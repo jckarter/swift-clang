@@ -116,7 +116,8 @@ ToolChain *DarwinHostInfo::CreateToolChain(const ArgList &Args,
     const char *UseNewToolChain = ::getenv("CCC_ENABLE_NEW_DARWIN_TOOLCHAIN");
     if (UseNewToolChain || 
         Arch == llvm::Triple::x86 || Arch == llvm::Triple::x86_64 ||
-        Arch == llvm::Triple::arm || Arch == llvm::Triple::thumb) {
+        Arch == llvm::Triple::arm || Arch == llvm::Triple::thumb ||
+        Arch == llvm::Triple::arm64) {
       TC = new toolchains::DarwinClang(*this, TCTriple);
     } else if (Arch == llvm::Triple::x86 || Arch == llvm::Triple::x86_64) {
       // We still use the legacy DarwinGCC toolchain on X86.

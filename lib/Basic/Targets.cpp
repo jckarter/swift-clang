@@ -1985,6 +1985,121 @@ public:
 };
 } // end anonymous namespace.
 
+
+namespace {
+class ARM64TargetInfo : public TargetInfo {
+  static const TargetInfo::GCCRegAlias GCCRegAliases[];
+  static const char * const GCCRegNames[];
+
+public:
+  ARM64TargetInfo(const std::string &TripleStr) : TargetInfo(TripleStr) {
+    LongWidth = LongAlign = PointerWidth = PointerAlign = 64;
+    IntMaxType = SignedLong;
+    UIntMaxType = UnsignedLong;
+    Int64Type = SignedLong;
+    RegParmMax = 8;
+
+    DescriptionString = "e-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-"
+                        "i64:64:64-f32:32:32-f64:64:64-v64:64:64-v128:128:128-"
+                        "a0:0:64-n32:64";
+
+    // {} in inline assembly are neon specifiers, not assembly variant
+    // specifiers.
+    NoAsmVariants = true;
+
+    // ARM64 targets default to using the ARM C++ ABI.
+    CXXABI = CXXABI_ARM;
+  }
+
+  virtual void getTargetDefines(const LangOptions &Opts,
+                                MacroBuilder &Builder) const {
+    // Target identification.
+    Builder.defineMacro("__arm64");
+    Builder.defineMacro("__arm64__");
+    Builder.defineMacro("__ARM_ARCH_8__");
+
+    // Target properties.
+    Builder.defineMacro("_LP64");
+    Builder.defineMacro("__LP64__");
+    Builder.defineMacro("__LITTLE_ENDIAN__");
+
+    // Subtarget options.
+    Builder.defineMacro("__REGISTER_PREFIX__", "");
+  }
+
+  virtual void getTargetBuiltins(const Builtin::Info *&Records,
+                                 unsigned &NumRecords) const {
+    Records = 0;
+    NumRecords = 0;
+  }
+
+  virtual const char *getVAListDeclaration() const {
+    return "typedef char* __builtin_va_list;";
+  }
+
+  virtual void getGCCRegNames(const char * const *&Names,
+                              unsigned &NumNames) const;
+  virtual void getGCCRegAliases(const GCCRegAlias *&Aliases,
+                                unsigned &NumAliases) const;
+
+  virtual bool validateAsmConstraint(const char *&Name,
+                                     TargetInfo::ConstraintInfo &Info) const {
+    return false;
+  }
+
+  virtual const char *getClobbers() const {
+    return "";
+  }
+};
+
+const char * const ARM64TargetInfo::GCCRegNames[] = {
+  // 32-bit Integer registers
+  "w0",  "w1",  "w2",  "w3",  "w4",  "w5",  "w6",  "w7",
+  "w8",  "w9",  "w10", "w11", "w12", "w13", "w14", "w15",
+  "w16", "w17", "w18", "w19", "w20", "w21", "w22", "w23",
+  "w24", "w25", "w26", "w27", "w28", "w29", "w30", "wsp"
+
+  // 64-bit Integer registers
+  "x0",  "x1",  "x2",  "x3",  "x4",  "x5",  "x6",  "x7",
+  "x8",  "x9",  "x10", "x11", "x12", "x13", "x14", "x15",
+  "x16", "x17", "x18", "x19", "x20", "x21", "x22", "x23",
+  "x24", "x25", "x26", "x27", "x28", "fp",  "lr",  "sp"
+
+  // FIXME: Float/Vector registers
+};
+
+void ARM64TargetInfo::getGCCRegNames(const char * const *&Names,
+                                     unsigned &NumNames) const {
+  Names = GCCRegNames;
+  NumNames = llvm::array_lengthof(GCCRegNames);
+}
+
+const TargetInfo::GCCRegAlias ARM64TargetInfo::GCCRegAliases[] = {
+  { { "w31" }, "wsp" },
+  { { "x29" }, "fp" },
+  { { "x30" }, "lr" },
+  { { "x31" }, "sp" },
+  // The S/D/Q and W/X registers overlap, but aren't really aliases; we
+  // don't want to substitute one of these for a different-sized one.
+};
+
+void ARM64TargetInfo::getGCCRegAliases(const GCCRegAlias *&Aliases,
+                                       unsigned &NumAliases) const {
+  Aliases = GCCRegAliases;
+  NumAliases = llvm::array_lengthof(GCCRegAliases);
+}
+} // end anonymous namespace.
+
+namespace {
+class DarwinARM64TargetInfo : public DarwinTargetInfo<ARM64TargetInfo> {
+public:
+  DarwinARM64TargetInfo(const std::string& triple)
+      : DarwinTargetInfo<ARM64TargetInfo>(triple) {
+    Int64Type = SignedLongLong;
+  }
+};
+} // end anonymous namespace
+
 namespace {
 class SparcV8TargetInfo : public TargetInfo {
   static const TargetInfo::GCCRegAlias GCCRegAliases[];
@@ -2550,6 +2665,10 @@ static TargetInfo *AllocateTarget(const std::string &T) {
   switch (Triple.getArch()) {
   default:
     return NULL;
+
+  case llvm::Triple::arm64:
+    assert(os == llvm::Triple::Darwin && "arm64 only supported on Darwin");
+    return new DarwinARM64TargetInfo(T);
 
   case llvm::Triple::arm:
   case llvm::Triple::thumb:

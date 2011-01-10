@@ -2133,6 +2133,59 @@ PPC32TargetCodeGenInfo::initDwarfEHRegSizeTable(CodeGen::CodeGenFunction &CGF,
 
 
 //===----------------------------------------------------------------------===//
+// ARM64 ABI Implementation
+//===----------------------------------------------------------------------===//
+
+namespace {
+
+class ARM64ABIInfo : public ABIInfo {
+public:
+  ARM64ABIInfo(CodeGenTypes &CGT) : ABIInfo(CGT) {}
+
+private:
+  ABIArgInfo classifyReturnType(QualType RetTy) const;
+  ABIArgInfo classifyArgumentType(QualType RetTy) const;
+
+  virtual void computeInfo(CGFunctionInfo &FI) const {
+    FI.getReturnInfo() = classifyReturnType(FI.getReturnType());
+    for (CGFunctionInfo::arg_iterator it = FI.arg_begin(), ie = FI.arg_end();
+         it != ie; ++it)
+      it->info = classifyArgumentType(it->type);
+  }
+
+  virtual llvm::Value *EmitVAArg(llvm::Value *VAListAddr, QualType Ty,
+                                 CodeGenFunction &CGF) const;
+};
+
+class ARM64TargetCodeGenInfo : public TargetCodeGenInfo {
+public:
+  ARM64TargetCodeGenInfo(CodeGenTypes &CGT)
+    : TargetCodeGenInfo(new ARM64ABIInfo(CGT)) {}
+
+  int getDwarfEHStackPointer(CodeGen::CodeGenModule &M) const {
+    return 31;
+  }
+};
+
+}
+
+ABIArgInfo ARM64ABIInfo::classifyArgumentType(QualType Ty) const {
+  assert(0 && "not yet implemented");
+  return ABIArgInfo::getIgnore();
+}
+
+ABIArgInfo ARM64ABIInfo::classifyReturnType(QualType RetTy) const {
+  assert(0 && "not yet implemented");
+  return ABIArgInfo::getIgnore();
+}
+
+llvm::Value *ARM64ABIInfo::EmitVAArg(llvm::Value *VAListAddr, QualType Ty,
+                                     CodeGenFunction &CGF) const {
+  assert(0 && "not yet implemented");
+  return 0;
+}
+
+//===----------------------------------------------------------------------===//
 // ARM ABI Implementation
 //===----------------------------------------------------------------------===//
 
@@ -2747,6 +2800,9 @@ const TargetCodeGenInfo &CodeGenModule::getTargetCodeGenInfo() {
   case llvm::Triple::mips:
   case llvm::Triple::mipsel:
     return *(TheTargetCodeGenInfo = new MIPSTargetCodeGenInfo(Types));
+
+  case llvm::Triple::arm64:
+    return *(TheTargetCodeGenInfo = new ARM64TargetCodeGenInfo(Types));
 
   case llvm::Triple::arm:
   case llvm::Triple::thumb:
