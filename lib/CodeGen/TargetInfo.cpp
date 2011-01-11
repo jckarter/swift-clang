@@ -2170,8 +2170,32 @@ public:
 }
 
 ABIArgInfo ARM64ABIInfo::classifyArgumentType(QualType Ty) const {
-  assert(0 && "not yet implemented");
-  return ABIArgInfo::getIgnore();
+  if (!isAggregateTypeForABI(Ty)) {
+    // Treat an enum type as its underlying type.
+    if (const EnumType *EnumTy = Ty->getAs<EnumType>())
+      Ty = EnumTy->getDecl()->getIntegerType();
+
+    return (Ty->isPromotableIntegerType() ?
+            ABIArgInfo::getExtend() : ABIArgInfo::getDirect());
+  }
+
+  // Ignore empty records.
+  if (isEmptyRecord(getContext(), Ty, true))
+    return ABIArgInfo::getIgnore();
+
+  // Structures with either a non-trivial destructor or a non-trivial
+  // copy constructor are always indirect.
+  if (isRecordWithNonTrivialDestructorOrCopyConstructor(Ty))
+    return ABIArgInfo::getIndirect(0, /*ByVal=*/false);
+
+  // Aggregates <= 16 bytes are passed directly in registers or on the stack.
+  uint64_t Size = getContext().getTypeSize(Ty);
+  if (Size <= 128) {
+    Size = 64 * ((Size + 63) / 64); // round up to multiple of 8 bytes
+    return ABIArgInfo::getDirect(llvm::IntegerType::get(getVMContext(), Size));
+  }
+
+  return ABIArgInfo::getIndirect(0);
 }
 
 ABIArgInfo ARM64ABIInfo::classifyReturnType(QualType RetTy) const {
