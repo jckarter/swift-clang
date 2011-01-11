@@ -2175,8 +2175,38 @@ ABIArgInfo ARM64ABIInfo::classifyArgumentType(QualType Ty) const {
 }
 
 ABIArgInfo ARM64ABIInfo::classifyReturnType(QualType RetTy) const {
-  assert(0 && "not yet implemented");
-  return ABIArgInfo::getIgnore();
+  if (RetTy->isVoidType())
+    return ABIArgInfo::getIgnore();
+
+  // Large vector types should be returned via memory.
+  if (RetTy->isVectorType() && getContext().getTypeSize(RetTy) > 128)
+    return ABIArgInfo::getIndirect(0);
+
+  if (!isAggregateTypeForABI(RetTy)) {
+    // Treat an enum type as its underlying type.
+    if (const EnumType *EnumTy = RetTy->getAs<EnumType>())
+      RetTy = EnumTy->getDecl()->getIntegerType();
+
+    return (RetTy->isPromotableIntegerType() ?
+            ABIArgInfo::getExtend() : ABIArgInfo::getDirect());
+  }
+
+  // Structures with either a non-trivial destructor or a non-trivial
+  // copy constructor are always indirect.
+  if (isRecordWithNonTrivialDestructorOrCopyConstructor(RetTy))
+    return ABIArgInfo::getIndirect(0, /*ByVal=*/false);
+
+  if (isEmptyRecord(getContext(), RetTy, true))
+    return ABIArgInfo::getIgnore();
+
+  // Aggregates <= 16 bytes are returned directly in registers or on the stack.
+  uint64_t Size = getContext().getTypeSize(RetTy);
+  if (Size <= 128) {
+    Size = 64 * ((Size + 63) / 64); // round up to multiple of 8 bytes
+    return ABIArgInfo::getDirect(llvm::IntegerType::get(getVMContext(), Size));
+  }
+
+  return ABIArgInfo::getIndirect(0);
 }
 
 llvm::Value *ARM64ABIInfo::EmitVAArg(llvm::Value *VAListAddr, QualType Ty,
