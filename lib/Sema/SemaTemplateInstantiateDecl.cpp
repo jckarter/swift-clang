@@ -1894,7 +1894,10 @@ TemplateDeclInstantiator::SubstFunctionType(FunctionDecl *D,
         // Parameter pack: make the instantiation an argument pack.
         SemaRef.CurrentInstantiationScope->MakeInstantiatedLocalArgPack(
                                                                       OldParam);
-        while (NewIdx < NumNewParams) {
+        unsigned NumArgumentsInExpansion
+          = SemaRef.getNumArgumentsInExpansion(OldParam->getType(),
+                                               TemplateArgs);
+        while (NumArgumentsInExpansion--) {
           ParmVarDecl *NewParam = NewProtoLoc->getArg(NewIdx++);
           Params.push_back(NewParam);
           SemaRef.CurrentInstantiationScope->InstantiatedLocalPackArg(OldParam,

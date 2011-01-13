@@ -1411,7 +1411,7 @@ unsigned FunctionDecl::getBuiltinID() const {
 
 
 /// getNumParams - Return the number of parameters this function must have
-/// based on its FunctionType.  This is the length of the PararmInfo array
+/// based on its FunctionType.  This is the length of the ParamInfo array
 /// after it has been created.
 unsigned FunctionDecl::getNumParams() const {
   const FunctionType *FT = getType()->getAs<FunctionType>();
@@ -1444,6 +1444,9 @@ void FunctionDecl::setParams(ASTContext &C,
 /// function parameters, if some of the parameters have default
 /// arguments (in C++) or the last parameter is a parameter pack.
 unsigned FunctionDecl::getMinRequiredArguments() const {
+  if (!getASTContext().getLangOptions().CPlusPlus)
+    return getNumParams();
+  
   unsigned NumRequiredArgs = getNumParams();  
   
   // If the last parameter is a parameter pack, we don't need an argument for 
@@ -1458,6 +1461,16 @@ unsigned FunctionDecl::getMinRequiredArguments() const {
          getParamDecl(NumRequiredArgs-1)->hasDefaultArg())
     --NumRequiredArgs;
 
+  // We might have parameter packs before the end. These can't be deduced,
+  // but they can still handle multiple arguments.
+  unsigned ArgIdx = NumRequiredArgs;
+  while (ArgIdx > 0) {
+    if (getParamDecl(ArgIdx - 1)->isParameterPack())
+      NumRequiredArgs = ArgIdx;
+    
+    --ArgIdx;
+  }
+  
   return NumRequiredArgs;
 }
 

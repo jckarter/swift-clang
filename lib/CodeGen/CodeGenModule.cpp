@@ -251,6 +251,7 @@ void CodeGenModule::setTypeVisibility(llvm::GlobalValue *GV,
 
   // Otherwise, drop the visibility to hidden.
   GV->setVisibility(llvm::GlobalValue::HiddenVisibility);
+  GV->setUnnamedAddr(true);
 }
 
 llvm::StringRef CodeGenModule::getMangledName(GlobalDecl GD) {
@@ -432,6 +433,9 @@ void CodeGenModule::SetLLVMFunctionAttributesForDefinition(const Decl *D,
 
   if (D->hasAttr<NoInlineAttr>())
     F->addFnAttr(llvm::Attribute::NoInline);
+
+  if (isa<CXXConstructorDecl>(D) || isa<CXXDestructorDecl>(D))
+    F->setUnnamedAddr(true);
 
   if (Features.getStackProtectorMode() == LangOptions::SSPOn)
     F->addFnAttr(llvm::Attribute::StackProtect);
@@ -1749,9 +1753,12 @@ static llvm::Constant *GenerateStringLiteral(const std::string &str,
       llvm::ConstantArray::get(CGM.getLLVMContext(), str, false);
 
   // Create a global variable for this string
-  return new llvm::GlobalVariable(CGM.getModule(), C->getType(), constant,
-                                  llvm::GlobalValue::PrivateLinkage,
-                                  C, GlobalName);
+  llvm::GlobalVariable *GV =
+    new llvm::GlobalVariable(CGM.getModule(), C->getType(), constant,
+                             llvm::GlobalValue::PrivateLinkage,
+                             C, GlobalName);
+  GV->setUnnamedAddr(true);
+  return GV;
 }
 
 /// GetAddrOfConstantString - Returns a pointer to a character array

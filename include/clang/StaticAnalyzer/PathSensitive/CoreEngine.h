@@ -37,10 +37,11 @@ namespace ento {
 ///   any transfer function logic and the sub-expression level (if any).
 class CoreEngine {
   friend class StmtNodeBuilder;
+  friend class GenericNodeBuilderImpl;
   friend class BranchNodeBuilder;
   friend class IndirectGotoNodeBuilder;
   friend class SwitchNodeBuilder;
-  friend class EndPathNodeBuilder;
+  friend class EndOfFunctionNodeBuilder;
   friend class CallEnterNodeBuilder;
   friend class CallExitNodeBuilder;
 
@@ -82,48 +83,6 @@ private:
                        unsigned Index, ExplodedNode *Pred);
   void HandleCallExit(const CallExit &L, ExplodedNode *Pred);
 
-  /// Get the initial state from the subengine.
-  const GRState* getInitialState(const LocationContext *InitLoc) {
-    return SubEng.getInitialState(InitLoc);
-  }
-
-  void ProcessEndPath(EndPathNodeBuilder& Builder) {
-    SubEng.ProcessEndPath(Builder);
-  }
-
-  void ProcessElement(const CFGElement E, StmtNodeBuilder& Builder) {
-    SubEng.ProcessElement(E, Builder);
-  }
-
-  bool ProcessBlockEntrance(const CFGBlock* Blk, const ExplodedNode *Pred,
-                            BlockCounter BC) {
-    return SubEng.ProcessBlockEntrance(Blk, Pred, BC);
-  }
-
-
-  void ProcessBranch(const Stmt* Condition, const Stmt* Terminator,
-                     BranchNodeBuilder& Builder) {
-    SubEng.ProcessBranch(Condition, Terminator, Builder);
-  }
-
-
-  void ProcessIndirectGoto(IndirectGotoNodeBuilder& Builder) {
-    SubEng.ProcessIndirectGoto(Builder);
-  }
-
-
-  void ProcessSwitch(SwitchNodeBuilder& Builder) {
-    SubEng.ProcessSwitch(Builder);
-  }
-
-  void ProcessCallEnter(CallEnterNodeBuilder &Builder) {
-    SubEng.ProcessCallEnter(Builder);
-  }
-
-  void ProcessCallExit(CallExitNodeBuilder &Builder) {
-    SubEng.ProcessCallExit(Builder);
-  }
-
 private:
   CoreEngine(const CoreEngine&); // Do not implement.
   CoreEngine& operator=(const CoreEngine&);
@@ -133,7 +92,7 @@ public:
   ///  a DFS exploration of the exploded graph.
   CoreEngine(SubEngine& subengine)
     : SubEng(subengine), G(new ExplodedGraph()),
-      WList(WorkList::MakeBFS()),
+      WList(WorkList::makeBFS()),
       BCounterFactory(G->getAllocator()) {}
 
   /// Construct a CoreEngine object to analyze the provided CFG and to
@@ -439,7 +398,52 @@ public:
   const GRState* getState() const { return Pred->State; }
 };
 
-class EndPathNodeBuilder {
+class GenericNodeBuilderImpl {
+protected:
+  CoreEngine &engine;
+  ExplodedNode *pred;
+  bool HasGeneratedNode;
+  ProgramPoint pp;
+  llvm::SmallVector<ExplodedNode*, 2> sinksGenerated;  
+
+  ExplodedNode *generateNodeImpl(const GRState *state, ExplodedNode *pred,
+                                 ProgramPoint programPoint, bool asSink);
+
+  GenericNodeBuilderImpl(CoreEngine &eng, ExplodedNode *pr, ProgramPoint p)
+    : engine(eng), pred(pr), HasGeneratedNode(false), pp(p) {}
+
+public:
+  bool hasGeneratedNode() const { return HasGeneratedNode; }
+  
+  WorkList &getWorkList() { return *engine.WList; }
+  
+  ExplodedNode* getPredecessor() const { return pred; }
+  
+  BlockCounter getBlockCounter() const {
+    return engine.WList->getBlockCounter();
+  }
+  
+  const llvm::SmallVectorImpl<ExplodedNode*> &sinks() const {
+    return sinksGenerated;
+  }
+};
+
+template <typename PP_T>
+class GenericNodeBuilder : public GenericNodeBuilderImpl {
+public:
+  GenericNodeBuilder(CoreEngine &eng, ExplodedNode *pr, const PP_T &p)
+    : GenericNodeBuilderImpl(eng, pr, p) {}
+
+  ExplodedNode *generateNode(const GRState *state, ExplodedNode *pred,
+                             const void *tag, bool asSink) {
+    return generateNodeImpl(state, pred, cast<PP_T>(pp).withTag(tag),
+                            asSink);
+  }
+  
+  const PP_T &getProgramPoint() const { return cast<PP_T>(pp); }
+};
+
+class EndOfFunctionNodeBuilder {
   CoreEngine &Eng;
   const CFGBlock& B;
   ExplodedNode* Pred;
@@ -448,10 +452,10 @@ public:
   bool HasGeneratedNode;
 
 public:
-  EndPathNodeBuilder(const CFGBlock* b, ExplodedNode* N, CoreEngine* e)
+  EndOfFunctionNodeBuilder(const CFGBlock* b, ExplodedNode* N, CoreEngine* e)
     : Eng(*e), B(*b), Pred(N), HasGeneratedNode(false) {}
 
-  ~EndPathNodeBuilder();
+  ~EndOfFunctionNodeBuilder();
 
   WorkList &getWorkList() { return *Eng.WList; }
 

@@ -245,7 +245,7 @@ private:
     CheckerContext C(Dst, Builder, Eng, Pred, tag,
                      isLoad ? ProgramPoint::PreLoadKind :
                      ProgramPoint::PreStoreKind, 0, S, state);
-    visitLocation(C, S, location);
+    visitLocation(C, S, location, isLoad);
   }
 
   void GR_evalDeadSymbols(ExplodedNodeSet &Dst, StmtNodeBuilder &Builder,
@@ -260,11 +260,12 @@ public:
   virtual ~Checker();
   virtual void _PreVisit(CheckerContext &C, const Stmt *S) {}
   virtual void _PostVisit(CheckerContext &C, const Stmt *S) {}
-  virtual void visitLocation(CheckerContext &C, const Stmt *S, SVal location) {}
+  virtual void visitLocation(CheckerContext &C, const Stmt *S, SVal location,
+                             bool isLoad) {}
   virtual void PreVisitBind(CheckerContext &C, const Stmt *StoreE,
                             SVal location, SVal val) {}
   virtual void evalDeadSymbols(CheckerContext &C, SymbolReaper &SymReaper) {}
-  virtual void evalEndPath(EndPathNodeBuilder &B, void *tag,
+  virtual void evalEndPath(EndOfFunctionNodeBuilder &B, void *tag,
                            ExprEngine &Eng) {}
 
   virtual void MarkLiveSymbols(const GRState *state, SymbolReaper &SymReaper) {}
@@ -287,7 +288,7 @@ public:
     return state;
   }
 
-  virtual bool WantsRegionChangeUpdate(const GRState *state) { return false; }
+  virtual bool wantsRegionChangeUpdate(const GRState *state) { return false; }
 
   virtual const GRState *EvalRegionChanges(const GRState *state,
                                            const MemRegion * const *Begin,

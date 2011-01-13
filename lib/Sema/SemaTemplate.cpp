@@ -2556,13 +2556,12 @@ bool Sema::CheckTemplateArgumentList(TemplateDecl *Template,
     if ((*Param)->isTemplateParameterPack()) {     
       if (PartialTemplateArgs && ArgumentPack.empty()) {
         Converted.push_back(TemplateArgument());
-      } else if (ArgumentPack.empty()) {
+      } else if (ArgumentPack.empty())
         Converted.push_back(TemplateArgument(0, 0));
-      } else {
-        TemplateArgument *PackedArgs
-          = new (Context) TemplateArgument [ArgumentPack.size()];
-        std::copy(ArgumentPack.begin(), ArgumentPack.end(), PackedArgs);
-        Converted.push_back(TemplateArgument(PackedArgs, ArgumentPack.size()));
+      else {
+        Converted.push_back(TemplateArgument::CreatePackCopy(Context, 
+                                                          ArgumentPack.data(), 
+                                                         ArgumentPack.size()));
         ArgumentPack.clear();
       }
     }
@@ -4846,7 +4845,7 @@ Sema::CheckFunctionTemplateSpecialization(FunctionDecl *FD,
   // Find the most specialized function template.
   UnresolvedSetIterator Result
     = getMostSpecialized(Candidates.begin(), Candidates.end(),
-                         TPOC_Other, FD->getLocation(),
+                         TPOC_Other, 0, FD->getLocation(),
                   PDiag(diag::err_function_template_spec_no_match) 
                     << FD->getDeclName(),
                   PDiag(diag::err_function_template_spec_ambiguous)
@@ -5668,7 +5667,7 @@ DeclResult Sema::ActOnExplicitInstantiation(Scope *S,
   
   // Find the most specialized function template specialization.
   UnresolvedSetIterator Result
-    = getMostSpecialized(Matches.begin(), Matches.end(), TPOC_Other, 
+    = getMostSpecialized(Matches.begin(), Matches.end(), TPOC_Other, 0,
                          D.getIdentifierLoc(), 
                      PDiag(diag::err_explicit_instantiation_not_known) << Name,
                      PDiag(diag::err_explicit_instantiation_ambiguous) << Name,
