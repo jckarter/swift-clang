@@ -343,8 +343,8 @@ namespace clang {
       /// sets.
       CXX_BASE_SPECIFIER_OFFSETS = 37,
 
-      /// \brief Record code for diagnostic mappings specified by the user.
-      DIAG_USER_MAPPINGS = 38
+      /// \brief Record code for #pragma diagnostic mappings.
+      DIAG_PRAGMA_MAPPINGS = 38
     };
 
     /// \brief Record types used within a source manager block.
@@ -555,7 +555,9 @@ namespace clang {
       /// \brief A PackExpansionType record.
       TYPE_PACK_EXPANSION           = 35,
       /// \brief An AttributedType record.
-      TYPE_ATTRIBUTED               = 36
+      TYPE_ATTRIBUTED               = 36,
+      /// \brief A SubstTemplateTypeParmPackType record.
+      TYPE_SUBST_TEMPLATE_TYPE_PARM_PACK = 37
     };
 
     /// \brief The type IDs for special types constructed by semantic

@@ -126,26 +126,33 @@ public:
 class CXXNamedCastExpr : public ExplicitCastExpr {
 private:
   SourceLocation Loc; // the location of the casting op
-
+  SourceLocation RParenLoc; // the location of the right parenthesis
+  
 protected:
   CXXNamedCastExpr(StmtClass SC, QualType ty, ExprValueKind VK,
                    CastKind kind, Expr *op, unsigned PathSize,
-                   TypeSourceInfo *writtenTy, SourceLocation l)
-    : ExplicitCastExpr(SC, ty, VK, kind, op, PathSize, writtenTy), Loc(l) {}
+                   TypeSourceInfo *writtenTy, SourceLocation l,
+                   SourceLocation RParenLoc)
+    : ExplicitCastExpr(SC, ty, VK, kind, op, PathSize, writtenTy), Loc(l),
+      RParenLoc(RParenLoc) {}
 
   explicit CXXNamedCastExpr(StmtClass SC, EmptyShell Shell, unsigned PathSize)
     : ExplicitCastExpr(SC, Shell, PathSize) { }
 
+  friend class ASTStmtReader;
+  
 public:
   const char *getCastName() const;
 
   /// \brief Retrieve the location of the cast operator keyword, e.g.,
   /// "static_cast".
   SourceLocation getOperatorLoc() const { return Loc; }
-  void setOperatorLoc(SourceLocation L) { Loc = L; }
 
+  /// \brief Retrieve the location of the closing parenthesis.
+  SourceLocation getRParenLoc() const { return RParenLoc; }
+  
   virtual SourceRange getSourceRange() const {
-    return SourceRange(Loc, getSubExpr()->getSourceRange().getEnd());
+    return SourceRange(Loc, RParenLoc);
   }
   static bool classof(const Stmt *T) {
     switch (T->getStmtClass()) {
@@ -168,9 +175,9 @@ public:
 class CXXStaticCastExpr : public CXXNamedCastExpr {
   CXXStaticCastExpr(QualType ty, ExprValueKind vk, CastKind kind, Expr *op,
                     unsigned pathSize, TypeSourceInfo *writtenTy,
-                    SourceLocation l)
+                    SourceLocation l, SourceLocation RParenLoc)
     : CXXNamedCastExpr(CXXStaticCastExprClass, ty, vk, kind, op, pathSize,
-                       writtenTy, l) {}
+                       writtenTy, l, RParenLoc) {}
 
   explicit CXXStaticCastExpr(EmptyShell Empty, unsigned PathSize)
     : CXXNamedCastExpr(CXXStaticCastExprClass, Empty, PathSize) { }
@@ -179,7 +186,8 @@ public:
   static CXXStaticCastExpr *Create(ASTContext &Context, QualType T,
                                    ExprValueKind VK, CastKind K, Expr *Op,
                                    const CXXCastPath *Path,
-                                   TypeSourceInfo *Written, SourceLocation L);
+                                   TypeSourceInfo *Written, SourceLocation L, 
+                                   SourceLocation RParenLoc);
   static CXXStaticCastExpr *CreateEmpty(ASTContext &Context,
                                         unsigned PathSize);
 
@@ -198,9 +206,9 @@ public:
 class CXXDynamicCastExpr : public CXXNamedCastExpr {
   CXXDynamicCastExpr(QualType ty, ExprValueKind VK, CastKind kind,
                      Expr *op, unsigned pathSize, TypeSourceInfo *writtenTy,
-                     SourceLocation l)
+                     SourceLocation l, SourceLocation RParenLoc)
     : CXXNamedCastExpr(CXXDynamicCastExprClass, ty, VK, kind, op, pathSize,
-                       writtenTy, l) {}
+                       writtenTy, l, RParenLoc) {}
 
   explicit CXXDynamicCastExpr(EmptyShell Empty, unsigned pathSize)
     : CXXNamedCastExpr(CXXDynamicCastExprClass, Empty, pathSize) { }
@@ -209,7 +217,8 @@ public:
   static CXXDynamicCastExpr *Create(ASTContext &Context, QualType T,
                                     ExprValueKind VK, CastKind Kind, Expr *Op,
                                     const CXXCastPath *Path,
-                                    TypeSourceInfo *Written, SourceLocation L);
+                                    TypeSourceInfo *Written, SourceLocation L, 
+                                    SourceLocation RParenLoc);
   
   static CXXDynamicCastExpr *CreateEmpty(ASTContext &Context,
                                          unsigned pathSize);
@@ -229,9 +238,10 @@ public:
 class CXXReinterpretCastExpr : public CXXNamedCastExpr {
   CXXReinterpretCastExpr(QualType ty, ExprValueKind vk, CastKind kind,
                          Expr *op, unsigned pathSize,
-                         TypeSourceInfo *writtenTy, SourceLocation l)
+                         TypeSourceInfo *writtenTy, SourceLocation l, 
+                         SourceLocation RParenLoc)
     : CXXNamedCastExpr(CXXReinterpretCastExprClass, ty, vk, kind, op,
-                       pathSize, writtenTy, l) {}
+                       pathSize, writtenTy, l, RParenLoc) {}
 
   CXXReinterpretCastExpr(EmptyShell Empty, unsigned pathSize)
     : CXXNamedCastExpr(CXXReinterpretCastExprClass, Empty, pathSize) { }
@@ -240,7 +250,8 @@ public:
   static CXXReinterpretCastExpr *Create(ASTContext &Context, QualType T,
                                         ExprValueKind VK, CastKind Kind,
                                         Expr *Op, const CXXCastPath *Path,
-                                 TypeSourceInfo *WrittenTy, SourceLocation L);
+                                 TypeSourceInfo *WrittenTy, SourceLocation L, 
+                                        SourceLocation RParenLoc);
   static CXXReinterpretCastExpr *CreateEmpty(ASTContext &Context,
                                              unsigned pathSize);
 
@@ -257,9 +268,10 @@ public:
 /// @c const_cast<char*>(PtrToConstChar).
 class CXXConstCastExpr : public CXXNamedCastExpr {
   CXXConstCastExpr(QualType ty, ExprValueKind VK, Expr *op,
-                   TypeSourceInfo *writtenTy, SourceLocation l)
+                   TypeSourceInfo *writtenTy, SourceLocation l, 
+                   SourceLocation RParenLoc)
     : CXXNamedCastExpr(CXXConstCastExprClass, ty, VK, CK_NoOp, op, 
-                       0, writtenTy, l) {}
+                       0, writtenTy, l, RParenLoc) {}
 
   explicit CXXConstCastExpr(EmptyShell Empty)
     : CXXNamedCastExpr(CXXConstCastExprClass, Empty, 0) { }
@@ -267,7 +279,8 @@ class CXXConstCastExpr : public CXXNamedCastExpr {
 public:
   static CXXConstCastExpr *Create(ASTContext &Context, QualType T,
                                   ExprValueKind VK, Expr *Op,
-                                  TypeSourceInfo *WrittenTy, SourceLocation L);
+                                  TypeSourceInfo *WrittenTy, SourceLocation L, 
+                                  SourceLocation RParenLoc);
   static CXXConstCastExpr *CreateEmpty(ASTContext &Context);
 
   static bool classof(const Stmt *T) {
@@ -2599,16 +2612,27 @@ public:
 /// or more function arguments to the function object \c f.
 class PackExpansionExpr : public Expr {
   SourceLocation EllipsisLoc;
+  
+  /// \brief The number of expansions that will be produced by this pack
+  /// expansion expression, if known.
+  ///
+  /// When zero, the number of expansions is not known. Otherwise, this value
+  /// is the number of expansions + 1.
+  unsigned NumExpansions;
+  
   Stmt *Pattern;
   
   friend class ASTStmtReader;
+  friend class ASTStmtWriter;
   
 public:
-  PackExpansionExpr(QualType T, Expr *Pattern, SourceLocation EllipsisLoc)
+  PackExpansionExpr(QualType T, Expr *Pattern, SourceLocation EllipsisLoc,
+                    llvm::Optional<unsigned> NumExpansions)
     : Expr(PackExpansionExprClass, T, Pattern->getValueKind(), 
            Pattern->getObjectKind(), /*TypeDependent=*/true, 
            /*ValueDependent=*/true, /*ContainsUnexpandedParameterPack=*/false),
       EllipsisLoc(EllipsisLoc),
+      NumExpansions(NumExpansions? *NumExpansions + 1 : 0),
       Pattern(Pattern) { }
 
   PackExpansionExpr(EmptyShell Empty) : Expr(PackExpansionExprClass, Empty) { }
@@ -2622,6 +2646,15 @@ public:
   /// \brief Retrieve the location of the ellipsis that describes this pack
   /// expansion.
   SourceLocation getEllipsisLoc() const { return EllipsisLoc; }
+  
+  /// \brief Determine the number of expansions that will be produced when 
+  /// this pack expansion is instantiated, if already known.
+  llvm::Optional<unsigned> getNumExpansions() const {
+    if (NumExpansions)
+      return NumExpansions - 1;
+    
+    return llvm::Optional<unsigned>();
+  }
   
   virtual SourceRange getSourceRange() const;
 

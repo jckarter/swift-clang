@@ -3330,8 +3330,16 @@ public:
   /// \brief Construct a pack expansion type from the pattern of the pack
   /// expansion.
   TypeSourceInfo *CheckPackExpansion(TypeSourceInfo *Pattern,
-                                     SourceLocation EllipsisLoc);
-  
+                                     SourceLocation EllipsisLoc,
+                                     llvm::Optional<unsigned> NumExpansions);
+
+  /// \brief Construct a pack expansion type from the pattern of the pack
+  /// expansion.
+  QualType CheckPackExpansion(QualType Pattern,
+                              SourceRange PatternRange,
+                              SourceLocation EllipsisLoc,
+                              llvm::Optional<unsigned> NumExpansions);
+
   /// \brief Invoked when parsing an expression followed by an ellipsis, which
   /// creates a pack expansion.
   ///
@@ -3340,7 +3348,17 @@ public:
   ///
   /// \param EllipsisLoc The location of the ellipsis.
   ExprResult ActOnPackExpansion(Expr *Pattern, SourceLocation EllipsisLoc);
-  
+
+  /// \brief Invoked when parsing an expression followed by an ellipsis, which
+  /// creates a pack expansion.
+  ///
+  /// \param Pattern The expression preceding the ellipsis, which will become
+  /// the pattern of the pack expansion.
+  ///
+  /// \param EllipsisLoc The location of the ellipsis.
+  ExprResult CheckPackExpansion(Expr *Pattern, SourceLocation EllipsisLoc,
+                                llvm::Optional<unsigned> NumExpansions);
+
   /// \brief Determine whether we could expand a pack expansion with the
   /// given set of parameter packs into separate arguments by repeatedly
   /// transforming the pattern.
@@ -3367,8 +3385,12 @@ public:
   /// C++0x [temp.arg.explicit]p9.
   ///
   /// \param NumExpansions The number of separate arguments that will be in
-  /// the expanded form of the corresponding pack expansion. Must be set when
-  /// \c ShouldExpand is \c true.
+  /// the expanded form of the corresponding pack expansion. This is both an
+  /// input and an output parameter, which can be set by the caller if the
+  /// number of expansions is known a priori (e.g., due to a prior substitution)
+  /// and will be set by the callee when the number of expansions is known.
+  /// The callee must set this value when \c ShouldExpand is \c true; it may
+  /// set this value in other cases.
   ///
   /// \returns true if an error occurred (e.g., because the parameter packs 
   /// are to be instantiated with arguments of different lengths), false 
@@ -3381,7 +3403,7 @@ public:
                              const MultiLevelTemplateArgumentList &TemplateArgs,
                                        bool &ShouldExpand,
                                        bool &RetainExpansion,
-                                       unsigned &NumExpansions);
+                                       llvm::Optional<unsigned> &NumExpansions);
 
   /// \brief Determine the number of arguments in the given pack expansion
   /// type.
@@ -3913,7 +3935,8 @@ public:
                                         SourceLocation Loc,
                                         DeclarationName Entity);
   ParmVarDecl *SubstParmVarDecl(ParmVarDecl *D,
-                            const MultiLevelTemplateArgumentList &TemplateArgs);
+                            const MultiLevelTemplateArgumentList &TemplateArgs,
+                                llvm::Optional<unsigned> NumExpansions);
   bool SubstParmTypes(SourceLocation Loc, 
                       ParmVarDecl **Params, unsigned NumParams,
                       const MultiLevelTemplateArgumentList &TemplateArgs,

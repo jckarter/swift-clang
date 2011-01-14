@@ -319,7 +319,7 @@ public:
   void print(const PrintingPolicy &Policy, llvm::raw_ostream &Out) const;
              
   /// \brief Used to insert TemplateArguments into FoldingSets.
-  void Profile(llvm::FoldingSetNodeID &ID, ASTContext &Context) const;
+  void Profile(llvm::FoldingSetNodeID &ID, const ASTContext &Context) const;
 };
 
 /// Location information for a TemplateArgument.
@@ -465,7 +465,11 @@ public:
   /// the pattern of the pack expansion.
   ///
   /// \param Ellipsis Will be set to the location of the ellipsis.
+  ///
+  /// \param NumExpansions Will be set to the number of expansions that will
+  /// be generated from this pack expansion, if known a priori.
   TemplateArgumentLoc getPackExpansionPattern(SourceLocation &Ellipsis,
+                                        llvm::Optional<unsigned> &NumExpansions,
                                               ASTContext &Context) const;
 };
 

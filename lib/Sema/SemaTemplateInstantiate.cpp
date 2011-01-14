@@ -622,7 +622,7 @@ namespace {
                                  unsigned NumUnexpanded,
                                  bool &ShouldExpand,
                                  bool &RetainExpansion,
-                                 unsigned &NumExpansions) {
+                                 llvm::Optional<unsigned> &NumExpansions) {
       return getSema().CheckParameterPacksForExpansion(EllipsisLoc, 
                                                        PatternRange, Unexpanded,
                                                        NumUnexpanded, 
@@ -705,12 +705,19 @@ namespace {
 
     QualType TransformFunctionProtoType(TypeLocBuilder &TLB,
                                         FunctionProtoTypeLoc TL);
-    ParmVarDecl *TransformFunctionTypeParam(ParmVarDecl *OldParm);
+    ParmVarDecl *TransformFunctionTypeParam(ParmVarDecl *OldParm,
+                                      llvm::Optional<unsigned> NumExpansions);
 
     /// \brief Transforms a template type parameter type by performing
     /// substitution of the corresponding template type argument.
     QualType TransformTemplateTypeParmType(TypeLocBuilder &TLB,
                                            TemplateTypeParmTypeLoc TL);
+
+    /// \brief Transforms an already-substituted template type parameter pack
+    /// into either itself (if we aren't substituting into its pack expansion)
+    /// or the appropriate substituted argument.
+    QualType TransformSubstTemplateTypeParmPackType(TypeLocBuilder &TLB,
+                                           SubstTemplateTypeParmPackTypeLoc TL);
 
     ExprResult TransformCallExpr(CallExpr *CE) {
       getSema().CallsUndergoingInstantiation.push_back(CE);
@@ -994,8 +1001,10 @@ QualType TemplateInstantiator::TransformFunctionProtoType(TypeLocBuilder &TLB,
 }
 
 ParmVarDecl *
-TemplateInstantiator::TransformFunctionTypeParam(ParmVarDecl *OldParm) {
-  return SemaRef.SubstParmVarDecl(OldParm, TemplateArgs);
+TemplateInstantiator::TransformFunctionTypeParam(ParmVarDecl *OldParm,
+                                       llvm::Optional<unsigned> NumExpansions) {
+  return SemaRef.SubstParmVarDecl(OldParm, TemplateArgs,
+                                  NumExpansions);
 }
 
 QualType
@@ -1024,10 +1033,15 @@ TemplateInstantiator::TransformTemplateTypeParmType(TypeLocBuilder &TLB,
              "Missing argument pack");
       
       if (getSema().ArgumentPackSubstitutionIndex == -1) {
-        // FIXME: Variadic templates fun case.
-        getSema().Diag(TL.getSourceRange().getBegin(), 
-                       diag::err_pack_expansion_mismatch_unsupported);
-        return QualType();
+        // We have the template argument pack, but we're not expanding the
+        // enclosing pack expansion yet. Just save the template argument
+        // pack for later substitution.
+        QualType Result
+          = getSema().Context.getSubstTemplateTypeParmPackType(T, Arg);
+        SubstTemplateTypeParmPackTypeLoc NewTL
+          = TLB.push<SubstTemplateTypeParmPackTypeLoc>(Result);
+        NewTL.setNameLoc(TL.getNameLoc());
+        return Result;
       }
       
       assert(getSema().ArgumentPackSubstitutionIndex < (int)Arg.pack_size());
@@ -1059,6 +1073,32 @@ TemplateInstantiator::TransformTemplateTypeParmType(TypeLocBuilder &TLB,
                                                 T->isParameterPack(),
                                                 T->getName());
   TemplateTypeParmTypeLoc NewTL = TLB.push<TemplateTypeParmTypeLoc>(Result);
+  NewTL.setNameLoc(TL.getNameLoc());
+  return Result;
+}
+
+QualType 
+TemplateInstantiator::TransformSubstTemplateTypeParmPackType(
+                                                            TypeLocBuilder &TLB,
+                                         SubstTemplateTypeParmPackTypeLoc TL) {
+  if (getSema().ArgumentPackSubstitutionIndex == -1) {
+    // We aren't expanding the parameter pack, so just return ourselves.
+    SubstTemplateTypeParmPackTypeLoc NewTL
+      = TLB.push<SubstTemplateTypeParmPackTypeLoc>(TL.getType());
+    NewTL.setNameLoc(TL.getNameLoc());
+    return TL.getType();
+  }
+  
+  const TemplateArgument &ArgPack = TL.getTypePtr()->getArgumentPack();
+  unsigned Index = (unsigned)getSema().ArgumentPackSubstitutionIndex;
+  assert(Index < ArgPack.pack_size() && "Substitution index out-of-range");
+  
+  QualType Result = ArgPack.pack_begin()[Index].getAsType();
+  Result = getSema().Context.getSubstTemplateTypeParmType(
+                                      TL.getTypePtr()->getReplacedParameter(),
+                                                          Result);
+  SubstTemplateTypeParmTypeLoc NewTL
+    = TLB.push<SubstTemplateTypeParmTypeLoc>(Result);
   NewTL.setNameLoc(TL.getNameLoc());
   return Result;
 }
@@ -1204,7 +1244,8 @@ TypeSourceInfo *Sema::SubstFunctionDeclType(TypeSourceInfo *T,
 }
 
 ParmVarDecl *Sema::SubstParmVarDecl(ParmVarDecl *OldParm, 
-                          const MultiLevelTemplateArgumentList &TemplateArgs) {
+                            const MultiLevelTemplateArgumentList &TemplateArgs,
+                                    llvm::Optional<unsigned> NumExpansions) {
   TypeSourceInfo *OldDI = OldParm->getTypeSourceInfo();
   TypeSourceInfo *NewDI = 0;
   
@@ -1223,7 +1264,8 @@ ParmVarDecl *Sema::SubstParmVarDecl(ParmVarDecl *OldParm,
       // We still have unexpanded parameter packs, which means that
       // our function parameter is still a function parameter pack.
       // Therefore, make its type a pack expansion type.
-      NewDI = CheckPackExpansion(NewDI, ExpansionTL.getEllipsisLoc());
+      NewDI = CheckPackExpansion(NewDI, ExpansionTL.getEllipsisLoc(),
+                                 NumExpansions);
     }
   } else {
     NewDI = SubstType(OldDI, TemplateArgs, OldParm->getLocation(), 
@@ -1323,7 +1365,7 @@ Sema::SubstBaseSpecifiers(CXXRecordDecl *Instantiation,
                                       Unexpanded);
       bool ShouldExpand = false;
       bool RetainExpansion = false;
-      unsigned NumExpansions = 0;
+      llvm::Optional<unsigned> NumExpansions;
       if (CheckParameterPacksForExpansion(Base->getEllipsisLoc(), 
                                           Base->getSourceRange(),
                                           Unexpanded.data(), Unexpanded.size(),
@@ -1336,7 +1378,7 @@ Sema::SubstBaseSpecifiers(CXXRecordDecl *Instantiation,
       
       // If we should expand this pack expansion now, do so.
       if (ShouldExpand) {
-        for (unsigned I = 0; I != NumExpansions; ++I) {
+        for (unsigned I = 0; I != *NumExpansions; ++I) {
             Sema::ArgumentPackSubstitutionIndexRAII SubstIndex(*this, I);
           
           TypeSourceInfo *BaseTypeLoc = SubstType(Base->getTypeSourceInfo(),

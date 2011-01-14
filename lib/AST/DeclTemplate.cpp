@@ -38,7 +38,7 @@ TemplateParameterList::TemplateParameterList(SourceLocation TemplateLoc,
 }
 
 TemplateParameterList *
-TemplateParameterList::Create(ASTContext &C, SourceLocation TemplateLoc,
+TemplateParameterList::Create(const ASTContext &C, SourceLocation TemplateLoc,
                               SourceLocation LAngleLoc, NamedDecl **Params,
                               unsigned NumParams, SourceLocation RAngleLoc) {
   unsigned Size = sizeof(TemplateParameterList) 
@@ -319,7 +319,8 @@ ClassTemplateDecl::getInjectedClassNameSpecialization() {
     if (TemplateTypeParmDecl *TTP = dyn_cast<TemplateTypeParmDecl>(*Param)) {
       QualType ArgType = Context.getTypeDeclType(TTP);
       if (TTP->isParameterPack())
-        ArgType = Context.getPackExpansionType(ArgType);
+        ArgType = Context.getPackExpansionType(ArgType, 
+                                               llvm::Optional<unsigned>());
       
       Arg = TemplateArgument(ArgType);
     } else if (NonTypeTemplateParmDecl *NTTP =
@@ -331,7 +332,8 @@ ClassTemplateDecl::getInjectedClassNameSpecialization() {
 
       if (NTTP->isParameterPack())
         E = new (Context) PackExpansionExpr(Context.DependentTy, E,
-                                            NTTP->getLocation());
+                                            NTTP->getLocation(),
+                                            llvm::Optional<unsigned>());
       Arg = TemplateArgument(E);
     } else {
       TemplateTemplateParmDecl *TTP = cast<TemplateTemplateParmDecl>(*Param);
@@ -356,7 +358,7 @@ ClassTemplateDecl::getInjectedClassNameSpecialization() {
 //===----------------------------------------------------------------------===//
 
 TemplateTypeParmDecl *
-TemplateTypeParmDecl::Create(ASTContext &C, DeclContext *DC,
+TemplateTypeParmDecl::Create(const ASTContext &C, DeclContext *DC,
                              SourceLocation L, unsigned D, unsigned P,
                              IdentifierInfo *Id, bool Typename,
                              bool ParameterPack) {
@@ -365,7 +367,7 @@ TemplateTypeParmDecl::Create(ASTContext &C, DeclContext *DC,
 }
 
 TemplateTypeParmDecl *
-TemplateTypeParmDecl::Create(ASTContext &C, EmptyShell Empty) {
+TemplateTypeParmDecl::Create(const ASTContext &C, EmptyShell Empty) {
   return new (C) TemplateTypeParmDecl(0, SourceLocation(), 0, false,
                                       QualType(), false);
 }
@@ -387,7 +389,7 @@ unsigned TemplateTypeParmDecl::getIndex() const {
 //===----------------------------------------------------------------------===//
 
 NonTypeTemplateParmDecl *
-NonTypeTemplateParmDecl::Create(ASTContext &C, DeclContext *DC,
+NonTypeTemplateParmDecl::Create(const ASTContext &C, DeclContext *DC,
                                 SourceLocation L, unsigned D, unsigned P,
                                 IdentifierInfo *Id, QualType T,
                                 bool ParameterPack, TypeSourceInfo *TInfo) {
@@ -406,7 +408,7 @@ SourceLocation NonTypeTemplateParmDecl::getDefaultArgumentLoc() const {
 //===----------------------------------------------------------------------===//
 
 TemplateTemplateParmDecl *
-TemplateTemplateParmDecl::Create(ASTContext &C, DeclContext *DC,
+TemplateTemplateParmDecl::Create(const ASTContext &C, DeclContext *DC,
                                  SourceLocation L, unsigned D, unsigned P,
                                  bool ParameterPack, IdentifierInfo *Id,
                                  TemplateParameterList *Params) {

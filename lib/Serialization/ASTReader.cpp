@@ -2128,15 +2128,15 @@ ASTReader::ReadASTBlock(PerFileData &F) {
       break;
     }
 
-    case DIAG_USER_MAPPINGS:
+    case DIAG_PRAGMA_MAPPINGS:
       if (Record.size() % 2 != 0) {
         Error("invalid DIAG_USER_MAPPINGS block in AST file");
         return Failure;
       }
-      if (UserDiagMappings.empty())
-        UserDiagMappings.swap(Record);
+      if (PragmaDiagMappings.empty())
+        PragmaDiagMappings.swap(Record);
       else
-        UserDiagMappings.insert(UserDiagMappings.end(),
+        PragmaDiagMappings.insert(PragmaDiagMappings.end(),
                                 Record.begin(), Record.end());
       break;
     }
@@ -2482,7 +2482,7 @@ void ASTReader::InitializeContext(ASTContext &Ctx) {
   if (SpecialTypes[SPECIAL_TYPE_INT128_INSTALLED])
     Context->setInt128Installed();
 
-  ReadUserDiagnosticMappings(Context->getDiagnostics());
+  ReadPragmaDiagnosticMappings(Context->getDiagnostics());
 }
 
 /// \brief Retrieve the name of the original source file name
@@ -2670,13 +2670,23 @@ PreprocessedEntity *ASTReader::ReadPreprocessedEntity(uint64_t Offset) {
   return ReadMacroRecord(*F, Offset);
 }
 
-void ASTReader::ReadUserDiagnosticMappings(Diagnostic &Diag) {
+void ASTReader::ReadPragmaDiagnosticMappings(Diagnostic &Diag) {
   unsigned Idx = 0;
-  while (Idx < UserDiagMappings.size()) {
-    unsigned DiagID = UserDiagMappings[Idx++];
-    unsigned Map = UserDiagMappings[Idx++];
-    Diag.setDiagnosticMappingInternal(DiagID, Map, Diag.GetCurDiagState(),
-                                      /*isUser=*/true);
+  while (Idx < PragmaDiagMappings.size()) {
+    SourceLocation
+      Loc = SourceLocation::getFromRawEncoding(PragmaDiagMappings[Idx++]);
+    while (1) {
+      assert(Idx < PragmaDiagMappings.size() &&
+             "Invalid data, didn't find '-1' marking end of diag/map pairs");
+      if (Idx >= PragmaDiagMappings.size())
+        break; // Something is messed up but at least avoid infinite loop in
+               // release build.
+      unsigned DiagID = PragmaDiagMappings[Idx++];
+      if (DiagID == (unsigned)-1)
+        break; // no more diag/map pairs for this location.
+      diag::Mapping Map = (diag::Mapping)PragmaDiagMappings[Idx++];
+      Diag.setDiagnosticMapping(DiagID, Map, Loc);
+    }
   }
 }
 
@@ -2954,8 +2964,10 @@ QualType ASTReader::ReadTypeRecord(unsigned Index) {
     QualType Pattern = GetType(Record[0]);
     if (Pattern.isNull())
       return QualType();
-
-    return Context->getPackExpansionType(Pattern);
+    llvm::Optional<unsigned> NumExpansions;
+    if (Record[1])
+      NumExpansions = Record[1] - 1;
+    return Context->getPackExpansionType(Pattern, NumExpansions);
   }
 
   case TYPE_ELABORATED: {
@@ -2995,6 +3007,15 @@ QualType ASTReader::ReadTypeRecord(unsigned Index) {
     return
       Context->getSubstTemplateTypeParmType(cast<TemplateTypeParmType>(Parm),
                                             Replacement);
+  }
+
+  case TYPE_SUBST_TEMPLATE_TYPE_PARM_PACK: {
+    unsigned Idx = 0;
+    QualType Parm = GetType(Record[Idx++]);
+    TemplateArgument ArgPack = ReadTemplateArgument(*Loc.F, Record, Idx);
+    return Context->getSubstTemplateTypeParmPackType(
+                                               cast<TemplateTypeParmType>(Parm),
+                                                     ArgPack);
   }
 
   case TYPE_INJECTED_CLASS_NAME: {
@@ -3231,6 +3252,10 @@ void TypeLocReader::VisitTemplateTypeParmTypeLoc(TemplateTypeParmTypeLoc TL) {
 }
 void TypeLocReader::VisitSubstTemplateTypeParmTypeLoc(
                                             SubstTemplateTypeParmTypeLoc TL) {
+  TL.setNameLoc(ReadSourceLocation(Record, Idx));
+}
+void TypeLocReader::VisitSubstTemplateTypeParmPackTypeLoc(
+                                          SubstTemplateTypeParmPackTypeLoc TL) {
   TL.setNameLoc(ReadSourceLocation(Record, Idx));
 }
 void TypeLocReader::VisitTemplateSpecializationTypeLoc(

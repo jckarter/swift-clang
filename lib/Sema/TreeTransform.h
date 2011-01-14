@@ -227,8 +227,12 @@ public:
   /// C++0x [temp.arg.explicit]p9.
   ///
   /// \param NumExpansions The number of separate arguments that will be in
-  /// the expanded form of the corresponding pack expansion. Must be set when
-  /// \c ShouldExpand is \c true.
+  /// the expanded form of the corresponding pack expansion. This is both an
+  /// input and an output parameter, which can be set by the caller if the
+  /// number of expansions is known a priori (e.g., due to a prior substitution)
+  /// and will be set by the callee when the number of expansions is known.
+  /// The callee must set this value when \c ShouldExpand is \c true; it may
+  /// set this value in other cases.
   ///
   /// \returns true if an error occurred (e.g., because the parameter packs 
   /// are to be instantiated with arguments of different lengths), false 
@@ -240,7 +244,7 @@ public:
                                unsigned NumUnexpanded,
                                bool &ShouldExpand,
                                bool &RetainExpansion,
-                               unsigned &NumExpansions) {
+                               llvm::Optional<unsigned> &NumExpansions) {
     ShouldExpand = false;
     return false;
   }
@@ -490,7 +494,8 @@ public:
 
   /// \brief Transforms a single function-type parameter.  Return null
   /// on error.
-  ParmVarDecl *TransformFunctionTypeParam(ParmVarDecl *OldParm);
+  ParmVarDecl *TransformFunctionTypeParam(ParmVarDecl *OldParm,
+                                        llvm::Optional<unsigned> NumExpansions);
 
   QualType TransformReferenceType(TypeLocBuilder &TLB, ReferenceTypeLoc TL);
 
@@ -806,6 +811,18 @@ public:
     // Build the elaborated-type-specifier type.
     QualType T = SemaRef.Context.getTypeDeclType(Tag);
     return SemaRef.Context.getElaboratedType(Keyword, NNS, T);
+  }
+
+  /// \brief Build a new pack expansion type.
+  ///
+  /// By default, builds a new PackExpansionType type from the given pattern.
+  /// Subclasses may override this routine to provide different behavior.
+  QualType RebuildPackExpansionType(QualType Pattern, 
+                                    SourceRange PatternRange,
+                                    SourceLocation EllipsisLoc,
+                                    llvm::Optional<unsigned> NumExpansions) {
+    return getSema().CheckPackExpansion(Pattern, PatternRange, EllipsisLoc,
+                                        NumExpansions);
   }
 
   /// \brief Build a new nested-name-specifier given the prefix and an
@@ -2155,12 +2172,13 @@ public:
   /// for a template argument. Subclasses may override this routine to provide 
   /// different behavior.
   TemplateArgumentLoc RebuildPackExpansion(TemplateArgumentLoc Pattern,
-                                           SourceLocation EllipsisLoc) {
+                                           SourceLocation EllipsisLoc,
+                                       llvm::Optional<unsigned> NumExpansions) {
     switch (Pattern.getArgument().getKind()) {
     case TemplateArgument::Expression: {
       ExprResult Result
-        = getSema().ActOnPackExpansion(Pattern.getSourceExpression(),
-                                       EllipsisLoc);
+        = getSema().CheckPackExpansion(Pattern.getSourceExpression(),
+                                       EllipsisLoc, NumExpansions);
       if (Result.isInvalid())
         return TemplateArgumentLoc();
           
@@ -2185,7 +2203,8 @@ public:
     case TemplateArgument::Type:
       if (TypeSourceInfo *Expansion 
             = getSema().CheckPackExpansion(Pattern.getTypeSourceInfo(),
-                                           EllipsisLoc))
+                                           EllipsisLoc,
+                                           NumExpansions))
         return TemplateArgumentLoc(TemplateArgument(Expansion->getType()),
                                    Expansion);
       break;
@@ -2199,8 +2218,9 @@ public:
   /// By default, performs semantic analysis to build a new pack expansion
   /// for an expression. Subclasses may override this routine to provide 
   /// different behavior.
-  ExprResult RebuildPackExpansion(Expr *Pattern, SourceLocation EllipsisLoc) {
-    return getSema().ActOnPackExpansion(Pattern, EllipsisLoc);
+  ExprResult RebuildPackExpansion(Expr *Pattern, SourceLocation EllipsisLoc,
+                                  llvm::Optional<unsigned> NumExpansions) {
+    return getSema().CheckPackExpansion(Pattern, EllipsisLoc, NumExpansions);
   }
   
 private:
@@ -2290,7 +2310,9 @@ bool TreeTransform<Derived>::TransformExprs(Expr **Inputs,
       // be expanded.
       bool Expand = true;
       bool RetainExpansion = false;
-      unsigned NumExpansions = 0;
+      llvm::Optional<unsigned> OrigNumExpansions
+        = Expansion->getNumExpansions();
+      llvm::Optional<unsigned> NumExpansions = OrigNumExpansions;
       if (getDerived().TryExpandParameterPacks(Expansion->getEllipsisLoc(),
                                                Pattern->getSourceRange(),
                                                Unexpanded.data(),
@@ -2309,7 +2331,8 @@ bool TreeTransform<Derived>::TransformExprs(Expr **Inputs,
           return true;
         
         ExprResult Out = getDerived().RebuildPackExpansion(OutPattern.get(), 
-                                                Expansion->getEllipsisLoc());
+                                                Expansion->getEllipsisLoc(),
+                                                           NumExpansions);
         if (Out.isInvalid())
           return true;
         
@@ -2321,14 +2344,15 @@ bool TreeTransform<Derived>::TransformExprs(Expr **Inputs,
       
       // The transform has determined that we should perform an elementwise
       // expansion of the pattern. Do so.
-      for (unsigned I = 0; I != NumExpansions; ++I) {
+      for (unsigned I = 0; I != *NumExpansions; ++I) {
         Sema::ArgumentPackSubstitutionIndexRAII SubstIndex(getSema(), I);
         ExprResult Out = getDerived().TransformExpr(Pattern);
         if (Out.isInvalid())
           return true;
 
         if (Out.get()->containsUnexpandedParameterPack()) {
-          Out = RebuildPackExpansion(Out.get(), Expansion->getEllipsisLoc());
+          Out = RebuildPackExpansion(Out.get(), Expansion->getEllipsisLoc(),
+                                     OrigNumExpansions);
           if (Out.isInvalid())
             return true;
         }
@@ -2807,8 +2831,10 @@ bool TreeTransform<Derived>::TransformTemplateArguments(InputIterator First,
       // We have a pack expansion, for which we will be substituting into
       // the pattern.
       SourceLocation Ellipsis;
+      llvm::Optional<unsigned> OrigNumExpansions;
       TemplateArgumentLoc Pattern
-        = In.getPackExpansionPattern(Ellipsis, getSema().Context);
+        = In.getPackExpansionPattern(Ellipsis, OrigNumExpansions, 
+                                     getSema().Context);
       
       llvm::SmallVector<UnexpandedParameterPack, 2> Unexpanded;
       getSema().collectUnexpandedParameterPacks(Pattern, Unexpanded);
@@ -2818,7 +2844,7 @@ bool TreeTransform<Derived>::TransformTemplateArguments(InputIterator First,
       // be expanded.
       bool Expand = true;
       bool RetainExpansion = false;
-      unsigned NumExpansions = 0;
+      llvm::Optional<unsigned> NumExpansions = OrigNumExpansions;
       if (getDerived().TryExpandParameterPacks(Ellipsis,
                                                Pattern.getSourceRange(),
                                                Unexpanded.data(),
@@ -2837,7 +2863,8 @@ bool TreeTransform<Derived>::TransformTemplateArguments(InputIterator First,
         if (getDerived().TransformTemplateArgument(Pattern, OutPattern))
           return true;
                 
-        Out = getDerived().RebuildPackExpansion(OutPattern, Ellipsis);
+        Out = getDerived().RebuildPackExpansion(OutPattern, Ellipsis,
+                                                NumExpansions);
         if (Out.getArgument().isNull())
           return true;
         
@@ -2847,14 +2874,15 @@ bool TreeTransform<Derived>::TransformTemplateArguments(InputIterator First,
       
       // The transform has determined that we should perform an elementwise
       // expansion of the pattern. Do so.
-      for (unsigned I = 0; I != NumExpansions; ++I) {
+      for (unsigned I = 0; I != *NumExpansions; ++I) {
         Sema::ArgumentPackSubstitutionIndexRAII SubstIndex(getSema(), I);
 
         if (getDerived().TransformTemplateArgument(Pattern, Out))
           return true;
         
         if (Out.getArgument().containsUnexpandedParameterPack()) {
-          Out = getDerived().RebuildPackExpansion(Out, Ellipsis);
+          Out = getDerived().RebuildPackExpansion(Out, Ellipsis,
+                                                  OrigNumExpansions);
           if (Out.getArgument().isNull())
             return true;
         }
@@ -2870,7 +2898,8 @@ bool TreeTransform<Derived>::TransformTemplateArguments(InputIterator First,
         if (getDerived().TransformTemplateArgument(Pattern, Out))
           return true;
         
-        Out = getDerived().RebuildPackExpansion(Out, Ellipsis);
+        Out = getDerived().RebuildPackExpansion(Out, Ellipsis,
+                                                OrigNumExpansions);
         if (Out.getArgument().isNull())
           return true;
         
@@ -3445,9 +3474,38 @@ QualType TreeTransform<Derived>::TransformExtVectorType(TypeLocBuilder &TLB,
 
 template<typename Derived>
 ParmVarDecl *
-TreeTransform<Derived>::TransformFunctionTypeParam(ParmVarDecl *OldParm) {
+TreeTransform<Derived>::TransformFunctionTypeParam(ParmVarDecl *OldParm,
+                                       llvm::Optional<unsigned> NumExpansions) {
   TypeSourceInfo *OldDI = OldParm->getTypeSourceInfo();
-  TypeSourceInfo *NewDI = getDerived().TransformType(OldDI);
+  TypeSourceInfo *NewDI = 0;
+  
+  if (NumExpansions && isa<PackExpansionType>(OldDI->getType())) {
+    // If we're substituting into a pack expansion type and we know the 
+    TypeLoc OldTL = OldDI->getTypeLoc();
+    PackExpansionTypeLoc OldExpansionTL = cast<PackExpansionTypeLoc>(OldTL);
+    
+    TypeLocBuilder TLB;
+    TypeLoc NewTL = OldDI->getTypeLoc();
+    TLB.reserve(NewTL.getFullDataSize());
+    
+    QualType Result = getDerived().TransformType(TLB, 
+                                               OldExpansionTL.getPatternLoc());
+    if (Result.isNull())
+      return 0;
+   
+    Result = RebuildPackExpansionType(Result, 
+                                OldExpansionTL.getPatternLoc().getSourceRange(), 
+                                      OldExpansionTL.getEllipsisLoc(),
+                                      NumExpansions);
+    if (Result.isNull())
+      return 0;
+    
+    PackExpansionTypeLoc NewExpansionTL
+      = TLB.push<PackExpansionTypeLoc>(Result);
+    NewExpansionTL.setEllipsisLoc(OldExpansionTL.getEllipsisLoc());
+    NewDI = TLB.getTypeSourceInfo(SemaRef.Context, Result);
+  } else
+    NewDI = getDerived().TransformType(OldDI);
   if (!NewDI)
     return 0;
 
@@ -3474,6 +3532,7 @@ bool TreeTransform<Derived>::
                               llvm::SmallVectorImpl<ParmVarDecl*> *PVars) {
   for (unsigned i = 0; i != NumParams; ++i) {
     if (ParmVarDecl *OldParm = Params[i]) {
+      llvm::Optional<unsigned> NumExpansions;
       if (OldParm->isParameterPack()) {
         // We have a function parameter pack that may need to be expanded.
         llvm::SmallVector<UnexpandedParameterPack, 2> Unexpanded;
@@ -3487,7 +3546,9 @@ bool TreeTransform<Derived>::
         // Determine whether we should expand the parameter packs.
         bool ShouldExpand = false;
         bool RetainExpansion = false;
-        unsigned NumExpansions = 0;
+        llvm::Optional<unsigned> OrigNumExpansions
+          = ExpansionTL.getTypePtr()->getNumExpansions();
+        NumExpansions = OrigNumExpansions;
         if (getDerived().TryExpandParameterPacks(ExpansionTL.getEllipsisLoc(),
                                                  Pattern.getSourceRange(),
                                                  Unexpanded.data(), 
@@ -3502,10 +3563,11 @@ bool TreeTransform<Derived>::
           // Expand the function parameter pack into multiple, separate
           // parameters.
           getDerived().ExpandingFunctionParameterPack(OldParm);
-          for (unsigned I = 0; I != NumExpansions; ++I) {
+          for (unsigned I = 0; I != *NumExpansions; ++I) {
             Sema::ArgumentPackSubstitutionIndexRAII SubstIndex(getSema(), I);
             ParmVarDecl *NewParm 
-              = getDerived().TransformFunctionTypeParam(OldParm);
+              = getDerived().TransformFunctionTypeParam(OldParm,
+                                                        OrigNumExpansions);
             if (!NewParm)
               return true;
             
@@ -3519,7 +3581,8 @@ bool TreeTransform<Derived>::
           if (RetainExpansion) {
             ForgetPartiallySubstitutedPackRAII Forget(getDerived());
             ParmVarDecl *NewParm 
-              = getDerived().TransformFunctionTypeParam(OldParm);
+              = getDerived().TransformFunctionTypeParam(OldParm,
+                                                        OrigNumExpansions);
             if (!NewParm)
               return true;
             
@@ -3537,7 +3600,8 @@ bool TreeTransform<Derived>::
       }
       
       Sema::ArgumentPackSubstitutionIndexRAII SubstIndex(getSema(), -1);
-      ParmVarDecl *NewParm = getDerived().TransformFunctionTypeParam(OldParm);
+      ParmVarDecl *NewParm = getDerived().TransformFunctionTypeParam(OldParm,
+                                                                 NumExpansions);
       if (!NewParm)
         return true;
       
@@ -3551,6 +3615,7 @@ bool TreeTransform<Derived>::
     // declaration for this parameter.
     QualType OldType = ParamTypes[i];
     bool IsPackExpansion = false;
+    llvm::Optional<unsigned> NumExpansions;
     if (const PackExpansionType *Expansion 
                                        = dyn_cast<PackExpansionType>(OldType)) {
       // We have a function parameter pack that may need to be expanded.
@@ -3561,7 +3626,6 @@ bool TreeTransform<Derived>::
       // Determine whether we should expand the parameter packs.
       bool ShouldExpand = false;
       bool RetainExpansion = false;
-      unsigned NumExpansions = 0;
       if (getDerived().TryExpandParameterPacks(Loc, SourceRange(),
                                                Unexpanded.data(), 
                                                Unexpanded.size(),
@@ -3574,7 +3638,7 @@ bool TreeTransform<Derived>::
       if (ShouldExpand) {
         // Expand the function parameter pack into multiple, separate 
         // parameters.
-        for (unsigned I = 0; I != NumExpansions; ++I) {
+        for (unsigned I = 0; I != *NumExpansions; ++I) {
           Sema::ArgumentPackSubstitutionIndexRAII SubstIndex(getSema(), I);
           QualType NewType = getDerived().TransformType(Pattern);
           if (NewType.isNull())
@@ -3614,7 +3678,8 @@ bool TreeTransform<Derived>::
       return true;
 
     if (IsPackExpansion)
-      NewType = getSema().Context.getPackExpansionType(NewType);
+      NewType = getSema().Context.getPackExpansionType(NewType,
+                                                       NumExpansions);
       
     OutParamTypes.push_back(NewType);
     if (PVars)
@@ -3913,6 +3978,13 @@ template<typename Derived>
 QualType TreeTransform<Derived>::TransformSubstTemplateTypeParmType(
                                          TypeLocBuilder &TLB,
                                          SubstTemplateTypeParmTypeLoc TL) {
+  return TransformTypeSpecType(TLB, TL);
+}
+
+template<typename Derived>
+QualType TreeTransform<Derived>::TransformSubstTemplateTypeParmPackType(
+                                          TypeLocBuilder &TLB,
+                                          SubstTemplateTypeParmPackTypeLoc TL) {
   return TransformTypeSpecType(TLB, TL);
 }
 
@@ -4232,8 +4304,25 @@ QualType TreeTransform<Derived>::
 template<typename Derived>
 QualType TreeTransform<Derived>::TransformPackExpansionType(TypeLocBuilder &TLB,
                                                       PackExpansionTypeLoc TL) {
-  llvm_unreachable("Caller must expansion pack expansion types");
-  return QualType();
+  QualType Pattern                                      
+    = getDerived().TransformType(TLB, TL.getPatternLoc());  
+  if (Pattern.isNull())
+    return QualType();
+  
+  QualType Result = TL.getType();  
+  if (getDerived().AlwaysRebuild() ||
+      Pattern != TL.getPatternLoc().getType()) {
+    Result = getDerived().RebuildPackExpansionType(Pattern, 
+                                           TL.getPatternLoc().getSourceRange(),
+                                                   TL.getEllipsisLoc(),
+                                           TL.getTypePtr()->getNumExpansions());
+    if (Result.isNull())
+      return QualType();
+  }
+  
+  PackExpansionTypeLoc NewT = TLB.push<PackExpansionTypeLoc>(Result);
+  NewT.setEllipsisLoc(TL.getEllipsisLoc());
+  return Result;
 }
 
 template<typename Derived>
@@ -6761,8 +6850,15 @@ TreeTransform<Derived>::TransformCXXNoexceptExpr(CXXNoexceptExpr *E) {
 template<typename Derived>
 ExprResult
 TreeTransform<Derived>::TransformPackExpansionExpr(PackExpansionExpr *E) {
-  llvm_unreachable("pack expansion expression in unhandled context");
-  return ExprError();
+  ExprResult Pattern = getDerived().TransformExpr(E->getPattern());
+  if (Pattern.isInvalid())
+    return ExprError();
+  
+  if (!getDerived().AlwaysRebuild() && Pattern.get() == E->getPattern())
+    return SemaRef.Owned(E);
+
+  return getDerived().RebuildPackExpansion(Pattern.get(), E->getEllipsisLoc(),
+                                           E->getNumExpansions());
 }
 
 template<typename Derived>
@@ -6779,7 +6875,7 @@ TreeTransform<Derived>::TransformSizeOfPackExpr(SizeOfPackExpr *E) {
   UnexpandedParameterPack Unexpanded(E->getPack(), E->getPackLoc());
   bool ShouldExpand = false;
   bool RetainExpansion = false;
-  unsigned NumExpansions = 0;
+  llvm::Optional<unsigned> NumExpansions;
   if (getDerived().TryExpandParameterPacks(E->getOperatorLoc(), E->getPackLoc(), 
                                            &Unexpanded, 1, 
                                            ShouldExpand, RetainExpansion,
@@ -6793,7 +6889,7 @@ TreeTransform<Derived>::TransformSizeOfPackExpr(SizeOfPackExpr *E) {
   // that stores that length.
   return getDerived().RebuildSizeOfPackExpr(E->getOperatorLoc(), E->getPack(), 
                                             E->getPackLoc(), E->getRParenLoc(), 
-                                            NumExpansions);
+                                            *NumExpansions);
 }
 
 template<typename Derived>
@@ -6992,7 +7088,8 @@ TreeTransform<Derived>::TransformBlockExpr(BlockExpr *E) {
   for (BlockDecl::param_const_iterator P = BD->param_begin(),
        EN = BD->param_end(); P != EN; ++P) {
     ParmVarDecl *OldParm = (*P);
-    ParmVarDecl *NewParm = getDerived().TransformFunctionTypeParam(OldParm);
+    ParmVarDecl *NewParm = getDerived().TransformFunctionTypeParam(OldParm,
+                                                   llvm::Optional<unsigned>());
     QualType NewType = NewParm->getType();
     Params.push_back(NewParm);
     ParamTypes.push_back(NewParm->getType());

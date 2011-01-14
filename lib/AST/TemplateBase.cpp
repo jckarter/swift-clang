@@ -136,7 +136,7 @@ bool TemplateArgument::containsUnexpandedParameterPack() const {
 }
 
 void TemplateArgument::Profile(llvm::FoldingSetNodeID &ID,
-                               ASTContext &Context) const {
+                               const ASTContext &Context) const {
   ID.AddInteger(Kind);
   switch (Kind) {
   case Null:
@@ -346,6 +346,7 @@ SourceRange TemplateArgumentLoc::getSourceRange() const {
 
 TemplateArgumentLoc 
 TemplateArgumentLoc::getPackExpansionPattern(SourceLocation &Ellipsis,
+                                       llvm::Optional<unsigned> &NumExpansions,
                                              ASTContext &Context) const {
   assert(Argument.isPackExpansion());
   
@@ -363,6 +364,7 @@ TemplateArgumentLoc::getPackExpansionPattern(SourceLocation &Ellipsis,
     Ellipsis = Expansion.getEllipsisLoc();
     
     TypeLoc Pattern = Expansion.getPatternLoc();
+    NumExpansions = Expansion.getTypePtr()->getNumExpansions();
     
     // FIXME: This is horrible. We know where the source location data is for
     // the pattern, and we have the pattern's type, but we are forced to copy
@@ -382,10 +384,12 @@ TemplateArgumentLoc::getPackExpansionPattern(SourceLocation &Ellipsis,
       = cast<PackExpansionExpr>(Argument.getAsExpr());
     Expr *Pattern = Expansion->getPattern();
     Ellipsis = Expansion->getEllipsisLoc();
+    NumExpansions = Expansion->getNumExpansions();
     return TemplateArgumentLoc(Pattern, Pattern);
   }
 
   case TemplateArgument::TemplateExpansion:
+    // FIXME: Variadic templates num expansions
     Ellipsis = getTemplateEllipsisLoc();
     return TemplateArgumentLoc(Argument.getPackExpansionPattern(),
                                getTemplateQualifierRange(),

@@ -1006,7 +1006,9 @@ void ASTStmtReader::VisitCXXTemporaryObjectExpr(CXXTemporaryObjectExpr *E) {
 
 void ASTStmtReader::VisitCXXNamedCastExpr(CXXNamedCastExpr *E) {
   VisitExplicitCastExpr(E);
-  E->setOperatorLoc(ReadSourceLocation(Record, Idx));
+  SourceRange R = ReadSourceRange(Record, Idx);
+  E->Loc = R.getBegin();
+  E->RParenLoc = R.getEnd();
 }
 
 void ASTStmtReader::VisitCXXStaticCastExpr(CXXStaticCastExpr *E) {
@@ -1292,6 +1294,7 @@ void ASTStmtReader::VisitCXXNoexceptExpr(CXXNoexceptExpr *E) {
 void ASTStmtReader::VisitPackExpansionExpr(PackExpansionExpr *E) {
   VisitExpr(E);
   E->EllipsisLoc = ReadSourceLocation(Record, Idx);
+  E->NumExpansions = Record[Idx++];
   E->Pattern = Reader.ReadSubExpr();  
 }
 
