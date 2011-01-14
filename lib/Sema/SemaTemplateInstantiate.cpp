@@ -622,7 +622,7 @@ namespace {
                                  unsigned NumUnexpanded,
                                  bool &ShouldExpand,
                                  bool &RetainExpansion,
-                                 unsigned &NumExpansions) {
+                                 llvm::Optional<unsigned> &NumExpansions) {
       return getSema().CheckParameterPacksForExpansion(EllipsisLoc, 
                                                        PatternRange, Unexpanded,
                                                        NumUnexpanded, 
@@ -705,7 +705,8 @@ namespace {
 
     QualType TransformFunctionProtoType(TypeLocBuilder &TLB,
                                         FunctionProtoTypeLoc TL);
-    ParmVarDecl *TransformFunctionTypeParam(ParmVarDecl *OldParm);
+    ParmVarDecl *TransformFunctionTypeParam(ParmVarDecl *OldParm,
+                                      llvm::Optional<unsigned> NumExpansions);
 
     /// \brief Transforms a template type parameter type by performing
     /// substitution of the corresponding template type argument.
@@ -1000,8 +1001,10 @@ QualType TemplateInstantiator::TransformFunctionProtoType(TypeLocBuilder &TLB,
 }
 
 ParmVarDecl *
-TemplateInstantiator::TransformFunctionTypeParam(ParmVarDecl *OldParm) {
-  return SemaRef.SubstParmVarDecl(OldParm, TemplateArgs);
+TemplateInstantiator::TransformFunctionTypeParam(ParmVarDecl *OldParm,
+                                       llvm::Optional<unsigned> NumExpansions) {
+  return SemaRef.SubstParmVarDecl(OldParm, TemplateArgs,
+                                  NumExpansions);
 }
 
 QualType
@@ -1241,7 +1244,8 @@ TypeSourceInfo *Sema::SubstFunctionDeclType(TypeSourceInfo *T,
 }
 
 ParmVarDecl *Sema::SubstParmVarDecl(ParmVarDecl *OldParm, 
-                          const MultiLevelTemplateArgumentList &TemplateArgs) {
+                            const MultiLevelTemplateArgumentList &TemplateArgs,
+                                    llvm::Optional<unsigned> NumExpansions) {
   TypeSourceInfo *OldDI = OldParm->getTypeSourceInfo();
   TypeSourceInfo *NewDI = 0;
   
@@ -1260,7 +1264,8 @@ ParmVarDecl *Sema::SubstParmVarDecl(ParmVarDecl *OldParm,
       // We still have unexpanded parameter packs, which means that
       // our function parameter is still a function parameter pack.
       // Therefore, make its type a pack expansion type.
-      NewDI = CheckPackExpansion(NewDI, ExpansionTL.getEllipsisLoc());
+      NewDI = CheckPackExpansion(NewDI, ExpansionTL.getEllipsisLoc(),
+                                 NumExpansions);
     }
   } else {
     NewDI = SubstType(OldDI, TemplateArgs, OldParm->getLocation(), 
@@ -1360,7 +1365,7 @@ Sema::SubstBaseSpecifiers(CXXRecordDecl *Instantiation,
                                       Unexpanded);
       bool ShouldExpand = false;
       bool RetainExpansion = false;
-      unsigned NumExpansions = 0;
+      llvm::Optional<unsigned> NumExpansions;
       if (CheckParameterPacksForExpansion(Base->getEllipsisLoc(), 
                                           Base->getSourceRange(),
                                           Unexpanded.data(), Unexpanded.size(),
@@ -1373,7 +1378,7 @@ Sema::SubstBaseSpecifiers(CXXRecordDecl *Instantiation,
       
       // If we should expand this pack expansion now, do so.
       if (ShouldExpand) {
-        for (unsigned I = 0; I != NumExpansions; ++I) {
+        for (unsigned I = 0; I != *NumExpansions; ++I) {
             Sema::ArgumentPackSubstitutionIndexRAII SubstIndex(*this, I);
           
           TypeSourceInfo *BaseTypeLoc = SubstType(Base->getTypeSourceInfo(),

@@ -557,7 +557,7 @@ void ExprEngine::ProcessStmt(const CFGStmt S, StmtNodeBuilder& builder) {
     }
 
     const StackFrameContext *SFC = LC->getCurrentStackFrame();
-    CleanedState = StateMgr.RemoveDeadBindings(St, SFC, SymReaper);
+    CleanedState = StateMgr.removeDeadBindings(St, SFC, SymReaper);
   } else {
     CleanedState = EntryNode->getState();
   }
@@ -1481,7 +1481,7 @@ void ExprEngine::processSwitch(SwitchNodeBuilder& builder) {
 }
 
 void ExprEngine::processCallEnter(CallEnterNodeBuilder &B) {
-  const GRState *state = B.getState()->EnterStackFrame(B.getCalleeContext());
+  const GRState *state = B.getState()->enterStackFrame(B.getCalleeContext());
   B.generateNode(state);
 }
 

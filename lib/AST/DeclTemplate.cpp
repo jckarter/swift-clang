@@ -319,7 +319,8 @@ ClassTemplateDecl::getInjectedClassNameSpecialization() {
     if (TemplateTypeParmDecl *TTP = dyn_cast<TemplateTypeParmDecl>(*Param)) {
       QualType ArgType = Context.getTypeDeclType(TTP);
       if (TTP->isParameterPack())
-        ArgType = Context.getPackExpansionType(ArgType);
+        ArgType = Context.getPackExpansionType(ArgType, 
+                                               llvm::Optional<unsigned>());
       
       Arg = TemplateArgument(ArgType);
     } else if (NonTypeTemplateParmDecl *NTTP =
@@ -331,7 +332,8 @@ ClassTemplateDecl::getInjectedClassNameSpecialization() {
 
       if (NTTP->isParameterPack())
         E = new (Context) PackExpansionExpr(Context.DependentTy, E,
-                                            NTTP->getLocation());
+                                            NTTP->getLocation(),
+                                            llvm::Optional<unsigned>());
       Arg = TemplateArgument(E);
     } else {
       TemplateTemplateParmDecl *TTP = cast<TemplateTemplateParmDecl>(*Param);
