@@ -808,6 +808,16 @@ public:
     return SemaRef.Context.getElaboratedType(Keyword, NNS, T);
   }
 
+  /// \brief Build a new pack expansion type.
+  ///
+  /// By default, builds a new PackExpansionType type from the given pattern.
+  /// Subclasses may override this routine to provide different behavior.
+  QualType RebuildPackExpansionType(QualType Pattern, 
+                                    SourceRange PatternRange,
+                                    SourceLocation EllipsisLoc) {
+    return getSema().CheckPackExpansion(Pattern, PatternRange, EllipsisLoc);
+  }
+
   /// \brief Build a new nested-name-specifier given the prefix and an
   /// identifier that names the next step in the nested-name-specifier.
   ///
@@ -3917,6 +3927,13 @@ QualType TreeTransform<Derived>::TransformSubstTemplateTypeParmType(
 }
 
 template<typename Derived>
+QualType TreeTransform<Derived>::TransformSubstTemplateTypeParmPackType(
+                                          TypeLocBuilder &TLB,
+                                          SubstTemplateTypeParmPackTypeLoc TL) {
+  return TransformTypeSpecType(TLB, TL);
+}
+
+template<typename Derived>
 QualType TreeTransform<Derived>::TransformTemplateSpecializationType(
                                                         TypeLocBuilder &TLB,
                                            TemplateSpecializationTypeLoc TL) {
@@ -4232,8 +4249,24 @@ QualType TreeTransform<Derived>::
 template<typename Derived>
 QualType TreeTransform<Derived>::TransformPackExpansionType(TypeLocBuilder &TLB,
                                                       PackExpansionTypeLoc TL) {
-  llvm_unreachable("Caller must expansion pack expansion types");
-  return QualType();
+  QualType Pattern                                      
+    = getDerived().TransformType(TLB, TL.getPatternLoc());  
+  if (Pattern.isNull())
+    return QualType();
+  
+  QualType Result = TL.getType();  
+  if (getDerived().AlwaysRebuild() ||
+      Pattern != TL.getPatternLoc().getType()) {
+    Result = getDerived().RebuildPackExpansionType(Pattern, 
+                                           TL.getPatternLoc().getSourceRange(),
+                                                   TL.getEllipsisLoc());
+    if (Result.isNull())
+      return QualType();
+  }
+  
+  PackExpansionTypeLoc NewT = TLB.push<PackExpansionTypeLoc>(Result);
+  NewT.setEllipsisLoc(TL.getEllipsisLoc());
+  return Result;
 }
 
 template<typename Derived>
@@ -6761,8 +6794,14 @@ TreeTransform<Derived>::TransformCXXNoexceptExpr(CXXNoexceptExpr *E) {
 template<typename Derived>
 ExprResult
 TreeTransform<Derived>::TransformPackExpansionExpr(PackExpansionExpr *E) {
-  llvm_unreachable("pack expansion expression in unhandled context");
-  return ExprError();
+  ExprResult Pattern = getDerived().TransformExpr(E->getPattern());
+  if (Pattern.isInvalid())
+    return ExprError();
+  
+  if (!getDerived().AlwaysRebuild() && Pattern.get() == E->getPattern())
+    return SemaRef.Owned(E);
+
+  return getDerived().RebuildPackExpansion(Pattern.get(), E->getEllipsisLoc());
 }
 
 template<typename Derived>

@@ -377,18 +377,13 @@ TypeResult Sema::ActOnPackExpansion(ParsedType Type,
 
 TypeSourceInfo *Sema::CheckPackExpansion(TypeSourceInfo *Pattern,
                                          SourceLocation EllipsisLoc) {
-  // C++0x [temp.variadic]p5:
-  //   The pattern of a pack expansion shall name one or more
-  //   parameter packs that are not expanded by a nested pack
-  //   expansion.
-  if (!Pattern->getType()->containsUnexpandedParameterPack()) {
-    Diag(EllipsisLoc, diag::err_pack_expansion_without_parameter_packs)
-      << Pattern->getTypeLoc().getSourceRange();
-    return 0;
-  }
-  
   // Create the pack expansion type and source-location information.
-  QualType Result = Context.getPackExpansionType(Pattern->getType());
+  QualType Result = CheckPackExpansion(Pattern->getType(), 
+                                       Pattern->getTypeLoc().getSourceRange(),
+                                       EllipsisLoc);
+  if (Result.isNull())
+    return 0;
+  
   TypeSourceInfo *TSResult = Context.CreateTypeSourceInfo(Result);
   PackExpansionTypeLoc TL = cast<PackExpansionTypeLoc>(TSResult->getTypeLoc());
   TL.setEllipsisLoc(EllipsisLoc);
@@ -398,6 +393,22 @@ TypeSourceInfo *Sema::CheckPackExpansion(TypeSourceInfo *Pattern,
          Pattern->getTypeLoc().getOpaqueData(),
          Pattern->getTypeLoc().getFullDataSize());
   return TSResult;
+}
+
+QualType Sema::CheckPackExpansion(QualType Pattern,
+                                  SourceRange PatternRange,
+                                  SourceLocation EllipsisLoc) {
+  // C++0x [temp.variadic]p5:
+  //   The pattern of a pack expansion shall name one or more
+  //   parameter packs that are not expanded by a nested pack
+  //   expansion.
+  if (!Pattern->containsUnexpandedParameterPack()) {
+    Diag(EllipsisLoc, diag::err_pack_expansion_without_parameter_packs)
+      << PatternRange;
+    return QualType();
+  }
+
+  return Context.getPackExpansionType(Pattern);
 }
 
 ExprResult Sema::ActOnPackExpansion(Expr *Pattern, SourceLocation EllipsisLoc) {
@@ -445,6 +456,10 @@ bool Sema::CheckParameterPacksForExpansion(SourceLocation EllipsisLoc,
   std::pair<IdentifierInfo *, SourceLocation> FirstPack;
   bool HaveFirstPack = false;
   
+  // FIXME: Variadic templates. Even if we don't expand, we'd still like to
+  // return the number of expansions back to the caller, perhaps as an 
+  // llvm::Optional, so that it can be embedded in the pack expansion. This
+  // is important for the multi-level substitution case.
   for (unsigned I = 0; I != NumUnexpanded; ++I) {
     // Compute the depth and index for this parameter pack.
     unsigned Depth;

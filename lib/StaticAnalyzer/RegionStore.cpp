@@ -822,7 +822,8 @@ SVal RegionStoreManager::evalDerivedToBase(SVal derived, QualType baseType) {
     return derived;
 
   const MemRegion *baseReg = 
-    MRMgr.getCXXBaseObjectRegion(baseDecl, derivedRegVal->getRegion());
+    MRMgr.getCXXBaseObjectRegion(baseDecl, derivedRegVal->getRegion()); 
+
   return loc::MemRegionVal(baseReg);
 }
 //===----------------------------------------------------------------------===//
@@ -1104,6 +1105,17 @@ RegionStoreManager::GetLazyBinding(RegionBindings B, const MemRegion *R) {
     if (X.second)
       return std::make_pair(X.first,
                             MRMgr.getFieldRegionWithSuper(FR, X.second));
+  }
+  // C++ base object region is another kind of region that we should blast
+  // through to look for lazy compound value. It is like a field region.
+  else if (const CXXBaseObjectRegion *baseReg = 
+                            dyn_cast<CXXBaseObjectRegion>(R)) {
+    const std::pair<Store, const MemRegion *> &X =
+      GetLazyBinding(B, baseReg->getSuperRegion());
+    
+    if (X.second)
+      return std::make_pair(X.first,
+                     MRMgr.getCXXBaseObjectRegionWithSuper(baseReg, X.second));
   }
   // The NULL MemRegion indicates an non-existent lazy binding. A NULL Store is
   // possible for a valid lazy binding.
@@ -1572,13 +1584,37 @@ Store RegionStoreManager::BindStruct(Store store, const TypedRegion* R,
 
 Store RegionStoreManager::KillStruct(Store store, const TypedRegion* R,
                                      SVal DefaultVal) {
+  BindingKey key = BindingKey::Make(R, BindingKey::Default);
+  
+  // The BindingKey may be "invalid" if we cannot handle the region binding
+  // explicitly.  One example is something like array[index], where index
+  // is a symbolic value.  In such cases, we want to invalidate the entire
+  // array, as the index assignment could have been to any element.  In
+  // the case of nested symbolic indices, we need to march up the region
+  // hierarchy untile we reach a region whose binding we can reason about.
+  const SubRegion *subReg = R;
+
+  while (!key.isValid()) {
+    if (const SubRegion *tmp = dyn_cast<SubRegion>(subReg->getSuperRegion())) {
+      subReg = tmp;
+      key = BindingKey::Make(tmp, BindingKey::Default);
+    }
+    else
+      break;
+  }                                 
+
+  // Remove the old bindings, using 'subReg' as the root of all regions
+  // we will invalidate.
   RegionBindings B = GetRegionBindings(store);
   llvm::OwningPtr<RegionStoreSubRegionMap>
     SubRegions(getRegionStoreSubRegionMap(store));
-  RemoveSubRegionBindings(B, R, *SubRegions);
+  RemoveSubRegionBindings(B, subReg, *SubRegions);
 
   // Set the default value of the struct region to "unknown".
-  return addBinding(B, R, BindingKey::Default, DefaultVal).getRoot();
+  if (!key.isValid())
+    return B.getRoot();
+  
+  return addBinding(B, key, DefaultVal).getRoot();
 }
 
 Store RegionStoreManager::CopyLazyBindings(nonloc::LazyCompoundVal V,
