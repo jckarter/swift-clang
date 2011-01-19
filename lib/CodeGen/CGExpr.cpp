@@ -475,7 +475,8 @@ LValue CodeGenFunction::EmitUnsupportedLValue(const Expr *E,
 LValue CodeGenFunction::EmitCheckedLValue(const Expr *E) {
   LValue LV = EmitLValue(E);
   if (!isa<DeclRefExpr>(E) && !LV.isBitField() && LV.isSimple())
-    EmitCheck(LV.getAddress(), getContext().getTypeSize(E->getType()) / 8);
+    EmitCheck(LV.getAddress(), 
+              getContext().getTypeSizeInChars(E->getType()).getQuantity());
   return LV;
 }
 
@@ -2081,7 +2082,6 @@ RValue CodeGenFunction::EmitCall(QualType CalleeType, llvm::Value *Callee,
 
   const FunctionType *FnType
     = cast<FunctionType>(cast<PointerType>(CalleeType)->getPointeeType());
-  QualType ResultType = FnType->getResultType();
 
   CallArgList Args;
   EmitCallArgs(Args, dyn_cast<FunctionProtoType>(FnType), ArgBeg, ArgEnd);
@@ -2108,4 +2108,3 @@ EmitPointerToDataMemberBinaryExpr(const BinaryOperator *E) {
 
   return MakeAddrLValue(AddV, MPT->getPointeeType());
 }
-

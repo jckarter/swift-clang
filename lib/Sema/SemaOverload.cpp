@@ -647,8 +647,8 @@ bool Sema::IsOverload(FunctionDecl *New, FunctionDecl *Old,
       isa<FunctionNoProtoType>(NewQType.getTypePtr()))
     return false;
 
-  FunctionProtoType* OldType = cast<FunctionProtoType>(OldQType);
-  FunctionProtoType* NewType = cast<FunctionProtoType>(NewQType);
+  const FunctionProtoType* OldType = cast<FunctionProtoType>(OldQType);
+  const FunctionProtoType* NewType = cast<FunctionProtoType>(NewQType);
 
   // The signature of a function includes the types of its
   // parameters (C++ 1.3.10), which includes the presence or absence
@@ -1012,7 +1012,7 @@ static bool IsStandardConversion(Sema &S, Expr* From, QualType ToType,
       FromType = Fn->getType();
       if (CXXMethodDecl *Method = dyn_cast<CXXMethodDecl>(Fn)) {
         if (!Method->isStatic()) {
-          Type *ClassType 
+          const Type *ClassType 
             = S.Context.getTypeDeclType(Method->getParent()).getTypePtr();
           FromType = S.Context.getMemberPointerType(FromType, ClassType);
         }
@@ -1760,8 +1760,8 @@ bool Sema::isObjCPointerConversion(QualType FromType, QualType ToType,
 /// for equlity of their argument types. Caller has already checked that
 /// they have same number of arguments. This routine assumes that Objective-C
 /// pointer types which only differ in their protocol qualifiers are equal.
-bool Sema::FunctionArgTypesAreEqual(FunctionProtoType*  OldType, 
-                            FunctionProtoType*  NewType){
+bool Sema::FunctionArgTypesAreEqual(const FunctionProtoType *OldType, 
+                                    const FunctionProtoType *NewType) {
   if (!getLangOptions().ObjC1)
     return std::equal(OldType->arg_type_begin(), OldType->arg_type_end(),
                       NewType->arg_type_begin());
@@ -4461,16 +4461,16 @@ BuiltinCandidateTypeSet::AddTypesConvertedFrom(QualType Ty,
   if (const ReferenceType *RefTy = Ty->getAs<ReferenceType>())
     Ty = RefTy->getPointeeType();
 
-  // We don't care about qualifiers on the type.
+  // If we're dealing with an array type, decay to the pointer.
+  if (Ty->isArrayType())
+    Ty = SemaRef.Context.getArrayDecayedType(Ty);
+
+  // Otherwise, we don't care about qualifiers on the type.
   Ty = Ty.getLocalUnqualifiedType();
 
   // Flag if we ever add a non-record type.
   const RecordType *TyRec = Ty->getAs<RecordType>();
   HasNonRecordTypes = HasNonRecordTypes || !TyRec;
-
-  // If we're dealing with an array type, decay to the pointer.
-  if (Ty->isArrayType())
-    Ty = SemaRef.Context.getArrayDecayedType(Ty);
 
   // Flag if we encounter an arithmetic type.
   HasArithmeticOrEnumeralTypes =
@@ -7904,7 +7904,11 @@ Sema::BuildCallToMemberFunction(Scope *S, Expr *MemExprE,
       if (isa<UsingShadowDecl>(Func))
         Func = cast<UsingShadowDecl>(Func)->getTargetDecl();
 
-      if ((Method = dyn_cast<CXXMethodDecl>(Func))) {
+      // Microsoft supports direct constructor calls.
+      if (getLangOptions().Microsoft && isa<CXXConstructorDecl>(Func)) {
+        AddOverloadCandidate(cast<CXXConstructorDecl>(Func), I.getPair(), Args, NumArgs,
+                             CandidateSet);
+      } else if ((Method = dyn_cast<CXXMethodDecl>(Func))) {
         // If explicit template arguments were provided, we can't call a
         // non-template member function.
         if (TemplateArgs)

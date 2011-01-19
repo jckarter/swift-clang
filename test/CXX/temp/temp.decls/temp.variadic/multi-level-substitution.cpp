@@ -88,4 +88,91 @@ namespace PacksAtDifferentLevels {
                                        pair<int, unsigned int>,
                                        pair<long, unsigned long>)
                                      >::value == 1? 1 : -1]; 
+
+  template<typename T, typename U>
+  struct some_function_object {
+    template<typename>
+    struct result_of;
+  };
+
+  template<template<class> class...> struct metafun_tuple { };
+
+  template<typename ...Types1>
+  struct X3 {
+    template<typename, typename> struct Inner {
+      static const unsigned value = 0;
+    };
+
+    template<typename ...Types2>
+    struct Inner<tuple<pair<Types1, Types2>...>,
+                 metafun_tuple<some_function_object<Types1, Types2>::template result_of...> > {
+      static const unsigned value = 1;
+    };
+  };
+
+  int check6[X3<short, int, long>::Inner<tuple<pair<short, unsigned short>,
+                                               pair<int, unsigned int>,
+                                               pair<long, unsigned long>>,
+                                 metafun_tuple<
+                         some_function_object<short, unsigned short>::result_of,
+                         some_function_object<int, unsigned int>::result_of,
+                         some_function_object<long, unsigned long>::result_of>
+                                     >::value == 1? 1 : -1];
+  int check7[X3<short, int>::Inner<tuple<pair<short, unsigned short>,
+                                               pair<int, unsigned int>,
+                                               pair<long, unsigned long>>,
+                                 metafun_tuple<
+                         some_function_object<short, unsigned short>::result_of,
+                         some_function_object<int, unsigned int>::result_of,
+                         some_function_object<long, unsigned long>::result_of>
+                                     >::value == 0? 1 : -1];
+
+  template<unsigned I, unsigned J> struct unsigned_pair { };
+
+  template<unsigned ...Values1>
+  struct X4 {
+    template<typename> struct Inner {
+      static const unsigned value = 0;
+    };
+
+    template<unsigned ...Values2>
+    struct Inner<tuple<unsigned_pair<Values1, Values2>...>> {
+      static const unsigned value = 1;
+    };
+  };
+
+  int check8[X4<1, 3, 5>::Inner<tuple<unsigned_pair<1, 2>,
+                                      unsigned_pair<3, 4>,
+                                      unsigned_pair<5, 6>>
+                                >::value == 1? 1 : -1];
+  int check9[X4<1, 3>::Inner<tuple<unsigned_pair<1, 2>,
+                                   unsigned_pair<3, 4>,
+                                   unsigned_pair<5, 6>>
+                             >::value == 0? 1 : -1];
+
+  template<class> struct add_reference;
+  template<class> struct add_pointer;
+  template<class> struct add_const;
+
+  template<template<class> class ...Templates>
+  struct X5 {
+    template<typename> struct Inner {
+      static const unsigned value = 0;
+    };
+
+    template<typename ...Types>
+    struct Inner<tuple<Templates<Types>...>> {
+      static const unsigned value = 1;
+    };
+  };
+
+  int check10[X5<add_reference, add_pointer, add_const>
+                ::Inner<tuple<add_reference<int>,
+                              add_pointer<float>,
+                              add_const<double>>>::value == 1? 1 : -1];
+  int check11[X5<add_reference, add_pointer>
+                ::Inner<tuple<add_reference<int>,
+                              add_pointer<float>,
+                              add_const<double>>>::value == 0? 1 : -1];
+
 }

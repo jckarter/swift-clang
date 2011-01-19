@@ -387,6 +387,12 @@ void Parser::Initialize() {
     ObjCTypeQuals[objc_byref] = &PP.getIdentifierTable().get("byref");
   }
 
+  // Initialize C++0x contextual keywords.
+  if (getLang().CPlusPlus0x) {
+    Ident_final = &PP.getIdentifierTable().get("final");
+    Ident_override = &PP.getIdentifierTable().get("override");
+  }
+
   Ident_super = &PP.getIdentifierTable().get("super");
 
   if (getLang().AltiVec) {
@@ -398,6 +404,10 @@ void Parser::Initialize() {
 /// ParseTopLevelDecl - Parse one top-level declaration, return whatever the
 /// action tells us to.  This returns true if the EOF was encountered.
 bool Parser::ParseTopLevelDecl(DeclGroupPtrTy &Result) {
+
+  while (Tok.is(tok::annot_pragma_unused))
+    HandlePragmaUnused();
+
   Result = DeclGroupPtrTy();
   if (Tok.is(tok::eof)) {
     Actions.ActOnEndOfTranslationUnit();

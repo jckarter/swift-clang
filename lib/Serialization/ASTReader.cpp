@@ -2630,6 +2630,7 @@ bool ASTReader::ParseLanguageOptions(
     PARSE_LANGOPT(AccessControl);
     PARSE_LANGOPT(CharIsSigned);
     PARSE_LANGOPT(ShortWChar);
+    PARSE_LANGOPT(ShortEnums);
     LangOpts.setGCMode((LangOptions::GCMode)Record[Idx++]);
     LangOpts.setVisibilityMode((Visibility)Record[Idx++]);
     LangOpts.setStackProtectorMode((LangOptions::StackProtectorMode)
@@ -2921,7 +2922,7 @@ QualType ASTReader::ReadTypeRecord(unsigned Index) {
     }
     bool IsDependent = Record[0];
     QualType T = Context->getRecordType(cast<RecordDecl>(GetDecl(Record[1])));
-    T->setDependent(IsDependent);
+    const_cast<Type*>(T.getTypePtr())->setDependent(IsDependent);
     return T;
   }
 
@@ -2932,7 +2933,7 @@ QualType ASTReader::ReadTypeRecord(unsigned Index) {
     }
     bool IsDependent = Record[0];
     QualType T = Context->getEnumType(cast<EnumDecl>(GetDecl(Record[1])));
-    T->setDependent(IsDependent);
+    const_cast<Type*>(T.getTypePtr())->setDependent(IsDependent);
     return T;
   }
 
@@ -3081,7 +3082,7 @@ QualType ASTReader::ReadTypeRecord(unsigned Index) {
   case TYPE_TEMPLATE_SPECIALIZATION: {
     unsigned Idx = 0;
     bool IsDependent = Record[Idx++];
-    TemplateName Name = ReadTemplateName(Record, Idx);
+    TemplateName Name = ReadTemplateName(*Loc.F, Record, Idx);
     llvm::SmallVector<TemplateArgument, 8> Args;
     ReadTemplateArgumentList(Args, *Loc.F, Record, Idx);
     QualType Canon = GetType(Record[Idx++]);
@@ -3092,7 +3093,7 @@ QualType ASTReader::ReadTypeRecord(unsigned Index) {
     else
       T = Context->getTemplateSpecializationType(Name, Args.data(),
                                                  Args.size(), Canon);
-    T->setDependent(IsDependent);
+    const_cast<Type*>(T.getTypePtr())->setDependent(IsDependent);
     return T;
   }
   }
@@ -4237,7 +4238,8 @@ void ASTReader::ReadQualifierInfo(PerFileData &F, QualifierInfo &Info,
 }
 
 TemplateName
-ASTReader::ReadTemplateName(const RecordData &Record, unsigned &Idx) {
+ASTReader::ReadTemplateName(PerFileData &F, const RecordData &Record, 
+                            unsigned &Idx) {
   TemplateName::NameKind Kind = (TemplateName::NameKind)Record[Idx++];
   switch (Kind) {
   case TemplateName::Template:
@@ -4267,6 +4269,19 @@ ASTReader::ReadTemplateName(const RecordData &Record, unsigned &Idx) {
     return Context->getDependentTemplateName(NNS,
                                          (OverloadedOperatorKind)Record[Idx++]);
   }
+      
+  case TemplateName::SubstTemplateTemplateParmPack: {
+    TemplateTemplateParmDecl *Param 
+      = cast_or_null<TemplateTemplateParmDecl>(GetDecl(Record[Idx++]));
+    if (!Param)
+      return TemplateName();
+    
+    TemplateArgument ArgPack = ReadTemplateArgument(F, Record, Idx);
+    if (ArgPack.getKind() != TemplateArgument::Pack)
+      return TemplateName();
+    
+    return Context->getSubstTemplateTemplateParmPack(Param, ArgPack);
+  }
   }
 
   assert(0 && "Unhandled template name kind!");
@@ -4290,9 +4305,13 @@ ASTReader::ReadTemplateArgument(PerFileData &F,
     return TemplateArgument(Value, T);
   }
   case TemplateArgument::Template: 
+    return TemplateArgument(ReadTemplateName(F, Record, Idx));
   case TemplateArgument::TemplateExpansion: {
-    TemplateName Name = ReadTemplateName(Record, Idx);
-    return TemplateArgument(Name, Kind == TemplateArgument::TemplateExpansion);
+    TemplateName Name = ReadTemplateName(F, Record, Idx);
+    llvm::Optional<unsigned> NumTemplateExpansions;
+    if (unsigned NumExpansions = Record[Idx++])
+      NumTemplateExpansions = NumExpansions - 1;
+    return TemplateArgument(Name, NumTemplateExpansions);
   }
   case TemplateArgument::Expression:
     return TemplateArgument(ReadExpr(F));
@@ -4456,7 +4475,7 @@ ASTReader::ReadNestedNameSpecifier(const RecordData &Record, unsigned &Idx) {
 
     case NestedNameSpecifier::TypeSpec:
     case NestedNameSpecifier::TypeSpecWithTemplate: {
-      Type *T = GetType(Record[Idx++]).getTypePtrOrNull();
+      const Type *T = GetType(Record[Idx++]).getTypePtrOrNull();
       if (!T)
         return 0;
       

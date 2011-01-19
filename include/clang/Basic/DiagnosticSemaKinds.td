@@ -56,6 +56,8 @@ def err_variably_modified_new_type : Error<
   "'new' cannot allocate object of variably modified type %0">;
 
 // C99 Designated Initializers
+def ext_designated_init : Extension<
+  "designated initializers are a C99 feature, accepted in C++ as an extension">;
 def err_array_designator_negative : Error<
   "array designator value '%0' is negative">;
 def err_array_designator_empty_range : Error<
@@ -736,6 +738,8 @@ def warn_no_constructor_for_refconst : Warning<
   "initialize its non-modifiable members">;
 def note_refconst_member_not_initialized : Note<
   "%select{const|reference}0 member %1 will never be initialized">;
+def ext_ms_explicit_constructor_call : ExtWarn<
+  "explicit constructor calls are a Microsoft extension">, InGroup<Microsoft>;
 
 // C++ destructors
 def err_destructor_not_member : Error<
@@ -815,6 +819,8 @@ def note_uninit_reference_member : Note<
   "uninitialized reference member is here">;
 def warn_field_is_uninit : Warning<"field is uninitialized when used here">,
   InGroup<DiagGroup<"uninitialized">>;
+def warn_var_is_uninit : Warning<"use of uninitialized variable %0">,
+  InGroup<DiagGroup<"uninitialized-experimental">>, DefaultIgnore;
 def err_init_incomplete_type : Error<"initialization of incomplete type %0">;
 
 def err_temp_copy_no_viable : Error<
@@ -1882,10 +1888,6 @@ def err_ellipsis_in_declarator_not_parameter : Error<
 
 def err_sizeof_pack_no_pack_name : Error<
   "%0 does not refer to the name of a parameter pack">;
-
-// Unsupported variadic templates features
-def err_pack_expansion_mismatch_unsupported : Error<
-  "clang cannot yet instantiate pack expansions with mismatched pack levels">;
 
 def err_unexpected_typedef : Error<
   "unexpected type name %0: expected expression">;

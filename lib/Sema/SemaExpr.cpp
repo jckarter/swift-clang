@@ -528,7 +528,8 @@ QualType Sema::UsualArithmeticConversions(Expr *&lhsExpr, Expr *&rhsExpr,
     if (order < 0) { // RHS is wider
       // float -> _Complex double
       if (!isCompAssign) {
-        ImpCastExprToType(lhsExpr, rhs, CK_FloatingCast);
+        QualType fp = cast<ComplexType>(rhs)->getElementType();
+        ImpCastExprToType(lhsExpr, fp, CK_FloatingCast);
         ImpCastExprToType(lhsExpr, rhs, CK_FloatingRealToComplex);
       }
       return rhs;
@@ -3901,6 +3902,12 @@ ExprResult Sema::ActOnMemberAccessExpr(Scope *S, Expr *Base,
                                        bool HasTrailingLParen) {
   if (SS.isSet() && SS.isInvalid())
     return ExprError();
+
+  // Warn about the explicit constructor calls Microsoft extension.
+  if (getLangOptions().Microsoft &&
+      Id.getKind() == UnqualifiedId::IK_ConstructorName)
+    Diag(Id.getSourceRange().getBegin(),
+         diag::ext_ms_explicit_constructor_call);
 
   TemplateArgumentListInfo TemplateArgsBuffer;
 
@@ -7979,7 +7986,7 @@ ExprResult Sema::BuildUnaryOp(Scope *S, SourceLocation OpLoc,
 
 // Unary Operators.  'Tok' is the token for the operator.
 ExprResult Sema::ActOnUnaryOp(Scope *S, SourceLocation OpLoc,
-                                            tok::TokenKind Op, Expr *Input) {
+                              tok::TokenKind Op, Expr *Input) {
   return BuildUnaryOp(S, OpLoc, ConvertTokenKindToUnaryOpcode(Op), Input);
 }
 
@@ -8531,7 +8538,7 @@ ExprResult Sema::ActOnVAArg(SourceLocation BuiltinLoc,
                                         Expr *expr, ParsedType type,
                                         SourceLocation RPLoc) {
   TypeSourceInfo *TInfo;
-  QualType T = GetTypeFromParser(type, &TInfo);
+  GetTypeFromParser(type, &TInfo);
   return BuildVAArgExpr(BuiltinLoc, expr, TInfo, RPLoc);
 }
 
@@ -8575,10 +8582,17 @@ ExprResult Sema::ActOnGNUNullExpr(SourceLocation TokenLoc) {
   // The type of __null will be int or long, depending on the size of
   // pointers on the target.
   QualType Ty;
-  if (Context.Target.getPointerWidth(0) == Context.Target.getIntWidth())
+  unsigned pw = Context.Target.getPointerWidth(0);
+  if (pw == Context.Target.getIntWidth())
     Ty = Context.IntTy;
-  else
+  else if (pw == Context.Target.getLongWidth())
     Ty = Context.LongTy;
+  else if (pw == Context.Target.getLongLongWidth())
+    Ty = Context.LongLongTy;
+  else {
+    assert(!"I don't know size of pointer!");
+    Ty = Context.IntTy;
+  }
 
   return Owned(new (Context) GNUNullExpr(Ty, TokenLoc));
 }

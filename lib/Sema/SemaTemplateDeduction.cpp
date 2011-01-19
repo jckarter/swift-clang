@@ -476,6 +476,7 @@ static bool IsPossiblyOpaquelyQualifiedType(QualType T) {
   case Type::DependentName:
   case Type::Decltype:
   case Type::UnresolvedUsing:
+  case Type::TemplateTypeParm:
     return true;
 
   case Type::ConstantArray:
@@ -876,7 +877,7 @@ DeduceTemplateArguments(Sema &S,
       Qualifiers Quals;
       QualType UnqualParam = S.Context.getUnqualifiedArrayType(Param, Quals);
       Quals.setCVRQualifiers(Quals.getCVRQualifiers() &
-                             Arg.getCVRQualifiersThroughArrayTypes());
+                             Arg.getCVRQualifiers());
       Param = S.Context.getQualifiedType(UnqualParam, Quals);
     }
   }
@@ -2019,11 +2020,9 @@ Sema::SubstituteExplicitTemplateArguments(
   // note that the template argument pack is partially substituted and record
   // the explicit template arguments. They'll be used as part of deduction
   // for this template parameter pack.
-  bool HasPartiallySubstitutedPack = false;
   for (unsigned I = 0, N = Builder.size(); I != N; ++I) {
     const TemplateArgument &Arg = Builder[I];
     if (Arg.getKind() == TemplateArgument::Pack) {
-      HasPartiallySubstitutedPack = true;
       CurrentInstantiationScope->SetPartiallySubstitutedPack(
                                                  TemplateParams->getParam(I), 
                                                              Arg.pack_begin(),
@@ -2438,7 +2437,6 @@ static bool AdjustFunctionParmAndArgTypesForDeduction(Sema &S,
     else {
       // - If A is a cv-qualified type, the top level cv-qualifiers of A’s
       //   type are ignored for type deduction.
-      QualType CanonArgType = S.Context.getCanonicalType(ArgType);
       if (ArgType.getCVRQualifiers())
         ArgType = ArgType.getUnqualifiedType();
     }
@@ -3077,6 +3075,26 @@ static bool isAtLeastAsSpecializedAs(Sema &S,
   return true;
 }
                                     
+/// \brief Determine whether this a function template whose parameter-type-list
+/// ends with a function parameter pack.
+static bool isVariadicFunctionTemplate(FunctionTemplateDecl *FunTmpl) {
+  FunctionDecl *Function = FunTmpl->getTemplatedDecl();
+  unsigned NumParams = Function->getNumParams();
+  if (NumParams == 0)
+    return false;
+  
+  ParmVarDecl *Last = Function->getParamDecl(NumParams - 1);
+  if (!Last->isParameterPack())
+    return false;
+  
+  // Make sure that no previous parameter is a parameter pack.
+  while (--NumParams > 0) {
+    if (Function->getParamDecl(NumParams - 1)->isParameterPack())
+      return false;
+  }
+  
+  return true;
+}
                                      
 /// \brief Returns the more specialized function template according
 /// to the rules of function template partial ordering (C++ [temp.func.order]).
@@ -3153,8 +3171,16 @@ Sema::getMoreSpecializedTemplate(FunctionTemplateDecl *FT1,
     return FT1;
   else if (Better2)
     return FT2;
-  else
-    return 0;
+  
+  // FIXME: This mimics what GCC implements, but doesn't match up with the
+  // proposed resolution for core issue 692. This area needs to be sorted out,
+  // but for now we attempt to maintain compatibility.
+  bool Variadic1 = isVariadicFunctionTemplate(FT1);
+  bool Variadic2 = isVariadicFunctionTemplate(FT2);
+  if (Variadic1 != Variadic2)
+    return Variadic1? FT2 : FT1;
+  
+  return 0;
 }
 
 /// \brief Determine if the two templates are equivalent.

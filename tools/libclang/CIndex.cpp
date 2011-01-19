@@ -1172,7 +1172,7 @@ bool CursorVisitor::VisitNestedNameSpecifier(NestedNameSpecifier *NNS,
     // If the type has a form where we know that the beginning of the source
     // range matches up with a reference cursor. Visit the appropriate reference
     // cursor.
-    Type *T = NNS->getAsType();
+    const Type *T = NNS->getAsType();
     if (const TypedefType *Typedef = dyn_cast<TypedefType>(T))
       return Visit(MakeCursorTypeRef(Typedef->getDecl(), Range.getBegin(), TU));
     if (const TagType *Tag = dyn_cast<TagType>(T))
@@ -1227,6 +1227,11 @@ bool CursorVisitor::VisitTemplateName(TemplateName Name, SourceLocation Loc) {
     // FIXME: Visit nested-name-specifier.
     return Visit(MakeCursorTemplateRef(
                                   Name.getAsQualifiedTemplateName()->getDecl(), 
+                                       Loc, TU));
+      
+  case TemplateName::SubstTemplateTemplateParmPack:
+    return Visit(MakeCursorTemplateRef(
+                  Name.getAsSubstTemplateTemplateParmPack()->getParameterPack(),
                                        Loc, TU));
   }
                  
@@ -1525,22 +1530,22 @@ class LabelRefVisit : public VisitorJob {
 public:
   LabelRefVisit(LabelStmt *LS, SourceLocation labelLoc, CXCursor parent)
     : VisitorJob(parent, VisitorJob::LabelRefVisitKind, LS,
-                 (void*) labelLoc.getRawEncoding()) {}
+                 labelLoc.getPtrEncoding()) {}
   
   static bool classof(const VisitorJob *VJ) {
     return VJ->getKind() == VisitorJob::LabelRefVisitKind;
   }
   LabelStmt *get() const { return static_cast<LabelStmt*>(data[0]); }
   SourceLocation getLoc() const { 
-    return SourceLocation::getFromRawEncoding((unsigned)(uintptr_t) data[1]); }
+    return SourceLocation::getFromPtrEncoding(data[1]); }
 };
 class NestedNameSpecifierVisit : public VisitorJob {
 public:
   NestedNameSpecifierVisit(NestedNameSpecifier *NS, SourceRange R,
                            CXCursor parent)
     : VisitorJob(parent, VisitorJob::NestedNameSpecifierVisitKind,
-                 NS, (void*) R.getBegin().getRawEncoding(),
-                 (void*) R.getEnd().getRawEncoding()) {}
+                 NS, R.getBegin().getPtrEncoding(),
+                 R.getEnd().getPtrEncoding()) {}
   static bool classof(const VisitorJob *VJ) {
     return VJ->getKind() == VisitorJob::NestedNameSpecifierVisitKind;
   }
@@ -1578,7 +1583,7 @@ class MemberRefVisit : public VisitorJob {
 public:
   MemberRefVisit(FieldDecl *D, SourceLocation L, CXCursor parent)
     : VisitorJob(parent, VisitorJob::MemberRefVisitKind, D,
-                 (void*) L.getRawEncoding()) {}
+                 L.getPtrEncoding()) {}
   static bool classof(const VisitorJob *VJ) {
     return VJ->getKind() == VisitorJob::MemberRefVisitKind;
   }
@@ -2206,7 +2211,8 @@ static void clang_parseTranslationUnit_Impl(void *UserData) {
   // Configure the diagnostics.
   DiagnosticOptions DiagOpts;
   llvm::IntrusiveRefCntPtr<Diagnostic> Diags;
-  Diags = CompilerInstance::createDiagnostics(DiagOpts, 0, 0);
+  Diags = CompilerInstance::createDiagnostics(DiagOpts, num_command_line_args, 
+                                              command_line_args);
 
   llvm::SmallVector<ASTUnit::RemappedFile, 4> RemappedFiles;
   for (unsigned I = 0; I != num_unsaved_files; ++I) {
@@ -2649,6 +2655,9 @@ static Decl *getDeclFromExpr(Stmt *E) {
 
   if (ObjCProtocolExpr *PE = dyn_cast<ObjCProtocolExpr>(E))
     return PE->getProtocol();
+  if (SubstNonTypeTemplateParmPackExpr *NTTP 
+                              = dyn_cast<SubstNonTypeTemplateParmPackExpr>(E))
+    return NTTP->getParameterPack();
   
   return 0;
 }

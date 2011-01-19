@@ -119,7 +119,9 @@ class ASTContext {
 
   mutable llvm::FoldingSet<QualifiedTemplateName> QualifiedTemplateNames;
   mutable llvm::FoldingSet<DependentTemplateName> DependentTemplateNames;
-
+  mutable llvm::FoldingSet<SubstTemplateTemplateParmPackStorage> 
+    SubstTemplateTemplateParmPacks;
+  
   /// \brief The set of nested name specifiers.
   ///
   /// This set is managed by the NestedNameSpecifier class.
@@ -592,12 +594,8 @@ public:
                                 ArrayType::ArraySizeModifier ASM,
                                 unsigned EltTypeQuals) const;
   
-  /// getUnknownSizeVariableArrayType - Return a variable array type with
-  /// all variable indices replaced with unknow [*] size.
-  QualType getUnknownSizeVariableArrayType(QualType Ty) const;
-  
   /// getVariableArrayDecayedType - Returns a vla type where known sizes
-  /// are replaced with [*]
+  /// are replaced with [*].
   QualType getVariableArrayDecayedType(QualType Ty) const;
 
   /// getVectorType - Return the unique reference to a vector type of
@@ -936,7 +934,9 @@ public:
                                         const IdentifierInfo *Name) const;
   TemplateName getDependentTemplateName(NestedNameSpecifier *NNS,
                                         OverloadedOperatorKind Operator) const;
-
+  TemplateName getSubstTemplateTemplateParmPack(TemplateTemplateParmDecl *Param,
+                                        const TemplateArgument &ArgPack) const;
+  
   enum GetBuiltinTypeError {
     GE_None,              //< No error
     GE_Missing_stdio,     //< Missing a type from <stdio.h>
@@ -1002,6 +1002,9 @@ public:
     return getTypeSize(CharTy);
   }
   
+  /// toCharUnitsFromBits - Convert a size in bits to a size in characters.
+  CharUnits toCharUnitsFromBits(int64_t BitSize) const;
+
   /// getTypeSizeInChars - Return the size of the specified type, in characters.
   /// This method does not work on incomplete types.
   CharUnits getTypeSizeInChars(QualType T) const;
@@ -1088,7 +1091,10 @@ public:
   /// include typedefs, 'typeof' operators, etc. The returned type is guaranteed
   /// to be free of any of these, allowing two canonical types to be compared
   /// for exact equality with a simple pointer comparison.
-  CanQualType getCanonicalType(QualType T) const;
+  CanQualType getCanonicalType(QualType T) const {
+    return CanQualType::CreateUnsafe(T.getCanonicalType());
+  }
+
   const Type *getCanonicalType(const Type *T) const {
     return T->getCanonicalTypeInternal().getTypePtr();
   }
@@ -1121,13 +1127,8 @@ public:
   /// \brief Determine whether the given types are equivalent after
   /// cvr-qualifiers have been removed.
   bool hasSameUnqualifiedType(QualType T1, QualType T2) {
-    CanQualType CT1 = getCanonicalType(T1);
-    CanQualType CT2 = getCanonicalType(T2);
-
-    Qualifiers Quals;
-    QualType UnqualT1 = getUnqualifiedArrayType(CT1, Quals);
-    QualType UnqualT2 = getUnqualifiedArrayType(CT2, Quals);
-    return UnqualT1 == UnqualT2;
+    return getCanonicalType(T1).getTypePtr() ==
+           getCanonicalType(T2).getTypePtr();
   }
 
   bool UnwrapSimilarPointerTypes(QualType &T1, QualType &T2);
@@ -1278,7 +1279,7 @@ public:
 
 private:
   // Helper for integer ordering
-  unsigned getIntegerRank(Type* T) const;
+  unsigned getIntegerRank(const Type *T) const;
 
 public:
 

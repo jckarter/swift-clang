@@ -697,12 +697,18 @@ namespace {
                                    ElaboratedTypeKeyword Keyword,
                                    NestedNameSpecifier *NNS, QualType T);
 
+    TemplateName TransformTemplateName(TemplateName Name,
+                                       QualType ObjectType = QualType(),
+                                       NamedDecl *FirstQualifierInScope = 0);
+
     ExprResult TransformPredefinedExpr(PredefinedExpr *E);
     ExprResult TransformDeclRefExpr(DeclRefExpr *E);
     ExprResult TransformCXXDefaultArgExpr(CXXDefaultArgExpr *E);
     ExprResult TransformTemplateParmRefExpr(DeclRefExpr *E,
                                             NonTypeTemplateParmDecl *D);
-
+    ExprResult TransformSubstNonTypeTemplateParmPackExpr(
+                                           SubstNonTypeTemplateParmPackExpr *E);
+    
     QualType TransformFunctionProtoType(TypeLocBuilder &TLB,
                                         FunctionProtoTypeLoc TL);
     ParmVarDecl *TransformFunctionTypeParam(ParmVarDecl *OldParm,
@@ -760,12 +766,7 @@ Decl *TemplateInstantiator::TransformDecl(SourceLocation Loc, Decl *D) {
         assert(Arg.getKind() == TemplateArgument::Pack && 
                "Missing argument pack");
         
-        if (getSema().ArgumentPackSubstitutionIndex == -1) {
-          // FIXME: Variadic templates fun case.
-          getSema().Diag(Loc,  diag::err_pack_expansion_mismatch_unsupported);
-          return 0;
-        }
-        
+        assert(getSema().ArgumentPackSubstitutionIndex >= 0);        
         assert(getSema().ArgumentPackSubstitutionIndex < (int)Arg.pack_size());
         Arg = Arg.pack_begin()[getSema().ArgumentPackSubstitutionIndex];
       }
@@ -809,11 +810,8 @@ TemplateInstantiator::TransformFirstQualifierInScope(NamedDecl *D,
         assert(Arg.getKind() == TemplateArgument::Pack && 
                "Missing argument pack");
         
-        if (getSema().ArgumentPackSubstitutionIndex == -1) {
-          // FIXME: Variadic templates fun case.
-          getSema().Diag(Loc, diag::err_pack_expansion_mismatch_unsupported);
+        if (getSema().ArgumentPackSubstitutionIndex == -1)
           return 0;
-        }
         
         assert(getSema().ArgumentPackSubstitutionIndex < (int)Arg.pack_size());
         Arg = Arg.pack_begin()[getSema().ArgumentPackSubstitutionIndex];
@@ -888,6 +886,60 @@ TemplateInstantiator::RebuildElaboratedType(SourceLocation KeywordLoc,
                                                                     NNS, T);
 }
 
+TemplateName TemplateInstantiator::TransformTemplateName(TemplateName Name,
+                                                         QualType ObjectType,
+                                             NamedDecl *FirstQualifierInScope) {
+  if (TemplateTemplateParmDecl *TTP
+       = dyn_cast_or_null<TemplateTemplateParmDecl>(Name.getAsTemplateDecl())) {
+    if (TTP->getDepth() < TemplateArgs.getNumLevels()) {
+      // If the corresponding template argument is NULL or non-existent, it's
+      // because we are performing instantiation from explicitly-specified
+      // template arguments in a function template, but there were some
+      // arguments left unspecified.
+      if (!TemplateArgs.hasTemplateArgument(TTP->getDepth(),
+                                            TTP->getPosition()))
+        return Name;
+      
+      TemplateArgument Arg = TemplateArgs(TTP->getDepth(), TTP->getPosition());
+      
+      if (TTP->isParameterPack()) {
+        assert(Arg.getKind() == TemplateArgument::Pack && 
+               "Missing argument pack");
+        
+        if (getSema().ArgumentPackSubstitutionIndex == -1) {
+          // We have the template argument pack to substitute, but we're not
+          // actually expanding the enclosing pack expansion yet. So, just
+          // keep the entire argument pack.
+          return getSema().Context.getSubstTemplateTemplateParmPack(TTP, Arg);
+        }
+        
+        assert(getSema().ArgumentPackSubstitutionIndex < (int)Arg.pack_size());
+        Arg = Arg.pack_begin()[getSema().ArgumentPackSubstitutionIndex];
+      }
+      
+      TemplateName Template = Arg.getAsTemplate();
+      assert(!Template.isNull() && Template.getAsTemplateDecl() &&
+             "Wrong kind of template template argument");
+      return Template;
+    }
+  }
+  
+  if (SubstTemplateTemplateParmPackStorage *SubstPack
+                                  = Name.getAsSubstTemplateTemplateParmPack()) {
+    if (getSema().ArgumentPackSubstitutionIndex == -1)
+      return Name;
+
+    const TemplateArgument &ArgPack = SubstPack->getArgumentPack();
+    assert(getSema().ArgumentPackSubstitutionIndex < (int)ArgPack.pack_size() &&
+           "Pack substitution index out-of-range");
+    return ArgPack.pack_begin()[getSema().ArgumentPackSubstitutionIndex]
+                                                               .getAsTemplate();
+  }
+  
+  return inherited::TransformTemplateName(Name, ObjectType, 
+                                          FirstQualifierInScope);
+}
+
 ExprResult 
 TemplateInstantiator::TransformPredefinedExpr(PredefinedExpr *E) {
   if (!E->isTypeDependent())
@@ -927,9 +979,19 @@ TemplateInstantiator::TransformTemplateParmRefExpr(DeclRefExpr *E,
            "Missing argument pack");
     
     if (getSema().ArgumentPackSubstitutionIndex == -1) {
-      // FIXME: Variadic templates fun case.
-      getSema().Diag(Loc, diag::err_pack_expansion_mismatch_unsupported);
-      return ExprError();
+      // We have an argument pack, but we can't select a particular argument
+      // out of it yet. Therefore, we'll build an expression to hold on to that
+      // argument pack.
+      QualType TargetType = SemaRef.SubstType(NTTP->getType(), TemplateArgs,
+                                              E->getLocation(), 
+                                              NTTP->getDeclName());
+      if (TargetType.isNull())
+        return ExprError();
+      
+      return new (SemaRef.Context) SubstNonTypeTemplateParmPackExpr(TargetType,
+                                                                    NTTP, 
+                                                              E->getLocation(),
+                                                                    Arg);
     }
     
     assert(getSema().ArgumentPackSubstitutionIndex < (int)Arg.pack_size());
@@ -968,6 +1030,42 @@ TemplateInstantiator::TransformTemplateParmRefExpr(DeclRefExpr *E,
                                                 E->getSourceRange().getBegin());
 }
                                                    
+ExprResult 
+TemplateInstantiator::TransformSubstNonTypeTemplateParmPackExpr(
+                                          SubstNonTypeTemplateParmPackExpr *E) {
+  if (getSema().ArgumentPackSubstitutionIndex == -1) {
+    // We aren't expanding the parameter pack, so just return ourselves.
+    return getSema().Owned(E);
+  }
+  
+  // FIXME: Variadic templates select Nth from type?  
+  const TemplateArgument &ArgPack = E->getArgumentPack();
+  unsigned Index = (unsigned)getSema().ArgumentPackSubstitutionIndex;
+  assert(Index < ArgPack.pack_size() && "Substitution index out-of-range");
+  
+  const TemplateArgument &Arg = ArgPack.pack_begin()[Index];
+  if (Arg.getKind() == TemplateArgument::Expression)
+    return SemaRef.Owned(Arg.getAsExpr());
+  
+  if (Arg.getKind() == TemplateArgument::Declaration) {
+    ValueDecl *VD = cast<ValueDecl>(Arg.getAsDecl());
+    
+    // Find the instantiation of the template argument.  This is
+    // required for nested templates.
+    VD = cast_or_null<ValueDecl>(
+                   getSema().FindInstantiatedDecl(E->getParameterPackLocation(),
+                                                  VD, TemplateArgs));
+    if (!VD)
+      return ExprError();
+
+    return SemaRef.BuildExpressionFromDeclTemplateArgument(Arg,
+                                                           E->getType(),
+                                                 E->getParameterPackLocation());
+  }
+    
+  return SemaRef.BuildExpressionFromIntegralTemplateArgument(Arg, 
+                                                 E->getParameterPackLocation());
+}
 
 ExprResult
 TemplateInstantiator::TransformDeclRefExpr(DeclRefExpr *E) {
@@ -1010,7 +1108,7 @@ TemplateInstantiator::TransformFunctionTypeParam(ParmVarDecl *OldParm,
 QualType
 TemplateInstantiator::TransformTemplateTypeParmType(TypeLocBuilder &TLB,
                                                 TemplateTypeParmTypeLoc TL) {
-  TemplateTypeParmType *T = TL.getTypePtr();
+  const TemplateTypeParmType *T = TL.getTypePtr();
   if (T->getDepth() < TemplateArgs.getNumLevels()) {
     // Replace the template type parameter with its corresponding
     // template argument.

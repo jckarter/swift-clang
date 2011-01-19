@@ -569,19 +569,20 @@ CharUnits ASTContext::getDeclAlign(const Decl *D, bool RefAsPointee) const {
         T = getPointerType(RT->getPointeeType());
     }
     if (!T->isIncompleteType() && !T->isFunctionType()) {
+      // Adjust alignments of declarations with array type by the
+      // large-array alignment on the target.
       unsigned MinWidth = Target.getLargeArrayMinWidth();
-      unsigned ArrayAlign = Target.getLargeArrayAlign();
-      if (isa<VariableArrayType>(T) && MinWidth != 0)
-        Align = std::max(Align, ArrayAlign);
-      if (ConstantArrayType *CT = dyn_cast<ConstantArrayType>(T)) {
-        unsigned Size = getTypeSize(CT);
-        if (MinWidth != 0 && MinWidth <= Size)
-          Align = std::max(Align, ArrayAlign);
-      }
-      // Incomplete or function types default to 1.
-      while (isa<VariableArrayType>(T) || isa<IncompleteArrayType>(T))
-        T = cast<ArrayType>(T)->getElementType();
+      const ArrayType *arrayType;
+      if (MinWidth && (arrayType = getAsArrayType(T))) {
+        if (isa<VariableArrayType>(arrayType))
+          Align = std::max(Align, Target.getLargeArrayAlign());
+        else if (isa<ConstantArrayType>(arrayType) &&
+                 MinWidth <= getTypeSize(cast<ConstantArrayType>(arrayType)))
+          Align = std::max(Align, Target.getLargeArrayAlign());
 
+        // Walk through any array types while we're at it.
+        T = getBaseElementType(arrayType);
+      }
       Align = std::max(Align, getPreferredTypeAlign(T.getTypePtr()));
     }
     if (const FieldDecl *FD = dyn_cast<FieldDecl>(VD)) {
@@ -592,14 +593,14 @@ CharUnits ASTContext::getDeclAlign(const Decl *D, bool RefAsPointee) const {
     }
   }
 
-  return CharUnits::fromQuantity(Align / Target.getCharWidth());
+  return toCharUnitsFromBits(Align);
 }
 
 std::pair<CharUnits, CharUnits>
 ASTContext::getTypeInfoInChars(const Type *T) {
   std::pair<uint64_t, unsigned> Info = getTypeInfo(T);
-  return std::make_pair(CharUnits::fromQuantity(Info.first / getCharWidth()),
-                        CharUnits::fromQuantity(Info.second / getCharWidth()));
+  return std::make_pair(toCharUnitsFromBits(Info.first),
+                        toCharUnitsFromBits(Info.second));
 }
 
 std::pair<CharUnits, CharUnits>
@@ -862,22 +863,27 @@ ASTContext::getTypeInfo(const Type *T) const {
   return std::make_pair(Width, Align);
 }
 
+/// toCharUnitsFromBits - Convert a size in bits to a size in characters.
+CharUnits ASTContext::toCharUnitsFromBits(int64_t BitSize) const {
+  return CharUnits::fromQuantity(BitSize / getCharWidth());
+}
+
 /// getTypeSizeInChars - Return the size of the specified type, in characters.
 /// This method does not work on incomplete types.
 CharUnits ASTContext::getTypeSizeInChars(QualType T) const {
-  return CharUnits::fromQuantity(getTypeSize(T) / getCharWidth());
+  return toCharUnitsFromBits(getTypeSize(T));
 }
 CharUnits ASTContext::getTypeSizeInChars(const Type *T) const {
-  return CharUnits::fromQuantity(getTypeSize(T) / getCharWidth());
+  return toCharUnitsFromBits(getTypeSize(T));
 }
 
 /// getTypeAlignInChars - Return the ABI-specified alignment of a type, in 
 /// characters. This method does not work on incomplete types.
 CharUnits ASTContext::getTypeAlignInChars(QualType T) const {
-  return CharUnits::fromQuantity(getTypeAlign(T) / getCharWidth());
+  return toCharUnitsFromBits(getTypeAlign(T));
 }
 CharUnits ASTContext::getTypeAlignInChars(const Type *T) const {
-  return CharUnits::fromQuantity(getTypeAlign(T) / getCharWidth());
+  return toCharUnitsFromBits(getTypeAlign(T));
 }
 
 /// getPreferredTypeAlign - Return the "preferred" alignment of the specified
@@ -1087,24 +1093,33 @@ ASTContext::getASTObjCImplementationLayout(
 //===----------------------------------------------------------------------===//
 
 QualType
-ASTContext::getExtQualType(const Type *TypeNode, Qualifiers Quals) const {
-  unsigned Fast = Quals.getFastQualifiers();
-  Quals.removeFastQualifiers();
+ASTContext::getExtQualType(const Type *baseType, Qualifiers quals) const {
+  unsigned fastQuals = quals.getFastQualifiers();
+  quals.removeFastQualifiers();
 
   // Check if we've already instantiated this type.
   llvm::FoldingSetNodeID ID;
-  ExtQuals::Profile(ID, TypeNode, Quals);
-  void *InsertPos = 0;
-  if (ExtQuals *EQ = ExtQualNodes.FindNodeOrInsertPos(ID, InsertPos)) {
-    assert(EQ->getQualifiers() == Quals);
-    QualType T = QualType(EQ, Fast);
-    return T;
+  ExtQuals::Profile(ID, baseType, quals);
+  void *insertPos = 0;
+  if (ExtQuals *eq = ExtQualNodes.FindNodeOrInsertPos(ID, insertPos)) {
+    assert(eq->getQualifiers() == quals);
+    return QualType(eq, fastQuals);
   }
 
-  ExtQuals *New = new (*this, TypeAlignment) ExtQuals(TypeNode, Quals);
-  ExtQualNodes.InsertNode(New, InsertPos);
-  QualType T = QualType(New, Fast);
-  return T;
+  // If the base type is not canonical, make the appropriate canonical type.
+  QualType canon;
+  if (!baseType->isCanonicalUnqualified()) {
+    SplitQualType canonSplit = baseType->getCanonicalTypeInternal().split();
+    canonSplit.second.addConsistentQualifiers(quals);
+    canon = getExtQualType(canonSplit.first, canonSplit.second);
+
+    // Re-find the insert position.
+    (void) ExtQualNodes.FindNodeOrInsertPos(ID, insertPos);
+  }
+
+  ExtQuals *eq = new (*this, TypeAlignment) ExtQuals(baseType, canon, quals);
+  ExtQualNodes.InsertNode(eq, insertPos);
+  return QualType(eq, fastQuals);
 }
 
 QualType
@@ -1390,12 +1405,15 @@ QualType ASTContext::getConstantArrayType(QualType EltTy,
       ConstantArrayTypes.FindNodeOrInsertPos(ID, InsertPos))
     return QualType(ATP, 0);
 
-  // If the element type isn't canonical, this won't be a canonical type either,
-  // so fill in the canonical type field.
-  QualType Canonical;
-  if (!EltTy.isCanonical()) {
-    Canonical = getConstantArrayType(getCanonicalType(EltTy), ArySize,
-                                     ASM, EltTypeQuals);
+  // If the element type isn't canonical or has qualifiers, this won't
+  // be a canonical type either, so fill in the canonical type field.
+  QualType Canon;
+  if (!EltTy.isCanonical() || EltTy.hasLocalQualifiers()) {
+    SplitQualType canonSplit = getCanonicalType(EltTy).split();
+    Canon = getConstantArrayType(QualType(canonSplit.first, 0), ArySize,
+                                 ASM, EltTypeQuals);
+    Canon = getQualifiedType(Canon, canonSplit.second);
+
     // Get the new insert position for the node we care about.
     ConstantArrayType *NewIP =
       ConstantArrayTypes.FindNodeOrInsertPos(ID, InsertPos);
@@ -1403,59 +1421,135 @@ QualType ASTContext::getConstantArrayType(QualType EltTy,
   }
 
   ConstantArrayType *New = new(*this,TypeAlignment)
-    ConstantArrayType(EltTy, Canonical, ArySize, ASM, EltTypeQuals);
+    ConstantArrayType(EltTy, Canon, ArySize, ASM, EltTypeQuals);
   ConstantArrayTypes.InsertNode(New, InsertPos);
   Types.push_back(New);
   return QualType(New, 0);
 }
 
-/// getIncompleteArrayType - Returns a unique reference to the type for a
-/// incomplete array of the specified element type.
-QualType ASTContext::getUnknownSizeVariableArrayType(QualType Ty) const {
-  QualType ElemTy = getBaseElementType(Ty);
-  DeclarationName Name;
-  llvm::SmallVector<QualType, 8> ATypes;
-  QualType ATy = Ty;
-  while (const ArrayType *AT = getAsArrayType(ATy)) {
-    ATypes.push_back(ATy);
-    ATy = AT->getElementType();
-  }
-  for (int i = ATypes.size() - 1; i >= 0; i--) {
-    if (const VariableArrayType *VAT = getAsVariableArrayType(ATypes[i])) {
-      ElemTy = getVariableArrayType(ElemTy, /*ArraySize*/0, ArrayType::Star,
-                                    0, VAT->getBracketsRange());
-    }
-    else if (const ConstantArrayType *CAT = getAsConstantArrayType(ATypes[i])) {
-      llvm::APSInt ConstVal(CAT->getSize());
-      ElemTy = getConstantArrayType(ElemTy, ConstVal, ArrayType::Normal, 0);
-    }
-    else if (getAsIncompleteArrayType(ATypes[i])) {
-      ElemTy = getVariableArrayType(ElemTy, /*ArraySize*/0, ArrayType::Normal,
-                                    0, SourceRange());
-    }
-    else
-      assert(false && "DependentArrayType is seen");
-  }
-  return ElemTy;
-}
+/// getVariableArrayDecayedType - Turns the given type, which may be
+/// variably-modified, into the corresponding type with all the known
+/// sizes replaced with [*].
+QualType ASTContext::getVariableArrayDecayedType(QualType type) const {
+  // Vastly most common case.
+  if (!type->isVariablyModifiedType()) return type;
 
-/// getVariableArrayDecayedType - Returns a vla type where known sizes
-/// are replaced with [*]
-QualType ASTContext::getVariableArrayDecayedType(QualType Ty) const {
-  if (Ty->isPointerType()) {
-    QualType BaseType = Ty->getAs<PointerType>()->getPointeeType();
-    if (isa<VariableArrayType>(BaseType)) {
-      ArrayType *AT = dyn_cast<ArrayType>(BaseType);
-      VariableArrayType *VAT = cast<VariableArrayType>(AT);
-      if (VAT->getSizeExpr()) {
-        Ty = getUnknownSizeVariableArrayType(BaseType);
-        Ty = getPointerType(Ty);
-      }
-    }
-  }
-  return Ty;
-}
+  QualType result;
 
+  SplitQualType split = type.getSplitDesugaredType();
+  const Type *ty = split.first;
+  switch (ty->getTypeClass()) {
+#define TYPE(Class, Base)
+#define ABSTRACT_TYPE(Class, Base)
+#define NON_CANONICAL_TYPE(Class, Base) case Type::Class:
+#include "clang/AST/TypeNodes.def"
+    llvm_unreachable("didn't desugar past all non-canonical types?");
+
+  // These types should never be variably-modified.
+  case Type::Builtin:
+  case Type::Complex:
+  case Type::Vector:
+  case Type::ExtVector:
+  case Type::DependentSizedExtVector:
+  case Type::ObjCObject:
+  case Type::ObjCInterface:
+  case Type::ObjCObjectPointer:
+  case Type::Record:
+  case Type::Enum:
+  case Type::UnresolvedUsing:
+  case Type::TypeOfExpr:
+  case Type::TypeOf:
+  case Type::Decltype:
+  case Type::DependentName:
+  case Type::InjectedClassName:
+  case Type::TemplateSpecialization:
+  case Type::DependentTemplateSpecialization:
+  case Type::TemplateTypeParm:
+  case Type::SubstTemplateTypeParmPack:
+  case Type::PackExpansion:
+    llvm_unreachable("type should never be variably-modified");
+
+  // These types can be variably-modified but should never need to
+  // further decay.
+  case Type::FunctionNoProto:
+  case Type::FunctionProto:
+  case Type::BlockPointer:
+  case Type::MemberPointer:
+    return type;
+
+  // These types can be variably-modified.  All these modifications
+  // preserve structure except as noted by comments.
+  // TODO: if we ever care about optimizing VLAs, there are no-op
+  // optimizations available here.
+  case Type::Pointer:
+    result = getPointerType(getVariableArrayDecayedType(
+                              cast<PointerType>(ty)->getPointeeType()));
+    break;
+
+  case Type::LValueReference: {
+    const LValueReferenceType *lv = cast<LValueReferenceType>(ty);
+    result = getLValueReferenceType(
+                 getVariableArrayDecayedType(lv->getPointeeType()),
+                                    lv->isSpelledAsLValue());
+    break;
+  }
+
+  case Type::RValueReference: {
+    const RValueReferenceType *lv = cast<RValueReferenceType>(ty);
+    result = getRValueReferenceType(
+                 getVariableArrayDecayedType(lv->getPointeeType()));
+    break;
+  }
+
+  case Type::ConstantArray: {
+    const ConstantArrayType *cat = cast<ConstantArrayType>(ty);
+    result = getConstantArrayType(
+                 getVariableArrayDecayedType(cat->getElementType()),
+                                  cat->getSize(),
+                                  cat->getSizeModifier(),
+                                  cat->getIndexTypeCVRQualifiers());
+    break;
+  }
+
+  case Type::DependentSizedArray: {
+    const DependentSizedArrayType *dat = cast<DependentSizedArrayType>(ty);
+    result = getDependentSizedArrayType(
+                 getVariableArrayDecayedType(dat->getElementType()),
+                                        dat->getSizeExpr(),
+                                        dat->getSizeModifier(),
+                                        dat->getIndexTypeCVRQualifiers(),
+                                        dat->getBracketsRange());
+    break;
+  }
+
+  // Turn incomplete types into [*] types.
+  case Type::IncompleteArray: {
+    const IncompleteArrayType *iat = cast<IncompleteArrayType>(ty);
+    result = getVariableArrayType(
+                 getVariableArrayDecayedType(iat->getElementType()),
+                                  /*size*/ 0,
+                                  ArrayType::Normal,
+                                  iat->getIndexTypeCVRQualifiers(),
+                                  SourceRange());
+    break;
+  }
+
+  // Turn VLA types into [*] types.
+  case Type::VariableArray: {
+    const VariableArrayType *vat = cast<VariableArrayType>(ty);
+    result = getVariableArrayType(
+                 getVariableArrayDecayedType(vat->getElementType()),
+                                  /*size*/ 0,
+                                  ArrayType::Star,
+                                  vat->getIndexTypeCVRQualifiers(),
+                                  vat->getBracketsRange());
+    break;
+  }
+  }
+
+  // Apply the top-level qualifiers from the original.
+  return getQualifiedType(result, split.second);
+}
 
 /// getVariableArrayType - Returns a non-unique reference to the type for a
 /// variable array of the specified element type.
@@ -1466,15 +1560,18 @@ QualType ASTContext::getVariableArrayType(QualType EltTy,
                                           SourceRange Brackets) const {
   // Since we don't unique expressions, it isn't possible to unique VLA's
   // that have an expression provided for their size.
-  QualType CanonType;
+  QualType Canon;
   
-  if (!EltTy.isCanonical()) {
-    CanonType = getVariableArrayType(getCanonicalType(EltTy), NumElts, ASM,
-                                     EltTypeQuals, Brackets);
+  // Be sure to pull qualifiers off the element type.
+  if (!EltTy.isCanonical() || EltTy.hasLocalQualifiers()) {
+    SplitQualType canonSplit = getCanonicalType(EltTy).split();
+    Canon = getVariableArrayType(QualType(canonSplit.first, 0), NumElts, ASM,
+                                 EltTypeQuals, Brackets);
+    Canon = getQualifiedType(Canon, canonSplit.second);
   }
   
   VariableArrayType *New = new(*this, TypeAlignment)
-    VariableArrayType(EltTy, CanonType, NumElts, ASM, EltTypeQuals, Brackets);
+    VariableArrayType(EltTy, Canon, NumElts, ASM, EltTypeQuals, Brackets);
 
   VariableArrayTypes.push_back(New);
   Types.push_back(New);
@@ -1484,106 +1581,114 @@ QualType ASTContext::getVariableArrayType(QualType EltTy,
 /// getDependentSizedArrayType - Returns a non-unique reference to
 /// the type for a dependently-sized array of the specified element
 /// type.
-QualType ASTContext::getDependentSizedArrayType(QualType EltTy,
-                                                Expr *NumElts,
+QualType ASTContext::getDependentSizedArrayType(QualType elementType,
+                                                Expr *numElements,
                                                 ArrayType::ArraySizeModifier ASM,
-                                                unsigned EltTypeQuals,
-                                                SourceRange Brackets) const {
-  assert((!NumElts || NumElts->isTypeDependent() || 
-          NumElts->isValueDependent()) &&
+                                                unsigned elementTypeQuals,
+                                                SourceRange brackets) const {
+  assert((!numElements || numElements->isTypeDependent() || 
+          numElements->isValueDependent()) &&
          "Size must be type- or value-dependent!");
 
-  void *InsertPos = 0;
-  DependentSizedArrayType *Canon = 0;
+  // Dependently-sized array types that do not have a specified number
+  // of elements will have their sizes deduced from a dependent
+  // initializer.  We do no canonicalization here at all, which is okay
+  // because they can't be used in most locations.
+  if (!numElements) {
+    DependentSizedArrayType *newType
+      = new (*this, TypeAlignment)
+          DependentSizedArrayType(*this, elementType, QualType(),
+                                  numElements, ASM, elementTypeQuals,
+                                  brackets);
+    Types.push_back(newType);
+    return QualType(newType, 0);
+  }
+
+  // Otherwise, we actually build a new type every time, but we
+  // also build a canonical type.
+
+  SplitQualType canonElementType = getCanonicalType(elementType).split();
+
+  void *insertPos = 0;
   llvm::FoldingSetNodeID ID;
+  DependentSizedArrayType::Profile(ID, *this,
+                                   QualType(canonElementType.first, 0),
+                                   ASM, elementTypeQuals, numElements);
 
-  QualType CanonicalEltTy = getCanonicalType(EltTy);
-  if (NumElts) {
-    // Dependently-sized array types that do not have a specified
-    // number of elements will have their sizes deduced from an
-    // initializer.
-    DependentSizedArrayType::Profile(ID, *this, CanonicalEltTy, ASM,
-                                     EltTypeQuals, NumElts);
+  // Look for an existing type with these properties.
+  DependentSizedArrayType *canonTy =
+    DependentSizedArrayTypes.FindNodeOrInsertPos(ID, insertPos);
 
-    Canon = DependentSizedArrayTypes.FindNodeOrInsertPos(ID, InsertPos);
+  // If we don't have one, build one.
+  if (!canonTy) {
+    canonTy = new (*this, TypeAlignment)
+      DependentSizedArrayType(*this, QualType(canonElementType.first, 0),
+                              QualType(), numElements, ASM, elementTypeQuals,
+                              brackets);
+    DependentSizedArrayTypes.InsertNode(canonTy, insertPos);
+    Types.push_back(canonTy);
   }
 
-  DependentSizedArrayType *New;
-  if (Canon) {
-    // We already have a canonical version of this array type; use it as
-    // the canonical type for a newly-built type.
-    New = new (*this, TypeAlignment)
-      DependentSizedArrayType(*this, EltTy, QualType(Canon, 0),
-                              NumElts, ASM, EltTypeQuals, Brackets);
-  } else if (CanonicalEltTy == EltTy) {
-    // This is a canonical type. Record it.
-    New = new (*this, TypeAlignment)
-      DependentSizedArrayType(*this, EltTy, QualType(),
-                              NumElts, ASM, EltTypeQuals, Brackets);
-    
-    if (NumElts) {
-#ifndef NDEBUG
-      DependentSizedArrayType *CanonCheck
-        = DependentSizedArrayTypes.FindNodeOrInsertPos(ID, InsertPos);
-      assert(!CanonCheck && "Dependent-sized canonical array type broken");
-      (void)CanonCheck;
-#endif
-      DependentSizedArrayTypes.InsertNode(New, InsertPos);
-    }
-  } else {
-    QualType Canon = getDependentSizedArrayType(CanonicalEltTy, NumElts,
-                                                ASM, EltTypeQuals,
-                                                SourceRange());
-    New = new (*this, TypeAlignment)
-      DependentSizedArrayType(*this, EltTy, Canon,
-                              NumElts, ASM, EltTypeQuals, Brackets);
-  }
+  // Apply qualifiers from the element type to the array.
+  QualType canon = getQualifiedType(QualType(canonTy,0),
+                                    canonElementType.second);
 
-  Types.push_back(New);
-  return QualType(New, 0);
+  // If we didn't need extra canonicalization for the element type,
+  // then just use that as our result.
+  if (QualType(canonElementType.first, 0) == elementType)
+    return canon;
+
+  // Otherwise, we need to build a type which follows the spelling
+  // of the element type.
+  DependentSizedArrayType *sugaredType
+    = new (*this, TypeAlignment)
+        DependentSizedArrayType(*this, elementType, canon, numElements,
+                                ASM, elementTypeQuals, brackets);
+  Types.push_back(sugaredType);
+  return QualType(sugaredType, 0);
 }
 
-QualType ASTContext::getIncompleteArrayType(QualType EltTy,
+QualType ASTContext::getIncompleteArrayType(QualType elementType,
                                             ArrayType::ArraySizeModifier ASM,
-                                            unsigned EltTypeQuals) const {
+                                            unsigned elementTypeQuals) const {
   llvm::FoldingSetNodeID ID;
-  IncompleteArrayType::Profile(ID, EltTy, ASM, EltTypeQuals);
+  IncompleteArrayType::Profile(ID, elementType, ASM, elementTypeQuals);
 
-  void *InsertPos = 0;
-  if (IncompleteArrayType *ATP =
-       IncompleteArrayTypes.FindNodeOrInsertPos(ID, InsertPos))
-    return QualType(ATP, 0);
+  void *insertPos = 0;
+  if (IncompleteArrayType *iat =
+       IncompleteArrayTypes.FindNodeOrInsertPos(ID, insertPos))
+    return QualType(iat, 0);
 
   // If the element type isn't canonical, this won't be a canonical type
-  // either, so fill in the canonical type field.
-  QualType Canonical;
+  // either, so fill in the canonical type field.  We also have to pull
+  // qualifiers off the element type.
+  QualType canon;
 
-  if (!EltTy.isCanonical()) {
-    Canonical = getIncompleteArrayType(getCanonicalType(EltTy),
-                                       ASM, EltTypeQuals);
+  if (!elementType.isCanonical() || elementType.hasLocalQualifiers()) {
+    SplitQualType canonSplit = getCanonicalType(elementType).split();
+    canon = getIncompleteArrayType(QualType(canonSplit.first, 0),
+                                   ASM, elementTypeQuals);
+    canon = getQualifiedType(canon, canonSplit.second);
 
     // Get the new insert position for the node we care about.
-    IncompleteArrayType *NewIP =
-      IncompleteArrayTypes.FindNodeOrInsertPos(ID, InsertPos);
-    assert(NewIP == 0 && "Shouldn't be in the map!"); (void)NewIP;
+    IncompleteArrayType *existing =
+      IncompleteArrayTypes.FindNodeOrInsertPos(ID, insertPos);
+    assert(!existing && "Shouldn't be in the map!"); (void) existing;
   }
 
-  IncompleteArrayType *New = new (*this, TypeAlignment)
-    IncompleteArrayType(EltTy, Canonical, ASM, EltTypeQuals);
+  IncompleteArrayType *newType = new (*this, TypeAlignment)
+    IncompleteArrayType(elementType, canon, ASM, elementTypeQuals);
 
-  IncompleteArrayTypes.InsertNode(New, InsertPos);
-  Types.push_back(New);
-  return QualType(New, 0);
+  IncompleteArrayTypes.InsertNode(newType, insertPos);
+  Types.push_back(newType);
+  return QualType(newType, 0);
 }
 
 /// getVectorType - Return the unique reference to a vector type of
 /// the specified element type and size. VectorType must be a built-in type.
 QualType ASTContext::getVectorType(QualType vecType, unsigned NumElts,
                                    VectorType::VectorKind VecKind) const {
-  BuiltinType *BaseType;
-
-  BaseType = dyn_cast<BuiltinType>(getCanonicalType(vecType).getTypePtr());
-  assert(BaseType != 0 && "getVectorType(): Expecting a built-in type");
+  assert(vecType->isBuiltinType());
 
   // Check if we've already instantiated a vector of this type.
   llvm::FoldingSetNodeID ID;
@@ -1614,10 +1719,7 @@ QualType ASTContext::getVectorType(QualType vecType, unsigned NumElts,
 /// the specified element type and size. VectorType must be a built-in type.
 QualType
 ASTContext::getExtVectorType(QualType vecType, unsigned NumElts) const {
-  BuiltinType *baseType;
-
-  baseType = dyn_cast<BuiltinType>(getCanonicalType(vecType).getTypePtr());
-  assert(baseType != 0 && "getExtVectorType(): Expecting a built-in type");
+  assert(vecType->isBuiltinType());
 
   // Check if we've already instantiated a vector of this type.
   llvm::FoldingSetNodeID ID;
@@ -1812,9 +1914,10 @@ QualType ASTContext::getInjectedClassNameType(CXXRecordDecl *Decl,
     Decl->TypeForDecl = PrevDecl->TypeForDecl;
     assert(isa<InjectedClassNameType>(Decl->TypeForDecl));
   } else {
-    Decl->TypeForDecl =
+    Type *newType =
       new (*this, TypeAlignment) InjectedClassNameType(Decl, TST);
-    Types.push_back(Decl->TypeForDecl);
+    Decl->TypeForDecl = newType;
+    Types.push_back(newType);
   }
   return QualType(Decl->TypeForDecl, 0);
 }
@@ -1842,11 +1945,12 @@ QualType ASTContext::getTypeDeclTypeSlow(const TypeDecl *Decl) const {
     return getEnumType(Enum);
   } else if (const UnresolvedUsingTypenameDecl *Using =
                dyn_cast<UnresolvedUsingTypenameDecl>(Decl)) {
-    Decl->TypeForDecl = new (*this, TypeAlignment) UnresolvedUsingType(Using);
+    Type *newType = new (*this, TypeAlignment) UnresolvedUsingType(Using);
+    Decl->TypeForDecl = newType;
+    Types.push_back(newType);
   } else
     llvm_unreachable("TypeDecl without a type?");
 
-  Types.push_back(Decl->TypeForDecl);
   return QualType(Decl->TypeForDecl, 0);
 }
 
@@ -1858,10 +1962,11 @@ ASTContext::getTypedefType(const TypedefDecl *Decl, QualType Canonical) const {
 
   if (Canonical.isNull())
     Canonical = getCanonicalType(Decl->getUnderlyingType());
-  Decl->TypeForDecl = new(*this, TypeAlignment)
+  TypedefType *newType = new(*this, TypeAlignment)
     TypedefType(Type::Typedef, Decl, Canonical);
-  Types.push_back(Decl->TypeForDecl);
-  return QualType(Decl->TypeForDecl, 0);
+  Decl->TypeForDecl = newType;
+  Types.push_back(newType);
+  return QualType(newType, 0);
 }
 
 QualType ASTContext::getRecordType(const RecordDecl *Decl) const {
@@ -1871,9 +1976,10 @@ QualType ASTContext::getRecordType(const RecordDecl *Decl) const {
     if (PrevDecl->TypeForDecl)
       return QualType(Decl->TypeForDecl = PrevDecl->TypeForDecl, 0); 
 
-  Decl->TypeForDecl = new (*this, TypeAlignment) RecordType(Decl);
-  Types.push_back(Decl->TypeForDecl);
-  return QualType(Decl->TypeForDecl, 0);
+  RecordType *newType = new (*this, TypeAlignment) RecordType(Decl);
+  Decl->TypeForDecl = newType;
+  Types.push_back(newType);
+  return QualType(newType, 0);
 }
 
 QualType ASTContext::getEnumType(const EnumDecl *Decl) const {
@@ -1883,9 +1989,10 @@ QualType ASTContext::getEnumType(const EnumDecl *Decl) const {
     if (PrevDecl->TypeForDecl)
       return QualType(Decl->TypeForDecl = PrevDecl->TypeForDecl, 0); 
 
-  Decl->TypeForDecl = new (*this, TypeAlignment) EnumType(Decl);
-  Types.push_back(Decl->TypeForDecl);
-  return QualType(Decl->TypeForDecl, 0);
+  EnumType *newType = new (*this, TypeAlignment) EnumType(Decl);
+  Decl->TypeForDecl = newType;
+  Types.push_back(newType);
+  return QualType(newType, 0);
 }
 
 QualType ASTContext::getAttributedType(AttributedType::Kind attrKind,
@@ -2565,86 +2672,51 @@ CanQualType ASTContext::getCanonicalParamType(QualType T) const {
   return CanQualType::CreateUnsafe(Result);
 }
 
-/// getCanonicalType - Return the canonical (structural) type corresponding to
-/// the specified potentially non-canonical type.  The non-canonical version
-/// of a type may have many "decorated" versions of types.  Decorators can
-/// include typedefs, 'typeof' operators, etc. The returned type is guaranteed
-/// to be free of any of these, allowing two canonical types to be compared
-/// for exact equality with a simple pointer comparison.
-CanQualType ASTContext::getCanonicalType(QualType T) const {
-  QualifierCollector Quals;
-  const Type *Ptr = Quals.strip(T);
-  QualType CanType = Ptr->getCanonicalTypeInternal();
 
-  // The canonical internal type will be the canonical type *except*
-  // that we push type qualifiers down through array types.
+QualType ASTContext::getUnqualifiedArrayType(QualType type,
+                                             Qualifiers &quals) {
+  SplitQualType splitType = type.getSplitUnqualifiedType();
 
-  // If there are no new qualifiers to push down, stop here.
-  if (!Quals.hasQualifiers())
-    return CanQualType::CreateUnsafe(CanType);
+  // FIXME: getSplitUnqualifiedType() actually walks all the way to
+  // the unqualified desugared type and then drops it on the floor.
+  // We then have to strip that sugar back off with
+  // getUnqualifiedDesugaredType(), which is silly.
+  const ArrayType *AT =
+    dyn_cast<ArrayType>(splitType.first->getUnqualifiedDesugaredType());
 
-  // If the type qualifiers are on an array type, get the canonical
-  // type of the array with the qualifiers applied to the element
-  // type.
-  ArrayType *AT = dyn_cast<ArrayType>(CanType);
-  if (!AT)
-    return CanQualType::CreateUnsafe(getQualifiedType(CanType, Quals));
-
-  // Get the canonical version of the element with the extra qualifiers on it.
-  // This can recursively sink qualifiers through multiple levels of arrays.
-  QualType NewEltTy = getQualifiedType(AT->getElementType(), Quals);
-  NewEltTy = getCanonicalType(NewEltTy);
-
-  if (ConstantArrayType *CAT = dyn_cast<ConstantArrayType>(AT))
-    return CanQualType::CreateUnsafe(
-             getConstantArrayType(NewEltTy, CAT->getSize(),
-                                  CAT->getSizeModifier(),
-                                  CAT->getIndexTypeCVRQualifiers()));
-  if (IncompleteArrayType *IAT = dyn_cast<IncompleteArrayType>(AT))
-    return CanQualType::CreateUnsafe(
-             getIncompleteArrayType(NewEltTy, IAT->getSizeModifier(),
-                                    IAT->getIndexTypeCVRQualifiers()));
-
-  if (DependentSizedArrayType *DSAT = dyn_cast<DependentSizedArrayType>(AT))
-    return CanQualType::CreateUnsafe(
-             getDependentSizedArrayType(NewEltTy,
-                                        DSAT->getSizeExpr(),
-                                        DSAT->getSizeModifier(),
-                                        DSAT->getIndexTypeCVRQualifiers(),
-                        DSAT->getBracketsRange())->getCanonicalTypeInternal());
-
-  VariableArrayType *VAT = cast<VariableArrayType>(AT);
-  return CanQualType::CreateUnsafe(getVariableArrayType(NewEltTy,
-                                                        VAT->getSizeExpr(),
-                                                        VAT->getSizeModifier(),
-                                              VAT->getIndexTypeCVRQualifiers(),
-                                                     VAT->getBracketsRange()));
-}
-
-QualType ASTContext::getUnqualifiedArrayType(QualType T,
-                                             Qualifiers &Quals) {
-  Quals = T.getQualifiers();
-  const ArrayType *AT = getAsArrayType(T);
+  // If we don't have an array, just use the results in splitType.
   if (!AT) {
-    return T.getUnqualifiedType();
+    quals = splitType.second;
+    return QualType(splitType.first, 0);
   }
 
-  QualType Elt = AT->getElementType();
-  QualType UnqualElt = getUnqualifiedArrayType(Elt, Quals);
-  if (Elt == UnqualElt)
-    return T;
+  // Otherwise, recurse on the array's element type.
+  QualType elementType = AT->getElementType();
+  QualType unqualElementType = getUnqualifiedArrayType(elementType, quals);
+
+  // If that didn't change the element type, AT has no qualifiers, so we
+  // can just use the results in splitType.
+  if (elementType == unqualElementType) {
+    assert(quals.empty()); // from the recursive call
+    quals = splitType.second;
+    return QualType(splitType.first, 0);
+  }
+
+  // Otherwise, add in the qualifiers from the outermost type, then
+  // build the type back up.
+  quals.addConsistentQualifiers(splitType.second);
 
   if (const ConstantArrayType *CAT = dyn_cast<ConstantArrayType>(AT)) {
-    return getConstantArrayType(UnqualElt, CAT->getSize(),
+    return getConstantArrayType(unqualElementType, CAT->getSize(),
                                 CAT->getSizeModifier(), 0);
   }
 
   if (const IncompleteArrayType *IAT = dyn_cast<IncompleteArrayType>(AT)) {
-    return getIncompleteArrayType(UnqualElt, IAT->getSizeModifier(), 0);
+    return getIncompleteArrayType(unqualElementType, IAT->getSizeModifier(), 0);
   }
 
   if (const VariableArrayType *VAT = dyn_cast<VariableArrayType>(AT)) {
-    return getVariableArrayType(UnqualElt,
+    return getVariableArrayType(unqualElementType,
                                 VAT->getSizeExpr(),
                                 VAT->getSizeModifier(),
                                 VAT->getIndexTypeCVRQualifiers(),
@@ -2652,7 +2724,7 @@ QualType ASTContext::getUnqualifiedArrayType(QualType T,
   }
 
   const DependentSizedArrayType *DSAT = cast<DependentSizedArrayType>(AT);
-  return getDependentSizedArrayType(UnqualElt, DSAT->getSizeExpr(),
+  return getDependentSizedArrayType(unqualElementType, DSAT->getSizeExpr(),
                                     DSAT->getSizeModifier(), 0,
                                     SourceRange());
 }
@@ -2737,6 +2809,15 @@ TemplateName ASTContext::getCanonicalTemplateName(TemplateName Name) const {
     return TemplateName(cast<TemplateDecl>(Template->getCanonicalDecl()));
   }
 
+  if (SubstTemplateTemplateParmPackStorage *SubstPack
+                                  = Name.getAsSubstTemplateTemplateParmPack()) {
+    TemplateTemplateParmDecl *CanonParam
+      = getCanonicalTemplateTemplateParmDecl(SubstPack->getParameterPack());
+    TemplateArgument CanonArgPack
+      = getCanonicalTemplateArgument(SubstPack->getArgumentPack());
+    return getSubstTemplateTemplateParmPack(CanonParam, CanonArgPack);
+  }
+      
   assert(!Name.getAsOverloadedTemplate());
 
   DependentTemplateName *DTN = Name.getAsDependentTemplateName();
@@ -2768,7 +2849,7 @@ ASTContext::getCanonicalTemplateArgument(const TemplateArgument &Arg) const {
     case TemplateArgument::TemplateExpansion:
       return TemplateArgument(getCanonicalTemplateName(
                                          Arg.getAsTemplateOrTemplatePattern()),
-                              true);
+                              Arg.getNumTemplateExpansions());
 
     case TemplateArgument::Integral:
       return TemplateArgument(*Arg.getAsIntegral(),
@@ -2845,7 +2926,8 @@ ASTContext::getCanonicalNestedNameSpecifier(NestedNameSpecifier *NNS) const {
       T = getCanonicalType(T);
     }
     
-    return NestedNameSpecifier::Create(*this, 0, false, T.getTypePtr());
+    return NestedNameSpecifier::Create(*this, 0, false,
+                                       const_cast<Type*>(T.getTypePtr()));
   }
 
   case NestedNameSpecifier::Global:
@@ -2867,8 +2949,7 @@ const ArrayType *ASTContext::getAsArrayType(QualType T) const {
   }
 
   // Handle the common negative case fast.
-  QualType CType = T->getCanonicalTypeInternal();
-  if (!isa<ArrayType>(CType))
+  if (!isa<ArrayType>(T.getCanonicalType()))
     return 0;
 
   // Apply any qualifiers from the array type to the element type.  This
@@ -2879,19 +2960,17 @@ const ArrayType *ASTContext::getAsArrayType(QualType T) const {
   // sugar such as a typedef in the way.  If we have type qualifiers on the type
   // we must propagate them down into the element type.
 
-  QualifierCollector Qs;
-  const Type *Ty = Qs.strip(T.getDesugaredType(*this));
+  SplitQualType split = T.getSplitDesugaredType();
+  Qualifiers qs = split.second;
 
   // If we have a simple case, just return now.
-  const ArrayType *ATy = dyn_cast<ArrayType>(Ty);
-  if (ATy == 0 || Qs.empty())
+  const ArrayType *ATy = dyn_cast<ArrayType>(split.first);
+  if (ATy == 0 || qs.empty())
     return ATy;
 
   // Otherwise, we have an array and we have qualifiers on it.  Push the
   // qualifiers into the array element type and return a new array type.
-  // Get the canonical version of the element with the extra qualifiers on it.
-  // This can recursively sink qualifiers through multiple levels of arrays.
-  QualType NewEltTy = getQualifiedType(ATy->getElementType(), Qs);
+  QualType NewEltTy = getQualifiedType(ATy->getElementType(), qs);
 
   if (const ConstantArrayType *CAT = dyn_cast<ConstantArrayType>(ATy))
     return cast<ArrayType>(getConstantArrayType(NewEltTy, CAT->getSize(),
@@ -2939,20 +3018,22 @@ QualType ASTContext::getArrayDecayedType(QualType Ty) const {
   return getQualifiedType(PtrTy, PrettyArrayType->getIndexTypeQualifiers());
 }
 
-QualType ASTContext::getBaseElementType(QualType QT) const {
-  QualifierCollector Qs;
-  while (const ArrayType *AT = getAsArrayType(QualType(Qs.strip(QT), 0)))
-    QT = AT->getElementType();
-  return Qs.apply(*this, QT);
+QualType ASTContext::getBaseElementType(const ArrayType *array) const {
+  return getBaseElementType(array->getElementType());
 }
 
-QualType ASTContext::getBaseElementType(const ArrayType *AT) const {
-  QualType ElemTy = AT->getElementType();
+QualType ASTContext::getBaseElementType(QualType type) const {
+  Qualifiers qs;
+  while (true) {
+    SplitQualType split = type.getSplitDesugaredType();
+    const ArrayType *array = split.first->getAsArrayTypeUnsafe();
+    if (!array) break;
 
-  if (const ArrayType *AT = getAsArrayType(ElemTy))
-    return getBaseElementType(AT);
+    type = array->getElementType();
+    qs.addConsistentQualifiers(split.second);
+  }
 
-  return ElemTy;
+  return getQualifiedType(type, qs);
 }
 
 /// getConstantArrayElementCount - Returns number of constant array elements.
@@ -3024,9 +3105,9 @@ int ASTContext::getFloatingTypeOrder(QualType LHS, QualType RHS) const {
 /// getIntegerRank - Return an integer conversion rank (C99 6.3.1.1p1). This
 /// routine will assert if passed a built-in type that isn't an integer or enum,
 /// or if it is not canonicalized.
-unsigned ASTContext::getIntegerRank(Type *T) const {
+unsigned ASTContext::getIntegerRank(const Type *T) const {
   assert(T->isCanonicalUnqualified() && "T should be canonicalized");
-  if (EnumType* ET = dyn_cast<EnumType>(T))
+  if (const EnumType* ET = dyn_cast<EnumType>(T))
     T = ET->getDecl()->getPromotionType().getTypePtr();
 
   if (T->isSpecificBuiltinType(BuiltinType::WChar_S) ||
@@ -3120,8 +3201,8 @@ QualType ASTContext::getPromotedIntegerType(QualType Promotable) const {
 /// C99 6.3.1.8p1.  If LHS > RHS, return 1.  If LHS == RHS, return 0. If
 /// LHS < RHS, return -1.
 int ASTContext::getIntegerTypeOrder(QualType LHS, QualType RHS) const {
-  Type *LHSC = getCanonicalType(LHS).getTypePtr();
-  Type *RHSC = getCanonicalType(RHS).getTypePtr();
+  const Type *LHSC = getCanonicalType(LHS).getTypePtr();
+  const Type *RHSC = getCanonicalType(RHS).getTypePtr();
   if (LHSC == RHSC) return 0;
 
   bool LHSUnsigned = LHSC->isUnsignedIntegerType();
@@ -4344,6 +4425,27 @@ ASTContext::getDependentTemplateName(NestedNameSpecifier *NNS,
   return TemplateName(QTN);
 }
 
+TemplateName 
+ASTContext::getSubstTemplateTemplateParmPack(TemplateTemplateParmDecl *Param,
+                                       const TemplateArgument &ArgPack) const {
+  ASTContext &Self = const_cast<ASTContext &>(*this);
+  llvm::FoldingSetNodeID ID;
+  SubstTemplateTemplateParmPackStorage::Profile(ID, Self, Param, ArgPack);
+  
+  void *InsertPos = 0;
+  SubstTemplateTemplateParmPackStorage *Subst
+    = SubstTemplateTemplateParmPacks.FindNodeOrInsertPos(ID, InsertPos);
+  
+  if (!Subst) {
+    Subst = new (*this) SubstTemplateTemplateParmPackStorage(Self, Param, 
+                                                           ArgPack.pack_size(),
+                                                         ArgPack.pack_begin());
+    SubstTemplateTemplateParmPacks.InsertNode(Subst, InsertPos);
+  }
+
+  return TemplateName(Subst);
+}
+
 /// getFromTargetType - Given one of the integer types provided by
 /// TargetInfo, produce the corresponding type. The unsigned @p Type
 /// is actually a value of type @c TargetInfo::IntType.
@@ -4374,7 +4476,7 @@ CanQualType ASTContext::getFromTargetType(unsigned Type) const {
 /// FIXME: Move to Type.
 ///
 bool ASTContext::isObjCNSObjectType(QualType Ty) const {
-  if (TypedefType *TDT = dyn_cast<TypedefType>(Ty)) {
+  if (const TypedefType *TDT = dyn_cast<TypedefType>(Ty)) {
     if (TypedefDecl *TD = TDT->getDecl())
       if (TD->getAttr<ObjCNSObjectAttr>())
         return true;
@@ -5382,7 +5484,7 @@ QualType ASTContext::mergeObjCGCQualifiers(QualType LHS, QualType RHS) {
 //===----------------------------------------------------------------------===//
 
 unsigned ASTContext::getIntWidth(QualType T) const {
-  if (EnumType *ET = dyn_cast<EnumType>(T))
+  if (const EnumType *ET = dyn_cast<EnumType>(T))
     T = ET->getDecl()->getIntegerType();
   if (T->isBooleanType())
     return 1;
