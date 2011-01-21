@@ -64,9 +64,18 @@ namespace {
       return true;
     }
 
-    /// \brief Record occurrences of (FIXME: function and) non-type template
+    /// \brief Record occurrences of function and non-type template
     /// parameter packs in an expression.
     bool VisitDeclRefExpr(DeclRefExpr *E) {
+      if (E->getDecl()->isParameterPack())
+        Unexpanded.push_back(std::make_pair(E->getDecl(), E->getLocation()));
+      
+      return true;
+    }
+    
+    // \brief Record occurrences of function and non-type template parameter
+    // packs in a block-captured expression.
+    bool VisitBlockDeclRefExpr(BlockDeclRefExpr *E) {
       if (E->getDecl()->isParameterPack())
         Unexpanded.push_back(std::make_pair(E->getDecl(), E->getLocation()));
       
@@ -523,14 +532,16 @@ bool Sema::CheckParameterPacksForExpansion(SourceLocation EllipsisLoc,
     //   Template argument deduction can extend the sequence of template 
     //   arguments corresponding to a template parameter pack, even when the
     //   sequence contains explicitly specified template arguments.
-    if (NamedDecl *PartialPack 
-                  = CurrentInstantiationScope->getPartiallySubstitutedPack()) {
-      unsigned PartialDepth, PartialIndex;
-      llvm::tie(PartialDepth, PartialIndex) = getDepthAndIndex(PartialPack);
-      if (PartialDepth == Depth && PartialIndex == Index)
-        RetainExpansion = true;
+    if (!IsFunctionParameterPack) {
+      if (NamedDecl *PartialPack 
+                    = CurrentInstantiationScope->getPartiallySubstitutedPack()){
+        unsigned PartialDepth, PartialIndex;
+        llvm::tie(PartialDepth, PartialIndex) = getDepthAndIndex(PartialPack);
+        if (PartialDepth == Depth && PartialIndex == Index)
+          RetainExpansion = true;
+      }
     }
-
+    
     if (!NumExpansions) {
       // The is the first pack we've seen for which we have an argument. 
       // Record it.

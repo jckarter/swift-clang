@@ -716,6 +716,7 @@ public:
                                      bool &Redeclaration);
   void CheckVariableDeclaration(VarDecl *NewVD, LookupResult &Previous,
                                 bool &Redeclaration);
+  void CheckCompleteVariableDeclaration(VarDecl *var);
   NamedDecl* ActOnFunctionDeclarator(Scope* S, Declarator& D, DeclContext* DC,
                                      QualType R, TypeSourceInfo *TInfo,
                                      LookupResult &Previous,
@@ -726,8 +727,7 @@ public:
   void CheckFunctionDeclaration(Scope *S,
                                 FunctionDecl *NewFD, LookupResult &Previous,
                                 bool IsExplicitSpecialization,
-                                bool &Redeclaration,
-                                bool &OverloadableAttrRequired);
+                                bool &Redeclaration);
   void CheckMain(FunctionDecl *FD);
   Decl *ActOnParamDeclarator(Scope *S, Declarator &D);
   ParmVarDecl *BuildParmVarDeclForTypedef(DeclContext *DC,
@@ -1368,8 +1368,10 @@ public:
   // More parsing and symbol table subroutines.
 
   // Decl attributes - this routine is the top level dispatcher.
-  void ProcessDeclAttributes(Scope *S, Decl *D, const Declarator &PD);
-  void ProcessDeclAttributeList(Scope *S, Decl *D, const AttributeList *AL);
+  void ProcessDeclAttributes(Scope *S, Decl *D, const Declarator &PD,
+                           bool NonInheritable = true, bool Inheritable = true);
+  void ProcessDeclAttributeList(Scope *S, Decl *D, const AttributeList *AL,
+                           bool NonInheritable = true, bool Inheritable = true);
 
   bool CheckRegparmAttr(const AttributeList &attr, unsigned &value);
   bool CheckCallingConvAttr(const AttributeList &attr, CallingConv &CC);
@@ -2488,9 +2490,8 @@ public:
   Expr *BuildObjCEncodeExpression(SourceLocation AtLoc,
                                   TypeSourceInfo *EncodedTypeInfo,
                                   SourceLocation RParenLoc);
-  CXXMemberCallExpr *BuildCXXMemberCallExpr(Expr *Exp,
-                                            NamedDecl *FoundDecl,
-                                            CXXMethodDecl *Method);
+  ExprResult BuildCXXMemberCallExpr(Expr *Exp, NamedDecl *FoundDecl,
+                                    CXXMethodDecl *Method);
 
   ExprResult ParseObjCEncodeExpression(SourceLocation AtLoc,
                                        SourceLocation EncodeLoc,
@@ -2538,7 +2539,7 @@ public:
   Decl *ActOnCXXMemberDeclarator(Scope *S, AccessSpecifier AS,
                                  Declarator &D,
                                  MultiTemplateParamsArg TemplateParameterLists,
-                                 Expr *BitfieldWidth,
+                                 Expr *BitfieldWidth, const VirtSpecifiers &VS,
                                  Expr *Init, bool IsDefinition,
                                  bool Deleted = false);
 
@@ -2717,12 +2718,17 @@ public:
   bool CheckOverridingFunctionExceptionSpec(const CXXMethodDecl *New,
                                             const CXXMethodDecl *Old);
 
-  /// CheckOverridingFunctionAttributes - Checks whether attributes are
-  /// incompatible or prevent overriding.
-  bool CheckOverridingFunctionAttributes(const CXXMethodDecl *New,
-                                         const CXXMethodDecl *Old);
-
   bool CheckPureMethod(CXXMethodDecl *Method, SourceRange InitRange);
+
+  /// CheckOverrideControl - Check C++0x override control semantics.
+  void CheckOverrideControl(const Decl *D);
+
+  /// CheckForFunctionMarkedFinal - Checks whether a virtual member function
+  /// overrides a virtual member function marked 'final', according to
+  /// C++0x [class.virtual]p3.
+  bool CheckIfOverriddenFunctionIsMarkedFinal(const CXXMethodDecl *New,
+                                              const CXXMethodDecl *Old);
+  
 
   //===--------------------------------------------------------------------===//
   // C++ Access Control
@@ -3027,6 +3033,7 @@ public:
                              NamedDecl *Template,
                              SourceLocation TemplateLoc,
                              SourceLocation RAngleLoc,
+                             unsigned ArgumentPackIndex,
                            llvm::SmallVectorImpl<TemplateArgument> &Converted,
                              CheckTemplateArgumentKind CTAK = CTAK_Specified);
 

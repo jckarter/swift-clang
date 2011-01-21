@@ -395,6 +395,9 @@ void ASTDeclReader::VisitFunctionDecl(FunctionDecl *FD) {
   FD->IsDeleted = Record[Idx++];
   FD->IsTrivial = Record[Idx++];
   FD->HasImplicitReturnZero = Record[Idx++];
+  FD->IsMarkedOverride = Record[Idx++];
+  FD->IsMarkedFinal = Record[Idx++];
+
   FD->EndRangeLoc = ReadSourceLocation(Record, Idx);
 
   // Read in the parameters.
@@ -1155,13 +1158,21 @@ void ASTDeclReader::VisitNonTypeTemplateParmDecl(NonTypeTemplateParmDecl *D) {
   // TemplateParmPosition.
   D->setDepth(Record[Idx++]);
   D->setPosition(Record[Idx++]);
-  // Rest of NonTypeTemplateParmDecl.
-  D->ParameterPack = Record[Idx++];
-  if (Record[Idx++]) {
-    Expr *DefArg = Reader.ReadExpr(F);
-    bool Inherited = Record[Idx++];
-    D->setDefaultArgument(DefArg, Inherited);
- }
+  if (D->isExpandedParameterPack()) {
+    void **Data = reinterpret_cast<void **>(D + 1);
+    for (unsigned I = 0, N = D->getNumExpansionTypes(); I != N; ++I) {
+      Data[2*I] = Reader.GetType(Record[Idx++]).getAsOpaquePtr();
+      Data[2*I + 1] = GetTypeSourceInfo(Record, Idx);
+    }
+  } else {
+    // Rest of NonTypeTemplateParmDecl.
+    D->ParameterPack = Record[Idx++];
+    if (Record[Idx++]) {
+      Expr *DefArg = Reader.ReadExpr(F);
+      bool Inherited = Record[Idx++];
+      D->setDefaultArgument(DefArg, Inherited);
+   }
+  }
 }
 
 void ASTDeclReader::VisitTemplateTemplateParmDecl(TemplateTemplateParmDecl *D) {
@@ -1242,12 +1253,10 @@ void ASTReader::ReadAttributes(PerFileData &F, AttrVec &Attrs,
     Attr *New = 0;
     attr::Kind Kind = (attr::Kind)Record[Idx++];
     SourceLocation Loc = ReadSourceLocation(F, Record, Idx);
-    bool isInherited = Record[Idx++];
 
 #include "clang/Serialization/AttrPCHRead.inc"
 
     assert(New && "Unable to decode attribute?");
-    New->setInherited(isInherited);
     Attrs.push_back(New);
   }
 }
@@ -1432,6 +1441,11 @@ Decl *ASTReader::ReadDeclRecord(unsigned Index, DeclID ID) {
   case DECL_NON_TYPE_TEMPLATE_PARM:
     D = NonTypeTemplateParmDecl::Create(*Context, 0, SourceLocation(), 0,0,0,
                                         QualType(), false, 0);
+    break;
+  case DECL_EXPANDED_NON_TYPE_TEMPLATE_PARM_PACK:
+    D = NonTypeTemplateParmDecl::Create(*Context, 0, SourceLocation(), 0, 0,
+                                        0, QualType(), 0, 0, Record[Idx++],
+                                        0);
     break;
   case DECL_TEMPLATE_TEMPLATE_PARM:
     D = TemplateTemplateParmDecl::Create(*Context, 0, SourceLocation(), 0, 0,

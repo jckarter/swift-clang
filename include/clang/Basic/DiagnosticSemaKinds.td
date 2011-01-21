@@ -767,7 +767,8 @@ def err_init_conversion_failed : Error<
   "base class|a vector element}0 of type %1 with an %select{rvalue|lvalue}2 of "
   "type %3">;
 
-def err_lvalue_to_rvalue_ref : Error<"rvalue reference cannot bind to lvalue">;
+def err_lvalue_to_rvalue_ref : Error<"rvalue reference to type %0 cannot bind "
+  "to lvalue of type %1">;
 def err_invalid_initialization : Error<
 "invalid initialization of reference of type %0 from expression of type %1">;
 def err_lvalue_to_rvalue_ambig_ref : Error<"rvalue reference cannot bind to lvalue "
@@ -870,15 +871,18 @@ def err_trailing_return_without_auto : Error<
 // C++0x attributes
 def err_repeat_attribute : Error<"'%0' attribute cannot be repeated">;
 
+// C++0x override control
+def override_keyword_only_allowed_on_virtual_member_functions : Error<
+  "only virtual member functions can be marked '%0'">;
+
+def err_function_marked_override_not_overriding : Error<
+  "%0 marked 'override' but does not override any member functions">;
+
 // C++0x [[final]]
 def err_final_function_overridden : Error<
   "declaration of %0 overrides a 'final' function">;
 def err_final_base : Error<
   "derivation from 'final' %0">;
-
-// C++0x [[override]]
-def err_override_function_not_overriding : Error<
-  "%0 marked 'override' but does not override any member functions">;
 
 def err_function_overriding_without_override : Error<
   "%0 overrides function%s1 without being marked 'override'">;
@@ -1825,8 +1829,6 @@ def ext_template_outside_of_template : ExtWarn<
   "'template' keyword outside of a template">, InGroup<CXX0x>;
 
 // C++0x Variadic Templates
-def err_variadic_templates_unsupported : Error<
-  "variadic templates are not yet implemented">;
 def err_template_param_pack_default_arg : Error<
   "template parameter pack cannot have a default argument">;
 def err_template_param_pack_must_be_last_template_parameter : Error<
@@ -2796,6 +2798,8 @@ def warn_condition_is_idiomatic_assignment : Warning<"using the result "
   InGroup<DiagGroup<"idiomatic-parentheses">>, DefaultIgnore;
 def note_condition_assign_to_comparison : Note<
   "use '==' to turn this assignment into an equality comparison">;
+def note_condition_or_assign_to_comparison : Note<
+  "use '!=' to turn this compound assignment into an inequality comparison">;
 def note_condition_assign_silence : Note<
   "place parentheses around the assignment to silence this warning">;
 

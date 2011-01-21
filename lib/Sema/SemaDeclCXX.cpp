@@ -852,6 +852,45 @@ Decl *Sema::ActOnAccessSpecifier(AccessSpecifier Access,
   return ASDecl;
 }
 
+/// CheckOverrideControl - Check C++0x override control semantics.
+void Sema::CheckOverrideControl(const Decl *D) {
+  const CXXMethodDecl *MD = llvm::dyn_cast<CXXMethodDecl>(D);
+  if (!MD || !MD->isVirtual())
+    return;
+
+  if (MD->isDependentContext())
+    return;
+
+  // C++0x [class.virtual]p3:
+  //   If a virtual function is marked with the virt-specifier override and does
+  //   not override a member function of a base class, 
+  //   the program is ill-formed.
+  bool HasOverriddenMethods = 
+    MD->begin_overridden_methods() != MD->end_overridden_methods();
+  if (MD->isMarkedOverride() && !HasOverriddenMethods) {
+    Diag(MD->getLocation(), 
+                 diag::err_function_marked_override_not_overriding)
+      << MD->getDeclName();
+    return;
+  }
+}
+
+/// CheckIfOverriddenFunctionIsMarkedFinal - Checks whether a virtual member 
+/// function overrides a virtual member function marked 'final', according to
+/// C++0x [class.virtual]p3.
+bool Sema::CheckIfOverriddenFunctionIsMarkedFinal(const CXXMethodDecl *New,
+                                                  const CXXMethodDecl *Old) {
+  // FIXME: Get rid of FinalAttr here.
+  if (Old->hasAttr<FinalAttr>() || Old->isMarkedFinal()) {
+    Diag(New->getLocation(), diag::err_final_function_overridden)
+      << New->getDeclName();
+    Diag(Old->getLocation(), diag::note_overridden_virtual_function);
+    return true;
+  }
+  
+  return false;
+}
+
 /// ActOnCXXMemberDeclarator - This is invoked when a C++ class member
 /// declarator is parsed. 'AS' is the access specifier, 'BW' specifies the
 /// bitfield width if there is one and 'InitExpr' specifies the initializer if
@@ -859,7 +898,8 @@ Decl *Sema::ActOnAccessSpecifier(AccessSpecifier Access,
 Decl *
 Sema::ActOnCXXMemberDeclarator(Scope *S, AccessSpecifier AS, Declarator &D,
                                MultiTemplateParamsArg TemplateParameterLists,
-                               ExprTy *BW, ExprTy *InitExpr, bool IsDefinition,
+                               ExprTy *BW, const VirtSpecifiers &VS,
+                               ExprTy *InitExpr, bool IsDefinition,
                                bool Deleted) {
   const DeclSpec &DS = D.getDeclSpec();
   DeclarationNameInfo NameInfo = GetNameForDeclarator(D);
@@ -987,6 +1027,27 @@ Sema::ActOnCXXMemberDeclarator(Scope *S, AccessSpecifier AS, Declarator &D,
     if (FunctionTemplateDecl *FunTmpl = dyn_cast<FunctionTemplateDecl>(Member))
       FunTmpl->getTemplatedDecl()->setAccess(AS);
   }
+
+  if (VS.isOverrideSpecified()) {
+    CXXMethodDecl *MD = dyn_cast<CXXMethodDecl>(Member);
+    if (!MD || !MD->isVirtual()) {
+      Diag(Member->getLocStart(), 
+           diag::override_keyword_only_allowed_on_virtual_member_functions)
+        << "override" << FixItHint::CreateRemoval(VS.getOverrideLoc());
+    } else
+      MD->setIsMarkedOverride(true);
+  }
+  if (VS.isFinalSpecified()) {
+    CXXMethodDecl *MD = dyn_cast<CXXMethodDecl>(Member);
+    if (!MD || !MD->isVirtual()) {
+      Diag(Member->getLocStart(), 
+           diag::override_keyword_only_allowed_on_virtual_member_functions)
+      << "final" << FixItHint::CreateRemoval(VS.getFinalLoc());
+    } else
+      MD->setIsMarkedFinal(true);
+  }
+
+  CheckOverrideControl(Member);
 
   assert((Name || isInstField) && "No identifier for non-field ?");
 
@@ -5641,16 +5702,7 @@ void Sema::AddCXXDirectInitializerToDecl(Decl *RealDecl,
   VDecl->setInit(Result.takeAs<Expr>());
   VDecl->setCXXDirectInitializer(true);
 
-    if (!VDecl->isInvalidDecl() &&
-        !VDecl->getDeclContext()->isDependentContext() &&
-        VDecl->hasGlobalStorage() && !VDecl->isStaticLocal() &&
-        !VDecl->getInit()->isConstantInitializer(Context,
-                                        VDecl->getType()->isReferenceType()))
-      Diag(VDecl->getLocation(), diag::warn_global_constructor)
-        << VDecl->getInit()->getSourceRange();
-
-  if (const RecordType *Record = VDecl->getType()->getAs<RecordType>())
-    FinalizeVarWithDestructor(VDecl, Record);
+  CheckCompleteVariableDeclaration(VDecl);
 }
 
 /// \brief Given a constructor and the set of arguments provided for the
@@ -5976,8 +6028,6 @@ bool Sema::CheckLiteralOperatorDeclaration(FunctionDecl *FnDecl) {
           cast<NonTypeTemplateParmDecl>(Params->getParam(0));
 
         // The template parameter must be a char parameter pack.
-        // FIXME: This test will always fail because non-type parameter packs
-        //   have not been implemented.
         if (PmDecl && PmDecl->isTemplateParameterPack() &&
             Context.hasSameType(PmDecl->getType(), Context.CharTy))
           Valid = true;
@@ -6880,19 +6930,6 @@ bool Sema::CheckOverridingFunctionReturnType(const CXXMethodDecl *New,
     Diag(Old->getLocation(), diag::note_overridden_virtual_function);
     return true;
   };
-
-  return false;
-}
-
-bool Sema::CheckOverridingFunctionAttributes(const CXXMethodDecl *New,
-                                             const CXXMethodDecl *Old)
-{
-  if (Old->hasAttr<FinalAttr>()) {
-    Diag(New->getLocation(), diag::err_final_function_overridden)
-      << New->getDeclName();
-    Diag(Old->getLocation(), diag::note_overridden_virtual_function);
-    return true;
-  }
 
   return false;
 }

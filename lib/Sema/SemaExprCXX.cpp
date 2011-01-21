@@ -1691,6 +1691,7 @@ static ExprResult BuildCXXCastArgument(Sema &S,
                                        QualType Ty,
                                        CastKind Kind,
                                        CXXMethodDecl *Method,
+                                       NamedDecl *FoundDecl,
                                        Expr *From) {
   switch (Kind) {
   default: assert(0 && "Unhandled cast kind!");
@@ -1717,9 +1718,11 @@ static ExprResult BuildCXXCastArgument(Sema &S,
     assert(!From->getType()->isPointerType() && "Arg can't have pointer type!");
     
     // Create an implicit call expr that calls it.
-    // FIXME: pass the FoundDecl for the user-defined conversion here
-    CXXMemberCallExpr *CE = S.BuildCXXMemberCallExpr(From, Method, Method);
-    return S.MaybeBindToTemporary(CE);
+    ExprResult Result = S.BuildCXXMemberCallExpr(From, FoundDecl, Method);
+    if (Result.isInvalid())
+      return ExprError();
+  
+    return S.MaybeBindToTemporary(Result.get());
   }
   }
 }    
@@ -1776,7 +1779,8 @@ Sema::PerformImplicitConversion(Expr *&From, QualType ToType,
         = BuildCXXCastArgument(*this,
                                From->getLocStart(),
                                ToType.getNonReferenceType(),
-                               CastKind, cast<CXXMethodDecl>(FD), 
+                               CastKind, cast<CXXMethodDecl>(FD),
+                               ICS.UserDefined.FoundConversionFunction,
                                From);
 
       if (CastArg.isInvalid())
@@ -3592,12 +3596,11 @@ ExprResult Sema::ActOnPseudoDestructorExpr(Scope *S, Expr *Base,
                                    Destructed, HasTrailingLParen);
 }
 
-CXXMemberCallExpr *Sema::BuildCXXMemberCallExpr(Expr *Exp, 
-                                                NamedDecl *FoundDecl,
-                                                CXXMethodDecl *Method) {
+ExprResult Sema::BuildCXXMemberCallExpr(Expr *Exp, NamedDecl *FoundDecl,
+                                        CXXMethodDecl *Method) {
   if (PerformObjectArgumentInitialization(Exp, /*Qualifier=*/0,
                                           FoundDecl, Method))
-    assert(0 && "Calling BuildCXXMemberCallExpr with invalid call?");
+    return true;
 
   MemberExpr *ME = 
       new (Context) MemberExpr(Exp, /*IsArrow=*/false, Method,

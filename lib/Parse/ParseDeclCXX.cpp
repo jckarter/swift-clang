@@ -1275,6 +1275,12 @@ VirtSpecifiers::VirtSpecifier Parser::isCXX0XVirtSpecifier() const {
   if (Tok.is(tok::identifier)) {
     IdentifierInfo *II = Tok.getIdentifierInfo();
 
+    // Initialize the contextual keywords.
+    if (!Ident_final) {
+      Ident_final = &PP.getIdentifierTable().get("final");
+      Ident_override = &PP.getIdentifierTable().get("override");
+    }
+
     if (II == Ident_override)
       return VirtSpecifiers::VS_Override;
 
@@ -1489,6 +1495,10 @@ void Parser::ParseCXXClassMemberDeclaration(AccessSpecifier AS,
         Diag(Tok, diag::err_func_def_no_params);
         ConsumeBrace();
         SkipUntil(tok::r_brace, true);
+        
+        // Consume the optional ';'
+        if (Tok.is(tok::semi))
+          ConsumeToken();
         return;
       }
 
@@ -1499,10 +1509,18 @@ void Parser::ParseCXXClassMemberDeclaration(AccessSpecifier AS,
         // assumes the declarator represents a function, not a typedef.
         ConsumeBrace();
         SkipUntil(tok::r_brace, true);
+
+        // Consume the optional ';'
+        if (Tok.is(tok::semi))
+          ConsumeToken();
         return;
       }
 
       ParseCXXInlineMethodDef(AS, DeclaratorInfo, TemplateInfo);
+      // Consume the optional ';'
+      if (Tok.is(tok::semi))
+        ConsumeToken();
+
       return;
     }
   }
@@ -1583,7 +1601,7 @@ void Parser::ParseCXXClassMemberDeclaration(AccessSpecifier AS,
                                                   DeclaratorInfo,
                                                   move(TemplateParams),
                                                   BitfieldSize.release(),
-                                                  Init.release(),
+                                                  VS, Init.release(),
                                                   /*IsDefinition*/Deleted,
                                                   Deleted);
     }
