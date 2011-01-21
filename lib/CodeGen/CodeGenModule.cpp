@@ -630,6 +630,7 @@ llvm::Constant *CodeGenModule::EmitAnnotateAttr(llvm::GlobalValue *GV,
     new llvm::GlobalVariable(*M, unit->getType(), false,
                              llvm::GlobalValue::PrivateLinkage, unit,
                              ".str");
+  unitGV->setUnnamedAddr(true);
 
   // Create the ConstantStruct for the global annotation.
   llvm::Constant *Fields[4] = {
@@ -921,7 +922,8 @@ static bool DeclIsConstantGlobal(ASTContext &Context, const VarDecl *D) {
 llvm::Constant *
 CodeGenModule::GetOrCreateLLVMGlobal(llvm::StringRef MangledName,
                                      const llvm::PointerType *Ty,
-                                     const VarDecl *D) {
+                                     const VarDecl *D,
+                                     bool UnnamedAddr) {
   // Lookup the entry, lazily creating it if necessary.
   llvm::GlobalValue *Entry = GetGlobalValue(MangledName);
   if (Entry) {
@@ -931,6 +933,9 @@ CodeGenModule::GetOrCreateLLVMGlobal(llvm::StringRef MangledName,
 
       WeakRefReferences.erase(Entry);
     }
+
+    if (UnnamedAddr)
+      Entry->setUnnamedAddr(true);
 
     if (Entry->getType() == Ty)
       return Entry;
@@ -1007,7 +1012,8 @@ llvm::Constant *CodeGenModule::GetAddrOfGlobalVar(const VarDecl *D,
 llvm::Constant *
 CodeGenModule::CreateRuntimeVariable(const llvm::Type *Ty,
                                      llvm::StringRef Name) {
-  return GetOrCreateLLVMGlobal(Name, llvm::PointerType::getUnqual(Ty), 0);
+  return GetOrCreateLLVMGlobal(Name,  llvm::PointerType::getUnqual(Ty), 0,
+                               true);
 }
 
 void CodeGenModule::EmitTentativeDefinition(const VarDecl *D) {
@@ -1085,8 +1091,8 @@ CodeGenModule::getVTableLinkage(const CXXRecordDecl *RD) {
 }
 
 CharUnits CodeGenModule::GetTargetTypeStoreSize(const llvm::Type *Ty) const {
-    return CharUnits::fromQuantity(
-      TheTargetData.getTypeStoreSizeInBits(Ty) / Context.getCharWidth());
+    return Context.toCharUnitsFromBits(
+      TheTargetData.getTypeStoreSizeInBits(Ty));
 }
 
 void CodeGenModule::EmitGlobalVarDefinition(const VarDecl *D) {
@@ -1589,6 +1595,7 @@ CodeGenModule::GetAddrOfConstantCFString(const StringLiteral *Literal) {
   llvm::GlobalVariable *GV =
     new llvm::GlobalVariable(getModule(), C->getType(), isConstant, Linkage, C,
                              ".str");
+  GV->setUnnamedAddr(true);
   if (isUTF16) {
     CharUnits Align = getContext().getTypeAlignInChars(getContext().ShortTy);
     GV->setAlignment(Align.getQuantity());
@@ -1680,6 +1687,7 @@ CodeGenModule::GetAddrOfConstantString(const StringLiteral *Literal) {
   llvm::GlobalVariable *GV =
   new llvm::GlobalVariable(getModule(), C->getType(), isConstant, Linkage, C,
                            ".str");
+  GV->setUnnamedAddr(true);
   if (isUTF16) {
     CharUnits Align = getContext().getTypeAlignInChars(getContext().ShortTy);
     GV->setAlignment(Align.getQuantity());

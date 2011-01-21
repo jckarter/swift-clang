@@ -25,6 +25,7 @@
 #include "clang/Analysis/AnalysisContext.h"
 #include "clang/Analysis/CFG.h"
 #include "clang/Analysis/Analyses/ReachableCode.h"
+#include "clang/Analysis/Analyses/UninitializedValuesV2.h"
 #include "llvm/ADT/BitVector.h"
 #include "llvm/Support/Casting.h"
 
@@ -130,6 +131,21 @@ static ControlFlowKind CheckFallThrough(AnalysisContext &AC) {
       continue;
     }
     CFGElement CE = B[B.size()-1];
+    if (CFGInitializer CI = CE.getAs<CFGInitializer>()) {
+      // A base or member initializer.
+      HasPlainEdge = true;
+      continue;
+    }
+    if (CFGMemberDtor MD = CE.getAs<CFGMemberDtor>()) {
+      // A member destructor.
+      HasPlainEdge = true;
+      continue;
+    }
+    if (CFGBaseDtor BD = CE.getAs<CFGBaseDtor>()) {
+      // A base destructor.
+      HasPlainEdge = true;
+      continue;
+    }
     CFGStmt CS = CE.getAs<CFGStmt>();
     if (!CS.isValid())
       continue;
@@ -344,6 +360,23 @@ static void CheckFallThroughForBody(Sema &S, const Decl *D, const Stmt *Body,
 }
 
 //===----------------------------------------------------------------------===//
+// -Wuninitialized
+//===----------------------------------------------------------------------===//
+
+namespace {
+class UninitValsDiagReporter : public UninitVariablesHandler {
+  Sema &S;
+public:
+  UninitValsDiagReporter(Sema &S) : S(S) {}
+  
+  void handleUseOfUninitVariable(const DeclRefExpr *dr, const VarDecl *vd) {
+    S.Diag(dr->getLocStart(), diag::warn_var_is_uninit)
+      << vd->getDeclName() << dr->getSourceRange();
+  }
+};
+}
+
+//===----------------------------------------------------------------------===//
 // AnalysisBasedWarnings - Worker object used by Sema to execute analysis-based
 //  warnings on a function, method, or block.
 //===----------------------------------------------------------------------===//
@@ -406,6 +439,14 @@ AnalysisBasedWarnings::IssueWarnings(sema::AnalysisBasedWarnings::Policy P,
   // Warning: check for unreachable code
   if (P.enableCheckUnreachable)
     CheckUnreachable(S, AC);
+  
+  if (Diags.getDiagnosticLevel(diag::warn_var_is_uninit, D->getLocStart())
+      != Diagnostic::Ignored) {
+    if (CFG *cfg = AC.getCFG()) {
+      UninitValsDiagReporter reporter(S);
+      runUninitializedVariablesAnalysis(*cast<DeclContext>(D), *cfg, reporter);
+    }
+  }
 }
 
 void clang::sema::

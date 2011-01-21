@@ -1913,6 +1913,11 @@ ExprResult Sema::ActOnDesignatedInitializer(Designation &Desig,
                                  Designators.data(), Designators.size(),
                                  InitExpressions.data(), InitExpressions.size(),
                                  Loc, GNUSyntax, Init.takeAs<Expr>());
+  
+  if (getLangOptions().CPlusPlus)
+    Diag(DIE->getLocStart(), diag::ext_designated_init)
+      << DIE->getSourceRange();
+  
   return Owned(DIE);
 }
 
@@ -2358,11 +2363,6 @@ static OverloadingResult TryRefInitWithConversionFunction(Sema &S,
     // functions.
     CXXRecordDecl *T2RecordDecl = cast<CXXRecordDecl>(T2RecordType->getDecl());
 
-    // Determine the type we are converting to. If we are allowed to
-    // convert to an rvalue, take the type that the destination type
-    // refers to.
-    QualType ToType = AllowRValues? cv1T1 : DestType;
-
     const UnresolvedSetImpl *Conversions
       = T2RecordDecl->getVisibleConversionFunctions();
     for (UnresolvedSetImpl::const_iterator I = Conversions->begin(),
@@ -2390,10 +2390,10 @@ static OverloadingResult TryRefInitWithConversionFunction(Sema &S,
         if (ConvTemplate)
           S.AddTemplateConversionCandidate(ConvTemplate, I.getPair(),
                                            ActingDC, Initializer,
-                                           ToType, CandidateSet);
+                                           DestType, CandidateSet);
         else
           S.AddConversionCandidate(Conv, I.getPair(), ActingDC,
-                                   Initializer, ToType, CandidateSet);
+                                   Initializer, DestType, CandidateSet);
       }
     }
   }
@@ -2570,37 +2570,35 @@ static void TryReferenceInitialization(Sema &S,
 
   //     - Otherwise, the reference shall be an lvalue reference to a 
   //       non-volatile const type (i.e., cv1 shall be const), or the reference
-  //       shall be an rvalue reference and the initializer expression shall 
-  //       be an rvalue or have a function type.
-  // We handled the function type stuff above.
-  if (!((isLValueRef && T1Quals.hasConst() && !T1Quals.hasVolatile()) ||
-        (isRValueRef && InitCategory.isRValue()))) {
+  //       shall be an rvalue reference.
+  if (isLValueRef && !(T1Quals.hasConst() && !T1Quals.hasVolatile())) {
     if (S.Context.getCanonicalType(T2) == S.Context.OverloadTy)
       Sequence.SetFailed(InitializationSequence::FK_AddressOfOverloadFailed);
     else if (ConvOvlResult && !Sequence.getFailedCandidateSet().empty())
       Sequence.SetOverloadFailure(
                         InitializationSequence::FK_ReferenceInitOverloadFailed,
                                   ConvOvlResult);
-    else if (isLValueRef)
+    else
       Sequence.SetFailed(InitCategory.isLValue()
         ? (RefRelationship == Sema::Ref_Related
              ? InitializationSequence::FK_ReferenceInitDropsQualifiers
              : InitializationSequence::FK_NonConstLValueReferenceBindingToUnrelated)
         : InitializationSequence::FK_NonConstLValueReferenceBindingToTemporary);
-    else
-      Sequence.SetFailed(
-                    InitializationSequence::FK_RValueReferenceBindingToLValue);
 
     return;
   }
 
-  //       - [If T1 is not a function type], if T2 is a class type and
-  if (!T1Function && T2->isRecordType()) {
-    bool isXValue = InitCategory.isXValue();
-    //       - the initializer expression is an rvalue and "cv1 T1" is 
-    //         reference-compatible with "cv2 T2", or
-    if (InitCategory.isRValue() && 
-        RefRelationship >= Sema::Ref_Compatible_With_Added_Qualification) {
+  //    - If the initializer expression
+  //      - is an xvalue, class prvalue, array prvalue, or function lvalue and
+  //        "cv1 T1" is reference-compatible with "cv2 T2"
+  // Note: functions are handled below.
+  if (!T1Function &&
+      RefRelationship >= Sema::Ref_Compatible_With_Added_Qualification &&
+      (InitCategory.isXValue() ||
+       (InitCategory.isPRValue() && T2->isRecordType()) ||
+       (InitCategory.isPRValue() && T2->isArrayType()))) {
+    ExprValueKind ValueKind = InitCategory.isXValue()? VK_XValue : VK_RValue;
+    if (InitCategory.isPRValue() && T2->isRecordType()) {
       // The corresponding bullet in C++03 [dcl.init.ref]p5 gives the
       // compiler the freedom to perform a copy here or bind to the
       // object, while C++0x requires that we bind directly to the
@@ -2612,27 +2610,30 @@ static void TryReferenceInitialization(Sema &S,
       //   be callable whether or not the copy is actually done.
       if (!S.getLangOptions().CPlusPlus0x && !S.getLangOptions().Microsoft)
         Sequence.AddExtraneousCopyToTemporary(cv2T2);
-
-      if (DerivedToBase)
-        Sequence.AddDerivedToBaseCastStep(
-                         S.Context.getQualifiedType(T1, T2Quals), 
-                         isXValue ? VK_XValue : VK_RValue);
-      else if (ObjCConversion)
-        Sequence.AddObjCObjectConversionStep(
-                                     S.Context.getQualifiedType(T1, T2Quals));
-
-      if (T1Quals != T2Quals)
-        Sequence.AddQualificationConversionStep(cv1T1,
-                                            isXValue ? VK_XValue : VK_RValue);
-      Sequence.AddReferenceBindingStep(cv1T1, /*bindingTemporary=*/!isXValue);
-      return;
     }
-
-    //       - T1 is not reference-related to T2 and the initializer expression
-    //         can be implicitly converted to an rvalue of type "cv3 T3" (this
-    //         conversion is selected by enumerating the applicable conversion
-    //         functions (13.3.1.6) and choosing the best one through overload 
-    //         resolution (13.3)),
+        
+    if (DerivedToBase)
+      Sequence.AddDerivedToBaseCastStep(S.Context.getQualifiedType(T1, T2Quals),
+                                        ValueKind);
+    else if (ObjCConversion)
+      Sequence.AddObjCObjectConversionStep(
+                                       S.Context.getQualifiedType(T1, T2Quals));
+      
+    if (T1Quals != T2Quals)
+      Sequence.AddQualificationConversionStep(cv1T1, ValueKind);
+    Sequence.AddReferenceBindingStep(cv1T1, 
+         /*bindingTemporary=*/(InitCategory.isPRValue() && !T2->isArrayType()));
+    return;      
+  }
+  
+  //       - has a class type (i.e., T2 is a class type), where T1 is not 
+  //         reference-related to T2, and can be implicitly converted to an 
+  //         xvalue, class prvalue, or function lvalue of type "cv3 T3",
+  //         where "cv1 T1" is reference-compatible with "cv3 T3",
+  //
+  // FIXME: Need to handle xvalue, class prvalue, etc. cases in 
+  // TryRefInitWithConversionFunction.
+  if (T2->isRecordType()) {
     if (RefRelationship == Sema::Ref_Incompatible) {
       ConvOvlResult = TryRefInitWithConversionFunction(S, Entity,
                                                        Kind, Initializer,
@@ -2649,13 +2650,7 @@ static void TryReferenceInitialization(Sema &S,
     Sequence.SetFailed(InitializationSequence::FK_ReferenceInitDropsQualifiers);
     return;
   }
-  
-  //      - If the initializer expression is an rvalue, with T2 an array type,
-  //        and "cv1 T1" is reference-compatible with "cv2 T2," the reference
-  //        is bound to the object represented by the rvalue (see 3.10).
-  // FIXME: How can an array type be reference-compatible with anything?
-  // Don't we mean the element types of T1 and T2?
-  
+    
   //      - Otherwise, a temporary of type “cv1 T1” is created and initialized
   //        from the initializer expression using the rules for a non-reference
   //        copy initialization (8.5). The reference is then bound to the 
@@ -2697,6 +2692,15 @@ static void TryReferenceInitialization(Sema &S,
     return;
   }
 
+  //   [...] If T1 is reference-related to T2 and the reference is an rvalue 
+  //   reference, the initializer expression shall not be an lvalue.
+  if (RefRelationship >= Sema::Ref_Related && !isLValueRef && 
+      InitCategory.isLValue()) {
+    Sequence.SetFailed(
+                    InitializationSequence::FK_RValueReferenceBindingToLValue);
+    return;
+  }
+  
   Sequence.AddReferenceBindingStep(cv1T1, /*bindingTemporary=*/true);
   return;
 }
@@ -3783,8 +3787,7 @@ InitializationSequence::Perform(Sema &S,
         CurInit.release();
         
         // Build the actual call to the conversion function.
-        CurInit = S.Owned(S.BuildCXXMemberCallExpr(CurInitExpr, FoundFn,
-                                                   Conversion));
+        CurInit = S.BuildCXXMemberCallExpr(CurInitExpr, FoundFn, Conversion);
         if (CurInit.isInvalid() || !CurInit.get())
           return ExprError();
         
@@ -4137,6 +4140,7 @@ bool InitializationSequence::Diagnose(Sema &S,
       
   case FK_RValueReferenceBindingToLValue:
     S.Diag(Kind.getLocation(), diag::err_lvalue_to_rvalue_ref)
+      << DestType.getNonReferenceType() << Args[0]->getType()
       << Args[0]->getSourceRange();
     break;
       

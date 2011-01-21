@@ -566,7 +566,6 @@ ExprResult Parser::ParseCastExpression(bool isUnaryExpression,
     ParenParseOption ParenExprType =
       (isUnaryExpression && !getLang().CPlusPlus)? CompoundLiteral : CastExpr;
     ParsedType CastTy;
-    SourceLocation LParenLoc = Tok.getLocation();
     SourceLocation RParenLoc;
     
     {
@@ -641,7 +640,7 @@ ExprResult Parser::ParseCastExpression(bool isUnaryExpression,
         (Actions.getTypeName(II, ILoc, getCurScope()) ||
          // Allow the base to be 'super' if in an objc-method.
          (&II == Ident_super && getCurScope()->isInObjcMethodScope()))) {
-      SourceLocation DotLoc = ConsumeToken();
+      ConsumeToken();
       
       if (Tok.isNot(tok::identifier)) {
         Diag(Tok, diag::err_expected_property_name);
@@ -1172,11 +1171,13 @@ Parser::ParsePostfixExpressionSuffix(ExprResult LHS) {
       // expression), or we didn't see a '~' in the right place. We
       // can still parse a destructor name here, but in that case it
       // names a real destructor.
+      // Allow explicit constructor calls in Microsoft mode.
+      // FIXME: Add support for explicit call of template constructor.
       UnqualifiedId Name;
       if (ParseUnqualifiedId(SS, 
                              /*EnteringContext=*/false, 
                              /*AllowDestructorName=*/true,
-                             /*AllowConstructorName=*/false, 
+                             /*AllowConstructorName=*/ getLang().Microsoft, 
                              ObjectType,
                              Name))
         LHS = ExprError();

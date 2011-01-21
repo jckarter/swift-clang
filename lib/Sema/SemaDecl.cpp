@@ -827,7 +827,7 @@ NamedDecl *Sema::LazilyCreateBuiltin(IdentifierInfo *II, unsigned bid,
 
   // Create Decl objects for each parameter, adding them to the
   // FunctionDecl.
-  if (FunctionProtoType *FT = dyn_cast<FunctionProtoType>(R)) {
+  if (const FunctionProtoType *FT = dyn_cast<FunctionProtoType>(R)) {
     llvm::SmallVector<ParmVarDecl*, 16> Params;
     for (unsigned i = 0, e = FT->getNumArgs(); i != e; ++i)
       Params.push_back(ParmVarDecl::Create(Context, New, SourceLocation(), 0,
@@ -1019,11 +1019,11 @@ static void MergeDeclAttributes(Decl *New, Decl *Old, ASTContext &C) {
   // we process them.
   if (!New->hasAttrs())
     New->setAttrs(AttrVec());
-  for (Decl::attr_iterator i = Old->attr_begin(), e = Old->attr_end(); i != e;
-       ++i) {
-    // FIXME: Make this more general than just checking for Overloadable.
-    if (!DeclHasAttr(New, *i) && (*i)->getKind() != attr::Overloadable) {
-      Attr *NewAttr = (*i)->clone(C);
+  for (specific_attr_iterator<InheritableAttr>
+       i = Old->specific_attr_begin<InheritableAttr>(),
+       e = Old->specific_attr_end<InheritableAttr>(); i != e; ++i) {
+    if (!DeclHasAttr(New, *i)) {
+      InheritableAttr *NewAttr = cast<InheritableAttr>((*i)->clone(C));
       NewAttr->setInherited(true);
       New->addAttr(NewAttr);
     }
@@ -3056,26 +3056,6 @@ Sema::ActOnVariableDeclarator(Scope *S, Declarator &D, DeclContext *DC,
     if (isExplicitSpecialization && !NewVD->isInvalidDecl() &&
         CheckMemberSpecialization(NewVD, Previous))
       NewVD->setInvalidDecl();
-    // For variables declared as __block which require copy construction,
-    // must capture copy initialization expression here.
-    if (!NewVD->isInvalidDecl() && NewVD->hasAttr<BlocksAttr>()) {
-      QualType T = NewVD->getType();
-      if (!T->isDependentType() && !T->isReferenceType() &&
-          T->getAs<RecordType>() && !T->isUnionType()) {
-        Expr *E = new (Context) DeclRefExpr(NewVD, T,
-                                            VK_LValue, SourceLocation());
-        ExprResult Res = PerformCopyInitialization(
-                InitializedEntity::InitializeBlock(NewVD->getLocation(), 
-                                                   T, false),
-                SourceLocation(),
-                Owned(E));
-        if (!Res.isInvalid()) {
-          Res = MaybeCreateExprWithCleanups(Res);
-          Expr *Init = Res.takeAs<Expr>();
-          Context.setBlockVarCopyInits(NewVD, Init);
-        }
-      }
-    }
   }
   
   // attributes declared post-definition are currently ignored
@@ -3367,7 +3347,7 @@ bool Sema::AddOverriddenMethods(CXXRecordDecl *DC, CXXMethodDecl *MD) {
       if (CXXMethodDecl *OldMD = dyn_cast<CXXMethodDecl>(*I)) {
         if (!CheckOverridingFunctionReturnType(MD, OldMD) &&
             !CheckOverridingFunctionExceptionSpec(MD, OldMD) &&
-            !CheckOverridingFunctionAttributes(MD, OldMD)) {
+            !CheckIfOverriddenFunctionIsMarkedFinal(MD, OldMD)) {
           MD->addOverriddenMethod(OldMD->getCanonicalDecl());
           AddedAny = true;
         }
@@ -3408,7 +3388,8 @@ CheckClassMemberNameAttributes(Sema& SemaRef, const FunctionDecl *FD) {
   ///   If a virtual member function f is marked override and does not override
   ///   a member function of a base class the program is ill-formed.
   if (HasOverrideAttr && !HasOverriddenMethods) {
-    SemaRef.Diag(MD->getLocation(), diag::err_override_function_not_overriding)
+    SemaRef.Diag(MD->getLocation(), 
+                 diag::err_function_marked_override_not_overriding)
       << MD->getDeclName();
     return;
   }
@@ -3863,13 +3844,15 @@ Sema::ActOnFunctionDeclarator(Scope* S, Declarator& D, DeclContext* DC,
   // Finally, we know we have the right number of parameters, install them.
   NewFD->setParams(Params.data(), Params.size());
 
-  bool OverloadableAttrRequired=false; // FIXME: HACK!
+  // Process the non-inheritable attributes on this declaration.
+  ProcessDeclAttributes(S, NewFD, D,
+                        /*NonInheritable=*/true, /*Inheritable=*/false);
+
   if (!getLangOptions().CPlusPlus) {
     // Perform semantic checking on the function declaration.
     bool isExplctSpecialization=false;
     CheckFunctionDeclaration(S, NewFD, Previous, isExplctSpecialization,
-                             Redeclaration, 
-                             /*FIXME:*/OverloadableAttrRequired);
+                             Redeclaration);
     assert((NewFD->isInvalidDecl() || !Redeclaration ||
             Previous.getResultKind() != LookupResult::FoundOverloaded) &&
            "previous declaration set still overloaded");
@@ -3945,9 +3928,8 @@ Sema::ActOnFunctionDeclarator(Scope* S, Declarator& D, DeclContext* DC,
     }
 
     // Perform semantic checking on the function declaration.
-    bool flag_c_overloaded=false; // unused for c++
     CheckFunctionDeclaration(S, NewFD, Previous, isExplicitSpecialization,
-                             Redeclaration, /*FIXME:*/flag_c_overloaded);
+                             Redeclaration);
 
     assert((NewFD->isInvalidDecl() || !Redeclaration ||
             Previous.getResultKind() != LookupResult::FoundOverloaded) &&
@@ -4054,7 +4036,8 @@ Sema::ActOnFunctionDeclarator(Scope* S, Declarator& D, DeclContext* DC,
   // (for example to check for conflicts, etc).
   // FIXME: This needs to happen before we merge declarations. Then,
   // let attribute merging cope with attribute conflicts.
-  ProcessDeclAttributes(S, NewFD, D);
+  ProcessDeclAttributes(S, NewFD, D,
+                        /*NonInheritable=*/false, /*Inheritable=*/true);
 
   // attributes declared post-definition are currently ignored
   // FIXME: This should happen during attribute merging
@@ -4068,17 +4051,6 @@ Sema::ActOnFunctionDeclarator(Scope* S, Declarator& D, DeclContext* DC,
   }
 
   AddKnownFunctionAttributes(NewFD);
-
-  if (OverloadableAttrRequired && !NewFD->hasAttr<OverloadableAttr>()) {
-    // If a function name is overloadable in C, then every function
-    // with that name must be marked "overloadable".
-    Diag(NewFD->getLocation(), diag::err_attribute_overloadable_missing)
-      << Redeclaration << NewFD;
-    if (!Previous.empty())
-      Diag(Previous.getRepresentativeDecl()->getLocation(),
-           diag::note_attribute_overloadable_prev_overload);
-    NewFD->addAttr(::new (Context) OverloadableAttr(SourceLocation(), Context));
-  }
 
   if (NewFD->hasAttr<OverloadableAttr>() && 
       !NewFD->getType()->getAs<FunctionProtoType>()) {
@@ -4140,8 +4112,7 @@ Sema::ActOnFunctionDeclarator(Scope* S, Declarator& D, DeclContext* DC,
 void Sema::CheckFunctionDeclaration(Scope *S, FunctionDecl *NewFD,
                                     LookupResult &Previous,
                                     bool IsExplicitSpecialization,
-                                    bool &Redeclaration,
-                                    bool &OverloadableAttrRequired) {
+                                    bool &Redeclaration) {
   // If NewFD is already known erroneous, don't do any of this checking.
   if (NewFD->isInvalidDecl()) {
     // If this is a class member, mark the class invalid immediately.
@@ -4186,9 +4157,6 @@ void Sema::CheckFunctionDeclaration(Scope *S, FunctionDecl *NewFD,
       Redeclaration = true;
       OldDecl = Previous.getFoundDecl();
     } else {
-      if (!getLangOptions().CPlusPlus)
-        OverloadableAttrRequired = true;
-
       switch (CheckOverload(S, NewFD, Previous, OldDecl,
                             /*NewIsUsingDecl*/ false)) {
       case Ovl_Match:
@@ -4202,6 +4170,23 @@ void Sema::CheckFunctionDeclaration(Scope *S, FunctionDecl *NewFD,
       case Ovl_Overload:
         Redeclaration = false;
         break;
+      }
+
+      if (!getLangOptions().CPlusPlus && !NewFD->hasAttr<OverloadableAttr>()) {
+        // If a function name is overloadable in C, then every function
+        // with that name must be marked "overloadable".
+        Diag(NewFD->getLocation(), diag::err_attribute_overloadable_missing)
+          << Redeclaration << NewFD;
+        NamedDecl *OverloadedDecl = 0;
+        if (Redeclaration)
+          OverloadedDecl = OldDecl;
+        else if (!Previous.empty())
+          OverloadedDecl = Previous.getRepresentativeDecl();
+        if (OverloadedDecl)
+          Diag(OverloadedDecl->getLocation(),
+               diag::note_attribute_overloadable_prev_overload);
+        NewFD->addAttr(::new (Context) OverloadableAttr(SourceLocation(),
+                                                        Context));
       }
     }
 
@@ -4712,24 +4697,7 @@ void Sema::AddInitializerToDecl(Decl *RealDecl, Expr *Init, bool DirectInit) {
   // Attach the initializer to the decl.
   VDecl->setInit(Init);
 
-  if (getLangOptions().CPlusPlus) {
-    if (!VDecl->isInvalidDecl() &&
-        !VDecl->getDeclContext()->isDependentContext() &&
-        VDecl->hasGlobalStorage() && !VDecl->isStaticLocal() &&
-        !Init->isConstantInitializer(Context,
-                                     VDecl->getType()->isReferenceType()))
-      Diag(VDecl->getLocation(), diag::warn_global_constructor)
-        << Init->getSourceRange();
-
-    // Make sure we mark the destructor as used if necessary.
-    QualType InitType = VDecl->getType();
-    while (const ArrayType *Array = Context.getAsArrayType(InitType))
-      InitType = Context.getBaseElementType(Array);
-    if (const RecordType *Record = InitType->getAs<RecordType>())
-      FinalizeVarWithDestructor(VDecl, Record);
-  }
-
-  return;
+  CheckCompleteVariableDeclaration(VDecl);
 }
 
 /// ActOnInitializerError - Given that there was an error parsing an
@@ -4923,20 +4891,60 @@ void Sema::ActOnUninitializedDecl(Decl *RealDecl,
                                         MultiExprArg(*this, 0, 0));
       if (Init.isInvalid())
         Var->setInvalidDecl();
-      else if (Init.get()) {
+      else if (Init.get())
         Var->setInit(MaybeCreateExprWithCleanups(Init.get()));
-
-        if (getLangOptions().CPlusPlus && !Var->isInvalidDecl() && 
-            Var->hasGlobalStorage() && !Var->isStaticLocal() &&
-            !Var->getDeclContext()->isDependentContext() &&
-            !Var->getInit()->isConstantInitializer(Context, false))
-          Diag(Var->getLocation(), diag::warn_global_constructor);
-      }
     }
 
-    if (!Var->isInvalidDecl() && getLangOptions().CPlusPlus && Record)
-      FinalizeVarWithDestructor(Var, Record);
+    CheckCompleteVariableDeclaration(Var);
   }
+}
+
+void Sema::CheckCompleteVariableDeclaration(VarDecl *var) {
+  if (var->isInvalidDecl()) return;
+
+  // All the following checks are C++ only.
+  if (!getLangOptions().CPlusPlus) return;
+
+  QualType baseType = Context.getBaseElementType(var->getType());
+  if (baseType->isDependentType()) return;
+
+  // __block variables might require us to capture a copy-initializer.
+  if (var->hasAttr<BlocksAttr>()) {
+    // It's currently invalid to ever have a __block variable with an
+    // array type; should we diagnose that here?
+
+    // Regardless, we don't want to ignore array nesting when
+    // constructing this copy.
+    QualType type = var->getType();
+
+    if (type->isStructureOrClassType()) {
+      SourceLocation poi = var->getLocation();
+      Expr *varRef = new (Context) DeclRefExpr(var, type, VK_LValue, poi);
+      ExprResult result =
+        PerformCopyInitialization(
+                        InitializedEntity::InitializeBlock(poi, type, false),
+                                  poi, Owned(varRef));
+      if (!result.isInvalid()) {
+        result = MaybeCreateExprWithCleanups(result);
+        Expr *init = result.takeAs<Expr>();
+        Context.setBlockVarCopyInits(var, init);
+      }
+    }
+  }
+
+  // Check for global constructors.
+  if (!var->getDeclContext()->isDependentContext() &&
+      var->hasGlobalStorage() &&
+      !var->isStaticLocal() &&
+      var->getInit() &&
+      !var->getInit()->isConstantInitializer(Context,
+                                             baseType->isReferenceType()))
+    Diag(var->getLocation(), diag::warn_global_constructor)
+      << var->getInit()->getSourceRange();
+
+  // Require the destructor.
+  if (const RecordType *recordType = baseType->getAs<RecordType>())
+    FinalizeVarWithDestructor(var, recordType);
 }
 
 Sema::DeclGroupPtrTy
@@ -5988,7 +5996,7 @@ Decl *Sema::ActOnTag(Scope *S, unsigned TagSpec, TagUseKind TUK,
       // Find the context where we'll be declaring the tag.
       // FIXME: We would like to maintain the current DeclContext as the
       // lexical context,
-      while (SearchDC->isRecord())
+      while (SearchDC->isRecord() || SearchDC->isTransparentContext())
         SearchDC = SearchDC->getParent();
 
       // Find the scope where we'll be declaring the tag.
@@ -6143,7 +6151,8 @@ Decl *Sema::ActOnTag(Scope *S, unsigned TagSpec, TagUseKind TUK,
             } else {
               // If the type is currently being defined, complain
               // about a nested redefinition.
-              TagType *Tag = cast<TagType>(Context.getTagDeclType(PrevTagDecl));
+              const TagType *Tag
+                = cast<TagType>(Context.getTagDeclType(PrevTagDecl));
               if (Tag->isBeingDefined()) {
                 Diag(NameLoc, diag::err_nested_redefinition) << Name;
                 Diag(PrevTagDecl->getLocation(),
@@ -7108,7 +7117,7 @@ void Sema::ActOnFields(Scope* S,
     FieldDecl *FD = cast<FieldDecl>(Fields[i]);
 
     // Get the type for the field.
-    Type *FDTy = FD->getType().getTypePtr();
+    const Type *FDTy = FD->getType().getTypePtr();
 
     if (!FD->isAnonymousStructOrUnion()) {
       // Remember all fields written by the user.

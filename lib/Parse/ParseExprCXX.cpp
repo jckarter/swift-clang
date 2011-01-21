@@ -824,7 +824,7 @@ bool Parser::ParseCXXCondition(ExprResult &ExprOut,
   // '=' assignment-expression
   if (isTokenEqualOrMistypedEqualEqual(
                                diag::err_invalid_equalequal_after_declarator)) {
-    SourceLocation EqualLoc = ConsumeToken();
+    ConsumeToken();
     ExprResult AssignExpr(ParseAssignmentExpression());
     if (!AssignExpr.isInvalid()) 
       Actions.AddInitializerToDecl(DeclOut, AssignExpr.take());
@@ -911,8 +911,11 @@ void Parser::ParseCXXSimpleTypeSpecifier(DeclSpec &DS) {
 
   // type-name
   case tok::annot_typename: {
-    DS.SetTypeSpecType(DeclSpec::TST_typename, Loc, PrevSpec, DiagID,
-                       getTypeAnnotation(Tok));
+    if (getTypeAnnotation(Tok))
+      DS.SetTypeSpecType(DeclSpec::TST_typename, Loc, PrevSpec, DiagID,
+                         getTypeAnnotation(Tok));
+    else
+      DS.SetTypeSpecError();
     
     DS.SetRangeEnd(Tok.getAnnotationEndLoc());
     ConsumeToken();

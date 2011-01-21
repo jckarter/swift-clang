@@ -21,16 +21,6 @@ int no_nullptr();
 // CHECK-NO-0X: no_nullptr
 
 
-#if __has_feature(cxx_concepts)
-int concepts();
-#else
-int no_concepts();
-#endif
-
-// CHECK-0X: no_concepts
-// CHECK-NO-0X: no_concepts
-
-
 #if __has_feature(cxx_decltype)
 int has_decltype();
 #else
@@ -97,8 +87,9 @@ int variadic_templates();
 int no_variadic_templates();
 #endif
 
-// CHECK-0X: no_variadic_templates
-// CHECK-NO-0X: no_variadic_templates
+// CHECK-0X: variadic_templates
+// Note: We allow variadic templates in C++98/03 with a warning.
+// CHECK-NO-0X: variadic_templates
 
 
 #if __has_feature(cxx_inline_namespaces)

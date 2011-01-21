@@ -1467,7 +1467,40 @@ struct FieldDeclarator {
     BitfieldSize = 0;
   }
 };
-  
+
+/// 
+class VirtSpecifiers {
+public:
+  enum VirtSpecifier {
+    VS_None = 0,
+    VS_Override = 1,
+    VS_Final = 2,
+    VS_New = 4
+  };
+
+  VirtSpecifiers() : Specifiers(0) { }
+
+  bool SetVirtSpecifier(VirtSpecifier VS, SourceLocation Loc, 
+                        const char *&PrevSpec);
+
+  bool isOverrideSpecified() const { return Specifiers & VS_Override; }
+  SourceLocation getOverrideLoc() const { return VS_overrideLoc; }
+
+  bool isFinalSpecified() const { return Specifiers & VS_Final; }
+  SourceLocation getFinalLoc() const { return VS_finalLoc; }
+
+  bool isNewSpecified() const { return Specifiers & VS_New; }
+  SourceLocation getNewLoc() const { return VS_newLoc; }
+
+private:
+  unsigned Specifiers;
+
+  SourceLocation VS_overrideLoc, VS_finalLoc, VS_newLoc;
+
+  static const char *getSpecifierName(VirtSpecifier VS);
+
+};
+
 } // end namespace clang
 
 #endif

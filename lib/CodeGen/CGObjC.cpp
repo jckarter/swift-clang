@@ -11,6 +11,7 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "CGDebugInfo.h"
 #include "CGObjCRuntime.h"
 #include "CodeGenFunction.h"
 #include "CodeGenModule.h"
@@ -240,9 +241,10 @@ void CodeGenFunction::GenerateObjCGetter(ObjCImplementationDecl *IMP,
                                     Types.ConvertType(getContext().VoidPtrTy)));
         Args.push_back(std::make_pair(RV, getContext().VoidPtrTy));
         // sizeof (Type of Ivar)
-        uint64_t Size =  getContext().getTypeSize(Ivar->getType()) / 8;
+        CharUnits Size =  getContext().getTypeSizeInChars(Ivar->getType());
         llvm::Value *SizeVal =
-          llvm::ConstantInt::get(Types.ConvertType(getContext().LongTy), Size);
+          llvm::ConstantInt::get(Types.ConvertType(getContext().LongTy), 
+                                 Size.getQuantity());
         Args.push_back(std::make_pair(RValue::get(SizeVal),
                                       getContext().LongTy));
         llvm::Value *isAtomic =
@@ -373,9 +375,10 @@ void CodeGenFunction::GenerateObjCSetter(ObjCImplementationDecl *IMP,
     RV = RValue::get(ArgAsPtrTy);
     Args.push_back(std::make_pair(RV, getContext().VoidPtrTy));
     // sizeof (Type of Ivar)
-    uint64_t Size =  getContext().getTypeSize(Ivar->getType()) / 8;
+    CharUnits Size =  getContext().getTypeSizeInChars(Ivar->getType());
     llvm::Value *SizeVal =
-      llvm::ConstantInt::get(Types.ConvertType(getContext().LongTy), Size);
+      llvm::ConstantInt::get(Types.ConvertType(getContext().LongTy), 
+                             Size.getQuantity());
     Args.push_back(std::make_pair(RValue::get(SizeVal),
                                   getContext().LongTy));
     llvm::Value *True =
@@ -434,7 +437,6 @@ void CodeGenFunction::GenerateObjCCtorDtorMethod(ObjCImplementationDecl *IMP,
     for (unsigned I = 0, E = IvarInitializers.size(); I != E; ++I) {
       CXXCtorInitializer *IvarInit = IvarInitializers[I];
       FieldDecl *Field = IvarInit->getAnyMember();
-      QualType FieldType = Field->getType();
       ObjCIvarDecl  *Ivar = cast<ObjCIvarDecl>(Field);
       LValue LV = EmitLValueForIvar(TypeOfSelfObject(), 
                                     LoadObjCSelf(), Ivar, 0);
@@ -611,6 +613,12 @@ void CodeGenFunction::EmitObjCForCollectionStmt(const ObjCForCollectionStmt &S){
   if (!EnumerationMutationFn) {
     CGM.ErrorUnsupported(&S, "Obj-C fast enumeration for this runtime");
     return;
+  }
+
+  CGDebugInfo *DI = getDebugInfo();
+  if (DI) {
+    DI->setLocation(S.getSourceRange().getBegin());
+    DI->EmitRegionStart(Builder);
   }
 
   JumpDest LoopEnd = getJumpDestInCurrentScope("forcoll.end");
@@ -843,6 +851,11 @@ void CodeGenFunction::EmitObjCForCollectionStmt(const ObjCForCollectionStmt &S){
     EmitStoreThroughLValue(RValue::get(null), elementLValue, elementType);
   }
 
+  if (DI) {
+    DI->setLocation(S.getSourceRange().getEnd());
+    DI->EmitRegionEnd(Builder);
+  }
+
   EmitBlock(LoopEnd.getBlock());
 }
 
@@ -860,5 +873,3 @@ void CodeGenFunction::EmitObjCAtSynchronizedStmt(
 }
 
 CGObjCRuntime::~CGObjCRuntime() {}
-
-

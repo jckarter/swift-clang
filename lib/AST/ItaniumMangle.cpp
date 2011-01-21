@@ -381,7 +381,8 @@ void CXXNameMangler::mangleFunctionEncoding(const FunctionDecl *FD) {
 
   // Do the canonicalization out here because parameter types can
   // undergo additional canonicalization (e.g. array decay).
-  FunctionType *FT = cast<FunctionType>(Context.getASTContext()
+  const FunctionType *FT
+    = cast<FunctionType>(Context.getASTContext()
                                           .getCanonicalType(FD->getType()));
 
   mangleBareFunctionType(FT, MangleReturnType);
@@ -1017,6 +1018,12 @@ void CXXNameMangler::mangleType(TemplateName TN) {
     break;
   }
 
+  case TemplateName::SubstTemplateTemplateParmPack: {
+    SubstTemplateTemplateParmPackStorage *SubstPack
+      = TN.getAsSubstTemplateTemplateParmPack();
+    mangleTemplateParameter(SubstPack->getParameterPack()->getIndex());
+    break;
+  }
   }
 
   addSubstitution(TN);
@@ -1948,6 +1955,11 @@ void CXXNameMangler::mangleExpression(const Expr *E, unsigned Arity) {
     break;
   }
 
+  case Expr::SubstNonTypeTemplateParmPackExprClass:
+    mangleTemplateParameter(
+     cast<SubstNonTypeTemplateParmPackExpr>(E)->getParameterPack()->getIndex());
+    break;
+      
   case Expr::DependentScopeDeclRefExprClass: {
     const DependentScopeDeclRefExpr *DRE = cast<DependentScopeDeclRefExpr>(E);
     NestedNameSpecifier *NNS = DRE->getQualifier();

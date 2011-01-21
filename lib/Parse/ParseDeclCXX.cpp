@@ -1261,6 +1261,62 @@ void Parser::HandleMemberFunctionDefaultArgs(Declarator& DeclaratorInfo,
   }
 }
 
+/// isCXX0XVirtSpecifier - Determine whether the next token is a C++0x
+/// virt-specifier.
+///
+///       virt-specifier:
+///         override
+///         final
+///         new
+VirtSpecifiers::VirtSpecifier Parser::isCXX0XVirtSpecifier() const {
+  if (Tok.is(tok::kw_new))
+    return VirtSpecifiers::VS_New;
+
+  if (Tok.is(tok::identifier)) {
+    IdentifierInfo *II = Tok.getIdentifierInfo();
+
+    // Initialize the contextual keywords.
+    if (!Ident_final) {
+      Ident_final = &PP.getIdentifierTable().get("final");
+      Ident_override = &PP.getIdentifierTable().get("override");
+    }
+
+    if (II == Ident_override)
+      return VirtSpecifiers::VS_Override;
+
+    if (II == Ident_final)
+      return VirtSpecifiers::VS_Final;
+  }
+
+  return VirtSpecifiers::VS_None;
+}
+
+/// ParseOptionalCXX0XVirtSpecifierSeq - Parse a virt-specifier-seq.
+///
+///       virt-specifier-seq:
+///         virt-specifier
+///         virt-specifier-seq virt-specifier
+void Parser::ParseOptionalCXX0XVirtSpecifierSeq(VirtSpecifiers &VS) {
+  if (!getLang().CPlusPlus0x)
+    return;
+
+  while (true) {
+    VirtSpecifiers::VirtSpecifier Specifier = isCXX0XVirtSpecifier();
+    if (Specifier == VirtSpecifiers::VS_None)
+      return;
+
+    // C++ [class.mem]p8:
+    //   A virt-specifier-seq shall contain at most one of each virt-specifier.
+    const char* PrevSpec = 0;
+    if (VS.SetVirtSpecifier(Specifier, Tok.getLocation(), PrevSpec))
+      Diag(Tok.getLocation(), diag::err_duplicate_virt_specifier)
+        << PrevSpec
+        << FixItHint::CreateRemoval(Tok.getLocation());
+
+    ConsumeToken();
+  }
+}
+
 /// ParseCXXClassMemberDeclaration - Parse a C++ class member declaration.
 ///
 ///       member-declaration:
@@ -1277,10 +1333,19 @@ void Parser::HandleMemberFunctionDefaultArgs(Declarator& DeclaratorInfo,
 ///         member-declarator-list ',' member-declarator
 ///
 ///       member-declarator:
-///         declarator pure-specifier[opt]
+///         declarator virt-specifier-seq[opt] pure-specifier[opt]
 ///         declarator constant-initializer[opt]
 ///         identifier[opt] ':' constant-expression
 ///
+///       virt-specifier-seq:
+///         virt-specifier
+///         virt-specifier-seq virt-specifier
+///
+///       virt-specifier:
+///         override
+///         final
+///         new
+/// 
 ///       pure-specifier:
 ///         '= 0'
 ///
@@ -1384,7 +1449,6 @@ void Parser::ParseCXXClassMemberDeclaration(AccessSpecifier AS,
     return;
   }
 
-  SourceLocation DSStart = Tok.getLocation();
   // decl-specifier-seq:
   // Parse the common declaration-specifiers piece.
   ParsingDeclSpec DS(*this, TemplateDiags);
@@ -1431,6 +1495,10 @@ void Parser::ParseCXXClassMemberDeclaration(AccessSpecifier AS,
         Diag(Tok, diag::err_func_def_no_params);
         ConsumeBrace();
         SkipUntil(tok::r_brace, true);
+        
+        // Consume the optional ';'
+        if (Tok.is(tok::semi))
+          ConsumeToken();
         return;
       }
 
@@ -1441,10 +1509,18 @@ void Parser::ParseCXXClassMemberDeclaration(AccessSpecifier AS,
         // assumes the declarator represents a function, not a typedef.
         ConsumeBrace();
         SkipUntil(tok::r_brace, true);
+
+        // Consume the optional ';'
+        if (Tok.is(tok::semi))
+          ConsumeToken();
         return;
       }
 
       ParseCXXInlineMethodDef(AS, DeclaratorInfo, TemplateInfo);
+      // Consume the optional ';'
+      if (Tok.is(tok::semi))
+        ConsumeToken();
+
       return;
     }
   }
@@ -1469,6 +1545,9 @@ void Parser::ParseCXXClassMemberDeclaration(AccessSpecifier AS,
       if (BitfieldSize.isInvalid())
         SkipUntil(tok::comma, true, true);
     }
+
+    VirtSpecifiers VS;
+    ParseOptionalCXX0XVirtSpecifierSeq(VS);
 
     // pure-specifier:
     //   '= 0'
@@ -1522,7 +1601,7 @@ void Parser::ParseCXXClassMemberDeclaration(AccessSpecifier AS,
                                                   DeclaratorInfo,
                                                   move(TemplateParams),
                                                   BitfieldSize.release(),
-                                                  Init.release(),
+                                                  VS, Init.release(),
                                                   /*IsDefinition*/Deleted,
                                                   Deleted);
     }
@@ -1869,7 +1948,7 @@ bool Parser::ParseExceptionSpecification(SourceLocation &EndLoc,
                                          bool &hasAnyExceptionSpec) {
   assert(Tok.is(tok::kw_throw) && "expected throw");
 
-  SourceLocation ThrowLoc = ConsumeToken();
+  ConsumeToken();
 
   if (!Tok.is(tok::l_paren)) {
     return Diag(Tok, diag::err_expected_lparen_after) << "throw";

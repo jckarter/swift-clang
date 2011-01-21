@@ -133,11 +133,21 @@ getLVForTemplateParameterList(const TemplateParameterList *Params) {
   for (TemplateParameterList::const_iterator P = Params->begin(),
                                           PEnd = Params->end();
        P != PEnd; ++P) {
-    if (NonTypeTemplateParmDecl *NTTP = dyn_cast<NonTypeTemplateParmDecl>(*P))
+    if (NonTypeTemplateParmDecl *NTTP = dyn_cast<NonTypeTemplateParmDecl>(*P)) {
+      if (NTTP->isExpandedParameterPack()) {
+        for (unsigned I = 0, N = NTTP->getNumExpansionTypes(); I != N; ++I) {
+          QualType T = NTTP->getExpansionType(I);
+          if (!T->isDependentType())
+            LV = merge(LV, T->getLinkageAndVisibility());
+        }
+        continue;
+      }
+      
       if (!NTTP->getType()->isDependentType()) {
         LV = merge(LV, NTTP->getType()->getLinkageAndVisibility());
         continue;
       }
+    }
 
     if (TemplateTemplateParmDecl *TTP
                                    = dyn_cast<TemplateTemplateParmDecl>(*P)) {
@@ -1871,6 +1881,25 @@ bool FieldDecl::isAnonymousStructOrUnion() const {
   return false;
 }
 
+unsigned FieldDecl::getFieldIndex() const {
+  if (CachedFieldIndex) return CachedFieldIndex - 1;
+
+  unsigned index = 0;
+  RecordDecl::field_iterator
+    i = getParent()->field_begin(), e = getParent()->field_end();
+  while (true) {
+    assert(i != e && "failed to find field in parent!");
+    if (*i == this)
+      break;
+
+    ++i;
+    ++index;
+  }
+
+  CachedFieldIndex = index + 1;
+  return index;
+}
+
 //===----------------------------------------------------------------------===//
 // TagDecl Implementation
 //===----------------------------------------------------------------------===//
@@ -1891,7 +1920,7 @@ TagDecl* TagDecl::getCanonicalDecl() {
 void TagDecl::setTypedefForAnonDecl(TypedefDecl *TDD) { 
   TypedefDeclOrQualifier = TDD; 
   if (TypeForDecl)
-    TypeForDecl->ClearLinkageCache();
+    const_cast<Type*>(TypeForDecl)->ClearLinkageCache();
   ClearLinkageCache();
 }
 

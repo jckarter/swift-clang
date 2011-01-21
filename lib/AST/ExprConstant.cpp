@@ -404,8 +404,7 @@ bool LValueExprEvaluator::VisitMemberExpr(MemberExpr *E) {
       break;
   }
 
-  Result.Offset += 
-      CharUnits::fromQuantity(RL.getFieldOffset(i) / Info.Ctx.getCharWidth());
+  Result.Offset += Info.Ctx.toCharUnitsFromBits(RL.getFieldOffset(i));
   return true;
 }
 
@@ -574,7 +573,7 @@ bool PointerExprEvaluator::VisitCastExpr(CastExpr* E) {
 
     Result.Base = BaseLV.getLValueBase();
     Result.Offset = BaseLV.getLValueOffset() + 
-      CharUnits::fromQuantity(Offset / Info.Ctx.getCharWidth());
+      Info.Ctx.toCharUnitsFromBits(Offset);
     return true;
   }
 
@@ -1481,12 +1480,9 @@ CharUnits IntExprEvaluator::GetAlignOfType(QualType T) {
   if (const ReferenceType *Ref = T->getAs<ReferenceType>())
     T = Ref->getPointeeType();
 
-  // Get information about the alignment.
-  unsigned CharSize = Info.Ctx.Target.getCharWidth();
-
   // __alignof is defined to return the preferred alignment.
-  return CharUnits::fromQuantity(
-      Info.Ctx.getPreferredTypeAlign(T.getTypePtr()) / CharSize);
+  return Info.Ctx.toCharUnitsFromBits(
+    Info.Ctx.getPreferredTypeAlign(T.getTypePtr()));
 }
 
 CharUnits IntExprEvaluator::GetAlignOfExpr(const Expr *E) {
@@ -1569,17 +1565,9 @@ bool IntExprEvaluator::VisitOffsetOfExpr(const OffsetOfExpr *E) {
         return false;
       RecordDecl *RD = RT->getDecl();
       const ASTRecordLayout &RL = Info.Ctx.getASTRecordLayout(RD);
-      unsigned i = 0;
-      // FIXME: It would be nice if we didn't have to loop here!
-      for (RecordDecl::field_iterator Field = RD->field_begin(),
-                                      FieldEnd = RD->field_end();
-           Field != FieldEnd; (void)++Field, ++i) {
-        if (*Field == MemberDecl)
-          break;
-      }
+      unsigned i = MemberDecl->getFieldIndex();
       assert(i < RL.getFieldCount() && "offsetof field in wrong type");
-      Result += CharUnits::fromQuantity(
-                           RL.getFieldOffset(i) / Info.Ctx.getCharWidth());
+      Result += Info.Ctx.toCharUnitsFromBits(RL.getFieldOffset(i));
       CurrentType = MemberDecl->getType().getNonReferenceType();
       break;
     }
@@ -1607,9 +1595,9 @@ bool IntExprEvaluator::VisitOffsetOfExpr(const OffsetOfExpr *E) {
         return false;
       
       // Add the offset to the base.
-      Result += CharUnits::fromQuantity(
-             RL.getBaseClassOffsetInBits(cast<CXXRecordDecl>(BaseRT->getDecl()))
-                                        / Info.Ctx.getCharWidth());
+      Result += Info.Ctx.toCharUnitsFromBits(
+             RL.getBaseClassOffsetInBits(
+               cast<CXXRecordDecl>(BaseRT->getDecl())));
       break;
     }
     }
@@ -2645,6 +2633,7 @@ static ICEDiag CheckICE(const Expr* E, ASTContext &Ctx) {
   case Expr::NoStmtClass:
   case Expr::OpaqueValueExprClass:
   case Expr::PackExpansionExprClass:
+  case Expr::SubstNonTypeTemplateParmPackExprClass:
     return ICEDiag(2, E->getLocStart());
 
   case Expr::SizeOfPackExprClass:

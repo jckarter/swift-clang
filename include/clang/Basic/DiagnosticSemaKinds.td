@@ -56,6 +56,8 @@ def err_variably_modified_new_type : Error<
   "'new' cannot allocate object of variably modified type %0">;
 
 // C99 Designated Initializers
+def ext_designated_init : Extension<
+  "designated initializers are a C99 feature, accepted in C++ as an extension">;
 def err_array_designator_negative : Error<
   "array designator value '%0' is negative">;
 def err_array_designator_empty_range : Error<
@@ -736,6 +738,8 @@ def warn_no_constructor_for_refconst : Warning<
   "initialize its non-modifiable members">;
 def note_refconst_member_not_initialized : Note<
   "%select{const|reference}0 member %1 will never be initialized">;
+def ext_ms_explicit_constructor_call : ExtWarn<
+  "explicit constructor calls are a Microsoft extension">, InGroup<Microsoft>;
 
 // C++ destructors
 def err_destructor_not_member : Error<
@@ -763,7 +767,8 @@ def err_init_conversion_failed : Error<
   "base class|a vector element}0 of type %1 with an %select{rvalue|lvalue}2 of "
   "type %3">;
 
-def err_lvalue_to_rvalue_ref : Error<"rvalue reference cannot bind to lvalue">;
+def err_lvalue_to_rvalue_ref : Error<"rvalue reference to type %0 cannot bind "
+  "to lvalue of type %1">;
 def err_invalid_initialization : Error<
 "invalid initialization of reference of type %0 from expression of type %1">;
 def err_lvalue_to_rvalue_ambig_ref : Error<"rvalue reference cannot bind to lvalue "
@@ -815,6 +820,8 @@ def note_uninit_reference_member : Note<
   "uninitialized reference member is here">;
 def warn_field_is_uninit : Warning<"field is uninitialized when used here">,
   InGroup<DiagGroup<"uninitialized">>;
+def warn_var_is_uninit : Warning<"use of uninitialized variable %0">,
+  InGroup<DiagGroup<"uninitialized-experimental">>, DefaultIgnore;
 def err_init_incomplete_type : Error<"initialization of incomplete type %0">;
 
 def err_temp_copy_no_viable : Error<
@@ -864,15 +871,18 @@ def err_trailing_return_without_auto : Error<
 // C++0x attributes
 def err_repeat_attribute : Error<"'%0' attribute cannot be repeated">;
 
+// C++0x override control
+def override_keyword_only_allowed_on_virtual_member_functions : Error<
+  "only virtual member functions can be marked '%0'">;
+
+def err_function_marked_override_not_overriding : Error<
+  "%0 marked 'override' but does not override any member functions">;
+
 // C++0x [[final]]
 def err_final_function_overridden : Error<
   "declaration of %0 overrides a 'final' function">;
 def err_final_base : Error<
   "derivation from 'final' %0">;
-
-// C++0x [[override]]
-def err_override_function_not_overriding : Error<
-  "%0 marked 'override' but does not override any member functions">;
 
 def err_function_overriding_without_override : Error<
   "%0 overrides function%s1 without being marked 'override'">;
@@ -1819,8 +1829,6 @@ def ext_template_outside_of_template : ExtWarn<
   "'template' keyword outside of a template">, InGroup<CXX0x>;
 
 // C++0x Variadic Templates
-def err_variadic_templates_unsupported : Error<
-  "variadic templates are not yet implemented">;
 def err_template_param_pack_default_arg : Error<
   "template parameter pack cannot have a default argument">;
 def err_template_param_pack_must_be_last_template_parameter : Error<
@@ -1882,10 +1890,6 @@ def err_ellipsis_in_declarator_not_parameter : Error<
 
 def err_sizeof_pack_no_pack_name : Error<
   "%0 does not refer to the name of a parameter pack">;
-
-// Unsupported variadic templates features
-def err_pack_expansion_mismatch_unsupported : Error<
-  "clang cannot yet instantiate pack expansions with mismatched pack levels">;
 
 def err_unexpected_typedef : Error<
   "unexpected type name %0: expected expression">;
@@ -2794,6 +2798,8 @@ def warn_condition_is_idiomatic_assignment : Warning<"using the result "
   InGroup<DiagGroup<"idiomatic-parentheses">>, DefaultIgnore;
 def note_condition_assign_to_comparison : Note<
   "use '==' to turn this assignment into an equality comparison">;
+def note_condition_or_assign_to_comparison : Note<
+  "use '!=' to turn this compound assignment into an inequality comparison">;
 def note_condition_assign_silence : Note<
   "place parentheses around the assignment to silence this warning">;
 

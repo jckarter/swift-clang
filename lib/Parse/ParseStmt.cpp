@@ -465,6 +465,12 @@ StmtResult Parser::ParseCompoundStatementBody(bool isStmtExpr) {
 
   StmtVector Stmts(Actions);
   while (Tok.isNot(tok::r_brace) && Tok.isNot(tok::eof)) {
+
+    if (Tok.is(tok::annot_pragma_unused)) {
+      HandlePragmaUnused();
+      continue;
+    }
+
     StmtResult R;
     if (Tok.isNot(tok::kw___extension__)) {
       R = ParseStatementOrDeclaration(Stmts, false);
@@ -539,12 +545,9 @@ bool Parser::ParseParenExprOrCondition(ExprResult &ExprResult,
                                        Decl *&DeclResult,
                                        SourceLocation Loc,
                                        bool ConvertToBoolean) {
-  bool ParseError = false;
-  
   SourceLocation LParenLoc = ConsumeParen();
   if (getLang().CPlusPlus) 
-    ParseError = ParseCXXCondition(ExprResult, DeclResult, Loc, 
-                                   ConvertToBoolean);
+    ParseCXXCondition(ExprResult, DeclResult, Loc, ConvertToBoolean);
   else {
     ExprResult = ParseExpression();
     DeclResult = 0;
