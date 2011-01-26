@@ -202,7 +202,7 @@ EmitExprForReferenceBinding(CodeGenFunction &CGF, const Expr *E,
   }
 
   RValue RV;
-  if (E->isLValue()) {
+  if (E->isGLValue()) {
     // Emit the expression as an lvalue.
     LValue LV = CGF.EmitLValue(E);
     if (LV.isSimple())
@@ -1682,66 +1682,66 @@ LValue CodeGenFunction::EmitCompoundLiteralLValue(const CompoundLiteralExpr *E){
 
 LValue 
 CodeGenFunction::EmitConditionalOperatorLValue(const ConditionalOperator *E) {
-  if (E->isGLValue()) {
-    if (int Cond = ConstantFoldsToSimpleInteger(E->getCond())) {
-      Expr *Live = Cond == 1 ? E->getLHS() : E->getRHS();
-      if (Live)
-        return EmitLValue(Live);
-    }
-
-    llvm::BasicBlock *LHSBlock = createBasicBlock("cond.true");
-    llvm::BasicBlock *RHSBlock = createBasicBlock("cond.false");
-    llvm::BasicBlock *ContBlock = createBasicBlock("cond.end");
-    
-    if (E->getLHS())
-      EmitBranchOnBoolExpr(E->getCond(), LHSBlock, RHSBlock);
-    else {
-      Expr *save = E->getSAVE();
-      assert(save && "VisitConditionalOperator - save is null");
-      // Intentianlly not doing direct assignment to ConditionalSaveExprs[save]
-      LValue SaveVal = EmitLValue(save);
-      ConditionalSaveLValueExprs[save] = SaveVal;
-      EmitBranchOnBoolExpr(E->getCond(), LHSBlock, RHSBlock);
-    }
-    
-    // Any temporaries created here are conditional.
-    BeginConditionalBranch();
-    EmitBlock(LHSBlock);
-    LValue LHS = EmitLValue(E->getTrueExpr());
-
-    EndConditionalBranch();
-    
-    if (!LHS.isSimple())
-      return EmitUnsupportedLValue(E, "conditional operator");
-
-    // FIXME: We shouldn't need an alloca for this.
-    llvm::Value *Temp = CreateTempAlloca(LHS.getAddress()->getType(),"condtmp");
-    Builder.CreateStore(LHS.getAddress(), Temp);
-    EmitBranch(ContBlock);
-    
-    // Any temporaries created here are conditional.
-    BeginConditionalBranch();
-    EmitBlock(RHSBlock);
-    LValue RHS = EmitLValue(E->getRHS());
-    EndConditionalBranch();
-    if (!RHS.isSimple())
-      return EmitUnsupportedLValue(E, "conditional operator");
-
-    Builder.CreateStore(RHS.getAddress(), Temp);
-    EmitBranch(ContBlock);
-
-    EmitBlock(ContBlock);
-    
-    Temp = Builder.CreateLoad(Temp, "lv");
-    return MakeAddrLValue(Temp, E->getType());
+  if (!E->isGLValue()) {
+    // ?: here should be an aggregate.
+    assert((hasAggregateLLVMType(E->getType()) &&
+            !E->getType()->isAnyComplexType()) &&
+           "Unexpected conditional operator!");
+    return EmitAggExprToLValue(E);
   }
-  
-  // ?: here should be an aggregate.
-  assert((hasAggregateLLVMType(E->getType()) &&
-          !E->getType()->isAnyComplexType()) &&
-         "Unexpected conditional operator!");
 
-  return EmitAggExprToLValue(E);
+  if (int Cond = ConstantFoldsToSimpleInteger(E->getCond())) {
+    Expr *Live = Cond == 1 ? E->getLHS() : E->getRHS();
+    if (Live)
+      return EmitLValue(Live);
+  }
+
+  llvm::BasicBlock *LHSBlock = createBasicBlock("cond.true");
+  llvm::BasicBlock *RHSBlock = createBasicBlock("cond.false");
+  llvm::BasicBlock *ContBlock = createBasicBlock("cond.end");
+
+  ConditionalEvaluation eval(*this);
+    
+  if (E->getLHS())
+    EmitBranchOnBoolExpr(E->getCond(), LHSBlock, RHSBlock);
+  else {
+    Expr *save = E->getSAVE();
+    assert(save && "VisitConditionalOperator - save is null");
+    // Intentianlly not doing direct assignment to ConditionalSaveExprs[save]
+    LValue SaveVal = EmitLValue(save);
+    ConditionalSaveLValueExprs[save] = SaveVal;
+    EmitBranchOnBoolExpr(E->getCond(), LHSBlock, RHSBlock);
+  }
+    
+  // Any temporaries created here are conditional.
+  EmitBlock(LHSBlock);
+  eval.begin(*this);
+  LValue LHS = EmitLValue(E->getTrueExpr());
+  eval.end(*this);
+    
+  if (!LHS.isSimple())
+    return EmitUnsupportedLValue(E, "conditional operator");
+
+  LHSBlock = Builder.GetInsertBlock();
+  Builder.CreateBr(ContBlock);
+    
+  // Any temporaries created here are conditional.
+  EmitBlock(RHSBlock);
+  eval.begin(*this);
+  LValue RHS = EmitLValue(E->getRHS());
+  eval.end(*this);
+  if (!RHS.isSimple())
+    return EmitUnsupportedLValue(E, "conditional operator");
+  RHSBlock = Builder.GetInsertBlock();
+
+  EmitBlock(ContBlock);
+
+  llvm::PHINode *phi = Builder.CreatePHI(LHS.getAddress()->getType(),
+                                         "cond-lvalue");
+  phi->reserveOperandSpace(2);
+  phi->addIncoming(LHS.getAddress(), LHSBlock);
+  phi->addIncoming(RHS.getAddress(), RHSBlock);
+  return MakeAddrLValue(phi, E->getType());
 }
 
 /// EmitCastLValue - Casts are never lvalues unless that cast is a dynamic_cast.

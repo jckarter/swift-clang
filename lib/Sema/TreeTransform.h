@@ -169,7 +169,9 @@ public:
                   DeclarationName Entity) : Self(Self) {
       OldLocation = Self.getDerived().getBaseLocation();
       OldEntity = Self.getDerived().getBaseEntity();
-      Self.getDerived().setBase(Location, Entity);
+      
+      if (Location.isValid())
+        Self.getDerived().setBase(Location, Entity);
     }
 
     ~TemporaryBase() {
@@ -631,6 +633,7 @@ public:
                                     QualType *ParamTypes,
                                     unsigned NumParamTypes,
                                     bool Variadic, unsigned Quals,
+                                    RefQualifierKind RefQualifier,
                                     const FunctionType::ExtInfo &Info);
 
   /// \brief Build a new unprototyped function type.
@@ -796,9 +799,28 @@ public:
     }
 
     if (!Tag) {
-      // FIXME: Would be nice to highlight just the source range.
-      SemaRef.Diag(IdLoc, diag::err_not_tag_in_scope)
-        << Kind << Id << DC;
+      // Check where the name exists but isn't a tag type and use that to emit
+      // better diagnostics.
+      LookupResult Result(SemaRef, Id, IdLoc, Sema::LookupTagName);
+      SemaRef.LookupQualifiedName(Result, DC);
+      switch (Result.getResultKind()) {
+        case LookupResult::Found:
+        case LookupResult::FoundOverloaded:
+        case LookupResult::FoundUnresolvedValue: {
+	  NamedDecl *SomeDecl = Result.getRepresentativeDecl();
+          unsigned Kind = 0;
+          if (isa<TypedefDecl>(SomeDecl)) Kind = 1;
+          else if (isa<ClassTemplateDecl>(SomeDecl)) Kind = 2;
+          SemaRef.Diag(IdLoc, diag::err_tag_reference_non_tag) << Kind;
+          SemaRef.Diag(SomeDecl->getLocation(), diag::note_declared_at);
+          break;
+	}
+        default:
+          // FIXME: Would be nice to highlight just the source range.
+          SemaRef.Diag(IdLoc, diag::err_not_tag_in_scope)
+            << Kind << Id << DC;
+          break;
+      }
       return QualType();
     }
 
@@ -2959,8 +2981,8 @@ QualType TreeTransform<Derived>::TransformType(QualType T) {
 
   // Temporary workaround.  All of these transformations should
   // eventually turn into transformations on TypeLocs.
-  TypeSourceInfo *DI = getSema().Context.CreateTypeSourceInfo(T);
-  DI->getTypeLoc().initialize(getDerived().getBaseLocation());
+  TypeSourceInfo *DI = getSema().Context.getTrivialTypeSourceInfo(T,
+                                                getDerived().getBaseLocation());
   
   TypeSourceInfo *NewDI = getDerived().TransformType(DI);
 
@@ -3052,7 +3074,7 @@ TreeTransform<Derived>::TransformTypeInObjectScope(QualType T,
     return T;
 
   TypeSourceInfo *TSI =
-    SemaRef.Context.getTrivialTypeSourceInfo(T, getBaseLocation());
+    SemaRef.Context.getTrivialTypeSourceInfo(T, getDerived().getBaseLocation());
 
   TSI = getDerived().TransformTypeInObjectScope(TSI, ObjectType,
                                                 UnqualLookup, Prefix);
@@ -3775,6 +3797,7 @@ TreeTransform<Derived>::TransformFunctionProtoType(TypeLocBuilder &TLB,
                                                    ParamTypes.size(),
                                                    T->isVariadic(),
                                                    T->getTypeQuals(),
+                                                   T->getRefQualifier(),
                                                    T->getExtInfo());
     if (Result.isNull())
       return QualType();
@@ -7157,7 +7180,7 @@ TreeTransform<Derived>::TransformBlockExpr(BlockExpr *E) {
                                                         ParamTypes.data(),
                                                         ParamTypes.size(),
                                                         BD->isVariadic(),
-                                                        0,
+                                                        0, RQ_None,
                                                BExprFunctionType->getExtInfo());
   CurBlock->FunctionType = FunctionType;
 
@@ -7352,9 +7375,10 @@ QualType TreeTransform<Derived>::RebuildFunctionProtoType(QualType T,
                                                         unsigned NumParamTypes,
                                                           bool Variadic,
                                                           unsigned Quals,
+                                                  RefQualifierKind RefQualifier,
                                             const FunctionType::ExtInfo &Info) {
   return SemaRef.BuildFunctionType(T, ParamTypes, NumParamTypes, Variadic,
-                                   Quals,
+                                   Quals, RefQualifier,
                                    getDerived().getBaseLocation(),
                                    getDerived().getBaseEntity(),
                                    Info);

@@ -282,11 +282,14 @@ public:
   void CheckerVisit(const Stmt *S, ExplodedNodeSet &Dst, ExplodedNodeSet &Src, 
                     CallbackKind Kind);
 
+  void CheckerVisitObjCMessage(const ObjCMessage &msg, ExplodedNodeSet &Dst,
+                               ExplodedNodeSet &Src, bool isPrevisit);
+
   bool CheckerEvalCall(const CallExpr *CE, 
                        ExplodedNodeSet &Dst, 
                        ExplodedNode *Pred);
 
-  void CheckerEvalNilReceiver(const ObjCMessageExpr *ME, 
+  void CheckerEvalNilReceiver(const ObjCMessage &msg,
                               ExplodedNodeSet &Dst,
                               const GRState *state,
                               ExplodedNode *Pred);
@@ -372,6 +375,9 @@ public:
   void VisitObjCAtSynchronizedStmt(const ObjCAtSynchronizedStmt *S,
                                    ExplodedNode *Pred, ExplodedNodeSet &Dst);
 
+  void VisitObjCPropertyRefExpr(const ObjCPropertyRefExpr *E,
+                                ExplodedNode *Pred, ExplodedNodeSet &Dst);
+
   /// Transfer function logic for computing the lvalue of an Objective-C ivar.
   void VisitLvalObjCIvarRefExpr(const ObjCIvarRefExpr* DR, ExplodedNode* Pred,
                                 ExplodedNodeSet& Dst);
@@ -388,6 +394,8 @@ public:
   /// VisitObjCMessageExpr - Transfer function for ObjC message expressions.
   void VisitObjCMessageExpr(const ObjCMessageExpr* ME, ExplodedNode* Pred, 
                             ExplodedNodeSet& Dst);
+  void VisitObjCMessage(const ObjCMessage &msg, ExplodedNodeSet &Src,
+                        ExplodedNodeSet& Dst);
 
   /// VisitReturnStmt - Transfer function logic for return statements.
   void VisitReturnStmt(const ReturnStmt* R, ExplodedNode* Pred, 
@@ -490,10 +498,10 @@ public:
   }
   
 protected:
-  void evalObjCMessageExpr(ExplodedNodeSet& Dst, const ObjCMessageExpr* ME, 
-                           ExplodedNode* Pred, const GRState *state) {
+  void evalObjCMessage(ExplodedNodeSet& Dst, const ObjCMessage &msg, 
+                       ExplodedNode* Pred, const GRState *state) {
     assert (Builder && "StmtNodeBuilder must be defined.");
-    getTF().evalObjCMessageExpr(Dst, *this, *Builder, ME, Pred, state);
+    getTF().evalObjCMessage(Dst, *this, *Builder, msg, Pred, state);
   }
 
   const GRState* MarkBranch(const GRState* St, const Stmt* Terminator,

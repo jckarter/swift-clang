@@ -521,11 +521,15 @@ Sema::CheckBaseSpecifier(CXXRecordDecl *Class,
   CXXRecordDecl * CXXBaseDecl = cast<CXXRecordDecl>(BaseDecl);
   assert(CXXBaseDecl && "Base type is not a C++ type");
 
-  // C++0x CWG Issue #817 indicates that [[final]] classes shouldn't be bases.
+  // C++ [class.derived]p2:
+  //   If a class is marked with the class-virt-specifier final and it appears
+  //   as a base-type-specifier in a base-clause (10 class.derived), the program
+  //   is ill-formed.
   if (CXXBaseDecl->hasAttr<FinalAttr>()) {
-    Diag(BaseLoc, diag::err_final_base) << BaseType.getAsString();
+    Diag(BaseLoc, diag::err_class_marked_final_used_as_base) 
+      << CXXBaseDecl->getDeclName();
     Diag(CXXBaseDecl->getLocation(), diag::note_previous_decl)
-      << BaseType;
+      << CXXBaseDecl->getDeclName();
     return 0;
   }
 
@@ -867,11 +871,31 @@ void Sema::CheckOverrideControl(const Decl *D) {
   //   the program is ill-formed.
   bool HasOverriddenMethods = 
     MD->begin_overridden_methods() != MD->end_overridden_methods();
-  if (MD->isMarkedOverride() && !HasOverriddenMethods) {
+  if (MD->hasAttr<OverrideAttr>() && !HasOverriddenMethods) {
     Diag(MD->getLocation(), 
                  diag::err_function_marked_override_not_overriding)
       << MD->getDeclName();
     return;
+  }
+
+  // C++0x [class.derived]p8:
+  //   In a class definition marked with the class-virt-specifier explicit,
+  //   if a virtual member function that is neither implicitly-declared nor a 
+  //   destructor overrides a member function of a base class and it is not
+  //   marked with the virt-specifier override, the program is ill-formed.
+  if (MD->getParent()->hasAttr<ExplicitAttr>() && !isa<CXXDestructorDecl>(MD) &&
+      HasOverriddenMethods && !MD->hasAttr<OverrideAttr>()) {
+    llvm::SmallVector<const CXXMethodDecl*, 4> 
+      OverriddenMethods(MD->begin_overridden_methods(), 
+                        MD->end_overridden_methods());
+
+    Diag(MD->getLocation(), diag::err_function_overriding_without_override)
+      << MD->getDeclName() 
+      << (unsigned)OverriddenMethods.size();
+
+    for (unsigned I = 0; I != OverriddenMethods.size(); ++I)
+      Diag(OverriddenMethods[I]->getLocation(),
+           diag::note_overridden_virtual_function);
   }
 }
 
@@ -880,15 +904,13 @@ void Sema::CheckOverrideControl(const Decl *D) {
 /// C++0x [class.virtual]p3.
 bool Sema::CheckIfOverriddenFunctionIsMarkedFinal(const CXXMethodDecl *New,
                                                   const CXXMethodDecl *Old) {
-  // FIXME: Get rid of FinalAttr here.
-  if (Old->hasAttr<FinalAttr>() || Old->isMarkedFinal()) {
-    Diag(New->getLocation(), diag::err_final_function_overridden)
-      << New->getDeclName();
-    Diag(Old->getLocation(), diag::note_overridden_virtual_function);
-    return true;
-  }
-  
-  return false;
+  if (!Old->hasAttr<FinalAttr>())
+    return false;
+
+  Diag(New->getLocation(), diag::err_final_function_overridden)
+    << New->getDeclName();
+  Diag(Old->getLocation(), diag::note_overridden_virtual_function);
+  return true;
 }
 
 /// ActOnCXXMemberDeclarator - This is invoked when a C++ class member
@@ -1035,7 +1057,7 @@ Sema::ActOnCXXMemberDeclarator(Scope *S, AccessSpecifier AS, Declarator &D,
            diag::override_keyword_only_allowed_on_virtual_member_functions)
         << "override" << FixItHint::CreateRemoval(VS.getOverrideLoc());
     } else
-      MD->setIsMarkedOverride(true);
+      MD->addAttr(new (Context) OverrideAttr(VS.getOverrideLoc(), Context));
   }
   if (VS.isFinalSpecified()) {
     CXXMethodDecl *MD = dyn_cast<CXXMethodDecl>(Member);
@@ -1044,7 +1066,7 @@ Sema::ActOnCXXMemberDeclarator(Scope *S, AccessSpecifier AS, Declarator &D,
            diag::override_keyword_only_allowed_on_virtual_member_functions)
       << "final" << FixItHint::CreateRemoval(VS.getFinalLoc());
     } else
-      MD->setIsMarkedFinal(true);
+      MD->addAttr(new (Context) FinalAttr(VS.getFinalLoc(), Context));
   }
 
   CheckOverrideControl(Member);
@@ -2724,7 +2746,7 @@ void Sema::CheckCompletedCXXClass(CXXRecordDecl *Record) {
     }
   }
 
-  if (Record->isDynamicClass())
+  if (Record->isDynamicClass() && !Record->isDependentType())
     DynamicClasses.push_back(Record);
 
   if (Record->getIdentifier()) {
@@ -3001,6 +3023,15 @@ QualType Sema::CheckConstructorDeclarator(Declarator &D, QualType R,
     D.setInvalidType();
   }
 
+  // C++0x [class.ctor]p4:
+  //   A constructor shall not be declared with a ref-qualifier.
+  if (FTI.hasRefQualifier()) {
+    Diag(FTI.getRefQualifierLoc(), diag::err_ref_qualifier_constructor)
+      << FTI.RefQualifierIsLValueRef 
+      << FixItHint::CreateRemoval(FTI.getRefQualifierLoc());
+    D.setInvalidType();
+  }
+  
   // Rebuild the function type "R" without any type qualifiers (in
   // case any of the errors above fired) and with "void" as the
   // return type, since constructors don't have return types.
@@ -3010,7 +3041,8 @@ QualType Sema::CheckConstructorDeclarator(Declarator &D, QualType R,
 
   FunctionProtoType::ExtProtoInfo EPI = Proto->getExtProtoInfo();
   EPI.TypeQuals = 0;
-
+  EPI.RefQualifier = RQ_None;
+  
   return Context.getFunctionType(Context.VoidTy, Proto->arg_type_begin(),
                                  Proto->getNumArgs(), EPI);
 }
@@ -3151,6 +3183,15 @@ QualType Sema::CheckDestructorDeclarator(Declarator &D, QualType R,
     D.setInvalidType();
   }
 
+  // C++0x [class.dtor]p2:
+  //   A destructor shall not be declared with a ref-qualifier.
+  if (FTI.hasRefQualifier()) {
+    Diag(FTI.getRefQualifierLoc(), diag::err_ref_qualifier_destructor)
+      << FTI.RefQualifierIsLValueRef
+      << FixItHint::CreateRemoval(FTI.getRefQualifierLoc());
+    D.setInvalidType();
+  }
+  
   // Make sure we don't have any parameters.
   if (FTI.NumArgs > 0 && !FTIHasSingleVoidArgument(FTI)) {
     Diag(D.getIdentifierLoc(), diag::err_destructor_with_params);
@@ -3177,6 +3218,7 @@ QualType Sema::CheckDestructorDeclarator(Declarator &D, QualType R,
   FunctionProtoType::ExtProtoInfo EPI = Proto->getExtProtoInfo();
   EPI.Variadic = false;
   EPI.TypeQuals = 0;
+  EPI.RefQualifier = RQ_None;
   return Context.getFunctionType(Context.VoidTy, 0, 0, EPI);
 }
 

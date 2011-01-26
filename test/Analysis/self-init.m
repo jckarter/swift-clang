@@ -1,4 +1,4 @@
-// RUN: %clang_cc1 -analyze -analyzer-check-objc-mem %s -verify
+// RUN: %clang_cc1 -analyze -analyzer-check-objc-mem -analyzer-check-objc-self-init %s -verify
 
 @class NSZone, NSCoder;
 @protocol NSObject
@@ -17,6 +17,9 @@
 -(id)init;
 -(id)release;
 @end
+@interface NSProxy <NSObject> {}
+@end
+
 //#import "Foundation/NSObject.h"
 typedef unsigned NSUInteger;
 typedef int NSInteger;
@@ -46,6 +49,10 @@ extern void *somePtr;
 -(id)_init;
 -(id)initWithSomething:(int)x;
 -(void)doSomething;
+@end
+
+@interface MyProxyObj : NSProxy {}
+-(id)init;
 @end
 
 @implementation MyObj
@@ -90,7 +97,7 @@ extern void *somePtr;
 }
 
 -(id)init6 {
-  [NSBundle loadNibNamed:@"Window" owner:myivar]; // expected-warning {{Using an ivar}}
+  [NSBundle loadNibNamed:@"Window" owner:myivar]; // expected-warning {{Instance variable used}}
   return [self initWithSomething:0];
 }
 
@@ -114,7 +121,7 @@ extern void *somePtr;
 }
 
 -(id)init10 {
-	myivar = 0; // expected-warning {{Using an ivar}}
+	myivar = 0; // expected-warning {{Instance variable used}}
     return self;
 }
 
@@ -129,11 +136,17 @@ extern void *somePtr;
 
 -(id)init13 {
 	if ((self == [super init])) {
-	  myivar = 0; // expected-warning {{Using an ivar}}
+	  myivar = 0; // expected-warning {{Instance variable used}}
 	}
 	return self; // expected-warning {{Returning 'self'}}
 }
 
 -(void)doSomething {}
+
+@end
+
+@implementation MyProxyObj
+
+- (id)init { return self; }
 
 @end

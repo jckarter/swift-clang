@@ -16,6 +16,7 @@
 #include "clang/Sema/AnalysisBasedWarnings.h"
 #include "clang/Sema/SemaInternal.h"
 #include "clang/Basic/SourceManager.h"
+#include "clang/Lex/Preprocessor.h"
 #include "clang/AST/DeclObjC.h"
 #include "clang/AST/DeclCXX.h"
 #include "clang/AST/ExprObjC.h"
@@ -120,35 +121,29 @@ static ControlFlowKind CheckFallThrough(AnalysisContext &AC) {
     const CFGBlock& B = **I;
     if (!live[B.getBlockID()])
       continue;
-    if (B.size() == 0) {
+
+    // Destructors can appear after the 'return' in the CFG.  This is
+    // normal.  We need to look pass the destructors for the return
+    // statement (if it exists).
+    CFGBlock::const_reverse_iterator ri = B.rbegin(), re = B.rend();
+    for ( ; ri != re ; ++ri) {
+      CFGElement CE = *ri;
+      if (isa<CFGStmt>(CE))
+        break;
+    }
+    
+    // No more CFGElements in the block?
+    if (ri == re) {
       if (B.getTerminator() && isa<CXXTryStmt>(B.getTerminator())) {
         HasAbnormalEdge = true;
         continue;
       }
-
       // A labeled empty statement, or the entry block...
       HasPlainEdge = true;
       continue;
     }
-    CFGElement CE = B[B.size()-1];
-    if (CFGInitializer CI = CE.getAs<CFGInitializer>()) {
-      // A base or member initializer.
-      HasPlainEdge = true;
-      continue;
-    }
-    if (CFGMemberDtor MD = CE.getAs<CFGMemberDtor>()) {
-      // A member destructor.
-      HasPlainEdge = true;
-      continue;
-    }
-    if (CFGBaseDtor BD = CE.getAs<CFGBaseDtor>()) {
-      // A base destructor.
-      HasPlainEdge = true;
-      continue;
-    }
-    CFGStmt CS = CE.getAs<CFGStmt>();
-    if (!CS.isValid())
-      continue;
+
+    CFGStmt CS = cast<CFGStmt>(*ri);
     Stmt *S = CS.getStmt();
     if (isa<ReturnStmt>(S)) {
       HasLiveReturn = true;
@@ -364,14 +359,93 @@ static void CheckFallThroughForBody(Sema &S, const Decl *D, const Stmt *Body,
 //===----------------------------------------------------------------------===//
 
 namespace {
+struct SLocSort {
+  bool operator()(const Expr *a, const Expr *b) {
+    SourceLocation aLoc = a->getLocStart();
+    SourceLocation bLoc = b->getLocStart();
+    return aLoc.getRawEncoding() < bLoc.getRawEncoding();
+  }
+};
+
 class UninitValsDiagReporter : public UninitVariablesHandler {
   Sema &S;
-public:
-  UninitValsDiagReporter(Sema &S) : S(S) {}
+  typedef llvm::SmallVector<const Expr *, 2> UsesVec;
+  typedef llvm::DenseMap<const VarDecl *, UsesVec*> UsesMap;
+  UsesMap *uses;
   
-  void handleUseOfUninitVariable(const DeclRefExpr *dr, const VarDecl *vd) {
-    S.Diag(dr->getLocStart(), diag::warn_var_is_uninit)
-      << vd->getDeclName() << dr->getSourceRange();
+public:
+  UninitValsDiagReporter(Sema &S) : S(S), uses(0) {}
+  ~UninitValsDiagReporter() { 
+    flushDiagnostics();
+  }
+  
+  void handleUseOfUninitVariable(const Expr *ex, const VarDecl *vd) {
+    if (!uses)
+      uses = new UsesMap();
+    
+    UsesVec *&vec = (*uses)[vd];
+    if (!vec)
+      vec = new UsesVec();
+    
+    vec->push_back(ex);
+  }
+  
+  void flushDiagnostics() {
+    if (!uses)
+      return;
+
+    for (UsesMap::iterator i = uses->begin(), e = uses->end(); i != e; ++i) {
+      const VarDecl *vd = i->first;
+      UsesVec *vec = i->second;
+      
+      S.Diag(vd->getLocStart(), diag::warn_uninit_var)
+        << vd->getDeclName() << vd->getSourceRange();
+      
+      // Sort the uses by their SourceLocations.  While not strictly
+      // guaranteed to produce them in line/column order, this will provide
+      // a stable ordering.
+      std::sort(vec->begin(), vec->end(), SLocSort());
+      
+      for (UsesVec::iterator vi = vec->begin(), ve = vec->end(); vi != ve; ++vi)
+      {
+        if (const DeclRefExpr *dr = dyn_cast<DeclRefExpr>(*vi)) {
+          S.Diag(dr->getLocStart(), diag::note_uninit_var)
+            << vd->getDeclName() << dr->getSourceRange();
+        }
+        else {
+          const BlockExpr *be = cast<BlockExpr>(*vi);
+          S.Diag(be->getLocStart(), diag::note_uninit_var_captured_by_block)
+            << vd->getDeclName();
+        }
+      }
+
+      // Suggest possible initialization (if any).
+      const char *initialization = 0;
+      QualType vdTy = vd->getType().getCanonicalType();
+      
+      if (vdTy->getAs<ObjCObjectPointerType>()) {
+        // Check if 'nil' is defined.
+        if (S.PP.getMacroInfo(&S.getASTContext().Idents.get("nil")))
+          initialization = " = nil";
+        else
+          initialization = " = 0";
+      }
+      else if (vdTy->isRealFloatingType()) {
+        initialization = " = 0.0";
+      }
+      else if (vdTy->isScalarType()) {
+        initialization = " = 0";
+      }
+      
+      if (initialization) {
+        SourceLocation loc = S.PP.getLocForEndOfToken(vd->getLocEnd());
+        S.Diag(loc, diag::note_var_fixit_add_initialization)
+          << FixItHint::CreateInsertion(loc, initialization);
+      }
+
+      delete vec;
+    }
+    delete uses;
   }
 };
 }
@@ -440,11 +514,12 @@ AnalysisBasedWarnings::IssueWarnings(sema::AnalysisBasedWarnings::Policy P,
   if (P.enableCheckUnreachable)
     CheckUnreachable(S, AC);
   
-  if (Diags.getDiagnosticLevel(diag::warn_var_is_uninit, D->getLocStart())
+  if (Diags.getDiagnosticLevel(diag::warn_uninit_var, D->getLocStart())
       != Diagnostic::Ignored) {
     if (CFG *cfg = AC.getCFG()) {
       UninitValsDiagReporter reporter(S);
-      runUninitializedVariablesAnalysis(*cast<DeclContext>(D), *cfg, reporter);
+      runUninitializedVariablesAnalysis(*cast<DeclContext>(D), *cfg, AC,
+                                        reporter);
     }
   }
 }

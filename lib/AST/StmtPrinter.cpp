@@ -481,7 +481,8 @@ void StmtPrinter::VisitDeclRefExpr(DeclRefExpr *Node) {
 
 void StmtPrinter::VisitDependentScopeDeclRefExpr(
                                            DependentScopeDeclRefExpr *Node) {
-  Node->getQualifier()->print(OS, Policy);
+  if (NestedNameSpecifier *Qualifier = Node->getQualifier())
+    Qualifier->print(OS, Policy);
   OS << Node->getNameInfo();
   if (Node->hasExplicitTemplateArgs())
     OS << TemplateSpecializationType::PrintTemplateArgumentList(
@@ -1127,14 +1128,15 @@ void StmtPrinter::VisitCXXPseudoDestructorExpr(CXXPseudoDestructorExpr *E) {
 }
 
 void StmtPrinter::VisitCXXConstructExpr(CXXConstructExpr *E) {
-  // FIXME. For now we just print a trivial constructor call expression,
-  // constructing its first argument object.
-  if (E->getNumArgs() == 1) {
-    CXXConstructorDecl *CD = E->getConstructor();
-    if (CD->isTrivial())
-      PrintExpr(E->getArg(0));
+  for (unsigned i = 0, e = E->getNumArgs(); i != e; ++i) {
+    if (isa<CXXDefaultArgExpr>(E->getArg(i))) {
+      // Don't print any defaulted arguments
+      break;
+    }
+
+    if (i) OS << ", ";
+    PrintExpr(E->getArg(i));
   }
-  // Nothing to print.
 }
 
 void StmtPrinter::VisitExprWithCleanups(ExprWithCleanups *E) {

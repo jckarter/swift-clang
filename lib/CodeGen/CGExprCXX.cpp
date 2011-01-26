@@ -63,13 +63,13 @@ static bool canDevirtualizeMemberFunctionCalls(ASTContext &Context,
   if (Context.getLangOptions().AppleKext)
     return false;
 
-  // If the member function has the "final" attribute, we know that it can't be
+  // If the member function is marked 'final', we know that it can't be
   // overridden and can therefore devirtualize it.
   if (MD->hasAttr<FinalAttr>())
     return true;
 
-  // Similarly, if the class itself has the "final" attribute it can't be
-  // overridden and we can therefore devirtualize the member function call.
+  // Similarly, if the class itself is marked 'final' it can't be overridden
+  // and we can therefore devirtualize the member function call.
   if (MD->getParent()->hasAttr<FinalAttr>())
     return true;
 

@@ -885,6 +885,24 @@ static void HandleVecReturnAttr(Decl *d, const AttributeList &Attr,
   d->addAttr(::new (S.Context) VecReturnAttr(Attr.getLoc(), S.Context));
 }
 
+static void HandleForbidTemporariesAttr(Decl *d, const AttributeList &Attr,
+                                        Sema &S) {
+  assert(Attr.isInvalid() == false);
+
+  if (Attr.getNumArgs() != 0) {
+    S.Diag(Attr.getLoc(), diag::err_attribute_wrong_number_arguments) << 0;
+    return;
+  }
+
+  if (!isa<TypeDecl>(d)) {
+    S.Diag(Attr.getLoc(), diag::warn_attribute_wrong_decl_type)
+      << Attr.getName() << 9 /*class*/;
+    return;
+  }
+
+  d->addAttr(::new (S.Context) ForbidTemporariesAttr(Attr.getLoc(), S.Context));
+}
+
 static void HandleDependencyAttr(Decl *d, const AttributeList &Attr, Sema &S) {
   if (!isFunctionOrMethod(d) && !isa<ParmVarDecl>(d)) {
     S.Diag(Attr.getLoc(), diag::err_attribute_wrong_decl_type)
@@ -2437,154 +2455,120 @@ static void HandleLaunchBoundsAttr(Decl *d, const AttributeList &Attr, Sema &S){
   }
 }
 
-static void HandleFinalAttr(Decl *d, const AttributeList &Attr, Sema &S) {
-  // check the attribute arguments.
-  if (Attr.getNumArgs() != 0) {
-    S.Diag(Attr.getLoc(), diag::err_attribute_wrong_number_arguments) << 0;
-    return;
-  }
-
-  if (!isa<CXXRecordDecl>(d)
-   && (!isa<CXXMethodDecl>(d) || !cast<CXXMethodDecl>(d)->isVirtual())) {
-    S.Diag(Attr.getLoc(),
-           Attr.isCXX0XAttribute() ? diag::err_attribute_wrong_decl_type
-                                   : diag::warn_attribute_wrong_decl_type)
-      << Attr.getName() << 7 /*virtual method or class*/;
-    return;
-  }
-  
-  // FIXME: Conform to C++0x redeclaration rules.
-  
-  if (d->getAttr<FinalAttr>()) {
-    S.Diag(Attr.getLoc(), diag::err_repeat_attribute) << "final";
-    return;
-  }
-
-  d->addAttr(::new (S.Context) FinalAttr(Attr.getLoc(), S.Context));
-}
-
-//===----------------------------------------------------------------------===//
-// C++0x member checking attributes
-//===----------------------------------------------------------------------===//
-
-static void HandleBaseCheckAttr(Decl *d, const AttributeList &Attr, Sema &S) {
-  if (Attr.getNumArgs() != 0) {
-    S.Diag(Attr.getLoc(), diag::err_attribute_wrong_number_arguments) << 0;
-    return;
-  }
-  
-  if (!isa<CXXRecordDecl>(d)) {
-    S.Diag(Attr.getLoc(),
-           Attr.isCXX0XAttribute() ? diag::err_attribute_wrong_decl_type
-                                   : diag::warn_attribute_wrong_decl_type)
-      << Attr.getName() << 9 /*class*/;
-    return;
-  }
-  
-  if (d->getAttr<BaseCheckAttr>()) {
-    S.Diag(Attr.getLoc(), diag::err_repeat_attribute) << "base_check";
-    return;
-  }
-  
-  d->addAttr(::new (S.Context) BaseCheckAttr(Attr.getLoc(), S.Context));
-}
-
-static void HandleHidingAttr(Decl *d, const AttributeList &Attr, Sema &S) {
-  if (Attr.getNumArgs() != 0) {
-    S.Diag(Attr.getLoc(), diag::err_attribute_wrong_number_arguments) << 0;
-    return;
-  }
-
-  if (!isa<RecordDecl>(d->getDeclContext())) {
-    // FIXME: It's not the type that's the problem
-    S.Diag(Attr.getLoc(),
-           Attr.isCXX0XAttribute() ? diag::err_attribute_wrong_decl_type
-                                   : diag::warn_attribute_wrong_decl_type)
-      << Attr.getName() << 11 /*member*/;
-    return;
-  }
-
-  // FIXME: Conform to C++0x redeclaration rules.
-
-  if (d->getAttr<HidingAttr>()) {
-    S.Diag(Attr.getLoc(), diag::err_repeat_attribute) << "hiding";
-    return;
-  }
-
-  d->addAttr(::new (S.Context) HidingAttr(Attr.getLoc(), S.Context));
-}
-
-static void HandleOverrideAttr(Decl *d, const AttributeList &Attr, Sema &S) {
-  if (Attr.getNumArgs() != 0) {
-    S.Diag(Attr.getLoc(), diag::err_attribute_wrong_number_arguments) << 0;
-    return;
-  }
-
-  if (!isa<CXXMethodDecl>(d) || !cast<CXXMethodDecl>(d)->isVirtual()) {
-    // FIXME: It's not the type that's the problem
-    S.Diag(Attr.getLoc(),
-           Attr.isCXX0XAttribute() ? diag::err_attribute_wrong_decl_type
-                                   : diag::warn_attribute_wrong_decl_type)
-      << Attr.getName() << 10 /*virtual method*/;
-    return;
-  }
-
-  // FIXME: Conform to C++0x redeclaration rules.
-
-  if (d->getAttr<OverrideAttr>()) {
-    S.Diag(Attr.getLoc(), diag::err_repeat_attribute) << "override";
-    return;
-  }
-
-  d->addAttr(::new (S.Context) OverrideAttr(Attr.getLoc(), S.Context));
-}
-
 //===----------------------------------------------------------------------===//
 // Checker-specific attribute handlers.
 //===----------------------------------------------------------------------===//
 
-static void HandleNSReturnsRetainedAttr(Decl *d, const AttributeList &Attr,
+static bool isValidSubjectOfNSAttribute(Sema &S, QualType type) {
+  return type->isObjCObjectPointerType() || S.Context.isObjCNSObjectType(type);
+}
+static bool isValidSubjectOfCFAttribute(Sema &S, QualType type) {
+  return type->isPointerType() || isValidSubjectOfNSAttribute(S, type);
+}
+
+static void HandleNSConsumedAttr(Decl *d, const AttributeList &attr, Sema &S) {
+  ParmVarDecl *param = dyn_cast<ParmVarDecl>(d);
+  if (!param) {
+    S.Diag(d->getLocStart(), diag::warn_attribute_wrong_decl_type)
+      << SourceRange(attr.getLoc()) << attr.getName() << 4 /*parameter*/;
+    return;
+  }
+
+  bool typeOK, cf;
+  if (attr.getKind() == AttributeList::AT_ns_consumed) {
+    typeOK = isValidSubjectOfNSAttribute(S, param->getType());
+    cf = false;
+  } else {
+    typeOK = isValidSubjectOfCFAttribute(S, param->getType());
+    cf = true;
+  }
+
+  if (!typeOK) {
+    S.Diag(d->getLocStart(), diag::warn_ns_attribute_wrong_parameter_type)
+      << SourceRange(attr.getLoc()) << attr.getName() << cf;
+    return;
+  }
+
+  if (cf)
+    param->addAttr(::new (S.Context) CFConsumedAttr(attr.getLoc(), S.Context));
+  else
+    param->addAttr(::new (S.Context) NSConsumedAttr(attr.getLoc(), S.Context));  
+}
+
+static void HandleNSConsumesSelfAttr(Decl *d, const AttributeList &attr,
+                                     Sema &S) {
+  if (!isa<ObjCMethodDecl>(d)) {
+    S.Diag(d->getLocStart(), diag::warn_attribute_wrong_decl_type)
+      << SourceRange(attr.getLoc()) << attr.getName() << 13 /*method*/;
+    return;
+  }
+
+  d->addAttr(::new (S.Context) NSConsumesSelfAttr(attr.getLoc(), S.Context));
+}
+
+static void HandleNSReturnsRetainedAttr(Decl *d, const AttributeList &attr,
                                         Sema &S) {
 
-  QualType RetTy;
+  QualType returnType;
 
   if (ObjCMethodDecl *MD = dyn_cast<ObjCMethodDecl>(d))
-    RetTy = MD->getResultType();
+    returnType = MD->getResultType();
   else if (FunctionDecl *FD = dyn_cast<FunctionDecl>(d))
-    RetTy = FD->getResultType();
+    returnType = FD->getResultType();
   else {
-    SourceLocation L = Attr.getLoc();
     S.Diag(d->getLocStart(), diag::warn_attribute_wrong_decl_type)
-        << SourceRange(L, L) << Attr.getName() << 3 /* function or method */;
+        << SourceRange(attr.getLoc()) << attr.getName()
+        << 3 /* function or method */;
     return;
   }
 
-  if (!(S.Context.isObjCNSObjectType(RetTy) || RetTy->getAs<PointerType>()
-        || RetTy->getAs<ObjCObjectPointerType>())) {
-    SourceLocation L = Attr.getLoc();
+  bool typeOK;
+  bool cf;
+  switch (attr.getKind()) {
+  default: llvm_unreachable("invalid ownership attribute"); return;
+  case AttributeList::AT_ns_returns_autoreleased:
+  case AttributeList::AT_ns_returns_retained:
+  case AttributeList::AT_ns_returns_not_retained:
+    typeOK = isValidSubjectOfNSAttribute(S, returnType);
+    cf = false;
+    break;
+
+  case AttributeList::AT_cf_returns_retained:
+  case AttributeList::AT_cf_returns_not_retained:
+    typeOK = isValidSubjectOfCFAttribute(S, returnType);
+    cf = true;
+    break;
+  }
+
+  if (!typeOK) {
     S.Diag(d->getLocStart(), diag::warn_ns_attribute_wrong_return_type)
-      << SourceRange(L, L) << Attr.getName();
+      << SourceRange(attr.getLoc())
+      << attr.getName() << isa<ObjCMethodDecl>(d) << cf;
     return;
   }
 
-  switch (Attr.getKind()) {
+  switch (attr.getKind()) {
     default:
       assert(0 && "invalid ownership attribute");
       return;
+    case AttributeList::AT_ns_returns_autoreleased:
+      d->addAttr(::new (S.Context) NSReturnsAutoreleasedAttr(attr.getLoc(),
+                                                             S.Context));
+      return;
     case AttributeList::AT_cf_returns_not_retained:
-      d->addAttr(::new (S.Context) CFReturnsNotRetainedAttr(Attr.getLoc(),
+      d->addAttr(::new (S.Context) CFReturnsNotRetainedAttr(attr.getLoc(),
                                                             S.Context));
       return;
     case AttributeList::AT_ns_returns_not_retained:
-      d->addAttr(::new (S.Context) NSReturnsNotRetainedAttr(Attr.getLoc(),
+      d->addAttr(::new (S.Context) NSReturnsNotRetainedAttr(attr.getLoc(),
                                                             S.Context));
       return;
     case AttributeList::AT_cf_returns_retained:
-      d->addAttr(::new (S.Context) CFReturnsRetainedAttr(Attr.getLoc(),
+      d->addAttr(::new (S.Context) CFReturnsRetainedAttr(attr.getLoc(),
                                                          S.Context));
       return;
     case AttributeList::AT_ns_returns_retained:
-      d->addAttr(::new (S.Context) NSReturnsRetainedAttr(Attr.getLoc(),
+      d->addAttr(::new (S.Context) NSReturnsRetainedAttr(attr.getLoc(),
                                                          S.Context));
       return;
   };
@@ -2698,7 +2682,6 @@ static void ProcessInheritableDeclAttr(Scope *scope, Decl *D,
   case AttributeList::AT_analyzer_noreturn:
     HandleAnalyzerNoReturnAttr  (D, Attr, S); break;
   case AttributeList::AT_annotate:    HandleAnnotateAttr    (D, Attr, S); break;
-  case AttributeList::AT_base_check:  HandleBaseCheckAttr   (D, Attr, S); break;
   case AttributeList::AT_carries_dependency:
                                       HandleDependencyAttr  (D, Attr, S); break;
   case AttributeList::AT_common:      HandleCommonAttr      (D, Attr, S); break;
@@ -2709,12 +2692,12 @@ static void ProcessInheritableDeclAttr(Scope *scope, Decl *D,
   case AttributeList::AT_ext_vector_type:
     HandleExtVectorTypeAttr(scope, D, Attr, S);
     break;
-  case AttributeList::AT_final:       HandleFinalAttr       (D, Attr, S); break;
+  case AttributeList::AT_forbid_temporaries:
+    HandleForbidTemporariesAttr(D, Attr, S); break;
   case AttributeList::AT_format:      HandleFormatAttr      (D, Attr, S); break;
   case AttributeList::AT_format_arg:  HandleFormatArgAttr   (D, Attr, S); break;
   case AttributeList::AT_global:      HandleGlobalAttr      (D, Attr, S); break;
   case AttributeList::AT_gnu_inline:  HandleGNUInlineAttr   (D, Attr, S); break;
-  case AttributeList::AT_hiding:      HandleHidingAttr      (D, Attr, S); break;
   case AttributeList::AT_launch_bounds:
     HandleLaunchBoundsAttr(D, Attr, S);
     break;
@@ -2730,11 +2713,16 @@ static void ProcessInheritableDeclAttr(Scope *scope, Decl *D,
   case AttributeList::AT_naked:       HandleNakedAttr       (D, Attr, S); break;
   case AttributeList::AT_noreturn:    HandleNoReturnAttr    (D, Attr, S); break;
   case AttributeList::AT_nothrow:     HandleNothrowAttr     (D, Attr, S); break;
-  case AttributeList::AT_override:    HandleOverrideAttr    (D, Attr, S); break;
   case AttributeList::AT_shared:      HandleSharedAttr      (D, Attr, S); break;
   case AttributeList::AT_vecreturn:   HandleVecReturnAttr   (D, Attr, S); break;
 
   // Checker-specific.
+  case AttributeList::AT_cf_consumed:
+  case AttributeList::AT_ns_consumed: HandleNSConsumedAttr  (D, Attr, S); break;
+  case AttributeList::AT_ns_consumes_self:
+    HandleNSConsumesSelfAttr(D, Attr, S); break;
+
+  case AttributeList::AT_ns_returns_autoreleased:
   case AttributeList::AT_ns_returns_not_retained:
   case AttributeList::AT_cf_returns_not_retained:
   case AttributeList::AT_ns_returns_retained:

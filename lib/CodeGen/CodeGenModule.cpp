@@ -210,7 +210,7 @@ void CodeGenModule::setTypeVisibility(llvm::GlobalValue *GV,
   // in CGVTables.cpp.
 
   // Preconditions.
-  if (GV->getLinkage() != llvm::GlobalVariable::WeakODRLinkage ||
+  if (GV->getLinkage() != llvm::GlobalVariable::LinkOnceODRLinkage ||
       GV->getVisibility() != llvm::GlobalVariable::DefaultVisibility)
     return;
 
@@ -324,9 +324,7 @@ void CodeGenModule::AddGlobalDtor(llvm::Function * Dtor, int Priority) {
 void CodeGenModule::EmitCtorList(const CtorList &Fns, const char *GlobalName) {
   // Ctor function type is void()*.
   llvm::FunctionType* CtorFTy =
-    llvm::FunctionType::get(llvm::Type::getVoidTy(VMContext),
-                            std::vector<const llvm::Type*>(),
-                            false);
+    llvm::FunctionType::get(llvm::Type::getVoidTy(VMContext), false);
   llvm::Type *CtorPFTy = llvm::PointerType::getUnqual(CtorFTy);
 
   // Get the type of a ctor entry, { i32, void ()* }.
@@ -822,8 +820,7 @@ CodeGenModule::GetOrCreateLLVMFunction(llvm::StringRef MangledName,
   if (isa<llvm::FunctionType>(Ty)) {
     FTy = cast<llvm::FunctionType>(Ty);
   } else {
-    FTy = llvm::FunctionType::get(llvm::Type::getVoidTy(VMContext),
-                                  std::vector<const llvm::Type*>(), false);
+    FTy = llvm::FunctionType::get(llvm::Type::getVoidTy(VMContext), false);
     IsIncompleteFunction = true;
   }
   
@@ -1056,19 +1053,21 @@ CodeGenModule::getVTableLinkage(const CXXRecordDecl *RD) {
       case TSK_Undeclared:
       case TSK_ExplicitSpecialization:
         if (KeyFunction->isInlined())
-          return llvm::GlobalVariable::WeakODRLinkage;
+          return llvm::GlobalVariable::LinkOnceODRLinkage;
         
         return llvm::GlobalVariable::ExternalLinkage;
         
       case TSK_ImplicitInstantiation:
+        return llvm::GlobalVariable::LinkOnceODRLinkage;
+
       case TSK_ExplicitInstantiationDefinition:
         return llvm::GlobalVariable::WeakODRLinkage;
-        
+  
       case TSK_ExplicitInstantiationDeclaration:
         // FIXME: Use available_externally linkage. However, this currently
         // breaks LLVM's build due to undefined symbols.
         //      return llvm::GlobalVariable::AvailableExternallyLinkage;
-        return llvm::GlobalVariable::WeakODRLinkage;
+        return llvm::GlobalVariable::LinkOnceODRLinkage;
     }
   }
   
@@ -1076,6 +1075,8 @@ CodeGenModule::getVTableLinkage(const CXXRecordDecl *RD) {
   case TSK_Undeclared:
   case TSK_ExplicitSpecialization:
   case TSK_ImplicitInstantiation:
+    return llvm::GlobalVariable::LinkOnceODRLinkage;
+
   case TSK_ExplicitInstantiationDefinition:
     return llvm::GlobalVariable::WeakODRLinkage;
     
@@ -1083,11 +1084,11 @@ CodeGenModule::getVTableLinkage(const CXXRecordDecl *RD) {
     // FIXME: Use available_externally linkage. However, this currently
     // breaks LLVM's build due to undefined symbols.
     //   return llvm::GlobalVariable::AvailableExternallyLinkage;
-    return llvm::GlobalVariable::WeakODRLinkage;
+    return llvm::GlobalVariable::LinkOnceODRLinkage;
   }
   
   // Silence GCC warning.
-  return llvm::GlobalVariable::WeakODRLinkage;
+  return llvm::GlobalVariable::LinkOnceODRLinkage;
 }
 
 CharUnits CodeGenModule::GetTargetTypeStoreSize(const llvm::Type *Ty) const {

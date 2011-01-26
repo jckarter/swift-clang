@@ -7,7 +7,7 @@
 struct ToBool { explicit operator bool(); };
 
 struct B;
-struct A { // expected-note 2{{candidate is the implicit copy constructor}}
+struct A {
   A(); 
   A(const B&); // expected-note 2 {{candidate constructor}}
 }; 

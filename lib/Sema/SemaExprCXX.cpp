@@ -517,13 +517,14 @@ bool Sema::CheckCXXThrowOperand(SourceLocation ThrowLoc, Expr *&E) {
 
   // Initialize the exception result.  This implicitly weeds out
   // abstract types or types with inaccessible copy constructors.
-  // FIXME: Determine whether we can elide this copy per C++0x [class.copy]p34.
+  const VarDecl *NRVOVariable = getCopyElisionCandidate(QualType(), E, false);
+
+  // FIXME: Determine whether we can elide this copy per C++0x [class.copy]p32.
   InitializedEntity Entity =
-    InitializedEntity::InitializeException(ThrowLoc, E->getType(),
-                                           /*NRVO=*/false);
-  ExprResult Res = PerformCopyInitialization(Entity,
-                                                   SourceLocation(),
-                                                   Owned(E));
+      InitializedEntity::InitializeException(ThrowLoc, E->getType(),
+                                             /*NRVO=*/false);
+  ExprResult Res = PerformMoveOrCopyInitialization(Entity, NRVOVariable, 
+                                                   QualType(), E);
   if (Res.isInvalid())
     return true;
   E = Res.takeAs<Expr>();
@@ -2556,6 +2557,32 @@ QualType Sema::CheckPointerToMemberOperands(Expr *&lex, Expr *&rex,
   QualType Result = MemPtr->getPointeeType();
   Result = Context.getCVRQualifiedType(Result, LType.getCVRQualifiers());
 
+  // C++0x [expr.mptr.oper]p6:
+  //   In a .* expression whose object expression is an rvalue, the program is
+  //   ill-formed if the second operand is a pointer to member function with 
+  //   ref-qualifier &. In a ->* expression or in a .* expression whose object 
+  //   expression is an lvalue, the program is ill-formed if the second operand 
+  //   is a pointer to member function with ref-qualifier &&.
+  if (const FunctionProtoType *Proto = Result->getAs<FunctionProtoType>()) {
+    switch (Proto->getRefQualifier()) {
+    case RQ_None:
+      // Do nothing
+      break;
+
+    case RQ_LValue:
+      if (!isIndirect && !lex->Classify(Context).isLValue())
+        Diag(Loc, diag::err_pointer_to_member_oper_value_classify)
+          << RType << 1 << lex->getSourceRange();
+      break;
+    
+    case RQ_RValue:
+      if (isIndirect || !lex->Classify(Context).isRValue())
+        Diag(Loc, diag::err_pointer_to_member_oper_value_classify)
+          << RType << 0 << lex->getSourceRange();
+      break;
+    }
+  }
+  
   // C++ [expr.mptr.oper]p6:
   //   The result of a .* expression whose second operand is a pointer
   //   to a data member is of the same value category as its
@@ -3187,9 +3214,12 @@ ExprResult Sema::MaybeBindToTemporary(Expr *E) {
     }
   }
 
+  CXXRecordDecl *RD = cast<CXXRecordDecl>(RT->getDecl());
+  if (RD->getAttr<ForbidTemporariesAttr>())
+    Diag(E->getExprLoc(), diag::warn_temporaries_forbidden) << E->getType();
+
   // That should be enough to guarantee that this type is complete.
   // If it has a trivial destructor, we can avoid the extra copy.
-  CXXRecordDecl *RD = cast<CXXRecordDecl>(RT->getDecl());
   if (RD->isInvalidDecl() || RD->hasTrivialDestructor())
     return Owned(E);
 

@@ -658,7 +658,7 @@ public:
   ///
   /// This value is used for lazy creation of destructors.
   bool hasDeclaredDestructor() const { return data().DeclaredDestructor; }
-  
+
   /// getConversions - Retrieve the overload set containing all of the
   /// conversion functions in this class.
   UnresolvedSetImpl *getConversionFunctions() {
@@ -1096,6 +1096,20 @@ public:
     return getType()->getAs<FunctionProtoType>()->getTypeQuals();
   }
 
+  /// \brief Retrieve the ref-qualifier associated with this method.
+  ///
+  /// In the following example, \c f() has an lvalue ref-qualifier, \c g()
+  /// has an rvalue ref-qualifier, and \c h() has no ref-qualifier.
+  /// \code
+  /// struct X {
+  ///   void f() &;
+  ///   void g() &&;
+  ///   void h();
+  /// };
+  RefQualifierKind getRefQualifier() const {
+    return getType()->getAs<FunctionProtoType>()->getRefQualifier();
+  }
+  
   bool hasInlineBody() const;
 
   // Implement isa/cast/dyncast/etc.
@@ -1471,6 +1485,29 @@ public:
   bool isCopyConstructor() const {
     unsigned TypeQuals = 0;
     return isCopyConstructor(TypeQuals);
+  }
+
+  /// \brief Determine whether this constructor is a move constructor
+  /// (C++0x [class.copy]p3), which can be used to move values of the class.
+  ///
+  /// \param TypeQuals If this constructor is a move constructor, will be set
+  /// to the type qualifiers on the referent of the first parameter's type.
+  bool isMoveConstructor(unsigned &TypeQuals) const;
+
+  /// \brief Determine whether this constructor is a move constructor
+  /// (C++0x [class.copy]p3), which can be used to move values of the class.
+  bool isMoveConstructor() const;
+  
+  /// \brief Determine whether this is a copy or move constructor.
+  ///
+  /// \param TypeQuals Will be set to the type qualifiers on the reference
+  /// parameter, if in fact this is a copy or move constructor.
+  bool isCopyOrMoveConstructor(unsigned &TypeQuals) const;
+
+  /// \brief Determine whether this a copy or move constructor.
+  bool isCopyOrMoveConstructor() const {
+    unsigned Quals;
+    return isCopyOrMoveConstructor(Quals);
   }
 
   /// isConvertingConstructor - Whether this constructor is a

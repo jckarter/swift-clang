@@ -18,6 +18,7 @@
 #include "llvm/ADT/DenseMap.h"
 #include "clang/AST/Decl.h"
 #include "clang/Analysis/CFG.h"
+#include "clang/Analysis/AnalysisContext.h"
 #include "clang/Analysis/Visitors/CFGRecStmtDeclVisitor.h"
 #include "clang/Analysis/Analyses/UninitializedValuesV2.h"
 #include "clang/Analysis/Support/SaveAndRestore.h"
@@ -287,27 +288,49 @@ public:
 class TransferFunctions : public CFGRecStmtVisitor<TransferFunctions> {
   CFGBlockValues &vals;
   const CFG &cfg;
+  AnalysisContext &ac;
   UninitVariablesHandler *handler;
   const DeclRefExpr *currentDR;
+  const Expr *currentVoidCast;
+  const bool flagBlockUses;
 public:
   TransferFunctions(CFGBlockValues &vals, const CFG &cfg,
-                    UninitVariablesHandler *handler)
-    : vals(vals), cfg(cfg), handler(handler), currentDR(0) {}
+                    AnalysisContext &ac,
+                    UninitVariablesHandler *handler,
+                    bool flagBlockUses)
+    : vals(vals), cfg(cfg), ac(ac), handler(handler), currentDR(0),
+      currentVoidCast(0), flagBlockUses(flagBlockUses) {}
   
   const CFG &getCFG() { return cfg; }
   void reportUninit(const DeclRefExpr *ex, const VarDecl *vd);
-  
+
+  void VisitBlockExpr(BlockExpr *be);
   void VisitDeclStmt(DeclStmt *ds);
   void VisitDeclRefExpr(DeclRefExpr *dr);
   void VisitUnaryOperator(UnaryOperator *uo);
   void VisitBinaryOperator(BinaryOperator *bo);
   void VisitCastExpr(CastExpr *ce);
+  void VisitSizeOfAlignOfExpr(SizeOfAlignOfExpr *se);
 };
 }
 
 void TransferFunctions::reportUninit(const DeclRefExpr *ex,
                                      const VarDecl *vd) {
   if (handler) handler->handleUseOfUninitVariable(ex, vd);
+}
+
+void TransferFunctions::VisitBlockExpr(BlockExpr *be) {
+  if (!flagBlockUses || !handler)
+    return;
+  AnalysisContext::referenced_decls_iterator i, e;
+  llvm::tie(i, e) = ac.getReferencedBlockVars(be->getBlockDecl());
+  for ( ; i != e; ++i) {
+    const VarDecl *vd = *i;
+    if (vd->getAttr<BlocksAttr>() || !vd->hasLocalStorage())
+      continue;
+    if (vals[vd] == Uninitialized)
+      handler->handleUseOfUninitVariable(be, vd);      
+  }
 }
 
 void TransferFunctions::VisitDeclStmt(DeclStmt *ds) {
@@ -424,15 +447,33 @@ void TransferFunctions::VisitCastExpr(clang::CastExpr *ce) {
       SaveAndRestore<const DeclRefExpr*> lastDR(currentDR, 
                                                 res.getDeclRefExpr());
       Visit(ce->getSubExpr());
-      if (vals[vd] == Uninitialized) {
+      if (currentVoidCast != ce && vals[vd] == Uninitialized) {
         reportUninit(res.getDeclRefExpr(), vd);
         // Don't cascade warnings.
         vals[vd] = Initialized;
       }
       return;
     }
-  }  
+  }
+  else if (CStyleCastExpr *cse = dyn_cast<CStyleCastExpr>(ce)) {
+    if (cse->getType()->isVoidType()) {
+      // e.g. (void) x;
+      SaveAndRestore<const Expr *>
+        lastVoidCast(currentVoidCast, cse->getSubExpr()->IgnoreParens());
+      Visit(cse->getSubExpr());
+      return;
+    }
+  }
   Visit(ce->getSubExpr());
+}
+
+void TransferFunctions::VisitSizeOfAlignOfExpr(SizeOfAlignOfExpr *se) {
+  if (se->isSizeOf()) {
+    if (se->getType()->isConstantSizeType())
+      return;
+    // Handle VLAs.
+    Visit(se->getArgumentExpr());
+  }
 }
 
 //------------------------------------------------------------------------====//
@@ -440,8 +481,9 @@ void TransferFunctions::VisitCastExpr(clang::CastExpr *ce) {
 //====------------------------------------------------------------------------//
 
 static bool runOnBlock(const CFGBlock *block, const CFG &cfg,
-                       CFGBlockValues &vals,
-                       UninitVariablesHandler *handler = 0) {
+                       AnalysisContext &ac, CFGBlockValues &vals,
+                       UninitVariablesHandler *handler = 0,
+                       bool flagBlockUses = false) {
   
   if (const BinaryOperator *b = getLogicalOperatorInChain(block)) {
     if (block->pred_size() == 2 && block->succ_size() == 2) {
@@ -468,7 +510,7 @@ static bool runOnBlock(const CFGBlock *block, const CFG &cfg,
     isFirst = false;
   }
   // Apply the transfer function.
-  TransferFunctions tf(vals, cfg, handler);
+  TransferFunctions tf(vals, cfg, ac, handler, flagBlockUses);
   for (CFGBlock::const_iterator I = block->begin(), E = block->end(); 
        I != E; ++I) {
     if (const CFGStmt *cs = dyn_cast<CFGStmt>(&*I)) {
@@ -480,6 +522,7 @@ static bool runOnBlock(const CFGBlock *block, const CFG &cfg,
 
 void clang::runUninitializedVariablesAnalysis(const DeclContext &dc,
                                               const CFG &cfg,
+                                              AnalysisContext &ac,
                                               UninitVariablesHandler &handler) {
   CFGBlockValues vals(cfg);
   vals.computeSetOfDeclarations(dc);
@@ -492,7 +535,7 @@ void clang::runUninitializedVariablesAnalysis(const DeclContext &dc,
 
   while (const CFGBlock *block = worklist.dequeue()) {
     // Did the block change?
-    bool changed = runOnBlock(block, cfg, vals);    
+    bool changed = runOnBlock(block, cfg, ac, vals);    
     if (changed || !previouslyVisited[block->getBlockID()])
       worklist.enqueueSuccessors(block);    
     previouslyVisited[block->getBlockID()] = true;
@@ -500,7 +543,7 @@ void clang::runUninitializedVariablesAnalysis(const DeclContext &dc,
   
   // Run through the blocks one more time, and report uninitialized variabes.
   for (CFG::const_iterator BI = cfg.begin(), BE = cfg.end(); BI != BE; ++BI) {
-    runOnBlock(*BI, cfg, vals, &handler);
+    runOnBlock(*BI, cfg, ac, vals, &handler, /* flagBlockUses */ true);
   }
 }
 

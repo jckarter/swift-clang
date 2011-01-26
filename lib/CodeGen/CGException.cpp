@@ -172,6 +172,21 @@ void EHScopeStack::popNullFixups() {
     BranchFixups.pop_back();
 }
 
+llvm::Value *CodeGenFunction::initFullExprCleanup() {
+  // Create a variable to decide whether the cleanup needs to be run.
+  llvm::AllocaInst *run = CreateTempAlloca(Builder.getInt1Ty(), "cleanup.cond");
+
+  // Initialize it to false at a site that's guaranteed to be run
+  // before each evaluation.
+  llvm::BasicBlock *block = OutermostConditional->getStartingBlock();
+  new llvm::StoreInst(Builder.getFalse(), run, &block->back());
+
+  // Initialize it to true at the current location.
+  Builder.CreateStore(Builder.getTrue(), run);
+
+  return run;
+}
+
 static llvm::Constant *getAllocateExceptionFn(CodeGenFunction &CGF) {
   // void *__cxa_allocate_exception(size_t thrown_size);
   const llvm::Type *SizeTy = CGF.ConvertType(CGF.getContext().getSizeType());
@@ -601,7 +616,8 @@ void CodeGenFunction::EmitCXXThrowExpr(const CXXThrowExpr *E) {
 
   // Now throw the exception.
   const llvm::Type *Int8PtrTy = llvm::Type::getInt8PtrTy(getLLVMContext());
-  llvm::Constant *TypeInfo = CGM.GetAddrOfRTTIDescriptor(ThrowType, true);
+  llvm::Constant *TypeInfo = CGM.GetAddrOfRTTIDescriptor(ThrowType, 
+                                                         /*ForEH=*/true);
 
   // The address of the destructor.  If the exception type has a
   // trivial destructor (or isn't a record), we just pass null.
@@ -656,7 +672,8 @@ void CodeGenFunction::EmitStartEHSpec(const Decl *D) {
   for (unsigned I = 0; I != NumExceptions; ++I) {
     QualType Ty = Proto->getExceptionType(I);
     QualType ExceptType = Ty.getNonReferenceType().getUnqualifiedType();
-    llvm::Value *EHType = CGM.GetAddrOfRTTIDescriptor(ExceptType, true);
+    llvm::Value *EHType = CGM.GetAddrOfRTTIDescriptor(ExceptType,
+                                                      /*ForEH=*/true);
     Filter->setFilter(I, EHType);
   }
 }
@@ -706,7 +723,7 @@ void CodeGenFunction::EnterCXXTryStmt(const CXXTryStmt &S, bool IsFnTryBlock) {
       if (CaughtType->isObjCObjectPointerType())
         TypeInfo = CGM.getObjCRuntime().GetEHType(CaughtType);
       else
-        TypeInfo = CGM.GetAddrOfRTTIDescriptor(CaughtType, true);
+        TypeInfo = CGM.GetAddrOfRTTIDescriptor(CaughtType, /*ForEH=*/true);
       CatchScope->setHandler(I, TypeInfo, Handler);
     } else {
       // No exception decl indicates '...', a catch-all.
@@ -1653,4 +1670,24 @@ CodeGenFunction::UnwindDest CodeGenFunction::getRethrowDest() {
 
 EHScopeStack::Cleanup::~Cleanup() {
   llvm_unreachable("Cleanup is indestructable");
+}
+
+void EHScopeStack::ConditionalCleanup::Emit(CodeGenFunction &CGF,
+                                            bool IsForEHCleanup) {
+  // Determine whether we should run the cleanup.
+  llvm::Value *condVal = CGF.Builder.CreateLoad(cond, "cond.should-run");
+
+  llvm::BasicBlock *cleanup = CGF.createBasicBlock("cond-cleanup.run");
+  llvm::BasicBlock *cont = CGF.createBasicBlock("cond-cleanup.cont");
+
+  // If we shouldn't run the cleanup, jump directly to the continuation block.
+  CGF.Builder.CreateCondBr(condVal, cleanup, cont);
+  CGF.EmitBlock(cleanup);
+
+  // Emit the core of the cleanup.
+  EmitImpl(CGF, IsForEHCleanup);
+  assert(CGF.HaveInsertPoint() && "cleanup didn't end with valid IP!");
+
+  // Fall into the continuation block.
+  CGF.EmitBlock(cont);
 }
