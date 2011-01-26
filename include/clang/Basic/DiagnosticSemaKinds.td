@@ -642,6 +642,8 @@ def err_virtual_non_function : Error<
   "'virtual' can only appear on non-static member functions">;
 def err_virtual_out_of_class : Error<
   "'virtual' can only be specified inside the class definition">;
+def err_virtual_member_function_template : Error<
+  "'virtual' can not be specified on member function templates">;
 def err_static_overrides_virtual : Error<
   "'static' member function %0 overrides a virtual function in a base class">;
 def err_explicit_non_function : Error<
@@ -728,6 +730,9 @@ def err_covariant_return_type_class_type_more_qualified : Error<
 def err_constructor_cannot_be : Error<"constructor cannot be declared '%0'">;
 def err_invalid_qualified_constructor : Error<
   "'%0' qualifier is not allowed on a constructor">;
+def err_ref_qualifier_constructor : Error<
+  "ref-qualifier '%select{&&|&}0' is not allowed on a constructor">;
+
 def err_constructor_return_type : Error<
   "constructor cannot have a return type">;
 def err_constructor_redeclared : Error<"constructor cannot be redeclared">;
@@ -747,6 +752,8 @@ def err_destructor_not_member : Error<
 def err_destructor_cannot_be : Error<"destructor cannot be declared '%0'">;
 def err_invalid_qualified_destructor : Error<
   "'%0' qualifier is not allowed on a destructor">;
+def err_ref_qualifier_destructor : Error<
+  "ref-qualifier '%select{&&|&}0' is not allowed on a destructor">;
 def err_destructor_return_type : Error<"destructor cannot have a return type">;
 def err_destructor_redeclared : Error<"destructor cannot be redeclared">;
 def err_destructor_with_params : Error<"destructor cannot have any parameters">;
@@ -819,9 +826,15 @@ def err_init_reference_member_uninitialized : Error<
 def note_uninit_reference_member : Note<
   "uninitialized reference member is here">;
 def warn_field_is_uninit : Warning<"field is uninitialized when used here">,
-  InGroup<DiagGroup<"uninitialized">>;
-def warn_var_is_uninit : Warning<"use of uninitialized variable %0">,
-  InGroup<DiagGroup<"uninitialized-experimental">>, DefaultIgnore;
+  InGroup<Uninitialized>;
+def warn_uninit_var : Warning<"use of uninitialized variable %0">,
+  InGroup<Uninitialized>, DefaultIgnore;
+def note_uninit_var : Note<
+  "variable %0 is possibly uninitialized when used here">;
+def note_uninit_var_captured_by_block : Note<
+  "variable %0 is possibly uninitialized when captured by block">;
+def note_var_fixit_add_initialization : Note<
+  "add initialization to silence this warning">;
 def err_init_incomplete_type : Error<"initialization of incomplete type %0">;
 
 def err_temp_copy_no_viable : Error<
@@ -848,6 +861,9 @@ def err_temp_copy_deleted : Error<
   "of type %1 invokes deleted constructor">;
 def err_temp_copy_incomplete : Error<
   "copying a temporary object of incomplete type %0">;
+def warn_temporaries_forbidden : Warning<
+  "must not create temporaries of type %0">,
+  InGroup<DiagGroup<"forbid-temporaries">>;
 
 // C++0x decltype
 def err_cannot_determine_declared_type_of_overloaded_function : Error<
@@ -867,16 +883,17 @@ def err_auto_missing_trailing_return : Error<
   "'auto' return without trailing return type">;
 def err_trailing_return_without_auto : Error<
   "trailing return type without 'auto' return">;
-  
-// C++0x attributes
-def err_repeat_attribute : Error<"'%0' attribute cannot be repeated">;
 
 // C++0x override control
 def override_keyword_only_allowed_on_virtual_member_functions : Error<
   "only virtual member functions can be marked '%0'">;
-
 def err_function_marked_override_not_overriding : Error<
   "%0 marked 'override' but does not override any member functions">;
+def err_class_marked_final_used_as_base : Error<
+  "base %0 is marked 'final'">;
+
+// C++0x attributes
+def err_repeat_attribute : Error<"'%0' attribute cannot be repeated">;
 
 // C++0x [[final]]
 def err_final_function_overridden : Error<
@@ -1031,17 +1048,17 @@ def err_attribute_weakref_without_alias : Error<
 def err_alias_not_supported_on_darwin : Error <
   "only weak aliases are supported on darwin">;
 def warn_attribute_wrong_decl_type : Warning<
-  "%0 attribute only applies to %select{function|union|"
-  "variable and function|function or method|parameter|"
-  "parameter or Objective-C method |function, method or block|"
-  "virtual method or class|function, method, or parameter|class|virtual method"
-  "|member|variable}1 types">;
+  "%0 attribute only applies to %select{functions|unions|"
+  "variables and functions|functions and methods|parameters|"
+  "parameters and methods|functions, methods and blocks|"
+  "classes and virtual methods|functions, methods, and parameters|"
+  "classes|virtual methods|class members|variables|methods}1">;
 def err_attribute_wrong_decl_type : Error<
-  "%0 attribute only applies to %select{function|union|"
-  "variable and function|function or method|parameter|"
-  "parameter or Objective-C method |function, method or block|"
-  "virtual method or class|function, method, or parameter|class|virtual method"
-  "|member|variable}1 types">;
+  "%0 attribute only applies to %select{functions|unions|"
+  "variables and functions|functions and methods|parameters|"
+  "parameters and methods|functions, methods and blocks|"
+  "classes and virtual methods|functions, methods, and parameters|"
+  "classes|virtual methods|class members|variables|methods}1">;
 def warn_function_attribute_wrong_type : Warning<
   "%0 only applies to function types; type here is %1">;
 def warn_gnu_inline_attribute_requires_inline : Warning<
@@ -1172,8 +1189,11 @@ def note_attribute_overloadable_prev_overload : Note<
 def err_attribute_overloadable_no_prototype : Error<
   "'overloadable' function %0 must have a prototype">;
 def warn_ns_attribute_wrong_return_type : Warning<
-    "%0 attribute only applies to functions or methods that "
-    "return a pointer or Objective-C object">;
+  "%0 attribute only applies to %select{functions|methods}1 that "
+  "return %select{an Objective-C object|a pointer}2">;
+def warn_ns_attribute_wrong_parameter_type : Warning<
+  "%0 attribute only applies to %select{Objective-C object|pointer}1 "
+  "parameters">;
 
 // Function Parameter Semantic Analysis.
 def err_param_with_void_type : Error<"argument may not have 'void' type">;
@@ -1561,6 +1581,9 @@ def ext_template_arg_extra_parens : ExtWarn<
   "address non-type template argument cannot be surrounded by parentheses">;
 def err_pointer_to_member_type : Error<
   "invalid use of pointer to member type after %select{.*|->*}0">;
+def err_pointer_to_member_oper_value_classify: Error<
+  "pointer-to-member function type %0 can only be called on an "
+  "%select{rvalue|lvalue}1">;
 
 // C++ template specialization
 def err_template_spec_unknown_kind : Error<
@@ -1676,6 +1699,8 @@ def err_function_template_spec_ambiguous : Error<
     "arguments to identify a particular function template">;
 def note_function_template_spec_matched : Note<
     "function template matches specialization %0">;
+def err_function_template_partial_spec : Error<
+    "function template partial specialization is not allowed">;
 
 // C++ Template Instantiation
 def err_template_recursion_depth_exceeded : Error<
@@ -2444,11 +2469,22 @@ def err_invalid_member_use_in_static_method : Error<
   "invalid use of member %0 in static member function">;
 def err_invalid_qualified_function_type : Error<
   "type qualifier is not allowed on this function">;
+def err_invalid_ref_qualifier_function_type : Error<
+  "ref-qualifier '%select{&&|&}0' is only allowed on non-static member functions,"
+  " member function pointers, and typedefs of function types">;
 def err_invalid_qualified_function_pointer : Error<
   "type qualifier is not allowed on this function %select{pointer|reference}0">;
 def err_invalid_qualified_typedef_function_type_use : Error<
   "a qualified function type cannot be used to declare a "
   "%select{static member|nonmember}0 function">;
+def err_invalid_ref_qualifier_typedef_function_type_use : Error<
+  "%select{static member|nonmember}0 function cannot have a ref-qualifier "
+  "'%select{&&|&}1'">;
+
+def err_ref_qualifier_overload : Error<
+  "cannot overload a member function %select{without a ref-qualifier|with "
+  "ref-qualifier '&'|with ref-qualifier '&&'}0 with a member function %select{"
+  "without a ref-qualifier|with ref-qualifier '&'|with ref-qualifier '&&'}1">;
 
 def err_invalid_non_static_member_use : Error<
   "invalid use of nonstatic data member %0">;
@@ -2515,8 +2551,8 @@ def warn_inst_method_not_found : Warning<
   "method %objcinstance0 not found (return type defaults to 'id')">;
 def error_no_super_class_message : Error<
   "no @interface declaration found in class messaging of %0">;
-def error_no_super_class : Error<
-  "no super class declared in @interface for %0">;
+def error_root_class_cannot_use_super : Error<
+  "%0 cannot use 'super' because it is a root class">;
 def err_invalid_receiver_to_message : Error<
   "invalid receiver to message expression">;
 def err_invalid_receiver_to_message_super : Error<
@@ -3364,8 +3400,8 @@ def err_blocks_disable : Error<"blocks support disabled - compile with -fblocks"
 def err_expected_block_lbrace : Error<"expected '{' in block literal">;
 def err_return_in_block_expression : Error<
   "return not allowed in block expression literal">;
-def err_block_returns_array : Error<
-  "block declared as returning an array">;
+def err_block_returning_array_function : Error<
+  "block cannot return %select{array|function}0 type %1">;
 
 
 // CFString checking

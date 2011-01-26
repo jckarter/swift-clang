@@ -89,16 +89,14 @@ protected:
 
 public:
 
-  /// \brief Whether this attribute should be merged to new
-  /// declarations.
-  virtual bool isMerged() const { return true; }
-
   attr::Kind getKind() const {
     return static_cast<attr::Kind>(AttrKind);
   }
 
   SourceLocation getLocation() const { return Loc; }
   void setLocation(SourceLocation L) { Loc = L; }
+
+  bool isInherited() const { return Inherited; }
 
   // Clone this attribute.
   virtual Attr* clone(ASTContext &C) const = 0;
@@ -113,7 +111,6 @@ protected:
     : Attr(AK, L) {}
 
 public:
-  bool isInherited() const { return Inherited; }
   void setInherited(bool I) { Inherited = I; }
 
   // Implement isa/cast/dyncast/etc.

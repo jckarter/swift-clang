@@ -395,9 +395,6 @@ void ASTDeclReader::VisitFunctionDecl(FunctionDecl *FD) {
   FD->IsDeleted = Record[Idx++];
   FD->IsTrivial = Record[Idx++];
   FD->HasImplicitReturnZero = Record[Idx++];
-  FD->IsMarkedOverride = Record[Idx++];
-  FD->IsMarkedFinal = Record[Idx++];
-
   FD->EndRangeLoc = ReadSourceLocation(Record, Idx);
 
   // Read in the parameters.
@@ -800,6 +797,7 @@ void ASTDeclReader::ReadCXXDefinitionData(
   Data.DeclaredCopyConstructor = Record[Idx++];
   Data.DeclaredCopyAssignment = Record[Idx++];
   Data.DeclaredDestructor = Record[Idx++];
+
   Data.NumBases = Record[Idx++];
   if (Data.NumBases)
     Data.Bases = Reader.GetCXXBaseSpecifiersOffset(Record[Idx++]);

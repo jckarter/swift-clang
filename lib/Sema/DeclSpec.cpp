@@ -52,6 +52,8 @@ DeclaratorChunk DeclaratorChunk::getFunction(const ParsedAttributes &attrs,
                                              ParamInfo *ArgInfo,
                                              unsigned NumArgs,
                                              unsigned TypeQuals,
+                                             bool RefQualifierIsLvalueRef,
+                                             SourceLocation RefQualifierLoc,
                                              bool hasExceptionSpec,
                                              SourceLocation ThrowLoc,
                                              bool hasAnyExceptionSpec,
@@ -74,6 +76,8 @@ DeclaratorChunk DeclaratorChunk::getFunction(const ParsedAttributes &attrs,
   I.Fun.TypeQuals        = TypeQuals;
   I.Fun.NumArgs          = NumArgs;
   I.Fun.ArgInfo          = 0;
+  I.Fun.RefQualifierIsLValueRef = RefQualifierIsLvalueRef;
+  I.Fun.RefQualifierLoc = RefQualifierLoc.getRawEncoding();
   I.Fun.hasExceptionSpec = hasExceptionSpec;
   I.Fun.ThrowLoc         = ThrowLoc.getRawEncoding();
   I.Fun.hasAnyExceptionSpec = hasAnyExceptionSpec;
@@ -669,17 +673,8 @@ void UnqualifiedId::setOperatorFunctionId(SourceLocation OperatorLoc,
   }
 }
 
-const char *VirtSpecifiers::getSpecifierName(VirtSpecifier VS) {
-  switch (VS) {
-  default: assert(0 && "Unknown specifier");
-  case VS_Override: return "override";
-  case VS_Final: return "final";
-  case VS_New: return "new";
-  }
-}
-
-bool VirtSpecifiers::SetVirtSpecifier(VirtSpecifier VS, SourceLocation Loc,
-                                      const char *&PrevSpec) {
+bool VirtSpecifiers::SetSpecifier(Specifier VS, SourceLocation Loc,
+                                  const char *&PrevSpec) {
   if (Specifiers & VS) {
     PrevSpec = getSpecifierName(VS);
     return true;
@@ -693,6 +688,42 @@ bool VirtSpecifiers::SetVirtSpecifier(VirtSpecifier VS, SourceLocation Loc,
   case VS_Final:    VS_finalLoc = Loc; break;
   case VS_New:      VS_newLoc = Loc; break;
   }
+
   return false;
+}
+
+const char *VirtSpecifiers::getSpecifierName(Specifier VS) {
+  switch (VS) {
+  default: assert(0 && "Unknown specifier");
+  case VS_Override: return "override";
+  case VS_Final: return "final";
+  case VS_New: return "new";
+  }
+}
+
+bool ClassVirtSpecifiers::SetSpecifier(Specifier CVS, SourceLocation Loc,
+                                       const char *&PrevSpec) {
+  if (Specifiers & CVS) {
+    PrevSpec = getSpecifierName(CVS);
+    return true;
+  }
+
+  Specifiers |= CVS;
+
+  switch (CVS) {
+  default: assert(0 && "Unknown specifier!");
+  case CVS_Final: CVS_finalLoc = Loc; break;
+  case CVS_Explicit: CVS_explicitLoc = Loc; break;
+  }
+
+  return false;
+}
+
+const char *ClassVirtSpecifiers::getSpecifierName(Specifier CVS) {
+  switch (CVS) {
+  default: assert(0 && "Unknown specifier");
+  case CVS_Final: return "final";
+  case CVS_Explicit: return "explicit";
+  }
 }
 

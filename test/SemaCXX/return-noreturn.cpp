@@ -1,4 +1,5 @@
-// RUN: %clang_cc1 %s -fsyntax-only -verify -Wmissing-noreturn -Wno-unreachable-code
+// RUN: %clang_cc1 %s -fsyntax-only -verify -Wreturn-type -Wmissing-noreturn -Wno-unreachable-code
+// XFAIL: *
 
 // A destructor may be marked noreturn and should still influence the CFG.
 namespace PR6884 {

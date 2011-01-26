@@ -2888,7 +2888,7 @@ Sema::ActOnVariableDeclarator(Scope *S, Declarator &D, DeclContext *DC,
     }
   }
   
-  bool isExplicitSpecialization;
+  bool isExplicitSpecialization = false;
   VarDecl *NewVD;
   if (!getLangOptions().CPlusPlus) {
       NewVD = VarDecl::Create(Context, DC, D.getIdentifierLoc(),
@@ -3372,52 +3372,6 @@ static void DiagnoseInvalidRedeclaration(Sema &S, FunctionDecl *NewFD) {
   }
 }
 
-/// CheckClassMemberNameAttributes - Check for class member name checking
-/// attributes according to [dcl.attr.override]
-static void 
-CheckClassMemberNameAttributes(Sema& SemaRef, const FunctionDecl *FD) {
-  const CXXMethodDecl *MD = dyn_cast<CXXMethodDecl>(FD);
-  if (!MD || !MD->isVirtual())
-    return;
-
-  bool HasOverrideAttr = MD->hasAttr<OverrideAttr>();
-  bool HasOverriddenMethods = 
-    MD->begin_overridden_methods() != MD->end_overridden_methods();
-
-  /// C++ [dcl.attr.override]p2:
-  ///   If a virtual member function f is marked override and does not override
-  ///   a member function of a base class the program is ill-formed.
-  if (HasOverrideAttr && !HasOverriddenMethods) {
-    SemaRef.Diag(MD->getLocation(), 
-                 diag::err_function_marked_override_not_overriding)
-      << MD->getDeclName();
-    return;
-  }
-
-  if (!MD->getParent()->hasAttr<BaseCheckAttr>())
-    return;
-
-  /// C++ [dcl.attr.override]p6:
-  ///   In a class definition marked base_check, if a virtual member function
-  ///    that is neither implicitly-declared nor a destructor overrides a 
-  ///    member function of a base class and it is not marked override, the
-  ///    program is ill-formed.
-  if (HasOverriddenMethods && !HasOverrideAttr && !MD->isImplicit() &&
-      !isa<CXXDestructorDecl>(MD)) {
-    llvm::SmallVector<const CXXMethodDecl*, 4> 
-      OverriddenMethods(MD->begin_overridden_methods(), 
-                        MD->end_overridden_methods());
-
-    SemaRef.Diag(MD->getLocation(), 
-                 diag::err_function_overriding_without_override)
-      << MD->getDeclName() << (unsigned)OverriddenMethods.size();
-
-    for (unsigned I = 0; I != OverriddenMethods.size(); ++I)
-      SemaRef.Diag(OverriddenMethods[I]->getLocation(),
-                   diag::note_overridden_virtual_function);
-  }
-}
-
 NamedDecl*
 Sema::ActOnFunctionDeclarator(Scope* S, Declarator& D, DeclContext* DC,
                               QualType R, TypeSourceInfo *TInfo,
@@ -3705,7 +3659,14 @@ Sema::ActOnFunctionDeclarator(Scope* S, Declarator& D, DeclContext* DC,
              diag::err_virtual_non_function);
       } else if (!CurContext->isRecord()) {
         // 'virtual' was specified outside of the class.
-        Diag(D.getDeclSpec().getVirtualSpecLoc(), diag::err_virtual_out_of_class)
+        Diag(D.getDeclSpec().getVirtualSpecLoc(), 
+             diag::err_virtual_out_of_class)
+          << FixItHint::CreateRemoval(D.getDeclSpec().getVirtualSpecLoc());
+      } else if (NewFD->getDescribedFunctionTemplate()) {
+        // C++ [temp.mem]p3:
+        //  A member function template shall not be virtual.
+        Diag(D.getDeclSpec().getVirtualSpecLoc(),
+             diag::err_virtual_member_function_template)
           << FixItHint::CreateRemoval(D.getDeclSpec().getVirtualSpecLoc());
       } else {
         // Okay: Add virtual to the method.
@@ -3875,8 +3836,10 @@ Sema::ActOnFunctionDeclarator(Scope* S, Declarator& D, DeclContext* DC,
       HasExplicitTemplateArgs = true;
     
       if (FunctionTemplate) {
-        // FIXME: Diagnose function template with explicit template
-        // arguments.
+        // Function template with explicit template arguments.
+        Diag(D.getIdentifierLoc(), diag::err_function_template_partial_spec)
+          << SourceRange(TemplateId->LAngleLoc, TemplateId->RAngleLoc);
+
         HasExplicitTemplateArgs = false;
       } else if (!isFunctionTemplateSpecialization && 
                  !D.getDeclSpec().isFriendSpecified()) {
@@ -4088,7 +4051,6 @@ Sema::ActOnFunctionDeclarator(Scope* S, Declarator& D, DeclContext* DC,
         FunctionTemplate->setInvalidDecl();
       return FunctionTemplate;
     }
-    CheckClassMemberNameAttributes(*this, NewFD);
   }
 
   MarkUnusedFileScopedDecl(NewFD);
@@ -5577,7 +5539,8 @@ NamedDecl *Sema::ImplicitlyDefineFunction(SourceLocation Loc,
   Declarator D(DS, Declarator::BlockContext);
   D.AddTypeInfo(DeclaratorChunk::getFunction(ParsedAttributes(),
                                              false, false, SourceLocation(), 0,
-                                             0, 0, false, SourceLocation(),
+                                             0, 0, true, SourceLocation(),
+                                             false, SourceLocation(),
                                              false, 0,0,0, Loc, Loc, D),
                 SourceLocation());
   D.SetIdentifier(&II, Loc);
@@ -6416,6 +6379,7 @@ void Sema::ActOnTagStartDefinition(Scope *S, Decl *TagD) {
 }
 
 void Sema::ActOnStartCXXMemberDeclarations(Scope *S, Decl *TagD,
+                                           ClassVirtSpecifiers &CVS,
                                            SourceLocation LBraceLoc) {
   AdjustDeclIfTemplate(TagD);
   CXXRecordDecl *Record = cast<CXXRecordDecl>(TagD);
@@ -6425,6 +6389,11 @@ void Sema::ActOnStartCXXMemberDeclarations(Scope *S, Decl *TagD,
   if (!Record->getIdentifier())
     return;
 
+  if (CVS.isFinalSpecified())
+    Record->addAttr(new (Context) FinalAttr(CVS.getFinalLoc(), Context));
+  if (CVS.isExplicitSpecified())
+    Record->addAttr(new (Context) ExplicitAttr(CVS.getExplicitLoc(), Context));
+    
   // C++ [class]p2:
   //   [...] The class-name is also inserted into the scope of the
   //   class itself; this is known as the injected-class-name. For

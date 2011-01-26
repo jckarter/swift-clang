@@ -86,7 +86,7 @@ BindingKey BindingKey::Make(const MemRegion *R, Kind k) {
     // FIXME: There are some ElementRegions for which we cannot compute
     // raw offsets yet, including regions with symbolic offsets. These will be
     // ignored by the store.
-    return BindingKey(O.getRegion(), O.getByteOffset(), k);
+    return BindingKey(O.getRegion(), O.getOffset().getQuantity(), k);
   }
 
   return BindingKey(R, 0, k);
@@ -983,6 +983,9 @@ SVal RegionStoreManager::Retrieve(Store store, Loc L, QualType T) {
   // should defer this when we can reason easily about symbolicating arrays
   // of bytes.
   if (isa<loc::ConcreteInt>(L)) {
+    return UnknownVal();
+  }
+  if (!isa<loc::MemRegionVal>(L)) {
     return UnknownVal();
   }
 

@@ -520,6 +520,7 @@ static void maybeSynthesizeBlockSignature(TypeProcessingState &state,
                              /*variadic*/ false, SourceLocation(),
                              /*args*/ 0, 0,
                              /*type quals*/ 0,
+                             /*ref-qualifier*/true, SourceLocation(),
                              /*EH*/ false, SourceLocation(), false, 0, 0, 0,
                              /*parens*/ loc, loc,
                              declarator));
@@ -1268,6 +1269,7 @@ QualType Sema::BuildFunctionType(QualType T,
                                  QualType *ParamTypes,
                                  unsigned NumParamTypes,
                                  bool Variadic, unsigned Quals,
+                                 RefQualifierKind RefQualifier,
                                  SourceLocation Loc, DeclarationName Entity,
                                  FunctionType::ExtInfo Info) {
   if (T->isArrayType() || T->isFunctionType()) {
@@ -1293,6 +1295,7 @@ QualType Sema::BuildFunctionType(QualType T,
   FunctionProtoType::ExtProtoInfo EPI;
   EPI.Variadic = Variadic;
   EPI.TypeQuals = Quals;
+  EPI.RefQualifier = RefQualifier;
   EPI.ExtInfo = Info;
 
   return Context.getFunctionType(T, ParamTypes, NumParamTypes, EPI);
@@ -1621,8 +1624,13 @@ TypeSourceInfo *Sema::GetTypeForDeclarator(Declarator &D, Scope *S,
       // For conversion functions, we'll diagnose this particular error later.
       if ((T->isArrayType() || T->isFunctionType()) &&
           (D.getName().getKind() != UnqualifiedId::IK_ConversionFunctionId)) {
-        Diag(DeclType.Loc, diag::err_func_returning_array_function) 
-          << T->isFunctionType() << T;
+        unsigned diagID = diag::err_func_returning_array_function;
+        // Last processing chunk in block context means this function chunk
+        // represents the block.
+        if (chunkIndex == 0 &&
+            D.getContext() == Declarator::BlockLiteralContext)
+          diagID = diag::err_block_returning_array_function;
+        Diag(DeclType.Loc, diagID) << T->isFunctionType() << T;
         T = Context.IntTy;
         D.setInvalidType(true);
       }
@@ -1716,7 +1724,10 @@ TypeSourceInfo *Sema::GetTypeForDeclarator(Declarator &D, Scope *S,
         FunctionProtoType::ExtProtoInfo EPI;
         EPI.Variadic = FTI.isVariadic;
         EPI.TypeQuals = FTI.TypeQuals;
-
+        EPI.RefQualifier = !FTI.hasRefQualifier()? RQ_None
+                    : FTI.RefQualifierIsLValueRef? RQ_LValue
+                    : RQ_RValue;
+        
         // Otherwise, we have a function with an argument list that is
         // potentially variadic.
         llvm::SmallVector<QualType, 16> ArgTys;
@@ -1870,21 +1881,44 @@ TypeSourceInfo *Sema::GetTypeForDeclarator(Declarator &D, Scope *S,
       FreeFunction = (DC && !DC->isRecord());
     }
 
-    if (FnTy->getTypeQuals() != 0 &&
+    // C++0x [dcl.fct]p6:
+    //   A ref-qualifier shall only be part of the function type for a
+    //   non-static member function, the function type to which a pointer to
+    //   member refers, or the top-level function type of a function typedef 
+    //   declaration.
+    if ((FnTy->getTypeQuals() != 0 || FnTy->getRefQualifier()) &&
         D.getDeclSpec().getStorageClassSpec() != DeclSpec::SCS_typedef &&
         (FreeFunction ||
          D.getDeclSpec().getStorageClassSpec() == DeclSpec::SCS_static)) {
-      if (D.isFunctionDeclarator())
-        Diag(D.getIdentifierLoc(), diag::err_invalid_qualified_function_type);
-      else
-        Diag(D.getIdentifierLoc(),
-             diag::err_invalid_qualified_typedef_function_type_use)
-          << FreeFunction;
-
-      // Strip the cv-quals from the type.
+      if (FnTy->getTypeQuals() != 0) {
+        if (D.isFunctionDeclarator())
+          Diag(D.getIdentifierLoc(), diag::err_invalid_qualified_function_type);
+        else
+          Diag(D.getIdentifierLoc(),
+               diag::err_invalid_qualified_typedef_function_type_use)
+            << FreeFunction;
+      }
+          
+      if (FnTy->getRefQualifier()) {
+        if (D.isFunctionDeclarator()) {
+          SourceLocation Loc
+            = D.getTypeObject(D.getNumTypeObjects()-1).Fun.getRefQualifierLoc();
+          Diag(Loc, diag::err_invalid_ref_qualifier_function_type)
+            << (FnTy->getRefQualifier() == RQ_LValue)
+            << FixItHint::CreateRemoval(Loc);
+        } else {
+          Diag(D.getIdentifierLoc(), 
+               diag::err_invalid_ref_qualifier_typedef_function_type_use)
+            << FreeFunction
+            << (FnTy->getRefQualifier() == RQ_LValue);
+        }
+      }
+          
+      // Strip the cv-quals and ref-qualifier from the type.
       FunctionProtoType::ExtProtoInfo EPI = FnTy->getExtProtoInfo();
       EPI.TypeQuals = 0;
-
+      EPI.RefQualifier = RQ_None;
+          
       T = Context.getFunctionType(FnTy->getResultType(), FnTy->arg_type_begin(),
                                   FnTy->getNumArgs(), EPI);
     }
@@ -1972,10 +2006,12 @@ TypeSourceInfo *Sema::GetTypeForDeclarator(Declarator &D, Scope *S,
 
 namespace {
   class TypeSpecLocFiller : public TypeLocVisitor<TypeSpecLocFiller> {
+    ASTContext &Context;
     const DeclSpec &DS;
 
   public:
-    TypeSpecLocFiller(const DeclSpec &DS) : DS(DS) {}
+    TypeSpecLocFiller(ASTContext &Context, const DeclSpec &DS) 
+      : Context(Context), DS(DS) {}
 
     void VisitQualifiedTypeLoc(QualifiedTypeLoc TL) {
       Visit(TL.getUnqualifiedLoc());
@@ -1990,7 +2026,7 @@ namespace {
       // Handle the base type, which might not have been written explicitly.
       if (DS.getTypeSpecType() == DeclSpec::TST_unspecified) {
         TL.setHasBaseTypeAsWritten(false);
-        TL.getBaseLoc().initialize(SourceLocation());
+        TL.getBaseLoc().initialize(Context, SourceLocation());
       } else {
         TL.setHasBaseTypeAsWritten(true);
         Visit(TL.getBaseLoc());
@@ -2021,7 +2057,7 @@ namespace {
       // If we got no declarator info from previous Sema routines,
       // just fill with the typespec loc.
       if (!TInfo) {
-        TL.initialize(DS.getTypeSpecTypeLoc());
+        TL.initialize(Context, DS.getTypeSpecTypeLoc());
         return;
       }
 
@@ -2114,7 +2150,7 @@ namespace {
           return;
         }
       }
-      TL.initializeLocal(SourceLocation());
+      TL.initializeLocal(Context, SourceLocation());
       TL.setKeywordLoc(Keyword != ETK_None
                        ? DS.getTypeSpecTypeLoc()
                        : SourceLocation());
@@ -2126,7 +2162,7 @@ namespace {
 
     void VisitTypeLoc(TypeLoc TL) {
       // FIXME: add other typespec types and change this to an assert.
-      TL.initialize(DS.getTypeSpecTypeLoc());
+      TL.initialize(Context, DS.getTypeSpecTypeLoc());
     }
   };
 
@@ -2231,7 +2267,7 @@ Sema::GetTypeSourceInfoForDeclarator(Declarator &D, QualType T,
     assert(TL.getFullDataSize() == CurrTL.getFullDataSize());
     memcpy(CurrTL.getOpaqueData(), TL.getOpaqueData(), TL.getFullDataSize());
   } else {
-    TypeSpecLocFiller(D.getDeclSpec()).Visit(CurrTL);
+    TypeSpecLocFiller(Context, D.getDeclSpec()).Visit(CurrTL);
   }
       
   return TInfo;
@@ -2556,6 +2592,17 @@ static bool handleFunctionTypeAttr(TypeProcessingState &state,
     if (!unwrapped.isFunctionType())
       return false;
 
+    // Diagnose regparm with fastcall.
+    const FunctionType *fn = unwrapped.get();
+    CallingConv CC = fn->getCallConv();
+    if (CC == CC_X86FastCall) {
+      S.Diag(attr.getLoc(), diag::err_attributes_are_not_compatible)
+        << FunctionType::getNameForCallConv(CC)
+        << "regparm";
+      attr.setInvalid();
+      return true;
+    }
+
     FunctionType::ExtInfo EI = 
       unwrapped.get()->getExtInfo().withRegParm(value);
     type = unwrapped.wrap(S, S.Context.adjustFunctionType(unwrapped.get(), EI));
@@ -2574,7 +2621,8 @@ static bool handleFunctionTypeAttr(TypeProcessingState &state,
   CallingConv CCOld = fn->getCallConv();
   if (S.Context.getCanonicalCallConv(CC) ==
       S.Context.getCanonicalCallConv(CCOld)) {
-    attr.setInvalid();
+    FunctionType::ExtInfo EI= unwrapped.get()->getExtInfo().withCallingConv(CC);
+    type = unwrapped.wrap(S, S.Context.adjustFunctionType(unwrapped.get(), EI));
     return true;
   }
 
@@ -2599,6 +2647,15 @@ static bool handleFunctionTypeAttr(TypeProcessingState &state,
     const FunctionProtoType *FnP = cast<FunctionProtoType>(fn);
     if (FnP->isVariadic()) {
       S.Diag(attr.getLoc(), diag::err_cconv_varargs)
+        << FunctionType::getNameForCallConv(CC);
+      attr.setInvalid();
+      return true;
+    }
+
+    // Also diagnose fastcall with regparm.
+    if (fn->getRegParmType()) {
+      S.Diag(attr.getLoc(), diag::err_attributes_are_not_compatible)
+        << "regparm"
         << FunctionType::getNameForCallConv(CC);
       attr.setInvalid();
       return true;

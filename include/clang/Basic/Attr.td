@@ -129,12 +129,6 @@ def AsmLabel : InheritableAttr {
   let Args = [StringArgument<"Label">];
 }
 
-def BaseCheck : InheritableAttr {
-  let Spellings = ["base_check"];
-  let Subjects = [CXXRecord];
-  let Namespaces = ["", "std"];
-}
-
 def Blocks : InheritableAttr {
   let Spellings = ["blocks"];
   let Args = [EnumArgument<"Type", "BlockType", ["byref"], ["ByRef"]>];
@@ -152,10 +146,17 @@ def CDecl : InheritableAttr {
 
 def CFReturnsRetained : InheritableAttr {
   let Spellings = ["cf_returns_retained"];
+  let Subjects = [ObjCMethod, Function];
 }
 
 def CFReturnsNotRetained : InheritableAttr {
   let Spellings = ["cf_returns_not_retained"];
+  let Subjects = [ObjCMethod, Function];
+}
+
+def CFConsumed : InheritableAttr {
+  let Spellings = ["cf_consumed"];
+  let Subjects = [ParmVar];
 }
 
 def Cleanup : InheritableAttr {
@@ -219,14 +220,21 @@ def DLLImport : InheritableAttr {
   let Spellings = ["dllimport"];
 }
 
+def Explicit : InheritableAttr {
+  let Spellings = [];
+}
+
 def FastCall : InheritableAttr {
   let Spellings = ["fastcall", "__fastcall"];
 }
 
-def Final : InheritableAttr {
-  let Spellings = ["final"];
-  let Subjects = [CXXRecord, CXXVirtualMethod];
-  let Namespaces = ["", "std"];
+def Final : InheritableAttr { 
+  let Spellings = [];
+}
+
+def ForbidTemporaries : Attr {
+  let Spellings = ["forbid_temporaries"];
+  let Subjects = [CXXRecord];
 }
 
 def Format : InheritableAttr {
@@ -242,12 +250,6 @@ def FormatArg : InheritableAttr {
 
 def GNUInline : InheritableAttr {
   let Spellings = ["gnu_inline"];
-}
-
-def Hiding : InheritableAttr {
-  let Spellings = ["hiding"];
-  let Subjects = [Field, CXXMethod];
-  let Namespaces = ["", "std"];
 }
 
 def IBAction : InheritableAttr {
@@ -336,10 +338,27 @@ def NoThrow : InheritableAttr {
 
 def NSReturnsRetained : InheritableAttr {
   let Spellings = ["ns_returns_retained"];
+  let Subjects = [ObjCMethod, Function];
 }
 
 def NSReturnsNotRetained : InheritableAttr {
   let Spellings = ["ns_returns_not_retained"];
+  let Subjects = [ObjCMethod, Function];
+}
+
+def NSReturnsAutoreleased : InheritableAttr {
+  let Spellings = ["ns_returns_autoreleased"];
+  let Subjects = [ObjCMethod, Function];
+}
+
+def NSConsumesSelf : InheritableAttr {
+  let Spellings = ["ns_consumes_self"];
+  let Subjects = [ObjCMethod];
+}
+
+def NSConsumed : InheritableAttr {
+  let Spellings = ["ns_consumed"];
+  let Subjects = [ParmVar];
 }
 
 def ObjCException : InheritableAttr {
@@ -347,17 +366,15 @@ def ObjCException : InheritableAttr {
 }
 
 def ObjCNSObject : InheritableAttr {
-  let Spellings = ["NSOjbect"];
-}
-
-def Override : InheritableAttr {
-  let Spellings = ["override"];
-  let Subjects = [CXXVirtualMethod];
-  let Namespaces = ["", "std"];
+  let Spellings = ["NSObject"];
 }
 
 def Overloadable : Attr {
   let Spellings = ["overloadable"];
+}
+
+def Override : InheritableAttr { 
+  let Spellings = [];
 }
 
 def Ownership : InheritableAttr {

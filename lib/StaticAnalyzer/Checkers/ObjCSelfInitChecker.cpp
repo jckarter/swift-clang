@@ -58,7 +58,7 @@ using namespace ento;
 
 static bool shouldRunOnFunctionOrMethod(const NamedDecl *ND);
 static bool isInitializationMethod(const ObjCMethodDecl *MD);
-static bool isInitMessage(const ObjCMessageExpr *E);
+static bool isInitMessage(const ObjCMessage &msg);
 static bool isSelfVar(SVal location, CheckerContext &C);
 
 namespace {
@@ -82,7 +82,7 @@ class ObjCSelfInitChecker : public CheckerVisitor<ObjCSelfInitChecker> {
 
 public:
   static void *getTag() { static int tag = 0; return &tag; }
-  void PostVisitObjCMessageExpr(CheckerContext &C, const ObjCMessageExpr *E);
+  void postVisitObjCMessage(CheckerContext &C, ObjCMessage msg);
   void PostVisitObjCIvarRefExpr(CheckerContext &C, const ObjCIvarRefExpr *E);
   void PreVisitReturnStmt(CheckerContext &C, const ReturnStmt *S);
   void PreVisitGenericCall(CheckerContext &C, const CallExpr *CE);
@@ -102,8 +102,8 @@ namespace {
 class InitSelfBug : public BugType {
   const std::string desc;
 public:
-  InitSelfBug() : BugType("missing \"self = [{initializer}]\"",
-                          "missing \"self = [{initializer}]\"") {}
+  InitSelfBug() : BugType("missing \"self = [(super or self) init...]\"",
+                          "missing \"self = [(super or self) init...]\"") {}
 };
 
 } // end anonymous namespace
@@ -176,8 +176,8 @@ static void checkForInvalidSelf(const Expr *E, CheckerContext &C,
   C.EmitReport(report);
 }
 
-void ObjCSelfInitChecker::PostVisitObjCMessageExpr(CheckerContext &C,
-                                                   const ObjCMessageExpr *E) {
+void ObjCSelfInitChecker::postVisitObjCMessage(CheckerContext &C,
+                                               ObjCMessage msg) {
   // When encountering a message that does initialization (init rule),
   // tag the return value so that we know later on that if self has this value
   // then it is properly initialized.
@@ -187,10 +187,10 @@ void ObjCSelfInitChecker::PostVisitObjCMessageExpr(CheckerContext &C,
                                      C.getCurrentAnalysisContext()->getDecl())))
     return;
 
-  if (isInitMessage(E)) {
+  if (isInitMessage(msg)) {
     // Tag the return value as the result of an initializer.
     const GRState *state = C.getState();
-    SVal V = state->getSVal(E);
+    SVal V = state->getSVal(msg.getOriginExpr());
     addSelfFlag(V, SelfFlag_InitRes, C);
     return;
   }
@@ -209,7 +209,8 @@ void ObjCSelfInitChecker::PostVisitObjCIvarRefExpr(CheckerContext &C,
     return;
 
   checkForInvalidSelf(E->getBase(), C,
-         "Using an ivar before setting 'self' to the result of an initializer");
+    "Instance variable used before setting 'self' to the result of "
+                                                 "'[(super or self) init...]'");
 }
 
 void ObjCSelfInitChecker::PreVisitReturnStmt(CheckerContext &C,
@@ -220,7 +221,8 @@ void ObjCSelfInitChecker::PreVisitReturnStmt(CheckerContext &C,
     return;
 
   checkForInvalidSelf(S->getRetValue(), C,
-          "Returning 'self' before setting it to the result of an initializer");
+    "Returning 'self' before setting it to the result of "
+                                                 "'[(super or self) init...]'");
 }
 
 // When a call receives a reference to 'self', [Pre/Post]VisitGenericCall pass
@@ -270,9 +272,21 @@ static bool shouldRunOnFunctionOrMethod(const NamedDecl *ND) {
   const ObjCMethodDecl *MD = dyn_cast<ObjCMethodDecl>(ND);
   if (!MD)
     return false;
-  if (!MD->getClassInterface()->getSuperClass())
-    return false;
   if (!isInitializationMethod(MD))
+    return false;
+
+  // self = [super init] applies only to NSObject subclasses.
+  // For instance, NSProxy doesn't implement -init.
+  ASTContext& Ctx = MD->getASTContext();
+  IdentifierInfo* NSObjectII = &Ctx.Idents.get("NSObject");
+  ObjCInterfaceDecl* ID = MD->getClassInterface()->getSuperClass();
+  for ( ; ID ; ID = ID->getSuperClass()) {
+    IdentifierInfo *II = ID->getIdentifier();
+
+    if (II == NSObjectII)
+      break;
+  }
+  if (!ID)
     return false;
 
   return true;
@@ -301,6 +315,6 @@ static bool isInitializationMethod(const ObjCMethodDecl *MD) {
                                     /*ignorePrefix=*/false) == cocoa::InitRule;
 }
 
-static bool isInitMessage(const ObjCMessageExpr *E) {
-  return cocoa::deriveNamingConvention(E->getSelector()) == cocoa::InitRule;
+static bool isInitMessage(const ObjCMessage &msg) {
+  return cocoa::deriveNamingConvention(msg.getSelector()) == cocoa::InitRule;
 }

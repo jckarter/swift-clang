@@ -228,6 +228,7 @@ private:
   void mangleTemplatePrefix(TemplateName Template);
   void mangleOperatorName(OverloadedOperatorKind OO, unsigned Arity);
   void mangleQualifiers(Qualifiers Quals);
+  void mangleRefQualifier(RefQualifierKind RefQualifier);
 
   void mangleObjCMethodName(const ObjCMethodDecl *MD);
 
@@ -817,13 +818,17 @@ void CXXNameMangler::mangleSourceName(const IdentifierInfo *II) {
 void CXXNameMangler::mangleNestedName(const NamedDecl *ND,
                                       const DeclContext *DC,
                                       bool NoFunction) {
-  // <nested-name> ::= N [<CV-qualifiers>] <prefix> <unqualified-name> E
-  //               ::= N [<CV-qualifiers>] <template-prefix> <template-args> E
+  // <nested-name> 
+  //   ::= N [<CV-qualifiers>] [<ref-qualifier>] <prefix> <unqualified-name> E
+  //   ::= N [<CV-qualifiers>] [<ref-qualifier>] <template-prefix> 
+  //       <template-args> E
 
   Out << 'N';
-  if (const CXXMethodDecl *Method = dyn_cast<CXXMethodDecl>(ND))
+  if (const CXXMethodDecl *Method = dyn_cast<CXXMethodDecl>(ND)) {
     mangleQualifiers(Qualifiers::fromCVRMask(Method->getTypeQualifiers()));
-
+    mangleRefQualifier(Method->getRefQualifier());
+  }
+  
   // Check if we have a template.
   const TemplateArgumentList *TemplateArgs = 0;
   if (const TemplateDecl *TD = isTemplate(ND, TemplateArgs)) {
@@ -1162,27 +1167,59 @@ void CXXNameMangler::mangleQualifiers(Qualifiers Quals) {
   // FIXME: For now, just drop all extension qualifiers on the floor.
 }
 
+void CXXNameMangler::mangleRefQualifier(RefQualifierKind RefQualifier) {
+  // <ref-qualifier> ::= R                # lvalue reference
+  //                 ::= O                # rvalue-reference
+  // Proposal to Itanium C++ ABI list on 1/26/11
+  switch (RefQualifier) {
+  case RQ_None:
+    break;
+      
+  case RQ_LValue:
+    Out << 'R';
+    break;
+      
+  case RQ_RValue:
+    Out << 'O';
+    break;
+  }
+}
+
 void CXXNameMangler::mangleObjCMethodName(const ObjCMethodDecl *MD) {
   llvm::SmallString<64> Buffer;
   Context.mangleObjCMethodName(MD, Buffer);
   Out << Buffer;
 }
 
-void CXXNameMangler::mangleType(QualType T) {
+void CXXNameMangler::mangleType(QualType nonCanon) {
   // Only operate on the canonical type!
-  T = Context.getASTContext().getCanonicalType(T);
+  QualType canon = nonCanon.getCanonicalType();
 
-  bool IsSubstitutable = T.hasLocalQualifiers() || !isa<BuiltinType>(T);
-  if (IsSubstitutable && mangleSubstitution(T))
+  SplitQualType split = canon.split();
+  Qualifiers quals = split.second;
+  const Type *ty = split.first;
+
+  bool isSubstitutable = quals || !isa<BuiltinType>(ty);
+  if (isSubstitutable && mangleSubstitution(canon))
     return;
 
-  if (Qualifiers Quals = T.getLocalQualifiers()) {
-    mangleQualifiers(Quals);
+  // If we're mangling a qualified array type, push the qualifiers to
+  // the element type.
+  if (quals && isa<ArrayType>(ty)) {
+    ty = Context.getASTContext().getAsArrayType(canon);
+    quals = Qualifiers();
+
+    // Note that we don't update canon: we want to add the
+    // substitution at the canonical type.
+  }
+
+  if (quals) {
+    mangleQualifiers(quals);
     // Recurse:  even if the qualified type isn't yet substitutable,
     // the unqualified type might be.
-    mangleType(T.getLocalUnqualifiedType());
+    mangleType(QualType(ty, 0));
   } else {
-    switch (T->getTypeClass()) {
+    switch (ty->getTypeClass()) {
 #define ABSTRACT_TYPE(CLASS, PARENT)
 #define NON_CANONICAL_TYPE(CLASS, PARENT) \
     case Type::CLASS: \
@@ -1190,15 +1227,15 @@ void CXXNameMangler::mangleType(QualType T) {
       return;
 #define TYPE(CLASS, PARENT) \
     case Type::CLASS: \
-      mangleType(static_cast<const CLASS##Type*>(T.getTypePtr())); \
+      mangleType(static_cast<const CLASS##Type*>(ty)); \
       break;
 #include "clang/AST/TypeNodes.def"
     }
   }
 
   // Add the substitution.
-  if (IsSubstitutable)
-    addSubstitution(T);
+  if (isSubstitutable)
+    addSubstitution(canon);
 }
 
 void CXXNameMangler::mangleNameOrStandardSubstitution(const NamedDecl *ND) {
@@ -1364,6 +1401,7 @@ void CXXNameMangler::mangleType(const MemberPointerType *T) {
   QualType PointeeType = T->getPointeeType();
   if (const FunctionProtoType *FPT = dyn_cast<FunctionProtoType>(PointeeType)) {
     mangleQualifiers(Qualifiers::fromCVRMask(FPT->getTypeQuals()));
+    mangleRefQualifier(FPT->getRefQualifier());
     mangleType(FPT);
     
     // Itanium C++ ABI 5.1.8:

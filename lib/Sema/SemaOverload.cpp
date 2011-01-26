@@ -170,7 +170,10 @@ void StandardConversionSequence::setAsIdentityConversion() {
   DeprecatedStringLiteralToCharPtr = false;
   ReferenceBinding = false;
   DirectBinding = false;
-  RRefBinding = false;
+  IsLvalueReference = true;
+  BindsToFunctionLvalue = false;
+  BindsToRvalue = false;
+  BindsImplicitObjectArgumentWithoutRefQualifier = false;
   CopyConstructor = 0;
 }
 
@@ -679,7 +682,7 @@ bool Sema::IsOverload(FunctionDecl *New, FunctionDecl *Old,
     return true;
 
   // If the function is a class member, its signature includes the
-  // cv-qualifiers (if any) on the function itself.
+  // cv-qualifiers (if any) and ref-qualifier (if any) on the function itself.
   //
   // As part of this, also check whether one of the member functions
   // is static, in which case they are not overloads (C++
@@ -690,8 +693,25 @@ bool Sema::IsOverload(FunctionDecl *New, FunctionDecl *Old,
   CXXMethodDecl* NewMethod = dyn_cast<CXXMethodDecl>(New);
   if (OldMethod && NewMethod &&
       !OldMethod->isStatic() && !NewMethod->isStatic() &&
-      OldMethod->getTypeQualifiers() != NewMethod->getTypeQualifiers())
+      (OldMethod->getTypeQualifiers() != NewMethod->getTypeQualifiers() ||
+       OldMethod->getRefQualifier() != NewMethod->getRefQualifier())) {
+    if (!UseUsingDeclRules &&
+        OldMethod->getRefQualifier() != NewMethod->getRefQualifier() &&
+        (OldMethod->getRefQualifier() == RQ_None ||
+         NewMethod->getRefQualifier() == RQ_None)) {
+      // C++0x [over.load]p2:
+      //   - Member function declarations with the same name and the same 
+      //     parameter-type-list as well as member function template 
+      //     declarations with the same name, the same parameter-type-list, and 
+      //     the same template parameter lists cannot be overloaded if any of 
+      //     them, but not all, have a ref-qualifier (8.3.5).
+      Diag(NewMethod->getLocation(), diag::err_ref_qualifier_overload)
+        << NewMethod->getRefQualifier() << OldMethod->getRefQualifier();
+      Diag(OldMethod->getLocation(), diag::note_previous_declaration);
+    }
+        
     return true;
+  }
   
   // The signatures match; this is not an overload.
   return false;
@@ -2324,6 +2344,33 @@ compareStandardConversionSubsets(ASTContext &Context,
   return ImplicitConversionSequence::Indistinguishable;
 }
 
+/// \brief Determine whether one of the given reference bindings is better
+/// than the other based on what kind of bindings they are.
+static bool isBetterReferenceBindingKind(const StandardConversionSequence &SCS1,
+                                       const StandardConversionSequence &SCS2) {
+  // C++0x [over.ics.rank]p3b4:
+  //   -- S1 and S2 are reference bindings (8.5.3) and neither refers to an
+  //      implicit object parameter of a non-static member function declared
+  //      without a ref-qualifier, and *either* S1 binds an rvalue reference 
+  //      to an rvalue and S2 binds an lvalue reference *or S1 binds an
+  //      lvalue reference to a function lvalue and S2 binds an rvalue 
+  //      reference*.
+  //
+  // FIXME: Rvalue references. We're going rogue with the above edits,
+  // because the semantics in the current C++0x working paper (N3225 at the
+  // time of this writing) break the standard definition of std::forward
+  // and std::reference_wrapper when dealing with references to functions.
+  // Proposed wording changes submitted to CWG for consideration.
+  if (SCS1.BindsImplicitObjectArgumentWithoutRefQualifier ||
+      SCS2.BindsImplicitObjectArgumentWithoutRefQualifier)
+    return false;
+  
+  return (!SCS1.IsLvalueReference && SCS1.BindsToRvalue &&
+          SCS2.IsLvalueReference) ||
+         (SCS1.IsLvalueReference && SCS1.BindsToFunctionLvalue &&
+          !SCS2.IsLvalueReference);
+}
+  
 /// CompareStandardConversionSequences - Compare two standard
 /// conversion sequences to determine whether one is better than the
 /// other or if they are indistinguishable (C++ 13.3.3.2p3).
@@ -2429,18 +2476,12 @@ CompareStandardConversionSequences(Sema &S,
     return QualCK;
 
   if (SCS1.ReferenceBinding && SCS2.ReferenceBinding) {
-    // C++0x [over.ics.rank]p3b4:
-    //   -- S1 and S2 are reference bindings (8.5.3) and neither refers to an
-    //      implicit object parameter of a non-static member function declared
-    //      without a ref-qualifier, and S1 binds an rvalue reference to an
-    //      rvalue and S2 binds an lvalue reference.
-    // FIXME: Rvalue references. We don't know if we're dealing with the 
-    // implicit object parameter, or if the member function in this case has a 
-    // ref qualifier. (Of course, we don't have ref qualifiers yet.)
-    if (SCS1.RRefBinding != SCS2.RRefBinding)
-      return SCS1.RRefBinding ? ImplicitConversionSequence::Better
-                              : ImplicitConversionSequence::Worse;
-
+    // Check for a better reference binding based on the kind of bindings.
+    if (isBetterReferenceBindingKind(SCS1, SCS2))
+      return ImplicitConversionSequence::Better;
+    else if (isBetterReferenceBindingKind(SCS2, SCS1))
+      return ImplicitConversionSequence::Worse;
+    
     // C++ [over.ics.rank]p3b4:
     //   -- S1 and S2 are reference bindings (8.5.3), and the types to
     //      which the references refer are the same type except for
@@ -2966,7 +3007,10 @@ TryReferenceInit(Sema &S, Expr *&Init, QualType DeclType,
       ICS.Standard.setToType(2, T1);
       ICS.Standard.ReferenceBinding = true;
       ICS.Standard.DirectBinding = true;
-      ICS.Standard.RRefBinding = isRValRef;
+      ICS.Standard.IsLvalueReference = !isRValRef;
+      ICS.Standard.BindsToFunctionLvalue = T2->isFunctionType();
+      ICS.Standard.BindsToRvalue = false;
+      ICS.Standard.BindsImplicitObjectArgumentWithoutRefQualifier = false;
       ICS.Standard.CopyConstructor = 0;
 
       // Nothing more to do: the inaccessibility/ambiguity check for
@@ -3036,7 +3080,10 @@ TryReferenceInit(Sema &S, Expr *&Init, QualType DeclType,
     ICS.Standard.DirectBinding = 
       S.getLangOptions().CPlusPlus0x || 
       (InitCategory.isPRValue() && !T2->isRecordType());
-    ICS.Standard.RRefBinding = isRValRef;
+    ICS.Standard.IsLvalueReference = !isRValRef;
+    ICS.Standard.BindsToFunctionLvalue = T2->isFunctionType();
+    ICS.Standard.BindsToRvalue = InitCategory.isRValue();        
+    ICS.Standard.BindsImplicitObjectArgumentWithoutRefQualifier = false;
     ICS.Standard.CopyConstructor = 0;
     return ICS; 
   }
@@ -3051,8 +3098,8 @@ TryReferenceInit(Sema &S, Expr *&Init, QualType DeclType,
   //          expression in the first case and to the result of the conversion
   //          in the second case (or, in either case, to an appropriate base 
   //          class subobject).
-  if (T2->isRecordType() && RefRelationship == Sema::Ref_Incompatible &&
-      !S.RequireCompleteType(DeclLoc, T2, 0) && 
+  if (!SuppressUserConversions && RefRelationship == Sema::Ref_Incompatible &&
+      T2->isRecordType() && !S.RequireCompleteType(DeclLoc, T2, 0) && 
       FindConversionForRefInit(S, ICS, DeclType, DeclLoc,
                                Init, T2, /*AllowRvalues=*/true,
                                AllowExplicit)) {
@@ -3065,7 +3112,7 @@ TryReferenceInit(Sema &S, Expr *&Init, QualType DeclType,
       ICS.setBad(BadConversionSequence::no_conversion, Init, DeclType);
 
     return ICS;
-      }
+  }
   
   //       -- Otherwise, a temporary of type "cv1 T1" is created and
   //          initialized from the initializer expression using the
@@ -3114,10 +3161,16 @@ TryReferenceInit(Sema &S, Expr *&Init, QualType DeclType,
   // Of course, that's still a reference binding.
   if (ICS.isStandard()) {
     ICS.Standard.ReferenceBinding = true;
-    ICS.Standard.RRefBinding = isRValRef;
+    ICS.Standard.IsLvalueReference = !isRValRef;
+    ICS.Standard.BindsToFunctionLvalue = T2->isFunctionType();
+    ICS.Standard.BindsToRvalue = true;
+    ICS.Standard.BindsImplicitObjectArgumentWithoutRefQualifier = false;
   } else if (ICS.isUserDefined()) {
     ICS.UserDefined.After.ReferenceBinding = true;
-    ICS.UserDefined.After.RRefBinding = isRValRef;
+    ICS.Standard.IsLvalueReference = !isRValRef;
+    ICS.Standard.BindsToFunctionLvalue = T2->isFunctionType();
+    ICS.Standard.BindsToRvalue = true;
+    ICS.Standard.BindsImplicitObjectArgumentWithoutRefQualifier = false;
   }
 
   return ICS;
@@ -3150,6 +3203,7 @@ TryCopyInitialization(Sema &S, Expr *From, QualType ToType,
 /// expression @p From.
 static ImplicitConversionSequence
 TryObjectArgumentInitialization(Sema &S, QualType OrigFromType,
+                                Expr::Classification FromClassification,
                                 CXXMethodDecl *Method,
                                 CXXRecordDecl *ActingContext) {
   QualType ClassType = S.Context.getTypeDeclType(ActingContext);
@@ -3165,22 +3219,35 @@ TryObjectArgumentInitialization(Sema &S, QualType OrigFromType,
 
   // We need to have an object of class type.
   QualType FromType = OrigFromType;
-  if (const PointerType *PT = FromType->getAs<PointerType>())
+  if (const PointerType *PT = FromType->getAs<PointerType>()) {
     FromType = PT->getPointeeType();
+
+    // When we had a pointer, it's implicitly dereferenced, so we
+    // better have an lvalue.
+    assert(FromClassification.isLValue());
+  }
 
   assert(FromType->isRecordType());
 
-  // The implicit object parameter is has the type "reference to cv X",
-  // where X is the class of which the function is a member
-  // (C++ [over.match.funcs]p4). However, when finding an implicit
-  // conversion sequence for the argument, we are not allowed to
-  // create temporaries or perform user-defined conversions
+  // C++0x [over.match.funcs]p4:
+  //   For non-static member functions, the type of the implicit object 
+  //   parameter is
+  //
+  //     — "lvalue reference to cv X" for functions declared without a 
+  //       ref-qualifier or with the & ref-qualifier
+  //     — "rvalue reference to cv X" for functions declared with the && 
+  //        ref-qualifier
+  //
+  // where X is the class of which the function is a member and cv is the 
+  // cv-qualification on the member function declaration.
+  //
+  // However, when finding an implicit conversion sequence for the argument, we 
+  // are not allowed to create temporaries or perform user-defined conversions
   // (C++ [over.match.funcs]p5). We perform a simplified version of
   // reference binding here, that allows class rvalues to bind to
   // non-constant references.
 
-  // First check the qualifiers. We don't care about lvalue-vs-rvalue
-  // with the implicit object parameter (C++ [over.match.funcs]p5).
+  // First check the qualifiers.
   QualType FromTypeCanon = S.Context.getCanonicalType(FromType);
   if (ImplicitParamType.getCVRQualifiers() 
                                     != FromTypeCanon.getLocalCVRQualifiers() &&
@@ -3204,6 +3271,31 @@ TryObjectArgumentInitialization(Sema &S, QualType OrigFromType,
     return ICS;
   }
 
+  // Check the ref-qualifier.
+  switch (Method->getRefQualifier()) {
+  case RQ_None:
+    // Do nothing; we don't care about lvalueness or rvalueness.
+    break;
+      
+  case RQ_LValue:
+    if (!FromClassification.isLValue() && Quals != Qualifiers::Const) {
+      // non-const lvalue reference cannot bind to an rvalue
+      ICS.setBad(BadConversionSequence::lvalue_ref_to_rvalue, FromType, 
+                 ImplicitParamType);
+      return ICS;
+    }
+    break;
+
+  case RQ_RValue:
+    if (!FromClassification.isRValue()) {
+      // rvalue reference cannot bind to an lvalue
+      ICS.setBad(BadConversionSequence::rvalue_ref_to_lvalue, FromType, 
+                 ImplicitParamType);
+      return ICS;
+    }
+    break;
+  }
+  
   // Success. Mark this as a reference binding.
   ICS.setStandard();
   ICS.Standard.setAsIdentityConversion();
@@ -3212,7 +3304,11 @@ TryObjectArgumentInitialization(Sema &S, QualType OrigFromType,
   ICS.Standard.setAllToTypes(ImplicitParamType);
   ICS.Standard.ReferenceBinding = true;
   ICS.Standard.DirectBinding = true;
-  ICS.Standard.RRefBinding = false;
+  ICS.Standard.IsLvalueReference = Method->getRefQualifier() != RQ_RValue; 
+  ICS.Standard.BindsToFunctionLvalue = false;
+  ICS.Standard.BindsToRvalue = FromClassification.isRValue();
+  ICS.Standard.BindsImplicitObjectArgumentWithoutRefQualifier
+    = (Method->getRefQualifier() == RQ_None);
   return ICS;
 }
 
@@ -3228,19 +3324,22 @@ Sema::PerformObjectArgumentInitialization(Expr *&From,
   QualType ImplicitParamRecordType  =
     Method->getThisType(Context)->getAs<PointerType>()->getPointeeType();
 
+  Expr::Classification FromClassification;
   if (const PointerType *PT = From->getType()->getAs<PointerType>()) {
     FromRecordType = PT->getPointeeType();
     DestType = Method->getThisType(Context);
+    FromClassification = Expr::Classification::makeSimpleLValue();
   } else {
     FromRecordType = From->getType();
     DestType = ImplicitParamRecordType;
+    FromClassification = From->Classify(Context);
   }
 
   // Note that we always use the true parent context when performing
   // the actual argument initialization.
   ImplicitConversionSequence ICS
-    = TryObjectArgumentInitialization(*this, From->getType(), Method,
-                                      Method->getParent());
+    = TryObjectArgumentInitialization(*this, From->getType(), FromClassification,
+                                      Method, Method->getParent());
   if (ICS.isBad()) {
     if (ICS.Bad.Kind == BadConversionSequence::bad_qualifiers) {
       Qualifiers FromQs = FromRecordType.getQualifiers();
@@ -3513,7 +3612,7 @@ Sema::AddOverloadCandidate(FunctionDecl *Function,
     = dyn_cast<FunctionProtoType>(Function->getType()->getAs<FunctionType>());
   assert(Proto && "Functions without a prototype cannot be overloaded");
   assert(!Function->getDescribedFunctionTemplate() &&
-         "Use AddTemplateOverloadCandidate for function templates");
+         "Use AddTemp∫lateOverloadCandidate for function templates");
 
   if (CXXMethodDecl *Method = dyn_cast<CXXMethodDecl>(Function)) {
     if (!isa<CXXConstructorDecl>(Method)) {
@@ -3525,7 +3624,8 @@ Sema::AddOverloadCandidate(FunctionDecl *Function,
       // object argument (C++ [over.call.func]p3), and the acting context
       // is irrelevant.
       AddMethodCandidate(Method, FoundDecl, Method->getParent(),
-                         QualType(), Args, NumArgs, CandidateSet,
+                         QualType(), Expr::Classification::makeSimpleLValue(), 
+                         Args, NumArgs, CandidateSet,
                          SuppressUserConversions);
       return;
     }
@@ -3626,7 +3726,8 @@ void Sema::AddFunctionCandidates(const UnresolvedSetImpl &Fns,
       if (isa<CXXMethodDecl>(FD) && !cast<CXXMethodDecl>(FD)->isStatic())
         AddMethodCandidate(cast<CXXMethodDecl>(FD), F.getPair(),
                            cast<CXXMethodDecl>(FD)->getParent(),
-                           Args[0]->getType(), Args + 1, NumArgs - 1, 
+                           Args[0]->getType(), Args[0]->Classify(Context),
+                           Args + 1, NumArgs - 1, 
                            CandidateSet, SuppressUserConversions);
       else
         AddOverloadCandidate(FD, F.getPair(), Args, NumArgs, CandidateSet,
@@ -3638,7 +3739,9 @@ void Sema::AddFunctionCandidates(const UnresolvedSetImpl &Fns,
         AddMethodTemplateCandidate(FunTmpl, F.getPair(),
                               cast<CXXRecordDecl>(FunTmpl->getDeclContext()),
                                    /*FIXME: explicit args */ 0,
-                                   Args[0]->getType(), Args + 1, NumArgs - 1,
+                                   Args[0]->getType(), 
+                                   Args[0]->Classify(Context),
+                                   Args + 1, NumArgs - 1,
                                    CandidateSet,
                                    SuppressUserConversions);
       else
@@ -3654,6 +3757,7 @@ void Sema::AddFunctionCandidates(const UnresolvedSetImpl &Fns,
 /// method) as a method candidate to the given overload set.
 void Sema::AddMethodCandidate(DeclAccessPair FoundDecl,
                               QualType ObjectType,
+                              Expr::Classification ObjectClassification,
                               Expr **Args, unsigned NumArgs,
                               OverloadCandidateSet& CandidateSet,
                               bool SuppressUserConversions) {
@@ -3668,12 +3772,12 @@ void Sema::AddMethodCandidate(DeclAccessPair FoundDecl,
            "Expected a member function template");
     AddMethodTemplateCandidate(TD, FoundDecl, ActingContext,
                                /*ExplicitArgs*/ 0,
-                               ObjectType, Args, NumArgs,
+                               ObjectType, ObjectClassification, Args, NumArgs,
                                CandidateSet,
                                SuppressUserConversions);
   } else {
     AddMethodCandidate(cast<CXXMethodDecl>(Decl), FoundDecl, ActingContext,
-                       ObjectType, Args, NumArgs,
+                       ObjectType, ObjectClassification, Args, NumArgs,
                        CandidateSet, SuppressUserConversions);
   }
 }
@@ -3688,6 +3792,7 @@ void Sema::AddMethodCandidate(DeclAccessPair FoundDecl,
 void
 Sema::AddMethodCandidate(CXXMethodDecl *Method, DeclAccessPair FoundDecl,
                          CXXRecordDecl *ActingContext, QualType ObjectType,
+                         Expr::Classification ObjectClassification,
                          Expr **Args, unsigned NumArgs,
                          OverloadCandidateSet& CandidateSet,
                          bool SuppressUserConversions) {
@@ -3746,8 +3851,8 @@ Sema::AddMethodCandidate(CXXMethodDecl *Method, DeclAccessPair FoundDecl,
     // Determine the implicit conversion sequence for the object
     // parameter.
     Candidate.Conversions[0]
-      = TryObjectArgumentInitialization(*this, ObjectType, Method,
-                                        ActingContext);
+      = TryObjectArgumentInitialization(*this, ObjectType, ObjectClassification,
+                                        Method, ActingContext);
     if (Candidate.Conversions[0].isBad()) {
       Candidate.Viable = false;
       Candidate.FailureKind = ovl_fail_bad_conversion;
@@ -3791,6 +3896,7 @@ Sema::AddMethodTemplateCandidate(FunctionTemplateDecl *MethodTmpl,
                                  CXXRecordDecl *ActingContext,
                         const TemplateArgumentListInfo *ExplicitTemplateArgs,
                                  QualType ObjectType,
+                                 Expr::Classification ObjectClassification,
                                  Expr **Args, unsigned NumArgs,
                                  OverloadCandidateSet& CandidateSet,
                                  bool SuppressUserConversions) {
@@ -3831,8 +3937,8 @@ Sema::AddMethodTemplateCandidate(FunctionTemplateDecl *MethodTmpl,
   assert(isa<CXXMethodDecl>(Specialization) &&
          "Specialization is not a member function?");
   AddMethodCandidate(cast<CXXMethodDecl>(Specialization), FoundDecl,
-                     ActingContext, ObjectType, Args, NumArgs,
-                     CandidateSet, SuppressUserConversions);
+                     ActingContext, ObjectType, ObjectClassification,
+                     Args, NumArgs, CandidateSet, SuppressUserConversions);
 }
 
 /// \brief Add a C++ function template specialization as a candidate
@@ -3932,8 +4038,9 @@ Sema::AddConversionCandidate(CXXConversionDecl *Conversion,
     = cast<CXXRecordDecl>(ImplicitParamType->getAs<RecordType>()->getDecl());
   
   Candidate.Conversions[0]
-    = TryObjectArgumentInitialization(*this, From->getType(), Conversion,
-                                      ConversionContext);
+    = TryObjectArgumentInitialization(*this, From->getType(), 
+                                      From->Classify(Context), 
+                                      Conversion, ConversionContext);
   
   if (Candidate.Conversions[0].isBad()) {
     Candidate.Viable = false;
@@ -4077,7 +4184,7 @@ void Sema::AddSurrogateCandidate(CXXConversionDecl *Conversion,
                                  DeclAccessPair FoundDecl,
                                  CXXRecordDecl *ActingContext,
                                  const FunctionProtoType *Proto,
-                                 QualType ObjectType,
+                                 Expr *Object,
                                  Expr **Args, unsigned NumArgs,
                                  OverloadCandidateSet& CandidateSet) {
   if (!CandidateSet.isNewCandidate(Conversion))
@@ -4100,8 +4207,9 @@ void Sema::AddSurrogateCandidate(CXXConversionDecl *Conversion,
   // Determine the implicit conversion sequence for the implicit
   // object parameter.
   ImplicitConversionSequence ObjectInit
-    = TryObjectArgumentInitialization(*this, ObjectType, Conversion,
-                                      ActingContext);
+    = TryObjectArgumentInitialization(*this, Object->getType(), 
+                                      Object->Classify(Context),
+                                      Conversion, ActingContext);
   if (ObjectInit.isBad()) {
     Candidate.Viable = false;
     Candidate.FailureKind = ovl_fail_bad_conversion;
@@ -4213,7 +4321,8 @@ void Sema::AddMemberOperatorCandidates(OverloadedOperatorKind Op,
          Oper != OperEnd;
          ++Oper)
       AddMethodCandidate(Oper.getPair(), Args[0]->getType(),
-                         Args + 1, NumArgs - 1, CandidateSet,
+                         Args[0]->Classify(Context), Args + 1, NumArgs - 1, 
+                         CandidateSet,
                          /* SuppressUserConversions = */ false);
   }
 }
@@ -4865,8 +4974,8 @@ public:
   //       T&         operator*(T*);
   //
   // C++ [over.built]p7:
-  //   For every function type T, there exist candidate operator
-  //   functions of the form
+  //   For every function type T that does not have cv-qualifiers or a 
+  //   ref-qualifier, there exist candidate operator functions of the form
   //       T&         operator*(T*);
   void addUnaryStarPointerOverloads() {
     for (BuiltinCandidateTypeSet::iterator
@@ -4877,6 +4986,10 @@ public:
       QualType PointeeTy = ParamTy->getPointeeType();
       if (!PointeeTy->isObjectType() && !PointeeTy->isFunctionType())
         continue;
+      
+      if (const FunctionProtoType *Proto =PointeeTy->getAs<FunctionProtoType>())
+        if (Proto->getTypeQuals() || Proto->getRefQualifier())
+          continue;
       
       S.AddBuiltinCandidate(S.Context.getLValueReferenceType(PointeeTy),
                             &ParamTy, Args, 1, CandidateSet);
@@ -7914,6 +8027,9 @@ Sema::BuildCallToMemberFunction(Scope *S, Expr *MemExprE,
     Qualifier = UnresExpr->getQualifier();
     
     QualType ObjectType = UnresExpr->getBaseType();
+    Expr::Classification ObjectClassification
+      = UnresExpr->isArrow()? Expr::Classification::makeSimpleLValue()
+                            : UnresExpr->getBase()->Classify(Context);
 
     // Add overload candidates
     OverloadCandidateSet CandidateSet(UnresExpr->getMemberLoc());
@@ -7933,6 +8049,7 @@ Sema::BuildCallToMemberFunction(Scope *S, Expr *MemExprE,
       if (isa<UsingShadowDecl>(Func))
         Func = cast<UsingShadowDecl>(Func)->getTargetDecl();
 
+
       // Microsoft supports direct constructor calls.
       if (getLangOptions().Microsoft && isa<CXXConstructorDecl>(Func)) {
         AddOverloadCandidate(cast<CXXConstructorDecl>(Func), I.getPair(), Args, NumArgs,
@@ -7944,13 +8061,14 @@ Sema::BuildCallToMemberFunction(Scope *S, Expr *MemExprE,
           continue;
         
         AddMethodCandidate(Method, I.getPair(), ActingDC, ObjectType,
-                           Args, NumArgs,
-                           CandidateSet, /*SuppressUserConversions=*/false);
+                           ObjectClassification, 
+                           Args, NumArgs, CandidateSet, 
+                           /*SuppressUserConversions=*/false);
       } else {
         AddMethodTemplateCandidate(cast<FunctionTemplateDecl>(Func),
                                    I.getPair(), ActingDC, TemplateArgs,
-                                   ObjectType, Args, NumArgs,
-                                   CandidateSet,
+                                   ObjectType,  ObjectClassification, 
+                                   Args, NumArgs, CandidateSet,
                                    /*SuppressUsedConversions=*/false);
       }
     }
@@ -8077,7 +8195,7 @@ Sema::BuildCallToObjectOfClassType(Scope *S, Expr *Object,
   for (LookupResult::iterator Oper = R.begin(), OperEnd = R.end();
        Oper != OperEnd; ++Oper) {
     AddMethodCandidate(Oper.getPair(), Object->getType(),
-                       Args, NumArgs, CandidateSet,
+                       Object->Classify(Context), Args, NumArgs, CandidateSet,
                        /*SuppressUserConversions=*/ false);
   }
   
@@ -8122,8 +8240,7 @@ Sema::BuildCallToObjectOfClassType(Scope *S, Expr *Object,
 
     if (const FunctionProtoType *Proto = ConvType->getAs<FunctionProtoType>())
       AddSurrogateCandidate(Conv, I.getPair(), ActingContext, Proto,
-                            Object->getType(), Args, NumArgs,
-                            CandidateSet);
+                            Object, Args, NumArgs, CandidateSet);
   }
 
   // Perform overload resolution.
@@ -8333,8 +8450,8 @@ Sema::BuildOverloadedArrowExpr(Scope *S, Expr *Base, SourceLocation OpLoc) {
 
   for (LookupResult::iterator Oper = R.begin(), OperEnd = R.end();
        Oper != OperEnd; ++Oper) {
-    AddMethodCandidate(Oper.getPair(), Base->getType(), 0, 0, CandidateSet,
-                       /*SuppressUserConversions=*/false);
+    AddMethodCandidate(Oper.getPair(), Base->getType(), Base->Classify(Context),
+                       0, 0, CandidateSet, /*SuppressUserConversions=*/false);
   }
 
   // Perform overload resolution.
