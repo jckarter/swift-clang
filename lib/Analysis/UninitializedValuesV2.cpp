@@ -25,9 +25,10 @@
 
 using namespace clang;
 
-static bool isTrackedVar(const VarDecl *vd) {
+static bool isTrackedVar(const VarDecl *vd, const DeclContext *dc) {
   return vd->isLocalVarDecl() && !vd->hasGlobalStorage() && 
-         vd->getType()->isScalarType();
+         vd->getType()->isScalarType() &&
+         vd->getDeclContext() == dc;
 }
 
 //------------------------------------------------------------------------====//
@@ -57,7 +58,7 @@ void DeclToBit::computeMap(const DeclContext &dc) {
                                                E(dc.decls_end());
   for ( ; I != E; ++I) {
     const VarDecl *vd = *I;
-    if (isTrackedVar(vd))
+    if (isTrackedVar(vd, &dc))
       map[vd] = count++;
   }
 }
@@ -157,8 +158,8 @@ static BinaryOperator *getLogicalOperatorInChain(const CFGBlock *block) {
 llvm::BitVector &CFGBlockValues::getBitVector(const CFGBlock *block,
                                               const CFGBlock *dstBlock) {
   unsigned idx = block->getBlockID();
-  if (dstBlock && block->succ_size() == 2 && block->pred_size() == 2) {
-    assert(block->getTerminator());
+  if (dstBlock && block->succ_size() == 2 && block->pred_size() == 2 &&
+      block->getTerminator()) {
     if (getLogicalOperatorInChain(block)) {
       if (*block->succ_begin() == dstBlock)
         return lazyCreate(vals[idx].first);
@@ -311,12 +312,55 @@ public:
   void VisitBinaryOperator(BinaryOperator *bo);
   void VisitCastExpr(CastExpr *ce);
   void VisitSizeOfAlignOfExpr(SizeOfAlignOfExpr *se);
+  void BlockStmt_VisitObjCForCollectionStmt(ObjCForCollectionStmt *fs);
+  
+  bool isTrackedVar(const VarDecl *vd) {
+    return ::isTrackedVar(vd, cast<DeclContext>(ac.getDecl()));
+  }
+  
+  FindVarResult findBlockVarDecl(Expr *ex);
 };
 }
 
 void TransferFunctions::reportUninit(const DeclRefExpr *ex,
                                      const VarDecl *vd) {
   if (handler) handler->handleUseOfUninitVariable(ex, vd);
+}
+
+FindVarResult TransferFunctions::findBlockVarDecl(Expr* ex) {
+  if (DeclRefExpr* dr = dyn_cast<DeclRefExpr>(ex->IgnoreParenCasts()))
+    if (VarDecl *vd = dyn_cast<VarDecl>(dr->getDecl()))
+      if (isTrackedVar(vd))
+        return FindVarResult(vd, dr);  
+  return FindVarResult(0, 0);
+}
+
+void TransferFunctions::BlockStmt_VisitObjCForCollectionStmt(
+    ObjCForCollectionStmt *fs) {
+  
+  Visit(fs->getCollection());
+  
+  // This represents an initialization of the 'element' value.
+  Stmt *element = fs->getElement();
+  const VarDecl* vd = 0;
+  
+  if (DeclStmt* ds = dyn_cast<DeclStmt>(element)) {
+    vd = cast<VarDecl>(ds->getSingleDecl());
+    if (!isTrackedVar(vd))
+      vd = 0;
+  }
+  else {
+    // Initialize the value of the reference variable.
+    const FindVarResult &res = findBlockVarDecl(cast<Expr>(element));
+    vd = res.getDecl();
+    if (!vd) {
+      Visit(element);
+      return;
+    }
+  }
+  
+  if (vd)
+    vals[vd] = Initialized;
 }
 
 void TransferFunctions::VisitBlockExpr(BlockExpr *be) {
@@ -326,10 +370,11 @@ void TransferFunctions::VisitBlockExpr(BlockExpr *be) {
   llvm::tie(i, e) = ac.getReferencedBlockVars(be->getBlockDecl());
   for ( ; i != e; ++i) {
     const VarDecl *vd = *i;
-    if (vd->getAttr<BlocksAttr>() || !vd->hasLocalStorage())
+    if (vd->getAttr<BlocksAttr>() || !vd->hasLocalStorage() || 
+        !isTrackedVar(vd))
       continue;
     if (vals[vd] == Uninitialized)
-      handler->handleUseOfUninitVariable(be, vd);      
+      handler->handleUseOfUninitVariable(be, vd);
   }
 }
 
@@ -364,15 +409,6 @@ void TransferFunctions::VisitDeclRefExpr(DeclRefExpr *dr) {
     if (const VarDecl *vd = dyn_cast<VarDecl>(dr->getDecl()))
       if (isTrackedVar(vd))
         vals[vd] = Initialized;
-}
-
-static FindVarResult findBlockVarDecl(Expr* ex) {
-  if (DeclRefExpr* dr = dyn_cast<DeclRefExpr>(ex->IgnoreParenCasts()))
-    if (VarDecl *vd = dyn_cast<VarDecl>(dr->getDecl()))
-      if (isTrackedVar(vd))
-        return FindVarResult(vd, dr);
-
-  return FindVarResult(0, 0);
 }
 
 void TransferFunctions::VisitBinaryOperator(clang::BinaryOperator *bo) {

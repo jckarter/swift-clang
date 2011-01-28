@@ -459,8 +459,8 @@ Store BasicStoreManager::BindDeclInternal(Store store, const VarRegion* VR,
       // C99: 6.7.8 Initialization
       //  If an object that has static storage duration is not initialized
       //  explicitly, then:
-      //   —if it has pointer type, it is initialized to a null pointer;
-      //   —if it has arithmetic type, it is initialized to (positive or
+      //   -if it has pointer type, it is initialized to a null pointer;
+      //   -if it has arithmetic type, it is initialized to (positive or
       //     unsigned) zero;
       if (!InitVal) {
         QualType T = VD->getType();
@@ -592,4 +592,3 @@ Store BasicStoreManager::InvalidateRegion(Store store,
   SVal V = svalBuilder.getConjuredSymbolVal(R, E, T, Count);
   return Bind(store, loc::MemRegionVal(R), V);
 }
-

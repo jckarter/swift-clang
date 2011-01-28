@@ -279,8 +279,8 @@ def warn_pragma_pack_pop_failed : Warning<"#pragma pack(pop, ...) failed: %0">;
 
 def warn_pragma_unused_undeclared_var : Warning<
   "undeclared variable %0 used as an argument for '#pragma unused'">;
-def warn_pragma_unused_expected_localvar : Warning<
-  "only local variables can be arguments to '#pragma unused'">;
+def warn_pragma_unused_expected_var_arg : Warning<
+  "only variables can be arguments to '#pragma unused'">;
 def err_unsupported_pragma_weak : Error<
   "using '#pragma weak' to refer to an undeclared identifier is not yet supported">;
 
@@ -541,65 +541,67 @@ def warn_missing_exception_specification : Warning<
 def err_class_redeclared_with_different_access : Error<
   "%0 redeclared with '%1' access">;
 def err_access : Error<
-  "%1 is a %select{private|protected}0 member of %3">, NoSFINAE;
+  "%1 is a %select{private|protected}0 member of %3">, AccessControl;
 def err_access_ctor : Error<
-  "calling a %select{private|protected}0 constructor of class %2">, NoSFINAE;
+  "calling a %select{private|protected}0 constructor of class %2">, 
+  AccessControl;
 def ext_rvalue_to_reference_access_ctor : ExtWarn<
   "C++98 requires an accessible copy constructor for class %2 when binding "
   "a reference to a temporary; was %select{private|protected}0">,
-  NoSFINAE, InGroup<BindToTemporaryCopy>;
+  AccessControl, InGroup<BindToTemporaryCopy>;
 def err_access_base : Error<
   "%select{base class|inherited virtual base class}0 %1 has %select{private|"
   "protected}3 %select{constructor|copy constructor|copy assignment operator|"
-  "destructor}2">, NoSFINAE;
+  "destructor}2">, AccessControl;
 def err_access_field: Error<
   "field of type %0 has %select{private|protected}2 %select{constructor|copy "
-  "constructor|copy assignment operator|destructor}1">, NoSFINAE;
+  "constructor|copy assignment operator|destructor}1">, AccessControl;
 
 def err_access_ctor_field :
     Error<"field of type %1 has %select{private|protected}2 constructor">,
-    NoSFINAE;
+    AccessControl;
 def err_access_dtor_base :
     Error<"base class %0 has %select{private|protected}1 destructor">,
-    NoSFINAE;
+    AccessControl;
 def err_access_dtor_vbase :
     Error<"inherited virtual base class %0 has "
     "%select{private|protected}1 destructor">,
-    NoSFINAE;
+    AccessControl;
 def err_access_dtor_temp :
     Error<"temporary of type %0 has %select{private|protected}1 destructor">,
-    NoSFINAE;
+    AccessControl;
 def err_access_dtor_exception :
     Error<"exception object of type %0 has %select{private|protected}1 "
-          "destructor">, NoSFINAE;
+          "destructor">, AccessControl;
 def err_access_dtor_field :
     Error<"field of type %1 has %select{private|protected}2 destructor">,
-    NoSFINAE;
+    AccessControl;
 def err_access_dtor_var :
     Error<"variable of type %1 has %select{private|protected}2 destructor">,
-    NoSFINAE;
+    AccessControl;
 def err_access_assign_field :
     Error<"field of type %1 has %select{private|protected}2 copy assignment"
           " operator">,
-    NoSFINAE;
+    AccessControl;
 def err_access_assign_base :
     Error<"base class %0 has %select{private|protected}1 copy assignment"
           " operator">,
-    NoSFINAE;
+    AccessControl;
 def err_access_copy_field :
     Error<"field of type %1 has %select{private|protected}2 copy constructor">,
-    NoSFINAE;
+    AccessControl;
 def err_access_copy_base :
     Error<"base class %0 has %select{private|protected}1 copy constructor">,
-    NoSFINAE;
+    AccessControl;
 def err_access_dtor_ivar :
     Error<"instance variable of type %0 has %select{private|protected}1 "
           "destructor">,
-    NoSFINAE;
+    AccessControl;
 def note_previous_access_declaration : Note<
   "previously declared '%1' here">;
 def err_access_outside_class : Error<
-  "access to %select{private|protected}0 member outside any class context">;
+  "access to %select{private|protected}0 member outside any class context">,
+  AccessControl;
 def note_access_natural : Note<
   "%select{|implicitly }1declared %select{private|protected}0 here">;
 def note_access_constrained_by_path : Note<
@@ -707,7 +709,7 @@ def note_overridden_virtual_function : Note<
 
 def err_covariant_return_inaccessible_base : Error<
   "invalid covariant return for virtual function: %1 is a "
-  "%select{private|protected}2 base class of %0">, NoSFINAE;
+  "%select{private|protected}2 base class of %0">, AccessControl;
 def err_covariant_return_ambiguous_derived_to_base_conv : Error<
   "return type of virtual function %3 is not covariant with the return type of "
   "the function it overrides (ambiguous conversion from derived class "
@@ -861,9 +863,6 @@ def err_temp_copy_deleted : Error<
   "of type %1 invokes deleted constructor">;
 def err_temp_copy_incomplete : Error<
   "copying a temporary object of incomplete type %0">;
-def warn_temporaries_forbidden : Warning<
-  "must not create temporaries of type %0">,
-  InGroup<DiagGroup<"forbid-temporaries">>;
 
 // C++0x decltype
 def err_cannot_determine_declared_type_of_overloaded_function : Error<
@@ -923,9 +922,9 @@ def err_enum_redeclare_scoped_mismatch : Error<
 
 // C++0x delegating constructors
 def err_delegation_0x_only : Error<
-  "Delegating constructors are permitted only in C++0x.">;
+  "delegating constructors are permitted only in C++0x">;
 def err_delegation_unimplemented : Error<
-  "Delegating constructors are not fully implemented.">;
+  "delegating constructors are not fully implemented">;
   
 // Objective-C++
 def err_objc_decls_may_only_appear_in_global_scope : Error<
@@ -3200,7 +3199,7 @@ def err_memptr_conv_via_virtual : Error<
 
 // C++ access control
 def err_conv_to_inaccessible_base : Error<
-  "conversion from %0 to inaccessible base class %1">, NoSFINAE;
+  "conversion from %0 to inaccessible base class %1">, AccessControl;
 def note_inheritance_specifier_here : Note<
   "'%0' inheritance specifier here">;
 def note_inheritance_implicitly_private_here : Note<
@@ -3569,9 +3568,9 @@ def warn_ivar_use_hidden : Warning<
 def error_ivar_use_in_class_method : Error<
   "instance variable %0 accessed in class method">;
 def error_private_ivar_access : Error<"instance variable %0 is private">,
-  NoSFINAE;
+  AccessControl;
 def error_protected_ivar_access : Error<"instance variable %0 is protected">,
-  NoSFINAE;
+  AccessControl;
 def warn_maynot_respond : Warning<"%0 may not respond to %1">;
 def warn_attribute_method_def : Warning<
   "method attribute can only be specified on method declarations">;

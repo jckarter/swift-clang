@@ -234,17 +234,23 @@ public:
   private:
     Sema &S;
     DeclContext *SavedContext;
-
+    unsigned SavedParsingDeclDepth;
+    
   public:
-    ContextRAII(Sema &S, DeclContext *ContextToPush)
-      : S(S), SavedContext(S.CurContext) {
+    ContextRAII(Sema &S, DeclContext *ContextToPush,
+                unsigned ParsingDeclDepth = 0)
+      : S(S), SavedContext(S.CurContext), 
+        SavedParsingDeclDepth(S.ParsingDeclDepth) 
+    {
       assert(ContextToPush && "pushing null context");
       S.CurContext = ContextToPush;
+      S.ParsingDeclDepth = 0;
     }
 
     void pop() {
       if (!SavedContext) return;
       S.CurContext = SavedContext;
+      S.ParsingDeclDepth = SavedParsingDeclDepth;
       SavedContext = 0;
     }
 
@@ -999,7 +1005,8 @@ public:
                              Expr *From,
                              bool SuppressUserConversions,
                              bool AllowExplicit,
-                             bool InOverloadResolution);
+                             bool InOverloadResolution,
+                             bool CStyle);
 
   bool IsIntegralPromotion(Expr *From, QualType FromType, QualType ToType);
   bool IsFloatingPointPromotion(QualType FromType, QualType ToType);
@@ -1023,7 +1030,8 @@ public:
                                     CastKind &Kind,
                                     CXXCastPath &BasePath,
                                     bool IgnoreBaseAccess);
-  bool IsQualificationConversion(QualType FromType, QualType ToType);
+  bool IsQualificationConversion(QualType FromType, QualType ToType,
+                                 bool CStyle);
   bool DiagnoseMultipleUserDefinedConversion(Expr *From, QualType ToType);
 
 
@@ -2801,6 +2809,10 @@ public:
   /// A flag to suppress access checking.
   bool SuppressAccessChecking;
 
+  /// \brief When true, access checking violations are treated as SFINAE
+  /// failures rather than hard errors.
+  bool AccessCheckingSFINAE;
+  
   void ActOnStartSuppressingAccessChecks();
   void ActOnStopSuppressingAccessChecks();
 
@@ -3706,6 +3718,13 @@ public:
   llvm::SmallVector<ActiveTemplateInstantiation, 16>
     ActiveTemplateInstantiations;
 
+  /// \brief Whether we are in a SFINAE context that is not associated with
+  /// template instantiation.
+  ///
+  /// This is used when setting up a SFINAE trap (\c see SFINAETrap) outside
+  /// of a template instantiation or template argument deduction.
+  bool InNonInstantiationSFINAEContext;
+  
   /// \brief The number of ActiveTemplateInstantiation entries in
   /// \c ActiveTemplateInstantiations that are not actual instantiations and,
   /// therefore, should not be counted as part of the instantiation depth.
@@ -3727,7 +3746,7 @@ public:
   /// should be instantiated as themselves. Otherwise, the index specifies
   /// which argument within the parameter pack will be used for substitution.
   int ArgumentPackSubstitutionIndex;
-  
+
   /// \brief RAII object used to change the argument pack substitution index
   /// within a \c Sema object.
   ///
@@ -3853,6 +3872,7 @@ public:
   private:
     Sema &SemaRef;
     bool Invalid;
+    bool SavedInNonInstantiationSFINAEContext;
     bool CheckInstantiationDepth(SourceLocation PointOfInstantiation,
                                  SourceRange InstantiationRange);
 
@@ -3868,23 +3888,39 @@ public:
   /// template argument substitution failures are not considered
   /// errors.
   ///
-  /// \returns The nearest template-deduction context object, if we are in a
-  /// SFINAE context, which can be used to capture diagnostics that will be
-  /// suppressed. Otherwise, returns NULL to indicate that we are not within a
-  /// SFINAE context.
-  sema::TemplateDeductionInfo *isSFINAEContext() const;
+  /// \returns An empty \c llvm::Optional if we're not in a SFINAE context.
+  /// Otherwise, contains a pointer that, if non-NULL, contains the nearest 
+  /// template-deduction context object, which can be used to capture 
+  /// diagnostics that will be suppressed. 
+  llvm::Optional<sema::TemplateDeductionInfo *> isSFINAEContext() const;
 
   /// \brief RAII class used to determine whether SFINAE has
   /// trapped any errors that occur during template argument
-  /// deduction.
+  /// deduction.`
   class SFINAETrap {
     Sema &SemaRef;
     unsigned PrevSFINAEErrors;
+    bool PrevInNonInstantiationSFINAEContext;
+    bool PrevAccessCheckingSFINAE;
+    
   public:
-    explicit SFINAETrap(Sema &SemaRef)
-      : SemaRef(SemaRef), PrevSFINAEErrors(SemaRef.NumSFINAEErrors) { }
+    explicit SFINAETrap(Sema &SemaRef, bool AccessCheckingSFINAE = false)
+      : SemaRef(SemaRef), PrevSFINAEErrors(SemaRef.NumSFINAEErrors),
+        PrevInNonInstantiationSFINAEContext(
+                                      SemaRef.InNonInstantiationSFINAEContext),
+        PrevAccessCheckingSFINAE(SemaRef.AccessCheckingSFINAE)
+    { 
+      if (!SemaRef.isSFINAEContext())
+        SemaRef.InNonInstantiationSFINAEContext = true;
+      SemaRef.AccessCheckingSFINAE = AccessCheckingSFINAE;
+    }
 
-    ~SFINAETrap() { SemaRef.NumSFINAEErrors = PrevSFINAEErrors; }
+    ~SFINAETrap() { 
+      SemaRef.NumSFINAEErrors = PrevSFINAEErrors; 
+      SemaRef.InNonInstantiationSFINAEContext 
+        = PrevInNonInstantiationSFINAEContext;
+      SemaRef.AccessCheckingSFINAE = PrevAccessCheckingSFINAE;
+    }
 
     /// \brief Determine whether any SFINAE errors have been trapped.
     bool hasErrorOccurred() const {
@@ -4515,7 +4551,8 @@ public:
   /// CheckAssignmentConstraints - Perform type checking for assignment,
   /// argument passing, variable initialization, and function return values.
   /// C99 6.5.16.
-  AssignConvertType CheckAssignmentConstraints(QualType lhs, QualType rhs);
+  AssignConvertType CheckAssignmentConstraints(SourceLocation Loc,
+                                               QualType lhs, QualType rhs);
 
   /// Check assignment constraints and prepare for a conversion of the
   /// RHS to the LHS type.
@@ -4559,10 +4596,11 @@ public:
   bool PerformImplicitConversion(Expr *&From, QualType ToType,
                                  const ImplicitConversionSequence& ICS,
                                  AssignmentAction Action,
-                                 bool IgnoreBaseAccess = false);
+                                 bool CStyle = false);
   bool PerformImplicitConversion(Expr *&From, QualType ToType,
                                  const StandardConversionSequence& SCS,
-                                 AssignmentAction Action,bool IgnoreBaseAccess);
+                                 AssignmentAction Action,
+                                 bool CStyle);
 
   /// the following "Check" methods will return a valid/converted QualType
   /// or a null QualType (indicating an error diagnostic was issued).

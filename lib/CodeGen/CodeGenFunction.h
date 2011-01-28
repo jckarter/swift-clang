@@ -97,23 +97,27 @@ struct BranchFixup {
   llvm::BranchInst *InitialBranch;
 };
 
-/// A metaprogramming class which decides whether a type is a subclass
-/// of llvm::Value that needs to be saved if it's used in a
-/// conditional cleanup.
-template
-  <class T,
-   bool mustSave =
-     llvm::is_base_of<llvm::Value, llvm::remove_pointer<T> >::value
-     && !llvm::is_base_of<llvm::Constant, llvm::remove_pointer<T> >::value
-     && !llvm::is_base_of<llvm::BasicBlock, llvm::remove_pointer<T> >::value>
-struct SavedValueInCond {
+template <class T> struct InvariantValue {
   typedef T type;
   typedef T saved_type;
   static bool needsSaving(type value) { return false; }
   static saved_type save(CodeGenFunction &CGF, type value) { return value; }
   static type restore(CodeGenFunction &CGF, saved_type value) { return value; }
 };
-// Partial specialization for true arguments at end of file.
+
+/// A metaprogramming class for ensuring that a value will dominate an
+/// arbitrary position in a function.
+template <class T> struct DominatingValue : InvariantValue<T> {};
+
+template <class T, bool mightBeInstruction =
+            llvm::is_base_of<llvm::Value, T>::value &&
+            !llvm::is_base_of<llvm::Constant, T>::value &&
+            !llvm::is_base_of<llvm::BasicBlock, T>::value>
+struct DominatingPointer;
+template <class T> struct DominatingPointer<T,false> : InvariantValue<T*> {};
+// template <class T> struct DominatingPointer<T,true> at end of file
+
+template <class T> struct DominatingValue<T*> : DominatingPointer<T> {};
 
 enum CleanupKind {
   EHCleanup = 0x1,
@@ -193,24 +197,18 @@ public:
     virtual void Emit(CodeGenFunction &CGF, bool IsForEHCleanup) = 0;
   };
 
-  /// A helper class for cleanups that execute conditionally.
-  class ConditionalCleanup : public Cleanup {
-    /// Either an i1 which directly indicates whether the cleanup
-    /// should be run or an i1* from which that should be loaded.
-    llvm::Value *cond;
-
-  public:
-    virtual void Emit(CodeGenFunction &CGF, bool IsForEHCleanup);
-
-  protected:
-    ConditionalCleanup(llvm::Value *cond) : cond(cond) {}
-
-    /// Emit the non-conditional code for the cleanup.
-    virtual void EmitImpl(CodeGenFunction &CGF, bool IsForEHCleanup) = 0;
-  };
-
   /// UnconditionalCleanupN stores its N parameters and just passes
   /// them to the real cleanup function.
+  template <class T, class A0>
+  class UnconditionalCleanup1 : public Cleanup {
+    A0 a0;
+  public:
+    UnconditionalCleanup1(A0 a0) : a0(a0) {}
+    void Emit(CodeGenFunction &CGF, bool IsForEHCleanup) {
+      T::Emit(CGF, IsForEHCleanup, a0);
+    }
+  };
+
   template <class T, class A0, class A1>
   class UnconditionalCleanup2 : public Cleanup {
     A0 a0; A1 a1;
@@ -223,22 +221,37 @@ public:
 
   /// ConditionalCleanupN stores the saved form of its N parameters,
   /// then restores them and performs the cleanup.
+  template <class T, class A0>
+  class ConditionalCleanup1 : public Cleanup {
+    typedef typename DominatingValue<A0>::saved_type A0_saved;
+    A0_saved a0_saved;
+
+    void Emit(CodeGenFunction &CGF, bool IsForEHCleanup) {
+      A0 a0 = DominatingValue<A0>::restore(CGF, a0_saved);
+      T::Emit(CGF, IsForEHCleanup, a0);
+    }
+
+  public:
+    ConditionalCleanup1(A0_saved a0)
+      : a0_saved(a0) {}
+  };
+
   template <class T, class A0, class A1>
-  class ConditionalCleanup2 : public ConditionalCleanup {
-    typedef typename SavedValueInCond<A0>::saved_type A0_saved;
-    typedef typename SavedValueInCond<A1>::saved_type A1_saved;
+  class ConditionalCleanup2 : public Cleanup {
+    typedef typename DominatingValue<A0>::saved_type A0_saved;
+    typedef typename DominatingValue<A1>::saved_type A1_saved;
     A0_saved a0_saved;
     A1_saved a1_saved;
 
-    void EmitImpl(CodeGenFunction &CGF, bool IsForEHCleanup) {
-      A0 a0 = SavedValueInCond<A0>::restore(CGF, a0_saved);
-      A1 a1 = SavedValueInCond<A1>::restore(CGF, a1_saved);
+    void Emit(CodeGenFunction &CGF, bool IsForEHCleanup) {
+      A0 a0 = DominatingValue<A0>::restore(CGF, a0_saved);
+      A1 a1 = DominatingValue<A1>::restore(CGF, a1_saved);
       T::Emit(CGF, IsForEHCleanup, a0, a1);
     }
 
   public:
-    ConditionalCleanup2(llvm::Value *cond, A0_saved a0, A1_saved a1)
-      : ConditionalCleanup(cond), a0_saved(a0), a1_saved(a1) {}
+    ConditionalCleanup2(A0_saved a0, A1_saved a1)
+      : a0_saved(a0), a1_saved(a1) {}
   };
 
 private:
@@ -602,12 +615,13 @@ public:
 
   llvm::BasicBlock *getInvokeDestImpl();
 
-  /// Sets up a condition for a full-expression cleanup.
-  llvm::Value *initFullExprCleanup();
+  /// Set up the last cleaup that was pushed as a conditional
+  /// full-expression cleanup.
+  void initFullExprCleanup();
 
   template <class T>
-  typename SavedValueInCond<T>::saved_type saveValueInCond(T value) {
-    return SavedValueInCond<T>::save(*this, value);
+  typename DominatingValue<T>::saved_type saveValueInCond(T value) {
+    return DominatingValue<T>::save(*this, value);
   }
 
 public:
@@ -629,23 +643,40 @@ public:
   /// pushFullExprCleanup - Push a cleanup to be run at the end of the
   /// current full-expression.  Safe against the possibility that
   /// we're currently inside a conditionally-evaluated expression.
+  template <class T, class A0>
+  void pushFullExprCleanup(CleanupKind kind, A0 a0) {
+    // If we're not in a conditional branch, or if none of the
+    // arguments requires saving, then use the unconditional cleanup.
+    if (!isInConditionalBranch()) {
+      typedef EHScopeStack::UnconditionalCleanup1<T, A0> CleanupType;
+      return EHStack.pushCleanup<CleanupType>(kind, a0);
+    }
+
+    typename DominatingValue<A0>::saved_type a0_saved = saveValueInCond(a0);
+
+    typedef EHScopeStack::ConditionalCleanup1<T, A0> CleanupType;
+    EHStack.pushCleanup<CleanupType>(kind, a0_saved);
+    initFullExprCleanup();
+  }
+
+  /// pushFullExprCleanup - Push a cleanup to be run at the end of the
+  /// current full-expression.  Safe against the possibility that
+  /// we're currently inside a conditionally-evaluated expression.
   template <class T, class A0, class A1>
   void pushFullExprCleanup(CleanupKind kind, A0 a0, A1 a1) {
     // If we're not in a conditional branch, or if none of the
     // arguments requires saving, then use the unconditional cleanup.
-    if (!(isInConditionalBranch() ||
-          SavedValueInCond<A0>::needsSaving(a0) ||
-          SavedValueInCond<A1>::needsSaving(a1))) {
+    if (!isInConditionalBranch()) {
       typedef EHScopeStack::UnconditionalCleanup2<T, A0, A1> CleanupType;
       return EHStack.pushCleanup<CleanupType>(kind, a0, a1);
     }
 
-    llvm::Value *condVar = initFullExprCleanup();
-    typename SavedValueInCond<A0>::saved_type a0_saved = saveValueInCond(a0);
-    typename SavedValueInCond<A1>::saved_type a1_saved = saveValueInCond(a1);
+    typename DominatingValue<A0>::saved_type a0_saved = saveValueInCond(a0);
+    typename DominatingValue<A1>::saved_type a1_saved = saveValueInCond(a1);
 
     typedef EHScopeStack::ConditionalCleanup2<T, A0, A1> CleanupType;
-    EHStack.pushCleanup<CleanupType>(kind, condVar, a0_saved, a1_saved);
+    EHStack.pushCleanup<CleanupType>(kind, a0_saved, a1_saved);
+    initFullExprCleanup();
   }
 
   /// PushDestructorCleanup - Push a cleanup to call the
@@ -811,7 +842,11 @@ public:
   /// getByrefValueFieldNumber - Given a declaration, returns the LLVM field
   /// number that holds the value.
   unsigned getByRefValueLLVMField(const ValueDecl *VD) const;
-  
+
+  /// BuildBlockByrefAddress - Computes address location of the
+  /// variable which is declared as __block.
+  llvm::Value *BuildBlockByrefAddress(llvm::Value *BaseAddr,
+                                      const VarDecl *V);
 private:
   CGDebugInfo *DebugInfo;
 
@@ -1912,7 +1947,7 @@ private:
 
 /// Helper class with most of the code for saving a value for a
 /// conditional expression cleanup.
-struct SavedValueInCondImpl {
+struct DominatingLLVMValue {
   typedef llvm::PointerIntPair<llvm::Value*, 1, bool> saved_type;
 
   /// Answer whether the given value needs extra work to be saved.
@@ -1943,12 +1978,42 @@ struct SavedValueInCondImpl {
   }
 };
 
-/// Partial specialization of SavedValueInCond for when a value really
-/// requires saving.
-template <class T> struct SavedValueInCond<T,true> : SavedValueInCondImpl {
-  typedef T type;
+/// A partial specialization of DominatingValue for llvm::Values that
+/// might be llvm::Instructions.
+template <class T> struct DominatingPointer<T,true> : DominatingLLVMValue {
+  typedef T *type;
   static type restore(CodeGenFunction &CGF, saved_type value) {
-    return static_cast<T>(SavedValueInCondImpl::restore(CGF, value));
+    return static_cast<T*>(DominatingLLVMValue::restore(CGF, value));
+  }
+};
+
+/// A specialization of DominatingValue for RValue.
+template <> struct DominatingValue<RValue> {
+  typedef RValue type;
+  class saved_type {
+    enum Kind { ScalarLiteral, ScalarAddress, AggregateLiteral,
+                AggregateAddress, ComplexAddress };
+
+    llvm::Value *Value;
+    Kind K;
+    saved_type(llvm::Value *v, Kind k) : Value(v), K(k) {}
+
+  public:
+    static bool needsSaving(RValue value);
+    static saved_type save(CodeGenFunction &CGF, RValue value);
+    RValue restore(CodeGenFunction &CGF);
+
+    // implementations in CGExprCXX.cpp
+  };
+
+  static bool needsSaving(type value) {
+    return saved_type::needsSaving(value);
+  }
+  static saved_type save(CodeGenFunction &CGF, type value) {
+    return saved_type::save(CGF, value);
+  }
+  static type restore(CodeGenFunction &CGF, saved_type value) {
+    return value.restore(CGF);
   }
 };
 

@@ -100,7 +100,7 @@ static PrintfSpecifierResult ParsePrintfSpecifier(FormatStringHandler &H,
   for ( ; I != E; ++I) {
     switch (*I) {
       default: hasMore = false; break;
-      case '\'': 
+      case '\'':
         // FIXME: POSIX specific.  Always accept?
         FS.setHasThousandsGrouping(I);
         break;
@@ -281,7 +281,7 @@ const char *ConversionSpecifier::toString() const {
 
 ArgTypeResult PrintfSpecifier::getArgType(ASTContext &Ctx) const {
   const PrintfConversionSpecifier &CS = getConversionSpecifier();
-  
+
   if (!CS.consumesDataArgument())
     return ArgTypeResult::Invalid();
 
@@ -292,7 +292,7 @@ ArgTypeResult PrintfSpecifier::getArgType(ASTContext &Ctx) const {
       default:
         return ArgTypeResult::Invalid();
     }
-  
+
   if (CS.isIntArg())
     switch (LM.getKind()) {
       case LengthModifier::AsLongDouble:
@@ -454,7 +454,7 @@ bool PrintfSpecifier::fixType(QualType QT) {
 
 void PrintfSpecifier::toString(llvm::raw_ostream &os) const {
   // Whilst some features have no defined order, we are using the order
-  // appearing in the C99 standard (ISO/IEC 9899:1999 (E) ¤7.19.6.1)
+  // appearing in the C99 standard (ISO/IEC 9899:1999 (E) 7.19.6.1)
   os << "%";
 
   // Positional args
@@ -593,7 +593,7 @@ bool PrintfSpecifier::hasValidLeftJustified() const {
 bool PrintfSpecifier::hasValidThousandsGroupingPrefix() const {
   if (!HasThousandsGrouping)
     return true;
-  
+
   switch (CS.getKind()) {
     case ConversionSpecifier::dArg:
     case ConversionSpecifier::iArg:

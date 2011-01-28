@@ -223,3 +223,20 @@ int test_34() {
   return x; // expected-note{{variable 'x' is possibly uninitialized when used here}}
 }
 
+// Test that this case doesn't crash.
+void test35(int x) {
+  __block int y = 0;
+  ^{ y = (x == 0); }();
+}
+
+// Test handling of indirect goto.
+void test36()
+{
+  void **pc; // expected-warning{{use of uninitialized variable 'pc'}} expected-note{{ add initialization to silence this warning}}
+  void *dummy[] = { &&L1, &&L2 };
+ L1:
+    goto *pc; // expected-note{{variable 'pc' is possibly uninitialized when used here}}
+ L2:
+    goto *pc;
+}
+
