@@ -288,6 +288,9 @@ public:
   }
   
 private:
+  /// \brief Allocator used to store cached code completions.
+  CodeCompletionAllocator CachedCompletionAllocator;
+
   /// \brief The set of cached code-completion results.
   std::vector<CachedCodeCompletionResult> CachedCompletionResults;
   

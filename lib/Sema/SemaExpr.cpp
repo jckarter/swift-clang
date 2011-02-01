@@ -8690,6 +8690,9 @@ bool Sema::DiagnoseAssignmentResult(AssignConvertType ConvTy,
     DiagKind = diag::ext_typecheck_convert_pointer_void_func;
     break;
   case IncompatiblePointerDiscardsQualifiers: {
+    // Perform array-to-pointer decay if necessary.
+    if (SrcType->isArrayType()) SrcType = Context.getArrayDecayedType(SrcType);
+
     Qualifiers lhq = SrcType->getPointeeType().getQualifiers();
     Qualifiers rhq = DstType->getPointeeType().getQualifiers();
     if (lhq.getAddressSpace() != rhq.getAddressSpace()) {
@@ -9225,8 +9228,40 @@ void Sema::DiagnoseAssignmentAsCondition(Expr *E) {
     << FixItHint::CreateInsertion(Close, ")");
 }
 
+/// \brief Redundant parentheses over an equality comparison can indicate
+/// that the user intended an assignment used as condition.
+void Sema::DiagnoseEqualityWithExtraParens(ParenExpr *parenE) {
+  // Don't warn if the parens came from a macro.
+  SourceLocation parenLoc = parenE->getLocStart();
+  if (parenLoc.isInvalid() || parenLoc.isMacroID())
+    return;
+
+  Expr *E = parenE->IgnoreParens();
+
+  if (BinaryOperator *opE = dyn_cast<BinaryOperator>(E))
+    if (opE->getOpcode() == BO_EQ &&
+        opE->getLHS()->IgnoreParenImpCasts()->isModifiableLvalue(Context)
+                                                           == Expr::MLV_Valid) {
+      SourceLocation Loc = opE->getOperatorLoc();
+      
+      // Don't emit a warning if the operation occurs within a macro.
+      // Sometimes extra parentheses are used within macros to make the
+      // instantiation of the macro less error prone.
+      if (!Loc.isMacroID()) {
+        Diag(Loc, diag::warn_equality_with_extra_parens) << E->getSourceRange();
+        Diag(Loc, diag::note_equality_comparison_to_assign)
+          << FixItHint::CreateReplacement(Loc, "=");
+        Diag(Loc, diag::note_equality_comparison_silence)
+          << FixItHint::CreateRemoval(parenE->getSourceRange().getBegin())
+          << FixItHint::CreateRemoval(parenE->getSourceRange().getEnd());
+      }
+    }
+}
+
 bool Sema::CheckBooleanCondition(Expr *&E, SourceLocation Loc) {
   DiagnoseAssignmentAsCondition(E);
+  if (ParenExpr *parenE = dyn_cast<ParenExpr>(E))
+    DiagnoseEqualityWithExtraParens(parenE);
 
   if (!E->isTypeDependent()) {
     if (E->isBoundMemberFunction(Context))

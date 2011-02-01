@@ -564,6 +564,9 @@ def err_access_field: Error<
 def err_access_ctor_field :
     Error<"field of type %1 has %select{private|protected}2 constructor">,
     AccessControl;
+def err_access_dtor : Error<
+  "calling a %select{private|protected}1 destructor of class %0">, 
+  AccessControl;
 def err_access_dtor_base :
     Error<"base class %0 has %select{private|protected}1 destructor">,
     AccessControl;
@@ -2849,6 +2852,13 @@ def note_condition_or_assign_to_comparison : Note<
   "use '!=' to turn this compound assignment into an inequality comparison">;
 def note_condition_assign_silence : Note<
   "place parentheses around the assignment to silence this warning">;
+
+def warn_equality_with_extra_parens : Warning<"equality comparison with "
+  "extraneous parentheses">, InGroup<Parentheses>;
+def note_equality_comparison_to_assign : Note<
+  "use '=' to turn this equality comparison into an assignment">;
+def note_equality_comparison_silence : Note<
+  "remove extraneous parentheses around the comparison to silence this warning">;
 
 def warn_synthesized_ivar_access : Warning<
   "direct access of synthesized ivar by using property access %0">,

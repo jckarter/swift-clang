@@ -105,4 +105,32 @@ void test() {
   if (a |= b) {} // expected-warning {{using the result of an assignment as a condition without parentheses}} \
                 // expected-note{{use '!=' to turn this compound assignment into an inequality comparison}} \
   // expected-note{{place parentheses around the assignment to silence this warning}}
+
+  if ((x == 5)) {} // expected-warning {{equality comparison with extraneous parentheses}} \
+                   // expected-note {{use '=' to turn this equality comparison into an assignment}} \
+                   // expected-note {{remove extraneous parentheses around the comparison to silence this warning}}
+  if ((5 == x)) {}
+
+#define EQ(x,y) ((x) == (y))
+  if (EQ(x, 5)) {}
+#undef EQ
 }
+
+void (*fn)();
+
+void test2() {
+    if ((fn == test2)) {} // expected-warning {{equality comparison with extraneous parentheses}} \
+                          // expected-note {{use '=' to turn this equality comparison into an assignment}} \
+                          // expected-note {{remove extraneous parentheses around the comparison to silence this warning}}
+    if ((test2 == fn)) {}
+}
+
+// Do not warn about extra '()' used within a macro.  This pattern
+// occurs frequently.
+#define COMPARE(x,y) (x == y)
+int test3(int x, int y) {
+  if (COMPARE(x, y)) // no-warning
+    return 0;
+  return 1;
+}
+

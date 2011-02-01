@@ -1115,7 +1115,8 @@ CharUnits RecordLayoutBuilder::LayoutBase(const BaseSubobjectInfo *Base) {
 
   if (!Base->Class->isEmpty()) {
     // Update the data size.
-    DataSize = Offset + Layout.getNonVirtualSize();
+    DataSize = Offset + 
+      (Layout.getNonVirtualSize().getQuantity() * Context.getCharWidth());
 
     Size = std::max(Size, DataSize);
   } else
@@ -1401,6 +1402,20 @@ void RecordLayoutBuilder::LayoutField(const FieldDecl *D) {
     std::pair<uint64_t, unsigned> FieldInfo = Context.getTypeInfo(D->getType());
     FieldSize = FieldInfo.first;
     FieldAlign = FieldInfo.second;
+
+    if (Context.getLangOptions().MSBitfields) {
+      // If MS bitfield layout is required, figure out what type is being
+      // laid out and align the field to the width of that type.
+      
+      // Resolve all typedefs down to their base type and round up the field
+      // alignment if necessary.
+      QualType T = Context.getBaseElementType(D->getType());
+      if (const BuiltinType *BTy = T->getAs<BuiltinType>()) {
+        uint64_t TypeSize = Context.getTypeSize(BTy);
+        if (TypeSize > FieldAlign)
+          FieldAlign = TypeSize;
+      }
+    }
   }
 
   // The align if the field is not packed. This is to check if the attribute
@@ -1665,7 +1680,7 @@ ASTContext::getASTRecordLayout(const RecordDecl *D) const {
       new (*this) ASTRecordLayout(*this, Builder->Size, Builder->Alignment,
                                   DataSize, Builder->FieldOffsets.data(),
                                   Builder->FieldOffsets.size(),
-                                  NonVirtualSize,
+                                  toCharUnitsFromBits(NonVirtualSize),
                                   Builder->NonVirtualAlignment,
                                   EmptySubobjects.SizeOfLargestEmptySubobject,
                                   Builder->PrimaryBase,
@@ -1834,7 +1849,7 @@ static void DumpCXXRecordLayout(llvm::raw_ostream &OS,
   OS << "  sizeof=" << Layout.getSize() / 8;
   OS << ", dsize=" << Layout.getDataSize() / 8;
   OS << ", align=" << Layout.getAlignment() / 8 << '\n';
-  OS << "  nvsize=" << Layout.getNonVirtualSize() / 8;
+  OS << "  nvsize=" << Layout.getNonVirtualSize().getQuantity();
   OS << ", nvalign=" << Layout.getNonVirtualAlign() / 8 << '\n';
   OS << '\n';
 }
