@@ -1548,6 +1548,20 @@ void Sema::MergeVarDecl(VarDecl *New, LookupResult &Previous) {
     return New->setInvalidDecl();
   }
 
+  // Check if extern is followed by non-extern and vice-versa.
+  if (New->hasExternalStorage() &&
+      !Old->hasLinkage() && Old->isLocalVarDecl()) {
+    Diag(New->getLocation(), diag::err_extern_non_extern) << New->getDeclName();
+    Diag(Old->getLocation(), diag::note_previous_definition);
+    return New->setInvalidDecl();
+  }
+  if (Old->hasExternalStorage() &&
+      !New->hasLinkage() && New->isLocalVarDecl()) {
+    Diag(New->getLocation(), diag::err_non_extern_extern) << New->getDeclName();
+    Diag(Old->getLocation(), diag::note_previous_definition);
+    return New->setInvalidDecl();
+  }
+
   // Variables with external linkage are analyzed in FinalizeDeclaratorGroup.
 
   // FIXME: The test for external storage here seems wrong? We still
@@ -3114,6 +3128,36 @@ void Sema::CheckShadow(Scope *S, VarDecl *D, const LookupResult& R) {
   NamedDecl* ShadowedDecl = R.getFoundDecl();
   if (!isa<VarDecl>(ShadowedDecl) && !isa<FieldDecl>(ShadowedDecl))
     return;
+
+  // Fields are not shadowed by variables in C++ static methods.
+  if (isa<FieldDecl>(ShadowedDecl))
+    if (CXXMethodDecl *MD = dyn_cast<CXXMethodDecl>(NewDC))
+      if (MD->isStatic())
+        return;
+
+  if (VarDecl *shadowedVar = dyn_cast<VarDecl>(ShadowedDecl))
+    if (shadowedVar->isExternC()) {
+      // Don't warn for this case:
+      //
+      // @code
+      // extern int bob;
+      // void f() {
+      //   extern int bob;
+      // }
+      // @endcode
+      if (D->isExternC())
+        return;
+
+      // For shadowing external vars, make sure that we point to the global
+      // declaration, not a locally scoped extern declaration.
+      for (VarDecl::redecl_iterator
+             I = shadowedVar->redecls_begin(), E = shadowedVar->redecls_end();
+           I != E; ++I)
+        if (I->isFileVarDecl()) {
+          ShadowedDecl = *I;
+          break;
+        }
+    }
 
   DeclContext *OldDC = ShadowedDecl->getDeclContext();
 

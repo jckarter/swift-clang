@@ -29,13 +29,14 @@ using namespace clang;
 ///         specifier-qualifier-list abstract-declarator[opt]
 ///
 /// Called type-id in C++.
-TypeResult Parser::ParseTypeName(SourceRange *Range) {
+TypeResult Parser::ParseTypeName(SourceRange *Range,
+                                 Declarator::TheContext Context) {
   // Parse the common declaration-specifiers piece.
   DeclSpec DS;
   ParseSpecifierQualifierList(DS);
 
   // Parse the abstract-declarator, if present.
-  Declarator DeclaratorInfo(DS, Declarator::TypeNameContext);
+  Declarator DeclaratorInfo(DS, Context);
   ParseDeclarator(DeclaratorInfo);
   if (Range)
     *Range = DeclaratorInfo.getSourceRange();
@@ -2511,6 +2512,10 @@ bool Parser::isConstructorDeclarator() {
   DeclaratorScopeObj DeclScopeObj(*this, SS);
   if (SS.isSet() && Actions.ShouldEnterDeclaratorScope(getCurScope(), SS))
     DeclScopeObj.EnterDeclaratorScope();
+
+  // Optionally skip Microsoft attributes.
+  ParsedAttributes Attrs;
+  MaybeParseMicrosoftAttributes(Attrs);
 
   // Check whether the next token(s) are part of a declaration
   // specifier, in which case we have the start of a parameter and,

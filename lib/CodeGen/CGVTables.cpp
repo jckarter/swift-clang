@@ -2374,6 +2374,12 @@ bool CodeGenVTables::ShouldEmitVTableInThisTU(const CXXRecordDecl *RD) {
       TSK == TSK_ExplicitInstantiationDefinition)
     return true;
 
+  // If we're building with optimization, we always emit VTables since that
+  // allows for virtual function calls to be devirtualized.
+  // (We don't want to do this in -fapple-kext mode however).
+  if (CGM.getCodeGenOpts().OptimizationLevel && !CGM.getLangOptions().AppleKext)
+    return true;
+
   return KeyFunction->hasBody();
 }
 
@@ -2505,7 +2511,7 @@ static llvm::Value *PerformTypeAdjustment(CodeGenFunction &CGF,
 
 static void setThunkVisibility(CodeGenModule &CGM, const CXXMethodDecl *MD,
                                const ThunkInfo &Thunk, llvm::Function *Fn) {
-  CGM.setGlobalVisibility(Fn, MD, /*ForDef*/ true);
+  CGM.setGlobalVisibility(Fn, MD);
 
   if (!CGM.getCodeGenOpts().HiddenWeakVTables)
     return;
@@ -2758,7 +2764,14 @@ void CodeGenVTables::ComputeVTableRelatedInformation(const CXXRecordDecl *RD,
 
   // Add the VTable layout.
   uint64_t NumVTableComponents = Builder.getNumVTableComponents();
+  // -fapple-kext adds an extra entry at end of vtbl.
+  bool IsAppleKext = CGM.getContext().getLangOptions().AppleKext;
+  if (IsAppleKext)
+    NumVTableComponents += 1;
+
   uint64_t *LayoutData = new uint64_t[NumVTableComponents + 1];
+  if (IsAppleKext)
+    LayoutData[NumVTableComponents] = 0;
   Entry.setPointer(LayoutData);
 
   // Store the number of components.
@@ -2925,49 +2938,6 @@ CodeGenVTables::CreateVTableInitializer(const CXXRecordDecl *RD,
   return llvm::ConstantArray::get(ArrayType, Inits.data(), Inits.size());
 }
 
-/// GetGlobalVariable - Will return a global variable of the given type. 
-/// If a variable with a different type already exists then a new variable
-/// with the right type will be created.
-/// FIXME: We should move this to CodeGenModule and rename it to something 
-/// better and then use it in CGVTT and CGRTTI. 
-static llvm::GlobalVariable *
-GetGlobalVariable(llvm::Module &Module, llvm::StringRef Name,
-                  const llvm::Type *Ty,
-                  llvm::GlobalValue::LinkageTypes Linkage) {
-
-  llvm::GlobalVariable *GV = Module.getNamedGlobal(Name);
-  llvm::GlobalVariable *OldGV = 0;
-  
-  if (GV) {
-    // Check if the variable has the right type.
-    if (GV->getType()->getElementType() == Ty)
-      return GV;
-
-    assert(GV->isDeclaration() && "Declaration has wrong type!");
-    
-    OldGV = GV;
-  }
-  
-  // Create a new variable.
-  GV = new llvm::GlobalVariable(Module, Ty, /*isConstant=*/true,
-                                Linkage, 0, Name);
-  
-  if (OldGV) {
-    // Replace occurrences of the old variable if needed.
-    GV->takeName(OldGV);
-   
-    if (!OldGV->use_empty()) {
-      llvm::Constant *NewPtrForOldDecl =
-        llvm::ConstantExpr::getBitCast(GV, OldGV->getType());
-      OldGV->replaceAllUsesWith(NewPtrForOldDecl);
-    }
-
-    OldGV->eraseFromParent();
-  }
-  
-  return GV;
-}
-
 llvm::GlobalVariable *CodeGenVTables::GetAddrOfVTable(const CXXRecordDecl *RD) {
   llvm::SmallString<256> OutName;
   CGM.getCXXABI().getMangleContext().mangleCXXVTable(RD, OutName);
@@ -2980,8 +2950,8 @@ llvm::GlobalVariable *CodeGenVTables::GetAddrOfVTable(const CXXRecordDecl *RD) {
     llvm::ArrayType::get(Int8PtrTy, getNumVTableComponents(RD));
 
   llvm::GlobalVariable *GV =
-    GetGlobalVariable(CGM.getModule(), Name, ArrayType,
-                      llvm::GlobalValue::ExternalLinkage);
+    CGM.CreateOrReplaceCXXRuntimeVariable(Name, ArrayType, 
+                                          llvm::GlobalValue::ExternalLinkage);
   GV->setUnnamedAddr(true);
   return GV;
 }
@@ -3012,7 +2982,7 @@ CodeGenVTables::EmitVTableDefinition(llvm::GlobalVariable *VTable,
   VTable->setLinkage(Linkage);
   
   // Set the right visibility.
-  CGM.setTypeVisibility(VTable, RD, /*ForRTTI*/ false, /*ForDef*/ true);
+  CGM.setTypeVisibility(VTable, RD, CodeGenModule::TVK_ForVTable);
 }
 
 llvm::GlobalVariable *
@@ -3043,8 +3013,8 @@ CodeGenVTables::GenerateConstructionVTable(const CXXRecordDecl *RD,
 
   // Create the variable that will hold the construction vtable.
   llvm::GlobalVariable *VTable = 
-    GetGlobalVariable(CGM.getModule(), Name, ArrayType, 
-                      llvm::GlobalValue::InternalLinkage);
+    CGM.CreateOrReplaceCXXRuntimeVariable(Name, ArrayType, 
+                                          llvm::GlobalValue::InternalLinkage);
 
   // Add the thunks.
   VTableThunksTy VTableThunks;
@@ -3076,7 +3046,10 @@ CodeGenVTables::GenerateClassData(llvm::GlobalVariable::LinkageTypes Linkage,
   VTable = GetAddrOfVTable(RD);
   EmitVTableDefinition(VTable, Linkage, RD);
 
-  GenerateVTT(Linkage, /*GenerateDefinition=*/true, RD);
+  if (RD->getNumVBases()) {
+    llvm::GlobalVariable *VTT = GetAddrOfVTT(RD);
+    EmitVTTDefinition(VTT, Linkage, RD);
+  }
 
   // If this is the magic class __cxxabiv1::__fundamental_type_info,
   // we will emit the typeinfo for the fundamental types. This is the

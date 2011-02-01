@@ -206,15 +206,6 @@ void Sema::ImpCastExprToType(Expr *&Expr, QualType Ty,
   if (ExprTy == TypeTy)
     return;
 
-  if (Expr->getType()->isPointerType() && Ty->isPointerType()) {
-    QualType ExprBaseType = cast<PointerType>(ExprTy)->getPointeeType();
-    QualType BaseType = cast<PointerType>(TypeTy)->getPointeeType();
-    if (ExprBaseType.getAddressSpace() != BaseType.getAddressSpace()) {
-      Diag(Expr->getExprLoc(), diag::err_implicit_pointer_address_space_cast)
-        << Expr->getSourceRange();
-    }
-  }
-
   // If this is a derived-to-base cast to a through a virtual base, we
   // need a vtable.
   if (Kind == CK_DerivedToBase && 
@@ -388,25 +379,29 @@ void Sema::ActOnEndOfTranslationUnit() {
       Consumer.CompleteTentativeDefinition(VD);
 
   }
-  
-  // Output warning for unused file scoped decls.
-  for (llvm::SmallVectorImpl<const DeclaratorDecl*>::iterator
-         I = UnusedFileScopedDecls.begin(),
-         E = UnusedFileScopedDecls.end(); I != E; ++I) {
-    if (const FunctionDecl *FD = dyn_cast<FunctionDecl>(*I)) {
-      const FunctionDecl *DiagD;
-      if (!FD->hasBody(DiagD))
-        DiagD = FD;
-      Diag(DiagD->getLocation(),
-           isa<CXXMethodDecl>(DiagD) ? diag::warn_unused_member_function
-                                     : diag::warn_unused_function)
-            << DiagD->getDeclName();
-    } else {
-      const VarDecl *DiagD = cast<VarDecl>(*I)->getDefinition();
-      if (!DiagD)
-        DiagD = cast<VarDecl>(*I);
-      Diag(DiagD->getLocation(), diag::warn_unused_variable)
-            << DiagD->getDeclName();
+
+  // If there were errors, disable 'unused' warnings since they will mostly be
+  // noise.
+  if (!Diags.hasErrorOccurred()) {
+    // Output warning for unused file scoped decls.
+    for (llvm::SmallVectorImpl<const DeclaratorDecl*>::iterator
+           I = UnusedFileScopedDecls.begin(),
+           E = UnusedFileScopedDecls.end(); I != E; ++I) {
+      if (const FunctionDecl *FD = dyn_cast<FunctionDecl>(*I)) {
+        const FunctionDecl *DiagD;
+        if (!FD->hasBody(DiagD))
+          DiagD = FD;
+        Diag(DiagD->getLocation(),
+             isa<CXXMethodDecl>(DiagD) ? diag::warn_unused_member_function
+                                       : diag::warn_unused_function)
+              << DiagD->getDeclName();
+      } else {
+        const VarDecl *DiagD = cast<VarDecl>(*I)->getDefinition();
+        if (!DiagD)
+          DiagD = cast<VarDecl>(*I);
+        Diag(DiagD->getLocation(), diag::warn_unused_variable)
+              << DiagD->getDeclName();
+      }
     }
   }
 

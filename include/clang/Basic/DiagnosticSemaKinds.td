@@ -386,6 +386,10 @@ def warn_objc_property_copy_missing_on_block : Warning<
 def warn_atomic_property_rule : Warning<
   "writable atomic property %0 cannot pair a synthesized setter/getter "
   "with a user defined setter/getter">;
+def warn_default_atomic_custom_getter_setter : Warning<
+  "atomic by default property %0 has a user defined %select{getter|setter}1 "
+  "(property should be marked 'atomic' if this is intended)">,
+  InGroup<CustomAtomic>, DefaultIgnore;
 def err_use_continuation_class : Error<
   "illegal redeclaration of property in continuation class %0"
   " (attribute must be 'readwrite', while its primary must be 'readonly')">;
@@ -1003,9 +1007,6 @@ def err_attribute_address_space_too_high : Error<
   "address space is larger than the maximum supported (%0)">;
 def err_attribute_address_multiple_qualifiers : Error<
   "multiple address spaces specified for type">;
-def err_implicit_pointer_address_space_cast : Error<
-  "illegal implicit conversion between two pointers with different address "
-  "spaces">;
 def err_as_qualified_auto_decl : Error<
   "automatic variable qualified with an address space">;
 def err_arg_with_address_space : Error<
@@ -1963,6 +1964,10 @@ def err_static_non_static : Error<
   "static declaration of %0 follows non-static declaration">;
 def err_non_static_static : Error<
   "non-static declaration of %0 follows static declaration">;
+def err_extern_non_extern : Error<
+  "extern declaration of %0 follows non-extern declaration">;
+def err_non_extern_extern : Error<
+  "non-extern declaration of %0 follows extern declaration">;
 def err_non_thread_thread : Error<
   "non-thread-local declaration of %0 follows thread-local declaration">;
 def err_thread_non_thread : Error<
@@ -2471,6 +2476,10 @@ def err_invalid_qualified_function_type : Error<
 def err_invalid_ref_qualifier_function_type : Error<
   "ref-qualifier '%select{&&|&}0' is only allowed on non-static member functions,"
   " member function pointers, and typedefs of function types">;
+def ext_qualified_function_type_template_arg : ExtWarn<
+  "template argument of '%0' qualified function type is a GNU extension">, 
+  InGroup<GNU>;
+
 def err_invalid_qualified_function_pointer : Error<
   "type qualifier is not allowed on this function %select{pointer|reference}0">;
 def err_invalid_qualified_typedef_function_type_use : Error<
@@ -2752,6 +2761,9 @@ def err_bad_memptr_lhs : Error<
 def warn_exception_caught_by_earlier_handler : Warning<
   "exception of type %0 will be caught by earlier handler">;
 def note_previous_exception_handler : Note<"for type %0">;
+def warn_non_virtual_dtor : Warning<
+  "%0 has virtual functions but non-virtual destructor">,
+  InGroup<NonVirtualDtor>, DefaultIgnore;
 
 def err_conditional_void_nonvoid : Error<
   "%select{left|right}1 operand to ? is void, but %select{right|left}1 operand "
@@ -2926,7 +2938,15 @@ def err_typecheck_convert_incompatible_block_pointer : Error<
   " %0 "
   "%select{from|to parameter of type|from a function with result type|to type|"
   "with an expression of type|to parameter of type|to type}2 %1">;
-  
+def err_typecheck_incompatible_address_space : Error<
+  "%select{assigning %1 to %0"
+  "|passing %0 to parameter of type %1"
+  "|returning %0 from a function with result type %1"
+  "|converting %0 to type %1"
+  "|initializing %0 with an expression of type %1"
+  "|sending %0 to parameter of type %1"
+  "|casting %0 to type %1}2"
+  " changes address space of pointer">;
 def err_typecheck_convert_ambiguous : Error<
   "ambiguity in initializing value of type %0 with initializer of type %1">;
 def err_cannot_initialize_decl_noname : Error<
