@@ -180,8 +180,17 @@ CodeGenFunction::GetAddressOfBaseClass(llvm::Value *Value,
 
   llvm::Value *VirtualOffset = 0;
 
-  if (VBase)
-    VirtualOffset = GetVirtualBaseClassOffset(Value, Derived, VBase);
+  if (VBase) {
+    if (Derived->hasAttr<FinalAttr>()) {
+      VirtualOffset = 0;
+
+      const ASTRecordLayout &Layout = getContext().getASTRecordLayout(Derived);
+
+      uint64_t VBaseOffset = Layout.getVBaseClassOffsetInBits(VBase);
+      NonVirtualOffset += VBaseOffset / 8;
+    } else
+      VirtualOffset = GetVirtualBaseClassOffset(Value, Derived, VBase);
+  }
 
   // Apply the offsets.
   Value = ApplyNonVirtualAndVirtualOffset(*this, Value, NonVirtualOffset, 
@@ -309,7 +318,7 @@ static llvm::Value *GetVTTParameter(CodeGenFunction &CGF, GlobalDecl GD,
     VTT = CGF.Builder.CreateConstInBoundsGEP1_64(VTT, SubVTTIndex);
   } else {
     // We're the complete constructor, so get the VTT by name.
-    VTT = CGF.CGM.getVTables().getVTT(RD);
+    VTT = CGF.CGM.getVTables().GetAddrOfVTT(RD);
     VTT = CGF.Builder.CreateConstInBoundsGEP2_64(VTT, 0, SubVTTIndex);
   }
 
@@ -787,6 +796,10 @@ void CodeGenFunction::EmitDestructorBody(FunctionArgList &Args) {
       assert(Dtor->isImplicit() && "bodyless dtor not implicit");
       // nothing to do besides what's in the epilogue
     }
+    // -fapple-kext must inline any call to this dtor into
+    // the caller's body.
+    if (getContext().getLangOptions().AppleKext)
+      CurFn->addFnAttr(llvm::Attribute::AlwaysInline);
     break;
   }
 
@@ -1255,7 +1268,13 @@ void CodeGenFunction::EmitCXXDestructorCall(const CXXDestructorDecl *DD,
                                             llvm::Value *This) {
   llvm::Value *VTT = GetVTTParameter(*this, GlobalDecl(DD, Type), 
                                      ForVirtualBase);
-  llvm::Value *Callee = CGM.GetAddrOfCXXDestructor(DD, Type);
+  llvm::Value *Callee = 0;
+  if (getContext().getLangOptions().AppleKext)
+    Callee = BuildAppleKextVirtualDestructorCall(DD, Type, 
+                                                 DD->getParent());
+    
+  if (!Callee)
+    Callee = CGM.GetAddrOfCXXDestructor(DD, Type);
   
   EmitCXXMemberCall(DD, Callee, ReturnValueSlot(), This, VTT, 0, 0);
 }

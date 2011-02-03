@@ -96,6 +96,7 @@ PCHValidator::ReadLanguageOptions(const LangOptions &LangOpts) {
   PARSE_LANGOPT_IMPORTANT(AltiVec, diag::warn_pch_altivec);
   PARSE_LANGOPT_IMPORTANT(Exceptions, diag::warn_pch_exceptions);
   PARSE_LANGOPT_IMPORTANT(SjLjExceptions, diag::warn_pch_sjlj_exceptions);
+  PARSE_LANGOPT_IMPORTANT(MSBitfields, diag::warn_pch_ms_bitfields);
   PARSE_LANGOPT_IMPORTANT(NeXTRuntime, diag::warn_pch_objc_runtime);
   PARSE_LANGOPT_IMPORTANT(Freestanding, diag::warn_pch_freestanding);
   PARSE_LANGOPT_IMPORTANT(NoBuiltin, diag::warn_pch_builtins);
@@ -1232,6 +1233,9 @@ ASTReader::ASTReadResult ASTReader::ReadSLocEntryRecord(unsigned ID) {
     std::string Filename(BlobStart, BlobStart + BlobLen);
     MaybeAddSystemRootToFilename(Filename);
     const FileEntry *File = FileMgr.getFile(Filename);
+    if (File == 0)
+      File = FileMgr.getVirtualFile(Filename, (off_t)Record[4],
+                                    (time_t)Record[5]);
     if (File == 0) {
       std::string ErrorStr = "could not find file '";
       ErrorStr += Filename;
@@ -2610,6 +2614,7 @@ bool ASTReader::ParseLanguageOptions(
     PARSE_LANGOPT(AltiVec);
     PARSE_LANGOPT(Exceptions);
     PARSE_LANGOPT(SjLjExceptions);
+    PARSE_LANGOPT(MSBitfields);
     PARSE_LANGOPT(NeXTRuntime);
     PARSE_LANGOPT(Freestanding);
     PARSE_LANGOPT(NoBuiltin);
@@ -2959,7 +2964,7 @@ QualType ASTReader::ReadTypeRecord(unsigned Index) {
   }
 
   case TYPE_PACK_EXPANSION: {
-    if (Record.size() != 1) {
+    if (Record.size() != 2) {
       Error("incorrect encoding of pack expansion type");
       return QualType();
     }

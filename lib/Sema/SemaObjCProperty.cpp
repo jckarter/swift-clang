@@ -440,9 +440,13 @@ Decl *Sema::ActOnPropertyImplDecl(Scope *S,
           Context.canAssignObjCInterfaces(
                                   PropType->getAs<ObjCObjectPointerType>(),
                                   IvarType->getAs<ObjCObjectPointerType>());
-      else 
-        compat = (CheckAssignmentConstraints(PropType, IvarType)
+      else {
+        SourceLocation Loc = PropertyIvarLoc;
+        if (Loc.isInvalid())
+          Loc = PropertyLoc;
+        compat = (CheckAssignmentConstraints(Loc, PropType, IvarType)
                     == Compatible);
+      }
       if (!compat) {
         Diag(PropertyLoc, diag::error_property_ivar_type)
           << property->getDeclName() << PropType
@@ -663,7 +667,7 @@ bool Sema::DiagnosePropertyAccessorMismatch(ObjCPropertyDecl *property,
       GetterMethod->getResultType() != property->getType()) {
     AssignConvertType result = Incompatible;
     if (property->getType()->isObjCObjectPointerType())
-      result = CheckAssignmentConstraints(GetterMethod->getResultType(),
+      result = CheckAssignmentConstraints(Loc, GetterMethod->getResultType(),
                                           property->getType());
     if (result != Compatible) {
       Diag(Loc, diag::warn_accessor_property_type_mismatch)
@@ -1077,7 +1081,32 @@ Sema::AtomicPropertySetterGetterRules (ObjCImplDecl* IMPDecl,
        E = IDecl->prop_end();
        I != E; ++I) {
     ObjCPropertyDecl *Property = (*I);
+    ObjCMethodDecl *GetterMethod = 0;
+    ObjCMethodDecl *SetterMethod = 0;
+    bool LookedUpGetterSetter = false;
+
     unsigned Attributes = Property->getPropertyAttributes();
+    unsigned AttributesAsWrittern = Property->getPropertyAttributesAsWritten();
+
+    if (!(AttributesAsWrittern & ObjCPropertyDecl::OBJC_PR_atomic) &&
+        !(AttributesAsWrittern & ObjCPropertyDecl::OBJC_PR_nonatomic)) {
+      GetterMethod = IMPDecl->getInstanceMethod(Property->getGetterName());
+      SetterMethod = IMPDecl->getInstanceMethod(Property->getSetterName());
+      LookedUpGetterSetter = true;
+      if (GetterMethod) {
+        Diag(GetterMethod->getLocation(),
+             diag::warn_default_atomic_custom_getter_setter)
+          << Property->getIdentifier() << 0;
+        Diag(Property->getLocation(), diag::note_property_declare);
+      }
+      if (SetterMethod) {
+        Diag(SetterMethod->getLocation(),
+             diag::warn_default_atomic_custom_getter_setter)
+          << Property->getIdentifier() << 1;
+        Diag(Property->getLocation(), diag::note_property_declare);
+      }
+    }
+
     // We only care about readwrite atomic property.
     if ((Attributes & ObjCPropertyDecl::OBJC_PR_nonatomic) ||
         !(Attributes & ObjCPropertyDecl::OBJC_PR_readwrite))
@@ -1086,10 +1115,11 @@ Sema::AtomicPropertySetterGetterRules (ObjCImplDecl* IMPDecl,
          = IMPDecl->FindPropertyImplDecl(Property->getIdentifier())) {
       if (PIDecl->getPropertyImplementation() == ObjCPropertyImplDecl::Dynamic)
         continue;
-      ObjCMethodDecl *GetterMethod =
-        IMPDecl->getInstanceMethod(Property->getGetterName());
-      ObjCMethodDecl *SetterMethod =
-        IMPDecl->getInstanceMethod(Property->getSetterName());
+      if (!LookedUpGetterSetter) {
+        GetterMethod = IMPDecl->getInstanceMethod(Property->getGetterName());
+        SetterMethod = IMPDecl->getInstanceMethod(Property->getSetterName());
+        LookedUpGetterSetter = true;
+      }
       if ((GetterMethod && !SetterMethod) || (!GetterMethod && SetterMethod)) {
         SourceLocation MethodLoc =
           (GetterMethod ? GetterMethod->getLocation()

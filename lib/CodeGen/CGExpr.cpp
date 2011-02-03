@@ -1164,12 +1164,9 @@ LValue CodeGenFunction::EmitDeclRefLValue(const DeclRefExpr *E) {
       V = CGM.getStaticLocalDeclAddress(VD);
     assert(V && "DeclRefExpr not entered in LocalDeclMap?");
 
-    if (VD->hasAttr<BlocksAttr>()) {
-      V = Builder.CreateStructGEP(V, 1, "forwarding");
-      V = Builder.CreateLoad(V);
-      V = Builder.CreateStructGEP(V, getByRefValueLLVMField(VD),
-                                  VD->getNameAsString());
-    }
+    if (VD->hasAttr<BlocksAttr>())
+      V = BuildBlockByrefAddress(V, VD);
+    
     if (VD->getType()->isReferenceType())
       V = Builder.CreateLoad(V, "tmp");
 
@@ -1181,24 +1178,10 @@ LValue CodeGenFunction::EmitDeclRefLValue(const DeclRefExpr *E) {
     setObjCGCLValueClass(getContext(), E, LV);
     return LV;
   }
-  
-  // If we're emitting an instance method as an independent lvalue,
-  // we're actually emitting a member pointer.
-  if (const CXXMethodDecl *MD = dyn_cast<CXXMethodDecl>(ND))
-    if (MD->isInstance()) {
-      llvm::Value *V = CGM.getCXXABI().EmitMemberPointer(MD);
-      return MakeAddrLValue(V, MD->getType(), Alignment);
-    }
-  if (const FunctionDecl *FD = dyn_cast<FunctionDecl>(ND))
-    return EmitFunctionDeclLValue(*this, E, FD);
-  
-  // If we're emitting a field as an independent lvalue, we're
-  // actually emitting a member pointer.
-  if (const FieldDecl *FD = dyn_cast<FieldDecl>(ND)) {
-    llvm::Value *V = CGM.getCXXABI().EmitMemberPointer(FD);
-    return MakeAddrLValue(V, FD->getType(), Alignment);
-  }
-  
+
+  if (const FunctionDecl *fn = dyn_cast<FunctionDecl>(ND))
+    return EmitFunctionDeclLValue(*this, E, fn);
+
   assert(false && "Unhandled DeclRefExpr");
   
   // an invalid LValue, but the assert will
@@ -1775,11 +1758,12 @@ LValue CodeGenFunction::EmitCastLValue(const CastExpr *E) {
   }
 
   case CK_NoOp:
-    if (!E->getSubExpr()->isRValue() || E->getType()->isRecordType())
+  case CK_LValueToRValue:
+    if (!E->getSubExpr()->Classify(getContext()).isPRValue() 
+        || E->getType()->isRecordType())
       return EmitLValue(E->getSubExpr());
     // Fall through to synthesize a temporary.
 
-  case CK_LValueToRValue:
   case CK_BitCast:
   case CK_ArrayToPointerDecay:
   case CK_FunctionToPointerDecay:

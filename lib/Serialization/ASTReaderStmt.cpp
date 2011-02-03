@@ -791,7 +791,6 @@ void ASTStmtReader::VisitShuffleVectorExpr(ShuffleVectorExpr *E) {
 void ASTStmtReader::VisitBlockExpr(BlockExpr *E) {
   VisitExpr(E);
   E->setBlockDecl(cast_or_null<BlockDecl>(Reader.GetDecl(Record[Idx++])));
-  E->setHasBlockDeclRefExprs(Record[Idx++]);
 }
 
 void ASTStmtReader::VisitBlockDeclRefExpr(BlockDeclRefExpr *E) {
@@ -1106,8 +1105,9 @@ void ASTStmtReader::VisitCXXScalarValueInitExpr(CXXScalarValueInitExpr *E) {
 
 void ASTStmtReader::VisitCXXNewExpr(CXXNewExpr *E) {
   VisitExpr(E);
-  E->setGlobalNew(Record[Idx++]);
-  E->setHasInitializer(Record[Idx++]);
+  E->GlobalNew = Record[Idx++];
+  E->Initializer = Record[Idx++];
+  E->UsualArrayDeleteWantsSize = Record[Idx++];
   bool isArray = Record[Idx++];
   unsigned NumPlacementArgs = Record[Idx++];
   unsigned NumCtorArgs = Record[Idx++];
@@ -1140,6 +1140,7 @@ void ASTStmtReader::VisitCXXDeleteExpr(CXXDeleteExpr *E) {
   E->GlobalDelete = Record[Idx++];
   E->ArrayForm = Record[Idx++];
   E->ArrayFormAsWritten = Record[Idx++];
+  E->UsualArrayDeleteWantsSize = Record[Idx++];
   E->OperatorDelete = cast_or_null<FunctionDecl>(Reader.GetDecl(Record[Idx++]));
   E->Argument = Reader.ReadSubExpr();
   E->Loc = ReadSourceLocation(Record, Idx);
@@ -1325,6 +1326,7 @@ void ASTStmtReader::VisitSubstNonTypeTemplateParmPackExpr(
 
 void ASTStmtReader::VisitOpaqueValueExpr(OpaqueValueExpr *E) {
   VisitExpr(E);
+  E->Loc = ReadSourceLocation(Record, Idx);
 }
 
 Stmt *ASTReader::ReadStmt(PerFileData &F) {

@@ -80,13 +80,13 @@ def NullDereference : DiagGroup<"null-dereference">;
 def InitializerOverrides : DiagGroup<"initializer-overrides">;
 def NonNull : DiagGroup<"nonnull">;
 def : DiagGroup<"nonportable-cfstrings">;
-def : DiagGroup<"non-virtual-dtor">;
+def NonVirtualDtor : DiagGroup<"non-virtual-dtor">;
 def : DiagGroup<"old-style-cast">;
 def : DiagGroup<"old-style-definition">;
 def OutOfLineDeclaration : DiagGroup<"out-of-line-declaration">;
 def : DiagGroup<"overflow">;
 def OverlengthStrings : DiagGroup<"overlength-strings">;
-def : DiagGroup<"overloaded-virtual">;
+def OverloadedVirtual : DiagGroup<"overloaded-virtual">;
 def Packed : DiagGroup<"packed">;
 def Padded : DiagGroup<"padded">;
 def PointerArith : DiagGroup<"pointer-arith">;
@@ -151,6 +151,9 @@ def ReadOnlySetterAttrs : DiagGroup<"readonly-setter-attrs">;
 def Reorder : DiagGroup<"reorder">;
 def UndeclaredSelector : DiagGroup<"undeclared-selector">;
 def ImplicitAtomic : DiagGroup<"implicit-atomic-properties">;
+def CustomAtomic : DiagGroup<"custom-atomic-properties">;
+def AtomicProperties : DiagGroup<"atomic-properties",
+                                 [ImplicitAtomic, CustomAtomic]>;
 def Selector : DiagGroup<"selector">;
 def NonfragileAbi2 : DiagGroup<"nonfragile-abi2">;
 def Protocol : DiagGroup<"protocol">;
@@ -225,7 +228,8 @@ def Most : DiagGroup<"most", [
     UnknownPragmas,
     Unused,
     VectorConversions,
-    VolatileRegisterVar
+    VolatileRegisterVar,
+    OverloadedVirtual
  ]>;
 
 // -Wall is -Wmost -Wparentheses

@@ -1548,6 +1548,20 @@ void Sema::MergeVarDecl(VarDecl *New, LookupResult &Previous) {
     return New->setInvalidDecl();
   }
 
+  // Check if extern is followed by non-extern and vice-versa.
+  if (New->hasExternalStorage() &&
+      !Old->hasLinkage() && Old->isLocalVarDecl()) {
+    Diag(New->getLocation(), diag::err_extern_non_extern) << New->getDeclName();
+    Diag(Old->getLocation(), diag::note_previous_definition);
+    return New->setInvalidDecl();
+  }
+  if (Old->hasExternalStorage() &&
+      !New->hasLinkage() && New->isLocalVarDecl()) {
+    Diag(New->getLocation(), diag::err_non_extern_extern) << New->getDeclName();
+    Diag(Old->getLocation(), diag::note_previous_definition);
+    return New->setInvalidDecl();
+  }
+
   // Variables with external linkage are analyzed in FinalizeDeclaratorGroup.
 
   // FIXME: The test for external storage here seems wrong? We still
@@ -3115,6 +3129,36 @@ void Sema::CheckShadow(Scope *S, VarDecl *D, const LookupResult& R) {
   if (!isa<VarDecl>(ShadowedDecl) && !isa<FieldDecl>(ShadowedDecl))
     return;
 
+  // Fields are not shadowed by variables in C++ static methods.
+  if (isa<FieldDecl>(ShadowedDecl))
+    if (CXXMethodDecl *MD = dyn_cast<CXXMethodDecl>(NewDC))
+      if (MD->isStatic())
+        return;
+
+  if (VarDecl *shadowedVar = dyn_cast<VarDecl>(ShadowedDecl))
+    if (shadowedVar->isExternC()) {
+      // Don't warn for this case:
+      //
+      // @code
+      // extern int bob;
+      // void f() {
+      //   extern int bob;
+      // }
+      // @endcode
+      if (D->isExternC())
+        return;
+
+      // For shadowing external vars, make sure that we point to the global
+      // declaration, not a locally scoped extern declaration.
+      for (VarDecl::redecl_iterator
+             I = shadowedVar->redecls_begin(), E = shadowedVar->redecls_end();
+           I != E; ++I)
+        if (I->isFileVarDecl()) {
+          ShadowedDecl = *I;
+          break;
+        }
+    }
+
   DeclContext *OldDC = ShadowedDecl->getDeclContext();
 
   // Only warn about certain kinds of shadowing for class members.
@@ -4232,7 +4276,7 @@ void Sema::CheckFunctionDeclaration(Scope *S, FunctionDecl *NewFD,
                    diag::note_overridden_virtual_function);
             }
           }
-        }        
+        }
       }
     }
 
@@ -5653,17 +5697,46 @@ TypedefDecl *Sema::ParseTypedefDecl(Scope *S, Declarator &D, QualType T,
                                            D.getIdentifier(),
                                            TInfo);
 
-  if (const TagType *TT = T->getAs<TagType>()) {
-    TagDecl *TD = TT->getDecl();
-
-    // If the TagDecl that the TypedefDecl points to is an anonymous decl
-    // keep track of the TypedefDecl.
-    if (!TD->getIdentifier() && !TD->getTypedefForAnonDecl())
-      TD->setTypedefForAnonDecl(NewTD);
+  // Bail out immediately if we have an invalid declaration.
+  if (D.isInvalidType()) {
+    NewTD->setInvalidDecl();
+    return NewTD;
   }
 
-  if (D.isInvalidType())
-    NewTD->setInvalidDecl();
+  // C++ [dcl.typedef]p8:
+  //   If the typedef declaration defines an unnamed class (or
+  //   enum), the first typedef-name declared by the declaration
+  //   to be that class type (or enum type) is used to denote the
+  //   class type (or enum type) for linkage purposes only.
+  // We need to check whether the type was declared in the declaration.
+  switch (D.getDeclSpec().getTypeSpecType()) {
+  case TST_enum:
+  case TST_struct:
+  case TST_union:
+  case TST_class: {
+    TagDecl *tagFromDeclSpec = cast<TagDecl>(D.getDeclSpec().getRepAsDecl());
+
+    // Do nothing if the tag is not anonymous or already has an
+    // associated typedef (from an earlier typedef in this decl group).
+    if (tagFromDeclSpec->getIdentifier()) break;
+    if (tagFromDeclSpec->getTypedefForAnonDecl()) break;
+
+    // A well-formed anonymous tag must always be a TUK_Definition.
+    assert(tagFromDeclSpec->isThisDeclarationADefinition());
+
+    // The type must match the tag exactly;  no qualifiers allowed.
+    if (!Context.hasSameType(T, Context.getTagDeclType(tagFromDeclSpec)))
+      break;
+
+    // Otherwise, set this is the anon-decl typedef for the tag.
+    tagFromDeclSpec->setTypedefForAnonDecl(NewTD);
+    break;
+  }
+    
+  default:
+    break;
+  }
+
   return NewTD;
 }
 

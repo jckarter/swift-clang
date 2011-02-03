@@ -122,7 +122,8 @@ public:
   virtual llvm::Constant *EmitMemberPointer(const CXXMethodDecl *MD);
 
   /// Create a member pointer for the given field.
-  virtual llvm::Constant *EmitMemberPointer(const FieldDecl *FD);
+  virtual llvm::Constant *EmitMemberDataPointer(const MemberPointerType *MPT,
+                                                CharUnits offset);
 
   /// Emit a comparison between two member pointers.  Returns an i1.
   virtual llvm::Value *
@@ -189,7 +190,7 @@ public:
   ///
   /// \param ElementType - the allocated type of the expression,
   ///   i.e. the pointee type of the expression result type
-  virtual CharUnits GetArrayCookieSize(QualType ElementType);
+  virtual CharUnits GetArrayCookieSize(const CXXNewExpr *expr);
 
   /// Initialize the array cookie for the given allocation.
   ///
@@ -202,6 +203,7 @@ public:
   virtual llvm::Value *InitializeArrayCookie(CodeGenFunction &CGF,
                                              llvm::Value *NewPtr,
                                              llvm::Value *NumElements,
+                                             const CXXNewExpr *expr,
                                              QualType ElementType);
 
   /// Reads the array cookie associated with the given pointer,
@@ -218,6 +220,7 @@ public:
   /// \param CookieSize - an out parameter which will be initialized
   ///   with the size of the cookie, or zero if there is no cookie
   virtual void ReadArrayCookie(CodeGenFunction &CGF, llvm::Value *Ptr,
+                               const CXXDeleteExpr *expr,
                                QualType ElementType, llvm::Value *&NumElements,
                                llvm::Value *&AllocPtr, CharUnits &CookieSize);
 

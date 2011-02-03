@@ -164,20 +164,8 @@ void CodeGenModule::ErrorUnsupported(const Decl *D, const char *Type,
   getDiags().Report(Context.getFullLoc(D->getLocation()), DiagID) << Msg;
 }
 
-static llvm::GlobalValue::VisibilityTypes GetLLVMVisibility(Visibility V) {
-  switch (V) {
-  case DefaultVisibility:   return llvm::GlobalValue::DefaultVisibility;
-  case HiddenVisibility:    return llvm::GlobalValue::HiddenVisibility;
-  case ProtectedVisibility: return llvm::GlobalValue::ProtectedVisibility;
-  }
-  llvm_unreachable("unknown visibility!");
-  return llvm::GlobalValue::DefaultVisibility;
-}
-
-
 void CodeGenModule::setGlobalVisibility(llvm::GlobalValue *GV,
-                                        const NamedDecl *D,
-                                        bool IsForDefinition) const {
+                                        const NamedDecl *D) const {
   // Internal definitions always have default visibility.
   if (GV->hasLocalLinkage()) {
     GV->setVisibility(llvm::GlobalValue::DefaultVisibility);
@@ -186,8 +174,7 @@ void CodeGenModule::setGlobalVisibility(llvm::GlobalValue *GV,
 
   // Set visibility for definitions.
   NamedDecl::LinkageInfo LV = D->getLinkageAndVisibility();
-  if (LV.visibilityExplicit() ||
-      (IsForDefinition && !GV->hasAvailableExternallyLinkage()))
+  if (LV.visibilityExplicit() || !GV->hasAvailableExternallyLinkage())
     GV->setVisibility(GetLLVMVisibility(LV.visibility()));
 }
 
@@ -195,11 +182,14 @@ void CodeGenModule::setGlobalVisibility(llvm::GlobalValue *GV,
 /// associated with the given type.
 void CodeGenModule::setTypeVisibility(llvm::GlobalValue *GV,
                                       const CXXRecordDecl *RD,
-                                      bool IsForRTTI,
-                                      bool IsForDefinition) const {
-  setGlobalVisibility(GV, RD, IsForDefinition);
+                                      TypeVisibilityKind TVK) const {
+  setGlobalVisibility(GV, RD);
 
   if (!CodeGenOpts.HiddenWeakVTables)
+    return;
+
+  // We never want to drop the visibility for RTTI names.
+  if (TVK == TVK_ForRTTIName)
     return;
 
   // We want to drop the visibility to hidden for weak type symbols.
@@ -245,9 +235,10 @@ void CodeGenModule::setTypeVisibility(llvm::GlobalValue *GV,
   // If there's a key function, there may be translation units
   // that don't have the key function's definition.  But ignore
   // this if we're emitting RTTI under -fno-rtti.
-  if (!IsForRTTI || Features.RTTI)
+  if (!(TVK != TVK_ForRTTI) || Features.RTTI) {
     if (Context.getKeyFunction(RD))
       return;
+  }
 
   // Otherwise, drop the visibility to hidden.
   GV->setVisibility(llvm::GlobalValue::HiddenVisibility);
@@ -460,8 +451,8 @@ void CodeGenModule::SetLLVMFunctionAttributesForDefinition(const Decl *D,
 
 void CodeGenModule::SetCommonAttributes(const Decl *D,
                                         llvm::GlobalValue *GV) {
-  if (isa<NamedDecl>(D))
-    setGlobalVisibility(GV, cast<NamedDecl>(D), /*ForDef*/ true);
+  if (const NamedDecl *ND = dyn_cast<NamedDecl>(D))
+    setGlobalVisibility(GV, ND);
   else
     GV->setVisibility(llvm::GlobalValue::DefaultVisibility);
 
@@ -986,6 +977,45 @@ CodeGenModule::GetOrCreateLLVMGlobal(llvm::StringRef MangledName,
 }
 
 
+llvm::GlobalVariable *
+CodeGenModule::CreateOrReplaceCXXRuntimeVariable(llvm::StringRef Name, 
+                                      const llvm::Type *Ty,
+                                      llvm::GlobalValue::LinkageTypes Linkage) {
+  llvm::GlobalVariable *GV = getModule().getNamedGlobal(Name);
+  llvm::GlobalVariable *OldGV = 0;
+
+  
+  if (GV) {
+    // Check if the variable has the right type.
+    if (GV->getType()->getElementType() == Ty)
+      return GV;
+
+    // Because C++ name mangling, the only way we can end up with an already
+    // existing global with the same name is if it has been declared extern "C".
+      assert(GV->isDeclaration() && "Declaration has wrong type!");
+    OldGV = GV;
+  }
+  
+  // Create a new variable.
+  GV = new llvm::GlobalVariable(getModule(), Ty, /*isConstant=*/true,
+                                Linkage, 0, Name);
+  
+  if (OldGV) {
+    // Replace occurrences of the old variable if needed.
+    GV->takeName(OldGV);
+    
+    if (!OldGV->use_empty()) {
+      llvm::Constant *NewPtrForOldDecl =
+      llvm::ConstantExpr::getBitCast(GV, OldGV->getType());
+      OldGV->replaceAllUsesWith(NewPtrForOldDecl);
+    }
+    
+    OldGV->eraseFromParent();
+  }
+  
+  return GV;
+}
+
 /// GetAddrOfGlobalVar - Return the llvm::Constant for the address of the
 /// given global variable.  If Ty is non-null and if the global doesn't exist,
 /// then it will be greated with the specified type instead of whatever the
@@ -1052,6 +1082,12 @@ CodeGenModule::getVTableLinkage(const CXXRecordDecl *RD) {
     switch (KeyFunction->getTemplateSpecializationKind()) {
       case TSK_Undeclared:
       case TSK_ExplicitSpecialization:
+        // When compiling with optimizations turned on, we emit all vtables,
+        // even if the key function is not defined in the current translation
+        // unit. If this is the case, use available_externally linkage.
+        if (!Def && CodeGenOpts.OptimizationLevel)
+          return llvm::GlobalVariable::AvailableExternallyLinkage;
+
         if (KeyFunction->isInlined())
           return llvm::GlobalVariable::LinkOnceODRLinkage;
         
@@ -1377,7 +1413,7 @@ void CodeGenModule::EmitGlobalFunctionDefinition(GlobalDecl GD) {
   setFunctionLinkage(D, Fn);
 
   // FIXME: this is redundant with part of SetFunctionDefinitionAttributes
-  setGlobalVisibility(Fn, D, /*ForDef*/ true);
+  setGlobalVisibility(Fn, D);
 
   CodeGenFunction(*this).GenerateCode(D, Fn);
 
@@ -1718,15 +1754,16 @@ CodeGenModule::GetAddrOfConstantString(const StringLiteral *Literal) {
 /// GetStringForStringLiteral - Return the appropriate bytes for a
 /// string literal, properly padded to match the literal type.
 std::string CodeGenModule::GetStringForStringLiteral(const StringLiteral *E) {
+  const ASTContext &Context = getContext();
   const ConstantArrayType *CAT =
-    getContext().getAsConstantArrayType(E->getType());
+    Context.getAsConstantArrayType(E->getType());
   assert(CAT && "String isn't pointer or array!");
 
   // Resize the string to the right size.
   uint64_t RealLen = CAT->getSize().getZExtValue();
 
   if (E->isWide())
-    RealLen *= getContext().Target.getWCharWidth()/8;
+    RealLen *= Context.Target.getWCharWidth() / Context.getCharWidth();
 
   std::string Str = E->getString().str();
   Str.resize(RealLen, '\0');

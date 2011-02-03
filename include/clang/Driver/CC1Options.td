@@ -183,6 +183,8 @@ def munwind_tables : Flag<"-munwind-tables">,
   HelpText<"Generate unwinding tables for all functions">;
 def mconstructor_aliases : Flag<"-mconstructor-aliases">,
   HelpText<"Emit complete constructors and destructors as aliases when possible">;
+def mms_bitfields : Flag<"-mms-bitfields">,
+  HelpText<"Set the default structure layout to be compatible with the Microsoft compiler standard.">;
 def O : Joined<"-O">, HelpText<"Optimization level">;
 def Os : Flag<"-Os">, HelpText<"Optimize for size">;
 
@@ -194,6 +196,10 @@ def dependency_file : Separate<"-dependency-file">,
   HelpText<"Filename (or -) to write dependency output to">;
 def sys_header_deps : Flag<"-sys-header-deps">,
   HelpText<"Include system headers in dependency output">;
+def header_include_file : Separate<"-header-include-file">,
+  HelpText<"Filename (or -) to write header include output to">;
+def H : Flag<"-H">,
+  HelpText<"Show header includes and nesting depth">;
 def MQ : Separate<"-MQ">, HelpText<"Specify target to quote for dependency">;
 def MT : Separate<"-MT">, HelpText<"Specify target for dependency">;
 def MP : Flag<"-MP">,
@@ -598,8 +604,6 @@ def dM : Flag<"-dM">,
   HelpText<"Print macro definitions in -E mode instead of normal output">;
 def dD : Flag<"-dD">,
   HelpText<"Print macro definitions in -E mode in addition to normal output">;
-def H : Flag<"-H">,
-  HelpText<"Show header includes and nesting depth">;
 
 //===----------------------------------------------------------------------===//
 // OpenCL Options

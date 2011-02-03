@@ -259,13 +259,31 @@ public:
 
   /// setGlobalVisibility - Set the visibility for the given LLVM
   /// GlobalValue.
-  void setGlobalVisibility(llvm::GlobalValue *GV, const NamedDecl *D,
-                           bool IsForDefinition) const;
+  void setGlobalVisibility(llvm::GlobalValue *GV, const NamedDecl *D) const;
+
+  /// TypeVisibilityKind - The kind of global variable that is passed to 
+  /// setTypeVisibility
+  enum TypeVisibilityKind {
+    TVK_ForVTT,
+    TVK_ForVTable,
+    TVK_ForRTTI,
+    TVK_ForRTTIName
+  };
 
   /// setTypeVisibility - Set the visibility for the given global
   /// value which holds information about a type.
   void setTypeVisibility(llvm::GlobalValue *GV, const CXXRecordDecl *D,
-                         bool IsForRTTI, bool IsForDefinition) const;
+                         TypeVisibilityKind TVK) const;
+
+  static llvm::GlobalValue::VisibilityTypes GetLLVMVisibility(Visibility V) {
+    switch (V) {
+    case DefaultVisibility:   return llvm::GlobalValue::DefaultVisibility;
+    case HiddenVisibility:    return llvm::GlobalValue::HiddenVisibility;
+    case ProtectedVisibility: return llvm::GlobalValue::ProtectedVisibility;
+    }
+    llvm_unreachable("unknown visibility!");
+    return llvm::GlobalValue::DefaultVisibility;
+  }
 
   llvm::Constant *GetAddrOfGlobal(GlobalDecl GD) {
     if (isa<CXXConstructorDecl>(GD.getDecl()))
@@ -279,6 +297,14 @@ public:
     else
       return GetAddrOfGlobalVar(cast<VarDecl>(GD.getDecl()));
   }
+
+  /// CreateOrReplaceCXXRuntimeVariable - Will return a global variable of the given
+  /// type. If a variable with a different type already exists then a new 
+  /// variable with the right type will be created and all uses of the old
+  /// variable will be replaced with a bitcast to the new variable.
+  llvm::GlobalVariable *
+  CreateOrReplaceCXXRuntimeVariable(llvm::StringRef Name, const llvm::Type *Ty,
+                                    llvm::GlobalValue::LinkageTypes Linkage);
 
   /// GetAddrOfGlobalVar - Return the llvm::Constant for the address of the
   /// given global variable.  If Ty is non-null and if the global doesn't exist,
@@ -411,6 +437,8 @@ public:
     // Make sure that this type is translated.
     Types.UpdateCompletedType(TD);
   }
+
+  llvm::Constant *getMemberPointerConstant(const UnaryOperator *e);
 
   /// EmitConstantExpr - Try to emit the given expression as a
   /// constant; returns 0 if the expression cannot be emitted as a

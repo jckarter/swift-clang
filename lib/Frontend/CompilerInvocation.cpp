@@ -220,6 +220,12 @@ static void DependencyOutputOptsToArgs(const DependencyOutputOptions &Opts,
                                        std::vector<std::string> &Res) {
   if (Opts.IncludeSystemHeaders)
     Res.push_back("-sys-header-deps");
+  if (Opts.ShowHeaderIncludes)
+    Res.push_back("-H");
+  if (!Opts.HeaderIncludeOutputFile.empty()) {
+    Res.push_back("-header-include-file");
+    Res.push_back(Opts.HeaderIncludeOutputFile);
+  }
   if (Opts.UsePhonyTargets)
     Res.push_back("-MP");
   if (!Opts.OutputFile.empty()) {
@@ -438,6 +444,10 @@ static void FrontendOptsToArgs(const FrontendOptions &Opts,
   for (unsigned i = 0, e = Opts.AddPluginActions.size(); i != e; ++i) {
     Res.push_back("-add-plugin");
     Res.push_back(Opts.AddPluginActions[i]);
+    for(unsigned ai = 0, ae = Opts.AddPluginArgs.size(); ai != ae; ++ai) {
+      Res.push_back("-plugin-arg-" + Opts.AddPluginActions[i]);
+      Res.push_back(Opts.AddPluginArgs[i][ai]);
+    }
   }
   for (unsigned i = 0, e = Opts.ASTMergeFiles.size(); i != e; ++i) {
     Res.push_back("-ast-merge");
@@ -579,6 +589,8 @@ static void LangOptsToArgs(const LangOptions &Opts,
     Res.push_back("-fsjlj-exceptions");
   if (!Opts.RTTI)
     Res.push_back("-fno-rtti");
+  if (Opts.MSBitfields)
+    Res.push_back("-mms-bitfields");
   if (!Opts.NeXTRuntime)
     Res.push_back("-fgnu-runtime");
   if (Opts.Freestanding)
@@ -726,8 +738,6 @@ static void PreprocessorOutputOptsToArgs(const PreprocessorOutputOptions &Opts,
   else if (!Opts.ShowCPP && Opts.ShowMacros)
     Res.push_back("-dM");
 
-  if (Opts.ShowHeaderIncludes)
-    Res.push_back("-H");
   if (!Opts.ShowLineMarkers)
     Res.push_back("-P");
   if (Opts.ShowComments)
@@ -954,6 +964,8 @@ static void ParseDependencyOutputArgs(DependencyOutputOptions &Opts,
   Opts.Targets = Args.getAllArgValues(OPT_MT);
   Opts.IncludeSystemHeaders = Args.hasArg(OPT_sys_header_deps);
   Opts.UsePhonyTargets = Args.hasArg(OPT_MP);
+  Opts.ShowHeaderIncludes = Args.hasArg(OPT_H);
+  Opts.HeaderIncludeOutputFile = Args.getLastArgValue(OPT_header_include_file);
 }
 
 static void ParseDiagnosticArgs(DiagnosticOptions &Opts, ArgList &Args,
@@ -1106,6 +1118,14 @@ static InputKind ParseFrontendArgs(FrontendOptions &Opts, ArgList &Args,
   }
 
   Opts.AddPluginActions = Args.getAllArgValues(OPT_add_plugin);
+  Opts.AddPluginArgs.resize(Opts.AddPluginActions.size());
+  for (int i = 0, e = Opts.AddPluginActions.size(); i != e; ++i) {
+    for (arg_iterator it = Args.filtered_begin(OPT_plugin_arg),
+           end = Args.filtered_end(); it != end; ++it) {
+      if ((*it)->getValue(Args, 0) == Opts.AddPluginActions[i])
+        Opts.AddPluginArgs[i].push_back((*it)->getValue(Args, 1));
+    }
+  }
 
   if (const Arg *A = Args.getLastArg(OPT_code_completion_at)) {
     Opts.CodeCompletionAt =
@@ -1433,6 +1453,7 @@ static void ParseLangArgs(LangOptions &Opts, ArgList &Args, InputKind IK,
                                                Diags);
   Opts.NumLargeByValueCopy = Args.getLastArgIntValue(OPT_Wlarge_by_value_copy,
                                                     0, Diags);
+  Opts.MSBitfields = Args.hasArg(OPT_mms_bitfields);
   Opts.NeXTRuntime = !Args.hasArg(OPT_fgnu_runtime);
   Opts.ObjCConstantStringClass =
     Args.getLastArgValue(OPT_fconstant_string_class);
@@ -1566,7 +1587,6 @@ static void ParsePreprocessorOutputArgs(PreprocessorOutputOptions &Opts,
   using namespace cc1options;
   Opts.ShowCPP = !Args.hasArg(OPT_dM);
   Opts.ShowComments = Args.hasArg(OPT_C);
-  Opts.ShowHeaderIncludes = Args.hasArg(OPT_H);
   Opts.ShowLineMarkers = !Args.hasArg(OPT_P);
   Opts.ShowMacroComments = Args.hasArg(OPT_CC);
   Opts.ShowMacros = Args.hasArg(OPT_dM) || Args.hasArg(OPT_dD);

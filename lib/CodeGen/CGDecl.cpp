@@ -305,6 +305,15 @@ unsigned CodeGenFunction::getByRefValueLLVMField(const ValueDecl *VD) const {
   return ByRefValueInfo.find(VD)->second.second;
 }
 
+llvm::Value *CodeGenFunction::BuildBlockByrefAddress(llvm::Value *BaseAddr,
+                                                     const VarDecl *V) {
+  llvm::Value *Loc = Builder.CreateStructGEP(BaseAddr, 1, "forwarding");
+  Loc = Builder.CreateLoad(Loc);
+  Loc = Builder.CreateStructGEP(Loc, getByRefValueLLVMField(V),
+                                V->getNameAsString());
+  return Loc;
+}
+
 /// BuildByRefType - This routine changes a __block variable declared as T x
 ///   into:
 ///
@@ -688,6 +697,7 @@ void CodeGenFunction::EmitAutoVarDecl(const VarDecl &D,
       DidCallStackSave = true;
 
       // Push a cleanup block and restore the stack there.
+      // FIXME: in general circumstances, this should be an EH cleanup.
       EHStack.pushCleanup<CallStackRestore>(NormalCleanup, Stack);
     }
 
@@ -795,9 +805,6 @@ void CodeGenFunction::EmitAutoVarDecl(const VarDecl &D,
     SpecialInit(*this, D, DeclPtr);
   } else if (Init) {
     llvm::Value *Loc = DeclPtr;
-    if (isByRef)
-      Loc = Builder.CreateStructGEP(DeclPtr, getByRefValueLLVMField(&D), 
-                                    D.getNameAsString());
     
     bool isVolatile = getContext().getCanonicalType(Ty).isVolatileQualified();
     
@@ -844,13 +851,31 @@ void CodeGenFunction::EmitAutoVarDecl(const VarDecl &D,
       }
     } else if (Ty->isReferenceType()) {
       RValue RV = EmitReferenceBindingToExpr(Init, &D);
+      if (isByRef)
+        Loc = Builder.CreateStructGEP(DeclPtr, getByRefValueLLVMField(&D), 
+                                      D.getNameAsString());
       EmitStoreOfScalar(RV.getScalarVal(), Loc, false, Alignment, Ty);
     } else if (!hasAggregateLLVMType(Init->getType())) {
       llvm::Value *V = EmitScalarExpr(Init);
+      if (isByRef) {
+        // When RHS has side-effect, must go through "forwarding' field
+        // to get to the address of the __block variable descriptor.
+        if (Init->HasSideEffects(getContext()))
+          Loc = BuildBlockByrefAddress(DeclPtr, &D);
+        else
+          Loc = Builder.CreateStructGEP(DeclPtr, getByRefValueLLVMField(&D), 
+                                        D.getNameAsString());
+      }
       EmitStoreOfScalar(V, Loc, isVolatile, Alignment, Ty);
     } else if (Init->getType()->isAnyComplexType()) {
+      if (isByRef)
+        Loc = Builder.CreateStructGEP(DeclPtr, getByRefValueLLVMField(&D), 
+                                      D.getNameAsString());
       EmitComplexExprIntoAddr(Init, Loc, isVolatile);
     } else {
+      if (isByRef)
+        Loc = Builder.CreateStructGEP(DeclPtr, getByRefValueLLVMField(&D), 
+                                      D.getNameAsString());
       EmitAggExpr(Init, AggValueSlot::forAddr(Loc, isVolatile, true, false));
     }
   }

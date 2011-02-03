@@ -761,7 +761,6 @@ void ASTStmtWriter::VisitShuffleVectorExpr(ShuffleVectorExpr *E) {
 void ASTStmtWriter::VisitBlockExpr(BlockExpr *E) {
   VisitExpr(E);
   Writer.AddDeclRef(E->getBlockDecl(), Record);
-  Record.push_back(E->hasBlockDeclRefExprs());
   Code = serialization::EXPR_BLOCK;
 }
 
@@ -1101,6 +1100,7 @@ void ASTStmtWriter::VisitCXXNewExpr(CXXNewExpr *E) {
   VisitExpr(E);
   Record.push_back(E->isGlobalNew());
   Record.push_back(E->hasInitializer());
+  Record.push_back(E->doesUsualArrayDeleteWantSize());
   Record.push_back(E->isArray());
   Record.push_back(E->getNumPlacementArgs());
   Record.push_back(E->getNumConstructorArgs());
@@ -1125,6 +1125,7 @@ void ASTStmtWriter::VisitCXXDeleteExpr(CXXDeleteExpr *E) {
   Record.push_back(E->isGlobalDelete());
   Record.push_back(E->isArrayForm());
   Record.push_back(E->isArrayFormAsWritten());
+  Record.push_back(E->doesUsualArrayDeleteWantSize());
   Writer.AddDeclRef(E->getOperatorDelete(), Record);
   Writer.AddStmt(E->getArgument());
   Writer.AddSourceLocation(E->getSourceRange().getBegin(), Record);
@@ -1330,6 +1331,7 @@ void ASTStmtWriter::VisitSubstNonTypeTemplateParmPackExpr(
 
 void ASTStmtWriter::VisitOpaqueValueExpr(OpaqueValueExpr *E) {
   VisitExpr(E);
+  Writer.AddSourceLocation(E->getLocation(), Record);
   Code = serialization::EXPR_OPAQUE_VALUE;
 }
 

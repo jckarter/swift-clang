@@ -885,24 +885,6 @@ static void HandleVecReturnAttr(Decl *d, const AttributeList &Attr,
   d->addAttr(::new (S.Context) VecReturnAttr(Attr.getLoc(), S.Context));
 }
 
-static void HandleForbidTemporariesAttr(Decl *d, const AttributeList &Attr,
-                                        Sema &S) {
-  assert(Attr.isInvalid() == false);
-
-  if (Attr.getNumArgs() != 0) {
-    S.Diag(Attr.getLoc(), diag::err_attribute_wrong_number_arguments) << 0;
-    return;
-  }
-
-  if (!isa<TypeDecl>(d)) {
-    S.Diag(Attr.getLoc(), diag::warn_attribute_wrong_decl_type)
-      << Attr.getName() << 9 /*class*/;
-    return;
-  }
-
-  d->addAttr(::new (S.Context) ForbidTemporariesAttr(Attr.getLoc(), S.Context));
-}
-
 static void HandleDependencyAttr(Decl *d, const AttributeList &Attr, Sema &S) {
   if (!isFunctionOrMethod(d) && !isa<ParmVarDecl>(d)) {
     S.Diag(Attr.getLoc(), diag::err_attribute_wrong_decl_type)
@@ -1490,7 +1472,8 @@ static void HandleCleanupAttr(Decl *d, const AttributeList &Attr, Sema &S) {
   // If this ever proves to be a problem it should be easy to fix.
   QualType Ty = S.Context.getPointerType(VD->getType());
   QualType ParamTy = FD->getParamDecl(0)->getType();
-  if (S.CheckAssignmentConstraints(ParamTy, Ty) != Sema::Compatible) {
+  if (S.CheckAssignmentConstraints(FD->getParamDecl(0)->getLocation(),
+                                   ParamTy, Ty) != Sema::Compatible) {
     S.Diag(Attr.getParameterLoc(),
            diag::err_attribute_cleanup_func_arg_incompatible_type) <<
       Attr.getParameterName() << ParamTy << Ty;
@@ -2692,8 +2675,6 @@ static void ProcessInheritableDeclAttr(Scope *scope, Decl *D,
   case AttributeList::AT_ext_vector_type:
     HandleExtVectorTypeAttr(scope, D, Attr, S);
     break;
-  case AttributeList::AT_forbid_temporaries:
-    HandleForbidTemporariesAttr(D, Attr, S); break;
   case AttributeList::AT_format:      HandleFormatAttr      (D, Attr, S); break;
   case AttributeList::AT_format_arg:  HandleFormatArgAttr   (D, Attr, S); break;
   case AttributeList::AT_global:      HandleGlobalAttr      (D, Attr, S); break;

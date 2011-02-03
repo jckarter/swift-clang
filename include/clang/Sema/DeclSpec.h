@@ -1177,7 +1177,8 @@ public:
     ConditionContext,    // Condition declaration in a C++ if/switch/while/for.
     TemplateParamContext,// Within a template parameter list.
     CXXCatchContext,     // C++ catch exception-declaration
-    BlockLiteralContext  // Block literal declarator.
+    BlockLiteralContext,  // Block literal declarator.
+    TemplateTypeArgContext // Template type argument.
   };
 
 private:
@@ -1302,14 +1303,15 @@ public:
   bool mayOmitIdentifier() const {
     return Context == TypeNameContext || Context == PrototypeContext ||
            Context == TemplateParamContext || Context == CXXCatchContext ||
-           Context == BlockLiteralContext;
+           Context == BlockLiteralContext || Context == TemplateTypeArgContext;
   }
 
   /// mayHaveIdentifier - Return true if the identifier is either optional or
   /// required.  This is true for normal declarators and prototypes, but not
   /// typenames.
   bool mayHaveIdentifier() const {
-    return Context != TypeNameContext && Context != BlockLiteralContext;
+    return Context != TypeNameContext && Context != BlockLiteralContext &&
+           Context != TemplateTypeArgContext;
   }
 
   /// mayBeFollowedByCXXDirectInit - Return true if the declarator can be
@@ -1512,6 +1514,8 @@ public:
 
   bool isNewSpecified() const { return Specifiers & VS_New; }
   SourceLocation getNewLoc() const { return VS_newLoc; }
+
+  void clear() { Specifiers = 0; }
 
   static const char *getSpecifierName(Specifier VS);
 

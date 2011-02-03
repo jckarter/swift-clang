@@ -279,8 +279,8 @@ def warn_pragma_pack_pop_failed : Warning<"#pragma pack(pop, ...) failed: %0">;
 
 def warn_pragma_unused_undeclared_var : Warning<
   "undeclared variable %0 used as an argument for '#pragma unused'">;
-def warn_pragma_unused_expected_localvar : Warning<
-  "only local variables can be arguments to '#pragma unused'">;
+def warn_pragma_unused_expected_var_arg : Warning<
+  "only variables can be arguments to '#pragma unused'">;
 def err_unsupported_pragma_weak : Error<
   "using '#pragma weak' to refer to an undeclared identifier is not yet supported">;
 
@@ -386,6 +386,10 @@ def warn_objc_property_copy_missing_on_block : Warning<
 def warn_atomic_property_rule : Warning<
   "writable atomic property %0 cannot pair a synthesized setter/getter "
   "with a user defined setter/getter">;
+def warn_default_atomic_custom_getter_setter : Warning<
+  "atomic by default property %0 has a user defined %select{getter|setter}1 "
+  "(property should be marked 'atomic' if this is intended)">,
+  InGroup<CustomAtomic>, DefaultIgnore;
 def err_use_continuation_class : Error<
   "illegal redeclaration of property in continuation class %0"
   " (attribute must be 'readwrite', while its primary must be 'readonly')">;
@@ -541,65 +545,70 @@ def warn_missing_exception_specification : Warning<
 def err_class_redeclared_with_different_access : Error<
   "%0 redeclared with '%1' access">;
 def err_access : Error<
-  "%1 is a %select{private|protected}0 member of %3">, NoSFINAE;
+  "%1 is a %select{private|protected}0 member of %3">, AccessControl;
 def err_access_ctor : Error<
-  "calling a %select{private|protected}0 constructor of class %2">, NoSFINAE;
+  "calling a %select{private|protected}0 constructor of class %2">, 
+  AccessControl;
 def ext_rvalue_to_reference_access_ctor : ExtWarn<
   "C++98 requires an accessible copy constructor for class %2 when binding "
   "a reference to a temporary; was %select{private|protected}0">,
-  NoSFINAE, InGroup<BindToTemporaryCopy>;
+  AccessControl, InGroup<BindToTemporaryCopy>;
 def err_access_base : Error<
   "%select{base class|inherited virtual base class}0 %1 has %select{private|"
   "protected}3 %select{constructor|copy constructor|copy assignment operator|"
-  "destructor}2">, NoSFINAE;
+  "destructor}2">, AccessControl;
 def err_access_field: Error<
   "field of type %0 has %select{private|protected}2 %select{constructor|copy "
-  "constructor|copy assignment operator|destructor}1">, NoSFINAE;
+  "constructor|copy assignment operator|destructor}1">, AccessControl;
 
 def err_access_ctor_field :
     Error<"field of type %1 has %select{private|protected}2 constructor">,
-    NoSFINAE;
+    AccessControl;
+def err_access_dtor : Error<
+  "calling a %select{private|protected}1 destructor of class %0">, 
+  AccessControl;
 def err_access_dtor_base :
     Error<"base class %0 has %select{private|protected}1 destructor">,
-    NoSFINAE;
+    AccessControl;
 def err_access_dtor_vbase :
     Error<"inherited virtual base class %0 has "
     "%select{private|protected}1 destructor">,
-    NoSFINAE;
+    AccessControl;
 def err_access_dtor_temp :
     Error<"temporary of type %0 has %select{private|protected}1 destructor">,
-    NoSFINAE;
+    AccessControl;
 def err_access_dtor_exception :
     Error<"exception object of type %0 has %select{private|protected}1 "
-          "destructor">, NoSFINAE;
+          "destructor">, AccessControl;
 def err_access_dtor_field :
     Error<"field of type %1 has %select{private|protected}2 destructor">,
-    NoSFINAE;
+    AccessControl;
 def err_access_dtor_var :
     Error<"variable of type %1 has %select{private|protected}2 destructor">,
-    NoSFINAE;
+    AccessControl;
 def err_access_assign_field :
     Error<"field of type %1 has %select{private|protected}2 copy assignment"
           " operator">,
-    NoSFINAE;
+    AccessControl;
 def err_access_assign_base :
     Error<"base class %0 has %select{private|protected}1 copy assignment"
           " operator">,
-    NoSFINAE;
+    AccessControl;
 def err_access_copy_field :
     Error<"field of type %1 has %select{private|protected}2 copy constructor">,
-    NoSFINAE;
+    AccessControl;
 def err_access_copy_base :
     Error<"base class %0 has %select{private|protected}1 copy constructor">,
-    NoSFINAE;
+    AccessControl;
 def err_access_dtor_ivar :
     Error<"instance variable of type %0 has %select{private|protected}1 "
           "destructor">,
-    NoSFINAE;
+    AccessControl;
 def note_previous_access_declaration : Note<
   "previously declared '%1' here">;
 def err_access_outside_class : Error<
-  "access to %select{private|protected}0 member outside any class context">;
+  "access to %select{private|protected}0 member outside any class context">,
+  AccessControl;
 def note_access_natural : Note<
   "%select{|implicitly }1declared %select{private|protected}0 here">;
 def note_access_constrained_by_path : Note<
@@ -707,7 +716,7 @@ def note_overridden_virtual_function : Note<
 
 def err_covariant_return_inaccessible_base : Error<
   "invalid covariant return for virtual function: %1 is a "
-  "%select{private|protected}2 base class of %0">, NoSFINAE;
+  "%select{private|protected}2 base class of %0">, AccessControl;
 def err_covariant_return_ambiguous_derived_to_base_conv : Error<
   "return type of virtual function %3 is not covariant with the return type of "
   "the function it overrides (ambiguous conversion from derived class "
@@ -827,12 +836,13 @@ def note_uninit_reference_member : Note<
   "uninitialized reference member is here">;
 def warn_field_is_uninit : Warning<"field is uninitialized when used here">,
   InGroup<Uninitialized>;
-def warn_uninit_var : Warning<"use of uninitialized variable %0">,
+def warn_uninit_var : Warning<"variable %0 is possibly uninitialized when used here">,
   InGroup<Uninitialized>, DefaultIgnore;
-def note_uninit_var : Note<
-  "variable %0 is possibly uninitialized when used here">;
-def note_uninit_var_captured_by_block : Note<
-  "variable %0 is possibly uninitialized when captured by block">;
+def note_uninit_var_def : Note<
+  "variable %0 is declared here">;
+def warn_uninit_var_captured_by_block : Warning<
+  "variable %0 is possibly uninitialized when captured by block">,
+  InGroup<Uninitialized>, DefaultIgnore;
 def note_var_fixit_add_initialization : Note<
   "add initialization to silence this warning">;
 def err_init_incomplete_type : Error<"initialization of incomplete type %0">;
@@ -861,9 +871,6 @@ def err_temp_copy_deleted : Error<
   "of type %1 invokes deleted constructor">;
 def err_temp_copy_incomplete : Error<
   "copying a temporary object of incomplete type %0">;
-def warn_temporaries_forbidden : Warning<
-  "must not create temporaries of type %0">,
-  InGroup<DiagGroup<"forbid-temporaries">>;
 
 // C++0x decltype
 def err_cannot_determine_declared_type_of_overloaded_function : Error<
@@ -923,9 +930,9 @@ def err_enum_redeclare_scoped_mismatch : Error<
 
 // C++0x delegating constructors
 def err_delegation_0x_only : Error<
-  "Delegating constructors are permitted only in C++0x.">;
+  "delegating constructors are permitted only in C++0x">;
 def err_delegation_unimplemented : Error<
-  "Delegating constructors are not fully implemented.">;
+  "delegating constructors are not fully implemented">;
   
 // Objective-C++
 def err_objc_decls_may_only_appear_in_global_scope : Error<
@@ -1004,9 +1011,6 @@ def err_attribute_address_space_too_high : Error<
   "address space is larger than the maximum supported (%0)">;
 def err_attribute_address_multiple_qualifiers : Error<
   "multiple address spaces specified for type">;
-def err_implicit_pointer_address_space_cast : Error<
-  "illegal implicit conversion between two pointers with different address "
-  "spaces">;
 def err_as_qualified_auto_decl : Error<
   "automatic variable qualified with an address space">;
 def err_arg_with_address_space : Error<
@@ -1964,6 +1968,10 @@ def err_static_non_static : Error<
   "static declaration of %0 follows non-static declaration">;
 def err_non_static_static : Error<
   "non-static declaration of %0 follows static declaration">;
+def err_extern_non_extern : Error<
+  "extern declaration of %0 follows non-extern declaration">;
+def err_non_extern_extern : Error<
+  "non-extern declaration of %0 follows extern declaration">;
 def err_non_thread_thread : Error<
   "non-thread-local declaration of %0 follows thread-local declaration">;
 def err_thread_non_thread : Error<
@@ -2472,6 +2480,10 @@ def err_invalid_qualified_function_type : Error<
 def err_invalid_ref_qualifier_function_type : Error<
   "ref-qualifier '%select{&&|&}0' is only allowed on non-static member functions,"
   " member function pointers, and typedefs of function types">;
+def ext_qualified_function_type_template_arg : ExtWarn<
+  "template argument of '%0' qualified function type is a GNU extension">, 
+  InGroup<GNU>;
+
 def err_invalid_qualified_function_pointer : Error<
   "type qualifier is not allowed on this function %select{pointer|reference}0">;
 def err_invalid_qualified_typedef_function_type_use : Error<
@@ -2753,6 +2765,14 @@ def err_bad_memptr_lhs : Error<
 def warn_exception_caught_by_earlier_handler : Warning<
   "exception of type %0 will be caught by earlier handler">;
 def note_previous_exception_handler : Note<"for type %0">;
+def warn_non_virtual_dtor : Warning<
+  "%0 has virtual functions but non-virtual destructor">,
+  InGroup<NonVirtualDtor>, DefaultIgnore;
+def warn_overloaded_virtual : Warning<
+  "%q0 hides overloaded virtual %select{function|functions}1">,
+  InGroup<OverloadedVirtual>, DefaultIgnore;
+def note_hidden_overloaded_virtual_declared_here : Note<
+  "hidden overloaded virtual function %q0 declared here">;
 
 def err_conditional_void_nonvoid : Error<
   "%select{left|right}1 operand to ? is void, but %select{right|left}1 operand "
@@ -2838,6 +2858,13 @@ def note_condition_or_assign_to_comparison : Note<
   "use '!=' to turn this compound assignment into an inequality comparison">;
 def note_condition_assign_silence : Note<
   "place parentheses around the assignment to silence this warning">;
+
+def warn_equality_with_extra_parens : Warning<"equality comparison with "
+  "extraneous parentheses">, InGroup<Parentheses>;
+def note_equality_comparison_to_assign : Note<
+  "use '=' to turn this equality comparison into an assignment">;
+def note_equality_comparison_silence : Note<
+  "remove extraneous parentheses around the comparison to silence this warning">;
 
 def warn_synthesized_ivar_access : Warning<
   "direct access of synthesized ivar by using property access %0">,
@@ -2927,7 +2954,15 @@ def err_typecheck_convert_incompatible_block_pointer : Error<
   " %0 "
   "%select{from|to parameter of type|from a function with result type|to type|"
   "with an expression of type|to parameter of type|to type}2 %1">;
-  
+def err_typecheck_incompatible_address_space : Error<
+  "%select{assigning %1 to %0"
+  "|passing %0 to parameter of type %1"
+  "|returning %0 from a function with result type %1"
+  "|converting %0 to type %1"
+  "|initializing %0 with an expression of type %1"
+  "|sending %0 to parameter of type %1"
+  "|casting %0 to type %1}2"
+  " changes address space of pointer">;
 def err_typecheck_convert_ambiguous : Error<
   "ambiguity in initializing value of type %0 with initializer of type %1">;
 def err_cannot_initialize_decl_noname : Error<
@@ -3200,7 +3235,7 @@ def err_memptr_conv_via_virtual : Error<
 
 // C++ access control
 def err_conv_to_inaccessible_base : Error<
-  "conversion from %0 to inaccessible base class %1">, NoSFINAE;
+  "conversion from %0 to inaccessible base class %1">, AccessControl;
 def note_inheritance_specifier_here : Note<
   "'%0' inheritance specifier here">;
 def note_inheritance_implicitly_private_here : Note<
@@ -3569,9 +3604,9 @@ def warn_ivar_use_hidden : Warning<
 def error_ivar_use_in_class_method : Error<
   "instance variable %0 accessed in class method">;
 def error_private_ivar_access : Error<"instance variable %0 is private">,
-  NoSFINAE;
+  AccessControl;
 def error_protected_ivar_access : Error<"instance variable %0 is protected">,
-  NoSFINAE;
+  AccessControl;
 def warn_maynot_respond : Warning<"%0 may not respond to %1">;
 def warn_attribute_method_def : Warning<
   "method attribute can only be specified on method declarations">;

@@ -63,6 +63,7 @@ namespace clang {
   class ClassTemplatePartialSpecializationDecl;
   class ClassTemplateSpecializationDecl;
   class CodeCompleteConsumer;
+  class CodeCompletionAllocator;
   class CodeCompletionResult;
   class Decl;
   class DeclAccessPair;
@@ -234,17 +235,23 @@ public:
   private:
     Sema &S;
     DeclContext *SavedContext;
-
+    unsigned SavedParsingDeclDepth;
+    
   public:
-    ContextRAII(Sema &S, DeclContext *ContextToPush)
-      : S(S), SavedContext(S.CurContext) {
+    ContextRAII(Sema &S, DeclContext *ContextToPush,
+                unsigned ParsingDeclDepth = 0)
+      : S(S), SavedContext(S.CurContext), 
+        SavedParsingDeclDepth(S.ParsingDeclDepth) 
+    {
       assert(ContextToPush && "pushing null context");
       S.CurContext = ContextToPush;
+      S.ParsingDeclDepth = 0;
     }
 
     void pop() {
       if (!SavedContext) return;
       S.CurContext = SavedContext;
+      S.ParsingDeclDepth = SavedParsingDeclDepth;
       SavedContext = 0;
     }
 
@@ -725,6 +732,7 @@ public:
                                      bool IsFunctionDefinition,
                                      bool &Redeclaration);
   bool AddOverriddenMethods(CXXRecordDecl *DC, CXXMethodDecl *MD);
+  void DiagnoseHiddenVirtualMethods(CXXRecordDecl *DC, CXXMethodDecl *MD);
   void CheckFunctionDeclaration(Scope *S,
                                 FunctionDecl *NewFD, LookupResult &Previous,
                                 bool IsExplicitSpecialization,
@@ -999,7 +1007,8 @@ public:
                              Expr *From,
                              bool SuppressUserConversions,
                              bool AllowExplicit,
-                             bool InOverloadResolution);
+                             bool InOverloadResolution,
+                             bool CStyle);
 
   bool IsIntegralPromotion(Expr *From, QualType FromType, QualType ToType);
   bool IsFloatingPointPromotion(QualType FromType, QualType ToType);
@@ -1023,7 +1032,8 @@ public:
                                     CastKind &Kind,
                                     CXXCastPath &BasePath,
                                     bool IgnoreBaseAccess);
-  bool IsQualificationConversion(QualType FromType, QualType ToType);
+  bool IsQualificationConversion(QualType FromType, QualType ToType,
+                                 bool CStyle);
   bool DiagnoseMultipleUserDefinedConversion(Expr *From, QualType ToType);
 
 
@@ -1775,10 +1785,11 @@ public:
                               const DeclarationNameInfo &NameInfo,
                               const CXXScopeSpec *SS = 0);
   ExprResult
-  BuildAnonymousStructUnionMemberReference(SourceLocation Loc,
-                                           IndirectFieldDecl *IndirectField,
-                                           Expr *BaseObjectExpr = 0,
-                                      SourceLocation OpLoc = SourceLocation());
+  BuildAnonymousStructUnionMemberReference(const CXXScopeSpec &SS,
+                                           SourceLocation nameLoc,
+                                           IndirectFieldDecl *indirectField,
+                                           Expr *baseObjectExpr = 0,
+                                      SourceLocation opLoc = SourceLocation());
   ExprResult BuildPossibleImplicitMemberExpr(const CXXScopeSpec &SS,
                                              LookupResult &R,
                                 const TemplateArgumentListInfo *TemplateArgs);
@@ -2261,7 +2272,12 @@ public:
 
 
   //// ActOnCXXThis -  Parse 'this' pointer.
-  ExprResult ActOnCXXThis(SourceLocation ThisLoc);
+  ExprResult ActOnCXXThis(SourceLocation loc);
+
+  /// tryCaptureCXXThis - Try to capture a 'this' pointer.  Returns a
+  /// pointer to an instance method whose 'this' pointer is
+  /// capturable, or null if this is not possible.
+  CXXMethodDecl *tryCaptureCXXThis();
 
   /// ActOnCXXBoolLiteral - Parse {true,false} literals.
   ExprResult ActOnCXXBoolLiteral(SourceLocation OpLoc, tok::TokenKind Kind);
@@ -2801,6 +2817,10 @@ public:
   /// A flag to suppress access checking.
   bool SuppressAccessChecking;
 
+  /// \brief When true, access checking violations are treated as SFINAE
+  /// failures rather than hard errors.
+  bool AccessCheckingSFINAE;
+  
   void ActOnStartSuppressingAccessChecks();
   void ActOnStopSuppressingAccessChecks();
 
@@ -3706,6 +3726,13 @@ public:
   llvm::SmallVector<ActiveTemplateInstantiation, 16>
     ActiveTemplateInstantiations;
 
+  /// \brief Whether we are in a SFINAE context that is not associated with
+  /// template instantiation.
+  ///
+  /// This is used when setting up a SFINAE trap (\c see SFINAETrap) outside
+  /// of a template instantiation or template argument deduction.
+  bool InNonInstantiationSFINAEContext;
+  
   /// \brief The number of ActiveTemplateInstantiation entries in
   /// \c ActiveTemplateInstantiations that are not actual instantiations and,
   /// therefore, should not be counted as part of the instantiation depth.
@@ -3727,7 +3754,7 @@ public:
   /// should be instantiated as themselves. Otherwise, the index specifies
   /// which argument within the parameter pack will be used for substitution.
   int ArgumentPackSubstitutionIndex;
-  
+
   /// \brief RAII object used to change the argument pack substitution index
   /// within a \c Sema object.
   ///
@@ -3853,6 +3880,7 @@ public:
   private:
     Sema &SemaRef;
     bool Invalid;
+    bool SavedInNonInstantiationSFINAEContext;
     bool CheckInstantiationDepth(SourceLocation PointOfInstantiation,
                                  SourceRange InstantiationRange);
 
@@ -3868,23 +3896,39 @@ public:
   /// template argument substitution failures are not considered
   /// errors.
   ///
-  /// \returns The nearest template-deduction context object, if we are in a
-  /// SFINAE context, which can be used to capture diagnostics that will be
-  /// suppressed. Otherwise, returns NULL to indicate that we are not within a
-  /// SFINAE context.
-  sema::TemplateDeductionInfo *isSFINAEContext() const;
+  /// \returns An empty \c llvm::Optional if we're not in a SFINAE context.
+  /// Otherwise, contains a pointer that, if non-NULL, contains the nearest 
+  /// template-deduction context object, which can be used to capture 
+  /// diagnostics that will be suppressed. 
+  llvm::Optional<sema::TemplateDeductionInfo *> isSFINAEContext() const;
 
   /// \brief RAII class used to determine whether SFINAE has
   /// trapped any errors that occur during template argument
-  /// deduction.
+  /// deduction.`
   class SFINAETrap {
     Sema &SemaRef;
     unsigned PrevSFINAEErrors;
+    bool PrevInNonInstantiationSFINAEContext;
+    bool PrevAccessCheckingSFINAE;
+    
   public:
-    explicit SFINAETrap(Sema &SemaRef)
-      : SemaRef(SemaRef), PrevSFINAEErrors(SemaRef.NumSFINAEErrors) { }
+    explicit SFINAETrap(Sema &SemaRef, bool AccessCheckingSFINAE = false)
+      : SemaRef(SemaRef), PrevSFINAEErrors(SemaRef.NumSFINAEErrors),
+        PrevInNonInstantiationSFINAEContext(
+                                      SemaRef.InNonInstantiationSFINAEContext),
+        PrevAccessCheckingSFINAE(SemaRef.AccessCheckingSFINAE)
+    { 
+      if (!SemaRef.isSFINAEContext())
+        SemaRef.InNonInstantiationSFINAEContext = true;
+      SemaRef.AccessCheckingSFINAE = AccessCheckingSFINAE;
+    }
 
-    ~SFINAETrap() { SemaRef.NumSFINAEErrors = PrevSFINAEErrors; }
+    ~SFINAETrap() { 
+      SemaRef.NumSFINAEErrors = PrevSFINAEErrors; 
+      SemaRef.InNonInstantiationSFINAEContext 
+        = PrevInNonInstantiationSFINAEContext;
+      SemaRef.AccessCheckingSFINAE = PrevAccessCheckingSFINAE;
+    }
 
     /// \brief Determine whether any SFINAE errors have been trapped.
     bool hasErrorOccurred() const {
@@ -4226,6 +4270,8 @@ public:
                             SourceLocation receiverNameLoc,
                             SourceLocation propertyNameLoc);
 
+  ObjCMethodDecl *tryCaptureObjCSelf();
+
   /// \brief Describes the kind of message expression indicated by a message
   /// send that starts with an identifier.
   enum ObjCMessageKind {
@@ -4475,6 +4521,11 @@ public:
     /// c/v/r qualifiers, which we accept as an extension.
     CompatiblePointerDiscardsQualifiers,
 
+    /// IncompatiblePointerDiscardsQualifiers - The assignment
+    /// discards qualifiers that we don't permit to be discarded,
+    /// like address spaces.
+    IncompatiblePointerDiscardsQualifiers,
+
     /// IncompatibleNestedPointerQualifiers - The assignment is between two
     /// nested pointer types, and the qualifiers other than the first two
     /// levels differ e.g. char ** -> const char **, but we accept them as an
@@ -4515,7 +4566,8 @@ public:
   /// CheckAssignmentConstraints - Perform type checking for assignment,
   /// argument passing, variable initialization, and function return values.
   /// C99 6.5.16.
-  AssignConvertType CheckAssignmentConstraints(QualType lhs, QualType rhs);
+  AssignConvertType CheckAssignmentConstraints(SourceLocation Loc,
+                                               QualType lhs, QualType rhs);
 
   /// Check assignment constraints and prepare for a conversion of the
   /// RHS to the LHS type.
@@ -4533,18 +4585,6 @@ public:
   AssignConvertType CheckTransparentUnionArgumentConstraints(QualType lhs,
                                                              Expr *&rExpr);
 
-  // Helper function for CheckAssignmentConstraints (C99 6.5.16.1p1)
-  AssignConvertType CheckPointerTypesForAssignment(QualType lhsType,
-                                                   QualType rhsType);
-
-  AssignConvertType CheckObjCPointerTypesForAssignment(QualType lhsType,
-                                                       QualType rhsType);
-
-  // Helper function for CheckAssignmentConstraints involving two
-  // block pointer types.
-  AssignConvertType CheckBlockPointerTypesForAssignment(QualType lhsType,
-                                                        QualType rhsType);
-
   bool IsStringLiteralToNonConstPointerConversion(Expr *From, QualType ToType);
 
   bool CheckExceptionSpecCompatibility(Expr *From, QualType ToType);
@@ -4559,10 +4599,11 @@ public:
   bool PerformImplicitConversion(Expr *&From, QualType ToType,
                                  const ImplicitConversionSequence& ICS,
                                  AssignmentAction Action,
-                                 bool IgnoreBaseAccess = false);
+                                 bool CStyle = false);
   bool PerformImplicitConversion(Expr *&From, QualType ToType,
                                  const StandardConversionSequence& SCS,
-                                 AssignmentAction Action,bool IgnoreBaseAccess);
+                                 AssignmentAction Action,
+                                 bool CStyle);
 
   /// the following "Check" methods will return a valid/converted QualType
   /// or a null QualType (indicating an error diagnostic was issued).
@@ -4701,6 +4742,10 @@ public:
   /// DiagnoseAssignmentAsCondition - Given that an expression is
   /// being used as a boolean condition, warn if it's an assignment.
   void DiagnoseAssignmentAsCondition(Expr *E);
+
+  /// \brief Redundant parentheses over an equality comparison can indicate
+  /// that the user intended an assignment used as condition.
+  void DiagnoseEqualityWithExtraParens(ParenExpr *parenE);
 
   /// CheckCXXBooleanCondition - Returns true if conversion to bool is invalid.
   bool CheckCXXBooleanCondition(Expr *&CondExpr);
@@ -4873,7 +4918,7 @@ public:
                                              MacroInfo *MacroInfo,
                                              unsigned Argument);
   void CodeCompleteNaturalLanguage();
-  void GatherGlobalCodeCompletions(
+  void GatherGlobalCodeCompletions(CodeCompletionAllocator &Allocator,
                   llvm::SmallVectorImpl<CodeCompletionResult> &Results);
   //@}
 
