@@ -733,58 +733,106 @@ Sema::ActOnStringLiteral(const Token *StringToks, unsigned NumStringToks) {
                                      StringTokLocs.size()));
 }
 
-/// ShouldSnapshotBlockValueReference - Return true if a reference inside of
-/// CurBlock to VD should cause it to be snapshotted (as we do for auto
-/// variables defined outside the block) or false if this is not needed (e.g.
-/// for values inside the block or for globals).
+enum CaptureResult {
+  /// No capture is required.
+  CR_NoCapture,
+
+  /// A capture is required.
+  CR_Capture,
+
+  /// An error occurred when trying to capture the given variable.
+  CR_Error
+};
+
+/// Diagnose an uncapturable value reference.
 ///
-/// This also keeps the 'hasBlockDeclRefExprs' in the BlockScopeInfo records
-/// up-to-date.
-///
-static bool ShouldSnapshotBlockValueReference(Sema &S, BlockScopeInfo *CurBlock,
-                                              ValueDecl *VD) {
-  // If the value is defined inside the block, we couldn't snapshot it even if
-  // we wanted to.
-  if (CurBlock->TheDecl == VD->getDeclContext())
-    return false;
+/// \param var - the variable referenced
+/// \param DC - the context which we couldn't capture through
+static CaptureResult
+DiagnoseUncapturableValueReference(Sema &S, SourceLocation loc,
+                                   VarDecl *var, DeclContext *DC) {
+  switch (S.ExprEvalContexts.back().Context) {
+  case Sema::Unevaluated:
+    // The argument will never be evaluated, so don't complain.
+    return CR_NoCapture;
 
-  // If this is an enum constant or function, it is constant, don't snapshot.
-  if (isa<EnumConstantDecl>(VD) || isa<FunctionDecl>(VD))
-    return false;
+  case Sema::PotentiallyEvaluated:
+  case Sema::PotentiallyEvaluatedIfUsed:
+    break;
 
-  // If this is a reference to an extern, static, or global variable, no need to
-  // snapshot it.
-  // FIXME: What about 'const' variables in C++?
-  if (const VarDecl *Var = dyn_cast<VarDecl>(VD))
-    if (!Var->hasLocalStorage())
-      return false;
-
-  // Blocks that have these can't be constant.
-  CurBlock->hasBlockDeclRefExprs = true;
-
-  // If we have nested blocks, the decl may be declared in an outer block (in
-  // which case that outer block doesn't get "hasBlockDeclRefExprs") or it may
-  // be defined outside all of the current blocks (in which case the blocks do
-  // all get the bit).  Walk the nesting chain.
-  for (unsigned I = S.FunctionScopes.size() - 1; I; --I) {
-    BlockScopeInfo *NextBlock = dyn_cast<BlockScopeInfo>(S.FunctionScopes[I]);
-
-    if (!NextBlock)
-      continue;
-
-    // If we found the defining block for the variable, don't mark the block as
-    // having a reference outside it.
-    if (NextBlock->TheDecl == VD->getDeclContext())
-      break;
-
-    // Otherwise, the DeclRef from the inner block causes the outer one to need
-    // a snapshot as well.
-    NextBlock->hasBlockDeclRefExprs = true;
+  case Sema::PotentiallyPotentiallyEvaluated:
+    // FIXME: delay these!
+    break;
   }
 
-  return true;
+  // Don't diagnose about capture if we're not actually in code right
+  // now; in general, there are more appropriate places that will
+  // diagnose this.
+  if (!S.CurContext->isFunctionOrMethod()) return CR_NoCapture;
+
+  // This particular madness can happen in ill-formed default
+  // arguments; claim it's okay and let downstream code handle it.
+  if (isa<ParmVarDecl>(var) &&
+      S.CurContext == var->getDeclContext()->getParent())
+    return CR_NoCapture;
+
+  DeclarationName functionName;
+  if (FunctionDecl *fn = dyn_cast<FunctionDecl>(var->getDeclContext()))
+    functionName = fn->getDeclName();
+  // FIXME: variable from enclosing block that we couldn't capture from!
+
+  S.Diag(loc, diag::err_reference_to_local_var_in_enclosing_function)
+    << var->getIdentifier() << functionName;
+  S.Diag(var->getLocation(), diag::note_local_variable_declared_here)
+    << var->getIdentifier();
+
+  return CR_Error;
 }
 
+/// ShouldCaptureValueReference - Determine if a reference to the
+/// given value in the current context requires a variable capture.
+///
+/// This also keeps the captures set in the BlockScopeInfo records
+/// up-to-date.
+static CaptureResult ShouldCaptureValueReference(Sema &S, SourceLocation loc,
+                                                 ValueDecl *value) {
+  // Only variables ever require capture.
+  VarDecl *var = dyn_cast<VarDecl>(value);
+  if (!var || isa<NonTypeTemplateParmDecl>(var)) return CR_NoCapture;
+
+  // Fast path: variables from the current context never require capture.
+  DeclContext *DC = S.CurContext;
+  if (var->getDeclContext() == DC) return CR_NoCapture;
+
+  // Only variables with local storage require capture.
+  // FIXME: What about 'const' variables in C++?
+  if (!var->hasLocalStorage()) return CR_NoCapture;
+
+  // Otherwise, we need to capture.
+
+  unsigned functionScopesIndex = S.FunctionScopes.size() - 1;
+
+  do {
+    // Only blocks (and eventually C++0x closures) can capture; other
+    // scopes don't work.
+    if (!isa<BlockDecl>(DC))
+      return DiagnoseUncapturableValueReference(S, loc, var, DC);
+
+    BlockScopeInfo *blockScope =
+      cast<BlockScopeInfo>(S.FunctionScopes[functionScopesIndex]);
+    assert(blockScope->TheDecl == static_cast<BlockDecl*>(DC));
+
+    // Try to capture it in this block.  If we've already captured at
+    // this level, we're done.
+    if (!blockScope->Captures.insert(var))
+      return CR_Capture;
+
+    functionScopesIndex--;
+    DC = cast<BlockDecl>(DC)->getDeclContext();
+  } while (var->getDeclContext() != DC);
+
+  return CR_Capture;
+}
 
 ExprResult
 Sema::BuildDeclRefExpr(ValueDecl *D, QualType Ty, ExprValueKind VK,
@@ -811,17 +859,6 @@ Sema::BuildDeclRefExpr(ValueDecl *D, QualType Ty,
       // Non-type template parameters can be referenced anywhere they are
       // visible.
       Ty = Ty.getNonLValueExprType(Context);
-    } else if (const CXXMethodDecl *MD = dyn_cast<CXXMethodDecl>(CurContext)) {
-      if (const FunctionDecl *FD = MD->getParent()->isLocalClass()) {
-        if (VD->hasLocalStorage() && VD->getDeclContext() != CurContext) {
-          Diag(NameInfo.getLoc(),
-               diag::err_reference_to_local_var_in_enclosing_function)
-            << D->getIdentifier() << FD->getDeclName();
-          Diag(D->getLocation(), diag::note_local_variable_declared_here)
-            << D->getIdentifier();
-          return ExprError();
-        }
-      }
 
     // This ridiculousness brought to you by 'extern void x;' and the
     // GNU compiler collection.
@@ -852,109 +889,116 @@ BuildFieldReferenceExpr(Sema &S, Expr *BaseExpr, bool IsArrow,
                         const DeclarationNameInfo &MemberNameInfo);
 
 ExprResult
-Sema::BuildAnonymousStructUnionMemberReference(SourceLocation Loc,
-                                               const CXXScopeSpec &SS,
-                                            IndirectFieldDecl *IndirectField,
-                                               Expr *BaseObjectExpr,
-                                               SourceLocation OpLoc) {
-  // Build the expression that refers to the base object, from
-  // which we will build a sequence of member references to each
-  // of the anonymous union objects and, eventually, the field we
-  // found via name lookup.
-  bool BaseObjectIsPointer = false;
-  Qualifiers BaseQuals;
-  VarDecl *BaseObject = IndirectField->getVarDecl();
-  if (BaseObject) {
-    // BaseObject is an anonymous struct/union variable (and is,
-    // therefore, not part of another non-anonymous record).
-    MarkDeclarationReferenced(Loc, BaseObject);
-    BaseObjectExpr =
-      new (Context) DeclRefExpr(BaseObject, BaseObject->getType(),
-                                VK_LValue, Loc);
-    BaseQuals
-      = Context.getCanonicalType(BaseObject->getType()).getQualifiers();
-  } else if (BaseObjectExpr) {
+Sema::BuildAnonymousStructUnionMemberReference(const CXXScopeSpec &SS,
+                                               SourceLocation loc,
+                                               IndirectFieldDecl *indirectField,
+                                               Expr *baseObjectExpr,
+                                               SourceLocation opLoc) {
+  // First, build the expression that refers to the base object.
+
+  bool baseObjectIsPointer = false;
+  Qualifiers baseQuals;
+
+  // Case 1:  the base of the indirect field is not a field.
+  VarDecl *baseVariable = indirectField->getVarDecl();
+  if (baseVariable) {
+    assert(baseVariable->getType()->isRecordType());
+
+    // In principle we could have a member access expression that
+    // accesses an anonymous struct/union that's a static member of
+    // the base object's class.  However, under the current standard,
+    // static data members cannot be anonymous structs or unions.
+    // Supporting this is as easy as building a MemberExpr here.
+    assert(!baseObjectExpr && "anonymous struct/union is static data member?");
+
+    DeclarationNameInfo baseNameInfo(DeclarationName(), loc);
+
+    ExprResult result =
+      BuildDeclarationNameExpr(SS, baseNameInfo, baseVariable);
+    if (result.isInvalid()) return ExprError();
+
+    baseObjectExpr = result.take();    
+    baseObjectIsPointer = false;
+    baseQuals = baseObjectExpr->getType().getQualifiers();
+
+  // Case 2: the base of the indirect field is a field and the user
+  // wrote a member expression.
+  } else if (baseObjectExpr) {
     // The caller provided the base object expression. Determine
     // whether its a pointer and whether it adds any qualifiers to the
     // anonymous struct/union fields we're looking into.
-    QualType ObjectType = BaseObjectExpr->getType();
-    if (const PointerType *ObjectPtr = ObjectType->getAs<PointerType>()) {
-      BaseObjectIsPointer = true;
-      ObjectType = ObjectPtr->getPointeeType();
+    QualType objectType = baseObjectExpr->getType();
+    
+    if (const PointerType *ptr = objectType->getAs<PointerType>()) {
+      baseObjectIsPointer = true;
+      objectType = ptr->getPointeeType();
+    } else {
+      baseObjectIsPointer = false;
     }
-    BaseQuals
-      = Context.getCanonicalType(ObjectType).getQualifiers();
+    baseQuals = objectType.getQualifiers();
+
+  // Case 3: the base of the indirect field is a field and we should
+  // build an implicit member access.
   } else {
     // We've found a member of an anonymous struct/union that is
     // inside a non-anonymous struct/union, so in a well-formed
     // program our base object expression is "this".
-    DeclContext *DC = getFunctionLevelDeclContext();
-    if (CXXMethodDecl *MD = dyn_cast<CXXMethodDecl>(DC)) {
-      if (!MD->isStatic()) {
-        QualType AnonFieldType
-          = Context.getTagDeclType(
-                     cast<RecordDecl>(
-                       (*IndirectField->chain_begin())->getDeclContext()));
-        QualType ThisType = Context.getTagDeclType(MD->getParent());
-        if ((Context.getCanonicalType(AnonFieldType)
-               == Context.getCanonicalType(ThisType)) ||
-            IsDerivedFrom(ThisType, AnonFieldType)) {
-          // Our base object expression is "this".
-          BaseObjectExpr = new (Context) CXXThisExpr(Loc,
-                                                     MD->getThisType(Context),
-                                                     /*isImplicit=*/true);
-          BaseObjectIsPointer = true;
-        }
-      } else {
-        return ExprError(Diag(Loc,diag::err_invalid_member_use_in_static_method)
-          << IndirectField->getDeclName());
-      }
-      BaseQuals = Qualifiers::fromCVRMask(MD->getTypeQualifiers());
+    CXXMethodDecl *method = tryCaptureCXXThis();
+    if (!method) {
+      Diag(loc, diag::err_invalid_member_use_in_static_method)
+        << indirectField->getDeclName();
+      return ExprError();
     }
 
-    if (!BaseObjectExpr) {
-      // The field is referenced for a pointer-to-member expression, e.g:
-      //
-      //   struct S {
-      //     union {
-      //       char c;
-      //     };
-      //   };
-      //   char S::*foo  = &S::c;
-      //
-      FieldDecl *field = IndirectField->getAnonField();
-      DeclarationNameInfo NameInfo(field->getDeclName(), Loc);
-      return BuildDeclRefExpr(field, field->getType().getNonReferenceType(),
-                              VK_LValue, NameInfo, &SS);
-    }
+    // Our base object expression is "this".
+    baseObjectExpr =
+      new (Context) CXXThisExpr(loc, method->getThisType(Context),
+                                /*isImplicit=*/ true);
+    baseObjectIsPointer = true;
+    baseQuals = Qualifiers::fromCVRMask(method->getTypeQualifiers());
   }
 
   // Build the implicit member references to the field of the
   // anonymous struct/union.
-  Expr *Result = BaseObjectExpr;
+  Expr *result = baseObjectExpr;
+  IndirectFieldDecl::chain_iterator
+    FI = indirectField->chain_begin(), FEnd = indirectField->chain_end();
 
-  IndirectFieldDecl::chain_iterator FI = IndirectField->chain_begin(),
-    FEnd = IndirectField->chain_end();
+  // Build the first member access in the chain with full information.
+  if (!baseVariable) {
+    FieldDecl *field = cast<FieldDecl>(*FI);
 
-  // Skip the first VarDecl if present. 
-  if (BaseObject)
-    FI++;    
-  for (; FI != FEnd; FI++) {
-    FieldDecl *Field = cast<FieldDecl>(*FI);
+    // FIXME: use the real found-decl info!
+    DeclAccessPair foundDecl = DeclAccessPair::make(field, field->getAccess());
 
-    // FIXME: these are somewhat meaningless
-    DeclarationNameInfo MemberNameInfo(Field->getDeclName(), Loc);
-    DeclAccessPair FoundDecl = DeclAccessPair::make(Field, Field->getAccess());
+    // Make a nameInfo that properly uses the anonymous name.
+    DeclarationNameInfo memberNameInfo(field->getDeclName(), loc);
 
-    Result = BuildFieldReferenceExpr(*this, Result, BaseObjectIsPointer,
-                                     SS, Field, FoundDecl, MemberNameInfo)
-      .take();
+    result = BuildFieldReferenceExpr(*this, result, baseObjectIsPointer,
+                                     SS, field, foundDecl,
+                                     memberNameInfo).take();
+    baseObjectIsPointer = false;
 
-    // All the implicit accesses are dot-accesses.
-    BaseObjectIsPointer = false;
+    // FIXME: check qualified member access
   }
 
-  return Owned(Result);
+  // In all cases, we should now skip the first declaration in the chain.
+  ++FI;
+
+  for (; FI != FEnd; FI++) {
+    FieldDecl *field = cast<FieldDecl>(*FI);
+
+    // FIXME: these are somewhat meaningless
+    DeclarationNameInfo memberNameInfo(field->getDeclName(), loc);
+    DeclAccessPair foundDecl = DeclAccessPair::make(field, field->getAccess());
+    CXXScopeSpec memberSS;
+
+    result = BuildFieldReferenceExpr(*this, result, /*isarrow*/ false,
+                                     memberSS, field, foundDecl, memberNameInfo)
+      .take();
+  }
+
+  return Owned(result);
 }
 
 /// Decomposes the given name into a DeclarationNameInfo, its location, and
@@ -1149,23 +1193,24 @@ static IMAKind ClassifyImplicitMemberAccess(Sema &SemaRef,
 /// Diagnose a reference to a field with no object available.
 static void DiagnoseInstanceReference(Sema &SemaRef,
                                       const CXXScopeSpec &SS,
-                                      const LookupResult &R) {
-  SourceLocation Loc = R.getNameLoc();
+                                      NamedDecl *rep,
+                                      const DeclarationNameInfo &nameInfo) {
+  SourceLocation Loc = nameInfo.getLoc();
   SourceRange Range(Loc);
   if (SS.isSet()) Range.setBegin(SS.getRange().getBegin());
 
-  if (R.getAsSingle<FieldDecl>() || R.getAsSingle<IndirectFieldDecl>()) {
+  if (isa<FieldDecl>(rep) || isa<IndirectFieldDecl>(rep)) {
     if (CXXMethodDecl *MD = dyn_cast<CXXMethodDecl>(SemaRef.CurContext)) {
       if (MD->isStatic()) {
         // "invalid use of member 'x' in static member function"
         SemaRef.Diag(Loc, diag::err_invalid_member_use_in_static_method)
-          << Range << R.getLookupName();
+          << Range << nameInfo.getName();
         return;
       }
     }
 
     SemaRef.Diag(Loc, diag::err_invalid_non_static_member_use)
-      << R.getLookupName() << Range;
+      << nameInfo.getName() << Range;
     return;
   }
 
@@ -1641,7 +1686,8 @@ Sema::BuildPossibleImplicitMemberExpr(const CXXScopeSpec &SS,
 
   case IMA_Error_StaticContext:
   case IMA_Error_Unrelated:
-    DiagnoseInstanceReference(*this, SS, R);
+    DiagnoseInstanceReference(*this, SS, R.getRepresentativeDecl(),
+                              R.getLookupNameInfo());
     return ExprError();
   }
 
@@ -2038,29 +2084,30 @@ Sema::BuildImplicitMemberExpr(const CXXScopeSpec &SS,
                               bool IsKnownInstance) {
   assert(!R.empty() && !R.isAmbiguous());
 
-  SourceLocation Loc = R.getNameLoc();
+  SourceLocation loc = R.getNameLoc();
 
   // We may have found a field within an anonymous union or struct
   // (C++ [class.union]).
-  // FIXME: This needs to happen post-isImplicitMemberReference?
   // FIXME: template-ids inside anonymous structs?
   if (IndirectFieldDecl *FD = R.getAsSingle<IndirectFieldDecl>())
-    return BuildAnonymousStructUnionMemberReference(Loc, SS, FD);
+    return BuildAnonymousStructUnionMemberReference(SS, R.getNameLoc(), FD);
 
-
-  // If this is known to be an instance access, go ahead and build a
+  // If this is known to be an instance access, go ahead and build an
+  // implicit 'this' expression now.
   // 'this' expression now.
-  DeclContext *DC = getFunctionLevelDeclContext();
-  QualType ThisType = cast<CXXMethodDecl>(DC)->getThisType(Context);
-  Expr *This = 0; // null signifies implicit access
+  CXXMethodDecl *method = tryCaptureCXXThis();
+  assert(method && "didn't correctly pre-flight capture of 'this'");
+
+  QualType thisType = method->getThisType(Context);
+  Expr *baseExpr = 0; // null signifies implicit access
   if (IsKnownInstance) {
     SourceLocation Loc = R.getNameLoc();
     if (SS.getRange().isValid())
       Loc = SS.getRange().getBegin();
-    This = new (Context) CXXThisExpr(Loc, ThisType, /*isImplicit=*/true);
+    baseExpr = new (Context) CXXThisExpr(loc, thisType, /*isImplicit=*/true);
   }
 
-  return BuildMemberReferenceExpr(This, ThisType,
+  return BuildMemberReferenceExpr(baseExpr, thisType,
                                   /*OpLoc*/ SourceLocation(),
                                   /*IsArrow*/ true,
                                   SS,
@@ -2184,6 +2231,7 @@ static ExprValueKind getValueKindForDecl(ASTContext &Context,
   // FIXME: It's not clear to me why NonTypeTemplateParmDecl is a VarDecl.
   if (isa<VarDecl>(D) && !isa<NonTypeTemplateParmDecl>(D)) return VK_LValue;
   if (isa<FieldDecl>(D)) return VK_LValue;
+  if (isa<IndirectFieldDecl>(D)) return VK_LValue;
   if (!Context.getLangOptions().CPlusPlus) return VK_RValue;
   if (isa<FunctionDecl>(D)) {
     if (isa<CXXMethodDecl>(D) && cast<CXXMethodDecl>(D)->isInstance())
@@ -2236,9 +2284,13 @@ Sema::BuildDeclarationNameExpr(const CXXScopeSpec &SS,
   if (VD->isInvalidDecl())
     return ExprError();
 
-  // Handle anonymous.
-  if (IndirectFieldDecl *FD = dyn_cast<IndirectFieldDecl>(VD))
-    return BuildAnonymousStructUnionMemberReference(Loc, SS, FD);
+  // Handle members of anonymous structs and unions.  If we got here,
+  // and the reference is to a class member indirect field, then this
+  // must be the subject of a pointer-to-member expression.
+  if (IndirectFieldDecl *indirectField = dyn_cast<IndirectFieldDecl>(VD))
+    if (!indirectField->isCXXClassMember())
+      return BuildAnonymousStructUnionMemberReference(SS, NameInfo.getLoc(),
+                                                      indirectField);
 
   ExprValueKind VK = getValueKindForDecl(Context, VD);
 
@@ -2250,66 +2302,74 @@ Sema::BuildDeclarationNameExpr(const CXXScopeSpec &SS,
   // We do not do this for things like enum constants, global variables, etc,
   // as they do not get snapshotted.
   //
-  if (getCurBlock() &&
-      ShouldSnapshotBlockValueReference(*this, getCurBlock(), VD)) {
-    if (VD->getType().getTypePtr()->isVariablyModifiedType()) {
-      Diag(Loc, diag::err_ref_vm_type);
-      Diag(D->getLocation(), diag::note_declared_at);
-      return ExprError();
-    }
+  switch (ShouldCaptureValueReference(*this, NameInfo.getLoc(), VD)) {
+  case CR_Error:
+    return ExprError();
 
-    if (VD->getType()->isArrayType()) {
-      Diag(Loc, diag::err_ref_array_type);
-      Diag(D->getLocation(), diag::note_declared_at);
-      return ExprError();
-    }
+  case CR_NoCapture:
+    // If this reference is not in a block or if the referenced
+    // variable is within the block, create a normal DeclRefExpr.
+    return BuildDeclRefExpr(VD, VD->getType().getNonReferenceType(), VK,
+                            NameInfo, &SS);
 
-    MarkDeclarationReferenced(Loc, VD);
-    QualType ExprTy = VD->getType().getNonReferenceType();
+  case CR_Capture:
+    break;
+  }
 
-    // The BlocksAttr indicates the variable is bound by-reference.
-    bool byrefVar = (VD->getAttr<BlocksAttr>() != 0);
-    QualType T = VD->getType();
-    BlockDeclRefExpr *BDRE;
+  // If we got here, we need to capture.
+
+  if (VD->getType().getTypePtr()->isVariablyModifiedType()) {
+    Diag(Loc, diag::err_ref_vm_type);
+    Diag(D->getLocation(), diag::note_declared_at);
+    return ExprError();
+  }
+
+  if (VD->getType()->isArrayType()) {
+    Diag(Loc, diag::err_ref_array_type);
+    Diag(D->getLocation(), diag::note_declared_at);
+    return ExprError();
+  }
+
+  MarkDeclarationReferenced(Loc, VD);
+  QualType ExprTy = VD->getType().getNonReferenceType();
+
+  // The BlocksAttr indicates the variable is bound by-reference.
+  bool byrefVar = (VD->getAttr<BlocksAttr>() != 0);
+  QualType T = VD->getType();
+  BlockDeclRefExpr *BDRE;
     
-    if (!byrefVar) {
-      // This is to record that a 'const' was actually synthesize and added.
-      bool constAdded = !ExprTy.isConstQualified();
-      // Variable will be bound by-copy, make it const within the closure.
-      ExprTy.addConst();
-      BDRE = new (Context) BlockDeclRefExpr(VD, ExprTy, VK,
-                                            Loc, false, constAdded);
-    }
-    else
-      BDRE = new (Context) BlockDeclRefExpr(VD, ExprTy, VK, Loc, true);
+  if (!byrefVar) {
+    // This is to record that a 'const' was actually synthesize and added.
+    bool constAdded = !ExprTy.isConstQualified();
+    // Variable will be bound by-copy, make it const within the closure.
+    ExprTy.addConst();
+    BDRE = new (Context) BlockDeclRefExpr(VD, ExprTy, VK,
+                                          Loc, false, constAdded);
+  }
+  else
+    BDRE = new (Context) BlockDeclRefExpr(VD, ExprTy, VK, Loc, true);
     
-    if (getLangOptions().CPlusPlus) {
-      if (!T->isDependentType() && !T->isReferenceType()) {
-        Expr *E = new (Context) 
-                    DeclRefExpr(const_cast<ValueDecl*>(BDRE->getDecl()), T,
-                                VK, SourceLocation());
-        if (T->getAs<RecordType>())
-          if (!T->isUnionType()) {
-            ExprResult Res = PerformCopyInitialization(
-                          InitializedEntity::InitializeBlock(VD->getLocation(), 
+  if (getLangOptions().CPlusPlus) {
+    if (!T->isDependentType() && !T->isReferenceType()) {
+      Expr *E = new (Context) 
+                  DeclRefExpr(const_cast<ValueDecl*>(BDRE->getDecl()), T,
+                              VK, SourceLocation());
+      if (T->isStructureOrClassType()) {
+        ExprResult Res = PerformCopyInitialization(
+                      InitializedEntity::InitializeBlock(VD->getLocation(), 
                                                          T, false),
-                                                         SourceLocation(),
-                                                         Owned(E));
-            if (!Res.isInvalid()) {
-              Res = MaybeCreateExprWithCleanups(Res);
-              Expr *Init = Res.takeAs<Expr>();
-              BDRE->setCopyConstructorExpr(Init);
-            }
+                                                   SourceLocation(),
+                                                   Owned(E));
+        if (!Res.isInvalid()) {
+          Res = MaybeCreateExprWithCleanups(Res);
+          Expr *Init = Res.takeAs<Expr>();
+          BDRE->setCopyConstructorExpr(Init);
         }
       }
     }
-    return Owned(BDRE);
   }
-  // If this reference is not in a block or if the referenced variable is
-  // within the block, create a normal DeclRefExpr.
 
-  return BuildDeclRefExpr(VD, VD->getType().getNonReferenceType(), VK,
-                          NameInfo, &SS);
+  return Owned(BDRE);
 }
 
 ExprResult Sema::ActOnPredefinedExpr(SourceLocation Loc,
@@ -3116,14 +3176,15 @@ static void DiagnoseQualifiedMemberReference(Sema &SemaRef,
                                              Expr *BaseExpr,
                                              QualType BaseType,
                                              const CXXScopeSpec &SS,
-                                             const LookupResult &R) {
+                                             NamedDecl *rep,
+                                       const DeclarationNameInfo &nameInfo) {
   // If this is an implicit member access, use a different set of
   // diagnostics.
   if (!BaseExpr)
-    return DiagnoseInstanceReference(SemaRef, SS, R);
+    return DiagnoseInstanceReference(SemaRef, SS, rep, nameInfo);
 
-  SemaRef.Diag(R.getNameLoc(), diag::err_qualified_member_of_unrelated)
-    << SS.getRange() << R.getRepresentativeDecl() << BaseType;
+  SemaRef.Diag(nameInfo.getLoc(), diag::err_qualified_member_of_unrelated)
+    << SS.getRange() << rep << BaseType;
 }
 
 // Check whether the declarations we found through a nested-name
@@ -3172,7 +3233,9 @@ bool Sema::CheckQualifiedMemberReference(Expr *BaseExpr,
       return false;
   }
 
-  DiagnoseQualifiedMemberReference(*this, BaseExpr, BaseType, SS, R);
+  DiagnoseQualifiedMemberReference(*this, BaseExpr, BaseType, SS,
+                                   R.getRepresentativeDecl(),
+                                   R.getLookupNameInfo());
   return true;
 }
 
@@ -3410,7 +3473,7 @@ Sema::BuildMemberReferenceExpr(Expr *BaseExpr, QualType BaseExprType,
   if (IndirectFieldDecl *FD = dyn_cast<IndirectFieldDecl>(MemberDecl))
     // We may have found a field within an anonymous union or struct
     // (C++ [class.union]).
-    return BuildAnonymousStructUnionMemberReference(MemberLoc, SS, FD,
+    return BuildAnonymousStructUnionMemberReference(SS, MemberLoc, FD,
                                                     BaseExpr, OpLoc);
 
   if (VarDecl *Var = dyn_cast<VarDecl>(MemberDecl)) {
@@ -7210,7 +7273,7 @@ void Sema::ConvertPropertyForLValue(Expr *&LHS, Expr *&RHS, QualType &LHSTy) {
 ///  - *(x + 1) -> x, if x is an array
 ///  - &"123"[2] -> 0
 ///  - & __real__ x -> x
-static NamedDecl *getPrimaryDecl(Expr *E) {
+static ValueDecl *getPrimaryDecl(Expr *E) {
   switch (E->getStmtClass()) {
   case Stmt::DeclRefExprClass:
     return cast<DeclRefExpr>(E)->getDecl();
@@ -7287,7 +7350,7 @@ static QualType CheckAddressOfOperand(Sema &S, Expr *OrigOp,
     // Technically, there should be a check for array subscript
     // expressions here, but the result of one is always an lvalue anyway.
   }
-  NamedDecl *dcl = getPrimaryDecl(op);
+  ValueDecl *dcl = getPrimaryDecl(op);
   Expr::LValueClassification lval = op->ClassifyLValue(S.Context);
 
   if (lval == Expr::LV_ClassTemporary) {
@@ -7363,17 +7426,17 @@ static QualType CheckAddressOfOperand(Sema &S, Expr *OrigOp,
       }
     } else if (isa<FunctionTemplateDecl>(dcl)) {
       return S.Context.OverloadTy;
-    } else if (FieldDecl *FD = dyn_cast<FieldDecl>(dcl)) {
+    } else if (isa<FieldDecl>(dcl) || isa<IndirectFieldDecl>(dcl)) {
       // Okay: we can take the address of a field.
       // Could be a pointer to member, though, if there is an explicit
       // scope qualifier for the class.
       if (isa<DeclRefExpr>(op) && cast<DeclRefExpr>(op)->getQualifier()) {
         DeclContext *Ctx = dcl->getDeclContext();
         if (Ctx && Ctx->isRecord()) {
-          if (FD->getType()->isReferenceType()) {
+          if (dcl->getType()->isReferenceType()) {
             S.Diag(OpLoc,
                    diag::err_cannot_form_pointer_to_member_of_reference_type)
-              << FD->getDeclName() << FD->getType();
+              << dcl->getDeclName() << dcl->getType();
             return QualType();
           }
 
@@ -8486,6 +8549,12 @@ ExprResult Sema::ActOnBlockStmtExpr(SourceLocation CaretLoc,
   bool NoReturn = BSI->TheDecl->getAttr<NoReturnAttr>();
   QualType BlockTy;
 
+  // Set the captured variables on the block.
+  BSI->TheDecl->setCapturedDecls(Context,
+                                 BSI->Captures.begin(),
+                                 BSI->Captures.end(),
+                                 BSI->CapturesCXXThis);
+
   // If the user wrote a function type in some form, try to use that.
   if (!BSI->FunctionType.isNull()) {
     const FunctionType *FTy = BSI->FunctionType->getAs<FunctionType>();
@@ -8557,8 +8626,7 @@ ExprResult Sema::ActOnBlockStmtExpr(SourceLocation CaretLoc,
     return ExprError();
   }
 
-  BlockExpr *Result = new (Context) BlockExpr(BSI->TheDecl, BlockTy,
-                                              BSI->hasBlockDeclRefExprs);
+  BlockExpr *Result = new (Context) BlockExpr(BSI->TheDecl, BlockTy);
 
   // Issue any analysis-based warnings.
   const sema::AnalysisBasedWarnings::Policy &WP =
@@ -9244,17 +9312,12 @@ void Sema::DiagnoseEqualityWithExtraParens(ParenExpr *parenE) {
                                                            == Expr::MLV_Valid) {
       SourceLocation Loc = opE->getOperatorLoc();
       
-      // Don't emit a warning if the operation occurs within a macro.
-      // Sometimes extra parentheses are used within macros to make the
-      // instantiation of the macro less error prone.
-      if (!Loc.isMacroID()) {
-        Diag(Loc, diag::warn_equality_with_extra_parens) << E->getSourceRange();
-        Diag(Loc, diag::note_equality_comparison_to_assign)
-          << FixItHint::CreateReplacement(Loc, "=");
-        Diag(Loc, diag::note_equality_comparison_silence)
-          << FixItHint::CreateRemoval(parenE->getSourceRange().getBegin())
-          << FixItHint::CreateRemoval(parenE->getSourceRange().getEnd());
-      }
+      Diag(Loc, diag::warn_equality_with_extra_parens) << E->getSourceRange();
+      Diag(Loc, diag::note_equality_comparison_to_assign)
+        << FixItHint::CreateReplacement(Loc, "=");
+      Diag(Loc, diag::note_equality_comparison_silence)
+        << FixItHint::CreateRemoval(parenE->getSourceRange().getBegin())
+        << FixItHint::CreateRemoval(parenE->getSourceRange().getEnd());
     }
 }
 

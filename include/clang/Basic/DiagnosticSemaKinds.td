@@ -836,12 +836,13 @@ def note_uninit_reference_member : Note<
   "uninitialized reference member is here">;
 def warn_field_is_uninit : Warning<"field is uninitialized when used here">,
   InGroup<Uninitialized>;
-def warn_uninit_var : Warning<"use of uninitialized variable %0">,
+def warn_uninit_var : Warning<"variable %0 is possibly uninitialized when used here">,
   InGroup<Uninitialized>, DefaultIgnore;
-def note_uninit_var : Note<
-  "variable %0 is possibly uninitialized when used here">;
-def note_uninit_var_captured_by_block : Note<
-  "variable %0 is possibly uninitialized when captured by block">;
+def note_uninit_var_def : Note<
+  "variable %0 is declared here">;
+def warn_uninit_var_captured_by_block : Warning<
+  "variable %0 is possibly uninitialized when captured by block">,
+  InGroup<Uninitialized>, DefaultIgnore;
 def note_var_fixit_add_initialization : Note<
   "add initialization to silence this warning">;
 def err_init_incomplete_type : Error<"initialization of incomplete type %0">;
@@ -2767,6 +2768,11 @@ def note_previous_exception_handler : Note<"for type %0">;
 def warn_non_virtual_dtor : Warning<
   "%0 has virtual functions but non-virtual destructor">,
   InGroup<NonVirtualDtor>, DefaultIgnore;
+def warn_overloaded_virtual : Warning<
+  "%q0 hides overloaded virtual %select{function|functions}1">,
+  InGroup<OverloadedVirtual>, DefaultIgnore;
+def note_hidden_overloaded_virtual_declared_here : Note<
+  "hidden overloaded virtual function %q0 declared here">;
 
 def err_conditional_void_nonvoid : Error<
   "%select{left|right}1 operand to ? is void, but %select{right|left}1 operand "

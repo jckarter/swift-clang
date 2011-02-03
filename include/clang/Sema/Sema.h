@@ -732,6 +732,7 @@ public:
                                      bool IsFunctionDefinition,
                                      bool &Redeclaration);
   bool AddOverriddenMethods(CXXRecordDecl *DC, CXXMethodDecl *MD);
+  void DiagnoseHiddenVirtualMethods(CXXRecordDecl *DC, CXXMethodDecl *MD);
   void CheckFunctionDeclaration(Scope *S,
                                 FunctionDecl *NewFD, LookupResult &Previous,
                                 bool IsExplicitSpecialization,
@@ -1784,11 +1785,11 @@ public:
                               const DeclarationNameInfo &NameInfo,
                               const CXXScopeSpec *SS = 0);
   ExprResult
-  BuildAnonymousStructUnionMemberReference(SourceLocation Loc,
-                                           const CXXScopeSpec &SS,
-                                           IndirectFieldDecl *IndirectField,
-                                           Expr *BaseObjectExpr = 0,
-                                      SourceLocation OpLoc = SourceLocation());
+  BuildAnonymousStructUnionMemberReference(const CXXScopeSpec &SS,
+                                           SourceLocation nameLoc,
+                                           IndirectFieldDecl *indirectField,
+                                           Expr *baseObjectExpr = 0,
+                                      SourceLocation opLoc = SourceLocation());
   ExprResult BuildPossibleImplicitMemberExpr(const CXXScopeSpec &SS,
                                              LookupResult &R,
                                 const TemplateArgumentListInfo *TemplateArgs);
@@ -2271,7 +2272,12 @@ public:
 
 
   //// ActOnCXXThis -  Parse 'this' pointer.
-  ExprResult ActOnCXXThis(SourceLocation ThisLoc);
+  ExprResult ActOnCXXThis(SourceLocation loc);
+
+  /// tryCaptureCXXThis - Try to capture a 'this' pointer.  Returns a
+  /// pointer to an instance method whose 'this' pointer is
+  /// capturable, or null if this is not possible.
+  CXXMethodDecl *tryCaptureCXXThis();
 
   /// ActOnCXXBoolLiteral - Parse {true,false} literals.
   ExprResult ActOnCXXBoolLiteral(SourceLocation OpLoc, tok::TokenKind Kind);
@@ -4263,6 +4269,8 @@ public:
                             IdentifierInfo &propertyName,
                             SourceLocation receiverNameLoc,
                             SourceLocation propertyNameLoc);
+
+  ObjCMethodDecl *tryCaptureObjCSelf();
 
   /// \brief Describes the kind of message expression indicated by a message
   /// send that starts with an identifier.

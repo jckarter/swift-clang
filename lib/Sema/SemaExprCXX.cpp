@@ -16,6 +16,7 @@
 #include "clang/Sema/Initialization.h"
 #include "clang/Sema/Lookup.h"
 #include "clang/Sema/ParsedTemplate.h"
+#include "clang/Sema/ScopeInfo.h"
 #include "clang/Sema/TemplateDeduction.h"
 #include "clang/AST/ASTContext.h"
 #include "clang/AST/CXXInheritance.h"
@@ -558,19 +559,42 @@ bool Sema::CheckCXXThrowOperand(SourceLocation ThrowLoc, Expr *&E) {
   return false;
 }
 
-ExprResult Sema::ActOnCXXThis(SourceLocation ThisLoc) {
+CXXMethodDecl *Sema::tryCaptureCXXThis() {
+  // Ignore block scopes: we can capture through them.
+  // Ignore nested enum scopes: we'll diagnose non-constant expressions
+  // where they're invalid, and other uses are legitimate.
+  // Don't ignore nested class scopes: you can't use 'this' in a local class.
+  DeclContext *DC = CurContext;
+  while (true) {
+    if (isa<BlockDecl>(DC)) DC = cast<BlockDecl>(DC)->getDeclContext();
+    else if (isa<EnumDecl>(DC)) DC = cast<EnumDecl>(DC)->getDeclContext();
+    else break;
+  }
+
+  // If we're not in an instance method, error out.
+  CXXMethodDecl *method = dyn_cast<CXXMethodDecl>(DC);
+  if (!method || !method->isInstance())
+    return 0;
+
+  // Mark that we're closing on 'this' in all the block scopes, if applicable.
+  for (unsigned idx = FunctionScopes.size() - 1;
+       isa<BlockScopeInfo>(FunctionScopes[idx]);
+       --idx)
+    cast<BlockScopeInfo>(FunctionScopes[idx])->CapturesCXXThis = true;
+
+  return method;
+}
+
+ExprResult Sema::ActOnCXXThis(SourceLocation loc) {
   /// C++ 9.3.2: In the body of a non-static member function, the keyword this
   /// is a non-lvalue expression whose value is the address of the object for
   /// which the function is called.
 
-  DeclContext *DC = getFunctionLevelDeclContext();
-  if (CXXMethodDecl *MD = dyn_cast<CXXMethodDecl>(DC))
-    if (MD->isInstance())
-      return Owned(new (Context) CXXThisExpr(ThisLoc,
-                                             MD->getThisType(Context),
-                                             /*isImplicit=*/false));
+  CXXMethodDecl *method = tryCaptureCXXThis();
+  if (!method) return Diag(loc, diag::err_invalid_this_use);
 
-  return ExprError(Diag(ThisLoc, diag::err_invalid_this_use));
+  return Owned(new (Context) CXXThisExpr(loc, method->getThisType(Context),
+                                         /*isImplicit=*/false));
 }
 
 ExprResult
