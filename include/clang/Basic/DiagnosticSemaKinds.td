@@ -1179,9 +1179,9 @@ def err_attribute_regparm_invalid_number : Error<
 
 
 // Clang-Specific Attributes
-def err_attribute_iboutlet : Error<
+def warn_attribute_iboutlet : Warning<
   "%0 attribute can only be applied to instance variables or properties">;
-def err_attribute_ibaction: Error<
+def warn_attribute_ibaction: Warning<
   "ibaction attribute can only be applied to Objective-C instance methods">;
 def err_attribute_overloadable_not_function : Error<
   "'overloadable' attribute can only be applied to a function">;
@@ -1476,9 +1476,9 @@ def note_template_param_prev_default_arg : Note<
   "previous default template argument defined here">;
 def err_template_param_default_arg_missing : Error<
   "template parameter missing a default argument">;
-def err_template_parameter_default_in_function_template : Error<
-  "a template parameter of a function template cannot have a default argument "
-  "in C++98">;
+def ext_template_parameter_default_in_function_template : ExtWarn<
+  "default template arguments for a function template are a C++0x extension">,
+  InGroup<CXX0x>;
 def err_template_parameter_default_template_member : Error<
   "cannot add a default template argument to the definition of a member of a "
   "class template">;
@@ -1585,6 +1585,8 @@ def ext_template_arg_extra_parens : ExtWarn<
   "address non-type template argument cannot be surrounded by parentheses">;
 def err_pointer_to_member_type : Error<
   "invalid use of pointer to member type after %select{.*|->*}0">;
+def err_pointer_to_member_call_drops_quals : Error<
+  "call to pointer to member function of type %0 drops '%1' qualifier%s2">;
 def err_pointer_to_member_oper_value_classify: Error<
   "pointer-to-member function type %0 can only be called on an "
   "%select{rvalue|lvalue}1">;
