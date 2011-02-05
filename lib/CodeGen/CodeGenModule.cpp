@@ -383,14 +383,18 @@ CodeGenModule::getFunctionLinkage(const FunctionDecl *D) {
   // merged with other definitions. c) C++ has the ODR, so we know the
   // definition is dependable.
   if (Linkage == GVA_CXXInline || Linkage == GVA_TemplateInstantiation)
-    return llvm::Function::LinkOnceODRLinkage;
+    return !Context.getLangOptions().AppleKext 
+             ? llvm::Function::LinkOnceODRLinkage 
+             : llvm::Function::InternalLinkage;
   
   // An explicit instantiation of a template has weak linkage, since
   // explicit instantiations can occur in multiple translation units
   // and must all be equivalent. However, we are not allowed to
   // throw away these explicit instantiations.
   if (Linkage == GVA_ExplicitTemplateInstantiation)
-    return llvm::Function::WeakODRLinkage;
+    return !Context.getLangOptions().AppleKext
+             ? llvm::Function::WeakODRLinkage
+             : llvm::Function::InternalLinkage;
   
   // Otherwise, we have strong external linkage.
   assert(Linkage == GVA_StrongExternal);
@@ -1089,38 +1093,47 @@ CodeGenModule::getVTableLinkage(const CXXRecordDecl *RD) {
           return llvm::GlobalVariable::AvailableExternallyLinkage;
 
         if (KeyFunction->isInlined())
-          return llvm::GlobalVariable::LinkOnceODRLinkage;
+          return !Context.getLangOptions().AppleKext ?
+                   llvm::GlobalVariable::LinkOnceODRLinkage :
+                   llvm::Function::InternalLinkage;
         
         return llvm::GlobalVariable::ExternalLinkage;
         
       case TSK_ImplicitInstantiation:
-        return llvm::GlobalVariable::LinkOnceODRLinkage;
+        return !Context.getLangOptions().AppleKext ?
+                 llvm::GlobalVariable::LinkOnceODRLinkage :
+                 llvm::Function::InternalLinkage;
 
       case TSK_ExplicitInstantiationDefinition:
-        return llvm::GlobalVariable::WeakODRLinkage;
+        return !Context.getLangOptions().AppleKext ?
+                 llvm::GlobalVariable::WeakODRLinkage :
+                 llvm::Function::InternalLinkage;
   
       case TSK_ExplicitInstantiationDeclaration:
         // FIXME: Use available_externally linkage. However, this currently
         // breaks LLVM's build due to undefined symbols.
         //      return llvm::GlobalVariable::AvailableExternallyLinkage;
-        return llvm::GlobalVariable::LinkOnceODRLinkage;
+        return !Context.getLangOptions().AppleKext ?
+                 llvm::GlobalVariable::LinkOnceODRLinkage :
+                 llvm::Function::InternalLinkage;
     }
   }
+  
+  if (Context.getLangOptions().AppleKext)
+    return llvm::Function::InternalLinkage;
   
   switch (RD->getTemplateSpecializationKind()) {
   case TSK_Undeclared:
   case TSK_ExplicitSpecialization:
   case TSK_ImplicitInstantiation:
-    return llvm::GlobalVariable::LinkOnceODRLinkage;
-
-  case TSK_ExplicitInstantiationDefinition:
-    return llvm::GlobalVariable::WeakODRLinkage;
-    
-  case TSK_ExplicitInstantiationDeclaration:
     // FIXME: Use available_externally linkage. However, this currently
     // breaks LLVM's build due to undefined symbols.
     //   return llvm::GlobalVariable::AvailableExternallyLinkage;
+  case TSK_ExplicitInstantiationDeclaration:
     return llvm::GlobalVariable::LinkOnceODRLinkage;
+
+  case TSK_ExplicitInstantiationDefinition:
+      return llvm::GlobalVariable::WeakODRLinkage;
   }
   
   // Silence GCC warning.

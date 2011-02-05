@@ -431,13 +431,16 @@ void Clang::AddARMTargetArgs(const ArgList &Args,
     ABIName = A->getValue(Args);
   } else {
     // Select the default based on the platform.
-    llvm::StringRef env = Triple.getEnvironmentName();
-    if (env == "gnueabi")
+    switch(Triple.getEnvironment()) {
+    case llvm::Triple::GNUEABI:
       ABIName = "aapcs-linux";
-    else if (env == "eabi")
+      break;
+    case llvm::Triple::EABI:
       ABIName = "aapcs";
-    else
+      break;
+    default:
       ABIName = "apcs-gnu";
+    }
   }
   CmdArgs.push_back("-target-abi");
   CmdArgs.push_back(ABIName);
@@ -484,8 +487,7 @@ void Clang::AddARMTargetArgs(const ArgList &Args,
     }
 
     case llvm::Triple::Linux: {
-      llvm::StringRef Env = getToolChain().getTriple().getEnvironmentName();
-      if (Env == "gnueabi") {
+      if (getToolChain().getTriple().getEnvironment() == llvm::Triple::GNUEABI) {
         FloatABI = "softfp";
         break;
       }
@@ -493,10 +495,20 @@ void Clang::AddARMTargetArgs(const ArgList &Args,
     // fall through
 
     default:
-      // Assume "soft", but warn the user we are guessing.
-      FloatABI = "soft";
-      D.Diag(clang::diag::warn_drv_assuming_mfloat_abi_is) << "soft";
-      break;
+      switch(Triple.getEnvironment()) {
+      case llvm::Triple::GNUEABI:
+        FloatABI = "softfp";
+        break;
+      case llvm::Triple::EABI:
+        // EABI is always AAPCS, and if it was not marked 'hard', it's softfp
+        FloatABI = "softfp";
+        break;
+      default:
+        // Assume "soft", but warn the user we are guessing.
+        FloatABI = "soft";
+        D.Diag(clang::diag::warn_drv_assuming_mfloat_abi_is) << "soft";
+        break;
+      }
     }
   }
 
@@ -1010,9 +1022,9 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
   if (!Args.hasFlag(options::OPT_fzero_initialized_in_bss,
                     options::OPT_fno_zero_initialized_in_bss))
     CmdArgs.push_back("-mno-zero-initialized-in-bss");
-  if (Args.hasFlag(options::OPT_fno_strict_aliasing,
-                   options::OPT_fstrict_aliasing,
-                   false))
+  if (!Args.hasFlag(options::OPT_fstrict_aliasing,
+                    options::OPT_fno_strict_aliasing,
+                    getToolChain().IsStrictAliasingDefault()))
     CmdArgs.push_back("-relaxed-aliasing");
 
   // Decide whether to use verbose asm. Verbose assembly is the default on
@@ -1361,7 +1373,7 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
   // these by hand.
 
   if (Args.hasArg(options::OPT_mkernel)) {
-    if (!Args.hasArg(options::OPT_fapple_kext))
+    if (!Args.hasArg(options::OPT_fapple_kext) && types::isCXX(InputType))
       CmdArgs.push_back("-fapple-kext");
     if (!Args.hasArg(options::OPT_fbuiltin))
       CmdArgs.push_back("-fno-builtin");
