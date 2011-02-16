@@ -131,7 +131,7 @@ LValue CGObjCRuntime::EmitValueForIvarAtOffset(CodeGen::CodeGenFunction &CGF,
   // a synthesized ivar can never be a bit-field, so this is safe.
   const ASTRecordLayout &RL =
     CGF.CGM.getContext().getASTObjCInterfaceLayout(OID);
-  uint64_t TypeSizeInBits = RL.getSize();
+  uint64_t TypeSizeInBits = CGF.CGM.getContext().toBits(RL.getSize());
   uint64_t FieldBitOffset = LookupFieldBitOffset(CGF.CGM, OID, 0, Ivar);
   uint64_t BitOffset = FieldBitOffset % 8;
   uint64_t ContainingTypeAlign = 8;
@@ -2214,7 +2214,7 @@ void CGObjCMac::GenerateClass(const ObjCImplementationDecl *ID) {
   if (ID->getNumIvarInitializers())
     Flags |= eClassFlags_HasCXXStructors;
   unsigned Size =
-    CGM.getContext().getASTObjCImplementationLayout(ID).getSize() / 8;
+    CGM.getContext().getASTObjCImplementationLayout(ID).getSize().getQuantity();
 
   // FIXME: Set CXX-structors flag.
   if (ID->getClassInterface()->getVisibility() == HiddenVisibility)
@@ -4950,7 +4950,7 @@ void CGObjCNonFragileABIMac::GetClassSizeInfo(const ObjCImplementationDecl *OID,
     CGM.getContext().getASTObjCImplementationLayout(OID);
 
   // InstanceSize is really instance end.
-  InstanceSize = llvm::RoundUpToAlignment(RL.getDataSize(), 8) / 8;
+  InstanceSize = RL.getDataSize().getQuantity();
 
   // If there are no fields, the start is the same as the end.
   if (!RL.getFieldCount())

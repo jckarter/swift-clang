@@ -90,7 +90,7 @@ private:
 ///
 class LocalScope {
 public:
-  typedef llvm::SmallVector<VarDecl*, 4> AutomaticVarsTy;
+  typedef BumpVector<VarDecl*> AutomaticVarsTy;
 
   /// const_iterator - Iterates local scope backwards and jumps to previous
   /// scope on reaching the beginning of currently iterated scope.
@@ -160,6 +160,8 @@ public:
   friend class const_iterator;
 
 private:
+  BumpVectorContext ctx;
+  
   /// Automatic variables in order of declaration.
   AutomaticVarsTy Vars;
   /// Iterator to variable in previous scope that was declared just before
@@ -168,15 +170,14 @@ private:
 
 public:
   /// Constructs empty scope linked to previous scope in specified place.
-  LocalScope(const_iterator P)
-      : Vars()
-      , Prev(P) {}
+  LocalScope(BumpVectorContext &ctx, const_iterator P)
+      : ctx(ctx), Vars(ctx, 4), Prev(P) {}
 
   /// Begin of scope in direction of CFG building (backwards).
   const_iterator begin() const { return const_iterator(*this, Vars.size()); }
 
   void addVar(VarDecl* VD) {
-    Vars.push_back(VD);
+    Vars.push_back(VD, ctx);
   }
 };
 
@@ -630,8 +631,10 @@ void CFGBuilder::addImplicitDtorsForDestructor(const CXXDestructorDecl *DD) {
 /// way return valid LocalScope object.
 LocalScope* CFGBuilder::createOrReuseLocalScope(LocalScope* Scope) {
   if (!Scope) {
-    Scope = cfg->getAllocator().Allocate<LocalScope>();
-    new (Scope) LocalScope(ScopePos);
+    llvm::BumpPtrAllocator &alloc = cfg->getAllocator();
+    Scope = alloc.Allocate<LocalScope>();
+    BumpVectorContext ctx(alloc);
+    new (Scope) LocalScope(ctx, ScopePos);
   }
   return Scope;
 }
@@ -921,8 +924,7 @@ CFGBlock *CFGBuilder::VisitStmt(Stmt *S, AddStmtChoice asc) {
 /// VisitChildren - Visit the children of a Stmt.
 CFGBlock *CFGBuilder::VisitChildren(Stmt* Terminator) {
   CFGBlock *B = Block;
-  for (Stmt::child_iterator I = Terminator->child_begin(),
-         E = Terminator->child_end(); I != E; ++I) {
+  for (Stmt::child_range I = Terminator->children(); I; ++I) {
     if (*I) B = Visit(*I);
   }
   return B;
@@ -2503,8 +2505,7 @@ CFGBlock *CFGBuilder::VisitChildrenForTemporaryDtors(Stmt *E) {
   // them in helper vector.
   typedef llvm::SmallVector<Stmt *, 4> ChildrenVect;
   ChildrenVect ChildrenRev;
-  for (Stmt::child_iterator I = E->child_begin(), L = E->child_end();
-      I != L; ++I) {
+  for (Stmt::child_range I = E->children(); I; ++I) {
     if (*I) ChildrenRev.push_back(*I);
   }
 
@@ -2697,7 +2698,7 @@ static void FindSubExprAssignments(Stmt *S,
   if (!S)
     return;
 
-  for (Stmt::child_iterator I=S->child_begin(), E=S->child_end(); I!=E; ++I) {
+  for (Stmt::child_range I = S->children(); I; ++I) {
     Stmt *child = *I;
     if (!child)
       continue;
@@ -3020,7 +3021,7 @@ static void print_elem(llvm::raw_ostream &OS, StmtPrinterHelper* Helper,
       if (StmtExpr* SE = dyn_cast<StmtExpr>(S)) {
         CompoundStmt* Sub = SE->getSubStmt();
 
-        if (Sub->child_begin() != Sub->child_end()) {
+        if (Sub->children()) {
           OS << "({ ... ; ";
           Helper->handledStmt(*SE->getSubStmt()->body_rbegin(),OS);
           OS << " })\n";

@@ -1286,6 +1286,7 @@ static void AddFunctionSpecifiers(Sema::ParserCompletionContext CCC,
   case Sema::PCC_RecoveryInFunction:
   case Sema::PCC_Type:
   case Sema::PCC_ParenthesizedExpression:
+  case Sema::PCC_LocalDeclarationSpecifiers:
     break;
   }
 }
@@ -1325,6 +1326,7 @@ static bool WantTypesInContext(Sema::ParserCompletionContext CCC,
   case Sema::PCC_RecoveryInFunction:
   case Sema::PCC_Type:
   case Sema::PCC_ParenthesizedExpression:
+  case Sema::PCC_LocalDeclarationSpecifiers:
     return true;
     
   case Sema::PCC_Expression:
@@ -1768,6 +1770,7 @@ static void AddOrdinaryNameResults(Sema::ParserCompletionContext CCC,
   }
       
   case Sema::PCC_Type:
+  case Sema::PCC_LocalDeclarationSpecifiers:
     break;
   }
 
@@ -1891,7 +1894,8 @@ static std::string FormatFunctionParameter(ASTContext &Context,
   
   // The argument for a block pointer parameter is a block literal with
   // the appropriate type.
-  FunctionProtoTypeLoc *Block = 0;
+  FunctionTypeLoc *Block = 0;
+  FunctionProtoTypeLoc *BlockProto = 0;
   TypeLoc TL;
   if (TypeSourceInfo *TSInfo = Param->getTypeSourceInfo()) {
     TL = TSInfo->getTypeLoc().getUnqualifiedLoc();
@@ -1916,7 +1920,8 @@ static std::string FormatFunctionParameter(ASTContext &Context,
       if (BlockPointerTypeLoc *BlockPtr
           = dyn_cast<BlockPointerTypeLoc>(&TL)) {
         TL = BlockPtr->getPointeeLoc().IgnoreParens();
-        Block = dyn_cast<FunctionProtoTypeLoc>(&TL);
+        Block = dyn_cast<FunctionTypeLoc>(&TL);
+        BlockProto = dyn_cast<FunctionProtoTypeLoc>(&TL);
       }
       break;
     }
@@ -1947,8 +1952,8 @@ static std::string FormatFunctionParameter(ASTContext &Context,
     ResultType.getAsStringInternal(Result, Context.PrintingPolicy);
   
   Result = '^' + Result;
-  if (Block->getNumArgs() == 0) {
-    if (Block->getTypePtr()->isVariadic())
+  if (!BlockProto || Block->getNumArgs() == 0) {
+    if (BlockProto && BlockProto->getTypePtr()->isVariadic())
       Result += "(...)";
     else
       Result += "(void)";
@@ -1959,7 +1964,7 @@ static std::string FormatFunctionParameter(ASTContext &Context,
         Result += ", ";
       Result += FormatFunctionParameter(Context, Block->getArg(I));
       
-      if (I == N - 1 && Block->getTypePtr()->isVariadic())
+      if (I == N - 1 && BlockProto->getTypePtr()->isVariadic())
         Result += ", ...";
     }
     Result += ")";
@@ -2719,6 +2724,9 @@ static enum CodeCompletionContext::Kind mapCodeCompletionContext(Sema &S,
 
   case Sema::PCC_ParenthesizedExpression:
     return CodeCompletionContext::CCC_ParenthesizedExpression;
+      
+  case Sema::PCC_LocalDeclarationSpecifiers:
+    return CodeCompletionContext::CCC_Type;
   }
   
   return CodeCompletionContext::CCC_Other;
@@ -2818,6 +2826,7 @@ void Sema::CodeCompleteOrdinaryName(Scope *S,
   case PCC_Template:
   case PCC_MemberTemplate:
   case PCC_Type:
+  case PCC_LocalDeclarationSpecifiers:
     Results.setFilter(&ResultBuilder::IsOrdinaryNonValueName);
     break;
 
@@ -2873,6 +2882,7 @@ void Sema::CodeCompleteOrdinaryName(Scope *S,
   case PCC_ForInit:
   case PCC_Condition:
   case PCC_Type:
+  case PCC_LocalDeclarationSpecifiers:
     break;
   }
   
@@ -4299,7 +4309,8 @@ void Sema::CodeCompleteObjCPropertySetter(Scope *S, Decl *ObjCImplDecl) {
                             Results.data(),Results.size());
 }
 
-void Sema::CodeCompleteObjCPassingType(Scope *S, ObjCDeclSpec &DS) {
+void Sema::CodeCompleteObjCPassingType(Scope *S, ObjCDeclSpec &DS,
+                                       bool IsParameter) {
   typedef CodeCompletionResult Result;
   ResultBuilder Results(*this, CodeCompleter->getAllocator(),
                         CodeCompletionContext::CCC_Type);
@@ -4325,6 +4336,26 @@ void Sema::CodeCompleteObjCPassingType(Scope *S, ObjCDeclSpec &DS) {
      Results.AddResult("bycopy");
      Results.AddResult("byref");
      Results.AddResult("oneway");
+  }
+  
+  // If we're completing the return type of an Objective-C method and the 
+  // identifier IBAction refers to a macro, provide a completion item for
+  // an action, e.g.,
+  //   IBAction)<#selector#>:(id)sender
+  if (DS.getObjCDeclQualifier() == 0 && !IsParameter &&
+      Context.Idents.get("IBAction").hasMacroDefinition()) {
+    typedef CodeCompletionString::Chunk Chunk;
+    CodeCompletionBuilder Builder(Results.getAllocator(), CCP_CodePattern, 
+                                  CXAvailability_Available);
+    Builder.AddTypedTextChunk("IBAction");
+    Builder.AddChunk(Chunk(CodeCompletionString::CK_RightParen));
+    Builder.AddPlaceholderChunk("selector");
+    Builder.AddChunk(Chunk(CodeCompletionString::CK_Colon));
+    Builder.AddChunk(Chunk(CodeCompletionString::CK_LeftParen));
+    Builder.AddTextChunk("id");
+    Builder.AddChunk(Chunk(CodeCompletionString::CK_RightParen));
+    Builder.AddTextChunk("sender");
+    Results.AddResult(CodeCompletionResult(Builder.TakeString()));
   }
   
   // Add various builtin type names and specifiers.
@@ -4447,9 +4478,20 @@ static ObjCMethodDecl *AddSuperSendCompletion(Sema &S, bool NeedSuperKeyword,
   
   // Try to find a superclass method with the same selector.
   ObjCMethodDecl *SuperMethod = 0;
-  while ((Class = Class->getSuperClass()) && !SuperMethod)
+  while ((Class = Class->getSuperClass()) && !SuperMethod) {
+    // Check in the class
     SuperMethod = Class->getMethod(CurMethod->getSelector(), 
                                    CurMethod->isInstanceMethod());
+
+    // Check in categories or class extensions.
+    if (!SuperMethod) {
+      for (ObjCCategoryDecl *Category = Class->getCategoryList(); Category;
+           Category = Category->getNextClassCategory())
+        if ((SuperMethod = Category->getMethod(CurMethod->getSelector(), 
+                                               CurMethod->isInstanceMethod())))
+          break;
+    }
+  }
 
   if (!SuperMethod)
     return 0;

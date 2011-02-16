@@ -1348,9 +1348,10 @@ public:
   /// Subclasses may override this routine to provide different behavior.
   ExprResult RebuildCallExpr(Expr *Callee, SourceLocation LParenLoc,
                                    MultiExprArg Args,
-                                   SourceLocation RParenLoc) {
+                                   SourceLocation RParenLoc,
+                                   Expr *ExecConfig = 0) {
     return getSema().ActOnCallExpr(/*Scope=*/0, Callee, LParenLoc,
-                                   move(Args), RParenLoc);
+                                   move(Args), RParenLoc, ExecConfig);
   }
 
   /// \brief Build a new member access expression.
@@ -2280,6 +2281,7 @@ StmtResult TreeTransform<Derived>::TransformStmt(Stmt *S) {
   // Transform individual statement nodes
 #define STMT(Node, Parent)                                              \
   case Stmt::Node##Class: return getDerived().Transform##Node(cast<Node>(S));
+#define ABSTRACT_STMT(Node)
 #define EXPR(Node, Parent)
 #include "clang/AST/StmtNodes.inc"
 
@@ -4831,13 +4833,6 @@ TreeTransform<Derived>::TransformDeclStmt(DeclStmt *S) {
 
 template<typename Derived>
 StmtResult
-TreeTransform<Derived>::TransformSwitchCase(SwitchCase *S) {
-  assert(false && "SwitchCase is abstract and cannot be transformed");
-  return SemaRef.Owned(S);
-}
-
-template<typename Derived>
-StmtResult
 TreeTransform<Derived>::TransformAsmStmt(AsmStmt *S) {
   
   ASTOwningVector<Expr*> Constraints(getSema());
@@ -5923,6 +5918,39 @@ template<typename Derived>
 ExprResult
 TreeTransform<Derived>::TransformCXXMemberCallExpr(CXXMemberCallExpr *E) {
   return getDerived().TransformCallExpr(E);
+}
+
+template<typename Derived>
+ExprResult
+TreeTransform<Derived>::TransformCUDAKernelCallExpr(CUDAKernelCallExpr *E) {
+  // Transform the callee.
+  ExprResult Callee = getDerived().TransformExpr(E->getCallee());
+  if (Callee.isInvalid())
+    return ExprError();
+
+  // Transform exec config.
+  ExprResult EC = getDerived().TransformCallExpr(E->getConfig());
+  if (EC.isInvalid())
+    return ExprError();
+
+  // Transform arguments.
+  bool ArgChanged = false;
+  ASTOwningVector<Expr*> Args(SemaRef);
+  if (getDerived().TransformExprs(E->getArgs(), E->getNumArgs(), true, Args, 
+                                  &ArgChanged))
+    return ExprError();
+
+  if (!getDerived().AlwaysRebuild() &&
+      Callee.get() == E->getCallee() &&
+      !ArgChanged)
+    return SemaRef.Owned(E);
+
+  // FIXME: Wrong source location information for the '('.
+  SourceLocation FakeLParenLoc
+    = ((Expr *)Callee.get())->getSourceRange().getBegin();
+  return getDerived().RebuildCallExpr(Callee.get(), FakeLParenLoc,
+                                      move_arg(Args),
+                                      E->getRParenLoc(), EC.get());
 }
 
 template<typename Derived>

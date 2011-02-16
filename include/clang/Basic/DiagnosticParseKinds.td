@@ -95,6 +95,7 @@ def err_expected_lsquare : Error<"expected '['">;
 def err_expected_rsquare : Error<"expected ']'">;
 def err_expected_rbrace : Error<"expected '}'">;
 def err_expected_greater : Error<"expected '>'">;
+def err_expected_ggg : Error<"expected '>>>'">;
 def err_expected_semi_declaration : Error<
   "expected ';' at end of declaration">;
 def err_expected_semi_decl_list : Error<
@@ -441,6 +442,18 @@ def warn_pragma_unused_expected_var : Warning<
   "expected '#pragma unused' argument to be a variable name">;
 def warn_pragma_unused_expected_punc : Warning<
   "expected ')' or ',' in '#pragma unused'">;
+
+// OpenCL Section 6.8.g
+def err_not_opencl_storage_class_specifier : Error<
+  "OpenCL does not support the '%0' storage class specifier">;
+
+// OpenCL EXTENSION pragma (OpenCL 1.1 [9.1])
+def warn_pragma_expected_colon : Warning<
+  "missing ':' after %0 - ignoring">;
+def warn_pragma_expected_enable_disable : Warning<
+  "expected 'enable' or 'disable' - ignoring">;
+def warn_pragma_unknown_extension : Warning<
+  "unknown OpenCL extension %0 - ignoring">;
 
 } // end of Parse Issue category.
 } // end of Parser diagnostics

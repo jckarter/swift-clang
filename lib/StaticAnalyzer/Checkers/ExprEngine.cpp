@@ -14,13 +14,14 @@
 //===----------------------------------------------------------------------===//
 
 // FIXME: Restructure checker registration.
-#include "ExprEngineInternalChecks.h"
+#include "InternalChecks.h"
 
-#include "clang/StaticAnalyzer/BugReporter/BugType.h"
-#include "clang/StaticAnalyzer/PathSensitive/AnalysisManager.h"
-#include "clang/StaticAnalyzer/PathSensitive/ExprEngine.h"
-#include "clang/StaticAnalyzer/PathSensitive/ExprEngineBuilders.h"
-#include "clang/StaticAnalyzer/PathSensitive/Checker.h"
+#include "clang/StaticAnalyzer/Core/CheckerManager.h"
+#include "clang/StaticAnalyzer/Core/BugReporter/BugType.h"
+#include "clang/StaticAnalyzer/Core/PathSensitive/AnalysisManager.h"
+#include "clang/StaticAnalyzer/Core/PathSensitive/ExprEngine.h"
+#include "clang/StaticAnalyzer/Core/PathSensitive/ExprEngineBuilders.h"
+#include "clang/StaticAnalyzer/Core/PathSensitive/Checker.h"
 #include "clang/AST/CharUnits.h"
 #include "clang/AST/ParentMap.h"
 #include "clang/AST/StmtObjC.h"
@@ -307,15 +308,11 @@ static void RegisterInternalChecks(ExprEngine &Eng) {
   RegisterUndefBranchChecker(Eng);
   RegisterUndefCapturedBlockVarChecker(Eng);
   RegisterUndefResultChecker(Eng);
-  RegisterStackAddrLeakChecker(Eng);
-  RegisterObjCAtSyncChecker(Eng);
 
   // This is not a checker yet.
   RegisterNoReturnFunctionChecker(Eng);
   RegisterBuiltinFunctionChecker(Eng);
   RegisterOSAtomicChecker(Eng);
-  RegisterUnixAPIChecker(Eng);
-  RegisterMacOSXAPIChecker(Eng);
 }
 
 ExprEngine::ExprEngine(AnalysisManager &mgr, TransferFuncs *tf)
@@ -338,6 +335,13 @@ ExprEngine::ExprEngine(AnalysisManager &mgr, TransferFuncs *tf)
   // FIXME: Eventually remove the TF object entirely.
   TF->RegisterChecks(*this);
   TF->RegisterPrinters(getStateManager().Printers);
+
+  mgr.getCheckerManager()->registerCheckersToEngine(*this);
+  
+  if (mgr.shouldEagerlyTrimExplodedGraph()) {
+    // Enable eager node reclaimation when constructing the ExplodedGraph.  
+    G.enableNodeReclamation();
+  }
 }
 
 ExprEngine::~ExprEngine() {
@@ -573,6 +577,8 @@ void ExprEngine::processCFGElement(const CFGElement E,
 }
 
 void ExprEngine::ProcessStmt(const CFGStmt S, StmtNodeBuilder& builder) {
+  // Reclaim any unnecessary nodes in the ExplodedGraph.
+  G.reclaimRecentlyAllocatedNodes();
   // Recycle any unused states in the GRStateManager.
   StateMgr.recycleUnusedStates();
   
@@ -853,7 +859,6 @@ void ExprEngine::Visit(const Stmt* S, ExplodedNode* Pred,
     case Stmt::LabelStmtClass:
     case Stmt::NoStmtClass:
     case Stmt::NullStmtClass:
-    case Stmt::SwitchCaseClass:
     case Stmt::OpaqueValueExprClass:
       llvm_unreachable("Stmt should not be in analyzer evaluation loop");
       break;
@@ -888,6 +893,7 @@ void ExprEngine::Visit(const Stmt* S, ExplodedNode* Pred,
     case Stmt::PredefinedExprClass:
     case Stmt::ShuffleVectorExprClass:
     case Stmt::VAArgExprClass:
+    case Stmt::CUDAKernelCallExprClass:
         // Fall through.
 
     // Cases we intentionally don't evaluate, since they don't need

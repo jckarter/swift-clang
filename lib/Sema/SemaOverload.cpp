@@ -1166,6 +1166,8 @@ static bool IsStandardConversion(Sema &S, Expr* From, QualType ToType,
     // Floating-integral conversions (C++ 4.9).
     SCS.Second = ICK_Floating_Integral;
     FromType = ToType.getUnqualifiedType();
+  } else if (S.IsBlockPointerConversion(FromType, ToType, FromType)) {
+               SCS.Second = ICK_Block_Pointer_Conversion;
   } else if (S.IsPointerConversion(From, FromType, ToType, InOverloadResolution,
                                    FromType, IncompatibleObjC)) {
     // Pointer conversions (C++ 4.10).
@@ -1780,6 +1782,91 @@ bool Sema::isObjCPointerConversion(QualType FromType, QualType ToType,
   }
 
   return false;
+}
+
+bool Sema::IsBlockPointerConversion(QualType FromType, QualType ToType,
+                                    QualType& ConvertedType) {
+  QualType ToPointeeType;
+  if (const BlockPointerType *ToBlockPtr =
+        ToType->getAs<BlockPointerType>())
+    ToPointeeType = ToBlockPtr->getPointeeType();
+  else
+    return false;
+  
+  QualType FromPointeeType;
+  if (const BlockPointerType *FromBlockPtr =
+      FromType->getAs<BlockPointerType>())
+    FromPointeeType = FromBlockPtr->getPointeeType();
+  else
+    return false;
+  // We have pointer to blocks, check whether the only
+  // differences in the argument and result types are in Objective-C
+  // pointer conversions. If so, we permit the conversion.
+  
+  const FunctionProtoType *FromFunctionType
+    = FromPointeeType->getAs<FunctionProtoType>();
+  const FunctionProtoType *ToFunctionType
+    = ToPointeeType->getAs<FunctionProtoType>();
+  
+  if (!FromFunctionType || !ToFunctionType)
+    return false;
+
+  if (Context.hasSameType(FromPointeeType, ToPointeeType))
+    return true;
+    
+  // Perform the quick checks that will tell us whether these
+  // function types are obviously different.
+  if (FromFunctionType->getNumArgs() != ToFunctionType->getNumArgs() ||
+      FromFunctionType->isVariadic() != ToFunctionType->isVariadic())
+    return false;
+    
+  FunctionType::ExtInfo FromEInfo = FromFunctionType->getExtInfo();
+  FunctionType::ExtInfo ToEInfo = ToFunctionType->getExtInfo();
+  if (FromEInfo != ToEInfo)
+    return false;
+
+  bool IncompatibleObjC = false;
+  if (Context.hasSameType(FromFunctionType->getResultType(), 
+                          ToFunctionType->getResultType())) {
+    // Okay, the types match exactly. Nothing to do.
+  } else {
+    QualType RHS = FromFunctionType->getResultType();
+    QualType LHS = ToFunctionType->getResultType();
+    if ((!getLangOptions().CPlusPlus || !RHS->isRecordType()) &&
+        !RHS.hasQualifiers() && LHS.hasQualifiers())
+       LHS = LHS.getUnqualifiedType();
+
+     if (Context.hasSameType(RHS,LHS)) {
+       // OK exact match.
+     } else if (isObjCPointerConversion(RHS, LHS,
+                                        ConvertedType, IncompatibleObjC)) {
+     if (IncompatibleObjC)
+       return false;
+     // Okay, we have an Objective-C pointer conversion.
+     }
+     else
+       return false;
+   }
+    
+   // Check argument types.
+   for (unsigned ArgIdx = 0, NumArgs = FromFunctionType->getNumArgs();
+        ArgIdx != NumArgs; ++ArgIdx) {
+     IncompatibleObjC = false;
+     QualType FromArgType = FromFunctionType->getArgType(ArgIdx);
+     QualType ToArgType = ToFunctionType->getArgType(ArgIdx);
+     if (Context.hasSameType(FromArgType, ToArgType)) {
+       // Okay, the types match exactly. Nothing to do.
+     } else if (isObjCPointerConversion(ToArgType, FromArgType,
+                                        ConvertedType, IncompatibleObjC)) {
+       if (IncompatibleObjC)
+         return false;
+       // Okay, we have an Objective-C pointer conversion.
+     } else
+       // Argument types are too different. Abort.
+       return false;
+   }
+   ConvertedType = ToType;
+   return true;
 }
 
 /// FunctionArgTypesAreEqual - This routine checks two function proto types
@@ -7426,7 +7513,8 @@ ExprResult
 Sema::BuildOverloadedCallExpr(Scope *S, Expr *Fn, UnresolvedLookupExpr *ULE,
                               SourceLocation LParenLoc,
                               Expr **Args, unsigned NumArgs,
-                              SourceLocation RParenLoc) {
+                              SourceLocation RParenLoc,
+                              Expr *ExecConfig) {
 #ifndef NDEBUG
   if (ULE->requiresADL()) {
     // To do ADL, we must have found an unqualified name.
@@ -7466,8 +7554,8 @@ Sema::BuildOverloadedCallExpr(Scope *S, Expr *Fn, UnresolvedLookupExpr *ULE,
     DiagnoseUseOfDecl(FDecl? FDecl : Best->FoundDecl.getDecl(),
                       ULE->getNameLoc());
     Fn = FixOverloadedFunctionReference(Fn, Best->FoundDecl, FDecl);
-    return BuildResolvedCallExpr(Fn, FDecl, LParenLoc, Args, NumArgs,
-                                 RParenLoc);
+    return BuildResolvedCallExpr(Fn, FDecl, LParenLoc, Args, NumArgs, RParenLoc,
+                                 ExecConfig);
   }
 
   case OR_No_Viable_Function:

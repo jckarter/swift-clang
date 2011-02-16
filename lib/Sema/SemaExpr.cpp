@@ -294,6 +294,9 @@ void Sema::DefaultLvalueConversion(Expr *&E) {
   if (T.hasQualifiers())
     T = T.getUnqualifiedType();
 
+  if (const ArraySubscriptExpr *ae = dyn_cast<ArraySubscriptExpr>(E))
+    CheckArrayAccess(ae);
+  
   E = ImplicitCastExpr::Create(Context, T, CK_LValueToRValue,
                                E, 0, VK_RValue);
 }
@@ -820,7 +823,7 @@ static CaptureResult shouldCaptureValueReference(Sema &S, SourceLocation loc,
                                                  ValueDecl *value) {
   // Only variables ever require capture.
   VarDecl *var = dyn_cast<VarDecl>(value);
-  if (!var || isa<NonTypeTemplateParmDecl>(var)) return CR_NoCapture;
+  if (!var) return CR_NoCapture;
 
   // Fast path: variables from the current context never require capture.
   DeclContext *DC = S.CurContext;
@@ -949,36 +952,23 @@ static ExprResult BuildBlockDeclRefExpr(Sema &S, ValueDecl *vd,
 
 ExprResult
 Sema::BuildDeclRefExpr(ValueDecl *D, QualType Ty, ExprValueKind VK,
-                       SourceLocation Loc, const CXXScopeSpec *SS) {
+                       SourceLocation Loc,
+                       const CXXScopeSpec *SS) {
   DeclarationNameInfo NameInfo(D->getDeclName(), Loc);
   return BuildDeclRefExpr(D, Ty, VK, NameInfo, SS);
 }
 
-/// BuildDeclRefExpr - Build a DeclRefExpr.
+/// BuildDeclRefExpr - Build an expression that references a
+/// declaration that does not require a closure capture.
 ExprResult
-Sema::BuildDeclRefExpr(ValueDecl *D, QualType Ty,
-                       ExprValueKind VK,
+Sema::BuildDeclRefExpr(ValueDecl *D, QualType Ty, ExprValueKind VK,
                        const DeclarationNameInfo &NameInfo,
                        const CXXScopeSpec *SS) {
-  if (Context.getCanonicalType(Ty) == Context.UndeducedAutoTy) {
+  if (Ty == Context.UndeducedAutoTy) {
     Diag(NameInfo.getLoc(),
          diag::err_auto_variable_cannot_appear_in_own_initializer)
       << D->getDeclName();
     return ExprError();
-  }
-
-  if (const VarDecl *VD = dyn_cast<VarDecl>(D)) {
-    if (isa<NonTypeTemplateParmDecl>(VD)) {
-      // Non-type template parameters can be referenced anywhere they are
-      // visible.
-      Ty = Ty.getNonLValueExprType(Context);
-
-    // This ridiculousness brought to you by 'extern void x;' and the
-    // GNU compiler collection.
-    } else if (!getLangOptions().CPlusPlus && !Ty.hasQualifiers() &&
-               Ty->isVoidType()) {
-      VK = VK_RValue;
-    }
   }
 
   MarkDeclarationReferenced(NameInfo.getLoc(), D);
@@ -1694,24 +1684,6 @@ ExprResult Sema::ActOnIdExpression(Scope *S,
         Diag(Var->getLocation(), diag::note_global_declared_at);
       }
     }
-  } else if (FunctionDecl *Func = R.getAsSingle<FunctionDecl>()) {
-    if (!getLangOptions().CPlusPlus && !Func->hasPrototype()) {
-      // C99 DR 316 says that, if a function type comes from a
-      // function definition (without a prototype), that type is only
-      // used for checking compatibility. Therefore, when referencing
-      // the function, we pretend that we don't have the full function
-      // type.
-      if (DiagnoseUseOfDecl(Func, NameLoc))
-        return ExprError();
-
-      QualType T = Func->getType();
-      QualType NoProtoType = T;
-      if (const FunctionProtoType *Proto = T->getAs<FunctionProtoType>())
-        NoProtoType = Context.getFunctionNoProtoType(Proto->getResultType(),
-                                                     Proto->getExtInfo());
-      // Note that functions are r-values in C.
-      return BuildDeclRefExpr(Func, NoProtoType, VK_RValue, NameLoc, &SS);
-    }
   }
 
   // Check whether this might be a C++ implicit instance member access.
@@ -2325,21 +2297,6 @@ Sema::BuildDeclarationNameExpr(const CXXScopeSpec &SS,
   return Owned(ULE);
 }
 
-static ExprValueKind getValueKindForDecl(ASTContext &Context,
-                                         const ValueDecl *D) {
-  // FIXME: It's not clear to me why NonTypeTemplateParmDecl is a VarDecl.
-  if (isa<VarDecl>(D) && !isa<NonTypeTemplateParmDecl>(D)) return VK_LValue;
-  if (isa<FieldDecl>(D)) return VK_LValue;
-  if (isa<IndirectFieldDecl>(D)) return VK_LValue;
-  if (!Context.getLangOptions().CPlusPlus) return VK_RValue;
-  if (isa<FunctionDecl>(D)) {
-    if (isa<CXXMethodDecl>(D) && cast<CXXMethodDecl>(D)->isInstance())
-      return VK_RValue;
-    return VK_LValue;
-  }
-  return Expr::getValueKindForType(D->getType());
-}
-
 /// \brief Complete semantic analysis for a reference to the given declaration.
 ExprResult
 Sema::BuildDeclarationNameExpr(const CXXScopeSpec &SS,
@@ -2402,15 +2359,6 @@ Sema::BuildDeclarationNameExpr(const CXXScopeSpec &SS,
   case CR_Error:
     return ExprError();
 
-  case CR_NoCapture: {
-    ExprValueKind VK = getValueKindForDecl(Context, VD);
-
-    // If this reference is not in a block or if the referenced
-    // variable is within the block, create a normal DeclRefExpr.
-    return BuildDeclRefExpr(VD, VD->getType().getNonReferenceType(), VK,
-                            NameInfo, &SS);
-  }
-
   case CR_Capture:
     assert(!SS.isSet() && "referenced local variable with scope specifier?");
     return BuildBlockDeclRefExpr(*this, VD, NameInfo, /*byref*/ false);
@@ -2418,6 +2366,125 @@ Sema::BuildDeclarationNameExpr(const CXXScopeSpec &SS,
   case CR_CaptureByRef:
     assert(!SS.isSet() && "referenced local variable with scope specifier?");
     return BuildBlockDeclRefExpr(*this, VD, NameInfo, /*byref*/ true);
+
+  case CR_NoCapture: {
+    // If this reference is not in a block or if the referenced
+    // variable is within the block, create a normal DeclRefExpr.
+
+    QualType type = VD->getType();
+    ExprValueKind valueKind = VK_RValue;
+
+    switch (D->getKind()) {
+    // Ignore all the non-ValueDecl kinds.
+#define ABSTRACT_DECL(kind)
+#define VALUE(type, base)
+#define DECL(type, base) \
+    case Decl::type:
+#include "clang/AST/DeclNodes.inc"
+      llvm_unreachable("invalid value decl kind");
+      return ExprError();
+
+    // These shouldn't make it here.
+    case Decl::ObjCAtDefsField:
+    case Decl::ObjCIvar:
+      llvm_unreachable("forming non-member reference to ivar?");
+      return ExprError();
+
+    // Enum constants are always r-values and never references.
+    // Unresolved using declarations are dependent.
+    case Decl::EnumConstant:
+    case Decl::UnresolvedUsingValue:
+      valueKind = VK_RValue;
+      break;
+
+    // Fields and indirect fields that got here must be for
+    // pointer-to-member expressions; we just call them l-values for
+    // internal consistency, because this subexpression doesn't really
+    // exist in the high-level semantics.
+    case Decl::Field:
+    case Decl::IndirectField:
+      assert(getLangOptions().CPlusPlus &&
+             "building reference to field in C?");
+
+      // These can't have reference type in well-formed programs, but
+      // for internal consistency we do this anyway.
+      type = type.getNonReferenceType();
+      valueKind = VK_LValue;
+      break;
+
+    // Non-type template parameters are either l-values or r-values
+    // depending on the type.
+    case Decl::NonTypeTemplateParm: {
+      if (const ReferenceType *reftype = type->getAs<ReferenceType>()) {
+        type = reftype->getPointeeType();
+        valueKind = VK_LValue; // even if the parameter is an r-value reference
+        break;
+      }
+
+      // For non-references, we need to strip qualifiers just in case
+      // the template parameter was declared as 'const int' or whatever.
+      valueKind = VK_RValue;
+      type = type.getUnqualifiedType();
+      break;
+    }
+
+    case Decl::Var:
+      // In C, "extern void blah;" is valid and is an r-value.
+      if (!getLangOptions().CPlusPlus &&
+          !type.hasQualifiers() &&
+          type->isVoidType()) {
+        valueKind = VK_RValue;
+        break;
+      }
+      // fallthrough
+
+    case Decl::ImplicitParam:
+    case Decl::ParmVar:
+      // These are always l-values.
+      valueKind = VK_LValue;
+      type = type.getNonReferenceType();
+      break;
+
+    case Decl::Function: {
+      // Functions are l-values in C++.
+      if (getLangOptions().CPlusPlus) {
+        valueKind = VK_LValue;
+        break;
+      }
+      
+      // C99 DR 316 says that, if a function type comes from a
+      // function definition (without a prototype), that type is only
+      // used for checking compatibility. Therefore, when referencing
+      // the function, we pretend that we don't have the full function
+      // type.
+      if (!cast<FunctionDecl>(VD)->hasPrototype())
+        if (const FunctionProtoType *proto = type->getAs<FunctionProtoType>())
+          type = Context.getFunctionNoProtoType(proto->getResultType(),
+                                                proto->getExtInfo());
+
+      // Functions are r-values in C.
+      valueKind = VK_RValue;
+      break;
+    }
+
+    case Decl::CXXMethod:
+      // C++ methods are l-values if static, r-values if non-static.
+      if (cast<CXXMethodDecl>(VD)->isStatic()) {
+        valueKind = VK_LValue;
+        break;
+      }
+      // fallthrough
+
+    case Decl::CXXConversion:
+    case Decl::CXXDestructor:
+    case Decl::CXXConstructor:
+      valueKind = VK_RValue;
+      break;
+    }
+
+    return BuildDeclRefExpr(VD, type, valueKind, NameInfo, &SS);
+  }
+
   }
 
   llvm_unreachable("unknown capture result");
@@ -4298,7 +4365,8 @@ bool Sema::GatherArgumentsForCall(SourceLocation CallLoc,
 /// locations.
 ExprResult
 Sema::ActOnCallExpr(Scope *S, Expr *Fn, SourceLocation LParenLoc,
-                    MultiExprArg args, SourceLocation RParenLoc) {
+                    MultiExprArg args, SourceLocation RParenLoc,
+                    Expr *ExecConfig) {
   unsigned NumArgs = args.size();
 
   // Since this might be a postfix expression, get rid of ParenListExprs.
@@ -4335,10 +4403,17 @@ Sema::ActOnCallExpr(Scope *S, Expr *Fn, SourceLocation LParenLoc,
     else if (Expr::hasAnyTypeDependentArguments(Args, NumArgs))
       Dependent = true;
 
-    if (Dependent)
-      return Owned(new (Context) CallExpr(Context, Fn, Args, NumArgs,
-                                          Context.DependentTy, VK_RValue,
-                                          RParenLoc));
+    if (Dependent) {
+      if (ExecConfig) {
+        return Owned(new (Context) CUDAKernelCallExpr(
+            Context, Fn, cast<CallExpr>(ExecConfig), Args, NumArgs,
+            Context.DependentTy, VK_RValue, RParenLoc));
+      } else {
+        return Owned(new (Context) CallExpr(Context, Fn, Args, NumArgs,
+                                            Context.DependentTy, VK_RValue,
+                                            RParenLoc));
+      }
+    }
 
     // Determine whether this is a call to an object (C++ [over.call.object]).
     if (Fn->getType()->isRecordType())
@@ -4431,7 +4506,7 @@ Sema::ActOnCallExpr(Scope *S, Expr *Fn, SourceLocation LParenLoc,
   if (isa<UnresolvedLookupExpr>(NakedFn)) {
     UnresolvedLookupExpr *ULE = cast<UnresolvedLookupExpr>(NakedFn);
     return BuildOverloadedCallExpr(S, Fn, ULE, LParenLoc, Args, NumArgs,
-                                   RParenLoc);
+                                   RParenLoc, ExecConfig);
   }
 
   NamedDecl *NDecl = 0;
@@ -4442,7 +4517,23 @@ Sema::ActOnCallExpr(Scope *S, Expr *Fn, SourceLocation LParenLoc,
   if (isa<DeclRefExpr>(NakedFn))
     NDecl = cast<DeclRefExpr>(NakedFn)->getDecl();
 
-  return BuildResolvedCallExpr(Fn, NDecl, LParenLoc, Args, NumArgs, RParenLoc);
+  return BuildResolvedCallExpr(Fn, NDecl, LParenLoc, Args, NumArgs, RParenLoc,
+                               ExecConfig);
+}
+
+ExprResult
+Sema::ActOnCUDAExecConfigExpr(Scope *S, SourceLocation LLLLoc,
+                              MultiExprArg execConfig, SourceLocation GGGLoc) {
+  FunctionDecl *ConfigDecl = Context.getcudaConfigureCallDecl();
+  if (!ConfigDecl)
+    return ExprError(Diag(LLLLoc, diag::err_undeclared_var_use)
+                          << "cudaConfigureCall");
+  QualType ConfigQTy = ConfigDecl->getType();
+
+  DeclRefExpr *ConfigDR = new (Context) DeclRefExpr(
+      ConfigDecl, ConfigQTy, VK_LValue, LLLLoc);
+
+  return ActOnCallExpr(S, ConfigDR, LLLLoc, execConfig, GGGLoc, 0);
 }
 
 /// BuildResolvedCallExpr - Build a call to a resolved expression,
@@ -4455,7 +4546,8 @@ ExprResult
 Sema::BuildResolvedCallExpr(Expr *Fn, NamedDecl *NDecl,
                             SourceLocation LParenLoc,
                             Expr **Args, unsigned NumArgs,
-                            SourceLocation RParenLoc) {
+                            SourceLocation RParenLoc,
+                            Expr *Config) {
   FunctionDecl *FDecl = dyn_cast_or_null<FunctionDecl>(NDecl);
 
   // Promote the function operand.
@@ -4463,11 +4555,21 @@ Sema::BuildResolvedCallExpr(Expr *Fn, NamedDecl *NDecl,
 
   // Make the call expr early, before semantic checks.  This guarantees cleanup
   // of arguments and function on error.
-  CallExpr *TheCall = new (Context) CallExpr(Context, Fn,
-                                             Args, NumArgs,
-                                             Context.BoolTy,
-                                             VK_RValue,
-                                             RParenLoc);
+  CallExpr *TheCall;
+  if (Config) {
+    TheCall = new (Context) CUDAKernelCallExpr(Context, Fn,
+                                               cast<CallExpr>(Config),
+                                               Args, NumArgs,
+                                               Context.BoolTy,
+                                               VK_RValue,
+                                               RParenLoc);
+  } else {
+    TheCall = new (Context) CallExpr(Context, Fn,
+                                     Args, NumArgs,
+                                     Context.BoolTy,
+                                     VK_RValue,
+                                     RParenLoc);
+  }
 
   const FunctionType *FuncT;
   if (!Fn->getType()->isBlockPointerType()) {
@@ -7142,6 +7244,11 @@ QualType Sema::CheckAssignmentOperands(Expr *LHS, Expr *&RHS,
         << UO->getSubExpr()->getSourceRange();
     Diag(UO->getOperatorLoc(), diag::note_indirection_through_null);
   }
+  
+  // Check for trivial buffer overflows.
+  if (const ArraySubscriptExpr *ae
+      = dyn_cast<ArraySubscriptExpr>(LHS->IgnoreParenCasts()))
+    CheckArrayAccess(ae);
   
   // C99 6.5.16p3: The type of an assignment expression is the type of the
   // left operand unless the left operand has qualified type, in which case

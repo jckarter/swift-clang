@@ -924,13 +924,22 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
       types::ID InputType = Inputs[0].getType();
 
       // Checks to perform for all language types.
+
+      CmdArgs.push_back("-analyzer-checker=core");
+      if (getToolChain().getTriple().getOS() != llvm::Triple::Win32)
+        CmdArgs.push_back("-analyzer-checker=unix");
+      if (getToolChain().getTriple().getVendor() == llvm::Triple::Apple)
+        CmdArgs.push_back("-analyzer-checker=macosx");
+
       CmdArgs.push_back("-analyzer-check-dead-stores");
 
       // Checks to perform for Objective-C/Objective-C++.
       if (types::isObjC(InputType)) {
+        // Enable all checkers in 'cocoa' package.
+        CmdArgs.push_back("-analyzer-checker=cocoa");
+
         CmdArgs.push_back("-analyzer-check-objc-methodsigs");
         CmdArgs.push_back("-analyzer-check-objc-unused-ivars");
-        CmdArgs.push_back("-analyzer-check-objc-self-init");
         // Do not enable the missing -dealloc check.
         // '-analyzer-check-objc-missing-dealloc',
       }
@@ -946,7 +955,6 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
         CmdArgs.push_back("-analyzer-check-objc-mem");
 
         CmdArgs.push_back("-analyzer-eagerly-assume");
-        CmdArgs.push_back("-analyzer-check-idempotent-operations");
       }
     }
 
@@ -1014,6 +1022,11 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
     CmdArgs.push_back("-no-merge-all-constants");
 
   // LLVM Code Generator Options.
+
+  if (Arg *A = Args.getLastArg(options::OPT_mregparm_EQ)) {
+    CmdArgs.push_back("-mregparm");
+    CmdArgs.push_back(A->getValue(Args));
+  }
 
   // FIXME: Set --enable-unsafe-fp-math.
   if (Args.hasFlag(options::OPT_fno_omit_frame_pointer,
@@ -1311,6 +1324,7 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
   Args.AddLastArg(CmdArgs, options::OPT_femit_all_decls);
   Args.AddLastArg(CmdArgs, options::OPT_fheinous_gnu_extensions);
   Args.AddLastArg(CmdArgs, options::OPT_flimit_debug_info);
+  Args.AddLastArg(CmdArgs, options::OPT_pg);
 
   // -flax-vector-conversions is default.
   if (!Args.hasFlag(options::OPT_flax_vector_conversions,
@@ -1741,13 +1755,10 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
 
   C.addCommand(new Command(JA, *this, Exec, CmdArgs));
 
-  // Explicitly warn that these options are unsupported, even though
-  // we are allowing compilation to continue.
-  for (arg_iterator it = Args.filtered_begin(options::OPT_pg),
-         ie = Args.filtered_end(); it != ie; ++it) {
-    (*it)->claim();
-    D.Diag(clang::diag::warn_drv_clang_unsupported) << (*it)->getAsString(Args);
-  }
+  if (Arg *A = Args.getLastArg(options::OPT_pg))
+    if (Args.hasArg(options::OPT_fomit_frame_pointer))
+      D.Diag(clang::diag::err_drv_argument_not_allowed_with)
+        << "-fomit-frame-pointer" << A->getAsString(Args);
 
   // Claim some arguments which clang supports automatically.
 
@@ -3179,8 +3190,12 @@ void freebsd::Link::ConstructJob(Compilation &C, const JobAction &JA,
   if (!Args.hasArg(options::OPT_nostdlib) &&
       !Args.hasArg(options::OPT_nostartfiles)) {
     if (!Args.hasArg(options::OPT_shared)) {
-      CmdArgs.push_back(Args.MakeArgString(
-                              getToolChain().GetFilePath("crt1.o")));
+      if (Args.hasArg(options::OPT_pg))
+        CmdArgs.push_back(Args.MakeArgString(
+                                getToolChain().GetFilePath("gcrt1.o")));
+      else
+        CmdArgs.push_back(Args.MakeArgString(
+                                getToolChain().GetFilePath("crt1.o")));
       CmdArgs.push_back(Args.MakeArgString(
                               getToolChain().GetFilePath("crti.o")));
       CmdArgs.push_back(Args.MakeArgString(
@@ -3208,26 +3223,49 @@ void freebsd::Link::ConstructJob(Compilation &C, const JobAction &JA,
       !Args.hasArg(options::OPT_nodefaultlibs)) {
     if (D.CCCIsCXX) {
       getToolChain().AddCXXStdlibLibArgs(Args, CmdArgs);
-      CmdArgs.push_back("-lm");
+      if (Args.hasArg(options::OPT_pg))
+        CmdArgs.push_back("-lm_p");
+      else
+        CmdArgs.push_back("-lm");
     }
     // FIXME: For some reason GCC passes -lgcc and -lgcc_s before adding
     // the default system libraries. Just mimic this for now.
-    CmdArgs.push_back("-lgcc");
+    if (Args.hasArg(options::OPT_pg))
+      CmdArgs.push_back("-lgcc_p");
+    else
+      CmdArgs.push_back("-lgcc");
     if (Args.hasArg(options::OPT_static)) {
       CmdArgs.push_back("-lgcc_eh");
+    } else if (Args.hasArg(options::OPT_pg)) {
+      CmdArgs.push_back("-lgcc_eh_p");
     } else {
       CmdArgs.push_back("--as-needed");
       CmdArgs.push_back("-lgcc_s");
       CmdArgs.push_back("--no-as-needed");
     }
 
-    if (Args.hasArg(options::OPT_pthread))
-      CmdArgs.push_back("-lpthread");
-    CmdArgs.push_back("-lc");
+    if (Args.hasArg(options::OPT_pthread)) {
+      if (Args.hasArg(options::OPT_pg))
+        CmdArgs.push_back("-lpthread_p");
+      else
+        CmdArgs.push_back("-lpthread");
+    }
 
-    CmdArgs.push_back("-lgcc");
+    if (Args.hasArg(options::OPT_pg)) {
+      if (Args.hasArg(options::OPT_shared))
+        CmdArgs.push_back("-lc");
+      else
+        CmdArgs.push_back("-lc_p");
+      CmdArgs.push_back("-lgcc_p");
+    } else {
+      CmdArgs.push_back("-lc");
+      CmdArgs.push_back("-lgcc");
+    }
+
     if (Args.hasArg(options::OPT_static)) {
       CmdArgs.push_back("-lgcc_eh");
+    } else if (Args.hasArg(options::OPT_pg)) {
+      CmdArgs.push_back("-lgcc_eh_p");
     } else {
       CmdArgs.push_back("--as-needed");
       CmdArgs.push_back("-lgcc_s");

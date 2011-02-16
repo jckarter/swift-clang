@@ -653,7 +653,7 @@ public:
   PrecompilePreambleConsumer(ASTUnit &Unit,
                              const Preprocessor &PP, bool Chaining,
                              const char *isysroot, llvm::raw_ostream *Out)
-    : PCHGenerator(PP, Chaining, isysroot, Out), Unit(Unit) { }
+    : PCHGenerator(PP, "", Chaining, isysroot, Out), Unit(Unit) { }
 
   virtual void HandleTopLevelDecl(DeclGroupRef D) {
     for (DeclGroupRef::iterator it = D.begin(), ie = D.end(); it != ie; ++it) {
@@ -700,9 +700,11 @@ public:
   virtual ASTConsumer *CreateASTConsumer(CompilerInstance &CI,
                                          llvm::StringRef InFile) {
     std::string Sysroot;
+    std::string OutputFile;
     llvm::raw_ostream *OS = 0;
     bool Chaining;
-    if (GeneratePCHAction::ComputeASTConsumerArguments(CI, InFile, Sysroot, 
+    if (GeneratePCHAction::ComputeASTConsumerArguments(CI, InFile, Sysroot,
+                                                       OutputFile,
                                                        OS, Chaining))
       return 0;
     
@@ -1368,7 +1370,8 @@ void ASTUnit::RealizePreprocessedEntitiesFromPreamble() {
 
   for (unsigned I = 0, N = PreprocessedEntitiesInPreamble.size(); I != N; ++I) {
     if (PreprocessedEntity *PE
-          = External->ReadPreprocessedEntity(PreprocessedEntitiesInPreamble[I]))
+          = External->ReadPreprocessedEntityAtOffset(
+                                            PreprocessedEntitiesInPreamble[I]))
       PreprocessedEntities.push_back(PE);
   }
   
@@ -2007,7 +2010,7 @@ bool ASTUnit::Save(llvm::StringRef File) {
   std::vector<unsigned char> Buffer;
   llvm::BitstreamWriter Stream(Buffer);
   ASTWriter Writer(Stream);
-  Writer.WriteAST(getSema(), 0, 0);
+  Writer.WriteAST(getSema(), 0, std::string(), 0);
   
   // Write the generated bitstream to "Out".
   if (!Buffer.empty())

@@ -33,17 +33,17 @@ namespace clang {
 /// ObjCInterfaceDecl. FIXME - Find appropriate name.
 /// These objects are managed by ASTContext.
 class ASTRecordLayout {
-  /// Size - Size of record in bits.
-  uint64_t Size;
+  /// Size - Size of record in characters.
+  CharUnits Size;
 
-  /// DataSize - Size of record in bits without tail padding.
-  uint64_t DataSize;
+  /// DataSize - Size of record in characters without tail padding.
+  CharUnits DataSize;
 
   /// FieldOffsets - Array of field offsets in bits.
   uint64_t *FieldOffsets;
 
-  // Alignment - Alignment of record in bits.
-  unsigned Alignment;
+  // Alignment - Alignment of record in characters.
+  CharUnits Alignment;
 
   // FieldCount - Number of fields.
   unsigned FieldCount;
@@ -82,14 +82,14 @@ class ASTRecordLayout {
 
   friend class ASTContext;
 
-  ASTRecordLayout(const ASTContext &Ctx, uint64_t size, unsigned alignment,
-                  unsigned datasize, const uint64_t *fieldoffsets,
+  ASTRecordLayout(const ASTContext &Ctx, CharUnits size, CharUnits alignment,
+                  CharUnits datasize, const uint64_t *fieldoffsets,
                   unsigned fieldcount);
 
   // Constructor for C++ records.
   typedef CXXRecordLayoutInfo::BaseOffsetsMapTy BaseOffsetsMapTy;
   ASTRecordLayout(const ASTContext &Ctx,
-                  uint64_t size, unsigned alignment, uint64_t datasize,
+                  CharUnits size, CharUnits alignment, CharUnits datasize,
                   const uint64_t *fieldoffsets, unsigned fieldcount,
                   CharUnits nonvirtualsize, CharUnits nonvirtualalign,
                   CharUnits SizeOfLargestEmptySubobject,
@@ -106,11 +106,11 @@ class ASTRecordLayout {
   void operator=(const ASTRecordLayout&); // DO NOT IMPLEMENT
 public:
 
-  /// getAlignment - Get the record alignment in bits.
-  unsigned getAlignment() const { return Alignment; }
+  /// getAlignment - Get the record alignment in characters.
+  CharUnits getAlignment() const { return Alignment; }
 
-  /// getSize - Get the record size in bits.
-  uint64_t getSize() const { return Size; }
+  /// getSize - Get the record size in characters.
+  CharUnits getSize() const { return Size; }
 
   /// getFieldCount - Get the number of fields in the layout.
   unsigned getFieldCount() const { return FieldCount; }
@@ -123,8 +123,8 @@ public:
   }
 
   /// getDataSize() - Get the record data size, which is the record size
-  /// without tail padding, in bits.
-  uint64_t getDataSize() const {
+  /// without tail padding, in characters.
+  CharUnits getDataSize() const {
     return DataSize;
   }
 

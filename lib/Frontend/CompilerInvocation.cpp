@@ -116,12 +116,17 @@ static void AnalyzerOptsToArgs(const AnalyzerOptions &Opts,
     Res.push_back("-analyzer-experimental-checks");
   if (Opts.EnableExperimentalInternalChecks)
     Res.push_back("-analyzer-experimental-internal-checks");
-  if (Opts.IdempotentOps)
-    Res.push_back("-analyzer-check-idempotent-operations");
-  if (Opts.ObjCSelfInitCheck)
-    Res.push_back("-analyzer-check-objc-self-init");
   if (Opts.BufferOverflows)
     Res.push_back("-analyzer-check-buffer-overflows");
+
+  for (unsigned i = 0, e = Opts.CheckersControlList.size(); i != e; ++i) {
+    const std::pair<std::string, bool> &opt = Opts.CheckersControlList[i];
+    if (opt.second)
+      Res.push_back("-analyzer-disable-checker");
+    else
+      Res.push_back("-analyzer-checker");
+    Res.push_back(opt.first);
+  }
 }
 
 static void CodeGenOptsToArgs(const CodeGenOptions &Opts,
@@ -201,6 +206,10 @@ static void CodeGenOptsToArgs(const CodeGenOptions &Opts,
   case CodeGenOptions::NonLegacy:
     Res.push_back("-fobjc-dispatch-method=non-legacy");
     break;
+  }
+  if (Opts.NumRegisterParameters) {
+    Res.push_back("-mregparm");
+    Res.push_back(llvm::utostr(Opts.NumRegisterParameters));
   }
   if (Opts.RelaxAll)
     Res.push_back("-mrelax-all");
@@ -878,10 +887,20 @@ static void ParseAnalyzerArgs(AnalyzerOptions &Opts, ArgList &Args,
   Opts.TrimGraph = Args.hasArg(OPT_trim_egraph);
   Opts.MaxNodes = Args.getLastArgIntValue(OPT_analyzer_max_nodes, 150000,Diags);
   Opts.MaxLoop = Args.getLastArgIntValue(OPT_analyzer_max_loop, 4, Diags);
+  Opts.EagerlyTrimEGraph = !Args.hasArg(OPT_analyzer_no_eagerly_trim_egraph);
   Opts.InlineCall = Args.hasArg(OPT_analyzer_inline_call);
-  Opts.IdempotentOps = Args.hasArg(OPT_analysis_WarnIdempotentOps);
-  Opts.ObjCSelfInitCheck = Args.hasArg(OPT_analysis_WarnObjCSelfInit);
   Opts.BufferOverflows = Args.hasArg(OPT_analysis_WarnBufferOverflows);
+
+  Opts.CheckersControlList.clear();
+  for (arg_iterator it = Args.filtered_begin(OPT_analyzer_checker,
+                                             OPT_analyzer_disable_checker),
+         ie = Args.filtered_end(); it != ie; ++it) {
+    const Arg *A = *it;
+    A->claim();
+    bool enable = (A->getOption().getID() == OPT_analyzer_checker);
+    Opts.CheckersControlList.push_back(std::make_pair(A->getValue(Args),
+                                                      enable));
+  }
 }
 
 static void ParseCodeGenArgs(CodeGenOptions &Opts, ArgList &Args, InputKind IK,
@@ -927,6 +946,7 @@ static void ParseCodeGenArgs(CodeGenOptions &Opts, ArgList &Args, InputKind IK,
   Opts.NoInfsFPMath = Opts.NoNaNsFPMath = Args.hasArg(OPT_cl_finite_math_only)||
                                           Args.hasArg(OPT_cl_fast_relaxed_math);
   Opts.NoZeroInitializedInBSS = Args.hasArg(OPT_mno_zero_initialized_in_bss);
+  Opts.NumRegisterParameters = Args.getLastArgIntValue(OPT_mregparm, 0, Diags);
   Opts.RelaxAll = Args.hasArg(OPT_mrelax_all);
   Opts.OmitLeafFramePointer = Args.hasArg(OPT_momit_leaf_frame_pointer);
   Opts.SoftFloat = Args.hasArg(OPT_msoft_float);
@@ -942,6 +962,7 @@ static void ParseCodeGenArgs(CodeGenOptions &Opts, ArgList &Args, InputKind IK,
   Opts.VerifyModule = !Args.hasArg(OPT_disable_llvm_verifier);
 
   Opts.InstrumentFunctions = Args.hasArg(OPT_finstrument_functions);
+  Opts.InstrumentForProfiling = Args.hasArg(OPT_pg);
 
   if (Arg *A = Args.getLastArg(OPT_fobjc_dispatch_method_EQ)) {
     llvm::StringRef Name = A->getValue(Args);
@@ -1326,6 +1347,7 @@ void CompilerInvocation::setLangDefaults(LangOptions &Opts, InputKind IK,
     Opts.AltiVec = 1;
     Opts.CXXOperatorNames = 1;
     Opts.LaxVectorConversions = 1;
+    Opts.DefaultFPContract = 1;
   }
 
   if (LangStd == LangStandard::lang_cuda)

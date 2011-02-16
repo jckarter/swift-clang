@@ -37,6 +37,7 @@
 #include "llvm/Intrinsics.h"
 #include "llvm/LLVMContext.h"
 #include "llvm/ADT/Triple.h"
+#include "llvm/Target/Mangler.h"
 #include "llvm/Target/TargetData.h"
 #include "llvm/Support/CallSite.h"
 #include "llvm/Support/ErrorHandling.h"
@@ -89,7 +90,17 @@ CodeGenModule::CodeGenModule(ASTContext &C, const CodeGenOptions &CGO,
   DebugInfo = CodeGenOpts.DebugInfo ? new CGDebugInfo(*this) : 0;
 
   Block.GlobalUniqueCount = 0;
-  Int8PtrTy = llvm::Type::getInt8PtrTy(M.getContext());
+
+  // Initialize the type cache.
+  llvm::LLVMContext &LLVMContext = M.getContext();
+  Int8Ty  = llvm::Type::getInt8Ty(LLVMContext);
+  Int32Ty  = llvm::Type::getInt32Ty(LLVMContext);
+  Int64Ty  = llvm::Type::getInt64Ty(LLVMContext);
+  PointerWidthInBits = C.Target.getPointerWidth(0);
+  IntTy = llvm::IntegerType::get(LLVMContext, C.Target.getIntWidth());
+  IntPtrTy = llvm::IntegerType::get(LLVMContext, PointerWidthInBits);
+  Int8PtrTy = Int8Ty->getPointerTo(0);
+  Int8PtrPtrTy = Int8PtrTy->getPointerTo(0);
 }
 
 CodeGenModule::~CodeGenModule() {
@@ -263,16 +274,18 @@ llvm::StringRef CodeGenModule::getMangledName(GlobalDecl GD) {
   }
   
   llvm::SmallString<256> Buffer;
+  llvm::raw_svector_ostream Out(Buffer);
   if (const CXXConstructorDecl *D = dyn_cast<CXXConstructorDecl>(ND))
-    getCXXABI().getMangleContext().mangleCXXCtor(D, GD.getCtorType(), Buffer);
+    getCXXABI().getMangleContext().mangleCXXCtor(D, GD.getCtorType(), Out);
   else if (const CXXDestructorDecl *D = dyn_cast<CXXDestructorDecl>(ND))
-    getCXXABI().getMangleContext().mangleCXXDtor(D, GD.getDtorType(), Buffer);
+    getCXXABI().getMangleContext().mangleCXXDtor(D, GD.getDtorType(), Out);
   else if (const BlockDecl *BD = dyn_cast<BlockDecl>(ND))
-    getCXXABI().getMangleContext().mangleBlock(BD, Buffer);
+    getCXXABI().getMangleContext().mangleBlock(BD, Out);
   else
-    getCXXABI().getMangleContext().mangleName(ND, Buffer);
+    getCXXABI().getMangleContext().mangleName(ND, Out);
 
   // Allocate space for the mangled name.
+  Out.flush();
   size_t Length = Buffer.size();
   char *Name = MangledNamesAllocator.Allocate<char>(Length);
   std::copy(Buffer.begin(), Buffer.end(), Name);
@@ -286,14 +299,15 @@ void CodeGenModule::getBlockMangledName(GlobalDecl GD, MangleBuffer &Buffer,
                                         const BlockDecl *BD) {
   MangleContext &MangleCtx = getCXXABI().getMangleContext();
   const Decl *D = GD.getDecl();
+  llvm::raw_svector_ostream Out(Buffer.getBuffer());
   if (D == 0)
-    MangleCtx.mangleGlobalBlock(BD, Buffer.getBuffer());
+    MangleCtx.mangleGlobalBlock(BD, Out);
   else if (const CXXConstructorDecl *CD = dyn_cast<CXXConstructorDecl>(D))
-    MangleCtx.mangleCtorBlock(CD, GD.getCtorType(), BD, Buffer.getBuffer());
+    MangleCtx.mangleCtorBlock(CD, GD.getCtorType(), BD, Out);
   else if (const CXXDestructorDecl *DD = dyn_cast<CXXDestructorDecl>(D))
-    MangleCtx.mangleDtorBlock(DD, GD.getDtorType(), BD, Buffer.getBuffer());
+    MangleCtx.mangleDtorBlock(DD, GD.getDtorType(), BD, Out);
   else
-    MangleCtx.mangleBlock(cast<DeclContext>(D), BD, Buffer.getBuffer());
+    MangleCtx.mangleBlock(cast<DeclContext>(D), BD, Out);
 }
 
 llvm::GlobalValue *CodeGenModule::GetGlobalValue(llvm::StringRef Name) {
@@ -857,10 +871,10 @@ CodeGenModule::GetOrCreateLLVMFunction(llvm::StringRef MangledName,
       if (isa<CXXRecordDecl>(FD->getLexicalDeclContext())) {
         if (FD->isImplicit() && !ForVTable) {
           assert(FD->isUsed() && "Sema didn't mark implicit function as used!");
-          DeferredDeclsToEmit.push_back(D);
+          DeferredDeclsToEmit.push_back(D.getWithDecl(FD));
           break;
         } else if (FD->isThisDeclarationADefinition()) {
-          DeferredDeclsToEmit.push_back(D);
+          DeferredDeclsToEmit.push_back(D.getWithDecl(FD));
           break;
         }
       }
