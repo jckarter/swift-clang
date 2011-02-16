@@ -65,6 +65,7 @@ namespace  {
     void PrintRawDeclStmt(DeclStmt *S);
     void PrintRawIfStmt(IfStmt *If);
     void PrintRawCXXCatchStmt(CXXCatchStmt *Catch);
+    void PrintCallArgs(CallExpr *E);
 
     void PrintExpr(Expr *E) {
       if (E)
@@ -217,10 +218,6 @@ void StmtPrinter::VisitSwitchStmt(SwitchStmt *Node) {
     OS << "\n";
     PrintStmt(Node->getBody());
   }
-}
-
-void StmtPrinter::VisitSwitchCase(SwitchCase*) {
-  assert(0 && "SwitchCase is an abstract class");
 }
 
 void StmtPrinter::VisitWhileStmt(WhileStmt *Node) {
@@ -725,9 +722,7 @@ void StmtPrinter::VisitArraySubscriptExpr(ArraySubscriptExpr *Node) {
   OS << "]";
 }
 
-void StmtPrinter::VisitCallExpr(CallExpr *Call) {
-  PrintExpr(Call->getCallee());
-  OS << "(";
+void StmtPrinter::PrintCallArgs(CallExpr *Call) {
   for (unsigned i = 0, e = Call->getNumArgs(); i != e; ++i) {
     if (isa<CXXDefaultArgExpr>(Call->getArg(i))) {
       // Don't print any defaulted arguments
@@ -737,6 +732,12 @@ void StmtPrinter::VisitCallExpr(CallExpr *Call) {
     if (i) OS << ", ";
     PrintExpr(Call->getArg(i));
   }
+}
+
+void StmtPrinter::VisitCallExpr(CallExpr *Call) {
+  PrintExpr(Call->getCallee());
+  OS << "(";
+  PrintCallArgs(Call);
   OS << ")";
 }
 void StmtPrinter::VisitMemberExpr(MemberExpr *Node) {
@@ -958,6 +959,15 @@ void StmtPrinter::VisitCXXOperatorCallExpr(CXXOperatorCallExpr *Node) {
 
 void StmtPrinter::VisitCXXMemberCallExpr(CXXMemberCallExpr *Node) {
   VisitCallExpr(cast<CallExpr>(Node));
+}
+
+void StmtPrinter::VisitCUDAKernelCallExpr(CUDAKernelCallExpr *Node) {
+  PrintExpr(Node->getCallee());
+  OS << "<<<";
+  PrintCallArgs(Node->getConfig());
+  OS << ">>>(";
+  PrintCallArgs(Node);
+  OS << ")";
 }
 
 void StmtPrinter::VisitCXXNamedCastExpr(CXXNamedCastExpr *Node) {

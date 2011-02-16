@@ -60,7 +60,7 @@ Sema::DeclGroupPtrTy Sema::ConvertDeclToDeclGroup(Decl *Ptr) {
 /// and then return NULL.
 ParsedType Sema::getTypeName(IdentifierInfo &II, SourceLocation NameLoc,
                              Scope *S, CXXScopeSpec *SS,
-                             bool isClassName,
+                             bool isClassName, bool HasTrailingDot,
                              ParsedType ObjectTypePtr) {
   // Determine where we will perform name lookup.
   DeclContext *LookupCtx = 0;
@@ -193,13 +193,15 @@ ParsedType Sema::getTypeName(IdentifierInfo &II, SourceLocation NameLoc,
       T = getElaboratedType(ETK_None, *SS, T);
     
   } else if (ObjCInterfaceDecl *IDecl = dyn_cast<ObjCInterfaceDecl>(IIDecl)) {
-    T = Context.getObjCInterfaceType(IDecl);
-  } else {
+    if (!HasTrailingDot)
+      T = Context.getObjCInterfaceType(IDecl);
+  }
+
+  if (T.isNull()) {
     // If it's not plausibly a type, suppress diagnostics.
     Result.suppressDiagnostics();
     return ParsedType();
   }
-
   return ParsedType::make(T);
 }
 
@@ -1920,7 +1922,7 @@ Decl *Sema::BuildAnonymousStructOrUnion(Scope *S, DeclSpec &DS,
 
       // Recover by adding 'static'.
       DS.SetStorageClassSpec(DeclSpec::SCS_static, SourceLocation(),
-                             PrevSpec, DiagID);
+                             PrevSpec, DiagID, getLangOptions());
     }
     // C++ [class.union]p3:
     //   A storage class is not allowed in a declaration of an
@@ -1933,7 +1935,7 @@ Decl *Sema::BuildAnonymousStructOrUnion(Scope *S, DeclSpec &DS,
 
       // Recover by removing the storage specifier.
       DS.SetStorageClassSpec(DeclSpec::SCS_unspecified, SourceLocation(),
-                             PrevSpec, DiagID);
+                             PrevSpec, DiagID, getLangOptions());
     }
 
     // C++ [class.union]p2:
@@ -3119,10 +3121,9 @@ void Sema::CheckShadow(Scope *S, VarDecl *D, const LookupResult& R) {
         Diagnostic::Ignored)
     return;
 
-  // Don't diagnose declarations at file scope.  The scope might not
-  // have a DeclContext if (e.g.) we're parsing a function prototype.
-  DeclContext *NewDC = static_cast<DeclContext*>(S->getEntity());
-  if (NewDC && NewDC->isFileContext())
+  // Don't diagnose declarations at file scope.
+  DeclContext *NewDC = D->getDeclContext();
+  if (NewDC->isFileContext())
     return;
   
   // Only diagnose if we're shadowing an unambiguous field or variable.
@@ -4109,6 +4110,19 @@ Sema::ActOnFunctionDeclarator(Scope* S, Declarator& D, DeclContext* DC,
   }
 
   MarkUnusedFileScopedDecl(NewFD);
+
+  if (getLangOptions().CUDA)
+    if (IdentifierInfo *II = NewFD->getIdentifier())
+      if (!NewFD->isInvalidDecl() &&
+          NewFD->getDeclContext()->getRedeclContext()->isTranslationUnit()) {
+        if (II->isStr("cudaConfigureCall")) {
+          if (!R->getAs<FunctionType>()->getResultType()->isScalarType())
+            Diag(NewFD->getLocation(), diag::err_config_scalar_return);
+
+          Context.setcudaConfigureCallDecl(NewFD);
+        }
+      }
+
   return NewFD;
 }
 

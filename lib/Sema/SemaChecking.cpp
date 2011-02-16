@@ -2954,8 +2954,7 @@ void AnalyzeImplicitConversions(Sema &S, Expr *OrigE, SourceLocation CC) {
 
   // Now just recurse over the expression's children.
   CC = E->getExprLoc();
-  for (Stmt::child_iterator I = E->child_begin(), IE = E->child_end();
-         I != IE; ++I)
+  for (Stmt::child_range I = E->children(); I; ++I)
     AnalyzeImplicitConversions(S, cast<Expr>(*I), CC);
 }
 
@@ -3079,5 +3078,41 @@ void Sema::CheckCastAlign(Expr *Op, QualType T, SourceRange TRange) {
     << static_cast<unsigned>(SrcAlign.getQuantity())
     << static_cast<unsigned>(DestAlign.getQuantity())
     << TRange << Op->getSourceRange();
+}
+
+void Sema::CheckArrayAccess(const clang::ArraySubscriptExpr *ae) {
+  const DeclRefExpr *dr =
+    dyn_cast<DeclRefExpr>(ae->getBase()->IgnoreParenImpCasts());
+  if (!dr)
+    return;
+  const VarDecl *vd = cast<VarDecl>(dr->getDecl());
+  const ConstantArrayType *cat = Context.getAsConstantArrayType(vd->getType());
+  if (!cat)
+    return;
+  const Expr *idx = ae->getIdx();
+  if (idx->isValueDependent())
+    return;
+  llvm::APSInt result;
+  if (!idx->isIntegerConstantExpr(result, Context))
+    return;
+
+  if (result.slt(0)) {
+    Diag(ae->getBase()->getLocStart(), diag::warn_array_index_precedes_bounds)
+      << result.toString(10, true) << idx->getSourceRange();
+  }
+  else {
+    const llvm::APInt &size = cat->getSize();
+    if (size.getBitWidth() > result.getBitWidth())
+      result = result.sext(size.getBitWidth());
+    if (result.sge(size)) {
+      Diag(ae->getBase()->getLocStart(), diag::warn_array_index_exceeds_bounds)
+        << result.toString(10, true) << size.toString(10, true)
+        << idx->getSourceRange();
+    }
+    else
+      return;
+  }
+  Diag(vd->getLocStart(), diag::note_array_index_out_of_bounds)
+    << vd->getDeclName();
 }
 

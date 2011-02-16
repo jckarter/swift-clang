@@ -2310,8 +2310,7 @@ void Sema::InstantiateFunctionDefinition(SourceLocation PointOfInstantiation,
 
   // Enter the scope of this instantiation. We don't use
   // PushDeclContext because we don't have a scope.
-  DeclContext *PreviousContext = CurContext;
-  CurContext = Function;
+  Sema::ContextRAII savedContext(*this, Function);
 
   MultiLevelTemplateArgumentList TemplateArgs =
     getTemplateInstantiationArgs(Function, 0, false, PatternDecl);
@@ -2334,7 +2333,7 @@ void Sema::InstantiateFunctionDefinition(SourceLocation PointOfInstantiation,
 
   PerformDependentDiagnostics(PatternDecl, TemplateArgs);
 
-  CurContext = PreviousContext;
+  savedContext.pop();
 
   DeclGroupRef DG(Function);
   Consumer.HandleTopLevelDecl(DG);
@@ -2435,13 +2434,13 @@ void Sema::InstantiateStaticDataMemberDefinition(
 
   // Enter the scope of this instantiation. We don't use
   // PushDeclContext because we don't have a scope.
-  DeclContext *PreviousContext = CurContext;
-  CurContext = Var->getDeclContext();
+  ContextRAII previousContext(*this, Var->getDeclContext());
 
   VarDecl *OldVar = Var;
   Var = cast_or_null<VarDecl>(SubstDecl(Def, Var->getDeclContext(),
                                         getTemplateInstantiationArgs(Var)));
-  CurContext = PreviousContext;
+
+  previousContext.pop();
 
   if (Var) {
     MemberSpecializationInfo *MSInfo = OldVar->getMemberSpecializationInfo();

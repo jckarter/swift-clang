@@ -1,21 +1,20 @@
-set(LLVM_NO_RTTI 1)
-
 set( LLVM_USED_LIBS
-  clangFrontendTool
-  clangFrontend
-  clangDriver
-  clangSerialization
+  clangAST
+  clangAnalysis
+  clangBasic
   clangCodeGen
+  clangDriver
+  clangFrontend
+  clangFrontendTool
+  clangIndex
+  clangLex
   clangParse
+  clangRewrite
   clangSema
+  clangSerialization
+  clangStaticAnalyzerFrontend
   clangStaticAnalyzerCheckers
   clangStaticAnalyzerCore
-  clangAnalysis
-  clangIndex
-  clangRewrite
-  clangAST
-  clangLex
-  clangBasic
   )
 
 set( LLVM_LINK_COMPONENTS

@@ -210,6 +210,9 @@ public:
   typedef TemplateParameterList TemplateParamsTy;
   typedef NestedNameSpecifier CXXScopeTy;
 
+  OpenCLOptions OpenCLFeatures;
+  FPOptions FPFeatures;
+
   const LangOptions &LangOpts;
   Preprocessor &PP;
   ASTContext &Context;
@@ -229,36 +232,6 @@ public:
   /// VAListTagName - The declaration name corresponding to __va_list_tag.
   /// This is used as part of a hack to omit that class from ADL results.
   DeclarationName VAListTagName;
-
-  /// A RAII object to temporarily push a declaration context.
-  class ContextRAII {
-  private:
-    Sema &S;
-    DeclContext *SavedContext;
-    unsigned SavedParsingDeclDepth;
-    
-  public:
-    ContextRAII(Sema &S, DeclContext *ContextToPush,
-                unsigned ParsingDeclDepth = 0)
-      : S(S), SavedContext(S.CurContext), 
-        SavedParsingDeclDepth(S.ParsingDeclDepth) 
-    {
-      assert(ContextToPush && "pushing null context");
-      S.CurContext = ContextToPush;
-      S.ParsingDeclDepth = 0;
-    }
-
-    void pop() {
-      if (!SavedContext) return;
-      S.CurContext = SavedContext;
-      S.ParsingDeclDepth = SavedParsingDeclDepth;
-      SavedContext = 0;
-    }
-
-    ~ContextRAII() {
-      pop();
-    }
-  };
 
   /// PackContext - Manages the stack for #pragma pack. An alignment
   /// of 0 indicates default alignment.
@@ -328,14 +301,125 @@ public:
   /// and must warn if not used. Only contains the first declaration.
   llvm::SmallVector<const DeclaratorDecl*, 4> UnusedFileScopedDecls;
 
-  /// \brief The stack of diagnostics that were delayed due to being
-  /// produced during the parsing of a declaration.
-  llvm::SmallVector<sema::DelayedDiagnostic, 0> DelayedDiagnostics;
+  class DelayedDiagnostics;
 
-  /// \brief The depth of the current ParsingDeclaration stack.
-  /// If nonzero, we are currently parsing a declaration (and
-  /// hence should delay deprecation warnings).
-  unsigned ParsingDeclDepth;
+  class ParsingDeclState {
+    unsigned SavedStackSize;
+    friend class Sema::DelayedDiagnostics;
+  };
+
+  class ProcessingContextState {
+    unsigned SavedParsingDepth;
+    unsigned SavedActiveStackBase;
+    friend class Sema::DelayedDiagnostics;
+  };
+
+  /// A class which encapsulates the logic for delaying diagnostics
+  /// during parsing and other processing.
+  class DelayedDiagnostics {
+    /// \brief The stack of diagnostics that were delayed due to being
+    /// produced during the parsing of a declaration.
+    sema::DelayedDiagnostic *Stack;
+
+    /// \brief The number of objects on the delayed-diagnostics stack.
+    unsigned StackSize;
+
+    /// \brief The current capacity of the delayed-diagnostics stack.
+    unsigned StackCapacity;
+
+    /// \brief The index of the first "active" delayed diagnostic in
+    /// the stack.  When parsing class definitions, we ignore active
+    /// delayed diagnostics from the surrounding context.
+    unsigned ActiveStackBase;
+
+    /// \brief The depth of the declarations we're currently parsing.
+    /// This gets saved and reset whenever we enter a class definition.
+    unsigned ParsingDepth;
+
+  public:
+    DelayedDiagnostics() : Stack(0), StackSize(0), StackCapacity(0),
+      ActiveStackBase(0), ParsingDepth(0) {}
+
+    ~DelayedDiagnostics() {
+      delete[] reinterpret_cast<char*>(Stack);
+    }
+
+    /// Adds a delayed diagnostic.
+    void add(const sema::DelayedDiagnostic &diag);
+
+    /// Determines whether diagnostics should be delayed.
+    bool shouldDelayDiagnostics() { return ParsingDepth > 0; }
+
+    /// Observe that we've started parsing a declaration.  Access and
+    /// deprecation diagnostics will be delayed; when the declaration
+    /// is completed, all active delayed diagnostics will be evaluated
+    /// in its context, and then active diagnostics stack will be
+    /// popped down to the saved depth.
+    ParsingDeclState pushParsingDecl() {
+      ParsingDepth++;
+
+      ParsingDeclState state;
+      state.SavedStackSize = StackSize;
+      return state;
+    }
+
+    /// Observe that we're completed parsing a declaration.
+    static void popParsingDecl(Sema &S, ParsingDeclState state, Decl *decl);
+
+    /// Observe that we've started processing a different context, the
+    /// contents of which are semantically separate from the
+    /// declarations it may lexically appear in.  This sets aside the
+    /// current stack of active diagnostics and starts afresh.
+    ProcessingContextState pushContext() {
+      assert(StackSize >= ActiveStackBase);
+
+      ProcessingContextState state;
+      state.SavedParsingDepth = ParsingDepth;
+      state.SavedActiveStackBase = ActiveStackBase;
+
+      ActiveStackBase = StackSize;
+      ParsingDepth = 0;
+
+      return state;
+    }
+
+    /// Observe that we've stopped processing a context.  This
+    /// restores the previous stack of active diagnostics.
+    void popContext(ProcessingContextState state) {
+      assert(ActiveStackBase == StackSize);
+      assert(ParsingDepth == 0);
+      ActiveStackBase = state.SavedActiveStackBase;
+      ParsingDepth = state.SavedParsingDepth;
+    }  
+  } DelayedDiagnostics;
+
+  /// A RAII object to temporarily push a declaration context.
+  class ContextRAII {
+  private:
+    Sema &S;
+    DeclContext *SavedContext;
+    ProcessingContextState SavedContextState;
+    
+  public:
+    ContextRAII(Sema &S, DeclContext *ContextToPush)
+      : S(S), SavedContext(S.CurContext), 
+        SavedContextState(S.DelayedDiagnostics.pushContext()) 
+    {
+      assert(ContextToPush && "pushing null context");
+      S.CurContext = ContextToPush;
+    }
+
+    void pop() {
+      if (!SavedContext) return;
+      S.CurContext = SavedContext;
+      S.DelayedDiagnostics.popContext(SavedContextState);
+      SavedContext = 0;
+    }
+
+    ~ContextRAII() {
+      pop();
+    }
+  };
 
   /// WeakUndeclaredIdentifiers - Identifiers contained in
   /// #pragma weak before declared. rare. may alias another
@@ -544,6 +628,9 @@ public:
   void Initialize();
   
   const LangOptions &getLangOptions() const { return LangOpts; }
+  OpenCLOptions &getOpenCLOptions() { return OpenCLFeatures; }
+  FPOptions     &getFPOptions() { return FPFeatures; }
+
   Diagnostic &getDiagnostics() const { return Diags; }
   SourceManager &getSourceManager() const { return SourceMgr; }
   const TargetAttributesSema &getTargetAttributesSema() const;
@@ -694,6 +781,7 @@ public:
   ParsedType getTypeName(IdentifierInfo &II, SourceLocation NameLoc,
                          Scope *S, CXXScopeSpec *SS = 0,
                          bool isClassName = false,
+                         bool HasTrailingDot = false,
                          ParsedType ObjectType = ParsedType());
   TypeSpecifierType isTagName(IdentifierInfo &II, Scope *S);
   bool DiagnoseUnknownTypeName(const IdentifierInfo &II,
@@ -1018,6 +1106,8 @@ public:
                            QualType& ConvertedType, bool &IncompatibleObjC);
   bool isObjCPointerConversion(QualType FromType, QualType ToType,
                                QualType& ConvertedType, bool &IncompatibleObjC);
+  bool IsBlockPointerConversion(QualType FromType, QualType ToType,
+                                QualType& ConvertedType);
   bool FunctionArgTypesAreEqual(const FunctionProtoType *OldType, 
                                 const FunctionProtoType *NewType);
   
@@ -1176,7 +1266,8 @@ public:
                                      UnresolvedLookupExpr *ULE,
                                      SourceLocation LParenLoc,
                                      Expr **Args, unsigned NumArgs,
-                                     SourceLocation RParenLoc);
+                                     SourceLocation RParenLoc,
+                                     Expr *ExecConfig);
 
   ExprResult CreateOverloadedUnaryOp(SourceLocation OpLoc,
                                      unsigned Opc,
@@ -1730,10 +1821,21 @@ public:
   void DiagnoseUnusedExprResult(const Stmt *S);
   void DiagnoseUnusedDecl(const NamedDecl *ND);
   
-  typedef uintptr_t ParsingDeclStackState;
+  ParsingDeclState PushParsingDeclaration() {
+    return DelayedDiagnostics.pushParsingDecl();
+  }
+  void PopParsingDeclaration(ParsingDeclState state, Decl *decl) {
+    DelayedDiagnostics::popParsingDecl(*this, state, decl);
+  }
 
-  ParsingDeclStackState PushParsingDeclaration();
-  void PopParsingDeclaration(ParsingDeclStackState S, Decl *D);
+  typedef ProcessingContextState ParsingClassState;
+  ParsingClassState PushParsingClass() {
+    return DelayedDiagnostics.pushContext();
+  }
+  void PopParsingClass(ParsingClassState state) {
+    DelayedDiagnostics.popContext(state);
+  }
+
   void EmitDeprecationWarning(NamedDecl *D, llvm::StringRef Message,
                               SourceLocation Loc, bool UnknownObjCClass=false);
 
@@ -1912,11 +2014,16 @@ public:
   /// This provides the location of the left/right parens and a list of comma
   /// locations.
   ExprResult ActOnCallExpr(Scope *S, Expr *Fn, SourceLocation LParenLoc,
-                           MultiExprArg Args, SourceLocation RParenLoc);
+                           MultiExprArg Args, SourceLocation RParenLoc,
+                           Expr *ExecConfig = 0);
   ExprResult BuildResolvedCallExpr(Expr *Fn, NamedDecl *NDecl,
                                    SourceLocation LParenLoc,
                                    Expr **Args, unsigned NumArgs,
-                                   SourceLocation RParenLoc);
+                                   SourceLocation RParenLoc,
+                                   Expr *ExecConfig = 0);
+
+  ExprResult ActOnCUDAExecConfigExpr(Scope *S, SourceLocation LLLLoc,
+                                MultiExprArg ExecConfig, SourceLocation GGGLoc);
 
   ExprResult ActOnCastExpr(Scope *S, SourceLocation LParenLoc,
                            ParsedType Ty, SourceLocation RParenLoc,
@@ -4244,6 +4351,7 @@ public:
   };
 
   Decl *ActOnMethodDeclaration(
+    Scope *S,
     SourceLocation BeginLoc, // location of the + or -.
     SourceLocation EndLoc,   // location of the ; or {.
     tok::TokenKind MethodType,
@@ -4396,6 +4504,10 @@ public:
                             SourceLocation PragmaLoc,
                             SourceLocation WeakNameLoc,
                             SourceLocation AliasNameLoc);
+
+  /// ActOnPragmaFPContract - Called on well formed
+  /// #pragma {STDC,OPENCL} FP_CONTRACT
+  void ActOnPragmaFPContract(tok::OnOffSwitch OOS);
 
   /// AddAlignmentAttributesForRecord - Adds any needed alignment attributes to
   /// a the record decl, to handle '#pragma pack' and '#pragma options align'.
@@ -4826,7 +4938,10 @@ public:
     PCC_Type,
     /// \brief Code completion occurs in a parenthesized expression, which
     /// might also be a type cast.
-    PCC_ParenthesizedExpression
+    PCC_ParenthesizedExpression,
+    /// \brief Code completion occurs within a sequence of declaration 
+    /// specifiers within a function, method, or block.
+    PCC_LocalDeclarationSpecifiers
   };
 
   void CodeCompleteOrdinaryName(Scope *S,
@@ -4869,7 +4984,8 @@ public:
   void CodeCompleteObjCPropertyFlags(Scope *S, ObjCDeclSpec &ODS);
   void CodeCompleteObjCPropertyGetter(Scope *S, Decl *ClassDecl);
   void CodeCompleteObjCPropertySetter(Scope *S, Decl *ClassDecl);
-  void CodeCompleteObjCPassingType(Scope *S, ObjCDeclSpec &DS);
+  void CodeCompleteObjCPassingType(Scope *S, ObjCDeclSpec &DS, 
+                                   bool IsParameter);
   void CodeCompleteObjCMessageReceiver(Scope *S);
   void CodeCompleteObjCSuperMessage(Scope *S, SourceLocation SuperLoc,
                                     IdentifierInfo **SelIdents,
@@ -4940,7 +5056,8 @@ public:
   SourceLocation getLocationOfStringLiteralByte(const StringLiteral *SL,
                                                 unsigned ByteNo) const;
 
-private:
+private:  
+  void CheckArrayAccess(const ArraySubscriptExpr *ae);
   bool CheckFunctionCall(FunctionDecl *FDecl, CallExpr *TheCall);
   bool CheckBlockCall(NamedDecl *NDecl, CallExpr *TheCall);
 

@@ -1,12 +1,11 @@
-set(LLVM_NO_RTTI 1)
-
 set( LLVM_USED_LIBS
+  clangAST
+  clangBasic
   clangDriver
+  clangLex
   clangParse
   clangSema
-  clangAST
-  clangLex
-  clangBasic
+  clangSerialization
   )
 
 add_clang_library(clangFrontend

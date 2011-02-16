@@ -29,8 +29,8 @@ using namespace clang;
 using namespace CodeGen;
 
 CodeGenFunction::CodeGenFunction(CodeGenModule &cgm)
-  : CGM(cgm), Target(CGM.getContext().Target),
-    Builder(cgm.getModule().getContext()),
+  : CodeGenTypeCache(cgm), CGM(cgm),
+    Target(CGM.getContext().Target), Builder(cgm.getModule().getContext()),
     BlockInfo(0), BlockPointer(0),
     NormalCleanupDest(0), EHCleanupDest(0), NextCleanupDestIndex(1),
     ExceptionSlot(0), DebugInfo(0), IndirectBranch(0),
@@ -39,14 +39,6 @@ CodeGenFunction::CodeGenFunction(CodeGenModule &cgm)
     CXXThisDecl(0), CXXThisValue(0), CXXVTTDecl(0), CXXVTTValue(0),
     OutermostConditional(0), TerminateLandingPad(0), TerminateHandler(0),
     TrapBB(0) {
-      
-  // Get some frequently used types.
-  LLVMPointerWidth = Target.getPointerWidth(0);
-  llvm::LLVMContext &LLVMContext = CGM.getLLVMContext();
-  IntPtrTy = llvm::IntegerType::get(LLVMContext, LLVMPointerWidth);
-  Int32Ty  = llvm::Type::getInt32Ty(LLVMContext);
-  Int64Ty  = llvm::Type::getInt64Ty(LLVMContext);
-  Int8PtrTy = cgm.Int8PtrTy;
       
   Exceptions = getContext().getLangOptions().Exceptions;
   CatchUndefined = getContext().getLangOptions().CatchUndefined;
@@ -126,7 +118,8 @@ void CodeGenFunction::FinishFunction(SourceLocation EndLoc) {
   // Emit function epilog (to return).
   EmitReturnBlock();
 
-  EmitFunctionInstrumentation("__cyg_profile_func_exit");
+  if (ShouldInstrumentFunction())
+    EmitFunctionInstrumentation("__cyg_profile_func_exit");
 
   // Emit debug descriptor for function end.
   if (CGDebugInfo *DI = getDebugInfo()) {
@@ -185,9 +178,6 @@ bool CodeGenFunction::ShouldInstrumentFunction() {
 /// instrumentation function with the current function and the call site, if
 /// function instrumentation is enabled.
 void CodeGenFunction::EmitFunctionInstrumentation(const char *Fn) {
-  if (!ShouldInstrumentFunction())
-    return;
-
   const llvm::PointerType *PointerTy;
   const llvm::FunctionType *FunctionTy;
   std::vector<const llvm::Type*> ProfileFuncArgs;
@@ -208,6 +198,15 @@ void CodeGenFunction::EmitFunctionInstrumentation(const char *Fn) {
   Builder.CreateCall2(F,
                       llvm::ConstantExpr::getBitCast(CurFn, PointerTy),
                       CallSite);
+}
+
+void CodeGenFunction::EmitMCountInstrumentation() {
+  llvm::FunctionType *FTy =
+    llvm::FunctionType::get(llvm::Type::getVoidTy(getLLVMContext()), false);
+
+  llvm::Constant *MCountFn = CGM.CreateRuntimeFunction(FTy,
+                                                       Target.getMCountName());
+  Builder.CreateCall(MCountFn);
 }
 
 void CodeGenFunction::StartFunction(GlobalDecl GD, QualType RetTy,
@@ -231,6 +230,19 @@ void CodeGenFunction::StartFunction(GlobalDecl GD, QualType RetTy,
         Fn->addFnAttr(llvm::Attribute::InlineHint);
         break;
       }
+
+  if (getContext().getLangOptions().OpenCL) {
+    // Add metadata for a kernel function.
+    if (const FunctionDecl *FD = dyn_cast_or_null<FunctionDecl>(D))
+      if (FD->hasAttr<OpenCLKernelAttr>()) {
+        llvm::LLVMContext &Context = getLLVMContext();
+        llvm::NamedMDNode *OpenCLMetadata = 
+          CGM.getModule().getOrInsertNamedMetadata("opencl.kernels");
+          
+        llvm::Value *Op = Fn;
+        OpenCLMetadata->addOperand(llvm::MDNode::get(Context, &Op, 1));
+      }
+  }
 
   llvm::BasicBlock *EntryBB = createBasicBlock("entry", CurFn);
 
@@ -258,7 +270,11 @@ void CodeGenFunction::StartFunction(GlobalDecl GD, QualType RetTy,
     DI->EmitFunctionStart(GD, FnType, CurFn, Builder);
   }
 
-  EmitFunctionInstrumentation("__cyg_profile_func_enter");
+  if (ShouldInstrumentFunction())
+    EmitFunctionInstrumentation("__cyg_profile_func_enter");
+
+  if (CGM.getCodeGenOpts().InstrumentForProfiling)
+    EmitMCountInstrumentation();
 
   // FIXME: Leaked.
   // CC info is ignored, hopefully?
@@ -385,8 +401,7 @@ bool CodeGenFunction::ContainsLabel(const Stmt *S, bool IgnoreCaseStmts) {
     IgnoreCaseStmts = true;
 
   // Scan subexpressions for verboten labels.
-  for (Stmt::const_child_iterator I = S->child_begin(), E = S->child_end();
-       I != E; ++I)
+  for (Stmt::const_child_range I = S->children(); I; ++I)
     if (ContainsLabel(*I, IgnoreCaseStmts))
       return true;
 

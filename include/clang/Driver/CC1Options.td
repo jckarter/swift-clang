@@ -64,12 +64,8 @@ def analysis_WarnObjCUnusedIvars : Flag<"-analyzer-check-objc-unused-ivars">,
   HelpText<"Warn about private ivars that are never used">;
 def analysis_ObjCMemChecker : Flag<"-analyzer-check-objc-mem">,
   HelpText<"Run the [Core] Foundation reference count checker">;
-def analysis_WarnObjCSelfInit : Flag<"-analyzer-check-objc-self-init">,
-  HelpText<"Warn about missing initialization of 'self' in an initializer">;
 def analysis_WarnSizeofPointer : Flag<"-warn-sizeof-pointer">,
   HelpText<"Warn about unintended use of sizeof() on pointer expressions">;
-def analysis_WarnIdempotentOps : Flag<"-analyzer-check-idempotent-operations">,
-  HelpText<"Warn about idempotent operations">;
 def analysis_AnalyzerStats : Flag<"-analyzer-stats">,
   HelpText<"Emit warnings with analyzer statistics">;
 def analysis_WarnBufferOverflows : Flag<"-analyzer-check-buffer-overflows">,
@@ -107,6 +103,8 @@ def analyzer_eagerly_assume : Flag<"-analyzer-eagerly-assume">,
   HelpText<"Eagerly assume the truth/falseness of some symbolic constraints">;
 def analyzer_no_purge_dead : Flag<"-analyzer-no-purge-dead">,
   HelpText<"Don't remove dead symbols, bindings, and constraints before processing a statement">;
+def analyzer_no_eagerly_trim_egraph : Flag<"-analyzer-no-eagerly-trim-egraph">,
+  HelpText<"Don't eagerly remove uninteresting ExplodedNodes from the ExplodedGraph">;
 def trim_egraph : Flag<"-trim-egraph">,
   HelpText<"Only show error-related paths in the analysis graph">;
 def analyzer_viz_egraph_graphviz : Flag<"-analyzer-viz-egraph-graphviz">,
@@ -119,6 +117,16 @@ def analyzer_max_nodes : Separate<"-analyzer-max-nodes">,
   HelpText<"The maximum number of nodes the analyzer can generate (150000 default, 0 = no limit)">;
 def analyzer_max_loop : Separate<"-analyzer-max-loop">,
   HelpText<"The maximum number of times the analyzer will go through a loop">;
+
+def analyzer_checker : Separate<"-analyzer-checker">,
+  HelpText<"Choose analyzer checkers to enable">;
+def analyzer_checker_EQ : Joined<"-analyzer-checker=">,
+  Alias<analyzer_checker>;
+
+def analyzer_disable_checker : Separate<"-analyzer-disable-checker">,
+  HelpText<"Choose analyzer checkers to disable">;
+def analyzer_disable_checker_EQ : Joined<"-analyzer-disable-checker=">,
+  Alias<analyzer_disable_checker>;
 
 //===----------------------------------------------------------------------===//
 // CodeGen Options
@@ -175,6 +183,8 @@ def momit_leaf_frame_pointer : Flag<"-momit-leaf-frame-pointer">,
   HelpText<"Omit frame pointer setup for leaf functions.">;
 def msoft_float : Flag<"-msoft-float">,
   HelpText<"Use software floating point">;
+def mregparm : Separate<"-mregparm">,
+  HelpText<"Limit the number of registers available for integer arguments">;
 def mrelax_all : Flag<"-mrelax-all">,
   HelpText<"Relax all machine instructions">;
 def mrelocation_model : Separate<"-mrelocation-model">,
@@ -187,6 +197,7 @@ def mms_bitfields : Flag<"-mms-bitfields">,
   HelpText<"Set the default structure layout to be compatible with the Microsoft compiler standard.">;
 def O : Joined<"-O">, HelpText<"Optimization level">;
 def Os : Flag<"-Os">, HelpText<"Optimize for size">;
+def pg : Flag<"-pg">, HelpText<"Enable mcount instrumentation">;
 
 //===----------------------------------------------------------------------===//
 // Dependency Output Options

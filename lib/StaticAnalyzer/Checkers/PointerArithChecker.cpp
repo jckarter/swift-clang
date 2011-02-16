@@ -12,9 +12,9 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "ExprEngineInternalChecks.h"
-#include "clang/StaticAnalyzer/BugReporter/BugType.h"
-#include "clang/StaticAnalyzer/PathSensitive/CheckerVisitor.h"
+#include "ClangSACheckers.h"
+#include "clang/StaticAnalyzer/Core/BugReporter/BugType.h"
+#include "clang/StaticAnalyzer/Core/PathSensitive/CheckerVisitor.h"
 
 using namespace clang;
 using namespace ento;
@@ -67,6 +67,6 @@ void PointerArithChecker::PreVisitBinaryOperator(CheckerContext &C,
   }
 }
 
-void ento::RegisterPointerArithChecker(ExprEngine &Eng) {
+void ento::registerPointerArithChecker(ExprEngine &Eng) {
   Eng.registerCheck(new PointerArithChecker());
 }

@@ -13,9 +13,9 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "ExprEngineInternalChecks.h"
-#include "clang/StaticAnalyzer/BugReporter/BugType.h"
-#include "clang/StaticAnalyzer/PathSensitive/CheckerVisitor.h"
+#include "ClangSACheckers.h"
+#include "clang/StaticAnalyzer/Core/BugReporter/BugType.h"
+#include "clang/StaticAnalyzer/Core/PathSensitive/CheckerVisitor.h"
 
 using namespace clang;
 using namespace ento;
@@ -67,6 +67,6 @@ void FixedAddressChecker::PreVisitBinaryOperator(CheckerContext &C,
   }
 }
 
-void ento::RegisterFixedAddressChecker(ExprEngine &Eng) {
+void ento::registerFixedAddressChecker(ExprEngine &Eng) {
   Eng.registerCheck(new FixedAddressChecker());
 }

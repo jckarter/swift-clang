@@ -313,6 +313,12 @@ llvm::DIType CGDebugInfo::CreateType(const BuiltinType *BT) {
                                      getOrCreateMainFile(),
                                      0, 0, 0, 0, Elements);
   }
+  case BuiltinType::ObjCSel: {
+    return  DBuilder.CreateStructType(TheCU, "objc_selector", 
+                                      getOrCreateMainFile(), 0, 0, 0,
+                                      llvm::DIDescriptor::FlagFwdDecl, 
+                                      llvm::DIArray());
+  }
   case BuiltinType::UChar:
   case BuiltinType::Char_U: Encoding = llvm::dwarf::DW_ATE_unsigned_char; break;
   case BuiltinType::Char_S:
@@ -1751,6 +1757,20 @@ void CGDebugInfo::EmitDeclare(const VarDecl *VD, unsigned Tag,
   if (!Ty)
     return;
 
+  if (llvm::Argument *Arg = dyn_cast<llvm::Argument>(Storage)) {
+    // If Storage is an aggregate returned as 'sret' then let debugger know
+    // about this.
+    if (Arg->hasStructRetAttr())
+      Ty = DBuilder.CreateReferenceType(Ty);
+    else if (CXXRecordDecl *Record = VD->getType()->getAsCXXRecordDecl()) {
+      // If an aggregate variable has non trivial destructor or non trivial copy
+      // constructor than it is pass indirectly. Let debug info know about this
+      // by using reference of the aggregate type as a argument type.
+      if (!Record->hasTrivialCopyConstructor() || !Record->hasTrivialDestructor())
+        Ty = DBuilder.CreateReferenceType(Ty);
+    }
+  }
+      
   // Get location information.
   unsigned Line = getLineNumber(VD->getLocation());
   unsigned Column = getColumnNumber(VD->getLocation());
@@ -1939,7 +1959,8 @@ void CGDebugInfo::EmitGlobalVariable(llvm::GlobalVariable *Var,
   }
   llvm::StringRef DeclName = D->getName();
   llvm::StringRef LinkageName;
-  if (D->getDeclContext() && !isa<FunctionDecl>(D->getDeclContext()))
+  if (D->getDeclContext() && !isa<FunctionDecl>(D->getDeclContext())
+      && !isa<ObjCMethodDecl>(D->getDeclContext()))
     LinkageName = Var->getName();
   if (LinkageName == DeclName)
     LinkageName = llvm::StringRef();

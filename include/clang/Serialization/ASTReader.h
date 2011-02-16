@@ -20,6 +20,7 @@
 #include "clang/AST/DeclObjC.h"
 #include "clang/AST/TemplateBase.h"
 #include "clang/Lex/ExternalPreprocessorSource.h"
+#include "clang/Lex/HeaderSearch.h"
 #include "clang/Lex/PreprocessingRecord.h"
 #include "clang/Basic/Diagnostic.h"
 #include "clang/Basic/IdentifierTable.h"
@@ -165,10 +166,12 @@ private:
 class ASTReader
   : public ExternalPreprocessorSource,
     public ExternalPreprocessingRecordSource,
+    public ExternalHeaderFileInfoSource,
     public ExternalSemaSource,
     public IdentifierInfoLookup,
     public ExternalIdentifierLookup,
-    public ExternalSLocEntrySource {
+    public ExternalSLocEntrySource 
+{
 public:
   enum ASTReadResult { Success, Failure, IgnorePCH };
   /// \brief Types of AST files.
@@ -261,7 +264,7 @@ private:
     /// stored.
     const uint32_t *IdentifierOffsets;
 
-    /// \brief Actual data for the on-disk hash table.
+    /// \brief Actual data for the on-disk hash table of identifiers.
     ///
     /// This pointer points into a memory buffer, where the on-disk hash
     /// table for identifiers actually lives.
@@ -280,13 +283,38 @@ private:
     /// \brief The offset of the start of the set of defined macros.
     uint64_t MacroStartOffset;
     
+    // === Detailed PreprocessingRecord ===
+    
+    /// \brief The cursor to the start of the (optional) detailed preprocessing 
+    /// record block.
+    llvm::BitstreamCursor PreprocessorDetailCursor;
+    
+    /// \brief The offset of the start of the preprocessor detail cursor.
+    uint64_t PreprocessorDetailStartOffset;
+    
     /// \brief The number of macro definitions in this file.
     unsigned LocalNumMacroDefinitions;
-
+    
     /// \brief Offsets of all of the macro definitions in the preprocessing
     /// record in the AST file.
     const uint32_t *MacroDefinitionOffsets;
 
+    // === Header search information ===
+    
+    /// \brief The number of local HeaderFileInfo structures.
+    unsigned LocalNumHeaderFileInfos;
+    
+    /// \brief Actual data for the on-disk hash table of header file 
+    /// information.
+    ///
+    /// This pointer points into a memory buffer, where the on-disk hash
+    /// table for header file information actually lives.
+    const char *HeaderFileInfoTableData;
+
+    /// \brief The on-disk hash table that contains information about each of
+    /// the header files.
+    void *HeaderFileInfoTable;
+    
     // === Selectors ===
 
     /// \brief The number of selectors new to this file.
@@ -566,6 +594,18 @@ private:
   /// The AST context tracks a few important types, such as va_list, directly.
   llvm::SmallVector<uint64_t, 16> SpecialTypes;
 
+  /// \brief The IDs of CUDA-specific declarations ASTContext stores directly.
+  ///
+  /// The AST context tracks a few important decls, currently cudaConfigureCall,
+  /// directly.
+  llvm::SmallVector<uint64_t, 2> CUDASpecialDeclRefs;
+
+  /// \brief The floating point pragma option settings.
+  llvm::SmallVector<uint64_t, 1> FPPragmaOptions;
+
+  /// \brief The OpenCL extension settings.
+  llvm::SmallVector<uint64_t, 1> OpenCLExtensions;
+
   //@}
 
   /// \brief Diagnostic IDs and their mappings that the user changed.
@@ -578,6 +618,13 @@ private:
   /// \brief The actual original file name that was used to build the primary
   /// AST file.
   std::string ActualOriginalFileName;
+
+  /// \brief The directory that the PCH was originally created in. Used to
+  /// allow resolving headers even after headers+PCH was moved to a new path.
+  std::string OriginalDir;
+
+  /// \brief The directory that the PCH we are reading is stored in.
+  std::string CurrentDir;
 
   /// \brief Whether this precompiled header is a relocatable PCH file.
   bool RelocatablePCH;
@@ -686,6 +733,13 @@ private:
   /// need to be emitted, such as inline function definitions or
   /// Objective-C protocols.
   std::deque<Decl *> InterestingDecls;
+
+  /// \brief We delay loading of the previous declaration chain to avoid
+  /// deeply nested calls when there are many redeclarations.
+  std::deque<std::pair<Decl *, serialization::DeclID> > PendingPreviousDecls;
+
+  /// \brief Ready to load the previous declaration of the given Decl.
+  void loadAndAttachPreviousDecl(Decl *D, serialization::DeclID ID);
 
   /// \brief When reading a Stmt tree, Stmt operands are placed in this stack.
   llvm::SmallVector<Stmt *, 16> StmtStack;
@@ -864,7 +918,10 @@ public:
   virtual void ReadPreprocessedEntities();
 
   /// \brief Read the preprocessed entity at the given offset.
-  virtual PreprocessedEntity *ReadPreprocessedEntity(uint64_t Offset);
+  virtual PreprocessedEntity *ReadPreprocessedEntityAtOffset(uint64_t Offset);
+
+  /// \brief Read the header file information for the given file entry.
+  virtual HeaderFileInfo GetHeaderFileInfo(const FileEntry *FE);
 
   void ReadPragmaDiagnosticMappings(Diagnostic &Diag);
 
@@ -1175,6 +1232,10 @@ public:
   /// \brief Reads the macro record located at the given offset.
   PreprocessedEntity *ReadMacroRecord(PerFileData &F, uint64_t Offset);
 
+  /// \brief Reads the preprocessed entity located at the current stream
+  /// position.
+  PreprocessedEntity *LoadPreprocessedEntity(PerFileData &F);
+      
   /// \brief Note that the identifier is a macro whose record will be loaded
   /// from the given AST file at the given (file-local) offset.
   void SetIdentifierIsMacro(IdentifierInfo *II, PerFileData &F,

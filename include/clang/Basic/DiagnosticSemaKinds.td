@@ -343,7 +343,8 @@ def err_conflicting_ivar_name : Error<
   "conflicting instance variable names: %0 vs %1">;
 def err_inconsistant_ivar_count : Error<
   "inconsistent number of instance variables specified">;
-def warn_incomplete_impl : Warning<"incomplete implementation">;
+def warn_incomplete_impl : Warning<"incomplete implementation">,
+  InGroup<DiagGroup<"incomplete-implementation">>;
 def note_undef_method_impl : Note<"method definition for %0 not found">;
 def note_required_for_protocol_at : 
   Note<"required for direct or indirect protocol %0">;
@@ -1051,11 +1052,11 @@ def warn_attribute_weak_on_local : Warning<
 def warn_weak_identifier_undeclared : Warning<
   "weak identifier %0 never declared">;
 def err_attribute_weak_static : Error<
-  "weak declaration of '%0' must be public">;
+  "weak declaration cannot have internal linkage">;
 def warn_attribute_weak_import_invalid_on_definition : Warning<
   "'weak_import' attribute cannot be specified on a definition">;
 def err_attribute_weakref_not_static : Error<
-  "weakref declaration of '%0' must be static">;
+  "weakref declaration must have internal linkage">;
 def err_attribute_weakref_not_global_context : Error<
   "weakref declaration of '%0' must be in a global context">;
 def err_attribute_weakref_without_alias : Error<
@@ -1414,6 +1415,17 @@ def note_ovl_builtin_unary_candidate : Note<
     "built-in candidate %0">;
 def err_ovl_no_viable_function_in_init : Error<
   "no matching constructor for initialization of %0">;
+def err_ovl_no_conversion_in_cast : Error<
+  "cannot convert %1 to %2 without a conversion operator">;
+def err_ovl_no_viable_conversion_in_cast : Error<
+  "no matching conversion for %select{|static_cast|reinterpret_cast|"
+  "dynamic_cast|C-style cast|functional-style cast}0 from %1 to %2">;
+def err_ovl_ambiguous_conversion_in_cast : Error<
+  "ambiguous conversion for %select{|static_cast|reinterpret_cast|"
+  "dynamic_cast|C-style cast|functional-style cast}0 from %1 to %2">;
+def err_ovl_deleted_conversion_in_cast : Error<
+  "%select{|static_cast|reinterpret_cast|dynamic_cast|C-style cast|"
+  "functional-style cast}0 from %1 to %2 uses deleted function">;
 def err_ovl_ambiguous_init : Error<"call to constructor of %0 is ambiguous">;
 def err_ref_init_ambiguous : Error<
   "reference initialization of type %0 with initializer of type %1 is ambiguous">;
@@ -1957,6 +1969,9 @@ def warn_deprecated_message : Warning<"%0 is deprecated: %1">,
 def warn_deprecated_fwdclass_message : Warning<
     "%0 maybe deprecated because receiver type is unknown">,
     InGroup<DeprecatedDeclarations>;
+def warn_deprecated_def : Warning<
+    "Implementing deprecated %select{method|class|category}0">,
+    InGroup<DeprecatedImplementations>, DefaultIgnore;
 def err_unavailable : Error<"%0 is unavailable">;
 def err_unavailable_message : Error<"%0 is unavailable: %1">;
 def warn_unavailable_fwdclass_message : Warning<
@@ -3049,6 +3064,8 @@ def err_deleted_function_use : Error<"attempt to use a deleted function">;
 
 def err_kern_type_not_void_return : Error<
   "kernel function type %0 must have void return type">;
+def err_config_scalar_return : Error<
+  "CUDA special function 'cudaConfigureCall' must have scalar return type">;
 
 
 def err_cannot_pass_objc_interface_to_vararg : Error<
@@ -3362,6 +3379,15 @@ def warn_not_compound_assign : Warning<
 def warn_explicit_conversion_functions : Warning<
   "explicit conversion functions are a C++0x extension">, InGroup<CXX0x>;
 
+def warn_array_index_precedes_bounds : Warning<
+  "array index of '%0' indexes before the beginning of the array">,
+  InGroup<DiagGroup<"array-bounds">>;
+def warn_array_index_exceeds_bounds : Warning<
+  "array index of '%0' indexes past the end of an array (that contains %1 elements)">,
+  InGroup<DiagGroup<"array-bounds">>;
+def note_array_index_out_of_bounds : Note<
+  "Array %0 declared here">;
+
 def warn_printf_write_back : Warning<
   "use of '%%n' in format string discouraged (potentially insecure)">,
   InGroup<FormatSecurity>;
@@ -3618,6 +3644,8 @@ def ext_c99_array_usage : Extension<
   "use of C99-specific array features, accepted as an extension">;
 def err_c99_array_usage_cxx : Error<
   "C99-specific array features are not permitted in C++">;
+def err_double_requires_fp64 : Error<
+  "use of type 'double' requires cl_khr_fp64 extension to be enabled">;
   
 def note_getter_unavailable : Note<
   "or because setter is declared here, but no getter method %0 is found">;

@@ -118,6 +118,7 @@ public:
                                          // single precision constants.
   unsigned FastRelaxedMath : 1; // OpenCL fast relaxed math (on its own,
                                 // defines __FAST_RELAXED_MATH__).
+  unsigned DefaultFPContract : 1; // Default setting for FP_CONTRACT
   // FIXME: This is just a temporary option, for testing purposes.
   unsigned NoBitFieldTypeAlign : 1;
 
@@ -210,6 +211,7 @@ public:
     SpellChecking = 1;
     SinglePrecisionConstants = 0;
     FastRelaxedMath = 0;
+    DefaultFPContract = 0;
     NoBitFieldTypeAlign = 0;
   }
 
@@ -233,6 +235,29 @@ public:
   }
   void setSignedOverflowBehavior(SignedOverflowBehaviorTy V) {
     SignedOverflowBehavior = (unsigned)V;
+  }
+};
+
+/// Floating point control options
+class FPOptions {
+public:
+  unsigned fp_contract : 1;
+
+  FPOptions() : fp_contract(0) {}
+
+  FPOptions(const LangOptions &LangOpts) :
+    fp_contract(LangOpts.DefaultFPContract) {}
+};
+
+/// OpenCL volatile options
+class OpenCLOptions {
+public:
+#define OPENCLEXT(nm)  unsigned nm : 1;
+#include "clang/Basic/OpenCLExtensions.def"
+
+  OpenCLOptions() {
+#define OPENCLEXT(nm)   nm = 0;
+#include "clang/Basic/OpenCLExtensions.def"
   }
 };
 

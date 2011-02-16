@@ -503,7 +503,7 @@ public:
 
 /// CodeGenFunction - This class organizes the per-function state that is used
 /// while generating LLVM code.
-class CodeGenFunction {
+class CodeGenFunction : public CodeGenTypeCache {
   CodeGenFunction(const CodeGenFunction&); // DO NOT IMPLEMENT
   void operator=(const CodeGenFunction&);  // DO NOT IMPLEMENT
 
@@ -580,12 +580,6 @@ public:
   /// AllocaInsertPoint - This is an instruction in the entry block before which
   /// we prefer to insert allocas.
   llvm::AssertingVH<llvm::Instruction> AllocaInsertPt;
-
-  // intptr_t, i32, i64
-  const llvm::IntegerType *IntPtrTy, *Int32Ty, *Int64Ty;
-  uint32_t LLVMPointerWidth;
-
-  const llvm::PointerType *Int8PtrTy;
 
   bool Exceptions;
   bool CatchUndefined;
@@ -1086,6 +1080,9 @@ public:
   /// instrumentation function with the current function and the call site, if
   /// function instrumentation is enabled.
   void EmitFunctionInstrumentation(const char *Fn);
+
+  /// EmitMCountInstrumentation - Emit call to .mcount.
+  void EmitMCountInstrumentation();
 
   /// EmitFunctionProlog - Emit the target specific LLVM code to load the
   /// arguments for the given function. This is also responsible for naming the

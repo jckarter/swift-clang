@@ -63,8 +63,7 @@ namespace {
   /// VisitExpr - Visit all of the children of this expression.
   bool CheckDefaultArgumentVisitor::VisitExpr(Expr *Node) {
     bool IsInvalid = false;
-    for (Stmt::child_iterator I = Node->child_begin(),
-         E = Node->child_end(); I != E; ++I)
+    for (Stmt::child_range I = Node->children(); I; ++I)
       IsInvalid |= Visit(*I);
     return IsInvalid;
   }
@@ -1078,10 +1077,8 @@ Sema::ActOnCXXMemberDeclarator(Scope *S, AccessSpecifier AS, Declarator &D,
   if (Deleted) // FIXME: Source location is not very good.
     SetDeclDeleted(Member, D.getSourceRange().getBegin());
 
-  if (isInstField) {
+  if (isInstField)
     FieldCollector->Add(cast<FieldDecl>(Member));
-    return 0;
-  }
   return Member;
 }
 
@@ -1365,8 +1362,7 @@ static bool InitExprContainsUninitializedFields(const Stmt *S,
     if (UOE->getOpcode() == UO_AddrOf)
       return false;
   }
-  for (Stmt::const_child_iterator it = S->child_begin(), e = S->child_end();
-       it != e; ++it) {
+  for (Stmt::const_child_range it = S->children(); it; ++it) {
     if (!*it) {
       // An expression such as 'member(arg ?: "")' may trigger this.
       continue;
@@ -2827,6 +2823,7 @@ static bool FindHiddenVirtualMethod(const CXXBaseSpecifier *Specifier,
        ++Path.Decls.first) {
     NamedDecl *D = *Path.Decls.first;
     if (CXXMethodDecl *MD = dyn_cast<CXXMethodDecl>(D)) {
+      MD = MD->getCanonicalDecl();
       foundSameNameMethod = true;
       // Interested only in hidden virtual methods.
       if (!MD->isVirtual())
@@ -2871,10 +2868,10 @@ void Sema::DiagnoseHiddenVirtualMethods(CXXRecordDecl *DC, CXXMethodDecl *MD) {
       for (CXXMethodDecl::method_iterator I = MD->begin_overridden_methods(),
                                           E = MD->end_overridden_methods();
            I != E; ++I)
-        Data.OverridenAndUsingBaseMethods.insert(*I);
+        Data.OverridenAndUsingBaseMethods.insert((*I)->getCanonicalDecl());
     if (UsingShadowDecl *shad = dyn_cast<UsingShadowDecl>(*res.first))
       if (CXXMethodDecl *MD = dyn_cast<CXXMethodDecl>(shad->getTargetDecl()))
-        Data.OverridenAndUsingBaseMethods.insert(MD);
+        Data.OverridenAndUsingBaseMethods.insert(MD->getCanonicalDecl());
   }
 
   if (DC->lookupInBases(&FindHiddenVirtualMethod, &Data, Paths) &&
@@ -4557,13 +4554,12 @@ namespace {
   /// to implicitly define the body of a C++ member function;
   class ImplicitlyDefinedFunctionScope {
     Sema &S;
-    DeclContext *PreviousContext;
+    Sema::ContextRAII SavedContext;
     
   public:
     ImplicitlyDefinedFunctionScope(Sema &S, CXXMethodDecl *Method)
-      : S(S), PreviousContext(S.CurContext) 
+      : S(S), SavedContext(S, Method) 
     {
-      S.CurContext = Method;
       S.PushFunctionScope();
       S.PushExpressionEvaluationContext(Sema::PotentiallyEvaluated);
     }
@@ -4571,7 +4567,6 @@ namespace {
     ~ImplicitlyDefinedFunctionScope() {
       S.PopExpressionEvaluationContext();
       S.PopFunctionOrBlockScope();
-      S.CurContext = PreviousContext;
     }
   };
 }
@@ -7198,8 +7193,7 @@ void Sema::SetDeclDeleted(Decl *Dcl, SourceLocation DelLoc) {
 }
 
 static void SearchForReturnInStmt(Sema &Self, Stmt *S) {
-  for (Stmt::child_iterator CI = S->child_begin(), E = S->child_end(); CI != E;
-       ++CI) {
+  for (Stmt::child_range CI = S->children(); CI; ++CI) {
     Stmt *SubStmt = *CI;
     if (!SubStmt)
       continue;
@@ -7283,6 +7277,10 @@ bool Sema::CheckOverridingFunctionReturnType(const CXXMethodDecl *New,
                     diag::err_covariant_return_ambiguous_derived_to_base_conv,
                     // FIXME: Should this point to the return type?
                     New->getLocation(), SourceRange(), New->getDeclName(), 0)) {
+      // FIXME: this note won't trigger for delayed access control
+      // diagnostics, and it's impossible to get an undelayed error
+      // here from access control during the original parse because
+      // the ParsingDeclSpec/ParsingDeclarator are still in scope.
       Diag(Old->getLocation(), diag::note_overridden_virtual_function);
       return true;
     }

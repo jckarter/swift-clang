@@ -38,6 +38,7 @@ if( CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR )
   set(LLVM_MAIN_INCLUDE_DIR "${LLVM_MAIN_SRC_DIR}/include")
   set(LLVM_BINARY_DIR ${CMAKE_BINARY_DIR})
 
+  set(CMAKE_INCLUDE_CURRENT_DIR ON)
   include_directories("${PATH_TO_LLVM_BUILD}/include" "${LLVM_MAIN_INCLUDE_DIR}")
   if( NOT PATH_TO_LLVM_BUILD STREQUAL LLVM_MAIN_SRC_DIR )
     include_directories("${LLVM_MAIN_INCLUDE_DIR}")
@@ -52,6 +53,8 @@ if( CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR )
 
   add_definitions( -D__STDC_LIMIT_MACROS )
   add_definitions( -D__STDC_CONSTANT_MACROS )
+
+  set( CLANG_BUILT_STANDALONE 1 )
 endif()
 
 set(CLANG_RESOURCE_DIR "" CACHE STRING
@@ -124,6 +127,9 @@ macro(add_clang_library name)
     string( REGEX MATCHALL "/[^/]+" split_path ${CMAKE_CURRENT_SOURCE_DIR})
     list( GET split_path -1 dir)
     file( GLOB_RECURSE headers
+      ../../../include/clang/StaticAnalyzer${dir}/*.h
+      ../../../include/clang/StaticAnalyzer${dir}/*.td
+      ../../../include/clang/StaticAnalyzer${dir}/*.def
       ../../include/clang${dir}/*.h
       ../../include/clang${dir}/*.td
       ../../include/clang${dir}/*.def)
@@ -210,3 +216,17 @@ add_subdirectory(runtime)
 
 # TODO: docs.
 add_subdirectory(test)
+
+# FIXME: unittests require gtest.
+if( NOT CLANG_BUILT_STANDALONE )
+  add_subdirectory(unittests)
+endif()
+
+# Workaround for MSVS10 to avoid the Dialog Hell
+# FIXME: This could be removed with future version of CMake.
+if( CLANG_BUILT_STANDALONE AND MSVC_VERSION EQUAL 1600 )
+  set(CLANG_SLN_FILENAME "${CMAKE_CURRENT_BINARY_DIR}/Clang.sln")
+  if( EXISTS "${CLANG_SLN_FILENAME}" )
+    file(APPEND "${CLANG_SLN_FILENAME}" "\n# This should be regenerated!\n")
+  endif()
+endif()
