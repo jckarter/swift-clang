@@ -190,7 +190,7 @@ public:
   }
 
   DefinedSVal makeIntVal(uint64_t X, QualType T) {
-    if (Loc::IsLocType(T))
+    if (Loc::isLocType(T))
       return loc::ConcreteInt(BasicVals.getValue(X, T));
 
     return nonloc::ConcreteInt(BasicVals.getValue(X, T));
@@ -238,7 +238,7 @@ public:
     return loc::MemRegionVal(R);
   }
 
-  Loc makeLoc(const AddrLabelExpr* E) {
+  Loc makeLoc(const AddrLabelExpr *E) {
     return loc::GotoLabel(E->getLabel());
   }
 

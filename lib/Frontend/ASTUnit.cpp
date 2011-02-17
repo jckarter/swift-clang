@@ -34,6 +34,7 @@
 #include "clang/Basic/TargetOptions.h"
 #include "clang/Basic/TargetInfo.h"
 #include "clang/Basic/Diagnostic.h"
+#include "llvm/ADT/StringExtras.h"
 #include "llvm/ADT/StringSet.h"
 #include "llvm/Support/Atomic.h"
 #include "llvm/Support/MemoryBuffer.h"
@@ -95,8 +96,9 @@ ASTUnit::ASTUnit(bool _MainFileIsAST)
     ConcurrencyCheckValue(CheckUnlocked), 
     PreambleRebuildCounter(0), SavedMainFileBuffer(0), PreambleBuffer(0),
     ShouldCacheCodeCompletionResults(false),
-    NumTopLevelDeclsAtLastCompletionCache(0),
-    CacheCodeCompletionCoolDown(0),
+    CompletionCacheTopLevelHashValue(0),
+    PreambleTopLevelHashValue(0),
+    CurrentTopLevelHashValue(0),
     UnsafeToFree(false) { 
   if (getenv("LIBCLANG_OBJTRACKING")) {
     llvm::sys::AtomicIncrement(&ActiveASTUnitObjects);
@@ -222,7 +224,8 @@ void ASTUnit::CacheCodeCompletionResults() {
   // Gather the set of global code completions.
   typedef CodeCompletionResult Result;
   llvm::SmallVector<Result, 8> Results;
-  TheSema->GatherGlobalCodeCompletions(CachedCompletionAllocator, Results);
+  CachedCompletionAllocator = new GlobalCodeCompletionAllocator;
+  TheSema->GatherGlobalCodeCompletions(*CachedCompletionAllocator, Results);
   
   // Translate global code completions into cached completions.
   llvm::DenseMap<CanQualType, unsigned> CompletionTypes;
@@ -233,7 +236,7 @@ void ASTUnit::CacheCodeCompletionResults() {
       bool IsNestedNameSpecifier = false;
       CachedCodeCompletionResult CachedResult;
       CachedResult.Completion = Results[I].CreateCodeCompletionString(*TheSema,
-                                                     CachedCompletionAllocator);
+                                                    *CachedCompletionAllocator);
       CachedResult.ShowInContexts = getDeclShowContexts(Results[I].Declaration,
                                                         Ctx->getLangOptions(),
                                                         IsNestedNameSpecifier);
@@ -297,7 +300,7 @@ void ASTUnit::CacheCodeCompletionResults() {
           Results[I].StartsNestedNameSpecifier = true;
           CachedResult.Completion 
             = Results[I].CreateCodeCompletionString(*TheSema,
-                                                    CachedCompletionAllocator);
+                                                    *CachedCompletionAllocator);
           CachedResult.ShowInContexts = RemainingContexts;
           CachedResult.Priority = CCP_NestedNameSpecifier;
           CachedResult.TypeClass = STC_Void;
@@ -318,7 +321,7 @@ void ASTUnit::CacheCodeCompletionResults() {
       CachedCodeCompletionResult CachedResult;
       CachedResult.Completion 
         = Results[I].CreateCodeCompletionString(*TheSema,
-                                                CachedCompletionAllocator);
+                                                *CachedCompletionAllocator);
       CachedResult.ShowInContexts
         = (1 << (CodeCompletionContext::CCC_TopLevel - 1))
         | (1 << (CodeCompletionContext::CCC_ObjCInterface - 1))
@@ -343,15 +346,15 @@ void ASTUnit::CacheCodeCompletionResults() {
     }
     }
   }
-
-  // Make a note of the state when we performed this caching.
-  NumTopLevelDeclsAtLastCompletionCache = top_level_size();
+  
+  // Save the current top-level hash value.
+  CompletionCacheTopLevelHashValue = CurrentTopLevelHashValue;
 }
 
 void ASTUnit::ClearCachedCompletionResults() {
   CachedCompletionResults.clear();
   CachedCompletionTypes.clear();
-  CachedCompletionAllocator.Reset();
+  CachedCompletionAllocator = 0;
 }
 
 namespace {
@@ -603,12 +606,69 @@ ASTUnit *ASTUnit::LoadFromASTFile(const std::string &Filename,
 
 namespace {
 
+/// \brief Preprocessor callback class that updates a hash value with the names 
+/// of all macros that have been defined by the translation unit.
+class MacroDefinitionTrackerPPCallbacks : public PPCallbacks {
+  unsigned &Hash;
+  
+public:
+  explicit MacroDefinitionTrackerPPCallbacks(unsigned &Hash) : Hash(Hash) { }
+  
+  virtual void MacroDefined(const Token &MacroNameTok, const MacroInfo *MI) {
+    Hash = llvm::HashString(MacroNameTok.getIdentifierInfo()->getName(), Hash);
+  }
+};
+
+/// \brief Add the given declaration to the hash of all top-level entities.
+void AddTopLevelDeclarationToHash(Decl *D, unsigned &Hash) {
+  if (!D)
+    return;
+  
+  DeclContext *DC = D->getDeclContext();
+  if (!DC)
+    return;
+  
+  if (!(DC->isTranslationUnit() || DC->getLookupParent()->isTranslationUnit()))
+    return;
+
+  if (NamedDecl *ND = dyn_cast<NamedDecl>(D)) {
+    if (ND->getIdentifier())
+      Hash = llvm::HashString(ND->getIdentifier()->getName(), Hash);
+    else if (DeclarationName Name = ND->getDeclName()) {
+      std::string NameStr = Name.getAsString();
+      Hash = llvm::HashString(NameStr, Hash);
+    }
+    return;
+  }
+  
+  if (ObjCForwardProtocolDecl *Forward 
+      = dyn_cast<ObjCForwardProtocolDecl>(D)) {
+    for (ObjCForwardProtocolDecl::protocol_iterator 
+         P = Forward->protocol_begin(),
+         PEnd = Forward->protocol_end();
+         P != PEnd; ++P)
+      AddTopLevelDeclarationToHash(*P, Hash);
+    return;
+  }
+  
+  if (ObjCClassDecl *Class = llvm::dyn_cast<ObjCClassDecl>(D)) {
+    for (ObjCClassDecl::iterator I = Class->begin(), IEnd = Class->end();
+         I != IEnd; ++I)
+      AddTopLevelDeclarationToHash(I->getInterface(), Hash);
+    return;
+  }
+}
+
 class TopLevelDeclTrackerConsumer : public ASTConsumer {
   ASTUnit &Unit;
-
+  unsigned &Hash;
+  
 public:
-  TopLevelDeclTrackerConsumer(ASTUnit &_Unit) : Unit(_Unit) {}
-
+  TopLevelDeclTrackerConsumer(ASTUnit &_Unit, unsigned &Hash)
+    : Unit(_Unit), Hash(Hash) {
+    Hash = 0;
+  }
+  
   void HandleTopLevelDecl(DeclGroupRef D) {
     for (DeclGroupRef::iterator it = D.begin(), ie = D.end(); it != ie; ++it) {
       Decl *D = *it;
@@ -618,6 +678,8 @@ public:
       // fundamental problem in the parser right now.
       if (isa<ObjCMethodDecl>(D))
         continue;
+
+      AddTopLevelDeclarationToHash(D, Hash);
       Unit.addTopLevelDecl(D);
     }
   }
@@ -632,7 +694,10 @@ public:
 
   virtual ASTConsumer *CreateASTConsumer(CompilerInstance &CI,
                                          llvm::StringRef InFile) {
-    return new TopLevelDeclTrackerConsumer(Unit);
+    CI.getPreprocessor().addPPCallbacks(
+     new MacroDefinitionTrackerPPCallbacks(Unit.getCurrentTopLevelHashValue()));
+    return new TopLevelDeclTrackerConsumer(Unit, 
+                                           Unit.getCurrentTopLevelHashValue());
   }
 
 public:
@@ -647,13 +712,17 @@ public:
 class PrecompilePreambleConsumer : public PCHGenerator, 
                                    public ASTSerializationListener {
   ASTUnit &Unit;
+  unsigned &Hash;                                   
   std::vector<Decl *> TopLevelDecls;
                                      
 public:
   PrecompilePreambleConsumer(ASTUnit &Unit,
                              const Preprocessor &PP, bool Chaining,
                              const char *isysroot, llvm::raw_ostream *Out)
-    : PCHGenerator(PP, "", Chaining, isysroot, Out), Unit(Unit) { }
+    : PCHGenerator(PP, "", Chaining, isysroot, Out), Unit(Unit),
+      Hash(Unit.getCurrentTopLevelHashValue()) {
+    Hash = 0;
+  }
 
   virtual void HandleTopLevelDecl(DeclGroupRef D) {
     for (DeclGroupRef::iterator it = D.begin(), ie = D.end(); it != ie; ++it) {
@@ -664,6 +733,7 @@ public:
       // fundamental problem in the parser right now.
       if (isa<ObjCMethodDecl>(D))
         continue;
+      AddTopLevelDeclarationToHash(D, Hash);
       TopLevelDecls.push_back(D);
     }
   }
@@ -710,6 +780,8 @@ public:
     
     const char *isysroot = CI.getFrontendOpts().RelocatablePCH ?
                              Sysroot.c_str() : 0;  
+    CI.getPreprocessor().addPPCallbacks(
+     new MacroDefinitionTrackerPPCallbacks(Unit.getCurrentTopLevelHashValue()));
     return new PrecompilePreambleConsumer(Unit, CI.getPreprocessor(), Chaining,
                                           isysroot, OS);
   }
@@ -856,14 +928,6 @@ bool ASTUnit::Parse(llvm::MemoryBuffer *OverrideMainBuffer) {
   }
 
   Invocation.reset(Clang.takeInvocation());
-
-  if (ShouldCacheCodeCompletionResults) {
-    if (CacheCodeCompletionCoolDown > 0)
-      --CacheCodeCompletionCoolDown;
-    else if (top_level_size() != NumTopLevelDeclsAtLastCompletionCache)
-      CacheCodeCompletionResults();
-  }
-
   return false;
   
 error:
@@ -1336,6 +1400,15 @@ llvm::MemoryBuffer *ASTUnit::getMainBufferWithPrecompiledPreamble(
   PreambleRebuildCounter = 1;
   PreprocessorOpts.eraseRemappedFile(
                                PreprocessorOpts.remapped_file_buffer_end() - 1);
+  
+  // If the hash of top-level entities differs from the hash of the top-level
+  // entities the last time we rebuilt the preamble, clear out the completion
+  // cache.
+  if (CurrentTopLevelHashValue != PreambleTopLevelHashValue) {
+    CompletionCacheTopLevelHashValue = 0;
+    PreambleTopLevelHashValue = CurrentTopLevelHashValue;
+  }
+  
   return CreatePaddedMainFileBuffer(NewPreamble.first, 
                                     PreambleReservedSize,
                                     FrontendOpts.Inputs[0].second);
@@ -1458,7 +1531,6 @@ ASTUnit *ASTUnit::LoadFromCompilerInvocation(CompilerInvocation *CI,
   AST->CaptureDiagnostics = CaptureDiagnostics;
   AST->CompleteTranslationUnit = CompleteTranslationUnit;
   AST->ShouldCacheCodeCompletionResults = CacheCodeCompletionResults;
-  AST->CacheCodeCompletionCoolDown = 1;
   AST->Invocation.reset(CI);
   
   return AST->LoadFromCompilerInvocation(PrecompilePreamble)? 0 : AST.take();
@@ -1566,7 +1638,6 @@ ASTUnit *ASTUnit::LoadFromCommandLine(const char **ArgBegin,
   AST->CaptureDiagnostics = CaptureDiagnostics;
   AST->CompleteTranslationUnit = CompleteTranslationUnit;
   AST->ShouldCacheCodeCompletionResults = CacheCodeCompletionResults;
-  AST->CacheCodeCompletionCoolDown = 1;
   AST->NumStoredDiagnosticsFromDriver = StoredDiagnostics.size();
   AST->NumStoredDiagnosticsInPreamble = StoredDiagnostics.size();
   AST->StoredDiagnostics.swap(StoredDiagnostics);
@@ -1609,7 +1680,14 @@ bool ASTUnit::Reparse(RemappedFile *RemappedFiles, unsigned NumRemappedFiles) {
   }
   
   // Parse the sources
-  bool Result = Parse(OverrideMainBuffer);  
+  bool Result = Parse(OverrideMainBuffer);
+  
+  // If we're caching global code-completion results, and the top-level 
+  // declarations have changed, clear out the code-completion cache.
+  if (!Result && ShouldCacheCodeCompletionResults &&
+      CurrentTopLevelHashValue != CompletionCacheTopLevelHashValue)
+    CacheCodeCompletionResults();
+
   return Result;
 }
 

@@ -45,6 +45,7 @@ namespace clang {
   class CXXDestructorDecl;
   class CXXTryStmt;
   class Decl;
+  class LabelDecl;
   class EnumConstantDecl;
   class FunctionDecl;
   class FunctionProtoType;
@@ -768,7 +769,7 @@ public:
   /// The given basic block lies in the current EH scope, but may be a
   /// target of a potentially scope-crossing jump; get a stable handle
   /// to which we can perform this jump later.
-  JumpDest getJumpDestInCurrentScope(const char *Name = 0) {
+  JumpDest getJumpDestInCurrentScope(llvm::StringRef Name = llvm::StringRef()) {
     return getJumpDestInCurrentScope(createBasicBlock(Name));
   }
 
@@ -838,6 +839,31 @@ public:
       CGF.EnsureInsertPoint();
     }
   };
+
+  /// An RAII object to set (and then clear) a mapping for an OpaqueValueExpr.
+  class OpaqueValueMapping {
+    CodeGenFunction &CGF;
+    const OpaqueValueExpr *OpaqueValue;
+
+  public:
+    OpaqueValueMapping(CodeGenFunction &CGF,
+                       const OpaqueValueExpr *opaqueValue,
+                       llvm::Value *value)
+      : CGF(CGF), OpaqueValue(opaqueValue) {
+      assert(opaqueValue && "no opaque value expression!");
+      CGF.OpaqueValues.insert(std::make_pair(opaqueValue, value));
+    }
+
+    void pop() {
+      assert(OpaqueValue && "mapping already popped!");
+      CGF.OpaqueValues.erase(OpaqueValue);
+      OpaqueValue = 0;
+    }
+
+    ~OpaqueValueMapping() {
+      if (OpaqueValue) CGF.OpaqueValues.erase(OpaqueValue);
+    }
+  };
   
   /// getByrefValueFieldNumber - Given a declaration, returns the LLVM field
   /// number that holds the value.
@@ -862,7 +888,7 @@ private:
   DeclMapTy LocalDeclMap;
 
   /// LabelMap - This keeps track of the LLVM basic block for each C label.
-  llvm::DenseMap<const LabelStmt*, JumpDest> LabelMap;
+  llvm::DenseMap<const LabelDecl*, JumpDest> LabelMap;
 
   // BreakContinueStack - This keeps track of where break and continue
   // statements should jump to.
@@ -882,6 +908,10 @@ private:
   /// CaseRangeBlock - This block holds if condition check for last case
   /// statement range in current switch instruction.
   llvm::BasicBlock *CaseRangeBlock;
+
+  /// OpaqueValues - Keeps track of the current set of opaque value
+  /// expressions.
+  llvm::DenseMap<const OpaqueValueExpr *, llvm::Value*> OpaqueValues;
 
   // VLASizeMap - This keeps track of the associated size for each VLA type.
   // We track this by the size expression rather than the type itself because
@@ -1139,7 +1169,7 @@ public:
 
   /// getBasicBlockForLabel - Return the LLVM basicblock that the specified
   /// label maps to.
-  JumpDest getJumpDestForLabel(const LabelStmt *S);
+  JumpDest getJumpDestForLabel(const LabelDecl *S);
 
   /// SimplifyForwardingBlocks - If the given basic block is only a branch to
   /// another basic block, simplify it. This assumes that no other code could
@@ -1278,11 +1308,21 @@ public:
     return Res;
   }
 
+  /// getOpaqueValueMapping - Given an opaque value expression (which
+  /// must be mapped), return its mapping.  Whether this is an address
+  /// or a value depends on the expression's type and value kind.
+  llvm::Value *getOpaqueValueMapping(const OpaqueValueExpr *e) {
+    llvm::DenseMap<const OpaqueValueExpr*,llvm::Value*>::iterator
+      it = OpaqueValues.find(e);
+    assert(it != OpaqueValues.end() && "no mapping for opaque value!");
+    return it->second;
+  }
+
   /// getAccessedFieldNo - Given an encoded value and a result number, return
   /// the input field number being accessed.
   static unsigned getAccessedFieldNo(unsigned Idx, const llvm::Constant *Elts);
 
-  llvm::BlockAddress *GetAddrOfLabel(const LabelStmt *L);
+  llvm::BlockAddress *GetAddrOfLabel(const LabelDecl *L);
   llvm::BasicBlock *GetIndirectGotoBlock();
 
   /// EmitNullInitialization - Generate code to set a value of the given type to
@@ -1465,7 +1505,7 @@ public:
 
   /// EmitLabel - Emit the block for the given label. It is legal to call this
   /// function even if there is no current insertion point.
-  void EmitLabel(const LabelStmt &S); // helper for EmitLabelStmt.
+  void EmitLabel(const LabelDecl *D); // helper for EmitLabelStmt.
 
   void EmitLabelStmt(const LabelStmt &S);
   void EmitGotoStmt(const GotoStmt &S);
@@ -1609,6 +1649,7 @@ public:
   LValue EmitConditionalOperatorLValue(const ConditionalOperator *E);
   LValue EmitCastLValue(const CastExpr *E);
   LValue EmitNullInitializationLValue(const CXXScalarValueInitExpr *E);
+  LValue EmitOpaqueValueLValue(const OpaqueValueExpr *e);
 
   llvm::Value *EmitIvarOffset(const ObjCInterfaceDecl *Interface,
                               const ObjCIvarDecl *Ivar);

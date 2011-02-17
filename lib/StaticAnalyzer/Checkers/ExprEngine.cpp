@@ -1344,7 +1344,7 @@ void ExprEngine::processBranch(const Stmt* Condition, const Stmt* Term,
 
 /// processIndirectGoto - Called by CoreEngine.  Used to generate successor
 ///  nodes by processing the 'effects' of a computed goto jump.
-void ExprEngine::processIndirectGoto(IndirectGotoNodeBuilder& builder) {
+void ExprEngine::processIndirectGoto(IndirectGotoNodeBuilder &builder) {
 
   const GRState *state = builder.getState();
   SVal V = state->getSVal(builder.getTarget());
@@ -1359,16 +1359,16 @@ void ExprEngine::processIndirectGoto(IndirectGotoNodeBuilder& builder) {
   typedef IndirectGotoNodeBuilder::iterator iterator;
 
   if (isa<loc::GotoLabel>(V)) {
-    const LabelStmt* L = cast<loc::GotoLabel>(V).getLabel();
+    const LabelDecl *L = cast<loc::GotoLabel>(V).getLabel();
 
-    for (iterator I=builder.begin(), E=builder.end(); I != E; ++I) {
+    for (iterator I = builder.begin(), E = builder.end(); I != E; ++I) {
       if (I.getLabel() == L) {
         builder.generateNode(I, state);
         return;
       }
     }
 
-    assert (false && "No block with label.");
+    assert(false && "No block with label.");
     return;
   }
 
@@ -2280,7 +2280,7 @@ void ExprEngine::VisitObjCForCollectionStmtAux(const ObjCForCollectionStmt* S,
         //  container.  We will do this with dispatch logic to the store.
         //  For now, just 'conjure' up a symbolic value.
         QualType T = R->getValueType();
-        assert(Loc::IsLocType(T));
+        assert(Loc::isLocType(T));
         unsigned Count = Builder->getCurrentBlockCount();
         SymbolRef Sym = SymMgr.getConjuredSymbol(elem, T, Count);
         SVal V = svalBuilder.makeLoc(Sym);
@@ -2798,7 +2798,7 @@ void ExprEngine::VisitInitListExpr(const InitListExpr* E, ExplodedNode* Pred,
     return;
   }
 
-  if (Loc::IsLocType(T) || T->isIntegerType()) {
+  if (Loc::isLocType(T) || T->isIntegerType()) {
     assert (E->getNumInits() == 1);
     ExplodedNodeSet Tmp;
     const Expr* Init = E->getInit(0);
@@ -3103,7 +3103,7 @@ void ExprEngine::VisitUnaryOperator(const UnaryOperator* U,
         // If the value is a location, ++/-- should always preserve
         // non-nullness.  Check if the original value was non-null, and if so
         // propagate that constraint.
-        if (Loc::IsLocType(U->getType())) {
+        if (Loc::isLocType(U->getType())) {
           DefinedOrUnknownSVal Constraint =
             svalBuilder.evalEQ(state, V2,svalBuilder.makeZeroVal(U->getType()));
 

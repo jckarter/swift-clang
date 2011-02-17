@@ -70,7 +70,7 @@ void CodeGenFunction::EmitDecl(const Decl &D) {
   case Decl::Friend:
   case Decl::FriendTemplate:
   case Decl::Block:
-    
+  case Decl::Label:
     assert(0 && "Declaration not should not be in declstmts!");
   case Decl::Function:  // void X();
   case Decl::Record:    // struct/union/class X;
@@ -648,7 +648,8 @@ void CodeGenFunction::EmitAutoVarDecl(const VarDecl &D,
             // to this variable. Set it to zero to indicate that NRVO was not 
             // applied.
             llvm::Value *Zero = Builder.getFalse();
-            NRVOFlag = CreateTempAlloca(Zero->getType(), "nrvo");            
+            NRVOFlag = CreateTempAlloca(Zero->getType(), "nrvo");
+            EnsureInsertPoint();
             Builder.CreateStore(Zero, NRVOFlag);
             
             // Record the NRVO flag for this variable.

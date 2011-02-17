@@ -1095,7 +1095,7 @@ def err_regparm_mismatch : Error<"function declared with with regparm(%0) "
   "attribute was previously declared "
   "%plural{0:without the regparm|:with the regparm(%1)}1 attribute">;
 def warn_label_attribute_not_unused : Warning<
-  "The only valid attribute for labels is 'unused'">;
+  "the only valid attribute for labels is 'unused'">;
 
 def warn_impcast_vector_scalar : Warning<
   "implicit conversion turns vector to scalar: %0 to %1">,
@@ -2157,9 +2157,9 @@ def warn_missing_braces : Warning<
   "suggest braces around initialization of subobject">,
   InGroup<DiagGroup<"missing-braces">>, DefaultIgnore;
 
-def err_redefinition_of_label : Error<"redefinition of label '%0'">;
-def err_undeclared_label_use : Error<"use of undeclared label '%0'">;
-def warn_unused_label : Warning<"unused label '%0'">,
+def err_redefinition_of_label : Error<"redefinition of label %0">;
+def err_undeclared_label_use : Error<"use of undeclared label %0">;
+def warn_unused_label : Warning<"unused label %0">,
   InGroup<UnusedLabel>, DefaultIgnore;
 
 def err_goto_into_protected_scope : Error<"goto into protected scope">;
@@ -2364,6 +2364,11 @@ def err_typecheck_member_reference_type : Error<
 def err_typecheck_member_reference_unknown : Error<
   "cannot refer to member %0 in %1 with '%select{.|->}2'">;
 def err_member_reference_needs_call : Error<
+  "base of member reference is an overloaded function; perhaps you meant "
+  "to call %select{it|the 0-argument overload}0?">;
+def note_member_ref_possible_intended_overload : Note<
+  "possibly valid overload here">;
+def err_member_reference_needs_call_zero_arg : Error<
   "base of member reference has function type %0; perhaps you meant to call "
   "this function with '()'?">;
 def warn_subscript_is_char : Warning<"array subscript is of type 'char'">,
@@ -2509,6 +2514,9 @@ def warn_lunsigned_always_true_comparison : Warning<
 def warn_runsigned_always_true_comparison : Warning<
   "comparison of %0 unsigned%select{| enum}2 expression is always %1">,
   InGroup<TautologicalCompare>;
+def warn_comparison_of_mixed_enum_types : Warning<
+  "comparison of two values with different enumeration types (%0 and %1)">,
+  InGroup<DiagGroup<"enum-compare">>;
 
 def err_invalid_this_use : Error<
   "invalid use of 'this' outside of a nonstatic member function">;
@@ -2567,6 +2575,8 @@ def err_getter_not_found : Error<
   "expected getter method not found on object of type %0">;
 def err_property_not_found_forward_class : Error<
   "property %0 cannot be found in forward class object %1">;
+def err_property_not_as_forward_class : Error<
+  "property %0 names an object of forward class type in class object %1">;
 def note_forward_class : Note<
   "forward class is declared here">;
 def err_duplicate_property : Error<
@@ -3386,7 +3396,7 @@ def warn_array_index_exceeds_bounds : Warning<
   "array index of '%0' indexes past the end of an array (that contains %1 elements)">,
   InGroup<DiagGroup<"array-bounds">>;
 def note_array_index_out_of_bounds : Note<
-  "Array %0 declared here">;
+  "array %0 declared here">;
 
 def warn_printf_write_back : Warning<
   "use of '%%n' in format string discouraged (potentially insecure)">,

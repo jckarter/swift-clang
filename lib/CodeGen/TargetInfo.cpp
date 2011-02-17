@@ -2650,7 +2650,7 @@ void MBlazeTargetCodeGenInfo::SetTargetAttributes(const Decl *D,
                                                   const {
   const FunctionDecl *FD = dyn_cast<FunctionDecl>(D);
   if (!FD) return;
-  
+
   llvm::CallingConv::ID CC = llvm::CallingConv::C;
   if (FD->hasAttr<MBlazeInterruptHandlerAttr>())
     CC = llvm::CallingConv::MBLAZE_INTR;
@@ -2829,7 +2829,7 @@ const TargetCodeGenInfo &CodeGenModule::getTargetCodeGenInfo() {
   case llvm::Triple::x86_64:
     switch (Triple.getOS()) {
     case llvm::Triple::Win32:
-    case llvm::Triple::MinGW64:
+    case llvm::Triple::MinGW32:
     case llvm::Triple::Cygwin:
       return *(TheTargetCodeGenInfo = new WinX86_64TargetCodeGenInfo(Types));
     default:

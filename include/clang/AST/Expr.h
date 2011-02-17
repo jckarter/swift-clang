@@ -2641,9 +2641,9 @@ public:
 /// AddrLabelExpr - The GNU address of label extension, representing &&label.
 class AddrLabelExpr : public Expr {
   SourceLocation AmpAmpLoc, LabelLoc;
-  LabelStmt *Label;
+  LabelDecl *Label;
 public:
-  AddrLabelExpr(SourceLocation AALoc, SourceLocation LLoc, LabelStmt *L,
+  AddrLabelExpr(SourceLocation AALoc, SourceLocation LLoc, LabelDecl *L,
                 QualType t)
     : Expr(AddrLabelExprClass, t, VK_RValue, OK_Ordinary, false, false, false),
       AmpAmpLoc(AALoc), LabelLoc(LLoc), Label(L) {}
@@ -2661,8 +2661,8 @@ public:
     return SourceRange(AmpAmpLoc, LabelLoc);
   }
 
-  LabelStmt *getLabel() const { return Label; }
-  void setLabel(LabelStmt *S) { Label = S; }
+  LabelDecl *getLabel() const { return Label; }
+  void setLabel(LabelDecl *L) { Label = L; }
 
   static bool classof(const Stmt *T) {
     return T->getStmtClass() == AddrLabelExprClass;
@@ -3635,6 +3635,11 @@ public:
            T->isDependentType(), T->isDependentType(), false), 
       Loc(Loc) {
   }
+
+  /// Given an expression which invokes a copy constructor --- i.e.  a
+  /// CXXConstructExpr, possibly wrapped in an ExprWithCleanups ---
+  /// find the OpaqueValueExpr that's the source of the construction.
+  static const OpaqueValueExpr *findInCopyConstruct(const Expr *expr);
 
   explicit OpaqueValueExpr(EmptyShell Empty)
     : Expr(OpaqueValueExprClass, Empty) { }

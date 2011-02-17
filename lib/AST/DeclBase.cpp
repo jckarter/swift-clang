@@ -42,6 +42,30 @@ using namespace clang;
 
 static bool StatSwitch = false;
 
+namespace {
+  template<typename Class>
+  inline SourceRange getSourceRangeImpl(const Decl *D, 
+                                        SourceRange (Class::*)() const) {
+    return static_cast<const Class *>(D)->getSourceRange();
+  }
+
+  inline SourceRange getSourceRangeImpl(const Decl *D, 
+                                        SourceRange (Decl::*)() const) {
+    return D->getLocation();
+  }
+}
+
+SourceRange Decl::getSourceRange() const {
+  switch (getKind()) {
+#define ABSTRACT_DECL(Type)
+#define DECL(Type, Base) \
+  case Type: return getSourceRangeImpl(this, &Type##Decl::getSourceRange);
+#include "clang/AST/DeclNodes.inc"
+  }
+  
+  return getLocation();
+}
+
 const char *Decl::getDeclKindName() const {
   switch (DeclKind) {
   default: assert(0 && "Declaration not in DeclNodes.inc!");
@@ -143,6 +167,101 @@ bool Decl::isDefinedOutsideFunctionOrMethod() const {
   return true;
 }
 
+namespace {
+  template<typename Class, typename Result>
+  inline Result *getCanonicalDeclImpl(Decl *D, Result *(Class::*)()) {
+    return static_cast<Class *>(D)->getCanonicalDecl();
+  }
+  
+  inline Decl *getCanonicalDeclImpl(Decl *D, Decl *(Decl::*)()) {
+    // No specific implementation.
+    return D;
+  }
+}
+
+Decl *Decl::getCanonicalDecl() {
+  switch (getKind()) {
+#define ABSTRACT_DECL(Type)
+#define DECL(Type, Base) \
+    case Type:           \
+      return getCanonicalDeclImpl(this, &Type##Decl::getCanonicalDecl);
+#include "clang/AST/DeclNodes.inc"
+  }
+  
+  return this;  
+}
+
+Decl *Decl::getNextRedeclaration() {
+  switch (getKind()) {
+  case Var: 
+    return static_cast<VarDecl *>(this)->getNextRedeclaration();
+      
+  case Function:
+  case CXXMethod:
+  case CXXConstructor:
+  case CXXDestructor:
+  case CXXConversion:
+    return static_cast<FunctionDecl *>(this)->getNextRedeclaration();
+     
+  case Typedef:
+    return static_cast<TypedefDecl *>(this)->getNextRedeclaration();
+      
+  case Enum:
+  case Record:
+  case CXXRecord:
+  case ClassTemplateSpecialization:
+  case ClassTemplatePartialSpecialization:
+    return static_cast<TagDecl *>(this)->getNextRedeclaration();
+
+  case ObjCMethod:
+    return static_cast<ObjCMethodDecl *>(this)->getNextRedeclaration();
+      
+  case FunctionTemplate:
+  case ClassTemplate:
+    return static_cast<RedeclarableTemplateDecl *>(this)
+                                                      ->getNextRedeclaration();
+      
+  case Namespace:
+  case UsingDirective:
+  case NamespaceAlias:
+  case Label:
+  case UnresolvedUsingTypename:
+  case TemplateTypeParm:
+  case EnumConstant:
+  case UnresolvedUsingValue:
+  case IndirectField:
+  case Field:
+  case ObjCIvar:
+  case ObjCAtDefsField:
+  case ImplicitParam:
+  case ParmVar:
+  case NonTypeTemplateParm:
+  case TemplateTemplateParm:
+  case Using:
+  case UsingShadow:
+  case ObjCCategory:
+  case ObjCProtocol:
+  case ObjCInterface:
+  case ObjCCategoryImpl:
+  case ObjCImplementation:
+  case ObjCProperty:
+  case ObjCCompatibleAlias:
+  case LinkageSpec:
+  case ObjCPropertyImpl:
+  case ObjCForwardProtocol:
+  case ObjCClass:
+  case FileScopeAsm:
+  case AccessSpec:
+  case Friend:
+  case FriendTemplate:
+  case StaticAssert:
+  case Block:
+  case TranslationUnit:
+    return this;
+  }
+  
+  return this;  
+}
 
 //===----------------------------------------------------------------------===//
 // PrettyStackTraceDecl Implementation
@@ -171,6 +290,15 @@ void PrettyStackTraceDecl::print(llvm::raw_ostream &OS) const {
 
 // Out-of-line virtual method providing a home for Decl.
 Decl::~Decl() { }
+
+bool Decl::isOutOfLine() const {
+  if (const VarDecl *VD = dyn_cast<VarDecl>(this))
+    return VD->isOutOfLine();
+  if (const FunctionDecl *FD = dyn_cast<FunctionDecl>(this))
+    return FD->isOutOfLine();
+  
+  return getLexicalDeclContext() != getDeclContext();
+}
 
 void Decl::setDeclContext(DeclContext *DC) {
   if (isOutOfSemaDC())
@@ -260,7 +388,8 @@ unsigned Decl::getIdentifierNamespaceForKind(Kind DeclKind) {
     case ObjCMethod:
     case ObjCProperty:
       return IDNS_Ordinary;
-
+    case Label:
+      return IDNS_Label;
     case IndirectField:
       return IDNS_Ordinary | IDNS_Member;
 
@@ -418,6 +547,24 @@ DeclContext *Decl::castToDeclContext(const Decl *D) {
       assert(false && "a decl that inherits DeclContext isn't handled");
       return 0;
   }
+}
+
+Stmt *Decl::getBody() const {
+  if (const FunctionDecl *FD = dyn_cast<FunctionDecl>(this))
+    return FD->getBody();
+  if (const ObjCMethodDecl *MD = dyn_cast<ObjCMethodDecl>(this))
+    return MD->getBody();
+  if (const BlockDecl *BD = dyn_cast<BlockDecl>(this))
+    return BD->getBody();
+  
+  return 0;
+}
+
+bool Decl::hasBody() const {
+  if (const FunctionDecl *FD = dyn_cast<FunctionDecl>(this))
+    return FD->hasBody();
+  
+  return getBody() != 0;
 }
 
 SourceLocation Decl::getBodyRBrace() const {

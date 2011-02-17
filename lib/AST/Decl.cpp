@@ -1159,7 +1159,7 @@ const Expr *VarDecl::getAnyInitializer(const VarDecl *&D) const {
 }
 
 bool VarDecl::isOutOfLine() const {
-  if (Decl::isOutOfLine())
+  if (getLexicalDeclContext() != getDeclContext())
     return true;
 
   if (!isStaticDataMember())
@@ -1883,7 +1883,7 @@ SourceLocation FunctionDecl::getPointOfInstantiation() const {
 }
 
 bool FunctionDecl::isOutOfLine() const {
-  if (Decl::isOutOfLine())
+  if (getLexicalDeclContext() != getDeclContext())
     return true;
   
   // If this function was instantiated from a member function of a 
@@ -2181,6 +2181,12 @@ SourceRange BlockDecl::getSourceRange() const {
 TranslationUnitDecl *TranslationUnitDecl::Create(ASTContext &C) {
   return new (C) TranslationUnitDecl(C);
 }
+
+LabelDecl *LabelDecl::Create(ASTContext &C, DeclContext *DC,
+                             SourceLocation L, IdentifierInfo *II) {
+  return new (C) LabelDecl(DC, L, II, 0);
+}
+
 
 NamespaceDecl *NamespaceDecl::Create(ASTContext &C, DeclContext *DC,
                                      SourceLocation L, IdentifierInfo *Id) {
