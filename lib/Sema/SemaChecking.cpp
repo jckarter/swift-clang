@@ -885,11 +885,12 @@ bool Sema::SemaCheckStringLiteral(const Expr *E, const CallExpr *TheCall,
     return false;
 
   switch (E->getStmtClass()) {
+  case Stmt::BinaryConditionalOperatorClass:
   case Stmt::ConditionalOperatorClass: {
-    const ConditionalOperator *C = cast<ConditionalOperator>(E);
+    const AbstractConditionalOperator *C = cast<AbstractConditionalOperator>(E);
     return SemaCheckStringLiteral(C->getTrueExpr(), TheCall, HasVAListArg,
                                   format_idx, firstDataArg, isPrintf)
-        && SemaCheckStringLiteral(C->getRHS(), TheCall, HasVAListArg,
+        && SemaCheckStringLiteral(C->getFalseExpr(), TheCall, HasVAListArg,
                                   format_idx, firstDataArg, isPrintf);
   }
 
@@ -909,6 +910,13 @@ bool Sema::SemaCheckStringLiteral(const Expr *E, const CallExpr *TheCall,
     E = cast<ParenExpr>(E)->getSubExpr();
     goto tryAgain;
   }
+
+  case Stmt::OpaqueValueExprClass:
+    if (const Expr *src = cast<OpaqueValueExpr>(E)->getSourceExpr()) {
+      E = src;
+      goto tryAgain;
+    }
+    return false;
 
   case Stmt::DeclRefExprClass: {
     const DeclRefExpr *DR = cast<DeclRefExpr>(E);
@@ -2791,9 +2799,15 @@ void CheckImplicitConversion(Sema &S, Expr *E, QualType T,
     }
 
     // If the target is integral, always warn.
-    if ((TargetBT && TargetBT->isInteger()))
-      // TODO: don't warn for integer values?
-      DiagnoseImpCast(S, E, T, CC, diag::warn_impcast_float_integer);
+    if ((TargetBT && TargetBT->isInteger())) {
+      Expr *InnerE = E->IgnoreParenImpCasts();
+      if (FloatingLiteral *LiteralExpr = dyn_cast<FloatingLiteral>(InnerE)) {
+        DiagnoseImpCast(S, LiteralExpr, T, CC,
+                        diag::warn_impcast_literal_float_to_integer);
+      } else {
+        DiagnoseImpCast(S, E, T, CC, diag::warn_impcast_float_integer);
+      }
+    }
 
     return;
   }
