@@ -1004,6 +1004,7 @@ Sema::BuildAnonymousStructUnionMemberReference(const CXXScopeSpec &SS,
 
   // Case 1:  the base of the indirect field is not a field.
   VarDecl *baseVariable = indirectField->getVarDecl();
+  CXXScopeSpec EmptySS;
   if (baseVariable) {
     assert(baseVariable->getType()->isRecordType());
 
@@ -1017,7 +1018,7 @@ Sema::BuildAnonymousStructUnionMemberReference(const CXXScopeSpec &SS,
     DeclarationNameInfo baseNameInfo(DeclarationName(), loc);
 
     ExprResult result =
-      BuildDeclarationNameExpr(SS, baseNameInfo, baseVariable);
+      BuildDeclarationNameExpr(EmptySS, baseNameInfo, baseVariable);
     if (result.isInvalid()) return ExprError();
 
     baseObjectExpr = result.take();    
@@ -1078,7 +1079,7 @@ Sema::BuildAnonymousStructUnionMemberReference(const CXXScopeSpec &SS,
     DeclarationNameInfo memberNameInfo(field->getDeclName(), loc);
 
     result = BuildFieldReferenceExpr(*this, result, baseObjectIsPointer,
-                                     SS, field, foundDecl,
+                                     EmptySS, field, foundDecl,
                                      memberNameInfo).take();
     baseObjectIsPointer = false;
 
@@ -1088,16 +1089,16 @@ Sema::BuildAnonymousStructUnionMemberReference(const CXXScopeSpec &SS,
   // In all cases, we should now skip the first declaration in the chain.
   ++FI;
 
-  for (; FI != FEnd; FI++) {
-    FieldDecl *field = cast<FieldDecl>(*FI);
+  while (FI != FEnd) {
+    FieldDecl *field = cast<FieldDecl>(*FI++);
 
     // FIXME: these are somewhat meaningless
     DeclarationNameInfo memberNameInfo(field->getDeclName(), loc);
     DeclAccessPair foundDecl = DeclAccessPair::make(field, field->getAccess());
-    CXXScopeSpec memberSS;
 
     result = BuildFieldReferenceExpr(*this, result, /*isarrow*/ false,
-                                     memberSS, field, foundDecl, memberNameInfo)
+                                     (FI == FEnd? SS : EmptySS), field, 
+                                     foundDecl, memberNameInfo)
       .take();
   }
 
@@ -1566,8 +1567,7 @@ ExprResult Sema::ActOnIdExpression(Scope *S,
       Name.getCXXNameType()->isDependentType()) {
     DependentID = true;
   } else if (SS.isSet()) {
-    DeclContext *DC = computeDeclContext(SS, false);
-    if (DC) {
+    if (DeclContext *DC = computeDeclContext(SS, false)) {
       if (RequireCompleteDeclContext(SS, DC))
         return ExprError();
     } else {
@@ -1575,10 +1575,10 @@ ExprResult Sema::ActOnIdExpression(Scope *S,
     }
   }
 
-  if (DependentID) {
+  if (DependentID)
     return ActOnDependentIdExpression(SS, NameInfo, isAddressOfOperand,
                                       TemplateArgs);
-  }
+
   bool IvarLookupFollowUp = false;
   // Perform the required lookup.
   LookupResult R(*this, NameInfo, LookupOrdinaryName);
@@ -1613,9 +1613,10 @@ ExprResult Sema::ActOnIdExpression(Scope *S,
       if (E.isInvalid())
         return ExprError();
 
-      Expr *Ex = E.takeAs<Expr>();
-      if (Ex) return Owned(Ex);
-      // Synthesize ivars lazily
+      if (Expr *Ex = E.takeAs<Expr>())
+        return Owned(Ex);
+      
+      // Synthesize ivars lazily.
       if (getLangOptions().ObjCDefaultSynthProperties &&
           getLangOptions().ObjCNonFragileABI2) {
         if (SynthesizeProvisionalIvar(*this, R, II, NameLoc)) {
@@ -8354,15 +8355,7 @@ ExprResult Sema::ActOnUnaryOp(Scope *S, SourceLocation OpLoc,
 
 /// ActOnAddrLabel - Parse the GNU address of label extension: "&&foo".
 ExprResult Sema::ActOnAddrLabel(SourceLocation OpLoc, SourceLocation LabLoc,
-                                IdentifierInfo *LabelII) {
-  // Look up the record for this label identifier.
-  LabelDecl *&TheDecl = getCurFunction()->LabelMap[LabelII];
-
-  // If we haven't seen this label yet, create a forward reference. It
-  // will be validated and/or cleaned up in ActOnFinishFunctionBody.
-  if (TheDecl == 0)
-    TheDecl = LabelDecl::Create(Context, CurContext, LabLoc, LabelII);
-
+                                LabelDecl *TheDecl) {
   TheDecl->setUsed();
   // Create the AST node.  The address of a label always has type 'void*'.
   return Owned(new (Context) AddrLabelExpr(OpLoc, LabLoc, TheDecl,
@@ -8796,7 +8789,7 @@ void Sema::ActOnBlockError(SourceLocation CaretLoc, Scope *CurScope) {
 /// ActOnBlockStmtExpr - This is called when the body of a block statement
 /// literal was successfully completed.  ^(int x){...}
 ExprResult Sema::ActOnBlockStmtExpr(SourceLocation CaretLoc,
-                                                Stmt *Body, Scope *CurScope) {
+                                    Stmt *Body, Scope *CurScope) {
   // If blocks are disabled, emit an error.
   if (!LangOpts.Blocks)
     Diag(CaretLoc, diag::err_blocks_disable);
@@ -8863,12 +8856,6 @@ ExprResult Sema::ActOnBlockStmtExpr(SourceLocation CaretLoc,
     DiagnoseInvalidJumps(cast<CompoundStmt>(Body));
 
   BSI->TheDecl->setBody(cast<CompoundStmt>(Body));
-
-  // Check goto/label use.
-  if (BSI->checkLabelUse(0, *this)) {
-    PopFunctionOrBlockScope();
-    return ExprError();
-  }
 
   BlockExpr *Result = new (Context) BlockExpr(BSI->TheDecl, BlockTy);
 

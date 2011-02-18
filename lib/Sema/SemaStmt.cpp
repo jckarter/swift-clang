@@ -48,9 +48,8 @@ StmtResult Sema::ActOnNullStmt(SourceLocation SemiLoc, bool LeadingEmptyMacro) {
   return Owned(new (Context) NullStmt(SemiLoc, LeadingEmptyMacro));
 }
 
-StmtResult Sema::ActOnDeclStmt(DeclGroupPtrTy dg,
-                                           SourceLocation StartLoc,
-                                           SourceLocation EndLoc) {
+StmtResult Sema::ActOnDeclStmt(DeclGroupPtrTy dg, SourceLocation StartLoc,
+                               SourceLocation EndLoc) {
   DeclGroupRef DG = dg.getAsVal<DeclGroupRef>();
 
   // If we have an invalid decl, just return an error.
@@ -232,37 +231,9 @@ Sema::ActOnDefaultStmt(SourceLocation DefaultLoc, SourceLocation ColonLoc,
 }
 
 StmtResult
-Sema::ActOnLabelStmt(SourceLocation IdentLoc, IdentifierInfo *II,
-                     SourceLocation ColonLoc, Stmt *SubStmt,
-                     const AttributeList *Attr) {
-  // According to GCC docs, "the only attribute that makes sense after a label
-  // is 'unused'".
-  bool HasUnusedAttr = false;
-  for ( ; Attr; Attr = Attr->getNext()) {
-    if (Attr->getKind() == AttributeList::AT_unused) {
-      HasUnusedAttr = true;
-    } else {
-      Diag(Attr->getLoc(), diag::warn_label_attribute_not_unused);
-      Attr->setInvalid(true);
-    }
-  }
-
-  return ActOnLabelStmt(IdentLoc, II, ColonLoc, SubStmt, HasUnusedAttr);
-}
-
-StmtResult
-Sema::ActOnLabelStmt(SourceLocation IdentLoc, IdentifierInfo *II,
-                     SourceLocation ColonLoc, Stmt *SubStmt,
-                     bool HasUnusedAttr) {
-  // Look up the record for this label identifier.
-  LabelDecl *&TheDecl = getCurFunction()->LabelMap[II];
-
-  // If not forward referenced or defined already, create the backing decl.
-  if (TheDecl == 0)
-    TheDecl = LabelDecl::Create(Context, CurContext, IdentLoc, II);
-
-  assert(TheDecl->getIdentifier() == II && "Label mismatch!");
-
+Sema::ActOnLabelStmt(SourceLocation IdentLoc, LabelDecl *TheDecl,
+                     SourceLocation ColonLoc, Stmt *SubStmt) {
+  
   // If the label was multiply defined, reject it now.
   if (TheDecl->getStmt()) {
     Diag(IdentLoc, diag::err_redefinition_of_label) << TheDecl->getDeclName();
@@ -273,9 +244,6 @@ Sema::ActOnLabelStmt(SourceLocation IdentLoc, IdentifierInfo *II,
   // Otherwise, things are good.  Fill in the declaration and return it.
   TheDecl->setLocation(IdentLoc);
   
-  // FIXME: Just use Decl ATTRIBUTES!
-  if (HasUnusedAttr)
-    TheDecl->setHasUnusedAttribute();
   LabelStmt *LS = new (Context) LabelStmt(IdentLoc, TheDecl, SubStmt);
   TheDecl->setStmt(LS);
   TheDecl->setLocation(IdentLoc);
@@ -1035,18 +1003,10 @@ Sema::ActOnObjCForCollectionStmt(SourceLocation ForLoc,
                                                    ForLoc, RParenLoc));
 }
 
-StmtResult
-Sema::ActOnGotoStmt(SourceLocation GotoLoc, SourceLocation LabelLoc,
-                    IdentifierInfo *LabelII) {
+StmtResult Sema::ActOnGotoStmt(SourceLocation GotoLoc,
+                               SourceLocation LabelLoc,
+                               LabelDecl *TheDecl) {
   getCurFunction()->setHasBranchIntoScope();
-  
-  // Look up the record for this label identifier.
-  LabelDecl *&TheDecl = getCurFunction()->LabelMap[LabelII];
-
-  // If we haven't seen this label yet, create a forward reference.
-  if (TheDecl == 0)
-    TheDecl = LabelDecl::Create(Context, CurContext, LabelLoc, LabelII);
-
   TheDecl->setUsed();
   return Owned(new (Context) GotoStmt(TheDecl, GotoLoc, LabelLoc));
 }

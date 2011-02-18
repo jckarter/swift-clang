@@ -629,6 +629,9 @@ static bool ShouldDiagnoseUnusedDecl(const NamedDecl *D) {
   if (D->isUsed() || D->hasAttr<UnusedAttr>())
     return false;
 
+  if (isa<LabelDecl>(D))
+    return true;
+  
   // White-list anything that isn't a local variable.
   if (!isa<VarDecl>(D) || isa<ParmVarDecl>(D) || isa<ImplicitParamDecl>(D) ||
       !D->getDeclContext()->isFunctionOrMethod())
@@ -671,16 +674,29 @@ static bool ShouldDiagnoseUnusedDecl(const NamedDecl *D) {
   return true;
 }
 
+/// DiagnoseUnusedDecl - Emit warnings about declarations that are not used
+/// unless they are marked attr(unused).
 void Sema::DiagnoseUnusedDecl(const NamedDecl *D) {
   if (!ShouldDiagnoseUnusedDecl(D))
     return;
   
+  unsigned DiagID;
   if (isa<VarDecl>(D) && cast<VarDecl>(D)->isExceptionVariable())
-    Diag(D->getLocation(), diag::warn_unused_exception_param)
-    << D->getDeclName();
+    DiagID = diag::warn_unused_exception_param;
+  else if (isa<LabelDecl>(D))
+    DiagID = diag::warn_unused_label;
   else
-    Diag(D->getLocation(), diag::warn_unused_variable) 
-    << D->getDeclName();
+    DiagID = diag::warn_unused_variable;
+
+  Diag(D->getLocation(), DiagID) << D->getDeclName();
+}
+
+static void CheckPoppedLabel(LabelDecl *L, Sema &S) {
+  // Verify that we have no forward references left.  If so, there was a goto
+  // or address of a label taken, but no definition of it.  Label fwd
+  // definitions are indicated with a null substmt.
+  if (L->getStmt() == 0)
+    S.Diag(L->getLocation(), diag::err_undeclared_label_use) <<L->getDeclName();
 }
 
 void Sema::ActOnPopScope(SourceLocation Loc, Scope *S) {
@@ -701,6 +717,10 @@ void Sema::ActOnPopScope(SourceLocation Loc, Scope *S) {
     // Diagnose unused variables in this scope.
     if (!S->hasErrorOccurred())
       DiagnoseUnusedDecl(D);
+    
+    // If this was a forward reference to a label, verify it was defined.
+    if (LabelDecl *LD = dyn_cast<LabelDecl>(D))
+      CheckPoppedLabel(LD, *this);
     
     // Remove this name from our lexical scope.
     IdResolver.RemoveDecl(D);
@@ -5474,11 +5494,6 @@ Decl *Sema::ActOnFinishFunctionBody(Decl *dcl, Stmt *Body,
   }
 
   // Verify and clean out per-function state.
-
-  // Check goto/label use.
-  FunctionScopeInfo *CurFn = getCurFunction();
-  CurFn->checkLabelUse(Body, *this);
-
   if (Body) {
     // C++ constructors that have function-try-blocks can't have return
     // statements in the handlers of that block. (C++ [except.handle]p14)

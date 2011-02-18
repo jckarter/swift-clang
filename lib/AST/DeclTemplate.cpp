@@ -112,6 +112,14 @@ RedeclarableTemplateDecl::CommonBase *RedeclarableTemplateDecl::getCommonPtr() {
 }
 
 
+RedeclarableTemplateDecl::CommonBase *
+RedeclarableTemplateDecl::newCommon(ASTContext &C) {
+  if (FunctionTemplateDecl *FunTmpl = dyn_cast<FunctionTemplateDecl>(this))
+    return FunTmpl->newCommon(C);
+  
+  return cast<ClassTemplateDecl>(this)->newCommon(C);
+}
+
 RedeclarableTemplateDecl *RedeclarableTemplateDecl::getCanonicalDeclImpl() {
   RedeclarableTemplateDecl *Tmpl = this;
   while (Tmpl->getPreviousDeclaration())
@@ -447,13 +455,6 @@ NonTypeTemplateParmDecl::Create(const ASTContext &C, DeclContext *DC,
                                            ExpandedTInfos);
 }
 
-SourceLocation NonTypeTemplateParmDecl::getInnerLocStart() const {
-  SourceLocation Start = getTypeSpecStartLoc();
-  if (Start.isInvalid())
-    Start = getLocation();
-  return Start;
-}
-
 SourceRange NonTypeTemplateParmDecl::getSourceRange() const {
   return SourceRange(getOuterLocStart(), getLocation());
 }
@@ -541,19 +542,6 @@ ClassTemplateSpecializationDecl *
 ClassTemplateSpecializationDecl::Create(ASTContext &Context, EmptyShell Empty) {
   return
     new (Context)ClassTemplateSpecializationDecl(ClassTemplateSpecialization);
-}
-
-void
-ClassTemplateSpecializationDecl::getNameForDiagnostic(std::string &S,
-                                                  const PrintingPolicy &Policy,
-                                                      bool Qualified) const {
-  NamedDecl::getNameForDiagnostic(S, Policy, Qualified);
-
-  const TemplateArgumentList &TemplateArgs = getTemplateArgs();
-  S += TemplateSpecializationType::PrintTemplateArgumentList(
-                                                          TemplateArgs.data(),
-                                                          TemplateArgs.size(),
-                                                             Policy);
 }
 
 ClassTemplateDecl *

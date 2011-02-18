@@ -158,14 +158,9 @@ public:
   /// specializations are printed with their template arguments.
   ///
   /// TODO: use an API that doesn't require so many temporary strings
-  virtual void getNameForDiagnostic(std::string &S,
-                                    const PrintingPolicy &Policy,
-                                    bool Qualified) const {
-    if (Qualified)
-      S += getQualifiedNameAsString(Policy);
-    else
-      S += getNameAsString();
-  }
+  void getNameForDiagnostic(std::string &S,
+                            const PrintingPolicy &Policy,
+                            bool Qualified) const;
 
   /// declarationReplaces - Determine whether this declaration, if
   /// known to be well-formed within its context, will replace the
@@ -301,10 +296,6 @@ inline llvm::raw_ostream &operator<<(llvm::raw_ostream &OS,
 /// location of the statement.  For GNU local labels (__label__), the decl
 /// location is where the __label__ is.
 class LabelDecl : public NamedDecl {
-  /// HasUnusedAttr - True if the label has __attribute__((unused)) on it.
-  /// FIXME: Just use attributes!
-  unsigned HasUnusedAttr : 1;
-
   LabelStmt *TheStmt;
   LabelDecl(DeclContext *DC, SourceLocation L, IdentifierInfo *II, LabelStmt *S)
     : NamedDecl(Label, DC, L, II), TheStmt(S) {}
@@ -315,9 +306,6 @@ public:
 
   LabelStmt *getStmt() const { return TheStmt; }
   void setStmt(LabelStmt *T) { TheStmt = T; }
-  
-  bool hasUnusedAttribute() const { return HasUnusedAttr; }
-  void setHasUnusedAttribute() { HasUnusedAttr = true; }
   
   // Implement isa/cast/dyncast/etc.
   static bool classof(const Decl *D) { return classofKind(D->getKind()); }
@@ -543,7 +531,7 @@ public:
 
   /// getInnerLocStart - Return SourceLocation representing start of source
   /// range ignoring outer template declarations.
-  virtual SourceLocation getInnerLocStart() const { return getLocation(); }
+  SourceLocation getInnerLocStart() const;
 
   /// getOuterLocStart - Return SourceLocation representing start of source
   /// range taking into account any outer template declarations.
@@ -691,7 +679,6 @@ public:
                          QualType T, TypeSourceInfo *TInfo, StorageClass S,
                          StorageClass SCAsWritten);
 
-  virtual SourceLocation getInnerLocStart() const;
   SourceRange getSourceRange() const;
 
   StorageClass getStorageClass() const { return (StorageClass)SClass; }
@@ -1348,10 +1335,6 @@ public:
   DeclarationNameInfo getNameInfo() const {
     return DeclarationNameInfo(getDeclName(), getLocation(), DNLoc);
   }
-
-  virtual void getNameForDiagnostic(std::string &S,
-                                    const PrintingPolicy &Policy,
-                                    bool Qualified) const;
 
   SourceRange getSourceRange() const {
     return SourceRange(getOuterLocStart(), EndRangeLoc);
@@ -2074,7 +2057,7 @@ public:
 
   /// getInnerLocStart - Return SourceLocation representing start of source
   /// range ignoring outer template declarations.
-  virtual SourceLocation getInnerLocStart() const { return TagKeywordLoc; }
+    SourceLocation getInnerLocStart() const;
 
   /// getOuterLocStart - Return SourceLocation representing start of source
   /// range taking into account any outer template declarations.
@@ -2495,9 +2478,8 @@ public:
     return field_begin() == field_end();
   }
 
-  /// completeDefinition - Notes that the definition of this type is
-  /// now complete.
-  virtual void completeDefinition();
+  /// \brief Indicates that the definition of this class is now complete.
+  void completeDefinition();
 
   static bool classof(const Decl *D) { return classofKind(D->getKind()); }
   static bool classof(const RecordDecl *D) { return true; }

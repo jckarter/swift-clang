@@ -82,7 +82,6 @@ private:
   Actions ObjCMethodActions;
   Actions ObjCImplementationActions;
   Actions CXXMethodActions;
-  TUActions TranslationUnitActions; // Remove this.
 
 public:
   ASTContext* Ctx;
@@ -170,10 +169,6 @@ public:
     CXXMethodActions.push_back(action);
   }
 
-  void addTranslationUnitAction(TUAction action) {
-    TranslationUnitActions.push_back(action);
-  }
-
   void addObjCImplementationAction(CodeAction action) {
     ObjCImplementationActions.push_back(action);
   }
@@ -207,10 +202,12 @@ public:
 //===----------------------------------------------------------------------===//
 
 void AnalysisConsumer::HandleDeclContext(ASTContext &C, DeclContext *dc) {
+  BugReporter BR(*Mgr);
   for (DeclContext::decl_iterator I = dc->decls_begin(), E = dc->decls_end();
        I != E; ++I) {
     Decl *D = *I;
-    
+    checkerMgr->runCheckersOnASTDecl(D, *Mgr, BR);
+
     switch (D->getKind()) {
       case Decl::Namespace: {
         HandleDeclContext(C, cast<NamespaceDecl>(D));
@@ -259,13 +256,10 @@ void AnalysisConsumer::HandleDeclContext(ASTContext &C, DeclContext *dc) {
 }
 
 void AnalysisConsumer::HandleTranslationUnit(ASTContext &C) {
+  BugReporter BR(*Mgr);
   TranslationUnitDecl *TU = C.getTranslationUnitDecl();
+  checkerMgr->runCheckersOnASTDecl(TU, *Mgr, BR);
   HandleDeclContext(C, TU);
-
-  for (TUActions::iterator I = TranslationUnitActions.begin(),
-                           E = TranslationUnitActions.end(); I != E; ++I) {
-    (*I)(*this, *Mgr, *TU);
-  }
 
   // Explicitly destroy the PathDiagnosticClient.  This will flush its output.
   // FIXME: This should be replaced with something that doesn't rely on
@@ -308,6 +302,12 @@ void AnalysisConsumer::HandleCode(Decl *D, Actions& actions) {
   if (D->hasBody() && Opts.AnalyzeNestedBlocks)
     FindBlocks(cast<DeclContext>(D), WL);
 
+  BugReporter BR(*Mgr);
+  for (llvm::SmallVectorImpl<Decl*>::iterator WI=WL.begin(), WE=WL.end();
+       WI != WE; ++WI)
+    if ((*WI)->hasBody())
+      checkerMgr->runCheckersOnASTBody(*WI, *Mgr, BR);
+
   for (Actions::iterator I = actions.begin(), E = actions.end(); I != E; ++I)
     for (llvm::SmallVectorImpl<Decl*>::iterator WI=WL.begin(), WE=WL.end();
          WI != WE; ++WI)
@@ -317,14 +317,6 @@ void AnalysisConsumer::HandleCode(Decl *D, Actions& actions) {
 //===----------------------------------------------------------------------===//
 // Analyses
 //===----------------------------------------------------------------------===//
-
-static void ActionWarnDeadStores(AnalysisConsumer &C, AnalysisManager& mgr,
-                                 Decl *D) {
-  if (LiveVariables *L = mgr.getLiveVariables(D)) {
-    BugReporter BR(mgr);
-    CheckDeadStores(*mgr.getCFG(D), *L, mgr.getParentMap(D), BR);
-  }
-}
 
 static void ActionWarnUninitVals(AnalysisConsumer &C, AnalysisManager& mgr,
                                  Decl *D) {
@@ -413,64 +405,6 @@ static void ActionObjCMemChecker(AnalysisConsumer &C, AnalysisManager& mgr,
    ActionObjCMemCheckerAux(C, mgr, D, true);
    break;
  }
-}
-
-static void ActionDisplayLiveVariables(AnalysisConsumer &C,
-                                       AnalysisManager& mgr, Decl *D) {
-  if (LiveVariables* L = mgr.getLiveVariables(D)) {
-    L->dumpBlockLiveness(mgr.getSourceManager());
-  }
-}
-
-static void ActionCFGDump(AnalysisConsumer &C, AnalysisManager& mgr, Decl *D) {
-  if (CFG *cfg = mgr.getCFG(D)) {
-    cfg->dump(mgr.getLangOptions());
-  }
-}
-
-static void ActionCFGView(AnalysisConsumer &C, AnalysisManager& mgr, Decl *D) {
-  if (CFG *cfg = mgr.getCFG(D)) {
-    cfg->viewCFG(mgr.getLangOptions());
-  }
-}
-
-static void ActionSecuritySyntacticChecks(AnalysisConsumer &C,
-                                          AnalysisManager &mgr, Decl *D) {
-  BugReporter BR(mgr);
-  CheckSecuritySyntaxOnly(D, BR);
-}
-
-static void ActionLLVMConventionChecker(AnalysisConsumer &C,
-                                        AnalysisManager &mgr,
-                                        TranslationUnitDecl &TU) {
-  BugReporter BR(mgr);
-  CheckLLVMConventions(TU, BR);
-}
-
-static void ActionWarnObjCDealloc(AnalysisConsumer &C, AnalysisManager& mgr,
-                                  Decl *D) {
-  if (mgr.getLangOptions().getGCMode() == LangOptions::GCOnly)
-    return;
-  BugReporter BR(mgr);
-  CheckObjCDealloc(cast<ObjCImplementationDecl>(D), mgr.getLangOptions(), BR);
-}
-
-static void ActionWarnObjCUnusedIvars(AnalysisConsumer &C, AnalysisManager& mgr,
-                                      Decl *D) {
-  BugReporter BR(mgr);
-  CheckObjCUnusedIvar(cast<ObjCImplementationDecl>(D), BR);
-}
-
-static void ActionWarnObjCMethSigs(AnalysisConsumer &C, AnalysisManager& mgr,
-                                   Decl *D) {
-  BugReporter BR(mgr);
-  CheckObjCInstMethSignature(cast<ObjCImplementationDecl>(D), BR);
-}
-
-static void ActionWarnSizeofPointer(AnalysisConsumer &C, AnalysisManager &mgr,
-                                    Decl *D) {
-  BugReporter BR(mgr);
-  CheckSizeofPointer(D, BR);
 }
 
 //===----------------------------------------------------------------------===//

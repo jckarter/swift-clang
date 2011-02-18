@@ -1344,6 +1344,8 @@ public:
     /// Tag name lookup, which finds the names of enums, classes,
     /// structs, and unions.
     LookupTagName,
+    /// Label name lookup.
+    LookupLabel,
     /// Member name lookup, which finds the names of
     /// class/struct/union members.
     LookupMemberName,
@@ -1412,6 +1414,9 @@ public:
                                     QualType T1, QualType T2,
                                     UnresolvedSetImpl &Functions);
 
+  LabelDecl *LookupOrCreateLabel(IdentifierInfo *II, SourceLocation Loc,
+                                 bool isLocalLabel = false);
+  
   DeclContextLookupResult LookupConstructors(CXXRecordDecl *Class);
   CXXDestructorDecl *LookupDestructor(CXXRecordDecl *Class);
 
@@ -1715,12 +1720,9 @@ public:
   StmtResult ActOnDefaultStmt(SourceLocation DefaultLoc,
                                       SourceLocation ColonLoc,
                                       Stmt *SubStmt, Scope *CurScope);
-  StmtResult ActOnLabelStmt(SourceLocation IdentLoc, IdentifierInfo *II,
-                            SourceLocation ColonLoc, Stmt *SubStmt,
-                            const AttributeList *Attr);
-  StmtResult ActOnLabelStmt(SourceLocation IdentLoc, IdentifierInfo *II,
-                            SourceLocation ColonLoc, Stmt *SubStmt,
-                            bool HasUnusedAttr);
+  StmtResult ActOnLabelStmt(SourceLocation IdentLoc, LabelDecl *TheDecl,
+                            SourceLocation ColonLoc, Stmt *SubStmt);
+    
   StmtResult ActOnIfStmt(SourceLocation IfLoc,
                          FullExprArg CondVal, Decl *CondVar,
                          Stmt *ThenVal,
@@ -1752,7 +1754,7 @@ public:
 
   StmtResult ActOnGotoStmt(SourceLocation GotoLoc,
                            SourceLocation LabelLoc,
-                           IdentifierInfo *LabelII);
+                           LabelDecl *TheDecl);
   StmtResult ActOnIndirectGotoStmt(SourceLocation GotoLoc,
                                    SourceLocation StarLoc,
                                    Expr *DestExp);
@@ -2075,10 +2077,9 @@ public:
                                 Expr *Cond, Expr *LHS, Expr *RHS);
 
   /// ActOnAddrLabel - Parse the GNU address of label extension: "&&foo".
-  ExprResult ActOnAddrLabel(SourceLocation OpLoc,
-                            SourceLocation LabLoc,
-                            IdentifierInfo *LabelII);
-
+  ExprResult ActOnAddrLabel(SourceLocation OpLoc, SourceLocation LabLoc,
+                            LabelDecl *LD);
+  
   ExprResult ActOnStmtExpr(SourceLocation LPLoc, Stmt *SubStmt,
                            SourceLocation RPLoc); // "({..})"
 
@@ -5057,7 +5058,7 @@ public:
                                                 unsigned ByteNo) const;
 
 private:  
-  void CheckArrayAccess(const ArraySubscriptExpr *ae);
+  void CheckArrayAccess(const ArraySubscriptExpr *E);
   bool CheckFunctionCall(FunctionDecl *FDecl, CallExpr *TheCall);
   bool CheckBlockCall(NamedDecl *NDecl, CallExpr *TheCall);
 

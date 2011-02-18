@@ -36,36 +36,16 @@ def triple_EQ : Joined<"-triple=">, Alias<triple>;
 // Analyzer Options
 //===----------------------------------------------------------------------===//
 
-def analysis_CFGDump : Flag<"-cfg-dump">,
-  HelpText<"Display Control-Flow Graphs">;
-def analysis_CFGView : Flag<"-cfg-view">,
-  HelpText<"View Control-Flow Graphs using GraphViz">;
 def analysis_UnoptimizedCFG : Flag<"-unoptimized-cfg">,
   HelpText<"Generate unoptimized CFGs for all analyses">;
 def analysis_CFGAddImplicitDtors : Flag<"-cfg-add-implicit-dtors">,
   HelpText<"Add C++ implicit destructors to CFGs for all analyses">;
 def analysis_CFGAddInitializers : Flag<"-cfg-add-initializers">,
   HelpText<"Add C++ initializers to CFGs for all analyses">;
-def analysis_DisplayLiveVariables : Flag<"-dump-live-variables">,
-  HelpText<"Print results of live variable analysis">;
-def analysis_LLVMConventionChecker : Flag<"-analyzer-check-llvm-conventions">,
-  HelpText<"Check code for LLVM codebase conventions (domain-specific)">;
-def analysis_SecuritySyntacticChecks : Flag<"-analyzer-check-security-syntactic">,
-  HelpText<"Perform quick security checks that require no data flow">;
-def analysis_WarnDeadStores : Flag<"-analyzer-check-dead-stores">,
-  HelpText<"Warn about stores to dead variables">;
 def analysis_WarnUninitVals : Flag<"-warn-uninit-values">,
   HelpText<"Warn about uses of uninitialized variables">;
-def analysis_WarnObjCMethSigs : Flag<"-analyzer-check-objc-methodsigs">,
-  HelpText<"Warn about Objective-C method signatures with type incompatibilities">;
-def analysis_WarnObjCDealloc : Flag<"-analyzer-check-objc-missing-dealloc">,
-  HelpText<"Warn about Objective-C classes that lack a correct implementation of -dealloc">;
-def analysis_WarnObjCUnusedIvars : Flag<"-analyzer-check-objc-unused-ivars">,
-  HelpText<"Warn about private ivars that are never used">;
 def analysis_ObjCMemChecker : Flag<"-analyzer-check-objc-mem">,
   HelpText<"Run the [Core] Foundation reference count checker">;
-def analysis_WarnSizeofPointer : Flag<"-warn-sizeof-pointer">,
-  HelpText<"Warn about unintended use of sizeof() on pointer expressions">;
 def analysis_AnalyzerStats : Flag<"-analyzer-stats">,
   HelpText<"Emit warnings with analyzer statistics">;
 def analysis_WarnBufferOverflows : Flag<"-analyzer-check-buffer-overflows">,
@@ -302,9 +282,6 @@ def help : Flag<"-help">,
   HelpText<"Print this help text">;
 def _help : Flag<"--help">, Alias<help>;
 def x : Separate<"-x">, HelpText<"Input language type">;
-def cxx_inheritance_view : Separate<"-cxx-inheritance-view">,
-  MetaVarName<"<class name>">,
-  HelpText<"View C++ inheritance for a specified class">;
 def o : Separate<"-o">, MetaVarName<"<path>">, HelpText<"Specify output file">;
 def load : Separate<"-load">, MetaVarName<"<dsopath>">,
   HelpText<"Load the named plugin (dynamic shared object)">;

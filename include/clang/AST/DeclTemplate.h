@@ -561,7 +561,7 @@ protected:
   /// for the common pointer.
   CommonBase *getCommonPtr();
 
-  virtual CommonBase *newCommon(ASTContext &C) = 0;
+  CommonBase *newCommon(ASTContext &C);
 
   // Construct a template decl with name, parameters, and templated element.
   RedeclarableTemplateDecl(Kind DK, DeclContext *DC, SourceLocation L,
@@ -773,7 +773,8 @@ protected:
   }
 
   friend class FunctionDecl;
-
+  friend class RedeclarableTemplateDecl;
+                               
   /// \brief Retrieve the set of function template specializations of this
   /// function template.
   llvm::FoldingSet<FunctionTemplateSpecializationInfo> &getSpecializations() {
@@ -1040,7 +1041,6 @@ public:
   using TemplateParmPosition::setPosition;
   using TemplateParmPosition::getIndex;
 
-  SourceLocation getInnerLocStart() const;
   SourceRange getSourceRange() const;
 
   /// \brief Determine whether this template parameter has a default
@@ -1317,10 +1317,6 @@ public:
   static ClassTemplateSpecializationDecl *
   Create(ASTContext &Context, EmptyShell Empty);
 
-  virtual void getNameForDiagnostic(std::string &S,
-                                    const PrintingPolicy &Policy,
-                                    bool Qualified) const;
-
   ClassTemplateSpecializationDecl *getMostRecentDeclaration() {
     CXXRecordDecl *Recent
         = cast<CXXRecordDecl>(CXXRecordDecl::getMostRecentDeclaration());
@@ -1470,8 +1466,6 @@ public:
   SourceLocation getTemplateKeywordLoc() const {
     return ExplicitInfo ? ExplicitInfo->TemplateKeywordLoc : SourceLocation();
   }
-
-  SourceLocation getInnerLocStart() const { return getTemplateKeywordLoc(); }
 
   void Profile(llvm::FoldingSetNodeID &ID) const {
     Profile(ID, TemplateArgs->data(), TemplateArgs->size(), getASTContext());
@@ -1730,6 +1724,8 @@ protected:
   Common *getCommonPtr() {
     return static_cast<Common *>(RedeclarableTemplateDecl::getCommonPtr());
   }
+
+  friend class RedeclarableTemplateDecl;
 
 public:
   /// Get the underlying class declarations of the template.
