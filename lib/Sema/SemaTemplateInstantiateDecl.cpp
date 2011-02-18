@@ -101,6 +101,14 @@ TemplateDeclInstantiator::VisitTranslationUnitDecl(TranslationUnitDecl *D) {
 }
 
 Decl *
+TemplateDeclInstantiator::VisitLabelDecl(LabelDecl *D) {
+  LabelDecl *Inst = LabelDecl::Create(SemaRef.Context, Owner, D->getLocation(),
+                                      D->getIdentifier());
+  Owner->addDecl(Inst);
+  return Inst;
+}
+
+Decl *
 TemplateDeclInstantiator::VisitNamespaceDecl(NamespaceDecl *D) {
   assert(false && "Namespaces cannot be instantiated");
   return D;
@@ -2860,7 +2868,27 @@ NamedDecl *Sema::FindInstantiatedDecl(SourceLocation Loc, NamedDecl *D,
       (ParentDC->isFunctionOrMethod() && ParentDC->isDependentContext())) {
     // D is a local of some kind. Look into the map of local
     // declarations to their instantiations.
-    return cast<NamedDecl>(CurrentInstantiationScope->getInstantiationOf(D));
+    typedef LocalInstantiationScope::DeclArgumentPack DeclArgumentPack;
+    llvm::PointerUnion<Decl *, DeclArgumentPack *> *Found
+      = CurrentInstantiationScope->findInstantiationOf(D);
+    
+    if (Found) {
+      if (Decl *FD = Found->dyn_cast<Decl *>())
+        return cast<NamedDecl>(FD);
+      
+      unsigned PackIdx = ArgumentPackSubstitutionIndex;
+      return cast<NamedDecl>((*Found->get<DeclArgumentPack *>())[PackIdx]);
+    }
+
+    // If we didn't find the decl, then we must have a label decl that hasn't
+    // been found yet.  Lazily instantiate it and return it now.
+    assert(isa<LabelDecl>(D));
+    
+    Decl *Inst = SubstDecl(D, CurContext, TemplateArgs);
+    assert(Inst && "Failed to instantiate label??");
+    
+    CurrentInstantiationScope->InstantiatedLocal(D, Inst);
+    return cast<LabelDecl>(Inst);
   }
 
   if (CXXRecordDecl *Record = dyn_cast<CXXRecordDecl>(D)) {

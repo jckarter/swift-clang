@@ -65,13 +65,6 @@ namespace  {
               OS << '\n';
               DumpSubTree(*CI++);
             }
-            if (const ConditionalOperator *CO = 
-                  dyn_cast<ConditionalOperator>(S)) {
-              if (CO->getSAVE()) {
-                OS << '\n';
-                DumpSubTree(CO->getSAVE());
-              }
-            }
           }
         }
         OS << ')';
@@ -289,6 +282,8 @@ void StmtDumper::DumpDeclarator(Decl *D) {
     UD->getTargetNestedNameDecl()->print(OS,
         PrintingPolicy(UD->getASTContext().getLangOptions()));
     OS << ";\"";
+  } else if (LabelDecl *LD = dyn_cast<LabelDecl>(D)) {
+    OS << "label " << LD->getNameAsString();
   } else {
     assert(0 && "Unexpected decl");
   }

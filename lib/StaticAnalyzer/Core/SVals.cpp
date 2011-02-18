@@ -68,7 +68,7 @@ SymbolRef SVal::getAsLocSymbol() const {
     return X->getLoc().getAsLocSymbol();
 
   if (const loc::MemRegionVal *X = dyn_cast<loc::MemRegionVal>(this)) {
-    const MemRegion *R = X->StripCasts();
+    const MemRegion *R = X->stripCasts();
     if (const SymbolicRegion *SymR = dyn_cast<SymbolicRegion>(R))
       return SymR->getSymbol();
   }
@@ -128,7 +128,7 @@ const MemRegion *SVal::getAsRegion() const {
   return 0;
 }
 
-const MemRegion *loc::MemRegionVal::StripCasts() const {
+const MemRegion *loc::MemRegionVal::stripCasts() const {
   const MemRegion *R = getRegion();
   return R ?  R->StripCasts() : NULL;
 }
@@ -350,7 +350,7 @@ void Loc::dumpToStream(llvm::raw_ostream& os) const {
       os << cast<loc::ConcreteInt>(this)->getValue().getZExtValue() << " (Loc)";
       break;
     case loc::GotoLabelKind:
-      os << "&&" << cast<loc::GotoLabel>(this)->getLabel()->getID()->getName();
+      os << "&&" << cast<loc::GotoLabel>(this)->getLabel()->getName();
       break;
     case loc::MemRegionKind:
       os << '&' << cast<loc::MemRegionVal>(this)->getRegion()->getString();

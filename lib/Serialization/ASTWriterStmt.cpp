@@ -76,6 +76,7 @@ namespace clang {
     void VisitBinaryOperator(BinaryOperator *E);
     void VisitCompoundAssignOperator(CompoundAssignOperator *E);
     void VisitConditionalOperator(ConditionalOperator *E);
+    void VisitBinaryConditionalOperator(BinaryConditionalOperator *E);
     void VisitImplicitCastExpr(ImplicitCastExpr *E);
     void VisitExplicitCastExpr(ExplicitCastExpr *E);
     void VisitCStyleCastExpr(CStyleCastExpr *E);
@@ -217,12 +218,9 @@ void ASTStmtWriter::VisitDefaultStmt(DefaultStmt *S) {
 
 void ASTStmtWriter::VisitLabelStmt(LabelStmt *S) {
   VisitStmt(S);
-  Writer.AddIdentifierRef(S->getID(), Record);
+  Writer.AddDeclRef(S->getDecl(), Record);
   Writer.AddStmt(S->getSubStmt());
   Writer.AddSourceLocation(S->getIdentLoc(), Record);
-  Record.push_back(S->isUsed());
-  Record.push_back(S->HasUnusedAttribute());
-  Record.push_back(Writer.GetLabelID(S));
   Code = serialization::STMT_LABEL;
 }
 
@@ -284,7 +282,7 @@ void ASTStmtWriter::VisitForStmt(ForStmt *S) {
 
 void ASTStmtWriter::VisitGotoStmt(GotoStmt *S) {
   VisitStmt(S);
-  Record.push_back(Writer.GetLabelID(S->getLabel()));
+  Writer.AddDeclRef(S->getLabel(), Record);
   Writer.AddSourceLocation(S->getGotoLoc(), Record);
   Writer.AddSourceLocation(S->getLabelLoc(), Record);
   Code = serialization::STMT_GOTO;
@@ -614,10 +612,22 @@ void ASTStmtWriter::VisitConditionalOperator(ConditionalOperator *E) {
   Writer.AddStmt(E->getCond());
   Writer.AddStmt(E->getLHS());
   Writer.AddStmt(E->getRHS());
-  Writer.AddStmt(E->getSAVE());
   Writer.AddSourceLocation(E->getQuestionLoc(), Record);
   Writer.AddSourceLocation(E->getColonLoc(), Record);
   Code = serialization::EXPR_CONDITIONAL_OPERATOR;
+}
+
+void
+ASTStmtWriter::VisitBinaryConditionalOperator(BinaryConditionalOperator *E) {
+  VisitExpr(E);
+  Writer.AddStmt(E->getOpaqueValue());
+  Writer.AddStmt(E->getCommon());
+  Writer.AddStmt(E->getCond());
+  Writer.AddStmt(E->getTrueExpr());
+  Writer.AddStmt(E->getFalseExpr());
+  Writer.AddSourceLocation(E->getQuestionLoc(), Record);
+  Writer.AddSourceLocation(E->getColonLoc(), Record);
+  Code = serialization::EXPR_BINARY_CONDITIONAL_OPERATOR;
 }
 
 void ASTStmtWriter::VisitImplicitCastExpr(ImplicitCastExpr *E) {
@@ -722,7 +732,7 @@ void ASTStmtWriter::VisitAddrLabelExpr(AddrLabelExpr *E) {
   VisitExpr(E);
   Writer.AddSourceLocation(E->getAmpAmpLoc(), Record);
   Writer.AddSourceLocation(E->getLabelLoc(), Record);
-  Record.push_back(Writer.GetLabelID(E->getLabel()));
+  Writer.AddDeclRef(E->getLabel(), Record);
   Code = serialization::EXPR_ADDR_LABEL;
 }
 
@@ -1323,6 +1333,7 @@ void ASTStmtWriter::VisitSubstNonTypeTemplateParmPackExpr(
 
 void ASTStmtWriter::VisitOpaqueValueExpr(OpaqueValueExpr *E) {
   VisitExpr(E);
+  Record.push_back(Writer.getOpaqueValueID(E));
   Writer.AddSourceLocation(E->getLocation(), Record);
   Code = serialization::EXPR_OPAQUE_VALUE;
 }
@@ -1359,16 +1370,10 @@ void ASTWriter::ClearSwitchCaseIDs() {
   SwitchCaseIDs.clear();
 }
 
-/// \brief Retrieve the ID for the given label statement, which may
-/// or may not have been emitted yet.
-unsigned ASTWriter::GetLabelID(LabelStmt *S) {
-  std::map<LabelStmt *, unsigned>::iterator Pos = LabelIDs.find(S);
-  if (Pos != LabelIDs.end())
-    return Pos->second;
-
-  unsigned NextID = LabelIDs.size();
-  LabelIDs[S] = NextID;
-  return NextID;
+unsigned ASTWriter::getOpaqueValueID(OpaqueValueExpr *e) {
+  unsigned &entry = OpaqueValues[e];
+  if (!entry) entry = OpaqueValues.size();
+  return entry;
 }
 
 /// \brief Write the given substatement or subexpression to the

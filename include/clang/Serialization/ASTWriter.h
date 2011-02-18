@@ -44,9 +44,9 @@ class CXXBaseSpecifier;
 class CXXCtorInitializer;
 class FPOptions;
 class HeaderSearch;
-class LabelStmt;
 class MacroDefinition;
 class MemorizeStatCalls;
+class OpaqueValueExpr;
 class OpenCLOptions;
 class ASTReader;
 class PreprocessedEntity;
@@ -261,8 +261,8 @@ private:
   /// \brief Mapping from SwitchCase statements to IDs.
   std::map<SwitchCase *, unsigned> SwitchCaseIDs;
 
-  /// \brief Mapping from LabelStmt statements to IDs.
-  std::map<LabelStmt *, unsigned> LabelIDs;
+  /// \brief Mapping from OpaqueValueExpr expressions to IDs.
+  llvm::DenseMap<OpaqueValueExpr *, unsigned> OpaqueValues;
 
   /// \brief The number of statements written to the AST file.
   unsigned NumStatements;
@@ -553,9 +553,8 @@ public:
 
   void ClearSwitchCaseIDs();
 
-  /// \brief Retrieve the ID for the given label statement, which may
-  /// or may not have been emitted yet.
-  unsigned GetLabelID(LabelStmt *S);
+  /// \brief Retrieve the ID for the given opaque value expression.
+  unsigned getOpaqueValueID(OpaqueValueExpr *e);
 
   unsigned getParmVarDeclAbbrev() const { return ParmVarDeclAbbrev; }
 

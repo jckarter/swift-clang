@@ -45,6 +45,7 @@ namespace clang {
   class CXXDestructorDecl;
   class CXXTryStmt;
   class Decl;
+  class LabelDecl;
   class EnumConstantDecl;
   class FunctionDecl;
   class FunctionProtoType;
@@ -591,13 +592,6 @@ public:
   /// when the NRVO has been applied to this variable.
   llvm::DenseMap<const VarDecl *, llvm::Value *> NRVOFlags;
 
-  /// \brief A mapping from 'Save' expression in a conditional expression
-  /// to the IR for this expression. Used to implement IR gen. for Gnu
-  /// extension's missing LHS expression in a conditional operator expression.
-  llvm::DenseMap<const Expr *, llvm::Value *> ConditionalSaveExprs;
-  llvm::DenseMap<const Expr *, ComplexPairTy> ConditionalSaveComplexExprs;
-  llvm::DenseMap<const Expr *, LValue> ConditionalSaveLValueExprs;
-
   EHScopeStack EHStack;
 
   /// i32s containing the indexes of the cleanup destinations.
@@ -768,7 +762,7 @@ public:
   /// The given basic block lies in the current EH scope, but may be a
   /// target of a potentially scope-crossing jump; get a stable handle
   /// to which we can perform this jump later.
-  JumpDest getJumpDestInCurrentScope(const char *Name = 0) {
+  JumpDest getJumpDestInCurrentScope(llvm::StringRef Name = llvm::StringRef()) {
     return getJumpDestInCurrentScope(createBasicBlock(Name));
   }
 
@@ -838,6 +832,108 @@ public:
       CGF.EnsureInsertPoint();
     }
   };
+
+  /// An object which temporarily prevents a value from being
+  /// destroyed by aggressive peephole optimizations that assume that
+  /// all uses of a value have been realized in the IR.
+  class PeepholeProtection {
+    llvm::Instruction *Inst;
+    friend class CodeGenFunction;
+
+  public:
+    PeepholeProtection() : Inst(0) {}
+  };  
+
+  /// An RAII object to set (and then clear) a mapping for an OpaqueValueExpr.
+  class OpaqueValueMapping {
+    CodeGenFunction &CGF;
+    const OpaqueValueExpr *OpaqueValue;
+    bool BoundLValue;
+    CodeGenFunction::PeepholeProtection Protection;
+
+  public:
+    static bool shouldBindAsLValue(const Expr *expr) {
+      return expr->isGLValue() || expr->getType()->isRecordType();
+    }
+
+    /// Build the opaque value mapping for the given conditional
+    /// operator if it's the GNU ?: extension.  This is a common
+    /// enough pattern that the convenience operator is really
+    /// helpful.
+    ///
+    OpaqueValueMapping(CodeGenFunction &CGF,
+                       const AbstractConditionalOperator *op) : CGF(CGF) {
+      if (isa<ConditionalOperator>(op)) {
+        OpaqueValue = 0;
+        BoundLValue = false;
+        return;
+      }
+
+      const BinaryConditionalOperator *e = cast<BinaryConditionalOperator>(op);
+      init(e->getOpaqueValue(), e->getCommon());
+    }
+
+    OpaqueValueMapping(CodeGenFunction &CGF,
+                       const OpaqueValueExpr *opaqueValue,
+                       LValue lvalue)
+      : CGF(CGF), OpaqueValue(opaqueValue), BoundLValue(true) {
+      assert(opaqueValue && "no opaque value expression!");
+      assert(shouldBindAsLValue(opaqueValue));
+      initLValue(lvalue);
+    }
+
+    OpaqueValueMapping(CodeGenFunction &CGF,
+                       const OpaqueValueExpr *opaqueValue,
+                       RValue rvalue)
+      : CGF(CGF), OpaqueValue(opaqueValue), BoundLValue(false) {
+      assert(opaqueValue && "no opaque value expression!");
+      assert(!shouldBindAsLValue(opaqueValue));
+      initRValue(rvalue);
+    }
+
+    void pop() {
+      assert(OpaqueValue && "mapping already popped!");
+      popImpl();
+      OpaqueValue = 0;
+    }
+
+    ~OpaqueValueMapping() {
+      if (OpaqueValue) popImpl();
+    }
+
+  private:
+    void popImpl() {
+      if (BoundLValue)
+        CGF.OpaqueLValues.erase(OpaqueValue);
+      else {
+        CGF.OpaqueRValues.erase(OpaqueValue);
+        CGF.unprotectFromPeepholes(Protection);
+      }
+    }
+
+    void init(const OpaqueValueExpr *ov, const Expr *e) {
+      OpaqueValue = ov;
+      BoundLValue = shouldBindAsLValue(ov);
+      assert(BoundLValue == shouldBindAsLValue(e)
+             && "inconsistent expression value kinds!");
+      if (BoundLValue)
+        initLValue(CGF.EmitLValue(e));
+      else
+        initRValue(CGF.EmitAnyExpr(e));
+    }
+
+    void initLValue(const LValue &lv) {
+      CGF.OpaqueLValues.insert(std::make_pair(OpaqueValue, lv));
+    }
+
+    void initRValue(const RValue &rv) {
+      // Work around an extremely aggressive peephole optimization in
+      // EmitScalarConversion which assumes that all other uses of a
+      // value are extant.
+      Protection = CGF.protectFromPeepholes(rv);
+      CGF.OpaqueRValues.insert(std::make_pair(OpaqueValue, rv));
+    }
+  };
   
   /// getByrefValueFieldNumber - Given a declaration, returns the LLVM field
   /// number that holds the value.
@@ -862,7 +958,7 @@ private:
   DeclMapTy LocalDeclMap;
 
   /// LabelMap - This keeps track of the LLVM basic block for each C label.
-  llvm::DenseMap<const LabelStmt*, JumpDest> LabelMap;
+  llvm::DenseMap<const LabelDecl*, JumpDest> LabelMap;
 
   // BreakContinueStack - This keeps track of where break and continue
   // statements should jump to.
@@ -882,6 +978,11 @@ private:
   /// CaseRangeBlock - This block holds if condition check for last case
   /// statement range in current switch instruction.
   llvm::BasicBlock *CaseRangeBlock;
+
+  /// OpaqueLValues - Keeps track of the current set of opaque value
+  /// expressions.
+  llvm::DenseMap<const OpaqueValueExpr *, LValue> OpaqueLValues;
+  llvm::DenseMap<const OpaqueValueExpr *, RValue> OpaqueRValues;
 
   // VLASizeMap - This keeps track of the associated size for each VLA type.
   // We track this by the size expression rather than the type itself because
@@ -1139,7 +1240,7 @@ public:
 
   /// getBasicBlockForLabel - Return the LLVM basicblock that the specified
   /// label maps to.
-  JumpDest getJumpDestForLabel(const LabelStmt *S);
+  JumpDest getJumpDestForLabel(const LabelDecl *S);
 
   /// SimplifyForwardingBlocks - If the given basic block is only a branch to
   /// another basic block, simplify it. This assumes that no other code could
@@ -1278,11 +1379,33 @@ public:
     return Res;
   }
 
+  /// getOpaqueLValueMapping - Given an opaque value expression (which
+  /// must be mapped to an l-value), return its mapping.
+  const LValue &getOpaqueLValueMapping(const OpaqueValueExpr *e) {
+    assert(OpaqueValueMapping::shouldBindAsLValue(e));
+
+    llvm::DenseMap<const OpaqueValueExpr*,LValue>::iterator
+      it = OpaqueLValues.find(e);
+    assert(it != OpaqueLValues.end() && "no mapping for opaque value!");
+    return it->second;
+  }
+
+  /// getOpaqueRValueMapping - Given an opaque value expression (which
+  /// must be mapped to an r-value), return its mapping.
+  const RValue &getOpaqueRValueMapping(const OpaqueValueExpr *e) {
+    assert(!OpaqueValueMapping::shouldBindAsLValue(e));
+
+    llvm::DenseMap<const OpaqueValueExpr*,RValue>::iterator
+      it = OpaqueRValues.find(e);
+    assert(it != OpaqueRValues.end() && "no mapping for opaque value!");
+    return it->second;
+  }
+
   /// getAccessedFieldNo - Given an encoded value and a result number, return
   /// the input field number being accessed.
   static unsigned getAccessedFieldNo(unsigned Idx, const llvm::Constant *Elts);
 
-  llvm::BlockAddress *GetAddrOfLabel(const LabelStmt *L);
+  llvm::BlockAddress *GetAddrOfLabel(const LabelDecl *L);
   llvm::BasicBlock *GetIndirectGotoBlock();
 
   /// EmitNullInitialization - Generate code to set a value of the given type to
@@ -1437,6 +1560,18 @@ public:
   /// EmitParmDecl - Emit a ParmVarDecl or an ImplicitParamDecl.
   void EmitParmDecl(const VarDecl &D, llvm::Value *Arg);
 
+  /// protectFromPeepholes - Protect a value that we're intending to
+  /// store to the side, but which will probably be used later, from
+  /// aggressive peepholing optimizations that might delete it.
+  ///
+  /// Pass the result to unprotectFromPeepholes to declare that
+  /// protection is no longer required.
+  ///
+  /// There's no particular reason why this shouldn't apply to
+  /// l-values, it's just that no existing peepholes work on pointers.
+  PeepholeProtection protectFromPeepholes(RValue rvalue);
+  void unprotectFromPeepholes(PeepholeProtection protection);
+
   //===--------------------------------------------------------------------===//
   //                             Statement Emission
   //===--------------------------------------------------------------------===//
@@ -1465,7 +1600,7 @@ public:
 
   /// EmitLabel - Emit the block for the given label. It is legal to call this
   /// function even if there is no current insertion point.
-  void EmitLabel(const LabelStmt &S); // helper for EmitLabelStmt.
+  void EmitLabel(const LabelDecl *D); // helper for EmitLabelStmt.
 
   void EmitLabelStmt(const LabelStmt &S);
   void EmitGotoStmt(const GotoStmt &S);
@@ -1606,9 +1741,10 @@ public:
   LValue EmitMemberExpr(const MemberExpr *E);
   LValue EmitObjCIsaExpr(const ObjCIsaExpr *E);
   LValue EmitCompoundLiteralLValue(const CompoundLiteralExpr *E);
-  LValue EmitConditionalOperatorLValue(const ConditionalOperator *E);
+  LValue EmitConditionalOperatorLValue(const AbstractConditionalOperator *E);
   LValue EmitCastLValue(const CastExpr *E);
   LValue EmitNullInitializationLValue(const CXXScalarValueInitExpr *E);
+  LValue EmitOpaqueValueLValue(const OpaqueValueExpr *e);
 
   llvm::Value *EmitIvarOffset(const ObjCInterfaceDecl *Interface,
                               const ObjCIvarDecl *Ivar);
@@ -1646,6 +1782,7 @@ public:
   LValue EmitPointerToDataMemberBinaryExpr(const BinaryOperator *E);
   LValue EmitObjCSelectorLValue(const ObjCSelectorExpr *E);
   void   EmitDeclRefExprDbgValue(const DeclRefExpr *E, llvm::Constant *Init);
+
   //===--------------------------------------------------------------------===//
   //                         Scalar Expression Emission
   //===--------------------------------------------------------------------===//

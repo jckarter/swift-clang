@@ -447,6 +447,9 @@ class CXXRecordDecl : public RecordDecl {
   void markedVirtualFunctionPure();
   friend void FunctionDecl::setPure(bool);
   
+  void completeDefinitionImpl(CXXFinalOverriderMap *FinalOverriders);
+  friend class RecordDecl;
+  
 protected:
   CXXRecordDecl(Kind K, TagKind TK, DeclContext *DC,
                 SourceLocation L, IdentifierInfo *Id,
@@ -472,10 +475,10 @@ public:
   typedef std::reverse_iterator<base_class_const_iterator>
     reverse_base_class_const_iterator;
 
-  virtual CXXRecordDecl *getCanonicalDecl() {
+  CXXRecordDecl *getCanonicalDecl() {
     return cast<CXXRecordDecl>(RecordDecl::getCanonicalDecl());
   }
-  virtual const CXXRecordDecl *getCanonicalDecl() const {
+  const CXXRecordDecl *getCanonicalDecl() const {
     return cast<CXXRecordDecl>(RecordDecl::getCanonicalDecl());
   }
   
@@ -993,9 +996,6 @@ public:
     if (DeclAccess == AS_private) return AS_none;
     return (PathAccess > DeclAccess ? PathAccess : DeclAccess);
   }
-
-  /// \brief Indicates that the definition of this class is now complete.
-  virtual void completeDefinition();
 
   /// \brief Indicates that the definition of this class is now complete, 
   /// and provides a final overrider map to help determine
@@ -1922,7 +1922,7 @@ public:
                                     SourceLocation IdentLoc,
                                     NamedDecl *Namespace);
 
-  virtual SourceRange getSourceRange() const {
+  SourceRange getSourceRange() const {
     return SourceRange(NamespaceLoc, IdentLoc);
   }
   

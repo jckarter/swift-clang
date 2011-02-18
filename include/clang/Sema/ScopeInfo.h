@@ -23,7 +23,7 @@ namespace clang {
 
 class BlockDecl;
 class IdentifierInfo;
-class LabelStmt;
+class LabelDecl;
 class ReturnStmt;
 class Scope;
 class SwitchStmt;
@@ -52,11 +52,6 @@ public:
   /// \brief Used to determine if errors occurred in this function or block.
   DiagnosticErrorTrap ErrorTrap;
 
-  /// LabelMap - This is a mapping from label identifiers to the LabelStmt for
-  /// it (which acts like the label decl in some ways).  Forward referenced
-  /// labels have a LabelStmt created for them with a null location & SubStmt.
-  llvm::DenseMap<IdentifierInfo*, LabelStmt*> LabelMap;
-
   /// SwitchStack - This is the current set of active switch statements in the
   /// block.
   llvm::SmallVector<SwitchStmt*, 8> SwitchStack;
@@ -64,7 +59,7 @@ public:
   /// \brief The list of return statements that occur within the function or
   /// block, if there is any chance of applying the named return value
   /// optimization.
-  llvm::SmallVector<ReturnStmt *, 4> Returns;
+  llvm::SmallVector<ReturnStmt*, 4> Returns;
 
   void setHasBranchIntoScope() {
     HasBranchIntoScope = true;

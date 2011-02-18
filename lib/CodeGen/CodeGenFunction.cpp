@@ -668,7 +668,7 @@ CodeGenFunction::EmitNullInitialization(llvm::Value *DestPtr, QualType Ty) {
   Builder.CreateMemSet(DestPtr, Builder.getInt8(0), SizeVal, Align, false);
 }
 
-llvm::BlockAddress *CodeGenFunction::GetAddrOfLabel(const LabelStmt *L) {
+llvm::BlockAddress *CodeGenFunction::GetAddrOfLabel(const LabelDecl *L) {
   // Make sure that there is a block for the indirect goto.
   if (IndirectBranch == 0)
     GetIndirectGotoBlock();
@@ -761,4 +761,31 @@ void CodeGenFunction::EmitDeclRefExprDbgValue(const DeclRefExpr *E,
   assert (Init && "Invalid DeclRefExpr initializer!");
   if (CGDebugInfo *Dbg = getDebugInfo())
     Dbg->EmitGlobalVariable(E->getDecl(), Init);
+}
+
+CodeGenFunction::PeepholeProtection
+CodeGenFunction::protectFromPeepholes(RValue rvalue) {
+  // At the moment, the only aggressive peephole we do in IR gen
+  // is trunc(zext) folding, but if we add more, we can easily
+  // extend this protection.
+
+  if (!rvalue.isScalar()) return PeepholeProtection();
+  llvm::Value *value = rvalue.getScalarVal();
+  if (!isa<llvm::ZExtInst>(value)) return PeepholeProtection();
+
+  // Just make an extra bitcast.
+  assert(HaveInsertPoint());
+  llvm::Instruction *inst = new llvm::BitCastInst(value, value->getType(), "",
+                                                  Builder.GetInsertBlock());
+
+  PeepholeProtection protection;
+  protection.Inst = inst;
+  return protection;
+}
+
+void CodeGenFunction::unprotectFromPeepholes(PeepholeProtection protection) {
+  if (!protection.Inst) return;
+
+  // In theory, we could try to duplicate the peepholes now, but whatever.
+  protection.Inst->eraseFromParent();
 }

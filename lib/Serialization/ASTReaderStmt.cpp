@@ -105,6 +105,7 @@ namespace clang {
     void VisitBinaryOperator(BinaryOperator *E);
     void VisitCompoundAssignOperator(CompoundAssignOperator *E);
     void VisitConditionalOperator(ConditionalOperator *E);
+    void VisitBinaryConditionalOperator(BinaryConditionalOperator *E);
     void VisitImplicitCastExpr(ImplicitCastExpr *E);
     void VisitExplicitCastExpr(ExplicitCastExpr *E);
     void VisitCStyleCastExpr(CStyleCastExpr *E);
@@ -245,12 +246,11 @@ void ASTStmtReader::VisitDefaultStmt(DefaultStmt *S) {
 
 void ASTStmtReader::VisitLabelStmt(LabelStmt *S) {
   VisitStmt(S);
-  S->setID(Reader.GetIdentifierInfo(Record, Idx));
+  LabelDecl *LD = cast<LabelDecl>(Reader.GetDecl(Record[Idx++]));
+  LD->setStmt(S);
+  S->setDecl(LD);
   S->setSubStmt(Reader.ReadSubStmt());
   S->setIdentLoc(ReadSourceLocation(Record, Idx));
-  S->setUsed(Record[Idx++]);
-  S->setUnusedAttribute(Record[Idx++]);
-  Reader.RecordLabelStmt(S, Record[Idx++]);
 }
 
 void ASTStmtReader::VisitIfStmt(IfStmt *S) {
@@ -319,7 +319,7 @@ void ASTStmtReader::VisitForStmt(ForStmt *S) {
 
 void ASTStmtReader::VisitGotoStmt(GotoStmt *S) {
   VisitStmt(S);
-  Reader.SetLabelOf(S, Record[Idx++]);
+  S->setLabel(cast<LabelDecl>(Reader.GetDecl(Record[Idx++])));
   S->setGotoLoc(ReadSourceLocation(Record, Idx));
   S->setLabelLoc(ReadSourceLocation(Record, Idx));
 }
@@ -627,12 +627,25 @@ void ASTStmtReader::VisitCompoundAssignOperator(CompoundAssignOperator *E) {
 
 void ASTStmtReader::VisitConditionalOperator(ConditionalOperator *E) {
   VisitExpr(E);
-  E->setCond(Reader.ReadSubExpr());
-  E->setLHS(Reader.ReadSubExpr());
-  E->setRHS(Reader.ReadSubExpr());
-  E->setSAVE(Reader.ReadSubExpr());
-  E->setQuestionLoc(ReadSourceLocation(Record, Idx));
-  E->setColonLoc(ReadSourceLocation(Record, Idx));
+  E->SubExprs[ConditionalOperator::COND] = Reader.ReadSubExpr();
+  E->SubExprs[ConditionalOperator::LHS] = Reader.ReadSubExpr();
+  E->SubExprs[ConditionalOperator::RHS] = Reader.ReadSubExpr();
+  E->QuestionLoc = ReadSourceLocation(Record, Idx);
+  E->ColonLoc = ReadSourceLocation(Record, Idx);
+}
+
+void
+ASTStmtReader::VisitBinaryConditionalOperator(BinaryConditionalOperator *E) {
+  VisitExpr(E);
+  E->OpaqueValue = cast<OpaqueValueExpr>(Reader.ReadSubExpr());
+  E->SubExprs[BinaryConditionalOperator::COMMON] = Reader.ReadSubExpr();
+  E->SubExprs[BinaryConditionalOperator::COND] = Reader.ReadSubExpr();
+  E->SubExprs[BinaryConditionalOperator::LHS] = Reader.ReadSubExpr();
+  E->SubExprs[BinaryConditionalOperator::RHS] = Reader.ReadSubExpr();
+  E->QuestionLoc = ReadSourceLocation(Record, Idx);
+  E->ColonLoc = ReadSourceLocation(Record, Idx);
+
+  E->getOpaqueValue()->setSourceExpr(E->getCommon());
 }
 
 void ASTStmtReader::VisitImplicitCastExpr(ImplicitCastExpr *E) {
@@ -759,7 +772,7 @@ void ASTStmtReader::VisitAddrLabelExpr(AddrLabelExpr *E) {
   VisitExpr(E);
   E->setAmpAmpLoc(ReadSourceLocation(Record, Idx));
   E->setLabelLoc(ReadSourceLocation(Record, Idx));
-  Reader.SetLabelOf(E, Record[Idx++]);
+  E->setLabel(cast<LabelDecl>(Reader.GetDecl(Record[Idx++])));
 }
 
 void ASTStmtReader::VisitStmtExpr(StmtExpr *E) {
@@ -1323,6 +1336,7 @@ void ASTStmtReader::VisitSubstNonTypeTemplateParmPackExpr(
 
 void ASTStmtReader::VisitOpaqueValueExpr(OpaqueValueExpr *E) {
   VisitExpr(E);
+  Idx++; // skip ID
   E->Loc = ReadSourceLocation(Record, Idx);
 }
 
@@ -1603,6 +1617,10 @@ Stmt *ASTReader::ReadStmtFromStream(PerFileData &F) {
       S = new (Context) ConditionalOperator(Empty);
       break;
 
+    case EXPR_BINARY_CONDITIONAL_OPERATOR:
+      S = new (Context) BinaryConditionalOperator(Empty);
+      break;
+
     case EXPR_IMPLICIT_CAST:
       S = ImplicitCastExpr::CreateEmpty(*Context,
                        /*PathSize*/ Record[ASTStmtReader::NumExprFields]);
@@ -1881,9 +1899,20 @@ Stmt *ASTReader::ReadStmtFromStream(PerFileData &F) {
       S = new (Context) SubstNonTypeTemplateParmPackExpr(Empty);
       break;
         
-    case EXPR_OPAQUE_VALUE:
-      S = new (Context) OpaqueValueExpr(Empty);
+    case EXPR_OPAQUE_VALUE: {
+      unsigned key = Record[ASTStmtReader::NumExprFields];
+      OpaqueValueExpr *&expr = OpaqueValueExprs[key];
+
+      // If we already have an entry for this opaque value expression,
+      // don't bother reading it again.
+      if (expr) {
+        StmtStack.push_back(expr);
+        continue;
+      }
+
+      S = expr = new (Context) OpaqueValueExpr(Empty);
       break;
+    }
 
     case EXPR_CUDA_KERNEL_CALL:
       S = new (Context) CUDAKernelCallExpr(*Context, Empty);

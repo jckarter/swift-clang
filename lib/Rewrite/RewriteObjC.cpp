@@ -3121,7 +3121,7 @@ Stmt *RewriteObjC::SynthMessageExpr(ObjCMessageExpr *Exp,
     ConditionalOperator *CondExpr =
       new (Context) ConditionalOperator(lessThanExpr,
                                         SourceLocation(), CE,
-                                        SourceLocation(), STCE, (Expr*)0,
+                                        SourceLocation(), STCE,
                                         returnType, VK_RValue, OK_Ordinary);
     ReplacingStmt = new (Context) ParenExpr(SourceLocation(), SourceLocation(), 
                                             CondExpr);
@@ -4656,7 +4656,6 @@ Stmt *RewriteObjC::SynthesizeBlockCall(CallExpr *Exp, const Expr *BlockExp) {
       new (Context) ConditionalOperator(CONDExp,
                                       SourceLocation(), cast<Expr>(LHSStmt),
                                       SourceLocation(), cast<Expr>(RHSStmt),
-                                      (Expr*)0,
                                       Exp->getType(), VK_RValue, OK_Ordinary);
     return CondExpr;
   } else if (const ObjCIvarRefExpr *IRE = dyn_cast<ObjCIvarRefExpr>(BlockExp)) {
@@ -5269,6 +5268,7 @@ FunctionDecl *RewriteObjC::SynthBlockInitFunctionDecl(llvm::StringRef name) {
 
 Stmt *RewriteObjC::SynthBlockInitExpr(BlockExpr *Exp,
           const llvm::SmallVector<BlockDeclRefExpr *, 8> &InnerBlockDeclRefs) {
+  const BlockDecl *block = Exp->getBlockDecl();
   Blocks.push_back(Exp);
 
   CollectBlockDeclRefInfo(Exp);
@@ -5412,7 +5412,22 @@ Stmt *RewriteObjC::SynthBlockInitExpr(BlockExpr *Exp,
       FD = SynthBlockInitFunctionDecl((*I)->getName());
       Exp = new (Context) DeclRefExpr(FD, FD->getType(), VK_LValue,
                                       SourceLocation());
-      Exp = new (Context) UnaryOperator(Exp, UO_AddrOf,
+      bool isNestedCapturedVar = false;
+      if (block)
+        for (BlockDecl::capture_const_iterator ci = block->capture_begin(),
+             ce = block->capture_end(); ci != ce; ++ci) {
+          const VarDecl *variable = ci->getVariable();
+          if (variable == ND && ci->isNested()) {
+            assert (ci->isByRef() && 
+                    "SynthBlockInitExpr - captured block variable is not byref");
+            isNestedCapturedVar = true;
+            break;
+          }
+        }
+      // captured nested byref variable has its address passed. Do not take
+      // its address again.
+      if (!isNestedCapturedVar)
+          Exp = new (Context) UnaryOperator(Exp, UO_AddrOf,
                                      Context->getPointerType(Exp->getType()),
                                      VK_RValue, OK_Ordinary, SourceLocation());
       Exp = NoTypeInfoCStyleCastExpr(Context, castT, CK_BitCast, Exp);

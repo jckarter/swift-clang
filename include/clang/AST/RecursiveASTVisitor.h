@@ -1088,6 +1088,11 @@ DEF_TRAVERSE_DECL(NamespaceAliasDecl, {
     return true;
   })
 
+DEF_TRAVERSE_DECL(LabelDecl, {
+  // There is no code in a LabelDecl.
+})
+  
+  
 DEF_TRAVERSE_DECL(NamespaceDecl, {
     // Code in an unnamed namespace shows up automatically in
     // decls_begin()/decls_end().  Thus we don't need to recurse on
@@ -1847,6 +1852,7 @@ DEF_TRAVERSE_STMT(CUDAKernelCallExpr, { })
 
 // These operators (all of them) do not need any action except
 // iterating over the children.
+DEF_TRAVERSE_STMT(BinaryConditionalOperator, { })
 DEF_TRAVERSE_STMT(ConditionalOperator, { })
 DEF_TRAVERSE_STMT(UnaryOperator, { })
 DEF_TRAVERSE_STMT(BinaryOperator, { })

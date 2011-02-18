@@ -510,11 +510,6 @@ LValue CodeGenFunction::EmitCheckedLValue(const Expr *E) {
 /// length type, this is not possible.
 ///
 LValue CodeGenFunction::EmitLValue(const Expr *E) {
-  llvm::DenseMap<const Expr *, LValue>::iterator I = 
-                                      ConditionalSaveLValueExprs.find(E);
-  if (I != ConditionalSaveLValueExprs.end())
-    return I->second;
-  
   switch (E->getStmtClass()) {
   default: return EmitUnsupportedLValue(E, "l-value expression");
 
@@ -581,8 +576,12 @@ LValue CodeGenFunction::EmitLValue(const Expr *E) {
     return EmitCompoundLiteralLValue(cast<CompoundLiteralExpr>(E));
   case Expr::ConditionalOperatorClass:
     return EmitConditionalOperatorLValue(cast<ConditionalOperator>(E));
+  case Expr::BinaryConditionalOperatorClass:
+    return EmitConditionalOperatorLValue(cast<BinaryConditionalOperator>(E));
   case Expr::ChooseExprClass:
     return EmitLValue(cast<ChooseExpr>(E)->getChosenSubExpr(getContext()));
+  case Expr::OpaqueValueExprClass:
+    return EmitOpaqueValueLValue(cast<OpaqueValueExpr>(E));
   case Expr::ImplicitCastExprClass:
   case Expr::CStyleCastExprClass:
   case Expr::CXXFunctionalCastExprClass:
@@ -1673,68 +1672,64 @@ LValue CodeGenFunction::EmitCompoundLiteralLValue(const CompoundLiteralExpr *E){
   return Result;
 }
 
-LValue 
-CodeGenFunction::EmitConditionalOperatorLValue(const ConditionalOperator *E) {
-  if (!E->isGLValue()) {
+LValue CodeGenFunction::
+EmitConditionalOperatorLValue(const AbstractConditionalOperator *expr) {
+  if (!expr->isGLValue()) {
     // ?: here should be an aggregate.
-    assert((hasAggregateLLVMType(E->getType()) &&
-            !E->getType()->isAnyComplexType()) &&
+    assert((hasAggregateLLVMType(expr->getType()) &&
+            !expr->getType()->isAnyComplexType()) &&
            "Unexpected conditional operator!");
-    return EmitAggExprToLValue(E);
+    return EmitAggExprToLValue(expr);
   }
 
-  if (int Cond = ConstantFoldsToSimpleInteger(E->getCond())) {
-    Expr *Live = Cond == 1 ? E->getLHS() : E->getRHS();
-    if (Live)
-      return EmitLValue(Live);
+  const Expr *condExpr = expr->getCond();
+
+  if (int condValue = ConstantFoldsToSimpleInteger(condExpr)) {
+    const Expr *live = expr->getTrueExpr(), *dead = expr->getFalseExpr();
+    if (condValue == -1) std::swap(live, dead);
+
+    if (!ContainsLabel(dead))
+      return EmitLValue(live);
   }
 
-  llvm::BasicBlock *LHSBlock = createBasicBlock("cond.true");
-  llvm::BasicBlock *RHSBlock = createBasicBlock("cond.false");
-  llvm::BasicBlock *ContBlock = createBasicBlock("cond.end");
+  OpaqueValueMapping binding(*this, expr);
+
+  llvm::BasicBlock *lhsBlock = createBasicBlock("cond.true");
+  llvm::BasicBlock *rhsBlock = createBasicBlock("cond.false");
+  llvm::BasicBlock *contBlock = createBasicBlock("cond.end");
 
   ConditionalEvaluation eval(*this);
-    
-  if (E->getLHS())
-    EmitBranchOnBoolExpr(E->getCond(), LHSBlock, RHSBlock);
-  else {
-    Expr *save = E->getSAVE();
-    assert(save && "VisitConditionalOperator - save is null");
-    // Intentianlly not doing direct assignment to ConditionalSaveExprs[save]
-    LValue SaveVal = EmitLValue(save);
-    ConditionalSaveLValueExprs[save] = SaveVal;
-    EmitBranchOnBoolExpr(E->getCond(), LHSBlock, RHSBlock);
-  }
+  EmitBranchOnBoolExpr(condExpr, lhsBlock, rhsBlock);
     
   // Any temporaries created here are conditional.
-  EmitBlock(LHSBlock);
+  EmitBlock(lhsBlock);
   eval.begin(*this);
-  LValue LHS = EmitLValue(E->getTrueExpr());
+  LValue lhs = EmitLValue(expr->getTrueExpr());
   eval.end(*this);
     
-  if (!LHS.isSimple())
-    return EmitUnsupportedLValue(E, "conditional operator");
+  if (!lhs.isSimple())
+    return EmitUnsupportedLValue(expr, "conditional operator");
 
-  LHSBlock = Builder.GetInsertBlock();
-  Builder.CreateBr(ContBlock);
+  lhsBlock = Builder.GetInsertBlock();
+  Builder.CreateBr(contBlock);
     
   // Any temporaries created here are conditional.
-  EmitBlock(RHSBlock);
+  EmitBlock(rhsBlock);
   eval.begin(*this);
-  LValue RHS = EmitLValue(E->getRHS());
+  LValue rhs = EmitLValue(expr->getFalseExpr());
   eval.end(*this);
-  if (!RHS.isSimple())
-    return EmitUnsupportedLValue(E, "conditional operator");
-  RHSBlock = Builder.GetInsertBlock();
+  if (!rhs.isSimple())
+    return EmitUnsupportedLValue(expr, "conditional operator");
+  rhsBlock = Builder.GetInsertBlock();
 
-  EmitBlock(ContBlock);
+  EmitBlock(contBlock);
 
-  llvm::PHINode *phi = Builder.CreatePHI(LHS.getAddress()->getType(),
+  llvm::PHINode *phi = Builder.CreatePHI(lhs.getAddress()->getType(),
                                          "cond-lvalue");
   phi->reserveOperandSpace(2);
-  phi->addIncoming(LHS.getAddress(), LHSBlock);
-  phi->addIncoming(RHS.getAddress(), RHSBlock);
-  return MakeAddrLValue(phi, E->getType());
+  phi->addIncoming(lhs.getAddress(), lhsBlock);
+  phi->addIncoming(rhs.getAddress(), rhsBlock);
+  return MakeAddrLValue(phi, expr->getType());
 }
 
 /// EmitCastLValue - Casts are never lvalues unless that cast is a dynamic_cast.
@@ -1886,6 +1881,11 @@ LValue CodeGenFunction::EmitNullInitializationLValue(
   LValue LV = MakeAddrLValue(CreateMemTemp(Ty), Ty);
   EmitNullInitialization(LV.getAddress(), Ty);
   return LV;
+}
+
+LValue CodeGenFunction::EmitOpaqueValueLValue(const OpaqueValueExpr *e) {
+  assert(e->isGLValue() || e->getType()->isRecordType());
+  return getOpaqueLValueMapping(e);
 }
 
 //===--------------------------------------------------------------------===//

@@ -859,7 +859,6 @@ void ExprEngine::Visit(const Stmt* S, ExplodedNode* Pred,
     case Stmt::LabelStmtClass:
     case Stmt::NoStmtClass:
     case Stmt::NullStmtClass:
-    case Stmt::OpaqueValueExprClass:
       llvm_unreachable("Stmt should not be in analyzer evaluation loop");
       break;
 
@@ -894,6 +893,7 @@ void ExprEngine::Visit(const Stmt* S, ExplodedNode* Pred,
     case Stmt::ShuffleVectorExprClass:
     case Stmt::VAArgExprClass:
     case Stmt::CUDAKernelCallExprClass:
+    case Stmt::OpaqueValueExprClass:
         // Fall through.
 
     // Cases we intentionally don't evaluate, since they don't need
@@ -1003,9 +1003,11 @@ void ExprEngine::Visit(const Stmt* S, ExplodedNode* Pred,
       VisitCompoundLiteralExpr(cast<CompoundLiteralExpr>(S), Pred, Dst);
       break;
 
+    case Stmt::BinaryConditionalOperatorClass:
     case Stmt::ConditionalOperatorClass: { // '?' operator
-      const ConditionalOperator* C = cast<ConditionalOperator>(S);
-      VisitGuardedExpr(C, C->getLHS(), C->getRHS(), Pred, Dst);
+      const AbstractConditionalOperator *C
+        = cast<AbstractConditionalOperator>(S);
+      VisitGuardedExpr(C, C->getTrueExpr(), C->getFalseExpr(), Pred, Dst);
       break;
     }
 
@@ -1206,9 +1208,10 @@ const GRState* ExprEngine::MarkBranch(const GRState* state,
       return state->BindExpr(B, UndefinedVal(Ex));
     }
 
+    case Stmt::BinaryConditionalOperatorClass:
     case Stmt::ConditionalOperatorClass: { // ?:
-
-      const ConditionalOperator* C = cast<ConditionalOperator>(Terminator);
+      const AbstractConditionalOperator* C
+        = cast<AbstractConditionalOperator>(Terminator);
 
       // For ?, if branchTaken == true then the value is either the LHS or
       // the condition itself. (GNU extension).
@@ -1216,9 +1219,9 @@ const GRState* ExprEngine::MarkBranch(const GRState* state,
       const Expr* Ex;
 
       if (branchTaken)
-        Ex = C->getLHS() ? C->getLHS() : C->getCond();
+        Ex = C->getTrueExpr();
       else
-        Ex = C->getRHS();
+        Ex = C->getFalseExpr();
 
       return state->BindExpr(C, UndefinedVal(Ex));
     }
@@ -1344,7 +1347,7 @@ void ExprEngine::processBranch(const Stmt* Condition, const Stmt* Term,
 
 /// processIndirectGoto - Called by CoreEngine.  Used to generate successor
 ///  nodes by processing the 'effects' of a computed goto jump.
-void ExprEngine::processIndirectGoto(IndirectGotoNodeBuilder& builder) {
+void ExprEngine::processIndirectGoto(IndirectGotoNodeBuilder &builder) {
 
   const GRState *state = builder.getState();
   SVal V = state->getSVal(builder.getTarget());
@@ -1359,16 +1362,16 @@ void ExprEngine::processIndirectGoto(IndirectGotoNodeBuilder& builder) {
   typedef IndirectGotoNodeBuilder::iterator iterator;
 
   if (isa<loc::GotoLabel>(V)) {
-    const LabelStmt* L = cast<loc::GotoLabel>(V).getLabel();
+    const LabelDecl *L = cast<loc::GotoLabel>(V).getLabel();
 
-    for (iterator I=builder.begin(), E=builder.end(); I != E; ++I) {
+    for (iterator I = builder.begin(), E = builder.end(); I != E; ++I) {
       if (I.getLabel() == L) {
         builder.generateNode(I, state);
         return;
       }
     }
 
-    assert (false && "No block with label.");
+    assert(false && "No block with label.");
     return;
   }
 
@@ -2280,7 +2283,7 @@ void ExprEngine::VisitObjCForCollectionStmtAux(const ObjCForCollectionStmt* S,
         //  container.  We will do this with dispatch logic to the store.
         //  For now, just 'conjure' up a symbolic value.
         QualType T = R->getValueType();
-        assert(Loc::IsLocType(T));
+        assert(Loc::isLocType(T));
         unsigned Count = Builder->getCurrentBlockCount();
         SymbolRef Sym = SymMgr.getConjuredSymbol(elem, T, Count);
         SVal V = svalBuilder.makeLoc(Sym);
@@ -2798,7 +2801,7 @@ void ExprEngine::VisitInitListExpr(const InitListExpr* E, ExplodedNode* Pred,
     return;
   }
 
-  if (Loc::IsLocType(T) || T->isIntegerType()) {
+  if (Loc::isLocType(T) || T->isIntegerType()) {
     assert (E->getNumInits() == 1);
     ExplodedNodeSet Tmp;
     const Expr* Init = E->getInit(0);
@@ -3103,7 +3106,7 @@ void ExprEngine::VisitUnaryOperator(const UnaryOperator* U,
         // If the value is a location, ++/-- should always preserve
         // non-nullness.  Check if the original value was non-null, and if so
         // propagate that constraint.
-        if (Loc::IsLocType(U->getType())) {
+        if (Loc::isLocType(U->getType())) {
           DefinedOrUnknownSVal Constraint =
             svalBuilder.evalEQ(state, V2,svalBuilder.makeZeroVal(U->getType()));
 

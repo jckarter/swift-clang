@@ -795,8 +795,9 @@ ExprResult Parser::ParseCastExpression(bool isUnaryExpression,
       return ExprError(Diag(Tok, diag::err_expected_ident));
 
     Diag(AmpAmpLoc, diag::ext_gnu_address_of_label);
-    Res = Actions.ActOnAddrLabel(AmpAmpLoc, Tok.getLocation(),
-                                 Tok.getIdentifierInfo());
+    LabelDecl *LD = Actions.LookupOrCreateLabel(Tok.getIdentifierInfo(),
+                                                Tok.getLocation());
+    Res = Actions.ActOnAddrLabel(AmpAmpLoc, Tok.getLocation(), LD);
     ConsumeToken();
     return move(Res);
   }
@@ -1801,6 +1802,8 @@ bool Parser::ParseExpressionList(llvm::SmallVectorImpl<Expr*> &Exprs,
     if (Tok.is(tok::code_completion)) {
       if (Completer)
         (Actions.*Completer)(getCurScope(), Data, Exprs.data(), Exprs.size());
+      else
+        Actions.CodeCompleteOrdinaryName(getCurScope(), Sema::PCC_Expression);
       ConsumeCodeCompletionToken();
     }
     

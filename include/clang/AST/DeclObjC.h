@@ -182,8 +182,9 @@ private:
   /// \brief A definition will return its interface declaration.
   /// An interface declaration will return its definition.
   /// Otherwise it will return itself.
-  virtual ObjCMethodDecl *getNextRedeclaration();
-
+  ObjCMethodDecl *getNextRedeclaration();
+  friend class Decl;
+  
 public:
   static ObjCMethodDecl *Create(ASTContext &C,
                                 SourceLocation beginLoc,
@@ -198,7 +199,7 @@ public:
                                 ImplementationControl impControl = None,
                                 unsigned numSelectorArgs = 0);
 
-  virtual ObjCMethodDecl *getCanonicalDecl();
+  ObjCMethodDecl *getCanonicalDecl();
   const ObjCMethodDecl *getCanonicalDecl() const {
     return const_cast<ObjCMethodDecl*>(this)->getCanonicalDecl();
   }
@@ -217,7 +218,7 @@ public:
   SourceLocation getLocStart() const { return getLocation(); }
   SourceLocation getLocEnd() const { return EndLoc; }
   void setEndLoc(SourceLocation Loc) { EndLoc = Loc; }
-  virtual SourceRange getSourceRange() const {
+  SourceRange getSourceRange() const {
     return SourceRange(getLocation(), EndLoc);
   }
 
@@ -300,7 +301,7 @@ public:
     return ImplementationControl(DeclImplementation);
   }
 
-  virtual Stmt *getBody() const {
+  Stmt *getBody() const {
     return (Stmt*) Body;
   }
   CompoundStmt *getCompoundBody() { return (CompoundStmt*)Body; }
@@ -393,7 +394,7 @@ public:
     AtEnd = atEnd;
   }
 
-  virtual SourceRange getSourceRange() const {
+  SourceRange getSourceRange() const {
     return SourceRange(getLocation(), getAtEndRange().getEnd());
   }
 
@@ -449,8 +450,11 @@ class ObjCInterfaceDecl : public ObjCContainerDecl {
   /// Protocols reference in both the @interface and class extensions.
   ObjCList<ObjCProtocolDecl> AllReferencedProtocols;
 
-  /// List of categories defined for this class.
-  /// FIXME: Why is this a linked list??
+  /// \brief List of categories and class extensions defined for this class.
+  ///
+  /// Categories are stored as a linked list in the AST, since the categories
+  /// and class extensions come long after the initial interface declaration,
+  /// and we avoid dynamically-resized arrays in the AST whereever possible.
   ObjCCategoryDecl *CategoryList;
   
   /// IvarList - List of all ivars defined by this class; including class
@@ -883,7 +887,7 @@ public:
                                const SourceLocation *Locs = 0,
                                unsigned nElts = 0);
   
-  virtual SourceRange getSourceRange() const;
+  SourceRange getSourceRange() const;
 
   typedef const ObjCClassRef* iterator;
   iterator begin() const { return ForwardDecls; }
@@ -1064,7 +1068,7 @@ public:
   SourceLocation getCategoryNameLoc() const { return CategoryNameLoc; }
   void setCategoryNameLoc(SourceLocation Loc) { CategoryNameLoc = Loc; }
 
-  virtual SourceRange getSourceRange() const {
+  SourceRange getSourceRange() const {
     return SourceRange(AtLoc, getAtEndRange().getEnd());
   }
 
@@ -1475,7 +1479,7 @@ public:
     return PropertyIvarDecl;
   }
 
-  virtual SourceRange getSourceRange() const {
+  SourceRange getSourceRange() const {
     return SourceRange(AtLoc, getLocation());
   }
 
@@ -1541,7 +1545,7 @@ public:
                                       ObjCIvarDecl *ivarDecl,
                                       SourceLocation ivarLoc);
 
-  virtual SourceRange getSourceRange() const;
+  SourceRange getSourceRange() const;
   
   SourceLocation getLocStart() const { return AtLoc; }
   void setAtLoc(SourceLocation Loc) { AtLoc = Loc; }
