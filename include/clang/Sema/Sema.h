@@ -600,6 +600,10 @@ public:
   // argument locations.
   llvm::DenseMap<ParmVarDecl *,SourceLocation> UnparsedDefaultArgLocs;
 
+  /// UndefinedInternals - all the used, undefined objects with
+  /// internal linkage in this translation unit.
+  llvm::DenseMap<NamedDecl*, SourceLocation> UndefinedInternals;
+
   typedef std::pair<ObjCMethodList, ObjCMethodList> GlobalMethods;
   typedef llvm::DenseMap<Selector, GlobalMethods> GlobalMethodPool;
 
@@ -4773,6 +4777,9 @@ public:
 
   QualType FindCompositeObjCPointerType(Expr *&LHS, Expr *&RHS,
                                         SourceLocation questionLoc);
+
+  bool DiagnoseConditionalForNull(Expr *LHS, Expr *RHS,
+                                  SourceLocation QuestionLoc);
 
   /// type checking for vector binary operators.
   QualType CheckVectorOperands(SourceLocation l, Expr *&lex, Expr *&rex);

@@ -500,7 +500,7 @@ def err_partial_specialization_friend : Error<
 def err_abstract_type_in_decl : Error<
   "%select{return|parameter|variable|field}0 type %1 is an abstract class">;
 def err_allocation_of_abstract_type : Error<
-  "allocation of an object of abstract type %0">;
+  "allocating an object of abstract class type %0">;
 def err_throw_abstract_type : Error<
   "cannot throw an object of abstract type %0">;
 def err_array_of_abstract_type : Error<"array of abstract class type %0">;
@@ -517,7 +517,7 @@ def err_type_defined_in_param_type : Error<
   "%0 can not be defined in a parameter type">;
 
 def note_pure_virtual_function : Note<
-  "pure virtual function %0">;
+  "unimplemented pure virtual method %0 in %1">;
 
 def err_deleted_non_function : Error<
   "only functions can have deleted definitions">;
@@ -1997,6 +1997,11 @@ def err_definition_of_implicitly_declared_member : Error<
 def err_redefinition_extern_inline : Error<
   "redefinition of a 'extern inline' function %0 is not supported in "
   "%select{C99 mode|C++}1">;
+
+// This should eventually be an error.
+def warn_undefined_internal : Warning<
+  "%select{function|variable}0 %q1 has internal linkage but is not defined">;
+def note_used_here : Note<"used here">;
   
 def warn_redefinition_of_typedef : Warning<
   "redefinition of typedef %0 is invalid in C">,
@@ -3147,6 +3152,8 @@ def err_incomplete_type_used_in_type_trait_expr : Error<
   "incomplete type %0 used in type trait expression">;
 def err_expected_ident_or_lparen : Error<"expected identifier or '('">;
 
+def err_typecheck_cond_incompatible_operands_null : Error<
+  "non-pointer operand type %0 incompatible with %select{NULL|nullptr}1">;
 } // End of general sema category.
 
 // inline asm.

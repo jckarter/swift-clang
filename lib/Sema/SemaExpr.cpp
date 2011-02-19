@@ -5229,6 +5229,46 @@ ExprResult Sema::ActOnParenOrParenListExpr(SourceLocation L,
   return Owned(expr);
 }
 
+/// \brief Emit a specialized diagnostic when one expression is a null pointer
+/// constant and the other is not a pointer.
+bool Sema::DiagnoseConditionalForNull(Expr *LHS, Expr *RHS,
+                                      SourceLocation QuestionLoc) {
+  Expr *NullExpr = LHS;
+  Expr *NonPointerExpr = RHS;
+  Expr::NullPointerConstantKind NullKind =
+      NullExpr->isNullPointerConstant(Context,
+                                      Expr::NPC_ValueDependentIsNotNull);
+
+  if (NullKind == Expr::NPCK_NotNull) {
+    NullExpr = RHS;
+    NonPointerExpr = LHS;
+    NullKind =
+        NullExpr->isNullPointerConstant(Context,
+                                        Expr::NPC_ValueDependentIsNotNull);
+  }
+
+  if (NullKind == Expr::NPCK_NotNull)
+    return false;
+
+  if (NullKind == Expr::NPCK_ZeroInteger) {
+    // In this case, check to make sure that we got here from a "NULL"
+    // string in the source code.
+    NullExpr = NullExpr->IgnoreParenImpCasts();
+    SourceManager& SM = Context.getSourceManager();
+    SourceLocation Loc = SM.getInstantiationLoc(NullExpr->getExprLoc());
+    unsigned Len =
+        Lexer::MeasureTokenLength(Loc, SM, Context.getLangOptions());
+    if (Len != 4 || memcmp(SM.getCharacterData(Loc), "NULL", 4))
+      return false;
+  }
+
+  int DiagType = (NullKind == Expr::NPCK_CXX0X_nullptr);
+  Diag(QuestionLoc, diag::err_typecheck_cond_incompatible_operands_null)
+      << NonPointerExpr->getType() << DiagType
+      << NonPointerExpr->getSourceRange();
+  return true;
+}
+
 /// Note that lhs is not null here, even if this is the gnu "x ?: y" extension.
 /// In that case, lhs = cond.
 /// C99 6.5.15
@@ -5470,6 +5510,12 @@ QualType Sema::CheckConditionalOperands(Expr *&Cond, Expr *&LHS, Expr *&RHS,
     ImpCastExprToType(RHS, LHSTy, CK_IntegralToPointer);
     return LHSTy;
   }
+
+  // Emit a better diagnostic if one of the expressions is a null pointer
+  // constant and the other is not a pointer type. In this case, the user most
+  // likely forgot to take the address of the other expression.
+  if (DiagnoseConditionalForNull(LHS, RHS, QuestionLoc))
+    return QualType();
 
   // Otherwise, the operands are not compatible.
   Diag(QuestionLoc, diag::err_typecheck_cond_incompatible_operands)
@@ -6772,7 +6818,7 @@ QualType Sema::CheckCompareOperands(Expr *&lex, Expr *&rex, SourceLocation Loc,
   rType = rex->getType();
 
   // The result of comparisons is 'bool' in C++, 'int' in C.
-  QualType ResultTy = getLangOptions().CPlusPlus ? Context.BoolTy:Context.IntTy;
+  QualType ResultTy = Context.getLogicalOperationType();
 
   if (isRelational) {
     if (lType->isRealType() && rType->isRealType())
@@ -7051,7 +7097,7 @@ QualType Sema::CheckVectorCompareOperands(Expr *&lex, Expr *&rex,
   // If AltiVec, the comparison results in a numeric type, i.e.
   // bool for C++, int for C
   if (getLangOptions().AltiVec)
-    return (getLangOptions().CPlusPlus ? Context.BoolTy : Context.IntTy);
+    return Context.getLogicalOperationType();
 
   QualType lType = lex->getType();
   QualType rType = rex->getType();
@@ -8303,7 +8349,7 @@ ExprResult Sema::CreateBuiltinUnaryOp(SourceLocation OpLoc,
     
     // LNot always has type int. C99 6.5.3.3p5.
     // In C++, it's bool. C++ 5.3.1p8
-    resultType = getLangOptions().CPlusPlus ? Context.BoolTy : Context.IntTy;
+    resultType = Context.getLogicalOperationType();
     break;
   case UO_Real:
   case UO_Imag:
@@ -9238,6 +9284,9 @@ void Sema::MarkDeclarationReferenced(SourceLocation Loc, Decl *D) {
       MarkVTableUsed(Loc, MethodDecl->getParent());
   }
   if (FunctionDecl *Function = dyn_cast<FunctionDecl>(D)) {
+    // Recursive functions should be marked when used from another function.
+    if (CurContext == Function) return;
+
     // Implicit instantiation of function templates and member functions of
     // class templates.
     if (Function->isImplicitlyInstantiable()) {
@@ -9266,19 +9315,23 @@ void Sema::MarkDeclarationReferenced(SourceLocation Loc, Decl *D) {
         else
           PendingInstantiations.push_back(std::make_pair(Function, Loc));
       }
-    } else // Walk redefinitions, as some of them may be instantiable.
+    } else {
+      // Walk redefinitions, as some of them may be instantiable.
       for (FunctionDecl::redecl_iterator i(Function->redecls_begin()),
            e(Function->redecls_end()); i != e; ++i) {
         if (!i->isUsed(false) && i->isImplicitlyInstantiable())
           MarkDeclarationReferenced(Loc, *i);
       }
+    }
 
-    // FIXME: keep track of references to static functions
+    // Keep track of used but undefined functions.
+    if (!Function->isPure() && !Function->hasBody() &&
+        Function->getLinkage() != ExternalLinkage) {
+      SourceLocation &old = UndefinedInternals[Function->getCanonicalDecl()];
+      if (old.isInvalid()) old = Loc;
+    }
 
-    // Recursive functions should be marked when used from another function.
-    if (CurContext != Function)
-      Function->setUsed(true);
-
+    Function->setUsed(true);
     return;
   }
 
@@ -9295,7 +9348,12 @@ void Sema::MarkDeclarationReferenced(SourceLocation Loc, Decl *D) {
       }
     }
 
-    // FIXME: keep track of references to static data?
+    // Keep track of used but undefined variables.
+    if (Var->hasDefinition() == VarDecl::DeclarationOnly
+        && Var->getLinkage() != ExternalLinkage) {
+      SourceLocation &old = UndefinedInternals[Var->getCanonicalDecl()];
+      if (old.isInvalid()) old = Loc;
+    }
 
     D->setUsed(true);
     return;
@@ -9487,13 +9545,11 @@ void Sema::DiagnoseAssignmentAsCondition(Expr *E) {
       Selector Sel = ME->getSelector();
 
       // self = [<foo> init...]
-      if (isSelfExpr(Op->getLHS())
-          && Sel.getIdentifierInfoForSlot(0)->getName().startswith("init"))
+      if (isSelfExpr(Op->getLHS()) && Sel.getNameForSlot(0).startswith("init"))
         diagnostic = diag::warn_condition_is_idiomatic_assignment;
 
       // <foo> = [<bar> nextObject]
-      else if (Sel.isUnarySelector() &&
-               Sel.getIdentifierInfoForSlot(0)->getName() == "nextObject")
+      else if (Sel.isUnarySelector() && Sel.getNameForSlot(0) == "nextObject")
         diagnostic = diag::warn_condition_is_idiomatic_assignment;
     }
 
