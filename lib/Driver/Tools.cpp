@@ -938,14 +938,11 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
         CmdArgs.push_back("-analyzer-checker=cocoa");
       }
 
-      // Checks to perform for all languages *except* C++.
-      if (!types::isCXX(InputType)) {
-        // NOTE: Leaving -analyzer-check-objc-mem here is intentional.
-        // It also checks C code.
-        CmdArgs.push_back("-analyzer-check-objc-mem");
+      // NOTE: Leaving -analyzer-check-objc-mem here is intentional.
+      // It also checks C code.
+      CmdArgs.push_back("-analyzer-check-objc-mem");
 
-        CmdArgs.push_back("-analyzer-eagerly-assume");
-      }
+      CmdArgs.push_back("-analyzer-eagerly-assume");
     }
 
     // Set the output format. The default is plist, for (lame) historical
@@ -1548,6 +1545,11 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
                      getToolChain().IsObjCDefaultSynthPropertiesDefault())) {
       CmdArgs.push_back("-fobjc-default-synthesize-properties");
     }
+
+    // -fobjc-exceptions is default.
+    if (!Args.hasFlag(options::OPT_fobjc_exceptions, 
+                      options::OPT_fno_objc_exceptions))
+      CmdArgs.push_back("-fno-objc-exceptions");
   }
 
   if (!Args.hasFlag(options::OPT_fassume_sane_operator_new,

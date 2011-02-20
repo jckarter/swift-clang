@@ -380,10 +380,6 @@ void ASTContext::InitBuiltinTypes() {
   // Placeholder type for functions.
   InitBuiltinType(OverloadTy,          BuiltinType::Overload);
 
-  // Placeholder type for C++0x auto declarations whose real type has
-  // not yet been deduced.
-  InitBuiltinType(UndeducedAutoTy,     BuiltinType::UndeducedAuto);
-
   // C99 6.2.5p11.
   FloatComplexTy      = getComplexType(FloatTy);
   DoubleComplexTy     = getComplexType(DoubleTy);
@@ -652,14 +648,14 @@ CharUnits ASTContext::getDeclAlign(const Decl *D, bool RefAsPointee) const {
 }
 
 std::pair<CharUnits, CharUnits>
-ASTContext::getTypeInfoInChars(const Type *T) {
+ASTContext::getTypeInfoInChars(const Type *T) const {
   std::pair<uint64_t, unsigned> Info = getTypeInfo(T);
   return std::make_pair(toCharUnitsFromBits(Info.first),
                         toCharUnitsFromBits(Info.second));
 }
 
 std::pair<CharUnits, CharUnits>
-ASTContext::getTypeInfoInChars(QualType T) {
+ASTContext::getTypeInfoInChars(QualType T) const {
   return getTypeInfoInChars(T.getTypePtr());
 }
 
@@ -875,6 +871,12 @@ ASTContext::getTypeInfo(const Type *T) const {
     return getTypeInfo(cast<SubstTemplateTypeParmType>(T)->
                        getReplacementType().getTypePtr());
 
+  case Type::Auto: {
+    const AutoType *A = cast<AutoType>(T);
+    assert(A->isDeduced() && "Cannot request the size of a dependent type");
+    return getTypeInfo(cast<AutoType>(T)->getDeducedType().getTypePtr());
+  }
+
   case Type::Paren:
     return getTypeInfo(cast<ParenType>(T)->getInnerType().getTypePtr());
 
@@ -882,7 +884,13 @@ ASTContext::getTypeInfo(const Type *T) const {
     const TypedefDecl *Typedef = cast<TypedefType>(T)->getDecl();
     std::pair<uint64_t, unsigned> Info
       = getTypeInfo(Typedef->getUnderlyingType().getTypePtr());
-    Align = std::max(Typedef->getMaxAlignment(), Info.second);
+    // If the typedef has an aligned attribute on it, it overrides any computed
+    // alignment we have.  This violates the GCC documentation (which says that
+    // attribute(aligned) can only round up) but matches its implementation.
+    if (unsigned AttrAlign = Typedef->getMaxAlignment())
+      Align = AttrAlign;
+    else
+      Align = Info.second;
     Width = Info.first;
     break;
   }
@@ -1526,6 +1534,7 @@ QualType ASTContext::getVariableArrayDecayedType(QualType type) const {
   case Type::DependentTemplateSpecialization:
   case Type::TemplateTypeParm:
   case Type::SubstTemplateTypeParmPack:
+  case Type::Auto:
   case Type::PackExpansion:
     llvm_unreachable("type should never be variably-modified");
 
@@ -2672,6 +2681,14 @@ QualType ASTContext::getDecltypeType(Expr *e) const {
   }
   Types.push_back(dt);
   return QualType(dt, 0);
+}
+
+/// getAutoType - Unlike many "get<Type>" functions, we don't unique
+/// AutoType AST's.
+QualType ASTContext::getAutoType(QualType DeducedType) const {
+  AutoType *at = new (*this, TypeAlignment) AutoType(DeducedType);
+  Types.push_back(at);
+  return QualType(at, 0);
 }
 
 /// getTagDeclType - Return the unique reference to the type for the

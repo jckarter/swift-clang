@@ -892,16 +892,31 @@ def err_cannot_determine_declared_type_of_overloaded_function : Error<
 def err_auto_variable_cannot_appear_in_own_initializer : Error<
   "variable %0 declared with 'auto' type cannot appear in its own initializer">;
 def err_illegal_decl_array_of_auto : Error<
-  "'%0' declared as array of 'auto'">;
+  "'%0' declared as array of %1">;
+def err_new_array_of_auto : Error<
+  "cannot allocate array of 'auto'">;
 def err_auto_not_allowed : Error<
-  "'auto' not allowed in %select{function prototype|struct member|union member"
-  "|class member|exception declaration|template parameter|block literal}0">;
+  "'auto' not allowed %select{in function prototype|in struct member"
+  "|in union member|in class member|in exception declaration"
+  "|in template parameter|in block literal|in template argument|here}0">;
 def err_auto_var_requires_init : Error<
   "declaration of variable %0 with type %1 requires an initializer">;
+def err_auto_new_requires_ctor_arg : Error<
+  "new expression for type %0 requires a constructor argument">;
+def err_auto_var_init_multiple_expressions : Error<
+  "initializer for variable %0 with type %1 contains multiple expressions">;
+def err_auto_new_ctor_multiple_expressions : Error<
+  "new expression for type %0 contains multiple constructor arguments">;
 def err_auto_missing_trailing_return : Error<
   "'auto' return without trailing return type">;
 def err_trailing_return_without_auto : Error<
-  "trailing return type without 'auto' return">;
+  "function with trailing return type must specify return type 'auto', not %0">;
+def err_auto_var_deduction_failure : Error<
+  "variable %0 with type %1 has incompatible initializer of type %2">;
+def err_auto_new_deduction_failure : Error<
+  "new expression for type %0 has incompatible constructor argument of type %1">;
+def err_auto_different_deductions : Error<
+  "'auto' deduced as %0 in declaration of %1 and deduced as %2 in declaration of %3">;
 
 // C++0x override control
 def override_keyword_only_allowed_on_virtual_member_functions : Error<
@@ -2686,6 +2701,10 @@ def err_bad_reinterpret_cast_overload : Error<
 def err_bad_static_cast_overload : Error<
   "address of overloaded function %0 cannot be static_cast to type %1">;
 
+def err_bad_cstyle_cast_overload : Error<
+  "address of overloaded function %0 cannot be cast to type %1">;
+
+
 def err_bad_cxx_cast_generic : Error<
   "%select{const_cast|static_cast|reinterpret_cast|dynamic_cast|C-style cast|"
   "functional-style cast}0 from %1 to %2 is not allowed">;
@@ -2823,6 +2842,10 @@ def err_bad_memptr_lhs : Error<
 def warn_exception_caught_by_earlier_handler : Warning<
   "exception of type %0 will be caught by earlier handler">;
 def note_previous_exception_handler : Note<"for type %0">;
+def err_exceptions_disabled : Error<
+  "cannot use '%0' with exceptions disabled">;
+def err_objc_exceptions_disabled : Error<
+  "cannot use '%0' with Objective-C exceptions disabled">;
 def warn_non_virtual_dtor : Warning<
   "%0 has virtual functions but non-virtual destructor">,
   InGroup<NonVirtualDtor>, DefaultIgnore;

@@ -412,7 +412,7 @@ public:
   CanQualType FloatTy, DoubleTy, LongDoubleTy;
   CanQualType FloatComplexTy, DoubleComplexTy, LongDoubleComplexTy;
   CanQualType VoidPtrTy, NullPtrTy;
-  CanQualType OverloadTy, UndeducedAutoTy;
+  CanQualType OverloadTy;
   CanQualType DependentTy;
   CanQualType ObjCBuiltinIdTy, ObjCBuiltinClassTy, ObjCBuiltinSelTy;
 
@@ -740,6 +740,9 @@ public:
   /// getDecltypeType - C++0x decltype.
   QualType getDecltypeType(Expr *e) const;
 
+  /// getAutoType - C++0x deduced auto type.
+  QualType getAutoType(QualType DeducedType) const;
+
   /// getTagDeclType - Return the unique reference to the type for the
   /// specified TagDecl (struct/union/class/enum) decl.
   QualType getTagDeclType(const TagDecl *Decl) const;
@@ -1042,8 +1045,8 @@ public:
   CharUnits getTypeAlignInChars(QualType T) const;
   CharUnits getTypeAlignInChars(const Type *T) const;
 
-  std::pair<CharUnits, CharUnits> getTypeInfoInChars(const Type *T);
-  std::pair<CharUnits, CharUnits> getTypeInfoInChars(QualType T);
+  std::pair<CharUnits, CharUnits> getTypeInfoInChars(const Type *T) const;
+  std::pair<CharUnits, CharUnits> getTypeInfoInChars(QualType T) const;
 
   /// getPreferredTypeAlign - Return the "preferred" alignment of the specified
   /// type for the current target in bits.  This can be different than the ABI

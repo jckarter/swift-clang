@@ -98,6 +98,7 @@ PCHValidator::ReadLanguageOptions(const LangOptions &LangOpts) {
   PARSE_LANGOPT_IMPORTANT(AltiVec, diag::warn_pch_altivec);
   PARSE_LANGOPT_IMPORTANT(Exceptions, diag::warn_pch_exceptions);
   PARSE_LANGOPT_IMPORTANT(SjLjExceptions, diag::warn_pch_sjlj_exceptions);
+  PARSE_LANGOPT_IMPORTANT(ObjCExceptions, diag::warn_pch_objc_exceptions);
   PARSE_LANGOPT_IMPORTANT(MSBitfields, diag::warn_pch_ms_bitfields);
   PARSE_LANGOPT_IMPORTANT(NeXTRuntime, diag::warn_pch_objc_runtime);
   PARSE_LANGOPT_IMPORTANT(Freestanding, diag::warn_pch_freestanding);
@@ -2799,6 +2800,7 @@ bool ASTReader::ParseLanguageOptions(
     PARSE_LANGOPT(AltiVec);
     PARSE_LANGOPT(Exceptions);
     PARSE_LANGOPT(SjLjExceptions);
+    PARSE_LANGOPT(ObjCExceptions);
     PARSE_LANGOPT(MSBitfields);
     PARSE_LANGOPT(NeXTRuntime);
     PARSE_LANGOPT(Freestanding);
@@ -3144,6 +3146,9 @@ QualType ASTReader::ReadTypeRecord(unsigned Index) {
   case TYPE_DECLTYPE:
     return Context->getDecltypeType(ReadExpr(*Loc.F));
 
+  case TYPE_AUTO:
+    return Context->getAutoType(GetType(Record[0]));
+
   case TYPE_RECORD: {
     if (Record.size() != 2) {
       Error("incorrect encoding of record type");
@@ -3453,6 +3458,9 @@ void TypeLocReader::VisitTypeOfTypeLoc(TypeOfTypeLoc TL) {
   TL.setUnderlyingTInfo(Reader.GetTypeSourceInfo(F, Record, Idx));
 }
 void TypeLocReader::VisitDecltypeTypeLoc(DecltypeTypeLoc TL) {
+  TL.setNameLoc(ReadSourceLocation(Record, Idx));
+}
+void TypeLocReader::VisitAutoTypeLoc(AutoTypeLoc TL) {
   TL.setNameLoc(ReadSourceLocation(Record, Idx));
 }
 void TypeLocReader::VisitRecordTypeLoc(RecordTypeLoc TL) {
