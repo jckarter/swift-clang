@@ -1593,14 +1593,19 @@ InitListChecker::CheckDesignatedInitializer(const InitializedEntity &Entity,
   } else {
     assert(D->isArrayRangeDesignator() && "Need array-range designator");
 
-
     DesignatedStartIndex =
       DIE->getArrayRangeStart(*D)->EvaluateAsInt(SemaRef.Context);
     DesignatedEndIndex =
       DIE->getArrayRangeEnd(*D)->EvaluateAsInt(SemaRef.Context);
     IndexExpr = DIE->getArrayRangeEnd(*D);
 
-    if (DesignatedStartIndex.getZExtValue() !=DesignatedEndIndex.getZExtValue())
+    // Codegen can't handle evaluating array range designators that have side
+    // effects, because we replicate the AST value for each initialized element.
+    // As such, set the sawArrayRangeDesignator() bit if we initialize multiple
+    // elements with something that has a side effect, so codegen can emit an
+    // "error unsupported" error instead of miscompiling the app.
+    if (DesignatedStartIndex.getZExtValue()!=DesignatedEndIndex.getZExtValue()&&
+        DIE->getInit()->HasSideEffects(SemaRef.Context))
       FullyStructuredList->sawArrayRangeDesignator();
   }
 
@@ -3190,7 +3195,10 @@ InitializationSequence::InitializationSequence(Sema &S,
                               /*InOverloadResolution*/ false,
                               /*CStyle=*/Kind.isCStyleOrFunctionalCast()))
   {
-    if (Initializer->getType() == Context.OverloadTy)
+    DeclAccessPair dap;
+    if (Initializer->getType() == Context.OverloadTy && 
+          !S.ResolveAddressOfOverloadedFunction(Initializer
+                      , DestType, false, dap))
       SetFailed(InitializationSequence::FK_AddressOfOverloadFailed);
     else
       SetFailed(InitializationSequence::FK_ConversionFailed);
@@ -4161,15 +4169,16 @@ bool InitializationSequence::Diagnose(Sema &S,
       << Args[0]->getSourceRange();
     break;
 
-  case FK_ConversionFailed:
+  case FK_ConversionFailed: {
+    QualType FromType = Args[0]->getType();
     S.Diag(Kind.getLocation(), diag::err_init_conversion_failed)
       << (int)Entity.getKind()
       << DestType
       << Args[0]->isLValue()
-      << Args[0]->getType()
+      << FromType
       << Args[0]->getSourceRange();
     break;
-
+  }
   case FK_TooManyInitsForScalar: {
     SourceRange R;
 

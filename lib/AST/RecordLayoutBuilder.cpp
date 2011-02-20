@@ -687,8 +687,8 @@ protected:
   /// alignment.
   void FinishLayout(const NamedDecl *D);
 
-  void UpdateAlignment(unsigned NewAlignment, unsigned UnpackedNewAlignment);
-  void UpdateAlignment(unsigned NewAlignment) {
+  void UpdateAlignment(CharUnits NewAlignment, CharUnits UnpackedNewAlignment);
+  void UpdateAlignment(CharUnits NewAlignment) {
     UpdateAlignment(NewAlignment, NewAlignment);
   }
 
@@ -799,14 +799,14 @@ void RecordLayoutBuilder::DeterminePrimaryBase(const CXXRecordDecl *RD) {
   Size += GetVirtualPointersSize(RD);
   DataSize = Size;
 
-  unsigned UnpackedBaseAlign = Context.Target.getPointerAlign(0);
-  unsigned BaseAlign = (Packed) ? 8 : UnpackedBaseAlign;
+  CharUnits UnpackedBaseAlign = 
+    Context.toCharUnitsFromBits(Context.Target.getPointerAlign(0));
+  CharUnits BaseAlign = (Packed) ? CharUnits::One() : UnpackedBaseAlign;
 
   // The maximum field alignment overrides base align.
   if (!MaxFieldAlignment.isZero()) {
-    unsigned MaxFieldAlignmentInBits = Context.toBits(MaxFieldAlignment);
-    BaseAlign = std::min(BaseAlign, MaxFieldAlignmentInBits);
-    UnpackedBaseAlign = std::min(UnpackedBaseAlign, MaxFieldAlignmentInBits);
+    BaseAlign = std::min(BaseAlign, MaxFieldAlignment);
+    UnpackedBaseAlign = std::min(UnpackedBaseAlign, MaxFieldAlignment);
   }
 
   // Update the alignment.
@@ -1095,23 +1095,23 @@ CharUnits RecordLayoutBuilder::LayoutBase(const BaseSubobjectInfo *Base) {
     return CharUnits::Zero();
   }
 
-  unsigned UnpackedBaseAlign = Context.toBits(Layout.getNonVirtualAlign());
-  unsigned BaseAlign = (Packed) ? 8 : UnpackedBaseAlign;
+  CharUnits UnpackedBaseAlign = Layout.getNonVirtualAlign();
+  CharUnits BaseAlign = (Packed) ? CharUnits::One() : UnpackedBaseAlign;
 
   // The maximum field alignment overrides base align.
   if (!MaxFieldAlignment.isZero()) {
-    unsigned MaxFieldAlignmentInBits = Context.toBits(MaxFieldAlignment);
-    BaseAlign = std::min(BaseAlign, MaxFieldAlignmentInBits);
-    UnpackedBaseAlign = std::min(UnpackedBaseAlign, MaxFieldAlignmentInBits);
+    BaseAlign = std::min(BaseAlign, MaxFieldAlignment);
+    UnpackedBaseAlign = std::min(UnpackedBaseAlign, MaxFieldAlignment);
   }
 
   // Round up the current record size to the base's alignment boundary.
-  uint64_t Offset = llvm::RoundUpToAlignment(DataSize, BaseAlign);
+  uint64_t Offset = 
+    llvm::RoundUpToAlignment(DataSize, Context.toBits(BaseAlign));
 
   // Try to place the base.
   while (!EmptySubobjects->CanPlaceBaseAtOffset(Base, 
                                           Context.toCharUnitsFromBits(Offset)))
-    Offset += BaseAlign;
+    Offset += Context.toBits(BaseAlign);
 
   if (!Base->Class->isEmpty()) {
     // Update the data size.
@@ -1146,7 +1146,7 @@ void RecordLayoutBuilder::InitializeLayout(const Decl *D) {
       MaxFieldAlignment = Context.toCharUnitsFromBits(MFAA->getAlignment());
 
     if (unsigned MaxAlign = D->getMaxAlignment())
-      UpdateAlignment(MaxAlign);
+      UpdateAlignment(Context.toCharUnitsFromBits(MaxAlign));
   }
 }
 
@@ -1207,7 +1207,7 @@ void RecordLayoutBuilder::Layout(const ObjCInterfaceDecl *D) {
   if (ObjCInterfaceDecl *SD = D->getSuperClass()) {
     const ASTRecordLayout &SL = Context.getASTObjCInterfaceLayout(SD);
 
-    UpdateAlignment(Context.toBits(SL.getAlignment()));
+    UpdateAlignment(SL.getAlignment());
 
     // We start laying out ivars not at the end of the superclass
     // structure, but at the next byte following the last field.
@@ -1296,7 +1296,7 @@ void RecordLayoutBuilder::LayoutWideBitField(uint64_t FieldSize,
   Size = std::max(Size, DataSize);
 
   // Remember max struct/class alignment.
-  UpdateAlignment(TypeAlign);
+  UpdateAlignment(Context.toCharUnitsFromBits(TypeAlign));
 }
 
 void RecordLayoutBuilder::LayoutBitField(const FieldDecl *D) {
@@ -1367,7 +1367,8 @@ void RecordLayoutBuilder::LayoutBitField(const FieldDecl *D) {
   Size = std::max(Size, DataSize);
 
   // Remember max struct/class alignment.
-  UpdateAlignment(FieldAlign, UnpackedFieldAlign);
+  UpdateAlignment(Context.toCharUnitsFromBits(FieldAlign), 
+                  Context.toCharUnitsFromBits(UnpackedFieldAlign));
 }
 
 void RecordLayoutBuilder::LayoutField(const FieldDecl *D) {
@@ -1382,24 +1383,28 @@ void RecordLayoutBuilder::LayoutField(const FieldDecl *D) {
   UnfilledBitsInLastByte = 0;
 
   bool FieldPacked = Packed || D->hasAttr<PackedAttr>();
-  uint64_t FieldOffset = IsUnion ? 0 : DataSize;
-  uint64_t FieldSize;
-  unsigned FieldAlign;
+  CharUnits FieldOffset = 
+    IsUnion ? CharUnits::Zero() : Context.toCharUnitsFromBits(DataSize);
+  CharUnits FieldSize;
+  CharUnits FieldAlign;
 
   if (D->getType()->isIncompleteArrayType()) {
     // This is a flexible array member; we can't directly
     // query getTypeInfo about these, so we figure it out here.
     // Flexible array members don't have any size, but they
     // have to be aligned appropriately for their element type.
-    FieldSize = 0;
+    FieldSize = CharUnits::Zero();
     const ArrayType* ATy = Context.getAsArrayType(D->getType());
-    FieldAlign = Context.getTypeAlign(ATy->getElementType());
+    FieldAlign = Context.getTypeAlignInChars(ATy->getElementType());
   } else if (const ReferenceType *RT = D->getType()->getAs<ReferenceType>()) {
     unsigned AS = RT->getPointeeType().getAddressSpace();
-    FieldSize = Context.Target.getPointerWidth(AS);
-    FieldAlign = Context.Target.getPointerAlign(AS);
+    FieldSize = 
+      Context.toCharUnitsFromBits(Context.Target.getPointerWidth(AS));
+    FieldAlign = 
+      Context.toCharUnitsFromBits(Context.Target.getPointerAlign(AS));
   } else {
-    std::pair<uint64_t, unsigned> FieldInfo = Context.getTypeInfo(D->getType());
+    std::pair<CharUnits, CharUnits> FieldInfo = 
+      Context.getTypeInfoInChars(D->getType());
     FieldSize = FieldInfo.first;
     FieldAlign = FieldInfo.second;
 
@@ -1411,7 +1416,7 @@ void RecordLayoutBuilder::LayoutField(const FieldDecl *D) {
       // alignment if necessary.
       QualType T = Context.getBaseElementType(D->getType());
       if (const BuiltinType *BTy = T->getAs<BuiltinType>()) {
-        uint64_t TypeSize = Context.getTypeSize(BTy);
+        CharUnits TypeSize = Context.getTypeSizeInChars(BTy);
         if (TypeSize > FieldAlign)
           FieldAlign = TypeSize;
       }
@@ -1420,46 +1425,48 @@ void RecordLayoutBuilder::LayoutField(const FieldDecl *D) {
 
   // The align if the field is not packed. This is to check if the attribute
   // was unnecessary (-Wpacked).
-  unsigned UnpackedFieldAlign = FieldAlign;
-  uint64_t UnpackedFieldOffset = FieldOffset;
+  CharUnits UnpackedFieldAlign = FieldAlign;
+  CharUnits UnpackedFieldOffset = FieldOffset;
 
   if (FieldPacked)
-    FieldAlign = 8;
-  FieldAlign = std::max(FieldAlign, D->getMaxAlignment());
-  UnpackedFieldAlign = std::max(UnpackedFieldAlign, D->getMaxAlignment());
+    FieldAlign = CharUnits::One();
+  CharUnits MaxAlignmentInChars = 
+    Context.toCharUnitsFromBits(D->getMaxAlignment());
+  FieldAlign = std::max(FieldAlign, MaxAlignmentInChars);
+  UnpackedFieldAlign = std::max(UnpackedFieldAlign, MaxAlignmentInChars);
 
   // The maximum field alignment overrides the aligned attribute.
   if (!MaxFieldAlignment.isZero()) {
-    unsigned MaxFieldAlignmentInBits = Context.toBits(MaxFieldAlignment);
-    FieldAlign = std::min(FieldAlign, MaxFieldAlignmentInBits);
-    UnpackedFieldAlign = std::min(UnpackedFieldAlign, MaxFieldAlignmentInBits);
+    FieldAlign = std::min(FieldAlign, MaxFieldAlignment);
+    UnpackedFieldAlign = std::min(UnpackedFieldAlign, MaxFieldAlignment);
   }
 
   // Round up the current record size to the field's alignment boundary.
-  FieldOffset = llvm::RoundUpToAlignment(FieldOffset, FieldAlign);
-  UnpackedFieldOffset = llvm::RoundUpToAlignment(UnpackedFieldOffset,
-                                                 UnpackedFieldAlign);
+  FieldOffset = FieldOffset.RoundUpToAlignment(FieldAlign);
+  UnpackedFieldOffset = 
+    UnpackedFieldOffset.RoundUpToAlignment(UnpackedFieldAlign);
 
   if (!IsUnion && EmptySubobjects) {
     // Check if we can place the field at this offset.
-    while (!EmptySubobjects->CanPlaceFieldAtOffset(D, 
-                                    Context.toCharUnitsFromBits(FieldOffset))) {
+    while (!EmptySubobjects->CanPlaceFieldAtOffset(D, FieldOffset)) {
       // We couldn't place the field at the offset. Try again at a new offset.
       FieldOffset += FieldAlign;
     }
   }
 
   // Place this field at the current location.
-  FieldOffsets.push_back(FieldOffset);
+  FieldOffsets.push_back(Context.toBits(FieldOffset));
 
-  CheckFieldPadding(FieldOffset, UnpaddedFieldOffset, UnpackedFieldOffset,
-                    UnpackedFieldAlign, FieldPacked, D);
+  CheckFieldPadding(Context.toBits(FieldOffset), UnpaddedFieldOffset, 
+                    Context.toBits(UnpackedFieldOffset),
+                    Context.toBits(UnpackedFieldAlign), FieldPacked, D);
 
   // Reserve space for this field.
+  uint64_t FieldSizeInBits = Context.toBits(FieldSize);
   if (IsUnion)
-    Size = std::max(Size, FieldSize);
+    Size = std::max(Size, FieldSizeInBits);
   else
-    Size = FieldOffset + FieldSize;
+    Size = Context.toBits(FieldOffset) + FieldSizeInBits;
 
   // Update the data size.
   DataSize = Size;
@@ -1512,24 +1519,22 @@ void RecordLayoutBuilder::FinishLayout(const NamedDecl *D) {
   }
 }
 
-void RecordLayoutBuilder::UpdateAlignment(unsigned NewAlignment,
-                                          unsigned UnpackedNewAlignment) {
+void RecordLayoutBuilder::UpdateAlignment(CharUnits NewAlignment,
+                                          CharUnits UnpackedNewAlignment) {
   // The alignment is not modified when using 'mac68k' alignment.
   if (IsMac68kAlign)
     return;
 
-  CharUnits NewAlignmentInChars = Context.toCharUnitsFromBits(NewAlignment);
-  if (NewAlignmentInChars > Alignment) {
-    assert(llvm::isPowerOf2_32(NewAlignment && "Alignment not a power of 2"));
-    Alignment = NewAlignmentInChars;
+  if (NewAlignment > Alignment) {
+    assert(llvm::isPowerOf2_32(NewAlignment.getQuantity() && 
+           "Alignment not a power of 2"));
+    Alignment = NewAlignment;
   }
 
-  CharUnits UnpackedNewAlignmentInChars = 
-    Context.toCharUnitsFromBits(UnpackedNewAlignment);
-  if (UnpackedNewAlignmentInChars > UnpackedAlignment) {
-    assert(llvm::isPowerOf2_32(UnpackedNewAlignment &&
+  if (UnpackedNewAlignment > UnpackedAlignment) {
+    assert(llvm::isPowerOf2_32(UnpackedNewAlignment.getQuantity() &&
            "Alignment not a power of 2"));
-    UnpackedAlignment = UnpackedNewAlignmentInChars;
+    UnpackedAlignment = UnpackedNewAlignment;
   }
 }
 
