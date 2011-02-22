@@ -351,12 +351,18 @@ def note_required_for_protocol_at :
 
 def warn_conflicting_ret_types : Warning<
   "conflicting return type in implementation of %0: %1 vs %2">;
+def warn_conflicting_ret_type_modifiers : Warning<
+  "conflicting distributed object modifiers on return type "
+  "in implementation of %0">;
 def warn_non_covariant_ret_types : Warning<
   "conflicting return type in implementation of %0: %1 vs %2">,
   InGroup<DiagGroup<"method-signatures">>, DefaultIgnore;
 
 def warn_conflicting_param_types : Warning<
   "conflicting parameter types in implementation of %0: %1 vs %2">;
+def warn_conflicting_param_modifiers : Warning<
+  "conflicting distributed object modifiers on patameter type "
+  "in implementation of %0">;
 def warn_non_contravariant_param_types : Warning<
   "conflicting parameter types in implementation of %0: %1 vs %2">,
   InGroup<DiagGroup<"method-signatures">>, DefaultIgnore;
@@ -898,7 +904,8 @@ def err_new_array_of_auto : Error<
 def err_auto_not_allowed : Error<
   "'auto' not allowed %select{in function prototype|in struct member"
   "|in union member|in class member|in exception declaration"
-  "|in template parameter|in block literal|in template argument|here}0">;
+  "|in template parameter|in block literal|in template argument"
+  "|in typedef|in function return type|here}0">;
 def err_auto_var_requires_init : Error<
   "declaration of variable %0 with type %1 requires an initializer">;
 def err_auto_new_requires_ctor_arg : Error<
@@ -911,6 +918,8 @@ def err_auto_missing_trailing_return : Error<
   "'auto' return without trailing return type">;
 def err_trailing_return_without_auto : Error<
   "function with trailing return type must specify return type 'auto', not %0">;
+def err_trailing_return_in_parens : Error<
+  "trailing return type may not be nested within parentheses">;
 def err_auto_var_deduction_failure : Error<
   "variable %0 with type %1 has incompatible initializer of type %2">;
 def err_auto_new_deduction_failure : Error<
@@ -1145,6 +1154,9 @@ def warn_impcast_literal_float_to_integer : Warning<
   "implicit conversion turns literal floating-point number into integer: "
   "%0 to %1">,
   InGroup<DiagGroup<"literal-conversion">>, DefaultIgnore;
+def warn_impcast_different_enum_types : Warning<
+  "implicit conversion from enumeration type %0 to different enumeration type "
+  "%1">, InGroup<DiagGroup<"conversion">>;
 
 def warn_cast_align : Warning<
   "cast from %0 to %1 increases required alignment from %2 to %3">,
@@ -2950,10 +2962,7 @@ def note_equality_comparison_silence : Note<
 def warn_synthesized_ivar_access : Warning<
   "direct access of synthesized ivar by using property access %0">,
   InGroup<NonfragileAbi2>, DefaultIgnore;
-def warn_ivar_variable_conflict : Warning<
-  "when default property synthesis is on, "
-  "%0 lookup will access property ivar instead of global variable">, 
-  InGroup<NonfragileAbi2>;
+
 def note_global_declared_at : Note<"global variable declared here">;
 
 // assignment related diagnostics (also for argument passing, returning, etc).

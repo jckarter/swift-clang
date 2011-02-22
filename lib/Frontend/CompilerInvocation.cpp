@@ -490,6 +490,8 @@ static void HeaderSearchOptsToArgs(const HeaderSearchOptions &Opts,
         Res.push_back("-iquote");
       } else if (E.Group == frontend::System) {
         Res.push_back("-isystem");
+      } else if (E.Group == frontend::CXXSystem) {
+        Res.push_back("-cxx-isystem");
       } else {
         assert(E.Group == frontend::Angled && "Invalid group!");
         Res.push_back(E.IsFramework ? "-F" : "-I");
@@ -1236,7 +1238,6 @@ std::string CompilerInvocation::GetResourcesPath(const char *Argv0,
 
 static void ParseHeaderSearchArgs(HeaderSearchOptions &Opts, ArgList &Args) {
   using namespace cc1options;
-  Opts.CXXSystemIncludes = Args.getAllArgValues(OPT_cxx_system_include);
   Opts.Sysroot = Args.getLastArgValue(OPT_isysroot, "/");
   Opts.Verbose = Args.hasArg(OPT_v);
   Opts.UseBuiltinIncludes = !Args.hasArg(OPT_nobuiltininc);
@@ -1272,10 +1273,12 @@ static void ParseHeaderSearchArgs(HeaderSearchOptions &Opts, ArgList &Args) {
   for (arg_iterator it = Args.filtered_begin(OPT_iquote),
          ie = Args.filtered_end(); it != ie; ++it)
     Opts.AddPath((*it)->getValue(Args), frontend::Quoted, true, false, true);
-  for (arg_iterator it = Args.filtered_begin(OPT_isystem, OPT_iwithsysroot),
-         ie = Args.filtered_end(); it != ie; ++it)
-    Opts.AddPath((*it)->getValue(Args), frontend::System, true, false,
-                 (*it)->getOption().matches(OPT_iwithsysroot));
+  for (arg_iterator it = Args.filtered_begin(OPT_cxx_isystem, OPT_isystem,
+         OPT_iwithsysroot), ie = Args.filtered_end(); it != ie; ++it)
+    Opts.AddPath((*it)->getValue(Args),
+                 ((*it)->getOption().matches(OPT_cxx_isystem) ?
+                   frontend::CXXSystem : frontend::System),
+                 true, false, (*it)->getOption().matches(OPT_iwithsysroot));
 
   // FIXME: Need options for the various environment variables!
 }
@@ -1457,7 +1460,7 @@ static void ParseLangArgs(LangOptions &Opts, ArgList &Args, InputKind IK,
   if (Args.hasArg(OPT_fno_threadsafe_statics))
     Opts.ThreadsafeStatics = 0;
   Opts.Exceptions = Args.hasArg(OPT_fexceptions);
-  Opts.ObjCExceptions = !Args.hasArg(OPT_fno_objc_exceptions);
+  Opts.ObjCExceptions = Args.hasArg(OPT_fobjc_exceptions);
   Opts.RTTI = !Args.hasArg(OPT_fno_rtti);
   Opts.Blocks = Args.hasArg(OPT_fblocks);
   Opts.CharIsSigned = !Args.hasArg(OPT_fno_signed_char);
@@ -1487,7 +1490,7 @@ static void ParseLangArgs(LangOptions &Opts, ArgList &Args, InputKind IK,
   Opts.EmitAllDecls = Args.hasArg(OPT_femit_all_decls);
   Opts.PICLevel = Args.getLastArgIntValue(OPT_pic_level, 0, Diags);
   Opts.SjLjExceptions = Args.hasArg(OPT_fsjlj_exceptions);
-  Opts.ObjCExceptions = !Args.hasArg(OPT_fno_objc_exceptions);
+  Opts.ObjCExceptions = Args.hasArg(OPT_fobjc_exceptions);
   Opts.Static = Args.hasArg(OPT_static_define);
   Opts.DumpRecordLayouts = Args.hasArg(OPT_fdump_record_layouts);
   Opts.DumpVTableLayouts = Args.hasArg(OPT_fdump_vtable_layouts);
