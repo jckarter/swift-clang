@@ -54,10 +54,15 @@ public:
   void evalMemcmp(CheckerContext &C, const CallExpr *CE);
 
   void evalstrLength(CheckerContext &C, const CallExpr *CE);
+  void evalstrnLength(CheckerContext &C, const CallExpr *CE);
+  void evalstrLengthCommon(CheckerContext &C, const CallExpr *CE, 
+                           bool IsStrnlen = false);
 
   void evalStrcpy(CheckerContext &C, const CallExpr *CE);
+  void evalStrncpy(CheckerContext &C, const CallExpr *CE);
   void evalStpcpy(CheckerContext &C, const CallExpr *CE);
-  void evalStrcpyCommon(CheckerContext &C, const CallExpr *CE, bool returnEnd);
+  void evalStrcpyCommon(CheckerContext &C, const CallExpr *CE, bool returnEnd,
+                        bool isStrncpy);
 
   // Utility methods
   std::pair<const GRState*, const GRState*>
@@ -776,6 +781,16 @@ void CStringChecker::evalMemcmp(CheckerContext &C, const CallExpr *CE) {
 
 void CStringChecker::evalstrLength(CheckerContext &C, const CallExpr *CE) {
   // size_t strlen(const char *s);
+  evalstrLengthCommon(C, CE, /* IsStrnlen = */ false);
+}
+
+void CStringChecker::evalstrnLength(CheckerContext &C, const CallExpr *CE) {
+  // size_t strnlen(const char *s, size_t maxlen);
+  evalstrLengthCommon(C, CE, /* IsStrnlen = */ true);
+}
+
+void CStringChecker::evalstrLengthCommon(CheckerContext &C, const CallExpr *CE,
+                                         bool IsStrnlen) {
   const GRState *state = C.getState();
   const Expr *Arg = CE->getArg(0);
   SVal ArgVal = state->getSVal(Arg);
@@ -790,6 +805,32 @@ void CStringChecker::evalstrLength(CheckerContext &C, const CallExpr *CE) {
     // transition to.
     if (strLength.isUndef())
       return;
+
+    // If the check is for strnlen() then bind the return value to no more than
+    // the maxlen value.
+    if (IsStrnlen) {
+      const Expr *maxlenExpr = CE->getArg(1);
+      SVal maxlenVal = state->getSVal(maxlenExpr);
+    
+      NonLoc *strLengthNL = dyn_cast<NonLoc>(&strLength);
+      NonLoc *maxlenValNL = dyn_cast<NonLoc>(&maxlenVal);
+
+      QualType cmpTy = C.getSValBuilder().getContext().IntTy;
+      const GRState *stateTrue, *stateFalse;
+    
+      // Check if the strLength is greater than or equal to the maxlen
+      llvm::tie(stateTrue, stateFalse) =
+        state->assume(cast<DefinedOrUnknownSVal>
+                      (C.getSValBuilder().evalBinOpNN(state, BO_GE, 
+                                                      *strLengthNL, *maxlenValNL,
+                                                      cmpTy)));
+
+      // If the strLength is greater than or equal to the maxlen, set strLength
+      // to maxlen
+      if (stateTrue && !stateFalse) {
+        strLength = maxlenVal;
+      }
+    }
 
     // If getCStringLength couldn't figure out the length, conjure a return
     // value, so it can be used in constraints, at least.
@@ -806,16 +847,21 @@ void CStringChecker::evalstrLength(CheckerContext &C, const CallExpr *CE) {
 
 void CStringChecker::evalStrcpy(CheckerContext &C, const CallExpr *CE) {
   // char *strcpy(char *restrict dst, const char *restrict src);
-  evalStrcpyCommon(C, CE, /* returnEnd = */ false);
+  evalStrcpyCommon(C, CE, /* returnEnd = */ false, /* isStrncpy = */ false);
+}
+
+void CStringChecker::evalStrncpy(CheckerContext &C, const CallExpr *CE) {
+  // char *strcpy(char *restrict dst, const char *restrict src);
+  evalStrcpyCommon(C, CE, /* returnEnd = */ false, /* isStrncpy = */ true);
 }
 
 void CStringChecker::evalStpcpy(CheckerContext &C, const CallExpr *CE) {
   // char *stpcpy(char *restrict dst, const char *restrict src);
-  evalStrcpyCommon(C, CE, /* returnEnd = */ true);
+  evalStrcpyCommon(C, CE, /* returnEnd = */ true, /* isStrncpy = */ false);
 }
 
 void CStringChecker::evalStrcpyCommon(CheckerContext &C, const CallExpr *CE,
-                                      bool returnEnd) {
+                                      bool returnEnd, bool isStrncpy) {
   const GRState *state = C.getState();
 
   // Check that the destination is non-null
@@ -839,6 +885,31 @@ void CStringChecker::evalStrcpyCommon(CheckerContext &C, const CallExpr *CE,
   // If the source isn't a valid C string, give up.
   if (strLength.isUndef())
     return;
+
+  if (isStrncpy) {
+    // Get the max number of characters to copy
+    const Expr *lenExpr = CE->getArg(2);
+    SVal lenVal = state->getSVal(lenExpr);
+
+    NonLoc *strLengthNL = dyn_cast<NonLoc>(&strLength);
+    NonLoc *lenValNL = dyn_cast<NonLoc>(&lenVal);
+
+    QualType cmpTy = C.getSValBuilder().getContext().IntTy;
+    const GRState *stateTrue, *stateFalse;
+    
+    // Check if the max number to copy is less than the length of the src
+    llvm::tie(stateTrue, stateFalse) =
+      state->assume(cast<DefinedOrUnknownSVal>
+                    (C.getSValBuilder().evalBinOpNN(state, BO_GT, 
+                                                    *strLengthNL, *lenValNL,
+                                                    cmpTy)));
+
+    if (stateTrue) {
+      // Max number to copy is less than the length of the src, so the actual
+      // strLength copied is the max number arg.
+      strLength = lenVal;
+    }    
+  }
 
   SVal Result = (returnEnd ? UnknownVal() : DstVal);
 
@@ -912,8 +983,10 @@ bool CStringChecker::evalCallExpr(CheckerContext &C, const CallExpr *CE) {
     .Cases("memcmp", "bcmp", &CStringChecker::evalMemcmp)
     .Cases("memmove", "__memmove_chk", &CStringChecker::evalMemmove)
     .Cases("strcpy", "__strcpy_chk", &CStringChecker::evalStrcpy)
+    .Cases("strncpy", "__strncpy_chk", &CStringChecker::evalStrncpy)
     .Cases("stpcpy", "__stpcpy_chk", &CStringChecker::evalStpcpy)
     .Case("strlen", &CStringChecker::evalstrLength)
+    .Case("strnlen", &CStringChecker::evalstrnLength)
     .Case("bcopy", &CStringChecker::evalBcopy)
     .Default(NULL);
 

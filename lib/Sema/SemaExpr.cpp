@@ -76,12 +76,10 @@ bool Sema::DiagnoseUseOfDecl(NamedDecl *D, SourceLocation Loc,
   }
 
   // See if this is an auto-typed variable whose initializer we are parsing.
-  if (const VarDecl *VD = dyn_cast<VarDecl>(D)) {
-    if (VD->isParsingAutoInit()) {
-      Diag(Loc, diag::err_auto_variable_cannot_appear_in_own_initializer)
-        << D->getDeclName();
-      return true;
-    }
+  if (ParsingInitForAutoVars.count(D)) {
+    Diag(Loc, diag::err_auto_variable_cannot_appear_in_own_initializer)
+      << D->getDeclName();
+    return true;
   }
 
   // See if the decl is deprecated.
@@ -1674,20 +1672,6 @@ ExprResult Sema::ActOnIdExpression(Scope *S,
 
   // This is guaranteed from this point on.
   assert(!R.empty() || ADL);
-
-  if (VarDecl *Var = R.getAsSingle<VarDecl>()) {
-    if (getLangOptions().ObjCNonFragileABI && IvarLookupFollowUp &&
-        !(getLangOptions().ObjCDefaultSynthProperties && 
-          getLangOptions().ObjCNonFragileABI2) &&
-        Var->isFileVarDecl()) {
-      ObjCPropertyDecl *Property = canSynthesizeProvisionalIvar(II);
-      if (Property) {
-        Diag(NameLoc, diag::warn_ivar_variable_conflict) << Var->getDeclName();
-        Diag(Property->getLocation(), diag::note_property_declare);
-        Diag(Var->getLocation(), diag::note_global_declared_at);
-      }
-    }
-  }
 
   // Check whether this might be a C++ implicit instance member access.
   // C++ [class.mfct.non-static]p3:
@@ -9350,9 +9334,12 @@ void Sema::MarkDeclarationReferenced(SourceLocation Loc, Decl *D) {
       }
     }
 
-    // Keep track of used but undefined variables.
+    // Keep track of used but undefined variables.  We make a hole in
+    // the warning for static const data members with in-line
+    // initializers.
     if (Var->hasDefinition() == VarDecl::DeclarationOnly
-        && Var->getLinkage() != ExternalLinkage) {
+        && Var->getLinkage() != ExternalLinkage
+        && !(Var->isStaticDataMember() && Var->hasInit())) {
       SourceLocation &old = UndefinedInternals[Var->getCanonicalDecl()];
       if (old.isInvalid()) old = Loc;
     }
