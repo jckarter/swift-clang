@@ -1246,9 +1246,18 @@ void Parser::ParseDeclarationSpecifiers(DeclSpec &DS,
                                          DiagID, getLang());
       break;
     case tok::kw_auto:
-      if (getLang().CPlusPlus0x || getLang().ObjC1)
-        isInvalid = DS.SetTypeSpecType(DeclSpec::TST_auto, Loc, PrevSpec,
-                                       DiagID);
+      if (getLang().CPlusPlus0x || getLang().ObjC2) {
+        if (isKnownToBeTypeSpecifier(GetLookAheadToken(1))) {
+          isInvalid = DS.SetStorageClassSpec(DeclSpec::SCS_auto, Loc, PrevSpec,
+                                           DiagID, getLang());
+          if (!isInvalid)
+            Diag(Tok, diag::auto_storage_class)
+              << FixItHint::CreateRemoval(DS.getStorageClassSpecLoc());
+        }
+        else
+          isInvalid = DS.SetTypeSpecType(DeclSpec::TST_auto, Loc, PrevSpec,
+                                         DiagID);
+      }
       else
         isInvalid = DS.SetStorageClassSpec(DeclSpec::SCS_auto, Loc, PrevSpec,
                                            DiagID, getLang());
@@ -1461,6 +1470,7 @@ void Parser::ParseDeclarationSpecifiers(DeclSpec &DS,
       else
         Diag(Tok, DiagID) << PrevSpec;
     }
+
     DS.SetRangeEnd(Tok.getLocation());
     ConsumeToken();
   }
@@ -1975,7 +1985,7 @@ void Parser::ParseEnumSpecifier(SourceLocation StartLoc, DeclSpec &DS,
     }
   }
 
-  bool AllowFixedUnderlyingType = getLang().CPlusPlus0x;
+  bool AllowFixedUnderlyingType = getLang().CPlusPlus0x || getLang().Microsoft;
   bool IsScopedEnum = false;
   bool IsScopedUsingClassTag = false;
 
@@ -2047,7 +2057,9 @@ void Parser::ParseEnumSpecifier(SourceLocation StartLoc, DeclSpec &DS,
         // Consume the ':'.
         ConsumeToken();
       
-        if (isCXXDeclarationSpecifier() != TPResult::True()) {
+        if ((getLang().CPlusPlus && 
+             isCXXDeclarationSpecifier() != TPResult::True()) ||
+            (!getLang().CPlusPlus && !isDeclarationSpecifier(true))) {
           // We'll parse this as a bitfield later.
           PossibleBitfield = true;
           TPA.Revert();
@@ -2064,6 +2076,10 @@ void Parser::ParseEnumSpecifier(SourceLocation StartLoc, DeclSpec &DS,
     if (!PossibleBitfield) {
       SourceRange Range;
       BaseType = ParseTypeName(&Range);
+      
+      if (!getLang().CPlusPlus0x)
+        Diag(StartLoc, diag::ext_ms_enum_fixed_underlying_type)
+          << Range;
     }
   }
 

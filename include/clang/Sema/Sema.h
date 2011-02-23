@@ -688,7 +688,8 @@ public:
 
   void PushFunctionScope();
   void PushBlockScope(Scope *BlockScope, BlockDecl *Block);
-  void PopFunctionOrBlockScope();
+  void PopFunctionOrBlockScope(const sema::AnalysisBasedWarnings::Policy *WP =0,
+                               const Decl *D = 0, const BlockExpr *blkExpr = 0);
 
   sema::FunctionScopeInfo *getCurFunction() const {
     return FunctionScopes.back();
@@ -864,6 +865,8 @@ public:
   DeclGroupPtrTy FinalizeDeclaratorGroup(Scope *S, const DeclSpec &DS,
                                          Decl **Group,
                                          unsigned NumDecls);
+  DeclGroupPtrTy BuildDeclaratorGroup(Decl **Group, unsigned NumDecls,
+                                      bool TypeMayContainAuto = true);
   void ActOnFinishKNRParamDeclarations(Scope *S, Declarator &D,
                                        SourceLocation LocAfterDecls);
   Decl *ActOnStartOfFunctionDef(Scope *S, Declarator &D);
@@ -1889,7 +1892,16 @@ public:
   void MarkDeclarationReferenced(SourceLocation Loc, Decl *D);
   void MarkDeclarationsReferencedInType(SourceLocation Loc, QualType T);
   void MarkDeclarationsReferencedInExpr(Expr *E);
-  bool DiagRuntimeBehavior(SourceLocation Loc, const PartialDiagnostic &PD);
+  
+  /// \brief Conditionally issue a diagnostic based on the current
+  /// evaluation context.
+  ///
+  /// \param stmt - If stmt is non-null, delay reporting the diagnostic until
+  ///  the function body is parsed, and then do a basic reachability analysis to
+  ///  determine if the statement is reachable.  If it is unreachable, the
+  ///  diagnostic will not be emitted.
+  bool DiagRuntimeBehavior(SourceLocation Loc, const Stmt *stmt,
+                           const PartialDiagnostic &PD);
 
   // Primary Expressions.
   SourceRange getExprRange(Expr *E) const;

@@ -473,11 +473,6 @@ static void HeaderSearchOptsToArgs(const HeaderSearchOptions &Opts,
     Res.push_back(Opts.Sysroot);
   }
 
-  for (unsigned i = 0, e = Opts.CXXSystemIncludes.size(); i != e; ++i) {
-    Res.push_back("-cxx-system-include");
-    Res.push_back(Opts.CXXSystemIncludes[i]);
-  }
-
   /// User specified include entries.
   for (unsigned i = 0, e = Opts.UserEntries.size(); i != e; ++i) {
     const HeaderSearchOptions::Entry &E = Opts.UserEntries[i];
@@ -590,10 +585,12 @@ static void LangOptsToArgs(const LangOptions &Opts,
     Res.push_back("-faltivec");
   if (Opts.Exceptions)
     Res.push_back("-fexceptions");
+  if (Opts.ObjCExceptions)
+    Res.push_back("-fobjc-exceptions");
+  if (Opts.CXXExceptions)
+    Res.push_back("-fcxx-exceptions");
   if (Opts.SjLjExceptions)
     Res.push_back("-fsjlj-exceptions");
-  if (!Opts.ObjCExceptions)
-    Res.push_back("-fno-objc-exceptions");
   if (!Opts.RTTI)
     Res.push_back("-fno-rtti");
   if (Opts.MSBitfields)
@@ -1461,6 +1458,9 @@ static void ParseLangArgs(LangOptions &Opts, ArgList &Args, InputKind IK,
     Opts.ThreadsafeStatics = 0;
   Opts.Exceptions = Args.hasArg(OPT_fexceptions);
   Opts.ObjCExceptions = Args.hasArg(OPT_fobjc_exceptions);
+  Opts.CXXExceptions = Args.hasArg(OPT_fcxx_exceptions);
+  Opts.SjLjExceptions = Args.hasArg(OPT_fsjlj_exceptions);
+
   Opts.RTTI = !Args.hasArg(OPT_fno_rtti);
   Opts.Blocks = Args.hasArg(OPT_fblocks);
   Opts.CharIsSigned = !Args.hasArg(OPT_fno_signed_char);
@@ -1489,8 +1489,6 @@ static void ParseLangArgs(LangOptions &Opts, ArgList &Args, InputKind IK,
   Opts.CatchUndefined = Args.hasArg(OPT_fcatch_undefined_behavior);
   Opts.EmitAllDecls = Args.hasArg(OPT_femit_all_decls);
   Opts.PICLevel = Args.getLastArgIntValue(OPT_pic_level, 0, Diags);
-  Opts.SjLjExceptions = Args.hasArg(OPT_fsjlj_exceptions);
-  Opts.ObjCExceptions = Args.hasArg(OPT_fobjc_exceptions);
   Opts.Static = Args.hasArg(OPT_static_define);
   Opts.DumpRecordLayouts = Args.hasArg(OPT_fdump_record_layouts);
   Opts.DumpVTableLayouts = Args.hasArg(OPT_fdump_vtable_layouts);
