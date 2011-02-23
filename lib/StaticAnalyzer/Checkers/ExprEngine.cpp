@@ -562,6 +562,7 @@ void ExprEngine::processEndWorklist(bool hasWorkRemaining) {
        I != E; ++I) {
     I->second->VisitEndAnalysis(G, BR, *this);
   }
+  getCheckerManager().runCheckersForEndAnalysis(G, BR, *this);
 }
 
 void ExprEngine::processCFGElement(const CFGElement E, 
@@ -3630,14 +3631,12 @@ void ExprEngine::ViewGraph(bool trim) {
       const_cast<BugType*>(*I)->FlushReports(BR);
 
     // Iterate through the reports and get their nodes.
-    for (BugReporter::iterator I=BR.begin(), E=BR.end(); I!=E; ++I) {
-      for (BugType::const_iterator I2=(*I)->begin(), E2=(*I)->end();
-           I2!=E2; ++I2) {
-        const BugReportEquivClass& EQ = *I2;
-        const BugReport &R = **EQ.begin();
-        ExplodedNode *N = const_cast<ExplodedNode*>(R.getErrorNode());
-        if (N) Src.push_back(N);
-      }
+    for (BugReporter::EQClasses_iterator
+           EI = BR.EQClasses_begin(), EE = BR.EQClasses_end(); EI != EE; ++EI) {
+      BugReportEquivClass& EQ = *EI;
+      const BugReport &R = **EQ.begin();
+      ExplodedNode *N = const_cast<ExplodedNode*>(R.getErrorNode());
+      if (N) Src.push_back(N);
     }
 
     ViewGraph(&Src[0], &Src[0]+Src.size());

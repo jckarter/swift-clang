@@ -14,6 +14,7 @@
 #ifndef LLVM_CLANG_SA_CORE_CHECKERMANAGER_H
 #define LLVM_CLANG_SA_CORE_CHECKERMANAGER_H
 
+#include "clang/Basic/LangOptions.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/FoldingSet.h"
@@ -31,6 +32,7 @@ namespace ento {
   class ObjCMessage;
   class SVal;
   class ExplodedNodeSet;
+  class ExplodedGraph;
   class GRState;
 
 struct VoidCheckerFnParm {};
@@ -77,8 +79,13 @@ public:
 };
 
 class CheckerManager {
+  const LangOptions LangOpts;
+
 public:
+  CheckerManager(const LangOptions &langOpts) : LangOpts(langOpts) { }
   ~CheckerManager();
+
+  const LangOptions &getLangOptions() const { return LangOpts; }
 
   typedef void *CheckerRef;
   typedef CheckerFn<> CheckerDtor;
@@ -166,6 +173,10 @@ public:
                               const GRState *state,
                               ExprEngine &Eng);
 
+  /// \brief Run checkers for end of analysis.
+  void runCheckersForEndAnalysis(ExplodedGraph &G, BugReporter &BR,
+                                 ExprEngine &Eng);
+
   // FIXME: Temporary until checker running is moved completely into
   // CheckerManager.
   void registerCheckersToEngine(ExprEngine &eng);
@@ -193,6 +204,8 @@ public:
   typedef CheckerFn<const ObjCMessage &, CheckerContext &> CheckObjCMessageFunc;
   typedef CheckerFn<const SVal &/*location*/, bool/*isLoad*/, CheckerContext &>
       CheckLocationFunc;
+  typedef CheckerFn<ExplodedGraph &, BugReporter &, ExprEngine &>
+      CheckEndAnalysisFunc;
 
   typedef bool (*HandlesStmtFunc)(const Stmt *D);
   void _registerForPreStmt(CheckStmtFunc checkfn,
@@ -204,6 +217,8 @@ public:
   void _registerForPostObjCMessage(CheckObjCMessageFunc checkfn);
 
   void _registerForLocation(CheckLocationFunc checkfn);
+
+  void _registerForEndAnalysis(CheckEndAnalysisFunc checkfn);
 
 //===----------------------------------------------------------------------===//
 // Implementation details.
@@ -245,7 +260,7 @@ private:
       : StmtKind(stmtKind), IsPreVisit(isPreVisit) { }
 
     static CachedStmtCheckersKey getSentinel() {
-      return CachedStmtCheckersKey(~0U, ~0U);
+      return CachedStmtCheckersKey(~0U, 0);
     }
     unsigned getHashValue() const {
       llvm::FoldingSetNodeID ID;
@@ -270,6 +285,8 @@ private:
   std::vector<CheckObjCMessageFunc> PostObjCMessageCheckers;
 
   std::vector<CheckLocationFunc> LocationCheckers;
+
+  std::vector<CheckEndAnalysisFunc> EndAnalysisCheckers;
 };
 
 } // end ento namespace

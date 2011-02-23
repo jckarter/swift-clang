@@ -146,7 +146,7 @@ void Sema::DiagnoseUnusedExprResult(const Stmt *S) {
     }
   }
 
-  DiagRuntimeBehavior(Loc, PDiag(DiagID) << R1 << R2);
+  DiagRuntimeBehavior(Loc, 0, PDiag(DiagID) << R1 << R2);
 }
 
 StmtResult
@@ -1766,8 +1766,10 @@ public:
 StmtResult
 Sema::ActOnCXXTryBlock(SourceLocation TryLoc, Stmt *TryBlock,
                        MultiStmtArg RawHandlers) {
-  if (!getLangOptions().Exceptions)
-    Diag(TryLoc, diag::err_exceptions_disabled) << "try";
+  // Don't report an error if 'try' is used in system headers.
+  if (!getLangOptions().Exceptions &&
+      !getSourceManager().isInSystemHeader(TryLoc))
+      Diag(TryLoc, diag::err_exceptions_disabled) << "try";
 
   unsigned NumHandlers = RawHandlers.size();
   assert(NumHandlers > 0 &&

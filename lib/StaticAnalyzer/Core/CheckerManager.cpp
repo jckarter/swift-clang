@@ -156,7 +156,10 @@ void CheckerManager::runCheckersForObjCMessage(bool isPreVisit,
                                                ExplodedNodeSet &Src,
                                                const ObjCMessage &msg,
                                                ExprEngine &Eng) {
-  CheckObjCMessageContext C(isPreVisit, PostObjCMessageCheckers, msg, Eng);
+  CheckObjCMessageContext C(isPreVisit,
+                            isPreVisit ? PreObjCMessageCheckers
+                                       : PostObjCMessageCheckers,
+                            msg, Eng);
   runPathSensitiveCheckers(C, Dst, Src);
 }
 
@@ -195,6 +198,13 @@ void CheckerManager::runCheckersForLocation(ExplodedNodeSet &Dst,
                                             ExprEngine &Eng) {
   CheckLocationContext C(LocationCheckers, location, isLoad, S, state, Eng);
   runPathSensitiveCheckers(C, Dst, Src);
+}
+
+void CheckerManager::runCheckersForEndAnalysis(ExplodedGraph &G,
+                                               BugReporter &BR,
+                                               ExprEngine &Eng) {
+  for (unsigned i = 0, e = EndAnalysisCheckers.size(); i != e; ++i)
+    EndAnalysisCheckers[i](G, BR, Eng);
 }
 
 void CheckerManager::registerCheckersToEngine(ExprEngine &eng) {
@@ -240,6 +250,10 @@ void CheckerManager::_registerForPostObjCMessage(CheckObjCMessageFunc checkfn) {
 
 void CheckerManager::_registerForLocation(CheckLocationFunc checkfn) {
   LocationCheckers.push_back(checkfn);
+}
+
+void CheckerManager::_registerForEndAnalysis(CheckEndAnalysisFunc checkfn) {
+  EndAnalysisCheckers.push_back(checkfn);
 }
 
 //===----------------------------------------------------------------------===//

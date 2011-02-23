@@ -2399,13 +2399,10 @@ def err_typecheck_member_reference_type : Error<
 def err_typecheck_member_reference_unknown : Error<
   "cannot refer to member %0 in %1 with '%select{.|->}2'">;
 def err_member_reference_needs_call : Error<
-  "base of member reference is an overloaded function; perhaps you meant "
-  "to call %select{it|the 0-argument overload}0?">;
+  "base of member reference is %select{a function|an overloaded function}0; "
+  "perhaps you meant to call it%select{| with no arguments}1?">;
 def note_member_ref_possible_intended_overload : Note<
   "possibly valid overload here">;
-def err_member_reference_needs_call_zero_arg : Error<
-  "base of member reference has function type %0; perhaps you meant to call "
-  "this function with '()'?">;
 def warn_subscript_is_char : Warning<"array subscript is of type 'char'">,
   InGroup<CharSubscript>, DefaultIgnore;
 
@@ -3124,6 +3121,8 @@ def err_kern_type_not_void_return : Error<
   "kernel function type %0 must have void return type">;
 def err_config_scalar_return : Error<
   "CUDA special function 'cudaConfigureCall' must have scalar return type">;
+def err_kern_call_not_global_function : Error<
+  "kernel call to non-global function %0">;
 
 
 def err_cannot_pass_objc_interface_to_vararg : Error<
