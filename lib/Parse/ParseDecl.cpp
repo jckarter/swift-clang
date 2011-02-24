@@ -956,8 +956,8 @@ void Parser::ParseDeclarationSpecifiers(DeclSpec &DS,
         goto DoneWithDeclSpec;
 
       CXXScopeSpec SS;
-      SS.setScopeRep((NestedNameSpecifier*) Tok.getAnnotationValue());
-      SS.setRange(Tok.getAnnotationRange());
+      SS.Adopt(static_cast<NestedNameSpecifier *>(Tok.getAnnotationValue()),
+               Tok.getAnnotationRange());
 
       // We are looking for a qualified typename.
       Token Next = NextToken();
@@ -2762,6 +2762,9 @@ void Parser::ParseDeclaratorInternal(Declarator &D,
     if (Kind == tok::star)
       // Remember that we parsed a pointer type, and remember the type-quals.
       D.AddTypeInfo(DeclaratorChunk::getPointer(DS.getTypeQualifiers(), Loc,
+                                                DS.getConstSpecLoc(),
+                                                DS.getVolatileSpecLoc(),
+                                                DS.getRestrictSpecLoc(),
                                                 DS.takeAttributes()),
                     SourceLocation());
     else
@@ -3758,4 +3761,3 @@ bool Parser::TryAltiVecTokenOutOfLine(DeclSpec &DS, SourceLocation Loc,
   }
   return false;
 }
-  

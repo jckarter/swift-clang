@@ -29,9 +29,13 @@
 #include "llvm/Support/ErrorHandling.h"
 
 namespace clang {
+  class ASTContext;
+  class TypeLoc;
   class LangOptions;
   class Diagnostic;
   class IdentifierInfo;
+  class NamespaceAliasDecl;
+  class NamespaceDecl;
   class NestedNameSpecifier;
   class Preprocessor;
   class Declarator;
@@ -51,7 +55,7 @@ namespace clang {
 class CXXScopeSpec {
   SourceRange Range;
   NestedNameSpecifier *ScopeRep;
-
+  
 public:
   CXXScopeSpec() : Range(), ScopeRep() { }
 
@@ -63,8 +67,75 @@ public:
   SourceLocation getEndLoc() const { return Range.getEnd(); }
 
   NestedNameSpecifier *getScopeRep() const { return ScopeRep; }
-  void setScopeRep(NestedNameSpecifier *S) { ScopeRep = S; }
 
+  /// \brief Extend the current nested-name-specifier by another
+  /// nested-name-specifier component of the form 'type::'.
+  ///
+  /// \param Context The AST context in which this nested-name-specifier
+  /// resides.
+  ///
+  /// \param TemplateKWLoc The location of the 'template' keyword, if present.
+  ///
+  /// \param TL The TypeLoc that describes the type preceding the '::'.
+  ///
+  /// \param ColonColonLoc The location of the trailing '::'.
+  void Extend(ASTContext &Context, SourceLocation TemplateKWLoc, TypeLoc TL,
+              SourceLocation ColonColonLoc);
+
+  /// \brief Extend the current nested-name-specifier by another 
+  /// nested-name-specifier component of the form 'identifier::'.
+  ///
+  /// \param Context The AST context in which this nested-name-specifier
+  /// resides.
+  ///
+  /// \param Identifier The identifier.
+  ///
+  /// \param IdentifierLoc The location of the identifier.
+  ///
+  /// \param ColonColonLoc The location of the trailing '::'.
+  void Extend(ASTContext &Context, IdentifierInfo *Identifier,
+              SourceLocation IdentifierLoc, SourceLocation ColonColonLoc);
+
+  /// \brief Extend the current nested-name-specifier by another 
+  /// nested-name-specifier component of the form 'namespace::'.
+  ///
+  /// \param Context The AST context in which this nested-name-specifier
+  /// resides.
+  ///
+  /// \param Namespace The namespace.
+  ///
+  /// \param NamespaceLoc The location of the namespace name.
+  ///
+  /// \param ColonColonLoc The location of the trailing '::'.
+  void Extend(ASTContext &Context, NamespaceDecl *Namespace,
+              SourceLocation NamespaceLoc, SourceLocation ColonColonLoc);
+
+  /// \brief Extend the current nested-name-specifier by another 
+  /// nested-name-specifier component of the form 'namespace-alias::'.
+  ///
+  /// \param Context The AST context in which this nested-name-specifier
+  /// resides.
+  ///
+  /// \param Alias The namespace alias.
+  ///
+  /// \param AliasLoc The location of the namespace alias 
+  /// name.
+  ///
+  /// \param ColonColonLoc The location of the trailing '::'.
+  void Extend(ASTContext &Context, NamespaceAliasDecl *Alias,
+              SourceLocation AliasLoc, SourceLocation ColonColonLoc);
+
+  /// \brief Turn this (empty) nested-name-specifier into the global
+  /// nested-name-specifier '::'.
+  void MakeGlobal(ASTContext &Context, SourceLocation ColonColonLoc);
+  
+  /// \brief Adopt an existing nested-name-specifier and its source range
+  /// as our own.
+  void Adopt(NestedNameSpecifier *Qualifier, SourceRange R) {
+    ScopeRep = Qualifier;
+    Range = R;
+  }
+  
   /// No scope specifier.
   bool isEmpty() const { return !Range.isValid(); }
   /// A scope specifier is present, but may be valid or invalid.
@@ -75,6 +146,15 @@ public:
   /// A scope specifier is present, and it refers to a real scope.
   bool isValid() const { return isNotEmpty() && ScopeRep != 0; }
 
+  /// \brief Indicate that this nested-name-specifier is invalid.
+  void SetInvalid(SourceRange R) { 
+    assert(R.isValid() && "Must have a valid source range");
+    if (Range.getBegin().isInvalid())
+      Range.setBegin(R.getBegin());
+    Range.setEnd(R.getEnd());
+    ScopeRep = 0;
+  }
+  
   /// Deprecated.  Some call sites intend isNotEmpty() while others intend
   /// isValid().
   bool isSet() const { return ScopeRep != 0; }
@@ -825,6 +905,16 @@ struct DeclaratorChunk {
   struct PointerTypeInfo : TypeInfoCommon {
     /// The type qualifiers: const/volatile/restrict.
     unsigned TypeQuals : 3;
+
+    /// The location of the const-qualifier, if any.
+    unsigned ConstQualLoc;
+
+    /// The location of the volatile-qualifier, if any.
+    unsigned VolatileQualLoc;
+
+    /// The location of the restrict-qualifier, if any.
+    unsigned RestrictQualLoc;
+
     void destroy() {
     }
   };
@@ -1055,12 +1145,18 @@ struct DeclaratorChunk {
   /// getPointer - Return a DeclaratorChunk for a pointer.
   ///
   static DeclaratorChunk getPointer(unsigned TypeQuals, SourceLocation Loc,
+                                    SourceLocation ConstQualLoc,
+                                    SourceLocation VolatileQualLoc,
+                                    SourceLocation RestrictQualLoc,
                                     const ParsedAttributes &attrs) {
     DeclaratorChunk I;
-    I.Kind          = Pointer;
-    I.Loc           = Loc;
-    I.Ptr.TypeQuals = TypeQuals;
-    I.Ptr.AttrList  = attrs.getList();
+    I.Kind                = Pointer;
+    I.Loc                 = Loc;
+    I.Ptr.TypeQuals       = TypeQuals;
+    I.Ptr.ConstQualLoc    = ConstQualLoc.getRawEncoding();
+    I.Ptr.VolatileQualLoc = VolatileQualLoc.getRawEncoding();
+    I.Ptr.RestrictQualLoc = RestrictQualLoc.getRawEncoding();
+    I.Ptr.AttrList        = attrs.getList();
     return I;
   }
 

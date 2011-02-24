@@ -23,6 +23,7 @@
 namespace clang {
   class Decl;
   class Stmt;
+  class CallExpr;
 
 namespace ento {
   class ExprEngine;
@@ -31,9 +32,19 @@ namespace ento {
   class CheckerContext;
   class ObjCMessage;
   class SVal;
+  class ExplodedNode;
   class ExplodedNodeSet;
   class ExplodedGraph;
   class GRState;
+  class EndOfFunctionNodeBuilder;
+  class MemRegion;
+  class SymbolReaper;
+
+class GraphExpander {
+public:
+  virtual ~GraphExpander();
+  virtual void expandGraph(ExplodedNodeSet &Dst, ExplodedNode *Pred) = 0;
+};
 
 struct VoidCheckerFnParm {};
 template <typename P1=VoidCheckerFnParm, typename P2=VoidCheckerFnParm,
@@ -102,11 +113,6 @@ public:
     CHECKER::_register(checker, *this);
   }
 
-  typedef void (*RegisterToEngFunc)(ExprEngine &Eng);
-  void addCheckerRegisterFunction(RegisterToEngFunc fn) {
-    Funcs.push_back(fn);
-  }
-
 //===----------------------------------------------------------------------===//
 // Functions for running checkers for AST traversing..
 //===----------------------------------------------------------------------===//
@@ -125,7 +131,7 @@ public:
 
   /// \brief Run checkers for pre-visiting Stmts.
   void runCheckersForPreStmt(ExplodedNodeSet &Dst,
-                             ExplodedNodeSet &Src,
+                             const ExplodedNodeSet &Src,
                              const Stmt *S,
                              ExprEngine &Eng) {
     runCheckersForStmt(/*isPreVisit=*/true, Dst, Src, S, Eng);
@@ -133,7 +139,7 @@ public:
 
   /// \brief Run checkers for post-visiting Stmts.
   void runCheckersForPostStmt(ExplodedNodeSet &Dst,
-                              ExplodedNodeSet &Src,
+                              const ExplodedNodeSet &Src,
                               const Stmt *S,
                               ExprEngine &Eng) {
     runCheckersForStmt(/*isPreVisit=*/false, Dst, Src, S, Eng);
@@ -141,12 +147,12 @@ public:
 
   /// \brief Run checkers for visiting Stmts.
   void runCheckersForStmt(bool isPreVisit,
-                          ExplodedNodeSet &Dst, ExplodedNodeSet &Src,
+                          ExplodedNodeSet &Dst, const ExplodedNodeSet &Src,
                           const Stmt *S, ExprEngine &Eng);
 
   /// \brief Run checkers for pre-visiting obj-c messages.
   void runCheckersForPreObjCMessage(ExplodedNodeSet &Dst,
-                                    ExplodedNodeSet &Src,
+                                    const ExplodedNodeSet &Src,
                                     const ObjCMessage &msg,
                                     ExprEngine &Eng) {
     runCheckersForObjCMessage(/*isPreVisit=*/true, Dst, Src, msg, Eng);
@@ -154,7 +160,7 @@ public:
 
   /// \brief Run checkers for post-visiting obj-c messages.
   void runCheckersForPostObjCMessage(ExplodedNodeSet &Dst,
-                                     ExplodedNodeSet &Src,
+                                     const ExplodedNodeSet &Src,
                                      const ObjCMessage &msg,
                                      ExprEngine &Eng) {
     runCheckersForObjCMessage(/*isPreVisit=*/false, Dst, Src, msg, Eng);
@@ -162,12 +168,13 @@ public:
 
   /// \brief Run checkers for visiting obj-c messages.
   void runCheckersForObjCMessage(bool isPreVisit,
-                                 ExplodedNodeSet &Dst, ExplodedNodeSet &Src,
+                                 ExplodedNodeSet &Dst,
+                                 const ExplodedNodeSet &Src,
                                  const ObjCMessage &msg, ExprEngine &Eng);
 
   /// \brief Run checkers for load/store of a location.
   void runCheckersForLocation(ExplodedNodeSet &Dst,
-                              ExplodedNodeSet &Src,
+                              const ExplodedNodeSet &Src,
                               SVal location, bool isLoad,
                               const Stmt *S,
                               const GRState *state,
@@ -177,9 +184,32 @@ public:
   void runCheckersForEndAnalysis(ExplodedGraph &G, BugReporter &BR,
                                  ExprEngine &Eng);
 
-  // FIXME: Temporary until checker running is moved completely into
-  // CheckerManager.
-  void registerCheckersToEngine(ExprEngine &eng);
+  /// \brief Run checkers for end of path.
+  void runCheckersForEndPath(EndOfFunctionNodeBuilder &B, ExprEngine &Eng);
+
+  /// \brief Run checkers for live symbols.
+  void runCheckersForLiveSymbols(const GRState *state,
+                                 SymbolReaper &SymReaper);
+
+  /// \brief Run checkers for dead symbols.
+  void runCheckersForDeadSymbols(ExplodedNodeSet &Dst,
+                                 const ExplodedNodeSet &Src,
+                                 SymbolReaper &SymReaper, const Stmt *S,
+                                 ExprEngine &Eng);
+
+  /// \brief True if at least one checker wants to check region changes.
+  bool wantsRegionChangeUpdate(const GRState *state);
+
+  /// \brief Run checkers for region changes.
+  const GRState *runCheckersForRegionChanges(const GRState *state,
+                                             const MemRegion * const *Begin,
+                                             const MemRegion * const *End);
+
+  /// \brief Run checkers for evaluating a call.
+  void runCheckersForEvalCall(ExplodedNodeSet &Dst,
+                              const ExplodedNodeSet &Src,
+                              const CallExpr *CE, ExprEngine &Eng,
+                              GraphExpander *defaultEval = 0);
 
 //===----------------------------------------------------------------------===//
 // Internal registration functions for AST traversing.
@@ -206,6 +236,9 @@ public:
       CheckLocationFunc;
   typedef CheckerFn<ExplodedGraph &, BugReporter &, ExprEngine &>
       CheckEndAnalysisFunc;
+  typedef CheckerFn<EndOfFunctionNodeBuilder &, ExprEngine &> CheckEndPathFunc;
+  typedef CheckerFn<SymbolReaper &, CheckerContext &> CheckDeadSymbolsFunc;
+  typedef CheckerFn<const GRState *, SymbolReaper &> CheckLiveSymbolsFunc;
 
   typedef bool (*HandlesStmtFunc)(const Stmt *D);
   void _registerForPreStmt(CheckStmtFunc checkfn,
@@ -220,6 +253,55 @@ public:
 
   void _registerForEndAnalysis(CheckEndAnalysisFunc checkfn);
 
+  void _registerForEndPath(CheckEndPathFunc checkfn);
+
+  void _registerForLiveSymbols(CheckLiveSymbolsFunc checkfn);
+
+  void _registerForDeadSymbols(CheckDeadSymbolsFunc checkfn);
+
+  class CheckRegionChangesFunc {
+    typedef const GRState * (*Func)(void *, const GRState *,
+                                    const MemRegion * const *,
+                                    const MemRegion * const *);
+    Func Fn;
+  public:
+    void *Checker;
+    CheckRegionChangesFunc(void *checker, Func fn) : Fn(fn), Checker(checker) {}
+    const GRState *operator()(const GRState *state,
+                              const MemRegion * const *begin,
+                              const MemRegion * const *end) {
+      return Fn(Checker, state, begin, end);
+    }
+  };
+
+  class WantsRegionChangeUpdateFunc {
+    typedef bool (*Func)(void *, const GRState *);
+    Func Fn;
+  public:
+    void *Checker;
+    WantsRegionChangeUpdateFunc(void *checker, Func fn)
+      : Fn(fn), Checker(checker) { }
+    bool operator()(const GRState *state) {
+      return Fn(Checker, state);
+    } 
+  };
+
+  void _registerForRegionChanges(CheckRegionChangesFunc checkfn,
+                                 WantsRegionChangeUpdateFunc wantUpdateFn);
+
+  class EvalCallFunc {
+    typedef bool (*Func)(void *, const CallExpr *, CheckerContext &);
+    Func Fn;
+  public:
+    void *Checker;
+    EvalCallFunc(void *checker, Func fn) : Fn(fn), Checker(checker) { }
+    bool operator()(const CallExpr *CE, CheckerContext &C) {
+      return Fn(Checker, CE, C);
+    } 
+  };
+
+  void _registerForEvalCall(EvalCallFunc checkfn);
+
 //===----------------------------------------------------------------------===//
 // Implementation details.
 //===----------------------------------------------------------------------===//
@@ -229,8 +311,6 @@ private:
   static void destruct(void *obj) { delete static_cast<CHECKER *>(obj); }
 
   std::vector<CheckerDtor> CheckerDtors;
-
-  std::vector<RegisterToEngFunc> Funcs;
 
   struct DeclCheckerInfo {
     CheckDeclFunc CheckFn;
@@ -287,6 +367,20 @@ private:
   std::vector<CheckLocationFunc> LocationCheckers;
 
   std::vector<CheckEndAnalysisFunc> EndAnalysisCheckers;
+
+  std::vector<CheckEndPathFunc> EndPathCheckers;
+
+  std::vector<CheckLiveSymbolsFunc> LiveSymbolsCheckers;
+
+  std::vector<CheckDeadSymbolsFunc> DeadSymbolsCheckers;
+
+  struct RegionChangesCheckerInfo {
+    CheckRegionChangesFunc CheckFn;
+    WantsRegionChangeUpdateFunc WantUpdateFn;
+  };
+  std::vector<RegionChangesCheckerInfo> RegionChangesCheckers;
+
+  std::vector<EvalCallFunc> EvalCallCheckers;
 };
 
 } // end ento namespace
