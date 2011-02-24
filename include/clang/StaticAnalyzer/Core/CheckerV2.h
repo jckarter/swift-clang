@@ -160,7 +160,93 @@ public:
   }
 };
 
+class EndPath {
+  template <typename CHECKER>
+  static void _checkEndPath(void *checker, EndOfFunctionNodeBuilder &B,
+                            ExprEngine &Eng) {
+    ((const CHECKER *)checker)->checkEndPath(B, Eng);
+  }
+
+public:
+  template <typename CHECKER>
+  static void _register(CHECKER *checker, CheckerManager &mgr) {
+    mgr._registerForEndPath(
+     CheckerManager::CheckEndPathFunc(checker, _checkEndPath<CHECKER>));
+  }
+};
+
+class LiveSymbols {
+  template <typename CHECKER>
+  static void _checkLiveSymbols(void *checker, const GRState *state,
+                                SymbolReaper &SR) {
+    ((const CHECKER *)checker)->checkLiveSymbols(state, SR);
+  }
+
+public:
+  template <typename CHECKER>
+  static void _register(CHECKER *checker, CheckerManager &mgr) {
+    mgr._registerForLiveSymbols(
+     CheckerManager::CheckLiveSymbolsFunc(checker, _checkLiveSymbols<CHECKER>));
+  }
+};
+
+class DeadSymbols {
+  template <typename CHECKER>
+  static void _checkDeadSymbols(void *checker,
+                                SymbolReaper &SR, CheckerContext &C) {
+    ((const CHECKER *)checker)->checkDeadSymbols(SR, C);
+  }
+
+public:
+  template <typename CHECKER>
+  static void _register(CHECKER *checker, CheckerManager &mgr) {
+    mgr._registerForDeadSymbols(
+     CheckerManager::CheckDeadSymbolsFunc(checker, _checkDeadSymbols<CHECKER>));
+  }
+};
+
+class RegionChanges {
+  template <typename CHECKER>
+  static const GRState *_checkRegionChanges(void *checker, const GRState *state,
+                                            const MemRegion * const *Begin,
+                                            const MemRegion * const *End) {
+    return ((const CHECKER *)checker)->checkRegionChanges(state, Begin, End);
+  }
+  template <typename CHECKER>
+  static bool _wantsRegionChangeUpdate(void *checker, const GRState *state) {
+    return ((const CHECKER *)checker)->wantsRegionChangeUpdate(state);
+  }
+
+public:
+  template <typename CHECKER>
+  static void _register(CHECKER *checker, CheckerManager &mgr) {
+    mgr._registerForRegionChanges(
+          CheckerManager::CheckRegionChangesFunc(checker,
+                                                 _checkRegionChanges<CHECKER>),
+          CheckerManager::WantsRegionChangeUpdateFunc(checker,
+                                            _wantsRegionChangeUpdate<CHECKER>));
+  }
+};
+
 } // end check namespace
+
+namespace eval {
+
+class Call {
+  template <typename CHECKER>
+  static bool _evalCall(void *checker, const CallExpr *CE, CheckerContext &C) {
+    return ((const CHECKER *)checker)->evalCall(CE, C);
+  }
+
+public:
+  template <typename CHECKER>
+  static void _register(CHECKER *checker, CheckerManager &mgr) {
+    mgr._registerForEvalCall(
+                     CheckerManager::EvalCallFunc(checker, _evalCall<CHECKER>));
+  }
+};
+
+} // end eval namespace
 
 template <typename CHECK1, typename CHECK2=check::_VoidCheck,
           typename CHECK3=check::_VoidCheck, typename CHECK4=check::_VoidCheck,
