@@ -78,6 +78,8 @@ static void AnalyzerOptsToArgs(const AnalyzerOptions &Opts,
                                std::vector<std::string> &Res) {
   for (unsigned i = 0, e = Opts.AnalysisList.size(); i != e; ++i)
     Res.push_back(getAnalysisName(Opts.AnalysisList[i]));
+  if (Opts.ShowCheckerHelp)
+    Res.push_back("-analyzer-checker-help");
   if (Opts.AnalysisStoreOpt != BasicStoreModel) {
     Res.push_back("-analyzer-store");
     Res.push_back(getAnalysisStoreName(Opts.AnalysisStoreOpt));
@@ -114,8 +116,6 @@ static void AnalyzerOptsToArgs(const AnalyzerOptions &Opts,
     Res.push_back("-analyzer-viz-egraph-ubigraph");
   if (Opts.EnableExperimentalChecks)
     Res.push_back("-analyzer-experimental-checks");
-  if (Opts.EnableExperimentalInternalChecks)
-    Res.push_back("-analyzer-experimental-internal-checks");
   if (Opts.BufferOverflows)
     Res.push_back("-analyzer-check-buffer-overflows");
 
@@ -861,6 +861,7 @@ static void ParseAnalyzerArgs(AnalyzerOptions &Opts, ArgList &Args,
       Opts.AnalysisDiagOpt = Value;
   }
 
+  Opts.ShowCheckerHelp = Args.hasArg(OPT_analyzer_checker_help);
   Opts.VisualizeEGDot = Args.hasArg(OPT_analyzer_viz_egraph_graphviz);
   Opts.VisualizeEGUbi = Args.hasArg(OPT_analyzer_viz_egraph_ubigraph);
   Opts.AnalyzeAll = Args.hasArg(OPT_analyzer_opt_analyze_headers);
@@ -875,8 +876,6 @@ static void ParseAnalyzerArgs(AnalyzerOptions &Opts, ArgList &Args,
   Opts.CFGAddImplicitDtors = Args.hasArg(OPT_analysis_CFGAddImplicitDtors);
   Opts.CFGAddInitializers = Args.hasArg(OPT_analysis_CFGAddInitializers);
   Opts.EnableExperimentalChecks = Args.hasArg(OPT_analyzer_experimental_checks);
-  Opts.EnableExperimentalInternalChecks =
-    Args.hasArg(OPT_analyzer_experimental_internal_checks);
   Opts.TrimGraph = Args.hasArg(OPT_trim_egraph);
   Opts.MaxNodes = Args.getLastArgIntValue(OPT_analyzer_max_nodes, 150000,Diags);
   Opts.MaxLoop = Args.getLastArgIntValue(OPT_analyzer_max_loop, 4, Diags);
@@ -891,8 +890,13 @@ static void ParseAnalyzerArgs(AnalyzerOptions &Opts, ArgList &Args,
     const Arg *A = *it;
     A->claim();
     bool enable = (A->getOption().getID() == OPT_analyzer_checker);
-    Opts.CheckersControlList.push_back(std::make_pair(A->getValue(Args),
-                                                      enable));
+    // We can have a list of comma separated checker names, e.g:
+    // '-analyzer-checker=cocoa,unix'
+    llvm::StringRef checkerList = A->getValue(Args);
+    llvm::SmallVector<llvm::StringRef, 4> checkers;
+    checkerList.split(checkers, ",");
+    for (unsigned i = 0, e = checkers.size(); i != e; ++i)
+      Opts.CheckersControlList.push_back(std::make_pair(checkers[i], enable));
   }
 }
 

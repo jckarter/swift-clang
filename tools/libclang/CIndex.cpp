@@ -310,6 +310,7 @@ public:
   // Name visitor
   bool VisitDeclarationNameInfo(DeclarationNameInfo Name);
   bool VisitNestedNameSpecifier(NestedNameSpecifier *NNS, SourceRange Range);
+  bool VisitNestedNameSpecifierLoc(NestedNameSpecifierLoc NNS);
   
   // Template visitors
   bool VisitTemplateParameters(const TemplateParameterList *Params);
@@ -685,6 +686,11 @@ bool CursorVisitor::VisitDeclaratorDecl(DeclaratorDecl *DD) {
     if (Visit(TSInfo->getTypeLoc()))
       return true;
 
+  // Visit the nested-name-specifier, if present.
+  if (NestedNameSpecifierLoc QualifierLoc = DD->getQualifierLoc())
+    if (VisitNestedNameSpecifierLoc(QualifierLoc))
+      return true;
+
   return false;
 }
 
@@ -718,8 +724,8 @@ bool CursorVisitor::VisitFunctionDecl(FunctionDecl *ND) {
       return true;
     
     // Visit the nested-name-specifier, if present.
-    if (NestedNameSpecifier *Qualifier = ND->getQualifier())
-      if (VisitNestedNameSpecifier(Qualifier, ND->getQualifierRange()))
+    if (NestedNameSpecifierLoc QualifierLoc = ND->getQualifierLoc())
+      if (VisitNestedNameSpecifierLoc(QualifierLoc))
         return true;
     
     // Visit the declaration name.
@@ -1074,8 +1080,8 @@ bool CursorVisitor::VisitNamespaceDecl(NamespaceDecl *D) {
 
 bool CursorVisitor::VisitNamespaceAliasDecl(NamespaceAliasDecl *D) {
   // Visit nested-name-specifier.
-  if (NestedNameSpecifier *Qualifier = D->getQualifier())
-    if (VisitNestedNameSpecifier(Qualifier, D->getQualifierRange()))
+  if (NestedNameSpecifierLoc QualifierLoc = D->getQualifierLoc())
+    if (VisitNestedNameSpecifierLoc(QualifierLoc))
       return true;
   
   return Visit(MakeCursorNamespaceRef(D->getAliasedNamespace(), 
@@ -1084,9 +1090,10 @@ bool CursorVisitor::VisitNamespaceAliasDecl(NamespaceAliasDecl *D) {
 
 bool CursorVisitor::VisitUsingDecl(UsingDecl *D) {
   // Visit nested-name-specifier.
-  if (NestedNameSpecifier *Qualifier = D->getTargetNestedNameDecl())
-    if (VisitNestedNameSpecifier(Qualifier, D->getNestedNameRange()))
+  if (NestedNameSpecifierLoc QualifierLoc = D->getQualifierLoc()) {
+    if (VisitNestedNameSpecifierLoc(QualifierLoc))
       return true;
+  }
   
   if (Visit(MakeCursorOverloadedDeclRef(D, D->getLocation(), TU)))
     return true;
@@ -1096,8 +1103,8 @@ bool CursorVisitor::VisitUsingDecl(UsingDecl *D) {
 
 bool CursorVisitor::VisitUsingDirectiveDecl(UsingDirectiveDecl *D) {
   // Visit nested-name-specifier.
-  if (NestedNameSpecifier *Qualifier = D->getQualifier())
-    if (VisitNestedNameSpecifier(Qualifier, D->getQualifierRange()))
+  if (NestedNameSpecifierLoc QualifierLoc = D->getQualifierLoc())
+    if (VisitNestedNameSpecifierLoc(QualifierLoc))
       return true;
 
   return Visit(MakeCursorNamespaceRef(D->getNominatedNamespaceAsWritten(),
@@ -1106,9 +1113,10 @@ bool CursorVisitor::VisitUsingDirectiveDecl(UsingDirectiveDecl *D) {
 
 bool CursorVisitor::VisitUnresolvedUsingValueDecl(UnresolvedUsingValueDecl *D) {
   // Visit nested-name-specifier.
-  if (NestedNameSpecifier *Qualifier = D->getTargetNestedNameSpecifier())
-    if (VisitNestedNameSpecifier(Qualifier, D->getTargetNestedNameRange()))
+  if (NestedNameSpecifierLoc QualifierLoc = D->getQualifierLoc()) {
+    if (VisitNestedNameSpecifierLoc(QualifierLoc))
       return true;
+  }
 
   return VisitDeclarationNameInfo(D->getNameInfo());
 }
@@ -1116,8 +1124,8 @@ bool CursorVisitor::VisitUnresolvedUsingValueDecl(UnresolvedUsingValueDecl *D) {
 bool CursorVisitor::VisitUnresolvedUsingTypenameDecl(
                                                UnresolvedUsingTypenameDecl *D) {
   // Visit nested-name-specifier.
-  if (NestedNameSpecifier *Qualifier = D->getTargetNestedNameSpecifier())
-    if (VisitNestedNameSpecifier(Qualifier, D->getTargetNestedNameRange()))
+  if (NestedNameSpecifierLoc QualifierLoc = D->getQualifierLoc())
+    if (VisitNestedNameSpecifierLoc(QualifierLoc))
       return true;
   
   return false;
@@ -1189,6 +1197,48 @@ bool CursorVisitor::VisitNestedNameSpecifier(NestedNameSpecifier *NNS,
   case NestedNameSpecifier::Global:
   case NestedNameSpecifier::Identifier:
     break;      
+  }
+  
+  return false;
+}
+
+bool 
+CursorVisitor::VisitNestedNameSpecifierLoc(NestedNameSpecifierLoc Qualifier) {
+  llvm::SmallVector<NestedNameSpecifierLoc, 4> Qualifiers;
+  for (; Qualifier; Qualifier = Qualifier.getPrefix())
+    Qualifiers.push_back(Qualifier);
+  
+  while (!Qualifiers.empty()) {
+    NestedNameSpecifierLoc Q = Qualifiers.pop_back_val();
+    NestedNameSpecifier *NNS = Q.getNestedNameSpecifier();
+    switch (NNS->getKind()) {
+    case NestedNameSpecifier::Namespace:
+      if (Visit(MakeCursorNamespaceRef(NNS->getAsNamespace(), 
+                                       Q.getLocalBeginLoc(),
+                                       TU)))
+        return true;
+        
+      break;
+      
+    case NestedNameSpecifier::NamespaceAlias:
+      if (Visit(MakeCursorNamespaceRef(NNS->getAsNamespaceAlias(), 
+                                       Q.getLocalBeginLoc(),
+                                       TU)))
+        return true;
+        
+      break;
+        
+    case NestedNameSpecifier::TypeSpec:
+    case NestedNameSpecifier::TypeSpecWithTemplate:
+      if (Visit(Q.getTypeLoc()))
+        return true;
+        
+      break;
+        
+    case NestedNameSpecifier::Global:
+    case NestedNameSpecifier::Identifier:
+      break;              
+    }
   }
   
   return false;
@@ -1457,6 +1507,11 @@ bool CursorVisitor::VisitPackExpansionTypeLoc(PackExpansionTypeLoc TL) {
 }
 
 bool CursorVisitor::VisitCXXRecordDecl(CXXRecordDecl *D) {
+  // Visit the nested-name-specifier, if present.
+  if (NestedNameSpecifierLoc QualifierLoc = D->getQualifierLoc())
+    if (VisitNestedNameSpecifierLoc(QualifierLoc))
+      return true;
+
   if (D->isDefinition()) {
     for (CXXRecordDecl::base_class_iterator I = D->bases_begin(),
          E = D->bases_end(); I != E; ++I) {
