@@ -783,8 +783,7 @@ Sema::ActOnTemplateParameterList(unsigned Depth,
 
 static void SetNestedNameSpecifier(TagDecl *T, const CXXScopeSpec &SS) {
   if (SS.isSet())
-    T->setQualifierInfo(static_cast<NestedNameSpecifier*>(SS.getScopeRep()),
-                        SS.getRange());
+    T->setQualifierInfo(SS.getWithLocInContext(T->getASTContext()));
 }
 
 DeclResult
@@ -3611,7 +3610,7 @@ Sema::BuildExpressionFromDeclTemplateArgument(const TemplateArgument &Arg,
         = NestedNameSpecifier::Create(Context, 0, false,
                                       ClassType.getTypePtr());
       CXXScopeSpec SS;
-      SS.Adopt(Qualifier, Loc);
+      SS.MakeTrivial(Context, Qualifier, Loc);
 
       // The actual value-ness of this is unimportant, but for
       // internal consistency's sake, references to instance methods
@@ -5998,7 +5997,7 @@ Sema::CheckTypenameType(ElaboratedTypeKeyword Keyword,
                         SourceLocation KeywordLoc, SourceRange NNSRange,
                         SourceLocation IILoc) {
   CXXScopeSpec SS;
-  SS.Adopt(NNS, NNSRange);
+  SS.MakeTrivial(Context, NNS, NNSRange);
 
   DeclContext *Ctx = computeDeclContext(SS);
   if (!Ctx) {
@@ -6036,7 +6035,7 @@ Sema::CheckTypenameType(ElaboratedTypeKeyword Keyword,
       << Name << Ctx << FullRange;
     if (UnresolvedUsingValueDecl *Using
           = dyn_cast<UnresolvedUsingValueDecl>(Result.getRepresentativeDecl())){
-      SourceLocation Loc = Using->getTargetNestedNameRange().getBegin();
+      SourceLocation Loc = Using->getQualifierLoc().getBeginLoc();
       Diag(Loc, diag::note_using_value_decl_missing_typename)
         << FixItHint::CreateInsertion(Loc, "typename ");
     }
@@ -6168,16 +6167,18 @@ ExprResult Sema::RebuildExprInCurrentInstantiation(Expr *E) {
 }
 
 bool Sema::RebuildNestedNameSpecifierInCurrentInstantiation(CXXScopeSpec &SS) {
-  if (SS.isInvalid()) return true;
+  if (SS.isInvalid()) 
+    return true;
 
-  NestedNameSpecifier *NNS = static_cast<NestedNameSpecifier*>(SS.getScopeRep());
+  NestedNameSpecifierLoc QualifierLoc = SS.getWithLocInContext(Context);
   CurrentInstantiationRebuilder Rebuilder(*this, SS.getRange().getBegin(),
                                           DeclarationName());
-  NestedNameSpecifier *Rebuilt =
-    Rebuilder.TransformNestedNameSpecifier(NNS, SS.getRange());
-  if (!Rebuilt) return true;
+  NestedNameSpecifierLoc Rebuilt 
+    = Rebuilder.TransformNestedNameSpecifierLoc(QualifierLoc);
+  if (!Rebuilt) 
+    return true;
 
-  SS.Adopt(Rebuilt, SS.getRange());
+  SS.Adopt(Rebuilt);
   return false;
 }
 

@@ -137,7 +137,8 @@ def CStringChecker : Checker<"CString">,
 def UnreachableCodeChecker : Checker<"UnreachableCode">,
   InPackage<CoreExperimental>,
   HelpText<"Check unreachable code">,
-  DescFile<"UnreachableCodeChecker.cpp">;
+  DescFile<"UnreachableCodeChecker.cpp">,
+  Hidden; // Must be specified explicitly in order to run.
 
 def IdempotentOperationChecker : Checker<"IdempotentOps">,
   InPackage<CoreExperimental>,
@@ -173,6 +174,21 @@ def SecuritySyntaxChecker : Checker<"SecuritySyntactic">,
   InPackage<CoreExperimental>,
   HelpText<"Perform quick security checks that require no data flow">,
   DescFile<"CheckSecuritySyntaxOnly.cpp">;
+
+def ReturnPointerRangeChecker : Checker<"ReturnPtrRange">,
+  InPackage<CoreExperimental>,
+  HelpText<"Check for an out-of-bound pointer being returned to callers">,
+  DescFile<"ReturnPointerRangeChecker.cpp">;
+
+def ArrayBoundChecker : Checker<"ArrayBound">,
+  InPackage<CoreExperimental>,
+  HelpText<"Check for an out-of-bound pointer being returned to callers">,
+  DescFile<"ArrayBoundChecker.cpp">;
+
+def CastSizeChecker : Checker<"CastSize">,
+  InPackage<CoreExperimental>,
+  HelpText<"Check when casting a malloc'ed type T, whether the size is a multiple of the size of T">,
+  DescFile<"CastSizeChecker.cpp">;
 
 def ObjCDeallocChecker : Checker<"Dealloc">,
   InPackage<CocoaExperimental>,

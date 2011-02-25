@@ -2027,9 +2027,10 @@ def err_redefinition_extern_inline : Error<
 
 // This should eventually be an error.
 def warn_undefined_internal : Warning<
-  "%select{function|variable}0 %q1 has internal linkage but is not defined">;
+  "%select{function|variable}0 %q1 has internal linkage but is not defined">,
+  DiagGroup<"undefined-internal">;
 def note_used_here : Note<"used here">;
-  
+
 def warn_redefinition_of_typedef : Warning<
   "redefinition of typedef %0 is invalid in C">,
   InGroup<DiagGroup<"typedef-redefinition"> >, DefaultError;
@@ -2341,12 +2342,11 @@ def warn_remainder_by_zero : Warning<"remainder by zero is undefined">;
 def warn_shift_negative : Warning<"shift count is negative">;
 def warn_shift_gt_typewidth : Warning<"shift count >= width of type">;
 def warn_shift_result_gt_typewidth : Warning<
-  "shift result (%0) requires %1 bits to represent, but the promoted type of "
-  "the shift expression is %2 with only %3 bits">,
+  "shift result (%0) requires %1 bits to represent, but %2 only has %3 bits">,
    InGroup<DiagGroup<"shift-overflow">>;
 def warn_shift_result_overrides_sign_bit : Warning<
-  "shift result (%0) overrides the sign bit of the promoted type of the shift "
-  "expression (%1) and becomes negative">,
+  "shift result (%0) overrides the sign bit of the shift expression's type "
+  "(%1) and becomes negative">,
   InGroup<DiagGroup<"shift-sign-overflow">>, DefaultIgnore;
 
 def warn_precedence_bitwise_rel : Warning<
