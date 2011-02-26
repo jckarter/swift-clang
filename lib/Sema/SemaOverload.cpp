@@ -2261,6 +2261,8 @@ IsUserDefinedConversion(Sema &S, Expr *From, QualType ToType,
     // Record the standard conversion we used and the conversion function.
     if (CXXConstructorDecl *Constructor
           = dyn_cast<CXXConstructorDecl>(Best->Function)) {
+      S.MarkDeclarationReferenced(From->getLocStart(), Constructor);
+
       // C++ [over.ics.user]p1:
       //   If the user-defined conversion is specified by a
       //   constructor (12.3.1), the initial standard conversion
@@ -2282,6 +2284,8 @@ IsUserDefinedConversion(Sema &S, Expr *From, QualType ToType,
       return OR_Success;
     } else if (CXXConversionDecl *Conversion
                  = dyn_cast<CXXConversionDecl>(Best->Function)) {
+      S.MarkDeclarationReferenced(From->getLocStart(), Conversion);
+
       // C++ [over.ics.user]p1:
       //
       //   [...] If the user-defined conversion is specified by a
@@ -3068,6 +3072,8 @@ FindConversionForRefInit(Sema &S, ImplicitConversionSequence &ICS,
     if (!Best->FinalConversion.DirectBinding)
       return false;
 
+    if (Best->Function)
+      S.MarkDeclarationReferenced(DeclLoc, Best->Function);
     ICS.setUserDefined();
     ICS.UserDefined.Before = Best->Conversions[0].Standard;
     ICS.UserDefined.After = Best->FinalConversion;
@@ -6248,8 +6254,7 @@ isBetterOverloadCandidate(Sema &S,
 OverloadingResult
 OverloadCandidateSet::BestViableFunction(Sema &S, SourceLocation Loc,
                                          iterator &Best,
-                                         bool UserDefinedConversion,
-                                         bool IsExtraneousCopy) {
+                                         bool UserDefinedConversion) {
   // Find the best viable function.
   Best = end();
   for (iterator Cand = begin(); Cand != end(); ++Cand) {
@@ -6280,21 +6285,6 @@ OverloadCandidateSet::BestViableFunction(Sema &S, SourceLocation Loc,
       (Best->Function->isDeleted() ||
        Best->Function->getAttr<UnavailableAttr>()))
     return OR_Deleted;
-
-  // C++ [basic.def.odr]p2:
-  //   An overloaded function is used if it is selected by overload resolution
-  //   when referred to from a potentially-evaluated expression. [Note: this
-  //   covers calls to named functions (5.2.2), operator overloading
-  //   (clause 13), user-defined conversions (12.3.2), allocation function for
-  //   placement new (5.3.4), as well as non-default initialization (8.5).
-  //
-  // As a special exception, we don't mark functions selected for extraneous
-  // copy constructor calls as used; the nature of extraneous copy constructor
-  // calls is that they are never in fact called.
-  // FIXME: This doesn't seem like the right approach. Should we be doing
-  // overload resolution at all for extraneous copies?
-  if (Best->Function && !IsExtraneousCopy)
-    S.MarkDeclarationReferenced(Loc, Best->Function);
 
   return OR_Success;
 }
@@ -7687,6 +7677,7 @@ Sema::BuildOverloadedCallExpr(Scope *S, Expr *Fn, UnresolvedLookupExpr *ULE,
   switch (CandidateSet.BestViableFunction(*this, Fn->getLocStart(), Best)) {
   case OR_Success: {
     FunctionDecl *FDecl = Best->Function;
+    MarkDeclarationReferenced(Fn->getExprLoc(), FDecl);
     CheckUnresolvedLookupAccess(ULE, Best->FoundDecl);
     DiagnoseUseOfDecl(FDecl? FDecl : Best->FoundDecl.getDecl(),
                       ULE->getNameLoc());
@@ -7709,11 +7700,15 @@ Sema::BuildOverloadedCallExpr(Scope *S, Expr *Fn, UnresolvedLookupExpr *ULE,
     break;
 
   case OR_Deleted:
-    Diag(Fn->getSourceRange().getBegin(), diag::err_ovl_deleted_call)
-      << Best->Function->isDeleted()
-      << ULE->getName()
-      << Fn->getSourceRange();
-    CandidateSet.NoteCandidates(*this, OCD_AllCandidates, Args, NumArgs);
+    {
+      Diag(Fn->getSourceRange().getBegin(), diag::err_ovl_deleted_call)
+        << Best->Function->isDeleted()
+        << ULE->getName()
+        << Best->Function->getMessageUnavailableAttr(
+             !Best->Function->isDeleted())
+        << Fn->getSourceRange();
+      CandidateSet.NoteCandidates(*this, OCD_AllCandidates, Args, NumArgs);
+    }
     break;
   }
 
@@ -7820,6 +7815,8 @@ Sema::CreateOverloadedUnaryOp(SourceLocation OpLoc, unsigned OpcIn,
       // We matched an overloaded operator. Build a call to that
       // operator.
 
+      MarkDeclarationReferenced(OpLoc, FnDecl);
+
       // Convert the arguments.
       if (CXXMethodDecl *Method = dyn_cast<CXXMethodDecl>(FnDecl)) {
         CheckMemberOperatorAccess(OpLoc, Args[0], 0, Best->FoundDecl);
@@ -7891,6 +7888,8 @@ Sema::CreateOverloadedUnaryOp(SourceLocation OpLoc, unsigned OpcIn,
       Diag(OpLoc, diag::err_ovl_deleted_oper)
         << Best->Function->isDeleted()
         << UnaryOperator::getOpcodeStr(Opc)
+        << Best->Function->getMessageUnavailableAttr(
+             !Best->Function->isDeleted())
         << Input->getSourceRange();
       CandidateSet.NoteCandidates(*this, OCD_AllCandidates, Args, NumArgs);
       return ExprError();
@@ -8043,6 +8042,8 @@ Sema::CreateOverloadedBinOp(SourceLocation OpLoc,
         // We matched an overloaded operator. Build a call to that
         // operator.
 
+        MarkDeclarationReferenced(OpLoc, FnDecl);
+
         // Convert the arguments.
         if (CXXMethodDecl *Method = dyn_cast<CXXMethodDecl>(FnDecl)) {
           // Best->Access is only meaningful for class members.
@@ -8157,6 +8158,8 @@ Sema::CreateOverloadedBinOp(SourceLocation OpLoc,
       Diag(OpLoc, diag::err_ovl_deleted_oper)
         << Best->Function->isDeleted()
         << BinaryOperator::getOpcodeStr(Opc)
+        << Best->Function->getMessageUnavailableAttr(
+             !Best->Function->isDeleted())
         << Args[0]->getSourceRange() << Args[1]->getSourceRange();
       CandidateSet.NoteCandidates(*this, OCD_AllCandidates, Args, 2);
       return ExprError();
@@ -8223,6 +8226,8 @@ Sema::CreateOverloadedArraySubscriptExpr(SourceLocation LLoc,
       if (FnDecl) {
         // We matched an overloaded operator. Build a call to that
         // operator.
+
+        MarkDeclarationReferenced(LLoc, FnDecl);
 
         CheckMemberOperatorAccess(LLoc, Args[0], Args[1], Best->FoundDecl);
         DiagnoseUseOfDecl(Best->FoundDecl, LLoc);
@@ -8303,6 +8308,8 @@ Sema::CreateOverloadedArraySubscriptExpr(SourceLocation LLoc,
     case OR_Deleted:
       Diag(LLoc, diag::err_ovl_deleted_oper)
         << Best->Function->isDeleted() << "[]"
+        << Best->Function->getMessageUnavailableAttr(
+             !Best->Function->isDeleted())
         << Args[0]->getSourceRange() << Args[1]->getSourceRange();
       CandidateSet.NoteCandidates(*this, OCD_AllCandidates, Args, 2,
                                   "[]", LLoc);
@@ -8395,6 +8402,7 @@ Sema::BuildCallToMemberFunction(Scope *S, Expr *MemExprE,
                                             Best)) {
     case OR_Success:
       Method = cast<CXXMethodDecl>(Best->Function);
+      MarkDeclarationReferenced(UnresExpr->getMemberLoc(), Method);
       FoundDecl = Best->FoundDecl;
       CheckUnresolvedMemberAccess(UnresExpr, Best->FoundDecl);
       DiagnoseUseOfDecl(Best->FoundDecl, UnresExpr->getNameLoc());
@@ -8418,7 +8426,10 @@ Sema::BuildCallToMemberFunction(Scope *S, Expr *MemExprE,
     case OR_Deleted:
       Diag(UnresExpr->getMemberLoc(), diag::err_ovl_deleted_member_call)
         << Best->Function->isDeleted()
-        << DeclName << MemExprE->getSourceRange();
+        << DeclName 
+        << Best->Function->getMessageUnavailableAttr(
+             !Best->Function->isDeleted())
+        << MemExprE->getSourceRange();
       CandidateSet.NoteCandidates(*this, OCD_AllCandidates, Args, NumArgs);
       // FIXME: Leaking incoming expressions!
       return ExprError();
@@ -8590,7 +8601,10 @@ Sema::BuildCallToObjectOfClassType(Scope *S, Expr *Object,
     Diag(Object->getSourceRange().getBegin(),
          diag::err_ovl_deleted_object_call)
       << Best->Function->isDeleted()
-      << Object->getType() << Object->getSourceRange();
+      << Object->getType() 
+      << Best->Function->getMessageUnavailableAttr(
+           !Best->Function->isDeleted())
+      << Object->getSourceRange();
     CandidateSet.NoteCandidates(*this, OCD_AllCandidates, Args, NumArgs);
     break;
   }
@@ -8622,6 +8636,7 @@ Sema::BuildCallToObjectOfClassType(Scope *S, Expr *Object,
                          RParenLoc);
   }
 
+  MarkDeclarationReferenced(LParenLoc, Best->Function);
   CheckMemberOperatorAccess(LParenLoc, Object, 0, Best->FoundDecl);
   DiagnoseUseOfDecl(Best->FoundDecl, LParenLoc);
 
@@ -8795,11 +8810,15 @@ Sema::BuildOverloadedArrowExpr(Scope *S, Expr *Base, SourceLocation OpLoc) {
   case OR_Deleted:
     Diag(OpLoc,  diag::err_ovl_deleted_oper)
       << Best->Function->isDeleted()
-      << "->" << Base->getSourceRange();
+      << "->" 
+      << Best->Function->getMessageUnavailableAttr(
+             !Best->Function->isDeleted())
+      << Base->getSourceRange();
     CandidateSet.NoteCandidates(*this, OCD_AllCandidates, &Base, 1);
     return ExprError();
   }
 
+  MarkDeclarationReferenced(OpLoc, Best->Function);
   CheckMemberOperatorAccess(OpLoc, Base, 0, Best->FoundDecl);
   DiagnoseUseOfDecl(Best->FoundDecl, OpLoc);
 
