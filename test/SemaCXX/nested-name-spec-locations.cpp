@@ -1,4 +1,4 @@
-// RUN: %clang-cc1 -fsyntax-only -verify %s
+// RUN: %clang_cc1 -fsyntax-only -verify %s
 
 // Note: the formatting in this test case is intentionally funny, with
 // nested-name-specifiers stretched out vertically so that we can
@@ -40,3 +40,31 @@ struct UnresolvedUsingTypenameDeclTester {
 
 UnresolvedUsingTypenameDeclTester<int> UnresolvedUsingTypenameDeclCheck; // expected-note{{in instantiation of template class}}
 
+
+template<typename T, typename U>
+struct PseudoDestructorExprTester {
+  void f(T *t) {
+    t->T::template Inner<typename add_reference<U>::type 
+      * // expected-error{{as a pointer to a reference of type}}
+      >::Blarg::~Blarg();
+  }
+};
+
+struct HasInnerTemplate {
+  template<typename T>
+  struct Inner;
+
+  typedef HasInnerTemplate T;
+};
+
+void PseudoDestructorExprCheck(
+                    PseudoDestructorExprTester<HasInnerTemplate, float> tester) {
+  tester.f(0); // expected-note{{in instantiation of member function}}
+}
+
+template<typename T>
+struct DependentScopedDeclRefExpr {
+  void f() {
+    outer_alias::inner::X0<T>::value = 17;
+  }
+};

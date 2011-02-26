@@ -1284,13 +1284,12 @@ public:
   /// By default, performs semantic analysis to build the new expression.
   /// Subclasses may override this routine to provide different behavior.
   ExprResult RebuildCXXPseudoDestructorExpr(Expr *Base,
-                                                  SourceLocation OperatorLoc,
-                                                  bool isArrow,
-                                                NestedNameSpecifier *Qualifier,
-                                                  SourceRange QualifierRange,
-                                                  TypeSourceInfo *ScopeType,
-                                                  SourceLocation CCLoc,
-                                                  SourceLocation TildeLoc,
+                                            SourceLocation OperatorLoc,
+                                            bool isArrow,
+                                            CXXScopeSpec &SS,
+                                            TypeSourceInfo *ScopeType,
+                                            SourceLocation CCLoc,
+                                            SourceLocation TildeLoc,
                                         PseudoDestructorTypeStorage Destroyed);
 
   /// \brief Build a new unary operator expression.
@@ -1888,12 +1887,12 @@ public:
   ///
   /// By default, performs semantic analysis to build the new expression.
   /// Subclasses may override this routine to provide different behavior.
-  ExprResult RebuildDependentScopeDeclRefExpr(NestedNameSpecifier *NNS,
-                                                SourceRange QualifierRange,
+  ExprResult RebuildDependentScopeDeclRefExpr(
+                                          NestedNameSpecifierLoc QualifierLoc,
                                        const DeclarationNameInfo &NameInfo,
                               const TemplateArgumentListInfo *TemplateArgs) {
     CXXScopeSpec SS;
-    SS.MakeTrivial(SemaRef.Context, NNS, QualifierRange);
+    SS.Adopt(QualifierLoc);
 
     if (TemplateArgs)
       return getSema().BuildQualifiedTemplateIdExpr(SS, NameInfo,
@@ -2597,9 +2596,7 @@ TreeTransform<Derived>::TransformNestedNameSpecifierLoc(
     }
   }
     
-    // The object type and qualifier-in-scope really apply to the
-    // leftmost entity.
-    ObjectType = QualType();
+    // The qualifier-in-scope only applies to the leftmost entity.
     FirstQualifierInScope = 0;
   }
   
@@ -6612,21 +6609,22 @@ TreeTransform<Derived>::TransformCXXPseudoDestructorExpr(
     return ExprError();
                                               
   QualType ObjectType = ObjectTypePtr.get();
-  NestedNameSpecifier *Qualifier = E->getQualifier();
-  if (Qualifier) {
-    Qualifier
-      = getDerived().TransformNestedNameSpecifier(E->getQualifier(),
-                                                  E->getQualifierRange(),
-                                                  ObjectType);
-    if (!Qualifier)
+  NestedNameSpecifierLoc QualifierLoc = E->getQualifierLoc();
+  if (QualifierLoc) {
+    QualifierLoc
+      = getDerived().TransformNestedNameSpecifierLoc(QualifierLoc, ObjectType);
+    if (!QualifierLoc)
       return ExprError();
   }
+  CXXScopeSpec SS;
+  SS.Adopt(QualifierLoc);
 
   PseudoDestructorTypeStorage Destroyed;
   if (E->getDestroyedTypeInfo()) {
     TypeSourceInfo *DestroyedTypeInfo
       = getDerived().TransformTypeInObjectScope(E->getDestroyedTypeInfo(),
-                                                ObjectType, 0, Qualifier);
+                                                ObjectType, 0, 
+                                        QualifierLoc.getNestedNameSpecifier());
     if (!DestroyedTypeInfo)
       return ExprError();
     Destroyed = DestroyedTypeInfo;
@@ -6637,10 +6635,6 @@ TreeTransform<Derived>::TransformCXXPseudoDestructorExpr(
                                             E->getDestroyedTypeLoc());
   } else {
     // Look for a destructor known with the given name.
-    CXXScopeSpec SS;
-    if (Qualifier)
-      SS.MakeTrivial(SemaRef.Context, Qualifier, E->getQualifierRange());
-    
     ParsedType T = SemaRef.getDestructorName(E->getTildeLoc(),
                                               *E->getDestroyedTypeIdentifier(),
                                                 E->getDestroyedTypeLoc(),
@@ -6665,8 +6659,7 @@ TreeTransform<Derived>::TransformCXXPseudoDestructorExpr(
   return getDerived().RebuildCXXPseudoDestructorExpr(Base.get(),
                                                      E->getOperatorLoc(),
                                                      E->isArrow(),
-                                                     Qualifier,
-                                                     E->getQualifierRange(),
+                                                     SS,
                                                      ScopeTypeInfo,
                                                      E->getColonColonLoc(),
                                                      E->getTildeLoc(),
@@ -6794,10 +6787,9 @@ template<typename Derived>
 ExprResult
 TreeTransform<Derived>::TransformDependentScopeDeclRefExpr(
                                                DependentScopeDeclRefExpr *E) {
-  NestedNameSpecifier *NNS
-    = getDerived().TransformNestedNameSpecifier(E->getQualifier(),
-                                                E->getQualifierRange());
-  if (!NNS)
+  NestedNameSpecifierLoc QualifierLoc
+  = getDerived().TransformNestedNameSpecifierLoc(E->getQualifierLoc());
+  if (!QualifierLoc)
     return ExprError();
 
   // TODO: If this is a conversion-function-id, verify that the
@@ -6811,14 +6803,13 @@ TreeTransform<Derived>::TransformDependentScopeDeclRefExpr(
 
   if (!E->hasExplicitTemplateArgs()) {
     if (!getDerived().AlwaysRebuild() &&
-        NNS == E->getQualifier() &&
+        QualifierLoc == E->getQualifierLoc() &&
         // Note: it is sufficient to compare the Name component of NameInfo:
         // if name has not changed, DNLoc has not changed either.
         NameInfo.getName() == E->getDeclName())
       return SemaRef.Owned(E);
 
-    return getDerived().RebuildDependentScopeDeclRefExpr(NNS,
-                                                         E->getQualifierRange(),
+    return getDerived().RebuildDependentScopeDeclRefExpr(QualifierLoc,
                                                          NameInfo,
                                                          /*TemplateArgs*/ 0);
   }
@@ -6829,8 +6820,7 @@ TreeTransform<Derived>::TransformDependentScopeDeclRefExpr(
                                               TransArgs))
     return ExprError();
 
-  return getDerived().RebuildDependentScopeDeclRefExpr(NNS,
-                                                       E->getQualifierRange(),
+  return getDerived().RebuildDependentScopeDeclRefExpr(QualifierLoc,
                                                        NameInfo,
                                                        &TransArgs);
 }
@@ -7930,16 +7920,11 @@ ExprResult
 TreeTransform<Derived>::RebuildCXXPseudoDestructorExpr(Expr *Base,
                                                      SourceLocation OperatorLoc,
                                                        bool isArrow,
-                                                 NestedNameSpecifier *Qualifier,
-                                                     SourceRange QualifierRange,
+                                                       CXXScopeSpec &SS,
                                                      TypeSourceInfo *ScopeType,
                                                        SourceLocation CCLoc,
                                                        SourceLocation TildeLoc,
                                         PseudoDestructorTypeStorage Destroyed) {
-  CXXScopeSpec SS;
-  if (Qualifier)
-    SS.MakeTrivial(SemaRef.Context, Qualifier, QualifierRange);
-
   QualType BaseType = Base->getType();
   if (Base->isTypeDependent() || Destroyed.getIdentifier() ||
       (!isArrow && !BaseType->getAs<RecordType>()) ||

@@ -1349,6 +1349,7 @@ bool Sema::FindAllocationOverload(SourceLocation StartLoc, SourceRange Range,
   case OR_Success: {
     // Got one!
     FunctionDecl *FnDecl = Best->Function;
+    MarkDeclarationReferenced(StartLoc, FnDecl);
     // The first argument is size_t, and the first parameter must be size_t,
     // too. This is checked on declaration and can be assumed. (It can't be
     // asserted on, though, since invalid decls are left in there.)
@@ -1386,7 +1387,10 @@ bool Sema::FindAllocationOverload(SourceLocation StartLoc, SourceRange Range,
   case OR_Deleted:
     Diag(StartLoc, diag::err_ovl_deleted_call)
       << Best->Function->isDeleted()
-      << Name << Range;
+      << Name 
+      << Best->Function->getMessageUnavailableAttr(
+             !Best->Function->isDeleted())
+      << Range;
     Candidates.NoteCandidates(*this, OCD_AllCandidates, Args, NumArgs);
     return true;
   }
@@ -2922,6 +2926,8 @@ static bool FindConditionalOverload(Sema &Self, Expr *&LHS, Expr *&RHS,
           Self.PerformImplicitConversion(RHS, Best->BuiltinTypes.ParamTypes[1],
                                          Best->Conversions[1], Sema::AA_Converting))
         break;
+      if (Best->Function)
+        Self.MarkDeclarationReferenced(QuestionLoc, Best->Function);
       return false;
 
     case OR_No_Viable_Function:
@@ -3664,7 +3670,7 @@ ExprResult Sema::BuildPseudoDestructorExpr(Expr *Base,
   Expr *Result
     = new (Context) CXXPseudoDestructorExpr(Context, Base,
                                             OpKind == tok::arrow, OpLoc,
-                                            SS.getScopeRep(), SS.getRange(),
+                                            SS.getWithLocInContext(Context),
                                             ScopeTypeInfo,
                                             CCLoc,
                                             TildeLoc,
@@ -3786,7 +3792,7 @@ ExprResult Sema::ActOnPseudoDestructorExpr(Scope *S, Expr *Base,
     if (FirstTypeName.getKind() == UnqualifiedId::IK_Identifier) {
       ParsedType T = getTypeName(*FirstTypeName.Identifier,
                                  FirstTypeName.StartLocation,
-                                 S, &SS, false, false, ObjectTypePtrForLookup);
+                                 S, &SS, true, false, ObjectTypePtrForLookup);
       if (!T) {
         Diag(FirstTypeName.StartLocation,
              diag::err_pseudo_dtor_destructor_non_type)
