@@ -31,9 +31,6 @@
 #include "clang/StaticAnalyzer/Core/PathDiagnosticClients.h"
 
 // FIXME: Restructure checker registration.
-#include "../Checkers/ClangSACheckers.h"
-#include "../Checkers/ExperimentalChecks.h"
-#include "../Checkers/InternalChecks.h"
 #include "../Checkers/BasicObjCFoundationChecks.h"
 
 #include "clang/Basic/FileManager.h"
@@ -341,16 +338,6 @@ static void ActionExprEngine(AnalysisConsumer &C, AnalysisManager& mgr,
   ExprEngine Eng(mgr, TF.take());
 
   RegisterNSErrorChecks(Eng.getBugReporter(), Eng, *D);
-
-  if (C.Opts.EnableExperimentalChecks)
-    RegisterExperimentalChecks(Eng);
-
-  if (C.Opts.BufferOverflows)
-    RegisterArrayBoundCheckerV2(Eng);
-
-  // Enable AnalyzerStatsChecker if it was given as an argument
-  if (C.Opts.AnalyzerStats)
-    RegisterAnalyzerStatsChecker(Eng);
 
   // Set the graph auditor.
   llvm::OwningPtr<ExplodedNode::Auditor> Auditor;

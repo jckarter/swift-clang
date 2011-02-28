@@ -102,8 +102,6 @@ static void AnalyzerOptsToArgs(const AnalyzerOptions &Opts,
     Res.push_back("-analyzer-display-progress");
   if (Opts.AnalyzeNestedBlocks)
     Res.push_back("-analyzer-opt-analyze-nested-blocks");
-  if (Opts.AnalyzerStats)
-    Res.push_back("-analyzer-stats");
   if (Opts.EagerlyAssume)
     Res.push_back("-analyzer-eagerly-assume");
   if (!Opts.PurgeDead)
@@ -114,10 +112,6 @@ static void AnalyzerOptsToArgs(const AnalyzerOptions &Opts,
     Res.push_back("-analyzer-viz-egraph-graphviz");
   if (Opts.VisualizeEGDot)
     Res.push_back("-analyzer-viz-egraph-ubigraph");
-  if (Opts.EnableExperimentalChecks)
-    Res.push_back("-analyzer-experimental-checks");
-  if (Opts.BufferOverflows)
-    Res.push_back("-analyzer-check-buffer-overflows");
 
   for (unsigned i = 0, e = Opts.CheckersControlList.size(); i != e; ++i) {
     const std::pair<std::string, bool> &opt = Opts.CheckersControlList[i];
@@ -868,20 +862,17 @@ static void ParseAnalyzerArgs(AnalyzerOptions &Opts, ArgList &Args,
   Opts.AnalyzerDisplayProgress = Args.hasArg(OPT_analyzer_display_progress);
   Opts.AnalyzeNestedBlocks =
     Args.hasArg(OPT_analyzer_opt_analyze_nested_blocks);
-  Opts.AnalyzerStats = Args.hasArg(OPT_analysis_AnalyzerStats);
   Opts.PurgeDead = !Args.hasArg(OPT_analyzer_no_purge_dead);
   Opts.EagerlyAssume = Args.hasArg(OPT_analyzer_eagerly_assume);
   Opts.AnalyzeSpecificFunction = Args.getLastArgValue(OPT_analyze_function);
   Opts.UnoptimizedCFG = Args.hasArg(OPT_analysis_UnoptimizedCFG);
   Opts.CFGAddImplicitDtors = Args.hasArg(OPT_analysis_CFGAddImplicitDtors);
   Opts.CFGAddInitializers = Args.hasArg(OPT_analysis_CFGAddInitializers);
-  Opts.EnableExperimentalChecks = Args.hasArg(OPT_analyzer_experimental_checks);
   Opts.TrimGraph = Args.hasArg(OPT_trim_egraph);
   Opts.MaxNodes = Args.getLastArgIntValue(OPT_analyzer_max_nodes, 150000,Diags);
   Opts.MaxLoop = Args.getLastArgIntValue(OPT_analyzer_max_loop, 4, Diags);
   Opts.EagerlyTrimEGraph = !Args.hasArg(OPT_analyzer_no_eagerly_trim_egraph);
   Opts.InlineCall = Args.hasArg(OPT_analyzer_inline_call);
-  Opts.BufferOverflows = Args.hasArg(OPT_analysis_WarnBufferOverflows);
 
   Opts.CheckersControlList.clear();
   for (arg_iterator it = Args.filtered_begin(OPT_analyzer_checker,
