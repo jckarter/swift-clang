@@ -22,24 +22,7 @@ namespace ento {
 class ExprEngine;
 
 // Foundational checks that handle basic semantics.
-void RegisterAdjustedReturnValueChecker(ExprEngine &Eng);
-void RegisterArrayBoundCheckerV2(ExprEngine &Eng);
-void RegisterAttrNonNullChecker(ExprEngine &Eng);
-void RegisterBuiltinFunctionChecker(ExprEngine &Eng);
-void RegisterCallAndMessageChecker(ExprEngine &Eng);
 void RegisterDereferenceChecker(ExprEngine &Eng);
-void RegisterDivZeroChecker(ExprEngine &Eng);
-void RegisterNoReturnFunctionChecker(ExprEngine &Eng);
-void RegisterReturnUndefChecker(ExprEngine &Eng);
-void RegisterUndefBranchChecker(ExprEngine &Eng);
-void RegisterUndefCapturedBlockVarChecker(ExprEngine &Eng);
-void RegisterUndefResultChecker(ExprEngine &Eng);
-void RegisterUndefinedArraySubscriptChecker(ExprEngine &Eng);
-void RegisterUndefinedAssignmentChecker(ExprEngine &Eng);
-void RegisterVLASizeChecker(ExprEngine &Eng);
-
-// API checks.
-void RegisterOSAtomicChecker(ExprEngine &Eng);
 
 } // end GR namespace
 

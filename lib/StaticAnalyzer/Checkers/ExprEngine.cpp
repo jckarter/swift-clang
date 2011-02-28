@@ -267,10 +267,12 @@ void ExprEngine::CheckerVisitBind(const Stmt *StoreE, ExplodedNodeSet &Dst,
                                     SVal val, bool isPrevisit) {
 
   if (Checkers.empty()) {
-    Dst.insert(Src);
+    getCheckerManager().runCheckersForBind(Dst, Src, location, val, StoreE,
+                                           *this);
     return;
   }
 
+  ExplodedNodeSet CheckerV1Tmp;
   ExplodedNodeSet Tmp;
   ExplodedNodeSet *PrevSet = &Src;
 
@@ -278,7 +280,7 @@ void ExprEngine::CheckerVisitBind(const Stmt *StoreE, ExplodedNodeSet &Dst,
   {
     ExplodedNodeSet *CurrSet = 0;
     if (I+1 == E)
-      CurrSet = &Dst;
+      CurrSet = &CheckerV1Tmp;
     else {
       CurrSet = (PrevSet == &Tmp) ? &Src : &Tmp;
       CurrSet->clear();
@@ -296,6 +298,9 @@ void ExprEngine::CheckerVisitBind(const Stmt *StoreE, ExplodedNodeSet &Dst,
     PrevSet = CurrSet;
   }
 
+  getCheckerManager().runCheckersForBind(Dst, CheckerV1Tmp, location, val,
+                                         StoreE, *this);
+  
   // Don't autotransition.  The CheckerContext objects should do this
   // automatically.
 }
@@ -314,25 +319,9 @@ static void RegisterInternalChecks(ExprEngine &Eng) {
   // their associated BugType will get registered with the BugReporter
   // automatically.  Note that the check itself is owned by the ExprEngine
   // object.
-  RegisterAdjustedReturnValueChecker(Eng);
   // CallAndMessageChecker should be registered before AttrNonNullChecker,
   // where we assume arguments are not undefined.
-  RegisterCallAndMessageChecker(Eng);
-  RegisterAttrNonNullChecker(Eng);
   RegisterDereferenceChecker(Eng);
-  RegisterVLASizeChecker(Eng);
-  RegisterDivZeroChecker(Eng);
-  RegisterReturnUndefChecker(Eng);
-  RegisterUndefinedArraySubscriptChecker(Eng);
-  RegisterUndefinedAssignmentChecker(Eng);
-  RegisterUndefBranchChecker(Eng);
-  RegisterUndefCapturedBlockVarChecker(Eng);
-  RegisterUndefResultChecker(Eng);
-
-  // This is not a checker yet.
-  RegisterNoReturnFunctionChecker(Eng);
-  RegisterBuiltinFunctionChecker(Eng);
-  RegisterOSAtomicChecker(Eng);
 }
 
 ExprEngine::ExprEngine(AnalysisManager &mgr, TransferFuncs *tf)
@@ -492,6 +481,8 @@ const GRState *ExprEngine::processAssume(const GRState *state, SVal cond,
     if (NewCO.get())
       CO_Ref = NewCO.take();
   }
+
+  state = getCheckerManager().runCheckersForEvalAssume(state, cond, assumption);
 
   // If the state is infeasible at this point, bail out.
   if (!state)
@@ -1319,6 +1310,8 @@ void ExprEngine::processBranch(const Stmt* Condition, const Stmt* Term,
     checker->VisitBranchCondition(builder, *this, Condition, tag);
   }
 
+  getCheckerManager().runCheckersForBranchCondition(Condition, builder, *this);
+
   // If the branch condition is undefined, return;
   if (!builder.isFeasible(true) && !builder.isFeasible(false))
     return;
@@ -1326,7 +1319,7 @@ void ExprEngine::processBranch(const Stmt* Condition, const Stmt* Term,
   const GRState* PrevState = builder.getState();
   SVal X = PrevState->getSVal(Condition);
 
-  if (X.isUnknown()) {
+  if (X.isUnknownOrUndef()) {
     // Give it a chance to recover from unknown.
     if (const Expr *Ex = dyn_cast<Expr>(Condition)) {
       if (Ex->getType()->isIntegerType()) {
@@ -1344,7 +1337,7 @@ void ExprEngine::processBranch(const Stmt* Condition, const Stmt* Term,
       }
     }
     // If the condition is still unknown, give up.
-    if (X.isUnknown()) {
+    if (X.isUnknownOrUndef()) {
       builder.generateNode(MarkBranch(PrevState, Term, true), true);
       builder.generateNode(MarkBranch(PrevState, Term, false), false);
       return;
@@ -1862,7 +1855,8 @@ void ExprEngine::evalStore(ExplodedNodeSet& Dst, const Expr *AssignE,
   if (Tmp.empty())
     return;
 
-  assert(!location.isUndef());
+  if (location.isUndef())
+    return;
 
   SaveAndRestore<ProgramPoint::Kind> OldSPointKind(Builder->PointKind,
                                                    ProgramPoint::PostStoreKind);
@@ -1922,7 +1916,8 @@ void ExprEngine::evalLoadCommon(ExplodedNodeSet& Dst, const Expr *Ex,
   if (Tmp.empty())
     return;
 
-  assert(!location.isUndef());
+  if (location.isUndef())
+    return;
 
   SaveAndRestore<ProgramPoint::Kind> OldSPointKind(Builder->PointKind);
 
@@ -2430,33 +2425,34 @@ void ExprEngine::VisitObjCMessage(const ObjCMessage &msg,
 
     if (const Expr *Receiver = msg.getInstanceReceiver()) {
       const GRState *state = GetState(Pred);
-
-      // Bifurcate the state into nil and non-nil ones.
-      DefinedOrUnknownSVal receiverVal =
-        cast<DefinedOrUnknownSVal>(state->getSVal(Receiver));
-
-      const GRState *notNilState, *nilState;
-      llvm::tie(notNilState, nilState) = state->assume(receiverVal);
-
-      // There are three cases: can be nil or non-nil, must be nil, must be
-      // non-nil. We handle must be nil, and merge the rest two into non-nil.
-      if (nilState && !notNilState) {
-        CheckerEvalNilReceiver(msg, dstEval, nilState, Pred);
-        continue;
+      SVal recVal = state->getSVal(Receiver);
+      if (!recVal.isUndef()) {
+        // Bifurcate the state into nil and non-nil ones.
+        DefinedOrUnknownSVal receiverVal = cast<DefinedOrUnknownSVal>(recVal);
+    
+        const GRState *notNilState, *nilState;
+        llvm::tie(notNilState, nilState) = state->assume(receiverVal);
+    
+        // There are three cases: can be nil or non-nil, must be nil, must be
+        // non-nil. We handle must be nil, and merge the rest two into non-nil.
+        if (nilState && !notNilState) {
+          CheckerEvalNilReceiver(msg, dstEval, nilState, Pred);
+          continue;
+        }
+    
+        // Check if the "raise" message was sent.
+        assert(notNilState);
+        if (msg.getSelector() == RaiseSel)
+          RaisesException = true;
+    
+        // Check if we raise an exception.  For now treat these as sinks.
+        // Eventually we will want to handle exceptions properly.
+        if (RaisesException)
+          Builder->BuildSinks = true;
+    
+        // Dispatch to plug-in transfer function.
+        evalObjCMessage(dstEval, msg, Pred, notNilState);
       }
-
-      // Check if the "raise" message was sent.
-      assert(notNilState);
-      if (msg.getSelector() == RaiseSel)
-        RaisesException = true;
-
-      // Check if we raise an exception.  For now treat these as sinks.
-      // Eventually we will want to handle exceptions properly.
-      if (RaisesException)
-        Builder->BuildSinks = true;
-
-      // Dispatch to plug-in transfer function.
-      evalObjCMessage(dstEval, msg, Pred, notNilState);
     }
     else if (const ObjCInterfaceDecl *Iface = msg.getReceiverInterface()) {
       IdentifierInfo* ClsName = Iface->getIdentifier();

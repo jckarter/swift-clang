@@ -765,34 +765,102 @@ void Clang::AddX86TargetArgs(const ArgList &Args,
   }
 }
 
-static bool needsExceptions(const ArgList &Args,  types::ID InputType,
-                            const llvm::Triple &Triple) {
-  // Handle -fno-exceptions.
+static bool 
+shouldUseExceptionTablesForObjCExceptions(const ArgList &Args, 
+                                          const llvm::Triple &Triple) {
+  // We use the zero-cost exception tables for Objective-C if the non-fragile
+  // ABI is enabled or when compiling for x86_64 and ARM on Snow Leopard and
+  // later.
+
+  if (Args.hasArg(options::OPT_fobjc_nonfragile_abi))
+    return true;
+
+  if (Triple.getOS() != llvm::Triple::Darwin)
+    return false;
+
+  return (Triple.getDarwinMajorNumber() >= 9 &&
+          (Triple.getArch() == llvm::Triple::x86_64 ||
+           Triple.getArch() == llvm::Triple::arm));  
+}
+
+/// addExceptionArgs - Adds exception related arguments to the driver command
+/// arguments. There's a master flag, -fexceptions and also language specific
+/// flags to enable/disable C++ and Objective-C exceptions.
+/// This makes it possible to for example disable C++ exceptions but enable
+/// Objective-C exceptions.
+static void addExceptionArgs(const ArgList &Args, types::ID InputType,
+                             const llvm::Triple &Triple,
+                             bool KernelOrKext, bool IsRewriter,
+                             ArgStringList &CmdArgs) {
+  if (KernelOrKext)
+    return;
+
+  // Exceptions are enabled by default.
+  bool ExceptionsEnabled = true;
+
+  // This keeps track of whether exceptions were explicitly turned on or off.
+  bool DidHaveExplicitExceptionFlag = false;
+
   if (Arg *A = Args.getLastArg(options::OPT_fexceptions,
                                options::OPT_fno_exceptions)) {
     if (A->getOption().matches(options::OPT_fexceptions))
-      return true;
-    else
-      return false;
+      ExceptionsEnabled = true;
+    else 
+      ExceptionsEnabled = false;
+
+    DidHaveExplicitExceptionFlag = true;
   }
 
-  // Otherwise, C++ inputs use exceptions.
-  if (types::isCXX(InputType))
-    return true;
+  bool ShouldUseExceptionTables = false;
 
-  // As do Objective-C non-fragile ABI inputs and all Objective-C inputs on
-  // x86_64 and ARM after SnowLeopard.
+  // Exception tables and cleanups can be enabled with -fexceptions even if the
+  // language itself doesn't support exceptions.
+  if (ExceptionsEnabled && DidHaveExplicitExceptionFlag)
+    ShouldUseExceptionTables = true;
+
   if (types::isObjC(InputType)) {
-    if (Args.hasArg(options::OPT_fobjc_nonfragile_abi))
-      return true;
-    if (Triple.getOS() != llvm::Triple::Darwin)
-      return false;
-    return (Triple.getDarwinMajorNumber() >= 9 &&
-            (Triple.getArch() == llvm::Triple::x86_64 ||
-             Triple.getArch() == llvm::Triple::arm));
+    bool ObjCExceptionsEnabled = ExceptionsEnabled;
+
+    if (Arg *A = Args.getLastArg(options::OPT_fobjc_exceptions, 
+                                 options::OPT_fno_objc_exceptions,
+                                 options::OPT_fexceptions,
+                                 options::OPT_fno_exceptions)) {
+      if (A->getOption().matches(options::OPT_fobjc_exceptions))
+        ObjCExceptionsEnabled = true;
+      else if (A->getOption().matches(options::OPT_fno_objc_exceptions))
+        ObjCExceptionsEnabled = false;
+    }
+
+    if (ObjCExceptionsEnabled) {
+      CmdArgs.push_back("-fobjc-exceptions");
+
+      ShouldUseExceptionTables |= 
+        shouldUseExceptionTablesForObjCExceptions(Args, Triple);
+    }
   }
 
-  return false;
+  if (types::isCXX(InputType)) {
+    bool CXXExceptionsEnabled = ExceptionsEnabled;
+
+    if (Arg *A = Args.getLastArg(options::OPT_fcxx_exceptions, 
+                                 options::OPT_fno_cxx_exceptions, 
+                                 options::OPT_fexceptions,
+                                 options::OPT_fno_exceptions)) {
+      if (A->getOption().matches(options::OPT_fcxx_exceptions))
+        CXXExceptionsEnabled = true;
+      else if (A->getOption().matches(options::OPT_fno_cxx_exceptions))
+        CXXExceptionsEnabled = false;
+    }
+
+    if (CXXExceptionsEnabled) {
+      CmdArgs.push_back("-fcxx-exceptions");
+
+      ShouldUseExceptionTables = true;
+    }
+  }
+
+  if (ShouldUseExceptionTables)
+    CmdArgs.push_back("-fexceptions");
 }
 
 void Clang::ConstructJob(Compilation &C, const JobAction &JA,
@@ -934,6 +1002,8 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
         CmdArgs.push_back("-analyzer-checker=unix");
       if (getToolChain().getTriple().getVendor() == llvm::Triple::Apple)
         CmdArgs.push_back("-analyzer-checker=macosx");
+
+      CmdArgs.push_back("-analyzer-checker=DeadStores");
 
       // Checks to perform for Objective-C/Objective-C++.
       if (types::isObjC(InputType)) {
@@ -1408,10 +1478,9 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
                    false))
     CmdArgs.push_back("-fno-elide-constructors");
 
-  // -fexceptions=0 is default.
-  if (!KernelOrKext &&
-      needsExceptions(Args, InputType, getToolChain().getTriple()))
-    CmdArgs.push_back("-fexceptions");
+  // Add exception args.
+  addExceptionArgs(Args, InputType, getToolChain().getTriple(),
+                   KernelOrKext, IsRewriter, CmdArgs);
 
   if (getToolChain().UseSjLjExceptions())
     CmdArgs.push_back("-fsjlj-exceptions");
@@ -1548,11 +1617,6 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
                      getToolChain().IsObjCDefaultSynthPropertiesDefault())) {
       CmdArgs.push_back("-fobjc-default-synthesize-properties");
     }
-
-    // -fno-objc-exceptions is default.
-    if (IsRewriter || Args.hasFlag(options::OPT_fobjc_exceptions, 
-                                   options::OPT_fno_objc_exceptions))
-      CmdArgs.push_back("-fobjc-exceptions");
   }
 
   if (!Args.hasFlag(options::OPT_fassume_sane_operator_new,

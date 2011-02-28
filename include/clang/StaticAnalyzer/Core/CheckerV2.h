@@ -145,6 +145,21 @@ public:
   }
 };
 
+class Bind {
+  template <typename CHECKER>
+  static void _checkBind(void *checker, const SVal &location, const SVal &val,
+                         CheckerContext &C) {
+    ((const CHECKER *)checker)->checkBind(location, val, C);
+  }
+
+public:
+  template <typename CHECKER>
+  static void _register(CHECKER *checker, CheckerManager &mgr) {
+    mgr._registerForBind(
+           CheckerManager::CheckBindFunc(checker, _checkBind<CHECKER>));
+  }
+};
+
 class EndAnalysis {
   template <typename CHECKER>
   static void _checkEndAnalysis(void *checker, ExplodedGraph &G,
@@ -172,6 +187,22 @@ public:
   static void _register(CHECKER *checker, CheckerManager &mgr) {
     mgr._registerForEndPath(
      CheckerManager::CheckEndPathFunc(checker, _checkEndPath<CHECKER>));
+  }
+};
+
+class BranchCondition {
+  template <typename CHECKER>
+  static void _checkBranchCondition(void *checker, const Stmt *condition,
+                                    BranchNodeBuilder &B, ExprEngine &Eng) {
+    ((const CHECKER *)checker)->checkBranchCondition(condition, B, Eng);
+  }
+
+public:
+  template <typename CHECKER>
+  static void _register(CHECKER *checker, CheckerManager &mgr) {
+    mgr._registerForBranchCondition(
+      CheckerManager::CheckBranchConditionFunc(checker,
+                                               _checkBranchCondition<CHECKER>));
   }
 };
 
@@ -231,6 +262,21 @@ public:
 } // end check namespace
 
 namespace eval {
+
+class Assume {
+  template <typename CHECKER>
+  static const GRState *_evalAssume(void *checker, const GRState *state,
+                                    const SVal &cond, bool assumption) {
+    return ((const CHECKER *)checker)->evalAssume(state, cond, assumption);
+  }
+
+public:
+  template <typename CHECKER>
+  static void _register(CHECKER *checker, CheckerManager &mgr) {
+    mgr._registerForEvalAssume(
+                 CheckerManager::EvalAssumeFunc(checker, _evalAssume<CHECKER>));
+  }
+};
 
 class Call {
   template <typename CHECKER>
