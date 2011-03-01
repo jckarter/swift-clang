@@ -792,7 +792,8 @@ public:
                          Scope *S, CXXScopeSpec *SS = 0,
                          bool isClassName = false,
                          bool HasTrailingDot = false,
-                         ParsedType ObjectType = ParsedType());
+                         ParsedType ObjectType = ParsedType(),
+                         bool WantNontrivialTypeSourceInfo = false);
   TypeSpecifierType isTagName(IdentifierInfo &II, Scope *S);
   bool DiagnoseUnknownTypeName(const IdentifierInfo &II,
                                SourceLocation IILoc,
@@ -3416,10 +3417,9 @@ public:
                     SourceLocation RAngleLoc);
 
   QualType CheckTypenameType(ElaboratedTypeKeyword Keyword,
-                             NestedNameSpecifier *NNS,
-                             const IdentifierInfo &II,
                              SourceLocation KeywordLoc,
-                             SourceRange NNSRange,
+                             NestedNameSpecifierLoc QualifierLoc,
+                             const IdentifierInfo &II,
                              SourceLocation IILoc);
 
   TypeSourceInfo *RebuildTypeInCurrentInstantiation(TypeSourceInfo *T,

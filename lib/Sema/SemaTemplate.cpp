@@ -368,9 +368,6 @@ Sema::ActOnDependentIdExpression(const CXXScopeSpec &SS,
                                  const DeclarationNameInfo &NameInfo,
                                  bool isAddressOfOperand,
                            const TemplateArgumentListInfo *TemplateArgs) {
-  NestedNameSpecifier *Qualifier
-    = static_cast<NestedNameSpecifier*>(SS.getScopeRep());
-
   DeclContext *DC = getFunctionLevelDeclContext();
 
   if (!isAddressOfOperand &&
@@ -386,7 +383,7 @@ Sema::ActOnDependentIdExpression(const CXXScopeSpec &SS,
                                                      /*This*/ 0, ThisType,
                                                      /*IsArrow*/ true,
                                                      /*Op*/ SourceLocation(),
-                                                     Qualifier, SS.getRange(),
+                                               SS.getWithLocInContext(Context),
                                                      FirstQualifierInScope,
                                                      NameInfo,
                                                      TemplateArgs));
@@ -1756,6 +1753,26 @@ Sema::ActOnTemplateIdType(TemplateTy TemplateD, SourceLocation TemplateLoc,
   TemplateArgumentListInfo TemplateArgs(LAngleLoc, RAngleLoc);
   translateTemplateArguments(TemplateArgsIn, TemplateArgs);
 
+  if (DependentTemplateName *DTN = Template.getAsDependentTemplateName()) {
+    QualType T = Context.getDependentTemplateSpecializationType(ETK_None,
+                                                           DTN->getQualifier(), 
+                                                           DTN->getIdentifier(), 
+                                                                TemplateArgs);
+    
+    // Build type-source information.    
+    TypeLocBuilder TLB;
+    DependentTemplateSpecializationTypeLoc SpecTL
+      = TLB.push<DependentTemplateSpecializationTypeLoc>(T);
+    SpecTL.setKeywordLoc(SourceLocation()); // FIXME: 'template' location
+    SpecTL.setNameLoc(TemplateLoc);
+    SpecTL.setLAngleLoc(LAngleLoc);
+    SpecTL.setRAngleLoc(RAngleLoc);
+    SpecTL.setQualifierRange(TemplateLoc); // FIXME: nested-name-specifier loc
+    for (unsigned I = 0, N = SpecTL.getNumArgs(); I != N; ++I)
+      SpecTL.setArgLocInfo(I, TemplateArgs[I].getLocInfo());
+    return CreateParsedType(T, TLB.getTypeSourceInfo(Context, T));
+  }
+  
   QualType Result = CheckTemplateIdType(Template, TemplateLoc, TemplateArgs);
   TemplateArgsIn.release();
 
@@ -1804,19 +1821,19 @@ TypeResult Sema::ActOnTagTemplateIdType(CXXScopeSpec &SS,
 
   ElaboratedTypeKeyword Keyword
     = TypeWithKeyword::getKeywordForTagTypeKind(TagKind);
-  QualType ElabType = Context.getElaboratedType(Keyword, /*NNS=*/0, Type);
+  QualType ElabType = Context.getElaboratedType(Keyword, SS.getScopeRep(), Type);
 
   TypeSourceInfo *ElabDI = Context.CreateTypeSourceInfo(ElabType);
   ElaboratedTypeLoc TL = cast<ElaboratedTypeLoc>(ElabDI->getTypeLoc());
   TL.setKeywordLoc(TagLoc);
-  TL.setQualifierRange(SS.getRange());
+  TL.setQualifierLoc(SS.getWithLocInContext(Context));
   TL.getNamedTypeLoc().initializeFullCopy(DI->getTypeLoc());
   return CreateParsedType(ElabType, ElabDI);
 }
 
 ExprResult Sema::BuildTemplateIdExpr(const CXXScopeSpec &SS,
-                                                 LookupResult &R,
-                                                 bool RequiresADL,
+                                     LookupResult &R,
+                                     bool RequiresADL,
                                  const TemplateArgumentListInfo &TemplateArgs) {
   // FIXME: Can we do any checking at this point? I guess we could check the
   // template arguments that we have against the template name, if the template
@@ -1832,19 +1849,12 @@ ExprResult Sema::BuildTemplateIdExpr(const CXXScopeSpec &SS,
   assert(!R.empty() && "empty lookup results when building templateid");
   assert(!R.isAmbiguous() && "ambiguous lookup when building templateid");
 
-  NestedNameSpecifier *Qualifier = 0;
-  SourceRange QualifierRange;
-  if (SS.isSet()) {
-    Qualifier = static_cast<NestedNameSpecifier*>(SS.getScopeRep());
-    QualifierRange = SS.getRange();
-  }
-
   // We don't want lookup warnings at this point.
   R.suppressDiagnostics();
 
   UnresolvedLookupExpr *ULE
     = UnresolvedLookupExpr::Create(Context, R.getNamingClass(),
-                                   Qualifier, QualifierRange,
+                                   SS.getWithLocInContext(Context),
                                    R.getLookupNameInfo(),
                                    RequiresADL, TemplateArgs,
                                    R.begin(), R.end());
@@ -5891,18 +5901,17 @@ TypeResult
 Sema::ActOnTypenameType(Scope *S, SourceLocation TypenameLoc,
                         const CXXScopeSpec &SS, const IdentifierInfo &II,
                         SourceLocation IdLoc) {
-  NestedNameSpecifier *NNS
-    = static_cast<NestedNameSpecifier *>(SS.getScopeRep());
-  if (!NNS)
+  if (SS.isInvalid())
     return true;
-
+  
   if (TypenameLoc.isValid() && S && !S->getTemplateParamParent() &&
       !getLangOptions().CPlusPlus0x)
     Diag(TypenameLoc, diag::ext_typename_outside_of_template)
       << FixItHint::CreateRemoval(TypenameLoc);
 
-  QualType T = CheckTypenameType(ETK_Typename, NNS, II,
-                                 TypenameLoc, SS.getRange(), IdLoc);
+  NestedNameSpecifierLoc QualifierLoc = SS.getWithLocInContext(Context);
+  QualType T = CheckTypenameType(TypenameLoc.isValid()? ETK_Typename : ETK_None,
+                                 TypenameLoc, QualifierLoc, II, IdLoc);
   if (T.isNull())
     return true;
 
@@ -5910,12 +5919,12 @@ Sema::ActOnTypenameType(Scope *S, SourceLocation TypenameLoc,
   if (isa<DependentNameType>(T)) {
     DependentNameTypeLoc TL = cast<DependentNameTypeLoc>(TSI->getTypeLoc());
     TL.setKeywordLoc(TypenameLoc);
-    TL.setQualifierRange(SS.getRange());
+    TL.setQualifierLoc(QualifierLoc);
     TL.setNameLoc(IdLoc);
   } else {
     ElaboratedTypeLoc TL = cast<ElaboratedTypeLoc>(TSI->getTypeLoc());
     TL.setKeywordLoc(TypenameLoc);
-    TL.setQualifierRange(SS.getRange());
+    TL.setQualifierLoc(QualifierLoc);
     cast<TypeSpecTypeLoc>(TL.getNamedTypeLoc()).setNameLoc(IdLoc);
   }
 
@@ -5955,7 +5964,7 @@ Sema::ActOnTypenameType(Scope *S, SourceLocation TypenameLoc,
     // type.
     TypeLocBuilder Builder;
     TemplateSpecializationTypeLoc SpecTL 
-    = Builder.push<TemplateSpecializationTypeLoc>(T);
+      = Builder.push<TemplateSpecializationTypeLoc>(T);
     
     // FIXME: No place to set the location of the 'template' keyword!
     SpecTL.setLAngleLoc(LAngleLoc);
@@ -5964,14 +5973,10 @@ Sema::ActOnTypenameType(Scope *S, SourceLocation TypenameLoc,
     for (unsigned I = 0, N = TemplateArgs.size(); I != N; ++I)
       SpecTL.setArgLocInfo(I, TemplateArgs[I].getLocInfo());
     
-    // FIXME: This is a hack. We really want to push the nested-name-specifier
-    // into TemplateSpecializationType.
-    
-    /* Note: NNS already embedded in template specialization type T. */
-    T = Context.getElaboratedType(ETK_Typename, /*NNS=*/0, T);
+    T = Context.getElaboratedType(ETK_Typename, SS.getScopeRep(), T);
     ElaboratedTypeLoc TL = Builder.push<ElaboratedTypeLoc>(T);
     TL.setKeywordLoc(TypenameLoc);
-    TL.setQualifierRange(SS.getRange());
+    TL.setQualifierLoc(SS.getWithLocInContext(Context));
     
     TypeSourceInfo *TSI = Builder.getTypeSourceInfo(Context, T);
     return CreateParsedType(T, TSI);
@@ -6007,19 +6012,22 @@ Sema::ActOnTypenameType(Scope *S, SourceLocation TypenameLoc,
 /// \brief Build the type that describes a C++ typename specifier,
 /// e.g., "typename T::type".
 QualType
-Sema::CheckTypenameType(ElaboratedTypeKeyword Keyword,
-                        NestedNameSpecifier *NNS, const IdentifierInfo &II,
-                        SourceLocation KeywordLoc, SourceRange NNSRange,
+Sema::CheckTypenameType(ElaboratedTypeKeyword Keyword, 
+                        SourceLocation KeywordLoc,
+                        NestedNameSpecifierLoc QualifierLoc, 
+                        const IdentifierInfo &II,
                         SourceLocation IILoc) {
   CXXScopeSpec SS;
-  SS.MakeTrivial(Context, NNS, NNSRange);
+  SS.Adopt(QualifierLoc);
 
   DeclContext *Ctx = computeDeclContext(SS);
   if (!Ctx) {
     // If the nested-name-specifier is dependent and couldn't be
     // resolved to a type, build a typename type.
-    assert(NNS->isDependent());
-    return Context.getDependentNameType(Keyword, NNS, &II);
+    assert(QualifierLoc.getNestedNameSpecifier()->isDependent());
+    return Context.getDependentNameType(Keyword, 
+                                        QualifierLoc.getNestedNameSpecifier(), 
+                                        &II);
   }
 
   // If the nested-name-specifier refers to the current instantiation,
@@ -6044,7 +6052,7 @@ Sema::CheckTypenameType(ElaboratedTypeKeyword Keyword,
   case LookupResult::FoundUnresolvedValue: {
     // We found a using declaration that is a value. Most likely, the using
     // declaration itself is meant to have the 'typename' keyword.
-    SourceRange FullRange(KeywordLoc.isValid() ? KeywordLoc : NNSRange.getBegin(),
+    SourceRange FullRange(KeywordLoc.isValid() ? KeywordLoc : SS.getBeginLoc(),
                           IILoc);
     Diag(IILoc, diag::err_typename_refers_to_using_value_decl)
       << Name << Ctx << FullRange;
@@ -6060,13 +6068,16 @@ Sema::CheckTypenameType(ElaboratedTypeKeyword Keyword,
 
   case LookupResult::NotFoundInCurrentInstantiation:
     // Okay, it's a member of an unknown instantiation.
-    return Context.getDependentNameType(Keyword, NNS, &II);
+    return Context.getDependentNameType(Keyword, 
+                                        QualifierLoc.getNestedNameSpecifier(), 
+                                        &II);
 
   case LookupResult::Found:
     if (TypeDecl *Type = dyn_cast<TypeDecl>(Result.getFoundDecl())) {
       // We found a type. Build an ElaboratedType, since the
       // typename-specifier was just sugar.
-      return Context.getElaboratedType(ETK_Typename, NNS,
+      return Context.getElaboratedType(ETK_Typename, 
+                                       QualifierLoc.getNestedNameSpecifier(),
                                        Context.getTypeDeclType(Type));
     }
 
@@ -6089,7 +6100,7 @@ Sema::CheckTypenameType(ElaboratedTypeKeyword Keyword,
 
   // If we get here, it's because name lookup did not find a
   // type. Emit an appropriate diagnostic and return an error.
-  SourceRange FullRange(KeywordLoc.isValid() ? KeywordLoc : NNSRange.getBegin(),
+  SourceRange FullRange(KeywordLoc.isValid() ? KeywordLoc : SS.getBeginLoc(),
                         IILoc);
   Diag(IILoc, DiagID) << FullRange << Name << Ctx;
   if (Referenced)

@@ -1226,10 +1226,9 @@ Sema::ActOnMemInitializer(Decl *ConstructorD,
         if (!NotUnknownSpecialization) {
           // When the scope specifier can refer to a member of an unknown
           // specialization, we take it as a type name.
-          BaseType = CheckTypenameType(ETK_None,
-                                       (NestedNameSpecifier *)SS.getScopeRep(),
-                                       *MemberOrBase, SourceLocation(),
-                                       SS.getRange(), IdLoc);
+          BaseType = CheckTypenameType(ETK_None, SourceLocation(),
+                                       SS.getWithLocInContext(Context),
+                                       *MemberOrBase, IdLoc);
           if (BaseType.isNull())
             return true;
 
@@ -1728,7 +1727,7 @@ BuildImplicitBaseInitializer(Sema &SemaRef, CXXConstructorDecl *Constructor,
     QualType ParamType = Param->getType().getNonReferenceType();
     
     Expr *CopyCtorArg = 
-      DeclRefExpr::Create(SemaRef.Context, 0, SourceRange(), Param, 
+      DeclRefExpr::Create(SemaRef.Context, NestedNameSpecifierLoc(), Param, 
                           Constructor->getLocation(), ParamType,
                           VK_LValue, 0);
     
@@ -1789,7 +1788,7 @@ BuildImplicitMemberInitializer(Sema &SemaRef, CXXConstructorDecl *Constructor,
     QualType ParamType = Param->getType().getNonReferenceType();
     
     Expr *MemberExprBase = 
-      DeclRefExpr::Create(SemaRef.Context, 0, SourceRange(), Param, 
+      DeclRefExpr::Create(SemaRef.Context, NestedNameSpecifierLoc(), Param, 
                           Loc, ParamType, VK_LValue, 0);
 
     // Build a reference to this field within the parameter.
@@ -6914,10 +6913,11 @@ Decl *Sema::ActOnTemplatedFriendTag(Scope *S, SourceLocation FriendLoc,
   // about the template header and build an appropriate non-templated
   // friend.  TODO: for source fidelity, remember the headers.
   if (isAllExplicitSpecializations) {
+    NestedNameSpecifierLoc QualifierLoc = SS.getWithLocInContext(Context);
     ElaboratedTypeKeyword Keyword
       = TypeWithKeyword::getKeywordForTagTypeKind(Kind);
-    QualType T = CheckTypenameType(Keyword, SS.getScopeRep(), *Name,
-                                   TagLoc, SS.getRange(), NameLoc);
+    QualType T = CheckTypenameType(Keyword, TagLoc, QualifierLoc,
+                                   *Name, NameLoc);
     if (T.isNull())
       return 0;
 
@@ -6925,12 +6925,12 @@ Decl *Sema::ActOnTemplatedFriendTag(Scope *S, SourceLocation FriendLoc,
     if (isa<DependentNameType>(T)) {
       DependentNameTypeLoc TL = cast<DependentNameTypeLoc>(TSI->getTypeLoc());
       TL.setKeywordLoc(TagLoc);
-      TL.setQualifierRange(SS.getRange());
+      TL.setQualifierLoc(QualifierLoc);
       TL.setNameLoc(NameLoc);
     } else {
       ElaboratedTypeLoc TL = cast<ElaboratedTypeLoc>(TSI->getTypeLoc());
       TL.setKeywordLoc(TagLoc);
-      TL.setQualifierRange(SS.getRange());
+      TL.setQualifierLoc(QualifierLoc);
       cast<TypeSpecTypeLoc>(TL.getNamedTypeLoc()).setNameLoc(NameLoc);
     }
 
@@ -6949,7 +6949,7 @@ Decl *Sema::ActOnTemplatedFriendTag(Scope *S, SourceLocation FriendLoc,
   TypeSourceInfo *TSI = Context.CreateTypeSourceInfo(T);
   DependentNameTypeLoc TL = cast<DependentNameTypeLoc>(TSI->getTypeLoc());
   TL.setKeywordLoc(TagLoc);
-  TL.setQualifierRange(SS.getRange());
+  TL.setQualifierLoc(SS.getWithLocInContext(Context));
   TL.setNameLoc(NameLoc);
 
   FriendDecl *Friend = FriendDecl::Create(Context, CurContext, NameLoc,

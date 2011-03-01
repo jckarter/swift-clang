@@ -657,7 +657,7 @@ protected:
 
   void SelectPrimaryVBase(const CXXRecordDecl *RD);
 
-  virtual uint64_t GetVirtualPointersSize(const CXXRecordDecl *RD) const;
+  virtual CharUnits GetVirtualPointersSize(const CXXRecordDecl *RD) const;
 
   /// LayoutNonVirtualBases - Determines the primary base class (if any) and
   /// lays it out. Will then proceed to lay out all non-virtual base clasess.
@@ -757,9 +757,9 @@ RecordLayoutBuilder::SelectPrimaryVBase(const CXXRecordDecl *RD) {
   }
 }
 
-uint64_t
+CharUnits
 RecordLayoutBuilder::GetVirtualPointersSize(const CXXRecordDecl *RD) const {
-  return Context.Target.getPointerWidth(0);
+  return Context.toCharUnitsFromBits(Context.Target.getPointerWidth(0));
 }
 
 /// DeterminePrimaryBase - Determine the primary base of the given class.
@@ -815,7 +815,7 @@ void RecordLayoutBuilder::DeterminePrimaryBase(const CXXRecordDecl *RD) {
   assert(DataSize == 0 && "Vtable pointer must be at offset zero!");
 
   // Update the size.
-  setSize(getSize() + Context.toCharUnitsFromBits(GetVirtualPointersSize(RD)));
+  setSize(getSize() + GetVirtualPointersSize(RD));
   setDataSize(getSize());
 
   CharUnits UnpackedBaseAlign = 
@@ -1281,7 +1281,7 @@ void RecordLayoutBuilder::LayoutWideBitField(uint64_t FieldSize,
   }
   assert(!Type.isNull() && "Did not find a type!");
 
-  unsigned TypeAlign = Context.getTypeAlign(Type);
+  CharUnits TypeAlign = Context.getTypeAlignInChars(Type);
 
   // We're not going to use any of the unfilled bits in the last byte.
   UnfilledBitsInLastByte = 0;
@@ -1295,7 +1295,8 @@ void RecordLayoutBuilder::LayoutWideBitField(uint64_t FieldSize,
   } else {
     // The bitfield is allocated starting at the next offset aligned appropriately
     // for T', with length n bits.
-    FieldOffset = llvm::RoundUpToAlignment(getDataSizeInBits(), TypeAlign);
+    FieldOffset = llvm::RoundUpToAlignment(getDataSizeInBits(), 
+                                           Context.toBits(TypeAlign));
 
     uint64_t NewSizeInBits = FieldOffset + FieldSize;
 
@@ -1307,13 +1308,13 @@ void RecordLayoutBuilder::LayoutWideBitField(uint64_t FieldSize,
   FieldOffsets.push_back(FieldOffset);
 
   CheckFieldPadding(FieldOffset, UnpaddedFieldOffset, FieldOffset,
-                    TypeAlign, FieldPacked, D);
+                    Context.toBits(TypeAlign), FieldPacked, D);
 
   // Update the size.
   setSize(std::max(getSizeInBits(), getDataSizeInBits()));
 
   // Remember max struct/class alignment.
-  UpdateAlignment(Context.toCharUnitsFromBits(TypeAlign));
+  UpdateAlignment(TypeAlign);
 }
 
 void RecordLayoutBuilder::LayoutBitField(const FieldDecl *D) {
@@ -1661,17 +1662,19 @@ namespace {
                           EmptySubobjectMap *EmptySubobjects) :
       RecordLayoutBuilder(Ctx, EmptySubobjects) {}
 
-    virtual uint64_t GetVirtualPointersSize(const CXXRecordDecl *RD) const;
+    virtual CharUnits GetVirtualPointersSize(const CXXRecordDecl *RD) const;
   };
 }
 
-uint64_t
+CharUnits
 MSRecordLayoutBuilder::GetVirtualPointersSize(const CXXRecordDecl *RD) const {
   // We should reserve space for two pointers if the class has both
   // virtual functions and virtual bases.
+  CharUnits PointerWidth = 
+    Context.toCharUnitsFromBits(Context.Target.getPointerWidth(0));
   if (RD->isPolymorphic() && RD->getNumVBases() > 0)
-    return 2 * Context.Target.getPointerWidth(0);
-  return Context.Target.getPointerWidth(0);
+    return 2 * PointerWidth;
+  return PointerWidth;
 }
 
 /// getASTRecordLayout - Get or compute information about the layout of the

@@ -987,17 +987,15 @@ DEF_TRAVERSE_TYPELOC(AttributedType, {
     TRY_TO(TraverseTypeLoc(TL.getModifiedLoc()));
   })
 
-// FIXME: use the sourceloc on qualifier?
 DEF_TRAVERSE_TYPELOC(ElaboratedType, {
-    if (TL.getTypePtr()->getQualifier()) {
-      TRY_TO(TraverseNestedNameSpecifier(TL.getTypePtr()->getQualifier()));
+    if (TL.getQualifierLoc()) {
+      TRY_TO(TraverseNestedNameSpecifierLoc(TL.getQualifierLoc()));
     }
     TRY_TO(TraverseTypeLoc(TL.getNamedTypeLoc()));
   })
 
-// FIXME: use the sourceloc on qualifier?
 DEF_TRAVERSE_TYPELOC(DependentNameType, {
-    TRY_TO(TraverseNestedNameSpecifier(TL.getTypePtr()->getQualifier()));
+    TRY_TO(TraverseNestedNameSpecifierLoc(TL.getQualifierLoc()));
   })
 
 DEF_TRAVERSE_TYPELOC(DependentTemplateSpecializationType, {
@@ -1684,7 +1682,7 @@ DEF_TRAVERSE_STMT(WhileStmt, { })
 
 
 DEF_TRAVERSE_STMT(CXXDependentScopeMemberExpr, {
-    TRY_TO(TraverseNestedNameSpecifier(S->getQualifier()));
+    TRY_TO(TraverseNestedNameSpecifierLoc(S->getQualifierLoc()));
     if (S->hasExplicitTemplateArgs()) {
       TRY_TO(TraverseTemplateArgumentLocsHelper(
           S->getTemplateArgs(), S->getNumTemplateArgs()));
@@ -1692,7 +1690,7 @@ DEF_TRAVERSE_STMT(CXXDependentScopeMemberExpr, {
   })
 
 DEF_TRAVERSE_STMT(DeclRefExpr, {
-    TRY_TO(TraverseNestedNameSpecifier(S->getQualifier()));
+    TRY_TO(TraverseNestedNameSpecifierLoc(S->getQualifierLoc()));
     TRY_TO(TraverseTemplateArgumentLocsHelper(
         S->getTemplateArgs(), S->getNumTemplateArgs()));
   })
@@ -1707,10 +1705,9 @@ DEF_TRAVERSE_STMT(DependentScopeDeclRefExpr, {
   })
 
 DEF_TRAVERSE_STMT(MemberExpr, {
+    TRY_TO(TraverseNestedNameSpecifierLoc(S->getQualifierLoc()));
     TRY_TO(TraverseTemplateArgumentLocsHelper(
         S->getTemplateArgs(), S->getNumTemplateArgs()));
-    // FIXME: Should we be recursing on the qualifier?
-    TRY_TO(TraverseNestedNameSpecifier(S->getQualifier()));
   })
 
 DEF_TRAVERSE_STMT(ImplicitCastExpr, {
@@ -1869,7 +1866,7 @@ DEF_TRAVERSE_STMT(PredefinedExpr, { })
 DEF_TRAVERSE_STMT(ShuffleVectorExpr, { })
 DEF_TRAVERSE_STMT(StmtExpr, { })
 DEF_TRAVERSE_STMT(UnresolvedLookupExpr, {
-  TRY_TO(TraverseNestedNameSpecifier(S->getQualifier()));
+  TRY_TO(TraverseNestedNameSpecifierLoc(S->getQualifierLoc()));
   if (S->hasExplicitTemplateArgs()) {
     TRY_TO(TraverseTemplateArgumentLocsHelper(S->getTemplateArgs(), 
                                               S->getNumTemplateArgs()));
@@ -1877,7 +1874,7 @@ DEF_TRAVERSE_STMT(UnresolvedLookupExpr, {
 })
   
 DEF_TRAVERSE_STMT(UnresolvedMemberExpr, {
-  TRY_TO(TraverseNestedNameSpecifier(S->getQualifier()));
+  TRY_TO(TraverseNestedNameSpecifierLoc(S->getQualifierLoc()));
   if (S->hasExplicitTemplateArgs()) {
     TRY_TO(TraverseTemplateArgumentLocsHelper(S->getTemplateArgs(), 
                                               S->getNumTemplateArgs()));
