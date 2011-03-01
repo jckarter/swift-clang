@@ -974,8 +974,8 @@ Sema::BuildDeclRefExpr(ValueDecl *D, QualType Ty, ExprValueKind VK,
   MarkDeclarationReferenced(NameInfo.getLoc(), D);
 
   Expr *E = DeclRefExpr::Create(Context,
-                              SS? (NestedNameSpecifier *)SS->getScopeRep() : 0,
-                                SS? SS->getRange() : SourceRange(),
+                                SS? SS->getWithLocInContext(Context) 
+                                  : NestedNameSpecifierLoc(),
                                 D, NameInfo, Ty, VK);
 
   // Just in case we're building an illegal pointer-to-member.
@@ -1350,10 +1350,13 @@ bool Sema::DiagnoseEmptyLookup(Scope *S, CXXScopeSpec &SS, LookupResult &R,
             TemplateArgumentListInfo TList;
             if (ULE->hasExplicitTemplateArgs())
               ULE->copyTemplateArgumentsInto(TList);
+            
+            CXXScopeSpec SS;
+            SS.Adopt(ULE->getQualifierLoc());
             CXXDependentScopeMemberExpr *DepExpr =
                 CXXDependentScopeMemberExpr::Create(
                     Context, DepThis, DepThisType, true, SourceLocation(),
-                    ULE->getQualifier(), ULE->getQualifierRange(), NULL,
+                    SS.getWithLocInContext(Context), NULL,
                     R.getLookupNameInfo(), &TList);
             CallsUndergoingInstantiation.back()->setCallee(DepExpr);
           } else {
@@ -2061,14 +2064,7 @@ static MemberExpr *BuildMemberExpr(ASTContext &C, Expr *Base, bool isArrow,
                                    QualType Ty,
                                    ExprValueKind VK, ExprObjectKind OK,
                           const TemplateArgumentListInfo *TemplateArgs = 0) {
-  NestedNameSpecifier *Qualifier = 0;
-  SourceRange QualifierRange;
-  if (SS.isSet()) {
-    Qualifier = (NestedNameSpecifier *) SS.getScopeRep();
-    QualifierRange = SS.getRange();
-  }
-
-  return MemberExpr::Create(C, Base, isArrow, Qualifier, QualifierRange,
+  return MemberExpr::Create(C, Base, isArrow, SS.getWithLocInContext(C),
                             Member, FoundDecl, MemberNameInfo,
                             TemplateArgs, Ty, VK, OK);
 }
@@ -2276,8 +2272,8 @@ Sema::BuildDeclarationNameExpr(const CXXScopeSpec &SS,
 
   UnresolvedLookupExpr *ULE
     = UnresolvedLookupExpr::Create(Context, R.getNamingClass(),
-                                   (NestedNameSpecifier*) SS.getScopeRep(),
-                                   SS.getRange(), R.getLookupNameInfo(),
+                                   SS.getWithLocInContext(Context),
+                                   R.getLookupNameInfo(),
                                    NeedsADL, R.isOverloadedResult(),
                                    R.begin(), R.end());
 
@@ -3269,8 +3265,7 @@ Sema::ActOnDependentMemberExpr(Expr *BaseExpr, QualType BaseType,
   // must have pointer type, and the accessed type is the pointee.
   return Owned(CXXDependentScopeMemberExpr::Create(Context, BaseExpr, BaseType,
                                                    IsArrow, OpLoc,
-                                                   SS.getScopeRep(),
-                                                   SS.getRange(),
+                                               SS.getWithLocInContext(Context),
                                                    FirstQualifierInScope,
                                                    NameInfo, TemplateArgs));
 }
@@ -3477,7 +3472,6 @@ Sema::BuildMemberReferenceExpr(Expr *BaseExpr, QualType BaseExprType,
   }
   R.setBaseObjectType(BaseType);
 
-  NestedNameSpecifier *Qualifier = SS.getScopeRep();
   const DeclarationNameInfo &MemberNameInfo = R.getLookupNameInfo();
   DeclarationName MemberName = MemberNameInfo.getName();
   SourceLocation MemberLoc = MemberNameInfo.getLoc();
@@ -3522,7 +3516,7 @@ Sema::BuildMemberReferenceExpr(Expr *BaseExpr, QualType BaseExprType,
       = UnresolvedMemberExpr::Create(Context, R.isUnresolvableResult(),
                                      BaseExpr, BaseExprType,
                                      IsArrow, OpLoc,
-                                     Qualifier, SS.getRange(),
+                                     SS.getWithLocInContext(Context),
                                      MemberNameInfo,
                                      TemplateArgs, R.begin(), R.end());
 

@@ -58,7 +58,50 @@ struct X3 {
   }
 };
 
-// RUN: c-index-test -test-annotate-tokens=%s:13:1:60:1 %s | FileCheck %s
+namespace outer {
+  namespace inner {
+    void f(int);
+    void f(double);
+  }
+}
+
+template<typename T>
+struct X4 {
+  typedef T type;
+  void g(int);
+  void g(float);
+
+  void h(T t) {
+    ::outer_alias::inner::f(t);
+    ::X4<type>::g(t);
+    this->::X4<type>::g(t);
+  }
+};
+
+typedef int Integer;
+template<>
+struct X4<Integer> {
+  typedef Integer type;
+
+  void g(int);
+  void g(float);
+
+  void h(type t) {
+    ::outer_alias::inner::f(t);
+    ::X4<type>::g(t);
+    this->::X4<type>::g(t);
+  }
+};
+
+
+template<typename T>
+struct X5 {
+  typedef T type;
+  typedef typename outer_alias::inner::vector<type>::iterator iter_type;
+  typedef typename outer_alias::inner::vector<int>::iterator int_ptr_type;
+};
+
+// RUN: c-index-test -test-annotate-tokens=%s:13:1:102:1 %s | FileCheck %s
 
 // CHECK: Keyword: "using" [14:1 - 14:6] UsingDeclaration=vector[4:12]
 // CHECK: Identifier: "outer_alias" [14:7 - 14:18] NamespaceRef=outer_alias:10:11
@@ -80,7 +123,38 @@ struct X3 {
 // CHECK: Punctuation: "::" [17:38 - 17:40] UsingDeclaration=iterator[5:18]
 // CHECK: Identifier: "iterator" [17:40 - 17:48] OverloadedDeclRef=iterator[5:18]
 
-// FIXME: Check nested-name-specifiers on VarDecl, CXXMethodDecl.
+// CHECK: Keyword: "void" [31:1 - 31:5] CXXMethod=foo:31:33 (Definition)
+// CHECK: Identifier: "outer" [31:6 - 31:11] NamespaceRef=outer:20:11
+// CHECK: Punctuation: "::" [31:11 - 31:13] CXXMethod=foo:31:33 (Definition)
+// CHECK: Identifier: "inner" [31:13 - 31:18] NamespaceRef=inner:21:13
+// CHECK: Punctuation: "::" [31:18 - 31:20] CXXMethod=foo:31:33 (Definition)
+// CHECK: Identifier: "array" [31:20 - 31:25] TemplateRef=array:23:12
+// CHECK: Punctuation: "<" [31:25 - 31:26] CXXMethod=foo:31:33 (Definition)
+// CHECK: Identifier: "T" [31:26 - 31:27] CXXMethod=foo:31:33 (Definition)
+// CHECK: Punctuation: "," [31:27 - 31:28] CXXMethod=foo:31:33 (Definition)
+// CHECK: Identifier: "N" [31:29 - 31:30] DeclRefExpr=N:30:31
+// CHECK: Punctuation: ">" [31:30 - 31:31] CXXMethod=foo:31:33 (Definition)
+// CHECK: Punctuation: "::" [31:31 - 31:33] CXXMethod=foo:31:33 (Definition)
+// CHECK: Identifier: "foo" [31:33 - 31:36] CXXMethod=foo:31:33 (Definition)
+// CHECK: Punctuation: "(" [31:36 - 31:37] CXXMethod=foo:31:33 (Definition)
+// CHECK: Punctuation: ")" [31:37 - 31:38] CXXMethod=foo:31:33 (Definition)
+
+// CHECK: Keyword: "int" [35:1 - 35:4] VarDecl=max_size:35:32 (Definition)
+// CHECK: Identifier: "outer" [35:5 - 35:10] NamespaceRef=outer:20:11
+// CHECK: Punctuation: "::" [35:10 - 35:12] VarDecl=max_size:35:32 (Definition)
+// CHECK: Identifier: "inner" [35:12 - 35:17] NamespaceRef=inner:21:13
+// CHECK: Punctuation: "::" [35:17 - 35:19] VarDecl=max_size:35:32 (Definition)
+// CHECK: Identifier: "array" [35:19 - 35:24] TemplateRef=array:23:12
+// CHECK: Punctuation: "<" [35:24 - 35:25] VarDecl=max_size:35:32 (Definition)
+// CHECK: Identifier: "T" [35:25 - 35:26] VarDecl=max_size:35:32 (Definition)
+// CHECK: Punctuation: "," [35:26 - 35:27] VarDecl=max_size:35:32 (Definition)
+// CHECK: Identifier: "N" [35:28 - 35:29] DeclRefExpr=N:34:31
+// CHECK: Punctuation: ">" [35:29 - 35:30] VarDecl=max_size:35:32 (Definition)
+// CHECK: Punctuation: "::" [35:30 - 35:32] VarDecl=max_size:35:32 (Definition)
+// CHECK: Identifier: "max_size" [35:32 - 35:40] VarDecl=max_size:35:32 (Definition)
+// CHECK: Punctuation: "=" [35:41 - 35:42] VarDecl=max_size:35:32 (Definition)
+// CHECK: Literal: "17" [35:43 - 35:45] UnexposedExpr=
+// CHECK: Punctuation: ";" [35:45 - 35:46]
 
 // CHECK: Keyword: "using" [40:3 - 40:8] UsingDeclaration=iterator:40:46
 // CHECK: Keyword: "typename" [40:9 - 40:17] UsingDeclaration=iterator:40:46
@@ -148,3 +222,102 @@ struct X3 {
 // CHECK: Punctuation: ">" [57:59 - 57:60] UnexposedExpr=
 // CHECK: Punctuation: "(" [57:60 - 57:61] CallExpr=
 // CHECK: Punctuation: ")" [57:61 - 57:62] CallExpr=
+
+// Unresolved member and non-member references
+// CHECK: Punctuation: "::" [75:5 - 75:7] UnexposedExpr=[63:10, 64:10]
+// CHECK: Identifier: "outer_alias" [75:7 - 75:18] NamespaceRef=outer_alias:10:11
+// CHECK: Punctuation: "::" [75:18 - 75:20] UnexposedExpr=[63:10, 64:10]
+// CHECK: Identifier: "inner" [75:20 - 75:25] NamespaceRef=inner:62:13
+// CHECK: Punctuation: "::" [75:25 - 75:27] UnexposedExpr=[63:10, 64:10]
+// CHECK: Identifier: "f" [75:27 - 75:28] OverloadedDeclRef=f[63:10, 64:10]
+// CHECK: Punctuation: "(" [75:28 - 75:29] CallExpr=
+// CHECK: Identifier: "t" [75:29 - 75:30] DeclRefExpr=t:74:12
+// CHECK: Punctuation: ")" [75:30 - 75:31] CallExpr=
+// CHECK: Punctuation: "::" [76:5 - 76:7] UnexposedExpr=[71:8, 72:8]
+// CHECK: Identifier: "X4" [76:7 - 76:9] TemplateRef=X4:69:8
+// CHECK: Punctuation: "<" [76:9 - 76:10] UnexposedExpr=[71:8, 72:8]
+// CHECK: Identifier: "type" [76:10 - 76:14] TypeRef=type:70:13
+// CHECK: Punctuation: ">" [76:14 - 76:15] UnexposedExpr=[71:8, 72:8]
+// CHECK: Punctuation: "::" [76:15 - 76:17] UnexposedExpr=[71:8, 72:8]
+// CHECK: Identifier: "g" [76:17 - 76:18] OverloadedDeclRef=g[71:8, 72:8]
+// CHECK: Punctuation: "(" [76:18 - 76:19] CallExpr=
+// CHECK: Identifier: "t" [76:19 - 76:20] DeclRefExpr=t:74:12
+// CHECK: Punctuation: ")" [76:20 - 76:21] CallExpr=
+// CHECK: Punctuation: ";" [76:21 - 76:22] UnexposedStmt=
+// CHECK: Keyword: "this" [77:5 - 77:9] UnexposedExpr=
+// CHECK: Punctuation: "->" [77:9 - 77:11] UnexposedExpr=
+// CHECK: Punctuation: "::" [77:11 - 77:13] UnexposedExpr=
+// CHECK: Identifier: "X4" [77:13 - 77:15] TemplateRef=X4:69:8
+// CHECK: Punctuation: "<" [77:15 - 77:16] UnexposedExpr=
+// CHECK: Identifier: "type" [77:16 - 77:20] TypeRef=type:70:13
+// CHECK: Punctuation: ">" [77:20 - 77:21] UnexposedExpr=
+// CHECK: Punctuation: "::" [77:21 - 77:23] UnexposedExpr=
+// CHECK: Identifier: "g" [77:23 - 77:24] UnexposedExpr=
+// CHECK: Punctuation: "(" [77:24 - 77:25] CallExpr=
+// CHECK: Identifier: "t" [77:25 - 77:26] DeclRefExpr=t:74:12
+// CHECK: Punctuation: ")" [77:26 - 77:27] CallExpr=
+
+// Resolved member and non-member references
+// CHECK: Punctuation: "::" [90:5 - 90:7] DeclRefExpr=f:63:10
+// CHECK: Identifier: "outer_alias" [90:7 - 90:18] NamespaceRef=outer_alias:10:11
+// CHECK: Punctuation: "::" [90:18 - 90:20] DeclRefExpr=f:63:10
+// CHECK: Identifier: "inner" [90:20 - 90:25] NamespaceRef=inner:62:13
+// CHECK: Punctuation: "::" [90:25 - 90:27] DeclRefExpr=f:63:10
+// CHECK: Identifier: "f" [90:27 - 90:28] DeclRefExpr=f:63:10
+// CHECK: Punctuation: "(" [90:28 - 90:29] CallExpr=f:63:10
+// CHECK: Identifier: "t" [90:29 - 90:30] DeclRefExpr=t:89:15
+// CHECK: Punctuation: ")" [90:30 - 90:31] CallExpr=f:63:10
+// CHECK: Punctuation: ";" [90:31 - 90:32] UnexposedStmt=
+// CHECK: Punctuation: "::" [91:5 - 91:7] MemberRefExpr=g:86:8
+// CHECK: Identifier: "X4" [91:7 - 91:9] TemplateRef=X4:69:8
+// CHECK: Punctuation: "<" [91:9 - 91:10] MemberRefExpr=g:86:8
+// CHECK: Identifier: "type" [91:10 - 91:14] TypeRef=type:84:19
+// CHECK: Punctuation: ">" [91:14 - 91:15] MemberRefExpr=g:86:8
+// CHECK: Punctuation: "::" [91:15 - 91:17] MemberRefExpr=g:86:8
+// CHECK: Identifier: "g" [91:17 - 91:18] MemberRefExpr=g:86:8
+// CHECK: Punctuation: "(" [91:18 - 91:19] CallExpr=g:86:8
+// CHECK: Identifier: "t" [91:19 - 91:20] DeclRefExpr=t:89:15
+// CHECK: Punctuation: ")" [91:20 - 91:21] CallExpr=g:86:8
+// CHECK: Punctuation: ";" [91:21 - 91:22] UnexposedStmt=
+// CHECK: Keyword: "this" [92:5 - 92:9] UnexposedExpr=
+// CHECK: Punctuation: "->" [92:9 - 92:11] MemberRefExpr=g:86:8
+// CHECK: Punctuation: "::" [92:11 - 92:13] MemberRefExpr=g:86:8
+// CHECK: Identifier: "X4" [92:13 - 92:15] TemplateRef=X4:69:8
+// CHECK: Punctuation: "<" [92:15 - 92:16] MemberRefExpr=g:86:8
+// CHECK: Identifier: "type" [92:16 - 92:20] TypeRef=type:84:19
+// CHECK: Punctuation: ">" [92:20 - 92:21] MemberRefExpr=g:86:8
+// CHECK: Punctuation: "::" [92:21 - 92:23] MemberRefExpr=g:86:8
+// CHECK: Identifier: "g" [92:23 - 92:24] MemberRefExpr=g:86:8
+// CHECK: Punctuation: "(" [92:24 - 92:25] CallExpr=g:86:8
+// CHECK: Identifier: "t" [92:25 - 92:26] DeclRefExpr=t:89:15
+// CHECK: Punctuation: ")" [92:26 - 92:27] CallExpr=g:86:8
+
+// Dependent name type
+// CHECK: Keyword: "typedef" [100:3 - 100:10] ClassTemplate=X5:98:8 (Definition)
+// CHECK: Keyword: "typename" [100:11 - 100:19] TypedefDecl=iter_type:100:63 (Definition)
+// CHECK: Identifier: "outer_alias" [100:20 - 100:31] NamespaceRef=outer_alias:10:11
+// CHECK: Punctuation: "::" [100:31 - 100:33] TypedefDecl=iter_type:100:63 (Definition)
+// CHECK: Identifier: "inner" [100:33 - 100:38] NamespaceRef=inner:62:13
+// CHECK: Punctuation: "::" [100:38 - 100:40] TypedefDecl=iter_type:100:63 (Definition)
+// CHECK: Identifier: "vector" [100:40 - 100:46] TemplateRef=vector:4:12
+// CHECK: Punctuation: "<" [100:46 - 100:47] TypedefDecl=iter_type:100:63 (Definition)
+// CHECK: Identifier: "type" [100:47 - 100:51] TypeRef=type:99:13
+// CHECK: Punctuation: ">" [100:51 - 100:52] TypedefDecl=iter_type:100:63 (Definition)
+// CHECK: Punctuation: "::" [100:52 - 100:54] TypedefDecl=iter_type:100:63 (Definition)
+// CHECK: Identifier: "iterator" [100:54 - 100:62] TypedefDecl=iter_type:100:63 (Definition)
+// CHECK: Identifier: "iter_type" [100:63 - 100:72] TypedefDecl=iter_type:100:63 (Definition)
+
+// CHECK: Keyword: "typedef" [101:3 - 101:10] ClassTemplate=X5:98:8 (Definition)
+// CHECK: Keyword: "typename" [101:11 - 101:19] TypedefDecl=int_ptr_type:101:62 (Definition)
+// CHECK: Identifier: "outer_alias" [101:20 - 101:31] NamespaceRef=outer_alias:10:11
+// CHECK: Punctuation: "::" [101:31 - 101:33] TypedefDecl=int_ptr_type:101:62 (Definition)
+// CHECK: Identifier: "inner" [101:33 - 101:38] NamespaceRef=inner:62:13
+// CHECK: Punctuation: "::" [101:38 - 101:40] TypedefDecl=int_ptr_type:101:62 (Definition)
+// CHECK: Identifier: "vector" [101:40 - 101:46] TemplateRef=vector:4:12
+// CHECK: Punctuation: "<" [101:46 - 101:47] TypedefDecl=int_ptr_type:101:62 (Definition)
+// CHECK: Keyword: "int" [101:47 - 101:50] TypedefDecl=int_ptr_type:101:62 (Definition)
+// CHECK: Punctuation: ">" [101:50 - 101:51] TypedefDecl=int_ptr_type:101:62 (Definition)
+// CHECK: Punctuation: "::" [101:51 - 101:53] TypedefDecl=int_ptr_type:101:62 (Definition)
+// CHECK: Identifier: "iterator" [101:53 - 101:61] TypeRef=iterator:5:18
+// CHECK: Identifier: "int_ptr_type" [101:62 - 101:74] TypedefDecl=int_ptr_type:101:62 (Definition)
+
