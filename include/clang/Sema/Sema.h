@@ -4325,11 +4325,6 @@ public:
                            ClassTemplateSpecializationDecl *ClassTemplateSpec,
                                                 TemplateSpecializationKind TSK);
 
-  NestedNameSpecifier *
-  SubstNestedNameSpecifier(NestedNameSpecifier *NNS,
-                           SourceRange Range,
-                           const MultiLevelTemplateArgumentList &TemplateArgs);
-
   NestedNameSpecifierLoc
   SubstNestedNameSpecifierLoc(NestedNameSpecifierLoc NNS,
                            const MultiLevelTemplateArgumentList &TemplateArgs);
@@ -4338,7 +4333,8 @@ public:
   SubstDeclarationNameInfo(const DeclarationNameInfo &NameInfo,
                            const MultiLevelTemplateArgumentList &TemplateArgs);
   TemplateName
-  SubstTemplateName(TemplateName Name, SourceLocation Loc,
+  SubstTemplateName(NestedNameSpecifierLoc QualifierLoc, TemplateName Name, 
+                    SourceLocation Loc,
                     const MultiLevelTemplateArgumentList &TemplateArgs);
   bool Subst(const TemplateArgumentLoc *Args, unsigned NumArgs,
              TemplateArgumentListInfo &Result,

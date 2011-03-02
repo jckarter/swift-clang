@@ -110,7 +110,34 @@ struct X6 {
   typedef class outer_alias::inner::vector<type>::template rebind<type>::other type4;
 };
 
-// RUN: c-index-test -test-annotate-tokens=%s:13:1:111:1 %s | FileCheck %s
+namespace outer {
+  namespace inner {
+    template<typename T, template<class> class TT>
+    struct apply_meta {
+      typedef typename TT<T>::type type;
+    };
+  }
+}
+
+template<typename T, typename U>
+struct X7 {
+  typedef T T_type;
+  typedef U U_type;
+  typedef outer_alias::inner::apply_meta<T_type, U_type::template apply> type;
+};
+
+struct X8 {
+  void f();
+};
+
+struct X9 : X8 {
+  typedef X8 inherited;
+  void f() { 
+    inherited::f();
+  }
+};
+
+// RUN: c-index-test -test-annotate-tokens=%s:13:1:137:1 %s | FileCheck %s
 
 // CHECK: Keyword: "using" [14:1 - 14:6] UsingDeclaration=vector[4:12]
 // CHECK: Identifier: "outer_alias" [14:7 - 14:18] NamespaceRef=outer_alias:10:11
@@ -119,7 +146,18 @@ struct X6 {
 // CHECK: Punctuation: "::" [14:25 - 14:27] UsingDeclaration=vector[4:12]
 // CHECK: Identifier: "vector" [14:27 - 14:33] OverloadedDeclRef=vector[4:12]
 // CHECK: Punctuation: ";" [14:33 - 14:34]
-// FIXME: Base specifiers, too
+
+// Base specifiers
+// CHECK: Identifier: "outer_alias" [16:19 - 16:30] NamespaceRef=outer_alias:10:11
+// CHECK: Punctuation: "::" [16:30 - 16:32] C++ base class specifier=outer_alias::inner::outer_alias::inner::vector<struct X>:4:12 [access=public isVirtual=false]
+// CHECK: Identifier: "inner" [16:32 - 16:37] NamespaceRef=inner:2:13
+// CHECK: Punctuation: "::" [16:37 - 16:39] C++ base class specifier=outer_alias::inner::outer_alias::inner::vector<struct X>:4:12 [access=public isVirtual=false]
+// CHECK: Identifier: "vector" [16:39 - 16:45] TemplateRef=vector:4:12
+// CHECK: Punctuation: "<" [16:45 - 16:46] C++ base class specifier=outer_alias::inner::outer_alias::inner::vector<struct X>:4:12 [access=public isVirtual=false]
+// CHECK: Identifier: "X" [16:46 - 16:47] TypeRef=struct X:12:8
+// CHECK: Punctuation: ">" [16:47 - 16:48] C++ base class specifier=outer_alias::inner::outer_alias::inner::vector<struct X>:4:12 [access=public isVirtual=false]
+
+
 // CHECK: Keyword: "using" [17:3 - 17:8] UsingDeclaration=iterator[5:18]
 // CHECK: Identifier: "outer_alias" [17:9 - 17:20] NamespaceRef=outer_alias:10:11
 // CHECK: Punctuation: "::" [17:20 - 17:22] UsingDeclaration=iterator[5:18]
@@ -404,3 +442,25 @@ struct X6 {
 // CHECK: Punctuation: "::" [110:72 - 110:74] TypedefDecl=type4:110:80 (Definition)
 // CHECK: Identifier: "other" [110:74 - 110:79] TypedefDecl=type4:110:80 (Definition)
 // CHECK: Identifier: "type4" [110:80 - 110:85] TypedefDecl=type4:110:80 (Definition)
+
+// Template template arguments
+// CHECK: Keyword: "typedef" [126:3 - 126:10] ClassTemplate=X7:123:8 (Definition)
+// CHECK: Identifier: "outer_alias" [126:11 - 126:22] NamespaceRef=outer_alias:10:11
+// CHECK: Punctuation: "::" [126:22 - 126:24] TypedefDecl=type:126:74 (Definition)
+// CHECK: Identifier: "inner" [126:24 - 126:29] NamespaceRef=inner:114:13
+// CHECK: Punctuation: "::" [126:29 - 126:31] TypedefDecl=type:126:74 (Definition)
+// CHECK: Identifier: "apply_meta" [126:31 - 126:41] TemplateRef=apply_meta:116:12
+// CHECK: Punctuation: "<" [126:41 - 126:42] TypedefDecl=type:126:74 (Definition)
+// CHECK: Identifier: "T_type" [126:42 - 126:48] TypeRef=T_type:124:13
+// CHECK: Punctuation: "," [126:48 - 126:49] TypedefDecl=type:126:74 (Definition)
+// CHECK: Identifier: "U_type" [126:50 - 126:56] TypeRef=U_type:125:13
+// CHECK: Punctuation: "::" [126:56 - 126:58] TypedefDecl=type:126:74 (Definition)
+// CHECK: Keyword: "template" [126:58 - 126:66] TypedefDecl=type:126:74 (Definition)
+// CHECK: Identifier: "apply" [126:67 - 126:72] TypedefDecl=type:126:74 (Definition)
+// CHECK: Punctuation: ">" [126:72 - 126:73] TypedefDecl=type:126:74 (Definition)
+// CHECK: Identifier: "type" [126:74 - 126:78] TypedefDecl=type:126:74 (Definition)
+
+// Member access expressions
+// CHECK: Identifier: "inherited" [136:5 - 136:14] TypeRef=inherited:134:14
+// CHECK: Punctuation: "::" [136:14 - 136:16] MemberRefExpr=f:130:8
+// CHECK: Identifier: "f" [136:16 - 136:17] MemberRefExpr=f:130:8

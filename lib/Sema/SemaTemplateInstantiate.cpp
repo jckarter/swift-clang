@@ -733,7 +733,9 @@ namespace {
                                    NestedNameSpecifierLoc QualifierLoc,
                                    QualType T);
 
-    TemplateName TransformTemplateName(TemplateName Name,
+    TemplateName TransformTemplateName(CXXScopeSpec &SS,
+                                       TemplateName Name,
+                                       SourceLocation NameLoc,                                     
                                        QualType ObjectType = QualType(),
                                        NamedDecl *FirstQualifierInScope = 0);
 
@@ -923,7 +925,9 @@ TemplateInstantiator::RebuildElaboratedType(SourceLocation KeywordLoc,
                                                                     T);
 }
 
-TemplateName TemplateInstantiator::TransformTemplateName(TemplateName Name,
+TemplateName TemplateInstantiator::TransformTemplateName(CXXScopeSpec &SS,
+                                                         TemplateName Name,
+                                                         SourceLocation NameLoc,                                     
                                                          QualType ObjectType,
                                              NamedDecl *FirstQualifierInScope) {
   if (TemplateTemplateParmDecl *TTP
@@ -962,19 +966,19 @@ TemplateName TemplateInstantiator::TransformTemplateName(TemplateName Name,
   }
   
   if (SubstTemplateTemplateParmPackStorage *SubstPack
-                                  = Name.getAsSubstTemplateTemplateParmPack()) {
+      = Name.getAsSubstTemplateTemplateParmPack()) {
     if (getSema().ArgumentPackSubstitutionIndex == -1)
       return Name;
-
+    
     const TemplateArgument &ArgPack = SubstPack->getArgumentPack();
     assert(getSema().ArgumentPackSubstitutionIndex < (int)ArgPack.pack_size() &&
            "Pack substitution index out-of-range");
     return ArgPack.pack_begin()[getSema().ArgumentPackSubstitutionIndex]
-                                                               .getAsTemplate();
+    .getAsTemplate();
   }
   
-  return inherited::TransformTemplateName(Name, ObjectType, 
-                                          FirstQualifierInScope);
+  return inherited::TransformTemplateName(SS, Name, NameLoc, ObjectType, 
+                                          FirstQualifierInScope);  
 }
 
 ExprResult 
@@ -2138,16 +2142,6 @@ bool Sema::SubstExprs(Expr **Exprs, unsigned NumExprs, bool IsCall,
   return Instantiator.TransformExprs(Exprs, NumExprs, IsCall, Outputs);
 }
 
-/// \brief Do template substitution on a nested-name-specifier.
-NestedNameSpecifier *
-Sema::SubstNestedNameSpecifier(NestedNameSpecifier *NNS,
-                               SourceRange Range,
-                         const MultiLevelTemplateArgumentList &TemplateArgs) {
-  TemplateInstantiator Instantiator(*this, TemplateArgs, Range.getBegin(),
-                                    DeclarationName());
-  return Instantiator.TransformNestedNameSpecifier(NNS, Range);
-}
-
 NestedNameSpecifierLoc
 Sema::SubstNestedNameSpecifierLoc(NestedNameSpecifierLoc NNS,
                         const MultiLevelTemplateArgumentList &TemplateArgs) {  
@@ -2169,11 +2163,14 @@ Sema::SubstDeclarationNameInfo(const DeclarationNameInfo &NameInfo,
 }
 
 TemplateName
-Sema::SubstTemplateName(TemplateName Name, SourceLocation Loc,
+Sema::SubstTemplateName(NestedNameSpecifierLoc QualifierLoc,
+                        TemplateName Name, SourceLocation Loc,
                         const MultiLevelTemplateArgumentList &TemplateArgs) {
   TemplateInstantiator Instantiator(*this, TemplateArgs, Loc,
                                     DeclarationName());
-  return Instantiator.TransformTemplateName(Name);
+  CXXScopeSpec SS;
+  SS.Adopt(QualifierLoc);
+  return Instantiator.TransformTemplateName(SS, Name, Loc);
 }
 
 bool Sema::Subst(const TemplateArgumentLoc *Args, unsigned NumArgs,

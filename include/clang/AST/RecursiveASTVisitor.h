@@ -601,11 +601,14 @@ bool RecursiveASTVisitor<Derived>::TraverseTemplateArgumentLoc(
     if (TypeSourceInfo *TSI = ArgLoc.getTypeSourceInfo())
       return getDerived().TraverseTypeLoc(TSI->getTypeLoc());
     else 
-      getDerived().TraverseType(Arg.getAsType());
+      return getDerived().TraverseType(Arg.getAsType());
   }
 
   case TemplateArgument::Template:
   case TemplateArgument::TemplateExpansion:
+    if (ArgLoc.getTemplateQualifierLoc())
+      TRY_TO(getDerived().TraverseNestedNameSpecifierLoc(
+                                            ArgLoc.getTemplateQualifierLoc()));
     return getDerived().TraverseTemplateName(
                                          Arg.getAsTemplateOrTemplatePattern());
 

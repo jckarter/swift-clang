@@ -400,8 +400,24 @@ ObjCMethodDecl *ObjCMethodDecl::getCanonicalDecl() {
 
 ObjCMethodFamily ObjCMethodDecl::getMethodFamily() const {
   ObjCMethodFamily family = static_cast<ObjCMethodFamily>(Family);
-  if (family != InvalidObjCMethodFamily)
+  if (family != static_cast<unsigned>(InvalidObjCMethodFamily))
     return family;
+
+  // Check for an explicit attribute.
+  if (const ObjCMethodFamilyAttr *attr = getAttr<ObjCMethodFamilyAttr>()) {
+    // The unfortunate necessity of mapping between enums here is due
+    // to the attributes framework.
+    switch (attr->getFamily()) {
+    case ObjCMethodFamilyAttr::OMF_None: family = OMF_None; break;
+    case ObjCMethodFamilyAttr::OMF_alloc: family = OMF_alloc; break;
+    case ObjCMethodFamilyAttr::OMF_copy: family = OMF_copy; break;
+    case ObjCMethodFamilyAttr::OMF_init: family = OMF_init; break;
+    case ObjCMethodFamilyAttr::OMF_mutableCopy: family = OMF_mutableCopy; break;
+    case ObjCMethodFamilyAttr::OMF_new: family = OMF_new; break;
+    }
+    Family = static_cast<unsigned>(family);
+    return family;
+  }
 
   family = getSelector().getMethodFamily();
   switch (family) {

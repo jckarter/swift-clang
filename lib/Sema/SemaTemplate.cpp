@@ -469,7 +469,8 @@ static TemplateArgumentLoc translateTemplateArgument(Sema &SemaRef,
     else
       TArg = Template;
     return TemplateArgumentLoc(TArg,
-                               Arg.getScopeSpec().getRange(),
+                               Arg.getScopeSpec().getWithLocInContext(
+                                                              SemaRef.Context),
                                Arg.getLocation(),
                                Arg.getEllipsisLoc());
   }
@@ -2104,7 +2105,6 @@ bool Sema::CheckTemplateTypeArgument(TemplateTypeParmDecl *Param,
 ///
 /// \param Converted the list of template arguments provided for template
 /// parameters that precede \p Param in the template parameter list.
-///
 /// \returns the substituted template argument, or NULL if an error occurred.
 static TypeSourceInfo *
 SubstDefaultTemplateArgument(Sema &SemaRef,
@@ -2201,6 +2201,9 @@ SubstDefaultTemplateArgument(Sema &SemaRef,
 /// \param Converted the list of template arguments provided for template
 /// parameters that precede \p Param in the template parameter list.
 ///
+/// \param QualifierLoc Will be set to the nested-name-specifier (with 
+/// source-location information) that precedes the template name.
+///
 /// \returns the substituted template argument, or NULL if an error occurred.
 static TemplateName
 SubstDefaultTemplateArgument(Sema &SemaRef,
@@ -2208,7 +2211,8 @@ SubstDefaultTemplateArgument(Sema &SemaRef,
                              SourceLocation TemplateLoc,
                              SourceLocation RAngleLoc,
                              TemplateTemplateParmDecl *Param,
-                       llvm::SmallVectorImpl<TemplateArgument> &Converted) {
+                       llvm::SmallVectorImpl<TemplateArgument> &Converted,
+                             NestedNameSpecifierLoc &QualifierLoc) {
   TemplateArgumentList TemplateArgs(TemplateArgumentList::OnStack,
                                     Converted.data(), Converted.size());
 
@@ -2220,7 +2224,16 @@ SubstDefaultTemplateArgument(Sema &SemaRef,
                                    Converted.size(),
                                    SourceRange(TemplateLoc, RAngleLoc));
 
-  return SemaRef.SubstTemplateName(
+  // Substitute into the nested-name-specifier first, 
+  QualifierLoc = Param->getDefaultArgument().getTemplateQualifierLoc();
+  if (QualifierLoc) {
+    QualifierLoc = SemaRef.SubstNestedNameSpecifierLoc(QualifierLoc, 
+                                                       AllTemplateArgs);
+    if (!QualifierLoc)
+      return TemplateName();
+  }
+  
+  return SemaRef.SubstTemplateName(QualifierLoc,
                       Param->getDefaultArgument().getArgument().getAsTemplate(),
                               Param->getDefaultArgument().getTemplateNameLoc(),
                                    AllTemplateArgs);
@@ -2256,10 +2269,10 @@ Sema::SubstDefaultTemplateArgumentIfAvailable(TemplateDecl *Template,
       return TemplateArgumentLoc();
 
     ExprResult Arg = SubstDefaultTemplateArgument(*this, Template,
-                                                        TemplateLoc,
-                                                        RAngleLoc,
-                                                        NonTypeParm,
-                                                        Converted);
+                                                  TemplateLoc,
+                                                  RAngleLoc,
+                                                  NonTypeParm,
+                                                  Converted);
     if (Arg.isInvalid())
       return TemplateArgumentLoc();
 
@@ -2272,16 +2285,19 @@ Sema::SubstDefaultTemplateArgumentIfAvailable(TemplateDecl *Template,
   if (!TempTempParm->hasDefaultArgument())
     return TemplateArgumentLoc();
 
+
+  NestedNameSpecifierLoc QualifierLoc;
   TemplateName TName = SubstDefaultTemplateArgument(*this, Template,
                                                     TemplateLoc,
                                                     RAngleLoc,
                                                     TempTempParm,
-                                                    Converted);
+                                                    Converted,
+                                                    QualifierLoc);
   if (TName.isNull())
     return TemplateArgumentLoc();
 
   return TemplateArgumentLoc(TemplateArgument(TName),
-                TempTempParm->getDefaultArgument().getTemplateQualifierRange(),
+                TempTempParm->getDefaultArgument().getTemplateQualifierLoc(),
                 TempTempParm->getDefaultArgument().getTemplateNameLoc());
 }
 
@@ -2392,11 +2408,8 @@ bool Sema::CheckTemplateArgument(NamedDecl *Param,
         DeclarationNameInfo NameInfo(DTN->getIdentifier(),
                                      Arg.getTemplateNameLoc());
 
-        // FIXME: TemplateArgumentLoc should store a NestedNameSpecifierLoc
-        // for the template name.
         CXXScopeSpec SS;
-        SS.MakeTrivial(Context, DTN->getQualifier(), 
-                       Arg.getTemplateQualifierRange());
+        SS.Adopt(Arg.getTemplateQualifierLoc());
         Expr *E = DependentScopeDeclRefExpr::Create(Context,
                                                 SS.getWithLocInContext(Context),
                                                     NameInfo);
@@ -2665,17 +2678,18 @@ bool Sema::CheckTemplateArgumentList(TemplateDecl *Template,
         break;
       }
 
+      NestedNameSpecifierLoc QualifierLoc;
       TemplateName Name = SubstDefaultTemplateArgument(*this, Template,
                                                        TemplateLoc,
                                                        RAngleLoc,
                                                        TempParm,
-                                                       Converted);
+                                                       Converted,
+                                                       QualifierLoc);
       if (Name.isNull())
         return true;
 
-      Arg = TemplateArgumentLoc(TemplateArgument(Name),
-                  TempParm->getDefaultArgument().getTemplateQualifierRange(),
-                  TempParm->getDefaultArgument().getTemplateNameLoc());
+      Arg = TemplateArgumentLoc(TemplateArgument(Name), QualifierLoc,
+                           TempParm->getDefaultArgument().getTemplateNameLoc());
     }
 
     // Introduce an instantiation record that describes where we are using
