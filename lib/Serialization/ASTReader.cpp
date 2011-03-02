@@ -2837,7 +2837,9 @@ bool ASTReader::ParseLanguageOptions(
     PARSE_LANGOPT(CUDA);
     PARSE_LANGOPT(CatchUndefined);
     PARSE_LANGOPT(DefaultFPContract);
-    // FIXME: Missing ElideConstructors?!
+    PARSE_LANGOPT(ElideConstructors);
+    PARSE_LANGOPT(SpellChecking);
+    PARSE_LANGOPT(MRTD);
   #undef PARSE_LANGOPT
 
     return Listener->ReadLanguageOptions(LangOpts);
@@ -3531,7 +3533,7 @@ void TypeLocReader::VisitDependentNameTypeLoc(DependentNameTypeLoc TL) {
 void TypeLocReader::VisitDependentTemplateSpecializationTypeLoc(
        DependentTemplateSpecializationTypeLoc TL) {
   TL.setKeywordLoc(ReadSourceLocation(Record, Idx));
-  TL.setQualifierRange(Reader.ReadSourceRange(F, Record, Idx));
+  TL.setQualifierLoc(Reader.ReadNestedNameSpecifierLoc(F, Record, Idx));
   TL.setNameLoc(ReadSourceLocation(Record, Idx));
   TL.setLAngleLoc(ReadSourceLocation(Record, Idx));
   TL.setRAngleLoc(ReadSourceLocation(Record, Idx));

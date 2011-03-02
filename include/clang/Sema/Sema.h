@@ -3182,17 +3182,27 @@ public:
                                const TemplateArgumentListInfo &TemplateArgs);
 
   TypeResult
-  ActOnTemplateIdType(TemplateTy Template, SourceLocation TemplateLoc,
+  ActOnTemplateIdType(CXXScopeSpec &SS,
+                      TemplateTy Template, SourceLocation TemplateLoc,
                       SourceLocation LAngleLoc,
                       ASTTemplateArgsPtr TemplateArgs,
                       SourceLocation RAngleLoc);
 
-  TypeResult ActOnTagTemplateIdType(CXXScopeSpec &SS,
-                                    TypeResult Type,
-                                    TagUseKind TUK,
+  /// \brief Parsed an elaborated-type-specifier that refers to a template-id,
+  /// such as \c class T::template apply<U>.
+  ///
+  /// \param TUK 
+  TypeResult ActOnTagTemplateIdType(TagUseKind TUK,
                                     TypeSpecifierType TagSpec,
-                                    SourceLocation TagLoc);
+                                    SourceLocation TagLoc,
+                                    CXXScopeSpec &SS,
+                                    TemplateTy TemplateD, 
+                                    SourceLocation TemplateLoc,
+                                    SourceLocation LAngleLoc,
+                                    ASTTemplateArgsPtr TemplateArgsIn,
+                                    SourceLocation RAngleLoc);
 
+  
   ExprResult BuildTemplateIdExpr(const CXXScopeSpec &SS,
                                  LookupResult &R,
                                  bool RequiresADL,
@@ -5199,7 +5209,7 @@ public:
                                                 unsigned ByteNo) const;
 
 private:  
-  void CheckArrayAccess(const ArraySubscriptExpr *E);
+  void CheckArrayAccess(const Expr *E);
   bool CheckFunctionCall(FunctionDecl *FDecl, CallExpr *TheCall);
   bool CheckBlockCall(NamedDecl *NDecl, CallExpr *TheCall);
 

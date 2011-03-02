@@ -1728,7 +1728,7 @@ TypeSourceInfo *Sema::GetTypeForDeclarator(Declarator &D, Scope *S,
 
       // cv-qualifiers on return types are pointless except when the type is a
       // class type in C++.
-      if (T->isPointerType() && T.getCVRQualifiers() &&
+      if (isa<PointerType>(T) && T.getLocalCVRQualifiers() &&
           (!getLangOptions().CPlusPlus || !T->isDependentType())) {
         assert(chunkIndex + 1 < e && "No DeclaratorChunk for the return type?");
         DeclaratorChunk ReturnTypeChunk = D.getTypeObject(chunkIndex + 1);
@@ -2276,8 +2276,7 @@ namespace {
                        ? DS.getTypeSpecTypeLoc()
                        : SourceLocation());
       const CXXScopeSpec& SS = DS.getTypeSpecScope();
-      TL.setQualifierRange(SS.isEmpty() ? SourceRange() : SS.getRange());
-      // FIXME: load appropriate source location.
+      TL.setQualifierLoc(SS.getWithLocInContext(Context));
       TL.setNameLoc(DS.getTypeSpecTypeLoc());
     }
 

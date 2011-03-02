@@ -282,7 +282,9 @@ bool Sema::DiagnoseUnknownTypeName(const IdentifierInfo &II,
         Diag(Result->getLocation(), diag::note_previous_decl)
           << Result->getDeclName();
         
-        SuggestedType = getTypeName(*Result->getIdentifier(), IILoc, S, SS);
+        SuggestedType = getTypeName(*Result->getIdentifier(), IILoc, S, SS,
+                                    false, false, ParsedType(),
+                                    /*NonTrivialTypeSourceInfo=*/true);
         return true;
       }
     } else if (Lookup.empty()) {
