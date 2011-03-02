@@ -545,7 +545,7 @@ void TypeLocWriter::VisitDependentNameTypeLoc(DependentNameTypeLoc TL) {
 void TypeLocWriter::VisitDependentTemplateSpecializationTypeLoc(
        DependentTemplateSpecializationTypeLoc TL) {
   Writer.AddSourceLocation(TL.getKeywordLoc(), Record);
-  Writer.AddSourceRange(TL.getQualifierRange(), Record);
+  Writer.AddNestedNameSpecifierLoc(TL.getQualifierLoc(), Record);
   Writer.AddSourceLocation(TL.getNameLoc(), Record);
   Writer.AddSourceLocation(TL.getLAngleLoc(), Record);
   Writer.AddSourceLocation(TL.getRAngleLoc(), Record);
@@ -1072,6 +1072,7 @@ void ASTWriter::WriteLanguageOptions(const LangOptions &LangOpts) {
   Record.push_back(LangOpts.DefaultFPContract);
   Record.push_back(LangOpts.ElideConstructors);
   Record.push_back(LangOpts.SpellChecking);
+  Record.push_back(LangOpts.MRTD);
   Stream.EmitRecord(LANGUAGE_OPTIONS, Record);
 }
 

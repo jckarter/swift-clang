@@ -427,6 +427,12 @@ void Clang::AddARMTargetArgs(const ArgList &Args,
   const Driver &D = getToolChain().getDriver();
   llvm::Triple Triple = getToolChain().getTriple();
 
+  // Disable movt generation, if requested.
+#ifdef DISABLE_ARM_DARWIN_USE_MOVT
+  CmdArgs.push_back("-mllvm");
+  CmdArgs.push_back("-arm-darwin-use-movt=0");
+#endif
+
   // Select the ABI to use.
   //
   // FIXME: Support -meabi.
@@ -725,6 +731,11 @@ void Clang::AddX86TargetArgs(const ArgList &Args,
       else if (getToolChain().getArchName() == "i386")
         CPUName = "i586";
     } else if (getToolChain().getOS().startswith("openbsd"))  {
+      if (getToolChain().getArchName() == "x86_64")
+        CPUName = "x86-64";
+      else if (getToolChain().getArchName() == "i386")
+        CPUName = "i486";
+    } else if (getToolChain().getOS().startswith("freebsd"))  {
       if (getToolChain().getArchName() == "x86_64")
         CPUName = "x86-64";
       else if (getToolChain().getArchName() == "i386")
@@ -1084,6 +1095,9 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
     CmdArgs.push_back(A->getValue(Args));
   }
 
+  if (Args.hasFlag(options::OPT_mrtd, options::OPT_mno_rtd, false))
+    CmdArgs.push_back("-mrtd");
+
   // FIXME: Set --enable-unsafe-fp-math.
   if (Args.hasFlag(options::OPT_fno_omit_frame_pointer,
                    options::OPT_fomit_frame_pointer))
@@ -1380,7 +1394,8 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
   Args.AddLastArg(CmdArgs, options::OPT_femit_all_decls);
   Args.AddLastArg(CmdArgs, options::OPT_fheinous_gnu_extensions);
   Args.AddLastArg(CmdArgs, options::OPT_flimit_debug_info);
-  Args.AddLastArg(CmdArgs, options::OPT_pg);
+  if (getToolChain().SupportsProfiling())
+    Args.AddLastArg(CmdArgs, options::OPT_pg);
 
   // -flax-vector-conversions is default.
   if (!Args.hasFlag(options::OPT_flax_vector_conversions,
@@ -2179,7 +2194,8 @@ void darwin::CC1::AddCC1OptionsArgs(const ArgList &Args, ArgStringList &CmdArgs,
 
   if (Args.hasArg(options::OPT_v))
     CmdArgs.push_back("-version");
-  if (Args.hasArg(options::OPT_pg))
+  if (Args.hasArg(options::OPT_pg) &&
+      getToolChain().SupportsProfiling())
     CmdArgs.push_back("-p");
   Args.AddLastArg(CmdArgs, options::OPT_p);
 
@@ -2812,7 +2828,8 @@ void darwin::Link::ConstructJob(Compilation &C, const JobAction &JA,
           }
         }
       } else {
-        if (Args.hasArg(options::OPT_pg)) {
+        if (Args.hasArg(options::OPT_pg) &&
+            getToolChain().SupportsProfiling()) {
           if (Args.hasArg(options::OPT_static) ||
               Args.hasArg(options::OPT_object) ||
               Args.hasArg(options::OPT_preload)) {
@@ -3274,7 +3291,10 @@ void freebsd::Link::ConstructJob(Compilation &C, const JobAction &JA,
   }
 
   Args.AddAllArgs(CmdArgs, options::OPT_L);
-  CmdArgs.push_back("-L/usr/lib");
+  const ToolChain::path_list Paths = getToolChain().getFilePaths();
+  for (ToolChain::path_list::const_iterator i = Paths.begin(), e = Paths.end();
+       i != e; ++i)
+    CmdArgs.push_back(Args.MakeArgString(llvm::StringRef("-L") + *i));
   Args.AddAllArgs(CmdArgs, options::OPT_T_Group);
   Args.AddAllArgs(CmdArgs, options::OPT_e);
   Args.AddAllArgs(CmdArgs, options::OPT_s);
@@ -3639,12 +3659,9 @@ void linuxtools::Link::ConstructJob(Compilation &C, const JobAction &JA,
 
   const ToolChain::path_list Paths = ToolChain.getFilePaths();
 
-  for (ToolChain::path_list::const_iterator i = Paths.begin(),
-         e = Paths.end();
-       i != e; ++i) {
-    const std::string &s = *i;
-    CmdArgs.push_back(Args.MakeArgString(std::string("-L") + s));
-  }
+  for (ToolChain::path_list::const_iterator i = Paths.begin(), e = Paths.end();
+       i != e; ++i)
+    CmdArgs.push_back(Args.MakeArgString(llvm::StringRef("-L") + *i));
 
   AddLinkerInputs(ToolChain, Inputs, Args, CmdArgs);
 

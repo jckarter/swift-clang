@@ -301,8 +301,7 @@ void Sema::DefaultLvalueConversion(Expr *&E) {
   if (T.hasQualifiers())
     T = T.getUnqualifiedType();
 
-  if (const ArraySubscriptExpr *ae = dyn_cast<ArraySubscriptExpr>(E))
-    CheckArrayAccess(ae);
+  CheckArrayAccess(E);
   
   E = ImplicitCastExpr::Create(Context, T, CK_LValueToRValue,
                                E, 0, VK_RValue);
@@ -6641,13 +6640,17 @@ static void DiagnoseBadShiftValues(Sema& S, Expr *&lex, Expr *&rex,
     return;
 
   if (Right.isNegative()) {
-    S.Diag(Loc, diag::warn_shift_negative) << rex->getSourceRange();
+    S.DiagRuntimeBehavior(Loc, rex,
+                          S.PDiag(diag::warn_shift_negative)
+                            << rex->getSourceRange());
     return;
   }
   llvm::APInt LeftBits(Right.getBitWidth(),
                        S.Context.getTypeSize(lex->getType()));
   if (Right.uge(LeftBits)) {
-    S.Diag(Loc, diag::warn_shift_gt_typewidth) << rex->getSourceRange();
+    S.DiagRuntimeBehavior(Loc, rex,
+                          S.PDiag(diag::warn_shift_gt_typewidth)
+                            << rex->getSourceRange());
     return;
   }
   if (Opc != BO_Shl)
@@ -7024,6 +7027,12 @@ QualType Sema::CheckCompareOperands(Expr *&lex, Expr *&rex, SourceLocation Loc,
       ImpCastExprToType(rex, T, CK_BitCast);
       return ResultTy;
     }
+
+    // Handle scoped enumeration types specifically, since they don't promote
+    // to integers.
+    if (lex->getType()->isEnumeralType() &&
+        Context.hasSameUnqualifiedType(lex->getType(), rex->getType()))
+      return ResultTy;
   }
 
   // Handle block pointer types.
@@ -7123,6 +7132,7 @@ QualType Sema::CheckCompareOperands(Expr *&lex, Expr *&rex, SourceLocation Loc,
     ImpCastExprToType(lex, rType, CK_NullToPointer);
     return ResultTy;
   }
+
   return InvalidOperands(Loc, lex, rex);
 }
 
@@ -7423,9 +7433,7 @@ QualType Sema::CheckAssignmentOperands(Expr *LHS, Expr *&RHS,
   }
   
   // Check for trivial buffer overflows.
-  if (const ArraySubscriptExpr *ae
-      = dyn_cast<ArraySubscriptExpr>(LHS->IgnoreParenCasts()))
-    CheckArrayAccess(ae);
+  CheckArrayAccess(LHS->IgnoreParenCasts());
   
   // C99 6.5.16p3: The type of an assignment expression is the type of the
   // left operand unless the left operand has qualified type, in which case
