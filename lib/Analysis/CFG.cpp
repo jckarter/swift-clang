@@ -2772,8 +2772,48 @@ CFG* CFG::buildCFG(const Decl *D, Stmt* Statement, ASTContext *C,
   return Builder.buildCFG(D, Statement, C, BO);
 }
 
-const CXXDestructorDecl *CFGImplicitDtor::getDestructorDecl() const {
+const CXXDestructorDecl *
+CFGImplicitDtor::getDestructorDecl(ASTContext &astContext) const {
+  switch (getKind()) {
+    case CFGElement::Invalid:
+    case CFGElement::Statement:
+    case CFGElement::Initializer:
+      llvm_unreachable("getDestructorDecl should only be used with "
+                       "ImplicitDtors");
+    case CFGElement::AutomaticObjectDtor: {
+      const VarDecl *var = cast<CFGAutomaticObjDtor>(this)->getVarDecl();
+      QualType ty = var->getType();
+      ty = ty.getNonReferenceType();
+      if (const ArrayType *arrayType = astContext.getAsArrayType(ty)) {
+        ty = arrayType->getElementType();
+      }
+      const RecordType *recordType = ty->getAs<RecordType>();
+      const CXXRecordDecl *classDecl =
+      cast<CXXRecordDecl>(recordType->getDecl());
+      return classDecl->getDestructor();      
+    }
+    case CFGElement::TemporaryDtor: {
+      const CXXBindTemporaryExpr *bindExpr =
+        cast<CFGTemporaryDtor>(this)->getBindTemporaryExpr();
+      const CXXTemporary *temp = bindExpr->getTemporary();
+      return temp->getDestructor();
+    }
+    case CFGElement::BaseDtor:
+    case CFGElement::MemberDtor:
+
+      // Not yet supported.
+      return 0;
+  }
+  llvm_unreachable("getKind() returned bogus value");
   return 0;
+}
+
+bool CFGImplicitDtor::isNoReturn(ASTContext &astContext) const {
+  if (const CXXDestructorDecl *cdecl = getDestructorDecl(astContext)) {
+    QualType ty = cdecl->getType();
+    return cast<FunctionType>(ty)->getNoReturnAttr();
+  }
+  return false;
 }
 
 //===----------------------------------------------------------------------===//

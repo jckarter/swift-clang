@@ -476,7 +476,8 @@ CursorVisitor::getPreprocessedEntities() {
 /// \returns true if the visitation should be aborted, false if it
 /// should continue.
 bool CursorVisitor::VisitChildren(CXCursor Cursor) {
-  if (clang_isReference(Cursor.kind)) {
+  if (clang_isReference(Cursor.kind) && 
+      Cursor.kind != CXCursor_CXXBaseSpecifier) {
     // By definition, references have no children.
     return false;
   }
@@ -542,6 +543,14 @@ bool CursorVisitor::VisitChildren(CXCursor Cursor) {
     return false;
   }
 
+  if (Cursor.kind == CXCursor_CXXBaseSpecifier) {
+    if (CXXBaseSpecifier *Base = getCursorCXXBaseSpecifier(Cursor)) {
+      if (TypeSourceInfo *BaseTSInfo = Base->getTypeSourceInfo()) {
+        return Visit(BaseTSInfo->getTypeLoc());
+      }
+    }
+  }
+  
   // Nothing to visit at the moment.
   return false;
 }
@@ -1319,6 +1328,9 @@ bool CursorVisitor::VisitTemplateArgumentLoc(const TemplateArgumentLoc &TAL) {
   
   case TemplateArgument::Template:
   case TemplateArgument::TemplateExpansion:
+    if (VisitNestedNameSpecifierLoc(TAL.getTemplateQualifierLoc()))
+      return true;
+      
     return VisitTemplateName(TAL.getArgument().getAsTemplateOrTemplatePattern(), 
                              TAL.getTemplateNameLoc());
   }
@@ -1967,12 +1979,8 @@ void EnqueueVisitor::VisitMemberExpr(MemberExpr *M) {
   // visit it.
   // FIXME: If we ever want to show these implicit accesses, this will be
   // unfortunate. However, clang_getCursor() relies on this behavior.
-  if (CXXThisExpr *This
-            = llvm::dyn_cast<CXXThisExpr>(M->getBase()->IgnoreParenImpCasts()))
-    if (This->isImplicit())
-      return;
-  
-  AddStmt(M->getBase());
+  if (!M->isImplicitAccess())
+    AddStmt(M->getBase());
 }
 void EnqueueVisitor::VisitObjCEncodeExpr(ObjCEncodeExpr *E) {
   AddTypeLoc(E->getEncodedTypeSourceInfo());
