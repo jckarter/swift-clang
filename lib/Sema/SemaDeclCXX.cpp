@@ -2838,7 +2838,8 @@ void Sema::CheckCompletedCXXClass(CXXRecordDecl *Record) {
     for (CXXRecordDecl::method_iterator M = Record->method_begin(),
                                      MEnd = Record->method_end();
          M != MEnd; ++M) {
-      DiagnoseHiddenVirtualMethods(Record, *M);
+      if (!(*M)->isStatic())
+        DiagnoseHiddenVirtualMethods(Record, *M);
     }
   }
 
@@ -6575,8 +6576,7 @@ Decl *Sema::ActOnStartLinkageSpecification(Scope *S, SourceLocation ExternLoc,
   // FIXME: Add all the various semantics of linkage specifications
 
   LinkageSpecDecl *D = LinkageSpecDecl::Create(Context, CurContext,
-                                               LangLoc, Language,
-                                               LBraceLoc.isValid());
+                                               LangLoc, Language);
   CurContext->addDecl(D);
   PushDeclContext(S, D);
   return D;
@@ -6587,10 +6587,15 @@ Decl *Sema::ActOnStartLinkageSpecification(Scope *S, SourceLocation ExternLoc,
 /// valid, it's the position of the closing '}' brace in a linkage
 /// specification that uses braces.
 Decl *Sema::ActOnFinishLinkageSpecification(Scope *S,
-                                                      Decl *LinkageSpec,
-                                                      SourceLocation RBraceLoc) {
-  if (LinkageSpec)
+                                            Decl *LinkageSpec,
+                                            SourceLocation RBraceLoc) {
+  if (LinkageSpec) {
+    if (RBraceLoc.isValid()) {
+      LinkageSpecDecl* LSDecl = cast<LinkageSpecDecl>(LinkageSpec);
+      LSDecl->setRBraceLoc(RBraceLoc);
+    }
     PopDeclContext();
+  }
   return LinkageSpec;
 }
 

@@ -687,6 +687,7 @@ void ASTDeclReader::VisitParmVarDecl(ParmVarDecl *PD) {
 void ASTDeclReader::VisitFileScopeAsmDecl(FileScopeAsmDecl *AD) {
   VisitDecl(AD);
   AD->setAsmString(cast<StringLiteral>(Reader.ReadExpr(F)));
+  AD->setRParenLoc(ReadSourceLocation(Record, Idx));
 }
 
 void ASTDeclReader::VisitBlockDecl(BlockDecl *BD) {
@@ -720,11 +721,13 @@ void ASTDeclReader::VisitBlockDecl(BlockDecl *BD) {
 void ASTDeclReader::VisitLinkageSpecDecl(LinkageSpecDecl *D) {
   VisitDecl(D);
   D->setLanguage((LinkageSpecDecl::LanguageIDs)Record[Idx++]);
-  D->setHasBraces(Record[Idx++]);
+  D->setRBraceLoc(ReadSourceLocation(Record, Idx));
 }
 
 void ASTDeclReader::VisitLabelDecl(LabelDecl *D) {
   VisitNamedDecl(D);
+  bool IsGnuLocal = Record[Idx++];
+  D->setGnuLocal(IsGnuLocal);
 }
 
 
@@ -1417,7 +1420,7 @@ Decl *ASTReader::ReadDeclRecord(unsigned Index, DeclID ID) {
   case DECL_LINKAGE_SPEC:
     D = LinkageSpecDecl::Create(*Context, 0, SourceLocation(),
                                 (LinkageSpecDecl::LanguageIDs)0,
-                                false);
+                                SourceLocation());
     break;
   case DECL_LABEL:
     D = LabelDecl::Create(*Context, 0, SourceLocation(), 0);
@@ -1585,7 +1588,8 @@ Decl *ASTReader::ReadDeclRecord(unsigned Index, DeclID ID) {
                             SC_None, SC_None, 0);
     break;
   case DECL_FILE_SCOPE_ASM:
-    D = FileScopeAsmDecl::Create(*Context, 0, SourceLocation(), 0);
+    D = FileScopeAsmDecl::Create(*Context, 0, 0, SourceLocation(),
+                                 SourceLocation());
     break;
   case DECL_BLOCK:
     D = BlockDecl::Create(*Context, 0, SourceLocation());
