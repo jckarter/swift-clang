@@ -527,6 +527,7 @@ Decl *Sema::ActOnTypeParameter(Scope *S, bool Typename, bool Ellipsis,
     = TemplateTypeParmDecl::Create(Context, Context.getTranslationUnitDecl(),
                                    Loc, Depth, Position, ParamName, Typename,
                                    Ellipsis);
+  Param->setAccess(AS_public);
   if (Invalid)
     Param->setInvalidDecl();
 
@@ -652,6 +653,8 @@ Decl *Sema::ActOnNonTypeTemplateParameter(Scope *S, Declarator &D,
                                       D.getIdentifierLoc(),
                                       Depth, Position, ParamName, T,
                                       IsParameterPack, TInfo);
+  Param->setAccess(AS_public);
+  
   if (Invalid)
     Param->setInvalidDecl();
 
@@ -705,13 +708,13 @@ Decl *Sema::ActOnTemplateTemplateParameter(Scope* S,
 
   // Construct the parameter object.
   bool IsParameterPack = EllipsisLoc.isValid();
-  // FIXME: Pack-ness is dropped
   TemplateTemplateParmDecl *Param =
     TemplateTemplateParmDecl::Create(Context, Context.getTranslationUnitDecl(),
                                      NameLoc.isInvalid()? TmpLoc : NameLoc,
                                      Depth, Position, IsParameterPack,
                                      Name, Params);
-
+  Param->setAccess(AS_public);
+  
   // If the template template parameter has a name, then link the identifier
   // into the scope and lookup mechanisms.
   if (Name) {
@@ -1629,14 +1632,42 @@ Sema::MatchTemplateParametersToScopeSpecifier(SourceLocation DeclStartLoc,
   return ParamLists[NumParamLists - 1];
 }
 
+void Sema::NoteAllFoundTemplates(TemplateName Name) {
+  if (TemplateDecl *Template = Name.getAsTemplateDecl()) {
+    Diag(Template->getLocation(), diag::note_template_declared_here)
+      << (isa<FunctionTemplateDecl>(Template)? 0
+          : isa<ClassTemplateDecl>(Template)? 1
+          : 2)
+      << Template->getDeclName();
+    return;
+  }
+  
+  if (OverloadedTemplateStorage *OST = Name.getAsOverloadedTemplate()) {
+    for (OverloadedTemplateStorage::iterator I = OST->begin(), 
+                                          IEnd = OST->end();
+         I != IEnd; ++I)
+      Diag((*I)->getLocation(), diag::note_template_declared_here)
+        << 0 << (*I)->getDeclName();
+    
+    return;
+  }
+}
+
+
 QualType Sema::CheckTemplateIdType(TemplateName Name,
                                    SourceLocation TemplateLoc,
                                    TemplateArgumentListInfo &TemplateArgs) {
   TemplateDecl *Template = Name.getAsTemplateDecl();
-  if (!Template) {
-    // The template name does not resolve to a template, so we just
-    // build a dependent template-id type.
-    return Context.getTemplateSpecializationType(Name, TemplateArgs);
+  if (!Template || isa<FunctionTemplateDecl>(Template)) {
+    // We might have a substituted template template parameter pack. If so,
+    // build a template specialization type for it.
+    if (Name.getAsSubstTemplateTemplateParmPack())
+      return Context.getTemplateSpecializationType(Name, TemplateArgs);
+    
+    Diag(TemplateLoc, diag::err_template_id_not_a_type)
+      << Name;
+    NoteAllFoundTemplates(Name);
+    return QualType();
   }
 
   // Check that the template argument list is well-formed for this
@@ -5065,7 +5096,17 @@ Sema::CheckFunctionTemplateSpecialization(FunctionDecl *FD,
 
   // Ignore access information;  it doesn't figure into redeclaration checking.
   FunctionDecl *Specialization = cast<FunctionDecl>(*Result);
-  Specialization->setLocation(FD->getLocation());
+
+  FunctionTemplateSpecializationInfo *SpecInfo
+    = Specialization->getTemplateSpecializationInfo();
+  assert(SpecInfo && "Function template specialization info missing?");
+  {
+    // Note: do not overwrite location info if previous template
+    // specialization kind was explicit.
+    TemplateSpecializationKind TSK = SpecInfo->getTemplateSpecializationKind();
+    if (TSK == TSK_Undeclared || TSK == TSK_ImplicitInstantiation)
+      Specialization->setLocation(FD->getLocation());
+  }
 
   // FIXME: Check if the prior specialization has a point of instantiation.
   // If so, we have run afoul of .
@@ -5088,10 +5129,6 @@ Sema::CheckFunctionTemplateSpecialization(FunctionDecl *FD,
   //   before the first use of that specialization that would cause an implicit
   //   instantiation to take place, in every translation unit in which such a
   //   use occurs; no diagnostic is required.
-  FunctionTemplateSpecializationInfo *SpecInfo
-    = Specialization->getTemplateSpecializationInfo();
-  assert(SpecInfo && "Function template specialization info missing?");
-
   bool HasNoEffect = false;
   if (!isFriend &&
       CheckSpecializationInstantiationRedecl(FD->getLocation(),
