@@ -791,8 +791,16 @@ def err_destructor_name : Error<
   "expected the class name after '~' to name the enclosing class">;
 def err_destructor_class_name : Error<
   "expected the class name after '~' to name a destructor">;
-def err_ident_in_pseudo_dtor_not_a_type : Error<
-  "identifier %0 in pseudo-destructor expression does not name a type">;
+def err_ident_in_dtor_not_a_type : Error<
+  "identifier %0 in object destruction expression does not name a type">;
+def err_destructor_expr_type_mismatch : Error<
+  "destructor type %0 in object destruction expression does not match the "
+  "type %1 of the object being destroyed">;
+def note_destructor_type_here : Note<
+  "type %0 is declared here">;
+
+def err_destructor_template : Error<
+  "destructor cannot be declared as a template">;
 
 // C++ initialization
 def err_init_conversion_failed : Error<
@@ -1926,6 +1934,14 @@ def err_template_kw_missing : Error<
   "missing 'template' keyword prior to dependent template name '%0%1'">;
 def ext_template_outside_of_template : ExtWarn<
   "'template' keyword outside of a template">, InGroup<CXX0x>;
+
+def err_non_type_template_in_nested_name_specifier : Error<
+  "qualified name refers into a specialization of function template '%0'">;
+def err_template_id_not_a_type : Error<
+  "template name refers to non-type template '%0'">;
+def note_template_declared_here : Note<
+  "%select{function template|class template|template template parameter}0 "
+  "%1 declared here">;
 
 // C++0x Variadic Templates
 def err_template_param_pack_default_arg : Error<
@@ -3284,7 +3300,7 @@ def err_in_class_initializer_bad_type : Error<
   "static data member of type %0 must be initialized out of line">;
 def ext_in_class_initializer_float_type : ExtWarn<
   "in-class initializer for static data member of type %0 "
-  "is a C++0x extension">, InGroup<CXX0x>;
+  "is a C++0x extension">, InGroup<CXX0xStaticNonIntegralInitializer>;
 def err_in_class_initializer_non_constant : Error<
   "in-class initializer is not a constant expression">;
 
