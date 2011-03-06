@@ -3308,23 +3308,34 @@ template<typename Derived>
 QualType
 TreeTransform<Derived>::TransformMemberPointerType(TypeLocBuilder &TLB,
                                                    MemberPointerTypeLoc TL) {
-  const MemberPointerType *T = TL.getTypePtr();
-
   QualType PointeeType = getDerived().TransformType(TLB, TL.getPointeeLoc());
   if (PointeeType.isNull())
     return QualType();
 
-  // TODO: preserve source information for this.
-  QualType ClassType
-    = getDerived().TransformType(QualType(T->getClass(), 0));
-  if (ClassType.isNull())
-    return QualType();
+  TypeSourceInfo* OldClsTInfo = TL.getClassTInfo();
+  TypeSourceInfo* NewClsTInfo = 0;
+  if (OldClsTInfo) {
+    NewClsTInfo = getDerived().TransformType(OldClsTInfo);
+    if (!NewClsTInfo)
+      return QualType();
+  }
+
+  const MemberPointerType *T = TL.getTypePtr();
+  QualType OldClsType = QualType(T->getClass(), 0);
+  QualType NewClsType;
+  if (NewClsTInfo)
+    NewClsType = NewClsTInfo->getType();
+  else {
+    NewClsType = getDerived().TransformType(OldClsType);
+    if (NewClsType.isNull())
+      return QualType();
+  }
 
   QualType Result = TL.getType();
   if (getDerived().AlwaysRebuild() ||
       PointeeType != T->getPointeeType() ||
-      ClassType != QualType(T->getClass(), 0)) {
-    Result = getDerived().RebuildMemberPointerType(PointeeType, ClassType,
+      NewClsType != OldClsType) {
+    Result = getDerived().RebuildMemberPointerType(PointeeType, NewClsType,
                                                    TL.getStarLoc());
     if (Result.isNull())
       return QualType();
@@ -3332,6 +3343,7 @@ TreeTransform<Derived>::TransformMemberPointerType(TypeLocBuilder &TLB,
 
   MemberPointerTypeLoc NewTL = TLB.push<MemberPointerTypeLoc>(Result);
   NewTL.setSigilLoc(TL.getSigilLoc());
+  NewTL.setClassTInfo(NewClsTInfo);
 
   return Result;
 }
@@ -4114,7 +4126,28 @@ template<typename Derived>
 QualType TreeTransform<Derived>::TransformSubstTemplateTypeParmType(
                                          TypeLocBuilder &TLB,
                                          SubstTemplateTypeParmTypeLoc TL) {
-  return TransformTypeSpecType(TLB, TL);
+  const SubstTemplateTypeParmType *T = TL.getTypePtr();
+  
+  // Substitute into the replacement type, which itself might involve something
+  // that needs to be transformed. This only tends to occur with default
+  // template arguments of template template parameters.
+  TemporaryBase Rebase(*this, TL.getNameLoc(), DeclarationName());
+  QualType Replacement = getDerived().TransformType(T->getReplacementType());
+  if (Replacement.isNull())
+    return QualType();
+  
+  // Always canonicalize the replacement type.
+  Replacement = SemaRef.Context.getCanonicalType(Replacement);
+  QualType Result
+    = SemaRef.Context.getSubstTemplateTypeParmType(T->getReplacedParameter(), 
+                                                   Replacement);
+  
+  // Propagate type-source information.
+  SubstTemplateTypeParmTypeLoc NewTL
+    = TLB.push<SubstTemplateTypeParmTypeLoc>(Result);
+  NewTL.setNameLoc(TL.getNameLoc());
+  return Result;
+
 }
 
 template<typename Derived>

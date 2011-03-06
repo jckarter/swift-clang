@@ -3111,8 +3111,10 @@ QualType ASTReader::ReadTypeRecord(unsigned Index) {
     EPI.Variadic = Record[Idx++];
     EPI.TypeQuals = Record[Idx++];
     EPI.RefQualifier = static_cast<RefQualifierKind>(Record[Idx++]);
-    EPI.HasExceptionSpec = Record[Idx++];
-    EPI.HasAnyExceptionSpec = Record[Idx++];
+    bool HasExceptionSpec = Record[Idx++];
+    bool HasAnyExceptionSpec = Record[Idx++];
+    EPI.ExceptionSpecType = HasExceptionSpec ?
+        (HasAnyExceptionSpec ? EST_DynamicAny : EST_Dynamic) : EST_None;
     EPI.NumExceptions = Record[Idx++];
     llvm::SmallVector<QualType, 2> Exceptions;
     for (unsigned I = 0; I != EPI.NumExceptions; ++I)
@@ -3401,6 +3403,7 @@ void TypeLocReader::VisitRValueReferenceTypeLoc(RValueReferenceTypeLoc TL) {
 }
 void TypeLocReader::VisitMemberPointerTypeLoc(MemberPointerTypeLoc TL) {
   TL.setStarLoc(ReadSourceLocation(Record, Idx));
+  TL.setClassTInfo(Reader.GetTypeSourceInfo(F, Record, Idx));
 }
 void TypeLocReader::VisitArrayTypeLoc(ArrayTypeLoc TL) {
   TL.setLBracketLoc(ReadSourceLocation(Record, Idx));

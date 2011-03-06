@@ -145,8 +145,8 @@ Decl *TemplateDeclInstantiator::VisitTypedefDecl(TypedefDecl *D) {
 
   // Create the new typedef
   TypedefDecl *Typedef
-    = TypedefDecl::Create(SemaRef.Context, Owner, D->getLocation(),
-                          D->getIdentifier(), DI);
+    = TypedefDecl::Create(SemaRef.Context, Owner, D->getLocStart(),
+                          D->getLocation(), D->getIdentifier(), DI);
   if (Invalid)
     Typedef->setInvalidDecl();
 
@@ -1450,7 +1450,8 @@ Decl *TemplateDeclInstantiator::VisitTemplateTypeParmDecl(
   const TemplateTypeParmType *TTPT = T->getAs<TemplateTypeParmType>();
 
   TemplateTypeParmDecl *Inst =
-    TemplateTypeParmDecl::Create(SemaRef.Context, Owner, D->getLocation(),
+    TemplateTypeParmDecl::Create(SemaRef.Context, Owner,
+                                 D->getLocStart(), D->getLocation(),
                                  TTPT->getDepth() - TemplateArgs.getNumLevels(),
                                  TTPT->getIndex(), D->getIdentifier(),
                                  D->wasDeclaredWithTypename(),
@@ -2158,8 +2159,9 @@ TemplateDeclInstantiator::InitFunctionInstantiation(FunctionDecl *New,
     // Rebuild the function type 
 
     FunctionProtoType::ExtProtoInfo EPI = Proto->getExtProtoInfo();
-    EPI.HasExceptionSpec = Proto->hasExceptionSpec();
-    EPI.HasAnyExceptionSpec = Proto->hasAnyExceptionSpec();
+    EPI.ExceptionSpecType = Proto->hasExceptionSpec() ?
+      (Proto->hasAnyExceptionSpec() ? EST_DynamicAny : EST_Dynamic) :
+      EST_None;
     EPI.NumExceptions = Exceptions.size();
     EPI.Exceptions = Exceptions.data();
     EPI.ExtInfo = Proto->getExtInfo();
