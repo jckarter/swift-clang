@@ -157,6 +157,7 @@ void ASTDeclWriter::VisitNamedDecl(NamedDecl *D) {
 
 void ASTDeclWriter::VisitTypeDecl(TypeDecl *D) {
   VisitNamedDecl(D);
+  Writer.AddSourceLocation(D->getLocStart(), Record);
   Writer.AddTypeRef(QualType(D->getTypeForDecl(), 0), Record);
 }
 
@@ -653,7 +654,7 @@ void ASTDeclWriter::VisitLinkageSpecDecl(LinkageSpecDecl *D) {
 
 void ASTDeclWriter::VisitLabelDecl(LabelDecl *D) {
   VisitNamedDecl(D);
-  Record.push_back(D->isGnuLocal());
+  Writer.AddSourceLocation(D->getLocStart(), Record);
   Code = serialization::DECL_LABEL;
 }
 

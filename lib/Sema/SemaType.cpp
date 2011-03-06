@@ -511,7 +511,7 @@ static void maybeSynthesizeBlockSignature(TypeProcessingState &state,
                              /*args*/ 0, 0,
                              /*type quals*/ 0,
                              /*ref-qualifier*/true, SourceLocation(),
-                             /*EH*/ false, SourceLocation(), false, 0, 0, 0,
+                             /*EH*/ EST_None, SourceLocation(), 0, 0, 0, 0,
                              /*parens*/ loc, loc,
                              declarator));
 
@@ -1764,9 +1764,9 @@ TypeSourceInfo *Sema::GetTypeForDeclarator(Declarator &D, Scope *S,
 
       // Exception specs are not allowed in typedefs. Complain, but add it
       // anyway.
-      if (FTI.hasExceptionSpec &&
+      if (FTI.getExceptionSpecType() != EST_None &&
           D.getDeclSpec().getStorageClassSpec() == DeclSpec::SCS_typedef)
-        Diag(FTI.getThrowLoc(), diag::err_exception_spec_in_typedef);
+        Diag(FTI.getExceptionSpecLoc(), diag::err_exception_spec_in_typedef);
 
       if (!FTI.NumArgs && !FTI.isVariadic && !getLangOptions().CPlusPlus) {
         // Simple void foo(), where the incoming T is the result type.
@@ -1855,9 +1855,8 @@ TypeSourceInfo *Sema::GetTypeForDeclarator(Declarator &D, Scope *S,
         }
 
         llvm::SmallVector<QualType, 4> Exceptions;
-        if (FTI.hasExceptionSpec) {
-          EPI.HasExceptionSpec = FTI.hasExceptionSpec;
-          EPI.HasAnyExceptionSpec = FTI.hasAnyExceptionSpec;
+        EPI.ExceptionSpecType = FTI.getExceptionSpecType();
+        if (FTI.getExceptionSpecType() == EST_Dynamic) {
           Exceptions.reserve(FTI.NumExceptions);
           for (unsigned ei = 0, ee = FTI.NumExceptions; ei != ee; ++ei) {
             // FIXME: Preserve type source info.
@@ -1869,6 +1868,8 @@ TypeSourceInfo *Sema::GetTypeForDeclarator(Declarator &D, Scope *S,
           }
           EPI.NumExceptions = Exceptions.size();
           EPI.Exceptions = Exceptions.data();
+        } else if (FTI.getExceptionSpecType() == EST_ComputedNoexcept) {
+          EPI.NoexceptExpr = FTI.NoexceptExpr;
         }
 
         T = Context.getFunctionType(T, ArgTys.data(), ArgTys.size(), EPI);
@@ -2345,10 +2346,12 @@ namespace {
   };
 
   class DeclaratorLocFiller : public TypeLocVisitor<DeclaratorLocFiller> {
+    ASTContext &Context;
     const DeclaratorChunk &Chunk;
 
   public:
-    DeclaratorLocFiller(const DeclaratorChunk &Chunk) : Chunk(Chunk) {}
+    DeclaratorLocFiller(ASTContext &Context, const DeclaratorChunk &Chunk)
+      : Context(Context), Chunk(Chunk) {}
 
     void VisitQualifiedTypeLoc(QualifiedTypeLoc TL) {
       llvm_unreachable("qualified type locs not expected here!");
@@ -2368,8 +2371,48 @@ namespace {
     }
     void VisitMemberPointerTypeLoc(MemberPointerTypeLoc TL) {
       assert(Chunk.Kind == DeclaratorChunk::MemberPointer);
+      const CXXScopeSpec& SS = Chunk.Mem.Scope();
+      NestedNameSpecifierLoc NNSLoc = SS.getWithLocInContext(Context);
+
+      const Type* ClsTy = TL.getClass();
+      QualType ClsQT = QualType(ClsTy, 0);
+      TypeSourceInfo *ClsTInfo = Context.CreateTypeSourceInfo(ClsQT, 0);
+      // Now copy source location info into the type loc component.
+      TypeLoc ClsTL = ClsTInfo->getTypeLoc();
+      switch (NNSLoc.getNestedNameSpecifier()->getKind()) {
+      case NestedNameSpecifier::Identifier:
+        assert(isa<DependentNameType>(ClsTy) && "Unexpected TypeLoc");
+        {
+          DependentNameTypeLoc DNTLoc = *cast<DependentNameTypeLoc>(&ClsTL);
+          DNTLoc.setKeywordLoc(SourceLocation());
+          DNTLoc.setQualifierLoc(NNSLoc.getPrefix());
+          DNTLoc.setNameLoc(NNSLoc.getLocalBeginLoc());
+        }
+        break;
+
+      case NestedNameSpecifier::TypeSpec:
+      case NestedNameSpecifier::TypeSpecWithTemplate:
+        if (isa<ElaboratedType>(ClsTy)) {
+          ElaboratedTypeLoc ETLoc = *cast<ElaboratedTypeLoc>(&ClsTL);
+          ETLoc.setKeywordLoc(SourceLocation());
+          ETLoc.setQualifierLoc(NNSLoc.getPrefix());
+          TypeLoc NamedTL = ETLoc.getNamedTypeLoc();
+          NamedTL.initializeFullCopy(NNSLoc.getTypeLoc());
+        } else {
+          ClsTL.initializeFullCopy(NNSLoc.getTypeLoc());
+        }
+        break;
+
+      case NestedNameSpecifier::Namespace:
+      case NestedNameSpecifier::NamespaceAlias:
+      case NestedNameSpecifier::Global:
+        llvm_unreachable("Nested-name-specifier must name a type");
+        break;
+      }
+
+      // Finally fill in MemberPointerLocInfo fields.
       TL.setStarLoc(Chunk.Loc);
-      // FIXME: nested name specifier
+      TL.setClassTInfo(ClsTInfo);
     }
     void VisitLValueReferenceTypeLoc(LValueReferenceTypeLoc TL) {
       assert(Chunk.Kind == DeclaratorChunk::Reference);
@@ -2440,7 +2483,7 @@ Sema::GetTypeSourceInfoForDeclarator(Declarator &D, QualType T,
       CurrTL = TL.getNextTypeLoc().getUnqualifiedLoc();
     }
 
-    DeclaratorLocFiller(D.getTypeObject(i)).Visit(CurrTL);
+    DeclaratorLocFiller(Context, D.getTypeObject(i)).Visit(CurrTL);
     CurrTL = CurrTL.getNextTypeLoc().getUnqualifiedLoc();
   }
   

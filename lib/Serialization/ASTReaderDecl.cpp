@@ -230,6 +230,7 @@ void ASTDeclReader::VisitNamedDecl(NamedDecl *ND) {
 
 void ASTDeclReader::VisitTypeDecl(TypeDecl *TD) {
   VisitNamedDecl(TD);
+  TD->setLocStart(ReadSourceLocation(Record, Idx));
   // Delay type reading until after we have fully initialized the decl.
   TypeIDForTypeDecl = Record[Idx++];
 }
@@ -748,8 +749,7 @@ void ASTDeclReader::VisitLinkageSpecDecl(LinkageSpecDecl *D) {
 
 void ASTDeclReader::VisitLabelDecl(LabelDecl *D) {
   VisitNamedDecl(D);
-  bool IsGnuLocal = Record[Idx++];
-  D->setGnuLocal(IsGnuLocal);
+  D->setLocStart(ReadSourceLocation(Record, Idx));
 }
 
 
@@ -1423,7 +1423,8 @@ Decl *ASTReader::ReadDeclRecord(unsigned Index, DeclID ID) {
     D = Context->getTranslationUnitDecl();
     break;
   case DECL_TYPEDEF:
-    D = TypedefDecl::Create(*Context, 0, SourceLocation(), 0, 0);
+    D = TypedefDecl::Create(*Context, 0, SourceLocation(), SourceLocation(),
+                            0, 0);
     break;
   case DECL_ENUM:
     D = EnumDecl::Create(*Context, Decl::EmptyShell());

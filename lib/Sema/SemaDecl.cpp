@@ -5758,8 +5758,8 @@ NamedDecl *Sema::ImplicitlyDefineFunction(SourceLocation Loc,
   D.AddTypeInfo(DeclaratorChunk::getFunction(ParsedAttributes(),
                                              false, false, SourceLocation(), 0,
                                              0, 0, true, SourceLocation(),
-                                             false, SourceLocation(),
-                                             false, 0,0,0, Loc, Loc, D),
+                                             EST_None, SourceLocation(),
+                                             0, 0, 0, 0, Loc, Loc, D),
                 SourceLocation());
   D.SetIdentifier(&II, Loc);
 
@@ -5867,6 +5867,7 @@ TypedefDecl *Sema::ParseTypedefDecl(Scope *S, Declarator &D, QualType T,
 
   // Scope manipulation handled by caller.
   TypedefDecl *NewTD = TypedefDecl::Create(Context, CurContext,
+                                           D.getSourceRange().getBegin(),
                                            D.getIdentifierLoc(),
                                            D.getIdentifier(),
                                            TInfo);
