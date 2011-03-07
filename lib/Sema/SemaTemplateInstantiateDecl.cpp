@@ -533,7 +533,7 @@ Decl *TemplateDeclInstantiator::VisitStaticAssertDecl(StaticAssertDecl *D) {
 Decl *TemplateDeclInstantiator::VisitEnumDecl(EnumDecl *D) {
   EnumDecl *Enum = EnumDecl::Create(SemaRef.Context, Owner,
                                     D->getLocation(), D->getIdentifier(),
-                                    D->getTagKeywordLoc(),
+                                    D->getLocStart(),
                                     /*PrevDecl=*/0, D->isScoped(),
                                     D->isScopedUsingClassTag(), D->isFixed());
   if (D->isFixed()) {
@@ -759,7 +759,7 @@ Decl *TemplateDeclInstantiator::VisitClassTemplateDecl(ClassTemplateDecl *D) {
   CXXRecordDecl *RecordInst
     = CXXRecordDecl::Create(SemaRef.Context, Pattern->getTagKind(), DC,
                             Pattern->getLocation(), Pattern->getIdentifier(),
-                            Pattern->getTagKeywordLoc(), PrevDecl,
+                            Pattern->getLocStart(), PrevDecl,
                             /*DelayTypeCreation=*/true);
 
   if (QualifierLoc)
@@ -901,7 +901,7 @@ Decl *TemplateDeclInstantiator::VisitCXXRecordDecl(CXXRecordDecl *D) {
   CXXRecordDecl *Record
     = CXXRecordDecl::Create(SemaRef.Context, D->getTagKind(), Owner,
                             D->getLocation(), D->getIdentifier(),
-                            D->getTagKeywordLoc(), PrevDecl);
+                            D->getLocStart(), PrevDecl);
 
   // Substitute the nested name specifier, if any.
   if (SubstQualifier(D, Record))
@@ -3001,11 +3001,14 @@ NamedDecl *Sema::FindInstantiatedDecl(SourceLocation Loc, NamedDecl *D,
 
     // If our context used to be dependent, we may need to instantiate
     // it before performing lookup into that context.
+    bool IsBeingInstantiated = false;
     if (CXXRecordDecl *Spec = dyn_cast<CXXRecordDecl>(ParentDC)) {
       if (!Spec->isDependentContext()) {
         QualType T = Context.getTypeDeclType(Spec);
         const RecordType *Tag = T->getAs<RecordType>();
         assert(Tag && "type of non-dependent record is not a RecordType");
+        if (Tag->isBeingDefined())
+          IsBeingInstantiated = true;
         if (!Tag->isBeingDefined() &&
             RequireCompleteType(Loc, T, diag::err_incomplete_type))
           return 0;
@@ -3032,13 +3035,29 @@ NamedDecl *Sema::FindInstantiatedDecl(SourceLocation Loc, NamedDecl *D,
                                    ParentDC->decls_end());
     }
 
-    // UsingShadowDecls can instantiate to nothing because of using hiding.
-    // Note: this assertion end up firing in invalid code even when none of the 
-    // AST invariants have been broken, so we explicitly check whether any
-    // errors have been emitted
-    assert((Result || isa<UsingShadowDecl>(D) || Diags.hasErrorOccurred()) &&
-           "Unable to find instantiation of declaration!");
-
+    if (!Result) {
+      if (isa<UsingShadowDecl>(D)) {
+        // UsingShadowDecls can instantiate to nothing because of using hiding.
+      } else if (Diags.hasErrorOccurred()) {
+        // We've already complained about something, so most likely this
+        // declaration failed to instantiate. There's no point in complaining
+        // further, since this is normal in invalid code.
+      } else if (IsBeingInstantiated) {
+        // The class in which this member exists is currently being 
+        // instantiated, and we haven't gotten around to instantiating this
+        // member yet. This can happen when the code uses forward declarations
+        // of member classes, and introduces ordering dependencies via
+        // template instantiation.
+        Diag(Loc, diag::err_member_not_yet_instantiated)
+          << D->getDeclName()
+          << Context.getTypeDeclType(cast<CXXRecordDecl>(ParentDC));
+        Diag(D->getLocation(), diag::note_non_instantiated_member_here);
+      } else {
+        // We should have found something, but didn't.
+        llvm_unreachable("Unable to find instantiation of declaration!");
+      }
+    }
+    
     D = Result;
   }
 
