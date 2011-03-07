@@ -41,7 +41,7 @@ using namespace clang::driver::tools;
 /// arguments that is shared with gcc.
 static void CheckPreprocessingOptions(const Driver &D, const ArgList &Args) {
   if (Arg *A = Args.getLastArg(options::OPT_C, options::OPT_CC))
-    if (!Args.hasArg(options::OPT_E))
+    if (!Args.hasArg(options::OPT_E) && !D.CCCIsCPP)
       D.Diag(clang::diag::err_drv_argument_only_allowed_with)
         << A->getAsString(Args) << "-E";
 }
@@ -2406,7 +2406,7 @@ void darwin::Preprocess::ConstructJob(Compilation &C, const JobAction &JA,
   OutputArgs.push_back("-o");
   OutputArgs.push_back(Output.getFilename());
 
-  if (Args.hasArg(options::OPT_E)) {
+  if (Args.hasArg(options::OPT_E) || getToolChain().getDriver().CCCIsCPP) {
     AddCPPOptionsArgs(Args, CmdArgs, Inputs, OutputArgs);
   } else {
     AddCPPOptionsArgs(Args, CmdArgs, Inputs, ArgStringList());
@@ -3602,13 +3602,15 @@ void linuxtools::Link::ConstructJob(Compilation &C, const JobAction &JA,
   CmdArgs.push_back("-m");
   if (ToolChain.getArch() == llvm::Triple::x86)
     CmdArgs.push_back("elf_i386");
-  else if (ToolChain.getArch() == llvm::Triple::arm)
+  else if (ToolChain.getArch() == llvm::Triple::arm 
+           ||  ToolChain.getArch() == llvm::Triple::thumb)
     CmdArgs.push_back("armelf_linux_eabi");
   else
     CmdArgs.push_back("elf_x86_64");
 
   if (Args.hasArg(options::OPT_static)) {
-    if (ToolChain.getArch() == llvm::Triple::arm)
+    if (ToolChain.getArch() == llvm::Triple::arm
+        || ToolChain.getArch() == llvm::Triple::thumb)
       CmdArgs.push_back("-Bstatic");
     else
       CmdArgs.push_back("-static");
@@ -3617,12 +3619,14 @@ void linuxtools::Link::ConstructJob(Compilation &C, const JobAction &JA,
   }
 
   if (ToolChain.getArch() == llvm::Triple::arm ||
+      ToolChain.getArch() == llvm::Triple::thumb ||
       (!Args.hasArg(options::OPT_static) &&
        !Args.hasArg(options::OPT_shared))) {
     CmdArgs.push_back("-dynamic-linker");
     if (ToolChain.getArch() == llvm::Triple::x86)
       CmdArgs.push_back("/lib/ld-linux.so.2");
-    else if (ToolChain.getArch() == llvm::Triple::arm)
+    else if (ToolChain.getArch() == llvm::Triple::arm ||
+             ToolChain.getArch() == llvm::Triple::thumb)
       CmdArgs.push_back("/lib/ld-linux.so.3");
     else
       CmdArgs.push_back("/lib64/ld-linux-x86-64.so.2");
