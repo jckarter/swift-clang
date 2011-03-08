@@ -2222,6 +2222,113 @@ PPC32TargetCodeGenInfo::initDwarfEHRegSizeTable(CodeGen::CodeGenFunction &CGF,
 
 
 //===----------------------------------------------------------------------===//
+// ARM64 ABI Implementation
+//===----------------------------------------------------------------------===//
+
+namespace {
+
+class ARM64ABIInfo : public ABIInfo {
+public:
+  ARM64ABIInfo(CodeGenTypes &CGT) : ABIInfo(CGT) {}
+
+private:
+  ABIArgInfo classifyReturnType(QualType RetTy) const;
+  ABIArgInfo classifyArgumentType(QualType RetTy) const;
+
+  virtual void computeInfo(CGFunctionInfo &FI) const {
+    FI.getReturnInfo() = classifyReturnType(FI.getReturnType());
+    for (CGFunctionInfo::arg_iterator it = FI.arg_begin(), ie = FI.arg_end();
+         it != ie; ++it)
+      it->info = classifyArgumentType(it->type);
+  }
+
+  virtual llvm::Value *EmitVAArg(llvm::Value *VAListAddr, QualType Ty,
+                                 CodeGenFunction &CGF) const;
+};
+
+class ARM64TargetCodeGenInfo : public TargetCodeGenInfo {
+public:
+  ARM64TargetCodeGenInfo(CodeGenTypes &CGT)
+    : TargetCodeGenInfo(new ARM64ABIInfo(CGT)) {}
+
+  int getDwarfEHStackPointer(CodeGen::CodeGenModule &M) const {
+    return 31;
+  }
+};
+
+}
+
+ABIArgInfo ARM64ABIInfo::classifyArgumentType(QualType Ty) const {
+  if (!isAggregateTypeForABI(Ty)) {
+    // Treat an enum type as its underlying type.
+    if (const EnumType *EnumTy = Ty->getAs<EnumType>())
+      Ty = EnumTy->getDecl()->getIntegerType();
+
+    return (Ty->isPromotableIntegerType() ?
+            ABIArgInfo::getExtend() : ABIArgInfo::getDirect());
+  }
+
+  // Ignore empty records.
+  if (isEmptyRecord(getContext(), Ty, true))
+    return ABIArgInfo::getIgnore();
+
+  // Structures with either a non-trivial destructor or a non-trivial
+  // copy constructor are always indirect.
+  if (isRecordWithNonTrivialDestructorOrCopyConstructor(Ty))
+    return ABIArgInfo::getIndirect(0, /*ByVal=*/false);
+
+  // Aggregates <= 16 bytes are passed directly in registers or on the stack.
+  uint64_t Size = getContext().getTypeSize(Ty);
+  if (Size <= 128) {
+    Size = 64 * ((Size + 63) / 64); // round up to multiple of 8 bytes
+    return ABIArgInfo::getDirect(llvm::IntegerType::get(getVMContext(), Size));
+  }
+
+  return ABIArgInfo::getIndirect(0);
+}
+
+ABIArgInfo ARM64ABIInfo::classifyReturnType(QualType RetTy) const {
+  if (RetTy->isVoidType())
+    return ABIArgInfo::getIgnore();
+
+  // Large vector types should be returned via memory.
+  if (RetTy->isVectorType() && getContext().getTypeSize(RetTy) > 128)
+    return ABIArgInfo::getIndirect(0);
+
+  if (!isAggregateTypeForABI(RetTy)) {
+    // Treat an enum type as its underlying type.
+    if (const EnumType *EnumTy = RetTy->getAs<EnumType>())
+      RetTy = EnumTy->getDecl()->getIntegerType();
+
+    return (RetTy->isPromotableIntegerType() ?
+            ABIArgInfo::getExtend() : ABIArgInfo::getDirect());
+  }
+
+  // Structures with either a non-trivial destructor or a non-trivial
+  // copy constructor are always indirect.
+  if (isRecordWithNonTrivialDestructorOrCopyConstructor(RetTy))
+    return ABIArgInfo::getIndirect(0, /*ByVal=*/false);
+
+  if (isEmptyRecord(getContext(), RetTy, true))
+    return ABIArgInfo::getIgnore();
+
+  // Aggregates <= 16 bytes are returned directly in registers or on the stack.
+  uint64_t Size = getContext().getTypeSize(RetTy);
+  if (Size <= 128) {
+    Size = 64 * ((Size + 63) / 64); // round up to multiple of 8 bytes
+    return ABIArgInfo::getDirect(llvm::IntegerType::get(getVMContext(), Size));
+  }
+
+  return ABIArgInfo::getIndirect(0);
+}
+
+llvm::Value *ARM64ABIInfo::EmitVAArg(llvm::Value *VAListAddr, QualType Ty,
+                                     CodeGenFunction &CGF) const {
+  assert(0 && "not yet implemented");
+  return 0;
+}
+
+//===----------------------------------------------------------------------===//
 // ARM ABI Implementation
 //===----------------------------------------------------------------------===//
 
@@ -2812,6 +2919,9 @@ const TargetCodeGenInfo &CodeGenModule::getTargetCodeGenInfo() {
   case llvm::Triple::mips:
   case llvm::Triple::mipsel:
     return *(TheTargetCodeGenInfo = new MIPSTargetCodeGenInfo(Types));
+
+  case llvm::Triple::arm64:
+    return *(TheTargetCodeGenInfo = new ARM64TargetCodeGenInfo(Types));
 
   case llvm::Triple::arm:
   case llvm::Triple::thumb:

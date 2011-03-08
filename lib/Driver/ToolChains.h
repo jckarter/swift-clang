@@ -173,7 +173,8 @@ public:
 #else
     // Default integrated assembler to on for x86.
     return (getTriple().getArch() == llvm::Triple::x86 ||
-            getTriple().getArch() == llvm::Triple::x86_64);
+            getTriple().getArch() == llvm::Triple::x86_64 ||
+            getTriple().getArch() == llvm::Triple::arm64);
 #endif
   }
   virtual bool IsStrictAliasingDefault() const {

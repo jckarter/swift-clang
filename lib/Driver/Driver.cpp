@@ -77,6 +77,7 @@ Driver::Driver(llvm::StringRef _ClangExecutable,
     CCCClangArchs.insert(llvm::Triple::x86);
     CCCClangArchs.insert(llvm::Triple::x86_64);
     CCCClangArchs.insert(llvm::Triple::arm);
+    CCCClangArchs.insert(llvm::Triple::arm64);
 
     if (!CXXIsProduction)
       CCCUseClangCXX = false;

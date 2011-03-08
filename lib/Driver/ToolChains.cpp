@@ -408,6 +408,8 @@ DarwinClang::DarwinClang(const HostInfo &Host, const llvm::Triple& Triple)
 void DarwinClang::AddLinkSearchPathArgs(const ArgList &Args,
                                        ArgStringList &CmdArgs) const {
   // The Clang toolchain uses explicit paths for internal libraries.
+  if (getTriple().getArch() == llvm::Triple::arm64)
+    return;
 
   // Unfortunately, we still might depend on a few of the libraries that are
   // only available in the gcc library directory (in particular
@@ -879,6 +881,11 @@ DerivedArgList *Darwin::TranslateArgs(const DerivedArgList &Args,
     else if (Name == "armv7")
       DAL->AddJoinedArg(0, MArch, "armv7a");
 
+    else if (Name == "arm64")
+      DAL->AddJoinedArg(0, MArch, "arm64");
+    else if (Name == "armv8")
+      DAL->AddJoinedArg(0, MArch, "arm64");
+
     else
       llvm_unreachable("invalid Darwin arch");
   }
@@ -914,7 +921,7 @@ const char *Darwin::GetDefaultRelocationModel() const {
 }
 
 const char *Darwin::GetForcedPicModel() const {
-  if (getArchName() == "x86_64")
+  if (getArchName() == "x86_64" || getArchName() == "arm64")
     return "pic";
   return 0;
 }
