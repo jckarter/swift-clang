@@ -281,7 +281,8 @@ public:
     StaticLocalDeclMap[D] = GV;
   }
 
-  CGDebugInfo *getDebugInfo() { return DebugInfo; }
+  CGDebugInfo *getModuleDebugInfo() { return DebugInfo; }
+
   ASTContext &getContext() const { return Context; }
   const CodeGenOptions &getCodeGenOpts() const { return CodeGenOpts; }
   const LangOptions &getLangOptions() const { return Features; }

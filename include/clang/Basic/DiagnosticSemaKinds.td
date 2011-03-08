@@ -1115,7 +1115,9 @@ def err_attribute_wrong_decl_type : Error<
   "classes and virtual methods|functions, methods, and parameters|"
   "classes|virtual methods|class members|variables|methods}1">;
 def warn_function_attribute_wrong_type : Warning<
-  "%0 only applies to function types; type here is %1">;
+  "'%0' only applies to function types; type here is %1">;
+def warn_pointer_attribute_wrong_type : Warning<
+  "'%0' only applies to pointer types; type here is %1">;
 def warn_gnu_inline_attribute_requires_inline : Warning<
   "'gnu_inline' attribute requires function to be marked 'inline',"
   " attribute ignored">;
@@ -1721,6 +1723,8 @@ def err_template_spec_default_arg : Error<
 def err_not_class_template_specialization : Error<
   "cannot specialize a %select{dependent template|template template "
   "parameter}0">;
+def err_function_specialization_in_class : Error<
+  "cannot specialize a function %0 within class scope">;
 
 // C++ class template specializations and out-of-line definitions
 def err_template_spec_needs_header : Error<
@@ -2288,12 +2292,17 @@ def ext_flexible_array_in_array : Extension<
   "%0 may not be used as an array element due to flexible array member">;
 def err_flexible_array_init_nonempty : Error<
   "non-empty initialization of flexible array member inside subobject">;
-def ext_flexible_array_empty_aggregate : Extension<
+def ext_flexible_array_empty_aggregate_ms : Extension<
   "flexible array member %0 in otherwise empty %select{struct|class}1 "
   "is a Microsoft extension">, InGroup<Microsoft>;
-def ext_flexible_array_union : Extension<
+def ext_flexible_array_union_ms : Extension<
   "flexible array member %0 in a union is a Microsoft extension">,
   InGroup<Microsoft>;
+def ext_flexible_array_empty_aggregate_gnu : Extension<
+  "flexible array member %0 in otherwise empty %select{struct|class}1 "
+  "is a GNU extension">, InGroup<GNU>;
+def ext_flexible_array_union_gnu : Extension<
+  "flexible array member %0 in a union is a GNU extension">, InGroup<GNU>;
 
 def err_flexible_array_init_needs_braces : Error<
   "flexible array requires brace-enclosed initializer">;
