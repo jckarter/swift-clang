@@ -678,6 +678,8 @@ public:
   /// \brief Build a partial diagnostic.
   PartialDiagnostic PDiag(unsigned DiagID = 0); // in SemaInternal.h
 
+  bool findMacroSpelling(SourceLocation &loc, llvm::StringRef name);
+
   ExprResult Owned(Expr* E) { return E; }
   ExprResult Owned(ExprResult R) { return R; }
   StmtResult Owned(Stmt* S) { return S; }
@@ -841,12 +843,10 @@ public:
   ParmVarDecl *BuildParmVarDeclForTypedef(DeclContext *DC,
                                           SourceLocation Loc,
                                           QualType T);
-  ParmVarDecl *CheckParameter(DeclContext *DC,
-                              TypeSourceInfo *TSInfo, QualType T,
-                              IdentifierInfo *Name,
-                              SourceLocation NameLoc,
-                              StorageClass SC,
-                              StorageClass SCAsWritten);
+  ParmVarDecl *CheckParameter(DeclContext *DC, SourceLocation StartLoc,
+                              SourceLocation NameLoc, IdentifierInfo *Name,
+                              QualType T, TypeSourceInfo *TSInfo,
+                              StorageClass SC, StorageClass SCAsWritten);
   void ActOnParamDefaultArgument(Decl *param,
                                  SourceLocation EqualLoc,
                                  Expr *defarg);
@@ -1704,6 +1704,7 @@ public:
   /// initialization.
   void CollectIvarsToConstructOrDestruct(ObjCInterfaceDecl *OI,
                                   llvm::SmallVectorImpl<ObjCIvarDecl*> &Ivars);
+
   //===--------------------------------------------------------------------===//
   // Statement Parsing Callbacks: SemaStmt.cpp.
 public:
@@ -1820,7 +1821,8 @@ public:
 
 
   VarDecl *BuildObjCExceptionDecl(TypeSourceInfo *TInfo, QualType ExceptionType,
-                                  IdentifierInfo *Name, SourceLocation NameLoc,
+                                  SourceLocation StartLoc,
+                                  SourceLocation IdLoc, IdentifierInfo *Id,
                                   bool Invalid = false);
 
   Decl *ActOnObjCExceptionDecl(Scope *S, Declarator &D);
@@ -1840,10 +1842,10 @@ public:
                                          Expr *SynchExpr,
                                          Stmt *SynchBody);
 
-  VarDecl *BuildExceptionDeclaration(Scope *S, 
-                                     TypeSourceInfo *TInfo,
-                                     IdentifierInfo *Name,
-                                     SourceLocation Loc);
+  VarDecl *BuildExceptionDeclaration(Scope *S, TypeSourceInfo *TInfo,
+                                     SourceLocation StartLoc,
+                                     SourceLocation IdLoc,
+                                     IdentifierInfo *Id);
   Decl *ActOnExceptionDeclarator(Scope *S, Declarator &D);
 
   StmtResult ActOnCXXCatchBlock(SourceLocation CatchLoc,

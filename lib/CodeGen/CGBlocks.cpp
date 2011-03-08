@@ -630,7 +630,9 @@ llvm::Value *CodeGenFunction::EmitBlockLiteral(const BlockExpr *blockExpr) {
 
       ImplicitCastExpr l2r(ImplicitCastExpr::OnStack, type, CK_LValueToRValue,
                            declRef, VK_RValue);
-      EmitAnyExprToMem(&l2r, blockField, /*volatile*/ false, /*init*/ true);
+      EmitExprAsInit(&l2r, variable, blockField,
+                     getContext().getDeclAlign(variable),
+                     /*captured by init*/ false);
     }
 
     // Push a destructor if necessary.  The semantics for when this
@@ -1076,6 +1078,7 @@ CodeGenFunction::GenerateCopyHelperFunction(const CGBlockInfo &blockInfo) {
 
   FunctionDecl *FD = FunctionDecl::Create(C,
                                           C.getTranslationUnitDecl(),
+                                          SourceLocation(),
                                           SourceLocation(), II, C.VoidTy, 0,
                                           SC_Static,
                                           SC_None,
@@ -1166,6 +1169,7 @@ CodeGenFunction::GenerateDestroyHelperFunction(const CGBlockInfo &blockInfo) {
     = &CGM.getContext().Idents.get("__destroy_helper_block_");
 
   FunctionDecl *FD = FunctionDecl::Create(C, C.getTranslationUnitDecl(),
+                                          SourceLocation(),
                                           SourceLocation(), II, C.VoidTy, 0,
                                           SC_Static,
                                           SC_None,
@@ -1269,6 +1273,7 @@ GeneratebyrefCopyHelperFunction(const llvm::Type *T, BlockFieldFlags flags,
 
   FunctionDecl *FD = FunctionDecl::Create(getContext(),
                                           getContext().getTranslationUnitDecl(),
+                                          SourceLocation(),
                                           SourceLocation(), II, R, 0,
                                           SC_Static,
                                           SC_None,
@@ -1339,6 +1344,7 @@ CodeGenFunction::GeneratebyrefDestroyHelperFunction(const llvm::Type *T,
 
   FunctionDecl *FD = FunctionDecl::Create(getContext(),
                                           getContext().getTranslationUnitDecl(),
+                                          SourceLocation(),
                                           SourceLocation(), II, R, 0,
                                           SC_Static,
                                           SC_None,
