@@ -702,6 +702,7 @@ void ASTDeclReader::VisitImplicitParamDecl(ImplicitParamDecl *PD) {
 void ASTDeclReader::VisitParmVarDecl(ParmVarDecl *PD) {
   VisitVarDecl(PD);
   PD->setObjCDeclQualifier((Decl::ObjCDeclQualifier)Record[Idx++]);
+  PD->setKNRPromoted(Record[Idx++]);
   PD->setHasInheritedDefaultArg(Record[Idx++]);
   if (Record[Idx++]) // hasUninstantiatedDefaultArg.
     PD->setUninstantiatedDefaultArg(Reader.ReadExpr(F));
@@ -744,6 +745,7 @@ void ASTDeclReader::VisitBlockDecl(BlockDecl *BD) {
 void ASTDeclReader::VisitLinkageSpecDecl(LinkageSpecDecl *D) {
   VisitDecl(D);
   D->setLanguage((LinkageSpecDecl::LanguageIDs)Record[Idx++]);
+  D->setExternLoc(ReadSourceLocation(Record, Idx));
   D->setRBraceLoc(ReadSourceLocation(Record, Idx));
 }
 
@@ -756,8 +758,8 @@ void ASTDeclReader::VisitLabelDecl(LabelDecl *D) {
 void ASTDeclReader::VisitNamespaceDecl(NamespaceDecl *D) {
   VisitNamedDecl(D);
   D->IsInline = Record[Idx++];
-  D->LBracLoc = ReadSourceLocation(Record, Idx);
-  D->RBracLoc = ReadSourceLocation(Record, Idx);
+  D->LocStart = ReadSourceLocation(Record, Idx);
+  D->RBraceLoc = ReadSourceLocation(Record, Idx);
   D->NextNamespace = Record[Idx++];
 
   bool IsOriginal = Record[Idx++];
@@ -1241,6 +1243,7 @@ void ASTDeclReader::VisitStaticAssertDecl(StaticAssertDecl *D) {
   VisitDecl(D);
   D->AssertExpr = Reader.ReadExpr(F);
   D->Message = cast<StringLiteral>(Reader.ReadExpr(F));
+  D->RParenLoc = ReadSourceLocation(Record, Idx);
 }
 
 std::pair<uint64_t, uint64_t>
@@ -1440,7 +1443,7 @@ Decl *ASTReader::ReadDeclRecord(unsigned Index, DeclID ID) {
                              DeclarationName(), QualType(), 0);
     break;
   case DECL_LINKAGE_SPEC:
-    D = LinkageSpecDecl::Create(*Context, 0, SourceLocation(),
+    D = LinkageSpecDecl::Create(*Context, 0, SourceLocation(), SourceLocation(),
                                 (LinkageSpecDecl::LanguageIDs)0,
                                 SourceLocation());
     break;
@@ -1448,7 +1451,8 @@ Decl *ASTReader::ReadDeclRecord(unsigned Index, DeclID ID) {
     D = LabelDecl::Create(*Context, 0, SourceLocation(), 0);
     break;
   case DECL_NAMESPACE:
-    D = NamespaceDecl::Create(*Context, 0, SourceLocation(), 0);
+    D = NamespaceDecl::Create(*Context, 0, SourceLocation(),
+                              SourceLocation(), 0);
     break;
   case DECL_NAMESPACE_ALIAS:
     D = NamespaceAliasDecl::Create(*Context, 0, SourceLocation(),
@@ -1486,7 +1490,8 @@ Decl *ASTReader::ReadDeclRecord(unsigned Index, DeclID ID) {
     break;
   case DECL_CXX_METHOD:
     D = CXXMethodDecl::Create(*Context, 0, SourceLocation(),
-                              DeclarationNameInfo(), QualType(), 0);
+                              DeclarationNameInfo(), QualType(), 0,
+                              false, SC_None, false, SourceLocation());
     break;
   case DECL_CXX_CONSTRUCTOR:
     D = CXXConstructorDecl::Create(*Context, Decl::EmptyShell());
@@ -1537,7 +1542,8 @@ Decl *ASTReader::ReadDeclRecord(unsigned Index, DeclID ID) {
                                          false, 0, 0);
     break;
   case DECL_STATIC_ASSERT:
-    D = StaticAssertDecl::Create(*Context, 0, SourceLocation(), 0, 0);
+    D = StaticAssertDecl::Create(*Context, 0, SourceLocation(), 0, 0,
+                                 SourceLocation());
     break;
 
   case DECL_OBJC_METHOD:

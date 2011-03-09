@@ -80,10 +80,17 @@ static const char *GetArmArchForMArch(llvm::StringRef Value) {
   if (Value == "armv4t")
     return "armv4t";
 
-  if (Value == "armv7" || Value == "armv7-a" || Value == "armv7-r" ||
-      Value == "armv7-m" || Value == "armv7a" || Value == "armv7r" ||
-      Value == "armv7m")
+  if (Value == "armv7" ||
+      Value == "armv7a" || Value == "armv7-a" ||
+      Value == "armv7r" || Value == "armv7-r" ||
+      Value == "armv7m" || Value == "armv7-m")
     return "armv7";
+
+  if (Value == "armv7f" || Value == "armv7-f")
+    return "armv7f";
+
+  if (Value == "armv7k" || Value == "armv7-k")
+    return "armv7k";
 
   return 0;
 }
@@ -104,8 +111,15 @@ static const char *GetArmArchForMCpu(llvm::StringRef Value) {
       Value == "arm1176jz-s" || Value == "arm1176jzf-s")
     return "armv6";
 
-  if (Value == "cortex-a8" || Value == "cortex-r4" || Value == "cortex-m3")
+  if (Value == "cortex-a8" || Value == "cortex-r4" || Value == "cortex-m3" ||
+      Value == "cortex-a9")
     return "armv7";
+
+  if (Value == "cortex-a9-mp")
+    return "armv7f";
+
+  if (Value == "pj4b")
+    return "armv7k";
 
   return 0;
 }
@@ -449,6 +463,10 @@ void DarwinClang::AddLinkSearchPathArgs(const ArgList &Args,
       ArchSpecificDir = "v5";
     else if (TripleStr.startswith("armv6") || TripleStr.startswith("thumbv6"))
       ArchSpecificDir = "v6";
+    else if (TripleStr.startswith("armv7f") || TripleStr.startswith("thumbv7f"))
+      ArchSpecificDir = "v7f";
+    else if (TripleStr.startswith("armv7k") || TripleStr.startswith("thumbv7k"))
+      ArchSpecificDir = "v7k";
     else if (TripleStr.startswith("armv7") || TripleStr.startswith("thumbv7"))
       ArchSpecificDir = "v7";
     break;
@@ -880,6 +898,10 @@ DerivedArgList *Darwin::TranslateArgs(const DerivedArgList &Args,
       DAL->AddJoinedArg(0, MArch, "armv6k");
     else if (Name == "armv7")
       DAL->AddJoinedArg(0, MArch, "armv7a");
+    else if (Name == "armv7f")
+      DAL->AddJoinedArg(0, MArch, "armv7f");
+    else if (Name == "armv7k")
+      DAL->AddJoinedArg(0, MArch, "armv7k");
 
     else if (Name == "arm64")
       DAL->AddJoinedArg(0, MArch, "arm64");

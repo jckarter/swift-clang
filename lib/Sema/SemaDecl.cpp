@@ -212,6 +212,7 @@ ParsedType Sema::getTypeName(IdentifierInfo &II, SourceLocation NameLoc,
       }
     }
   } else if (ObjCInterfaceDecl *IDecl = dyn_cast<ObjCInterfaceDecl>(IIDecl)) {
+    (void)DiagnoseUseOfDecl(IDecl, NameLoc);
     if (!HasTrailingDot)
       T = Context.getObjCInterfaceType(IDecl);
   }
@@ -3711,7 +3712,8 @@ Sema::ActOnFunctionDeclarator(Scope* S, Declarator& D, DeclContext* DC,
       NewFD = CXXConversionDecl::Create(Context, cast<CXXRecordDecl>(DC),
                                         D.getSourceRange().getBegin(),
                                         NameInfo, R, TInfo,
-                                        isInline, isExplicit);
+                                        isInline, isExplicit,
+                                        SourceLocation());
 
       isVirtualOkay = true;
     } else if (DC->isRecord()) {
@@ -3747,7 +3749,8 @@ Sema::ActOnFunctionDeclarator(Scope* S, Declarator& D, DeclContext* DC,
       NewFD = CXXMethodDecl::Create(Context, cast<CXXRecordDecl>(DC),
                                     D.getSourceRange().getBegin(),
                                     NameInfo, R, TInfo,
-                                    isStatic, SCAsWritten, isInline);
+                                    isStatic, SCAsWritten, isInline,
+                                    SourceLocation());
 
       isVirtualOkay = !isStatic;
     } else {
@@ -4254,7 +4257,7 @@ Sema::ActOnFunctionDeclarator(Scope* S, Declarator& D, DeclContext* DC,
     RegisterLocallyScopedExternCDecl(NewFD, Previous, S);
 
   // Set this FunctionDecl's range up to the right paren.
-  NewFD->setLocEnd(D.getSourceRange().getEnd());
+  NewFD->setRangeEnd(D.getSourceRange().getEnd());
 
   if (getLangOptions().CPlusPlus) {
     if (FunctionTemplate) {
@@ -6499,7 +6502,7 @@ CreateNewDecl:
   if (Kind == TTK_Enum) {
     // FIXME: Tag decls should be chained to any simultaneous vardecls, e.g.:
     // enum X { A, B, C } D;    D should chain to X.
-    New = EnumDecl::Create(Context, SearchDC, Loc, Name, KWLoc,
+    New = EnumDecl::Create(Context, SearchDC, KWLoc, Loc, Name,
                            cast_or_null<EnumDecl>(PrevDecl), ScopedEnum,
                            ScopedEnumUsesClassTag, !EnumUnderlying.isNull());
     // If this is an undefined enum, warn.
@@ -6545,13 +6548,13 @@ CreateNewDecl:
     // struct X { int A; } D;    D should chain to X.
     if (getLangOptions().CPlusPlus) {
       // FIXME: Look for a way to use RecordDecl for simple structs.
-      New = CXXRecordDecl::Create(Context, Kind, SearchDC, Loc, Name, KWLoc,
+      New = CXXRecordDecl::Create(Context, Kind, SearchDC, KWLoc, Loc, Name,
                                   cast_or_null<CXXRecordDecl>(PrevDecl));
-      
+
       if (isStdBadAlloc && (!StdBadAlloc || getStdBadAlloc()->isImplicit()))
         StdBadAlloc = cast<CXXRecordDecl>(New);
     } else
-      New = RecordDecl::Create(Context, Kind, SearchDC, Loc, Name, KWLoc,
+      New = RecordDecl::Create(Context, Kind, SearchDC, KWLoc, Loc, Name,
                                cast_or_null<RecordDecl>(PrevDecl));
   }
 
@@ -6676,10 +6679,9 @@ void Sema::ActOnStartCXXMemberDeclarations(Scope *S, Decl *TagD,
   //   purposes of access checking, the injected-class-name is treated
   //   as if it were a public member name.
   CXXRecordDecl *InjectedClassName
-    = CXXRecordDecl::Create(Context, Record->getTagKind(),
-                            CurContext, Record->getLocation(),
+    = CXXRecordDecl::Create(Context, Record->getTagKind(), CurContext,
+                            Record->getLocStart(), Record->getLocation(),
                             Record->getIdentifier(),
-                            Record->getLocStart(),
                             /*PrevDecl=*/0,
                             /*DelayTypeCreation=*/true);
   Context.getTypeDeclType(InjectedClassName, Record);
