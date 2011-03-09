@@ -1069,6 +1069,12 @@ Sema::ActOnCXXMemberDeclarator(Scope *S, AccessSpecifier AS, Declarator &D,
       MD->addAttr(new (Context) FinalAttr(VS.getFinalLoc(), Context));
   }
 
+  if (VS.getLastLocation().isValid()) {
+    // Update the end location of a method that has a virt-specifiers.
+    if (CXXMethodDecl *MD = dyn_cast_or_null<CXXMethodDecl>(Member))
+      MD->setRangeEnd(VS.getLastLocation());
+  }
+      
   CheckOverrideControl(Member);
 
   assert((Name || isInstField) && "No identifier for non-field ?");
@@ -1826,7 +1832,7 @@ BuildImplicitMemberInitializer(Sema &SemaRef, CXXConstructorDecl *Constructor,
         IterationVarName = &SemaRef.Context.Idents.get(OS.str());
       }
       VarDecl *IterationVar
-        = VarDecl::Create(SemaRef.Context, SemaRef.CurContext, Loc,
+        = VarDecl::Create(SemaRef.Context, SemaRef.CurContext, Loc, Loc,
                           IterationVarName, SizeType,
                         SemaRef.Context.getTrivialTypeSourceInfo(SizeType, Loc),
                           SC_None, SC_None);
@@ -3543,14 +3549,16 @@ Decl *Sema::ActOnConversionDeclarator(CXXConversionDecl *Conversion) {
 /// definition.
 Decl *Sema::ActOnStartNamespaceDef(Scope *NamespcScope,
                                    SourceLocation InlineLoc,
+                                   SourceLocation NamespaceLoc,
                                    SourceLocation IdentLoc,
                                    IdentifierInfo *II,
                                    SourceLocation LBrace,
                                    AttributeList *AttrList) {
-  // anonymous namespace starts at its left brace
+  SourceLocation StartLoc = InlineLoc.isValid() ? InlineLoc : NamespaceLoc;
+  // For anonymous namespace, take the location of the left brace.
+  SourceLocation Loc = II ? IdentLoc : LBrace;
   NamespaceDecl *Namespc = NamespaceDecl::Create(Context, CurContext,
-    (II ? IdentLoc : LBrace) , II);
-  Namespc->setLBracLoc(LBrace);
+                                                 StartLoc, Loc, II);
   Namespc->setInline(InlineLoc.isValid());
 
   Scope *DeclRegionScope = NamespcScope->getParent();
@@ -3709,7 +3717,7 @@ static inline NamespaceDecl *getNamespaceDecl(NamedDecl *D) {
 void Sema::ActOnFinishNamespaceDef(Decl *Dcl, SourceLocation RBrace) {
   NamespaceDecl *Namespc = dyn_cast_or_null<NamespaceDecl>(Dcl);
   assert(Namespc && "Invalid parameter, expected NamespaceDecl");
-  Namespc->setRBracLoc(RBrace);
+  Namespc->setRBraceLoc(RBrace);
   PopDeclContext();
   if (Namespc->hasAttr<VisibilityAttr>())
     PopPragmaVisibility();
@@ -3732,7 +3740,7 @@ NamespaceDecl *Sema::getOrCreateStdNamespace() {
     // The "std" namespace has not yet been defined, so build one implicitly.
     StdNamespace = NamespaceDecl::Create(Context, 
                                          Context.getTranslationUnitDecl(),
-                                         SourceLocation(),
+                                         SourceLocation(), SourceLocation(),
                                          &PP.getIdentifierTable().get("std"));
     getStdNamespace()->setImplicit(true);
   }
@@ -4721,11 +4729,12 @@ CXXConstructorDecl *Sema::DeclareImplicitDefaultConstructor(
   // Create the actual constructor declaration.
   CanQualType ClassType
     = Context.getCanonicalType(Context.getTypeDeclType(ClassDecl));
+  SourceLocation ClassLoc = ClassDecl->getLocation();
   DeclarationName Name
     = Context.DeclarationNames.getCXXConstructorName(ClassType);
-  DeclarationNameInfo NameInfo(Name, ClassDecl->getLocation());
+  DeclarationNameInfo NameInfo(Name, ClassLoc);
   CXXConstructorDecl *DefaultCon
-    = CXXConstructorDecl::Create(Context, ClassDecl, NameInfo,
+    = CXXConstructorDecl::Create(Context, ClassDecl, ClassLoc, NameInfo,
                                  Context.getFunctionType(Context.VoidTy,
                                                          0, 0, EPI),
                                  /*TInfo=*/0,
@@ -4921,15 +4930,16 @@ void Sema::DeclareInheritedConstructors(CXXRecordDecl *ClassDecl) {
         //   user-writtern inline constructor [...]
         DeclarationNameInfo DNI(CreatedCtorName, UsingLoc);
         CXXConstructorDecl *NewCtor = CXXConstructorDecl::Create(
-            Context, ClassDecl, DNI, QualType(NewCtorType, 0), /*TInfo=*/0,
-            BaseCtor->isExplicit(), /*Inline=*/true,
+            Context, ClassDecl, UsingLoc, DNI, QualType(NewCtorType, 0),
+            /*TInfo=*/0, BaseCtor->isExplicit(), /*Inline=*/true,
             /*ImplicitlyDeclared=*/true);
         NewCtor->setAccess(BaseCtor->getAccess());
 
         // Build up the parameter decls and add them.
         llvm::SmallVector<ParmVarDecl *, 16> ParamDecls;
         for (unsigned i = 0; i < params; ++i) {
-          ParamDecls.push_back(ParmVarDecl::Create(Context, NewCtor, UsingLoc,
+          ParamDecls.push_back(ParmVarDecl::Create(Context, NewCtor,
+                                                   UsingLoc, UsingLoc,
                                                    /*IdentifierInfo=*/0,
                                                    BaseCtorType->getArgType(i),
                                                    /*TInfo=*/0, SC_None,
@@ -4999,11 +5009,12 @@ CXXDestructorDecl *Sema::DeclareImplicitDestructor(CXXRecordDecl *ClassDecl) {
   
   CanQualType ClassType
     = Context.getCanonicalType(Context.getTypeDeclType(ClassDecl));
+  SourceLocation ClassLoc = ClassDecl->getLocation();
   DeclarationName Name
     = Context.DeclarationNames.getCXXDestructorName(ClassType);
-  DeclarationNameInfo NameInfo(Name, ClassDecl->getLocation());
+  DeclarationNameInfo NameInfo(Name, ClassLoc);
   CXXDestructorDecl *Destructor
-      = CXXDestructorDecl::Create(Context, ClassDecl, NameInfo, Ty, 0,
+    = CXXDestructorDecl::Create(Context, ClassDecl, ClassLoc, NameInfo, Ty, 0,
                                 /*isInline=*/true,
                                 /*isImplicitlyDeclared=*/true);
   Destructor->setAccess(AS_public);
@@ -5190,7 +5201,7 @@ BuildSingleCopyAssign(Sema &S, SourceLocation Loc, QualType T,
     OS << "__i" << Depth;
     IterationVarName = &S.Context.Idents.get(OS.str());
   }
-  VarDecl *IterationVar = VarDecl::Create(S.Context, S.CurContext, Loc,
+  VarDecl *IterationVar = VarDecl::Create(S.Context, S.CurContext, Loc, Loc,
                                           IterationVarName, SizeType,
                             S.Context.getTrivialTypeSourceInfo(SizeType, Loc),
                                           SC_None, SC_None);
@@ -5395,21 +5406,22 @@ CXXMethodDecl *Sema::DeclareImplicitCopyAssignment(CXXRecordDecl *ClassDecl) {
   EPI.NumExceptions = ExceptSpec.size();
   EPI.Exceptions = ExceptSpec.data();
   DeclarationName Name = Context.DeclarationNames.getCXXOperatorName(OO_Equal);
-  DeclarationNameInfo NameInfo(Name, ClassDecl->getLocation());
+  SourceLocation ClassLoc = ClassDecl->getLocation();
+  DeclarationNameInfo NameInfo(Name, ClassLoc);
   CXXMethodDecl *CopyAssignment
-    = CXXMethodDecl::Create(Context, ClassDecl, NameInfo,
+    = CXXMethodDecl::Create(Context, ClassDecl, ClassLoc, NameInfo,
                             Context.getFunctionType(RetType, &ArgType, 1, EPI),
                             /*TInfo=*/0, /*isStatic=*/false,
                             /*StorageClassAsWritten=*/SC_None,
-                            /*isInline=*/true);
+                            /*isInline=*/true,
+                            SourceLocation());
   CopyAssignment->setAccess(AS_public);
   CopyAssignment->setImplicit();
   CopyAssignment->setTrivial(ClassDecl->hasTrivialCopyAssignment());
   
   // Add the parameter to the operator.
   ParmVarDecl *FromParam = ParmVarDecl::Create(Context, CopyAssignment,
-                                               ClassDecl->getLocation(),
-                                               /*Id=*/0,
+                                               ClassLoc, ClassLoc, /*Id=*/0,
                                                ArgType, /*TInfo=*/0,
                                                SC_None,
                                                SC_None, 0);
@@ -5860,9 +5872,10 @@ CXXConstructorDecl *Sema::DeclareImplicitCopyConstructor(
   DeclarationName Name
     = Context.DeclarationNames.getCXXConstructorName(
                                            Context.getCanonicalType(ClassType));
-  DeclarationNameInfo NameInfo(Name, ClassDecl->getLocation());
+  SourceLocation ClassLoc = ClassDecl->getLocation();
+  DeclarationNameInfo NameInfo(Name, ClassLoc);
   CXXConstructorDecl *CopyConstructor
-    = CXXConstructorDecl::Create(Context, ClassDecl, NameInfo,
+    = CXXConstructorDecl::Create(Context, ClassDecl, ClassLoc, NameInfo,
                                  Context.getFunctionType(Context.VoidTy,
                                                          &ArgType, 1, EPI),
                                  /*TInfo=*/0,
@@ -5877,7 +5890,7 @@ CXXConstructorDecl *Sema::DeclareImplicitCopyConstructor(
   
   // Add the parameter to the constructor.
   ParmVarDecl *FromParam = ParmVarDecl::Create(Context, CopyConstructor,
-                                               ClassDecl->getLocation(),
+                                               ClassLoc, ClassLoc,
                                                /*IdentifierInfo=*/0,
                                                ArgType, /*TInfo=*/0,
                                                SC_None,
@@ -6582,7 +6595,7 @@ Decl *Sema::ActOnStartLinkageSpecification(Scope *S, SourceLocation ExternLoc,
   // FIXME: Add all the various semantics of linkage specifications
 
   LinkageSpecDecl *D = LinkageSpecDecl::Create(Context, CurContext,
-                                               LangLoc, Language);
+                                               ExternLoc, LangLoc, Language);
   CurContext->addDecl(D);
   PushDeclContext(S, D);
   return D;
@@ -6608,10 +6621,11 @@ Decl *Sema::ActOnFinishLinkageSpecification(Scope *S,
 /// \brief Perform semantic analysis for the variable declaration that
 /// occurs within a C++ catch clause, returning the newly-created
 /// variable.
-VarDecl *Sema::BuildExceptionDeclaration(Scope *S, 
+VarDecl *Sema::BuildExceptionDeclaration(Scope *S,
                                          TypeSourceInfo *TInfo,
-                                         IdentifierInfo *Name,
-                                         SourceLocation Loc) {
+                                         SourceLocation StartLoc,
+                                         SourceLocation Loc,
+                                         IdentifierInfo *Name) {
   bool Invalid = false;
   QualType ExDeclType = TInfo->getType();
   
@@ -6681,9 +6695,8 @@ VarDecl *Sema::BuildExceptionDeclaration(Scope *S,
     }
   }
 
-  VarDecl *ExDecl = VarDecl::Create(Context, CurContext, Loc,
-                                    Name, ExDeclType, TInfo, SC_None,
-                                    SC_None);
+  VarDecl *ExDecl = VarDecl::Create(Context, CurContext, StartLoc, Loc, Name,
+                                    ExDeclType, TInfo, SC_None, SC_None);
   ExDecl->setExceptionVariable(true);
   
   if (!Invalid) {
@@ -6766,9 +6779,9 @@ Decl *Sema::ActOnExceptionDeclarator(Scope *S, Declarator &D) {
   }
 
   VarDecl *ExDecl = BuildExceptionDeclaration(S, TInfo,
-                                              D.getIdentifier(),
-                                              D.getIdentifierLoc());
-
+                                              D.getSourceRange().getBegin(),
+                                              D.getIdentifierLoc(),
+                                              D.getIdentifier());
   if (Invalid)
     ExDecl->setInvalidDecl();
 
@@ -6782,21 +6795,23 @@ Decl *Sema::ActOnExceptionDeclarator(Scope *S, Declarator &D) {
   return ExDecl;
 }
 
-Decl *Sema::ActOnStaticAssertDeclaration(SourceLocation AssertLoc,
+Decl *Sema::ActOnStaticAssertDeclaration(SourceLocation StaticAssertLoc,
                                          Expr *AssertExpr,
-                                         Expr *AssertMessageExpr_) {
+                                         Expr *AssertMessageExpr_,
+                                         SourceLocation RParenLoc) {
   StringLiteral *AssertMessage = cast<StringLiteral>(AssertMessageExpr_);
 
   if (!AssertExpr->isTypeDependent() && !AssertExpr->isValueDependent()) {
     llvm::APSInt Value(32);
     if (!AssertExpr->isIntegerConstantExpr(Value, Context)) {
-      Diag(AssertLoc, diag::err_static_assert_expression_is_not_constant) <<
+      Diag(StaticAssertLoc,
+           diag::err_static_assert_expression_is_not_constant) <<
         AssertExpr->getSourceRange();
       return 0;
     }
 
     if (Value == 0) {
-      Diag(AssertLoc, diag::err_static_assert_failed)
+      Diag(StaticAssertLoc, diag::err_static_assert_failed)
         << AssertMessage->getString() << AssertExpr->getSourceRange();
     }
   }
@@ -6804,8 +6819,8 @@ Decl *Sema::ActOnStaticAssertDeclaration(SourceLocation AssertLoc,
   if (DiagnoseUnexpandedParameterPack(AssertExpr, UPPC_StaticAssertExpression))
     return 0;
 
-  Decl *Decl = StaticAssertDecl::Create(Context, CurContext, AssertLoc,
-                                        AssertExpr, AssertMessage);
+  Decl *Decl = StaticAssertDecl::Create(Context, CurContext, StaticAssertLoc,
+                                        AssertExpr, AssertMessage, RParenLoc);
 
   CurContext->addDecl(Decl);
   return Decl;

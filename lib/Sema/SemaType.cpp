@@ -95,12 +95,10 @@ static void diagnoseBadTypeAttribute(Sema &S, const AttributeList &attr,
 
   // The GC attributes are usually written with macros;  special-case them.
   if (useInstantiationLoc && loc.isMacroID() && attr.getParameterName()) {
-    SourceLocation instLoc = S.getSourceManager().getInstantiationLoc(loc);
-    llvm::StringRef macro = S.getPreprocessor().getSpelling(instLoc);
-    if ((macro == "__strong" && attr.getParameterName()->isStr("strong")) ||
-        (macro == "__weak" && attr.getParameterName()->isStr("weak"))) {
-      loc = instLoc;
-      name = macro;
+    if (attr.getParameterName()->isStr("strong")) {
+      if (S.findMacroSpelling(loc, "__strong")) name = "__strong";
+    } else if (attr.getParameterName()->isStr("weak")) {
+      if (S.findMacroSpelling(loc, "__weak")) name = "__weak";
     }
   }
 
@@ -1505,10 +1503,8 @@ TypeSourceInfo *Sema::GetTypeForDeclarator(Declarator &D, Scope *S,
     
     if (!D.isInvalidType() && D.getDeclSpec().isTypeSpecOwned()) {
       TagDecl* Owned = cast<TagDecl>(D.getDeclSpec().getRepAsDecl());
-      // Owned is embedded if it was defined here, or if it is the
-      // very first (i.e., canonical) declaration of this tag type.
-      Owned->setEmbeddedInDeclarator(Owned->isDefinition() ||
-                                     Owned->isCanonicalDecl());
+      // Owned declaration is embedded in declarator.
+      Owned->setEmbeddedInDeclarator(true);
       if (OwnedDecl) *OwnedDecl = Owned;
     }
     break;
@@ -1877,9 +1873,12 @@ TypeSourceInfo *Sema::GetTypeForDeclarator(Declarator &D, Scope *S,
           } else if (!FTI.hasPrototype) {
             if (ArgTy->isPromotableIntegerType()) {
               ArgTy = Context.getPromotedIntegerType(ArgTy);
+              Param->setKNRPromoted(true);
             } else if (const BuiltinType* BTy = ArgTy->getAs<BuiltinType>()) {
-              if (BTy->getKind() == BuiltinType::Float)
+              if (BTy->getKind() == BuiltinType::Float) {
                 ArgTy = Context.DoubleTy;
+                Param->setKNRPromoted(true);
+              }
             }
           }
 

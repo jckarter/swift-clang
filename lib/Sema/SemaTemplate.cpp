@@ -650,6 +650,7 @@ Decl *Sema::ActOnNonTypeTemplateParameter(Scope *S, Declarator &D,
   bool IsParameterPack = D.hasEllipsis();
   NonTypeTemplateParmDecl *Param
     = NonTypeTemplateParmDecl::Create(Context, Context.getTranslationUnitDecl(),
+                                      D.getSourceRange().getBegin(),
                                       D.getIdentifierLoc(),
                                       Depth, Position, ParamName, T,
                                       IsParameterPack, TInfo);
@@ -962,7 +963,7 @@ Sema::CheckClassTemplate(Scope *S, unsigned TagSpec, TagUseKind TUK,
   }
 
   CXXRecordDecl *NewClass =
-    CXXRecordDecl::Create(Context, Kind, SemanticContext, NameLoc, Name, KWLoc,
+    CXXRecordDecl::Create(Context, Kind, SemanticContext, KWLoc, NameLoc, Name,
                           PrevClassTemplate?
                             PrevClassTemplate->getTemplatedDecl() : 0,
                           /*DelayTypeCreation=*/true);
@@ -1755,6 +1756,7 @@ QualType Sema::CheckTemplateIdType(TemplateName Name,
       Decl = ClassTemplateSpecializationDecl::Create(Context,
                             ClassTemplate->getTemplatedDecl()->getTagKind(),
                                                 ClassTemplate->getDeclContext(),
+                                                ClassTemplate->getLocation(),
                                                 ClassTemplate->getLocation(),
                                                      ClassTemplate,
                                                      Converted.data(),
@@ -4595,7 +4597,7 @@ Sema::ActOnClassTemplateSpecialization(Scope *S, unsigned TagSpec,
     ClassTemplatePartialSpecializationDecl *Partial
       = ClassTemplatePartialSpecializationDecl::Create(Context, Kind,
                                              ClassTemplate->getDeclContext(),
-                                                       TemplateNameLoc,
+                                                       KWLoc, TemplateNameLoc,
                                                        TemplateParams,
                                                        ClassTemplate,
                                                        Converted.data(),
@@ -4658,7 +4660,7 @@ Sema::ActOnClassTemplateSpecialization(Scope *S, unsigned TagSpec,
     Specialization
       = ClassTemplateSpecializationDecl::Create(Context, Kind,
                                              ClassTemplate->getDeclContext(),
-                                                TemplateNameLoc,
+                                                KWLoc, TemplateNameLoc,
                                                 ClassTemplate,
                                                 Converted.data(),
                                                 Converted.size(),
@@ -5521,7 +5523,7 @@ Sema::ActOnExplicitInstantiation(Scope *S,
     Specialization
       = ClassTemplateSpecializationDecl::Create(Context, Kind,
                                              ClassTemplate->getDeclContext(),
-                                                TemplateNameLoc,
+                                                KWLoc, TemplateNameLoc,
                                                 ClassTemplate,
                                                 Converted.data(),
                                                 Converted.size(),
