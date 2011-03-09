@@ -1069,6 +1069,12 @@ Sema::ActOnCXXMemberDeclarator(Scope *S, AccessSpecifier AS, Declarator &D,
       MD->addAttr(new (Context) FinalAttr(VS.getFinalLoc(), Context));
   }
 
+  if (VS.getLastLocation().isValid()) {
+    // Update the end location of a method that has a virt-specifiers.
+    if (CXXMethodDecl *MD = dyn_cast_or_null<CXXMethodDecl>(Member))
+      MD->setRangeEnd(VS.getLastLocation());
+  }
+      
   CheckOverrideControl(Member);
 
   assert((Name || isInstField) && "No identifier for non-field ?");
@@ -3543,14 +3549,16 @@ Decl *Sema::ActOnConversionDeclarator(CXXConversionDecl *Conversion) {
 /// definition.
 Decl *Sema::ActOnStartNamespaceDef(Scope *NamespcScope,
                                    SourceLocation InlineLoc,
+                                   SourceLocation NamespaceLoc,
                                    SourceLocation IdentLoc,
                                    IdentifierInfo *II,
                                    SourceLocation LBrace,
                                    AttributeList *AttrList) {
-  // anonymous namespace starts at its left brace
+  SourceLocation StartLoc = InlineLoc.isValid() ? InlineLoc : NamespaceLoc;
+  // For anonymous namespace, take the location of the left brace.
+  SourceLocation Loc = II ? IdentLoc : LBrace;
   NamespaceDecl *Namespc = NamespaceDecl::Create(Context, CurContext,
-    (II ? IdentLoc : LBrace) , II);
-  Namespc->setLBracLoc(LBrace);
+                                                 StartLoc, Loc, II);
   Namespc->setInline(InlineLoc.isValid());
 
   Scope *DeclRegionScope = NamespcScope->getParent();
@@ -3709,7 +3717,7 @@ static inline NamespaceDecl *getNamespaceDecl(NamedDecl *D) {
 void Sema::ActOnFinishNamespaceDef(Decl *Dcl, SourceLocation RBrace) {
   NamespaceDecl *Namespc = dyn_cast_or_null<NamespaceDecl>(Dcl);
   assert(Namespc && "Invalid parameter, expected NamespaceDecl");
-  Namespc->setRBracLoc(RBrace);
+  Namespc->setRBraceLoc(RBrace);
   PopDeclContext();
   if (Namespc->hasAttr<VisibilityAttr>())
     PopPragmaVisibility();
@@ -3732,7 +3740,7 @@ NamespaceDecl *Sema::getOrCreateStdNamespace() {
     // The "std" namespace has not yet been defined, so build one implicitly.
     StdNamespace = NamespaceDecl::Create(Context, 
                                          Context.getTranslationUnitDecl(),
-                                         SourceLocation(),
+                                         SourceLocation(), SourceLocation(),
                                          &PP.getIdentifierTable().get("std"));
     getStdNamespace()->setImplicit(true);
   }
@@ -5405,7 +5413,8 @@ CXXMethodDecl *Sema::DeclareImplicitCopyAssignment(CXXRecordDecl *ClassDecl) {
                             Context.getFunctionType(RetType, &ArgType, 1, EPI),
                             /*TInfo=*/0, /*isStatic=*/false,
                             /*StorageClassAsWritten=*/SC_None,
-                            /*isInline=*/true);
+                            /*isInline=*/true,
+                            SourceLocation());
   CopyAssignment->setAccess(AS_public);
   CopyAssignment->setImplicit();
   CopyAssignment->setTrivial(ClassDecl->hasTrivialCopyAssignment());
@@ -6586,7 +6595,7 @@ Decl *Sema::ActOnStartLinkageSpecification(Scope *S, SourceLocation ExternLoc,
   // FIXME: Add all the various semantics of linkage specifications
 
   LinkageSpecDecl *D = LinkageSpecDecl::Create(Context, CurContext,
-                                               LangLoc, Language);
+                                               ExternLoc, LangLoc, Language);
   CurContext->addDecl(D);
   PushDeclContext(S, D);
   return D;
@@ -6786,21 +6795,23 @@ Decl *Sema::ActOnExceptionDeclarator(Scope *S, Declarator &D) {
   return ExDecl;
 }
 
-Decl *Sema::ActOnStaticAssertDeclaration(SourceLocation AssertLoc,
+Decl *Sema::ActOnStaticAssertDeclaration(SourceLocation StaticAssertLoc,
                                          Expr *AssertExpr,
-                                         Expr *AssertMessageExpr_) {
+                                         Expr *AssertMessageExpr_,
+                                         SourceLocation RParenLoc) {
   StringLiteral *AssertMessage = cast<StringLiteral>(AssertMessageExpr_);
 
   if (!AssertExpr->isTypeDependent() && !AssertExpr->isValueDependent()) {
     llvm::APSInt Value(32);
     if (!AssertExpr->isIntegerConstantExpr(Value, Context)) {
-      Diag(AssertLoc, diag::err_static_assert_expression_is_not_constant) <<
+      Diag(StaticAssertLoc,
+           diag::err_static_assert_expression_is_not_constant) <<
         AssertExpr->getSourceRange();
       return 0;
     }
 
     if (Value == 0) {
-      Diag(AssertLoc, diag::err_static_assert_failed)
+      Diag(StaticAssertLoc, diag::err_static_assert_failed)
         << AssertMessage->getString() << AssertExpr->getSourceRange();
     }
   }
@@ -6808,8 +6819,8 @@ Decl *Sema::ActOnStaticAssertDeclaration(SourceLocation AssertLoc,
   if (DiagnoseUnexpandedParameterPack(AssertExpr, UPPC_StaticAssertExpression))
     return 0;
 
-  Decl *Decl = StaticAssertDecl::Create(Context, CurContext, AssertLoc,
-                                        AssertExpr, AssertMessage);
+  Decl *Decl = StaticAssertDecl::Create(Context, CurContext, StaticAssertLoc,
+                                        AssertExpr, AssertMessage, RParenLoc);
 
   CurContext->addDecl(Decl);
   return Decl;
