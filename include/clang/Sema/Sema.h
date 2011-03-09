@@ -2197,6 +2197,7 @@ public:
 
   // Act on C++ namespaces
   Decl *ActOnStartNamespaceDef(Scope *S, SourceLocation InlineLoc,
+                               SourceLocation NamespaceLoc,
                                SourceLocation IdentLoc,
                                IdentifierInfo *Ident,
                                SourceLocation LBrace,
@@ -2920,9 +2921,10 @@ public:
   void ActOnFinishDelayedCXXMethodDeclaration(Scope *S, Decl *Method);
   void ActOnFinishDelayedMemberDeclarations(Scope *S, Decl *Record);
 
-  Decl *ActOnStaticAssertDeclaration(SourceLocation AssertLoc,
+  Decl *ActOnStaticAssertDeclaration(SourceLocation StaticAssertLoc,
                                      Expr *AssertExpr,
-                                     Expr *AssertMessageExpr);
+                                     Expr *AssertMessageExpr,
+                                     SourceLocation RParenLoc);
 
   FriendDecl *CheckFriendTypeDecl(SourceLocation FriendLoc,
                                   TypeSourceInfo *TSInfo);

@@ -41,20 +41,19 @@ CXXRecordDecl::DefinitionData::DefinitionData(CXXRecordDecl *D)
 }
 
 CXXRecordDecl::CXXRecordDecl(Kind K, TagKind TK, DeclContext *DC,
-                             SourceLocation L, IdentifierInfo *Id,
-                             CXXRecordDecl *PrevDecl,
-                             SourceLocation TKL)
-  : RecordDecl(K, TK, DC, L, Id, PrevDecl, TKL),
+                             SourceLocation StartLoc, SourceLocation IdLoc,
+                             IdentifierInfo *Id, CXXRecordDecl *PrevDecl)
+  : RecordDecl(K, TK, DC, StartLoc, IdLoc, Id, PrevDecl),
     DefinitionData(PrevDecl ? PrevDecl->DefinitionData : 0),
     TemplateOrInstantiation() { }
 
 CXXRecordDecl *CXXRecordDecl::Create(const ASTContext &C, TagKind TK,
-                                     DeclContext *DC, SourceLocation L,
-                                     IdentifierInfo *Id, SourceLocation TKL,
+                                     DeclContext *DC, SourceLocation StartLoc,
+                                     SourceLocation IdLoc, IdentifierInfo *Id,
                                      CXXRecordDecl* PrevDecl,
                                      bool DelayTypeCreation) {
-  CXXRecordDecl* R = new (C) CXXRecordDecl(CXXRecord, TK, DC, L, Id,
-                                           PrevDecl, TKL);
+  CXXRecordDecl* R = new (C) CXXRecordDecl(CXXRecord, TK, DC, StartLoc, IdLoc,
+                                           Id, PrevDecl);
 
   // FIXME: DelayTypeCreation seems like such a hack
   if (!DelayTypeCreation)
@@ -63,8 +62,8 @@ CXXRecordDecl *CXXRecordDecl::Create(const ASTContext &C, TagKind TK,
 }
 
 CXXRecordDecl *CXXRecordDecl::Create(const ASTContext &C, EmptyShell Empty) {
-  return new (C) CXXRecordDecl(CXXRecord, TTK_Struct, 0, SourceLocation(), 0, 0,
-                               SourceLocation());
+  return new (C) CXXRecordDecl(CXXRecord, TTK_Struct, 0, SourceLocation(),
+                               SourceLocation(), 0, 0);
 }
 
 void
@@ -887,9 +886,10 @@ CXXMethodDecl::Create(ASTContext &C, CXXRecordDecl *RD,
                       SourceLocation StartLoc,
                       const DeclarationNameInfo &NameInfo,
                       QualType T, TypeSourceInfo *TInfo,
-                      bool isStatic, StorageClass SCAsWritten, bool isInline) {
+                      bool isStatic, StorageClass SCAsWritten, bool isInline,
+                      SourceLocation EndLocation) {
   return new (C) CXXMethodDecl(CXXMethod, RD, StartLoc, NameInfo, T, TInfo,
-                               isStatic, SCAsWritten, isInline);
+                               isStatic, SCAsWritten, isInline, EndLocation);
 }
 
 bool CXXMethodDecl::isUsualDeallocationFunction() const {
@@ -1255,7 +1255,8 @@ CXXDestructorDecl::Create(ASTContext &C, CXXRecordDecl *RD,
 CXXConversionDecl *
 CXXConversionDecl::Create(ASTContext &C, EmptyShell Empty) {
   return new (C) CXXConversionDecl(0, SourceLocation(), DeclarationNameInfo(),
-                                   QualType(), 0, false, false);
+                                   QualType(), 0, false, false,
+                                   SourceLocation());
 }
 
 CXXConversionDecl *
@@ -1263,20 +1264,22 @@ CXXConversionDecl::Create(ASTContext &C, CXXRecordDecl *RD,
                           SourceLocation StartLoc,
                           const DeclarationNameInfo &NameInfo,
                           QualType T, TypeSourceInfo *TInfo,
-                          bool isInline, bool isExplicit) {
+                          bool isInline, bool isExplicit,
+                          SourceLocation EndLocation) {
   assert(NameInfo.getName().getNameKind()
          == DeclarationName::CXXConversionFunctionName &&
          "Name must refer to a conversion function");
   return new (C) CXXConversionDecl(RD, StartLoc, NameInfo, T, TInfo,
-                                   isInline, isExplicit);
+                                   isInline, isExplicit, EndLocation);
 }
 
 LinkageSpecDecl *LinkageSpecDecl::Create(ASTContext &C,
                                          DeclContext *DC,
-                                         SourceLocation L,
+                                         SourceLocation ExternLoc,
+                                         SourceLocation LangLoc,
                                          LanguageIDs Lang,
                                          SourceLocation RBraceLoc) {
-  return new (C) LinkageSpecDecl(DC, L, Lang, RBraceLoc);
+  return new (C) LinkageSpecDecl(DC, ExternLoc, LangLoc, Lang, RBraceLoc);
 }
 
 UsingDirectiveDecl *UsingDirectiveDecl::Create(ASTContext &C, DeclContext *DC,
@@ -1379,9 +1382,12 @@ UnresolvedUsingTypenameDecl::Create(ASTContext &C, DeclContext *DC,
 }
 
 StaticAssertDecl *StaticAssertDecl::Create(ASTContext &C, DeclContext *DC,
-                                           SourceLocation L, Expr *AssertExpr,
-                                           StringLiteral *Message) {
-  return new (C) StaticAssertDecl(DC, L, AssertExpr, Message);
+                                           SourceLocation StaticAssertLoc,
+                                           Expr *AssertExpr,
+                                           StringLiteral *Message,
+                                           SourceLocation RParenLoc) {
+  return new (C) StaticAssertDecl(DC, StaticAssertLoc, AssertExpr, Message,
+                                  RParenLoc);
 }
 
 static const char *getAccessName(AccessSpecifier AS) {
