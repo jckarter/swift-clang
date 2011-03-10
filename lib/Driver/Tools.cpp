@@ -445,6 +445,12 @@ void Clang::AddARMTargetArgs(const ArgList &Args,
   CmdArgs.push_back("-arm-darwin-use-movt=0");
 #endif
 
+  // Disable tail calls, if requested.
+#ifdef DISABLE_ARM_DARWIN_TAIL_CALLS
+  CmdArgs.push_back("-mllvm");
+  CmdArgs.push_back("-arm-darwin-allow-tail-calls=0");
+#endif
+
   // Select the ABI to use.
   //
   // FIXME: Support -meabi.
