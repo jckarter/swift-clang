@@ -3184,7 +3184,9 @@ public:
                                 IdentifierInfo *Name, SourceLocation NameLoc,
                                 AttributeList *Attr,
                                 TemplateParameterList *TemplateParams,
-                                AccessSpecifier AS);
+                                AccessSpecifier AS,
+                                unsigned NumOuterTemplateParamLists,
+                            TemplateParameterList **OuterTemplateParamLists);
 
   void translateTemplateArguments(const ASTTemplateArgsPtr &In,
                                   TemplateArgumentListInfo &Out);
@@ -4551,6 +4553,9 @@ public:
                                            ObjCInterfaceDecl *CDecl);
   ObjCMethodDecl *LookupPrivateInstanceMethod(Selector Sel,
                                               ObjCInterfaceDecl *ClassDecl);
+  ObjCMethodDecl *LookupMethodInQualifiedType(Selector Sel,
+                                              const ObjCObjectPointerType *OPT,
+                                              bool IsInstance);
 
   ExprResult
   HandleExprPropertyRefExpr(const ObjCObjectPointerType *OPT,
