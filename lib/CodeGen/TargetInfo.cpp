@@ -2243,9 +2243,7 @@ private:
   }
 
   virtual llvm::Value *EmitVAArg(llvm::Value *VAListAddr, QualType Ty,
-                                 CodeGenFunction &CGF) const {
-    return 0;
-  }
+                                 CodeGenFunction &CGF) const;
 };
 
 class ARM64TargetCodeGenInfo : public TargetCodeGenInfo {
@@ -2322,6 +2320,12 @@ ABIArgInfo ARM64ABIInfo::classifyReturnType(QualType RetTy) const {
   }
 
   return ABIArgInfo::getIndirect(0);
+}
+
+llvm::Value *ARM64ABIInfo::EmitVAArg(llvm::Value *VAListAddr, QualType Ty,
+                                     CodeGenFunction &CGF) const {
+  assert(0 && "not yet implemented");
+  return 0;
 }
 
 //===----------------------------------------------------------------------===//
