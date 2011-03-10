@@ -92,6 +92,9 @@ static const char *GetArmArchForMArch(llvm::StringRef Value) {
   if (Value == "armv7k" || Value == "armv7-k")
     return "armv7k";
 
+  if (Value == "armv7s" || Value == "armv7-s")
+    return "armv7s";
+
   return 0;
 }
 
@@ -120,6 +123,9 @@ static const char *GetArmArchForMCpu(llvm::StringRef Value) {
 
   if (Value == "pj4b")
     return "armv7k";
+
+  if (Value == "swift")
+    return "armv7s";
 
   return 0;
 }
@@ -467,6 +473,8 @@ void DarwinClang::AddLinkSearchPathArgs(const ArgList &Args,
       ArchSpecificDir = "v7f";
     else if (TripleStr.startswith("armv7k") || TripleStr.startswith("thumbv7k"))
       ArchSpecificDir = "v7k";
+    else if (TripleStr.startswith("armv7s") || TripleStr.startswith("thumbv7s"))
+      ArchSpecificDir = "v7s";
     else if (TripleStr.startswith("armv7") || TripleStr.startswith("thumbv7"))
       ArchSpecificDir = "v7";
     break;
@@ -902,6 +910,8 @@ DerivedArgList *Darwin::TranslateArgs(const DerivedArgList &Args,
       DAL->AddJoinedArg(0, MArch, "armv7f");
     else if (Name == "armv7k")
       DAL->AddJoinedArg(0, MArch, "armv7k");
+    else if (Name == "armv7s")
+      DAL->AddJoinedArg(0, MArch, "armv7s");
 
     else if (Name == "arm64")
       DAL->AddJoinedArg(0, MArch, "arm64");
