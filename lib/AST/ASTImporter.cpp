@@ -139,7 +139,7 @@ namespace {
     Expr *VisitCharacterLiteral(CharacterLiteral *E);
     Expr *VisitParenExpr(ParenExpr *E);
     Expr *VisitUnaryOperator(UnaryOperator *E);
-    Expr *VisitSizeOfAlignOfExpr(SizeOfAlignOfExpr *E);
+    Expr *VisitUnaryExprOrTypeTraitExpr(UnaryExprOrTypeTraitExpr *E);
     Expr *VisitBinaryOperator(BinaryOperator *E);
     Expr *VisitCompoundAssignOperator(CompoundAssignOperator *E);
     Expr *VisitImplicitCastExpr(ImplicitCastExpr *E);
@@ -521,16 +521,21 @@ static bool IsStructurallyEquivalent(StructuralEquivalenceContext &Context,
     }
     if (Proto1->isVariadic() != Proto2->isVariadic())
       return false;
-    if (Proto1->hasExceptionSpec() != Proto2->hasExceptionSpec())
+    if (Proto1->getExceptionSpecType() != Proto2->getExceptionSpecType())
       return false;
-    if (Proto1->hasAnyExceptionSpec() != Proto2->hasAnyExceptionSpec())
-      return false;
-    if (Proto1->getNumExceptions() != Proto2->getNumExceptions())
-      return false;
-    for (unsigned I = 0, N = Proto1->getNumExceptions(); I != N; ++I) {
+    if (Proto1->getExceptionSpecType() == EST_Dynamic) {
+      if (Proto1->getNumExceptions() != Proto2->getNumExceptions())
+        return false;
+      for (unsigned I = 0, N = Proto1->getNumExceptions(); I != N; ++I) {
+        if (!IsStructurallyEquivalent(Context,
+                                      Proto1->getExceptionType(I),
+                                      Proto2->getExceptionType(I)))
+          return false;
+      }
+    } else if (Proto1->getExceptionSpecType() == EST_ComputedNoexcept) {
       if (!IsStructurallyEquivalent(Context,
-                                    Proto1->getExceptionType(I),
-                                    Proto2->getExceptionType(I)))
+                                    Proto1->getNoexceptExpr(),
+                                    Proto2->getNoexceptExpr()))
         return false;
     }
     if (Proto1->getTypeQuals() != Proto2->getTypeQuals())
@@ -3799,7 +3804,8 @@ Expr *ASTNodeImporter::VisitUnaryOperator(UnaryOperator *E) {
                                          Importer.Import(E->getOperatorLoc()));                                        
 }
 
-Expr *ASTNodeImporter::VisitSizeOfAlignOfExpr(SizeOfAlignOfExpr *E) {
+Expr *ASTNodeImporter::VisitUnaryExprOrTypeTraitExpr(
+                                            UnaryExprOrTypeTraitExpr *E) {
   QualType ResultType = Importer.Import(E->getType());
   
   if (E->isArgumentType()) {
@@ -3807,8 +3813,8 @@ Expr *ASTNodeImporter::VisitSizeOfAlignOfExpr(SizeOfAlignOfExpr *E) {
     if (!TInfo)
       return 0;
     
-    return new (Importer.getToContext()) SizeOfAlignOfExpr(E->isSizeOf(),
-                                                           TInfo, ResultType,
+    return new (Importer.getToContext()) UnaryExprOrTypeTraitExpr(E->getKind(),
+                                           TInfo, ResultType,
                                            Importer.Import(E->getOperatorLoc()),
                                            Importer.Import(E->getRParenLoc()));
   }
@@ -3817,8 +3823,8 @@ Expr *ASTNodeImporter::VisitSizeOfAlignOfExpr(SizeOfAlignOfExpr *E) {
   if (!SubExpr)
     return 0;
   
-  return new (Importer.getToContext()) SizeOfAlignOfExpr(E->isSizeOf(),
-                                                         SubExpr, ResultType,
+  return new (Importer.getToContext()) UnaryExprOrTypeTraitExpr(E->getKind(),
+                                          SubExpr, ResultType,
                                           Importer.Import(E->getOperatorLoc()),
                                           Importer.Import(E->getRParenLoc()));
 }

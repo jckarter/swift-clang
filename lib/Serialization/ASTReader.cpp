@@ -3117,15 +3117,18 @@ QualType ASTReader::ReadTypeRecord(unsigned Index) {
     EPI.Variadic = Record[Idx++];
     EPI.TypeQuals = Record[Idx++];
     EPI.RefQualifier = static_cast<RefQualifierKind>(Record[Idx++]);
-    bool HasExceptionSpec = Record[Idx++];
-    bool HasAnyExceptionSpec = Record[Idx++];
-    EPI.ExceptionSpecType = HasExceptionSpec ?
-        (HasAnyExceptionSpec ? EST_DynamicAny : EST_Dynamic) : EST_None;
-    EPI.NumExceptions = Record[Idx++];
-    llvm::SmallVector<QualType, 2> Exceptions;
-    for (unsigned I = 0; I != EPI.NumExceptions; ++I)
-      Exceptions.push_back(GetType(Record[Idx++]));
-    EPI.Exceptions = Exceptions.data();
+    ExceptionSpecificationType EST =
+        static_cast<ExceptionSpecificationType>(Record[Idx++]);
+    EPI.ExceptionSpecType = EST;
+    if (EST == EST_Dynamic) {
+      EPI.NumExceptions = Record[Idx++];
+      llvm::SmallVector<QualType, 2> Exceptions;
+      for (unsigned I = 0; I != EPI.NumExceptions; ++I)
+        Exceptions.push_back(GetType(Record[Idx++]));
+      EPI.Exceptions = Exceptions.data();
+    } else if (EST == EST_ComputedNoexcept) {
+      EPI.NoexceptExpr = ReadExpr(*Loc.F);
+    }
     return Context->getFunctionType(ResultType, ParamTypes.data(), NumParams,
                                     EPI);
   }
@@ -3443,8 +3446,8 @@ void TypeLocReader::VisitExtVectorTypeLoc(ExtVectorTypeLoc TL) {
   TL.setNameLoc(ReadSourceLocation(Record, Idx));
 }
 void TypeLocReader::VisitFunctionTypeLoc(FunctionTypeLoc TL) {
-  TL.setLParenLoc(ReadSourceLocation(Record, Idx));
-  TL.setRParenLoc(ReadSourceLocation(Record, Idx));
+  TL.setLocalRangeBegin(ReadSourceLocation(Record, Idx));
+  TL.setLocalRangeEnd(ReadSourceLocation(Record, Idx));
   TL.setTrailingReturn(Record[Idx++]);
   for (unsigned i = 0, e = TL.getNumArgs(); i != e; ++i) {
     TL.setArg(i, cast_or_null<ParmVarDecl>(Reader.GetDecl(Record[Idx++])));
