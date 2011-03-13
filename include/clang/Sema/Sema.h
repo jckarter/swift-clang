@@ -757,7 +757,8 @@ public:
       const FunctionProtoType *Old, SourceLocation OldLoc,
       const FunctionProtoType *New, SourceLocation NewLoc,
       bool *MissingExceptionSpecification = 0,
-      bool *MissingEmptyExceptionSpecification = 0);
+      bool *MissingEmptyExceptionSpecification = 0,
+      bool AllowNoexceptAllMatchWithNoSpec = false);
   bool CheckExceptionSpecSubset(
       const PartialDiagnostic &DiagID, const PartialDiagnostic & NoteID,
       const FunctionProtoType *Superset, SourceLocation SuperLoc,
@@ -1076,8 +1077,9 @@ public:
   bool MergeFunctionDecl(FunctionDecl *New, Decl *Old);
   bool MergeCompatibleFunctionDecls(FunctionDecl *New, FunctionDecl *Old);
   void mergeObjCMethodDecls(ObjCMethodDecl *New, const ObjCMethodDecl *Old);
-  void MergeVarDeclTypes(VarDecl *New, VarDecl *Old);
   void MergeVarDecl(VarDecl *New, LookupResult &OldDecls);
+  void MergeVarDeclTypes(VarDecl *New, VarDecl *Old);
+  void MergeVarDeclExceptionSpecs(VarDecl *New, VarDecl *Old);
   bool MergeCXXFunctionDecl(FunctionDecl *New, FunctionDecl *Old);
 
   // AssignmentAction - This is used by all the assignment diagnostic functions
@@ -1288,6 +1290,14 @@ public:
   FunctionDecl *ResolveSingleFunctionTemplateSpecialization(Expr *From,
                                                    bool Complain = false,
                                                    DeclAccessPair* Found = 0);
+
+  ExprResult ResolveAndFixSingleFunctionTemplateSpecialization(
+                      Expr *SrcExpr, bool DoFunctionPointerConverion = false, 
+                      bool Complain = false, 
+                      const SourceRange& OpRangeForComplaining = SourceRange(), 
+                      QualType DestTypeForComplaining = QualType(), 
+                      unsigned DiagIDForComplaining = 0);
+
 
   Expr *FixOverloadedFunctionReference(Expr *E,
                                        DeclAccessPair FoundDecl,
@@ -4549,7 +4559,7 @@ public:
     ObjCArgInfo *ArgInfo,
     DeclaratorChunk::ParamInfo *CParamInfo, unsigned CNumArgs, // c-style args
     AttributeList *AttrList, tok::ObjCKeywordKind MethodImplKind,
-    bool isVariadic = false);
+    bool isVariadic, bool MethodDefinition);
 
   // Helper method for ActOnClassMethod/ActOnInstanceMethod.
   // Will search "local" class/category implementations for a method decl.
