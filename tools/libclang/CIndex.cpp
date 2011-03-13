@@ -1749,7 +1749,7 @@ public:
   void VisitObjCEncodeExpr(ObjCEncodeExpr *E);
   void VisitObjCMessageExpr(ObjCMessageExpr *M);
   void VisitOverloadExpr(OverloadExpr *E);
-  void VisitSizeOfAlignOfExpr(SizeOfAlignOfExpr *E);
+  void VisitUnaryExprOrTypeTraitExpr(UnaryExprOrTypeTraitExpr *E);
   void VisitStmt(Stmt *S);
   void VisitSwitchStmt(SwitchStmt *S);
   void VisitWhileStmt(WhileStmt *W);
@@ -2000,7 +2000,7 @@ void EnqueueVisitor::VisitOffsetOfExpr(OffsetOfExpr *E) {
       AddStmt(E->getIndexExpr(Node.getArrayExprIndex()));
       break;
     case OffsetOfNode::Field:
-      AddMemberRef(Node.getField(), Node.getRange().getEnd());
+      AddMemberRef(Node.getField(), Node.getSourceRange().getEnd());
       break;
     case OffsetOfNode::Identifier:
     case OffsetOfNode::Base:
@@ -2014,7 +2014,8 @@ void EnqueueVisitor::VisitOverloadExpr(OverloadExpr *E) {
   AddExplicitTemplateArgs(E->getOptionalExplicitTemplateArgs());
   WL.push_back(OverloadExprParts(E, Parent));
 }
-void EnqueueVisitor::VisitSizeOfAlignOfExpr(SizeOfAlignOfExpr *E) {
+void EnqueueVisitor::VisitUnaryExprOrTypeTraitExpr(
+                                              UnaryExprOrTypeTraitExpr *E) {
   EnqueueChildren(E);
   if (E->isArgumentType())
     AddTypeLoc(E->getArgumentTypeInfo());
