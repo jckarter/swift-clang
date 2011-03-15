@@ -1319,6 +1319,8 @@ enum LinuxDistro {
   Fedora13,
   Fedora14,
   OpenSuse11_3,
+  UbuntuHardy,
+  UbuntuIntrepid,
   UbuntuJaunty,
   UbuntuKarmic,
   UbuntuLucid,
@@ -1339,7 +1341,8 @@ static bool IsDebian(enum LinuxDistro Distro) {
 }
 
 static bool IsUbuntu(enum LinuxDistro Distro) {
-  return Distro == UbuntuLucid || Distro == UbuntuMaverick || 
+  return Distro == UbuntuHardy  || Distro == UbuntuIntrepid ||
+         Distro == UbuntuLucid  || Distro == UbuntuMaverick || 
          Distro == UbuntuJaunty || Distro == UbuntuKarmic;
 }
 
@@ -1368,6 +1371,10 @@ static LinuxDistro DetectLinuxDistro(llvm::Triple::ArchType Arch) {
     llvm::SmallVector<llvm::StringRef, 8> Lines;
     Data.split(Lines, "\n");
     for (unsigned int i = 0, s = Lines.size(); i < s; ++ i) {
+      if (Lines[i] == "DISTRIB_CODENAME=hardy")
+        return UbuntuHardy;
+      if (Lines[i] == "DISTRIB_CODENAME=intrepid")
+        return UbuntuIntrepid;      
       if (Lines[i] == "DISTRIB_CODENAME=maverick")
         return UbuntuMaverick;
       else if (Lines[i] == "DISTRIB_CODENAME=lucid")
@@ -1483,7 +1490,8 @@ Linux::Linux(const HostInfo &Host, const llvm::Triple &Triple)
 
   const char* GccVersions[] = {"4.5.2", "4.5.1", "4.5", "4.4.5", "4.4.4",
                                "4.4.3", "4.4", "4.3.4", "4.3.3", "4.3.2",
-                               "4.3"};
+                               "4.3", "4.2.4", "4.2.3", "4.2.2", "4.2.1",
+                               "4.2"};
   std::string Base = "";
   for (unsigned i = 0; i < sizeof(GccVersions)/sizeof(char*); ++i) {
     std::string Suffix = GccTriple + "/" + GccVersions[i];

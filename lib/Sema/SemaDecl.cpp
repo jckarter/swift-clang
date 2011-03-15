@@ -494,7 +494,20 @@ void Sema::PushOnScopeChains(NamedDecl *D, Scope *S, bool AddToContext) {
   }
 
   S->AddDecl(D);
-  IdResolver.AddDecl(D);
+  
+  if (isa<LabelDecl>(D) && !cast<LabelDecl>(D)->isGnuLocal()) {
+    // Implicitly-generated labels may end up getting generated in an order that
+    // isn't strictly lexical, which breaks name lookup. Be careful to insert
+    // the label at the appropriate place in the identifier chain.
+    for (I = IdResolver.begin(D->getDeclName()); I != IEnd; ++I) {
+      if ((*I)->getLexicalDeclContext()->Encloses(CurContext))
+        break;
+    }
+    
+    IdResolver.InsertDecl(I, D);
+  } else {
+    IdResolver.AddDecl(D);
+  }
 }
 
 bool Sema::isDeclInScope(NamedDecl *&D, DeclContext *Ctx, Scope *S,
@@ -3733,7 +3746,7 @@ Sema::ActOnFunctionDeclarator(Scope* S, Declarator& D, DeclContext* DC,
       }
 
       bool isStatic = SC == SC_Static;
-    
+
       // [class.free]p1:
       // Any allocation function for a class T is a static member
       // (even if not explicitly declared static).
@@ -3746,7 +3759,7 @@ Sema::ActOnFunctionDeclarator(Scope* S, Declarator& D, DeclContext* DC,
       if (Name.getCXXOverloadedOperator() == OO_Delete ||
           Name.getCXXOverloadedOperator() == OO_Array_Delete)
         isStatic = true;
-    
+
       // This is a C++ method declaration.
       NewFD = CXXMethodDecl::Create(Context, cast<CXXRecordDecl>(DC),
                                     D.getSourceRange().getBegin(),
