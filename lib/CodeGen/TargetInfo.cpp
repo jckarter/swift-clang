@@ -2243,9 +2243,7 @@ private:
   }
 
   virtual llvm::Value *EmitVAArg(llvm::Value *VAListAddr, QualType Ty,
-                                 CodeGenFunction &CGF) const {
-    return 0;
-  }
+                                 CodeGenFunction &CGF) const;
 };
 
 class ARM64TargetCodeGenInfo : public TargetCodeGenInfo {
@@ -2322,6 +2320,52 @@ ABIArgInfo ARM64ABIInfo::classifyReturnType(QualType RetTy) const {
   }
 
   return ABIArgInfo::getIndirect(0);
+}
+
+llvm::Value *ARM64ABIInfo::EmitVAArg(llvm::Value *VAListAddr, QualType Ty,
+                                     CodeGenFunction &CGF) const {
+  // Use the LLVM va_arg instruction except for aggregates.
+  if (!isAggregateTypeForABI(Ty))
+    return 0;
+
+  uint64_t Size = CGF.getContext().getTypeSize(Ty) / 8;
+  uint64_t Align = CGF.getContext().getTypeAlign(Ty) / 8;
+  bool isIndirect = false;
+  if (Size > 16) {
+    isIndirect = true;
+    Size = 8;
+    Align = 8;
+  }
+
+  const llvm::Type *BP = llvm::Type::getInt8PtrTy(CGF.getLLVMContext());
+  const llvm::Type *BPP = llvm::PointerType::getUnqual(BP);
+
+  CGBuilderTy &Builder = CGF.Builder;
+  llvm::Value *VAListAddrAsBPP = Builder.CreateBitCast(VAListAddr, BPP, "ap");
+  llvm::Value *Addr = Builder.CreateLoad(VAListAddrAsBPP, "ap.cur");
+
+  const uint64_t MinABIAlign = 8;
+  if (Align > MinABIAlign) {
+    llvm::Value *Offset = llvm::ConstantInt::get(CGF.Int32Ty, Align-1);
+    Addr = Builder.CreateGEP(Addr, Offset);
+    llvm::Value *AsInt = Builder.CreatePtrToInt(Addr, CGF.Int64Ty);
+    llvm::Value *Mask = llvm::ConstantInt::get(CGF.Int64Ty, ~(Align-1));
+    llvm::Value *Aligned = Builder.CreateAnd(AsInt, Mask);
+    Addr = Builder.CreateIntToPtr(Aligned, BP, "ap.align");
+  }
+
+  uint64_t Offset = llvm::RoundUpToAlignment(Size, MinABIAlign);
+  llvm::Value *NextAddr =
+    Builder.CreateGEP(Addr, llvm::ConstantInt::get(CGF.Int32Ty, Offset),
+                      "ap.next");
+  Builder.CreateStore(NextAddr, VAListAddrAsBPP);
+
+  if (isIndirect)
+    Addr = Builder.CreateLoad(Builder.CreateBitCast(Addr, BPP));
+  llvm::Type *PTy = llvm::PointerType::getUnqual(CGF.ConvertType(Ty));
+  llvm::Value *AddrTyped = Builder.CreateBitCast(Addr, PTy);
+
+  return AddrTyped;
 }
 
 //===----------------------------------------------------------------------===//
