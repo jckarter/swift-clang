@@ -420,7 +420,8 @@ static bool isSignedCharDefault(const llvm::Triple &Triple) {
 }
 
 void Clang::AddARMTargetArgs(const ArgList &Args,
-                             ArgStringList &CmdArgs) const {
+                             ArgStringList &CmdArgs,
+                             bool KernelOrKext) const {
   const Driver &D = getToolChain().getDriver();
   llvm::Triple Triple = getToolChain().getTriple();
 
@@ -587,8 +588,17 @@ void Clang::AddARMTargetArgs(const ArgList &Args,
   // Setting -msoft-float effectively disables NEON because of the GCC
   // implementation, although the same isn't true of VFP or VFP3.
   if (FloatABI == "soft") {
-      CmdArgs.push_back("-target-feature");
-      CmdArgs.push_back("-neon");
+    CmdArgs.push_back("-target-feature");
+    CmdArgs.push_back("-neon");
+  }
+
+  // Kernel code has more strict alignment requirements.
+  if (KernelOrKext) {
+    CmdArgs.push_back("-mllvm");
+    CmdArgs.push_back("-arm-long-calls");
+
+    CmdArgs.push_back("-mllvm");
+    CmdArgs.push_back("-arm-strict-align");
   }
 }
 
@@ -833,25 +843,16 @@ static void addExceptionArgs(const ArgList &Args, types::ID InputType,
   if (ExceptionsEnabled && DidHaveExplicitExceptionFlag)
     ShouldUseExceptionTables = true;
 
-  if (types::isObjC(InputType)) {
-    bool ObjCExceptionsEnabled = ExceptionsEnabled;
+  // Obj-C exceptions are enabled by default, regardless of -fexceptions. This
+  // is not necessarily sensible, but follows GCC.
+  if (types::isObjC(InputType) &&
+      Args.hasFlag(options::OPT_fobjc_exceptions, 
+                   options::OPT_fno_objc_exceptions,
+                   true)) {
+    CmdArgs.push_back("-fobjc-exceptions");
 
-    if (Arg *A = Args.getLastArg(options::OPT_fobjc_exceptions, 
-                                 options::OPT_fno_objc_exceptions,
-                                 options::OPT_fexceptions,
-                                 options::OPT_fno_exceptions)) {
-      if (A->getOption().matches(options::OPT_fobjc_exceptions))
-        ObjCExceptionsEnabled = true;
-      else if (A->getOption().matches(options::OPT_fno_objc_exceptions))
-        ObjCExceptionsEnabled = false;
-    }
-
-    if (ObjCExceptionsEnabled) {
-      CmdArgs.push_back("-fobjc-exceptions");
-
-      ShouldUseExceptionTables |= 
-        shouldUseExceptionTablesForObjCExceptions(Args, Triple);
-    }
+    ShouldUseExceptionTables |= 
+      shouldUseExceptionTablesForObjCExceptions(Args, Triple);
   }
 
   if (types::isCXX(InputType)) {
@@ -1173,7 +1174,7 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
 
   case llvm::Triple::arm:
   case llvm::Triple::thumb:
-    AddARMTargetArgs(Args, CmdArgs);
+    AddARMTargetArgs(Args, CmdArgs, KernelOrKext);
     break;
 
   case llvm::Triple::mips:
@@ -1895,7 +1896,8 @@ void ClangAs::ConstructJob(Compilation &C, const JobAction &JA,
                     !IsOpt))
     CmdArgs.push_back("-relax-all");
 
-  // FIXME: Add -force_cpusubtype_ALL support, once we have it.
+  // Ignore explicit -force_cpusubtype_ALL option.
+  (void) Args.hasArg(options::OPT_force__cpusubtype__ALL);
 
   // FIXME: Add -g support, once we have it.
 
