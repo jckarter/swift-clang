@@ -11,7 +11,8 @@
 //===----------------------------------------------------------------------===//
 
 #define nil (void*)0
-
+typedef const struct __CFString * CFStringRef;
+extern const CFStringRef kCGImageSourceShouldCache __attribute__((visibility("default")));
 typedef signed char BOOL;
 typedef struct _NSZone NSZone;
 typedef unsigned int NSUInteger;
@@ -60,7 +61,11 @@ typedef struct {} NSFastEnumerationState;
 @protocol P;
 @class C;
 
-void f(id a, id<P> b, C* c, C<P> *d) {
+typedef struct FooType * __attribute__ ((NSObject)) FooType;
+typedef struct BarType * BarType;
+
+
+void f(id a, id<P> b, C* c, C<P> *d, FooType fooType, BarType barType) {
   [NSArray arrayWithObjects:@"Hello", a, b, c, d, nil];
 
   [NSArray arrayWithObjects:@"Foo", "Bar", "Baz", nil]; // expected-warning 2 {{Argument to 'NSArray' method 'arrayWithObjects:' should be an Objective-C pointer type, not 'char *'}}
@@ -70,9 +75,9 @@ void f(id a, id<P> b, C* c, C<P> *d) {
   [[[NSArray alloc] initWithObjects:@"Foo", "Bar", nil] autorelease]; // expected-warning {{Argument to method 'initWithObjects:' should be an Objective-C pointer type, not 'char *'}}
   [[[NSDictionary alloc] initWithObjectsAndKeys:@"Foo", "Bar", nil] autorelease]; // expected-warning {{Argument to method 'initWithObjectsAndKeys:' should be an Objective-C pointer type, not 'char *'}}
   [[[NSDictionary alloc] initWithObjectsAndKeys:@"Foo", (void*) 0, nil] autorelease]; // no-warning
+  [[[NSDictionary alloc] initWithObjectsAndKeys:@"Foo", kCGImageSourceShouldCache, nil] autorelease]; // no-warning
+  [[[NSDictionary alloc] initWithObjectsAndKeys:@"Foo", fooType, nil] autorelease]; // no-warning
+  [[[NSDictionary alloc] initWithObjectsAndKeys:@"Foo", barType, nil] autorelease]; // expected-warning {{Argument to method 'initWithObjectsAndKeys:' should be an Objective-C pointer type, not 'BarType'}}
   [[[NSSet alloc] initWithObjects:@"Foo", "Bar", nil] autorelease]; // expected-warning {{Argument to method 'initWithObjects:' should be an Objective-C pointer type, not 'char *'}}
 }
 
-int main() {
-  f(nil, nil, nil, nil);
-}

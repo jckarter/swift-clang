@@ -1499,7 +1499,7 @@ def err_ovl_no_viable_subscript :
 def err_ovl_no_oper :
     Error<"type %0 does not provide a %select{subscript|call}1 operator">;
 def err_ovl_unresolvable :
-    Error<"cannot resolve overloaded function from context">;
+    Error<"cannot resolve overloaded function %0 from context">;
   
 
 def err_ovl_no_viable_object_call : Error<
@@ -1733,6 +1733,8 @@ def err_template_spec_default_arg : Error<
 def err_not_class_template_specialization : Error<
   "cannot specialize a %select{dependent template|template template "
   "parameter}0">;
+def err_function_specialization_in_class : Error<
+  "cannot specialize a function %0 within class scope">;
 
 // C++ class template specializations and out-of-line definitions
 def err_template_spec_needs_header : Error<
