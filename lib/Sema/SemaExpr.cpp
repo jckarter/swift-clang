@@ -4574,9 +4574,6 @@ Sema::ActOnCallExpr(Scope *S, Expr *Fn, SourceLocation LParenLoc,
 
           return MaybeBindToTemporary(TheCall);
         }
-        return ExprError(Diag(Fn->getLocStart(),
-                              diag::err_typecheck_call_not_function)
-                              << Fn->getType() << Fn->getSourceRange());
       }
     }
   }
@@ -6315,10 +6312,6 @@ QualType Sema::InvalidOperands(SourceLocation Loc, Expr *&lex, Expr *&rex) {
   Diag(Loc, diag::err_typecheck_invalid_operands)
     << lex->getType() << rex->getType()
     << lex->getSourceRange() << rex->getSourceRange();
-    if (lex->getType() == Context.OverloadTy)
-      NoteAllOverloadCandidates(lex);
-    if (rex->getType() == Context.OverloadTy)
-      NoteAllOverloadCandidates(rex);
   return QualType();
 }
 
@@ -9797,17 +9790,8 @@ ExprResult Sema::CheckPlaceholderExpr(Expr *E, SourceLocation Loc) {
 
   // If this is overload, check for a single overload.
   assert(BT->getKind() == BuiltinType::Overload);
-
-  if (FunctionDecl *Specialization
-        = ResolveSingleFunctionTemplateSpecialization(E)) {
-    // The access doesn't really matter in this case.
-    DeclAccessPair Found = DeclAccessPair::make(Specialization,
-                                                Specialization->getAccess());
-    E = FixOverloadedFunctionReference(E, Found, Specialization);
-    if (!E) return ExprError();
-    return Owned(E);
-  }
-
-  Diag(Loc, diag::err_ovl_unresolvable) << E->getSourceRange();
-  return ExprError();
+  return ResolveAndFixSingleFunctionTemplateSpecialization(E, false, true,
+                                                           E->getSourceRange(),
+                                                           QualType(),
+                                                    diag::err_ovl_unresolvable);
 }
