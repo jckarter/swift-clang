@@ -500,11 +500,15 @@ void Sema::PushOnScopeChains(NamedDecl *D, Scope *S, bool AddToContext) {
     // isn't strictly lexical, which breaks name lookup. Be careful to insert
     // the label at the appropriate place in the identifier chain.
     for (I = IdResolver.begin(D->getDeclName()); I != IEnd; ++I) {
-      if ((*I)->getLexicalDeclContext()->Encloses(CurContext))
+      DeclContext *IDC = (*I)->getLexicalDeclContext();
+      if (IDC == CurContext) {
+        if (!S->isDeclScope(*I))
+          continue;
+      } else if (IDC->Encloses(CurContext))
         break;
     }
     
-    IdResolver.InsertDecl(I, D);
+    IdResolver.InsertDeclAfter(I, D);
   } else {
     IdResolver.AddDecl(D);
   }
@@ -4098,9 +4102,15 @@ Sema::ActOnFunctionDeclarator(Scope* S, Declarator& D, DeclContext* DC,
                                                        Previous))
         NewFD->setInvalidDecl();
     } else if (isFunctionTemplateSpecialization) {
-      if (CheckFunctionTemplateSpecialization(NewFD,
-                                              (HasExplicitTemplateArgs ? &TemplateArgs : 0),
-                                              Previous))
+      if (CurContext->isDependentContext() && CurContext->isRecord() 
+          && !isFriend) {
+        Diag(NewFD->getLocation(), diag::err_function_specialization_in_class)
+          << NewFD->getDeclName();
+        NewFD->setInvalidDecl();
+        return 0;
+      } else if (CheckFunctionTemplateSpecialization(NewFD,
+                                  (HasExplicitTemplateArgs ? &TemplateArgs : 0),
+                                                     Previous))
         NewFD->setInvalidDecl();
     } else if (isExplicitSpecialization && isa<CXXMethodDecl>(NewFD)) {
       if (CheckMemberSpecialization(NewFD, Previous))
