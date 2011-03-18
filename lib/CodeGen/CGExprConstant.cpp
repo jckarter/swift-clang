@@ -39,7 +39,7 @@ class ConstStructBuilder {
 
   bool Packed;
   CharUnits NextFieldOffsetInChars;
-  unsigned LLVMStructAlignment;
+  CharUnits LLVMStructAlignment;
   std::vector<llvm::Constant *> Elements;
 public:
   static llvm::Constant *BuildStruct(CodeGenModule &CGM, CodeGenFunction *CGF,
@@ -49,7 +49,7 @@ private:
   ConstStructBuilder(CodeGenModule &CGM, CodeGenFunction *CGF)
     : CGM(CGM), CGF(CGF), Packed(false), 
     NextFieldOffsetInChars(CharUnits::Zero()),
-    LLVMStructAlignment(1) { }
+    LLVMStructAlignment(CharUnits::One()) { }
 
   bool AppendField(const FieldDecl *Field, uint64_t FieldOffset,
                    llvm::Constant *InitExpr);
@@ -65,13 +65,15 @@ private:
                               
   bool Build(InitListExpr *ILE);
 
-  unsigned getAlignment(const llvm::Constant *C) const {
-    if (Packed)  return 1;
-    return CGM.getTargetData().getABITypeAlignment(C->getType());
+  CharUnits getAlignment(const llvm::Constant *C) const {
+    if (Packed)  return CharUnits::One();
+    return CharUnits::fromQuantity(
+        CGM.getTargetData().getABITypeAlignment(C->getType()));
   }
 
-  uint64_t getSizeInBytes(const llvm::Constant *C) const {
-    return CGM.getTargetData().getTypeAllocSize(C->getType());
+  CharUnits getSizeInChars(const llvm::Constant *C) const {
+    return CharUnits::fromQuantity(
+        CGM.getTargetData().getTypeAllocSize(C->getType()));
   }
 };
 
@@ -86,12 +88,11 @@ AppendField(const FieldDecl *Field, uint64_t FieldOffset,
   assert(NextFieldOffsetInChars <= FieldOffsetInChars
          && "Field offset mismatch!");
 
-  unsigned FieldAlignment = getAlignment(InitCst);
+  CharUnits FieldAlignment = getAlignment(InitCst);
 
   // Round up the field offset to the alignment of the field type.
   CharUnits AlignedNextFieldOffsetInChars =
-    NextFieldOffsetInChars.RoundUpToAlignment(
-        CharUnits::fromQuantity(FieldAlignment));
+    NextFieldOffsetInChars.RoundUpToAlignment(FieldAlignment);
 
   if (AlignedNextFieldOffsetInChars > FieldOffsetInChars) {
     assert(!Packed && "Alignment is wrong even with a packed struct!");
@@ -116,10 +117,11 @@ AppendField(const FieldDecl *Field, uint64_t FieldOffset,
   // Add the field.
   Elements.push_back(InitCst);
   NextFieldOffsetInChars = AlignedNextFieldOffsetInChars +
-                           CharUnits::fromQuantity(getSizeInBytes(InitCst));
+                           getSizeInChars(InitCst);
   
   if (Packed)
-    assert(LLVMStructAlignment == 1 && "Packed struct not byte-aligned!");
+    assert(LLVMStructAlignment == CharUnits::One() && 
+           "Packed struct not byte-aligned!");
   else
     LLVMStructAlignment = std::max(LLVMStructAlignment, FieldAlignment);
 
@@ -283,9 +285,10 @@ void ConstStructBuilder::AppendPadding(CharUnits PadSize) {
 
   llvm::Constant *C = llvm::UndefValue::get(Ty);
   Elements.push_back(C);
-  assert(getAlignment(C) == 1 && "Padding must have 1 byte alignment!");
+  assert(getAlignment(C) == CharUnits::One() && 
+         "Padding must have 1 byte alignment!");
 
-  NextFieldOffsetInChars += CharUnits::fromQuantity(getSizeInBytes(C));
+  NextFieldOffsetInChars += getSizeInChars(C);
 }
 
 void ConstStructBuilder::AppendTailPadding(CharUnits RecordSize) {
@@ -297,40 +300,39 @@ void ConstStructBuilder::AppendTailPadding(CharUnits RecordSize) {
 
 void ConstStructBuilder::ConvertStructToPacked() {
   std::vector<llvm::Constant *> PackedElements;
-  uint64_t ElementOffsetInBytes = 0;
+  CharUnits ElementOffsetInChars = CharUnits::Zero();
 
   for (unsigned i = 0, e = Elements.size(); i != e; ++i) {
     llvm::Constant *C = Elements[i];
 
-    unsigned ElementAlign =
-      CGM.getTargetData().getABITypeAlignment(C->getType());
-    uint64_t AlignedElementOffsetInBytes =
-      llvm::RoundUpToAlignment(ElementOffsetInBytes, ElementAlign);
+    CharUnits ElementAlign = CharUnits::fromQuantity(
+      CGM.getTargetData().getABITypeAlignment(C->getType()));
+    CharUnits AlignedElementOffsetInChars =
+      ElementOffsetInChars.RoundUpToAlignment(ElementAlign);
 
-    if (AlignedElementOffsetInBytes > ElementOffsetInBytes) {
+    if (AlignedElementOffsetInChars > ElementOffsetInChars) {
       // We need some padding.
-      uint64_t NumBytes =
-        AlignedElementOffsetInBytes - ElementOffsetInBytes;
+      CharUnits NumChars =
+        AlignedElementOffsetInChars - ElementOffsetInChars;
 
       const llvm::Type *Ty = llvm::Type::getInt8Ty(CGM.getLLVMContext());
-      if (NumBytes > 1)
-        Ty = llvm::ArrayType::get(Ty, NumBytes);
+      if (NumChars > CharUnits::One())
+        Ty = llvm::ArrayType::get(Ty, NumChars.getQuantity());
 
       llvm::Constant *Padding = llvm::UndefValue::get(Ty);
       PackedElements.push_back(Padding);
-      ElementOffsetInBytes += getSizeInBytes(Padding);
+      ElementOffsetInChars += getSizeInChars(Padding);
     }
 
     PackedElements.push_back(C);
-    ElementOffsetInBytes += getSizeInBytes(C);
+    ElementOffsetInChars += getSizeInChars(C);
   }
 
-  assert(CharUnits::fromQuantity(ElementOffsetInBytes) == 
-           NextFieldOffsetInChars &&
+  assert(ElementOffsetInChars == NextFieldOffsetInChars &&
          "Packing the struct changed its size!");
 
   Elements = PackedElements;
-  LLVMStructAlignment = 1;
+  LLVMStructAlignment = CharUnits::One();
   Packed = true;
 }
                             
@@ -387,8 +389,7 @@ bool ConstStructBuilder::Build(InitListExpr *ILE) {
   }
 
   CharUnits LLVMSizeInChars = 
-    NextFieldOffsetInChars.RoundUpToAlignment(
-      CharUnits::fromQuantity(LLVMStructAlignment));
+    NextFieldOffsetInChars.RoundUpToAlignment(LLVMStructAlignment);
 
   // Check if we need to convert the struct to a packed struct.
   if (NextFieldOffsetInChars <= LayoutSizeInChars && 
@@ -420,9 +421,9 @@ llvm::Constant *ConstStructBuilder::
   llvm::ConstantStruct::get(CGM.getLLVMContext(),
                             Builder.Elements, Builder.Packed);
   
-  assert(llvm::RoundUpToAlignment(Builder.NextFieldOffsetInChars.getQuantity(),
-                                  Builder.getAlignment(Result)) ==
-         Builder.getSizeInBytes(Result) && "Size mismatch!");
+  assert(Builder.NextFieldOffsetInChars.RoundUpToAlignment(
+           Builder.getAlignment(Result)) ==
+         Builder.getSizeInChars(Result) && "Size mismatch!");
   
   return Result;
 }
