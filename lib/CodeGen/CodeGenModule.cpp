@@ -154,6 +154,11 @@ bool CodeGenModule::isTargetDarwin() const {
   return getContext().Target.getTriple().getOS() == llvm::Triple::Darwin;
 }
 
+void CodeGenModule::Error(SourceLocation loc, llvm::StringRef error) {
+  unsigned diagID = getDiags().getCustomDiagID(Diagnostic::Error, error);
+  getDiags().Report(Context.getFullLoc(loc), diagID);
+}
+
 /// ErrorUnsupported - Print out an error that codegen doesn't support the
 /// specified stmt yet.
 void CodeGenModule::ErrorUnsupported(const Stmt *S, const char *Type,
@@ -1934,7 +1939,7 @@ void CodeGenModule::EmitObjCPropertyImplementations(const
 /// EmitObjCIvarInitializations - Emit information for ivar initialization
 /// for an implementation.
 void CodeGenModule::EmitObjCIvarInitializations(ObjCImplementationDecl *D) {
-  if (!Features.NeXTRuntime || D->getNumIvarInitializers() == 0)
+  if (D->getNumIvarInitializers() == 0)
     return;
   DeclContext* DC = const_cast<DeclContext*>(dyn_cast<DeclContext>(D));
   assert(DC && "EmitObjCIvarInitializations - null DeclContext");
