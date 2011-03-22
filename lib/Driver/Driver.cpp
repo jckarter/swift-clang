@@ -58,8 +58,8 @@ Driver::Driver(llvm::StringRef _ClangExecutable,
                bool IsProduction, bool CXXIsProduction,
                Diagnostic &_Diags)
   : Opts(createDriverOptTable()), Diags(_Diags),
-    ClangExecutable(_ClangExecutable), DefaultHostTriple(_DefaultHostTriple),
-    DefaultImageName(_DefaultImageName),
+    ClangExecutable(_ClangExecutable), UseStdLib(true),
+    DefaultHostTriple(_DefaultHostTriple), DefaultImageName(_DefaultImageName),
     DriverTitle("clang \"gcc-compatible\" driver"),
     Host(0),
     CCPrintOptionsFilename(0), CCPrintHeadersFilename(0), CCCIsCXX(false),
@@ -288,6 +288,10 @@ Compilation *Driver::BuildCompilation(int argc, const char **argv) {
     A->claim();
     PrefixDirs.push_back(A->getValue(*Args, 0));
   }
+  if (const Arg *A = Args->getLastArg(options::OPT__sysroot_EQ))
+    SysRoot = A->getValue(*Args);
+  if (Args->hasArg(options::OPT_nostdlib))
+    UseStdLib = false;
 
   Host = GetHostInfo(DefaultHostTriple.c_str());
 
@@ -1262,7 +1266,12 @@ std::string Driver::GetFilePath(const char *Name, const ToolChain &TC) const {
   // attempting to use this prefix when lokup up program paths.
   for (Driver::prefix_list::const_iterator it = PrefixDirs.begin(),
        ie = PrefixDirs.end(); it != ie; ++it) {
-    llvm::sys::Path P(*it);
+    std::string Dir(*it);
+    if (Dir.empty())
+      continue;
+    if (Dir[0] == '=')
+      Dir = SysRoot + Dir.substr(1);
+    llvm::sys::Path P(Dir);
     P.appendComponent(Name);
     bool Exists;
     if (!llvm::sys::fs::exists(P.str(), Exists) && Exists)
@@ -1272,7 +1281,12 @@ std::string Driver::GetFilePath(const char *Name, const ToolChain &TC) const {
   const ToolChain::path_list &List = TC.getFilePaths();
   for (ToolChain::path_list::const_iterator
          it = List.begin(), ie = List.end(); it != ie; ++it) {
-    llvm::sys::Path P(*it);
+    std::string Dir(*it);
+    if (Dir.empty())
+      continue;
+    if (Dir[0] == '=')
+      Dir = SysRoot + Dir.substr(1);
+    llvm::sys::Path P(Dir);
     P.appendComponent(Name);
     bool Exists;
     if (!llvm::sys::fs::exists(P.str(), Exists) && Exists)
