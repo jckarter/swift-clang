@@ -461,7 +461,7 @@ void Clang::AddARMTargetArgs(const ArgList &Args,
 
   // Disable tail calls, if requested.
 #ifdef DISABLE_ARM_DARWIN_TAIL_CALLS
-  CmdArgs.push_back("-mllvm");
+  CmdArgs.push_back("-backend-option");
   CmdArgs.push_back("-arm-darwin-allow-tail-calls=0");
 #endif
 
