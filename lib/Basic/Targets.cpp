@@ -1844,6 +1844,7 @@ public:
       .Case("cortex-a9-mp", "7F")
       .Case("pj4b", "7K")
       .Case("cortex-m3", "7M")
+      .Case("cortex-m0", "6M")
       .Default(0);
   }
   virtual bool setCPU(const std::string &Name) {

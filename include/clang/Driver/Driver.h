@@ -77,6 +77,12 @@ public:
   typedef llvm::SmallVector<std::string, 4> prefix_list;
   prefix_list PrefixDirs;
 
+  /// sysroot, if present
+  std::string SysRoot;
+
+  /// If the standard library is used
+  bool UseStdLib;
+
   /// Default host triple.
   std::string DefaultHostTriple;
 
