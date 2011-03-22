@@ -37,6 +37,17 @@
 using namespace clang::driver;
 using namespace clang::driver::tools;
 
+/// FindTargetProgramPath - Return path of the target specific version of
+/// ProgName.  If it doesn't exist, return path of ProgName itself.
+static std::string FindTargetProgramPath(const ToolChain &TheToolChain,
+                                         const char *ProgName) {
+  std::string Executable(TheToolChain.getTripleString() + "-" + ProgName);
+  std::string Path(TheToolChain.GetProgramPath(Executable.c_str()));
+  if (Path != Executable)
+    return Path;
+  return TheToolChain.GetProgramPath(ProgName);
+}
+
 /// CheckPreprocessingOptions - Perform some validation of preprocessing
 /// arguments that is shared with gcc.
 static void CheckPreprocessingOptions(const Driver &D, const ArgList &Args) {
@@ -369,6 +380,8 @@ static const char *getARMTargetCPU(const ArgList &Args,
     return "iwmmxt";
   if (MArch == "xscale")
     return "xscale";
+  if (MArch == "armv6m" || MArch == "armv6-m")
+    return "cortex-m0";
 
   // If all else failed, return the most base CPU LLVM supports.
   return "arm7tdmi";
@@ -3280,6 +3293,9 @@ void freebsd::Link::ConstructJob(Compilation &C, const JobAction &JA,
   const Driver &D = getToolChain().getDriver();
   ArgStringList CmdArgs;
 
+  if (!D.SysRoot.empty())
+    CmdArgs.push_back(Args.MakeArgString("--sysroot=" + D.SysRoot));
+
   if (Args.hasArg(options::OPT_static)) {
     CmdArgs.push_back("-Bstatic");
   } else {
@@ -3445,8 +3461,8 @@ void netbsd::Assemble::ConstructJob(Compilation &C, const JobAction &JA,
     CmdArgs.push_back(II.getFilename());
   }
 
-  const char *Exec =
-    Args.MakeArgString(getToolChain().GetProgramPath("as"));
+  const char *Exec = Args.MakeArgString(FindTargetProgramPath(getToolChain(),
+                                                              "as"));
   C.addCommand(new Command(JA, *this, Exec, CmdArgs));
 }
 
@@ -3457,6 +3473,9 @@ void netbsd::Link::ConstructJob(Compilation &C, const JobAction &JA,
                                  const char *LinkingOutput) const {
   const Driver &D = getToolChain().getDriver();
   ArgStringList CmdArgs;
+
+  if (!D.SysRoot.empty())
+    CmdArgs.push_back(Args.MakeArgString("--sysroot=" + D.SysRoot));
 
   if (Args.hasArg(options::OPT_static)) {
     CmdArgs.push_back("-Bstatic");
@@ -3556,8 +3575,8 @@ void netbsd::Link::ConstructJob(Compilation &C, const JobAction &JA,
                                                                     "crtn.o")));
   }
 
-  const char *Exec =
-    Args.MakeArgString(getToolChain().GetProgramPath("ld"));
+  const char *Exec = Args.MakeArgString(FindTargetProgramPath(getToolChain(),
+                                                              "ld"));
   C.addCommand(new Command(JA, *this, Exec, CmdArgs));
 }
 
@@ -3615,10 +3634,8 @@ void linuxtools::Link::ConstructJob(Compilation &C, const JobAction &JA,
   // handled somewhere else.
   Args.ClaimAllArgs(options::OPT_w);
 
-  if (Arg *A = Args.getLastArg(options::OPT__sysroot_EQ)) {
-    CmdArgs.push_back("--sysroot");
-    CmdArgs.push_back(A->getValue(Args));
-  }
+  if (!D.SysRoot.empty())
+    CmdArgs.push_back(Args.MakeArgString("--sysroot=" + D.SysRoot));
 
   if (Args.hasArg(options::OPT_pie))
     CmdArgs.push_back("-pie");
@@ -3898,6 +3915,9 @@ void dragonfly::Link::ConstructJob(Compilation &C, const JobAction &JA,
                                    const char *LinkingOutput) const {
   const Driver &D = getToolChain().getDriver();
   ArgStringList CmdArgs;
+
+  if (!D.SysRoot.empty())
+    CmdArgs.push_back(Args.MakeArgString("--sysroot=" + D.SysRoot));
 
   if (Args.hasArg(options::OPT_static)) {
     CmdArgs.push_back("-Bstatic");
