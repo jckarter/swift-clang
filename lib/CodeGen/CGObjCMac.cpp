@@ -328,7 +328,7 @@ public:
     CanQualType SelType = Ctx.getCanonicalParamType(Ctx.getObjCSelType());
     Params.push_back(IdType);
     Params.push_back(SelType);
-    Params.push_back(Ctx.LongTy);
+    Params.push_back(Ctx.getPointerDiffType()->getCanonicalTypeUnqualified());
     Params.push_back(Ctx.BoolTy);
     const llvm::FunctionType *FTy =
       Types.GetFunctionType(Types.getFunctionInfo(IdType, Params,
@@ -346,7 +346,7 @@ public:
     CanQualType SelType = Ctx.getCanonicalParamType(Ctx.getObjCSelType());
     Params.push_back(IdType);
     Params.push_back(SelType);
-    Params.push_back(Ctx.LongTy);
+    Params.push_back(Ctx.getPointerDiffType()->getCanonicalTypeUnqualified());
     Params.push_back(IdType);
     Params.push_back(Ctx.BoolTy);
     Params.push_back(Ctx.BoolTy);
@@ -5018,14 +5018,14 @@ void CGObjCNonFragileABIMac::GenerateClass(const ObjCImplementationDecl *ID) {
     while (const ObjCInterfaceDecl *Super = Root->getSuperClass())
       Root = Super;
     IsAGV = GetClassGlobal(ObjCMetaClassName + Root->getNameAsString());
-    if (Root->hasAttr<WeakImportAttr>())
+    if (Root->isWeakImported())
       IsAGV->setLinkage(llvm::GlobalValue::ExternalWeakLinkage);
     // work on super class metadata symbol.
     std::string SuperClassName =
       ObjCMetaClassName + 
         ID->getClassInterface()->getSuperClass()->getNameAsString();
     SuperClassGV = GetClassGlobal(SuperClassName);
-    if (ID->getClassInterface()->getSuperClass()->hasAttr<WeakImportAttr>())
+    if (ID->getClassInterface()->getSuperClass()->isWeakImported())
       SuperClassGV->setLinkage(llvm::GlobalValue::ExternalWeakLinkage);
   }
   llvm::GlobalVariable *CLASS_RO_GV = BuildClassRoTInitializer(flags,
@@ -5055,7 +5055,7 @@ void CGObjCNonFragileABIMac::GenerateClass(const ObjCImplementationDecl *ID) {
     std::string RootClassName =
       ID->getClassInterface()->getSuperClass()->getNameAsString();
     SuperClassGV = GetClassGlobal(ObjCClassName + RootClassName);
-    if (ID->getClassInterface()->getSuperClass()->hasAttr<WeakImportAttr>())
+    if (ID->getClassInterface()->getSuperClass()->isWeakImported())
       SuperClassGV->setLinkage(llvm::GlobalValue::ExternalWeakLinkage);
   }
   GetClassSizeInfo(ID, InstanceStart, InstanceSize);
@@ -5137,7 +5137,7 @@ void CGObjCNonFragileABIMac::GenerateCategory(const ObjCCategoryImplDecl *OCD) {
   Values[0] = GetClassName(OCD->getIdentifier());
   // meta-class entry symbol
   llvm::GlobalVariable *ClassGV = GetClassGlobal(ExtClassName);
-  if (Interface->hasAttr<WeakImportAttr>())
+  if (Interface->isWeakImported())
     ClassGV->setLinkage(llvm::GlobalValue::ExternalWeakLinkage);
   
   Values[1] = ClassGV;
@@ -5810,7 +5810,7 @@ llvm::Value *CGObjCNonFragileABIMac::EmitMetaClassRef(CGBuilderTy &Builder,
 /// decl.
 llvm::Value *CGObjCNonFragileABIMac::GetClass(CGBuilderTy &Builder,
                                               const ObjCInterfaceDecl *ID) {
-  if (ID->hasAttr<WeakImportAttr>()) {
+  if (ID->isWeakImported()) {
     std::string ClassName(getClassSymbolPrefix() + ID->getNameAsString());
     llvm::GlobalVariable *ClassGV = GetClassGlobal(ClassName);
     ClassGV->setLinkage(llvm::GlobalValue::ExternalWeakLinkage);
@@ -6293,10 +6293,7 @@ CGObjCNonFragileABIMac::GetInterfaceEHType(const ObjCInterfaceDecl *ID,
 
 CodeGen::CGObjCRuntime *
 CodeGen::CreateMacObjCRuntime(CodeGen::CodeGenModule &CGM) {
+  if (CGM.getLangOptions().ObjCNonFragileABI)
+    return new CGObjCNonFragileABIMac(CGM);
   return new CGObjCMac(CGM);
-}
-
-CodeGen::CGObjCRuntime *
-CodeGen::CreateMacNonFragileABIObjCRuntime(CodeGen::CodeGenModule &CGM) {
-  return new CGObjCNonFragileABIMac(CGM);
 }
