@@ -72,14 +72,8 @@ CodeGenModule::CodeGenModule(ASTContext &C, const CodeGenOptions &CGO,
     BlockObjectAssignDecl(0), BlockObjectDisposeDecl(0),
     BlockObjectAssign(0), BlockObjectDispose(0),
     BlockDescriptorType(0), GenericBlockLiteralType(0) {
-  if (!Features.ObjC1)
-    Runtime = 0;
-  else if (!Features.NeXTRuntime)
-    Runtime = CreateGNUObjCRuntime(*this);
-  else if (Features.ObjCNonFragileABI)
-    Runtime = CreateMacNonFragileABIObjCRuntime(*this);
-  else
-    Runtime = CreateMacObjCRuntime(*this);
+  if (Features.ObjC1)
+     createObjCRuntime();
 
   // Enable TBAA unless it's suppressed.
   if (!CodeGenOpts.RelaxedAliasing && CodeGenOpts.OptimizationLevel > 0)
@@ -115,8 +109,6 @@ CodeGenModule::~CodeGenModule() {
 void CodeGenModule::createObjCRuntime() {
   if (!Features.NeXTRuntime)
     Runtime = CreateGNUObjCRuntime(*this);
-  else if (Features.ObjCNonFragileABI)
-    Runtime = CreateMacNonFragileABIObjCRuntime(*this);
   else
     Runtime = CreateMacObjCRuntime(*this);
 }
@@ -517,7 +509,7 @@ void CodeGenModule::SetFunctionAttributes(GlobalDecl GD,
   if (FD->hasAttr<DLLImportAttr>()) {
     F->setLinkage(llvm::Function::DLLImportLinkage);
   } else if (FD->hasAttr<WeakAttr>() ||
-             FD->hasAttr<WeakImportAttr>()) {
+             FD->isWeakImported()) {
     // "extern_weak" is overloaded in LLVM; we probably should have
     // separate linkage types for this.
     F->setLinkage(llvm::Function::ExternalWeakLinkage);
@@ -994,7 +986,7 @@ CodeGenModule::GetOrCreateLLVMGlobal(llvm::StringRef MangledName,
     } else {
       if (D->hasAttr<DLLImportAttr>())
         GV->setLinkage(llvm::GlobalValue::DLLImportLinkage);
-      else if (D->hasAttr<WeakAttr>() || D->hasAttr<WeakImportAttr>())
+      else if (D->hasAttr<WeakAttr>() || D->isWeakImported())
         GV->setLinkage(llvm::GlobalValue::ExternalWeakLinkage);
 
       // Set visibility on a declaration only if it's explicit.
@@ -1538,7 +1530,7 @@ void CodeGenModule::EmitAliasDefinition(GlobalDecl GD) {
     }
   } else if (D->hasAttr<WeakAttr>() ||
              D->hasAttr<WeakRefAttr>() ||
-             D->hasAttr<WeakImportAttr>()) {
+             D->isWeakImported()) {
     GA->setLinkage(llvm::Function::WeakAnyLinkage);
   }
 
