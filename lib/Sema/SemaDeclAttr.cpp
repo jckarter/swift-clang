@@ -1436,10 +1436,11 @@ static void HandleWeakImportAttr(Decl *D, const AttributeList &Attr, Sema &S) {
       S.Diag(Attr.getLoc(),
              diag::warn_attribute_weak_import_invalid_on_definition)
         << "weak_import" << 2 /*variable and function*/;
-    else if (S.Context.Target.getTriple().getOS() != llvm::Triple::Darwin ||
-             (!isa<ObjCInterfaceDecl>(D) &&
-              !isa<ObjCPropertyDecl>(D) &&
-              !isa<ObjCMethodDecl>(D)))
+    else if (isa<ObjCPropertyDecl>(D) || isa<ObjCMethodDecl>(D) ||
+             (S.Context.Target.getTriple().getOS() == llvm::Triple::Darwin &&
+              isa<ObjCInterfaceDecl>(D))) {
+      // Nothing to warn about here.
+    } else
       S.Diag(Attr.getLoc(), diag::warn_attribute_wrong_decl_type)
         << Attr.getName() << ExpectedVariableOrFunction;
 
@@ -3094,7 +3095,7 @@ void Sema::DelayedDiagnostics::popParsingDecl(Sema &S, ParsingDeclState state,
 
   // Destroy all the delayed diagnostics we're about to pop off.
   for (unsigned i = state.SavedStackSize, e = DD.StackSize; i != e; ++i)
-    DD.Stack[i].destroy();
+    DD.Stack[i].Destroy();
 
   DD.StackSize = state.SavedStackSize;
 }
