@@ -500,7 +500,7 @@ void Sema::PushOnScopeChains(NamedDecl *D, Scope *S, bool AddToContext) {
     // isn't strictly lexical, which breaks name lookup. Be careful to insert
     // the label at the appropriate place in the identifier chain.
     for (I = IdResolver.begin(D->getDeclName()); I != IEnd; ++I) {
-      DeclContext *IDC = (*I)->getLexicalDeclContext();
+      DeclContext *IDC = (*I)->getLexicalDeclContext()->getRedeclContext();
       if (IDC == CurContext) {
         if (!S->isDeclScope(*I))
           continue;
@@ -5502,7 +5502,8 @@ void Sema::ActOnFinishKNRParamDeclarations(Scope *S, Declarator &D,
 
         // Implicitly declare the argument as type 'int' for lack of a better
         // type.
-        DeclSpec DS;
+        AttributeFactory attrs;
+        DeclSpec DS(attrs);
         const char* PrevSpec; // unused
         unsigned DiagID; // unused
         DS.SetTypeSpecType(DeclSpec::TST_int, FTI.ArgInfo[i].IdentLoc,
@@ -5838,17 +5839,18 @@ NamedDecl *Sema::ImplicitlyDefineFunction(SourceLocation Loc,
 
   // Set a Declarator for the implicit definition: int foo();
   const char *Dummy;
-  DeclSpec DS;
+  AttributeFactory attrFactory;
+  DeclSpec DS(attrFactory);
   unsigned DiagID;
   bool Error = DS.SetTypeSpecType(DeclSpec::TST_int, Loc, Dummy, DiagID);
   (void)Error; // Silence warning.
   assert(!Error && "Error setting up implicit decl!");
   Declarator D(DS, Declarator::BlockContext);
-  D.AddTypeInfo(DeclaratorChunk::getFunction(ParsedAttributes(),
-                                             false, false, SourceLocation(), 0,
+  D.AddTypeInfo(DeclaratorChunk::getFunction(false, false, SourceLocation(), 0,
                                              0, 0, true, SourceLocation(),
                                              EST_None, SourceLocation(),
                                              0, 0, 0, 0, Loc, Loc, D),
+                DS.getAttributes(),
                 SourceLocation());
   D.SetIdentifier(&II, Loc);
 
