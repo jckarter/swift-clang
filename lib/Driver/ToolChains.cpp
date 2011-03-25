@@ -377,7 +377,8 @@ void DarwinClang::AddLinkRuntimeLibArgs(const ArgList &Args,
   // Select the dynamic runtime library and the target specific static library.
   const char *DarwinStaticLib = 0;
   if (isTargetIPhoneOS()) {
-    CmdArgs.push_back("-lgcc_s.1");
+    if (isIPhoneOSVersionLT(5, 0))
+      CmdArgs.push_back("-lgcc_s.1");
 
     // We may need some static functions for armv6/thumb which are required to
     // be in the same linkage unit as their caller.
