@@ -415,8 +415,6 @@ def warn_deleted_function_accepted_as_extension: ExtWarn<
 // C++0x override control
 def ext_override_control_keyword : Extension<
   "'%0' keyword accepted as a C++0x extension">, InGroup<CXX0x>;
-def ext_override_inline: Extension<
-  "'%0' keyword only allowed in declarations, allowed as an extension">;
 
 def err_duplicate_virt_specifier : Error<
   "class member already marked '%0'">;
@@ -447,6 +445,8 @@ def err_availability_unknown_change : Error<
   "'obsoleted'">;
 def err_availability_redundant : Error<
   "redundant %0 availability change; only the last specified change will "        "be used">;
+def warn_availability_and_unavailable : Warning<
+  "'unavailable' availability overrides all other availability information">;
 
 // Language specific pragmas
 // - Generic warnings
