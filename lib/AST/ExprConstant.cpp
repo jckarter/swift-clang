@@ -770,7 +770,7 @@ APValue VectorExprEvaluator::VisitCastExpr(const CastExpr* E) {
          return APValue();
        Result = APValue(F);
     } else {
-      return false;
+      return APValue();
     }
 
     // Splat and create vector APValue.
@@ -782,7 +782,7 @@ APValue VectorExprEvaluator::VisitCastExpr(const CastExpr* E) {
       return Visit(const_cast<Expr*>(SE));
 
     if (!SETy->isIntegerType())
-      return false;
+      return APValue();
 
     APSInt Init;
     if (!EvaluateInteger(SE, Init, Info))
@@ -808,7 +808,7 @@ APValue VectorExprEvaluator::VisitCastExpr(const CastExpr* E) {
   case CK_NoOp:
     return Visit(const_cast<Expr*>(SE));
   default:
-    return false;
+    return APValue();
   }
 }
 
@@ -1764,7 +1764,6 @@ bool IntExprEvaluator::VisitCastExpr(CastExpr *E) {
   QualType SrcType = SubExpr->getType();
 
   switch (E->getCastKind()) {
-  case CK_BitCast:
   case CK_BaseToDerived:
   case CK_DerivedToBase:
   case CK_UncheckedDerivedToBase:
@@ -1794,6 +1793,7 @@ bool IntExprEvaluator::VisitCastExpr(CastExpr *E) {
   case CK_IntegralComplexToFloatingComplex:
     llvm_unreachable("invalid cast kind for integral value");
 
+  case CK_BitCast:
   case CK_Dependent:
   case CK_GetObjCProperty:
   case CK_LValueBitCast:
