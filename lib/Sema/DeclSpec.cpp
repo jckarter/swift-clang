@@ -829,7 +829,6 @@ bool VirtSpecifiers::SetSpecifier(Specifier VS, SourceLocation Loc,
   default: assert(0 && "Unknown specifier!");
   case VS_Override: VS_overrideLoc = Loc; break;
   case VS_Final:    VS_finalLoc = Loc; break;
-  case VS_New:      VS_newLoc = Loc; break;
   }
 
   return false;
@@ -840,33 +839,5 @@ const char *VirtSpecifiers::getSpecifierName(Specifier VS) {
   default: assert(0 && "Unknown specifier");
   case VS_Override: return "override";
   case VS_Final: return "final";
-  case VS_New: return "new";
   }
 }
-
-bool ClassVirtSpecifiers::SetSpecifier(Specifier CVS, SourceLocation Loc,
-                                       const char *&PrevSpec) {
-  if (Specifiers & CVS) {
-    PrevSpec = getSpecifierName(CVS);
-    return true;
-  }
-
-  Specifiers |= CVS;
-
-  switch (CVS) {
-  default: assert(0 && "Unknown specifier!");
-  case CVS_Final: CVS_finalLoc = Loc; break;
-  case CVS_Explicit: CVS_explicitLoc = Loc; break;
-  }
-
-  return false;
-}
-
-const char *ClassVirtSpecifiers::getSpecifierName(Specifier CVS) {
-  switch (CVS) {
-  default: assert(0 && "Unknown specifier");
-  case CVS_Final: return "final";
-  case CVS_Explicit: return "explicit";
-  }
-}
-

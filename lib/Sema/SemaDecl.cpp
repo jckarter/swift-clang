@@ -1870,9 +1870,14 @@ Decl *Sema::ParsedFreeStandingDeclSpec(Scope *S, AccessSpecifier AS,
   if (emittedWarning || (TagD && TagD->isInvalidDecl()))
     return TagD;
 
+  // Note that a linkage-specification sets a storage class, but
+  // 'extern "C" struct foo;' is actually valid and not theoretically
+  // useless.
   if (DeclSpec::SCS scs = DS.getStorageClassSpec())
-    Diag(DS.getStorageClassSpecLoc(), diag::warn_standalone_specifier)
-      << DeclSpec::getSpecifierName(scs);
+    if (!DS.isExternInLinkageSpec())
+      Diag(DS.getStorageClassSpecLoc(), diag::warn_standalone_specifier)
+        << DeclSpec::getSpecifierName(scs);
+
   if (DS.isThreadSpecified())
     Diag(DS.getThreadSpecLoc(), diag::warn_standalone_specifier) << "__thread";
   if (DS.getTypeQualifiers()) {
@@ -6714,7 +6719,7 @@ void Sema::ActOnTagStartDefinition(Scope *S, Decl *TagD) {
 }
 
 void Sema::ActOnStartCXXMemberDeclarations(Scope *S, Decl *TagD,
-                                           ClassVirtSpecifiers &CVS,
+                                           SourceLocation FinalLoc,
                                            SourceLocation LBraceLoc) {
   AdjustDeclIfTemplate(TagD);
   CXXRecordDecl *Record = cast<CXXRecordDecl>(TagD);
@@ -6724,10 +6729,8 @@ void Sema::ActOnStartCXXMemberDeclarations(Scope *S, Decl *TagD,
   if (!Record->getIdentifier())
     return;
 
-  if (CVS.isFinalSpecified())
-    Record->addAttr(new (Context) FinalAttr(CVS.getFinalLoc(), Context));
-  if (CVS.isExplicitSpecified())
-    Record->addAttr(new (Context) ExplicitAttr(CVS.getExplicitLoc(), Context));
+  if (FinalLoc.isValid())
+    Record->addAttr(new (Context) FinalAttr(FinalLoc, Context));
     
   // C++ [class]p2:
   //   [...] The class-name is also inserted into the scope of the
