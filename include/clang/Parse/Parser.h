@@ -121,6 +121,9 @@ class Parser : public CodeCompletionHandler {
   /// \brief Identifier for "obsoleted".
   IdentifierInfo *Ident_obsoleted;
 
+  /// \brief Identifier for "unavailable".
+  IdentifierInfo *Ident_unavailable;
+
   /// C++0x contextual keywords. 
   mutable IdentifierInfo *Ident_final;
   mutable IdentifierInfo *Ident_override;
@@ -1573,8 +1576,7 @@ private:
   VirtSpecifiers::Specifier isCXX0XVirtSpecifier() const;
   void ParseOptionalCXX0XVirtSpecifierSeq(VirtSpecifiers &VS);
 
-  ClassVirtSpecifiers::Specifier isCXX0XClassVirtSpecifier() const;
-  void ParseOptionalCXX0XClassVirtSpecifierSeq(ClassVirtSpecifiers &CVS);
+  bool isCXX0XFinalKeyword() const;
 
   /// DeclaratorScopeObj - RAII object used in Parser::ParseDirectDeclarator to
   /// enter a new C++ declarator scope and exit it when the function is
