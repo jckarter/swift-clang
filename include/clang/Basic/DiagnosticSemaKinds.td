@@ -2697,6 +2697,8 @@ def ext_gnu_ptr_func_arith : Extension<
   InGroup<PointerArith>;
 def error_readonly_property_assignment : Error<
   "assigning to property with 'readonly' attribute not allowed">;
+def error_readonly_message_assignment : Error<
+  "assigning to 'readonly' return result of an objective-c message not allowed">;
 def ext_integer_increment_complex : Extension<
   "ISO C does not support '++'/'--' on complex integer type %0">;
 def ext_integer_complement_complex : Extension<
@@ -2716,9 +2718,9 @@ def err_imaginary_not_supported : Error<"imaginary types are not supported">;
 def warn_root_inst_method_not_found : Warning<
   "instance method %0 is being used on 'Class' which is not in the root class">;
 def warn_class_method_not_found : Warning<
-  "method %objcclass0 not found (return type defaults to 'id')">;
+  "class method %objcclass0 not found (return type defaults to 'id')">;
 def warn_inst_method_not_found : Warning<
-  "method %objcinstance0 not found (return type defaults to 'id')">;
+  "instance method %objcinstance0 not found (return type defaults to 'id')">;
 def error_no_super_class_message : Error<
   "no @interface declaration found in class messaging of %0">;
 def error_root_class_cannot_use_super : Error<
