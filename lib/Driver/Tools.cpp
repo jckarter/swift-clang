@@ -1469,7 +1469,17 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
     CmdArgs.push_back(A->getValue(Args));
   }
 
-  Args.AddLastArg(CmdArgs, options::OPT_fwrapv);
+  // -fno-strict-overflow implies -fwrapv if it isn't disabled, but
+  // -fstrict-overflow won't turn off an explicitly enabled -fwrapv.
+  if (Arg *A = Args.getLastArg(options::OPT_fwrapv,
+                               options::OPT_fno_wrapv)) {
+    if (A->getOption().matches(options::OPT_fwrapv))
+      CmdArgs.push_back("-fwrapv");
+  } else if (Arg *A = Args.getLastArg(options::OPT_fstrict_overflow,
+                                      options::OPT_fno_strict_overflow)) {
+    if (A->getOption().matches(options::OPT_fno_strict_overflow))
+      CmdArgs.push_back("-fwrapv");
+  }
   Args.AddLastArg(CmdArgs, options::OPT_fwritable_strings);
   Args.AddLastArg(CmdArgs, options::OPT_funroll_loops);
 
@@ -1741,6 +1751,16 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
         Args.getLastArg(options::OPT_fdiagnostics_show_category_EQ)) {
     CmdArgs.push_back("-fdiagnostics-show-category");
     CmdArgs.push_back(A->getValue(Args));
+  }
+
+  if (Arg *A = Args.getLastArg(
+      options::OPT_fdiagnostics_show_note_include_stack,
+      options::OPT_fno_diagnostics_show_note_include_stack)) {
+    if (A->getOption().matches(
+        options::OPT_fdiagnostics_show_note_include_stack))
+      CmdArgs.push_back("-fdiagnostics-show-note-include-stack");
+    else
+      CmdArgs.push_back("-fno-diagnostics-show-note-include-stack");
   }
 
   // Color diagnostics are the default, unless the terminal doesn't support
