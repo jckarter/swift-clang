@@ -871,6 +871,9 @@ def note_uninit_reference_member : Note<
   "uninitialized reference member is here">;
 def warn_field_is_uninit : Warning<"field is uninitialized when used here">,
   InGroup<Uninitialized>;
+def warn_uninit_self_reference_in_init : Warning<
+  "variable %0 is uninitialized when used within its own initialization">,
+  InGroup<Uninitialized>;
 def warn_uninit_var : Warning<"variable %0 is possibly uninitialized when used here">,
   InGroup<Uninitialized>, DefaultIgnore;
 def warn_maybe_uninit_var :
@@ -2226,6 +2229,8 @@ def err_bitfield_width_exceeds_type_size : Error<
   "size of bit-field %0 (%1 bits) exceeds size of its type (%2 bits)">;
 def err_anon_bitfield_width_exceeds_type_size : Error<
   "size of anonymous bit-field (%0 bits) exceeds size of its type (%1 bits)">;
+def err_incorrect_number_of_vector_initializers : Error<
+  "number of elements must be either one or match the size of the vector">;
   
 // Used by C++ which allows bit-fields that are wider than the type.
 def warn_bitfield_width_exceeds_type_size: Warning<
