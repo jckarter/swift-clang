@@ -7282,9 +7282,7 @@ QualType Sema::CheckVectorCompareOperands(Expr *&lex, Expr *&rex,
 
   // If AltiVec, the comparison results in a numeric type, i.e.
   // bool for C++, int for C
-  if (lType->getAs<VectorType>()->getVectorKind() == VectorType::AltiVecVector
-      && rType->getAs<VectorType>()->getVectorKind() ==
-         VectorType::AltiVecVector)
+  if (vType->getAs<VectorType>()->getVectorKind() == VectorType::AltiVecVector)
     return Context.getLogicalOperationType();
 
   // For non-floating point types, check for self-comparisons of the form
@@ -7415,6 +7413,21 @@ static bool IsReadonlyProperty(Expr *E, Sema &S) {
   return false;
 }
 
+static bool IsConstProperty(Expr *E, Sema &S) {
+  if (E->getStmtClass() == Expr::ObjCPropertyRefExprClass) {
+    const ObjCPropertyRefExpr* PropExpr = cast<ObjCPropertyRefExpr>(E);
+    if (PropExpr->isImplicitProperty()) return false;
+    
+    ObjCPropertyDecl *PDecl = PropExpr->getExplicitProperty();
+    QualType T = PDecl->getType();
+    if (T->isReferenceType())
+      T = cast<ReferenceType>(T)->getPointeeType();
+    CanQualType CT = S.Context.getCanonicalType(T);
+    return CT.isConstQualified();
+  }
+  return false;
+}
+
 static bool IsReadonlyMessage(Expr *E, Sema &S) {
   if (E->getStmtClass() != Expr::MemberExprClass) 
     return false;
@@ -7437,6 +7450,8 @@ static bool CheckForModifiableLvalue(Expr *E, SourceLocation Loc, Sema &S) {
                                                               &Loc);
   if (IsLV == Expr::MLV_Valid && IsReadonlyProperty(E, S))
     IsLV = Expr::MLV_ReadonlyProperty;
+  else if (Expr::MLV_ConstQualified && IsConstProperty(E, S))
+    IsLV = Expr::MLV_Valid;
   else if (IsLV == Expr::MLV_ClassTemporary && IsReadonlyMessage(E, S))
     IsLV = Expr::MLV_InvalidMessageExpression;
   if (IsLV == Expr::MLV_Valid)
@@ -9823,6 +9838,9 @@ void Sema::DiagnoseEqualityWithExtraParens(ParenExpr *parenE) {
   // Don't warn if the parens came from a macro.
   SourceLocation parenLoc = parenE->getLocStart();
   if (parenLoc.isInvalid() || parenLoc.isMacroID())
+    return;
+  // Don't warn for dependent expressions.
+  if (parenE->isTypeDependent())
     return;
 
   Expr *E = parenE->IgnoreParens();
