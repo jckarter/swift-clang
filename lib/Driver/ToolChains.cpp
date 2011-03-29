@@ -89,9 +89,6 @@ static const char *GetArmArchForMArch(llvm::StringRef Value) {
   if (Value == "armv7f" || Value == "armv7-f")
     return "armv7f";
 
-  if (Value == "armv7k" || Value == "armv7-k")
-    return "armv7k";
-
   return 0;
 }
 
@@ -118,9 +115,6 @@ static const char *GetArmArchForMCpu(llvm::StringRef Value) {
 
   if (Value == "cortex-a9-mp")
     return "armv7f";
-
-  if (Value == "pj4b")
-    return "armv7k";
 
   return 0;
 }
@@ -319,8 +313,6 @@ void DarwinClang::AddLinkSearchPathArgs(const ArgList &Args,
       ArchSpecificDir = "v6";
     else if (TripleStr.startswith("armv7f") || TripleStr.startswith("thumbv7f"))
       ArchSpecificDir = "v7f";
-    else if (TripleStr.startswith("armv7k") || TripleStr.startswith("thumbv7k"))
-      ArchSpecificDir = "v7k";
     else if (TripleStr.startswith("armv7") || TripleStr.startswith("thumbv7"))
       ArchSpecificDir = "v7";
     break;
@@ -755,8 +747,6 @@ DerivedArgList *Darwin::TranslateArgs(const DerivedArgList &Args,
       DAL->AddJoinedArg(0, MArch, "armv7a");
     else if (Name == "armv7f")
       DAL->AddJoinedArg(0, MArch, "armv7f");
-    else if (Name == "armv7k")
-      DAL->AddJoinedArg(0, MArch, "armv7k");
 
     else
       llvm_unreachable("invalid Darwin arch");
