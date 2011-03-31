@@ -216,10 +216,19 @@ EmitExprForReferenceBinding(CodeGenFunction &CGF, const Expr *E,
                                        InitializedDecl);
   }
 
+  if (const ObjCPropertyRefExpr *PRE = 
+      dyn_cast<ObjCPropertyRefExpr>(E->IgnoreParenImpCasts()))
+    if (PRE->getGetterResultType()->isReferenceType())
+      E = PRE;
+    
   RValue RV;
   if (E->isGLValue()) {
     // Emit the expression as an lvalue.
     LValue LV = CGF.EmitLValue(E);
+    if (LV.isPropertyRef()) {
+      RV = CGF.EmitLoadOfPropertyRefLValue(LV);
+      return RV.getScalarVal();
+    }
     if (LV.isSimple())
       return LV.getAddress();
     
@@ -1765,9 +1774,8 @@ EmitConditionalOperatorLValue(const AbstractConditionalOperator *expr) {
 
   EmitBlock(contBlock);
 
-  llvm::PHINode *phi = Builder.CreatePHI(lhs.getAddress()->getType(),
+  llvm::PHINode *phi = Builder.CreatePHI(lhs.getAddress()->getType(), 2,
                                          "cond-lvalue");
-  phi->reserveOperandSpace(2);
   phi->addIncoming(lhs.getAddress(), lhsBlock);
   phi->addIncoming(rhs.getAddress(), rhsBlock);
   return MakeAddrLValue(phi, expr->getType());
