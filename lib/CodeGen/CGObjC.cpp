@@ -651,16 +651,14 @@ static RValue GenerateMessageSendSuper(CodeGenFunction &CGF,
 RValue CodeGenFunction::EmitLoadOfPropertyRefLValue(LValue LV,
                                                     ReturnValueSlot Return) {
   const ObjCPropertyRefExpr *E = LV.getPropertyRefExpr();
-  QualType ResultType;
+  QualType ResultType = E->getGetterResultType();
   Selector S;
   if (E->isExplicitProperty()) {
     const ObjCPropertyDecl *Property = E->getExplicitProperty();
     S = Property->getGetterName();
-    ResultType = E->getType();
   } else {
     const ObjCMethodDecl *Getter = E->getImplicitPropertyGetter();
     S = Getter->getSelector();
-    ResultType = Getter->getResultType(); // with reference!
   }
 
   llvm::Value *Receiver = LV.getPropertyRefBaseAddr();
@@ -681,14 +679,8 @@ void CodeGenFunction::EmitStoreThroughPropertyRefLValue(RValue Src,
                                                         LValue Dst) {
   const ObjCPropertyRefExpr *E = Dst.getPropertyRefExpr();
   Selector S = E->getSetterSelector();
-  QualType ArgType;
-  if (E->isImplicitProperty()) {
-    const ObjCMethodDecl *Setter = E->getImplicitPropertySetter();
-    ObjCMethodDecl::param_iterator P = Setter->param_begin(); 
-    ArgType = (*P)->getType();
-  } else {
-    ArgType = E->getType();
-  }
+  QualType ArgType = E->getSetterArgType();
+  
   // FIXME. Other than scalars, AST is not adequate for setter and
   // getter type mismatches which require conversion.
   if (Src.isScalar()) {
@@ -830,11 +822,11 @@ void CodeGenFunction::EmitObjCForCollectionStmt(const ObjCForCollectionStmt &S){
   EmitBlock(LoopBodyBB);
 
   // The current index into the buffer.
-  llvm::PHINode *index = Builder.CreatePHI(UnsignedLongLTy, "forcoll.index");
+  llvm::PHINode *index = Builder.CreatePHI(UnsignedLongLTy, 3, "forcoll.index");
   index->addIncoming(zero, LoopInitBB);
 
   // The current buffer size.
-  llvm::PHINode *count = Builder.CreatePHI(UnsignedLongLTy, "forcoll.count");
+  llvm::PHINode *count = Builder.CreatePHI(UnsignedLongLTy, 3, "forcoll.count");
   count->addIncoming(initialBufferLimit, LoopInitBB);
 
   // Check whether the mutations value has changed from where it was
