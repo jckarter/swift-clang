@@ -1181,6 +1181,7 @@ enum LinuxDistro {
   UbuntuKarmic,
   UbuntuLucid,
   UbuntuMaverick,
+  UbuntuNatty,
   UnknownDistro
 };
 
@@ -1199,7 +1200,8 @@ static bool IsDebian(enum LinuxDistro Distro) {
 static bool IsUbuntu(enum LinuxDistro Distro) {
   return Distro == UbuntuHardy  || Distro == UbuntuIntrepid ||
          Distro == UbuntuLucid  || Distro == UbuntuMaverick || 
-         Distro == UbuntuJaunty || Distro == UbuntuKarmic;
+         Distro == UbuntuJaunty || Distro == UbuntuKarmic ||
+         Distro == UbuntuNatty;
 }
 
 static bool IsDebianBased(enum LinuxDistro Distro) {
@@ -1215,7 +1217,9 @@ static bool HasMultilib(llvm::Triple::ArchType Arch, enum LinuxDistro Distro) {
 
     return true;
   }
-  if (Arch == llvm::Triple::x86 && IsDebianBased(Distro))
+  if (Arch == llvm::Triple::ppc64)
+    return true;
+  if ((Arch == llvm::Triple::x86 || Arch == llvm::Triple::ppc) && IsDebianBased(Distro))
     return true;
   return false;
 }
@@ -1229,16 +1233,18 @@ static LinuxDistro DetectLinuxDistro(llvm::Triple::ArchType Arch) {
     for (unsigned int i = 0, s = Lines.size(); i < s; ++ i) {
       if (Lines[i] == "DISTRIB_CODENAME=hardy")
         return UbuntuHardy;
-      if (Lines[i] == "DISTRIB_CODENAME=intrepid")
-        return UbuntuIntrepid;      
-      if (Lines[i] == "DISTRIB_CODENAME=maverick")
-        return UbuntuMaverick;
-      else if (Lines[i] == "DISTRIB_CODENAME=lucid")
-        return UbuntuLucid;
+      else if (Lines[i] == "DISTRIB_CODENAME=intrepid")
+        return UbuntuIntrepid;
       else if (Lines[i] == "DISTRIB_CODENAME=jaunty")
         return UbuntuJaunty;
       else if (Lines[i] == "DISTRIB_CODENAME=karmic")
         return UbuntuKarmic;
+      else if (Lines[i] == "DISTRIB_CODENAME=lucid")
+        return UbuntuLucid;
+      else if (Lines[i] == "DISTRIB_CODENAME=maverick")
+        return UbuntuMaverick;
+      else if (Lines[i] == "DISTRIB_CODENAME=natty")
+        return UbuntuNatty;
     }
     return UnknownDistro;
   }
@@ -1288,7 +1294,7 @@ Linux::Linux(const HostInfo &Host, const llvm::Triple &Triple)
     Suffix32 = "/32";
 
   std::string Suffix64  = "";
-  if (Arch == llvm::Triple::x86)
+  if (Arch == llvm::Triple::x86 || Arch == llvm::Triple::ppc)
     Suffix64 = "/64";
 
   std::string Lib32 = "lib";
@@ -1342,6 +1348,16 @@ Linux::Linux(const HostInfo &Host, const llvm::Triple &Triple)
     else if (!llvm::sys::fs::exists("/usr/lib/gcc/i586-suse-linux", Exists) &&
              Exists)
       GccTriple = "i586-suse-linux";
+  } else if (Arch == llvm::Triple::ppc) {
+    if (!llvm::sys::fs::exists("/usr/lib/powerpc-linux-gnu", Exists) && Exists)
+      GccTriple = "powerpc-linux-gnu";
+    else if (!llvm::sys::fs::exists("/usr/lib/gcc/powerpc-unknown-linux-gnu", Exists) && Exists)
+      GccTriple = "powerpc-unknown-linux-gnu";
+  } else if (Arch == llvm::Triple::ppc64) {
+    if (!llvm::sys::fs::exists("/usr/lib/gcc/powerpc64-unknown-linux-gnu", Exists) && Exists)
+      GccTriple = "powerpc64-unknown-linux-gnu";
+    else if (!llvm::sys::fs::exists("/usr/lib64/gcc/powerpc64-unknown-linux-gnu", Exists) && Exists)
+      GccTriple = "powerpc64-unknown-linux-gnu";
   }
 
   const char* GccVersions[] = {"4.5.2", "4.5.1", "4.5", "4.4.5", "4.4.4",
@@ -1361,10 +1377,15 @@ Linux::Linux(const HostInfo &Host, const llvm::Triple &Triple)
       Base = t2;
       break;
     }
+    std::string t3 = "/usr/lib/" + GccTriple + "/gcc/" + Suffix;
+    if (!llvm::sys::fs::exists(t3 + "/crtbegin.o", Exists) && Exists) {
+      Base = t3;
+      break;
+    }
   }
 
   path_list &Paths = getFilePaths();
-  bool Is32Bits = getArch() == llvm::Triple::x86;
+  bool Is32Bits = (getArch() == llvm::Triple::x86 || getArch() == llvm::Triple::ppc);
 
   std::string Suffix;
   std::string Lib;

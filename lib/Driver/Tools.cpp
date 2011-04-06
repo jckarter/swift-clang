@@ -3678,6 +3678,10 @@ void linuxtools::Link::ConstructJob(Compilation &C, const JobAction &JA,
   else if (ToolChain.getArch() == llvm::Triple::arm 
            ||  ToolChain.getArch() == llvm::Triple::thumb)
     CmdArgs.push_back("armelf_linux_eabi");
+  else if (ToolChain.getArch() == llvm::Triple::ppc)
+    CmdArgs.push_back("elf32ppclinux");
+  else if (ToolChain.getArch() == llvm::Triple::ppc64)
+    CmdArgs.push_back("elf64ppc");
   else
     CmdArgs.push_back("elf_x86_64");
 
@@ -3701,6 +3705,10 @@ void linuxtools::Link::ConstructJob(Compilation &C, const JobAction &JA,
     else if (ToolChain.getArch() == llvm::Triple::arm ||
              ToolChain.getArch() == llvm::Triple::thumb)
       CmdArgs.push_back("/lib/ld-linux.so.3");
+    else if (ToolChain.getArch() == llvm::Triple::ppc)
+      CmdArgs.push_back("/lib/ld.so");
+    else if (ToolChain.getArch() == llvm::Triple::ppc64)
+      CmdArgs.push_back("/lib64/ld64.so");
     else
       CmdArgs.push_back("/lib64/ld-linux-x86-64.so.2");
   }
