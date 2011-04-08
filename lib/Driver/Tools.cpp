@@ -1270,6 +1270,12 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
   Args.AddLastArg(CmdArgs, options::OPT_P);
   Args.AddLastArg(CmdArgs, options::OPT_print_ivar_layout);
 
+  if (D.CCLogDiagnostics) {
+    CmdArgs.push_back("-diagnostic-log-file");
+    CmdArgs.push_back(D.CCLogDiagnosticsFilename ?
+                      D.CCLogDiagnosticsFilename : "-");
+  }
+
   // Special case debug options to only pass -g to clang. This is
   // wrong.
   Args.ClaimAllArgs(options::OPT_g_Group);
@@ -2281,6 +2287,9 @@ void darwin::CC1::AddCC1OptionsArgs(const ArgList &Args, ArgStringList &CmdArgs,
   } else
     Args.AddAllArgs(CmdArgs, options::OPT_f_Group, options::OPT_fsyntax_only);
 
+  // Claim Clang only -f options, they aren't worth warning about.
+  Args.ClaimAllArgs(options::OPT_f_clang_Group);
+
   Args.AddAllArgs(CmdArgs, options::OPT_undef);
   if (Args.hasArg(options::OPT_Qn))
     CmdArgs.push_back("-fno-ident");
@@ -2337,6 +2346,9 @@ void darwin::CC1::AddCPPOptionsArgs(const ArgList &Args, ArgStringList &CmdArgs,
 
   // The driver treats -fsyntax-only specially.
   Args.AddAllArgs(CmdArgs, options::OPT_f_Group, options::OPT_fsyntax_only);
+
+  // Claim Clang only -f options, they aren't worth warning about.
+  Args.ClaimAllArgs(options::OPT_f_clang_Group);
 
   if (Args.hasArg(options::OPT_g_Group) && !Args.hasArg(options::OPT_g0) &&
       !Args.hasArg(options::OPT_fno_working_directory))
