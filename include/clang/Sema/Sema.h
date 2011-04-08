@@ -4749,6 +4749,10 @@ public:
                          ExprValueKind VK = VK_RValue,
                          const CXXCastPath *BasePath = 0);
 
+  /// ScalarTypeToBooleanCastKind - Returns the cast kind corresponding
+  /// to the conversion from scalar type ScalarTy to the Boolean type.
+  static CastKind ScalarTypeToBooleanCastKind(QualType ScalarTy);
+
   /// IgnoredValueConversions - Given that an expression's result is
   /// syntactically ignored, perform any conversions that are
   /// required.
@@ -5023,6 +5027,10 @@ public:
   bool CheckCastTypes(SourceRange TyRange, QualType CastTy, Expr *&CastExpr,
                       CastKind &Kind, ExprValueKind &VK, CXXCastPath &BasePath,
                       bool FunctionalStyle = false);
+
+  bool checkUnknownAnyCast(SourceRange TyRange, QualType castType,
+                           Expr *&castExpr, CastKind &castKind,
+                           ExprValueKind &valueKind, CXXCastPath &BasePath);
 
   // CheckVectorCast - check type constraints for vectors.
   // Since vectors are an extension, there are no C standard reference for this.
