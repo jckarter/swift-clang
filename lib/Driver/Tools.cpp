@@ -1093,7 +1093,7 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
   }
   if (!Args.hasFlag(options::OPT_fmerge_all_constants,
                     options::OPT_fno_merge_all_constants))
-    CmdArgs.push_back("-no-merge-all-constants");
+    CmdArgs.push_back("-fno-merge-all-constants");
 
   // LLVM Code Generator Options.
 
@@ -1449,6 +1449,13 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
   if (Arg *A = Args.getLastArg(options::OPT_ftrapv_handler_EQ)) {
     CmdArgs.push_back("-ftrapv-handler");
     CmdArgs.push_back(A->getValue(Args));
+  }
+
+  // Forward -ftrap_function= options to the backend.
+  if (Arg *A = Args.getLastArg(options::OPT_ftrap_function_EQ)) {
+    llvm::StringRef FuncName = A->getValue(Args);
+    CmdArgs.push_back("-backend-option");
+    CmdArgs.push_back(Args.MakeArgString("-trap-func=" + FuncName));
   }
 
   // -fno-strict-overflow implies -fwrapv if it isn't disabled, but
