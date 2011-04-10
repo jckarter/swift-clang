@@ -684,6 +684,8 @@ static void LangOptsToArgs(const LangOptions &Opts,
   }
   if (Opts.FakeAddressSpaceMap)
     Res.push_back("-ffake-address-space-map");
+  if (Opts.ParseUnknownAnytype)
+    Res.push_back("-funknown-anytype");
 }
 
 static void PreprocessorOptsToArgs(const PreprocessorOptions &Opts,
@@ -1189,6 +1191,7 @@ static InputKind ParseFrontendArgs(FrontendOptions &Opts, ArgList &Args,
       .Case("assembler-with-cpp", IK_Asm)
       .Case("c++-cpp-output", IK_PreprocessedCXX)
       .Case("objective-c-cpp-output", IK_PreprocessedObjC)
+      .Case("objc-cpp-output", IK_PreprocessedObjC)
       .Case("objective-c++-cpp-output", IK_PreprocessedObjCXX)
       .Case("c-header", IK_C)
       .Case("objective-c-header", IK_ObjC)
@@ -1506,6 +1509,7 @@ static void ParseLangArgs(LangOptions &Opts, ArgList &Args, InputKind IK,
   Opts.OptimizeSize = 0;
   Opts.MRTD = Args.hasArg(OPT_mrtd);
   Opts.FakeAddressSpaceMap = Args.hasArg(OPT_ffake_address_space_map);
+  Opts.ParseUnknownAnytype = Args.hasArg(OPT_funknown_anytype);
 
   // FIXME: Eliminate this dependency.
   unsigned Opt = getOptimizationLevel(Args, IK, Diags);
