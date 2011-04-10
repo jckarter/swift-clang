@@ -1197,6 +1197,10 @@ def warn_impcast_literal_float_to_integer : Warning<
 def warn_impcast_different_enum_types : Warning<
   "implicit conversion from enumeration type %0 to different enumeration type "
   "%1">, InGroup<DiagGroup<"conversion">>;
+def warn_impcast_bool_to_null_pointer : Warning<
+    "initialization of pointer of type %0 to NULL from a constant boolean "
+    "expression">, InGroup<BoolConversions>;
+
 
 def warn_cast_align : Warning<
   "cast from %0 to %1 increases required alignment from %2 to %3">,
@@ -1297,6 +1301,8 @@ def err_param_default_argument : Error<
   "C does not support default arguments">;
 def err_param_default_argument_redefinition : Error<
   "redefinition of default argument">;
+def war_param_default_argument_redefinition : ExtWarn<
+  "redefinition of default argument">;
 def err_param_default_argument_missing : Error<
   "missing default argument on parameter">;
 def err_param_default_argument_missing_name : Error<
@@ -1366,10 +1372,6 @@ def note_ovl_candidate : Note<"candidate "
     "is the implicit copy constructor|"
     "is the implicit copy assignment operator|"
     "is an inherited constructor}0%1">;
-
-def warn_init_pointer_from_false : Warning<
-    "initialization of pointer of type %0 from literal 'false'">,
-    InGroup<BoolConversions>;
 
 def note_ovl_candidate_inherited_constructor : Note<"inherited from here">;
 def note_ovl_candidate_bad_deduction : Note<
