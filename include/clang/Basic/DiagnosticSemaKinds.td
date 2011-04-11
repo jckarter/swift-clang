@@ -1194,6 +1194,8 @@ def warn_impcast_literal_float_to_integer : Warning<
   "implicit conversion turns literal floating-point number into integer: "
   "%0 to %1">,
   InGroup<DiagGroup<"literal-conversion">>, DefaultIgnore;
+def note_fix_integral_float_as_integer : Note<
+  "this can be rewritten as an integer literal with the exact same value">;
 def warn_impcast_different_enum_types : Warning<
   "implicit conversion from enumeration type %0 to different enumeration type "
   "%1">, InGroup<DiagGroup<"conversion">>;
@@ -2206,6 +2208,8 @@ def err_excess_initializers_in_char_array_initializer : Error<
   "excess elements in char array initializer">;
 def warn_excess_initializers_in_char_array_initializer : ExtWarn<
   "excess elements in char array initializer">;
+def err_initializer_string_for_char_array_too_long : Error<
+  "initializer-string for char array is too long">;
 def warn_initializer_string_for_char_array_too_long : ExtWarn<
   "initializer-string for char array is too long">;
 def warn_missing_field_initializers : Warning<
