@@ -77,6 +77,31 @@ static const CXXRecordDecl *getMostDerivedClassDecl(const Expr *Base) {
   return cast<CXXRecordDecl>(DerivedType->castAs<RecordType>()->getDecl());
 }
 
+// FIXME: Ideally Expr::IgnoreParenNoopCasts should do this, but it doesn't do
+// quite what we want.
+static const Expr *skipNoOpCastsAndParens(const Expr *E) {
+  while (true) {
+    if (const ParenExpr *PE = dyn_cast<ParenExpr>(E)) {
+      E = PE->getSubExpr();
+      continue;
+    }
+
+    if (const CastExpr *CE = dyn_cast<CastExpr>(E)) {
+      if (CE->getCastKind() == CK_NoOp) {
+        E = CE->getSubExpr();
+        continue;
+      }
+    }
+    if (const UnaryOperator *UO = dyn_cast<UnaryOperator>(E)) {
+      if (UO->getOpcode() == UO_Extension) {
+        E = UO->getSubExpr();
+        continue;
+      }
+    }
+    return E;
+  }
+}
+
 /// canDevirtualizeMemberFunctionCalls - Checks whether virtual calls on given
 /// expr can be devirtualized.
 static bool canDevirtualizeMemberFunctionCalls(ASTContext &Context,
@@ -112,6 +137,7 @@ static bool canDevirtualizeMemberFunctionCalls(ASTContext &Context,
   if (MD->getParent()->hasAttr<FinalAttr>())
     return true;
 
+  Base = skipNoOpCastsAndParens(Base);
   if (const DeclRefExpr *DRE = dyn_cast<DeclRefExpr>(Base)) {
     if (const VarDecl *VD = dyn_cast<VarDecl>(DRE->getDecl())) {
       // This is a record decl. We know the type and can devirtualize it.
@@ -1270,9 +1296,7 @@ void CodeGenFunction::EmitCXXDeleteExpr(const CXXDeleteExpr *E) {
   llvm::BasicBlock *DeleteNotNull = createBasicBlock("delete.notnull");
   llvm::BasicBlock *DeleteEnd = createBasicBlock("delete.end");
 
-  llvm::Value *IsNull =
-    Builder.CreateICmpEQ(Ptr, llvm::Constant::getNullValue(Ptr->getType()),
-                         "isnull");
+  llvm::Value *IsNull = Builder.CreateIsNull(Ptr, "isnull");
 
   Builder.CreateCondBr(IsNull, DeleteEnd, DeleteNotNull);
   EmitBlock(DeleteNotNull);
@@ -1364,120 +1388,179 @@ llvm::Value *CodeGenFunction::EmitCXXTypeidExpr(const CXXTypeidExpr *E) {
   return Builder.CreateBitCast(CGM.GetAddrOfRTTIDescriptor(Ty), LTy);
 }
 
-llvm::Value *CodeGenFunction::EmitDynamicCast(llvm::Value *V,
-                                              const CXXDynamicCastExpr *DCE) {
-  QualType SrcTy = DCE->getSubExpr()->getType();
-  QualType DestTy = DCE->getTypeAsWritten();
-  QualType InnerType = DestTy->getPointeeType();
+static llvm::Constant *getDynamicCastFn(CodeGenFunction &CGF) {
+  // void *__dynamic_cast(const void *sub,
+  //                      const abi::__class_type_info *src,
+  //                      const abi::__class_type_info *dst,
+  //                      std::ptrdiff_t src2dst_offset);
   
-  const llvm::Type *LTy = ConvertType(DCE->getType());
+  const llvm::Type *Int8PtrTy = llvm::Type::getInt8PtrTy(CGF.getLLVMContext());
+  const llvm::Type *PtrDiffTy = 
+    CGF.ConvertType(CGF.getContext().getPointerDiffType());
 
-  bool CanBeZero = false;
-  bool ToVoid = false;
-  bool ThrowOnBad = false;
-  if (DestTy->isPointerType()) {
-    // FIXME: if PointerType->hasAttr<NonNullAttr>(), we don't set this
-    CanBeZero = true;
-    if (InnerType->isVoidType())
-      ToVoid = true;
-  } else {
-    LTy = LTy->getPointerTo();
-    
-    // FIXME: What if exceptions are disabled?
-    ThrowOnBad = true;
-  }
+  const llvm::Type *Args[4] = { Int8PtrTy, Int8PtrTy, Int8PtrTy, PtrDiffTy };
+  
+  const llvm::FunctionType *FTy =
+    llvm::FunctionType::get(Int8PtrTy, Args, false);
+  
+  return CGF.CGM.CreateRuntimeFunction(FTy, "__dynamic_cast");
+}
 
-  if (SrcTy->isPointerType() || SrcTy->isReferenceType())
-    SrcTy = SrcTy->getPointeeType();
-  SrcTy = SrcTy.getUnqualifiedType();
+static llvm::Constant *getBadCastFn(CodeGenFunction &CGF) {
+  // void __cxa_bad_cast();
+  
+  const llvm::Type *VoidTy = llvm::Type::getVoidTy(CGF.getLLVMContext());
+  const llvm::FunctionType *FTy =
+    llvm::FunctionType::get(VoidTy, false);
+  
+  return CGF.CGM.CreateRuntimeFunction(FTy, "__cxa_bad_cast");
+}
 
-  if (DestTy->isPointerType() || DestTy->isReferenceType())
-    DestTy = DestTy->getPointeeType();
-  DestTy = DestTy.getUnqualifiedType();
+static void EmitBadCastCall(CodeGenFunction &CGF) {
+  llvm::Value *F = getBadCastFn(CGF);
+  if (llvm::BasicBlock *InvokeDest = CGF.getInvokeDest()) {
+    llvm::BasicBlock *Cont = CGF.createBasicBlock("invoke.cont");
+    CGF.Builder.CreateInvoke(F, Cont, InvokeDest)->setDoesNotReturn();
+    CGF.EmitBlock(Cont);
+  } else
+    CGF.Builder.CreateCall(F)->setDoesNotReturn();
+  
+  CGF.Builder.CreateUnreachable();
+}
 
-  llvm::BasicBlock *ContBlock = createBasicBlock();
-  llvm::BasicBlock *NullBlock = 0;
-  llvm::BasicBlock *NonZeroBlock = 0;
-  if (CanBeZero) {
-    NonZeroBlock = createBasicBlock();
-    NullBlock = createBasicBlock();
-    Builder.CreateCondBr(Builder.CreateIsNotNull(V), NonZeroBlock, NullBlock);
-    EmitBlock(NonZeroBlock);
-  }
+static llvm::Value *
+EmitDynamicCastCall(CodeGenFunction &CGF, llvm::Value *Value,
+                    QualType SrcTy, QualType DestTy,
+                    llvm::BasicBlock *CastEnd) {
+  const llvm::Type *PtrDiffLTy = 
+    CGF.ConvertType(CGF.getContext().getPointerDiffType());
+  const llvm::Type *DestLTy = CGF.ConvertType(DestTy);
 
-  llvm::BasicBlock *BadCastBlock = 0;
+  if (const PointerType *PTy = DestTy->getAs<PointerType>()) {
+    if (PTy->getPointeeType()->isVoidType()) {
+      // C++ [expr.dynamic.cast]p7:
+      //   If T is "pointer to cv void," then the result is a pointer to the
+      //   most derived object pointed to by v.
 
-  const llvm::Type *PtrDiffTy = ConvertType(getContext().getPointerDiffType());
+      // Get the vtable pointer.
+      llvm::Value *VTable = CGF.GetVTablePtr(Value, PtrDiffLTy->getPointerTo());
 
-  // See if this is a dynamic_cast(void*)
-  if (ToVoid) {
-    llvm::Value *This = V;
-    V = GetVTablePtr(This, PtrDiffTy->getPointerTo());
-    V = Builder.CreateConstInBoundsGEP1_64(V, -2ULL);
-    V = Builder.CreateLoad(V, "offset to top");
-    This = EmitCastToVoidPtr(This);
-    V = Builder.CreateInBoundsGEP(This, V);
-    V = Builder.CreateBitCast(V, LTy);
-  } else {
-    /// Call __dynamic_cast
-    const llvm::Type *ResultType = Int8PtrTy;
-    const llvm::FunctionType *FTy;
-    std::vector<const llvm::Type*> ArgTys;
-    ArgTys.push_back(Int8PtrTy);
-    ArgTys.push_back(Int8PtrTy);
-    ArgTys.push_back(Int8PtrTy);
-    ArgTys.push_back(PtrDiffTy);
-    FTy = llvm::FunctionType::get(ResultType, ArgTys, false);
+      // Get the offset-to-top from the vtable.
+      llvm::Value *OffsetToTop = 
+        CGF.Builder.CreateConstInBoundsGEP1_64(VTable, -2ULL);
+      OffsetToTop = CGF.Builder.CreateLoad(OffsetToTop, "offset.to.top");
 
-    // FIXME: Calculate better hint.
-    llvm::Value *hint = llvm::ConstantInt::get(PtrDiffTy, -1ULL);
-    
-    assert(SrcTy->isRecordType() && "Src type must be record type!");
-    assert(DestTy->isRecordType() && "Dest type must be record type!");
-    
-    llvm::Value *SrcArg
-      = CGM.GetAddrOfRTTIDescriptor(SrcTy.getUnqualifiedType());
-    llvm::Value *DestArg
-      = CGM.GetAddrOfRTTIDescriptor(DestTy.getUnqualifiedType());
-    
-    V = Builder.CreateBitCast(V, Int8PtrTy);
-    V = Builder.CreateCall4(CGM.CreateRuntimeFunction(FTy, "__dynamic_cast"),
-                            V, SrcArg, DestArg, hint);
-    V = Builder.CreateBitCast(V, LTy);
+      // Finally, add the offset to the pointer.
+      Value = CGF.EmitCastToVoidPtr(Value);
+      Value = CGF.Builder.CreateInBoundsGEP(Value, OffsetToTop);
 
-    if (ThrowOnBad) {
-      BadCastBlock = createBasicBlock();
-      Builder.CreateCondBr(Builder.CreateIsNotNull(V), ContBlock, BadCastBlock);
-      EmitBlock(BadCastBlock);
-      /// Invoke __cxa_bad_cast
-      ResultType = llvm::Type::getVoidTy(getLLVMContext());
-      const llvm::FunctionType *FBadTy;
-      FBadTy = llvm::FunctionType::get(ResultType, false);
-      llvm::Value *F = CGM.CreateRuntimeFunction(FBadTy, "__cxa_bad_cast");
-      if (llvm::BasicBlock *InvokeDest = getInvokeDest()) {
-        llvm::BasicBlock *Cont = createBasicBlock("invoke.cont");
-        Builder.CreateInvoke(F, Cont, InvokeDest)->setDoesNotReturn();
-        EmitBlock(Cont);
-      } else {
-        // FIXME: Does this ever make sense?
-        Builder.CreateCall(F)->setDoesNotReturn();
-      }
-      Builder.CreateUnreachable();
+      return CGF.Builder.CreateBitCast(Value, DestLTy);
     }
   }
+
+  QualType SrcRecordTy;
+  QualType DestRecordTy;
   
-  if (CanBeZero) {
-    Builder.CreateBr(ContBlock);
-    EmitBlock(NullBlock);
-    Builder.CreateBr(ContBlock);
-  }
-  EmitBlock(ContBlock);
-  if (CanBeZero) {
-    llvm::PHINode *PHI = Builder.CreatePHI(LTy, 2);
-    PHI->addIncoming(V, NonZeroBlock);
-    PHI->addIncoming(llvm::Constant::getNullValue(LTy), NullBlock);
-    V = PHI;
+  if (const PointerType *DestPTy = DestTy->getAs<PointerType>()) {
+    SrcRecordTy = SrcTy->castAs<PointerType>()->getPointeeType();
+    DestRecordTy = DestPTy->getPointeeType();
+  } else {
+    SrcRecordTy = SrcTy;
+    DestRecordTy = DestTy->castAs<ReferenceType>()->getPointeeType();
   }
 
-  return V;
+  assert(SrcRecordTy->isRecordType() && "source type must be a record type!");
+  assert(DestRecordTy->isRecordType() && "dest type must be a record type!");
+
+  llvm::Value *SrcRTTI =
+    CGF.CGM.GetAddrOfRTTIDescriptor(SrcRecordTy.getUnqualifiedType());
+  llvm::Value *DestRTTI =
+    CGF.CGM.GetAddrOfRTTIDescriptor(DestRecordTy.getUnqualifiedType());
+
+  // FIXME: Actually compute a hint here.
+  llvm::Value *OffsetHint = llvm::ConstantInt::get(PtrDiffLTy, -1ULL);
+
+  // Emit the call to __dynamic_cast.
+  Value = CGF.EmitCastToVoidPtr(Value);
+  Value = CGF.Builder.CreateCall4(getDynamicCastFn(CGF), Value,
+                                  SrcRTTI, DestRTTI, OffsetHint);
+  Value = CGF.Builder.CreateBitCast(Value, DestLTy);
+
+  /// C++ [expr.dynamic.cast]p9:
+  ///   A failed cast to reference type throws std::bad_cast
+  if (DestTy->isReferenceType()) {
+    llvm::BasicBlock *BadCastBlock = 
+      CGF.createBasicBlock("dynamic_cast.bad_cast");
+
+    llvm::Value *IsNull = CGF.Builder.CreateIsNull(Value);
+    CGF.Builder.CreateCondBr(IsNull, BadCastBlock, CastEnd);
+
+    CGF.EmitBlock(BadCastBlock);
+    EmitBadCastCall(CGF);
+  }
+
+  return Value;
+}
+
+static llvm::Value *EmitDynamicCastToNull(CodeGenFunction &CGF,
+                                          QualType DestTy) {
+  const llvm::Type *DestLTy = CGF.ConvertType(DestTy);
+  if (DestTy->isPointerType())
+    return llvm::Constant::getNullValue(DestLTy);
+
+  /// C++ [expr.dynamic.cast]p9:
+  ///   A failed cast to reference type throws std::bad_cast
+  EmitBadCastCall(CGF);
+
+  CGF.EmitBlock(CGF.createBasicBlock("dynamic_cast.end"));
+  return llvm::UndefValue::get(DestLTy);
+}
+
+llvm::Value *CodeGenFunction::EmitDynamicCast(llvm::Value *Value,
+                                              const CXXDynamicCastExpr *DCE) {
+  QualType DestTy = DCE->getTypeAsWritten();
+
+  if (DCE->isAlwaysNull())
+    return EmitDynamicCastToNull(*this, DestTy);
+
+  QualType SrcTy = DCE->getSubExpr()->getType();
+
+  // C++ [expr.dynamic.cast]p4: 
+  //   If the value of v is a null pointer value in the pointer case, the result
+  //   is the null pointer value of type T.
+  bool ShouldNullCheckSrcValue = SrcTy->isPointerType();
+  
+  llvm::BasicBlock *CastNull = 0;
+  llvm::BasicBlock *CastNotNull = 0;
+  llvm::BasicBlock *CastEnd = createBasicBlock("dynamic_cast.end");
+  
+  if (ShouldNullCheckSrcValue) {
+    CastNull = createBasicBlock("dynamic_cast.null");
+    CastNotNull = createBasicBlock("dynamic_cast.notnull");
+
+    llvm::Value *IsNull = Builder.CreateIsNull(Value);
+    Builder.CreateCondBr(IsNull, CastNull, CastNotNull);
+    EmitBlock(CastNotNull);
+  }
+
+  Value = EmitDynamicCastCall(*this, Value, SrcTy, DestTy, CastEnd);
+
+  if (ShouldNullCheckSrcValue) {
+    EmitBranch(CastEnd);
+
+    EmitBlock(CastNull);
+    EmitBranch(CastEnd);
+  }
+
+  EmitBlock(CastEnd);
+
+  if (ShouldNullCheckSrcValue) {
+    llvm::PHINode *PHI = Builder.CreatePHI(Value->getType(), 2);
+    PHI->addIncoming(Value, CastNotNull);
+    PHI->addIncoming(llvm::Constant::getNullValue(Value->getType()), CastNull);
+
+    Value = PHI;
+  }
+
+  return Value;
 }
