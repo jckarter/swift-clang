@@ -2488,6 +2488,16 @@ Sema::BuildDeclarationNameExpr(const CXXScopeSpec &SS,
       break;
 
     case Decl::Function: {
+      const FunctionType *fty = type->castAs<FunctionType>();
+
+      // If we're referring to a function with an __unknown_anytype
+      // result type, make the entire expression __unknown_anytype.
+      if (fty->getResultType() == Context.UnknownAnyTy) {
+        type = Context.UnknownAnyTy;
+        valueKind = VK_RValue;
+        break;
+      }
+
       // Functions are l-values in C++.
       if (getLangOptions().CPlusPlus) {
         valueKind = VK_LValue;
@@ -2499,10 +2509,10 @@ Sema::BuildDeclarationNameExpr(const CXXScopeSpec &SS,
       // used for checking compatibility. Therefore, when referencing
       // the function, we pretend that we don't have the full function
       // type.
-      if (!cast<FunctionDecl>(VD)->hasPrototype())
-        if (const FunctionProtoType *proto = type->getAs<FunctionProtoType>())
-          type = Context.getFunctionNoProtoType(proto->getResultType(),
-                                                proto->getExtInfo());
+      if (!cast<FunctionDecl>(VD)->hasPrototype() &&
+          isa<FunctionProtoType>(fty))
+        type = Context.getFunctionNoProtoType(fty->getResultType(),
+                                              fty->getExtInfo());
 
       // Functions are r-values in C.
       valueKind = VK_RValue;
@@ -2510,6 +2520,16 @@ Sema::BuildDeclarationNameExpr(const CXXScopeSpec &SS,
     }
 
     case Decl::CXXMethod:
+      // If we're referring to a method with an __unknown_anytype
+      // result type, make the entire expression __unknown_anytype.
+      // This should only be possible with a type written directly.
+      if (const FunctionProtoType *proto = dyn_cast<FunctionProtoType>(VD->getType()))
+        if (proto->getResultType() == Context.UnknownAnyTy) {
+          type = Context.UnknownAnyTy;
+          valueKind = VK_RValue;
+          break;
+        }
+
       // C++ methods are l-values if static, r-values if non-static.
       if (cast<CXXMethodDecl>(VD)->isStatic()) {
         valueKind = VK_LValue;
@@ -2533,8 +2553,7 @@ Sema::BuildDeclarationNameExpr(const CXXScopeSpec &SS,
   return ExprError();
 }
 
-ExprResult Sema::ActOnPredefinedExpr(SourceLocation Loc,
-                                                 tok::TokenKind Kind) {
+ExprResult Sema::ActOnPredefinedExpr(SourceLocation Loc, tok::TokenKind Kind) {
   PredefinedExpr::IdentType IT;
 
   switch (Kind) {
@@ -4532,15 +4551,36 @@ bool Sema::GatherArgumentsForCall(SourceLocation CallLoc,
 
   // If this is a variadic call, handle args passed through "...".
   if (CallType != VariadicDoesNotApply) {
-    // Promote the arguments (C99 6.5.2.2p7).
-    for (unsigned i = ArgIx; i != NumArgs; ++i) {
-      ExprResult Arg = DefaultVariadicArgumentPromotion(Args[i], CallType, FDecl);
-      Invalid |= Arg.isInvalid();
-      AllArgs.push_back(Arg.take());
+
+    // Assume that extern "C" functions with variadic arguments that
+    // return __unknown_anytype aren't *really* variadic.
+    if (Proto->getResultType() == Context.UnknownAnyTy &&
+        FDecl && FDecl->isExternC()) {
+      for (unsigned i = ArgIx; i != NumArgs; ++i) {
+        ExprResult arg;
+        if (isa<ExplicitCastExpr>(Args[i]->IgnoreParens()))
+          arg = DefaultFunctionArrayLvalueConversion(Args[i]);
+        else
+          arg = DefaultVariadicArgumentPromotion(Args[i], CallType, FDecl);
+        Invalid |= arg.isInvalid();
+        AllArgs.push_back(arg.take());
+      }
+
+    // Otherwise do argument promotion, (C99 6.5.2.2p7).
+    } else {
+      for (unsigned i = ArgIx; i != NumArgs; ++i) {
+        ExprResult Arg = DefaultVariadicArgumentPromotion(Args[i], CallType, FDecl);
+        Invalid |= Arg.isInvalid();
+        AllArgs.push_back(Arg.take());
+      }
     }
   }
   return Invalid;
 }
+
+/// Given a function expression of unknown-any type, try to rebuild it
+/// to have a function type.
+static ExprResult rebuildUnknownAnyFunction(Sema &S, Expr *fn);
 
 /// ActOnCallExpr - Handle a call to Fn with the specified array of arguments.
 /// This provides the location of the left/right parens and a list of comma
@@ -4601,6 +4641,12 @@ Sema::ActOnCallExpr(Scope *S, Expr *Fn, SourceLocation LParenLoc,
     if (Fn->getType()->isRecordType())
       return Owned(BuildCallToObjectOfClassType(S, Fn, LParenLoc, Args, NumArgs,
                                                 RParenLoc));
+
+    if (Fn->getType() == Context.UnknownAnyTy) {
+      ExprResult result = rebuildUnknownAnyFunction(*this, Fn);
+      if (result.isInvalid()) return ExprError();
+      Fn = result.take();
+    }
 
     Expr *NakedFn = Fn->IgnoreParens();
 
@@ -4715,52 +4761,6 @@ Sema::ActOnCUDAExecConfigExpr(Scope *S, SourceLocation LLLLoc,
   return ActOnCallExpr(S, ConfigDR, LLLLoc, execConfig, GGGLoc, 0);
 }
 
-/// Given a function expression of unknown-any type, rebuild it to
-/// have a type appropriate for being called with the given arguments,
-/// yielding a value of unknown-any type.
-static ExprResult rebuildUnknownAnyFunction(Sema &S, Expr *fn,
-                                            Expr **args, unsigned numArgs) {
-  // Strip an lvalue-to-rvalue conversion off.
-  if (ImplicitCastExpr *ice = dyn_cast<ImplicitCastExpr>(fn))
-    if (ice->getCastKind() == CK_LValueToRValue)
-      fn = ice->getSubExpr();
-
-  // Build a simple function type exactly matching the arguments.
-  llvm::SmallVector<QualType, 8> argTypes;
-  argTypes.reserve(numArgs);
-  for (unsigned i = 0; i != numArgs; ++i) {
-    // Require all the sub-expression to not be placeholders.
-    ExprResult result = S.CheckPlaceholderExpr(args[i]);
-    if (result.isInvalid()) return ExprError();
-    args[i] = result.take();
-
-    // Do l2r conversions on all the arguments.
-    S.DefaultLvalueConversion(args[i]);
-
-    argTypes.push_back(args[i]->getType());
-  }
-
-  // Resolve the symbol to a function type that returns an unknown-any
-  // type.  In the fully resolved expression, this cast will surround
-  // the DeclRefExpr.
-  FunctionProtoType::ExtProtoInfo extInfo;
-  QualType fnType = S.Context.getFunctionType(S.Context.UnknownAnyTy,
-                                              argTypes.data(), numArgs,
-                                              extInfo);
-  fn = ImplicitCastExpr::Create(S.Context, fnType,
-                                CK_ResolveUnknownAnyType,
-                                fn, /*path*/ 0,
-                     (S.getLangOptions().CPlusPlus ? VK_LValue : VK_RValue));
-
-  // Decay that to a pointer.
-  fnType = S.Context.getPointerType(fnType);
-  fn = ImplicitCastExpr::Create(S.Context, fnType,
-                                CK_FunctionToPointerDecay,
-                                fn, /*path*/ 0, VK_RValue);
-
-  return S.Owned(fn);
-}
-
 /// BuildResolvedCallExpr - Build a call to a resolved expression,
 /// i.e. an expression not of \p OverloadTy.  The expression should
 /// unary-convert to an expression of function-pointer or
@@ -4820,11 +4820,10 @@ Sema::BuildResolvedCallExpr(Expr *Fn, NamedDecl *NDecl,
   } else {
     // Handle calls to expressions of unknown-any type.
     if (Fn->getType() == Context.UnknownAnyTy) {
-      ExprResult rewrite = rebuildUnknownAnyFunction(*this, Fn, Args, NumArgs);
+      ExprResult rewrite = rebuildUnknownAnyFunction(*this, Fn);
       if (rewrite.isInvalid()) return ExprError();
       Fn = rewrite.take();
       TheCall->setCallee(Fn);
-      NDecl = FDecl = 0;
       goto retry;
     }
 
@@ -8089,10 +8088,10 @@ static QualType CheckAddressOfOperand(Sema &S, Expr *OrigOp,
     return S.Context.DependentTy;
   if (OrigOp->getType() == S.Context.OverloadTy)
     return S.Context.OverloadTy;
+  if (OrigOp->getType() == S.Context.UnknownAnyTy)
+    return S.Context.UnknownAnyTy;
 
-  ExprResult PR = S.CheckPlaceholderExpr(OrigOp);
-  if (PR.isInvalid()) return QualType();
-  OrigOp = PR.take();
+  assert(!OrigOp->getType()->isPlaceholderType());
 
   // Make sure to ignore parentheses in subsequent checks
   Expr *op = OrigOp->IgnoreParens();
@@ -10145,81 +10144,32 @@ ExprResult Sema::ActOnBooleanCondition(Scope *S, SourceLocation Loc,
 }
 
 namespace {
-  struct RebuildUnknownAnyExpr
-    : StmtVisitor<RebuildUnknownAnyExpr, ExprResult> {
+  /// A visitor for rebuilding a call to an __unknown_any expression
+  /// to have an appropriate type.
+  struct RebuildUnknownAnyFunction
+    : StmtVisitor<RebuildUnknownAnyFunction, ExprResult> {
 
     Sema &S;
 
-    /// The current destination type.
-    QualType DestType;
-
-    RebuildUnknownAnyExpr(Sema &S, QualType castType)
-      : S(S), DestType(castType) {}
+    RebuildUnknownAnyFunction(Sema &S) : S(S) {}
 
     ExprResult VisitStmt(Stmt *S) {
-      llvm_unreachable("unexpected expression kind!");
+      llvm_unreachable("unexpected statement!");
       return ExprError();
     }
 
-    ExprResult VisitCallExpr(CallExpr *call) {
-      Expr *callee = call->getCallee();
-
-      bool wasBlock;
-      QualType type = callee->getType();
-      if (const PointerType *ptr = type->getAs<PointerType>()) {
-        type = ptr->getPointeeType();
-        wasBlock = false;
-      } else {
-        type = type->castAs<BlockPointerType>()->getPointeeType();
-        wasBlock = true;
-      }
-      const FunctionType *fnType = type->castAs<FunctionType>();
-
-      // Verify that this is a legal result type of a function.
-      if (DestType->isArrayType() || DestType->isFunctionType()) {
-        unsigned diagID = diag::err_func_returning_array_function;
-        if (wasBlock) diagID = diag::err_block_returning_array_function;
-
-        S.Diag(call->getExprLoc(), diagID)
-          << DestType->isFunctionType() << DestType;
-        return ExprError();
-      }
-
-      // Otherwise, go ahead and set DestType as the call's result.
-      call->setType(DestType.getNonLValueExprType(S.Context));
-      call->setValueKind(Expr::getValueKindForType(DestType));
-      assert(call->getObjectKind() == OK_Ordinary);
-
-      // Rebuild the function type, replacing the result type with DestType.
-      if (const FunctionProtoType *proto = dyn_cast<FunctionProtoType>(fnType))
-        DestType = S.Context.getFunctionType(DestType,
-                                             proto->arg_type_begin(),
-                                             proto->getNumArgs(),
-                                             proto->getExtProtoInfo());
-      else
-        DestType = S.Context.getFunctionNoProtoType(DestType,
-                                                    fnType->getExtInfo());
-
-      // Rebuild the appropriate pointer-to-function type.
-      if (wasBlock)
-        DestType = S.Context.getBlockPointerType(DestType);
-      else
-        DestType = S.Context.getPointerType(DestType);
-
-      // Finally, we can recurse.
-      ExprResult calleeResult = Visit(callee);
-      if (!calleeResult.isUsable()) return ExprError();
-      call->setCallee(calleeResult.take());
-
-      // Bind a temporary if necessary.
-      return S.MaybeBindToTemporary(call);
+    ExprResult VisitExpr(Expr *expr) {
+      S.Diag(expr->getExprLoc(), diag::err_unsupported_unknown_any_call)
+        << expr->getSourceRange();
+      return ExprError();
     }
 
     /// Rebuild an expression which simply semantically wraps another
     /// expression which it shares the type and value kind of.
     template <class T> ExprResult rebuildSugarExpr(T *expr) {
       ExprResult subResult = Visit(expr->getSubExpr());
-      if (!subResult.isUsable()) return ExprError();
+      if (subResult.isInvalid()) return ExprError();
+
       Expr *subExpr = subResult.take();
       expr->setSubExpr(subExpr);
       expr->setType(subExpr->getType());
@@ -10236,45 +10186,287 @@ namespace {
       return rebuildSugarExpr(op);
     }
 
-    ExprResult VisitImplicitCastExpr(ImplicitCastExpr *ice) {
-      // Rebuild an inner resolution by stripping it and propagating
-      // the new type down.
-      if (ice->getCastKind() == CK_ResolveUnknownAnyType)
-        return Visit(ice->getSubExpr());
+    ExprResult VisitUnaryAddrOf(UnaryOperator *op) {
+      ExprResult subResult = Visit(op->getSubExpr());
+      if (subResult.isInvalid()) return ExprError();
 
-      // The only other case we should be able to get here is a
-      // function-to-pointer decay.
-      assert(ice->getCastKind() == CK_FunctionToPointerDecay);
-      ice->setType(DestType);
-      assert(ice->getValueKind() == VK_RValue);
-      assert(ice->getObjectKind() == OK_Ordinary);
+      Expr *subExpr = subResult.take();
+      op->setSubExpr(subExpr);
+      op->setType(S.Context.getPointerType(subExpr->getType()));
+      assert(op->getValueKind() == VK_RValue);
+      assert(op->getObjectKind() == OK_Ordinary);
+      return op;
+    }
 
-      // Rebuild the sub-expression as the pointee (function) type.
-      DestType = DestType->castAs<PointerType>()->getPointeeType();
+    ExprResult resolveDecl(Expr *expr, ValueDecl *decl) {
+      if (!isa<FunctionDecl>(decl)) return VisitExpr(expr);
 
-      ExprResult result = Visit(ice->getSubExpr());
-      if (!result.isUsable()) return ExprError();
+      expr->setType(decl->getType());
 
-      ice->setSubExpr(result.take());
-      return S.Owned(ice);
+      assert(expr->getValueKind() == VK_RValue);
+      if (S.getLangOptions().CPlusPlus &&
+          !(isa<CXXMethodDecl>(decl) &&
+            cast<CXXMethodDecl>(decl)->isInstance()))
+        expr->setValueKind(VK_LValue);
+
+      return expr;
+    }
+
+    ExprResult VisitMemberExpr(MemberExpr *mem) {
+      return resolveDecl(mem, mem->getMemberDecl());
     }
 
     ExprResult VisitDeclRefExpr(DeclRefExpr *ref) {
-      ExprValueKind valueKind = VK_LValue;
-      if (S.getLangOptions().CPlusPlus) {
-        // FIXME: if the value was resolved as a reference type, we
-        // should really remember that somehow, or else we'll be
-        // missing a load.
-        DestType = DestType.getNonReferenceType();
-      } else if (DestType->isFunctionType()) {
-        valueKind = VK_RValue;
-      }
-
-      return S.Owned(ImplicitCastExpr::Create(S.Context, DestType,
-                                              CK_ResolveUnknownAnyType,
-                                              ref, 0, valueKind));
+      return resolveDecl(ref, ref->getDecl());
     }
   };
+}
+
+/// Given a function expression of unknown-any type, try to rebuild it
+/// to have a function type.
+static ExprResult rebuildUnknownAnyFunction(Sema &S, Expr *fn) {
+  ExprResult result = RebuildUnknownAnyFunction(S).Visit(fn);
+  if (result.isInvalid()) return ExprError();
+  return S.DefaultFunctionArrayConversion(result.take());
+}
+
+namespace {
+  /// A visitor for rebuilding an expression of type __unknown_anytype
+  /// into one which resolves the type directly on the referring
+  /// expression.  Strict preservation of the original source
+  /// structure is not a goal.
+  struct RebuildUnknownAnyExpr
+    : StmtVisitor<RebuildUnknownAnyExpr, ExprResult> {
+
+    Sema &S;
+
+    /// The current destination type.
+    QualType DestType;
+
+    RebuildUnknownAnyExpr(Sema &S, QualType castType)
+      : S(S), DestType(castType) {}
+
+    ExprResult VisitStmt(Stmt *S) {
+      llvm_unreachable("unexpected statement!");
+      return ExprError();
+    }
+
+    ExprResult VisitExpr(Expr *expr) {
+      S.Diag(expr->getExprLoc(), diag::err_unsupported_unknown_any_expr)
+        << expr->getSourceRange();
+      return ExprError();
+    }
+
+    ExprResult VisitCallExpr(CallExpr *call);
+    ExprResult VisitObjCMessageExpr(ObjCMessageExpr *message);
+
+    /// Rebuild an expression which simply semantically wraps another
+    /// expression which it shares the type and value kind of.
+    template <class T> ExprResult rebuildSugarExpr(T *expr) {
+      ExprResult subResult = Visit(expr->getSubExpr());
+      if (subResult.isInvalid()) return ExprError();
+      Expr *subExpr = subResult.take();
+      expr->setSubExpr(subExpr);
+      expr->setType(subExpr->getType());
+      expr->setValueKind(subExpr->getValueKind());
+      assert(expr->getObjectKind() == OK_Ordinary);
+      return expr;
+    }
+
+    ExprResult VisitParenExpr(ParenExpr *paren) {
+      return rebuildSugarExpr(paren);
+    }
+
+    ExprResult VisitUnaryExtension(UnaryOperator *op) {
+      return rebuildSugarExpr(op);
+    }
+
+    ExprResult VisitUnaryAddrOf(UnaryOperator *op) {
+      const PointerType *ptr = DestType->getAs<PointerType>();
+      if (!ptr) {
+        S.Diag(op->getOperatorLoc(), diag::err_unknown_any_addrof)
+          << op->getSourceRange();
+        return ExprError();
+      }
+      assert(op->getValueKind() == VK_RValue);
+      assert(op->getObjectKind() == OK_Ordinary);
+      op->setType(DestType);
+
+      // Build the sub-expression as if it were an object of the pointee type.
+      DestType = ptr->getPointeeType();
+      ExprResult subResult = Visit(op->getSubExpr());
+      if (subResult.isInvalid()) return ExprError();
+      op->setSubExpr(subResult.take());
+      return op;
+    }
+
+    ExprResult VisitImplicitCastExpr(ImplicitCastExpr *ice);
+
+    ExprResult resolveDecl(Expr *expr, ValueDecl *decl);
+
+    ExprResult VisitMemberExpr(MemberExpr *mem) {
+      return resolveDecl(mem, mem->getMemberDecl());
+    }
+
+    ExprResult VisitDeclRefExpr(DeclRefExpr *ref) {
+      return resolveDecl(ref, ref->getDecl());
+    }
+  };
+}
+
+/// Rebuilds a call expression which yielded __unknown_anytype.
+ExprResult RebuildUnknownAnyExpr::VisitCallExpr(CallExpr *call) {
+  Expr *callee = call->getCallee();
+
+  enum FnKind {
+    FK_Function,
+    FK_FunctionPointer,
+    FK_BlockPointer
+  };
+
+  FnKind kind;
+  QualType type = callee->getType();
+  if (type->isFunctionType()) {
+    assert(isa<CXXMemberCallExpr>(call) || isa<CXXOperatorCallExpr>(call));
+    kind = FK_Function;
+  } else if (const PointerType *ptr = type->getAs<PointerType>()) {
+    type = ptr->getPointeeType();
+    kind = FK_FunctionPointer;
+  } else {
+    type = type->castAs<BlockPointerType>()->getPointeeType();
+    kind = FK_BlockPointer;
+  }
+  const FunctionType *fnType = type->castAs<FunctionType>();
+
+  // Verify that this is a legal result type of a function.
+  if (DestType->isArrayType() || DestType->isFunctionType()) {
+    unsigned diagID = diag::err_func_returning_array_function;
+    if (kind == FK_BlockPointer)
+      diagID = diag::err_block_returning_array_function;
+
+    S.Diag(call->getExprLoc(), diagID)
+      << DestType->isFunctionType() << DestType;
+    return ExprError();
+  }
+
+  // Otherwise, go ahead and set DestType as the call's result.
+  call->setType(DestType.getNonLValueExprType(S.Context));
+  call->setValueKind(Expr::getValueKindForType(DestType));
+  assert(call->getObjectKind() == OK_Ordinary);
+
+  // Rebuild the function type, replacing the result type with DestType.
+  if (const FunctionProtoType *proto = dyn_cast<FunctionProtoType>(fnType))
+    DestType = S.Context.getFunctionType(DestType,
+                                         proto->arg_type_begin(),
+                                         proto->getNumArgs(),
+                                         proto->getExtProtoInfo());
+  else
+    DestType = S.Context.getFunctionNoProtoType(DestType,
+                                                fnType->getExtInfo());
+
+  // Rebuild the appropriate pointer-to-function type.
+  switch (kind) {
+  case FK_Function:
+    // Nothing to do.
+    break;
+
+  case FK_FunctionPointer:
+    DestType = S.Context.getPointerType(DestType);
+    break;
+
+  case FK_BlockPointer:
+    DestType = S.Context.getBlockPointerType(DestType);
+    break;
+  }
+
+  // Finally, we can recurse.
+  ExprResult calleeResult = Visit(callee);
+  if (!calleeResult.isUsable()) return ExprError();
+  call->setCallee(calleeResult.take());
+
+  // Bind a temporary if necessary.
+  return S.MaybeBindToTemporary(call);
+}
+
+ExprResult RebuildUnknownAnyExpr::VisitObjCMessageExpr(ObjCMessageExpr *msg) {
+  ObjCMethodDecl *method = msg->getMethodDecl();
+  assert(method && "__unknown_anytype message without result type?");
+
+  // Verify that this is a legal result type of a call.
+  if (DestType->isArrayType() || DestType->isFunctionType()) {
+    S.Diag(msg->getExprLoc(), diag::err_func_returning_array_function)
+      << DestType->isFunctionType() << DestType;
+    return ExprError();
+  }
+
+  assert(method->getResultType() == S.Context.UnknownAnyTy);
+  method->setResultType(DestType);
+
+  // Change the type of the message.
+  msg->setType(DestType.getNonReferenceType());
+  msg->setValueKind(Expr::getValueKindForType(DestType));
+
+  return S.MaybeBindToTemporary(msg);
+}
+
+ExprResult RebuildUnknownAnyExpr::VisitImplicitCastExpr(ImplicitCastExpr *ice) {
+  // The only case we should ever see here is a function-to-pointer decay.
+  assert(ice->getCastKind() == CK_FunctionToPointerDecay);
+  assert(ice->getValueKind() == VK_RValue);
+  assert(ice->getObjectKind() == OK_Ordinary);
+
+  ice->setType(DestType);
+
+  // Rebuild the sub-expression as the pointee (function) type.
+  DestType = DestType->castAs<PointerType>()->getPointeeType();
+
+  ExprResult result = Visit(ice->getSubExpr());
+  if (!result.isUsable()) return ExprError();
+
+  ice->setSubExpr(result.take());
+  return S.Owned(ice);
+}
+
+ExprResult RebuildUnknownAnyExpr::resolveDecl(Expr *expr, ValueDecl *decl) {
+  ExprValueKind valueKind = VK_LValue;
+  QualType type = DestType;
+
+  // We know how to make this work for certain kinds of decls:
+
+  //  - functions
+  if (FunctionDecl *fn = dyn_cast<FunctionDecl>(decl)) {
+    if (CXXMethodDecl *method = dyn_cast<CXXMethodDecl>(fn))
+      if (method->isInstance()) valueKind = VK_RValue;
+
+    // This is true because FunctionDecls must always have function
+    // type, so we can't be resolving the entire thing at once.
+    assert(type->isFunctionType());
+
+    // Function references aren't l-values in C.
+    if (!S.getLangOptions().CPlusPlus)
+      valueKind = VK_RValue;
+
+  //  - variables
+  } else if (isa<VarDecl>(decl)) {
+    if (const ReferenceType *refTy = type->getAs<ReferenceType>()) {
+      type = refTy->getPointeeType();
+    } else if (type->isFunctionType()) {
+      S.Diag(expr->getExprLoc(), diag::err_unknown_any_var_function_type)
+        << decl << expr->getSourceRange();
+      return ExprError();
+    }
+
+  //  - nothing else
+  } else {
+    S.Diag(expr->getExprLoc(), diag::err_unsupported_unknown_any_decl)
+      << decl << expr->getSourceRange();
+    return ExprError();
+  }
+
+  decl->setType(DestType);
+  expr->setType(type);
+  expr->setValueKind(valueKind);
+  return S.Owned(expr);
 }
 
 /// Check a cast of an unknown-any type.  We intentionally only
@@ -10295,18 +10487,37 @@ ExprResult Sema::checkUnknownAnyCast(SourceRange typeRange, QualType castType,
 
 static ExprResult diagnoseUnknownAnyExpr(Sema &S, Expr *e) {
   Expr *orig = e;
+  unsigned diagID = diag::err_uncasted_use_of_unknown_any;
   while (true) {
     e = e->IgnoreParenImpCasts();
-    if (CallExpr *call = dyn_cast<CallExpr>(e))
+    if (CallExpr *call = dyn_cast<CallExpr>(e)) {
       e = call->getCallee();
-    else
+      diagID = diag::err_uncasted_call_of_unknown_any;
+    } else {
       break;
+    }
   }
 
-  assert(isa<DeclRefExpr>(e) && "unexpected form of unknown-any expression");
-  DeclRefExpr *ref = cast<DeclRefExpr>(e);
-  S.Diag(ref->getLocation(), diag::err_bad_use_of_unknown_any)
-    << ref->getDecl() << orig->getSourceRange();
+  SourceLocation loc;
+  NamedDecl *d;
+  if (DeclRefExpr *ref = dyn_cast<DeclRefExpr>(e)) {
+    loc = ref->getLocation();
+    d = ref->getDecl();
+  } else if (MemberExpr *mem = dyn_cast<MemberExpr>(e)) {
+    loc = mem->getMemberLoc();
+    d = mem->getMemberDecl();
+  } else if (ObjCMessageExpr *msg = dyn_cast<ObjCMessageExpr>(e)) {
+    diagID = diag::err_uncasted_call_of_unknown_any;
+    loc = msg->getSelectorLoc();
+    d = msg->getMethodDecl();
+    assert(d && "unknown method returning __unknown_any?");
+  } else {
+    S.Diag(e->getExprLoc(), diag::err_unsupported_unknown_any_expr)
+      << e->getSourceRange();
+    return ExprError();
+  }
+
+  S.Diag(loc, diagID) << d << orig->getSourceRange();
 
   // Never recoverable.
   return ExprError();
