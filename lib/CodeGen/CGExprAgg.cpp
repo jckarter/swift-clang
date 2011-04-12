@@ -310,10 +310,6 @@ void AggExprEmitter::VisitCastExpr(CastExpr *E) {
     llvm_unreachable("should not be emitting lvalue bitcast as rvalue");
     break;
 
-  case CK_ResolveUnknownAnyType:
-    EmitAggLoadOfLValue(E);
-    break;
-      
   case CK_Dependent:
   case CK_BitCast:
   case CK_ArrayToPointerDecay:
