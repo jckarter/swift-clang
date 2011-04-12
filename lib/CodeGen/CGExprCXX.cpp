@@ -167,10 +167,12 @@ static bool canDevirtualizeMemberFunctionCalls(ASTContext &Context,
 // extensions allowing explicit constructor function call.
 RValue CodeGenFunction::EmitCXXMemberCallExpr(const CXXMemberCallExpr *CE,
                                               ReturnValueSlot ReturnValue) {
-  if (isa<BinaryOperator>(CE->getCallee()->IgnoreParens())) 
+  const Expr *callee = CE->getCallee()->IgnoreParens();
+
+  if (isa<BinaryOperator>(callee))
     return EmitCXXMemberPointerCallExpr(CE, ReturnValue);
-      
-  const MemberExpr *ME = cast<MemberExpr>(CE->getCallee()->IgnoreParens());
+
+  const MemberExpr *ME = cast<MemberExpr>(callee);
   const CXXMethodDecl *MD = cast<CXXMethodDecl>(ME->getMemberDecl());
 
   CGDebugInfo *DI = getDebugInfo();
@@ -1336,6 +1338,28 @@ void CodeGenFunction::EmitCXXDeleteExpr(const CXXDeleteExpr *E) {
   EmitBlock(DeleteEnd);
 }
 
+static llvm::Constant *getBadTypeidFn(CodeGenFunction &CGF) {
+  // void __cxa_bad_typeid();
+  
+  const llvm::Type *VoidTy = llvm::Type::getVoidTy(CGF.getLLVMContext());
+  const llvm::FunctionType *FTy =
+  llvm::FunctionType::get(VoidTy, false);
+  
+  return CGF.CGM.CreateRuntimeFunction(FTy, "__cxa_bad_typeid");
+}
+
+static void EmitBadTypeidCall(CodeGenFunction &CGF) {
+  llvm::Value *F = getBadTypeidFn(CGF);
+  if (llvm::BasicBlock *InvokeDest = CGF.getInvokeDest()) {
+    llvm::BasicBlock *Cont = CGF.createBasicBlock("invoke.cont");
+    CGF.Builder.CreateInvoke(F, Cont, InvokeDest)->setDoesNotReturn();
+    CGF.EmitBlock(Cont);
+  } else
+    CGF.Builder.CreateCall(F)->setDoesNotReturn();
+  
+  CGF.Builder.CreateUnreachable();
+}
+
 llvm::Value *CodeGenFunction::EmitCXXTypeidExpr(const CXXTypeidExpr *E) {
   QualType Ty = E->getType();
   const llvm::Type *LTy = ConvertType(Ty)->getPointerTo();
@@ -1370,13 +1394,9 @@ llvm::Value *CodeGenFunction::EmitCXXTypeidExpr(const CXXTypeidExpr *E) {
         Builder.CreateCondBr(Builder.CreateICmpNE(This, Zero),
                              NonZeroBlock, ZeroBlock);
         EmitBlock(ZeroBlock);
-        /// Call __cxa_bad_typeid
-        const llvm::Type *ResultType = llvm::Type::getVoidTy(getLLVMContext());
-        const llvm::FunctionType *FTy;
-        FTy = llvm::FunctionType::get(ResultType, false);
-        llvm::Value *F = CGM.CreateRuntimeFunction(FTy, "__cxa_bad_typeid");
-        Builder.CreateCall(F)->setDoesNotReturn();
-        Builder.CreateUnreachable();
+
+        EmitBadTypeidCall(*this);
+
         EmitBlock(NonZeroBlock);
       }
       llvm::Value *V = GetVTablePtr(This, LTy->getPointerTo());
