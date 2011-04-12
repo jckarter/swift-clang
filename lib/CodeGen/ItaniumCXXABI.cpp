@@ -537,20 +537,22 @@ llvm::Constant *ItaniumCXXABI::EmitMemberPointer(const CXXMethodDecl *MD) {
       MemPtr[1] = llvm::ConstantInt::get(ptrdiff_t, 0);
     }
   } else {
-    const FunctionProtoType *FPT = MD->getType()->getAs<FunctionProtoType>();
+    QualType fnType = MD->getType();
+    const FunctionProtoType *FPT = MD->getType()->castAs<FunctionProtoType>();
     const llvm::Type *Ty;
     // Check whether the function has a computable LLVM signature.
     if (!CodeGenTypes::VerifyFuncTypeComplete(FPT)) {
       // The function has a computable LLVM signature; use the correct type.
-      Ty = Types.GetFunctionType(Types.getFunctionInfo(MD), FPT->isVariadic());
+      Ty = Types.GetFunctionType(Types.getFunctionInfo(MD),
+                                 FPT->isVariadic());
     } else {
       // Use an arbitrary non-function type to tell GetAddrOfFunction that the
       // function type is incomplete.
       Ty = ptrdiff_t;
     }
+    llvm::Constant *addr = CGM.GetAddrOfFunction(MD, Ty);
 
-    llvm::Constant *Addr = CGM.GetAddrOfFunction(MD, Ty);
-    MemPtr[0] = llvm::ConstantExpr::getPtrToInt(Addr, ptrdiff_t);
+    MemPtr[0] = llvm::ConstantExpr::getPtrToInt(addr, ptrdiff_t);
     MemPtr[1] = llvm::ConstantInt::get(ptrdiff_t, 0);
   }
   
