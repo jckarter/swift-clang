@@ -1946,6 +1946,8 @@ def note_typename_refers_here : Note<
     "referenced member %0 is declared here">;
 def err_typename_missing : Error<
   "missing 'typename' prior to dependent type name '%0%1'">;
+def war_typename_missing : ExtWarn<
+  "missing 'typename' prior to dependent type name '%0%1'">;
 def ext_typename_outside_of_template : ExtWarn<
   "'typename' occurs outside of a template">, InGroup<CXX0x>;
 def err_typename_refers_to_using_value_decl : Error<
@@ -3797,6 +3799,8 @@ def warn_ivar_use_hidden : Warning<
   "local declaration of %0 hides instance variable">;
 def error_ivar_use_in_class_method : Error<
   "instance variable %0 accessed in class method">;
+def error_implicit_ivar_access : Error<
+  "instance variable %0 cannot be accessed because 'self' has been redeclared">;
 def error_private_ivar_access : Error<"instance variable %0 is private">,
   AccessControl;
 def error_protected_ivar_access : Error<"instance variable %0 is protected">,
