@@ -644,11 +644,6 @@ void Clang::AddARMTargetArgs(const ArgList &Args,
     CmdArgs.push_back("-backend-option");
     CmdArgs.push_back("-arm-strict-align");
   }
-
-  if (!isIPhoneOSVersionLT(5, 0)) {
-    CmdArgs.push_back("-backend-option");
-    CmdArgs.push_back("-use-divmod-libcall");
-  }
 }
 
 void Clang::AddMIPSTargetArgs(const ArgList &Args,
