@@ -786,7 +786,7 @@ Sema::ActOnStringLiteral(const Token *StringToks, unsigned NumStringToks) {
   // Pass &StringTokLocs[0], StringTokLocs.size() to factory!
   return Owned(StringLiteral::Create(Context, Literal.GetString(),
                                      Literal.GetStringLength(),
-                                     Literal.AnyWide, StrTy,
+                                     Literal.AnyWide, Literal.Pascal, StrTy,
                                      &StringTokLocs[0],
                                      StringTokLocs.size()));
 }
@@ -1318,12 +1318,24 @@ static IMAKind ClassifyImplicitMemberAccess(Sema &SemaRef,
     return IMA_Error_StaticContext;
   }
 
+  CXXRecordDecl *
+        contextClass = cast<CXXMethodDecl>(DC)->getParent()->getCanonicalDecl();
+
+  // [class.mfct.non-static]p3: 
+  // ...is used in the body of a non-static member function of class X,
+  // if name lookup (3.4.1) resolves the name in the id-expression to a
+  // non-static non-type member of some class C [...]
+  // ...if C is not X or a base class of X, the class member access expression
+  // is ill-formed.
+  if (R.getNamingClass() &&
+      contextClass != R.getNamingClass()->getCanonicalDecl() &&
+      contextClass->isProvablyNotDerivedFrom(R.getNamingClass()))
+    return (hasNonInstance ? IMA_Mixed_Unrelated : IMA_Error_Unrelated);
+
   // If we can prove that the current context is unrelated to all the
   // declaring classes, it can't be an implicit member reference (in
   // which case it's an error if any of those members are selected).
-  if (IsProvablyNotDerivedFrom(SemaRef,
-                               cast<CXXMethodDecl>(DC)->getParent(),
-                               Classes))
+  if (IsProvablyNotDerivedFrom(SemaRef, contextClass, Classes))
     return (hasNonInstance ? IMA_Mixed_Unrelated : IMA_Error_Unrelated);
 
   return (hasNonInstance ? IMA_Mixed : IMA_Instance);
@@ -10080,13 +10092,10 @@ void Sema::DiagnoseAssignmentAsCondition(Expr *E) {
       << FixItHint::CreateReplacement(Loc, "==");
 
   SourceLocation Open = E->getSourceRange().getBegin();
-  SourceLocation Close = E->getSourceRange().getEnd();
-  if (!Open.isMacroID() && !Close.isMacroID()) {
-    SourceLocation LocForEndOfToken = PP.getLocForEndOfToken(Close);
-    Diag(Loc, diag::note_condition_assign_silence)
-      << FixItHint::CreateInsertion(Open, "(")
-      << FixItHint::CreateInsertion(LocForEndOfToken, ")");
-  }
+  SourceLocation Close = PP.getLocForEndOfToken(E->getSourceRange().getEnd());
+  Diag(Loc, diag::note_condition_assign_silence)
+        << FixItHint::CreateInsertion(Open, "(")
+        << FixItHint::CreateInsertion(Close, ")");
 }
 
 /// \brief Redundant parentheses over an equality comparison can indicate
