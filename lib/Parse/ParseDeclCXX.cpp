@@ -404,13 +404,21 @@ Decl *Parser::ParseUsingDeclaration(unsigned Context,
                                        IsTypeName, TypenameLoc);
 }
 
-/// ParseStaticAssertDeclaration - Parse C++0x static_assert-declaratoion.
+/// ParseStaticAssertDeclaration - Parse C++0x or C1X static_assert-declaration.
 ///
-///      static_assert-declaration:
-///        static_assert ( constant-expression  ,  string-literal  ) ;
+/// [C++0x] static_assert-declaration:
+///           static_assert ( constant-expression  ,  string-literal  ) ;
+///
+/// [C1X]   static_assert-declaration:
+///           _Static_assert ( constant-expression  ,  string-literal  ) ;
 ///
 Decl *Parser::ParseStaticAssertDeclaration(SourceLocation &DeclEnd){
-  assert(Tok.is(tok::kw_static_assert) && "Not a static_assert declaration");
+  assert((Tok.is(tok::kw_static_assert) || Tok.is(tok::kw__Static_assert)) &&
+         "Not a static_assert declaration");
+
+  if (Tok.is(tok::kw__Static_assert) && !getLang().C1X)
+    Diag(Tok, diag::ext_c1x_static_assert);
+
   SourceLocation StaticAssertLoc = ConsumeToken();
 
   if (Tok.isNot(tok::l_paren)) {
@@ -1374,6 +1382,17 @@ bool Parser::isCXX0XFinalKeyword() const {
 void Parser::ParseCXXClassMemberDeclaration(AccessSpecifier AS,
                                        const ParsedTemplateInfo &TemplateInfo,
                                        ParsingDeclRAIIObject *TemplateDiags) {
+  if (Tok.is(tok::at)) {
+    if (getLang().ObjC1 && NextToken().isObjCAtKeyword(tok::objc_defs))
+      Diag(Tok, diag::err_at_defs_cxx);
+    else
+      Diag(Tok, diag::err_at_in_class);
+    
+    ConsumeToken();
+    SkipUntil(tok::r_brace);
+    return;
+  }
+  
   // Access declarations.
   if (!TemplateInfo.Kind &&
       (Tok.is(tok::identifier) || Tok.is(tok::coloncolon)) &&
@@ -1415,7 +1434,7 @@ void Parser::ParseCXXClassMemberDeclaration(AccessSpecifier AS,
   }
 
   // static_assert-declaration
-  if (Tok.is(tok::kw_static_assert)) {
+  if (Tok.is(tok::kw_static_assert) || Tok.is(tok::kw__Static_assert)) {
     // FIXME: Check for templates
     SourceLocation DeclEnd;
     ParseStaticAssertDeclaration(DeclEnd);
