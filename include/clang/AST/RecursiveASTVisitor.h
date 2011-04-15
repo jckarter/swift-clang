@@ -1696,6 +1696,7 @@ DEF_TRAVERSE_STMT(ObjCAtSynchronizedStmt, { })
 DEF_TRAVERSE_STMT(ObjCAtThrowStmt, { })
 DEF_TRAVERSE_STMT(ObjCAtTryStmt, { })
 DEF_TRAVERSE_STMT(ObjCForCollectionStmt, { })
+DEF_TRAVERSE_STMT(CXXForRangeStmt, { })
 DEF_TRAVERSE_STMT(ReturnStmt, { })
 DEF_TRAVERSE_STMT(SwitchStmt, { })
 DEF_TRAVERSE_STMT(WhileStmt, { })
@@ -1772,6 +1773,22 @@ bool RecursiveASTVisitor<Derived>::TraverseInitListExpr(InitListExpr *S) {
   // All we need are the default actions.  FIXME: use a helper function.
   for (Stmt::child_range range = S->children(); range; ++range) {
     TRY_TO(TraverseStmt(*range));
+  }
+  return true;
+}
+
+// GenericSelectionExpr is a special case because the types and expressions
+// are interleaved.  We also need to watch out for null types (default
+// generic associations).
+template<typename Derived>
+bool RecursiveASTVisitor<Derived>::
+TraverseGenericSelectionExpr(GenericSelectionExpr *S) {
+  TRY_TO(WalkUpFromGenericSelectionExpr(S));
+  TRY_TO(TraverseStmt(S->getControllingExpr()));
+  for (unsigned i = 0; i != S->getNumAssocs(); ++i) {
+    if (TypeSourceInfo *TS = S->getAssocTypeSourceInfo(i))
+      TRY_TO(TraverseTypeLoc(TS->getTypeLoc()));
+    TRY_TO(TraverseStmt(S->getAssocExpr(i)));
   }
   return true;
 }
