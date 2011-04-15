@@ -423,6 +423,7 @@ void ExprEngine::Visit(const Stmt* S, ExplodedNode* Pred,
     case Stmt::CXXBindTemporaryExprClass:
     case Stmt::CXXCatchStmtClass:
     case Stmt::CXXDependentScopeMemberExprClass:
+    case Stmt::CXXForRangeStmtClass:
     case Stmt::CXXNullPtrLiteralExprClass:
     case Stmt::CXXPseudoDestructorExprClass:
     case Stmt::CXXTemporaryObjectExprClass:
@@ -457,6 +458,8 @@ void ExprEngine::Visit(const Stmt* S, ExplodedNode* Pred,
 
     case Stmt::ParenExprClass:
       llvm_unreachable("ParenExprs already handled.");
+    case Stmt::GenericSelectionExprClass:
+      llvm_unreachable("GenericSelectionExprs already handled.");
     // Cases that should never be evaluated simply because they shouldn't
     // appear in the CFG.
     case Stmt::BreakStmtClass:
