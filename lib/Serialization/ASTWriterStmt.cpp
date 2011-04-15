@@ -93,6 +93,7 @@ namespace clang {
     void VisitShuffleVectorExpr(ShuffleVectorExpr *E);
     void VisitBlockExpr(BlockExpr *E);
     void VisitBlockDeclRefExpr(BlockDeclRefExpr *E);
+    void VisitGenericSelectionExpr(GenericSelectionExpr *E);
 
     // Objective-C Expressions
     void VisitObjCStringLiteral(ObjCStringLiteral *E);
@@ -115,6 +116,7 @@ namespace clang {
     // C++ Statements
     void VisitCXXCatchStmt(CXXCatchStmt *S);
     void VisitCXXTryStmt(CXXTryStmt *S);
+    void VisitCXXForRangeStmt(CXXForRangeStmt *);
 
     void VisitCXXOperatorCallExpr(CXXOperatorCallExpr *E);
     void VisitCXXMemberCallExpr(CXXMemberCallExpr *E);
@@ -784,6 +786,23 @@ void ASTStmtWriter::VisitBlockDeclRefExpr(BlockDeclRefExpr *E) {
   Code = serialization::EXPR_BLOCK_DECL_REF;
 }
 
+void ASTStmtWriter::VisitGenericSelectionExpr(GenericSelectionExpr *E) {
+  VisitExpr(E);
+  Record.push_back(E->getNumAssocs());
+
+  Writer.AddStmt(E->getControllingExpr());
+  for (unsigned I = 0, N = E->getNumAssocs(); I != N; ++I) {
+    Writer.AddTypeSourceInfo(E->getAssocTypeSourceInfo(I), Record);
+    Writer.AddStmt(E->getAssocExpr(I));
+  }
+  Record.push_back(E->isResultDependent() ? -1U : E->getResultIndex());
+
+  Writer.AddSourceLocation(E->getGenericLoc(), Record);
+  Writer.AddSourceLocation(E->getDefaultLoc(), Record);
+  Writer.AddSourceLocation(E->getRParenLoc(), Record);
+  Code = serialization::EXPR_GENERIC_SELECTION;
+}
+
 //===----------------------------------------------------------------------===//
 // Objective-C Expressions and Statements.
 //===----------------------------------------------------------------------===//
@@ -961,6 +980,20 @@ void ASTStmtWriter::VisitCXXTryStmt(CXXTryStmt *S) {
   for (unsigned i = 0, e = S->getNumHandlers(); i != e; ++i)
     Writer.AddStmt(S->getHandler(i));
   Code = serialization::STMT_CXX_TRY;
+}
+
+void ASTStmtWriter::VisitCXXForRangeStmt(CXXForRangeStmt *S) {
+  VisitStmt(S);
+  Writer.AddSourceLocation(S->getForLoc(), Record);
+  Writer.AddSourceLocation(S->getColonLoc(), Record);
+  Writer.AddSourceLocation(S->getRParenLoc(), Record);
+  Writer.AddStmt(S->getRangeStmt());
+  Writer.AddStmt(S->getBeginEndStmt());
+  Writer.AddStmt(S->getCond());
+  Writer.AddStmt(S->getInc());
+  Writer.AddStmt(S->getLoopVarStmt());
+  Writer.AddStmt(S->getBody());
+  Code = serialization::STMT_CXX_FOR_RANGE;
 }
 
 void ASTStmtWriter::VisitCXXOperatorCallExpr(CXXOperatorCallExpr *E) {
@@ -1267,6 +1300,8 @@ void ASTStmtWriter::VisitUnresolvedMemberExpr(UnresolvedMemberExpr *E) {
 void ASTStmtWriter::VisitUnresolvedLookupExpr(UnresolvedLookupExpr *E) {
   VisitOverloadExpr(E);
   Record.push_back(E->requiresADL());
+  if (E->requiresADL())
+    Record.push_back(E->isStdAssociatedNamespace());
   Record.push_back(E->isOverloaded());
   Writer.AddDeclRef(E->getNamingClass(), Record);
   Code = serialization::EXPR_CXX_UNRESOLVED_LOOKUP;

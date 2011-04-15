@@ -995,6 +995,28 @@ def err_delegation_unimplemented : Error<
   "delegating constructors are not fully implemented">;
 def err_delegating_initializer_alone : Error<
   "an initializer for a delegating constructor must appear alone">;
+
+// C++0x range-based for loop
+def err_for_range_decl_must_be_var : Error<
+  "for range declaration must declare a variable">;
+def err_for_range_storage_class : Error<
+  "loop variable %0 may not be declared %select{'extern'|'static'|"
+  "'__private_extern__'|'auto'|'register'|'constexpr'}1">;
+def err_type_defined_in_for_range : Error<
+  "types may not be defined in a for range declaration">;
+def err_for_range_deduction_failure : Error<
+  "cannot use type %0 as a range">;
+def err_for_range_incomplete_type : Error<
+  "cannot use incomplete type %0 as a range">;
+def err_for_range_iter_deduction_failure : Error<
+  "cannot use type %0 as an iterator">;
+def err_for_range_member_begin_end_mismatch : Error<
+  "range type %0 has '%select{begin|end}1' member but no '%select{end|begin}1' member">;
+def err_for_range_begin_end_types_differ : Error<
+  "'begin' and 'end' must return the same type (got %0 and %1)">;
+def note_for_range_type : Note<"range has type %0">;
+def note_for_range_begin_end : Note<
+  "selected '%select{begin|end}0' %select{function|template }1%2 with iterator type %3">;
   
 // Objective-C++
 def err_objc_decls_may_only_appear_in_global_scope : Error<
@@ -1151,6 +1173,7 @@ def err_cconv_varargs : Error<
 def err_regparm_mismatch : Error<"function declared with with regparm(%0) "
   "attribute was previously declared "
   "%plural{0:without the regparm|:with the regparm(%1)}1 attribute">;
+def err_invalid_pcs : Error<"Invalid PCS type">;
 
 // Availability attribute
 def warn_availability_unknown_platform : Warning<
@@ -3623,6 +3646,21 @@ def warn_stringcompare : Warning<
   "result of comparison against %select{a string literal|@encode}0 is "
   "unspecified (use strncmp instead)">;
 
+// Generic selections.
+def err_assoc_type_incomplete : Error<
+  "type %0 in generic association incomplete">;
+def err_assoc_type_nonobject : Error<
+  "type %0 in generic association not an object type">;
+def err_assoc_type_variably_modified : Error<
+  "type %0 in generic association is a variably modified type">;
+def err_assoc_compatible_types : Error<
+  "type %0 in generic association compatible with previously specified type %1">;
+def note_compat_assoc : Note<
+  "compatible type %0 specified here">;
+def err_generic_sel_no_match : Error<
+  "controlling expression type %0 not compatible with any generic association type">;
+def err_generic_sel_multi_match : Error<
+  "controlling expression type %0 compatible with %1 generic association types">;
 
 
 // Blocks
