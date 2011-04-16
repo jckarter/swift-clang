@@ -327,7 +327,7 @@ void Clang::AddPreprocessingOptions(const Driver &D,
   }
 }
 
-/// getARMTargetCPU - Get the (LLVM) name of the ARM cpu we are targetting.
+/// getARMTargetCPU - Get the (LLVM) name of the ARM cpu we are targeting.
 //
 // FIXME: tblgen this.
 static const char *getARMTargetCPU(const ArgList &Args,
@@ -1746,6 +1746,11 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
   if (!Args.hasFlag(options::OPT_fdiagnostics_fixit_info,
                     options::OPT_fno_diagnostics_fixit_info))
     CmdArgs.push_back("-fno-diagnostics-fixit-info");
+  
+  // Enable -fdiagnostics-show-name by default.
+  if (Args.hasFlag(options::OPT_fdiagnostics_show_name,
+                   options::OPT_fno_diagnostics_show_name, false))
+    CmdArgs.push_back("-fdiagnostics-show-name");
 
   // Enable -fdiagnostics-show-option by default.
   if (Args.hasFlag(options::OPT_fdiagnostics_show_option,
