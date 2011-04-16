@@ -73,7 +73,7 @@ namespace llvm {
 
 namespace clang {
   class ASTContext;
-  class TypedefDecl;
+  class TypedefNameDecl;
   class TemplateDecl;
   class TemplateTypeParmDecl;
   class NonTypeTemplateParmDecl;
@@ -2007,7 +2007,7 @@ public:
   friend class StmtIteratorBase;
 
   void Profile(llvm::FoldingSetNodeID &ID) {
-    assert(0 && "Cannnot unique VariableArrayTypes.");
+    assert(0 && "Cannot unique VariableArrayTypes.");
   }
 };
 
@@ -2506,7 +2506,7 @@ public:
   bool hasDynamicExceptionSpec() const {
     return isDynamicExceptionSpec(getExceptionSpecType());
   }
-  /// \brief Return whther this function has a noexcept exception spec.
+  /// \brief Return whether this function has a noexcept exception spec.
   bool hasNoexceptExceptionSpec() const {
     return isNoexceptExceptionSpec(getExceptionSpecType());
   }
@@ -2625,18 +2625,18 @@ public:
 
 
 class TypedefType : public Type {
-  TypedefDecl *Decl;
+  TypedefNameDecl *Decl;
 protected:
-  TypedefType(TypeClass tc, const TypedefDecl *D, QualType can)
+  TypedefType(TypeClass tc, const TypedefNameDecl *D, QualType can)
     : Type(tc, can, can->isDependentType(), can->isVariablyModifiedType(), 
            /*ContainsUnexpandedParameterPack=*/false),
-      Decl(const_cast<TypedefDecl*>(D)) {
+      Decl(const_cast<TypedefNameDecl*>(D)) {
     assert(!isa<TypedefType>(can) && "Invalid canonical type");
   }
   friend class ASTContext;  // ASTContext creates these.
 public:
 
-  TypedefDecl *getDecl() const { return Decl; }
+  TypedefNameDecl *getDecl() const { return Decl; }
 
   bool isSugared() const { return true; }
   QualType desugar() const;

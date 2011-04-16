@@ -3762,7 +3762,7 @@ void RewriteObjC::RewriteObjCClassMetaData(ObjCImplementationDecl *IDecl,
                                            std::string &Result) {
   ObjCInterfaceDecl *CDecl = IDecl->getClassInterface();
 
-  // Explictly declared @interface's are already synthesized.
+  // Explicitly declared @interface's are already synthesized.
   if (CDecl->isImplicitInterfaceDecl()) {
     // FIXME: Implementation of a class with no @interface (legacy) doese not
     // produce correct synthesis as yet.
@@ -4601,7 +4601,7 @@ void RewriteObjC::GetInnerBlockDeclRefExprs(Stmt *S,
 
 /// convertFunctionTypeOfBlocks - This routine converts a function type
 /// whose result type may be a block pointer or whose argument type(s)
-/// might be block pointers to an equivalent funtion type replacing
+/// might be block pointers to an equivalent function type replacing
 /// all block pointers to function pointers.
 QualType RewriteObjC::convertFunctionTypeOfBlocks(const FunctionType *FT) {
   const FunctionProtoType *FTP = dyn_cast<FunctionProtoType>(FT);
@@ -4953,7 +4953,7 @@ void RewriteObjC::RewriteBlockPointerDecl(NamedDecl *ND) {
   QualType DeclT;
   if (VarDecl *VD = dyn_cast<VarDecl>(ND))
     DeclT = VD->getType();
-  else if (TypedefDecl *TDD = dyn_cast<TypedefDecl>(ND))
+  else if (TypedefNameDecl *TDD = dyn_cast<TypedefNameDecl>(ND))
     DeclT = TDD->getUnderlyingType();
   else if (FieldDecl *FD = dyn_cast<FieldDecl>(ND))
     DeclT = FD->getType();
@@ -5736,7 +5736,7 @@ Stmt *RewriteObjC::RewriteFunctionBodyOrGlobalInitializer(Stmt *S) {
             RewriteTypeOfDecl(VD);
         }
       }
-      if (TypedefDecl *TD = dyn_cast<TypedefDecl>(SD)) {
+      if (TypedefNameDecl *TD = dyn_cast<TypedefNameDecl>(SD)) {
         if (isTopLevelBlockPointerType(TD->getUnderlyingType()))
           RewriteBlockPointerDecl(TD);
         else if (TD->getUnderlyingType()->isFunctionPointerType())
@@ -5906,7 +5906,7 @@ void RewriteObjC::HandleDeclInMainFile(Decl *D) {
     }
     return;
   }
-  if (TypedefDecl *TD = dyn_cast<TypedefDecl>(D)) {
+  if (TypedefNameDecl *TD = dyn_cast<TypedefNameDecl>(D)) {
     if (isTopLevelBlockPointerType(TD->getUnderlyingType()))
       RewriteBlockPointerDecl(TD);
     else if (TD->getUnderlyingType()->isFunctionPointerType())
