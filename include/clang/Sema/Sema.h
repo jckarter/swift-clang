@@ -128,7 +128,9 @@ namespace clang {
   class TemplatePartialOrderingContext;
   class TemplateTemplateParmDecl;
   class Token;
+  class TypeAliasDecl;
   class TypedefDecl;
+  class TypedefNameDecl;
   class TypeLoc;
   class UnqualifiedId;
   class UnresolvedLookupExpr;
@@ -255,7 +257,7 @@ public:
   /// ExtVectorDecls - This is a list all the extended vector types. This allows
   /// us to associate a raw vector type with one of the ext_vector type names.
   /// This is only necessary for issuing pretty diagnostics.
-  llvm::SmallVector<TypedefDecl*, 24> ExtVectorDecls;
+  llvm::SmallVector<TypedefNameDecl*, 24> ExtVectorDecls;
 
   /// FieldCollector - Collects CXXFieldDecls during parsing of C++ classes.
   llvm::OwningPtr<CXXFieldCollector> FieldCollector;
@@ -814,6 +816,7 @@ public:
   void RegisterLocallyScopedExternCDecl(NamedDecl *ND,
                                         const LookupResult &Previous,
                                         Scope *S);
+  bool DiagnoseClassNameShadow(DeclContext *DC, DeclarationNameInfo Info);
   void DiagnoseFunctionSpecifiers(Declarator& D);
   void CheckShadow(Scope *S, VarDecl *D, const LookupResult& R);
   void CheckShadow(Scope *S, VarDecl *D);
@@ -821,6 +824,8 @@ public:
   NamedDecl* ActOnTypedefDeclarator(Scope* S, Declarator& D, DeclContext* DC,
                                     QualType R, TypeSourceInfo *TInfo,
                                     LookupResult &Previous, bool &Redeclaration);
+  NamedDecl* ActOnTypedefNameDecl(Scope* S, DeclContext* DC, TypedefNameDecl *D,
+                                  LookupResult &Previous, bool &Redeclaration);
   NamedDecl* ActOnVariableDeclarator(Scope* S, Declarator& D, DeclContext* DC,
                                      QualType R, TypeSourceInfo *TInfo,
                                      LookupResult &Previous,
@@ -1076,7 +1081,7 @@ public:
   /// Subroutines of ActOnDeclarator().
   TypedefDecl *ParseTypedefDecl(Scope *S, Declarator &D, QualType T,
                                 TypeSourceInfo *TInfo);
-  void MergeTypeDefDecl(TypedefDecl *New, LookupResult &OldDecls);
+  void MergeTypedefNameDecl(TypedefNameDecl *New, LookupResult &OldDecls);
   bool MergeFunctionDecl(FunctionDecl *New, Decl *Old);
   bool MergeCompatibleFunctionDecls(FunctionDecl *New, FunctionDecl *Old);
   void mergeObjCMethodDecls(ObjCMethodDecl *New, const ObjCMethodDecl *Old);
@@ -2309,6 +2314,11 @@ public:
                               AttributeList *AttrList,
                               bool IsTypeName,
                               SourceLocation TypenameLoc);
+  Decl *ActOnAliasDeclaration(Scope *CurScope,
+                              AccessSpecifier AS,
+                              SourceLocation UsingLoc,
+                              UnqualifiedId &Name,
+                              TypeResult Type);
 
   /// AddCXXDirectInitializerToDecl - This action is called immediately after
   /// ActOnDeclarator, when a C++ direct initializer is present.
@@ -3599,7 +3609,7 @@ public:
   /// \param T The type that is being checked for unexpanded parameter
   /// packs.
   ///
-  /// \returns true if an error ocurred, false otherwise.
+  /// \returns true if an error occurred, false otherwise.
   bool DiagnoseUnexpandedParameterPack(SourceLocation Loc, TypeSourceInfo *T,
                                        UnexpandedParameterPackContext UPPC);
 
@@ -3609,7 +3619,7 @@ public:
   /// \param E The expression that is being checked for unexpanded
   /// parameter packs.
   ///
-  /// \returns true if an error ocurred, false otherwise.
+  /// \returns true if an error occurred, false otherwise.
   bool DiagnoseUnexpandedParameterPack(Expr *E,
                        UnexpandedParameterPackContext UPPC = UPPC_Expression);
 
@@ -3619,7 +3629,7 @@ public:
   /// \param SS The nested-name-specifier that is being checked for
   /// unexpanded parameter packs.
   ///
-  /// \returns true if an error ocurred, false otherwise.
+  /// \returns true if an error occurred, false otherwise.
   bool DiagnoseUnexpandedParameterPack(const CXXScopeSpec &SS,
                                        UnexpandedParameterPackContext UPPC);
 
@@ -3629,7 +3639,7 @@ public:
   /// \param NameInfo The name (with source location information) that
   /// is being checked for unexpanded parameter packs.
   ///
-  /// \returns true if an error ocurred, false otherwise.
+  /// \returns true if an error occurred, false otherwise.
   bool DiagnoseUnexpandedParameterPack(const DeclarationNameInfo &NameInfo,
                                        UnexpandedParameterPackContext UPPC);
 
@@ -3641,7 +3651,7 @@ public:
   /// \param Template The template name that is being checked for unexpanded 
   /// parameter packs.
   ///
-  /// \returns true if an error ocurred, false otherwise.
+  /// \returns true if an error occurred, false otherwise.
   bool DiagnoseUnexpandedParameterPack(SourceLocation Loc,
                                        TemplateName Template,
                                        UnexpandedParameterPackContext UPPC);
@@ -3652,7 +3662,7 @@ public:
   /// \param Arg The template argument that is being checked for unexpanded 
   /// parameter packs.
   ///
-  /// \returns true if an error ocurred, false otherwise.
+  /// \returns true if an error occurred, false otherwise.
   bool DiagnoseUnexpandedParameterPack(TemplateArgumentLoc Arg,
                                        UnexpandedParameterPackContext UPPC);
   

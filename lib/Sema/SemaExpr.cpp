@@ -348,7 +348,7 @@ ExprResult Sema::DefaultFunctionArrayLvalueConversion(Expr *E) {
 
 /// UsualUnaryConversions - Performs various conversions that are common to most
 /// operators (C99 6.3). The conversions of array and function types are
-/// sometimes surpressed. For example, the array->pointer conversion doesn't
+/// sometimes suppressed. For example, the array->pointer conversion doesn't
 /// apply if the array is an argument to the sizeof or address (&) operators.
 /// In these instances, this routine should *not* be called.
 ExprResult Sema::UsualUnaryConversions(Expr *E) {
@@ -772,7 +772,7 @@ Sema::ActOnGenericSelectionExpr(SourceLocation KeyLoc,
   ExprResult ER = CreateGenericSelectionExpr(KeyLoc, DefaultLoc, RParenLoc,
                                              ControllingExpr, Types, Exprs,
                                              NumAssocs);
-  delete Types;
+  delete [] Types;
   return ER;
 }
 
@@ -2089,11 +2089,21 @@ Sema::LookupInObjCMethod(LookupResult &Lookup, Scope *S,
       if (const DeclRefExpr *DE = dyn_cast<DeclRefExpr>(base)) {
         const NamedDecl *ND = DE->getDecl();
         if (!isa<ImplicitParamDecl>(ND)) {
+          // relax the rule such that it is allowed to have a shadow 'self'
+          // where stand-alone ivar can be found in this 'self' object. 
+          // This is to match gcc's behavior.
+          ObjCInterfaceDecl *selfIFace = 0;
+          if (const ObjCObjectPointerType *OPT =
+              base->getType()->getAsObjCInterfacePointerType())
+            selfIFace = OPT->getInterfaceDecl();
+          if (!selfIFace || 
+              !selfIFace->lookupInstanceVariable(IV->getIdentifier())) {
             Diag(Loc, diag::error_implicit_ivar_access)
             << IV->getDeclName();
             Diag(ND->getLocation(), diag::note_declared_at);
             return ExprError();
           }
+        }
       }
       return Owned(new (Context)
                    ObjCIvarRefExpr(IV, IV->getType(), Loc,
@@ -2469,7 +2479,7 @@ bool Sema::UseArgumentDependentLookup(const CXXScopeSpec &SS,
 /// were not overloaded, and it doesn't promise that the declaration
 /// will in fact be used.
 static bool CheckDeclInExpr(Sema &S, SourceLocation Loc, NamedDecl *D) {
-  if (isa<TypedefDecl>(D)) {
+  if (isa<TypedefNameDecl>(D)) {
     S.Diag(Loc, diag::err_unexpected_typedef) << D->getDeclName();
     return true;
   }
