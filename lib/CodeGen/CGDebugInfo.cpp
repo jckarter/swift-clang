@@ -119,6 +119,17 @@ llvm::StringRef CGDebugInfo::getObjCMethodName(const ObjCMethodDecl *OMD) {
   return llvm::StringRef(StrPtr, OS.tell());
 }
 
+/// getSelectporName - Return selector name. This is used for debugging
+/// info.
+llvm::StringRef CGDebugInfo::getSelectorName(Selector S) {
+  llvm::SmallString<256> SName;
+  llvm::raw_svector_ostream OS(SName);
+  OS << S.getAsString();
+  char *StrPtr = DebugInfoNames.Allocate<char>(OS.tell());
+  memcpy(StrPtr, SName.begin(), OS.tell());
+  return llvm::StringRef(StrPtr, OS.tell());
+}
+
 /// getClassName - Get class name including template argument list.
 llvm::StringRef 
 CGDebugInfo::getClassName(RecordDecl *RD) {
@@ -1191,9 +1202,22 @@ llvm::DIType CGDebugInfo::CreateType(const ObjCInterfaceType *Ty,
     else if (Field->getAccessControl() == ObjCIvarDecl::Private)
       Flags = llvm::DIDescriptor::FlagPrivate;
 
-    FieldTy = DBuilder.createMemberType(FieldName, FieldDefUnit,
-                                        FieldLine, FieldSize, FieldAlign,
-                                        FieldOffset, Flags, FieldTy);
+    llvm::StringRef PropertyName;
+    llvm::StringRef PropertyGetter;
+    llvm::StringRef PropertySetter;
+    unsigned PropertyAttributes;
+    if (ObjCPropertyDecl *PD =
+        ID->FindPropertyVisibleInPrimaryClass(Field->getIdentifier())) {
+      PropertyName = PD->getName();
+      PropertyGetter = getSelectorName(PD->getGetterName());
+      PropertySetter = getSelectorName(PD->getSetterName());
+      PropertyAttributes = PD->getPropertyAttributes();
+    }
+    FieldTy = DBuilder.createObjCIVar(FieldName, FieldDefUnit,
+                                      FieldLine, FieldSize, FieldAlign,
+                                      FieldOffset, Flags, FieldTy,
+                                      PropertyName, PropertyGetter,
+                                      PropertySetter, PropertyAttributes);
     EltTys.push_back(FieldTy);
   }
 
