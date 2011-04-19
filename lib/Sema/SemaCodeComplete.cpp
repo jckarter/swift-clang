@@ -5370,16 +5370,65 @@ void Sema::CodeCompleteObjCPropertySynthesizeIvar(Scope *S,
     Class = cast<ObjCCategoryImplDecl>(Container)->getCategoryDecl()
                                                           ->getClassInterface();
 
+  // Determine the type of the property we're synthesizing.
+  QualType PropertyType = Context.getObjCIdType();
+  if (Class) {
+    if (ObjCPropertyDecl *Property
+                              = Class->FindPropertyDeclaration(PropertyName)) {
+      PropertyType 
+        = Property->getType().getNonReferenceType().getUnqualifiedType();
+      
+      // Give preference to ivars 
+      Results.setPreferredType(PropertyType);
+    }
+  }
+
   // Add all of the instance variables in this class and its superclasses.
   Results.EnterNewScope();
+  bool SawSimilarlyNamedIvar = false;
+  std::string NameWithPrefix;
+  NameWithPrefix += '_';
+  NameWithPrefix += PropertyName->getName().str();
+  std::string NameWithSuffix = PropertyName->getName().str();
+  NameWithSuffix += '_';
   for(; Class; Class = Class->getSuperClass()) {
-    // FIXME: We could screen the type of each ivar for compatibility with
-    // the property, but is that being too paternal?
-    for (ObjCInterfaceDecl::ivar_iterator IVar = Class->ivar_begin(),
-                                       IVarEnd = Class->ivar_end();
-         IVar != IVarEnd; ++IVar) 
-      Results.AddResult(Result(*IVar, 0), CurContext, 0, false);
+    for (ObjCIvarDecl *Ivar = Class->all_declared_ivar_begin(); Ivar; 
+         Ivar = Ivar->getNextIvar()) {
+      Results.AddResult(Result(Ivar, 0), CurContext, 0, false);
+      
+      // Determine whether we've seen an ivar with a name similar to the 
+      // property.
+      if ((PropertyName == Ivar->getIdentifier() ||
+           NameWithPrefix == Ivar->getName() ||
+           NameWithSuffix == Ivar->getName())) {
+        SawSimilarlyNamedIvar = true;
+       
+        // Reduce the priority of this result by one, to give it a slight
+        // advantage over other results whose names don't match so closely.
+        if (Results.size() && 
+            Results.data()[Results.size() - 1].Kind 
+                                      == CodeCompletionResult::RK_Declaration &&
+            Results.data()[Results.size() - 1].Declaration == Ivar)
+          Results.data()[Results.size() - 1].Priority--;
+      }
+    }
   }
+  
+  if (!SawSimilarlyNamedIvar) {
+    // Create ivar result _propName, that the user can use to synthesize
+    // an ivar of the appropriate type.    
+    unsigned Priority = CCP_MemberDeclaration + 1;
+    typedef CodeCompletionResult Result;
+    CodeCompletionAllocator &Allocator = Results.getAllocator();
+    CodeCompletionBuilder Builder(Allocator, Priority,CXAvailability_Available);
+
+    Builder.AddResultTypeChunk(GetCompletionTypeString(PropertyType, Context,
+                                                       Allocator));
+    Builder.AddTypedTextChunk(Allocator.CopyString(NameWithPrefix));
+    Results.AddResult(Result(Builder.TakeString(), Priority, 
+                             CXCursor_ObjCIvarDecl));
+  }
+  
   Results.ExitScope();
   
   HandleCodeCompleteResults(this, CodeCompleter, 
