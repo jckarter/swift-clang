@@ -2773,8 +2773,9 @@ void clang_getInstantiationLocation(CXSourceLocation location,
   // Check that the FileID is invalid on the instantiation location.
   // This can manifest in invalid code.
   FileID fileID = SM.getFileID(InstLoc);
-  const SrcMgr::SLocEntry &sloc = SM.getSLocEntry(fileID);
-  if (!sloc.isFile()) {
+  bool Invalid = false;
+  const SrcMgr::SLocEntry &sloc = SM.getSLocEntry(fileID, &Invalid);
+  if (!sloc.isFile() || Invalid) {
     createNullLocation(file, line, column, offset);
     return;
   }
@@ -5202,8 +5203,10 @@ const char *clang_getTUMemoryUsageName(CXTUMemoryUsageKind kind) {
       break;
     case CXTUMemoryUsage_Selectors:
       str = "ASTContext: selectors";
+      break;
     case CXTUMemoryUsage_GlobalCompletionResults:
       str = "Code completion: cached global results";
+      break;
   }
   return str;
 }
