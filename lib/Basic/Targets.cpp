@@ -2812,7 +2812,7 @@ static TargetInfo *AllocateTarget(const std::string &T) {
     return NULL;
 
   case llvm::Triple::arm64:
-    assert(os == llvm::Triple::Darwin && "arm64 only supported on Darwin");
+    assert(Triple.isOSDarwin() && "arm64 only supported on Darwin");
     return new DarwinARM64TargetInfo(T);
 
   case llvm::Triple::arm:
