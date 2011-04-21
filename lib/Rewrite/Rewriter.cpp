@@ -310,7 +310,7 @@ std::string Rewriter::ConvertToString(Stmt *From) {
   std::string SStr;
   llvm::raw_string_ostream S(SStr);
   From->printPretty(S, 0, PrintingPolicy(*LangOpts));
-  return SStr;
+  return S.str();
 }
 
 bool Rewriter::IncreaseIndentation(CharSourceRange range,
