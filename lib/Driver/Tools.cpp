@@ -945,8 +945,8 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
     if (Arg *A = Args.getLastArg(options::OPT_O_Group))
       IsOpt = !A->getOption().matches(options::OPT_O0);
     if (Args.hasFlag(options::OPT_mrelax_all,
-                      options::OPT_mno_relax_all,
-                      !IsOpt))
+                     options::OPT_mno_relax_all,
+                     !IsOpt))
       CmdArgs.push_back("-mrelax-all");
 
     // When using an integrated assembler, translate -Wa, and -Xassembler
@@ -1276,6 +1276,13 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
   Args.AddAllArgs(CmdArgs, options::OPT_fdata_sections);
 
   Args.AddAllArgs(CmdArgs, options::OPT_finstrument_functions);
+
+  if (Args.hasArg(options::OPT_ftest_coverage) ||
+      Args.hasArg(options::OPT_coverage))
+    CmdArgs.push_back("-femit-coverage-notes");
+  if (Args.hasArg(options::OPT_fprofile_arcs) ||
+      Args.hasArg(options::OPT_coverage))
+    CmdArgs.push_back("-femit-coverage-data");
 
   Args.AddLastArg(CmdArgs, options::OPT_nostdinc);
   Args.AddLastArg(CmdArgs, options::OPT_nostdincxx);

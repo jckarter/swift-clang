@@ -64,7 +64,7 @@ CodeGenModule::CodeGenModule(ASTContext &C, const CodeGenOptions &CGO,
     ABI(createCXXABI(*this)), 
     Types(C, M, TD, getTargetCodeGenInfo().getABIInfo(), ABI),
     TBAA(0),
-    VTables(*this), Runtime(0),
+    VTables(*this), Runtime(0), DebugInfo(0),
     CFConstantStringClassRef(0), ConstantStringClassRef(0),
     VMContext(M.getContext()),
     NSConcreteGlobalBlockDecl(0), NSConcreteStackBlockDecl(0),
@@ -80,8 +80,11 @@ CodeGenModule::CodeGenModule(ASTContext &C, const CodeGenOptions &CGO,
     TBAA = new CodeGenTBAA(Context, VMContext, getLangOptions(),
                            ABI.getMangleContext());
 
-  // If debug info generation is enabled, create the CGDebugInfo object.
-  DebugInfo = CodeGenOpts.DebugInfo ? new CGDebugInfo(*this) : 0;
+  // If debug info or coverage generation is enabled, create the CGDebugInfo
+  // object.
+  if (CodeGenOpts.DebugInfo || CodeGenOpts.EmitGcovArcs ||
+      CodeGenOpts.EmitGcovNotes)
+    DebugInfo = new CGDebugInfo(*this);
 
   Block.GlobalUniqueCount = 0;
 
@@ -2160,7 +2163,7 @@ static void EmitGlobalDeclMetadata(CodeGenModule &CGM,
     Addr,
     GetPointerConstant(CGM.getLLVMContext(), D.getDecl())
   };
-  GlobalMetadata->addOperand(llvm::MDNode::get(CGM.getLLVMContext(), Ops, 2));
+  GlobalMetadata->addOperand(llvm::MDNode::get(CGM.getLLVMContext(), Ops));
 }
 
 /// Emits metadata nodes associating all the global values in the
@@ -2201,7 +2204,7 @@ void CodeGenFunction::EmitDeclMetadata() {
 
     if (llvm::AllocaInst *Alloca = dyn_cast<llvm::AllocaInst>(Addr)) {
       llvm::Value *DAddr = GetPointerConstant(getLLVMContext(), D);
-      Alloca->setMetadata(DeclPtrKind, llvm::MDNode::get(Context, &DAddr, 1));
+      Alloca->setMetadata(DeclPtrKind, llvm::MDNode::get(Context, DAddr));
     } else if (llvm::GlobalValue *GV = dyn_cast<llvm::GlobalValue>(Addr)) {
       GlobalDecl GD = GlobalDecl(cast<VarDecl>(D));
       EmitGlobalDeclMetadata(CGM, GlobalMetadata, GD, GV);
