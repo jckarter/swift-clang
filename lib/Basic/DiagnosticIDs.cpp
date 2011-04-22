@@ -404,6 +404,8 @@ DiagnosticIDs::getDiagnosticLevel(unsigned DiagID, unsigned DiagClass,
   if (mapping)
     *mapping = (diag::Mapping) (MappingInfo & 7);
 
+  bool ShouldEmitInSystemHeader = false;
+
   switch (MappingInfo & 7) {
   default: assert(0 && "Unknown mapping!");
   case diag::MAP_IGNORE:
@@ -426,6 +428,9 @@ DiagnosticIDs::getDiagnosticLevel(unsigned DiagID, unsigned DiagClass,
   case diag::MAP_FATAL:
     Result = DiagnosticIDs::Fatal;
     break;
+  case diag::MAP_WARNING_SHOW_IN_SYSTEM_HEADER:
+    ShouldEmitInSystemHeader = true;
+    // continue as MAP_WARNING.
   case diag::MAP_WARNING:
     // If warnings are globally mapped to ignore or error, do it.
     if (Diag.IgnoreAllWarnings)
@@ -468,6 +473,20 @@ DiagnosticIDs::getDiagnosticLevel(unsigned DiagID, unsigned DiagClass,
   // if this is any sort of extension warning, and if we're in an __extension__
   // block, silence it.
   if (Diag.AllExtensionsSilenced && isBuiltinExtensionDiag(DiagID))
+    return DiagnosticIDs::Ignored;
+
+  // If we are in a system header, we ignore it.
+  // We also want to ignore extensions and warnings in -Werror and
+  // -pedantic-errors modes, which *map* warnings/extensions to errors.
+  if (Result >= DiagnosticIDs::Warning &&
+      DiagClass != CLASS_ERROR &&
+      // Custom diagnostics always are emitted in system headers.
+      DiagID < diag::DIAG_UPPER_LIMIT &&
+      !ShouldEmitInSystemHeader &&
+      Diag.SuppressSystemWarnings &&
+      Loc.isValid() &&
+      Diag.getSourceManager().isInSystemHeader(
+          Diag.getSourceManager().getInstantiationLoc(Loc)))
     return DiagnosticIDs::Ignored;
 
   return Result;
@@ -555,16 +574,9 @@ bool DiagnosticIDs::ProcessDiag(Diagnostic &Diag) const {
   DiagnosticIDs::Level DiagLevel;
   unsigned DiagID = Info.getID();
 
-  // ShouldEmitInSystemHeader - True if this diagnostic should be produced even
-  // in a system header.
-  bool ShouldEmitInSystemHeader;
-
   if (DiagID >= diag::DIAG_UPPER_LIMIT) {
     // Handle custom diagnostics, which cannot be mapped.
     DiagLevel = CustomDiagInfo->getLevel(DiagID);
-
-    // Custom diagnostics always are emitted in system headers.
-    ShouldEmitInSystemHeader = true;
   } else {
     // Get the class of the diagnostic.  If this is a NOTE, map it onto whatever
     // the diagnostic level was for the previous diagnostic so that it is
@@ -572,14 +584,7 @@ bool DiagnosticIDs::ProcessDiag(Diagnostic &Diag) const {
     unsigned DiagClass = getBuiltinDiagClass(DiagID);
     if (DiagClass == CLASS_NOTE) {
       DiagLevel = DiagnosticIDs::Note;
-      ShouldEmitInSystemHeader = false;  // extra consideration is needed
     } else {
-      // If this is not an error and we are in a system header, we ignore it.
-      // Check the original Diag ID here, because we also want to ignore
-      // extensions and warnings in -Werror and -pedantic-errors modes, which
-      // *map* warnings/extensions to errors.
-      ShouldEmitInSystemHeader = DiagClass == CLASS_ERROR;
-
       DiagLevel = getDiagnosticLevel(DiagID, DiagClass, Info.getLocation(),
                                      Diag);
     }
@@ -614,18 +619,6 @@ bool DiagnosticIDs::ProcessDiag(Diagnostic &Diag) const {
       (DiagLevel == DiagnosticIDs::Note &&
        Diag.LastDiagLevel == DiagnosticIDs::Ignored))
     return false;
-
-  // If this diagnostic is in a system header and is not a clang error, suppress
-  // it.
-  if (Diag.SuppressSystemWarnings && !ShouldEmitInSystemHeader &&
-      Info.getLocation().isValid() &&
-      Diag.getSourceManager().isInSystemHeader(
-          Diag.getSourceManager().getInstantiationLoc(Info.getLocation())) &&
-      (DiagLevel != DiagnosticIDs::Note ||
-       Diag.LastDiagLevel == DiagnosticIDs::Ignored)) {
-    Diag.LastDiagLevel = DiagnosticIDs::Ignored;
-    return false;
-  }
 
   if (DiagLevel >= DiagnosticIDs::Error) {
     if (Diag.Client->IncludeInDiagnosticCounts()) {
