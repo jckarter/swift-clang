@@ -468,7 +468,7 @@ void Darwin::AddDeploymentTarget(DerivedArgList &Args) const {
     assert(!iPhoneVersion && "Unknown target platform!");
     if (!Driver::GetReleaseVersion(OSXVersion->getValue(Args), Major, Minor,
                                    Micro, HadExtra) || HadExtra ||
-        Major != 10 || Minor >= 10 || Micro >= 10)
+        Major != 10 || Minor >= 100 || Micro >= 100)
       getDriver().Diag(clang::diag::err_drv_invalid_version_number)
         << OSXVersion->getAsString(Args);
   } else {
@@ -582,9 +582,12 @@ DerivedArgList *Darwin::TranslateArgs(const DerivedArgList &Args,
       // driver behavior; that isn't going to work in our model. We
       // use isDriverOption() as an approximation, although things
       // like -O4 are going to slip through.
-      if (!XarchArg || Index > Prev + 1 ||
-          XarchArg->getOption().isDriverOption()) {
-       getDriver().Diag(clang::diag::err_drv_invalid_Xarch_argument)
+      if (!XarchArg || Index > Prev + 1) {
+        getDriver().Diag(clang::diag::err_drv_invalid_Xarch_argument_with_args)
+          << A->getAsString(Args);
+        continue;
+      } else if (XarchArg->getOption().isDriverOption()) {
+        getDriver().Diag(clang::diag::err_drv_invalid_Xarch_argument_isdriver)
           << A->getAsString(Args);
         continue;
       }
