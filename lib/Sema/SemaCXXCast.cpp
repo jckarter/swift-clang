@@ -1326,6 +1326,23 @@ static TryCastResult TryReinterpretCast(Sema &Self, ExprResult &SrcExpr,
     // C++ 5.2.10p10: [...] a reference cast reinterpret_cast<T&>(x) has the
     //   same effect as the conversion *reinterpret_cast<T*>(&x) with the
     //   built-in & and * operators.
+
+    const char *inappropriate = 0;
+    switch (SrcExpr.get()->getObjectKind()) {
+    case OK_Ordinary:
+      break;
+    case OK_BitField:        inappropriate = "bit-field";           break;
+    case OK_VectorComponent: inappropriate = "vector element";      break;
+    case OK_ObjCProperty:    inappropriate = "property expression"; break;
+    }
+    if (inappropriate) {
+      Self.Diag(OpRange.getBegin(), diag::err_bad_reinterpret_cast_reference)
+          << inappropriate << DestType
+          << OpRange << SrcExpr.get()->getSourceRange();
+      msg = 0; SrcExpr = ExprError();
+      return TC_NotApplicable;
+    }
+
     // This code does this transformation for the checked types.
     DestType = Self.Context.getPointerType(DestTypeTmp->getPointeeType());
     SrcType = Self.Context.getPointerType(SrcType);
