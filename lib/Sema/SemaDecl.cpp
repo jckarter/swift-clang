@@ -356,7 +356,7 @@ bool Sema::DiagnoseUnknownTypeName(const IdentifierInfo &II,
   else if (isDependentScopeSpecifier(*SS)) {
     unsigned DiagID = diag::err_typename_missing;
     if (getLangOptions().Microsoft && isMicrosoftMissingTypename(SS))
-      DiagID = diag::war_typename_missing;
+      DiagID = diag::warn_typename_missing;
 
     Diag(SS->getRange().getBegin(), DiagID)
       << (NestedNameSpecifier *)SS->getScopeRep() << II.getName()
@@ -1258,10 +1258,14 @@ bool Sema::MergeFunctionDecl(FunctionDecl *New, Decl *OldD) {
       New->getStorageClass() == SC_Static &&
       Old->getStorageClass() != SC_Static &&
       !canRedefineFunction(Old, getLangOptions())) {
-    Diag(New->getLocation(), diag::err_static_non_static)
-      << New;
-    Diag(Old->getLocation(), PrevDiag);
-    return true;
+    if (getLangOptions().Microsoft) {
+      Diag(New->getLocation(), diag::warn_static_non_static) << New;
+      Diag(Old->getLocation(), PrevDiag);
+    } else {
+      Diag(New->getLocation(), diag::err_static_non_static) << New;
+      Diag(Old->getLocation(), PrevDiag);
+      return true;
+    }
   }
 
   // If a function is first declared with a calling convention, but is
@@ -5233,7 +5237,7 @@ void Sema::ActOnUninitializedDecl(Decl *RealDecl,
 
     const RecordType *Record
       = Context.getBaseElementType(Type)->getAs<RecordType>();
-    if (Record && getLangOptions().CPlusPlus && !getLangOptions().CPlusPlus0x &&
+    if (Record && getLangOptions().CPlusPlus &&
         cast<CXXRecordDecl>(Record->getDecl())->isPOD()) {
       // C++03 [dcl.init]p9:
       //   If no initializer is specified for an object, and the
@@ -5246,7 +5250,6 @@ void Sema::ActOnUninitializedDecl(Decl *RealDecl,
       //   any, have an indeterminate initial value); if the object
       //   or any of its subobjects are of const-qualified type, the
       //   program is ill-formed.
-      // FIXME: DPG thinks it is very fishy that C++0x disables this.
     } else {
       // Check for jumps past the implicit initializer.  C++0x
       // clarifies that this applies to a "variable with automatic
@@ -5726,6 +5729,22 @@ static bool ShouldWarnAboutMissingPrototype(const FunctionDecl *FD) {
   return MissingPrototype;
 }
 
+void Sema::CheckForFunctionRedefinition(FunctionDecl *FD) {
+  // Don't complain if we're in GNU89 mode and the previous definition
+  // was an extern inline function.
+  const FunctionDecl *Definition;
+  if (FD->hasBody(Definition) &&
+      !canRedefineFunction(Definition, getLangOptions())) {
+    if (getLangOptions().GNUMode && Definition->isInlineSpecified() &&
+        Definition->getStorageClass() == SC_Extern)
+      Diag(FD->getLocation(), diag::err_redefinition_extern_inline)
+        << FD->getDeclName() << getLangOptions().CPlusPlus;
+    else
+      Diag(FD->getLocation(), diag::err_redefinition) << FD->getDeclName();
+    Diag(Definition->getLocation(), diag::note_previous_definition);
+  }
+}
+
 Decl *Sema::ActOnStartOfFunctionDef(Scope *FnBodyScope, Decl *D) {
   // Clear the last template instantiation error context.
   LastTemplateInstantiationErrorContext = ActiveTemplateInstantiation();
@@ -5743,19 +5762,8 @@ Decl *Sema::ActOnStartOfFunctionDef(Scope *FnBodyScope, Decl *D) {
   PushFunctionScope();
 
   // See if this is a redefinition.
-  // But don't complain if we're in GNU89 mode and the previous definition
-  // was an extern inline function.
-  const FunctionDecl *Definition;
-  if (FD->hasBody(Definition) &&
-      !canRedefineFunction(Definition, getLangOptions())) {
-    if (getLangOptions().GNUMode && Definition->isInlineSpecified() &&
-        Definition->getStorageClass() == SC_Extern)
-      Diag(FD->getLocation(), diag::err_redefinition_extern_inline)
-        << FD->getDeclName() << getLangOptions().CPlusPlus;
-    else
-      Diag(FD->getLocation(), diag::err_redefinition) << FD->getDeclName();
-    Diag(Definition->getLocation(), diag::note_previous_definition);
-  }
+  if (!FD->isLateTemplateParsed())
+    CheckForFunctionRedefinition(FD);
 
   // Builtin functions cannot be defined.
   if (unsigned BuiltinID = FD->getBuiltinID()) {
