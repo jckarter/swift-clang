@@ -286,7 +286,7 @@ def err_missing_id_definition : Error<"cannot find definition of 'id'">;
 def err_missing_proto_definition : Error<
   "cannot find definition of 'Protocol'">;
 def err_missing_class_definition : Error<"cannot find definition of 'Class'">;
-def warn_expected_implementation : Warning<
+def err_expected_implementation : Error<
   "@end must appear in an @implementation context">;
 def error_property_ivar_decl : Error<
   "property synthesize requires specification of an ivar">;
@@ -385,7 +385,7 @@ def err_enum_template : Error<"enumeration cannot be a template">;
 
 def err_missing_dependent_template_keyword : Error<
   "use 'template' keyword to treat '%0' as a dependent template name">;
-def war_missing_dependent_template_keyword : ExtWarn<
+def warn_missing_dependent_template_keyword : ExtWarn<
   "use 'template' keyword to treat '%0' as a dependent template name">;
 
 def warn_static_inline_explicit_inst_ignored : Warning<

@@ -2262,6 +2262,21 @@ void Sema::InstantiateFunctionDefinition(SourceLocation PointOfInstantiation,
   if (PatternDecl)
     Pattern = PatternDecl->getBody(PatternDecl);
 
+  // Postpone late parsed template instantiations.
+  if (PatternDecl->isLateTemplateParsed() && !LateTemplateParser) {
+    PendingInstantiations.push_back(
+      std::make_pair(Function, PointOfInstantiation));
+    return;
+  }
+
+  // Call the LateTemplateParser callback if there a need to late parse
+  // a templated function definition. 
+  if (!Pattern && PatternDecl && PatternDecl->isLateTemplateParsed() &&
+      LateTemplateParser) {
+    LateTemplateParser(OpaqueParser, (FunctionDecl*)PatternDecl);
+    Pattern = PatternDecl->getBody(PatternDecl);
+  }
+
   if (!Pattern) {
     if (DefinitionRequired) {
       if (Function->getPrimaryTemplate())
@@ -3094,7 +3109,10 @@ NamedDecl *Sema::FindInstantiatedDecl(SourceLocation Loc, NamedDecl *D,
 
 /// \brief Performs template instantiation for all implicit template
 /// instantiations we have seen until this point.
-void Sema::PerformPendingInstantiations(bool LocalOnly) {
+///
+/// \returns true if anything was instantiated.
+bool Sema::PerformPendingInstantiations(bool LocalOnly) {
+  bool InstantiatedAnything = false;
   while (!PendingLocalImplicitInstantiations.empty() ||
          (!LocalOnly && !PendingInstantiations.empty())) {
     PendingImplicitInstantiation Inst;
@@ -3115,6 +3133,7 @@ void Sema::PerformPendingInstantiations(bool LocalOnly) {
                                 TSK_ExplicitInstantiationDefinition;
       InstantiateFunctionDefinition(/*FIXME:*/Inst.second, Function, true,
                                     DefinitionRequired);
+      InstantiatedAnything = true;
       continue;
     }
 
@@ -3151,7 +3170,10 @@ void Sema::PerformPendingInstantiations(bool LocalOnly) {
                               TSK_ExplicitInstantiationDefinition;
     InstantiateStaticDataMemberDefinition(/*FIXME:*/Inst.second, Var, true,
                                           DefinitionRequired);
+    InstantiatedAnything = true;
   }
+  
+  return InstantiatedAnything;
 }
 
 void Sema::PerformDependentDiagnostics(const DeclContext *Pattern,

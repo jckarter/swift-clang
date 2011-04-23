@@ -764,7 +764,7 @@ CGDebugInfo::CreateCXXMemberFunction(const CXXMethodDecl *Method,
   
   // Don't cache ctors or dtors since we have to emit multiple functions for
   // a single ctor or dtor.
-  if (!IsCtorOrDtor && Method->isThisDeclarationADefinition())
+  if (!IsCtorOrDtor)
     SPCache[Method] = llvm::WeakVH(SP);
 
   return SP;
@@ -1579,6 +1579,29 @@ llvm::DIType CGDebugInfo::CreateMemberType(llvm::DIFile Unit, QualType FType,
   return Ty;
 }
 
+/// getFunctionDeclaration - Return debug info descriptor to describe method
+/// declaration for the given method definition.
+llvm::DISubprogram CGDebugInfo::getFunctionDeclaration(const Decl *D) {
+  const FunctionDecl *FD = dyn_cast<FunctionDecl>(D);
+  if (!FD) return llvm::DISubprogram();
+
+  // Setup context.
+  getContextDescriptor(cast<Decl>(D->getDeclContext()));
+
+  for (FunctionDecl::redecl_iterator I = FD->redecls_begin(),
+         E = FD->redecls_end(); I != E; ++I) {
+    const FunctionDecl *NextFD = *I;
+    llvm::DenseMap<const FunctionDecl *, llvm::WeakVH>::iterator
+      MI = SPCache.find(NextFD);
+    if (MI != SPCache.end()) {
+      llvm::DISubprogram SP(dyn_cast_or_null<llvm::MDNode>(&*MI->second));
+      if (SP.isSubprogram() && !llvm::DISubprogram(SP).isDefinition())
+        return SP;
+    }
+  }
+  return llvm::DISubprogram();
+}
+
 /// EmitFunctionStart - Constructs the debug code for entering a function -
 /// "llvm.dbg.func.start.".
 void CGDebugInfo::EmitFunctionStart(GlobalDecl GD, QualType FnType,
@@ -1639,12 +1662,14 @@ void CGDebugInfo::EmitFunctionStart(GlobalDecl GD, QualType FnType,
   unsigned LineNo = getLineNumber(CurLoc);
   if (D->isImplicit())
     Flags |= llvm::DIDescriptor::FlagArtificial;
+  llvm::DIType SPTy = getOrCreateType(FnType, Unit);
+  llvm::DISubprogram SPDecl = getFunctionDeclaration(D);
   llvm::DISubprogram SP =
     DBuilder.createFunction(FDContext, Name, LinkageName, Unit,
-                            LineNo, getOrCreateType(FnType, Unit),
+                            LineNo, SPTy,
                             Fn->hasInternalLinkage(), true/*definition*/,
                             Flags, CGM.getLangOptions().Optimize, Fn,
-                            TParamsArray);
+                            TParamsArray, SPDecl);
 
   // Push function on region stack.
   llvm::MDNode *SPN = SP;
@@ -1797,15 +1822,17 @@ llvm::DIType CGDebugInfo::EmitTypeForVarWithBlocksAttr(const ValueDecl *VD,
   }
   
   CharUnits Align = CGM.getContext().getDeclAlign(VD);
-  if (Align > CharUnits::fromQuantity(
-        CGM.getContext().Target.getPointerAlign(0) / 8)) {
-    unsigned AlignedOffsetInBytes
-      = llvm::RoundUpToAlignment(FieldOffset/8, Align.getQuantity());
-    unsigned NumPaddingBytes
-      = AlignedOffsetInBytes - FieldOffset/8;
+  if (Align > CGM.getContext().toCharUnitsFromBits(
+        CGM.getContext().Target.getPointerAlign(0))) {
+    CharUnits FieldOffsetInBytes 
+      = CGM.getContext().toCharUnitsFromBits(FieldOffset);
+    CharUnits AlignedOffsetInBytes
+      = FieldOffsetInBytes.RoundUpToAlignment(Align);
+    CharUnits NumPaddingBytes
+      = AlignedOffsetInBytes - FieldOffsetInBytes;
     
-    if (NumPaddingBytes > 0) {
-      llvm::APInt pad(32, NumPaddingBytes);
+    if (NumPaddingBytes.isPositive()) {
+      llvm::APInt pad(32, NumPaddingBytes.getQuantity());
       FType = CGM.getContext().getConstantArrayType(CGM.getContext().CharTy,
                                                     pad, ArrayType::Normal, 0);
       EltTys.push_back(CreateMemberType(Unit, FType, "", &FieldOffset));
@@ -1815,7 +1842,7 @@ llvm::DIType CGDebugInfo::EmitTypeForVarWithBlocksAttr(const ValueDecl *VD,
   FType = Type;
   llvm::DIType FieldTy = CGDebugInfo::getOrCreateType(FType, Unit);
   FieldSize = CGM.getContext().getTypeSize(FType);
-  FieldAlign = Align.getQuantity()*8;
+  FieldAlign = CGM.getContext().toBits(Align);
 
   *XOffset = FieldOffset;  
   FieldTy = DBuilder.createMemberType(VD->getName(), Unit,
@@ -1882,13 +1909,13 @@ void CGDebugInfo::EmitDeclare(const VarDecl *VD, unsigned Tag,
       const llvm::Type *Int64Ty = llvm::Type::getInt64Ty(CGM.getLLVMContext());
       addr.push_back(llvm::ConstantInt::get(Int64Ty, llvm::DIBuilder::OpPlus));
       // offset of __forwarding field
-      offset = 
-        CharUnits::fromQuantity(CGM.getContext().Target.getPointerWidth(0)/8);
+      offset = CGM.getContext().toCharUnitsFromBits(
+        CGM.getContext().Target.getPointerWidth(0));
       addr.push_back(llvm::ConstantInt::get(Int64Ty, offset.getQuantity()));
       addr.push_back(llvm::ConstantInt::get(Int64Ty, llvm::DIBuilder::OpDeref));
       addr.push_back(llvm::ConstantInt::get(Int64Ty, llvm::DIBuilder::OpPlus));
       // offset of x field
-      offset = CharUnits::fromQuantity(XOffset/8);
+      offset = CGM.getContext().toCharUnitsFromBits(XOffset);
       addr.push_back(llvm::ConstantInt::get(Int64Ty, offset.getQuantity()));
 
       // Create the descriptor for the variable.
@@ -1989,12 +2016,12 @@ void CGDebugInfo::EmitDeclare(const VarDecl *VD, unsigned Tag,
     addr.push_back(llvm::ConstantInt::get(Int64Ty, llvm::DIBuilder::OpDeref));
     addr.push_back(llvm::ConstantInt::get(Int64Ty, llvm::DIBuilder::OpPlus));
     // offset of __forwarding field
-    offset = CharUnits::fromQuantity(target.getPointerSize()/8);
+    offset = CGM.getContext().toCharUnitsFromBits(target.getPointerSize());
     addr.push_back(llvm::ConstantInt::get(Int64Ty, offset.getQuantity()));
     addr.push_back(llvm::ConstantInt::get(Int64Ty, llvm::DIBuilder::OpDeref));
     addr.push_back(llvm::ConstantInt::get(Int64Ty, llvm::DIBuilder::OpPlus));
     // offset of x field
-    offset = CharUnits::fromQuantity(XOffset/8);
+    offset = CGM.getContext().toCharUnitsFromBits(XOffset);
     addr.push_back(llvm::ConstantInt::get(Int64Ty, offset.getQuantity()));
   }
 
