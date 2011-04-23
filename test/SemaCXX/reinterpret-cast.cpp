@@ -108,3 +108,11 @@ void const_arrays() {
   (void)reinterpret_cast<char *>(s); // expected-error {{reinterpret_cast from 'const STRING *' (aka 'char const (*)[10]') to 'char *' casts away qualifiers}}
   (void)reinterpret_cast<const STRING *>(c);
 }
+
+namespace PR9564 {
+  struct a { int a : 10; }; a x;
+  int *y = &reinterpret_cast<int&>(x.a); // expected-error {{not allowed}}
+
+  __attribute((ext_vector_type(4))) typedef float v4;
+  float& w(v4 &a) { return reinterpret_cast<float&>(a[1]); } // expected-error {{not allowed}}
+}

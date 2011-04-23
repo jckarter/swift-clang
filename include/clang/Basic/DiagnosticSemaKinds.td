@@ -393,7 +393,7 @@ def note_declared_at : Note<"declared here">;
 def note_method_declared_at : Note<"method declared here">;
 def err_setter_type_void : Error<"type of setter must be void">;
 def err_duplicate_method_decl : Error<"duplicate declaration of method %0">;
-def warn_missing_atend : Warning<"'@end' is missing in implementation context">;
+def err_missing_atend : Error<"'@end' is missing in implementation context">;
 def err_objc_var_decl_inclass : 
     Error<"cannot declare variable inside @interface or @protocol">;
 def error_missing_method_context : Error<
@@ -560,7 +560,7 @@ def err_incomplete_in_exception_spec : Error<
   "in exception specification">;
 def err_mismatched_exception_spec : Error<
   "exception specification in declaration does not match previous declaration">;
-def war_mismatched_exception_spec : ExtWarn<
+def warn_mismatched_exception_spec : ExtWarn<
   "exception specification in declaration does not match previous declaration">;
 def err_override_exception_spec : Error<
   "exception specification of overriding function is more lax than "
@@ -1332,7 +1332,7 @@ def err_param_default_argument : Error<
   "C does not support default arguments">;
 def err_param_default_argument_redefinition : Error<
   "redefinition of default argument">;
-def war_param_default_argument_redefinition : ExtWarn<
+def warn_param_default_argument_redefinition : ExtWarn<
   "redefinition of default argument">;
 def err_param_default_argument_missing : Error<
   "missing default argument on parameter">;
@@ -1975,7 +1975,7 @@ def note_typename_refers_here : Note<
     "referenced member %0 is declared here">;
 def err_typename_missing : Error<
   "missing 'typename' prior to dependent type name '%0%1'">;
-def war_typename_missing : ExtWarn<
+def warn_typename_missing : ExtWarn<
   "missing 'typename' prior to dependent type name '%0%1'">;
 def ext_typename_outside_of_template : ExtWarn<
   "'typename' occurs outside of a template">, InGroup<CXX0x>;
@@ -2123,6 +2123,8 @@ def warn_redefinition_of_typedef : Warning<
 def err_inline_declaration_block_scope : Error<
   "inline declaration of %0 not allowed in block scope">;
 def err_static_non_static : Error<
+  "static declaration of %0 follows non-static declaration">;
+def warn_static_non_static : ExtWarn<
   "static declaration of %0 follows non-static declaration">;
 def err_non_static_static : Error<
   "non-static declaration of %0 follows static declaration">;
@@ -2877,6 +2879,8 @@ def err_bad_cxx_cast_member_pointer_size : Error<
   "cannot %select{||reinterpret_cast||C-style cast|}0 from member pointer "
   "type %1 to member pointer type %2 of different size">;
 def err_bad_static_cast_incomplete : Error<"%0 is an incomplete type">;
+def err_bad_reinterpret_cast_reference : Error<
+  "reinterpret_cast of a %0 to %1 needs its address which is not allowed">;
 
 // These messages don't adhere to the pattern.
 // FIXME: Display the path somehow better.

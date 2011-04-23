@@ -307,6 +307,16 @@ public:
   /// and must warn if not used. Only contains the first declaration.
   llvm::SmallVector<const DeclaratorDecl*, 4> UnusedFileScopedDecls;
 
+  /// \brief Callback to the parser to parse templated functions when needed.
+  typedef void LateTemplateParserCB(void *P, FunctionDecl *FD);
+  LateTemplateParserCB *LateTemplateParser;
+  void *OpaqueParser; 
+
+  void SetLateTemplateParser(LateTemplateParserCB *LTP, void *P) {
+    LateTemplateParser = LTP;
+    OpaqueParser = P; 
+  }
+
   class DelayedDiagnostics;
 
   class ParsingDeclState {
@@ -879,6 +889,7 @@ public:
                                       bool TypeMayContainAuto = true);
   void ActOnFinishKNRParamDeclarations(Scope *S, Declarator &D,
                                        SourceLocation LocAfterDecls);
+  void CheckForFunctionRedefinition(FunctionDecl *FD);
   Decl *ActOnStartOfFunctionDef(Scope *S, Declarator &D);
   Decl *ActOnStartOfFunctionDef(Scope *S, Decl *D);
   void ActOnStartOfObjCMethodDef(Scope *S, Decl *D);
@@ -2974,11 +2985,14 @@ public:
                                          AttributeList *AttrList);
 
   void ActOnReenterTemplateScope(Scope *S, Decl *Template);
+  void ActOnReenterDeclaratorTemplateScope(Scope *S, DeclaratorDecl *D);
   void ActOnStartDelayedMemberDeclarations(Scope *S, Decl *Record);
   void ActOnStartDelayedCXXMethodDeclaration(Scope *S, Decl *Method);
   void ActOnDelayedCXXMethodParameter(Scope *S, Decl *Param);
   void ActOnFinishDelayedCXXMethodDeclaration(Scope *S, Decl *Method);
   void ActOnFinishDelayedMemberDeclarations(Scope *S, Decl *Record);
+  void MarkAsLateParsedTemplate(FunctionDecl *FD, bool Flag = true);
+  bool IsInsideALocalClassWithinATemplateFunction();
 
   Decl *ActOnStaticAssertDeclaration(SourceLocation StaticAssertLoc,
                                      Expr *AssertExpr,
@@ -4336,7 +4350,7 @@ public:
   /// types, static variables, enumerators, etc.
   std::deque<PendingImplicitInstantiation> PendingLocalImplicitInstantiations;
 
-  void PerformPendingInstantiations(bool LocalOnly = false);
+  bool PerformPendingInstantiations(bool LocalOnly = false);
 
   TypeSourceInfo *SubstType(TypeSourceInfo *T,
                             const MultiLevelTemplateArgumentList &TemplateArgs,
