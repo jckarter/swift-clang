@@ -22,7 +22,6 @@
 #include "llvm/Support/PrettyStackTrace.h"
 #include "llvm/ADT/OwningPtr.h"
 #include <stack>
-#include <list>
 
 namespace clang {
   class PragmaHandler;
@@ -937,8 +936,8 @@ private:
     LateParsedTemplateMapT;
   LateParsedTemplateMapT LateParsedTemplateMap;
 
-  static void LateTemplateParserCallback(void *P, FunctionDecl *FD);
-  void LateTemplateParser(FunctionDecl *FD);
+  static void LateTemplateParserCallback(void *P, const FunctionDecl *FD);
+  void LateTemplateParser(const FunctionDecl *FD);
 
   Sema::ParsingClassState
   PushParsingClass(Decl *TagOrTemplate, bool TopLevelClass);

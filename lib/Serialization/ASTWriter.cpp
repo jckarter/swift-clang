@@ -1063,6 +1063,7 @@ void ASTWriter::WriteLanguageOptions(const LangOptions &LangOpts) {
   Record.push_back(LangOpts.GNUInline); // Should GNU inline semantics be
                                   // used (instead of C99 semantics).
   Record.push_back(LangOpts.NoInline); // Should __NO_INLINE__ be defined.
+  Record.push_back(LangOpts.Deprecated); // Should __DEPRECATED be defined.
   Record.push_back(LangOpts.AccessControl); // Whether C++ access control should
                                             // be enabled.
   Record.push_back(LangOpts.CharIsSigned); // Whether char is a signed or
@@ -3793,9 +3794,13 @@ void ASTWriter::AddCXXDefinitionData(const CXXRecordDecl *D, RecordDataImpl &Rec
   Record.push_back(Data.Polymorphic);
   Record.push_back(Data.Abstract);
   Record.push_back(Data.HasTrivialConstructor);
+  Record.push_back(Data.HasConstExprNonCopyMoveConstructor);
   Record.push_back(Data.HasTrivialCopyConstructor);
+  Record.push_back(Data.HasTrivialMoveConstructor);
   Record.push_back(Data.HasTrivialCopyAssignment);
+  Record.push_back(Data.HasTrivialMoveAssignment);
   Record.push_back(Data.HasTrivialDestructor);
+  Record.push_back(Data.HasNonLiteralTypeFieldsOrBases);
   Record.push_back(Data.ComputedVisibleConversions);
   Record.push_back(Data.DeclaredDefaultConstructor);
   Record.push_back(Data.DeclaredCopyConstructor);
