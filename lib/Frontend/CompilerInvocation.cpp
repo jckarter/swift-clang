@@ -577,7 +577,7 @@ static void LangOptsToArgs(const LangOptions &Opts,
   if (Opts.WritableStrings)
     Res.push_back("-fwritable-strings");
   if (Opts.ConstStrings)
-    Res.push_back("-Wwrite-strings");
+    Res.push_back("-fconst-strings");
   if (!Opts.LaxVectorConversions)
     Res.push_back("-fno-lax-vector-conversions");
   if (Opts.AltiVec)
@@ -694,6 +694,8 @@ static void LangOptsToArgs(const LangOptions &Opts,
     Res.push_back("-funknown-anytype");
   if (Opts.DelayedTemplateParsing)
     Res.push_back("-fdelayed-template-parsing");
+  if (Opts.Deprecated)
+    Res.push_back("-fdeprecated-macro");
 }
 
 static void PreprocessorOptsToArgs(const PreprocessorOptions &Opts,
@@ -1475,7 +1477,8 @@ static void ParseLangArgs(LangOptions &Opts, ArgList &Args, InputKind IK,
   Opts.MSCVersion = Args.getLastArgIntValue(OPT_fmsc_version, 0, Diags);
   Opts.Borland = Args.hasArg(OPT_fborland_extensions);
   Opts.WritableStrings = Args.hasArg(OPT_fwritable_strings);
-  Opts.ConstStrings = Args.hasArg(OPT_Wwrite_strings);
+  Opts.ConstStrings = Args.hasFlag(OPT_fconst_strings, OPT_fno_const_strings,
+                                   Opts.ConstStrings);
   if (Args.hasArg(OPT_fno_lax_vector_conversions))
     Opts.LaxVectorConversions = 0;
   if (Args.hasArg(OPT_fno_threadsafe_statics))
@@ -1526,6 +1529,11 @@ static void ParseLangArgs(LangOptions &Opts, ArgList &Args, InputKind IK,
   Opts.MRTD = Args.hasArg(OPT_mrtd);
   Opts.FakeAddressSpaceMap = Args.hasArg(OPT_ffake_address_space_map);
   Opts.ParseUnknownAnytype = Args.hasArg(OPT_funknown_anytype);
+
+  // Record whether the __DEPRECATED define was requested.
+  Opts.Deprecated = Args.hasFlag(OPT_fdeprecated_macro,
+                                 OPT_fno_deprecated_macro,
+                                 Opts.Deprecated);
 
   // FIXME: Eliminate this dependency.
   unsigned Opt = getOptimizationLevel(Args, IK, Diags);
