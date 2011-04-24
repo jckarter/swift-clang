@@ -32,8 +32,11 @@ CXXRecordDecl::DefinitionData::DefinitionData(CXXRecordDecl *D)
     UserDeclaredCopyAssignment(false), UserDeclaredDestructor(false),
     Aggregate(true), PlainOldData(true), Empty(true), Polymorphic(false),
     Abstract(false), HasTrivialConstructor(true),
-    HasTrivialCopyConstructor(true), HasTrivialCopyAssignment(true),
-    HasTrivialDestructor(true), ComputedVisibleConversions(false),
+    HasConstExprNonCopyMoveConstructor(false),
+    HasTrivialCopyConstructor(true), HasTrivialMoveConstructor(true),
+    HasTrivialCopyAssignment(true), HasTrivialMoveAssignment(true),
+    HasTrivialDestructor(true), HasNonLiteralTypeFieldsOrBases(false),
+    ComputedVisibleConversions(false),
     DeclaredDefaultConstructor(false), DeclaredCopyConstructor(false), 
     DeclaredCopyAssignment(false), DeclaredDestructor(false),
     NumBases(0), NumVBases(0), Bases(), VBases(),
@@ -116,6 +119,10 @@ CXXRecordDecl::setBases(CXXBaseSpecifier const * const *Bases,
     //   polymorphic class.
     if (BaseClassDecl->isPolymorphic())
       data().Polymorphic = true;
+
+    // Record if this base is the first non-literal field or base.
+    if (!hasNonLiteralTypeFieldsOrBases() && !BaseType->isLiteralType())
+      data().HasNonLiteralTypeFieldsOrBases = true;
     
     // Now go through all virtual bases of this base and add them.
     for (CXXRecordDecl::base_class_iterator VBase =
@@ -139,16 +146,20 @@ CXXRecordDecl::setBases(CXXBaseSpecifier const * const *Bases,
       // C++ [class.ctor]p5:
       //   A constructor is trivial if its class has no virtual base classes.
       data().HasTrivialConstructor = false;
-      
-      // C++ [class.copy]p6:
-      //   A copy constructor is trivial if its class has no virtual base 
-      //   classes.
+
+      // C++0x [class.copy]p13:
+      //   A copy/move constructor for class X is trivial if it is neither
+      //   user-provided nor deleted and if
+      //    -- class X has no virtual functions and no virtual base classes, and
       data().HasTrivialCopyConstructor = false;
-      
-      // C++ [class.copy]p11:
-      //   A copy assignment operator is trivial if its class has no virtual
-      //   base classes.
+      data().HasTrivialMoveConstructor = false;
+
+      // C++0x [class.copy]p27:
+      //   A copy/move assignment operator for class X is trivial if it is
+      //   neither user-provided nor deleted and if
+      //    -- class X has no virtual functions and no virtual base classes, and
       data().HasTrivialCopyAssignment = false;
+      data().HasTrivialMoveAssignment = false;
     } else {
       // C++ [class.ctor]p5:
       //   A constructor is trivial if all the direct base classes of its
@@ -156,17 +167,29 @@ CXXRecordDecl::setBases(CXXBaseSpecifier const * const *Bases,
       if (!BaseClassDecl->hasTrivialConstructor())
         data().HasTrivialConstructor = false;
       
-      // C++ [class.copy]p6:
-      //   A copy constructor is trivial if all the direct base classes of its
-      //   class have trivial copy constructors.
+      // C++0x [class.copy]p13:
+      //   A copy/move constructor for class X is trivial if [...]
+      //    [...]
+      //    -- the constructor selected to copy/move each direct base class
+      //       subobject is trivial, and
+      // FIXME: C++0x: We need to only consider the selected constructor
+      // instead of all of them.
       if (!BaseClassDecl->hasTrivialCopyConstructor())
         data().HasTrivialCopyConstructor = false;
-      
-      // C++ [class.copy]p11:
-      //   A copy assignment operator is trivial if all the direct base classes
-      //   of its class have trivial copy assignment operators.
+      if (!BaseClassDecl->hasTrivialMoveConstructor())
+        data().HasTrivialMoveConstructor = false;
+
+      // C++0x [class.copy]p27:
+      //   A copy/move assignment operator for class X is trivial if [...]
+      //    [...]
+      //    -- the assignment operator selected to copy/move each direct base
+      //       class subobject is trivial, and
+      // FIXME: C++0x: We need to only consider the selected operator instead
+      // of all of them.
       if (!BaseClassDecl->hasTrivialCopyAssignment())
         data().HasTrivialCopyAssignment = false;
+      if (!BaseClassDecl->hasTrivialMoveAssignment())
+        data().HasTrivialMoveAssignment = false;
     }
     
     // C++ [class.ctor]p3:
@@ -215,6 +238,23 @@ bool CXXRecordDecl::hasAnyDependentBases() const {
 
 bool CXXRecordDecl::hasConstCopyConstructor(const ASTContext &Context) const {
   return getCopyConstructor(Context, Qualifiers::Const) != 0;
+}
+
+bool CXXRecordDecl::isTriviallyCopyable() const {
+  // C++0x [class]p5:
+  //   A trivially copyable class is a class that:
+  //   -- has no non-trivial copy constructors,
+  if (!hasTrivialCopyConstructor()) return false;
+  //   -- has no non-trivial move constructors,
+  if (!hasTrivialMoveConstructor()) return false;
+  //   -- has no non-trivial copy assignment operators,
+  if (!hasTrivialCopyAssignment()) return false;
+  //   -- has no non-trivial move assignment operators, and
+  if (!hasTrivialMoveAssignment()) return false;
+  //   -- has a trivial destructor.
+  if (!hasTrivialDestructor()) return false;
+
+  return true;
 }
 
 /// \brief Perform a simplistic form of overload resolution that only considers
@@ -357,8 +397,18 @@ void CXXRecordDecl::addedMember(Decl *D) {
       
       // None of the special member functions are trivial.
       data().HasTrivialConstructor = false;
+
+      // C++0x [class.copy]p13:
+      //   A copy/move constructor for class X is trivial if [...]
+      //    -- class X has no virtual functions [...]
       data().HasTrivialCopyConstructor = false;
+      data().HasTrivialMoveConstructor = false;
+
+      // C++0x [class.copy]p27:
+      //   A copy/move assignment operator for class X is trivial if [...]
+      //    -- class X has no virtual functions [...]
       data().HasTrivialCopyAssignment = false;
+      data().HasTrivialMoveAssignment = false;
       // FIXME: Destructor?
     }
   }
@@ -422,18 +472,33 @@ void CXXRecordDecl::addedMember(Decl *D) {
     // FIXME: C++0x: don't do this for "= default" default constructors.
     data().HasTrivialConstructor = false;
 
-    // Note when we have a user-declared copy constructor, which will
-    // suppress the implicit declaration of a copy constructor.
-    if (!FunTmpl && Constructor->isCopyConstructor()) {
-      data().UserDeclaredCopyConstructor = true;
-      data().DeclaredCopyConstructor = true;
-      
-      // C++ [class.copy]p6:
-      //   A copy constructor is trivial if it is implicitly declared.
-      // FIXME: C++0x: don't do this for "= default" copy constructors.
-      data().HasTrivialCopyConstructor = false;
+    // Note when we have a user-declared copy or move constructor, which will
+    // suppress the implicit declaration of those constructors.
+    if (!FunTmpl) {
+      if (Constructor->isCopyConstructor()) {
+        data().UserDeclaredCopyConstructor = true;
+        data().DeclaredCopyConstructor = true;
+
+        // C++0x [class.copy]p13:
+        //   A copy/move constructor for class X is trivial if it is neither
+        //   user-provided nor deleted
+        // FIXME: C++0x: don't do this for "= default" copy constructors.
+        data().HasTrivialCopyConstructor = false;
+      } else if (Constructor->isMoveConstructor()) {
+        // C++0x [class.copy]p13:
+        //   A copy/move constructor for class X is trivial if it is neither
+        //   user-provided nor deleted
+        // FIXME: C++0x: don't do this for "= default" move constructors.
+        data().HasTrivialMoveConstructor = false;
+      }
     }
-    
+    if (Constructor->isConstExpr() &&
+        !Constructor->isCopyOrMoveConstructor()) {
+      // Record if we see any constexpr constructors which are niether copy
+      // nor move constructors.
+      data().HasConstExprNonCopyMoveConstructor = true;
+    }
+
     return;
   }
 
@@ -471,35 +536,53 @@ void CXXRecordDecl::addedMember(Decl *D) {
         return;
       
       ASTContext &Context = getASTContext();
-      QualType ArgType = FnType->getArgType(0);
-      if (const LValueReferenceType *Ref =ArgType->getAs<LValueReferenceType>())
-        ArgType = Ref->getPointeeType();
-      
-      ArgType = ArgType.getUnqualifiedType();
       QualType ClassType = Context.getCanonicalType(Context.getTypeDeclType(
                                              const_cast<CXXRecordDecl*>(this)));
-      
+
+      bool isRValueRefArg = false;
+      QualType ArgType = FnType->getArgType(0);
+      if (const LValueReferenceType *Ref =
+          ArgType->getAs<LValueReferenceType>()) {
+        ArgType = Ref->getPointeeType();
+      } else if (const RValueReferenceType *Ref =
+               ArgType->getAs<RValueReferenceType>()) {
+        ArgType = Ref->getPointeeType();
+        isRValueRefArg = true;
+      }
       if (!Context.hasSameUnqualifiedType(ClassType, ArgType))
         return;
-      
-      // This is a copy assignment operator.
-      // FIXME: Move assignment operators.
-      
-      // Suppress the implicit declaration of a copy constructor.
-      data().UserDeclaredCopyAssignment = true;
-      data().DeclaredCopyAssignment = true;
-      
-      // C++ [class.copy]p11:
-      //   A copy assignment operator is trivial if it is implicitly declared.
-      // FIXME: C++0x: don't do this for "= default" copy operators.
-      data().HasTrivialCopyAssignment = false;
-      
+
       // C++ [class]p4:
-      //   A POD-struct is an aggregate class that [...] has no user-defined copy
-      //   assignment operator [...].
+      //   A POD-struct is an aggregate class that [...] has no user-defined
+      //   copy assignment operator [...].
+      // FIXME: This should be probably determined dynamically in terms of
+      // other more precise attributes to correctly model how it is specified
+      // in C++0x. Setting it here happens to do the right thing.
       data().PlainOldData = false;
+
+      if (!isRValueRefArg) {
+        // This is a copy assignment operator.
+
+        // Suppress the implicit declaration of a copy constructor.
+        data().UserDeclaredCopyAssignment = true;
+        data().DeclaredCopyAssignment = true;
+
+        // C++0x [class.copy]p27:
+        //   A copy/move assignment operator for class X is trivial if it is
+        //   neither user-provided nor deleted [...]
+        // FIXME: C++0x: don't do this for "= default" copy operators.
+        data().HasTrivialCopyAssignment = false;
+      } else {
+        // This is a move assignment operator.
+
+        // C++0x [class.copy]p27:
+        //   A copy/move assignment operator for class X is trivial if it is
+        //   neither user-provided nor deleted [...]
+        // FIXME: C++0x: don't do this for "= default" copy operators.
+        data().HasTrivialMoveAssignment = false;
+      }
     }
-    
+
     // Keep the list of conversion functions up-to-date.
     if (CXXConversionDecl *Conversion = dyn_cast<CXXConversionDecl>(D)) {
       // We don't record specializations.
@@ -539,7 +622,7 @@ void CXXRecordDecl::addedMember(Decl *D) {
       data().PlainOldData = false;
     }
     
-    // C++ [class]p9:
+    // C++0x [class]p9:
     //   A POD struct is a class that is both a trivial class and a 
     //   standard-layout class, and has no non-static data members of type 
     //   non-POD struct, non-POD union (or array of such types).
@@ -549,16 +632,41 @@ void CXXRecordDecl::addedMember(Decl *D) {
       data().PlainOldData = false;
     if (T->isReferenceType())
       data().HasTrivialConstructor = false;
-    
+
+    // Record if this field is the first non-literal field or base.
+    if (!hasNonLiteralTypeFieldsOrBases() && !T->isLiteralType())
+      data().HasNonLiteralTypeFieldsOrBases = true;
+
     if (const RecordType *RecordTy = T->getAs<RecordType>()) {
       CXXRecordDecl* FieldRec = cast<CXXRecordDecl>(RecordTy->getDecl());
       if (FieldRec->getDefinition()) {
         if (!FieldRec->hasTrivialConstructor())
           data().HasTrivialConstructor = false;
+
+        // C++0x [class.copy]p13:
+        //   A copy/move constructor for class X is trivial if [...]
+        //    [...]
+        //    -- for each non-static data member of X that is of class type (or
+        //       an array thereof), the constructor selected to copy/move that
+        //       member is trivial;
+        // FIXME: C++0x: We don't correctly model 'selected' constructors.
         if (!FieldRec->hasTrivialCopyConstructor())
           data().HasTrivialCopyConstructor = false;
+        if (!FieldRec->hasTrivialMoveConstructor())
+          data().HasTrivialMoveConstructor = false;
+
+        // C++0x [class.copy]p27:
+        //   A copy/move assignment operator for class X is trivial if [...]
+        //    [...]
+        //    -- for each non-static data member of X that is of class type (or
+        //       an array thereof), the assignment operator selected to
+        //       copy/move that member is trivial;
+        // FIXME: C++0x: We don't correctly model 'selected' operators.
         if (!FieldRec->hasTrivialCopyAssignment())
           data().HasTrivialCopyAssignment = false;
+        if (!FieldRec->hasTrivialMoveAssignment())
+          data().HasTrivialMoveAssignment = false;
+
         if (!FieldRec->hasTrivialDestructor())
           data().HasTrivialDestructor = false;
       }

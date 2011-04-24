@@ -874,32 +874,70 @@ bool Type::isLiteralType() const {
 
   // C++0x [basic.types]p10:
   //   A type is a literal type if it is:
-  switch (CanonicalType->getTypeClass()) {
-    // We're whitelisting
-  default: return false;
+  //   [...]
+  //   -- an array of literal type
+  // Extension: variable arrays cannot be literal types, since they're
+  // runtime-sized.
+  if (isArrayType() && !isConstantArrayType())
+    return false;
+  const Type *BaseTy = getBaseElementTypeUnsafe();
+  assert(BaseTy && "NULL element type");
 
-    //   -- a scalar type
-  case Builtin:
-  case Complex:
-  case Pointer:
-  case MemberPointer:
-  case Vector:
-  case ExtVector:
-  case ObjCObjectPointer:
-  case Enum:
+  // C++0x [basic.types]p10:
+  //   A type is a literal type if it is:
+  //    -- a scalar type; or
+  if (BaseTy->isScalarType()) return true;
+  //    -- a reference type; or
+  if (BaseTy->isReferenceType()) return true;
+  //    -- a class type that has all of the following properties:
+  if (const RecordType *RT = BaseTy->getAs<RecordType>()) {
+    const CXXRecordDecl *ClassDecl = cast<CXXRecordDecl>(RT->getDecl());
+    //      -- a trivial destructor,
+    if (!ClassDecl->hasTrivialDestructor()) return false;
+    //      -- every constructor call and full-expression in the
+    //         brace-or-equal-initializers for non-static data members (if any)
+    //         is a constant expression,
+    // FIXME: C++0x: Clang doesn't yet support non-static data member
+    // declarations with initializers, or constexprs.
+    //      -- it is an aggregate type or has at least one constexpr
+    //         constructor or constructor template that is not a copy or move
+    //         constructor, and
+    if (!ClassDecl->isAggregate() &&
+        !ClassDecl->hasConstExprNonCopyMoveConstructor())
+      return false;
+    //      -- all non-static data members and base classes of literal types
+    if (ClassDecl->hasNonLiteralTypeFieldsOrBases()) return false;
+
     return true;
+  }
+  return false;
+}
 
-    //   -- a class type with ...
-  case Record:
-    // FIXME: Do the tests
+bool Type::isTrivialType() const {
+  if (isIncompleteType())
     return false;
 
-    //   -- an array of literal type
-    // Extension: variable arrays cannot be literal types, since they're
-    // runtime-sized.
-  case ConstantArray:
-    return cast<ArrayType>(CanonicalType)->getElementType()->isLiteralType();
+  // C++0x [basic.types]p9:
+  //   Scalar types, trivial class types, arrays of such types, and
+  //   cv-qualified versions of these types are collectively called trivial
+  //   types.
+  const Type *BaseTy = getBaseElementTypeUnsafe();
+  assert(BaseTy && "NULL element type");
+  if (BaseTy->isScalarType()) return true;
+  if (const RecordType *RT = BaseTy->getAs<RecordType>()) {
+    const CXXRecordDecl *ClassDecl = cast<CXXRecordDecl>(RT->getDecl());
+
+    // C++0x [class]p5:
+    //   A trivial class is a class that has a trivial default constructor
+    if (!ClassDecl->hasTrivialConstructor()) return false;
+    //   and is trivially copyable.
+    if (!ClassDecl->isTriviallyCopyable()) return false;
+
+    return true;
   }
+
+  // No other types can match.
+  return false;
 }
 
 bool Type::isPromotableIntegerType() const {
