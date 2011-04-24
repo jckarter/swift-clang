@@ -257,8 +257,6 @@ def fcolor_diagnostics : Flag<"-fcolor-diagnostics">,
   HelpText<"Use colors in diagnostics">;
 def Wno_rewrite_macros : Flag<"-Wno-rewrite-macros">,
   HelpText<"Silence ObjC rewriting warnings">;
-def Wwrite_strings : Flag<"-Wwrite-strings">,
-  HelpText<"Remove const qualifier from string literals">;
 def verify : Flag<"-verify">,
   HelpText<"Verify emitted diagnostics and warnings">;
 
@@ -526,6 +524,10 @@ def trigraphs : Flag<"-trigraphs">,
   HelpText<"Process trigraph sequences">;
 def fwritable_strings : Flag<"-fwritable-strings">,
   HelpText<"Store string literals as writable data">;
+def fconst_strings : Flag<"-fconst-strings">,
+  HelpText<"Use a const qualified type for string literals in C and ObjC">;
+def fno_const_strings : Flag<"-fno-const-strings">,
+  HelpText<"Don't use a const qualified type for string literals in C and ObjC">;
 def fno_bitfield_type_align : Flag<"-fno-bitfield-type-align">,
   HelpText<"Ignore bit-field types when aligning structures">;
 def traditional_cpp : Flag<"-traditional-cpp">,
@@ -537,6 +539,10 @@ def fdelayed_template_parsing : Flag<"-fdelayed-template-parsing">,
            "translation unit ">;
 def funknown_anytype : Flag<"-funknown-anytype">,
   HelpText<"Enable parser support for the __unknown_anytype type; for testing purposes only">;
+def fdeprecated_macro : Flag<"-fdeprecated-macro">,
+  HelpText<"Defines the __DEPRECATED macro">;
+def fno_deprecated_macro : Flag<"-fno-deprecated-macro">,
+  HelpText<"Undefines the __DEPRECATED macro">;
 
 //===----------------------------------------------------------------------===//
 // Header Search Options
