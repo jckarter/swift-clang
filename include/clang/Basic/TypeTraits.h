@@ -30,10 +30,11 @@ namespace clang {
     UTT_IsClass,
     UTT_IsEmpty,
     UTT_IsEnum,
+    UTT_IsLiteral,
     UTT_IsPOD,
     UTT_IsPolymorphic,
-    UTT_IsUnion,
-    UTT_IsLiteral
+    UTT_IsTrivial,
+    UTT_IsUnion
   };
 
   /// BinaryTypeTrait - Names for the binary type traits.

@@ -166,6 +166,8 @@ def Wa_COMMA : CommaJoined<"-Wa,">,
   HelpText<"Pass the comma separated arguments in <arg> to the assembler">,
   MetaVarName<"<arg>">;
 def Wall : Flag<"-Wall">, Group<W_Group>;
+def Wdeprecated : Flag<"-Wdeprecated">, Group<W_Group>;
+def Wno_deprecated : Flag<"-Wno-deprecated">, Group<W_Group>;
 def Wextra : Flag<"-Wextra">, Group<W_Group>;
 def Wl_COMMA : CommaJoined<"-Wl,">, Flags<[LinkerInput, RenderAsInput]>,
   HelpText<"Pass the comma separated arguments in <arg> to the linker">,
@@ -175,6 +177,8 @@ def Wnonportable_cfstrings : Joined<"-Wnonportable-cfstrings">, Group<W_Group>;
 def Wp_COMMA : CommaJoined<"-Wp,">,
   HelpText<"Pass the comma separated arguments in <arg> to the preprocessor">,
   MetaVarName<"<arg>">;
+def Wwrite_strings : Flag<"-Wwrite-strings">, Group<W_Group>;
+def Wno_write_strings : Flag<"-Wno-write-strings">, Group<W_Group>;
 def W_Joined : Joined<"-W">, Group<W_Group>;
 def Xanalyzer : Separate<"-Xanalyzer">,
   HelpText<"Pass <arg> to the static analyzer">, MetaVarName<"<arg>">;
