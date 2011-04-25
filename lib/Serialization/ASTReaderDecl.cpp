@@ -1661,22 +1661,26 @@ Decl *ASTReader::ReadDeclRecord(unsigned Index, DeclID ID) {
       // so we need to make sure we insert in front. For all other contexts,
       // the vector is empty here anyway, so there's no loss in efficiency.
       Infos.insert(Infos.begin(), Info);
+    }
 
-      // Now add the pending visible updates for this decl context, if it has
-      // any.
-      DeclContextVisibleUpdatesPending::iterator I =
-          PendingVisibleUpdates.find(ID);
-      if (I != PendingVisibleUpdates.end()) {
-        DeclContextVisibleUpdates &U = I->second;
-        Info.LexicalDecls = 0;
-        Info.NumLexicalDecls = 0;
-        for (DeclContextVisibleUpdates::iterator UI = U.begin(), UE = U.end();
-             UI != UE; ++UI) {
-          Info.NameLookupTableData = *UI;
-          Infos.push_back(Info);
-        }
-        PendingVisibleUpdates.erase(I);
+    // Now add the pending visible updates for this decl context, if it has any.
+    DeclContextVisibleUpdatesPending::iterator I =
+        PendingVisibleUpdates.find(ID);
+    if (I != PendingVisibleUpdates.end()) {
+      // There are updates. This means the context has external visible
+      // storage, even if the original stored version didn't.
+      DC->setHasExternalVisibleStorage(true);
+      DeclContextVisibleUpdates &U = I->second;
+      DeclContextInfos &Infos = DeclContextOffsets[DC];
+      DeclContextInfo Info;
+      Info.LexicalDecls = 0;
+      Info.NumLexicalDecls = 0;
+      for (DeclContextVisibleUpdates::iterator UI = U.begin(), UE = U.end();
+           UI != UE; ++UI) {
+        Info.NameLookupTableData = *UI;
+        Infos.push_back(Info);
       }
+      PendingVisibleUpdates.erase(I);
     }
   }
   assert(Idx == Record.size());
@@ -1733,6 +1737,21 @@ void ASTDeclReader::UpdateDecl(Decl *D, const RecordData &Record) {
     case UPD_CXX_ADDED_TEMPLATE_SPECIALIZATION:
       // It will be added to the template's specializations set when loaded.
       Reader.GetDecl(Record[Idx++]);
+      break;
+
+    case UPD_CXX_ADDED_ANONYMOUS_NAMESPACE: {
+      NamespaceDecl *Anon = cast<NamespaceDecl>(Reader.GetDecl(Record[Idx++]));
+      // Guard against these being loaded out of original order. Don't use
+      // getNextNamespace(), since it tries to access the context and can't in
+      // the middle of deserialization.
+      if (!Anon->NextNamespace) {
+        if (TranslationUnitDecl *TU = dyn_cast<TranslationUnitDecl>(D))
+          TU->setAnonymousNamespace(Anon);
+        else
+          cast<NamespaceDecl>(D)->OrigOrAnonNamespace.setPointer(Anon);
+      }
+      break;
+    }
     }
   }
 }
