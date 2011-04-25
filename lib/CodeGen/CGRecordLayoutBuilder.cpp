@@ -168,7 +168,7 @@ private:
 
   /// AppendTailPadding - Append enough tail padding so that the type will have
   /// the passed size.
-  void AppendTailPadding(uint64_t RecordSize);
+  void AppendTailPadding(CharUnits RecordSize);
 
   CharUnits getTypeAlignment(const llvm::Type *Ty) const;
 
@@ -309,13 +309,15 @@ CGBitFieldInfo CGBitFieldInfo::MakeInfo(CodeGenTypes &Types,
     // in higher bits. But this also reverts the bytes, so fix this here by reverting
     // the byte offset on big-endian machines.
     if (Types.getTargetData().isBigEndian()) {
-      AI.FieldByteOffset = (ContainingTypeSizeInBits - AccessStart - AccessWidth )/8;
+      AI.FieldByteOffset = Types.getContext().toCharUnitsFromBits(
+          ContainingTypeSizeInBits - AccessStart - AccessWidth);
     } else {
-      AI.FieldByteOffset = AccessStart / 8;
+      AI.FieldByteOffset = Types.getContext().toCharUnitsFromBits(AccessStart);
     }
     AI.FieldBitStart = AccessBitsInFieldStart - AccessStart;
     AI.AccessWidth = AccessWidth;
-    AI.AccessAlignment = llvm::MinAlign(ContainingTypeAlign, AccessStart) / 8;
+    AI.AccessAlignment = Types.getContext().toCharUnitsFromBits(
+        llvm::MinAlign(ContainingTypeAlign, AccessStart));
     AI.TargetBitOffset = AccessedTargetBits;
     AI.TargetBitWidth = AccessBitsInFieldSize;
 
@@ -349,10 +351,12 @@ void CGRecordLayoutBuilder::LayoutBitField(const FieldDecl *D,
     return;
 
   uint64_t nextFieldOffsetInBits = Types.getContext().toBits(NextFieldOffset);
-  unsigned numBytesToAppend;
+  CharUnits numBytesToAppend;
+  unsigned charAlign = Types.getContext().Target.getCharAlign();
 
   if (fieldOffset < nextFieldOffsetInBits && !BitsAvailableInLastField) {
-    assert(fieldOffset % 8 == 0 && "Field offset not aligned correctly");
+    assert(fieldOffset % charAlign == 0 && 
+           "Field offset not aligned correctly");
 
     CharUnits fieldOffsetInCharUnits = 
       Types.getContext().toCharUnitsFromBits(fieldOffset);
@@ -367,27 +371,31 @@ void CGRecordLayoutBuilder::LayoutBitField(const FieldDecl *D,
     assert(!NextFieldOffset.isZero() && "Must have laid out at least one byte");
 
     // The bitfield begins in the previous bit-field.
-    numBytesToAppend =
-      llvm::RoundUpToAlignment(fieldSize - BitsAvailableInLastField, 8) / 8;
+    numBytesToAppend = Types.getContext().toCharUnitsFromBits(
+      llvm::RoundUpToAlignment(fieldSize - BitsAvailableInLastField, 
+                               charAlign));
   } else {
-    assert(fieldOffset % 8 == 0 && "Field offset not aligned correctly");
+    assert(fieldOffset % charAlign == 0 && 
+           "Field offset not aligned correctly");
 
     // Append padding if necessary.
-    AppendPadding(CharUnits::fromQuantity(fieldOffset / 8), CharUnits::One());
+    AppendPadding(Types.getContext().toCharUnitsFromBits(fieldOffset), 
+                  CharUnits::One());
 
-    numBytesToAppend = llvm::RoundUpToAlignment(fieldSize, 8) / 8;
+    numBytesToAppend = Types.getContext().toCharUnitsFromBits(
+        llvm::RoundUpToAlignment(fieldSize, charAlign));
 
-    assert(numBytesToAppend && "No bytes to append!");
+    assert(!numBytesToAppend.isZero() && "No bytes to append!");
   }
 
   // Add the bit field info.
   BitFields.insert(std::make_pair(D,
                    CGBitFieldInfo::MakeInfo(Types, D, fieldOffset, fieldSize)));
 
-  AppendBytes(CharUnits::fromQuantity(numBytesToAppend));
+  AppendBytes(numBytesToAppend);
 
   BitsAvailableInLastField =
-    NextFieldOffset.getQuantity() * 8 - (fieldOffset + fieldSize);
+    Types.getContext().toBits(NextFieldOffset) - (fieldOffset + fieldSize);
 }
 
 bool CGRecordLayoutBuilder::LayoutField(const FieldDecl *D,
@@ -473,11 +481,12 @@ CGRecordLayoutBuilder::LayoutUnionField(const FieldDecl *Field,
       return 0;
 
     const llvm::Type *FieldTy = llvm::Type::getInt8Ty(Types.getLLVMContext());
-    unsigned NumBytesToAppend =
-      llvm::RoundUpToAlignment(FieldSize, 8) / 8;
+    CharUnits NumBytesToAppend = Types.getContext().toCharUnitsFromBits(
+      llvm::RoundUpToAlignment(FieldSize, 
+                               Types.getContext().Target.getCharAlign()));
 
-    if (NumBytesToAppend > 1)
-      FieldTy = llvm::ArrayType::get(FieldTy, NumBytesToAppend);
+    if (NumBytesToAppend > CharUnits::One())
+      FieldTy = llvm::ArrayType::get(FieldTy, NumBytesToAppend.getQuantity());
 
     // Add the bit field info.
     BitFields.insert(std::make_pair(Field,
@@ -756,29 +765,25 @@ bool CGRecordLayoutBuilder::LayoutFields(const RecordDecl *D) {
   }
   
   // Append tail padding if necessary.
-  AppendTailPadding(Types.getContext().toBits(Layout.getSize()));
+  AppendTailPadding(Layout.getSize());
 
   return true;
 }
 
-void CGRecordLayoutBuilder::AppendTailPadding(uint64_t RecordSize) {
-  assert(RecordSize % 8 == 0 && "Invalid record size!");
+void CGRecordLayoutBuilder::AppendTailPadding(CharUnits RecordSize) {
+  ResizeLastBaseFieldIfNecessary(RecordSize);
 
-  CharUnits RecordSizeInBytes =
-    Types.getContext().toCharUnitsFromBits(RecordSize);
-  ResizeLastBaseFieldIfNecessary(RecordSizeInBytes);
-
-  assert(NextFieldOffset <= RecordSizeInBytes && "Size mismatch!");
+  assert(NextFieldOffset <= RecordSize && "Size mismatch!");
 
   CharUnits AlignedNextFieldOffset =
     NextFieldOffset.RoundUpToAlignment(getAlignmentAsLLVMStruct());
 
-  if (AlignedNextFieldOffset == RecordSizeInBytes) {
+  if (AlignedNextFieldOffset == RecordSize) {
     // We don't need any padding.
     return;
   }
 
-  CharUnits NumPadBytes = RecordSizeInBytes - NextFieldOffset;
+  CharUnits NumPadBytes = RecordSize - NextFieldOffset;
   AppendBytes(NumPadBytes);
 }
 
@@ -978,7 +983,7 @@ CGRecordLayout *CodeGenTypes::ComputeRecordLayout(const RecordDecl *D) {
       // Verify that every component access is within the structure.
       uint64_t FieldOffset = SL->getElementOffsetInBits(AI.FieldIndex);
       uint64_t AccessBitOffset = FieldOffset +
-        getContext().toBits(CharUnits::fromQuantity(AI.FieldByteOffset));
+        getContext().toBits(AI.FieldByteOffset);
       assert(AccessBitOffset + AI.AccessWidth <= TypeSizeInBits &&
              "Invalid bit-field access (out of range)!");
     }
@@ -1037,11 +1042,11 @@ void CGBitFieldInfo::print(llvm::raw_ostream &OS) const {
       OS.indent(8);
       OS << "<AccessInfo"
          << " FieldIndex:" << AI.FieldIndex
-         << " FieldByteOffset:" << AI.FieldByteOffset
+         << " FieldByteOffset:" << AI.FieldByteOffset.getQuantity()
          << " FieldBitStart:" << AI.FieldBitStart
          << " AccessWidth:" << AI.AccessWidth << "\n";
       OS.indent(8 + strlen("<AccessInfo"));
-      OS << " AccessAlignment:" << AI.AccessAlignment
+      OS << " AccessAlignment:" << AI.AccessAlignment.getQuantity()
          << " TargetBitOffset:" << AI.TargetBitOffset
          << " TargetBitWidth:" << AI.TargetBitWidth
          << ">\n";
