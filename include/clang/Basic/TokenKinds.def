@@ -346,6 +346,10 @@ KEYWORD(__is_polymorphic            , KEYCXX)
 KEYWORD(__is_trivial                , KEYCXX)
 KEYWORD(__is_union                  , KEYCXX)
 
+// Embarcadero Expression Traits
+KEYWORD(__is_lvalue_expr            , KEYCXX)
+KEYWORD(__is_rvalue_expr            , KEYCXX)
+
 // Apple Extension.
 KEYWORD(__private_extern__          , KEYALL)
 
@@ -411,6 +415,10 @@ ALIAS("__volatile__" , volatile   , KEYALL)
 KEYWORD(__ptr64                   , KEYMS)
 KEYWORD(__w64                     , KEYMS)
 KEYWORD(__uuidof                  , KEYMS | KEYBORLAND)
+KEYWORD(__try                     , KEYMS | KEYBORLAND)
+KEYWORD(__except                  , KEYMS | KEYBORLAND)
+KEYWORD(__finally                 , KEYMS | KEYBORLAND)
+KEYWORD(__leave                   , KEYMS | KEYBORLAND)
 ALIAS("_asm"         , asm        , KEYMS)
 ALIAS("_cdecl"       , __cdecl    , KEYMS | KEYBORLAND)
 ALIAS("_fastcall"    , __fastcall , KEYMS | KEYBORLAND)
