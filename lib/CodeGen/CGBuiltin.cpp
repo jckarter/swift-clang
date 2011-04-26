@@ -176,7 +176,8 @@ RValue CodeGenFunction::EmitBuiltinExpr(const FunctionDecl *FD,
                                         unsigned BuiltinID, const CallExpr *E) {
   // See if we can constant fold this builtin.  If so, don't emit it at all.
   Expr::EvalResult Result;
-  if (E->Evaluate(Result, CGM.getContext())) {
+  if (E->Evaluate(Result, CGM.getContext()) &&
+      !Result.hasSideEffects()) {
     if (Result.Val.isInt())
       return RValue::get(llvm::ConstantInt::get(getLLVMContext(),
                                                 Result.Val.getInt()));
@@ -312,9 +313,10 @@ RValue CodeGenFunction::EmitBuiltinExpr(const FunctionDecl *FD,
   }
   case Builtin::BI__builtin_expect: {
     // FIXME: pass expect through to LLVM
+    Value *ArgValue = EmitScalarExpr(E->getArg(0));
     if (E->getArg(1)->HasSideEffects(getContext()))
       (void)EmitScalarExpr(E->getArg(1));
-    return RValue::get(EmitScalarExpr(E->getArg(0)));
+    return RValue::get(ArgValue);
   }
   case Builtin::BI__builtin_bswap32:
   case Builtin::BI__builtin_bswap64: {
