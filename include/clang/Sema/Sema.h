@@ -27,6 +27,7 @@
 #include "clang/Basic/Specifiers.h"
 #include "clang/Basic/TemplateKinds.h"
 #include "clang/Basic/TypeTraits.h"
+#include "clang/Basic/ExpressionTraits.h"
 #include "llvm/ADT/OwningPtr.h"
 #include "llvm/ADT/SmallPtrSet.h"
 #include "llvm/ADT/SmallVector.h"
@@ -239,6 +240,8 @@ public:
   /// PackContext - Manages the stack for #pragma pack. An alignment
   /// of 0 indicates default alignment.
   void *PackContext; // Really a "PragmaPackStack*"
+    
+  bool MSStructPragmaOn; // True when #pragma ms_struct on
 
   /// VisContext - Manages the stack for #pragma GCC visibility.
   void *VisContext; // Really a "PragmaVisStack*"
@@ -2732,6 +2735,18 @@ public:
                                   TypeSourceInfo *RhsT,
                                   SourceLocation RParen);
 
+  /// ActOnExpressionTrait - Parsed one of the unary type trait support
+  /// pseudo-functions.
+  ExprResult ActOnExpressionTrait(ExpressionTrait OET,
+                                  SourceLocation KWLoc,
+                                  Expr *Queried,
+                                  SourceLocation RParen);
+
+  ExprResult BuildExpressionTrait(ExpressionTrait OET,
+                                  SourceLocation KWLoc,
+                                  Expr *Queried,
+                                  SourceLocation RParen);
+
   ExprResult ActOnStartCXXMemberReference(Scope *S,
                                           Expr *Base,
                                           SourceLocation OpLoc,
@@ -4842,6 +4857,11 @@ public:
     PPK_Pop      // #pragma pack(pop, [identifier], [n])
   };
 
+  enum PragmaMSStructKind {
+    PMSST_OFF,  // #pragms ms_struct off
+    PMSST_ON    // #pragms ms_struct on
+  };
+
   /// ActOnPragmaPack - Called on well formed #pragma pack(...).
   void ActOnPragmaPack(PragmaPackKind Kind,
                        IdentifierInfo *Name,
@@ -4849,6 +4869,9 @@ public:
                        SourceLocation PragmaLoc,
                        SourceLocation LParenLoc,
                        SourceLocation RParenLoc);
+    
+  /// ActOnPragmaMSStruct - Called on well formed #pragms ms_struct [on|off].
+  void ActOnPragmaMSStruct(PragmaMSStructKind Kind);
 
   /// ActOnPragmaUnused - Called on well-formed '#pragma unused'.
   void ActOnPragmaUnused(const Token &Identifier,
