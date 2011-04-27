@@ -261,6 +261,11 @@ def err_builtin_definition : Error<"definition of builtin function %0">;
 def err_types_compatible_p_in_cplusplus : Error<
   "__builtin_types_compatible_p is not valid in C++">;
 def warn_builtin_unknown : Warning<"use of unknown builtin %0">, DefaultError;
+def warn_non_pod_memset : Warning<
+  "destination for this memset call is a pointer to a non-POD type %0">,
+  InGroup<DiagGroup<"non-pod-memset">>;
+def note_non_pod_memset_silence : Note<
+  "explicitly cast the pointer to silence this warning">;
 
 /// main()
 // static/inline main() are not errors in C, just in C++.
@@ -1863,6 +1868,9 @@ def err_template_recursion_depth_exceeded : Error<
 def note_template_recursion_depth : Note<
   "use -ftemplate-depth-N to increase recursive template instantiation depth">;
 
+def err_template_instantiate_within_definition : Error<
+  "%select{implicit|explicit}0 instantiation of template %1 within its"
+  " own definition">;
 def err_template_instantiate_undefined : Error<
   "%select{implicit|explicit}0 instantiation of undefined template %1">;
 def err_implicit_instantiate_member_undefined : Error<

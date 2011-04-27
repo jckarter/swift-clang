@@ -22,10 +22,6 @@
 #include "clang/Basic/SourceManager.h"
 using namespace clang;
 
-static bool isColonOrRSquareBracket(const Token &Tok) {
-  return Tok.is(tok::colon) || Tok.is(tok::r_square);
-}
-
 //===----------------------------------------------------------------------===//
 // C99 6.8: Statements and Blocks.
 //===----------------------------------------------------------------------===//
@@ -114,7 +110,6 @@ Retry:
     }
     
     if (Next.isNot(tok::coloncolon)) {
-      // FIXME: Temporarily enable this code only for C.
       CXXScopeSpec SS;
       IdentifierInfo *Name = Tok.getIdentifierInfo();
       SourceLocation NameLoc = Tok.getLocation();
@@ -147,67 +142,19 @@ Retry:
         // we're in a syntactic context we haven't handled yet. 
         break;     
           
-      case Sema::NC_Type: {
-        // We have a type. In C, this means that we have a declaration.
-        if (!getLang().CPlusPlus) {
-          ParsedType Type = Classification.getType();
-          const char *PrevSpec = 0;
-          unsigned DiagID;
-          ConsumeToken(); // the identifier
-          ParsingDeclSpec DS(*this);
-          DS.takeAttributesFrom(attrs);
-          DS.SetTypeSpecType(DeclSpec::TST_typename, NameLoc, PrevSpec, DiagID,
-                             Type);
-          DS.SetRangeStart(NameLoc);
-          DS.SetRangeEnd(NameLoc);
-          
-          // In Objective-C, check whether this is the start of a class message
-          // send that is missing an opening square bracket ('[').
-          if (getLang().ObjC1 && Tok.is(tok::identifier) && 
-              Type.get()->isObjCObjectOrInterfaceType() &&
-              isColonOrRSquareBracket(NextToken())) {
-            // Fake up a Declarator to use with ActOnTypeName.
-            Declarator DeclaratorInfo(DS, Declarator::TypeNameContext);
-            TypeResult Ty = Actions.ActOnTypeName(getCurScope(), DeclaratorInfo);
-            if (Ty.isInvalid()) {
-              SkipUntil(tok::r_brace, /*StopAtSemi=*/true, /*DontConsume=*/true);
-              if (Tok.is(tok::semi))
-                ConsumeToken();
-              return StmtError();
-            }
-            
-            ExprResult MsgExpr = ParseObjCMessageExpressionBody(SourceLocation(), 
-                                                                SourceLocation(),
-                                                                Ty.get(), 0);
-            return ParseExprStatement(attrs, MsgExpr);
-          }
-          
-          // Objective-C supports syntax of the form 'id<proto1,proto2>' where 
-          // 'id' is a specific typedef and 'itf<proto1,proto2>' where 'itf' is 
-          // an Objective-C interface. 
-          if (Tok.is(tok::less) && getLang().ObjC1)
-            ParseObjCProtocolQualifiers(DS);
-
-          SourceLocation DeclStart = NameLoc, DeclEnd;
-          DeclGroupPtrTy Decl = ParseSimpleDeclaration(DS, Stmts, 
-                                                       Declarator::BlockContext,
-                                                       DeclEnd, true);
-          return Actions.ActOnDeclStmt(Decl, DeclStart, DeclEnd);
-        }
-          
-        // In C++, we might also have a functional-style cast. Just annotate
-        // this as a type token.
+      case Sema::NC_Type:
         Tok.setKind(tok::annot_typename);
         setTypeAnnotation(Tok, Classification.getType());
         Tok.setAnnotationEndLoc(NameLoc);
-        Tok.setLocation(NameLoc);
         PP.AnnotateCachedTokens(Tok);
         break;
-      }
           
       case Sema::NC_Expression:
-        ConsumeToken(); // the identifier
-        return ParseExprStatement(attrs, Classification.getExpression());
+        Tok.setKind(tok::annot_primary_expr);
+        setExprAnnotation(Tok, Classification.getExpression());
+        Tok.setAnnotationEndLoc(NameLoc);
+        PP.AnnotateCachedTokens(Tok);
+        break;
           
       case Sema::NC_TypeTemplate:
       case Sema::NC_FunctionTemplate: {
@@ -265,7 +212,7 @@ Retry:
       return StmtError();
     }
 
-    return ParseExprStatement(attrs, ExprResult());
+    return ParseExprStatement(attrs);
   }
 
   case tok::kw_case:                // C99 6.8.1: labeled-statement
@@ -343,14 +290,13 @@ Retry:
 }
 
 /// \brief Parse an expression statement.
-StmtResult Parser::ParseExprStatement(ParsedAttributes &Attrs, 
-                                      ExprResult Primary) {
+StmtResult Parser::ParseExprStatement(ParsedAttributes &Attrs) {
   // If a case keyword is missing, this is where it should be inserted.
   Token OldToken = Tok;
   
   // FIXME: Use the attributes
   // expression[opt] ';'
-  ExprResult Expr(ParseExpression(Primary));
+  ExprResult Expr(ParseExpression());
   if (Expr.isInvalid()) {
     // If the expression is invalid, skip ahead to the next semicolon or '}'.
     // Not doing this opens us up to the possibility of infinite loops if

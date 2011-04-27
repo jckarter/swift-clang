@@ -149,7 +149,7 @@ class Parser : public CodeCompletionHandler {
   /// ColonProtectionRAIIObject RAII object.
   bool ColonIsSacred;
 
-  /// \brief When true, we are directly inside an Ojective-C messsage 
+  /// \brief When true, we are directly inside an Objective-C messsage 
   /// send expression.
   ///
   /// This is managed by the \c InMessageExpressionRAIIObject class, and
@@ -391,6 +391,24 @@ private:
 
   static void setTypeAnnotation(Token &Tok, ParsedType T) {
     Tok.setAnnotationValue(T.getAsOpaquePtr());
+  }
+  
+  /// \brief Read an already-translated primary expression out of an annotation
+  /// token.
+  static ExprResult getExprAnnotation(Token &Tok) {
+    if (Tok.getAnnotationValue())
+      return ExprResult((Expr *)Tok.getAnnotationValue());
+    
+    return ExprResult(true);
+  }
+  
+  /// \brief Set the primary expression corresponding to the given annotation
+  /// token.
+  static void setExprAnnotation(Token &Tok, ExprResult ER) {
+    if (ER.isInvalid())
+      Tok.setAnnotationValue(0);
+    else
+      Tok.setAnnotationValue(ER.get());
   }
 
   /// TryAnnotateTypeOrScopeToken - If the current token position is on a
@@ -1049,10 +1067,10 @@ private:
   //===--------------------------------------------------------------------===//
   // C99 6.5: Expressions.
   
-  ExprResult ParseExpression(ExprResult Primary = ExprResult());
+  ExprResult ParseExpression();
   ExprResult ParseConstantExpression();
   // Expr that doesn't include commas.
-  ExprResult ParseAssignmentExpression(ExprResult Primary = ExprResult());
+  ExprResult ParseAssignmentExpression();
 
   ExprResult ParseExpressionWithLeadingAt(SourceLocation AtLoc);
 
@@ -1258,7 +1276,7 @@ private:
   }
   StmtResult ParseStatementOrDeclaration(StmtVector& Stmts,
                                          bool OnlyStatement = false);
-  StmtResult ParseExprStatement(ParsedAttributes &Attrs, ExprResult Primary);
+  StmtResult ParseExprStatement(ParsedAttributes &Attrs);
   StmtResult ParseLabeledStatement(ParsedAttributes &Attr);
   StmtResult ParseCaseStatement(ParsedAttributes &Attr,
                                 bool MissingCase = false,
@@ -1330,12 +1348,6 @@ private:
                                         unsigned Context,
                                         SourceLocation &DeclEnd,
                                         ParsedAttributes &attrs,
-                                        bool RequireSemi,
-                                        ForRangeInit *FRI = 0);
-  DeclGroupPtrTy ParseSimpleDeclaration(ParsingDeclSpec &DS,
-                                        StmtVector &Stmts,
-                                        unsigned Context,
-                                        SourceLocation &DeclEnd,
                                         bool RequireSemi,
                                         ForRangeInit *FRI = 0);
   DeclGroupPtrTy ParseDeclGroup(ParsingDeclSpec &DS, unsigned Context,
