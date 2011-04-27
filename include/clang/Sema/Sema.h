@@ -112,6 +112,7 @@ namespace clang {
   class ObjCPropertyDecl;
   class ObjCProtocolDecl;
   class OverloadCandidateSet;
+  class OverloadExpr;
   class ParenListExpr;
   class ParmVarDecl;
   class Preprocessor;
@@ -1413,7 +1414,7 @@ public:
                                                    bool Complain,
                                                    DeclAccessPair &Found);
 
-  FunctionDecl *ResolveSingleFunctionTemplateSpecialization(Expr *From,
+  FunctionDecl *ResolveSingleFunctionTemplateSpecialization(OverloadExpr *ovl,
                                                    bool Complain = false,
                                                    DeclAccessPair* Found = 0);
 
@@ -4904,6 +4905,9 @@ public:
   /// AddAlignmentAttributesForRecord - Adds any needed alignment attributes to
   /// a the record decl, to handle '#pragma pack' and '#pragma options align'.
   void AddAlignmentAttributesForRecord(RecordDecl *RD);
+
+  /// AddMsStructLayoutForRecord - Adds ms_struct layout attribute to record.
+  void AddMsStructLayoutForRecord(RecordDecl *RD);
 
   /// FreePackedContext - Deallocate and null out PackContext.
   void FreePackedContext();

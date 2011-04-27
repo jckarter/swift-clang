@@ -402,6 +402,9 @@ void ASTContext::InitBuiltinTypes() {
   // Placeholder type for functions.
   InitBuiltinType(OverloadTy,          BuiltinType::Overload);
 
+  // Placeholder type for bound members.
+  InitBuiltinType(BoundMemberTy,       BuiltinType::BoundMember);
+
   // "any" type; useful for debugger-like clients.
   InitBuiltinType(UnknownAnyTy,        BuiltinType::UnknownAny);
 
@@ -721,6 +724,7 @@ ASTContext::getTypeInfo(const Type *T) const {
     std::pair<uint64_t, unsigned> EltInfo = getTypeInfo(CAT->getElementType());
     Width = EltInfo.first*CAT->getSize().getZExtValue();
     Align = EltInfo.second;
+    Width = llvm::RoundUpToAlignment(Width, Align);
     break;
   }
   case Type::ExtVector:
