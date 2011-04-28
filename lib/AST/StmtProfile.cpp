@@ -181,6 +181,18 @@ void StmtProfiler::VisitCXXForRangeStmt(CXXForRangeStmt *S) {
   VisitStmt(S);
 }
 
+void StmtProfiler::VisitSEHTryStmt(SEHTryStmt *S) {
+  VisitStmt(S);
+}
+
+void StmtProfiler::VisitSEHFinallyStmt(SEHFinallyStmt *S) {
+  VisitStmt(S);
+}
+
+void StmtProfiler::VisitSEHExceptStmt(SEHExceptStmt *S) {
+  VisitStmt(S);
+}
+
 void StmtProfiler::VisitObjCForCollectionStmt(ObjCForCollectionStmt *S) {
   VisitStmt(S);
 }
@@ -800,6 +812,12 @@ void StmtProfiler::VisitBinaryTypeTraitExpr(BinaryTypeTraitExpr *S) {
   ID.AddInteger(S->getTrait());
   VisitType(S->getLhsType());
   VisitType(S->getRhsType());
+}
+
+void StmtProfiler::VisitArrayTypeTraitExpr(ArrayTypeTraitExpr *S) {
+  VisitExpr(S);
+  ID.AddInteger(S->getTrait());
+  VisitType(S->getQueriedType());
 }
 
 void StmtProfiler::VisitExpressionTraitExpr(ExpressionTraitExpr *S) {

@@ -1882,7 +1882,7 @@ public:
   StmtResult ActOnExprStmt(FullExprArg Expr);
 
   StmtResult ActOnNullStmt(SourceLocation SemiLoc,
-                           bool LeadingEmptyMacro = false);
+                        SourceLocation LeadingEmptyMacroLoc = SourceLocation());
   StmtResult ActOnCompoundStmt(SourceLocation L, SourceLocation R,
                                        MultiStmtArg Elts,
                                        bool isStmtExpr);
@@ -2001,6 +2001,19 @@ public:
                                 Decl *ExDecl, Stmt *HandlerBlock);
   StmtResult ActOnCXXTryBlock(SourceLocation TryLoc, Stmt *TryBlock,
                               MultiStmtArg Handlers);
+
+  StmtResult ActOnSEHTryBlock(bool IsCXXTry, // try (true) or __try (false) ?
+                              SourceLocation TryLoc,
+                              Stmt *TryBlock,
+                              Stmt *Handler);
+
+  StmtResult ActOnSEHExceptBlock(SourceLocation Loc,
+                                 Expr *FilterExpr,
+                                 Stmt *Block);
+
+  StmtResult ActOnSEHFinallyBlock(SourceLocation Loc,
+                                  Stmt *Block);
+
   void DiagnoseReturnInConstructorExceptionHandler(CXXTryStmt *TryBlock);
 
   bool ShouldWarnIfUnusedFileScopedDecl(const DeclaratorDecl *D) const;
@@ -2735,6 +2748,20 @@ public:
                                   TypeSourceInfo *LhsT,
                                   TypeSourceInfo *RhsT,
                                   SourceLocation RParen);
+
+  /// ActOnArrayTypeTrait - Parsed one of the bianry type trait support
+  /// pseudo-functions.
+  ExprResult ActOnArrayTypeTrait(ArrayTypeTrait ATT,
+                                 SourceLocation KWLoc,
+                                 ParsedType LhsTy,
+                                 Expr *DimExpr,
+                                 SourceLocation RParen);
+
+  ExprResult BuildArrayTypeTrait(ArrayTypeTrait ATT,
+                                 SourceLocation KWLoc,
+                                 TypeSourceInfo *TSInfo,
+                                 Expr *DimExpr,
+                                 SourceLocation RParen);
 
   /// ActOnExpressionTrait - Parsed one of the unary type trait support
   /// pseudo-functions.
@@ -5515,6 +5542,8 @@ private:
   void CheckPrintfScanfArguments(const CallExpr *TheCall, bool HasVAListArg,
                                  unsigned format_idx, unsigned firstDataArg,
                                  bool isPrintf);
+
+  void CheckMemsetArguments(const CallExpr *Call);
 
   void CheckReturnStackAddr(Expr *RetValExp, QualType lhsType,
                             SourceLocation ReturnLoc);

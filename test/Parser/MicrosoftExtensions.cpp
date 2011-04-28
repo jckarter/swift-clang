@@ -147,3 +147,10 @@ int main() {
 }
 
 
+__interface MicrosoftInterface;
+__interface MicrosoftInterface {
+   virtual void foo1() = 0;
+   virtual void foo2() = 0;
+};
+
+__int64 x7 = __int64(0);
