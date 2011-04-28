@@ -2491,17 +2491,10 @@ ABIArgInfo ARMABIInfo::classifyArgumentType(QualType Ty) const {
   // FIXME: This doesn't handle alignment > 64 bits.
   const llvm::Type* ElemTy;
   unsigned SizeRegs;
-  if (getContext().getTypeSizeInChars(Ty) <= CharUnits::fromQuantity(32)) {
+  if (getContext().getTypeSizeInChars(Ty) <= CharUnits::fromQuantity(64)) {
     ElemTy = llvm::Type::getInt32Ty(getVMContext());
     SizeRegs = (getContext().getTypeSize(Ty) + 31) / 32;
-    llvm::SmallVector<const llvm::Type*, 8> LLVMFields;
-    LLVMFields.push_back(llvm::ArrayType::get(ElemTy, SizeRegs));
-    const llvm::Type* STy = llvm::StructType::get(getVMContext(), LLVMFields,
-                                                  true);
-    return ABIArgInfo::getDirect(STy);
-  }
-
-  if (getABIKind() == ARMABIInfo::APCS) {
+  } else if (getABIKind() == ARMABIInfo::APCS) {
     // Initial ARM ByVal support is APCS-only.
     return ABIArgInfo::getIndirect(0, /*ByVal=*/true);
   } else {
@@ -2510,12 +2503,12 @@ ABIArgInfo ARMABIInfo::classifyArgumentType(QualType Ty) const {
     // byval.
     ElemTy = llvm::Type::getInt64Ty(getVMContext());
     SizeRegs = (getContext().getTypeSize(Ty) + 63) / 64;
-    llvm::SmallVector<const llvm::Type*, 8> LLVMFields;
-    LLVMFields.push_back(llvm::ArrayType::get(ElemTy, SizeRegs));
-    const llvm::Type* STy = llvm::StructType::get(getVMContext(), LLVMFields,
-                                                  true);
-    return ABIArgInfo::getDirect(STy);
   }
+
+  const llvm::Type *STy =
+    llvm::StructType::get(getVMContext(),
+                          llvm::ArrayType::get(ElemTy, SizeRegs), NULL, NULL);
+  return ABIArgInfo::getDirect(STy);
 }
 
 static bool isIntegerLikeType(QualType Ty, ASTContext &Context,
