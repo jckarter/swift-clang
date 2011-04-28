@@ -171,6 +171,7 @@ void Parser::ParseGNUAttributes(ParsedAttributes &attrs,
           case tok::kw_short:
           case tok::kw_int:
           case tok::kw_long:
+          case tok::kw___int64:
           case tok::kw_signed:
           case tok::kw_unsigned:
           case tok::kw_float:
@@ -724,29 +725,7 @@ Parser::DeclGroupPtrTy Parser::ParseSimpleDeclaration(StmtVector &Stmts,
   // Parse the common declaration-specifiers piece.
   ParsingDeclSpec DS(*this);
   DS.takeAttributesFrom(attrs);
-  return ParseSimpleDeclaration(DS, Stmts, Context, DeclEnd, RequireSemi, FRI);
-}
 
-///       simple-declaration: [C99 6.7: declaration] [C++ 7p1: dcl.dcl]
-///         declaration-specifiers init-declarator-list[opt] ';'
-///[C90/C++]init-declarator-list ';'                             [TODO]
-/// [OMP]   threadprivate-directive                              [TODO]
-///
-///       for-range-declaration: [C++0x 6.5p1: stmt.ranged]
-///         attribute-specifier-seq[opt] type-specifier-seq declarator
-///
-/// If RequireSemi is false, this does not check for a ';' at the end of the
-/// declaration.  If it is true, it checks for and eats it.
-///
-/// If FRI is non-null, we might be parsing a for-range-declaration instead
-/// of a simple-declaration. If we find that we are, we also parse the
-/// for-range-initializer, and place it here.
-Parser::DeclGroupPtrTy Parser::ParseSimpleDeclaration(ParsingDeclSpec &DS,
-                                                      StmtVector &Stmts,
-                                                      unsigned Context,
-                                                      SourceLocation &DeclEnd,
-                                                      bool RequireSemi,
-                                                      ForRangeInit *FRI) {
   ParseDeclarationSpecifiers(DS, ParsedTemplateInfo(), AS_none,
                              getDeclSpecContextFromDeclaratorContext(Context));
   StmtResult R = Actions.ActOnVlaStmt(DS);
@@ -1710,6 +1689,10 @@ void Parser::ParseDeclarationSpecifiers(DeclSpec &DS,
         isInvalid = DS.SetTypeSpecWidth(DeclSpec::TSW_longlong, Loc, PrevSpec,
                                         DiagID);
       break;
+    case tok::kw___int64:
+        isInvalid = DS.SetTypeSpecWidth(DeclSpec::TSW_longlong, Loc, PrevSpec,
+                                        DiagID);
+      break;
     case tok::kw_signed:
       isInvalid = DS.SetTypeSpecSign(DeclSpec::TSS_signed, Loc, PrevSpec,
                                      DiagID);
@@ -2005,6 +1988,10 @@ bool Parser::ParseOptionalTypeSpecifier(DeclSpec &DS, bool& isInvalid,
       isInvalid = DS.SetTypeSpecWidth(DeclSpec::TSW_long, Loc, PrevSpec,
                                       DiagID);
     else
+      isInvalid = DS.SetTypeSpecWidth(DeclSpec::TSW_longlong, Loc, PrevSpec,
+                                      DiagID);
+    break;
+  case tok::kw___int64:
       isInvalid = DS.SetTypeSpecWidth(DeclSpec::TSW_longlong, Loc, PrevSpec,
                                       DiagID);
     break;
@@ -2726,6 +2713,7 @@ bool Parser::isKnownToBeTypeSpecifier(const Token &Tok) const {
     // type-specifiers
   case tok::kw_short:
   case tok::kw_long:
+  case tok::kw___int64:
   case tok::kw_signed:
   case tok::kw_unsigned:
   case tok::kw__Complex:
@@ -2794,6 +2782,7 @@ bool Parser::isTypeSpecifierQualifier() {
     // type-specifiers
   case tok::kw_short:
   case tok::kw_long:
+  case tok::kw___int64:
   case tok::kw_signed:
   case tok::kw_unsigned:
   case tok::kw__Complex:
@@ -2917,6 +2906,7 @@ bool Parser::isDeclarationSpecifier(bool DisambiguatingWithExpression) {
     // type-specifiers
   case tok::kw_short:
   case tok::kw_long:
+  case tok::kw___int64:
   case tok::kw_signed:
   case tok::kw_unsigned:
   case tok::kw__Complex:
@@ -2954,9 +2944,6 @@ bool Parser::isDeclarationSpecifier(bool DisambiguatingWithExpression) {
   case tok::kw_virtual:
   case tok::kw_explicit:
 
-    // typedef-name
-  case tok::annot_typename:
-
     // static_assert-declaration
   case tok::kw__Static_assert:
 
@@ -2971,6 +2958,11 @@ bool Parser::isDeclarationSpecifier(bool DisambiguatingWithExpression) {
   case tok::less:
     return getLang().ObjC1;
 
+    // typedef-name
+  case tok::annot_typename:
+    return !DisambiguatingWithExpression ||
+           !isStartOfObjCClassMessageMissingOpenBracket();
+      
   case tok::kw___declspec:
   case tok::kw___cdecl:
   case tok::kw___stdcall:
