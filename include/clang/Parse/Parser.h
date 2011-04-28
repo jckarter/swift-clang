@@ -32,8 +32,9 @@ namespace clang {
   class PragmaUnusedHandler;
   class ColonProtectionRAIIObject;
   class InMessageExpressionRAIIObject;
+  class PoisonSEHIdentifiersRAIIObject;
   class VersionTuple;
-
+  
 /// PrettyStackTraceParserEntry - If a crash happens while the parser is active,
 /// an entry is printed for it.
 class PrettyStackTraceParserEntry : public llvm::PrettyStackTraceEntry {
@@ -75,6 +76,7 @@ class Parser : public CodeCompletionHandler {
   friend class PragmaUnusedHandler;
   friend class ColonProtectionRAIIObject;
   friend class InMessageExpressionRAIIObject;
+  friend class PoisonSEHIdentifiersRAIIObject;
   friend class ParenBraceBracketBalancer;
 
   Preprocessor &PP;
@@ -101,6 +103,12 @@ class Parser : public CodeCompletionHandler {
   enum { ScopeCacheSize = 16 };
   unsigned NumCachedScopes;
   Scope *ScopeCache[ScopeCacheSize];
+
+  /// Identifiers used for SEH handling in Borland. These are only
+  /// allowed in particular circumstances
+  IdentifierInfo *Ident__exception_code, *Ident___exception_code, *Ident_GetExceptionCode; // __except block
+  IdentifierInfo *Ident__exception_info, *Ident___exception_info, *Ident_GetExceptionInfo; // __except filter expression
+  IdentifierInfo *Ident__abnormal_termination, *Ident___abnormal_termination, *Ident_AbnormalTermination; // __finally
 
   /// Ident_super - IdentifierInfo for "super", to support fast
   /// comparison.
@@ -149,7 +157,7 @@ class Parser : public CodeCompletionHandler {
   /// ColonProtectionRAIIObject RAII object.
   bool ColonIsSacred;
 
-  /// \brief When true, we are directly inside an Ojective-C messsage 
+  /// \brief When true, we are directly inside an Objective-C messsage 
   /// send expression.
   ///
   /// This is managed by the \c InMessageExpressionRAIIObject class, and
@@ -391,6 +399,24 @@ private:
 
   static void setTypeAnnotation(Token &Tok, ParsedType T) {
     Tok.setAnnotationValue(T.getAsOpaquePtr());
+  }
+  
+  /// \brief Read an already-translated primary expression out of an annotation
+  /// token.
+  static ExprResult getExprAnnotation(Token &Tok) {
+    if (Tok.getAnnotationValue())
+      return ExprResult((Expr *)Tok.getAnnotationValue());
+    
+    return ExprResult(true);
+  }
+  
+  /// \brief Set the primary expression corresponding to the given annotation
+  /// token.
+  static void setExprAnnotation(Token &Tok, ExprResult ER) {
+    if (ER.isInvalid())
+      Tok.setAnnotationValue(0);
+    else
+      Tok.setAnnotationValue(ER.get());
   }
 
   /// TryAnnotateTypeOrScopeToken - If the current token position is on a
@@ -1049,10 +1075,10 @@ private:
   //===--------------------------------------------------------------------===//
   // C99 6.5: Expressions.
   
-  ExprResult ParseExpression(ExprResult Primary = ExprResult());
+  ExprResult ParseExpression();
   ExprResult ParseConstantExpression();
   // Expr that doesn't include commas.
-  ExprResult ParseAssignmentExpression(ExprResult Primary = ExprResult());
+  ExprResult ParseAssignmentExpression();
 
   ExprResult ParseExpressionWithLeadingAt(SourceLocation AtLoc);
 
@@ -1258,7 +1284,7 @@ private:
   }
   StmtResult ParseStatementOrDeclaration(StmtVector& Stmts,
                                          bool OnlyStatement = false);
-  StmtResult ParseExprStatement(ParsedAttributes &Attrs, ExprResult Primary);
+  StmtResult ParseExprStatement(ParsedAttributes &Attrs);
   StmtResult ParseLabeledStatement(ParsedAttributes &Attr);
   StmtResult ParseCaseStatement(ParsedAttributes &Attr,
                                 bool MissingCase = false,
@@ -1292,6 +1318,14 @@ private:
   StmtResult ParseCXXTryBlock(ParsedAttributes &Attr);
   StmtResult ParseCXXTryBlockCommon(SourceLocation TryLoc);
   StmtResult ParseCXXCatchBlock();
+
+  //===--------------------------------------------------------------------===//
+  // MS: SEH Statements and Blocks
+
+  StmtResult ParseSEHTryBlock(ParsedAttributes &Attr);
+  StmtResult ParseSEHTryBlockCommon(SourceLocation Loc);
+  StmtResult ParseSEHExceptBlock(SourceLocation Loc);
+  StmtResult ParseSEHFinallyBlock(SourceLocation Loc);
 
   //===--------------------------------------------------------------------===//
   // Objective-C Statements
@@ -1330,12 +1364,6 @@ private:
                                         unsigned Context,
                                         SourceLocation &DeclEnd,
                                         ParsedAttributes &attrs,
-                                        bool RequireSemi,
-                                        ForRangeInit *FRI = 0);
-  DeclGroupPtrTy ParseSimpleDeclaration(ParsingDeclSpec &DS,
-                                        StmtVector &Stmts,
-                                        unsigned Context,
-                                        SourceLocation &DeclEnd,
                                         bool RequireSemi,
                                         ForRangeInit *FRI = 0);
   DeclGroupPtrTy ParseDeclGroup(ParsingDeclSpec &DS, unsigned Context,
@@ -1804,7 +1832,8 @@ private:
   ExprResult ParseBinaryTypeTrait();
 
   //===--------------------------------------------------------------------===//
-  // Embarcadero: Expression Traits
+  // Embarcadero: Arary and Expression Traits
+  ExprResult ParseArrayTypeTrait();
   ExprResult ParseExpressionTrait();
 
   //===--------------------------------------------------------------------===//

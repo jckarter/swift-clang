@@ -1849,6 +1849,10 @@ DEF_TRAVERSE_STMT(BinaryTypeTraitExpr, {
     TRY_TO(TraverseTypeLoc(S->getRhsTypeSourceInfo()->getTypeLoc()));
   })
 
+DEF_TRAVERSE_STMT(ArrayTypeTraitExpr, {
+    TRY_TO(TraverseTypeLoc(S->getQueriedTypeSourceInfo()->getTypeLoc()));
+  })
+
 DEF_TRAVERSE_STMT(ExpressionTraitExpr, {
     TRY_TO(TraverseStmt(S->getQueriedExpression()));
   })
@@ -1928,6 +1932,10 @@ DEF_TRAVERSE_STMT(UnresolvedMemberExpr, {
                                               S->getNumTemplateArgs()));
   }
 })
+
+DEF_TRAVERSE_STMT(SEHTryStmt, {})
+DEF_TRAVERSE_STMT(SEHExceptStmt, {})
+DEF_TRAVERSE_STMT(SEHFinallyStmt,{})
 
 DEF_TRAVERSE_STMT(CXXOperatorCallExpr, { })
 DEF_TRAVERSE_STMT(OpaqueValueExpr, { })

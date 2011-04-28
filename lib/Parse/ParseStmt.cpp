@@ -22,10 +22,6 @@
 #include "clang/Basic/SourceManager.h"
 using namespace clang;
 
-static bool isColonOrRSquareBracket(const Token &Tok) {
-  return Tok.is(tok::colon) || Tok.is(tok::r_square);
-}
-
 //===----------------------------------------------------------------------===//
 // C99 6.8: Statements and Blocks.
 //===----------------------------------------------------------------------===//
@@ -44,6 +40,7 @@ static bool isColonOrRSquareBracket(const Token &Tok) {
 ///         jump-statement
 /// [C++]   declaration-statement
 /// [C++]   try-block
+/// [MS]    seh-try-block
 /// [OBC]   objc-throw-statement
 /// [OBC]   objc-try-catch-statement
 /// [OBC]   objc-synchronized-statement
@@ -113,8 +110,7 @@ Retry:
       return ParseLabeledStatement(attrs);
     }
     
-    if (!getLang().CPlusPlus) {
-      // FIXME: Temporarily enable this code only for C.
+    if (Next.isNot(tok::coloncolon)) {
       CXXScopeSpec SS;
       IdentifierInfo *Name = Tok.getIdentifierInfo();
       SourceLocation NameLoc = Tok.getLocation();
@@ -148,60 +144,18 @@ Retry:
         break;     
           
       case Sema::NC_Type:
-        // We have a type. In C, this means that we have a declaration.
-        if (!getLang().CPlusPlus) {
-          ParsedType Type = Classification.getType();
-          const char *PrevSpec = 0;
-          unsigned DiagID;
-          ConsumeToken(); // the identifier
-          ParsingDeclSpec DS(*this);
-          DS.takeAttributesFrom(attrs);
-          DS.SetTypeSpecType(DeclSpec::TST_typename, NameLoc, PrevSpec, DiagID,
-                             Type);
-          DS.SetRangeStart(NameLoc);
-          DS.SetRangeEnd(NameLoc);
-          
-          // In Objective-C, check whether this is the start of a class message
-          // send that is missing an opening square bracket ('[').
-          if (getLang().ObjC1 && Tok.is(tok::identifier) && 
-              Type.get()->isObjCObjectOrInterfaceType() &&
-              isColonOrRSquareBracket(NextToken())) {
-            // Fake up a Declarator to use with ActOnTypeName.
-            Declarator DeclaratorInfo(DS, Declarator::TypeNameContext);
-            TypeResult Ty = Actions.ActOnTypeName(getCurScope(), DeclaratorInfo);
-            if (Ty.isInvalid()) {
-              SkipUntil(tok::r_brace, /*StopAtSemi=*/true, /*DontConsume=*/true);
-              if (Tok.is(tok::semi))
-                ConsumeToken();
-              return StmtError();
-            }
-            
-            ExprResult MsgExpr = ParseObjCMessageExpressionBody(SourceLocation(), 
-                                                                SourceLocation(),
-                                                                Ty.get(), 0);
-            return ParseExprStatement(attrs, MsgExpr);
-          }
-          
-          // Objective-C supports syntax of the form 'id<proto1,proto2>' where 
-          // 'id' is a specific typedef and 'itf<proto1,proto2>' where 'itf' is 
-          // an Objective-C interface. 
-          if (Tok.is(tok::less) && getLang().ObjC1)
-            ParseObjCProtocolQualifiers(DS);
-
-          SourceLocation DeclStart = NameLoc, DeclEnd;
-          DeclGroupPtrTy Decl = ParseSimpleDeclaration(DS, Stmts, 
-                                                       Declarator::BlockContext,
-                                                       DeclEnd, true);
-          return Actions.ActOnDeclStmt(Decl, DeclStart, DeclEnd);
-        }
-          
-        // In C++, we might also have a functional-style cast.
-        // FIXME: Implement this!
+        Tok.setKind(tok::annot_typename);
+        setTypeAnnotation(Tok, Classification.getType());
+        Tok.setAnnotationEndLoc(NameLoc);
+        PP.AnnotateCachedTokens(Tok);
         break;
           
       case Sema::NC_Expression:
-        ConsumeToken(); // the identifier
-        return ParseExprStatement(attrs, Classification.getExpression());
+        Tok.setKind(tok::annot_primary_expr);
+        setExprAnnotation(Tok, Classification.getExpression());
+        Tok.setAnnotationEndLoc(NameLoc);
+        PP.AnnotateCachedTokens(Tok);
+        break;
           
       case Sema::NC_TypeTemplate:
       case Sema::NC_FunctionTemplate: {
@@ -211,7 +165,20 @@ Retry:
         if (AnnotateTemplateIdToken(
                             TemplateTy::make(Classification.getTemplateName()), 
                                     Classification.getTemplateNameKind(),
-                                    SS, Id)) {
+                                    SS, Id, SourceLocation(),
+                                    /*AllowTypeAnnotation=*/false)) {
+          // Handle errors here by skipping up to the next semicolon or '}', and
+          // eat the semicolon if that's what stopped us.
+          SkipUntil(tok::r_brace, /*StopAtSemi=*/true, /*DontConsume=*/true);
+          if (Tok.is(tok::semi))
+            ConsumeToken();
+          return StmtError();        
+        }
+        
+        // If the next token is '::', jump right into parsing a 
+        // nested-name-specifier. We don't want to leave the template-id
+        // hanging.
+        if (NextToken().is(tok::coloncolon) && TryAnnotateCXXScopeToken(false)){
           // Handle errors here by skipping up to the next semicolon or '}', and
           // eat the semicolon if that's what stopped us.
           SkipUntil(tok::r_brace, /*StopAtSemi=*/true, /*DontConsume=*/true);
@@ -246,7 +213,7 @@ Retry:
       return StmtError();
     }
 
-    return ParseExprStatement(attrs, ExprResult());
+    return ParseExprStatement(attrs);
   }
 
   case tok::kw_case:                // C99 6.8.1: labeled-statement
@@ -257,8 +224,10 @@ Retry:
   case tok::l_brace:                // C99 6.8.2: compound-statement
     return ParseCompoundStatement(attrs);
   case tok::semi: {                 // C99 6.8.3p3: expression[opt] ';'
-    bool LeadingEmptyMacro = Tok.hasLeadingEmptyMacro();
-    return Actions.ActOnNullStmt(ConsumeToken(), LeadingEmptyMacro);
+    SourceLocation LeadingEmptyMacroLoc;
+    if (Tok.hasLeadingEmptyMacro())
+      LeadingEmptyMacroLoc = PP.getLastEmptyMacroInstantiationLoc();
+    return Actions.ActOnNullStmt(ConsumeToken(), LeadingEmptyMacroLoc);
   }
 
   case tok::kw_if:                  // C99 6.8.4.1: if-statement
@@ -304,6 +273,9 @@ Retry:
 
   case tok::kw_try:                 // C++ 15: try-block
     return ParseCXXTryBlock(attrs);
+
+  case tok::kw___try:
+    return ParseSEHTryBlock(attrs);
   }
 
   // If we reached this code, the statement must end in a semicolon.
@@ -322,14 +294,13 @@ Retry:
 }
 
 /// \brief Parse an expression statement.
-StmtResult Parser::ParseExprStatement(ParsedAttributes &Attrs, 
-                                      ExprResult Primary) {
+StmtResult Parser::ParseExprStatement(ParsedAttributes &Attrs) {
   // If a case keyword is missing, this is where it should be inserted.
   Token OldToken = Tok;
   
   // FIXME: Use the attributes
   // expression[opt] ';'
-  ExprResult Expr(ParseExpression(Primary));
+  ExprResult Expr(ParseExpression());
   if (Expr.isInvalid()) {
     // If the expression is invalid, skip ahead to the next semicolon or '}'.
     // Not doing this opens us up to the possibility of infinite loops if
@@ -354,7 +325,111 @@ StmtResult Parser::ParseExprStatement(ParsedAttributes &Attrs,
   // Otherwise, eat the semicolon.
   ExpectAndConsumeSemi(diag::err_expected_semi_after_expr);
   return Actions.ActOnExprStmt(Actions.MakeFullExpr(Expr.get()));
+}
 
+StmtResult Parser::ParseSEHTryBlock(ParsedAttributes & Attrs) {
+  assert(Tok.is(tok::kw___try) && "Expected '__try'");
+  SourceLocation Loc = ConsumeToken();
+  return ParseSEHTryBlockCommon(Loc);
+}
+
+/// ParseSEHTryBlockCommon
+///
+/// seh-try-block:
+///   '__try' compound-statement seh-handler
+///
+/// seh-handler:
+///   seh-except-block
+///   seh-finally-block
+///
+StmtResult Parser::ParseSEHTryBlockCommon(SourceLocation TryLoc) {
+  if(Tok.isNot(tok::l_brace))
+    return StmtError(Diag(Tok,diag::err_expected_lbrace));
+
+  ParsedAttributesWithRange attrs(AttrFactory);
+  StmtResult TryBlock(ParseCompoundStatement(attrs));
+  if(TryBlock.isInvalid())
+    return move(TryBlock);
+
+  StmtResult Handler;
+  if(Tok.is(tok::kw___except)) {
+    SourceLocation Loc = ConsumeToken();
+    Handler = ParseSEHExceptBlock(Loc);
+  } else if (Tok.is(tok::kw___finally)) {
+    SourceLocation Loc = ConsumeToken();
+    Handler = ParseSEHFinallyBlock(Loc);
+  } else {
+    return StmtError(Diag(Tok,diag::err_seh_expected_handler));
+  }
+
+  if(Handler.isInvalid())
+    return move(Handler);
+
+  return Actions.ActOnSEHTryBlock(false /* IsCXXTry */,
+                                  TryLoc,
+                                  TryBlock.take(),
+                                  Handler.take());
+}
+
+/// ParseSEHExceptBlock - Handle __except
+///
+/// seh-except-block:
+///   '__except' '(' seh-filter-expression ')' compound-statement
+///
+StmtResult Parser::ParseSEHExceptBlock(SourceLocation ExceptLoc) {
+  PoisonIdentifierRAIIObject raii(Ident__exception_code, false),
+    raii2(Ident___exception_code, false),
+    raii3(Ident_GetExceptionCode, false);
+
+  if(ExpectAndConsume(tok::l_paren,diag::err_expected_lparen))
+    return StmtError();
+
+  ParseScope ExpectScope(this, Scope::DeclScope | Scope::ControlScope);
+
+  if (getLang().Borland) {
+    Ident__exception_info->setIsPoisoned(false);
+    Ident___exception_info->setIsPoisoned(false);
+    Ident_GetExceptionInfo->setIsPoisoned(false);
+  }
+  ExprResult FilterExpr(ParseExpression());
+
+  if (getLang().Borland) {
+    Ident__exception_info->setIsPoisoned(true);
+    Ident___exception_info->setIsPoisoned(true);
+    Ident_GetExceptionInfo->setIsPoisoned(true);
+  }
+
+  if(FilterExpr.isInvalid())
+    return StmtError();
+
+  if(ExpectAndConsume(tok::r_paren,diag::err_expected_rparen))
+    return StmtError();
+
+  ParsedAttributesWithRange attrs(AttrFactory);
+  StmtResult Block(ParseCompoundStatement(attrs));
+
+  if(Block.isInvalid())
+    return move(Block);
+
+  return Actions.ActOnSEHExceptBlock(ExceptLoc, FilterExpr.take(), Block.take());
+}
+
+/// ParseSEHFinallyBlock - Handle __finally
+///
+/// seh-finally-block:
+///   '__finally' compound-statement
+///
+StmtResult Parser::ParseSEHFinallyBlock(SourceLocation FinallyBlock) {
+  PoisonIdentifierRAIIObject raii(Ident__abnormal_termination, false),
+    raii2(Ident___abnormal_termination, false),
+    raii3(Ident_AbnormalTermination, false);
+
+  ParsedAttributesWithRange attrs(AttrFactory);
+  StmtResult Block(ParseCompoundStatement(attrs));
+  if(Block.isInvalid())
+    return move(Block);
+
+  return Actions.ActOnSEHFinallyBlock(FinallyBlock,Block.take());
 }
 
 /// ParseLabeledStatement - We have an identifier and a ':' after it.
@@ -1819,6 +1894,10 @@ StmtResult Parser::ParseCXXTryBlock(ParsedAttributes &attrs) {
 ///       handler-seq:
 ///         handler handler-seq[opt]
 ///
+///       [Borland] try-block:
+///         'try' compound-statement seh-except-block
+///         'try' compound-statment  seh-finally-block
+///
 StmtResult Parser::ParseCXXTryBlockCommon(SourceLocation TryLoc) {
   if (Tok.isNot(tok::l_brace))
     return StmtError(Diag(Tok, diag::err_expected_lbrace));
@@ -1828,23 +1907,45 @@ StmtResult Parser::ParseCXXTryBlockCommon(SourceLocation TryLoc) {
   if (TryBlock.isInvalid())
     return move(TryBlock);
 
-  StmtVector Handlers(Actions);
-  MaybeParseCXX0XAttributes(attrs);
-  ProhibitAttributes(attrs);
+  // Borland allows SEH-handlers with 'try'
+  if(Tok.is(tok::kw___except) || Tok.is(tok::kw___finally)) {
+    // TODO: Factor into common return ParseSEHHandlerCommon(...)
+    StmtResult Handler;
+    if(Tok.is(tok::kw___except)) {
+      SourceLocation Loc = ConsumeToken();
+      Handler = ParseSEHExceptBlock(Loc);
+    }
+    else {
+      SourceLocation Loc = ConsumeToken();
+      Handler = ParseSEHFinallyBlock(Loc);
+    }
+    if(Handler.isInvalid())
+      return move(Handler);
 
-  if (Tok.isNot(tok::kw_catch))
-    return StmtError(Diag(Tok, diag::err_expected_catch));
-  while (Tok.is(tok::kw_catch)) {
-    StmtResult Handler(ParseCXXCatchBlock());
-    if (!Handler.isInvalid())
-      Handlers.push_back(Handler.release());
+    return Actions.ActOnSEHTryBlock(true /* IsCXXTry */,
+                                    TryLoc,
+                                    TryBlock.take(),
+                                    Handler.take());
   }
-  // Don't bother creating the full statement if we don't have any usable
-  // handlers.
-  if (Handlers.empty())
-    return StmtError();
+  else {
+    StmtVector Handlers(Actions);
+    MaybeParseCXX0XAttributes(attrs);
+    ProhibitAttributes(attrs);
 
-  return Actions.ActOnCXXTryBlock(TryLoc, TryBlock.take(), move_arg(Handlers));
+    if (Tok.isNot(tok::kw_catch))
+      return StmtError(Diag(Tok, diag::err_expected_catch));
+    while (Tok.is(tok::kw_catch)) {
+      StmtResult Handler(ParseCXXCatchBlock());
+      if (!Handler.isInvalid())
+        Handlers.push_back(Handler.release());
+    }
+    // Don't bother creating the full statement if we don't have any usable
+    // handlers.
+    if (Handlers.empty())
+      return StmtError();
+
+    return Actions.ActOnCXXTryBlock(TryLoc, TryBlock.take(), move_arg(Handlers));
+  }
 }
 
 /// ParseCXXCatchBlock - Parse a C++ catch block, called handler in the standard

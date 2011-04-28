@@ -299,8 +299,6 @@ public:
            (((Mask & CVRMask) | (other.Mask & CVRMask)) == (Mask & CVRMask));
   }
 
-  bool isSupersetOf(Qualifiers Other) const;
-
   bool operator==(Qualifiers Other) const { return Mask == Other.Mask; }
   bool operator!=(Qualifiers Other) const { return Mask != Other.Mask; }
 
@@ -606,8 +604,14 @@ public:
   /// ASTContext::getUnqualifiedArrayType.
   inline SplitQualType getSplitUnqualifiedType() const;
   
+  /// \brief Determine whether this type is more qualified than the other
+  /// given type, requiring exact equality for non-CVR qualifiers.
   bool isMoreQualifiedThan(QualType Other) const;
+
+  /// \brief Determine whether this type is at least as qualified as the other
+  /// given type, requiring exact equality for non-CVR qualifiers.
   bool isAtLeastAsQualifiedAs(QualType Other) const;
+  
   QualType getNonReferenceType() const;
 
   /// \brief Determine the type of a (typically non-lvalue) expression with the
@@ -1171,7 +1175,7 @@ public:
   /// (C++0x [basic.types]p10)
   bool isLiteralType() const;
 
-  /// isTrivialType - Return true if this is a literal type
+  /// isTrivialType - Return true if this is a trivial type
   /// (C++0x [basic.types]p9)
   bool isTrivialType() const;
 
@@ -2832,6 +2836,9 @@ public:
   // const, it needs to return false.
   bool hasConstFields() const { return false; }
 
+  /// \brief Whether this class has standard layout
+  bool hasStandardLayout(ASTContext& Ctx) const;
+
   bool isSugared() const { return false; }
   QualType desugar() const { return QualType(this, 0); }
 
@@ -4149,12 +4156,6 @@ inline FunctionType::ExtInfo getFunctionExtInfo(const Type &t) {
 
 inline FunctionType::ExtInfo getFunctionExtInfo(QualType t) {
   return getFunctionExtInfo(*t);
-}
-
-/// \brief Determine whether this set of qualifiers is a superset of the given 
-/// set of qualifiers.
-inline bool Qualifiers::isSupersetOf(Qualifiers Other) const {
-  return Mask != Other.Mask && (Mask | Other.Mask) == Mask;
 }
 
 /// isMoreQualifiedThan - Determine whether this type is more
