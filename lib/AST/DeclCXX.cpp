@@ -270,11 +270,11 @@ GetBestOverloadCandidateSimple(
   
   unsigned Best = 0, N = Cands.size();
   for (unsigned I = 1; I != N; ++I)
-    if (Cands[Best].second.isSupersetOf(Cands[I].second))
+    if (Cands[Best].second.compatiblyIncludes(Cands[I].second))
       Best = I;
   
   for (unsigned I = 1; I != N; ++I)
-    if (Cands[Best].second.isSupersetOf(Cands[I].second))
+    if (Cands[Best].second.compatiblyIncludes(Cands[I].second))
       return 0;
   
   return Cands[Best].first;
@@ -926,6 +926,10 @@ CXXDestructorDecl *CXXRecordDecl::getDestructor() const {
 
 void CXXRecordDecl::completeDefinition() {
   completeDefinition(0);
+
+  ASTContext &Context = getASTContext();
+  if (const RecordType *RT = getTypeForDecl()->getAs<RecordType>())
+    data().HasStandardLayout = RT->hasStandardLayout(Context);
 }
 
 void CXXRecordDecl::completeDefinition(CXXFinalOverriderMap *FinalOverriders) {
