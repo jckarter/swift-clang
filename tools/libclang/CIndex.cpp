@@ -5198,7 +5198,7 @@ typedef std::vector<CXTUResourceUsageEntry> MemUsageEntries;
 
 static inline void createCXTUResourceUsageEntry(MemUsageEntries &entries,
                                               enum CXTUResourceUsageKind k,
-                                              double amount) {
+                                              unsigned long amount) {
   CXTUResourceUsageEntry entry = { k, amount };
   entries.push_back(entry);
 }
@@ -5220,6 +5220,12 @@ const char *clang_getTUResourceUsageName(CXTUResourceUsageKind kind) {
     case CXTUResourceUsage_GlobalCompletionResults:
       str = "Code completion: cached global results";
       break;
+    case CXTUResourceUsage_SourceManagerContentCache:
+      str = "SourceManager: content cache allocator";
+      break;
+    case CXTUResourceUsage_AST_SideTables:
+      str = "ASTContext: side tables";
+      break;
   }
   return str;
 }
@@ -5236,7 +5242,7 @@ CXTUResourceUsage clang_getCXTUResourceUsage(CXTranslationUnit TU) {
   
   // How much memory is used by AST nodes and types?
   createCXTUResourceUsageEntry(*entries, CXTUResourceUsage_AST,
-    (unsigned long) astContext.getTotalAllocatedMemory());
+    (unsigned long) astContext.getASTAllocatedMemory());
 
   // How much memory is used by identifiers?
   createCXTUResourceUsageEntry(*entries, CXTUResourceUsage_Identifiers,
@@ -5246,14 +5252,24 @@ CXTUResourceUsage clang_getCXTUResourceUsage(CXTranslationUnit TU) {
   createCXTUResourceUsageEntry(*entries, CXTUResourceUsage_Selectors,
     (unsigned long) astContext.Selectors.getTotalMemory());
   
+  // How much memory is used by ASTContext's side tables?
+  createCXTUResourceUsageEntry(*entries, CXTUResourceUsage_AST_SideTables,
+    (unsigned long) astContext.getSideTableAllocatedMemory());
+  
   // How much memory is used for caching global code completion results?
   unsigned long completionBytes = 0;
   if (GlobalCodeCompletionAllocator *completionAllocator =
       astUnit->getCachedCompletionAllocator().getPtr()) {
     completionBytes = completionAllocator-> getTotalMemory();
   }
-  createCXTUResourceUsageEntry(*entries, CXTUResourceUsage_GlobalCompletionResults,
-    completionBytes);
+  createCXTUResourceUsageEntry(*entries,
+                               CXTUResourceUsage_GlobalCompletionResults,
+                               completionBytes);
+  
+  // How much memory is being used by SourceManager's content cache?
+  createCXTUResourceUsageEntry(*entries,
+          CXTUResourceUsage_SourceManagerContentCache,
+          (unsigned long) astContext.getSourceManager().getContentCacheSize());
 
 
   CXTUResourceUsage usage = { (void*) entries.get(),
