@@ -383,14 +383,15 @@ public:
 class NullStmt : public Stmt {
   SourceLocation SemiLoc;
 
-  /// \brief Whether the null statement was preceded by an empty macro, e.g:
+  /// \brief If the null statement was preceded by an empty macro this is
+  /// its instantiation source location, e.g:
   /// @code
   ///   #define CALL(x)
   ///   CALL(0);
   /// @endcode
-  bool LeadingEmptyMacro;
+  SourceLocation LeadingEmptyMacro;
 public:
-  NullStmt(SourceLocation L, bool LeadingEmptyMacro = false)
+  NullStmt(SourceLocation L, SourceLocation LeadingEmptyMacro =SourceLocation())
     : Stmt(NullStmtClass), SemiLoc(L), LeadingEmptyMacro(LeadingEmptyMacro) {}
 
   /// \brief Build an empty null statement.
@@ -399,7 +400,8 @@ public:
   SourceLocation getSemiLoc() const { return SemiLoc; }
   void setSemiLoc(SourceLocation L) { SemiLoc = L; }
 
-  bool hasLeadingEmptyMacro() const { return LeadingEmptyMacro; }
+  bool hasLeadingEmptyMacro() const { return LeadingEmptyMacro.isValid(); }
+  SourceLocation getLeadingEmptyMacroLoc() const { return LeadingEmptyMacro; }
 
   SourceRange getSourceRange() const { return SourceRange(SemiLoc); }
 
@@ -1431,6 +1433,122 @@ public:
   child_range children() {
     return child_range(&Exprs[0], &Exprs[0] + NumOutputs + NumInputs);
   }
+};
+
+class SEHExceptStmt : public Stmt {
+  SourceLocation  Loc;
+  Stmt           *Children[2];
+
+  enum { FILTER_EXPR, BLOCK };
+
+  SEHExceptStmt(SourceLocation Loc,
+                Expr *FilterExpr,
+                Stmt *Block);
+
+public:
+  static SEHExceptStmt* Create(ASTContext &C,
+                               SourceLocation ExceptLoc,
+                               Expr *FilterExpr,
+                               Stmt *Block);
+  SourceRange getSourceRange() const {
+    return SourceRange(getExceptLoc(), getEndLoc());
+  }
+
+  SourceLocation getExceptLoc() const { return Loc; }
+  SourceLocation getEndLoc() const { return getBlock()->getLocEnd(); }
+
+  Expr *getFilterExpr() const { return reinterpret_cast<Expr*>(Children[FILTER_EXPR]); }
+  CompoundStmt *getBlock() const { return llvm::cast<CompoundStmt>(Children[BLOCK]); }
+
+  child_range children() {
+    return child_range(Children,Children+2);
+  }
+
+  static bool classof(const Stmt *T) {
+    return T->getStmtClass() == SEHExceptStmtClass;
+  }
+
+  static bool classof(SEHExceptStmt *) { return true; }
+
+};
+
+class SEHFinallyStmt : public Stmt {
+  SourceLocation  Loc;
+  Stmt           *Block;
+
+  SEHFinallyStmt(SourceLocation Loc,
+                 Stmt *Block);
+
+public:
+  static SEHFinallyStmt* Create(ASTContext &C,
+                                SourceLocation FinallyLoc,
+                                Stmt *Block);
+
+  SourceRange getSourceRange() const {
+    return SourceRange(getFinallyLoc(), getEndLoc());
+  }
+
+  SourceLocation getFinallyLoc() const { return Loc; }
+  SourceLocation getEndLoc() const { return Block->getLocEnd(); }
+
+  CompoundStmt *getBlock() const { return llvm::cast<CompoundStmt>(Block); }
+
+  child_range children() {
+    return child_range(&Block,&Block+1);
+  }
+
+  static bool classof(const Stmt *T) {
+    return T->getStmtClass() == SEHFinallyStmtClass;
+  }
+
+  static bool classof(SEHFinallyStmt *) { return true; }
+
+};
+
+class SEHTryStmt : public Stmt {
+  bool            IsCXXTry;
+  SourceLocation  TryLoc;
+  Stmt           *Children[2];
+
+  enum { TRY = 0, HANDLER = 1 };
+
+  SEHTryStmt(bool isCXXTry, // true if 'try' otherwise '__try'
+             SourceLocation TryLoc,
+             Stmt *TryBlock,
+             Stmt *Handler);
+
+public:
+  static SEHTryStmt* Create(ASTContext &C,
+                            bool isCXXTry,
+                            SourceLocation TryLoc,
+                            Stmt *TryBlock,
+                            Stmt *Handler);
+
+  SourceRange getSourceRange() const {
+    return SourceRange(getTryLoc(), getEndLoc());
+  }
+
+  SourceLocation getTryLoc() const { return TryLoc; }
+  SourceLocation getEndLoc() const { return Children[HANDLER]->getLocEnd(); }
+
+  bool getIsCXXTry() const { return IsCXXTry; }
+  CompoundStmt* getTryBlock() const { return llvm::cast<CompoundStmt>(Children[TRY]); }
+  Stmt *getHandler() const { return Children[HANDLER]; }
+
+  /// Returns 0 if not defined
+  SEHExceptStmt  *getExceptHandler() const;
+  SEHFinallyStmt *getFinallyHandler() const;
+
+  child_range children() {
+    return child_range(Children,Children+2);
+  }
+
+  static bool classof(const Stmt *T) {
+    return T->getStmtClass() == SEHTryStmtClass;
+  }
+
+  static bool classof(SEHTryStmt *) { return true; }
+
 };
 
 }  // end namespace clang

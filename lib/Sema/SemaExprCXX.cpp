@@ -2355,8 +2355,12 @@ static bool EvaluateUnaryTypeTrait(Sema &Self, UnaryTypeTrait UTT, QualType T,
                                    SourceLocation KeyLoc) {
   // FIXME: For many of these traits, we need a complete type before we can 
   // check these properties.
-  assert(!T->isDependentType() &&
-         "Cannot evaluate traits for dependent types.");
+
+  if (T->isDependentType()) {
+    Self.Diag(KeyLoc, diag::err_dependent_type_used_in_type_trait_expr) << T;
+    return false;
+  }
+
   ASTContext &C = Self.Context;
   switch(UTT) {
   default: assert(false && "Unknown type trait or not implemented");
@@ -2379,6 +2383,7 @@ static bool EvaluateUnaryTypeTrait(Sema &Self, UnaryTypeTrait UTT, QualType T,
     return false;
   case UTT_IsAbstract:
     if (const RecordType *RT = T->getAs<RecordType>())
+      if (!Self.RequireCompleteType(KeyLoc, T, diag::err_incomplete_typeid))
       return cast<CXXRecordDecl>(RT->getDecl())->isAbstract();
     return false;
   case UTT_IsEmpty:
@@ -2387,6 +2392,74 @@ static bool EvaluateUnaryTypeTrait(Sema &Self, UnaryTypeTrait UTT, QualType T,
           && cast<CXXRecordDecl>(Record->getDecl())->isEmpty();
     }
     return false;
+  case UTT_IsIntegral:
+    return T->isIntegralType(C);
+  case UTT_IsFloatingPoint:
+    return T->isFloatingType();
+  case UTT_IsArithmetic:
+    return T->isArithmeticType() && ! T->isEnumeralType();
+  case UTT_IsArray:
+    return T->isArrayType();
+  case UTT_IsCompleteType:
+    return ! T->isIncompleteType();
+  case UTT_IsCompound:
+    return ! (T->isVoidType() || T->isArithmeticType()) || T->isEnumeralType();
+  case UTT_IsConst:
+    return T.isConstQualified();
+  case UTT_IsFunction:
+    return T->isFunctionType();
+  case UTT_IsFundamental:
+    return T->isVoidType() || (T->isArithmeticType() && ! T->isEnumeralType());
+  case UTT_IsLvalueReference:
+    return T->isLValueReferenceType();
+  case UTT_IsMemberFunctionPointer:
+    return T->isMemberFunctionPointerType();
+  case UTT_IsMemberObjectPointer:
+    return T->isMemberDataPointerType();
+  case UTT_IsMemberPointer:
+    return T->isMemberPointerType();
+  case UTT_IsObject:
+    // Defined in Section 3.9 p8 of the Working Draft, essentially:
+    // !__is_reference(T) && !__is_function(T) && !__is_void(T).
+    return ! (T->isReferenceType() || T->isFunctionType() || T->isVoidType());
+  case UTT_IsPointer:
+    return T->isPointerType();
+  case UTT_IsReference:
+    return T->isReferenceType();
+  case UTT_IsRvalueReference:
+    return T->isRValueReferenceType();
+  case UTT_IsScalar:
+    // Scalar type is defined in Section 3.9 p10 of the Working Draft.
+    // Essentially:
+    // __is_arithmetic( T ) || __is_enumeration(T) ||
+    // __is_pointer(T) || __is_member_pointer(T)
+    return (T->isArithmeticType() || T->isEnumeralType() ||
+            T->isPointerType() || T->isMemberPointerType());
+  case UTT_IsSigned:
+    return T->isSignedIntegerType();
+  case UTT_IsStandardLayout:
+    // Error if T is an incomplete type.
+    if (Self.RequireCompleteType(KeyLoc, T, diag::err_incomplete_typeid))
+      return false;
+
+    // A standard layout type is:
+    // - a scalar type
+    // - an array of standard layout types
+    // - a standard layout class type:
+    if (EvaluateUnaryTypeTrait(Self, UTT_IsScalar, T, KeyLoc))
+      return true;
+    if (EvaluateUnaryTypeTrait(Self, UTT_IsScalar, C.getBaseElementType(T),
+                               KeyLoc))
+      return true;
+    if (const RecordType *RT = C.getBaseElementType(T)->getAs<RecordType>())
+      return RT->hasStandardLayout(C);
+    return false;
+  case UTT_IsUnsigned:
+    return T->isUnsignedIntegerType();
+  case UTT_IsVoid:
+    return T->isVoidType();
+  case UTT_IsVolatile:
+    return T.isVolatileQualified();
   case UTT_HasTrivialConstructor:
     // http://gcc.gnu.org/onlinedocs/gcc/Type-Traits.html:
     //   If __is_pod (type) is true then the trait is true, else if type is
@@ -2579,11 +2652,21 @@ ExprResult Sema::BuildUnaryTypeTrait(UnaryTypeTrait UTT,
   // According to http://gcc.gnu.org/onlinedocs/gcc/Type-Traits.html
   // all traits except __is_class, __is_enum and __is_union require a the type
   // to be complete, an array of unknown bound, or void.
-  if (UTT != UTT_IsClass && UTT != UTT_IsEnum && UTT != UTT_IsUnion) {
+  if (UTT != UTT_IsClass && UTT != UTT_IsEnum && UTT != UTT_IsUnion &&
+      UTT != UTT_IsCompleteType) {
     QualType E = T;
     if (T->isIncompleteArrayType())
       E = Context.getAsArrayType(T)->getElementType();
     if (!T->isVoidType() &&
+        (! LangOpts.Borland ||
+         UTT == UTT_HasNothrowAssign ||
+         UTT == UTT_HasNothrowCopy ||
+         UTT == UTT_HasNothrowConstructor ||
+         UTT == UTT_HasTrivialAssign ||
+         UTT == UTT_HasTrivialCopy ||
+         UTT == UTT_HasTrivialConstructor ||
+         UTT == UTT_HasTrivialDestructor ||
+         UTT == UTT_HasVirtualDestructor) &&
         RequireCompleteType(KWLoc, E,
                             diag::err_incomplete_type_used_in_type_trait_expr))
       return ExprError();
@@ -2618,8 +2701,14 @@ ExprResult Sema::ActOnBinaryTypeTrait(BinaryTypeTrait BTT,
 static bool EvaluateBinaryTypeTrait(Sema &Self, BinaryTypeTrait BTT,
                                     QualType LhsT, QualType RhsT,
                                     SourceLocation KeyLoc) {
-  assert((!LhsT->isDependentType() || RhsT->isDependentType()) &&
-         "Cannot evaluate traits for dependent types.");
+  if (LhsT->isDependentType()) {
+    Self.Diag(KeyLoc, diag::err_dependent_type_used_in_type_trait_expr) << LhsT;
+    return false;
+  }
+  else if (RhsT->isDependentType()) {
+    Self.Diag(KeyLoc, diag::err_dependent_type_used_in_type_trait_expr) << RhsT;
+    return false;
+  }
 
   switch(BTT) {
   case BTT_IsBaseOf: {
@@ -2651,11 +2740,12 @@ static bool EvaluateBinaryTypeTrait(Sema &Self, BinaryTypeTrait BTT,
     return cast<CXXRecordDecl>(rhsRecord->getDecl())
       ->isDerivedFrom(cast<CXXRecordDecl>(lhsRecord->getDecl()));
   }
-
+  case BTT_IsSame:
+    return Self.Context.hasSameType(LhsT, RhsT);
   case BTT_TypeCompatible:
     return Self.Context.typesAreCompatible(LhsT.getUnqualifiedType(),
                                            RhsT.getUnqualifiedType());
-      
+  case BTT_IsConvertible:
   case BTT_IsConvertibleTo: {
     // C++0x [meta.rel]p4:
     //   Given the following function prototype:
@@ -2730,6 +2820,8 @@ ExprResult Sema::BuildBinaryTypeTrait(BinaryTypeTrait BTT,
   QualType ResultType;
   switch (BTT) {
   case BTT_IsBaseOf:       ResultType = Context.BoolTy; break;
+  case BTT_IsConvertible:  ResultType = Context.BoolTy; break;
+  case BTT_IsSame:         ResultType = Context.BoolTy; break;
   case BTT_TypeCompatible: ResultType = Context.IntTy; break;
   case BTT_IsConvertibleTo: ResultType = Context.BoolTy; break;
   }
@@ -2737,6 +2829,102 @@ ExprResult Sema::BuildBinaryTypeTrait(BinaryTypeTrait BTT,
   return Owned(new (Context) BinaryTypeTraitExpr(KWLoc, BTT, LhsTSInfo,
                                                  RhsTSInfo, Value, RParen,
                                                  ResultType));
+}
+
+ExprResult Sema::ActOnArrayTypeTrait(ArrayTypeTrait ATT,
+                                     SourceLocation KWLoc,
+                                     ParsedType Ty,
+                                     Expr* DimExpr,
+                                     SourceLocation RParen) {
+  TypeSourceInfo *TSInfo;
+  QualType T = GetTypeFromParser(Ty, &TSInfo);
+  if (!TSInfo)
+    TSInfo = Context.getTrivialTypeSourceInfo(T);
+
+  return BuildArrayTypeTrait(ATT, KWLoc, TSInfo, DimExpr, RParen);
+}
+
+static uint64_t EvaluateArrayTypeTrait(Sema &Self, ArrayTypeTrait ATT,
+                                           QualType T, Expr *DimExpr,
+                                           SourceLocation KeyLoc) {
+  if (T->isDependentType()) {
+    Self.Diag(KeyLoc, diag::err_dependent_type_used_in_type_trait_expr) << T;
+    return false;
+  }
+
+  switch(ATT) {
+  case ATT_ArrayRank:
+    if (T->isArrayType()) {
+      unsigned Dim = 0;
+      while (const ArrayType *AT = Self.Context.getAsArrayType(T)) {
+        ++Dim;
+        T = AT->getElementType();
+      }
+      return Dim;
+    }
+    return 0;
+
+  case ATT_ArrayExtent: {
+    llvm::APSInt Value;
+    uint64_t Dim;
+    if (DimExpr->isIntegerConstantExpr(Value, Self.Context, 0, false)) {
+      if (Value < llvm::APSInt(Value.getBitWidth(), Value.isUnsigned())) {
+        Self.Diag(KeyLoc, diag::err_dimension_expr_not_constant_integer) <<
+          DimExpr->getSourceRange();
+        return false;
+      }
+      Dim = Value.getLimitedValue();
+    } else {
+      Self.Diag(KeyLoc, diag::err_dimension_expr_not_constant_integer) <<
+        DimExpr->getSourceRange();
+      return false;
+    }
+
+    if (T->isArrayType()) {
+      unsigned D = 0;
+      bool Matched = false;
+      while (const ArrayType *AT = Self.Context.getAsArrayType(T)) {
+        if (Dim == D) {
+          Matched = true;
+          break;
+        }
+        ++D;
+        T = AT->getElementType();
+      }
+
+      if (Matched && T->isArrayType()) {
+        if (const ConstantArrayType *CAT = Self.Context.getAsConstantArrayType(T))
+          return CAT->getSize().getLimitedValue();
+      }
+    }
+    return 0;
+  }
+  }
+  llvm_unreachable("Unknown type trait or not implemented");
+}
+
+ExprResult Sema::BuildArrayTypeTrait(ArrayTypeTrait ATT,
+                                     SourceLocation KWLoc,
+                                     TypeSourceInfo *TSInfo,
+                                     Expr* DimExpr,
+                                     SourceLocation RParen) {
+  QualType T = TSInfo->getType();
+
+  uint64_t Value;
+  if (!T->isDependentType())
+    Value = EvaluateArrayTypeTrait(*this, ATT, T, DimExpr, KWLoc);
+  else
+    return ExprError();
+
+  // Select trait result type.
+  QualType ResultType;
+  switch (ATT) {
+  case ATT_ArrayRank:    ResultType = Context.IntTy; break;
+  case ATT_ArrayExtent:  ResultType = Context.IntTy; break;
+  }
+
+  return Owned(new (Context) ArrayTypeTraitExpr(KWLoc, ATT, TSInfo, Value,
+                                                DimExpr, RParen, ResultType));
 }
 
 ExprResult Sema::ActOnExpressionTrait(ExpressionTrait ET,
