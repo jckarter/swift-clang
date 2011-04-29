@@ -3094,6 +3094,14 @@ CheckTemplateArgumentAddressOfObjectOrFunction(Sema &S,
   SourceLocation AddrOpLoc;
   if (UnaryOperator *UnOp = dyn_cast<UnaryOperator>(Arg)) {
     if (UnOp->getOpcode() == UO_AddrOf) {
+      // Support &__uuidof(class_with_uuid) as a non-type template argument.
+      // Very common in Microsoft COM headers.
+      if (S.getLangOptions().Microsoft && 
+        isa<CXXUuidofExpr>(UnOp->getSubExpr())) {
+        Converted = TemplateArgument(ArgIn);
+        return false;
+      }
+
       DRE = dyn_cast<DeclRefExpr>(UnOp->getSubExpr());
       AddressTaken = true;
       AddrOpLoc = UnOp->getOperatorLoc();
