@@ -1330,10 +1330,6 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
     else if (A->getOption().matches(options::OPT_O) &&
              A->getValue(Args)[0] == '\0')
       CmdArgs.push_back("-O2");
-    else if (A->getOption().matches(options::OPT_O) &&
-             A->getValue(Args)[0] == 'z' &&
-             A->getValue(Args)[1] == '\0')
-      CmdArgs.push_back("-Os");
     else
       A->render(Args, CmdArgs);
   }
@@ -2026,6 +2022,7 @@ void ClangAs::ConstructJob(Compilation &C, const JobAction &JA,
 
   Args.AddAllArgValues(CmdArgs, options::OPT_Wa_COMMA,
                        options::OPT_Xassembler);
+  Args.AddAllArgs(CmdArgs, options::OPT_mllvm);
 
   assert(Output.isFilename() && "Unexpected lipo output.");
   CmdArgs.push_back("-o");

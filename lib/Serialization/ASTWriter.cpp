@@ -3782,6 +3782,7 @@ void ASTWriter::AddCXXDefinitionData(const CXXRecordDecl *D, RecordDataImpl &Rec
   Record.push_back(Data.Empty);
   Record.push_back(Data.Polymorphic);
   Record.push_back(Data.Abstract);
+  Record.push_back(Data.HasStandardLayout);
   Record.push_back(Data.HasTrivialConstructor);
   Record.push_back(Data.HasConstExprNonCopyMoveConstructor);
   Record.push_back(Data.HasTrivialCopyConstructor);
@@ -3953,6 +3954,18 @@ void ASTWriter::CompletedImplicitDefinition(const FunctionDecl *D) {
   // Implicit decl from a PCH was defined.
   // FIXME: Should implicit definition be a separate FunctionDecl?
   RewriteDecl(D);
+}
+
+void ASTWriter::StaticDataMemberInstantiated(const VarDecl *D) {
+  if (D->getPCHLevel() == 0)
+    return;
+
+  // Since the actual instantiation is delayed, this really means that we need
+  // to update the instantiation location.
+  UpdateRecord &Record = DeclUpdates[D];
+  Record.push_back(UPD_CXX_INSTANTIATED_STATIC_DATA_MEMBER);
+  AddSourceLocation(
+      D->getMemberSpecializationInfo()->getPointOfInstantiation(), Record);
 }
 
 ASTSerializationListener::~ASTSerializationListener() { }
