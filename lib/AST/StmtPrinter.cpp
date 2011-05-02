@@ -1293,7 +1293,6 @@ void StmtPrinter::VisitUnresolvedMemberExpr(UnresolvedMemberExpr *Node) {
 
 static const char *getTypeTraitName(UnaryTypeTrait UTT) {
   switch (UTT) {
-  default: assert(false && "Unknown type trait");
   case UTT_HasNothrowAssign:      return "__has_nothrow_assign";
   case UTT_HasNothrowConstructor: return "__has_nothrow_constructor";
   case UTT_HasNothrowCopy:          return "__has_nothrow_copy";
@@ -1315,7 +1314,7 @@ static const char *getTypeTraitName(UnaryTypeTrait UTT) {
   case UTT_IsFunction:              return "__is_function";
   case UTT_IsFundamental:           return "__is_fundamental";
   case UTT_IsIntegral:              return "__is_integral";
-  case UTT_IsLvalueExpr:            return "__is_lvalue_expr";
+  case UTT_IsLiteral:               return "__is_literal";
   case UTT_IsLvalueReference:       return "__is_lvalue_reference";
   case UTT_IsMemberFunctionPointer: return "__is_member_function_pointer";
   case UTT_IsMemberObjectPointer:   return "__is_member_object_pointer";
@@ -1325,7 +1324,6 @@ static const char *getTypeTraitName(UnaryTypeTrait UTT) {
   case UTT_IsPointer:               return "__is_pointer";
   case UTT_IsPolymorphic:         return "__is_polymorphic";
   case UTT_IsReference:             return "__is_reference";
-  case UTT_IsRvalueExpr:            return "__is_rvalue_expr";
   case UTT_IsRvalueReference:       return "__is_rvalue_reference";
   case UTT_IsScalar:                return "__is_scalar";
   case UTT_IsSigned:                return "__is_signed";
@@ -1336,7 +1334,7 @@ static const char *getTypeTraitName(UnaryTypeTrait UTT) {
   case UTT_IsVoid:                  return "__is_void";
   case UTT_IsVolatile:              return "__is_volatile";
   }
-  return "";
+  llvm_unreachable("Type trait not covered by switch statement");
 }
 
 static const char *getTypeTraitName(BinaryTypeTrait BTT) {
@@ -1347,7 +1345,7 @@ static const char *getTypeTraitName(BinaryTypeTrait BTT) {
   case BTT_TypeCompatible:   return "__builtin_types_compatible_p";
   case BTT_IsConvertibleTo:  return "__is_convertible_to";
   }
-  return "";
+  llvm_unreachable("Binary type trait not covered by switch");
 }
 
 static const char *getTypeTraitName(ArrayTypeTrait ATT) {
@@ -1355,16 +1353,15 @@ static const char *getTypeTraitName(ArrayTypeTrait ATT) {
   case ATT_ArrayRank:        return "__array_rank";
   case ATT_ArrayExtent:      return "__array_extent";
   }
-  return "";
+  llvm_unreachable("Array type trait not covered by switch");
 }
 
 static const char *getExpressionTraitName(ExpressionTrait ET) {
   switch (ET) {
-  default: llvm_unreachable("Unknown expression trait");
   case ET_IsLValueExpr:      return "__is_lvalue_expr";
   case ET_IsRValueExpr:      return "__is_rvalue_expr";
   }
-  return "";
+  llvm_unreachable("Expression type trait not covered by switch");
 }
 
 void StmtPrinter::VisitUnaryTypeTraitExpr(UnaryTypeTraitExpr *E) {
