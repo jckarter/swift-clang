@@ -65,6 +65,9 @@ def err_drv_command_signalled : Error<
   "%0 command failed due to signal %1 (use -v to see invocation)">;
 def err_drv_invalid_mfloat_abi : Error<
   "invalid float ABI '%0'">;
+def err_drv_invalid_libcxx_deployment : Error<
+  "invalid deployment target for -stdlib=libc++ (requires %0 or later)">;
+
 def err_drv_I_dash_not_supported : Error<
   "'%0' not supported, please use -iquote instead">;
 def err_drv_unknown_argument : Error<"unknown argument: '%0'">;
@@ -78,6 +81,10 @@ def err_drv_cc_print_options_failure : Error<
     "unable to open CC_PRINT_OPTIONS file: %0">;
 def err_drv_preamble_format : Error<
     "incorrect format for -preamble-bytes=N,END">;
+def err_drv_conflicting_deployment_targets : Error<
+  "conflicting deployment targets, both '%0' and '%1' are present in environment">;
+def err_drv_invalid_arch_for_deployment_target : Error<
+  "invalid architecture '%0' for deployment target '%1'">;
 
 def warn_c_kext : Warning<
   "ignoring -fapple-kext which is valid for c++ and objective-c++ only">;

@@ -1008,6 +1008,10 @@ def err_delegation_unimplemented : Error<
   "delegating constructors are not fully implemented">;
 def err_delegating_initializer_alone : Error<
   "an initializer for a delegating constructor must appear alone">;
+def err_delegating_ctor_loop : Error<
+  "constructor %0 delegates to itself (possibly indirectly)">;
+def err_delegating_codegen_not_implemented : Error<
+  "code generation for delegating constructors not implemented">;
 
 // C++0x range-based for loop
 def err_for_range_decl_must_be_var : Error<
@@ -3335,8 +3339,6 @@ def warn_unused_call : Warning<
 
 def err_incomplete_type_used_in_type_trait_expr : Error<
   "incomplete type %0 used in type trait expression">;
-def err_dependent_type_used_in_type_trait_expr : Error<
-  "dependent type %0 used in type trait expression">;
 def err_dimension_expr_not_constant_integer : Error<
   "dimension expression does not evaluate to a constant unsigned int">;
 def err_expected_ident_or_lparen : Error<"expected identifier or '('">;

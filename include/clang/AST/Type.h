@@ -299,6 +299,10 @@ public:
            (((Mask & CVRMask) | (other.Mask & CVRMask)) == (Mask & CVRMask));
   }
 
+  /// \brief Determine whether this set of qualifiers is a strict superset of
+  /// another set of qualifiers, not considering qualifier compatibility.
+  bool isStrictSupersetOf(Qualifiers Other) const;
+  
   bool operator==(Qualifiers Other) const { return Mask == Other.Mask; }
   bool operator!=(Qualifiers Other) const { return Mask != Other.Mask; }
 
@@ -1179,6 +1183,10 @@ public:
   /// (C++0x [basic.types]p9)
   bool isTrivialType() const;
 
+  /// \brief Test if this type is a standard-layout type.
+  /// (C++0x [basic.type]p9)
+  bool isStandardLayoutType() const;
+
   /// isCXX11PODType() - Return true if this is a POD type according to the
   /// more relaxed rules of the C++11 standard, regardless of the current
   /// compilation's language.
@@ -1232,6 +1240,8 @@ public:
   bool isDerivedType() const;      // C99 6.2.5p20
   bool isScalarType() const;       // C99 6.2.5p21 (arithmetic + pointers)
   bool isAggregateType() const;
+  bool isFundamentalType() const;
+  bool isCompoundType() const;
 
   // Type Predicates: Check to see if this type is structurally the specified
   // type, ignoring typedefs and qualifiers.
@@ -2842,9 +2852,6 @@ public:
   // const, it needs to return false.
   bool hasConstFields() const { return false; }
 
-  /// \brief Whether this class has standard layout
-  bool hasStandardLayout(ASTContext& Ctx) const;
-
   bool isSugared() const { return false; }
   QualType desugar() const { return QualType(this, 0); }
 
@@ -2964,44 +2971,68 @@ public:
 };
 
 class TemplateTypeParmType : public Type, public llvm::FoldingSetNode {
-  unsigned Depth : 15;
-  unsigned ParameterPack : 1;
-  unsigned Index : 16;
-  IdentifierInfo *Name;
+  // Helper data collector for canonical types.
+  struct CanonicalTTPTInfo {
+    unsigned Depth : 15;
+    unsigned ParameterPack : 1;
+    unsigned Index : 16;
+  };
 
-  TemplateTypeParmType(unsigned D, unsigned I, bool PP, IdentifierInfo *N,
-                       QualType Canon)
+  union {
+    // Info for the canonical type.
+    CanonicalTTPTInfo CanTTPTInfo;
+    // Info for the non-canonical type.
+    TemplateTypeParmDecl *TTPDecl;
+  };
+
+  /// Build a non-canonical type.
+  TemplateTypeParmType(TemplateTypeParmDecl *TTPDecl, QualType Canon)
     : Type(TemplateTypeParm, Canon, /*Dependent=*/true,
-           /*VariablyModified=*/false, PP),
-      Depth(D), ParameterPack(PP), Index(I), Name(N) { }
+           /*VariablyModified=*/false,
+           Canon->containsUnexpandedParameterPack()),
+      TTPDecl(TTPDecl) { }
 
+  /// Build the canonical type.
   TemplateTypeParmType(unsigned D, unsigned I, bool PP)
     : Type(TemplateTypeParm, QualType(this, 0), /*Dependent=*/true,
-           /*VariablyModified=*/false, PP),
-      Depth(D), ParameterPack(PP), Index(I), Name(0) { }
+           /*VariablyModified=*/false, PP) {
+    CanTTPTInfo.Depth = D;
+    CanTTPTInfo.Index = I;
+    CanTTPTInfo.ParameterPack = PP;
+  }
 
   friend class ASTContext;  // ASTContext creates these
 
+  const CanonicalTTPTInfo& getCanTTPTInfo() const {
+    QualType Can = getCanonicalTypeInternal();
+    return Can->castAs<TemplateTypeParmType>()->CanTTPTInfo;
+  }
+
 public:
-  unsigned getDepth() const { return Depth; }
-  unsigned getIndex() const { return Index; }
-  bool isParameterPack() const { return ParameterPack; }
-  IdentifierInfo *getName() const { return Name; }
+  unsigned getDepth() const { return getCanTTPTInfo().Depth; }
+  unsigned getIndex() const { return getCanTTPTInfo().Index; }
+  bool isParameterPack() const { return getCanTTPTInfo().ParameterPack; }
+
+  TemplateTypeParmDecl *getDecl() const {
+    return isCanonicalUnqualified() ? 0 : TTPDecl;
+  }
+
+  IdentifierInfo *getIdentifier() const;
 
   bool isSugared() const { return false; }
   QualType desugar() const { return QualType(this, 0); }
 
   void Profile(llvm::FoldingSetNodeID &ID) {
-    Profile(ID, Depth, Index, ParameterPack, Name);
+    Profile(ID, getDepth(), getIndex(), isParameterPack(), getDecl());
   }
 
   static void Profile(llvm::FoldingSetNodeID &ID, unsigned Depth,
                       unsigned Index, bool ParameterPack,
-                      IdentifierInfo *Name) {
+                      TemplateTypeParmDecl *TTPDecl) {
     ID.AddInteger(Depth);
     ID.AddInteger(Index);
     ID.AddBoolean(ParameterPack);
-    ID.AddPointer(Name);
+    ID.AddPointer(TTPDecl);
   }
 
   static bool classof(const Type *T) {
@@ -3030,8 +3061,6 @@ class SubstTemplateTypeParmType : public Type, public llvm::FoldingSetNode {
   friend class ASTContext;
 
 public:
-  IdentifierInfo *getName() const { return Replaced->getName(); }
-
   /// Gets the template parameter that was substituted for.
   const TemplateTypeParmType *getReplacedParameter() const {
     return Replaced;
@@ -3092,7 +3121,7 @@ class SubstTemplateTypeParmPackType : public Type, public llvm::FoldingSetNode {
   friend class ASTContext;
   
 public:
-  IdentifierInfo *getName() const { return Replaced->getName(); }
+  IdentifierInfo *getIdentifier() const { return Replaced->getIdentifier(); }
   
   /// Gets the template parameter that was substituted for.
   const TemplateTypeParmType *getReplacedParameter() const {
@@ -4197,6 +4226,40 @@ inline QualType QualType::getNonReferenceType() const {
     return RefType->getPointeeType();
   else
     return *this;
+}
+
+/// \brief Tests whether the type is categorized as a fundamental type.
+///
+/// \returns True for types specified in C++0x [basic.fundamental].
+inline bool Type::isFundamentalType() const {
+  return isVoidType() ||
+         // FIXME: It's really annoying that we don't have an
+         // 'isArithmeticType()' which agrees with the standard definition.
+         (isArithmeticType() && !isEnumeralType());
+}
+
+/// \brief Tests whether the type is categorized as a compound type.
+///
+/// \returns True for types specified in C++0x [basic.compound].
+inline bool Type::isCompoundType() const {
+  // C++0x [basic.compound]p1:
+  //   Compound types can be constructed in the following ways:
+  //    -- arrays of objects of a given type [...];
+  return isArrayType() ||
+  //    -- functions, which have parameters of given types [...];
+         isFunctionType() ||
+  //    -- pointers to void or objects or functions [...];
+         isPointerType() ||
+  //    -- references to objects or functions of a given type. [...]
+         isReferenceType() ||
+  //    -- classes containing a sequence of objects of various types, [...];
+         isRecordType() ||
+  //    -- unions, which ar classes capable of containing objects of different types at different times;
+         isUnionType() ||
+  //    -- enumerations, which comprise a set of named constant values. [...];
+         isEnumeralType() ||
+  //    -- pointers to non-static class members, [...].
+         isMemberPointerType();
 }
 
 inline bool Type::isFunctionType() const {
