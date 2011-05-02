@@ -901,9 +901,12 @@ DeduceTemplateArguments(Sema &S,
       Comparison.ParamIsRvalueRef = ParamRef->getAs<RValueReferenceType>();
       Comparison.ArgIsRvalueRef = ArgRef->getAs<RValueReferenceType>();
       Comparison.Qualifiers = NeitherMoreQualified;
-      if (Param.isMoreQualifiedThan(Arg))
+      
+      Qualifiers ParamQuals = Param.getQualifiers();
+      Qualifiers ArgQuals = Arg.getQualifiers();
+      if (ParamQuals.isStrictSupersetOf(ArgQuals))
         Comparison.Qualifiers = ParamMoreQualified;
-      else if (Arg.isMoreQualifiedThan(Param))
+      else if (ArgQuals.isStrictSupersetOf(ParamQuals))
         Comparison.Qualifiers = ArgMoreQualified;
       RefParamComparisons->push_back(Comparison);
     }
@@ -3056,10 +3059,11 @@ Sema::DeduceAutoType(TypeSourceInfo *Type, Expr *Init,
   LocalInstantiationScope InstScope(*this);
 
   // Build template<class TemplParam> void Func(FuncParam);
-  QualType TemplArg = Context.getTemplateTypeParmType(0, 0, false);
-  TemplateTypeParmDecl TemplParam(0, SourceLocation(), Loc, 0, false,
-                                  TemplArg, false);
-  NamedDecl *TemplParamPtr = &TemplParam;
+  TemplateTypeParmDecl *TemplParam =
+    TemplateTypeParmDecl::Create(Context, 0, SourceLocation(), Loc, 0, 0, 0,
+                                 false, false);
+  QualType TemplArg = QualType(TemplParam->getTypeForDecl(), 0);
+  NamedDecl *TemplParamPtr = TemplParam;
   FixedSizeTemplateParameterList<1> TemplateParams(Loc, Loc, &TemplParamPtr,
                                                    Loc);
 

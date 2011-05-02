@@ -3072,6 +3072,9 @@ public:
                                            SourceLocation LParenLoc,
                                            CXXRecordDecl *ClassDecl);
 
+  bool SetDelegatingInitializer(CXXConstructorDecl *Constructor,
+                                CXXCtorInitializer *Initializer);
+
   bool SetCtorInitializers(CXXConstructorDecl *Constructor,
                            CXXCtorInitializer **Initializers,
                            unsigned NumInitializers, bool AnyErrors);
@@ -4524,6 +4527,7 @@ public:
                                         DeclarationName Entity);
   ParmVarDecl *SubstParmVarDecl(ParmVarDecl *D,
                             const MultiLevelTemplateArgumentList &TemplateArgs,
+                                int indexAdjustment,
                                 llvm::Optional<unsigned> NumExpansions);
   bool SubstParmTypes(SourceLocation Loc, 
                       ParmVarDecl **Params, unsigned NumParams,

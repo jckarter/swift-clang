@@ -1,4 +1,4 @@
-// RUN: %clang_cc1 -fsyntax-only -verify %s 
+// RUN: %clang_cc1 -triple x86_64-apple-darwin10 -fsyntax-only -verify %s 
 #define T(b) (b) ? 1 : -1
 #define F(b) (b) ? -1 : 1
 
@@ -26,6 +26,9 @@ struct HasAnonymousUnion {
     float f;
   };
 };
+
+typedef int Vector __attribute__((vector_size(16)));
+typedef int VectorExt __attribute__((ext_vector_type(4)));
 
 // Not PODs
 typedef const void cvoid;
@@ -104,6 +107,8 @@ void is_pod()
   { int arr[T(__is_pod(HasAssign))]; }
   { int arr[T(__is_pod(IntArNB))]; }
   { int arr[T(__is_pod(HasAnonymousUnion))]; }
+  { int arr[T(__is_pod(Vector))]; }
+  { int arr[T(__is_pod(VectorExt))]; }
 
   { int arr[F(__is_pod(Derives))]; }
   { int arr[F(__is_pod(DerivesAr))]; }
@@ -942,6 +947,8 @@ void is_standard_layout()
   int t04[T(__is_standard_layout(CStruct))];
   int t05[T(__is_standard_layout(CppStructStandard))];
   int t06[T(__is_standard_layout(CppStructStandardAr))];
+  int t07[T(__is_standard_layout(Vector))];
+  int t08[T(__is_standard_layout(VectorExt))];
 
   typedef CppStructNonStandardByBase CppStructNonStandardByBaseAr[4];
 
@@ -1429,12 +1436,14 @@ void is_trivial()
   { int arr[T(__is_trivial(POD))]; }
   { int arr[T(__is_trivial(Int))]; }
   { int arr[T(__is_trivial(IntAr))]; }
+  { int arr[T(__is_trivial(IntArNB))]; }
   { int arr[T(__is_trivial(Statics))]; }
   { int arr[T(__is_trivial(Empty))]; }
   { int arr[T(__is_trivial(EmptyUnion))]; }
   { int arr[T(__is_trivial(Union))]; }
   { int arr[T(__is_trivial(Derives))]; }
   { int arr[T(__is_trivial(DerivesAr))]; }
+  { int arr[T(__is_trivial(DerivesArNB))]; }
   { int arr[T(__is_trivial(DerivesEmpty))]; }
   { int arr[T(__is_trivial(HasFunc))]; }
   { int arr[T(__is_trivial(HasOp))]; }
@@ -1445,6 +1454,8 @@ void is_trivial()
   { int arr[T(__is_trivial(HasProt))]; }
   { int arr[T(__is_trivial(DerivesHasPriv))]; }
   { int arr[T(__is_trivial(DerivesHasProt))]; }
+  { int arr[T(__is_trivial(Vector))]; }
+  { int arr[T(__is_trivial(VectorExt))]; }
 
   { int arr[F(__is_trivial(HasCons))]; }
   { int arr[F(__is_trivial(HasCopyAssign))]; }
@@ -1459,8 +1470,6 @@ void is_trivial()
   { int arr[F(__is_trivial(DerivesHasDest))]; }
   { int arr[F(__is_trivial(DerivesHasRef))]; }
   { int arr[F(__is_trivial(DerivesHasVirt))]; }
-  { int arr[F(__is_trivial(IntArNB))]; }
-  { int arr[F(__is_trivial(DerivesArNB))]; }
   { int arr[F(__is_trivial(void))]; }
   { int arr[F(__is_trivial(cvoid))]; }
 }
