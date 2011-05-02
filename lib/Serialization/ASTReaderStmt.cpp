@@ -425,21 +425,21 @@ void ASTStmtReader::VisitPredefinedExpr(PredefinedExpr *E) {
 void ASTStmtReader::VisitDeclRefExpr(DeclRefExpr *E) {
   VisitExpr(E);
 
-  bool HasQualifier = Record[Idx++];
-  bool HasExplicitTemplateArgs = Record[Idx++];
+  E->DeclRefExprBits.HasQualifier = Record[Idx++];
+  E->DeclRefExprBits.HasFoundDecl = Record[Idx++];
+  E->DeclRefExprBits.HasExplicitTemplateArgs = Record[Idx++];
   unsigned NumTemplateArgs = 0;
-  if (HasExplicitTemplateArgs)
+  if (E->hasExplicitTemplateArgs())
     NumTemplateArgs = Record[Idx++];
 
-  E->DecoratedD.setInt((HasQualifier? DeclRefExpr::HasQualifierFlag : 0) |
-      (HasExplicitTemplateArgs 
-         ? DeclRefExpr::HasExplicitTemplateArgumentListFlag : 0));
-  
-  if (HasQualifier)
-    E->getNameQualifier()->QualifierLoc
+  if (E->hasQualifier())
+    E->getInternalQualifierLoc()
       = Reader.ReadNestedNameSpecifierLoc(F, Record, Idx);
 
-  if (HasExplicitTemplateArgs)
+  if (E->hasFoundDecl())
+    E->getInternalFoundDecl() = cast<NamedDecl>(Reader.GetDecl(Record[Idx++]));
+
+  if (E->hasExplicitTemplateArgs())
     ReadExplicitTemplateArgumentList(E->getExplicitTemplateArgs(),
                                      NumTemplateArgs);
 
@@ -1570,12 +1570,13 @@ Stmt *ASTReader::ReadStmtFromStream(PerFileData &F) {
       break;
 
     case EXPR_DECL_REF:
-      S = DeclRefExpr::CreateEmpty(*Context,
-                         /*HasQualifier=*/Record[ASTStmtReader::NumExprFields],
-          /*HasExplicitTemplateArgs=*/Record[ASTStmtReader::NumExprFields + 1],
-                  /*NumTemplateArgs=*/Record[ASTStmtReader::NumExprFields + 1]
-                                   ? Record[ASTStmtReader::NumExprFields + 2] 
-                                   : 0);
+      S = DeclRefExpr::CreateEmpty(
+        *Context,
+        /*HasQualifier=*/Record[ASTStmtReader::NumExprFields],
+        /*HasFoundDecl=*/Record[ASTStmtReader::NumExprFields + 1],
+        /*HasExplicitTemplateArgs=*/Record[ASTStmtReader::NumExprFields + 2],
+        /*NumTemplateArgs=*/Record[ASTStmtReader::NumExprFields + 2] ?
+          Record[ASTStmtReader::NumExprFields + 3] : 0);
       break;
 
     case EXPR_INTEGER_LITERAL:

@@ -695,9 +695,6 @@ void DeclPrinter::VisitTemplateDecl(const TemplateDecl *D) {
     if (const TemplateTypeParmDecl *TTP =
           dyn_cast<TemplateTypeParmDecl>(Param)) {
 
-      QualType ParamType =
-        Context.getTypeDeclType(const_cast<TemplateTypeParmDecl*>(TTP));
-
       if (TTP->wasDeclaredWithTypename())
         Out << "typename ";
       else
@@ -706,7 +703,7 @@ void DeclPrinter::VisitTemplateDecl(const TemplateDecl *D) {
       if (TTP->isParameterPack())
         Out << "... ";
 
-      Out << ParamType.getAsString(Policy);
+      Out << TTP->getNameAsString();
 
       if (TTP->hasDefaultArgument()) {
         Out << " = ";

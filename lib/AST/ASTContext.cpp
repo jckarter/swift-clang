@@ -375,7 +375,7 @@ void ASTContext::InitBuiltinTypes() {
   InitBuiltinType(UnsignedInt128Ty,    BuiltinType::UInt128);
 
   if (LangOpts.CPlusPlus) { // C++ 3.9.1p5
-    if (!LangOpts.ShortWChar)
+    if (TargetInfo::isTypeSigned(Target.getWCharType()))
       InitBuiltinType(WCharTy,           BuiltinType::WChar_S);
     else  // -fshort-wchar makes wchar_t be unsigned.
       InitBuiltinType(WCharTy,           BuiltinType::WChar_U);
@@ -2196,9 +2196,9 @@ QualType ASTContext::getSubstTemplateTypeParmPackType(
 /// name.
 QualType ASTContext::getTemplateTypeParmType(unsigned Depth, unsigned Index,
                                              bool ParameterPack,
-                                             IdentifierInfo *Name) const {
+                                             TemplateTypeParmDecl *TTPDecl) const {
   llvm::FoldingSetNodeID ID;
-  TemplateTypeParmType::Profile(ID, Depth, Index, ParameterPack, Name);
+  TemplateTypeParmType::Profile(ID, Depth, Index, ParameterPack, TTPDecl);
   void *InsertPos = 0;
   TemplateTypeParmType *TypeParm
     = TemplateTypeParmTypes.FindNodeOrInsertPos(ID, InsertPos);
@@ -2206,10 +2206,9 @@ QualType ASTContext::getTemplateTypeParmType(unsigned Depth, unsigned Index,
   if (TypeParm)
     return QualType(TypeParm, 0);
 
-  if (Name) {
+  if (TTPDecl) {
     QualType Canon = getTemplateTypeParmType(Depth, Index, ParameterPack);
-    TypeParm = new (*this, TypeAlignment)
-      TemplateTypeParmType(Depth, Index, ParameterPack, Name, Canon);
+    TypeParm = new (*this, TypeAlignment) TemplateTypeParmType(TTPDecl, Canon);
 
     TemplateTypeParmType *TypeCheck 
       = TemplateTypeParmTypes.FindNodeOrInsertPos(ID, InsertPos);
