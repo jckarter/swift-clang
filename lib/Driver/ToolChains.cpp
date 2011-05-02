@@ -119,8 +119,10 @@ static const char *GetArmArchForMCpu(llvm::StringRef Value) {
   if (Value == "cortex-a9-mp")
     return "armv7f";
 
+#ifndef __OPEN_SOURCE__
   if (Value == "pj4b")
     return "armv7k";
+#endif // !__OPEN_SOURCE__
 
   return 0;
 }
