@@ -303,7 +303,7 @@ ASTTypeWriter::VisitTemplateTypeParmType(const TemplateTypeParmType *T) {
   Record.push_back(T->getDepth());
   Record.push_back(T->getIndex());
   Record.push_back(T->isParameterPack());
-  Writer.AddIdentifierRef(T->getName(), Record);
+  Writer.AddDeclRef(T->getDecl(), Record);
   Code = TYPE_TEMPLATE_TYPE_PARM;
 }
 
@@ -3782,7 +3782,11 @@ void ASTWriter::AddCXXDefinitionData(const CXXRecordDecl *D, RecordDataImpl &Rec
   Record.push_back(Data.Empty);
   Record.push_back(Data.Polymorphic);
   Record.push_back(Data.Abstract);
-  Record.push_back(Data.HasStandardLayout);
+  Record.push_back(Data.IsStandardLayout);
+  Record.push_back(Data.HasNoNonEmptyBases);
+  Record.push_back(Data.HasPrivateFields);
+  Record.push_back(Data.HasProtectedFields);
+  Record.push_back(Data.HasPublicFields);
   Record.push_back(Data.HasTrivialConstructor);
   Record.push_back(Data.HasConstExprNonCopyMoveConstructor);
   Record.push_back(Data.HasTrivialCopyConstructor);

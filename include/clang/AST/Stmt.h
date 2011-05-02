@@ -158,6 +158,16 @@ protected:
   };
   enum { NumExprBits = 15 };
 
+  class DeclRefExprBitfields {
+    friend class DeclRefExpr;
+    friend class ASTStmtReader; // deserialization
+    unsigned : NumExprBits;
+
+    unsigned HasQualifier : 1;
+    unsigned HasExplicitTemplateArgs : 1;
+    unsigned HasFoundDecl : 1;
+  };
+
   class CastExprBitfields {
     friend class CastExpr;
     unsigned : NumExprBits;
@@ -180,6 +190,7 @@ protected:
     StmtBitfields StmtBits;
     CompoundStmtBitfields CompoundStmtBits;
     ExprBitfields ExprBits;
+    DeclRefExprBitfields DeclRefExprBits;
     CastExprBitfields CastExprBits;
     CallExprBitfields CallExprBits;
   };

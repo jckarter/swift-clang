@@ -28,6 +28,7 @@
 #include "clang/Basic/TargetInfo.h"
 #include "clang/Lex/Preprocessor.h"
 #include "llvm/ADT/STLExtras.h"
+#include "llvm/Support/ErrorHandling.h"
 using namespace clang;
 using namespace sema;
 
@@ -2351,115 +2352,197 @@ ExprResult Sema::ActOnUnaryTypeTrait(UnaryTypeTrait UTT,
   return BuildUnaryTypeTrait(UTT, KWLoc, TSInfo, RParen);
 }
 
-static bool EvaluateUnaryTypeTrait(Sema &Self, UnaryTypeTrait UTT, QualType T,
-                                   SourceLocation KeyLoc) {
-  // FIXME: For many of these traits, we need a complete type before we can 
-  // check these properties.
+/// \brief Check the completeness of a type in a unary type trait.
+///
+/// If the particular type trait requires a complete type, tries to complete
+/// it. If completing the type fails, a diagnostic is emitted and false
+/// returned. If completing the type succeeds or no completion was required,
+/// returns true.
+static bool CheckUnaryTypeTraitTypeCompleteness(Sema &S,
+                                                UnaryTypeTrait UTT,
+                                                SourceLocation Loc,
+                                                QualType ArgTy) {
+  // C++0x [meta.unary.prop]p3:
+  //   For all of the class templates X declared in this Clause, instantiating
+  //   that template with a template argument that is a class template
+  //   specialization may result in the implicit instantiation of the template
+  //   argument if and only if the semantics of X require that the argument
+  //   must be a complete type.
+  // We apply this rule to all the type trait expressions used to implement
+  // these class templates. We also try to follow any GCC documented behavior
+  // in these expressions to ensure portability of standard libraries.
+  switch (UTT) {
+    // is_complete_type somewhat obviously cannot require a complete type.
+  case UTT_IsCompleteType:
+    // Fall-through
 
-  if (T->isDependentType()) {
-    Self.Diag(KeyLoc, diag::err_dependent_type_used_in_type_trait_expr) << T;
-    return false;
+    // These traits are modeled on the type predicates in C++0x
+    // [meta.unary.cat] and [meta.unary.comp]. They are not specified as
+    // requiring a complete type, as whether or not they return true cannot be
+    // impacted by the completeness of the type.
+  case UTT_IsVoid:
+  case UTT_IsIntegral:
+  case UTT_IsFloatingPoint:
+  case UTT_IsArray:
+  case UTT_IsPointer:
+  case UTT_IsLvalueReference:
+  case UTT_IsRvalueReference:
+  case UTT_IsMemberFunctionPointer:
+  case UTT_IsMemberObjectPointer:
+  case UTT_IsEnum:
+  case UTT_IsUnion:
+  case UTT_IsClass:
+  case UTT_IsFunction:
+  case UTT_IsReference:
+  case UTT_IsArithmetic:
+  case UTT_IsFundamental:
+  case UTT_IsObject:
+  case UTT_IsScalar:
+  case UTT_IsCompound:
+  case UTT_IsMemberPointer:
+    // Fall-through
+
+    // These traits are modeled on type predicates in C++0x [meta.unary.prop]
+    // which requires some of its traits to have the complete type. However,
+    // the completeness of the type cannot impact these traits' semantics, and
+    // so they don't require it. This matches the comments on these traits in
+    // Table 49.
+  case UTT_IsConst:
+  case UTT_IsVolatile:
+  case UTT_IsSigned:
+  case UTT_IsUnsigned:
+    return true;
+
+    // C++0x [meta.unary.prop] Table 49 requires the following traits to be
+    // applied to a complete type.
+  case UTT_IsTrivial:
+  case UTT_IsStandardLayout:
+  case UTT_IsPOD:
+  case UTT_IsLiteral:
+  case UTT_IsEmpty:
+  case UTT_IsPolymorphic:
+  case UTT_IsAbstract:
+    // Fall-through
+
+    // These trait expressions are designed to help implement predicates in
+    // [meta.unary.prop] despite not being named the same. They are specified
+    // by both GCC and the Embarcadero C++ compiler, and require the complete
+    // type due to the overarching C++0x type predicates being implemented
+    // requiring the complete type.
+  case UTT_HasNothrowAssign:
+  case UTT_HasNothrowConstructor:
+  case UTT_HasNothrowCopy:
+  case UTT_HasTrivialAssign:
+  case UTT_HasTrivialConstructor:
+  case UTT_HasTrivialCopy:
+  case UTT_HasTrivialDestructor:
+  case UTT_HasVirtualDestructor:
+    // Arrays of unknown bound are expressly allowed.
+    QualType ElTy = ArgTy;
+    if (ArgTy->isIncompleteArrayType())
+      ElTy = S.Context.getAsArrayType(ArgTy)->getElementType();
+
+    // The void type is expressly allowed.
+    if (ElTy->isVoidType())
+      return true;
+
+    return !S.RequireCompleteType(
+      Loc, ElTy, diag::err_incomplete_type_used_in_type_trait_expr);
   }
+  llvm_unreachable("Type trait not handled by switch");
+}
+
+static bool EvaluateUnaryTypeTrait(Sema &Self, UnaryTypeTrait UTT,
+                                   SourceLocation KeyLoc, QualType T) {
+  assert(!T->isDependentType() && "Cannot evaluate traits of dependent type");
 
   ASTContext &C = Self.Context;
   switch(UTT) {
-  default: assert(false && "Unknown type trait or not implemented");
-  case UTT_IsPOD: return T->isPODType();
-  case UTT_IsLiteral: return T->isLiteralType();
-  case UTT_IsTrivial: return T->isTrivialType();
-  case UTT_IsClass: // Fallthrough
-  case UTT_IsUnion:
-    if (const RecordType *Record = T->getAs<RecordType>()) {
-      bool Union = Record->getDecl()->isUnion();
-      return UTT == UTT_IsUnion ? Union : !Union;
-    }
-    return false;
-  case UTT_IsEnum: return T->isEnumeralType();
-  case UTT_IsPolymorphic:
-    if (const RecordType *Record = T->getAs<RecordType>()) {
-      // Type traits are only parsed in C++, so we've got CXXRecords.
-      return cast<CXXRecordDecl>(Record->getDecl())->isPolymorphic();
-    }
-    return false;
-  case UTT_IsAbstract:
-    if (const RecordType *RT = T->getAs<RecordType>())
-      if (!Self.RequireCompleteType(KeyLoc, T, diag::err_incomplete_typeid))
-      return cast<CXXRecordDecl>(RT->getDecl())->isAbstract();
-    return false;
-  case UTT_IsEmpty:
-    if (const RecordType *Record = T->getAs<RecordType>()) {
-      return !Record->getDecl()->isUnion()
-          && cast<CXXRecordDecl>(Record->getDecl())->isEmpty();
-    }
-    return false;
+    // Type trait expressions corresponding to the primary type category
+    // predicates in C++0x [meta.unary.cat].
+  case UTT_IsVoid:
+    return T->isVoidType();
   case UTT_IsIntegral:
     return T->isIntegralType(C);
   case UTT_IsFloatingPoint:
     return T->isFloatingType();
-  case UTT_IsArithmetic:
-    return T->isArithmeticType() && ! T->isEnumeralType();
   case UTT_IsArray:
     return T->isArrayType();
-  case UTT_IsCompleteType:
-    return ! T->isIncompleteType();
-  case UTT_IsCompound:
-    return ! (T->isVoidType() || T->isArithmeticType()) || T->isEnumeralType();
-  case UTT_IsConst:
-    return T.isConstQualified();
-  case UTT_IsFunction:
-    return T->isFunctionType();
-  case UTT_IsFundamental:
-    return T->isVoidType() || (T->isArithmeticType() && ! T->isEnumeralType());
+  case UTT_IsPointer:
+    return T->isPointerType();
   case UTT_IsLvalueReference:
     return T->isLValueReferenceType();
+  case UTT_IsRvalueReference:
+    return T->isRValueReferenceType();
   case UTT_IsMemberFunctionPointer:
     return T->isMemberFunctionPointerType();
   case UTT_IsMemberObjectPointer:
     return T->isMemberDataPointerType();
-  case UTT_IsMemberPointer:
-    return T->isMemberPointerType();
-  case UTT_IsObject:
-    // Defined in Section 3.9 p8 of the Working Draft, essentially:
-    // !__is_reference(T) && !__is_function(T) && !__is_void(T).
-    return ! (T->isReferenceType() || T->isFunctionType() || T->isVoidType());
-  case UTT_IsPointer:
-    return T->isPointerType();
+  case UTT_IsEnum:
+    return T->isEnumeralType();
+  case UTT_IsUnion:
+    return T->isUnionType();
+  case UTT_IsClass:
+    return T->isClassType() || T->isStructureType();
+  case UTT_IsFunction:
+    return T->isFunctionType();
+
+    // Type trait expressions which correspond to the convenient composition
+    // predicates in C++0x [meta.unary.comp].
   case UTT_IsReference:
     return T->isReferenceType();
-  case UTT_IsRvalueReference:
-    return T->isRValueReferenceType();
+  case UTT_IsArithmetic:
+    return T->isArithmeticType() && !T->isEnumeralType();
+  case UTT_IsFundamental:
+    return T->isFundamentalType();
+  case UTT_IsObject:
+    return T->isObjectType();
   case UTT_IsScalar:
-    // Scalar type is defined in Section 3.9 p10 of the Working Draft.
-    // Essentially:
-    // __is_arithmetic( T ) || __is_enumeration(T) ||
-    // __is_pointer(T) || __is_member_pointer(T)
-    return (T->isArithmeticType() || T->isEnumeralType() ||
-            T->isPointerType() || T->isMemberPointerType());
-  case UTT_IsSigned:
-    return T->isSignedIntegerType();
-  case UTT_IsStandardLayout:
-    // Error if T is an incomplete type.
-    if (Self.RequireCompleteType(KeyLoc, T, diag::err_incomplete_typeid))
-      return false;
+    return T->isScalarType();
+  case UTT_IsCompound:
+    return T->isCompoundType();
+  case UTT_IsMemberPointer:
+    return T->isMemberPointerType();
 
-    // A standard layout type is:
-    // - a scalar type
-    // - an array of standard layout types
-    // - a standard layout class type:
-    if (EvaluateUnaryTypeTrait(Self, UTT_IsScalar, T, KeyLoc))
-      return true;
-    if (EvaluateUnaryTypeTrait(Self, UTT_IsScalar, C.getBaseElementType(T),
-                               KeyLoc))
-      return true;
-    if (const RecordType *RT = C.getBaseElementType(T)->getAs<RecordType>())
-      return RT->hasStandardLayout(C);
-    return false;
-  case UTT_IsUnsigned:
-    return T->isUnsignedIntegerType();
-  case UTT_IsVoid:
-    return T->isVoidType();
+    // Type trait expressions which correspond to the type property predicates
+    // in C++0x [meta.unary.prop].
+  case UTT_IsConst:
+    return T.isConstQualified();
   case UTT_IsVolatile:
     return T.isVolatileQualified();
+  case UTT_IsTrivial:
+    return T->isTrivialType();
+  case UTT_IsStandardLayout:
+    return T->isStandardLayoutType();
+  case UTT_IsPOD:
+    return T->isPODType();
+  case UTT_IsLiteral:
+    return T->isLiteralType();
+  case UTT_IsEmpty:
+    if (const CXXRecordDecl *RD = T->getAsCXXRecordDecl())
+      return !RD->isUnion() && RD->isEmpty();
+    return false;
+  case UTT_IsPolymorphic:
+    if (const CXXRecordDecl *RD = T->getAsCXXRecordDecl())
+      return RD->isPolymorphic();
+    return false;
+  case UTT_IsAbstract:
+    if (const CXXRecordDecl *RD = T->getAsCXXRecordDecl())
+      return RD->isAbstract();
+    return false;
+  case UTT_IsSigned:
+    return T->isSignedIntegerType();
+  case UTT_IsUnsigned:
+    return T->isUnsignedIntegerType();
+
+    // Type trait expressions which query classes regarding their construction,
+    // destruction, and copying. Rather than being based directly on the
+    // related type predicates in the standard, they are specified by both
+    // GCC[1] and the Embarcadero C++ compiler[2], and Clang implements those
+    // specifications.
+    //
+    //   1: http://gcc.gnu/.org/onlinedocs/gcc/Type-Traits.html
+    //   2: http://docwiki.embarcadero.com/RADStudio/XE/en/Type_Trait_Functions_(C%2B%2B0x)_Index
   case UTT_HasTrivialConstructor:
     // http://gcc.gnu.org/onlinedocs/gcc/Type-Traits.html:
     //   If __is_pod (type) is true then the trait is true, else if type is
@@ -2640,7 +2723,17 @@ static bool EvaluateUnaryTypeTrait(Sema &Self, UnaryTypeTrait UTT, QualType T,
         return Destructor->isVirtual();
     }
     return false;
+
+    // These type trait expressions are modeled on the specifications for the
+    // Embarcadero C++0x type trait functions:
+    //   http://docwiki.embarcadero.com/RADStudio/XE/en/Type_Trait_Functions_(C%2B%2B0x)_Index
+  case UTT_IsCompleteType:
+    // http://docwiki.embarcadero.com/RADStudio/XE/en/Is_complete_type_(typename_T_):
+    //   Returns True if and only if T is a complete type at the point of the
+    //   function call.
+    return !T->isIncompleteType();
   }
+  llvm_unreachable("Type trait not covered by switch");
 }
 
 ExprResult Sema::BuildUnaryTypeTrait(UnaryTypeTrait UTT,
@@ -2648,33 +2741,12 @@ ExprResult Sema::BuildUnaryTypeTrait(UnaryTypeTrait UTT,
                                      TypeSourceInfo *TSInfo,
                                      SourceLocation RParen) {
   QualType T = TSInfo->getType();
-
-  // According to http://gcc.gnu.org/onlinedocs/gcc/Type-Traits.html
-  // all traits except __is_class, __is_enum and __is_union require a the type
-  // to be complete, an array of unknown bound, or void.
-  if (UTT != UTT_IsClass && UTT != UTT_IsEnum && UTT != UTT_IsUnion &&
-      UTT != UTT_IsCompleteType) {
-    QualType E = T;
-    if (T->isIncompleteArrayType())
-      E = Context.getAsArrayType(T)->getElementType();
-    if (!T->isVoidType() &&
-        (! LangOpts.Borland ||
-         UTT == UTT_HasNothrowAssign ||
-         UTT == UTT_HasNothrowCopy ||
-         UTT == UTT_HasNothrowConstructor ||
-         UTT == UTT_HasTrivialAssign ||
-         UTT == UTT_HasTrivialCopy ||
-         UTT == UTT_HasTrivialConstructor ||
-         UTT == UTT_HasTrivialDestructor ||
-         UTT == UTT_HasVirtualDestructor) &&
-        RequireCompleteType(KWLoc, E,
-                            diag::err_incomplete_type_used_in_type_trait_expr))
-      return ExprError();
-  }
+  if (!CheckUnaryTypeTraitTypeCompleteness(*this, UTT, KWLoc, T))
+    return ExprError();
 
   bool Value = false;
   if (!T->isDependentType())
-    Value = EvaluateUnaryTypeTrait(*this, UTT, T, KWLoc);
+    Value = EvaluateUnaryTypeTrait(*this, UTT, KWLoc, T);
 
   return Owned(new (Context) UnaryTypeTraitExpr(KWLoc, UTT, TSInfo, Value,
                                                 RParen, Context.BoolTy));
@@ -2701,14 +2773,8 @@ ExprResult Sema::ActOnBinaryTypeTrait(BinaryTypeTrait BTT,
 static bool EvaluateBinaryTypeTrait(Sema &Self, BinaryTypeTrait BTT,
                                     QualType LhsT, QualType RhsT,
                                     SourceLocation KeyLoc) {
-  if (LhsT->isDependentType()) {
-    Self.Diag(KeyLoc, diag::err_dependent_type_used_in_type_trait_expr) << LhsT;
-    return false;
-  }
-  else if (RhsT->isDependentType()) {
-    Self.Diag(KeyLoc, diag::err_dependent_type_used_in_type_trait_expr) << RhsT;
-    return false;
-  }
+  assert(!LhsT->isDependentType() && !RhsT->isDependentType() &&
+         "Cannot evaluate traits of dependent types");
 
   switch(BTT) {
   case BTT_IsBaseOf: {
@@ -2847,10 +2913,7 @@ ExprResult Sema::ActOnArrayTypeTrait(ArrayTypeTrait ATT,
 static uint64_t EvaluateArrayTypeTrait(Sema &Self, ArrayTypeTrait ATT,
                                            QualType T, Expr *DimExpr,
                                            SourceLocation KeyLoc) {
-  if (T->isDependentType()) {
-    Self.Diag(KeyLoc, diag::err_dependent_type_used_in_type_trait_expr) << T;
-    return false;
-  }
+  assert(!T->isDependentType() && "Cannot evaluate traits of dependent type");
 
   switch(ATT) {
   case ATT_ArrayRank:
@@ -2910,41 +2973,47 @@ ExprResult Sema::BuildArrayTypeTrait(ArrayTypeTrait ATT,
                                      SourceLocation RParen) {
   QualType T = TSInfo->getType();
 
-  uint64_t Value;
+  // FIXME: This should likely be tracked as an APInt to remove any host
+  // assumptions about the width of size_t on the target.
+  uint64_t Value = 0;
   if (!T->isDependentType())
     Value = EvaluateArrayTypeTrait(*this, ATT, T, DimExpr, KWLoc);
-  else
-    return ExprError();
 
-  // Select trait result type.
-  QualType ResultType;
-  switch (ATT) {
-  case ATT_ArrayRank:    ResultType = Context.IntTy; break;
-  case ATT_ArrayExtent:  ResultType = Context.IntTy; break;
-  }
-
+  // While the specification for these traits from the Embarcadero C++
+  // compiler's documentation says the return type is 'unsigned int', Clang
+  // returns 'size_t'. On Windows, the primary platform for the Embarcadero
+  // compiler, there is no difference. On several other platforms this is an
+  // important distinction.
   return Owned(new (Context) ArrayTypeTraitExpr(KWLoc, ATT, TSInfo, Value,
-                                                DimExpr, RParen, ResultType));
+                                                DimExpr, RParen,
+                                                Context.getSizeType()));
 }
 
 ExprResult Sema::ActOnExpressionTrait(ExpressionTrait ET,
-                                     SourceLocation KWLoc,
-                                     Expr* Queried,
-                                     SourceLocation RParen) {
+                                      SourceLocation KWLoc,
+                                      Expr *Queried,
+                                      SourceLocation RParen) {
   // If error parsing the expression, ignore.
   if (!Queried)
-      return ExprError();
+    return ExprError();
 
-  ExprResult Result
-    = BuildExpressionTrait(ET, KWLoc, Queried, RParen);
+  ExprResult Result = BuildExpressionTrait(ET, KWLoc, Queried, RParen);
 
   return move(Result);
 }
 
+static bool EvaluateExpressionTrait(ExpressionTrait ET, Expr *E) {
+  switch (ET) {
+  case ET_IsLValueExpr: return E->isLValue();
+  case ET_IsRValueExpr: return E->isRValue();
+  }
+  llvm_unreachable("Expression trait not covered by switch");
+}
+
 ExprResult Sema::BuildExpressionTrait(ExpressionTrait ET,
-                                     SourceLocation KWLoc,
-                                     Expr* Queried,
-                                     SourceLocation RParen) {
+                                      SourceLocation KWLoc,
+                                      Expr *Queried,
+                                      SourceLocation RParen) {
   if (Queried->isTypeDependent()) {
     // Delay type-checking for type-dependent expressions.
   } else if (Queried->getType()->isPlaceholderType()) {
@@ -2953,17 +3022,10 @@ ExprResult Sema::BuildExpressionTrait(ExpressionTrait ET,
     return BuildExpressionTrait(ET, KWLoc, PE.take(), RParen);
   }
 
-  bool Value = false;
-  switch (ET) {
-  default: llvm_unreachable("Unknown or unimplemented expression trait");
-  case ET_IsLValueExpr:       Value = Queried->isLValue(); break;
-  case ET_IsRValueExpr:       Value = Queried->isRValue(); break;
-  }
-  
-  // C99 6.5.3.4p4: the type (an unsigned integer type) is size_t.
-  return Owned(
-      new (Context) ExpressionTraitExpr(
-          KWLoc, ET, Queried, Value, RParen, Context.BoolTy));
+  bool Value = EvaluateExpressionTrait(ET, Queried);
+
+  return Owned(new (Context) ExpressionTraitExpr(KWLoc, ET, Queried, Value,
+                                                 RParen, Context.BoolTy));
 }
 
 QualType Sema::CheckPointerToMemberOperands(ExprResult &lex, ExprResult &rex,

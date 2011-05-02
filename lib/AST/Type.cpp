@@ -27,6 +27,18 @@
 #include <algorithm>
 using namespace clang;
 
+bool Qualifiers::isStrictSupersetOf(Qualifiers Other) const {
+  return (*this != Other) &&
+    // CVR qualifiers superset
+    (((Mask & CVRMask) | (Other.Mask & CVRMask)) == (Mask & CVRMask)) &&
+    // ObjC GC qualifiers superset
+    ((getObjCGCAttr() == Other.getObjCGCAttr()) ||
+     (hasObjCGCAttr() && !Other.hasObjCGCAttr())) &&
+    // Address space superset.
+    ((getAddressSpace() == Other.getAddressSpace()) ||
+     (hasAddressSpace()&& !Other.hasAddressSpace()));
+}
+
 bool QualType::isConstant(QualType T, ASTContext &Ctx) {
   if (T.isConstQualified())
     return true;
@@ -869,7 +881,7 @@ bool Type::isPODType() const {
 }
 
 bool Type::isLiteralType() const {
-  if (isIncompleteType())
+  if (isDependentType())
     return false;
 
   // C++0x [basic.types]p10:
@@ -878,15 +890,21 @@ bool Type::isLiteralType() const {
   //   -- an array of literal type
   // Extension: variable arrays cannot be literal types, since they're
   // runtime-sized.
-  if (isArrayType() && !isConstantArrayType())
+  if (isVariableArrayType())
     return false;
   const Type *BaseTy = getBaseElementTypeUnsafe();
   assert(BaseTy && "NULL element type");
 
+  // Return false for incomplete types after skipping any incomplete array
+  // types; those are expressly allowed by the standard and thus our API.
+  if (BaseTy->isIncompleteType())
+    return false;
+
   // C++0x [basic.types]p10:
   //   A type is a literal type if it is:
   //    -- a scalar type; or
-  if (BaseTy->isScalarType()) return true;
+  // As an extension, Clang treats vector types as Scalar types.
+  if (BaseTy->isScalarType() || BaseTy->isVectorType()) return true;
   //    -- a reference type; or
   if (BaseTy->isReferenceType()) return true;
   //    -- a class type that has all of the following properties:
@@ -916,7 +934,7 @@ bool Type::isLiteralType() const {
 }
 
 bool Type::isTrivialType() const {
-  if (isIncompleteType())
+  if (isDependentType())
     return false;
 
   // C++0x [basic.types]p9:
@@ -925,7 +943,14 @@ bool Type::isTrivialType() const {
   //   types.
   const Type *BaseTy = getBaseElementTypeUnsafe();
   assert(BaseTy && "NULL element type");
-  if (BaseTy->isScalarType()) return true;
+
+  // Return false for incomplete types after skipping any incomplete array
+  // types which are expressly allowed by the standard and thus our API.
+  if (BaseTy->isIncompleteType())
+    return false;
+
+  // As an extension, Clang treats vector types as Scalar types.
+  if (BaseTy->isScalarType() || BaseTy->isVectorType()) return true;
   if (const RecordType *RT = BaseTy->getAs<RecordType>()) {
     if (const CXXRecordDecl *ClassDecl =
         dyn_cast<CXXRecordDecl>(RT->getDecl())) {
@@ -943,11 +968,45 @@ bool Type::isTrivialType() const {
   return false;
 }
 
-// This is effectively the intersection of isTrivialType and hasStandardLayout.
-// We implement it dircetly to avoid redundant conversions from a type to
-// a CXXRecordDecl.
+bool Type::isStandardLayoutType() const {
+  if (isDependentType())
+    return false;
+
+  // C++0x [basic.types]p9:
+  //   Scalar types, standard-layout class types, arrays of such types, and
+  //   cv-qualified versions of these types are collectively called
+  //   standard-layout types.
+  const Type *BaseTy = getBaseElementTypeUnsafe();
+  assert(BaseTy && "NULL element type");
+
+  // Return false for incomplete types after skipping any incomplete array
+  // types which are expressly allowed by the standard and thus our API.
+  if (BaseTy->isIncompleteType())
+    return false;
+
+  // As an extension, Clang treats vector types as Scalar types.
+  if (BaseTy->isScalarType() || BaseTy->isVectorType()) return true;
+  if (const RecordType *RT = BaseTy->getAs<RecordType>()) {
+    if (const CXXRecordDecl *ClassDecl =
+        dyn_cast<CXXRecordDecl>(RT->getDecl()))
+      if (!ClassDecl->isStandardLayout())
+        return false;
+
+    // Default to 'true' for non-C++ class types.
+    // FIXME: This is a bit dubious, but plain C structs should trivially meet
+    // all the requirements of standard layout classes.
+    return true;
+  }
+
+  // No other types can match.
+  return false;
+}
+
+// This is effectively the intersection of isTrivialType and
+// isStandardLayoutType. We implement it dircetly to avoid redundant
+// conversions from a type to a CXXRecordDecl.
 bool Type::isCXX11PODType() const {
-  if (isIncompleteType())
+  if (isDependentType())
     return false;
 
   // C++11 [basic.types]p9:
@@ -955,7 +1014,14 @@ bool Type::isCXX11PODType() const {
   //   versions of these types are collectively called trivial types.
   const Type *BaseTy = getBaseElementTypeUnsafe();
   assert(BaseTy && "NULL element type");
-  if (BaseTy->isScalarType()) return true;
+
+  // Return false for incomplete types after skipping any incomplete array
+  // types which are expressly allowed by the standard and thus our API.
+  if (BaseTy->isIncompleteType())
+    return false;
+
+  // As an extension, Clang treats vector types as Scalar types.
+  if (BaseTy->isScalarType() || BaseTy->isVectorType()) return true;
   if (const RecordType *RT = BaseTy->getAs<RecordType>()) {
     if (const CXXRecordDecl *ClassDecl =
         dyn_cast<CXXRecordDecl>(RT->getDecl())) {
@@ -970,7 +1036,7 @@ bool Type::isCXX11PODType() const {
       // C++11 [class]p10:
       //   A POD struct is a non-union class that is both a trivial class and
       //   a standard-layout class [...]
-      if (!ClassDecl->hasStandardLayout()) return false;
+      if (!ClassDecl->isStandardLayout()) return false;
 
       // C++11 [class]p10:
       //   A POD struct is a non-union class that is both a trivial class and
@@ -1434,111 +1500,12 @@ bool RecordType::classof(const TagType *TT) {
   return isa<RecordDecl>(TT->getDecl());
 }
 
-static uint64_t countBasesWithFields(QualType BaseType) {
-  uint64_t BasesWithFields = 0;
-  if (const RecordType *T = BaseType->getAs<RecordType>()) {
-    CXXRecordDecl *RD = cast<CXXRecordDecl>(T->getDecl());
-    for (CXXRecordDecl::field_iterator Field = RD->field_begin(),
-           E = RD->field_end(); Field != E; ++Field)
-      BasesWithFields = 1;
-    for (CXXRecordDecl::base_class_const_iterator B = RD->bases_begin(),
-           BE = RD->bases_end(); B != BE; ++B)
-      BasesWithFields += countBasesWithFields(B->getType());
-  }
-  return BasesWithFields;
-}
-
-bool RecordType::hasStandardLayout(ASTContext& Context) const {
-  CXXRecordDecl *RD = cast<CXXRecordDecl>(getDecl());
-  if (! RD) {
-    assert(cast<RecordDecl>(getDecl()) &&
-           "RecordType does not have a corresponding RecordDecl");
-    return true;
-  }
-
-  // A standard-layout class is a class that:
-
-  for (CXXRecordDecl::method_iterator M = RD->method_begin(), 
-       ME = RD->method_end(); M != ME; ++M) {
-    CXXMethodDecl *Method = *M;
-
-    // C++0x [class]p7:
-    //   A standard-layout class is a class that [...]
-    //    -- has no virtual functions (10.3) [...]
-    if (Method->isVirtual())
-      return false;
-  }
-
-  AccessSpecifier AS = AS_none;
-  QualType FirstFieldType;
-  bool FirstFieldType_set = false;
-  uint64_t FieldCount = 0;
-
-  for (CXXRecordDecl::field_iterator Field = RD->field_begin(),
-         E = RD->field_end(); Field != E; ++Field, ++FieldCount) {
-    // C++0x [class]p7:
-    //   A standard-layout class is a class that [...]
-    //    -- has no non-static data members of type non-standard-layout class
-    //       (or array of such types) or reference [...]
-    QualType FieldType = Context.getBaseElementType((*Field)->getType());
-    if (const RecordType *T =
-        Context.getBaseElementType(FieldType)->getAs<RecordType>()) {
-      if (! T->hasStandardLayout(Context) || T->isReferenceType())
-        return false;
-    }
-    if (! FirstFieldType_set) {
-      FirstFieldType = FieldType;
-      FirstFieldType_set = true;
-    }
-  
-    // C++0x [class]p7:
-    //   A standard-layout class is a class that [...]
-    //    -- has the same access control (Clause 11) for all non-static data
-    //       members [...]
-    if (AS == AS_none)
-      AS = (*Field)->getAccess();
-    else if (AS != (*Field)->getAccess())
-      return false;
-  }
-
-  for (CXXRecordDecl::base_class_const_iterator B = RD->bases_begin(),
-           BE = RD->bases_end(); B != BE; ++B) {
-    // C++0x [class]p7:
-    //   A standard-layout class is a class that [...]
-    //    -- no virtual base classes (10.1) [...]
-    if (B->isVirtual())
-      return false;
-
-    QualType BT = B->getType();
-
-    // C++0x [class]p7:
-    //   A standard-layout class is a class that [...]
-    //    -- has no non-standard-layout base classes [...]
-    if (const RecordType *T = BT->getAs<RecordType>())
-      if (! T->hasStandardLayout(Context))
-        return false;
-
-    // C++0x [class]p7:
-    //   A standard-layout class is a class that [...]
-    //    -- has no base classes of the same type as the first non-static data
-    //       member.
-    if (BT == FirstFieldType)
-      return false;
-
-    // C++0x [class]p7:
-    //   A standard-layout class is a class that [...]
-    //    -- either has no non-static data members in the most derived class
-    //       and at most one base class with non-static data members, or has
-    //       no base classes with non-static data members [...]
-    if (countBasesWithFields(BT) > (FieldCount == 0 ? 1 : 0))
-      return false;
-  }
-
-  return true;
-}
-
 bool EnumType::classof(const TagType *TT) {
   return isa<EnumDecl>(TT->getDecl());
+}
+
+IdentifierInfo *TemplateTypeParmType::getIdentifier() const {
+  return isCanonicalUnqualified() ? 0 : getDecl()->getIdentifier();
 }
 
 SubstTemplateTypeParmPackType::
