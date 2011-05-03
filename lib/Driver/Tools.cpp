@@ -373,8 +373,10 @@ static const char *getARMTargetCPU(const ArgList &Args,
     return "cortex-a8";
   if (MArch == "armv7f" || MArch == "armv7-f")
     return "cortex-a9-mp";
+#ifndef __OPEN_SOURCE__
   if (MArch == "armv7k" || MArch == "armv7-k")
     return "pj4b";
+#endif // !__OPEN_SOURCE__
   if (MArch == "armv7s" || MArch == "armv7-s")
     return "swift";
   if (MArch == "armv7r" || MArch == "armv7-r")
@@ -428,8 +430,10 @@ static const char *getLLVMArchSuffixForARM(llvm::StringRef CPU) {
   if (CPU == "cortex-a9-mp")
     return "v7f";
 
+#ifndef __OPEN_SOURCE__
   if (CPU == "pj4b")
     return "v7k";
+#endif // !__OPEN_SOURCE__
 
   if (CPU == "swift")
     return "v7s";
@@ -926,6 +930,25 @@ static void addExceptionArgs(const ArgList &Args, types::ID InputType,
     CmdArgs.push_back("-fexceptions");
 }
 
+static bool ShouldDisableCFI(const ArgList &Args,
+                             const ToolChain &TC) {
+
+  // FIXME: Duplicated code with ToolChains.cpp
+  // FIXME: This doesn't belong here, but ideally we will support static soon
+  // anyway.
+  bool HasStatic = (Args.hasArg(options::OPT_mkernel) ||
+                    Args.hasArg(options::OPT_static) ||
+                    Args.hasArg(options::OPT_fapple_kext));
+  bool IsIADefault = TC.IsIntegratedAssemblerDefault() && !HasStatic;
+  bool UseIntegratedAs = Args.hasFlag(options::OPT_integrated_as,
+                                      options::OPT_no_integrated_as,
+                                      IsIADefault);
+  bool UseCFI = Args.hasFlag(options::OPT_fdwarf2_cfi_asm,
+                             options::OPT_fno_dwarf2_cfi_asm,
+                             UseIntegratedAs);
+  return !UseCFI;
+}
+
 void Clang::ConstructJob(Compilation &C, const JobAction &JA,
                          const InputInfo &Output,
                          const InputInfoList &Inputs,
@@ -1396,11 +1419,8 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
       CmdArgs.push_back("-fno-gnu-keywords");
   }
 
-  if (Arg *A = Args.getLastArg(options::OPT_fdwarf2_cfi_asm,
-                               options::OPT_fno_dwarf2_cfi_asm)) {
-    if (A->getOption().matches(options::OPT_fno_dwarf2_cfi_asm))
-      CmdArgs.push_back("-fno-dwarf2-cfi-asm");
-  }
+  if (ShouldDisableCFI(Args, getToolChain()))
+    CmdArgs.push_back("-fno-dwarf2-cfi-asm");
 
   if (Arg *A = Args.getLastArg(options::OPT_ftemplate_depth_)) {
     CmdArgs.push_back("-ftemplate-depth");
@@ -1551,6 +1571,12 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
     CmdArgs.push_back(Args.MakeArgString(llvm::Twine(StackProtectorLevel)));
   }
 
+  // Translate -mstackrealign
+  if (Args.hasArg(options::OPT_mstackrealign)) {
+    CmdArgs.push_back("-backend-option");
+    CmdArgs.push_back("-force-align-stack");
+  }
+  
   // Forward -f options with positive and negative forms; we translate
   // these by hand.
 
@@ -2898,12 +2924,17 @@ void darwin::Link::AddLinkArgs(Compilation &C,
   Args.AddAllArgs(CmdArgs, options::OPT_sub__library);
   Args.AddAllArgs(CmdArgs, options::OPT_sub__umbrella);
 
-  Args.AddAllArgsTranslated(CmdArgs, options::OPT_isysroot, "-syslibroot");
-  if (getDarwinToolChain().isTargetIPhoneOS()) {
-    if (!Args.hasArg(options::OPT_isysroot)) {
-      CmdArgs.push_back("-syslibroot");
-      CmdArgs.push_back("/Developer/SDKs/Extra");
-    }
+  // Give --sysroot= preference, over the Apple specific behavior to also use
+  // --isysroot as the syslibroot.
+  if (const Arg *A = Args.getLastArg(options::OPT__sysroot_EQ)) {
+    CmdArgs.push_back("-syslibroot");
+    CmdArgs.push_back(A->getValue(Args));
+  } else if (const Arg *A = Args.getLastArg(options::OPT_isysroot)) {
+    CmdArgs.push_back("-syslibroot");
+    CmdArgs.push_back(A->getValue(Args));
+  } else if (getDarwinToolChain().isTargetIPhoneOS()) {
+    CmdArgs.push_back("-syslibroot");
+    CmdArgs.push_back("/Developer/SDKs/Extra");
   }
 
   Args.AddLastArg(CmdArgs, options::OPT_twolevel__namespace);
