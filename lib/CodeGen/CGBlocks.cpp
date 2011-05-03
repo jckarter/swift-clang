@@ -722,7 +722,7 @@ RValue CodeGenFunction::EmitBlockCallExpr(const CallExpr* E,
   // Add the block literal.
   QualType VoidPtrTy = getContext().getPointerType(getContext().VoidTy);
   CallArgList Args;
-  Args.push_back(std::make_pair(RValue::get(BlockLiteral), VoidPtrTy));
+  Args.add(RValue::get(BlockLiteral), VoidPtrTy);
 
   QualType FnType = BPT->getPointeeType();
 
@@ -1063,6 +1063,10 @@ CodeGenFunction::GenerateCopyHelperFunction(const CGBlockInfo &blockInfo) {
   IdentifierInfo *II
     = &CGM.getContext().Idents.get("__copy_helper_block_");
 
+  // Check if we should generate debug info for this block helper function.
+  if (CGM.getModuleDebugInfo())
+    DebugInfo = CGM.getModuleDebugInfo();
+
   FunctionDecl *FD = FunctionDecl::Create(C,
                                           C.getTranslationUnitDecl(),
                                           SourceLocation(),
@@ -1149,6 +1153,10 @@ CodeGenFunction::GenerateDestroyHelperFunction(const CGBlockInfo &blockInfo) {
   llvm::Function *Fn =
     llvm::Function::Create(LTy, llvm::GlobalValue::InternalLinkage,
                            "__destroy_helper_block_", &CGM.getModule());
+
+  // Check if we should generate debug info for this block destroy function.
+  if (CGM.getModuleDebugInfo())
+    DebugInfo = CGM.getModuleDebugInfo();
 
   IdentifierInfo *II
     = &CGM.getContext().Idents.get("__destroy_helper_block_");
