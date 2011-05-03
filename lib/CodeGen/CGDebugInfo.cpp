@@ -628,7 +628,8 @@ CollectRecordFields(const RecordDecl *record, llvm::DIFile tunit,
     FieldDecl *field = *I;
     if (IsMsStruct) {
       // Zero-length bitfields following non-bitfield members are ignored
-      if (CGM.getContext().ZeroBitfieldFollowsNonBitfield((field), LastFD)) {
+      if (CGM.getContext().ZeroBitfieldFollowsNonBitfield((field), LastFD) ||
+          CGM.getContext().ZeroBitfieldFollowsBitfield((field), LastFD)) {
         --fieldNo;
         continue;
       }
@@ -1643,7 +1644,8 @@ void CGDebugInfo::EmitFunctionStart(GlobalDecl GD, QualType FnType,
     }
     Name = getFunctionName(FD);
     // Use mangled name as linkage name for c/c++ functions.
-    LinkageName = CGM.getMangledName(GD);
+    if (!Fn->hasInternalLinkage())
+      LinkageName = CGM.getMangledName(GD);
     if (LinkageName == Name)
       LinkageName = llvm::StringRef();
     if (FD->hasPrototype())
