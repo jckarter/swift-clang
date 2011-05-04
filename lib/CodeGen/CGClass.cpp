@@ -726,12 +726,13 @@ void CodeGenFunction::EmitCtorPrologue(const CXXConstructorDecl *CD,
        B != E; ++B) {
     CXXCtorInitializer *Member = (*B);
     
-    if (Member->isBaseInitializer())
+    if (Member->isBaseInitializer()) {
       EmitBaseInitializer(*this, ClassDecl, Member, CtorType);
-    else if (Member->isAnyMemberInitializer())
+    } else {
+      assert(Member->isAnyMemberInitializer() &&
+            "Delegating initializer on non-delegating constructor");
       MemberInitializers.push_back(Member);
-    else
-      llvm_unreachable("Delegating initializer on non-delegating constructor");
+    }
   }
 
   InitializeVTablePointers(ClassDecl);
@@ -1269,6 +1270,23 @@ CodeGenFunction::EmitDelegateCXXConstructorCall(const CXXConstructorDecl *Ctor,
            ReturnValueSlot(), DelegateArgs, Ctor);
 }
 
+namespace {
+  struct CallDelegatingCtorDtor : EHScopeStack::Cleanup {
+    const CXXDestructorDecl *Dtor;
+    llvm::Value *Addr;
+    CXXDtorType Type;
+
+    CallDelegatingCtorDtor(const CXXDestructorDecl *D, llvm::Value *Addr,
+                           CXXDtorType Type)
+      : Dtor(D), Addr(Addr), Type(Type) {}
+
+    void Emit(CodeGenFunction &CGF, bool IsForEH) {
+      CGF.EmitCXXDestructorCall(Dtor, Type, /*ForVirtualBase=*/false,
+                                Addr);
+    }
+  };
+}
+
 void
 CodeGenFunction::EmitDelegatingCXXConstructorCall(const CXXConstructorDecl *Ctor,
                                                   const FunctionArgList &Args) {
@@ -1279,8 +1297,17 @@ CodeGenFunction::EmitDelegatingCXXConstructorCall(const CXXConstructorDecl *Ctor
   AggValueSlot AggSlot = AggValueSlot::forAddr(ThisPtr, false, /*Lifetime*/ true);
 
   EmitAggExpr(Ctor->init_begin()[0]->getInit(), AggSlot);
-}
 
+  const CXXRecordDecl *ClassDecl = Ctor->getParent();
+  if (CGM.getLangOptions().Exceptions && !ClassDecl->hasTrivialDestructor()) {
+    CXXDtorType Type =
+      CurGD.getCtorType() == Ctor_Complete ? Dtor_Complete : Dtor_Base;
+
+    EHStack.pushCleanup<CallDelegatingCtorDtor>(EHCleanup,
+                                                ClassDecl->getDestructor(),
+                                                ThisPtr, Type);
+  }
+}
 
 void CodeGenFunction::EmitCXXDestructorCall(const CXXDestructorDecl *DD,
                                             CXXDtorType Type,

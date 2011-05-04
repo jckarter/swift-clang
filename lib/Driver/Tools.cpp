@@ -473,12 +473,6 @@ void Clang::AddARMTargetArgs(const ArgList &Args,
   CmdArgs.push_back("-arm-darwin-use-movt=0");
 #endif
 
-  // Disable tail calls, if requested.
-#ifdef DISABLE_ARM_DARWIN_TAIL_CALLS
-  CmdArgs.push_back("-backend-option");
-  CmdArgs.push_back("-arm-darwin-allow-tail-calls=0");
-#endif
-
   // Select the ABI to use.
   //
   // FIXME: Support -meabi.
@@ -680,7 +674,7 @@ void Clang::AddMIPSTargetArgs(const ArgList &Args,
     else if (MArch == "r6000")
       CmdArgs.push_back("mips2");
     else
-      CmdArgs.push_back(MArch.str().c_str());
+      CmdArgs.push_back(Args.MakeArgString(MArch));
   }
 
   // Select the float ABI as determined by -msoft-float, -mhard-float, and
