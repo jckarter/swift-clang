@@ -222,6 +222,14 @@ CINDEX_LINKAGE CXString clang_getFileName(CXFile SFile);
 CINDEX_LINKAGE time_t clang_getFileTime(CXFile SFile);
 
 /**
+ * \brief Determine whether the given header is guarded against
+ * multiple inclusions, either with the conventional
+ * #ifndef/#define/#endif macro guards or with #pragma once.
+ */
+CINDEX_LINKAGE unsigned 
+clang_isFileMultipleIncludeGuarded(CXTranslationUnit tu, CXFile file);
+
+/**
  * \brief Retrieve a file handle within the given translation unit.
  *
  * \param tu the translation unit
@@ -1027,12 +1035,14 @@ enum CXTUResourceUsageKind {
   CXTUResourceUsage_SourceManager_Membuffer_MMap = 8,
   CXTUResourceUsage_ExternalASTSource_Membuffer_Malloc = 9, 
   CXTUResourceUsage_ExternalASTSource_Membuffer_MMap = 10, 
+  CXTUResourceUsage_Preprocessor = 11,
+  CXTUResourceUsage_PreprocessingRecord = 12,
   CXTUResourceUsage_MEMORY_IN_BYTES_BEGIN = CXTUResourceUsage_AST,
   CXTUResourceUsage_MEMORY_IN_BYTES_END =
-    CXTUResourceUsage_ExternalASTSource_Membuffer_MMap,
+    CXTUResourceUsage_PreprocessingRecord,
 
   CXTUResourceUsage_First = CXTUResourceUsage_AST,
-  CXTUResourceUsage_Last = CXTUResourceUsage_ExternalASTSource_Membuffer_MMap
+  CXTUResourceUsage_Last = CXTUResourceUsage_PreprocessingRecord
 };
 
 /**
