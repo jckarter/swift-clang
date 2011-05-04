@@ -2132,6 +2132,16 @@ void Sema::MergeVarDecl(VarDecl *New, LookupResult &Previous) {
 /// no declarator (e.g. "struct foo;") is parsed.
 Decl *Sema::ParsedFreeStandingDeclSpec(Scope *S, AccessSpecifier AS,
                                        DeclSpec &DS) {
+  return ParsedFreeStandingDeclSpec(S, AS, DS,
+                                    MultiTemplateParamsArg(*this, 0, 0));
+}
+
+/// ParsedFreeStandingDeclSpec - This method is invoked when a declspec with
+/// no declarator (e.g. "struct foo;") is parsed. It also accopts template
+/// parameters to cope with template friend declarations.
+Decl *Sema::ParsedFreeStandingDeclSpec(Scope *S, AccessSpecifier AS,
+                                       DeclSpec &DS,
+                                       MultiTemplateParamsArg TemplateParams) {
   Decl *TagD = 0;
   TagDecl *Tag = 0;
   if (DS.getTypeSpecType() == DeclSpec::TST_class ||
@@ -2163,7 +2173,7 @@ Decl *Sema::ParsedFreeStandingDeclSpec(Scope *S, AccessSpecifier AS,
     // whatever routines created it handled the friendship aspect.
     if (TagD && !Tag)
       return 0;
-    return ActOnFriendTypeDecl(S, DS, MultiTemplateParamsArg(*this, 0, 0));
+    return ActOnFriendTypeDecl(S, DS, TemplateParams);
   }
 
   // Track whether we warned about the fact that there aren't any
@@ -6705,6 +6715,19 @@ Decl *Sema::ActOnTag(Scope *S, unsigned TagSpec, TagUseKind TUK,
     // shouldn't be diagnosing.
     LookupName(Previous, S);
 
+    if (Previous.isAmbiguous() && TUK == TUK_Definition) {
+      LookupResult::Filter F = Previous.makeFilter();
+      while (F.hasNext()) {
+        NamedDecl *ND = F.next();
+        if (ND->getDeclContext()->getRedeclContext() != SearchDC)
+          F.erase();
+      }
+      F.done();
+      
+      if (Previous.isAmbiguous())
+        return 0;
+    }
+    
     // Note:  there used to be some attempt at recovery here.
     if (Previous.isAmbiguous())
       return 0;

@@ -1,6 +1,8 @@
-// RUN: %clang_cc1 -fsyntax-only -Wnon-pod-memset -verify %s
+// RUN: %clang_cc1 -fsyntax-only -Wnon-pod-memaccess -verify %s
 
-extern void *memset(void *, int, unsigned);
+extern "C" void *memset(void *, int, unsigned);
+extern "C" void *memmove(void *s1, const void *s2, unsigned n);
+extern "C" void *memcpy(void *s1, const void *s2, unsigned n);
 
 // Several POD types that should not warn.
 struct S1 {} s1;
@@ -24,19 +26,32 @@ struct X5 : virtual S1 {} x5;
 
 void test_warn() {
   memset(&x1, 0, sizeof x1); // \
-      // expected-warning {{destination for this memset call is a pointer to a non-POD type}} \
+      // expected-warning {{destination for this 'memset' call is a pointer to non-POD type}} \
       // expected-note {{explicitly cast the pointer to silence this warning}}
   memset(&x2, 0, sizeof x2); // \
-      // expected-warning {{destination for this memset call is a pointer to a non-POD type}} \
+      // expected-warning {{destination for this 'memset' call is a pointer to non-POD type}} \
       // expected-note {{explicitly cast the pointer to silence this warning}}
   memset(&x3, 0, sizeof x3); // \
-      // expected-warning {{destination for this memset call is a pointer to a non-POD type}} \
+      // expected-warning {{destination for this 'memset' call is a pointer to dynamic class}} \
       // expected-note {{explicitly cast the pointer to silence this warning}}
   memset(&x4, 0, sizeof x4); // \
-      // expected-warning {{destination for this memset call is a pointer to a non-POD type}} \
+      // expected-warning {{destination for this 'memset' call is a pointer to non-POD type}} \
       // expected-note {{explicitly cast the pointer to silence this warning}}
   memset(&x5, 0, sizeof x5); // \
-      // expected-warning {{destination for this memset call is a pointer to a non-POD type}} \
+      // expected-warning {{destination for this 'memset' call is a pointer to dynamic class}} \
+      // expected-note {{explicitly cast the pointer to silence this warning}}
+
+  memmove(&x1, 0, sizeof x1); // \
+      // expected-warning{{destination for this 'memmove' call is a pointer to non-POD type 'struct X1'}} \
+      // expected-note {{explicitly cast the pointer to silence this warning}}
+  memmove(0, &x1, sizeof x1); // \
+      // expected-warning{{source of this 'memmove' call is a pointer to non-POD type 'struct X1'}} \
+      // expected-note {{explicitly cast the pointer to silence this warning}}
+  memcpy(&x1, 0, sizeof x1); // \
+      // expected-warning{{destination for this 'memcpy' call is a pointer to non-POD type 'struct X1'}} \
+      // expected-note {{explicitly cast the pointer to silence this warning}}
+  memcpy(0, &x1, sizeof x1); // \
+      // expected-warning{{source of this 'memcpy' call is a pointer to non-POD type 'struct X1'}} \
       // expected-note {{explicitly cast the pointer to silence this warning}}
 }
 
@@ -60,4 +75,11 @@ void test_nowarn(void *void_ptr) {
 
   // Dead code shouldn't warn.
   if (false) memset(&x1, 0, sizeof x1);
+}
+
+namespace N {
+  void *memset(void *, int, unsigned);
+  void test_nowarn() {
+    N::memset(&x1, 0, sizeof x1);
+  }
 }
