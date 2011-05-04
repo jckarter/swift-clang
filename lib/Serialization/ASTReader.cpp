@@ -1697,7 +1697,8 @@ namespace {
       using namespace clang::io;
       HeaderFileInfo HFI;
       unsigned Flags = *d++;
-      HFI.isImport = (Flags >> 3) & 0x01;
+      HFI.isImport = (Flags >> 4) & 0x01;
+      HFI.isPragmaOnce = (Flags >> 3) & 0x01;
       HFI.DirInfo = (Flags >> 1) & 0x03;
       HFI.Resolved = Flags & 0x01;
       HFI.NumIncludes = ReadUnalignedLE16(d);
@@ -4710,18 +4711,28 @@ ASTReader::ReadCXXCtorInitializers(PerFileData &F, const RecordData &Record,
       bool IsBaseVirtual = false;
       FieldDecl *Member = 0;
       IndirectFieldDecl *IndirectMember = 0;
+      CXXConstructorDecl *Target = 0;
 
-      bool IsBaseInitializer = Record[Idx++];
-      if (IsBaseInitializer) {
+      CtorInitializerType Type = (CtorInitializerType)Record[Idx++];
+      switch (Type) {
+       case CTOR_INITIALIZER_BASE:
         BaseClassInfo = GetTypeSourceInfo(F, Record, Idx);
         IsBaseVirtual = Record[Idx++];
-      } else {
-        bool IsIndirectMemberInitializer = Record[Idx++];
-        if (IsIndirectMemberInitializer)
-          IndirectMember = cast<IndirectFieldDecl>(GetDecl(Record[Idx++]));
-        else
-          Member = cast<FieldDecl>(GetDecl(Record[Idx++]));
+        break;
+
+       case CTOR_INITIALIZER_DELEGATING:
+        Target = cast<CXXConstructorDecl>(GetDecl(Record[Idx++]));
+        break;
+
+       case CTOR_INITIALIZER_MEMBER:
+        Member = cast<FieldDecl>(GetDecl(Record[Idx++]));
+        break;
+
+       case CTOR_INITIALIZER_INDIRECT_MEMBER:
+        IndirectMember = cast<IndirectFieldDecl>(GetDecl(Record[Idx++]));
+        break;
       }
+
       SourceLocation MemberOrEllipsisLoc = ReadSourceLocation(F, Record, Idx);
       Expr *Init = ReadExpr(F);
       SourceLocation LParenLoc = ReadSourceLocation(F, Record, Idx);
@@ -4739,10 +4750,13 @@ ASTReader::ReadCXXCtorInitializers(PerFileData &F, const RecordData &Record,
       }
 
       CXXCtorInitializer *BOMInit;
-      if (IsBaseInitializer) {
+      if (Type == CTOR_INITIALIZER_BASE) {
         BOMInit = new (C) CXXCtorInitializer(C, BaseClassInfo, IsBaseVirtual,
                                              LParenLoc, Init, RParenLoc,
                                              MemberOrEllipsisLoc);
+      } else if (Type == CTOR_INITIALIZER_DELEGATING) {
+        BOMInit = new (C) CXXCtorInitializer(C, MemberOrEllipsisLoc, LParenLoc,
+                                             Target, Init, RParenLoc);
       } else if (IsWritten) {
         if (Member)
           BOMInit = new (C) CXXCtorInitializer(C, Member, MemberOrEllipsisLoc,
