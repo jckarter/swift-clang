@@ -963,7 +963,10 @@ Sema::ActOnCXXMemberDeclarator(Scope *S, AccessSpecifier AS, Declarator &D,
                                MultiTemplateParamsArg TemplateParameterLists,
                                ExprTy *BW, const VirtSpecifiers &VS,
                                ExprTy *InitExpr, bool IsDefinition,
-                               bool Deleted) {
+                               bool Deleted, bool Defaulted) {
+  // FIXME: Do something with this
+  (void) Defaulted;
+
   const DeclSpec &DS = D.getDeclSpec();
   DeclarationNameInfo NameInfo = GetNameForDeclarator(D);
   DeclarationName Name = NameInfo.getName();
@@ -1547,7 +1550,8 @@ Sema::BuildDelegatingInitializer(TypeSourceInfo *TInfo,
     return true;
 
   CXXConstructExpr *ConExpr = cast<CXXConstructExpr>(DelegationInit.get());
-  CXXConstructorDecl *Constructor = ConExpr->getConstructor();
+  CXXConstructorDecl *Constructor
+    = ConExpr->getConstructor();
   assert(Constructor && "Delegating constructor with no target?");
 
   CheckImplicitConversions(DelegationInit.get(), LParenLoc);
@@ -2072,23 +2076,7 @@ static bool CollectFieldInitializer(BaseAndFieldInfo &Info,
 bool
 Sema::SetDelegatingInitializer(CXXConstructorDecl *Constructor,
                                CXXCtorInitializer *Initializer) {
-  CXXConstructorDecl *Target = Initializer->getTargetConstructor();
-  CXXConstructorDecl *Canonical = Constructor->getCanonicalDecl();
-  while (Target) {
-    if (Target->getCanonicalDecl() == Canonical) {
-      Diag(Initializer->getSourceLocation(), diag::err_delegating_ctor_loop)
-        << Constructor;
-      return true;
-    }
-    Target = Target->getTargetConstructor();
-  }
-
-  // We do the cycle detection first so that we know that we're not
-  // going to create a cycle by inserting this link. This ensures that
-  // the AST is cycle-free and we don't get a scenario where we have
-  // a B -> C -> B cycle and then add an A -> B link and get stuck in
-  // an infinite loop as we check for cycles with A and never get there
-  // because we get stuck in a cycle not including A.
+  assert(Initializer->isDelegatingInitializer());
   Constructor->setNumCtorInitializers(1);
   CXXCtorInitializer **initializer =
     new (Context) CXXCtorInitializer*[1];
@@ -2100,9 +2088,10 @@ Sema::SetDelegatingInitializer(CXXConstructorDecl *Constructor,
     DiagnoseUseOfDecl(Dtor, Initializer->getSourceLocation());
   }
 
+  DelegatingCtorDecls.push_back(Constructor);
+
   return false;
 }
-
                                
 bool
 Sema::SetCtorInitializers(CXXConstructorDecl *Constructor,
@@ -2479,7 +2468,7 @@ void Sema::ActOnMemInitializers(Decl *ConstructorDecl,
         HadError = true;
         // We will treat this as being the only initializer.
       }
-      SetDelegatingInitializer(Constructor, *MemInits);
+      SetDelegatingInitializer(Constructor, MemInits[i]);
       // Return immediately as the initializer is set.
       return;
     }
@@ -4970,7 +4959,8 @@ CXXConstructorDecl *Sema::DeclareImplicitDefaultConstructor(
                                  /*TInfo=*/0,
                                  /*isExplicit=*/false,
                                  /*isInline=*/true,
-                                 /*isImplicitlyDeclared=*/true);
+                                 /*isImplicitlyDeclared=*/true,
+                                 /*isExplicitlyDefaulted=*/false);
   DefaultCon->setAccess(AS_public);
   DefaultCon->setImplicit();
   DefaultCon->setTrivial(ClassDecl->hasTrivialConstructor());
@@ -5166,7 +5156,8 @@ void Sema::DeclareInheritedConstructors(CXXRecordDecl *ClassDecl) {
         CXXConstructorDecl *NewCtor = CXXConstructorDecl::Create(
             Context, ClassDecl, UsingLoc, DNI, QualType(NewCtorType, 0),
             /*TInfo=*/0, BaseCtor->isExplicit(), /*Inline=*/true,
-            /*ImplicitlyDeclared=*/true);
+            /*ImplicitlyDeclared=*/true,
+            /*isExplicitlyDefaulted*/false);
         NewCtor->setAccess(BaseCtor->getAccess());
 
         // Build up the parameter decls and add them.
@@ -6115,7 +6106,8 @@ CXXConstructorDecl *Sema::DeclareImplicitCopyConstructor(
                                  /*TInfo=*/0,
                                  /*isExplicit=*/false,
                                  /*isInline=*/true,
-                                 /*isImplicitlyDeclared=*/true);
+                                 /*isImplicitlyDeclared=*/true,
+                                 /*isExplicitlyDefaulted=*/false);
   CopyConstructor->setAccess(AS_public);
   CopyConstructor->setTrivial(ClassDecl->hasTrivialCopyConstructor());
   
@@ -7956,4 +7948,87 @@ void Sema::SetIvarInitializers(ObjCImplementationDecl *ObjCImplementation) {
     ObjCImplementation->setIvarInitializers(Context, 
                                             AllToInit.data(), AllToInit.size());
   }
+}
+
+static
+void DelegatingCycleHelper(CXXConstructorDecl* Ctor,
+                           llvm::SmallSet<CXXConstructorDecl*, 4> &Valid,
+                           llvm::SmallSet<CXXConstructorDecl*, 4> &Invalid,
+                           llvm::SmallSet<CXXConstructorDecl*, 4> &Current,
+                           Sema &S) {
+  llvm::SmallSet<CXXConstructorDecl*, 4>::iterator CI = Current.begin(),
+                                                   CE = Current.end();
+  if (Ctor->isInvalidDecl())
+    return;
+
+  const FunctionDecl *FNTarget = 0;
+  CXXConstructorDecl *Target;
+  
+  // We ignore the result here since if we don't have a body, Target will be
+  // null below.
+  (void)Ctor->getTargetConstructor()->hasBody(FNTarget);
+  Target
+= const_cast<CXXConstructorDecl*>(cast_or_null<CXXConstructorDecl>(FNTarget));
+
+  CXXConstructorDecl *Canonical = Ctor->getCanonicalDecl(),
+                     // Avoid dereferencing a null pointer here.
+                     *TCanonical = Target ? Target->getCanonicalDecl() : 0;
+
+  if (!Current.insert(Canonical))
+    return;
+
+  // We know that beyond here, we aren't chaining into a cycle.
+  if (!Target || !Target->isDelegatingConstructor() ||
+      Target->isInvalidDecl() || Valid.count(TCanonical)) {
+    for (CI = Current.begin(), CE = Current.end(); CI != CE; ++CI)
+      Valid.insert(*CI);
+    Current.clear();
+  // We've hit a cycle.
+  } else if (TCanonical == Canonical || Invalid.count(TCanonical) ||
+             Current.count(TCanonical)) {
+    // If we haven't diagnosed this cycle yet, do so now.
+    if (!Invalid.count(TCanonical)) {
+      S.Diag((*Ctor->init_begin())->getSourceLocation(),
+             diag::warn_delegating_ctor_cycle)
+        << Ctor;
+
+      // Don't add a note for a function delegating directo to itself.
+      if (TCanonical != Canonical)
+        S.Diag(Target->getLocation(), diag::note_it_delegates_to);
+
+      CXXConstructorDecl *C = Target;
+      while (C->getCanonicalDecl() != Canonical) {
+        (void)C->getTargetConstructor()->hasBody(FNTarget);
+        assert(FNTarget && "Ctor cycle through bodiless function");
+
+        C
+       = const_cast<CXXConstructorDecl*>(cast<CXXConstructorDecl>(FNTarget));
+        S.Diag(C->getLocation(), diag::note_which_delegates_to);
+      }
+    }
+
+    for (CI = Current.begin(), CE = Current.end(); CI != CE; ++CI)
+      Invalid.insert(*CI);
+    Current.clear();
+  } else {
+    DelegatingCycleHelper(Target, Valid, Invalid, Current, S);
+  }
+}
+   
+
+void Sema::CheckDelegatingCtorCycles() {
+  llvm::SmallSet<CXXConstructorDecl*, 4> Valid, Invalid, Current;
+
+  llvm::SmallSet<CXXConstructorDecl*, 4>::iterator CI = Current.begin(),
+                                                   CE = Current.end();
+
+  for (llvm::SmallVector<CXXConstructorDecl*, 4>::iterator
+         I = DelegatingCtorDecls.begin(),
+         E = DelegatingCtorDecls.end();
+       I != E; ++I) {
+   DelegatingCycleHelper(*I, Valid, Invalid, Current, *this);
+  }
+
+  for (CI = Invalid.begin(), CE = Invalid.end(); CI != CE; ++CI)
+    (*CI)->setInvalidDecl();
 }
