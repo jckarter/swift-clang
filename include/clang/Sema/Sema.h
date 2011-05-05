@@ -312,6 +312,10 @@ public:
   /// and must warn if not used. Only contains the first declaration.
   llvm::SmallVector<const DeclaratorDecl*, 4> UnusedFileScopedDecls;
 
+  /// \brief All the delegating constructors seen so far in the file, used for
+  /// cycle detection at the end of the TU.
+  llvm::SmallVector<CXXConstructorDecl*, 4> DelegatingCtorDecls;
+
   /// \brief Callback to the parser to parse templated functions when needed.
   typedef void LateTemplateParserCB(void *P, const FunctionDecl *FD);
   LateTemplateParserCB *LateTemplateParser;
@@ -703,6 +707,8 @@ public:
   StmtResult Owned(Stmt* S) { return S; }
 
   void ActOnEndOfTranslationUnit();
+
+  void CheckDelegatingCtorCycles();
 
   Scope *getScopeForContext(DeclContext *Ctx);
 
@@ -2068,7 +2074,14 @@ public:
   void MarkDeclarationReferenced(SourceLocation Loc, Decl *D);
   void MarkDeclarationsReferencedInType(SourceLocation Loc, QualType T);
   void MarkDeclarationsReferencedInExpr(Expr *E);
-  
+
+  /// \brief Figure out if an expression could be turned into a call.
+  bool isExprCallable(const Expr &E, QualType &ZeroArgCallReturnTy,
+                      UnresolvedSetImpl &NonTemplateOverloads);
+  /// \brief Give notes for a set of overloads.
+  void NoteOverloads(const UnresolvedSetImpl &Overloads,
+                     const SourceLocation FinalNoteLoc);
+
   /// \brief Conditionally issue a diagnostic based on the current
   /// evaluation context.
   ///
@@ -3044,7 +3057,7 @@ public:
                                  MultiTemplateParamsArg TemplateParameterLists,
                                  Expr *BitfieldWidth, const VirtSpecifiers &VS,
                                  Expr *Init, bool IsDefinition,
-                                 bool Deleted = false);
+                                 bool Deleted = false, bool Defaulted = false);
 
   MemInitResult ActOnMemInitializer(Decl *ConstructorD,
                                     Scope *S,
