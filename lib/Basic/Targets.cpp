@@ -2186,6 +2186,12 @@ public:
 
   virtual bool validateAsmConstraint(const char *&Name,
                                      TargetInfo::ConstraintInfo &Info) const {
+    switch (*Name) {
+    default: return false;
+    case 'w': // Floating point and SIMD registers (V0-V31)
+      Info.setAllowsRegister();
+      return true;
+    }
     return false;
   }
 
