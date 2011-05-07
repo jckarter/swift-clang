@@ -727,7 +727,7 @@ void CodeGenModule::EmitGlobal(GlobalDecl GD) {
     }
 
     // Forward declarations are emitted lazily on first use.
-    if (!FD->isThisDeclarationADefinition())
+    if (!FD->doesThisDeclarationHaveABody())
       return;
   } else {
     const VarDecl *VD = cast<VarDecl>(Global);
@@ -793,14 +793,19 @@ void CodeGenModule::EmitGlobalDefinition(GlobalDecl GD) {
       return;
 
     if (const CXXMethodDecl *Method = dyn_cast<CXXMethodDecl>(D)) {
+      // Make sure to emit the definition(s) before we emit the thunks.
+      // This is necessary for the generation of certain thunks.
+      if (const CXXConstructorDecl *CD = dyn_cast<CXXConstructorDecl>(Method))
+        EmitCXXConstructor(CD, GD.getCtorType());
+      else if (const CXXDestructorDecl *DD =dyn_cast<CXXDestructorDecl>(Method))
+        EmitCXXDestructor(DD, GD.getDtorType());
+      else
+        EmitGlobalFunctionDefinition(GD);
+
       if (Method->isVirtual())
         getVTables().EmitThunks(GD);
 
-      if (const CXXConstructorDecl *CD = dyn_cast<CXXConstructorDecl>(Method))
-        return EmitCXXConstructor(CD, GD.getCtorType());
-  
-      if (const CXXDestructorDecl *DD = dyn_cast<CXXDestructorDecl>(Method))
-        return EmitCXXDestructor(DD, GD.getDtorType());
+      return;
     }
 
     return EmitGlobalFunctionDefinition(GD);
@@ -892,7 +897,7 @@ CodeGenModule::GetOrCreateLLVMFunction(llvm::StringRef MangledName,
           assert(FD->isUsed() && "Sema didn't mark implicit function as used!");
           DeferredDeclsToEmit.push_back(D.getWithDecl(FD));
           break;
-        } else if (FD->isThisDeclarationADefinition()) {
+        } else if (FD->doesThisDeclarationHaveABody()) {
           DeferredDeclsToEmit.push_back(D.getWithDecl(FD));
           break;
         }
