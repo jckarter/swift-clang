@@ -174,26 +174,39 @@ private:
 };
 
 int __if_exists_test() {
-
   int b=0;
-
-
   __if_exists(IF_EXISTS::Type) {
      b++;
      b++;
   }
-
   __if_exists(IF_EXISTS::Type_not) {
      this wont compile.
   }
-
   __if_not_exists(IF_EXISTS::Type) {
      this wont compile.
   }
-
   __if_not_exists(IF_EXISTS::Type_not) {
      b++;
      b++;
   }
-
 }
+
+
+__if_exists(IF_EXISTS::Type) {
+  int var23;
+}
+
+__if_exists(IF_EXISTS::Type_not) {
+ this wont compile.
+}
+
+__if_not_exists(IF_EXISTS::Type) {
+ this wont compile.
+}
+
+__if_not_exists(IF_EXISTS::Type_not) {
+  int var244;
+}
+
+int __identifier(generic) = 3;
+
