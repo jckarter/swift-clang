@@ -1508,15 +1508,18 @@ Sema::CXXSpecialMember Sema::getSpecialMember(const CXXMethodDecl *MD) {
     if (Ctor->isCopyConstructor())
       return Sema::CXXCopyConstructor;
     
-    return Sema::CXXConstructor;
+    if (Ctor->isDefaultConstructor())
+      return Sema::CXXDefaultConstructor;
   } 
   
   if (isa<CXXDestructorDecl>(MD))
     return Sema::CXXDestructor;
   
-  assert(MD->isCopyAssignmentOperator() && 
-         "Must have copy assignment operator");
-  return Sema::CXXCopyAssignment;
+  if (MD->isCopyAssignmentOperator())
+    return Sema::CXXCopyAssignment;
+
+  llvm_unreachable("getSpecialMember on non-special member");
+  return Sema::CXXInvalid;
 }
 
 /// canRedefineFunction - checks if a function can be redefined. Currently,
@@ -1727,6 +1730,11 @@ bool Sema::MergeFunctionDecl(FunctionDecl *New, Decl *OldD) {
             << New << getSpecialMember(OldMethod);
           return true;
         }
+      } else if (OldMethod->isExplicitlyDefaulted()) {
+        Diag(NewMethod->getLocation(),
+             diag::err_definition_of_explicitly_defaulted_member)
+          << getSpecialMember(OldMethod);
+        return true;
       }
     }
 
@@ -2487,6 +2495,24 @@ Decl *Sema::BuildAnonymousStructOrUnion(Scope *S, DeclSpec &DS,
       // Recover by removing the storage specifier.
       DS.SetStorageClassSpec(DeclSpec::SCS_unspecified, SourceLocation(),
                              PrevSpec, DiagID, getLangOptions());
+    }
+
+    // Ignore const/volatile/restrict qualifiers.
+    if (DS.getTypeQualifiers()) {
+      if (DS.getTypeQualifiers() & DeclSpec::TQ_const)
+        Diag(DS.getConstSpecLoc(), diag::ext_anonymous_struct_union_qualified)
+          << Record->isUnion() << 0 
+          << FixItHint::CreateRemoval(DS.getConstSpecLoc());
+      if (DS.getTypeQualifiers() & DeclSpec::TQ_volatile)
+        Diag(DS.getVolatileSpecLoc(), diag::ext_anonymous_struct_union_qualified)
+          << Record->isUnion() << 1
+          << FixItHint::CreateRemoval(DS.getVolatileSpecLoc());
+      if (DS.getTypeQualifiers() & DeclSpec::TQ_restrict)
+        Diag(DS.getRestrictSpecLoc(), diag::ext_anonymous_struct_union_qualified)
+          << Record->isUnion() << 2 
+          << FixItHint::CreateRemoval(DS.getRestrictSpecLoc());
+
+      DS.ClearTypeQualifiers();
     }
 
     // C++ [class.union]p2:
@@ -4116,16 +4142,6 @@ Sema::ActOnFunctionDeclarator(Scope* S, Declarator& D, DeclContext* DC,
                                          /*isImplicitlyDeclared=*/false);
 
       NewFD = NewCD;
-
-      if (DefaultLoc.isValid()) {
-        if (NewCD->isDefaultConstructor() ||
-            NewCD->isCopyOrMoveConstructor()) {
-          NewFD->setDefaulted();
-          NewFD->setExplicitlyDefaulted();
-        } else {
-          Diag(DefaultLoc, diag::err_default_special_members);
-        }
-      }
     } else if (Name.getNameKind() == DeclarationName::CXXDestructorName) {
       // This is a C++ destructor declaration.
       if (DC->isRecord()) {
@@ -4138,11 +4154,6 @@ Sema::ActOnFunctionDeclarator(Scope* S, Declarator& D, DeclContext* DC,
                                           isInline,
                                           /*isImplicitlyDeclared=*/false);
         isVirtualOkay = true;
-
-        if (DefaultLoc.isValid()) {
-          NewFD->setDefaulted();
-          NewFD->setExplicitlyDefaulted();
-        }
       } else {
         Diag(D.getIdentifierLoc(), diag::err_destructor_not_member);
 
@@ -4160,9 +4171,6 @@ Sema::ActOnFunctionDeclarator(Scope* S, Declarator& D, DeclContext* DC,
              diag::err_conv_function_not_member);
         return 0;
       }
-
-      if (DefaultLoc.isValid())
-        Diag(DefaultLoc, diag::err_default_special_members);
 
       CheckConversionDeclarator(D, R, SC);
       NewFD = CXXConversionDecl::Create(Context, cast<CXXRecordDecl>(DC),
@@ -4211,16 +4219,6 @@ Sema::ActOnFunctionDeclarator(Scope* S, Declarator& D, DeclContext* DC,
       NewFD = NewMD;
 
       isVirtualOkay = !isStatic;
-
-      if (DefaultLoc.isValid()) {
-        if (NewMD->isCopyAssignmentOperator() /* ||
-            NewMD->isMoveAssignmentOperator() */) {
-          NewFD->setDefaulted();
-          NewFD->setExplicitlyDefaulted();
-        } else {
-          Diag(DefaultLoc, diag::err_default_special_members);
-        }
-      }
     } else {
       if (DefaultLoc.isValid())
         Diag(DefaultLoc, diag::err_default_special_members);
@@ -4694,7 +4692,7 @@ Sema::ActOnFunctionDeclarator(Scope* S, Declarator& D, DeclContext* DC,
 
     } else if (!IsFunctionDefinition && D.getCXXScopeSpec().isSet() &&
                !isFriend && !isFunctionTemplateSpecialization &&
-               !isExplicitSpecialization) {
+               !isExplicitSpecialization && !DefaultLoc.isValid()) {
       // An out-of-line member function declaration must also be a
       // definition (C++ [dcl.meaning]p1).
       // Note that this is not the case for explicit specializations of
@@ -4778,6 +4776,36 @@ Sema::ActOnFunctionDeclarator(Scope* S, Declarator& D, DeclContext* DC,
           Context.setcudaConfigureCallDecl(NewFD);
         }
       }
+
+  // Check explicitly defaulted methods
+  // FIXME: This could be made better through CXXSpecialMember if it did
+  // default constructors (which it should rather than any constructor).
+  if (NewFD && DefaultLoc.isValid() && getLangOptions().CPlusPlus) {
+    if (CXXMethodDecl *MD = dyn_cast<CXXMethodDecl>(NewFD)) {
+      if (CXXConstructorDecl *CD = dyn_cast<CXXConstructorDecl>(MD)) {
+        if (CD->isDefaultConstructor() || CD->isCopyOrMoveConstructor()) {
+          CD->setDefaulted();
+          CD->setExplicitlyDefaulted();
+          if (CD != CD->getCanonicalDecl() && CD->isDefaultConstructor())
+            CheckExplicitlyDefaultedDefaultConstructor(CD);
+          // FIXME: Do copy/move ctors here.
+        } else {
+          Diag(DefaultLoc, diag::err_default_special_members);
+        }
+      } else if (CXXDestructorDecl *DD = dyn_cast<CXXDestructorDecl>(MD)) {
+        DD->setDefaulted();
+        DD->setExplicitlyDefaulted();
+        // FIXME: Add a checking method
+      } else if (MD->isCopyAssignmentOperator() /* ||
+                 MD->isMoveAssignmentOperator() */) {
+        MD->setDefaulted();
+        MD->setExplicitlyDefaulted();
+        // FIXME: Add a checking method
+      } else {
+        Diag(DefaultLoc, diag::err_default_special_members);
+      }
+    }
+  }
 
   return NewFD;
 }
@@ -6763,7 +6791,8 @@ Decl *Sema::ActOnTag(Scope *S, unsigned TagSpec, TagUseKind TUK,
     // shouldn't be diagnosing.
     LookupName(Previous, S);
 
-    if (Previous.isAmbiguous() && TUK == TUK_Definition) {
+    if (Previous.isAmbiguous() && 
+        (TUK == TUK_Definition || TUK == TUK_Declaration)) {
       LookupResult::Filter F = Previous.makeFilter();
       while (F.hasNext()) {
         NamedDecl *ND = F.next();
@@ -6771,9 +6800,6 @@ Decl *Sema::ActOnTag(Scope *S, unsigned TagSpec, TagUseKind TUK,
           F.erase();
       }
       F.done();
-      
-      if (Previous.isAmbiguous())
-        return 0;
     }
     
     // Note:  there used to be some attempt at recovery here.
@@ -7653,8 +7679,8 @@ bool Sema::CheckNontrivialField(FieldDecl *FD) {
       CXXSpecialMember member = CXXInvalid;
       if (!RDecl->hasTrivialCopyConstructor())
         member = CXXCopyConstructor;
-      else if (!RDecl->hasTrivialConstructor())
-        member = CXXConstructor;
+      else if (!RDecl->hasTrivialDefaultConstructor())
+        member = CXXDefaultConstructor;
       else if (!RDecl->hasTrivialCopyAssignment())
         member = CXXCopyAssignment;
       else if (!RDecl->hasTrivialDestructor())
@@ -7683,7 +7709,7 @@ void Sema::DiagnoseNontrivial(const RecordType* T, CXXSpecialMember member) {
   case CXXInvalid:
     break;
 
-  case CXXConstructor:
+  case CXXDefaultConstructor:
     if (RD->hasUserDeclaredConstructor()) {
       typedef CXXRecordDecl::ctor_iterator ctor_iter;
       for (ctor_iter ci = RD->ctor_begin(), ce = RD->ctor_end(); ci != ce;++ci){
@@ -7757,8 +7783,8 @@ void Sema::DiagnoseNontrivial(const RecordType* T, CXXSpecialMember member) {
 
   bool (CXXRecordDecl::*hasTrivial)() const;
   switch (member) {
-  case CXXConstructor:
-    hasTrivial = &CXXRecordDecl::hasTrivialConstructor; break;
+  case CXXDefaultConstructor:
+    hasTrivial = &CXXRecordDecl::hasTrivialDefaultConstructor; break;
   case CXXCopyConstructor:
     hasTrivial = &CXXRecordDecl::hasTrivialCopyConstructor; break;
   case CXXCopyAssignment:
