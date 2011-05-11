@@ -1508,15 +1508,18 @@ Sema::CXXSpecialMember Sema::getSpecialMember(const CXXMethodDecl *MD) {
     if (Ctor->isCopyConstructor())
       return Sema::CXXCopyConstructor;
     
-    return Sema::CXXConstructor;
+    if (Ctor->isDefaultConstructor())
+      return Sema::CXXDefaultConstructor;
   } 
   
   if (isa<CXXDestructorDecl>(MD))
     return Sema::CXXDestructor;
   
-  assert(MD->isCopyAssignmentOperator() && 
-         "Must have copy assignment operator");
-  return Sema::CXXCopyAssignment;
+  if (MD->isCopyAssignmentOperator())
+    return Sema::CXXCopyAssignment;
+
+  llvm_unreachable("getSpecialMember on non-special member");
+  return Sema::CXXInvalid;
 }
 
 /// canRedefineFunction - checks if a function can be redefined. Currently,
@@ -3557,7 +3560,8 @@ Sema::ActOnVariableDeclarator(Scope *S, Declarator &D, DeclContext *DC,
     bool Invalid = false;
     if (TemplateParameterList *TemplateParams
         = MatchTemplateParametersToScopeSpecifier(
-                                                  D.getDeclSpec().getSourceRange().getBegin(),
+                                  D.getDeclSpec().getSourceRange().getBegin(),
+                                                  D.getIdentifierLoc(),
                                                   D.getCXXScopeSpec(),
                                                   TemplateParamLists.get(),
                                                   TemplateParamLists.size(),
@@ -3579,7 +3583,6 @@ Sema::ActOnVariableDeclarator(Scope *S, Declarator &D, DeclContext *DC,
           << II
           << SourceRange(TemplateParams->getTemplateLoc(),
                          TemplateParams->getRAngleLoc());
-        isExplicitSpecialization = true;
       }
     }
 
@@ -4252,6 +4255,7 @@ Sema::ActOnFunctionDeclarator(Scope* S, Declarator& D, DeclContext* DC,
     if (TemplateParameterList *TemplateParams
           = MatchTemplateParametersToScopeSpecifier(
                                   D.getDeclSpec().getSourceRange().getBegin(),
+                                  D.getIdentifierLoc(),
                                   D.getCXXScopeSpec(),
                                   TemplateParamLists.get(),
                                   TemplateParamLists.size(),
@@ -6304,6 +6308,11 @@ Decl *Sema::ActOnFinishFunctionBody(Decl *dcl, Stmt *Body,
       WP.disableCheckFallThrough();
     }
 
+    // MSVC permits the use of pure specifier (=0) on function definition,
+    // defined at class scope, warn about this non standard construct.
+    if (getLangOptions().Microsoft && FD->isPure())
+      Diag(FD->getLocation(), diag::warn_pure_function_definition);
+
     if (!FD->isInvalidDecl()) {
       DiagnoseUnusedParameters(FD->param_begin(), FD->param_end());
       DiagnoseSizeOfParametersAndReturnValue(FD->param_begin(), FD->param_end(),
@@ -6650,7 +6659,7 @@ Decl *Sema::ActOnTag(Scope *S, unsigned TagSpec, TagUseKind TUK,
   if (TemplateParameterLists.size() > 0 ||
       (SS.isNotEmpty() && TUK != TUK_Reference)) {
     if (TemplateParameterList *TemplateParams
-          = MatchTemplateParametersToScopeSpecifier(KWLoc, SS,
+          = MatchTemplateParametersToScopeSpecifier(KWLoc, NameLoc, SS,
                                                 TemplateParameterLists.get(),
                                                 TemplateParameterLists.size(),
                                                     TUK == TUK_Friend,
@@ -7677,7 +7686,7 @@ bool Sema::CheckNontrivialField(FieldDecl *FD) {
       if (!RDecl->hasTrivialCopyConstructor())
         member = CXXCopyConstructor;
       else if (!RDecl->hasTrivialDefaultConstructor())
-        member = CXXConstructor;
+        member = CXXDefaultConstructor;
       else if (!RDecl->hasTrivialCopyAssignment())
         member = CXXCopyAssignment;
       else if (!RDecl->hasTrivialDestructor())
@@ -7706,7 +7715,7 @@ void Sema::DiagnoseNontrivial(const RecordType* T, CXXSpecialMember member) {
   case CXXInvalid:
     break;
 
-  case CXXConstructor:
+  case CXXDefaultConstructor:
     if (RD->hasUserDeclaredConstructor()) {
       typedef CXXRecordDecl::ctor_iterator ctor_iter;
       for (ctor_iter ci = RD->ctor_begin(), ce = RD->ctor_end(); ci != ce;++ci){
@@ -7780,7 +7789,7 @@ void Sema::DiagnoseNontrivial(const RecordType* T, CXXSpecialMember member) {
 
   bool (CXXRecordDecl::*hasTrivial)() const;
   switch (member) {
-  case CXXConstructor:
+  case CXXDefaultConstructor:
     hasTrivial = &CXXRecordDecl::hasTrivialDefaultConstructor; break;
   case CXXCopyConstructor:
     hasTrivial = &CXXRecordDecl::hasTrivialCopyConstructor; break;
