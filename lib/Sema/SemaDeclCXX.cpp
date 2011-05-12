@@ -3057,6 +3057,14 @@ void Sema::CheckExplicitlyDefaultedDefaultConstructor(CXXConstructorDecl *CD) {
     // We know there are no parameters.
     CD->setType(Context.getFunctionType(Context.VoidTy, 0, 0, EPI));
   }
+
+  if (ShouldDeleteDefaultConstructor(CD)) {
+    if (First)
+      CD->setDeletedAsWritten();
+    else
+      Diag(CD->getLocation(), diag::err_out_of_line_default_deletes)
+        << getSpecialMember(CD);
+  }
 }
 
 bool Sema::ShouldDeleteDefaultConstructor(CXXConstructorDecl *CD) {
@@ -5255,6 +5263,7 @@ CXXConstructorDecl *Sema::DeclareImplicitDefaultConstructor(
                                  /*isInline=*/true,
                                  /*isImplicitlyDeclared=*/true);
   DefaultCon->setAccess(AS_public);
+  DefaultCon->setDefaulted();
   DefaultCon->setImplicit();
   DefaultCon->setTrivial(ClassDecl->hasTrivialDefaultConstructor());
   
@@ -5275,7 +5284,7 @@ CXXConstructorDecl *Sema::DeclareImplicitDefaultConstructor(
 
 void Sema::DefineImplicitDefaultConstructor(SourceLocation CurrentLocation,
                                             CXXConstructorDecl *Constructor) {
-  assert((Constructor->isImplicit() && Constructor->isDefaultConstructor() &&
+  assert((Constructor->isDefaulted() && Constructor->isDefaultConstructor() &&
           !Constructor->isUsed(false) && !Constructor->isDeleted()) &&
     "DefineImplicitDefaultConstructor - call it for implicit default ctor");
 
