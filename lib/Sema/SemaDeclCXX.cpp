@@ -1025,8 +1025,7 @@ Decl *
 Sema::ActOnCXXMemberDeclarator(Scope *S, AccessSpecifier AS, Declarator &D,
                                MultiTemplateParamsArg TemplateParameterLists,
                                ExprTy *BW, const VirtSpecifiers &VS,
-                               ExprTy *InitExpr, bool IsDefinition,
-                               bool Deleted, SourceLocation DefaultLoc) {
+                               ExprTy *InitExpr, bool IsDefinition) {
   const DeclSpec &DS = D.getDeclSpec();
   DeclarationNameInfo NameInfo = GetNameForDeclarator(D);
   DeclarationName Name = NameInfo.getName();
@@ -1091,9 +1090,6 @@ Sema::ActOnCXXMemberDeclarator(Scope *S, AccessSpecifier AS, Declarator &D,
   if (isInstField) {
     CXXScopeSpec &SS = D.getCXXScopeSpec();
     
-    if (DefaultLoc.isValid())
-      Diag(DefaultLoc, diag::err_default_special_members);
-    
     if (SS.isSet() && !SS.isInvalid()) {
       // The user provided a superfluous scope specifier inside a class
       // definition:
@@ -1118,8 +1114,7 @@ Sema::ActOnCXXMemberDeclarator(Scope *S, AccessSpecifier AS, Declarator &D,
                          AS);
     assert(Member && "HandleField never returns null");
   } else {
-    Member = HandleDeclarator(S, D, move(TemplateParameterLists), IsDefinition,
-                              DefaultLoc);
+    Member = HandleDeclarator(S, D, move(TemplateParameterLists), IsDefinition);
     if (!Member) {
       return 0;
     }
@@ -1189,8 +1184,6 @@ Sema::ActOnCXXMemberDeclarator(Scope *S, AccessSpecifier AS, Declarator &D,
   if (Init)
     AddInitializerToDecl(Member, Init, false,
                          DS.getTypeSpecType() == DeclSpec::TST_auto);
-  if (Deleted) // FIXME: Source location is not very good.
-    SetDeclDeleted(Member, D.getSourceRange().getBegin());
 
   FinalizeDeclaration(Member);
 
@@ -3005,19 +2998,31 @@ void Sema::CheckCompletedCXXClass(CXXRecordDecl *Record) {
 }
 
 void Sema::CheckExplicitlyDefaultedMethods(CXXRecordDecl *Record) {
-  for (CXXRecordDecl::ctor_iterator CI = Record->ctor_begin(),
-                                    CE = Record->ctor_end();
-       CI != CE; ++CI) {
-    if (!CI->isInvalidDecl() && CI->isExplicitlyDefaulted()) {
-      if (CI->isDefaultConstructor()) {
-        CheckExplicitlyDefaultedDefaultConstructor(*CI);
-      }
+  for (CXXRecordDecl::method_iterator MI = Record->method_begin(),
+                                      ME = Record->method_end();
+       MI != ME; ++MI) {
+    if (!MI->isInvalidDecl() && MI->isExplicitlyDefaulted()) {
+      switch (getSpecialMember(*MI)) {
+      case CXXDefaultConstructor:
+        CheckExplicitlyDefaultedDefaultConstructor(
+                                                  cast<CXXConstructorDecl>(*MI));
+        break;
 
-      // FIXME: Do copy and move constructors
+      case CXXDestructor:
+        CheckExplicitlyDefaultedDestructor(cast<CXXDestructorDecl>(*MI));
+        break;
+
+      case CXXCopyConstructor:
+      case CXXCopyAssignment:
+      // FIXME: Do copy and move constructors and assignment operators
+        break;
+
+      default:
+        llvm_unreachable("non-special member explicitly defaulted!");
+      }
     }
   }
 
-  // FIXME: Do copy and move assignment and destructors
 }
 
 void Sema::CheckExplicitlyDefaultedDefaultConstructor(CXXConstructorDecl *CD) {
@@ -3045,7 +3050,8 @@ void Sema::CheckExplicitlyDefaultedDefaultConstructor(CXXConstructorDecl *CD) {
 
   if (CtorType->hasExceptionSpec()) {
     if (CheckEquivalentExceptionSpec(
-          PDiag(diag::err_incorrect_defaulted_exception_spec),
+          PDiag(diag::err_incorrect_defaulted_exception_spec)
+            << 0 /* default constructor */,
           PDiag(),
           ExceptionType, SourceLocation(),
           CtorType, CD->getLocation())) {
@@ -3063,7 +3069,45 @@ void Sema::CheckExplicitlyDefaultedDefaultConstructor(CXXConstructorDecl *CD) {
       CD->setDeletedAsWritten();
     else
       Diag(CD->getLocation(), diag::err_out_of_line_default_deletes)
-        << getSpecialMember(CD);
+        << 0 /* default constructor */;
+  }
+}
+
+void Sema::CheckExplicitlyDefaultedDestructor(CXXDestructorDecl *DD) {
+  assert(DD->isExplicitlyDefaulted());
+
+  // Whether this was the first-declared instance of the destructor.
+  bool First = DD == DD->getCanonicalDecl();
+
+  ImplicitExceptionSpecification Spec
+    = ComputeDefaultedDtorExceptionSpec(DD->getParent());
+  FunctionProtoType::ExtProtoInfo EPI = Spec.getEPI();
+  const FunctionProtoType *DtorType = DD->getType()->getAs<FunctionProtoType>(),
+                          *ExceptionType = Context.getFunctionType(
+                         Context.VoidTy, 0, 0, EPI)->getAs<FunctionProtoType>();
+
+  if (DtorType->hasExceptionSpec()) {
+    if (CheckEquivalentExceptionSpec(
+          PDiag(diag::err_incorrect_defaulted_exception_spec)
+            << 3 /* destructor */,
+          PDiag(),
+          ExceptionType, SourceLocation(),
+          DtorType, DD->getLocation())) {
+      DD->setInvalidDecl();
+      return;
+    }
+  } else if (First) {
+    // We set the declaration to have the computed exception spec here.
+    // There are no parameters.
+    DD->setType(Context.getFunctionType(Context.VoidTy, 0, 0, EPI));
+  }
+
+  if (ShouldDeleteDestructor(DD)) {
+    if (First)
+      DD->setDeletedAsWritten();
+    else
+      Diag(DD->getLocation(), diag::err_out_of_line_default_deletes)
+        << 3 /* destructor */;
   }
 }
 
@@ -3079,8 +3123,6 @@ bool Sema::ShouldDeleteDefaultConstructor(CXXConstructorDecl *CD) {
   bool Union = RD->isUnion();
   bool AllConst = true;
 
-  DiagnosticErrorTrap Trap(Diags);
-
   // We do this because we should never actually use an anonymous
   // union's constructor.
   if (Union && RD->isAnonymousStructOrUnion())
@@ -3094,6 +3136,10 @@ bool Sema::ShouldDeleteDefaultConstructor(CXXConstructorDecl *CD) {
   for (CXXRecordDecl::base_class_iterator BI = RD->bases_begin(),
                                           BE = RD->bases_end();
        BI != BE; ++BI) {
+    // We'll handle this one later
+    if (BI->isVirtual())
+      continue;
+
     CXXRecordDecl *BaseDecl = BI->getType()->getAsCXXRecordDecl();
     assert(BaseDecl && "base isn't a CXXRecordDecl");
 
@@ -3105,10 +3151,6 @@ bool Sema::ShouldDeleteDefaultConstructor(CXXConstructorDecl *CD) {
     if (CheckDestructorAccess(SourceLocation(), BaseDtor, PDiag()) !=
         AR_accessible)
       return true;
-
-    // We'll handle this one later
-    if (BI->isVirtual())
-      continue;
 
     // -- any [direct base class either] has no default constructor or
     //    overload resolution as applied to [its] default constructor
@@ -3213,7 +3255,7 @@ bool Sema::ShouldDeleteDefaultConstructor(CXXConstructorDecl *CD) {
               !UnionFieldRecord->hasTrivialDefaultConstructor())
             return true;
         }
-        
+
         if (AllConst)
           return true;
 
@@ -3237,6 +3279,109 @@ bool Sema::ShouldDeleteDefaultConstructor(CXXConstructorDecl *CD) {
 
   if (Union && AllConst)
     return true;
+
+  return false;
+}
+
+bool Sema::ShouldDeleteDestructor(CXXDestructorDecl *DD) {
+  CXXRecordDecl *RD = DD->getParent();
+  assert(!RD->isDependentType() && "do deletion after instantiation");
+  if (!LangOpts.CPlusPlus0x)
+    return false;
+
+  // Do access control from the destructor
+  ContextRAII CtorContext(*this, DD);
+
+  bool Union = RD->isUnion();
+
+  // C++0x [class.dtor]p5
+  //    A defaulted destructor for a class X is defined as deleted if:
+  for (CXXRecordDecl::base_class_iterator BI = RD->bases_begin(),
+                                          BE = RD->bases_end();
+       BI != BE; ++BI) {
+    // We'll handle this one later
+    if (BI->isVirtual())
+      continue;
+
+    CXXRecordDecl *BaseDecl = BI->getType()->getAsCXXRecordDecl();
+    CXXDestructorDecl *BaseDtor = LookupDestructor(BaseDecl);
+    assert(BaseDtor && "base has no destructor");
+
+    // -- any direct or virtual base class has a deleted destructor or
+    //    a destructor that is inaccessible from the defaulted destructor
+    if (BaseDtor->isDeleted())
+      return true;
+    if (CheckDestructorAccess(SourceLocation(), BaseDtor, PDiag()) !=
+        AR_accessible)
+      return true;
+  }
+
+  for (CXXRecordDecl::base_class_iterator BI = RD->vbases_begin(),
+                                          BE = RD->vbases_end();
+       BI != BE; ++BI) {
+    CXXRecordDecl *BaseDecl = BI->getType()->getAsCXXRecordDecl();
+    CXXDestructorDecl *BaseDtor = LookupDestructor(BaseDecl);
+    assert(BaseDtor && "base has no destructor");
+
+    // -- any direct or virtual base class has a deleted destructor or
+    //    a destructor that is inaccessible from the defaulted destructor
+    if (BaseDtor->isDeleted())
+      return true;
+    if (CheckDestructorAccess(SourceLocation(), BaseDtor, PDiag()) !=
+        AR_accessible)
+      return true;
+  }
+
+  for (CXXRecordDecl::field_iterator FI = RD->field_begin(),
+                                     FE = RD->field_end();
+       FI != FE; ++FI) {
+    QualType FieldType = Context.getBaseElementType(FI->getType());
+    CXXRecordDecl *FieldRecord = FieldType->getAsCXXRecordDecl();
+    if (FieldRecord) {
+      if (FieldRecord->isUnion() && FieldRecord->isAnonymousStructOrUnion()) {
+         for (CXXRecordDecl::field_iterator UI = FieldRecord->field_begin(),
+                                            UE = FieldRecord->field_end();
+              UI != UE; ++UI) {
+           QualType UnionFieldType = Context.getBaseElementType(FI->getType());
+           CXXRecordDecl *UnionFieldRecord =
+             UnionFieldType->getAsCXXRecordDecl();
+
+           // -- X is a union-like class that has a variant member with a non-
+           //    trivial destructor.
+           if (UnionFieldRecord && !UnionFieldRecord->hasTrivialDestructor())
+             return true;
+         }
+      // Technically we are supposed to do this next check unconditionally.
+      // But that makes absolutely no sense.
+      } else {
+        CXXDestructorDecl *FieldDtor = LookupDestructor(FieldRecord);
+
+        // -- any of the non-static data members has class type M (or array
+        //    thereof) and M has a deleted destructor or a destructor that is
+        //    inaccessible from the defaulted destructor
+        if (FieldDtor->isDeleted())
+          return true;
+        if (CheckDestructorAccess(SourceLocation(), FieldDtor, PDiag()) !=
+          AR_accessible)
+        return true;
+        
+        // -- X is a union-like class that has a variant member with a non-
+        //    trivial destructor.
+        if (Union && !FieldDtor->isTrivial())
+          return true;
+      }
+    }
+  }
+
+  if (DD->isVirtual()) {
+    FunctionDecl *OperatorDelete = 0;
+    DeclarationName Name =
+      Context.DeclarationNames.getCXXOperatorName(OO_Delete);
+    if (FindDeallocationFunction(SourceLocation(), RD, Name, OperatorDelete,
+          false))
+      return true;
+  }
+
 
   return false;
 }
@@ -5487,12 +5632,8 @@ void Sema::DeclareInheritedConstructors(CXXRecordDecl *ClassDecl) {
   }
 }
 
-CXXDestructorDecl *Sema::DeclareImplicitDestructor(CXXRecordDecl *ClassDecl) {
-  // C++ [class.dtor]p2:
-  //   If a class has no user-declared destructor, a destructor is
-  //   declared implicitly. An implicitly-declared destructor is an
-  //   inline public member of its class.
-  
+Sema::ImplicitExceptionSpecification
+Sema::ComputeDefaultedDtorExceptionSpec(CXXRecordDecl *ClassDecl) {
   // C++ [except.spec]p14: 
   //   An implicitly declared special member function (Clause 12) shall have 
   //   an exception-specification.
@@ -5529,11 +5670,20 @@ CXXDestructorDecl *Sema::DeclareImplicitDestructor(CXXRecordDecl *ClassDecl) {
                     LookupDestructor(cast<CXXRecordDecl>(RecordTy->getDecl())));
   }
 
+  return ExceptSpec;
+}
+
+CXXDestructorDecl *Sema::DeclareImplicitDestructor(CXXRecordDecl *ClassDecl) {
+  // C++ [class.dtor]p2:
+  //   If a class has no user-declared destructor, a destructor is
+  //   declared implicitly. An implicitly-declared destructor is an
+  //   inline public member of its class.
+  
+  ImplicitExceptionSpecification Spec =
+   ComputeDefaultedDtorExceptionSpec(ClassDecl); 
+  FunctionProtoType::ExtProtoInfo EPI = Spec.getEPI();
+
   // Create the actual destructor declaration.
-  FunctionProtoType::ExtProtoInfo EPI;
-  EPI.ExceptionSpecType = ExceptSpec.getExceptionSpecType();
-  EPI.NumExceptions = ExceptSpec.size();
-  EPI.Exceptions = ExceptSpec.data();
   QualType Ty = Context.getFunctionType(Context.VoidTy, 0, 0, EPI);
 
   CanQualType ClassType
@@ -5547,6 +5697,7 @@ CXXDestructorDecl *Sema::DeclareImplicitDestructor(CXXRecordDecl *ClassDecl) {
                                   /*isInline=*/true,
                                   /*isImplicitlyDeclared=*/true);
   Destructor->setAccess(AS_public);
+  Destructor->setDefaulted();
   Destructor->setImplicit();
   Destructor->setTrivial(ClassDecl->hasTrivialDestructor());
   
@@ -5560,6 +5711,9 @@ CXXDestructorDecl *Sema::DeclareImplicitDestructor(CXXRecordDecl *ClassDecl) {
   
   // This could be uniqued if it ever proves significant.
   Destructor->setTypeSourceInfo(Context.getTrivialTypeSourceInfo(Ty));
+
+  if (ShouldDeleteDestructor(Destructor))
+    Destructor->setDeletedAsWritten();
   
   AddOverriddenMethods(ClassDecl, Destructor);
   
@@ -5568,7 +5722,7 @@ CXXDestructorDecl *Sema::DeclareImplicitDestructor(CXXRecordDecl *ClassDecl) {
 
 void Sema::DefineImplicitDestructor(SourceLocation CurrentLocation,
                                     CXXDestructorDecl *Destructor) {
-  assert((Destructor->isImplicit() && !Destructor->isUsed(false)) &&
+  assert((Destructor->isDefaulted() && !Destructor->isUsed(false)) &&
          "DefineImplicitDestructor - call it for implicit default dtor");
   CXXRecordDecl *ClassDecl = Destructor->getParent();
   assert(ClassDecl && "DefineImplicitDestructor - invalid destructor");
@@ -7863,6 +8017,47 @@ void Sema::SetDeclDeleted(Decl *Dcl, SourceLocation DelLoc) {
     // recovery.
   }
   Fn->setDeletedAsWritten();
+}
+
+void Sema::SetDeclDefaulted(Decl *Dcl, SourceLocation DefaultLoc) {
+  CXXMethodDecl *MD = dyn_cast<CXXMethodDecl>(Dcl);
+
+  if (MD) {
+    CXXSpecialMember Member = getSpecialMember(MD);
+    if (Member == CXXInvalid) {
+      Diag(DefaultLoc, diag::err_default_special_members);
+      return;
+    }
+
+    MD->setDefaulted();
+    MD->setExplicitlyDefaulted();
+
+    // We'll check it when the record is done
+    if (MD == MD->getCanonicalDecl())
+      return;
+
+    switch (Member) {
+    case CXXDefaultConstructor: {
+      CXXConstructorDecl *CD = cast<CXXConstructorDecl>(MD);
+      CheckExplicitlyDefaultedDefaultConstructor(CD);
+      DefineImplicitDefaultConstructor(DefaultLoc, CD);
+      break;
+    }
+
+    case CXXDestructor: {
+      CXXDestructorDecl *DD = cast<CXXDestructorDecl>(MD);
+      CheckExplicitlyDefaultedDestructor(DD);
+      DefineImplicitDestructor(DefaultLoc, DD);
+      break;
+    }
+
+    default:
+      // FIXME: Do the rest once we have functions
+      break;
+    }
+  } else {
+    Diag(DefaultLoc, diag::err_default_special_members);
+  }
 }
 
 static void SearchForReturnInStmt(Sema &Self, Stmt *S) {
