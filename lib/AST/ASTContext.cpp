@@ -4541,7 +4541,8 @@ void ASTContext::getObjCEncodingForStructureImpl(RecordDecl *RDecl,
       // expands virtual bases each time one is encountered in the hierarchy,
       // making the encoding type bigger than it really is.
       getObjCEncodingForStructureImpl(base, S, FD, /*includeVBases*/false);
-      CurOffs += toBits(getASTRecordLayout(base).getNonVirtualSize());
+      if (!base->isEmpty())
+        CurOffs += toBits(getASTRecordLayout(base).getNonVirtualSize());
     } else {
       FieldDecl *field = cast<FieldDecl>(dcl);
       if (FD) {
