@@ -119,3 +119,16 @@ const char g3[] = @encode(Sub_with_virt);
 
 // CHECK: @_ZL2g4 = internal constant [19 x i8] c"{Sub2=^^?qcf^^?cd}\00"
 const char g4[] = @encode(Sub2);
+
+// http://llvm.org/PR9927
+class allocator {
+};
+class basic_string     {
+struct _Alloc_hider : allocator       {
+char* _M_p;
+};
+_Alloc_hider _M_dataplus;
+};
+
+// CHECK: @_ZL2g5 = internal constant [32 x i8] c"{basic_string={_Alloc_hider=*}}\00"
+const char g5[] = @encode(basic_string);
