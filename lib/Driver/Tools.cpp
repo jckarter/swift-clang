@@ -465,12 +465,6 @@ void Clang::AddARMTargetArgs(const ArgList &Args,
   const Driver &D = getToolChain().getDriver();
   llvm::Triple Triple = getToolChain().getTriple();
 
-  // Disable movt generation, if requested.
-#ifdef DISABLE_ARM_DARWIN_USE_MOVT
-  CmdArgs.push_back("-backend-option");
-  CmdArgs.push_back("-arm-darwin-use-movt=0");
-#endif
-
   // Select the ABI to use.
   //
   // FIXME: Support -meabi.
@@ -641,10 +635,8 @@ void Clang::AddARMTargetArgs(const ArgList &Args,
     CmdArgs.push_back("-arm-strict-align");
 
     // The kext linker doesn't know how to deal with movw/movt.
-#ifndef DISABLE_ARM_DARWIN_USE_MOVT
     CmdArgs.push_back("-backend-option");
     CmdArgs.push_back("-arm-darwin-use-movt=0");
-#endif
   }
 }
 
