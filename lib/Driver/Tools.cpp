@@ -632,6 +632,14 @@ void Clang::AddARMTargetArgs(const ArgList &Args,
   }
 }
 
+void Clang::AddARM64TargetArgs(const ArgList &Args,
+                               ArgStringList &CmdArgs) const {
+  if (!Args.hasFlag(options::OPT_mimplicit_float,
+                    options::OPT_mno_implicit_float,
+                    true))
+    CmdArgs.push_back("-no-implicit-float");
+}
+
 void Clang::AddMIPSTargetArgs(const ArgList &Args,
                              ArgStringList &CmdArgs) const {
   const Driver &D = getToolChain().getDriver();
@@ -1257,6 +1265,10 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
   case llvm::Triple::arm:
   case llvm::Triple::thumb:
     AddARMTargetArgs(Args, CmdArgs, KernelOrKext);
+    break;
+
+  case llvm::Triple::arm64:
+    AddARM64TargetArgs(Args, CmdArgs);
     break;
 
   case llvm::Triple::mips:
