@@ -121,7 +121,7 @@ def flimit_debug_info : Flag<"-flimit-debug-info">,
 def fno_common : Flag<"-fno-common">,
   HelpText<"Compile common globals like normal definitions">;
 def no_implicit_float : Flag<"-no-implicit-float">,
-  HelpText<"Don't generate implicit floating point instructions (x86-only)">;
+  HelpText<"Don't generate implicit floating point instructions (arm64,x86)">;
 def finstrument_functions : Flag<"-finstrument-functions">,
   HelpText<"Generate calls to instrument function entry and exit">;
 def fno_merge_all_constants : Flag<"-fno-merge-all-constants">,
