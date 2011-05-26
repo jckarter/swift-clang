@@ -39,8 +39,12 @@ unsigned ASTContext::NumImplicitDefaultConstructors;
 unsigned ASTContext::NumImplicitDefaultConstructorsDeclared;
 unsigned ASTContext::NumImplicitCopyConstructors;
 unsigned ASTContext::NumImplicitCopyConstructorsDeclared;
+unsigned ASTContext::NumImplicitMoveConstructors;
+unsigned ASTContext::NumImplicitMoveConstructorsDeclared;
 unsigned ASTContext::NumImplicitCopyAssignmentOperators;
 unsigned ASTContext::NumImplicitCopyAssignmentOperatorsDeclared;
+unsigned ASTContext::NumImplicitMoveAssignmentOperators;
+unsigned ASTContext::NumImplicitMoveAssignmentOperatorsDeclared;
 unsigned ASTContext::NumImplicitDestructors;
 unsigned ASTContext::NumImplicitDestructorsDeclared;
 
@@ -318,9 +322,17 @@ void ASTContext::PrintStats() const {
   fprintf(stderr, "  %u/%u implicit copy constructors created\n",
           NumImplicitCopyConstructorsDeclared, 
           NumImplicitCopyConstructors);
+  if (getLangOptions().CPlusPlus)
+    fprintf(stderr, "  %u/%u implicit move constructors created\n",
+            NumImplicitMoveConstructorsDeclared, 
+            NumImplicitMoveConstructors);
   fprintf(stderr, "  %u/%u implicit copy assignment operators created\n",
           NumImplicitCopyAssignmentOperatorsDeclared, 
           NumImplicitCopyAssignmentOperators);
+  if (getLangOptions().CPlusPlus)
+    fprintf(stderr, "  %u/%u implicit move assignment operators created\n",
+            NumImplicitMoveAssignmentOperatorsDeclared, 
+            NumImplicitMoveAssignmentOperators);
   fprintf(stderr, "  %u/%u implicit destructors created\n",
           NumImplicitDestructorsDeclared, NumImplicitDestructors);
   
@@ -2813,9 +2825,10 @@ QualType ASTContext::getUnaryTransformType(QualType BaseType,
                                            UnaryTransformType::UTTKind Kind)
     const {
   UnaryTransformType *Ty =
-    new UnaryTransformType (BaseType, UnderlyingType, Kind,
-                            UnderlyingType->isDependentType() ?
-                              QualType() : UnderlyingType);
+    new (*this, TypeAlignment) UnaryTransformType (BaseType, UnderlyingType, 
+                                                   Kind,
+                                 UnderlyingType->isDependentType() ?
+                                    QualType() : UnderlyingType);
   Types.push_back(Ty);
   return QualType(Ty, 0);
 }
@@ -3716,7 +3729,7 @@ bool ASTContext::BlockRequiresCopying(QualType Ty) const {
   if (getLangOptions().CPlusPlus) {
     if (const RecordType *RT = Ty->getAs<RecordType>()) {
       CXXRecordDecl *RD = cast<CXXRecordDecl>(RT->getDecl());
-      return RD->hasConstCopyConstructor(*this);
+      return RD->hasConstCopyConstructor();
       
     }
   }
