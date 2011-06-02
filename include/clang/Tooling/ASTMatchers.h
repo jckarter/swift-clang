@@ -48,8 +48,8 @@
 #include "clang/Tooling/VariadicFunction.h"
 #include "llvm/ADT/Twine.h"
 #include "llvm/Support/type_traits.h"
-#include <assert.h>
-#include <stdint.h>
+#include "llvm/Support/DataTypes.h"
+#include <cassert>
 #include <map>
 #include <string>
 #include <utility>
@@ -1435,7 +1435,6 @@ AST_POLYMORPHIC_MATCHER_P(HasAnyArgument, Matcher<clang::Expr>, InnerMatcher) {
 ///   matching int x
 AST_MATCHER_P2(clang::FunctionDecl, HasParameter,
                unsigned, N, Matcher<clang::ParmVarDecl>, InnerMatcher) {
-  assert(N >= 0);
   return (N < Node.getNumParams() &&
           InnerMatcher.Matches(
               *Node.getParamDecl(N), Finder, Builder));
@@ -1597,10 +1596,10 @@ AST_MATCHER_P(clang::ConditionalOperator, HasTrueExpression,
 /// Example matches b
 ///   condition ? a : b
 AST_MATCHER_P(clang::ConditionalOperator, HasFalseExpression,
-              Matcher<clang::Expr>, Matcher) {
+              Matcher<clang::Expr>, InnerMatcher) {
   clang::Expr *Expression = Node.getFalseExpr();
   return (Expression != NULL &&
-          Matcher.Matches(*Expression, Finder, Builder));
+          InnerMatcher.Matches(*Expression, Finder, Builder));
 }
 
 /// Matches if a declaration has a body attached.
