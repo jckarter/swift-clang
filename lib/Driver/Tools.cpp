@@ -114,11 +114,6 @@ static void AddLinkerInputs(const ToolChain &TC,
   // (constructed via -Xarch_).
   Args.AddAllArgValues(CmdArgs, options::OPT_Zlinker_input);
 
-  // Add our corresponding lib directory. This is necessary for finding libprofile_rt.a
-  // for example. This matches gcc's behaviour that adds
-  // -L<inst>/gcc/lib/gcc/<triple>/<ver> to the link line.
-  CmdArgs.push_back(Args.MakeArgString("-L" + TC.getDriver().Dir + "/../lib"));
-
   for (InputInfoList::const_iterator
          it = Inputs.begin(), ie = Inputs.end(); it != ie; ++it) {
     const InputInfo &II = *it;
@@ -149,6 +144,22 @@ static void AddLinkerInputs(const ToolChain &TC,
       TC.AddCCKextLibArgs(Args, CmdArgs);
     } else
       A.renderAsInput(Args, CmdArgs);
+  }
+}
+
+static void addProfileRT(const ToolChain &TC, const ArgList &Args,
+                         ArgStringList &CmdArgs) {
+  if (Args.hasArg(options::OPT_fprofile_arcs) ||
+      Args.hasArg(options::OPT_fprofile_generate) ||
+      Args.hasArg(options::OPT_fcreate_profile) ||
+      Args.hasArg(options::OPT_coverage)) {
+    // GCC links libgcov.a by adding -L<inst>/gcc/lib/gcc/<triple>/<ver> -lgcov
+    // to the link line. We cannot do the same thing because unlike gcov
+    // there is a libprofile_rt.so. We used to use the -l:libprofile_rt.a
+    // syntax, but that is not supported by old linkers.
+    const char *lib = Args.MakeArgString(TC.getDriver().Dir + "/../lib/" +
+                                         "libprofile_rt.a");
+    CmdArgs.push_back(lib);
   }
 }
 
@@ -1723,6 +1734,11 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
                                options::OPT_fno_gnu_keywords))
     A->render(Args, CmdArgs);
 
+  if (Args.hasFlag(options::OPT_fgnu89_inline,
+                   options::OPT_fno_gnu89_inline,
+                   false))
+    CmdArgs.push_back("-fgnu89-inline");
+
   // -fnext-runtime defaults to on Darwin and when rewriting Objective-C, and is
   // -the -cc1 default.
   bool NeXTRuntimeIsDefault =
@@ -3159,11 +3175,7 @@ void darwin::Link::ConstructJob(Compilation &C, const JobAction &JA,
     // endfile_spec is empty.
   }
 
-  if (Args.hasArg(options::OPT_fprofile_arcs) ||
-      Args.hasArg(options::OPT_fprofile_generate) ||
-      Args.hasArg(options::OPT_fcreate_profile) ||
-      Args.hasArg(options::OPT_coverage))
-    CmdArgs.push_back("-l:libprofile_rt.a");
+  addProfileRT(getToolChain(), Args, CmdArgs);
 
   Args.AddAllArgs(CmdArgs, options::OPT_T_Group);
   Args.AddAllArgs(CmdArgs, options::OPT_F);
@@ -3322,11 +3334,7 @@ void auroraux::Link::ConstructJob(Compilation &C, const JobAction &JA,
                                 getToolChain().GetFilePath("crtend.o")));
   }
 
-  if (Args.hasArg(options::OPT_fprofile_arcs) ||
-      Args.hasArg(options::OPT_fprofile_generate) ||
-      Args.hasArg(options::OPT_fcreate_profile) ||
-      Args.hasArg(options::OPT_coverage))
-    CmdArgs.push_back("-l:libprofile_rt.a");
+  addProfileRT(getToolChain(), Args, CmdArgs);
 
   const char *Exec =
     Args.MakeArgString(getToolChain().GetProgramPath("ld"));
@@ -3627,11 +3635,7 @@ void freebsd::Link::ConstructJob(Compilation &C, const JobAction &JA,
                                                                     "crtn.o")));
   }
 
-  if (Args.hasArg(options::OPT_fprofile_arcs) ||
-      Args.hasArg(options::OPT_fprofile_generate) ||
-      Args.hasArg(options::OPT_fcreate_profile) ||
-      Args.hasArg(options::OPT_coverage))
-    CmdArgs.push_back("-l:libprofile_rt.a");
+  addProfileRT(getToolChain(), Args, CmdArgs);
 
   const char *Exec =
     Args.MakeArgString(getToolChain().GetProgramPath("ld"));
@@ -3786,11 +3790,7 @@ void netbsd::Link::ConstructJob(Compilation &C, const JobAction &JA,
                                                                     "crtn.o")));
   }
 
-  if (Args.hasArg(options::OPT_fprofile_arcs) ||
-      Args.hasArg(options::OPT_fprofile_generate) ||
-      Args.hasArg(options::OPT_fcreate_profile) ||
-      Args.hasArg(options::OPT_coverage))
-    CmdArgs.push_back("-l:libprofile_rt.a");
+  addProfileRT(getToolChain(), Args, CmdArgs);
 
   const char *Exec = Args.MakeArgString(FindTargetProgramPath(getToolChain(),
                                                       ToolTriple.getTriple(),
@@ -4014,11 +4014,7 @@ void linuxtools::Link::ConstructJob(Compilation &C, const JobAction &JA,
     }
   }
 
-  if (Args.hasArg(options::OPT_fprofile_arcs) ||
-      Args.hasArg(options::OPT_fprofile_generate) ||
-      Args.hasArg(options::OPT_fcreate_profile) ||
-      Args.hasArg(options::OPT_coverage))
-    CmdArgs.push_back("-l:libprofile_rt.a");
+  addProfileRT(getToolChain(), Args, CmdArgs);
 
   if (Args.hasArg(options::OPT_use_gold_plugin)) {
     CmdArgs.push_back("-plugin");
@@ -4102,11 +4098,7 @@ void minix::Link::ConstructJob(Compilation &C, const JobAction &JA,
                                               "/usr/gnu/lib/libend.a")));
   }
 
-  if (Args.hasArg(options::OPT_fprofile_arcs) ||
-      Args.hasArg(options::OPT_fprofile_generate) ||
-      Args.hasArg(options::OPT_fcreate_profile) ||
-      Args.hasArg(options::OPT_coverage))
-    CmdArgs.push_back("-l:libprofile_rt.a");
+  addProfileRT(getToolChain(), Args, CmdArgs);
 
   const char *Exec =
     Args.MakeArgString(getToolChain().GetProgramPath("/usr/gnu/bin/gld"));
@@ -4263,11 +4255,7 @@ void dragonfly::Link::ConstructJob(Compilation &C, const JobAction &JA,
                               getToolChain().GetFilePath("crtn.o")));
   }
 
-  if (Args.hasArg(options::OPT_fprofile_arcs) ||
-      Args.hasArg(options::OPT_fprofile_generate) ||
-      Args.hasArg(options::OPT_fcreate_profile) ||
-      Args.hasArg(options::OPT_coverage))
-    CmdArgs.push_back("-l:libprofile_rt.a");
+  addProfileRT(getToolChain(), Args, CmdArgs);
 
   const char *Exec =
     Args.MakeArgString(getToolChain().GetProgramPath("ld"));
