@@ -820,6 +820,11 @@ DerivedArgList *Darwin::TranslateArgs(const DerivedArgList &Args,
     else if (Name == "armv8")
       DAL->AddJoinedArg(0, MArch, "arm64");
 
+    else if (Name == "arm64")
+      DAL->AddJoinedArg(0, MArch, "arm64");
+    else if (Name == "armv8")
+      DAL->AddJoinedArg(0, MArch, "arm64");
+
     else
       llvm_unreachable("invalid Darwin arch");
   }
@@ -1262,7 +1267,8 @@ enum LinuxDistro {
 
 static bool IsRedhat(enum LinuxDistro Distro) {
   return Distro == Fedora13 || Distro == Fedora14 ||
-         Distro == Fedora15 || Distro == FedoraRawhide;
+         Distro == Fedora15 || Distro == FedoraRawhide ||
+         Distro == RHEL4 || Distro == RHEL5 || Distro == RHEL6;
 }
 
 static bool IsOpenSuse(enum LinuxDistro Distro) {
@@ -1297,7 +1303,8 @@ static bool HasMultilib(llvm::Triple::ArchType Arch, enum LinuxDistro Distro) {
   }
   if (Arch == llvm::Triple::ppc64)
     return true;
-  if ((Arch == llvm::Triple::x86 || Arch == llvm::Triple::ppc) && IsDebianBased(Distro))
+  if ((Arch == llvm::Triple::x86 || Arch == llvm::Triple::ppc) && 
+      IsDebianBased(Distro))
     return true;
   return false;
 }
@@ -1341,10 +1348,12 @@ static LinuxDistro DetectLinuxDistro(llvm::Triple::ArchType Arch) {
     else if (Data.startswith("Red Hat Enterprise Linux") &&
              Data.find("release 6") != llvm::StringRef::npos)
       return RHEL6;
-    else if (Data.startswith("Red Hat Enterprise Linux") &&
+    else if ((Data.startswith("Red Hat Enterprise Linux") ||
+	      Data.startswith("CentOS")) &&
              Data.find("release 5") != llvm::StringRef::npos)
       return RHEL5;
-    else if (Data.startswith("Red Hat Enterprise Linux") &&
+    else if ((Data.startswith("Red Hat Enterprise Linux") ||
+	      Data.startswith("CentOS")) &&
              Data.find("release 4") != llvm::StringRef::npos)
       return RHEL4;
     return UnknownDistro;
@@ -1503,18 +1512,23 @@ Linux::Linux(const HostInfo &Host, const llvm::Triple &Triple)
   } else if (Arch == llvm::Triple::ppc) {
     if (!llvm::sys::fs::exists("/usr/lib/powerpc-linux-gnu", Exists) && Exists)
       GccTriple = "powerpc-linux-gnu";
-    else if (!llvm::sys::fs::exists("/usr/lib/gcc/powerpc-unknown-linux-gnu", Exists) && Exists)
+    else if (!llvm::sys::fs::exists("/usr/lib/gcc/powerpc-unknown-linux-gnu",
+                                    Exists) && Exists)
       GccTriple = "powerpc-unknown-linux-gnu";
   } else if (Arch == llvm::Triple::ppc64) {
-    if (!llvm::sys::fs::exists("/usr/lib/gcc/powerpc64-unknown-linux-gnu", Exists) && Exists)
+    if (!llvm::sys::fs::exists("/usr/lib/gcc/powerpc64-unknown-linux-gnu",
+                               Exists) && Exists)
       GccTriple = "powerpc64-unknown-linux-gnu";
-    else if (!llvm::sys::fs::exists("/usr/lib64/gcc/powerpc64-unknown-linux-gnu", Exists) && Exists)
+    else if (!llvm::sys::fs::exists("/usr/lib64/gcc/"
+                                    "powerpc64-unknown-linux-gnu", Exists) && 
+             Exists)
       GccTriple = "powerpc64-unknown-linux-gnu";
   }
 
   std::string Base = findGCCBaseLibDir(GccTriple);
   path_list &Paths = getFilePaths();
-  bool Is32Bits = (getArch() == llvm::Triple::x86 || getArch() == llvm::Triple::ppc);
+  bool Is32Bits = (getArch() == llvm::Triple::x86 || 
+                   getArch() == llvm::Triple::ppc);
 
   std::string Suffix;
   std::string Lib;
@@ -1555,7 +1569,9 @@ Linux::Linux(const HostInfo &Host, const llvm::Triple &Triple)
     ExtraOpts.push_back("--no-add-needed");
 
   if (Distro == DebianSqueeze || Distro == DebianWheezy ||
-      IsOpenSuse(Distro) || IsRedhat(Distro) || Distro == UbuntuLucid ||
+      IsOpenSuse(Distro) ||
+      (IsRedhat(Distro) && Distro != RHEL4 && Distro != RHEL5) ||
+      Distro == UbuntuLucid ||
       Distro == UbuntuMaverick || Distro == UbuntuKarmic ||
       Distro == UbuntuNatty)
     ExtraOpts.push_back("--build-id");
@@ -1571,9 +1587,14 @@ Linux::Linux(const HostInfo &Host, const llvm::Triple &Triple)
     if (IsOpenSuse(Distro) && Is32Bits)
       Paths.push_back(Base + "/../../../../" + GccTriple + "/lib/../lib");
     Paths.push_back(Base + "/../../../../" + Lib);
-    Paths.push_back("/lib/../" + Lib);
-    Paths.push_back("/usr/lib/../" + Lib);
   }
+
+  // FIXME: This is in here to find crt1.o. It is provided by libc, and
+  // libc (like gcc), can be installed in any directory. Once we are
+  // fetching this from a config file, we should have a libc prefix.
+  Paths.push_back("/lib/../" + Lib);
+  Paths.push_back("/usr/lib/../" + Lib);
+
   if (!Suffix.empty())
     Paths.push_back(Base);
   if (IsOpenSuse(Distro))
