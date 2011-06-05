@@ -3460,6 +3460,8 @@ void freebsd::Assemble::ConstructJob(Compilation &C, const JobAction &JA,
   if (getToolChain().getArchName() == "i386")
     CmdArgs.push_back("--32");
 
+  if (getToolChain().getArchName() == "powerpc")
+    CmdArgs.push_back("-a32");
 
   // Set byte order explicitly
   if (getToolChain().getArchName() == "mips")
@@ -3514,6 +3516,11 @@ void freebsd::Link::ConstructJob(Compilation &C, const JobAction &JA,
   if (getToolChain().getArchName() == "i386") {
     CmdArgs.push_back("-m");
     CmdArgs.push_back("elf_i386_fbsd");
+  }
+
+  if (getToolChain().getArchName() == "powerpc") {
+    CmdArgs.push_back("-m");
+    CmdArgs.push_back("elf32ppc");
   }
 
   if (Output.isFilename()) {
@@ -3945,10 +3952,10 @@ void linuxtools::Link::ConstructJob(Compilation &C, const JobAction &JA,
     CmdArgs.push_back("-lm");
   }
 
-  if (Args.hasArg(options::OPT_static))
-    CmdArgs.push_back("--start-group");
-
   if (!Args.hasArg(options::OPT_nostdlib)) {
+    if (Args.hasArg(options::OPT_static))
+      CmdArgs.push_back("--start-group");
+
     if (!D.CCCIsCXX)
       CmdArgs.push_back("-lgcc");
 
