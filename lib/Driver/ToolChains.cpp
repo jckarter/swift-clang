@@ -825,6 +825,11 @@ DerivedArgList *Darwin::TranslateArgs(const DerivedArgList &Args,
     else if (Name == "armv8")
       DAL->AddJoinedArg(0, MArch, "arm64");
 
+    else if (Name == "arm64")
+      DAL->AddJoinedArg(0, MArch, "arm64");
+    else if (Name == "armv8")
+      DAL->AddJoinedArg(0, MArch, "arm64");
+
     else
       llvm_unreachable("invalid Darwin arch");
   }
@@ -1071,6 +1076,11 @@ FreeBSD::FreeBSD(const HostInfo &Host, const llvm::Triple& Triple)
   if (Triple.getArch() == llvm::Triple::x86 &&
       llvm::Triple(getDriver().DefaultHostTriple).getArch() ==
         llvm::Triple::x86_64)
+    Lib32 = true;
+
+  if (Triple.getArch() == llvm::Triple::ppc &&
+      llvm::Triple(getDriver().DefaultHostTriple).getArch() ==
+        llvm::Triple::ppc64)
     Lib32 = true;
 
   if (Lib32) {
