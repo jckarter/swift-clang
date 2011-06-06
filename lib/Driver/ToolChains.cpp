@@ -830,6 +830,11 @@ DerivedArgList *Darwin::TranslateArgs(const DerivedArgList &Args,
     else if (Name == "armv8")
       DAL->AddJoinedArg(0, MArch, "arm64");
 
+    else if (Name == "arm64")
+      DAL->AddJoinedArg(0, MArch, "arm64");
+    else if (Name == "armv8")
+      DAL->AddJoinedArg(0, MArch, "arm64");
+
     else
       llvm_unreachable("invalid Darwin arch");
   }
@@ -1272,6 +1277,7 @@ enum LinuxDistro {
   UbuntuLucid,
   UbuntuMaverick,
   UbuntuNatty,
+  UbuntuOneiric,
   UnknownDistro
 };
 
@@ -1295,7 +1301,7 @@ static bool IsUbuntu(enum LinuxDistro Distro) {
   return Distro == UbuntuHardy  || Distro == UbuntuIntrepid ||
          Distro == UbuntuLucid  || Distro == UbuntuMaverick ||
          Distro == UbuntuJaunty || Distro == UbuntuKarmic ||
-         Distro == UbuntuNatty;
+         Distro == UbuntuNatty  || Distro == UbuntuOneiric;
 }
 
 static bool IsDebianBased(enum LinuxDistro Distro) {
@@ -1340,6 +1346,8 @@ static LinuxDistro DetectLinuxDistro(llvm::Triple::ArchType Arch) {
         return UbuntuMaverick;
       else if (Lines[i] == "DISTRIB_CODENAME=natty")
         return UbuntuNatty;
+      else if (Lines[i] == "DISTRIB_CODENAME=oneiric")
+        return UbuntuOneiric;
     }
     return UnknownDistro;
   }
@@ -1568,7 +1576,7 @@ Linux::Linux(const HostInfo &Host, const llvm::Triple &Triple)
     ExtraOpts.push_back("-X");
 
   if (IsRedhat(Distro) || IsOpenSuse(Distro) || Distro == UbuntuMaverick ||
-      Distro == UbuntuNatty)
+      Distro == UbuntuNatty || Distro == UbuntuOneiric)
     ExtraOpts.push_back("--hash-style=gnu");
 
   if (IsDebian(Distro) || IsOpenSuse(Distro) || Distro == UbuntuLucid ||
@@ -1583,7 +1591,7 @@ Linux::Linux(const HostInfo &Host, const llvm::Triple &Triple)
       (IsRedhat(Distro) && Distro != RHEL4 && Distro != RHEL5) ||
       Distro == UbuntuLucid ||
       Distro == UbuntuMaverick || Distro == UbuntuKarmic ||
-      Distro == UbuntuNatty)
+      Distro == UbuntuNatty || Distro == UbuntuOneiric)
     ExtraOpts.push_back("--build-id");
 
   if (IsOpenSuse(Distro))
