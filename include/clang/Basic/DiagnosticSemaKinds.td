@@ -1420,8 +1420,7 @@ def warn_default_arg_makes_ctor_special : Warning<
 def note_previous_declaration_special : Note<
   // The ERRORs are in hopes that if they occur, they'll get reported.
   "previous declaration was %select{*ERROR*|a copy constructor|a move "
-  "constructor|*ERROR*|*ERROR*|*ERROR*|not a special member function}0">,
-  InGroup<DefaultArgSpecialMember>;
+  "constructor|*ERROR*|*ERROR*|*ERROR*|not a special member function}0">;
 
 def err_use_of_default_argument_to_function_declared_later : Error<
   "use of default argument to function %0 that is declared later in class %1">;
@@ -1893,6 +1892,9 @@ def note_explicit_template_spec_does_not_need_header : Note<
 def err_template_qualified_declarator_no_match : Error<
   "nested name specifier '%0' for declaration does not refer into a class, "
   "class template or class template partial specialization">;
+def err_specialize_member_of_template : Error<
+  "cannot specialize (with 'template<>') a member of an unspecialized "
+  "template">;
 
 // C++ Class Template Partial Specialization
 def err_default_arg_in_partial_spec : Error<
@@ -2045,7 +2047,7 @@ def note_explicit_instantiation_candidate : Note<
   "explicit instantiation candidate function template here %0">;
 def err_explicit_instantiation_inline : Error<
   "explicit instantiation cannot be 'inline'">;
-def ext_explicit_instantiation_without_qualified_id : ExtWarn<
+def ext_explicit_instantiation_without_qualified_id : Extension<
   "qualifier in explicit instantiation of %q0 requires a template-id "
   "(a typedef is not permitted)">;
 def err_explicit_instantiation_unqualified_wrong_namespace : Error<
