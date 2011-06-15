@@ -2421,6 +2421,8 @@ def err_indirect_goto_in_protected_scope : Error<
 def note_indirect_goto_target : Note<"possible target of indirect goto">;
 def note_protected_by_variable_init : Note<
   "jump bypasses variable initialization">;
+def note_protected_by_variable_nontriv_destructor : Note<
+  "jump bypasses variable with a non-trivial destructor">;
 def note_protected_by_cleanup : Note<
   "jump bypasses initialization of variable with __attribute__((cleanup))">;
 def note_protected_by_vla_typedef : Note<
@@ -2566,11 +2568,11 @@ def warn_remainder_by_zero : Warning<"remainder by zero is undefined">;
 def warn_shift_negative : Warning<"shift count is negative">;
 def warn_shift_gt_typewidth : Warning<"shift count >= width of type">;
 def warn_shift_result_gt_typewidth : Warning<
-  "shift result (%0) requires %1 bits to represent, but %2 only has %3 bits">,
-   InGroup<DiagGroup<"shift-overflow">>;
-def warn_shift_result_overrides_sign_bit : Warning<
-  "shift result (%0) overrides the sign bit of the shift expression's type "
-  "(%1) and becomes negative">,
+  "signed shift result (%0) requires %1 bits to represent, but %2 only has "
+  "%3 bits">, InGroup<DiagGroup<"shift-overflow">>;
+def warn_shift_result_sets_sign_bit : Warning<
+  "signed shift result (%0) sets the sign bit of the shift expression's "
+  "type (%1) and becomes negative">,
   InGroup<DiagGroup<"shift-sign-overflow">>, DefaultIgnore;
 
 def warn_precedence_bitwise_rel : Warning<
@@ -2601,6 +2603,10 @@ def note_logical_and_in_logical_or_silence : Note<
 def warn_self_assignment : Warning<
   "explicitly assigning a variable of type %0 to itself">,
   InGroup<SelfAssignment>, DefaultIgnore;
+
+def warn_sizeof_array_param : Warning<
+  "sizeof on array function parameter will return size of %0 instead of %1">,
+  InGroup<SizeofArrayArgument>;
 
 def err_sizeof_nonfragile_interface : Error<
   "invalid application of '%select{alignof|sizeof}1' to interface %0 in "
