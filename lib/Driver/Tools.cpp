@@ -399,6 +399,14 @@ static const char *getARMTargetCPU(const ArgList &Args,
     return "arm1156t2-s";
   if (MArch == "armv7" || MArch == "armv7a" || MArch == "armv7-a")
     return "cortex-a8";
+  if (MArch == "armv7f" || MArch == "armv7-f")
+    return "cortex-a9-mp";
+#ifndef __OPEN_SOURCE__
+  if (MArch == "armv7k" || MArch == "armv7-k")
+    return "pj4b";
+#endif // !__OPEN_SOURCE__
+  if (MArch == "armv7s" || MArch == "armv7-s")
+    return "swift";
   if (MArch == "armv7r" || MArch == "armv7-r")
     return "cortex-r4";
   if (MArch == "armv7m" || MArch == "armv7-m")
@@ -447,6 +455,17 @@ static const char *getLLVMArchSuffixForARM(llvm::StringRef CPU) {
   if (CPU == "cortex-a8" || CPU == "cortex-a9")
     return "v7";
 
+  if (CPU == "cortex-a9-mp")
+    return "v7f";
+
+#ifndef __OPEN_SOURCE__
+  if (CPU == "pj4b")
+    return "v7k";
+#endif // !__OPEN_SOURCE__
+
+  if (CPU == "swift")
+    return "v7s";
+
   return "";
 }
 
@@ -474,12 +493,6 @@ void Clang::AddARMTargetArgs(const ArgList &Args,
                              bool KernelOrKext) const {
   const Driver &D = getToolChain().getDriver();
   llvm::Triple Triple = getToolChain().getTriple();
-
-  // Disable movt generation, if requested.
-#ifdef DISABLE_ARM_DARWIN_USE_MOVT
-  CmdArgs.push_back("-backend-option");
-  CmdArgs.push_back("-arm-darwin-use-movt=0");
-#endif
 
   // Select the ABI to use.
   //
@@ -651,10 +664,8 @@ void Clang::AddARMTargetArgs(const ArgList &Args,
     CmdArgs.push_back("-arm-strict-align");
 
     // The kext linker doesn't know how to deal with movw/movt.
-#ifndef DISABLE_ARM_DARWIN_USE_MOVT
     CmdArgs.push_back("-backend-option");
     CmdArgs.push_back("-arm-darwin-use-movt=0");
-#endif
   }
 }
 
