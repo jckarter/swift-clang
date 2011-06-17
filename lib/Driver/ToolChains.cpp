@@ -43,7 +43,8 @@ using namespace clang::driver::toolchains;
 
 Darwin::Darwin(const HostInfo &Host, const llvm::Triple& Triple)
   : ToolChain(Host, Triple), TargetInitialized(false),
-    ARCRuntimeForSimulator(ARCSimulator_None)
+    ARCRuntimeForSimulator(ARCSimulator_None),
+    LibCXXForSimulator(LibCXXSimulator_None)
 {
   // Compute the initial Darwin version based on the host.
   bool HadExtra;
@@ -516,6 +517,8 @@ void Darwin::AddDeploymentTarget(DerivedArgList &Args) const {
             Major < 10 && Minor < 100 && Micro < 100) {
           ARCRuntimeForSimulator = Major < 5 ? ARCSimulator_NoARCRuntime
                                              : ARCSimulator_HasARCRuntime;
+          LibCXXForSimulator = Major < 5 ? LibCXXSimulator_NotAvailable
+                                         : LibCXXSimulator_Available;
         }
         break;
       }
@@ -942,14 +945,27 @@ DerivedArgList *Darwin::TranslateArgs(const DerivedArgList &Args,
   // Validate the C++ standard library choice.
   CXXStdlibType Type = GetCXXStdlibType(*DAL);
   if (Type == ToolChain::CST_Libcxx) {
-    if (isTargetIPhoneOS()) {
-      if (isIPhoneOSVersionLT(5, 0))
-        getDriver().Diag(clang::diag::err_drv_invalid_libcxx_deployment)
-          << "iOS 5.0";
-    } else {
-      if (isMacosxVersionLT(10, 7))
-        getDriver().Diag(clang::diag::err_drv_invalid_libcxx_deployment)
-          << "Mac OS X 10.7";
+    switch (LibCXXForSimulator) {
+    case LibCXXSimulator_None:
+      // Handle non-simulator cases.
+      if (isTargetIPhoneOS()) {
+        if (isIPhoneOSVersionLT(5, 0)) {
+          getDriver().Diag(clang::diag::err_drv_invalid_libcxx_deployment)
+            << "iOS 5.0";
+        }
+      } else {
+        if (isMacosxVersionLT(10, 7)) {
+          getDriver().Diag(clang::diag::err_drv_invalid_libcxx_deployment)
+            << "Mac OS X 10.7";
+        }
+      }
+      break;
+    case LibCXXSimulator_NotAvailable:
+      getDriver().Diag(clang::diag::err_drv_invalid_libcxx_deployment)
+        << "iOS 5.0";
+      break;
+    case LibCXXSimulator_Available:
+      break;
     }
   }
 
