@@ -241,7 +241,7 @@ id test9(Test9 *v) {
 // Test that the inference rules are different for fast enumeration variables.
 void test10(id collection) {
   for (id x in collection) {
-    __strong id *ptr = &x; // expected-error {{initializing '__strong id *' with an expression of type 'const __unsafe_unretained id *' changes retain/release properties of pointer}}
+    __strong id *ptr = &x; // expected-warning {{initializing '__strong id *' with an expression of type 'const __strong id *' discards qualifiers}}
   }
 
   for (__strong id x in collection) {
@@ -548,3 +548,18 @@ int Test31() {
     int k = (pcls->isa ? i : j); // expected-error {{member reference base type 'Class<PTest31>' is not a structure or union}}
     return cls->isa ? i : j; // expected-error {{member reference base type 'Class' is not a structure or union}}
 }
+
+// rdar://9612030
+@interface ITest32 {
+@public
+ id ivar;
+}
+@end
+
+id Test32(__weak ITest32 *x) {
+  __weak ITest32 *y;
+  x->ivar = 0; // expected-error {{dereferencing a __weak pointer is not allowed}}
+  return y ? y->ivar     // expected-error {{dereferencing a __weak pointer is not allowed}}
+           : (*x).ivar;  // expected-error {{dereferencing a __weak pointer is not allowed}}
+}
+

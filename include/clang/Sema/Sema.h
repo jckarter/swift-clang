@@ -4316,12 +4316,27 @@ public:
                                       QualType *FunctionType,
                                       sema::TemplateDeductionInfo &Info);
 
+  /// brief A function argument from which we performed template argument 
+  // deduction for a call.
+  struct OriginalCallArg {
+    OriginalCallArg(QualType OriginalParamType,
+                    unsigned ArgIdx,
+                    QualType OriginalArgType)
+      : OriginalParamType(OriginalParamType), ArgIdx(ArgIdx), 
+        OriginalArgType(OriginalArgType) { }
+    
+    QualType OriginalParamType;
+    unsigned ArgIdx;
+    QualType OriginalArgType;
+  };
+  
   TemplateDeductionResult
   FinishTemplateArgumentDeduction(FunctionTemplateDecl *FunctionTemplate,
                       llvm::SmallVectorImpl<DeducedTemplateArgument> &Deduced,
                                   unsigned NumExplicitlySpecified,
                                   FunctionDecl *&Specialization,
-                                  sema::TemplateDeductionInfo &Info);
+                                  sema::TemplateDeductionInfo &Info,
+           llvm::SmallVectorImpl<OriginalCallArg> const *OriginalCallArgs = 0);
 
   TemplateDeductionResult
   DeduceTemplateArguments(FunctionTemplateDecl *FunctionTemplate,
@@ -5886,8 +5901,17 @@ private:
                                  unsigned format_idx, unsigned firstDataArg,
                                  bool isPrintf);
 
-  void CheckMemsetcpymoveArguments(const CallExpr *Call,
-                                   const IdentifierInfo *FnName);
+  /// \brief Enumeration used to describe which of the memory setting or copying
+  /// functions is being checked by \c CheckMemsetcpymoveArguments().
+  enum CheckedMemoryFunction {
+    CMF_Memset,
+    CMF_Memcpy,
+    CMF_Memmove
+  };
+  
+  void CheckMemsetcpymoveArguments(const CallExpr *Call, 
+                                   CheckedMemoryFunction CMF,
+                                   IdentifierInfo *FnName);
 
   void CheckReturnStackAddr(Expr *RetValExp, QualType lhsType,
                             SourceLocation ReturnLoc);
