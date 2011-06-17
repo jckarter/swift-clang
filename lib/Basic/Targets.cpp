@@ -2065,6 +2065,12 @@ public:
       case 'q': // ...ARMV4 ldrsb
       case 'v': // ...VFP load/store (reg+constant offset)
       case 'y': // ...iWMMXt load/store
+      case 't': // address valid for load/store opaque types wider
+	        // than 128-bits
+      case 'n': // valid address for Neon doubleword vector load/store
+      case 'm': // valid address for Neon element and structure load/store
+      case 's': // valid address for non-offset loads/stores of quad-word
+	        // values in four ARM registers
         Info.setAllowsMemory();
         Name++;
         return true;
@@ -2072,13 +2078,15 @@ public:
     }
     return false;
   }
-  std::string
-  virtual convertConstraint(const char *&Constraint) const {
+  virtual std::string convertConstraint(const char *&Constraint) const {
     std::string R;
     switch (*Constraint) {
     case 'U':   // Two-character constraint; add "^" hint for later parsing.
       R = std::string("^") + std::string(Constraint, 2);
       Constraint++;
+      break;
+    case 'p': // 'p' should be translated to 'r' by default.
+      R = std::string("r");
       break;
     default:
       return std::string(1, *Constraint);

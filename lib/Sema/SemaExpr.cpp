@@ -439,7 +439,11 @@ ExprResult Sema::DefaultArgumentPromotion(Expr *E) {
 /// interfaces passed by value.
 ExprResult Sema::DefaultVariadicArgumentPromotion(Expr *E, VariadicCallType CT,
                                                   FunctionDecl *FDecl) {
-  ExprResult ExprRes = DefaultArgumentPromotion(E);
+  ExprResult ExprRes = CheckPlaceholderExpr(E);
+  if (ExprRes.isInvalid())
+    return ExprError();
+  
+  ExprRes = DefaultArgumentPromotion(E);
   if (ExprRes.isInvalid())
     return ExprError();
   E = ExprRes.take();
@@ -4333,6 +4337,16 @@ Sema::LookupMemberExpr(LookupResult &R, ExprResult &BaseExpr,
         Diag(MemberLoc, diag::error_protected_ivar_access)
           << IV->getDeclName();
     }
+    if (getLangOptions().ObjCAutoRefCount) {
+      Expr *BaseExp = BaseExpr.get()->IgnoreParenImpCasts();
+      if (UnaryOperator *UO = dyn_cast<UnaryOperator>(BaseExp))
+        if (UO->getOpcode() == UO_Deref)
+          BaseExp = UO->getSubExpr()->IgnoreParenCasts();
+      
+      if (DeclRefExpr *DE = dyn_cast<DeclRefExpr>(BaseExp))
+        if (DE->getType().getObjCLifetime() == Qualifiers::OCL_Weak)
+          Diag(DE->getLocation(), diag::error_arc_weak_ivar_access);
+    }
 
     return Owned(new (Context) ObjCIvarRefExpr(IV, IV->getType(),
                                                MemberLoc, BaseExpr.take(),
@@ -5295,8 +5309,9 @@ Sema::BuildCompoundLiteralExpr(SourceLocation LParenLoc, TypeSourceInfo *TInfo,
   // In C, compound literals are l-values for some reason.
   ExprValueKind VK = getLangOptions().CPlusPlus ? VK_RValue : VK_LValue;
 
-  return Owned(new (Context) CompoundLiteralExpr(LParenLoc, TInfo, literalType,
-                                                 VK, literalExpr, isFileScope));
+  return MaybeBindToTemporary(
+           new (Context) CompoundLiteralExpr(LParenLoc, TInfo, literalType,
+                                             VK, literalExpr, isFileScope));
 }
 
 ExprResult
@@ -7762,7 +7777,8 @@ QualType Sema::CheckCompareOperands(ExprResult &lex, ExprResult &rex, SourceLoca
     // comparisons of member pointers to null pointer constants.
     if (RHSIsNull &&
         ((lType->isAnyPointerType() || lType->isNullPtrType()) ||
-         (!isRelational && lType->isMemberPointerType()))) {
+         (!isRelational && 
+          (lType->isMemberPointerType() || lType->isBlockPointerType())))) {
       rex = ImpCastExprToType(rex.take(), lType, 
                         lType->isMemberPointerType()
                           ? CK_NullToMemberPointer
@@ -7771,7 +7787,8 @@ QualType Sema::CheckCompareOperands(ExprResult &lex, ExprResult &rex, SourceLoca
     }
     if (LHSIsNull &&
         ((rType->isAnyPointerType() || rType->isNullPtrType()) ||
-         (!isRelational && rType->isMemberPointerType()))) {
+         (!isRelational && 
+          (rType->isMemberPointerType() || rType->isBlockPointerType())))) {
       lex = ImpCastExprToType(lex.take(), rType, 
                         rType->isMemberPointerType()
                           ? CK_NullToMemberPointer
@@ -8144,25 +8161,28 @@ static bool CheckForModifiableLvalue(Expr *E, SourceLocation Loc, Sema &S) {
   case Expr::MLV_ConstQualified:
     Diag = diag::err_typecheck_assign_const;
 
-    // In ARC, use some specialized diagnostics for the times when we
-    // infer const.
+    // In ARC, use some specialized diagnostics for occasions where we
+    // infer 'const'.  These are always pseudo-strong variables.
     if (S.getLangOptions().ObjCAutoRefCount) {
       DeclRefExpr *declRef = dyn_cast<DeclRefExpr>(E->IgnoreParenCasts());
       if (declRef && isa<VarDecl>(declRef->getDecl())) {
         VarDecl *var = cast<VarDecl>(declRef->getDecl());
 
-        // If the variable wasn't written with 'const', there are some
-        // cases where we infer const anyway:
-        //  - self
-        //  - fast enumeration variables
-        if (!var->getTypeSourceInfo() ||
-            !var->getTypeSourceInfo()->getType().isConstQualified()) {
+        // Use the normal diagnostic if it's pseudo-__strong but the
+        // user actually wrote 'const'.
+        if (var->isARCPseudoStrong() &&
+            (!var->getTypeSourceInfo() ||
+             !var->getTypeSourceInfo()->getType().isConstQualified())) {
+          // There are two pseudo-strong cases:
+          //  - self
           ObjCMethodDecl *method = S.getCurMethodDecl();
           if (method && var == method->getSelfDecl())
             Diag = diag::err_typecheck_arr_assign_self;
-          else if (var->getType().getObjCLifetime()
-                     == Qualifiers::OCL_ExplicitNone)
+
+          //  - fast enumeration variables
+          else
             Diag = diag::err_typecheck_arr_assign_enumeration;
+
           SourceRange Assign;
           if (Loc != OrigLoc)
             Assign = SourceRange(OrigLoc, OrigLoc);
@@ -8911,6 +8931,60 @@ ExprResult Sema::CreateBuiltinBinOp(SourceLocation OpLoc,
     ExprResult resolvedRHS = CheckPlaceholderExpr(rhs.get());
     if (!resolvedRHS.isUsable()) return ExprError();
     rhs = move(resolvedRHS);
+  }
+
+  bool LeftNull = Expr::NPCK_GNUNull ==
+      lhs.get()->isNullPointerConstant(Context,
+                                       Expr::NPC_ValueDependentIsNotNull);
+  bool RightNull = Expr::NPCK_GNUNull ==
+      rhs.get()->isNullPointerConstant(Context,
+                                       Expr::NPC_ValueDependentIsNotNull);
+
+  // Detect when a NULL constant is used improperly in an expression.  These
+  // are mainly cases where the null pointer is used as an integer instead
+  // of a pointer.
+  if (LeftNull || RightNull) {
+    if (Opc == BO_Mul || Opc == BO_Div || Opc == BO_Rem || Opc == BO_Add ||
+        Opc == BO_Sub || Opc == BO_Shl || Opc == BO_Shr || Opc == BO_And ||
+        Opc == BO_Xor || Opc == BO_Or || Opc == BO_MulAssign ||
+        Opc == BO_DivAssign || Opc == BO_AddAssign || Opc == BO_SubAssign ||
+        Opc == BO_RemAssign || Opc == BO_ShlAssign || Opc == BO_ShrAssign ||
+        Opc == BO_AndAssign || Opc == BO_OrAssign || Opc == BO_XorAssign) {
+      // These are the operations that would not make sense with a null pointer
+      // no matter what the other expression is.
+      if (LeftNull && RightNull) {
+        Diag(OpLoc, diag::warn_null_in_arithmetic_operation)
+             << lhs.get()->getSourceRange() << rhs.get()->getSourceRange();
+      } else if (LeftNull) {
+        Diag(OpLoc, diag::warn_null_in_arithmetic_operation)
+             << lhs.get()->getSourceRange();
+      } else if (RightNull) {
+        Diag(OpLoc, diag::warn_null_in_arithmetic_operation)
+             << rhs.get()->getSourceRange();
+      }
+    } else if (Opc == BO_LE || Opc == BO_LT || Opc == BO_GE || Opc == BO_GT ||
+               Opc == BO_EQ || Opc == BO_NE) {
+      // These are the operations that would not make sense with a null pointer
+      // if the other expression the other expression is not a pointer.
+      QualType LeftType = lhs.get()->getType();
+      QualType RightType = rhs.get()->getType();
+      bool LeftPointer = LeftType->isPointerType() ||
+                         LeftType->isBlockPointerType() ||
+                         LeftType->isMemberPointerType() ||
+                         LeftType->isObjCObjectPointerType();
+      bool RightPointer = RightType->isPointerType() ||
+                          RightType->isBlockPointerType() ||
+                          RightType->isMemberPointerType() ||
+                          RightType->isObjCObjectPointerType();
+      if ((LeftNull != RightNull) && !LeftPointer && !RightPointer) {
+        if (LeftNull)
+          Diag(OpLoc, diag::warn_null_in_arithmetic_operation)
+               << lhs.get()->getSourceRange();
+        if (RightNull)
+          Diag(OpLoc, diag::warn_null_in_arithmetic_operation)
+               << rhs.get()->getSourceRange();
+      }
+    }
   }
 
   switch (Opc) {
