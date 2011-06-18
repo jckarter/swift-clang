@@ -38,5 +38,5 @@ add_clang_library(clangSema
   TargetAttributesSema.cpp
   )
 
-add_dependencies(clangSema ClangARMNeon ClangAttrClasses ClangAttrList 
+add_dependencies(clangSema ClangARMNeon ClangARM64SIMD ClangAttrClasses ClangAttrList 
                  ClangDiagnosticSema ClangDeclNodes ClangStmtNodes)

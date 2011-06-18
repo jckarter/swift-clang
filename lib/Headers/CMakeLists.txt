@@ -35,7 +35,13 @@ endif()
 
 # Generate arm_neon.h
 clang_tablegen(arm_neon.h.inc -gen-arm-neon
+  -I ${CMAKE_CURRENT_SOURCE_DIR}/../../include
   SOURCE ${CLANG_SOURCE_DIR}/include/clang/Basic/arm_neon.td)
+
+# Generate aarch64_simd.h
+clang_tablegen(aarch64_simd.h.inc -gen-arm64-simd
+  -I ${CMAKE_CURRENT_SOURCE_DIR}/../../include
+  SOURCE ${CLANG_SOURCE_DIR}/include/clang/Basic/arm64_simd.td)
 
 set(out_files)
 foreach( f ${files} )
@@ -72,9 +78,24 @@ if (other_output_dir)
     list(APPEND out_files ${other_dst})
 endif ()
 
+add_custom_command(OUTPUT ${output_dir}/aarch64_simd.h 
+  DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/aarch64_simd.h.inc
+  COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_CURRENT_BINARY_DIR}/aarch64_simd.h.inc ${output_dir}/aarch64_simd.h
+  COMMENT "Copying clang's aarch64_simd.h...")
+list(APPEND out_files ${output_dir}/aarch64_simd.h)
+
+if (other_output_dir)
+    set(other_dst ${other_output_dir}/aarch64_simd.h)
+    add_custom_command(OUTPUT ${other_dst}
+      DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/aarch64_simd.h.inc
+      COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_CURRENT_BINARY_DIR}/aarch64_simd.h.inc ${other_dst}
+      COMMENT "Copying clang's aarch64_simd.h...")
+    list(APPEND out_files ${other_dst})
+endif ()
+
 add_custom_target(clang-headers ALL DEPENDS ${out_files})
 set_target_properties(clang-headers PROPERTIES FOLDER "Misc")
 
-install(FILES ${files} ${output_dir}/arm_neon.h
+install(FILES ${files} ${output_dir}/arm_neon.h ${output_dir}/aarch64_simd.h
   PERMISSIONS OWNER_READ OWNER_WRITE GROUP_READ WORLD_READ
   DESTINATION lib${LLVM_LIBDIR_SUFFIX}/clang/${CLANG_VERSION}/include)

@@ -31,6 +31,7 @@ endif()
 
 add_dependencies(clangBasic 
                  ClangARMNeon
+                 ClangARM64SIMD
                  ClangAttrList
                  ClangDiagnosticAnalysis
                  ClangDiagnosticAST

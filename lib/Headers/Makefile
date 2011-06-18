@@ -9,7 +9,7 @@
 
 CLANG_LEVEL := ../..
 
-BUILT_SOURCES = arm_neon.h.inc
+BUILT_SOURCES = arm_neon.h.inc aarch64_simd.h.inc
 TABLEGEN_INC_FILES_COMMON = 1
 
 include $(CLANG_LEVEL)/Makefile
@@ -24,11 +24,11 @@ HEADERS := $(notdir $(wildcard $(PROJ_SRC_DIR)/*.h))
 OBJHEADERS := $(addprefix $(HeaderDir)/, $(HEADERS))
 
 
-$(OBJHEADERS): $(HeaderDir)/%.h: $(PROJ_SRC_DIR)/%.h $(HeaderDir)/.dir $(HeaderDir)/arm_neon.h
+$(OBJHEADERS): $(HeaderDir)/%.h: $(PROJ_SRC_DIR)/%.h $(HeaderDir)/.dir $(HeaderDir)/arm_neon.h $(HeaderDir)/aarch64_simd.h
 	$(Verb) cp $< $@
 	$(Echo) Copying $(notdir $<) to build dir
 
-$(HeaderDir)/arm_neon.h: $(BUILT_SOURCES) $(HeaderDir)/.dir
+$(HeaderDir)/arm_neon.h $(HeaderDir)/aarch64_simd.h: $(HeaderDir)/%: %.inc $(HeaderDir)/.dir
 	$(Verb) cp $< $@
 	$(Echo) Copying $(notdir $<) to build dir
 
@@ -39,6 +39,7 @@ PROJ_headers := $(DESTDIR)$(PROJ_prefix)/lib/clang/$(CLANG_VERSION)/include
 
 INSTHEADERS := $(addprefix $(PROJ_headers)/, $(HEADERS))
 INSTHEADERS += $(PROJ_headers)/arm_neon.h
+INSTHEADERS += $(PROJ_headers)/aarch64_simd.h
 
 $(PROJ_headers):
 	$(Verb) $(MKDIR) $@
@@ -51,4 +52,10 @@ install-local:: $(INSTHEADERS)
 
 $(ObjDir)/arm_neon.h.inc.tmp : $(CLANG_LEVEL)/include/clang/Basic/arm_neon.td $(TBLGEN) $(ObjDir)/.dir
 	$(Echo) "Building Clang arm_neon.h.inc with tblgen"
-	$(Verb) $(TableGen) -gen-arm-neon -o $(call SYSPATH, $@) $<
+	$(Verb) $(TableGen) -gen-arm-neon -o $(call SYSPATH, $@) \
+	  -I $(PROJ_SRC_DIR)/../../include $<
+
+$(ObjDir)/aarch64_simd.h.inc.tmp : $(CLANG_LEVEL)/include/clang/Basic/arm64_simd.td $(TBLGEN) $(ObjDir)/.dir
+	$(Echo) "Building Clang aarch64_simd.h.inc with tblgen"
+	$(Verb) $(TableGen) -gen-arm64-simd -o $(call SYSPATH, $@) \
+	  -I $(PROJ_SRC_DIR)/../../include $<
