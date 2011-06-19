@@ -194,6 +194,10 @@ Sema::CheckBuiltinFunctionCall(unsigned BuiltinID, CallExpr *TheCall) {
         if (CheckARMBuiltinFunctionCall(BuiltinID, TheCall))
           return ExprError();
         break;
+      case llvm::Triple::arm64:
+        if (CheckARM64BuiltinFunctionCall(BuiltinID, TheCall))
+          return ExprError();
+        break;
       default:
         break;
     }
@@ -278,6 +282,54 @@ bool Sema::CheckARMBuiltinFunctionCall(unsigned BuiltinID, CallExpr *TheCall) {
       << l << u+l << TheCall->getArg(i)->getSourceRange();
 
   // FIXME: VFP Intrinsics should error if VFP not present.
+  return false;
+}
+
+bool Sema::CheckARM64BuiltinFunctionCall(unsigned BuiltinID,
+                                         CallExpr *TheCall) {
+  llvm::APSInt Result;
+
+  unsigned mask = 0;
+  unsigned TV = 0;
+  switch (BuiltinID) {
+#define GET_NEON_OVERLOAD_CHECK
+#include "clang/Basic/arm64_simd.inc"
+#undef GET_NEON_OVERLOAD_CHECK
+  }
+  
+  // For SIMD intrinsics which are overloaded on vector element type, validate
+  // the immediate which specifies which variant to emit.
+  if (mask) {
+    unsigned ArgNo = TheCall->getNumArgs()-1;
+    if (SemaBuiltinConstantArg(TheCall, ArgNo, Result))
+      return true;
+    
+    TV = Result.getLimitedValue(32);
+    if ((TV > 31) || (mask & (1 << TV)) == 0)
+      return Diag(TheCall->getLocStart(), diag::err_invalid_neon_type_code)
+        << TheCall->getArg(ArgNo)->getSourceRange();
+  }
+  
+  // For SIMD intrinsics which take an immediate value as part of the 
+  // instruction, range check them here.
+  unsigned i = 0, l = 0, u = 0;
+  switch (BuiltinID) {
+  default: return false;
+#define GET_NEON_IMMEDIATE_CHECK
+#include "clang/Basic/arm64_simd.inc"
+#undef GET_NEON_IMMEDIATE_CHECK
+  };
+
+  // Check that the immediate argument is actually a constant.
+  if (SemaBuiltinConstantArg(TheCall, i, Result))
+    return true;
+
+  // Range check against the upper/lower values for this isntruction.
+  unsigned Val = Result.getZExtValue();
+  if (Val < l || Val > (u + l))
+    return Diag(TheCall->getLocStart(), diag::err_argument_invalid_range)
+      << l << u+l << TheCall->getArg(i)->getSourceRange();
+
   return false;
 }
 
