@@ -7218,13 +7218,13 @@ QualType Sema::CheckAdditionOperands( // C99 6.5.6
       } else if (PointeeTy->isFunctionType()) {
         if (getLangOptions().CPlusPlus) {
           Diag(Loc, diag::err_typecheck_pointer_arith_function_type)
-            << lex.get()->getType() << lex.get()->getSourceRange();
+            << PExp->getType() << PExp->getSourceRange();
           return QualType();
         }
 
         // GNU extension: arithmetic on pointer to function
         Diag(Loc, diag::ext_gnu_ptr_func_arith)
-          << lex.get()->getType() << lex.get()->getSourceRange();
+          << PExp->getType() << PExp->getSourceRange();
       } else {
         // Check if we require a complete type.
         if (((PExp->getType()->isPointerType() &&
@@ -8945,31 +8945,39 @@ ExprResult Sema::CreateBuiltinBinOp(SourceLocation OpLoc,
   // are mainly cases where the null pointer is used as an integer instead
   // of a pointer.
   if (LeftNull || RightNull) {
-    if (Opc == BO_Mul || Opc == BO_Div || Opc == BO_Rem || Opc == BO_Add ||
-        Opc == BO_Sub || Opc == BO_Shl || Opc == BO_Shr || Opc == BO_And ||
-        Opc == BO_Xor || Opc == BO_Or || Opc == BO_MulAssign ||
-        Opc == BO_DivAssign || Opc == BO_AddAssign || Opc == BO_SubAssign ||
-        Opc == BO_RemAssign || Opc == BO_ShlAssign || Opc == BO_ShrAssign ||
-        Opc == BO_AndAssign || Opc == BO_OrAssign || Opc == BO_XorAssign) {
-      // These are the operations that would not make sense with a null pointer
-      // no matter what the other expression is.
-      Diag(OpLoc, diag::warn_null_in_arithmetic_operation)
-        << (LeftNull ? lhs.get()->getSourceRange() : SourceRange())
-        << (RightNull ? rhs.get()->getSourceRange() : SourceRange());
-    } else if (Opc == BO_LE || Opc == BO_LT || Opc == BO_GE || Opc == BO_GT ||
-               Opc == BO_EQ || Opc == BO_NE) {
-      // These are the operations that would not make sense with a null pointer
-      // if the other expression the other expression is not a pointer.
-      QualType LeftType = lhs.get()->getType();
-      QualType RightType = rhs.get()->getType();
-      if (LeftNull != RightNull &&
-          !LeftType->isPointerLikeType() &&
-          !LeftType->canDecayToPointerType() &&
-          !RightType->isPointerLikeType() &&
-          !RightType->canDecayToPointerType()) {
+    // Avoid analyzing cases where the result will either be invalid (and
+    // diagnosed as such) or entirely valid and not something to warn about.
+    QualType LeftType = lhs.get()->getType();
+    QualType RightType = rhs.get()->getType();
+    if (!LeftType->isBlockPointerType() && !LeftType->isMemberPointerType() &&
+        !LeftType->isFunctionType() &&
+        !RightType->isBlockPointerType() &&
+        !RightType->isMemberPointerType() &&
+        !RightType->isFunctionType()) {
+      if (Opc == BO_Mul || Opc == BO_Div || Opc == BO_Rem || Opc == BO_Add ||
+          Opc == BO_Sub || Opc == BO_Shl || Opc == BO_Shr || Opc == BO_And ||
+          Opc == BO_Xor || Opc == BO_Or || Opc == BO_MulAssign ||
+          Opc == BO_DivAssign || Opc == BO_AddAssign || Opc == BO_SubAssign ||
+          Opc == BO_RemAssign || Opc == BO_ShlAssign || Opc == BO_ShrAssign ||
+          Opc == BO_AndAssign || Opc == BO_OrAssign || Opc == BO_XorAssign) {
+        // These are the operations that would not make sense with a null pointer
+        // no matter what the other expression is.
         Diag(OpLoc, diag::warn_null_in_arithmetic_operation)
-          << (LeftNull ? lhs.get()->getSourceRange()
-                       : rhs.get()->getSourceRange());
+          << (LeftNull ? lhs.get()->getSourceRange() : SourceRange())
+          << (RightNull ? rhs.get()->getSourceRange() : SourceRange());
+      } else if (Opc == BO_LE || Opc == BO_LT || Opc == BO_GE || Opc == BO_GT ||
+                 Opc == BO_EQ || Opc == BO_NE) {
+        // These are the operations that would not make sense with a null pointer
+        // if the other expression the other expression is not a pointer.
+        if (LeftNull != RightNull &&
+            !LeftType->isAnyPointerType() &&
+            !LeftType->canDecayToPointerType() &&
+            !RightType->isAnyPointerType() &&
+            !RightType->canDecayToPointerType()) {
+          Diag(OpLoc, diag::warn_null_in_arithmetic_operation)
+            << (LeftNull ? lhs.get()->getSourceRange()
+                         : rhs.get()->getSourceRange());
+        }
       }
     }
   }
@@ -9139,6 +9147,20 @@ static void DiagnoseBitwisePrecedence(Sema &Self, BinaryOperatorKind Opc,
   }
 }
 
+/// \brief It accepts a '&' expr that is inside a '|' one.
+/// Emit a diagnostic together with a fixit hint that wraps the '&' expression
+/// in parentheses.
+static void
+EmitDiagnosticForBitwiseAndInBitwiseOr(Sema &Self, SourceLocation OpLoc,
+                                       BinaryOperator *Bop) {
+  assert(Bop->getOpcode() == BO_And);
+  Self.Diag(Bop->getOperatorLoc(), diag::warn_bitwise_and_in_bitwise_or)
+      << Bop->getSourceRange() << OpLoc;
+  SuggestParentheses(Self, Bop->getOperatorLoc(),
+    Self.PDiag(diag::note_bitwise_and_in_bitwise_or_silence),
+    Bop->getSourceRange());
+}
+
 /// \brief It accepts a '&&' expr that is inside a '||' one.
 /// Emit a diagnostic together with a fixit hint that wraps the '&&' expression
 /// in parentheses.
@@ -9204,13 +9226,28 @@ static void DiagnoseLogicalAndInLogicalOrRHS(Sema &S, SourceLocation OpLoc,
   }
 }
 
+/// \brief Look for '&' in the left or right hand of a '|' expr.
+static void DiagnoseBitwiseAndInBitwiseOr(Sema &S, SourceLocation OpLoc,
+                                             Expr *OrArg) {
+  if (BinaryOperator *Bop = dyn_cast<BinaryOperator>(OrArg)) {
+    if (Bop->getOpcode() == BO_And)
+      return EmitDiagnosticForBitwiseAndInBitwiseOr(S, OpLoc, Bop);
+  }
+}
+
 /// DiagnoseBinOpPrecedence - Emit warnings for expressions with tricky
 /// precedence.
 static void DiagnoseBinOpPrecedence(Sema &Self, BinaryOperatorKind Opc,
                                     SourceLocation OpLoc, Expr *lhs, Expr *rhs){
   // Diagnose "arg1 'bitwise' arg2 'eq' arg3".
   if (BinaryOperator::isBitwiseOp(Opc))
-    return DiagnoseBitwisePrecedence(Self, Opc, OpLoc, lhs, rhs);
+    DiagnoseBitwisePrecedence(Self, Opc, OpLoc, lhs, rhs);
+
+  // Diagnose "arg1 & arg2 | arg3"
+  if (Opc == BO_Or && !OpLoc.isMacroID()/* Don't warn in macros. */) {
+    DiagnoseBitwiseAndInBitwiseOr(Self, OpLoc, lhs);
+    DiagnoseBitwiseAndInBitwiseOr(Self, OpLoc, rhs);
+  }
 
   // Warn about arg1 || arg2 && arg3, as GCC 4.3+ does.
   // We don't warn for 'assert(a || b && "bad")' since this is safe.
