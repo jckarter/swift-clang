@@ -1089,6 +1089,8 @@ Value *CodeGenFunction::EmitTargetBuiltinExpr(unsigned BuiltinID,
   case llvm::Triple::arm:
   case llvm::Triple::thumb:
     return EmitARMBuiltinExpr(BuiltinID, E);
+  case llvm::Triple::arm64:
+    return EmitARM64BuiltinExpr(BuiltinID, E);
   case llvm::Triple::x86:
   case llvm::Triple::x86_64:
     return EmitX86BuiltinExpr(BuiltinID, E);
@@ -1895,6 +1897,39 @@ Value *CodeGenFunction::EmitARMBuiltinExpr(unsigned BuiltinID,
     }
     return SV;
   }
+  }
+}
+
+Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
+                                             const CallExpr *E) {
+  llvm::SmallVector<Value*, 4> Ops;
+  for (unsigned i = 0, e = E->getNumArgs() - 1; i != e; i++)
+    Ops.push_back(EmitScalarExpr(E->getArg(i)));
+
+  llvm::APSInt Result;
+  const Expr *Arg = E->getArg(E->getNumArgs()-1);
+  if (!Arg->isIntegerConstantExpr(Result, getContext()))
+    return 0;
+
+  // Determine the type of this overloaded NEON intrinsic.
+  unsigned type = Result.getZExtValue();
+  bool usgn = type & 0x08;
+  bool quad = type & 0x10;
+  bool poly = (type & 0x7) == 5 || (type & 0x7) == 6;
+  (void)poly;  // Only used in assert()s.
+  (void)usgn; // FIXME: remove when the variable is used
+
+  const llvm::VectorType *VTy = GetNeonType(getLLVMContext(), type & 0x7, quad);
+  const llvm::Type *Ty = VTy;
+  if (!Ty)
+    return 0;
+
+  switch (BuiltinID) {
+  default: return 0;
+  case ARM64::BI__builtin_arm64_vhadd_v:
+  case ARM64::BI__builtin_arm64_vhaddq_v:
+    assert(0 && "NYI");
+    return 0;
   }
 }
 
