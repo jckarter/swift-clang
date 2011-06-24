@@ -19,8 +19,8 @@ BUILTIN(__clear_cache, "v.", "")
 BUILTIN(__builtin_thread_pointer, "v*", "")
 
 // SIMD
-#define GET_ARM64_BUILTINS
+#define GET_NEON_BUILTINS
 #include "clang/Basic/arm64_simd.inc"
-#undef GET_ARM64_BUILTINS
+#undef GET_NEON_BUILTINS
 
 #undef BUILTIN

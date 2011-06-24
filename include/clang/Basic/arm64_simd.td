@@ -19,7 +19,7 @@ include "clang/Basic/arm_neon_common.td"
 def VADD : Inst<"vadd", "ddd", "csilfUcUsUiUlQcQsQiQlQfQUcQUsQUiQUl", OP_ADD>;
 def VADDL   : Inst<"vaddl", "wdd", "csiUcUsUi", OP_ADDL>;
 def VADDW   : Inst<"vaddw", "wwd", "csiUcUsUi", OP_ADDW>;
-//def VHADD   : SInst<"vhadd", "ddd", "csiUcUsUiQcQsQiQUcQUsQUi">;
+def VHADD   : SInst<"vhadd", "ddd", "csiUcUsUiQcQsQiQUcQUsQUi">;
 //def VRHADD  : SInst<"vrhadd", "ddd", "csiUcUsUiQcQsQiQUcQUsQUi">;
 //def VQADD   : SInst<"vqadd", "ddd", "csilUcUsUiUlQcQsQiQlQUcQUsQUiQUl">;
 //def VADDHN  : IInst<"vaddhn", "hkk", "silUsUiUl">;

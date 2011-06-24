@@ -2191,6 +2191,8 @@ class ARM64TargetInfo : public TargetInfo {
   static const TargetInfo::GCCRegAlias GCCRegAliases[];
   static const char * const GCCRegNames[];
 
+  static const Builtin::Info BuiltinInfo[];
+
 public:
   ARM64TargetInfo(const std::string &TripleStr) : TargetInfo(TripleStr) {
     LongWidth = LongAlign = PointerWidth = PointerAlign = 64;
@@ -2229,8 +2231,8 @@ public:
 
   virtual void getTargetBuiltins(const Builtin::Info *&Records,
                                  unsigned &NumRecords) const {
-    Records = 0;
-    NumRecords = 0;
+    Records = BuiltinInfo;
+    NumRecords = clang::ARM64::LastTSBuiltin-Builtin::FirstTSBuiltin;
   }
 
   virtual const char *getVAListDeclaration() const {
@@ -2300,6 +2302,13 @@ void ARM64TargetInfo::getGCCRegAliases(const GCCRegAlias *&Aliases,
   Aliases = GCCRegAliases;
   NumAliases = llvm::array_lengthof(GCCRegAliases);
 }
+
+const Builtin::Info ARM64TargetInfo::BuiltinInfo[] = {
+#define BUILTIN(ID, TYPE, ATTRS) { #ID, TYPE, ATTRS, 0, ALL_LANGUAGES, false },
+#define LIBBUILTIN(ID, TYPE, ATTRS, HEADER) { #ID, TYPE, ATTRS, HEADER,\
+                                              ALL_LANGUAGES, false },
+#include "clang/Basic/BuiltinsARM64.def"
+};
 } // end anonymous namespace.
 
 namespace {
