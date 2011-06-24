@@ -2601,7 +2601,12 @@ def warn_arc_non_pod_class_with_object_member : Warning<
   "to make it ABI-compatible">, InGroup<AutomaticReferenceCountingABI>,
   DefaultIgnore;
 def warn_arc_retained_assign : Warning<
-  "assigning retained object to %select{weak|unsafe_unretained}0 variable">,
+  "assigning retained object to %select{weak|unsafe_unretained}0 variable"
+  "; object will be released after assignment">,
+  InGroup<ARCUnsafeRetainedAssign>;
+def warn_arc_retained_property_assign : Warning<
+  "assigning retained object to unsafe property"
+  "; object will be released after assignment">,
   InGroup<ARCUnsafeRetainedAssign>;
 def warn_arc_trivial_member_function_with_object_member : Warning<
   "%0 cannot be shared between ARC and non-ARC "
@@ -4208,7 +4213,7 @@ def err_vector_incorrect_num_initializers : Error<
 def err_altivec_empty_initializer : Error<"expected initializer">;
 
 def err_invalid_neon_type_code : Error<
-  "incompatible constant for this __builtin_neon function">; 
+  "incompatible constant for this builtin function">; 
 def err_argument_invalid_range : Error<
   "argument should be a value from %0 to %1">;
 

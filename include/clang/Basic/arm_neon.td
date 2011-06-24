@@ -76,7 +76,7 @@ def VMAX : SInst<"vmax", "ddd", "csiUcUsUifQcQsQiQUcQUsQUiQf">;
 def VMIN : SInst<"vmin", "ddd", "csiUcUsUifQcQsQiQUcQUsQUiQf">;
 
 ////////////////////////////////////////////////////////////////////////////////
-// E.3.7 Pairdise Addition
+// E.3.7 Pairwise Addition
 def VPADD  : IInst<"vpadd", "ddd", "csiUcUsUif">;
 def VPADDL : SInst<"vpaddl", "nd",  "csiUcUsUiQcQsQiQUcQUsQUi">;
 def VPADAL : SInst<"vpadal", "nnd", "csiUcUsUiQcQsQiQUcQUsQUi">;
@@ -246,7 +246,7 @@ def VEXT : WInst<"vext", "dddi",
                  "cUcPcsUsPsiUilUlfQcQUcQPcQsQUsQPsQiQUiQlQUlQf">;
 
 ////////////////////////////////////////////////////////////////////////////////
-// E.3.27 Reverse vector elements (sdap endianness)
+// E.3.27 Reverse vector elements
 def VREV64 : Inst<"vrev64", "dd", "csiUcUsUiPcPsfQcQsQiQUcQUsQUiQPcQPsQf",
                   OP_REV64>;
 def VREV32 : Inst<"vrev32", "dd", "csUcUsPcPsQcQsQUcQUsQPcQPs", OP_REV32>;
