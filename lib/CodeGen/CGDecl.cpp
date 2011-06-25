@@ -364,6 +364,20 @@ namespace {
     }
   };
 
+  struct ExtendGCLifetime : EHScopeStack::Cleanup {
+    const VarDecl &Var;
+    ExtendGCLifetime(const VarDecl *var) : Var(*var) {}
+
+    void Emit(CodeGenFunction &CGF, bool forEH) {
+      // Compute the address of the local variable, in case it's a
+      // byref or something.
+      DeclRefExpr DRE(const_cast<VarDecl*>(&Var), Var.getType(), VK_LValue,
+                      SourceLocation());
+      llvm::Value *value = CGF.EmitLoadOfScalar(CGF.EmitDeclRefLValue(&DRE));
+      CGF.EmitExtendGCLifetime(value);
+    }
+  };
+
   struct CallCleanupFunction : EHScopeStack::Cleanup {
     llvm::Constant *CleanupFn;
     const CGFunctionInfo &FnInfo;
@@ -468,7 +482,7 @@ void CodeGenFunction::EmitScalarInit(const Expr *init,
     llvm::Value *value = EmitScalarExpr(init);
     if (capturedByInit)
       drillIntoBlockVariable(*this, lvalue, cast<VarDecl>(D));
-    EmitStoreThroughLValue(RValue::get(value), lvalue, lvalue.getType());
+    EmitStoreThroughLValue(RValue::get(value), lvalue);
     return;
   }
 
@@ -565,7 +579,7 @@ void CodeGenFunction::EmitScalarInit(const Expr *init,
 void CodeGenFunction::EmitScalarInit(llvm::Value *init, LValue lvalue) {
   Qualifiers::ObjCLifetime lifetime = lvalue.getObjCLifetime();
   if (!lifetime)
-    return EmitStoreThroughLValue(RValue::get(init), lvalue, lvalue.getType());
+    return EmitStoreThroughLValue(RValue::get(init), lvalue);
 
   switch (lifetime) {
   case Qualifiers::OCL_None:
@@ -968,7 +982,7 @@ void CodeGenFunction::EmitExprAsInit(const Expr *init,
     RValue rvalue = EmitReferenceBindingToExpr(init, D);
     if (capturedByInit) 
       drillIntoBlockVariable(*this, lvalue, cast<VarDecl>(D));
-    EmitStoreThroughLValue(rvalue, lvalue, type);
+    EmitStoreThroughLValue(rvalue, lvalue);
   } else if (!hasAggregateLLVMType(type)) {
     EmitScalarInit(init, D, lvalue, capturedByInit);
   } else if (type->isAnyComplexType()) {
@@ -1027,6 +1041,12 @@ void CodeGenFunction::EmitAutoVarCleanups(const AutoVarEmission &emission) {
       llvm::Value *loc = emission.getObjectAddress(*this);
       EmitAutoVarWithLifetime(*this, D, loc, lifetime);
     }
+  }
+
+  // In GC mode, honor objc_precise_lifetime.
+  if (getLangOptions().getGCMode() != LangOptions::NonGC &&
+      D.hasAttr<ObjCPreciseLifetimeAttr>()) {
+    EHStack.pushCleanup<ExtendGCLifetime>(NormalCleanup, &D);
   }
 
   // Handle the cleanup attribute.
@@ -1143,10 +1163,11 @@ void CodeGenFunction::EmitParmDecl(const VarDecl &D, llvm::Value *Arg,
     }
 
     // Store the initial value into the alloca.
-    if (doStore)
-      EmitStoreOfScalar(Arg, DeclPtr, Ty.isVolatileQualified(),
-                        getContext().getDeclAlign(&D).getQuantity(), Ty,
-                        CGM.getTBAAInfo(Ty));
+    if (doStore) {
+      LValue lv = MakeAddrLValue(DeclPtr, Ty,
+                                 getContext().getDeclAlign(&D).getQuantity());
+      EmitStoreOfScalar(Arg, lv);
+    }
   }
 
   llvm::Value *&DMEntry = LocalDeclMap[&D];
