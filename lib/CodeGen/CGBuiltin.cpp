@@ -1150,6 +1150,17 @@ Value *CodeGenFunction::EmitNeonShiftVector(Value *V, const llvm::Type *Ty,
   return llvm::ConstantVector::get(CV);
 }
 
+Value *CodeGenFunction::EmitNeon64Call(Function *F, SmallVectorImpl<Value*> &Ops,
+                                     const char *name) {
+  unsigned j = 0;
+  for (Function::const_arg_iterator ai = F->arg_begin(), ae = F->arg_end();
+       ai != ae; ++ai, ++j)
+    Ops[j] = Builder.CreateBitCast(Ops[j], ai->getType(), name);
+
+  return Builder.CreateCall(F, Ops.begin(), Ops.end(), name);
+}
+
+
 /// GetPointeeAlignment - Given an expression with a pointer type, find the
 /// alignment of the type referenced by the pointer.  Skip over implicit
 /// casts.
@@ -1924,12 +1935,14 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
   if (!Ty)
     return 0;
 
+  unsigned Int;
   switch (BuiltinID) {
   default: return 0;
   case ARM64::BI__builtin_arm64_vhadd_v:
-  case ARM64::BI__builtin_arm64_vhaddq_v:
-    assert(0 && "NYI");
-    return 0;
+  case ARM64::BI__builtin_arm64_vhaddq_v: {
+    Int = usgn ? Intrinsic::arm64_neon_uhadd : Intrinsic::arm64_neon_shadd;
+    return EmitNeon64Call(CGM.getIntrinsic(Int, &Ty, 1), Ops, "vrhadd");
+  }
   }
 }
 

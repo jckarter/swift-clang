@@ -2045,6 +2045,9 @@ public:
   llvm::Value *EmitNeonShiftVector(llvm::Value *V, const llvm::Type *Ty,
                                    bool negateForRightShift);
   llvm::Value *EmitARM64BuiltinExpr(unsigned BuiltinID, const CallExpr *E);
+  llvm::Value *EmitNeon64Call(llvm::Function *F,
+                             llvm::SmallVectorImpl<llvm::Value*> &O,
+                             const char *name);
 
   llvm::Value *BuildVector(const llvm::SmallVectorImpl<llvm::Value*> &Ops);
   llvm::Value *EmitX86BuiltinExpr(unsigned BuiltinID, const CallExpr *E);

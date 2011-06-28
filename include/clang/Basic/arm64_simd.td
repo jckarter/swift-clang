@@ -37,7 +37,7 @@ def VMLSL    : Inst<"vmlsl", "wwdd", "csiUcUsUi", OP_MLSL>;
 //def VQRDMULH : SInst<"vqrdmulh", "ddd", "siQsQi">;
 //def VQDMLAL  : SInst<"vqdmlal", "wwdd", "si">;
 //def VQDMLSL  : SInst<"vqdmlsl", "wwdd", "si">;
-//def VMULL    : SInst<"vmull", "wdd", "csiUcUsUiPc">;
+def VMULL    : SInst<"vmull", "wdd", "csiUcUsUiPc">;
 //def VQDMULL  : SInst<"vqdmull", "wdd", "si">;
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -65,7 +65,7 @@ def VCLT  : Inst<"vclt", "udd", "csifUcUsUiQcQsQiQfQUcQUsQUi", OP_LT>;
 
 ////////////////////////////////////////////////////////////////////////////////
 // Absolute Difference
-//def VABD  : SInst<"vabd", "ddd",  "csiUcUsUifQcQsQiQUcQUsQUiQf">;
+def VABD  : SInst<"vabd", "ddd",  "csiUcUsUifQcQsQiQUcQUsQUiQf">;
 def VABDL : Inst<"vabdl", "wdd",  "csiUcUsUi", OP_ABDL>;
 def VABA  : Inst<"vaba", "dddd", "csiUcUsUiQcQsQiQUcQUsQUi", OP_ABA>;
 def VABAL : Inst<"vabal", "wwdd", "csiUcUsUi", OP_ABAL>;
@@ -200,7 +200,7 @@ def VGET_LOW  : Inst<"vget_low", "dk", "csilhfUcUsUiUlPcPs", OP_LO>;
 //def VCVT_N_F32   : SInst<"vcvt_n_f32", "fdi", "iUiQiQUi">;
 //}
 //def VMOVN        : IInst<"vmovn", "hk",  "silUsUiUl">;
-//def VMOVL        : SInst<"vmovl", "wd",  "csiUcUsUi">;
+def VMOVL        : SInst<"vmovl", "wd",  "csiUcUsUi">;
 //def VQMOVN       : SInst<"vqmovn", "hk",  "silUsUiUl">;
 //def VQMOVUN      : SInst<"vqmovun", "ek",  "sil">;
 
