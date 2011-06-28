@@ -67,6 +67,8 @@ def OP_REINT : Op;
 def OP_ABDL  : Op;
 def OP_ABA   : Op;
 def OP_ABAL  : Op;
+def OP_QDMLAL : Op;
+def OP_QDMLSL : Op;
 
 class Inst <string n, string p, string t, Op o> {
   string Name = n;

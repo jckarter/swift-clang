@@ -1956,6 +1956,28 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
   case ARM64::BI__builtin_arm64_vraddhn_v:
     Int = Intrinsic::arm64_neon_raddhn;
     return EmitNeon64Call(CGM.getIntrinsic(Int, &Ty, 1), Ops, "vraddhn");
+  case ARM64::BI__builtin_arm64_vmla_v: // Only used for FP types
+    Int = Intrinsic::arm64_neon_fmla;
+    return EmitNeon64Call(CGM.getIntrinsic(Int, &Ty, 1), Ops, "fmla");
+  case ARM64::BI__builtin_arm64_vmls_v: // Only used for FP types
+    Int = Intrinsic::arm64_neon_fmls;
+    return EmitNeon64Call(CGM.getIntrinsic(Int, &Ty, 1), Ops, "fmls");
+  case ARM64::BI__builtin_arm64_vmul_v: // Only used for PMUL.
+    Int = Intrinsic::arm64_neon_pmul;
+    return EmitNeon64Call(CGM.getIntrinsic(Int, &Ty, 1), Ops, "vqdmulh");
+  case ARM64::BI__builtin_arm64_vmull_v:
+    Int = usgn ? Intrinsic::arm64_neon_umull : Intrinsic::arm64_neon_smull;
+    Int = poly ? Intrinsic::arm64_neon_pmull : Int;
+    return EmitNeon64Call(CGM.getIntrinsic(Int, &Ty, 1), Ops, "vmull");
+  case ARM64::BI__builtin_arm64_vqdmulh_v:
+    Int = Intrinsic::arm64_neon_sqdmulh;
+    return EmitNeon64Call(CGM.getIntrinsic(Int, &Ty, 1), Ops, "vqdmulh");
+  case ARM64::BI__builtin_arm64_vqrdmulh_v:
+    Int = Intrinsic::arm64_neon_sqrdmulh;
+    return EmitNeon64Call(CGM.getIntrinsic(Int, &Ty, 1), Ops, "vqrdmulh");
+  case ARM64::BI__builtin_arm64_vqdmull_v:
+    Int = Intrinsic::arm64_neon_sqdmull;
+    return EmitNeon64Call(CGM.getIntrinsic(Int, &Ty, 1), Ops, "vqdmull");
   }
 }
 

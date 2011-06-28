@@ -28,17 +28,19 @@ def VRADDHN : IInst<"vraddhn", "hkk", "silUsUiUl">;
 ////////////////////////////////////////////////////////////////////////////////
 // Multiplication
 def VMUL     : Inst<"vmul", "ddd", "csifUcUsUiQcQsQiQfQUcQUsQUi", OP_MUL>;
-//def VMULP    : SInst<"vmul", "ddd", "PcQPc">;
-def VMLA     : Inst<"vmla", "dddd", "csifUcUsUiQcQsQiQfQUcQUsQUi", OP_MLA>;
+def VMULP    : SInst<"vmul", "ddd", "PcQPc">;
+def VMLA     : Inst<"vmla", "dddd", "csiUcUsUiQcQsQiQUcQUsQUi", OP_MLA>;
+def FMLA     : IInst<"vmla", "dddd", "fQf">;
 def VMLAL    : Inst<"vmlal", "wwdd", "csiUcUsUi", OP_MLAL>;
-def VMLS     : Inst<"vmls", "dddd", "csifUcUsUiQcQsQiQfQUcQUsQUi", OP_MLS>;
+def VMLS     : Inst<"vmls", "dddd", "csiUcUsUiQcQsQiQUcQUsQUi", OP_MLS>;
+def FMLS     : IInst<"vmls", "dddd", "fQf">;
 def VMLSL    : Inst<"vmlsl", "wwdd", "csiUcUsUi", OP_MLSL>;
-//def VQDMULH  : SInst<"vqdmulh", "ddd", "siQsQi">;
-//def VQRDMULH : SInst<"vqrdmulh", "ddd", "siQsQi">;
-//def VQDMLAL  : SInst<"vqdmlal", "wwdd", "si">;
-//def VQDMLSL  : SInst<"vqdmlsl", "wwdd", "si">;
+def VQDMULH  : SInst<"vqdmulh", "ddd", "siQsQi">;
+def VQRDMULH : SInst<"vqrdmulh", "ddd", "siQsQi">;
+def VQDMLAL  : Inst<"vqdmlal", "wwdd", "si", OP_QDMLAL>;
+def VQDMLSL  : Inst<"vqdmlsl", "wwdd", "si", OP_QDMLSL>;
 def VMULL    : SInst<"vmull", "wdd", "csiUcUsUiPc">;
-//def VQDMULL  : SInst<"vqdmull", "wdd", "si">;
+def VQDMULL  : SInst<"vqdmull", "wdd", "si">;
 
 ////////////////////////////////////////////////////////////////////////////////
 // Subtraction
