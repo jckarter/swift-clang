@@ -1938,6 +1938,13 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
   unsigned Int;
   switch (BuiltinID) {
   default: return 0;
+  case ARM64::BI__builtin_arm64_vmovl_v: {
+    const llvm::Type *DTy =llvm::VectorType::getTruncatedElementVectorType(VTy);
+    Ops[0] = Builder.CreateBitCast(Ops[0], DTy);
+    if (usgn)
+      return Builder.CreateZExt(Ops[0], Ty, "vmovl");
+    return Builder.CreateSExt(Ops[0], Ty, "vmovl");
+  }
   case ARM64::BI__builtin_arm64_vhadd_v:
   case ARM64::BI__builtin_arm64_vhaddq_v:
     Int = usgn ? Intrinsic::arm64_neon_uhadd : Intrinsic::arm64_neon_shadd;
