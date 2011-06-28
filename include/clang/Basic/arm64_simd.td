@@ -47,10 +47,10 @@ def VQDMULL  : SInst<"vqdmull", "wdd", "si">;
 def VSUB : Inst<"vsub", "ddd", "csilfUcUsUiUlQcQsQiQlQfQUcQUsQUiQUl", OP_SUB>;
 def VSUBL   : Inst<"vsubl", "wdd", "csiUcUsUi", OP_SUBL>;
 def VSUBW   : Inst<"vsubw", "wwd", "csiUcUsUi", OP_SUBW>;
-//def VQSUB   : SInst<"vqsub", "ddd", "csilUcUsUiUlQcQsQiQlQUcQUsQUiQUl">;
-//def VHSUB   : SInst<"vhsub", "ddd", "csiUcUsUiQcQsQiQUcQUsQUi">;
-//def VSUBHN  : IInst<"vsubhn", "hkk", "silUsUiUl">;
-//def VRSUBHN : IInst<"vrsubhn", "hkk", "silUsUiUl">;
+def VQSUB   : SInst<"vqsub", "ddd", "csilUcUsUiUlQcQsQiQlQUcQUsQUiQUl">;
+def VHSUB   : SInst<"vhsub", "ddd", "csiUcUsUiQcQsQiQUcQUsQUi">;
+def VSUBHN  : IInst<"vsubhn", "hkk", "silUsUiUl">;
+def VRSUBHN : IInst<"vrsubhn", "hkk", "silUsUiUl">;
 
 ////////////////////////////////////////////////////////////////////////////////
 // Comparison
