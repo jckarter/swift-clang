@@ -828,8 +828,7 @@ Sema::ActOnCXXNew(SourceLocation StartLoc, bool UseGlobal,
     }
   }
 
-  TypeSourceInfo *TInfo = GetTypeForDeclarator(D, /*Scope=*/0, /*OwnedDecl=*/0,
-                                               /*AllowAuto=*/true);
+  TypeSourceInfo *TInfo = GetTypeForDeclarator(D, /*Scope=*/0);
   QualType AllocType = TInfo->getType();
   if (D.isInvalidType())
     return ExprError();
@@ -4461,7 +4460,16 @@ ExprResult Sema::IgnoredValueConversions(Expr *E) {
   //   [Except in specific positions,] an lvalue that does not have
   //   array type is converted to the value stored in the
   //   designated object (and is no longer an lvalue).
-  if (E->isRValue()) return Owned(E);
+  if (E->isRValue()) {
+    // In C, function designators (i.e. expressions of function type)
+    // are r-values, but we still want to do function-to-pointer decay
+    // on them.  This is both technically correct and convenient for
+    // some clients.
+    if (!getLangOptions().CPlusPlus && E->getType()->isFunctionType())
+      return DefaultFunctionArrayConversion(E);
+
+    return Owned(E);
+  }
 
   // We always want to do this on ObjC property references.
   if (E->getObjectKind() == OK_ObjCProperty) {

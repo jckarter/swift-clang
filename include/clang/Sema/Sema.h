@@ -779,9 +779,7 @@ public:
                                  SourceLocation Loc, DeclarationName Entity);
   QualType BuildParenType(QualType T);
 
-  TypeSourceInfo *GetTypeForDeclarator(Declarator &D, Scope *S,
-                                       TagDecl **OwnedDecl = 0,
-                                       bool AllowAutoInTypeName = false);
+  TypeSourceInfo *GetTypeForDeclarator(Declarator &D, Scope *S);
   TypeSourceInfo *GetTypeSourceInfoForDeclarator(Declarator &D, QualType T,
                                                TypeSourceInfo *ReturnTypeInfo);
   /// \brief Package the given type and TSI into a ParsedType.
@@ -5056,6 +5054,7 @@ public:
   ExprResult
   HandleExprPropertyRefExpr(const ObjCObjectPointerType *OPT,
                             Expr *BaseExpr,
+                            SourceLocation OpLoc,
                             DeclarationName MemberName,
                             SourceLocation MemberLoc,
                             SourceLocation SuperLoc, QualType SuperType,

@@ -2608,7 +2608,7 @@ Decl *Sema::BuildAnonymousStructOrUnion(Scope *S, DeclSpec &DS,
   }
 
   // Mock up a declarator.
-  Declarator Dc(DS, Declarator::TypeNameContext);
+  Declarator Dc(DS, Declarator::MemberContext);
   TypeSourceInfo *TInfo = GetTypeForDeclarator(Dc, S);
   assert(TInfo && "couldn't build declarator info for anonymous struct/union");
 
@@ -5971,21 +5971,13 @@ Decl *Sema::ActOnParamDeclarator(Scope *S, Declarator &D) {
 
   DiagnoseFunctionSpecifiers(D);
 
-  TagDecl *OwnedDecl = 0;
-  TypeSourceInfo *TInfo = GetTypeForDeclarator(D, S, &OwnedDecl);
+  TypeSourceInfo *TInfo = GetTypeForDeclarator(D, S);
   QualType parmDeclType = TInfo->getType();
 
   if (getLangOptions().CPlusPlus) {
     // Check that there are no default arguments inside the type of this
     // parameter.
     CheckExtraCXXDefaultArguments(D);
-     
-    if (OwnedDecl && OwnedDecl->isDefinition()) {
-      // C++ [dcl.fct]p6:
-      //   Types shall not be defined in return or parameter types.
-      Diag(OwnedDecl->getLocation(), diag::err_type_defined_in_param_type)
-        << Context.getTypeDeclType(OwnedDecl);
-    }
     
     // Parameter declarators cannot be qualified (C++ [dcl.meaning]p1).
     if (D.getCXXScopeSpec().isSet()) {
