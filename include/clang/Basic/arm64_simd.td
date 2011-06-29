@@ -79,9 +79,9 @@ def VMIN : SInst<"vmin", "ddd", "csiUcUsUifQcQsQiQUcQUsQUiQf">;
 
 ////////////////////////////////////////////////////////////////////////////////
 // Pairwise Addition
-//def VPADD  : IInst<"vpadd", "ddd", "csiUcUsUif">;
-//def VPADDL : SInst<"vpaddl", "nd",  "csiUcUsUiQcQsQiQUcQUsQUi">;
-//def VPADAL : SInst<"vpadal", "nnd", "csiUcUsUiQcQsQiQUcQUsQUi">;
+def VPADD  : IInst<"vpadd", "ddd", "csiUcUsUif">;
+def VPADDL : SInst<"vpaddl", "nd",  "csiUcUsUiQcQsQiQUcQUsQUi">;
+def VPADAL : SInst<"vpadal", "nnd", "csiUcUsUiQcQsQiQUcQUsQUi">;
 
 ////////////////////////////////////////////////////////////////////////////////
 // Folding Max/Min

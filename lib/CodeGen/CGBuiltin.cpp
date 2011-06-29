@@ -2030,7 +2030,7 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
       Ty = llvm::VectorType::get(llvm::Type::getFloatTy(getLLVMContext()),
                                  2+2*quad);
     else
-      Ty = llvm::VectorType::get(llvm::Type::getFloatTy(getLLVMContext()), 2);
+      Ty = llvm::VectorType::get(llvm::Type::getDoubleTy(getLLVMContext()), 2);
     Int = Intrinsic::arm64_neon_facgt;
     return EmitNeon64Call(CGM.getIntrinsic(Int, &Ty, 1), Ops, "facgt");
   }
@@ -2065,6 +2065,34 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
         EmitNeon64Call(CGM.getIntrinsic(Int, &Ty, 1), TmpOps, "vabdl");
     llvm::Value *addend = Builder.CreateBitCast(Ops[0], Ty);
     return Builder.CreateAdd(addend, tmp);
+  }
+  case ARM64::BI__builtin_arm64_vpadd_v:
+    Int = Intrinsic::arm64_neon_addp;
+    if (Ty->isFPOrFPVectorTy()) Int = Intrinsic::arm64_neon_faddp;
+    return EmitNeon64Call(CGM.getIntrinsic(Int, &Ty, 1), Ops, "vpadd");
+  case ARM64::BI__builtin_arm64_vpaddl_v: {
+    unsigned ArgElts = VTy->getNumElements();
+    const llvm::IntegerType *EltTy = cast<IntegerType>(VTy->getElementType());
+    unsigned BitWidth = EltTy->getBitWidth();
+    const llvm::Type *RetTy = llvm::VectorType::get(
+        llvm::IntegerType::get(getLLVMContext(), 2*BitWidth), ArgElts/2);
+    const llvm::Type* Tys[2] = { RetTy, Ty };
+    Int = usgn ? Intrinsic::arm64_neon_uaddlp : Intrinsic::arm64_neon_saddlp;
+    return EmitNeon64Call(CGM.getIntrinsic(Int, Tys, 2), Ops, "vpaddl");
+  }
+  case ARM64::BI__builtin_arm64_vpadal_v: {
+    unsigned ArgElts = VTy->getNumElements();
+    const llvm::IntegerType *EltTy = cast<IntegerType>(VTy->getElementType());
+    unsigned BitWidth = EltTy->getBitWidth();
+    const llvm::Type *RetTy = llvm::VectorType::get(
+        llvm::IntegerType::get(getLLVMContext(), 2*BitWidth), ArgElts/2);
+    const llvm::Type* Tys[2] = { RetTy, Ty };
+    Int = usgn ? Intrinsic::arm64_neon_uaddlp : Intrinsic::arm64_neon_saddlp;
+    SmallVector<llvm::Value*, 1> TmpOps;
+    TmpOps.push_back(Ops[1]);
+    llvm::Value *tmp = EmitNeon64Call(CGM.getIntrinsic(Int, Tys, 2), TmpOps, "vpadal");
+    llvm::Value *addend = Builder.CreateBitCast(Ops[0], tmp->getType());
+    return Builder.CreateAdd(tmp, addend);
   }
   }
 }
