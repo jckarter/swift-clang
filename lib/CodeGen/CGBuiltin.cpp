@@ -2009,21 +2009,46 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     std::swap(Ops[0], Ops[1]);
     // FALLTHROUGH
   case ARM64::BI__builtin_arm64_vcage_v:
-  case ARM64::BI__builtin_arm64_vcageq_v:
+  case ARM64::BI__builtin_arm64_vcageq_v: {
+    const llvm::Type *EltTy = VTy->getElementType();
+    if (EltTy == llvm::Type::getInt32Ty(getLLVMContext()))
+      Ty = llvm::VectorType::get(llvm::Type::getFloatTy(getLLVMContext()),
+                                 2+2*quad);
+    else
+      Ty = llvm::VectorType::get(llvm::Type::getFloatTy(getLLVMContext()), 2);
     Int = Intrinsic::arm64_neon_facge;
     return EmitNeon64Call(CGM.getIntrinsic(Int, &Ty, 1), Ops, "facge");
+  }
   case ARM64::BI__builtin_arm64_vcalt_v:
   case ARM64::BI__builtin_arm64_vcaltq_v:
     std::swap(Ops[0], Ops[1]);
     // FALLTHROUGH
   case ARM64::BI__builtin_arm64_vcagt_v:
-  case ARM64::BI__builtin_arm64_vcagtq_v:
+  case ARM64::BI__builtin_arm64_vcagtq_v: {
+    const llvm::Type *EltTy = VTy->getElementType();
+    if (EltTy == llvm::Type::getInt32Ty(getLLVMContext()))
+      Ty = llvm::VectorType::get(llvm::Type::getFloatTy(getLLVMContext()),
+                                 2+2*quad);
+    else
+      Ty = llvm::VectorType::get(llvm::Type::getFloatTy(getLLVMContext()), 2);
     Int = Intrinsic::arm64_neon_facgt;
     return EmitNeon64Call(CGM.getIntrinsic(Int, &Ty, 1), Ops, "facgt");
+  }
   case ARM64::BI__builtin_arm64_vtst_v:
   case ARM64::BI__builtin_arm64_vtstq_v:
     Int = Intrinsic::arm64_neon_cmtst;
     return EmitNeon64Call(CGM.getIntrinsic(Int, &Ty, 1), Ops, "cmtst");
+  case ARM64::BI__builtin_arm64_vmax_v:
+  case ARM64::BI__builtin_arm64_vmaxq_v:
+    Int = usgn ? Intrinsic::arm64_neon_umax : Intrinsic::arm64_neon_smax;
+    if (Ty->isFPOrFPVectorTy()) Int = Intrinsic::arm64_neon_fmax;
+    return EmitNeon64Call(CGM.getIntrinsic(Int, &Ty, 1), Ops, "vmax");
+  case ARM64::BI__builtin_arm64_vmin_v:
+  case ARM64::BI__builtin_arm64_vminq_v:
+    Int = usgn ? Intrinsic::arm64_neon_umin : Intrinsic::arm64_neon_smin;
+    if (Ty->isFPOrFPVectorTy()) Int = Intrinsic::arm64_neon_fmin;
+    return EmitNeon64Call(CGM.getIntrinsic(Int, &Ty, 1), Ops, "vmin");
+
   }
 }
 

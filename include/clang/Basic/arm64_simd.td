@@ -74,8 +74,8 @@ def VABAL : Inst<"vabal", "wwdd", "csiUcUsUi", OP_ABAL>;
 
 ////////////////////////////////////////////////////////////////////////////////
 // Max/Min
-//def VMAX : SInst<"vmax", "ddd", "csiUcUsUifQcQsQiQUcQUsQUiQf">;
-//def VMIN : SInst<"vmin", "ddd", "csiUcUsUifQcQsQiQUcQUsQUiQf">;
+def VMAX : SInst<"vmax", "ddd", "csiUcUsUifQcQsQiQUcQUsQUiQf">;
+def VMIN : SInst<"vmin", "ddd", "csiUcUsUifQcQsQiQUcQUsQUiQf">;
 
 ////////////////////////////////////////////////////////////////////////////////
 // Pairwise Addition
