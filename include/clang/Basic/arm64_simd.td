@@ -244,8 +244,8 @@ def VMLSL_N      : Inst<"vmlsl_n", "wwda", "siUsUi", OP_MLSL_N>;
 
 ////////////////////////////////////////////////////////////////////////////////
 // Vector Extract
-//def VEXT : WInst<"vext", "dddi",
-//                 "cUcPcsUsPsiUilUlfQcQUcQPcQsQUsQPsQiQUiQlQUlQf">;
+def VEXT : WInst<"vext", "dddi",
+                 "cUcPcsUsPsiUilUlfQcQUcQPcQsQUsQPsQiQUiQlQUlQf">;
 
 ////////////////////////////////////////////////////////////////////////////////
 // Reverse vector elements
