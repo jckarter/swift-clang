@@ -59,11 +59,11 @@ def VCGE  : Inst<"vcge", "udd", "csifUcUsUiQcQsQiQfQUcQUsQUi", OP_GE>;
 def VCLE  : Inst<"vcle", "udd", "csifUcUsUiQcQsQiQfQUcQUsQUi", OP_LE>;
 def VCGT  : Inst<"vcgt", "udd", "csifUcUsUiQcQsQiQfQUcQUsQUi", OP_GT>;
 def VCLT  : Inst<"vclt", "udd", "csifUcUsUiQcQsQiQfQUcQUsQUi", OP_LT>;
-//def VCAGE : IInst<"vcage", "udd", "fQf">;
-//def VCALE : IInst<"vcale", "udd", "fQf">;
-//def VCAGT : IInst<"vcagt", "udd", "fQf">;
-//def VCALT : IInst<"vcalt", "udd", "fQf">;
-//def VTST  : WInst<"vtst", "udd", "csiUcUsUiPcQcQsQiQUcQUsQUiQPc">;
+def VCAGE : IInst<"vcage", "udd", "fQf">;
+def VCALE : IInst<"vcale", "udd", "fQf">;
+def VCAGT : IInst<"vcagt", "udd", "fQf">;
+def VCALT : IInst<"vcalt", "udd", "fQf">;
+def VTST  : WInst<"vtst", "udd", "csiUcUsUiPcQcQsQiQUcQUsQUiQPc">;
 
 ////////////////////////////////////////////////////////////////////////////////
 // Absolute Difference
