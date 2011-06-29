@@ -85,8 +85,8 @@ def VPADAL : SInst<"vpadal", "nnd", "csiUcUsUiQcQsQiQUcQUsQUi">;
 
 ////////////////////////////////////////////////////////////////////////////////
 // Folding Max/Min
-//def VPMAX : SInst<"vpmax", "ddd", "csiUcUsUif">;
-//def VPMIN : SInst<"vpmin", "ddd", "csiUcUsUif">;
+def VPMAX : SInst<"vpmax", "ddd", "csiUcUsUif">;
+def VPMIN : SInst<"vpmin", "ddd", "csiUcUsUif">;
 
 ////////////////////////////////////////////////////////////////////////////////
 // Reciprocal/Sqrt
