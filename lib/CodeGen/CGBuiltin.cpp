@@ -2102,6 +2102,14 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     Int = usgn ? Intrinsic::arm64_neon_umaxp : Intrinsic::arm64_neon_smaxp;
     if (Ty->isFPOrFPVectorTy()) Int = Intrinsic::arm64_neon_fmaxp;
     return EmitNeon64Call(CGM.getIntrinsic(Int, &Ty, 1), Ops, "vpmax");
+  case ARM64::BI__builtin_arm64_vrecps_v:
+  case ARM64::BI__builtin_arm64_vrecpsq_v:
+    Int = Intrinsic::arm64_neon_frecps;
+    return EmitNeon64Call(CGM.getIntrinsic(Int, &Ty, 1), Ops, "vrecps");
+  case ARM64::BI__builtin_arm64_vrsqrts_v:
+  case ARM64::BI__builtin_arm64_vrsqrtsq_v:
+    Int = Intrinsic::arm64_neon_frsqrts;
+    return EmitNeon64Call(CGM.getIntrinsic(Int, &Ty, 1), Ops, "vrsqrts");
   }
 }
 
