@@ -2048,7 +2048,24 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     Int = usgn ? Intrinsic::arm64_neon_umin : Intrinsic::arm64_neon_smin;
     if (Ty->isFPOrFPVectorTy()) Int = Intrinsic::arm64_neon_fmin;
     return EmitNeon64Call(CGM.getIntrinsic(Int, &Ty, 1), Ops, "vmin");
-
+  case ARM64::BI__builtin_arm64_vabd_v:
+  case ARM64::BI__builtin_arm64_vabdq_v:
+    Int = usgn ? Intrinsic::arm64_neon_uabd : Intrinsic::arm64_neon_sabd;
+    if (Ty->isFPOrFPVectorTy()) Int = Intrinsic::arm64_neon_fabd;
+    return EmitNeon64Call(CGM.getIntrinsic(Int, &Ty, 1), Ops, "vabd");
+  case ARM64::BI__builtin_arm64_vabdl_v:
+    Int = usgn ? Intrinsic::arm64_neon_uabdl : Intrinsic::arm64_neon_sabdl;
+    return EmitNeon64Call(CGM.getIntrinsic(Int, &Ty, 1), Ops, "vabdl");
+  case ARM64::BI__builtin_arm64_vabal_v: {
+    Int = usgn ? Intrinsic::arm64_neon_uabdl : Intrinsic::arm64_neon_sabdl;
+    SmallVector<llvm::Value*, 2> TmpOps;
+    TmpOps.push_back(Ops[1]);
+    TmpOps.push_back(Ops[2]);
+    llvm::Value *tmp =
+        EmitNeon64Call(CGM.getIntrinsic(Int, &Ty, 1), TmpOps, "vabdl");
+    llvm::Value *addend = Builder.CreateBitCast(Ops[0], Ty);
+    return Builder.CreateAdd(addend, tmp);
+  }
   }
 }
 

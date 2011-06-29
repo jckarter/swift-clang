@@ -68,9 +68,9 @@ def VTST  : WInst<"vtst", "udd", "csiUcUsUiPcQcQsQiQUcQUsQUiQPc">;
 ////////////////////////////////////////////////////////////////////////////////
 // Absolute Difference
 def VABD  : SInst<"vabd", "ddd",  "csiUcUsUifQcQsQiQUcQUsQUiQf">;
-def VABDL : Inst<"vabdl", "wdd",  "csiUcUsUi", OP_ABDL>;
+def VABDL : IInst<"vabdl", "wdd",  "csiUcUsUi">;
 def VABA  : Inst<"vaba", "dddd", "csiUcUsUiQcQsQiQUcQUsQUi", OP_ABA>;
-def VABAL : Inst<"vabal", "wwdd", "csiUcUsUi", OP_ABAL>;
+def VABAL : SInst<"vabal", "wwdd", "csiUcUsUi">;
 
 ////////////////////////////////////////////////////////////////////////////////
 // Max/Min
