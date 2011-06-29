@@ -201,7 +201,7 @@ def VGET_LOW  : Inst<"vget_low", "dk", "csilhfUcUsUiUlPcPs", OP_LO>;
 //def VCVT_N_U32   : SInst<"vcvt_n_u32", "udi", "fQf">;
 //def VCVT_N_F32   : SInst<"vcvt_n_f32", "fdi", "iUiQiQUi">;
 //}
-//def VMOVN        : IInst<"vmovn", "hk",  "silUsUiUl">;
+def VMOVN        : IInst<"vmovn", "hk",  "silUsUiUl">;
 def VMOVL        : SInst<"vmovl", "wd",  "csiUcUsUi">;
 //def VQMOVN       : SInst<"vqmovn", "hk",  "silUsUiUl">;
 //def VQMOVUN      : SInst<"vqmovun", "ek",  "sil">;

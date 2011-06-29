@@ -1945,6 +1945,11 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
       return Builder.CreateZExt(Ops[0], Ty, "vmovl");
     return Builder.CreateSExt(Ops[0], Ty, "vmovl");
   }
+  case ARM64::BI__builtin_arm64_vmovn_v: {
+    const llvm::Type *QTy = llvm::VectorType::getExtendedElementVectorType(VTy);
+    Ops[0] = Builder.CreateBitCast(Ops[0], QTy);
+    return Builder.CreateTrunc(Ops[0], Ty, "vmovn");
+  }
   case ARM64::BI__builtin_arm64_vhadd_v:
   case ARM64::BI__builtin_arm64_vhaddq_v:
     Int = usgn ? Intrinsic::arm64_neon_uhadd : Intrinsic::arm64_neon_shadd;
