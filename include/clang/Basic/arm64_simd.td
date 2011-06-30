@@ -102,29 +102,29 @@ def VQRSHL : SInst<"vqrshl", "ddx", "csilUcUsUiUlQcQsQiQlQUcQUsQUiQUl">;
 
 ////////////////////////////////////////////////////////////////////////////////
 // Shifts by constant
-//let isShift = 1 in {
-//def VSHR_N     : SInst<"vshr_n", "ddi", "csilUcUsUiUlQcQsQiQlQUcQUsQUiQUl">;
-//def VSHL_N     : IInst<"vshl_n", "ddi", "csilUcUsUiUlQcQsQiQlQUcQUsQUiQUl">;
-//def VRSHR_N    : SInst<"vrshr_n", "ddi", "csilUcUsUiUlQcQsQiQlQUcQUsQUiQUl">;
-//def VSRA_N     : SInst<"vsra_n", "dddi", "csilUcUsUiUlQcQsQiQlQUcQUsQUiQUl">;
-//def VRSRA_N    : SInst<"vrsra_n", "dddi", "csilUcUsUiUlQcQsQiQlQUcQUsQUiQUl">;
-//def VQSHL_N    : SInst<"vqshl_n", "ddi", "csilUcUsUiUlQcQsQiQlQUcQUsQUiQUl">;
-//def VQSHLU_N   : SInst<"vqshlu_n", "udi", "csilQcQsQiQl">;
-//def VSHRN_N    : IInst<"vshrn_n", "hki", "silUsUiUl">;
-//def VQSHRUN_N  : SInst<"vqshrun_n", "eki", "sil">;
-//def VQRSHRUN_N : SInst<"vqrshrun_n", "eki", "sil">;
-//def VQSHRN_N   : SInst<"vqshrn_n", "hki", "silUsUiUl">;
-//def VRSHRN_N   : IInst<"vrshrn_n", "hki", "silUsUiUl">;
-//def VQRSHRN_N  : SInst<"vqrshrn_n", "hki", "silUsUiUl">;
-//def VSHLL_N    : SInst<"vshll_n", "wdi", "csiUcUsUi">;
+let isShift = 1 in {
+def VSHR_N     : SInst<"vshr_n", "ddi", "csilUcUsUiUlQcQsQiQlQUcQUsQUiQUl">;
+def VSHL_N     : IInst<"vshl_n", "ddi", "csilUcUsUiUlQcQsQiQlQUcQUsQUiQUl">;
+def VRSHR_N    : SInst<"vrshr_n", "ddi", "csilUcUsUiUlQcQsQiQlQUcQUsQUiQUl">;
+def VSRA_N     : SInst<"vsra_n", "dddi", "csilUcUsUiUlQcQsQiQlQUcQUsQUiQUl">;
+def VRSRA_N    : SInst<"vrsra_n", "dddi", "csilUcUsUiUlQcQsQiQlQUcQUsQUiQUl">;
+def VQSHL_N    : SInst<"vqshl_n", "ddi", "csilUcUsUiUlQcQsQiQlQUcQUsQUiQUl">;
+def VQSHLU_N   : SInst<"vqshlu_n", "udi", "csilQcQsQiQl">;
+def VSHRN_N    : IInst<"vshrn_n", "hki", "silUsUiUl">;
+def VQSHRUN_N  : SInst<"vqshrun_n", "eki", "sil">;
+def VQRSHRUN_N : SInst<"vqrshrun_n", "eki", "sil">;
+def VQSHRN_N   : SInst<"vqshrn_n", "hki", "silUsUiUl">;
+def VRSHRN_N   : IInst<"vrshrn_n", "hki", "silUsUiUl">;
+def VQRSHRN_N  : SInst<"vqrshrn_n", "hki", "silUsUiUl">;
+def VSHLL_N    : SInst<"vshll_n", "wdi", "csiUcUsUi">;
 
 ////////////////////////////////////////////////////////////////////////////////
 // Shifts with insert
-//def VSRI_N : WInst<"vsri_n", "dddi",
-//                   "csilUcUsUiUlPcPsQcQsQiQlQUcQUsQUiQUlQPcQPs">;
-//def VSLI_N : WInst<"vsli_n", "dddi",
-//                   "csilUcUsUiUlPcPsQcQsQiQlQUcQUsQUiQUlQPcQPs">;
-//}
+def VSRI_N : WInst<"vsri_n", "dddi",
+                   "csilUcUsUiUlPcPsQcQsQiQlQUcQUsQUiQUlQPcQPs">;
+def VSLI_N : WInst<"vsli_n", "dddi",
+                   "csilUcUsUiUlPcPsQcQsQiQlQUcQUsQUiQUlQPcQPs">;
+}
 
 ////////////////////////////////////////////////////////////////////////////////
 // Loads and stores of a single vector
