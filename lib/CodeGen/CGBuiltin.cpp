@@ -2127,6 +2127,22 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     Value *SV = llvm::ConstantVector::get(Indices);
     return Builder.CreateShuffleVector(Ops[0], Ops[1], SV, "vext");
   }
+  case ARM64::BI__builtin_arm64_vshl_v:
+  case ARM64::BI__builtin_arm64_vshlq_v:
+    Int = usgn ? Intrinsic::arm64_neon_ushl : Intrinsic::arm64_neon_sshl;
+    return EmitNeon64Call(CGM.getIntrinsic(Int, &Ty, 1), Ops, "vshl");
+  case ARM64::BI__builtin_arm64_vqshl_v:
+  case ARM64::BI__builtin_arm64_vqshlq_v:
+    Int = usgn ? Intrinsic::arm64_neon_uqshl : Intrinsic::arm64_neon_sqshl;
+    return EmitNeon64Call(CGM.getIntrinsic(Int, &Ty, 1), Ops, "vqshl");
+  case ARM64::BI__builtin_arm64_vrshl_v:
+  case ARM64::BI__builtin_arm64_vrshlq_v:
+    Int = usgn ? Intrinsic::arm64_neon_urshl : Intrinsic::arm64_neon_srshl;
+    return EmitNeon64Call(CGM.getIntrinsic(Int, &Ty, 1), Ops, "vqshl");
+  case ARM64::BI__builtin_arm64_vqrshl_v:
+  case ARM64::BI__builtin_arm64_vqrshlq_v:
+    Int = usgn ? Intrinsic::arm64_neon_uqrshl : Intrinsic::arm64_neon_sqrshl;
+    return EmitNeon64Call(CGM.getIntrinsic(Int, &Ty, 1), Ops, "vqrshl");
   }
 }
 
