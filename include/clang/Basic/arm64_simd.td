@@ -159,13 +159,13 @@ def VST1_LANE : WInst<"vst1_lane", "vpdi",
 
 ////////////////////////////////////////////////////////////////////////////////
 // Extract lanes from a vector
-//def VGET_LANE : IInst<"vget_lane", "sdi",
-//                      "UcUsUicsiPcPsfQUcQUsQUiQcQsQiQPcQPsQflUlQlQUl">;
+def VGET_LANE : IInst<"vget_lane", "sdi",
+                      "UcUsUicsiPcPsfQUcQUsQUiQcQsQiQPcQPsQflUlQlQUl">;
 
 ////////////////////////////////////////////////////////////////////////////////
 // Set lanes within a vector
-//def VSET_LANE : IInst<"vset_lane", "dsdi",
-//                      "UcUsUicsiPcPsfQUcQUsQUiQcQsQiQPcQPsQflUlQlQUl">;
+def VSET_LANE : IInst<"vset_lane", "dsdi",
+                      "UcUsUicsiPcPsfQUcQUsQUiQcQsQiQPcQPsQflUlQlQUl">;
 
 ////////////////////////////////////////////////////////////////////////////////
 // Initialize a vector from bit pattern

@@ -1939,6 +1939,30 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     Ops[0] = Builder.CreateBitCast(Ops[0], QTy);
     return Builder.CreateTrunc(Ops[0], Ty, "vmovn");
   }
+  case ARM64::BI__builtin_arm64_vget_lane_i8:
+  case ARM64::BI__builtin_arm64_vget_lane_i16:
+  case ARM64::BI__builtin_arm64_vget_lane_i32:
+  case ARM64::BI__builtin_arm64_vget_lane_i64:
+  case ARM64::BI__builtin_arm64_vget_lane_f32:
+  case ARM64::BI__builtin_arm64_vgetq_lane_i8:
+  case ARM64::BI__builtin_arm64_vgetq_lane_i16:
+  case ARM64::BI__builtin_arm64_vgetq_lane_i32:
+  case ARM64::BI__builtin_arm64_vgetq_lane_i64:
+  case ARM64::BI__builtin_arm64_vgetq_lane_f32:
+    return Builder.CreateExtractElement(Ops[0], EmitScalarExpr(E->getArg(1)),
+                                        "vget_lane");
+  case ARM64::BI__builtin_arm64_vset_lane_i8:
+  case ARM64::BI__builtin_arm64_vset_lane_i16:
+  case ARM64::BI__builtin_arm64_vset_lane_i32:
+  case ARM64::BI__builtin_arm64_vset_lane_i64:
+  case ARM64::BI__builtin_arm64_vset_lane_f32:
+  case ARM64::BI__builtin_arm64_vsetq_lane_i8:
+  case ARM64::BI__builtin_arm64_vsetq_lane_i16:
+  case ARM64::BI__builtin_arm64_vsetq_lane_i32:
+  case ARM64::BI__builtin_arm64_vsetq_lane_i64:
+  case ARM64::BI__builtin_arm64_vsetq_lane_f32:
+    Ops.push_back(EmitScalarExpr(E->getArg(2)));
+    return Builder.CreateInsertElement(Ops[1], Ops[0], Ops[2], "vset_lane");
   case ARM64::BI__builtin_arm64_vhadd_v:
   case ARM64::BI__builtin_arm64_vhaddq_v:
     Int = usgn ? Intrinsic::arm64_neon_uhadd : Intrinsic::arm64_neon_shadd;
