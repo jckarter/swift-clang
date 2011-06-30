@@ -2212,6 +2212,37 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     llvm::Value *tmp = EmitNeonCall(CGM.getIntrinsic(Int, &Ty, 1), TmpOps, "vrshr_n");
     return Builder.CreateAdd(Ops[0], tmp);
   }
+  case ARM64::BI__builtin_arm64_vld1_v:
+  case ARM64::BI__builtin_arm64_vld1q_v:
+    Ops[0] = Builder.CreateBitCast(Ops[0], llvm::PointerType::getUnqual(VTy));
+    return Builder.CreateLoad(Ops[0]);
+  case ARM64::BI__builtin_arm64_vst1_v:
+  case ARM64::BI__builtin_arm64_vst1q_v:
+    Ops[0] = Builder.CreateBitCast(Ops[0], llvm::PointerType::getUnqual(VTy));
+    return Builder.CreateStore(Ops[1], Ops[0]);
+  case ARM64::BI__builtin_arm64_vld1_lane_v:
+  case ARM64::BI__builtin_arm64_vld1q_lane_v:
+    Ops[1] = Builder.CreateBitCast(Ops[1], Ty);
+    Ty = llvm::PointerType::getUnqual(VTy->getElementType());
+    Ops[0] = Builder.CreateBitCast(Ops[0], Ty);
+    Ops[0] = Builder.CreateLoad(Ops[0]);
+    return Builder.CreateInsertElement(Ops[1], Ops[0], Ops[2], "vld1_lane");
+  case ARM64::BI__builtin_arm64_vld1_dup_v:
+  case ARM64::BI__builtin_arm64_vld1q_dup_v: {
+    Value *V = UndefValue::get(Ty);
+    Ty = llvm::PointerType::getUnqual(VTy->getElementType());
+    Ops[0] = Builder.CreateBitCast(Ops[0], Ty);
+    Ops[0] = Builder.CreateLoad(Ops[0]);
+    llvm::Constant *CI = ConstantInt::get(Int32Ty, 0);
+    Ops[0] = Builder.CreateInsertElement(V, Ops[0], CI);
+    return EmitNeonSplat(Ops[0], CI);
+  }
+  case ARM64::BI__builtin_arm64_vst1_lane_v:
+  case ARM64::BI__builtin_arm64_vst1q_lane_v:
+    Ops[1] = Builder.CreateBitCast(Ops[1], Ty);
+    Ops[1] = Builder.CreateExtractElement(Ops[1], Ops[2]);
+    Ty = llvm::PointerType::getUnqual(Ops[1]->getType());
+    return Builder.CreateStore(Ops[1], Builder.CreateBitCast(Ops[0], Ty));
   }
 }
 

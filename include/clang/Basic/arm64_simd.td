@@ -128,16 +128,16 @@ def VSLI_N : WInst<"vsli_n", "dddi",
 
 ////////////////////////////////////////////////////////////////////////////////
 // Loads and stores of a single vector
-//def VLD1      : WInst<"vld1", "dc",
-//                      "QUcQUsQUiQUlQcQsQiQlQhQfQPcQPsUcUsUiUlcsilhfPcPs">;
-//def VLD1_LANE : WInst<"vld1_lane", "dcdi",
-//                      "QUcQUsQUiQUlQcQsQiQlQhQfQPcQPsUcUsUiUlcsilhfPcPs">;
-//def VLD1_DUP  : WInst<"vld1_dup", "dc",
-//                      "QUcQUsQUiQUlQcQsQiQlQhQfQPcQPsUcUsUiUlcsilhfPcPs">;
-//def VST1      : WInst<"vst1", "vpd",
-//                      "QUcQUsQUiQUlQcQsQiQlQhQfQPcQPsUcUsUiUlcsilhfPcPs">;
-//def VST1_LANE : WInst<"vst1_lane", "vpdi",
-//                      "QUcQUsQUiQUlQcQsQiQlQhQfQPcQPsUcUsUiUlcsilhfPcPs">;
+def VLD1      : WInst<"vld1", "dc",
+                      "QUcQUsQUiQUlQcQsQiQlQhQfQPcQPsUcUsUiUlcsilhfPcPs">;
+def VLD1_LANE : WInst<"vld1_lane", "dcdi",
+                      "QUcQUsQUiQUlQcQsQiQlQhQfQPcQPsUcUsUiUlcsilhfPcPs">;
+def VLD1_DUP  : WInst<"vld1_dup", "dc",
+                      "QUcQUsQUiQUlQcQsQiQlQhQfQPcQPsUcUsUiUlcsilhfPcPs">;
+def VST1      : WInst<"vst1", "vpd",
+                      "QUcQUsQUiQUlQcQsQiQlQhQfQPcQPsUcUsUiUlcsilhfPcPs">;
+def VST1_LANE : WInst<"vst1_lane", "vpdi",
+                      "QUcQUsQUiQUlQcQsQiQlQhQfQPcQPsUcUsUiUlcsilhfPcPs">;
 
 ////////////////////////////////////////////////////////////////////////////////
 // Loads and stores of an N-element structure
