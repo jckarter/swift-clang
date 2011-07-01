@@ -219,6 +219,7 @@ ASTContext::ASTContext(const LangOptions& LOpts, SourceManager &SM,
   FunctionProtoTypes(this_()),
   TemplateSpecializationTypes(this_()),
   DependentTemplateSpecializationTypes(this_()),
+  SubstTemplateTemplateParmPacks(this_()),
   GlobalNestedNameSpecifier(0), IsInt128Installed(false),
   CFConstantStringTypeDecl(0), NSConstantStringTypeDecl(0),
   ObjCFastEnumerationStateTypeDecl(0), FILEDecl(0), 
@@ -2801,7 +2802,12 @@ static QualType getDecltypeForExpr(const Expr *e, const ASTContext &Context) {
 /// on canonical type's (which are always unique).
 QualType ASTContext::getDecltypeType(Expr *e) const {
   DecltypeType *dt;
-  if (e->isTypeDependent()) {
+  
+  // C++0x [temp.type]p2:
+  //   If an expression e involves a template parameter, decltype(e) denotes a
+  //   unique dependent type. Two such decltype-specifiers refer to the same 
+  //   type only if their expressions are equivalent (14.5.6.1). 
+  if (e->isInstantiationDependent()) {
     llvm::FoldingSetNodeID ID;
     DependentDecltypeType::Profile(ID, *this, e);
 
@@ -3036,11 +3042,21 @@ bool ASTContext::UnwrapSimilarPointerTypes(QualType &T1, QualType &T2) {
 DeclarationNameInfo
 ASTContext::getNameForTemplate(TemplateName Name,
                                SourceLocation NameLoc) const {
-  if (TemplateDecl *TD = Name.getAsTemplateDecl())
+  switch (Name.getKind()) {
+  case TemplateName::QualifiedTemplate:
+  case TemplateName::Template:
     // DNInfo work in progress: CHECKME: what about DNLoc?
-    return DeclarationNameInfo(TD->getDeclName(), NameLoc);
+    return DeclarationNameInfo(Name.getAsTemplateDecl()->getDeclName(),
+                               NameLoc);
 
-  if (DependentTemplateName *DTN = Name.getAsDependentTemplateName()) {
+  case TemplateName::OverloadedTemplate: {
+    OverloadedTemplateStorage *Storage = Name.getAsOverloadedTemplate();
+    // DNInfo work in progress: CHECKME: what about DNLoc?
+    return DeclarationNameInfo((*Storage->begin())->getDeclName(), NameLoc);
+  }
+
+  case TemplateName::DependentTemplate: {
+    DependentTemplateName *DTN = Name.getAsDependentTemplateName();
     DeclarationName DName;
     if (DTN->isIdentifier()) {
       DName = DeclarationNames.getIdentifier(DTN->getIdentifier());
@@ -3055,36 +3071,64 @@ ASTContext::getNameForTemplate(TemplateName Name,
     }
   }
 
-  OverloadedTemplateStorage *Storage = Name.getAsOverloadedTemplate();
-  assert(Storage);
-  // DNInfo work in progress: CHECKME: what about DNLoc?
-  return DeclarationNameInfo((*Storage->begin())->getDeclName(), NameLoc);
+  case TemplateName::SubstTemplateTemplateParm: {
+    SubstTemplateTemplateParmStorage *subst
+      = Name.getAsSubstTemplateTemplateParm();
+    return DeclarationNameInfo(subst->getParameter()->getDeclName(),
+                               NameLoc);
+  }
+
+  case TemplateName::SubstTemplateTemplateParmPack: {
+    SubstTemplateTemplateParmPackStorage *subst
+      = Name.getAsSubstTemplateTemplateParmPack();
+    return DeclarationNameInfo(subst->getParameterPack()->getDeclName(),
+                               NameLoc);
+  }
+  }
+
+  llvm_unreachable("bad template name kind!");
 }
 
 TemplateName ASTContext::getCanonicalTemplateName(TemplateName Name) const {
-  if (TemplateDecl *Template = Name.getAsTemplateDecl()) {
+  switch (Name.getKind()) {
+  case TemplateName::QualifiedTemplate:
+  case TemplateName::Template: {
+    TemplateDecl *Template = Name.getAsTemplateDecl();
     if (TemplateTemplateParmDecl *TTP 
-                              = dyn_cast<TemplateTemplateParmDecl>(Template))
+          = dyn_cast<TemplateTemplateParmDecl>(Template))
       Template = getCanonicalTemplateTemplateParmDecl(TTP);
   
     // The canonical template name is the canonical template declaration.
     return TemplateName(cast<TemplateDecl>(Template->getCanonicalDecl()));
   }
 
-  if (SubstTemplateTemplateParmPackStorage *SubstPack
-                                  = Name.getAsSubstTemplateTemplateParmPack()) {
-    TemplateTemplateParmDecl *CanonParam
-      = getCanonicalTemplateTemplateParmDecl(SubstPack->getParameterPack());
-    TemplateArgument CanonArgPack
-      = getCanonicalTemplateArgument(SubstPack->getArgumentPack());
-    return getSubstTemplateTemplateParmPack(CanonParam, CanonArgPack);
-  }
-      
-  assert(!Name.getAsOverloadedTemplate());
+  case TemplateName::OverloadedTemplate:
+    llvm_unreachable("cannot canonicalize overloaded template");
 
-  DependentTemplateName *DTN = Name.getAsDependentTemplateName();
-  assert(DTN && "Non-dependent template names must refer to template decls.");
-  return DTN->CanonicalTemplateName;
+  case TemplateName::DependentTemplate: {
+    DependentTemplateName *DTN = Name.getAsDependentTemplateName();
+    assert(DTN && "Non-dependent template names must refer to template decls.");
+    return DTN->CanonicalTemplateName;
+  }
+
+  case TemplateName::SubstTemplateTemplateParm: {
+    SubstTemplateTemplateParmStorage *subst
+      = Name.getAsSubstTemplateTemplateParm();
+    return getCanonicalTemplateName(subst->getReplacement());
+  }
+
+  case TemplateName::SubstTemplateTemplateParmPack: {
+    SubstTemplateTemplateParmPackStorage *subst
+                                  = Name.getAsSubstTemplateTemplateParmPack();
+    TemplateTemplateParmDecl *canonParameter
+      = getCanonicalTemplateTemplateParmDecl(subst->getParameterPack());
+    TemplateArgument canonArgPack
+      = getCanonicalTemplateArgument(subst->getArgumentPack());
+    return getSubstTemplateTemplateParmPack(canonParameter, canonArgPack);
+  }
+  }
+
+  llvm_unreachable("bad template name!");
 }
 
 bool ASTContext::hasSameTemplateName(TemplateName X, TemplateName Y) {
@@ -4791,6 +4835,24 @@ ASTContext::getDependentTemplateName(NestedNameSpecifier *NNS,
 }
 
 TemplateName 
+ASTContext::getSubstTemplateTemplateParm(TemplateTemplateParmDecl *param,
+                                         TemplateName replacement) const {
+  llvm::FoldingSetNodeID ID;
+  SubstTemplateTemplateParmStorage::Profile(ID, param, replacement);
+  
+  void *insertPos = 0;
+  SubstTemplateTemplateParmStorage *subst
+    = SubstTemplateTemplateParms.FindNodeOrInsertPos(ID, insertPos);
+  
+  if (!subst) {
+    subst = new (*this) SubstTemplateTemplateParmStorage(param, replacement);
+    SubstTemplateTemplateParms.InsertNode(subst, insertPos);
+  }
+
+  return TemplateName(subst);
+}
+
+TemplateName 
 ASTContext::getSubstTemplateTemplateParmPack(TemplateTemplateParmDecl *Param,
                                        const TemplateArgument &ArgPack) const {
   ASTContext &Self = const_cast<ASTContext &>(*this);
@@ -4802,7 +4864,7 @@ ASTContext::getSubstTemplateTemplateParmPack(TemplateTemplateParmDecl *Param,
     = SubstTemplateTemplateParmPacks.FindNodeOrInsertPos(ID, InsertPos);
   
   if (!Subst) {
-    Subst = new (*this) SubstTemplateTemplateParmPackStorage(Self, Param, 
+    Subst = new (*this) SubstTemplateTemplateParmPackStorage(Param, 
                                                            ArgPack.pack_size(),
                                                          ArgPack.pack_begin());
     SubstTemplateTemplateParmPacks.InsertNode(Subst, InsertPos);
