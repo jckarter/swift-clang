@@ -248,15 +248,15 @@ def VREV16 : Inst<"vrev16", "dd", "cUcPcQcQUcQPc", OP_REV16>;
 
 ////////////////////////////////////////////////////////////////////////////////
 // Other single operand arithmetic
-//def VABS    : SInst<"vabs", "dd", "csifQcQsQiQf">;
-//def VQABS   : SInst<"vqabs", "dd", "csiQcQsQi">;
+def VABS    : SInst<"vabs", "dd", "csifQcQsQiQf">;
+def VQABS   : SInst<"vqabs", "dd", "csiQcQsQi">;
 def VNEG    : Inst<"vneg", "dd", "csifQcQsQiQf", OP_NEG>;
-//def VQNEG   : SInst<"vqneg", "dd", "csiQcQsQi">;
-//def VCLS    : SInst<"vcls", "dd", "csiQcQsQi">;
-//def VCLZ    : IInst<"vclz", "dd", "csiUcUsUiQcQsQiQUcQUsQUi">;
-//def VCNT    : WInst<"vcnt", "dd", "UccPcQUcQcQPc">;
-//def VRECPE  : SInst<"vrecpe", "dd", "fUiQfQUi">;
-//def VRSQRTE : SInst<"vrsqrte", "dd", "fUiQfQUi">;
+def VQNEG   : SInst<"vqneg", "dd", "csiQcQsQi">;
+def VCLS    : SInst<"vcls", "dd", "csiQcQsQi">;
+def VCLZ    : IInst<"vclz", "dd", "csiUcUsUiQcQsQiQUcQUsQUi">;
+def VCNT    : WInst<"vcnt", "dd", "UccPcQUcQcQPc">;
+def VRECPE  : SInst<"vrecpe", "dd", "fUiQfQUi">;
+def VRSQRTE : SInst<"vrsqrte", "dd", "fUiQfQUi">;
 
 ////////////////////////////////////////////////////////////////////////////////
 // Logical operations

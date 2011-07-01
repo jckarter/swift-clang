@@ -2291,6 +2291,45 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
   case ARM64::BI__builtin_arm64_vqmovun_v:
     return EmitNeonCall(CGM.getIntrinsic(Intrinsic::arm64_neon_sqxtun, &Ty, 1),
                         Ops, "vqmovun");
+  case ARM64::BI__builtin_arm64_vabs_v:
+  case ARM64::BI__builtin_arm64_vabsq_v:
+      return EmitNeonCall(CGM.getIntrinsic(Intrinsic::arm64_neon_abs, &Ty, 1),
+                          Ops, "vabs");
+  case ARM64::BI__builtin_arm64_vqabs_v:
+  case ARM64::BI__builtin_arm64_vqabsq_v:
+    return EmitNeonCall(CGM.getIntrinsic(Intrinsic::arm64_neon_sqabs, &Ty, 1),
+                        Ops, "vqabs");
+  case ARM64::BI__builtin_arm64_vqneg_v:
+  case ARM64::BI__builtin_arm64_vqnegq_v:
+    return EmitNeonCall(CGM.getIntrinsic(Intrinsic::arm64_neon_sqneg, &Ty, 1),
+                        Ops, "vqneg");
+  case ARM64::BI__builtin_arm64_vclz_v:
+  case ARM64::BI__builtin_arm64_vclzq_v: {
+    Function *F = CGM.getIntrinsic(Intrinsic::ctlz, &Ty, 1);
+    return EmitNeonCall(F, Ops, "vclz");
+  }
+  case ARM64::BI__builtin_arm64_vcls_v:
+  case ARM64::BI__builtin_arm64_vclsq_v: {
+    Function *F = CGM.getIntrinsic(Intrinsic::arm64_neon_cls, &Ty, 1);
+    return EmitNeonCall(F, Ops, "vcls");
+  }
+  case ARM64::BI__builtin_arm64_vcnt_v:
+  case ARM64::BI__builtin_arm64_vcntq_v: {
+    Function *F = CGM.getIntrinsic(Intrinsic::ctpop, &Ty, 1);
+    return EmitNeonCall(F, Ops, "vcnt");
+  }
+  case ARM64::BI__builtin_arm64_vrecpe_v:
+  case ARM64::BI__builtin_arm64_vrecpeq_v:
+    Int = Intrinsic::arm64_neon_urecpe;
+    if (Ty->isFPOrFPVectorTy()) Int = Intrinsic::arm64_neon_frecpe;
+    return EmitNeonCall(CGM.getIntrinsic(Int, &Ty, 1),
+                        Ops, "vrecpe");
+  case ARM64::BI__builtin_arm64_vrsqrte_v:
+  case ARM64::BI__builtin_arm64_vrsqrteq_v:
+    Int = Intrinsic::arm64_neon_ursqrte;
+    if (Ty->isFPOrFPVectorTy()) Int = Intrinsic::arm64_neon_frsqrte;
+    return EmitNeonCall(CGM.getIntrinsic(Int, &Ty, 1),
+                                         Ops, "vrsqrte");
   }
 }
 
