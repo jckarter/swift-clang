@@ -191,20 +191,10 @@ def VGET_LOW  : Inst<"vget_low", "dk", "csilhfUcUsUiUlPcPs", OP_LO>;
 
 ////////////////////////////////////////////////////////////////////////////////
 // Converting vectors
-//def VCVT_S32     : SInst<"vcvt_s32", "xd",  "fQf">;
-//def VCVT_U32     : SInst<"vcvt_u32", "ud",  "fQf">;
-//def VCVT_F16     : SInst<"vcvt_f16", "hk",  "f">;
-//def VCVT_F32     : SInst<"vcvt_f32", "fd",  "iUiQiQUi">;
-//def VCVT_F32_F16 : SInst<"vcvt_f32_f16", "fd",  "h">;
-//let isVCVT_N = 1 in {
-//def VCVT_N_S32   : SInst<"vcvt_n_s32", "xdi", "fQf">;
-//def VCVT_N_U32   : SInst<"vcvt_n_u32", "udi", "fQf">;
-//def VCVT_N_F32   : SInst<"vcvt_n_f32", "fdi", "iUiQiQUi">;
-//}
 def VMOVN        : IInst<"vmovn", "hk",  "silUsUiUl">;
 def VMOVL        : SInst<"vmovl", "wd",  "csiUcUsUi">;
-//def VQMOVN       : SInst<"vqmovn", "hk",  "silUsUiUl">;
-//def VQMOVUN      : SInst<"vqmovun", "ek",  "sil">;
+def VQMOVN       : SInst<"vqmovn", "hk",  "silUsUiUl">;
+def VQMOVUN      : SInst<"vqmovun", "ek",  "sil">;
 
 ////////////////////////////////////////////////////////////////////////////////
 // Table lookup, Extended table lookup

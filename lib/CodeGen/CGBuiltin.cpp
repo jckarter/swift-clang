@@ -2267,6 +2267,12 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     Ops[1] = Builder.CreateExtractElement(Ops[1], Ops[2]);
     Ty = llvm::PointerType::getUnqual(Ops[1]->getType());
     return Builder.CreateStore(Ops[1], Builder.CreateBitCast(Ops[0], Ty));
+  case ARM64::BI__builtin_arm64_vqmovn_v:
+    Int = usgn ? Intrinsic::arm64_neon_uqxtn : Intrinsic::arm64_neon_sqxtn;
+    return EmitNeonCall(CGM.getIntrinsic(Int, &Ty, 1), Ops, "vqmovn");
+  case ARM64::BI__builtin_arm64_vqmovun_v:
+    return EmitNeonCall(CGM.getIntrinsic(Intrinsic::arm64_neon_sqxtun, &Ty, 1),
+                        Ops, "vqmovun");
   }
 }
 
