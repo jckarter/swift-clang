@@ -69,6 +69,8 @@ def OP_ABA   : Op;
 def OP_ABAL  : Op;
 def OP_QDMLAL : Op;
 def OP_QDMLSL : Op;
+def OP_QDMLSL_N : Op;
+def OP_QDMLAL_N : Op;
 
 class Inst <string n, string p, string t, Op o> {
   string Name = n;

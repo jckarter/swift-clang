@@ -1985,6 +1985,24 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
   case ARM64::BI__builtin_arm64_vmlaq_v: // Only used for FP types
     Int = Intrinsic::arm64_neon_fmla;
     return EmitNeonCall(CGM.getIntrinsic(Int, &Ty, 1), Ops, "fmla");
+  case ARM64::BI__builtin_arm64_vmla_lane_v:
+  case ARM64::BI__builtin_arm64_vmlaq_lane_v: { // Only used for FP types
+    llvm::Constant *cst = cast<Constant>(Ops[3]);
+    Ops[2] = Builder.CreateBitCast(Ops[2], VTy);
+    Ops[2] = EmitNeonSplat(Ops[2], cst);
+    Ops.pop_back();
+    Int = Intrinsic::arm64_neon_fmla;
+    return EmitNeonCall(CGM.getIntrinsic(Int, &Ty, 1), Ops, "fmla");
+  }
+  case ARM64::BI__builtin_arm64_vmls_lane_v:
+  case ARM64::BI__builtin_arm64_vmlsq_lane_v: { // Only used for FP types
+    llvm::Constant *cst = cast<Constant>(Ops[3]);
+    Ops[2] = Builder.CreateBitCast(Ops[2], VTy);
+    Ops[2] = EmitNeonSplat(Ops[2], cst);
+    Ops.pop_back();
+    Int = Intrinsic::arm64_neon_fmls;
+    return EmitNeonCall(CGM.getIntrinsic(Int, &Ty, 1), Ops, "fmls");
+  }
   case ARM64::BI__builtin_arm64_vmls_v:
   case ARM64::BI__builtin_arm64_vmlsq_v:  // Only used for FP types
     Int = Intrinsic::arm64_neon_fmls;

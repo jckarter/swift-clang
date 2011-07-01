@@ -209,28 +209,30 @@ def VQMOVUN      : SInst<"vqmovun", "ek",  "sil">;
 
 ////////////////////////////////////////////////////////////////////////////////
 // Operations with a scalar value
-def VMLA_LANE    : Inst<"vmla_lane", "dddgi", "siUsUifQsQiQUsQUiQf", OP_MLA_LN>;
+def VMLA_LANE    : Inst<"vmla_lane", "dddgi", "siUsUiQsQiQUsQUi", OP_MLA_LN>;
+def FMLA_LANE    : IInst<"vmla_lane", "dddgi", "fQf">;
 def VMLAL_LANE   : Inst<"vmlal_lane", "wwddi", "siUsUi", OP_MLAL_LN>;
 def VQDMLAL_LANE : Inst<"vqdmlal_lane", "wwddi", "si", OP_QDMLAL_LN>; 
-def VMLS_LANE    : Inst<"vmls_lane", "dddgi", "siUsUifQsQiQUsQUiQf", OP_MLS_LN>;
+def VMLS_LANE    : Inst<"vmls_lane", "dddgi", "siUsUiQsQiQUsQUi", OP_MLS_LN>;
+def FMLS_LANE    : IInst<"vmls_lane", "dddgi", "fQf">;
 def VMLSL_LANE   : Inst<"vmlsl_lane", "wwddi", "siUsUi", OP_MLSL_LN>;
 def VQDMLSL_LANE : Inst<"vqdmlsl_lane", "wwddi", "si", OP_QDMLSL_LN>;
 def VMUL_N       : Inst<"vmul_n", "dds", "sifUsUiQsQiQfQUsQUi", OP_MUL_N>;
 def VMUL_LANE    : Inst<"vmul_lane", "ddgi", "sifUsUiQsQiQfQUsQUi", OP_MUL_LN>;
-//def VMULL_N      : SInst<"vmull_n", "wda", "siUsUi">;
+def VMULL_N      : SInst<"vmull_n", "wda", "siUsUi">;
 def VMULL_LANE   : Inst<"vmull_lane", "wddi", "siUsUi", OP_MULL_LN>;
-//def VQDMULL_N    : SInst<"vqdmull_n", "wda", "si">;
+def VQDMULL_N    : SInst<"vqdmull_n", "wda", "si">;
 def VQDMULL_LANE : Inst<"vqdmull_lane", "wddi", "si", OP_QDMULL_LN>;
-//def VQDMULH_N    : SInst<"vqdmulh_n", "dda", "siQsQi">;
+def VQDMULH_N    : SInst<"vqdmulh_n", "dda", "siQsQi">;
 def VQDMULH_LANE : Inst<"vqdmulh_lane", "ddgi", "siQsQi", OP_QDMULH_LN>;
-//def VQRDMULH_N   : SInst<"vqrdmulh_n", "dda", "siQsQi">;
+def VQRDMULH_N   : SInst<"vqrdmulh_n", "dda", "siQsQi">;
 def VQRDMULH_LANE : Inst<"vqrdmulh_lane", "ddgi", "siQsQi", OP_QRDMULH_LN>;
 def VMLA_N       : Inst<"vmla_n", "ddda", "siUsUifQsQiQUsQUiQf", OP_MLA_N>;
 def VMLAL_N      : Inst<"vmlal_n", "wwda", "siUsUi", OP_MLAL_N>;
-//def VQDMLAL_N    : SInst<"vqdmlal_n", "wwda", "si">;
+def VQDMLAL_N    : Inst<"vqdmlal_n", "wwda", "si", OP_QDMLAL_N>;
 def VMLS_N       : Inst<"vmls_n", "ddds", "siUsUifQsQiQUsQUiQf", OP_MLS_N>;
 def VMLSL_N      : Inst<"vmlsl_n", "wwda", "siUsUi", OP_MLSL_N>;
-//def VQDMLSL_N    : SInst<"vqdmlsl_n", "wwda", "si">;
+def VQDMLSL_N    : Inst<"vqdmlsl_n", "wwda", "si",OP_QDMLSL_N>;
 
 ////////////////////////////////////////////////////////////////////////////////
 // Vector Extract
