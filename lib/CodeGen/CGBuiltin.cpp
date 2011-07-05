@@ -2285,6 +2285,39 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     Ops[1] = Builder.CreateExtractElement(Ops[1], Ops[2]);
     Ty = llvm::PointerType::getUnqual(Ops[1]->getType());
     return Builder.CreateStore(Ops[1], Builder.CreateBitCast(Ops[0], Ty));
+  case ARM64::BI__builtin_arm64_vld2_v:
+  case ARM64::BI__builtin_arm64_vld2q_v: {
+    const llvm::Type *PTy = llvm::PointerType::getUnqual(VTy);
+    Ops[1] = Builder.CreateBitCast(Ops[0], PTy);
+    const llvm::Type *Tys[2] = { VTy, PTy };
+    Function *F = CGM.getIntrinsic(Intrinsic::arm64_neon_ld2, Tys, 2);
+    Ops[1] = Builder.CreateCall(F, Ops[1], "vld2");
+    Ops[0] = Builder.CreateBitCast(Ops[0],
+                llvm::PointerType::getUnqual(Ops[1]->getType()));
+    return Builder.CreateStore(Ops[1], Ops[0]);
+  }
+  case ARM64::BI__builtin_arm64_vld3_v:
+  case ARM64::BI__builtin_arm64_vld3q_v: {
+    const llvm::Type *PTy = llvm::PointerType::getUnqual(VTy);
+    Ops[1] = Builder.CreateBitCast(Ops[0], PTy);
+    const llvm::Type *Tys[2] = { VTy, PTy };
+    Function *F = CGM.getIntrinsic(Intrinsic::arm64_neon_ld3, Tys, 2);
+    Ops[1] = Builder.CreateCall(F, Ops[1], "vld3");
+    Ops[0] = Builder.CreateBitCast(Ops[0],
+                llvm::PointerType::getUnqual(Ops[1]->getType()));
+    return Builder.CreateStore(Ops[1], Ops[0]);
+  }
+  case ARM64::BI__builtin_arm64_vld4_v:
+  case ARM64::BI__builtin_arm64_vld4q_v: {
+    const llvm::Type *PTy = llvm::PointerType::getUnqual(VTy);
+    Ops[1] = Builder.CreateBitCast(Ops[0], PTy);
+    const llvm::Type *Tys[2] = { VTy, PTy };
+    Function *F = CGM.getIntrinsic(Intrinsic::arm64_neon_ld4, Tys, 2);
+    Ops[1] = Builder.CreateCall(F, Ops[1], "vld4");
+    Ops[0] = Builder.CreateBitCast(Ops[0],
+                llvm::PointerType::getUnqual(Ops[1]->getType()));
+    return Builder.CreateStore(Ops[1], Ops[0]);
+  }
   case ARM64::BI__builtin_arm64_vqmovn_v:
     Int = usgn ? Intrinsic::arm64_neon_uqxtn : Intrinsic::arm64_neon_sqxtn;
     return EmitNeonCall(CGM.getIntrinsic(Int, &Ty, 1), Ops, "vqmovn");
