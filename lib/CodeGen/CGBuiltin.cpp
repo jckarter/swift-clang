@@ -2330,6 +2330,65 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     if (Ty->isFPOrFPVectorTy()) Int = Intrinsic::arm64_neon_frsqrte;
     return EmitNeonCall(CGM.getIntrinsic(Int, &Ty, 1),
                                          Ops, "vrsqrte");
+  case ARM64::BI__builtin_arm64_vtrn_v:
+  case ARM64::BI__builtin_arm64_vtrnq_v: {
+    Ops[0] = Builder.CreateBitCast(Ops[0], llvm::PointerType::getUnqual(Ty));
+    Ops[1] = Builder.CreateBitCast(Ops[1], Ty);
+    Ops[2] = Builder.CreateBitCast(Ops[2], Ty);
+    Value *SV = 0;
+
+    for (unsigned vi = 0; vi != 2; ++vi) {
+      SmallVector<Constant*, 16> Indices;
+      for (unsigned i = 0, e = VTy->getNumElements(); i != e; i += 2) {
+        Indices.push_back(ConstantInt::get(Int32Ty, i+vi));
+        Indices.push_back(ConstantInt::get(Int32Ty, i+e+vi));
+      }
+      Value *Addr = Builder.CreateConstInBoundsGEP1_32(Ops[0], vi);
+      SV = llvm::ConstantVector::get(Indices);
+      SV = Builder.CreateShuffleVector(Ops[1], Ops[2], SV, "vtrn");
+      SV = Builder.CreateStore(SV, Addr);
+    }
+    return SV;
+  }
+  case ARM64::BI__builtin_arm64_vuzp_v:
+  case ARM64::BI__builtin_arm64_vuzpq_v: {
+    Ops[0] = Builder.CreateBitCast(Ops[0], llvm::PointerType::getUnqual(Ty));
+    Ops[1] = Builder.CreateBitCast(Ops[1], Ty);
+    Ops[2] = Builder.CreateBitCast(Ops[2], Ty);
+    Value *SV = 0;
+
+    for (unsigned vi = 0; vi != 2; ++vi) {
+      SmallVector<Constant*, 16> Indices;
+      for (unsigned i = 0, e = VTy->getNumElements(); i != e; ++i)
+        Indices.push_back(ConstantInt::get(Int32Ty, 2*i+vi));
+
+      Value *Addr = Builder.CreateConstInBoundsGEP1_32(Ops[0], vi);
+      SV = llvm::ConstantVector::get(Indices);
+      SV = Builder.CreateShuffleVector(Ops[1], Ops[2], SV, "vuzp");
+      SV = Builder.CreateStore(SV, Addr);
+    }
+    return SV;
+  }
+  case ARM64::BI__builtin_arm64_vzip_v: 
+  case ARM64::BI__builtin_arm64_vzipq_v: {
+    Ops[0] = Builder.CreateBitCast(Ops[0], llvm::PointerType::getUnqual(Ty));
+    Ops[1] = Builder.CreateBitCast(Ops[1], Ty);
+    Ops[2] = Builder.CreateBitCast(Ops[2], Ty);
+    Value *SV = 0;
+
+    for (unsigned vi = 0; vi != 2; ++vi) {
+      SmallVector<Constant*, 16> Indices;
+      for (unsigned i = 0, e = VTy->getNumElements(); i != e; i += 2) {
+        Indices.push_back(ConstantInt::get(Int32Ty, (i + vi*e) >> 1));
+        Indices.push_back(ConstantInt::get(Int32Ty, ((i + vi*e) >> 1)+e));
+      }
+      Value *Addr = Builder.CreateConstInBoundsGEP1_32(Ops[0], vi);
+      SV = llvm::ConstantVector::get(Indices);
+      SV = Builder.CreateShuffleVector(Ops[1], Ops[2], SV, "vzip");
+      SV = Builder.CreateStore(SV, Addr);
+    }
+    return SV;
+  }
   }
 }
 
