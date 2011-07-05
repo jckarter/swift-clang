@@ -198,14 +198,14 @@ def VQMOVUN      : SInst<"vqmovun", "ek",  "sil">;
 
 ////////////////////////////////////////////////////////////////////////////////
 // Table lookup, Extended table lookup
-//def VTBL1 : WInst<"vtbl1", "ddt",  "UccPc">;
-//def VTBL2 : WInst<"vtbl2", "d2t",  "UccPc">;
-//def VTBL3 : WInst<"vtbl3", "d3t",  "UccPc">;
-//def VTBL4 : WInst<"vtbl4", "d4t",  "UccPc">;
-//def VTBX1 : WInst<"vtbx1", "dddt", "UccPc">;
-//def VTBX2 : WInst<"vtbx2", "dd2t", "UccPc">;
-//def VTBX3 : WInst<"vtbx3", "dd3t", "UccPc">;
-//def VTBX4 : WInst<"vtbx4", "dd4t", "UccPc">;
+def VTBL1 : WInst<"vtbl1", "ddk",  "UccPc">;
+def VTBL2 : WInst<"vtbl2", "ddkk",  "UccPc">;
+def VTBL3 : WInst<"vtbl3", "ddkkk",  "UccPc">;
+def VTBL4 : WInst<"vtbl4", "ddkkkk",  "UccPc">;
+def VTBX1 : WInst<"vtbx1", "dddk", "UccPc">;
+def VTBX2 : WInst<"vtbx2", "dddkk", "UccPc">;
+def VTBX3 : WInst<"vtbx3", "dddkkk", "UccPc">;
+def VTBX4 : WInst<"vtbx4", "dddkkkk", "UccPc">;
 
 ////////////////////////////////////////////////////////////////////////////////
 // Operations with a scalar value
