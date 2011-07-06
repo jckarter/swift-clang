@@ -2318,6 +2318,39 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
                 llvm::PointerType::getUnqual(Ops[1]->getType()));
     return Builder.CreateStore(Ops[1], Ops[0]);
   }
+  case ARM64::BI__builtin_arm64_vld2_dup_v: {
+    const llvm::Type *PTy =
+      llvm::PointerType::getUnqual(VTy->getElementType());
+    Ops[1] = Builder.CreateBitCast(Ops[0], PTy);
+    const llvm::Type *Tys[2] = { VTy, PTy };
+    Function *F = CGM.getIntrinsic(Intrinsic::arm64_neon_ld2r, Tys, 2);
+    Ops[1] = Builder.CreateCall(F, Ops[1], "vld2");
+    Ops[0] = Builder.CreateBitCast(Ops[0],
+                llvm::PointerType::getUnqual(Ops[1]->getType()));
+    return Builder.CreateStore(Ops[1], Ops[0]);
+  }
+  case ARM64::BI__builtin_arm64_vld3_dup_v: {
+    const llvm::Type *PTy =
+      llvm::PointerType::getUnqual(VTy->getElementType());
+    Ops[1] = Builder.CreateBitCast(Ops[0], PTy);
+    const llvm::Type *Tys[2] = { VTy, PTy };
+    Function *F = CGM.getIntrinsic(Intrinsic::arm64_neon_ld3r, Tys, 2);
+    Ops[1] = Builder.CreateCall(F, Ops[1], "vld3");
+    Ops[0] = Builder.CreateBitCast(Ops[0],
+                llvm::PointerType::getUnqual(Ops[1]->getType()));
+    return Builder.CreateStore(Ops[1], Ops[0]);
+  }
+  case ARM64::BI__builtin_arm64_vld4_dup_v: {
+    const llvm::Type *PTy =
+      llvm::PointerType::getUnqual(VTy->getElementType());
+    Ops[1] = Builder.CreateBitCast(Ops[0], PTy);
+    const llvm::Type *Tys[2] = { VTy, PTy };
+    Function *F = CGM.getIntrinsic(Intrinsic::arm64_neon_ld4r, Tys, 2);
+    Ops[1] = Builder.CreateCall(F, Ops[1], "vld4");
+    Ops[0] = Builder.CreateBitCast(Ops[0],
+                llvm::PointerType::getUnqual(Ops[1]->getType()));
+    return Builder.CreateStore(Ops[1], Ops[0]);
+  }
   case ARM64::BI__builtin_arm64_vqmovn_v:
     Int = usgn ? Intrinsic::arm64_neon_uqxtn : Intrinsic::arm64_neon_sqxtn;
     return EmitNeonCall(CGM.getIntrinsic(Int, &Ty, 1), Ops, "vqmovn");
