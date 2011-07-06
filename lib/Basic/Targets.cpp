@@ -647,9 +647,9 @@ public:
 };
 
 const Builtin::Info PPCTargetInfo::BuiltinInfo[] = {
-#define BUILTIN(ID, TYPE, ATTRS) { #ID, TYPE, ATTRS, 0, ALL_LANGUAGES, false },
+#define BUILTIN(ID, TYPE, ATTRS) { #ID, TYPE, ATTRS, 0, ALL_LANGUAGES },
 #define LIBBUILTIN(ID, TYPE, ATTRS, HEADER) { #ID, TYPE, ATTRS, HEADER,\
-                                              ALL_LANGUAGES, false },
+                                              ALL_LANGUAGES },
 #include "clang/Basic/BuiltinsPPC.def"
 };
 
@@ -674,7 +674,8 @@ void PPCTargetInfo::getTargetDefines(const LangOptions &Opts,
   }
 
   // Target properties.
-  Builder.defineMacro("_BIG_ENDIAN");
+  if (getTriple().getOS() != llvm::Triple::NetBSD)
+    Builder.defineMacro("_BIG_ENDIAN");
   Builder.defineMacro("__BIG_ENDIAN__");
 
   // Subtarget options.
@@ -805,10 +806,10 @@ public:
     switch (getTriple().getOS()) {
     case llvm::Triple::FreeBSD:
     case llvm::Triple::NetBSD:
-        SizeType = UnsignedInt;
-        break;
+      SizeType = UnsignedInt;
+      break;
     default:
-	break;
+      break;
     }
   }
 
@@ -910,9 +911,9 @@ namespace {
   };
 
   const Builtin::Info PTXTargetInfo::BuiltinInfo[] = {
-#define BUILTIN(ID, TYPE, ATTRS) { #ID, TYPE, ATTRS, 0, ALL_LANGUAGES, false },
+#define BUILTIN(ID, TYPE, ATTRS) { #ID, TYPE, ATTRS, 0, ALL_LANGUAGES },
 #define LIBBUILTIN(ID, TYPE, ATTRS, HEADER) { #ID, TYPE, ATTRS, HEADER,\
-                                              ALL_LANGUAGES, false },
+                                              ALL_LANGUAGES },
 #include "clang/Basic/BuiltinsPTX.def"
   };
 
@@ -1078,9 +1079,9 @@ void MBlazeTargetInfo::getGCCRegAliases(const GCCRegAlias *&Aliases,
 namespace {
 // Namespace for x86 abstract base class
 const Builtin::Info BuiltinInfo[] = {
-#define BUILTIN(ID, TYPE, ATTRS) { #ID, TYPE, ATTRS, 0, ALL_LANGUAGES, false },
+#define BUILTIN(ID, TYPE, ATTRS) { #ID, TYPE, ATTRS, 0, ALL_LANGUAGES },
 #define LIBBUILTIN(ID, TYPE, ATTRS, HEADER) { #ID, TYPE, ATTRS, HEADER,\
-                                              ALL_LANGUAGES, false },
+                                              ALL_LANGUAGES },
 #include "clang/Basic/BuiltinsX86.def"
 };
 
@@ -2216,9 +2217,9 @@ void ARMTargetInfo::getGCCRegAliases(const GCCRegAlias *&Aliases,
 }
 
 const Builtin::Info ARMTargetInfo::BuiltinInfo[] = {
-#define BUILTIN(ID, TYPE, ATTRS) { #ID, TYPE, ATTRS, 0, ALL_LANGUAGES, false },
+#define BUILTIN(ID, TYPE, ATTRS) { #ID, TYPE, ATTRS, 0, ALL_LANGUAGES },
 #define LIBBUILTIN(ID, TYPE, ATTRS, HEADER) { #ID, TYPE, ATTRS, HEADER,\
-                                              ALL_LANGUAGES, false },
+                                              ALL_LANGUAGES },
 #include "clang/Basic/BuiltinsARM.def"
 };
 } // end anonymous namespace.
@@ -2836,22 +2837,36 @@ static TargetInfo *AllocateTarget(const std::string &T) {
     return new MSP430TargetInfo(T);
 
   case llvm::Triple::mips:
-    if (os == llvm::Triple::Psp)
+    switch (os) {
+    case llvm::Triple::Psp:
       return new PSPTargetInfo<MipsTargetInfo>(T);
-    if (os == llvm::Triple::Linux)
+    case llvm::Triple::Linux:
       return new LinuxTargetInfo<MipsTargetInfo>(T);
-    if (os == llvm::Triple::RTEMS)
+    case llvm::Triple::RTEMS:
       return new RTEMSTargetInfo<MipsTargetInfo>(T);
-    return new MipsTargetInfo(T);
+    case llvm::Triple::FreeBSD:
+      return new NetBSDTargetInfo<MipsTargetInfo>(T);
+    case llvm::Triple::NetBSD:
+      return new NetBSDTargetInfo<MipsTargetInfo>(T);
+    default:
+      return new MipsTargetInfo(T);
+    }
 
   case llvm::Triple::mipsel:
-    if (os == llvm::Triple::Psp)
+    switch (os) {
+    case llvm::Triple::Psp:
       return new PSPTargetInfo<MipselTargetInfo>(T);
-    if (os == llvm::Triple::Linux)
+    case llvm::Triple::Linux:
       return new LinuxTargetInfo<MipselTargetInfo>(T);
-    if (os == llvm::Triple::RTEMS)
+    case llvm::Triple::RTEMS:
       return new RTEMSTargetInfo<MipselTargetInfo>(T);
-    return new MipselTargetInfo(T);
+    case llvm::Triple::FreeBSD:
+      return new NetBSDTargetInfo<MipselTargetInfo>(T);
+    case llvm::Triple::NetBSD:
+      return new NetBSDTargetInfo<MipselTargetInfo>(T);
+    default:
+      return new MipsTargetInfo(T);
+    }
 
   case llvm::Triple::ppc:
     if (Triple.isOSDarwin())
