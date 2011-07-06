@@ -2351,6 +2351,54 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
                 llvm::PointerType::getUnqual(Ops[1]->getType()));
     return Builder.CreateStore(Ops[1], Ops[0]);
   }
+  case ARM64::BI__builtin_arm64_vld2_lane_v:
+  case ARM64::BI__builtin_arm64_vld2q_lane_v: {
+    const llvm::Type *Tys[2] = { VTy, Ops[1]->getType() };
+    Function *F = CGM.getIntrinsic(Intrinsic::arm64_neon_ld2lane, Tys, 2);
+    Ops.push_back(Ops[1]);
+    Ops.erase(Ops.begin()+1);
+    Ops[1] = Builder.CreateBitCast(Ops[1], Ty);
+    Ops[2] = Builder.CreateBitCast(Ops[2], Ty);
+    Ops[3] = Builder.CreateZExt(Ops[3],
+                llvm::IntegerType::get(getLLVMContext(), 64));
+    Ops[1] = Builder.CreateCall(F, Ops.begin() + 1, Ops.end(), "vld2_lane");
+    Ty = llvm::PointerType::getUnqual(Ops[1]->getType());
+    Ops[0] = Builder.CreateBitCast(Ops[0], Ty);
+    return Builder.CreateStore(Ops[1], Ops[0]);
+  }
+  case ARM64::BI__builtin_arm64_vld3_lane_v:
+  case ARM64::BI__builtin_arm64_vld3q_lane_v: {
+    const llvm::Type *Tys[2] = { VTy, Ops[1]->getType() };
+    Function *F = CGM.getIntrinsic(Intrinsic::arm64_neon_ld3lane, Tys, 2);
+    Ops.push_back(Ops[1]);
+    Ops.erase(Ops.begin()+1);
+    Ops[1] = Builder.CreateBitCast(Ops[1], Ty);
+    Ops[2] = Builder.CreateBitCast(Ops[2], Ty);
+    Ops[3] = Builder.CreateBitCast(Ops[3], Ty);
+    Ops[4] = Builder.CreateZExt(Ops[4],
+                llvm::IntegerType::get(getLLVMContext(), 64));
+    Ops[1] = Builder.CreateCall(F, Ops.begin() + 1, Ops.end(), "vld3_lane");
+    Ty = llvm::PointerType::getUnqual(Ops[1]->getType());
+    Ops[0] = Builder.CreateBitCast(Ops[0], Ty);
+    return Builder.CreateStore(Ops[1], Ops[0]);
+  }
+  case ARM64::BI__builtin_arm64_vld4_lane_v:
+  case ARM64::BI__builtin_arm64_vld4q_lane_v: {
+    const llvm::Type *Tys[2] = { VTy, Ops[1]->getType() };
+    Function *F = CGM.getIntrinsic(Intrinsic::arm64_neon_ld4lane, Tys, 2);
+    Ops.push_back(Ops[1]);
+    Ops.erase(Ops.begin()+1);
+    Ops[1] = Builder.CreateBitCast(Ops[1], Ty);
+    Ops[2] = Builder.CreateBitCast(Ops[2], Ty);
+    Ops[3] = Builder.CreateBitCast(Ops[3], Ty);
+    Ops[4] = Builder.CreateBitCast(Ops[4], Ty);
+    Ops[5] = Builder.CreateZExt(Ops[5],
+                llvm::IntegerType::get(getLLVMContext(), 64));
+    Ops[1] = Builder.CreateCall(F, Ops.begin() + 1, Ops.end(), "vld4_lane");
+    Ty = llvm::PointerType::getUnqual(Ops[1]->getType());
+    Ops[0] = Builder.CreateBitCast(Ops[0], Ty);
+    return Builder.CreateStore(Ops[1], Ops[0]);
+  }
   case ARM64::BI__builtin_arm64_vqmovn_v:
     Int = usgn ? Intrinsic::arm64_neon_uqxtn : Intrinsic::arm64_neon_sqxtn;
     return EmitNeonCall(CGM.getIntrinsic(Int, &Ty, 1), Ops, "vqmovn");
