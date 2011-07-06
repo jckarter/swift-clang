@@ -86,6 +86,8 @@ private:
   /// initialized.
   std::string MacosxVersionMin;
 
+  bool hasARCRuntime() const;
+
 private:
   void AddDeploymentTarget(DerivedArgList &Args) const;
 
@@ -190,7 +192,7 @@ public:
 
   virtual bool HasNativeLLVMSupport() const;
 
-  virtual bool HasARCRuntime() const;
+  virtual void configureObjCRuntime(ObjCRuntime &runtime) const;
 
   virtual DerivedArgList *TranslateArgs(const DerivedArgList &Args,
                                         const char *BoundArch) const;
