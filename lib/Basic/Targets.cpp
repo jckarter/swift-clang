@@ -93,12 +93,12 @@ static void getDarwinDefines(MacroBuilder &Builder, const LangOptions &Opts,
       Builder.defineMacro("__strong", "__attribute__((objc_gc(strong)))");
     else
       Builder.defineMacro("__strong", "");
-    
+
     // __unsafe_unretained is defined to nothing in non-ARC mode. We even
     // allow this in C, since one might have block pointers in structs that
     // are used in pure C code and in Objective-C ARC.
     Builder.defineMacro("__unsafe_unretained", "");
-    
+
     // The Objective-C bridged cast keywords are defined to nothing in non-ARC
     // mode; then they become normal, C-style casts.
     Builder.defineMacro("__bridge", "");
@@ -106,7 +106,7 @@ static void getDarwinDefines(MacroBuilder &Builder, const LangOptions &Opts,
     Builder.defineMacro("__bridge_retained", "");
     Builder.defineMacro("__bridge_retain", "");
   }
-  
+
   if (Opts.Static)
     Builder.defineMacro("__STATIC__");
   else
@@ -182,7 +182,7 @@ class DarwinTargetInfo : public OSTargetInfo<Target> {
 protected:
   virtual void getOSDefines(const LangOptions &Opts, const llvm::Triple &Triple,
                             MacroBuilder &Builder) const {
-    getDarwinDefines(Builder, Opts, Triple, this->PlatformName, 
+    getDarwinDefines(Builder, Opts, Triple, this->PlatformName,
                      this->PlatformMinVersion);
   }
 
@@ -2371,9 +2371,9 @@ void ARM64TargetInfo::getGCCRegAliases(const GCCRegAlias *&Aliases,
 }
 
 const Builtin::Info ARM64TargetInfo::BuiltinInfo[] = {
-#define BUILTIN(ID, TYPE, ATTRS) { #ID, TYPE, ATTRS, 0, ALL_LANGUAGES, false },
+#define BUILTIN(ID, TYPE, ATTRS) { #ID, TYPE, ATTRS, 0, ALL_LANGUAGES },
 #define LIBBUILTIN(ID, TYPE, ATTRS, HEADER) { #ID, TYPE, ATTRS, HEADER,\
-                                              ALL_LANGUAGES, false },
+                                              ALL_LANGUAGES },
 #include "clang/Basic/BuiltinsARM64.def"
 };
 } // end anonymous namespace.
