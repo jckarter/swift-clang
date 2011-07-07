@@ -2836,6 +2836,62 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     const llvm::Type *Tys[2] = { VTy, ArgTy };
     return EmitNeonCall(CGM.getIntrinsic(Int, Tys, 2), Ops, "vmovn_high");
   }
+  case ARM64::BI__builtin_arm64_vtrn1_v:
+  case ARM64::BI__builtin_arm64_vtrn1q_v: {
+    SmallVector<Constant*, 16> Indices;
+    for (unsigned i = 0, e = VTy->getNumElements(); i != e; i += 2) {
+      Indices.push_back(ConstantInt::get(Int32Ty, i));
+      Indices.push_back(ConstantInt::get(Int32Ty, i+e));
+    }
+    Ops.push_back(llvm::ConstantVector::get(Indices));
+    return Builder.CreateShuffleVector(Ops[0], Ops[1], Ops[2], "vtrn1");
+  }
+  case ARM64::BI__builtin_arm64_vtrn2_v:
+  case ARM64::BI__builtin_arm64_vtrn2q_v: {
+    SmallVector<Constant*, 16> Indices;
+    for (unsigned i = 0, e = VTy->getNumElements(); i != e; i += 2) {
+      Indices.push_back(ConstantInt::get(Int32Ty, i+1));
+      Indices.push_back(ConstantInt::get(Int32Ty, i+e+1));
+    }
+    Ops.push_back(llvm::ConstantVector::get(Indices));
+    return Builder.CreateShuffleVector(Ops[0], Ops[1], Ops[2], "vtrn2");
+  }
+  case ARM64::BI__builtin_arm64_vuzp1_v:
+  case ARM64::BI__builtin_arm64_vuzp1q_v: {
+    SmallVector<Constant*, 16> Indices;
+    for (unsigned i = 0, e = VTy->getNumElements(); i != e; ++i)
+      Indices.push_back(ConstantInt::get(Int32Ty, 2*i));
+    Ops.push_back(llvm::ConstantVector::get(Indices));
+    return Builder.CreateShuffleVector(Ops[0], Ops[1], Ops[2], "vuzp1");
+  }
+  case ARM64::BI__builtin_arm64_vuzp2_v:
+  case ARM64::BI__builtin_arm64_vuzp2q_v: {
+    SmallVector<Constant*, 16> Indices;
+    for (unsigned i = 0, e = VTy->getNumElements(); i != e; ++i)
+      Indices.push_back(ConstantInt::get(Int32Ty, 2*i+1));
+    Ops.push_back(llvm::ConstantVector::get(Indices));
+    return Builder.CreateShuffleVector(Ops[0], Ops[1], Ops[2], "vuzp2");
+  }
+  case ARM64::BI__builtin_arm64_vzip1_v:
+  case ARM64::BI__builtin_arm64_vzip1q_v: {
+    SmallVector<Constant*, 16> Indices;
+    for (unsigned i = 0, e = VTy->getNumElements(); i != e; i += 2) {
+      Indices.push_back(ConstantInt::get(Int32Ty, i >> 1));
+      Indices.push_back(ConstantInt::get(Int32Ty, (i >> 1)+e));
+    }
+    Ops.push_back(llvm::ConstantVector::get(Indices));
+    return Builder.CreateShuffleVector(Ops[0], Ops[1], Ops[2], "vzip1");
+  }
+  case ARM64::BI__builtin_arm64_vzip2_v:
+  case ARM64::BI__builtin_arm64_vzip2q_v: {
+    SmallVector<Constant*, 16> Indices;
+    for (unsigned i = 0, e = VTy->getNumElements(); i != e; i += 2) {
+      Indices.push_back(ConstantInt::get(Int32Ty, (i+e) >> 1));
+      Indices.push_back(ConstantInt::get(Int32Ty, ((i+e) >> 1)+e));
+    }
+    Ops.push_back(llvm::ConstantVector::get(Indices));
+    return Builder.CreateShuffleVector(Ops[0], Ops[1], Ops[2], "vzip2");
+  }
   }
 }
 

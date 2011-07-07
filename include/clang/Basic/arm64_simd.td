@@ -231,6 +231,15 @@ def VTBX3 : WInst<"vtbx3", "dddkkk", "UccPc">;
 def VTBX4 : WInst<"vtbx4", "dddkkkk", "UccPc">;
 
 ////////////////////////////////////////////////////////////////////////////////
+// Vector Shuffles
+def VTRN1 : WInst<"vtrn1", "ddd", "csilUcUsUiUlQcQsQiQlQUcQUsQUiQUl">;
+def VTRN2 : WInst<"vtrn2", "ddd", "csilUcUsUiUlQcQsQiQlQUcQUsQUiQUl">;
+def VZIP1 : WInst<"vzip1", "ddd", "csilUcUsUiUlQcQsQiQlQUcQUsQUiQUl">;
+def VZIP2 : WInst<"vzip2", "ddd", "csilUcUsUiUlQcQsQiQlQUcQUsQUiQUl">;
+def VUZP1 : WInst<"vuzp1", "ddd", "csilUcUsUiUlQcQsQiQlQUcQUsQUiQUl">;
+def VUZP2 : WInst<"vuzp2", "ddd", "csilUcUsUiUlQcQsQiQlQUcQUsQUiQUl">;
+
+////////////////////////////////////////////////////////////////////////////////
 // Operations with a scalar value
 def VMLA_LANE    : Inst<"vmla_lane", "dddgi", "siUsUiQsQiQUsQUi", OP_MLA_LN>;
 def FMLA_LANE    : IInst<"vmla_lane", "dddgi", "fQf">;
