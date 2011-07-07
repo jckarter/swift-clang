@@ -3207,7 +3207,23 @@ static bool handleObjCOwnershipTypeAttr(TypeProcessingState &state,
     attr.setInvalid();
     return true;
   }
-
+    
+  // Forbid __weak for class objects marked as 
+  // objc_arc_weak_reference_unavailable
+  if (lifetime == Qualifiers::OCL_Weak) {
+    QualType T = type;
+    while (const PointerType *ptr = T->getAs<PointerType>())
+      T = ptr->getPointeeType();
+    if (const ObjCObjectPointerType *ObjT = T->getAs<ObjCObjectPointerType>()) {
+      ObjCInterfaceDecl *Class = ObjT->getInterfaceDecl();
+      if (Class->isArcWeakrefUnavailable()) {
+          S.Diag(attr.getLoc(), diag::err_arc_unsupported_weak_class);
+          S.Diag(ObjT->getInterfaceDecl()->getLocation(), 
+                 diag::note_class_declared);
+      }
+    }
+  }
+  
   return true;
 }
 
