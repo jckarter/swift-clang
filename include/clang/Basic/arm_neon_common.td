@@ -121,4 +121,5 @@ class WInst<string n, string p, string t> : Inst<n, p, t, OP_NONE> {}
 // size modifiers:
 // U: unsigned
 // Q: 128b
+// R: 128b without 'q' suffix
 // P: polynomial

@@ -2605,6 +2605,18 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     return EmitNeonCall(CGM.getIntrinsic(Intrinsic::arm64_neon_tbx4, &Ty, 1),
                         Ops, "vtbx4");
   }
+  case ARM64::BI__builtin_arm64_vabdl_high_v: {
+    Int = usgn ? Intrinsic::arm64_neon_uabdl2 : Intrinsic::arm64_neon_sabdl2;
+    const llvm::Type *Tys[2] = { VTy, Ops[0]->getType() };
+    return EmitNeonCall(CGM.getIntrinsic(Int, Tys, 2), Ops, "vabdl_high");
+  }
+  case ARM64::BI__builtin_arm64_vabal_high_v: {
+    Int = usgn ? Intrinsic::arm64_neon_uabdl2 : Intrinsic::arm64_neon_sabdl2;
+    const llvm::Type *Tys[2] = { VTy, Ops[1]->getType() };
+    SmallVector<llvm::Value*, 2> TmpOps(Ops.begin()+1, Ops.end());
+    Ops[1] = EmitNeonCall(CGM.getIntrinsic(Int, Tys, 2), TmpOps, "vabdl_high");
+    return Builder.CreateAdd(Builder.CreateBitCast(Ops[0], Ty), Ops[1]);
+  }
   }
 }
 
