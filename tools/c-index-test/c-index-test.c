@@ -1496,6 +1496,7 @@ int write_pch_file(const char *filename, int argc, const char *argv[]) {
   CXTranslationUnit TU;
   struct CXUnsavedFile *unsaved_files = 0;
   int num_unsaved_files = 0;
+  int result = 0;
   
   Idx = clang_createIndex(/* excludeDeclsFromPCH */1, /* displayDiagnosics=*/1);
   
@@ -1517,12 +1518,34 @@ int write_pch_file(const char *filename, int argc, const char *argv[]) {
     return 1;
   }
 
-  if (clang_saveTranslationUnit(TU, filename, clang_defaultSaveOptions(TU)))
-    fprintf(stderr, "Unable to write PCH file %s\n", filename);
+  switch (clang_saveTranslationUnit(TU, filename, 
+                                    clang_defaultSaveOptions(TU))) {
+  case CXSaveError_None:
+    break;
+
+  case CXSaveError_TranslationErrors:
+    fprintf(stderr, "Unable to write PCH file %s: translation errors\n", 
+            filename);
+    result = 2;    
+    break;
+
+  case CXSaveError_InvalidTU:
+    fprintf(stderr, "Unable to write PCH file %s: invalid translation unit\n", 
+            filename);
+    result = 3;    
+    break;
+
+  case CXSaveError_Unknown:
+  default:
+    fprintf(stderr, "Unable to write PCH file %s: unknown error \n", filename);
+    result = 1;
+    break;
+  }
+  
   clang_disposeTranslationUnit(TU);
   free_remapped_files(unsaved_files, num_unsaved_files);
   clang_disposeIndex(Idx);
-  return 0;  
+  return result;
 }
 
 /******************************************************************************/
