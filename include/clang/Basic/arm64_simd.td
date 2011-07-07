@@ -24,6 +24,10 @@ def VRHADD  : SInst<"vrhadd", "ddd", "csiUcUsUiQcQsQiQUcQUsQUi">;
 def VQADD   : SInst<"vqadd", "ddd", "csilUcUsUiUlQcQsQiQlQUcQUsQUiQUl">;
 def VADDHN  : IInst<"vaddhn", "hkk", "silUsUiUl">;
 def VRADDHN : IInst<"vraddhn", "hkk", "silUsUiUl">;
+def VADDL_HIGH : SInst<"vaddl_high", "ndd", "RcRsRiRUcRUsRUi">;
+def VADDW_HIGH : SInst<"vaddw_high", "ndd", "RcRsRiRUcRUsRUi">;
+def VADDHN_HIGH  : SInst<"vaddhn_high",  "hdd", "RsRiRlRUsRUiRUl">;
+def VRADDHN_HIGH : SInst<"vraddhn_high", "hdd", "RsRiRlRUsRUiRUl">;
 
 ////////////////////////////////////////////////////////////////////////////////
 // Multiplication
@@ -41,6 +45,12 @@ def VQDMLAL  : Inst<"vqdmlal", "wwdd", "si", OP_QDMLAL>;
 def VQDMLSL  : Inst<"vqdmlsl", "wwdd", "si", OP_QDMLSL>;
 def VMULL    : SInst<"vmull", "wdd", "csiUcUsUiPc">;
 def VQDMULL  : SInst<"vqdmull", "wdd", "si">;
+def VMLAL_HIGH : SInst<"vmlal_high", "nndd", "RcRsRiRUcRUsRUi">;
+def VMLSL_HIGH : SInst<"vmlsl_high", "nndd", "RcRsRiRUcRUsRUi">;
+def VMULL_HIGH : SInst<"vmull_high", "ndd",  "RcRsRiRUcRUsRUi">;
+def VQDMLAL_HIGH : SInst<"vqdmlal_high", "nndd", "RsRi">;
+def VQDMLSL_HIGH : SInst<"vqdmlsl_high", "nndd", "RsRi">;
+def VQDMULL_HIGH : SInst<"vqdmull_high", "ndd",  "RsRi">;
 
 ////////////////////////////////////////////////////////////////////////////////
 // Subtraction
@@ -51,6 +61,10 @@ def VQSUB   : SInst<"vqsub", "ddd", "csilUcUsUiUlQcQsQiQlQUcQUsQUiQUl">;
 def VHSUB   : SInst<"vhsub", "ddd", "csiUcUsUiQcQsQiQUcQUsQUi">;
 def VSUBHN  : IInst<"vsubhn", "hkk", "silUsUiUl">;
 def VRSUBHN : IInst<"vrsubhn", "hkk", "silUsUiUl">;
+def VSUBL_HIGH   : SInst<"vsubl_high",   "ndd", "RcRsRiRUcRUsRUi">;
+def VSUBW_HIGH   : SInst<"vsubw_high",   "ndd", "RcRsRiRUcRUsRUi">;
+def VRSUBHN_HIGH : SInst<"vrsubhn_high", "hdd", "RsRiRl">;
+def VSUBHN_HIGH  : SInst<"vsubhn_high",   "hdd", "RsRiRl">;
 
 ////////////////////////////////////////////////////////////////////////////////
 // Comparison
@@ -119,6 +133,8 @@ def VQSHRN_N   : SInst<"vqshrn_n", "hki", "silUsUiUl">;
 def VRSHRN_N   : IInst<"vrshrn_n", "hki", "silUsUiUl">;
 def VQRSHRN_N  : SInst<"vqrshrn_n", "hki", "silUsUiUl">;
 def VSHLL_N    : SInst<"vshll_n", "wdi", "csiUcUsUi">;
+def VRSHRN_HIGH : SInst<"vrshrn_high", "hki", "RsRiRlRUsRUiRUl">;
+def VSHRN_HIGH  : SInst<"vshrn_high",  "hki", "RsRiRlRUsRUiRUl">;
 
 ////////////////////////////////////////////////////////////////////////////////
 // Shifts with insert
@@ -197,6 +213,11 @@ def VMOVN        : IInst<"vmovn", "hk",  "silUsUiUl">;
 def VMOVL        : SInst<"vmovl", "wd",  "csiUcUsUi">;
 def VQMOVN       : SInst<"vqmovn", "hk",  "silUsUiUl">;
 def VQMOVUN      : SInst<"vqmovun", "ek",  "sil">;
+def VXTL_HIGH    : SInst<"vxtl_high",   "nd", "RcRsRiRUcRUsRUi">;
+def VQXTN_HIGH   : SInst<"vqxtn_high",  "hd", "RsRiRlRUsRUiRUl">;
+def VQXTUN_HIGH  : SInst<"vqxtun_high", "hd", "RsRiRl">;
+def VMOVN_HIGH   : SInst<"vmovn_high",  "hd", "RsRiRlRUsRUiRUl">;
+def VMOVL_HIGH   : SInst<"vmovl_high",  "nd", "RcRsRiRUcRUsRUi">;
 
 ////////////////////////////////////////////////////////////////////////////////
 // Table lookup, Extended table lookup
