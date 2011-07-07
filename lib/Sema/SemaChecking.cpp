@@ -3595,6 +3595,7 @@ static bool findRetainCycleOwner(Expr *e, RetainCycleOwner &owner) {
       case CK_BitCast:
       case CK_LValueBitCast:
       case CK_LValueToRValue:
+      case CK_ObjCReclaimReturnedObject:
         e = cast->getSubExpr();
         continue;
 
