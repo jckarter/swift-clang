@@ -298,6 +298,15 @@ def VMLSL_N      : Inst<"vmlsl_n", "wwda", "siUsUi", OP_MLSL_N>;
 def VQDMLSL_N    : Inst<"vqdmlsl_n", "wwda", "si",OP_QDMLSL_N>;
 
 ////////////////////////////////////////////////////////////////////////////////
+// Cross Lane
+def ADDV  : SInst<"vaddv",  "sd", "csiUcUsUiQcQsQiQUcQUsQUi">;
+def ADDLV : SInst<"vaddlv", "zd", "csiUcUsUiQcQsQiQUcQUsQUi">;
+def MAXV  : SInst<"vmaxv",  "sd", "csiUcUsUiQcQsQiQUcQUsQUi">;
+def MINV  : SInst<"vminv",  "sd", "csiUcUsUiQcQsQiQUcQUsQUi">;
+def MAXNMV : SInst<"vmaxnmv", "sd", "Qf">;
+def MINMV  : SInst<"vminnmv", "sd", "Qf">; 
+
+////////////////////////////////////////////////////////////////////////////////
 // Vector Extract
 def VEXT : WInst<"vext", "dddi",
                  "cUcPcsUsPsiUilUlfQcQUcQPcQsQUsQPsQiQUiQlQUlQf">;

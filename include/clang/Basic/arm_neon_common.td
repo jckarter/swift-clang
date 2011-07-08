@@ -106,6 +106,7 @@ class WInst<string n, string p, string t> : Inst<n, p, t, OP_NONE> {}
 // l: constant uint64
 // s: scalar of element type
 // a: scalar of element type (splat to vector type)
+// z: scalar of double element type width
 // k: default elt width, double num elts
 // #: array of default vectors
 // p: pointer type
