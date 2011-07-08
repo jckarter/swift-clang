@@ -101,6 +101,7 @@ class WInst<string n, string p, string t> : Inst<n, p, t, OP_NONE> {}
 // n: double width elements, half num elts
 // h: half width elements, double num elts
 // e: half width elements, double num elts, unsigned
+// b: half width elements, same num elts
 // i: constant int
 // l: constant uint64
 // s: scalar of element type

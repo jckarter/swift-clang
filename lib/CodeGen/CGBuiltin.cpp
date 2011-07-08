@@ -2311,6 +2311,53 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     const llvm::Type *Tys[2] = { Ty, InTy };
     return EmitNeonCall(CGM.getIntrinsic(Int, Tys, 2), Ops, "vcvti_z");
   }
+  case ARM64::BI__builtin_arm64_vrnd_a_v:
+  case ARM64::BI__builtin_arm64_vrndq_a_v: {
+    Int = Intrinsic::arm64_neon_frinta;
+    return EmitNeonCall(CGM.getIntrinsic(Int, &Ty, 1), Ops, "vrnd_a");
+  }
+  case ARM64::BI__builtin_arm64_vrnd_i_v:
+  case ARM64::BI__builtin_arm64_vrndq_i_v: {
+    Int = Intrinsic::arm64_neon_frinti;
+    return EmitNeonCall(CGM.getIntrinsic(Int, &Ty, 1), Ops, "vrnd_i");
+  }
+  case ARM64::BI__builtin_arm64_vrnd_m_v:
+  case ARM64::BI__builtin_arm64_vrndq_m_v: {
+    Int = Intrinsic::arm64_neon_frintm;
+    return EmitNeonCall(CGM.getIntrinsic(Int, &Ty, 1), Ops, "vrnd_m");
+  }
+  case ARM64::BI__builtin_arm64_vrnd_n_v:
+  case ARM64::BI__builtin_arm64_vrndq_n_v: {
+    Int = Intrinsic::arm64_neon_frintn;
+    return EmitNeonCall(CGM.getIntrinsic(Int, &Ty, 1), Ops, "vrnd_n");
+  }
+  case ARM64::BI__builtin_arm64_vrnd_p_v:
+  case ARM64::BI__builtin_arm64_vrndq_p_v: {
+    Int = Intrinsic::arm64_neon_frintp;
+    return EmitNeonCall(CGM.getIntrinsic(Int, &Ty, 1), Ops, "vrnd_p");
+  }
+  case ARM64::BI__builtin_arm64_vrnd_x_v:
+  case ARM64::BI__builtin_arm64_vrndq_x_v: {
+    Int = Intrinsic::arm64_neon_frintx;
+    return EmitNeonCall(CGM.getIntrinsic(Int, &Ty, 1), Ops, "vrnd_x");
+  }
+  case ARM64::BI__builtin_arm64_vrnd_z_v:
+  case ARM64::BI__builtin_arm64_vrndq_z_v: {
+    Int = Intrinsic::arm64_neon_frintz;
+    return EmitNeonCall(CGM.getIntrinsic(Int, &Ty, 1), Ops, "vrnd_z");
+  }
+  case ARM64::BI__builtin_arm64_vcvt_f32_v: {
+    Int = Intrinsic::arm64_neon_fcvtxn;
+    const llvm::Type *InTy = GetNeonType(getLLVMContext(), 8, true);
+    const llvm::Type *Tys[2] = { Ty, InTy };
+    return EmitNeonCall(CGM.getIntrinsic(Int, Tys, 2), Ops, "vcvt_f32");
+  }
+  case ARM64::BI__builtin_arm64_vcvt2_f32_v: {
+    Int = Intrinsic::arm64_neon_fcvtxn2;
+    const llvm::Type *InTy = GetNeonType(getLLVMContext(), 8, true);
+    const llvm::Type *Tys[2] = { Ty, InTy };
+    return EmitNeonCall(CGM.getIntrinsic(Int, Tys, 2), Ops, "vcvt2_f32");
+  }
   case ARM64::BI__builtin_arm64_vsri_n_v:
   case ARM64::BI__builtin_arm64_vsriq_n_v: {
     Ops[0] = Builder.CreateBitCast(Ops[0], Ty);

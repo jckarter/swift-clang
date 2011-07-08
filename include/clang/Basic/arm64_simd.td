@@ -157,7 +157,15 @@ def VCVTI_N : SInst<"vcvti_n", "fdi", "iUiQiQUiQlQUl">;
 def VCVTI_P : SInst<"vcvti_p", "fdi", "iUiQiQUiQlQUl">;
 def VCVTI_Z : SInst<"vcvti_z", "fdi", "iUiQiQUiQlQUl">;
 }
-
+def VCVT  : SInst<"vcvt_f32",  "bd", "Rd">;
+def VCVT2 : SInst<"vcvt2_f32", "hd", "Rd">;
+def VRND_A : SInst<"vrnd_a", "dd", "fQfQd">;
+def VRND_I : SInst<"vrnd_i", "dd", "fQfQd">;
+def VRND_M : SInst<"vrnd_m", "dd", "fQfQd">;
+def VRND_N : SInst<"vrnd_n", "dd", "fQfQd">;
+def VRND_P : SInst<"vrnd_p", "dd", "fQfQd">;
+def VRND_X : SInst<"vrnd_x", "dd", "fQfQd">;
+def VRND_Z : SInst<"vrnd_z", "dd", "fQfQd">;
 
 ////////////////////////////////////////////////////////////////////////////////
 // Loads and stores of a single vector
