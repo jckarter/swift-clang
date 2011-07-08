@@ -53,6 +53,14 @@ def VQDMLSL_HIGH : SInst<"vqdmlsl_high", "nndd", "RsRi">;
 def VQDMULL_HIGH : SInst<"vqdmull_high", "ndd",  "RsRi">;
 
 ////////////////////////////////////////////////////////////////////////////////
+// Miscellaneous FP
+def VDIV  : SInst<"vdiv",  "ddd", "fQfQd">;
+def VMULX : SInst<"vmulx", "ddd", "fQfQd">;
+def VMAXNMP : SInst<"vmaxnmp", "ddd", "fQfQd">;
+def VMINNMP : SInst<"vminnmp", "ddd", "fQfQd">;
+def VSQRT : SInst<"vsqrt", "dd", "fQfQd">;
+
+////////////////////////////////////////////////////////////////////////////////
 // Subtraction
 def VSUB : Inst<"vsub", "ddd", "csilfUcUsUiUlQcQsQiQlQfQUcQUsQUiQUl", OP_SUB>;
 def VSUBL   : Inst<"vsubl", "wdd", "csiUcUsUi", OP_SUBL>;
@@ -312,6 +320,7 @@ def VCLZ    : IInst<"vclz", "dd", "csiUcUsUiQcQsQiQUcQUsQUi">;
 def VCNT    : WInst<"vcnt", "dd", "UccPcQUcQcQPc">;
 def VRECPE  : SInst<"vrecpe", "dd", "fUiQfQUi">;
 def VRSQRTE : SInst<"vrsqrte", "dd", "fUiQfQUi">;
+def VRBIT   : SInst<"vrbit", "dd", "cUcQcQUc">;
 
 ////////////////////////////////////////////////////////////////////////////////
 // Logical operations

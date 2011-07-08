@@ -2358,6 +2358,32 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     const llvm::Type *Tys[2] = { Ty, InTy };
     return EmitNeonCall(CGM.getIntrinsic(Int, Tys, 2), Ops, "vcvt2_f32");
   }
+  case ARM64::BI__builtin_arm64_vdiv_v:
+  case ARM64::BI__builtin_arm64_vdivq_v:
+    Ops[0] = Builder.CreateBitCast(Ops[0], Ty);
+    Ops[1] = Builder.CreateBitCast(Ops[1], Ty);
+    return Builder.CreateFDiv(Ops[0], Ops[1]);
+  case ARM64::BI__builtin_arm64_vmaxnmp_v:
+  case ARM64::BI__builtin_arm64_vmaxnmpq_v: {
+    Int = Intrinsic::arm64_neon_fmaxnmp;
+    return EmitNeonCall(CGM.getIntrinsic(Int, &Ty, 1), Ops, "vmaxnmp");
+  }
+  case ARM64::BI__builtin_arm64_vminnmp_v:
+  case ARM64::BI__builtin_arm64_vminnmpq_v: {
+    Int = Intrinsic::arm64_neon_fminnmp;
+    return EmitNeonCall(CGM.getIntrinsic(Int, &Ty, 1), Ops, "vminnmp");
+  }
+  case ARM64::BI__builtin_arm64_vsqrt_v:
+  case ARM64::BI__builtin_arm64_vsqrtq_v: {
+    Int = Intrinsic::sqrt;
+    Ops[0] = Builder.CreateBitCast(Ops[0], Ty);
+    return EmitNeonCall(CGM.getIntrinsic(Int, &Ty, 1), Ops, "vsqrt");
+  }
+  case ARM64::BI__builtin_arm64_vrbit_v:
+  case ARM64::BI__builtin_arm64_vrbitq_v: {
+    Int = Intrinsic::arm64_neon_rbit;
+    return EmitNeonCall(CGM.getIntrinsic(Int, &Ty, 1), Ops, "vrbit");
+  }
   case ARM64::BI__builtin_arm64_vsri_n_v:
   case ARM64::BI__builtin_arm64_vsriq_n_v: {
     Ops[0] = Builder.CreateBitCast(Ops[0], Ty);
