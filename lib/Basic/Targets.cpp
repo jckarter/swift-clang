@@ -1088,7 +1088,7 @@ const Builtin::Info BuiltinInfo[] = {
 static const char* const GCCRegNames[] = {
   "ax", "dx", "cx", "bx", "si", "di", "bp", "sp",
   "st", "st(1)", "st(2)", "st(3)", "st(4)", "st(5)", "st(6)", "st(7)",
-  "argp", "flags", "fspr", "dirflag", "frame",
+  "argp", "flags", "fpcr", "fpsr", "dirflag", "frame",
   "xmm0", "xmm1", "xmm2", "xmm3", "xmm4", "xmm5", "xmm6", "xmm7",
   "mm0", "mm1", "mm2", "mm3", "mm4", "mm5", "mm6", "mm7",
   "r8", "r9", "r10", "r11", "r12", "r13", "r14", "r15",
@@ -2995,7 +2995,7 @@ static TargetInfo *AllocateTarget(const std::string &T) {
     case llvm::Triple::RTEMS:
       return new RTEMSTargetInfo<MipsTargetInfo>(T);
     case llvm::Triple::FreeBSD:
-      return new NetBSDTargetInfo<MipsTargetInfo>(T);
+      return new FreeBSDTargetInfo<MipsTargetInfo>(T);
     case llvm::Triple::NetBSD:
       return new NetBSDTargetInfo<MipsTargetInfo>(T);
     default:
