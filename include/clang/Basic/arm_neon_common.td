@@ -115,6 +115,7 @@ class WInst<string n, string p, string t> : Inst<n, p, t, OP_NONE> {}
 // s: short
 // i: int
 // l: long
+// d: double
 // f: float
 // h: half-float
 

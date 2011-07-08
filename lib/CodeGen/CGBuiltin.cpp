@@ -1114,6 +1114,7 @@ static const llvm::VectorType *GetNeonType(LLVMContext &C, unsigned type,
     case 2: return llvm::VectorType::get(llvm::Type::getInt32Ty(C),2 << (int)q);
     case 3: return llvm::VectorType::get(llvm::Type::getInt64Ty(C),1 << (int)q);
     case 4: return llvm::VectorType::get(llvm::Type::getFloatTy(C),2 << (int)q);
+    case 8: return llvm::VectorType::get(llvm::Type::getDoubleTy(C), 1 << (int)q);
   };
   return 0;
 }
@@ -1251,13 +1252,13 @@ Value *CodeGenFunction::EmitARMBuiltinExpr(unsigned BuiltinID,
   
   // Determine the type of this overloaded NEON intrinsic.
   unsigned type = Result.getZExtValue();
-  bool usgn = type & 0x08;
-  bool quad = type & 0x10;
+  bool usgn = type & 0x10;
+  bool quad = type & 0x20;
   bool poly = (type & 0x7) == 5 || (type & 0x7) == 6;
   (void)poly;  // Only used in assert()s.
   bool rightShift = false;
 
-  const llvm::VectorType *VTy = GetNeonType(getLLVMContext(), type & 0x7, quad);
+  const llvm::VectorType *VTy = GetNeonType(getLLVMContext(), type & 0xF, quad);
   const llvm::Type *Ty = VTy;
   if (!Ty)
     return 0;
@@ -1913,13 +1914,13 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
 
   // Determine the type of this overloaded NEON intrinsic.
   unsigned type = Result.getZExtValue();
-  bool usgn = type & 0x08;
-  bool quad = type & 0x10;
+  bool usgn = type & 0x10;
+  bool quad = type & 0x20;
   bool poly = (type & 0x7) == 5 || (type & 0x7) == 6;
   (void)poly;  // Only used in assert()s.
   (void)usgn; // FIXME: remove when the variable is used
 
-  const llvm::VectorType *VTy = GetNeonType(getLLVMContext(), type & 0x7, quad);
+  const llvm::VectorType *VTy = GetNeonType(getLLVMContext(), type & 0xF, quad);
   const llvm::Type *Ty = VTy;
   if (!Ty)
     return 0;
@@ -2219,6 +2220,97 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
   case ARM64::BI__builtin_arm64_vshll_n_v:
     Int = usgn ? Intrinsic::arm64_neon_ushll : Intrinsic::arm64_neon_sshll;
     return EmitNeonCall(CGM.getIntrinsic(Int, &Ty, 1), Ops, "vshll_n");
+  case ARM64::BI__builtin_arm64_vcvtf_a_v:
+  case ARM64::BI__builtin_arm64_vcvtfq_a_v: {
+    Int = usgn ? Intrinsic::arm64_neon_fcvtau : Intrinsic::arm64_neon_fcvtas;
+    bool Double =
+      (cast<llvm::IntegerType>(VTy->getElementType())->getBitWidth() == 64);
+    const llvm::Type *InTy =
+      GetNeonType(getLLVMContext(), Double ? 8 : 4, quad);
+    const llvm::Type *Tys[2] = { Ty, InTy };
+    return EmitNeonCall(CGM.getIntrinsic(Int, Tys, 2), Ops, "vcvtf_a");
+  }
+  case ARM64::BI__builtin_arm64_vcvtf_m_v:
+  case ARM64::BI__builtin_arm64_vcvtfq_m_v: {
+    Int = usgn ? Intrinsic::arm64_neon_fcvtmu : Intrinsic::arm64_neon_fcvtms;
+    bool Double =
+      (cast<llvm::IntegerType>(VTy->getElementType())->getBitWidth() == 64);
+    const llvm::Type *InTy =
+      GetNeonType(getLLVMContext(), Double ? 8 : 4, quad);
+    const llvm::Type *Tys[2] = { Ty, InTy };
+    return EmitNeonCall(CGM.getIntrinsic(Int, Tys, 2), Ops, "vcvtf_m");
+  }
+  case ARM64::BI__builtin_arm64_vcvtf_n_v:
+  case ARM64::BI__builtin_arm64_vcvtfq_n_v: {
+    bool Double = 
+      (cast<llvm::IntegerType>(VTy->getElementType())->getBitWidth() == 64);
+    Ops[0] = Builder.CreateBitCast(Ops[0],
+        GetNeonType(getLLVMContext(), Double ? 8 : 4, quad));
+    if (usgn)
+      return Builder.CreateFPToUI(Ops[0], Ty);
+    else
+      return Builder.CreateFPToSI(Ops[0], Ty);
+  }
+  case ARM64::BI__builtin_arm64_vcvtf_p_v:
+  case ARM64::BI__builtin_arm64_vcvtfq_p_v: {
+    Int = usgn ? Intrinsic::arm64_neon_fcvtpu : Intrinsic::arm64_neon_fcvtps;
+    bool Double =
+      (cast<llvm::IntegerType>(VTy->getElementType())->getBitWidth() == 64);
+    const llvm::Type *InTy =
+      GetNeonType(getLLVMContext(), Double ? 8 : 4, quad);
+    const llvm::Type *Tys[2] = { Ty, InTy };
+    return EmitNeonCall(CGM.getIntrinsic(Int, Tys, 2), Ops, "vcvtf_p");
+  }
+  case ARM64::BI__builtin_arm64_vcvtf_z_v:
+  case ARM64::BI__builtin_arm64_vcvtfq_z_v: {
+    Int = usgn ? Intrinsic::arm64_neon_fcvtzu : Intrinsic::arm64_neon_fcvtzs;
+    bool Double =
+      (cast<llvm::IntegerType>(VTy->getElementType())->getBitWidth() == 64);
+    const llvm::Type *InTy =
+      GetNeonType(getLLVMContext(), Double ? 8 : 4, quad);
+    const llvm::Type *Tys[2] = { Ty, InTy };
+    return EmitNeonCall(CGM.getIntrinsic(Int, Tys, 2), Ops, "vcvtf_z");
+  }
+  case ARM64::BI__builtin_arm64_vcvti_m_v:
+  case ARM64::BI__builtin_arm64_vcvtiq_m_v: {
+    Int = usgn ? Intrinsic::arm64_neon_fcvtmuc : Intrinsic::arm64_neon_fcvtmsc;
+    bool Double =
+      (cast<llvm::IntegerType>(VTy->getElementType())->getBitWidth() == 64);
+    const llvm::Type *InTy =
+      GetNeonType(getLLVMContext(), Double ? 8 : 4, quad);
+    const llvm::Type *Tys[2] = { Ty, InTy };
+    return EmitNeonCall(CGM.getIntrinsic(Int, Tys, 2), Ops, "vcvti_m");
+  }
+  case ARM64::BI__builtin_arm64_vcvti_n_v:
+  case ARM64::BI__builtin_arm64_vcvtiq_n_v: {
+    Int = usgn ? Intrinsic::arm64_neon_fcvtnuc : Intrinsic::arm64_neon_fcvtnsc;
+    bool Double =
+      (cast<llvm::IntegerType>(VTy->getElementType())->getBitWidth() == 64);
+    const llvm::Type *InTy =
+      GetNeonType(getLLVMContext(), Double ? 8 : 4, quad);
+    const llvm::Type *Tys[2] = { Ty, InTy };
+    return EmitNeonCall(CGM.getIntrinsic(Int, Tys, 2), Ops, "vcvti_n");
+  }
+  case ARM64::BI__builtin_arm64_vcvti_p_v:
+  case ARM64::BI__builtin_arm64_vcvtiq_p_v: {
+    Int = usgn ? Intrinsic::arm64_neon_fcvtpuc : Intrinsic::arm64_neon_fcvtpsc;
+    bool Double =
+      (cast<llvm::IntegerType>(VTy->getElementType())->getBitWidth() == 64);
+    const llvm::Type *InTy =
+      GetNeonType(getLLVMContext(), Double ? 8 : 4, quad);
+    const llvm::Type *Tys[2] = { Ty, InTy };
+    return EmitNeonCall(CGM.getIntrinsic(Int, Tys, 2), Ops, "vcvti_p");
+  }
+  case ARM64::BI__builtin_arm64_vcvti_z_v:
+  case ARM64::BI__builtin_arm64_vcvtiq_z_v: {
+    Int = usgn ? Intrinsic::arm64_neon_fcvtzuc : Intrinsic::arm64_neon_fcvtzsc;
+    bool Double =
+      (cast<llvm::IntegerType>(VTy->getElementType())->getBitWidth() == 64);
+    const llvm::Type *InTy =
+      GetNeonType(getLLVMContext(), Double ? 8 : 4, quad);
+    const llvm::Type *Tys[2] = { Ty, InTy };
+    return EmitNeonCall(CGM.getIntrinsic(Int, Tys, 2), Ops, "vcvti_z");
+  }
   case ARM64::BI__builtin_arm64_vsri_n_v:
   case ARM64::BI__builtin_arm64_vsriq_n_v: {
     Ops[0] = Builder.CreateBitCast(Ops[0], Ty);
