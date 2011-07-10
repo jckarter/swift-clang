@@ -31,6 +31,7 @@ CodeGenTypes::CodeGenTypes(ASTContext &Ctx, llvm::Module& M,
                            CGCXXABI &CXXABI, const CodeGenOptions &CGO)
   : Context(Ctx), Target(Ctx.Target), TheModule(M), TheTargetData(TD),
     TheABIInfo(Info), TheCXXABI(CXXABI), CodeGenOpts(CGO) {
+  RecursionState = RS_Normal;
 }
 
 CodeGenTypes::~CodeGenTypes() {
@@ -93,19 +94,56 @@ llvm::Type *CodeGenTypes::ConvertTypeForMem(QualType T){
 
 }
 
-// Code to verify a given function type is complete, i.e. the return type
-// and all of the argument types are complete.
-const TagType *CodeGenTypes::VerifyFuncTypeComplete(const Type* T) {
-  const FunctionType *FT = cast<FunctionType>(T);
-  if (const TagType* TT = FT->getResultType()->getAs<TagType>())
-    if (!TT->getDecl()->isDefinition())
-      return TT;
-  if (const FunctionProtoType *FPT = dyn_cast<FunctionProtoType>(T))
+/// isFuncTypeArgumentConvertible - Return true if the specified type in a 
+/// function argument or result position can be converted to an IR type at this
+/// point.  This boils down to being whether it is complete, as well as whether
+/// we've temporarily deferred expanding the type because we're in a recursive
+/// context.
+bool CodeGenTypes::isFuncTypeArgumentConvertible(QualType Ty){
+  // If this isn't a tagged type, we can convert it!
+  const TagType *TT = Ty->getAs<TagType>();
+  if (TT == 0) return true;
+  
+  
+  // If it's a tagged type, but is a forward decl, we can't convert it.
+  if (!TT->getDecl()->isDefinition())
+    return false;
+  
+  // If we're not under a pointer under a struct, then we can convert it if
+  // needed.
+  if (RecursionState != RS_StructPointer)
+    return true;
+
+  // If this is an enum, then it is safe to convert.
+  const RecordType *RT = dyn_cast<RecordType>(TT);
+  if (RT == 0) return true;
+
+  // Otherwise, we have to be careful.  If it is a struct that we're in the
+  // process of expanding, then we can't convert the function type.  That's ok
+  // though because we must be in a pointer context under the struct, so we can
+  // just convert it to a dummy type.
+  //
+  // We decide this by checking whether ConvertRecordDeclType returns us an
+  // opaque type for a struct that we know is defined.
+  return !ConvertRecordDeclType(RT->getDecl())->isOpaque();
+}
+
+
+/// Code to verify a given function type is complete, i.e. the return type
+/// and all of the argument types are complete.  Also check to see if we are in
+/// a RS_StructPointer context, and if so whether any struct types have been
+/// pended.  If so, we don't want to ask the ABI lowering code to handle a type
+/// that cannot be converted to an IR type.
+bool CodeGenTypes::isFuncTypeConvertible(const FunctionType *FT) {
+  if (!isFuncTypeArgumentConvertible(FT->getResultType()))
+    return false;
+  
+  if (const FunctionProtoType *FPT = dyn_cast<FunctionProtoType>(FT))
     for (unsigned i = 0, e = FPT->getNumArgs(); i != e; i++)
-      if (const TagType *TT = FPT->getArgType(i)->getAs<TagType>())
-        if (!TT->getDecl()->isDefinition())
-          return TT;
-  return 0;
+      if (!isFuncTypeArgumentConvertible(FPT->getArgType(i)))
+        return false;
+
+  return true;
 }
 
 /// UpdateCompletedType - When we find the full definition for a TagDecl,
@@ -121,8 +159,14 @@ void CodeGenTypes::UpdateCompletedType(const TagDecl *TD) {
     return;
   }
   
+  // If we completed a RecordDecl that we previously used and converted to an
+  // anonymous type, then go ahead and complete it now.
   const RecordDecl *RD = cast<RecordDecl>(TD);
-  if (!RD->isDependentType())
+  if (RD->isDependentType()) return;
+
+  // Only complete it if we converted it already.  If we haven't converted it
+  // yet, we'll just do it lazily.
+ // if (RecordDeclTypes.count(Context.getTagDeclType(RD).getTypePtr()))
     ConvertRecordDeclType(RD);
 }
 
@@ -296,13 +340,20 @@ llvm::Type *CodeGenTypes::ConvertType(QualType T) {
     // First, check whether we can build the full function type.  If the
     // function type depends on an incomplete type (e.g. a struct or enum), we
     // cannot lower the function type.
-    if (VerifyFuncTypeComplete(Ty)) {
+    if (RecursionState == RS_StructPointer ||
+        !isFuncTypeConvertible(cast<FunctionType>(Ty))) {
       // This function's type depends on an incomplete tag type.
       // Return a placeholder type.
       ResultType = llvm::StructType::get(getLLVMContext());
       break;
     }
 
+    // While we're converting the argument types for a function, we don't want
+    // to recursively convert any pointed-to structs.  Converting directly-used
+    // structs is ok though.
+    RecursionStateTy SavedRecursionState = RecursionState;
+    RecursionState = RS_Struct;
+    
     // The function type can be built; call the appropriate routines to
     // build it.
     const CGFunctionInfo *FI;
@@ -317,8 +368,15 @@ llvm::Type *CodeGenTypes::ConvertType(QualType T) {
                 CanQual<FunctionNoProtoType>::CreateUnsafe(QualType(FNPT, 0)));
       isVariadic = true;
     }
-
+    
     ResultType = GetFunctionType(*FI, isVariadic);
+    
+    // Restore our recursion state.
+    RecursionState = SavedRecursionState;
+    
+    if (RecursionState == RS_Normal)
+      while (!DeferredRecords.empty())
+        ConvertRecordDeclType(DeferredRecords.pop_back_val());
     break;
   }
 
@@ -426,10 +484,16 @@ llvm::StructType *CodeGenTypes::ConvertRecordDeclType(const RecordDecl *RD) {
   CGRecordLayout *Layout = ComputeRecordLayout(RD, Ty);
   CGRecordLayouts[Key] = Layout;
 
+  // If this struct blocked a FunctionType conversion, then recompute whatever
+  // was derived from that.
+  // FIXME: This is hugely overconservative.
+  TypeCache.clear();
+  
   
   // Restore our recursion state.  If we're done converting the outer-most
   // record, then convert any deferred structs as well.
   RecursionState = SavedRecursionState;
+  
   if (RecursionState == RS_Normal)
     while (!DeferredRecords.empty())
       ConvertRecordDeclType(DeferredRecords.pop_back_val());
