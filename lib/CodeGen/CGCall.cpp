@@ -252,8 +252,7 @@ const CGFunctionInfo &CodeGenTypes::getFunctionInfo(CanQualType ResTy,
 
   // Lookup or create unique function info.
   llvm::FoldingSetNodeID ID;
-  CGFunctionInfo::Profile(ID, Info, ResTy,
-                          ArgTys.begin(), ArgTys.end());
+  CGFunctionInfo::Profile(ID, Info, ResTy, ArgTys.begin(), ArgTys.end());
 
   void *InsertPos = 0;
   CGFunctionInfo *FI = FunctionInfos.FindNodeOrInsertPos(ID, InsertPos);
@@ -704,16 +703,15 @@ const llvm::Type *CodeGenTypes::GetFunctionTypeForVTable(GlobalDecl GD) {
   const CXXMethodDecl *MD = cast<CXXMethodDecl>(GD.getDecl());
   const FunctionProtoType *FPT = MD->getType()->getAs<FunctionProtoType>();
 
-  if (!VerifyFuncTypeComplete(FPT)) {
-    const CGFunctionInfo *Info;
-    if (isa<CXXDestructorDecl>(MD))
-      Info = &getFunctionInfo(cast<CXXDestructorDecl>(MD), GD.getDtorType());
-    else
-      Info = &getFunctionInfo(MD);
-    return GetFunctionType(*Info, FPT->isVariadic());
-  }
-
-  return llvm::StructType::get(getLLVMContext());
+  if (!isFuncTypeConvertible(FPT))
+    return llvm::StructType::get(getLLVMContext());
+    
+  const CGFunctionInfo *Info;
+  if (isa<CXXDestructorDecl>(MD))
+    Info = &getFunctionInfo(cast<CXXDestructorDecl>(MD), GD.getDtorType());
+  else
+    Info = &getFunctionInfo(MD);
+  return GetFunctionType(*Info, FPT->isVariadic());
 }
 
 void CodeGenModule::ConstructAttributeList(const CGFunctionInfo &FI,
