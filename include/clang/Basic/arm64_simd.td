@@ -296,6 +296,7 @@ def VQDMLAL_N    : Inst<"vqdmlal_n", "wwda", "si", OP_QDMLAL_N>;
 def VMLS_N       : Inst<"vmls_n", "ddds", "siUsUifQsQiQUsQUiQf", OP_MLS_N>;
 def VMLSL_N      : Inst<"vmlsl_n", "wwda", "siUsUi", OP_MLSL_N>;
 def VQDMLSL_N    : Inst<"vqdmlsl_n", "wwda", "si",OP_QDMLSL_N>;
+def VMULX_LANE   : SInst<"vmulx_lane", "dddi", "fQfQd">;
 
 ////////////////////////////////////////////////////////////////////////////////
 // Cross Lane
