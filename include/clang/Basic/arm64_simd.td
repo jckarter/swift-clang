@@ -299,10 +299,10 @@ def VQDMLSL_N    : Inst<"vqdmlsl_n", "wwda", "si",OP_QDMLSL_N>;
 
 ////////////////////////////////////////////////////////////////////////////////
 // Cross Lane
-def ADDV  : SInst<"vaddv",  "sd", "csiUcUsUiQcQsQiQUcQUsQUi">;
-def ADDLV : SInst<"vaddlv", "zd", "csiUcUsUiQcQsQiQUcQUsQUi">;
-def MAXV  : SInst<"vmaxv",  "sd", "csiUcUsUiQcQsQiQUcQUsQUi">;
-def MINV  : SInst<"vminv",  "sd", "csiUcUsUiQcQsQiQUcQUsQUi">;
+def ADDV  : SInst<"vaddv",  "sd", "csUcUsQcQsQiQUcQUsQUi">;
+def ADDLV : SInst<"vaddlv", "zd", "csUcUsQcQsQiQUcQUsQUi">;
+def MAXV  : SInst<"vmaxv",  "sd", "csUcUsQcQsQiQUcQUsQUiQf">;
+def MINV  : SInst<"vminv",  "sd", "csUcUsQcQsQiQUcQUsQUiQf">;
 def MAXNMV : SInst<"vmaxnmv", "sd", "Qf">;
 def MINMV  : SInst<"vminnmv", "sd", "Qf">; 
 
