@@ -1011,7 +1011,7 @@ RValue CodeGenFunction::EmitBuiltinExpr(const FunctionDecl *FD,
     LLVMContext &C = CGM.getLLVMContext();
 
     Value *Arg = EmitScalarExpr(E->getArg(0));
-    const llvm::Type *ArgTy = Arg->getType();
+    llvm::Type *ArgTy = Arg->getType();
     if (ArgTy->isPPC_FP128Ty())
       break; // FIXME: I'm not sure what the right implementation is here.
     int ArgWidth = ArgTy->getPrimitiveSizeInBits();
@@ -1068,7 +1068,7 @@ RValue CodeGenFunction::EmitBuiltinExpr(const FunctionDecl *FD,
 
       // If the intrinsic arg type is different from the builtin arg type
       // we need to do a bit cast.
-      const llvm::Type *PTy = FTy->getParamType(i);
+      llvm::Type *PTy = FTy->getParamType(i);
       if (PTy != ArgValue->getType()) {
         assert(PTy->canLosslesslyBitCastTo(FTy->getParamType(i)) &&
                "Must be able to losslessly bit cast to param");
@@ -1941,8 +1941,8 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
   (void)poly;  // Only used in assert()s.
   (void)usgn; // FIXME: remove when the variable is used
 
-  const llvm::VectorType *VTy = GetNeonType(getLLVMContext(), type & 0xF, quad);
-  const llvm::Type *Ty = VTy;
+  llvm::VectorType *VTy = GetNeonType(getLLVMContext(), type & 0xF, quad);
+  llvm::Type *Ty = VTy;
   if (!Ty)
     return 0;
 
@@ -2130,21 +2130,21 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     return EmitNeonCall(CGM.getIntrinsic(Int, &Ty, 1), Ops, "vpadd");
   case ARM64::BI__builtin_arm64_vpaddl_v: {
     unsigned ArgElts = VTy->getNumElements();
-    const llvm::IntegerType *EltTy = cast<IntegerType>(VTy->getElementType());
+    llvm::IntegerType *EltTy = cast<IntegerType>(VTy->getElementType());
     unsigned BitWidth = EltTy->getBitWidth();
-    const llvm::Type *RetTy = llvm::VectorType::get(
+    llvm::Type *RetTy = llvm::VectorType::get(
         llvm::IntegerType::get(getLLVMContext(), 2*BitWidth), ArgElts/2);
-    const llvm::Type* Tys[2] = { RetTy, Ty };
+    llvm::Type* Tys[2] = { RetTy, Ty };
     Int = usgn ? Intrinsic::arm64_neon_uaddlp : Intrinsic::arm64_neon_saddlp;
     return EmitNeonCall(CGM.getIntrinsic(Int, Tys, 2), Ops, "vpaddl");
   }
   case ARM64::BI__builtin_arm64_vpadal_v: {
     unsigned ArgElts = VTy->getNumElements();
-    const llvm::IntegerType *EltTy = cast<IntegerType>(VTy->getElementType());
+    llvm::IntegerType *EltTy = cast<IntegerType>(VTy->getElementType());
     unsigned BitWidth = EltTy->getBitWidth();
-    const llvm::Type *RetTy = llvm::VectorType::get(
+    llvm::Type *RetTy = llvm::VectorType::get(
         llvm::IntegerType::get(getLLVMContext(), 2*BitWidth), ArgElts/2);
-    const llvm::Type* Tys[2] = { RetTy, Ty };
+    llvm::Type* Tys[2] = { RetTy, Ty };
     Int = usgn ? Intrinsic::arm64_neon_uaddlp : Intrinsic::arm64_neon_saddlp;
     SmallVector<llvm::Value*, 1> TmpOps;
     TmpOps.push_back(Ops[1]);
@@ -2246,9 +2246,9 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     Int = usgn ? Intrinsic::arm64_neon_fcvtau : Intrinsic::arm64_neon_fcvtas;
     bool Double =
       (cast<llvm::IntegerType>(VTy->getElementType())->getBitWidth() == 64);
-    const llvm::Type *InTy =
+    llvm::Type *InTy =
       GetNeonType(getLLVMContext(), Double ? 8 : 4, quad);
-    const llvm::Type *Tys[2] = { Ty, InTy };
+    llvm::Type *Tys[2] = { Ty, InTy };
     return EmitNeonCall(CGM.getIntrinsic(Int, Tys, 2), Ops, "vcvtf_a");
   }
   case ARM64::BI__builtin_arm64_vcvtf_m_v:
@@ -2256,9 +2256,9 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     Int = usgn ? Intrinsic::arm64_neon_fcvtmu : Intrinsic::arm64_neon_fcvtms;
     bool Double =
       (cast<llvm::IntegerType>(VTy->getElementType())->getBitWidth() == 64);
-    const llvm::Type *InTy =
+    llvm::Type *InTy =
       GetNeonType(getLLVMContext(), Double ? 8 : 4, quad);
-    const llvm::Type *Tys[2] = { Ty, InTy };
+    llvm::Type *Tys[2] = { Ty, InTy };
     return EmitNeonCall(CGM.getIntrinsic(Int, Tys, 2), Ops, "vcvtf_m");
   }
   case ARM64::BI__builtin_arm64_vcvtf_n_v:
@@ -2277,9 +2277,9 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     Int = usgn ? Intrinsic::arm64_neon_fcvtpu : Intrinsic::arm64_neon_fcvtps;
     bool Double =
       (cast<llvm::IntegerType>(VTy->getElementType())->getBitWidth() == 64);
-    const llvm::Type *InTy =
+    llvm::Type *InTy =
       GetNeonType(getLLVMContext(), Double ? 8 : 4, quad);
-    const llvm::Type *Tys[2] = { Ty, InTy };
+    llvm::Type *Tys[2] = { Ty, InTy };
     return EmitNeonCall(CGM.getIntrinsic(Int, Tys, 2), Ops, "vcvtf_p");
   }
   case ARM64::BI__builtin_arm64_vcvtf_z_v:
@@ -2287,9 +2287,9 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     Int = usgn ? Intrinsic::arm64_neon_fcvtzu : Intrinsic::arm64_neon_fcvtzs;
     bool Double =
       (cast<llvm::IntegerType>(VTy->getElementType())->getBitWidth() == 64);
-    const llvm::Type *InTy =
+    llvm::Type *InTy =
       GetNeonType(getLLVMContext(), Double ? 8 : 4, quad);
-    const llvm::Type *Tys[2] = { Ty, InTy };
+    llvm::Type *Tys[2] = { Ty, InTy };
     return EmitNeonCall(CGM.getIntrinsic(Int, Tys, 2), Ops, "vcvtf_z");
   }
   case ARM64::BI__builtin_arm64_vcvti_m_v:
@@ -2297,9 +2297,9 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     Int = usgn ? Intrinsic::arm64_neon_fcvtmuc : Intrinsic::arm64_neon_fcvtmsc;
     bool Double =
       (cast<llvm::IntegerType>(VTy->getElementType())->getBitWidth() == 64);
-    const llvm::Type *InTy =
+    llvm::Type *InTy =
       GetNeonType(getLLVMContext(), Double ? 8 : 4, quad);
-    const llvm::Type *Tys[2] = { Ty, InTy };
+    llvm::Type *Tys[2] = { Ty, InTy };
     return EmitNeonCall(CGM.getIntrinsic(Int, Tys, 2), Ops, "vcvti_m");
   }
   case ARM64::BI__builtin_arm64_vcvti_n_v:
@@ -2307,9 +2307,9 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     Int = usgn ? Intrinsic::arm64_neon_fcvtnuc : Intrinsic::arm64_neon_fcvtnsc;
     bool Double =
       (cast<llvm::IntegerType>(VTy->getElementType())->getBitWidth() == 64);
-    const llvm::Type *InTy =
+    llvm::Type *InTy =
       GetNeonType(getLLVMContext(), Double ? 8 : 4, quad);
-    const llvm::Type *Tys[2] = { Ty, InTy };
+    llvm::Type *Tys[2] = { Ty, InTy };
     return EmitNeonCall(CGM.getIntrinsic(Int, Tys, 2), Ops, "vcvti_n");
   }
   case ARM64::BI__builtin_arm64_vcvti_p_v:
@@ -2317,9 +2317,9 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     Int = usgn ? Intrinsic::arm64_neon_fcvtpuc : Intrinsic::arm64_neon_fcvtpsc;
     bool Double =
       (cast<llvm::IntegerType>(VTy->getElementType())->getBitWidth() == 64);
-    const llvm::Type *InTy =
+    llvm::Type *InTy =
       GetNeonType(getLLVMContext(), Double ? 8 : 4, quad);
-    const llvm::Type *Tys[2] = { Ty, InTy };
+    llvm::Type *Tys[2] = { Ty, InTy };
     return EmitNeonCall(CGM.getIntrinsic(Int, Tys, 2), Ops, "vcvti_p");
   }
   case ARM64::BI__builtin_arm64_vcvti_z_v:
@@ -2327,9 +2327,9 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     Int = usgn ? Intrinsic::arm64_neon_fcvtzuc : Intrinsic::arm64_neon_fcvtzsc;
     bool Double =
       (cast<llvm::IntegerType>(VTy->getElementType())->getBitWidth() == 64);
-    const llvm::Type *InTy =
+    llvm::Type *InTy =
       GetNeonType(getLLVMContext(), Double ? 8 : 4, quad);
-    const llvm::Type *Tys[2] = { Ty, InTy };
+    llvm::Type *Tys[2] = { Ty, InTy };
     return EmitNeonCall(CGM.getIntrinsic(Int, Tys, 2), Ops, "vcvti_z");
   }
   case ARM64::BI__builtin_arm64_vrnd_a_v:
@@ -2369,14 +2369,14 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
   }
   case ARM64::BI__builtin_arm64_vcvt_f32_v: {
     Int = Intrinsic::arm64_neon_fcvtxn;
-    const llvm::Type *InTy = GetNeonType(getLLVMContext(), 8, true);
-    const llvm::Type *Tys[2] = { Ty, InTy };
+    llvm::Type *InTy = GetNeonType(getLLVMContext(), 8, true);
+    llvm::Type *Tys[2] = { Ty, InTy };
     return EmitNeonCall(CGM.getIntrinsic(Int, Tys, 2), Ops, "vcvt_f32");
   }
   case ARM64::BI__builtin_arm64_vcvt2_f32_v: {
     Int = Intrinsic::arm64_neon_fcvtxn2;
-    const llvm::Type *InTy = GetNeonType(getLLVMContext(), 8, true);
-    const llvm::Type *Tys[2] = { Ty, InTy };
+    llvm::Type *InTy = GetNeonType(getLLVMContext(), 8, true);
+    llvm::Type *Tys[2] = { Ty, InTy };
     return EmitNeonCall(CGM.getIntrinsic(Int, Tys, 2), Ops, "vcvt2_f32");
   }
   case ARM64::BI__builtin_arm64_vdiv_v:
@@ -2411,7 +2411,7 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     Ty = llvm::IntegerType::get(getLLVMContext(), 32);
     VTy =
       llvm::VectorType::get(llvm::IntegerType::get(getLLVMContext(), 8), 8);
-    const llvm::Type *Tys[2] = { Ty, VTy };
+    llvm::Type *Tys[2] = { Ty, VTy };
     Ops.push_back(EmitScalarExpr(E->getArg(0)));
     Ops[0] = EmitNeonCall(CGM.getIntrinsic(Int, Tys, 2), Ops, "vaddv");
     return Builder.CreateTrunc(Ops[0],
@@ -2423,7 +2423,7 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     Ty = llvm::IntegerType::get(getLLVMContext(), 32);
     VTy =
       llvm::VectorType::get(llvm::IntegerType::get(getLLVMContext(), 16), 4);
-    const llvm::Type *Tys[2] = { Ty, VTy };
+    llvm::Type *Tys[2] = { Ty, VTy };
     Ops.push_back(EmitScalarExpr(E->getArg(0)));
     Ops[0] = EmitNeonCall(CGM.getIntrinsic(Int, Tys, 2), Ops, "vaddv");
     return Builder.CreateTrunc(Ops[0],
@@ -2435,7 +2435,7 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     Ty = llvm::IntegerType::get(getLLVMContext(), 32);
     VTy =
       llvm::VectorType::get(llvm::IntegerType::get(getLLVMContext(), 8), 16);
-    const llvm::Type *Tys[2] = { Ty, VTy };
+    llvm::Type *Tys[2] = { Ty, VTy };
     Ops.push_back(EmitScalarExpr(E->getArg(0)));
     Ops[0] = EmitNeonCall(CGM.getIntrinsic(Int, Tys, 2), Ops, "vaddv");
     return Builder.CreateTrunc(Ops[0],
@@ -2447,7 +2447,7 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     Ty = llvm::IntegerType::get(getLLVMContext(), 32);
     VTy =
       llvm::VectorType::get(llvm::IntegerType::get(getLLVMContext(), 16), 8);
-    const llvm::Type *Tys[2] = { Ty, VTy };
+    llvm::Type *Tys[2] = { Ty, VTy };
     Ops.push_back(EmitScalarExpr(E->getArg(0)));
     Ops[0] = EmitNeonCall(CGM.getIntrinsic(Int, Tys, 2), Ops, "vaddv");
     return Builder.CreateTrunc(Ops[0],
@@ -2458,7 +2458,7 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     Int = Intrinsic::arm64_neon_addv;
     Ty = llvm::IntegerType::get(getLLVMContext(), 32);
     VTy = llvm::VectorType::get(Ty, 4);
-    const llvm::Type *Tys[2] = { Ty, VTy };
+    llvm::Type *Tys[2] = { Ty, VTy };
     Ops.push_back(EmitScalarExpr(E->getArg(0)));
     return EmitNeonCall(CGM.getIntrinsic(Int, Tys, 2), Ops, "vaddv");
   }
@@ -2467,7 +2467,7 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     Ty = llvm::IntegerType::get(getLLVMContext(), 32);
     VTy =
       llvm::VectorType::get(llvm::IntegerType::get(getLLVMContext(), 8), 8);
-    const llvm::Type *Tys[2] = { Ty, VTy };
+    llvm::Type *Tys[2] = { Ty, VTy };
     Ops.push_back(EmitScalarExpr(E->getArg(0)));
     Ops[0] = EmitNeonCall(CGM.getIntrinsic(Int, Tys, 2), Ops, "vmaxv");
     return Builder.CreateTrunc(Ops[0],
@@ -2478,7 +2478,7 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     Ty = llvm::IntegerType::get(getLLVMContext(), 32);
     VTy =
       llvm::VectorType::get(llvm::IntegerType::get(getLLVMContext(), 16), 4);
-    const llvm::Type *Tys[2] = { Ty, VTy };
+    llvm::Type *Tys[2] = { Ty, VTy };
     Ops.push_back(EmitScalarExpr(E->getArg(0)));
     Ops[0] = EmitNeonCall(CGM.getIntrinsic(Int, Tys, 2), Ops, "vmaxv");
     return Builder.CreateTrunc(Ops[0],
@@ -2489,7 +2489,7 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     Ty = llvm::IntegerType::get(getLLVMContext(), 32);
     VTy =
       llvm::VectorType::get(llvm::IntegerType::get(getLLVMContext(), 8), 16);
-    const llvm::Type *Tys[2] = { Ty, VTy };
+    llvm::Type *Tys[2] = { Ty, VTy };
     Ops.push_back(EmitScalarExpr(E->getArg(0)));
     Ops[0] = EmitNeonCall(CGM.getIntrinsic(Int, Tys, 2), Ops, "vmaxv");
     return Builder.CreateTrunc(Ops[0],
@@ -2500,7 +2500,7 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     Ty = llvm::IntegerType::get(getLLVMContext(), 32);
     VTy =
       llvm::VectorType::get(llvm::IntegerType::get(getLLVMContext(), 16), 8);
-    const llvm::Type *Tys[2] = { Ty, VTy };
+    llvm::Type *Tys[2] = { Ty, VTy };
     Ops.push_back(EmitScalarExpr(E->getArg(0)));
     Ops[0] = EmitNeonCall(CGM.getIntrinsic(Int, Tys, 2), Ops, "vmaxv");
     return Builder.CreateTrunc(Ops[0],
@@ -2510,7 +2510,7 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     Int = Intrinsic::arm64_neon_umaxv;
     Ty = llvm::IntegerType::get(getLLVMContext(), 32);
     VTy = llvm::VectorType::get(Ty, 4);
-    const llvm::Type *Tys[2] = { Ty, VTy };
+    llvm::Type *Tys[2] = { Ty, VTy };
     Ops.push_back(EmitScalarExpr(E->getArg(0)));
     return EmitNeonCall(CGM.getIntrinsic(Int, Tys, 2), Ops, "vmaxv");
   }
@@ -2519,7 +2519,7 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     Ty = llvm::IntegerType::get(getLLVMContext(), 32);
     VTy =
       llvm::VectorType::get(llvm::IntegerType::get(getLLVMContext(), 8), 8);
-    const llvm::Type *Tys[2] = { Ty, VTy };
+    llvm::Type *Tys[2] = { Ty, VTy };
     Ops.push_back(EmitScalarExpr(E->getArg(0)));
     Ops[0] = EmitNeonCall(CGM.getIntrinsic(Int, Tys, 2), Ops, "vmaxv");
     return Builder.CreateTrunc(Ops[0],
@@ -2530,7 +2530,7 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     Ty = llvm::IntegerType::get(getLLVMContext(), 32);
     VTy =
       llvm::VectorType::get(llvm::IntegerType::get(getLLVMContext(), 16), 4);
-    const llvm::Type *Tys[2] = { Ty, VTy };
+    llvm::Type *Tys[2] = { Ty, VTy };
     Ops.push_back(EmitScalarExpr(E->getArg(0)));
     Ops[0] = EmitNeonCall(CGM.getIntrinsic(Int, Tys, 2), Ops, "vmaxv");
     return Builder.CreateTrunc(Ops[0],
@@ -2541,7 +2541,7 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     Ty = llvm::IntegerType::get(getLLVMContext(), 32);
     VTy =
       llvm::VectorType::get(llvm::IntegerType::get(getLLVMContext(), 8), 16);
-    const llvm::Type *Tys[2] = { Ty, VTy };
+    llvm::Type *Tys[2] = { Ty, VTy };
     Ops.push_back(EmitScalarExpr(E->getArg(0)));
     Ops[0] = EmitNeonCall(CGM.getIntrinsic(Int, Tys, 2), Ops, "vmaxv");
     return Builder.CreateTrunc(Ops[0],
@@ -2552,7 +2552,7 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     Ty = llvm::IntegerType::get(getLLVMContext(), 32);
     VTy =
       llvm::VectorType::get(llvm::IntegerType::get(getLLVMContext(), 16), 8);
-    const llvm::Type *Tys[2] = { Ty, VTy };
+    llvm::Type *Tys[2] = { Ty, VTy };
     Ops.push_back(EmitScalarExpr(E->getArg(0)));
     Ops[0] = EmitNeonCall(CGM.getIntrinsic(Int, Tys, 2), Ops, "vmaxv");
     return Builder.CreateTrunc(Ops[0],
@@ -2562,7 +2562,7 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     Int = Intrinsic::arm64_neon_smaxv;
     Ty = llvm::IntegerType::get(getLLVMContext(), 32);
     VTy = llvm::VectorType::get(Ty, 4);
-    const llvm::Type *Tys[2] = { Ty, VTy };
+    llvm::Type *Tys[2] = { Ty, VTy };
     Ops.push_back(EmitScalarExpr(E->getArg(0)));
     return EmitNeonCall(CGM.getIntrinsic(Int, Tys, 2), Ops, "vmaxv");
   }
@@ -2570,7 +2570,7 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     Int = Intrinsic::arm64_neon_fmaxv;
     Ty = llvm::Type::getFloatTy(getLLVMContext());
     VTy = llvm::VectorType::get(Ty, 4);
-    const llvm::Type *Tys[2] = { Ty, VTy };
+    llvm::Type *Tys[2] = { Ty, VTy };
     Ops.push_back(EmitScalarExpr(E->getArg(0)));
     return EmitNeonCall(CGM.getIntrinsic(Int, Tys, 2), Ops, "vmaxv");
   }
@@ -2579,7 +2579,7 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     Ty = llvm::IntegerType::get(getLLVMContext(), 32);
     VTy =
       llvm::VectorType::get(llvm::IntegerType::get(getLLVMContext(), 8), 8);
-    const llvm::Type *Tys[2] = { Ty, VTy };
+    llvm::Type *Tys[2] = { Ty, VTy };
     Ops.push_back(EmitScalarExpr(E->getArg(0)));
     Ops[0] = EmitNeonCall(CGM.getIntrinsic(Int, Tys, 2), Ops, "vminv");
     return Builder.CreateTrunc(Ops[0],
@@ -2590,7 +2590,7 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     Ty = llvm::IntegerType::get(getLLVMContext(), 32);
     VTy =
       llvm::VectorType::get(llvm::IntegerType::get(getLLVMContext(), 16), 4);
-    const llvm::Type *Tys[2] = { Ty, VTy };
+    llvm::Type *Tys[2] = { Ty, VTy };
     Ops.push_back(EmitScalarExpr(E->getArg(0)));
     Ops[0] = EmitNeonCall(CGM.getIntrinsic(Int, Tys, 2), Ops, "vminv");
     return Builder.CreateTrunc(Ops[0],
@@ -2601,7 +2601,7 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     Ty = llvm::IntegerType::get(getLLVMContext(), 32);
     VTy =
       llvm::VectorType::get(llvm::IntegerType::get(getLLVMContext(), 8), 16);
-    const llvm::Type *Tys[2] = { Ty, VTy };
+    llvm::Type *Tys[2] = { Ty, VTy };
     Ops.push_back(EmitScalarExpr(E->getArg(0)));
     Ops[0] = EmitNeonCall(CGM.getIntrinsic(Int, Tys, 2), Ops, "vminv");
     return Builder.CreateTrunc(Ops[0],
@@ -2612,7 +2612,7 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     Ty = llvm::IntegerType::get(getLLVMContext(), 32);
     VTy =
       llvm::VectorType::get(llvm::IntegerType::get(getLLVMContext(), 16), 8);
-    const llvm::Type *Tys[2] = { Ty, VTy };
+    llvm::Type *Tys[2] = { Ty, VTy };
     Ops.push_back(EmitScalarExpr(E->getArg(0)));
     Ops[0] = EmitNeonCall(CGM.getIntrinsic(Int, Tys, 2), Ops, "vminv");
     return Builder.CreateTrunc(Ops[0],
@@ -2623,7 +2623,7 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     Ty = llvm::IntegerType::get(getLLVMContext(), 32);
     VTy =
       llvm::VectorType::get(llvm::IntegerType::get(getLLVMContext(), 8), 8);
-    const llvm::Type *Tys[2] = { Ty, VTy };
+    llvm::Type *Tys[2] = { Ty, VTy };
     Ops.push_back(EmitScalarExpr(E->getArg(0)));
     Ops[0] = EmitNeonCall(CGM.getIntrinsic(Int, Tys, 2), Ops, "vminv");
     return Builder.CreateTrunc(Ops[0],
@@ -2634,7 +2634,7 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     Ty = llvm::IntegerType::get(getLLVMContext(), 32);
     VTy =
       llvm::VectorType::get(llvm::IntegerType::get(getLLVMContext(), 16), 4);
-    const llvm::Type *Tys[2] = { Ty, VTy };
+    llvm::Type *Tys[2] = { Ty, VTy };
     Ops.push_back(EmitScalarExpr(E->getArg(0)));
     Ops[0] = EmitNeonCall(CGM.getIntrinsic(Int, Tys, 2), Ops, "vminv");
     return Builder.CreateTrunc(Ops[0],
@@ -2645,7 +2645,7 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     Ty = llvm::IntegerType::get(getLLVMContext(), 32);
     VTy =
       llvm::VectorType::get(llvm::IntegerType::get(getLLVMContext(), 8), 16);
-    const llvm::Type *Tys[2] = { Ty, VTy };
+    llvm::Type *Tys[2] = { Ty, VTy };
     Ops.push_back(EmitScalarExpr(E->getArg(0)));
     Ops[0] = EmitNeonCall(CGM.getIntrinsic(Int, Tys, 2), Ops, "vminv");
     return Builder.CreateTrunc(Ops[0],
@@ -2656,7 +2656,7 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     Ty = llvm::IntegerType::get(getLLVMContext(), 32);
     VTy =
       llvm::VectorType::get(llvm::IntegerType::get(getLLVMContext(), 16), 8);
-    const llvm::Type *Tys[2] = { Ty, VTy };
+    llvm::Type *Tys[2] = { Ty, VTy };
     Ops.push_back(EmitScalarExpr(E->getArg(0)));
     Ops[0] = EmitNeonCall(CGM.getIntrinsic(Int, Tys, 2), Ops, "vminv");
     return Builder.CreateTrunc(Ops[0],
@@ -2666,7 +2666,7 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     Int = Intrinsic::arm64_neon_sminv;
     Ty = llvm::IntegerType::get(getLLVMContext(), 32);
     VTy = llvm::VectorType::get(Ty, 4);
-    const llvm::Type *Tys[2] = { Ty, VTy };
+    llvm::Type *Tys[2] = { Ty, VTy };
     Ops.push_back(EmitScalarExpr(E->getArg(0)));
     return EmitNeonCall(CGM.getIntrinsic(Int, Tys, 2), Ops, "vminv");
   }
@@ -2674,7 +2674,7 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     Int = Intrinsic::arm64_neon_fminv;
     Ty = llvm::Type::getFloatTy(getLLVMContext());
     VTy = llvm::VectorType::get(Ty, 4);
-    const llvm::Type *Tys[2] = { Ty, VTy };
+    llvm::Type *Tys[2] = { Ty, VTy };
     Ops.push_back(EmitScalarExpr(E->getArg(0)));
     return EmitNeonCall(CGM.getIntrinsic(Int, Tys, 2), Ops, "vminv");
   }
@@ -2683,7 +2683,7 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     Ty = llvm::IntegerType::get(getLLVMContext(), 32);
     VTy =
       llvm::VectorType::get(llvm::IntegerType::get(getLLVMContext(), 8), 8);
-    const llvm::Type *Tys[2] = { Ty, VTy };
+    llvm::Type *Tys[2] = { Ty, VTy };
     Ops.push_back(EmitScalarExpr(E->getArg(0)));
     Ops[0] = EmitNeonCall(CGM.getIntrinsic(Int, Tys, 2), Ops, "vaddlv");
     return Builder.CreateTrunc(Ops[0],
@@ -2694,7 +2694,7 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     Ty = llvm::IntegerType::get(getLLVMContext(), 32);
     VTy =
       llvm::VectorType::get(llvm::IntegerType::get(getLLVMContext(), 16), 4);
-    const llvm::Type *Tys[2] = { Ty, VTy };
+    llvm::Type *Tys[2] = { Ty, VTy };
     Ops.push_back(EmitScalarExpr(E->getArg(0)));
     return EmitNeonCall(CGM.getIntrinsic(Int, Tys, 2), Ops, "vaddlv");
   }
@@ -2703,7 +2703,7 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     Ty = llvm::IntegerType::get(getLLVMContext(), 32);
     VTy =
       llvm::VectorType::get(llvm::IntegerType::get(getLLVMContext(), 8), 16);
-    const llvm::Type *Tys[2] = { Ty, VTy };
+    llvm::Type *Tys[2] = { Ty, VTy };
     Ops.push_back(EmitScalarExpr(E->getArg(0)));
     Ops[0] = EmitNeonCall(CGM.getIntrinsic(Int, Tys, 2), Ops, "vaddlv");
     return Builder.CreateTrunc(Ops[0],
@@ -2714,7 +2714,7 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     Ty = llvm::IntegerType::get(getLLVMContext(), 32);
     VTy =
       llvm::VectorType::get(llvm::IntegerType::get(getLLVMContext(), 16), 8);
-    const llvm::Type *Tys[2] = { Ty, VTy };
+    llvm::Type *Tys[2] = { Ty, VTy };
     Ops.push_back(EmitScalarExpr(E->getArg(0)));
     return EmitNeonCall(CGM.getIntrinsic(Int, Tys, 2), Ops, "vaddlv");
   }
@@ -2722,7 +2722,7 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     Int = Intrinsic::arm64_neon_uaddlv;
     Ty = llvm::IntegerType::get(getLLVMContext(), 64);
     VTy = llvm::VectorType::get(IntegerType::get(getLLVMContext(), 32), 4);
-    const llvm::Type *Tys[2] = { Ty, VTy };
+    llvm::Type *Tys[2] = { Ty, VTy };
     Ops.push_back(EmitScalarExpr(E->getArg(0)));
     return EmitNeonCall(CGM.getIntrinsic(Int, Tys, 2), Ops, "vaddlv");
   }
@@ -2731,7 +2731,7 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     Ty = llvm::IntegerType::get(getLLVMContext(), 32);
     VTy =
       llvm::VectorType::get(llvm::IntegerType::get(getLLVMContext(), 8), 8);
-    const llvm::Type *Tys[2] = { Ty, VTy };
+    llvm::Type *Tys[2] = { Ty, VTy };
     Ops.push_back(EmitScalarExpr(E->getArg(0)));
     Ops[0] = EmitNeonCall(CGM.getIntrinsic(Int, Tys, 2), Ops, "vaddlv");
     return Builder.CreateTrunc(Ops[0],
@@ -2742,7 +2742,7 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     Ty = llvm::IntegerType::get(getLLVMContext(), 32);
     VTy =
       llvm::VectorType::get(llvm::IntegerType::get(getLLVMContext(), 16), 4);
-    const llvm::Type *Tys[2] = { Ty, VTy };
+    llvm::Type *Tys[2] = { Ty, VTy };
     Ops.push_back(EmitScalarExpr(E->getArg(0)));
     return EmitNeonCall(CGM.getIntrinsic(Int, Tys, 2), Ops, "vaddlv");
   }
@@ -2751,7 +2751,7 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     Ty = llvm::IntegerType::get(getLLVMContext(), 32);
     VTy =
       llvm::VectorType::get(llvm::IntegerType::get(getLLVMContext(), 8), 16);
-    const llvm::Type *Tys[2] = { Ty, VTy };
+    llvm::Type *Tys[2] = { Ty, VTy };
     Ops.push_back(EmitScalarExpr(E->getArg(0)));
     Ops[0] = EmitNeonCall(CGM.getIntrinsic(Int, Tys, 2), Ops, "vaddlv");
     return Builder.CreateTrunc(Ops[0],
@@ -2762,7 +2762,7 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     Ty = llvm::IntegerType::get(getLLVMContext(), 32);
     VTy =
       llvm::VectorType::get(llvm::IntegerType::get(getLLVMContext(), 16), 8);
-    const llvm::Type *Tys[2] = { Ty, VTy };
+    llvm::Type *Tys[2] = { Ty, VTy };
     Ops.push_back(EmitScalarExpr(E->getArg(0)));
     return EmitNeonCall(CGM.getIntrinsic(Int, Tys, 2), Ops, "vaddlv");
   }
@@ -2770,7 +2770,7 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     Int = Intrinsic::arm64_neon_saddlv;
     Ty = llvm::IntegerType::get(getLLVMContext(), 64);
     VTy = llvm::VectorType::get(IntegerType::get(getLLVMContext(), 32), 4);
-    const llvm::Type *Tys[2] = { Ty, VTy };
+    llvm::Type *Tys[2] = { Ty, VTy };
     Ops.push_back(EmitScalarExpr(E->getArg(0)));
     return EmitNeonCall(CGM.getIntrinsic(Int, Tys, 2), Ops, "vaddlv");
   }
@@ -2778,7 +2778,7 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     Int = Intrinsic::arm64_neon_fmaxnmv;
     Ty = llvm::Type::getFloatTy(getLLVMContext());
     VTy = llvm::VectorType::get(Ty, 4);
-    const llvm::Type *Tys[2] = { Ty, VTy };
+    llvm::Type *Tys[2] = { Ty, VTy };
     Ops.push_back(EmitScalarExpr(E->getArg(0)));
     return EmitNeonCall(CGM.getIntrinsic(Int, Tys, 2), Ops, "vmaxnmv");
   }
@@ -2786,7 +2786,7 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     Int = Intrinsic::arm64_neon_fminnmv;
     Ty = llvm::Type::getFloatTy(getLLVMContext());
     VTy = llvm::VectorType::get(Ty, 4);
-    const llvm::Type *Tys[2] = { Ty, VTy };
+    llvm::Type *Tys[2] = { Ty, VTy };
     Ops.push_back(EmitScalarExpr(E->getArg(0)));
     return EmitNeonCall(CGM.getIntrinsic(Int, Tys, 2), Ops, "vmaxnmv");
   }
@@ -2858,9 +2858,9 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     return Builder.CreateStore(Ops[1], Builder.CreateBitCast(Ops[0], Ty));
   case ARM64::BI__builtin_arm64_vld2_v:
   case ARM64::BI__builtin_arm64_vld2q_v: {
-    const llvm::Type *PTy = llvm::PointerType::getUnqual(VTy);
+    llvm::Type *PTy = llvm::PointerType::getUnqual(VTy);
     Ops[1] = Builder.CreateBitCast(Ops[0], PTy);
-    const llvm::Type *Tys[2] = { VTy, PTy };
+    llvm::Type *Tys[2] = { VTy, PTy };
     Function *F = CGM.getIntrinsic(Intrinsic::arm64_neon_ld2, Tys, 2);
     Ops[1] = Builder.CreateCall(F, Ops[1], "vld2");
     Ops[0] = Builder.CreateBitCast(Ops[0],
@@ -2869,9 +2869,9 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
   }
   case ARM64::BI__builtin_arm64_vld3_v:
   case ARM64::BI__builtin_arm64_vld3q_v: {
-    const llvm::Type *PTy = llvm::PointerType::getUnqual(VTy);
+    llvm::Type *PTy = llvm::PointerType::getUnqual(VTy);
     Ops[1] = Builder.CreateBitCast(Ops[0], PTy);
-    const llvm::Type *Tys[2] = { VTy, PTy };
+    llvm::Type *Tys[2] = { VTy, PTy };
     Function *F = CGM.getIntrinsic(Intrinsic::arm64_neon_ld3, Tys, 2);
     Ops[1] = Builder.CreateCall(F, Ops[1], "vld3");
     Ops[0] = Builder.CreateBitCast(Ops[0],
@@ -2880,9 +2880,9 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
   }
   case ARM64::BI__builtin_arm64_vld4_v:
   case ARM64::BI__builtin_arm64_vld4q_v: {
-    const llvm::Type *PTy = llvm::PointerType::getUnqual(VTy);
+    llvm::Type *PTy = llvm::PointerType::getUnqual(VTy);
     Ops[1] = Builder.CreateBitCast(Ops[0], PTy);
-    const llvm::Type *Tys[2] = { VTy, PTy };
+    llvm::Type *Tys[2] = { VTy, PTy };
     Function *F = CGM.getIntrinsic(Intrinsic::arm64_neon_ld4, Tys, 2);
     Ops[1] = Builder.CreateCall(F, Ops[1], "vld4");
     Ops[0] = Builder.CreateBitCast(Ops[0],
@@ -2890,10 +2890,10 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     return Builder.CreateStore(Ops[1], Ops[0]);
   }
   case ARM64::BI__builtin_arm64_vld2_dup_v: {
-    const llvm::Type *PTy =
+    llvm::Type *PTy =
       llvm::PointerType::getUnqual(VTy->getElementType());
     Ops[1] = Builder.CreateBitCast(Ops[0], PTy);
-    const llvm::Type *Tys[2] = { VTy, PTy };
+    llvm::Type *Tys[2] = { VTy, PTy };
     Function *F = CGM.getIntrinsic(Intrinsic::arm64_neon_ld2r, Tys, 2);
     Ops[1] = Builder.CreateCall(F, Ops[1], "vld2");
     Ops[0] = Builder.CreateBitCast(Ops[0],
@@ -2901,10 +2901,10 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     return Builder.CreateStore(Ops[1], Ops[0]);
   }
   case ARM64::BI__builtin_arm64_vld3_dup_v: {
-    const llvm::Type *PTy =
+    llvm::Type *PTy =
       llvm::PointerType::getUnqual(VTy->getElementType());
     Ops[1] = Builder.CreateBitCast(Ops[0], PTy);
-    const llvm::Type *Tys[2] = { VTy, PTy };
+    llvm::Type *Tys[2] = { VTy, PTy };
     Function *F = CGM.getIntrinsic(Intrinsic::arm64_neon_ld3r, Tys, 2);
     Ops[1] = Builder.CreateCall(F, Ops[1], "vld3");
     Ops[0] = Builder.CreateBitCast(Ops[0],
@@ -2912,10 +2912,10 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     return Builder.CreateStore(Ops[1], Ops[0]);
   }
   case ARM64::BI__builtin_arm64_vld4_dup_v: {
-    const llvm::Type *PTy =
+    llvm::Type *PTy =
       llvm::PointerType::getUnqual(VTy->getElementType());
     Ops[1] = Builder.CreateBitCast(Ops[0], PTy);
-    const llvm::Type *Tys[2] = { VTy, PTy };
+    llvm::Type *Tys[2] = { VTy, PTy };
     Function *F = CGM.getIntrinsic(Intrinsic::arm64_neon_ld4r, Tys, 2);
     Ops[1] = Builder.CreateCall(F, Ops[1], "vld4");
     Ops[0] = Builder.CreateBitCast(Ops[0],
@@ -2924,7 +2924,7 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
   }
   case ARM64::BI__builtin_arm64_vld2_lane_v:
   case ARM64::BI__builtin_arm64_vld2q_lane_v: {
-    const llvm::Type *Tys[2] = { VTy, Ops[1]->getType() };
+    llvm::Type *Tys[2] = { VTy, Ops[1]->getType() };
     Function *F = CGM.getIntrinsic(Intrinsic::arm64_neon_ld2lane, Tys, 2);
     Ops.push_back(Ops[1]);
     Ops.erase(Ops.begin()+1);
@@ -2939,7 +2939,7 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
   }
   case ARM64::BI__builtin_arm64_vld3_lane_v:
   case ARM64::BI__builtin_arm64_vld3q_lane_v: {
-    const llvm::Type *Tys[2] = { VTy, Ops[1]->getType() };
+    llvm::Type *Tys[2] = { VTy, Ops[1]->getType() };
     Function *F = CGM.getIntrinsic(Intrinsic::arm64_neon_ld3lane, Tys, 2);
     Ops.push_back(Ops[1]);
     Ops.erase(Ops.begin()+1);
@@ -2955,7 +2955,7 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
   }
   case ARM64::BI__builtin_arm64_vld4_lane_v:
   case ARM64::BI__builtin_arm64_vld4q_lane_v: {
-    const llvm::Type *Tys[2] = { VTy, Ops[1]->getType() };
+    llvm::Type *Tys[2] = { VTy, Ops[1]->getType() };
     Function *F = CGM.getIntrinsic(Intrinsic::arm64_neon_ld4lane, Tys, 2);
     Ops.push_back(Ops[1]);
     Ops.erase(Ops.begin()+1);
@@ -2974,7 +2974,7 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
   case ARM64::BI__builtin_arm64_vst2q_v: {
     Ops.push_back(Ops[0]);
     Ops.erase(Ops.begin());
-    const llvm::Type *Tys[2] = { VTy, Ops[2]->getType() };
+    llvm::Type *Tys[2] = { VTy, Ops[2]->getType() };
     return EmitNeonCall(CGM.getIntrinsic(Intrinsic::arm64_neon_st2, Tys, 2),
                         Ops, "");
   }
@@ -2984,7 +2984,7 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     Ops.erase(Ops.begin());
     Ops[2] = Builder.CreateZExt(Ops[2],
                 llvm::IntegerType::get(getLLVMContext(), 64));
-    const llvm::Type *Tys[2] = { VTy, Ops[3]->getType() };
+    llvm::Type *Tys[2] = { VTy, Ops[3]->getType() };
     return EmitNeonCall(CGM.getIntrinsic(Intrinsic::arm64_neon_st2lane, Tys, 2),
                         Ops, "");
   }
@@ -2992,7 +2992,7 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
   case ARM64::BI__builtin_arm64_vst3q_v: {
     Ops.push_back(Ops[0]);
     Ops.erase(Ops.begin());
-    const llvm::Type *Tys[2] = { VTy, Ops[3]->getType() };
+    llvm::Type *Tys[2] = { VTy, Ops[3]->getType() };
     return EmitNeonCall(CGM.getIntrinsic(Intrinsic::arm64_neon_st3, Tys, 2),
                         Ops, "");
   }
@@ -3002,7 +3002,7 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     Ops.erase(Ops.begin());
     Ops[3] = Builder.CreateZExt(Ops[3],
                 llvm::IntegerType::get(getLLVMContext(), 64));
-    const llvm::Type *Tys[2] = { VTy, Ops[4]->getType() };
+    llvm::Type *Tys[2] = { VTy, Ops[4]->getType() };
     return EmitNeonCall(CGM.getIntrinsic(Intrinsic::arm64_neon_st3lane, Tys, 2),
                         Ops, "");
   }
@@ -3010,7 +3010,7 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
   case ARM64::BI__builtin_arm64_vst4q_v: {
     Ops.push_back(Ops[0]);
     Ops.erase(Ops.begin());
-    const llvm::Type *Tys[2] = { VTy, Ops[4]->getType() };
+    llvm::Type *Tys[2] = { VTy, Ops[4]->getType() };
     return EmitNeonCall(CGM.getIntrinsic(Intrinsic::arm64_neon_st4, Tys, 2),
                         Ops, "");
   }
@@ -3020,7 +3020,7 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     Ops.erase(Ops.begin());
     Ops[4] = Builder.CreateZExt(Ops[4],
                 llvm::IntegerType::get(getLLVMContext(), 64));
-    const llvm::Type *Tys[2] = { VTy, Ops[5]->getType() };
+    llvm::Type *Tys[2] = { VTy, Ops[5]->getType() };
     return EmitNeonCall(CGM.getIntrinsic(Intrinsic::arm64_neon_st4lane, Tys, 2),
                         Ops, "");
   }
@@ -3182,8 +3182,8 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     unsigned BitWidth =cast<IntegerType>(VTy->getElementType())->getBitWidth();
     const llvm::Type *DInt =
       llvm::IntegerType::get(getLLVMContext(), BitWidth/2);
-    const llvm::Type *ArgTy = llvm::VectorType::get(DInt, 2*NumElts);
-    const llvm::Type *Tys[2] = { VTy, ArgTy };
+    llvm::Type *ArgTy = llvm::VectorType::get(DInt, 2*NumElts);
+    llvm::Type *Tys[2] = { VTy, ArgTy };
     return EmitNeonCall(CGM.getIntrinsic(Int, Tys, 2), Ops, "vabdl_high");
   }
   case ARM64::BI__builtin_arm64_vabal_high_v: {
@@ -3192,8 +3192,8 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     unsigned BitWidth =cast<IntegerType>(VTy->getElementType())->getBitWidth();
     const llvm::Type *DInt =
       llvm::IntegerType::get(getLLVMContext(), BitWidth/2);
-    const llvm::Type *ArgTy = llvm::VectorType::get(DInt, 2*NumElts);
-    const llvm::Type *Tys[2] = { VTy, ArgTy };
+    llvm::Type *ArgTy = llvm::VectorType::get(DInt, 2*NumElts);
+    llvm::Type *Tys[2] = { VTy, ArgTy };
     SmallVector<llvm::Value*, 2> TmpOps(Ops.begin()+1, Ops.end());
     Ops[1] = EmitNeonCall(CGM.getIntrinsic(Int, Tys, 2), TmpOps, "vabdl_high");
     return Builder.CreateAdd(Builder.CreateBitCast(Ops[0], Ty), Ops[1]);
@@ -3204,8 +3204,8 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     unsigned BitWidth =cast<IntegerType>(VTy->getElementType())->getBitWidth();
     const llvm::Type *DInt =
       llvm::IntegerType::get(getLLVMContext(), BitWidth/2);
-    const llvm::Type *ArgTy = llvm::VectorType::get(DInt, 2*NumElts);
-    const llvm::Type *Tys[2] = { VTy, ArgTy };
+    llvm::Type *ArgTy = llvm::VectorType::get(DInt, 2*NumElts);
+    llvm::Type *Tys[2] = { VTy, ArgTy };
     return EmitNeonCall(CGM.getIntrinsic(Int, Tys, 2), Ops, "vaddl_high");
   }
   case ARM64::BI__builtin_arm64_vaddw_high_v: {
@@ -3214,8 +3214,8 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     unsigned BitWidth =cast<IntegerType>(VTy->getElementType())->getBitWidth();
     const llvm::Type *DInt =
       llvm::IntegerType::get(getLLVMContext(), BitWidth/2);
-    const llvm::Type *ArgTy = llvm::VectorType::get(DInt, 2*NumElts);
-    const llvm::Type *Tys[2] = { VTy, ArgTy };
+    llvm::Type *ArgTy = llvm::VectorType::get(DInt, 2*NumElts);
+    llvm::Type *Tys[2] = { VTy, ArgTy };
     return EmitNeonCall(CGM.getIntrinsic(Int, Tys, 2), Ops, "vaddw_high");
   }
   case ARM64::BI__builtin_arm64_vmlal_high_v: {
@@ -3224,8 +3224,8 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     unsigned BitWidth =cast<IntegerType>(VTy->getElementType())->getBitWidth();
     const llvm::Type *DInt =
       llvm::IntegerType::get(getLLVMContext(), BitWidth/2);
-    const llvm::Type *ArgTy = llvm::VectorType::get(DInt, 2*NumElts);
-    const llvm::Type *Tys[2] = { VTy, ArgTy };
+    llvm::Type *ArgTy = llvm::VectorType::get(DInt, 2*NumElts);
+    llvm::Type *Tys[2] = { VTy, ArgTy };
     SmallVector<llvm::Value*, 2> TmpOps(Ops.begin()+1, Ops.end());
     Ops[1] = EmitNeonCall(CGM.getIntrinsic(Int, Tys, 2), TmpOps, "vabdl_high");
     return Builder.CreateAdd(Builder.CreateBitCast(Ops[0], Ty), Ops[1]);
@@ -3236,8 +3236,8 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     unsigned BitWidth =cast<IntegerType>(VTy->getElementType())->getBitWidth();
     const llvm::Type *DInt =
       llvm::IntegerType::get(getLLVMContext(), BitWidth/2);
-    const llvm::Type *ArgTy = llvm::VectorType::get(DInt, 2*NumElts);
-    const llvm::Type *Tys[2] = { VTy, ArgTy };
+    llvm::Type *ArgTy = llvm::VectorType::get(DInt, 2*NumElts);
+    llvm::Type *Tys[2] = { VTy, ArgTy };
     SmallVector<llvm::Value*, 2> TmpOps(Ops.begin()+1, Ops.end());
     Ops[1] = EmitNeonCall(CGM.getIntrinsic(Int, Tys, 2), TmpOps, "vabdl_high");
     return Builder.CreateSub(Builder.CreateBitCast(Ops[0], Ty), Ops[1]);
@@ -3249,8 +3249,8 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     unsigned BitWidth =cast<IntegerType>(VTy->getElementType())->getBitWidth();
     const llvm::Type *DInt =
       llvm::IntegerType::get(getLLVMContext(), BitWidth/2);
-    const llvm::Type *ArgTy = llvm::VectorType::get(DInt, 2*NumElts);
-    const llvm::Type *Tys[2] = { VTy, ArgTy };
+    llvm::Type *ArgTy = llvm::VectorType::get(DInt, 2*NumElts);
+    llvm::Type *Tys[2] = { VTy, ArgTy };
     return EmitNeonCall(CGM.getIntrinsic(Int, Tys, 2), Ops, "vxtl_high");
   }
   case ARM64::BI__builtin_arm64_vmull_high_v: {
@@ -3259,8 +3259,8 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     unsigned BitWidth =cast<IntegerType>(VTy->getElementType())->getBitWidth();
     const llvm::Type *DInt =
       llvm::IntegerType::get(getLLVMContext(), BitWidth/2);
-    const llvm::Type *ArgTy = llvm::VectorType::get(DInt, 2*NumElts);
-    const llvm::Type *Tys[2] = { VTy, ArgTy };
+    llvm::Type *ArgTy = llvm::VectorType::get(DInt, 2*NumElts);
+    llvm::Type *Tys[2] = { VTy, ArgTy };
     return EmitNeonCall(CGM.getIntrinsic(Int, Tys, 2), Ops, "vmull_high");
   }
   case ARM64::BI__builtin_arm64_vqdmull_high_v: {
@@ -3269,8 +3269,8 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     unsigned BitWidth =cast<IntegerType>(VTy->getElementType())->getBitWidth();
     const llvm::Type *DInt =
       llvm::IntegerType::get(getLLVMContext(), BitWidth/2);
-    const llvm::Type *ArgTy = llvm::VectorType::get(DInt, 2*NumElts);
-    const llvm::Type *Tys[2] = { VTy, ArgTy };
+    llvm::Type *ArgTy = llvm::VectorType::get(DInt, 2*NumElts);
+    llvm::Type *Tys[2] = { VTy, ArgTy };
     return EmitNeonCall(CGM.getIntrinsic(Int, Tys, 2), Ops, "vqdmull_high");
   }
   case ARM64::BI__builtin_arm64_vqdmlal_high_v: {
@@ -3279,8 +3279,8 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     unsigned BitWidth =cast<IntegerType>(VTy->getElementType())->getBitWidth();
     const llvm::Type *DInt =
       llvm::IntegerType::get(getLLVMContext(), BitWidth/2);
-    const llvm::Type *ArgTy = llvm::VectorType::get(DInt, 2*NumElts);
-    const llvm::Type *Tys[2] = { VTy, ArgTy };
+    llvm::Type *ArgTy = llvm::VectorType::get(DInt, 2*NumElts);
+    llvm::Type *Tys[2] = { VTy, ArgTy };
     SmallVector<llvm::Value*, 2> TmpOps(Ops.begin()+1, Ops.end());
     Ops[1] = EmitNeonCall(CGM.getIntrinsic(Int, Tys, 2), TmpOps, "vqdmull_high");
     return Builder.CreateAdd(Builder.CreateBitCast(Ops[0], Ty), Ops[1]);
@@ -3291,8 +3291,8 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     unsigned BitWidth =cast<IntegerType>(VTy->getElementType())->getBitWidth();
     const llvm::Type *DInt =
       llvm::IntegerType::get(getLLVMContext(), BitWidth/2);
-    const llvm::Type *ArgTy = llvm::VectorType::get(DInt, 2*NumElts);
-    const llvm::Type *Tys[2] = { VTy, ArgTy };
+    llvm::Type *ArgTy = llvm::VectorType::get(DInt, 2*NumElts);
+    llvm::Type *Tys[2] = { VTy, ArgTy };
     SmallVector<llvm::Value*, 2> TmpOps(Ops.begin()+1, Ops.end());
     Ops[1] = EmitNeonCall(CGM.getIntrinsic(Int, Tys, 2), TmpOps, "vqdmull_high");
     return Builder.CreateSub(Builder.CreateBitCast(Ops[0], Ty), Ops[1]);
@@ -3303,8 +3303,8 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     unsigned BitWidth =cast<IntegerType>(VTy->getElementType())->getBitWidth();
     const llvm::Type *DInt =
       llvm::IntegerType::get(getLLVMContext(), BitWidth/2);
-    const llvm::Type *ArgTy = llvm::VectorType::get(DInt, 2*NumElts);
-    const llvm::Type *Tys[2] = { VTy, ArgTy };
+    llvm::Type *ArgTy = llvm::VectorType::get(DInt, 2*NumElts);
+    llvm::Type *Tys[2] = { VTy, ArgTy };
     return EmitNeonCall(CGM.getIntrinsic(Int, Tys, 2), Ops, "vsubl_high");
   }
   case ARM64::BI__builtin_arm64_vsubw_high_v: {
@@ -3313,8 +3313,8 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     unsigned BitWidth =cast<IntegerType>(VTy->getElementType())->getBitWidth();
     const llvm::Type *DInt =
       llvm::IntegerType::get(getLLVMContext(), BitWidth/2);
-    const llvm::Type *ArgTy = llvm::VectorType::get(DInt, 2*NumElts);
-    const llvm::Type *Tys[2] = { VTy, ArgTy };
+    llvm::Type *ArgTy = llvm::VectorType::get(DInt, 2*NumElts);
+    llvm::Type *Tys[2] = { VTy, ArgTy };
     return EmitNeonCall(CGM.getIntrinsic(Int, Tys, 2), Ops, "vsubw_high");
   }
   case ARM64::BI__builtin_arm64_vqxtn_high_v: {
@@ -3323,8 +3323,8 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     unsigned BitWidth =cast<IntegerType>(VTy->getElementType())->getBitWidth();
     const llvm::Type *DInt =
       llvm::IntegerType::get(getLLVMContext(), BitWidth*2);
-    const llvm::Type *ArgTy = llvm::VectorType::get(DInt, NumElts/2);
-    const llvm::Type *Tys[2] = { VTy, ArgTy };
+    llvm::Type *ArgTy = llvm::VectorType::get(DInt, NumElts/2);
+    llvm::Type *Tys[2] = { VTy, ArgTy };
     return EmitNeonCall(CGM.getIntrinsic(Int, Tys, 2), Ops, "vsubw_high");
   }
   case ARM64::BI__builtin_arm64_vqxtun_high_v: {
@@ -3333,8 +3333,8 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     unsigned BitWidth =cast<IntegerType>(VTy->getElementType())->getBitWidth();
     const llvm::Type *DInt =
       llvm::IntegerType::get(getLLVMContext(), BitWidth*2);
-    const llvm::Type *ArgTy = llvm::VectorType::get(DInt, NumElts/2);
-    const llvm::Type *Tys[2] = { VTy, ArgTy };
+    llvm::Type *ArgTy = llvm::VectorType::get(DInt, NumElts/2);
+    llvm::Type *Tys[2] = { VTy, ArgTy };
     return EmitNeonCall(CGM.getIntrinsic(Int, Tys, 2), Ops, "vsubw_high");
   }
   case ARM64::BI__builtin_arm64_vrshrn_high_v: {
@@ -3343,8 +3343,8 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     unsigned BitWidth =cast<IntegerType>(VTy->getElementType())->getBitWidth();
     const llvm::Type *DInt =
       llvm::IntegerType::get(getLLVMContext(), BitWidth*2);
-    const llvm::Type *ArgTy = llvm::VectorType::get(DInt, NumElts/2);
-    const llvm::Type *Tys[2] = { VTy, ArgTy };
+    llvm::Type *ArgTy = llvm::VectorType::get(DInt, NumElts/2);
+    llvm::Type *Tys[2] = { VTy, ArgTy };
     return EmitNeonCall(CGM.getIntrinsic(Int, Tys, 2), Ops, "vrshrn_high");
   }
   case ARM64::BI__builtin_arm64_vshrn_high_v: {
@@ -3353,8 +3353,8 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     unsigned BitWidth =cast<IntegerType>(VTy->getElementType())->getBitWidth();
     const llvm::Type *DInt =
       llvm::IntegerType::get(getLLVMContext(), BitWidth*2);
-    const llvm::Type *ArgTy = llvm::VectorType::get(DInt, NumElts/2);
-    const llvm::Type *Tys[2] = { VTy, ArgTy };
+    llvm::Type *ArgTy = llvm::VectorType::get(DInt, NumElts/2);
+    llvm::Type *Tys[2] = { VTy, ArgTy };
     return EmitNeonCall(CGM.getIntrinsic(Int, Tys, 2), Ops, "vshrn_high");
   }
   case ARM64::BI__builtin_arm64_vrsubhn_high_v: {
@@ -3363,8 +3363,8 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     unsigned BitWidth =cast<IntegerType>(VTy->getElementType())->getBitWidth();
     const llvm::Type *DInt =
       llvm::IntegerType::get(getLLVMContext(), BitWidth*2);
-    const llvm::Type *ArgTy = llvm::VectorType::get(DInt, NumElts/2);
-    const llvm::Type *Tys[2] = { VTy, ArgTy };
+    llvm::Type *ArgTy = llvm::VectorType::get(DInt, NumElts/2);
+    llvm::Type *Tys[2] = { VTy, ArgTy };
     return EmitNeonCall(CGM.getIntrinsic(Int, Tys, 2), Ops, "vrsubhn_high");
   }
   case ARM64::BI__builtin_arm64_vsubhn_high_v: {
@@ -3373,8 +3373,8 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     unsigned BitWidth =cast<IntegerType>(VTy->getElementType())->getBitWidth();
     const llvm::Type *DInt =
       llvm::IntegerType::get(getLLVMContext(), BitWidth*2);
-    const llvm::Type *ArgTy = llvm::VectorType::get(DInt, NumElts/2);
-    const llvm::Type *Tys[2] = { VTy, ArgTy };
+    llvm::Type *ArgTy = llvm::VectorType::get(DInt, NumElts/2);
+    llvm::Type *Tys[2] = { VTy, ArgTy };
     return EmitNeonCall(CGM.getIntrinsic(Int, Tys, 2), Ops, "vsubhn_high");
   }
   case ARM64::BI__builtin_arm64_vraddhn_high_v: {
@@ -3383,8 +3383,8 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     unsigned BitWidth =cast<IntegerType>(VTy->getElementType())->getBitWidth();
     const llvm::Type *DInt =
       llvm::IntegerType::get(getLLVMContext(), BitWidth*2);
-    const llvm::Type *ArgTy = llvm::VectorType::get(DInt, NumElts/2);
-    const llvm::Type *Tys[2] = { VTy, ArgTy };
+    llvm::Type *ArgTy = llvm::VectorType::get(DInt, NumElts/2);
+    llvm::Type *Tys[2] = { VTy, ArgTy };
     return EmitNeonCall(CGM.getIntrinsic(Int, Tys, 2), Ops, "vraddhn_high");
   }
   case ARM64::BI__builtin_arm64_vaddhn_high_v: {
@@ -3393,8 +3393,8 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     unsigned BitWidth =cast<IntegerType>(VTy->getElementType())->getBitWidth();
     const llvm::Type *DInt =
       llvm::IntegerType::get(getLLVMContext(), BitWidth*2);
-    const llvm::Type *ArgTy = llvm::VectorType::get(DInt, NumElts/2);
-    const llvm::Type *Tys[2] = { VTy, ArgTy };
+    llvm::Type *ArgTy = llvm::VectorType::get(DInt, NumElts/2);
+    llvm::Type *Tys[2] = { VTy, ArgTy };
     return EmitNeonCall(CGM.getIntrinsic(Int, Tys, 2), Ops, "vaddhn_high");
   }
   case ARM64::BI__builtin_arm64_vmovn_high_v: {
@@ -3403,8 +3403,8 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     unsigned BitWidth =cast<IntegerType>(VTy->getElementType())->getBitWidth();
     const llvm::Type *DInt =
       llvm::IntegerType::get(getLLVMContext(), BitWidth*2);
-    const llvm::Type *ArgTy = llvm::VectorType::get(DInt, NumElts/2);
-    const llvm::Type *Tys[2] = { VTy, ArgTy };
+    llvm::Type *ArgTy = llvm::VectorType::get(DInt, NumElts/2);
+    llvm::Type *Tys[2] = { VTy, ArgTy };
     return EmitNeonCall(CGM.getIntrinsic(Int, Tys, 2), Ops, "vmovn_high");
   }
   case ARM64::BI__builtin_arm64_vtrn1_v:
