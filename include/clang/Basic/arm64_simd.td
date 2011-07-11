@@ -280,7 +280,7 @@ def VUZP2 : WInst<"vuzp2", "ddd", "csilUcUsUiUlQcQsQiQlQUcQUsQUiQUl">;
 ////////////////////////////////////////////////////////////////////////////////
 // Operations with a scalar value
 def VMLA_LANE    : Inst<"vmla_lane", "dddgi", "siUsUiQsQiQUsQUi", OP_MLA_LN>;
-def FMLA_LANE    : IInst<"vmla_lane", "dddgi", "fQf">;
+def FMLA_LANE    : IInst<"vmla_lane", "ddddi", "fQfQd">;
 def VMLAL_LANE   : Inst<"vmlal_lane", "wwddi", "siUsUi", OP_MLAL_LN>;
 def VQDMLAL_LANE : Inst<"vqdmlal_lane", "wwddi", "si", OP_QDMLAL_LN>; 
 def VMLS_LANE    : Inst<"vmls_lane", "dddgi", "siUsUiQsQiQUsQUi", OP_MLS_LN>;
@@ -288,7 +288,7 @@ def FMLS_LANE    : IInst<"vmls_lane", "dddgi", "fQf">;
 def VMLSL_LANE   : Inst<"vmlsl_lane", "wwddi", "siUsUi", OP_MLSL_LN>;
 def VQDMLSL_LANE : Inst<"vqdmlsl_lane", "wwddi", "si", OP_QDMLSL_LN>;
 def VMUL_N       : Inst<"vmul_n", "dds", "sifUsUiQsQiQfQUsQUi", OP_MUL_N>;
-def VMUL_LANE    : Inst<"vmul_lane", "ddgi", "sifUsUiQsQiQfQUsQUi", OP_MUL_LN>;
+def VMUL_LANE    : Inst<"vmul_lane", "dddi", "sifUsUiQsQiQfQdQUsQUi", OP_MUL_LN>;
 def VMULL_N      : SInst<"vmull_n", "wda", "siUsUi">;
 def VMULL_LANE   : Inst<"vmull_lane", "wddi", "siUsUi", OP_MULL_LN>;
 def VQDMULL_N    : SInst<"vqdmull_n", "wda", "si">;
@@ -328,15 +328,15 @@ def VREV16 : Inst<"vrev16", "dd", "cUcPcQcQUcQPc", OP_REV16>;
 
 ////////////////////////////////////////////////////////////////////////////////
 // Other single operand arithmetic
-def VABS    : SInst<"vabs", "dd", "csifQcQsQiQf">;
+def VABS    : SInst<"vabs", "dd", "csifQcQsQiQfQd">;
 def VQABS   : SInst<"vqabs", "dd", "csiQcQsQi">;
-def VNEG    : Inst<"vneg", "dd", "csifQcQsQiQf", OP_NEG>;
+def VNEG    : Inst<"vneg", "dd", "csifQcQsQiQfQd", OP_NEG>;
 def VQNEG   : SInst<"vqneg", "dd", "csiQcQsQi">;
 def VCLS    : SInst<"vcls", "dd", "csiQcQsQi">;
 def VCLZ    : IInst<"vclz", "dd", "csiUcUsUiQcQsQiQUcQUsQUi">;
 def VCNT    : WInst<"vcnt", "dd", "UccPcQUcQcQPc">;
-def VRECPE  : SInst<"vrecpe", "dd", "fUiQfQUi">;
-def VRSQRTE : SInst<"vrsqrte", "dd", "fUiQfQUi">;
+def VRECPE  : SInst<"vrecpe", "dd",  "fUiQfQdQUi">;
+def VRSQRTE : SInst<"vrsqrte", "dd", "fUiQfQdQUi">;
 def VRBIT   : SInst<"vrbit", "dd", "cUcQcQUc">;
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -348,7 +348,7 @@ def VEOR : Inst<"veor", "ddd", "csilUcUsUiUlQcQsQiQlQUcQUsQUiQUl", OP_XOR>;
 def VBIC : Inst<"vbic", "ddd", "csilUcUsUiUlQcQsQiQlQUcQUsQUiQUl", OP_ANDN>;
 def VORN : Inst<"vorn", "ddd", "csilUcUsUiUlQcQsQiQlQUcQUsQUiQUl", OP_ORN>;
 def VBSL : Inst<"vbsl", "dudd",
-                "csilUcUsUiUlfPcPsQcQsQiQlQUcQUsQUiQUlQfQPcQPs", OP_SEL>;
+                "csilUcUsUiUlfPcPsQcQsQiQlQUcQUsQUiQUlQfQdQPcQPs", OP_SEL>;
 
 ////////////////////////////////////////////////////////////////////////////////
 // Transposition operations
