@@ -97,12 +97,12 @@ if(PYTHONINTERP_FOUND)
                 ${LLVM_BINARY_DIR}/test
                 ${CMAKE_CURRENT_BINARY_DIR}
                 COMMENT "Running Clang and LLVM regression tests")
-    add_dependencies(check-all clang-test.deps)
+    add_dependencies(check-all check.deps clang-test.deps)
     if ( LLVM_INCLUDE_TESTS )
-       add_dependencies(check-all check.deps ClangUnitTests)
+      add_dependencies(clang-test.deps ClangUnitTests)
     endif ( LLVM_INCLUDE_TESTS )
     add_dependencies(clang-test.deps
-                    llvm-dis opt
+                    llvm-dis llc opt
                      FileCheck count not
                      )
    set_target_properties(check-all PROPERTIES FOLDER "Clang tests")
@@ -111,7 +111,6 @@ if(PYTHONINTERP_FOUND)
   add_dependencies(clang-test clang-test.deps)
   add_dependencies(clang-test.deps
                  clang clang-headers c-index-test arcmt-test c-arcmt-test
-                 llc
                  )
 
 endif()

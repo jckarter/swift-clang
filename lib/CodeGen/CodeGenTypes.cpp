@@ -32,6 +32,7 @@ CodeGenTypes::CodeGenTypes(ASTContext &Ctx, llvm::Module& M,
   : Context(Ctx), Target(Ctx.Target), TheModule(M), TheTargetData(TD),
     TheABIInfo(Info), TheCXXABI(CXXABI), CodeGenOpts(CGO) {
   RecursionState = RS_Normal;
+  SkippedLayout = false;
 }
 
 CodeGenTypes::~CodeGenTypes() {
@@ -166,7 +167,7 @@ void CodeGenTypes::UpdateCompletedType(const TagDecl *TD) {
 
   // Only complete it if we converted it already.  If we haven't converted it
   // yet, we'll just do it lazily.
- // if (RecordDeclTypes.count(Context.getTagDeclType(RD).getTypePtr()))
+  if (RecordDeclTypes.count(Context.getTagDeclType(RD).getTypePtr()))
     ConvertRecordDeclType(RD);
 }
 
@@ -345,6 +346,8 @@ llvm::Type *CodeGenTypes::ConvertType(QualType T) {
       // This function's type depends on an incomplete tag type.
       // Return a placeholder type.
       ResultType = llvm::StructType::get(getLLVMContext());
+      
+      SkippedLayout |= RecursionState == RS_StructPointer;
       break;
     }
 
@@ -373,6 +376,9 @@ llvm::Type *CodeGenTypes::ConvertType(QualType T) {
     
     // Restore our recursion state.
     RecursionState = SavedRecursionState;
+
+    if (SkippedLayout)
+      TypeCache.clear();
     
     if (RecursionState == RS_Normal)
       while (!DeferredRecords.empty())
@@ -487,7 +493,8 @@ llvm::StructType *CodeGenTypes::ConvertRecordDeclType(const RecordDecl *RD) {
   // If this struct blocked a FunctionType conversion, then recompute whatever
   // was derived from that.
   // FIXME: This is hugely overconservative.
-  TypeCache.clear();
+  if (SkippedLayout)
+    TypeCache.clear();
   
   
   // Restore our recursion state.  If we're done converting the outer-most
