@@ -215,8 +215,8 @@ def VST4_LANE : WInst<"vst4_lane", "vp4i", "QUsQUiQsQiQhQfQPsUcUsUicsihfPcPs">;
 
 ////////////////////////////////////////////////////////////////////////////////
 // Extract lanes from a vector
-def VGET_LANE : IInst<"vget_lane", "sdi",
-                      "UcUsUicsiPcPsfQUcQUsQUiQcQsQiQPcQPsQflUlQlQUl">;
+def VGET_LANE : SInst<"vget_lane", "sdi",
+                      "RcRsRiRlRUcRUsRUiRUlRfRPcRPs">;
 
 ////////////////////////////////////////////////////////////////////////////////
 // Set lanes within a vector
@@ -283,8 +283,8 @@ def VMLA_LANE    : Inst<"vmla_lane", "dddgi", "siUsUiQsQiQUsQUi", OP_MLA_LN>;
 def FMLA_LANE    : IInst<"vmla_lane", "ddddi", "fQfQd">;
 def VMLAL_LANE   : Inst<"vmlal_lane", "wwddi", "siUsUi", OP_MLAL_LN>;
 def VQDMLAL_LANE : Inst<"vqdmlal_lane", "wwddi", "si", OP_QDMLAL_LN>; 
-def VMLS_LANE    : Inst<"vmls_lane", "dddgi", "siUsUiQsQiQUsQUi", OP_MLS_LN>;
-def FMLS_LANE    : IInst<"vmls_lane", "dddgi", "fQf">;
+def VMLS_LANE    : Inst<"vmls_lane", "ddddi", "siUsUiQsQiQUsQUi", OP_MLS_LN>;
+def FMLS_LANE    : IInst<"vmls_lane", "ddddi", "fQf">;
 def VMLSL_LANE   : Inst<"vmlsl_lane", "wwddi", "siUsUi", OP_MLSL_LN>;
 def VQDMLSL_LANE : Inst<"vqdmlsl_lane", "wwddi", "si", OP_QDMLSL_LN>;
 def VMUL_N       : Inst<"vmul_n", "dds", "sifUsUiQsQiQfQUsQUi", OP_MUL_N>;

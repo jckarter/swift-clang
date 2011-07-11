@@ -1941,6 +1941,42 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
   (void)poly;  // Only used in assert()s.
   (void)usgn; // FIXME: remove when the variable is used
 
+  // Handle non-overloaded intrinsics first.
+  switch (BuiltinID) {
+  default: break;
+  case ARM64::BI__builtin_arm64_vget_lane_u8:
+  case ARM64::BI__builtin_arm64_vget_lane_s8:
+  case ARM64::BI__builtin_arm64_vget_lane_p8:
+    Ops[0] = Builder.CreateBitCast(Ops[0],
+        llvm::VectorType::get(llvm::IntegerType::get(getLLVMContext(), 8), 16));
+    return Builder.CreateExtractElement(Ops[0], EmitScalarExpr(E->getArg(1)),
+                                        "vget_lane");
+  case ARM64::BI__builtin_arm64_vget_lane_u16:
+  case ARM64::BI__builtin_arm64_vget_lane_s16:
+  case ARM64::BI__builtin_arm64_vget_lane_p16:
+    Ops[0] = Builder.CreateBitCast(Ops[0],
+        llvm::VectorType::get(llvm::IntegerType::get(getLLVMContext(), 16), 8));
+    return Builder.CreateExtractElement(Ops[0], EmitScalarExpr(E->getArg(1)),
+                                        "vget_lane");
+  case ARM64::BI__builtin_arm64_vget_lane_u32:
+  case ARM64::BI__builtin_arm64_vget_lane_s32:
+    Ops[0] = Builder.CreateBitCast(Ops[0],
+        llvm::VectorType::get(llvm::IntegerType::get(getLLVMContext(), 32), 4));
+    return Builder.CreateExtractElement(Ops[0], EmitScalarExpr(E->getArg(1)),
+                                        "vget_lane");
+  case ARM64::BI__builtin_arm64_vget_lane_u64:
+  case ARM64::BI__builtin_arm64_vget_lane_s64:
+    Ops[0] = Builder.CreateBitCast(Ops[0],
+        llvm::VectorType::get(llvm::IntegerType::get(getLLVMContext(), 64), 2));
+    return Builder.CreateExtractElement(Ops[0], EmitScalarExpr(E->getArg(1)),
+                                        "vget_lane");
+  case ARM64::BI__builtin_arm64_vget_lane_f32:
+    Ops[0] = Builder.CreateBitCast(Ops[0],
+        llvm::VectorType::get(llvm::Type::getFloatTy(getLLVMContext()), 4));
+    return Builder.CreateExtractElement(Ops[0], EmitScalarExpr(E->getArg(1)),
+                                        "vget_lane");
+  }
+
   llvm::VectorType *VTy = GetNeonType(getLLVMContext(), type & 0xF, quad);
   llvm::Type *Ty = VTy;
   if (!Ty)
@@ -1961,18 +1997,29 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     Ops[0] = Builder.CreateBitCast(Ops[0], QTy);
     return Builder.CreateTrunc(Ops[0], Ty, "vmovn");
   }
-  case ARM64::BI__builtin_arm64_vget_lane_i8:
-  case ARM64::BI__builtin_arm64_vget_lane_i16:
-  case ARM64::BI__builtin_arm64_vget_lane_i32:
-  case ARM64::BI__builtin_arm64_vget_lane_i64:
+  case ARM64::BI__builtin_arm64_vget_lane_u8:
+  case ARM64::BI__builtin_arm64_vget_lane_u16:
+  case ARM64::BI__builtin_arm64_vget_lane_u32:
+  case ARM64::BI__builtin_arm64_vget_lane_u64:
   case ARM64::BI__builtin_arm64_vget_lane_f32:
-  case ARM64::BI__builtin_arm64_vgetq_lane_i8:
-  case ARM64::BI__builtin_arm64_vgetq_lane_i16:
-  case ARM64::BI__builtin_arm64_vgetq_lane_i32:
-  case ARM64::BI__builtin_arm64_vgetq_lane_i64:
-  case ARM64::BI__builtin_arm64_vgetq_lane_f32:
+  case ARM64::BI__builtin_arm64_vget_lane_p8:
+  case ARM64::BI__builtin_arm64_vget_lane_p16:
     return Builder.CreateExtractElement(Ops[0], EmitScalarExpr(E->getArg(1)),
                                         "vget_lane");
+  case ARM64::BI__builtin_arm64_vget_lane_s8:
+  case ARM64::BI__builtin_arm64_vget_lane_s16:
+  case ARM64::BI__builtin_arm64_vget_lane_s32:
+  case ARM64::BI__builtin_arm64_vget_lane_s64: {
+    Ops[0] = Builder.CreateExtractElement(Ops[0], EmitScalarExpr(E->getArg(1)),
+                                        "vget_lane");
+    Ty = Ops[0]->getType();
+    if (isa<IntegerType>(Ty) &&
+        cast<llvm::IntegerType>(Ty)->getBitWidth() < 64)
+      return Builder.CreateSExt(Ops[0],
+                                llvm::IntegerType::get(getLLVMContext(), 32));
+    else
+      return Ops[0];
+  }
   case ARM64::BI__builtin_arm64_vset_lane_i8:
   case ARM64::BI__builtin_arm64_vset_lane_i16:
   case ARM64::BI__builtin_arm64_vset_lane_i32:
