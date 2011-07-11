@@ -252,14 +252,14 @@ def VMOVL_HIGH   : SInst<"vmovl_high",  "nd", "RcRsRiRUcRUsRUi">;
 
 ////////////////////////////////////////////////////////////////////////////////
 // Table lookup, Extended table lookup
-def VTBL1 : WInst<"vtbl1", "ddk",  "UccPc">;
-def VTBL2 : WInst<"vtbl2", "ddkk",  "UccPc">;
-def VTBL3 : WInst<"vtbl3", "ddkkk",  "UccPc">;
-def VTBL4 : WInst<"vtbl4", "ddkkkk",  "UccPc">;
-def VTBX1 : WInst<"vtbx1", "dddk", "UccPc">;
-def VTBX2 : WInst<"vtbx2", "dddkk", "UccPc">;
-def VTBX3 : WInst<"vtbx3", "dddkkk", "UccPc">;
-def VTBX4 : WInst<"vtbx4", "dddkkkk", "UccPc">;
+def VTBL1 : WInst<"vtbl1", "ddk",  "UccPcQUcQcQPc">;
+def VTBL2 : WInst<"vtbl2", "ddkk",  "UccPcQUcQcQPc">;
+def VTBL3 : WInst<"vtbl3", "ddkkk",  "UccPcQUcQcQPc">;
+def VTBL4 : WInst<"vtbl4", "ddkkkk",  "UccPcQUcQcQPc">;
+def VTBX1 : WInst<"vtbx1", "dddk", "UccPcQUcQcQPc">;
+def VTBX2 : WInst<"vtbx2", "dddkk", "UccPcQUcQcQPc">;
+def VTBX3 : WInst<"vtbx3", "dddkkk", "UccPcQUcQcQPc">;
+def VTBX4 : WInst<"vtbx4", "dddkkkk", "UccPcQUcQcQPc">;
 
 ////////////////////////////////////////////////////////////////////////////////
 // Vector Shuffles

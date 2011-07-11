@@ -3128,49 +3128,57 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     }
     return SV;
   }
-  case ARM64::BI__builtin_arm64_vtbl1_v: {
+  case ARM64::BI__builtin_arm64_vtbl1_v:
+   case ARM64::BI__builtin_arm64_vtbl1q_v: {
     Ops.push_back(Ops[0]);
     Ops.erase(Ops.begin());
     return EmitNeonCall(CGM.getIntrinsic(Intrinsic::arm64_neon_tbl1, &Ty, 1),
                         Ops, "vtbl1");
   }
-  case ARM64::BI__builtin_arm64_vtbl2_v: {
+  case ARM64::BI__builtin_arm64_vtbl2_v:
+   case ARM64::BI__builtin_arm64_vtbl2q_v: {
     Ops.push_back(Ops[0]);
     Ops.erase(Ops.begin());
     return EmitNeonCall(CGM.getIntrinsic(Intrinsic::arm64_neon_tbl2, &Ty, 1),
                         Ops, "vtbl2");
   }
-  case ARM64::BI__builtin_arm64_vtbl3_v: {
+  case ARM64::BI__builtin_arm64_vtbl3_v:
+  case ARM64::BI__builtin_arm64_vtbl3q_v: {
     Ops.push_back(Ops[0]);
     Ops.erase(Ops.begin());
     return EmitNeonCall(CGM.getIntrinsic(Intrinsic::arm64_neon_tbl3, &Ty, 1),
                         Ops, "vtbl3");
   }
-  case ARM64::BI__builtin_arm64_vtbl4_v: {
+  case ARM64::BI__builtin_arm64_vtbl4_v:
+  case ARM64::BI__builtin_arm64_vtbl4q_v: {
     Ops.push_back(Ops[0]);
     Ops.erase(Ops.begin());
     return EmitNeonCall(CGM.getIntrinsic(Intrinsic::arm64_neon_tbl4, &Ty, 1),
                         Ops, "vtbl4");
   }
-  case ARM64::BI__builtin_arm64_vtbx1_v: {
+  case ARM64::BI__builtin_arm64_vtbx1_v:
+  case ARM64::BI__builtin_arm64_vtbx1q_v: {
     Ops.push_back(Ops[1]);
     Ops.erase(Ops.begin());
     return EmitNeonCall(CGM.getIntrinsic(Intrinsic::arm64_neon_tbx1, &Ty, 1),
                         Ops, "vtbx1");
   }
-  case ARM64::BI__builtin_arm64_vtbx2_v: {
+  case ARM64::BI__builtin_arm64_vtbx2_v:
+  case ARM64::BI__builtin_arm64_vtbx2q_v: {
     Ops.push_back(Ops[1]);
     Ops.erase(Ops.begin());
     return EmitNeonCall(CGM.getIntrinsic(Intrinsic::arm64_neon_tbx2, &Ty, 1),
                         Ops, "vtbx2");
   }
-  case ARM64::BI__builtin_arm64_vtbx3_v: {
+  case ARM64::BI__builtin_arm64_vtbx3_v:
+  case ARM64::BI__builtin_arm64_vtbx3q_v: {
     Ops.push_back(Ops[1]);
     Ops.erase(Ops.begin());
     return EmitNeonCall(CGM.getIntrinsic(Intrinsic::arm64_neon_tbx3, &Ty, 1),
                         Ops, "vtbx3");
   }
-  case ARM64::BI__builtin_arm64_vtbx4_v: {
+  case ARM64::BI__builtin_arm64_vtbx4_v:
+  case ARM64::BI__builtin_arm64_vtbx4q_v: {
     Ops.push_back(Ops[1]);
     Ops.erase(Ops.begin());
     return EmitNeonCall(CGM.getIntrinsic(Intrinsic::arm64_neon_tbx4, &Ty, 1),
