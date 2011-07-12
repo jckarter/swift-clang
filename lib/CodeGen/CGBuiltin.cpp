@@ -2889,6 +2889,7 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
   case ARM64::BI__builtin_arm64_vst1_v:
   case ARM64::BI__builtin_arm64_vst1q_v:
     Ops[0] = Builder.CreateBitCast(Ops[0], llvm::PointerType::getUnqual(VTy));
+    Ops[1] = Builder.CreateBitCast(Ops[1], VTy);
     return Builder.CreateStore(Ops[1], Ops[0]);
   case ARM64::BI__builtin_arm64_vld1_lane_v:
   case ARM64::BI__builtin_arm64_vld1q_lane_v:
