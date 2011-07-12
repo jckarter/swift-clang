@@ -1944,6 +1944,18 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
   // Handle non-overloaded intrinsics first.
   switch (BuiltinID) {
   default: break;
+  case ARM64::BI__builtin_arm64_vset_lane_i8:
+  case ARM64::BI__builtin_arm64_vset_lane_i16:
+  case ARM64::BI__builtin_arm64_vset_lane_i32:
+  case ARM64::BI__builtin_arm64_vset_lane_i64:
+  case ARM64::BI__builtin_arm64_vset_lane_f32:
+  case ARM64::BI__builtin_arm64_vsetq_lane_i8:
+  case ARM64::BI__builtin_arm64_vsetq_lane_i16:
+  case ARM64::BI__builtin_arm64_vsetq_lane_i32:
+  case ARM64::BI__builtin_arm64_vsetq_lane_i64:
+  case ARM64::BI__builtin_arm64_vsetq_lane_f32:
+    Ops.push_back(EmitScalarExpr(E->getArg(2)));
+    return Builder.CreateInsertElement(Ops[1], Ops[0], Ops[2], "vset_lane");
   case ARM64::BI__builtin_arm64_vget_lane_u8:
   case ARM64::BI__builtin_arm64_vget_lane_s8:
   case ARM64::BI__builtin_arm64_vget_lane_p8:
@@ -2020,18 +2032,6 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     else
       return Ops[0];
   }
-  case ARM64::BI__builtin_arm64_vset_lane_i8:
-  case ARM64::BI__builtin_arm64_vset_lane_i16:
-  case ARM64::BI__builtin_arm64_vset_lane_i32:
-  case ARM64::BI__builtin_arm64_vset_lane_i64:
-  case ARM64::BI__builtin_arm64_vset_lane_f32:
-  case ARM64::BI__builtin_arm64_vsetq_lane_i8:
-  case ARM64::BI__builtin_arm64_vsetq_lane_i16:
-  case ARM64::BI__builtin_arm64_vsetq_lane_i32:
-  case ARM64::BI__builtin_arm64_vsetq_lane_i64:
-  case ARM64::BI__builtin_arm64_vsetq_lane_f32:
-    Ops.push_back(EmitScalarExpr(E->getArg(2)));
-    return Builder.CreateInsertElement(Ops[1], Ops[0], Ops[2], "vset_lane");
   case ARM64::BI__builtin_arm64_vhadd_v:
   case ARM64::BI__builtin_arm64_vhaddq_v:
     Int = usgn ? Intrinsic::arm64_neon_uhadd : Intrinsic::arm64_neon_shadd;
@@ -2879,6 +2879,7 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     TmpOps.push_back(Ops[1]);
     TmpOps.push_back(Ops[2]);
     llvm::Value *tmp = EmitNeonCall(CGM.getIntrinsic(Int, &Ty, 1), TmpOps, "vrshr_n");
+    Ops[0] = Builder.CreateBitCast(Ops[0], VTy);
     return Builder.CreateAdd(Ops[0], tmp);
   }
   case ARM64::BI__builtin_arm64_vld1_v:
