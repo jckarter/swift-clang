@@ -2511,6 +2511,12 @@ def note_protected_by___block : Note<
   "jump bypasses setup of __block variable">;
 def note_protected_by_objc_ownership : Note<
   "jump bypasses initialization of retaining variable">;
+def note_enters_block_captures_cxx_obj : Note<
+  "jump enters lifetime of block which captures a destructible c++ object">;
+def note_enters_block_captures_strong : Note<
+  "jump enters lifetime of block which strongly captures a variable">;
+def note_enters_block_captures_weak : Note<
+  "jump enters lifetime of block which weakly captures a variable">;
 
 def note_exits_cleanup : Note<
   "jump exits scope of variable with __attribute__((cleanup))">;
@@ -2534,6 +2540,12 @@ def note_exits_objc_autoreleasepool : Note<
   "jump exits autoreleasepool block">;
 def note_exits_objc_ownership : Note<
   "jump exits scope of retaining variable">;
+def note_exits_block_captures_cxx_obj : Note<
+  "jump exits lifetime of block which captures a destructible c++ object">;
+def note_exits_block_captures_strong : Note<
+  "jump exits lifetime of block which strongly captures a variable">;
+def note_exits_block_captures_weak : Note<
+  "jump exits lifetime of block which weakly captures a variable">;
 
 def err_func_returning_array_function : Error<
   "function cannot return %select{array|function}0 type %1">;
@@ -4196,6 +4208,9 @@ def err_second_parameter_to_va_arg_abstract: Error<
 def warn_second_parameter_to_va_arg_not_pod : Warning<
   "second argument to 'va_arg' is of non-POD type %0">,
   InGroup<DiagGroup<"non-pod-varargs">>, DefaultError;
+def warn_second_parameter_to_va_arg_never_compatible : Warning<
+  "second argument to 'va_arg' is of promotable type %0; this va_arg has "
+  "undefined behavior because arguments will be promoted to %1">;
 
 def warn_return_missing_expr : Warning<
   "non-void %select{function|method}1 %0 should return a value">, DefaultError,
