@@ -689,8 +689,8 @@ void AggExprEmitter::VisitInitListExpr(InitListExpr *E) {
       endOfInit = CGF.CreateTempAlloca(begin->getType(),
                                        "arrayinit.endOfInit");
       Builder.CreateStore(begin, endOfInit);
-      CGF.pushPartialArrayCleanup(begin, elementType,
-                                  CGF.getDestroyer(dtorKind), endOfInit);
+      CGF.pushIrregularPartialArrayCleanup(begin, endOfInit, elementType,
+                                           CGF.getDestroyer(dtorKind));
       cleanup = CGF.EHStack.stable_begin();
 
     // Otherwise, remember that we didn't need a cleanup.
@@ -710,16 +710,17 @@ void AggExprEmitter::VisitInitListExpr(InitListExpr *E) {
     // Emit the explicit initializers.
     for (uint64_t i = 0; i != NumInitElements; ++i) {
       // Advance to the next element.
-      if (i > 0)
+      if (i > 0) {
         element = Builder.CreateInBoundsGEP(element, one, "arrayinit.element");
+
+        // Tell the cleanup that it needs to destroy up to this
+        // element.  TODO: some of these stores can be trivially
+        // observed to be unnecessary.
+        if (endOfInit) Builder.CreateStore(element, endOfInit);
+      }
 
       LValue elementLV = CGF.MakeAddrLValue(element, elementType);
       EmitInitializationToLValue(E->getInit(i), elementLV);
-
-      // Tell the cleanup that it needs to destroy this element.
-      // TODO: some of these stores can be trivially observed to be
-      // unnecessary.
-      if (endOfInit) Builder.CreateStore(element, endOfInit);
     }
 
     // Check whether there's a non-trivial array-fill expression.
@@ -743,8 +744,10 @@ void AggExprEmitter::VisitInitListExpr(InitListExpr *E) {
       //   do { *array++ = filler; } while (array != end);
 
       // Advance to the start of the rest of the array.
-      if (NumInitElements)
+      if (NumInitElements) {
         element = Builder.CreateInBoundsGEP(element, one, "arrayinit.start");
+        if (endOfInit) Builder.CreateStore(element, endOfInit);
+      }
 
       // Compute the end of the array.
       llvm::Value *end = Builder.CreateInBoundsGEP(begin,
@@ -767,12 +770,12 @@ void AggExprEmitter::VisitInitListExpr(InitListExpr *E) {
       else
         EmitNullInitializationToLValue(elementLV);
 
-      // Tell the EH cleanup that we finished with that element.
-      if (endOfInit) Builder.CreateStore(element, endOfInit);
-
       // Move on to the next element.
       llvm::Value *nextElement =
         Builder.CreateInBoundsGEP(currentElement, one, "arrayinit.next");
+
+      // Tell the EH cleanup that we finished with the last element.
+      if (endOfInit) Builder.CreateStore(nextElement, endOfInit);
 
       // Leave the loop if we're done.
       llvm::Value *done = Builder.CreateICmpEQ(nextElement, end,
@@ -797,9 +800,9 @@ void AggExprEmitter::VisitInitListExpr(InitListExpr *E) {
   // the disadvantage is that the generated code is more difficult for
   // the optimizer, especially with bitfields.
   unsigned NumInitElements = E->getNumInits();
-  RecordDecl *SD = E->getType()->getAs<RecordType>()->getDecl();
+  RecordDecl *record = E->getType()->castAs<RecordType>()->getDecl();
   
-  if (E->getType()->isUnionType()) {
+  if (record->isUnion()) {
     // Only initialize one field of a union. The field itself is
     // specified by the initializer list.
     if (!E->getInitializedFieldInUnion()) {
@@ -808,8 +811,8 @@ void AggExprEmitter::VisitInitListExpr(InitListExpr *E) {
 #ifndef NDEBUG
       // Make sure that it's really an empty and not a failure of
       // semantic analysis.
-      for (RecordDecl::field_iterator Field = SD->field_begin(),
-                                   FieldEnd = SD->field_end();
+      for (RecordDecl::field_iterator Field = record->field_begin(),
+                                   FieldEnd = record->field_end();
            Field != FieldEnd; ++Field)
         assert(Field->isUnnamedBitfield() && "Only unnamed bitfields allowed");
 #endif
@@ -831,45 +834,72 @@ void AggExprEmitter::VisitInitListExpr(InitListExpr *E) {
     return;
   }
 
+  // We'll need to enter cleanup scopes in case any of the member
+  // initializers throw an exception.
+  llvm::SmallVector<EHScopeStack::stable_iterator, 16> cleanups;
+
   // Here we iterate over the fields; this makes it simpler to both
   // default-initialize fields and skip over unnamed fields.
-  unsigned CurInitVal = 0;
-  for (RecordDecl::field_iterator Field = SD->field_begin(),
-                               FieldEnd = SD->field_end();
-       Field != FieldEnd; ++Field) {
-    // We're done once we hit the flexible array member
-    if (Field->getType()->isIncompleteArrayType())
+  unsigned curInitIndex = 0;
+  for (RecordDecl::field_iterator field = record->field_begin(),
+                               fieldEnd = record->field_end();
+       field != fieldEnd; ++field) {
+    // We're done once we hit the flexible array member.
+    if (field->getType()->isIncompleteArrayType())
       break;
 
-    if (Field->isUnnamedBitfield())
+    // Always skip anonymous bitfields.
+    if (field->isUnnamedBitfield())
       continue;
 
-    // Don't emit GEP before a noop store of zero.
-    if (CurInitVal == NumInitElements && Dest.isZeroed() &&
+    // We're done if we reach the end of the explicit initializers, we
+    // have a zeroed object, and the rest of the fields are
+    // zero-initializable.
+    if (curInitIndex == NumInitElements && Dest.isZeroed() &&
         CGF.getTypes().isZeroInitializable(E->getType()))
       break;
     
     // FIXME: volatility
-    LValue FieldLoc = CGF.EmitLValueForFieldInitialization(DestPtr, *Field, 0);
+    LValue LV = CGF.EmitLValueForFieldInitialization(DestPtr, *field, 0);
     // We never generate write-barries for initialized fields.
-    FieldLoc.setNonGC(true);
+    LV.setNonGC(true);
     
-    if (CurInitVal < NumInitElements) {
+    if (curInitIndex < NumInitElements) {
       // Store the initializer into the field.
-      EmitInitializationToLValue(E->getInit(CurInitVal++), FieldLoc);
+      EmitInitializationToLValue(E->getInit(curInitIndex++), LV);
     } else {
       // We're out of initalizers; default-initialize to null
-      EmitNullInitializationToLValue(FieldLoc);
+      EmitNullInitializationToLValue(LV);
+    }
+
+    // Push a destructor if necessary.
+    // FIXME: if we have an array of structures, all explicitly
+    // initialized, we can end up pushing a linear number of cleanups.
+    bool pushedCleanup = false;
+    if (QualType::DestructionKind dtorKind
+          = field->getType().isDestructedType()) {
+      assert(LV.isSimple());
+      if (CGF.needsEHCleanup(dtorKind)) {
+        CGF.pushDestroy(EHCleanup, LV.getAddress(), field->getType(),
+                        CGF.getDestroyer(dtorKind), false);
+        cleanups.push_back(CGF.EHStack.stable_begin());
+        pushedCleanup = true;
+      }
     }
     
     // If the GEP didn't get used because of a dead zero init or something
     // else, clean it up for -O0 builds and general tidiness.
-    if (FieldLoc.isSimple())
+    if (!pushedCleanup && LV.isSimple()) 
       if (llvm::GetElementPtrInst *GEP =
-            dyn_cast<llvm::GetElementPtrInst>(FieldLoc.getAddress()))
+            dyn_cast<llvm::GetElementPtrInst>(LV.getAddress()))
         if (GEP->use_empty())
           GEP->eraseFromParent();
   }
+
+  // Deactivate all the partial cleanups in reverse order, which
+  // generally means popping them.
+  for (unsigned i = cleanups.size(); i != 0; --i)
+    CGF.DeactivateCleanupBlock(cleanups[i-1]);
 }
 
 //===----------------------------------------------------------------------===//

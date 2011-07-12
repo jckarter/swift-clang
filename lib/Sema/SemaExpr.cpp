@@ -8501,6 +8501,15 @@ ExprResult Sema::ActOnBlockStmtExpr(SourceLocation CaretLoc,
 
   const AnalysisBasedWarnings::Policy &WP = AnalysisWarnings.getDefaultPolicy();
   PopFunctionOrBlockScope(&WP, Result->getBlockDecl(), Result);
+  for (BlockDecl::capture_const_iterator ci = BSI->TheDecl->capture_begin(),
+       ce = BSI->TheDecl->capture_end(); ci != ce; ++ci) {
+    const VarDecl *variable = ci->getVariable();
+    QualType T = variable->getType();
+    QualType::DestructionKind destructKind = T.isDestructedType();
+    if (destructKind != QualType::DK_none)
+      getCurFunction()->setHasBranchProtectedScope();
+  }
+
   return Owned(Result);
 }
 
@@ -8560,6 +8569,23 @@ ExprResult Sema::BuildVAArgExpr(SourceLocation BuiltinLoc,
       Diag(TInfo->getTypeLoc().getBeginLoc(),
           diag::warn_second_parameter_to_va_arg_not_pod)
         << TInfo->getType()
+        << TInfo->getTypeLoc().getSourceRange();
+
+    // Check for va_arg where arguments of the given type will be promoted
+    // (i.e. this va_arg is guaranteed to have undefined behavior).
+    QualType PromoteType;
+    if (TInfo->getType()->isPromotableIntegerType()) {
+      PromoteType = Context.getPromotedIntegerType(TInfo->getType());
+      if (Context.typesAreCompatible(PromoteType, TInfo->getType()))
+        PromoteType = QualType();
+    }
+    if (TInfo->getType()->isSpecificBuiltinType(BuiltinType::Float))
+      PromoteType = Context.DoubleTy;
+    if (!PromoteType.isNull())
+      Diag(TInfo->getTypeLoc().getBeginLoc(),
+          diag::warn_second_parameter_to_va_arg_never_compatible)
+        << TInfo->getType()
+        << PromoteType
         << TInfo->getTypeLoc().getSourceRange();
   }
 
