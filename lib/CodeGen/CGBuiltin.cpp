@@ -2184,23 +2184,25 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     Int = Intrinsic::arm64_neon_addp;
     if (Ty->isFPOrFPVectorTy()) Int = Intrinsic::arm64_neon_faddp;
     return EmitNeonCall(CGM.getIntrinsic(Int, &Ty, 1), Ops, "vpadd");
-  case ARM64::BI__builtin_arm64_vpaddl_v: {
+  case ARM64::BI__builtin_arm64_vpaddl_v:
+  case ARM64::BI__builtin_arm64_vpaddlq_v: {
     unsigned ArgElts = VTy->getNumElements();
     llvm::IntegerType *EltTy = cast<IntegerType>(VTy->getElementType());
     unsigned BitWidth = EltTy->getBitWidth();
-    llvm::Type *RetTy = llvm::VectorType::get(
-        llvm::IntegerType::get(getLLVMContext(), 2*BitWidth), ArgElts/2);
-    llvm::Type* Tys[2] = { RetTy, Ty };
+    llvm::Type *ArgTy = llvm::VectorType::get(
+        llvm::IntegerType::get(getLLVMContext(), BitWidth/2), 2*ArgElts);
+    llvm::Type* Tys[2] = { VTy, ArgTy };
     Int = usgn ? Intrinsic::arm64_neon_uaddlp : Intrinsic::arm64_neon_saddlp;
     return EmitNeonCall(CGM.getIntrinsic(Int, Tys, 2), Ops, "vpaddl");
   }
-  case ARM64::BI__builtin_arm64_vpadal_v: {
+  case ARM64::BI__builtin_arm64_vpadal_v:
+  case ARM64::BI__builtin_arm64_vpadalq_v: {
     unsigned ArgElts = VTy->getNumElements();
     llvm::IntegerType *EltTy = cast<IntegerType>(VTy->getElementType());
     unsigned BitWidth = EltTy->getBitWidth();
-    llvm::Type *RetTy = llvm::VectorType::get(
-        llvm::IntegerType::get(getLLVMContext(), 2*BitWidth), ArgElts/2);
-    llvm::Type* Tys[2] = { RetTy, Ty };
+    llvm::Type *ArgTy = llvm::VectorType::get(
+        llvm::IntegerType::get(getLLVMContext(), BitWidth/2), 2*ArgElts);
+    llvm::Type* Tys[2] = { VTy, ArgTy };
     Int = usgn ? Intrinsic::arm64_neon_uaddlp : Intrinsic::arm64_neon_saddlp;
     SmallVector<llvm::Value*, 1> TmpOps;
     TmpOps.push_back(Ops[1]);
