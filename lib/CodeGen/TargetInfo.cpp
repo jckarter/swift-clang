@@ -825,6 +825,22 @@ class X86_64ABIInfo : public ABIInfo {
   /// should just return Memory for the aggregate).
   static Class merge(Class Accum, Class Field);
 
+  /// postMerge - Implement the X86_64 ABI post merging algorithm.
+  ///
+  /// Post merger cleanup, reduces a malformed Hi and Lo pair to
+  /// final MEMORY or SSE classes when necessary.
+  ///
+  /// \param AggregateSize - The size of the current aggregate in
+  /// the classification process.
+  ///
+  /// \param Lo - The classification for the parts of the type
+  /// residing in the low word of the containing object.
+  ///
+  /// \param Hi - The classification for the parts of the type
+  /// residing in the higher words of the containing object.
+  ///
+  void postMerge(unsigned AggregateSize, Class &Lo, Class &Hi) const;
+
   /// classify - Determine the x86_64 register classes in which the
   /// given type T should be passed.
   ///
@@ -848,7 +864,7 @@ class X86_64ABIInfo : public ABIInfo {
   /// also be ComplexX87.
   void classify(QualType T, uint64_t OffsetBase, Class &Lo, Class &Hi) const;
 
-  llvm::Type *Get16ByteVectorType(QualType Ty) const;
+  llvm::Type *GetByteVectorType(QualType Ty) const;
   llvm::Type *GetSSETypeAtOffset(llvm::Type *IRType,
                                  unsigned IROffset, QualType SourceTy,
                                  unsigned SourceOffset) const;
@@ -959,6 +975,39 @@ public:
   }
 };
 
+}
+
+void X86_64ABIInfo::postMerge(unsigned AggregateSize, Class &Lo,
+                              Class &Hi) const {
+  // AMD64-ABI 3.2.3p2: Rule 5. Then a post merger cleanup is done:
+  //
+  // (a) If one of the classes is Memory, the whole argument is passed in
+  //     memory.
+  //
+  // (b) If X87UP is not preceded by X87, the whole argument is passed in
+  //     memory.
+  //
+  // (c) If the size of the aggregate exceeds two eightbytes and the first
+  //     eightbyte isn't SSE or any other eightbyte isn't SSEUP, the whole
+  //     argument is passed in memory. NOTE: This is necessary to keep the
+  //     ABI working for processors that don't support the __m256 type.
+  //
+  // (d) If SSEUP is not preceded by SSE or SSEUP, it is converted to SSE.
+  //
+  // Some of these are enforced by the merging logic.  Others can arise
+  // only with unions; for example:
+  //   union { _Complex double; unsigned; }
+  //
+  // Note that clauses (b) and (c) were added in 0.98.
+  //
+  if (Hi == Memory)
+    Lo = Memory;
+  if (Hi == X87Up && Lo != X87 && honorsRevision0_98())
+    Lo = Memory;
+  if (AggregateSize > 128 && (Lo != SSE || Hi != SSEUp))
+    Lo = Memory;
+  if (Hi == SSEUp && Lo != SSE)
+    Hi = SSE;
 }
 
 X86_64ABIInfo::Class X86_64ABIInfo::merge(Class Accum, Class Field) {
@@ -1087,7 +1136,14 @@ void X86_64ABIInfo::classify(QualType Ty, uint64_t OffsetBase,
       // split.
       if (OffsetBase && OffsetBase != 64)
         Hi = Lo;
-    } else if (Size == 128) {
+    } else if (Size == 128 || Size == 256) {
+      // Arguments of 256-bits are split into four eightbyte chunks. The
+      // least significant one belongs to class SSE and all the others to class
+      // SSEUP. The original Lo and Hi design considers that types can't be
+      // greater than 128-bits, so a 64-bit split in Hi and Lo makes sense.
+      // This design isn't correct for 256-bits, but since there're no cases
+      // where the upper parts would need to be inspected, avoid adding
+      // complexity and just consider Hi to match the 64-256 part.
       Lo = SSE;
       Hi = SSEUp;
     }
@@ -1126,8 +1182,8 @@ void X86_64ABIInfo::classify(QualType Ty, uint64_t OffsetBase,
     uint64_t Size = getContext().getTypeSize(Ty);
 
     // AMD64-ABI 3.2.3p2: Rule 1. If the size of an object is larger
-    // than two eightbytes, ..., it has class MEMORY.
-    if (Size > 128)
+    // than four eightbytes, ..., it has class MEMORY.
+    if (Size > 256)
       return;
 
     // AMD64-ABI 3.2.3p2: Rule 1. If ..., or it contains unaligned
@@ -1142,6 +1198,13 @@ void X86_64ABIInfo::classify(QualType Ty, uint64_t OffsetBase,
     Current = NoClass;
     uint64_t EltSize = getContext().getTypeSize(AT->getElementType());
     uint64_t ArraySize = AT->getSize().getZExtValue();
+
+    // The only case a 256-bit wide vector could be used is when the array
+    // contains a single 256-bit element. Since Lo and Hi logic isn't extended
+    // to work for sizes wider than 128, early check and fallback to memory.
+    if (Size > 128 && EltSize != 256)
+      return;
+
     for (uint64_t i=0, Offset=OffsetBase; i<ArraySize; ++i, Offset += EltSize) {
       Class FieldLo, FieldHi;
       classify(AT->getElementType(), Offset, FieldLo, FieldHi);
@@ -1151,9 +1214,7 @@ void X86_64ABIInfo::classify(QualType Ty, uint64_t OffsetBase,
         break;
     }
 
-    // Do post merger cleanup (see below). Only case we worry about is Memory.
-    if (Hi == Memory)
-      Lo = Memory;
+    postMerge(Size, Lo, Hi);
     assert((Hi != SSEUp || Lo == SSE) && "Invalid SSEUp array classification.");
     return;
   }
@@ -1162,8 +1223,8 @@ void X86_64ABIInfo::classify(QualType Ty, uint64_t OffsetBase,
     uint64_t Size = getContext().getTypeSize(Ty);
 
     // AMD64-ABI 3.2.3p2: Rule 1. If the size of an object is larger
-    // than two eightbytes, ..., it has class MEMORY.
-    if (Size > 128)
+    // than four eightbytes, ..., it has class MEMORY.
+    if (Size > 256)
       return;
 
     // AMD64-ABI 3.2.3p2: Rule 2. If a C++ object has either a non-trivial
@@ -1173,6 +1234,13 @@ void X86_64ABIInfo::classify(QualType Ty, uint64_t OffsetBase,
       return;
 
     const RecordDecl *RD = RT->getDecl();
+
+    // The only case a 256-bit wide vector could be used is when the struct
+    // contains a single 256-bit element. Since Lo and Hi logic isn't extended
+    // to work for sizes wider than 128, early check and fallback to memory.
+    RecordDecl::field_iterator FirstElt = RD->field_begin();
+    if (Size > 128 && getContext().getTypeSize(FirstElt->getType()) != 256)
+      return;
 
     // Assume variable sized types are passed in memory.
     if (RD->hasFlexibleArrayMember())
@@ -1209,7 +1277,7 @@ void X86_64ABIInfo::classify(QualType Ty, uint64_t OffsetBase,
 
     // Classify the fields one at a time, merging the results.
     unsigned idx = 0;
-    for (RecordDecl::field_iterator i = RD->field_begin(), e = RD->field_end();
+    for (RecordDecl::field_iterator i = FirstElt, e = RD->field_end();
            i != e; ++i, ++idx) {
       uint64_t Offset = OffsetBase + Layout.getFieldOffset(idx);
       bool BitField = i->isBitField();
@@ -1262,31 +1330,7 @@ void X86_64ABIInfo::classify(QualType Ty, uint64_t OffsetBase,
         break;
     }
 
-    // AMD64-ABI 3.2.3p2: Rule 5. Then a post merger cleanup is done:
-    //
-    // (a) If one of the classes is MEMORY, the whole argument is
-    // passed in memory.
-    //
-    // (b) If X87UP is not preceded by X87, the whole argument is 
-    // passed in memory.
-    // 
-    // (c) If the size of the aggregate exceeds two eightbytes and the first
-    // eight-byte isn't SSE or any other eightbyte isn't SSEUP, the whole 
-    // argument is passed in memory.
-    // 
-    // (d) If SSEUP is not preceded by SSE or SSEUP, it is converted to SSE.
-    //
-    // Some of these are enforced by the merging logic.  Others can arise
-    // only with unions; for example:
-    //   union { _Complex double; unsigned; }
-    //
-    // Note that clauses (b) and (c) were added in 0.98.
-    if (Hi == Memory)
-      Lo = Memory;
-    if (Hi == X87Up && Lo != X87 && honorsRevision0_98())
-      Lo = Memory;
-    if (Hi == SSEUp && Lo != SSE)
-      Hi = SSE;
+    postMerge(Size, Lo, Hi);
   }
 }
 
@@ -1326,10 +1370,10 @@ ABIArgInfo X86_64ABIInfo::getIndirectResult(QualType Ty) const {
   return ABIArgInfo::getIndirect(Align);
 }
 
-/// Get16ByteVectorType - The ABI specifies that a value should be passed in an
-/// full vector XMM register.  Pick an LLVM IR type that will be passed as a
+/// GetByteVectorType - The ABI specifies that a value should be passed in an
+/// full vector XMM/YMM register.  Pick an LLVM IR type that will be passed as a
 /// vector register.
-llvm::Type *X86_64ABIInfo::Get16ByteVectorType(QualType Ty) const {
+llvm::Type *X86_64ABIInfo::GetByteVectorType(QualType Ty) const {
   llvm::Type *IRType = CGT.ConvertType(Ty);
 
   // Wrapper structs that just contain vectors are passed just like vectors,
@@ -1343,7 +1387,8 @@ llvm::Type *X86_64ABIInfo::Get16ByteVectorType(QualType Ty) const {
   // If the preferred type is a 16-byte vector, prefer to pass it.
   if (llvm::VectorType *VT = dyn_cast<llvm::VectorType>(IRType)){
     llvm::Type *EltTy = VT->getElementType();
-    if (VT->getBitWidth() == 128 &&
+    unsigned BitWidth = VT->getBitWidth();
+    if ((BitWidth == 128 || BitWidth == 256) &&
         (EltTy->isFloatTy() || EltTy->isDoubleTy() ||
          EltTy->isIntegerTy(8) || EltTy->isIntegerTy(16) ||
          EltTy->isIntegerTy(32) || EltTy->isIntegerTy(64) ||
@@ -1704,12 +1749,13 @@ classifyReturnType(QualType RetTy) const {
     break;
 
     // AMD64-ABI 3.2.3p4: Rule 5. If the class is SSEUP, the eightbyte
-    // is passed in the upper half of the last used SSE register.
+    // is passed in the next available eightbyte chunk if the last used
+    // vector register.
     //
     // SSEUP should always be preceded by SSE, just widen.
   case SSEUp:
     assert(Lo == SSE && "Unexpected SSEUp classification.");
-    ResType = Get16ByteVectorType(RetTy);
+    ResType = GetByteVectorType(RetTy);
     break;
 
     // AMD64-ABI 3.2.3p4: Rule 7. If the class is X87UP, the value is
@@ -1848,7 +1894,7 @@ ABIArgInfo X86_64ABIInfo::classifyArgumentType(QualType Ty, unsigned &neededInt,
     // register.  This only happens when 128-bit vectors are passed.
   case SSEUp:
     assert(Lo == SSE && "Unexpected SSEUp classification");
-    ResType = Get16ByteVectorType(Ty);
+    ResType = GetByteVectorType(Ty);
     break;
   }
 
