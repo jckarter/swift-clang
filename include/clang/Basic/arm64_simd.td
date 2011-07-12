@@ -58,7 +58,6 @@ def VQDMLAL2_LANE  : SInst<"vqdmlal2_lane", "nnddi",  "RsRi">;
 def VQDMLSL2_LANE  : SInst<"vqdmlsl2_lane", "nnddi",  "RsRi">;
 def VQDMULL2_LANE  : SInst<"vqdmull2_lane", "nddi",  "RsRi">;
 
-
 ////////////////////////////////////////////////////////////////////////////////
 // Miscellaneous FP
 def VDIV  : SInst<"vdiv",  "ddd", "fQfQd">;
