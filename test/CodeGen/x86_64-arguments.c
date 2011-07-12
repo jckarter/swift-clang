@@ -262,3 +262,45 @@ void f9122143()
 // CHECK: define double @f36(double %arg.coerce)
 typedef unsigned v2i32 __attribute((__vector_size__(8)));
 v2i32 f36(v2i32 arg) { return arg; }
+
+// CHECK: declare void @f38(<8 x float>)
+// CHECK: declare void @f37(<8 x float>)
+typedef float __m256 __attribute__ ((__vector_size__ (32)));
+typedef struct {
+  __m256 m;
+} s256;
+
+s256 x38;
+__m256 x37;
+
+void f38(s256 x);
+void f37(__m256 x);
+void f39() { f38(x38); f37(x37); }
+
+// The two next tests make sure that the struct below is passed
+// in the same way regardless of avx being used
+
+// CHECK: declare void @func40(%struct.t128* byval align 16)
+typedef float __m128 __attribute__ ((__vector_size__ (16)));
+typedef struct t128 {
+  __m128 m;
+  __m128 n;
+} two128;
+
+extern void func40(two128 s);
+void func41(two128 s) {
+  func40(s);
+}
+
+// CHECK: declare void @func42(%struct.t128_2* byval align 16)
+typedef struct xxx {
+  __m128 array[2];
+} Atwo128;
+typedef struct t128_2 {
+  Atwo128 x;
+} SA;
+
+extern void func42(SA s);
+void func43(SA s) {
+  func42(s);
+}
