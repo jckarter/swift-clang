@@ -627,18 +627,23 @@ llvm::Value *CodeGenFunction::EmitBlockLiteral(const BlockExpr *blockExpr) {
     // Push a destructor if necessary.  The semantics for when this
     // actually gets run are really obscure.
     if (!ci->isByRef()) {
-      switch (type.isDestructedType()) {
+      switch (QualType::DestructionKind dtorKind = type.isDestructedType()) {
       case QualType::DK_none:
         break;
-      case QualType::DK_cxx_destructor:
-        PushDestructorCleanup(type, blockField);
+
+      // Block captures count as local values and have imprecise semantics.
+      // They also can't be arrays, so need to worry about that.
+      case QualType::DK_objc_strong_lifetime: {
+        // This local is a GCC and MSVC compiler workaround.
+        Destroyer *destroyer = &destroyARCStrongImprecise;
+        pushDestroy(getCleanupKind(dtorKind), blockField, type,
+                    *destroyer, /*useEHCleanupForArray*/ false);
         break;
-      case QualType::DK_objc_strong_lifetime:
-        PushARCReleaseCleanup(getARCCleanupKind(), type, blockField, false);
-        break;
+      }
+
       case QualType::DK_objc_weak_lifetime:
-        // __weak objects on the stack always get EH cleanups.
-        PushARCWeakReleaseCleanup(NormalAndEHCleanup, type, blockField);
+      case QualType::DK_cxx_destructor:
+        pushDestroy(dtorKind, blockField, type);
         break;
       }
     }
@@ -1794,7 +1799,7 @@ namespace {
     llvm::Value *Addr;
     CallBlockRelease(llvm::Value *Addr) : Addr(Addr) {}
 
-    void Emit(CodeGenFunction &CGF, bool IsForEH) {
+    void Emit(CodeGenFunction &CGF, Flags flags) {
       // Should we be passing FIELD_IS_WEAK here?
       CGF.BuildBlockRelease(Addr, BLOCK_FIELD_IS_BYREF);
     }

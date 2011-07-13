@@ -355,33 +355,6 @@ CodeGenFunction::ExpandTypeFromArgs(QualType Ty, LValue LV,
   return AI;
 }
 
-void
-CodeGenFunction::ExpandTypeToArgs(QualType Ty, RValue RV,
-                                  llvm::SmallVector<llvm::Value*, 16> &Args) {
-  const RecordType *RT = Ty->getAsStructureType();
-  assert(RT && "Can only expand structure types.");
-
-  RecordDecl *RD = RT->getDecl();
-  assert(RV.isAggregate() && "Unexpected rvalue during struct expansion");
-  llvm::Value *Addr = RV.getAggregateAddr();
-  for (RecordDecl::field_iterator i = RD->field_begin(), e = RD->field_end();
-         i != e; ++i) {
-    FieldDecl *FD = *i;
-    QualType FT = FD->getType();
-
-    // FIXME: What are the right qualifiers here?
-    LValue LV = EmitLValueForField(Addr, FD, 0);
-    if (CodeGenFunction::hasAggregateLLVMType(FT)) {
-      ExpandTypeToArgs(FT, RValue::getAggregate(LV.getAddress()), Args);
-    } else {
-      RValue RV = EmitLoadOfLValue(LV);
-      assert(RV.isScalar() &&
-             "Unexpected non-scalar rvalue during struct expansion.");
-      Args.push_back(RV.getScalarVal());
-    }
-  }
-}
-
 /// EnterStructPointerForCoercedAccess - Given a struct pointer that we are
 /// accessing some number of bytes out of it, try to gep into the struct to get
 /// at its inner goodness.  Dive as deep as possible without entering an element
@@ -1455,6 +1428,52 @@ CodeGenFunction::EmitCallOrInvoke(llvm::Value *Callee,
   return Invoke;
 }
 
+static void checkArgMatches(llvm::Value *Elt, unsigned &ArgNo,
+                            llvm::FunctionType *FTy) {
+  if (ArgNo < FTy->getNumParams())
+    assert(Elt->getType() == FTy->getParamType(ArgNo));
+  else
+    assert(FTy->isVarArg());
+  ++ArgNo;
+}
+
+void CodeGenFunction::ExpandTypeToArgs(QualType Ty, RValue RV,
+                                       llvm::SmallVector<llvm::Value*,16> &Args,
+                                       llvm::FunctionType *IRFuncTy) {
+  const RecordType *RT = Ty->getAsStructureType();
+  assert(RT && "Can only expand structure types.");
+  
+  RecordDecl *RD = RT->getDecl();
+  assert(RV.isAggregate() && "Unexpected rvalue during struct expansion");
+  llvm::Value *Addr = RV.getAggregateAddr();
+  for (RecordDecl::field_iterator i = RD->field_begin(), e = RD->field_end();
+       i != e; ++i) {
+    FieldDecl *FD = *i;
+    QualType FT = FD->getType();
+    
+    // FIXME: What are the right qualifiers here?
+    LValue LV = EmitLValueForField(Addr, FD, 0);
+    if (CodeGenFunction::hasAggregateLLVMType(FT)) {
+      ExpandTypeToArgs(FT, RValue::getAggregate(LV.getAddress()),
+                       Args, IRFuncTy);
+      continue;
+    }
+    
+    RValue RV = EmitLoadOfLValue(LV);
+    assert(RV.isScalar() &&
+           "Unexpected non-scalar rvalue during struct expansion.");
+
+    // Insert a bitcast as needed.
+    llvm::Value *V = RV.getScalarVal();
+    if (Args.size() < IRFuncTy->getNumParams() &&
+        V->getType() != IRFuncTy->getParamType(Args.size()))
+      V = Builder.CreateBitCast(V, IRFuncTy->getParamType(Args.size()));
+
+    Args.push_back(V);
+  }
+}
+
+
 RValue CodeGenFunction::EmitCall(const CGFunctionInfo &CallInfo,
                                  llvm::Value *Callee,
                                  ReturnValueSlot ReturnValue,
@@ -1469,6 +1488,11 @@ RValue CodeGenFunction::EmitCall(const CGFunctionInfo &CallInfo,
   QualType RetTy = CallInfo.getReturnType();
   const ABIArgInfo &RetAI = CallInfo.getReturnInfo();
 
+  // IRArgNo - Keep track of the argument number in the callee we're looking at.
+  unsigned IRArgNo = 0;
+  llvm::FunctionType *IRFuncTy =
+    cast<llvm::FunctionType>(
+                  cast<llvm::PointerType>(Callee->getType())->getElementType());
 
   // If the call returns a temporary with struct return, create a temporary
   // alloca to hold the result, unless one is given to us.
@@ -1477,6 +1501,7 @@ RValue CodeGenFunction::EmitCall(const CGFunctionInfo &CallInfo,
     if (!Value)
       Value = CreateMemTemp(RetTy);
     Args.push_back(Value);
+    checkArgMatches(Value, IRArgNo, IRFuncTy);
   }
 
   assert(CallInfo.arg_size() == CallArgs.size() &&
@@ -1497,11 +1522,15 @@ RValue CodeGenFunction::EmitCall(const CGFunctionInfo &CallInfo,
         if (ArgInfo.getIndirectAlign() > AI->getAlignment())
           AI->setAlignment(ArgInfo.getIndirectAlign());
         Args.push_back(AI);
+        
         if (RV.isScalar())
           EmitStoreOfScalar(RV.getScalarVal(), Args.back(), false,
                             TypeAlign, I->Ty);
         else
           StoreComplexToAddr(RV.getComplexVal(), Args.back(), false);
+        
+        // Validate argument match.
+        checkArgMatches(AI, IRArgNo, IRFuncTy);
       } else {
         // We want to avoid creating an unnecessary temporary+copy here;
         // however, we need one in two cases:
@@ -1521,9 +1550,15 @@ RValue CodeGenFunction::EmitCall(const CGFunctionInfo &CallInfo,
             AI->setAlignment(Align);
           Args.push_back(AI);
           EmitAggregateCopy(AI, Addr, I->Ty, RV.isVolatileQualified());
+              
+          // Validate argument match.
+          checkArgMatches(AI, IRArgNo, IRFuncTy);
         } else {
           // Skip the extra memcpy call.
           Args.push_back(Addr);
+          
+          // Validate argument match.
+          checkArgMatches(Addr, IRArgNo, IRFuncTy);
         }
       }
       break;
@@ -1537,10 +1572,20 @@ RValue CodeGenFunction::EmitCall(const CGFunctionInfo &CallInfo,
       if (!isa<llvm::StructType>(ArgInfo.getCoerceToType()) &&
           ArgInfo.getCoerceToType() == ConvertType(info_it->type) &&
           ArgInfo.getDirectOffset() == 0) {
+        llvm::Value *V;
         if (RV.isScalar())
-          Args.push_back(RV.getScalarVal());
+          V = RV.getScalarVal();
         else
-          Args.push_back(Builder.CreateLoad(RV.getAggregateAddr()));
+          V = Builder.CreateLoad(RV.getAggregateAddr());
+        
+        // If the argument doesn't match, perform a bitcast to coerce it.  This
+        // can happen due to trivial type mismatches.
+        if (IRArgNo < IRFuncTy->getNumParams() &&
+            V->getType() != IRFuncTy->getParamType(IRArgNo))
+          V = Builder.CreateBitCast(V, IRFuncTy->getParamType(IRArgNo));
+        Args.push_back(V);
+        
+        checkArgMatches(V, IRArgNo, IRFuncTy);
         break;
       }
 
@@ -1577,18 +1622,25 @@ RValue CodeGenFunction::EmitCall(const CGFunctionInfo &CallInfo,
           // We don't know what we're loading from.
           LI->setAlignment(1);
           Args.push_back(LI);
+          
+          // Validate argument match.
+          checkArgMatches(LI, IRArgNo, IRFuncTy);
         }
       } else {
         // In the simple case, just pass the coerced loaded value.
         Args.push_back(CreateCoercedLoad(SrcPtr, ArgInfo.getCoerceToType(),
                                          *this));
+        
+        // Validate argument match.
+        checkArgMatches(Args.back(), IRArgNo, IRFuncTy);
       }
 
       break;
     }
 
     case ABIArgInfo::Expand:
-      ExpandTypeToArgs(I->Ty, RV, Args);
+      ExpandTypeToArgs(I->Ty, RV, Args, IRFuncTy);
+      IRArgNo = Args.size();
       break;
     }
   }
@@ -1622,7 +1674,6 @@ RValue CodeGenFunction::EmitCall(const CGFunctionInfo &CallInfo,
           Callee = CalleeF;
       }
     }
-
 
   unsigned CallingConv;
   CodeGen::AttributeListType AttributeList;
@@ -1691,8 +1742,8 @@ RValue CodeGenFunction::EmitCall(const CGFunctionInfo &CallInfo,
 
   case ABIArgInfo::Extend:
   case ABIArgInfo::Direct: {
-    if (RetAI.getCoerceToType() == ConvertType(RetTy) &&
-        RetAI.getDirectOffset() == 0) {
+    llvm::Type *RetIRTy = ConvertType(RetTy);
+    if (RetAI.getCoerceToType() == RetIRTy && RetAI.getDirectOffset() == 0) {
       if (RetTy->isAnyComplexType()) {
         llvm::Value *Real = Builder.CreateExtractValue(CI, 0);
         llvm::Value *Imag = Builder.CreateExtractValue(CI, 1);
@@ -1709,7 +1760,13 @@ RValue CodeGenFunction::EmitCall(const CGFunctionInfo &CallInfo,
         BuildAggStore(*this, CI, DestPtr, DestIsVolatile, false);
         return RValue::getAggregate(DestPtr);
       }
-      return RValue::get(CI);
+      
+      // If the argument doesn't match, perform a bitcast to coerce it.  This
+      // can happen due to trivial type mismatches.
+      llvm::Value *V = CI;
+      if (V->getType() != RetIRTy)
+        V = Builder.CreateBitCast(V, RetIRTy);
+      return RValue::get(V);
     }
 
     llvm::Value *DestPtr = ReturnValue.getValue();
