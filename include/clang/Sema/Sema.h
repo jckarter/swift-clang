@@ -760,7 +760,6 @@ public:
   // Type Analysis / Processing: SemaType.cpp.
   //
 
-  QualType adjustParameterType(QualType T);
   QualType BuildQualifiedType(QualType T, SourceLocation Loc, Qualifiers Qs);
   QualType BuildQualifiedType(QualType T, SourceLocation Loc, unsigned CVR) {
     return BuildQualifiedType(T, Loc, Qualifiers::fromCVRMask(CVR));
@@ -1606,6 +1605,8 @@ public:
     LookupRedeclarationWithLinkage,
     /// Look up the name of an Objective-C protocol.
     LookupObjCProtocolName,
+    /// Look up implicit 'self' parameter of an objective-c method.
+    LookupObjCImplicitSelfParam,
     /// \brief Look up any declaration with any name.
     LookupAnyName
   };

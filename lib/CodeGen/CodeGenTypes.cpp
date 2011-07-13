@@ -92,7 +92,6 @@ llvm::Type *CodeGenTypes::ConvertTypeForMem(QualType T){
   // Otherwise, return an integer of the target-specified size.
   return llvm::IntegerType::get(getLLVMContext(),
                                 (unsigned)Context.getTypeSize(T));
-
 }
 
 /// isFuncTypeArgumentConvertible - Return true if the specified type in a 
@@ -155,8 +154,13 @@ void CodeGenTypes::UpdateCompletedType(const TagDecl *TD) {
   // from the enum to be recomputed.
   if (const EnumDecl *ED = dyn_cast<EnumDecl>(TD)) {
     // Only flush the cache if we've actually already converted this type.
-    if (TypeCache.count(ED->getTypeForDecl()))
-      TypeCache.clear();
+    if (TypeCache.count(ED->getTypeForDecl())) {
+      // Okay, we formed some types based on this.  We speculated that the enum
+      // would be lowered to i32, so we only need to flush the cache if this
+      // didn't happen.
+      if (!ConvertType(ED->getIntegerType())->isIntegerTy(32))
+        TypeCache.clear();
+    }
     return;
   }
   
@@ -318,8 +322,14 @@ llvm::Type *CodeGenTypes::ConvertType(QualType T) {
     const IncompleteArrayType *A = cast<IncompleteArrayType>(Ty);
     assert(A->getIndexTypeCVRQualifiers() == 0 &&
            "FIXME: We only handle trivial array types so far!");
-    // int X[] -> [0 x int]
-    ResultType = llvm::ArrayType::get(ConvertTypeForMem(A->getElementType()),0);
+    // int X[] -> [0 x int], unless the element type is not sized.  If it is
+    // unsized (e.g. an incomplete struct) just use [0 x i8].
+    ResultType = ConvertTypeForMem(A->getElementType());
+    if (!ResultType->isSized()) {
+      SkippedLayout = true;
+      ResultType = llvm::Type::getInt8Ty(getLLVMContext());
+    }
+    ResultType = llvm::ArrayType::get(ResultType, 0);
     break;
   }
   case Type::ConstantArray: {
@@ -411,12 +421,14 @@ llvm::Type *CodeGenTypes::ConvertType(QualType T) {
     break;
   }
 
-   case Type::Enum: {
+  case Type::Enum: {
     const EnumDecl *ED = cast<EnumType>(Ty)->getDecl();
     if (ED->isDefinition() || ED->isFixed())
       return ConvertType(ED->getIntegerType());
-    // Return a placeholder '{}' type.
-    ResultType = llvm::StructType::get(getLLVMContext());
+    // Return a placeholder 'i32' type.  This can be changed later when the
+    // type is defined (see UpdateCompletedType), but is likely to be the
+    // "right" answer.
+    ResultType = llvm::Type::getInt32Ty(getLLVMContext());
     break;
   }
 
@@ -451,10 +463,10 @@ llvm::StructType *CodeGenTypes::ConvertRecordDeclType(const RecordDecl *RD) {
   llvm::StructType *&Entry = RecordDeclTypes[Key];
 
   // If we don't have a StructType at all yet, create the forward declaration.
-  if (Entry == 0)
-    Entry = llvm::StructType::createNamed(getLLVMContext(), 
-                                          std::string(RD->getKindName()) + "." +
-                                          RD->getQualifiedNameAsString());
+  if (Entry == 0) {
+    Entry = llvm::StructType::createNamed(getLLVMContext(), "");
+    addRecordTypeName(RD, Entry, "");
+  }
   llvm::StructType *Ty = Entry;
 
   // If this is still a forward declaration, or the LLVM type is already

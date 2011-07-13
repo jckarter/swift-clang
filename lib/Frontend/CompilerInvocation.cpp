@@ -737,6 +737,8 @@ static void LangOptsToArgs(const LangOptions &Opts,
     Res.push_back("-ffake-address-space-map");
   if (Opts.ParseUnknownAnytype)
     Res.push_back("-funknown-anytype");
+  if (Opts.DebuggerSupport)
+    Res.push_back("-fdebugger-support");
   if (Opts.DelayedTemplateParsing)
     Res.push_back("-fdelayed-template-parsing");
   if (Opts.Deprecated)
@@ -1048,6 +1050,7 @@ static void ParseDependencyOutputArgs(DependencyOutputOptions &Opts,
   Opts.UsePhonyTargets = Args.hasArg(OPT_MP);
   Opts.ShowHeaderIncludes = Args.hasArg(OPT_H);
   Opts.HeaderIncludeOutputFile = Args.getLastArgValue(OPT_header_include_file);
+  Opts.AddMissingHeaderDeps = Args.hasArg(OPT_MG);
 }
 
 static void ParseDiagnosticArgs(DiagnosticOptions &Opts, ArgList &Args,
@@ -1666,6 +1669,7 @@ static void ParseLangArgs(LangOptions &Opts, ArgList &Args, InputKind IK,
   Opts.MRTD = Args.hasArg(OPT_mrtd);
   Opts.FakeAddressSpaceMap = Args.hasArg(OPT_ffake_address_space_map);
   Opts.ParseUnknownAnytype = Args.hasArg(OPT_funknown_anytype);
+  Opts.DebuggerSupport = Args.hasArg(OPT_fdebugger_support);
 
   // Record whether the __DEPRECATED define was requested.
   Opts.Deprecated = Args.hasFlag(OPT_fdeprecated_macro,
