@@ -536,9 +536,6 @@ Corrected:
            UnqualifiedDiag = diag::err_unknown_typename_suggest;
            QualifiedDiag = diag::err_unknown_nested_typename_suggest;
          }
-        
-        if (Corrected.getCorrectionSpecifier())
-          SS.MakeTrivial(Context, Corrected.getCorrectionSpecifier(), SourceRange(NameLoc));
 
         if (SS.isEmpty())
           Diag(NameLoc, UnqualifiedDiag)
@@ -6588,6 +6585,7 @@ NamedDecl *Sema::ImplicitlyDefineFunction(SourceLocation Loc,
   Declarator D(DS, Declarator::BlockContext);
   D.AddTypeInfo(DeclaratorChunk::getFunction(false, false, SourceLocation(), 0,
                                              0, 0, true, SourceLocation(),
+                                             SourceLocation(),
                                              EST_None, SourceLocation(),
                                              0, 0, 0, 0, Loc, Loc, D),
                 DS.getAttributes(),
