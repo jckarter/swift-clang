@@ -85,23 +85,52 @@ namespace integral {
 
 namespace objects {
 
+  struct X1 { X1(int); };
+  struct X2 { explicit X2(int); };
+
   template <int N>
   struct A {
     A() { static_assert(N == 0, ""); }
     A(int, double) { static_assert(N == 1, ""); }
-    A(int, int) { static_assert(N == 2, ""); }
     A(std::initializer_list<int>) { static_assert(N == 3, ""); }
   };
 
-  void initialization() {
+  template <int N>
+  struct D {
+    D(std::initializer_list<int>) { static_assert(N == 0, ""); } // expected-note 1 {{candidate}}
+    D(std::initializer_list<double>) { static_assert(N == 1, ""); } // expected-note 1 {{candidate}}
+  };
+
+  template <int N>
+  struct E {
+    E(int, int) { static_assert(N == 0, ""); }
+    E(X1, int) { static_assert(N == 1, ""); }
+  };
+
+  void overload_resolution() {
     { A<0> a{}; }
     { A<0> a = {}; }
-    { A<1> a{1, 1.0}; }
-    { A<1> a = {1, 1.0}; }
+    // Narrowing conversions don't affect viability. The next two choose
+    // the initializer_list constructor.
+    { A<3> a{1, 1.0}; } // expected-error {{narrowing conversion}}
+    { A<3> a = {1, 1.0}; } // expected-error {{narrowing conversion}}
     { A<3> a{1, 2, 3, 4, 5, 6, 7, 8}; }
     { A<3> a = {1, 2, 3, 4, 5, 6, 7, 8}; }
     { A<3> a{1, 2, 3, 4, 5, 6, 7, 8}; }
     { A<3> a{1, 2}; }
+
+    { D<0> d{1, 2, 3}; }
+    { D<1> d{1.0, 2.0, 3.0}; }
+    { D<-1> d{1, 2.0}; } // expected-error {{ambiguous}}
+
+    { E<0> e{1, 2}; }
+  }
+
+  void explicit_implicit() {
+    { X1 x{0}; }
+    { X1 x = {0}; }
+    { X2 x{0}; }
+    { X2 x = {0}; } // expected-error {{explicit}}
   }
 
   struct C {
@@ -171,4 +200,63 @@ namespace litb {
   // valid (T deduced to <>).
   B g({1, 2, 3});
 
+}
+
+namespace aggregate {
+  // Direct list initialization does NOT allow braces to be elided!
+  struct S {
+    int ar[2];
+    struct T {
+      int i1;
+      int i2;
+    } t;
+    struct U {
+      int i1;
+    } u[2];
+    struct V {
+      int var[2];
+    } v;
+  };
+
+  void test() {
+    S s1 = { 1, 2, 3 ,4, 5, 6, 7, 8 }; // no-error
+    S s2{ {1, 2}, {3, 4}, { {5}, {6} }, { {7, 8} } }; // completely braced
+    S s3{ 1, 2, 3, 4, 5, 6 }; // xpected-error
+    S s4{ {1, 2}, {3, 4}, {5, 6}, { {7, 8} } }; // xpected-error
+    S s5{ {1, 2}, {3, 4}, { {5}, {6} }, {7, 8} }; // xpected-error
+    // May still omit stuff, though.
+    S s6{ {1}, {}, { {}, {} } };
+  }
+}
+
+namespace references {
+  // From [dcl.init.list]p3 bullet 5:
+  struct S {
+    S(std::initializer_list<double>);
+    S(const std::string&);
+  };
+  void test() {
+    const S &r1 = { 1, 2, 3.0 }; // no-error (constructor #1)
+    const S &r2{ "Spinach" }; // no-error (constructor #2)
+    S &r3 = { 1, 2, 3 }; // xpected-error (binding to non-const)
+    const int &i1 = { 1 }; // no-error
+    const int &i2 = { 1.1 }; // xpected-error {{narrowing}}
+    const int (&iar)[2] = { 1, 2 }; // no-error
+
+    // Edge case: the standard says this must create a temporary and thus
+    // fail to bind, but that's almost certainly a defect.
+    int i;
+    int &ri1{ i };
+    int &ri2 = { i };
+    S s{ "Spinach" };
+    S &rs1{ s };
+    S &rs2 = { s };
+  }
+}
+
+namespace incomplete {
+  // Just to make sure it doesn't crash.
+  struct S;
+  S s { 1, 2, 3 }; // expected-error {{incomplete}}
+  S t = { 1, 2, 3 }; // expected-error {{incomplete}}
 }
