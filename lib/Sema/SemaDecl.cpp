@@ -536,9 +536,6 @@ Corrected:
            UnqualifiedDiag = diag::err_unknown_typename_suggest;
            QualifiedDiag = diag::err_unknown_nested_typename_suggest;
          }
-        
-        if (Corrected.getCorrectionSpecifier())
-          SS.MakeTrivial(Context, Corrected.getCorrectionSpecifier(), SourceRange(NameLoc));
 
         if (SS.isEmpty())
           Diag(NameLoc, UnqualifiedDiag)
@@ -2766,6 +2763,7 @@ Sema::GetNameFromUnqualifiedId(const UnqualifiedId &Name) {
 
   switch (Name.getKind()) {
 
+  case UnqualifiedId::IK_ImplicitSelfParam:
   case UnqualifiedId::IK_Identifier:
     NameInfo.setName(Name.Identifier);
     NameInfo.setLoc(Name.StartLocation);
@@ -6168,7 +6166,8 @@ ParmVarDecl *Sema::CheckParameter(DeclContext *DC, SourceLocation StartLoc,
   }
 
   ParmVarDecl *New = ParmVarDecl::Create(Context, DC, StartLoc, NameLoc, Name,
-                                         adjustParameterType(T), TSInfo,
+                                         Context.getAdjustedParameterType(T), 
+                                         TSInfo,
                                          StorageClass, StorageClassAsWritten,
                                          0);
 
@@ -6586,6 +6585,7 @@ NamedDecl *Sema::ImplicitlyDefineFunction(SourceLocation Loc,
   Declarator D(DS, Declarator::BlockContext);
   D.AddTypeInfo(DeclaratorChunk::getFunction(false, false, SourceLocation(), 0,
                                              0, 0, true, SourceLocation(),
+                                             SourceLocation(),
                                              EST_None, SourceLocation(),
                                              0, 0, 0, 0, Loc, Loc, D),
                 DS.getAttributes(),

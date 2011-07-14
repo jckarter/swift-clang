@@ -511,7 +511,8 @@ void test20(unsigned n) {
 
   // Destroy.
   // CHECK-NEXT: [[END:%.*]] = getelementptr inbounds i8** [[VLA]], i64 [[DIM]]
-  // CHECK-NEXT: br label
+  // CHECK-NEXT: [[EMPTY:%.*]] = icmp eq i8** [[VLA]], [[END]]
+  // CHECK-NEXT: br i1 [[EMPTY]]
 
   // CHECK:      [[AFTER:%.*]] = phi i8** [ [[END]], {{%.*}} ], [ [[CUR:%.*]], {{%.*}} ]
   // CHECK-NEXT: [[CUR:%.*]] = getelementptr inbounds i8** [[AFTER]], i64 -1
@@ -556,7 +557,8 @@ void test21(unsigned n) {
   // CHECK-NEXT: [[BEGIN:%.*]] = getelementptr inbounds [3 x i8*]* [[VLA]], i32 0, i32 0
   // CHECK-NEXT: [[T1:%.*]] = mul nuw i64 [[T0]], 3
   // CHECK-NEXT: [[END:%.*]] = getelementptr inbounds i8** [[BEGIN]], i64 [[T1]]
-  // CHECK-NEXT: br label
+  // CHECK-NEXT: [[EMPTY:%.*]] = icmp eq i8** [[BEGIN]], [[END]]
+  // CHECK-NEXT: br i1 [[EMPTY]]
 
   // CHECK:      [[AFTER:%.*]] = phi i8** [ [[END]], {{%.*}} ], [ [[CUR:%.*]], {{%.*}} ]
   // CHECK-NEXT: [[CUR:%.*]] = getelementptr inbounds i8** [[AFTER]], i64 -1
@@ -641,12 +643,11 @@ int (^test25(int x))(void) {
 // CHECK-NEXT: [[BEGIN:%.*]] = getelementptr inbounds [4 x i8*]* [[X]], i32 0, i32 0
 // CHECK-NEXT: [[END:%.*]] = getelementptr inbounds i8** [[BEGIN]], i64 4
 // CHECK-NEXT: br label
-// CHECK:      [[CUR:%.*]] = phi i8**
-// CHECK-NEXT: [[ISDONE:%.*]] = icmp eq i8** [[CUR]], [[END]]
+// CHECK:      [[PAST:%.*]] = phi i8** [ [[END]], {{%.*}} ], [ [[CUR:%.*]], {{%.*}} ]
+// CHECK-NEXT: [[CUR]] = getelementptr inbounds i8** [[PAST]], i64 -1
+// CHECK-NEXT: call void @objc_storeStrong(i8** [[CUR]], i8* null)
+// CHECK-NEXT: [[ISDONE:%.*]] = icmp eq i8** [[CUR]], [[BEGIN]]
 // CHECK-NEXT: br i1 [[ISDONE]],
-// CHECK:      call void @objc_storeStrong(i8** [[CUR]], i8* null)
-// CHECK-NEXT: [[NEXT:%.*]] = getelementptr inbounds i8** [[CUR]], i32 1
-// CHECK-NEXT: br label
 // CHECK:      ret void
 
 // Check that 'init' retains self.
@@ -1527,3 +1528,27 @@ void test53(void) {
 // CHECK-NEXT: call void @objc_release(i8* [[T0]])
 // CHECK-NEXT: ret void
 }
+
+// <rdar://problem/9758798>
+// CHECK: define void @test54(i32 %first, ...)
+void test54(int first, ...) {
+  __builtin_va_list arglist;
+  // CHECK: call void @llvm.va_start
+  __builtin_va_start(arglist, first);
+  // CHECK: call i8* @objc_retain
+  id obj = __builtin_va_arg(arglist, id);
+  // CHECK: call void @llvm.va_end
+  __builtin_va_end(arglist);
+  // CHECK: call void @objc_release
+  // CHECK: ret void
+}
+
+// PR10228
+@interface Test55Base @end
+@interface Test55 : Test55Base @end
+@implementation Test55 (Category)
+- (void) dealloc {}
+@end
+// CHECK:   define internal void @"\01-[Test55(Category) dealloc]"(
+// CHECK-NOT: ret
+// CHECK:     call void bitcast (i8* ({{%.*}}*, i8*, ...)* @objc_msgSendSuper2 to void ({{%.*}}*, i8*)*)(
