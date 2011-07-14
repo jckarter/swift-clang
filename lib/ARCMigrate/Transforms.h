@@ -34,7 +34,7 @@ void rewriteUnbridgedCasts(MigrationPass &pass);
 void makeAssignARCSafe(MigrationPass &pass);
 void removeRetainReleaseDealloc(MigrationPass &pass);
 void removeZeroOutPropsInDealloc(MigrationPass &pass);
-void changeIvarsOfAssignProperties(MigrationPass &pass);
+void rewriteProperties(MigrationPass &pass);
 void rewriteBlockObjCVariable(MigrationPass &pass);
 void rewriteUnusedInitDelegate(MigrationPass &pass);
 
@@ -43,6 +43,9 @@ void removeEmptyStatementsAndDealloc(MigrationPass &pass);
 //===----------------------------------------------------------------------===//
 // Helpers.
 //===----------------------------------------------------------------------===//
+
+/// \brief Determine whether we can add weak to the given type.
+bool canApplyWeak(ASTContext &Ctx, QualType type);
 
 /// \brief 'Loc' is the end of a statement range. This returns the location
 /// immediately after the semicolon following the statement.

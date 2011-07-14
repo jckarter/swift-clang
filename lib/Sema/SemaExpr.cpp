@@ -1404,8 +1404,7 @@ bool Sema::DiagnoseEmptyLookup(Scope *S, CXXScopeSpec &SS, LookupResult &R,
     std::string CorrectedQuotedStr(Corrected.getQuoted(getLangOptions()));
     R.setLookupName(Corrected.getCorrection());
 
-    if (!Corrected.isKeyword()) {
-      NamedDecl *ND = Corrected.getCorrectionDecl();
+    if (NamedDecl *ND = Corrected.getCorrectionDecl()) {
       R.addDecl(ND);
       if (isa<ValueDecl>(ND) || isa<FunctionTemplateDecl>(ND)) {
         if (SS.isEmpty())
@@ -1604,7 +1603,9 @@ ExprResult Sema::ActOnIdExpression(Scope *S,
 
   bool IvarLookupFollowUp = false;
   // Perform the required lookup.
-  LookupResult R(*this, NameInfo, LookupOrdinaryName);
+  LookupResult R(*this, NameInfo, 
+                 (Id.getKind() == UnqualifiedId::IK_ImplicitSelfParam) 
+                  ? LookupObjCImplicitSelfParam : LookupOrdinaryName);
   if (TemplateArgs) {
     // Lookup the template name again to correctly establish the context in
     // which it was found. This is really unfortunate as we already did the
@@ -1835,6 +1836,7 @@ Sema::LookupInObjCMethod(LookupResult &Lookup, Scope *S,
       IdentifierInfo &II = Context.Idents.get("self");
       UnqualifiedId SelfName;
       SelfName.setIdentifier(&II, SourceLocation());
+      SelfName.setKind(UnqualifiedId::IK_ImplicitSelfParam);
       CXXScopeSpec SelfScopeSpec;
       ExprResult SelfExpr = ActOnIdExpression(S, SelfScopeSpec,
                                               SelfName, false, false);
@@ -1846,27 +1848,6 @@ Sema::LookupInObjCMethod(LookupResult &Lookup, Scope *S,
         return ExprError();
 
       MarkDeclarationReferenced(Loc, IV);
-      Expr *base = SelfExpr.take();
-      base = base->IgnoreParenImpCasts();
-      if (const DeclRefExpr *DE = dyn_cast<DeclRefExpr>(base)) {
-        const NamedDecl *ND = DE->getDecl();
-        if (!isa<ImplicitParamDecl>(ND)) {
-          // relax the rule such that it is allowed to have a shadow 'self'
-          // where stand-alone ivar can be found in this 'self' object. 
-          // This is to match gcc's behavior.
-          ObjCInterfaceDecl *selfIFace = 0;
-          if (const ObjCObjectPointerType *OPT =
-              base->getType()->getAsObjCInterfacePointerType())
-            selfIFace = OPT->getInterfaceDecl();
-          if (!selfIFace || 
-              !selfIFace->lookupInstanceVariable(IV->getIdentifier())) {
-            Diag(Loc, diag::error_implicit_ivar_access)
-            << IV->getDeclName();
-            Diag(ND->getLocation(), diag::note_declared_at);
-            return ExprError();
-          }
-        }
-      }
       return Owned(new (Context)
                    ObjCIvarRefExpr(IV, IV->getType(), Loc,
                                    SelfExpr.take(), true, true));
@@ -8497,10 +8478,6 @@ ExprResult Sema::ActOnBlockStmtExpr(SourceLocation CaretLoc,
 
   BSI->TheDecl->setBody(cast<CompoundStmt>(Body));
 
-  BlockExpr *Result = new (Context) BlockExpr(BSI->TheDecl, BlockTy);
-
-  const AnalysisBasedWarnings::Policy &WP = AnalysisWarnings.getDefaultPolicy();
-  PopFunctionOrBlockScope(&WP, Result->getBlockDecl(), Result);
   for (BlockDecl::capture_const_iterator ci = BSI->TheDecl->capture_begin(),
        ce = BSI->TheDecl->capture_end(); ci != ce; ++ci) {
     const VarDecl *variable = ci->getVariable();
@@ -8509,6 +8486,10 @@ ExprResult Sema::ActOnBlockStmtExpr(SourceLocation CaretLoc,
     if (destructKind != QualType::DK_none)
       getCurFunction()->setHasBranchProtectedScope();
   }
+
+  BlockExpr *Result = new (Context) BlockExpr(BSI->TheDecl, BlockTy);
+  const AnalysisBasedWarnings::Policy &WP = AnalysisWarnings.getDefaultPolicy();
+  PopFunctionOrBlockScope(&WP, Result->getBlockDecl(), Result);
 
   return Owned(Result);
 }
@@ -9571,9 +9552,6 @@ ExprResult RebuildUnknownAnyExpr::VisitCallExpr(CallExpr *call) {
 }
 
 ExprResult RebuildUnknownAnyExpr::VisitObjCMessageExpr(ObjCMessageExpr *msg) {
-  ObjCMethodDecl *method = msg->getMethodDecl();
-  assert(method && "__unknown_anytype message without result type?");
-
   // Verify that this is a legal result type of a call.
   if (DestType->isArrayType() || DestType->isFunctionType()) {
     S.Diag(msg->getExprLoc(), diag::err_func_returning_array_function)
@@ -9581,8 +9559,11 @@ ExprResult RebuildUnknownAnyExpr::VisitObjCMessageExpr(ObjCMessageExpr *msg) {
     return ExprError();
   }
 
-  assert(method->getResultType() == S.Context.UnknownAnyTy);
-  method->setResultType(DestType);
+  // Rewrite the method result type if available.
+  if (ObjCMethodDecl *method = msg->getMethodDecl()) {
+    assert(method->getResultType() == S.Context.UnknownAnyTy);
+    method->setResultType(DestType);
+  }
 
   // Change the type of the message.
   msg->setType(DestType.getNonReferenceType());

@@ -316,9 +316,10 @@ namespace {
     CodeGenFunction::Destroyer &destroyer;
     bool useEHCleanupForArray;
 
-    void Emit(CodeGenFunction &CGF, bool isForEH) {
+    void Emit(CodeGenFunction &CGF, Flags flags) {
       // Don't use an EH cleanup recursively from an EH cleanup.
-      bool useEHCleanupForArray = !isForEH && this->useEHCleanupForArray;
+      bool useEHCleanupForArray =
+        flags.isForNormalCleanup() && this->useEHCleanupForArray;
 
       CGF.emitDestroy(addr, type, destroyer, useEHCleanupForArray);
     }
@@ -334,9 +335,9 @@ namespace {
     llvm::Value *NRVOFlag;
     llvm::Value *Loc;
 
-    void Emit(CodeGenFunction &CGF, bool IsForEH) {
+    void Emit(CodeGenFunction &CGF, Flags flags) {
       // Along the exceptions path we always execute the dtor.
-      bool NRVO = !IsForEH && NRVOFlag;
+      bool NRVO = flags.isForNormalCleanup() && NRVOFlag;
 
       llvm::BasicBlock *SkipDtorBB = 0;
       if (NRVO) {
@@ -358,7 +359,7 @@ namespace {
   struct CallStackRestore : EHScopeStack::Cleanup {
     llvm::Value *Stack;
     CallStackRestore(llvm::Value *Stack) : Stack(Stack) {}
-    void Emit(CodeGenFunction &CGF, bool IsForEH) {
+    void Emit(CodeGenFunction &CGF, Flags flags) {
       llvm::Value *V = CGF.Builder.CreateLoad(Stack, "tmp");
       llvm::Value *F = CGF.CGM.getIntrinsic(llvm::Intrinsic::stackrestore);
       CGF.Builder.CreateCall(F, V);
@@ -369,7 +370,7 @@ namespace {
     const VarDecl &Var;
     ExtendGCLifetime(const VarDecl *var) : Var(*var) {}
 
-    void Emit(CodeGenFunction &CGF, bool forEH) {
+    void Emit(CodeGenFunction &CGF, Flags flags) {
       // Compute the address of the local variable, in case it's a
       // byref or something.
       DeclRefExpr DRE(const_cast<VarDecl*>(&Var), Var.getType(), VK_LValue,
@@ -388,7 +389,7 @@ namespace {
                         const VarDecl *Var)
       : CleanupFn(CleanupFn), FnInfo(*Info), Var(*Var) {}
 
-    void Emit(CodeGenFunction &CGF, bool IsForEH) {
+    void Emit(CodeGenFunction &CGF, Flags flags) {
       DeclRefExpr DRE(const_cast<VarDecl*>(&Var), Var.getType(), VK_LValue,
                       SourceLocation());
       // Compute the address of the local variable, in case it's a byref
@@ -427,9 +428,14 @@ static void EmitAutoVarWithLifetime(CodeGenFunction &CGF, const VarDecl &var,
     break;
 
   case Qualifiers::OCL_Strong: {
-    CGF.PushARCReleaseCleanup(CGF.getARCCleanupKind(),
-                              var.getType(), addr,
-                              var.hasAttr<ObjCPreciseLifetimeAttr>());
+    CodeGenFunction::Destroyer &destroyer =
+      (var.hasAttr<ObjCPreciseLifetimeAttr>()
+       ? CodeGenFunction::destroyARCStrongPrecise
+       : CodeGenFunction::destroyARCStrongImprecise);
+
+    CleanupKind cleanupKind = CGF.getARCCleanupKind();
+    CGF.pushDestroy(cleanupKind, addr, var.getType(), destroyer,
+                    cleanupKind & EHCleanup);
     break;
   }
   case Qualifiers::OCL_Autoreleasing:
@@ -439,7 +445,9 @@ static void EmitAutoVarWithLifetime(CodeGenFunction &CGF, const VarDecl &var,
   case Qualifiers::OCL_Weak:
     // __weak objects always get EH cleanups; otherwise, exceptions
     // could cause really nasty crashes instead of mere leaks.
-    CGF.PushARCWeakReleaseCleanup(NormalAndEHCleanup, var.getType(), addr);
+    CGF.pushDestroy(NormalAndEHCleanup, addr, var.getType(),
+                    CodeGenFunction::destroyARCWeak,
+                    /*useEHCleanup*/ true);
     break;
   }
 }
@@ -1129,11 +1137,21 @@ CodeGenFunction::getDestroyer(QualType::DestructionKind kind) {
   return *destroyer;
 }
 
+/// pushDestroy - Push the standard destructor for the given type.
+void CodeGenFunction::pushDestroy(QualType::DestructionKind dtorKind,
+                                  llvm::Value *addr, QualType type) {
+  assert(dtorKind && "cannot push destructor for trivial type");
+
+  CleanupKind cleanupKind = getCleanupKind(dtorKind);
+  pushDestroy(cleanupKind, addr, type, getDestroyer(dtorKind),
+              cleanupKind & EHCleanup);
+}
+
 void CodeGenFunction::pushDestroy(CleanupKind cleanupKind, llvm::Value *addr,
                                   QualType type, Destroyer &destroyer,
                                   bool useEHCleanupForArray) {
-  EHStack.pushCleanup<DestroyObject>(cleanupKind, addr, type, destroyer,
-                                     useEHCleanupForArray);
+  pushFullExprCleanup<DestroyObject>(cleanupKind, addr, type,
+                                     destroyer, useEHCleanupForArray);
 }
 
 /// emitDestroy - Immediately perform the destruction of the given
@@ -1156,8 +1174,20 @@ void CodeGenFunction::emitDestroy(llvm::Value *addr, QualType type,
 
   llvm::Value *begin = addr;
   llvm::Value *length = emitArrayLength(arrayType, type, begin);
+
+  // Normally we have to check whether the array is zero-length.
+  bool checkZeroLength = true;
+
+  // But if the array length is constant, we can suppress that.
+  if (llvm::ConstantInt *constLength = dyn_cast<llvm::ConstantInt>(length)) {
+    // ...and if it's constant zero, we can just skip the entire thing.
+    if (constLength->isZero()) return;
+    checkZeroLength = false;
+  }
+
   llvm::Value *end = Builder.CreateInBoundsGEP(begin, length);
-  emitArrayDestroy(begin, end, type, destroyer, useEHCleanupForArray);
+  emitArrayDestroy(begin, end, type, destroyer,
+                   checkZeroLength, useEHCleanupForArray);
 }
 
 /// emitArrayDestroy - Destroys all the elements of the given array,
@@ -1174,6 +1204,7 @@ void CodeGenFunction::emitArrayDestroy(llvm::Value *begin,
                                        llvm::Value *end,
                                        QualType type,
                                        Destroyer &destroyer,
+                                       bool checkZeroLength,
                                        bool useEHCleanup) {
   assert(!type->isArrayType());
 
@@ -1181,6 +1212,12 @@ void CodeGenFunction::emitArrayDestroy(llvm::Value *begin,
   // need to check for the zero-element case.
   llvm::BasicBlock *bodyBB = createBasicBlock("arraydestroy.body");
   llvm::BasicBlock *doneBB = createBasicBlock("arraydestroy.done");
+
+  if (checkZeroLength) {
+    llvm::Value *isEmpty = Builder.CreateICmpEQ(begin, end,
+                                                "arraydestroy.isempty");
+    Builder.CreateCondBr(isEmpty, doneBB, bodyBB);
+  }
 
   // Enter the loop body, making that address the current address.
   llvm::BasicBlock *entryBB = Builder.GetInsertBlock();
@@ -1214,58 +1251,34 @@ void CodeGenFunction::emitArrayDestroy(llvm::Value *begin,
 
 /// Perform partial array destruction as if in an EH cleanup.  Unlike
 /// emitArrayDestroy, the element type here may still be an array type.
-///
-/// Essentially does an emitArrayDestroy, but checking for the
-/// possibility of a zero-length array (in case the initializer for
-/// the first element throws).
 static void emitPartialArrayDestroy(CodeGenFunction &CGF,
                                     llvm::Value *begin, llvm::Value *end,
                                     QualType type,
                                     CodeGenFunction::Destroyer &destroyer) {
-  // Check whether the array is empty.  For the sake of prettier IR,
-  // we want to jump to the end of the array destroy loop instead of
-  // jumping to yet another block.  We can do this with some modest
-  // assumptions about how emitArrayDestroy works.
-
-  llvm::Value *earlyTest =
-    CGF.Builder.CreateICmpEQ(begin, end, "pad.isempty");
-
-  llvm::BasicBlock *nextBB = CGF.createBasicBlock("pad.arraydestroy");
-
-  // Temporarily, build the conditional branch with identical
-  // successors.  We'll patch this in a bit.
-  llvm::BranchInst *br =
-    CGF.Builder.CreateCondBr(earlyTest, nextBB, nextBB);
-  CGF.EmitBlock(nextBB);
-
-  llvm::Value *zero = llvm::ConstantInt::get(CGF.SizeTy, 0);
-
   // If the element type is itself an array, drill down.
-  llvm::SmallVector<llvm::Value*,4> gepIndices;
-  gepIndices.push_back(zero);
+  unsigned arrayDepth = 0;
   while (const ArrayType *arrayType = CGF.getContext().getAsArrayType(type)) {
     // VLAs don't require a GEP index to walk into.
     if (!isa<VariableArrayType>(arrayType))
-      gepIndices.push_back(zero);
+      arrayDepth++;
     type = arrayType->getElementType();
   }
-  if (gepIndices.size() != 1) {
+
+  if (arrayDepth) {
+    llvm::Value *zero = llvm::ConstantInt::get(CGF.SizeTy, arrayDepth+1);
+
+    llvm::SmallVector<llvm::Value*,4> gepIndices(arrayDepth, zero);
     begin = CGF.Builder.CreateInBoundsGEP(begin, gepIndices.begin(),
                                           gepIndices.end(), "pad.arraybegin");
     end = CGF.Builder.CreateInBoundsGEP(end, gepIndices.begin(),
                                         gepIndices.end(), "pad.arrayend");
   }
 
-  // Now that we know that the array isn't empty, destroy it.  We
-  // don't ever need an EH cleanup because we assume that we're in an
-  // EH cleanup ourselves, so a throwing destructor causes an
-  // immediate terminate.
-  CGF.emitArrayDestroy(begin, end, type, destroyer, /*useEHCleanup*/ false);
-
-  // Set the conditional branch's 'false' successor to doneBB.
-  llvm::BasicBlock *doneBB = CGF.Builder.GetInsertBlock();
-  assert(CGF.Builder.GetInsertPoint() == doneBB->begin());
-  br->setSuccessor(0, doneBB);
+  // Destroy the array.  We don't ever need an EH cleanup because we
+  // assume that we're in an EH cleanup ourselves, so a throwing
+  // destructor causes an immediate terminate.
+  CGF.emitArrayDestroy(begin, end, type, destroyer,
+                       /*checkZeroLength*/ true, /*useEHCleanup*/ false);
 }
 
 namespace {
@@ -1284,7 +1297,7 @@ namespace {
       : ArrayBegin(arrayBegin), ArrayEnd(arrayEnd),
         ElementType(elementType), Destroyer(*destroyer) {}
 
-    void Emit(CodeGenFunction &CGF, bool isForEH) {
+    void Emit(CodeGenFunction &CGF, Flags flags) {
       emitPartialArrayDestroy(CGF, ArrayBegin, ArrayEnd,
                               ElementType, Destroyer);
     }
@@ -1306,7 +1319,7 @@ namespace {
       : ArrayBegin(arrayBegin), ArrayEndPointer(arrayEndPointer),
         ElementType(elementType), Destroyer(*destroyer) {}
 
-    void Emit(CodeGenFunction &CGF, bool isForEH) {
+    void Emit(CodeGenFunction &CGF, Flags flags) {
       llvm::Value *arrayEnd = CGF.Builder.CreateLoad(ArrayEndPointer);
       emitPartialArrayDestroy(CGF, ArrayBegin, arrayEnd,
                               ElementType, Destroyer);
@@ -1324,13 +1337,12 @@ namespace {
 /// \param destructionKind - the kind of destruction required
 /// \param initializedElementCount - a value of type size_t* holding
 ///   the number of successfully-constructed elements
-void CodeGenFunction::pushIrregularPartialArrayCleanup(llvm::Value *array,
+void CodeGenFunction::pushIrregularPartialArrayCleanup(llvm::Value *arrayBegin,
                                                  llvm::Value *arrayEndPointer,
                                                        QualType elementType,
                                                        Destroyer &destroyer) {
-  // FIXME: can this be in a conditional expression?
-  EHStack.pushCleanup<IrregularPartialArrayDestroy>(EHCleanup, array,
-                                                    arrayEndPointer,
+  pushFullExprCleanup<IrregularPartialArrayDestroy>(EHCleanup,
+                                                    arrayBegin, arrayEndPointer,
                                                     elementType, &destroyer);
 }
 
@@ -1348,8 +1360,7 @@ void CodeGenFunction::pushRegularPartialArrayCleanup(llvm::Value *arrayBegin,
                                                      llvm::Value *arrayEnd,
                                                      QualType elementType,
                                                      Destroyer &destroyer) {
-  // FIXME: can this be in a conditional expression?
-  EHStack.pushCleanup<RegularPartialArrayDestroy>(EHCleanup,
+  pushFullExprCleanup<RegularPartialArrayDestroy>(EHCleanup,
                                                   arrayBegin, arrayEnd,
                                                   elementType, &destroyer);
 }
@@ -1364,7 +1375,7 @@ namespace {
 
     llvm::Value *Param;
 
-    void Emit(CodeGenFunction &CGF, bool IsForEH) {
+    void Emit(CodeGenFunction &CGF, Flags flags) {
       CGF.EmitARCRelease(Param, /*precise*/ false);
     }
   };

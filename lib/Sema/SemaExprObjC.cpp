@@ -178,11 +178,14 @@ ExprResult Sema::ParseObjCSelectorExpression(Selector Sel,
                                           SourceRange(LParenLoc, RParenLoc));
   if (!Method)
     Diag(SelLoc, diag::warn_undeclared_selector) << Sel;
-
-  llvm::DenseMap<Selector, SourceLocation>::iterator Pos
-    = ReferencedSelectors.find(Sel);
-  if (Pos == ReferencedSelectors.end())
-    ReferencedSelectors.insert(std::make_pair(Sel, SelLoc));
+  
+  if (!Method ||
+      Method->getImplementationControl() != ObjCMethodDecl::Optional) {
+    llvm::DenseMap<Selector, SourceLocation>::iterator Pos
+      = ReferencedSelectors.find(Sel);
+    if (Pos == ReferencedSelectors.end())
+      ReferencedSelectors.insert(std::make_pair(Sel, SelLoc));
+  }
 
   // In ARC, forbid the user from using @selector for 
   // retain/release/autorelease/dealloc/retainCount.
@@ -355,7 +358,14 @@ bool Sema::CheckMessageArgumentTypes(QualType ReceiverType,
                               : diag::warn_inst_method_not_found;
     Diag(lbrac, DiagID)
       << Sel << isClassMessage << SourceRange(lbrac, rbrac);
-    ReturnType = Context.getObjCIdType();
+
+    // In debuggers, we want to use __unknown_anytype for these
+    // results so that clients can cast them.
+    if (getLangOptions().DebuggerSupport) {
+      ReturnType = Context.UnknownAnyTy;
+    } else {
+      ReturnType = Context.getObjCIdType();
+    }
     VK = VK_RValue;
     return false;
   }

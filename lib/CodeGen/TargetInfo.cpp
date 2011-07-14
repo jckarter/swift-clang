@@ -1235,13 +1235,6 @@ void X86_64ABIInfo::classify(QualType Ty, uint64_t OffsetBase,
 
     const RecordDecl *RD = RT->getDecl();
 
-    // The only case a 256-bit wide vector could be used is when the struct
-    // contains a single 256-bit element. Since Lo and Hi logic isn't extended
-    // to work for sizes wider than 128, early check and fallback to memory.
-    RecordDecl::field_iterator FirstElt = RD->field_begin();
-    if (Size > 128 && getContext().getTypeSize(FirstElt->getType()) != 256)
-      return;
-
     // Assume variable sized types are passed in memory.
     if (RD->hasFlexibleArrayMember())
       return;
@@ -1277,14 +1270,22 @@ void X86_64ABIInfo::classify(QualType Ty, uint64_t OffsetBase,
 
     // Classify the fields one at a time, merging the results.
     unsigned idx = 0;
-    for (RecordDecl::field_iterator i = FirstElt, e = RD->field_end();
+    for (RecordDecl::field_iterator i = RD->field_begin(), e = RD->field_end();
            i != e; ++i, ++idx) {
       uint64_t Offset = OffsetBase + Layout.getFieldOffset(idx);
       bool BitField = i->isBitField();
 
-      // AMD64-ABI 3.2.3p2: Rule 1. If ..., or it contains unaligned
-      // fields, it has class MEMORY.
+      // AMD64-ABI 3.2.3p2: Rule 1. If the size of an object is larger than
+      // four eightbytes, or it contains unaligned fields, it has class MEMORY.
       //
+      // The only case a 256-bit wide vector could be used is when the struct
+      // contains a single 256-bit element. Since Lo and Hi logic isn't extended
+      // to work for sizes wider than 128, early check and fallback to memory.
+      //
+      if (Size > 128 && getContext().getTypeSize(i->getType()) != 256) {
+        Lo = Memory;
+        return;
+      }
       // Note, skip this test for bit-fields, see below.
       if (!BitField && Offset % getContext().getTypeAlign(i->getType())) {
         Lo = Memory;
