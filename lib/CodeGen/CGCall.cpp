@@ -265,6 +265,9 @@ const CGFunctionInfo &CodeGenTypes::getFunctionInfo(CanQualType ResTy,
                           ArgTys.data(), ArgTys.size());
   FunctionInfos.InsertNode(FI, InsertPos);
 
+  bool Inserted = FunctionsBeingProcessed.insert(FI); (void)Inserted;
+  assert(Inserted && "Recursively being processed?");
+  
   // Compute ABI information.
   getABIInfo().computeInfo(*FI);
 
@@ -280,6 +283,9 @@ const CGFunctionInfo &CodeGenTypes::getFunctionInfo(CanQualType ResTy,
     if (I->info.canHaveCoerceToType() && I->info.getCoerceToType() == 0)
       I->info.setCoerceToType(ConvertType(I->type));
 
+  bool Erased = FunctionsBeingProcessed.erase(FI); (void)Erased;
+  assert(Erased && "Not in set?");
+  
   return *FI;
 }
 
@@ -604,6 +610,10 @@ llvm::FunctionType *CodeGenTypes::GetFunctionType(GlobalDecl GD) {
 
 llvm::FunctionType *
 CodeGenTypes::GetFunctionType(const CGFunctionInfo &FI, bool isVariadic) {
+  
+  bool Inserted = FunctionsBeingProcessed.insert(&FI); (void)Inserted;
+  assert(Inserted && "Recursively being processed?");
+  
   llvm::SmallVector<llvm::Type*, 8> argTypes;
   const llvm::Type *resultType = 0;
 
@@ -669,6 +679,9 @@ CodeGenTypes::GetFunctionType(const CGFunctionInfo &FI, bool isVariadic) {
     }
   }
 
+  bool Erased = FunctionsBeingProcessed.erase(&FI); (void)Erased;
+  assert(Erased && "Not in set?");
+  
   return llvm::FunctionType::get(resultType, argTypes, isVariadic);
 }
 
@@ -1414,18 +1427,23 @@ void CodeGenFunction::EmitCallArg(CallArgList &args, const Expr *E,
 /// on the current state of the EH stack.
 llvm::CallSite
 CodeGenFunction::EmitCallOrInvoke(llvm::Value *Callee,
-                                  llvm::Value * const *ArgBegin,
-                                  llvm::Value * const *ArgEnd,
+                                  llvm::ArrayRef<llvm::Value *> Args,
                                   const llvm::Twine &Name) {
   llvm::BasicBlock *InvokeDest = getInvokeDest();
   if (!InvokeDest)
-    return Builder.CreateCall(Callee, ArgBegin, ArgEnd, Name);
+    return Builder.CreateCall(Callee, Args, Name);
 
   llvm::BasicBlock *ContBB = createBasicBlock("invoke.cont");
   llvm::InvokeInst *Invoke = Builder.CreateInvoke(Callee, ContBB, InvokeDest,
-                                                  ArgBegin, ArgEnd, Name);
+                                                  Args, Name);
   EmitBlock(ContBB);
   return Invoke;
+}
+
+llvm::CallSite
+CodeGenFunction::EmitCallOrInvoke(llvm::Value *Callee,
+                                  const llvm::Twine &Name) {
+  return EmitCallOrInvoke(Callee, llvm::ArrayRef<llvm::Value *>(), Name);
 }
 
 static void checkArgMatches(llvm::Value *Elt, unsigned &ArgNo,
@@ -1687,11 +1705,10 @@ RValue CodeGenFunction::EmitCall(const CGFunctionInfo &CallInfo,
 
   llvm::CallSite CS;
   if (!InvokeDest) {
-    CS = Builder.CreateCall(Callee, Args.data(), Args.data()+Args.size());
+    CS = Builder.CreateCall(Callee, Args);
   } else {
     llvm::BasicBlock *Cont = createBasicBlock("invoke.cont");
-    CS = Builder.CreateInvoke(Callee, Cont, InvokeDest,
-                              Args.data(), Args.data()+Args.size());
+    CS = Builder.CreateInvoke(Callee, Cont, InvokeDest, Args);
     EmitBlock(Cont);
   }
   if (callOrInvoke)
