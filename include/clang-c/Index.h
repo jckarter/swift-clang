@@ -833,14 +833,24 @@ enum CXTranslationUnit_Flags {
   
   /**
    * \brief Used to indicate that the "detailed" preprocessing record,
-   * if requested, should also contain nested macro instantiations.
+   * if requested, should also contain nested macro expansions.
    *
-   * Nested macro instantiations (i.e., macro instantiations that occur
-   * inside another macro instantiation) can, in some code bases, require
+   * Nested macro expansions (i.e., macro expansions that occur
+   * inside another macro expansion) can, in some code bases, require
    * a large amount of storage to due preprocessor metaprogramming. Moreover,
    * its fairly rare that this information is useful for libclang clients.
    */
-  CXTranslationUnit_NestedMacroInstantiations = 0x40
+  CXTranslationUnit_NestedMacroExpansions = 0x40,
+
+  /**
+   * \brief Legacy name to indicate that the "detailed" preprocessing record,
+   * if requested, should contain nested macro expansions.
+   *
+   * \see CXTranslationUnit_NestedMacroExpansions for the current name for this
+   * value, and its semantics. This is just an alias.
+   */
+  CXTranslationUnit_NestedMacroInstantiations =
+    CXTranslationUnit_NestedMacroExpansions
 };
 
 /**
@@ -1421,7 +1431,8 @@ enum CXCursorKind {
   /* Preprocessing */
   CXCursor_PreprocessingDirective        = 500,
   CXCursor_MacroDefinition               = 501,
-  CXCursor_MacroInstantiation            = 502,
+  CXCursor_MacroExpansion                = 502,
+  CXCursor_MacroInstantiation            = CXCursor_MacroExpansion,
   CXCursor_InclusionDirective            = 503,
   CXCursor_FirstPreprocessing            = CXCursor_PreprocessingDirective,
   CXCursor_LastPreprocessing             = CXCursor_InclusionDirective

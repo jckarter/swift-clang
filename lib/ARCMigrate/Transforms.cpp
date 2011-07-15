@@ -94,7 +94,7 @@ SourceLocation trans::findLocationAfterSemi(SourceLocation loc,
                                             ASTContext &Ctx) {
   SourceManager &SM = Ctx.getSourceManager();
   if (loc.isMacroID()) {
-    if (!Lexer::isAtEndOfMacroInstantiation(loc, SM, Ctx.getLangOptions()))
+    if (!Lexer::isAtEndOfMacroExpansion(loc, SM, Ctx.getLangOptions()))
       return SourceLocation();
     loc = SM.getInstantiationRange(loc).second;
   }
@@ -150,6 +150,17 @@ bool trans::hasSideEffects(Expr *E, ASTContext &Ctx) {
   }
 
   return true;
+}
+
+bool trans::isGlobalVar(Expr *E) {
+  E = E->IgnoreParenCasts();
+  if (DeclRefExpr *DRE = dyn_cast<DeclRefExpr>(E))
+    return DRE->getDecl()->getDeclContext()->isFileContext();
+  if (ConditionalOperator *condOp = dyn_cast<ConditionalOperator>(E))
+    return isGlobalVar(condOp->getTrueExpr()) &&
+           isGlobalVar(condOp->getFalseExpr());
+
+  return false;  
 }
 
 namespace {
