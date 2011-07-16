@@ -37,9 +37,14 @@ class RetainReleaseDeallocRemover :
   ExprSet Removables;
   llvm::OwningPtr<ParentMap> StmtMap;
 
+  Selector DelegateSel;
+
 public:
   RetainReleaseDeallocRemover(MigrationPass &pass)
-    : Body(0), Pass(pass) { }
+    : Body(0), Pass(pass) {
+    DelegateSel =
+        Pass.Ctx.Selectors.getNullarySelector(&Pass.Ctx.Idents.get("delegate"));
+  }
 
   void transformBody(Stmt *body) {
     Body = body;
@@ -58,10 +63,9 @@ public:
         // will likely die immediately while previously it was kept alive
         // by the autorelease pool. This is bad practice in general, leave it
         // and emit an error to force the user to restructure his code.
-        std::string err = "it is not safe to remove an unused '";
-        err += E->getSelector().getAsString() + "'; its receiver may be "
-            "destroyed immediately";
-        Pass.TA.reportError(err, E->getLocStart(), E->getSourceRange());
+        Pass.TA.reportError("it is not safe to remove an unused 'autorelease' "
+            "message; its receiver may be destroyed immediately",
+            E->getLocStart(), E->getSourceRange());
         return true;
       }
       // Pass through.
@@ -87,6 +91,14 @@ public:
             Pass.TA.reportError(err, rec->getLocStart());
             return true;
           }
+
+          if (E->getMethodFamily() == OMF_release && isDelegateMessage(rec)) {
+            Pass.TA.reportError("it is not safe to remove 'retain' "
+                "message on the result of a 'delegate' message; "
+                "the object that was passed to 'setDelegate:' may not be "
+                "properly retained", rec->getLocStart());
+            return true;
+          }
         }
     case OMF_dealloc:
       break;
@@ -97,10 +109,7 @@ public:
       return true;
     case ObjCMessageExpr::SuperInstance: {
       Transaction Trans(Pass.TA);
-      Pass.TA.clearDiagnostic(diag::err_arc_illegal_explicit_message,
-                              diag::err_unavailable,
-                              diag::err_unavailable_message,
-                              E->getSuperLoc());
+      clearDiagnostics(E->getSuperLoc());
       if (tryRemoving(E))
         return true;
       Pass.TA.replace(E->getSourceRange(), "self");
@@ -114,10 +123,20 @@ public:
     if (!rec) return true;
 
     Transaction Trans(Pass.TA);
-    Pass.TA.clearDiagnostic(diag::err_arc_illegal_explicit_message,
-                            diag::err_unavailable,
-                            diag::err_unavailable_message,
-                            rec->getExprLoc());
+    clearDiagnostics(rec->getExprLoc());
+
+    if (E->getMethodFamily() == OMF_release &&
+        isRemovable(E) && isInAtFinally(E)) {
+      // Change the -release to "receiver = nil" in a finally to avoid a leak
+      // when an exception is thrown.
+      Pass.TA.replace(E->getSourceRange(), rec->getSourceRange());
+      if (Pass.Ctx.Idents.get("nil").hasMacroDefinition())
+        Pass.TA.insertAfterToken(rec->getLocEnd(), " = nil");
+      else
+        Pass.TA.insertAfterToken(rec->getLocEnd(), " = 0");
+      return true;
+    }
+
     if (!hasSideEffects(E, Pass.Ctx)) {
       if (tryRemoving(E))
         return true;
@@ -128,6 +147,38 @@ public:
   }
 
 private:
+  void clearDiagnostics(SourceLocation loc) const {
+    Pass.TA.clearDiagnostic(diag::err_arc_illegal_explicit_message,
+                            diag::err_unavailable,
+                            diag::err_unavailable_message,
+                            loc);
+  }
+
+  bool isDelegateMessage(Expr *E) const {
+    if (!E) return false;
+
+    E = E->IgnoreParenCasts();
+    if (ObjCMessageExpr *ME = dyn_cast<ObjCMessageExpr>(E))
+      return (ME->isInstanceMessage() && ME->getSelector() == DelegateSel);
+
+    if (ObjCPropertyRefExpr *propE = dyn_cast<ObjCPropertyRefExpr>(E))
+      return propE->getGetterSelector() == DelegateSel;
+
+    return false;
+  }
+
+  bool isInAtFinally(Expr *E) const {
+    assert(E);
+    Stmt *S = E;
+    while (S) {
+      if (isa<ObjCAtFinallyStmt>(S))
+        return true;
+      S = StmtMap->getParent(S);
+    }
+
+    return false;
+  }
+
   bool isRemovable(Expr *E) const {
     return Removables.count(E);
   }
