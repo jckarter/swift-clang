@@ -2396,8 +2396,8 @@ llvm::Value *ARM64ABIInfo::EmitVAArg(llvm::Value *VAListAddr, QualType Ty,
     Align = 8;
   }
 
-  const llvm::Type *BP = llvm::Type::getInt8PtrTy(CGF.getLLVMContext());
-  const llvm::Type *BPP = llvm::PointerType::getUnqual(BP);
+  llvm::Type *BP = llvm::Type::getInt8PtrTy(CGF.getLLVMContext());
+  llvm::Type *BPP = llvm::PointerType::getUnqual(BP);
 
   CGBuilderTy &Builder = CGF.Builder;
   llvm::Value *VAListAddrAsBPP = Builder.CreateBitCast(VAListAddr, BPP, "ap");
