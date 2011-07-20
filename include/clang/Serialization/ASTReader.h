@@ -474,10 +474,20 @@ private:
   /// = I + 1 has already been loaded.
   std::vector<Decl *> DeclsLoaded;
 
+  typedef ContinuousRangeMap<serialization::DeclID, 
+                             std::pair<PerFileData *, int32_t>, 4> 
+    GlobalDeclMapType;
+  
+  /// \brief Mapping from global declaration IDs to the module in which the
+  /// declaration resides along with the offset that should be added to the
+  /// global declaration ID to produce a local ID.
+  GlobalDeclMapType GlobalDeclMap;
+  
   typedef std::pair<PerFileData *, uint64_t> FileOffset;
   typedef llvm::SmallVector<FileOffset, 2> FileOffsetsTy;
   typedef llvm::DenseMap<serialization::DeclID, FileOffsetsTy>
       DeclUpdateOffsetsMap;
+  
   /// \brief Declarations that have modifications residing in a later file
   /// in the chain.
   DeclUpdateOffsetsMap DeclUpdateOffsets;
@@ -544,6 +554,15 @@ private:
   /// been loaded.
   std::vector<IdentifierInfo *> IdentifiersLoaded;
 
+  typedef ContinuousRangeMap<serialization::IdentID, 
+                             std::pair<PerFileData *, int32_t>, 4> 
+    GlobalIdentifierMapType;
+  
+  /// \brief Mapping from global identifer IDs to the module in which the
+  /// identifier resides along with the offset that should be added to the
+  /// global identifier ID to produce a local ID.
+  GlobalIdentifierMapType GlobalIdentifierMap;
+
   /// \brief A vector containing selectors that have already been loaded.
   ///
   /// This vector is indexed by the Selector ID (-1). NULL selector
@@ -551,8 +570,26 @@ private:
   /// been loaded.
   llvm::SmallVector<Selector, 16> SelectorsLoaded;
 
+  typedef ContinuousRangeMap<serialization::SelectorID, 
+                             std::pair<PerFileData *, int32_t>, 4> 
+    GlobalSelectorMapType;
+  
+  /// \brief Mapping from global selector IDs to the module in which the
+  /// selector resides along with the offset that should be added to the
+  /// global selector ID to produce a local ID.
+  GlobalSelectorMapType GlobalSelectorMap;
+
   /// \brief The macro definitions we have already loaded.
   llvm::SmallVector<MacroDefinition *, 16> MacroDefinitionsLoaded;
+
+  typedef ContinuousRangeMap<serialization::MacroID, 
+                             std::pair<PerFileData *, int32_t>, 4> 
+    GlobalMacroDefinitionMapType;
+  
+  /// \brief Mapping from global macro definition IDs to the module in which the
+  /// selector resides along with the offset that should be added to the
+  /// global selector ID to produce a local ID.
+  GlobalMacroDefinitionMapType GlobalMacroDefinitionMap;
 
   /// \brief Mapping from identifiers that represent macros whose definitions
   /// have not yet been deserialized to the global offset where the macro
