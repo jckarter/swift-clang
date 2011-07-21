@@ -1005,7 +1005,7 @@ static bool ShouldDisableCFI(const ArgList &Args,
 
 /// \brief Check whether the given input tree contains any compilation actions.
 static bool ContainsCompileAction(const Action *A) {
-  if (isa<CompileJobAction>(A))
+  if (llvm::isa<CompileJobAction>(A))
     return true;
 
   for (Action::const_iterator it = A->begin(), ie = A->end(); it != ie; ++it)
