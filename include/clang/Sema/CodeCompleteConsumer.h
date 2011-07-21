@@ -21,11 +21,6 @@
 #include "clang-c/Index.h"
 #include <string>
 
-namespace llvm {
-  class raw_ostream;
-  class Twine;
-}
-
 namespace clang {
 
 class Decl;
@@ -136,7 +131,7 @@ QualType getDeclUsageType(ASTContext &C, NamedDecl *ND);
 ///
 /// \param PreferredTypeIsPointer Whether the preferred type for the context
 /// of this macro is a pointer type.
-unsigned getMacroUsagePriority(llvm::StringRef MacroName, 
+unsigned getMacroUsagePriority(StringRef MacroName, 
                                const LangOptions &LangOpts,
                                bool PreferredTypeIsPointer = false);
 
@@ -280,7 +275,8 @@ public:
   /// \brief Construct a new code-completion context of the given kind.
   CodeCompletionContext(enum Kind Kind, QualType T) : Kind(Kind) { 
     if (Kind == CCC_DotMemberAccess || Kind == CCC_ArrowMemberAccess ||
-        Kind == CCC_ObjCPropertyAccess)
+        Kind == CCC_ObjCPropertyAccess || Kind == CCC_ObjCClassMessage ||
+        Kind == CCC_ObjCInstanceMessage)
       BaseType = T;
     else
       PreferredType = T;
@@ -463,19 +459,19 @@ public:
 class CodeCompletionAllocator : public llvm::BumpPtrAllocator { 
 public:
   /// \brief Copy the given string into this allocator.
-  const char *CopyString(llvm::StringRef String);
+  const char *CopyString(StringRef String);
 
   /// \brief Copy the given string into this allocator.
-  const char *CopyString(llvm::Twine String);
+  const char *CopyString(Twine String);
   
   // \brief Copy the given string into this allocator.
   const char *CopyString(const char *String) {
-    return CopyString(llvm::StringRef(String));
+    return CopyString(StringRef(String));
   }
   
   /// \brief Copy the given string into this allocator.
   const char *CopyString(const std::string &String) {
-    return CopyString(llvm::StringRef(String));
+    return CopyString(StringRef(String));
   }
 };
   
@@ -490,7 +486,7 @@ private:
   CXAvailabilityKind Availability;
   
   /// \brief The chunks stored in this string.
-  llvm::SmallVector<Chunk, 4> Chunks;
+  SmallVector<Chunk, 4> Chunks;
   
 public:
   CodeCompletionBuilder(CodeCompletionAllocator &Allocator) 
@@ -709,7 +705,7 @@ inline bool operator>=(const CodeCompletionResult &X,
 }
 
   
-llvm::raw_ostream &operator<<(llvm::raw_ostream &OS, 
+raw_ostream &operator<<(raw_ostream &OS, 
                               const CodeCompletionString &CCS);
 
 /// \brief Abstract interface for a consumer of code-completion 
@@ -850,7 +846,7 @@ public:
 /// receives in a simple format.
 class PrintingCodeCompleteConsumer : public CodeCompleteConsumer {
   /// \brief The raw output stream.
-  llvm::raw_ostream &OS;
+  raw_ostream &OS;
     
   CodeCompletionAllocator Allocator;
   
@@ -859,7 +855,7 @@ public:
   /// results to the given raw output stream.
   PrintingCodeCompleteConsumer(bool IncludeMacros, bool IncludeCodePatterns,
                                bool IncludeGlobals,
-                               llvm::raw_ostream &OS)
+                               raw_ostream &OS)
     : CodeCompleteConsumer(IncludeMacros, IncludeCodePatterns, IncludeGlobals,
                            false), OS(OS) {}
   

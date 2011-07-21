@@ -1594,7 +1594,20 @@ def note_ovl_candidate_bad_conv : Note<"candidate "
     " not viable: no known conversion from %2 to %3 for "
     "%select{%ordinal5 argument|object argument}4; "
     "%select{|dereference the argument with *|"
-    "take the address of the argument with &}6">;
+    "take the address of the argument with &|"
+    "remove *|"
+    "remove &}6">;
+def note_ovl_candidate_bad_arc_conv : Note<"candidate "
+    "%select{function|function|constructor|"
+    "function |function |constructor |"
+    "constructor (the implicit default constructor)|"
+    "constructor (the implicit copy constructor)|"
+    "constructor (the implicit move constructor)|"
+    "function (the implicit copy assignment operator)|"
+    "function (the implicit move assignment operator)|"
+    "constructor (inherited)}0%1"
+    " not viable: cannot implicitly convert argument of type %2 to %3 for "
+    "%select{%ordinal5 argument|object argument}4 under ARC">;
 def note_ovl_candidate_bad_addrspace : Note<"candidate "
     "%select{function|function|constructor|"
     "function |function |constructor |"
@@ -3040,9 +3053,6 @@ def err_stmtexpr_file_scope : Error<
   "statement expression not allowed at file scope">;
 def warn_mixed_sign_comparison : Warning<
   "comparison of integers of different signs: %0 and %1">,
-  InGroup<SignCompare>, DefaultIgnore;
-def warn_mixed_sign_conditional : Warning<
-  "operands of ? are integers of different signs: %0 and %1">,
   InGroup<SignCompare>, DefaultIgnore;
 def warn_lunsigned_always_true_comparison : Warning<
   "comparison of unsigned%select{| enum}2 expression %0 is always %1">,
