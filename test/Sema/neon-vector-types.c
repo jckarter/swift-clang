@@ -22,7 +22,6 @@ typedef __attribute__((neon_vector_type(2, 4))) int only_one_arg; // expected-er
 typedef __attribute__((neon_vector_type(2.0))) int non_int_width; // expected-error{{attribute requires integer constant}}
 
 // Only certain element types are allowed.
-typedef __attribute__((neon_vector_type(2))) double double_elt; // expected-error{{invalid vector element type}}
 typedef __attribute__((neon_vector_type(4))) void* ptr_elt; // expected-error{{invalid vector element type}}
 typedef __attribute__((neon_polyvector_type(4))) float32_t bad_poly_elt; // expected-error{{invalid vector element type}}
 struct aggr { signed char c; };
