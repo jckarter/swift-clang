@@ -224,6 +224,7 @@ private:
   /// First (not depending on another) PCH in chain is in front.
   std::vector<llvm::MemoryBuffer *> ASTBuffers;
 
+public:
   /// \brief Information that is needed for every module.
   struct PerFileData {
     PerFileData(ASTFileType Ty);
@@ -243,6 +244,9 @@ private:
 
     /// \brief The size of this file, in bits.
     uint64_t SizeInBits;
+
+    /// \brief The global bit offset (or base) of this module
+    uint64_t GlobalBitOffset;
 
     /// \brief The bitstream reader from which we'll read the AST file.
     llvm::BitstreamReader StreamFile;
@@ -433,7 +437,8 @@ private:
     /// directly loaded modules.
     SmallVector<PerFileData *, 1> Loaders;
   };
-
+private:
+  
   /// \brief All loaded modules, indexed by name.
   llvm::StringMap<PerFileData*> Modules;
 
@@ -509,6 +514,7 @@ private:
 
   /// \brief Information about the contents of a DeclContext.
   struct DeclContextInfo {
+    PerFileData *F;
     void *NameLookupTableData; // a ASTDeclContextNameLookupTable.
     const serialization::KindDeclIDPair *LexicalDecls;
     unsigned NumLexicalDecls;
@@ -613,6 +619,15 @@ private:
   /// added to the global preprocessing entitiy ID to produce a local ID.
   GlobalPreprocessedEntityMapType GlobalPreprocessedEntityMap;
   
+  typedef ContinuousRangeMap<serialization::CXXBaseSpecifiersID,
+                             std::pair<PerFileData *, int32_t>, 4>
+    GlobalCXXBaseSpecifiersMapType;
+
+  /// \brief Mapping from global CXX base specifier IDs to the module in which the
+  /// CXX base specifier resides along with the offset that should be added to the
+  /// global CXX base specifer ID to produce a local ID.
+  GlobalCXXBaseSpecifiersMapType GlobalCXXBaseSpecifiersMap;
+
   /// \name CodeGen-relevant special data
   /// \brief Fields containing data that is relevant to CodeGen.
   //@{
@@ -793,8 +808,14 @@ private:
   /// Number of visible decl contexts read/total.
   unsigned NumVisibleDeclContextsRead, TotalVisibleDeclContexts;
   
+  /// Total size of modules, in bits, currently loaded
+  uint64_t TotalModulesSizeInBits;
+
   /// \brief Number of Decl/types that are currently deserializing.
   unsigned NumCurrentElementsDeserializing;
+
+  /// Number of CXX base specifiers currently loaded
+  unsigned NumCXXBaseSpecifiersLoaded;
 
   /// \brief An IdentifierInfo that has been loaded but whose top-level
   /// declarations of the same name have not (yet) been loaded.
@@ -893,7 +914,7 @@ private:
     uint64_t Offset;
   };
 
-  QualType ReadTypeRecord(unsigned Index);
+  QualType readTypeRecord(unsigned Index);
   RecordLocation TypeCursorForIndex(unsigned Index);
   void LoadedDecl(unsigned Index, Decl *D);
   Decl *ReadDeclRecord(unsigned Index, serialization::DeclID ID);
@@ -1067,7 +1088,9 @@ public:
   }
       
   /// \brief Returns the number of C++ base specifiers found in the chain.
-  unsigned getTotalNumCXXBaseSpecifiers() const;
+  unsigned getTotalNumCXXBaseSpecifiers() const {
+    return NumCXXBaseSpecifiersLoaded;
+  }
       
   /// \brief Reads a TemplateArgumentLocInfo appropriate for the
   /// given TemplateArgument kind.
@@ -1091,6 +1114,21 @@ public:
   /// type.
   QualType GetType(serialization::TypeID ID);
 
+  /// \brief Resolve a local type ID within a given AST file into a type.
+  QualType getLocalType(PerFileData &F, unsigned LocalID);
+  
+  /// \brief Map a local type ID within a given AST file into a global type ID.
+  serialization::TypeID getGlobalTypeID(PerFileData &F, unsigned LocalID) const;
+  
+  /// \brief Read a type from the current position in the given record, which 
+  /// was read from the given AST file.
+  QualType readType(PerFileData &F, const RecordData &Record, unsigned &Idx) {
+    if (Idx >= Record.size())
+      return QualType();
+    
+    return getLocalType(F, Record[Idx++]);
+  }
+  
   /// \brief Returns the type ID associated with the given type.
   /// If the type didn't come from the AST file the ID that is returned is
   /// marked as "doesn't exist in AST".
@@ -1101,10 +1139,50 @@ public:
   /// marked as "doesn't exist in AST".
   serialization::TypeIdx GetTypeIdx(QualType T) const;
 
+  /// \brief Map from a local declaration ID within a given module to a 
+  /// global declaration ID.
+  serialization::DeclID getGlobalDeclID(PerFileData &F, unsigned LocalID) const;
+  
   /// \brief Resolve a declaration ID into a declaration, potentially
   /// building a new declaration.
   Decl *GetDecl(serialization::DeclID ID);
   virtual Decl *GetExternalDecl(uint32_t ID);
+
+  /// \brief Reads a declaration with the given local ID in the give module.
+  Decl *GetLocalDecl(PerFileData &F, uint32_t LocalID) {
+    return GetDecl(getGlobalDeclID(F, LocalID));
+  }
+
+  /// \brief Reads a declaration with the given local ID in the give module.
+  ///
+  /// \returns The requested declaration, casted to the given return type.
+  template<typename T>
+  T *GetLocalDeclAs(PerFileData &F, uint32_t LocalID) {
+    return cast_or_null<T>(GetLocalDecl(F, LocalID));
+  }
+
+  /// \brief Reads a declaration ID from the given position in a record in the 
+  /// given module.
+  ///
+  /// \returns The declaration ID read from the record, adjusted to a global ID.
+  serialization::DeclID ReadDeclID(PerFileData &F, const RecordData &Record,
+                                   unsigned &Idx);
+  
+  /// \brief Reads a declaration from the given position in a record in the
+  /// given module.
+  Decl *ReadDecl(PerFileData &F, const RecordData &R, unsigned &I) {
+    return GetDecl(ReadDeclID(F, R, I));
+  }
+  
+  /// \brief Reads a declaration from the given position in a record in the
+  /// given module.
+  ///
+  /// \returns The declaration read from this location, casted to the given
+  /// result type.
+  template<typename T>
+  T *ReadDeclAs(PerFileData &F, const RecordData &R, unsigned &I) {
+    return cast_or_null<T>(GetDecl(ReadDeclID(F, R, I)));
+  }
 
   /// \brief Resolve a CXXBaseSpecifiers ID into an offset into the chain
   /// of loaded AST files.
@@ -1169,6 +1247,9 @@ public:
   /// \brief Print some statistics about AST usage.
   virtual void PrintStats();
 
+  /// \brief Dump information about the AST reader to standard error.
+  void dump();
+  
   /// Return the amount of memory used by memory buffers, breaking down
   /// by heap-backed versus mmap'ed memory.
   virtual void getMemoryBufferSizes(MemoryBufferSizes &sizes) const;
@@ -1246,7 +1327,8 @@ public:
   }
 
   /// \brief Read a declaration name.
-  DeclarationName ReadDeclarationName(const RecordData &Record, unsigned &Idx);
+  DeclarationName ReadDeclarationName(PerFileData &F, 
+                                      const RecordData &Record, unsigned &Idx);
   void ReadDeclarationNameLoc(PerFileData &F,
                               DeclarationNameLoc &DNLoc, DeclarationName Name,
                               const RecordData &Record, unsigned &Idx);
@@ -1256,7 +1338,8 @@ public:
   void ReadQualifierInfo(PerFileData &F, QualifierInfo &Info,
                          const RecordData &Record, unsigned &Idx);
 
-  NestedNameSpecifier *ReadNestedNameSpecifier(const RecordData &Record,
+  NestedNameSpecifier *ReadNestedNameSpecifier(PerFileData &F,
+                                               const RecordData &Record,
                                                unsigned &Idx);
 
   NestedNameSpecifierLoc ReadNestedNameSpecifierLoc(PerFileData &F, 
@@ -1283,7 +1366,7 @@ public:
                            unsigned &Idx);
 
   /// \brief Read a UnresolvedSet structure.
-  void ReadUnresolvedSet(UnresolvedSetImpl &Set,
+  void ReadUnresolvedSet(PerFileData &F, UnresolvedSetImpl &Set,
                          const RecordData &Record, unsigned &Idx);
 
   /// \brief Read a C++ base specifier.
@@ -1333,7 +1416,8 @@ public:
   /// \brief Read a version tuple.
   VersionTuple ReadVersionTuple(const RecordData &Record, unsigned &Idx);
 
-  CXXTemporary *ReadCXXTemporary(const RecordData &Record, unsigned &Idx);
+  CXXTemporary *ReadCXXTemporary(PerFileData &F, const RecordData &Record, 
+                                 unsigned &Idx);
       
   /// \brief Reads attributes from the current stream position.
   void ReadAttributes(PerFileData &F, AttrVec &Attrs,
