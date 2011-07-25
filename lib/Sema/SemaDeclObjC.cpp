@@ -559,7 +559,7 @@ void
 Sema::FindProtocolDeclaration(bool WarnOnDeclarations,
                               const IdentifierLocPair *ProtocolId,
                               unsigned NumProtocols,
-                              llvm::SmallVectorImpl<Decl *> &Protocols) {
+                              SmallVectorImpl<Decl *> &Protocols) {
   for (unsigned i = 0; i != NumProtocols; ++i) {
     ObjCProtocolDecl *PDecl = LookupProtocol(ProtocolId[i].first,
                                              ProtocolId[i].second);
@@ -627,8 +627,8 @@ Sema::ActOnForwardProtocolDeclaration(SourceLocation AtProtocolLoc,
                                       const IdentifierLocPair *IdentList,
                                       unsigned NumElts,
                                       AttributeList *attrList) {
-  llvm::SmallVector<ObjCProtocolDecl*, 32> Protocols;
-  llvm::SmallVector<SourceLocation, 8> ProtoLocs;
+  SmallVector<ObjCProtocolDecl*, 32> Protocols;
+  SmallVector<SourceLocation, 8> ProtoLocs;
 
   for (unsigned i = 0; i != NumElts; ++i) {
     IdentifierInfo *Ident = IdentList[i].first;
@@ -1074,13 +1074,14 @@ static SourceRange getTypeRange(TypeSourceInfo *TSI) {
 static void CheckMethodOverrideReturn(Sema &S,
                                       ObjCMethodDecl *MethodImpl,
                                       ObjCMethodDecl *MethodDecl,
-                                      bool IsProtocolMethodDecl) {
+                                      bool IsProtocolMethodDecl,
+                                      bool IsDeclaration) {
   if (IsProtocolMethodDecl &&
       (MethodDecl->getObjCDeclQualifier() !=
        MethodImpl->getObjCDeclQualifier())) {
     S.Diag(MethodImpl->getLocation(), 
            diag::warn_conflicting_ret_type_modifiers)
-        << MethodImpl->getDeclName()
+        << MethodImpl->getDeclName() << IsDeclaration
         << getTypeRange(MethodImpl->getResultTypeSourceInfo());
     S.Diag(MethodDecl->getLocation(), diag::note_previous_declaration)
         << getTypeRange(MethodDecl->getResultTypeSourceInfo());
@@ -1113,6 +1114,7 @@ static void CheckMethodOverrideReturn(Sema &S,
     << MethodImpl->getDeclName()
     << MethodDecl->getResultType()
     << MethodImpl->getResultType()
+    << IsDeclaration
     << getTypeRange(MethodImpl->getResultTypeSourceInfo());
   S.Diag(MethodDecl->getLocation(), diag::note_previous_definition)
     << getTypeRange(MethodDecl->getResultTypeSourceInfo());
@@ -1123,14 +1125,15 @@ static void CheckMethodOverrideParam(Sema &S,
                                      ObjCMethodDecl *MethodDecl,
                                      ParmVarDecl *ImplVar,
                                      ParmVarDecl *IfaceVar,
-                                     bool IsProtocolMethodDecl) {
+                                     bool IsProtocolMethodDecl,
+                                     bool IsDeclaration) {
   if (IsProtocolMethodDecl &&
       (ImplVar->getObjCDeclQualifier() !=
        IfaceVar->getObjCDeclQualifier())) {
     S.Diag(ImplVar->getLocation(), 
            diag::warn_conflicting_param_modifiers)
         << getTypeRange(ImplVar->getTypeSourceInfo())
-        << MethodImpl->getDeclName();
+        << MethodImpl->getDeclName() << IsDeclaration;
     S.Diag(IfaceVar->getLocation(), diag::note_previous_declaration)
         << getTypeRange(IfaceVar->getTypeSourceInfo());   
   }
@@ -1162,7 +1165,8 @@ static void CheckMethodOverrideParam(Sema &S,
 
   S.Diag(ImplVar->getLocation(), DiagID)
     << getTypeRange(ImplVar->getTypeSourceInfo())
-    << MethodImpl->getDeclName() << IfaceTy << ImplTy;
+    << MethodImpl->getDeclName() << IfaceTy << ImplTy 
+    << IsDeclaration;
   S.Diag(IfaceVar->getLocation(), diag::note_previous_definition)
     << getTypeRange(IfaceVar->getTypeSourceInfo());
 }
@@ -1239,22 +1243,24 @@ static bool checkMethodFamilyMismatch(Sema &S, ObjCMethodDecl *impl,
 
 void Sema::WarnConflictingTypedMethods(ObjCMethodDecl *ImpMethodDecl,
                                        ObjCMethodDecl *MethodDecl,
-                                       bool IsProtocolMethodDecl) {
+                                       bool IsProtocolMethodDecl,
+                                       bool IsDeclaration) {
   if (getLangOptions().ObjCAutoRefCount &&
       checkMethodFamilyMismatch(*this, ImpMethodDecl, MethodDecl))
     return;
 
   CheckMethodOverrideReturn(*this, ImpMethodDecl, MethodDecl, 
-                            IsProtocolMethodDecl);
+                            IsProtocolMethodDecl, IsDeclaration);
 
   for (ObjCMethodDecl::param_iterator IM = ImpMethodDecl->param_begin(),
        IF = MethodDecl->param_begin(), EM = ImpMethodDecl->param_end();
        IM != EM; ++IM, ++IF)
     CheckMethodOverrideParam(*this, ImpMethodDecl, MethodDecl, *IM, *IF,
-                             IsProtocolMethodDecl);
+                             IsProtocolMethodDecl, IsDeclaration);
 
   if (ImpMethodDecl->isVariadic() != MethodDecl->isVariadic()) {
-    Diag(ImpMethodDecl->getLocation(), diag::warn_conflicting_variadic);
+    Diag(ImpMethodDecl->getLocation(), diag::warn_conflicting_variadic)
+      << IsDeclaration;
     Diag(MethodDecl->getLocation(), diag::note_previous_declaration);
   }
 }
@@ -1427,12 +1433,110 @@ void Sema::MatchAllMethodDeclarations(const llvm::DenseSet<Selector> &InsMap,
       MatchAllMethodDeclarations(InsMap, ClsMap, InsMapSeen, ClsMapSeen,
                                  IMPDecl,
                                  (*PI), IncompleteImpl, false);
+    
+    // Check for any type mismtch of methods declared in class 
+    // and methods declared in protocol.
+    MatchMethodsInClassAndItsProtocol(I);
+    
     if (I->getSuperClass())
       MatchAllMethodDeclarations(InsMap, ClsMap, InsMapSeen, ClsMapSeen,
                                  IMPDecl,
                                  I->getSuperClass(), IncompleteImpl, false);
   }
 }
+
+static void MatchMethodsInClassAndOneProtocol(Sema &S, 
+                                              Sema::SelectorSet &InsMap,
+                                              Sema::SelectorSet &ClsMap,
+                                              const ObjCContainerDecl *IDecl,
+                                              const ObjCProtocolDecl *PDecl) {
+  if (!InsMap.empty())
+    for (ObjCInterfaceDecl::instmeth_iterator IM = PDecl->instmeth_begin(),
+         E = PDecl->instmeth_end(); IM != E; ++IM) {
+      Selector Sel = (*IM)->getSelector();
+      if (InsMap.count(Sel)) {
+        ObjCMethodDecl *ProtoMethodDecl = PDecl->getInstanceMethod(Sel);
+        ObjCMethodDecl *ClsMethodDecl = IDecl->getInstanceMethod(Sel);
+        if (ProtoMethodDecl && ClsMethodDecl)
+          S.WarnConflictingTypedMethods(
+                                      ClsMethodDecl, 
+                                      ProtoMethodDecl, true, true);
+        InsMap.erase(Sel);
+      }
+      if (InsMap.empty())
+        break;
+    }
+  if (!ClsMap.empty())
+    for (ObjCInterfaceDecl::classmeth_iterator IM = PDecl->classmeth_begin(),
+         E = PDecl->classmeth_end(); IM != E; ++IM) {
+      Selector Sel = (*IM)->getSelector();
+      if (ClsMap.count(Sel)) {
+        ObjCMethodDecl *ProtoMethodDecl = PDecl->getClassMethod(Sel);
+        ObjCMethodDecl *ClsMethodDecl = IDecl->getClassMethod(Sel);
+        if (ProtoMethodDecl && ClsMethodDecl)
+          S.WarnConflictingTypedMethods(
+                                        ClsMethodDecl, 
+                                        ProtoMethodDecl, true, true);
+        ClsMap.erase(Sel);
+      }
+      if (ClsMap.empty())
+        break;
+    }
+  if (InsMap.empty() && ClsMap.empty())
+    return;
+  
+  for (ObjCProtocolDecl::protocol_iterator PI = PDecl->protocol_begin(),
+       PE = PDecl->protocol_end(); PI != PE; ++PI)
+    MatchMethodsInClassAndOneProtocol(S, InsMap, ClsMap, IDecl, (*PI));
+}
+
+void Sema::MatchMethodsInClassAndItsProtocol(const ObjCInterfaceDecl *CDecl) {
+  if (CDecl->all_referenced_protocol_begin() ==
+      CDecl->all_referenced_protocol_end())
+    return;
+  
+  SelectorSet InsMap, ClsMap;
+  for (ObjCInterfaceDecl::instmeth_iterator I = CDecl->instmeth_begin(),
+       E = CDecl->instmeth_end(); I != E; ++I)
+    if (!InsMap.count((*I)->getSelector()))
+      InsMap.insert((*I)->getSelector());
+  
+  for (ObjCInterfaceDecl::classmeth_iterator
+       I = CDecl->classmeth_begin(), E = CDecl->classmeth_end(); I != E; ++I)
+    if (!ClsMap.count((*I)->getSelector()))
+      ClsMap.insert((*I)->getSelector());
+  
+  if (!InsMap.empty() || !ClsMap.empty())
+    for (ObjCInterfaceDecl::all_protocol_iterator
+         PI = CDecl->all_referenced_protocol_begin(),
+         E = CDecl->all_referenced_protocol_end(); PI != E; ++PI)
+      MatchMethodsInClassAndOneProtocol(*this, InsMap, ClsMap, CDecl, (*PI));
+  
+  // Also for class extensions
+  if (!CDecl->getFirstClassExtension())
+    return;
+  
+  for (const ObjCCategoryDecl *ClsExtDecl = CDecl->getFirstClassExtension();
+       ClsExtDecl; ClsExtDecl = ClsExtDecl->getNextClassExtension()) {
+    InsMap.clear();
+    ClsMap.clear();
+    for (ObjCCategoryDecl::instmeth_iterator I = ClsExtDecl->instmeth_begin(),
+         E = ClsExtDecl->instmeth_end(); I != E; ++I)
+      if (!InsMap.count((*I)->getSelector()))
+        InsMap.insert((*I)->getSelector());
+    for (ObjCCategoryDecl::classmeth_iterator I = ClsExtDecl->classmeth_begin(),
+         E = ClsExtDecl->classmeth_end(); I != E; ++I)
+      if (!ClsMap.count((*I)->getSelector()))
+        ClsMap.insert((*I)->getSelector());
+    if (InsMap.empty() && ClsMap.empty())
+      continue;
+    for (ObjCInterfaceDecl::all_protocol_iterator
+         PI = CDecl->all_referenced_protocol_begin(),
+         E = CDecl->all_referenced_protocol_end(); PI != E; ++PI)
+      MatchMethodsInClassAndOneProtocol(*this, InsMap, ClsMap, ClsExtDecl, (*PI));
+  }
+}
+
 
 void Sema::ImplMethodsVsClassMethods(Scope *S, ObjCImplDecl* IMPDecl,
                                      ObjCContainerDecl* CDecl,
@@ -1511,7 +1615,7 @@ Sema::ActOnForwardClassDeclaration(SourceLocation AtClassLoc,
                                    IdentifierInfo **IdentList,
                                    SourceLocation *IdentLocs,
                                    unsigned NumElts) {
-  llvm::SmallVector<ObjCInterfaceDecl*, 32> Interfaces;
+  SmallVector<ObjCInterfaceDecl*, 32> Interfaces;
 
   for (unsigned i = 0; i != NumElts; ++i) {
     // Check for another declaration kind with the same name.
@@ -2334,7 +2438,7 @@ Decl *Sema::ActOnMethodDeclaration(
                              : ObjCMethodDecl::Required,
                            false);
 
-  llvm::SmallVector<ParmVarDecl*, 16> Params;
+  SmallVector<ParmVarDecl*, 16> Params;
 
   for (unsigned i = 0, e = Sel.getNumArgs(); i != e; ++i) {
     QualType ArgType;
@@ -2521,7 +2625,7 @@ bool Sema::CheckObjCDeclScope(Decl *D) {
 /// instance variables of ClassName into Decls.
 void Sema::ActOnDefs(Scope *S, Decl *TagD, SourceLocation DeclStart,
                      IdentifierInfo *ClassName,
-                     llvm::SmallVectorImpl<Decl*> &Decls) {
+                     SmallVectorImpl<Decl*> &Decls) {
   // Check that ClassName is a valid class
   ObjCInterfaceDecl *Class = getObjCInterfaceDecl(ClassName, DeclStart);
   if (!Class) {
@@ -2549,7 +2653,7 @@ void Sema::ActOnDefs(Scope *S, Decl *TagD, SourceLocation DeclStart,
   }
 
   // Introduce all of these fields into the appropriate scope.
-  for (llvm::SmallVectorImpl<Decl*>::iterator D = Decls.begin();
+  for (SmallVectorImpl<Decl*>::iterator D = Decls.begin();
        D != Decls.end(); ++D) {
     FieldDecl *FD = cast<FieldDecl>(*D);
     if (getLangOptions().CPlusPlus)
@@ -2651,7 +2755,7 @@ Decl *Sema::ActOnObjCExceptionDecl(Scope *S, Declarator &D) {
 /// CollectIvarsToConstructOrDestruct - Collect those ivars which require
 /// initialization.
 void Sema::CollectIvarsToConstructOrDestruct(ObjCInterfaceDecl *OI,
-                                llvm::SmallVectorImpl<ObjCIvarDecl*> &Ivars) {
+                                SmallVectorImpl<ObjCIvarDecl*> &Ivars) {
   for (ObjCIvarDecl *Iv = OI->all_declared_ivar_begin(); Iv; 
        Iv= Iv->getNextIvar()) {
     QualType QT = Context.getBaseElementType(Iv->getType());
