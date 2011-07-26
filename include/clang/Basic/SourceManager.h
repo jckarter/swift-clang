@@ -259,7 +259,7 @@ namespace SrcMgr {
                             getInstantiationLocEnd());
     }
 
-    bool isMacroArgInstantiation() const {
+    bool isMacroArgExpansion() const {
       // Note that this needs to return false for default constructed objects.
       return getInstantiationLocStart().isValid() &&
         SourceLocation::getFromRawEncoding(InstantiationLocEnd).isInvalid();
@@ -583,23 +583,23 @@ public:
                         SrcMgr::C_User, LoadedID, LoadedOffset);
   }
 
-  /// createMacroArgInstantiationLoc - Return a new SourceLocation that encodes
-  /// the fact that a token from SpellingLoc should actually be referenced from
-  /// InstantiationLoc, and that it represents the instantiation of a macro
+  /// createMacroArgExpansionLoc - Return a new SourceLocation that encodes the
+  /// fact that a token from SpellingLoc should actually be referenced from
+  /// ExpansionLoc, and that it represents the instantiation of a macro
   /// argument into the function-like macro body.
-  SourceLocation createMacroArgInstantiationLoc(SourceLocation Loc,
-                                                SourceLocation InstantiationLoc,
-                                                unsigned TokLength);
+  SourceLocation createMacroArgExpansionLoc(SourceLocation Loc,
+                                            SourceLocation ExpansionLoc,
+                                            unsigned TokLength);
 
-  /// createInstantiationLoc - Return a new SourceLocation that encodes the fact
+  /// createExpansionLoc - Return a new SourceLocation that encodes the fact
   /// that a token from SpellingLoc should actually be referenced from
-  /// InstantiationLoc.
-  SourceLocation createInstantiationLoc(SourceLocation Loc,
-                                        SourceLocation InstantiationLocStart,
-                                        SourceLocation InstantiationLocEnd,
-                                        unsigned TokLength,
-                                        int LoadedID = 0,
-                                        unsigned LoadedOffset = 0);
+  /// ExpansionLoc.
+  SourceLocation createExpansionLoc(SourceLocation Loc,
+                                    SourceLocation ExpansionLocStart,
+                                    SourceLocation ExpansionLocEnd,
+                                    unsigned TokLength,
+                                    int LoadedID = 0,
+                                    unsigned LoadedOffset = 0);
 
   /// \brief Retrieve the memory buffer associated with the given file.
   ///
@@ -803,12 +803,12 @@ public:
     return getDecomposedLoc(SpellingLoc).second;
   }
 
-  /// isMacroArgInstantiation - This method tests whether the given source
-  /// location represents a macro argument's instantiation into the
-  /// function-like macro definition. Such source locations only appear inside
-  /// of the instantiation locations representing where a particular
-  /// function-like macro was expanded.
-  bool isMacroArgInstantiation(SourceLocation Loc) const;
+  /// isMacroArgExpansion - This method tests whether the given source location
+  /// represents a macro argument's expansion into the function-like macro
+  /// definition. Such source locations only appear inside of the expansion
+  /// locations representing where a particular function-like macro was
+  /// expanded.
+  bool isMacroArgExpansion(SourceLocation Loc) const;
 
   //===--------------------------------------------------------------------===//
   // Queries about the code at a SourceLocation.
@@ -1080,13 +1080,13 @@ private:
     return getLoadedSLocEntry(static_cast<unsigned>(-ID - 2));
   }
   
-  /// createInstantiationLoc - Implements the common elements of storing an
+  /// createExpansionLoc - Implements the common elements of storing an
   /// instantiation info struct into the SLocEntry table and producing a source
   /// location that refers to it.
-  SourceLocation createInstantiationLocImpl(const SrcMgr::InstantiationInfo &II,
-                                            unsigned TokLength,
-                                            int LoadedID = 0,
-                                            unsigned LoadedOffset = 0);
+  SourceLocation createExpansionLocImpl(const SrcMgr::InstantiationInfo &II,
+                                        unsigned TokLength,
+                                        int LoadedID = 0,
+                                        unsigned LoadedOffset = 0);
 
   /// isOffsetInFileID - Return true if the specified FileID contains the
   /// specified SourceLocation offset.  This is a very hot method.
