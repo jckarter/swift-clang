@@ -289,7 +289,7 @@ unsigned SourceManager::getLineTableFilenameID(StringRef Name) {
 /// unspecified.
 void SourceManager::AddLineNote(SourceLocation Loc, unsigned LineNo,
                                 int FilenameID) {
-  std::pair<FileID, unsigned> LocInfo = getDecomposedInstantiationLoc(Loc);
+  std::pair<FileID, unsigned> LocInfo = getDecomposedExpansionLoc(Loc);
 
   bool Invalid = false;
   const SLocEntry &Entry = getSLocEntry(LocInfo.first, &Invalid);
@@ -319,7 +319,7 @@ void SourceManager::AddLineNote(SourceLocation Loc, unsigned LineNo,
     return AddLineNote(Loc, LineNo, FilenameID);
   }
 
-  std::pair<FileID, unsigned> LocInfo = getDecomposedInstantiationLoc(Loc);
+  std::pair<FileID, unsigned> LocInfo = getDecomposedExpansionLoc(Loc);
 
   bool Invalid = false;
   const SLocEntry &Entry = getSLocEntry(LocInfo.first, &Invalid);
@@ -406,7 +406,7 @@ void SourceManager::clearIDTables() {
   // The highest possible offset is 2^31-1, so CurrentLoadedOffset starts at
   // 2^31.
   CurrentLoadedOffset = 1U << 31U;
-  createInstantiationLoc(SourceLocation(),SourceLocation(),SourceLocation(), 1);
+  createExpansionLoc(SourceLocation(),SourceLocation(),SourceLocation(), 1);
 }
 
 /// getOrCreateContentCache - Create or return a cached ContentCache for the
@@ -518,30 +518,32 @@ FileID SourceManager::createFileID(const ContentCache *File,
 }
 
 SourceLocation
-SourceManager::createMacroArgInstantiationLoc(SourceLocation SpellingLoc,
-                                              SourceLocation ILoc,
-                                              unsigned TokLength) {
+SourceManager::createMacroArgExpansionLoc(SourceLocation SpellingLoc,
+                                          SourceLocation ExpansionLoc,
+                                          unsigned TokLength) {
   InstantiationInfo II =
-    InstantiationInfo::createForMacroArg(SpellingLoc, ILoc);
-  return createInstantiationLocImpl(II, TokLength);
-}
-
-SourceLocation SourceManager::createInstantiationLoc(SourceLocation SpellingLoc,
-                                                     SourceLocation ILocStart,
-                                                     SourceLocation ILocEnd,
-                                                     unsigned TokLength,
-                                                     int LoadedID,
-                                                     unsigned LoadedOffset) {
-  InstantiationInfo II =
-    InstantiationInfo::create(SpellingLoc, ILocStart, ILocEnd);
-  return createInstantiationLocImpl(II, TokLength, LoadedID, LoadedOffset);
+    InstantiationInfo::createForMacroArg(SpellingLoc, ExpansionLoc);
+  return createExpansionLocImpl(II, TokLength);
 }
 
 SourceLocation
-SourceManager::createInstantiationLocImpl(const InstantiationInfo &II,
-                                          unsigned TokLength,
-                                          int LoadedID,
-                                          unsigned LoadedOffset) {
+SourceManager::createExpansionLoc(SourceLocation SpellingLoc,
+                                  SourceLocation ExpansionLocStart,
+                                  SourceLocation ExpansionLocEnd,
+                                  unsigned TokLength,
+                                  int LoadedID,
+                                  unsigned LoadedOffset) {
+  InstantiationInfo II =
+    InstantiationInfo::create(SpellingLoc, ExpansionLocStart,
+                              ExpansionLocEnd);
+  return createExpansionLocImpl(II, TokLength, LoadedID, LoadedOffset);
+}
+
+SourceLocation
+SourceManager::createExpansionLocImpl(const InstantiationInfo &II,
+                                      unsigned TokLength,
+                                      int LoadedID,
+                                      unsigned LoadedOffset) {
   if (LoadedID < 0) {
     assert(LoadedID != -1 && "Loading sentinel FileID");
     unsigned Index = unsigned(-LoadedID) - 2;
@@ -783,11 +785,11 @@ FileID SourceManager::getFileIDLoaded(unsigned SLocOffset) const {
 }
 
 SourceLocation SourceManager::
-getInstantiationLocSlowCase(SourceLocation Loc) const {
+getExpansionLocSlowCase(SourceLocation Loc) const {
   do {
     // Note: If Loc indicates an offset into a token that came from a macro
     // expansion (e.g. the 5th character of the token) we do not want to add
-    // this offset when going to the instantiation location.  The instatiation
+    // this offset when going to the instantiation location.  The expansion
     // location is the macro invocation, which the offset has nothing to do
     // with.  This is unlike when we get the spelling loc, because the offset
     // directly correspond to the token whose spelling we're inspecting.
@@ -809,7 +811,7 @@ SourceLocation SourceManager::getSpellingLocSlowCase(SourceLocation Loc) const {
 
 
 std::pair<FileID, unsigned>
-SourceManager::getDecomposedInstantiationLocSlowCase(
+SourceManager::getDecomposedExpansionLocSlowCase(
                                              const SrcMgr::SLocEntry *E) const {
   // If this is an instantiation record, walk through all the instantiation
   // points.
@@ -857,40 +859,40 @@ SourceLocation SourceManager::getImmediateSpellingLoc(SourceLocation Loc) const{
 }
 
 
-/// getImmediateInstantiationRange - Loc is required to be an instantiation
+/// getImmediateExpansionRange - Loc is required to be an instantiation
 /// location.  Return the start/end of the instantiation information.
 std::pair<SourceLocation,SourceLocation>
-SourceManager::getImmediateInstantiationRange(SourceLocation Loc) const {
+SourceManager::getImmediateExpansionRange(SourceLocation Loc) const {
   assert(Loc.isMacroID() && "Not an instantiation loc!");
   const InstantiationInfo &II = getSLocEntry(getFileID(Loc)).getInstantiation();
   return II.getInstantiationLocRange();
 }
 
-/// getInstantiationRange - Given a SourceLocation object, return the
-/// range of tokens covered by the instantiation in the ultimate file.
+/// getExpansionRange - Given a SourceLocation object, return the range of
+/// tokens covered by the expansion in the ultimate file.
 std::pair<SourceLocation,SourceLocation>
-SourceManager::getInstantiationRange(SourceLocation Loc) const {
+SourceManager::getExpansionRange(SourceLocation Loc) const {
   if (Loc.isFileID()) return std::make_pair(Loc, Loc);
 
   std::pair<SourceLocation,SourceLocation> Res =
-    getImmediateInstantiationRange(Loc);
+    getImmediateExpansionRange(Loc);
 
   // Fully resolve the start and end locations to their ultimate instantiation
   // points.
   while (!Res.first.isFileID())
-    Res.first = getImmediateInstantiationRange(Res.first).first;
+    Res.first = getImmediateExpansionRange(Res.first).first;
   while (!Res.second.isFileID())
-    Res.second = getImmediateInstantiationRange(Res.second).second;
+    Res.second = getImmediateExpansionRange(Res.second).second;
   return Res;
 }
 
-bool SourceManager::isMacroArgInstantiation(SourceLocation Loc) const {
+bool SourceManager::isMacroArgExpansion(SourceLocation Loc) const {
   if (!Loc.isMacroID()) return false;
 
   FileID FID = getFileID(Loc);
   const SrcMgr::SLocEntry *E = &getSLocEntry(FID);
   const SrcMgr::InstantiationInfo &II = E->getInstantiation();
-  return II.isMacroArgInstantiation();
+  return II.isMacroArgExpansion();
 }
 
 
@@ -958,10 +960,10 @@ unsigned SourceManager::getSpellingColumnNumber(SourceLocation Loc,
   return getColumnNumber(LocInfo.first, LocInfo.second, Invalid);
 }
 
-unsigned SourceManager::getInstantiationColumnNumber(SourceLocation Loc,
-                                                     bool *Invalid) const {
+unsigned SourceManager::getExpansionColumnNumber(SourceLocation Loc,
+                                                 bool *Invalid) const {
   if (isInvalid(Loc, Invalid)) return 0;
-  std::pair<FileID, unsigned> LocInfo = getDecomposedInstantiationLoc(Loc);
+  std::pair<FileID, unsigned> LocInfo = getDecomposedExpansionLoc(Loc);
   return getColumnNumber(LocInfo.first, LocInfo.second, Invalid);
 }
 
@@ -1153,10 +1155,10 @@ unsigned SourceManager::getSpellingLineNumber(SourceLocation Loc,
   std::pair<FileID, unsigned> LocInfo = getDecomposedSpellingLoc(Loc);
   return getLineNumber(LocInfo.first, LocInfo.second);
 }
-unsigned SourceManager::getInstantiationLineNumber(SourceLocation Loc, 
-                                                   bool *Invalid) const {
+unsigned SourceManager::getExpansionLineNumber(SourceLocation Loc,
+                                               bool *Invalid) const {
   if (isInvalid(Loc, Invalid)) return 0;
-  std::pair<FileID, unsigned> LocInfo = getDecomposedInstantiationLoc(Loc);
+  std::pair<FileID, unsigned> LocInfo = getDecomposedExpansionLoc(Loc);
   return getLineNumber(LocInfo.first, LocInfo.second);
 }
 unsigned SourceManager::getPresumedLineNumber(SourceLocation Loc,
@@ -1176,7 +1178,7 @@ unsigned SourceManager::getPresumedLineNumber(SourceLocation Loc,
 SrcMgr::CharacteristicKind
 SourceManager::getFileCharacteristic(SourceLocation Loc) const {
   assert(!Loc.isInvalid() && "Can't get file characteristic of invalid loc!");
-  std::pair<FileID, unsigned> LocInfo = getDecomposedInstantiationLoc(Loc);
+  std::pair<FileID, unsigned> LocInfo = getDecomposedExpansionLoc(Loc);
   bool Invalid = false;
   const SLocEntry &SEntry = getSLocEntry(LocInfo.first, &Invalid);
   if (Invalid || !SEntry.isFile())
@@ -1223,7 +1225,7 @@ PresumedLoc SourceManager::getPresumedLoc(SourceLocation Loc) const {
   if (Loc.isInvalid()) return PresumedLoc();
 
   // Presumed locations are always for instantiation points.
-  std::pair<FileID, unsigned> LocInfo = getDecomposedInstantiationLoc(Loc);
+  std::pair<FileID, unsigned> LocInfo = getDecomposedExpansionLoc(Loc);
 
   bool Invalid = false;
   const SLocEntry &Entry = getSLocEntry(LocInfo.first, &Invalid);

@@ -187,9 +187,9 @@ Lexer *Lexer::Create_PragmaLexer(SourceLocation SpellingLoc,
 
   // Set the SourceLocation with the remapping information.  This ensures that
   // GetMappedTokenLoc will remap the tokens as they are lexed.
-  L->FileLoc = SM.createInstantiationLoc(SM.getLocForStartOfFile(SpellingFID),
-                                         ExpansionLocStart,
-                                         ExpansionLocEnd, TokLen);
+  L->FileLoc = SM.createExpansionLoc(SM.getLocForStartOfFile(SpellingFID),
+                                     ExpansionLocStart,
+                                     ExpansionLocEnd, TokLen);
 
   // Ensure that the lexer thinks it is inside a directive, so that end \n will
   // return an EOD token.
@@ -394,7 +394,7 @@ unsigned Lexer::MeasureTokenLength(SourceLocation Loc,
 
   // If this comes from a macro expansion, we really do want the macro name, not
   // the token this macro expanded to.
-  Loc = SM.getInstantiationLoc(Loc);
+  Loc = SM.getExpansionLoc(Loc);
   std::pair<FileID, unsigned> LocInfo = SM.getDecomposedLoc(Loc);
   bool Invalid = false;
   StringRef Buffer = SM.getBufferData(LocInfo.first, &Invalid);
@@ -687,7 +687,7 @@ SourceLocation Lexer::getLocForEndOfToken(SourceLocation Loc, unsigned Offset,
       return SourceLocation(); // Points inside the macro expansion.
 
     // Continue and find the location just after the macro expansion.
-    Loc = SM.getInstantiationRange(Loc).second;
+    Loc = SM.getExpansionRange(Loc).second;
   }
 
   unsigned Len = Lexer::MeasureTokenLength(Loc, SM, Features);
@@ -912,9 +912,9 @@ static SourceLocation GetMappedTokenLoc(Preprocessor &PP,
   // Figure out the expansion loc range, which is the range covered by the
   // original _Pragma(...) sequence.
   std::pair<SourceLocation,SourceLocation> II =
-    SM.getImmediateInstantiationRange(FileLoc);
+    SM.getImmediateExpansionRange(FileLoc);
 
-  return SM.createInstantiationLoc(SpellingLoc, II.first, II.second, TokLen);
+  return SM.createExpansionLoc(SpellingLoc, II.first, II.second, TokLen);
 }
 
 /// getSourceLocation - Return a source location identifier for the specified

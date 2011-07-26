@@ -284,8 +284,8 @@ bool Preprocessor::HandleMacroExpandedIdentifier(Token &Identifier,
     // Update the tokens location to include both its expansion and physical
     // locations.
     SourceLocation Loc =
-      SourceMgr.createInstantiationLoc(Identifier.getLocation(), ExpandLoc,
-                                       ExpansionEnd,Identifier.getLength());
+      SourceMgr.createExpansionLoc(Identifier.getLocation(), ExpandLoc,
+                                   ExpansionEnd,Identifier.getLength());
     Identifier.setLocation(Loc);
 
     // If this is a disabled macro or #define X X, we must mark the result as
@@ -838,7 +838,7 @@ void Preprocessor::ExpandBuiltinMacro(Token &Tok) {
     // can matter for a function-like macro that expands to contain __LINE__.
     // Skip down through expansion points until we find a file loc for the
     // end of the expansion history.
-    Loc = SourceMgr.getInstantiationRange(Loc).second;
+    Loc = SourceMgr.getExpansionRange(Loc).second;
     PresumedLoc PLoc = SourceMgr.getPresumedLoc(Loc);
 
     // __LINE__ expands to a simple numeric value.
@@ -875,18 +875,18 @@ void Preprocessor::ExpandBuiltinMacro(Token &Tok) {
       ComputeDATE_TIME(DATELoc, TIMELoc, *this);
     Tok.setKind(tok::string_literal);
     Tok.setLength(strlen("\"Mmm dd yyyy\""));
-    Tok.setLocation(SourceMgr.createInstantiationLoc(DATELoc, Tok.getLocation(),
-                                                     Tok.getLocation(),
-                                                     Tok.getLength()));
+    Tok.setLocation(SourceMgr.createExpansionLoc(DATELoc, Tok.getLocation(),
+                                                 Tok.getLocation(),
+                                                 Tok.getLength()));
     return;
   } else if (II == Ident__TIME__) {
     if (!TIMELoc.isValid())
       ComputeDATE_TIME(DATELoc, TIMELoc, *this);
     Tok.setKind(tok::string_literal);
     Tok.setLength(strlen("\"hh:mm:ss\""));
-    Tok.setLocation(SourceMgr.createInstantiationLoc(TIMELoc, Tok.getLocation(),
-                                                     Tok.getLocation(),
-                                                     Tok.getLength()));
+    Tok.setLocation(SourceMgr.createExpansionLoc(TIMELoc, Tok.getLocation(),
+                                                 Tok.getLocation(),
+                                                 Tok.getLength()));
     return;
   } else if (II == Ident__INCLUDE_LEVEL__) {
     // Compute the presumed include depth of this token.  This can be affected
