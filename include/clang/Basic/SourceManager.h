@@ -259,7 +259,7 @@ namespace SrcMgr {
                             getInstantiationLocEnd());
     }
 
-    bool isMacroArgInstantiation() const {
+    bool isMacroArgExpansion() const {
       // Note that this needs to return false for default constructed objects.
       return getInstantiationLocStart().isValid() &&
         SourceLocation::getFromRawEncoding(InstantiationLocEnd).isInvalid();
@@ -583,23 +583,23 @@ public:
                         SrcMgr::C_User, LoadedID, LoadedOffset);
   }
 
-  /// createMacroArgInstantiationLoc - Return a new SourceLocation that encodes
-  /// the fact that a token from SpellingLoc should actually be referenced from
-  /// InstantiationLoc, and that it represents the instantiation of a macro
+  /// createMacroArgExpansionLoc - Return a new SourceLocation that encodes the
+  /// fact that a token from SpellingLoc should actually be referenced from
+  /// ExpansionLoc, and that it represents the instantiation of a macro
   /// argument into the function-like macro body.
-  SourceLocation createMacroArgInstantiationLoc(SourceLocation Loc,
-                                                SourceLocation InstantiationLoc,
-                                                unsigned TokLength);
+  SourceLocation createMacroArgExpansionLoc(SourceLocation Loc,
+                                            SourceLocation ExpansionLoc,
+                                            unsigned TokLength);
 
-  /// createInstantiationLoc - Return a new SourceLocation that encodes the fact
+  /// createExpansionLoc - Return a new SourceLocation that encodes the fact
   /// that a token from SpellingLoc should actually be referenced from
-  /// InstantiationLoc.
-  SourceLocation createInstantiationLoc(SourceLocation Loc,
-                                        SourceLocation InstantiationLocStart,
-                                        SourceLocation InstantiationLocEnd,
-                                        unsigned TokLength,
-                                        int LoadedID = 0,
-                                        unsigned LoadedOffset = 0);
+  /// ExpansionLoc.
+  SourceLocation createExpansionLoc(SourceLocation Loc,
+                                    SourceLocation ExpansionLocStart,
+                                    SourceLocation ExpansionLocEnd,
+                                    unsigned TokLength,
+                                    int LoadedID = 0,
+                                    unsigned LoadedOffset = 0);
 
   /// \brief Retrieve the memory buffer associated with the given file.
   ///
@@ -723,24 +723,24 @@ public:
     return SourceLocation::getFileLoc(FileOffset);
   }
 
-  /// getInstantiationLoc - Given a SourceLocation object, return the
-  /// instantiation location referenced by the ID.
-  SourceLocation getInstantiationLoc(SourceLocation Loc) const {
+  /// getExpansionLoc - Given a SourceLocation object, return the expansion
+  /// location referenced by the ID.
+  SourceLocation getExpansionLoc(SourceLocation Loc) const {
     // Handle the non-mapped case inline, defer to out of line code to handle
-    // instantiations.
+    // expansions.
     if (Loc.isFileID()) return Loc;
-    return getInstantiationLocSlowCase(Loc);
+    return getExpansionLocSlowCase(Loc);
   }
 
-  /// getImmediateInstantiationRange - Loc is required to be an instantiation
-  /// location.  Return the start/end of the instantiation information.
+  /// getImmediateExpansionRange - Loc is required to be an expansion location.
+  /// Return the start/end of the expansion information.
   std::pair<SourceLocation,SourceLocation>
-  getImmediateInstantiationRange(SourceLocation Loc) const;
+  getImmediateExpansionRange(SourceLocation Loc) const;
 
-  /// getInstantiationRange - Given a SourceLocation object, return the
-  /// range of tokens covered by the instantiation in the ultimate file.
+  /// getExpansionRange - Given a SourceLocation object, return the range of
+  /// tokens covered by the expansion the ultimate file.
   std::pair<SourceLocation,SourceLocation>
-  getInstantiationRange(SourceLocation Loc) const;
+  getExpansionRange(SourceLocation Loc) const;
 
 
   /// getSpellingLoc - Given a SourceLocation object, return the spelling
@@ -767,11 +767,11 @@ public:
     return std::make_pair(FID, Loc.getOffset()-getSLocEntry(FID).getOffset());
   }
 
-  /// getDecomposedInstantiationLoc - Decompose the specified location into a
+  /// getDecomposedExpansionLoc - Decompose the specified location into a
   /// raw FileID + Offset pair.  If the location is an instantiation record,
   /// walk through it until we find the final location instantiated.
   std::pair<FileID, unsigned>
-  getDecomposedInstantiationLoc(SourceLocation Loc) const {
+  getDecomposedExpansionLoc(SourceLocation Loc) const {
     FileID FID = getFileID(Loc);
     const SrcMgr::SLocEntry *E = &getSLocEntry(FID);
 
@@ -779,7 +779,7 @@ public:
     if (Loc.isFileID())
       return std::make_pair(FID, Offset);
 
-    return getDecomposedInstantiationLocSlowCase(E);
+    return getDecomposedExpansionLocSlowCase(E);
   }
 
   /// getDecomposedSpellingLoc - Decompose the specified location into a raw
@@ -803,12 +803,12 @@ public:
     return getDecomposedLoc(SpellingLoc).second;
   }
 
-  /// isMacroArgInstantiation - This method tests whether the given source
-  /// location represents a macro argument's instantiation into the
-  /// function-like macro definition. Such source locations only appear inside
-  /// of the instantiation locations representing where a particular
-  /// function-like macro was expanded.
-  bool isMacroArgInstantiation(SourceLocation Loc) const;
+  /// isMacroArgExpansion - This method tests whether the given source location
+  /// represents a macro argument's expansion into the function-like macro
+  /// definition. Such source locations only appear inside of the expansion
+  /// locations representing where a particular function-like macro was
+  /// expanded.
+  bool isMacroArgExpansion(SourceLocation Loc) const;
 
   //===--------------------------------------------------------------------===//
   // Queries about the code at a SourceLocation.
@@ -828,8 +828,8 @@ public:
   unsigned getColumnNumber(FileID FID, unsigned FilePos, 
                            bool *Invalid = 0) const;
   unsigned getSpellingColumnNumber(SourceLocation Loc, bool *Invalid = 0) const;
-  unsigned getInstantiationColumnNumber(SourceLocation Loc,
-                                        bool *Invalid = 0) const;
+  unsigned getExpansionColumnNumber(SourceLocation Loc,
+                                    bool *Invalid = 0) const;
   unsigned getPresumedColumnNumber(SourceLocation Loc, bool *Invalid = 0) const;
 
 
@@ -839,8 +839,7 @@ public:
   /// about to emit a diagnostic.
   unsigned getLineNumber(FileID FID, unsigned FilePos, bool *Invalid = 0) const;
   unsigned getSpellingLineNumber(SourceLocation Loc, bool *Invalid = 0) const;
-  unsigned getInstantiationLineNumber(SourceLocation Loc, 
-                                      bool *Invalid = 0) const;
+  unsigned getExpansionLineNumber(SourceLocation Loc, bool *Invalid = 0) const;
   unsigned getPresumedLineNumber(SourceLocation Loc, bool *Invalid = 0) const;
 
   /// Return the filename or buffer identifier of the buffer the location is in.
@@ -1081,13 +1080,13 @@ private:
     return getLoadedSLocEntry(static_cast<unsigned>(-ID - 2));
   }
   
-  /// createInstantiationLoc - Implements the common elements of storing an
+  /// createExpansionLoc - Implements the common elements of storing an
   /// instantiation info struct into the SLocEntry table and producing a source
   /// location that refers to it.
-  SourceLocation createInstantiationLocImpl(const SrcMgr::InstantiationInfo &II,
-                                            unsigned TokLength,
-                                            int LoadedID = 0,
-                                            unsigned LoadedOffset = 0);
+  SourceLocation createExpansionLocImpl(const SrcMgr::InstantiationInfo &II,
+                                        unsigned TokLength,
+                                        int LoadedID = 0,
+                                        unsigned LoadedOffset = 0);
 
   /// isOffsetInFileID - Return true if the specified FileID contains the
   /// specified SourceLocation offset.  This is a very hot method.
@@ -1130,11 +1129,11 @@ private:
   FileID getFileIDLocal(unsigned SLocOffset) const;
   FileID getFileIDLoaded(unsigned SLocOffset) const;
 
-  SourceLocation getInstantiationLocSlowCase(SourceLocation Loc) const;
+  SourceLocation getExpansionLocSlowCase(SourceLocation Loc) const;
   SourceLocation getSpellingLocSlowCase(SourceLocation Loc) const;
 
   std::pair<FileID, unsigned>
-  getDecomposedInstantiationLocSlowCase(const SrcMgr::SLocEntry *E) const;
+  getDecomposedExpansionLocSlowCase(const SrcMgr::SLocEntry *E) const;
   std::pair<FileID, unsigned>
   getDecomposedSpellingLocSlowCase(const SrcMgr::SLocEntry *E,
                                    unsigned Offset) const;
