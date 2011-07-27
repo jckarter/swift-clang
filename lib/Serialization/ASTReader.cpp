@@ -4328,27 +4328,6 @@ void ASTReader::InitializeSema(Sema &S) {
   }
   PreloadedDecls.clear();
 
-  // If there were any tentative definitions, deserialize them and add
-  // them to Sema's list of tentative definitions.
-  for (unsigned I = 0, N = TentativeDefinitions.size(); I != N; ++I) {
-    VarDecl *Var = cast<VarDecl>(GetDecl(TentativeDefinitions[I]));
-    SemaObj->TentativeDefinitions.push_back(Var);
-  }
-
-  // If there were any unused file scoped decls, deserialize them and add to
-  // Sema's list of unused file scoped decls.
-  for (unsigned I = 0, N = UnusedFileScopedDecls.size(); I != N; ++I) {
-    DeclaratorDecl *D = cast<DeclaratorDecl>(GetDecl(UnusedFileScopedDecls[I]));
-    SemaObj->UnusedFileScopedDecls.push_back(D);
-  }
-
-  // If there were any delegating constructors, add them to Sema's list
-  for (unsigned I = 0, N = DelegatingCtorDecls.size(); I != N; ++I) {
-    CXXConstructorDecl *D
-     = cast<CXXConstructorDecl>(GetDecl(DelegatingCtorDecls[I]));
-    SemaObj->DelegatingCtorDecls.push_back(D);
-  }
-
   // If there were any locally-scoped external declarations,
   // deserialize them and add them to Sema's table of locally-scoped
   // external declarations.
@@ -4569,6 +4548,38 @@ void ASTReader::ReadKnownNamespaces(
                 = dyn_cast_or_null<NamespaceDecl>(GetDecl(KnownNamespaces[I])))
       Namespaces.push_back(Namespace);
   }
+}
+
+void ASTReader::ReadTentativeDefinitions(
+                  SmallVectorImpl<VarDecl *> &TentativeDefs) {
+  for (unsigned I = 0, N = TentativeDefinitions.size(); I != N; ++I) {
+    VarDecl *Var = dyn_cast_or_null<VarDecl>(GetDecl(TentativeDefinitions[I]));
+    if (Var)
+      TentativeDefs.push_back(Var);
+  }
+  TentativeDefinitions.clear();
+}
+
+void ASTReader::ReadUnusedFileScopedDecls(
+                               SmallVectorImpl<const DeclaratorDecl *> &Decls) {
+  for (unsigned I = 0, N = UnusedFileScopedDecls.size(); I != N; ++I) {
+    DeclaratorDecl *D
+      = dyn_cast_or_null<DeclaratorDecl>(GetDecl(UnusedFileScopedDecls[I]));
+    if (D)
+      Decls.push_back(D);
+  }
+  UnusedFileScopedDecls.clear();
+}
+
+void ASTReader::ReadDelegatingConstructors(
+                                 SmallVectorImpl<CXXConstructorDecl *> &Decls) {
+  for (unsigned I = 0, N = DelegatingCtorDecls.size(); I != N; ++I) {
+    CXXConstructorDecl *D
+      = dyn_cast_or_null<CXXConstructorDecl>(GetDecl(DelegatingCtorDecls[I]));
+    if (D)
+      Decls.push_back(D);
+  }
+  DelegatingCtorDecls.clear();
 }
 
 void ASTReader::LoadSelector(Selector Sel) {

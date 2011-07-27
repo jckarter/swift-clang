@@ -18,11 +18,14 @@
 
 namespace clang {
 
-struct ObjCMethodList;
-class Sema;
-class Scope;
+class CXXConstructorDecl;
+class DeclaratorDecl;
 class LookupResult;
-
+struct ObjCMethodList;
+class Scope;
+class Sema;
+class VarDecl;
+  
 /// \brief An abstract interface that should be implemented by
 /// external AST sources that also provide information for semantic
 /// analysis.
@@ -64,12 +67,42 @@ public:
   /// \return true to tell Sema to recover using the LookupResult.
   virtual bool LookupUnqualified(LookupResult &R, Scope *S) { return false; }
 
+  /// \brief Read the set of tentative definitions known to the external Sema
+  /// source.
+  ///
+  /// The external source should append its own tentative definitions to the
+  /// given vector of tentative definitions. Note that this routine may be
+  /// invoked multiple times; the external source should take care not to
+  /// introduce the same declarations repeatedly.
+  virtual void ReadTentativeDefinitions(
+                                  SmallVectorImpl<VarDecl *> &TentativeDefs) {}
+  
+  /// \brief Read the set of unused file-scope declarations known to the
+  /// external Sema source.
+  ///
+  /// The external source should append its own unused, filed-scope to the
+  /// given vector of declarations. Note that this routine may be
+  /// invoked multiple times; the external source should take care not to
+  /// introduce the same declarations repeatedly.
+  virtual void ReadUnusedFileScopedDecls(
+                 SmallVectorImpl<const DeclaratorDecl *> &Decls) {}
+  
+  /// \brief Read the set of delegating constructors known to the
+  /// external Sema source.
+  ///
+  /// The external source should append its own delegating constructors to the
+  /// given vector of declarations. Note that this routine may be
+  /// invoked multiple times; the external source should take care not to
+  /// introduce the same declarations repeatedly.
+  virtual void ReadDelegatingConstructors(
+                 SmallVectorImpl<CXXConstructorDecl *> &Decls) {}
+  
   // isa/cast/dyn_cast support
   static bool classof(const ExternalASTSource *Source) {
     return Source->SemaSource;
   }
   static bool classof(const ExternalSemaSource *) { return true; }
-};
+}; 
 
 } // end namespace clang
 
