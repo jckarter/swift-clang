@@ -969,7 +969,8 @@ void ASTWriter::WriteMetadata(ASTContext &Context, StringRef isysroot,
   Record.push_back(CLANG_VERSION_MINOR);
   Record.push_back(!isysroot.empty());
   // FIXME: This writes the absolute path for chained headers.
-  const std::string &BlobStr = Chain ? Chain->getFileName() : Target.getTriple().getTriple();
+  const std::string &BlobStr =
+                  Chain ? Chain->getFileName() : Target.getTriple().getTriple();
   Stream.EmitRecordWithBlob(MetaAbbrevCode, Record, BlobStr);
 
   // Original file name and file ID
@@ -1505,10 +1506,10 @@ void ASTWriter::WriteSourceManagerBlock(SourceManager &SourceMgr,
       }
     } else {
       // The source location entry is a macro expansion.
-      const SrcMgr::InstantiationInfo &Inst = SLoc->getInstantiation();
-      Record.push_back(Inst.getSpellingLoc().getRawEncoding());
-      Record.push_back(Inst.getInstantiationLocStart().getRawEncoding());
-      Record.push_back(Inst.getInstantiationLocEnd().getRawEncoding());
+      const SrcMgr::ExpansionInfo &Expansion = SLoc->getExpansion();
+      Record.push_back(Expansion.getSpellingLoc().getRawEncoding());
+      Record.push_back(Expansion.getExpansionLocStart().getRawEncoding());
+      Record.push_back(Expansion.getExpansionLocEnd().getRawEncoding());
 
       // Compute the token length for this macro expansion.
       unsigned NextOffset = SourceMgr.getNextLocalOffset();
@@ -1548,14 +1549,8 @@ void ASTWriter::WriteSourceManagerBlock(SourceManager &SourceMgr,
     // Sorted by offset.
     typedef std::pair<uint32_t, StringRef> ModuleOffset;
     SmallVector<ModuleOffset, 16> Modules;
-    Modules.reserve(Chain->Modules.size());
-    for (llvm::StringMap<Module*>::const_iterator
-             I = Chain->Modules.begin(), E = Chain->Modules.end();
-         I != E; ++I) {
-      Modules.push_back(ModuleOffset(I->getValue()->SLocEntryBaseOffset,
-                                     I->getKey()));
-    }
-    std::sort(Modules.begin(), Modules.end());
+
+    Chain->ModuleMgr.exportLookup(Modules);
 
     Abbrev = new BitCodeAbbrev();
     Abbrev->Add(BitCodeAbbrevOp(SOURCE_LOCATION_MAP));

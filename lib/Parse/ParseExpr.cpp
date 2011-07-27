@@ -303,9 +303,9 @@ Parser::ParseRHSOfBinaryExpression(ExprResult LHS, prec::Level MinPrec) {
         // Eat the colon.
         ColonLoc = ConsumeToken();
       } else {
-        // Otherwise, we're missing a ':'.  Assume that this was a typo that the
-        // user forgot.  If we're not in a macro instantiation, we can suggest a
-        // fixit hint.  If there were two spaces before the current token,
+        // Otherwise, we're missing a ':'.  Assume that this was a typo that
+        // the user forgot. If we're not in a macro expansion, we can suggest
+        // a fixit hint. If there were two spaces before the current token,
         // suggest inserting the colon in between them, otherwise insert ": ".
         SourceLocation FILoc = Tok.getLocation();
         const char *FIText = ": ";
@@ -769,6 +769,9 @@ ExprResult Parser::ParseCastExpression(bool isUnaryExpression,
     break;
   }
   case tok::char_constant:     // constant: character-constant
+  case tok::wide_char_constant:
+  case tok::utf16_char_constant:
+  case tok::utf32_char_constant:
     Res = Actions.ActOnCharacterConstant(Tok);
     ConsumeToken();
     break;
@@ -780,6 +783,9 @@ ExprResult Parser::ParseCastExpression(bool isUnaryExpression,
     break;
   case tok::string_literal:    // primary-expression: string-literal
   case tok::wide_string_literal:
+  case tok::utf8_string_literal:
+  case tok::utf16_string_literal:
+  case tok::utf32_string_literal:
     Res = ParseStringLiteralExpression();
     break;
   case tok::kw__Generic:   // primary-expression: generic-selection [C1X 6.5.1]
