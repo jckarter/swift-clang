@@ -2855,9 +2855,7 @@ void ASTWriter::WriteASTCore(Sema &SemaRef, MemorizeStatCalls *StatCalls,
 
   RecordData WeakUndeclaredIdentifiers;
   if (!SemaRef.WeakUndeclaredIdentifiers.empty()) {
-    WeakUndeclaredIdentifiers.push_back(
-                                      SemaRef.WeakUndeclaredIdentifiers.size());
-    for (llvm::DenseMap<IdentifierInfo*,Sema::WeakInfo>::iterator
+    for (llvm::DenseMap<IdentifierInfo*,WeakInfo>::iterator
          I = SemaRef.WeakUndeclaredIdentifiers.begin(),
          E = SemaRef.WeakUndeclaredIdentifiers.end(); I != E; ++I) {
       AddIdentifierRef(I->first, WeakUndeclaredIdentifiers);
@@ -2876,9 +2874,11 @@ void ASTWriter::WriteASTCore(Sema &SemaRef, MemorizeStatCalls *StatCalls,
   for (llvm::DenseMap<DeclarationName, NamedDecl *>::iterator
          TD = SemaRef.LocallyScopedExternalDecls.begin(),
          TDEnd = SemaRef.LocallyScopedExternalDecls.end();
-       TD != TDEnd; ++TD)
-    AddDeclRef(TD->second, LocallyScopedExternalDecls);
-
+       TD != TDEnd; ++TD) {
+    if (TD->second->getPCHLevel() == 0)
+      AddDeclRef(TD->second, LocallyScopedExternalDecls);
+  }
+  
   // Build a record containing all of the ext_vector declarations.
   RecordData ExtVectorDecls;
   AddLazyVectorDecls(*this, SemaRef.ExtVectorDecls, ExtVectorDecls);
@@ -2886,7 +2886,6 @@ void ASTWriter::WriteASTCore(Sema &SemaRef, MemorizeStatCalls *StatCalls,
   // Build a record containing all of the VTable uses information.
   RecordData VTableUses;
   if (!SemaRef.VTableUses.empty()) {
-    VTableUses.push_back(SemaRef.VTableUses.size());
     for (unsigned I = 0, N = SemaRef.VTableUses.size(); I != N; ++I) {
       AddDeclRef(SemaRef.VTableUses[I].first, VTableUses);
       AddSourceLocation(SemaRef.VTableUses[I].second, VTableUses);
@@ -3120,9 +3119,7 @@ void ASTWriter::WriteASTChain(Sema &SemaRef, MemorizeStatCalls *StatCalls,
   // We write the entire table, overwriting the tables from the chain.
   RecordData WeakUndeclaredIdentifiers;
   if (!SemaRef.WeakUndeclaredIdentifiers.empty()) {
-    WeakUndeclaredIdentifiers.push_back(
-                                      SemaRef.WeakUndeclaredIdentifiers.size());
-    for (llvm::DenseMap<IdentifierInfo*,Sema::WeakInfo>::iterator
+    for (llvm::DenseMap<IdentifierInfo*,WeakInfo>::iterator
          I = SemaRef.WeakUndeclaredIdentifiers.begin(),
          E = SemaRef.WeakUndeclaredIdentifiers.end(); I != E; ++I) {
       AddIdentifierRef(I->first, WeakUndeclaredIdentifiers);
@@ -3155,7 +3152,6 @@ void ASTWriter::WriteASTChain(Sema &SemaRef, MemorizeStatCalls *StatCalls,
   // a use is new to this part.
   RecordData VTableUses;
   if (!SemaRef.VTableUses.empty()) {
-    VTableUses.push_back(SemaRef.VTableUses.size());
     for (unsigned I = 0, N = SemaRef.VTableUses.size(); I != N; ++I) {
       AddDeclRef(SemaRef.VTableUses[I].first, VTableUses);
       AddSourceLocation(SemaRef.VTableUses[I].second, VTableUses);
