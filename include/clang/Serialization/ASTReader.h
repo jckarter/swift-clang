@@ -24,6 +24,8 @@
 #include "clang/Lex/HeaderSearch.h"
 #include "clang/Lex/PreprocessingRecord.h"
 #include "clang/Basic/Diagnostic.h"
+#include "clang/Basic/FileManager.h"
+#include "clang/Basic/FileSystemOptions.h"
 #include "clang/Basic/IdentifierTable.h"
 #include "clang/Basic/SourceManager.h"
 #include "llvm/ADT/APFloat.h"
@@ -341,15 +343,7 @@ public:
   /// \brief Offset of each declaration within the bitstream, indexed
   /// by the declaration ID (-1).
   const uint32_t *DeclOffsets;
-  
-  /// \brief A snapshot of the pending instantiations in the chain.
-  ///
-  /// This record tracks the instantiations that Sema has to perform at the
-  /// end of the TU. It consists of a pair of values for every pending
-  /// instantiation where the first value is the ID of the decl and the second
-  /// is the instantiation location.
-  SmallVector<uint64_t, 64> PendingInstantiations;
-  
+    
   /// \brief The number of C++ base specifier sets in this AST file.
   unsigned LocalNumCXXBaseSpecifiers;
   
@@ -395,7 +389,11 @@ class ModuleManager {
   SmallVector<Module*, 2> Chain;
 
   /// \brief All loaded modules, indexed by name.
-  llvm::StringMap<Module*> Modules;
+  llvm::DenseMap<const FileEntry *, Module *> Modules;
+
+  /// \brief FileManager that handles translating between filenames and
+  /// FileEntry *.
+  FileManager FileMgr;
 
 public:
   typedef SmallVector<Module*, 2>::iterator ModuleIterator;
@@ -403,6 +401,7 @@ public:
   typedef SmallVector<Module*, 2>::reverse_iterator ModuleReverseIterator;
   typedef std::pair<uint32_t, StringRef> ModuleOffset;
 
+  ModuleManager(const FileSystemOptions &FSO);
   ~ModuleManager();
 
   /// \brief Forward iterator to traverse all loaded modules
@@ -436,7 +435,7 @@ public:
   Module &operator[](unsigned Index) const { return *Chain[Index]; }
 
   /// \brief Returns the module associated with the given name
-  Module *lookup(StringRef Name) { return Modules.lookup(Name); }
+  Module *lookup(StringRef Name);
 
   /// \brief Number of modules loaded
   unsigned size() const { return Chain.size(); }
@@ -729,6 +728,14 @@ private:
   /// CodeGen has to emit VTables for these records, so they have to be eagerly
   /// deserialized.
   SmallVector<uint64_t, 64> VTableUses;
+
+  /// \brief A snapshot of the pending instantiations in the chain.
+  ///
+  /// This record tracks the instantiations that Sema has to perform at the
+  /// end of the TU. It consists of a pair of values for every pending
+  /// instantiation where the first value is the ID of the decl and the second
+  /// is the instantiation location.
+  SmallVector<uint64_t, 64> PendingInstantiations;
 
   //@}
 
@@ -1394,6 +1401,15 @@ public:
   virtual void ReadReferencedSelectors(
                  SmallVectorImpl<std::pair<Selector, SourceLocation> > &Sels);
 
+  virtual void ReadWeakUndeclaredIdentifiers(
+                 SmallVectorImpl<std::pair<IdentifierInfo *, WeakInfo> > &WI);
+
+  virtual void ReadUsedVTables(SmallVectorImpl<ExternalVTableUse> &VTables);
+
+  virtual void ReadPendingInstantiations(
+                 SmallVectorImpl<std::pair<ValueDecl *, 
+                                           SourceLocation> > &Pending);
+
   /// \brief Load a selector from disk, registering its ID if it exists.
   void LoadSelector(Selector Sel);
 
@@ -1408,26 +1424,36 @@ public:
   /// \brief Report a diagnostic.
   DiagnosticBuilder Diag(SourceLocation Loc, unsigned DiagID);
 
-  IdentifierInfo *DecodeIdentifierInfo(unsigned Idx);
+  IdentifierInfo *DecodeIdentifierInfo(serialization::IdentifierID ID);
 
-  IdentifierInfo *GetIdentifierInfo(const RecordData &Record, unsigned &Idx) {
-    return DecodeIdentifierInfo(Record[Idx++]);
+  IdentifierInfo *GetIdentifierInfo(Module &M, const RecordData &Record, 
+                                    unsigned &Idx) {
+    return DecodeIdentifierInfo(getGlobalIdentifierID(M, Record[Idx++]));
   }
 
-  virtual IdentifierInfo *GetIdentifier(unsigned ID) {
+  virtual IdentifierInfo *GetIdentifier(serialization::IdentifierID ID) {
     return DecodeIdentifierInfo(ID);
   }
 
+  IdentifierInfo *getLocalIdentifier(Module &M, unsigned LocalID);
+  
+  serialization::IdentifierID getGlobalIdentifierID(Module &M, 
+                                                    unsigned LocalID);
+                                 
   /// \brief Read the source location entry with index ID.
   virtual bool ReadSLocEntry(int ID);
 
-  Selector DecodeSelector(unsigned Idx);
+  /// \brief Retrieve a selector from the given module with its local ID
+  /// number.
+  Selector getLocalSelector(Module &M, unsigned LocalID);
+
+  Selector DecodeSelector(serialization::SelectorID Idx);
 
   virtual Selector GetExternalSelector(serialization::SelectorID ID);
   uint32_t GetNumExternalSelectors();
 
-  Selector GetSelector(const RecordData &Record, unsigned &Idx) {
-    return DecodeSelector(Record[Idx++]);
+  Selector ReadSelector(Module &M, const RecordData &Record, unsigned &Idx) {
+    return getLocalSelector(M, Record[Idx++]);
   }
   
   /// \brief Retrieve the global selector ID that corresponds to this
