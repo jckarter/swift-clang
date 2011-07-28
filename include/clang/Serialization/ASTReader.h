@@ -296,11 +296,15 @@ public:
   /// This pointer points into a memory buffer, where the on-disk hash
   /// table for header file information actually lives.
   const char *HeaderFileInfoTableData;
-  
+    
   /// \brief The on-disk hash table that contains information about each of
   /// the header files.
   void *HeaderFileInfoTable;
   
+  /// \brief Actual data for the list of framework names used in the header
+  /// search information.
+  const char *HeaderFileFrameworkStrings;
+
   // === Selectors ===
   
   /// \brief The number of selectors new to this file.
@@ -1370,6 +1374,19 @@ public:
   /// which will be used during typo correction.
   virtual void ReadKnownNamespaces(
                            SmallVectorImpl<NamespaceDecl *> &Namespaces);
+
+  virtual void ReadTentativeDefinitions(
+                 SmallVectorImpl<VarDecl *> &TentativeDefs);
+
+  virtual void ReadUnusedFileScopedDecls(
+                 SmallVectorImpl<const DeclaratorDecl *> &Decls);
+
+  virtual void ReadDelegatingConstructors(
+                 SmallVectorImpl<CXXConstructorDecl *> &Decls);
+
+  virtual void ReadExtVectorDecls(SmallVectorImpl<TypedefNameDecl *> &Decls);
+
+  virtual void ReadDynamicClasses(SmallVectorImpl<CXXRecordDecl *> &Decls);
 
   /// \brief Load a selector from disk, registering its ID if it exists.
   void LoadSelector(Selector Sel);
