@@ -2062,7 +2062,7 @@ ASTReader::ReadASTBlock(Module &F) {
         &F,
         /* No visible information */ 0,
         reinterpret_cast<const KindDeclIDPair *>(BlobStart),
-        BlobLen / sizeof(KindDeclIDPair)
+        static_cast<unsigned int>(BlobLen / sizeof(KindDeclIDPair))
       };
       DeclContextOffsets[Context ? Context->getTranslationUnitDecl() : 0]
         .push_back(Info);
@@ -2196,7 +2196,14 @@ ASTReader::ReadASTBlock(Module &F) {
       break;
 
     case REFERENCED_SELECTOR_POOL:
-      F.ReferencedSelectorsData.swap(Record);
+      if (!Record.empty()) {
+        for (unsigned Idx = 0, N = Record.size() - 1; Idx < N; /* in loop */) {
+          ReferencedSelectorsData.push_back(getGlobalSelectorID(F, 
+                                                                Record[Idx++]));
+          ReferencedSelectorsData.push_back(ReadSourceLocation(F, Record, Idx).
+                                              getRawEncoding());
+        }
+      }
       break;
 
     case PP_COUNTER_VALUE:
@@ -4349,20 +4356,6 @@ void ASTReader::InitializeSema(Sema &S) {
   }
   PreloadedDecls.clear();
 
-  // If there were any locally-scoped external declarations,
-  // deserialize them and add them to Sema's table of locally-scoped
-  // external declarations.
-  for (unsigned I = 0, N = LocallyScopedExternalDecls.size(); I != N; ++I) {
-    NamedDecl *D = cast<NamedDecl>(GetDecl(LocallyScopedExternalDecls[I]));
-    SemaObj->LocallyScopedExternalDecls[D->getDeclName()] = D;
-  }
-
-  // FIXME: Do VTable uses and dynamic classes deserialize too much ?
-  // Can we cut them down before writing them ?
-
-  // If there were any dynamic classes declarations, deserialize them
-  // and add them to Sema's vector of such declarations.
-
   // Load the offsets of the declarations that Sema references.
   // They will be lazily deserialized when needed.
   if (!SemaDeclRefs.empty()) {
@@ -4371,22 +4364,6 @@ void ASTReader::InitializeSema(Sema &S) {
       SemaObj->StdNamespace = SemaDeclRefs[0];
     if (!SemaObj->StdBadAlloc)
       SemaObj->StdBadAlloc = SemaDeclRefs[1];
-  }
-
-  for (Module *F = &ModuleMgr.getPrimaryModule(); F; F = F->NextInSource) {
-
-    // If there are @selector references added them to its pool. This is for
-    // implementation of -Wselector.
-    if (!F->ReferencedSelectorsData.empty()) {
-      unsigned int DataSize = F->ReferencedSelectorsData.size()-1;
-      unsigned I = 0;
-      while (I < DataSize) {
-        Selector Sel = DecodeSelector(F->ReferencedSelectorsData[I++]);
-        SourceLocation SelLoc = ReadSourceLocation(
-                                    *F, F->ReferencedSelectorsData, I);
-        SemaObj->ReferencedSelectors.insert(std::make_pair(Sel, SelLoc));
-      }
-    }
   }
 
   // The special data sets below always come from the most recent PCH,
@@ -4616,6 +4593,35 @@ void ASTReader::ReadDynamicClasses(SmallVectorImpl<CXXRecordDecl *> &Decls) {
   DynamicClasses.clear();
 }
 
+void 
+ASTReader::ReadLocallyScopedExternalDecls(SmallVectorImpl<NamedDecl *> &Decls) {
+  for (unsigned I = 0, N = LocallyScopedExternalDecls.size(); I != N; ++I) {
+    NamedDecl *D 
+      = dyn_cast_or_null<NamedDecl>(GetDecl(LocallyScopedExternalDecls[I]));
+    if (D)
+      Decls.push_back(D);
+  }
+  LocallyScopedExternalDecls.clear();
+}
+
+void ASTReader::ReadReferencedSelectors(
+       SmallVectorImpl<std::pair<Selector, SourceLocation> > &Sels) {
+  if (ReferencedSelectorsData.empty())
+    return;
+  
+  // If there are @selector references added them to its pool. This is for
+  // implementation of -Wselector.
+  unsigned int DataSize = ReferencedSelectorsData.size()-1;
+  unsigned I = 0;
+  while (I < DataSize) {
+    Selector Sel = DecodeSelector(ReferencedSelectorsData[I++]);
+    SourceLocation SelLoc
+      = SourceLocation::getFromRawEncoding(ReferencedSelectorsData[I++]);
+    Sels.push_back(std::make_pair(Sel, SelLoc));
+  }
+  ReferencedSelectorsData.clear();
+}
+
 void ASTReader::LoadSelector(Selector Sel) {
   // It would be complicated to avoid reading the methods anyway. So don't.
   ReadMethodPool(Sel);
@@ -4740,13 +4746,19 @@ Selector ASTReader::DecodeSelector(unsigned ID) {
   return SelectorsLoaded[ID - 1];
 }
 
-Selector ASTReader::GetExternalSelector(uint32_t ID) {
+Selector ASTReader::GetExternalSelector(serialization::SelectorID ID) {
   return DecodeSelector(ID);
 }
 
 uint32_t ASTReader::GetNumExternalSelectors() {
   // ID 0 (the null selector) is considered an external selector.
   return getTotalNumSelectors() + 1;
+}
+
+serialization::SelectorID 
+ASTReader::getGlobalSelectorID(Module &F, unsigned LocalID) const {
+  // FIXME: Perform local -> global remapping
+  return LocalID;
 }
 
 DeclarationName

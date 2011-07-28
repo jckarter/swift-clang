@@ -328,10 +328,6 @@ public:
   /// instance and factory methods.
   void *SelectorLookupTable;
   
-  /// \brief Method selectors used in a @selector expression. Used for
-  /// implementation of -Wselector.
-  SmallVector<uint64_t, 64> ReferencedSelectorsData;
-  
   // === Declarations ===
   
   /// DeclsCursor - This is a cursor to the start of the DECLS_BLOCK block. It
@@ -747,6 +743,10 @@ private:
   /// \brief A list of all the delegating constructors we've seen, to diagnose
   /// cycles.
   SmallVector<uint64_t, 4> DelegatingCtorDecls;
+  
+  /// \brief Method selectors used in a @selector expression. Used for
+  /// implementation of -Wselector.
+  SmallVector<uint64_t, 64> ReferencedSelectorsData;
 
   /// \brief A snapshot of Sema's weak undeclared identifier tracking, for
   /// generating warnings.
@@ -1388,6 +1388,12 @@ public:
 
   virtual void ReadDynamicClasses(SmallVectorImpl<CXXRecordDecl *> &Decls);
 
+  virtual void ReadLocallyScopedExternalDecls(
+                 SmallVectorImpl<NamedDecl *> &Decls);
+  
+  virtual void ReadReferencedSelectors(
+                 SmallVectorImpl<std::pair<Selector, SourceLocation> > &Sels);
+
   /// \brief Load a selector from disk, registering its ID if it exists.
   void LoadSelector(Selector Sel);
 
@@ -1417,12 +1423,17 @@ public:
 
   Selector DecodeSelector(unsigned Idx);
 
-  virtual Selector GetExternalSelector(uint32_t ID);
+  virtual Selector GetExternalSelector(serialization::SelectorID ID);
   uint32_t GetNumExternalSelectors();
 
   Selector GetSelector(const RecordData &Record, unsigned &Idx) {
     return DecodeSelector(Record[Idx++]);
   }
+  
+  /// \brief Retrieve the global selector ID that corresponds to this
+  /// the local selector ID in a given module.
+  serialization::SelectorID getGlobalSelectorID(Module &F, 
+                                                unsigned LocalID) const;
 
   /// \brief Read a declaration name.
   DeclarationName ReadDeclarationName(Module &F, 
