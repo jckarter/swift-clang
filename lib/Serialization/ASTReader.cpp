@@ -1647,6 +1647,8 @@ namespace {
   /// inode numbers, so that the search can cope with non-normalized path names
   /// and symlinks.
   class HeaderFileInfoTrait {
+    HeaderSearch *HS;
+    const char *FrameworkStrings;
     const char *SearchPath;
     struct stat SearchPathStatBuf;
     llvm::Optional<int> SearchPathStatResult;
@@ -1669,7 +1671,10 @@ namespace {
     
     typedef HeaderFileInfo data_type;
     
-    HeaderFileInfoTrait(const char *SearchPath = 0) : SearchPath(SearchPath) { }
+    HeaderFileInfoTrait(HeaderSearch *HS,
+                        const char *FrameworkStrings,
+                        const char *SearchPath = 0) 
+      : HS(HS), FrameworkStrings(FrameworkStrings), SearchPath(SearchPath) { }
     
     static unsigned ComputeHash(const char *path) {
       return llvm::HashString(llvm::sys::path::filename(path));
@@ -1704,21 +1709,29 @@ namespace {
       return (const char *)d;
     }
     
-    static data_type ReadData(const internal_key_type, const unsigned char *d,
-                              unsigned DataLen) {
+    data_type ReadData(const internal_key_type, const unsigned char *d,
+                       unsigned DataLen) {
       const unsigned char *End = d + DataLen;
       using namespace clang::io;
       HeaderFileInfo HFI;
       unsigned Flags = *d++;
-      HFI.isImport = (Flags >> 4) & 0x01;
-      HFI.isPragmaOnce = (Flags >> 3) & 0x01;
-      HFI.DirInfo = (Flags >> 1) & 0x03;
-      HFI.Resolved = Flags & 0x01;
+      HFI.isImport = (Flags >> 5) & 0x01;
+      HFI.isPragmaOnce = (Flags >> 4) & 0x01;
+      HFI.DirInfo = (Flags >> 2) & 0x03;
+      HFI.Resolved = (Flags >> 1) & 0x01;
+      HFI.IndexHeaderMapHeader = Flags & 0x01;
       HFI.NumIncludes = ReadUnalignedLE16(d);
       HFI.ControllingMacroID = ReadUnalignedLE32(d);
+      if (unsigned FrameworkOffset = ReadUnalignedLE32(d)) {
+        // The framework offset is 1 greater than the actual offset, 
+        // since 0 is used as an indicator for "no framework name".
+        StringRef FrameworkName(FrameworkStrings + FrameworkOffset - 1);
+        HFI.Framework = HS->getUniqueFrameworkName(FrameworkName);
+      }
+      
       assert(End == d && "Wrong data length in HeaderFileInfo deserialization");
       (void)End;
-      
+            
       // This HeaderFileInfo was externally loaded.
       HFI.External = true;
       return HFI;
@@ -2424,19 +2437,23 @@ ASTReader::ReadASTBlock(Module &F) {
         CUDASpecialDeclRefs.push_back(getGlobalDeclID(F, Record[I]));
       break;
 
-    case HEADER_SEARCH_TABLE:
+    case HEADER_SEARCH_TABLE: {
       F.HeaderFileInfoTableData = BlobStart;
       F.LocalNumHeaderFileInfos = Record[1];
+      F.HeaderFileFrameworkStrings = BlobStart + Record[2];
       if (Record[0]) {
         F.HeaderFileInfoTable
           = HeaderFileInfoLookupTable::Create(
                    (const unsigned char *)F.HeaderFileInfoTableData + Record[0],
-                   (const unsigned char *)F.HeaderFileInfoTableData);
+                   (const unsigned char *)F.HeaderFileInfoTableData,
+                   HeaderFileInfoTrait(PP? &PP->getHeaderSearchInfo() : 0,
+                                       BlobStart + Record[2]));
         if (PP)
           PP->getHeaderSearchInfo().SetExternalSource(this);
       }
       break;
-
+    }
+        
     case FP_PRAGMA_OPTIONS:
       // Later tables overwrite earlier ones.
       FPPragmaOptions.swap(Record);
@@ -3076,9 +3093,13 @@ PreprocessedEntity *ASTReader::ReadPreprocessedEntityAtOffset(uint64_t Offset) {
 }
 
 HeaderFileInfo ASTReader::GetHeaderFileInfo(const FileEntry *FE) {
-  HeaderFileInfoTrait Trait(FE->getName());
   for (ModuleIterator I = ModuleMgr.begin(), E = ModuleMgr.end(); I != E; ++I) {
     Module &F = *(*I);
+
+    HeaderFileInfoTrait Trait(&PP->getHeaderSearchInfo(),
+                              F.HeaderFileFrameworkStrings,
+                              FE->getName());
+    
     HeaderFileInfoLookupTable *Table
       = static_cast<HeaderFileInfoLookupTable *>(F.HeaderFileInfoTable);
     if (!Table)
@@ -4336,27 +4357,20 @@ void ASTReader::InitializeSema(Sema &S) {
     SemaObj->LocallyScopedExternalDecls[D->getDeclName()] = D;
   }
 
-  // If there were any ext_vector type declarations, deserialize them
-  // and add them to Sema's vector of such declarations.
-  for (unsigned I = 0, N = ExtVectorDecls.size(); I != N; ++I)
-    SemaObj->ExtVectorDecls.push_back(
-                             cast<TypedefNameDecl>(GetDecl(ExtVectorDecls[I])));
-
   // FIXME: Do VTable uses and dynamic classes deserialize too much ?
   // Can we cut them down before writing them ?
 
   // If there were any dynamic classes declarations, deserialize them
   // and add them to Sema's vector of such declarations.
-  for (unsigned I = 0, N = DynamicClasses.size(); I != N; ++I)
-    SemaObj->DynamicClasses.push_back(
-                               cast<CXXRecordDecl>(GetDecl(DynamicClasses[I])));
 
   // Load the offsets of the declarations that Sema references.
   // They will be lazily deserialized when needed.
   if (!SemaDeclRefs.empty()) {
     assert(SemaDeclRefs.size() == 2 && "More decl refs than expected!");
-    SemaObj->StdNamespace = SemaDeclRefs[0];
-    SemaObj->StdBadAlloc = SemaDeclRefs[1];
+    if (!SemaObj->StdNamespace)
+      SemaObj->StdNamespace = SemaDeclRefs[0];
+    if (!SemaObj->StdBadAlloc)
+      SemaObj->StdBadAlloc = SemaDeclRefs[1];
   }
 
   for (Module *F = &ModuleMgr.getPrimaryModule(); F; F = F->NextInSource) {
@@ -4580,6 +4594,26 @@ void ASTReader::ReadDelegatingConstructors(
       Decls.push_back(D);
   }
   DelegatingCtorDecls.clear();
+}
+
+void ASTReader::ReadExtVectorDecls(SmallVectorImpl<TypedefNameDecl *> &Decls) {
+  for (unsigned I = 0, N = ExtVectorDecls.size(); I != N; ++I) {
+    TypedefNameDecl *D
+      = dyn_cast_or_null<TypedefNameDecl>(GetDecl(ExtVectorDecls[I]));
+    if (D)
+      Decls.push_back(D);
+  }
+  ExtVectorDecls.clear();
+}
+
+void ASTReader::ReadDynamicClasses(SmallVectorImpl<CXXRecordDecl *> &Decls) {
+  for (unsigned I = 0, N = DynamicClasses.size(); I != N; ++I) {
+    CXXRecordDecl *D
+      = dyn_cast_or_null<CXXRecordDecl>(GetDecl(DynamicClasses[I]));
+    if (D)
+      Decls.push_back(D);
+  }
+  DynamicClasses.clear();
 }
 
 void ASTReader::LoadSelector(Selector Sel) {
@@ -5343,6 +5377,7 @@ Module::Module(ModuleKind Kind)
     IdentifierLookupTable(0), LocalNumMacroDefinitions(0),
     MacroDefinitionOffsets(0), LocalNumHeaderFileInfos(0), 
     HeaderFileInfoTableData(0), HeaderFileInfoTable(0),
+    HeaderFileFrameworkStrings(0),
     LocalNumSelectors(0), SelectorOffsets(0),
     SelectorLookupTableData(0), SelectorLookupTable(0), LocalNumDecls(0),
     DeclOffsets(0), LocalNumCXXBaseSpecifiers(0), CXXBaseSpecifiersOffsets(0),
