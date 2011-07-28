@@ -20,6 +20,7 @@
 #include "clang/Sema/IdentifierResolver.h"
 #include "clang/Sema/ObjCMethodList.h"
 #include "clang/Sema/DeclSpec.h"
+#include "clang/Sema/ExternalSemaSource.h"
 #include "clang/Sema/LocInfoType.h"
 #include "clang/Sema/TypoCorrection.h"
 #include "clang/AST/Expr.h"
@@ -234,10 +235,14 @@ public:
   /// the current full expression.
   SmallVector<CXXTemporary*, 8> ExprTemporaries;
 
+  typedef LazyVector<TypedefNameDecl *, ExternalSemaSource, 
+                     &ExternalSemaSource::ReadExtVectorDecls, 2, 2>
+    ExtVectorDeclsType;
+
   /// ExtVectorDecls - This is a list all the extended vector types. This allows
   /// us to associate a raw vector type with one of the ext_vector type names.
   /// This is only necessary for issuing pretty diagnostics.
-  SmallVector<TypedefNameDecl*, 24> ExtVectorDecls;
+  ExtVectorDeclsType ExtVectorDecls;
 
   /// FieldCollector - Collects CXXFieldDecls during parsing of C++ classes.
   llvm::OwningPtr<CXXFieldCollector> FieldCollector;
@@ -280,16 +285,28 @@ public:
   ///     not visible.
   llvm::DenseMap<DeclarationName, NamedDecl *> LocallyScopedExternalDecls;
 
-  /// \brief All the tentative definitions encountered in the TU.
-  SmallVector<VarDecl *, 2> TentativeDefinitions;
+  typedef LazyVector<VarDecl *, ExternalSemaSource, 
+                     &ExternalSemaSource::ReadTentativeDefinitions, 2, 2>
+    TentativeDefinitionsType;
 
+  /// \brief All the tentative definitions encountered in the TU.
+  TentativeDefinitionsType TentativeDefinitions;
+
+  typedef LazyVector<const DeclaratorDecl *, ExternalSemaSource, 
+                     &ExternalSemaSource::ReadUnusedFileScopedDecls, 2, 2>
+    UnusedFileScopedDeclsType;
+  
   /// \brief The set of file scoped decls seen so far that have not been used
   /// and must warn if not used. Only contains the first declaration.
-  SmallVector<const DeclaratorDecl*, 4> UnusedFileScopedDecls;
+  UnusedFileScopedDeclsType UnusedFileScopedDecls;
+
+  typedef LazyVector<CXXConstructorDecl *, ExternalSemaSource, 
+                     &ExternalSemaSource::ReadDelegatingConstructors, 2, 2>
+    DelegatingCtorDeclsType;
 
   /// \brief All the delegating constructors seen so far in the file, used for
   /// cycle detection at the end of the TU.
-  SmallVector<CXXConstructorDecl*, 4> DelegatingCtorDecls;
+  DelegatingCtorDeclsType DelegatingCtorDecls;
 
   /// \brief All the overriding destructors seen during a class definition
   /// (there could be multiple due to nested classes) that had their exception
@@ -2092,6 +2109,8 @@ public:
   StmtResult BuildObjCAtThrowStmt(SourceLocation AtLoc, Expr *Throw);
   StmtResult ActOnObjCAtThrowStmt(SourceLocation AtLoc, Expr *Throw,
                                   Scope *CurScope);
+  ExprResult ActOnObjCAtSynchronizedOperand(SourceLocation atLoc,
+                                            Expr *operand);
   StmtResult ActOnObjCAtSynchronizedStmt(SourceLocation AtLoc,
                                          Expr *SynchExpr,
                                          Stmt *SynchBody);
@@ -3356,9 +3375,13 @@ public:
   /// by code generation).
   llvm::DenseMap<CXXRecordDecl *, bool> VTablesUsed;
 
+  typedef LazyVector<CXXRecordDecl *, ExternalSemaSource, 
+                     &ExternalSemaSource::ReadDynamicClasses, 2, 2>
+    DynamicClassesType;
+
   /// \brief A list of all of the dynamic classes in this translation
   /// unit.
-  SmallVector<CXXRecordDecl *, 16> DynamicClasses;
+  DynamicClassesType DynamicClasses;
 
   /// \brief Note that the vtable for the given class was used at the
   /// given location.
