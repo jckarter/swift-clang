@@ -374,9 +374,6 @@ public:
   /// preprocessing record.
   unsigned NumPreallocatedPreprocessingEntities;
   
-  /// \brief The next module in source order.
-  Module *NextInSource;
-  
   /// \brief All the modules that loaded this one. Can contain NULL for
   /// directly loaded modules.
   SmallVector<Module *, 1> Loaders;
@@ -404,19 +401,22 @@ public:
   ModuleManager(const FileSystemOptions &FSO);
   ~ModuleManager();
 
-  /// \brief Forward iterator to traverse all loaded modules
+  /// \brief Forward iterator to traverse all loaded modules.  This is reverse
+  /// source-order.
   ModuleIterator begin() { return Chain.begin(); }
   /// \brief Forward iterator end-point to traverse all loaded modules
   ModuleIterator end() { return Chain.end(); }
 
-  /// \brief Const forward iterator to traverse all loaded modules
+  /// \brief Const forward iterator to traverse all loaded modules.  This is 
+  /// in reverse source-order.
   ModuleConstIterator begin() const { return Chain.begin(); }
   /// \brief Const forward iterator end-point to traverse all loaded modules
   ModuleConstIterator end() const { return Chain.end(); }
 
-  /// \brief Reverse iterator to traverse all loaded modules
+  /// \brief Reverse iterator to traverse all loaded modules.  This is in 
+  /// source order.
   ModuleReverseIterator rbegin() { return Chain.rbegin(); }
-  /// \brief Reverse iterator end-point to traverse all loaded modules
+  /// \brief Reverse iterator end-point to traverse all loaded modules.
   ModuleReverseIterator rend() { return Chain.rend(); }
 
   /// \brief Returns the primary module associated with the manager, that is,
@@ -1584,6 +1584,11 @@ public:
   /// position.
   PreprocessedEntity *LoadPreprocessedEntity(Module &F);
       
+  /// \brief Determine the global preprocessed entity ID that corresponds to
+  /// the given local ID within the given module.
+  serialization::PreprocessedEntityID 
+  getGlobalPreprocessedEntityID(Module &M, unsigned LocalID);
+  
   /// \brief Note that the identifier is a macro whose record will be loaded
   /// from the given AST file at the given (file-local) offset.
   void SetIdentifierIsMacro(IdentifierInfo *II, Module &F,
@@ -1603,6 +1608,17 @@ public:
   /// \brief Retrieve the macro definition with the given ID.
   MacroDefinition *getMacroDefinition(serialization::MacroID ID);
 
+  /// \brief Retrieve the global macro definition ID that corresponds to the
+  /// local macro definition ID within a given module.
+  serialization::MacroID getGlobalMacroDefinitionID(Module &M, 
+                                                    unsigned LocalID);
+
+  /// \brief Deserialize a macro definition that is local to the given
+  /// module.
+  MacroDefinition *getLocalMacroDefinition(Module &M, unsigned LocalID) {
+    return getMacroDefinition(getGlobalMacroDefinitionID(M, LocalID));
+  }
+  
   /// \brief Retrieve the AST context that this AST reader supplements.
   ASTContext *getContext() { return Context; }
 
