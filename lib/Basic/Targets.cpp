@@ -147,7 +147,7 @@ static void getDarwinDefines(MacroBuilder &Builder, const LangOptions &Opts,
   }
 
   // If -ccc-host-triple arch-pc-win32-macho option specified, we're
-  // generating code for Win32 ABI. No need to emit 
+  // generating code for Win32 ABI. No need to emit
   // __ENVIRONMENT_XX_OS_VERSION_MIN_REQUIRED__.
   if (PlatformName == "win32") {
     PlatformMinVersion = VersionTuple(Maj, Min, Rev);
@@ -2332,6 +2332,9 @@ public:
     default: return false;
     case 'w': // Floating point and SIMD registers (V0-V31)
       Info.setAllowsRegister();
+      return true;
+    case 'Q': // A memory address that is a single base register.
+      Info.setAllowsMemory();
       return true;
     }
     return false;

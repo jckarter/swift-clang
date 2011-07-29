@@ -1,4 +1,4 @@
-// RUN: %clang_cc1 -triple arm64-apple-ios -emit-llvm -o - %s
+// RUN: %clang_cc1 -triple arm64-apple-ios -emit-llvm -o - %s | FileCheck %s
 
 // rdar://9167275
 
@@ -35,4 +35,11 @@ void t4(long op) {
 float t5(float x) {
   __asm__("fadd %0, %0, %0" : "+w" (x));
   return x;
+}
+
+// rdar://9865712
+void t6 (void *f, int g) {
+  // CHECK: t6
+  // CHECK: call void asm "str $1, $0", "=*Q,r"
+  asm("str %1, %0" : "=Q"(f) : "r"(g));
 }
