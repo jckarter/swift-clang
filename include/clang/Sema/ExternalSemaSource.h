@@ -14,6 +14,7 @@
 #define LLVM_CLANG_SEMA_EXTERNAL_SEMA_SOURCE_H
 
 #include "clang/AST/ExternalASTSource.h"
+#include "clang/Sema/Weak.h"
 #include <utility>
 
 namespace clang {
@@ -26,7 +27,16 @@ struct ObjCMethodList;
 class Scope;
 class Sema;
 class TypedefNameDecl;
+class ValueDecl;
 class VarDecl;
+  
+/// \brief A simple structure that captures a vtable use for the purposes of
+/// the \c ExternalSemaSource.
+struct ExternalVTableUse {
+  CXXRecordDecl *Record;
+  SourceLocation Location;
+  bool DefinitionRequired;
+};
   
 /// \brief An abstract interface that should be implemented by
 /// external AST sources that also provide information for semantic
@@ -115,6 +125,54 @@ public:
   /// invoked multiple times; the external source should take care not to
   /// introduce the same declarations repeatedly.
   virtual void ReadDynamicClasses(SmallVectorImpl<CXXRecordDecl *> &Decls) {}
+
+  /// \brief Read the set of locally-scoped external declarations known to the
+  /// external Sema source.
+  ///
+  /// The external source should append its own locally-scoped external
+  /// declarations to the given vector of declarations. Note that this routine 
+  /// may be invoked multiple times; the external source should take care not 
+  /// to introduce the same declarations repeatedly.
+  virtual void ReadLocallyScopedExternalDecls(
+                 SmallVectorImpl<NamedDecl *> &Decls) {}
+
+  /// \brief Read the set of referenced selectors known to the
+  /// external Sema source.
+  ///
+  /// The external source should append its own referenced selectors to the 
+  /// given vector of selectors. Note that this routine 
+  /// may be invoked multiple times; the external source should take care not 
+  /// to introduce the same selectors repeatedly.
+  virtual void ReadReferencedSelectors(
+                 SmallVectorImpl<std::pair<Selector, SourceLocation> > &Sels) {}
+
+  /// \brief Read the set of weak, undeclared identifiers known to the
+  /// external Sema source.
+  ///
+  /// The external source should append its own weak, undeclared identifiers to
+  /// the given vector. Note that this routine may be invoked multiple times; 
+  /// the external source should take care not to introduce the same identifiers
+  /// repeatedly.
+  virtual void ReadWeakUndeclaredIdentifiers(
+                 SmallVectorImpl<std::pair<IdentifierInfo *, WeakInfo> > &WI) {}
+
+  /// \brief Read the set of used vtables known to the external Sema source.
+  ///
+  /// The external source should append its own used vtables to the given
+  /// vector. Note that this routine may be invoked multiple times; the external
+  /// source should take care not to introduce the same vtables repeatedly.
+  virtual void ReadUsedVTables(SmallVectorImpl<ExternalVTableUse> &VTables) {}
+
+  /// \brief Read the set of pending instantiations known to the external
+  /// Sema source.
+  ///
+  /// The external source should append its own pending instantiations to the
+  /// given vector. Note that this routine may be invoked multiple times; the
+  /// external source should take care not to introduce the same instantiations
+  /// repeatedly.
+  virtual void ReadPendingInstantiations(
+                 SmallVectorImpl<std::pair<ValueDecl *, 
+                                           SourceLocation> > &Pending) {}
 
   // isa/cast/dyn_cast support
   static bool classof(const ExternalASTSource *Source) {
