@@ -2147,6 +2147,9 @@ public:
     case 'P': // VFP Floating point register double precision
       Info.setAllowsRegister();
       return true;
+    case 'Q': // A memory address that is a single base register.
+      Info.setAllowsMemory();
+      return true;
     case 'U': // a memory reference...
       switch (Name[1]) {
       case 'q': // ...ARMV4 ldrsb
