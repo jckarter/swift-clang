@@ -380,9 +380,26 @@ public:
   /// type ID, or the representation of a Type*.
   const uint32_t *TypeOffsets;
   
-  /// \brief Base type ID for types local to this module.
-  serialization::TypeID BaseTypeID;
+  /// \brief Base type ID for types local to this module as represented in 
+  /// the global type ID space.
+  serialization::TypeID GlobalBaseTypeIndex;
   
+  /// \brief Remapping table for type IDs in this module.
+  ContinuousRangeMap<uint32_t, int, 2> TypeRemap;
+
+  /// \brief Base type ID for types local to this module as represented in
+  /// the module's type ID space.
+  serialization::TypeID LocalBaseTypeIndex;
+
+  /// \brief Remapping table that maps from a type as represented as a module
+  /// and local type index to the index used within the current module to
+  /// refer to that same type.
+  /// 
+  /// This mapping is effectively the reverse of the normal \c TypeRemap, and
+  /// is used specifically by ASTReader::GetTypeIdx() to help map between
+  /// global type IDs and a module's view of the same type ID as a hash value.
+  llvm::DenseMap<Module *, int> ReverseTypeRemap;
+
   // === Miscellaneous ===
   
   /// \brief Diagnostic IDs and their mappings that the user changed.
@@ -419,6 +436,9 @@ class ModuleManager {
   /// \brief FileManager that handles translating between filenames and
   /// FileEntry *.
   FileManager FileMgr;
+  
+  /// \brief A lookup of in-memory (virtual file) buffers
+  llvm::DenseMap<const FileEntry *, llvm::MemoryBuffer *> InMemoryBuffers;
 
 public:
   typedef SmallVector<Module*, 2>::iterator ModuleIterator;
@@ -464,12 +484,18 @@ public:
 
   /// \brief Returns the module associated with the given name
   Module *lookup(StringRef Name);
+  
+  /// \brief Returns the in-memory (virtual file) buffer with the given name
+  llvm::MemoryBuffer *lookupBuffer(StringRef Name);
 
   /// \brief Number of modules loaded
   unsigned size() const { return Chain.size(); }
 
   /// \brief Creates a new module and adds it to the list of known modules
   Module &addModule(StringRef FileName, ModuleKind Type);
+  
+  /// \brief Add an in-memory buffer the list of known buffers
+  void addInMemoryBuffer(StringRef FileName, llvm::MemoryBuffer *Buffer);
 
   /// \brief Exports the list of loaded modules with their corresponding names
   void exportLookup(SmallVector<ModuleOffset, 16> &Target);
@@ -541,10 +567,6 @@ private:
       
   /// \brief The AST consumer.
   ASTConsumer *Consumer;
-
-  /// \brief AST buffers for chained PCHs created and stored in memory.
-  /// First (not depending on another) PCH in chain is in front.
-  std::vector<llvm::MemoryBuffer *> ASTBuffers;
 
   /// \brief The module manager which manages modules and their dependencies
   ModuleManager ModuleMgr;
@@ -1121,11 +1143,9 @@ public:
   /// \brief Sets and initializes the given Context.
   void InitializeContext(ASTContext &Context);
 
-  /// \brief Set AST buffers for chained PCHs created and stored in memory.
-  /// First (not depending on another) PCH in chain is first in array.
-  void setASTMemoryBuffers(llvm::MemoryBuffer **bufs, unsigned numBufs) {
-    ASTBuffers.clear();
-    ASTBuffers.insert(ASTBuffers.begin(), bufs, bufs + numBufs);
+  /// \brief Add in-memory (virtual file) buffer.
+  void addInMemoryBuffer(StringRef &FileName, llvm::MemoryBuffer *Buffer) {
+    ModuleMgr.addInMemoryBuffer(FileName, Buffer);
   }
 
   /// \brief Retrieve the name of the named (primary) AST file
@@ -1232,6 +1252,10 @@ public:
   
   /// \brief Map a local type ID within a given AST file into a global type ID.
   serialization::TypeID getGlobalTypeID(Module &F, unsigned LocalID) const;
+  
+  /// \brief Map a global type ID to an ID as it would be locally expressed
+  /// in the given model.
+  unsigned getLocalTypeID(Module &M, serialization::TypeID GlobalID);
   
   /// \brief Read a type from the current position in the given record, which 
   /// was read from the given AST file.
