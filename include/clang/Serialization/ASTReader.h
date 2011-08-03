@@ -255,6 +255,9 @@ public:
   /// \brief Base identifier ID for identifiers local to this module.
   serialization::IdentID BaseIdentifierID;
 
+  /// \brief Remapping table for declaration IDs in this module.
+  ContinuousRangeMap<uint32_t, int, 2> IdentifierRemap;
+
   /// \brief Actual data for the on-disk hash table of identifiers.
   ///
   /// This pointer points into a memory buffer, where the on-disk hash
@@ -360,6 +363,9 @@ public:
   
   /// \brief Base declaration ID for declarations local to this module.
   serialization::DeclID BaseDeclID;
+
+  /// \brief Remapping table for declaration IDs in this module.
+  ContinuousRangeMap<uint32_t, int, 2> DeclRemap;
 
   /// \brief The number of C++ base specifier sets in this AST file.
   unsigned LocalNumCXXBaseSpecifiers;
@@ -628,7 +634,7 @@ private:
   // TU, and when we read those update records, the actual context will not
   // be available yet (unless it's the TU), so have this pending map using the
   // ID as a key. It will be realized when the context is actually loaded.
-  typedef SmallVector<void *, 1> DeclContextVisibleUpdates;
+  typedef SmallVector<std::pair<void *, Module*>, 1> DeclContextVisibleUpdates;
   typedef llvm::DenseMap<serialization::DeclID, DeclContextVisibleUpdates>
       DeclContextVisibleUpdatesPending;
 
@@ -1023,8 +1029,8 @@ private:
   QualType readTypeRecord(unsigned Index);
   RecordLocation TypeCursorForIndex(unsigned Index);
   void LoadedDecl(unsigned Index, Decl *D);
-  Decl *ReadDeclRecord(unsigned Index, serialization::DeclID ID);
-  RecordLocation DeclCursorForIndex(unsigned Index, serialization::DeclID ID);
+  Decl *ReadDeclRecord(serialization::DeclID ID);
+  RecordLocation DeclCursorForID(serialization::DeclID ID);
   RecordLocation getLocalBitOffset(uint64_t GlobalOffset);
   
   void PassInterestingDeclsToConsumer();
@@ -1247,12 +1253,12 @@ public:
   Decl *GetDecl(serialization::DeclID ID);
   virtual Decl *GetExternalDecl(uint32_t ID);
 
-  /// \brief Reads a declaration with the given local ID in the give module.
+  /// \brief Reads a declaration with the given local ID in the given module.
   Decl *GetLocalDecl(Module &F, uint32_t LocalID) {
     return GetDecl(getGlobalDeclID(F, LocalID));
   }
 
-  /// \brief Reads a declaration with the given local ID in the give module.
+  /// \brief Reads a declaration with the given local ID in the given module.
   ///
   /// \returns The requested declaration, casted to the given return type.
   template<typename T>
