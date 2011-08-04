@@ -889,10 +889,10 @@ void ASTDeclReader::ReadCXXDefinitionData(
 
   Data.NumBases = Record[Idx++];
   if (Data.NumBases)
-    Data.Bases = Reader.GetCXXBaseSpecifiersOffset(Record[Idx++]);
+    Data.Bases = Reader.readCXXBaseSpecifiers(F, Record, Idx);
   Data.NumVBases = Record[Idx++];
   if (Data.NumVBases)
-    Data.VBases = Reader.GetCXXBaseSpecifiersOffset(Record[Idx++]);
+    Data.VBases = Reader.readCXXBaseSpecifiers(F, Record, Idx);
   
   Reader.ReadUnresolvedSet(F, Data.Conversions, Record, Idx);
   Reader.ReadUnresolvedSet(F, Data.VisibleConversions, Record, Idx);
@@ -1407,7 +1407,8 @@ ASTReader::DeclCursorForID(DeclID ID) {
   GlobalDeclMapType::iterator I = GlobalDeclMap.find(ID);
   assert(I != GlobalDeclMap.end() && "Corrupted global declaration map");
   Module *M = I->second;
-  return RecordLocation(M, M->DeclOffsets[ID - M->BaseDeclID - 1]);
+  return RecordLocation(M, 
+           M->DeclOffsets[ID - M->BaseDeclID - NUM_PREDEF_DECL_IDS]);
 }
 
 ASTReader::RecordLocation ASTReader::getLocalBitOffset(uint64_t GlobalOffset) {
@@ -1416,6 +1417,10 @@ ASTReader::RecordLocation ASTReader::getLocalBitOffset(uint64_t GlobalOffset) {
 
   assert(I != GlobalBitOffsetsMap.end() && "Corrupted global bit offsets map");
   return RecordLocation(I->second, GlobalOffset - I->second->GlobalBitOffset);
+}
+
+uint64_t ASTReader::getGlobalBitOffset(Module &M, uint32_t LocalOffset) {
+  return LocalOffset + M.GlobalBitOffset;
 }
 
 void ASTDeclReader::attachPreviousDecl(Decl *D, Decl *previous) {
