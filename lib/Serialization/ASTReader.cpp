@@ -1413,7 +1413,7 @@ bool ASTReader::ReadBlockAbbrevs(llvm::BitstreamCursor &Cursor,
   }
 }
 
-PreprocessedEntity *ASTReader::ReadMacroRecord(Module &F, uint64_t Offset) {
+void ASTReader::ReadMacroRecord(Module &F, uint64_t Offset) {
   assert(PP && "Forgot to set Preprocessor ?");
   llvm::BitstreamCursor &Stream = F.MacroCursor;
 
@@ -1430,14 +1430,14 @@ PreprocessedEntity *ASTReader::ReadMacroRecord(Module &F, uint64_t Offset) {
     unsigned Code = Stream.ReadCode();
     switch (Code) {
     case llvm::bitc::END_BLOCK:
-      return 0;
+      return;
 
     case llvm::bitc::ENTER_SUBBLOCK:
       // No known subblocks, always skip them.
       Stream.ReadSubBlockID();
       if (Stream.SkipBlock()) {
         Error("malformed block record in AST file");
-        return 0;
+        return;
       }
       continue;
 
@@ -1461,12 +1461,12 @@ PreprocessedEntity *ASTReader::ReadMacroRecord(Module &F, uint64_t Offset) {
       // of the definition of the macro we were looking for. We're
       // done.
       if (Macro)
-        return 0;
+        return;
 
       IdentifierInfo *II = getLocalIdentifier(F, Record[0]);
       if (II == 0) {
         Error("macro must have a name in AST file");
-        return 0;
+        return;
       }
       SourceLocation Loc = ReadSourceLocation(F, Record[1]);
       bool isUsed = Record[2];
@@ -1530,7 +1530,7 @@ PreprocessedEntity *ASTReader::ReadMacroRecord(Module &F, uint64_t Offset) {
   }
   }
   
-  return 0;
+  return;
 }
 
 PreprocessedEntity *ASTReader::LoadPreprocessedEntity(Module &F) {
@@ -1568,7 +1568,7 @@ PreprocessedEntity *ASTReader::LoadPreprocessedEntity(Module &F) {
   switch (RecType) {
   case PPD_MACRO_EXPANSION: {
     PreprocessedEntityID GlobalID = getGlobalPreprocessedEntityID(F, Record[0]);
-    if (PreprocessedEntity *PE = PPRec.getLoadedPreprocessedEntity(GlobalID))
+    if (PreprocessedEntity *PE = PPRec.getLoadedPreprocessedEntity(GlobalID-1))
       return PE;
     
     MacroExpansion *ME =
@@ -1576,13 +1576,13 @@ PreprocessedEntity *ASTReader::LoadPreprocessedEntity(Module &F) {
                                  SourceRange(ReadSourceLocation(F, Record[1]),
                                              ReadSourceLocation(F, Record[2])),
                                  getLocalMacroDefinition(F, Record[4]));
-    PPRec.setLoadedPreallocatedEntity(GlobalID, ME);
+    PPRec.setLoadedPreallocatedEntity(GlobalID - 1, ME);
     return ME;
   }
       
   case PPD_MACRO_DEFINITION: {
     PreprocessedEntityID GlobalID = getGlobalPreprocessedEntityID(F, Record[0]);
-    if (PreprocessedEntity *PE = PPRec.getLoadedPreprocessedEntity(GlobalID))
+    if (PreprocessedEntity *PE = PPRec.getLoadedPreprocessedEntity(GlobalID-1))
       return PE;
 
     unsigned MacroDefID = getGlobalMacroDefinitionID(F, Record[1]);
@@ -1602,7 +1602,7 @@ PreprocessedEntity *ASTReader::LoadPreprocessedEntity(Module &F) {
                                             ReadSourceLocation(F, Record[2]),
                                             ReadSourceLocation(F, Record[3])));
       
-      PPRec.setLoadedPreallocatedEntity(GlobalID, MD);
+      PPRec.setLoadedPreallocatedEntity(GlobalID - 1, MD);
       MacroDefinitionsLoaded[MacroDefID - 1] = MD;
       
       if (DeserializationListener)
@@ -1614,7 +1614,7 @@ PreprocessedEntity *ASTReader::LoadPreprocessedEntity(Module &F) {
       
   case PPD_INCLUSION_DIRECTIVE: {
     PreprocessedEntityID GlobalID = getGlobalPreprocessedEntityID(F, Record[0]);
-    if (PreprocessedEntity *PE = PPRec.getLoadedPreprocessedEntity(GlobalID))
+    if (PreprocessedEntity *PE = PPRec.getLoadedPreprocessedEntity(GlobalID-1))
       return PE;
     
     const char *FullFileNameStart = BlobStart + Record[3];
@@ -1632,7 +1632,7 @@ PreprocessedEntity *ASTReader::LoadPreprocessedEntity(Module &F) {
                                        File,
                                  SourceRange(ReadSourceLocation(F, Record[1]),
                                              ReadSourceLocation(F, Record[2])));
-    PPRec.setLoadedPreallocatedEntity(GlobalID, ID);
+    PPRec.setLoadedPreallocatedEntity(GlobalID - 1, ID);
     return ID;
   }
   }
@@ -1875,8 +1875,15 @@ const FileEntry *ASTReader::getFileEntry(StringRef filenameStrRef) {
 }
 
 MacroID ASTReader::getGlobalMacroDefinitionID(Module &M, unsigned LocalID) {
-  // FIXME: Local-to-global mapping
-  return LocalID;
+  if (LocalID < NUM_PREDEF_MACRO_IDS)
+    return LocalID;
+  
+  ContinuousRangeMap<uint32_t, int, 2>::iterator I
+    = M.MacroDefinitionRemap.find(LocalID - NUM_PREDEF_MACRO_IDS);
+  assert(I != M.MacroDefinitionRemap.end() && 
+         "Invalid index into macro definition ID remap");
+  
+  return LocalID + I->second;
 }
 
 /// \brief If we are loading a relocatable PCH file, and the filename is
@@ -2316,6 +2323,8 @@ ASTReader::ReadASTBlock(Module &F) {
       ContinuousRangeMap<uint32_t, int, 2>::Builder 
         IdentifierRemap(F.IdentifierRemap);
       ContinuousRangeMap<uint32_t, int, 2>::Builder 
+        MacroDefinitionRemap(F.MacroDefinitionRemap);
+      ContinuousRangeMap<uint32_t, int, 2>::Builder 
         SelectorRemap(F.SelectorRemap);
       ContinuousRangeMap<uint32_t, int, 2>::Builder DeclRemap(F.DeclRemap);
       ContinuousRangeMap<uint32_t, int, 2>::Builder TypeRemap(F.TypeRemap);
@@ -2347,7 +2356,9 @@ ASTReader::ReadASTBlock(Module &F) {
           std::make_pair(IdentifierIDOffset, 
                          OM->BaseIdentifierID - IdentifierIDOffset));
         (void)PreprocessedEntityIDOffset;
-        (void)MacroDefinitionIDOffset;
+        MacroDefinitionRemap.insert(
+          std::make_pair(MacroDefinitionIDOffset,
+                         OM->BaseMacroDefinitionID - MacroDefinitionIDOffset));
         SelectorRemap.insert(std::make_pair(SelectorIDOffset, 
                                OM->BaseSelectorID - SelectorIDOffset));
         DeclRemap.insert(std::make_pair(DeclIDOffset, 
@@ -2475,7 +2486,8 @@ ASTReader::ReadASTBlock(Module &F) {
       F.MacroDefinitionOffsets = (const uint32_t *)BlobStart;
       F.NumPreallocatedPreprocessingEntities = Record[0];
       F.LocalNumMacroDefinitions = Record[1];
-
+      unsigned LocalBaseMacroID = Record[2];
+      
       // Introduce the global -> local mapping for preprocessed entities within 
       // this AST file.
       unsigned StartingID;
@@ -2492,17 +2504,27 @@ ASTReader::ReadASTBlock(Module &F) {
         // a particular allocation strategy in the preprocessing record.
         StartingID = getTotalNumPreprocessedEntities();
       }
+      GlobalPreprocessedEntityMap.insert(std::make_pair(StartingID, &F));
       
       F.BaseMacroDefinitionID = getTotalNumMacroDefinitions();
       F.BasePreprocessedEntityID = StartingID;
 
-      // Introduce the global -> local mapping for macro definitions within 
-      // this AST file.
-      GlobalPreprocessedEntityMap.insert(std::make_pair(StartingID, &F));
-      GlobalMacroDefinitionMap.insert(
-        std::make_pair(getTotalNumMacroDefinitions() + 1, &F));
-      MacroDefinitionsLoaded.resize(
+      if (F.LocalNumMacroDefinitions > 0) {
+        // Introduce the global -> local mapping for macro definitions within 
+        // this module.
+        GlobalMacroDefinitionMap.insert(
+          std::make_pair(getTotalNumMacroDefinitions() + 1, &F));
+        
+        // Introduce the local -> global mapping for macro definitions within
+        // this module.
+        F.MacroDefinitionRemap.insert(
+          std::make_pair(LocalBaseMacroID,
+                         F.BaseMacroDefinitionID - LocalBaseMacroID));
+        
+        MacroDefinitionsLoaded.resize(
                     MacroDefinitionsLoaded.size() + F.LocalNumMacroDefinitions);
+      }
+      
       break;
     }
         
@@ -3186,6 +3208,7 @@ bool ASTReader::ParseLanguageOptions(
     PARSE_LANGOPT(SpellChecking);
     PARSE_LANGOPT(MRTD);
     PARSE_LANGOPT(ObjCAutoRefCount);
+    PARSE_LANGOPT(ObjCInferRelatedReturnType);
   #undef PARSE_LANGOPT
 
     return Listener->ReadLanguageOptions(LangOpts);
@@ -5588,6 +5611,11 @@ void Module::dump() {
   llvm::errs() << "  Base type index: " << BaseTypeIndex << '\n'
                << "  Number of types: " << LocalNumTypes << '\n';
   dumpLocalRemap("Type index map", TypeRemap);
+  llvm::errs() << "  Base macro definition ID: " << BaseMacroDefinitionID 
+               << '\n'
+               << "  Number of macro definitions: " << LocalNumMacroDefinitions
+               << '\n';
+  dumpLocalRemap("Macro definition ID map", MacroDefinitionRemap);
   llvm::errs() << "  Base decl ID: " << BaseDeclID << '\n'
                << "  Number of decls: " << LocalNumDecls << '\n';
   dumpLocalRemap("Decl ID map", DeclRemap);
