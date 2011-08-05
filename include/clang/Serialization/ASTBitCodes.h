@@ -125,6 +125,9 @@ namespace clang {
     /// \brief An ID number that refers to a macro in an AST file.
     typedef uint32_t MacroID;
 
+    /// \brief The number of predefined macro IDs.
+    const unsigned int NUM_PREDEF_MACRO_IDS = 1;
+    
     /// \brief An ID number that refers to an ObjC selctor in an AST file.
     typedef uint32_t SelectorID;
 
@@ -138,7 +141,10 @@ namespace clang {
     /// \brief An ID number that refers to an entity in the detailed
     /// preprocessing record.
     typedef uint32_t PreprocessedEntityID;
-    
+
+    /// \brief The number of predefined preprocessed entity IDs.
+    const unsigned int NUM_PREDEF_PP_ENTITY_IDS = 1;
+
     /// \brief Describes the various kinds of blocks that occur within
     /// an AST file.
     enum BlockIDs {
