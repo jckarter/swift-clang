@@ -2317,6 +2317,10 @@ public:
 
 }
 
+static bool isHomogeneousAggregate(QualType Ty, const Type *&Base,
+                                   ASTContext &Context,
+                                   bool FPOnly, uint64_t *HAMembers = 0);
+
 ABIArgInfo ARM64ABIInfo::classifyArgumentType(QualType Ty) const {
   if (!isAggregateTypeForABI(Ty)) {
     // Treat an enum type as its underlying type.
@@ -2335,6 +2339,11 @@ ABIArgInfo ARM64ABIInfo::classifyArgumentType(QualType Ty) const {
   // copy constructor are always indirect.
   if (isRecordWithNonTrivialDestructorOrCopyConstructor(Ty))
     return ABIArgInfo::getIndirect(0, /*ByVal=*/false);
+
+  // Homogeneous Floating-point Aggregates (HFAs) need to be expanded.
+  const Type *Base = 0;
+  if (isHomogeneousAggregate(Ty, Base, getContext(), true))
+    return ABIArgInfo::getExpand();
 
   // Aggregates <= 16 bytes are passed directly in registers or on the stack.
   uint64_t Size = getContext().getTypeSize(Ty);
@@ -2532,10 +2541,11 @@ void ARMABIInfo::computeInfo(CGFunctionInfo &FI) const {
 /// recursive calls that check aggregate component types.
 static bool isHomogeneousAggregate(QualType Ty, const Type *&Base,
                                    ASTContext &Context,
-                                   uint64_t *HAMembers = 0) {
+                                   bool FPOnly, uint64_t *HAMembers) {
   uint64_t Members;
   if (const ConstantArrayType *AT = Context.getAsConstantArrayType(Ty)) {
-    if (!isHomogeneousAggregate(AT->getElementType(), Base, Context, &Members))
+    if (!isHomogeneousAggregate(AT->getElementType(), Base, Context, FPOnly,
+                                &Members))
       return false;
     Members *= AT->getSize().getZExtValue();
   } else if (const RecordType *RT = Ty->getAs<RecordType>()) {
@@ -2551,7 +2561,8 @@ static bool isHomogeneousAggregate(QualType Ty, const Type *&Base,
          i != e; ++i) {
       const FieldDecl *FD = *i;
       uint64_t FldMembers;
-      if (!isHomogeneousAggregate(FD->getType(), Base, Context, &FldMembers))
+      if (!isHomogeneousAggregate(FD->getType(), Base, Context, FPOnly,
+                                  &FldMembers))
         return false;
       Members += FldMembers;
     }
@@ -2568,6 +2579,8 @@ static bool isHomogeneousAggregate(QualType Ty, const Type *&Base,
       if (BT->getKind() != BuiltinType::Float && 
           BT->getKind() != BuiltinType::Double)
         return false;
+    } else if (FPOnly) {
+      return false;
     } else if (const VectorType *VT = Ty->getAs<VectorType>()) {
       unsigned VecSize = Context.getTypeSize(VT);
       if (VecSize != 64 && VecSize != 128)
@@ -2615,7 +2628,7 @@ ABIArgInfo ARMABIInfo::classifyArgumentType(QualType Ty) const {
   if (getABIKind() == ARMABIInfo::AAPCS_VFP) {
     // Homogeneous Aggregates need to be expanded.
     const Type *Base = 0;
-    if (isHomogeneousAggregate(Ty, Base, getContext()))
+    if (isHomogeneousAggregate(Ty, Base, getContext(), false))
       return ABIArgInfo::getExpand();
   }
 

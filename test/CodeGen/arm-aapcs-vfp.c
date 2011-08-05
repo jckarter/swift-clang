@@ -4,8 +4,15 @@
 // RUN:   -mfloat-abi hard \
 // RUN:   -ffreestanding \
 // RUN:   -emit-llvm -w -o - %s | FileCheck %s
+// RUN: %clang_cc1 -triple arm64-apple-darwin9 \
+// RUN:   -ffreestanding \
+// RUN:   -emit-llvm -w -o - %s | FileCheck -check-prefix=CHECK64 %s
 
+#ifdef __arm64__
+#include <aarch64_simd.h>
+#else
 #include <arm_neon.h>
+#endif
 
 struct homogeneous_struct {
   float f[2];
@@ -13,6 +20,7 @@ struct homogeneous_struct {
   float f4;
 };
 // CHECK: define arm_aapcs_vfpcc void @test_struct(float %{{.*}}, float %{{.*}}, float %{{.*}}, float %{{.*}})
+// CHECK64: define void @test_struct(float %{{.*}}, float %{{.*}}, float %{{.*}}, float %{{.*}})
 extern void struct_callee(struct homogeneous_struct);
 void test_struct(struct homogeneous_struct arg) {
   struct_callee(arg);
@@ -22,6 +30,7 @@ struct nested_array {
   double d[4];
 };
 // CHECK: define arm_aapcs_vfpcc void @test_array(double %{{.*}}, double %{{.*}}, double %{{.*}}, double %{{.*}})
+// CHECK64: define void @test_array(double %{{.*}}, double %{{.*}}, double %{{.*}}, double %{{.*}})
 extern void array_callee(struct nested_array);
 void test_array(struct nested_array arg) {
   array_callee(arg);
@@ -29,6 +38,7 @@ void test_array(struct nested_array arg) {
 
 extern void complex_callee(__complex__ double);
 // CHECK: define arm_aapcs_vfpcc void @test_complex(double %{{.*}}, double %{{.*}})
+// CHECK64: define void @test_complex(double %{{.*}}, double %{{.*}})
 void test_complex(__complex__ double cd) {
   complex_callee(cd);
 }
@@ -43,6 +53,7 @@ struct big_struct {
   float f4;
 };
 // CHECK: define arm_aapcs_vfpcc void @test_big([5 x i32] %{{.*}})
+// CHECK64: define void @test_big(%struct.big_struct* byval %{{.*}})
 extern void big_callee(struct big_struct);
 void test_big(struct big_struct arg) {
   big_callee(arg);
@@ -56,6 +67,7 @@ struct heterogeneous_struct {
   int i2;
 };
 // CHECK: define arm_aapcs_vfpcc void @test_hetero([2 x i32] %{{.*}})
+// CHECK64: define void @test_hetero(i64 %{{.*}})
 extern void hetero_callee(struct heterogeneous_struct);
 void test_hetero(struct heterogeneous_struct arg) {
   hetero_callee(arg);
@@ -63,6 +75,7 @@ void test_hetero(struct heterogeneous_struct arg) {
 
 // Neon multi-vector types are homogeneous aggregates.
 // CHECK: define arm_aapcs_vfpcc <16 x i8> @f0(<16 x i8> %{{.*}}, <16 x i8> %{{.*}}, <16 x i8> %{{.*}}, <16 x i8> %{{.*}})
+// CHECK64: define <16 x i8> @f0(%struct.int8x16x4_t* byval %{{.*}})
 int8x16_t f0(int8x16x4_t v4) {
   return vaddq_s8(v4.val[0], v4.val[3]);
 }
@@ -76,6 +89,7 @@ struct neon_struct {
   int16x4_t v4;
 };
 // CHECK: define arm_aapcs_vfpcc void @test_neon(<8 x i8> %{{.*}}, <8 x i8> %{{.*}}, <2 x i32> %{{.*}}, <4 x i16> %{{.*}})
+// CHECK64: define void @test_neon(%struct.neon_struct* byval %{{.*}})
 extern void neon_callee(struct neon_struct);
 void test_neon(struct neon_struct arg) {
   neon_callee(arg);
