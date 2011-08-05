@@ -1270,8 +1270,8 @@ void RecordLayoutBuilder::LayoutFields(const RecordDecl *D) {
         continue;
       // FIXME. streamline these conditions into a simple one.
       else if (Context.BitfieldFollowsBitfield(FD, LastFD) ||
-               Context.BitfieldFollowsNoneBitfield(FD, LastFD) ||
-               Context.NoneBitfieldFollowsBitfield(FD, LastFD)) {
+               Context.BitfieldFollowsNonBitfield(FD, LastFD) ||
+               Context.NonBitfieldFollowsBitfield(FD, LastFD)) {
         // 1) Adjacent bit fields are packed into the same 1-, 2-, or
         // 4-byte allocation unit if the integral types are the same
         // size and if the next bit field fits into the current
@@ -1581,12 +1581,11 @@ void RecordLayoutBuilder::LayoutField(const FieldDecl *D) {
         CharUnits ZeroLengthBitfieldAlignment = FieldInfo.second;        
         if (ZeroLengthBitfieldAlignment > FieldAlign)
           FieldAlign = ZeroLengthBitfieldAlignment;
-      }
-      else if (ZeroLengthBitfieldBoundary > FieldAlign) {
+      } else if (ZeroLengthBitfieldBoundary > FieldAlign) {
         // Align 'bar' based on a fixed alignment specified by the target.
-        assert (Context.Target.useZeroLengthBitfieldAlignment() &&
-                "ZeroLengthBitfieldBoundary should only be used in conjunction"
-                "with useZeroLengthBitfieldAlignment.");
+        assert(Context.Target.useZeroLengthBitfieldAlignment() &&
+               "ZeroLengthBitfieldBoundary should only be used in conjunction"
+               " with useZeroLengthBitfieldAlignment.");
         FieldAlign = ZeroLengthBitfieldBoundary;
       }
       ZeroLengthBitfield = 0;
