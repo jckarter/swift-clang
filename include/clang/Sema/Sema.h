@@ -2265,6 +2265,7 @@ public:
 
   bool DiagnoseEmptyLookup(Scope *S, CXXScopeSpec &SS, LookupResult &R,
                            CorrectTypoContext CTC = CTC_Unknown,
+                           TemplateArgumentListInfo *ExplicitTemplateArgs = 0,
                            Expr **Args = 0, unsigned NumArgs = 0);
 
   ExprResult LookupInObjCMethod(LookupResult &R, Scope *S, IdentifierInfo *II,
@@ -5991,16 +5992,16 @@ private:
                                  bool isPrintf);
 
   /// \brief Enumeration used to describe which of the memory setting or copying
-  /// functions is being checked by \c CheckMemsetcpymoveArguments().
+  /// functions is being checked by \c CheckMemaccessArguments().
   enum CheckedMemoryFunction {
     CMF_Memset,
     CMF_Memcpy,
-    CMF_Memmove
+    CMF_Memmove,
+    CMF_Memcmp
   };
   
-  void CheckMemsetcpymoveArguments(const CallExpr *Call, 
-                                   CheckedMemoryFunction CMF,
-                                   IdentifierInfo *FnName);
+  void CheckMemaccessArguments(const CallExpr *Call, CheckedMemoryFunction CMF,
+                               IdentifierInfo *FnName);
 
   void CheckReturnStackAddr(Expr *RetValExp, QualType lhsType,
                             SourceLocation ReturnLoc);
