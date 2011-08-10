@@ -2976,9 +2976,6 @@ void ASTReader::InitializeContext(ASTContext &Ctx) {
 
     if (unsigned String = SpecialTypes[SPECIAL_TYPE_CF_CONSTANT_STRING])
       Context->setCFConstantStringType(GetType(String));
-    if (unsigned FastEnum
-          = SpecialTypes[SPECIAL_TYPE_OBJC_FAST_ENUMERATION_STATE])
-      Context->setObjCFastEnumerationStateType(GetType(FastEnum));
     if (unsigned File = SpecialTypes[SPECIAL_TYPE_FILE]) {
       QualType FileType = GetType(File);
       if (FileType.isNull()) {
@@ -3033,24 +3030,12 @@ void ASTReader::InitializeContext(ASTContext &Ctx) {
     if (unsigned ObjCClassRedef
         = SpecialTypes[SPECIAL_TYPE_OBJC_CLASS_REDEFINITION])
       Context->ObjCClassRedefinitionType = GetType(ObjCClassRedef);
-    if (unsigned String = SpecialTypes[SPECIAL_TYPE_BLOCK_DESCRIPTOR])
-      Context->setBlockDescriptorType(GetType(String));
-    if (unsigned String
-        = SpecialTypes[SPECIAL_TYPE_BLOCK_EXTENDED_DESCRIPTOR])
-      Context->setBlockDescriptorExtendedType(GetType(String));
     if (unsigned ObjCSelRedef
         = SpecialTypes[SPECIAL_TYPE_OBJC_SEL_REDEFINITION])
       Context->ObjCSelRedefinitionType = GetType(ObjCSelRedef);
-    if (unsigned String = SpecialTypes[SPECIAL_TYPE_NS_CONSTANT_STRING])
-      Context->setNSConstantStringType(GetType(String));
 
     if (SpecialTypes[SPECIAL_TYPE_INT128_INSTALLED])
       Context->setInt128Installed();
-
-    if (unsigned AutoDeduct = SpecialTypes[SPECIAL_TYPE_AUTO_DEDUCT])
-      Context->AutoDeductTy = GetType(AutoDeduct);
-    if (unsigned AutoRRefDeduct = SpecialTypes[SPECIAL_TYPE_AUTO_RREF_DEDUCT])
-      Context->AutoRRefDeductTy = GetType(AutoRRefDeduct);
   }
 
   ReadPragmaDiagnosticMappings(Context->getDiagnostics());
@@ -4033,6 +4018,11 @@ QualType ASTReader::GetType(TypeID ID) {
     case PREDEF_TYPE_OBJC_ID:       T = Context->ObjCBuiltinIdTy;    break;
     case PREDEF_TYPE_OBJC_CLASS:    T = Context->ObjCBuiltinClassTy; break;
     case PREDEF_TYPE_OBJC_SEL:      T = Context->ObjCBuiltinSelTy;   break;
+    case PREDEF_TYPE_AUTO_DEDUCT:   T = Context->getAutoDeductType(); break;
+        
+    case PREDEF_TYPE_AUTO_RREF_DEDUCT: 
+      T = Context->getAutoRRefDeductType(); 
+      break;
     }
 
     assert(!T.isNull() && "Unknown predefined type");
