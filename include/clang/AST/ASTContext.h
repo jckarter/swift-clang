@@ -198,10 +198,6 @@ class ASTContext : public llvm::RefCountedBase<ASTContext> {
   QualType ObjCConstantStringType;
   mutable RecordDecl *CFConstantStringTypeDecl;
 
-  mutable RecordDecl *NSConstantStringTypeDecl;
-
-  mutable RecordDecl *ObjCFastEnumerationStateTypeDecl;
-
   /// \brief The type for the C FILE type.
   TypeDecl *FILEDecl;
 
@@ -212,9 +208,15 @@ class ASTContext : public llvm::RefCountedBase<ASTContext> {
   TypeDecl *sigjmp_bufDecl;
 
   /// \brief Type for the Block descriptor for Blocks CodeGen.
+  ///
+  /// Since this is only used for generation of debug info, it is not
+  /// serialized.
   mutable RecordDecl *BlockDescriptorType;
 
   /// \brief Type for the Block descriptor for Blocks CodeGen.
+  ///
+  /// Since this is only used for generation of debug info, it is not
+  /// serialized.
   mutable RecordDecl *BlockDescriptorExtendedType;
 
   /// \brief Declaration for the CUDA cudaConfigureCall function.
@@ -567,28 +569,9 @@ public:
   /// blocks.
   QualType getBlockDescriptorType() const;
 
-  // Set the type for a Block descriptor type.
-  void setBlockDescriptorType(QualType T);
-  /// Get the BlockDescriptorType type, or NULL if it hasn't yet been built.
-  QualType getRawBlockdescriptorType() {
-    if (BlockDescriptorType)
-      return getTagDeclType(BlockDescriptorType);
-    return QualType();
-  }
-
   /// This gets the struct used to keep track of the extended descriptor for
   /// pointer to blocks.
   QualType getBlockDescriptorExtendedType() const;
-
-  // Set the type for a Block descriptor extended type.
-  void setBlockDescriptorExtendedType(QualType T);
-  /// Get the BlockDescriptorExtendedType type, or NULL if it hasn't yet been
-  /// built.
-  QualType getRawBlockdescriptorExtendedType() const {
-    if (BlockDescriptorExtendedType)
-      return getTagDeclType(BlockDescriptorExtendedType);
-    return QualType();
-  }
 
   void setcudaConfigureCallDecl(FunctionDecl *FD) {
     cudaConfigureCallDecl = FD;
@@ -823,19 +806,6 @@ public:
   // constant CFStrings.
   QualType getCFConstantStringType() const;
 
-  // getNSConstantStringType - Return the C structure type used to represent
-  // constant NSStrings.
-  QualType getNSConstantStringType() const;
-  /// Get the structure type used to representation NSStrings, or NULL
-  /// if it hasn't yet been built.
-  QualType getRawNSConstantStringType() const {
-    if (NSConstantStringTypeDecl)
-      return getTagDeclType(NSConstantStringTypeDecl);
-    return QualType();
-  }
-  void setNSConstantStringType(QualType T);
-
-
   /// Get the structure type used to representation CFStrings, or NULL
   /// if it hasn't yet been built.
   QualType getRawCFConstantStringType() const {
@@ -850,19 +820,6 @@ public:
   QualType getObjCConstantStringInterface() const {
     return ObjCConstantStringType;
   }
-
-  //// This gets the struct used to keep track of fast enumerations.
-  QualType getObjCFastEnumerationStateType() const;
-
-  /// Get the ObjCFastEnumerationState type, or NULL if it hasn't yet
-  /// been built.
-  QualType getRawObjCFastEnumerationStateType() const {
-    if (ObjCFastEnumerationStateTypeDecl)
-      return getTagDeclType(ObjCFastEnumerationStateTypeDecl);
-    return QualType();
-  }
-
-  void setObjCFastEnumerationStateType(QualType T);
 
   /// \brief Set the type for the C FILE type.
   void setFILEDecl(TypeDecl *FILEDecl) { this->FILEDecl = FILEDecl; }
