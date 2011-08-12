@@ -91,6 +91,7 @@ public:
 };
 
 typedef const SymbolData* SymbolRef;
+typedef llvm::SmallVector<SymbolRef, 2> SymbolRefSmallVectorTy;
 
 /// A symbol representing the value of a MemRegion.
 class SymbolRegionValue : public SymbolData {
@@ -357,8 +358,12 @@ public:
 
 class SymbolManager {
   typedef llvm::FoldingSet<SymExpr> DataSetTy;
+  typedef llvm::DenseMap<SymbolRef, SymbolRefSmallVectorTy*> SymbolDependTy;
 
   DataSetTy DataSet;
+  /// Stores the extra dependencies between symbols: the data should be kept
+  /// alive as long as the key is live.
+  SymbolDependTy SymbolDependencies;
   unsigned SymbolCounter;
   llvm::BumpPtrAllocator& BPAlloc;
   BasicValueFactory &BV;
@@ -367,7 +372,8 @@ class SymbolManager {
 public:
   SymbolManager(ASTContext& ctx, BasicValueFactory &bv,
                 llvm::BumpPtrAllocator& bpalloc)
-    : SymbolCounter(0), BPAlloc(bpalloc), BV(bv), Ctx(ctx) {}
+    : SymbolDependencies(16), SymbolCounter(0),
+      BPAlloc(bpalloc), BV(bv), Ctx(ctx) {}
 
   ~SymbolManager();
 
@@ -413,15 +419,28 @@ public:
     return SE->getType(Ctx);
   }
 
+  /// \brief Add artificial symbol dependency.
+  ///
+  /// The dependent symbol should stay alive as long as the primary is alive.
+  void addSymbolDependency(const SymbolRef Primary, const SymbolRef Dependent);
+
+  const SymbolRefSmallVectorTy *getDependentSymbols(const SymbolRef Primary);
+
   ASTContext &getContext() { return Ctx; }
   BasicValueFactory &getBasicVals() { return BV; }
 };
 
 class SymbolReaper {
+  enum SymbolStatus {
+    NotProcessed,
+    HaveMarkedDependents
+  };
+
   typedef llvm::DenseSet<SymbolRef> SymbolSetTy;
+  typedef llvm::DenseMap<SymbolRef, SymbolStatus> SymbolMapTy;
   typedef llvm::DenseSet<const MemRegion *> RegionSetTy;
 
-  SymbolSetTy TheLiving;
+  SymbolMapTy TheLiving;
   SymbolSetTy MetadataInUse;
   SymbolSetTy TheDead;
 
@@ -495,6 +514,10 @@ public:
   /// \brief Set to the value of the symbolic store after
   /// StoreManager::removeDeadBindings has been called.
   void setReapedStore(StoreRef st) { reapedStore = st; }
+
+private:
+  /// Mark the symbols dependent on the input symbol as live.
+  void markDependentsLive(SymbolRef sym);
 };
 
 class SymbolVisitor {
@@ -504,7 +527,7 @@ public:
   /// The method returns \c true if symbols should continue be scanned and \c
   /// false otherwise.
   virtual bool VisitSymbol(SymbolRef sym) = 0;
-  virtual bool VisitMemRegion(const MemRegion *region) { return true; };
+  virtual bool VisitMemRegion(const MemRegion *region) { return true; }
   virtual ~SymbolVisitor();
 };
 
