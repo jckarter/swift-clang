@@ -174,27 +174,29 @@ class ASTContext : public llvm::RefCountedBase<ASTContext> {
   TemplateTemplateParmDecl *
     getCanonicalTemplateTemplateParmDecl(TemplateTemplateParmDecl *TTP) const;
 
-  /// \brief Whether __[u]int128_t identifier is installed.
-  bool IsInt128Installed;
+  /// \brief The typedef for the __int128_t type.
+  mutable TypedefDecl *Int128Decl;
 
+  /// \brief The typedef for the __uint128_t type.
+  mutable TypedefDecl *UInt128Decl;
+  
   /// BuiltinVaListType - built-in va list type.
   /// This is initially null and set by Sema::LazilyCreateBuiltin when
   /// a builtin that takes a valist is encountered.
   QualType BuiltinVaListType;
 
-  /// ObjCIdType - a pseudo built-in typedef type (set by Sema).
-  QualType ObjCIdTypedefType;
+  /// \brief The typedef for the predefined 'id' type.
+  mutable TypedefDecl *ObjCIdDecl;
+  
+  /// \brief The typedef for the predefined 'SEL' type.
+  mutable TypedefDecl *ObjCSelDecl;
 
-  /// ObjCSelType - another pseudo built-in typedef type (set by Sema).
-  QualType ObjCSelTypedefType;
-
-  /// ObjCProtoType - another pseudo built-in typedef type (set by Sema).
   QualType ObjCProtoType;
   const RecordType *ProtoStructType;
 
-  /// ObjCClassType - another pseudo built-in typedef type (set by Sema).
-  QualType ObjCClassTypedefType;
-
+  /// \brief The typedef for the predefined 'Class' type.
+  mutable TypedefDecl *ObjCClassDecl;
+  
   // Typedefs which may be provided defining the structure of Objective-C
   // pseudo-builtins
   QualType ObjCIdRedefinitionType;
@@ -500,6 +502,12 @@ public:
   void PrintStats() const;
   const std::vector<Type*>& getTypes() const { return Types; }
 
+  /// \brief Retrieve the declaration for the 128-bit signed integer type.
+  TypedefDecl *getInt128Decl() const;
+
+  /// \brief Retrieve the declaration for the 128-bit unsigned integer type.
+  TypedefDecl *getUInt128Decl() const;
+  
   //===--------------------------------------------------------------------===//
   //                           Type Constructors
   //===--------------------------------------------------------------------===//
@@ -948,26 +956,39 @@ public:
   /// purpose in characters.
   CharUnits getObjCEncodingTypeSize(QualType t) const;
 
-  /// \brief Whether __[u]int128_t identifier is installed.
-  bool isInt128Installed() const { return IsInt128Installed; }
-  void setInt128Installed() { IsInt128Installed = true; }
-
+  /// \brief Retrieve the typedef corresponding to the predefined 'id' type
+  /// in Objective-C.
+  TypedefDecl *getObjCIdDecl() const;
+  
   /// This setter/getter represents the ObjC 'id' type. It is setup lazily, by
   /// Sema.  id is always a (typedef for a) pointer type, a pointer to a struct.
-  QualType getObjCIdType() const { return ObjCIdTypedefType; }
-  void setObjCIdType(QualType T);
+  QualType getObjCIdType() const {
+    return getTypeDeclType(getObjCIdDecl());
+  }
 
-  void setObjCSelType(QualType T);
-  QualType getObjCSelType() const { return ObjCSelTypedefType; }
+  /// \brief Retrieve the typedef corresponding to the predefined 'SEL' type
+  /// in Objective-C.
+  TypedefDecl *getObjCSelDecl() const;
+  
+  /// \brief Retrieve the type that corresponds to the predefined Objective-C
+  /// 'SEL' type.
+  QualType getObjCSelType() const { 
+    return getTypeDeclType(getObjCSelDecl());
+  }
 
   void setObjCProtoType(QualType QT);
   QualType getObjCProtoType() const { return ObjCProtoType; }
 
+  /// \brief Retrieve the typedef declaration corresponding to the predefined
+  /// Objective-C 'Class' type.
+  TypedefDecl *getObjCClassDecl() const;
+  
   /// This setter/getter repreents the ObjC 'Class' type. It is setup lazily, by
   /// Sema.  'Class' is always a (typedef for a) pointer type, a pointer to a
   /// struct.
-  QualType getObjCClassType() const { return ObjCClassTypedefType; }
-  void setObjCClassType(QualType T);
+  QualType getObjCClassType() const { 
+    return getTypeDeclType(getObjCClassDecl());
+  }
 
   void setBuiltinVaListType(QualType T);
   QualType getBuiltinVaListType() const { return BuiltinVaListType; }
@@ -1415,13 +1436,13 @@ public:
   bool typesAreBlockPointerCompatible(QualType, QualType); 
 
   bool isObjCIdType(QualType T) const {
-    return T == ObjCIdTypedefType;
+    return T == getObjCIdType();
   }
   bool isObjCClassType(QualType T) const {
-    return T == ObjCClassTypedefType;
+    return T == getObjCClassType();
   }
   bool isObjCSelType(QualType T) const {
-    return T == ObjCSelTypedefType;
+    return T == getObjCSelType();
   }
   bool QualifiedIdConformsQualifiedId(QualType LHS, QualType RHS);
   bool ObjCQualifiedIdTypesAreCompatible(QualType LHS, QualType RHS,
