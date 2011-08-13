@@ -221,7 +221,9 @@ ASTContext::ASTContext(const LangOptions& LOpts, SourceManager &SM,
   TemplateSpecializationTypes(this_()),
   DependentTemplateSpecializationTypes(this_()),
   SubstTemplateTemplateParmPacks(this_()),
-  GlobalNestedNameSpecifier(0), IsInt128Installed(false),
+  GlobalNestedNameSpecifier(0), 
+  Int128Decl(0), UInt128Decl(0),
+  ObjCIdDecl(0), ObjCSelDecl(0), ObjCClassDecl(0),
   CFConstantStringTypeDecl(0),
   FILEDecl(0), 
   jmp_bufDecl(0), sigjmp_bufDecl(0), BlockDescriptorType(0), 
@@ -345,6 +347,33 @@ void ASTContext::PrintStats() const {
   BumpAlloc.PrintStats();
 }
 
+TypedefDecl *ASTContext::getInt128Decl() const {
+  if (!Int128Decl) {
+    TypeSourceInfo *TInfo = getTrivialTypeSourceInfo(Int128Ty);
+    Int128Decl = TypedefDecl::Create(const_cast<ASTContext &>(*this), 
+                                     getTranslationUnitDecl(),
+                                     SourceLocation(),
+                                     SourceLocation(),
+                                     &Idents.get("__int128_t"),
+                                     TInfo);
+  }
+  
+  return Int128Decl;
+}
+
+TypedefDecl *ASTContext::getUInt128Decl() const {
+  if (!UInt128Decl) {
+    TypeSourceInfo *TInfo = getTrivialTypeSourceInfo(UnsignedInt128Ty);
+    UInt128Decl = TypedefDecl::Create(const_cast<ASTContext &>(*this), 
+                                     getTranslationUnitDecl(),
+                                     SourceLocation(),
+                                     SourceLocation(),
+                                     &Idents.get("__uint128_t"),
+                                     TInfo);
+  }
+  
+  return UInt128Decl;
+}
 
 void ASTContext::InitBuiltinType(CanQualType &R, BuiltinType::Kind K) {
   BuiltinType *Ty = new (*this, TypeAlignment) BuiltinType(K);
@@ -428,11 +457,6 @@ void ASTContext::InitBuiltinTypes() {
   LongDoubleComplexTy = getComplexType(LongDoubleTy);
 
   BuiltinVaListType = QualType();
-
-  // "Builtin" typedefs set by Sema::ActOnTranslationUnitScope().
-  ObjCIdTypedefType = QualType();
-  ObjCClassTypedefType = QualType();
-  ObjCSelTypedefType = QualType();
 
   // Builtin types for 'id', 'Class', and 'SEL'.
   InitBuiltinType(ObjCBuiltinIdTy, BuiltinType::ObjCId);
@@ -4054,6 +4078,7 @@ void ASTContext::getObjCEncodingForPropertyDecl(const ObjCPropertyDecl *PD,
     case ObjCPropertyDecl::Assign: break;
     case ObjCPropertyDecl::Copy:   S += ",C"; break;
     case ObjCPropertyDecl::Retain: S += ",&"; break;
+    case ObjCPropertyDecl::Weak:   S += ",W"; break;
     }
   }
 
@@ -4619,20 +4644,48 @@ void ASTContext::setBuiltinVaListType(QualType T) {
   BuiltinVaListType = T;
 }
 
-void ASTContext::setObjCIdType(QualType T) {
-  ObjCIdTypedefType = T;
+TypedefDecl *ASTContext::getObjCIdDecl() const {
+  if (!ObjCIdDecl) {
+    QualType T = getObjCObjectType(ObjCBuiltinIdTy, 0, 0);
+    T = getObjCObjectPointerType(T);
+    TypeSourceInfo *IdInfo = getTrivialTypeSourceInfo(T);
+    ObjCIdDecl = TypedefDecl::Create(const_cast<ASTContext &>(*this),
+                                     getTranslationUnitDecl(),
+                                     SourceLocation(), SourceLocation(),
+                                     &Idents.get("id"), IdInfo);
+  }
+  
+  return ObjCIdDecl;
 }
 
-void ASTContext::setObjCSelType(QualType T) {
-  ObjCSelTypedefType = T;
+TypedefDecl *ASTContext::getObjCSelDecl() const {
+  if (!ObjCSelDecl) {
+    QualType SelT = getPointerType(ObjCBuiltinSelTy);
+    TypeSourceInfo *SelInfo = getTrivialTypeSourceInfo(SelT);
+    ObjCSelDecl = TypedefDecl::Create(const_cast<ASTContext &>(*this),
+                                      getTranslationUnitDecl(),
+                                      SourceLocation(), SourceLocation(),
+                                      &Idents.get("SEL"), SelInfo);
+  }
+  return ObjCSelDecl;
 }
 
 void ASTContext::setObjCProtoType(QualType QT) {
   ObjCProtoType = QT;
 }
 
-void ASTContext::setObjCClassType(QualType T) {
-  ObjCClassTypedefType = T;
+TypedefDecl *ASTContext::getObjCClassDecl() const {
+  if (!ObjCClassDecl) {
+    QualType T = getObjCObjectType(ObjCBuiltinClassTy, 0, 0);
+    T = getObjCObjectPointerType(T);
+    TypeSourceInfo *ClassInfo = getTrivialTypeSourceInfo(T);
+    ObjCClassDecl = TypedefDecl::Create(const_cast<ASTContext &>(*this),
+                                        getTranslationUnitDecl(),
+                                        SourceLocation(), SourceLocation(),
+                                        &Idents.get("Class"), ClassInfo);
+  }
+  
+  return ObjCClassDecl;
 }
 
 void ASTContext::setObjCConstantStringInterface(ObjCInterfaceDecl *Decl) {
