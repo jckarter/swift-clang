@@ -2833,11 +2833,14 @@ ASTReader::ASTReadResult ASTReader::ReadASTCore(StringRef FileName,
                                                 Module *ImportedBy) {
   Module *M;
   bool NewModule;
-  llvm::tie(M, NewModule) = ModuleMgr.addModule(FileName, Type, ImportedBy);
+  std::string ErrorStr;
+  llvm::tie(M, NewModule) = ModuleMgr.addModule(FileName, Type, ImportedBy,
+                                                ErrorStr);
 
   if (!M) {
     // We couldn't load the module.
-    std::string Msg = "Unable to load module \"" + FileName.str() + "\"";
+    std::string Msg = "Unable to load module \"" + FileName.str() + "\": "
+      + ErrorStr;
     Error(Msg);
     return Failure;
   }
@@ -2847,37 +2850,14 @@ ASTReader::ASTReadResult ASTReader::ReadASTCore(StringRef FileName,
     return Success;
   }
 
-  Module &F = *M;
-
+  // FIXME: This seems rather a hack. Should CurrentDir be part of the
+  // module?
   if (FileName != "-") {
     CurrentDir = llvm::sys::path::parent_path(FileName);
     if (CurrentDir.empty()) CurrentDir = ".";
   }
 
-  if (llvm::MemoryBuffer *Buffer = ModuleMgr.lookupBuffer(FileName)) {
-    F.Buffer.reset(Buffer);
-    assert(F.Buffer && "Passed null buffer");
-  } else {
-    // Open the AST file.
-    //
-    // FIXME: This shouldn't be here, we should just take a raw_ostream.
-    std::string ErrStr;
-    llvm::error_code ec;
-    if (FileName == "-") {
-      ec = llvm::MemoryBuffer::getSTDIN(F.Buffer);
-      if (ec)
-        ErrStr = ec.message();
-    } else
-      F.Buffer.reset(FileMgr.getBufferForFile(FileName, &ErrStr));
-    if (!F.Buffer) {
-      Error(ErrStr.c_str());
-      return IgnorePCH;
-    }
-  }
-
-  // Initialize the stream
-  F.StreamFile.init((const unsigned char *)F.Buffer->getBufferStart(),
-                    (const unsigned char *)F.Buffer->getBufferEnd());
+  Module &F = *M;
   llvm::BitstreamCursor &Stream = F.Stream;
   Stream.init(F.StreamFile);
   F.SizeInBits = F.Buffer->getBufferSize() * 8;
@@ -5727,10 +5707,12 @@ llvm::MemoryBuffer *ModuleManager::lookupBuffer(StringRef Name) {
 
 std::pair<Module *, bool>
 ModuleManager::addModule(StringRef FileName, ModuleKind Type, 
-                         Module *ImportedBy) {
+                         Module *ImportedBy, std::string &ErrorStr) {
   const FileEntry *Entry = FileMgr.getFile(FileName);
-  if (!Entry)
+  if (!Entry && FileName != "-") {
+    ErrorStr = "file not found";
     return std::make_pair(static_cast<Module*>(0), false);
+  }
 
   // Check whether we already loaded this module, before 
   Module *&ModuleEntry = Modules[Entry];
@@ -5740,10 +5722,31 @@ ModuleManager::addModule(StringRef FileName, ModuleKind Type,
     Module *New = new Module(Type);
     New->FileName = FileName.str();
     Chain.push_back(New);
-  
     NewModule = true;
     ModuleEntry = New;
-  }
+
+    // Load the contents of the module
+    if (llvm::MemoryBuffer *Buffer = lookupBuffer(FileName)) {
+      // The buffer was already provided for us.
+      assert(Buffer && "Passed null buffer");
+      New->Buffer.reset(Buffer);
+    } else {
+      // Open the AST file.
+      llvm::error_code ec;
+      if (FileName == "-") {
+        ec = llvm::MemoryBuffer::getSTDIN(New->Buffer);
+        if (ec)
+          ErrorStr = ec.message();
+      } else
+        New->Buffer.reset(FileMgr.getBufferForFile(FileName, &ErrorStr));
+
+      if (!New->Buffer)
+        return std::make_pair(static_cast<Module*>(0), false);
+    }
+
+    // Initialize the stream
+    New->StreamFile.init((const unsigned char *)New->Buffer->getBufferStart(),
+                         (const unsigned char *)New->Buffer->getBufferEnd());     }
 
   if (ImportedBy) {
     ModuleEntry->ImportedBy.insert(ImportedBy);
