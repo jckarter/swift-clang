@@ -49,7 +49,6 @@
 #include <iterator>
 #include <cstdio>
 #include <sys/stat.h>
-#include <iostream>
 
 using namespace clang;
 using namespace clang::serialization;
@@ -699,7 +698,8 @@ public:
     assert(II->isExtensionToken() == ExtensionToken &&
            "Incorrect extension token flag");
     (void)ExtensionToken;
-    II->setIsPoisoned(Poisoned);
+    if (Poisoned)
+      II->setIsPoisoned(true);
     assert(II->isCPlusPlusOperatorKeyword() == CPlusPlusOperatorKeyword &&
            "Incorrect C++ operator keyword flag");
     (void)CPlusPlusOperatorKeyword;
@@ -707,6 +707,7 @@ public:
     // If this identifier is a macro, deserialize the macro
     // definition.
     if (hasMacroDefinition) {
+      // FIXME: Check for conflicts?
       uint32_t Offset = ReadUnalignedLE32(d);
       Reader.SetIdentifierIsMacro(II, F, Offset);
       DataLen -= 4;
@@ -1319,9 +1320,11 @@ ASTReader::ASTReadResult ASTReader::ReadSLocEntryRecord(int ID) {
     FileID FID = SourceMgr.createFileID(File, IncludeLoc,
                                         (SrcMgr::CharacteristicKind)Record[2],
                                         ID, BaseOffset + Record[0]);
+    SrcMgr::FileInfo &FileInfo =
+          const_cast<SrcMgr::FileInfo&>(SourceMgr.getSLocEntry(FID).getFile());
+    FileInfo.NumCreatedFIDs = Record[6];
     if (Record[3])
-      const_cast<SrcMgr::FileInfo&>(SourceMgr.getSLocEntry(FID).getFile())
-        .setHasLineDirectives();
+      FileInfo.setHasLineDirectives();
     
     break;
   }
@@ -4574,25 +4577,46 @@ void ASTReader::InitializeSema(Sema &S) {
   }
 }
 
-IdentifierInfo* ASTReader::get(const char *NameStart, const char *NameEnd) {
-  // Try to find this name within our on-disk hash tables. We start with the
-  // most recent one, since that one contains the most up-to-date info.
-  for (ModuleIterator I = ModuleMgr.begin(), E = ModuleMgr.end(); I != E; ++I) {
-    ASTIdentifierLookupTable *IdTable
-        = (ASTIdentifierLookupTable *)(*I)->IdentifierLookupTable;
-    if (!IdTable)
-      continue;
-    std::pair<const char*, unsigned> Key(NameStart, NameEnd - NameStart);
-    ASTIdentifierLookupTable::iterator Pos = IdTable->find(Key);
-    if (Pos == IdTable->end())
-      continue;
+namespace {
+  /// \brief Visitor class used to look up identifirs in 
+  class IdentifierLookupVisitor {
+    StringRef Name;
+    IdentifierInfo *Found;
+  public:
+    explicit IdentifierLookupVisitor(StringRef Name) : Name(Name), Found() { }
 
-    // Dereferencing the iterator has the effect of building the
-    // IdentifierInfo node and populating it with the various
-    // declarations it needs.
-    return *Pos;
-  }
-  return 0;
+    static bool visit(Module &M, void *UserData) {
+      IdentifierLookupVisitor *This
+        = static_cast<IdentifierLookupVisitor *>(UserData);
+      
+      ASTIdentifierLookupTable *IdTable
+        = (ASTIdentifierLookupTable *)M.IdentifierLookupTable;
+      if (!IdTable)
+        return false;
+
+      std::pair<const char*, unsigned> Key(This->Name.begin(), 
+                                           This->Name.size());
+      ASTIdentifierLookupTable::iterator Pos = IdTable->find(Key);
+      if (Pos == IdTable->end())
+        return false;
+
+      // Dereferencing the iterator has the effect of building the
+      // IdentifierInfo node and populating it with the various
+      // declarations it needs.
+      This->Found = *Pos;
+      return true;
+    }
+
+    // \brief Retrieve the identifier info found within the module
+    // files.
+    IdentifierInfo *getIdentifierInfo() const { return Found; }
+  };
+}
+
+IdentifierInfo* ASTReader::get(const char *NameStart, const char *NameEnd) {
+  IdentifierLookupVisitor Visitor(StringRef(NameStart, NameEnd - NameStart));
+  ModuleMgr.visit(IdentifierLookupVisitor::visit, &Visitor);
+  return Visitor.getIdentifierInfo();
 }
 
 namespace clang {
@@ -5606,6 +5630,9 @@ ASTReader::~ASTReader() {
   }
 }
 
+//===----------------------------------------------------------------------===//
+// Module implementation
+//===----------------------------------------------------------------------===//
 Module::Module(ModuleKind Kind)
   : Kind(Kind), DirectlyImported(false), SizeInBits(0), 
     LocalNumSLocEntries(0), SLocEntryBaseID(0),
@@ -5695,6 +5722,10 @@ void Module::dump() {
   dumpLocalRemap("Decl ID local -> global map", DeclRemap);
 }
 
+//===----------------------------------------------------------------------===//
+// Module manager implementation
+//===----------------------------------------------------------------------===//
+
 Module *ModuleManager::lookup(StringRef Name) {
   const FileEntry *Entry = FileMgr.getFile(Name);
   return Modules[Entry];
@@ -5765,20 +5796,78 @@ void ModuleManager::addInMemoryBuffer(StringRef FileName,
     Buffer->getBufferSize(), 0);
   InMemoryBuffers[Entry] = Buffer;
 }
-/// \brief Exports the list of loaded modules with their corresponding names
-void ModuleManager::exportLookup(SmallVector<ModuleOffset, 16> &Target) {
-  Target.reserve(size());
-  for (ModuleConstIterator I = Chain.begin(), E = Chain.end();
-       I != E; ++I) {
-    Target.push_back(ModuleOffset((*I)->SLocEntryBaseOffset,
-                                  (*I)->FileName));
-  }
-  std::sort(Target.begin(), Target.end());
-}
 
 ModuleManager::ModuleManager(const FileSystemOptions &FSO) : FileMgr(FSO) { }
 
 ModuleManager::~ModuleManager() {
   for (unsigned i = 0, e = Chain.size(); i != e; ++i)
     delete Chain[e - i - 1];
+}
+
+void ModuleManager::visit(bool (*Visitor)(Module &M, void *UserData), 
+                          void *UserData) {
+  unsigned N = size();
+
+  // Record the number of incoming edges for each module. When we
+  // encounter a module with no incoming edges, push it into the queue
+  // to seed the queue.
+  SmallVector<Module *, 4> Queue;
+  Queue.reserve(N);
+  llvm::DenseMap<Module *, unsigned> UnusedIncomingEdges; 
+  for (ModuleIterator M = begin(), MEnd = end(); M != MEnd; ++M) {
+    if (unsigned Size = (*M)->ImportedBy.size())
+      UnusedIncomingEdges[*M] = Size;
+    else
+      Queue.push_back(*M);
+  }
+
+  llvm::SmallPtrSet<Module *, 4> Skipped;
+  unsigned QueueStart = 0;
+  while (QueueStart < Queue.size()) {
+    Module *CurrentModule = Queue[QueueStart++];
+
+    // Check whether this module should be skipped.
+    if (Skipped.count(CurrentModule))
+      continue;
+
+    if (Visitor(*CurrentModule, UserData)) {
+      // The visitor has requested that cut off visitation of any
+      // module that the current module depends on. To indicate this
+      // behavior, we mark all of the reachable modules as having N
+      // incoming edges (which is impossible otherwise).
+      SmallVector<Module *, 4> Stack;
+      Stack.push_back(CurrentModule);
+      Skipped.insert(CurrentModule);
+      while (!Stack.empty()) {
+        Module *NextModule = Stack.back();
+        Stack.pop_back();
+
+        // For any module that this module depends on, push it on the
+        // stack (if it hasn't already been marked as visited).
+        for (llvm::SetVector<Module *>::iterator 
+                  M = NextModule->Imports.begin(),
+               MEnd = NextModule->Imports.end();
+             M != MEnd; ++M) {
+          if (Skipped.insert(*M))
+            Stack.push_back(*M);
+        }
+      }
+      continue;
+    }
+
+    // For any module that this module depends on, push it on the
+    // stack (if it hasn't already been marked as visited).
+    for (llvm::SetVector<Module *>::iterator M = CurrentModule->Imports.begin(),
+                                          MEnd = CurrentModule->Imports.end();
+         M != MEnd; ++M) {
+
+      // Remove our current module as an impediment to visiting the
+      // module we depend on. If we were the last unvisited module
+      // that depends on this particular module, push it into the
+      // queue to be visited.
+      unsigned &NumUnusedEdges = UnusedIncomingEdges[*M];
+      if (NumUnusedEdges && (--NumUnusedEdges == 0))
+        Queue.push_back(*M);
+    }
+  }
 }
