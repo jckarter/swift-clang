@@ -264,8 +264,9 @@ def err_types_compatible_p_in_cplusplus : Error<
   "__builtin_types_compatible_p is not valid in C++">;
 def warn_builtin_unknown : Warning<"use of unknown builtin %0">, DefaultError;
 def warn_dyn_class_memaccess : Warning<
-  "%select{destination for|source of}0 this %1 call is a pointer to dynamic "
-  "class %2; vtable pointer will be overwritten">, 
+  "%select{destination for|source of|first operand of|second operand of}0 this "
+  "%1 call is a pointer to dynamic class %2; vtable pointer will be "
+  "%select{overwritten|copied|moved|compared}3">,
   InGroup<DiagGroup<"dynamic-class-memaccess">>;
 def note_bad_memaccess_silence : Note<
   "explicitly cast the pointer to silence this warning">;
@@ -569,6 +570,9 @@ def error_property_implemented : Error<"property %0 is already implemented">;
 def warn_objc_property_attr_mutually_exclusive : Warning<
   "property attributes '%0' and '%1' are mutually exclusive">,
   InGroup<ReadOnlySetterAttrs>, DefaultIgnore;
+def warn_objc_missing_super_dealloc : Warning<
+  "method possibly missing a [super dealloc] call">,
+  InGroup<ObjCMissingSuperCalls>;
 def warn_undeclared_selector : Warning<
   "undeclared selector %0">, InGroup<UndeclaredSelector>, DefaultIgnore;
 def warn_implicit_atomic_property : Warning<

@@ -438,10 +438,11 @@ public:
     FullSourceLoc L(S->getLocStart(), BR.getSourceManager());
 
     if (Loc::isLocType(VD->getType())) {
-      std::string msg = "'" + std::string(VD->getNameAsString()) +
-      "' now aliases '" + MostRecent->getNameAsString() + "'";
+      llvm::SmallString<64> buf;
+      llvm::raw_svector_ostream os(buf);
+      os << '\'' << VD << "' now aliases '" << MostRecent << '\'';
 
-      PD.push_front(new PathDiagnosticEventPiece(L, msg));
+      PD.push_front(new PathDiagnosticEventPiece(L, os.str()));
     }
 
     return true;
@@ -1224,9 +1225,7 @@ void BugReport::addVisitor(BugReporterVisitor* visitor) {
 
 BugReport::~BugReport() {
   for (visitor_iterator I = visitor_begin(), E = visitor_end(); I != E; ++I) {
-    if ((*I)->isOwnedByReporterContext()) {
-      delete *I;
-    }
+    delete *I;
   }
 }
 
@@ -1261,45 +1260,6 @@ const Stmt *BugReport::getStmt() const {
     S = GetStmt(ProgP);
 
   return S;
-}
-
-PathDiagnosticPiece*
-BugReport::getEndPath(BugReporterContext &BRC,
-                      const ExplodedNode *EndPathNode) {
-
-  const ProgramPoint &PP = EndPathNode->getLocation();
-  PathDiagnosticLocation L;
-
-  if (const BlockEntrance *BE = dyn_cast<BlockEntrance>(&PP)) {
-    const CFGBlock *block = BE->getBlock();
-    if (block->getBlockID() == 0) {
-      L = PathDiagnosticLocation(
-          EndPathNode->getLocationContext()->getDecl()->getBodyRBrace(),
-          BRC.getSourceManager());
-    }
-  }
-
-  if (!L.isValid()) {
-    const Stmt *S = getStmt();
-
-    if (!S)
-      return NULL;
-
-    L = PathDiagnosticLocation(S, BRC.getSourceManager());
-  }
-
-  BugReport::ranges_iterator Beg, End;
-  llvm::tie(Beg, End) = getRanges();
-
-  // Only add the statement itself as a range if we didn't specify any
-  // special ranges for this report.
-  PathDiagnosticPiece *P = new PathDiagnosticEventPiece(L, getDescription(),
-                                                        Beg == End);
-
-  for (; Beg != End; ++Beg)
-    P->addRange(*Beg);
-
-  return P;
 }
 
 std::pair<BugReport::ranges_iterator, BugReport::ranges_iterator>
@@ -1338,13 +1298,6 @@ SourceLocation BugReport::getLocation() const {
   }
 
   return FullSourceLoc();
-}
-
-PathDiagnosticPiece *BugReport::VisitNode(const ExplodedNode *N,
-                                          const ExplodedNode *PrevN,
-                                          BugReporterContext &BRC,
-                                          BugReport &BR) {
-  return NULL;
 }
 
 //===----------------------------------------------------------------------===//
@@ -1666,14 +1619,27 @@ void GRBugReporter::GeneratePathDiagnostic(PathDiagnostic& PD,
   // Start building the path diagnostic...
   PathDiagnosticBuilder PDB(*this, R, BackMap.get(), getPathDiagnosticClient());
 
-  if (PathDiagnosticPiece *Piece = R->getEndPath(PDB, N))
-    PD.push_back(Piece);
+  // Register additional node visitors.
+  R->addVisitor(new NilReceiverBRVisitor());
+  R->addVisitor(new ConditionBRVisitor());
+
+  // Generate the very last diagnostic piece - the piece is visible before 
+  // the trace is expanded.
+  PathDiagnosticPiece *LastPiece = 0;
+  for (BugReport::visitor_iterator I = R->visitor_begin(),
+                                   E = R->visitor_end(); I!=E; ++I) {
+    if (PathDiagnosticPiece *Piece = (*I)->getEndPath(PDB, N, *R)) {
+      assert (!LastPiece &&
+              "There can only be one final piece in a diagnostic.");
+      LastPiece = Piece;
+    }
+  }
+  if (!LastPiece)
+    LastPiece = BugReporterVisitor::getDefaultEndPath(PDB, N, *R);
+  if (LastPiece)
+    PD.push_back(LastPiece);
   else
     return;
-
-  // Register additional node visitors.
-  bugreporter::registerNilReceiverVisitor(*R);
-  bugreporter::registerConditionVisitor(*R);
 
   switch (PDB.getGenerationScheme()) {
     case PathDiagnosticClient::Extensive:

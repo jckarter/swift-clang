@@ -776,6 +776,7 @@ ParsedType Parser::ParseObjCTypeName(ObjCDeclSpec &DS,
 
   SourceLocation LParenLoc = ConsumeParen();
   SourceLocation TypeStartLoc = Tok.getLocation();
+  ObjCDeclContextSwitch ObjCDC(*this);
 
   // Parse type qualifiers, in, inout, etc.
   ParseObjCTypeQualifierList(DS, Context);
@@ -1192,7 +1193,9 @@ void Parser::ParseObjCClassInstanceVariables(Decl *interfaceDecl,
     }
   }
   SourceLocation RBraceLoc = MatchRHSPunctuation(tok::r_brace, LBraceLoc);
+  Actions.ActOnObjCContainerStartDefinition(interfaceDecl);
   Actions.ActOnLastBitfield(RBraceLoc, AllIvarDecls);
+  Actions.ActOnObjCContainerFinishDefinition(interfaceDecl);
   // Call ActOnFields() even if we don't have any decls. This is useful
   // for code rewriting tools that need to be aware of the empty list.
   Actions.ActOnFields(getCurScope(), atLoc, interfaceDecl,
