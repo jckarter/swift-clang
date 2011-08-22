@@ -16,6 +16,7 @@
 #define LLVM_CLANG_GR_BUGREPORTER
 
 #include "clang/Basic/SourceLocation.h"
+#include "clang/StaticAnalyzer/Core/BugReporter/BugReporterVisitor.h"
 #include "clang/StaticAnalyzer/Core/PathSensitive/ProgramState.h"
 #include "llvm/ADT/FoldingSet.h"
 #include "llvm/ADT/ImmutableList.h"
@@ -48,27 +49,9 @@ class BugType;
 // Interface for individual bug reports.
 //===----------------------------------------------------------------------===//
 
-class BugReporterVisitor : public llvm::FoldingSetNode {
-public:
-  virtual ~BugReporterVisitor();
-
-  /// \brief Return a diagnostic piece which should be associated with the
-  /// given node.
-  ///
-  /// The last parameter can be used to register a new visitor with the given
-  /// BugReport while processing a node.
-  virtual PathDiagnosticPiece *VisitNode(const ExplodedNode *N,
-                                         const ExplodedNode *PrevN,
-                                         BugReporterContext &BRC,
-                                         BugReport &BR) = 0;
-
-  virtual bool isOwnedByReporterContext() { return true; }
-  virtual void Profile(llvm::FoldingSetNodeID &ID) const = 0;
-};
-
 /// This class provides an interface through which checkers can create
 /// individual bug reports.
-class BugReport : public BugReporterVisitor {
+class BugReport {
 public:
   class NodeResolver {
   public:
@@ -77,14 +60,12 @@ public:
             getOriginalNode(const ExplodedNode *N) = 0;
   };
 
-  typedef void (*VisitorCreator)(BugReport &BR, const void *data);
   typedef const SourceRange *ranges_iterator;
   typedef llvm::ImmutableList<BugReporterVisitor*>::iterator visitor_iterator;
 
 protected:
   friend class BugReporter;
   friend class BugReportEquivClass;
-  typedef SmallVector<std::pair<VisitorCreator, const void*>, 2> Creators;
 
   BugType& BT;
   std::string ShortDescription;
@@ -104,31 +85,21 @@ protected:
   /// for each bug.
   virtual void Profile(llvm::FoldingSetNodeID& hash) const;
 
-  const Stmt *getStmt() const;
-
 public:
   BugReport(BugType& bt, StringRef desc, const ExplodedNode *errornode)
     : BT(bt), Description(desc), ErrorNode(errornode),
-      Callbacks(F.getEmptyList()) {
-      addVisitor(this);
-    }
+      Callbacks(F.getEmptyList()) {}
 
   BugReport(BugType& bt, StringRef shortDesc, StringRef desc,
             const ExplodedNode *errornode)
     : BT(bt), ShortDescription(shortDesc), Description(desc),
-      ErrorNode(errornode), Callbacks(F.getEmptyList()) {
-      addVisitor(this);
-    }
+      ErrorNode(errornode), Callbacks(F.getEmptyList()) {}
 
   BugReport(BugType& bt, StringRef desc, FullSourceLoc l)
     : BT(bt), Description(desc), Location(l), ErrorNode(0),
-      Callbacks(F.getEmptyList()) {
-      addVisitor(this);
-    }
+      Callbacks(F.getEmptyList()) {}
 
   virtual ~BugReport();
-
-  virtual bool isOwnedByReporterContext() { return false; }
 
   const BugType& getBugType() const { return BT; }
   BugType& getBugType() { return BT; }
@@ -148,16 +119,14 @@ public:
     return std::make_pair((const char**)0,(const char**)0);
   }
 
-  /// Provide custom definition for the last diagnostic piece on the path.
-  virtual PathDiagnosticPiece *getEndPath(BugReporterContext &BRC,
-                                          const ExplodedNode *N);
-
   /// \brief Return the "definitive" location of the reported bug.
   ///
   ///  While a bug can span an entire path, usually there is a specific
   ///  location that can be used to identify where the key issue occurred.
   ///  This location is used by clients rendering diagnostics.
   virtual SourceLocation getLocation() const;
+
+  const Stmt *getStmt() const;
 
   /// \brief Add a range to a bug report.
   ///
@@ -178,20 +147,11 @@ public:
   /// \sa registerConditionVisitor(), registerTrackNullOrUndefValue(),
   /// registerFindLastStore(), registerNilReceiverVisitor(), and
   /// registerVarDeclsLastStore().
-  void addVisitorCreator(VisitorCreator creator, const void *data) {
-    creator(*this, data);
-  }
-
-  void addVisitor(BugReporterVisitor* visitor);
+  void addVisitor(BugReporterVisitor *visitor);
 
 	/// Iterators through the custom diagnostic visitors.
   visitor_iterator visitor_begin() { return Callbacks.begin(); }
   visitor_iterator visitor_end() { return Callbacks.end(); }
-
-  virtual PathDiagnosticPiece *VisitNode(const ExplodedNode *N,
-                                         const ExplodedNode *PrevN,
-                                         BugReporterContext &BRC,
-                                         BugReport &BR);
 };
 
 //===----------------------------------------------------------------------===//
@@ -444,30 +404,6 @@ public:
 
   virtual BugReport::NodeResolver& getNodeResolver() = 0;
 };
-
-//===----------------------------------------------------------------------===//
-//===----------------------------------------------------------------------===//
-
-namespace bugreporter {
-
-const Stmt *GetDerefExpr(const ExplodedNode *N);
-const Stmt *GetDenomExpr(const ExplodedNode *N);
-const Stmt *GetCalleeExpr(const ExplodedNode *N);
-const Stmt *GetRetValExpr(const ExplodedNode *N);
-
-void registerConditionVisitor(BugReport &BR);
-
-void registerTrackNullOrUndefValue(BugReport &BR, const void *stmt);
-
-void registerFindLastStore(BugReport &BR, const void *memregion);
-
-void registerNilReceiverVisitor(BugReport &BR);
-
-void registerVarDeclsLastStore(BugReport &BR, const void *stmt);
-
-} // end namespace clang::bugreporter
-
-//===----------------------------------------------------------------------===//
 
 } // end GR namespace
 
