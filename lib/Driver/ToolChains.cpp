@@ -272,6 +272,8 @@ Tool &Darwin::SelectTool(const Compilation &C, const JobAction &JA,
       T = new tools::darwin::Lipo(*this); break;
     case Action::DsymutilJobClass:
       T = new tools::darwin::Dsymutil(*this); break;
+    case Action::VerifyJobClass:
+      T = new tools::darwin::VerifyDebug(*this); break;
     }
   }
 
@@ -383,8 +385,8 @@ void DarwinClang::AddLinkSearchPathArgs(const ArgList &Args,
 
 void DarwinClang::AddLinkARCArgs(const ArgList &Args,
                                  ArgStringList &CmdArgs) const {
-  
-  CmdArgs.push_back("-force_load");    
+
+  CmdArgs.push_back("-force_load");
   llvm::sys::Path P(getDriver().ClangExecutable);
   P.eraseComponent(); // 'clang'
   P.eraseComponent(); // 'bin'
@@ -406,13 +408,13 @@ void DarwinClang::AddLinkARCArgs(const ArgList &Args,
 }
 
 void DarwinClang::AddLinkRuntimeLib(const ArgList &Args,
-                                    ArgStringList &CmdArgs, 
+                                    ArgStringList &CmdArgs,
                                     const char *DarwinStaticLib) const {
   llvm::sys::Path P(getDriver().ResourceDir);
   P.appendComponent("lib");
   P.appendComponent("darwin");
   P.appendComponent(DarwinStaticLib);
-  
+
   // For now, allow missing resource libraries to support developers who may
   // not have compiler-rt checked out or integrated into their build.
   bool Exists;
@@ -1063,6 +1065,8 @@ Tool &Generic_GCC::SelectTool(const Compilation &C,
       T = new tools::darwin::Lipo(*this); break;
     case Action::DsymutilJobClass:
       T = new tools::darwin::Dsymutil(*this); break;
+    case Action::VerifyJobClass:
+      T = new tools::darwin::VerifyDebug(*this); break;
     }
   }
 
@@ -1426,7 +1430,7 @@ static bool HasMultilib(llvm::Triple::ArchType Arch, enum LinuxDistro Distro) {
   }
   if (Arch == llvm::Triple::ppc64)
     return true;
-  if ((Arch == llvm::Triple::x86 || Arch == llvm::Triple::ppc) && 
+  if ((Arch == llvm::Triple::x86 || Arch == llvm::Triple::ppc) &&
       IsDebianBased(Distro))
     return true;
   return false;
@@ -1651,14 +1655,14 @@ Linux::Linux(const HostInfo &Host, const llvm::Triple &Triple)
                                Exists) && Exists)
       GccTriple = "powerpc64-unknown-linux-gnu";
     else if (!llvm::sys::fs::exists("/usr/lib64/gcc/"
-                                    "powerpc64-unknown-linux-gnu", Exists) && 
+                                    "powerpc64-unknown-linux-gnu", Exists) &&
              Exists)
       GccTriple = "powerpc64-unknown-linux-gnu";
   }
 
   std::string Base = findGCCBaseLibDir(GccTriple);
   path_list &Paths = getFilePaths();
-  bool Is32Bits = (getArch() == llvm::Triple::x86 || 
+  bool Is32Bits = (getArch() == llvm::Triple::x86 ||
                    getArch() == llvm::Triple::ppc);
 
   std::string Suffix;
@@ -1831,6 +1835,7 @@ Tool &Windows::SelectTool(const Compilation &C, const JobAction &JA,
     case Action::BindArchClass:
     case Action::LipoJobClass:
     case Action::DsymutilJobClass:
+    case Action::VerifyJobClass:
       assert(0 && "Invalid tool kind.");
     case Action::PreprocessJobClass:
     case Action::PrecompileJobClass:
