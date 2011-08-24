@@ -1682,8 +1682,10 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
       StackProtectorLevel = 1;
     else if (A->getOption().matches(options::OPT_fstack_protector_all))
       StackProtectorLevel = 2;
-  } else
-    StackProtectorLevel = getToolChain().GetDefaultStackProtectorLevel();
+  } else {
+    StackProtectorLevel =
+      getToolChain().GetDefaultStackProtectorLevel(KernelOrKext);
+  }
   if (StackProtectorLevel) {
     CmdArgs.push_back("-stack-protector");
     CmdArgs.push_back(Args.MakeArgString(Twine(StackProtectorLevel)));
@@ -3488,6 +3490,26 @@ void darwin::Dsymutil::ConstructJob(Compilation &C, const JobAction &JA,
 
   const char *Exec =
     Args.MakeArgString(getToolChain().GetProgramPath("dsymutil"));
+  C.addCommand(new Command(JA, *this, Exec, CmdArgs));
+}
+
+void darwin::VerifyDebug::ConstructJob(Compilation &C, const JobAction &JA,
+				       const InputInfo &Output,
+				       const InputInfoList &Inputs,
+				       const ArgList &Args,
+				       const char *LinkingOutput) const {
+  ArgStringList CmdArgs;
+  CmdArgs.push_back("--verify");
+
+  assert(Inputs.size() == 1 && "Unable to handle multiple inputs.");
+  const InputInfo &Input = Inputs[0];
+  assert(Input.isFilename() && "Unexpected verify input");
+
+  // Grabbing the output of the earlier dsymutil run.
+  CmdArgs.push_back(Input.getFilename());
+
+  const char *Exec =
+    Args.MakeArgString(getToolChain().GetProgramPath("dwarfdump"));
   C.addCommand(new Command(JA, *this, Exec, CmdArgs));
 }
 
