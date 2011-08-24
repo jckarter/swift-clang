@@ -93,7 +93,7 @@ static ControlFlowKind CheckFallThrough(AnalysisContext &AC) {
   // The CFG leaves in dead things, and we don't want the dead code paths to
   // confuse us, so we mark all live things first.
   llvm::BitVector live(cfg->getNumBlockIDs());
-  unsigned count = reachable_code::ScanReachableFromBlock(cfg->getEntry(),
+  unsigned count = reachable_code::ScanReachableFromBlock(&cfg->getEntry(),
                                                           live);
 
   bool AddEHEdges = AC.getAddEHEdges();
@@ -108,7 +108,7 @@ static ControlFlowKind CheckFallThrough(AnalysisContext &AC) {
           if (b.getTerminator() && isa<CXXTryStmt>(b.getTerminator()))
             // When not adding EH edges from calls, catch clauses
             // can otherwise seem dead.  Avoid noting them as dead.
-            count += reachable_code::ScanReachableFromBlock(b, live);
+            count += reachable_code::ScanReachableFromBlock(&b, live);
           continue;
         }
       }
@@ -170,7 +170,7 @@ static ControlFlowKind CheckFallThrough(AnalysisContext &AC) {
     }
 
     CFGStmt CS = cast<CFGStmt>(*ri);
-    Stmt *S = CS.getStmt();
+    const Stmt *S = CS.getStmt();
     if (isa<ReturnStmt>(S)) {
       HasLiveReturn = true;
       continue;
@@ -196,13 +196,13 @@ static ControlFlowKind CheckFallThrough(AnalysisContext &AC) {
     }
 
     bool NoReturnEdge = false;
-    if (CallExpr *C = dyn_cast<CallExpr>(S)) {
+    if (const CallExpr *C = dyn_cast<CallExpr>(S)) {
       if (std::find(B.succ_begin(), B.succ_end(), &cfg->getExit())
             == B.succ_end()) {
         HasAbnormalEdge = true;
         continue;
       }
-      Expr *CEE = C->getCallee()->IgnoreParenCasts();
+      const Expr *CEE = C->getCallee()->IgnoreParenCasts();
       QualType calleeType = CEE->getType();
       if (calleeType == AC.getASTContext().BoundMemberTy) {
         calleeType = Expr::findBoundMemberType(CEE);
@@ -211,8 +211,8 @@ static ControlFlowKind CheckFallThrough(AnalysisContext &AC) {
       if (getFunctionExtInfo(calleeType).getNoReturn()) {
         NoReturnEdge = true;
         HasFakeEdge = true;
-      } else if (DeclRefExpr *DRE = dyn_cast<DeclRefExpr>(CEE)) {
-        ValueDecl *VD = DRE->getDecl();
+      } else if (const DeclRefExpr *DRE = dyn_cast<DeclRefExpr>(CEE)) {
+        const ValueDecl *VD = DRE->getDecl();
         if (VD->hasAttr<NoReturnAttr>()) {
           NoReturnEdge = true;
           HasFakeEdge = true;
@@ -1095,7 +1095,7 @@ static void checkThreadSafety(Sema &S, AnalysisContext &AC) {
     for (CFGBlock::const_iterator BI = CurrBlock->begin(),
          BE = CurrBlock->end(); BI != BE; ++BI) {
       if (const CFGStmt *CfgStmt = dyn_cast<CFGStmt>(&*BI)) {
-        LocksetBuilder.Visit(CfgStmt->getStmt());
+        LocksetBuilder.Visit(const_cast<Stmt*>(CfgStmt->getStmt()));
       }
     }
     Exitset = LocksetBuilder.getLockset();
@@ -1226,13 +1226,19 @@ AnalysisBasedWarnings::IssueWarnings(sema::AnalysisBasedWarnings::Policy P,
   // prototyping, but we need a way for analyses to say what expressions they
   // expect to always be CFGElements and then fill in the BuildOptions
   // appropriately.  This is essentially a layering violation.
-  AC.getCFGBuildOptions()
-    .setAlwaysAdd(Stmt::BinaryOperatorClass)
-    .setAlwaysAdd(Stmt::BlockExprClass)
-    .setAlwaysAdd(Stmt::CStyleCastExprClass)
-    .setAlwaysAdd(Stmt::DeclRefExprClass)
-    .setAlwaysAdd(Stmt::ImplicitCastExprClass)
-    .setAlwaysAdd(Stmt::UnaryOperatorClass);
+  if (P.enableCheckUnreachable) {
+    // Unreachable code analysis requires a linearized CFG.
+    AC.getCFGBuildOptions().setAllAlwaysAdd();
+  }
+  else {
+    AC.getCFGBuildOptions()
+      .setAlwaysAdd(Stmt::BinaryOperatorClass)
+      .setAlwaysAdd(Stmt::BlockExprClass)
+      .setAlwaysAdd(Stmt::CStyleCastExprClass)
+      .setAlwaysAdd(Stmt::DeclRefExprClass)
+      .setAlwaysAdd(Stmt::ImplicitCastExprClass)
+      .setAlwaysAdd(Stmt::UnaryOperatorClass);
+  }
 
   // Construct the analysis context with the specified CFG build options.
   
