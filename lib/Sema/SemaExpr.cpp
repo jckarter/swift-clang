@@ -443,6 +443,18 @@ ExprResult Sema::DefaultArgumentPromotion(Expr *E) {
   if (Ty->isSpecificBuiltinType(BuiltinType::Float))
     E = ImpCastExprToType(E, Context.DoubleTy, CK_FloatingCast).take();
 
+  // C++ includes lvalue-to-rvalue conversion as a default argument
+  // promotion.  If we have a gl-value, initialize a temporary.
+  if (getLangOptions().CPlusPlus && E->isGLValue()) {
+    ExprResult Temp = PerformCopyInitialization(
+                       InitializedEntity::InitializeTemporary(E->getType()),
+                                                E->getExprLoc(),
+                                                Owned(E));
+    if (Temp.isInvalid())
+      return ExprError();
+    E = Temp.get();
+  }
+
   return Owned(E);
 }
 
@@ -460,19 +472,13 @@ ExprResult Sema::DefaultVariadicArgumentPromotion(Expr *E, VariadicCallType CT,
     return ExprError();
   E = ExprRes.take();
 
-  // __builtin_va_start takes the second argument as a "varargs" argument, but
-  // it doesn't actually do anything with it.  It doesn't need to be non-pod
-  // etc.
-  if (FDecl && FDecl->getBuiltinID() == Builtin::BI__builtin_va_start)
-    return Owned(E);
-  
   // Don't allow one to pass an Objective-C interface to a vararg.
   if (E->getType()->isObjCObjectType() &&
     DiagRuntimeBehavior(E->getLocStart(), 0,
                         PDiag(diag::err_cannot_pass_objc_interface_to_vararg)
                           << E->getType() << CT))
     return ExprError();
-  
+
   if (!E->getType().isPODType(Context)) {
     // C++0x [expr.call]p7:
     //   Passing a potentially-evaluated argument of class type (Clause 9) 
@@ -517,8 +523,7 @@ ExprResult Sema::DefaultVariadicArgumentPromotion(Expr *E, VariadicCallType CT,
       ExprResult Comma = ActOnBinOp(TUScope, E->getLocStart(), tok::comma,
                                     Call.get(), E);
       if (Comma.isInvalid())
-        return ExprError();
-      
+        return ExprError();      
       E = Comma.get();
     }
   }
@@ -7408,7 +7413,7 @@ static QualType CheckAddressOfOperand(Sema &S, Expr *OrigOp,
                 S.Context.getTypeDeclType(cast<RecordDecl>(Ctx)).getTypePtr());
         }
       }
-    } else if (!isa<FunctionDecl>(dcl))
+    } else if (!isa<FunctionDecl>(dcl) && !isa<NonTypeTemplateParmDecl>(dcl))
       assert(0 && "Unknown/unexpected decl type");
   }
 
