@@ -21,7 +21,6 @@
 #include "clang/StaticAnalyzer/Core/PathSensitive/CoreEngine.h"
 #include "clang/StaticAnalyzer/Core/PathSensitive/ProgramState.h"
 #include "clang/StaticAnalyzer/Core/PathSensitive/TransferFuncs.h"
-#include "clang/StaticAnalyzer/Core/PathSensitive/ObjCMessage.h"
 #include "clang/StaticAnalyzer/Core/BugReporter/BugReporter.h"
 #include "clang/AST/Type.h"
 #include "clang/AST/ExprObjC.h"
@@ -35,6 +34,8 @@ class ObjCForCollectionStmt;
 namespace ento {
 
 class AnalysisManager;
+class CallOrObjCMessage;
+class ObjCMessage;
 
 class ExprEngine : public SubEngine {
   AnalysisManager &AMgr;
@@ -194,6 +195,10 @@ public:
                        const StoreManager::InvalidatedSymbols *invalidated,
                        ArrayRef<const MemRegion *> ExplicitRegions,
                        ArrayRef<const MemRegion *> Regions);
+
+  /// printState - Called by ProgramStateManager to print checker-specific data.
+  void printState(raw_ostream &Out, const ProgramState *State,
+                  const char *NL, const char *Sep);
 
   virtual ProgramStateManager& getStateManager() { return StateMgr; }
 
@@ -420,8 +425,7 @@ protected:
   /// evalBind - Handle the semantics of binding a value to a specific location.
   ///  This method is used by evalStore, VisitDeclStmt, and others.
   void evalBind(ExplodedNodeSet &Dst, const Stmt *StoreE, ExplodedNode *Pred,
-                const ProgramState *St, SVal location, SVal Val,
-                bool atDeclInit = false);
+                SVal location, SVal Val, bool atDeclInit = false);
 
 public:
   // FIXME: 'tag' should be removed, and a LocationContext should be used
