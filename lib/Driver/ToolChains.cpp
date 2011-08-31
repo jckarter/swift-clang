@@ -603,6 +603,7 @@ void Darwin::AddDeploymentTarget(DerivedArgList &Args) const {
     // default platform.
     if (OSXTarget && iOSTarget) {
       if (getTriple().getArch() == llvm::Triple::arm ||
+          getTriple().getArch() == llvm::Triple::arm64 ||
           getTriple().getArch() == llvm::Triple::thumb)
         OSXTarget = 0;
       else
