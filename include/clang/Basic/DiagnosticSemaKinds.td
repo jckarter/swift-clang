@@ -4152,7 +4152,13 @@ def err_literal_operator_outside_namespace : Error<
 // FIXME: This diagnostic sucks
 def err_literal_operator_params : Error<
   "parameter declaration for literal operator %0 is not valid">;
-
+def warn_user_literal_hexfloat : Warning<
+  "user-defined literal with suffix '%0' is preempted by C99 hexfloat "
+  "extension">, InGroup<UserDefinedLiterals>;
+def warn_user_literal_reserved : Warning<
+  "user-defined literals not starting with '_' are reserved by the "
+  "implementation">, InGroup<UserDefinedLiterals>;
+  
 // C++ conversion functions
 def err_conv_function_not_member : Error<
   "conversion function must be a non-static member function">;
@@ -4213,6 +4219,32 @@ def err_defaulted_copy_assign_const_param : Error<
 def err_defaulted_copy_assign_quals : Error<
   "an explicitly-defaulted copy assignment operator may not have 'const' "
   "or 'volatile' qualifiers">;
+def err_defaulted_move_ctor_params : Error<
+  "an explicitly-defaulted move constructor must have exactly one parameter">;
+def err_defaulted_move_ctor_volatile_param : Error<
+  "the parameter for an explicitly-defaulted move constructor may not be "
+  "volatile">;
+def err_defaulted_move_ctor_const_param : Error<
+  "the parameter for an explicitly-defaulted move constructor may not be "
+  "const">;
+def err_defaulted_move_assign_params : Error<
+  "an explicitly-defaulted move assignment operator must have exactly one "
+  "parameter">;
+def err_defaulted_move_assign_return_type : Error<
+  "an explicitly-defaulted move assignment operator must return an unqualified "
+  "lvalue reference to its class type">;
+def err_defaulted_move_assign_not_ref : Error<
+  "the parameter for an explicitly-defaulted move assignment operator must be an "
+  "rvalue reference type">;
+def err_defaulted_move_assign_volatile_param : Error<
+  "the parameter for an explicitly-defaulted move assignment operator may not "
+  "be volatile">;
+def err_defaulted_move_assign_const_param : Error<
+  "the parameter for an explicitly-defaulted move assignment operator may not "
+  "be const">;
+def err_defaulted_move_assign_quals : Error<
+  "an explicitly-defaulted move assignment operator may not have 'const' "
+  "or 'volatile' qualifiers">;
 def err_incorrect_defaulted_exception_spec : Error<
   "exception specification of explicitly defaulted %select{default constructor|"
   "copy constructor|move constructor|copy assignment operator|move assignment "
@@ -4222,8 +4254,6 @@ def err_out_of_line_default_deletes : Error<
   "defaulting this %select{default constructor|copy constructor|move "
   "constructor|copy assignment operator|move assignment operator|destructor}0 "
   "would delete it after its first declaration">;
-def err_defaulted_move_unsupported : Error<
-  "defaulting move functions not yet supported">;
 
 def warn_ptr_arith_precedes_bounds : Warning<
   "the pointer decremented by %0 refers before the beginning of the array">,
