@@ -1078,7 +1078,7 @@ public:
 
   /// \brief The parser has processed a module import declaration.
   ///
-  /// \param ImportLoc The location of the '__import__' keyword.
+  /// \param ImportLoc The location of the '__import_module__' keyword.
   ///
   /// \param ModuleName The name of the module.
   ///
@@ -1829,14 +1829,6 @@ public:
                                 ObjCIvarDecl **Fields, unsigned nIvars,
                                 SourceLocation Loc);
 
-  /// \brief Determine whether we can synthesize a provisional ivar for the
-  /// given name.
-  ObjCPropertyDecl *canSynthesizeProvisionalIvar(IdentifierInfo *II);
-
-  /// \brief Determine whether we can synthesize a provisional ivar for the
-  /// given property.
-  bool canSynthesizeProvisionalIvar(ObjCPropertyDecl *Property);
-
   /// ImplMethodsVsClassMethods - This is main routine to warn if any method
   /// remains unimplemented in the class or category @implementation.
   void ImplMethodsVsClassMethods(Scope *S, ObjCImplDecl* IMPDecl,
@@ -1853,6 +1845,7 @@ public:
   /// properties which must be synthesized in class's @implementation.
   void DefaultSynthesizeProperties (Scope *S, ObjCImplDecl* IMPDecl,
                                     ObjCInterfaceDecl *IDecl);
+  void DefaultSynthesizeProperties(Scope *S, Decl *D);
   
   /// CollectImmediateProperties - This routine collects all properties in
   /// the class and its conforming protocols; but not those it its super class.
@@ -1957,6 +1950,10 @@ public:
   void AddFactoryMethodToGlobalPool(ObjCMethodDecl *Method, bool impl=false) {
     AddMethodToGlobalPool(Method, impl, /*instance*/false);
   }
+
+  /// AddAnyMethodToGlobalPool - Add any method, instance or factory to global
+  /// pool.
+  void AddAnyMethodToGlobalPool(Decl *D);
 
   /// LookupInstanceMethodInGlobalPool - Returns the method and warns if
   /// there are multiple signatures.
@@ -2241,10 +2238,6 @@ public:
 
   // Primary Expressions.
   SourceRange getExprRange(Expr *E) const;
-
-  ObjCIvarDecl *SynthesizeProvisionalIvar(LookupResult &Lookup,
-                                          IdentifierInfo *II,
-                                          SourceLocation NameLoc);
   
   ExprResult ActOnIdExpression(Scope *S, CXXScopeSpec &SS, UnqualifiedId &Name,
                                bool HasTrailingLParen, bool IsAddressOfOperand);
