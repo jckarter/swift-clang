@@ -58,7 +58,7 @@ class ModuleLoader;
 ///
 class Preprocessor : public llvm::RefCountedBase<Preprocessor> {
   Diagnostic        *Diags;
-  LangOptions        Features;
+  LangOptions       &Features;
   const TargetInfo  &Target;
   FileManager       &FileMgr;
   SourceManager     &SourceMgr;
@@ -298,7 +298,7 @@ private:  // Cached tokens state.
   MacroInfo *getInfoForMacro(IdentifierInfo *II) const;
   
 public:
-  Preprocessor(Diagnostic &diags, const LangOptions &opts,
+  Preprocessor(Diagnostic &diags, LangOptions &opts,
                const TargetInfo &target,
                SourceManager &SM, HeaderSearch &Headers,
                ModuleLoader &TheModuleLoader,
@@ -1117,7 +1117,8 @@ private:
   void HandleDigitDirective(Token &Tok);
   void HandleUserDiagnosticDirective(Token &Tok, bool isWarning);
   void HandleIdentSCCSDirective(Token &Tok);
-
+  void HandleMacroExportDirective(Token &Tok);
+  
   // File inclusion.
   void HandleIncludeDirective(SourceLocation HashLoc,
                               Token &Tok,
