@@ -59,7 +59,7 @@ class ModuleLoader;
 class Preprocessor : public llvm::RefCountedBase<Preprocessor> {
   Diagnostic        *Diags;
   LangOptions       &Features;
-  const TargetInfo  &Target;
+  const TargetInfo  *Target;
   FileManager       &FileMgr;
   SourceManager     &SourceMgr;
   ScratchBuffer     *ScratchBuf;
@@ -227,10 +227,6 @@ class Preprocessor : public llvm::RefCountedBase<Preprocessor> {
   /// previous macro value.
   llvm::DenseMap<IdentifierInfo*, std::vector<MacroInfo*> > PragmaPushMacroInfo;
 
-  /// \brief Expansion source location for the last macro that expanded
-  /// to no tokens.
-  SourceLocation LastEmptyMacroExpansionLoc;
-
   // Various statistics we track for performance analysis.
   unsigned NumDirectives, NumIncluded, NumDefined, NumUndefined, NumPragma;
   unsigned NumIf, NumElse, NumEndif;
@@ -299,19 +295,26 @@ private:  // Cached tokens state.
   
 public:
   Preprocessor(Diagnostic &diags, LangOptions &opts,
-               const TargetInfo &target,
+               const TargetInfo *target,
                SourceManager &SM, HeaderSearch &Headers,
                ModuleLoader &TheModuleLoader,
                IdentifierInfoLookup *IILookup = 0,
-               bool OwnsHeaderSearch = false);
+               bool OwnsHeaderSearch = false,
+               bool DelayInitialization = false);
 
   ~Preprocessor();
 
+  /// \brief Initialize the preprocessor, if the constructor did not already
+  /// perform the initialization.
+  ///
+  /// \param Target Information about the target.
+  void Initialize(const TargetInfo &Target);
+  
   Diagnostic &getDiagnostics() const { return *Diags; }
   void setDiagnostics(Diagnostic &D) { Diags = &D; }
 
   const LangOptions &getLangOptions() const { return Features; }
-  const TargetInfo &getTargetInfo() const { return Target; }
+  const TargetInfo &getTargetInfo() const { return *Target; }
   FileManager &getFileManager() const { return FileMgr; }
   SourceManager &getSourceManager() const { return SourceMgr; }
   HeaderSearch &getHeaderSearchInfo() const { return HeaderInfo; }
@@ -398,12 +401,6 @@ public:
                          MacroInfo*>::const_iterator macro_iterator;
   macro_iterator macro_begin(bool IncludeExternalMacros = true) const;
   macro_iterator macro_end(bool IncludeExternalMacros = true) const;
-
-  /// \brief Expansion source location for the last macro that expanded
-  /// to no tokens.
-  SourceLocation getLastEmptyMacroExpansionLoc() const {
-    return LastEmptyMacroExpansionLoc;
-  }
 
   const std::string &getPredefines() const { return Predefines; }
   /// setPredefines - Set the predefines for this Preprocessor.  These
