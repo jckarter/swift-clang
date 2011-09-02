@@ -1554,7 +1554,7 @@ static std::string findGCCBaseLibDir(const std::string &GccTriple) {
   }
   static const char* GccVersions[] = {"4.6.1", "4.6.0", "4.6",
                                       "4.5.3", "4.5.2", "4.5.1", "4.5",
-                                      "4.4.5", "4.4.4", "4.4.3", "4.4",
+                                      "4.4.6", "4.4.5", "4.4.4", "4.4.3", "4.4",
                                       "4.3.4", "4.3.3", "4.3.2", "4.3",
                                       "4.2.4", "4.2.3", "4.2.2", "4.2.1",
                                       "4.2", "4.1.1"};
@@ -1682,11 +1682,12 @@ Linux::Linux(const HostInfo &Host, const llvm::Triple &Triple)
     Lib = Lib64;
   }
 
-  llvm::sys::Path LinkerPath(Base + "/../../../../" + GccTriple + "/bin/ld");
-  if (!llvm::sys::fs::exists(LinkerPath.str(), Exists) && Exists)
-    Linker = LinkerPath.str();
-  else
-    Linker = GetProgramPath("ld");
+  // OpenSuse stores the linker with the compiler, add that to the search
+  // path.
+  ToolChain::path_list &PPaths = getProgramPaths();
+  PPaths.push_back(Base + "/../../../../" + GccTriple + "/bin");
+
+  Linker = GetProgramPath("ld");
 
   LinuxDistro Distro = DetectLinuxDistro(Arch);
 
