@@ -586,7 +586,7 @@ bool Driver::HandleImmediateArgs(const Compilation &C) {
       llvm::outs() << *it;
     }
     llvm::outs() << "\n";
-    llvm::outs() << "libraries: =";
+    llvm::outs() << "libraries: =" << ResourceDir;
 
     std::string sysroot;
     if (Arg *A = C.getArgs().getLastArg(options::OPT__sysroot_EQ))
@@ -594,8 +594,7 @@ bool Driver::HandleImmediateArgs(const Compilation &C) {
 
     for (ToolChain::path_list::const_iterator it = TC.getFilePaths().begin(),
            ie = TC.getFilePaths().end(); it != ie; ++it) {
-      if (it != TC.getFilePaths().begin())
-        llvm::outs() << ':';
+      llvm::outs() << ':';
       const char *path = it->c_str();
       if (path[0] == '=')
         llvm::outs() << sysroot << path + 1;
@@ -1429,6 +1428,12 @@ std::string Driver::GetFilePath(const char *Name, const ToolChain &TC) const {
     if (!llvm::sys::fs::exists(P.str(), Exists) && Exists)
       return P.str();
   }
+
+  llvm::sys::Path P(ResourceDir);
+  P.appendComponent(Name);
+  bool Exists;
+  if (!llvm::sys::fs::exists(P.str(), Exists) && Exists)
+    return P.str();
 
   const ToolChain::path_list &List = TC.getFilePaths();
   for (ToolChain::path_list::const_iterator
