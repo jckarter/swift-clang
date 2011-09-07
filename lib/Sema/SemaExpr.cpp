@@ -1456,6 +1456,8 @@ bool Sema::DiagnoseEmptyLookup(Scope *S, CXXScopeSpec &SS, LookupResult &R,
           CXXMethodDecl *DepMethod = cast_or_null<CXXMethodDecl>(
               CurMethod->getInstantiatedFromMemberFunction());
           if (DepMethod) {
+            if (getLangOptions().Microsoft)
+              diagnostic = diag::warn_found_via_dependent_bases_lookup;
             Diag(R.getNameLoc(), diagnostic) << Name
               << FixItHint::CreateInsertion(R.getNameLoc(), "this->");
             QualType DepThisType = DepMethod->getThisType(Context);
@@ -6673,17 +6675,17 @@ QualType Sema::CheckCompareOperands(ExprResult &LHS, ExprResult &RHS,
 /// operates on extended vector types.  Instead of producing an IntTy result,
 /// like a scalar comparison, a vector comparison produces a vector of integer
 /// types.
-QualType Sema::CheckVectorCompareOperands(ExprResult &lex, ExprResult &rex,
+QualType Sema::CheckVectorCompareOperands(ExprResult &LHS, ExprResult &RHS,
                                           SourceLocation Loc,
                                           bool isRelational) {
   // Check to make sure we're operating on vectors of the same type and width,
   // Allowing one side to be a scalar of element type.
-  QualType vType = CheckVectorOperands(lex, rex, Loc, /*isCompAssign*/false);
+  QualType vType = CheckVectorOperands(LHS, RHS, Loc, /*isCompAssign*/false);
   if (vType.isNull())
     return vType;
 
-  QualType lType = lex.get()->getType();
-  QualType rType = rex.get()->getType();
+  QualType LHSType = LHS.get()->getType();
+  QualType RHSType = RHS.get()->getType();
 
   // If AltiVec, the comparison results in a numeric type, i.e.
   // bool for C++, int for C
@@ -6693,9 +6695,9 @@ QualType Sema::CheckVectorCompareOperands(ExprResult &lex, ExprResult &rex,
   // For non-floating point types, check for self-comparisons of the form
   // x == x, x != x, x < x, etc.  These always evaluate to a constant, and
   // often indicate logic errors in the program.
-  if (!lType->hasFloatingRepresentation()) {
-    if (DeclRefExpr* DRL = dyn_cast<DeclRefExpr>(lex.get()->IgnoreParens()))
-      if (DeclRefExpr* DRR = dyn_cast<DeclRefExpr>(rex.get()->IgnoreParens()))
+  if (!LHSType->hasFloatingRepresentation()) {
+    if (DeclRefExpr* DRL = dyn_cast<DeclRefExpr>(LHS.get()->IgnoreParens()))
+      if (DeclRefExpr* DRR = dyn_cast<DeclRefExpr>(RHS.get()->IgnoreParens()))
         if (DRL->getDecl() == DRR->getDecl())
           DiagRuntimeBehavior(Loc, 0,
                               PDiag(diag::warn_comparison_always)
@@ -6705,18 +6707,18 @@ QualType Sema::CheckVectorCompareOperands(ExprResult &lex, ExprResult &rex,
   }
 
   // Check for comparisons of floating point operands using != and ==.
-  if (!isRelational && lType->hasFloatingRepresentation()) {
-    assert (rType->hasFloatingRepresentation());
-    CheckFloatComparison(Loc, lex.get(), rex.get());
+  if (!isRelational && LHSType->hasFloatingRepresentation()) {
+    assert (RHSType->hasFloatingRepresentation());
+    CheckFloatComparison(Loc, LHS.get(), RHS.get());
   }
 
   // Return the type for the comparison, which is the same as vector type for
   // integer vectors, or an integer type of identical size and number of
   // elements for floating point vectors.
-  if (lType->hasIntegerRepresentation())
-    return lType;
+  if (LHSType->hasIntegerRepresentation())
+    return LHSType;
 
-  const VectorType *VTy = lType->getAs<VectorType>();
+  const VectorType *VTy = LHSType->getAs<VectorType>();
   unsigned TypeSize = Context.getTypeSize(VTy->getElementType());
   if (TypeSize == Context.getTypeSize(Context.IntTy))
     return Context.getExtVectorType(Context.IntTy, VTy->getNumElements());
@@ -6729,39 +6731,39 @@ QualType Sema::CheckVectorCompareOperands(ExprResult &lex, ExprResult &rex,
 }
 
 inline QualType Sema::CheckBitwiseOperands(
-  ExprResult &lex, ExprResult &rex, SourceLocation Loc, bool isCompAssign) {
-  if (lex.get()->getType()->isVectorType() ||
-      rex.get()->getType()->isVectorType()) {
-    if (lex.get()->getType()->hasIntegerRepresentation() &&
-        rex.get()->getType()->hasIntegerRepresentation())
-      return CheckVectorOperands(lex, rex, Loc, isCompAssign);
+  ExprResult &LHS, ExprResult &RHS, SourceLocation Loc, bool isCompAssign) {
+  if (LHS.get()->getType()->isVectorType() ||
+      RHS.get()->getType()->isVectorType()) {
+    if (LHS.get()->getType()->hasIntegerRepresentation() &&
+        RHS.get()->getType()->hasIntegerRepresentation())
+      return CheckVectorOperands(LHS, RHS, Loc, isCompAssign);
     
-    return InvalidOperands(Loc, lex, rex);
+    return InvalidOperands(Loc, LHS, RHS);
   }
 
-  ExprResult lexResult = Owned(lex), rexResult = Owned(rex);
-  QualType compType = UsualArithmeticConversions(lexResult, rexResult,
+  ExprResult LHSResult = Owned(LHS), RHSResult = Owned(RHS);
+  QualType compType = UsualArithmeticConversions(LHSResult, RHSResult,
                                                  isCompAssign);
-  if (lexResult.isInvalid() || rexResult.isInvalid())
+  if (LHSResult.isInvalid() || RHSResult.isInvalid())
     return QualType();
-  lex = lexResult.take();
-  rex = rexResult.take();
+  LHS = LHSResult.take();
+  RHS = RHSResult.take();
 
-  if (lex.get()->getType()->isIntegralOrUnscopedEnumerationType() &&
-      rex.get()->getType()->isIntegralOrUnscopedEnumerationType())
+  if (LHS.get()->getType()->isIntegralOrUnscopedEnumerationType() &&
+      RHS.get()->getType()->isIntegralOrUnscopedEnumerationType())
     return compType;
-  return InvalidOperands(Loc, lex, rex);
+  return InvalidOperands(Loc, LHS, RHS);
 }
 
 inline QualType Sema::CheckLogicalOperands( // C99 6.5.[13,14]
-  ExprResult &lex, ExprResult &rex, SourceLocation Loc, unsigned Opc) {
+  ExprResult &LHS, ExprResult &RHS, SourceLocation Loc, unsigned Opc) {
   
   // Diagnose cases where the user write a logical and/or but probably meant a
   // bitwise one.  We do this when the LHS is a non-bool integer and the RHS
   // is a constant.
-  if (lex.get()->getType()->isIntegerType() &&
-      !lex.get()->getType()->isBooleanType() &&
-      rex.get()->getType()->isIntegerType() && !rex.get()->isValueDependent() &&
+  if (LHS.get()->getType()->isIntegerType() &&
+      !LHS.get()->getType()->isBooleanType() &&
+      RHS.get()->getType()->isIntegerType() && !RHS.get()->isValueDependent() &&
       // Don't warn in macros or template instantiations.
       !Loc.isMacroID() && ActiveTemplateInstantiations.empty()) {
     // If the RHS can be constant folded, and if it constant folds to something
@@ -6769,11 +6771,11 @@ inline QualType Sema::CheckLogicalOperands( // C99 6.5.[13,14]
     // happened to fold to true/false) then warn.
     // Parens on the RHS are ignored.
     Expr::EvalResult Result;
-    if (rex.get()->Evaluate(Result, Context) && !Result.HasSideEffects)
-      if ((getLangOptions().Bool && !rex.get()->getType()->isBooleanType()) ||
+    if (RHS.get()->Evaluate(Result, Context) && !Result.HasSideEffects)
+      if ((getLangOptions().Bool && !RHS.get()->getType()->isBooleanType()) ||
           (Result.Val.getInt() != 0 && Result.Val.getInt() != 1)) {
         Diag(Loc, diag::warn_logical_instead_of_bitwise)
-          << rex.get()->getSourceRange()
+          << RHS.get()->getSourceRange()
           << (Opc == BO_LAnd ? "&&" : "||");
         // Suggest replacing the logical operator with the bitwise version
         Diag(Loc, diag::note_logical_instead_of_bitwise_change_operator)
@@ -6787,25 +6789,25 @@ inline QualType Sema::CheckLogicalOperands( // C99 6.5.[13,14]
           Diag(Loc, diag::note_logical_instead_of_bitwise_remove_constant)
               << FixItHint::CreateRemoval(
                   SourceRange(
-                      Lexer::getLocForEndOfToken(lex.get()->getLocEnd(),
+                      Lexer::getLocForEndOfToken(LHS.get()->getLocEnd(),
                                                  0, getSourceManager(),
                                                  getLangOptions()),
-                      rex.get()->getLocEnd()));
+                      RHS.get()->getLocEnd()));
       }
   }
   
   if (!Context.getLangOptions().CPlusPlus) {
-    lex = UsualUnaryConversions(lex.take());
-    if (lex.isInvalid())
+    LHS = UsualUnaryConversions(LHS.take());
+    if (LHS.isInvalid())
       return QualType();
 
-    rex = UsualUnaryConversions(rex.take());
-    if (rex.isInvalid())
+    RHS = UsualUnaryConversions(RHS.take());
+    if (RHS.isInvalid())
       return QualType();
 
-    if (!lex.get()->getType()->isScalarType() ||
-        !rex.get()->getType()->isScalarType())
-      return InvalidOperands(Loc, lex, rex);
+    if (!LHS.get()->getType()->isScalarType() ||
+        !RHS.get()->getType()->isScalarType())
+      return InvalidOperands(Loc, LHS, RHS);
 
     return Context.IntTy;
   }
@@ -6816,15 +6818,15 @@ inline QualType Sema::CheckLogicalOperands( // C99 6.5.[13,14]
   // C++ [expr.log.and]p1
   // C++ [expr.log.or]p1
   // The operands are both contextually converted to type bool.
-  ExprResult lexRes = PerformContextuallyConvertToBool(lex.get());
-  if (lexRes.isInvalid())
-    return InvalidOperands(Loc, lex, rex);
-  lex = move(lexRes);
+  ExprResult LHSRes = PerformContextuallyConvertToBool(LHS.get());
+  if (LHSRes.isInvalid())
+    return InvalidOperands(Loc, LHS, RHS);
+  LHS = move(LHSRes);
 
-  ExprResult rexRes = PerformContextuallyConvertToBool(rex.get());
-  if (rexRes.isInvalid())
-    return InvalidOperands(Loc, lex, rex);
-  rex = move(rexRes);
+  ExprResult RHSRes = PerformContextuallyConvertToBool(RHS.get());
+  if (RHSRes.isInvalid())
+    return InvalidOperands(Loc, LHS, RHS);
+  RHS = move(RHSRes);
 
   // C++ [expr.log.and]p2
   // C++ [expr.log.or]p2
@@ -6995,26 +6997,26 @@ static bool CheckForModifiableLvalue(Expr *E, SourceLocation Loc, Sema &S) {
 
 
 // C99 6.5.16.1
-QualType Sema::CheckAssignmentOperands(Expr *LHS, ExprResult &RHS,
+QualType Sema::CheckAssignmentOperands(Expr *LHSExpr, ExprResult &RHS,
                                        SourceLocation Loc,
                                        QualType CompoundType) {
   // Verify that LHS is a modifiable lvalue, and emit error if not.
-  if (CheckForModifiableLvalue(LHS, Loc, *this))
+  if (CheckForModifiableLvalue(LHSExpr, Loc, *this))
     return QualType();
 
-  QualType LHSType = LHS->getType();
+  QualType LHSType = LHSExpr->getType();
   QualType RHSType = CompoundType.isNull() ? RHS.get()->getType() :
                                              CompoundType;
   AssignConvertType ConvTy;
   if (CompoundType.isNull()) {
     QualType LHSTy(LHSType);
     // Simple assignment "x = y".
-    if (LHS->getObjectKind() == OK_ObjCProperty) {
-      ExprResult LHSResult = Owned(LHS);
+    if (LHSExpr->getObjectKind() == OK_ObjCProperty) {
+      ExprResult LHSResult = Owned(LHSExpr);
       ConvertPropertyForLValue(LHSResult, RHS, LHSTy);
       if (LHSResult.isInvalid())
         return QualType();
-      LHS = LHSResult.take();
+      LHSExpr = LHSResult.take();
     }
     ConvTy = CheckSingleAssignmentConstraints(LHSTy, RHS);
     if (RHS.isInvalid())
@@ -7057,9 +7059,9 @@ QualType Sema::CheckAssignmentOperands(Expr *LHS, ExprResult &RHS,
 
     if (ConvTy == Compatible) {
       if (LHSType.getObjCLifetime() == Qualifiers::OCL_Strong)
-        checkRetainCycles(LHS, RHS.get());
+        checkRetainCycles(LHSExpr, RHS.get());
       else if (getLangOptions().ObjCAutoRefCount)
-        checkUnsafeExprAssigns(Loc, LHS, RHS.get());
+        checkUnsafeExprAssigns(Loc, LHSExpr, RHS.get());
     }
   } else {
     // Compound assignment "x += y"
@@ -7070,7 +7072,7 @@ QualType Sema::CheckAssignmentOperands(Expr *LHS, ExprResult &RHS,
                                RHS.get(), AA_Assigning))
     return QualType();
 
-  CheckForNullPointerDereference(*this, LHS);
+  CheckForNullPointerDereference(*this, LHSExpr);
 
   // C99 6.5.16p3: The type of an assignment expression is the type of the
   // left operand unless the left operand has qualified type, in which case
@@ -7595,92 +7597,92 @@ static inline UnaryOperatorKind ConvertTokenKindToUnaryOpcode(
 /// DiagnoseSelfAssignment - Emits a warning if a value is assigned to itself.
 /// This warning is only emitted for builtin assignment operations. It is also
 /// suppressed in the event of macro expansions.
-static void DiagnoseSelfAssignment(Sema &S, Expr *lhs, Expr *rhs,
+static void DiagnoseSelfAssignment(Sema &S, Expr *LHSExpr, Expr *RHSExpr,
                                    SourceLocation OpLoc) {
   if (!S.ActiveTemplateInstantiations.empty())
     return;
   if (OpLoc.isInvalid() || OpLoc.isMacroID())
     return;
-  lhs = lhs->IgnoreParenImpCasts();
-  rhs = rhs->IgnoreParenImpCasts();
-  const DeclRefExpr *LeftDeclRef = dyn_cast<DeclRefExpr>(lhs);
-  const DeclRefExpr *RightDeclRef = dyn_cast<DeclRefExpr>(rhs);
-  if (!LeftDeclRef || !RightDeclRef ||
-      LeftDeclRef->getLocation().isMacroID() ||
-      RightDeclRef->getLocation().isMacroID())
+  LHSExpr = LHSExpr->IgnoreParenImpCasts();
+  RHSExpr = RHSExpr->IgnoreParenImpCasts();
+  const DeclRefExpr *LHSDeclRef = dyn_cast<DeclRefExpr>(LHSExpr);
+  const DeclRefExpr *RHSDeclRef = dyn_cast<DeclRefExpr>(RHSExpr);
+  if (!LHSDeclRef || !RHSDeclRef ||
+      LHSDeclRef->getLocation().isMacroID() ||
+      RHSDeclRef->getLocation().isMacroID())
     return;
-  const ValueDecl *LeftDecl =
-    cast<ValueDecl>(LeftDeclRef->getDecl()->getCanonicalDecl());
-  const ValueDecl *RightDecl =
-    cast<ValueDecl>(RightDeclRef->getDecl()->getCanonicalDecl());
-  if (LeftDecl != RightDecl)
+  const ValueDecl *LHSDecl =
+    cast<ValueDecl>(LHSDeclRef->getDecl()->getCanonicalDecl());
+  const ValueDecl *RHSDecl =
+    cast<ValueDecl>(RHSDeclRef->getDecl()->getCanonicalDecl());
+  if (LHSDecl != RHSDecl)
     return;
-  if (LeftDecl->getType().isVolatileQualified())
+  if (LHSDecl->getType().isVolatileQualified())
     return;
-  if (const ReferenceType *RefTy = LeftDecl->getType()->getAs<ReferenceType>())
+  if (const ReferenceType *RefTy = LHSDecl->getType()->getAs<ReferenceType>())
     if (RefTy->getPointeeType().isVolatileQualified())
       return;
 
   S.Diag(OpLoc, diag::warn_self_assignment)
-      << LeftDeclRef->getType()
-      << lhs->getSourceRange() << rhs->getSourceRange();
+      << LHSDeclRef->getType()
+      << LHSExpr->getSourceRange() << RHSExpr->getSourceRange();
 }
 
 // checkArithmeticNull - Detect when a NULL constant is used improperly in an
 // expression.  These are mainly cases where the null pointer is used as an
 // integer instead of a pointer.
-static void checkArithmeticNull(Sema &S, ExprResult &lex, ExprResult &rex,
+static void checkArithmeticNull(Sema &S, ExprResult &LHS, ExprResult &RHS,
                                 SourceLocation Loc, bool isCompare) {
   // The canonical way to check for a GNU null is with isNullPointerConstant,
   // but we use a bit of a hack here for speed; this is a relatively
   // hot path, and isNullPointerConstant is slow.
-  bool LeftNull = isa<GNUNullExpr>(lex.get()->IgnoreParenImpCasts());
-  bool RightNull = isa<GNUNullExpr>(rex.get()->IgnoreParenImpCasts());
+  bool LHSNull = isa<GNUNullExpr>(LHS.get()->IgnoreParenImpCasts());
+  bool RHSNull = isa<GNUNullExpr>(RHS.get()->IgnoreParenImpCasts());
 
   // Detect when a NULL constant is used improperly in an expression.  These
   // are mainly cases where the null pointer is used as an integer instead
   // of a pointer.
-  if (!LeftNull && !RightNull)
+  if (!LHSNull && !RHSNull)
     return;
 
-  QualType LeftType = lex.get()->getType();
-  QualType RightType = rex.get()->getType();
+  QualType LHSType = LHS.get()->getType();
+  QualType RHSType = RHS.get()->getType();
 
   // Avoid analyzing cases where the result will either be invalid (and
   // diagnosed as such) or entirely valid and not something to warn about.
-  if (LeftType->isBlockPointerType() || LeftType->isMemberPointerType() ||
-      LeftType->isFunctionType() || RightType->isBlockPointerType() ||
-      RightType->isMemberPointerType() || RightType->isFunctionType())
+  if (LHSType->isBlockPointerType() || LHSType->isMemberPointerType() ||
+      LHSType->isFunctionType() || RHSType->isBlockPointerType() ||
+      RHSType->isMemberPointerType() || RHSType->isFunctionType())
     return;
 
   // Comparison operations would not make sense with a null pointer no matter
   // what the other expression is.
   if (!isCompare) {
     S.Diag(Loc, diag::warn_null_in_arithmetic_operation)
-        << (LeftNull ? lex.get()->getSourceRange() : SourceRange())
-        << (RightNull ? rex.get()->getSourceRange() : SourceRange());
+        << (LHSNull ? LHS.get()->getSourceRange() : SourceRange())
+        << (RHSNull ? RHS.get()->getSourceRange() : SourceRange());
     return;
   }
 
   // The rest of the operations only make sense with a null pointer
   // if the other expression is a pointer.
-  if (LeftNull == RightNull || LeftType->isAnyPointerType() ||
-      LeftType->canDecayToPointerType() || RightType->isAnyPointerType() ||
-      RightType->canDecayToPointerType())
+  if (LHSNull == RHSNull || LHSType->isAnyPointerType() ||
+      LHSType->canDecayToPointerType() || RHSType->isAnyPointerType() ||
+      RHSType->canDecayToPointerType())
     return;
 
   S.Diag(Loc, diag::warn_null_in_comparison_operation)
-      << LeftNull /* LHS is NULL */
-      << (LeftNull ? rex.get()->getType() : lex.get()->getType())
-      << lex.get()->getSourceRange() << rex.get()->getSourceRange();
+      << LHSNull /* LHS is NULL */
+      << (LHSNull ? RHS.get()->getType() : LHS.get()->getType())
+      << LHS.get()->getSourceRange() << RHS.get()->getSourceRange();
 }
 /// CreateBuiltinBinOp - Creates a new built-in binary operation with
 /// operator @p Opc at location @c TokLoc. This routine only supports
 /// built-in operations; ActOnBinOp handles overloaded operators.
 ExprResult Sema::CreateBuiltinBinOp(SourceLocation OpLoc,
                                     BinaryOperatorKind Opc,
-                                    Expr *lhsExpr, Expr *rhsExpr) {
-  ExprResult lhs = Owned(lhsExpr), rhs = Owned(rhsExpr);
+                                    Expr *LHSExpr, Expr *RHSExpr) {
+  ExprResult LHS = Owned(LHSExpr), RHS = Owned(RHSExpr);
   QualType ResultTy;     // Result type of the binary operator.
   // The following two variables are used for compound assignment operators
   QualType CompLHSTy;    // Type of LHS after promotions for computation
@@ -7696,13 +7698,13 @@ ExprResult Sema::CreateBuiltinBinOp(SourceLocation OpLoc,
   // f<int> == 0;  // resolve f<int> blindly
   // void (*p)(int); p = f<int>;  // resolve f<int> using target
   if (Opc != BO_Assign) { 
-    ExprResult resolvedLHS = CheckPlaceholderExpr(lhs.get());
+    ExprResult resolvedLHS = CheckPlaceholderExpr(LHS.get());
     if (!resolvedLHS.isUsable()) return ExprError();
-    lhs = move(resolvedLHS);
+    LHS = move(resolvedLHS);
 
-    ExprResult resolvedRHS = CheckPlaceholderExpr(rhs.get());
+    ExprResult resolvedRHS = CheckPlaceholderExpr(RHS.get());
     if (!resolvedRHS.isUsable()) return ExprError();
-    rhs = move(resolvedRHS);
+    RHS = move(resolvedRHS);
   }
 
   if (Opc == BO_Mul || Opc == BO_Div || Opc == BO_Rem || Opc == BO_Add ||
@@ -7711,127 +7713,127 @@ ExprResult Sema::CreateBuiltinBinOp(SourceLocation OpLoc,
       Opc == BO_DivAssign || Opc == BO_AddAssign || Opc == BO_SubAssign ||
       Opc == BO_RemAssign || Opc == BO_ShlAssign || Opc == BO_ShrAssign ||
       Opc == BO_AndAssign || Opc == BO_OrAssign || Opc == BO_XorAssign)
-    checkArithmeticNull(*this, lhs, rhs, OpLoc, /*isCompare=*/false);
+    checkArithmeticNull(*this, LHS, RHS, OpLoc, /*isCompare=*/false);
   else if (Opc == BO_LE || Opc == BO_LT || Opc == BO_GE || Opc == BO_GT ||
            Opc == BO_EQ || Opc == BO_NE)
-    checkArithmeticNull(*this, lhs, rhs, OpLoc, /*isCompare=*/true);
+    checkArithmeticNull(*this, LHS, RHS, OpLoc, /*isCompare=*/true);
 
   switch (Opc) {
   case BO_Assign:
-    ResultTy = CheckAssignmentOperands(lhs.get(), rhs, OpLoc, QualType());
+    ResultTy = CheckAssignmentOperands(LHS.get(), RHS, OpLoc, QualType());
     if (getLangOptions().CPlusPlus &&
-        lhs.get()->getObjectKind() != OK_ObjCProperty) {
-      VK = lhs.get()->getValueKind();
-      OK = lhs.get()->getObjectKind();
+        LHS.get()->getObjectKind() != OK_ObjCProperty) {
+      VK = LHS.get()->getValueKind();
+      OK = LHS.get()->getObjectKind();
     }
     if (!ResultTy.isNull())
-      DiagnoseSelfAssignment(*this, lhs.get(), rhs.get(), OpLoc);
+      DiagnoseSelfAssignment(*this, LHS.get(), RHS.get(), OpLoc);
     break;
   case BO_PtrMemD:
   case BO_PtrMemI:
-    ResultTy = CheckPointerToMemberOperands(lhs, rhs, VK, OpLoc,
+    ResultTy = CheckPointerToMemberOperands(LHS, RHS, VK, OpLoc,
                                             Opc == BO_PtrMemI);
     break;
   case BO_Mul:
   case BO_Div:
-    ResultTy = CheckMultiplyDivideOperands(lhs, rhs, OpLoc, false,
+    ResultTy = CheckMultiplyDivideOperands(LHS, RHS, OpLoc, false,
                                            Opc == BO_Div);
     break;
   case BO_Rem:
-    ResultTy = CheckRemainderOperands(lhs, rhs, OpLoc);
+    ResultTy = CheckRemainderOperands(LHS, RHS, OpLoc);
     break;
   case BO_Add:
-    ResultTy = CheckAdditionOperands(lhs, rhs, OpLoc);
+    ResultTy = CheckAdditionOperands(LHS, RHS, OpLoc);
     break;
   case BO_Sub:
-    ResultTy = CheckSubtractionOperands(lhs, rhs, OpLoc);
+    ResultTy = CheckSubtractionOperands(LHS, RHS, OpLoc);
     break;
   case BO_Shl:
   case BO_Shr:
-    ResultTy = CheckShiftOperands(lhs, rhs, OpLoc, Opc);
+    ResultTy = CheckShiftOperands(LHS, RHS, OpLoc, Opc);
     break;
   case BO_LE:
   case BO_LT:
   case BO_GE:
   case BO_GT:
-    ResultTy = CheckCompareOperands(lhs, rhs, OpLoc, Opc, true);
+    ResultTy = CheckCompareOperands(LHS, RHS, OpLoc, Opc, true);
     break;
   case BO_EQ:
   case BO_NE:
-    ResultTy = CheckCompareOperands(lhs, rhs, OpLoc, Opc, false);
+    ResultTy = CheckCompareOperands(LHS, RHS, OpLoc, Opc, false);
     break;
   case BO_And:
   case BO_Xor:
   case BO_Or:
-    ResultTy = CheckBitwiseOperands(lhs, rhs, OpLoc);
+    ResultTy = CheckBitwiseOperands(LHS, RHS, OpLoc);
     break;
   case BO_LAnd:
   case BO_LOr:
-    ResultTy = CheckLogicalOperands(lhs, rhs, OpLoc, Opc);
+    ResultTy = CheckLogicalOperands(LHS, RHS, OpLoc, Opc);
     break;
   case BO_MulAssign:
   case BO_DivAssign:
-    CompResultTy = CheckMultiplyDivideOperands(lhs, rhs, OpLoc, true,
+    CompResultTy = CheckMultiplyDivideOperands(LHS, RHS, OpLoc, true,
                                                Opc == BO_DivAssign);
     CompLHSTy = CompResultTy;
-    if (!CompResultTy.isNull() && !lhs.isInvalid() && !rhs.isInvalid())
-      ResultTy = CheckAssignmentOperands(lhs.get(), rhs, OpLoc, CompResultTy);
+    if (!CompResultTy.isNull() && !LHS.isInvalid() && !RHS.isInvalid())
+      ResultTy = CheckAssignmentOperands(LHS.get(), RHS, OpLoc, CompResultTy);
     break;
   case BO_RemAssign:
-    CompResultTy = CheckRemainderOperands(lhs, rhs, OpLoc, true);
+    CompResultTy = CheckRemainderOperands(LHS, RHS, OpLoc, true);
     CompLHSTy = CompResultTy;
-    if (!CompResultTy.isNull() && !lhs.isInvalid() && !rhs.isInvalid())
-      ResultTy = CheckAssignmentOperands(lhs.get(), rhs, OpLoc, CompResultTy);
+    if (!CompResultTy.isNull() && !LHS.isInvalid() && !RHS.isInvalid())
+      ResultTy = CheckAssignmentOperands(LHS.get(), RHS, OpLoc, CompResultTy);
     break;
   case BO_AddAssign:
-    CompResultTy = CheckAdditionOperands(lhs, rhs, OpLoc, &CompLHSTy);
-    if (!CompResultTy.isNull() && !lhs.isInvalid() && !rhs.isInvalid())
-      ResultTy = CheckAssignmentOperands(lhs.get(), rhs, OpLoc, CompResultTy);
+    CompResultTy = CheckAdditionOperands(LHS, RHS, OpLoc, &CompLHSTy);
+    if (!CompResultTy.isNull() && !LHS.isInvalid() && !RHS.isInvalid())
+      ResultTy = CheckAssignmentOperands(LHS.get(), RHS, OpLoc, CompResultTy);
     break;
   case BO_SubAssign:
-    CompResultTy = CheckSubtractionOperands(lhs, rhs, OpLoc, &CompLHSTy);
-    if (!CompResultTy.isNull() && !lhs.isInvalid() && !rhs.isInvalid())
-      ResultTy = CheckAssignmentOperands(lhs.get(), rhs, OpLoc, CompResultTy);
+    CompResultTy = CheckSubtractionOperands(LHS, RHS, OpLoc, &CompLHSTy);
+    if (!CompResultTy.isNull() && !LHS.isInvalid() && !RHS.isInvalid())
+      ResultTy = CheckAssignmentOperands(LHS.get(), RHS, OpLoc, CompResultTy);
     break;
   case BO_ShlAssign:
   case BO_ShrAssign:
-    CompResultTy = CheckShiftOperands(lhs, rhs, OpLoc, Opc, true);
+    CompResultTy = CheckShiftOperands(LHS, RHS, OpLoc, Opc, true);
     CompLHSTy = CompResultTy;
-    if (!CompResultTy.isNull() && !lhs.isInvalid() && !rhs.isInvalid())
-      ResultTy = CheckAssignmentOperands(lhs.get(), rhs, OpLoc, CompResultTy);
+    if (!CompResultTy.isNull() && !LHS.isInvalid() && !RHS.isInvalid())
+      ResultTy = CheckAssignmentOperands(LHS.get(), RHS, OpLoc, CompResultTy);
     break;
   case BO_AndAssign:
   case BO_XorAssign:
   case BO_OrAssign:
-    CompResultTy = CheckBitwiseOperands(lhs, rhs, OpLoc, true);
+    CompResultTy = CheckBitwiseOperands(LHS, RHS, OpLoc, true);
     CompLHSTy = CompResultTy;
-    if (!CompResultTy.isNull() && !lhs.isInvalid() && !rhs.isInvalid())
-      ResultTy = CheckAssignmentOperands(lhs.get(), rhs, OpLoc, CompResultTy);
+    if (!CompResultTy.isNull() && !LHS.isInvalid() && !RHS.isInvalid())
+      ResultTy = CheckAssignmentOperands(LHS.get(), RHS, OpLoc, CompResultTy);
     break;
   case BO_Comma:
-    ResultTy = CheckCommaOperands(*this, lhs, rhs, OpLoc);
-    if (getLangOptions().CPlusPlus && !rhs.isInvalid()) {
-      VK = rhs.get()->getValueKind();
-      OK = rhs.get()->getObjectKind();
+    ResultTy = CheckCommaOperands(*this, LHS, RHS, OpLoc);
+    if (getLangOptions().CPlusPlus && !RHS.isInvalid()) {
+      VK = RHS.get()->getValueKind();
+      OK = RHS.get()->getObjectKind();
     }
     break;
   }
-  if (ResultTy.isNull() || lhs.isInvalid() || rhs.isInvalid())
+  if (ResultTy.isNull() || LHS.isInvalid() || RHS.isInvalid())
     return ExprError();
 
   // Check for array bounds violations for both sides of the BinaryOperator
-  CheckArrayAccess(lhs.get());
-  CheckArrayAccess(rhs.get());
+  CheckArrayAccess(LHS.get());
+  CheckArrayAccess(RHS.get());
 
   if (CompResultTy.isNull())
-    return Owned(new (Context) BinaryOperator(lhs.take(), rhs.take(), Opc,
+    return Owned(new (Context) BinaryOperator(LHS.take(), RHS.take(), Opc,
                                               ResultTy, VK, OK, OpLoc));
-  if (getLangOptions().CPlusPlus && lhs.get()->getObjectKind() !=
+  if (getLangOptions().CPlusPlus && LHS.get()->getObjectKind() !=
       OK_ObjCProperty) {
     VK = VK_LValue;
-    OK = lhs.get()->getObjectKind();
+    OK = LHS.get()->getObjectKind();
   }
-  return Owned(new (Context) CompoundAssignOperator(lhs.take(), rhs.take(), Opc,
+  return Owned(new (Context) CompoundAssignOperator(LHS.take(), RHS.take(), Opc,
                                                     ResultTy, VK, OK, CompLHSTy,
                                                     CompResultTy, OpLoc));
 }
@@ -7841,44 +7843,46 @@ ExprResult Sema::CreateBuiltinBinOp(SourceLocation OpLoc,
 /// comparison operators have higher precedence. The most typical example of
 /// such code is "flags & 0x0020 != 0", which is equivalent to "flags & 1".
 static void DiagnoseBitwisePrecedence(Sema &Self, BinaryOperatorKind Opc,
-                                      SourceLocation OpLoc,Expr *lhs,Expr *rhs){
+                                      SourceLocation OpLoc, Expr *LHSExpr,
+                                      Expr *RHSExpr) {
   typedef BinaryOperator BinOp;
-  BinOp::Opcode lhsopc = static_cast<BinOp::Opcode>(-1),
-                rhsopc = static_cast<BinOp::Opcode>(-1);
-  if (BinOp *BO = dyn_cast<BinOp>(lhs))
-    lhsopc = BO->getOpcode();
-  if (BinOp *BO = dyn_cast<BinOp>(rhs))
-    rhsopc = BO->getOpcode();
+  BinOp::Opcode LHSopc = static_cast<BinOp::Opcode>(-1),
+                RHSopc = static_cast<BinOp::Opcode>(-1);
+  if (BinOp *BO = dyn_cast<BinOp>(LHSExpr))
+    LHSopc = BO->getOpcode();
+  if (BinOp *BO = dyn_cast<BinOp>(RHSExpr))
+    RHSopc = BO->getOpcode();
 
   // Subs are not binary operators.
-  if (lhsopc == -1 && rhsopc == -1)
+  if (LHSopc == -1 && RHSopc == -1)
     return;
 
   // Bitwise operations are sometimes used as eager logical ops.
   // Don't diagnose this.
-  if ((BinOp::isComparisonOp(lhsopc) || BinOp::isBitwiseOp(lhsopc)) &&
-      (BinOp::isComparisonOp(rhsopc) || BinOp::isBitwiseOp(rhsopc)))
+  if ((BinOp::isComparisonOp(LHSopc) || BinOp::isBitwiseOp(LHSopc)) &&
+      (BinOp::isComparisonOp(RHSopc) || BinOp::isBitwiseOp(RHSopc)))
     return;
 
-  bool isLeftComp = BinOp::isComparisonOp(lhsopc);
-  bool isRightComp = BinOp::isComparisonOp(rhsopc);
+  bool isLeftComp = BinOp::isComparisonOp(LHSopc);
+  bool isRightComp = BinOp::isComparisonOp(RHSopc);
   if (!isLeftComp && !isRightComp) return;
 
-  SourceRange DiagRange = isLeftComp ? SourceRange(lhs->getLocStart(), OpLoc)
-                                     : SourceRange(OpLoc, rhs->getLocEnd());
-  std::string OpStr = isLeftComp ? BinOp::getOpcodeStr(lhsopc)
-                                 : BinOp::getOpcodeStr(rhsopc);
+  SourceRange DiagRange = isLeftComp ? SourceRange(LHSExpr->getLocStart(),
+                                                   OpLoc)
+                                     : SourceRange(OpLoc, RHSExpr->getLocEnd());
+  std::string OpStr = isLeftComp ? BinOp::getOpcodeStr(LHSopc)
+                                 : BinOp::getOpcodeStr(RHSopc);
   SourceRange ParensRange = isLeftComp ?
-      SourceRange(cast<BinOp>(lhs)->getRHS()->getLocStart(),
-                  rhs->getLocEnd())
-    : SourceRange(lhs->getLocStart(),
-                  cast<BinOp>(rhs)->getLHS()->getLocStart());
+      SourceRange(cast<BinOp>(LHSExpr)->getRHS()->getLocStart(),
+                  RHSExpr->getLocEnd())
+    : SourceRange(LHSExpr->getLocStart(),
+                  cast<BinOp>(RHSExpr)->getLHS()->getLocStart());
 
   Self.Diag(OpLoc, diag::warn_precedence_bitwise_rel)
     << DiagRange << BinOp::getOpcodeStr(Opc) << OpStr;
   SuggestParentheses(Self, OpLoc,
     Self.PDiag(diag::note_precedence_bitwise_silence) << OpStr,
-    rhs->getSourceRange());
+    RHSExpr->getSourceRange());
   SuggestParentheses(Self, OpLoc,
     Self.PDiag(diag::note_precedence_bitwise_first) << BinOp::getOpcodeStr(Opc),
     ParensRange);
@@ -7928,11 +7932,11 @@ static bool EvaluatesAsFalse(Sema &S, Expr *E) {
 
 /// \brief Look for '&&' in the left hand of a '||' expr.
 static void DiagnoseLogicalAndInLogicalOrLHS(Sema &S, SourceLocation OpLoc,
-                                             Expr *OrLHS, Expr *OrRHS) {
-  if (BinaryOperator *Bop = dyn_cast<BinaryOperator>(OrLHS)) {
+                                             Expr *LHSExpr, Expr *RHSExpr) {
+  if (BinaryOperator *Bop = dyn_cast<BinaryOperator>(LHSExpr)) {
     if (Bop->getOpcode() == BO_LAnd) {
       // If it's "a && b || 0" don't warn since the precedence doesn't matter.
-      if (EvaluatesAsFalse(S, OrRHS))
+      if (EvaluatesAsFalse(S, RHSExpr))
         return;
       // If it's "1 && a || b" don't warn since the precedence doesn't matter.
       if (!EvaluatesAsTrue(S, Bop->getLHS()))
@@ -7950,11 +7954,11 @@ static void DiagnoseLogicalAndInLogicalOrLHS(Sema &S, SourceLocation OpLoc,
 
 /// \brief Look for '&&' in the right hand of a '||' expr.
 static void DiagnoseLogicalAndInLogicalOrRHS(Sema &S, SourceLocation OpLoc,
-                                             Expr *OrLHS, Expr *OrRHS) {
-  if (BinaryOperator *Bop = dyn_cast<BinaryOperator>(OrRHS)) {
+                                             Expr *LHSExpr, Expr *RHSExpr) {
+  if (BinaryOperator *Bop = dyn_cast<BinaryOperator>(RHSExpr)) {
     if (Bop->getOpcode() == BO_LAnd) {
       // If it's "0 || a && b" don't warn since the precedence doesn't matter.
-      if (EvaluatesAsFalse(S, OrLHS))
+      if (EvaluatesAsFalse(S, LHSExpr))
         return;
       // If it's "a || b && 1" don't warn since the precedence doesn't matter.
       if (!EvaluatesAsTrue(S, Bop->getRHS()))
@@ -7975,52 +7979,54 @@ static void DiagnoseBitwiseAndInBitwiseOr(Sema &S, SourceLocation OpLoc,
 /// DiagnoseBinOpPrecedence - Emit warnings for expressions with tricky
 /// precedence.
 static void DiagnoseBinOpPrecedence(Sema &Self, BinaryOperatorKind Opc,
-                                    SourceLocation OpLoc, Expr *lhs, Expr *rhs){
+                                    SourceLocation OpLoc, Expr *LHSExpr,
+                                    Expr *RHSExpr){
   // Diagnose "arg1 'bitwise' arg2 'eq' arg3".
   if (BinaryOperator::isBitwiseOp(Opc))
-    DiagnoseBitwisePrecedence(Self, Opc, OpLoc, lhs, rhs);
+    DiagnoseBitwisePrecedence(Self, Opc, OpLoc, LHSExpr, RHSExpr);
 
   // Diagnose "arg1 & arg2 | arg3"
   if (Opc == BO_Or && !OpLoc.isMacroID()/* Don't warn in macros. */) {
-    DiagnoseBitwiseAndInBitwiseOr(Self, OpLoc, lhs);
-    DiagnoseBitwiseAndInBitwiseOr(Self, OpLoc, rhs);
+    DiagnoseBitwiseAndInBitwiseOr(Self, OpLoc, LHSExpr);
+    DiagnoseBitwiseAndInBitwiseOr(Self, OpLoc, RHSExpr);
   }
 
   // Warn about arg1 || arg2 && arg3, as GCC 4.3+ does.
   // We don't warn for 'assert(a || b && "bad")' since this is safe.
   if (Opc == BO_LOr && !OpLoc.isMacroID()/* Don't warn in macros. */) {
-    DiagnoseLogicalAndInLogicalOrLHS(Self, OpLoc, lhs, rhs);
-    DiagnoseLogicalAndInLogicalOrRHS(Self, OpLoc, lhs, rhs);
+    DiagnoseLogicalAndInLogicalOrLHS(Self, OpLoc, LHSExpr, RHSExpr);
+    DiagnoseLogicalAndInLogicalOrRHS(Self, OpLoc, LHSExpr, RHSExpr);
   }
 }
 
 // Binary Operators.  'Tok' is the token for the operator.
 ExprResult Sema::ActOnBinOp(Scope *S, SourceLocation TokLoc,
                             tok::TokenKind Kind,
-                            Expr *lhs, Expr *rhs) {
+                            Expr *LHSExpr, Expr *RHSExpr) {
   BinaryOperatorKind Opc = ConvertTokenKindToBinaryOpcode(Kind);
-  assert((lhs != 0) && "ActOnBinOp(): missing left expression");
-  assert((rhs != 0) && "ActOnBinOp(): missing right expression");
+  assert((LHSExpr != 0) && "ActOnBinOp(): missing left expression");
+  assert((RHSExpr != 0) && "ActOnBinOp(): missing right expression");
 
   // Emit warnings for tricky precedence issues, e.g. "bitfield & 0x4 == 0"
-  DiagnoseBinOpPrecedence(*this, Opc, TokLoc, lhs, rhs);
+  DiagnoseBinOpPrecedence(*this, Opc, TokLoc, LHSExpr, RHSExpr);
 
-  return BuildBinOp(S, TokLoc, Opc, lhs, rhs);
+  return BuildBinOp(S, TokLoc, Opc, LHSExpr, RHSExpr);
 }
 
 ExprResult Sema::BuildBinOp(Scope *S, SourceLocation OpLoc,
                             BinaryOperatorKind Opc,
-                            Expr *lhs, Expr *rhs) {
+                            Expr *LHSExpr, Expr *RHSExpr) {
   if (getLangOptions().CPlusPlus) {
     bool UseBuiltinOperator;
 
-    if (lhs->isTypeDependent() || rhs->isTypeDependent()) {
+    if (LHSExpr->isTypeDependent() || RHSExpr->isTypeDependent()) {
       UseBuiltinOperator = false;
-    } else if (Opc == BO_Assign && lhs->getObjectKind() == OK_ObjCProperty) {
+    } else if (Opc == BO_Assign &&
+               LHSExpr->getObjectKind() == OK_ObjCProperty) {
       UseBuiltinOperator = true;
     } else {
-      UseBuiltinOperator = !lhs->getType()->isOverloadableType() &&
-                           !rhs->getType()->isOverloadableType();
+      UseBuiltinOperator = !LHSExpr->getType()->isOverloadableType() &&
+                           !RHSExpr->getType()->isOverloadableType();
     }
 
     if (!UseBuiltinOperator) {
@@ -8032,17 +8038,17 @@ ExprResult Sema::BuildBinOp(Scope *S, SourceLocation OpLoc,
       OverloadedOperatorKind OverOp
         = BinaryOperator::getOverloadedOperator(Opc);
       if (S && OverOp != OO_None)
-        LookupOverloadedOperatorName(OverOp, S, lhs->getType(), rhs->getType(),
-                                     Functions);
+        LookupOverloadedOperatorName(OverOp, S, LHSExpr->getType(),
+                                     RHSExpr->getType(), Functions);
 
       // Build the (potentially-overloaded, potentially-dependent)
       // binary operation.
-      return CreateOverloadedBinOp(OpLoc, Opc, Functions, lhs, rhs);
+      return CreateOverloadedBinOp(OpLoc, Opc, Functions, LHSExpr, RHSExpr);
     }
   }
 
   // Build a built-in binary operation.
-  return CreateBuiltinBinOp(OpLoc, Opc, lhs, rhs);
+  return CreateBuiltinBinOp(OpLoc, Opc, LHSExpr, RHSExpr);
 }
 
 ExprResult Sema::CreateBuiltinUnaryOp(SourceLocation OpLoc,
