@@ -415,20 +415,15 @@ public:
   /// underlines and FixItHint display as appropriate at each level. Walk is
   /// accomplished by calling itself recursively.
   ///
-  /// FIXME: Switch parameters to ArrayRefs.
   /// FIXME: Break up massive function into logical units.
   ///
   /// \param Loc The location for this caret.
   /// \param Ranges The underlined ranges for this code snippet.
-  /// \param NumRanges The number of unlined ranges.
   /// \param Hints The FixIt hints active for this diagnostic.
-  /// \param NumHints The number of hints active for this diagnostic.
   /// \param OnMacroInst The current depth of the macro expansion stack.
   void Emit(SourceLocation Loc,
-            CharSourceRange *Ranges,
-            unsigned NumRanges,
-            const FixItHint *Hints,
-            unsigned NumHints,
+            SmallVectorImpl<CharSourceRange>& Ranges,
+            ArrayRef<FixItHint> Hints,
             unsigned OnMacroInst = 0) {
     assert(!Loc.isInvalid() && "must have a valid source location here");
 
@@ -447,19 +442,20 @@ public:
       SourceLocation OneLevelUp = getImmediateMacroCallerLoc(SM, Loc);
 
       // FIXME: Map ranges?
-      Emit(OneLevelUp, Ranges, NumRanges, Hints, NumHints, OnMacroInst + 1);
+      Emit(OneLevelUp, Ranges, Hints, OnMacroInst + 1);
 
       // Map the location.
       Loc = getImmediateMacroCalleeLoc(SM, Loc);
 
       // Map the ranges.
-      for (unsigned i = 0; i != NumRanges; ++i) {
-        CharSourceRange &R = Ranges[i];
-        SourceLocation S = R.getBegin(), E = R.getEnd();
-        if (S.isMacroID())
-          R.setBegin(getImmediateMacroCalleeLoc(SM, S));
-        if (E.isMacroID())
-          R.setEnd(getImmediateMacroCalleeLoc(SM, E));
+      for (SmallVectorImpl<CharSourceRange>::iterator I = Ranges.begin(),
+                                                      E = Ranges.end();
+           I != E; ++I) {
+        SourceLocation Start = I->getBegin(), End = I->getEnd();
+        if (Start.isMacroID())
+          I->setBegin(getImmediateMacroCalleeLoc(SM, Start));
+        if (End.isMacroID())
+          I->setEnd(getImmediateMacroCalleeLoc(SM, End));
       }
 
       if (!Suppressed) {
@@ -484,7 +480,7 @@ public:
         }
         OS << "note: expanded from:\n";
 
-        Emit(Loc, Ranges, NumRanges, 0, 0, OnMacroInst + 1);
+        Emit(Loc, Ranges, ArrayRef<FixItHint>(), OnMacroInst + 1);
         return;
       }
 
@@ -509,6 +505,7 @@ public:
     if (Invalid)
       return;
 
+    unsigned LineNo = SM.getLineNumber(FID, FileOffset);
     unsigned ColNo = SM.getColumnNumber(FID, FileOffset);
     unsigned CaretEndColNo
       = ColNo + Lexer::MeasureTokenLength(Loc, SM, LangOpts);
@@ -537,13 +534,10 @@ public:
     std::string CaretLine(LineEnd-LineStart, ' ');
 
     // Highlight all of the characters covered by Ranges with ~ characters.
-    if (NumRanges) {
-      unsigned LineNo = SM.getLineNumber(FID, FileOffset);
-
-      for (unsigned i = 0, e = NumRanges; i != e; ++i)
-        Printer.HighlightRange(Ranges[i], SM, LineNo, FID, CaretLine,
-                               SourceLine);
-    }
+    for (SmallVectorImpl<CharSourceRange>::iterator I = Ranges.begin(),
+                                                    E = Ranges.end();
+         I != E; ++I)
+      Printer.HighlightRange(*I, SM, LineNo, FID, CaretLine, SourceLine);
 
     // Next, insert the caret itself.
     if (ColNo-1 < CaretLine.size())
@@ -551,27 +545,7 @@ public:
     else
       CaretLine.push_back('^');
 
-    // Scan the source line, looking for tabs.  If we find any, manually expand
-    // them to spaces and update the CaretLine to match.
-    for (unsigned i = 0; i != SourceLine.size(); ++i) {
-      if (SourceLine[i] != '\t') continue;
-
-      // Replace this tab with at least one space.
-      SourceLine[i] = ' ';
-
-      // Compute the number of spaces we need to insert.
-      unsigned TabStop = DiagOpts.TabStop;
-      assert(0 < TabStop && TabStop <= DiagnosticOptions::MaxTabStop &&
-             "Invalid -ftabstop value");
-      unsigned NumSpaces = ((i+TabStop)/TabStop * TabStop) - (i+1);
-      assert(NumSpaces < TabStop && "Invalid computation of space amt");
-
-      // Insert spaces into the SourceLine.
-      SourceLine.insert(i+1, NumSpaces, ' ');
-
-      // Insert spaces or ~'s into CaretLine.
-      CaretLine.insert(i+1, NumSpaces, CaretLine[i] == '~' ? '~' : ' ');
-    }
+    ExpandTabs(SourceLine, CaretLine);
 
     // If we are in -fdiagnostics-print-source-range-info mode, we are trying
     // to produce easily machine parsable output.  Add a space before the
@@ -582,70 +556,9 @@ public:
       CaretLine = ' ' + CaretLine;
     }
 
-    std::string FixItInsertionLine;
-    if (NumHints && DiagOpts.ShowFixits) {
-      for (const FixItHint *Hint = Hints, *LastHint = Hints + NumHints;
-           Hint != LastHint; ++Hint) {
-        if (!Hint->CodeToInsert.empty()) {
-          // We have an insertion hint. Determine whether the inserted
-          // code is on the same line as the caret.
-          std::pair<FileID, unsigned> HintLocInfo
-            = SM.getDecomposedExpansionLoc(Hint->RemoveRange.getBegin());
-          if (SM.getLineNumber(HintLocInfo.first, HintLocInfo.second) ==
-                SM.getLineNumber(FID, FileOffset)) {
-            // Insert the new code into the line just below the code
-            // that the user wrote.
-            unsigned HintColNo
-              = SM.getColumnNumber(HintLocInfo.first, HintLocInfo.second);
-            unsigned LastColumnModified
-              = HintColNo - 1 + Hint->CodeToInsert.size();
-            if (LastColumnModified > FixItInsertionLine.size())
-              FixItInsertionLine.resize(LastColumnModified, ' ');
-            std::copy(Hint->CodeToInsert.begin(), Hint->CodeToInsert.end(),
-                      FixItInsertionLine.begin() + HintColNo - 1);
-          } else {
-            FixItInsertionLine.clear();
-            break;
-          }
-        }
-      }
-      // Now that we have the entire fixit line, expand the tabs in it.
-      // Since we don't want to insert spaces in the middle of a word,
-      // find each word and the column it should line up with and insert
-      // spaces until they match.
-      if (!FixItInsertionLine.empty()) {
-        unsigned FixItPos = 0;
-        unsigned LinePos = 0;
-        unsigned TabExpandedCol = 0;
-        unsigned LineLength = LineEnd - LineStart;
-
-        while (FixItPos < FixItInsertionLine.size() && LinePos < LineLength) {
-          // Find the next word in the FixIt line.
-          while (FixItPos < FixItInsertionLine.size() &&
-                 FixItInsertionLine[FixItPos] == ' ')
-            ++FixItPos;
-          unsigned CharDistance = FixItPos - TabExpandedCol;
-
-          // Walk forward in the source line, keeping track of
-          // the tab-expanded column.
-          for (unsigned I = 0; I < CharDistance; ++I, ++LinePos)
-            if (LinePos >= LineLength || LineStart[LinePos] != '\t')
-              ++TabExpandedCol;
-            else
-              TabExpandedCol =
-                (TabExpandedCol/DiagOpts.TabStop + 1) * DiagOpts.TabStop;
-
-          // Adjust the fixit line to match this column.
-          FixItInsertionLine.insert(FixItPos, TabExpandedCol-FixItPos, ' ');
-          FixItPos = TabExpandedCol;
-
-          // Walk to the end of the word.
-          while (FixItPos < FixItInsertionLine.size() &&
-                 FixItInsertionLine[FixItPos] != ' ')
-            ++FixItPos;
-        }
-      }
-    }
+    std::string FixItInsertionLine = BuildFixItInsertionLine(LineNo,
+                                                             LineStart, LineEnd,
+                                                             Hints);
 
     // If the source line is too long for our terminal, select only the
     // "interesting" source region within that line.
@@ -678,48 +591,148 @@ public:
     }
 
     // Print out any parseable fixit information requested by the options.
-    EmitParseableFixits(Hints, NumHints);
+    EmitParseableFixits(Hints);
   }
 
 private:
-  void EmitParseableFixits(const FixItHint *Hints, unsigned NumHints) {
+  std::string BuildFixItInsertionLine(unsigned LineNo,
+                                      const char *LineStart,
+                                      const char *LineEnd,
+                                      ArrayRef<FixItHint> Hints) {
+    std::string FixItInsertionLine;
+    if (Hints.empty() || !DiagOpts.ShowFixits)
+      return FixItInsertionLine;
+
+    for (ArrayRef<FixItHint>::iterator I = Hints.begin(), E = Hints.end();
+         I != E; ++I) {
+      if (!I->CodeToInsert.empty()) {
+        // We have an insertion hint. Determine whether the inserted
+        // code is on the same line as the caret.
+        std::pair<FileID, unsigned> HintLocInfo
+          = SM.getDecomposedExpansionLoc(I->RemoveRange.getBegin());
+        if (LineNo == SM.getLineNumber(HintLocInfo.first, HintLocInfo.second)) {
+          // Insert the new code into the line just below the code
+          // that the user wrote.
+          unsigned HintColNo
+            = SM.getColumnNumber(HintLocInfo.first, HintLocInfo.second);
+          unsigned LastColumnModified
+            = HintColNo - 1 + I->CodeToInsert.size();
+          if (LastColumnModified > FixItInsertionLine.size())
+            FixItInsertionLine.resize(LastColumnModified, ' ');
+          std::copy(I->CodeToInsert.begin(), I->CodeToInsert.end(),
+                    FixItInsertionLine.begin() + HintColNo - 1);
+        } else {
+          FixItInsertionLine.clear();
+          break;
+        }
+      }
+    }
+
+    if (FixItInsertionLine.empty())
+      return FixItInsertionLine;
+
+    // Now that we have the entire fixit line, expand the tabs in it.
+    // Since we don't want to insert spaces in the middle of a word,
+    // find each word and the column it should line up with and insert
+    // spaces until they match.
+    unsigned FixItPos = 0;
+    unsigned LinePos = 0;
+    unsigned TabExpandedCol = 0;
+    unsigned LineLength = LineEnd - LineStart;
+
+    while (FixItPos < FixItInsertionLine.size() && LinePos < LineLength) {
+      // Find the next word in the FixIt line.
+      while (FixItPos < FixItInsertionLine.size() &&
+             FixItInsertionLine[FixItPos] == ' ')
+        ++FixItPos;
+      unsigned CharDistance = FixItPos - TabExpandedCol;
+
+      // Walk forward in the source line, keeping track of
+      // the tab-expanded column.
+      for (unsigned I = 0; I < CharDistance; ++I, ++LinePos)
+        if (LinePos >= LineLength || LineStart[LinePos] != '\t')
+          ++TabExpandedCol;
+        else
+          TabExpandedCol =
+            (TabExpandedCol/DiagOpts.TabStop + 1) * DiagOpts.TabStop;
+
+      // Adjust the fixit line to match this column.
+      FixItInsertionLine.insert(FixItPos, TabExpandedCol-FixItPos, ' ');
+      FixItPos = TabExpandedCol;
+
+      // Walk to the end of the word.
+      while (FixItPos < FixItInsertionLine.size() &&
+             FixItInsertionLine[FixItPos] != ' ')
+        ++FixItPos;
+    }
+
+    return FixItInsertionLine;
+  }
+
+  void ExpandTabs(std::string &SourceLine, std::string &CaretLine) {
+    // Scan the source line, looking for tabs.  If we find any, manually expand
+    // them to spaces and update the CaretLine to match.
+    for (unsigned i = 0; i != SourceLine.size(); ++i) {
+      if (SourceLine[i] != '\t') continue;
+
+      // Replace this tab with at least one space.
+      SourceLine[i] = ' ';
+
+      // Compute the number of spaces we need to insert.
+      unsigned TabStop = DiagOpts.TabStop;
+      assert(0 < TabStop && TabStop <= DiagnosticOptions::MaxTabStop &&
+             "Invalid -ftabstop value");
+      unsigned NumSpaces = ((i+TabStop)/TabStop * TabStop) - (i+1);
+      assert(NumSpaces < TabStop && "Invalid computation of space amt");
+
+      // Insert spaces into the SourceLine.
+      SourceLine.insert(i+1, NumSpaces, ' ');
+
+      // Insert spaces or ~'s into CaretLine.
+      CaretLine.insert(i+1, NumSpaces, CaretLine[i] == '~' ? '~' : ' ');
+    }
+  }
+
+  void EmitParseableFixits(ArrayRef<FixItHint> Hints) {
     if (!DiagOpts.ShowParseableFixits)
       return;
 
     // We follow FixItRewriter's example in not (yet) handling
     // fix-its in macros.
-    for (const FixItHint *Hint = Hints; Hint != Hints + NumHints; ++Hint) {
-      if (Hint->RemoveRange.isInvalid() ||
-          Hint->RemoveRange.getBegin().isMacroID() ||
-          Hint->RemoveRange.getEnd().isMacroID())
+    for (ArrayRef<FixItHint>::iterator I = Hints.begin(), E = Hints.end();
+         I != E; ++I) {
+      if (I->RemoveRange.isInvalid() ||
+          I->RemoveRange.getBegin().isMacroID() ||
+          I->RemoveRange.getEnd().isMacroID())
         return;
     }
 
-    for (const FixItHint *Hint = Hints; Hint != Hints + NumHints; ++Hint) {
-      SourceLocation B = Hint->RemoveRange.getBegin();
-      SourceLocation E = Hint->RemoveRange.getEnd();
+    for (ArrayRef<FixItHint>::iterator I = Hints.begin(), E = Hints.end();
+         I != E; ++I) {
+      SourceLocation BLoc = I->RemoveRange.getBegin();
+      SourceLocation ELoc = I->RemoveRange.getEnd();
 
-      std::pair<FileID, unsigned> BInfo = SM.getDecomposedLoc(B);
-      std::pair<FileID, unsigned> EInfo = SM.getDecomposedLoc(E);
+      std::pair<FileID, unsigned> BInfo = SM.getDecomposedLoc(BLoc);
+      std::pair<FileID, unsigned> EInfo = SM.getDecomposedLoc(ELoc);
 
       // Adjust for token ranges.
-      if (Hint->RemoveRange.isTokenRange())
-        EInfo.second += Lexer::MeasureTokenLength(E, SM, LangOpts);
+      if (I->RemoveRange.isTokenRange())
+        EInfo.second += Lexer::MeasureTokenLength(ELoc, SM, LangOpts);
 
       // We specifically do not do word-wrapping or tab-expansion here,
       // because this is supposed to be easy to parse.
-      PresumedLoc PLoc = SM.getPresumedLoc(B);
+      PresumedLoc PLoc = SM.getPresumedLoc(BLoc);
       if (PLoc.isInvalid())
         break;
 
       OS << "fix-it:\"";
-      OS.write_escaped(SM.getPresumedLoc(B).getFilename());
+      OS.write_escaped(PLoc.getFilename());
       OS << "\":{" << SM.getLineNumber(BInfo.first, BInfo.second)
         << ':' << SM.getColumnNumber(BInfo.first, BInfo.second)
         << '-' << SM.getLineNumber(EInfo.first, EInfo.second)
         << ':' << SM.getColumnNumber(EInfo.first, EInfo.second)
         << "}:\"";
-      OS.write_escaped(Hint->CodeToInsert);
+      OS.write_escaped(I->CodeToInsert);
       OS << "\"\n";
     }
   }
@@ -727,22 +740,21 @@ private:
 
 } // end namespace
 
-void TextDiagnosticPrinter::EmitCaretDiagnostic(SourceLocation Loc,
-                                                CharSourceRange *Ranges,
-                                                unsigned NumRanges,
-                                                const SourceManager &SM,
-                                                const FixItHint *Hints,
-                                                unsigned NumHints,
-                                                unsigned Columns,
-                                                unsigned MacroSkipStart,
-                                                unsigned MacroSkipEnd) {
+void TextDiagnosticPrinter::EmitCaretDiagnostic(
+    SourceLocation Loc,
+    SmallVectorImpl<CharSourceRange>& Ranges,
+    const SourceManager &SM,
+    ArrayRef<FixItHint> Hints,
+    unsigned Columns,
+    unsigned MacroSkipStart,
+    unsigned MacroSkipEnd) {
   assert(LangOpts && "Unexpected diagnostic outside source file processing");
   assert(DiagOpts && "Unexpected diagnostic without options set");
   // FIXME: Remove this method and have clients directly build and call Emit on
   // the CaretDiagnostic object.
   CaretDiagnostic CaretDiag(*this, OS, SM, *LangOpts, *DiagOpts,
                             Columns, MacroSkipStart, MacroSkipEnd);
-  CaretDiag.Emit(Loc, Ranges, NumRanges, Hints, NumHints);
+  CaretDiag.Emit(Loc, Ranges, Hints);
 }
 
 /// \brief Skip over whitespace in the string, starting at the given
@@ -1185,19 +1197,15 @@ void TextDiagnosticPrinter::HandleDiagnostic(Diagnostic::Level Level,
     LastCaretDiagnosticWasNote = (Level == Diagnostic::Note);
 
     // Get the ranges into a local array we can hack on.
-    CharSourceRange Ranges[20];
-    unsigned NumRanges = Info.getNumRanges();
-    assert(NumRanges < 20 && "Out of space");
-    for (unsigned i = 0; i != NumRanges; ++i)
-      Ranges[i] = Info.getRange(i);
+    SmallVector<CharSourceRange, 20> Ranges;
+    Ranges.reserve(Info.getNumRanges());
+    for (unsigned i = 0, e = Info.getNumRanges(); i != e; ++i)
+      Ranges.push_back(Info.getRange(i));
 
-    unsigned NumHints = Info.getNumFixItHints();
-    for (unsigned i = 0; i != NumHints; ++i) {
+    for (unsigned i = 0, e = Info.getNumFixItHints(); i != e; ++i) {
       const FixItHint &Hint = Info.getFixItHint(i);
-      if (Hint.RemoveRange.isValid()) {
-        assert(NumRanges < 20 && "Out of space");
-        Ranges[NumRanges++] = Hint.RemoveRange;
-      }
+      if (Hint.RemoveRange.isValid())
+        Ranges.push_back(Hint.RemoveRange);
     }
 
     const SourceManager &SM = LastLoc.getManager();
@@ -1220,9 +1228,9 @@ void TextDiagnosticPrinter::HandleDiagnostic(Diagnostic::Level Level,
       }
     }        
     
-    EmitCaretDiagnostic(LastLoc, Ranges, NumRanges, LastLoc.getManager(),
-                        Info.getFixItHints(),
-                        Info.getNumFixItHints(),
+    EmitCaretDiagnostic(LastLoc, Ranges, LastLoc.getManager(),
+                        llvm::makeArrayRef(Info.getFixItHints(),
+                                           Info.getNumFixItHints()),
                         DiagOpts->MessageLength,
                         MacroInstSkipStart, MacroInstSkipEnd);
   }
