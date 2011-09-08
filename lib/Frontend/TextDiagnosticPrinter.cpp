@@ -101,86 +101,6 @@ void TextDiagnosticPrinter::PrintIncludeStack(Diagnostic::Level Level,
   PrintIncludeStackRecursively(OS, SM, Loc, DiagOpts->ShowLocation);
 }
 
-/// HighlightRange - Given a SourceRange and a line number, highlight (with ~'s)
-/// any characters in LineNo that intersect the SourceRange.
-void TextDiagnosticPrinter::HighlightRange(const CharSourceRange &R,
-                                           const SourceManager &SM,
-                                           unsigned LineNo, FileID FID,
-                                           std::string &CaretLine,
-                                           const std::string &SourceLine) {
-  assert(CaretLine.size() == SourceLine.size() &&
-         "Expect a correspondence between source and caret line!");
-  if (!R.isValid()) return;
-
-  SourceLocation Begin = SM.getExpansionLoc(R.getBegin());
-  SourceLocation End = SM.getExpansionLoc(R.getEnd());
-
-  // If the End location and the start location are the same and are a macro
-  // location, then the range was something that came from a macro expansion
-  // or _Pragma.  If this is an object-like macro, the best we can do is to
-  // highlight the range.  If this is a function-like macro, we'd also like to
-  // highlight the arguments.
-  if (Begin == End && R.getEnd().isMacroID())
-    End = SM.getExpansionRange(R.getEnd()).second;
-
-  unsigned StartLineNo = SM.getExpansionLineNumber(Begin);
-  if (StartLineNo > LineNo || SM.getFileID(Begin) != FID)
-    return;  // No intersection.
-
-  unsigned EndLineNo = SM.getExpansionLineNumber(End);
-  if (EndLineNo < LineNo || SM.getFileID(End) != FID)
-    return;  // No intersection.
-
-  // Compute the column number of the start.
-  unsigned StartColNo = 0;
-  if (StartLineNo == LineNo) {
-    StartColNo = SM.getExpansionColumnNumber(Begin);
-    if (StartColNo) --StartColNo;  // Zero base the col #.
-  }
-
-  // Compute the column number of the end.
-  unsigned EndColNo = CaretLine.size();
-  if (EndLineNo == LineNo) {
-    EndColNo = SM.getExpansionColumnNumber(End);
-    if (EndColNo) {
-      --EndColNo;  // Zero base the col #.
-
-      // Add in the length of the token, so that we cover multi-char tokens if
-      // this is a token range.
-      if (R.isTokenRange())
-        EndColNo += Lexer::MeasureTokenLength(End, SM, *LangOpts);
-    } else {
-      EndColNo = CaretLine.size();
-    }
-  }
-
-  assert(StartColNo <= EndColNo && "Invalid range!");
-
-  // Check that a token range does not highlight only whitespace.
-  if (R.isTokenRange()) {
-    // Pick the first non-whitespace column.
-    while (StartColNo < SourceLine.size() &&
-           (SourceLine[StartColNo] == ' ' || SourceLine[StartColNo] == '\t'))
-      ++StartColNo;
-
-    // Pick the last non-whitespace column.
-    if (EndColNo > SourceLine.size())
-      EndColNo = SourceLine.size();
-    while (EndColNo-1 &&
-           (SourceLine[EndColNo-1] == ' ' || SourceLine[EndColNo-1] == '\t'))
-      --EndColNo;
-
-    // If the start/end passed each other, then we are trying to highlight a
-    // range that just exists in whitespace, which must be some sort of other
-    // bug.
-    assert(StartColNo <= EndColNo && "Trying to highlight whitespace??");
-  }
-
-  // Fill the range with ~'s.
-  for (unsigned i = StartColNo; i < EndColNo; ++i)
-    CaretLine[i] = '~';
-}
-
 /// \brief When the source code line we want to print is too long for
 /// the terminal, select the "interesting" region.
 static void SelectInterestingSourceRegion(std::string &SourceLine,
@@ -537,7 +457,7 @@ public:
     for (SmallVectorImpl<CharSourceRange>::iterator I = Ranges.begin(),
                                                     E = Ranges.end();
          I != E; ++I)
-      Printer.HighlightRange(*I, SM, LineNo, FID, CaretLine, SourceLine);
+      HighlightRange(*I, LineNo, FID, SourceLine, CaretLine);
 
     // Next, insert the caret itself.
     if (ColNo-1 < CaretLine.size())
@@ -595,6 +515,84 @@ public:
   }
 
 private:
+  /// \brief Highlight a SourceRange (with ~'s) for any characters on LineNo.
+  void HighlightRange(const CharSourceRange &R,
+                      unsigned LineNo, FileID FID,
+                      const std::string &SourceLine,
+                      std::string &CaretLine) {
+    assert(CaretLine.size() == SourceLine.size() &&
+           "Expect a correspondence between source and caret line!");
+    if (!R.isValid()) return;
+
+    SourceLocation Begin = SM.getExpansionLoc(R.getBegin());
+    SourceLocation End = SM.getExpansionLoc(R.getEnd());
+
+    // If the End location and the start location are the same and are a macro
+    // location, then the range was something that came from a macro expansion
+    // or _Pragma.  If this is an object-like macro, the best we can do is to
+    // highlight the range.  If this is a function-like macro, we'd also like to
+    // highlight the arguments.
+    if (Begin == End && R.getEnd().isMacroID())
+      End = SM.getExpansionRange(R.getEnd()).second;
+
+    unsigned StartLineNo = SM.getExpansionLineNumber(Begin);
+    if (StartLineNo > LineNo || SM.getFileID(Begin) != FID)
+      return;  // No intersection.
+
+    unsigned EndLineNo = SM.getExpansionLineNumber(End);
+    if (EndLineNo < LineNo || SM.getFileID(End) != FID)
+      return;  // No intersection.
+
+    // Compute the column number of the start.
+    unsigned StartColNo = 0;
+    if (StartLineNo == LineNo) {
+      StartColNo = SM.getExpansionColumnNumber(Begin);
+      if (StartColNo) --StartColNo;  // Zero base the col #.
+    }
+
+    // Compute the column number of the end.
+    unsigned EndColNo = CaretLine.size();
+    if (EndLineNo == LineNo) {
+      EndColNo = SM.getExpansionColumnNumber(End);
+      if (EndColNo) {
+        --EndColNo;  // Zero base the col #.
+
+        // Add in the length of the token, so that we cover multi-char tokens if
+        // this is a token range.
+        if (R.isTokenRange())
+          EndColNo += Lexer::MeasureTokenLength(End, SM, LangOpts);
+      } else {
+        EndColNo = CaretLine.size();
+      }
+    }
+
+    assert(StartColNo <= EndColNo && "Invalid range!");
+
+    // Check that a token range does not highlight only whitespace.
+    if (R.isTokenRange()) {
+      // Pick the first non-whitespace column.
+      while (StartColNo < SourceLine.size() &&
+             (SourceLine[StartColNo] == ' ' || SourceLine[StartColNo] == '\t'))
+        ++StartColNo;
+
+      // Pick the last non-whitespace column.
+      if (EndColNo > SourceLine.size())
+        EndColNo = SourceLine.size();
+      while (EndColNo-1 &&
+             (SourceLine[EndColNo-1] == ' ' || SourceLine[EndColNo-1] == '\t'))
+        --EndColNo;
+
+      // If the start/end passed each other, then we are trying to highlight a
+      // range that just exists in whitespace, which must be some sort of other
+      // bug.
+      assert(StartColNo <= EndColNo && "Trying to highlight whitespace??");
+    }
+
+    // Fill the range with ~'s.
+    for (unsigned i = StartColNo; i < EndColNo; ++i)
+      CaretLine[i] = '~';
+  }
+
   std::string BuildFixItInsertionLine(unsigned LineNo,
                                       const char *LineStart,
                                       const char *LineEnd,
@@ -944,6 +942,114 @@ static PresumedLoc getDiagnosticPresumedLoc(const SourceManager &SM,
   return SM.getPresumedLoc(Loc);
 }
 
+/// \brief Print out the file/line/column information and include trace.
+///
+/// This method handlen the emission of the diagnostic location information.
+/// This includes extracting as much location information as is present for the
+/// diagnostic and printing it, as well as any include stack or source ranges
+/// necessary.
+void TextDiagnosticPrinter::EmitDiagnosticLoc(Diagnostic::Level Level,
+                                              const DiagnosticInfo &Info,
+                                              const SourceManager &SM,
+                                              PresumedLoc PLoc) {
+  if (PLoc.isInvalid()) {
+    // At least print the file name if available:
+    FileID FID = SM.getFileID(Info.getLocation());
+    if (!FID.isInvalid()) {
+      const FileEntry* FE = SM.getFileEntryForID(FID);
+      if (FE && FE->getName()) {
+        OS << FE->getName();
+        if (FE->getDevice() == 0 && FE->getInode() == 0
+            && FE->getFileMode() == 0) {
+          // in PCH is a guess, but a good one:
+          OS << " (in PCH)";
+        }
+        OS << ": ";
+      }
+    }
+    return;
+  }
+  unsigned LineNo = PLoc.getLine();
+
+  if (!DiagOpts->ShowLocation)
+    return;
+
+  if (DiagOpts->ShowColors)
+    OS.changeColor(savedColor, true);
+
+  OS << PLoc.getFilename();
+  switch (DiagOpts->Format) {
+  case DiagnosticOptions::Clang: OS << ':'  << LineNo; break;
+  case DiagnosticOptions::Msvc:  OS << '('  << LineNo; break;
+  case DiagnosticOptions::Vi:    OS << " +" << LineNo; break;
+  }
+
+  if (DiagOpts->ShowColumn)
+    // Compute the column number.
+    if (unsigned ColNo = PLoc.getColumn()) {
+      if (DiagOpts->Format == DiagnosticOptions::Msvc) {
+        OS << ',';
+        ColNo--;
+      } else 
+        OS << ':';
+      OS << ColNo;
+    }
+  switch (DiagOpts->Format) {
+  case DiagnosticOptions::Clang: 
+  case DiagnosticOptions::Vi:    OS << ':';    break;
+  case DiagnosticOptions::Msvc:  OS << ") : "; break;
+  }
+
+  if (DiagOpts->ShowSourceRanges && Info.getNumRanges()) {
+    FileID CaretFileID =
+      SM.getFileID(SM.getExpansionLoc(Info.getLocation()));
+    bool PrintedRange = false;
+
+    for (unsigned i = 0, e = Info.getNumRanges(); i != e; ++i) {
+      // Ignore invalid ranges.
+      if (!Info.getRange(i).isValid()) continue;
+
+      SourceLocation B = Info.getRange(i).getBegin();
+      SourceLocation E = Info.getRange(i).getEnd();
+      B = SM.getExpansionLoc(B);
+      E = SM.getExpansionLoc(E);
+
+      // If the End location and the start location are the same and are a
+      // macro location, then the range was something that came from a
+      // macro expansion or _Pragma.  If this is an object-like macro, the
+      // best we can do is to highlight the range.  If this is a
+      // function-like macro, we'd also like to highlight the arguments.
+      if (B == E && Info.getRange(i).getEnd().isMacroID())
+        E = SM.getExpansionRange(Info.getRange(i).getEnd()).second;
+
+      std::pair<FileID, unsigned> BInfo = SM.getDecomposedLoc(B);
+      std::pair<FileID, unsigned> EInfo = SM.getDecomposedLoc(E);
+
+      // If the start or end of the range is in another file, just discard
+      // it.
+      if (BInfo.first != CaretFileID || EInfo.first != CaretFileID)
+        continue;
+
+      // Add in the length of the token, so that we cover multi-char
+      // tokens.
+      unsigned TokSize = 0;
+      if (Info.getRange(i).isTokenRange())
+        TokSize = Lexer::MeasureTokenLength(E, SM, *LangOpts);
+
+      OS << '{' << SM.getLineNumber(BInfo.first, BInfo.second) << ':'
+        << SM.getColumnNumber(BInfo.first, BInfo.second) << '-'
+        << SM.getLineNumber(EInfo.first, EInfo.second) << ':'
+        << (SM.getColumnNumber(EInfo.first, EInfo.second)+TokSize)
+        << '}';
+      PrintedRange = true;
+    }
+
+    if (PrintedRange)
+      OS << ':';
+  }
+  OS << ' ';
+}
+
 void TextDiagnosticPrinter::HandleDiagnostic(Diagnostic::Level Level,
                                              const DiagnosticInfo &Info) {
   // Default implementation (Warnings/errors count).
@@ -958,113 +1064,20 @@ void TextDiagnosticPrinter::HandleDiagnostic(Diagnostic::Level Level,
   if (!Prefix.empty())
     OS << Prefix << ": ";
 
-  // If the location is specified, print out a file/line/col and include trace
-  // if enabled.
   if (Info.getLocation().isValid()) {
     const SourceManager &SM = Info.getSourceManager();
     PresumedLoc PLoc = getDiagnosticPresumedLoc(SM, Info.getLocation());
-    if (PLoc.isInvalid()) {
-      // At least print the file name if available:
-      FileID FID = SM.getFileID(Info.getLocation());
-      if (!FID.isInvalid()) {
-        const FileEntry* FE = SM.getFileEntryForID(FID);
-        if (FE && FE->getName()) {
-          OS << FE->getName();
-          if (FE->getDevice() == 0 && FE->getInode() == 0
-              && FE->getFileMode() == 0) {
-            // in PCH is a guess, but a good one:
-            OS << " (in PCH)";
-          }
-          OS << ": ";
-        }
-      }
-    } else {
-      unsigned LineNo = PLoc.getLine();
 
-      // First, if this diagnostic is not in the main file, print out the
-      // "included from" lines.
-      PrintIncludeStack(Level, PLoc.getIncludeLoc(), SM);
-      StartOfLocationInfo = OS.tell();
+    // First, if this diagnostic is not in the main file, print out the
+    // "included from" lines.
+    PrintIncludeStack(Level, PLoc.getIncludeLoc(), SM);
+    StartOfLocationInfo = OS.tell();
 
-      // Compute the column number.
-      if (DiagOpts->ShowLocation) {
-        if (DiagOpts->ShowColors)
-          OS.changeColor(savedColor, true);
+    // Next emit the location of this particular diagnostic.
+    EmitDiagnosticLoc(Level, Info, SM, PLoc);
 
-        OS << PLoc.getFilename();
-        switch (DiagOpts->Format) {
-        case DiagnosticOptions::Clang: OS << ':'  << LineNo; break;
-        case DiagnosticOptions::Msvc:  OS << '('  << LineNo; break;
-        case DiagnosticOptions::Vi:    OS << " +" << LineNo; break;
-        }
-        if (DiagOpts->ShowColumn)
-          if (unsigned ColNo = PLoc.getColumn()) {
-            if (DiagOpts->Format == DiagnosticOptions::Msvc) {
-              OS << ',';
-              ColNo--;
-            } else 
-              OS << ':';
-            OS << ColNo;
-          }
-        switch (DiagOpts->Format) {
-        case DiagnosticOptions::Clang: 
-        case DiagnosticOptions::Vi:    OS << ':';    break;
-        case DiagnosticOptions::Msvc:  OS << ") : "; break;
-        }
-
-                
-        if (DiagOpts->ShowSourceRanges && Info.getNumRanges()) {
-          FileID CaretFileID =
-            SM.getFileID(SM.getExpansionLoc(Info.getLocation()));
-          bool PrintedRange = false;
-
-          for (unsigned i = 0, e = Info.getNumRanges(); i != e; ++i) {
-            // Ignore invalid ranges.
-            if (!Info.getRange(i).isValid()) continue;
-
-            SourceLocation B = Info.getRange(i).getBegin();
-            SourceLocation E = Info.getRange(i).getEnd();
-            B = SM.getExpansionLoc(B);
-            E = SM.getExpansionLoc(E);
-
-            // If the End location and the start location are the same and are a
-            // macro location, then the range was something that came from a
-            // macro expansion or _Pragma.  If this is an object-like macro, the
-            // best we can do is to highlight the range.  If this is a
-            // function-like macro, we'd also like to highlight the arguments.
-            if (B == E && Info.getRange(i).getEnd().isMacroID())
-              E = SM.getExpansionRange(Info.getRange(i).getEnd()).second;
-
-            std::pair<FileID, unsigned> BInfo = SM.getDecomposedLoc(B);
-            std::pair<FileID, unsigned> EInfo = SM.getDecomposedLoc(E);
-
-            // If the start or end of the range is in another file, just discard
-            // it.
-            if (BInfo.first != CaretFileID || EInfo.first != CaretFileID)
-              continue;
-
-            // Add in the length of the token, so that we cover multi-char
-            // tokens.
-            unsigned TokSize = 0;
-            if (Info.getRange(i).isTokenRange())
-              TokSize = Lexer::MeasureTokenLength(E, SM, *LangOpts);
-
-            OS << '{' << SM.getLineNumber(BInfo.first, BInfo.second) << ':'
-               << SM.getColumnNumber(BInfo.first, BInfo.second) << '-'
-               << SM.getLineNumber(EInfo.first, EInfo.second) << ':'
-               << (SM.getColumnNumber(EInfo.first, EInfo.second)+TokSize)
-               << '}';
-            PrintedRange = true;
-          }
-
-          if (PrintedRange)
-            OS << ':';
-        }
-      }
-      OS << ' ';
-      if (DiagOpts->ShowColors)
-        OS.resetColor();
-    }
+    if (DiagOpts->ShowColors)
+      OS.resetColor();
   }
 
   if (DiagOpts->ShowColors) {
