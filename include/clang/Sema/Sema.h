@@ -1020,7 +1020,7 @@ public:
                                 FunctionDecl *NewFD, LookupResult &Previous,
                                 bool IsExplicitSpecialization,
                                 bool &Redeclaration);
-  void CheckMain(FunctionDecl *FD);
+  void CheckMain(FunctionDecl *FD, const DeclSpec &D);
   Decl *ActOnParamDeclarator(Scope *S, Declarator &D);
   ParmVarDecl *BuildParmVarDeclForTypedef(DeclContext *DC,
                                           SourceLocation Loc,
@@ -1063,6 +1063,10 @@ public:
   void computeNRVO(Stmt *Body, sema::FunctionScopeInfo *Scope);
   Decl *ActOnFinishFunctionBody(Decl *Decl, Stmt *Body);
   Decl *ActOnFinishFunctionBody(Decl *Decl, Stmt *Body, bool IsInstantiation);
+
+  /// ActOnFinishDelayedAttribute - Invoked when we have finished parsing an
+  /// attribute for which parsing is delayed.
+  void ActOnFinishDelayedAttribute(Scope *S, Decl *D, ParsedAttributes &Attrs);
 
   /// \brief Diagnose any unused parameters in the given sequence of
   /// ParmVarDecl pointers.
@@ -1239,6 +1243,10 @@ public:
   /// of a declarator's nested name specifier.
   void EnterDeclaratorContext(Scope *S, DeclContext *DC);
   void ExitDeclaratorContext(Scope *S);
+
+  /// Push the parameters of D, which must be a function, into scope.
+  void ActOnReenterFunctionContext(Scope* S, Decl* D);
+  void ActOnExitFunctionContext() { PopDeclContext(); }
 
   DeclContext *getFunctionLevelDeclContext();
 
