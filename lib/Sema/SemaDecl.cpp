@@ -782,6 +782,29 @@ void Sema::ExitDeclaratorContext(Scope *S) {
   // disappear.
 }
 
+
+void Sema::ActOnReenterFunctionContext(Scope* S, Decl *D) {
+  FunctionDecl *FD = dyn_cast<FunctionDecl>(D);
+  if (FunctionTemplateDecl *TFD = dyn_cast_or_null<FunctionTemplateDecl>(D)) {
+    // We assume that the caller has already called
+    // ActOnReenterTemplateScope
+    FD = TFD->getTemplatedDecl();
+  }
+  if (!FD)
+    return;
+
+  PushDeclContext(S, FD);
+  for (unsigned P = 0, NumParams = FD->getNumParams(); P < NumParams; ++P) {
+    ParmVarDecl *Param = FD->getParamDecl(P);
+    // If the parameter has an identifier, then add it to the scope
+    if (Param->getIdentifier()) {
+      S->AddDecl(Param);
+      IdResolver.AddDecl(Param);
+    }
+  }
+}
+
+
 /// \brief Determine whether we allow overloading of the function
 /// PrevDecl with another declaration.
 ///
@@ -3780,6 +3803,9 @@ Sema::ActOnVariableDeclarator(Scope *S, Declarator &D, DeclContext *DC,
       NewVD->setThreadSpecified(true);
   }
 
+  if (D.getDeclSpec().isModulePrivateSpecified())
+    NewVD->setModulePrivate();
+
   // Set the lexical context. If the declarator has a C++ scope specifier, the
   // lexical context will be different from the semantic context.
   NewVD->setLexicalDeclContext(CurContext);
@@ -4663,6 +4689,12 @@ Sema::ActOnFunctionDeclarator(Scope *S, Declarator &D, DeclContext *DC,
              diag::err_constexpr_dtor);
     }
 
+    // If __module_private__ was specified, mark the function accordingly.
+    if (D.getDeclSpec().isModulePrivateSpecified()) {
+      NewFD->setModulePrivate();
+      if (FunctionTemplate)
+        FunctionTemplate->setModulePrivate();
+    }
 
     // Filter out previous declarations that don't match the scope.
     FilterLookupForScope(Previous, DC, S, NewFD->hasLinkage(),
@@ -4782,8 +4814,19 @@ Sema::ActOnFunctionDeclarator(Scope *S, Declarator &D, DeclContext *DC,
   if (!getLangOptions().CPlusPlus) {
     // Perform semantic checking on the function declaration.
     bool isExplicitSpecialization=false;
-    CheckFunctionDeclaration(S, NewFD, Previous, isExplicitSpecialization,
-                             Redeclaration);
+    if (!NewFD->isInvalidDecl()) {
+      if (NewFD->getResultType()->isVariablyModifiedType()) {
+        // Functions returning a variably modified type violate C99 6.7.5.2p2
+        // because all functions have linkage.
+        Diag(NewFD->getLocation(), diag::err_vm_func_decl);
+        NewFD->setInvalidDecl();
+      } else {
+        if (NewFD->isMain()) 
+          CheckMain(NewFD, D.getDeclSpec());
+        CheckFunctionDeclaration(S, NewFD, Previous, isExplicitSpecialization,
+                                 Redeclaration);
+      }
+    }
     assert((NewFD->isInvalidDecl() || !Redeclaration ||
             Previous.getResultKind() != LookupResult::FoundOverloaded) &&
            "previous declaration set still overloaded");
@@ -4889,9 +4932,19 @@ Sema::ActOnFunctionDeclarator(Scope *S, Declarator &D, DeclContext *DC,
     }
 
     // Perform semantic checking on the function declaration.
-    if (!isDependentClassScopeExplicitSpecialization)
-      CheckFunctionDeclaration(S, NewFD, Previous, isExplicitSpecialization,
-                               Redeclaration);
+    if (!isDependentClassScopeExplicitSpecialization) {
+      if (NewFD->isInvalidDecl()) {
+        // If this is a class member, mark the class invalid immediately.
+        // This avoids some consistency errors later.
+        if (CXXMethodDecl* methodDecl = dyn_cast<CXXMethodDecl>(NewFD))
+          methodDecl->getParent()->setInvalidDecl();
+      } else {
+        if (NewFD->isMain()) 
+          CheckMain(NewFD, D.getDeclSpec());
+        CheckFunctionDeclaration(S, NewFD, Previous, isExplicitSpecialization,
+                                 Redeclaration);
+      }
+    }
 
     assert((NewFD->isInvalidDecl() || !Redeclaration ||
             Previous.getResultKind() != LookupResult::FoundOverloaded) &&
@@ -5101,25 +5154,8 @@ void Sema::CheckFunctionDeclaration(Scope *S, FunctionDecl *NewFD,
                                     LookupResult &Previous,
                                     bool IsExplicitSpecialization,
                                     bool &Redeclaration) {
-  // If NewFD is already known erroneous, don't do any of this checking.
-  if (NewFD->isInvalidDecl()) {
-    // If this is a class member, mark the class invalid immediately.
-    // This avoids some consistency errors later.
-    if (isa<CXXMethodDecl>(NewFD))
-      cast<CXXMethodDecl>(NewFD)->getParent()->setInvalidDecl();
-
-    return;
-  }
-
-  if (NewFD->getResultType()->isVariablyModifiedType()) {
-    // Functions returning a variably modified type violate C99 6.7.5.2p2
-    // because all functions have linkage.
-    Diag(NewFD->getLocation(), diag::err_vm_func_decl);
-    return NewFD->setInvalidDecl();
-  }
-
-  if (NewFD->isMain()) 
-    CheckMain(NewFD);
+  assert(!NewFD->getResultType()->isVariablyModifiedType() 
+         && "Variably modified return types are not handled here");
 
   // Check for a previous declaration of this name.
   if (Previous.empty() && NewFD->isExternC()) {
@@ -5292,22 +5328,19 @@ void Sema::CheckFunctionDeclaration(Scope *S, FunctionDecl *NewFD,
   }
 }
 
-void Sema::CheckMain(FunctionDecl* FD) {
+void Sema::CheckMain(FunctionDecl* FD, const DeclSpec& DS) {
   // C++ [basic.start.main]p3:  A program that declares main to be inline
   //   or static is ill-formed.
   // C99 6.7.4p4:  In a hosted environment, the inline function specifier
   //   shall not appear in a declaration of main.
   // static main is not an error under C99, but we should warn about it.
-  bool isInline = FD->isInlineSpecified();
-  bool isStatic = FD->getStorageClass() == SC_Static;
-  if (isInline || isStatic) {
-    unsigned diagID = diag::warn_unusual_main_decl;
-    if (isInline || getLangOptions().CPlusPlus)
-      diagID = diag::err_unusual_main_decl;
-
-    int which = isStatic + (isInline << 1) - 1;
-    Diag(FD->getLocation(), diagID) << which;
-  }
+  if (FD->getStorageClass() == SC_Static)
+    Diag(DS.getStorageClassSpecLoc(), getLangOptions().CPlusPlus 
+         ? diag::err_static_main : diag::warn_static_main) 
+      << FixItHint::CreateRemoval(DS.getStorageClassSpecLoc());
+  if (FD->isInlineSpecified())
+    Diag(DS.getInlineSpecLoc(), diag::err_inline_main) 
+      << FixItHint::CreateRemoval(DS.getInlineSpecLoc());
 
   QualType T = FD->getType();
   assert(T->isFunctionType() && "function decl is not of function type");
@@ -6777,6 +6810,15 @@ Decl *Sema::ActOnFinishFunctionBody(Decl *dcl, Stmt *Body,
   return dcl;
 }
 
+
+/// When we finish delayed parsing of an attribute, we must attach it to the
+/// relevant Decl.
+void Sema::ActOnFinishDelayedAttribute(Scope *S, Decl *D,
+                                       ParsedAttributes &Attrs) {
+  ProcessDeclAttributeList(S, D, Attrs.getList());
+}
+
+
 /// ImplicitlyDefineFunction - An undeclared identifier was used in a function
 /// call, forming a call to an implicitly defined function (per C99 6.5.1p2).
 NamedDecl *Sema::ImplicitlyDefineFunction(SourceLocation Loc,
@@ -6937,6 +6979,9 @@ TypedefDecl *Sema::ParseTypedefDecl(Scope *S, Declarator &D, QualType T,
     return NewTD;
   }
 
+  if (D.getDeclSpec().isModulePrivateSpecified())
+    NewTD->setModulePrivate();
+  
   // C++ [dcl.typedef]p8:
   //   If the typedef declaration defines an unnamed class (or
   //   enum), the first typedef-name declared by the declaration
@@ -7078,6 +7123,7 @@ Decl *Sema::ActOnTag(Scope *S, unsigned TagSpec, TagUseKind TUK,
                      SourceLocation KWLoc, CXXScopeSpec &SS,
                      IdentifierInfo *Name, SourceLocation NameLoc,
                      AttributeList *Attr, AccessSpecifier AS,
+                     bool IsModulePrivate,
                      MultiTemplateParamsArg TemplateParameterLists,
                      bool &OwnedDecl, bool &IsDependent,
                      bool ScopedEnum, bool ScopedEnumUsesClassTag,
@@ -7117,6 +7163,7 @@ Decl *Sema::ActOnTag(Scope *S, unsigned TagSpec, TagUseKind TUK,
         DeclResult Result = CheckClassTemplate(S, TagSpec, TUK, KWLoc,
                                                SS, Name, NameLoc, Attr,
                                                TemplateParams, AS,
+                                               IsModulePrivate,
                                            TemplateParameterLists.size() - 1,
                  (TemplateParameterList**) TemplateParameterLists.release());
         return Result.get();
@@ -7679,6 +7726,9 @@ CreateNewDecl:
     AddMsStructLayoutForRecord(RD);
   }
 
+  if (IsModulePrivate)
+    New->setModulePrivate();
+
   // If this is a specialization of a member class (of a class template),
   // check the specialization.
   if (isExplicitSpecialization && CheckMemberSpecialization(New, Previous))
@@ -7908,7 +7958,7 @@ bool Sema::VerifyBitField(SourceLocation FieldLoc, IdentifierInfo *FieldName,
 /// ActOnField - Each field of a C struct/union is passed into this in order
 /// to create a FieldDecl object for it.
 Decl *Sema::ActOnField(Scope *S, Decl *TagD, SourceLocation DeclStart,
-                       Declarator &D, ExprTy *BitfieldWidth) {
+                       Declarator &D, Expr *BitfieldWidth) {
   FieldDecl *Res = HandleField(S, cast_or_null<RecordDecl>(TagD),
                                DeclStart, D, static_cast<Expr*>(BitfieldWidth),
                                /*HasInit=*/false, AS_public);
@@ -8364,7 +8414,7 @@ TranslateIvarVisibility(tok::ObjCKeywordKind ivarVisibility) {
 /// in order to create an IvarDecl object for it.
 Decl *Sema::ActOnIvar(Scope *S,
                                 SourceLocation DeclStart,
-                                Declarator &D, ExprTy *BitfieldWidth,
+                                Declarator &D, Expr *BitfieldWidth,
                                 tok::ObjCKeywordKind Visibility) {
 
   IdentifierInfo *II = D.getIdentifier();
@@ -9048,7 +9098,7 @@ EnumConstantDecl *Sema::CheckEnumConstant(EnumDecl *Enum,
 Decl *Sema::ActOnEnumConstant(Scope *S, Decl *theEnumDecl, Decl *lastEnumConst,
                               SourceLocation IdLoc, IdentifierInfo *Id,
                               AttributeList *Attr,
-                              SourceLocation EqualLoc, ExprTy *val) {
+                              SourceLocation EqualLoc, Expr *val) {
   EnumDecl *TheEnumDecl = cast<EnumDecl>(theEnumDecl);
   EnumConstantDecl *LastEnumConst =
     cast_or_null<EnumConstantDecl>(lastEnumConst);
