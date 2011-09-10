@@ -3868,25 +3868,57 @@ ExprResult Sema::PerformContextuallyConvertToBool(Expr *From) {
   return ExprError();
 }
 
-/// TryContextuallyConvertToObjCId - Attempt to contextually convert the
-/// expression From to 'id'.
-static ImplicitConversionSequence
-TryContextuallyConvertToObjCId(Sema &S, Expr *From) {
-  QualType Ty = S.Context.getObjCIdType();
-  return TryImplicitConversion(S, From, Ty,
-                               // FIXME: Are these flags correct?
-                               /*SuppressUserConversions=*/false,
-                               /*AllowExplicit=*/true,
-                               /*InOverloadResolution=*/false,
-                               /*CStyle=*/false,
-                               /*AllowObjCWritebackConversion=*/false);
+/// dropPointerConversions - If the given standard conversion sequence
+/// involves any pointer conversions, remove them.  This may change
+/// the result type of the conversion sequence.
+static void dropPointerConversion(StandardConversionSequence &SCS) {
+  if (SCS.Second == ICK_Pointer_Conversion) {
+    SCS.Second = ICK_Identity;
+    SCS.Third = ICK_Identity;
+    SCS.ToTypePtrs[2] = SCS.ToTypePtrs[1] = SCS.ToTypePtrs[0];
+  }
 }
 
-/// PerformContextuallyConvertToObjCId - Perform a contextual conversion
-/// of the expression From to 'id'.
-ExprResult Sema::PerformContextuallyConvertToObjCId(Expr *From) {
+/// TryContextuallyConvertToObjCPointer - Attempt to contextually
+/// convert the expression From to an Objective-C pointer type.
+static ImplicitConversionSequence
+TryContextuallyConvertToObjCPointer(Sema &S, Expr *From) {
+  // Do an implicit conversion to 'id'.
+  QualType Ty = S.Context.getObjCIdType();
+  ImplicitConversionSequence ICS
+    = TryImplicitConversion(S, From, Ty,
+                            // FIXME: Are these flags correct?
+                            /*SuppressUserConversions=*/false,
+                            /*AllowExplicit=*/true,
+                            /*InOverloadResolution=*/false,
+                            /*CStyle=*/false,
+                            /*AllowObjCWritebackConversion=*/false);
+
+  // Strip off any final conversions to 'id'.
+  switch (ICS.getKind()) {
+  case ImplicitConversionSequence::BadConversion:
+  case ImplicitConversionSequence::AmbiguousConversion:
+  case ImplicitConversionSequence::EllipsisConversion:
+    break;
+
+  case ImplicitConversionSequence::UserDefinedConversion:
+    dropPointerConversion(ICS.UserDefined.After);
+    break;
+
+  case ImplicitConversionSequence::StandardConversion:
+    dropPointerConversion(ICS.Standard);
+    break;
+  }
+
+  return ICS;
+}
+
+/// PerformContextuallyConvertToObjCPointer - Perform a contextual
+/// conversion of the expression From to an Objective-C pointer type.
+ExprResult Sema::PerformContextuallyConvertToObjCPointer(Expr *From) {
   QualType Ty = Context.getObjCIdType();
-  ImplicitConversionSequence ICS = TryContextuallyConvertToObjCId(*this, From);
+  ImplicitConversionSequence ICS =
+    TryContextuallyConvertToObjCPointer(*this, From);
   if (!ICS.isBad())
     return PerformImplicitConversion(From, Ty, ICS, AA_Converting);
   return ExprError();
@@ -7256,6 +7288,34 @@ SourceLocation GetLocationForCandidate(const OverloadCandidate *Cand) {
   return SourceLocation();
 }
 
+static unsigned RankDeductionFailure(
+    const OverloadCandidate::DeductionFailureInfo &DFI) {
+  switch ((Sema::TemplateDeductionResult)DFI.Result) {
+  case Sema::TDK_Success:
+  case Sema::TDK_Incomplete:
+    return 1;
+
+  case Sema::TDK_Underqualified:
+  case Sema::TDK_Inconsistent:
+    return 2;
+
+  case Sema::TDK_SubstitutionFailure:
+  case Sema::TDK_NonDeducedMismatch:
+    return 3;
+
+  case Sema::TDK_InstantiationDepth:
+  case Sema::TDK_FailedOverloadResolution:
+    return 4;
+
+  case Sema::TDK_InvalidExplicitArguments:
+    return 5;
+
+  case Sema::TDK_TooManyArguments:
+  case Sema::TDK_TooFewArguments:
+    return 6;
+  }
+}
+
 struct CompareOverloadCandidatesForDisplay {
   Sema &S;
   CompareOverloadCandidatesForDisplay(Sema &S) : S(S) {}
@@ -7335,6 +7395,15 @@ struct CompareOverloadCandidatesForDisplay {
 
       } else if (R->FailureKind == ovl_fail_bad_conversion)
         return false;
+
+      if (L->FailureKind == ovl_fail_bad_deduction) {
+        if (R->FailureKind != ovl_fail_bad_deduction)
+          return true;
+
+        if (L->DeductionFailure.Result != R->DeductionFailure.Result)
+          return RankDeductionFailure(L->DeductionFailure)
+              <= RankDeductionFailure(R->DeductionFailure);
+      }
 
       // TODO: others?
     }
