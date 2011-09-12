@@ -1394,6 +1394,12 @@ void Sema::MergeTypedefNameDecl(TypedefNameDecl *New, LookupResult &OldDecls) {
   if (TypedefNameDecl *Typedef = dyn_cast<TypedefNameDecl>(Old))
     New->setPreviousDeclaration(Typedef);
 
+  // __module_private__ is propagated to later declarations.
+  if (Old->isModulePrivate())
+    New->setModulePrivate();
+  else if (New->isModulePrivate())
+    diagnoseModulePrivateRedeclaration(New, Old);
+           
   if (getLangOptions().Microsoft)
     return;
 
@@ -1455,8 +1461,14 @@ void Sema::MergeTypedefNameDecl(TypedefNameDecl *New, LookupResult &OldDecls) {
 static bool
 DeclHasAttr(const Decl *D, const Attr *A) {
   const OwnershipAttr *OA = dyn_cast<OwnershipAttr>(A);
+  const AnnotateAttr *Ann = dyn_cast<AnnotateAttr>(A);
   for (Decl::attr_iterator i = D->attr_begin(), e = D->attr_end(); i != e; ++i)
     if ((*i)->getKind() == A->getKind()) {
+      if (Ann) {
+        if (Ann->getAnnotation() == cast<AnnotateAttr>(*i)->getAnnotation())
+          return true;
+        continue;
+      }
       // FIXME: Don't hardcode this check
       if (OA && isa<OwnershipAttr>(*i))
         return OA->getOwnKind() == cast<OwnershipAttr>(*i)->getOwnKind();
@@ -1959,6 +1971,12 @@ bool Sema::MergeCompatibleFunctionDecls(FunctionDecl *New, FunctionDecl *Old) {
   if (Old->isPure())
     New->setPure();
 
+  // __module_private__ is propagated to later declarations.
+  if (Old->isModulePrivate())
+    New->setModulePrivate();
+  else if (New->isModulePrivate())
+    diagnoseModulePrivateRedeclaration(New, Old);
+
   // Merge attributes from the parameters.  These can mismatch with K&R
   // declarations.
   if (New->getNumParams() == Old->getNumParams())
@@ -2140,6 +2158,12 @@ void Sema::MergeVarDecl(VarDecl *New, LookupResult &Previous) {
     Diag(Old->getLocation(), diag::note_previous_definition);
     return New->setInvalidDecl();
   }
+
+  // __module_private__ is propagated to later declarations.
+  if (Old->isModulePrivate())
+    New->setModulePrivate();
+  else if (New->isModulePrivate())
+    diagnoseModulePrivateRedeclaration(New, Old);
 
   // Variables with external linkage are analyzed in FinalizeDeclaratorGroup.
 
@@ -3803,6 +3827,15 @@ Sema::ActOnVariableDeclarator(Scope *S, Declarator &D, DeclContext *DC,
       NewVD->setThreadSpecified(true);
   }
 
+  if (D.getDeclSpec().isModulePrivateSpecified()) {
+    if (isExplicitSpecialization)
+      Diag(NewVD->getLocation(), diag::err_module_private_specialization)
+        << 2
+        << FixItHint::CreateRemoval(D.getDeclSpec().getModulePrivateSpecLoc());
+    else
+      NewVD->setModulePrivate();
+  }
+
   // Set the lexical context. If the declarator has a C++ scope specifier, the
   // lexical context will be different from the semantic context.
   NewVD->setLexicalDeclContext(CurContext);
@@ -4686,6 +4719,20 @@ Sema::ActOnFunctionDeclarator(Scope *S, Declarator &D, DeclContext *DC,
              diag::err_constexpr_dtor);
     }
 
+    // If __module_private__ was specified, mark the function accordingly.
+    if (D.getDeclSpec().isModulePrivateSpecified()) {
+      if (isFunctionTemplateSpecialization) {
+        SourceLocation ModulePrivateLoc
+          = D.getDeclSpec().getModulePrivateSpecLoc();
+        Diag(ModulePrivateLoc, diag::err_module_private_specialization)
+          << 0
+          << FixItHint::CreateRemoval(ModulePrivateLoc);
+      } else {
+        NewFD->setModulePrivate();
+        if (FunctionTemplate)
+          FunctionTemplate->setModulePrivate();
+      }
+    }
 
     // Filter out previous declarations that don't match the scope.
     FilterLookupForScope(Previous, DC, S, NewFD->hasLinkage(),
@@ -5233,6 +5280,10 @@ void Sema::CheckFunctionDeclaration(Scope *S, FunctionDecl *NewFD,
           NewTemplateDecl->setMemberSpecialization();
           assert(OldTemplateDecl->isMemberSpecialization());
         }
+        
+        if (OldTemplateDecl->isModulePrivate())
+          NewTemplateDecl->setModulePrivate();
+        
       } else {
         if (isa<CXXMethodDecl>(NewFD)) // Set access for out-of-line definitions
           NewFD->setAccess(OldDecl->getAccess());
@@ -6970,6 +7021,9 @@ TypedefDecl *Sema::ParseTypedefDecl(Scope *S, Declarator &D, QualType T,
     return NewTD;
   }
 
+  if (D.getDeclSpec().isModulePrivateSpecified())
+    NewTD->setModulePrivate();
+  
   // C++ [dcl.typedef]p8:
   //   If the typedef declaration defines an unnamed class (or
   //   enum), the first typedef-name declared by the declaration
@@ -7111,6 +7165,7 @@ Decl *Sema::ActOnTag(Scope *S, unsigned TagSpec, TagUseKind TUK,
                      SourceLocation KWLoc, CXXScopeSpec &SS,
                      IdentifierInfo *Name, SourceLocation NameLoc,
                      AttributeList *Attr, AccessSpecifier AS,
+                     SourceLocation ModulePrivateLoc,
                      MultiTemplateParamsArg TemplateParameterLists,
                      bool &OwnedDecl, bool &IsDependent,
                      bool ScopedEnum, bool ScopedEnumUsesClassTag,
@@ -7150,6 +7205,7 @@ Decl *Sema::ActOnTag(Scope *S, unsigned TagSpec, TagUseKind TUK,
         DeclResult Result = CheckClassTemplate(S, TagSpec, TUK, KWLoc,
                                                SS, Name, NameLoc, Attr,
                                                TemplateParams, AS,
+                                               ModulePrivateLoc,
                                            TemplateParameterLists.size() - 1,
                  (TemplateParameterList**) TemplateParameterLists.release());
         return Result.get();
@@ -7712,6 +7768,19 @@ CreateNewDecl:
     AddMsStructLayoutForRecord(RD);
   }
 
+  if (PrevDecl && PrevDecl->isModulePrivate())
+    New->setModulePrivate();
+  else if (ModulePrivateLoc.isValid()) {
+    if (isExplicitSpecialization)
+      Diag(New->getLocation(), diag::err_module_private_specialization)
+        << 2
+        << FixItHint::CreateRemoval(ModulePrivateLoc);
+    else if (PrevDecl && !PrevDecl->isModulePrivate())
+      diagnoseModulePrivateRedeclaration(New, PrevDecl, ModulePrivateLoc);
+    else
+      New->setModulePrivate();
+  }
+  
   // If this is a specialization of a member class (of a class template),
   // check the specialization.
   if (isExplicitSpecialization && CheckMemberSpecialization(New, Previous))
@@ -7941,7 +8010,7 @@ bool Sema::VerifyBitField(SourceLocation FieldLoc, IdentifierInfo *FieldName,
 /// ActOnField - Each field of a C struct/union is passed into this in order
 /// to create a FieldDecl object for it.
 Decl *Sema::ActOnField(Scope *S, Decl *TagD, SourceLocation DeclStart,
-                       Declarator &D, ExprTy *BitfieldWidth) {
+                       Declarator &D, Expr *BitfieldWidth) {
   FieldDecl *Res = HandleField(S, cast_or_null<RecordDecl>(TagD),
                                DeclStart, D, static_cast<Expr*>(BitfieldWidth),
                                /*HasInit=*/false, AS_public);
@@ -8010,6 +8079,9 @@ FieldDecl *Sema::HandleField(Scope *S, RecordDecl *Record,
   if (NewFD->isInvalidDecl())
     Record->setInvalidDecl();
 
+  if (D.getDeclSpec().isModulePrivateSpecified())
+    NewFD->setModulePrivate();
+  
   if (NewFD->isInvalidDecl() && PrevDecl) {
     // Don't introduce NewFD into scope; there's already something
     // with the same name in the same scope.
@@ -8397,7 +8469,7 @@ TranslateIvarVisibility(tok::ObjCKeywordKind ivarVisibility) {
 /// in order to create an IvarDecl object for it.
 Decl *Sema::ActOnIvar(Scope *S,
                                 SourceLocation DeclStart,
-                                Declarator &D, ExprTy *BitfieldWidth,
+                                Declarator &D, Expr *BitfieldWidth,
                                 tok::ObjCKeywordKind Visibility) {
 
   IdentifierInfo *II = D.getIdentifier();
@@ -8487,6 +8559,9 @@ Decl *Sema::ActOnIvar(Scope *S,
   if (getLangOptions().ObjCAutoRefCount && inferObjCARCLifetime(NewID))
     NewID->setInvalidDecl();
 
+  if (D.getDeclSpec().isModulePrivateSpecified())
+    NewID->setModulePrivate();
+  
   if (II) {
     // FIXME: When interfaces are DeclContexts, we'll need to add
     // these to the interface.
@@ -9081,7 +9156,7 @@ EnumConstantDecl *Sema::CheckEnumConstant(EnumDecl *Enum,
 Decl *Sema::ActOnEnumConstant(Scope *S, Decl *theEnumDecl, Decl *lastEnumConst,
                               SourceLocation IdLoc, IdentifierInfo *Id,
                               AttributeList *Attr,
-                              SourceLocation EqualLoc, ExprTy *val) {
+                              SourceLocation EqualLoc, Expr *val) {
   EnumDecl *TheEnumDecl = cast<EnumDecl>(theEnumDecl);
   EnumConstantDecl *LastEnumConst =
     cast_or_null<EnumConstantDecl>(lastEnumConst);
@@ -9380,6 +9455,20 @@ DeclResult Sema::ActOnModuleImport(SourceLocation ImportLoc,
   // FIXME: Actually create a declaration to describe the module import.
   (void)Module;
   return DeclResult((Decl *)0);
+}
+
+void 
+Sema::diagnoseModulePrivateRedeclaration(NamedDecl *New, NamedDecl *Old,
+                                         SourceLocation ModulePrivateKeyword) {
+  assert(!Old->isModulePrivate() && "Old is module-private!");
+  
+  Diag(New->getLocation(), diag::err_module_private_follows_public)
+    << New->getDeclName() << SourceRange(ModulePrivateKeyword);
+  Diag(Old->getLocation(), diag::note_previous_declaration)
+    << Old->getDeclName();
+  
+  // Drop the __module_private__ from the new declaration, since it's invalid.
+  New->setModulePrivate(false);
 }
 
 void Sema::ActOnPragmaWeakID(IdentifierInfo* Name,

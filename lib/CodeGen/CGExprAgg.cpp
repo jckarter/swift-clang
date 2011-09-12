@@ -365,7 +365,8 @@ void AggExprEmitter::VisitCastExpr(CastExpr *E) {
   case CK_FloatingToIntegral:
   case CK_FloatingToBoolean:
   case CK_FloatingCast:
-  case CK_AnyPointerToObjCPointerCast:
+  case CK_CPointerToObjCPointerCast:
+  case CK_BlockPointerToObjCPointerCast:
   case CK_AnyPointerToBlockPointerCast:
   case CK_ObjCObjectLValueCast:
   case CK_FloatingRealToComplex:
@@ -378,9 +379,10 @@ void AggExprEmitter::VisitCastExpr(CastExpr *E) {
   case CK_IntegralComplexToBoolean:
   case CK_IntegralComplexCast:
   case CK_IntegralComplexToFloatingComplex:
-  case CK_ObjCProduceObject:
-  case CK_ObjCConsumeObject:
-  case CK_ObjCReclaimReturnedObject:
+  case CK_ARCProduceObject:
+  case CK_ARCConsumeObject:
+  case CK_ARCReclaimReturnedObject:
+  case CK_ARCExtendBlockObject:
     llvm_unreachable("cast kind invalid for aggregate types");
   }
 }

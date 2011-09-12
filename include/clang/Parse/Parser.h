@@ -195,13 +195,7 @@ public:
   
   // Type forwarding.  All of these are statically 'void*', but they may all be
   // different actual classes based on the actions in place.
-  typedef Expr ExprTy;
-  typedef Stmt StmtTy;
   typedef OpaquePtr<DeclGroupRef> DeclGroupPtrTy;
-  typedef CXXBaseSpecifier BaseTy;
-  typedef CXXCtorInitializer MemInitTy;
-  typedef NestedNameSpecifier CXXScopeTy;
-  typedef TemplateParameterList TemplateParamsTy;
   typedef OpaquePtr<TemplateName> TemplateTy;
 
   typedef SmallVector<TemplateParameterList *, 4> TemplateParameterLists;
@@ -1416,9 +1410,9 @@ private:
   void ParseMicrosoftIfExistsExternalDeclaration();
   void ParseMicrosoftIfExistsClassDeclaration(DeclSpec::TST TagType,
                                               AccessSpecifier& CurAS);
-bool ParseAsmOperandsOpt(SmallVectorImpl<IdentifierInfo *> &Names,
-                           SmallVectorImpl<ExprTy *> &Constraints,
-                           SmallVectorImpl<ExprTy *> &Exprs);
+  bool ParseAsmOperandsOpt(SmallVectorImpl<IdentifierInfo *> &Names,
+                           SmallVectorImpl<Expr *> &Constraints,
+                           SmallVectorImpl<Expr *> &Exprs);
 
   //===--------------------------------------------------------------------===//
   // C++ 6: Statements and Blocks
