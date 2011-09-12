@@ -29,6 +29,10 @@ using namespace CodeGen;
 typedef llvm::PointerIntPair<llvm::Value*,1,bool> TryEmitResult;
 static TryEmitResult
 tryEmitARCRetainScalarExpr(CodeGenFunction &CGF, const Expr *e);
+static RValue AdjustRelatedResultType(CodeGenFunction &CGF,
+                                      const Expr *E,
+                                      const ObjCMethodDecl *Method,
+                                      RValue Result);
 
 /// Given the address of a variable of pointer type, find the correct
 /// null to store into it.
@@ -45,6 +49,127 @@ llvm::Value *CodeGenFunction::EmitObjCStringLiteral(const ObjCStringLiteral *E)
       CGM.getObjCRuntime().GenerateConstantString(E->getString());
   // FIXME: This bitcast should just be made an invariant on the Runtime.
   return llvm::ConstantExpr::getBitCast(C, ConvertType(E->getType()));
+}
+
+static const char *selectorForType(QualType type) {
+  if (const BuiltinType *BT = type->getAs<BuiltinType>()) {
+    switch (BT->getKind()) {
+    case BuiltinType::Char_S:
+    case BuiltinType::SChar:
+      return "numberWithChar";
+    case BuiltinType::Char_U:
+    case BuiltinType::UChar:
+      return "numberWithUnsignedChar";
+    case BuiltinType::Short:
+      return "numberWithShort";
+    case BuiltinType::UShort:
+      return "numberWithUnsignedShort";
+    case BuiltinType::Int:
+      return "numberWithInt";
+    case BuiltinType::UInt:
+      return "numberWithUnsignedInt";
+    case BuiltinType::Long:
+      return "numberWithLong";
+    case BuiltinType::ULong:
+      return "numberWithUnsignedLong";
+    case BuiltinType::LongLong:
+      return "numberWithLongLong";
+    case BuiltinType::ULongLong:
+      return "numberWithUnsignedLongLong";
+    case BuiltinType::Float:
+      return "numberWithFloat";
+    case BuiltinType::Double:
+      return "numberWithDouble";
+    case BuiltinType::Bool:
+      return "numberWithBool";
+    default:
+      break;
+    }
+  }
+  return NULL;
+}
+
+llvm::Value *CodeGenFunction::EmitObjCNumericLiteral(const ObjCNumericLiteral *E) {
+  // Message the appropriate +[NSNumber numberWith<Type>:] method.
+  // Generate the correct selector for this literal's concrete type.
+  const Expr *NL = E->getNumber();
+  ASTContext &Context = CGM.getContext();
+  const char *SelName = selectorForType(NL->getType());
+  assert(SelName && "No matching selector for type.");
+  Selector Sel = Context.Selectors.getUnarySelector(&Context.Idents.get(StringRef(SelName)));
+  
+  // Generate a reference to the class pointer, which will be the receiver.
+  QualType ResultType = E->getType(); // should be NSNumber *
+  const ObjCObjectPointerType *InterfacePointerType = ResultType->getAsObjCInterfacePointerType();
+  ObjCInterfaceDecl *Class = InterfacePointerType->getObjectType()->getInterface();
+  CGObjCRuntime &Runtime = CGM.getObjCRuntime();
+  llvm::Value *Receiver = Runtime.GetClass(Builder, Class);
+
+  // Get the method.
+  ObjCMethodDecl *Method = Class->lookupClassMethod(Sel);
+  
+  // Generate the argument list.
+  CallArgList Args;
+  const Stmt *Arg = NL;
+  EmitCallArgs(Args, Method, &Arg, &Arg + 1);
+
+  RValue result = Runtime.GenerateMessageSend(*this, ReturnValueSlot(), ResultType,
+                                              Sel, Receiver, Args, Class, Method);
+  return AdjustRelatedResultType(*this, E, Method, result).getScalarVal();
+}
+
+llvm::Value *CodeGenFunction::EmitObjCArrayLiteral(const ObjCArrayLiteral *E) {
+  // TBD add CGObjCRuntime::GenerateConstantArray(). For now always do these at runtime.
+  ASTContext &Context = CGM.getContext();
+  Selector Sel = Context.Selectors.getUnarySelector(&Context.Idents.get(StringRef("arrayWithObjects")));
+  
+  // Generate a reference to the class pointer, which will be the receiver.
+  QualType ResultType = E->getType(); // should be NSArray *
+  const ObjCObjectPointerType *InterfacePointerType = ResultType->getAsObjCInterfacePointerType();
+  ObjCInterfaceDecl *Class = InterfacePointerType->getObjectType()->getInterface();
+  CGObjCRuntime &Runtime = CGM.getObjCRuntime();
+  llvm::Value *Receiver = Runtime.GetClass(Builder, Class);
+  
+  // Generate the argument list.
+  CallArgList Args;
+  ObjCMethodDecl *NoMethod = NULL;  // disables argument type checking for now, until I figure out the right types to use.
+#if 0
+  /// FIXME. TODO
+  std::pair<ConstExprIterator,ConstExprIterator> Elements(E->getElements());
+  EmitCallArgs(Args, NoMethod, Elements.first, Elements.second);
+#endif
+  // ObjCMethodDecl *Method = Class->lookupClassMethod(Sel);
+  RValue result = Runtime.GenerateMessageSend(*this, ReturnValueSlot(), ResultType,
+                                              Sel,
+                                              Receiver, Args, Class,
+                                              NoMethod);
+  return AdjustRelatedResultType(*this, E, NoMethod, result).getScalarVal();
+}
+
+llvm::Value *CodeGenFunction::EmitObjCDictionaryLiteral(const ObjCDictionaryLiteral *E) {
+  // TBD add CGObjCRuntime::GenerateConstantArray(). For now always do these at runtime.
+  ASTContext &Context = CGM.getContext();
+  Selector Sel = Context.Selectors.getUnarySelector(&Context.Idents.get(StringRef("dictionaryWithObjectsAndKeys")));
+  
+  // Generate a reference to the class pointer, which will be the receiver.
+  QualType ResultType = E->getType(); // should be NSDictionary *
+  const ObjCObjectPointerType *InterfacePointerType = ResultType->getAsObjCInterfacePointerType();
+  ObjCInterfaceDecl *Class = InterfacePointerType->getObjectType()->getInterface();
+  CGObjCRuntime &Runtime = CGM.getObjCRuntime();
+  llvm::Value *Receiver = Runtime.GetClass(Builder, Class);
+  
+  // Generate the argument list.
+  CallArgList Args;
+  ObjCMethodDecl *NoMethod = NULL;  // disables argument type checking for now, until I figure out the right types to use.
+  std::pair<ConstExprIterator,ConstExprIterator> ValuesKeys(E->getValuesKeys());
+  EmitCallArgs(Args, NoMethod, ValuesKeys.first, ValuesKeys.second);
+  
+  // ObjCMethodDecl *Method = Class->lookupClassMethod(Sel);
+  RValue result = Runtime.GenerateMessageSend(*this, ReturnValueSlot(), ResultType,
+                                              Sel,
+                                              Receiver, Args, Class,
+                                              NoMethod);
+  return AdjustRelatedResultType(*this, E, NoMethod, result).getScalarVal();
 }
 
 /// Emit a selector.

@@ -126,6 +126,9 @@ def MaterializeTemporaryExpr : DStmt<Expr>;
 
 // Obj-C Expressions.
 def ObjCStringLiteral : DStmt<Expr>;
+def ObjCNumericLiteral : DStmt<Expr>;
+def ObjCArrayLiteral : DStmt<Expr>;
+def ObjCDictionaryLiteral : DStmt<Expr>;
 def ObjCEncodeExpr : DStmt<Expr>;
 def ObjCMessageExpr : DStmt<Expr>;
 def ObjCSelectorExpr : DStmt<Expr>;

@@ -17,6 +17,7 @@
 #include "clang/AST/DeclObjC.h"
 #include "clang/AST/Expr.h"
 #include "clang/Basic/IdentifierTable.h"
+#include "clang/Sema/Ownership.h"
 
 namespace clang {
   class IdentifierInfo;
@@ -54,6 +55,113 @@ public:
   // Iterators
   child_range children() { return child_range(&String, &String+1); }
 };
+
+/// ObjCNumericLiteral - used for objective-c numeric literals;
+/// as in: @42 or @true (c++/objc++) or @__yes (c/objc)
+class ObjCNumericLiteral : public Expr {
+  /// Number - expression AST node for the numeric literal
+  Stmt *Number;
+  SourceLocation AtLoc;
+public:
+  ObjCNumericLiteral(Stmt *NL, QualType T, SourceLocation L)
+  : Expr(ObjCNumericLiteralClass, T, VK_RValue, OK_Ordinary, 
+         false, false, false, false), Number(NL), AtLoc(L) {}
+  explicit ObjCNumericLiteral(EmptyShell Empty)
+  : Expr(ObjCNumericLiteralClass, Empty) {}
+  
+  Expr *getNumber() { return cast<Expr>(Number); }
+  const Expr *getNumber() const { return cast<Expr>(Number); }
+  void setNumber(Expr *N) { Number = N; }
+  
+  SourceLocation getAtLoc() const { return AtLoc; }
+  void setAtLoc(SourceLocation L) { AtLoc = L; }
+  
+  SourceRange getSourceRange() const {
+      return SourceRange(AtLoc, Number->getSourceRange().getEnd());
+  }
+
+  static bool classof(const Stmt *T) {
+      return T->getStmtClass() == ObjCNumericLiteralClass;
+  }
+  static bool classof(const ObjCNumericLiteral *) { return true; }
+  
+  // Iterators
+  child_range children() { return child_range(&Number, &Number+1); }
+};
+
+/// ObjCArrayLiteral - used for objective-c array containers; as in:
+/// @[@"Hello", NSApp, [NSNumber numberWithInt:42]];
+class ObjCArrayLiteral : public Expr {
+  /// Elements - element expressions of the objective-c array literals
+  Stmt **Elements;
+  unsigned NumElements;
+    
+  SourceRange Range;
+public:
+  ObjCArrayLiteral(ASTContext &C, Expr **args, unsigned nexpr, 
+                   QualType T, SourceRange SR)
+  : Expr(ObjCArrayLiteralClass, T, VK_RValue, OK_Ordinary, false, false,
+         false, false), Range(SR) {
+    Elements = new (C) Stmt*[nexpr];
+    for (unsigned i = 0; i < nexpr; i++)
+      Elements[i] = args[i];
+  }
+  explicit ObjCArrayLiteral(EmptyShell Empty)
+  : Expr(ObjCArrayLiteralClass, Empty) {}
+  
+  SourceRange getSourceRange() const { return Range; }
+  
+  static bool classof(const Stmt *T) {
+      return T->getStmtClass() == ObjCArrayLiteralClass;
+  }
+  static bool classof(const ObjCArrayLiteral *) { return true; }
+
+  /// \brief Retrieve elements of array of literals.
+  Expr **getElements() { return reinterpret_cast<Expr **>(Elements); }
+    
+  /// getNumElements - Return number of elements of objective-c array literal.
+  unsigned getNumElements() const { return NumElements; }
+    
+    /// getExpr - Return the Expr at the specified index.
+  Expr *getElement(unsigned Index) {
+    assert((Index < NumElements) && "Arg access out of range!");
+    return cast<Expr>(Elements[Index]);
+  }
+  const Expr *getElement(unsigned Index) const {
+    assert((Index < NumElements) && "Arg access out of range!");
+    return cast<Expr>(Elements[Index]);
+  }
+  
+  // Iterators
+  child_range children() { return child_range(&Elements[0], &Elements[0]+NumElements); }
+};
+
+class ObjCDictionaryLiteral : public Expr {
+  SmallVector<Expr *, 5> ValuesKeys;  // interleaved Value, Key, ..., nil terminated
+  SourceRange Range;
+public:
+  ObjCDictionaryLiteral(MultiExprArg VK, QualType T, SourceRange SR)
+  : Expr(ObjCDictionaryLiteralClass, T, VK_RValue, OK_Ordinary, false, false,
+         false, false),
+  ValuesKeys(VK.release(), VK.get() + VK.size()), Range(SR) {}
+  explicit ObjCDictionaryLiteral(EmptyShell Empty)
+  : Expr(ObjCDictionaryLiteralClass, Empty) {}
+  
+  SourceRange getSourceRange() const { return Range; }
+  
+  static bool classof(const Stmt *T) {
+      return T->getStmtClass() == ObjCDictionaryLiteralClass;
+  }
+  static bool classof(const ObjCDictionaryLiteral *) { return true; }
+  
+  // Iterators
+  child_range children() { return child_range((Stmt **)ValuesKeys.begin(), (Stmt **)ValuesKeys.end()); }
+
+  std::pair<ConstExprIterator,ConstExprIterator> getValuesKeys() const {
+    return std::pair<ConstExprIterator,ConstExprIterator>((Stmt **)ValuesKeys.begin(), (Stmt **)ValuesKeys.end());
+  }
+};
+
 
 /// ObjCEncodeExpr, used for @encode in Objective-C.  @encode has the same type
 /// and behavior as StringLiteral except that the string initializer is obtained

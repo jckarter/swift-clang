@@ -513,6 +513,15 @@ public:
   Value *VisitObjCStringLiteral(const ObjCStringLiteral *E) {
     return CGF.EmitObjCStringLiteral(E);
   }
+  Value *VisitObjCNumericLiteral(ObjCNumericLiteral *E) {
+    return CGF.EmitObjCNumericLiteral(E);
+  }
+  Value *VisitObjCArrayLiteral(ObjCArrayLiteral *E) {
+    return CGF.EmitObjCArrayLiteral(E);
+  }
+  Value *VisitObjCDictionaryLiteral(ObjCDictionaryLiteral *E) {
+    return CGF.EmitObjCDictionaryLiteral(E);
+  }
   Value *VisitAsTypeExpr(AsTypeExpr *CE);
 };
 }  // end anonymous namespace.

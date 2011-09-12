@@ -165,7 +165,10 @@ CXCursor cxcursor::MakeCXCursor(Stmt *S, Decl *Parent,
   case Stmt::CXXDependentScopeMemberExprClass:
   case Stmt::UnresolvedMemberExprClass:   
   case Stmt::CXXNoexceptExprClass:
-  case Stmt::ObjCStringLiteralClass:    
+  case Stmt::ObjCStringLiteralClass:
+  case Expr::ObjCNumericLiteralClass:
+  case Expr::ObjCArrayLiteralClass:
+  case Expr::ObjCDictionaryLiteralClass:
   case Stmt::ObjCEncodeExprClass:       
   case Stmt::ObjCSelectorExprClass:   
   case Stmt::ObjCProtocolExprClass:   

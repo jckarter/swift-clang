@@ -1441,6 +1441,43 @@ void StmtPrinter::VisitObjCStringLiteral(ObjCStringLiteral *Node) {
   VisitStringLiteral(Node->getString());
 }
 
+void StmtPrinter::VisitObjCNumericLiteral(ObjCNumericLiteral *E) {
+  OS << "@";
+  Visit(E->getNumber());
+}
+
+void StmtPrinter::VisitObjCArrayLiteral(ObjCArrayLiteral *E) {
+  OS << "@[ ";
+  StmtRange ch = E->children();
+  if (ch.first != ch.second) {
+    while (1) {
+      Visit(*ch.first);
+      ++ch.first;
+      if (ch.first == ch.second) break;
+      OS << ", ";
+    }
+  }
+  OS << " ]";
+}
+
+void StmtPrinter::VisitObjCDictionaryLiteral(ObjCDictionaryLiteral *E) {
+  OS << "@{ ";
+  StmtRange ch = E->children();
+  if (ch.first != ch.second) {
+    while (1) {
+      Stmt *value = *ch.first;
+      ++ch.first;
+      if (ch.first == ch.second) break;
+      Stmt *key = *ch.first;
+      Visit(key); OS << " : "; Visit(value);
+      ++ch.first;
+      if (ch.first == ch.second) break;
+      OS << ", ";
+    }
+  }
+  OS << " }";
+}
+
 void StmtPrinter::VisitObjCEncodeExpr(ObjCEncodeExpr *Node) {
   OS << "@encode(" << Node->getEncodedType().getAsString(Policy) << ')';
 }

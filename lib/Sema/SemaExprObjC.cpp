@@ -120,6 +120,57 @@ ExprResult Sema::ParseObjCStringLiteral(SourceLocation *AtLocs,
   return new (Context) ObjCStringLiteral(S, Ty, AtLocs[0]);
 }
 
+ExprResult Sema::BuildObjCNumericLiteral(SourceLocation AtLoc, Expr *Number) {
+  // the type should be NSNumber *.
+  IdentifierInfo *NSIdent = &Context.Idents.get("NSNumber");
+  NamedDecl *IF = LookupSingleName(TUScope, NSIdent, AtLoc,
+                                   LookupOrdinaryName);
+  QualType Ty;
+  if (ObjCInterfaceDecl *NumberIF = dyn_cast_or_null<ObjCInterfaceDecl>(IF)) {
+    Ty = Context.getObjCObjectPointerType(Context.getObjCInterfaceType(NumberIF));
+  } else {
+    // If there is no NSNumber interface defined then treat constant
+    // numbers as untyped objects and let the runtime figure it out later.
+    Ty = Context.getObjCIdType();
+  }
+  return new (Context) ObjCNumericLiteral(Number, Ty, AtLoc);
+}
+
+ExprResult Sema::BuildObjCArrayLiteral(SourceRange SR, MultiExprArg Elements) {
+  // the type should be NSArray *.
+  IdentifierInfo *NSIdent = &Context.Idents.get("NSArray");
+  NamedDecl *IF = LookupSingleName(TUScope, NSIdent, SR.getBegin(),
+                                   LookupOrdinaryName);
+  QualType Ty;
+  if (ObjCInterfaceDecl *ArrayIF = dyn_cast_or_null<ObjCInterfaceDecl>(IF)) {
+    Ty = Context.getObjCObjectPointerType(Context.getObjCInterfaceType(ArrayIF));
+  } else {
+    // If there is no NSArray interface defined then treat literal
+    // array as untyped object and let the runtime figure it out later.
+    Ty = Context.getObjCIdType();
+  }
+  
+  return new (Context) ObjCArrayLiteral(Context, Elements.get(), Elements.size(), 
+                                        Ty, SR);
+}
+
+ExprResult Sema::BuildObjCDictionaryLiteral(SourceRange SR, MultiExprArg Elements) {
+  // the type should be NSDictionary *.
+  IdentifierInfo *NSIdent = &Context.Idents.get("NSDictionary");
+  NamedDecl *IF = LookupSingleName(TUScope, NSIdent, SR.getBegin(),
+                                   LookupOrdinaryName);
+  QualType Ty;
+  if (ObjCInterfaceDecl *DictIF = dyn_cast_or_null<ObjCInterfaceDecl>(IF)) {
+    Ty = Context.getObjCObjectPointerType(Context.getObjCInterfaceType(DictIF));
+  } else {
+    // If there is no NSDictionary interface defined then treat literal
+    // dictionary as untyped object and let the runtime figure it out later.
+    Ty = Context.getObjCIdType();
+  }
+  
+  return new (Context) ObjCDictionaryLiteral(Elements, Ty, SR);
+}
+
 ExprResult Sema::BuildObjCEncodeExpression(SourceLocation AtLoc,
                                       TypeSourceInfo *EncodedTypeInfo,
                                       SourceLocation RParenLoc) {

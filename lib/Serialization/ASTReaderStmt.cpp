@@ -782,6 +782,21 @@ void ASTStmtReader::VisitObjCStringLiteral(ObjCStringLiteral *E) {
   E->setAtLoc(ReadSourceLocation(Record, Idx));
 }
 
+void ASTStmtReader::VisitObjCNumericLiteral(ObjCNumericLiteral *E) {
+    VisitExpr(E);
+    // could be one of several IntegerLiteral, FloatLiteral, etc.
+    E->setNumber(cast<Expr>(Reader.ReadSubStmt()));
+    E->setAtLoc(ReadSourceLocation(Record, Idx));
+}
+
+void ASTStmtReader::VisitObjCArrayLiteral(ObjCArrayLiteral *E) {
+    // TBD
+}
+
+void ASTStmtReader::VisitObjCDictionaryLiteral(ObjCDictionaryLiteral *E) {
+    // TBD
+}
+
 void ASTStmtReader::VisitObjCEncodeExpr(ObjCEncodeExpr *E) {
   VisitExpr(E);
   E->setEncodedTypeSourceInfo(GetTypeSourceInfo(Record, Idx));
@@ -1726,6 +1741,15 @@ Stmt *ASTReader::ReadStmtFromStream(Module &F) {
 
     case EXPR_OBJC_STRING_LITERAL:
       S = new (Context) ObjCStringLiteral(Empty);
+      break;
+    case EXPR_OBJC_NUMERIC_LITERAL:
+      S = new (Context) ObjCNumericLiteral(Empty);
+      break;
+    case EXPR_OBJC_ARRAY_LITERAL:
+      S = new (Context) ObjCArrayLiteral(Empty);
+      break;
+    case EXPR_OBJC_DICTIONARY_LITERAL:
+      S = new (Context) ObjCDictionaryLiteral(Empty);
       break;
     case EXPR_OBJC_ENCODE:
       S = new (Context) ObjCEncodeExpr(Empty);

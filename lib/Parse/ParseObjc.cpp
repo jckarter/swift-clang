@@ -1861,6 +1861,26 @@ ExprResult Parser::ParseObjCAtExpression(SourceLocation AtLoc) {
   case tok::string_literal:    // primary-expression: string-literal
   case tok::wide_string_literal:
     return ParsePostfixExpressionSuffix(ParseObjCStringLiteral(AtLoc));
+
+  case tok::char_constant:
+    return ParsePostfixExpressionSuffix(ParseObjCCharacterLiteral(AtLoc));
+      
+  case tok::numeric_constant:
+    return ParsePostfixExpressionSuffix(ParseObjCNumericLiteral(AtLoc));
+
+  case tok::kw_true:  // Objective-C++, etc.
+    return ParsePostfixExpressionSuffix(ParseObjCBooleanLiteral(AtLoc, 1));
+  case tok::kw_false: // Objective-C++, etc.
+    return ParsePostfixExpressionSuffix(ParseObjCBooleanLiteral(AtLoc, 0));
+    
+  case tok::l_square:
+    // Objective-C array literal
+    return ParsePostfixExpressionSuffix(ParseObjCArrayLiteral(AtLoc));
+          
+  case tok::l_brace:
+    // Objective-C dictionary literal
+    return ParsePostfixExpressionSuffix(ParseObjCDictionaryLiteral(AtLoc));
+          
   default:
     if (Tok.getIdentifierInfo() == 0)
       return ExprError(Diag(AtLoc, diag::err_unexpected_at));
@@ -1872,6 +1892,10 @@ ExprResult Parser::ParseObjCAtExpression(SourceLocation AtLoc) {
       return ParsePostfixExpressionSuffix(ParseObjCProtocolExpression(AtLoc));
     case tok::objc_selector:
       return ParsePostfixExpressionSuffix(ParseObjCSelectorExpression(AtLoc));
+    case tok::objc___yes:
+        return ParsePostfixExpressionSuffix(ParseObjCBooleanLiteral(AtLoc, 1));
+    case tok::objc___no:
+        return ParsePostfixExpressionSuffix(ParseObjCBooleanLiteral(AtLoc, 0));
     default:
       return ExprError(Diag(AtLoc, diag::err_unexpected_at));
     }
@@ -2334,6 +2358,131 @@ ExprResult Parser::ParseObjCStringLiteral(SourceLocation AtLoc) {
 
   return Owned(Actions.ParseObjCStringLiteral(&AtLocs[0], AtStrings.take(),
                                               AtStrings.size()));
+}
+
+//    objc-boolean-expression:
+//      @true | @false
+
+ExprResult Parser::ParseObjCBooleanLiteral(SourceLocation AtLoc, int ArgValue) {
+  // Foundation uses kCFBooleanTrue / kCFBooleanFalse.
+  //+ (NSNumber *)numberWithBool:(BOOL)value {
+  //    return value ? (NSNumber *)kCFBooleanTrue : (NSNumber *)kCFBooleanFalse;
+  //}
+  SourceLocation EndLoc = ConsumeToken();             // consume the keyword.
+  // map @yes/@true @no/@false to a CXXBoolLiteral
+  // eventually define new AST for this.
+  tok::TokenKind Kind = (ArgValue ? tok::kw_true : tok::kw_false);
+  ExprResult Lit(Actions.ActOnCXXBoolLiteral(EndLoc, Kind));
+  return Owned(Actions.BuildObjCNumericLiteral(AtLoc, Lit.take()));
+}
+
+ExprResult Parser::ParseObjCCharacterLiteral(SourceLocation AtLoc) {
+  ExprResult Lit(Actions.ActOnCharacterConstant(Tok));
+  if (Lit.isInvalid()) {
+    return move(Lit);
+  }
+  SourceLocation EndLoc = ConsumeToken();         // consume the literal token.
+
+  // generate a cast to the correct argument type.
+  Lit = Actions.ImpCastExprToType(Lit.take(), Actions.Context.CharTy,
+                                  CK_IntegralCast).take();
+  return Owned(Actions.BuildObjCNumericLiteral(AtLoc, Lit.take()));
+}
+
+ExprResult Parser::ParseObjCNumericLiteral(SourceLocation AtLoc) {
+  ExprResult Lit(Actions.ActOnNumericConstant(Tok));
+  if (Lit.isInvalid()) {
+    return move(Lit);
+  }
+  SourceLocation EndLoc = ConsumeToken();         // consume the literal token.
+  return Owned(Actions.BuildObjCNumericLiteral(AtLoc, Lit.take()));
+}
+
+ExprResult Parser::ParseObjCArrayLiteral(SourceLocation AtLoc) {
+  SmallVector<SourceLocation, 4> ElementLocs;
+  ExprVector ElementExprs(Actions);                   // array elements.
+  ElementLocs.push_back(ConsumeBracket());            // consume the l_square.
+
+  while (Tok.isNot(tok::r_square)) {
+    // Parse list of array element expressions (all must be id types).
+    ExprResult Res(ParseAssignmentExpression());
+    if (Res.isInvalid()) {
+      // We must manually skip to a ']', otherwise the expression skipper will
+      // stop at the ']' when it skips to the ';'.  We want it to skip beyond
+      // the enclosing expression.
+      SkipUntil(tok::r_square);
+      return move(Res);
+    }
+    
+    // We have a valid expression. Collect it in a vector so we can
+    // build the argument list.
+    ElementExprs.push_back(Res.release());
+
+    if (Tok.is(tok::comma)) {
+      ElementLocs.push_back(ConsumeToken()); // Eat the ','.
+    } else if (Tok.isNot(tok::r_square)) {
+     return ExprError(Diag(Tok, diag::err_expected_rsquare_or_comma));
+    }
+  }
+  SourceLocation EndLoc = ConsumeBracket();
+
+  // append sentinel nil to the argument list.
+  ASTContext &Context = Actions.Context;
+  ElementExprs.push_back(new (Context) GNUNullExpr(Context.VoidPtrTy, EndLoc));
+  MultiExprArg Args(Actions, ElementExprs.take(), ElementExprs.size());
+  return Owned(Actions.BuildObjCArrayLiteral(SourceRange(AtLoc, EndLoc), Args));
+}
+
+ExprResult Parser::ParseObjCDictionaryLiteral(SourceLocation AtLoc) {
+  SmallVector<SourceLocation, 4> ElementLocs;
+  ExprVector KeyValueExprs(Actions);                   // array elements.
+  ElementLocs.push_back(ConsumeBrace());              // consume the l_square.
+  
+  while (Tok.isNot(tok::r_brace)) {
+    // Parse the comma separated key : value expressions.
+    ExprResult KeyExpr(ParseAssignmentExpression());
+    if (KeyExpr.isInvalid()) {
+      // We must manually skip to a '}', otherwise the expression skipper will
+      // stop at the '}' when it skips to the ';'.  We want it to skip beyond
+      // the enclosing expression.
+      SkipUntil(tok::r_brace);
+      return move(KeyExpr);
+    }
+    
+    if (Tok.is(tok::colon)) {
+      ConsumeToken();
+    } else {
+      return ExprError(Diag(Tok, diag::err_expected_colon));
+    }
+    
+    ExprResult ValueExpr(ParseAssignmentExpression());
+    if (ValueExpr.isInvalid()) {
+      // We must manually skip to a '}', otherwise the expression skipper will
+      // stop at the '}' when it skips to the ';'.  We want it to skip beyond
+      // the enclosing expression.
+      SkipUntil(tok::r_brace);
+      return move(ValueExpr);
+    }
+
+    // We have a valid expression. Collect it in a vector so we can
+    // build the argument list.
+    KeyValueExprs.push_back(ValueExpr.release());
+    KeyValueExprs.push_back(KeyExpr.release());
+    
+    if (Tok.is(tok::comma)) {
+      ElementLocs.push_back(ConsumeToken()); // Eat the ','.
+    } else if (Tok.isNot(tok::r_brace)) {
+      return ExprError(Diag(Tok, diag::err_expected_rbrace_or_comma));
+    }
+  }
+  SourceLocation EndLoc = ConsumeBrace();
+  
+  // Create the ObjCDictionaryLiteral.
+  ASTContext &Context = Actions.Context;
+  KeyValueExprs.push_back(new (Context) GNUNullExpr(Context.VoidPtrTy, EndLoc));
+  MultiExprArg Args(Actions, KeyValueExprs.take(), KeyValueExprs.size());
+  return Owned(Actions.BuildObjCDictionaryLiteral(SourceRange(AtLoc, EndLoc),
+                                                  Args));
 }
 
 ///    objc-encode-expression:

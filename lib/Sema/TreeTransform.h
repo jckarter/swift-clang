@@ -7724,6 +7724,24 @@ TreeTransform<Derived>::TransformObjCStringLiteral(ObjCStringLiteral *E) {
 
 template<typename Derived>
 ExprResult
+TreeTransform<Derived>::TransformObjCNumericLiteral(ObjCNumericLiteral *E) {
+  return SemaRef.Owned(E);
+}
+
+template<typename Derived>
+ExprResult
+TreeTransform<Derived>::TransformObjCArrayLiteral(ObjCArrayLiteral *E) {
+  return SemaRef.Owned(E);
+}
+
+template<typename Derived>
+ExprResult
+TreeTransform<Derived>::TransformObjCDictionaryLiteral(ObjCDictionaryLiteral *E) {
+  return SemaRef.Owned(E);
+}
+
+template<typename Derived>
+ExprResult
 TreeTransform<Derived>::TransformObjCEncodeExpr(ObjCEncodeExpr *E) {
   TypeSourceInfo *EncodedTypeInfo
     = getDerived().TransformType(E->getEncodedTypeSourceInfo());

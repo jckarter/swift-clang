@@ -930,6 +930,21 @@ void StmtProfiler::VisitObjCStringLiteral(const ObjCStringLiteral *S) {
   VisitExpr(S);
 }
 
+void StmtProfiler::VisitObjCNumericLiteral(const ObjCNumericLiteral *E) {
+  VisitExpr(E);
+  // TBD
+}
+
+void StmtProfiler::VisitObjCArrayLiteral(const ObjCArrayLiteral *E) {
+  VisitExpr(E);
+  // TBD
+}
+
+void StmtProfiler::VisitObjCDictionaryLiteral(const ObjCDictionaryLiteral *E) {
+  VisitExpr(E);
+  // TBD
+}
+
 void StmtProfiler::VisitObjCEncodeExpr(const ObjCEncodeExpr *S) {
   VisitExpr(S);
   VisitType(S->getEncodedType());

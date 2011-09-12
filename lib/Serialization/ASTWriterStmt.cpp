@@ -744,6 +744,21 @@ void ASTStmtWriter::VisitObjCStringLiteral(ObjCStringLiteral *E) {
   Code = serialization::EXPR_OBJC_STRING_LITERAL;
 }
 
+void ASTStmtWriter::VisitObjCNumericLiteral(ObjCNumericLiteral *E) {
+  VisitExpr(E);
+  Writer.AddStmt(E->getNumber());
+  Writer.AddSourceLocation(E->getAtLoc(), Record);
+  Code = serialization::EXPR_OBJC_NUMERIC_LITERAL;
+}
+
+void ASTStmtWriter::VisitObjCArrayLiteral(ObjCArrayLiteral *E) {
+    // TBD
+}
+
+void ASTStmtWriter::VisitObjCDictionaryLiteral(ObjCDictionaryLiteral *E) {
+    // TBD
+}
+
 void ASTStmtWriter::VisitObjCEncodeExpr(ObjCEncodeExpr *E) {
   VisitExpr(E);
   Writer.AddTypeSourceInfo(E->getEncodedTypeSourceInfo(), Record);

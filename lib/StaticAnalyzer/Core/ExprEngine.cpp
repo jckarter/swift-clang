@@ -558,6 +558,9 @@ void ExprEngine::Visit(const Stmt *S, ExplodedNode *Pred,
     case Stmt::ObjCProtocolExprClass:
     case Stmt::ObjCSelectorExprClass:
     case Stmt::ObjCStringLiteralClass:
+    case Expr::ObjCNumericLiteralClass:
+    case Expr::ObjCArrayLiteralClass:
+    case Expr::ObjCDictionaryLiteralClass:
     case Stmt::ParenListExprClass:
     case Stmt::PredefinedExprClass:
     case Stmt::ShuffleVectorExprClass:
