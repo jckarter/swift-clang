@@ -51,70 +51,97 @@ llvm::Value *CodeGenFunction::EmitObjCStringLiteral(const ObjCStringLiteral *E)
   return llvm::ConstantExpr::getBitCast(C, ConvertType(E->getType()));
 }
 
-static const char *selectorForType(QualType type) {
+Selector selectorForType(ASTContext &Context, QualType type) {
+  const char *SelName = 0;
   if (const BuiltinType *BT = type->getAs<BuiltinType>()) {
     switch (BT->getKind()) {
     case BuiltinType::Char_S:
     case BuiltinType::SChar:
-      return "numberWithChar";
+      SelName = "numberWithChar";
+      break;
     case BuiltinType::Char_U:
     case BuiltinType::UChar:
-      return "numberWithUnsignedChar";
+      SelName =  "numberWithUnsignedChar";
+      break;
     case BuiltinType::Short:
-      return "numberWithShort";
+      SelName =  "numberWithShort";
+      break;
     case BuiltinType::UShort:
-      return "numberWithUnsignedShort";
+      SelName =  "numberWithUnsignedShort";
+      break;
     case BuiltinType::Int:
-      return "numberWithInt";
+      SelName =  "numberWithInt";
+      break;
     case BuiltinType::UInt:
-      return "numberWithUnsignedInt";
+      SelName = "numberWithUnsignedInt";
+      break;
     case BuiltinType::Long:
-      return "numberWithLong";
+      SelName = "numberWithLong";
+      break;
     case BuiltinType::ULong:
-      return "numberWithUnsignedLong";
+      SelName =  "numberWithUnsignedLong";
+      break;
     case BuiltinType::LongLong:
-      return "numberWithLongLong";
+      SelName = "numberWithLongLong";
+      break;
     case BuiltinType::ULongLong:
-      return "numberWithUnsignedLongLong";
+      SelName = "numberWithUnsignedLongLong";
+      break;
     case BuiltinType::Float:
-      return "numberWithFloat";
+      SelName = "numberWithFloat";
+      break;
     case BuiltinType::Double:
-      return "numberWithDouble";
+      SelName =  "numberWithDouble";
+      break;
     case BuiltinType::Bool:
-      return "numberWithBool";
+      SelName = "numberWithBool";
+      break;
     default:
+      assert(false && 
+             "unrecognizable type for numeric literal - selectorForType");
       break;
     }
   }
-  return NULL;
+  Selector Sel;
+  if (SelName)
+    Sel = Context.Selectors.getUnarySelector(&Context.Idents.get(StringRef(SelName)));
+  return Sel;
 }
 
+/// EmitObjCNumericLiteral - This routine generates code for
+/// the appropriate +[NSNumber numberWith<Type>:] method.
+///
 llvm::Value *CodeGenFunction::EmitObjCNumericLiteral(const ObjCNumericLiteral *E) {
-  // Message the appropriate +[NSNumber numberWith<Type>:] method.
   // Generate the correct selector for this literal's concrete type.
   const Expr *NL = E->getNumber();
   ASTContext &Context = CGM.getContext();
-  const char *SelName = selectorForType(NL->getType());
-  assert(SelName && "No matching selector for type.");
-  Selector Sel = Context.Selectors.getUnarySelector(&Context.Idents.get(StringRef(SelName)));
+  Selector Sel = selectorForType(Context, NL->getType());
   
   // Generate a reference to the class pointer, which will be the receiver.
   QualType ResultType = E->getType(); // should be NSNumber *
-  const ObjCObjectPointerType *InterfacePointerType = ResultType->getAsObjCInterfacePointerType();
-  ObjCInterfaceDecl *Class = InterfacePointerType->getObjectType()->getInterface();
+  const ObjCObjectPointerType *InterfacePointerType = 
+    ResultType->getAsObjCInterfacePointerType();
+  ObjCInterfaceDecl *NSNumberDecl = 
+    InterfacePointerType->getObjectType()->getInterface();
   CGObjCRuntime &Runtime = CGM.getObjCRuntime();
-  llvm::Value *Receiver = Runtime.GetClass(Builder, Class);
+  llvm::Value *Receiver = Runtime.GetClass(Builder, NSNumberDecl);
 
   // Get the method.
-  ObjCMethodDecl *Method = Class->lookupClassMethod(Sel);
-  
-  // Generate the argument list.
+  ObjCMethodDecl *Method = NSNumberDecl->lookupClassMethod(Sel);
+  ParmVarDecl *argDecl = *Method->param_begin();
+  QualType ArgQT = argDecl->getType().getUnqualifiedType();
+  RValue RV = EmitAnyExpr(NL);
+  // FIXME. We may have to do appropriate cast for other builtin types too.
+  if (const BuiltinType *BT = NL->getType()->getAs<BuiltinType>())
+    if (BT->getKind() == BuiltinType::Bool)
+      RV = RValue::get(Builder.CreateZExt(RV.getScalarVal(), 
+                                          ConvertType(ArgQT)));
+
   CallArgList Args;
-  const Stmt *Arg = NL;
-  EmitCallArgs(Args, Method, &Arg, &Arg + 1);
+  Args.add(RV, ArgQT);
 
   RValue result = Runtime.GenerateMessageSend(*this, ReturnValueSlot(), ResultType,
-                                              Sel, Receiver, Args, Class, Method);
+                                              Sel, Receiver, Args, NSNumberDecl, Method);
   return AdjustRelatedResultType(*this, E, Method, result).getScalarVal();
 }
 

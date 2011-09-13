@@ -120,13 +120,16 @@ ExprResult Sema::ParseObjCStringLiteral(SourceLocation *AtLocs,
   return new (Context) ObjCStringLiteral(S, Ty, AtLocs[0]);
 }
 
+/// BuildObjCNumericLiteral - builds an ObjCNumericLiteral AST node for the
+/// numeric literal expression. Type of the expression will be "NSNumber *"
+/// or "id" if NSNumber is unavailable.
 ExprResult Sema::BuildObjCNumericLiteral(SourceLocation AtLoc, Expr *Number) {
-  // the type should be NSNumber *.
   IdentifierInfo *NSIdent = &Context.Idents.get("NSNumber");
   NamedDecl *IF = LookupSingleName(TUScope, NSIdent, AtLoc,
                                    LookupOrdinaryName);
   QualType Ty;
   if (ObjCInterfaceDecl *NumberIF = dyn_cast_or_null<ObjCInterfaceDecl>(IF)) {
+    // type must be NSNumber *.
     Ty = Context.getObjCObjectPointerType(Context.getObjCInterfaceType(NumberIF));
   } else {
     // If there is no NSNumber interface defined then treat constant

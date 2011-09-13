@@ -2458,14 +2458,18 @@ ExprResult Sema::ActOnCharacterConstant(const Token &Tok) {
                                               Tok.getLocation()));
 }
 
+ExprResult Sema::ActOnIntegerConstant(SourceLocation Loc, uint64_t Val) {
+  unsigned IntSize = Context.getTargetInfo().getIntWidth();
+  return Owned(IntegerLiteral::Create(Context, llvm::APInt(IntSize, Val),
+                                      Context.IntTy, Loc));
+}
+
 ExprResult Sema::ActOnNumericConstant(const Token &Tok) {
   // Fast path for a single digit (which is quite common).  A single digit
   // cannot have a trigraph, escaped newline, radix prefix, or type suffix.
   if (Tok.getLength() == 1) {
     const char Val = PP.getSpellingOfSingleCharacterNumericConstant(Tok);
-    unsigned IntSize = Context.getTargetInfo().getIntWidth();
-    return Owned(IntegerLiteral::Create(Context, llvm::APInt(IntSize, Val-'0'),
-                    Context.IntTy, Tok.getLocation()));
+    return ActOnIntegerConstant(Tok.getLocation(), Val-'0');
   }
 
   llvm::SmallString<512> IntegerBuffer;

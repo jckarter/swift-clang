@@ -2315,6 +2315,7 @@ public:
                                       NamedDecl *D);
 
   ExprResult ActOnPredefinedExpr(SourceLocation Loc, tok::TokenKind Kind);
+  ExprResult ActOnIntegerConstant(SourceLocation Loc, uint64_t Val);
   ExprResult ActOnNumericConstant(const Token &Tok);
   ExprResult ActOnCharacterConstant(const Token &Tok);
   ExprResult ActOnParenExpr(SourceLocation L, SourceLocation R, Expr *E);
@@ -3325,7 +3326,10 @@ public:
   ExprResult ParseObjCStringLiteral(SourceLocation *AtLocs,
                                     Expr **Strings,
                                     unsigned NumStrings);
-  
+    
+  /// BuildObjCNumericLiteral - builds an ObjCNumericLiteral AST node for the
+  /// numeric literal expression. Type of the expression will be "NSNumber *"
+  /// or "id" if NSNumber is unavailable.
   ExprResult BuildObjCNumericLiteral(SourceLocation AtLoc, Expr *Number);
   ExprResult BuildObjCArrayLiteral(SourceRange SR, MultiExprArg Elements);
   ExprResult BuildObjCDictionaryLiteral(SourceRange SR, MultiExprArg Elements);

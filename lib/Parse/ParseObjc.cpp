@@ -2360,22 +2360,23 @@ ExprResult Parser::ParseObjCStringLiteral(SourceLocation AtLoc) {
                                               AtStrings.size()));
 }
 
-//    objc-boolean-expression:
-//      @true | @false
-
+/// ParseObjCBooleanLiteral -
+/// objc-scalar-literal : '@' boolean-keyword
+///                        ;
+/// boolean-keyword: 'true' | 'false' | '__yes' | '__no'
+///                        ;
 ExprResult Parser::ParseObjCBooleanLiteral(SourceLocation AtLoc, int ArgValue) {
-  // Foundation uses kCFBooleanTrue / kCFBooleanFalse.
-  //+ (NSNumber *)numberWithBool:(BOOL)value {
-  //    return value ? (NSNumber *)kCFBooleanTrue : (NSNumber *)kCFBooleanFalse;
-  //}
   SourceLocation EndLoc = ConsumeToken();             // consume the keyword.
-  // map @yes/@true @no/@false to a CXXBoolLiteral
-  // eventually define new AST for this.
-  tok::TokenKind Kind = (ArgValue ? tok::kw_true : tok::kw_false);
-  ExprResult Lit(Actions.ActOnCXXBoolLiteral(EndLoc, Kind));
+  ExprResult Lit(Actions.ActOnIntegerConstant(EndLoc, ArgValue));
+  // generate a cast to the correct argument type.
+  Lit = Actions.ImpCastExprToType(Lit.take(), Actions.Context.BoolTy,
+                                  CK_IntegralToBoolean);
   return Owned(Actions.BuildObjCNumericLiteral(AtLoc, Lit.take()));
 }
 
+/// ParseObjCCharacterLiteral -
+/// objc-scalar-literal : '@' character-literal
+///                        ;
 ExprResult Parser::ParseObjCCharacterLiteral(SourceLocation AtLoc) {
   ExprResult Lit(Actions.ActOnCharacterConstant(Tok));
   if (Lit.isInvalid()) {
@@ -2385,10 +2386,15 @@ ExprResult Parser::ParseObjCCharacterLiteral(SourceLocation AtLoc) {
 
   // generate a cast to the correct argument type.
   Lit = Actions.ImpCastExprToType(Lit.take(), Actions.Context.CharTy,
-                                  CK_IntegralCast).take();
+                                  CK_IntegralCast);
   return Owned(Actions.BuildObjCNumericLiteral(AtLoc, Lit.take()));
 }
 
+/// ParseObjCNumericLiteral -
+/// objc-scalar-literal : '@' scalar-literal
+///                        ;
+/// scalar-literal : | numeric-constant			/* any numeric constant. */
+///                    ;
 ExprResult Parser::ParseObjCNumericLiteral(SourceLocation AtLoc) {
   ExprResult Lit(Actions.ActOnNumericConstant(Tok));
   if (Lit.isInvalid()) {
