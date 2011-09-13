@@ -4926,9 +4926,10 @@ static bool IsArithmeticOp(BinaryOperatorKind Opc) {
 /// expression.
 static bool IsArithmeticBinaryExpr(Expr *E, BinaryOperatorKind *Opcode,
                                    Expr **RHSExprs) {
-  E = E->IgnoreParenImpCasts();
+  // Don't strip parenthesis: we should not warn if E is in parenthesis.
+  E = E->IgnoreImpCasts();
   E = E->IgnoreConversionOperator();
-  E = E->IgnoreParenImpCasts();
+  E = E->IgnoreImpCasts();
 
   // Built-in binary operator.
   if (BinaryOperator *OP = dyn_cast<BinaryOperator>(E)) {
@@ -5868,7 +5869,7 @@ static void diagnoseArithmeticOnFunctionPointer(Sema &S, SourceLocation Loc,
     << Pointer->getSourceRange();
 }
 
-/// \brief Warn if Operand is incomplete pointer type
+/// \brief Emit error if Operand is incomplete pointer type
 ///
 /// \returns True if pointer has incomplete type
 static bool checkArithmeticIncompletePointerType(Sema &S, SourceLocation Loc,
@@ -5974,7 +5975,7 @@ static bool checkArithmethicPointerOnNonFragileABI(Sema &S,
   return false;
 }
 
-/// \brief Warn when two pointers are incompatible.
+/// \brief Emit error when two pointers are incompatible.
 static void diagnosePointerIncompatibility(Sema &S, SourceLocation Loc,
                                            Expr *LHSExpr, Expr *RHSExpr) {
   assert(LHSExpr->getType()->isAnyPointerType());
@@ -6009,32 +6010,33 @@ QualType Sema::CheckAdditionOperands( // C99 6.5.6
   if (IExp->getType()->isAnyPointerType())
     std::swap(PExp, IExp);
 
-  if (PExp->getType()->isAnyPointerType()) {
-    if (IExp->getType()->isIntegerType()) {
-      if (!checkArithmeticOpPointerOperand(*this, Loc, PExp))
-        return QualType();
+  if (!PExp->getType()->isAnyPointerType())
+    return InvalidOperands(Loc, LHS, RHS);
 
-      // Diagnose bad cases where we step over interface counts.
-      if (!checkArithmethicPointerOnNonFragileABI(*this, Loc, PExp))
-        return QualType();
+  if (!IExp->getType()->isIntegerType())
+    return InvalidOperands(Loc, LHS, RHS);
 
-      // Check array bounds for pointer arithemtic
-      CheckArrayAccess(PExp, IExp);
+  if (!checkArithmeticOpPointerOperand(*this, Loc, PExp))
+    return QualType();
 
-      if (CompLHSTy) {
-        QualType LHSTy = Context.isPromotableBitField(LHS.get());
-        if (LHSTy.isNull()) {
-          LHSTy = LHS.get()->getType();
-          if (LHSTy->isPromotableIntegerType())
-            LHSTy = Context.getPromotedIntegerType(LHSTy);
-        }
-        *CompLHSTy = LHSTy;
-      }
-      return PExp->getType();
+  // Diagnose bad cases where we step over interface counts.
+  if (!checkArithmethicPointerOnNonFragileABI(*this, Loc, PExp))
+    return QualType();
+
+  // Check array bounds for pointer arithemtic
+  CheckArrayAccess(PExp, IExp);
+
+  if (CompLHSTy) {
+    QualType LHSTy = Context.isPromotableBitField(LHS.get());
+    if (LHSTy.isNull()) {
+      LHSTy = LHS.get()->getType();
+      if (LHSTy->isPromotableIntegerType())
+        LHSTy = Context.getPromotedIntegerType(LHSTy);
     }
+    *CompLHSTy = LHSTy;
   }
 
-  return InvalidOperands(Loc, LHS, RHS);
+  return PExp->getType();
 }
 
 // C99 6.5.6
