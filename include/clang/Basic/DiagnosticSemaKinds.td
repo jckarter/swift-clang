@@ -2657,6 +2657,8 @@ def warn_unused_label : Warning<"unused label %0">,
   InGroup<UnusedLabel>, DefaultIgnore;
 
 def err_goto_into_protected_scope : Error<"goto into protected scope">;
+def warn_goto_into_protected_scope : ExtWarn<"goto into protected scope">,
+  InGroup<Microsoft>;
 def err_switch_into_protected_scope : Error<
   "switch case is in protected scope">;
 def err_indirect_goto_without_addrlabel : Error<
@@ -2884,7 +2886,7 @@ def err_arc_assign_property_ownership : Error<
   "existing ivar %1 for property %0 with %select{unsafe_unretained| assign}2 "
   "attribute must be __unsafe_unretained">;
 def err_arc_inconsistent_property_ownership : Error<
-  "%select{strong|weak|unsafe_unretained}1 property %0 may not also be "
+  "%select{|unsafe_unretained|strong|weak}1 property %0 may not also be "
   "declared %select{|__unsafe_unretained|__strong|__weak|__autoreleasing}2">;
 def err_arc_atomic_ownership : Error<
   "cannot perform atomic operation on a pointer to type %0: type has "
