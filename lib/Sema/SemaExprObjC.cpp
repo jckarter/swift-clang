@@ -132,9 +132,8 @@ ExprResult Sema::BuildObjCNumericLiteral(SourceLocation AtLoc, Expr *Number) {
     // type must be NSNumber *.
     Ty = Context.getObjCObjectPointerType(Context.getObjCInterfaceType(NumberIF));
   } else {
-    // If there is no NSNumber interface defined then treat constant
-    // numbers as untyped objects and let the runtime figure it out later.
-    Ty = Context.getObjCIdType();
+    Diag(AtLoc, diag::err_undeclared_nsnumber);
+    return ExprError();
   }
   return new (Context) ObjCNumericLiteral(Number, Ty, AtLoc);
 }

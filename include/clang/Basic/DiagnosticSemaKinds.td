@@ -1283,6 +1283,8 @@ def err_attr_objc_ownership_redundant : Error<
   "the type %0 already has retainment attributes set on it">;
 def err_attribute_not_string : Error<
   "argument to %0 attribute was not a string literal">;
+def err_undeclared_nsnumber : Error<
+  "NSNumber must be available for use of objective-c literals">;
 def err_attribute_section_invalid_for_target : Error<
   "argument to 'section' attribute is not valid for this target: %0">;
 def err_attribute_section_local_variable : Error<
