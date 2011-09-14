@@ -1166,7 +1166,5 @@ void clang::ApplyHeaderSearchOptions(HeaderSearch &HS,
   if (HSOpts.UseStandardIncludes)
     Init.AddDefaultSystemIncludePaths(Lang, Triple, HSOpts);
 
-  HS.setModuleCachePath(HSOpts.ModuleCachePath);
-  
   Init.Realize(Lang);
 }
