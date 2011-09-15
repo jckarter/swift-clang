@@ -2874,6 +2874,7 @@ public:
   }
   virtual void getArchDefines(const LangOptions &Opts,
                                 MacroBuilder &Builder) const {
+    // NOTE: O64 will not be supported.
     if (ABI == "o32") {
       Builder.defineMacro("__mips_o32");
       Builder.defineMacro("_ABIO32", "1");
