@@ -1121,6 +1121,11 @@ public:
   llvm::Value *getExceptionSlot();
   llvm::Value *getEHSelectorSlot();
 
+  /// Returns the contents of the function's exception object and selector
+  /// slots.
+  llvm::Value *getExceptionFromSlot();
+  llvm::Value *getSelectorFromSlot();
+
   llvm::Value *getNormalCleanupDestSlot();
 
   llvm::BasicBlock *getUnreachableBlock() {
@@ -1669,8 +1674,8 @@ public:
   void EmitCXXDestructorCall(const CXXDestructorDecl *D, CXXDtorType Type,
                              bool ForVirtualBase, llvm::Value *This);
 
-  void EmitNewArrayInitializer(const CXXNewExpr *E, llvm::Value *NewPtr,
-                               llvm::Value *NumElements);
+  void EmitNewArrayInitializer(const CXXNewExpr *E, QualType elementType,
+                               llvm::Value *NewPtr, llvm::Value *NumElements);
 
   void EmitCXXTemporary(const CXXTemporary *Temporary, llvm::Value *Ptr);
 
