@@ -101,7 +101,7 @@ public:
   ObjCArrayLiteral(ASTContext &C, Expr **args, unsigned nexpr, 
                    QualType T, SourceRange SR)
   : Expr(ObjCArrayLiteralClass, T, VK_RValue, OK_Ordinary, false, false,
-         false, false), Range(SR) {
+         false, false), NumElements(nexpr), Range(SR) {
     Elements = new (C) Stmt*[nexpr];
     for (unsigned i = 0; i < nexpr; i++)
       Elements[i] = args[i];

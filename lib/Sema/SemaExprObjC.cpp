@@ -147,9 +147,8 @@ ExprResult Sema::BuildObjCArrayLiteral(SourceRange SR, MultiExprArg Elements) {
   if (ObjCInterfaceDecl *ArrayIF = dyn_cast_or_null<ObjCInterfaceDecl>(IF)) {
     Ty = Context.getObjCObjectPointerType(Context.getObjCInterfaceType(ArrayIF));
   } else {
-    // If there is no NSArray interface defined then treat literal
-    // array as untyped object and let the runtime figure it out later.
-    Ty = Context.getObjCIdType();
+    Diag(SR.getBegin(), diag::err_undeclared_nsarray);
+    return ExprError();
   }
   
   return new (Context) ObjCArrayLiteral(Context, Elements.get(), Elements.size(), 

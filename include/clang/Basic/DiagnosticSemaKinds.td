@@ -1285,6 +1285,8 @@ def err_attribute_not_string : Error<
   "argument to %0 attribute was not a string literal">;
 def err_undeclared_nsnumber : Error<
   "NSNumber must be available for use of objective-c literals">;
+def err_undeclared_nsarray : Error<
+  "NSArray must be available for use of objective-c array literals">;
 def err_attribute_section_invalid_for_target : Error<
   "argument to 'section' attribute is not valid for this target: %0">;
 def err_attribute_section_local_variable : Error<

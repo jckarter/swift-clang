@@ -2405,9 +2405,8 @@ ExprResult Parser::ParseObjCNumericLiteral(SourceLocation AtLoc) {
 }
 
 ExprResult Parser::ParseObjCArrayLiteral(SourceLocation AtLoc) {
-  SmallVector<SourceLocation, 4> ElementLocs;
   ExprVector ElementExprs(Actions);                   // array elements.
-  ElementLocs.push_back(ConsumeBracket());            // consume the l_square.
+  ConsumeBracket(); // consume the l_square.
 
   while (Tok.isNot(tok::r_square)) {
     // Parse list of array element expressions (all must be id types).
@@ -2424,17 +2423,12 @@ ExprResult Parser::ParseObjCArrayLiteral(SourceLocation AtLoc) {
     // build the argument list.
     ElementExprs.push_back(Res.release());
 
-    if (Tok.is(tok::comma)) {
-      ElementLocs.push_back(ConsumeToken()); // Eat the ','.
-    } else if (Tok.isNot(tok::r_square)) {
+    if (Tok.is(tok::comma))
+      ConsumeToken(); // Eat the ','.
+    else if (Tok.isNot(tok::r_square))
      return ExprError(Diag(Tok, diag::err_expected_rsquare_or_comma));
-    }
   }
-  SourceLocation EndLoc = ConsumeBracket();
-
-  // append sentinel nil to the argument list.
-  ASTContext &Context = Actions.Context;
-  ElementExprs.push_back(new (Context) GNUNullExpr(Context.VoidPtrTy, EndLoc));
+  SourceLocation EndLoc = ConsumeBracket(); // location of ']'
   MultiExprArg Args(Actions, ElementExprs.take(), ElementExprs.size());
   return Owned(Actions.BuildObjCArrayLiteral(SourceRange(AtLoc, EndLoc), Args));
 }
