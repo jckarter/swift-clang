@@ -802,7 +802,7 @@ SourceLocation SourceManager::getSpellingLocSlowCase(SourceLocation Loc) const {
   do {
     std::pair<FileID, unsigned> LocInfo = getDecomposedLoc(Loc);
     Loc = getSLocEntry(LocInfo.first).getExpansion().getSpellingLoc();
-    Loc = Loc.getFileLocWithOffset(LocInfo.second);
+    Loc = Loc.getLocWithOffset(LocInfo.second);
   } while (!Loc.isFileID());
   return Loc;
 }
@@ -834,7 +834,7 @@ SourceManager::getDecomposedSpellingLocSlowCase(const SrcMgr::SLocEntry *E,
   SourceLocation Loc;
   do {
     Loc = E->getExpansion().getSpellingLoc();
-    Loc = Loc.getFileLocWithOffset(Offset);
+    Loc = Loc.getLocWithOffset(Offset);
 
     FID = getFileID(Loc);
     E = &getSLocEntry(FID);
@@ -852,7 +852,7 @@ SourceLocation SourceManager::getImmediateSpellingLoc(SourceLocation Loc) const{
   if (Loc.isFileID()) return Loc;
   std::pair<FileID, unsigned> LocInfo = getDecomposedLoc(Loc);
   Loc = getSLocEntry(LocInfo.first).getExpansion().getSpellingLoc();
-  return Loc.getFileLocWithOffset(LocInfo.second);
+  return Loc.getLocWithOffset(LocInfo.second);
 }
 
 
@@ -1273,7 +1273,7 @@ PresumedLoc SourceManager::getPresumedLoc(SourceLocation Loc) const {
       // Handle virtual #include manipulation.
       if (Entry->IncludeOffset) {
         IncludeLoc = getLocForStartOfFile(LocInfo.first);
-        IncludeLoc = IncludeLoc.getFileLocWithOffset(Entry->IncludeOffset);
+        IncludeLoc = IncludeLoc.getLocWithOffset(Entry->IncludeOffset);
       }
     }
   }
@@ -1324,7 +1324,8 @@ static llvm::Optional<ino_t> getActualFileInode(const FileEntry *File) {
 /// If the source file is included multiple times, the source location will
 /// be based upon an arbitrary inclusion.
 SourceLocation SourceManager::translateFileLineCol(const FileEntry *SourceFile,
-                                                  unsigned Line, unsigned Col) {
+                                                  unsigned Line,
+                                                  unsigned Col) const {
   assert(SourceFile && "Null source file!");
   assert(Line && Col && "Line and column should start from 1!");
 
@@ -1432,15 +1433,31 @@ SourceLocation SourceManager::translateFileLineCol(const FileEntry *SourceFile,
       }
     }      
   }
-    
-  if (FirstFID.isInvalid())
+
+  return translateLineCol(FirstFID, Line, Col);
+}
+
+/// \brief Get the source location in \arg FID for the given line:col.
+/// Returns null location if \arg FID is not a file SLocEntry.
+SourceLocation SourceManager::translateLineCol(FileID FID,
+                                               unsigned Line,
+                                               unsigned Col) const {
+  if (FID.isInvalid())
+    return SourceLocation();
+
+  bool Invalid = false;
+  const SLocEntry &Entry = getSLocEntry(FID, &Invalid);
+  if (Invalid)
+    return SourceLocation();
+  
+  if (!Entry.isFile())
     return SourceLocation();
 
   if (Line == 1 && Col == 1)
-    return getLocForStartOfFile(FirstFID);
+    return getLocForStartOfFile(FID);
 
   ContentCache *Content
-    = const_cast<ContentCache *>(getOrCreateContentCache(SourceFile));
+    = const_cast<ContentCache *>(Entry.getFile().getContentCache());
   if (!Content)
     return SourceLocation();
     
@@ -1457,7 +1474,7 @@ SourceLocation SourceManager::translateFileLineCol(const FileEntry *SourceFile,
     unsigned Size = Content->getBuffer(Diag, *this)->getBufferSize();
     if (Size > 0)
       --Size;
-    return getLocForStartOfFile(FirstFID).getFileLocWithOffset(Size);
+    return getLocForStartOfFile(FID).getLocWithOffset(Size);
   }
 
   unsigned FilePos = Content->SourceLineCache[Line - 1];
@@ -1469,9 +1486,9 @@ SourceLocation SourceManager::translateFileLineCol(const FileEntry *SourceFile,
   while (i < BufLength-1 && i < Col-1 && Buf[i] != '\n' && Buf[i] != '\r')
     ++i;
   if (i < Col-1)
-    return getLocForStartOfFile(FirstFID).getFileLocWithOffset(FilePos + i);
+    return getLocForStartOfFile(FID).getLocWithOffset(FilePos + i);
 
-  return getLocForStartOfFile(FirstFID).getFileLocWithOffset(FilePos + Col - 1);
+  return getLocForStartOfFile(FID).getLocWithOffset(FilePos + Col - 1);
 }
 
 /// \brief Compute a map of macro argument chunks to their expanded source
@@ -1481,7 +1498,8 @@ SourceLocation SourceManager::translateFileLineCol(const FileEntry *SourceFile,
 ///     0   -> SourceLocation()
 ///     100 -> Expanded macro arg location
 ///     110 -> SourceLocation()
-void SourceManager::computeMacroArgsCache(ContentCache *Content, FileID FID) {
+void SourceManager::computeMacroArgsCache(ContentCache *Content,
+                                          FileID FID) const {
   assert(!Content->MacroArgsCache);
   assert(!FID.isInvalid());
 
@@ -1560,7 +1578,8 @@ void SourceManager::computeMacroArgsCache(ContentCache *Content, FileID FID) {
 ///             ^
 /// Passing a file location pointing at 'foo', will yield a macro location
 /// where 'foo' was expanded into.
-SourceLocation SourceManager::getMacroArgExpandedLocation(SourceLocation Loc) {
+SourceLocation
+SourceManager::getMacroArgExpandedLocation(SourceLocation Loc) const {
   if (Loc.isInvalid() || !Loc.isFileID())
     return Loc;
 
@@ -1584,7 +1603,7 @@ SourceLocation SourceManager::getMacroArgExpandedLocation(SourceLocation Loc) {
   unsigned MacroArgBeginOffs = I->first;
   SourceLocation MacroArgExpandedLoc = I->second;
   if (MacroArgExpandedLoc.isValid())
-    return MacroArgExpandedLoc.getFileLocWithOffset(Offset - MacroArgBeginOffs);
+    return MacroArgExpandedLoc.getLocWithOffset(Offset - MacroArgBeginOffs);
 
   return Loc;
 }
@@ -1598,7 +1617,7 @@ static bool MoveUpIncludeHierarchy(std::pair<FileID, unsigned> &Loc,
   SourceLocation UpperLoc;
   const SrcMgr::SLocEntry &Entry = SM.getSLocEntry(Loc.first);
   if (Entry.isExpansion())
-    UpperLoc = Entry.getExpansion().getExpansionLocStart();
+    UpperLoc = Entry.getExpansion().getExpansionLocEnd();
   else
     UpperLoc = Entry.getFile().getIncludeLoc();
   
