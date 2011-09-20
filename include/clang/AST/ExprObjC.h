@@ -93,8 +93,8 @@ public:
 /// @[@"Hello", NSApp, [NSNumber numberWithInt:42]];
 class ObjCArrayLiteral : public Expr {
   /// Elements - element expressions of the objective-c array literals
-  Stmt **Elements;
   unsigned NumElements;
+  Stmt **Elements;
   ObjCMethodDecl *ArrayWithObjectsMethod;
   SourceRange Range;
 public:
@@ -112,7 +112,7 @@ public:
   : Expr(ObjCArrayLiteralClass, Empty) {}
   
   SourceRange getSourceRange() const { return Range; }
-  
+
   static bool classof(const Stmt *T) {
       return T->getStmtClass() == ObjCArrayLiteralClass;
   }
@@ -123,6 +123,7 @@ public:
     
   /// getNumElements - Return number of elements of objective-c array literal.
   unsigned getNumElements() const { return NumElements; }
+  unsigned getNumElements() { return NumElements; }
     
     /// getExpr - Return the Expr at the specified index.
   Expr *getElement(unsigned Index) {
@@ -133,12 +134,19 @@ public:
     assert((Index < NumElements) && "Arg access out of range!");
     return cast<Expr>(Elements[Index]);
   }
-
+  /// setElement - Set the specified element.
+  void setElement(unsigned Arg, Expr *ElementExpr) {
+    assert(Arg < NumElements && "Arg access out of range!");
+    Elements[Arg] = ElementExpr;
+  }
+    
   const ObjCMethodDecl *getArrayWithObjectsMethod() const
     { return ArrayWithObjectsMethod; }
     
   // Iterators
   child_range children() { return child_range(&Elements[0], &Elements[0]+NumElements); }
+    
+  friend class ASTStmtReader;
 };
 
 class ObjCDictionaryLiteral : public Expr {
@@ -165,6 +173,8 @@ public:
   std::pair<ConstExprIterator,ConstExprIterator> getValuesKeys() const {
     return std::pair<ConstExprIterator,ConstExprIterator>((Stmt **)ValuesKeys.begin(), (Stmt **)ValuesKeys.end());
   }
+    
+  friend class ASTStmtReader;
 };
 
 

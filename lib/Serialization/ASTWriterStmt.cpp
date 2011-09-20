@@ -752,7 +752,13 @@ void ASTStmtWriter::VisitObjCNumericLiteral(ObjCNumericLiteral *E) {
 }
 
 void ASTStmtWriter::VisitObjCArrayLiteral(ObjCArrayLiteral *E) {
-    // TBD
+  VisitExpr(E);
+  Record.push_back(E->getNumElements());
+  for (unsigned i = 0; i < E->getNumElements(); i++)
+    Writer.AddStmt(E->getElement(i));
+  Writer.AddDeclRef(E->getArrayWithObjectsMethod(), Record);
+  Writer.AddSourceRange(E->getSourceRange(), Record);
+  Code = serialization::EXPR_OBJC_ARRAY_LITERAL;
 }
 
 void ASTStmtWriter::VisitObjCDictionaryLiteral(ObjCDictionaryLiteral *E) {
