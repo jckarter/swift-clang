@@ -61,11 +61,14 @@ public:
 class ObjCNumericLiteral : public Expr {
   /// Number - expression AST node for the numeric literal
   Stmt *Number;
+  ObjCMethodDecl *ObjCNumricLiteralMethod;
   SourceLocation AtLoc;
 public:
-  ObjCNumericLiteral(Stmt *NL, QualType T, SourceLocation L)
+  ObjCNumericLiteral(Stmt *NL, QualType T, ObjCMethodDecl *method,
+                     SourceLocation L)
   : Expr(ObjCNumericLiteralClass, T, VK_RValue, OK_Ordinary, 
-         false, false, false, false), Number(NL), AtLoc(L) {}
+         false, false, false, false), Number(NL), 
+    ObjCNumricLiteralMethod(method), AtLoc(L) {}
   explicit ObjCNumericLiteral(EmptyShell Empty)
   : Expr(ObjCNumericLiteralClass, Empty) {}
   
@@ -73,6 +76,9 @@ public:
   const Expr *getNumber() const { return cast<Expr>(Number); }
   void setNumber(Expr *N) { Number = N; }
   
+  const ObjCMethodDecl *getObjCNumricLiteralMethod() const
+    { return ObjCNumricLiteralMethod; }
+    
   SourceLocation getAtLoc() const { return AtLoc; }
   void setAtLoc(SourceLocation L) { AtLoc = L; }
   
@@ -87,6 +93,8 @@ public:
   
   // Iterators
   child_range children() { return child_range(&Number, &Number+1); }
+    
+  friend class ASTStmtReader;
 };
 
 /// ObjCArrayLiteral - used for objective-c array containers; as in:

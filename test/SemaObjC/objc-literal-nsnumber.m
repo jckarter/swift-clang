@@ -7,9 +7,12 @@ typedef unsigned long NSUInteger;
 typedef unsigned int NSUInteger;
 #endif
 
-typedef int NSNumber;
+@interface NSNumber
++ (NSNumber *)numberWithInt:(int)value;
+@end
 
 int main() {
-  NSNumber * N = @3.1415926535;  // expected-error {{NSNumber must be available for use of objective-c literals}}
-  NSNumber *noNumber = @__yes; // expected-error {{NSNumber must be available for use of objective-c literals}}
+  NSNumber * N = @3.1415926535;  // expected-error {{declaration of 'numberWithDouble:' is missing in NSNumber class}}
+  NSNumber *noNumber = @__yes; // expected-error {{declaration of 'numberWithBool:' is missing in NSNumber class}}
+  NSNumber * NInt = @1000;
 }

@@ -785,8 +785,9 @@ void ASTStmtReader::VisitObjCStringLiteral(ObjCStringLiteral *E) {
 void ASTStmtReader::VisitObjCNumericLiteral(ObjCNumericLiteral *E) {
     VisitExpr(E);
     // could be one of several IntegerLiteral, FloatLiteral, etc.
-    E->setNumber(cast<Expr>(Reader.ReadSubStmt()));
-    E->setAtLoc(ReadSourceLocation(Record, Idx));
+    E->Number = Reader.ReadSubStmt();
+    E->ObjCNumricLiteralMethod = ReadDeclAs<ObjCMethodDecl>(Record, Idx);
+    E->AtLoc = ReadSourceLocation(Record, Idx);
 }
 
 void ASTStmtReader::VisitObjCArrayLiteral(ObjCArrayLiteral *E) {

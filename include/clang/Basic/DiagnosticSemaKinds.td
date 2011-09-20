@@ -1288,7 +1288,9 @@ def err_undeclared_nsnumber : Error<
 def err_undeclared_nsarray : Error<
   "NSArray must be available for use of objective-c array literals">;
 def err_undeclared_arraywithobjects : Error<
-  "declaration of %d is missing in NSArray class">;
+  "declaration of %0 is missing in NSArray class">;
+def err_undeclared_nsnumber_method : Error<
+  "declaration of %0 is missing in NSNumber class">;
 def err_invalid_nsarray_element : Error<
   "elements of objective-c array literals must be objects">;
 def err_attribute_section_invalid_for_target : Error<

@@ -51,71 +51,16 @@ llvm::Value *CodeGenFunction::EmitObjCStringLiteral(const ObjCStringLiteral *E)
   return llvm::ConstantExpr::getBitCast(C, ConvertType(E->getType()));
 }
 
-Selector selectorForType(ASTContext &Context, QualType type) {
-  const char *SelName = 0;
-  if (const BuiltinType *BT = type->getAs<BuiltinType>()) {
-    switch (BT->getKind()) {
-    case BuiltinType::Char_S:
-    case BuiltinType::SChar:
-      SelName = "numberWithChar";
-      break;
-    case BuiltinType::Char_U:
-    case BuiltinType::UChar:
-      SelName =  "numberWithUnsignedChar";
-      break;
-    case BuiltinType::Short:
-      SelName =  "numberWithShort";
-      break;
-    case BuiltinType::UShort:
-      SelName =  "numberWithUnsignedShort";
-      break;
-    case BuiltinType::Int:
-      SelName =  "numberWithInt";
-      break;
-    case BuiltinType::UInt:
-      SelName = "numberWithUnsignedInt";
-      break;
-    case BuiltinType::Long:
-      SelName = "numberWithLong";
-      break;
-    case BuiltinType::ULong:
-      SelName =  "numberWithUnsignedLong";
-      break;
-    case BuiltinType::LongLong:
-      SelName = "numberWithLongLong";
-      break;
-    case BuiltinType::ULongLong:
-      SelName = "numberWithUnsignedLongLong";
-      break;
-    case BuiltinType::Float:
-      SelName = "numberWithFloat";
-      break;
-    case BuiltinType::Double:
-      SelName =  "numberWithDouble";
-      break;
-    case BuiltinType::Bool:
-      SelName = "numberWithBool";
-      break;
-    default:
-      assert(false && 
-             "unrecognizable type for numeric literal - selectorForType");
-      break;
-    }
-  }
-  Selector Sel;
-  if (SelName)
-    Sel = Context.Selectors.getUnarySelector(&Context.Idents.get(StringRef(SelName)));
-  return Sel;
-}
-
 /// EmitObjCNumericLiteral - This routine generates code for
 /// the appropriate +[NSNumber numberWith<Type>:] method.
 ///
 llvm::Value *CodeGenFunction::EmitObjCNumericLiteral(const ObjCNumericLiteral *E) {
   // Generate the correct selector for this literal's concrete type.
   const Expr *NL = E->getNumber();
-  ASTContext &Context = CGM.getContext();
-  Selector Sel = selectorForType(Context, NL->getType());
+  // Get the method.
+  const ObjCMethodDecl *Method = E->getObjCNumricLiteralMethod();
+  assert(Method && "NSNumber method is null");
+  Selector Sel = Method->getSelector();
   
   // Generate a reference to the class pointer, which will be the receiver.
   QualType ResultType = E->getType(); // should be NSNumber *
@@ -126,8 +71,6 @@ llvm::Value *CodeGenFunction::EmitObjCNumericLiteral(const ObjCNumericLiteral *E
   CGObjCRuntime &Runtime = CGM.getObjCRuntime();
   llvm::Value *Receiver = Runtime.GetClass(Builder, NSNumberDecl);
 
-  // Get the method.
-  ObjCMethodDecl *Method = NSNumberDecl->lookupClassMethod(Sel);
   ParmVarDecl *argDecl = *Method->param_begin();
   QualType ArgQT = argDecl->getType().getUnqualifiedType();
   RValue RV = EmitAnyExpr(NL);

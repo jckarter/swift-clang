@@ -120,6 +120,64 @@ ExprResult Sema::ParseObjCStringLiteral(SourceLocation *AtLocs,
   return new (Context) ObjCStringLiteral(S, Ty, AtLocs[0]);
 }
 
+static Selector 
+selectorForType(ASTContext &Context, QualType type) {
+    const char *SelName = 0;
+    if (const BuiltinType *BT = type->getAs<BuiltinType>()) {
+        switch (BT->getKind()) {
+            case BuiltinType::Char_S:
+            case BuiltinType::SChar:
+                SelName = "numberWithChar";
+                break;
+            case BuiltinType::Char_U:
+            case BuiltinType::UChar:
+                SelName =  "numberWithUnsignedChar";
+                break;
+            case BuiltinType::Short:
+                SelName =  "numberWithShort";
+                break;
+            case BuiltinType::UShort:
+                SelName =  "numberWithUnsignedShort";
+                break;
+            case BuiltinType::Int:
+                SelName =  "numberWithInt";
+                break;
+            case BuiltinType::UInt:
+                SelName = "numberWithUnsignedInt";
+                break;
+            case BuiltinType::Long:
+                SelName = "numberWithLong";
+                break;
+            case BuiltinType::ULong:
+                SelName =  "numberWithUnsignedLong";
+                break;
+            case BuiltinType::LongLong:
+                SelName = "numberWithLongLong";
+                break;
+            case BuiltinType::ULongLong:
+                SelName = "numberWithUnsignedLongLong";
+                break;
+            case BuiltinType::Float:
+                SelName = "numberWithFloat";
+                break;
+            case BuiltinType::Double:
+                SelName =  "numberWithDouble";
+                break;
+            case BuiltinType::Bool:
+                SelName = "numberWithBool";
+                break;
+            default:
+                assert(false && 
+                       "unrecognizable type for numeric literal - selectorForType");
+                break;
+        }
+    }
+    Selector Sel;
+    if (SelName)
+        Sel = Context.Selectors.getUnarySelector(&Context.Idents.get(StringRef(SelName)));
+    return Sel;
+}
+
 /// BuildObjCNumericLiteral - builds an ObjCNumericLiteral AST node for the
 /// numeric literal expression. Type of the expression will be "NSNumber *"
 /// or "id" if NSNumber is unavailable.
@@ -128,14 +186,21 @@ ExprResult Sema::BuildObjCNumericLiteral(SourceLocation AtLoc, Expr *Number) {
   NamedDecl *IF = LookupSingleName(TUScope, NSIdent, AtLoc,
                                    LookupOrdinaryName);
   QualType Ty;
+  ObjCMethodDecl *Method  = 0;
   if (ObjCInterfaceDecl *NumberIF = dyn_cast_or_null<ObjCInterfaceDecl>(IF)) {
     // type must be NSNumber *.
     Ty = Context.getObjCObjectPointerType(Context.getObjCInterfaceType(NumberIF));
+    Selector Sel = selectorForType(Context, Number->getType());
+    Method = NumberIF->lookupClassMethod(Sel);
+    if (!Method) {
+      Diag(AtLoc, diag::err_undeclared_nsnumber_method) << Sel;
+      return ExprError();
+    }
   } else {
     Diag(AtLoc, diag::err_undeclared_nsnumber);
     return ExprError();
   }
-  return new (Context) ObjCNumericLiteral(Number, Ty, AtLoc);
+  return new (Context) ObjCNumericLiteral(Number, Ty, Method, AtLoc);
 }
 
 void Sema::CheckObjCArrayLiteralElement(ExprResult Res) {
