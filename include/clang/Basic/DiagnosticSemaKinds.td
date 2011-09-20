@@ -2589,6 +2589,8 @@ def err_at_least_one_initializer_needed_to_size_array : Error<
 def err_array_size_non_int : Error<"size of array has non-integer type %0">;
 def err_init_element_not_constant : Error<
   "initializer element is not a compile-time constant">;
+def err_local_cant_init : Error<
+  "'__local' variable cannot have an initializer">;
 def err_block_extern_cant_init : Error<
   "'extern' variable cannot have an initializer">;
 def warn_extern_init : Warning<"'extern' variable has an initializer">;
@@ -2615,6 +2617,9 @@ def warn_braces_around_scalar_init : Warning<
   "braces around scalar initializer">;
 def warn_many_braces_around_scalar_init : ExtWarn<
   "too many braces around scalar initializer">;
+def ext_complex_component_init : Extension<
+  "complex initialization specifying real and imaginary components "
+  "is an extension">, InGroup<DiagGroup<"complex-component-init">>;
 def err_empty_scalar_initializer : Error<"scalar initializer cannot be empty">;
 def err_illegal_initializer : Error<
   "illegal initializer (only variables can be initialized)">;

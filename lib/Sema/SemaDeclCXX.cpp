@@ -2262,6 +2262,19 @@ struct BaseAndFieldInfo {
 };
 }
 
+/// \brief Determine whether the given indirect field declaration is somewhere
+/// within an anonymous union.
+static bool isWithinAnonymousUnion(IndirectFieldDecl *F) {
+  for (IndirectFieldDecl::chain_iterator C = F->chain_begin(), 
+                                      CEnd = F->chain_end();
+       C != CEnd; ++C)
+    if (CXXRecordDecl *Record = dyn_cast<CXXRecordDecl>((*C)->getDeclContext()))
+      if (Record->isUnion())
+        return true;
+        
+  return false;
+}
+
 static bool CollectFieldInitializer(Sema &SemaRef, BaseAndFieldInfo &Info,
                                     FieldDecl *Field, 
                                     IndirectFieldDecl *Indirect = 0) {
@@ -2293,7 +2306,8 @@ static bool CollectFieldInitializer(Sema &SemaRef, BaseAndFieldInfo &Info,
 
   // Don't build an implicit initializer for union members if none was
   // explicitly specified.
-  if (Field->getParent()->isUnion())
+  if (Field->getParent()->isUnion() ||
+      (Indirect && isWithinAnonymousUnion(Indirect)))
     return false;
 
   // Don't try to build an implicit initializer if there were semantic
@@ -2330,19 +2344,6 @@ Sema::SetDelegatingInitializer(CXXConstructorDecl *Constructor,
 
   DelegatingCtorDecls.push_back(Constructor);
 
-  return false;
-}
-
-/// \brief Determine whether the given indirect field declaration is somewhere
-/// within an anonymous union.
-static bool isWithinAnonymousUnion(IndirectFieldDecl *F) {
-  for (IndirectFieldDecl::chain_iterator C = F->chain_begin(), 
-                                      CEnd = F->chain_end();
-       C != CEnd; ++C)
-    if (CXXRecordDecl *Record = dyn_cast<CXXRecordDecl>((*C)->getDeclContext()))
-      if (Record->isUnion())
-        return true;
-        
   return false;
 }
 
@@ -5932,7 +5933,6 @@ NamedDecl *Sema::BuildUsingDeclaration(Scope *S, AccessSpecifier AS,
   // Otherwise, look up the target name.
 
   LookupResult R(*this, NameInfo, LookupOrdinaryName);
-  R.setUsingDeclaration(true);
 
   // Unlike most lookups, we don't always want to hide tag
   // declarations: tag names are visible through the using declaration
@@ -6964,8 +6964,10 @@ void Sema::AdjustDestructorExceptionSpec(CXXRecordDecl *classDecl,
   ImplicitExceptionSpecification exceptSpec =
       ComputeDefaultedDtorExceptionSpec(classDecl);
 
-  // Replace the destructor's type.
-  FunctionProtoType::ExtProtoInfo epi;
+  // Replace the destructor's type, building off the existing one. Fortunately,
+  // the only thing of interest in the destructor type is its extended info.
+  // The return and arguments are fixed.
+  FunctionProtoType::ExtProtoInfo epi = dtorType->getExtProtoInfo();
   epi.ExceptionSpecType = exceptSpec.getExceptionSpecType();
   epi.NumExceptions = exceptSpec.size();
   epi.Exceptions = exceptSpec.data();
