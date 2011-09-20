@@ -138,21 +138,37 @@ ExprResult Sema::BuildObjCNumericLiteral(SourceLocation AtLoc, Expr *Number) {
   return new (Context) ObjCNumericLiteral(Number, Ty, AtLoc);
 }
 
+void Sema::CheckObjCArrayLiteralElement(ExprResult Res) {
+  Expr *Exp = Res.take();
+  if (!Exp->getType()->isObjCObjectPointerType())
+    Diag(Exp->getLocStart(), diag::err_invalid_nsarray_element);
+}
+
 ExprResult Sema::BuildObjCArrayLiteral(SourceRange SR, MultiExprArg Elements) {
+  IdentifierInfo *KeyIdents[] = {
+      &Context.Idents.get("arrayWithObjects"),
+      &Context.Idents.get("count")
+  };
   // the type should be NSArray *.
   IdentifierInfo *NSIdent = &Context.Idents.get("NSArray");
   NamedDecl *IF = LookupSingleName(TUScope, NSIdent, SR.getBegin(),
                                    LookupOrdinaryName);
   QualType Ty;
+  ObjCMethodDecl *ArrayWithObjectsMethod = 0;
   if (ObjCInterfaceDecl *ArrayIF = dyn_cast_or_null<ObjCInterfaceDecl>(IF)) {
     Ty = Context.getObjCObjectPointerType(Context.getObjCInterfaceType(ArrayIF));
+    Selector Sel = Context.Selectors.getSelector(2, KeyIdents);
+    ArrayWithObjectsMethod = ArrayIF->lookupClassMethod(Sel);
+    if (!ArrayWithObjectsMethod) {
+      Diag(SR.getBegin(), diag::err_undeclared_arraywithobjects) << Sel;
+      return ExprError();
+    }
   } else {
     Diag(SR.getBegin(), diag::err_undeclared_nsarray);
     return ExprError();
   }
-  
   return new (Context) ObjCArrayLiteral(Context, Elements.get(), Elements.size(), 
-                                        Ty, SR);
+                                        Ty, ArrayWithObjectsMethod, SR);
 }
 
 ExprResult Sema::BuildObjCDictionaryLiteral(SourceRange SR, MultiExprArg Elements) {

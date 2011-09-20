@@ -1287,6 +1287,10 @@ def err_undeclared_nsnumber : Error<
   "NSNumber must be available for use of objective-c literals">;
 def err_undeclared_nsarray : Error<
   "NSArray must be available for use of objective-c array literals">;
+def err_undeclared_arraywithobjects : Error<
+  "declaration of %d is missing in NSArray class">;
+def err_invalid_nsarray_element : Error<
+  "elements of objective-c array literals must be objects">;
 def err_attribute_section_invalid_for_target : Error<
   "argument to 'section' attribute is not valid for this target: %0">;
 def err_attribute_section_local_variable : Error<

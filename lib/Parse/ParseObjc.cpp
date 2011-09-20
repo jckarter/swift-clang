@@ -2418,7 +2418,7 @@ ExprResult Parser::ParseObjCArrayLiteral(SourceLocation AtLoc) {
       SkipUntil(tok::r_square);
       return move(Res);
     }
-    
+    Actions.CheckObjCArrayLiteralElement(Res);
     // We have a valid expression. Collect it in a vector so we can
     // build the argument list.
     ElementExprs.push_back(Res.release());

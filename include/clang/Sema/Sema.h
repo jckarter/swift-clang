@@ -3332,6 +3332,7 @@ public:
   /// or "id" if NSNumber is unavailable.
   ExprResult BuildObjCNumericLiteral(SourceLocation AtLoc, Expr *Number);
   ExprResult BuildObjCArrayLiteral(SourceRange SR, MultiExprArg Elements);
+  void CheckObjCArrayLiteralElement(ExprResult Res);
   ExprResult BuildObjCDictionaryLiteral(SourceRange SR, MultiExprArg Elements);
  
   ExprResult BuildObjCEncodeExpression(SourceLocation AtLoc,

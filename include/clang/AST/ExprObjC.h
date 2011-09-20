@@ -95,13 +95,15 @@ class ObjCArrayLiteral : public Expr {
   /// Elements - element expressions of the objective-c array literals
   Stmt **Elements;
   unsigned NumElements;
-    
+  ObjCMethodDecl *ArrayWithObjectsMethod;
   SourceRange Range;
 public:
   ObjCArrayLiteral(ASTContext &C, Expr **args, unsigned nexpr, 
-                   QualType T, SourceRange SR)
+                   QualType T, ObjCMethodDecl * Method,
+                   SourceRange SR)
   : Expr(ObjCArrayLiteralClass, T, VK_RValue, OK_Ordinary, false, false,
-         false, false), NumElements(nexpr), Range(SR) {
+         false, false), NumElements(nexpr), ArrayWithObjectsMethod(Method),
+                        Range(SR) {
     Elements = new (C) Stmt*[nexpr];
     for (unsigned i = 0; i < nexpr; i++)
       Elements[i] = args[i];
@@ -131,7 +133,10 @@ public:
     assert((Index < NumElements) && "Arg access out of range!");
     return cast<Expr>(Elements[Index]);
   }
-  
+
+  const ObjCMethodDecl *getArrayWithObjectsMethod() const
+    { return ArrayWithObjectsMethod; }
+    
   // Iterators
   child_range children() { return child_range(&Elements[0], &Elements[0]+NumElements); }
 };
