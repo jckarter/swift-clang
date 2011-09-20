@@ -131,37 +131,41 @@ void PathDiagnosticClient::HandlePathDiagnostic(const PathDiagnostic *D) {
 //===----------------------------------------------------------------------===//
 
 static SourceLocation getValidSourceLocation(const Stmt* S,
-                                             const ParentMap &PM) {
+                                             LocationOrAnalysisContext LAC) {
   SourceLocation L = S->getLocStart();
+  assert(!LAC.isNull() && "A valid LocationContext or AnalysisContext should "
+                          "be passed to PathDiagnosticLocation upon creation.");
 
   // S might be a temporary statement that does not have a location in the
   // source code, so find an enclosing statement and use it's location.
-  while (!L.isValid()) {
-    S = PM.getParent(S);
-    L = S->getLocStart();
+  if (!L.isValid()) {
+
+    ParentMap *PM = 0;
+    if (LAC.is<const LocationContext*>())
+      PM = &LAC.get<const LocationContext*>()->getParentMap();
+    else
+      PM = &LAC.get<AnalysisContext*>()->getParentMap();
+
+    while (!L.isValid()) {
+      S = PM->getParent(S);
+      L = S->getLocStart();
+    }
   }
 
   return L;
 }
 
-PathDiagnosticLocation::PathDiagnosticLocation(const Stmt *s,
-                                               const SourceManager &sm,
-                                               const LocationContext *lc)
-  : K(StmtK), S(s), D(0), SM(&sm), LC(lc)
-{
-  const ParentMap* PM = 0;
-  if (lc)
-    PM = &lc->getParentMap();
-
-  Loc = genLocation(PM);
-  Range = genRange(PM);
+PathDiagnosticLocation
+  PathDiagnosticLocation::createBegin(const Decl *D,
+                                      const SourceManager &SM) {
+  return PathDiagnosticLocation(D->getLocStart(), SM, SingleLocK);
 }
 
 PathDiagnosticLocation
-  PathDiagnosticLocation::createBeginStmt(const Stmt *S,
-                                          const SourceManager &SM,
-                                          const LocationContext *LC) {
-  return PathDiagnosticLocation(getValidSourceLocation(S, LC->getParentMap()),
+  PathDiagnosticLocation::createBegin(const Stmt *S,
+                                      const SourceManager &SM,
+                                      LocationOrAnalysisContext LAC) {
+  return PathDiagnosticLocation(getValidSourceLocation(S, LAC),
                                 SM, SingleLocK);
 }
 
@@ -169,6 +173,12 @@ PathDiagnosticLocation
   PathDiagnosticLocation::createOperatorLoc(const BinaryOperator *BO,
                                             const SourceManager &SM) {
   return PathDiagnosticLocation(BO->getOperatorLoc(), SM, SingleLocK);
+}
+
+PathDiagnosticLocation
+  PathDiagnosticLocation::createMemberLoc(const MemberExpr *ME,
+                                          const SourceManager &SM) {
+  return PathDiagnosticLocation(ME->getMemberLoc(), SM, SingleLocK);
 }
 
 PathDiagnosticLocation
@@ -255,7 +265,7 @@ PathDiagnosticLocation PathDiagnosticLocation::createSingleLocation(
 }
 
 FullSourceLoc
-  PathDiagnosticLocation::genLocation(const ParentMap *PM) const {
+  PathDiagnosticLocation::genLocation(LocationOrAnalysisContext LAC) const {
   assert(isValid());
   // Note that we want a 'switch' here so that the compiler can warn us in
   // case we add more cases.
@@ -264,7 +274,7 @@ FullSourceLoc
     case RangeK:
       break;
     case StmtK:
-      return FullSourceLoc(getValidSourceLocation(S, LC->getParentMap()),
+      return FullSourceLoc(getValidSourceLocation(S, LAC),
                            const_cast<SourceManager&>(*SM));
     case DeclK:
       return FullSourceLoc(D->getLocation(), const_cast<SourceManager&>(*SM));
@@ -274,7 +284,7 @@ FullSourceLoc
 }
 
 PathDiagnosticRange
-  PathDiagnosticLocation::genRange(const ParentMap *PM) const {
+  PathDiagnosticLocation::genRange(LocationOrAnalysisContext LAC) const {
   assert(isValid());
   // Note that we want a 'switch' here so that the compiler can warn us in
   // case we add more cases.
@@ -309,7 +319,7 @@ PathDiagnosticRange
         case Stmt::BinaryConditionalOperatorClass:
         case Stmt::ConditionalOperatorClass:
         case Stmt::ObjCForCollectionStmtClass: {
-          SourceLocation L = getValidSourceLocation(S, LC->getParentMap());
+          SourceLocation L = getValidSourceLocation(S, LAC);
           return SourceRange(L, L);
         }
       }
@@ -353,22 +363,9 @@ void PathDiagnosticLocation::flatten() {
 //===----------------------------------------------------------------------===//
 
 void PathDiagnosticLocation::Profile(llvm::FoldingSetNodeID &ID) const {
-  ID.AddInteger((unsigned) K);
-  switch (K) {
-    case RangeK:
-      ID.AddInteger(R.getBegin().getRawEncoding());
-      ID.AddInteger(R.getEnd().getRawEncoding());
-      break;      
-    case SingleLocK:
-      ID.AddInteger(R.getBegin().getRawEncoding());
-      break;
-    case StmtK:
-      ID.Add(S);
-      break;
-    case DeclK:
-      ID.Add(D);
-      break;
-  }
+  ID.AddInteger(Range.getBegin().getRawEncoding());
+  ID.AddInteger(Range.getEnd().getRawEncoding());
+  ID.AddInteger(Loc.getRawEncoding());
   return;
 }
 

@@ -16,6 +16,7 @@
 
 #include "clang/Basic/Diagnostic.h"
 #include "llvm/ADT/FoldingSet.h"
+#include "llvm/ADT/PointerUnion.h"
 #include <deque>
 #include <iterator>
 #include <string>
@@ -23,10 +24,12 @@
 
 namespace clang {
 
+class AnalysisContext;
 class BinaryOperator;
 class CompoundStmt;
 class Decl;
 class LocationContext;
+class MemberExpr;
 class ParentMap;
 class ProgramPoint;
 class SourceManager;
@@ -88,6 +91,9 @@ public:
   PathDiagnosticRange() : isPoint(false) {}
 };
 
+typedef llvm::PointerUnion<const LocationContext*, AnalysisContext*>
+                                                   LocationOrAnalysisContext;
+
 class PathDiagnosticLocation {
 private:
   enum Kind { RangeK, SingleLocK, StmtK, DeclK } K;
@@ -95,47 +101,65 @@ private:
   const Stmt *S;
   const Decl *D;
   const SourceManager *SM;
-  const LocationContext *LC;
   FullSourceLoc Loc;
   PathDiagnosticRange Range;
 
-  FullSourceLoc genLocation(const ParentMap *PM=0) const;
-  PathDiagnosticRange genRange(const ParentMap *PM=0) const;
+  PathDiagnosticLocation(SourceLocation L, const SourceManager &sm,
+                         Kind kind)
+    : K(kind), R(L, L), S(0), D(0), SM(&sm),
+      Loc(genLocation()), Range(genRange()) {
+  }
+  
+  FullSourceLoc
+    genLocation(LocationOrAnalysisContext LAC = (AnalysisContext*)0) const;
+  PathDiagnosticRange
+    genRange(LocationOrAnalysisContext LAC = (AnalysisContext*)0) const;
 
 public:
   PathDiagnosticLocation()
-    : K(SingleLocK), S(0), D(0), SM(0), LC(0) {
+    : K(SingleLocK), S(0), D(0), SM(0) {
   }
 
   PathDiagnosticLocation(FullSourceLoc L)
-    : K(SingleLocK), R(L, L), S(0), D(0), SM(&L.getManager()), LC(0),
-      Loc(genLocation()), Range(genRange()) {
-  }
-
-  PathDiagnosticLocation(SourceLocation L, const SourceManager &sm,
-                         Kind kind = SingleLocK)
-    : K(kind), R(L, L), S(0), D(0), SM(&sm), LC(0),
+    : K(SingleLocK), R(L, L), S(0), D(0), SM(&L.getManager()),
       Loc(genLocation()), Range(genRange()) {
   }
 
   PathDiagnosticLocation(const Stmt *s,
                          const SourceManager &sm,
-                         const LocationContext *lc);
+                         LocationOrAnalysisContext lac)
+    : K(StmtK), S(s), D(0), SM(&sm),
+      Loc(genLocation(lac)), Range(genRange(lac)) {}
+
 
   PathDiagnosticLocation(const Decl *d, const SourceManager &sm)
-    : K(DeclK), S(0), D(d), SM(&sm), LC(0),
+    : K(DeclK), S(0), D(d), SM(&sm),
       Loc(genLocation()), Range(genRange()) {
   }
 
-  // Create a location for the beginning of the statement.
-  static PathDiagnosticLocation createBeginStmt(const Stmt *S,
-                                                const SourceManager &SM,
-                                                const LocationContext *LC);
+  static PathDiagnosticLocation create(const Decl *D,
+                                       const SourceManager &SM) {
+    return PathDiagnosticLocation(D, SM);
+  }
+
+  /// Create a location for the beginning of the declaration.
+  static PathDiagnosticLocation createBegin(const Decl *D,
+                                            const SourceManager &SM);
+
+  /// Create a location for the beginning of the statement.
+  static PathDiagnosticLocation createBegin(const Stmt *S,
+                                            const SourceManager &SM,
+                                            const LocationOrAnalysisContext LAC);
 
   /// Create the location for the operator of the binary expression.
   /// Assumes the statement has a valid location.
   static PathDiagnosticLocation createOperatorLoc(const BinaryOperator *BO,
                                                   const SourceManager &SM);
+
+  /// For member expressions, return the location of the '.' or '->'.
+  /// Assumes the statement has a valid location.
+  static PathDiagnosticLocation createMemberLoc(const MemberExpr *ME,
+                                                const SourceManager &SM);
 
   /// Create a location for the beginning of the compound statement.
   /// Assumes the statement has a valid location.
@@ -171,7 +195,7 @@ public:
                                              const PathDiagnosticLocation &PDL);
 
   bool operator==(const PathDiagnosticLocation &X) const {
-    return K == X.K && R == X.R && S == X.S && D == X.D && LC == X.LC;
+    return K == X.K && R == X.R && S == X.S && D == X.D;
   }
 
   bool operator!=(const PathDiagnosticLocation &X) const {
@@ -202,7 +226,6 @@ public:
   void flatten();
 
   const SourceManager& getManager() const { assert(isValid()); return *SM; }
-  const LocationContext* getLocationContext() const { return LC; }
   
   void Profile(llvm::FoldingSetNodeID &ID) const;
 };
