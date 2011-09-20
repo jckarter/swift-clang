@@ -27,6 +27,7 @@ class BinaryOperator;
 class CompoundStmt;
 class Decl;
 class LocationContext;
+class ParentMap;
 class ProgramPoint;
 class SourceManager;
 class Stmt;
@@ -79,10 +80,12 @@ protected:
 
 class PathDiagnosticRange : public SourceRange {
 public:
-  const bool isPoint;
+  bool isPoint;
 
   PathDiagnosticRange(const SourceRange &R, bool isP = false)
     : SourceRange(R), isPoint(isP) {}
+
+  PathDiagnosticRange() : isPoint(false) {}
 };
 
 class PathDiagnosticLocation {
@@ -93,24 +96,36 @@ private:
   const Decl *D;
   const SourceManager *SM;
   const LocationContext *LC;
+  FullSourceLoc Loc;
+  PathDiagnosticRange Range;
+
+  FullSourceLoc genLocation(const ParentMap *PM=0) const;
+  PathDiagnosticRange genRange(const ParentMap *PM=0) const;
+
 public:
   PathDiagnosticLocation()
-    : K(SingleLocK), S(0), D(0), SM(0), LC(0) {}
+    : K(SingleLocK), S(0), D(0), SM(0), LC(0) {
+  }
 
   PathDiagnosticLocation(FullSourceLoc L)
-    : K(SingleLocK), R(L, L), S(0), D(0), SM(&L.getManager()), LC(0) {}
+    : K(SingleLocK), R(L, L), S(0), D(0), SM(&L.getManager()), LC(0),
+      Loc(genLocation()), Range(genRange()) {
+  }
 
   PathDiagnosticLocation(SourceLocation L, const SourceManager &sm,
                          Kind kind = SingleLocK)
-    : K(kind), R(L, L), S(0), D(0), SM(&sm), LC(0) {}
+    : K(kind), R(L, L), S(0), D(0), SM(&sm), LC(0),
+      Loc(genLocation()), Range(genRange()) {
+  }
 
   PathDiagnosticLocation(const Stmt *s,
                          const SourceManager &sm,
-                         const LocationContext *lc)
-    : K(StmtK), S(s), D(0), SM(&sm), LC(lc) {}
+                         const LocationContext *lc);
 
   PathDiagnosticLocation(const Decl *d, const SourceManager &sm)
-    : K(DeclK), S(0), D(d), SM(&sm), LC(0) {}
+    : K(DeclK), S(0), D(d), SM(&sm), LC(0),
+      Loc(genLocation()), Range(genRange()) {
+  }
 
   // Create a location for the beginning of the statement.
   static PathDiagnosticLocation createBeginStmt(const Stmt *S,
@@ -143,12 +158,17 @@ public:
                                                    const SourceManager &SM);
 
   /// Create a location corresponding to the given valid ExplodedNode.
-  PathDiagnosticLocation(const ProgramPoint& P, const SourceManager &SMng);
+  static PathDiagnosticLocation create(const ProgramPoint& P,
+                                       const SourceManager &SMng);
 
   /// Create a location corresponding to the next valid ExplodedNode as end
   /// of path location.
   static PathDiagnosticLocation createEndOfPath(const ExplodedNode* N,
                                                 const SourceManager &SM);
+
+  /// Convert the given location into a single kind location.
+  static PathDiagnosticLocation createSingleLocation(
+                                             const PathDiagnosticLocation &PDL);
 
   bool operator==(const PathDiagnosticLocation &X) const {
     return K == X.K && R == X.R && S == X.S && D == X.D && LC == X.LC;
@@ -162,8 +182,14 @@ public:
     return SM != 0;
   }
 
-  FullSourceLoc asLocation() const;
-  PathDiagnosticRange asRange() const;
+  FullSourceLoc asLocation() const {
+    return Loc;
+  }
+
+  PathDiagnosticRange asRange() const {
+    return Range;
+  }
+
   const Stmt *asStmt() const { assert(isValid()); return S; }
   const Decl *asDecl() const { assert(isValid()); return D; }
 
@@ -171,16 +197,6 @@ public:
 
   void invalidate() {
     *this = PathDiagnosticLocation();
-  }
-
-  /// Specify that the object represents a single location.
-  void setSingleLocKind() {
-    if (K == SingleLocK)
-      return;
-
-    SourceLocation L = asLocation();
-    K = SingleLocK;
-    R = SourceRange(L, L);
   }
 
   void flatten();
