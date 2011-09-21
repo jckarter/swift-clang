@@ -82,43 +82,6 @@ PathDiagnostic::PathDiagnostic(StringRef bugtype, StringRef desc,
     Desc(StripTrailingDots(desc)),
     Category(StripTrailingDots(category)) {}
 
-void PathDiagnosticClient::HandleDiagnostic(Diagnostic::Level DiagLevel,
-                                            const DiagnosticInfo &Info) {
-  // Default implementation (Warnings/errors count).
-  DiagnosticClient::HandleDiagnostic(DiagLevel, Info);
-
-  // Create a PathDiagnostic with a single piece.
-
-  PathDiagnostic* D = new PathDiagnostic();
-
-  const char *LevelStr;
-  switch (DiagLevel) {
-  default:
-  case Diagnostic::Ignored: assert(0 && "Invalid diagnostic type");
-  case Diagnostic::Note:    LevelStr = "note: "; break;
-  case Diagnostic::Warning: LevelStr = "warning: "; break;
-  case Diagnostic::Error:   LevelStr = "error: "; break;
-  case Diagnostic::Fatal:   LevelStr = "fatal error: "; break;
-  }
-
-  llvm::SmallString<100> StrC;
-  StrC += LevelStr;
-  Info.FormatDiagnostic(StrC);
-
-  PathDiagnosticPiece *P =
-    new PathDiagnosticEventPiece(FullSourceLoc(Info.getLocation(),
-                                               Info.getSourceManager()),
-                                 StrC.str());
-
-  for (unsigned i = 0, e = Info.getNumRanges(); i != e; ++i)
-    P->addRange(Info.getRange(i).getAsRange());
-  for (unsigned i = 0, e = Info.getNumFixItHints(); i != e; ++i)
-    P->addFixItHint(Info.getFixItHint(i));
-  D->push_front(P);
-
-  HandlePathDiagnostic(D);
-}
-
 void PathDiagnosticClient::HandlePathDiagnostic(const PathDiagnostic *D) {
   // For now this simply forwards to HandlePathDiagnosticImpl.  In the future
   // we can use this indirection to control for multi-threaded access to
@@ -265,7 +228,8 @@ PathDiagnosticLocation PathDiagnosticLocation::createSingleLocation(
 }
 
 FullSourceLoc
-  PathDiagnosticLocation::genLocation(LocationOrAnalysisContext LAC) const {
+  PathDiagnosticLocation::genLocation(SourceLocation L,
+                                      LocationOrAnalysisContext LAC) const {
   assert(isValid());
   // Note that we want a 'switch' here so that the compiler can warn us in
   // case we add more cases.
@@ -280,7 +244,7 @@ FullSourceLoc
       return FullSourceLoc(D->getLocation(), const_cast<SourceManager&>(*SM));
   }
 
-  return FullSourceLoc(R.getBegin(), const_cast<SourceManager&>(*SM));
+  return FullSourceLoc(L, const_cast<SourceManager&>(*SM));
 }
 
 PathDiagnosticRange
@@ -290,7 +254,7 @@ PathDiagnosticRange
   // case we add more cases.
   switch (K) {
     case SingleLocK:
-      return PathDiagnosticRange(R, true);
+      return PathDiagnosticRange(SourceRange(Loc,Loc), true);
     case RangeK:
       break;
     case StmtK: {
@@ -323,8 +287,10 @@ PathDiagnosticRange
           return SourceRange(L, L);
         }
       }
-
-      return S->getSourceRange();
+      SourceRange R = S->getSourceRange();
+      if (R.isValid())
+        return R;
+      break;  
     }
     case DeclK:
       if (const ObjCMethodDecl *MD = dyn_cast<ObjCMethodDecl>(D))
@@ -339,19 +305,16 @@ PathDiagnosticRange
       }
   }
 
-  return R;
+  return SourceRange(Loc,Loc);
 }
 
 void PathDiagnosticLocation::flatten() {
   if (K == StmtK) {
-    R = asRange();
     K = RangeK;
     S = 0;
     D = 0;
   }
   else if (K == DeclK) {
-    SourceLocation L = D->getLocation();
-    R = SourceRange(L, L);
     K = SingleLocK;
     S = 0;
     D = 0;
