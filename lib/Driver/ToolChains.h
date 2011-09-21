@@ -95,7 +95,8 @@ public:
   Darwin(const HostInfo &Host, const llvm::Triple& Triple);
   ~Darwin();
 
-  std::string ComputeEffectiveClangTriple(const ArgList &Args) const;
+  std::string ComputeEffectiveClangTriple(const ArgList &Args,
+                                          types::ID InputType) const;
 
   /// @name Darwin Specific Toolchain API
   /// {
@@ -268,6 +269,9 @@ public:
 
 /// DarwinClang - The Darwin toolchain used by Clang.
 class LLVM_LIBRARY_VISIBILITY DarwinClang : public Darwin {
+private:
+  void AddGCCLibexecPath(unsigned darwinVersion);
+
 public:
   DarwinClang(const HostInfo &Host, const llvm::Triple& Triple);
 
@@ -299,7 +303,8 @@ public:
   Darwin_Generic_GCC(const HostInfo &Host, const llvm::Triple& Triple)
     : Generic_GCC(Host, Triple) {}
 
-  std::string ComputeEffectiveClangTriple(const ArgList &Args) const;
+  std::string ComputeEffectiveClangTriple(const ArgList &Args,
+                                          types::ID InputType) const;
 
   virtual const char *GetDefaultRelocationModel() const { return "pic"; }
 };

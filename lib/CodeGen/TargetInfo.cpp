@@ -3181,9 +3181,10 @@ public:
 const unsigned MipsABIInfo::MinABIStackAlignInBytes;
 
 class MIPSTargetCodeGenInfo : public TargetCodeGenInfo {
+  unsigned SizeOfUnwindException;
 public:
-  MIPSTargetCodeGenInfo(CodeGenTypes &CGT)
-    : TargetCodeGenInfo(new MipsABIInfo(CGT)) {}
+  MIPSTargetCodeGenInfo(CodeGenTypes &CGT, unsigned SZ)
+    : TargetCodeGenInfo(new MipsABIInfo(CGT)), SizeOfUnwindException(SZ) {}
 
   int getDwarfEHStackPointer(CodeGen::CodeGenModule &CGM) const {
     return 29;
@@ -3193,7 +3194,7 @@ public:
                                llvm::Value *Address) const;
 
   unsigned getSizeOfUnwindException() const {
-    return 24;
+    return SizeOfUnwindException;
   }
 };
 }
@@ -3329,7 +3330,11 @@ const TargetCodeGenInfo &CodeGenModule::getTargetCodeGenInfo() {
 
   case llvm::Triple::mips:
   case llvm::Triple::mipsel:
-    return *(TheTargetCodeGenInfo = new MIPSTargetCodeGenInfo(Types));
+    return *(TheTargetCodeGenInfo = new MIPSTargetCodeGenInfo(Types, 24));
+
+  case llvm::Triple::mips64:
+  case llvm::Triple::mips64el:
+    return *(TheTargetCodeGenInfo = new MIPSTargetCodeGenInfo(Types, 32));
 
   case llvm::Triple::arm64:
     return *(TheTargetCodeGenInfo = new ARM64TargetCodeGenInfo(Types));
