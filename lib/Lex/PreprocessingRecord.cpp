@@ -145,10 +145,10 @@ unsigned PreprocessingRecord::findEndLocalPreprocessedEntity(
 }
 
 void PreprocessingRecord::addPreprocessedEntity(PreprocessedEntity *Entity) {
-  SourceLocation Loc = Entity->getSourceRange().getBegin();
+  assert(Entity);
   assert((PreprocessedEntities.empty() ||
-          !SourceMgr.isBeforeInTranslationUnit(Loc,
-                     PreprocessedEntities.back()->getSourceRange().getEnd())) &&
+       !SourceMgr.isBeforeInTranslationUnit(Entity->getSourceRange().getBegin(),
+                   PreprocessedEntities.back()->getSourceRange().getBegin())) &&
          "Adding a preprocessed entity that is before the previous one in TU");
   PreprocessedEntities.push_back(Entity);
 }
@@ -229,9 +229,7 @@ void PreprocessingRecord::MacroDefined(const Token &Id,
                                        const MacroInfo *MI) {
   SourceRange R(MI->getDefinitionLoc(), MI->getDefinitionEndLoc());
   MacroDefinition *Def
-      = new (*this) MacroDefinition(Id.getIdentifierInfo(),
-                                    MI->getDefinitionLoc(),
-                                    R);
+      = new (*this) MacroDefinition(Id.getIdentifierInfo(), R);
   addPreprocessedEntity(Def);
   MacroDefinitions[MI] = getPPEntityID(PreprocessedEntities.size()-1,
                                        /*isLoaded=*/false);

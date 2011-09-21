@@ -16,6 +16,7 @@
 
 #include "clang/Basic/Diagnostic.h"
 #include "llvm/ADT/FoldingSet.h"
+#include "llvm/ADT/PointerUnion.h"
 #include <deque>
 #include <iterator>
 #include <string>
@@ -23,10 +24,12 @@
 
 namespace clang {
 
+class AnalysisContext;
 class BinaryOperator;
 class CompoundStmt;
 class Decl;
 class LocationContext;
+class MemberExpr;
 class ParentMap;
 class ProgramPoint;
 class SourceManager;
@@ -42,7 +45,7 @@ class ExplodedNode;
 
 class PathDiagnostic;
 
-class PathDiagnosticClient : public DiagnosticClient  {
+class PathDiagnosticClient {
 public:
   PathDiagnosticClient() {}
 
@@ -57,8 +60,6 @@ public:
   
   virtual StringRef getName() const = 0;
   
-  virtual void HandleDiagnostic(Diagnostic::Level DiagLevel,
-                                const DiagnosticInfo &Info);
   void HandlePathDiagnostic(const PathDiagnostic* D);
 
   enum PathGenerationScheme { Minimal, Extensive };
@@ -88,54 +89,81 @@ public:
   PathDiagnosticRange() : isPoint(false) {}
 };
 
+typedef llvm::PointerUnion<const LocationContext*, AnalysisContext*>
+                                                   LocationOrAnalysisContext;
+
 class PathDiagnosticLocation {
 private:
   enum Kind { RangeK, SingleLocK, StmtK, DeclK } K;
-  SourceRange R;
   const Stmt *S;
   const Decl *D;
   const SourceManager *SM;
-  const LocationContext *LC;
   FullSourceLoc Loc;
   PathDiagnosticRange Range;
 
-  FullSourceLoc genLocation(const ParentMap *PM=0) const;
-  PathDiagnosticRange genRange(const ParentMap *PM=0) const;
+  PathDiagnosticLocation(SourceLocation L, const SourceManager &sm,
+                         Kind kind)
+    : K(kind), S(0), D(0), SM(&sm),
+      Loc(genLocation(L)), Range(genRange()) {
+    assert(Loc.isValid());
+    assert(Range.isValid());
+  }
+
+  FullSourceLoc
+    genLocation(SourceLocation L = SourceLocation(),
+                LocationOrAnalysisContext LAC = (AnalysisContext*)0) const;
+
+  PathDiagnosticRange
+    genRange(LocationOrAnalysisContext LAC = (AnalysisContext*)0) const;
 
 public:
+  /// Create an invalid location.
   PathDiagnosticLocation()
-    : K(SingleLocK), S(0), D(0), SM(0), LC(0) {
-  }
+    : K(SingleLocK), S(0), D(0), SM(0) {}
 
-  PathDiagnosticLocation(FullSourceLoc L)
-    : K(SingleLocK), R(L, L), S(0), D(0), SM(&L.getManager()), LC(0),
-      Loc(genLocation()), Range(genRange()) {
-  }
-
-  PathDiagnosticLocation(SourceLocation L, const SourceManager &sm,
-                         Kind kind = SingleLocK)
-    : K(kind), R(L, L), S(0), D(0), SM(&sm), LC(0),
-      Loc(genLocation()), Range(genRange()) {
-  }
-
+  /// Create a location corresponding to the given statement.
   PathDiagnosticLocation(const Stmt *s,
                          const SourceManager &sm,
-                         const LocationContext *lc);
-
-  PathDiagnosticLocation(const Decl *d, const SourceManager &sm)
-    : K(DeclK), S(0), D(d), SM(&sm), LC(0),
-      Loc(genLocation()), Range(genRange()) {
+                         LocationOrAnalysisContext lac)
+    : K(StmtK), S(s), D(0), SM(&sm),
+      Loc(genLocation(SourceLocation(), lac)),
+      Range(genRange(lac)) {
+    assert(Loc.isValid());
+    assert(Range.isValid());
   }
 
-  // Create a location for the beginning of the statement.
-  static PathDiagnosticLocation createBeginStmt(const Stmt *S,
-                                                const SourceManager &SM,
-                                                const LocationContext *LC);
+  /// Create a location corresponding to the given declaration.
+  PathDiagnosticLocation(const Decl *d, const SourceManager &sm)
+    : K(DeclK), S(0), D(d), SM(&sm),
+      Loc(genLocation()), Range(genRange()) {
+    assert(Loc.isValid());
+    assert(Range.isValid());
+  }
+
+  /// Create a location corresponding to the given declaration.
+  static PathDiagnosticLocation create(const Decl *D,
+                                       const SourceManager &SM) {
+    return PathDiagnosticLocation(D, SM);
+  }
+
+  /// Create a location for the beginning of the declaration.
+  static PathDiagnosticLocation createBegin(const Decl *D,
+                                            const SourceManager &SM);
+
+  /// Create a location for the beginning of the statement.
+  static PathDiagnosticLocation createBegin(const Stmt *S,
+                                            const SourceManager &SM,
+                                            const LocationOrAnalysisContext LAC);
 
   /// Create the location for the operator of the binary expression.
   /// Assumes the statement has a valid location.
   static PathDiagnosticLocation createOperatorLoc(const BinaryOperator *BO,
                                                   const SourceManager &SM);
+
+  /// For member expressions, return the location of the '.' or '->'.
+  /// Assumes the statement has a valid location.
+  static PathDiagnosticLocation createMemberLoc(const MemberExpr *ME,
+                                                const SourceManager &SM);
 
   /// Create a location for the beginning of the compound statement.
   /// Assumes the statement has a valid location.
@@ -171,7 +199,7 @@ public:
                                              const PathDiagnosticLocation &PDL);
 
   bool operator==(const PathDiagnosticLocation &X) const {
-    return K == X.K && R == X.R && S == X.S && D == X.D && LC == X.LC;
+    return K == X.K && Loc == X.Loc && Range == X.Range;
   }
 
   bool operator!=(const PathDiagnosticLocation &X) const {
@@ -202,7 +230,6 @@ public:
   void flatten();
 
   const SourceManager& getManager() const { assert(isValid()); return *SM; }
-  const LocationContext* getLocationContext() const { return LC; }
   
   void Profile(llvm::FoldingSetNodeID &ID) const;
 };
@@ -269,9 +296,15 @@ public:
 
   Kind getKind() const { return kind; }
 
-  void addRange(SourceRange R) { ranges.push_back(R); }
+  void addRange(SourceRange R) {
+    if (!R.isValid())
+      return;
+    ranges.push_back(R);
+  }
 
   void addRange(SourceLocation B, SourceLocation E) {
+    if (!B.isValid() || !E.isValid())
+      return;
     ranges.push_back(SourceRange(B,E));
   }
 
@@ -316,7 +349,7 @@ public:
                           PathDiagnosticPiece::Kind k,
                           bool addPosRange = true)
   : PathDiagnosticPiece(s, k), Pos(pos) {
-    assert(Pos.asLocation().isValid() &&
+    assert(Pos.isValid() && Pos.asLocation().isValid() &&
            "PathDiagnosticSpotPiece's must have a valid location.");
     if (addPosRange && Pos.hasRange()) addRange(Pos.asRange());
   }
