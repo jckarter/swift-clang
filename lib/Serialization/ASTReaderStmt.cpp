@@ -801,7 +801,17 @@ void ASTStmtReader::VisitObjCArrayLiteral(ObjCArrayLiteral *E) {
 }
 
 void ASTStmtReader::VisitObjCDictionaryLiteral(ObjCDictionaryLiteral *E) {
-    // TBD
+    VisitExpr(E);
+    E->NumElements = Record[Idx++];
+    E->KeyValues = 
+        new (Reader.getContext()) 
+          ObjCDictionaryLiteral::KeyValuePair[E->NumElements];
+    for (unsigned I = 0, N = E->NumElements; I != N; ++I) {
+      E->KeyValues[I].Key = Reader.ReadSubExpr();
+      E->KeyValues[I].Value = Reader.ReadSubExpr();
+    }
+    E->DictWithObjectsMethod = ReadDeclAs<ObjCMethodDecl>(Record, Idx);
+    E->Range = ReadSourceRange(Record, Idx);
 }
 
 void ASTStmtReader::VisitObjCEncodeExpr(ObjCEncodeExpr *E) {

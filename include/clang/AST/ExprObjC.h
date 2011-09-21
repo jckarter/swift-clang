@@ -160,22 +160,30 @@ public:
 /// ObjCDictionaryLiteral - AST node to represent objective-c dictionary literals;
 /// as in:  @{@"name" : NSUserName(), @"date" : [NSDate date] };
 class ObjCDictionaryLiteral : public Expr {
+  typedef class KeyValuePair {
+  public:
+    Expr *Key;
+    Expr *Value;
+  } KeyValuePair;
   unsigned NumElements;
-  // FIXME. This will leak memory change it to arrays.
-  SmallVector<std::pair<Expr *, Expr*>, 4> KeyValues;
+  KeyValuePair *KeyValues;
   ObjCMethodDecl *DictWithObjectsMethod;
   SourceRange Range;
     
 public:
-  ObjCDictionaryLiteral(SmallVectorImpl< std::pair<Expr *, Expr*> >& VK, 
+  ObjCDictionaryLiteral(ASTContext &C,
+                        ArrayRef< std::pair<Expr *, Expr*> > VK, 
                         QualType T, ObjCMethodDecl *method,
                         SourceRange SR)
   : Expr(ObjCDictionaryLiteralClass, T, VK_RValue, OK_Ordinary, false, false,
          false, false),
   DictWithObjectsMethod(method), Range(SR) {
     NumElements = VK.size();
-    for (unsigned i = 0; i < NumElements; i++)
-      KeyValues.push_back(VK[i]);
+    KeyValues = new (C) KeyValuePair[NumElements];
+    for (unsigned i = 0; i < NumElements; i++) {
+      KeyValues[i].Key = VK[i].first;
+      KeyValues[i].Value = VK[i].second; 
+    }
   }
     
   explicit ObjCDictionaryLiteral(EmptyShell Empty)
@@ -186,12 +194,12 @@ public:
   unsigned getNumElements() const { return NumElements; }
   unsigned getNumElements() { return NumElements; }
 
-  std::pair<Expr *, Expr*> &getKeyValueElement(unsigned Index) {
+  KeyValuePair &getKeyValueElement(unsigned Index) {
     assert((Index < NumElements) && "Arg access out of range!");
     return KeyValues[Index];
   }
 
-  const std::pair<Expr *, Expr*> &getKeyValueElement(unsigned Index) const {
+  KeyValuePair &getKeyValueElement(unsigned Index) const {
     assert((Index < NumElements) && "Arg access out of range!");
     return KeyValues[Index];
   }
@@ -207,7 +215,9 @@ public:
   static bool classof(const ObjCDictionaryLiteral *) { return true; }
     
   // Iterators
-  child_range children() { return child_range(); }
+  child_range children() { 
+    return child_range();
+  }
     
   friend class ASTStmtReader;
 };

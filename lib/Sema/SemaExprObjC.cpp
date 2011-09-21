@@ -237,7 +237,7 @@ ExprResult Sema::BuildObjCArrayLiteral(SourceRange SR, MultiExprArg Elements) {
 }
 
 ExprResult Sema::BuildObjCDictionaryLiteral(SourceRange SR, 
-                   SmallVectorImpl< std::pair<Expr *, Expr*> >& Elements) {
+                   ArrayRef< std::pair<Expr *, Expr*> > Elements) {
   IdentifierInfo *KeyIdents[] = {
     &Context.Idents.get("dictionaryWithObjects"),
     &Context.Idents.get("forKeys"),
@@ -262,7 +262,7 @@ ExprResult Sema::BuildObjCDictionaryLiteral(SourceRange SR,
     return ExprError();
   }
   
-  return new (Context) ObjCDictionaryLiteral(Elements, Ty, 
+  return new (Context) ObjCDictionaryLiteral(Context, Elements, Ty, 
                                              DictWithObjectsMethod, SR);
 }
 

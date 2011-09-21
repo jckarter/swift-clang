@@ -3334,7 +3334,7 @@ public:
   ExprResult BuildObjCArrayLiteral(SourceRange SR, MultiExprArg Elements);
   void CheckObjCCollectionLiteralElement(ExprResult Res);
   ExprResult BuildObjCDictionaryLiteral(SourceRange SR, 
-               SmallVectorImpl< std::pair<Expr *, Expr*> >& Elements);
+               ArrayRef< std::pair<Expr *, Expr*> >Elements);
  
   ExprResult BuildObjCEncodeExpression(SourceLocation AtLoc,
                                   TypeSourceInfo *EncodedTypeInfo,
