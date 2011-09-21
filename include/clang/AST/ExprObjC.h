@@ -157,30 +157,57 @@ public:
   friend class ASTStmtReader;
 };
 
+/// ObjCDictionaryLiteral - AST node to represent objective-c dictionary literals;
+/// as in:  @{@"name" : NSUserName(), @"date" : [NSDate date] };
 class ObjCDictionaryLiteral : public Expr {
-  SmallVector<Expr *, 5> ValuesKeys;  // interleaved Value, Key, ..., nil terminated
+  unsigned NumElements;
+  // FIXME. This will leak memory change it to arrays.
+  SmallVector<std::pair<Expr *, Expr*>, 4> KeyValues;
+  ObjCMethodDecl *DictWithObjectsMethod;
   SourceRange Range;
+    
 public:
-  ObjCDictionaryLiteral(MultiExprArg VK, QualType T, SourceRange SR)
+  ObjCDictionaryLiteral(SmallVectorImpl< std::pair<Expr *, Expr*> >& VK, 
+                        QualType T, ObjCMethodDecl *method,
+                        SourceRange SR)
   : Expr(ObjCDictionaryLiteralClass, T, VK_RValue, OK_Ordinary, false, false,
          false, false),
-  ValuesKeys(VK.release(), VK.get() + VK.size()), Range(SR) {}
+  DictWithObjectsMethod(method), Range(SR) {
+    NumElements = VK.size();
+    for (unsigned i = 0; i < NumElements; i++)
+      KeyValues.push_back(VK[i]);
+  }
+    
   explicit ObjCDictionaryLiteral(EmptyShell Empty)
   : Expr(ObjCDictionaryLiteralClass, Empty) {}
   
+  /// getNumElements - Return number of elements of objective-c dictionary 
+  /// literal.
+  unsigned getNumElements() const { return NumElements; }
+  unsigned getNumElements() { return NumElements; }
+
+  std::pair<Expr *, Expr*> &getKeyValueElement(unsigned Index) {
+    assert((Index < NumElements) && "Arg access out of range!");
+    return KeyValues[Index];
+  }
+
+  const std::pair<Expr *, Expr*> &getKeyValueElement(unsigned Index) const {
+    assert((Index < NumElements) && "Arg access out of range!");
+    return KeyValues[Index];
+  }
+    
+  const ObjCMethodDecl *getDictWithObjectsMethod() const
+    { return DictWithObjectsMethod; }
+
   SourceRange getSourceRange() const { return Range; }
   
   static bool classof(const Stmt *T) {
       return T->getStmtClass() == ObjCDictionaryLiteralClass;
   }
   static bool classof(const ObjCDictionaryLiteral *) { return true; }
-  
+    
   // Iterators
-  child_range children() { return child_range((Stmt **)ValuesKeys.begin(), (Stmt **)ValuesKeys.end()); }
-
-  std::pair<ConstExprIterator,ConstExprIterator> getValuesKeys() const {
-    return std::pair<ConstExprIterator,ConstExprIterator>((Stmt **)ValuesKeys.begin(), (Stmt **)ValuesKeys.end());
-  }
+  child_range children() { return child_range(); }
     
   friend class ASTStmtReader;
 };

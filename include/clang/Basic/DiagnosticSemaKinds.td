@@ -1287,12 +1287,18 @@ def err_undeclared_nsnumber : Error<
   "NSNumber must be available for use of objective-c literals">;
 def err_undeclared_nsarray : Error<
   "NSArray must be available for use of objective-c array literals">;
+def err_undeclared_nsdictionary : Error<
+  "NSDictionary must be available for use of objective-c dictionary "
+  "literals">;
 def err_undeclared_arraywithobjects : Error<
   "declaration of %0 is missing in NSArray class">;
+def err_undeclared_dictwithobjects : Error<
+  "declaration of %0 is missing in NSDictionary class">;
 def err_undeclared_nsnumber_method : Error<
   "declaration of %0 is missing in NSNumber class">;
-def err_invalid_nsarray_element : Error<
-  "elements of objective-c array literals must be objects">;
+def err_invalid_collection_element : Error<
+  "members of objective-c collection literals "
+  "must be objects">;
 def err_attribute_section_invalid_for_target : Error<
   "argument to 'section' attribute is not valid for this target: %0">;
 def err_attribute_section_local_variable : Error<

@@ -203,10 +203,10 @@ ExprResult Sema::BuildObjCNumericLiteral(SourceLocation AtLoc, Expr *Number) {
   return new (Context) ObjCNumericLiteral(Number, Ty, Method, AtLoc);
 }
 
-void Sema::CheckObjCArrayLiteralElement(ExprResult Res) {
+void Sema::CheckObjCCollectionLiteralElement(ExprResult Res) {
   Expr *Exp = Res.take();
   if (!Exp->getType()->isObjCObjectPointerType())
-    Diag(Exp->getLocStart(), diag::err_invalid_nsarray_element);
+    Diag(Exp->getLocStart(), diag::err_invalid_collection_element);
 }
 
 ExprResult Sema::BuildObjCArrayLiteral(SourceRange SR, MultiExprArg Elements) {
@@ -236,21 +236,34 @@ ExprResult Sema::BuildObjCArrayLiteral(SourceRange SR, MultiExprArg Elements) {
                                         Ty, ArrayWithObjectsMethod, SR);
 }
 
-ExprResult Sema::BuildObjCDictionaryLiteral(SourceRange SR, MultiExprArg Elements) {
-  // the type should be NSDictionary *.
+ExprResult Sema::BuildObjCDictionaryLiteral(SourceRange SR, 
+                   SmallVectorImpl< std::pair<Expr *, Expr*> >& Elements) {
+  IdentifierInfo *KeyIdents[] = {
+    &Context.Idents.get("dictionaryWithObjects"),
+    &Context.Idents.get("forKeys"),
+    &Context.Idents.get("count")
+  };
+    
   IdentifierInfo *NSIdent = &Context.Idents.get("NSDictionary");
   NamedDecl *IF = LookupSingleName(TUScope, NSIdent, SR.getBegin(),
                                    LookupOrdinaryName);
   QualType Ty;
+  ObjCMethodDecl *DictWithObjectsMethod = 0;
   if (ObjCInterfaceDecl *DictIF = dyn_cast_or_null<ObjCInterfaceDecl>(IF)) {
     Ty = Context.getObjCObjectPointerType(Context.getObjCInterfaceType(DictIF));
+    Selector Sel = Context.Selectors.getSelector(3, KeyIdents);
+    DictWithObjectsMethod = DictIF->lookupClassMethod(Sel);
+    if (!DictWithObjectsMethod) {
+      Diag(SR.getBegin(), diag::err_undeclared_dictwithobjects) << Sel;
+      return ExprError();
+    }
   } else {
-    // If there is no NSDictionary interface defined then treat literal
-    // dictionary as untyped object and let the runtime figure it out later.
-    Ty = Context.getObjCIdType();
+    Diag(SR.getBegin(), diag::err_undeclared_nsdictionary);
+    return ExprError();
   }
   
-  return new (Context) ObjCDictionaryLiteral(Elements, Ty, SR);
+  return new (Context) ObjCDictionaryLiteral(Elements, Ty, 
+                                             DictWithObjectsMethod, SR);
 }
 
 ExprResult Sema::BuildObjCEncodeExpression(SourceLocation AtLoc,

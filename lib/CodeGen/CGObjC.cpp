@@ -176,6 +176,7 @@ llvm::Value *CodeGenFunction::EmitObjCArrayLiteral(const ObjCArrayLiteral *E) {
 }
 
 llvm::Value *CodeGenFunction::EmitObjCDictionaryLiteral(const ObjCDictionaryLiteral *E) {
+#if 0
   // TBD add CGObjCRuntime::GenerateConstantArray(). For now always do these at runtime.
   ASTContext &Context = CGM.getContext();
   Selector Sel = Context.Selectors.getUnarySelector(&Context.Idents.get(StringRef("dictionaryWithObjectsAndKeys")));
@@ -199,6 +200,8 @@ llvm::Value *CodeGenFunction::EmitObjCDictionaryLiteral(const ObjCDictionaryLite
                                               Receiver, Args, Class,
                                               NoMethod);
   return AdjustRelatedResultType(*this, E, NoMethod, result).getScalarVal();
+#endif
+  return 0;
 }
 
 /// Emit a selector.

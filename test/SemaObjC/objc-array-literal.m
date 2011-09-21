@@ -34,5 +34,5 @@ int main() {
   for (id string in array)
     NSLog(@"%@\n", string);
 
-  NSArray *array1 = @["Forgot"]; // expected-error {{elements of objective-c array literals must be objects}}
+  NSArray *array1 = @["Forgot"]; // expected-error {{members of objective-c collection literals must be objects}}
 }

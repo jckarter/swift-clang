@@ -2418,7 +2418,7 @@ ExprResult Parser::ParseObjCArrayLiteral(SourceLocation AtLoc) {
       SkipUntil(tok::r_square);
       return move(Res);
     }
-    Actions.CheckObjCArrayLiteralElement(Res);
+    Actions.CheckObjCCollectionLiteralElement(Res);
     // We have a valid expression. Collect it in a vector so we can
     // build the argument list.
     ElementExprs.push_back(Res.release());
@@ -2434,10 +2434,8 @@ ExprResult Parser::ParseObjCArrayLiteral(SourceLocation AtLoc) {
 }
 
 ExprResult Parser::ParseObjCDictionaryLiteral(SourceLocation AtLoc) {
-  SmallVector<SourceLocation, 4> ElementLocs;
-  ExprVector KeyValueExprs(Actions);                   // array elements.
-  ElementLocs.push_back(ConsumeBrace());              // consume the l_square.
-  
+  SmallVector<std::pair<Expr *, Expr*>, 4> KeyValueExprs; // array elements.
+  ConsumeBrace(); // consume the l_square.
   while (Tok.isNot(tok::r_brace)) {
     // Parse the comma separated key : value expressions.
     ExprResult KeyExpr(ParseAssignmentExpression());
@@ -2448,7 +2446,7 @@ ExprResult Parser::ParseObjCDictionaryLiteral(SourceLocation AtLoc) {
       SkipUntil(tok::r_brace);
       return move(KeyExpr);
     }
-    
+    Actions.CheckObjCCollectionLiteralElement(KeyExpr);
     if (Tok.is(tok::colon)) {
       ConsumeToken();
     } else {
@@ -2463,26 +2461,22 @@ ExprResult Parser::ParseObjCDictionaryLiteral(SourceLocation AtLoc) {
       SkipUntil(tok::r_brace);
       return move(ValueExpr);
     }
-
+     Actions.CheckObjCCollectionLiteralElement(ValueExpr);
     // We have a valid expression. Collect it in a vector so we can
     // build the argument list.
-    KeyValueExprs.push_back(ValueExpr.release());
-    KeyValueExprs.push_back(KeyExpr.release());
+    KeyValueExprs.push_back(std::make_pair(KeyExpr.take(), 
+                                           ValueExpr.take()));
     
-    if (Tok.is(tok::comma)) {
-      ElementLocs.push_back(ConsumeToken()); // Eat the ','.
-    } else if (Tok.isNot(tok::r_brace)) {
+    if (Tok.is(tok::comma))
+      ConsumeToken(); // Eat the ','.
+    else if (Tok.isNot(tok::r_brace))
       return ExprError(Diag(Tok, diag::err_expected_rbrace_or_comma));
-    }
   }
   SourceLocation EndLoc = ConsumeBrace();
   
   // Create the ObjCDictionaryLiteral.
-  ASTContext &Context = Actions.Context;
-  KeyValueExprs.push_back(new (Context) GNUNullExpr(Context.VoidPtrTy, EndLoc));
-  MultiExprArg Args(Actions, KeyValueExprs.take(), KeyValueExprs.size());
   return Owned(Actions.BuildObjCDictionaryLiteral(SourceRange(AtLoc, EndLoc),
-                                                  Args));
+                                                  KeyValueExprs));
 }
 
 ///    objc-encode-expression:

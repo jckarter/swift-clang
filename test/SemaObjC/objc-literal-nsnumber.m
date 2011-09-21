@@ -16,3 +16,29 @@ int main() {
   NSNumber *noNumber = @__yes; // expected-error {{declaration of 'numberWithBool:' is missing in NSNumber class}}
   NSNumber * NInt = @1000;
 }
+
+// Dictionary test
+@class NSDictionary;
+
+NSDictionary *err() {
+  return @{@"name" : @"value"}; // expected-error {{declaration of 'dictionaryWithObjects:forKeys:count:' is missing in NSDictionary class}}
+}
+
+@interface NSDate
++ (NSDate *) date;
+@end
+
+@interface NSDictionary
++ (id)dictionaryWithObjects:(const id [])objects forKeys:(const id [])keys count:(NSUInteger)cnt;
+@end
+
+id NSUserName();
+
+int Int();
+
+NSDictionary * warn() {
+
+NSDictionary *dictionary = @{@"name" : NSUserName(),
+                             @"date" : [NSDate date] };
+return @{@"name" : Int()}; // expected-error {{members of objective-c collection literals must be objects}}
+}
