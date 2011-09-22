@@ -1121,6 +1121,30 @@ Sema::ActOnCXXMemberDeclarator(Scope *S, AccessSpecifier AS, Declarator &D,
   if (isInstField) {
     CXXScopeSpec &SS = D.getCXXScopeSpec();
     
+    // FIXME: Check that the name is an identifier!
+    IdentifierInfo *II = Name.getAsIdentifierInfo();
+
+    // Member field could not be with "template" keyword.
+    // So TemplateParameterLists should be empty in this case.
+    if (TemplateParameterLists.size()) {
+      TemplateParameterList* TemplateParams = TemplateParameterLists.get()[0];
+      if (TemplateParams->size()) {
+        // There is no such thing as a member field template.
+        Diag(D.getIdentifierLoc(), diag::err_template_member)
+            << II
+            << SourceRange(TemplateParams->getTemplateLoc(),
+                TemplateParams->getRAngleLoc());
+      } else {
+        // There is an extraneous 'template<>' for this member.
+        Diag(TemplateParams->getTemplateLoc(),
+            diag::err_template_member_noparams)
+            << II
+            << SourceRange(TemplateParams->getTemplateLoc(),
+                TemplateParams->getRAngleLoc());
+      }
+      return 0;
+    }
+
     if (SS.isSet() && !SS.isInvalid()) {
       // The user provided a superfluous scope specifier inside a class
       // definition:
@@ -1138,9 +1162,7 @@ Sema::ActOnCXXMemberDeclarator(Scope *S, AccessSpecifier AS, Declarator &D,
        
       SS.clear();
     }
-    
-    // FIXME: Check for template parameters!
-    // FIXME: Check that the name is an identifier!
+
     Member = HandleField(S, cast<CXXRecordDecl>(CurContext), Loc, D, BitWidth,
                          HasDeferredInit, AS);
     assert(Member && "HandleField never returns null");
@@ -4630,10 +4652,10 @@ void Sema::ActOnFinishCXXMemberSpecification(Scope* S, SourceLocation RLoc,
 
   AdjustDeclIfTemplate(TagDecl);
 
-  ActOnFields(S, RLoc, TagDecl,
+  ActOnFields(S, RLoc, TagDecl, llvm::makeArrayRef(
               // strict aliasing violation!
               reinterpret_cast<Decl**>(FieldCollector->getCurFields()),
-              FieldCollector->getCurNumFields(), LBrac, RBrac, AttrList);
+              FieldCollector->getCurNumFields()), LBrac, RBrac, AttrList);
 
   CheckCompletedCXXClass(
                         dyn_cast_or_null<CXXRecordDecl>(TagDecl));
@@ -6813,7 +6835,7 @@ void Sema::DeclareInheritedConstructors(CXXRecordDecl *ClassDecl) {
                                                    /*TInfo=*/0, SC_None,
                                                    SC_None, /*DefaultArg=*/0));
         }
-        NewCtor->setParams(ParamDecls.data(), ParamDecls.size());
+        NewCtor->setParams(ParamDecls);
         NewCtor->setInheritedConstructor(BaseCtor);
 
         PushOnScopeChains(NewCtor, S, false);
@@ -7331,7 +7353,7 @@ CXXMethodDecl *Sema::DeclareImplicitCopyAssignment(CXXRecordDecl *ClassDecl) {
                                                ArgType, /*TInfo=*/0,
                                                SC_None,
                                                SC_None, 0);
-  CopyAssignment->setParams(&FromParam, 1);
+  CopyAssignment->setParams(FromParam);
   
   // Note that we have added this copy-assignment operator.
   ++ASTContext::NumImplicitCopyAssignmentOperatorsDeclared;
@@ -7746,7 +7768,7 @@ CXXMethodDecl *Sema::DeclareImplicitMoveAssignment(CXXRecordDecl *ClassDecl) {
                                                ArgType, /*TInfo=*/0,
                                                SC_None,
                                                SC_None, 0);
-  MoveAssignment->setParams(&FromParam, 1);
+  MoveAssignment->setParams(FromParam);
 
   // Note that we have added this copy-assignment operator.
   ++ASTContext::NumImplicitMoveAssignmentOperatorsDeclared;
@@ -8237,7 +8259,7 @@ CXXConstructorDecl *Sema::DeclareImplicitCopyConstructor(
                                                ArgType, /*TInfo=*/0,
                                                SC_None,
                                                SC_None, 0);
-  CopyConstructor->setParams(&FromParam, 1);
+  CopyConstructor->setParams(FromParam);
 
   if (Scope *S = getScopeForContext(ClassDecl))
     PushOnScopeChains(CopyConstructor, S, false);
@@ -8394,7 +8416,7 @@ CXXConstructorDecl *Sema::DeclareImplicitMoveConstructor(
                                                ArgType, /*TInfo=*/0,
                                                SC_None,
                                                SC_None, 0);
-  MoveConstructor->setParams(&FromParam, 1);
+  MoveConstructor->setParams(FromParam);
 
   // C++0x [class.copy]p9:
   //   If the definition of a class X does not explicitly declare a move
