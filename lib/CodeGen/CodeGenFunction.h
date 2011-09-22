@@ -2100,6 +2100,8 @@ public:
   llvm::Value *EmitObjCNumericLiteral(const ObjCNumericLiteral *E);
   llvm::Value *EmitObjCArrayLiteral(const ObjCArrayLiteral *E);
   llvm::Value *EmitObjCDictionaryLiteral(const ObjCDictionaryLiteral *E);
+  llvm::Value *EmitObjCCollectionLiteral(const Expr *E,
+                                const ObjCMethodDecl *MethodWithObjects);
   llvm::Value *EmitObjCSelectorExpr(const ObjCSelectorExpr *E);
   RValue EmitObjCMessageExpr(const ObjCMessageExpr *E,
                              ReturnValueSlot Return = ReturnValueSlot());

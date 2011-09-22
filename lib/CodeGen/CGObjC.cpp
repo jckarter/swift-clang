@@ -88,116 +88,38 @@ llvm::Value *CodeGenFunction::EmitObjCNumericLiteral(const ObjCNumericLiteral *E
   return AdjustRelatedResultType(*this, E, Method, result).getScalarVal();
 }
 
-llvm::Value *CodeGenFunction::EmitObjCArrayLiteral(const ObjCArrayLiteral *E) {
-  ASTContext &Context = CGM.getContext();
-  const ObjCMethodDecl *ArrayWithObjectsMethod = 
-    E->getArrayWithObjectsMethod();
-  assert(ArrayWithObjectsMethod && "ArrayWithObjectsMethod is null");
-  Selector Sel = ArrayWithObjectsMethod->getSelector();
-  
-  // Generate a reference to the class pointer, which will be the receiver.
-  QualType ResultType = E->getType(); // should be NSArray *
-  const ObjCObjectPointerType *InterfacePointerType = 
-    ResultType->getAsObjCInterfacePointerType();
-  ObjCInterfaceDecl *Class = InterfacePointerType->getObjectType()->getInterface();
-  CGObjCRuntime &Runtime = CGM.getObjCRuntime();
-  llvm::Value *Receiver = Runtime.GetClass(Builder, Class);
-  
-  // Generate the argument list.
-  CallArgList Args;
-  llvm::Type *ObjectPtrTy =  CGM.getTypes().ConvertType(Context.getObjCIdType());
-  llvm::ArrayType *AT = llvm::ArrayType::get(ObjectPtrTy, E->getNumElements());
-  llvm::AllocaInst *Alloc = CreateTempAlloca(AT);
-  Alloc->setAlignment(CGM.getTargetData().getABITypeAlignment(ObjectPtrTy));
-  // for (unsigned i = 0; i < num_elements; i++) Alloc[i] = element[i];
-  llvm::Type *SizeTy = ConvertType(getContext().getSizeType());
-  llvm::Value *IndexVar = CreateTempAlloca(SizeTy, "object.index");
-  // Initialize this index variable to zero.
-  llvm::Value* Zero = llvm::Constant::getNullValue(SizeTy);
-  Builder.CreateStore(Zero, IndexVar);
-  llvm::BasicBlock *CondBlock = createBasicBlock("for.cond");
-  llvm::BasicBlock *AfterFor = createBasicBlock("for.end");
-    
-  EmitBlock(CondBlock);
-  llvm::BasicBlock *ForBody = createBasicBlock("for.body");
-  // Generate: if (i < num_elements) fall to the loop body,
-  // otherwise, go to the block after the for-loop.
-  uint64_t NumElements = E->getNumElements();
-  llvm::Value *Counter = Builder.CreateLoad(IndexVar);
-  llvm::Value *NumElementsPtr =
-    llvm::ConstantInt::get(Counter->getType(), NumElements);
-  llvm::Value *IsLess = 
-    Builder.CreateICmpULT(Counter, NumElementsPtr, "isless");
-    
-  // If the condition is true, execute the body.
-  Builder.CreateCondBr(IsLess, ForBody, AfterFor);
-    
-  EmitBlock(ForBody);
-  llvm::BasicBlock *ContinueBlock = createBasicBlock("for.inc");
-  llvm::Value *DeclPtr = Alloc;
-  ///  Body is here.
-  for (uint64_t i = 0; i < NumElements; i++) {
-    const Expr *Rhs = E->getElement(i);  
-    llvm::Value* rhsVal = EmitAnyExpr(Rhs).getScalarVal();
-    rhsVal = Builder.CreateBitCast(rhsVal, ObjectPtrTy);
-    Builder.CreateStore(rhsVal, Builder.CreateStructGEP(DeclPtr, i));
-  }
-    
-  EmitBlock(ContinueBlock);
-    
-  // Emit the increment of the loop counter.
-  llvm::Value *NextVal = llvm::ConstantInt::get(Counter->getType(), 1);
-  Counter = Builder.CreateLoad(IndexVar);
-  NextVal = Builder.CreateAdd(Counter, NextVal, "inc");
-  Builder.CreateStore(NextVal, IndexVar);
-    
-  // Finally, branch back up to the condition for the next iteration.
-  EmitBranch(CondBlock);
-    
-  // Emit the fall-through block.
-  EmitBlock(AfterFor, true);
-  
-  ObjCMethodDecl::param_iterator PI = ArrayWithObjectsMethod->param_begin();
-  ParmVarDecl *argDecl = *PI++;
-  QualType ArgQT = argDecl->getType().getUnqualifiedType();
-  Args.add(RValue::get(DeclPtr), ArgQT);
-  argDecl = *PI;
-  ArgQT = argDecl->getType().getUnqualifiedType();
-  llvm::Value *Count = 
-    llvm::ConstantInt::get(CGM.getTypes().ConvertType(ArgQT), NumElements);
-  Args.add(RValue::get(Count), ArgQT);
-
-  RValue result = Runtime.GenerateMessageSend(*this, ReturnValueSlot(), 
-                                              ArrayWithObjectsMethod->getResultType(),
-                                              Sel,
-                                              Receiver, Args, Class,
-                                              ArrayWithObjectsMethod);
-  return Builder.CreateBitCast(result.getScalarVal(), ConvertType(ResultType));
-}
-
-llvm::Value *CodeGenFunction::EmitObjCDictionaryLiteral(const ObjCDictionaryLiteral *E) {
+llvm::Value *CodeGenFunction::EmitObjCCollectionLiteral(const Expr *E,
+                                    const ObjCMethodDecl *MethodWithObjects) {
     ASTContext &Context = CGM.getContext();
-    const ObjCMethodDecl *DictWithObjectsMethod = 
-      E->getDictWithObjectsMethod();
-    assert(DictWithObjectsMethod && "DictWithObjectsMethod is null");
-    Selector Sel = DictWithObjectsMethod->getSelector();
-    
+    Selector Sel = MethodWithObjects->getSelector();
     // Generate a reference to the class pointer, which will be the receiver.
-    QualType ResultType = E->getType(); // should be NSDictionary *
+    QualType ResultType = E->getType(); // should be NSArray *
     const ObjCObjectPointerType *InterfacePointerType = 
-      ResultType->getAsObjCInterfacePointerType();
+     ResultType->getAsObjCInterfacePointerType();
     ObjCInterfaceDecl *Class = InterfacePointerType->getObjectType()->getInterface();
     CGObjCRuntime &Runtime = CGM.getObjCRuntime();
     llvm::Value *Receiver = Runtime.GetClass(Builder, Class);
+    const ObjCDictionaryLiteral *DLE = 0;
+    const ObjCArrayLiteral *ALE = dyn_cast<ObjCArrayLiteral>(E);
+    if (!ALE)
+      DLE = cast<ObjCDictionaryLiteral>(E);
+    uint64_t NumElements = 
+      ALE ? ALE->getNumElements() : DLE->getNumElements();
     
     // Generate the argument list.
     CallArgList Args;
     llvm::Type *ObjectPtrTy =  CGM.getTypes().ConvertType(Context.getObjCIdType());
-    llvm::ArrayType *AT = llvm::ArrayType::get(ObjectPtrTy, E->getNumElements());
-    llvm::AllocaInst *Values = CreateTempAlloca(AT);
-    Values->setAlignment(CGM.getTargetData().getABITypeAlignment(ObjectPtrTy));
-    llvm::AllocaInst *Keys = CreateTempAlloca(AT);
-    Keys->setAlignment(CGM.getTargetData().getABITypeAlignment(ObjectPtrTy));
+    llvm::ArrayType *AT = llvm::ArrayType::get(ObjectPtrTy, NumElements);
+    llvm::AllocaInst *Alloc = CreateTempAlloca(AT);
+    Alloc->setAlignment(CGM.getTargetData().getABITypeAlignment(ObjectPtrTy));
+    llvm::Value *DeclPtr = Alloc;
+    llvm::AllocaInst *Keys;
+    llvm::Value *DeclKeysPtr;
+    if (DLE) {
+      Keys = CreateTempAlloca(AT);
+      Keys->setAlignment(CGM.getTargetData().getABITypeAlignment(ObjectPtrTy));
+      DeclKeysPtr = Keys;
+    }
     // for (unsigned i = 0; i < num_elements; i++) Alloc[i] = element[i];
     llvm::Type *SizeTy = ConvertType(getContext().getSizeType());
     llvm::Value *IndexVar = CreateTempAlloca(SizeTy, "object.index");
@@ -211,7 +133,6 @@ llvm::Value *CodeGenFunction::EmitObjCDictionaryLiteral(const ObjCDictionaryLite
     llvm::BasicBlock *ForBody = createBasicBlock("for.body");
     // Generate: if (i < num_elements) fall to the loop body,
     // otherwise, go to the block after the for-loop.
-    uint64_t NumElements = E->getNumElements();
     llvm::Value *Counter = Builder.CreateLoad(IndexVar);
     llvm::Value *NumElementsPtr =
     llvm::ConstantInt::get(Counter->getType(), NumElements);
@@ -223,18 +144,24 @@ llvm::Value *CodeGenFunction::EmitObjCDictionaryLiteral(const ObjCDictionaryLite
     
     EmitBlock(ForBody);
     llvm::BasicBlock *ContinueBlock = createBasicBlock("for.inc");
-    llvm::Value *DeclValuesPtr = Values;
-    llvm::Value *DeclKeysPtr = Keys;
     ///  Body is here.
     for (uint64_t i = 0; i < NumElements; i++) {
-        const Expr *Rhs = E->getKeyValueElement(i).Value;  
-        llvm::Value* rhsVal = EmitAnyExpr(Rhs).getScalarVal();
-        rhsVal = Builder.CreateBitCast(rhsVal, ObjectPtrTy);
-        Builder.CreateStore(rhsVal, Builder.CreateStructGEP(DeclValuesPtr, i));
-        Rhs = E->getKeyValueElement(i).Key;
-        rhsVal = EmitAnyExpr(Rhs).getScalarVal();
-        rhsVal = Builder.CreateBitCast(rhsVal, ObjectPtrTy);
-        Builder.CreateStore(rhsVal, Builder.CreateStructGEP(DeclKeysPtr, i));
+        if (ALE) {
+          const Expr *Rhs = ALE->getElement(i);  
+          llvm::Value* rhsVal = EmitAnyExpr(Rhs).getScalarVal();
+          rhsVal = Builder.CreateBitCast(rhsVal, ObjectPtrTy);
+          Builder.CreateStore(rhsVal, Builder.CreateStructGEP(DeclPtr, i));
+        }
+        else {
+          const Expr *Rhs = DLE->getKeyValueElement(i).Value;  
+          llvm::Value* rhsVal = EmitAnyExpr(Rhs).getScalarVal();
+          rhsVal = Builder.CreateBitCast(rhsVal, ObjectPtrTy);
+          Builder.CreateStore(rhsVal, Builder.CreateStructGEP(DeclPtr, i));
+          Rhs = DLE->getKeyValueElement(i).Key;
+          rhsVal = EmitAnyExpr(Rhs).getScalarVal();
+          rhsVal = Builder.CreateBitCast(rhsVal, ObjectPtrTy);
+          Builder.CreateStore(rhsVal, Builder.CreateStructGEP(DeclKeysPtr, i));
+        }
     }
     
     EmitBlock(ContinueBlock);
@@ -251,25 +178,36 @@ llvm::Value *CodeGenFunction::EmitObjCDictionaryLiteral(const ObjCDictionaryLite
     // Emit the fall-through block.
     EmitBlock(AfterFor, true);
     
-    ObjCMethodDecl::param_iterator PI = DictWithObjectsMethod->param_begin();
+    ObjCMethodDecl::param_iterator PI = MethodWithObjects->param_begin();
     ParmVarDecl *argDecl = *PI++;
     QualType ArgQT = argDecl->getType().getUnqualifiedType();
-    Args.add(RValue::get(DeclValuesPtr), ArgQT);
-    argDecl = *PI++;
-    ArgQT = argDecl->getType().getUnqualifiedType();
-    Args.add(RValue::get(DeclKeysPtr), ArgQT);
-    argDecl = *PI;         
+    Args.add(RValue::get(DeclPtr), ArgQT);
+    if (DLE) {
+      argDecl = *PI++;
+      ArgQT = argDecl->getType().getUnqualifiedType();
+      Args.add(RValue::get(DeclKeysPtr), ArgQT);
+    }
+    argDecl = *PI;
     ArgQT = argDecl->getType().getUnqualifiedType();
     llvm::Value *Count = 
-        llvm::ConstantInt::get(CGM.getTypes().ConvertType(ArgQT), NumElements);
+      llvm::ConstantInt::get(CGM.getTypes().ConvertType(ArgQT), NumElements);
     Args.add(RValue::get(Count), ArgQT);
     
     RValue result = Runtime.GenerateMessageSend(*this, ReturnValueSlot(), 
-                                                DictWithObjectsMethod->getResultType(),
+                                                MethodWithObjects->getResultType(),
                                                 Sel,
                                                 Receiver, Args, Class,
-                                                DictWithObjectsMethod);
+                                                MethodWithObjects);
     return Builder.CreateBitCast(result.getScalarVal(), ConvertType(ResultType));
+}
+
+llvm::Value *CodeGenFunction::EmitObjCArrayLiteral(const ObjCArrayLiteral *E) {
+  return EmitObjCCollectionLiteral(E, E->getArrayWithObjectsMethod());
+}
+
+llvm::Value *CodeGenFunction::EmitObjCDictionaryLiteral(
+                                            const ObjCDictionaryLiteral *E) {
+  return EmitObjCCollectionLiteral(E, E->getDictWithObjectsMethod());
 }
 
 /// Emit a selector.
