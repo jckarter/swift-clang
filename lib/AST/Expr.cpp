@@ -130,57 +130,6 @@ SourceLocation Expr::getExprLoc() const {
 // Primary Expressions.
 //===----------------------------------------------------------------------===//
 
-void ExplicitTemplateArgumentList::initializeFrom(
-                                      const TemplateArgumentListInfo &Info) {
-  LAngleLoc = Info.getLAngleLoc();
-  RAngleLoc = Info.getRAngleLoc();
-  NumTemplateArgs = Info.size();
-
-  TemplateArgumentLoc *ArgBuffer = getTemplateArgs();
-  for (unsigned i = 0; i != NumTemplateArgs; ++i)
-    new (&ArgBuffer[i]) TemplateArgumentLoc(Info[i]);
-}
-
-void ExplicitTemplateArgumentList::initializeFrom(
-                                          const TemplateArgumentListInfo &Info,
-                                                  bool &Dependent, 
-                                                  bool &InstantiationDependent,
-                                       bool &ContainsUnexpandedParameterPack) {
-  LAngleLoc = Info.getLAngleLoc();
-  RAngleLoc = Info.getRAngleLoc();
-  NumTemplateArgs = Info.size();
-
-  TemplateArgumentLoc *ArgBuffer = getTemplateArgs();
-  for (unsigned i = 0; i != NumTemplateArgs; ++i) {
-    Dependent = Dependent || Info[i].getArgument().isDependent();
-    InstantiationDependent = InstantiationDependent || 
-                             Info[i].getArgument().isInstantiationDependent();
-    ContainsUnexpandedParameterPack 
-      = ContainsUnexpandedParameterPack || 
-        Info[i].getArgument().containsUnexpandedParameterPack();
-
-    new (&ArgBuffer[i]) TemplateArgumentLoc(Info[i]);
-  }
-}
-
-void ExplicitTemplateArgumentList::copyInto(
-                                      TemplateArgumentListInfo &Info) const {
-  Info.setLAngleLoc(LAngleLoc);
-  Info.setRAngleLoc(RAngleLoc);
-  for (unsigned I = 0; I != NumTemplateArgs; ++I)
-    Info.addArgument(getTemplateArgs()[I]);
-}
-
-std::size_t ExplicitTemplateArgumentList::sizeFor(unsigned NumTemplateArgs) {
-  return sizeof(ExplicitTemplateArgumentList) +
-         sizeof(TemplateArgumentLoc) * NumTemplateArgs;
-}
-
-std::size_t ExplicitTemplateArgumentList::sizeFor(
-                                      const TemplateArgumentListInfo &Info) {
-  return sizeFor(Info.size());
-}
-
 /// \brief Compute the type-, value-, and instantiation-dependence of a 
 /// declaration reference
 /// based on the declaration being referenced.
@@ -360,7 +309,7 @@ DeclRefExpr *DeclRefExpr::Create(ASTContext &Context,
   if (FoundD)
     Size += sizeof(NamedDecl *);
   if (TemplateArgs)
-    Size += ExplicitTemplateArgumentList::sizeFor(*TemplateArgs);
+    Size += ASTTemplateArgumentListInfo::sizeFor(*TemplateArgs);
 
   void *Mem = Context.Allocate(Size, llvm::alignOf<DeclRefExpr>());
   return new (Mem) DeclRefExpr(QualifierLoc, D, NameInfo, FoundD, TemplateArgs,
@@ -378,7 +327,7 @@ DeclRefExpr *DeclRefExpr::CreateEmpty(ASTContext &Context,
   if (HasFoundDecl)
     Size += sizeof(NamedDecl *);
   if (HasExplicitTemplateArgs)
-    Size += ExplicitTemplateArgumentList::sizeFor(NumTemplateArgs);
+    Size += ASTTemplateArgumentListInfo::sizeFor(NumTemplateArgs);
 
   void *Mem = Context.Allocate(Size, llvm::alignOf<DeclRefExpr>());
   return new (Mem) DeclRefExpr(EmptyShell());
@@ -952,7 +901,7 @@ MemberExpr *MemberExpr::Create(ASTContext &C, Expr *base, bool isarrow,
     Size += sizeof(MemberNameQualifier);
 
   if (targs)
-    Size += ExplicitTemplateArgumentList::sizeFor(*targs);
+    Size += ASTTemplateArgumentListInfo::sizeFor(*targs);
 
   void *Mem = C.Allocate(Size, llvm::alignOf<MemberExpr>());
   MemberExpr *E = new (Mem) MemberExpr(base, isarrow, memberdecl, nameinfo,
