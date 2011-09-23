@@ -1474,6 +1474,9 @@ def warn_impcast_literal_float_to_integer : Warning<
   "implicit conversion turns literal floating-point number into integer: "
   "%0 to %1">,
   InGroup<DiagGroup<"literal-conversion">>, DefaultIgnore;
+def warn_impcast_string_literal_to_bool : Warning<
+  "implicit conversion turns string literal into bool: %0 to %1">,
+  InGroup<DiagGroup<"literal-conversion">>, DefaultIgnore;
 def note_fix_integral_float_as_integer : Note<
   "this can be rewritten as an integer literal with the exact same value">;
 def warn_impcast_different_enum_types : Warning<
@@ -3782,19 +3785,21 @@ def ext_typecheck_convert_incompatible_pointer : ExtWarn<
   "take the address with &|"
   "remove *|"
   "remove &}3">,
-  InGroup<DiagGroup<"incompatible-pointer-types">>;
+  InGroup<IncompatiblePointerTypes>;
 def ext_typecheck_convert_discards_qualifiers : ExtWarn<
   "%select{assigning to|passing|returning|converting|initializing|sending|casting}2"
   " %0 "
   "%select{from|to parameter of type|from a function with result type|to type|"
   "with an expression of type|to parameter of type|to type}2 %1 discards "
-  "qualifiers">;
+  "qualifiers">,
+  InGroup<IncompatiblePointerTypes>;
 def ext_nested_pointer_qualifier_mismatch : ExtWarn<
   "%select{assigning to|passing|returning|converting|initializing|sending|casting}2"
   " %0 "
   "%select{from|to parameter of type|from a function with result type|to type|"
   "with an expression of type|to parameter of type|to type}2 %1 discards "
-  "qualifiers in nested pointer types">;
+  "qualifiers in nested pointer types">,
+  InGroup<IncompatiblePointerTypes>;
 def warn_incompatible_vectors : Warning<
   "incompatible vector types "
   "%select{assigning to|passing|returning|converting|initializing|sending|casting}2"
@@ -3938,9 +3943,11 @@ def ext_typecheck_cond_incompatible_operands_nonstandard : ExtWarn<
 def err_cast_selector_expr : Error<
   "cannot type cast @selector expression">;
 def warn_typecheck_cond_incompatible_pointers : ExtWarn<
-  "pointer type mismatch (%0 and %1)">;
+  "pointer type mismatch (%0 and %1)">,
+  InGroup<DiagGroup<"pointer-type-mismatch">>;
 def warn_typecheck_cond_pointer_integer_mismatch : ExtWarn<
-  "pointer/integer type mismatch in conditional expression (%0 and %1)">;
+  "pointer/integer type mismatch in conditional expression (%0 and %1)">,
+  InGroup<DiagGroup<"conditional-type-mismatch">>;
 def err_typecheck_choose_expr_requires_constant : Error<
   "'__builtin_choose_expr' requires a constant expression">;
 def ext_typecheck_expression_not_constant_but_accepted : Extension<
