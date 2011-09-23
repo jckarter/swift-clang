@@ -1033,7 +1033,7 @@ void ExprEngine::processIndirectGoto(IndirectGotoNodeBuilder &builder) {
       }
     }
 
-    assert(false && "No block with label.");
+    llvm_unreachable("No block with label.");
     return;
   }
 
