@@ -260,7 +260,7 @@ Tool &Darwin::SelectTool(const Compilation &C, const JobAction &JA,
     switch (Key) {
     case Action::InputClass:
     case Action::BindArchClass:
-      assert(0 && "Invalid tool kind.");
+      llvm_unreachable("Invalid tool kind.");
     case Action::PreprocessJobClass:
       T = new tools::darwin::Preprocess(*this); break;
     case Action::AnalyzeJobClass:
@@ -340,7 +340,7 @@ void DarwinClang::AddLinkSearchPathArgs(const ArgList &Args,
   P.appendComponent("gcc");
   switch (getTriple().getArch()) {
   default:
-    assert(0 && "Invalid Darwin arch!");
+    llvm_unreachable("Invalid Darwin arch!");
   case llvm::Triple::x86:
   case llvm::Triple::x86_64:
     P.appendComponent("i686-apple-darwin10");
@@ -1057,7 +1057,7 @@ Tool &Generic_GCC::SelectTool(const Compilation &C,
     switch (Key) {
     case Action::InputClass:
     case Action::BindArchClass:
-      assert(0 && "Invalid tool kind.");
+      llvm_unreachable("Invalid tool kind.");
     case Action::PreprocessJobClass:
       T = new tools::gcc::Preprocess(*this); break;
     case Action::PrecompileJobClass:
@@ -1148,7 +1148,7 @@ Tool &TCEToolChain::SelectTool(const Compilation &C,
     case Action::AnalyzeJobClass:
       T = new tools::Clang(*this); break;
     default:
-     assert(false && "Unsupported action for TCE target.");
+     llvm_unreachable("Unsupported action for TCE target.");
     }
   }
   return *T;
@@ -1860,7 +1860,7 @@ Tool &Windows::SelectTool(const Compilation &C, const JobAction &JA,
     case Action::LipoJobClass:
     case Action::DsymutilJobClass:
     case Action::VerifyJobClass:
-      assert(0 && "Invalid tool kind.");
+      llvm_unreachable("Invalid tool kind.");
     case Action::PreprocessJobClass:
     case Action::PrecompileJobClass:
     case Action::AnalyzeJobClass:
