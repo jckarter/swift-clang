@@ -133,6 +133,7 @@ void Preprocessor::Initialize(const TargetInfo &Target) {
   KeepComments = false;
   KeepMacroComments = false;
   SuppressIncludeNotFoundError = false;
+  AutoModuleImport = false;
   
   // Macro expansion is enabled.
   DisableMacroExpansion = false;
@@ -601,6 +602,7 @@ void Preprocessor::createPreprocessingRecord(
   if (Record)
     return;
   
-  Record = new PreprocessingRecord(IncludeNestedMacroExpansions);
+  Record = new PreprocessingRecord(getSourceManager(),
+                                   IncludeNestedMacroExpansions);
   addPPCallbacks(Record);
 }

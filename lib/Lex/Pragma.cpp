@@ -366,7 +366,8 @@ void Preprocessor::HandlePragmaDependency(Token &DependencyTok) {
 
   // Search include directories for this file.
   const DirectoryLookup *CurDir;
-  const FileEntry *File = LookupFile(Filename, isAngled, 0, CurDir, NULL, NULL);
+  const FileEntry *File = LookupFile(Filename, isAngled, 0, CurDir, NULL, NULL,
+                                     NULL);
   if (File == 0) {
     if (!SuppressIncludeNotFoundError)
       Diag(FilenameTok, diag::err_pp_file_not_found) << Filename;
@@ -1033,7 +1034,7 @@ void Preprocessor::RegisterBuiltinPragmas() {
   AddPragmaHandler("STDC", new PragmaSTDC_UnknownHandler());
 
   // MS extensions.
-  if (Features.Microsoft) {
+  if (Features.MicrosoftExt) {
     AddPragmaHandler(new PragmaCommentHandler());
   }
 }

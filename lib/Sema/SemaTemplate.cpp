@@ -424,7 +424,7 @@ bool Sema::DiagnoseTemplateParameterShadow(SourceLocation Loc, Decl *PrevDecl) {
   assert(PrevDecl->isTemplateParameter() && "Not a template parameter");
 
   // Microsoft Visual C++ permits template parameters to be shadowed.
-  if (getLangOptions().Microsoft)
+  if (getLangOptions().MicrosoftExt)
     return false;
 
   // C++ [temp.local]p4:
@@ -3370,7 +3370,7 @@ CheckTemplateArgumentAddressOfObjectOrFunction(Sema &S,
     }
   }
 
-  if (S.getLangOptions().Microsoft && isa<CXXUuidofExpr>(Arg)) {
+  if (S.getLangOptions().MicrosoftExt && isa<CXXUuidofExpr>(Arg)) {
     Converted = TemplateArgument(ArgIn);
     return false;
   }
@@ -4521,7 +4521,7 @@ static bool CheckTemplateSpecializationScope(Sema &S,
   }
 
   if (S.CurContext->isRecord() && !IsPartialSpecialization) {
-    if (S.getLangOptions().Microsoft) {
+    if (S.getLangOptions().MicrosoftExt) {
       // Do not warn for class scope explicit specialization during
       // instantiation, warning was already emitted during pattern
       // semantic analysis.
@@ -5522,12 +5522,10 @@ Sema::CheckFunctionTemplateSpecialization(FunctionDecl *FD,
   // Take copies of (semantic and syntactic) template argument lists.
   const TemplateArgumentList* TemplArgs = new (Context)
     TemplateArgumentList(Specialization->getTemplateSpecializationArgs());
-  const TemplateArgumentListInfo* TemplArgsAsWritten = ExplicitTemplateArgs
-    ? new (Context) TemplateArgumentListInfo(*ExplicitTemplateArgs) : 0;
   FD->setFunctionTemplateSpecialization(Specialization->getPrimaryTemplate(),
                                         TemplArgs, /*InsertPos=*/0,
                                     SpecInfo->getTemplateSpecializationKind(),
-                                        TemplArgsAsWritten);
+                                        ExplicitTemplateArgs);
   FD->setStorageClass(Specialization->getStorageClass());
   
   // The "previous declaration" for this function template specialization is

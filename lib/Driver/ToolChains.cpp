@@ -189,8 +189,9 @@ Darwin::~Darwin() {
     delete it->second;
 }
 
-std::string Darwin::ComputeEffectiveClangTriple(const ArgList &Args) const {
-  llvm::Triple Triple(ComputeLLVMTriple(Args));
+std::string Darwin::ComputeEffectiveClangTriple(const ArgList &Args,
+                                                types::ID InputType) const {
+  llvm::Triple Triple(ComputeLLVMTriple(Args, InputType));
 
   // If the target isn't initialized (e.g., an unknown Darwin platform, return
   // the default triple).
@@ -275,8 +276,6 @@ Tool &Darwin::SelectTool(const Compilation &C, const JobAction &JA,
 DarwinClang::DarwinClang(const HostInfo &Host, const llvm::Triple& Triple)
   : Darwin(Host, Triple)
 {
-  std::string UsrPrefix = "llvm-gcc-4.2/";
-
   getProgramPaths().push_back(getDriver().getInstalledDir());
   if (getDriver().getInstalledDir() != getDriver().Dir)
     getProgramPaths().push_back(getDriver().Dir);
@@ -289,16 +288,24 @@ DarwinClang::DarwinClang(const HostInfo &Host, const llvm::Triple& Triple)
   // For fallback, we need to know how to find the GCC cc1 executables, so we
   // also add the GCC libexec paths. This is legacy code that can be removed
   // once fallback is no longer useful.
+  AddGCCLibexecPath(DarwinVersion[0]);
+  AddGCCLibexecPath(DarwinVersion[0] - 2);
+  AddGCCLibexecPath(DarwinVersion[0] - 1);
+  AddGCCLibexecPath(DarwinVersion[0] + 1);
+  AddGCCLibexecPath(DarwinVersion[0] + 2);
+}
+
+void DarwinClang::AddGCCLibexecPath(unsigned darwinVersion) {
   std::string ToolChainDir = "i686-apple-darwin";
-  ToolChainDir += llvm::utostr(DarwinVersion[0]);
+  ToolChainDir += llvm::utostr(darwinVersion);
   ToolChainDir += "/4.2.1";
 
   std::string Path = getDriver().Dir;
-  Path += "/../" + UsrPrefix + "libexec/gcc/";
+  Path += "/../llvm-gcc-4.2/libexec/gcc/";
   Path += ToolChainDir;
   getProgramPaths().push_back(Path);
 
-  Path = "/usr/" + UsrPrefix + "libexec/gcc/";
+  Path = "/usr/llvm-gcc-4.2/libexec/gcc/";
   Path += ToolChainDir;
   getProgramPaths().push_back(Path);
 }
@@ -958,8 +965,9 @@ bool Darwin::SupportsObjCGC() const {
 }
 
 std::string
-Darwin_Generic_GCC::ComputeEffectiveClangTriple(const ArgList &Args) const {
-  return ComputeLLVMTriple(Args);
+Darwin_Generic_GCC::ComputeEffectiveClangTriple(const ArgList &Args,
+                                                types::ID InputType) const {
+  return ComputeLLVMTriple(Args, InputType);
 }
 
 /// Generic_GCC - A tool chain using the 'gcc' command to perform
@@ -1513,6 +1521,14 @@ static std::string findGCCBaseLibDir(const std::string &GccTriple) {
     std::string t3 = "/usr/lib/" + GccTriple + "/gcc/" + Suffix;
     if (!llvm::sys::fs::exists(t3 + "/crtbegin.o", Exists) && Exists)
       return t3;
+    if (GccTriple == "i386-linux-gnu") {
+      // Ubuntu 11.04 uses an unusual path.
+      std::string t4 =
+          std::string("/usr/lib/i386-linux-gnu/gcc/i686-linux-gnu/") +
+          GccVersions[i];
+      if (!llvm::sys::fs::exists(t4 + "/crtbegin.o", Exists) && Exists)
+        return t4;
+    }
   }
   return "";
 }
@@ -1578,6 +1594,9 @@ Linux::Linux(const HostInfo &Host, const llvm::Triple &Triple)
   } else if (Arch == llvm::Triple::x86) {
     if (!llvm::sys::fs::exists("/usr/lib/gcc/i686-linux-gnu", Exists) && Exists)
       GccTriple = "i686-linux-gnu";
+    else if (!llvm::sys::fs::exists("/usr/lib/i386-linux-gnu", Exists) &&
+             Exists)
+      GccTriple = "i386-linux-gnu";
     else if (!llvm::sys::fs::exists("/usr/lib/gcc/i686-pc-linux-gnu", Exists) &&
              Exists)
       GccTriple = "i686-pc-linux-gnu";

@@ -32,6 +32,7 @@
 #include "clang/Basic/TemplateKinds.h"
 #include "clang/Basic/TypeTraits.h"
 #include "clang/Basic/ExpressionTraits.h"
+#include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/OwningPtr.h"
 #include "llvm/ADT/SmallPtrSet.h"
 #include "llvm/ADT/SmallVector.h"
@@ -675,8 +676,9 @@ public:
 
   GlobalMethodPool::iterator ReadMethodPool(Selector Sel);
 
-  /// Private Helper predicate to check for 'self'.
-  bool isSelfExpr(Expr *RExpr);
+  /// Private Helper predicate to check for 'self'. Upon success, it
+  /// returns method declaration where 'self' is referenced.
+  const ObjCMethodDecl *GetMethodIfSelfExpr(Expr *RExpr);
 public:
   Sema(Preprocessor &pp, ASTContext &ctxt, ASTConsumer &consumer,
        TranslationUnitKind TUKind = TU_Complete,
@@ -1189,7 +1191,7 @@ public:
 
   // This is used for both record definitions and ObjC interface declarations.
   void ActOnFields(Scope* S, SourceLocation RecLoc, Decl *TagDecl,
-                   Decl **Fields, unsigned NumFields,
+                   llvm::ArrayRef<Decl *> Fields,
                    SourceLocation LBrac, SourceLocation RBrac,
                    AttributeList *AttrList);
 
@@ -4341,8 +4343,7 @@ public:
   /// must be set.
   bool CheckParameterPacksForExpansion(SourceLocation EllipsisLoc,
                                        SourceRange PatternRange,
-                                     const UnexpandedParameterPack *Unexpanded,
-                                       unsigned NumUnexpanded,
+                             llvm::ArrayRef<UnexpandedParameterPack> Unexpanded,
                              const MultiLevelTemplateArgumentList &TemplateArgs,
                                        bool &ShouldExpand,
                                        bool &RetainExpansion,
@@ -5398,8 +5399,8 @@ public:
   void FreeVisContext();
 
   /// AddAlignedAttr - Adds an aligned attribute to a particular declaration.
-  void AddAlignedAttr(SourceLocation AttrLoc, Decl *D, Expr *E);
-  void AddAlignedAttr(SourceLocation AttrLoc, Decl *D, TypeSourceInfo *T);
+  void AddAlignedAttr(SourceRange AttrRange, Decl *D, Expr *E);
+  void AddAlignedAttr(SourceRange AttrRange, Decl *D, TypeSourceInfo *T);
 
   /// CastCategory - Get the correct forwarded implicit cast result category
   /// from the inner expression.
@@ -5624,7 +5625,7 @@ public:
   QualType InvalidOperands(SourceLocation Loc, ExprResult &LHS,
                            ExprResult &RHS);
   QualType CheckPointerToMemberOperands( // C++ 5.5
-    ExprResult &lex, ExprResult &rex, ExprValueKind &VK,
+    ExprResult &LHS, ExprResult &RHS, ExprValueKind &VK,
     SourceLocation OpLoc, bool isIndirect);
   QualType CheckMultiplyDivideOperands( // C99 6.5.5
     ExprResult &LHS, ExprResult &RHS, SourceLocation Loc, bool IsCompAssign,
@@ -6069,7 +6070,7 @@ private:
 
   void CheckReturnStackAddr(Expr *RetValExp, QualType lhsType,
                             SourceLocation ReturnLoc);
-  void CheckFloatComparison(SourceLocation loc, Expr* lex, Expr* rex);
+  void CheckFloatComparison(SourceLocation Loc, Expr* LHS, Expr* RHS);
   void CheckImplicitConversions(Expr *E, SourceLocation CC = SourceLocation());
 
   void CheckBitFieldInitialization(SourceLocation InitLoc, FieldDecl *Field,

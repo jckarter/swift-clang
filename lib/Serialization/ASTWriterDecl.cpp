@@ -321,13 +321,14 @@ void ASTDeclWriter::VisitFunctionDecl(FunctionDecl *D) {
     // Template args as written.
     Record.push_back(FTSInfo->TemplateArgumentsAsWritten != 0);
     if (FTSInfo->TemplateArgumentsAsWritten) {
-      Record.push_back(FTSInfo->TemplateArgumentsAsWritten->size());
-      for (int i=0, e = FTSInfo->TemplateArgumentsAsWritten->size(); i!=e; ++i)
+      Record.push_back(FTSInfo->TemplateArgumentsAsWritten->NumTemplateArgs);
+      for (int i=0, e = FTSInfo->TemplateArgumentsAsWritten->NumTemplateArgs;
+             i!=e; ++i)
         Writer.AddTemplateArgumentLoc((*FTSInfo->TemplateArgumentsAsWritten)[i],
                                       Record);
-      Writer.AddSourceLocation(FTSInfo->TemplateArgumentsAsWritten->getLAngleLoc(),
+      Writer.AddSourceLocation(FTSInfo->TemplateArgumentsAsWritten->LAngleLoc,
                                Record);
-      Writer.AddSourceLocation(FTSInfo->TemplateArgumentsAsWritten->getRAngleLoc(),
+      Writer.AddSourceLocation(FTSInfo->TemplateArgumentsAsWritten->RAngleLoc,
                                Record);
     }
     
@@ -1594,6 +1595,9 @@ void ASTWriter::WriteDeclsBlockAbbrevs() {
 /// relatively painless since they would presumably only do it for top-level
 /// decls.
 static bool isRequiredDecl(const Decl *D, ASTContext &Context) {
+  // An ObjCMethodDecl is never considered as "required" because its
+  // implementation container always is.
+
   // File scoped assembly or obj-c implementation must be seen.
   if (isa<FileScopeAsmDecl>(D) || isa<ObjCImplDecl>(D))
     return true;

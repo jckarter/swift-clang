@@ -559,11 +559,7 @@ static void EmitMemberInitializer(CodeGenFunction &CGF,
     LHS = CGF.EmitLValueForFieldInitialization(ThisPtr, Field, 0);
   }
 
-  // FIXME: If there's no initializer and the CXXCtorInitializer
-  // was implicitly generated, we shouldn't be zeroing memory.
-  if (FieldType->isArrayType() && !MemberInit->getInit()) {
-    CGF.EmitNullInitialization(LHS.getAddress(), Field->getType());
-  } else if (!CGF.hasAggregateLLVMType(Field->getType())) {
+  if (!CGF.hasAggregateLLVMType(Field->getType())) {
     if (LHS.isSimple()) {
       CGF.EmitExprAsInit(MemberInit->getInit(), Field, LHS, false);
     } else {
@@ -577,7 +573,7 @@ static void EmitMemberInitializer(CodeGenFunction &CGF,
     llvm::Value *ArrayIndexVar = 0;
     const ConstantArrayType *Array
       = CGF.getContext().getAsConstantArrayType(FieldType);
-    if (Array && Constructor->isImplicit() && 
+    if (Array && Constructor->isImplicitlyDefined() &&
         Constructor->isCopyOrMoveConstructor()) {
       llvm::Type *SizeTy
         = CGF.ConvertType(CGF.getContext().getSizeType());
@@ -983,6 +979,10 @@ void CodeGenFunction::EnterDtorCleanups(const CXXDestructorDecl *DD,
   }
 
   const CXXRecordDecl *ClassDecl = DD->getParent();
+
+  // Unions have no bases and do not call field destructors.
+  if (ClassDecl->isUnion())
+    return;
 
   // The complete-destructor phase just destructs all the virtual bases.
   if (DtorType == Dtor_Complete) {

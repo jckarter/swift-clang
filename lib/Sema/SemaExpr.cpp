@@ -1441,7 +1441,7 @@ bool Sema::DiagnoseEmptyLookup(Scope *S, CXXScopeSpec &SS, LookupResult &R,
           CXXMethodDecl *DepMethod = cast_or_null<CXXMethodDecl>(
               CurMethod->getInstantiatedFromMemberFunction());
           if (DepMethod) {
-            if (getLangOptions().Microsoft)
+            if (getLangOptions().MicrosoftExt)
               diagnostic = diag::warn_found_via_dependent_bases_lookup;
             Diag(R.getNameLoc(), diagnostic) << Name
               << FixItHint::CreateInsertion(R.getNameLoc(), "this->");
@@ -2605,7 +2605,7 @@ ExprResult Sema::ActOnNumericConstant(const Token &Tok) {
           // To be compatible with MSVC, hex integer literals ending with the
           // LL or i64 suffix are always signed in Microsoft mode.
           if (!Literal.isUnsigned && (ResultVal[LongLongSize-1] == 0 ||
-              (getLangOptions().Microsoft && Literal.isLongLong)))
+              (getLangOptions().MicrosoftExt && Literal.isLongLong)))
             Ty = Context.LongLongTy;
           else if (AllowUnsigned)
             Ty = Context.UnsignedLongLongTy;
@@ -4198,8 +4198,12 @@ ExprResult Sema::CheckExtVectorCast(SourceRange R, QualType DestTy,
 
   // If SrcTy is a VectorType, the total size must match to explicitly cast to
   // an ExtVectorType.
+  // In OpenCL, casts between vectors of different types are not allowed.
+  // (See OpenCL 6.2).
   if (SrcTy->isVectorType()) {
-    if (Context.getTypeSize(DestTy) != Context.getTypeSize(SrcTy)) {
+    if (Context.getTypeSize(DestTy) != Context.getTypeSize(SrcTy)
+        || (getLangOptions().OpenCL &&
+            (DestTy.getCanonicalType() != SrcTy.getCanonicalType()))) {
       Diag(R.getBegin(),diag::err_invalid_conversion_between_ext_vectors)
         << DestTy << SrcTy << R;
       return ExprError();
@@ -4252,7 +4256,8 @@ Sema::ActOnCastExpr(Scope *S, SourceLocation LParenLoc,
   // i.e. all the elements are integer constants.
   ParenExpr *PE = dyn_cast<ParenExpr>(CastExpr);
   ParenListExpr *PLE = dyn_cast<ParenListExpr>(CastExpr);
-  if (getLangOptions().AltiVec && castType->isVectorType() && (PE || PLE)) {
+  if ((getLangOptions().AltiVec || getLangOptions().OpenCL)
+       && castType->isVectorType() && (PE || PLE)) {
     if (PLE && PLE->getNumExprs() == 0) {
       Diag(PLE->getExprLoc(), diag::err_altivec_empty_initializer);
       return ExprError();
@@ -5078,6 +5083,25 @@ ExprResult Sema::ActOnConditionalOp(SourceLocation QuestionLoc,
                               OK));
 }
 
+/// ConvertObjCSelfToClassRootType - convet type of 'self' in class method
+/// to pointer to root of method's class.
+static QualType
+ConvertObjCSelfToClassRootType(Sema &S, Expr *selfExpr) {
+  QualType SelfType;
+  if (const ObjCMethodDecl *MD = S.GetMethodIfSelfExpr(selfExpr))
+    if (MD->isClassMethod()) {
+      const ObjCInterfaceDecl *Root = 0;
+      if (const ObjCInterfaceDecl * IDecl = MD->getClassInterface())
+      do {
+        Root = IDecl;
+      } while ((IDecl = IDecl->getSuperClass()));
+      if (Root)
+        SelfType =  S.Context.getObjCObjectPointerType(
+                      S.Context.getObjCInterfaceType(Root)); 
+    }
+  return SelfType;
+}
+
 // checkPointerTypesForAssignment - This is a very tricky routine (despite
 // being closely modeled after the C99 spec:-). The odd characteristic of this
 // routine is it effectively iqnores the qualifiers on the top level pointee.
@@ -5247,7 +5271,6 @@ checkObjCPointerTypesForAssignment(Sema &S, QualType LHSType,
     return Sema::Compatible;
   }
   if (RHSType->isObjCBuiltinType()) {
-    // Class is not compatible with ObjC object pointers.
     if (RHSType->isObjCClassType() && !LHSType->isObjCBuiltinType() &&
         !LHSType->isObjCQualifiedClassType())
       return Sema::IncompatiblePointer;
@@ -5406,7 +5429,7 @@ Sema::CheckAssignmentConstraints(QualType LHSType, ExprResult &RHS,
         Kind = CK_BitCast;
         return Compatible;
       }
-
+      
       Kind = CK_BitCast;
       return IncompatiblePointer;
     }
@@ -5454,6 +5477,9 @@ Sema::CheckAssignmentConstraints(QualType LHSType, ExprResult &RHS,
 
   // Conversions to Objective-C pointers.
   if (isa<ObjCObjectPointerType>(LHSType)) {
+    QualType RHSQT = ConvertObjCSelfToClassRootType(*this, RHS.get());
+    if (!RHSQT.isNull())
+      RHSType = RHSQT;
     // A* -> B*
     if (RHSType->isObjCObjectPointerType()) {
       Kind = CK_BitCast;
@@ -5774,9 +5800,50 @@ QualType Sema::CheckVectorOperands(ExprResult &LHS, ExprResult &RHS,
   return QualType();
 }
 
+// checkArithmeticNull - Detect when a NULL constant is used improperly in an
+// expression.  These are mainly cases where the null pointer is used as an
+// integer instead of a pointer.
+static void checkArithmeticNull(Sema &S, ExprResult &LHS, ExprResult &RHS,
+                                SourceLocation Loc, bool IsCompare) {
+  // The canonical way to check for a GNU null is with isNullPointerConstant,
+  // but we use a bit of a hack here for speed; this is a relatively
+  // hot path, and isNullPointerConstant is slow.
+  bool LHSNull = isa<GNUNullExpr>(LHS.get()->IgnoreParenImpCasts());
+  bool RHSNull = isa<GNUNullExpr>(RHS.get()->IgnoreParenImpCasts());
+
+  QualType NonNullType = LHSNull ? RHS.get()->getType() : LHS.get()->getType();
+
+  // Avoid analyzing cases where the result will either be invalid (and
+  // diagnosed as such) or entirely valid and not something to warn about.
+  if ((!LHSNull && !RHSNull) || NonNullType->isBlockPointerType() ||
+      NonNullType->isMemberPointerType() || NonNullType->isFunctionType())
+    return;
+
+  // Comparison operations would not make sense with a null pointer no matter
+  // what the other expression is.
+  if (!IsCompare) {
+    S.Diag(Loc, diag::warn_null_in_arithmetic_operation)
+        << (LHSNull ? LHS.get()->getSourceRange() : SourceRange())
+        << (RHSNull ? RHS.get()->getSourceRange() : SourceRange());
+    return;
+  }
+
+  // The rest of the operations only make sense with a null pointer
+  // if the other expression is a pointer.
+  if (LHSNull == RHSNull || NonNullType->isAnyPointerType() ||
+      NonNullType->canDecayToPointerType())
+    return;
+
+  S.Diag(Loc, diag::warn_null_in_comparison_operation)
+      << LHSNull /* LHS is NULL */ << NonNullType
+      << LHS.get()->getSourceRange() << RHS.get()->getSourceRange();
+}
+
 QualType Sema::CheckMultiplyDivideOperands(ExprResult &LHS, ExprResult &RHS,
                                            SourceLocation Loc,
                                            bool IsCompAssign, bool IsDiv) {
+  checkArithmeticNull(*this, LHS, RHS, Loc, /*isCompare=*/false);
+
   if (LHS.get()->getType()->isVectorType() ||
       RHS.get()->getType()->isVectorType())
     return CheckVectorOperands(LHS, RHS, Loc, IsCompAssign);
@@ -5801,6 +5868,8 @@ QualType Sema::CheckMultiplyDivideOperands(ExprResult &LHS, ExprResult &RHS,
 
 QualType Sema::CheckRemainderOperands(
   ExprResult &LHS, ExprResult &RHS, SourceLocation Loc, bool IsCompAssign) {
+  checkArithmeticNull(*this, LHS, RHS, Loc, /*isCompare=*/false);
+
   if (LHS.get()->getType()->isVectorType() ||
       RHS.get()->getType()->isVectorType()) {
     if (LHS.get()->getType()->hasIntegerRepresentation() && 
@@ -5873,7 +5942,7 @@ static void diagnoseArithmeticOnFunctionPointer(Sema &S, SourceLocation Loc,
     << Pointer->getSourceRange();
 }
 
-/// \brief Warn if Operand is incomplete pointer type
+/// \brief Emit error if Operand is incomplete pointer type
 ///
 /// \returns True if pointer has incomplete type
 static bool checkArithmeticIncompletePointerType(Sema &S, SourceLocation Loc,
@@ -5979,7 +6048,7 @@ static bool checkArithmethicPointerOnNonFragileABI(Sema &S,
   return false;
 }
 
-/// \brief Warn when two pointers are incompatible.
+/// \brief Emit error when two pointers are incompatible.
 static void diagnosePointerIncompatibility(Sema &S, SourceLocation Loc,
                                            Expr *LHSExpr, Expr *RHSExpr) {
   assert(LHSExpr->getType()->isAnyPointerType());
@@ -5991,6 +6060,8 @@ static void diagnosePointerIncompatibility(Sema &S, SourceLocation Loc,
 
 QualType Sema::CheckAdditionOperands( // C99 6.5.6
   ExprResult &LHS, ExprResult &RHS, SourceLocation Loc, QualType* CompLHSTy) {
+  checkArithmeticNull(*this, LHS, RHS, Loc, /*isCompare=*/false);
+
   if (LHS.get()->getType()->isVectorType() ||
       RHS.get()->getType()->isVectorType()) {
     QualType compType = CheckVectorOperands(LHS, RHS, Loc, CompLHSTy);
@@ -6014,38 +6085,41 @@ QualType Sema::CheckAdditionOperands( // C99 6.5.6
   if (IExp->getType()->isAnyPointerType())
     std::swap(PExp, IExp);
 
-  if (PExp->getType()->isAnyPointerType()) {
-    if (IExp->getType()->isIntegerType()) {
-      if (!checkArithmeticOpPointerOperand(*this, Loc, PExp))
-        return QualType();
+  if (!PExp->getType()->isAnyPointerType())
+    return InvalidOperands(Loc, LHS, RHS);
 
-      // Diagnose bad cases where we step over interface counts.
-      if (!checkArithmethicPointerOnNonFragileABI(*this, Loc, PExp))
-        return QualType();
+  if (!IExp->getType()->isIntegerType())
+    return InvalidOperands(Loc, LHS, RHS);
 
-      // Check array bounds for pointer arithemtic
-      CheckArrayAccess(PExp, IExp);
+  if (!checkArithmeticOpPointerOperand(*this, Loc, PExp))
+    return QualType();
 
-      if (CompLHSTy) {
-        QualType LHSTy = Context.isPromotableBitField(LHS.get());
-        if (LHSTy.isNull()) {
-          LHSTy = LHS.get()->getType();
-          if (LHSTy->isPromotableIntegerType())
-            LHSTy = Context.getPromotedIntegerType(LHSTy);
-        }
-        *CompLHSTy = LHSTy;
-      }
-      return PExp->getType();
+  // Diagnose bad cases where we step over interface counts.
+  if (!checkArithmethicPointerOnNonFragileABI(*this, Loc, PExp))
+    return QualType();
+
+  // Check array bounds for pointer arithemtic
+  CheckArrayAccess(PExp, IExp);
+
+  if (CompLHSTy) {
+    QualType LHSTy = Context.isPromotableBitField(LHS.get());
+    if (LHSTy.isNull()) {
+      LHSTy = LHS.get()->getType();
+      if (LHSTy->isPromotableIntegerType())
+        LHSTy = Context.getPromotedIntegerType(LHSTy);
     }
+    *CompLHSTy = LHSTy;
   }
 
-  return InvalidOperands(Loc, LHS, RHS);
+  return PExp->getType();
 }
 
 // C99 6.5.6
 QualType Sema::CheckSubtractionOperands(ExprResult &LHS, ExprResult &RHS,
                                         SourceLocation Loc,
                                         QualType* CompLHSTy) {
+  checkArithmeticNull(*this, LHS, RHS, Loc, /*isCompare=*/false);
+
   if (LHS.get()->getType()->isVectorType() ||
       RHS.get()->getType()->isVectorType()) {
     QualType compType = CheckVectorOperands(LHS, RHS, Loc, CompLHSTy);
@@ -6195,6 +6269,8 @@ static void DiagnoseBadShiftValues(Sema& S, ExprResult &LHS, ExprResult &RHS,
 QualType Sema::CheckShiftOperands(ExprResult &LHS, ExprResult &RHS,
                                   SourceLocation Loc, unsigned Opc,
                                   bool IsCompAssign) {
+  checkArithmeticNull(*this, LHS, RHS, Loc, /*isCompare=*/false);
+
   // C99 6.5.7p2: Each of the operands shall have integer type.
   if (!LHS.get()->getType()->hasIntegerRepresentation() || 
       !RHS.get()->getType()->hasIntegerRepresentation())
@@ -6344,6 +6420,8 @@ static void diagnoseFunctionPointerToVoidComparison(Sema &S, SourceLocation Loc,
 QualType Sema::CheckCompareOperands(ExprResult &LHS, ExprResult &RHS,
                                     SourceLocation Loc, unsigned OpaqueOpc,
                                     bool IsRelational) {
+  checkArithmeticNull(*this, LHS, RHS, Loc, /*isCompare=*/true);
+
   BinaryOperatorKind Opc = (BinaryOperatorKind) OpaqueOpc;
 
   // Handle vector comparisons separately.
@@ -6778,6 +6856,8 @@ QualType Sema::CheckVectorCompareOperands(ExprResult &LHS, ExprResult &RHS,
 
 inline QualType Sema::CheckBitwiseOperands(
   ExprResult &LHS, ExprResult &RHS, SourceLocation Loc, bool IsCompAssign) {
+  checkArithmeticNull(*this, LHS, RHS, Loc, /*isCompare=*/false);
+
   if (LHS.get()->getType()->isVectorType() ||
       RHS.get()->getType()->isVectorType()) {
     if (LHS.get()->getType()->hasIntegerRepresentation() &&
@@ -7092,10 +7172,10 @@ QualType Sema::CheckAssignmentOperands(Expr *LHSExpr, ExprResult &RHS,
            UO->getOpcode() == UO_Minus) &&
           Loc.isFileID() && UO->getOperatorLoc().isFileID() &&
           // Only if the two operators are exactly adjacent.
-          Loc.getFileLocWithOffset(1) == UO->getOperatorLoc() &&
+          Loc.getLocWithOffset(1) == UO->getOperatorLoc() &&
           // And there is a space or other character before the subexpr of the
           // unary +/-.  We don't want to warn on "x=-1".
-          Loc.getFileLocWithOffset(2) != UO->getSubExpr()->getLocStart() &&
+          Loc.getLocWithOffset(2) != UO->getSubExpr()->getLocStart() &&
           UO->getSubExpr()->getLocStart().isFileID()) {
         Diag(Loc, diag::warn_not_compound_assign)
           << (UO->getOpcode() == UO_Plus ? "+" : "-")
@@ -7684,54 +7764,6 @@ static void DiagnoseSelfAssignment(Sema &S, Expr *LHSExpr, Expr *RHSExpr,
       << LHSExpr->getSourceRange() << RHSExpr->getSourceRange();
 }
 
-// checkArithmeticNull - Detect when a NULL constant is used improperly in an
-// expression.  These are mainly cases where the null pointer is used as an
-// integer instead of a pointer.
-static void checkArithmeticNull(Sema &S, ExprResult &LHS, ExprResult &RHS,
-                                SourceLocation Loc, bool IsCompare) {
-  // The canonical way to check for a GNU null is with isNullPointerConstant,
-  // but we use a bit of a hack here for speed; this is a relatively
-  // hot path, and isNullPointerConstant is slow.
-  bool LHSNull = isa<GNUNullExpr>(LHS.get()->IgnoreParenImpCasts());
-  bool RHSNull = isa<GNUNullExpr>(RHS.get()->IgnoreParenImpCasts());
-
-  // Detect when a NULL constant is used improperly in an expression.  These
-  // are mainly cases where the null pointer is used as an integer instead
-  // of a pointer.
-  if (!LHSNull && !RHSNull)
-    return;
-
-  QualType LHSType = LHS.get()->getType();
-  QualType RHSType = RHS.get()->getType();
-
-  // Avoid analyzing cases where the result will either be invalid (and
-  // diagnosed as such) or entirely valid and not something to warn about.
-  if (LHSType->isBlockPointerType() || LHSType->isMemberPointerType() ||
-      LHSType->isFunctionType() || RHSType->isBlockPointerType() ||
-      RHSType->isMemberPointerType() || RHSType->isFunctionType())
-    return;
-
-  // Comparison operations would not make sense with a null pointer no matter
-  // what the other expression is.
-  if (!IsCompare) {
-    S.Diag(Loc, diag::warn_null_in_arithmetic_operation)
-        << (LHSNull ? LHS.get()->getSourceRange() : SourceRange())
-        << (RHSNull ? RHS.get()->getSourceRange() : SourceRange());
-    return;
-  }
-
-  // The rest of the operations only make sense with a null pointer
-  // if the other expression is a pointer.
-  if (LHSNull == RHSNull || LHSType->isAnyPointerType() ||
-      LHSType->canDecayToPointerType() || RHSType->isAnyPointerType() ||
-      RHSType->canDecayToPointerType())
-    return;
-
-  S.Diag(Loc, diag::warn_null_in_comparison_operation)
-      << LHSNull /* LHS is NULL */
-      << (LHSNull ? RHS.get()->getType() : LHS.get()->getType())
-      << LHS.get()->getSourceRange() << RHS.get()->getSourceRange();
-}
 /// CreateBuiltinBinOp - Creates a new built-in binary operation with
 /// operator @p Opc at location @c TokLoc. This routine only supports
 /// built-in operations; ActOnBinOp handles overloaded operators.
@@ -7762,17 +7794,6 @@ ExprResult Sema::CreateBuiltinBinOp(SourceLocation OpLoc,
     if (!resolvedRHS.isUsable()) return ExprError();
     RHS = move(resolvedRHS);
   }
-
-  if (Opc == BO_Mul || Opc == BO_Div || Opc == BO_Rem || Opc == BO_Add ||
-      Opc == BO_Sub || Opc == BO_Shl || Opc == BO_Shr || Opc == BO_And ||
-      Opc == BO_Xor || Opc == BO_Or || Opc == BO_MulAssign ||
-      Opc == BO_DivAssign || Opc == BO_AddAssign || Opc == BO_SubAssign ||
-      Opc == BO_RemAssign || Opc == BO_ShlAssign || Opc == BO_ShrAssign ||
-      Opc == BO_AndAssign || Opc == BO_OrAssign || Opc == BO_XorAssign)
-    checkArithmeticNull(*this, LHS, RHS, OpLoc, /*isCompare=*/false);
-  else if (Opc == BO_LE || Opc == BO_LT || Opc == BO_GE || Opc == BO_GT ||
-           Opc == BO_EQ || Opc == BO_NE)
-    checkArithmeticNull(*this, LHS, RHS, OpLoc, /*isCompare=*/true);
 
   switch (Opc) {
   case BO_Assign:
@@ -8698,7 +8719,7 @@ void Sema::ActOnBlockArguments(Declarator &ParamInfo, Scope *CurScope) {
 
   // Set the parameters on the block decl.
   if (!Params.empty()) {
-    CurBlock->TheDecl->setParams(Params.data(), Params.size());
+    CurBlock->TheDecl->setParams(Params);
     CheckParmsForFunctionDef(CurBlock->TheDecl->param_begin(),
                              CurBlock->TheDecl->param_end(),
                              /*CheckParameterNames=*/false);
@@ -8924,7 +8945,7 @@ ExprResult Sema::ActOnGNUNullExpr(SourceLocation TokenLoc) {
   else if (pw == Context.getTargetInfo().getLongLongWidth())
     Ty = Context.LongLongTy;
   else {
-    assert(!"I don't know size of pointer!");
+    assert(0 && "I don't know size of pointer!");
     Ty = Context.IntTy;
   }
 
@@ -9574,7 +9595,7 @@ void Sema::DiagnoseAssignmentAsCondition(Expr *E) {
       Selector Sel = ME->getSelector();
 
       // self = [<foo> init...]
-      if (isSelfExpr(Op->getLHS()) && Sel.getNameForSlot(0).startswith("init"))
+      if (GetMethodIfSelfExpr(Op->getLHS()) && Sel.getNameForSlot(0).startswith("init"))
         diagnostic = diag::warn_condition_is_idiomatic_assignment;
 
       // <foo> = [<bar> nextObject]

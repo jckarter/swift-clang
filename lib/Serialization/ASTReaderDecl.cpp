@@ -373,7 +373,8 @@ void ASTDeclReader::VisitFunctionDecl(FunctionDecl *FD) {
     // Template args as written.
     SmallVector<TemplateArgumentLoc, 8> TemplArgLocs;
     SourceLocation LAngleLoc, RAngleLoc;
-    if (Record[Idx++]) {  // TemplateArgumentsAsWritten != 0
+    bool HasTemplateArgumentsAsWritten = Record[Idx++];
+    if (HasTemplateArgumentsAsWritten) {
       unsigned NumTemplateArgLocs = Record[Idx++];
       TemplArgLocs.reserve(NumTemplateArgLocs);
       for (unsigned i=0; i != NumTemplateArgLocs; ++i)
@@ -389,14 +390,14 @@ void ASTDeclReader::VisitFunctionDecl(FunctionDecl *FD) {
     ASTContext &C = Reader.getContext();
     TemplateArgumentList *TemplArgList
       = TemplateArgumentList::CreateCopy(C, TemplArgs.data(), TemplArgs.size());
-    TemplateArgumentListInfo *TemplArgsInfo
-      = new (C) TemplateArgumentListInfo(LAngleLoc, RAngleLoc);
+    TemplateArgumentListInfo TemplArgsInfo(LAngleLoc, RAngleLoc);
     for (unsigned i=0, e = TemplArgLocs.size(); i != e; ++i)
-      TemplArgsInfo->addArgument(TemplArgLocs[i]);
+      TemplArgsInfo.addArgument(TemplArgLocs[i]);
     FunctionTemplateSpecializationInfo *FTInfo
         = FunctionTemplateSpecializationInfo::Create(C, FD, Template, TSK,
                                                      TemplArgList,
-                                                     TemplArgsInfo, POI);
+                             HasTemplateArgumentsAsWritten ? &TemplArgsInfo : 0,
+                                                     POI);
     FD->TemplateOrSpecialization = FTInfo;
 
     if (FD->isCanonicalDecl()) { // if canonical add to template's set.
@@ -465,7 +466,7 @@ void ASTDeclReader::VisitFunctionDecl(FunctionDecl *FD) {
   Params.reserve(NumParams);
   for (unsigned I = 0; I != NumParams; ++I)
     Params.push_back(ReadDeclAs<ParmVarDecl>(Record, Idx));
-  FD->setParams(Reader.getContext(), Params.data(), NumParams);
+  FD->setParams(Reader.getContext(), Params);
 }
 
 void ASTDeclReader::VisitObjCMethodDecl(ObjCMethodDecl *MD) {
@@ -758,7 +759,7 @@ void ASTDeclReader::VisitBlockDecl(BlockDecl *BD) {
   Params.reserve(NumParams);
   for (unsigned I = 0; I != NumParams; ++I)
     Params.push_back(ReadDeclAs<ParmVarDecl>(Record, Idx));
-  BD->setParams(Params.data(), NumParams);
+  BD->setParams(Params);
 
   bool capturesCXXThis = Record[Idx++];
   unsigned numCaptures = Record[Idx++];
@@ -1361,7 +1362,7 @@ void ASTReader::ReadAttributes(Module &F, AttrVec &Attrs,
   for (unsigned i = 0, e = Record[Idx++]; i != e; ++i) {
     Attr *New = 0;
     attr::Kind Kind = (attr::Kind)Record[Idx++];
-    SourceLocation Loc = ReadSourceLocation(F, Record, Idx);
+    SourceRange Range = ReadSourceRange(F, Record, Idx);
 
 #include "clang/Serialization/AttrPCHRead.inc"
 
@@ -1393,6 +1394,9 @@ inline void ASTReader::LoadedDecl(unsigned Index, Decl *D) {
 /// code generation, e.g., inline function definitions, Objective-C
 /// declarations with metadata, etc.
 static bool isConsumerInterestedIn(Decl *D) {
+  // An ObjCMethodDecl is never considered as "interesting" because its
+  // implementation container always is.
+
   if (isa<FileScopeAsmDecl>(D) || 
       isa<ObjCProtocolDecl>(D) || 
       isa<ObjCImplDecl>(D))
@@ -1402,8 +1406,6 @@ static bool isConsumerInterestedIn(Decl *D) {
            Var->isThisDeclarationADefinition() == VarDecl::Definition;
   if (FunctionDecl *Func = dyn_cast<FunctionDecl>(D))
     return Func->doesThisDeclarationHaveABody();
-  if (ObjCMethodDecl *Method = dyn_cast<ObjCMethodDecl>(D))
-    return Method->hasBody();
   
   return false;
 }
@@ -1737,14 +1739,8 @@ Decl *ASTReader::ReadDeclRecord(DeclID ID) {
   // AST consumer might need to know about, queue it.
   // We don't pass it to the consumer immediately because we may be in recursive
   // loading, and some declarations may still be initializing.
-  if (isConsumerInterestedIn(D)) {
-    if (Consumer) {
-      DeclGroupRef DG(D);
-      Consumer->HandleInterestingDecl(DG);
-    } else {
+  if (isConsumerInterestedIn(D))
       InterestingDecls.push_back(D);
-    }
-  }
   
   return D;
 }

@@ -54,6 +54,7 @@ class ExprArgument<string name> : Argument<name>;
 class FunctionArgument<string name> : Argument<name>;
 class TypeArgument<string name> : Argument<name>;
 class UnsignedArgument<string name> : Argument<name>;
+class SourceLocArgument<string name> : Argument<name>;
 class VariadicUnsignedArgument<string name> : Argument<name>;
 class VariadicExprArgument<string name> : Argument<name>;
 
@@ -287,7 +288,7 @@ def IBOutlet : InheritableAttr {
 
 def IBOutletCollection : InheritableAttr {
   let Spellings = ["iboutletcollection"];
-  let Args = [TypeArgument<"InterFace">];
+  let Args = [TypeArgument<"Interface">, SourceLocArgument<"InterfaceLoc">];
 }
 
 def Malloc : InheritableAttr {
@@ -601,15 +602,19 @@ def SharedLockFunction : InheritableAttr {
   let LateParsed = 1;
 }
 
+// The first argument is an integer or boolean value specifying the return value
+// of a successful lock acquisition.
 def ExclusiveTrylockFunction : InheritableAttr {
   let Spellings = ["exclusive_trylock_function"];
-  let Args = [VariadicExprArgument<"Args">];
+  let Args = [ExprArgument<"SuccessValue">, VariadicExprArgument<"Args">];
   let LateParsed = 1;
 }
 
+// The first argument is an integer or boolean value specifying the return value
+// of a successful lock acquisition.
 def SharedTrylockFunction : InheritableAttr {
   let Spellings = ["shared_trylock_function"];
-  let Args = [VariadicExprArgument<"Args">];
+  let Args = [ExprArgument<"SuccessValue">, VariadicExprArgument<"Args">];
   let LateParsed = 1;
 }
 

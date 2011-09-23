@@ -18,6 +18,7 @@
 #include "CGDebugInfo.h"
 #include "CGRecordLayout.h"
 #include "CGObjCRuntime.h"
+#include "TargetInfo.h"
 #include "clang/AST/ASTContext.h"
 #include "clang/AST/DeclObjC.h"
 #include "clang/Frontend/CodeGenOptions.h"
@@ -1212,7 +1213,7 @@ void CodeGenFunction::EmitStoreThroughExtVectorComponentLValue(RValue Src,
 // or neither.
 static void setObjCGCLValueClass(const ASTContext &Ctx, const Expr *E,
                                  LValue &LV) {
-  if (Ctx.getLangOptions().getGCMode() == LangOptions::NonGC)
+  if (Ctx.getLangOptions().getGC() == LangOptions::NonGC)
     return;
   
   if (isa<ObjCIvarRefExpr>(E)) {
@@ -1419,7 +1420,7 @@ LValue CodeGenFunction::EmitUnaryOpLValue(const UnaryOperator *E) {
     // But, we continue to generate __strong write barrier on indirect write
     // into a pointer to object.
     if (getContext().getLangOptions().ObjC1 &&
-        getContext().getLangOptions().getGCMode() != LangOptions::NonGC &&
+        getContext().getLangOptions().getGC() != LangOptions::NonGC &&
         LV.isObjCWeak())
       LV.setNonGC(!E->isOBJCGCCandidate(getContext()));
     return LV;
@@ -1680,7 +1681,7 @@ LValue CodeGenFunction::EmitArraySubscriptExpr(const ArraySubscriptExpr *E) {
   LV.getQuals().setAddressSpace(E->getBase()->getType().getAddressSpace());
 
   if (getContext().getLangOptions().ObjC1 &&
-      getContext().getLangOptions().getGCMode() != LangOptions::NonGC) {
+      getContext().getLangOptions().getGC() != LangOptions::NonGC) {
     LV.setNonGC(!E->isOBJCGCCandidate(getContext()));
     setObjCGCLValueClass(getContext(), E, LV);
   }
@@ -2414,8 +2415,35 @@ RValue CodeGenFunction::EmitCall(QualType CalleeType, llvm::Value *Callee,
   CallArgList Args;
   EmitCallArgs(Args, dyn_cast<FunctionProtoType>(FnType), ArgBeg, ArgEnd);
 
-  return EmitCall(CGM.getTypes().getFunctionInfo(Args, FnType),
-                  Callee, ReturnValue, Args, TargetDecl);
+  const CGFunctionInfo &FnInfo = CGM.getTypes().getFunctionInfo(Args, FnType);
+
+  // C99 6.5.2.2p6:
+  //   If the expression that denotes the called function has a type
+  //   that does not include a prototype, [the default argument
+  //   promotions are performed]. If the number of arguments does not
+  //   equal the number of parameters, the behavior is undefined. If
+  //   the function is defined with a type that includes a prototype,
+  //   and either the prototype ends with an ellipsis (, ...) or the
+  //   types of the arguments after promotion are not compatible with
+  //   the types of the parameters, the behavior is undefined. If the
+  //   function is defined with a type that does not include a
+  //   prototype, and the types of the arguments after promotion are
+  //   not compatible with those of the parameters after promotion,
+  //   the behavior is undefined [except in some trivial cases].
+  // That is, in the general case, we should assume that a call
+  // through an unprototyped function type works like a *non-variadic*
+  // call.  The way we make this work is to cast to the exact type
+  // of the promoted arguments.
+  if (isa<FunctionNoProtoType>(FnType) &&
+      !getTargetHooks().isNoProtoCallVariadic(FnType->getCallConv())) {
+    assert(cast<llvm::FunctionType>(Callee->getType()->getContainedType(0))
+             ->isVarArg());
+    llvm::Type *CalleeTy = getTypes().GetFunctionType(FnInfo, false);
+    CalleeTy = CalleeTy->getPointerTo();
+    Callee = Builder.CreateBitCast(Callee, CalleeTy, "callee.knr.cast");
+  }
+
+  return EmitCall(FnInfo, Callee, ReturnValue, Args, TargetDecl);
 }
 
 LValue CodeGenFunction::

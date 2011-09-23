@@ -494,6 +494,9 @@ def warn_property_attr_mismatch : Warning<
 def warn_objc_property_copy_missing_on_block : Warning<
     "'copy' attribute must be specified for the block property "
     "when -fobjc-gc-only is specified">;
+def warn_objc_property_retain_of_block : Warning<
+    "retain'ed block property does not copy the block "
+    "- use copy attribute instead">, InGroup<ObjCRetainBlockProperty>;
 def warn_atomic_property_rule : Warning<
   "writable atomic property %0 cannot pair a synthesized setter/getter "
   "with a user defined setter/getter">;
@@ -1411,34 +1414,42 @@ def warn_double_lock : Warning<
   "locking '%0' that is already locked">,
   InGroup<ThreadSafety>, DefaultIgnore;
 def warn_no_unlock : Warning<
-  "mutex '%0' is still held at the end of function '%1'">,
+  "mutex '%0' is still locked at the end of function">,
   InGroup<ThreadSafety>, DefaultIgnore;
 // FIXME: improve the error message about locks not in scope
 def warn_lock_at_end_of_scope : Warning<
-  "mutex '%0' is still held at the end of its scope">,
+  "mutex '%0' is still locked at the end of its scope">,
   InGroup<ThreadSafety>, DefaultIgnore;
 def warn_expecting_lock_held_on_loop : Warning<
-  "expecting lock on '%0' to be held at start of each loop">,
+  "expecting mutex '%0' to be locked at start of each loop">,
   InGroup<ThreadSafety>, DefaultIgnore;
 def warn_lock_exclusive_and_shared : Warning<
-  "lock '%0' is exclusive and shared in the same scope">,
+  "mutex '%0' is locked exclusively and shared in the same scope">,
   InGroup<ThreadSafety>, DefaultIgnore;
 def note_lock_exclusive_and_shared : Note<
   "the other lock of mutex '%0' is here">,
   InGroup<ThreadSafety>, DefaultIgnore;
 def warn_variable_requires_lock : Warning<
-  "%select{reading|writing}2 variable '%0' requires lock on '%1' to be "
-  "%select{held|held exclusively}2">,
+  "%select{reading|writing}2 variable '%0' requires locking "
+  "%select{'%1'|'%1' exclusively}2">,
   InGroup<ThreadSafety>, DefaultIgnore;
 def warn_var_deref_requires_lock : Warning<
-  "%select{reading|writing}2 the value pointed to by '%0' requires lock on '%1'"
-  " to be %select{held|held exclusively}2">,
+  "%select{reading|writing}2 the value pointed to by '%0' requires locking "
+  "%select{'%1'|'%1' exclusively}2">,
+  InGroup<ThreadSafety>, DefaultIgnore;
+def warn_variable_requires_any_lock : Warning<
+  "%select{reading|writing}1 variable '%0' requires locking "
+  "%select{any mutex|any mutex exclusively}1">,
+  InGroup<ThreadSafety>, DefaultIgnore;
+def warn_var_deref_requires_any_lock : Warning<
+  "%select{reading|writing}1 the value pointed to by '%0' requires locking "
+  "%select{any mutex|any mutex exclusively}1">,
   InGroup<ThreadSafety>, DefaultIgnore;
 def warn_fun_requires_lock : Warning<
   "calling function '%0' requires %select{shared|exclusive}2 lock on '%1'">,
   InGroup<ThreadSafety>, DefaultIgnore;
 def warn_fun_excludes_mutex : Warning<
-  "cannot call function '%0' while holding mutex '%1'">,
+  "cannot call function '%0' while mutex '%1' is locked">,
   InGroup<ThreadSafety>, DefaultIgnore;
 def warn_cannot_resolve_lock : Warning<
   "cannot resolve lock expression to a specific lockable object">,
@@ -1795,15 +1806,18 @@ def note_ovl_candidate_bad_ownership : Note<"candidate "
     "function |function |constructor |"
     "constructor (the implicit default constructor)|"
     "constructor (the implicit copy constructor)|"
+    "constructor (the implicit move constructor)|"
     "function (the implicit copy assignment operator)|"
+    "function (the implicit move assignment operator)|"
     "constructor (inherited)}0%1 not viable: "
     "%select{%ordinal6|'this'}5 argument (%2) has "
     "%select{no|__unsafe_unretained|__strong|__weak|__autoreleasing}3 ownership,"
     " but parameter has %select{no|__unsafe_unretained|__strong|__weak|"
     "__autoreleasing}4 ownership">;
 def note_ovl_candidate_bad_cvr_this : Note<"candidate "
-    "%select{|function|||function||||"
-    "function (the implicit copy assignment operator)|}0 not viable: "
+    "%select{|function|||function|||||"
+    "function (the implicit copy assignment operator)|"
+    "function (the implicit move assignment operator)|}0 not viable: "
     "'this' argument has type %2, but method is not marked "
     "%select{const|restrict|const or restrict|volatile|const or volatile|"
     "volatile or restrict|const, volatile, or restrict}3">;
@@ -1949,6 +1963,9 @@ def err_template_template_parm_no_parms : Error<
 def err_template_variable : Error<"variable %0 declared as a template">;
 def err_template_variable_noparams : Error<
   "extraneous 'template<>' in declaration of variable %0">;
+def err_template_member : Error<"member %0 declared as a template">;
+def err_template_member_noparams : Error<
+  "extraneous 'template<>' in declaration of member %0">;
 def err_template_tag_noparams : Error<
   "extraneous 'template<>' in declaration of %0 %1">;
 def err_template_decl_ref : Error<
@@ -2594,6 +2611,8 @@ def err_at_least_one_initializer_needed_to_size_array : Error<
 def err_array_size_non_int : Error<"size of array has non-integer type %0">;
 def err_init_element_not_constant : Error<
   "initializer element is not a compile-time constant">;
+def err_local_cant_init : Error<
+  "'__local' variable cannot have an initializer">;
 def err_block_extern_cant_init : Error<
   "'extern' variable cannot have an initializer">;
 def warn_extern_init : Warning<"'extern' variable has an initializer">;
@@ -2620,6 +2639,9 @@ def warn_braces_around_scalar_init : Warning<
   "braces around scalar initializer">;
 def warn_many_braces_around_scalar_init : ExtWarn<
   "too many braces around scalar initializer">;
+def ext_complex_component_init : Extension<
+  "complex initialization specifying real and imaginary components "
+  "is an extension">, InGroup<DiagGroup<"complex-component-init">>;
 def err_empty_scalar_initializer : Error<"scalar initializer cannot be empty">;
 def err_illegal_initializer : Error<
   "illegal initializer (only variables can be initialized)">;
@@ -2673,6 +2695,8 @@ def warn_unused_label : Warning<"unused label %0">,
   InGroup<UnusedLabel>, DefaultIgnore;
 
 def err_goto_into_protected_scope : Error<"goto into protected scope">;
+def warn_goto_into_protected_scope : ExtWarn<"goto into protected scope">,
+  InGroup<Microsoft>;
 def err_switch_into_protected_scope : Error<
   "switch case is in protected scope">;
 def err_indirect_goto_without_addrlabel : Error<
@@ -2900,7 +2924,7 @@ def err_arc_assign_property_ownership : Error<
   "existing ivar %1 for property %0 with %select{unsafe_unretained| assign}2 "
   "attribute must be __unsafe_unretained">;
 def err_arc_inconsistent_property_ownership : Error<
-  "%select{strong|weak|unsafe_unretained}1 property %0 may not also be "
+  "%select{|unsafe_unretained|strong|weak}1 property %0 may not also be "
   "declared %select{|__unsafe_unretained|__strong|__weak|__autoreleasing}2">;
 def err_arc_atomic_ownership : Error<
   "cannot perform atomic operation on a pointer to type %0: type has "
@@ -4618,7 +4642,8 @@ def note_getter_unavailable : Note<
 def err_invalid_protocol_qualifiers : Error<
   "invalid protocol qualifiers on non-ObjC type">;
 def warn_ivar_use_hidden : Warning<
-  "local declaration of %0 hides instance variable">;
+  "local declaration of %0 hides instance variable">,
+   InGroup<DiagGroup<"shadow-ivar">>;
 def error_ivar_use_in_class_method : Error<
   "instance variable %0 accessed in class method">;
 def error_implicit_ivar_access : Error<
@@ -4741,6 +4766,12 @@ def err_module_private_follows_public : Error<
 def err_module_private_specialization : Error<
   "%select{template|partial|member}0 specialization cannot be "
   "declared __module_private__">;
+def err_module_private_local : Error<
+  "%select{local variable|parameter|typedef}0 %1 cannot be declared "
+  "__module_private__">;
+def err_module_private_local_class : Error<
+  "local %select{struct|union|class|enum}0 cannot be declared "
+  "__module_private__">;
 }
 
 } // end of sema component.

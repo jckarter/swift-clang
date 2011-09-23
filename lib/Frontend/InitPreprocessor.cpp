@@ -344,7 +344,7 @@ static void InitializeStandardPredefinedMacros(const TargetInfo &TI,
                                                const LangOptions &LangOpts,
                                                const FrontendOptions &FEOpts,
                                                MacroBuilder &Builder) {
-  if (!LangOpts.Microsoft && !LangOpts.TraditionalCPP)
+  if (!LangOpts.MicrosoftExt && !LangOpts.TraditionalCPP)
     Builder.defineMacro("__STDC__");
   if (LangOpts.Freestanding)
     Builder.defineMacro("__STDC_HOSTED__", "0");
@@ -431,7 +431,7 @@ static void InitializePredefinedMacros(const TargetInfo &TI,
         Builder.defineMacro("OBJC_ZEROCOST_EXCEPTIONS");
     }
 
-    if (LangOpts.getGCMode() != LangOptions::NonGC)
+    if (LangOpts.getGC() != LangOptions::NonGC)
       Builder.defineMacro("__OBJC_GC__");
 
     if (LangOpts.NeXTRuntime)
@@ -470,7 +470,7 @@ static void InitializePredefinedMacros(const TargetInfo &TI,
     Builder.defineMacro("__private_extern__", "extern");
   }
 
-  if (LangOpts.Microsoft) {
+  if (LangOpts.MicrosoftExt) {
     // Both __PRETTY_FUNCTION__ and __FUNCTION__ are GCC extensions, however
     // VC++ appears to only like __FUNCTION__.
     Builder.defineMacro("__PRETTY_FUNCTION__", "__FUNCTION__");
@@ -556,9 +556,6 @@ static void InitializePredefinedMacros(const TargetInfo &TI,
   if (!TargetInfo::isTypeSigned(TI.getWIntType()))
     Builder.defineMacro("__WINT_UNSIGNED__");
 
-  if (!TargetInfo::isTypeSigned(TI.getWCharType()))
-    Builder.defineMacro("__WCHAR_UNSIGNED__");
-
   // Define exact-width integer types for stdint.h
   Builder.defineMacro("__INT" + Twine(TI.getCharWidth()) + "_TYPE__",
                       "char");
@@ -604,9 +601,9 @@ static void InitializePredefinedMacros(const TargetInfo &TI,
   int Dig = PickFP(&TI.getLongDoubleFormat(), -1/*FIXME*/, 17, 21, 33, 36);
   Builder.defineMacro("__DECIMAL_DIG__", Twine(Dig));
 
-  if (LangOpts.getStackProtectorMode() == LangOptions::SSPOn)
+  if (LangOpts.getStackProtector() == LangOptions::SSPOn)
     Builder.defineMacro("__SSP__");
-  else if (LangOpts.getStackProtectorMode() == LangOptions::SSPReq)
+  else if (LangOpts.getStackProtector() == LangOptions::SSPReq)
     Builder.defineMacro("__SSP_ALL__", "2");
 
   if (FEOpts.ProgramAction == frontend::RewriteObjC)
@@ -710,6 +707,10 @@ void clang::InitializePreprocessor(Preprocessor &PP,
   InitializeFileRemapping(PP.getDiagnostics(), PP.getSourceManager(),
                           PP.getFileManager(), InitOpts);
 
+  // Specify whether the preprocessor should replace #include/#import with
+  // module imports when plausible.
+  PP.setAutoModuleImport(InitOpts.AutoModuleImport);
+
   // Emit line markers for various builtin sections of the file.  We don't do
   // this in asm preprocessor mode, because "# 4" is not a line marker directive
   // in this mode.
@@ -783,7 +784,7 @@ void clang::InitializePreprocessor(Preprocessor &PP,
                           
   // Copy PredefinedBuffer into the Preprocessor.
   PP.setPredefines(Predefines.str());
-
+  
   // Initialize the header search object.
   ApplyHeaderSearchOptions(PP.getHeaderSearchInfo(), HSOpts,
                            PP.getLangOptions(),

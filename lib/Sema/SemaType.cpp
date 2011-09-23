@@ -664,7 +664,7 @@ static QualType ConvertDeclSpecToType(TypeProcessingState &state) {
       // each struct declaration and type name."
       // FIXME: Does Microsoft really have the implicit int extension in C++?
       if (S.getLangOptions().CPlusPlus &&
-          !S.getLangOptions().Microsoft) {
+          !S.getLangOptions().MicrosoftExt) {
         S.Diag(DeclLoc, diag::err_missing_type_specifier)
           << DS.getSourceRange();
 
@@ -1036,6 +1036,11 @@ static QualType inferARCLifetimeForPointee(Sema &S, QualType type,
   // retaining.  This currently only triggers for Class (possibly
   // protocol-qualifed, and arrays thereof).
   } else if (type->isObjCARCImplicitlyUnretainedType()) {
+    implicitLifetime = Qualifiers::OCL_ExplicitNone;
+
+  // If we are in an unevaluated context, like sizeof, assume ExplicitNone and
+  // don't give error.
+  } else if (S.ExprEvalContexts.back().Context == Sema::Unevaluated) {
     implicitLifetime = Qualifiers::OCL_ExplicitNone;
 
   // If that failed, give an error and recover using __autoreleasing.

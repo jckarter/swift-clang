@@ -183,6 +183,38 @@ static void addProfileRT(const ToolChain &TC, const ArgList &Args,
   CmdArgs.push_back(Args.MakeArgString(ProfileRT));
 }
 
+static void AddIncludeDirectoryList(const ArgList &Args,
+                                    ArgStringList &CmdArgs,
+                                    const char *ArgName,
+                                    const char *DirList) {
+  if (!DirList)
+    return; // Nothing to do.
+
+  StringRef Dirs(DirList);
+  if (Dirs.empty()) // Empty string should not add '.'.
+    return;
+
+  StringRef::size_type Delim;
+  while ((Delim = Dirs.find(llvm::sys::PathSeparator)) != StringRef::npos) {
+    if (Delim == 0) { // Leading colon.
+      CmdArgs.push_back(ArgName);
+      CmdArgs.push_back(".");
+    } else {
+      CmdArgs.push_back(ArgName);
+      CmdArgs.push_back(Args.MakeArgString(Dirs.substr(0, Delim)));
+    }
+    Dirs = Dirs.substr(Delim + 1);
+  }
+
+  if (Dirs.empty()) { // Trailing colon.
+    CmdArgs.push_back(ArgName);
+    CmdArgs.push_back(".");
+  } else { // Add the last path.
+    CmdArgs.push_back(ArgName);
+    CmdArgs.push_back(Args.MakeArgString(Dirs));
+  }
+}
+
 void Clang::AddPreprocessingOptions(const Driver &D,
                                     const ArgList &Args,
                                     ArgStringList &CmdArgs,
@@ -375,6 +407,39 @@ void Clang::AddPreprocessingOptions(const Driver &D,
       CmdArgs.push_back(A->getValue(Args));
     }
   }
+  
+  // If a module path was provided, pass it along. Otherwise, use a temporary
+  // directory.
+  if (Arg *A = Args.getLastArg(options::OPT_fmodule_cache_path)) {
+    A->claim();
+    A->render(Args, CmdArgs);
+  } else {
+    llvm::SmallString<128> DefaultModuleCache;
+    llvm::sys::path::system_temp_directory(/*erasedOnReboot=*/false, 
+                                           DefaultModuleCache);
+    llvm::sys::path::append(DefaultModuleCache, "clang-module-cache");
+    CmdArgs.push_back("-fmodule-cache-path");
+    CmdArgs.push_back(Args.MakeArgString(DefaultModuleCache));
+  }
+  
+  Args.AddAllArgs(CmdArgs, options::OPT_fauto_module_import);
+
+  // Parse additional include paths from environment variables.
+  // CPATH - included following the user specified includes (but prior to
+  // builtin and standard includes).
+  AddIncludeDirectoryList(Args, CmdArgs, "-I", ::getenv("CPATH"));
+  // C_INCLUDE_PATH - system includes enabled when compiling C.
+  AddIncludeDirectoryList(Args, CmdArgs, "-c-isystem",
+                          ::getenv("C_INCLUDE_PATH"));
+  // CPLUS_INCLUDE_PATH - system includes enabled when compiling C++.
+  AddIncludeDirectoryList(Args, CmdArgs, "-cxx-isystem",
+                          ::getenv("CPLUS_INCLUDE_PATH"));
+  // OBJC_INCLUDE_PATH - system includes enabled when compiling ObjC.
+  AddIncludeDirectoryList(Args, CmdArgs, "-objc-isystem",
+                          ::getenv("OBJC_INCLUDE_PATH"));
+  // OBJCPLUS_INCLUDE_PATH - system includes enabled when compiling ObjC++.
+  AddIncludeDirectoryList(Args, CmdArgs, "-objcxx-isystem",
+                          ::getenv("OBJCPLUS_INCLUDE_PATH"));
 }
 
 /// getARMTargetCPU - Get the (LLVM) name of the ARM cpu we are targeting.
@@ -1335,6 +1400,8 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
 
   case llvm::Triple::mips:
   case llvm::Triple::mipsel:
+  case llvm::Triple::mips64:
+  case llvm::Triple::mips64el:
     AddMIPSTargetArgs(Args, CmdArgs);
     break;
 
@@ -1768,6 +1835,11 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
   if (Args.hasFlag(options::OPT_fms_extensions, options::OPT_fno_ms_extensions,
                    getToolChain().getTriple().getOS() == llvm::Triple::Win32))
     CmdArgs.push_back("-fms-extensions");
+
+  // -fms-compatibility=0 is default.
+  if (Args.hasFlag(options::OPT_fms_compatibility, options::OPT_fno_ms_compatibility,
+                   getToolChain().getTriple().getOS() == llvm::Triple::Win32))
+    CmdArgs.push_back("-fms-compatibility");
 
   // -fmsc-version=1300 is default.
   if (Args.hasFlag(options::OPT_fms_extensions, options::OPT_fno_ms_extensions,
@@ -2209,7 +2281,8 @@ void ClangAs::ConstructJob(Compilation &C, const JobAction &JA,
 
   // Add the "effective" target triple.
   CmdArgs.push_back("-triple");
-  std::string TripleStr = getToolChain().ComputeEffectiveClangTriple(Args);
+  std::string TripleStr = 
+    getToolChain().ComputeEffectiveClangTriple(Args, Input.getType());
   CmdArgs.push_back(Args.MakeArgString(TripleStr));
 
   // Set the output mode, we currently only expect to be used as a real

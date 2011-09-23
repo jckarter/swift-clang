@@ -195,8 +195,8 @@ void Parser::ParseGNUAttributeArgs(IdentifierInfo *AttrName,
 
     if (Tok.is(tok::r_paren)) {
       // __attribute__(( mode(byte) ))
-      ConsumeParen(); // ignore the right paren loc for now
-      Attrs.addNew(AttrName, AttrNameLoc, 0, AttrNameLoc,
+      SourceLocation RParen = ConsumeParen();
+      Attrs.addNew(AttrName, SourceRange(AttrNameLoc, RParen), 0, AttrNameLoc,
                    ParmName, ParmLoc, 0, 0);
     } else if (Tok.is(tok::comma)) {
       ConsumeToken();
@@ -219,20 +219,21 @@ void Parser::ParseGNUAttributeArgs(IdentifierInfo *AttrName,
         ConsumeToken(); // Eat the comma, move to the next argument
       }
       if (ArgExprsOk && Tok.is(tok::r_paren)) {
-        ConsumeParen(); // ignore the right paren loc for now
-        Attrs.addNew(AttrName, AttrNameLoc, 0, AttrNameLoc,
+        SourceLocation RParen = ConsumeParen();
+        Attrs.addNew(AttrName, SourceRange(AttrNameLoc, RParen), 0, AttrNameLoc,
                      ParmName, ParmLoc, ArgExprs.take(), ArgExprs.size());
       }
     }
   } else { // not an identifier
     switch (Tok.getKind()) {
-    case tok::r_paren:
+    case tok::r_paren: {
     // parse a possibly empty comma separated list of expressions
       // __attribute__(( nonnull() ))
-      ConsumeParen(); // ignore the right paren loc for now
-      Attrs.addNew(AttrName, AttrNameLoc, 0, AttrNameLoc,
+      SourceLocation RParen = ConsumeParen();
+      Attrs.addNew(AttrName, SourceRange(AttrNameLoc, RParen), 0, AttrNameLoc,
                    0, SourceLocation(), 0, 0);
       break;
+    }
     case tok::kw_char:
     case tok::kw_wchar_t:
     case tok::kw_char16_t:
@@ -248,16 +249,16 @@ void Parser::ParseGNUAttributeArgs(IdentifierInfo *AttrName,
     case tok::kw_double:
     case tok::kw_void:
     case tok::kw_typeof: {
-      AttributeList *attr
-        = Attrs.addNew(AttrName, AttrNameLoc, 0, AttrNameLoc,
-                       0, SourceLocation(), 0, 0);
-      if (attr->getKind() == AttributeList::AT_IBOutletCollection)
-        Diag(Tok, diag::err_iboutletcollection_builtintype);
       // If it's a builtin type name, eat it and expect a rparen
       // __attribute__(( vec_type_hint(char) ))
-      ConsumeToken();
+      SourceLocation EndLoc = ConsumeToken();
       if (Tok.is(tok::r_paren))
-        ConsumeParen();
+        EndLoc = ConsumeParen();
+      AttributeList *attr
+        = Attrs.addNew(AttrName, SourceRange(AttrNameLoc, EndLoc), 0,
+                       AttrNameLoc, 0, SourceLocation(), 0, 0);
+      if (attr->getKind() == AttributeList::AT_IBOutletCollection)
+        Diag(Tok, diag::err_iboutletcollection_builtintype);
       break;
     }
     default:
@@ -281,8 +282,8 @@ void Parser::ParseGNUAttributeArgs(IdentifierInfo *AttrName,
       }
       // Match the ')'.
       if (ArgExprsOk && Tok.is(tok::r_paren)) {
-        ConsumeParen(); // ignore the right paren loc for now
-        Attrs.addNew(AttrName, AttrNameLoc, 0,
+        SourceLocation RParen = ConsumeParen();
+        Attrs.addNew(AttrName, SourceRange(AttrNameLoc, RParen), 0,
                      AttrNameLoc, 0, SourceLocation(),
                      ArgExprs.take(), ArgExprs.size());
       }
@@ -695,7 +696,7 @@ void Parser::ParseAvailabilityAttribute(IdentifierInfo &Availability,
   }
 
   // Record this attribute
-  attrs.addNew(&Availability, AvailabilityLoc, 
+  attrs.addNew(&Availability, SourceRange(AvailabilityLoc, RParenLoc), 
                0, SourceLocation(),
                Platform, PlatformLoc,
                Changes[Introduced],
@@ -2641,7 +2642,7 @@ void Parser::ParseStructUnionBody(SourceLocation RecordLoc,
   MaybeParseGNUAttributes(attrs);
 
   Actions.ActOnFields(getCurScope(),
-                      RecordLoc, TagDecl, FieldDecls.data(), FieldDecls.size(),
+                      RecordLoc, TagDecl, FieldDecls,
                       LBraceLoc, RBraceLoc,
                       attrs.getList());
   StructScope.Exit();
@@ -2700,7 +2701,7 @@ void Parser::ParseEnumSpecifier(SourceLocation StartLoc, DeclSpec &DS,
   MaybeParseGNUAttributes(attrs);
 
   bool AllowFixedUnderlyingType 
-    = getLang().CPlusPlus0x || getLang().Microsoft || getLang().ObjC2;
+    = getLang().CPlusPlus0x || getLang().MicrosoftExt || getLang().ObjC2;
 
   CXXScopeSpec &SS = DS.getTypeSpecScope();
   if (getLang().CPlusPlus) {
@@ -4151,7 +4152,7 @@ void Parser::ParseParameterDeclarationClause(
     DeclSpec DS(AttrFactory);
 	
     // Skip any Microsoft attributes before a param.
-    if (getLang().Microsoft && Tok.is(tok::l_square))
+    if (getLang().MicrosoftExt && Tok.is(tok::l_square))
       ParseMicrosoftAttributes(DS.getAttributes());
 
     SourceLocation DSStart = Tok.getLocation();

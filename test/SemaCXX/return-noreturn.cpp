@@ -1,4 +1,5 @@
 // RUN: %clang_cc1 %s -fsyntax-only -verify -Wreturn-type -Wmissing-noreturn -Wno-unreachable-code
+// RUN: %clang_cc1 %s -fsyntax-only -std=c++0x -verify -Wreturn-type -Wmissing-noreturn -Wno-unreachable-code
 
 // A destructor may be marked noreturn and should still influence the CFG.
 void pr6884_abort() __attribute__((noreturn));
@@ -7,6 +8,8 @@ struct pr6884_abort_struct {
   pr6884_abort_struct() {}
   ~pr6884_abort_struct() __attribute__((noreturn)) { pr6884_abort(); }
 };
+
+struct other { ~other() {} };
 
 // Ensure that destructors from objects are properly modeled in the CFG despite
 // the presence of switches, case statements, labels, and blocks. These tests
@@ -37,8 +40,62 @@ namespace abort_struct_complex_cfgs {
     switch (x) default: L1: L2: case 4: { pr6884_abort_struct(); }
   }
 
-  int h(int x) {
+  // Test that these constructs work even when extraneous blocks are created
+  // before and after the switch due to implicit destructors.
+  int g1(int x) {
+    other o;
+    switch (x) default: pr6884_abort_struct();
+  }
+  int g2(int x) {
+    other o;
+    switch (x) { default: pr6884_abort_struct(); }
+  }
+  int g2_positive(int x) {
+    other o;
+    switch (x) { default: ; }
+  } // expected-warning {{control reaches end of non-void function}}
+  int g3(int x) {
+    other o;
+    switch (x) { default: { pr6884_abort_struct(); } }
+  }
+  int g4(int x) {
+    other o;
+    switch (x) default: L1: L2: case 4: pr6884_abort_struct();
+  }
+  int g5(int x) {
+    other o;
+    switch (x) default: L1: { L2: case 4: pr6884_abort_struct(); }
+  }
+  int g6(int x) {
+    other o;
+    switch (x) default: L1: L2: case 4: { pr6884_abort_struct(); }
+  }
+
+  // Test that these constructs work even with variables carrying the no-return
+  // destructor instead of temporaries.
+  int h1(int x) {
+    other o;
+    switch (x) default: pr6884_abort_struct a;
+  }
+  int h2(int x) {
+    other o;
+    switch (x) { default: pr6884_abort_struct a; }
+  }
+  int h3(int x) {
+    other o;
     switch (x) { default: { pr6884_abort_struct a; } }
+  }
+  int h4(int x) {
+    other o;
+    switch (x) default: L1: L2: case 4: pr6884_abort_struct a;
+  }
+  int h5(int x) {
+    other o;
+    switch (x) default: L1: { L2: case 4: pr6884_abort_struct a; }
+  }
+  int h6(int x) {
+    other o;
+    switch (x) default: L1: L2: case 4: { pr6884_abort_struct a; }
   }
 }
 

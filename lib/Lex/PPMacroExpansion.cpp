@@ -93,7 +93,7 @@ void Preprocessor::RegisterBuiltinMacros() {
   Ident__has_include_next = RegisterBuiltinMacro(*this, "__has_include_next");
 
   // Microsoft Extensions.
-  if (Features.Microsoft) 
+  if (Features.MicrosoftExt) 
     Ident__pragma = RegisterBuiltinMacro(*this, "__pragma");
   else
     Ident__pragma = 0;
@@ -489,8 +489,7 @@ MacroArgs *Preprocessor::ReadFunctionLikeMacroArgs(Token &MacroName,
     return 0;
   }
 
-  return MacroArgs::create(MI, ArgTokens.data(), ArgTokens.size(),
-                           isVarargsElided, *this);
+  return MacroArgs::create(MI, ArgTokens, isVarargsElided, *this);
 }
 
 /// \brief Keeps macro expanded tokens for TokenLexers.
@@ -785,7 +784,7 @@ static bool EvaluateHasIncludeCommon(Token &Tok,
   // Search include directories.
   const DirectoryLookup *CurDir;
   const FileEntry *File =
-      PP.LookupFile(Filename, isAngled, LookupFrom, CurDir, NULL, NULL);
+      PP.LookupFile(Filename, isAngled, LookupFrom, CurDir, NULL, NULL, NULL);
 
   // Get the result value.  Result = true means the file exists.
   bool Result = File != 0;

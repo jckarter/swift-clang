@@ -18,6 +18,7 @@
 #include "CGCall.h"
 #include "CGCXXABI.h"
 #include "CGObjCRuntime.h"
+#include "CGOpenCLRuntime.h"
 #include "TargetInfo.h"
 #include "clang/Frontend/CodeGenOptions.h"
 #include "clang/AST/ASTContext.h"
@@ -27,7 +28,6 @@
 #include "clang/AST/DeclTemplate.h"
 #include "clang/AST/Mangle.h"
 #include "clang/AST/RecordLayout.h"
-#include "clang/Basic/Builtins.h"
 #include "clang/Basic/Diagnostic.h"
 #include "clang/Basic/SourceManager.h"
 #include "clang/Basic/TargetInfo.h"
@@ -66,15 +66,17 @@ CodeGenModule::CodeGenModule(ASTContext &C, const CodeGenOptions &CGO,
     ABI(createCXXABI(*this)), 
     Types(C, M, TD, getTargetCodeGenInfo().getABIInfo(), ABI, CGO),
     TBAA(0),
-    VTables(*this), ObjCRuntime(0), DebugInfo(0), ARCData(0), RRData(0),
-    CFConstantStringClassRef(0), ConstantStringClassRef(0),
+    VTables(*this), ObjCRuntime(0), OpenCLRuntime(0), DebugInfo(0), ARCData(0),
+    RRData(0), CFConstantStringClassRef(0), ConstantStringClassRef(0),
     NSConstantStringType(0),
     VMContext(M.getContext()),
     NSConcreteGlobalBlock(0), NSConcreteStackBlock(0),
     BlockObjectAssign(0), BlockObjectDispose(0),
     BlockDescriptorType(0), GenericBlockLiteralType(0) {
   if (Features.ObjC1)
-     createObjCRuntime();
+    createObjCRuntime();
+  if (Features.OpenCL)
+    createOpenCLRuntime();
 
   // Enable TBAA unless it's suppressed.
   if (!CodeGenOpts.RelaxedAliasing && CodeGenOpts.OptimizationLevel > 0)
@@ -110,6 +112,7 @@ CodeGenModule::CodeGenModule(ASTContext &C, const CodeGenOptions &CGO,
 
 CodeGenModule::~CodeGenModule() {
   delete ObjCRuntime;
+  delete OpenCLRuntime;
   delete &ABI;
   delete TBAA;
   delete DebugInfo;
@@ -122,6 +125,10 @@ void CodeGenModule::createObjCRuntime() {
     ObjCRuntime = CreateGNUObjCRuntime(*this);
   else
     ObjCRuntime = CreateMacObjCRuntime(*this);
+}
+
+void CodeGenModule::createOpenCLRuntime() {
+  OpenCLRuntime = new CGOpenCLRuntime(*this);
 }
 
 void CodeGenModule::Release() {
@@ -401,7 +408,12 @@ CodeGenModule::getFunctionLinkage(const FunctionDecl *D) {
   // definition somewhere else, so we can use available_externally linkage.
   if (Linkage == GVA_C99Inline)
     return llvm::Function::AvailableExternallyLinkage;
-  
+
+  // Note that Apple's kernel linker doesn't support symbol
+  // coalescing, so we need to avoid linkonce and weak linkages there.
+  // Normally, this means we just map to internal, but for explicit
+  // instantiations we'll map to external.
+
   // In C++, the compiler has to emit a definition in every translation unit
   // that references the function.  We should use linkonce_odr because
   // a) if all references in this translation unit are optimized away, we
@@ -420,7 +432,7 @@ CodeGenModule::getFunctionLinkage(const FunctionDecl *D) {
   if (Linkage == GVA_ExplicitTemplateInstantiation)
     return !Context.getLangOptions().AppleKext
              ? llvm::Function::WeakODRLinkage
-             : llvm::Function::InternalLinkage;
+             : llvm::Function::ExternalLinkage;
   
   // Otherwise, we have strong external linkage.
   assert(Linkage == GVA_StrongExternal);
@@ -473,9 +485,9 @@ void CodeGenModule::SetLLVMFunctionAttributesForDefinition(const Decl *D,
   if (isa<CXXConstructorDecl>(D) || isa<CXXDestructorDecl>(D))
     F->setUnnamedAddr(true);
 
-  if (Features.getStackProtectorMode() == LangOptions::SSPOn)
+  if (Features.getStackProtector() == LangOptions::SSPOn)
     F->addFnAttr(llvm::Attribute::StackProtect);
-  else if (Features.getStackProtectorMode() == LangOptions::SSPReq)
+  else if (Features.getStackProtector() == LangOptions::SSPReq)
     F->addFnAttr(llvm::Attribute::StackProtectReq);
   
   unsigned alignment = D->getMaxAlignment() / Context.getCharWidth();
@@ -1609,35 +1621,6 @@ void CodeGenModule::EmitAliasDefinition(GlobalDecl GD) {
   }
 
   SetCommonAttributes(D, GA);
-}
-
-/// getBuiltinLibFunction - Given a builtin id for a function like
-/// "__builtin_fabsf", return a Function* for "fabsf".
-llvm::Value *CodeGenModule::getBuiltinLibFunction(const FunctionDecl *FD,
-                                                  unsigned BuiltinID) {
-  assert((Context.BuiltinInfo.isLibFunction(BuiltinID) ||
-          Context.BuiltinInfo.isPredefinedLibFunction(BuiltinID)) &&
-         "isn't a lib fn");
-
-  // Get the name, skip over the __builtin_ prefix (if necessary).
-  StringRef Name;
-  GlobalDecl D(FD);
-
-  // If the builtin has been declared explicitly with an assembler label,
-  // use the mangled name. This differs from the plain label on platforms
-  // that prefix labels.
-  if (FD->hasAttr<AsmLabelAttr>())
-    Name = getMangledName(D);
-  else if (Context.BuiltinInfo.isLibFunction(BuiltinID))
-    Name = Context.BuiltinInfo.GetName(BuiltinID) + 10;
-  else
-    Name = Context.BuiltinInfo.GetName(BuiltinID);
-
-
-  llvm::FunctionType *Ty =
-    cast<llvm::FunctionType>(getTypes().ConvertType(FD->getType()));
-
-  return GetOrCreateLLVMFunction(Name, Ty, D, /*ForVTable=*/false);
 }
 
 llvm::Function *CodeGenModule::getIntrinsic(unsigned IID,
