@@ -8,6 +8,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "clang/Driver/Phases.h"
+#include "llvm/Support/ErrorHandling.h"
 
 #include <cassert>
 
@@ -23,5 +24,4 @@ const char *phases::getPhaseName(ID Id) {
   }
 
   llvm_unreachable("Invalid phase id.");
-  return 0;
 }
