@@ -12,6 +12,7 @@
 #include "clang/Driver/Arg.h"
 #include "clang/Driver/ArgList.h"
 #include "llvm/Support/raw_ostream.h"
+#include "llvm/Support/ErrorHandling.h"
 #include <cassert>
 #include <algorithm>
 using namespace clang::driver;
@@ -115,7 +116,6 @@ OptionGroup::OptionGroup(OptSpecifier ID, const char *Name,
 
 Arg *OptionGroup::accept(const ArgList &Args, unsigned &Index) const {
   llvm_unreachable("accept() should never be called on an OptionGroup");
-  return 0;
 }
 
 InputOption::InputOption(OptSpecifier ID)
@@ -124,7 +124,6 @@ InputOption::InputOption(OptSpecifier ID)
 
 Arg *InputOption::accept(const ArgList &Args, unsigned &Index) const {
   llvm_unreachable("accept() should never be called on an InputOption");
-  return 0;
 }
 
 UnknownOption::UnknownOption(OptSpecifier ID)
@@ -133,7 +132,6 @@ UnknownOption::UnknownOption(OptSpecifier ID)
 
 Arg *UnknownOption::accept(const ArgList &Args, unsigned &Index) const {
   llvm_unreachable("accept() should never be called on an UnknownOption");
-  return 0;
 }
 
 FlagOption::FlagOption(OptSpecifier ID, const char *Name,
