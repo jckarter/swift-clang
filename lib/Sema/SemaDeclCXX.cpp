@@ -9978,7 +9978,6 @@ void Sema::SetDeclDefaulted(Decl *Dcl, SourceLocation DefaultLoc) {
 
     case CXXInvalid:
       llvm_unreachable("Invalid special member.");
-      break;
     }
   } else {
     Diag(DefaultLoc, diag::err_default_special_members);
@@ -10302,7 +10301,10 @@ bool Sema::DefineUsedVTables() {
     // Optionally warn if we're emitting a weak vtable.
     if (Class->getLinkage() == ExternalLinkage &&
         Class->getTemplateSpecializationKind() != TSK_ImplicitInstantiation) {
-      if (!KeyFunction || (KeyFunction->hasBody() && KeyFunction->isInlined()))
+      const FunctionDecl *KeyFunctionDef = 0;
+      if (!KeyFunction || 
+          (KeyFunction->hasBody(KeyFunctionDef) && 
+           KeyFunctionDef->isInlined()))
         Diag(Class->getLocation(), diag::warn_weak_vtable) << Class;
     }
   }
