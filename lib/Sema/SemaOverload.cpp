@@ -909,20 +909,22 @@ Sema::TryImplicitConversion(Expr *From, QualType ToType,
 /// explicit user-defined conversions are permitted.
 ExprResult
 Sema::PerformImplicitConversion(Expr *From, QualType ToType,
-                                AssignmentAction Action, bool AllowExplicit) {
+                                AssignmentAction Action, bool AllowExplicit,
+                                bool Diagnose) {
   ImplicitConversionSequence ICS;
-  return PerformImplicitConversion(From, ToType, Action, AllowExplicit, ICS);
+  return PerformImplicitConversion(From, ToType, Action, AllowExplicit, ICS,
+                                   Diagnose);
 }
 
 ExprResult
 Sema::PerformImplicitConversion(Expr *From, QualType ToType,
                                 AssignmentAction Action, bool AllowExplicit,
-                                ImplicitConversionSequence& ICS) {
+                                ImplicitConversionSequence& ICS,
+                                bool Diagnose) {
   // Objective-C ARC: Determine whether we will allow the writeback conversion.
   bool AllowObjCWritebackConversion
     = getLangOptions().ObjCAutoRefCount && 
       (Action == AA_Passing || Action == AA_Sending);
-  
 
   ICS = clang::TryImplicitConversion(*this, From, ToType,
                                      /*SuppressUserConversions=*/false,
@@ -930,6 +932,8 @@ Sema::PerformImplicitConversion(Expr *From, QualType ToType,
                                      /*InOverloadResolution=*/false,
                                      /*CStyle=*/false,
                                      AllowObjCWritebackConversion);
+  if (!Diagnose && ICS.isFailure())
+    return ExprError();
   return PerformImplicitConversion(From, ToType, ICS, Action);
 }
 
@@ -6907,6 +6911,17 @@ void DiagnoseBadConversion(Sema &S, OverloadCandidate *Cand, unsigned I) {
         << (FromExpr ? FromExpr->getSourceRange() : SourceRange())
         << FromTy << (CVR - 1) << I+1;
     }
+    MaybeEmitInheritedConstructorNote(S, Fn);
+    return;
+  }
+
+  // Special diagnostic for failure to convert an initializer list, since
+  // telling the user that it has type void is not useful.
+  if (FromExpr && isa<InitListExpr>(FromExpr)) {
+    S.Diag(Fn->getLocation(), diag::note_ovl_candidate_bad_list_argument)
+      << (unsigned) FnKind << FnDesc
+      << (FromExpr ? FromExpr->getSourceRange() : SourceRange())
+      << FromTy << ToTy << (unsigned) isObjectArgument << I+1;
     MaybeEmitInheritedConstructorNote(S, Fn);
     return;
   }

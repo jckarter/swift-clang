@@ -22,6 +22,7 @@
 #include "clang/Sema/DeclSpec.h"
 #include "clang/Sema/ExternalSemaSource.h"
 #include "clang/Sema/LocInfoType.h"
+#include "clang/Sema/MultiInitializer.h"
 #include "clang/Sema/TypoCorrection.h"
 #include "clang/Sema/Weak.h"
 #include "clang/AST/Expr.h"
@@ -1383,7 +1384,7 @@ public:
                                              QualType ResultType,
                                              Expr *Value,
                                              bool AllowNRVO = true);
-  
+
   bool CanPerformCopyInitialization(const InitializedEntity &Entity,
                                     ExprResult Init);
   ExprResult PerformCopyInitialization(const InitializedEntity &Entity,
@@ -2217,8 +2218,9 @@ public:
   //===--------------------------------------------------------------------===//
   // Expression Parsing Callbacks: SemaExpr.cpp.
 
-  bool DiagnoseUseOfDecl(NamedDecl *D, SourceLocation Loc, 
-                         const ObjCInterfaceDecl *UnknownObjCClass=0);
+  bool CanUseDecl(NamedDecl *D);
+  bool DiagnoseUseOfDecl(NamedDecl *D, SourceLocation Loc,
+                         const ObjCInterfaceDecl *UnknownObjCClass = 0);
   std::string getDeletedOrUnavailableSuffix(const FunctionDecl *FD);
   bool DiagnosePropertyAccessorMismatch(ObjCPropertyDecl *PD,
                                         ObjCMethodDecl *Getter,
@@ -3397,24 +3399,37 @@ public:
                                     SourceLocation RParenLoc,
                                     SourceLocation EllipsisLoc);
 
-  MemInitResult BuildMemberInitializer(ValueDecl *Member, Expr **Args,
-                                       unsigned NumArgs, SourceLocation IdLoc,
-                                       SourceLocation LParenLoc,
-                                       SourceLocation RParenLoc);
+  MemInitResult ActOnMemInitializer(Decl *ConstructorD,
+                                    Scope *S,
+                                    CXXScopeSpec &SS,
+                                    IdentifierInfo *MemberOrBase,
+                                    ParsedType TemplateTypeTy,
+                                    SourceLocation IdLoc,
+                                    Expr *InitList,
+                                    SourceLocation EllipsisLoc);
+
+  MemInitResult BuildMemInitializer(Decl *ConstructorD,
+                                    Scope *S,
+                                    CXXScopeSpec &SS,
+                                    IdentifierInfo *MemberOrBase,
+                                    ParsedType TemplateTypeTy,
+                                    SourceLocation IdLoc,
+                                    const MultiInitializer &Init,
+                                    SourceLocation EllipsisLoc);
+
+  MemInitResult BuildMemberInitializer(ValueDecl *Member,
+                                       const MultiInitializer &Args,
+                                       SourceLocation IdLoc);
 
   MemInitResult BuildBaseInitializer(QualType BaseType,
                                      TypeSourceInfo *BaseTInfo,
-                                     Expr **Args, unsigned NumArgs,
-                                     SourceLocation LParenLoc,
-                                     SourceLocation RParenLoc,
+                                     const MultiInitializer &Args,
                                      CXXRecordDecl *ClassDecl,
                                      SourceLocation EllipsisLoc);
 
   MemInitResult BuildDelegatingInitializer(TypeSourceInfo *TInfo,
-                                           Expr **Args, unsigned NumArgs,
+                                           const MultiInitializer &Args,
                                            SourceLocation BaseLoc,
-                                           SourceLocation RParenLoc,
-                                           SourceLocation LParenLoc,
                                            CXXRecordDecl *ClassDecl);
 
   bool SetDelegatingInitializer(CXXConstructorDecl *Constructor,
@@ -5580,7 +5595,8 @@ public:
   // CheckAssignmentOperands, and ActOnReturnStmt. Prior to type checking,
   // this routine performs the default function/array converions.
   AssignConvertType CheckSingleAssignmentConstraints(QualType LHSType,
-                                                     ExprResult &RHS);
+                                                     ExprResult &RHS,
+                                                     bool Diagnose = true);
 
   // \brief If the lhs type is a transparent union, check whether we
   // can initialize the transparent union with the given expression.
@@ -5593,11 +5609,13 @@ public:
 
   ExprResult PerformImplicitConversion(Expr *From, QualType ToType,
                                        AssignmentAction Action,
-                                       bool AllowExplicit = false);
+                                       bool AllowExplicit = false,
+                                       bool Diagnose = true);
   ExprResult PerformImplicitConversion(Expr *From, QualType ToType,
                                        AssignmentAction Action,
                                        bool AllowExplicit,
-                                       ImplicitConversionSequence& ICS);
+                                       ImplicitConversionSequence& ICS,
+                                       bool Diagnose = true);
   ExprResult PerformImplicitConversion(Expr *From, QualType ToType,
                                        const ImplicitConversionSequence& ICS,
                                        AssignmentAction Action,
@@ -5680,8 +5698,6 @@ public:
                                       SourceLocation Loc, bool isRelational);
 
   /// type checking declaration initializers (C99 6.7.8)
-  bool CheckInitList(const InitializedEntity &Entity,
-                     InitListExpr *&InitList, QualType &DeclType);
   bool CheckForConstantInitializer(Expr *e, QualType t);
 
   // type checking C++ declaration initializers (C++ [dcl.init]).

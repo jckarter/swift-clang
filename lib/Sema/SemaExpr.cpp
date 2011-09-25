@@ -41,6 +41,20 @@
 using namespace clang;
 using namespace sema;
 
+/// \brief Determine whether the use of this declaration is valid, without
+/// emitting diagnostics.
+bool Sema::CanUseDecl(NamedDecl *D) {
+  // See if this is an auto-typed variable whose initializer we are parsing.
+  if (ParsingInitForAutoVars.count(D))
+    return false;
+
+  // See if this is a deleted function.
+  if (FunctionDecl *FD = dyn_cast<FunctionDecl>(D)) {
+    if (FD->isDeleted())
+      return false;
+  }
+  return true;
+}
 
 /// \brief Determine whether the use of this declaration is valid, and
 /// emit any corresponding diagnostics.
@@ -50,9 +64,6 @@ using namespace sema;
 /// it might warn if a deprecated or unavailable declaration is being
 /// used, or produce an error (and return true) if a C++0x deleted
 /// function is being used.
-///
-/// If IgnoreDeprecated is set to true, this should not warn about deprecated
-/// decls.
 ///
 /// \returns true if there was an error (this declaration cannot be
 /// referenced), false otherwise.
@@ -1690,6 +1701,16 @@ ExprResult Sema::ActOnIdExpression(Scope *S,
     // If this name wasn't predeclared and if this is not a function
     // call, diagnose the problem.
     if (R.empty()) {
+
+      // In Microsoft mode, if we are inside a template class member function
+      // and we can't resolve an identifier then assume the identifier is type
+      // dependent. The goal is to postpone name lookup to instantiation time 
+      // to be able to search into type dependent base classes.
+      if (getLangOptions().MicrosoftMode && CurContext->isDependentContext() &&
+          isa<CXXMethodDecl>(CurContext))
+        return ActOnDependentIdExpression(SS, NameInfo, IsAddressOfOperand,
+                                          TemplateArgs);
+
       if (DiagnoseEmptyLookup(S, SS, R, CTC_Unknown))
         return ExprError();
 
@@ -5649,7 +5670,8 @@ Sema::CheckTransparentUnionArgumentConstraints(QualType ArgType,
 }
 
 Sema::AssignConvertType
-Sema::CheckSingleAssignmentConstraints(QualType LHSType, ExprResult &RHS) {
+Sema::CheckSingleAssignmentConstraints(QualType LHSType, ExprResult &RHS,
+                                       bool Diagnose) {
   if (getLangOptions().CPlusPlus) {
     if (!LHSType->isRecordType()) {
       // C++ 5.17p3: If the left operand is not of class type, the
@@ -5657,7 +5679,7 @@ Sema::CheckSingleAssignmentConstraints(QualType LHSType, ExprResult &RHS) {
       // cv-unqualified type of the left operand.
       ExprResult Res = PerformImplicitConversion(RHS.get(),
                                                  LHSType.getUnqualifiedType(),
-                                                 AA_Assigning);
+                                                 AA_Assigning, Diagnose);
       if (Res.isInvalid())
         return Incompatible;
       Sema::AssignConvertType result = Compatible;
@@ -5671,7 +5693,7 @@ Sema::CheckSingleAssignmentConstraints(QualType LHSType, ExprResult &RHS) {
 
     // FIXME: Currently, we fall through and treat C++ classes like C
     // structures.
-  }  
+  }
 
   // C99 6.5.16.1p1: the left operand is a pointer and the right is
   // a null pointer constant.
