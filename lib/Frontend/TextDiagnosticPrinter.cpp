@@ -20,7 +20,6 @@
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/ADT/SmallString.h"
-#include "llvm/ADT/StringExtras.h"
 #include <algorithm>
 using namespace clang;
 
@@ -88,7 +87,7 @@ static void PrintIncludeStackRecursively(raw_ostream &OS,
 /// \param Level The diagnostic level of the message this stack pertains to.
 /// \param Loc   The include location of the current file (not the diagnostic
 ///              location).
-void TextDiagnosticPrinter::PrintIncludeStack(Diagnostic::Level Level,
+void TextDiagnosticPrinter::PrintIncludeStack(DiagnosticsEngine::Level Level,
                                               SourceLocation Loc,
                                               const SourceManager &SM) {
   // Skip redundant include stacks altogether.
@@ -96,7 +95,7 @@ void TextDiagnosticPrinter::PrintIncludeStack(Diagnostic::Level Level,
     return;
   LastWarningLoc = Loc;
 
-  if (!DiagOpts->ShowNoteIncludeStack && Level == Diagnostic::Note)
+  if (!DiagOpts->ShowNoteIncludeStack && Level == DiagnosticsEngine::Note)
     return;
 
   PrintIncludeStackRecursively(OS, SM, Loc, DiagOpts->ShowLocation);
@@ -292,42 +291,39 @@ static SourceLocation getImmediateMacroCalleeLoc(const SourceManager &SM,
 
 namespace {
 
-/// \brief Class to encapsulate the logic for printing a caret diagnostic
-/// message.
+/// \brief Class to encapsulate the logic for formatting and printing a textual
+/// diagnostic message.
 ///
-/// This class provides an interface for building and emitting a caret
-/// diagnostic, including all of the macro backtrace caret diagnostics, FixIt
-/// Hints, and code snippets. In the presence of macros this turns into
-/// a recursive process and so the class provides common state across the
-/// emission of a particular diagnostic, while each invocation of \see Emit()
-/// walks down the macro stack.
+/// This class provides an interface for building and emitting a textual
+/// diagnostic, including all of the macro backtraces, caret diagnostics, FixIt
+/// Hints, and code snippets. In the presence of macros this involves
+/// a recursive process, synthesizing notes for each macro expansion.
 ///
-/// This logic assumes that the core diagnostic location and text has already
-/// been emitted and focuses on emitting the pretty caret display and macro
-/// backtrace following that.
+/// The purpose of this class is to isolate the implementation of printing
+/// beautiful text diagnostics from any particular interfaces. The Clang
+/// DiagnosticClient is implemented through this class as is diagnostic
+/// printing coming out of libclang.
 ///
-/// FIXME: Hoist helper routines specific to caret diagnostics into class
-/// methods to reduce paramater passing churn.
-class CaretDiagnostic {
+/// A brief worklist:
+/// FIXME: Sink the printing of the diagnostic message itself into this class.
+/// FIXME: Sink the printing of the include stack into this class.
+/// FIXME: Remove the TextDiagnosticPrinter as an input.
+/// FIXME: Sink the recursive printing of template instantiations into this
+/// class.
+class TextDiagnostic {
   TextDiagnosticPrinter &Printer;
   raw_ostream &OS;
   const SourceManager &SM;
   const LangOptions &LangOpts;
   const DiagnosticOptions &DiagOpts;
-  const unsigned Columns, MacroSkipStart, MacroSkipEnd;
 
 public:
-  CaretDiagnostic(TextDiagnosticPrinter &Printer,
+  TextDiagnostic(TextDiagnosticPrinter &Printer,
                   raw_ostream &OS,
                   const SourceManager &SM,
                   const LangOptions &LangOpts,
-                  const DiagnosticOptions &DiagOpts,
-                  unsigned Columns,
-                  unsigned MacroSkipStart,
-                  unsigned MacroSkipEnd)
-    : Printer(Printer), OS(OS), SM(SM), LangOpts(LangOpts), DiagOpts(DiagOpts),
-      Columns(Columns), MacroSkipStart(MacroSkipStart),
-      MacroSkipEnd(MacroSkipEnd) {
+                  const DiagnosticOptions &DiagOpts)
+    : Printer(Printer), OS(OS), SM(SM), LangOpts(LangOpts), DiagOpts(DiagOpts) {
   }
 
   /// \brief Emit the caret diagnostic text.
@@ -341,79 +337,106 @@ public:
   /// \param Loc The location for this caret.
   /// \param Ranges The underlined ranges for this code snippet.
   /// \param Hints The FixIt hints active for this diagnostic.
+  /// \param MacroSkipEnd The depth to stop skipping macro expansions.
   /// \param OnMacroInst The current depth of the macro expansion stack.
   void Emit(SourceLocation Loc,
             SmallVectorImpl<CharSourceRange>& Ranges,
             ArrayRef<FixItHint> Hints,
+            unsigned &MacroDepth,
             unsigned OnMacroInst = 0) {
     assert(!Loc.isInvalid() && "must have a valid source location here");
 
-    // If this is a macro ID, first emit information about where this was
-    // expanded (recursively) then emit information about where the token was
-    // spelled from.
-    if (!Loc.isFileID()) {
-      // Whether to suppress printing this macro expansion.
-      bool Suppressed 
-        = OnMacroInst >= MacroSkipStart && OnMacroInst < MacroSkipEnd;
-
-      // When processing macros, skip over the expansions leading up to
-      // a macro argument, and trace the argument's expansion stack instead.
-      Loc = skipToMacroArgExpansion(SM, Loc);
-
-      SourceLocation OneLevelUp = getImmediateMacroCallerLoc(SM, Loc);
-
-      // FIXME: Map ranges?
-      Emit(OneLevelUp, Ranges, Hints, OnMacroInst + 1);
-
-      // Map the location.
-      Loc = getImmediateMacroCalleeLoc(SM, Loc);
-
-      // Map the ranges.
-      for (SmallVectorImpl<CharSourceRange>::iterator I = Ranges.begin(),
-                                                      E = Ranges.end();
-           I != E; ++I) {
-        SourceLocation Start = I->getBegin(), End = I->getEnd();
-        if (Start.isMacroID())
-          I->setBegin(getImmediateMacroCalleeLoc(SM, Start));
-        if (End.isMacroID())
-          I->setEnd(getImmediateMacroCalleeLoc(SM, End));
-      }
-
-      if (!Suppressed) {
-        // Don't print recursive expansion notes from an expansion note.
-        Loc = SM.getSpellingLoc(Loc);
-
-        // Get the pretty name, according to #line directives etc.
-        PresumedLoc PLoc = SM.getPresumedLoc(Loc);
-        if (PLoc.isInvalid())
-          return;
-
-        // If this diagnostic is not in the main file, print out the
-        // "included from" lines.
-        Printer.PrintIncludeStack(Diagnostic::Note, PLoc.getIncludeLoc(), SM);
-
-        if (DiagOpts.ShowLocation) {
-          // Emit the file/line/column that this expansion came from.
-          OS << PLoc.getFilename() << ':' << PLoc.getLine() << ':';
-          if (DiagOpts.ShowColumn)
-            OS << PLoc.getColumn() << ':';
-          OS << ' ';
-        }
-        OS << "note: expanded from:\n";
-
-        Emit(Loc, Ranges, ArrayRef<FixItHint>(), OnMacroInst + 1);
-        return;
-      }
-
-      if (OnMacroInst == MacroSkipStart) {
-        // Tell the user that we've skipped contexts.
-        OS << "note: (skipping " << (MacroSkipEnd - MacroSkipStart) 
-        << " expansions in backtrace; use -fmacro-backtrace-limit=0 to see "
-        "all)\n";
-      }
-
+    // If this is a file source location, directly emit the source snippet and
+    // caret line. Also record the macro depth reached.
+    if (Loc.isFileID()) {
+      assert(MacroDepth == 0 && "We shouldn't hit a leaf node twice!");
+      MacroDepth = OnMacroInst;
+      EmitSnippetAndCaret(Loc, Ranges, Hints);
       return;
     }
+    // Otherwise recurse through each macro expansion layer.
+
+    // When processing macros, skip over the expansions leading up to
+    // a macro argument, and trace the argument's expansion stack instead.
+    Loc = skipToMacroArgExpansion(SM, Loc);
+
+    SourceLocation OneLevelUp = getImmediateMacroCallerLoc(SM, Loc);
+
+    // FIXME: Map ranges?
+    Emit(OneLevelUp, Ranges, Hints, MacroDepth, OnMacroInst + 1);
+
+    // Map the location.
+    Loc = getImmediateMacroCalleeLoc(SM, Loc);
+
+    unsigned MacroSkipStart = 0, MacroSkipEnd = 0;
+    if (MacroDepth > DiagOpts.MacroBacktraceLimit) {
+      MacroSkipStart = DiagOpts.MacroBacktraceLimit / 2 +
+        DiagOpts.MacroBacktraceLimit % 2;
+      MacroSkipEnd = MacroDepth - DiagOpts.MacroBacktraceLimit / 2;
+    }
+
+    // Whether to suppress printing this macro expansion.
+    bool Suppressed = (OnMacroInst >= MacroSkipStart &&
+                       OnMacroInst < MacroSkipEnd);
+
+    // Map the ranges.
+    for (SmallVectorImpl<CharSourceRange>::iterator I = Ranges.begin(),
+                                                    E = Ranges.end();
+         I != E; ++I) {
+      SourceLocation Start = I->getBegin(), End = I->getEnd();
+      if (Start.isMacroID())
+        I->setBegin(getImmediateMacroCalleeLoc(SM, Start));
+      if (End.isMacroID())
+        I->setEnd(getImmediateMacroCalleeLoc(SM, End));
+    }
+
+    if (!Suppressed) {
+      // Don't print recursive expansion notes from an expansion note.
+      Loc = SM.getSpellingLoc(Loc);
+
+      // Get the pretty name, according to #line directives etc.
+      PresumedLoc PLoc = SM.getPresumedLoc(Loc);
+      if (PLoc.isInvalid())
+        return;
+
+      // If this diagnostic is not in the main file, print out the
+      // "included from" lines.
+      Printer.PrintIncludeStack(DiagnosticsEngine::Note, PLoc.getIncludeLoc(), 
+                                SM);
+
+      if (DiagOpts.ShowLocation) {
+        // Emit the file/line/column that this expansion came from.
+        OS << PLoc.getFilename() << ':' << PLoc.getLine() << ':';
+        if (DiagOpts.ShowColumn)
+          OS << PLoc.getColumn() << ':';
+        OS << ' ';
+      }
+      OS << "note: expanded from:\n";
+
+      EmitSnippetAndCaret(Loc, Ranges, ArrayRef<FixItHint>());
+      return;
+    }
+
+    if (OnMacroInst == MacroSkipStart) {
+      // Tell the user that we've skipped contexts.
+      OS << "note: (skipping " << (MacroSkipEnd - MacroSkipStart) 
+      << " expansions in backtrace; use -fmacro-backtrace-limit=0 to see "
+      "all)\n";
+    }
+  }
+
+  /// \brief Emit a code snippet and caret line.
+  ///
+  /// This routine emits a single line's code snippet and caret line..
+  ///
+  /// \param Loc The location for the caret.
+  /// \param Ranges The underlined ranges for this code snippet.
+  /// \param Hints The FixIt hints active for this diagnostic.
+  void EmitSnippetAndCaret(SourceLocation Loc,
+                           SmallVectorImpl<CharSourceRange>& Ranges,
+                           ArrayRef<FixItHint> Hints) {
+    assert(!Loc.isInvalid() && "must have a valid source location here");
+    assert(Loc.isFileID() && "must have a file location here");
 
     // Decompose the location into a FID/Offset pair.
     std::pair<FileID, unsigned> LocInfo = SM.getDecomposedLoc(Loc);
@@ -483,6 +506,7 @@ public:
 
     // If the source line is too long for our terminal, select only the
     // "interesting" source region within that line.
+    unsigned Columns = DiagOpts.MessageLength;
     if (Columns && SourceLine.size() > Columns)
       SelectInterestingSourceRegion(SourceLine, CaretLine, FixItInsertionLine,
                                     CaretEndColNo, Columns);
@@ -739,23 +763,6 @@ private:
 
 } // end namespace
 
-void TextDiagnosticPrinter::EmitCaretDiagnostic(
-    SourceLocation Loc,
-    SmallVectorImpl<CharSourceRange>& Ranges,
-    const SourceManager &SM,
-    ArrayRef<FixItHint> Hints,
-    unsigned Columns,
-    unsigned MacroSkipStart,
-    unsigned MacroSkipEnd) {
-  assert(LangOpts && "Unexpected diagnostic outside source file processing");
-  assert(DiagOpts && "Unexpected diagnostic without options set");
-  // FIXME: Remove this method and have clients directly build and call Emit on
-  // the CaretDiagnostic object.
-  CaretDiagnostic CaretDiag(*this, OS, SM, *LangOpts, *DiagOpts,
-                            Columns, MacroSkipStart, MacroSkipEnd);
-  CaretDiag.Emit(Loc, Ranges, Hints);
-}
-
 /// \brief Skip over whitespace in the string, starting at the given
 /// index.
 ///
@@ -848,87 +855,6 @@ static unsigned findEndOfWord(unsigned Start,
   return findEndOfWord(Start + 1, Str, Length, Column + 1, Columns);
 }
 
-/// \brief Print the given string to a stream, word-wrapping it to
-/// some number of columns in the process.
-///
-/// \brief OS the stream to which the word-wrapping string will be
-/// emitted.
-///
-/// \brief Str the string to word-wrap and output.
-///
-/// \brief Columns the number of columns to word-wrap to.
-///
-/// \brief Column the column number at which the first character of \p
-/// Str will be printed. This will be non-zero when part of the first
-/// line has already been printed.
-///
-/// \brief Indentation the number of spaces to indent any lines beyond
-/// the first line.
-///
-/// \returns true if word-wrapping was required, or false if the
-/// string fit on the first line.
-static bool PrintWordWrapped(raw_ostream &OS,
-                             const SmallVectorImpl<char> &Str,
-                             unsigned Columns,
-                             unsigned Column = 0,
-                             unsigned Indentation = WordWrapIndentation) {
-  unsigned Length = Str.size();
-
-  // If there is a newline in this message somewhere, find that
-  // newline and split the message into the part before the newline
-  // (which will be word-wrapped) and the part from the newline one
-  // (which will be emitted unchanged).
-  for (unsigned I = 0; I != Length; ++I)
-    if (Str[I] == '\n') {
-      Length = I;
-      break;
-    }
-
-  // The string used to indent each line.
-  llvm::SmallString<16> IndentStr;
-  IndentStr.assign(Indentation, ' ');
-  bool Wrapped = false;
-  for (unsigned WordStart = 0, WordEnd; WordStart < Length;
-       WordStart = WordEnd) {
-    // Find the beginning of the next word.
-    WordStart = skipWhitespace(WordStart, Str, Length);
-    if (WordStart == Length)
-      break;
-
-    // Find the end of this word.
-    WordEnd = findEndOfWord(WordStart, Str, Length, Column, Columns);
-
-    // Does this word fit on the current line?
-    unsigned WordLength = WordEnd - WordStart;
-    if (Column + WordLength < Columns) {
-      // This word fits on the current line; print it there.
-      if (WordStart) {
-        OS << ' ';
-        Column += 1;
-      }
-      OS.write(&Str[WordStart], WordLength);
-      Column += WordLength;
-      continue;
-    }
-
-    // This word does not fit on the current line, so wrap to the next
-    // line.
-    OS << '\n';
-    OS.write(&IndentStr[0], Indentation);
-    OS.write(&Str[WordStart], WordLength);
-    Column = Indentation + WordLength;
-    Wrapped = true;
-  }
-
-  if (Length == Str.size())
-    return Wrapped; // We're done.
-
-  // There is a newline in the message, followed by something that
-  // will not be word-wrapped. Print that.
-  OS.write(&Str[Length], Str.size() - Length);
-  return true;
-}
-
 /// Get the presumed location of a diagnostic message. This computes the
 /// presumed location for the top of any macro backtrace when present.
 static PresumedLoc getDiagnosticPresumedLoc(const SourceManager &SM,
@@ -949,8 +875,8 @@ static PresumedLoc getDiagnosticPresumedLoc(const SourceManager &SM,
 /// This includes extracting as much location information as is present for the
 /// diagnostic and printing it, as well as any include stack or source ranges
 /// necessary.
-void TextDiagnosticPrinter::EmitDiagnosticLoc(Diagnostic::Level Level,
-                                              const DiagnosticInfo &Info,
+void TextDiagnosticPrinter::EmitDiagnosticLoc(DiagnosticsEngine::Level Level,
+                                              const Diagnostic &Info,
                                               const SourceManager &SM,
                                               PresumedLoc PLoc) {
   if (PLoc.isInvalid()) {
@@ -1051,10 +977,175 @@ void TextDiagnosticPrinter::EmitDiagnosticLoc(Diagnostic::Level Level,
   OS << ' ';
 }
 
-void TextDiagnosticPrinter::HandleDiagnostic(Diagnostic::Level Level,
-                                             const DiagnosticInfo &Info) {
+/// \brief Print the diagonstic level to a raw_ostream.
+///
+/// Handles colorizing the level and formatting.
+static void printDiagnosticLevel(raw_ostream &OS,
+                                 DiagnosticsEngine::Level Level,
+                                 bool ShowColors) {
+  if (ShowColors) {
+    // Print diagnostic category in bold and color
+    switch (Level) {
+    case DiagnosticsEngine::Ignored:
+      llvm_unreachable("Invalid diagnostic type");
+    case DiagnosticsEngine::Note:    OS.changeColor(noteColor, true); break;
+    case DiagnosticsEngine::Warning: OS.changeColor(warningColor, true); break;
+    case DiagnosticsEngine::Error:   OS.changeColor(errorColor, true); break;
+    case DiagnosticsEngine::Fatal:   OS.changeColor(fatalColor, true); break;
+    }
+  }
+
+  switch (Level) {
+  case DiagnosticsEngine::Ignored: llvm_unreachable("Invalid diagnostic type");
+  case DiagnosticsEngine::Note:    OS << "note: "; break;
+  case DiagnosticsEngine::Warning: OS << "warning: "; break;
+  case DiagnosticsEngine::Error:   OS << "error: "; break;
+  case DiagnosticsEngine::Fatal:   OS << "fatal error: "; break;
+  }
+
+  if (ShowColors)
+    OS.resetColor();
+}
+
+/// \brief Print the diagnostic name to a raw_ostream.
+///
+/// This prints the diagnostic name to a raw_ostream if it has one. It formats
+/// the name according to the expected diagnostic message formatting:
+///   " [diagnostic_name_here]"
+static void printDiagnosticName(raw_ostream &OS, const Diagnostic &Info) {
+  if (!DiagnosticIDs::isBuiltinNote(Info.getID()))
+    OS << " [" << DiagnosticIDs::getName(Info.getID()) << "]";
+}
+
+/// \brief Print any diagnostic option information to a raw_ostream.
+///
+/// This implements all of the logic for adding diagnostic options to a message
+/// (via OS). Each relevant option is comma separated and all are enclosed in
+/// the standard bracketing: " [...]".
+static void printDiagnosticOptions(raw_ostream &OS,
+                                   DiagnosticsEngine::Level Level,
+                                   const Diagnostic &Info,
+                                   const DiagnosticOptions &DiagOpts) {
+  bool Started = false;
+  if (DiagOpts.ShowOptionNames) {
+    // Handle special cases for non-warnings early.
+    if (Info.getID() == diag::fatal_too_many_errors) {
+      OS << " [-ferror-limit=]";
+      return;
+    }
+
+    // Was this a warning mapped to an error using -Werror or pragma?
+    if (Level == DiagnosticsEngine::Error &&
+        DiagnosticIDs::isBuiltinWarningOrExtension(Info.getID())) {
+      diag::Mapping mapping = diag::MAP_IGNORE;
+      Info.getDiags()->getDiagnosticLevel(Info.getID(), Info.getLocation(), 
+                                          &mapping);
+      if (mapping == diag::MAP_WARNING) {
+        OS << " [-Werror";
+        Started = true;
+      }
+    }
+
+    // If the diagnostic is an extension diagnostic and not enabled by default
+    // then it must have been turned on with -pedantic.
+    bool EnabledByDefault;
+    if (DiagnosticIDs::isBuiltinExtensionDiag(Info.getID(),
+                                              EnabledByDefault) &&
+        !EnabledByDefault) {
+      OS << (Started ? "," : " [") << "-pedantic";
+      Started = true;
+    }
+
+    StringRef Opt = DiagnosticIDs::getWarningOptionForDiag(Info.getID());
+    if (!Opt.empty()) {
+      OS << (Started ? "," : " [") << "-W" << Opt;
+      Started = true;
+    }
+  }
+
+  // If the user wants to see category information, include it too.
+  if (DiagOpts.ShowCategories) {
+    unsigned DiagCategory =
+      DiagnosticIDs::getCategoryNumberForDiag(Info.getID());
+    if (DiagCategory) {
+      OS << (Started ? "," : " [");
+      Started = true;
+      if (DiagOpts.ShowCategories == 1)
+        OS << DiagCategory;
+      else {
+        assert(DiagOpts.ShowCategories == 2 && "Invalid ShowCategories value");
+        OS << DiagnosticIDs::getCategoryNameFromID(DiagCategory);
+      }
+    }
+  }
+  if (Started)
+    OS << ']';
+}
+
+/// \brief Print the given string to a stream, word-wrapping it to
+/// some number of columns in the process.
+///
+/// \param OS the stream to which the word-wrapping string will be
+/// emitted.
+/// \param Str the string to word-wrap and output.
+/// \param Columns the number of columns to word-wrap to.
+/// \param Column the column number at which the first character of \p
+/// Str will be printed. This will be non-zero when part of the first
+/// line has already been printed.
+/// \param Indentation the number of spaces to indent any lines beyond
+/// the first line.
+/// \returns true if word-wrapping was required, or false if the
+/// string fit on the first line.
+static bool printWordWrapped(raw_ostream &OS,
+                             const SmallVectorImpl<char> &Str,
+                             unsigned Columns,
+                             unsigned Column = 0,
+                             unsigned Indentation = WordWrapIndentation) {
+  const unsigned Length = Str.size();
+
+  // The string used to indent each line.
+  llvm::SmallString<16> IndentStr;
+  IndentStr.assign(Indentation, ' ');
+  bool Wrapped = false;
+  for (unsigned WordStart = 0, WordEnd; WordStart < Length;
+       WordStart = WordEnd) {
+    // Find the beginning of the next word.
+    WordStart = skipWhitespace(WordStart, Str, Length);
+    if (WordStart == Length)
+      break;
+
+    // Find the end of this word.
+    WordEnd = findEndOfWord(WordStart, Str, Length, Column, Columns);
+
+    // Does this word fit on the current line?
+    unsigned WordLength = WordEnd - WordStart;
+    if (Column + WordLength < Columns) {
+      // This word fits on the current line; print it there.
+      if (WordStart) {
+        OS << ' ';
+        Column += 1;
+      }
+      OS.write(&Str[WordStart], WordLength);
+      Column += WordLength;
+      continue;
+    }
+
+    // This word does not fit on the current line, so wrap to the next
+    // line.
+    OS << '\n';
+    OS.write(&IndentStr[0], Indentation);
+    OS.write(&Str[WordStart], WordLength);
+    Column = Indentation + WordLength;
+    Wrapped = true;
+  }
+
+  return Wrapped;
+}
+
+void TextDiagnosticPrinter::HandleDiagnostic(DiagnosticsEngine::Level Level,
+                                             const Diagnostic &Info) {
   // Default implementation (Warnings/errors count).
-  DiagnosticClient::HandleDiagnostic(Level, Info);
+  DiagnosticConsumer::HandleDiagnostic(Level, Info);
 
   // Keeps track of the the starting position of the location
   // information (e.g., "foo.c:10:4:") that precedes the error
@@ -1081,104 +1172,23 @@ void TextDiagnosticPrinter::HandleDiagnostic(Diagnostic::Level Level,
       OS.resetColor();
   }
 
-  if (DiagOpts->ShowColors) {
-    // Print diagnostic category in bold and color
-    switch (Level) {
-    case Diagnostic::Ignored: llvm_unreachable("Invalid diagnostic type");
-    case Diagnostic::Note:    OS.changeColor(noteColor, true); break;
-    case Diagnostic::Warning: OS.changeColor(warningColor, true); break;
-    case Diagnostic::Error:   OS.changeColor(errorColor, true); break;
-    case Diagnostic::Fatal:   OS.changeColor(fatalColor, true); break;
-    }
-  }
-
-  switch (Level) {
-  case Diagnostic::Ignored: llvm_unreachable("Invalid diagnostic type");
-  case Diagnostic::Note:    OS << "note: "; break;
-  case Diagnostic::Warning: OS << "warning: "; break;
-  case Diagnostic::Error:   OS << "error: "; break;
-  case Diagnostic::Fatal:   OS << "fatal error: "; break;
-  }
-
-  if (DiagOpts->ShowColors)
-    OS.resetColor();
+  printDiagnosticLevel(OS, Level, DiagOpts->ShowColors);
 
   llvm::SmallString<100> OutStr;
   Info.FormatDiagnostic(OutStr);
 
-  if (DiagOpts->ShowNames &&
-      !DiagnosticIDs::isBuiltinNote(Info.getID())) {
-    OutStr += " [";
-    OutStr += DiagnosticIDs::getName(Info.getID());
-    OutStr += "]";
-  }
-  
-  std::string OptionName;
-  if (DiagOpts->ShowOptionNames) {
-    // Was this a warning mapped to an error using -Werror or pragma?
-    if (Level == Diagnostic::Error &&
-        DiagnosticIDs::isBuiltinWarningOrExtension(Info.getID())) {
-      diag::Mapping mapping = diag::MAP_IGNORE;
-      Info.getDiags()->getDiagnosticLevel(Info.getID(), Info.getLocation(), 
-                                          &mapping);
-      if (mapping == diag::MAP_WARNING)
-        OptionName += "-Werror";
-    }
+  llvm::raw_svector_ostream DiagMessageStream(OutStr);
+  if (DiagOpts->ShowNames)
+    printDiagnosticName(DiagMessageStream, Info);
+  printDiagnosticOptions(DiagMessageStream, Level, Info, *DiagOpts);
+  DiagMessageStream.flush();
 
-    StringRef Opt = DiagnosticIDs::getWarningOptionForDiag(Info.getID());
-    if (!Opt.empty()) {
-      if (!OptionName.empty())
-        OptionName += ',';
-      OptionName += "-W";
-      OptionName += Opt;
-    } else if (Info.getID() == diag::fatal_too_many_errors) {
-      OptionName = "-ferror-limit=";
-    } else {
-      // If the diagnostic is an extension diagnostic and not enabled by default
-      // then it must have been turned on with -pedantic.
-      bool EnabledByDefault;
-      if (DiagnosticIDs::isBuiltinExtensionDiag(Info.getID(),
-                                                EnabledByDefault) &&
-          !EnabledByDefault)
-        OptionName = "-pedantic";
-    }
-  }
-  
-  // If the user wants to see category information, include it too.
-  unsigned DiagCategory = 0;
-  if (DiagOpts->ShowCategories)
-    DiagCategory = DiagnosticIDs::getCategoryNumberForDiag(Info.getID());
-
-  // If there is any categorization information, include it.
-  if (!OptionName.empty() || DiagCategory != 0) {
-    bool NeedsComma = false;
-    OutStr += " [";
-    
-    if (!OptionName.empty()) {
-      OutStr += OptionName;
-      NeedsComma = true;
-    }
-    
-    if (DiagCategory) {
-      if (NeedsComma) OutStr += ',';
-      if (DiagOpts->ShowCategories == 1)
-        OutStr += llvm::utostr(DiagCategory);
-      else {
-        assert(DiagOpts->ShowCategories == 2 && "Invalid ShowCategories value");
-        OutStr += DiagnosticIDs::getCategoryNameFromID(DiagCategory);
-      }
-    }
-    
-    OutStr += "]";
-  }
-
-  
   if (DiagOpts->ShowColors) {
     // Print warnings, errors and fatal errors in bold, no color
     switch (Level) {
-    case Diagnostic::Warning: OS.changeColor(savedColor, true); break;
-    case Diagnostic::Error:   OS.changeColor(savedColor, true); break;
-    case Diagnostic::Fatal:   OS.changeColor(savedColor, true); break;
+    case DiagnosticsEngine::Warning: OS.changeColor(savedColor, true); break;
+    case DiagnosticsEngine::Error:   OS.changeColor(savedColor, true); break;
+    case DiagnosticsEngine::Fatal:   OS.changeColor(savedColor, true); break;
     default: break; //don't bold notes
     }
   }
@@ -1188,7 +1198,7 @@ void TextDiagnosticPrinter::HandleDiagnostic(Diagnostic::Level Level,
     // column number where we currently are (after printing the
     // location information).
     unsigned Column = OS.tell() - StartOfLocationInfo;
-    PrintWordWrapped(OS, OutStr, DiagOpts->MessageLength, Column);
+    printWordWrapped(OS, OutStr, DiagOpts->MessageLength, Column);
   } else {
     OS.write(OutStr.begin(), OutStr.size());
   }
@@ -1204,11 +1214,11 @@ void TextDiagnosticPrinter::HandleDiagnostic(Diagnostic::Level Level,
   // multiple times if one loc has multiple diagnostics.
   if (DiagOpts->ShowCarets && Info.getLocation().isValid() &&
       ((LastLoc != Info.getLocation()) || Info.getNumRanges() ||
-       (LastCaretDiagnosticWasNote && Level != Diagnostic::Note) ||
+       (LastCaretDiagnosticWasNote && Level != DiagnosticsEngine::Note) ||
        Info.getNumFixItHints())) {
     // Cache the LastLoc, it allows us to omit duplicate source/caret spewage.
     LastLoc = FullSourceLoc(Info.getLocation(), Info.getSourceManager());
-    LastCaretDiagnosticWasNote = (Level == Diagnostic::Note);
+    LastCaretDiagnosticWasNote = (Level == DiagnosticsEngine::Note);
 
     // Get the ranges into a local array we can hack on.
     SmallVector<CharSourceRange, 20> Ranges;
@@ -1222,31 +1232,15 @@ void TextDiagnosticPrinter::HandleDiagnostic(Diagnostic::Level Level,
         Ranges.push_back(Hint.RemoveRange);
     }
 
-    const SourceManager &SM = LastLoc.getManager();
-    unsigned MacroInstSkipStart = 0, MacroInstSkipEnd = 0;
-    if (DiagOpts && DiagOpts->MacroBacktraceLimit && !LastLoc.isFileID()) {
-      // Compute the length of the macro-expansion backtrace, so that we
-      // can establish which steps in the macro backtrace we'll skip.
-      SourceLocation Loc = LastLoc;
-      unsigned Depth = 0;
-      do {
-        ++Depth;
-        Loc = skipToMacroArgExpansion(SM, Loc);
-        Loc = getImmediateMacroCallerLoc(SM, Loc);
-      } while (!Loc.isFileID());
-      
-      if (Depth > DiagOpts->MacroBacktraceLimit) {
-        MacroInstSkipStart = DiagOpts->MacroBacktraceLimit / 2 + 
-                             DiagOpts->MacroBacktraceLimit % 2;
-        MacroInstSkipEnd = Depth - DiagOpts->MacroBacktraceLimit / 2;
-      }
-    }        
-    
-    EmitCaretDiagnostic(LastLoc, Ranges, LastLoc.getManager(),
-                        llvm::makeArrayRef(Info.getFixItHints(),
-                                           Info.getNumFixItHints()),
-                        DiagOpts->MessageLength,
-                        MacroInstSkipStart, MacroInstSkipEnd);
+    assert(LangOpts && "Unexpected diagnostic outside source file processing");
+    assert(DiagOpts && "Unexpected diagnostic without options set");
+
+    TextDiagnostic TextDiag(*this, OS, Info.getSourceManager(),
+                            *LangOpts, *DiagOpts);
+    unsigned MacroDepth = 0;
+    TextDiag.Emit(LastLoc, Ranges, llvm::makeArrayRef(Info.getFixItHints(),
+                                                      Info.getNumFixItHints()),
+                  MacroDepth);
   }
 
   OS.flush();
