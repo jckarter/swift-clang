@@ -545,7 +545,7 @@ void Sema::ActOnEndOfTranslationUnit() {
   if (LangOpts.CPlusPlus0x &&
       Diags.getDiagnosticLevel(diag::warn_delegating_ctor_cycle,
                                SourceLocation())
-        != Diagnostic::Ignored)
+        != DiagnosticsEngine::Ignored)
     CheckDelegatingCtorCycles();
 
   // If there were errors, disable 'unused' warnings since they will mostly be
@@ -669,7 +669,7 @@ Sema::SemaDiagnosticBuilder::~SemaDiagnosticBuilder() {
       // Make a copy of this suppressed diagnostic and store it with the
       // template-deduction information;
       FlushCounts();
-      DiagnosticInfo DiagInfo(&SemaRef.Diags);
+      Diagnostic DiagInfo(&SemaRef.Diags);
         
       if (*Info)
         (*Info)->addSuppressedDiagnostic(DiagInfo.getLocation(),
@@ -934,7 +934,7 @@ void Sema::NoteOverloads(const UnresolvedSetImpl &Overloads,
     // FIXME: Magic number for max shown overloads stolen from
     // OverloadCandidateSet::NoteCandidates.
     if (ShownOverloads >= 4 &&
-        Diags.getShowOverloads() == Diagnostic::Ovl_Best) {
+        Diags.getShowOverloads() == DiagnosticsEngine::Ovl_Best) {
       ++SuppressedOverloads;
       continue;
     }
