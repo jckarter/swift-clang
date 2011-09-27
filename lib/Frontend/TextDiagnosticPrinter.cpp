@@ -763,98 +763,6 @@ private:
 
 } // end namespace
 
-/// \brief Skip over whitespace in the string, starting at the given
-/// index.
-///
-/// \returns The index of the first non-whitespace character that is
-/// greater than or equal to Idx or, if no such character exists,
-/// returns the end of the string.
-static unsigned skipWhitespace(unsigned Idx,
-                               const SmallVectorImpl<char> &Str,
-                               unsigned Length) {
-  while (Idx < Length && isspace(Str[Idx]))
-    ++Idx;
-  return Idx;
-}
-
-/// \brief If the given character is the start of some kind of
-/// balanced punctuation (e.g., quotes or parentheses), return the
-/// character that will terminate the punctuation.
-///
-/// \returns The ending punctuation character, if any, or the NULL
-/// character if the input character does not start any punctuation.
-static inline char findMatchingPunctuation(char c) {
-  switch (c) {
-  case '\'': return '\'';
-  case '`': return '\'';
-  case '"':  return '"';
-  case '(':  return ')';
-  case '[': return ']';
-  case '{': return '}';
-  default: break;
-  }
-
-  return 0;
-}
-
-/// \brief Find the end of the word starting at the given offset
-/// within a string.
-///
-/// \returns the index pointing one character past the end of the
-/// word.
-static unsigned findEndOfWord(unsigned Start,
-                              const SmallVectorImpl<char> &Str,
-                              unsigned Length, unsigned Column,
-                              unsigned Columns) {
-  assert(Start < Str.size() && "Invalid start position!");
-  unsigned End = Start + 1;
-
-  // If we are already at the end of the string, take that as the word.
-  if (End == Str.size())
-    return End;
-
-  // Determine if the start of the string is actually opening
-  // punctuation, e.g., a quote or parentheses.
-  char EndPunct = findMatchingPunctuation(Str[Start]);
-  if (!EndPunct) {
-    // This is a normal word. Just find the first space character.
-    while (End < Length && !isspace(Str[End]))
-      ++End;
-    return End;
-  }
-
-  // We have the start of a balanced punctuation sequence (quotes,
-  // parentheses, etc.). Determine the full sequence is.
-  llvm::SmallString<16> PunctuationEndStack;
-  PunctuationEndStack.push_back(EndPunct);
-  while (End < Length && !PunctuationEndStack.empty()) {
-    if (Str[End] == PunctuationEndStack.back())
-      PunctuationEndStack.pop_back();
-    else if (char SubEndPunct = findMatchingPunctuation(Str[End]))
-      PunctuationEndStack.push_back(SubEndPunct);
-
-    ++End;
-  }
-
-  // Find the first space character after the punctuation ended.
-  while (End < Length && !isspace(Str[End]))
-    ++End;
-
-  unsigned PunctWordLength = End - Start;
-  if (// If the word fits on this line
-      Column + PunctWordLength <= Columns ||
-      // ... or the word is "short enough" to take up the next line
-      // without too much ugly white space
-      PunctWordLength < Columns/3)
-    return End; // Take the whole thing as a single "word".
-
-  // The whole quoted/parenthesized string is too long to print as a
-  // single "word". Instead, find the "word" that starts just after
-  // the punctuation and use that end-point instead. This will recurse
-  // until it finds something small enough to consider a word.
-  return findEndOfWord(Start + 1, Str, Length, Column + 1, Columns);
-}
-
 /// Get the presumed location of a diagnostic message. This computes the
 /// presumed location for the top of any macro backtrace when present.
 static PresumedLoc getDiagnosticPresumedLoc(const SourceManager &SM,
@@ -1082,6 +990,95 @@ static void printDiagnosticOptions(raw_ostream &OS,
     OS << ']';
 }
 
+/// \brief Skip over whitespace in the string, starting at the given
+/// index.
+///
+/// \returns The index of the first non-whitespace character that is
+/// greater than or equal to Idx or, if no such character exists,
+/// returns the end of the string.
+static unsigned skipWhitespace(unsigned Idx, StringRef Str, unsigned Length) {
+  while (Idx < Length && isspace(Str[Idx]))
+    ++Idx;
+  return Idx;
+}
+
+/// \brief If the given character is the start of some kind of
+/// balanced punctuation (e.g., quotes or parentheses), return the
+/// character that will terminate the punctuation.
+///
+/// \returns The ending punctuation character, if any, or the NULL
+/// character if the input character does not start any punctuation.
+static inline char findMatchingPunctuation(char c) {
+  switch (c) {
+  case '\'': return '\'';
+  case '`': return '\'';
+  case '"':  return '"';
+  case '(':  return ')';
+  case '[': return ']';
+  case '{': return '}';
+  default: break;
+  }
+
+  return 0;
+}
+
+/// \brief Find the end of the word starting at the given offset
+/// within a string.
+///
+/// \returns the index pointing one character past the end of the
+/// word.
+static unsigned findEndOfWord(unsigned Start, StringRef Str,
+                              unsigned Length, unsigned Column,
+                              unsigned Columns) {
+  assert(Start < Str.size() && "Invalid start position!");
+  unsigned End = Start + 1;
+
+  // If we are already at the end of the string, take that as the word.
+  if (End == Str.size())
+    return End;
+
+  // Determine if the start of the string is actually opening
+  // punctuation, e.g., a quote or parentheses.
+  char EndPunct = findMatchingPunctuation(Str[Start]);
+  if (!EndPunct) {
+    // This is a normal word. Just find the first space character.
+    while (End < Length && !isspace(Str[End]))
+      ++End;
+    return End;
+  }
+
+  // We have the start of a balanced punctuation sequence (quotes,
+  // parentheses, etc.). Determine the full sequence is.
+  llvm::SmallString<16> PunctuationEndStack;
+  PunctuationEndStack.push_back(EndPunct);
+  while (End < Length && !PunctuationEndStack.empty()) {
+    if (Str[End] == PunctuationEndStack.back())
+      PunctuationEndStack.pop_back();
+    else if (char SubEndPunct = findMatchingPunctuation(Str[End]))
+      PunctuationEndStack.push_back(SubEndPunct);
+
+    ++End;
+  }
+
+  // Find the first space character after the punctuation ended.
+  while (End < Length && !isspace(Str[End]))
+    ++End;
+
+  unsigned PunctWordLength = End - Start;
+  if (// If the word fits on this line
+      Column + PunctWordLength <= Columns ||
+      // ... or the word is "short enough" to take up the next line
+      // without too much ugly white space
+      PunctWordLength < Columns/3)
+    return End; // Take the whole thing as a single "word".
+
+  // The whole quoted/parenthesized string is too long to print as a
+  // single "word". Instead, find the "word" that starts just after
+  // the punctuation and use that end-point instead. This will recurse
+  // until it finds something small enough to consider a word.
+  return findEndOfWord(Start + 1, Str, Length, Column + 1, Columns);
+}
+
 /// \brief Print the given string to a stream, word-wrapping it to
 /// some number of columns in the process.
 ///
@@ -1096,12 +1093,11 @@ static void printDiagnosticOptions(raw_ostream &OS,
 /// the first line.
 /// \returns true if word-wrapping was required, or false if the
 /// string fit on the first line.
-static bool printWordWrapped(raw_ostream &OS,
-                             const SmallVectorImpl<char> &Str,
+static bool printWordWrapped(raw_ostream &OS, StringRef Str,
                              unsigned Columns,
                              unsigned Column = 0,
                              unsigned Indentation = WordWrapIndentation) {
-  const unsigned Length = Str.size();
+  const unsigned Length = std::min(Str.find('\n'), Str.size());
 
   // The string used to indent each line.
   llvm::SmallString<16> IndentStr;
@@ -1125,7 +1121,7 @@ static bool printWordWrapped(raw_ostream &OS,
         OS << ' ';
         Column += 1;
       }
-      OS.write(&Str[WordStart], WordLength);
+      OS << Str.substr(WordStart, WordLength);
       Column += WordLength;
       continue;
     }
@@ -1134,18 +1130,57 @@ static bool printWordWrapped(raw_ostream &OS,
     // line.
     OS << '\n';
     OS.write(&IndentStr[0], Indentation);
-    OS.write(&Str[WordStart], WordLength);
+    OS << Str.substr(WordStart, WordLength);
     Column = Indentation + WordLength;
     Wrapped = true;
   }
 
+  // Append any remaning text from the message with its existing formatting.
+  OS << Str.substr(Length);
+
   return Wrapped;
+}
+
+static void printDiagnosticMessage(raw_ostream &OS,
+                                   DiagnosticsEngine::Level Level,
+                                   StringRef Message,
+                                   unsigned CurrentColumn, unsigned Columns,
+                                   bool ShowColors) {
+  if (ShowColors) {
+    // Print warnings, errors and fatal errors in bold, no color
+    switch (Level) {
+    case DiagnosticsEngine::Warning: OS.changeColor(savedColor, true); break;
+    case DiagnosticsEngine::Error:   OS.changeColor(savedColor, true); break;
+    case DiagnosticsEngine::Fatal:   OS.changeColor(savedColor, true); break;
+    default: break; //don't bold notes
+    }
+  }
+
+  if (Columns)
+    printWordWrapped(OS, Message, Columns, CurrentColumn);
+  else
+    OS << Message;
+
+  if (ShowColors)
+    OS.resetColor();
+  OS << '\n';
 }
 
 void TextDiagnosticPrinter::HandleDiagnostic(DiagnosticsEngine::Level Level,
                                              const Diagnostic &Info) {
   // Default implementation (Warnings/errors count).
   DiagnosticConsumer::HandleDiagnostic(Level, Info);
+
+  // Render the diagnostic message into a temporary buffer eagerly. We'll use
+  // this later as we print out the diagnostic to the terminal.
+  llvm::SmallString<100> OutStr;
+  Info.FormatDiagnostic(OutStr);
+
+  llvm::raw_svector_ostream DiagMessageStream(OutStr);
+  if (DiagOpts->ShowNames)
+    printDiagnosticName(DiagMessageStream, Info);
+  printDiagnosticOptions(DiagMessageStream, Level, Info, *DiagOpts);
+
 
   // Keeps track of the the starting position of the location
   // information (e.g., "foo.c:10:4:") that precedes the error
@@ -1156,55 +1191,44 @@ void TextDiagnosticPrinter::HandleDiagnostic(DiagnosticsEngine::Level Level,
   if (!Prefix.empty())
     OS << Prefix << ": ";
 
-  if (Info.getLocation().isValid()) {
-    const SourceManager &SM = Info.getSourceManager();
-    PresumedLoc PLoc = getDiagnosticPresumedLoc(SM, Info.getLocation());
-
-    // First, if this diagnostic is not in the main file, print out the
-    // "included from" lines.
-    PrintIncludeStack(Level, PLoc.getIncludeLoc(), SM);
-    StartOfLocationInfo = OS.tell();
-
-    // Next emit the location of this particular diagnostic.
-    EmitDiagnosticLoc(Level, Info, SM, PLoc);
-
-    if (DiagOpts->ShowColors)
-      OS.resetColor();
+  // Use a dedicated, simpler path for diagnostics without a valid location.
+  // This is important as if the location is missing, we may be emitting
+  // diagnostics in a context that lacks language options, a source manager, or
+  // other infrastructure necessary when emitting more rich diagnostics.
+  if (!Info.getLocation().isValid()) {
+    printDiagnosticLevel(OS, Level, DiagOpts->ShowColors);
+    printDiagnosticMessage(OS, Level, DiagMessageStream.str(),
+                           OS.tell() - StartOfLocationInfo,
+                           DiagOpts->MessageLength, DiagOpts->ShowColors);
+    OS.flush();
+    return;
   }
 
-  printDiagnosticLevel(OS, Level, DiagOpts->ShowColors);
+  // Assert that the rest of our infrastructure is setup properly.
+  assert(LangOpts && "Unexpected diagnostic outside source file processing");
+  assert(DiagOpts && "Unexpected diagnostic without options set");
+  assert(Info.hasSourceManager() &&
+         "Unexpected diagnostic with no source manager");
+  const SourceManager &SM = Info.getSourceManager();
+  TextDiagnostic TextDiag(*this, OS, SM, *LangOpts, *DiagOpts);
 
-  llvm::SmallString<100> OutStr;
-  Info.FormatDiagnostic(OutStr);
+  PresumedLoc PLoc = getDiagnosticPresumedLoc(SM, Info.getLocation());
 
-  llvm::raw_svector_ostream DiagMessageStream(OutStr);
-  if (DiagOpts->ShowNames)
-    printDiagnosticName(DiagMessageStream, Info);
-  printDiagnosticOptions(DiagMessageStream, Level, Info, *DiagOpts);
-  DiagMessageStream.flush();
+  // First, if this diagnostic is not in the main file, print out the
+  // "included from" lines.
+  PrintIncludeStack(Level, PLoc.getIncludeLoc(), SM);
+  StartOfLocationInfo = OS.tell();
 
-  if (DiagOpts->ShowColors) {
-    // Print warnings, errors and fatal errors in bold, no color
-    switch (Level) {
-    case DiagnosticsEngine::Warning: OS.changeColor(savedColor, true); break;
-    case DiagnosticsEngine::Error:   OS.changeColor(savedColor, true); break;
-    case DiagnosticsEngine::Fatal:   OS.changeColor(savedColor, true); break;
-    default: break; //don't bold notes
-    }
-  }
+  // Next emit the location of this particular diagnostic.
+  EmitDiagnosticLoc(Level, Info, SM, PLoc);
 
-  if (DiagOpts->MessageLength) {
-    // We will be word-wrapping the error message, so compute the
-    // column number where we currently are (after printing the
-    // location information).
-    unsigned Column = OS.tell() - StartOfLocationInfo;
-    printWordWrapped(OS, OutStr, DiagOpts->MessageLength, Column);
-  } else {
-    OS.write(OutStr.begin(), OutStr.size());
-  }
-  OS << '\n';
   if (DiagOpts->ShowColors)
     OS.resetColor();
+
+  printDiagnosticLevel(OS, Level, DiagOpts->ShowColors);
+  printDiagnosticMessage(OS, Level, DiagMessageStream.str(),
+                         OS.tell() - StartOfLocationInfo,
+                         DiagOpts->MessageLength, DiagOpts->ShowColors);
 
   // If caret diagnostics are enabled and we have location, we want to
   // emit the caret.  However, we only do this if the location moved
@@ -1212,7 +1236,7 @@ void TextDiagnosticPrinter::HandleDiagnostic(DiagnosticsEngine::Level Level,
   // was part of a different warning or error diagnostic, or if the
   // diagnostic has ranges.  We don't want to emit the same caret
   // multiple times if one loc has multiple diagnostics.
-  if (DiagOpts->ShowCarets && Info.getLocation().isValid() &&
+  if (DiagOpts->ShowCarets &&
       ((LastLoc != Info.getLocation()) || Info.getNumRanges() ||
        (LastCaretDiagnosticWasNote && Level != DiagnosticsEngine::Note) ||
        Info.getNumFixItHints())) {
@@ -1232,11 +1256,6 @@ void TextDiagnosticPrinter::HandleDiagnostic(DiagnosticsEngine::Level Level,
         Ranges.push_back(Hint.RemoveRange);
     }
 
-    assert(LangOpts && "Unexpected diagnostic outside source file processing");
-    assert(DiagOpts && "Unexpected diagnostic without options set");
-
-    TextDiagnostic TextDiag(*this, OS, Info.getSourceManager(),
-                            *LangOpts, *DiagOpts);
     unsigned MacroDepth = 0;
     TextDiag.Emit(LastLoc, Ranges, llvm::makeArrayRef(Info.getFixItHints(),
                                                       Info.getNumFixItHints()),
