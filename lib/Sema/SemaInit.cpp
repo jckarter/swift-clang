@@ -744,8 +744,10 @@ void InitListChecker::CheckSubElementType(const InitializedEntity &Entity,
     // type here, though.
 
     if (Expr *Str = IsStringInit(expr, arrayType, SemaRef.Context)) {
-      CheckStringInit(Str, ElemType, arrayType, SemaRef);
-      UpdateStructuredListElement(StructuredList, StructuredIndex, Str);
+      if (!VerifyOnly) {
+        CheckStringInit(Str, ElemType, arrayType, SemaRef);
+        UpdateStructuredListElement(StructuredList, StructuredIndex, Str);
+      }
       ++Index;
       return;
     }
@@ -1116,13 +1118,13 @@ void InitListChecker::CheckArrayType(const InitializedEntity &Entity,
   if (Index < IList->getNumInits()) {
     if (Expr *Str = IsStringInit(IList->getInit(Index), arrayType,
                                  SemaRef.Context)) {
-      CheckStringInit(Str, DeclType, arrayType, SemaRef);
       // We place the string literal directly into the resulting
       // initializer list. This is the only place where the structure
       // of the structured initializer list doesn't match exactly,
       // because doing so would involve allocating one character
       // constant for each string.
       if (!VerifyOnly) {
+        CheckStringInit(Str, DeclType, arrayType, SemaRef);
         UpdateStructuredListElement(StructuredList, StructuredIndex, Str);
         StructuredList->resizeInits(SemaRef.Context, StructuredIndex);
       }
@@ -1878,7 +1880,7 @@ InitListChecker::CheckDesignatedInitializer(const InitializedEntity &Entity,
       = DesignatedEndIndex.extOrTrunc(MaxElements.getBitWidth());
     DesignatedEndIndex.setIsUnsigned(MaxElements.isUnsigned());
     if (DesignatedEndIndex >= MaxElements) {
-      if (VerifyOnly)
+      if (!VerifyOnly)
         SemaRef.Diag(IndexExpr->getSourceRange().getBegin(),
                       diag::err_array_designator_too_large)
           << DesignatedEndIndex.toString(10) << MaxElements.toString(10)
@@ -4480,7 +4482,6 @@ InitializationSequence::Perform(Sema &S,
       FunctionDecl *Fn = Step->Function.Function;
       DeclAccessPair FoundFn = Step->Function.FoundDecl;
       bool CreatedObject = false;
-      bool IsLvalue = false;
       if (CXXConstructorDecl *Constructor = dyn_cast<CXXConstructorDecl>(Fn)) {
         // Build a call to the selected constructor.
         ASTOwningVector<Expr*> ConstructorArgs(S);
@@ -4518,7 +4519,6 @@ InitializationSequence::Perform(Sema &S,
       } else {
         // Build a call to the conversion function.
         CXXConversionDecl *Conversion = cast<CXXConversionDecl>(Fn);
-        IsLvalue = Conversion->getResultType()->isLValueReferenceType();
         S.CheckMemberOperatorAccess(Kind.getLocation(), CurInit.get(), 0,
                                     FoundFn);
         S.DiagnoseUseOfDecl(FoundFn, Kind.getLocation());
@@ -4558,11 +4558,10 @@ InitializationSequence::Perform(Sema &S,
         }
       }
 
-      // FIXME: xvalues
       CurInit = S.Owned(ImplicitCastExpr::Create(S.Context,
                                                  CurInit.get()->getType(),
                                                  CastKind, CurInit.get(), 0,
-                                           IsLvalue ? VK_LValue : VK_RValue));
+                                                CurInit.get()->getValueKind()));
 
       if (RequiresCopy)
         CurInit = CopyObject(S, Entity.getType().getNonReferenceType(), Entity,
