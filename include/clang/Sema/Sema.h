@@ -677,9 +677,8 @@ public:
 
   GlobalMethodPool::iterator ReadMethodPool(Selector Sel);
 
-  /// Private Helper predicate to check for 'self'. Upon success, it
-  /// returns method declaration where 'self' is referenced.
-  const ObjCMethodDecl *GetMethodIfSelfExpr(Expr *RExpr);
+  /// Private Helper predicate to check for 'self'.
+  bool isSelfExpr(Expr *RExpr);
 public:
   Sema(Preprocessor &pp, ASTContext &ctxt, ASTConsumer &consumer,
        TranslationUnitKind TUKind = TU_Complete,
@@ -1099,6 +1098,9 @@ public:
                                           SourceLocation ModulePrivateKeyword
                                             = SourceLocation());
   
+  /// \brief Retrieve a suitable printing policy.
+  PrintingPolicy getPrintingPolicy() const;
+
   /// Scope actions.
   void ActOnPopScope(SourceLocation Loc, Scope *S);
   void ActOnTranslationUnitScope(Scope *S);
@@ -4819,7 +4821,7 @@ public:
   };
 
   void PrintInstantiationStack();
-
+  
   /// \brief Determines whether we are currently in a context where
   /// template argument substitution failures are not considered
   /// errors.
@@ -5302,9 +5304,7 @@ public:
   
   /// \brief Check whether the given new method is a valid override of the
   /// given overridden method, and set any properties that should be inherited.
-  ///
-  /// \returns True if an error occurred.
-  bool CheckObjCMethodOverride(ObjCMethodDecl *NewMethod, 
+  void CheckObjCMethodOverride(ObjCMethodDecl *NewMethod, 
                                const ObjCMethodDecl *Overridden,
                                bool IsImplementation);
 
@@ -5406,10 +5406,6 @@ public:
   /// AddAlignedAttr - Adds an aligned attribute to a particular declaration.
   void AddAlignedAttr(SourceRange AttrRange, Decl *D, Expr *E);
   void AddAlignedAttr(SourceRange AttrRange, Decl *D, TypeSourceInfo *T);
-
-  /// CastCategory - Get the correct forwarded implicit cast result category
-  /// from the inner expression.
-  ExprValueKind CastCategory(Expr *E);
 
   /// \brief The kind of conversion being performed.
   enum CheckedConversionKind {
