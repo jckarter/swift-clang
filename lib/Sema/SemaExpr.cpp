@@ -252,10 +252,13 @@ void Sema::DiagnoseSentinelCalls(NamedDecl *D, SourceLocation Loc,
     NullValue = "NULL";
   else
     NullValue = "(void*) 0";
-  
-  Diag(MissingNilLoc, diag::warn_missing_sentinel) 
-    << calleeType
-    << FixItHint::CreateInsertion(MissingNilLoc, ", " + NullValue);
+
+  if (MissingNilLoc.isInvalid())
+    Diag(Loc, diag::warn_missing_sentinel) << calleeType;
+  else
+    Diag(MissingNilLoc, diag::warn_missing_sentinel) 
+      << calleeType
+      << FixItHint::CreateInsertion(MissingNilLoc, ", " + NullValue);
   Diag(D->getLocation(), diag::note_sentinel_here) << calleeType;
 }
 
@@ -1988,7 +1991,7 @@ Sema::PerformObjectMemberConversion(Expr *From,
   SourceRange FromRange = From->getSourceRange();
   SourceLocation FromLoc = FromRange.getBegin();
 
-  ExprValueKind VK = CastCategory(From);
+  ExprValueKind VK = From->getValueKind();
 
   // C++ [class.member.lookup]p8:
   //   [...] Ambiguities can often be resolved by qualifying a name with its
@@ -5107,25 +5110,6 @@ ExprResult Sema::ActOnConditionalOp(SourceLocation QuestionLoc,
                               OK));
 }
 
-/// ConvertObjCSelfToClassRootType - convet type of 'self' in class method
-/// to pointer to root of method's class.
-static QualType
-ConvertObjCSelfToClassRootType(Sema &S, Expr *selfExpr) {
-  QualType SelfType;
-  if (const ObjCMethodDecl *MD = S.GetMethodIfSelfExpr(selfExpr))
-    if (MD->isClassMethod()) {
-      const ObjCInterfaceDecl *Root = 0;
-      if (const ObjCInterfaceDecl * IDecl = MD->getClassInterface())
-      do {
-        Root = IDecl;
-      } while ((IDecl = IDecl->getSuperClass()));
-      if (Root)
-        SelfType =  S.Context.getObjCObjectPointerType(
-                      S.Context.getObjCInterfaceType(Root)); 
-    }
-  return SelfType;
-}
-
 // checkPointerTypesForAssignment - This is a very tricky routine (despite
 // being closely modeled after the C99 spec:-). The odd characteristic of this
 // routine is it effectively iqnores the qualifiers on the top level pointee.
@@ -5453,7 +5437,7 @@ Sema::CheckAssignmentConstraints(QualType LHSType, ExprResult &RHS,
         Kind = CK_BitCast;
         return Compatible;
       }
-      
+
       Kind = CK_BitCast;
       return IncompatiblePointer;
     }
@@ -5501,9 +5485,6 @@ Sema::CheckAssignmentConstraints(QualType LHSType, ExprResult &RHS,
 
   // Conversions to Objective-C pointers.
   if (isa<ObjCObjectPointerType>(LHSType)) {
-    QualType RHSQT = ConvertObjCSelfToClassRootType(*this, RHS.get());
-    if (!RHSQT.isNull())
-      RHSType = RHSQT;
     // A* -> B*
     if (RHSType->isObjCObjectPointerType()) {
       Kind = CK_BitCast;
@@ -9619,7 +9600,7 @@ void Sema::DiagnoseAssignmentAsCondition(Expr *E) {
       Selector Sel = ME->getSelector();
 
       // self = [<foo> init...]
-      if (GetMethodIfSelfExpr(Op->getLHS()) && Sel.getNameForSlot(0).startswith("init"))
+      if (isSelfExpr(Op->getLHS()) && Sel.getNameForSlot(0).startswith("init"))
         diagnostic = diag::warn_condition_is_idiomatic_assignment;
 
       // <foo> = [<bar> nextObject]
