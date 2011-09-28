@@ -231,11 +231,11 @@ ASTContext::ASTContext(LangOptions& LOpts, SourceManager &SM,
     BlockDescriptorExtendedType(0), cudaConfigureCallDecl(0),
     NullTypeSourceInfo(QualType()),
     SourceMgr(SM), LangOpts(LOpts), 
-    AddrSpaceMap(0), Target(t),
+    AddrSpaceMap(0), Target(t), PrintingPolicy(LOpts),
     Idents(idents), Selectors(sels),
     BuiltinInfo(builtins),
     DeclarationNames(*this),
-    ExternalSource(0), Listener(0), PrintingPolicy(LOpts),
+    ExternalSource(0), Listener(0),
     LastSDM(0, 0),
     UniqueBlockByRefTypeID(0) 
 {
@@ -4385,7 +4385,7 @@ void ASTContext::getObjCEncodingForTypeImpl(QualType T, std::string& S,
           = TemplateSpecializationType::PrintTemplateArgumentList(
                                             TemplateArgs.data(),
                                             TemplateArgs.size(),
-                                            (*this).PrintingPolicy);
+                                            (*this).getPrintingPolicy());
 
         S += TemplateArgsStr;
       }
