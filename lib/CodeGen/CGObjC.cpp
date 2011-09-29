@@ -58,7 +58,7 @@ llvm::Value *CodeGenFunction::EmitObjCNumericLiteral(const ObjCNumericLiteral *E
   // Generate the correct selector for this literal's concrete type.
   const Expr *NL = E->getNumber();
   // Get the method.
-  const ObjCMethodDecl *Method = E->getObjCNumricLiteralMethod();
+  const ObjCMethodDecl *Method = E->getObjCNumericLiteralMethod();
   assert(Method && "NSNumber method is null");
   Selector Sel = Method->getSelector();
   

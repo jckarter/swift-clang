@@ -61,14 +61,14 @@ public:
 class ObjCNumericLiteral : public Expr {
   /// Number - expression AST node for the numeric literal
   Stmt *Number;
-  ObjCMethodDecl *ObjCNumricLiteralMethod;
+  ObjCMethodDecl *ObjCNumericLiteralMethod;
   SourceLocation AtLoc;
 public:
   ObjCNumericLiteral(Stmt *NL, QualType T, ObjCMethodDecl *method,
                      SourceLocation L)
   : Expr(ObjCNumericLiteralClass, T, VK_RValue, OK_Ordinary, 
          false, false, false, false), Number(NL), 
-    ObjCNumricLiteralMethod(method), AtLoc(L) {}
+    ObjCNumericLiteralMethod(method), AtLoc(L) {}
   explicit ObjCNumericLiteral(EmptyShell Empty)
   : Expr(ObjCNumericLiteralClass, Empty) {}
   
@@ -76,8 +76,8 @@ public:
   const Expr *getNumber() const { return cast<Expr>(Number); }
   void setNumber(Expr *N) { Number = N; }
   
-  ObjCMethodDecl *getObjCNumricLiteralMethod() const
-    { return ObjCNumricLiteralMethod; }
+  ObjCMethodDecl *getObjCNumericLiteralMethod() const
+    { return ObjCNumericLiteralMethod; }
     
   SourceLocation getAtLoc() const { return AtLoc; }
   void setAtLoc(SourceLocation L) { AtLoc = L; }

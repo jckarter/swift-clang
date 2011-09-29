@@ -4073,7 +4073,7 @@ ExprResult Sema::MaybeBindToTemporary(Expr *E) {
       if (ObjCMessageExpr *Send = dyn_cast<ObjCMessageExpr>(E)) {
         D = Send->getMethodDecl();
       } else if (ObjCNumericLiteral *NumLit = dyn_cast<ObjCNumericLiteral>(E)) {
-        D = NumLit->getObjCNumricLiteralMethod();
+        D = NumLit->getObjCNumericLiteralMethod();
       } else if (ObjCArrayLiteral *ArrayLit = dyn_cast<ObjCArrayLiteral>(E)) {
         D = ArrayLit->getArrayWithObjectsMethod();
       } else if (ObjCDictionaryLiteral *DictLit

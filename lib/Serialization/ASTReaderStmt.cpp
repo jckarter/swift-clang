@@ -786,7 +786,7 @@ void ASTStmtReader::VisitObjCNumericLiteral(ObjCNumericLiteral *E) {
     VisitExpr(E);
     // could be one of several IntegerLiteral, FloatLiteral, etc.
     E->Number = Reader.ReadSubStmt();
-    E->ObjCNumricLiteralMethod = ReadDeclAs<ObjCMethodDecl>(Record, Idx);
+    E->ObjCNumericLiteralMethod = ReadDeclAs<ObjCMethodDecl>(Record, Idx);
     E->AtLoc = ReadSourceLocation(Record, Idx);
 }
 
