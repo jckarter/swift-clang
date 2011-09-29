@@ -486,9 +486,15 @@ public:
   /// \brief The declaration of the Objective-C NSArray class.
   ObjCInterfaceDecl *NSArrayDecl;
 
+  /// \brief The declaration of the arrayWithObjects:count: method.
+  ObjCMethodDecl *ArrayWithObjectsMethod;
+  
   /// \brief The declaration of the Objective-C NSDictionary class.
   ObjCInterfaceDecl *NSDictionaryDecl;
 
+  /// \brief The declaration of the dictionaryWithObjects:forKeys:count: method.
+  ObjCMethodDecl *DictionaryWithObjectsMethod;
+  
   /// A flag to remember whether the implicit forms of operator new and delete
   /// have been declared.
   bool GlobalNewDeleteDeclared;

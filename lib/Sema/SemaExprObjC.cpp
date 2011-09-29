@@ -242,19 +242,21 @@ ExprResult Sema::BuildObjCArrayLiteral(SourceRange SR, MultiExprArg Elements) {
     }
   }
   
-  // Find the arrayWithObjects:count: method.
-  IdentifierInfo *KeyIdents[] = {
-    &Context.Idents.get("arrayWithObjects"),
-    &Context.Idents.get("count")
-  };
-  
-  Selector Sel = Context.Selectors.getSelector(2, KeyIdents);
-  ObjCMethodDecl *ArrayWithObjectsMethod = NSArrayDecl->lookupClassMethod(Sel);
+  // Find the arrayWithObjects:count: method, if we haven't done so already.
   if (!ArrayWithObjectsMethod) {
-    Diag(SR.getBegin(), diag::err_undeclared_arraywithobjects) << Sel;
-    return ExprError();
+    IdentifierInfo *KeyIdents[] = {
+      &Context.Idents.get("arrayWithObjects"),
+      &Context.Idents.get("count")
+    };
+    
+    Selector Sel = Context.Selectors.getSelector(2, KeyIdents);
+    ArrayWithObjectsMethod = NSArrayDecl->lookupClassMethod(Sel);
+    if (!ArrayWithObjectsMethod) {
+      Diag(SR.getBegin(), diag::err_undeclared_arraywithobjects) << Sel;
+      return ExprError();
+    }
   }
-
+  
   // FIXME: Validate the signature of this selector!
   
   // Dig out the type that all elements should be converted to.
@@ -305,25 +307,27 @@ ExprResult Sema::BuildObjCDictionaryLiteral(SourceRange SR,
     }
   }
   
-  // Find the dictionaryWithObjects:forKeys:count: method.
-  IdentifierInfo *KeyIdents[] = {
-    &Context.Idents.get("dictionaryWithObjects"),
-    &Context.Idents.get("forKeys"),
-    &Context.Idents.get("count")
-  };
-  
-  Selector Sel = Context.Selectors.getSelector(3, KeyIdents);
-  ObjCMethodDecl *DictWithObjectsMethod
-    = NSDictionaryDecl->lookupClassMethod(Sel);
-  if (!DictWithObjectsMethod) {
-    Diag(SR.getBegin(), diag::err_undeclared_dictwithobjects) << Sel;
-    return ExprError();    
+  // Find the dictionaryWithObjects:forKeys:count: method, if we haven't done
+  // so already.
+  if (!DictionaryWithObjectsMethod) {
+    IdentifierInfo *KeyIdents[] = {
+      &Context.Idents.get("dictionaryWithObjects"),
+      &Context.Idents.get("forKeys"),
+      &Context.Idents.get("count")
+    };
+    
+    Selector Sel = Context.Selectors.getSelector(3, KeyIdents);
+    DictionaryWithObjectsMethod = NSDictionaryDecl->lookupClassMethod(Sel);
+    if (!DictionaryWithObjectsMethod) {
+      Diag(SR.getBegin(), diag::err_undeclared_dictwithobjects) << Sel;
+      return ExprError();    
+    }
   }
-
+  
   // FIXME: Tons of redundancy below that needs some refactoring to fix.
   
   // Dig out the type that all objects should be converted to.
-  QualType ObjectT = DictWithObjectsMethod->param_begin()[0]->getType();
+  QualType ObjectT = DictionaryWithObjectsMethod->param_begin()[0]->getType();
   if (const PointerType *Ptr = ObjectT->getAs<PointerType>())
     ObjectT = Ptr->getPointeeType();
   else {
@@ -332,7 +336,7 @@ ExprResult Sema::BuildObjCDictionaryLiteral(SourceRange SR,
   }
 
   // Dig out the type that all keys should be converted to.
-  QualType KeyT = DictWithObjectsMethod->param_begin()[1]->getType();
+  QualType KeyT = DictionaryWithObjectsMethod->param_begin()[1]->getType();
   if (const PointerType *Ptr = KeyT->getAs<PointerType>())
     KeyT = Ptr->getPointeeType();
   else {
@@ -371,7 +375,7 @@ ExprResult Sema::BuildObjCDictionaryLiteral(SourceRange SR,
                                                llvm::makeArrayRef(Elements, 
                                                                   NumElements),
                                                Ty, 
-                                               DictWithObjectsMethod, SR));
+                                               DictionaryWithObjectsMethod, SR));
 }
 
 ExprResult Sema::BuildObjCEncodeExpression(SourceLocation AtLoc,
