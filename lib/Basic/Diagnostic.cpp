@@ -172,10 +172,12 @@ void DiagnosticsEngine::setDiagnosticMapping(diag::kind Diag, diag::Mapping Map,
   bool isPragma = L.isValid();
   FullSourceLoc Loc(L, *SourceMgr);
   FullSourceLoc LastStateChangePos = DiagStatePoints.back().Loc;
+  DiagnosticMappingInfo MappingInfo = DiagnosticMappingInfo::Make(
+    Map, /*IsUser=*/true, isPragma);
 
   // Common case; setting all the diagnostics of a group in one place.
   if (Loc.isInvalid() || Loc == LastStateChangePos) {
-    setDiagnosticMappingInternal(Diag, Map, GetCurDiagState(), true, isPragma);
+    GetCurDiagState()->setMappingInfo(Diag, MappingInfo);
     return;
   }
 
@@ -188,7 +190,7 @@ void DiagnosticsEngine::setDiagnosticMapping(diag::kind Diag, diag::Mapping Map,
     // the new state became active.
     DiagStates.push_back(*GetCurDiagState());
     PushDiagStatePoint(&DiagStates.back(), Loc);
-    setDiagnosticMappingInternal(Diag, Map, GetCurDiagState(), true, isPragma);
+    GetCurDiagState()->setMappingInfo(Diag, MappingInfo);
     return;
   }
 
@@ -201,12 +203,12 @@ void DiagnosticsEngine::setDiagnosticMapping(diag::kind Diag, diag::Mapping Map,
   // Update all diagnostic states that are active after the given location.
   for (DiagStatePointsTy::iterator
          I = Pos+1, E = DiagStatePoints.end(); I != E; ++I) {
-    setDiagnosticMappingInternal(Diag, Map, I->State, true, isPragma);
+    GetCurDiagState()->setMappingInfo(Diag, MappingInfo);
   }
 
   // If the location corresponds to an existing point, just update its state.
   if (Pos->Loc == Loc) {
-    setDiagnosticMappingInternal(Diag, Map, Pos->State, true, isPragma);
+    GetCurDiagState()->setMappingInfo(Diag, MappingInfo);
     return;
   }
 
@@ -215,9 +217,83 @@ void DiagnosticsEngine::setDiagnosticMapping(diag::kind Diag, diag::Mapping Map,
   Pos->Loc.isBeforeInTranslationUnitThan(Loc);
   DiagStates.push_back(*Pos->State);
   DiagState *NewState = &DiagStates.back();
-  setDiagnosticMappingInternal(Diag, Map, NewState, true, isPragma);
+  GetCurDiagState()->setMappingInfo(Diag, MappingInfo);
   DiagStatePoints.insert(Pos+1, DiagStatePoint(NewState,
                                                FullSourceLoc(Loc, *SourceMgr)));
+}
+
+bool DiagnosticsEngine::setDiagnosticGroupMapping(
+  StringRef Group, diag::Mapping Map, SourceLocation Loc)
+{
+  // Get the diagnostics in this group.
+  llvm::SmallVector<diag::kind, 8> GroupDiags;
+  if (Diags->getDiagnosticsInGroup(Group, GroupDiags))
+    return true;
+
+  // Set the mapping.
+  for (unsigned i = 0, e = GroupDiags.size(); i != e; ++i)
+    setDiagnosticMapping(GroupDiags[i], Map, Loc);
+
+  return false;
+}
+
+bool DiagnosticsEngine::setDiagnosticGroupWarningAsError(StringRef Group,
+                                                         bool Enabled) {
+  // If we are enabling this feature, just set the diagnostic mappings to map to
+  // errors.
+  if (Enabled)
+    return setDiagnosticGroupMapping(Group, diag::MAP_ERROR);
+
+  // Otherwise, we want to set the diagnostic mapping's "no Werror" bit, and
+  // potentially downgrade anything already mapped to be a warning.
+
+  // Get the diagnostics in this group.
+  llvm::SmallVector<diag::kind, 8> GroupDiags;
+  if (Diags->getDiagnosticsInGroup(Group, GroupDiags))
+    return true;
+
+  // Perform the mapping change.
+  for (unsigned i = 0, e = GroupDiags.size(); i != e; ++i) {
+    DiagnosticMappingInfo &Info = GetCurDiagState()->getOrAddMappingInfo(
+      GroupDiags[i]);
+
+    if (Info.getMapping() == diag::MAP_ERROR ||
+        Info.getMapping() == diag::MAP_FATAL)
+      Info.setMapping(diag::MAP_WARNING);
+
+    Info.setNoWarningAsError(true);
+  }
+
+  return false;
+}
+
+bool DiagnosticsEngine::setDiagnosticGroupErrorAsFatal(StringRef Group,
+                                                       bool Enabled) {
+  // If we are enabling this feature, just set the diagnostic mappings to map to
+  // fatal errors.
+  if (Enabled)
+    return setDiagnosticGroupMapping(Group, diag::MAP_FATAL);
+
+  // Otherwise, we want to set the diagnostic mapping's "no Werror" bit, and
+  // potentially downgrade anything already mapped to be an error.
+
+  // Get the diagnostics in this group.
+  llvm::SmallVector<diag::kind, 8> GroupDiags;
+  if (Diags->getDiagnosticsInGroup(Group, GroupDiags))
+    return true;
+
+  // Perform the mapping change.
+  for (unsigned i = 0, e = GroupDiags.size(); i != e; ++i) {
+    DiagnosticMappingInfo &Info = GetCurDiagState()->getOrAddMappingInfo(
+      GroupDiags[i]);
+
+    if (Info.getMapping() == diag::MAP_FATAL)
+      Info.setMapping(diag::MAP_ERROR);
+
+    Info.setNoErrorAsFatal(true);
+  }
+
+  return false;
 }
 
 void DiagnosticsEngine::Report(const StoredDiagnostic &storedDiag) {
