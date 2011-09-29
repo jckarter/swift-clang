@@ -4072,6 +4072,13 @@ ExprResult Sema::MaybeBindToTemporary(Expr *E) {
       ObjCMethodDecl *D = 0;
       if (ObjCMessageExpr *Send = dyn_cast<ObjCMessageExpr>(E)) {
         D = Send->getMethodDecl();
+      } else if (ObjCNumericLiteral *NumLit = dyn_cast<ObjCNumericLiteral>(E)) {
+        D = NumLit->getObjCNumricLiteralMethod();
+      } else if (ObjCArrayLiteral *ArrayLit = dyn_cast<ObjCArrayLiteral>(E)) {
+        D = ArrayLit->getArrayWithObjectsMethod();
+      } else if (ObjCDictionaryLiteral *DictLit
+                                        = dyn_cast<ObjCDictionaryLiteral>(E)) {
+        D = DictLit->getDictWithObjectsMethod();
       } else {
         CastExpr *CE = cast<CastExpr>(E);
         assert(CE->getCastKind() == CK_GetObjCProperty);

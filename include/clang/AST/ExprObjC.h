@@ -76,7 +76,7 @@ public:
   const Expr *getNumber() const { return cast<Expr>(Number); }
   void setNumber(Expr *N) { Number = N; }
   
-  const ObjCMethodDecl *getObjCNumricLiteralMethod() const
+  ObjCMethodDecl *getObjCNumricLiteralMethod() const
     { return ObjCNumricLiteralMethod; }
     
   SourceLocation getAtLoc() const { return AtLoc; }
@@ -131,7 +131,6 @@ public:
     
   /// getNumElements - Return number of elements of objective-c array literal.
   unsigned getNumElements() const { return NumElements; }
-  unsigned getNumElements() { return NumElements; }
     
     /// getExpr - Return the Expr at the specified index.
   Expr *getElement(unsigned Index) {
@@ -148,7 +147,7 @@ public:
     Elements[Arg] = ElementExpr;
   }
     
-  const ObjCMethodDecl *getArrayWithObjectsMethod() const
+  ObjCMethodDecl *getArrayWithObjectsMethod() const
     { return ArrayWithObjectsMethod; }
     
   // Iterators
@@ -192,19 +191,18 @@ public:
   /// getNumElements - Return number of elements of objective-c dictionary 
   /// literal.
   unsigned getNumElements() const { return NumElements; }
-  unsigned getNumElements() { return NumElements; }
 
   KeyValuePair &getKeyValueElement(unsigned Index) {
     assert((Index < NumElements) && "Arg access out of range!");
     return KeyValues[Index];
   }
 
-  KeyValuePair &getKeyValueElement(unsigned Index) const {
+  const KeyValuePair &getKeyValueElement(unsigned Index) const {
     assert((Index < NumElements) && "Arg access out of range!");
     return KeyValues[Index];
   }
     
-  const ObjCMethodDecl *getDictWithObjectsMethod() const
+  ObjCMethodDecl *getDictWithObjectsMethod() const
     { return DictWithObjectsMethod; }
 
   SourceRange getSourceRange() const { return Range; }

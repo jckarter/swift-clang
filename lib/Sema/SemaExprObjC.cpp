@@ -200,7 +200,8 @@ ExprResult Sema::BuildObjCNumericLiteral(SourceLocation AtLoc, Expr *Number) {
     Diag(AtLoc, diag::err_undeclared_nsnumber);
     return ExprError();
   }
-  return new (Context) ObjCNumericLiteral(Number, Ty, Method, AtLoc);
+  return MaybeBindToTemporary(
+           new (Context) ObjCNumericLiteral(Number, Ty, Method, AtLoc));
 }
 
 void Sema::CheckObjCCollectionLiteralElement(ExprResult Res) {
@@ -232,8 +233,10 @@ ExprResult Sema::BuildObjCArrayLiteral(SourceRange SR, MultiExprArg Elements) {
     Diag(SR.getBegin(), diag::err_undeclared_nsarray);
     return ExprError();
   }
-  return new (Context) ObjCArrayLiteral(Context, Elements.get(), Elements.size(), 
-                                        Ty, ArrayWithObjectsMethod, SR);
+  return MaybeBindToTemporary(
+           new (Context) ObjCArrayLiteral(Context, Elements.get(), 
+                                          Elements.size(), Ty, 
+                                          ArrayWithObjectsMethod, SR));
 }
 
 ExprResult Sema::BuildObjCDictionaryLiteral(SourceRange SR, 
@@ -262,8 +265,9 @@ ExprResult Sema::BuildObjCDictionaryLiteral(SourceRange SR,
     return ExprError();
   }
   
-  return new (Context) ObjCDictionaryLiteral(Context, Elements, Ty, 
-                                             DictWithObjectsMethod, SR);
+  return MaybeBindToTemporary(
+           new (Context) ObjCDictionaryLiteral(Context, Elements, Ty, 
+                                               DictWithObjectsMethod, SR));
 }
 
 ExprResult Sema::BuildObjCEncodeExpression(SourceLocation AtLoc,
