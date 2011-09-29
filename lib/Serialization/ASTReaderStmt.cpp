@@ -795,7 +795,7 @@ void ASTStmtReader::VisitObjCArrayLiteral(ObjCArrayLiteral *E) {
     E->NumElements = Record[Idx++];
     E->Elements = new (Reader.getContext()) Stmt*[E->NumElements];
     for (unsigned I = 0, N = E->NumElements; I != N; ++I)
-      E->setElement(I, Reader.ReadSubExpr());
+      E->Elements[I] = Reader.ReadSubExpr();
     E->ArrayWithObjectsMethod = ReadDeclAs<ObjCMethodDecl>(Record, Idx);
     E->Range = ReadSourceRange(Record, Idx);
 }

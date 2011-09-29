@@ -74,16 +74,15 @@ public:
   
   Expr *getNumber() { return cast<Expr>(Number); }
   const Expr *getNumber() const { return cast<Expr>(Number); }
-  void setNumber(Expr *N) { Number = N; }
   
-  ObjCMethodDecl *getObjCNumericLiteralMethod() const
-    { return ObjCNumericLiteralMethod; }
+  ObjCMethodDecl *getObjCNumericLiteralMethod() const {
+    return ObjCNumericLiteralMethod; 
+  }
     
   SourceLocation getAtLoc() const { return AtLoc; }
-  void setAtLoc(SourceLocation L) { AtLoc = L; }
   
   SourceRange getSourceRange() const {
-      return SourceRange(AtLoc, Number->getSourceRange().getEnd());
+    return SourceRange(AtLoc, Number->getSourceRange().getEnd());
   }
 
   static bool classof(const Stmt *T) {
@@ -109,15 +108,17 @@ public:
   ObjCArrayLiteral(ASTContext &C, Expr **args, unsigned nexpr, 
                    QualType T, ObjCMethodDecl * Method,
                    SourceRange SR)
-  : Expr(ObjCArrayLiteralClass, T, VK_RValue, OK_Ordinary, false, false,
-         false, false), NumElements(nexpr), ArrayWithObjectsMethod(Method),
-                        Range(SR) {
+    : Expr(ObjCArrayLiteralClass, T, VK_RValue, OK_Ordinary, false, false,
+           false, false), 
+      NumElements(nexpr), ArrayWithObjectsMethod(Method), Range(SR) 
+  {
     Elements = new (C) Stmt*[nexpr];
     for (unsigned i = 0; i < nexpr; i++)
       Elements[i] = args[i];
   }
+  
   explicit ObjCArrayLiteral(EmptyShell Empty)
-  : Expr(ObjCArrayLiteralClass, Empty) {}
+    : Expr(ObjCArrayLiteralClass, Empty) {}
   
   SourceRange getSourceRange() const { return Range; }
 
@@ -141,23 +142,21 @@ public:
     assert((Index < NumElements) && "Arg access out of range!");
     return cast<Expr>(Elements[Index]);
   }
-  /// setElement - Set the specified element.
-  void setElement(unsigned Arg, Expr *ElementExpr) {
-    assert(Arg < NumElements && "Arg access out of range!");
-    Elements[Arg] = ElementExpr;
+    
+  ObjCMethodDecl *getArrayWithObjectsMethod() const {
+    return ArrayWithObjectsMethod; 
   }
     
-  ObjCMethodDecl *getArrayWithObjectsMethod() const
-    { return ArrayWithObjectsMethod; }
-    
   // Iterators
-  child_range children() { return child_range(&Elements[0], &Elements[0]+NumElements); }
+  child_range children() { 
+    return child_range(&Elements[0], &Elements[0]+NumElements); 
+  }
     
   friend class ASTStmtReader;
 };
 
-/// ObjCDictionaryLiteral - AST node to represent objective-c dictionary literals;
-/// as in:  @{@"name" : NSUserName(), @"date" : [NSDate date] };
+/// ObjCDictionaryLiteral - AST node to represent objective-c dictionary 
+/// literals; as in:  @{@"name" : NSUserName(), @"date" : [NSDate date] };
 class ObjCDictionaryLiteral : public Expr {
   typedef class KeyValuePair {
   public:
@@ -174,9 +173,10 @@ public:
                         ArrayRef< std::pair<Expr *, Expr*> > VK, 
                         QualType T, ObjCMethodDecl *method,
                         SourceRange SR)
-  : Expr(ObjCDictionaryLiteralClass, T, VK_RValue, OK_Ordinary, false, false,
-         false, false),
-  DictWithObjectsMethod(method), Range(SR) {
+    : Expr(ObjCDictionaryLiteralClass, T, VK_RValue, OK_Ordinary, false, false,
+           false, false),
+      DictWithObjectsMethod(method), Range(SR) 
+  {
     NumElements = VK.size();
     KeyValues = new (C) KeyValuePair[NumElements];
     for (unsigned i = 0; i < NumElements; i++) {
@@ -186,7 +186,7 @@ public:
   }
     
   explicit ObjCDictionaryLiteral(EmptyShell Empty)
-  : Expr(ObjCDictionaryLiteralClass, Empty) {}
+    : Expr(ObjCDictionaryLiteralClass, Empty) {}
   
   /// getNumElements - Return number of elements of objective-c dictionary 
   /// literal.
