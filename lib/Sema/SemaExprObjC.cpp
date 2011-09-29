@@ -182,24 +182,32 @@ selectorForType(ASTContext &Context, QualType type) {
 /// numeric literal expression. Type of the expression will be "NSNumber *"
 /// or "id" if NSNumber is unavailable.
 ExprResult Sema::BuildObjCNumericLiteral(SourceLocation AtLoc, Expr *Number) {
-  IdentifierInfo *NSIdent = &Context.Idents.get("NSNumber");
-  NamedDecl *IF = LookupSingleName(TUScope, NSIdent, AtLoc,
-                                   LookupOrdinaryName);
-  QualType Ty;
-  ObjCMethodDecl *Method  = 0;
-  if (ObjCInterfaceDecl *NumberIF = dyn_cast_or_null<ObjCInterfaceDecl>(IF)) {
-    // type must be NSNumber *.
-    Ty = Context.getObjCObjectPointerType(Context.getObjCInterfaceType(NumberIF));
-    Selector Sel = selectorForType(Context, Number->getType());
-    Method = NumberIF->lookupClassMethod(Sel);
-    if (!Method) {
-      Diag(AtLoc, diag::err_undeclared_nsnumber_method) << Sel;
+  // Look up the NSNumber class, if we haven't done so already.
+  if (!NSNumberDecl) {
+    IdentifierInfo *NSIdent = &Context.Idents.get("NSNumber");
+    NamedDecl *IF = LookupSingleName(TUScope, NSIdent, AtLoc,
+                                     LookupOrdinaryName);
+    NSNumberDecl = dyn_cast_or_null<ObjCInterfaceDecl>(IF);
+    
+    if (!NSNumberDecl) {
+      Diag(AtLoc, diag::err_undeclared_nsnumber);
       return ExprError();
     }
-  } else {
-    Diag(AtLoc, diag::err_undeclared_nsnumber);
+  }
+  
+  // Look for the appropriate method within NSNumber.
+  ObjCMethodDecl *Method  = 0;
+  Selector Sel = selectorForType(Context, Number->getType());
+  Method = NSNumberDecl->lookupClassMethod(Sel);
+  if (!Method) {
+    Diag(AtLoc, diag::err_undeclared_nsnumber_method) << Sel;
     return ExprError();
   }
+
+  // Construct the literal.
+  QualType Ty
+    = Context.getObjCObjectPointerType(
+                                    Context.getObjCInterfaceType(NSNumberDecl));
   return MaybeBindToTemporary(
            new (Context) ObjCNumericLiteral(Number, Ty, Method, AtLoc));
 }
@@ -222,16 +230,18 @@ ExprResult Sema::CheckObjCCollectionLiteralElement(Expr *Element) {
 }
 
 ExprResult Sema::BuildObjCArrayLiteral(SourceRange SR, MultiExprArg Elements) {
-  // Find the NSArray class.
-  IdentifierInfo *NSIdent = &Context.Idents.get("NSArray");
-  NamedDecl *IF = LookupSingleName(TUScope, NSIdent, SR.getBegin(),
-                                   LookupOrdinaryName);
-  ObjCInterfaceDecl *ArrayIF = dyn_cast_or_null<ObjCInterfaceDecl>(IF);
-  if (!ArrayIF) {
-    Diag(SR.getBegin(), diag::err_undeclared_nsarray);
-    return ExprError();
+  // Look up the NSArray class, if we haven't done so already.
+  if (!NSArrayDecl) {
+    IdentifierInfo *NSIdent = &Context.Idents.get("NSArray");
+    NamedDecl *IF = LookupSingleName(TUScope, NSIdent, SR.getBegin(),
+                                     LookupOrdinaryName);
+    NSArrayDecl = dyn_cast_or_null<ObjCInterfaceDecl>(IF);
+    if (!NSArrayDecl) {
+      Diag(SR.getBegin(), diag::err_undeclared_nsarray);
+      return ExprError();
+    }
   }
-
+  
   // Find the arrayWithObjects:count: method.
   IdentifierInfo *KeyIdents[] = {
     &Context.Idents.get("arrayWithObjects"),
@@ -239,7 +249,7 @@ ExprResult Sema::BuildObjCArrayLiteral(SourceRange SR, MultiExprArg Elements) {
   };
   
   Selector Sel = Context.Selectors.getSelector(2, KeyIdents);
-  ObjCMethodDecl *ArrayWithObjectsMethod = ArrayIF->lookupClassMethod(Sel);
+  ObjCMethodDecl *ArrayWithObjectsMethod = NSArrayDecl->lookupClassMethod(Sel);
   if (!ArrayWithObjectsMethod) {
     Diag(SR.getBegin(), diag::err_undeclared_arraywithobjects) << Sel;
     return ExprError();
@@ -271,7 +281,8 @@ ExprResult Sema::BuildObjCArrayLiteral(SourceRange SR, MultiExprArg Elements) {
   }
     
   QualType Ty 
-    = Context.getObjCObjectPointerType(Context.getObjCInterfaceType(ArrayIF));
+    = Context.getObjCObjectPointerType(
+                                    Context.getObjCInterfaceType(NSArrayDecl));
 
   return MaybeBindToTemporary(
            new (Context) ObjCArrayLiteral(Context, Elements.get(), 
@@ -282,16 +293,18 @@ ExprResult Sema::BuildObjCArrayLiteral(SourceRange SR, MultiExprArg Elements) {
 ExprResult Sema::BuildObjCDictionaryLiteral(SourceRange SR, 
                                             std::pair<Expr *, Expr*> *Elements,
                                             unsigned NumElements) {
-  // Find the NSDictionary class.
-  IdentifierInfo *NSIdent = &Context.Idents.get("NSDictionary");
-  NamedDecl *IF = LookupSingleName(TUScope, NSIdent, SR.getBegin(),
-                                   LookupOrdinaryName);
-  ObjCInterfaceDecl *DictIF = dyn_cast_or_null<ObjCInterfaceDecl>(IF);
-  if (!DictIF) {
-    Diag(SR.getBegin(), diag::err_undeclared_nsdictionary);
-    return ExprError();    
+  // Look up the NSDictionary class, if we haven't done so already.
+  if (!NSDictionaryDecl) {
+    IdentifierInfo *NSIdent = &Context.Idents.get("NSDictionary");
+    NamedDecl *IF = LookupSingleName(TUScope, NSIdent, SR.getBegin(),
+                                     LookupOrdinaryName);
+    NSDictionaryDecl = dyn_cast_or_null<ObjCInterfaceDecl>(IF);
+    if (!NSDictionaryDecl) {
+      Diag(SR.getBegin(), diag::err_undeclared_nsdictionary);
+      return ExprError();    
+    }
   }
-
+  
   // Find the dictionaryWithObjects:forKeys:count: method.
   IdentifierInfo *KeyIdents[] = {
     &Context.Idents.get("dictionaryWithObjects"),
@@ -300,7 +313,8 @@ ExprResult Sema::BuildObjCDictionaryLiteral(SourceRange SR,
   };
   
   Selector Sel = Context.Selectors.getSelector(3, KeyIdents);
-  ObjCMethodDecl *DictWithObjectsMethod = DictIF->lookupClassMethod(Sel);
+  ObjCMethodDecl *DictWithObjectsMethod
+    = NSDictionaryDecl->lookupClassMethod(Sel);
   if (!DictWithObjectsMethod) {
     Diag(SR.getBegin(), diag::err_undeclared_dictwithobjects) << Sel;
     return ExprError();    
@@ -350,7 +364,8 @@ ExprResult Sema::BuildObjCDictionaryLiteral(SourceRange SR,
 
   
   QualType Ty
-    = Context.getObjCObjectPointerType(Context.getObjCInterfaceType(DictIF));  
+    = Context.getObjCObjectPointerType(
+                                Context.getObjCInterfaceType(NSDictionaryDecl));  
   return MaybeBindToTemporary(
            new (Context) ObjCDictionaryLiteral(Context, 
                                                llvm::makeArrayRef(Elements, 

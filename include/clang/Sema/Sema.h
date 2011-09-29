@@ -480,6 +480,15 @@ public:
   /// \brief The MSVC "_GUID" struct, which is defined in MSVC header files.
   RecordDecl *MSVCGuidDecl;
 
+  /// \brief The declaration of the Objective-C NSNumber class.
+  ObjCInterfaceDecl *NSNumberDecl;
+
+  /// \brief The declaration of the Objective-C NSArray class.
+  ObjCInterfaceDecl *NSArrayDecl;
+
+  /// \brief The declaration of the Objective-C NSDictionary class.
+  ObjCInterfaceDecl *NSDictionaryDecl;
+
   /// A flag to remember whether the implicit forms of operator new and delete
   /// have been declared.
   bool GlobalNewDeleteDeclared;
