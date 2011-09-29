@@ -265,6 +265,10 @@ ExprResult Sema::BuildObjCNumericLiteral(SourceLocation AtLoc, Expr *Number) {
 }
 
 ExprResult Sema::CheckObjCCollectionLiteralElement(Expr *Element) {
+  // If the expression is type-dependent, there's nothing for us to do.
+  if (Element->isTypeDependent())
+    return Element;
+  
   // Perform lvalue-to-rvalue conversion.
   ExprResult Result = DefaultLvalueConversion(Element);
   if (Result.isInvalid())
@@ -324,7 +328,8 @@ ExprResult Sema::BuildObjCArrayLiteral(SourceRange SR, MultiExprArg Elements) {
   for (unsigned I = 0, N = Elements.size(); I != N; ++I) {
     // Convert this element to the element type of the array parameter.
     // We know this works because we validated the signature, above. 
-    if (!Context.hasSameType(T, ElementsBuffer[I]->getType())) {
+    if (!ElementsBuffer[I]->isTypeDependent() &&
+        !Context.hasSameType(T, ElementsBuffer[I]->getType())) {
       ExprResult Converted = ImpCastExprToType(ElementsBuffer[I], T, 
                                                CK_BitCast);
       if (Converted.isInvalid())
@@ -399,7 +404,8 @@ ExprResult Sema::BuildObjCDictionaryLiteral(SourceRange SR,
 
   for (unsigned I = 0, N = NumElements; I != N; ++I) {
     // Convert this expression to the key type of the array parameter.
-    if (!Context.hasSameType(KeyT, Elements[I].first->getType())) {
+    if (!Elements[I].first->isTypeDependent() &&
+        !Context.hasSameType(KeyT, Elements[I].first->getType())) {
       ExprResult Converted
         = ImpCastExprToType(Elements[I].first, KeyT, CK_BitCast);
       if (Converted.isInvalid())
@@ -409,7 +415,8 @@ ExprResult Sema::BuildObjCDictionaryLiteral(SourceRange SR,
     }
     
     // Convert this expression to the object type of the array parameter.
-    if (!Context.hasSameType(ObjectT, Elements[I].second->getType())) {
+    if (!Elements[I].second->isTypeDependent() &&
+        !Context.hasSameType(ObjectT, Elements[I].second->getType())) {
       ExprResult Converted
       = ImpCastExprToType(Elements[I].second, ObjectT, CK_BitCast);
       if (Converted.isInvalid())
