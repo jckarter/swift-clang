@@ -339,9 +339,10 @@ ExprResult Sema::BuildObjCArrayLiteral(SourceRange SR, MultiExprArg Elements) {
                                     Context.getObjCInterfaceType(NSArrayDecl));
 
   return MaybeBindToTemporary(
-           new (Context) ObjCArrayLiteral(Context, Elements.get(), 
-                                          Elements.size(), Ty, 
-                                          ArrayWithObjectsMethod, SR));
+           ObjCArrayLiteral::Create(Context, 
+                                    llvm::makeArrayRef(Elements.get(), 
+                                                       Elements.size()), 
+                                    Ty, ArrayWithObjectsMethod, SR));
 }
 
 ExprResult Sema::BuildObjCDictionaryLiteral(SourceRange SR, 

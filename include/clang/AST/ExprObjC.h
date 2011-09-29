@@ -99,27 +99,25 @@ public:
 /// ObjCArrayLiteral - used for objective-c array containers; as in:
 /// @[@"Hello", NSApp, [NSNumber numberWithInt:42]];
 class ObjCArrayLiteral : public Expr {
-  /// Elements - element expressions of the objective-c array literals
   unsigned NumElements;
-  Stmt **Elements;
-  ObjCMethodDecl *ArrayWithObjectsMethod;
   SourceRange Range;
-public:
-  ObjCArrayLiteral(ASTContext &C, Expr **args, unsigned nexpr, 
+  ObjCMethodDecl *ArrayWithObjectsMethod;
+  
+  ObjCArrayLiteral(llvm::ArrayRef<Expr *> Elements,
                    QualType T, ObjCMethodDecl * Method,
-                   SourceRange SR)
-    : Expr(ObjCArrayLiteralClass, T, VK_RValue, OK_Ordinary, false, false,
-           false, false), 
-      NumElements(nexpr), ArrayWithObjectsMethod(Method), Range(SR) 
-  {
-    Elements = new (C) Stmt*[nexpr];
-    for (unsigned i = 0; i < nexpr; i++)
-      Elements[i] = args[i];
-  }
+                   SourceRange SR);
   
-  explicit ObjCArrayLiteral(EmptyShell Empty)
-    : Expr(ObjCArrayLiteralClass, Empty) {}
-  
+  explicit ObjCArrayLiteral(EmptyShell Empty, unsigned NumElements)
+    : Expr(ObjCArrayLiteralClass, Empty), NumElements(NumElements) {}
+
+public:
+  static ObjCArrayLiteral *Create(ASTContext &C, 
+                                  llvm::ArrayRef<Expr *> Elements,
+                                  QualType T, ObjCMethodDecl * Method,
+                                  SourceRange SR);
+
+  static ObjCArrayLiteral *CreateEmpty(ASTContext &C, unsigned NumElements);
+
   SourceRange getSourceRange() const { return Range; }
 
   static bool classof(const Stmt *T) {
@@ -128,19 +126,24 @@ public:
   static bool classof(const ObjCArrayLiteral *) { return true; }
 
   /// \brief Retrieve elements of array of literals.
-  Expr **getElements() { return reinterpret_cast<Expr **>(Elements); }
-    
+  Expr **getElements() { return reinterpret_cast<Expr **>(this + 1); }
+
+  /// \brief Retrieve elements of array of literals.
+  const Expr * const *getElements() const { 
+    return reinterpret_cast<const Expr * const*>(this + 1); 
+  }
+
   /// getNumElements - Return number of elements of objective-c array literal.
   unsigned getNumElements() const { return NumElements; }
     
     /// getExpr - Return the Expr at the specified index.
   Expr *getElement(unsigned Index) {
     assert((Index < NumElements) && "Arg access out of range!");
-    return cast<Expr>(Elements[Index]);
+    return cast<Expr>(getElements()[Index]);
   }
   const Expr *getElement(unsigned Index) const {
     assert((Index < NumElements) && "Arg access out of range!");
-    return cast<Expr>(Elements[Index]);
+    return cast<Expr>(getElements()[Index]);
   }
     
   ObjCMethodDecl *getArrayWithObjectsMethod() const {
@@ -149,7 +152,8 @@ public:
     
   // Iterators
   child_range children() { 
-    return child_range(&Elements[0], &Elements[0]+NumElements); 
+    return child_range((Stmt **)getElements(), 
+                       (Stmt **)getElements() + NumElements);
   }
     
   friend class ASTStmtReader;

@@ -792,10 +792,11 @@ void ASTStmtReader::VisitObjCNumericLiteral(ObjCNumericLiteral *E) {
 
 void ASTStmtReader::VisitObjCArrayLiteral(ObjCArrayLiteral *E) {
     VisitExpr(E);
-    E->NumElements = Record[Idx++];
-    E->Elements = new (Reader.getContext()) Stmt*[E->NumElements];
-    for (unsigned I = 0, N = E->NumElements; I != N; ++I)
-      E->Elements[I] = Reader.ReadSubExpr();
+    unsigned NumElements = Record[Idx++];
+    assert(NumElements == E->getNumElements() && "Wrong number of elements");
+    Expr **Elements = E->getElements();
+    for (unsigned I = 0, N = NumElements; I != N; ++I)
+      Elements[I] = Reader.ReadSubExpr();
     E->ArrayWithObjectsMethod = ReadDeclAs<ObjCMethodDecl>(Record, Idx);
     E->Range = ReadSourceRange(Record, Idx);
 }
@@ -1763,7 +1764,8 @@ Stmt *ASTReader::ReadStmtFromStream(Module &F) {
       S = new (Context) ObjCNumericLiteral(Empty);
       break;
     case EXPR_OBJC_ARRAY_LITERAL:
-      S = new (Context) ObjCArrayLiteral(Empty);
+      S = ObjCArrayLiteral::CreateEmpty(Context,
+                                        Record[ASTStmtReader::NumExprFields]);
       break;
     case EXPR_OBJC_DICTIONARY_LITERAL:
       S = new (Context) ObjCDictionaryLiteral(Empty);

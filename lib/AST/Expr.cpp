@@ -3289,3 +3289,42 @@ BlockDeclRefExpr::BlockDeclRefExpr(VarDecl *d, QualType t, ExprValueKind VK,
   ExprBits.ValueDependent = ValueDependent;
   ExprBits.InstantiationDependent = InstantiationDependent;
 }
+
+ObjCArrayLiteral::ObjCArrayLiteral(llvm::ArrayRef<Expr *> Elements, 
+                                   QualType T, ObjCMethodDecl *Method,
+                                   SourceRange SR)
+  : Expr(ObjCArrayLiteralClass, T, VK_RValue, OK_Ordinary, 
+         false, false, false, false), 
+    NumElements(Elements.size()), Range(SR), ArrayWithObjectsMethod(Method)
+{
+  Expr **SaveElements = getElements();
+  for (unsigned I = 0, N = Elements.size(); I != N; ++I) {
+    if (Elements[I]->isTypeDependent() || Elements[I]->isValueDependent())
+      ExprBits.ValueDependent = true;
+    if (Elements[I]->isInstantiationDependent())
+      ExprBits.InstantiationDependent = true;
+    if (Elements[I]->containsUnexpandedParameterPack())
+      ExprBits.ContainsUnexpandedParameterPack = true;
+    
+    SaveElements[I] = Elements[I];
+  }
+}
+
+ObjCArrayLiteral *ObjCArrayLiteral::Create(ASTContext &C, 
+                                           llvm::ArrayRef<Expr *> Elements,
+                                           QualType T, ObjCMethodDecl * Method,
+                                           SourceRange SR) {
+  void *Mem = C.Allocate(sizeof(ObjCArrayLiteral) 
+                         + Elements.size() * sizeof(Expr *));
+  return new (Mem) ObjCArrayLiteral(Elements, T, Method, SR);
+}
+
+ObjCArrayLiteral *ObjCArrayLiteral::CreateEmpty(ASTContext &C, 
+                                                unsigned NumElements) {
+  
+  void *Mem = C.Allocate(sizeof(ObjCArrayLiteral) 
+                         + NumElements * sizeof(Expr *));
+  return new (Mem) ObjCArrayLiteral(EmptyShell(), NumElements);
+}
+
+
