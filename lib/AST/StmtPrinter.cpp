@@ -1462,18 +1462,13 @@ void StmtPrinter::VisitObjCArrayLiteral(ObjCArrayLiteral *E) {
 
 void StmtPrinter::VisitObjCDictionaryLiteral(ObjCDictionaryLiteral *E) {
   OS << "@{ ";
-  StmtRange ch = E->children();
-  if (ch.first != ch.second) {
-    while (1) {
-      Stmt *value = *ch.first;
-      ++ch.first;
-      if (ch.first == ch.second) break;
-      Stmt *key = *ch.first;
-      Visit(key); OS << " : "; Visit(value);
-      ++ch.first;
-      if (ch.first == ch.second) break;
+  for (unsigned I = 0, N = E->getNumElements(); I != N; ++I) {
+    if (I > 0)
       OS << ", ";
-    }
+    
+    Visit(E->getKeyValueElement(I).Key);
+    OS << " : ";
+    Visit(E->getKeyValueElement(I).Value);
   }
   OS << " }";
 }
