@@ -7725,7 +7725,32 @@ TreeTransform<Derived>::TransformObjCNumericLiteral(ObjCNumericLiteral *E) {
 template<typename Derived>
 ExprResult
 TreeTransform<Derived>::TransformObjCArrayLiteral(ObjCArrayLiteral *E) {
-  return SemaRef.Owned(E);
+  // Transform each of the elements.
+  llvm::SmallVector<Expr *, 8> Elements;
+  bool ArgChanged = false;
+  if (getDerived().TransformExprs(E->getElements(), E->getNumElements(), 
+                                  /*IsCall=*/false, Elements, &ArgChanged))
+    return ExprError();
+  
+  if (!getDerived().AlwaysRebuild() && !ArgChanged)
+    return ExprError();
+  
+  // Make a second pass over the elements to make sure they are valid collection
+  // literal elements.
+  // FIXME: DPG is not happy with this. I may want to move this checking into
+  // the container-literal building routines.
+  for (unsigned I = 0, N = Elements.size(); I != N; ++I) {
+    ExprResult Checked
+      = getSema().CheckObjCCollectionLiteralElement(Elements[I]);
+    if (Checked.isInvalid())
+      return ExprError();
+    
+    Elements[I] = Checked.get();
+  }
+  
+  return getSema().BuildObjCArrayLiteral(E->getSourceRange(),
+                                         MultiExprArg(Elements.data(),
+                                                      Elements.size()));
 }
 
 template<typename Derived>

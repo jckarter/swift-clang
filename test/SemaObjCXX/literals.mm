@@ -33,8 +33,12 @@ typedef unsigned char BOOL;
 
 template<typename T>
 void test_array_literals(T t) {
-  id arr = @[ @17, t ];
+  id arr = @[ @17, t ]; // expected-error{{members of objective-c collection literals must be objects}}
 }
+
+template void test_array_literals(id);
+template void test_array_literals(NSArray*);
+template void test_array_literals(int); // expected-note{{in instantiation of function template specialization 'test_array_literals<int>' requested here}}
 
 template<typename T>
 void test_dictionary_literals(T t) {
