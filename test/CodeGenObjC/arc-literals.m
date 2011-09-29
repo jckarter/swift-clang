@@ -39,9 +39,20 @@ void test_array(id a, id b) {
   // CHECK: call i8* @objc_retain(i8*
 
   // Constructing the array
+  // CHECK: getelementptr inbounds [2 x i8*]* [[OBJECTS:%[A-Za-z0-9]+]], i32 0, i32 0
+  // CHECK: store i8*
+  // CHECK: getelementptr inbounds [2 x i8*]* [[OBJECTS]], i32 0, i32 1
+  // CHECK: store i8*
+
   // CHECK: {{call i8*.*objc_msgSend.*i64 2}}
   // CHECK: call i8* @objc_retainAutoreleasedReturnValue
   id arr = @[a, b];
+
+  // Loop that releases the objects retained to build the array.
+  // CHECK: getelementptr inbounds [2 x i8*]* %objects, i32 0, i32 0
+  // CHECK: br label
+  // CHECK: call void @objc_release
+  // CHECK: br i1
 
   // CHECK: call void @objc_release
   // CHECK: call void @objc_release
@@ -57,10 +68,31 @@ void test_dictionary(id k1, id o1, id k2, id o2) {
   // CHECK: call i8* @objc_retain(i8*
   // CHECK: call i8* @objc_retain(i8*
 
+  // Constructing the arrays
+  // CHECK: getelementptr inbounds [2 x i8*]* [[KEYS:%[A-Za-z0-9]+]], i32 0, i32 0
+  // CHECK: store i8*
+  // CHECK: getelementptr inbounds [2 x i8*]* [[OBJECTS:%[A-Za-z0-9]+]], i32 0, i32 0
+  // CHECK: store i8*
+  // CHECK: getelementptr inbounds [2 x i8*]* [[KEYS]], i32 0, i32 1
+  // CHECK: store i8*
+  // CHECK: getelementptr inbounds [2 x i8*]* [[OBJECTS]], i32 0, i32 1
+  // CHECK: store i8*
+
   // Constructing the dictionary
   // CHECK: {{call i8.*@objc_msgSend}}
   // CHECK: call i8* @objc_retainAutoreleasedReturnValue
   id dict = @{ k1 : o1, k2 : o2 };
+
+  // Release the objects in the arrays
+  // CHECK: getelementptr inbounds [2 x i8*]* [[KEYS]], i32 0, i32 0
+  // CHECK: br label
+  // CHECK: call void @objc_release
+  // CHECK: br i1
+  
+  // CHECK: getelementptr inbounds [2 x i8*]* [[OBJECTS]], i32 0, i32 0
+  // CHECK: br label
+  // CHECK: call void @objc_release
+  // CHECK: br i1
 
   // CHECK: call void @objc_release
   // CHECK: call void @objc_release
