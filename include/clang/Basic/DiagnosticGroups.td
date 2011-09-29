@@ -66,6 +66,7 @@ def BitwiseOpParentheses: DiagGroup<"bitwise-op-parentheses">;
 def LogicalOpParentheses: DiagGroup<"logical-op-parentheses">;
 def IgnoredQualifiers : DiagGroup<"ignored-qualifiers">;
 def : DiagGroup<"import">;
+def IncompatiblePointerTypes : DiagGroup<"incompatible-pointer-types">;
 def : DiagGroup<"init-self">;
 def : DiagGroup<"inline">;
 def : DiagGroup<"int-to-pointer-cast">;
@@ -84,6 +85,7 @@ def : DiagGroup<"newline-eof">;
 def LongLong : DiagGroup<"long-long">;
 def MismatchedTags : DiagGroup<"mismatched-tags">;
 def MissingFieldInitializers : DiagGroup<"missing-field-initializers">;
+def ModuleBuild : DiagGroup<"module-build">;
 def NullDereference : DiagGroup<"null-dereference">;
 def InitializerOverrides : DiagGroup<"initializer-overrides">;
 def NonNull : DiagGroup<"nonnull">;
@@ -226,6 +228,7 @@ def Conversion : DiagGroup<"conversion",
                            [DiagGroup<"shorten-64-to-32">,
                             DiagGroup<"constant-conversion">,
                             DiagGroup<"literal-conversion">,
+                            DiagGroup<"string-conversion">,
                             DiagGroup<"sign-conversion">,
                             BoolConversions]>,
                  DiagCategory<"Value Conversion Issue">;

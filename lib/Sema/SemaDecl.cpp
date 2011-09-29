@@ -1263,7 +1263,7 @@ NamedDecl *Sema::LazilyCreateBuiltin(IdentifierInfo *II, unsigned bid,
       << R;
     if (Context.BuiltinInfo.getHeaderName(BID) &&
         Diags.getDiagnosticLevel(diag::ext_implicit_lib_function_decl, Loc)
-          != Diagnostic::Ignored)
+          != DiagnosticsEngine::Ignored)
       Diag(Loc, diag::note_please_include_header)
         << Context.BuiltinInfo.getHeaderName(BID)
         << Context.BuiltinInfo.GetName(BID);
@@ -1493,9 +1493,11 @@ static void mergeDeclAttributes(Decl *newDecl, const Decl *oldDecl,
   for (specific_attr_iterator<InheritableAttr>
        i = oldDecl->specific_attr_begin<InheritableAttr>(),
        e = oldDecl->specific_attr_end<InheritableAttr>(); i != e; ++i) {
-    // Ignore deprecated and unavailable attributes if requested.
+    // Ignore deprecated/unavailable/availability attributes if requested.
     if (!mergeDeprecation &&
-        (isa<DeprecatedAttr>(*i) || isa<UnavailableAttr>(*i)))
+        (isa<DeprecatedAttr>(*i) || 
+         isa<UnavailableAttr>(*i) ||
+         isa<AvailabilityAttr>(*i)))
       continue;
 
     if (!DeclHasAttr(newDecl, *i)) {
@@ -2936,7 +2938,6 @@ Sema::GetNameFromUnqualifiedId(const UnqualifiedId &Name) {
   } // switch (Name.getKind())
 
   llvm_unreachable("Unknown name kind");
-  return DeclarationNameInfo();
 }
 
 static QualType getCoreType(QualType Ty) {
@@ -3980,7 +3981,7 @@ Sema::ActOnVariableDeclarator(Scope *S, Declarator &D, DeclContext *DC,
 void Sema::CheckShadow(Scope *S, VarDecl *D, const LookupResult& R) {
   // Return if warning is ignored.
   if (Diags.getDiagnosticLevel(diag::warn_decl_shadow, R.getNameLoc()) ==
-        Diagnostic::Ignored)
+        DiagnosticsEngine::Ignored)
     return;
 
   // Don't diagnose declarations at file scope.
@@ -4054,7 +4055,7 @@ void Sema::CheckShadow(Scope *S, VarDecl *D, const LookupResult& R) {
 /// \brief Check -Wshadow without the advantage of a previous lookup.
 void Sema::CheckShadow(Scope *S, VarDecl *D) {
   if (Diags.getDiagnosticLevel(diag::warn_decl_shadow, D->getLocation()) ==
-        Diagnostic::Ignored)
+        DiagnosticsEngine::Ignored)
     return;
 
   LookupResult R(*this, D->getDeclName(), D->getLocation(),
@@ -8373,7 +8374,6 @@ void Sema::DiagnoseNontrivial(const RecordType* T, CXXSpecialMember member) {
       }
 
       llvm_unreachable("found no user-declared constructors");
-      return;
     }
     break;
 
@@ -8458,7 +8458,7 @@ void Sema::DiagnoseNontrivial(const RecordType* T, CXXSpecialMember member) {
   case CXXDestructor:
     hasTrivial = &CXXRecordDecl::hasTrivialDestructor; break;
   default:
-    llvm_unreachable("unexpected special member"); return;
+    llvm_unreachable("unexpected special member");
   }
 
   // Check for nontrivial bases (and recurse).

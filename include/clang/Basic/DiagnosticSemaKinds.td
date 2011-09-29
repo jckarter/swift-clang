@@ -516,6 +516,9 @@ def warn_default_atomic_custom_getter_setter : Warning<
 def err_use_continuation_class : Error<
   "illegal redeclaration of property in continuation class %0"
   " (attribute must be 'readwrite', while its primary must be 'readonly')">;
+def error_type_mismatch_continuation_class : Error<
+  "type of property %0 in continuation class does not match "
+  "property type in primary class">;
 def err_use_continuation_class_redeclaration_readwrite : Error<
   "illegal redeclaration of 'readwrite' property in continuation class %0"
   " (perhaps you intended this to be a 'readwrite' redeclaration of a "
@@ -552,8 +555,7 @@ def warn_arc_perform_selector_leaks : Warning<
   "performSelector may cause a leak because its selector is unknown">,
   InGroup<DiagGroup<"arc-performSelector-leaks">>;
 def err_gc_weak_property_strong_type : Error<
-  "weak attribute declared on a __strong type property"
-  "in GC mode">;
+  "weak attribute declared on a __strong type property in GC mode">;
 
 def error_synthesized_ivar_yet_not_supported : Error<
   "instance variable synthesis not yet supported"
@@ -1490,6 +1492,9 @@ def warn_impcast_literal_float_to_integer : Warning<
   "implicit conversion turns literal floating-point number into integer: "
   "%0 to %1">,
   InGroup<DiagGroup<"literal-conversion">>, DefaultIgnore;
+def warn_impcast_string_literal_to_bool : Warning<
+  "implicit conversion turns string literal into bool: %0 to %1">,
+  InGroup<DiagGroup<"string-conversion">>, DefaultIgnore;
 def note_fix_integral_float_as_integer : Note<
   "this can be rewritten as an integer literal with the exact same value">;
 def warn_impcast_different_enum_types : Warning<
@@ -1743,6 +1748,16 @@ def note_ovl_candidate_bad_conv_incomplete : Note<"candidate "
     "function (the implicit move assignment operator)|"
     "constructor (inherited)}0%1 "
     "not viable: cannot convert argument of incomplete type %2 to %3">;
+def note_ovl_candidate_bad_list_argument : Note<"candidate "
+    "%select{function|function|constructor|"
+    "function |function |constructor |"
+    "constructor (the implicit default constructor)|"
+    "constructor (the implicit copy constructor)|"
+    "constructor (the implicit move constructor)|"
+    "function (the implicit copy assignment operator)|"
+    "function (the implicit move assignment operator)|"
+    "constructor (inherited)}0%1 "
+    "not viable: cannot convert initializer list argument to %3">;
 def note_ovl_candidate_bad_overload : Note<"candidate "
     "%select{function|function|constructor|"
     "function |function |constructor |"
@@ -3798,19 +3813,21 @@ def ext_typecheck_convert_incompatible_pointer : ExtWarn<
   "take the address with &|"
   "remove *|"
   "remove &}3">,
-  InGroup<DiagGroup<"incompatible-pointer-types">>;
+  InGroup<IncompatiblePointerTypes>;
 def ext_typecheck_convert_discards_qualifiers : ExtWarn<
   "%select{assigning to|passing|returning|converting|initializing|sending|casting}2"
   " %0 "
   "%select{from|to parameter of type|from a function with result type|to type|"
   "with an expression of type|to parameter of type|to type}2 %1 discards "
-  "qualifiers">;
+  "qualifiers">,
+  InGroup<IncompatiblePointerTypes>;
 def ext_nested_pointer_qualifier_mismatch : ExtWarn<
   "%select{assigning to|passing|returning|converting|initializing|sending|casting}2"
   " %0 "
   "%select{from|to parameter of type|from a function with result type|to type|"
   "with an expression of type|to parameter of type|to type}2 %1 discards "
-  "qualifiers in nested pointer types">;
+  "qualifiers in nested pointer types">,
+  InGroup<IncompatiblePointerTypes>;
 def warn_incompatible_vectors : Warning<
   "incompatible vector types "
   "%select{assigning to|passing|returning|converting|initializing|sending|casting}2"
@@ -3954,9 +3971,11 @@ def ext_typecheck_cond_incompatible_operands_nonstandard : ExtWarn<
 def err_cast_selector_expr : Error<
   "cannot type cast @selector expression">;
 def warn_typecheck_cond_incompatible_pointers : ExtWarn<
-  "pointer type mismatch (%0 and %1)">;
+  "pointer type mismatch (%0 and %1)">,
+  InGroup<DiagGroup<"pointer-type-mismatch">>;
 def warn_typecheck_cond_pointer_integer_mismatch : ExtWarn<
-  "pointer/integer type mismatch in conditional expression (%0 and %1)">;
+  "pointer/integer type mismatch in conditional expression (%0 and %1)">,
+  InGroup<DiagGroup<"conditional-type-mismatch">>;
 def err_typecheck_choose_expr_requires_constant : Error<
   "'__builtin_choose_expr' requires a constant expression">;
 def ext_typecheck_expression_not_constant_but_accepted : Extension<
@@ -4636,6 +4655,12 @@ def err_c99_array_usage_cxx : Error<
   "C99-specific array features are not permitted in C++">;
 def err_double_requires_fp64 : Error<
   "use of type 'double' requires cl_khr_fp64 extension to be enabled">;
+def err_nsconsumed_attribute_mismatch : Error<
+  "overriding method has mismatched ns_consumed attribute on its"
+  " parameter">;
+def err_nsreturns_retained_attribute_mismatch : Error<
+  "overriding method has mismatched ns_returns_%select{not_retained|retained}0"
+  " attributes">;
   
 def note_getter_unavailable : Note<
   "or because setter is declared here, but no getter method %0 is found">;

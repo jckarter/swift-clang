@@ -545,6 +545,15 @@ Decl *Parser::ParseUsingDeclaration(unsigned Context,
     return 0;
   }
 
+  // "typename" keyword is allowed for identifiers only,
+  // because it may be a type definition.
+  if (IsTypeName && Name.getKind() != UnqualifiedId::IK_Identifier) {
+    Diag(Name.getSourceRange().getBegin(), diag::err_typename_identifiers_only)
+      << FixItHint::CreateRemoval(SourceRange(TypenameLoc));
+    // Proceed parsing, but reset the IsTypeName flag.
+    IsTypeName = false;
+  }
+
   if (IsAliasDecl) {
     TemplateParameterLists *TemplateParams = TemplateInfo.TemplateParams;
     MultiTemplateParamsArg TemplateParamsArg(Actions,
@@ -1572,7 +1581,6 @@ bool Parser::isCXX0XFinalKeyword() const {
 ///       virt-specifier:
 ///         override
 ///         final
-///         new
 /// 
 ///       pure-specifier:
 ///         '= 0'
@@ -2293,9 +2301,17 @@ Parser::MemInitResult Parser::ParseMemInitializer(Decl *ConstructorDecl) {
 
   // Parse the '('.
   if (getLang().CPlusPlus0x && Tok.is(tok::l_brace)) {
-    // FIXME: Do something with the braced-init-list.
-    ParseBraceInitializer();
-    return true;
+    ExprResult InitList = ParseBraceInitializer();
+    if (InitList.isInvalid())
+      return true;
+
+    SourceLocation EllipsisLoc;
+    if (Tok.is(tok::ellipsis))
+      EllipsisLoc = ConsumeToken();
+
+    return Actions.ActOnMemInitializer(ConstructorDecl, getCurScope(), SS, II,
+                                       TemplateTypeTy, IdLoc, InitList.take(),
+                                       EllipsisLoc);
   } else if(Tok.is(tok::l_paren)) {
     SourceLocation LParenLoc = ConsumeParen();
 

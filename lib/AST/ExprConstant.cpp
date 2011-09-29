@@ -389,7 +389,6 @@ public:
 
   RetTy VisitStmt(const Stmt *) {
     llvm_unreachable("Expression evaluator should not be called on stmts");
-    return DerivedError(0);
   }
   RetTy VisitExpr(const Expr *E) {
     return DerivedError(E);
@@ -485,6 +484,13 @@ public:
       return Visit(E->getSubExpr());
     }
   }
+
+  bool VisitInitListExpr(const InitListExpr *E) {
+    if (Info.Ctx.getLangOptions().CPlusPlus0x && E->getNumInits() == 1)
+      return Visit(E->getInit(0));
+    return Error(E);
+  }
+
   // FIXME: Missing: __real__, __imag__
 
 };
@@ -611,6 +617,8 @@ public:
   bool VisitImplicitValueInitExpr(const ImplicitValueInitExpr *E)
       { return Success((Expr*)0); }
   bool VisitCXXNullPtrLiteralExpr(const CXXNullPtrLiteralExpr *E)
+      { return Success((Expr*)0); }
+  bool VisitCXXScalarValueInitExpr(const CXXScalarValueInitExpr *E)
       { return Success((Expr*)0); }
 
   // FIXME: Missing: @protocol, @selector
@@ -1082,7 +1090,9 @@ public:
 
   bool VisitCXXNoexceptExpr(const CXXNoexceptExpr *E);
   bool VisitSizeOfPackExpr(const SizeOfPackExpr *E);
-    
+
+  bool VisitInitListExpr(const InitListExpr *E);
+
 private:
   CharUnits GetAlignOfExpr(const Expr *E);
   CharUnits GetAlignOfType(QualType T);
@@ -1935,6 +1945,17 @@ bool IntExprEvaluator::VisitCXXNoexceptExpr(const CXXNoexceptExpr *E) {
   return Success(E->getValue(), E);
 }
 
+bool IntExprEvaluator::VisitInitListExpr(const InitListExpr *E) {
+  if (!Info.Ctx.getLangOptions().CPlusPlus0x)
+    return Error(E);
+
+  if (E->getNumInits() == 0)
+    return Success(0, E);
+
+  assert(E->getNumInits() == 1 && "Excess initializers for integer in C++11.");
+  return Visit(E->getInit(0));
+}
+
 //===----------------------------------------------------------------------===//
 // Float Evaluation
 //===----------------------------------------------------------------------===//
@@ -1967,6 +1988,8 @@ public:
   bool VisitUnaryImag(const UnaryOperator *E);
 
   bool VisitDeclRefExpr(const DeclRefExpr *E);
+
+  bool VisitInitListExpr(const InitListExpr *E);
 
   // FIXME: Missing: array subscript of vector, member of vector,
   //                 ImplicitValueInitExpr
@@ -2236,6 +2259,19 @@ bool FloatExprEvaluator::VisitCXXScalarValueInitExpr(const CXXScalarValueInitExp
   return true;
 }
 
+bool FloatExprEvaluator::VisitInitListExpr(const InitListExpr *E) {
+  if (!Info.Ctx.getLangOptions().CPlusPlus0x)
+    return Error(E);
+
+  if (E->getNumInits() == 0) {
+    Result = APFloat::getZero(Info.Ctx.getFloatTypeSemantics(E->getType()));
+    return true;
+  }
+
+  assert(E->getNumInits() == 1 && "Excess initializers for integer in C++11.");
+  return Visit(E->getInit(0));
+}
+
 //===----------------------------------------------------------------------===//
 // Complex Evaluation (for float and integer)
 //===----------------------------------------------------------------------===//
@@ -2267,7 +2303,7 @@ public:
 
   bool VisitBinaryOperator(const BinaryOperator *E);
   bool VisitUnaryOperator(const UnaryOperator *E);
-  // FIXME Missing: ImplicitValueInitExpr
+  // FIXME Missing: ImplicitValueInitExpr, InitListExpr
 };
 } // end anonymous namespace
 
@@ -2769,7 +2805,6 @@ static ICEDiag CheckICE(const Expr* E, ASTContext &Ctx) {
   case Expr::CompoundAssignOperatorClass:
   case Expr::CompoundLiteralExprClass:
   case Expr::ExtVectorElementExprClass:
-  case Expr::InitListExprClass:
   case Expr::DesignatedInitExprClass:
   case Expr::ImplicitValueInitExprClass:
   case Expr::ParenListExprClass:
@@ -2817,6 +2852,17 @@ static ICEDiag CheckICE(const Expr* E, ASTContext &Ctx) {
   case Expr::AsTypeExprClass:
   case Expr::ObjCIndirectCopyRestoreExprClass:
   case Expr::MaterializeTemporaryExprClass:
+    return ICEDiag(2, E->getLocStart());
+
+  case Expr::InitListExprClass:
+    if (Ctx.getLangOptions().CPlusPlus0x) {
+      const InitListExpr *ILE = cast<InitListExpr>(E);
+      if (ILE->getNumInits() == 0)
+        return NoDiag();
+      if (ILE->getNumInits() == 1)
+        return CheckICE(ILE->getInit(0), Ctx);
+      // Fall through for more than 1 expression.
+    }
     return ICEDiag(2, E->getLocStart());
 
   case Expr::SizeOfPackExprClass:

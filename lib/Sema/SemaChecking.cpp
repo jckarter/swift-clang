@@ -2140,7 +2140,7 @@ void Sema::CheckStrlcpycatArguments(const CallExpr *Call,
   llvm::SmallString<128> sizeString;
   llvm::raw_svector_ostream OS(sizeString);
   OS << "sizeof(";
-  DstArg->printPretty(OS, Context, 0, Context.PrintingPolicy);
+  DstArg->printPretty(OS, Context, 0, getPrintingPolicy());
   OS << ")";
   
   Diag(OriginalSizeArg->getLocStart(), diag::note_strlcpycat_wrong_size)
@@ -3237,9 +3237,16 @@ void CheckImplicitConversion(Sema &S, Expr *E, QualType T,
   if (CC.isInvalid())
     return;
 
-  // Never diagnose implicit casts to bool.
-  if (Target->isSpecificBuiltinType(BuiltinType::Bool))
-    return;
+  // Diagnose implicit casts to bool.
+  if (Target->isSpecificBuiltinType(BuiltinType::Bool)) {
+    if (isa<StringLiteral>(E))
+      // Warn on string literal to bool.  Checks for string literals in logical
+      // expressions, for instances, assert(0 && "error here"), is prevented
+      // by a check in AnalyzeImplicitConversions().
+      return DiagnoseImpCast(S, E, T, CC,
+                             diag::warn_impcast_string_literal_to_bool);
+    return; // Other casts to bool are not checked.
+  }
 
   // Strip vector types.
   if (isa<VectorType>(Source)) {
@@ -3508,8 +3515,16 @@ void AnalyzeImplicitConversions(Sema &S, Expr *OrigE, SourceLocation CC) {
 
   // Now just recurse over the expression's children.
   CC = E->getExprLoc();
-  for (Stmt::child_range I = E->children(); I; ++I)
-    AnalyzeImplicitConversions(S, cast<Expr>(*I), CC);
+  BinaryOperator *BO = dyn_cast<BinaryOperator>(E);
+  bool IsLogicalOperator = BO && BO->isLogicalOp();
+  for (Stmt::child_range I = E->children(); I; ++I) {
+    Expr *ChildExpr = cast<Expr>(*I);
+    if (IsLogicalOperator &&
+        isa<StringLiteral>(ChildExpr->IgnoreParenImpCasts()))
+      // Ignore checking string literals that are in logical operators.
+      continue;
+    AnalyzeImplicitConversions(S, ChildExpr, CC);
+  }
 }
 
 } // end anonymous namespace
@@ -3601,7 +3616,7 @@ void Sema::CheckCastAlign(Expr *Op, QualType T, SourceRange TRange) {
   // cast; don't do it if we're ignoring -Wcast_align (as is the default).
   if (getDiagnostics().getDiagnosticLevel(diag::warn_cast_align,
                                           TRange.getBegin())
-        == Diagnostic::Ignored)
+        == DiagnosticsEngine::Ignored)
     return;
 
   // Ignore dependent types.

@@ -3206,7 +3206,6 @@ static void handleNSReturnsRetainedAttr(Sema &S, Decl *D,
   switch (Attr.getKind()) {
     default:
       llvm_unreachable("invalid ownership attribute");
-      return;
     case AttributeList::AT_ns_returns_autoreleased:
       D->addAttr(::new (S.Context) NSReturnsAutoreleasedAttr(Attr.getRange(),
                                                              S.Context));
@@ -3759,7 +3758,9 @@ static bool isForbiddenTypeAllowed(Sema &S, Decl *decl) {
   // Private ivars are always okay.  Unfortunately, people don't
   // always properly make their ivars private, even in system headers.
   // Plus we need to make fields okay, too.
-  if (!isa<FieldDecl>(decl) && !isa<ObjCPropertyDecl>(decl))
+  // Function declarations in sys headers will be marked unavailable.
+  if (!isa<FieldDecl>(decl) && !isa<ObjCPropertyDecl>(decl) &&
+      !isa<FunctionDecl>(decl))
     return false;
 
   // Require it to be declared in a system header.

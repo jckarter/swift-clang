@@ -47,18 +47,6 @@ using namespace clang::driver;
 using namespace clang::driver::tools;
 using namespace clang;
 
-/// FindTargetProgramPath - Return path of the target specific version of
-/// ProgName.  If it doesn't exist, return path of ProgName itself.
-static std::string FindTargetProgramPath(const ToolChain &TheToolChain,
-                                         const std::string TripleString,
-                                         const char *ProgName) {
-  std::string Executable(TripleString + "-" + ProgName);
-  std::string Path(TheToolChain.GetProgramPath(Executable.c_str()));
-  if (Path != Executable)
-    return Path;
-  return TheToolChain.GetProgramPath(ProgName);
-}
-
 /// CheckPreprocessingOptions - Perform some validation of preprocessing
 /// arguments that is shared with gcc.
 static void CheckPreprocessingOptions(const Driver &D, const ArgList &Args) {
@@ -752,32 +740,68 @@ void Clang::AddARMTargetArgs(const ArgList &Args,
   }
 }
 
+// Get default architecture.
+static const char* getMipsArchFromCPU(StringRef CPUName) {
+  if (CPUName == "mips32r1" || CPUName == "4ke")
+    return "mips";
+
+  assert((CPUName == "mips64r1" || CPUName == "mips64r2") &&
+         "Unexpected cpu name.");
+
+  return "mips64";
+}
+
+// Get default target cpu.
+static const char* getMipsCPUFromArch(StringRef ArchName, const Driver &D) {
+  if (ArchName == "mips" || ArchName == "mipsel")
+    return "mips32r1";
+  else if (ArchName == "mips64" || ArchName == "mips64el")
+    return "mips64r1";
+  else
+    D.Diag(diag::err_drv_invalid_arch_name) << ArchName;
+
+  return 0;
+}
+
+// Get default ABI.
+static const char* getMipsABIFromArch(StringRef ArchName) {
+    if (ArchName == "mips" || ArchName == "mipsel")
+      return "o32";
+    
+    assert((ArchName == "mips64" || ArchName == "mips64el") &&
+           "Unexpected arch name.");
+    return "n64";
+}
+
 void Clang::AddMIPSTargetArgs(const ArgList &Args,
                              ArgStringList &CmdArgs) const {
   const Driver &D = getToolChain().getDriver();
 
+  StringRef ArchName;
+  const char *CPUName;
+
+  // Set target cpu and architecture.
+  if (Arg *A = Args.getLastArg(options::OPT_mcpu_EQ)) {
+    CPUName = A->getValue(Args);
+    ArchName = getMipsArchFromCPU(CPUName);
+  }
+  else {
+    ArchName = Args.MakeArgString(getToolChain().getArchName());
+    CPUName = getMipsCPUFromArch(ArchName, D);
+  }
+
+  CmdArgs.push_back("-target-cpu");
+  CmdArgs.push_back(CPUName);
+ 
   // Select the ABI to use.
   const char *ABIName = 0;
-  if (Arg *A = Args.getLastArg(options::OPT_mabi_EQ)) {
+  if (Arg *A = Args.getLastArg(options::OPT_mabi_EQ))
     ABIName = A->getValue(Args);
-  } else {
-    ABIName = "o32";
-  }
+  else 
+    ABIName = getMipsABIFromArch(ArchName);
 
   CmdArgs.push_back("-target-abi");
   CmdArgs.push_back(ABIName);
-
-  if (const Arg *A = Args.getLastArg(options::OPT_march_EQ)) {
-    StringRef MArch = A->getValue(Args);
-    CmdArgs.push_back("-target-cpu");
-
-    if ((MArch == "r2000") || (MArch == "r3000"))
-      CmdArgs.push_back("mips1");
-    else if (MArch == "r6000")
-      CmdArgs.push_back("mips2");
-    else
-      CmdArgs.push_back(Args.MakeArgString(MArch));
-  }
 
   // Select the float ABI as determined by -msoft-float, -mhard-float, and
   StringRef FloatABI;
@@ -4054,9 +4078,7 @@ void netbsd::Assemble::ConstructJob(Compilation &C, const JobAction &JA,
     CmdArgs.push_back(II.getFilename());
   }
 
-  const char *Exec = Args.MakeArgString(FindTargetProgramPath(getToolChain(),
-                                                      ToolTriple.getTriple(),
-                                                      "as"));
+  const char *Exec = Args.MakeArgString((getToolChain().GetProgramPath("as")));
   C.addCommand(new Command(JA, *this, Exec, CmdArgs));
 }
 
@@ -4172,9 +4194,7 @@ void netbsd::Link::ConstructJob(Compilation &C, const JobAction &JA,
 
   addProfileRT(getToolChain(), Args, CmdArgs, getToolChain().getTriple());
 
-  const char *Exec = Args.MakeArgString(FindTargetProgramPath(getToolChain(),
-                                                      ToolTriple.getTriple(),
-                                                      "ld"));
+  const char *Exec = Args.MakeArgString(getToolChain().GetProgramPath("ld"));
   C.addCommand(new Command(JA, *this, Exec, CmdArgs));
 }
 

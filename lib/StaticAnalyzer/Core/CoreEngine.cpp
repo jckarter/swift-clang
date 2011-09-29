@@ -327,7 +327,6 @@ void CoreEngine::HandleBlockExit(const CFGBlock * B, ExplodedNode *Pred) {
     switch (Term->getStmtClass()) {
       default:
         llvm_unreachable("Analysis for this terminator not implemented.");
-        break;
 
       case Stmt::BinaryOperatorClass: // '&&' and '||'
         HandleBranch(cast<BinaryOperator>(Term)->getLHS(), Term, B, Pred);
@@ -787,7 +786,7 @@ void CallEnterNodeBuilder::generateNode(const ProgramState *state) {
     // The Diagnostic is  actually shared when we create ASTUnits from AST files.
     AnalysisManager AMgr(TU->getASTContext(), TU->getDiagnostic(), 
                          OldMgr.getLangOptions(), 
-                         OldMgr.getPathDiagnosticClient(),
+                         OldMgr.getPathDiagnosticConsumer(),
                          OldMgr.getStoreManagerCreator(),
                          OldMgr.getConstraintManagerCreator(),
                          OldMgr.getCheckerManager(),
