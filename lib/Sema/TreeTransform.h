@@ -2137,7 +2137,17 @@ public:
                                                 OperatorLoc, Pack, PackLoc, 
                                                 RParenLoc, Length);
   }
-                                   
+
+  /// \brief Build a new Objective-C array literal.
+  ///
+  /// By default, performs semantic analysis to build the new expression.
+  /// Subclasses may override this routine to provide different behavior.
+  ExprResult RebuildObjCArrayLiteral(SourceRange Range,
+                                     Expr **Elements, unsigned NumElements) {
+    return getSema().BuildObjCArrayLiteral(Range, 
+                                           MultiExprArg(Elements, NumElements));
+  }
+
   /// \brief Build a new Objective-C @encode expression.
   ///
   /// By default, performs semantic analysis to build the new expression.
@@ -7733,7 +7743,7 @@ TreeTransform<Derived>::TransformObjCArrayLiteral(ObjCArrayLiteral *E) {
     return ExprError();
   
   if (!getDerived().AlwaysRebuild() && !ArgChanged)
-    return ExprError();
+    return Owned(E);
   
   // Make a second pass over the elements to make sure they are valid collection
   // literal elements.
@@ -7748,9 +7758,9 @@ TreeTransform<Derived>::TransformObjCArrayLiteral(ObjCArrayLiteral *E) {
     Elements[I] = Checked.get();
   }
   
-  return getSema().BuildObjCArrayLiteral(E->getSourceRange(),
-                                         MultiExprArg(Elements.data(),
-                                                      Elements.size()));
+  return getDerived().RebuildObjCArrayLiteral(E->getSourceRange(),
+                                              Elements.data(),
+                                              Elements.size());
 }
 
 template<typename Derived>
