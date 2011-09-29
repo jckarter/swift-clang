@@ -168,42 +168,45 @@ class ObjCDictionaryLiteral : public Expr {
     Expr *Value;
   } KeyValuePair;
   unsigned NumElements;
-  KeyValuePair *KeyValues;
-  ObjCMethodDecl *DictWithObjectsMethod;
   SourceRange Range;
+  ObjCMethodDecl *DictWithObjectsMethod;
     
-public:
-  ObjCDictionaryLiteral(ASTContext &C,
-                        ArrayRef< std::pair<Expr *, Expr*> > VK, 
+  ObjCDictionaryLiteral(ArrayRef< std::pair<Expr *, Expr*> > VK, 
                         QualType T, ObjCMethodDecl *method,
-                        SourceRange SR)
-    : Expr(ObjCDictionaryLiteralClass, T, VK_RValue, OK_Ordinary, false, false,
-           false, false),
-      DictWithObjectsMethod(method), Range(SR) 
-  {
-    NumElements = VK.size();
-    KeyValues = new (C) KeyValuePair[NumElements];
-    for (unsigned i = 0; i < NumElements; i++) {
-      KeyValues[i].Key = VK[i].first;
-      KeyValues[i].Value = VK[i].second; 
-    }
-  }
-    
-  explicit ObjCDictionaryLiteral(EmptyShell Empty)
-    : Expr(ObjCDictionaryLiteralClass, Empty) {}
+                        SourceRange SR);
+
+  explicit ObjCDictionaryLiteral(EmptyShell Empty, unsigned NumElements)
+    : Expr(ObjCDictionaryLiteralClass, Empty), NumElements(NumElements) {}
+
+public:
+  static ObjCDictionaryLiteral *Create(ASTContext &C,
+                                       ArrayRef< std::pair<Expr *, Expr*> > VK, 
+                                       QualType T, ObjCMethodDecl *method,
+                                       SourceRange SR);
   
+  static ObjCDictionaryLiteral *CreateEmpty(ASTContext &C, 
+                                            unsigned NumElements);
+  
+  KeyValuePair *getKeyValues() {
+    return reinterpret_cast<KeyValuePair *>(this + 1);
+  }
+
+  const KeyValuePair *getKeyValues() const {
+    return reinterpret_cast<const KeyValuePair *>(this + 1);
+  }
+
   /// getNumElements - Return number of elements of objective-c dictionary 
   /// literal.
   unsigned getNumElements() const { return NumElements; }
 
-  KeyValuePair &getKeyValueElement(unsigned Index) {
+  KeyValuePair getKeyValueElement(unsigned Index) {
     assert((Index < NumElements) && "Arg access out of range!");
-    return KeyValues[Index];
+    return getKeyValues()[Index];
   }
 
   const KeyValuePair &getKeyValueElement(unsigned Index) const {
     assert((Index < NumElements) && "Arg access out of range!");
-    return KeyValues[Index];
+    return getKeyValues()[Index];
   }
     
   ObjCMethodDecl *getDictWithObjectsMethod() const

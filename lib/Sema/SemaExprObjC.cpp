@@ -424,11 +424,11 @@ ExprResult Sema::BuildObjCDictionaryLiteral(SourceRange SR,
     = Context.getObjCObjectPointerType(
                                 Context.getObjCInterfaceType(NSDictionaryDecl));  
   return MaybeBindToTemporary(
-           new (Context) ObjCDictionaryLiteral(Context, 
-                                               llvm::makeArrayRef(Elements, 
-                                                                  NumElements),
-                                               Ty, 
-                                               DictionaryWithObjectsMethod, SR));
+           ObjCDictionaryLiteral::Create(Context, 
+                                         llvm::makeArrayRef(Elements, 
+                                                            NumElements),
+                                         Ty, 
+                                         DictionaryWithObjectsMethod, SR));
 }
 
 ExprResult Sema::BuildObjCEncodeExpression(SourceLocation AtLoc,

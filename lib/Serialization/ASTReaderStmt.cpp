@@ -783,36 +783,35 @@ void ASTStmtReader::VisitObjCStringLiteral(ObjCStringLiteral *E) {
 }
 
 void ASTStmtReader::VisitObjCNumericLiteral(ObjCNumericLiteral *E) {
-    VisitExpr(E);
-    // could be one of several IntegerLiteral, FloatLiteral, etc.
-    E->Number = Reader.ReadSubStmt();
-    E->ObjCNumericLiteralMethod = ReadDeclAs<ObjCMethodDecl>(Record, Idx);
-    E->AtLoc = ReadSourceLocation(Record, Idx);
+  VisitExpr(E);
+  // could be one of several IntegerLiteral, FloatLiteral, etc.
+  E->Number = Reader.ReadSubStmt();
+  E->ObjCNumericLiteralMethod = ReadDeclAs<ObjCMethodDecl>(Record, Idx);
+  E->AtLoc = ReadSourceLocation(Record, Idx);
 }
 
 void ASTStmtReader::VisitObjCArrayLiteral(ObjCArrayLiteral *E) {
-    VisitExpr(E);
-    unsigned NumElements = Record[Idx++];
-    assert(NumElements == E->getNumElements() && "Wrong number of elements");
-    Expr **Elements = E->getElements();
-    for (unsigned I = 0, N = NumElements; I != N; ++I)
-      Elements[I] = Reader.ReadSubExpr();
-    E->ArrayWithObjectsMethod = ReadDeclAs<ObjCMethodDecl>(Record, Idx);
-    E->Range = ReadSourceRange(Record, Idx);
+  VisitExpr(E);
+  unsigned NumElements = Record[Idx++];
+  assert(NumElements == E->getNumElements() && "Wrong number of elements");
+  Expr **Elements = E->getElements();
+  for (unsigned I = 0, N = NumElements; I != N; ++I)
+    Elements[I] = Reader.ReadSubExpr();
+  E->ArrayWithObjectsMethod = ReadDeclAs<ObjCMethodDecl>(Record, Idx);
+  E->Range = ReadSourceRange(Record, Idx);
 }
 
 void ASTStmtReader::VisitObjCDictionaryLiteral(ObjCDictionaryLiteral *E) {
-    VisitExpr(E);
-    E->NumElements = Record[Idx++];
-    E->KeyValues = 
-        new (Reader.getContext()) 
-          ObjCDictionaryLiteral::KeyValuePair[E->NumElements];
-    for (unsigned I = 0, N = E->NumElements; I != N; ++I) {
-      E->KeyValues[I].Key = Reader.ReadSubExpr();
-      E->KeyValues[I].Value = Reader.ReadSubExpr();
-    }
-    E->DictWithObjectsMethod = ReadDeclAs<ObjCMethodDecl>(Record, Idx);
-    E->Range = ReadSourceRange(Record, Idx);
+  VisitExpr(E);
+  unsigned NumElements = Record[Idx++];
+  assert(NumElements == E->getNumElements() && "Wrong number of elements");
+  ObjCDictionaryLiteral::KeyValuePair *KeyValues = E->getKeyValues();
+  for (unsigned I = 0; I != NumElements; ++I) {
+    KeyValues[I].Key = Reader.ReadSubExpr();
+    KeyValues[I].Value = Reader.ReadSubExpr();
+  }
+  E->DictWithObjectsMethod = ReadDeclAs<ObjCMethodDecl>(Record, Idx);
+  E->Range = ReadSourceRange(Record, Idx);
 }
 
 void ASTStmtReader::VisitObjCEncodeExpr(ObjCEncodeExpr *E) {
@@ -1768,7 +1767,8 @@ Stmt *ASTReader::ReadStmtFromStream(Module &F) {
                                         Record[ASTStmtReader::NumExprFields]);
       break;
     case EXPR_OBJC_DICTIONARY_LITERAL:
-      S = new (Context) ObjCDictionaryLiteral(Empty);
+      S = ObjCDictionaryLiteral::CreateEmpty(Context,
+                                        Record[ASTStmtReader::NumExprFields]);
       break;
     case EXPR_OBJC_ENCODE:
       S = new (Context) ObjCEncodeExpr(Empty);

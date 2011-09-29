@@ -3327,4 +3327,46 @@ ObjCArrayLiteral *ObjCArrayLiteral::CreateEmpty(ASTContext &C,
   return new (Mem) ObjCArrayLiteral(EmptyShell(), NumElements);
 }
 
+ObjCDictionaryLiteral::ObjCDictionaryLiteral(
+                                       ArrayRef< std::pair<Expr *, Expr*> > VK, 
+                                             QualType T, ObjCMethodDecl *method,
+                                             SourceRange SR)
+  : Expr(ObjCDictionaryLiteralClass, T, VK_RValue, OK_Ordinary, false, false,
+         false, false),
+    NumElements(VK.size()), Range(SR), DictWithObjectsMethod(method)
+{
+  KeyValuePair *KeyValues = getKeyValues();
+  for (unsigned I = 0; I < NumElements; I++) {
+    if (VK[I].first->isTypeDependent() || VK[I].first->isValueDependent() ||
+        VK[I].second->isTypeDependent() || VK[I].second->isValueDependent())
+      ExprBits.ValueDependent = true;
+    if (VK[I].first->isInstantiationDependent() ||
+        VK[I].second->isInstantiationDependent())
+      ExprBits.InstantiationDependent = true;
+    if (VK[I].first->containsUnexpandedParameterPack() ||
+        VK[I].second->containsUnexpandedParameterPack())
+      ExprBits.ContainsUnexpandedParameterPack = true;
+
+    KeyValues[I].Key = VK[I].first;
+    KeyValues[I].Value = VK[I].second; 
+  }
+}
+
+ObjCDictionaryLiteral *
+ObjCDictionaryLiteral::Create(ASTContext &C,
+                              ArrayRef< std::pair<Expr *, Expr*> > VK, 
+                              QualType T, ObjCMethodDecl *method,
+                              SourceRange SR) {
+  void *Mem = C.Allocate(sizeof(ObjCDictionaryLiteral) + 
+                         sizeof(KeyValuePair) * VK.size());
+  return new (Mem) ObjCDictionaryLiteral(VK, T, method, SR);
+}
+
+ObjCDictionaryLiteral *
+ObjCDictionaryLiteral::CreateEmpty(ASTContext &C, unsigned NumElements) {
+  void *Mem = C.Allocate(sizeof(ObjCDictionaryLiteral) + 
+                         sizeof(KeyValuePair) * NumElements);
+  return new (Mem) ObjCDictionaryLiteral(EmptyShell(), NumElements);
+}
+
 
