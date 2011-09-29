@@ -46,8 +46,21 @@ static inline void test_numeric_literals() {
   // CHECK-IR: {{call.*1.745}}
   id floatlit = @17.45;
 }
+
+static inline void test_array_literals() {
+  // CHECK-PRINT: id arraylit = @[ @17, @1.745
+  id arraylit = @[@17, @17.45];
+}
+
+static inline void test_dictionary_literals() {
+  // CHECK-PRINT: id dictlit = @{ @17 : {{@1.745[^,]*}}, @"hello" : @"world" };
+  id dictlit = @{@17 : @17.45, @"hello" : @"world" };
+}
+
 #else
 void test_all() {
   test_numeric_literals();
+  test_array_literals();
+  test_dictionary_literals();
 }
 #endif
