@@ -1739,6 +1739,9 @@ private:
     if (getLang().CPlusPlus0x && isCXX0XAttributeSpecifier())
       ParseCXX0XAttributes(attrs, endLoc);
   }
+
+  void ParseCXX0XAttributeSpecifier(ParsedAttributes &attrs,
+                                    SourceLocation *EndLoc = 0);
   void ParseCXX0XAttributes(ParsedAttributesWithRange &attrs,
                             SourceLocation *EndLoc = 0);
 
@@ -1772,7 +1775,9 @@ private:
   void ParseDecltypeSpecifier(DeclSpec &DS);
   void ParseUnderlyingTypeSpecifier(DeclSpec &DS);
   
-  ExprResult ParseCXX0XAlignArgument(SourceLocation Start);
+  ExprResult ParseAlignArgument(SourceLocation Start);
+  void ParseAlignmentSpecifier(ParsedAttributes &Attrs,
+                               SourceLocation *endLoc = 0);
 
   VirtSpecifiers::Specifier isCXX0XVirtSpecifier() const;
   void ParseOptionalCXX0XVirtSpecifierSeq(VirtSpecifiers &VS);

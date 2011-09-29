@@ -22,6 +22,7 @@
 #include "clang/Basic/TargetInfo.h"
 #include "clang/Sema/DeclSpec.h"
 #include "clang/Sema/DelayedDiagnostic.h"
+#include "clang/Sema/Lookup.h"
 #include "llvm/ADT/StringExtras.h"
 using namespace clang;
 using namespace sema;
@@ -753,19 +754,41 @@ static void handleIBAction(Sema &S, Decl *D, const AttributeList &Attr) {
   S.Diag(Attr.getLoc(), diag::warn_attribute_ibaction) << Attr.getName();
 }
 
+static bool checkIBOutletCommon(Sema &S, Decl *D, const AttributeList &Attr) {
+  // The IBOutlet/IBOutletCollection attributes only apply to instance
+  // variables or properties of Objective-C classes.  The outlet must also
+  // have an object reference type.
+  if (const ObjCIvarDecl *VD = dyn_cast<ObjCIvarDecl>(D)) {
+    if (!VD->getType()->getAs<ObjCObjectPointerType>()) {
+      S.Diag(Attr.getLoc(), diag::err_iboutlet_object_type)
+        << Attr.getName() << VD->getType() << 0;
+      return false;
+    }
+  }
+  else if (const ObjCPropertyDecl *PD = dyn_cast<ObjCPropertyDecl>(D)) {
+    if (!PD->getType()->getAs<ObjCObjectPointerType>()) {
+      S.Diag(Attr.getLoc(), diag::err_iboutlet_object_type) 
+        << Attr.getName() << PD->getType() << 1;
+      return false;
+    }
+  }
+  else {
+    S.Diag(Attr.getLoc(), diag::warn_attribute_iboutlet) << Attr.getName();
+    return false;
+  }
+  
+  return true;
+}
+
 static void handleIBOutlet(Sema &S, Decl *D, const AttributeList &Attr) {
   // check the attribute arguments.
   if (!checkAttributeNumArgs(S, Attr, 0))
     return;
-
-  // The IBOutlet attributes only apply to instance variables of
-  // Objective-C classes.
-  if (isa<ObjCIvarDecl>(D) || isa<ObjCPropertyDecl>(D)) {
-    D->addAttr(::new (S.Context) IBOutletAttr(Attr.getRange(), S.Context));
+  
+  if (!checkIBOutletCommon(S, D, Attr))
     return;
-  }
 
-  S.Diag(Attr.getLoc(), diag::warn_attribute_iboutlet) << Attr.getName();
+  D->addAttr(::new (S.Context) IBOutletAttr(Attr.getRange(), S.Context));
 }
 
 static void handleIBOutletCollection(Sema &S, Decl *D,
@@ -777,25 +800,9 @@ static void handleIBOutletCollection(Sema &S, Decl *D,
     return;
   }
 
-  // The IBOutletCollection attributes only apply to instance variables of
-  // Objective-C classes.
-  if (!(isa<ObjCIvarDecl>(D) || isa<ObjCPropertyDecl>(D))) {
-    S.Diag(Attr.getLoc(), diag::warn_attribute_iboutlet) << Attr.getName();
+  if (!checkIBOutletCommon(S, D, Attr))
     return;
-  }
-  if (const ValueDecl *VD = dyn_cast<ValueDecl>(D))
-    if (!VD->getType()->getAs<ObjCObjectPointerType>()) {
-      S.Diag(Attr.getLoc(), diag::err_iboutletcollection_object_type) 
-        << VD->getType() << 0;
-      return;
-    }
-  if (const ObjCPropertyDecl *PD = dyn_cast<ObjCPropertyDecl>(D))
-    if (!PD->getType()->getAs<ObjCObjectPointerType>()) {
-      S.Diag(Attr.getLoc(), diag::err_iboutletcollection_object_type) 
-        << PD->getType() << 1;
-      return;
-    }
-  
+
   IdentifierInfo *II = Attr.getParameterName();
   if (!II)
     II = &S.Context.Idents.get("id");
@@ -3256,6 +3263,36 @@ static void handleObjCReturnsInnerPointerAttr(Sema &S, Decl *D,
     ::new (S.Context) ObjCReturnsInnerPointerAttr(attr.getRange(), S.Context));
 }
 
+static void handleNSBridgedAttr(Sema &S, Scope *Sc, Decl *D,
+                                const AttributeList &Attr) {
+  RecordDecl *RD = dyn_cast<RecordDecl>(D);
+  if (!RD || RD->isUnion()) {
+    S.Diag(D->getLocStart(), diag::err_attribute_wrong_decl_type)
+      << Attr.getRange() << Attr.getName() << 14 /*struct */;
+  }
+
+  IdentifierInfo *ParmName = Attr.getParameterName();
+
+  // In Objective-C, verify that the type names an Objective-C type.
+  // We don't want to check this outside of ObjC because people sometimes
+  // do crazy C declarations of Objective-C types.
+  if (ParmName && S.getLangOptions().ObjC1) {
+    // Check for an existing type with this name.
+    LookupResult R(S, DeclarationName(ParmName), Attr.getParameterLoc(),
+                   Sema::LookupOrdinaryName);
+    if (S.LookupName(R, Sc)) {
+      NamedDecl *Target = R.getFoundDecl();
+      if (Target && !isa<ObjCInterfaceDecl>(Target)) {
+        S.Diag(D->getLocStart(), diag::err_ns_bridged_not_interface);
+        S.Diag(Target->getLocStart(), diag::note_declared_at);
+      }
+    }
+  }
+
+  D->addAttr(::new (S.Context) NSBridgedAttr(Attr.getRange(), S.Context,
+                                             ParmName));
+}
+
 static void handleObjCOwnershipAttr(Sema &S, Decl *D,
                                     const AttributeList &Attr) {
   if (hasDeclarator(D)) return;
@@ -3458,6 +3495,9 @@ static void ProcessInheritableDeclAttr(Sema &S, Scope *scope, Decl *D,
 
   case AttributeList::AT_objc_returns_inner_pointer:
     handleObjCReturnsInnerPointerAttr(S, D, Attr); break;
+
+  case AttributeList::AT_ns_bridged:
+    handleNSBridgedAttr(S, scope, D, Attr); break;
 
   // Checker-specific.
   case AttributeList::AT_cf_consumed:

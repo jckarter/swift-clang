@@ -114,7 +114,7 @@ def Alias : InheritableAttr {
 }
 
 def Aligned : InheritableAttr {
-  let Spellings = ["align", "aligned"];
+  let Spellings = ["aligned"];
   let Subjects = [NonBitField, NormalVar, Tag];
   let Args = [AlignedArgument<"Alignment">];
   let Namespaces = ["", "std"];
@@ -360,6 +360,12 @@ def NoInstrumentFunction : InheritableAttr {
 
 def NoThrow : InheritableAttr {
   let Spellings = ["nothrow"];
+}
+
+def NSBridged : InheritableAttr {
+  let Spellings = ["ns_bridged"];
+  let Subjects = [Record];
+  let Args = [IdentifierArgument<"BridgedType">];
 }
 
 def NSReturnsRetained : InheritableAttr {
