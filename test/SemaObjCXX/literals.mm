@@ -40,8 +40,15 @@ template void test_array_literals(id);
 template void test_array_literals(NSArray*);
 template void test_array_literals(int); // expected-note{{in instantiation of function template specialization 'test_array_literals<int>' requested here}}
 
-template<typename T>
-void test_dictionary_literals(T t) {
-  id dict = @{ @17 : t , t : @42 };
+template<typename T, typename U>
+void test_dictionary_literals(T t, U u) {
+  id dict = @{ 
+    @17 : t, // expected-error{{members of objective-c collection literals must be objects}}
+    u : @42 // expected-error{{members of objective-c collection literals must be objects}} 
+  };
 }
 
+template void test_dictionary_literals(id, NSArray*);
+template void test_dictionary_literals(NSArray*, id);
+template void test_dictionary_literals(int, id); // expected-note{{in instantiation of function template specialization 'test_dictionary_literals<int, id>' requested here}}
+template void test_dictionary_literals(id, int); // expected-note{{in instantiation of function template specialization 'test_dictionary_literals<id, int>' requested here}}

@@ -2148,6 +2148,16 @@ public:
                                            MultiExprArg(Elements, NumElements));
   }
 
+  /// \brief Build a new Objective-C dictionary literal.
+  ///
+  /// By default, performs semantic analysis to build the new expression.
+  /// Subclasses may override this routine to provide different behavior.
+  ExprResult RebuildObjCDictionaryLiteral(SourceRange Range,
+                                          std::pair<Expr *, Expr*> *Elements,
+                                          unsigned NumElements) {
+    return getSema().BuildObjCDictionaryLiteral(Range, Elements, NumElements);
+  }
+  
   /// \brief Build a new Objective-C @encode expression.
   ///
   /// By default, performs semantic analysis to build the new expression.
@@ -7765,8 +7775,47 @@ TreeTransform<Derived>::TransformObjCArrayLiteral(ObjCArrayLiteral *E) {
 
 template<typename Derived>
 ExprResult
-TreeTransform<Derived>::TransformObjCDictionaryLiteral(ObjCDictionaryLiteral *E) {
-  return SemaRef.Owned(E);
+TreeTransform<Derived>::TransformObjCDictionaryLiteral(
+                                                    ObjCDictionaryLiteral *E) {  
+  // Transform each of the elements.
+  // FIXME: Some day, we're going to want to support pack expansions here.
+  llvm::SmallVector<std::pair<Expr *, Expr*>, 8> KeyValues;
+  bool ArgChanged = false;
+  for (unsigned I = 0, N = E->getNumElements(); I != N; ++I) {
+    // Transform and check key.
+    ExprResult Key = getDerived().TransformExpr(E->getKeyValueElement(I).Key);
+    if (Key.isInvalid())
+      return ExprError();
+    
+    Key = getSema().CheckObjCCollectionLiteralElement(Key.get());
+    if (Key.isInvalid())
+      return ExprError();
+    
+    if (Key.get() != E->getKeyValueElement(I).Key)
+      ArgChanged = true;
+    
+    // Transform and check value.
+    ExprResult Value
+      = getDerived().TransformExpr(E->getKeyValueElement(I).Value);
+    if (Value.isInvalid())
+      return ExprError();
+    
+    Value = getSema().CheckObjCCollectionLiteralElement(Value.get());
+    if (Value.isInvalid())
+      return ExprError();
+    
+    if (Value.get() != E->getKeyValueElement(I).Value)
+      ArgChanged = true;
+    
+    KeyValues.push_back(std::make_pair(Key.get(), Value.get()));
+  }
+  
+  if (!getDerived().AlwaysRebuild() && !ArgChanged)
+    return Owned(E);
+
+  return getDerived().RebuildObjCDictionaryLiteral(E->getSourceRange(),
+                                                   KeyValues.data(),
+                                                   KeyValues.size());
 }
 
 template<typename Derived>
