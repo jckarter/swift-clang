@@ -175,22 +175,22 @@ private:
   /// the state so that we know what is the diagnostic state at any given
   /// source location.
   class DiagState {
-    llvm::DenseMap<unsigned, unsigned> DiagMap;
+    llvm::DenseMap<unsigned, DiagnosticMappingInfo> DiagMap;
 
   public:
-    typedef llvm::DenseMap<unsigned, unsigned>::const_iterator iterator;
+    typedef llvm::DenseMap<unsigned, DiagnosticMappingInfo>::iterator
+      iterator;
+    typedef llvm::DenseMap<unsigned, DiagnosticMappingInfo>::const_iterator
+      const_iterator;
 
-    void setMapping(diag::kind Diag, unsigned Map) { DiagMap[Diag] = Map; }
-
-    diag::Mapping getMapping(diag::kind Diag) const {
-      iterator I = DiagMap.find(Diag);
-      if (I != DiagMap.end())
-        return (diag::Mapping)I->second;
-      return diag::Mapping();
+    void setMappingInfo(diag::kind Diag, DiagnosticMappingInfo Info) {
+      DiagMap[Diag] = Info;
     }
 
-    iterator begin() const { return DiagMap.begin(); }
-    iterator end() const { return DiagMap.end(); }
+    DiagnosticMappingInfo &getOrAddMappingInfo(diag::kind Diag);
+
+    const_iterator begin() const { return DiagMap.begin(); }
+    const_iterator end() const { return DiagMap.end(); }
   };
 
   /// \brief Keeps and automatically disposes all DiagStates that we create.
@@ -448,9 +448,19 @@ public:
   /// 'Loc' is the source location that this change of diagnostic state should
   /// take affect. It can be null if we are setting the state from command-line.
   bool setDiagnosticGroupMapping(StringRef Group, diag::Mapping Map,
-                                 SourceLocation Loc = SourceLocation()) {
-    return Diags->setDiagnosticGroupMapping(Group, Map, Loc, *this);
-  }
+                                 SourceLocation Loc = SourceLocation());
+
+  /// \brief Set the warning-as-error flag for the given diagnostic group. This
+  /// function always only operates on the current diagnostic state.
+  ///
+  /// \returns True if the given group is unknown, false otherwise.
+  bool setDiagnosticGroupWarningAsError(StringRef Group, bool Enabled);
+
+  /// \brief Set the error-as-fatal flag for the given diagnostic group. This
+  /// function always only operates on the current diagnostic state.
+  ///
+  /// \returns True if the given group is unknown, false otherwise.
+  bool setDiagnosticGroupErrorAsFatal(StringRef Group, bool Enabled);
 
   bool hasErrorOccurred() const { return ErrorOccurred; }
   bool hasFatalErrorOccurred() const { return FatalErrorOccurred; }
@@ -505,9 +515,8 @@ public:
   ///
   /// \param Loc The source location we are interested in finding out the
   /// diagnostic state. Can be null in order to query the latest state.
-  Level getDiagnosticLevel(unsigned DiagID, SourceLocation Loc,
-                           diag::Mapping *mapping = 0) const {
-    return (Level)Diags->getDiagnosticLevel(DiagID, Loc, *this, mapping);
+  Level getDiagnosticLevel(unsigned DiagID, SourceLocation Loc) const {
+    return (Level)Diags->getDiagnosticLevel(DiagID, Loc, *this);
   }
 
   /// Report - Issue the message to the client.  @c DiagID is a member of the
@@ -553,23 +562,6 @@ public:
 private:
   /// \brief Report the delayed diagnostic.
   void ReportDelayed();
-
-
-  /// getDiagnosticMappingInfo - Return the mapping info currently set for the
-  /// specified builtin diagnostic.  This returns the high bit encoding, or zero
-  /// if the field is completely uninitialized.
-  diag::Mapping getDiagnosticMappingInfo(diag::kind Diag,
-                                         DiagState *State) const {
-    return State->getMapping(Diag);
-  }
-
-  void setDiagnosticMappingInternal(unsigned DiagId, unsigned Map,
-                                    DiagState *State,
-                                    bool isUser, bool isPragma) const {
-    if (isUser) Map |= 8;  // Set the high bit for user mappings.
-    if (isPragma) Map |= 0x10;  // Set the bit for diagnostic pragma mappings.
-    State->setMapping((diag::kind)DiagId, Map);
-  }
 
   // This is private state used by DiagnosticBuilder.  We put it here instead of
   // in DiagnosticBuilder in order to keep DiagnosticBuilder a small lightweight
@@ -1072,6 +1064,22 @@ public:
   /// and errors.
   virtual void HandleDiagnostic(DiagnosticsEngine::Level DiagLevel,
                                 const Diagnostic &Info);
+  
+  /// \brief Clone the diagnostic consumer, producing an equivalent consumer
+  /// that can be used in a different context.
+  virtual DiagnosticConsumer *clone(DiagnosticsEngine &Diags) const = 0;
+};
+
+/// IgnoringDiagConsumer - This is a diagnostic client that just ignores all
+/// diags.
+class IgnoringDiagConsumer : public DiagnosticConsumer {
+  void HandleDiagnostic(DiagnosticsEngine::Level DiagLevel,
+                        const Diagnostic &Info) {
+    // Just ignore it.
+  }
+  DiagnosticConsumer *clone(DiagnosticsEngine &Diags) const {
+    return new IgnoringDiagConsumer();
+  }
 };
 
 }  // end namespace clang
