@@ -120,62 +120,116 @@ ExprResult Sema::ParseObjCStringLiteral(SourceLocation *AtLocs,
   return new (Context) ObjCStringLiteral(S, Ty, AtLocs[0]);
 }
 
-static Selector 
-selectorForType(ASTContext &Context, QualType type) {
-    const char *SelName = 0;
-    if (const BuiltinType *BT = type->getAs<BuiltinType>()) {
-        switch (BT->getKind()) {
-            case BuiltinType::Char_S:
-            case BuiltinType::SChar:
-                SelName = "numberWithChar";
-                break;
-            case BuiltinType::Char_U:
-            case BuiltinType::UChar:
-                SelName =  "numberWithUnsignedChar";
-                break;
-            case BuiltinType::Short:
-                SelName =  "numberWithShort";
-                break;
-            case BuiltinType::UShort:
-                SelName =  "numberWithUnsignedShort";
-                break;
-            case BuiltinType::Int:
-                SelName =  "numberWithInt";
-                break;
-            case BuiltinType::UInt:
-                SelName = "numberWithUnsignedInt";
-                break;
-            case BuiltinType::Long:
-                SelName = "numberWithLong";
-                break;
-            case BuiltinType::ULong:
-                SelName =  "numberWithUnsignedLong";
-                break;
-            case BuiltinType::LongLong:
-                SelName = "numberWithLongLong";
-                break;
-            case BuiltinType::ULongLong:
-                SelName = "numberWithUnsignedLongLong";
-                break;
-            case BuiltinType::Float:
-                SelName = "numberWithFloat";
-                break;
-            case BuiltinType::Double:
-                SelName =  "numberWithDouble";
-                break;
-            case BuiltinType::Bool:
-                SelName = "numberWithBool";
-                break;
-            default:
-                assert(false && 
-                       "unrecognizable type for numeric literal - selectorForType");
-                break;
-        }
-    }
-    Selector Sel;
-    if (SelName)
-        Sel = Context.Selectors.getUnarySelector(&Context.Idents.get(StringRef(SelName)));
-    return Sel;
+/// \brief Retrieve the NSNumber factory method that should be used to create
+/// an Objective-C literal for the given type.
+static ObjCMethodDecl *getNSNumberFactoryMethod(Sema &S, SourceLocation Loc,
+                                                QualType T, 
+                                                SourceRange Range) {
+  // All permissible NSNumber literal types are built-in types.
+  const BuiltinType *BT = T->getAs<BuiltinType>();
+  if (!BT) {
+    S.Diag(Loc, diag::err_invalid_nsnumber_type)
+      << T << Range;
+    return 0;
+  }
+    
+  // Map built-in types to NSNumber factory methods.
+  Sema::NSNumberLiteralMethodKinds Kind;
+  switch (BT->getKind()) {
+  case BuiltinType::Char_S:
+  case BuiltinType::SChar:
+    Kind = Sema::NSNumberWithChar;
+    break;      
+  case BuiltinType::Char_U:
+  case BuiltinType::UChar:
+    Kind = Sema::NSNumberWithUnsignedChar;
+    break;
+  case BuiltinType::Short:
+    Kind = Sema::NSNumberWithShort;
+    break;
+  case BuiltinType::UShort:
+    Kind = Sema::NSNumberWithUnsignedShort;
+    break;
+  case BuiltinType::Int:
+    Kind = Sema::NSNumberWithInt;
+    break;
+  case BuiltinType::UInt:
+    Kind = Sema::NSNumberWithUnsignedInt;
+    break;
+  case BuiltinType::Long:
+    Kind = Sema::NSNumberWithLong;
+    break;
+  case BuiltinType::ULong:
+    Kind = Sema::NSNumberWithUnsignedLong;
+    break;
+  case BuiltinType::LongLong:
+    Kind = Sema::NSNumberWithLongLong;
+    break;
+  case BuiltinType::ULongLong:
+    Kind = Sema::NSNumberWithUnsignedLongLong;
+    break;
+  case BuiltinType::Float:
+    Kind = Sema::NSNumberWithFloat;
+    break;
+  case BuiltinType::Double:
+    Kind = Sema::NSNumberWithDouble;
+    break;
+  case BuiltinType::Bool:
+    Kind = Sema::NSNumberWithBool;
+    break;
+  
+  case BuiltinType::Void:
+  case BuiltinType::WChar_U:
+  case BuiltinType::WChar_S:
+  case BuiltinType::Char16:
+  case BuiltinType::Char32:
+  case BuiltinType::Int128:
+  case BuiltinType::LongDouble:
+  case BuiltinType::UInt128:
+  case BuiltinType::NullPtr:
+  case BuiltinType::ObjCClass:
+  case BuiltinType::ObjCId:
+  case BuiltinType::ObjCSel:
+  case BuiltinType::BoundMember:
+  case BuiltinType::Dependent:
+  case BuiltinType::Overload:
+  case BuiltinType::UnknownAny:
+    S.Diag(Loc, diag::err_invalid_nsnumber_type)
+      << T << Range;
+    return 0;
+  }
+  
+  // If we already looked up this method, we're done.
+  if (S.NSNumberLiteralMethods[Kind])
+    return S.NSNumberLiteralMethods[Kind];
+  
+  // Determine the selector for the factory method we will use.
+  static const char *SelectorName[Sema::NumNSNumberLiteralMethods] = {
+    "numberWithChar",
+    "numberWithUnsignedChar",
+    "numberWithShort",
+    "numberWithUnsignedShort",
+    "numberWithInt",
+    "numberWithUnsignedInt",
+    "numberWithLong",
+    "numberWithUnsignedLong",
+    "numberWithLongLong",
+    "numberWithUnsignedLongLong",
+    "numberWithFloat",
+    "numberWithDouble",
+    "numberWithBool"
+  };
+  
+  Selector Sel
+    = S.Context.Selectors.getUnarySelector(
+        &S.Context.Idents.get(SelectorName[Kind]));
+  
+  // Look for the appropriate method within NSNumber.
+  S.NSNumberLiteralMethods[Kind] = S.NSNumberDecl->lookupClassMethod(Sel);
+  if (!S.NSNumberLiteralMethods[Kind])
+    S.Diag(Loc, diag::err_undeclared_nsnumber_method) << Sel;
+
+  return S.NSNumberLiteralMethods[Kind];
 }
 
 /// BuildObjCNumericLiteral - builds an ObjCNumericLiteral AST node for the
@@ -196,14 +250,12 @@ ExprResult Sema::BuildObjCNumericLiteral(SourceLocation AtLoc, Expr *Number) {
   }
   
   // Look for the appropriate method within NSNumber.
-  ObjCMethodDecl *Method  = 0;
-  Selector Sel = selectorForType(Context, Number->getType());
-  Method = NSNumberDecl->lookupClassMethod(Sel);
-  if (!Method) {
-    Diag(AtLoc, diag::err_undeclared_nsnumber_method) << Sel;
+  ObjCMethodDecl *Method  = getNSNumberFactoryMethod(*this, AtLoc, 
+                                                     Number->getType(), 
+                                                     Number->getSourceRange());
+  if (!Method)
     return ExprError();
-  }
-
+  
   // Construct the literal.
   QualType Ty
     = Context.getObjCObjectPointerType(

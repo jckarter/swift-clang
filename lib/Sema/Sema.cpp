@@ -112,6 +112,8 @@ Sema::Sema(Preprocessor &pp, ASTContext &ctxt, ASTConsumer &consumer,
 {
   TUScope = 0;
   LoadedExternalKnownNamespaces = false;
+  for (unsigned I = 0; I != NumNSNumberLiteralMethods; ++I)
+    NSNumberLiteralMethods[I] = 0;
   
   if (getLangOptions().CPlusPlus)
     FieldCollector.reset(new CXXFieldCollector());

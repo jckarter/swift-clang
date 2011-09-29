@@ -483,6 +483,27 @@ public:
   /// \brief The declaration of the Objective-C NSNumber class.
   ObjCInterfaceDecl *NSNumberDecl;
 
+  /// \brief Enumerates the NSNumber methods used to generate literals.
+  enum NSNumberLiteralMethodKinds {
+    NSNumberWithChar,
+    NSNumberWithUnsignedChar,
+    NSNumberWithShort,
+    NSNumberWithUnsignedShort,
+    NSNumberWithInt,
+    NSNumberWithUnsignedInt,
+    NSNumberWithLong,
+    NSNumberWithUnsignedLong,
+    NSNumberWithLongLong,
+    NSNumberWithUnsignedLongLong,
+    NSNumberWithFloat,
+    NSNumberWithDouble,
+    NSNumberWithBool
+  };
+  static const unsigned NumNSNumberLiteralMethods = 13;
+  
+  /// \brief The Objective-C NSNumber methods used to create NSNumber literals.
+  ObjCMethodDecl *NSNumberLiteralMethods[NumNSNumberLiteralMethods];
+  
   /// \brief The declaration of the Objective-C NSArray class.
   ObjCInterfaceDecl *NSArrayDecl;
 
@@ -498,7 +519,6 @@ public:
   /// A flag to remember whether the implicit forms of operator new and delete
   /// have been declared.
   bool GlobalNewDeleteDeclared;
-
 
   /// A flag that is set when parsing a -dealloc method and no [super dealloc]
   /// call was found yet.

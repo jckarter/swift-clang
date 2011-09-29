@@ -1290,6 +1290,8 @@ def err_attribute_not_string : Error<
   "argument to %0 attribute was not a string literal">;
 def err_undeclared_nsnumber : Error<
   "NSNumber must be available for use of objective-c literals">;
+def err_invalid_nsnumber_type : Error<
+  "%0 is not a valid literal type for NSNumber">;
 def err_undeclared_nsarray : Error<
   "NSArray must be available for use of objective-c array literals">;
 def err_undeclared_nsdictionary : Error<

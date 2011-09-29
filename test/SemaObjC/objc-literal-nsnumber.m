@@ -15,6 +15,7 @@ int main() {
   NSNumber * N = @3.1415926535;  // expected-error {{declaration of 'numberWithDouble:' is missing in NSNumber class}}
   NSNumber *noNumber = @__yes; // expected-error {{declaration of 'numberWithBool:' is missing in NSNumber class}}
   NSNumber * NInt = @1000;
+  NSNumber * NLongDouble = @1000.0l; // expected-error{{'long double' is not a valid literal type for NSNumber}}
 }
 
 // Dictionary test
@@ -37,8 +38,7 @@ id NSUserName();
 int Int();
 
 NSDictionary * warn() {
-
-NSDictionary *dictionary = @{@"name" : NSUserName(),
-                             @"date" : [NSDate date] };
-return @{@"name" : Int()}; // expected-error {{members of objective-c collection literals must be objects}}
+  NSDictionary *dictionary = @{@"name" : NSUserName(),
+                               @"date" : [NSDate date] };
+  return @{@"name" : Int()}; // expected-error {{members of objective-c collection literals must be objects}}
 }
