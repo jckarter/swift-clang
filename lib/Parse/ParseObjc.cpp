@@ -2417,11 +2417,13 @@ ExprResult Parser::ParseObjCArrayLiteral(SourceLocation AtLoc) {
       SkipUntil(tok::r_square);
       return move(Res);
     }
-    Actions.CheckObjCCollectionLiteralElement(Res);
-    // We have a valid expression. Collect it in a vector so we can
-    // build the argument list.
-    ElementExprs.push_back(Res.release());
-
+    Res = Actions.CheckObjCCollectionLiteralElement(Res.get());
+    if (Res.isUsable()) {
+      // We have a valid expression. Collect it in a vector so we can
+      // build the argument list.
+      ElementExprs.push_back(Res.release());
+    }
+    
     if (Tok.is(tok::comma))
       ConsumeToken(); // Eat the ','.
     else if (Tok.isNot(tok::r_square))
@@ -2445,7 +2447,8 @@ ExprResult Parser::ParseObjCDictionaryLiteral(SourceLocation AtLoc) {
       SkipUntil(tok::r_brace);
       return move(KeyExpr);
     }
-    Actions.CheckObjCCollectionLiteralElement(KeyExpr);
+    KeyExpr = Actions.CheckObjCCollectionLiteralElement(KeyExpr.get());
+    
     if (Tok.is(tok::colon)) {
       ConsumeToken();
     } else {
@@ -2460,11 +2463,14 @@ ExprResult Parser::ParseObjCDictionaryLiteral(SourceLocation AtLoc) {
       SkipUntil(tok::r_brace);
       return move(ValueExpr);
     }
-     Actions.CheckObjCCollectionLiteralElement(ValueExpr);
-    // We have a valid expression. Collect it in a vector so we can
-    // build the argument list.
-    KeyValueExprs.push_back(std::make_pair(KeyExpr.take(), 
-                                           ValueExpr.take()));
+     ValueExpr = Actions.CheckObjCCollectionLiteralElement(ValueExpr.get());
+    
+    if (KeyExpr.isUsable() && ValueExpr.isUsable()) {
+      // We have a valid expression. Collect it in a vector so we can
+      // build the argument list.
+      KeyValueExprs.push_back(std::make_pair(KeyExpr.take(), 
+                                             ValueExpr.take()));
+    }
     
     if (Tok.is(tok::comma))
       ConsumeToken(); // Eat the ','.
@@ -2475,7 +2481,8 @@ ExprResult Parser::ParseObjCDictionaryLiteral(SourceLocation AtLoc) {
   
   // Create the ObjCDictionaryLiteral.
   return Owned(Actions.BuildObjCDictionaryLiteral(SourceRange(AtLoc, EndLoc),
-                                                  KeyValueExprs));
+                                                  KeyValueExprs.data(),
+                                                  KeyValueExprs.size()));
 }
 
 ///    objc-encode-expression:

@@ -204,35 +204,75 @@ ExprResult Sema::BuildObjCNumericLiteral(SourceLocation AtLoc, Expr *Number) {
            new (Context) ObjCNumericLiteral(Number, Ty, Method, AtLoc));
 }
 
-void Sema::CheckObjCCollectionLiteralElement(ExprResult Res) {
-  Expr *Exp = Res.take();
-  if (!Exp->getType()->isObjCObjectPointerType())
-    Diag(Exp->getLocStart(), diag::err_invalid_collection_element);
+ExprResult Sema::CheckObjCCollectionLiteralElement(Expr *Element) {
+  // Perform lvalue-to-rvalue conversion.
+  ExprResult Result = DefaultLvalueConversion(Element);
+  if (Result.isInvalid())
+    return ExprError();
+  Element = Result.get();
+
+  // Make sure that we have an Objective-C pointer type.
+  if (!Element->getType()->isObjCObjectPointerType()) {
+    // FIXME: Recover properly for all of the obvious cases.
+    Diag(Element->getLocStart(), diag::err_invalid_collection_element);
+    return ExprError();
+  }
+  
+  return Result;
 }
 
 ExprResult Sema::BuildObjCArrayLiteral(SourceRange SR, MultiExprArg Elements) {
-  IdentifierInfo *KeyIdents[] = {
-      &Context.Idents.get("arrayWithObjects"),
-      &Context.Idents.get("count")
-  };
-  // the type should be NSArray *.
+  // Find the NSArray class.
   IdentifierInfo *NSIdent = &Context.Idents.get("NSArray");
   NamedDecl *IF = LookupSingleName(TUScope, NSIdent, SR.getBegin(),
                                    LookupOrdinaryName);
-  QualType Ty;
-  ObjCMethodDecl *ArrayWithObjectsMethod = 0;
-  if (ObjCInterfaceDecl *ArrayIF = dyn_cast_or_null<ObjCInterfaceDecl>(IF)) {
-    Ty = Context.getObjCObjectPointerType(Context.getObjCInterfaceType(ArrayIF));
-    Selector Sel = Context.Selectors.getSelector(2, KeyIdents);
-    ArrayWithObjectsMethod = ArrayIF->lookupClassMethod(Sel);
-    if (!ArrayWithObjectsMethod) {
-      Diag(SR.getBegin(), diag::err_undeclared_arraywithobjects) << Sel;
-      return ExprError();
-    }
-  } else {
+  ObjCInterfaceDecl *ArrayIF = dyn_cast_or_null<ObjCInterfaceDecl>(IF);
+  if (!ArrayIF) {
     Diag(SR.getBegin(), diag::err_undeclared_nsarray);
     return ExprError();
   }
+
+  // Find the arrayWithObjects:count: method.
+  IdentifierInfo *KeyIdents[] = {
+    &Context.Idents.get("arrayWithObjects"),
+    &Context.Idents.get("count")
+  };
+  
+  Selector Sel = Context.Selectors.getSelector(2, KeyIdents);
+  ObjCMethodDecl *ArrayWithObjectsMethod = ArrayIF->lookupClassMethod(Sel);
+  if (!ArrayWithObjectsMethod) {
+    Diag(SR.getBegin(), diag::err_undeclared_arraywithobjects) << Sel;
+    return ExprError();
+  }
+
+  // FIXME: Validate the signature of this selector!
+  
+  // Dig out the type that all elements should be converted to.
+  QualType T = ArrayWithObjectsMethod->param_begin()[0]->getType();
+  if (const PointerType *Ptr = T->getAs<PointerType>())
+    T = Ptr->getPointeeType();
+  else {
+    // FIXME: Diagnostic this error!
+    return ExprError();
+  }
+
+  Expr **ElementsBuffer = Elements.get();
+  for (unsigned I = 0, N = Elements.size(); I != N; ++I) {
+    // Convert this element to the element type of the array parameter.
+    // We know this works because we validated the signature, above. 
+    if (!Context.hasSameType(T, ElementsBuffer[I]->getType())) {
+      ExprResult Converted = ImpCastExprToType(ElementsBuffer[I], T, 
+                                               CK_BitCast);
+      if (Converted.isInvalid())
+        return ExprError();
+      
+      ElementsBuffer[I] = Converted.get();
+    }
+  }
+    
+  QualType Ty 
+    = Context.getObjCObjectPointerType(Context.getObjCInterfaceType(ArrayIF));
+
   return MaybeBindToTemporary(
            new (Context) ObjCArrayLiteral(Context, Elements.get(), 
                                           Elements.size(), Ty, 
@@ -240,33 +280,82 @@ ExprResult Sema::BuildObjCArrayLiteral(SourceRange SR, MultiExprArg Elements) {
 }
 
 ExprResult Sema::BuildObjCDictionaryLiteral(SourceRange SR, 
-                   ArrayRef< std::pair<Expr *, Expr*> > Elements) {
+                                            std::pair<Expr *, Expr*> *Elements,
+                                            unsigned NumElements) {
+  // Find the NSDictionary class.
+  IdentifierInfo *NSIdent = &Context.Idents.get("NSDictionary");
+  NamedDecl *IF = LookupSingleName(TUScope, NSIdent, SR.getBegin(),
+                                   LookupOrdinaryName);
+  ObjCInterfaceDecl *DictIF = dyn_cast_or_null<ObjCInterfaceDecl>(IF);
+  if (!DictIF) {
+    Diag(SR.getBegin(), diag::err_undeclared_nsdictionary);
+    return ExprError();    
+  }
+
+  // Find the dictionaryWithObjects:forKeys:count: method.
   IdentifierInfo *KeyIdents[] = {
     &Context.Idents.get("dictionaryWithObjects"),
     &Context.Idents.get("forKeys"),
     &Context.Idents.get("count")
   };
-    
-  IdentifierInfo *NSIdent = &Context.Idents.get("NSDictionary");
-  NamedDecl *IF = LookupSingleName(TUScope, NSIdent, SR.getBegin(),
-                                   LookupOrdinaryName);
-  QualType Ty;
-  ObjCMethodDecl *DictWithObjectsMethod = 0;
-  if (ObjCInterfaceDecl *DictIF = dyn_cast_or_null<ObjCInterfaceDecl>(IF)) {
-    Ty = Context.getObjCObjectPointerType(Context.getObjCInterfaceType(DictIF));
-    Selector Sel = Context.Selectors.getSelector(3, KeyIdents);
-    DictWithObjectsMethod = DictIF->lookupClassMethod(Sel);
-    if (!DictWithObjectsMethod) {
-      Diag(SR.getBegin(), diag::err_undeclared_dictwithobjects) << Sel;
-      return ExprError();
-    }
-  } else {
-    Diag(SR.getBegin(), diag::err_undeclared_nsdictionary);
+  
+  Selector Sel = Context.Selectors.getSelector(3, KeyIdents);
+  ObjCMethodDecl *DictWithObjectsMethod = DictIF->lookupClassMethod(Sel);
+  if (!DictWithObjectsMethod) {
+    Diag(SR.getBegin(), diag::err_undeclared_dictwithobjects) << Sel;
+    return ExprError();    
+  }
+
+  // FIXME: Tons of redundancy below that needs some refactoring to fix.
+  
+  // Dig out the type that all objects should be converted to.
+  QualType ObjectT = DictWithObjectsMethod->param_begin()[0]->getType();
+  if (const PointerType *Ptr = ObjectT->getAs<PointerType>())
+    ObjectT = Ptr->getPointeeType();
+  else {
+    // FIXME: Diagnostic this error!
     return ExprError();
   }
+
+  // Dig out the type that all keys should be converted to.
+  QualType KeyT = DictWithObjectsMethod->param_begin()[1]->getType();
+  if (const PointerType *Ptr = KeyT->getAs<PointerType>())
+    KeyT = Ptr->getPointeeType();
+  else {
+    // FIXME: Diagnostic this error!
+    return ExprError();
+  }
+
+  for (unsigned I = 0, N = NumElements; I != N; ++I) {
+    // Convert this expression to the key type of the array parameter.
+    if (!Context.hasSameType(KeyT, Elements[I].first->getType())) {
+      ExprResult Converted
+        = ImpCastExprToType(Elements[I].first, KeyT, CK_BitCast);
+      if (Converted.isInvalid())
+        return ExprError();
+      
+      Elements[I].first = Converted.get();
+    }
+    
+    // Convert this expression to the object type of the array parameter.
+    if (!Context.hasSameType(ObjectT, Elements[I].second->getType())) {
+      ExprResult Converted
+      = ImpCastExprToType(Elements[I].second, ObjectT, CK_BitCast);
+      if (Converted.isInvalid())
+        return ExprError();
+      
+      Elements[I].second = Converted.get();
+    }
+  }
+
   
+  QualType Ty
+    = Context.getObjCObjectPointerType(Context.getObjCInterfaceType(DictIF));  
   return MaybeBindToTemporary(
-           new (Context) ObjCDictionaryLiteral(Context, Elements, Ty, 
+           new (Context) ObjCDictionaryLiteral(Context, 
+                                               llvm::makeArrayRef(Elements, 
+                                                                  NumElements),
+                                               Ty, 
                                                DictWithObjectsMethod, SR));
 }
 
