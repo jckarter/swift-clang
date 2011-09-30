@@ -2381,10 +2381,6 @@ ExprResult Parser::ParseObjCCharacterLiteral(SourceLocation AtLoc) {
     return move(Lit);
   }
   SourceLocation EndLoc = ConsumeToken();         // consume the literal token.
-
-  // generate a cast to the correct argument type.
-  Lit = Actions.ImpCastExprToType(Lit.take(), Actions.Context.CharTy,
-                                  CK_IntegralCast);
   return Owned(Actions.BuildObjCNumericLiteral(AtLoc, Lit.take()));
 }
 

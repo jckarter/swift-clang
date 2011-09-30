@@ -8,6 +8,7 @@ typedef unsigned int NSUInteger;
 #endif
 
 @interface NSNumber
++ (NSNumber *)numberWithChar:(char)value;
 + (NSNumber *)numberWithInt:(int)value;
 @end
 
@@ -16,6 +17,7 @@ int main() {
   NSNumber *noNumber = @__yes; // expected-error {{declaration of 'numberWithBool:' is missing in NSNumber class}}
   NSNumber * NInt = @1000;
   NSNumber * NLongDouble = @1000.0l; // expected-error{{'long double' is not a valid literal type for NSNumber}}
+  id character = @ 'a';
 }
 
 // Dictionary test

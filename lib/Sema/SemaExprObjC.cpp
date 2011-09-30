@@ -264,9 +264,33 @@ ExprResult Sema::BuildObjCNumericLiteral(SourceLocation AtLoc, Expr *Number) {
     }
   }
   
+  // Determine the type of the literal.
+  QualType NumberType = Number->getType();
+  if (CharacterLiteral *Char = dyn_cast<CharacterLiteral>(Number)) {
+    // In C, character literals have type 'int'. That's not the type we want
+    // to use to determine the Objective-c literal kind.
+    switch (Char->getKind()) {
+    case CharacterLiteral::Ascii:
+      NumberType = Context.CharTy;
+      break;
+      
+    case CharacterLiteral::Wide:
+      NumberType = Context.getWCharType();
+      break;
+      
+    case CharacterLiteral::UTF16:
+      NumberType = Context.Char16Ty;
+      break;
+      
+    case CharacterLiteral::UTF32:
+      NumberType = Context.Char32Ty;
+      break;
+    }
+  }
+  
   // Look for the appropriate method within NSNumber.
   ObjCMethodDecl *Method  = getNSNumberFactoryMethod(*this, AtLoc, 
-                                                     Number->getType(), 
+                                                     NumberType, 
                                                      Number->getSourceRange());
   if (!Method)
     return ExprError();
