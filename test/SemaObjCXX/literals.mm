@@ -1,4 +1,4 @@
-// RUN: %clang_cc1 -fsyntax-only -verify -std=c++0x %s
+// RUN: %clang_cc1 -fsyntax-only -verify -std=c++0x -fblocks %s
 
 typedef unsigned char BOOL;
 
@@ -30,6 +30,30 @@ typedef unsigned char BOOL;
 @interface NSDictionary
 + (id)dictionaryWithObjects:(const id [])objects forKeys:(const id [])keys count:(unsigned long)cnt;
 @end
+
+template<typename T>
+struct ConvertibleTo {
+  operator T();
+};
+
+template<typename T>
+struct ExplicitlyConvertibleTo {
+  explicit operator T();
+};
+
+void test_convertibility(ConvertibleTo<NSArray*> toArray,
+                         ConvertibleTo<id> toId,
+                         ConvertibleTo<int (^)(int)> toBlock,
+                         ConvertibleTo<int> toInt,
+                         ExplicitlyConvertibleTo<NSArray *> toArrayExplicit) {
+  id array = @[ 
+               toArray,
+               toId,
+               toBlock,
+               toInt // expected-error{{collection element of type 'ConvertibleTo<int>' is not an Objective-C object}}
+              ];
+  id array2 = @[ toArrayExplicit ]; // expected-error{{collection element of type 'ExplicitlyConvertibleTo<NSArray *>' is not an Objective-C object}}
+}
 
 template<typename T>
 void test_array_literals(T t) {

@@ -337,13 +337,34 @@ static ExprResult CheckObjCCollectionLiteralElement(Sema &S, Expr *Element,
   // If the expression is type-dependent, there's nothing for us to do.
   if (Element->isTypeDependent())
     return Element;
-  
+
+  // In C++, check for an implicit conversion to an Objective-C object pointer 
+  // type.
+  if (S.getLangOptions().CPlusPlus && Element->getType()->isRecordType()) {
+    QualType Id = S.Context.getObjCIdType();
+    ImplicitConversionSequence ICS
+      = S.TryImplicitConversion(Element, Id,
+                                /*SuppressUserConversions=*/false,
+                                /*AllowExplicit=*/false,
+                                /*InOverloadResolution=*/false,
+                                /*CStyle=*/false,
+                                /*AllowObjCWritebackConversion=*/false);
+    if (ICS.isUserDefined()) {
+      ExprResult Converted = S.PerformImplicitConversion(Element, Id, ICS,
+                                                         Sema::AA_Converting);
+      if (Converted.isInvalid())
+        return ExprError();
+      
+      Element = Converted.get();
+    }
+  }
+
   // Perform lvalue-to-rvalue conversion.
   ExprResult Result = S.DefaultLvalueConversion(Element);
   if (Result.isInvalid())
     return ExprError();
   Element = Result.get();
-
+  
   // Make sure that we have an Objective-C pointer type or block.
   if (!Element->getType()->isObjCObjectPointerType() &&
       !Element->getType()->isBlockPointerType()) {
