@@ -1303,6 +1303,13 @@ def err_undeclared_dictwithobjects : Error<
   "declaration of %0 is missing in NSDictionary class">;
 def err_undeclared_nsnumber_method : Error<
   "declaration of %0 is missing in NSNumber class">;
+def err_objc_literal_method_sig : Error<
+  "literal construction method %0 has incompatible signature">;
+def note_objc_literal_method_param : Note<
+  "%select{first|second|third}0 parameter has unexpected type %1 "
+  "(should be %2)">;
+def note_objc_literal_method_return : Note<
+  "method returns unexpected type %0 (should be an object type)">;
 def err_invalid_collection_element : Error<
   "collection element of type %0 is not an Objective-C object">;
 def err_box_literal_collection : Error<

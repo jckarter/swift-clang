@@ -225,11 +225,26 @@ static ObjCMethodDecl *getNSNumberFactoryMethod(Sema &S, SourceLocation Loc,
         &S.Context.Idents.get(SelectorName[*Kind]));
   
   // Look for the appropriate method within NSNumber.
-  S.NSNumberLiteralMethods[*Kind] = S.NSNumberDecl->lookupClassMethod(Sel);
-  if (!S.NSNumberLiteralMethods[*Kind])
+  ObjCMethodDecl *Method = S.NSNumberDecl->lookupClassMethod(Sel);;
+  if (!Method) {
     S.Diag(Loc, diag::err_undeclared_nsnumber_method) << Sel;
+    return 0;
+  }
+  
+  // Make sure the return type is reasonable.
+  if (!Method->getResultType()->isObjCObjectPointerType()) {
+    S.Diag(Loc, diag::err_objc_literal_method_sig)
+      << Sel;
+    S.Diag(Method->getLocation(), diag::note_objc_literal_method_return)
+      << Method->getResultType();
+    return 0;
+  }
 
-  return S.NSNumberLiteralMethods[*Kind];
+  // Note: if the parameter type is out-of-line, we'll catch it later in the
+  // implicit conversion.
+  
+  S.NSNumberLiteralMethods[*Kind] = Method;
+  return Method;
 }
 
 /// BuildObjCNumericLiteral - builds an ObjCNumericLiteral AST node for the
@@ -310,7 +325,7 @@ static ExprResult CheckObjCCollectionLiteralElement(Sema &S, Expr *Element,
       !Element->getType()->isBlockPointerType()) {
     bool Recovered = false;
     
-    // If this is potentially a numeric literal, build it as a numeric literal.
+    // If this is potentially an Objective-C numeric literal, add the '@'.
     if (isa<IntegerLiteral>(OrigElement) || 
         isa<CharacterLiteral>(OrigElement) ||
         isa<FloatingLiteral>(OrigElement) ||
@@ -332,7 +347,9 @@ static ExprResult CheckObjCCollectionLiteralElement(Sema &S, Expr *Element,
         Element = Result.get();
         Recovered = true;
       }
-    } else if (StringLiteral *String = dyn_cast<StringLiteral>(OrigElement)) {
+    }
+    // If this is potentially an Objective-C string literal, add the '@'.
+    else if (StringLiteral *String = dyn_cast<StringLiteral>(OrigElement)) {
       if (String->isAscii()) {
         S.Diag(OrigElement->getLocStart(), diag::err_box_literal_collection)
           << 0 << OrigElement->getSourceRange()
@@ -390,14 +407,41 @@ ExprResult Sema::BuildObjCArrayLiteral(SourceRange SR, MultiExprArg Elements) {
     }
   }
   
-  // FIXME: Validate the signature of this selector!
-  
+  // Make sure the return type is reasonable.
+  if (!ArrayWithObjectsMethod->getResultType()->isObjCObjectPointerType()) {
+    Diag(SR.getBegin(), diag::err_objc_literal_method_sig)
+      << ArrayWithObjectsMethod->getSelector();
+    Diag(ArrayWithObjectsMethod->getLocation(),
+         diag::note_objc_literal_method_return)
+      << ArrayWithObjectsMethod->getResultType();
+    return ExprError();
+  }
+
   // Dig out the type that all elements should be converted to.
   QualType T = ArrayWithObjectsMethod->param_begin()[0]->getType();
-  if (const PointerType *Ptr = T->getAs<PointerType>())
-    T = Ptr->getPointeeType();
-  else {
-    // FIXME: Diagnose this error!
+  const PointerType *PtrT = T->getAs<PointerType>();
+  if (!PtrT || 
+      !Context.hasSameUnqualifiedType(PtrT->getPointeeType(),
+                                      Context.getObjCIdType())) {
+    Diag(SR.getBegin(), diag::err_objc_literal_method_sig)
+      << ArrayWithObjectsMethod->getSelector();
+    Diag(ArrayWithObjectsMethod->param_begin()[0]->getLocation(),
+         diag::note_objc_literal_method_param)
+      << 0 << T 
+      << Context.getPointerType(Context.getObjCIdType().withConst());
+    return ExprError();
+  }
+  T = PtrT->getPointeeType();
+  
+  // Check that the 'count' parameter is integral.
+  if (!ArrayWithObjectsMethod->param_begin()[1]->getType()->isIntegerType()) {
+    Diag(SR.getBegin(), diag::err_objc_literal_method_sig)
+      << ArrayWithObjectsMethod->getSelector();
+    Diag(ArrayWithObjectsMethod->param_begin()[1]->getLocation(),
+         diag::note_objc_literal_method_param)
+      << 1 
+      << ArrayWithObjectsMethod->param_begin()[1]->getType()
+      << "integral";
     return ExprError();
   }
 
@@ -457,21 +501,58 @@ ExprResult Sema::BuildObjCDictionaryLiteral(SourceRange SR,
     }
   }
   
-  // Dig out the type that all values should be converted to.
-  QualType ValueT = DictionaryWithObjectsMethod->param_begin()[0]->getType();
-  if (const PointerType *Ptr = ValueT->getAs<PointerType>())
-    ValueT = Ptr->getPointeeType();
-  else {
-    // FIXME: Diagnose this error!
+  // Make sure the return type is reasonable.
+  if (!DictionaryWithObjectsMethod->getResultType()->isObjCObjectPointerType()){
+    Diag(SR.getBegin(), diag::err_objc_literal_method_sig)
+    << DictionaryWithObjectsMethod->getSelector();
+    Diag(DictionaryWithObjectsMethod->getLocation(),
+         diag::note_objc_literal_method_return)
+    << DictionaryWithObjectsMethod->getResultType();
     return ExprError();
   }
 
+  // Dig out the type that all values should be converted to.
+  QualType ValueT = DictionaryWithObjectsMethod->param_begin()[0]->getType();
+  const PointerType *PtrValue = ValueT->getAs<PointerType>();
+  if (!PtrValue || 
+      !Context.hasSameUnqualifiedType(PtrValue->getPointeeType(),
+                                      Context.getObjCIdType())) {
+    Diag(SR.getBegin(), diag::err_objc_literal_method_sig)
+      << DictionaryWithObjectsMethod->getSelector();
+    Diag(DictionaryWithObjectsMethod->param_begin()[0]->getLocation(),
+         diag::note_objc_literal_method_param)
+      << 0 << ValueT
+      << Context.getPointerType(Context.getObjCIdType().withConst());
+    return ExprError();
+  }
+  ValueT = PtrValue->getPointeeType();
+
   // Dig out the type that all keys should be converted to.
   QualType KeyT = DictionaryWithObjectsMethod->param_begin()[1]->getType();
-  if (const PointerType *Ptr = KeyT->getAs<PointerType>())
-    KeyT = Ptr->getPointeeType();
-  else {
-    // FIXME: Diagnose this error!
+  const PointerType *PtrKey = KeyT->getAs<PointerType>();
+  if (!PtrKey || 
+      !Context.hasSameUnqualifiedType(PtrKey->getPointeeType(),
+                                      Context.getObjCIdType())) {
+    Diag(SR.getBegin(), diag::err_objc_literal_method_sig)
+      << DictionaryWithObjectsMethod->getSelector();
+    Diag(DictionaryWithObjectsMethod->param_begin()[1]->getLocation(),
+         diag::note_objc_literal_method_param)
+      << 1 << KeyT
+      << Context.getPointerType(Context.getObjCIdType().withConst());
+    return ExprError();
+  }
+  KeyT = PtrKey->getPointeeType();
+
+  // Check that the 'count' parameter is integral.
+  if (!DictionaryWithObjectsMethod->param_begin()[2]->getType()
+                                                            ->isIntegerType()) {
+    Diag(SR.getBegin(), diag::err_objc_literal_method_sig)
+      << DictionaryWithObjectsMethod->getSelector();
+    Diag(DictionaryWithObjectsMethod->param_begin()[2]->getLocation(),
+         diag::note_objc_literal_method_param)
+      << 2
+      << DictionaryWithObjectsMethod->param_begin()[2]->getType()
+      << "integral";
     return ExprError();
   }
 
