@@ -10,6 +10,7 @@
 // CHECK: c"numberWithChar:\00"
 // CHECK: c"arrayWithObjects:count:\00"
 // CHECK: c"dictionaryWithObjects:forKeys:count:\00"
+// CHECK: c"prop\00"
 
 // CHECK: define void @test_numeric()
 void test_numeric() {
@@ -98,6 +99,45 @@ void test_dictionary(id k1, id o1, id k2, id o2) {
   // CHECK: call void @objc_release
   // CHECK: call void @objc_release
   // CHECK: call void @objc_release
+  // CHECK: call void @objc_release
+  // CHECK-NEXT: ret void
+}
+
+@interface A
+@end
+
+@interface B
+@property (retain) A* prop;
+@end
+
+// CHECK: define void @test_property
+void test_property(B *b) {
+  // Retain parameter
+  // CHECK: call i8* @objc_retain
+
+  // Invoke 'prop'
+  // CHECK: load i8** @"\01L_OBJC_SELECTOR_REFERENCES
+  // CHECK: {{call.*@objc_msgSend}}
+  // CHECK: call i8* @objc_retainAutoreleasedReturnValue
+
+  // Invoke arrayWithObjects:count:
+  // CHECK: load i8** @"\01L_OBJC_SELECTOR_REFERENCES
+  // CHECK: {{call.*objc_msgSend}}
+  // CHECK: call i8* @objc_retainAutoreleasedReturnValue
+  id arr = @[ b.prop ];
+
+  // Release b.prop
+  // CHECK: call void @objc_release
+
+  // Destroy the temporary array.
+  // CHECK: br label
+  // CHECK: call void @objc_release
+  // CHECK: br i1
+
+  // Destroy arr
+  // CHECK: call void @objc_release
+
+  // Destroy b
   // CHECK: call void @objc_release
   // CHECK-NEXT: ret void
 }
