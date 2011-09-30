@@ -40,5 +40,5 @@ int Int();
 NSDictionary * warn() {
   NSDictionary *dictionary = @{@"name" : NSUserName(),
                                @"date" : [NSDate date] };
-  return @{@"name" : Int()}; // expected-error {{members of objective-c collection literals must be objects}}
+  return @{@"name" : Int()}; // expected-error {{collection element of type 'int' is not an Objective-C object}}
 }

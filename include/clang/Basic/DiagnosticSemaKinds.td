@@ -1289,13 +1289,13 @@ def err_attr_objc_ownership_redundant : Error<
 def err_attribute_not_string : Error<
   "argument to %0 attribute was not a string literal">;
 def err_undeclared_nsnumber : Error<
-  "NSNumber must be available for use of objective-c literals">;
+  "NSNumber must be available to use Objective-C literals">;
 def err_invalid_nsnumber_type : Error<
   "%0 is not a valid literal type for NSNumber">;
 def err_undeclared_nsarray : Error<
-  "NSArray must be available for use of objective-c array literals">;
+  "NSArray must be available to use Objective-C array literals">;
 def err_undeclared_nsdictionary : Error<
-  "NSDictionary must be available for use of objective-c dictionary "
+  "NSDictionary must be available to use Objective-C dictionary "
   "literals">;
 def err_undeclared_arraywithobjects : Error<
   "declaration of %0 is missing in NSArray class">;
@@ -1304,8 +1304,7 @@ def err_undeclared_dictwithobjects : Error<
 def err_undeclared_nsnumber_method : Error<
   "declaration of %0 is missing in NSNumber class">;
 def err_invalid_collection_element : Error<
-  "members of objective-c collection literals "
-  "must be objects">;
+  "collection element of type %0 is not an Objective-C object">;
 def err_attribute_section_invalid_for_target : Error<
   "argument to 'section' attribute is not valid for this target: %0">;
 def err_attribute_section_local_variable : Error<

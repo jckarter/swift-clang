@@ -33,7 +33,7 @@ typedef unsigned char BOOL;
 
 template<typename T>
 void test_array_literals(T t) {
-  id arr = @[ @17, t ]; // expected-error{{members of objective-c collection literals must be objects}}
+  id arr = @[ @17, t ]; // expected-error{{collection element of type 'int' is not an Objective-C object}}
 }
 
 template void test_array_literals(id);
@@ -43,8 +43,8 @@ template void test_array_literals(int); // expected-note{{in instantiation of fu
 template<typename T, typename U>
 void test_dictionary_literals(T t, U u) {
   id dict = @{ 
-    @17 : t, // expected-error{{members of objective-c collection literals must be objects}}
-    u : @42 // expected-error{{members of objective-c collection literals must be objects}} 
+    @17 : t, // expected-error{{collection element of type 'int' is not an Objective-C object}}
+    u : @42 // expected-error{{collection element of type 'int' is not an Objective-C object}}
   };
 }
 
@@ -60,7 +60,7 @@ void test_bad_variadic_array_literal(Args ...args) {
 
 template<typename ...Args>
 void test_variadic_array_literal(Args ...args) {
-  id arr1 = @[ args... ]; // expected-error{{members of objective-c collection literals must be objects}}
+  id arr1 = @[ args... ]; // expected-error{{collection element of type 'int' is not an Objective-C object}}
 }
 template void test_variadic_array_literal(id);
 template void test_variadic_array_literal(id, NSArray*);

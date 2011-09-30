@@ -306,7 +306,8 @@ static ExprResult CheckObjCCollectionLiteralElement(Sema &S, Expr *Element,
   // Make sure that we have an Objective-C pointer type.
   if (!Element->getType()->isObjCObjectPointerType()) {
     // FIXME: Recover properly for all of the obvious cases.
-    S.Diag(Element->getLocStart(), diag::err_invalid_collection_element);
+    S.Diag(Element->getLocStart(), diag::err_invalid_collection_element)
+      << Element->getType();
     return ExprError();
   }
   
