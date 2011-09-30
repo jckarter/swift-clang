@@ -34,5 +34,8 @@ int main() {
   for (id string in array)
     NSLog(@"%@\n", string);
 
-  NSArray *array1 = @["Forgot"]; // expected-error {{collection element of type 'char [7]' is not an Objective-C object}}
+  NSArray *array1 = @["Forgot"]; // expected-error {{string literal must be prefixed by '@' in a collection}}
+
+  const char *blah;
+  NSArray *array2 = @[blah]; // expected-error{{collection element of type 'const char *' is not an Objective-C object}}
 }

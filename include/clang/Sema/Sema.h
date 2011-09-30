@@ -3368,6 +3368,8 @@ public:
                                     Expr **Strings,
                                     unsigned NumStrings);
     
+  ExprResult BuildObjCStringLiteral(SourceLocation AtLoc, StringLiteral *S);
+  
   /// BuildObjCNumericLiteral - builds an ObjCNumericLiteral AST node for the
   /// numeric literal expression. Type of the expression will be "NSNumber *"
   /// or "id" if NSNumber is unavailable.

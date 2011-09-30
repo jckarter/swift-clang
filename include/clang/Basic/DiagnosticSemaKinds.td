@@ -1305,6 +1305,9 @@ def err_undeclared_nsnumber_method : Error<
   "declaration of %0 is missing in NSNumber class">;
 def err_invalid_collection_element : Error<
   "collection element of type %0 is not an Objective-C object">;
+def err_box_literal_collection : Error<
+  "%select{string|character|boolean|numeric}0 literal must be prefixed by '@' "
+  "in a collection">;
 def err_attribute_section_invalid_for_target : Error<
   "argument to 'section' attribute is not valid for this target: %0">;
 def err_attribute_section_local_variable : Error<

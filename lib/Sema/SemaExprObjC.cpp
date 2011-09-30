@@ -68,7 +68,11 @@ ExprResult Sema::ParseObjCStringLiteral(SourceLocation *AtLocs,
                               Context.getPointerType(Context.CharTy),
                               &StrLocs[0], StrLocs.size());
   }
+  
+  return BuildObjCStringLiteral(AtLocs[0], S);
+}
 
+ExprResult Sema::BuildObjCStringLiteral(SourceLocation AtLoc, StringLiteral *S){
   // Verify that this composite string is acceptable for ObjC strings.
   if (CheckObjCString(S))
     return true;
@@ -89,7 +93,7 @@ ExprResult Sema::ParseObjCStringLiteral(SourceLocation *AtLocs,
     else
       NSIdent = &Context.Idents.get(StringClass);
     
-    NamedDecl *IF = LookupSingleName(TUScope, NSIdent, AtLocs[0],
+    NamedDecl *IF = LookupSingleName(TUScope, NSIdent, AtLoc,
                                      LookupOrdinaryName);
     if (ObjCInterfaceDecl *StrIF = dyn_cast_or_null<ObjCInterfaceDecl>(IF)) {
       Context.setObjCConstantStringInterface(StrIF);
@@ -104,7 +108,7 @@ ExprResult Sema::ParseObjCStringLiteral(SourceLocation *AtLocs,
     }
   } else {
     IdentifierInfo *NSIdent = &Context.Idents.get("NSString");
-    NamedDecl *IF = LookupSingleName(TUScope, NSIdent, AtLocs[0],
+    NamedDecl *IF = LookupSingleName(TUScope, NSIdent, AtLoc,
                                      LookupOrdinaryName);
     if (ObjCInterfaceDecl *StrIF = dyn_cast_or_null<ObjCInterfaceDecl>(IF)) {
       Context.setObjCConstantStringInterface(StrIF);
@@ -117,67 +121,48 @@ ExprResult Sema::ParseObjCStringLiteral(SourceLocation *AtLocs,
     }
   }
 
-  return new (Context) ObjCStringLiteral(S, Ty, AtLocs[0]);
+  return new (Context) ObjCStringLiteral(S, Ty, AtLoc);
 }
 
-/// \brief Retrieve the NSNumber factory method that should be used to create
-/// an Objective-C literal for the given type.
-static ObjCMethodDecl *getNSNumberFactoryMethod(Sema &S, SourceLocation Loc,
-                                                QualType T, 
-                                                SourceRange Range) {
-  // All permissible NSNumber literal types are built-in types.
+/// \brief Determine the appropriate NSNumber factory method kind for a
+/// literal of the given type.
+static llvm::Optional<Sema::NSNumberLiteralMethodKinds>
+getNSNumberFactoryMethodKind(QualType T) {
   const BuiltinType *BT = T->getAs<BuiltinType>();
-  if (!BT) {
-    S.Diag(Loc, diag::err_invalid_nsnumber_type)
-      << T << Range;
-    return 0;
-  }
-    
-  // Map built-in types to NSNumber factory methods.
-  Sema::NSNumberLiteralMethodKinds Kind;
+  if (!BT)
+    return llvm::Optional<Sema::NSNumberLiteralMethodKinds>();
+  
+  
   switch (BT->getKind()) {
   case BuiltinType::Char_S:
   case BuiltinType::SChar:
-    Kind = Sema::NSNumberWithChar;
-    break;      
+    return Sema::NSNumberWithChar;
   case BuiltinType::Char_U:
   case BuiltinType::UChar:
-    Kind = Sema::NSNumberWithUnsignedChar;
-    break;
+    return Sema::NSNumberWithUnsignedChar;
   case BuiltinType::Short:
-    Kind = Sema::NSNumberWithShort;
-    break;
+    return Sema::NSNumberWithShort;
   case BuiltinType::UShort:
-    Kind = Sema::NSNumberWithUnsignedShort;
-    break;
+    return Sema::NSNumberWithUnsignedShort;
   case BuiltinType::Int:
-    Kind = Sema::NSNumberWithInt;
-    break;
+    return Sema::NSNumberWithInt;
   case BuiltinType::UInt:
-    Kind = Sema::NSNumberWithUnsignedInt;
-    break;
+    return Sema::NSNumberWithUnsignedInt;
   case BuiltinType::Long:
-    Kind = Sema::NSNumberWithLong;
-    break;
+    return Sema::NSNumberWithLong;
   case BuiltinType::ULong:
-    Kind = Sema::NSNumberWithUnsignedLong;
-    break;
+    return Sema::NSNumberWithUnsignedLong;
   case BuiltinType::LongLong:
-    Kind = Sema::NSNumberWithLongLong;
-    break;
+    return Sema::NSNumberWithLongLong;
   case BuiltinType::ULongLong:
-    Kind = Sema::NSNumberWithUnsignedLongLong;
-    break;
+    return Sema::NSNumberWithUnsignedLongLong;
   case BuiltinType::Float:
-    Kind = Sema::NSNumberWithFloat;
-    break;
+    return Sema::NSNumberWithFloat;
   case BuiltinType::Double:
-    Kind = Sema::NSNumberWithDouble;
-    break;
+    return Sema::NSNumberWithDouble;
   case BuiltinType::Bool:
-    Kind = Sema::NSNumberWithBool;
-    break;
-  
+    return  Sema::NSNumberWithBool;
+    
   case BuiltinType::Void:
   case BuiltinType::WChar_U:
   case BuiltinType::WChar_S:
@@ -194,14 +179,29 @@ static ObjCMethodDecl *getNSNumberFactoryMethod(Sema &S, SourceLocation Loc,
   case BuiltinType::Dependent:
   case BuiltinType::Overload:
   case BuiltinType::UnknownAny:
+    break;
+  }
+  
+  return llvm::Optional<Sema::NSNumberLiteralMethodKinds>();
+}
+
+/// \brief Retrieve the NSNumber factory method that should be used to create
+/// an Objective-C literal for the given type.
+static ObjCMethodDecl *getNSNumberFactoryMethod(Sema &S, SourceLocation Loc,
+                                                QualType T, 
+                                                SourceRange Range) {
+  llvm::Optional<Sema::NSNumberLiteralMethodKinds> Kind 
+    = getNSNumberFactoryMethodKind(T);
+  
+  if (!Kind) {
     S.Diag(Loc, diag::err_invalid_nsnumber_type)
       << T << Range;
     return 0;
   }
-  
+    
   // If we already looked up this method, we're done.
-  if (S.NSNumberLiteralMethods[Kind])
-    return S.NSNumberLiteralMethods[Kind];
+  if (S.NSNumberLiteralMethods[*Kind])
+    return S.NSNumberLiteralMethods[*Kind];
   
   // Determine the selector for the factory method we will use.
   static const char *SelectorName[Sema::NumNSNumberLiteralMethods] = {
@@ -222,14 +222,14 @@ static ObjCMethodDecl *getNSNumberFactoryMethod(Sema &S, SourceLocation Loc,
   
   Selector Sel
     = S.Context.Selectors.getUnarySelector(
-        &S.Context.Idents.get(SelectorName[Kind]));
+        &S.Context.Idents.get(SelectorName[*Kind]));
   
   // Look for the appropriate method within NSNumber.
-  S.NSNumberLiteralMethods[Kind] = S.NSNumberDecl->lookupClassMethod(Sel);
-  if (!S.NSNumberLiteralMethods[Kind])
+  S.NSNumberLiteralMethods[*Kind] = S.NSNumberDecl->lookupClassMethod(Sel);
+  if (!S.NSNumberLiteralMethods[*Kind])
     S.Diag(Loc, diag::err_undeclared_nsnumber_method) << Sel;
 
-  return S.NSNumberLiteralMethods[Kind];
+  return S.NSNumberLiteralMethods[*Kind];
 }
 
 /// BuildObjCNumericLiteral - builds an ObjCNumericLiteral AST node for the
@@ -293,6 +293,8 @@ ExprResult Sema::ActOnObjCBoolLiteral(SourceLocation AtLoc,
 /// collection literal.
 static ExprResult CheckObjCCollectionLiteralElement(Sema &S, Expr *Element, 
                                                     QualType T) {
+  Expr *OrigElement = Element;
+  
   // If the expression is type-dependent, there's nothing for us to do.
   if (Element->isTypeDependent())
     return Element;
@@ -303,13 +305,53 @@ static ExprResult CheckObjCCollectionLiteralElement(Sema &S, Expr *Element,
     return ExprError();
   Element = Result.get();
 
-  // Make sure that we have an Objective-C pointer type.
+  // Make sure that we have an Objective-C pointer type or block.
   if (!Element->getType()->isObjCObjectPointerType() &&
       !Element->getType()->isBlockPointerType()) {
-    // FIXME: Recover properly for all of the obvious cases.
-    S.Diag(Element->getLocStart(), diag::err_invalid_collection_element)
-      << Element->getType();
-    return ExprError();
+    bool Recovered = false;
+    
+    // If this is potentially a numeric literal, build it as a numeric literal.
+    if (isa<IntegerLiteral>(OrigElement) || 
+        isa<CharacterLiteral>(OrigElement) ||
+        isa<FloatingLiteral>(OrigElement) ||
+        isa<CXXBoolLiteralExpr>(OrigElement)) {
+      if (getNSNumberFactoryMethodKind(OrigElement->getType())) {
+        int Which = isa<CharacterLiteral>(OrigElement) ? 1
+                  : isa<CXXBoolLiteralExpr>(OrigElement) ? 2
+                  : 3;
+        
+        S.Diag(OrigElement->getLocStart(), diag::err_box_literal_collection)
+          << Which << OrigElement->getSourceRange()
+          << FixItHint::CreateInsertion(OrigElement->getLocStart(), "@");
+        
+        Result = S.BuildObjCNumericLiteral(OrigElement->getLocStart(),
+                                           OrigElement);
+        if (Result.isInvalid())
+          return ExprError();
+        
+        Element = Result.get();
+        Recovered = true;
+      }
+    } else if (StringLiteral *String = dyn_cast<StringLiteral>(OrigElement)) {
+      if (String->isAscii()) {
+        S.Diag(OrigElement->getLocStart(), diag::err_box_literal_collection)
+          << 0 << OrigElement->getSourceRange()
+          << FixItHint::CreateInsertion(OrigElement->getLocStart(), "@");
+
+        Result = S.BuildObjCStringLiteral(OrigElement->getLocStart(), String);
+        if (Result.isInvalid())
+          return ExprError();
+        
+        Element = Result.get();
+        Recovered = true;
+      }
+    }
+    
+    if (!Recovered) {
+      S.Diag(Element->getLocStart(), diag::err_invalid_collection_element)
+        << Element->getType();
+      return ExprError();
+    }
   }
   
   // Make sure that the element has the type that the container factory 
