@@ -1186,7 +1186,15 @@ def err_constexpr_tag : Error<
 def err_constexpr_dtor : Error<"destructor cannot be marked constexpr">;
 def err_constexpr_no_declarators : Error<
   "constexpr can only be used in variable and function declarations">;
-  
+def err_invalid_constexpr_var_decl : Error<
+  "constexpr variable declaration must be a definition">;
+def err_constexpr_var_requires_init : Error<
+  "declaration of constexpr variable %0 requires an initializer">;
+def err_constexpr_initialized_static_member : Error<
+  "definition of initialized static data member %0 cannot be marked constexpr">;
+def err_constexpr_var_requires_const_init : Error<
+  "constexpr variable %0 must be initialized by a constant expression">;
+ 
 // Objective-C++
 def err_objc_decls_may_only_appear_in_global_scope : Error<
   "Objective-C declarations may only appear in global scope">;
@@ -4069,11 +4077,18 @@ def err_not_direct_base_or_virtual : Error<
 
 def err_in_class_initializer_non_const : Error<
   "non-const static data member must be initialized out of line">;
+def err_in_class_initializer_volatile : Error<
+  "static const volatile data member must be initialized out of line">;
 def err_in_class_initializer_bad_type : Error<
   "static data member of type %0 must be initialized out of line">;
 def ext_in_class_initializer_float_type : ExtWarn<
-  "in-class initializer for static data member of type %0 "
-  "is a C++0x extension">, InGroup<CXX0xStaticNonIntegralInitializer>;
+  "in-class initializer for static data member of type %0 is a GNU extension">,
+  InGroup<GNU>;
+def note_in_class_initializer_float_type_constexpr : Note<
+  "use 'constexpr' specifier to silence this warning">;
+def err_in_class_initializer_literal_type : Error<
+  "in-class initializer for static data member of type %0 requires "
+  "'constexpr' specifier">;
 def err_in_class_initializer_non_constant : Error<
   "in-class initializer is not a constant expression">;
 
@@ -4277,8 +4292,8 @@ def err_defaulted_copy_assign_const_param : Error<
   "the parameter for this explicitly-defaulted copy assignment operator is "
   "const, but a member or base requires it to be non-const">;
 def err_defaulted_copy_assign_quals : Error<
-  "an explicitly-defaulted copy assignment operator may not have 'const' "
-  "or 'volatile' qualifiers">;
+  "an explicitly-defaulted copy assignment operator may not have 'const', "
+  "'constexpr' or 'volatile' qualifiers">;
 def err_defaulted_move_ctor_params : Error<
   "an explicitly-defaulted move constructor must have exactly one parameter">;
 def err_defaulted_move_ctor_volatile_param : Error<
@@ -4303,8 +4318,8 @@ def err_defaulted_move_assign_const_param : Error<
   "the parameter for an explicitly-defaulted move assignment operator may not "
   "be const">;
 def err_defaulted_move_assign_quals : Error<
-  "an explicitly-defaulted move assignment operator may not have 'const' "
-  "or 'volatile' qualifiers">;
+  "an explicitly-defaulted move assignment operator may not have 'const', "
+  "'constexpr' or 'volatile' qualifiers">;
 def err_incorrect_defaulted_exception_spec : Error<
   "exception specification of explicitly defaulted %select{default constructor|"
   "copy constructor|move constructor|copy assignment operator|move assignment "
