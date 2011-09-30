@@ -41,6 +41,13 @@ struct ExplicitlyConvertibleTo {
   explicit operator T();
 };
 
+template<typename T> ConvertibleTo<T> makeConvertible();
+
+struct X {
+  ConvertibleTo<id> x;
+  ConvertibleTo<id> get();
+};
+
 void test_convertibility(ConvertibleTo<NSArray*> toArray,
                          ConvertibleTo<id> toId,
                          ConvertibleTo<int (^)(int)> toBlock,
@@ -53,6 +60,15 @@ void test_convertibility(ConvertibleTo<NSArray*> toArray,
                toInt // expected-error{{collection element of type 'ConvertibleTo<int>' is not an Objective-C object}}
               ];
   id array2 = @[ toArrayExplicit ]; // expected-error{{collection element of type 'ExplicitlyConvertibleTo<NSArray *>' is not an Objective-C object}}
+
+  id array3 = @[ 
+                makeConvertible<id>(),
+                               makeConvertible<id>, // expected-error{{collection element of type 'ConvertibleTo<id> ()' is not an Objective-C object}}
+               ];
+
+  X x;
+  id array4 = @[ x.x ];
+  id array5 = @[ x.get ]; // expected-error{{a bound member function may only be called}}
 }
 
 template<typename T>

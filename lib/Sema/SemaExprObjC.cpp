@@ -331,13 +331,17 @@ ExprResult Sema::ActOnObjCBoolLiteral(SourceLocation AtLoc,
 /// \brief Check that the given expression is a valid element of an Objective-C
 /// collection literal.
 static ExprResult CheckObjCCollectionLiteralElement(Sema &S, Expr *Element, 
-                                                    QualType T) {
-  Expr *OrigElement = Element;
-  
+                                                    QualType T) {  
   // If the expression is type-dependent, there's nothing for us to do.
   if (Element->isTypeDependent())
     return Element;
 
+  ExprResult Result = S.CheckPlaceholderExpr(Element);
+  if (Result.isInvalid())
+    return ExprError();
+  Element = Result.get();
+
+  Expr *OrigElement = Element;
   // In C++, check for an implicit conversion to an Objective-C object pointer 
   // type.
   if (S.getLangOptions().CPlusPlus && Element->getType()->isRecordType()) {
@@ -360,7 +364,7 @@ static ExprResult CheckObjCCollectionLiteralElement(Sema &S, Expr *Element,
   }
 
   // Perform lvalue-to-rvalue conversion.
-  ExprResult Result = S.DefaultLvalueConversion(Element);
+  Result = S.DefaultLvalueConversion(Element);
   if (Result.isInvalid())
     return ExprError();
   Element = Result.get();
