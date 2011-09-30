@@ -1060,7 +1060,7 @@ private:
   void ParseLexedMemberInitializers(ParsingClass &Class);
   void ParseLexedMemberInitializer(LateParsedMemberInitializer &MI);
   Decl *ParseLexedObjCMethodDefs(LexedMethod &LM);
-  bool ConsumeAndStoreTryAndInitializers(CachedTokens &Toks);
+  bool ConsumeAndStoreFunctionPrologue(CachedTokens &Toks);
   bool ConsumeAndStoreUntil(tok::TokenKind T1,
                             CachedTokens &Toks,
                             bool StopAtSemi = true,
@@ -1414,7 +1414,7 @@ private:
   StmtResult ParseBreakStatement(ParsedAttributes &Attr);
   StmtResult ParseReturnStatement(ParsedAttributes &Attr);
   StmtResult ParseAsmStatement(bool &msAsm);
-  StmtResult FuzzyParseMicrosoftAsmStatement(SourceLocation AsmLoc);
+  StmtResult ParseMicrosoftAsmStatement(SourceLocation AsmLoc);
   bool ParseMicrosoftIfExistsCondition(bool& Result);
   void ParseMicrosoftIfExistsStatement(StmtVector &Stmts);
   void ParseMicrosoftIfExistsExternalDeclaration();
@@ -1744,6 +1744,9 @@ private:
     if (getLang().CPlusPlus0x && isCXX0XAttributeSpecifier())
       ParseCXX0XAttributes(attrs, endLoc);
   }
+
+  void ParseCXX0XAttributeSpecifier(ParsedAttributes &attrs,
+                                    SourceLocation *EndLoc = 0);
   void ParseCXX0XAttributes(ParsedAttributesWithRange &attrs,
                             SourceLocation *EndLoc = 0);
 
@@ -1777,7 +1780,9 @@ private:
   void ParseDecltypeSpecifier(DeclSpec &DS);
   void ParseUnderlyingTypeSpecifier(DeclSpec &DS);
   
-  ExprResult ParseCXX0XAlignArgument(SourceLocation Start);
+  ExprResult ParseAlignArgument(SourceLocation Start);
+  void ParseAlignmentSpecifier(ParsedAttributes &Attrs,
+                               SourceLocation *endLoc = 0);
 
   VirtSpecifiers::Specifier isCXX0XVirtSpecifier() const;
   void ParseOptionalCXX0XVirtSpecifierSeq(VirtSpecifiers &VS);

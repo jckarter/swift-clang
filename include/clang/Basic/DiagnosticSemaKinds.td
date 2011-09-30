@@ -1186,7 +1186,15 @@ def err_constexpr_tag : Error<
 def err_constexpr_dtor : Error<"destructor cannot be marked constexpr">;
 def err_constexpr_no_declarators : Error<
   "constexpr can only be used in variable and function declarations">;
-  
+def err_invalid_constexpr_var_decl : Error<
+  "constexpr variable declaration must be a definition">;
+def err_constexpr_var_requires_init : Error<
+  "declaration of constexpr variable %0 requires an initializer">;
+def err_constexpr_initialized_static_member : Error<
+  "definition of initialized static data member %0 cannot be marked constexpr">;
+def err_constexpr_var_requires_const_init : Error<
+  "constexpr variable %0 must be initialized by a constant expression">;
+ 
 // Objective-C++
 def err_objc_decls_may_only_appear_in_global_scope : Error<
   "Objective-C declarations may only appear in global scope">;
@@ -1205,11 +1213,6 @@ def err_attribute_too_many_arguments : Error<
   "attribute takes no more than %0 argument%s0">;
 def err_attribute_too_few_arguments : Error<
   "attribute takes at least %0 argument%s0">;
-def err_iboutletcollection_type : Error<
-  "invalid type %0 as argument of iboutletcollection attribute">;
-def err_iboutletcollection_object_type : Error<
-  "%select{ivar|property}1 with iboutletcollection attribute must "
-  "have object type (invalid %0)">;
 def err_attribute_missing_parameter_name : Error<
   "attribute requires unquoted parameter">;
 def err_attribute_invalid_vector_type : Error<"invalid vector element type %0">;
@@ -1363,7 +1366,7 @@ def err_attribute_wrong_decl_type : Error<
   "variables and functions|functions and methods|parameters|"
   "parameters and methods|functions, methods and blocks|"
   "classes and virtual methods|functions, methods, and parameters|"
-  "classes|virtual methods|class members|variables|methods}1">;
+  "classes|virtual methods|class members|variables|methods|structs}1">;
 def warn_function_attribute_wrong_type : Warning<
   "'%0' only applies to function types; type here is %1">;
 def warn_pointer_attribute_wrong_type : Warning<
@@ -1585,6 +1588,11 @@ def warn_attribute_iboutlet : Warning<
   "%0 attribute can only be applied to instance variables or properties">;
 def warn_attribute_ibaction: Warning<
   "ibaction attribute can only be applied to Objective-C instance methods">;
+def err_iboutletcollection_type : Error<
+  "invalid type %0 as argument of iboutletcollection attribute">;
+def err_iboutlet_object_type : Error<
+  "%select{ivar|property}2 with %0 attribute must "
+  "be an object type (invalid %1)">;
 def err_attribute_overloadable_not_function : Error<
   "'overloadable' attribute can only be applied to a function">;
 def err_attribute_overloadable_missing : Error<
@@ -1600,6 +1608,8 @@ def warn_ns_attribute_wrong_return_type : Warning<
 def warn_ns_attribute_wrong_parameter_type : Warning<
   "%0 attribute only applies to %select{Objective-C object|pointer}1 "
   "parameters">;
+def err_ns_bridged_not_interface : Error<
+  "parameter of 'ns_bridged' attribute does not name an Objective-C class">;
 
 // Function Parameter Semantic Analysis.
 def err_param_with_void_type : Error<"argument may not have 'void' type">;
@@ -4094,11 +4104,18 @@ def err_not_direct_base_or_virtual : Error<
 
 def err_in_class_initializer_non_const : Error<
   "non-const static data member must be initialized out of line">;
+def err_in_class_initializer_volatile : Error<
+  "static const volatile data member must be initialized out of line">;
 def err_in_class_initializer_bad_type : Error<
   "static data member of type %0 must be initialized out of line">;
 def ext_in_class_initializer_float_type : ExtWarn<
-  "in-class initializer for static data member of type %0 "
-  "is a C++0x extension">, InGroup<CXX0xStaticNonIntegralInitializer>;
+  "in-class initializer for static data member of type %0 is a GNU extension">,
+  InGroup<GNU>;
+def note_in_class_initializer_float_type_constexpr : Note<
+  "use 'constexpr' specifier to silence this warning">;
+def err_in_class_initializer_literal_type : Error<
+  "in-class initializer for static data member of type %0 requires "
+  "'constexpr' specifier">;
 def err_in_class_initializer_non_constant : Error<
   "in-class initializer is not a constant expression">;
 
@@ -4302,8 +4319,8 @@ def err_defaulted_copy_assign_const_param : Error<
   "the parameter for this explicitly-defaulted copy assignment operator is "
   "const, but a member or base requires it to be non-const">;
 def err_defaulted_copy_assign_quals : Error<
-  "an explicitly-defaulted copy assignment operator may not have 'const' "
-  "or 'volatile' qualifiers">;
+  "an explicitly-defaulted copy assignment operator may not have 'const', "
+  "'constexpr' or 'volatile' qualifiers">;
 def err_defaulted_move_ctor_params : Error<
   "an explicitly-defaulted move constructor must have exactly one parameter">;
 def err_defaulted_move_ctor_volatile_param : Error<
@@ -4328,8 +4345,8 @@ def err_defaulted_move_assign_const_param : Error<
   "the parameter for an explicitly-defaulted move assignment operator may not "
   "be const">;
 def err_defaulted_move_assign_quals : Error<
-  "an explicitly-defaulted move assignment operator may not have 'const' "
-  "or 'volatile' qualifiers">;
+  "an explicitly-defaulted move assignment operator may not have 'const', "
+  "'constexpr' or 'volatile' qualifiers">;
 def err_incorrect_defaulted_exception_spec : Error<
   "exception specification of explicitly defaulted %select{default constructor|"
   "copy constructor|move constructor|copy assignment operator|move assignment "
