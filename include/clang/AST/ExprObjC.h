@@ -221,7 +221,10 @@ public:
     
   // Iterators
   child_range children() { 
-    return child_range();
+    // Note: we're taking advantage of the layout of the KeyValuePair struct
+    // here. If that struct changes, this code will need to change as well.
+    return child_range(reinterpret_cast<Stmt **>(this + 1),
+                       reinterpret_cast<Stmt **>(this + 1) + NumElements * 2);
   }
     
   friend class ASTStmtReader;

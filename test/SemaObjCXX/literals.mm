@@ -66,3 +66,9 @@ template void test_variadic_array_literal(id);
 template void test_variadic_array_literal(id, NSArray*);
 template void test_variadic_array_literal(id, int, NSArray*); // expected-note{{in instantiation of function template specialization 'test_variadic_array_literal<id, int, NSArray *>' requested here}}
 
+template<typename ...Args>
+void test_bad_variadic_dictionary_literal(Args ...args) {
+  id dict = @{ args : @17 }; // expected-error{{initializer contains unexpanded parameter pack 'args'}}
+}
+
+// FIXME: Handle key/value pairs that are pack expansions.
