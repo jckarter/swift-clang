@@ -2556,11 +2556,12 @@ void Parser::PopParsingClass(Sema::ParsingClassState state) {
   Victim->TemplateScope = getCurScope()->getParent()->isTemplateParamScope();
 }
 
-/// ParseCXX0XAttributes - Parse a C++0x attribute-specifier. Currently only
-/// parses standard attributes.
+/// ParseCXX0XAttributeSpecifier - Parse a C++0x attribute-specifier. Currently
+/// only parses standard attributes.
 ///
 /// [C++0x] attribute-specifier:
 ///         '[' '[' attribute-list ']' ']'
+///         alignment-specifier
 ///
 /// [C++0x] attribute-list:
 ///         attribute[opt]
@@ -2591,12 +2592,15 @@ void Parser::PopParsingClass(Sema::ParsingClassState state) {
 ///         '[' balanced-token-seq ']'
 ///         '{' balanced-token-seq '}'
 ///         any token but '(', ')', '[', ']', '{', or '}'
-void Parser::ParseCXX0XAttributes(ParsedAttributesWithRange &attrs,
-                                  SourceLocation *endLoc) {
+void Parser::ParseCXX0XAttributeSpecifier(ParsedAttributes &attrs,
+                                          SourceLocation *endLoc) {
+  if (Tok.is(tok::kw_alignas)) {
+    ParseAlignmentSpecifier(attrs, endLoc);
+    return;
+  }
+
   assert(Tok.is(tok::l_square) && NextToken().is(tok::l_square)
       && "Not a C++0x attribute list");
-
-  SourceLocation StartLoc = Tok.getLocation(), Loc;
 
   ConsumeBracket();
   ConsumeBracket();
@@ -2654,29 +2658,6 @@ void Parser::ParseCXX0XAttributes(ParsedAttributesWithRange &attrs,
         break;
       }
 
-      // One argument; must be a type-id or assignment-expression
-      case AttributeList::AT_aligned: {
-        if (Tok.isNot(tok::l_paren)) {
-          Diag(Tok.getLocation(), diag::err_cxx0x_attribute_requires_arguments)
-            << AttrName->getName();
-          break;
-        }
-        SourceLocation ParamLoc = ConsumeParen();
-
-        ExprResult ArgExpr = ParseCXX0XAlignArgument(ParamLoc);
-
-        MatchRHSPunctuation(tok::r_paren, ParamLoc);
-
-        ExprVector ArgExprs(Actions);
-        ArgExprs.push_back(ArgExpr.release());
-        attrs.addNew(AttrName, AttrLoc, 0, AttrLoc,
-                     0, ParamLoc, ArgExprs.take(), 1,
-                     false, true);
-
-        AttrParsed = true;
-        break;
-      }
-
       // Silence warnings
       default: break;
       }
@@ -2692,31 +2673,27 @@ void Parser::ParseCXX0XAttributes(ParsedAttributesWithRange &attrs,
 
   if (ExpectAndConsume(tok::r_square, diag::err_expected_rsquare))
     SkipUntil(tok::r_square, false);
-  Loc = Tok.getLocation();
+  if (endLoc)
+    *endLoc = Tok.getLocation();
   if (ExpectAndConsume(tok::r_square, diag::err_expected_rsquare))
     SkipUntil(tok::r_square, false);
-
-  attrs.Range = SourceRange(StartLoc, Loc);
 }
 
-/// ParseCXX0XAlignArgument - Parse the argument to C++0x's [[align]]
-/// attribute.
+/// ParseCXX0XAttributes - Parse a C++0x attribute-specifier-seq.
 ///
-/// FIXME: Simply returns an alignof() expression if the argument is a
-/// type. Ideally, the type should be propagated directly into Sema.
-///
-/// [C++0x] 'align' '(' type-id ')'
-/// [C++0x] 'align' '(' assignment-expression ')'
-ExprResult Parser::ParseCXX0XAlignArgument(SourceLocation Start) {
-  if (isTypeIdInParens()) {
-    EnterExpressionEvaluationContext Unevaluated(Actions, Sema::Unevaluated);
-    SourceLocation TypeLoc = Tok.getLocation();
-    ParsedType Ty = ParseTypeName().get();
-    SourceRange TypeRange(Start, Tok.getLocation());
-    return Actions.ActOnUnaryExprOrTypeTraitExpr(TypeLoc, UETT_AlignOf, true,
-                                                Ty.getAsOpaquePtr(), TypeRange);
-  } else
-    return ParseConstantExpression();
+/// attribute-specifier-seq:
+///       attribute-specifier-seq[opt] attribute-specifier
+void Parser::ParseCXX0XAttributes(ParsedAttributesWithRange &attrs,
+                                  SourceLocation *endLoc) {
+  SourceLocation StartLoc = Tok.getLocation(), Loc;
+  if (!endLoc)
+    endLoc = &Loc;
+
+  do
+    ParseCXX0XAttributeSpecifier(attrs, endLoc);
+  while (isCXX0XAttributeSpecifier());
+
+  attrs.Range = SourceRange(StartLoc, *endLoc);
 }
 
 /// ParseMicrosoftAttributes - Parse a Microsoft attribute [Attr]

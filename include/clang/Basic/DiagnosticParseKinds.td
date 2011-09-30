@@ -64,11 +64,14 @@ def ext_ms_enum_fixed_underlying_type : Extension<
   InGroup<Microsoft>;
 
 def ext_c1x_generic_selection : Extension<
-  "generic selections are a C1X-specific feature">;
+  "generic selections are a C1X-specific feature">, InGroup<C1X>;
 def err_duplicate_default_assoc : Error<
   "duplicate default generic association">;
 def note_previous_default_assoc : Note<
   "previous default generic association is here">;
+
+def ext_c1x_alignas : Extension<
+  "_Alignas is a C1X-specific feature">, InGroup<C1X>;
 
 def ext_gnu_indirect_goto : Extension<
   "use of GNU indirect-goto extension">, InGroup<GNU>;
@@ -259,7 +262,7 @@ def err_unexected_colon_in_nested_name_spec : Error<
 def err_bool_redeclaration : Error<
   "redeclaration of C++ built-in type 'bool'">;
 def ext_c1x_static_assert : Extension<
-  "_Static_assert is a C1X-specific feature">;
+  "_Static_assert is a C1X-specific feature">, InGroup<C1X>;
 
 /// Objective-C parser diagnostics
 def err_expected_minus_or_plus : Error<

@@ -2222,7 +2222,7 @@ public:
 
   bool CanUseDecl(NamedDecl *D);
   bool DiagnoseUseOfDecl(NamedDecl *D, SourceLocation Loc,
-                         const ObjCInterfaceDecl *UnknownObjCClass = 0);
+                         const ObjCInterfaceDecl *UnknownObjCClass=0);
   std::string getDeletedOrUnavailableSuffix(const FunctionDecl *FD);
   bool DiagnosePropertyAccessorMismatch(ObjCPropertyDecl *PD,
                                         ObjCMethodDecl *Getter,
@@ -5402,6 +5402,11 @@ public:
 
   /// FreeVisContext - Deallocate and null out VisContext.
   void FreeVisContext();
+
+  /// AddCFAuditedAttribute - Check whether we're currently within
+  /// '#pragma clang arc_cf_code_audited' and, if so, consider adding
+  /// the appropriate attribute.
+  void AddCFAuditedAttribute(Decl *D);
 
   /// AddAlignedAttr - Adds an aligned attribute to a particular declaration.
   void AddAlignedAttr(SourceRange AttrRange, Decl *D, Expr *E);
