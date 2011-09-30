@@ -256,6 +256,14 @@ ExprResult Sema::BuildObjCNumericLiteral(SourceLocation AtLoc, Expr *Number) {
   if (!Method)
     return ExprError();
   
+  // Convert the number to the type that the parameter expects.
+  QualType ElementT = Method->param_begin()[0]->getType();
+  ExprResult ConvertedNumber = PerformImplicitConversion(Number, ElementT,
+                                                         AA_Sending);
+  if (ConvertedNumber.isInvalid())
+    return ExprError();
+  Number = ConvertedNumber.get();
+  
   // Construct the literal.
   QualType Ty
     = Context.getObjCObjectPointerType(

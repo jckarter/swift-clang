@@ -74,18 +74,14 @@ llvm::Value *CodeGenFunction::EmitObjCNumericLiteral(const ObjCNumericLiteral *E
   ParmVarDecl *argDecl = *Method->param_begin();
   QualType ArgQT = argDecl->getType().getUnqualifiedType();
   RValue RV = EmitAnyExpr(NL);
-  // FIXME. We may have to do appropriate cast for other builtin types too.
-  if (const BuiltinType *BT = NL->getType()->getAs<BuiltinType>())
-    if (BT->getKind() == BuiltinType::Bool)
-      RV = RValue::get(Builder.CreateZExt(RV.getScalarVal(), 
-                                          ConvertType(ArgQT)));
-
   CallArgList Args;
   Args.add(RV, ArgQT);
 
-  RValue result = Runtime.GenerateMessageSend(*this, ReturnValueSlot(), ResultType,
-                                              Sel, Receiver, Args, NSNumberDecl, Method);
-  return AdjustRelatedResultType(*this, E, Method, result).getScalarVal();
+  RValue result = Runtime.GenerateMessageSend(*this, ReturnValueSlot(), 
+                                              ResultType, Sel, Receiver, Args, 
+                                              NSNumberDecl, Method);
+  return Builder.CreateBitCast(result.getScalarVal(), 
+                               ConvertType(E->getType()));
 }
 
 llvm::Value *CodeGenFunction::EmitObjCCollectionLiteral(const Expr *E,
