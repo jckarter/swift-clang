@@ -2417,8 +2417,15 @@ ExprResult Parser::ParseObjCArrayLiteral(SourceLocation AtLoc) {
       SkipUntil(tok::r_square);
       return move(Res);
     }    
-    ElementExprs.push_back(Res.release());
     
+    // Parse the ellipsis that indicates a pack expansion.
+    if (Tok.is(tok::ellipsis))
+      Res = Actions.ActOnPackExpansion(Res.get(), ConsumeToken());    
+    if (Res.isInvalid())
+      return true;
+
+    ElementExprs.push_back(Res.release());
+
     if (Tok.is(tok::comma))
       ConsumeToken(); // Eat the ','.
     else if (Tok.isNot(tok::r_square))

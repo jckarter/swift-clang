@@ -1,4 +1,4 @@
-// RUN: %clang_cc1 -fsyntax-only -verify %s
+// RUN: %clang_cc1 -fsyntax-only -verify -std=c++0x %s
 
 typedef unsigned char BOOL;
 
@@ -52,3 +52,17 @@ template void test_dictionary_literals(id, NSArray*);
 template void test_dictionary_literals(NSArray*, id);
 template void test_dictionary_literals(int, id); // expected-note{{in instantiation of function template specialization 'test_dictionary_literals<int, id>' requested here}}
 template void test_dictionary_literals(id, int); // expected-note{{in instantiation of function template specialization 'test_dictionary_literals<id, int>' requested here}}
+
+template<typename ...Args>
+void test_bad_variadic_array_literal(Args ...args) {
+  id arr1 = @[ args ]; // expected-error{{initializer contains unexpanded parameter pack 'args'}}
+}
+
+template<typename ...Args>
+void test_variadic_array_literal(Args ...args) {
+  id arr1 = @[ args... ]; // expected-error{{members of objective-c collection literals must be objects}}
+}
+template void test_variadic_array_literal(id);
+template void test_variadic_array_literal(id, NSArray*);
+template void test_variadic_array_literal(id, int, NSArray*); // expected-note{{in instantiation of function template specialization 'test_variadic_array_literal<id, int, NSArray *>' requested here}}
+
