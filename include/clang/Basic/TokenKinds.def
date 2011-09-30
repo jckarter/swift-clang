@@ -539,7 +539,6 @@ OBJC2_AT_KEYWORD(optional)
 OBJC2_AT_KEYWORD(synthesize)
 OBJC2_AT_KEYWORD(dynamic)
 
-// probably need OBJC3_AT_KEYWORD, but prototyping for now XXX_PCB
 OBJC2_AT_KEYWORD(__yes)
 OBJC2_AT_KEYWORD(__no)
 

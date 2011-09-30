@@ -272,6 +272,23 @@ ExprResult Sema::BuildObjCNumericLiteral(SourceLocation AtLoc, Expr *Number) {
            new (Context) ObjCNumericLiteral(Number, Ty, Method, AtLoc));
 }
 
+ExprResult Sema::ActOnObjCBoolLiteral(SourceLocation AtLoc, 
+                                      SourceLocation ValueLoc,
+                                      bool Value) {
+  ExprResult Inner;
+  if (getLangOptions().CPlusPlus) {
+    Inner = ActOnCXXBoolLiteral(ValueLoc, Value? tok::kw_true : tok::kw_false);
+  } else {
+    // C doesn't actually have a way to represent literal values of type 
+    // _Bool. So, we'll use 0/1 and implicit cast to _Bool.
+    Inner = ActOnIntegerConstant(ValueLoc, Value? 1 : 0);
+    Inner = ImpCastExprToType(Inner.get(), Context.BoolTy, 
+                              CK_IntegralToBoolean);
+  }
+  
+  return BuildObjCNumericLiteral(AtLoc, Inner.get());
+}
+
 /// \brief Check that the given expression is a valid element of an Objective-C
 /// collection literal.
 static ExprResult CheckObjCCollectionLiteralElement(Sema &S, Expr *Element, 

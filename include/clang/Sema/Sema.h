@@ -3372,6 +3372,8 @@ public:
   /// numeric literal expression. Type of the expression will be "NSNumber *"
   /// or "id" if NSNumber is unavailable.
   ExprResult BuildObjCNumericLiteral(SourceLocation AtLoc, Expr *Number);
+  ExprResult ActOnObjCBoolLiteral(SourceLocation AtLoc, SourceLocation ValueLoc,
+                                  bool Value);
   ExprResult BuildObjCArrayLiteral(SourceRange SR, MultiExprArg Elements);
   ExprResult BuildObjCDictionaryLiteral(SourceRange SR,                                         
                                         std::pair<Expr *, Expr*> *Elements,

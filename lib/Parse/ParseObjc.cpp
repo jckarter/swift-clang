@@ -1868,9 +1868,9 @@ ExprResult Parser::ParseObjCAtExpression(SourceLocation AtLoc) {
     return ParsePostfixExpressionSuffix(ParseObjCNumericLiteral(AtLoc));
 
   case tok::kw_true:  // Objective-C++, etc.
-    return ParsePostfixExpressionSuffix(ParseObjCBooleanLiteral(AtLoc, 1));
+    return ParsePostfixExpressionSuffix(ParseObjCBooleanLiteral(AtLoc, true));
   case tok::kw_false: // Objective-C++, etc.
-    return ParsePostfixExpressionSuffix(ParseObjCBooleanLiteral(AtLoc, 0));
+    return ParsePostfixExpressionSuffix(ParseObjCBooleanLiteral(AtLoc, false));
     
   case tok::l_square:
     // Objective-C array literal
@@ -1892,9 +1892,11 @@ ExprResult Parser::ParseObjCAtExpression(SourceLocation AtLoc) {
     case tok::objc_selector:
       return ParsePostfixExpressionSuffix(ParseObjCSelectorExpression(AtLoc));
     case tok::objc___yes:
-        return ParsePostfixExpressionSuffix(ParseObjCBooleanLiteral(AtLoc, 1));
+        return ParsePostfixExpressionSuffix(ParseObjCBooleanLiteral(AtLoc, 
+                                                                    true));
     case tok::objc___no:
-        return ParsePostfixExpressionSuffix(ParseObjCBooleanLiteral(AtLoc, 0));
+        return ParsePostfixExpressionSuffix(ParseObjCBooleanLiteral(AtLoc,
+                                                                    false));
     default:
       return ExprError(Diag(AtLoc, diag::err_unexpected_at));
     }
@@ -2364,13 +2366,10 @@ ExprResult Parser::ParseObjCStringLiteral(SourceLocation AtLoc) {
 ///                        ;
 /// boolean-keyword: 'true' | 'false' | '__yes' | '__no'
 ///                        ;
-ExprResult Parser::ParseObjCBooleanLiteral(SourceLocation AtLoc, int ArgValue) {
+ExprResult Parser::ParseObjCBooleanLiteral(SourceLocation AtLoc, 
+                                           bool ArgValue) {
   SourceLocation EndLoc = ConsumeToken();             // consume the keyword.
-  ExprResult Lit(Actions.ActOnIntegerConstant(EndLoc, ArgValue));
-  // generate a cast to the correct argument type.
-  Lit = Actions.ImpCastExprToType(Lit.take(), Actions.Context.BoolTy,
-                                  CK_IntegralToBoolean);
-  return Owned(Actions.BuildObjCNumericLiteral(AtLoc, Lit.take()));
+  return Actions.ActOnObjCBoolLiteral(AtLoc, EndLoc, ArgValue);
 }
 
 /// ParseObjCCharacterLiteral -

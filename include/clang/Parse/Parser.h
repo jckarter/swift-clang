@@ -1362,7 +1362,7 @@ private:
   ExprResult ParseObjCStringLiteral(SourceLocation AtLoc);
   ExprResult ParseObjCCharacterLiteral(SourceLocation AtLoc);
   ExprResult ParseObjCNumericLiteral(SourceLocation AtLoc);
-  ExprResult ParseObjCBooleanLiteral(SourceLocation AtLoc, int ArgValue);
+  ExprResult ParseObjCBooleanLiteral(SourceLocation AtLoc, bool ArgValue);
   ExprResult ParseObjCArrayLiteral(SourceLocation AtLoc);
   ExprResult ParseObjCDictionaryLiteral(SourceLocation AtLoc);
   ExprResult ParseObjCEncodeExpression(SourceLocation AtLoc);
