@@ -2416,13 +2416,8 @@ ExprResult Parser::ParseObjCArrayLiteral(SourceLocation AtLoc) {
       // the enclosing expression.
       SkipUntil(tok::r_square);
       return move(Res);
-    }
-    Res = Actions.CheckObjCCollectionLiteralElement(Res.get());
-    if (Res.isUsable()) {
-      // We have a valid expression. Collect it in a vector so we can
-      // build the argument list.
-      ElementExprs.push_back(Res.release());
-    }
+    }    
+    ElementExprs.push_back(Res.release());
     
     if (Tok.is(tok::comma))
       ConsumeToken(); // Eat the ','.
@@ -2447,7 +2442,6 @@ ExprResult Parser::ParseObjCDictionaryLiteral(SourceLocation AtLoc) {
       SkipUntil(tok::r_brace);
       return move(KeyExpr);
     }
-    KeyExpr = Actions.CheckObjCCollectionLiteralElement(KeyExpr.get());
     
     if (Tok.is(tok::colon)) {
       ConsumeToken();
@@ -2463,14 +2457,10 @@ ExprResult Parser::ParseObjCDictionaryLiteral(SourceLocation AtLoc) {
       SkipUntil(tok::r_brace);
       return move(ValueExpr);
     }
-     ValueExpr = Actions.CheckObjCCollectionLiteralElement(ValueExpr.get());
     
-    if (KeyExpr.isUsable() && ValueExpr.isUsable()) {
-      // We have a valid expression. Collect it in a vector so we can
-      // build the argument list.
-      KeyValueExprs.push_back(std::make_pair(KeyExpr.take(), 
-                                             ValueExpr.take()));
-    }
+    // We have a valid expression. Collect it in a vector so we can
+    // build the argument list.
+    KeyValueExprs.push_back(std::make_pair(KeyExpr.take(), ValueExpr.take()));
     
     if (Tok.is(tok::comma))
       ConsumeToken(); // Eat the ','.

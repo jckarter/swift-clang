@@ -7755,19 +7755,6 @@ TreeTransform<Derived>::TransformObjCArrayLiteral(ObjCArrayLiteral *E) {
   if (!getDerived().AlwaysRebuild() && !ArgChanged)
     return Owned(E);
   
-  // Make a second pass over the elements to make sure they are valid collection
-  // literal elements.
-  // FIXME: DPG is not happy with this. I may want to move this checking into
-  // the container-literal building routines.
-  for (unsigned I = 0, N = Elements.size(); I != N; ++I) {
-    ExprResult Checked
-      = getSema().CheckObjCCollectionLiteralElement(Elements[I]);
-    if (Checked.isInvalid())
-      return ExprError();
-    
-    Elements[I] = Checked.get();
-  }
-  
   return getDerived().RebuildObjCArrayLiteral(E->getSourceRange(),
                                               Elements.data(),
                                               Elements.size());
@@ -7787,20 +7774,12 @@ TreeTransform<Derived>::TransformObjCDictionaryLiteral(
     if (Key.isInvalid())
       return ExprError();
     
-    Key = getSema().CheckObjCCollectionLiteralElement(Key.get());
-    if (Key.isInvalid())
-      return ExprError();
-    
     if (Key.get() != E->getKeyValueElement(I).Key)
       ArgChanged = true;
     
     // Transform and check value.
     ExprResult Value
       = getDerived().TransformExpr(E->getKeyValueElement(I).Value);
-    if (Value.isInvalid())
-      return ExprError();
-    
-    Value = getSema().CheckObjCCollectionLiteralElement(Value.get());
     if (Value.isInvalid())
       return ExprError();
     

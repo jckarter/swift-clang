@@ -264,13 +264,16 @@ ExprResult Sema::BuildObjCNumericLiteral(SourceLocation AtLoc, Expr *Number) {
            new (Context) ObjCNumericLiteral(Number, Ty, Method, AtLoc));
 }
 
-ExprResult Sema::CheckObjCCollectionLiteralElement(Expr *Element) {
+/// \brief Check that the given expression is a valid element of an Objective-C
+/// collection literal.
+static ExprResult CheckObjCCollectionLiteralElement(Sema &S, Expr *Element, 
+                                                    QualType T) {
   // If the expression is type-dependent, there's nothing for us to do.
   if (Element->isTypeDependent())
     return Element;
   
   // Perform lvalue-to-rvalue conversion.
-  ExprResult Result = DefaultLvalueConversion(Element);
+  ExprResult Result = S.DefaultLvalueConversion(Element);
   if (Result.isInvalid())
     return ExprError();
   Element = Result.get();
@@ -278,9 +281,14 @@ ExprResult Sema::CheckObjCCollectionLiteralElement(Expr *Element) {
   // Make sure that we have an Objective-C pointer type.
   if (!Element->getType()->isObjCObjectPointerType()) {
     // FIXME: Recover properly for all of the obvious cases.
-    Diag(Element->getLocStart(), diag::err_invalid_collection_element);
+    S.Diag(Element->getLocStart(), diag::err_invalid_collection_element);
     return ExprError();
   }
+  
+  // Make sure that the element has the type that the container factory 
+  // function expects. 
+  if (!S.Context.hasSameType(T, Element->getType()))
+    Result = S.PerformImplicitConversion(Element, T, Sema::AA_Sending);
   
   return Result;
 }
@@ -320,23 +328,21 @@ ExprResult Sema::BuildObjCArrayLiteral(SourceRange SR, MultiExprArg Elements) {
   if (const PointerType *Ptr = T->getAs<PointerType>())
     T = Ptr->getPointeeType();
   else {
-    // FIXME: Diagnostic this error!
+    // FIXME: Diagnose this error!
     return ExprError();
   }
 
+  // Check that each of the elements provided is valid in a collection literal,
+  // performing conversions as necessary.
   Expr **ElementsBuffer = Elements.get();
   for (unsigned I = 0, N = Elements.size(); I != N; ++I) {
-    // Convert this element to the element type of the array parameter.
-    // We know this works because we validated the signature, above. 
-    if (!ElementsBuffer[I]->isTypeDependent() &&
-        !Context.hasSameType(T, ElementsBuffer[I]->getType())) {
-      ExprResult Converted = ImpCastExprToType(ElementsBuffer[I], T, 
-                                               CK_BitCast);
-      if (Converted.isInvalid())
-        return ExprError();
-      
-      ElementsBuffer[I] = Converted.get();
-    }
+    ExprResult Converted = CheckObjCCollectionLiteralElement(*this,
+                                                             ElementsBuffer[I],
+                                                             T);
+    if (Converted.isInvalid())
+      return ExprError();
+    
+    ElementsBuffer[I] = Converted.get();
   }
     
   QualType Ty 
@@ -382,14 +388,12 @@ ExprResult Sema::BuildObjCDictionaryLiteral(SourceRange SR,
     }
   }
   
-  // FIXME: Tons of redundancy below that needs some refactoring to fix.
-  
-  // Dig out the type that all objects should be converted to.
-  QualType ObjectT = DictionaryWithObjectsMethod->param_begin()[0]->getType();
-  if (const PointerType *Ptr = ObjectT->getAs<PointerType>())
-    ObjectT = Ptr->getPointeeType();
+  // Dig out the type that all values should be converted to.
+  QualType ValueT = DictionaryWithObjectsMethod->param_begin()[0]->getType();
+  if (const PointerType *Ptr = ValueT->getAs<PointerType>())
+    ValueT = Ptr->getPointeeType();
   else {
-    // FIXME: Diagnostic this error!
+    // FIXME: Diagnose this error!
     return ExprError();
   }
 
@@ -398,32 +402,27 @@ ExprResult Sema::BuildObjCDictionaryLiteral(SourceRange SR,
   if (const PointerType *Ptr = KeyT->getAs<PointerType>())
     KeyT = Ptr->getPointeeType();
   else {
-    // FIXME: Diagnostic this error!
+    // FIXME: Diagnose this error!
     return ExprError();
   }
 
+  // Check that each of the keys and values provided is valid in a collection 
+  // literal, performing conversions as necessary.
   for (unsigned I = 0, N = NumElements; I != N; ++I) {
-    // Convert this expression to the key type of the array parameter.
-    if (!Elements[I].first->isTypeDependent() &&
-        !Context.hasSameType(KeyT, Elements[I].first->getType())) {
-      ExprResult Converted
-        = ImpCastExprToType(Elements[I].first, KeyT, CK_BitCast);
-      if (Converted.isInvalid())
-        return ExprError();
-      
-      Elements[I].first = Converted.get();
-    }
+    // Check the key.
+    ExprResult Key = CheckObjCCollectionLiteralElement(*this, Elements[I].first, 
+                                                       KeyT);
+    if (Key.isInvalid())
+      return ExprError();
     
-    // Convert this expression to the object type of the array parameter.
-    if (!Elements[I].second->isTypeDependent() &&
-        !Context.hasSameType(ObjectT, Elements[I].second->getType())) {
-      ExprResult Converted
-      = ImpCastExprToType(Elements[I].second, ObjectT, CK_BitCast);
-      if (Converted.isInvalid())
-        return ExprError();
-      
-      Elements[I].second = Converted.get();
-    }
+    // Check the value.
+    ExprResult Value
+      = CheckObjCCollectionLiteralElement(*this, Elements[I].second, ValueT);
+    if (Value.isInvalid())
+      return ExprError();
+    
+    Elements[I].first = Key.get();
+    Elements[I].second = Value.get();
   }
 
   

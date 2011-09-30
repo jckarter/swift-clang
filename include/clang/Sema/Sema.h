@@ -3373,7 +3373,6 @@ public:
   /// or "id" if NSNumber is unavailable.
   ExprResult BuildObjCNumericLiteral(SourceLocation AtLoc, Expr *Number);
   ExprResult BuildObjCArrayLiteral(SourceRange SR, MultiExprArg Elements);
-  ExprResult CheckObjCCollectionLiteralElement(Expr *Element);
   ExprResult BuildObjCDictionaryLiteral(SourceRange SR,                                         
                                         std::pair<Expr *, Expr*> *Elements,
                                         unsigned NumElements);
