@@ -91,55 +91,46 @@ llvm::Value *CodeGenFunction::EmitObjCCollectionLiteral(const Expr *E,
   const ObjCArrayLiteral *ALE = dyn_cast<ObjCArrayLiteral>(E);
   if (!ALE)
     DLE = cast<ObjCDictionaryLiteral>(E);
+  
+  // Compute the type of the array we're initializing.
   uint64_t NumElements = 
     ALE ? ALE->getNumElements() : DLE->getNumElements();
-  
-  // Initialize the argument array(s).
   llvm::APInt APNumElements(Context.getTypeSize(Context.getSizeType()),
                             NumElements);
+  QualType ElementType = Context.getObjCIdType().withConst();
   QualType ElementArrayType 
-    = Context.getConstantArrayType(Context.getObjCIdType(), APNumElements,
+    = Context.getConstantArrayType(ElementType, APNumElements, 
                                    ArrayType::Normal, /*IndexTypeQuals=*/0);
-    
-  llvm::Value *Objects = CreateMemTemp(ElementArrayType, "objects");
-  if (getLangOptions().ObjCAutoRefCount) {
-    CleanupKind CleanupKind = getARCCleanupKind();
-    pushDestroy(CleanupKind, Objects, ElementArrayType, 
-                CodeGenFunction::destroyARCStrongImprecise,
-                CleanupKind & EHCleanup);    
-  }
-  
+
+  // Allocate the temporary array(s).
+  llvm::Value *Objects = CreateMemTemp(ElementArrayType, "objects");  
   llvm::Value *Keys = 0;
-  if (DLE) {
+  if (DLE)
     Keys = CreateMemTemp(ElementArrayType, "keys");
-    
-    if (getLangOptions().ObjCAutoRefCount) {
-      CleanupKind CleanupKind = getARCCleanupKind();
-      pushDestroy(CleanupKind, Keys, ElementArrayType, 
-                  CodeGenFunction::destroyARCStrongImprecise,
-                  CleanupKind & EHCleanup);    
-    }
-  }
   
+  // Perform the actual initialialization of the array(s).
   for (uint64_t i = 0; i < NumElements; i++) {
     if (ALE) {
+      // Emit the initializer.
       const Expr *Rhs = ALE->getElement(i);
       LValue LV = LValue::MakeAddr(Builder.CreateStructGEP(Objects, i),
-                                   Rhs->getType(),
+                                   ElementType,
                                    Context.getTypeAlign(Rhs->getType()),
                                    Context);
       EmitScalarInit(Rhs, /*D=*/0, LV, /*capturedByInit=*/false);
-    } else {
+    } else {      
+      // Emit the key initializer.
       const Expr *Key = DLE->getKeyValueElement(i).Key;
       LValue KeyLV = LValue::MakeAddr(Builder.CreateStructGEP(Keys, i),
-                                      Key->getType(),
+                                      ElementType,
                                       Context.getTypeAlign(Key->getType()),
                                       Context);
       EmitScalarInit(Key, /*D=*/0, KeyLV, /*capturedByInit=*/false);
 
+      // Emit the value initializer.
       const Expr *Value = DLE->getKeyValueElement(i).Value;  
-      LValue ValueLV = LValue::MakeAddr(Builder.CreateStructGEP(Objects, i),
-                                        Value->getType(),
+      LValue ValueLV = LValue::MakeAddr(Builder.CreateStructGEP(Objects, i), 
+                                        ElementType,
                                         Context.getTypeAlign(Value->getType()),
                                         Context);
       EmitScalarInit(Value, /*D=*/0, ValueLV, /*capturedByInit=*/false);
