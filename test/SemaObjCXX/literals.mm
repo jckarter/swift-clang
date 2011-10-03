@@ -111,4 +111,29 @@ void test_bad_variadic_dictionary_literal(Args ...args) {
   id dict = @{ args : @17 }; // expected-error{{initializer contains unexpanded parameter pack 'args'}}
 }
 
-// FIXME: Handle key/value pairs that are pack expansions.
+// Test array literal pack expansions. 
+template<typename T, typename U>
+struct pair {
+  T first;
+  U second;
+};
+
+template<typename T, typename ...Ts, typename ... Us>
+void test_variadic_dictionary_expansion(T t, pair<Ts, Us>... key_values) {
+  id dict = @{ 
+    t : key_values.second ..., // expected-error{{collection element of type 'int' is not an Objective-C object}}
+    key_values.first : key_values.second ..., // expected-error{{collection element of type 'float' is not an Objective-C object}}
+    key_values.second : t ...
+  };
+}
+
+template void test_variadic_dictionary_expansion(id, 
+                                                 pair<NSNumber*, id>,
+                                                 pair<id, ConvertibleTo<id>>);
+template void test_variadic_dictionary_expansion(NSNumber *, // expected-note{{in instantiation of function template specialization}}
+                                                 pair<NSNumber*, int>,
+                                                 pair<id, ConvertibleTo<id>>);
+template void test_variadic_dictionary_expansion(NSNumber *, // expected-note{{in instantiation of function template specialization}}
+                                                 pair<NSNumber*, id>,
+                                                 pair<float, ConvertibleTo<id>>);
+

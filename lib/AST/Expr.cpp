@@ -3328,45 +3328,66 @@ ObjCArrayLiteral *ObjCArrayLiteral::CreateEmpty(ASTContext &C,
 }
 
 ObjCDictionaryLiteral::ObjCDictionaryLiteral(
-                                       ArrayRef< std::pair<Expr *, Expr*> > VK, 
+                                             ArrayRef<ObjCDictionaryElement> VK, 
+                                             bool HasPackExpansions,
                                              QualType T, ObjCMethodDecl *method,
                                              SourceRange SR)
   : Expr(ObjCDictionaryLiteralClass, T, VK_RValue, OK_Ordinary, false, false,
          false, false),
-    NumElements(VK.size()), Range(SR), DictWithObjectsMethod(method)
+    NumElements(VK.size()), HasPackExpansions(HasPackExpansions), Range(SR), 
+    DictWithObjectsMethod(method)
 {
   KeyValuePair *KeyValues = getKeyValues();
+  ExpansionData *Expansions = getExpansionData();
   for (unsigned I = 0; I < NumElements; I++) {
-    if (VK[I].first->isTypeDependent() || VK[I].first->isValueDependent() ||
-        VK[I].second->isTypeDependent() || VK[I].second->isValueDependent())
+    if (VK[I].Key->isTypeDependent() || VK[I].Key->isValueDependent() ||
+        VK[I].Value->isTypeDependent() || VK[I].Value->isValueDependent())
       ExprBits.ValueDependent = true;
-    if (VK[I].first->isInstantiationDependent() ||
-        VK[I].second->isInstantiationDependent())
+    if (VK[I].Key->isInstantiationDependent() ||
+        VK[I].Value->isInstantiationDependent())
       ExprBits.InstantiationDependent = true;
-    if (VK[I].first->containsUnexpandedParameterPack() ||
-        VK[I].second->containsUnexpandedParameterPack())
+    if (VK[I].EllipsisLoc.isInvalid() &&
+        (VK[I].Key->containsUnexpandedParameterPack() ||
+         VK[I].Value->containsUnexpandedParameterPack()))
       ExprBits.ContainsUnexpandedParameterPack = true;
 
-    KeyValues[I].Key = VK[I].first;
-    KeyValues[I].Value = VK[I].second; 
+    KeyValues[I].Key = VK[I].Key;
+    KeyValues[I].Value = VK[I].Value; 
+    if (Expansions) {
+      Expansions[I].EllipsisLoc = VK[I].EllipsisLoc;
+      if (VK[I].NumExpansions)
+        Expansions[I].NumExpansionsPlusOne = *VK[I].NumExpansions + 1;
+      else
+        Expansions[I].NumExpansionsPlusOne = 0;
+    }
   }
 }
 
 ObjCDictionaryLiteral *
 ObjCDictionaryLiteral::Create(ASTContext &C,
-                              ArrayRef< std::pair<Expr *, Expr*> > VK, 
+                              ArrayRef<ObjCDictionaryElement> VK, 
+                              bool HasPackExpansions,
                               QualType T, ObjCMethodDecl *method,
                               SourceRange SR) {
+  unsigned ExpansionsSize = 0;
+  if (HasPackExpansions)
+    ExpansionsSize = sizeof(ExpansionData) * VK.size();
+    
   void *Mem = C.Allocate(sizeof(ObjCDictionaryLiteral) + 
-                         sizeof(KeyValuePair) * VK.size());
-  return new (Mem) ObjCDictionaryLiteral(VK, T, method, SR);
+                         sizeof(KeyValuePair) * VK.size() + ExpansionsSize);
+  return new (Mem) ObjCDictionaryLiteral(VK, HasPackExpansions, T, method, SR);
 }
 
 ObjCDictionaryLiteral *
-ObjCDictionaryLiteral::CreateEmpty(ASTContext &C, unsigned NumElements) {
+ObjCDictionaryLiteral::CreateEmpty(ASTContext &C, unsigned NumElements,
+                                   bool HasPackExpansions) {
+  unsigned ExpansionsSize = 0;
+  if (HasPackExpansions)
+    ExpansionsSize = sizeof(ExpansionData) * NumElements;
   void *Mem = C.Allocate(sizeof(ObjCDictionaryLiteral) + 
-                         sizeof(KeyValuePair) * NumElements);
-  return new (Mem) ObjCDictionaryLiteral(EmptyShell(), NumElements);
+                         sizeof(KeyValuePair) * NumElements + ExpansionsSize);
+  return new (Mem) ObjCDictionaryLiteral(EmptyShell(), NumElements, 
+                                         HasPackExpansions);
 }
 
 

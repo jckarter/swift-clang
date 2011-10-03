@@ -519,7 +519,7 @@ ExprResult Sema::BuildObjCArrayLiteral(SourceRange SR, MultiExprArg Elements) {
 }
 
 ExprResult Sema::BuildObjCDictionaryLiteral(SourceRange SR, 
-                                            std::pair<Expr *, Expr*> *Elements,
+                                            ObjCDictionaryElement *Elements,
                                             unsigned NumElements) {
   // Look up the NSDictionary class, if we haven't done so already.
   if (!NSDictionaryDecl) {
@@ -607,21 +607,36 @@ ExprResult Sema::BuildObjCDictionaryLiteral(SourceRange SR,
 
   // Check that each of the keys and values provided is valid in a collection 
   // literal, performing conversions as necessary.
+  bool HasPackExpansions = false;
   for (unsigned I = 0, N = NumElements; I != N; ++I) {
     // Check the key.
-    ExprResult Key = CheckObjCCollectionLiteralElement(*this, Elements[I].first, 
+    ExprResult Key = CheckObjCCollectionLiteralElement(*this, Elements[I].Key, 
                                                        KeyT);
     if (Key.isInvalid())
       return ExprError();
     
     // Check the value.
     ExprResult Value
-      = CheckObjCCollectionLiteralElement(*this, Elements[I].second, ValueT);
+      = CheckObjCCollectionLiteralElement(*this, Elements[I].Value, ValueT);
     if (Value.isInvalid())
       return ExprError();
     
-    Elements[I].first = Key.get();
-    Elements[I].second = Value.get();
+    Elements[I].Key = Key.get();
+    Elements[I].Value = Value.get();
+    
+    if (Elements[I].EllipsisLoc.isInvalid())
+      continue;
+    
+    if (!Elements[I].Key->containsUnexpandedParameterPack() &&
+        !Elements[I].Value->containsUnexpandedParameterPack()) {
+      Diag(Elements[I].EllipsisLoc, 
+           diag::err_pack_expansion_without_parameter_packs)
+        << SourceRange(Elements[I].Key->getLocStart(),
+                       Elements[I].Value->getLocEnd());
+      return ExprError();
+    }
+    
+    HasPackExpansions = true;
   }
 
   
@@ -632,6 +647,7 @@ ExprResult Sema::BuildObjCDictionaryLiteral(SourceRange SR,
            ObjCDictionaryLiteral::Create(Context, 
                                          llvm::makeArrayRef(Elements, 
                                                             NumElements),
+                                         HasPackExpansions,
                                          Ty, 
                                          DictionaryWithObjectsMethod, SR));
 }

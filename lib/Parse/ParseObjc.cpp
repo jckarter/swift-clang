@@ -2432,7 +2432,7 @@ ExprResult Parser::ParseObjCArrayLiteral(SourceLocation AtLoc) {
 }
 
 ExprResult Parser::ParseObjCDictionaryLiteral(SourceLocation AtLoc) {
-  SmallVector<std::pair<Expr *, Expr*>, 4> KeyValueExprs; // array elements.
+  SmallVector<ObjCDictionaryElement, 4> Elements; // dictionary elements.
   ConsumeBrace(); // consume the l_square.
   while (Tok.isNot(tok::r_brace)) {
     // Parse the comma separated key : value expressions.
@@ -2460,9 +2460,17 @@ ExprResult Parser::ParseObjCDictionaryLiteral(SourceLocation AtLoc) {
       return move(ValueExpr);
     }
     
+    // Parse the ellipsis that designates this as a pack expansion.
+    SourceLocation EllipsisLoc;
+    if (Tok.is(tok::ellipsis) && getLang().CPlusPlus)
+      EllipsisLoc = ConsumeToken();
+    
     // We have a valid expression. Collect it in a vector so we can
     // build the argument list.
-    KeyValueExprs.push_back(std::make_pair(KeyExpr.take(), ValueExpr.take()));
+    ObjCDictionaryElement Element = { 
+      KeyExpr.get(), ValueExpr.get(), EllipsisLoc, llvm::Optional<unsigned>()
+    };
+    Elements.push_back(Element);
     
     if (Tok.is(tok::comma))
       ConsumeToken(); // Eat the ','.
@@ -2473,8 +2481,8 @@ ExprResult Parser::ParseObjCDictionaryLiteral(SourceLocation AtLoc) {
   
   // Create the ObjCDictionaryLiteral.
   return Owned(Actions.BuildObjCDictionaryLiteral(SourceRange(AtLoc, EndLoc),
-                                                  KeyValueExprs.data(),
-                                                  KeyValueExprs.size()));
+                                                  Elements.data(),
+                                                  Elements.size()));
 }
 
 ///    objc-encode-expression:

@@ -26,6 +26,7 @@
 #include "clang/Sema/TypoCorrection.h"
 #include "clang/Sema/Weak.h"
 #include "clang/AST/Expr.h"
+#include "clang/AST/ExprObjC.h"
 #include "clang/AST/DeclarationName.h"
 #include "clang/AST/ExternalASTSource.h"
 #include "clang/AST/TypeLoc.h"
@@ -3377,8 +3378,9 @@ public:
   ExprResult ActOnObjCBoolLiteral(SourceLocation AtLoc, SourceLocation ValueLoc,
                                   bool Value);
   ExprResult BuildObjCArrayLiteral(SourceRange SR, MultiExprArg Elements);
+    
   ExprResult BuildObjCDictionaryLiteral(SourceRange SR,                                         
-                                        std::pair<Expr *, Expr*> *Elements,
+                                        ObjCDictionaryElement *Elements,
                                         unsigned NumElements);
  
   ExprResult BuildObjCEncodeExpression(SourceLocation AtLoc,

@@ -805,10 +805,17 @@ void ASTStmtReader::VisitObjCDictionaryLiteral(ObjCDictionaryLiteral *E) {
   VisitExpr(E);
   unsigned NumElements = Record[Idx++];
   assert(NumElements == E->getNumElements() && "Wrong number of elements");
+  bool HasPackExpansions = Record[Idx++];
+  assert(HasPackExpansions == E->HasPackExpansions &&"Pack expansion mismatch");
   ObjCDictionaryLiteral::KeyValuePair *KeyValues = E->getKeyValues();
+  ObjCDictionaryLiteral::ExpansionData *Expansions = E->getExpansionData();
   for (unsigned I = 0; I != NumElements; ++I) {
     KeyValues[I].Key = Reader.ReadSubExpr();
     KeyValues[I].Value = Reader.ReadSubExpr();
+    if (HasPackExpansions) {
+      Expansions[I].EllipsisLoc = ReadSourceLocation(Record, Idx);
+      Expansions[I].NumExpansionsPlusOne = Record[Idx++];
+    }
   }
   E->DictWithObjectsMethod = ReadDeclAs<ObjCMethodDecl>(Record, Idx);
   E->Range = ReadSourceRange(Record, Idx);
@@ -1768,7 +1775,8 @@ Stmt *ASTReader::ReadStmtFromStream(Module &F) {
       break;
     case EXPR_OBJC_DICTIONARY_LITERAL:
       S = ObjCDictionaryLiteral::CreateEmpty(Context,
-                                        Record[ASTStmtReader::NumExprFields]);
+            Record[ASTStmtReader::NumExprFields],
+            Record[ASTStmtReader::NumExprFields + 1]);
       break;
     case EXPR_OBJC_ENCODE:
       S = new (Context) ObjCEncodeExpr(Empty);

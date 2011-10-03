@@ -159,54 +159,123 @@ public:
   friend class ASTStmtReader;
 };
 
+/// \brief An element in an Objective-C dictionary literal.
+///
+struct ObjCDictionaryElement {
+  /// \brief The key for the dictionary element.
+  Expr *Key;
+  
+  /// \brief The value of the dictionary element.
+  Expr *Value;
+  
+  /// \brief The location of the ellipsis, if this is a pack expansion.
+  SourceLocation EllipsisLoc;
+  
+  /// \brief The number of elements this pack expansion will expand to, if
+  /// this is a pack expansion and is known.
+  llvm::Optional<unsigned> NumExpansions;
+
+  /// \brief Determines whether this dictionary element is a pack expansion.
+  bool isPackExpansion() const { return EllipsisLoc.isValid(); }
+};
+
 /// ObjCDictionaryLiteral - AST node to represent objective-c dictionary 
 /// literals; as in:  @{@"name" : NSUserName(), @"date" : [NSDate date] };
 class ObjCDictionaryLiteral : public Expr {
-  typedef class KeyValuePair {
-  public:
+  /// \brief Key/value pair used to store the key and value of a given element.
+  ///
+  /// Objects of this type are stored directly after the expression.
+  struct KeyValuePair {
     Expr *Key;
     Expr *Value;
-  } KeyValuePair;
-  unsigned NumElements;
+  };
+  
+  /// \brief Data that describes an element that is a pack expansion, used if any
+  /// of the elements in the dictionary literal are pack expansions.
+  struct ExpansionData {
+    /// \brief The location of the ellipsis, if this element is a pack
+    /// expansion.
+    SourceLocation EllipsisLoc;
+
+    /// \brief If non-zero, the number of elements that this pack
+    /// expansion will expand to (+1).
+    unsigned NumExpansionsPlusOne;
+  };
+
+  /// \brief The number of elements in this dictionary literal.
+  unsigned NumElements : 31;
+  
+  /// \brief Determine whether this dictionary literal has any pack expansions.
+  ///
+  /// If the dictionary literal has pack expansions, then there will
+  /// be an array of pack expansion data following the array of
+  /// key/value pairs, which provide the locations of the ellipses (if
+  /// any) and number of elements in the expansion (if known). If
+  /// there are no pack expansions, we optimize away this storage.
+  unsigned HasPackExpansions : 1;
+  
   SourceRange Range;
   ObjCMethodDecl *DictWithObjectsMethod;
     
-  ObjCDictionaryLiteral(ArrayRef< std::pair<Expr *, Expr*> > VK, 
+  ObjCDictionaryLiteral(ArrayRef<ObjCDictionaryElement> VK, 
+                        bool HasPackExpansions,
                         QualType T, ObjCMethodDecl *method,
                         SourceRange SR);
 
-  explicit ObjCDictionaryLiteral(EmptyShell Empty, unsigned NumElements)
-    : Expr(ObjCDictionaryLiteralClass, Empty), NumElements(NumElements) {}
+  explicit ObjCDictionaryLiteral(EmptyShell Empty, unsigned NumElements,
+                                 bool HasPackExpansions)
+    : Expr(ObjCDictionaryLiteralClass, Empty), NumElements(NumElements),
+      HasPackExpansions(HasPackExpansions) {}
 
-public:
-  static ObjCDictionaryLiteral *Create(ASTContext &C,
-                                       ArrayRef< std::pair<Expr *, Expr*> > VK, 
-                                       QualType T, ObjCMethodDecl *method,
-                                       SourceRange SR);
-  
-  static ObjCDictionaryLiteral *CreateEmpty(ASTContext &C, 
-                                            unsigned NumElements);
-  
   KeyValuePair *getKeyValues() {
     return reinterpret_cast<KeyValuePair *>(this + 1);
   }
-
+  
   const KeyValuePair *getKeyValues() const {
     return reinterpret_cast<const KeyValuePair *>(this + 1);
   }
 
+  ExpansionData *getExpansionData() {
+    if (!HasPackExpansions)
+      return 0;
+    
+    return reinterpret_cast<ExpansionData *>(getKeyValues() + NumElements);
+  }
+
+  const ExpansionData *getExpansionData() const {
+    if (!HasPackExpansions)
+      return 0;
+    
+    return reinterpret_cast<const ExpansionData *>(getKeyValues()+NumElements);
+  }
+
+public:
+  static ObjCDictionaryLiteral *Create(ASTContext &C,
+                                       ArrayRef<ObjCDictionaryElement> VK, 
+                                       bool HasPackExpansions,
+                                       QualType T, ObjCMethodDecl *method,
+                                       SourceRange SR);
+  
+  static ObjCDictionaryLiteral *CreateEmpty(ASTContext &C, 
+                                            unsigned NumElements,
+                                            bool HasPackExpansions);
+  
   /// getNumElements - Return number of elements of objective-c dictionary 
   /// literal.
   unsigned getNumElements() const { return NumElements; }
 
-  KeyValuePair getKeyValueElement(unsigned Index) {
+  ObjCDictionaryElement getKeyValueElement(unsigned Index) const {
     assert((Index < NumElements) && "Arg access out of range!");
-    return getKeyValues()[Index];
-  }
-
-  const KeyValuePair &getKeyValueElement(unsigned Index) const {
-    assert((Index < NumElements) && "Arg access out of range!");
-    return getKeyValues()[Index];
+    const KeyValuePair &KV = getKeyValues()[Index];
+    ObjCDictionaryElement Result = { KV.Key, KV.Value, SourceLocation(),
+                                     llvm::Optional<unsigned>() };
+    if (HasPackExpansions) {
+      const ExpansionData &Expansion = getExpansionData()[Index];
+      Result.EllipsisLoc = Expansion.EllipsisLoc;
+      if (Expansion.NumExpansionsPlusOne > 0)
+        Result.NumExpansions = Expansion.NumExpansionsPlusOne - 1;
+    }
+    return Result;
   }
     
   ObjCMethodDecl *getDictWithObjectsMethod() const
@@ -228,6 +297,7 @@ public:
   }
     
   friend class ASTStmtReader;
+  friend class ASTStmtWriter;
 };
 
 

@@ -1466,9 +1466,12 @@ void StmtPrinter::VisitObjCDictionaryLiteral(ObjCDictionaryLiteral *E) {
     if (I > 0)
       OS << ", ";
     
-    Visit(E->getKeyValueElement(I).Key);
+    ObjCDictionaryElement Element = E->getKeyValueElement(I);
+    Visit(Element.Key);
     OS << " : ";
-    Visit(E->getKeyValueElement(I).Value);
+    Visit(Element.Value);
+    if (Element.isPackExpansion())
+      OS << "...";
   }
   OS << " }";
 }

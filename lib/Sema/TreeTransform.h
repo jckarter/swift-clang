@@ -2153,7 +2153,7 @@ public:
   /// By default, performs semantic analysis to build the new expression.
   /// Subclasses may override this routine to provide different behavior.
   ExprResult RebuildObjCDictionaryLiteral(SourceRange Range,
-                                          std::pair<Expr *, Expr*> *Elements,
+                                          ObjCDictionaryElement *Elements,
                                           unsigned NumElements) {
     return getSema().BuildObjCDictionaryLiteral(Range, Elements, NumElements);
   }
@@ -7765,36 +7765,121 @@ ExprResult
 TreeTransform<Derived>::TransformObjCDictionaryLiteral(
                                                     ObjCDictionaryLiteral *E) {  
   // Transform each of the elements.
-  // FIXME: Some day, we're going to want to support pack expansions here.
-  llvm::SmallVector<std::pair<Expr *, Expr*>, 8> KeyValues;
+  llvm::SmallVector<ObjCDictionaryElement, 8> Elements;
   bool ArgChanged = false;
   for (unsigned I = 0, N = E->getNumElements(); I != N; ++I) {
+    ObjCDictionaryElement OrigElement = E->getKeyValueElement(I);
+    
+    if (OrigElement.isPackExpansion()) {
+      // This key/value element is a pack expansion.
+      SmallVector<UnexpandedParameterPack, 2> Unexpanded;
+      getSema().collectUnexpandedParameterPacks(OrigElement.Key, Unexpanded);
+      getSema().collectUnexpandedParameterPacks(OrigElement.Value, Unexpanded);
+      assert(!Unexpanded.empty() && "Pack expansion without parameter packs?");
+
+      // Determine whether the set of unexpanded parameter packs can
+      // and should be expanded.
+      bool Expand = true;
+      bool RetainExpansion = false;
+      llvm::Optional<unsigned> OrigNumExpansions = OrigElement.NumExpansions;
+      llvm::Optional<unsigned> NumExpansions = OrigNumExpansions;
+      SourceRange PatternRange(OrigElement.Key->getLocStart(),
+                               OrigElement.Value->getLocEnd());
+     if (getDerived().TryExpandParameterPacks(OrigElement.EllipsisLoc,
+                                               PatternRange,
+                                               Unexpanded,
+                                               Expand, RetainExpansion,
+                                               NumExpansions))
+        return ExprError();
+
+      if (!Expand) {
+        // The transform has determined that we should perform a simple
+        // transformation on the pack expansion, producing another pack 
+        // expansion.
+        Sema::ArgumentPackSubstitutionIndexRAII SubstIndex(getSema(), -1);
+        ExprResult Key = getDerived().TransformExpr(OrigElement.Key);
+        if (Key.isInvalid())
+          return ExprError();
+
+        if (Key.get() != OrigElement.Key)
+          ArgChanged = true;
+
+        ExprResult Value = getDerived().TransformExpr(OrigElement.Value);
+        if (Value.isInvalid())
+          return ExprError();
+        
+        if (Value.get() != OrigElement.Value)
+          ArgChanged = true;
+
+        ObjCDictionaryElement Expansion = { 
+          Key.get(), Value.get(), OrigElement.EllipsisLoc, NumExpansions
+        };
+        Elements.push_back(Expansion);
+        continue;
+      }
+
+      // Record right away that the argument was changed.  This needs
+      // to happen even if the array expands to nothing.
+      ArgChanged = true;
+      
+      // The transform has determined that we should perform an elementwise
+      // expansion of the pattern. Do so.
+      for (unsigned I = 0; I != *NumExpansions; ++I) {
+        Sema::ArgumentPackSubstitutionIndexRAII SubstIndex(getSema(), I);
+        ExprResult Key = getDerived().TransformExpr(OrigElement.Key);
+        if (Key.isInvalid())
+          return ExprError();
+
+        ExprResult Value = getDerived().TransformExpr(OrigElement.Value);
+        if (Value.isInvalid())
+          return ExprError();
+
+        ObjCDictionaryElement Element = { 
+          Key.get(), Value.get(), SourceLocation(), NumExpansions
+        };
+
+        // If any unexpanded parameter packs remain, we still have a
+        // pack expansion.
+        if (Key.get()->containsUnexpandedParameterPack() ||
+            Value.get()->containsUnexpandedParameterPack())
+          Element.EllipsisLoc = OrigElement.EllipsisLoc;
+          
+        Elements.push_back(Element);
+      }
+
+      // We've finished with this pack expansion.
+      continue;
+    }
+
     // Transform and check key.
-    ExprResult Key = getDerived().TransformExpr(E->getKeyValueElement(I).Key);
+    ExprResult Key = getDerived().TransformExpr(OrigElement.Key);
     if (Key.isInvalid())
       return ExprError();
     
-    if (Key.get() != E->getKeyValueElement(I).Key)
+    if (Key.get() != OrigElement.Key)
       ArgChanged = true;
     
     // Transform and check value.
     ExprResult Value
-      = getDerived().TransformExpr(E->getKeyValueElement(I).Value);
+      = getDerived().TransformExpr(OrigElement.Value);
     if (Value.isInvalid())
       return ExprError();
     
-    if (Value.get() != E->getKeyValueElement(I).Value)
+    if (Value.get() != OrigElement.Value)
       ArgChanged = true;
     
-    KeyValues.push_back(std::make_pair(Key.get(), Value.get()));
+    ObjCDictionaryElement Element = { 
+      Key.get(), Value.get(), SourceLocation(), llvm::Optional<unsigned>()
+    };
+    Elements.push_back(Element);
   }
   
   if (!getDerived().AlwaysRebuild() && !ArgChanged)
     return Owned(E);
 
   return getDerived().RebuildObjCDictionaryLiteral(E->getSourceRange(),
-                                                   KeyValues.data(),
-                                                   KeyValues.size());
+                                                   Elements.data(),
+                                                   Elements.size());
 }
 
 template<typename Derived>

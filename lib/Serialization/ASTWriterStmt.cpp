@@ -763,16 +763,25 @@ void ASTStmtWriter::VisitObjCArrayLiteral(ObjCArrayLiteral *E) {
 }
 
 void ASTStmtWriter::VisitObjCDictionaryLiteral(ObjCDictionaryLiteral *E) {
-    VisitExpr(E);
-    Record.push_back(E->getNumElements());
-    for (unsigned i = 0; i < E->getNumElements(); i++) {
-      Writer.AddStmt(E->getKeyValueElement(i).Key);
-      Writer.AddStmt(E->getKeyValueElement(i).Value);
+  VisitExpr(E);
+  Record.push_back(E->getNumElements());
+  Record.push_back(E->HasPackExpansions);
+  for (unsigned i = 0; i < E->getNumElements(); i++) {
+    ObjCDictionaryElement Element = E->getKeyValueElement(i);
+    Writer.AddStmt(Element.Key);
+    Writer.AddStmt(Element.Value);
+    if (E->HasPackExpansions) {
+      Writer.AddSourceLocation(Element.EllipsisLoc, Record);
+      unsigned NumExpansions = 0;
+      if (Element.NumExpansions)
+        NumExpansions = *Element.NumExpansions + 1;
+      Record.push_back(NumExpansions);
     }
+  }
     
-    Writer.AddDeclRef(E->getDictWithObjectsMethod(), Record);
-    Writer.AddSourceRange(E->getSourceRange(), Record);
-    Code = serialization::EXPR_OBJC_DICTIONARY_LITERAL;
+  Writer.AddDeclRef(E->getDictWithObjectsMethod(), Record);
+  Writer.AddSourceRange(E->getSourceRange(), Record);
+  Code = serialization::EXPR_OBJC_DICTIONARY_LITERAL;
 }
 
 void ASTStmtWriter::VisitObjCEncodeExpr(ObjCEncodeExpr *E) {
