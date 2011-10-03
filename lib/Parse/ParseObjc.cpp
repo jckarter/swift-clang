@@ -2436,15 +2436,19 @@ ExprResult Parser::ParseObjCDictionaryLiteral(SourceLocation AtLoc) {
   ConsumeBrace(); // consume the l_square.
   while (Tok.isNot(tok::r_brace)) {
     // Parse the comma separated key : value expressions.
-    ExprResult KeyExpr(ParseAssignmentExpression());
-    if (KeyExpr.isInvalid()) {
-      // We must manually skip to a '}', otherwise the expression skipper will
-      // stop at the '}' when it skips to the ';'.  We want it to skip beyond
-      // the enclosing expression.
-      SkipUntil(tok::r_brace);
-      return move(KeyExpr);
+    ExprResult KeyExpr;
+    {
+      ColonProtectionRAIIObject X(*this);
+      KeyExpr = ParseAssignmentExpression();
+      if (KeyExpr.isInvalid()) {
+        // We must manually skip to a '}', otherwise the expression skipper will
+        // stop at the '}' when it skips to the ';'.  We want it to skip beyond
+        // the enclosing expression.
+        SkipUntil(tok::r_brace);
+        return move(KeyExpr);
+      }
     }
-    
+
     if (Tok.is(tok::colon)) {
       ConsumeToken();
     } else {

@@ -137,3 +137,14 @@ template void test_variadic_dictionary_expansion(NSNumber *, // expected-note{{i
                                                  pair<NSNumber*, id>,
                                                  pair<float, ConvertibleTo<id>>);
 
+// Test parsing 
+struct key {
+  static id value;
+};
+
+id key;
+id value;
+
+void test_dictionary_colon() {
+  id dict = @{ key : value };
+}
