@@ -7388,7 +7388,13 @@ ExprResult Sema::ConvertPropertyForRValue(Expr *E) {
             << PRE->getBase()->getType();
     }
   }
-  
+  else {
+    // lvalue-ness of an explicit property is determined by
+    // property type.
+    ObjCPropertyDecl *PDecl = PRE->getExplicitProperty();
+    VK = Expr::getValueKindForType(PDecl->getType());
+  }
+    
   E = ImplicitCastExpr::Create(Context, T, CK_GetObjCProperty,
                                E, 0, VK);
   
@@ -7412,7 +7418,7 @@ void Sema::ConvertPropertyForLValue(ExprResult &LHS, ExprResult &RHS,
     // setter, RHS expression is being passed to the setter argument. So,
     // type conversion (and comparison) is RHS to setter's argument type.
     if (const ObjCMethodDecl *SetterMD = PropRef->getImplicitPropertySetter()) {
-      ObjCMethodDecl::param_iterator P = SetterMD->param_begin();
+      ObjCMethodDecl::param_const_iterator P = SetterMD->param_begin();
       LHSTy = (*P)->getType();
       Consumed = (getLangOptions().ObjCAutoRefCount &&
                   (*P)->hasAttr<NSConsumedAttr>());
@@ -7431,7 +7437,7 @@ void Sema::ConvertPropertyForLValue(ExprResult &LHS, ExprResult &RHS,
     const ObjCMethodDecl *setter
       = PropRef->getExplicitProperty()->getSetterMethodDecl();
     if (setter) {
-      ObjCMethodDecl::param_iterator P = setter->param_begin();
+      ObjCMethodDecl::param_const_iterator P = setter->param_begin();
       LHSTy = (*P)->getType();
       Consumed = (*P)->hasAttr<NSConsumedAttr>();
     }
@@ -10129,7 +10135,7 @@ static ExprResult diagnoseUnknownAnyExpr(Sema &S, Expr *E) {
     d = mem->getMemberDecl();
   } else if (ObjCMessageExpr *msg = dyn_cast<ObjCMessageExpr>(E)) {
     diagID = diag::err_uncasted_call_of_unknown_any;
-    loc = msg->getSelectorLoc();
+    loc = msg->getSelectorStartLoc();
     d = msg->getMethodDecl();
     if (!d) {
       S.Diag(loc, diag::err_uncasted_send_to_unknown_any_method)
