@@ -5209,7 +5209,7 @@ public:
     SourceLocation EndLoc,   // location of the ; or {.
     tok::TokenKind MethodType,
     ObjCDeclSpec &ReturnQT, ParsedType ReturnType,
-    SourceLocation SelectorStartLoc, Selector Sel,
+    ArrayRef<SourceLocation> SelectorLocs, Selector Sel,
     // optional arguments. The number of types/arguments is obtained
     // from the Sel.getNumArgs().
     ObjCArgInfo *ArgInfo,
@@ -5270,7 +5270,7 @@ public:
   ExprResult ActOnSuperMessage(Scope *S, SourceLocation SuperLoc,
                                Selector Sel,
                                SourceLocation LBracLoc,
-                               SourceLocation SelectorLoc,
+                               ArrayRef<SourceLocation> SelectorLocs,
                                SourceLocation RBracLoc,
                                MultiExprArg Args);
 
@@ -5280,7 +5280,7 @@ public:
                                Selector Sel,
                                ObjCMethodDecl *Method,
                                SourceLocation LBracLoc,
-                               SourceLocation SelectorLoc,
+                               ArrayRef<SourceLocation> SelectorLocs,
                                SourceLocation RBracLoc,
                                MultiExprArg Args);
 
@@ -5288,7 +5288,7 @@ public:
                                ParsedType Receiver,
                                Selector Sel,
                                SourceLocation LBracLoc,
-                               SourceLocation SelectorLoc,
+                               ArrayRef<SourceLocation> SelectorLocs,
                                SourceLocation RBracLoc,
                                MultiExprArg Args);
 
@@ -5298,7 +5298,7 @@ public:
                                   Selector Sel,
                                   ObjCMethodDecl *Method,
                                   SourceLocation LBracLoc,
-                                  SourceLocation SelectorLoc,
+                                  ArrayRef<SourceLocation> SelectorLocs,
                                   SourceLocation RBracLoc,
                                   MultiExprArg Args);
 
@@ -5306,7 +5306,7 @@ public:
                                   Expr *Receiver,
                                   Selector Sel,
                                   SourceLocation LBracLoc,
-                                  SourceLocation SelectorLoc,
+                                  ArrayRef<SourceLocation> SelectorLocs,
                                   SourceLocation RBracLoc,
                                   MultiExprArg Args);
 
