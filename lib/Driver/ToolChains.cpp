@@ -1555,6 +1555,44 @@ namespace {
 /// information about it. It starts from the host information provided to the
 /// Driver, and has logic for fuzzing that where appropriate.
 class GCCInstallationDetector {
+  /// \brief Struct to store and manipulate GCC versions.
+  ///
+  /// We rely on assumptions about the form and structure of GCC version
+  /// numbers: they consist of at most three '.'-separated components, and each
+  /// component is a non-negative integer.
+  struct GCCVersion {
+    unsigned Major, Minor, Patch;
+
+    static GCCVersion Parse(StringRef VersionText) {
+      const GCCVersion BadVersion = {};
+      std::pair<StringRef, StringRef> First = VersionText.split('.');
+      std::pair<StringRef, StringRef> Second = First.second.split('.');
+
+      GCCVersion GoodVersion = {};
+      if (First.first.getAsInteger(10, GoodVersion.Major))
+        return BadVersion;
+      if (Second.first.getAsInteger(10, GoodVersion.Minor))
+        return BadVersion;
+      // We accept a number, or a string for the patch version, in case there
+      // is a strang suffix, or other mangling: '4.1.x', '4.1.2-rc3'. When it
+      // isn't a number, we just use '0' as the number but accept it.
+      if (Second.first.getAsInteger(10, GoodVersion.Patch))
+        GoodVersion.Patch = 0;
+      return GoodVersion;
+    }
+
+    bool operator<(const GCCVersion &RHS) const {
+      if (Major < RHS.Major) return true;
+      if (Major > RHS.Major) return false;
+      if (Minor < RHS.Minor) return true;
+      if (Minor > RHS.Minor) return false;
+      return Patch < RHS.Patch;
+    }
+    bool operator>(const GCCVersion &RHS) const { return RHS < *this; }
+    bool operator<=(const GCCVersion &RHS) const { return !(*this > RHS); }
+    bool operator>=(const GCCVersion &RHS) const { return !(*this < RHS); }
+  };
+
   bool IsValid;
   std::string GccTriple;
 
@@ -1601,122 +1639,37 @@ public:
     }
 
     llvm::Triple::ArchType HostArch = llvm::Triple(GccTriple).getArch();
-    // The directories which may contain x86-64 triple GCC installations.
-    SmallVector<StringRef, 2> CandidateLibDirs;
-    // The compatible GCC triples for an x86-64 Linux Clang.
+    // The library directories which may contain GCC installations.
+    SmallVector<StringRef, 4> CandidateLibDirs;
+    // The compatible GCC triples for this particular architecture.
     SmallVector<StringRef, 10> CandidateTriples;
-    if (HostArch == llvm::Triple::arm || HostArch == llvm::Triple::thumb) {
-      static const char *const LibDirs[] = { "/usr/lib/gcc" };
-      static const char *const Triples[] = { "arm-linux-gnueabi" };
-      CandidateLibDirs.append(LibDirs, LibDirs + llvm::array_lengthof(LibDirs));
-      CandidateTriples.append(Triples, Triples + llvm::array_lengthof(Triples));
-    } else if (HostArch == llvm::Triple::x86_64) {
-      static const char *const LibDirs[] = { "/usr/lib64/gcc", "/usr/lib/gcc" };
-      static const char *const Triples[] = {
-        "x86_64-linux-gnu",
-        "x86_64-unknown-linux-gnu",
-        "x86_64-pc-linux-gnu",
-        "x86_64-redhat-linux6E",
-        "x86_64-redhat-linux",
-        "x86_64-suse-linux",
-        "x86_64-manbo-linux-gnu",
-        "x86_64-linux-gnu",
-        "x86_64-slackware-linux"
-      };
-      CandidateLibDirs.append(LibDirs, LibDirs + llvm::array_lengthof(LibDirs));
-      CandidateTriples.append(Triples, Triples + llvm::array_lengthof(Triples));
-    } else if (HostArch == llvm::Triple::x86) {
-      static const char *const LibDirs[] = { "/usr/lib32/gcc", "/usr/lib/gcc" };
-      static const char *const Triples[] = {
-        "i686-linux-gnu",
-        "i386-linux-gnu",
-        "i686-pc-linux-gnu",
-        "i486-linux-gnu",
-        "i686-redhat-linux",
-        "i586-suse-linux",
-        "i486-slackware-linux"
-      };
-      CandidateLibDirs.append(LibDirs, LibDirs + llvm::array_lengthof(LibDirs));
-      CandidateTriples.append(Triples, Triples + llvm::array_lengthof(Triples));
-    } else if (HostArch == llvm::Triple::ppc) {
-      static const char *const LibDirs[] = { "/usr/lib32/gcc", "/usr/lib/gcc" };
-      static const char *const Triples[] = {
-        "powerpc-linux-gnu",
-        "powerpc-unknown-linux-gnu"
-      };
-      CandidateLibDirs.append(LibDirs, LibDirs + llvm::array_lengthof(LibDirs));
-      CandidateTriples.append(Triples, Triples + llvm::array_lengthof(Triples));
-    } else if (HostArch == llvm::Triple::ppc64) {
-      static const char *const LibDirs[] = { "/usr/lib64/gcc", "/usr/lib/gcc" };
-      static const char *const Triples[] = { "powerpc64-unknown-linux-gnu" };
-      CandidateLibDirs.append(LibDirs, LibDirs + llvm::array_lengthof(LibDirs));
-      CandidateTriples.append(Triples, Triples + llvm::array_lengthof(Triples));
-    }
+    CollectLibDirsAndTriples(HostArch, CandidateLibDirs, CandidateTriples);
 
-    // First finds the 'prefix' which exists beneath the system root. Second,
-    // finds the first triple which exists beneath that prefix.
-    StringRef DetectedGccPrefix, DetectedGccTriple;
-    for (unsigned i = 0, ie = CandidateLibDirs.size(); i < ie; ++i) {
-      if (!PathExists(CandidateLibDirs[i]))
+    // Always include the default host triple as the final fallback if no
+    // specific triple is detected.
+    CandidateTriples.push_back(D.DefaultHostTriple);
+
+    // Compute the set of prefixes for our search.
+    SmallVector<std::string, 8> Prefixes(D.PrefixDirs.begin(),
+                                         D.PrefixDirs.end());
+    Prefixes.push_back(D.SysRoot);
+    Prefixes.push_back(D.SysRoot + "/usr");
+    Prefixes.push_back(D.InstalledDir);
+
+    // Loop over the various components which exist and select the best GCC
+    // installation available. GCC installs are ranked by version number.
+    GCCVersion BestVersion = {};
+    for (unsigned i = 0, ie = Prefixes.size(); i < ie; ++i) {
+      if (!PathExists(Prefixes[i]))
         continue;
-
-      for (unsigned j = 0, je = CandidateTriples.size(); j < je; ++j) {
-        if (PathExists(CandidateLibDirs[i].str() + "/" +
-                       CandidateTriples[j].str())) {
-          DetectedGccPrefix = CandidateLibDirs[i];
-          DetectedGccTriple = CandidateTriples[j];
-        }
+      for (unsigned j = 0, je = CandidateLibDirs.size(); j < je; ++j) {
+        const std::string LibDir = Prefixes[i] + CandidateLibDirs[j].str();
+        if (!PathExists(LibDir))
+          continue;
+        for (unsigned k = 0, ke = CandidateTriples.size(); k < ke; ++k)
+          ScanLibDirForGCCTriple(LibDir, CandidateTriples[k], BestVersion);
       }
     }
-
-    static const char* GccVersions[] = {
-      "4.6.1", "4.6.0", "4.6",
-      "4.5.3", "4.5.2", "4.5.1", "4.5",
-      "4.4.6", "4.4.5", "4.4.4", "4.4.3", "4.4",
-      "4.3.4", "4.3.3", "4.3.2", "4.3",
-      "4.2.4", "4.2.3", "4.2.2", "4.2.1", "4.2",
-      "4.1.1"};
-    SmallVector<std::string, 8> Paths(D.PrefixDirs.begin(),
-                                      D.PrefixDirs.end());
-    Paths.push_back(D.SysRoot + "/usr/");
-    const std::string Triples[] = {DetectedGccTriple.str(), D.DefaultHostTriple};
-    IsValid = true;  // In case we're able to find a GCC install.
-    for (SmallVector<std::string, 8>::const_iterator I = Paths.begin(),
-                                                     E = Paths.end();
-         I != E; ++I) {
-      for (unsigned i = 0; i < sizeof(GccVersions)/sizeof(char*); ++i) {
-        for (unsigned j = 0; j < sizeof(Triples)/sizeof(Triples[0]); ++j) {
-          GccTriple = Triples[j];
-          std::string Suffix = Triples[j] + "/" + GccVersions[i];
-          GccInstallPath = *I + "lib/gcc/" + Suffix;
-          GccParentLibPath = GccInstallPath + "/../../..";
-          if (PathExists(GccInstallPath + "/crtbegin.o"))
-            return;
-          GccInstallPath = *I + "lib64/gcc/" + Suffix;
-          GccParentLibPath = GccInstallPath + "/../../..";
-          if (PathExists(GccInstallPath + "/crtbegin.o"))
-            return;
-          GccInstallPath = *I + "lib/" + GccTriple + "/gcc/" + Suffix;
-          GccParentLibPath = GccInstallPath + "/../../../..";
-          if (PathExists(GccInstallPath + "/crtbegin.o"))
-            return;
-
-          if (GccTriple != "i386-linux-gnu")
-            continue;
-
-          // Ubuntu 11.04 uses an unusual path.
-          GccInstallPath = *I + "lib/i386-linux-gnu/gcc/i686-linux-gnu/" +
-            GccVersions[i];
-          GccParentLibPath = GccInstallPath + "/../../../..";
-          if (PathExists(GccInstallPath + "/crtbegin.o"))
-            return;
-        }
-      }
-    }
-    GccTriple.clear();
-    GccInstallPath.clear();
-    GccParentLibPath.clear();
-    IsValid = false;
   }
 
   /// \brief Check whether we detected a valid GCC install.
@@ -1730,6 +1683,116 @@ public:
 
   /// \brief Get the detected GCC parent lib path.
   const std::string &getParentLibPath() const { return GccParentLibPath; }
+
+private:
+  static void CollectLibDirsAndTriples(llvm::Triple::ArchType HostArch,
+                                       SmallVectorImpl<StringRef> &LibDirs,
+                                       SmallVectorImpl<StringRef> &Triples) {
+    if (HostArch == llvm::Triple::arm || HostArch == llvm::Triple::thumb) {
+      static const char *const ARMLibDirs[] = { "/lib/gcc" };
+      static const char *const ARMTriples[] = { "arm-linux-gnueabi" };
+      LibDirs.append(ARMLibDirs, ARMLibDirs + llvm::array_lengthof(ARMLibDirs));
+      Triples.append(ARMTriples, ARMTriples + llvm::array_lengthof(ARMTriples));
+    } else if (HostArch == llvm::Triple::x86_64) {
+      static const char *const X86_64LibDirs[] = {
+        "/lib64/gcc", "/lib/gcc", "/lib64", "/lib"
+      };
+      static const char *const X86_64Triples[] = {
+        "x86_64-linux-gnu",
+        "x86_64-unknown-linux-gnu",
+        "x86_64-pc-linux-gnu",
+        "x86_64-redhat-linux6E",
+        "x86_64-redhat-linux",
+        "x86_64-suse-linux",
+        "x86_64-manbo-linux-gnu",
+        "x86_64-linux-gnu",
+        "x86_64-slackware-linux"
+      };
+      LibDirs.append(X86_64LibDirs,
+                     X86_64LibDirs + llvm::array_lengthof(X86_64LibDirs));
+      Triples.append(X86_64Triples,
+                     X86_64Triples + llvm::array_lengthof(X86_64Triples));
+    } else if (HostArch == llvm::Triple::x86) {
+      static const char *const X86LibDirs[] = {
+        "/lib32/gcc", "/lib/gcc", "/lib32", "/lib"
+      };
+      static const char *const X86Triples[] = {
+        "i686-linux-gnu",
+        "i386-linux-gnu",
+        "i686-pc-linux-gnu",
+        "i486-linux-gnu",
+        "i686-redhat-linux",
+        "i586-suse-linux",
+        "i486-slackware-linux"
+      };
+      LibDirs.append(X86LibDirs, X86LibDirs + llvm::array_lengthof(X86LibDirs));
+      Triples.append(X86Triples, X86Triples + llvm::array_lengthof(X86Triples));
+    } else if (HostArch == llvm::Triple::ppc) {
+      static const char *const PPCLibDirs[] = {
+        "/lib32/gcc", "/lib/gcc", "/lib32", "/lib"
+      };
+      static const char *const PPCTriples[] = {
+        "powerpc-linux-gnu",
+        "powerpc-unknown-linux-gnu"
+      };
+      LibDirs.append(PPCLibDirs, PPCLibDirs + llvm::array_lengthof(PPCLibDirs));
+      Triples.append(PPCTriples, PPCTriples + llvm::array_lengthof(PPCTriples));
+    } else if (HostArch == llvm::Triple::ppc64) {
+      static const char *const PPC64LibDirs[] = {
+        "/lib64/gcc", "/lib/gcc", "/lib64", "/lib"
+      };
+      static const char *const PPC64Triples[] = {
+        "powerpc64-unknown-linux-gnu"
+      };
+      LibDirs.append(PPC64LibDirs,
+                     PPC64LibDirs + llvm::array_lengthof(PPC64LibDirs));
+      Triples.append(PPC64Triples,
+                     PPC64Triples + llvm::array_lengthof(PPC64Triples));
+    }
+  }
+
+  void ScanLibDirForGCCTriple(const std::string &LibDir,
+                              StringRef CandidateTriple,
+                              GCCVersion &BestVersion) {
+    const std::string TripleDir = LibDir + "/" + CandidateTriple.str();
+    if (!PathExists(TripleDir))
+      return;
+
+    // There are various different suffixes on the triple directory we
+    // check for. We also record what is necessary to walk from each back
+    // up to the lib directory.
+    const std::string Suffixes[] = { "", "/gcc/" + CandidateTriple.str(),
+      "/gcc/i686-linux-gnu" };
+    const std::string InstallSuffixes[] = { "/../../..", "/../../../..",
+      "/../../../.." };
+    const unsigned NumSuffixes = (llvm::array_lengthof(Suffixes) -
+                                  (CandidateTriple != "i386-linux-gnu"));
+    for (unsigned i = 0; i < NumSuffixes; ++i) {
+      StringRef Suffix = Suffixes[i];
+      llvm::error_code EC;
+      for (llvm::sys::fs::directory_iterator LI(TripleDir + Suffix, EC), LE;
+           !EC && LI != LE; LI = LI.increment(EC)) {
+        StringRef VersionText = llvm::sys::path::filename(LI->path());
+        GCCVersion CandidateVersion = GCCVersion::Parse(VersionText);
+        static const GCCVersion MinVersion = { 4, 1, 1 };
+        if (CandidateVersion < MinVersion)
+          continue;
+        if (CandidateVersion <= BestVersion)
+          continue;
+        if (!PathExists(LI->path() + "/crtbegin.o"))
+          continue;
+
+        BestVersion = CandidateVersion;
+        GccTriple = CandidateTriple.str();
+        // FIXME: We hack together the directory name here instead of
+        // using LI to ensure stable path separators across Windows and
+        // Linux.
+        GccInstallPath = TripleDir + Suffixes[i] + "/" + VersionText.str();
+        GccParentLibPath = GccInstallPath + InstallSuffixes[i];
+        IsValid = true;
+      }
+    }
+  }
 };
 }
 
