@@ -2031,13 +2031,14 @@ public:
   /// By default, performs semantic analysis to build the new expression.
   /// Subclasses may override this routine to provide different behavior.
   ExprResult RebuildCXXConstructExpr(QualType T,
-                                           SourceLocation Loc,
-                                           CXXConstructorDecl *Constructor,
-                                           bool IsElidable,
-                                           MultiExprArg Args,
-                                           bool RequiresZeroInit,
+                                     SourceLocation Loc,
+                                     CXXConstructorDecl *Constructor,
+                                     bool IsElidable,
+                                     MultiExprArg Args,
+                                     bool HadMultipleCandidates,
+                                     bool RequiresZeroInit,
                              CXXConstructExpr::ConstructionKind ConstructKind,
-                                           SourceRange ParenRange) {
+                                     SourceRange ParenRange) {
     ASTOwningVector<Expr*> ConvertedArgs(SemaRef);
     if (getSema().CompleteConstructorCall(Constructor, move(Args), Loc, 
                                           ConvertedArgs))
@@ -2045,6 +2046,7 @@ public:
     
     return getSema().BuildCXXConstructExpr(Loc, T, Constructor, IsElidable,
                                            move_arg(ConvertedArgs),
+                                           HadMultipleCandidates,
                                            RequiresZeroInit, ConstructKind,
                                            ParenRange);
   }
@@ -2152,7 +2154,7 @@ public:
   /// \brief Build a new Objective-C class message.
   ExprResult RebuildObjCMessageExpr(TypeSourceInfo *ReceiverTypeInfo,
                                           Selector Sel,
-                                          SourceLocation SelectorLoc,
+                                          ArrayRef<SourceLocation> SelectorLocs,
                                           ObjCMethodDecl *Method,
                                           SourceLocation LBracLoc, 
                                           MultiExprArg Args,
@@ -2160,14 +2162,14 @@ public:
     return SemaRef.BuildClassMessage(ReceiverTypeInfo,
                                      ReceiverTypeInfo->getType(),
                                      /*SuperLoc=*/SourceLocation(),
-                                     Sel, Method, LBracLoc, SelectorLoc,
+                                     Sel, Method, LBracLoc, SelectorLocs,
                                      RBracLoc, move(Args));
   }
 
   /// \brief Build a new Objective-C instance message.
   ExprResult RebuildObjCMessageExpr(Expr *Receiver,
                                           Selector Sel,
-                                          SourceLocation SelectorLoc,
+                                          ArrayRef<SourceLocation> SelectorLocs,
                                           ObjCMethodDecl *Method,
                                           SourceLocation LBracLoc, 
                                           MultiExprArg Args,
@@ -2175,7 +2177,7 @@ public:
     return SemaRef.BuildInstanceMessage(Receiver,
                                         Receiver->getType(),
                                         /*SuperLoc=*/SourceLocation(),
-                                        Sel, Method, LBracLoc, SelectorLoc,
+                                        Sel, Method, LBracLoc, SelectorLocs,
                                         RBracLoc, move(Args));
   }
 
@@ -7345,6 +7347,7 @@ TreeTransform<Derived>::TransformCXXConstructExpr(CXXConstructExpr *E) {
   return getDerived().RebuildCXXConstructExpr(T, /*FIXME:*/E->getLocStart(),
                                               Constructor, E->isElidable(),
                                               move_arg(Args),
+                                              E->hadMultipleCandidates(),
                                               E->requiresZeroInitialization(),
                                               E->getConstructionKind(),
                                               E->getParenRange());
@@ -7794,9 +7797,11 @@ TreeTransform<Derived>::TransformObjCMessageExpr(ObjCMessageExpr *E) {
       return SemaRef.Owned(E);
 
     // Build a new class message send.
+    SmallVector<SourceLocation, 16> SelLocs;
+    E->getSelectorLocs(SelLocs);
     return getDerived().RebuildObjCMessageExpr(ReceiverTypeInfo,
                                                E->getSelector(),
-                                               E->getSelectorLoc(),
+                                               SelLocs,
                                                E->getMethodDecl(),
                                                E->getLeftLoc(),
                                                move_arg(Args),
@@ -7817,9 +7822,11 @@ TreeTransform<Derived>::TransformObjCMessageExpr(ObjCMessageExpr *E) {
     return SemaRef.Owned(E);
   
   // Build a new instance message send.
+  SmallVector<SourceLocation, 16> SelLocs;
+  E->getSelectorLocs(SelLocs);
   return getDerived().RebuildObjCMessageExpr(Receiver.get(),
                                              E->getSelector(),
-                                             E->getSelectorLoc(),
+                                             SelLocs,
                                              E->getMethodDecl(),
                                              E->getLeftLoc(),
                                              move_arg(Args),

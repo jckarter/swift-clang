@@ -49,7 +49,7 @@ using namespace clang;
 Driver::Driver(StringRef ClangExecutable,
                StringRef DefaultHostTriple,
                StringRef DefaultImageName,
-               bool IsProduction, bool CXXIsProduction,
+               bool IsProduction,
                DiagnosticsEngine &Diags)
   : Opts(createDriverOptTable()), Diags(Diags),
     ClangExecutable(ClangExecutable), UseStdLib(true),
@@ -74,9 +74,6 @@ Driver::Driver(StringRef ClangExecutable,
     CCCClangArchs.insert(llvm::Triple::x86_64);
     CCCClangArchs.insert(llvm::Triple::arm);
     CCCClangArchs.insert(llvm::Triple::arm64);
-
-    if (!CXXIsProduction)
-      CCCUseClangCXX = false;
   }
 
   Name = llvm::sys::path::stem(ClangExecutable);

@@ -238,7 +238,7 @@ Sema::HandlePropertyInClassExtension(Scope *S,
   if (PIDecl->getType().getCanonicalType() 
       != PDecl->getType().getCanonicalType()) {
     Diag(AtLoc, 
-         diag::error_type_mismatch_continuation_class) << PDecl->getType();
+         diag::warn_type_mismatch_continuation_class) << PDecl->getType();
     Diag(PIDecl->getLocation(), diag::note_property_declare);
   }
     
@@ -1576,7 +1576,8 @@ void Sema::ProcessPropertyDecl(ObjCPropertyDecl *property,
                                                   SC_None,
                                                   SC_None,
                                                   0);
-      SetterMethod->setMethodParams(Context, &Argument, 1, 1);
+      SetterMethod->setMethodParams(Context, Argument,
+                                    ArrayRef<SourceLocation>());
 
       AddPropertyAttrs(*this, SetterMethod, property);
 

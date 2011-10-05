@@ -1198,7 +1198,8 @@ RetainSummaryManager::updateSummaryFromAnnotations(RetainSummary *&Summ,
   
   // Effects on the parameters.
   unsigned parm_idx = 0;
-  for (ObjCMethodDecl::param_iterator pi=MD->param_begin(), pe=MD->param_end();
+  for (ObjCMethodDecl::param_const_iterator
+         pi=MD->param_begin(), pe=MD->param_end();
        pi != pe; ++pi, ++parm_idx) {
     const ParmVarDecl *pd = *pi;
     if (pd->getAttr<NSConsumedAttr>()) {
@@ -1244,9 +1245,9 @@ RetainSummaryManager::getCommonMethodSummary(const ObjCMethodDecl *MD,
     // Delegates are a frequent form of false positives with the retain
     // count checker.
     unsigned i = 0;
-    for (ObjCMethodDecl::param_iterator I = MD->param_begin(),
+    for (ObjCMethodDecl::param_const_iterator I = MD->param_begin(),
          E = MD->param_end(); I != E; ++I, ++i)
-      if (ParmVarDecl *PD = *I) {
+      if (const ParmVarDecl *PD = *I) {
         QualType Ty = Ctx.getCanonicalType(PD->getType());
         if (Ty.getLocalUnqualifiedType() == Ctx.VoidPtrTy)
           ScratchArgs = AF.add(ScratchArgs, i, StopTracking);
@@ -3019,7 +3020,7 @@ bool RetainCountChecker::evalCall(const CallExpr *CE, CheckerContext &C) const {
   if (RetVal.isUnknown()) {
     // If the receiver is unknown, conjure a return value.
     SValBuilder &SVB = C.getSValBuilder();
-    unsigned Count = C.getNodeBuilder().getCurrentBlockCount();
+    unsigned Count = C.getCurrentBlockCount();
     SVal RetVal = SVB.getConjuredSymbolVal(0, CE, ResultTy, Count);
   }
   state = state->BindExpr(CE, RetVal, false);
@@ -3034,7 +3035,7 @@ bool RetainCountChecker::evalCall(const CallExpr *CE, CheckerContext &C) const {
       Binding = state->get<RefBindings>(Sym);
 
     // Invalidate the argument region.
-    unsigned Count = C.getNodeBuilder().getCurrentBlockCount();
+    unsigned Count = C.getCurrentBlockCount();
     state = state->invalidateRegions(ArgRegion, CE, Count);
 
     // Restore the refcount status of the argument.
@@ -3172,12 +3173,10 @@ void RetainCountChecker::checkReturnWithRetEffect(const ReturnStmt *S,
       if (hasError) {
         // Generate an error node.
         state = state->set<RefBindings>(Sym, X);
-        StmtNodeBuilder &Builder = C.getNodeBuilder();
 
         static SimpleProgramPointTag
                ReturnOwnLeakTag("RetainCountChecker : ReturnsOwnLeak");
-        ExplodedNode *N = Builder.generateNode(S, state, Pred,
-                                               &ReturnOwnLeakTag);
+        ExplodedNode *N = C.generateNode(state, Pred, &ReturnOwnLeakTag);
         if (N) {
           const LangOptions &LOpts = C.getASTContext().getLangOptions();
           bool GCEnabled = C.isObjCGCEnabled();
@@ -3194,12 +3193,10 @@ void RetainCountChecker::checkReturnWithRetEffect(const ReturnStmt *S,
       // Trying to return a not owned object to a caller expecting an
       // owned object.
       state = state->set<RefBindings>(Sym, X ^ RefVal::ErrorReturnedNotOwned);
-      StmtNodeBuilder &Builder = C.getNodeBuilder();
 
       static SimpleProgramPointTag
              ReturnNotOwnedTag("RetainCountChecker : ReturnNotOwnedForOwned");
-      ExplodedNode *N = Builder.generateNode(S, state, Pred, 
-                                             &ReturnNotOwnedTag);
+      ExplodedNode *N = C.generateNode(state, Pred, &ReturnNotOwnedTag);
       if (N) {
         if (!returnNotOwnedForOwned)
           returnNotOwnedForOwned.reset(new ReturnedNotOwnedForOwned());
