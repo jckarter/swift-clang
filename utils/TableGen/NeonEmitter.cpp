@@ -42,7 +42,8 @@ static void ParseTypes(Record *r, std::string &s,
   int len = 0;
 
   for (unsigned i = 0, e = s.size(); i != e; ++i, ++len) {
-    if (data[len] == 'P' || data[len] == 'Q' || data[len] == 'U')
+    if (data[len] == 'P' || data[len] == 'Q' ||
+        data[len] == 'U' || data[len] == 'R')
       continue;
 
     switch (data[len]) {
@@ -52,6 +53,7 @@ static void ParseTypes(Record *r, std::string &s,
       case 'l':
       case 'h':
       case 'f':
+      case 'd':
         break;
       default:
         throw TGError(r->getLoc(),
@@ -76,6 +78,8 @@ static char Widen(const char t) {
       return 'l';
     case 'h':
       return 'f';
+    case 'f':
+      return 'd';
     default: throw "unhandled type in widen!";
   }
   return '\0';
@@ -93,19 +97,39 @@ static char Narrow(const char t) {
       return 'i';
     case 'f':
       return 'h';
+    case 'd':
+      return 'f';
     default: throw "unhandled type in narrow!";
+  }
+  return '\0';
+}
+
+// ToFloat - Convert a type code into the equivalent FP type.
+static char ToFloat(const char t) {
+  switch (t) {
+    case 'h':
+    case 'i':
+      return 'f';
+    case 'l':
+      return 'd';
+    default: throw "unhandled type in tofloat!";
   }
   return '\0';
 }
 
 /// For a particular StringRef, return the base type code, and whether it has
 /// the quad-vector, polynomial, or unsigned modifiers set.
-static char ClassifyType(StringRef ty, bool &quad, bool &poly, bool &usgn) {
+static char ClassifyType(StringRef ty, bool &quad, bool &qsuffix, bool &poly, bool &usgn) {
   unsigned off = 0;
 
   // remember quad.
   if (ty[off] == 'Q') {
     quad = true;
+    qsuffix = true;
+    ++off;
+  } else if (ty[off] == 'R') {
+    quad = true;
+    qsuffix = false;
     ++off;
   }
 
@@ -139,7 +163,7 @@ static char ModType(const char mod, char type, bool &quad, bool &poly,
     case 'u':
       usgn = true;
       poly = false;
-      if (type == 'f')
+      if (type == 'f' || type == 'd')
         type = 'i';
       break;
     case 'x':
@@ -151,7 +175,7 @@ static char ModType(const char mod, char type, bool &quad, bool &poly,
     case 'f':
       if (type == 'h')
         quad = true;
-      type = 'f';
+      type = ToFloat(type);
       usgn = false;
       break;
     case 'g':
@@ -177,6 +201,10 @@ static char ModType(const char mod, char type, bool &quad, bool &poly,
     case 'a':
       scal = true;
       break;
+    case 'z':
+      scal = true;
+      type = Widen(type);
+      break;
     case 'k':
       quad = true;
       break;
@@ -195,6 +223,10 @@ static char ModType(const char mod, char type, bool &quad, bool &poly,
       type = Narrow(type);
       usgn = true;
       break;
+    case 'b':
+      type = Narrow(type);
+      quad = false;
+      break;
     default:
       break;
   }
@@ -210,6 +242,7 @@ static std::string TypeString(const char mod, StringRef typestr) {
   bool scal = false;
   bool cnst = false;
   bool pntr = false;
+  bool qsuffix = false;
 
   if (mod == 'v')
     return "void";
@@ -217,7 +250,7 @@ static std::string TypeString(const char mod, StringRef typestr) {
     return "int";
 
   // base type to get the type string for.
-  char type = ClassifyType(typestr, quad, poly, usgn);
+  char type = ClassifyType(typestr, quad, qsuffix, poly, usgn);
 
   // Based on the modifying character, change the type and width if necessary.
   type = ModType(mod, type, quad, poly, usgn, scal, cnst, pntr);
@@ -264,6 +297,12 @@ static std::string TypeString(const char mod, StringRef typestr) {
         break;
       s += quad ? "x4" : "x2";
       break;
+    case 'd':
+      s += "float64";
+      if (scal)
+        break;
+      s += quad ? "x2" : "x1";
+      break;
     default:
       throw "unhandled type!";
       break;
@@ -299,6 +338,7 @@ static std::string BuiltinTypeString(const char mod, StringRef typestr,
   bool scal = false;
   bool cnst = false;
   bool pntr = false;
+  bool qsuffix = false;
 
   if (mod == 'v')
     return "v"; // void
@@ -306,7 +346,7 @@ static std::string BuiltinTypeString(const char mod, StringRef typestr,
     return "i"; // int
 
   // base type to get the type string for.
-  char type = ClassifyType(typestr, quad, poly, usgn);
+  char type = ClassifyType(typestr, quad, qsuffix, poly, usgn);
 
   // Based on the modifying character, change the type and width if necessary.
   type = ModType(mod, type, quad, poly, usgn, scal, cnst, pntr);
@@ -394,7 +434,8 @@ static std::string MangleName(const std::string &name, StringRef typestr,
   bool quad = false;
   bool poly = false;
   bool usgn = false;
-  char type = ClassifyType(typestr, quad, poly, usgn);
+  bool qsuffix = false;
+  char type = ClassifyType(typestr, quad, qsuffix, poly, usgn);
 
   std::string s = name;
 
@@ -447,6 +488,14 @@ static std::string MangleName(const std::string &name, StringRef typestr,
     default: break;
     }
     break;
+  case 'd':
+    switch (ck) {
+    case ClassS:
+    case ClassI: s += "_f64"; break;
+    case ClassW: s += "_64"; break;
+    default: break;
+    }
+    break;
   default:
     throw "unhandled type!";
     break;
@@ -456,7 +505,7 @@ static std::string MangleName(const std::string &name, StringRef typestr,
 
   // Insert a 'q' before the first '_' character so that it ends up before
   // _lane or _n on vector-scalar operations.
-  if (quad) {
+  if (qsuffix) {
     size_t pos = s.find('_');
     s = s.insert(pos, "q");
   }
@@ -583,7 +632,7 @@ static std::string SplatLane(unsigned nElts, const std::string &vec,
 static unsigned GetNumElements(StringRef typestr, bool &quad) {
   quad = false;
   bool dummy = false;
-  char type = ClassifyType(typestr, quad, dummy, dummy);
+  char type = ClassifyType(typestr, quad, dummy, dummy, dummy);
   unsigned nElts = 0;
   switch (type) {
   case 'c': nElts = 8; break;
@@ -592,6 +641,7 @@ static unsigned GetNumElements(StringRef typestr, bool &quad) {
   case 'l': nElts = 1; break;
   case 'h': nElts = 4; break;
   case 'f': nElts = 2; break;
+  case 'd': nElts = 1; break;
   default:
     throw "unhandled type!";
     break;
@@ -664,6 +714,20 @@ static std::string GenOpString(OpKind op, const std::string &proto,
     break;
   case OpMlal:
     s += "__a + " + MangleName("vmull", typestr, ClassS) + "(__b, __c);";
+    break;
+  case OpQdmlal:
+    s += "__a + " + MangleName("vqdmull", typestr, ClassS) + "(__b, __c);";
+    break;
+  case OpQdmlsl:
+    s += "__a - " + MangleName("vqdmull", typestr, ClassS) + "(__b, __c);";
+    break;
+  case OpQdmlalN:
+    s += "__a + " + MangleName("vqdmull", typestr, ClassS) + "(__b, " +
+                    Duplicate(nElts, typestr, "__c") + ");";
+    break;
+  case OpQdmlslN:
+    s += "__a - " + MangleName("vqdmull", typestr, ClassS) + "(__b, " +
+                    Duplicate(nElts, typestr, "__c") + ");";
     break;
   case OpMlsN:
     s += "__a - (__b * " + Duplicate(nElts, typestr, "__c") + ");";
@@ -844,17 +908,18 @@ static unsigned GetNeonEnum(const std::string &proto, StringRef typestr) {
   bool scal = false;
   bool cnst = false;
   bool pntr = false;
+  bool qsuffix = false;
 
   // Base type to get the type string for.
-  char type = ClassifyType(typestr, quad, poly, usgn);
+  char type = ClassifyType(typestr, quad, qsuffix, poly, usgn);
 
   // Based on the modifying character, change the type and width if necessary.
   type = ModType(mod, type, quad, poly, usgn, scal, cnst, pntr);
 
   if (usgn)
-    ret |= 0x08;
-  if (quad && proto[1] != 'g')
     ret |= 0x10;
+  if (quad && proto[1] != 'g')
+    ret |= 0x20;
 
   switch (type) {
     case 'c':
@@ -875,6 +940,9 @@ static unsigned GetNeonEnum(const std::string &proto, StringRef typestr) {
     case 'f':
       ret |= 4;
       break;
+    case 'd':
+      ret |= 8;
+      break;
     default:
       throw "unhandled type!";
       break;
@@ -882,8 +950,10 @@ static unsigned GetNeonEnum(const std::string &proto, StringRef typestr) {
   return ret;
 }
 
-// Generate the definition for this intrinsic, e.g. __builtin_neon_cls(a)
-static std::string GenBuiltin(const std::string &name, const std::string &proto,
+// Generate the definition for this intrinsic.
+static std::string GenBuiltin(const std::string &name,
+                              const std::string &prefix,
+                              const std::string &proto,
                               StringRef typestr, ClassKind ck) {
   std::string s;
 
@@ -896,7 +966,7 @@ static std::string GenBuiltin(const std::string &name, const std::string &proto,
   // Check if the prototype has a scalar operand with the type of the vector
   // elements.  If not, bitcasting the args will take care of arg checking.
   // The actual signedness etc. will be taken care of with special enums.
-  if (proto.find('s') == std::string::npos)
+  if ((proto.find('s') == std::string::npos) && (proto.find('z') == std::string::npos))
     ck = ClassB;
 
   if (proto[0] != 'v') {
@@ -916,7 +986,7 @@ static std::string GenBuiltin(const std::string &name, const std::string &proto,
 
   bool splat = proto.find('a') != std::string::npos;
 
-  s += "__builtin_neon_";
+  s += "__builtin_" + prefix;
   if (splat) {
     // Call the non-splat builtin: chop off the "_n" suffix from the name.
     std::string vname(name, 0, name.size()-2);
@@ -943,7 +1013,7 @@ static std::string GenBuiltin(const std::string &name, const std::string &proto,
     bool argUsgn = false;
     bool argScalar = false;
     bool dummy = false;
-    char argType = ClassifyType(typestr, argQuad, argPoly, argUsgn);
+    char argType = ClassifyType(typestr, argQuad, dummy, argPoly, argUsgn);
     argType = ModType(proto[i], argType, argQuad, argPoly, argUsgn, argScalar,
                       dummy, dummy);
 
@@ -1000,14 +1070,17 @@ static std::string GenBuiltin(const std::string &name, const std::string &proto,
 }
 
 static std::string GenBuiltinDef(const std::string &name,
+                                 const std::string &prefix,
                                  const std::string &proto,
                                  StringRef typestr, ClassKind ck) {
-  std::string s("BUILTIN(__builtin_neon_");
+  std::string s("BUILTIN(__builtin_");
+  s += prefix;
 
   // If all types are the same size, bitcasting the args will take care
   // of arg checking.  The actual signedness etc. will be taken care of with
   // special enums.
-  if (proto.find('s') == std::string::npos)
+  if (proto.find('s') == std::string::npos &&
+      proto.find('z') == std::string::npos)
     ck = ClassB;
 
   s += MangleName(name, typestr, ck);
@@ -1025,6 +1098,7 @@ static std::string GenBuiltinDef(const std::string &name,
 }
 
 static std::string GenIntrinsic(const std::string &name,
+                                const std::string &prefix,
                                 const std::string &proto,
                                 StringRef outTypeStr, StringRef inTypeStr,
                                 OpKind kind, ClassKind classKind) {
@@ -1064,7 +1138,7 @@ static std::string GenIntrinsic(const std::string &name,
   if (kind != OpNone)
     s += GenOpString(kind, proto, outTypeStr);
   else
-    s += GenBuiltin(name, proto, outTypeStr, classKind);
+    s += GenBuiltin(name, prefix, proto, outTypeStr, classKind);
   if (define)
     s += " })";
   else
@@ -1076,9 +1150,15 @@ static std::string GenIntrinsic(const std::string &name,
 /// run - Read the records in arm_neon.td and output arm_neon.h.  arm_neon.h
 /// is comprised of type definitions and function declarations.
 void NeonEmitter::run(raw_ostream &OS) {
-  OS << 
+  if (IsARM64)
+   OS << 
+    "/*===---- aarch64_simd.h - ARM64 SIMD intrinsics ------------------------"
+    "---===\n";
+  else
+   OS << 
     "/*===---- arm_neon.h - ARM Neon intrinsics ------------------------------"
-    "---===\n"
+    "---===\n";
+  OS << 
     " *\n"
     " * Permission is hereby granted, free of charge, to any person obtaining "
     "a copy\n"
@@ -1113,30 +1193,41 @@ void NeonEmitter::run(raw_ostream &OS) {
     "---===\n"
     " */\n\n";
 
-  OS << "#ifndef __ARM_NEON_H\n";
-  OS << "#define __ARM_NEON_H\n\n";
+  if (IsARM64) {
+    OS << "#ifndef __AARCH64_SIMD_H\n";
+    OS << "#define __AARCH64_SIMD_H\n\n";
+  } else {
+    OS << "#ifndef __ARM_NEON_H\n";
+    OS << "#define __ARM_NEON_H\n\n";
 
-  OS << "#ifndef __ARM_NEON__\n";
-  OS << "#error \"NEON support not enabled\"\n";
-  OS << "#endif\n\n";
+    OS << "#ifndef __ARM_NEON__\n";
+    OS << "#error \"NEON support not enabled\"\n";
+    OS << "#endif\n\n";
+  }
 
   OS << "#include <stdint.h>\n\n";
 
   // Emit NEON-specific scalar typedefs.
   OS << "typedef float float32_t;\n";
+  if (IsARM64)
+    OS << "typedef double float64_t;\n";
   OS << "typedef int8_t poly8_t;\n";
   OS << "typedef int16_t poly16_t;\n";
   OS << "typedef uint16_t float16_t;\n";
 
   // Emit Neon vector typedefs.
-  std::string TypedefTypes("cQcsQsiQilQlUcQUcUsQUsUiQUiUlQUlhQhfQfPcQPcPsQPs");
+  std::string TypedefTypes;
+  if (IsARM64)
+    TypedefTypes = "cQcsQsiQilQlUcQUcUsQUsUiQUiUlQUlhQhfQfQdPcQPcPsQPs";
+  else
+    TypedefTypes = "cQcsQsiQilQlUcQUcUsQUsUiQUiUlQUlhQhfQfPcQPcPsQPs";
   SmallVector<StringRef, 24> TDTypeVec;
   ParseTypes(0, TypedefTypes, TDTypeVec);
 
   // Emit vector typedefs.
   for (unsigned i = 0, e = TDTypeVec.size(); i != e; ++i) {
     bool dummy, quad = false, poly = false;
-    (void) ClassifyType(TDTypeVec[i], quad, poly, dummy);
+    (void) ClassifyType(TDTypeVec[i], quad, dummy, poly, dummy);
     if (poly)
       OS << "typedef __attribute__((neon_polyvector_type(";
     else
@@ -1169,25 +1260,32 @@ void NeonEmitter::run(raw_ostream &OS) {
 
   std::vector<Record*> RV = Records.getAllDerivedDefinitions("Inst");
 
-  // Emit vmovl, vmull and vabd intrinsics first so they can be used by other
-  // intrinsics.  (Some of the saturating multiply instructions are also
-  // used to implement the corresponding "_lane" variants, but tablegen
-  // sorts the records into alphabetical order so that the "_lane" variants
-  // come after the intrinsics they use.)
+  // Emit vmovl, vmull, vqdmull, and vabd intrinsics first so they can be
+  // used by other intrinsics.  (Some of the saturating multiply instructions
+  // are also used to implement the corresponding "_lane" variants,
+  // but tablegen sorts the records into alphabetical order so that the "_lane"
+  // variants come after the intrinsics they use.)
   emitIntrinsic(OS, Records.getDef("VMOVL"));
   emitIntrinsic(OS, Records.getDef("VMULL"));
   emitIntrinsic(OS, Records.getDef("VABD"));
+  emitIntrinsic(OS, Records.getDef("VQDMULL"));
+
 
   for (unsigned i = 0, e = RV.size(); i != e; ++i) {
     Record *R = RV[i];
-    if (R->getName() != "VMOVL" &&
-        R->getName() != "VMULL" &&
-        R->getName() != "VABD")
-      emitIntrinsic(OS, R);
+    if (R->getName() == "VMOVL" ||
+        R->getName() == "VMULL" ||
+        R->getName() == "VABD"  ||
+        R->getName() == "VQDMULL")
+      continue;
+    emitIntrinsic(OS, R);
   }
 
   OS << "#undef __ai\n\n";
-  OS << "#endif /* __ARM_NEON_H */\n";
+  if (IsARM64)
+    OS << "#endif /* __AARCH64_SIMD_H */\n";
+  else
+    OS << "#endif /* __ARM_NEON_H */\n";
 }
 
 /// emitIntrinsic - Write out the arm_neon.h header file definitions for the
@@ -1212,18 +1310,19 @@ void NeonEmitter::emitIntrinsic(raw_ostream &OS, Record *R) {
     if (kind == OpReinterpret) {
       bool outQuad = false;
       bool dummy = false;
-      (void)ClassifyType(TypeVec[ti], outQuad, dummy, dummy);
+      (void)ClassifyType(TypeVec[ti], outQuad, dummy, dummy, dummy);
       for (unsigned srcti = 0, srcte = TypeVec.size();
            srcti != srcte; ++srcti) {
         bool inQuad = false;
-        (void)ClassifyType(TypeVec[srcti], inQuad, dummy, dummy);
+        (void)ClassifyType(TypeVec[srcti], inQuad, dummy, dummy, dummy);
         if (srcti == ti || inQuad != outQuad)
           continue;
-        OS << GenIntrinsic(name, Proto, TypeVec[ti], TypeVec[srcti],
+        OS << GenIntrinsic(name, builtinPrefix(), Proto,
+                           TypeVec[ti], TypeVec[srcti],
                            OpCast, ClassS);
       }
     } else {
-      OS << GenIntrinsic(name, Proto, TypeVec[ti], TypeVec[ti],
+      OS << GenIntrinsic(name, builtinPrefix(), Proto, TypeVec[ti], TypeVec[ti],
                          kind, classKind);
     }
   }
@@ -1233,7 +1332,7 @@ void NeonEmitter::emitIntrinsic(raw_ostream &OS, Record *R) {
 static unsigned RangeFromType(const char mod, StringRef typestr) {
   // base type to get the type string for.
   bool quad = false, dummy = false;
-  char type = ClassifyType(typestr, quad, dummy, dummy);
+  char type = ClassifyType(typestr, quad, dummy, dummy, dummy);
   type = ModType(mod, type, quad, dummy, dummy, dummy, dummy, dummy);
 
   switch (type) {
@@ -1245,6 +1344,7 @@ static unsigned RangeFromType(const char mod, StringRef typestr) {
     case 'f':
     case 'i':
       return (2 << (int)quad) - 1;
+    case 'd':
     case 'l':
       return (1 << (int)quad) - 1;
     default:
@@ -1266,6 +1366,7 @@ void NeonEmitter::runHeader(raw_ostream &OS) {
 
   // Generate BuiltinsARM.def for NEON
   OS << "#ifdef GET_NEON_BUILTINS\n";
+  std::string prefix = builtinPrefix();
   for (unsigned i = 0, e = RV.size(); i != e; ++i) {
     Record *R = RV[i];
     OpKind k = OpMap[R->getValueAsDef("Operand")->getName()];
@@ -1293,7 +1394,7 @@ void NeonEmitter::runHeader(raw_ostream &OS) {
       // Generate the BuiltinsARM.def declaration for this builtin, ensuring
       // that each unique BUILTIN() macro appears only once in the output
       // stream.
-      std::string bd = GenBuiltinDef(name, Proto, TypeVec[ti], ck);
+      std::string bd = GenBuiltinDef(name, prefix, Proto, TypeVec[ti], ck);
       if (EmittedMap.count(bd))
         continue;
 
@@ -1322,7 +1423,8 @@ void NeonEmitter::runHeader(raw_ostream &OS) {
 
     // Functions which have a scalar argument cannot be overloaded, no need to
     // check them if we are emitting the type checking code.
-    if (Proto.find('s') != std::string::npos)
+    if (Proto.find('s') != std::string::npos ||
+        Proto.find('z') != std::string::npos)
       continue;
 
     SmallVector<StringRef, 16> TypeVec;
@@ -1335,8 +1437,8 @@ void NeonEmitter::runHeader(raw_ostream &OS) {
     unsigned mask = 0, qmask = 0;
     for (unsigned ti = 0, te = TypeVec.size(); ti != te; ++ti) {
       // Generate the switch case(s) for this builtin for the type validation.
-      bool quad = false, poly = false, usgn = false;
-      (void) ClassifyType(TypeVec[ti], quad, poly, usgn);
+      bool quad = false, poly = false, usgn = false, qsuffix = false;
+      (void) ClassifyType(TypeVec[ti], quad, qsuffix, poly, usgn);
 
       if (quad) {
         qi = ti;
@@ -1347,11 +1449,11 @@ void NeonEmitter::runHeader(raw_ostream &OS) {
       }
     }
     if (mask)
-      OS << "case ARM::BI__builtin_neon_"
+      OS << "case " << builtinNamespace() << "::BI__builtin_" << prefix
          << MangleName(name, TypeVec[si], ClassB)
          << ": mask = " << "0x" << utohexstr(mask) << "; break;\n";
     if (qmask)
-      OS << "case ARM::BI__builtin_neon_"
+      OS << "case " << builtinNamespace() << "::BI__builtin_" << prefix
          << MangleName(name, TypeVec[qi], ClassB)
          << ": mask = " << "0x" << utohexstr(qmask) << "; break;\n";
   }
@@ -1397,7 +1499,8 @@ void NeonEmitter::runHeader(raw_ostream &OS) {
         // in the range 1 to 32.
         ck = ClassB;
         rangestr = "l = 1; u = 31"; // upper bound = l + u
-      } else if (Proto.find('s') == std::string::npos) {
+      } else if (Proto.find('s') == std::string::npos &&
+                 Proto.find('z') == std::string::npos) {
         // Builtins which are overloaded by type will need to have their upper
         // bound computed at Sema time based on the type constant.
         ck = ClassB;
@@ -1439,7 +1542,8 @@ void NeonEmitter::runHeader(raw_ostream &OS) {
           case 'i': ie = ii + 1; break;
         }
       }
-      OS << "case ARM::BI__builtin_neon_" << MangleName(name, TypeVec[ti], ck)
+      OS << "case " << builtinNamespace() << "::BI__builtin_" << prefix
+         << MangleName(name, TypeVec[ti], ck)
          << ": i = " << immidx << "; " << rangestr << "; break;\n";
     }
   }
@@ -1532,11 +1636,11 @@ void NeonEmitter::runTests(raw_ostream &OS) {
       if (kind == OpReinterpret) {
         bool outQuad = false;
         bool dummy = false;
-        (void)ClassifyType(TypeVec[ti], outQuad, dummy, dummy);
+        (void)ClassifyType(TypeVec[ti], outQuad, dummy, dummy, dummy);
         for (unsigned srcti = 0, srcte = TypeVec.size();
              srcti != srcte; ++srcti) {
           bool inQuad = false;
-          (void)ClassifyType(TypeVec[srcti], inQuad, dummy, dummy);
+          (void)ClassifyType(TypeVec[srcti], inQuad, dummy, dummy, dummy);
           if (srcti == ti || inQuad != outQuad)
             continue;
           OS << GenTest(name, Proto, TypeVec[ti], TypeVec[srcti], isShift);

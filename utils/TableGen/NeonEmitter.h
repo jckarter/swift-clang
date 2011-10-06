@@ -75,7 +75,11 @@ enum OpKind {
   OpReinterpret,
   OpAbdl,
   OpAba,
-  OpAbal
+  OpAbal,
+  OpQdmlal,
+  OpQdmlsl,
+  OpQdmlalN,
+  OpQdmlslN
 };
 
 enum ClassKind {
@@ -92,9 +96,11 @@ namespace llvm {
     RecordKeeper &Records;
     StringMap<OpKind> OpMap;
     DenseMap<Record*, ClassKind> ClassMap;
+    bool IsARM64;
 
   public:
-    NeonEmitter(RecordKeeper &R) : Records(R) {
+    NeonEmitter(RecordKeeper &R, bool isARM64 = false) :
+      Records(R), IsARM64(isARM64) {
       OpMap["OP_NONE"]  = OpNone;
       OpMap["OP_ADD"]   = OpAdd;
       OpMap["OP_ADDL"]  = OpAddl;
@@ -149,6 +155,10 @@ namespace llvm {
       OpMap["OP_ABDL"]  = OpAbdl;
       OpMap["OP_ABA"]   = OpAba;
       OpMap["OP_ABAL"]  = OpAbal;
+      OpMap["OP_QDMLAL"] = OpQdmlal;
+      OpMap["OP_QDMLSL"] = OpQdmlsl;
+      OpMap["OP_QDMLAL_N"] = OpQdmlalN;
+      OpMap["OP_QDMLSL_N"] = OpQdmlslN;
 
       Record *SI = R.getClass("SInst");
       Record *II = R.getClass("IInst");
@@ -169,6 +179,8 @@ namespace llvm {
 
   private:
     void emitIntrinsic(raw_ostream &OS, Record *R);
+    std::string builtinNamespace() { return IsARM64 ? "ARM64" : "ARM"; }
+    std::string builtinPrefix() { return IsARM64 ? "arm64_" : "neon_"; }
   };
 
 } // End llvm namespace

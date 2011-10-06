@@ -45,7 +45,10 @@ enum ActionType {
   GenOptParserDefs, GenOptParserImpl,
   GenArmNeon,
   GenArmNeonSema,
-  GenArmNeonTest
+  GenArmNeonTest,
+  GenArm64SIMD,
+  GenArm64SIMDSema,
+  GenArm64SIMDTest
 };
 
 namespace {
@@ -90,6 +93,12 @@ namespace {
                                "Generate ARM NEON sema support for clang"),
                     clEnumValN(GenArmNeonTest, "gen-arm-neon-test",
                                "Generate ARM NEON tests for clang"),
+                    clEnumValN(GenArm64SIMD, "gen-arm64-simd",
+                               "Generate aarch64_simd.h for clang"),
+                    clEnumValN(GenArm64SIMDSema, "gen-arm64-simd-sema",
+                               "Generate ARM64 SIMD sema support for clang"),
+                    clEnumValN(GenArm64SIMDTest, "gen-arm64-simd-test",
+                               "Generate ARM64 SIMD tests for clang"),
                     clEnumValEnd));
 
   cl::opt<std::string>
@@ -156,6 +165,15 @@ public:
       break;
     case GenArmNeonTest:
       NeonEmitter(Records).runTests(OS);
+      break;
+    case GenArm64SIMD:
+      NeonEmitter(Records, true).run(OS);
+      break;
+    case GenArm64SIMDSema:
+      NeonEmitter(Records, true).runHeader(OS);
+      break;
+    case GenArm64SIMDTest:
+      NeonEmitter(Records, true).runTests(OS);
       break;
     default:
       assert(1 && "Invalid Action");
