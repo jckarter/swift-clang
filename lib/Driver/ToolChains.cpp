@@ -27,6 +27,7 @@
 
 #include "llvm/ADT/SmallString.h"
 #include "llvm/ADT/StringExtras.h"
+#include "llvm/ADT/StringSwitch.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/FileSystem.h"
@@ -118,65 +119,35 @@ bool Darwin::hasBlocksRuntime() const {
     return !isMacosxVersionLT(10, 6);
 }
 
-// FIXME: Can we tablegen this?
 static const char *GetArmArchForMArch(StringRef Value) {
-  if (Value == "armv6k")
-    return "armv6";
-
-  if (Value == "armv5tej")
-    return "armv5";
-
-  if (Value == "xscale")
-    return "xscale";
-
-  if (Value == "armv4t")
-    return "armv4t";
-
-  if (Value == "armv7" ||
-      Value == "armv7a" || Value == "armv7-a" ||
-      Value == "armv7r" || Value == "armv7-r" ||
-      Value == "armv7m" || Value == "armv7-m")
-    return "armv7";
-
-  if (Value == "armv7f" || Value == "armv7-f")
-    return "armv7f";
-
-  if (Value == "armv7k" || Value == "armv7-k")
-    return "armv7k";
-
-  return 0;
+  return llvm::StringSwitch<const char*>(Value)
+    .Case("armv6k", "armv6")
+    .Case("armv5tej", "armv5")
+    .Case("xscale", "xscale")
+    .Case("armv4t", "armv4t")
+    .Case("armv7", "armv7")
+    .Cases("armv7a", "armv7-a", "armv7")
+    .Cases("armv7r", "armv7-r", "armv7")
+    .Cases("armv7m", "armv7-m", "armv7")
+    .Cases("armv7f", "armv7-f", "armv7f")
+    .Cases("armv7k", "armv7-k", "armv7k")
+    .Default(0);
 }
 
-// FIXME: Can we tablegen this?
 static const char *GetArmArchForMCpu(StringRef Value) {
-  if (Value == "arm10tdmi" || Value == "arm1020t" || Value == "arm9e" ||
-      Value == "arm946e-s" || Value == "arm966e-s" ||
-      Value == "arm968e-s" || Value == "arm10e" ||
-      Value == "arm1020e" || Value == "arm1022e" || Value == "arm926ej-s" ||
-      Value == "arm1026ej-s")
-    return "armv5";
-
-  if (Value == "xscale")
-    return "xscale";
-
-  if (Value == "arm1136j-s" || Value == "arm1136jf-s" ||
-      Value == "arm1176jz-s" || Value == "arm1176jzf-s" ||
-      Value == "cortex-m0" )
-    return "armv6";
-
-  if (Value == "cortex-a8" || Value == "cortex-r4" || Value == "cortex-m3" ||
-      Value == "cortex-a9")
-    return "armv7";
-
-  if (Value == "cortex-a9-mp")
-    return "armv7f";
-
+  return llvm::StringSwitch<const char *>(Value)
+    .Cases("arm9e", "arm946e-s", "arm966e-s", "arm968e-s", "arm926ej-s","armv5")
+    .Cases("arm10e", "arm10tdmi", "armv5")
+    .Cases("arm1020t", "arm1020e", "arm1022e", "arm1026ej-s", "armv5")
+    .Case("xscale", "xscale")
+    .Cases("arm1136j-s", "arm1136jf-s", "arm1176jz-s",
+           "arm1176jzf-s", "cortex-m0", "armv6")
+    .Cases("cortex-a8", "cortex-r4", "cortex-m3", "cortex-a9", "armv7")
+    .Case("cortex-a9-mp", "armv7f")
 #ifndef __OPEN_SOURCE__
-  if (Value == "pj4b")
-    return "armv7k";
+    .Case("pj4b", "armv7k")
 #endif // !__OPEN_SOURCE__
-
-  return 0;
+    .Default(0);
 }
 
 StringRef Darwin::getDarwinArchName(const ArgList &Args) const {
