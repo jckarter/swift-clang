@@ -3011,7 +3011,8 @@ static bool RebuildDeclaratorInCurrentInstantiation(Sema &S, Declarator &D,
   case DeclSpec::TST_typename:
   case DeclSpec::TST_typeofType:
   case DeclSpec::TST_decltype:
-  case DeclSpec::TST_underlyingType: {
+  case DeclSpec::TST_underlyingType:
+  case DeclSpec::TST_atomic: {
     // Grab the type from the parser.
     TypeSourceInfo *TSI = 0;
     QualType T = S.GetTypeFromParser(DS.getRepAsType(), &TSI);
@@ -8003,13 +8004,14 @@ void Sema::ActOnTagStartDefinition(Scope *S, Decl *TagD) {
   PushDeclContext(S, Tag);
 }
 
-void Sema::ActOnObjCContainerStartDefinition(Decl *IDecl) {
+Decl *Sema::ActOnObjCContainerStartDefinition(Decl *IDecl) {
   assert(isa<ObjCContainerDecl>(IDecl) && 
          "ActOnObjCContainerStartDefinition - Not ObjCContainerDecl");
   DeclContext *OCD = cast<DeclContext>(IDecl);
   assert(getContainingDC(OCD) == CurContext &&
       "The next DeclContext should be lexically contained in the current one.");
   CurContext = OCD;
+  return IDecl;
 }
 
 void Sema::ActOnStartCXXMemberDeclarations(Scope *S, Decl *TagD,
@@ -8067,7 +8069,17 @@ void Sema::ActOnObjCContainerFinishDefinition() {
   // Exit this scope of this interface definition.
   PopDeclContext();
 }
-                                          
+
+void Sema::ActOnObjCTemporaryExitContainerContext() {
+  OriginalLexicalContext = CurContext;
+  ActOnObjCContainerFinishDefinition();
+}
+
+void Sema::ActOnObjCReenterContainerContext() {
+  ActOnObjCContainerStartDefinition(cast<Decl>(OriginalLexicalContext));
+  OriginalLexicalContext = 0;
+}
+
 void Sema::ActOnTagDefinitionError(Scope *S, Decl *TagD) {
   AdjustDeclIfTemplate(TagD);
   TagDecl *Tag = cast<TagDecl>(TagD);
@@ -9650,4 +9662,13 @@ void Sema::ActOnPragmaWeakAlias(IdentifierInfo* Name,
 
 Decl *Sema::getObjCDeclContext() const {
   return (dyn_cast_or_null<ObjCContainerDecl>(CurContext));
+}
+
+AvailabilityResult Sema::getCurContextAvailability() const {
+  const Decl *D = cast<Decl>(getCurLexicalContext());
+  // A category implicitly has the availability of the interface.
+  if (const ObjCCategoryDecl *CatD = dyn_cast<ObjCCategoryDecl>(D))
+    D = CatD->getClassInterface();
+  
+  return D->getAvailability();
 }
