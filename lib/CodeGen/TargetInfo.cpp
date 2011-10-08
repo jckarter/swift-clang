@@ -3377,9 +3377,6 @@ const TargetCodeGenInfo &CodeGenModule::getTargetCodeGenInfo() {
   if (TheTargetCodeGenInfo)
     return *TheTargetCodeGenInfo;
 
-  // For now we just cache the TargetCodeGenInfo in CodeGenModule and don't
-  // free it.
-
   const llvm::Triple &Triple = getContext().getTargetInfo().getTriple();
   switch (Triple.getArch()) {
   default:
