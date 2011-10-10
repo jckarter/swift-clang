@@ -810,6 +810,9 @@ static void CheckConstexprCtorInitializer(Sema &SemaRef,
                                           FieldDecl *Field,
                                           llvm::SmallSet<Decl*, 16> &Inits,
                                           bool &Diagnosed) {
+  if (Field->isUnnamedBitfield())
+    return;
+  
   if (!Inits.count(Field)) {
     if (!Diagnosed) {
       SemaRef.Diag(Dcl->getLocation(), diag::err_constexpr_ctor_missing_init);
@@ -902,7 +905,8 @@ bool Sema::CheckConstexprFunctionBody(const FunctionDecl *Dcl, Stmt *Body) {
         Diag(Dcl->getLocation(), diag::err_constexpr_union_ctor_no_init);
         return false;
       }
-    } else if (!Constructor->isDelegatingConstructor()) {
+    } else if (!Constructor->isDependentContext() &&
+               !Constructor->isDelegatingConstructor()) {
       assert(RD->getNumVBases() == 0 && "constexpr ctor with virtual bases");
 
       // Skip detailed checking if we have enough initializers, and we would
@@ -1428,7 +1432,7 @@ Decl *
 Sema::ActOnCXXMemberDeclarator(Scope *S, AccessSpecifier AS, Declarator &D,
                                MultiTemplateParamsArg TemplateParameterLists,
                                Expr *BW, const VirtSpecifiers &VS,
-                               Expr *InitExpr, bool HasDeferredInit,
+                               bool HasDeferredInit,
                                bool IsDefinition) {
   const DeclSpec &DS = D.getDeclSpec();
   DeclarationNameInfo NameInfo = GetNameForDeclarator(D);
@@ -1440,11 +1444,9 @@ Sema::ActOnCXXMemberDeclarator(Scope *S, AccessSpecifier AS, Declarator &D,
     Loc = D.getSourceRange().getBegin();
 
   Expr *BitWidth = static_cast<Expr*>(BW);
-  Expr *Init = static_cast<Expr*>(InitExpr);
 
   assert(isa<CXXRecordDecl>(CurContext));
   assert(!DS.isFriendSpecified());
-  assert(!Init || !HasDeferredInit);
 
   bool isFunc = D.isDeclarationOfFunction();
 
@@ -1608,14 +1610,6 @@ Sema::ActOnCXXMemberDeclarator(Scope *S, AccessSpecifier AS, Declarator &D,
   CheckOverrideControl(Member);
 
   assert((Name || isInstField) && "No identifier for non-field ?");
-
-  if (Init)
-    AddInitializerToDecl(Member, Init, false,
-                         DS.getTypeSpecType() == DeclSpec::TST_auto);
-  else if (DS.getStorageClassSpec() == DeclSpec::SCS_static)
-    ActOnUninitializedDecl(Member, DS.getTypeSpecType() == DeclSpec::TST_auto);
-
-  FinalizeDeclaration(Member);
 
   if (isInstField)
     FieldCollector->Add(cast<FieldDecl>(Member));
@@ -2419,9 +2413,8 @@ BuildImplicitMemberInitializer(Sema &SemaRef, CXXConstructorDecl *Constructor,
     QualType ParamType = Param->getType().getNonReferenceType();
 
     // Suppress copying zero-width bitfields.
-    if (const Expr *Width = Field->getBitWidth())
-      if (Width->EvaluateAsInt(SemaRef.Context) == 0)
-        return false;
+    if (Field->isBitField() && Field->getBitWidthValue(SemaRef.Context) == 0)
+      return false;
     
     Expr *MemberExprBase = 
       DeclRefExpr::Create(SemaRef.Context, NestedNameSpecifierLoc(), Param, 
@@ -2825,6 +2818,13 @@ bool Sema::SetCtorInitializers(CXXConstructorDecl *Constructor,
                                MemEnd = ClassDecl->decls_end();
        Mem != MemEnd; ++Mem) {
     if (FieldDecl *F = dyn_cast<FieldDecl>(*Mem)) {
+      // C++ [class.bit]p2:
+      //   A declaration for a bit-field that omits the identifier declares an
+      //   unnamed bit-field. Unnamed bit-fields are not members and cannot be
+      //   initialized.
+      if (F->isUnnamedBitfield())
+        continue;
+      
       if (F->getType()->isIncompleteArrayType()) {
         assert(ClassDecl->hasFlexibleArrayMember() &&
                "Incomplete array type is not valid");
@@ -2965,9 +2965,13 @@ DiagnoseBaseOrMemInitializerOrder(Sema &SemaRef,
 
   // 3. Direct fields.
   for (CXXRecordDecl::field_iterator Field = ClassDecl->field_begin(),
-       E = ClassDecl->field_end(); Field != E; ++Field)
+       E = ClassDecl->field_end(); Field != E; ++Field) {
+    if (Field->isUnnamedBitfield())
+      continue;
+    
     IdealInitKeys.push_back(GetKeyForTopLevelField(*Field));
-
+  }
+  
   unsigned NumIdealInits = IdealInitKeys.size();
   unsigned IdealIndex = 0;
 
@@ -3539,7 +3543,7 @@ void Sema::CheckCompletedCXXClass(CXXRecordDecl *Record) {
     for (RecordDecl::field_iterator F = Record->field_begin(), 
                                  FEnd = Record->field_end();
          F != FEnd; ++F) {
-      if (F->hasInClassInitializer())
+      if (F->hasInClassInitializer() || F->isUnnamedBitfield())
         continue;
 
       if (F->getType()->isReferenceType() ||
@@ -3742,7 +3746,7 @@ void Sema::CheckExplicitlyDefaultedDefaultConstructor(CXXConstructorDecl *CD) {
     return;
   }
 
-  if (ShouldDeleteDefaultConstructor(CD)) {
+  if (ShouldDeleteSpecialMember(CD, CXXDefaultConstructor)) {
     if (First) {
       CD->setDeletedAsWritten();
     } else {
@@ -4096,29 +4100,43 @@ void Sema::CheckExplicitlyDefaultedDestructor(CXXDestructorDecl *DD) {
   }
 }
 
-bool Sema::ShouldDeleteDefaultConstructor(CXXConstructorDecl *CD) {
-  CXXRecordDecl *RD = CD->getParent();
+/// This function implements the following C++0x paragraphs:
+///  - [class.ctor]/5
+bool Sema::ShouldDeleteSpecialMember(CXXMethodDecl *MD, CXXSpecialMember CSM) {
+  assert(!MD->isInvalidDecl());
+  CXXRecordDecl *RD = MD->getParent();
   assert(!RD->isDependentType() && "do deletion after instantiation");
   if (!LangOpts.CPlusPlus0x || RD->isInvalidDecl())
     return false;
 
-  SourceLocation Loc = CD->getLocation();
+  bool IsUnion = RD->isUnion();
+  bool IsConstructor = false;
+  bool IsAssignment = false;
+  bool IsMove = false;
+  
+  bool ConstArg = false;
+
+  switch (CSM) {
+  case CXXDefaultConstructor:
+    IsConstructor = true;
+    break;
+  default:
+    llvm_unreachable("function only currently implemented for default ctors");
+  }
+
+  SourceLocation Loc = MD->getLocation();
 
   // Do access control from the constructor
-  ContextRAII CtorContext(*this, CD);
+  ContextRAII MethodContext(*this, MD);
 
-  bool Union = RD->isUnion();
   bool AllConst = true;
 
   // We do this because we should never actually use an anonymous
   // union's constructor.
-  if (Union && RD->isAnonymousStructOrUnion())
+  if (IsUnion && RD->isAnonymousStructOrUnion())
     return false;
 
   // FIXME: We should put some diagnostic logic right into this function.
-
-  // C++0x [class.ctor]/5
-  //    A defaulted default constructor for class X is defined as deleted if:
 
   for (CXXRecordDecl::base_class_iterator BI = RD->bases_begin(),
                                           BE = RD->bases_end();
@@ -4130,26 +4148,33 @@ bool Sema::ShouldDeleteDefaultConstructor(CXXConstructorDecl *CD) {
     CXXRecordDecl *BaseDecl = BI->getType()->getAsCXXRecordDecl();
     assert(BaseDecl && "base isn't a CXXRecordDecl");
 
-    // -- any [direct base class] has a type with a destructor that is
-    //    deleted or inaccessible from the defaulted default constructor
-    CXXDestructorDecl *BaseDtor = LookupDestructor(BaseDecl);
-    if (BaseDtor->isDeleted())
-      return true;
-    if (CheckDestructorAccess(Loc, BaseDtor, PDiag()) !=
-        AR_accessible)
-      return true;
+    // Unless we have an assignment operator, the base's destructor must
+    // be accessible and not deleted.
+    if (!IsAssignment) {
+      CXXDestructorDecl *BaseDtor = LookupDestructor(BaseDecl);
+      if (BaseDtor->isDeleted())
+        return true;
+      if (CheckDestructorAccess(Loc, BaseDtor, PDiag()) !=
+          AR_accessible)
+        return true;
+    }
 
-    // -- any [direct base class either] has no default constructor or
-    //    overload resolution as applied to [its] default constructor
-    //    results in an ambiguity or in a function that is deleted or
-    //    inaccessible from the defaulted default constructor
-    CXXConstructorDecl *BaseDefault = LookupDefaultConstructor(BaseDecl);
-    if (!BaseDefault || BaseDefault->isDeleted())
-      return true;
-
-    if (CheckConstructorAccess(Loc, BaseDefault, BaseDefault->getAccess(),
-                               PDiag()) != AR_accessible)
-      return true;
+    // Finding the corresponding member in the base should lead to a
+    // unique, accessible, non-deleted function.
+    if (CSM != CXXDestructor) {
+      SpecialMemberOverloadResult *SMOR =
+        LookupSpecialMember(BaseDecl, CSM, ConstArg, false, IsMove, false,
+                            false);
+      if (!SMOR->hasSuccess())
+        return true;
+      CXXMethodDecl *BaseMember = SMOR->getMethod();
+      if (IsConstructor) {
+        CXXConstructorDecl *BaseCtor = cast<CXXConstructorDecl>(BaseMember);
+        if (CheckConstructorAccess(Loc, BaseCtor, BaseCtor->getAccess(),
+                                   PDiag()) != AR_accessible)
+          return true;
+      }
+    }
   }
 
   for (CXXRecordDecl::base_class_iterator BI = RD->vbases_begin(),
@@ -4158,69 +4183,76 @@ bool Sema::ShouldDeleteDefaultConstructor(CXXConstructorDecl *CD) {
     CXXRecordDecl *BaseDecl = BI->getType()->getAsCXXRecordDecl();
     assert(BaseDecl && "base isn't a CXXRecordDecl");
 
-    // -- any [virtual base class] has a type with a destructor that is
-    //    delete or inaccessible from the defaulted default constructor
-    CXXDestructorDecl *BaseDtor = LookupDestructor(BaseDecl);
-    if (BaseDtor->isDeleted())
-      return true;
-    if (CheckDestructorAccess(Loc, BaseDtor, PDiag()) !=
-        AR_accessible)
-      return true;
+    // Unless we have an assignment operator, the base's destructor must
+    // be accessible and not deleted.
+    if (!IsAssignment) {
+      CXXDestructorDecl *BaseDtor = LookupDestructor(BaseDecl);
+      if (BaseDtor->isDeleted())
+        return true;
+      if (CheckDestructorAccess(Loc, BaseDtor, PDiag()) !=
+          AR_accessible)
+        return true;
+    }
 
-    // -- any [virtual base class either] has no default constructor or
-    //    overload resolution as applied to [its] default constructor
-    //    results in an ambiguity or in a function that is deleted or
-    //    inaccessible from the defaulted default constructor
-    CXXConstructorDecl *BaseDefault = LookupDefaultConstructor(BaseDecl);
-    if (!BaseDefault || BaseDefault->isDeleted())
-      return true;
-
-    if (CheckConstructorAccess(Loc, BaseDefault, BaseDefault->getAccess(),
-                               PDiag()) != AR_accessible)
-      return true;
+    // Finding the corresponding member in the base should lead to a
+    // unique, accessible, non-deleted function.
+    if (CSM != CXXDestructor) {
+      SpecialMemberOverloadResult *SMOR =
+        LookupSpecialMember(BaseDecl, CSM, ConstArg, false, IsMove, false,
+                            false);
+      if (!SMOR->hasSuccess())
+        return true;
+      CXXMethodDecl *BaseMember = SMOR->getMethod();
+      if (IsConstructor) {
+        CXXConstructorDecl *BaseCtor = cast<CXXConstructorDecl>(BaseMember);
+        if (CheckConstructorAccess(Loc, BaseCtor, BaseCtor->getAccess(),
+                                   PDiag()) != AR_accessible)
+          return true;
+      }
+    }
   }
 
   for (CXXRecordDecl::field_iterator FI = RD->field_begin(),
                                      FE = RD->field_end();
        FI != FE; ++FI) {
-    if (FI->isInvalidDecl())
+    if (FI->isInvalidDecl() || FI->isUnnamedBitfield())
       continue;
     
     QualType FieldType = Context.getBaseElementType(FI->getType());
     CXXRecordDecl *FieldRecord = FieldType->getAsCXXRecordDecl();
 
-    // -- any non-static data member with no brace-or-equal-initializer is of
-    //    reference type
-    if (FieldType->isReferenceType() && !FI->hasInClassInitializer())
-      return true;
+    // For a default constructor, all references must be initialized in-class
+    // and, if a union, it must have a non-const member.
+    if (CSM == CXXDefaultConstructor) {
+      if (FieldType->isReferenceType() && !FI->hasInClassInitializer())
+        return true;
 
-    // -- X is a union and all its variant members are of const-qualified type
-    //    (or array thereof)
-    if (Union && !FieldType.isConstQualified())
-      AllConst = false;
+      if (IsUnion && !FieldType.isConstQualified())
+        AllConst = false;
+    }
 
     if (FieldRecord) {
-      // -- X is a union-like class that has a variant member with a non-trivial
-      //    default constructor
-      if (Union && !FieldRecord->hasTrivialDefaultConstructor())
-        return true;
+      // Unless we're doing assignment, the field's destructor must be
+      // accessible and not deleted.
+      if (!IsAssignment) {
+        CXXDestructorDecl *FieldDtor = LookupDestructor(FieldRecord);
+        if (FieldDtor->isDeleted())
+          return true;
+        if (CheckDestructorAccess(Loc, FieldDtor, PDiag()) !=
+            AR_accessible)
+          return true;
+      }
 
-      CXXDestructorDecl *FieldDtor = LookupDestructor(FieldRecord);
-      if (FieldDtor->isDeleted())
-        return true;
-      if (CheckDestructorAccess(Loc, FieldDtor, PDiag()) !=
-          AR_accessible)
-        return true;
-
-      // -- any non-variant non-static data member of const-qualified type (or
-      //    array thereof) with no brace-or-equal-initializer does not have a
-      //    user-provided default constructor
-      if (FieldType.isConstQualified() &&
+      // For a default constructor, a const member must have a user-provided
+      // default constructor or else be explicitly initialized.
+      if (CSM == CXXDefaultConstructor && FieldType.isConstQualified() &&
           !FI->hasInClassInitializer() &&
           !FieldRecord->hasUserProvidedDefaultConstructor())
         return true;
  
-      if (!Union && FieldRecord->isUnion() &&
+      // For a default constructor, additional restrictions exist on the
+      // variant members.
+      if (CSM == CXXDefaultConstructor && !IsUnion && FieldRecord->isUnion() &&
           FieldRecord->isAnonymousStructOrUnion()) {
         // We're okay to reuse AllConst here since we only care about the
         // value otherwise if we're in a union.
@@ -4249,29 +4281,43 @@ bool Sema::ShouldDeleteDefaultConstructor(CXXConstructorDecl *CD) {
         continue;
       }
 
-      // -- any non-static data member with no brace-or-equal-initializer has
-      //    class type M (or array thereof) and either M has no default
-      //    constructor or overload resolution as applied to M's default
-      //    constructor results in an ambiguity or in a function that is deleted
-      //    or inaccessible from the defaulted default constructor.
-      if (!FI->hasInClassInitializer()) {
-        CXXConstructorDecl *FieldDefault = LookupDefaultConstructor(FieldRecord);
-        if (!FieldDefault || FieldDefault->isDeleted())
+      // Check that the corresponding member of the field is accessible,
+      // unique, and non-deleted. We don't do this if it has an explicit
+      // initialization when default-constructing.
+      if (CSM != CXXDestructor &&
+          (CSM != CXXDefaultConstructor || !FI->hasInClassInitializer())) {
+        SpecialMemberOverloadResult *SMOR =
+          LookupSpecialMember(FieldRecord, CSM, ConstArg, false, IsMove, false,
+                              false);
+        if (!SMOR->hasSuccess())
           return true;
-        if (CheckConstructorAccess(Loc, FieldDefault, FieldDefault->getAccess(),
-                                   PDiag()) != AR_accessible)
+
+        CXXMethodDecl *FieldMember = SMOR->getMethod();
+        if (IsConstructor) {
+          CXXConstructorDecl *FieldCtor = cast<CXXConstructorDecl>(FieldMember);
+          if (CheckConstructorAccess(Loc, FieldCtor, FieldCtor->getAccess(),
+                                     PDiag()) != AR_accessible)
+          return true;
+        }
+
+        // We need the corresponding member of a union to be trivial so that
+        // we can safely copy them all simultaneously.
+        // FIXME: Note that performing the check here (where we rely on the lack
+        // of an in-class initializer) is technically ill-formed. However, this
+        // seems most obviously to be a bug in the standard.
+        if (IsUnion && !FieldMember->isTrivial())
           return true;
       }
-    } else if (!Union && FieldType.isConstQualified() &&
-               !FI->hasInClassInitializer()) {
-      // -- any non-variant non-static data member of const-qualified type (or
-      //    array thereof) with no brace-or-equal-initializer does not have a
-      //    user-provided default constructor
+    } else if (CSM == CXXDefaultConstructor && !IsUnion &&
+               FieldType.isConstQualified() && !FI->hasInClassInitializer()) {
+      // We can't initialize a const member of non-class type to any value.
       return true;
     }
   }
 
-  if (Union && AllConst)
+  // We can't have all const members in a union when default-constructing,
+  // or else they're all nonsensical garbage values that can't be changed.
+  if (CSM == CXXDefaultConstructor && IsUnion && AllConst)
     return true;
 
   return false;
@@ -4369,6 +4415,9 @@ bool Sema::ShouldDeleteCopyConstructor(CXXConstructorDecl *CD) {
   for (CXXRecordDecl::field_iterator FI = RD->field_begin(),
                                      FE = RD->field_end();
        FI != FE; ++FI) {
+    if (FI->isUnnamedBitfield())
+      continue;
+    
     QualType FieldType = Context.getBaseElementType(FI->getType());
     
     // -- for a copy constructor, a non-static data member of rvalue reference
@@ -4506,6 +4555,9 @@ bool Sema::ShouldDeleteCopyAssignmentOperator(CXXMethodDecl *MD) {
   for (CXXRecordDecl::field_iterator FI = RD->field_begin(),
                                      FE = RD->field_end();
        FI != FE; ++FI) {
+    if (FI->isUnnamedBitfield())
+      continue;
+    
     QualType FieldType = Context.getBaseElementType(FI->getType());
     
     // -- a non-static data member of reference type
@@ -4662,6 +4714,9 @@ bool Sema::ShouldDeleteMoveConstructor(CXXConstructorDecl *CD) {
   for (CXXRecordDecl::field_iterator FI = RD->field_begin(),
                                      FE = RD->field_end();
        FI != FE; ++FI) {
+    if (FI->isUnnamedBitfield())
+      continue;
+    
     QualType FieldType = Context.getBaseElementType(FI->getType());
 
     if (CXXRecordDecl *FieldRecord = FieldType->getAsCXXRecordDecl()) {
@@ -4782,6 +4837,9 @@ bool Sema::ShouldDeleteMoveAssignmentOperator(CXXMethodDecl *MD) {
   for (CXXRecordDecl::field_iterator FI = RD->field_begin(),
                                      FE = RD->field_end();
        FI != FE; ++FI) {
+    if (FI->isUnnamedBitfield())
+      continue;
+        
     QualType FieldType = Context.getBaseElementType(FI->getType());
     
     // -- a non-static data member of reference type
@@ -6979,7 +7037,7 @@ CXXConstructorDecl *Sema::DeclareImplicitDefaultConstructor(
     PushOnScopeChains(DefaultCon, S, false);
   ClassDecl->addDecl(DefaultCon);
 
-  if (ShouldDeleteDefaultConstructor(DefaultCon))
+  if (ShouldDeleteSpecialMember(DefaultCon, CXXDefaultConstructor))
     DefaultCon->setDeletedAsWritten();
   
   return DefaultCon;
@@ -7889,6 +7947,9 @@ void Sema::DefineImplicitCopyAssignment(SourceLocation CurrentLocation,
   for (CXXRecordDecl::field_iterator Field = ClassDecl->field_begin(),
                                   FieldEnd = ClassDecl->field_end(); 
        Field != FieldEnd; ++Field) {
+    if (Field->isUnnamedBitfield())
+      continue;
+    
     // Check for members of reference type; we can't copy those.
     if (Field->getType()->isReferenceType()) {
       Diag(ClassDecl->getLocation(), diag::err_uninitialized_member_for_assign)
@@ -7913,9 +7974,8 @@ void Sema::DefineImplicitCopyAssignment(SourceLocation CurrentLocation,
     }
 
     // Suppress assigning zero-width bitfields.
-    if (const Expr *Width = Field->getBitWidth())
-      if (Width->EvaluateAsInt(Context) == 0)
-        continue;
+    if (Field->isBitField() && Field->getBitWidthValue(Context) == 0)
+      continue;
     
     QualType FieldType = Field->getType().getNonReferenceType();
     if (FieldType->isIncompleteArrayType()) {
@@ -8307,6 +8367,9 @@ void Sema::DefineImplicitMoveAssignment(SourceLocation CurrentLocation,
   for (CXXRecordDecl::field_iterator Field = ClassDecl->field_begin(),
                                   FieldEnd = ClassDecl->field_end(); 
        Field != FieldEnd; ++Field) {
+    if (Field->isUnnamedBitfield())
+      continue;
+
     // Check for members of reference type; we can't move those.
     if (Field->getType()->isReferenceType()) {
       Diag(ClassDecl->getLocation(), diag::err_uninitialized_member_for_assign)
@@ -8331,9 +8394,8 @@ void Sema::DefineImplicitMoveAssignment(SourceLocation CurrentLocation,
     }
 
     // Suppress assigning zero-width bitfields.
-    if (const Expr *Width = Field->getBitWidth())
-      if (Width->EvaluateAsInt(Context) == 0)
-        continue;
+    if (Field->isBitField() && Field->getBitWidthValue(Context) == 0)
+      continue;
     
     QualType FieldType = Field->getType().getNonReferenceType();
     if (FieldType->isIncompleteArrayType()) {
@@ -9056,6 +9118,7 @@ void Sema::AddCXXDirectInitializerToDecl(Decl *RealDecl,
   // class type.
 
   if (!VDecl->getType()->isDependentType() &&
+      !VDecl->getType()->isIncompleteArrayType() && 
       RequireCompleteType(VDecl->getLocation(), VDecl->getType(),
                           diag::err_typecheck_decl_incomplete_type)) {
     VDecl->setInvalidDecl();
@@ -9131,14 +9194,19 @@ void Sema::AddCXXDirectInitializerToDecl(Decl *RealDecl,
     = InitializationKind::CreateDirect(VDecl->getLocation(),
                                        LParenLoc, RParenLoc);
   
+  QualType T = VDecl->getType();
   InitializationSequence InitSeq(*this, Entity, Kind, 
                                  Exprs.get(), Exprs.size());
-  ExprResult Result = InitSeq.Perform(*this, Entity, Kind, move(Exprs));
+  ExprResult Result = InitSeq.Perform(*this, Entity, Kind, move(Exprs), &T);
   if (Result.isInvalid()) {
     VDecl->setInvalidDecl();
     return;
+  } else if (T != VDecl->getType()) {
+    VDecl->setType(T);
+    Result.get()->setType(T);
   }
 
+  
   Expr *Init = Result.get();
   CheckImplicitConversions(Init, LParenLoc);
   
