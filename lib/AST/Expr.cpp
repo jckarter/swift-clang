@@ -274,7 +274,8 @@ DeclRefExpr::DeclRefExpr(NestedNameSpecifierLoc QualifierLoc,
     if (InstantiationDependent)
       setInstantiationDependent(true);
   }
-      
+  DeclRefExprBits.HadMultipleCandidates = 0;
+
   computeDependence();
 }
 
@@ -2954,7 +2955,7 @@ StringRef ObjCBridgedCastExpr::getBridgeKindName() const {
 }
 
 bool ChooseExpr::isConditionTrue(const ASTContext &C) const {
-  return getCond()->EvaluateAsInt(C) != 0;
+  return getCond()->EvaluateKnownConstInt(C) != 0;
 }
 
 ShuffleVectorExpr::ShuffleVectorExpr(ASTContext &C, Expr **args, unsigned nexpr,
