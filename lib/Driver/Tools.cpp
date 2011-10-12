@@ -1489,9 +1489,16 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
     }
   }
 
-  Args.AddLastArg(CmdArgs, options::OPT_nostdinc);
-  Args.AddLastArg(CmdArgs, options::OPT_nostdincxx);
-  Args.AddLastArg(CmdArgs, options::OPT_nobuiltininc);
+  // Pass options for controlling the default header search paths.
+  if (Args.hasArg(options::OPT_nostdinc)) {
+    CmdArgs.push_back("-nostdsysteminc");
+    CmdArgs.push_back("-nobuiltininc");
+  } else {
+    if (Args.hasArg(options::OPT_nostdlibinc))
+        CmdArgs.push_back("-nostdsysteminc");
+    Args.AddLastArg(CmdArgs, options::OPT_nostdincxx);
+    Args.AddLastArg(CmdArgs, options::OPT_nobuiltininc);
+  }
 
   // Pass the path to compiler resource files.
   CmdArgs.push_back("-resource-dir");
