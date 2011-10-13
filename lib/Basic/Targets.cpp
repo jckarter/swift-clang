@@ -3763,6 +3763,8 @@ static TargetInfo *AllocateTarget(const std::string &T) {
     if (Triple.isOSDarwin())
       return new DarwinPPC32TargetInfo(T);
     switch (os) {
+    case llvm::Triple::Linux:
+      return new LinuxTargetInfo<PPC32TargetInfo>(T);
     case llvm::Triple::FreeBSD:
       return new FreeBSDTargetInfo<PPC32TargetInfo>(T);
     case llvm::Triple::NetBSD:
@@ -3777,6 +3779,8 @@ static TargetInfo *AllocateTarget(const std::string &T) {
     if (Triple.isOSDarwin())
       return new DarwinPPC64TargetInfo(T);
     switch (os) {
+    case llvm::Triple::Linux:
+      return new LinuxTargetInfo<PPC64TargetInfo>(T);
     case llvm::Triple::Lv2:
       return new PS3PPUTargetInfo<PPC64TargetInfo>(T);
     case llvm::Triple::FreeBSD:
@@ -3797,6 +3801,8 @@ static TargetInfo *AllocateTarget(const std::string &T) {
 
   case llvm::Triple::sparc:
     switch (os) {
+    case llvm::Triple::Linux:
+      return new LinuxTargetInfo<SparcV8TargetInfo>(T);
     case llvm::Triple::AuroraUX:
       return new AuroraUXSparcV8TargetInfo(T);
     case llvm::Triple::Solaris:
