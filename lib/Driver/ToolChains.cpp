@@ -208,7 +208,7 @@ Tool &Darwin::SelectTool(const Compilation &C, const JobAction &JA,
     // Fallback to llvm-gcc for i386 kext compiles, we don't support that ABI.
     if (Inputs.size() == 1 &&
         types::isCXX(Inputs[0]->getType()) &&
-        getTriple().getOS() == llvm::Triple::Darwin &&
+        getTriple().isOSDarwin() &&
         getTriple().getArch() == llvm::Triple::x86 &&
         (C.getArgs().getLastArg(options::OPT_fapple_kext) ||
          C.getArgs().getLastArg(options::OPT_mkernel)))
@@ -1712,6 +1712,7 @@ private:
         "i686-pc-linux-gnu",
         "i486-linux-gnu",
         "i686-redhat-linux",
+        "i386-redhat-linux",
         "i586-suse-linux",
         "i486-slackware-linux"
       };

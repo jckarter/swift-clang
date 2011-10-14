@@ -618,12 +618,12 @@ def err_unexpected_friend : Error<
 def ext_enum_friend : ExtWarn<
   "enumeration type %0 cannot be a friend">;
 def ext_nonclass_type_friend : ExtWarn<
-  "non-class friend type %0 is a C++11 extension">, InGroup<CXX0x>;
+  "non-class friend type %0 is a C++11 extension">, InGroup<CXX11>;
 def err_friend_is_member : Error<
   "friends cannot be members of the declaring class">;
 def ext_unelaborated_friend_type : ExtWarn<
   "specify '%select{struct|union|class|enum}0' to befriend %1; accepted "
-  "as a C++11 extension">, InGroup<CXX0x>;
+  "as a C++11 extension">, InGroup<CXX11>;
 def err_qualified_friend_not_found : Error<
   "no function named %0 with type %1 was found in the specified scope">;
 def err_introducing_special_friend : Error<
@@ -1365,6 +1365,8 @@ def err_attr_objc_ownership_redundant : Error<
   "the type %0 already has retainment attributes set on it">;
 def err_attribute_not_string : Error<
   "argument to %0 attribute was not a string literal">;
+def err_only_annotate_after_access_spec : Error<
+  "access specifier can only have annotation attributes">;
 def err_attribute_section_invalid_for_target : Error<
   "argument to 'section' attribute is not valid for this target: %0">;
 def err_attribute_section_local_variable : Error<
@@ -1437,6 +1439,9 @@ def err_cconv_varargs : Error<
 def err_regparm_mismatch : Error<"function declared with with regparm(%0) "
   "attribute was previously declared "
   "%plural{0:without the regparm|:with the regparm(%1)}1 attribute">;
+def err_returns_retained_mismatch : Error<
+  "function declared with the ns_returns_retained attribute "
+  "was previously declared without the ns_returns_retained attribute">;
 def err_objc_precise_lifetime_bad_type : Error<
   "objc_precise_lifetime only applies to retainable types; type here is %0">;
 def warn_objc_precise_lifetime_meaningless : Error<
@@ -1558,8 +1563,6 @@ def warn_impcast_literal_float_to_integer : Warning<
 def warn_impcast_string_literal_to_bool : Warning<
   "implicit conversion turns string literal into bool: %0 to %1">,
   InGroup<DiagGroup<"string-conversion">>, DefaultIgnore;
-def note_fix_integral_float_as_integer : Note<
-  "this can be rewritten as an integer literal with the exact same value">;
 def warn_impcast_different_enum_types : Warning<
   "implicit conversion from enumeration type %0 to different enumeration type "
   "%1">, InGroup<DiagGroup<"conversion">>;
@@ -2051,7 +2054,7 @@ def err_template_param_default_arg_missing : Error<
   "template parameter missing a default argument">;
 def ext_template_parameter_default_in_function_template : ExtWarn<
   "default template arguments for a function template are a C++11 extension">,
-  InGroup<CXX0x>;
+  InGroup<CXX11>;
 def err_template_parameter_default_template_member : Error<
   "cannot add a default template argument to the definition of a member of a "
   "class template">;
@@ -2188,7 +2191,7 @@ def ext_template_spec_decl_out_of_scope_global : ExtWarn<
   "%select{class template|class template partial|function template|member "
   "function|static data member|member class}0 specialization of %1 must "
   "originally be declared in the global scope; accepted as a C++11 extension">,
-  InGroup<CXX0x>;
+  InGroup<CXX11>;
 def err_template_spec_decl_out_of_scope : Error<
   "%select{class template|class template partial|function template|member "
   "function|static data member|member class}0 specialization of %1 must "
@@ -2197,7 +2200,7 @@ def ext_template_spec_decl_out_of_scope : ExtWarn<
   "%select{class template|class template partial|function template|member "
   "function|static data member|member class}0 specialization of %1 must "
   "originally be declared in namespace %2; accepted as a C++11 extension">,
-  InGroup<CXX0x>;
+  InGroup<CXX11>;
 def err_template_spec_redecl_out_of_scope : Error<
   "%select{class template|class template partial|function template|member "
   "function|static data member|member class}0 specialization of %1 not in a "
@@ -2364,7 +2367,7 @@ def note_previous_explicit_instantiation : Note<
 def ext_explicit_instantiation_after_specialization : Extension<
     "explicit instantiation of %0 that occurs after an explicit "
     "specialization will be ignored (C++11 extension)">,
-    InGroup<CXX0x>;
+    InGroup<CXX11>;
 def note_previous_template_specialization : Note<
     "previous template specialization is here">;
 def err_explicit_instantiation_enum : Error<
@@ -2381,10 +2384,10 @@ def err_explicit_instantiation_must_be_global : Error<
   "explicit instantiation of %0 must occur at global scope">;
 def warn_explicit_instantiation_out_of_scope_0x : Warning<
   "explicit instantiation of %0 not in a namespace enclosing %1">, 
-  InGroup<CXX0xCompat>;
+  InGroup<CXX11Compat>;
 def warn_explicit_instantiation_must_be_global_0x : Warning<
   "explicit instantiation of %0 must occur at global scope">, 
-  InGroup<CXX0xCompat>;
+  InGroup<CXX11Compat>;
   
 def err_explicit_instantiation_requires_name : Error<
   "explicit instantiation declaration requires a name">;
@@ -2416,7 +2419,7 @@ def err_explicit_instantiation_unqualified_wrong_namespace : Error<
   "explicit instantiation of %q0 must occur in %1">;
 def warn_explicit_instantiation_unqualified_wrong_namespace_0x : Warning<
   "explicit instantiation of %q0 must occur in %1">, 
-  InGroup<CXX0xCompat>;
+  InGroup<CXX11Compat>;
 def err_explicit_instantiation_undefined_member : Error<
   "explicit instantiation of undefined %select{member class|member function|"
   "static data member}0 %1 of class template %2">;
@@ -2440,7 +2443,7 @@ def warn_typename_missing : ExtWarn<
   "missing 'typename' prior to dependent type name '%0%1'">,
   InGroup<DiagGroup<"typename-missing">>;
 def ext_typename_outside_of_template : ExtWarn<
-  "'typename' occurs outside of a template">, InGroup<CXX0x>;
+  "'typename' occurs outside of a template">, InGroup<CXX11>;
 def err_typename_refers_to_using_value_decl : Error<
   "typename specifier refers to a dependent using declaration for a value "
   "%0 in %1">;
@@ -2458,7 +2461,7 @@ def note_referenced_class_template : Error<
 def err_template_kw_missing : Error<
   "missing 'template' keyword prior to dependent template name '%0%1'">;
 def ext_template_outside_of_template : ExtWarn<
-  "'template' keyword outside of a template">, InGroup<CXX0x>;
+  "'template' keyword outside of a template">, InGroup<CXX11>;
 
 def err_non_type_template_in_nested_name_specifier : Error<
   "qualified name refers into a specialization of function template '%0'">;
@@ -2754,11 +2757,11 @@ def err_init_list_constant_narrowing : Error<
 def warn_init_list_variable_narrowing : Warning<
   "non-constant-expression cannot be narrowed from type %0 to %1 in "
   "initializer list in C++11">,
-  InGroup<CXX0xNarrowing>, DefaultIgnore;
+  InGroup<CXX11Narrowing>, DefaultIgnore;
 def warn_init_list_constant_narrowing : Warning<
   "constant expression evaluates to %0 which cannot be narrowed to type %1 in "
   "C++11">,
-  InGroup<CXX0xNarrowing>, DefaultIgnore;
+  InGroup<CXX11Narrowing>, DefaultIgnore;
 def note_init_list_narrowing_override : Note<
   "override this message by inserting an explicit cast">;
 def err_init_objc_class : Error<
@@ -3674,7 +3677,7 @@ def err_array_size_ambiguous_conversion : Error<
 def ext_array_size_conversion : Extension<
   "implicit conversion from array size expression of type %0 to "
   "%select{integral|enumeration}1 type %2 is a C++11 extension">,
-  InGroup<CXX0x>;
+  InGroup<CXX11>;
 def err_address_space_qualified_new : Error<
   "'new' cannot allocate objects of type %0 in address space '%1'">;
 def err_address_space_qualified_delete : Error<
@@ -4378,7 +4381,7 @@ def warn_not_compound_assign : Warning<
 
 // C++11 explicit conversion operators
 def warn_explicit_conversion_functions : Warning<
-  "explicit conversion functions are a C++11 extension">, InGroup<CXX0x>;
+  "explicit conversion functions are a C++11 extension">, InGroup<CXX11>;
 
 // C++11 defaulted functions
 def err_defaulted_default_ctor_params : Error<
