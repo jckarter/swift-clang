@@ -1838,6 +1838,8 @@ public:
                            bool NonInheritable = true, bool Inheritable = true);
   void ProcessDeclAttributeList(Scope *S, Decl *D, const AttributeList *AL,
                            bool NonInheritable = true, bool Inheritable = true);
+  bool ProcessAccessDeclAttributeList(AccessSpecDecl *ASDecl,
+                                      const AttributeList *AttrList);
 
   void checkUnusedDeclAttributes(Declarator &D);
 
@@ -3414,9 +3416,10 @@ public:
   bool isCurrentClassName(const IdentifierInfo &II, Scope *S,
                           const CXXScopeSpec *SS = 0);
 
-  Decl *ActOnAccessSpecifier(AccessSpecifier Access,
-                             SourceLocation ASLoc,
-                             SourceLocation ColonLoc);
+  bool ActOnAccessSpecifier(AccessSpecifier Access,
+                            SourceLocation ASLoc,
+                            SourceLocation ColonLoc,
+                            AttributeList *Attrs = 0);
 
   Decl *ActOnCXXMemberDeclarator(Scope *S, AccessSpecifier AS,
                                  Declarator &D,
@@ -6110,7 +6113,12 @@ private:
     CMF_Memset,
     CMF_Memcpy,
     CMF_Memmove,
-    CMF_Memcmp
+    CMF_Memcmp,
+    CMF_Strncpy,
+    CMF_Strncmp,
+    CMF_Strncasecmp,
+    CMF_Strncat,
+    CMF_Strndup
   };
   
   void CheckMemaccessArguments(const CallExpr *Call, CheckedMemoryFunction CMF,
