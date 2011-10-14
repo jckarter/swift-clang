@@ -1439,6 +1439,9 @@ def err_cconv_varargs : Error<
 def err_regparm_mismatch : Error<"function declared with with regparm(%0) "
   "attribute was previously declared "
   "%plural{0:without the regparm|:with the regparm(%1)}1 attribute">;
+def err_returns_retained_mismatch : Error<
+  "function declared with the ns_returns_retained attribute "
+  "was previously declared without the ns_returns_retained attribute">;
 def err_objc_precise_lifetime_bad_type : Error<
   "objc_precise_lifetime only applies to retainable types; type here is %0">;
 def warn_objc_precise_lifetime_meaningless : Error<
@@ -1560,8 +1563,6 @@ def warn_impcast_literal_float_to_integer : Warning<
 def warn_impcast_string_literal_to_bool : Warning<
   "implicit conversion turns string literal into bool: %0 to %1">,
   InGroup<DiagGroup<"string-conversion">>, DefaultIgnore;
-def note_fix_integral_float_as_integer : Note<
-  "this can be rewritten as an integer literal with the exact same value">;
 def warn_impcast_different_enum_types : Warning<
   "implicit conversion from enumeration type %0 to different enumeration type "
   "%1">, InGroup<DiagGroup<"conversion">>;
