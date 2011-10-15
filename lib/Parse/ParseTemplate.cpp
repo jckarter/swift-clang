@@ -475,8 +475,10 @@ Decl *Parser::ParseTypeParameter(unsigned Depth, unsigned Position) {
     Ellipsis = true;
     EllipsisLoc = ConsumeToken();
 
-    if (!getLang().CPlusPlus0x)
-      Diag(EllipsisLoc, diag::ext_variadic_templates);
+    Diag(EllipsisLoc,
+         getLang().CPlusPlus0x
+           ? diag::warn_cxx98_compat_variadic_templates
+           : diag::ext_variadic_templates);
   }
 
   // Grab the template parameter name (if given)
@@ -547,8 +549,10 @@ Parser::ParseTemplateTemplateParameter(unsigned Depth, unsigned Position) {
   if (Tok.is(tok::ellipsis)) {
     EllipsisLoc = ConsumeToken();
     
-    if (!getLang().CPlusPlus0x)
-      Diag(EllipsisLoc, diag::ext_variadic_templates);
+    Diag(EllipsisLoc,
+         getLang().CPlusPlus0x
+           ? diag::warn_cxx98_compat_variadic_templates
+           : diag::ext_variadic_templates);
   }
       
   // Get the identifier, if given.
@@ -705,15 +709,15 @@ Parser::ParseTemplateIdAfterTemplateName(TemplateTy Template,
   RAngleLoc = Tok.getLocation();
 
   if (Tok.is(tok::greatergreater)) {
-    if (!getLang().CPlusPlus0x) {
-      const char *ReplaceStr = "> >";
-      if (NextToken().is(tok::greater) || NextToken().is(tok::greatergreater))
-        ReplaceStr = "> > ";
+    const char *ReplaceStr = "> >";
+    if (NextToken().is(tok::greater) || NextToken().is(tok::greatergreater))
+      ReplaceStr = "> > ";
 
-      Diag(Tok.getLocation(), diag::err_two_right_angle_brackets_need_space)
-        << FixItHint::CreateReplacement(
-                                 SourceRange(Tok.getLocation()), ReplaceStr);
-    }
+    Diag(Tok.getLocation(), getLang().CPlusPlus0x ?
+         diag::warn_cxx98_compat_two_right_angle_brackets :
+         diag::err_two_right_angle_brackets_need_space)
+      << FixItHint::CreateReplacement(SourceRange(Tok.getLocation()),
+                                      ReplaceStr);
 
     Tok.setKind(tok::greater);
     if (!ConsumeLastToken) {
