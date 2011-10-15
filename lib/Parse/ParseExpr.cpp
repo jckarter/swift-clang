@@ -920,6 +920,7 @@ ExprResult Parser::ParseCastExpression(bool isUnaryExpression,
   case tok::kw___int64:
   case tok::kw_signed:
   case tok::kw_unsigned:
+  case tok::kw_half:
   case tok::kw_float:
   case tok::kw_double:
   case tok::kw_void:
@@ -947,6 +948,9 @@ ExprResult Parser::ParseCastExpression(bool isUnaryExpression,
         (!getLang().CPlusPlus0x || Tok.isNot(tok::l_brace)))
       return ExprError(Diag(Tok, diag::err_expected_lparen_after_type)
                          << DS.getSourceRange());
+
+    if (Tok.is(tok::l_brace))
+      Diag(Tok, diag::warn_cxx98_compat_generalized_initializer_lists);
 
     Res = ParseCXXTypeConstructExpression(DS);
     break;
@@ -1206,9 +1210,10 @@ Parser::ParsePostfixExpressionSuffix(ExprResult LHS) {
       T.consumeOpen();
       Loc = T.getOpenLocation();
       ExprResult Idx;
-      if (getLang().CPlusPlus0x && Tok.is(tok::l_brace))
+      if (getLang().CPlusPlus0x && Tok.is(tok::l_brace)) {
+        Diag(Tok, diag::warn_cxx98_compat_generalized_initializer_lists);
         Idx = ParseBraceInitializer();
-      else
+      } else
         Idx = ParseExpression();
 
       SourceLocation RLoc = Tok.getLocation();
@@ -2156,9 +2161,10 @@ bool Parser::ParseExpressionList(SmallVectorImpl<Expr*> &Exprs,
     }
 
     ExprResult Expr;
-    if (getLang().CPlusPlus0x && Tok.is(tok::l_brace))
+    if (getLang().CPlusPlus0x && Tok.is(tok::l_brace)) {
+      Diag(Tok, diag::warn_cxx98_compat_generalized_initializer_lists);
       Expr = ParseBraceInitializer();
-    else
+    } else
       Expr = ParseAssignmentExpression();
 
     if (Tok.is(tok::ellipsis))
