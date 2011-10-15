@@ -1392,6 +1392,7 @@ public:
   bool isComplexType() const;      // C99 6.2.5p11 (complex)
   bool isAnyComplexType() const;   // C99 6.2.5p11 (complex) + Complex Int.
   bool isFloatingType() const;     // C99 6.2.5p11 (real floating + complex)
+  bool isHalfType() const;         // OpenCL 6.1.1.1, NEON (IEEE 754-2008 half)
   bool isRealType() const;         // C99 6.2.5p17 (real floating + integer)
   bool isArithmeticType() const;   // C99 6.2.5p18 (integer + floating)
   bool isVoidType() const;         // C99 6.2.5p19
@@ -1699,6 +1700,8 @@ public:
     LongLong,
     Int128,   // __int128_t
 
+    Half,     // This is the 'half' type in OpenCL,
+              // __fp16 in case of ARM NEON.
     Float, Double, LongDouble,
 
     NullPtr,  // This is the type of C++0x 'nullptr'.
@@ -1779,7 +1782,7 @@ public:
   }
 
   bool isFloatingPoint() const {
-    return getKind() >= Float && getKind() <= LongDouble;
+    return getKind() >= Half && getKind() <= LongDouble;
   }
 
   /// Determines whether this type is a placeholder type, i.e. a type
@@ -2702,17 +2705,8 @@ public:
     unsigned char TypeQuals;
     RefQualifierKind RefQualifier;
     unsigned NumExceptions;
-
-    /// Exceptions - A variable size array after that holds the exception types.
     const QualType *Exceptions;
-
-    /// NoexceptExpr - Instead of Exceptions, there may be a single Expr*
-    /// pointing to the expression in the noexcept() specifier.
     Expr *NoexceptExpr;
-    
-    /// ConsumedArgs - A variable size array, following Exceptions
-    /// and of length NumArgs, holding flags indicating which arguments
-    /// are consumed.  This only appears if HasAnyConsumedArgs is true.
     const bool *ConsumedArguments;
   };
 
@@ -2742,6 +2736,19 @@ private:
 
   /// HasAnyConsumedArgs - Whether this function has any consumed arguments.
   unsigned HasAnyConsumedArgs : 1;
+
+  // ArgInfo - There is an variable size array after the class in memory that
+  // holds the argument types.
+
+  // Exceptions - There is another variable size array after ArgInfo that
+  // holds the exception types.
+
+  // NoexceptExpr - Instead of Exceptions, there may be a single Expr* pointing
+  // to the expression in the noexcept() specifier.
+
+  // ConsumedArgs - A variable size array, following Exceptions
+  // and of length NumArgs, holding flags indicating which arguments
+  // are consumed.  This only appears if HasAnyConsumedArgs is true.
 
   friend class ASTContext;  // ASTContext creates these.
 
