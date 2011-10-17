@@ -389,6 +389,35 @@ static bool printWordWrapped(raw_ostream &OS, StringRef Str,
   return Wrapped;
 }
 
+/// \brief Retrieve the name of the immediate macro expansion.
+///
+/// This routine starts from a source location, and finds the name of the macro
+/// responsible for its immediate expansion. It looks through any intervening
+/// macro argument expansions to compute this. It returns a StringRef which
+/// refers to the SourceManager-owned buffer of the source where that macro
+/// name is spelled. Thus, the result shouldn't out-live that SourceManager.
+///
+static StringRef getImmediateMacroName(SourceLocation Loc,
+                                       const SourceManager &SM,
+                                       const LangOptions &LangOpts) {
+  assert(Loc.isMacroID() && "Only reasonble to call this on macros");
+  // Walk past macro argument expanions.
+  while (SM.isMacroArgExpansion(Loc))
+    Loc = SM.getImmediateExpansionRange(Loc).first;
+
+  // Find the spelling location of the start of the non-argument expansion
+  // range. This is where the macro name was spelled in order to begin
+  // expanding this macro.
+  Loc = SM.getSpellingLoc(SM.getImmediateExpansionRange(Loc).first);
+
+  // Dig out the buffer where the macro name was spelled and the extents of the
+  // name so that we can render it into the expansion note.
+  std::pair<FileID, unsigned> ExpansionInfo = SM.getDecomposedLoc(Loc);
+  unsigned MacroTokenLength = Lexer::MeasureTokenLength(Loc, SM, LangOpts);
+  StringRef ExpansionBuffer = SM.getBufferData(ExpansionInfo.first);
+  return ExpansionBuffer.substr(ExpansionInfo.second, MacroTokenLength);
+}
+
 TextDiagnostic::TextDiagnostic(raw_ostream &OS,
                                const SourceManager &SM,
                                const LangOptions &LangOpts,
@@ -400,8 +429,7 @@ void TextDiagnostic::emitDiagnostic(SourceLocation Loc,
                                     DiagnosticsEngine::Level Level,
                                     StringRef Message,
                                     ArrayRef<CharSourceRange> Ranges,
-                                    ArrayRef<FixItHint> FixItHints,
-                                    bool LastCaretDiagnosticWasNote) {
+                                    ArrayRef<FixItHint> FixItHints) {
   PresumedLoc PLoc = getDiagnosticPresumedLoc(SM, Loc);
 
   // First, if this diagnostic is not in the main file, print out the
@@ -421,15 +449,8 @@ void TextDiagnostic::emitDiagnostic(SourceLocation Loc,
                          OS.tell() - StartOfLocationInfo,
                          DiagOpts.MessageLength, DiagOpts.ShowColors);
 
-  // If caret diagnostics are enabled and we have location, we want to
-  // emit the caret.  However, we only do this if the location moved
-  // from the last diagnostic, if the last diagnostic was a note that
-  // was part of a different warning or error diagnostic, or if the
-  // diagnostic has ranges.  We don't want to emit the same caret
-  // multiple times if one loc has multiple diagnostics.
-  if (DiagOpts.ShowCarets &&
-      (Loc != LastLoc || !Ranges.empty() || !FixItHints.empty() ||
-       (LastLevel == DiagnosticsEngine::Note && Level != LastLevel))) {
+  // Only recurse if we have a valid location.
+  if (Loc.isValid()) {
     // Get the ranges into a local array we can hack on.
     SmallVector<CharSourceRange, 20> MutableRanges(Ranges.begin(),
                                                    Ranges.end());
@@ -441,7 +462,8 @@ void TextDiagnostic::emitDiagnostic(SourceLocation Loc,
         MutableRanges.push_back(I->RemoveRange);
 
     unsigned MacroDepth = 0;
-    emitCaret(Loc, MutableRanges, FixItHints, MacroDepth);
+    emitMacroExpansionsAndCarets(Loc, Level, MutableRanges, FixItHints,
+                                 MacroDepth);
   }
 
   LastLoc = Loc;
@@ -654,26 +676,26 @@ void TextDiagnostic::emitDiagnosticLoc(SourceLocation Loc, PresumedLoc PLoc,
   OS << ' ';
 }
 
-/// \brief Emit the caret and underlining text.
+/// \brief Recursively emit notes for each macro expansion and caret
+/// diagnostics where appropriate.
 ///
-/// Walks up the macro expansion stack printing the code snippet, caret,
-/// underlines and FixItHint display as appropriate at each level. Walk is
-/// accomplished by calling itself recursively.
-///
-/// FIXME: Remove macro expansion from this routine, it shouldn't be tied to
-/// caret diagnostics.
-/// FIXME: Break up massive function into logical units.
+/// Walks up the macro expansion stack printing expansion notes, the code
+/// snippet, caret, underlines and FixItHint display as appropriate at each
+/// level.
 ///
 /// \param Loc The location for this caret.
+/// \param Level The diagnostic level currently being emitted.
 /// \param Ranges The underlined ranges for this code snippet.
 /// \param Hints The FixIt hints active for this diagnostic.
 /// \param MacroSkipEnd The depth to stop skipping macro expansions.
 /// \param OnMacroInst The current depth of the macro expansion stack.
-void TextDiagnostic::emitCaret(SourceLocation Loc,
-                               SmallVectorImpl<CharSourceRange>& Ranges,
-                               ArrayRef<FixItHint> Hints,
-                               unsigned &MacroDepth,
-                               unsigned OnMacroInst) {
+void TextDiagnostic::emitMacroExpansionsAndCarets(
+    SourceLocation Loc,
+    DiagnosticsEngine::Level Level,
+    SmallVectorImpl<CharSourceRange>& Ranges,
+    ArrayRef<FixItHint> Hints,
+    unsigned &MacroDepth,
+    unsigned OnMacroInst) {
   assert(!Loc.isInvalid() && "must have a valid source location here");
 
   // If this is a file source location, directly emit the source snippet and
@@ -681,7 +703,7 @@ void TextDiagnostic::emitCaret(SourceLocation Loc,
   if (Loc.isFileID()) {
     assert(MacroDepth == 0 && "We shouldn't hit a leaf node twice!");
     MacroDepth = OnMacroInst;
-    emitSnippetAndCaret(Loc, Ranges, Hints);
+    emitSnippetAndCaret(Loc, Level, Ranges, Hints);
     return;
   }
   // Otherwise recurse through each macro expansion layer.
@@ -693,7 +715,11 @@ void TextDiagnostic::emitCaret(SourceLocation Loc,
   SourceLocation OneLevelUp = getImmediateMacroCallerLoc(SM, Loc);
 
   // FIXME: Map ranges?
-  emitCaret(OneLevelUp, Ranges, Hints, MacroDepth, OnMacroInst + 1);
+  emitMacroExpansionsAndCarets(OneLevelUp, Level, Ranges, Hints, MacroDepth,
+                               OnMacroInst + 1);
+
+  // Save the original location so we can find the spelling of the macro call.
+  SourceLocation MacroLoc = Loc;
 
   // Map the location.
   Loc = getImmediateMacroCalleeLoc(SM, Loc);
@@ -720,38 +746,25 @@ void TextDiagnostic::emitCaret(SourceLocation Loc,
       I->setEnd(getImmediateMacroCalleeLoc(SM, End));
   }
 
-  if (!Suppressed) {
-    // Don't print recursive expansion notes from an expansion note.
-    Loc = SM.getSpellingLoc(Loc);
-
-    // Get the pretty name, according to #line directives etc.
-    PresumedLoc PLoc = SM.getPresumedLoc(Loc);
-    if (PLoc.isInvalid())
-      return;
-
-    // If this diagnostic is not in the main file, print out the
-    // "included from" lines.
-    emitIncludeStack(PLoc.getIncludeLoc(), DiagnosticsEngine::Note);
-
-    if (DiagOpts.ShowLocation) {
-      // Emit the file/line/column that this expansion came from.
-      OS << PLoc.getFilename() << ':' << PLoc.getLine() << ':';
-      if (DiagOpts.ShowColumn)
-        OS << PLoc.getColumn() << ':';
-      OS << ' ';
+  if (Suppressed) {
+    // Tell the user that we've skipped contexts.
+    if (OnMacroInst == MacroSkipStart) {
+      // FIXME: Emit this as a real note diagnostic.
+      // FIXME: Format an actual diagnostic rather than a hard coded string.
+      OS << "note: (skipping " << (MacroSkipEnd - MacroSkipStart)
+         << " expansions in backtrace; use -fmacro-backtrace-limit=0 to see "
+            "all)\n";
     }
-    OS << "note: expanded from:\n";
-
-    emitSnippetAndCaret(Loc, Ranges, ArrayRef<FixItHint>());
     return;
   }
 
-  if (OnMacroInst == MacroSkipStart) {
-    // Tell the user that we've skipped contexts.
-    OS << "note: (skipping " << (MacroSkipEnd - MacroSkipStart) 
-    << " expansions in backtrace; use -fmacro-backtrace-limit=0 to see "
-    "all)\n";
-  }
+  llvm::SmallString<100> MessageStorage;
+  llvm::raw_svector_ostream Message(MessageStorage);
+  Message << "expanded from macro: "
+          << getImmediateMacroName(MacroLoc, SM, LangOpts);
+  emitDiagnostic(SM.getSpellingLoc(Loc), DiagnosticsEngine::Note,
+                 Message.str(),
+                 Ranges, ArrayRef<FixItHint>());
 }
 
 /// \brief Emit a code snippet and caret line.
@@ -762,11 +775,23 @@ void TextDiagnostic::emitCaret(SourceLocation Loc,
 /// \param Ranges The underlined ranges for this code snippet.
 /// \param Hints The FixIt hints active for this diagnostic.
 void TextDiagnostic::emitSnippetAndCaret(
-    SourceLocation Loc,
+    SourceLocation Loc, DiagnosticsEngine::Level Level,
     SmallVectorImpl<CharSourceRange>& Ranges,
     ArrayRef<FixItHint> Hints) {
   assert(!Loc.isInvalid() && "must have a valid source location here");
   assert(Loc.isFileID() && "must have a file location here");
+
+  // If caret diagnostics are enabled and we have location, we want to
+  // emit the caret.  However, we only do this if the location moved
+  // from the last diagnostic, if the last diagnostic was a note that
+  // was part of a different warning or error diagnostic, or if the
+  // diagnostic has ranges.  We don't want to emit the same caret
+  // multiple times if one loc has multiple diagnostics.
+  if (!DiagOpts.ShowCarets)
+    return;
+  if (Loc == LastLoc && Ranges.empty() && Hints.empty() &&
+      (LastLevel != DiagnosticsEngine::Note || Level == LastLevel))
+    return;
 
   // Decompose the location into a FID/Offset pair.
   std::pair<FileID, unsigned> LocInfo = SM.getDecomposedLoc(Loc);

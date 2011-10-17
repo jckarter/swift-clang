@@ -5652,13 +5652,11 @@ public:
 
   ExprResult PerformImplicitConversion(Expr *From, QualType ToType,
                                        AssignmentAction Action,
-                                       bool AllowExplicit = false,
-                                       bool Diagnose = true);
+                                       bool AllowExplicit = false);
   ExprResult PerformImplicitConversion(Expr *From, QualType ToType,
                                        AssignmentAction Action,
                                        bool AllowExplicit,
-                                       ImplicitConversionSequence& ICS,
-                                       bool Diagnose = true);
+                                       ImplicitConversionSequence& ICS);
   ExprResult PerformImplicitConversion(Expr *From, QualType ToType,
                                        const ImplicitConversionSequence& ICS,
                                        AssignmentAction Action,
@@ -6104,6 +6102,10 @@ private:
   void CheckNonNullArguments(const NonNullAttr *NonNull,
                              const Expr * const *ExprArgs,
                              SourceLocation CallSiteLoc);
+
+  void CheckStaticArrayArguments(const FunctionDecl *FDecl,
+                                 const Expr * const *ExprArgs,
+                                 SourceLocation CallSiteLoc);
 
   void CheckPrintfScanfArguments(const CallExpr *TheCall, bool HasVAListArg,
                                  unsigned format_idx, unsigned firstDataArg,
