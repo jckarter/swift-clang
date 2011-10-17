@@ -53,6 +53,12 @@ bool Sema::CanUseDecl(NamedDecl *D) {
     if (FD->isDeleted())
       return false;
   }
+
+  // See if this function is unavailable.
+  if (D->getAvailability() == AR_Unavailable &&
+      cast<Decl>(CurContext)->getAvailability() != AR_Unavailable)
+    return false;
+
   return true;
 }
 
@@ -5540,9 +5546,23 @@ Sema::CheckSingleAssignmentConstraints(QualType LHSType, ExprResult &RHS,
       // C++ 5.17p3: If the left operand is not of class type, the
       // expression is implicitly converted (C++ 4) to the
       // cv-unqualified type of the left operand.
-      ExprResult Res = PerformImplicitConversion(RHS.get(),
-                                                 LHSType.getUnqualifiedType(),
-                                                 AA_Assigning, Diagnose);
+      ExprResult Res;
+      if (Diagnose) {
+        Res = PerformImplicitConversion(RHS.get(), LHSType.getUnqualifiedType(),
+                                        AA_Assigning);
+      } else {
+        ImplicitConversionSequence ICS =
+            TryImplicitConversion(RHS.get(), LHSType.getUnqualifiedType(),
+                                  /*SuppressUserConversions=*/false,
+                                  /*AllowExplicit=*/false,
+                                  /*InOverloadResolution=*/false,
+                                  /*CStyle=*/false,
+                                  /*AllowObjCWritebackConversion=*/false);
+        if (ICS.isFailure())
+          return Incompatible;
+        Res = PerformImplicitConversion(RHS.get(), LHSType.getUnqualifiedType(),
+                                        ICS, AA_Assigning);
+      }
       if (Res.isInvalid())
         return Incompatible;
       Sema::AssignConvertType result = Compatible;
@@ -6782,10 +6802,10 @@ inline QualType Sema::CheckLogicalOperands( // C99 6.5.[13,14]
     // that isn't 0 or 1 (which indicate a potential logical operation that
     // happened to fold to true/false) then warn.
     // Parens on the RHS are ignored.
-    Expr::EvalResult Result;
-    if (RHS.get()->Evaluate(Result, Context) && !Result.HasSideEffects)
+    llvm::APSInt Result;
+    if (RHS.get()->EvaluateAsInt(Result, Context))
       if ((getLangOptions().Bool && !RHS.get()->getType()->isBooleanType()) ||
-          (Result.Val.getInt() != 0 && Result.Val.getInt() != 1)) {
+          (Result != 0 && Result != 1)) {
         Diag(Loc, diag::warn_logical_instead_of_bitwise)
           << RHS.get()->getSourceRange()
           << (Opc == BO_LAnd ? "&&" : "||");
