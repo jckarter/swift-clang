@@ -597,7 +597,8 @@ Sema::ActOnStartProtocolInterface(SourceLocation AtProtoInterfaceLoc,
     PDecl->setChangedSinceDeserialization(true);
   } else {
     PDecl = ObjCProtocolDecl::Create(Context, CurContext, ProtocolName,
-                                     ProtocolLoc, AtProtoInterfaceLoc);
+                                     ProtocolLoc, AtProtoInterfaceLoc,
+                                     /*isForwardDecl=*/false);
     PushOnScopeChains(PDecl, TUScope);
     PDecl->setForwardDecl(false);
   }
@@ -698,7 +699,8 @@ Sema::ActOnForwardProtocolDeclaration(SourceLocation AtProtocolLoc,
     bool isNew = false;
     if (PDecl == 0) { // Not already seen?
       PDecl = ObjCProtocolDecl::Create(Context, CurContext, Ident,
-                                       IdentList[i].second, AtProtocolLoc);
+                                       IdentList[i].second, AtProtocolLoc,
+                                       /*isForwardDecl=*/true);
       PushOnScopeChains(PDecl, TUScope, false);
       isNew = true;
     }
@@ -2300,6 +2302,11 @@ void Sema::ActOnAtEnd(Scope *S, SourceRange AtEnd,
     }
   }
   ActOnObjCContainerFinishDefinition();
+
+  for (unsigned i = 0; i != tuvNum; i++) {
+    DeclGroupRef DG = allTUVars[i].getAsVal<DeclGroupRef>();
+    Consumer.HandleTopLevelDeclInObjCContainer(DG);
+  }
 }
 
 

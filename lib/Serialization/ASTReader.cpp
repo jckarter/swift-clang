@@ -1283,8 +1283,9 @@ void ASTReader::ReadMacroRecord(Module &F, uint64_t Offset) {
       MI->setIsUsed(isUsed);
       MI->setIsFromAST();
 
-      unsigned NextIndex = 3;
-      MI->setExportLocation(ReadSourceLocation(F, Record, NextIndex));
+      bool IsPublic = Record[3];
+      unsigned NextIndex = 4;
+      MI->setVisibility(IsPublic, ReadSourceLocation(F, Record, NextIndex));
       
       if (RecType == PP_MACRO_FUNCTION_LIKE) {
         // Decode function-like macro info.
@@ -1399,7 +1400,8 @@ HeaderFileInfoTrait::ReadData(const internal_key_type, const unsigned char *d,
   HFI.Resolved = (Flags >> 1) & 0x01;
   HFI.IndexHeaderMapHeader = Flags & 0x01;
   HFI.NumIncludes = ReadUnalignedLE16(d);
-  HFI.ControllingMacroID = Reader.getGlobalDeclID(M, ReadUnalignedLE32(d));
+  HFI.ControllingMacroID = Reader.getGlobalIdentifierID(M, 
+                                                        ReadUnalignedLE32(d));
   if (unsigned FrameworkOffset = ReadUnalignedLE32(d)) {
     // The framework offset is 1 greater than the actual offset, 
     // since 0 is used as an indicator for "no framework name".
@@ -3838,6 +3840,11 @@ QualType ASTReader::GetType(TypeID ID) {
     case PREDEF_TYPE_AUTO_RREF_DEDUCT: 
       T = Context.getAutoRRefDeductType(); 
       break;
+
+    case PREDEF_TYPE_ARC_UNBRIDGED_CAST:
+      T = Context.ARCUnbridgedCastTy;
+      break;
+
     }
 
     assert(!T.isNull() && "Unknown predefined type");
