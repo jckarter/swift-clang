@@ -192,6 +192,9 @@ def err_using_decl_can_not_refer_to_namespace : Error<
   "using declaration can not refer to namespace">;
 def err_using_decl_constructor : Error<
   "using declaration can not refer to a constructor">;
+def warn_cxx98_compat_using_decl_constructor : Warning<
+  "inherited constructors are incompatible with C++98">,
+  InGroup<CXX98Compat>, DefaultIgnore;
 def err_using_decl_destructor : Error<
   "using declaration can not refer to a destructor">;
 def err_using_decl_template_id : Error<
@@ -619,13 +622,25 @@ def err_unexpected_friend : Error<
   "friends can only be classes or functions">;
 def ext_enum_friend : ExtWarn<
   "enumeration type %0 cannot be a friend">;
+def warn_cxx98_compat_enum_friend : Warning<
+  "befriending enumeration type %0 is incompatible with C++98">,
+  InGroup<CXX98Compat>, DefaultIgnore;
 def ext_nonclass_type_friend : ExtWarn<
   "non-class friend type %0 is a C++11 extension">, InGroup<CXX11>;
+def warn_cxx98_compat_nonclass_type_friend : Warning<
+  "non-class friend type %0 is incompatible with C++98">,
+  InGroup<CXX98Compat>, DefaultIgnore;
 def err_friend_is_member : Error<
   "friends cannot be members of the declaring class">;
+def warn_cxx98_compat_friend_is_member : Warning<
+  "friend declaration naming a member of the declaring class is incompatible "
+  "with C++98">, InGroup<CXX98Compat>, DefaultIgnore;
 def ext_unelaborated_friend_type : ExtWarn<
   "specify '%select{struct|union|class|enum}0' to befriend %1; accepted "
   "as a C++11 extension">, InGroup<CXX11>;
+def warn_cxx98_compat_unelaborated_friend_type : Warning<
+  "befriending %1 without '%select{struct|union|class|enum}0' keyword is "
+  "incompatible with C++98">, InGroup<CXX98Compat>, DefaultIgnore;
 def err_qualified_friend_not_found : Error<
   "no function named %0 with type %1 was found in the specified scope">;
 def err_introducing_special_friend : Error<
@@ -1160,8 +1175,11 @@ def err_incomplete_type_no_underlying_type : Error<
   "an incomplete enumeration type has no underlying type yet">;
 
 // C++11 delegating constructors
-def err_delegation_0x_only : Error<
+def err_delegating_ctor : Error<
   "delegating constructors are permitted only in C++11">;
+def warn_cxx98_compat_delegating_ctor : Warning<
+  "delegating constructors are incompatible with C++98">,
+  InGroup<CXX98Compat>, DefaultIgnore;
 def err_delegating_initializer_alone : Error<
   "an initializer for a delegating constructor must appear alone">;
 def warn_delegating_ctor_cycle : Warning<
@@ -2071,6 +2089,9 @@ def err_template_param_default_arg_missing : Error<
 def ext_template_parameter_default_in_function_template : ExtWarn<
   "default template arguments for a function template are a C++11 extension">,
   InGroup<CXX11>;
+def warn_cxx98_compat_template_parameter_default_in_function_template : Warning<
+  "default template arguments for a function template are incompatible with C++98">,
+  InGroup<CXX98Compat>, DefaultIgnore;
 def err_template_parameter_default_template_member : Error<
   "cannot add a default template argument to the definition of a member of a "
   "class template">;
@@ -2111,6 +2132,12 @@ def ext_template_arg_local_type : ExtWarn<
   "template argument uses local type %0">, InGroup<LocalTypeTemplateArgs>;
 def ext_template_arg_unnamed_type : ExtWarn<
   "template argument uses unnamed type">, InGroup<UnnamedTypeTemplateArgs>;
+def warn_cxx98_compat_template_arg_local_type : Warning<
+  "local type %0 as template argument is incompatible with C++98">,
+  InGroup<CXX98Compat>, DefaultIgnore;
+def warn_cxx98_compat_template_arg_unnamed_type : Warning<
+  "unnamed type as template argument is incompatible with C++98">,
+  InGroup<CXX98Compat>, DefaultIgnore;
 def note_template_unnamed_type_here : Note<
   "unnamed type used in template argument was declared here">;
 def err_template_arg_overload_type : Error<
@@ -2178,6 +2205,9 @@ def err_template_arg_not_pointer_to_member_form : Error<
   "non-type template argument is not a pointer to member constant">;
 def ext_template_arg_extra_parens : ExtWarn<
   "address non-type template argument cannot be surrounded by parentheses">;
+def warn_cxx98_compat_template_arg_extra_parens : Warning<
+  "redundant parentheses surrounding address non-type template argument are "
+  "incompatible with C++98">, InGroup<CXX98Compat>, DefaultIgnore;
 def err_pointer_to_member_type : Error<
   "invalid use of pointer to member type after %select{.*|->*}0">;
 def err_pointer_to_member_call_drops_quals : Error<
@@ -2203,11 +2233,6 @@ def err_template_spec_decl_out_of_scope_global : Error<
   "%select{class template|class template partial|function template|member "
   "function|static data member|member class}0 specialization of %1 must "
   "originally be declared in the global scope">;
-def ext_template_spec_decl_out_of_scope_global : ExtWarn<
-  "%select{class template|class template partial|function template|member "
-  "function|static data member|member class}0 specialization of %1 must "
-  "originally be declared in the global scope; accepted as a C++11 extension">,
-  InGroup<CXX11>;
 def err_template_spec_decl_out_of_scope : Error<
   "%select{class template|class template partial|function template|member "
   "function|static data member|member class}0 specialization of %1 must "
@@ -2217,6 +2242,11 @@ def ext_template_spec_decl_out_of_scope : ExtWarn<
   "function|static data member|member class}0 specialization of %1 must "
   "originally be declared in namespace %2; accepted as a C++11 extension">,
   InGroup<CXX11>;
+def warn_cxx98_compat_template_spec_decl_out_of_scope : Warning<
+  "%select{class template|class template partial|function template|member "
+  "function|static data member|member class}0 specialization of %1 outside "
+  "namespace %2 is incompatible with C++98">,
+  InGroup<CXX98Compat>, DefaultIgnore;
 def err_template_spec_redecl_out_of_scope : Error<
   "%select{class template|class template partial|function template|member "
   "function|static data member|member class}0 specialization of %1 not in a "
@@ -2384,6 +2414,10 @@ def ext_explicit_instantiation_after_specialization : Extension<
     "explicit instantiation of %0 that occurs after an explicit "
     "specialization will be ignored (C++11 extension)">,
     InGroup<CXX11>;
+def warn_cxx98_compat_explicit_instantiation_after_specialization : Warning<
+    "explicit instantiation of %0 that occurs after an explicit "
+    "specialization is incompatible with C++98">,
+    InGroup<CXX98CompatPedantic>, DefaultIgnore;
 def note_previous_template_specialization : Note<
     "previous template specialization is here">;
 def err_explicit_instantiation_enum : Error<
@@ -2464,6 +2498,9 @@ def warn_typename_missing : ExtWarn<
   InGroup<DiagGroup<"typename-missing">>;
 def ext_typename_outside_of_template : ExtWarn<
   "'typename' occurs outside of a template">, InGroup<CXX11>;
+def warn_cxx98_compat_typename_outside_of_template : Warning<
+  "use of 'typename' outside of a template is incompatible with C++98">,
+  InGroup<CXX98Compat>, DefaultIgnore;
 def err_typename_refers_to_using_value_decl : Error<
   "typename specifier refers to a dependent using declaration for a value "
   "%0 in %1">;
@@ -2482,6 +2519,9 @@ def err_template_kw_missing : Error<
   "missing 'template' keyword prior to dependent template name '%0%1'">;
 def ext_template_outside_of_template : ExtWarn<
   "'template' keyword outside of a template">, InGroup<CXX11>;
+def warn_cxx98_compat_template_outside_of_template : Warning<
+  "use of 'template' keyword outside of a template is incompatible with C++98">,
+  InGroup<CXX98Compat>, DefaultIgnore;
 
 def err_non_type_template_in_nested_name_specifier : Error<
   "qualified name refers into a specialization of function template '%0'">;
@@ -2769,6 +2809,9 @@ def ext_complex_component_init : Extension<
   "complex initialization specifying real and imaginary components "
   "is an extension">, InGroup<DiagGroup<"complex-component-init">>;
 def err_empty_scalar_initializer : Error<"scalar initializer cannot be empty">;
+def warn_cxx98_compat_empty_scalar_initializer : Warning<
+  "scalar initialized from empty initializer list is incompatible with C++98">,
+  InGroup<CXX98Compat>, DefaultIgnore;
 def err_illegal_initializer : Error<
   "illegal initializer (only variables can be initialized)">;
 def err_illegal_initializer_type : Error<"illegal initializer type %0">;
@@ -3623,6 +3666,9 @@ def err_bad_const_cast_dest : Error<
   "which is not a reference, pointer-to-object, or pointer-to-data-member">;
 def ext_cast_fn_obj : Extension<
   "cast between pointer-to-function and pointer-to-object is an extension">;
+def warn_cxx98_compat_cast_fn_obj : Warning<
+  "cast between pointer-to-function and pointer-to-object is incompatible with C++98">,
+  InGroup<CXX98CompatPedantic>, DefaultIgnore;
 def err_bad_reinterpret_cast_small_int : Error<
   "cast from pointer to smaller type %2 loses information">;
 def err_bad_cxx_cast_vector_to_scalar_different_size : Error<
@@ -3708,6 +3754,10 @@ def ext_array_size_conversion : Extension<
   "implicit conversion from array size expression of type %0 to "
   "%select{integral|enumeration}1 type %2 is a C++11 extension">,
   InGroup<CXX11>;
+def warn_cxx98_compat_array_size_conversion : Warning<
+  "implicit conversion from array size expression of type %0 to "
+  "%select{integral|enumeration}1 type %2 is incompatible with C++98">,
+  InGroup<CXX98CompatPedantic>, DefaultIgnore;
 def err_address_space_qualified_new : Error<
   "'new' cannot allocate objects of type %0 in address space '%1'">;
 def err_address_space_qualified_delete : Error<
@@ -4083,6 +4133,10 @@ def warn_cannot_pass_non_pod_arg_to_vararg : Warning<
   "cannot pass object of %select{non-POD|non-trivial}0 type %1 through variadic"
   " %select{function|block|method|constructor}2; call will abort at runtime">,
   InGroup<DiagGroup<"non-pod-varargs">>, DefaultError;
+def warn_cxx98_compat_pass_non_pod_arg_to_vararg : Warning<
+  "passing object of trivial but non-POD type %0 through variadic"
+  " %select{function|block|method|constructor}1 is incompatible with C++98">,
+  InGroup<CXX98Compat>, DefaultIgnore;
 
 def err_typecheck_call_invalid_ordered_compare : Error<
   "ordered compare requires two args of floating point type (%0 and %1)">;
@@ -4413,8 +4467,11 @@ def warn_not_compound_assign : Warning<
   "use of unary operator that may be intended as compound assignment (%0=)">;
 
 // C++11 explicit conversion operators
-def warn_explicit_conversion_functions : Warning<
+def ext_explicit_conversion_functions : ExtWarn<
   "explicit conversion functions are a C++11 extension">, InGroup<CXX11>;
+def warn_cxx98_compat_explicit_conversion_functions : Warning<
+  "explicit conversion functions are incompatible with C++98">,
+  InGroup<CXX98Compat>, DefaultIgnore;
 
 // C++11 defaulted functions
 def err_defaulted_default_ctor_params : Error<
