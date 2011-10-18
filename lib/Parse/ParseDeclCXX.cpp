@@ -587,6 +587,8 @@ Decl *Parser::ParseStaticAssertDeclaration(SourceLocation &DeclEnd){
 
   if (Tok.is(tok::kw__Static_assert) && !getLang().C1X)
     Diag(Tok, diag::ext_c1x_static_assert);
+  if (Tok.is(tok::kw_static_assert))
+    Diag(Tok, diag::warn_cxx98_compat_static_assert);
 
   SourceLocation StaticAssertLoc = ConsumeToken();
 
@@ -1711,6 +1713,9 @@ void Parser::ParseCXXClassMemberDeclaration(AccessSpecifier AS,
   // Hold late-parsed attributes so we can attach a Decl to them later.
   LateParsedAttrList LateParsedAttrs;
 
+  SourceLocation EqualLoc;
+  bool HasInitializer = false;
+  ExprResult Init;
   if (Tok.isNot(tok::colon)) {
     // Don't parse FOO:BAR as if it were a typo for FOO::BAR.
     ColonProtectionRAIIObject X(*this);
@@ -1733,14 +1738,15 @@ void Parser::ParseCXXClassMemberDeclaration(AccessSpecifier AS,
 
     // MSVC permits pure specifier on inline functions declared at class scope.
     // Hence check for =0 before checking for function definition.
-    ExprResult Init;
     if (getLang().MicrosoftExt && Tok.is(tok::equal) &&
         DeclaratorInfo.isFunctionDeclarator() && 
         NextToken().is(tok::numeric_constant)) {
-      ConsumeToken();
+      EqualLoc = ConsumeToken();
       Init = ParseInitializer();
       if (Init.isInvalid())
         SkipUntil(tok::comma, true, true);
+      else
+        HasInitializer = true;
     }
 
     bool IsDefinition = false;
@@ -1842,9 +1848,8 @@ void Parser::ParseCXXClassMemberDeclaration(AccessSpecifier AS,
     // goes before or after the GNU attributes and __asm__.
     ParseOptionalCXX0XVirtSpecifierSeq(VS);
 
-    bool HasInitializer = false;
     bool HasDeferredInitializer = false;
-    if (Tok.is(tok::equal) || Tok.is(tok::l_brace)) {
+    if ((Tok.is(tok::equal) || Tok.is(tok::l_brace)) && !HasInitializer) {
       if (BitfieldSize.get()) {
         Diag(Tok, diag::err_bitfield_member_init);
         SkipUntil(tok::comma, true, true);
@@ -1905,15 +1910,15 @@ void Parser::ParseCXXClassMemberDeclaration(AccessSpecifier AS,
         ParseCXXNonStaticMemberInitializer(ThisDecl);
     } else if (HasInitializer) {
       // Normal initializer.
-      SourceLocation EqualLoc;
-      ExprResult Init
-        = ParseCXXMemberInitializer(DeclaratorInfo.isDeclarationOfFunction(), 
-                                    EqualLoc);
+      if (!Init.isUsable())
+        Init = ParseCXXMemberInitializer(
+                 DeclaratorInfo.isDeclarationOfFunction(), EqualLoc);
+      
       if (Init.isInvalid())
         SkipUntil(tok::comma, true, true);
       else if (ThisDecl)
         Actions.AddInitializerToDecl(ThisDecl, Init.get(), false,
-                                   DS.getTypeSpecType() == DeclSpec::TST_auto);
+                                   DS.getTypeSpecType() == DeclSpec::TST_auto);      
     } else if (ThisDecl && DS.getStorageClassSpec() == DeclSpec::SCS_static) {
       // No initializer.
       Actions.ActOnUninitializedDecl(ThisDecl, 
@@ -1945,6 +1950,8 @@ void Parser::ParseCXXClassMemberDeclaration(AccessSpecifier AS,
     DeclaratorInfo.clear();
     VS.clear();
     BitfieldSize = true;
+    Init = true;
+    HasInitializer = false;
 
     // Attributes are only allowed on the second declarator.
     MaybeParseGNUAttributes(DeclaratorInfo);
@@ -2147,11 +2154,6 @@ void Parser::ParseCXXMemberSpecification(SourceLocation RecordLoc,
         SourceLocation EndLoc;
         if (Tok.is(tok::colon)) {
           EndLoc = Tok.getLocation();
-          if (Actions.ActOnAccessSpecifier(AS, ASLoc, EndLoc,
-                                           AccessAttrs.getList())) {
-            // found another attribute than only annotations
-            AccessAttrs.clear();
-          }
           ConsumeToken();
         } else if (Tok.is(tok::semi)) {
           EndLoc = Tok.getLocation();
@@ -2163,7 +2165,13 @@ void Parser::ParseCXXMemberSpecification(SourceLocation RecordLoc,
           Diag(EndLoc, diag::err_expected_colon) 
             << FixItHint::CreateInsertion(EndLoc, ":");
         }
-        Actions.ActOnAccessSpecifier(AS, ASLoc, EndLoc);
+
+        if (Actions.ActOnAccessSpecifier(AS, ASLoc, EndLoc,
+                                         AccessAttrs.getList())) {
+          // found another attribute than only annotations
+          AccessAttrs.clear();
+        }
+
         continue;
       }
 
@@ -2394,6 +2402,8 @@ Parser::MaybeParseExceptionSpecification(SourceRange &SpecificationRange,
   // If there's no noexcept specification, we're done.
   if (Tok.isNot(tok::kw_noexcept))
     return Result;
+
+  Diag(Tok, diag::warn_cxx98_compat_noexcept_decl);
 
   // If we already had a dynamic specification, parse the noexcept for,
   // recovery, but emit a diagnostic and don't store the results.

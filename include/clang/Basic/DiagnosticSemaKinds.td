@@ -1081,6 +1081,9 @@ def err_temp_copy_incomplete : Error<
 // C++11 decltype
 def err_cannot_determine_declared_type_of_overloaded_function : Error<
     "cannot determine the type of an overloaded function">;
+def warn_cxx98_compat_decltype : Warning<
+  "'decltype' type specifier is incompatible with C++98">,
+  InGroup<CXX98Compat>, DefaultIgnore;
     
 // C++11 auto
 def warn_cxx98_compat_auto_type_specifier : Warning<
@@ -1194,6 +1197,9 @@ def note_for_range_begin_end : Note<
   "selected '%select{begin|end}0' %select{function|template }1%2 with iterator type %3">;
 
 // C++11 constexpr
+def warn_cxx98_compat_constexpr : Warning<
+  "'constexpr' specifier is incompatible with C++98">,
+  InGroup<CXX98Compat>, DefaultIgnore;
 def err_invalid_constexpr : Error<
   "%select{function parameter|typedef|non-static data member}0 "
   "cannot be constexpr">;
@@ -1273,6 +1279,11 @@ def note_non_literal_nontrivial_dtor : Note<
   "%0 is not literal because it has a non-trivial destructor">;
 def note_non_literal_mutable_field : Note<
   "%0 is not literal because it has a mutable data member">;
+
+// C++11 char16_t/char32_t
+def warn_cxx98_compat_unicode_type : Warning<
+  "'%0' type specifier is incompatible with C++98">,
+  InGroup<CXX98Compat>, DefaultIgnore;
  
 // Objective-C++
 def err_objc_decls_may_only_appear_in_global_scope : Error<
@@ -2417,15 +2428,17 @@ def note_explicit_instantiation_candidate : Note<
   "explicit instantiation candidate function template here %0">;
 def err_explicit_instantiation_inline : Error<
   "explicit instantiation cannot be 'inline'">;
+def warn_explicit_instantiation_inline_0x : Warning<
+  "explicit instantiation cannot be 'inline'">, InGroup<CXX11Compat>;
 def err_explicit_instantiation_constexpr : Error<
   "explicit instantiation cannot be 'constexpr'">;
 def ext_explicit_instantiation_without_qualified_id : Extension<
   "qualifier in explicit instantiation of %q0 requires a template-id "
   "(a typedef is not permitted)">;
 def err_explicit_instantiation_unqualified_wrong_namespace : Error<
-  "explicit instantiation of %q0 must occur in %1">;
+  "explicit instantiation of %q0 must occur in namespace %1">;
 def warn_explicit_instantiation_unqualified_wrong_namespace_0x : Warning<
-  "explicit instantiation of %q0 must occur in %1">, 
+  "explicit instantiation of %q0 must occur in namespace %1">,
   InGroup<CXX11Compat>;
 def err_explicit_instantiation_undefined_member : Error<
   "explicit instantiation of undefined %select{member class|member function|"
@@ -2899,9 +2912,11 @@ def err_flexible_array_empty_struct : Error<
 def err_flexible_array_has_nonpod_type : Error<
   "flexible array member %0 of non-POD element type %1">;
 def ext_flexible_array_in_struct : Extension<
-  "%0 may not be nested in a struct due to flexible array member">;
+  "%0 may not be nested in a struct due to flexible array member">,
+  InGroup<FlexibleArrayExtensions>;
 def ext_flexible_array_in_array : Extension<
-  "%0 may not be used as an array element due to flexible array member">;
+  "%0 may not be used as an array element due to flexible array member">,
+  InGroup<FlexibleArrayExtensions>;
 def err_flexible_array_init : Error<
   "initialization of flexible array member is not allowed">;
 def ext_flexible_array_empty_aggregate_ms : Extension<
@@ -3053,8 +3068,9 @@ def err_arc_bridge_cast_wrong_kind : Error<
   "%select{Objective-C|block|C}2 pointer type %3 cannot use %select{__bridge|"
   "__bridge_transfer|__bridge_retained}4">;
 def err_arc_cast_requires_bridge : Error<
-  "cast of %select{Objective-C|block|C}0 pointer type %1 to "
-  "%select{Objective-C|block|C}2 pointer type %3 requires a bridged cast">;
+  "%select{cast|implicit conversion}0 of %select{Objective-C|block|C}1 "
+  "pointer type %2 to %select{Objective-C|block|C}3 pointer type %4 "
+  "requires a bridged cast">;
 def note_arc_bridge : Note<
   "use __bridge to convert directly (no change in ownership)">;
 def note_arc_bridge_transfer : Note<
@@ -3706,7 +3722,8 @@ def ext_delete_void_ptr_operand : ExtWarn<
 def err_ambiguous_delete_operand : Error<"ambiguous conversion of delete "
                                          "expression of type %0 to a pointer">;
 def warn_delete_incomplete : Warning<
-  "deleting pointer to incomplete type %0 may cause undefined behaviour">;
+  "deleting pointer to incomplete type %0 may cause undefined behaviour">,
+  InGroup<DiagGroup<"delete-incomplete">>;
 def err_delete_incomplete_class_type : Error<
   "deleting incomplete class type %0; no conversions to pointer type">;
 def warn_delete_array_type : Warning<
@@ -3721,9 +3738,11 @@ def err_decrement_bool : Error<"cannot decrement expression of type bool">;
 def warn_increment_bool : Warning<
   "incrementing expression of type bool is deprecated">, InGroup<Deprecated>;
 def ext_catch_incomplete_ptr : ExtWarn<
-  "ISO C++ forbids catching a pointer to incomplete type %0">;
+  "ISO C++ forbids catching a pointer to incomplete type %0">,
+  InGroup<CatchIncompleteExtension>;
 def ext_catch_incomplete_ref : ExtWarn<
-  "ISO C++ forbids catching a reference to incomplete type %0">;
+  "ISO C++ forbids catching a reference to incomplete type %0">,
+  InGroup<CatchIncompleteExtension>;
 def err_catch_incomplete : Error<"cannot catch incomplete type %0">;
 def err_catch_rvalue_ref : Error<"cannot catch exceptions by rvalue reference">;
 def err_qualified_catch_declarator : Error<
@@ -4788,7 +4807,7 @@ def err_missing_param_declspec : Error<
 def err_objc_array_of_interfaces : Error<
   "array of interface %0 is invalid (probably should be an array of pointers)">;
 def ext_c99_array_usage : Extension<
-  "use of C99-specific array features, accepted as an extension">;
+  "use of C99-specific array features, accepted as an extension">, InGroup<C99>;
 def err_c99_array_usage_cxx : Error<
   "C99-specific array features are not permitted in C++">;
 def err_double_requires_fp64 : Error<
