@@ -163,7 +163,7 @@ getNSNumberFactoryMethodKind(QualType T) {
   case BuiltinType::Double:
     return Sema::NSNumberWithDouble;
   case BuiltinType::Bool:
-    return  Sema::NSNumberWithBool;
+    return Sema::NSNumberWithBool;
     
   case BuiltinType::Void:
   case BuiltinType::WChar_U:
@@ -181,6 +181,8 @@ getNSNumberFactoryMethodKind(QualType T) {
   case BuiltinType::Dependent:
   case BuiltinType::Overload:
   case BuiltinType::UnknownAny:
+  case BuiltinType::ARCUnbridgedCast:
+  case BuiltinType::Half:
     break;
   }
   
