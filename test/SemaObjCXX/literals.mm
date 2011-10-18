@@ -68,7 +68,7 @@ void test_convertibility(ConvertibleTo<NSArray*> toArray,
 
   X x;
   id array4 = @[ x.x ];
-  id array5 = @[ x.get ]; // expected-error{{a bound member function may only be called}}
+  id array5 = @[ x.get ]; // expected-error{{reference to non-static member function must be called}}
 }
 
 template<typename T>
