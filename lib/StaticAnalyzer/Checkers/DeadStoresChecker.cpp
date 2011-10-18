@@ -114,7 +114,7 @@ public:
 
       case DeadInit:
         BugType = "Dead initialization";
-        os << "Value stored to '" << V
+        os << "Value stored to '" << *V
            << "' during its initialization is never read";
         break;
 
@@ -122,7 +122,7 @@ public:
         BugType = "Dead increment";
       case Standard:
         if (!BugType) BugType = "Dead assignment";
-        os << "Value stored to '" << V << "' is never read";
+        os << "Value stored to '" << *V << "' is never read";
         break;
 
       case Enclosing:
@@ -348,7 +348,7 @@ class DeadStoresChecker : public Checker<check::ASTCodeBody> {
 public:
   void checkASTCodeBody(const Decl *D, AnalysisManager& mgr,
                         BugReporter &BR) const {
-    if (LiveVariables *L = mgr.getLiveVariables(D)) {
+    if (LiveVariables *L = mgr.getAnalysis<LiveVariables>(D)) {
       CFG &cfg = *mgr.getCFG(D);
       AnalysisContext *AC = mgr.getAnalysisContext(D);
       ParentMap &pmap = mgr.getParentMap(D);

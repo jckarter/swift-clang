@@ -617,10 +617,9 @@ llvm::Value *CodeGenFunction::EmitBlockLiteral(const BlockExpr *blockExpr) {
       ImplicitCastExpr l2r(ImplicitCastExpr::OnStack, type, CK_LValueToRValue,
                            declRef, VK_RValue);
       EmitExprAsInit(&l2r, &blockFieldPseudoVar,
-                     LValue::MakeAddr(blockField, type,
-                                      getContext().getDeclAlign(variable)
-                                                  .getQuantity(),
-                                      getContext()),
+                     MakeAddrLValue(blockField, type,
+                                    getContext().getDeclAlign(variable)
+                                                .getQuantity()),
                      /*captured by init*/ false);
     }
 
@@ -997,7 +996,7 @@ CodeGenFunction::GenerateBlockFunction(GlobalDecl GD,
     for (BlockDecl::capture_const_iterator ci = blockDecl->capture_begin(),
            ce = blockDecl->capture_end(); ci != ce; ++ci) {
       const VarDecl *variable = ci->getVariable();
-      DI->setLocation(variable->getLocation());
+      DI->EmitLocation(Builder, variable->getLocation());
 
       const CGBlockInfo::Capture &capture = blockInfo.getCapture(variable);
       if (capture.isConstant()) {

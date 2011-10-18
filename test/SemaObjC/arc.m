@@ -1,4 +1,4 @@
-// RUN: %clang_cc1 -triple x86_64-apple-darwin11 -fobjc-nonfragile-abi -fobjc-runtime-has-weak -fsyntax-only -fobjc-arc -fblocks -verify %s
+// RUN: %clang_cc1 -triple x86_64-apple-darwin11 -fobjc-runtime-has-weak -fsyntax-only -fobjc-arc -fblocks -verify %s
 
 typedef unsigned long NSUInteger;
 
@@ -263,8 +263,8 @@ void test11(id op, void *vp) {
   b = (vp == nil);
   b = (nil == vp);
 
-  b = (vp == op); // expected-error {{implicit conversion of an Objective-C pointer to 'void *'}}
-  b = (op == vp); // expected-error {{implicit conversion of a non-Objective-C pointer type 'void *' to 'id'}}
+  b = (vp == op); // expected-error {{implicit conversion of Objective-C pointer type 'id' to C pointer type 'void *' requires a bridged cast}} expected-note {{use __bridge}} expected-note {{use __bridge_retained}}
+  b = (op == vp); // expected-error {{implicit conversion of C pointer type 'void *' to Objective-C pointer type 'id' requires a bridged cast}} expected-note {{use __bridge}} expected-note {{use __bridge_transfer}}
 }
 
 void test12(id collection) {
@@ -662,3 +662,26 @@ void test38() {
     ;
   }
 }
+
+// rdar://10186536
+@class NSColor;
+void _NSCalc(NSColor* color, NSColor* bezelColors[]) __attribute__((unavailable("not available in automatic reference counting mode")));
+
+void _NSCalcBeze(NSColor* color, NSColor* bezelColors[]); // expected-error {{must explicitly describe intended ownership of an object array parameter}}
+
+// rdar://9970739
+@interface RestaurantTableViewCell
+- (void) restaurantLocation;
+@end
+
+@interface Radar9970739
+- (void) Meth;
+@end
+
+@implementation Radar9970739
+- (void) Meth { 
+  RestaurantTableViewCell *cell;
+  [cell restaurantLocatoin]; // expected-error {{no visible @interface for 'RestaurantTableViewCell' declares the selector 'restaurantLocatoin'}}
+}
+@end
+

@@ -766,9 +766,16 @@ bool Type::hasUnsignedIntegerRepresentation() const {
     return isUnsignedIntegerType();
 }
 
+bool Type::isHalfType() const {
+  if (const BuiltinType *BT = dyn_cast<BuiltinType>(CanonicalType))
+    return BT->getKind() == BuiltinType::Half;
+  // FIXME: Should we allow complex __fp16? Probably not.
+  return false;
+}
+
 bool Type::isFloatingType() const {
   if (const BuiltinType *BT = dyn_cast<BuiltinType>(CanonicalType))
-    return BT->getKind() >= BuiltinType::Float &&
+    return BT->getKind() >= BuiltinType::Half &&
            BT->getKind() <= BuiltinType::LongDouble;
   if (const ComplexType *CT = dyn_cast<ComplexType>(CanonicalType))
     return CT->getElementType()->isFloatingType();
@@ -905,7 +912,7 @@ bool Type::isIncompleteType() const {
   case Record:
     // A tagged type (struct/union/enum/class) is incomplete if the decl is a
     // forward declaration, but not a full definition (C99 6.2.5p22).
-    return !cast<TagType>(CanonicalType)->getDecl()->isDefinition();
+    return !cast<TagType>(CanonicalType)->getDecl()->isCompleteDefinition();
   case ConstantArray:
     // An array is incomplete if its element type is incomplete
     // (C++ [dcl.array]p1).
@@ -1134,29 +1141,19 @@ bool Type::isLiteralType() const {
     return true;
   //    -- a class type that has all of the following properties:
   if (const RecordType *RT = BaseTy->getAs<RecordType>()) {
+    //    -- a trivial destructor,
+    //    -- every constructor call and full-expression in the
+    //       brace-or-equal-initializers for non-static data members (if any)
+    //       is a constant expression,
+    //    -- it is an aggregate type or has at least one constexpr
+    //       constructor or constructor template that is not a copy or move
+    //       constructor, and
+    //    -- all non-static data members and base classes of literal types
+    //
+    // We resolve DR1361 by ignoring the second bullet.
     if (const CXXRecordDecl *ClassDecl =
-        dyn_cast<CXXRecordDecl>(RT->getDecl())) {
-      //    -- a trivial destructor,
-      if (!ClassDecl->hasTrivialDestructor())
-        return false;
-
-      //    -- every constructor call and full-expression in the
-      //       brace-or-equal-initializers for non-static data members (if any)
-      //       is a constant expression,
-      // We deliberately do not implement this restriction. It isn't necessary
-      // and doesn't make any sense.
-
-      //    -- it is an aggregate type or has at least one constexpr
-      //       constructor or constructor template that is not a copy or move
-      //       constructor, and
-      if (!ClassDecl->isAggregate() &&
-          !ClassDecl->hasConstexprNonCopyMoveConstructor())
-        return false;
-
-      //    -- all non-static data members and base classes of literal types
-      if (ClassDecl->hasNonLiteralTypeFieldsOrBases())
-        return false;
-    }
+        dyn_cast<CXXRecordDecl>(RT->getDecl()))
+      return ClassDecl->isLiteral();
 
     return true;
   }
@@ -1485,6 +1482,7 @@ const char *BuiltinType::getName(const PrintingPolicy &Policy) const {
   case ULong:             return "unsigned long";
   case ULongLong:         return "unsigned long long";
   case UInt128:           return "__uint128_t";
+  case Half:              return "half";
   case Float:             return "float";
   case Double:            return "double";
   case LongDouble:        return "long double";
@@ -1497,6 +1495,7 @@ const char *BuiltinType::getName(const PrintingPolicy &Policy) const {
   case BoundMember:       return "<bound member function type>";
   case Dependent:         return "<dependent type>";
   case UnknownAny:        return "<unknown type>";
+  case ARCUnbridgedCast:  return "<ARC unbridged cast type>";
   case ObjCId:            return "id";
   case ObjCClass:         return "Class";
   case ObjCSel:           return "SEL";
@@ -1757,7 +1756,7 @@ static TagDecl *getInterestingTagDecl(TagDecl *decl) {
   for (TagDecl::redecl_iterator I = decl->redecls_begin(),
                                 E = decl->redecls_end();
        I != E; ++I) {
-    if (I->isDefinition() || I->isBeingDefined())
+    if (I->isCompleteDefinition() || I->isBeingDefined())
       return *I;
   }
   // If there's no definition (not even in progress), return what we have.
@@ -2123,6 +2122,8 @@ static CachedProperties computeCachedProperties(const Type *T) {
     return Cache::get(cast<ObjCObjectType>(T)->getBaseType());
   case Type::ObjCObjectPointer:
     return Cache::get(cast<ObjCObjectPointerType>(T)->getPointeeType());
+  case Type::Atomic:
+    return Cache::get(cast<AtomicType>(T)->getValueType());
   }
 
   llvm_unreachable("unhandled type class");

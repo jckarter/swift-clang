@@ -92,9 +92,9 @@ public:
 
   /// AddDefaultSystemIncludePaths - Adds the default system include paths so
   ///  that e.g. stdio.h is found.
-  void AddDefaultSystemIncludePaths(const LangOptions &Lang,
-                                    const llvm::Triple &triple,
-                                    const HeaderSearchOptions &HSOpts);
+  void AddDefaultIncludePaths(const LangOptions &Lang,
+                              const llvm::Triple &triple,
+                              const HeaderSearchOptions &HSOpts);
 
   /// Realize - Merges all search path lists into one list and send it to
   /// HeaderSearch.
@@ -424,14 +424,16 @@ void InitHeaderSearch::AddDefaultCIncludePaths(const llvm::Triple &triple,
                                             const HeaderSearchOptions &HSOpts) {
   llvm::Triple::OSType os = triple.getOS();
 
-  switch (os) {
-  case llvm::Triple::FreeBSD:
-  case llvm::Triple::NetBSD:
-    break;
-  default:
-    // FIXME: temporary hack: hard-coded paths.
-    AddPath("/usr/local/include", System, true, false, false);
-    break;
+  if (HSOpts.UseStandardSystemIncludes) {
+    switch (os) {
+    case llvm::Triple::FreeBSD:
+    case llvm::Triple::NetBSD:
+      break;
+    default:
+      // FIXME: temporary hack: hard-coded paths.
+      AddPath("/usr/local/include", System, true, false, false);
+      break;
+    }
   }
 
   // Builtin includes use #include_next directives and should be positioned
@@ -443,6 +445,11 @@ void InitHeaderSearch::AddDefaultCIncludePaths(const llvm::Triple &triple,
     P.appendComponent("include");
     AddPath(P.str(), System, false, false, false, /*IgnoreSysRoot=*/ true);
   }
+
+  // All remaining additions are for system include directories, early exit if
+  // we aren't using them.
+  if (!HSOpts.UseStandardSystemIncludes)
+    return;
 
   // Add dirs specified via 'configure --with-c-include-dirs'.
   StringRef CIncludeDirs(C_INCLUDE_DIRS);
@@ -713,7 +720,12 @@ AddDefaultCPlusPlusIncludePaths(const llvm::Triple &triple, const HeaderSearchOp
     //===------------------------------------------------------------------===//
     // Redhat based distros.
     //===------------------------------------------------------------------===//
-    // Fedora 15
+    // Fedora 15 (GCC 4.6.1)
+    AddGnuCPlusPlusIncludePaths("/usr/include/c++/4.6.1",
+                                "x86_64-redhat-linux", "32", "", triple);
+    AddGnuCPlusPlusIncludePaths("/usr/include/c++/4.6.1",
+                                "i686-redhat-linux", "", "", triple);
+    // Fedora 15 (GCC 4.6.0)
     AddGnuCPlusPlusIncludePaths("/usr/include/c++/4.6.0",
                                 "x86_64-redhat-linux", "32", "", triple);
     AddGnuCPlusPlusIncludePaths("/usr/include/c++/4.6.0",
@@ -927,10 +939,11 @@ AddDefaultCPlusPlusIncludePaths(const llvm::Triple &triple, const HeaderSearchOp
   }
 }
 
-void InitHeaderSearch::AddDefaultSystemIncludePaths(const LangOptions &Lang,
-                                                    const llvm::Triple &triple,
+void InitHeaderSearch::AddDefaultIncludePaths(const LangOptions &Lang,
+                                              const llvm::Triple &triple,
                                             const HeaderSearchOptions &HSOpts) {
-  if (Lang.CPlusPlus && HSOpts.UseStandardCXXIncludes) {
+  if (Lang.CPlusPlus && HSOpts.UseStandardCXXIncludes &&
+      HSOpts.UseStandardSystemIncludes) {
     if (HSOpts.UseLibcxx) {
       if (triple.isOSDarwin()) {
         // On Darwin, libc++ may be installed alongside the compiler in
@@ -948,27 +961,31 @@ void InitHeaderSearch::AddDefaultSystemIncludePaths(const LangOptions &Lang,
       }
       
       AddPath("/usr/include/c++/v1", CXXSystem, true, false, false);
-    }
-    else
+    } else {
       AddDefaultCPlusPlusIncludePaths(triple, HSOpts);
+    }
   }
 
   AddDefaultCIncludePaths(triple, HSOpts);
 
   // Add the default framework include paths on Darwin.
-  if (triple.isOSDarwin()) {
-    AddPath("/System/Library/Frameworks", System, true, false, true);
-    AddPath("/Library/Frameworks", System, true, false, true);
+  if (HSOpts.UseStandardSystemIncludes) {
+    if (triple.isOSDarwin()) {
+      AddPath("/System/Library/Frameworks", System, true, false, true);
+      AddPath("/Library/Frameworks", System, true, false, true);
+    }
   }
 }
 
 /// RemoveDuplicates - If there are duplicate directory entries in the specified
-/// search list, remove the later (dead) ones.
-static void RemoveDuplicates(std::vector<DirectoryLookup> &SearchList,
-                             unsigned First, bool Verbose) {
+/// search list, remove the later (dead) ones.  Returns the number of non-system
+/// headers removed, which is used to update NumAngled.
+static unsigned RemoveDuplicates(std::vector<DirectoryLookup> &SearchList,
+                                 unsigned First, bool Verbose) {
   llvm::SmallPtrSet<const DirectoryEntry *, 8> SeenDirs;
   llvm::SmallPtrSet<const DirectoryEntry *, 8> SeenFrameworkDirs;
   llvm::SmallPtrSet<const HeaderMap *, 8> SeenHeaderMaps;
+  unsigned NonSystemRemoved = 0;
   for (unsigned i = First; i != SearchList.size(); ++i) {
     unsigned DirToRemove = i;
 
@@ -1035,12 +1052,15 @@ static void RemoveDuplicates(std::vector<DirectoryLookup> &SearchList,
         llvm::errs() << "  as it is a non-system directory that duplicates "
                      << "a system directory\n";
     }
+    if (DirToRemove != i)
+      ++NonSystemRemoved;
 
     // This is reached if the current entry is a duplicate.  Remove the
     // DirToRemove (usually the current dir).
     SearchList.erase(SearchList.begin()+DirToRemove);
     --i;
   }
+  return NonSystemRemoved;
 }
 
 
@@ -1087,7 +1107,8 @@ void InitHeaderSearch::Realize(const LangOptions &Lang) {
   // Remove duplicates across both the Angled and System directories.  GCC does
   // this and failing to remove duplicates across these two groups breaks
   // #include_next.
-  RemoveDuplicates(SearchList, NumQuoted, Verbose);
+  unsigned NonSystemRemoved = RemoveDuplicates(SearchList, NumQuoted, Verbose);
+  NumAngled -= NonSystemRemoved;
 
   bool DontSearchCurDir = false;  // TODO: set to true if -I- is set?
   Headers.SetSearchPaths(SearchList, NumQuoted, NumAngled, DontSearchCurDir);
@@ -1127,8 +1148,7 @@ void clang::ApplyHeaderSearchOptions(HeaderSearch &HS,
                  E.IgnoreSysRoot);
   }
 
-  if (HSOpts.UseStandardIncludes)
-    Init.AddDefaultSystemIncludePaths(Lang, Triple, HSOpts);
+  Init.AddDefaultIncludePaths(Lang, Triple, HSOpts);
 
   Init.Realize(Lang);
 }

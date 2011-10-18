@@ -732,6 +732,10 @@ FileID SourceManager::getFileIDLocal(unsigned SLocOffset) const {
 FileID SourceManager::getFileIDLoaded(unsigned SLocOffset) const {
   assert(SLocOffset >= CurrentLoadedOffset && "Bad function choice");
 
+  // Sanity checking, otherwise a bug may lead to hanging in release build.
+  if (SLocOffset < CurrentLoadedOffset)
+    return FileID();
+
   // Essentially the same as the local case, but the loaded array is sorted
   // in the other direction.
 
@@ -807,6 +811,16 @@ SourceLocation SourceManager::getSpellingLocSlowCase(SourceLocation Loc) const {
     std::pair<FileID, unsigned> LocInfo = getDecomposedLoc(Loc);
     Loc = getSLocEntry(LocInfo.first).getExpansion().getSpellingLoc();
     Loc = Loc.getLocWithOffset(LocInfo.second);
+  } while (!Loc.isFileID());
+  return Loc;
+}
+
+SourceLocation SourceManager::getFileLocSlowCase(SourceLocation Loc) const {
+  do {
+    if (isMacroArgExpansion(Loc))
+      Loc = getImmediateSpellingLoc(Loc);
+    else
+      Loc = getImmediateExpansionRange(Loc).first;
   } while (!Loc.isFileID());
   return Loc;
 }

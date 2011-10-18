@@ -38,7 +38,6 @@
 #include "llvm/Support/FileSystem.h"
 #include "llvm/Support/Path.h"
 #include "llvm/Support/Program.h"
-#include "llvm/Support/Process.h"
 
 #include "InputInfo.h"
 
@@ -50,7 +49,7 @@ using namespace clang;
 Driver::Driver(StringRef ClangExecutable,
                StringRef DefaultHostTriple,
                StringRef DefaultImageName,
-               bool IsProduction, bool CXXIsProduction,
+               bool IsProduction,
                DiagnosticsEngine &Diags)
   : Opts(createDriverOptTable()), Diags(Diags),
     ClangExecutable(ClangExecutable), UseStdLib(true),
@@ -74,9 +73,6 @@ Driver::Driver(StringRef ClangExecutable,
     CCCClangArchs.insert(llvm::Triple::x86);
     CCCClangArchs.insert(llvm::Triple::x86_64);
     CCCClangArchs.insert(llvm::Triple::arm);
-
-    if (!CXXIsProduction)
-      CCCUseClangCXX = false;
   }
 
   Name = llvm::sys::path::stem(ClangExecutable);
@@ -323,13 +319,6 @@ Compilation *Driver::BuildCompilation(ArrayRef<const char *> ArgList) {
     SysRoot = A->getValue(*Args);
   if (Args->hasArg(options::OPT_nostdlib))
     UseStdLib = false;
-
-  // Honor --working-directory. Eventually we want to handle this completely
-  // internally to support good use as a library, but for now we just change our
-  // working directory.
-  if (const Arg *A = Args->getLastArg(options::OPT__working_directory)) {
-    llvm::sys::Process::SetWorkingDirectory(A->getValue(*Args));
-  }
 
   Host = GetHostInfo(DefaultHostTriple.c_str());
 
@@ -1241,7 +1230,7 @@ static const Tool &SelectToolForJob(Compilation &C, const ToolChain *TC,
   bool HasStatic = (C.getArgs().hasArg(options::OPT_mkernel) ||
                     C.getArgs().hasArg(options::OPT_static) ||
                     C.getArgs().hasArg(options::OPT_fapple_kext));
-  bool IsDarwin = TC->getTriple().getOS() == llvm::Triple::Darwin;
+  bool IsDarwin = TC->getTriple().isOSDarwin();
   bool IsIADefault = TC->IsIntegratedAssemblerDefault() &&
     !(HasStatic && IsDarwin);
   if (C.getArgs().hasFlag(options::OPT_integrated_as,
@@ -1568,6 +1557,8 @@ const HostInfo *Driver::GetHostInfo(const char *TripleStr) const {
   case llvm::Triple::AuroraUX:
     return createAuroraUXHostInfo(*this, Triple);
   case llvm::Triple::Darwin:
+  case llvm::Triple::MacOSX:
+  case llvm::Triple::IOS:
     return createDarwinHostInfo(*this, Triple);
   case llvm::Triple::DragonFly:
     return createDragonFlyHostInfo(*this, Triple);

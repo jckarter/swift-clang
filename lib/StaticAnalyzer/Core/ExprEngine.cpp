@@ -453,9 +453,7 @@ void ExprEngine::Visit(const Stmt *S, ExplodedNode *Pred,
     case Stmt::CXXBindTemporaryExprClass:
     case Stmt::CXXCatchStmtClass:
     case Stmt::CXXDependentScopeMemberExprClass:
-    case Stmt::CXXForRangeStmtClass:
     case Stmt::CXXPseudoDestructorExprClass:
-    case Stmt::CXXTemporaryObjectExprClass:
     case Stmt::CXXThrowExprClass:
     case Stmt::CXXTryStmtClass:
     case Stmt::CXXTypeidExprClass:
@@ -501,6 +499,7 @@ void ExprEngine::Visit(const Stmt *S, ExplodedNode *Pred,
     case Stmt::CaseStmtClass:
     case Stmt::CompoundStmtClass:
     case Stmt::ContinueStmtClass:
+    case Stmt::CXXForRangeStmtClass:
     case Stmt::DefaultStmtClass:
     case Stmt::DoStmtClass:
     case Stmt::ForStmtClass:
@@ -568,6 +567,7 @@ void ExprEngine::Visit(const Stmt *S, ExplodedNode *Pred,
     case Stmt::CUDAKernelCallExprClass:
     case Stmt::OpaqueValueExprClass:
     case Stmt::AsTypeExprClass:
+    case Stmt::AtomicExprClass:
         // Fall through.
 
     // Cases we intentionally don't evaluate, since they don't need
@@ -631,6 +631,7 @@ void ExprEngine::Visit(const Stmt *S, ExplodedNode *Pred,
       break;
     }
 
+    case Stmt::CXXTemporaryObjectExprClass:
     case Stmt::CXXConstructExprClass: {
       const CXXConstructExpr *C = cast<CXXConstructExpr>(S);
       // For block-level CXXConstructExpr, we don't have a destination region.
@@ -1088,25 +1089,13 @@ void ExprEngine::processSwitch(SwitchNodeBuilder& builder) {
     const CaseStmt *Case = I.getCase();
 
     // Evaluate the LHS of the case value.
-    Expr::EvalResult V1;
-    bool b = Case->getLHS()->Evaluate(V1, getContext());
-
-    // Sanity checks.  These go away in Release builds.
-    assert(b && V1.Val.isInt() && !V1.HasSideEffects
-             && "Case condition must evaluate to an integer constant.");
-    (void)b; // silence unused variable warning
-    assert(V1.Val.getInt().getBitWidth() ==
-           getContext().getTypeSize(CondE->getType()));
+    llvm::APSInt V1 = Case->getLHS()->EvaluateKnownConstInt(getContext());
+    assert(V1.getBitWidth() == getContext().getTypeSize(CondE->getType()));
 
     // Get the RHS of the case, if it exists.
-    Expr::EvalResult V2;
-
-    if (const Expr *E = Case->getRHS()) {
-      b = E->Evaluate(V2, getContext());
-      assert(b && V2.Val.isInt() && !V2.HasSideEffects
-             && "Case condition must evaluate to an integer constant.");
-      (void)b; // silence unused variable warning
-    }
+    llvm::APSInt V2;
+    if (const Expr *E = Case->getRHS())
+      V2 = E->EvaluateKnownConstInt(getContext());
     else
       V2 = V1;
 
@@ -1115,7 +1104,7 @@ void ExprEngine::processSwitch(SwitchNodeBuilder& builder) {
     //  This should be easy once we have "ranges" for NonLVals.
 
     do {
-      nonloc::ConcreteInt CaseVal(getBasicVals().getValue(V1.Val.getInt()));
+      nonloc::ConcreteInt CaseVal(getBasicVals().getValue(V1));
       DefinedOrUnknownSVal Res = svalBuilder.evalEQ(DefaultSt ? DefaultSt : state,
                                                CondV, CaseVal);
 
@@ -1144,11 +1133,11 @@ void ExprEngine::processSwitch(SwitchNodeBuilder& builder) {
       }
 
       // Concretize the next value in the range.
-      if (V1.Val.getInt() == V2.Val.getInt())
+      if (V1 == V2)
         break;
 
-      ++V1.Val.getInt();
-      assert (V1.Val.getInt() <= V2.Val.getInt());
+      ++V1;
+      assert (V1 <= V2);
 
     } while (true);
   }

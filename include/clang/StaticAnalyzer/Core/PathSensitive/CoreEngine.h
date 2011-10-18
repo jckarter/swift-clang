@@ -166,7 +166,7 @@ class StmtNodeBuilder {
   const CFGBlock &B;
   const unsigned Idx;
   ExplodedNode *Pred;
-  ProgramStateManager& Mgr;
+
 
 public:
   bool PurgingDeadSymbols;
@@ -184,8 +184,7 @@ public:
   StmtNodeBuilder(const CFGBlock *b,
                   unsigned idx,
                   ExplodedNode *N,
-                  CoreEngine* e,
-                  ProgramStateManager &mgr);
+                  CoreEngine* e);
 
   ~StmtNodeBuilder();
 
@@ -200,13 +199,6 @@ public:
     return getBlockCounter().getNumVisited(
                             Pred->getLocationContext()->getCurrentStackFrame(),
                                            B.getBlockID());
-  }
-
-  ExplodedNode *generateNode(PostStmt PP,
-                             const ProgramState *St,
-                             ExplodedNode *Pred) {
-    hasGeneratedNode = true;
-    return generateNodeInternal(PP, St, Pred);
   }
 
   ExplodedNode *generateNode(const Stmt *S,
@@ -245,7 +237,7 @@ public:
   generateNodeInternal(const Stmt *S,
                        const ProgramState *State,
                        ExplodedNode *Pred,
-                       ProgramPoint::Kind K = ProgramPoint::PostStmtKind,
+                       ProgramPoint::Kind K,
                        const ProgramPointTag *tag = 0);
 
   /// getStmt - Return the current block-level expression associated with
@@ -316,6 +308,8 @@ public:
 
   BlockCounter getBlockCounter() const { return Eng.WList->getBlockCounter();}
 
+  /// This function generates a new ExplodedNode but not a new
+  /// branch(block edge).
   ExplodedNode *generateNode(const Stmt *Condition, const ProgramState *State);
 
   ExplodedNode *generateNode(const ProgramState *State, bool branch);

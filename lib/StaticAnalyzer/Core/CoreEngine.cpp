@@ -17,6 +17,7 @@
 #include "clang/StaticAnalyzer/Core/PathSensitive/ExprEngine.h"
 #include "clang/Index/TranslationUnit.h"
 #include "clang/AST/Expr.h"
+#include "clang/AST/StmtCXX.h"
 #include "llvm/Support/Casting.h"
 #include "llvm/ADT/DenseMap.h"
 using namespace clang;
@@ -313,8 +314,7 @@ void CoreEngine::HandleBlockEntrance(const BlockEntrance &L,
 
   // Process the entrance of the block.
   if (CFGElement E = L.getFirstElement()) {
-    StmtNodeBuilder Builder(L.getBlock(), 0, Pred, this,
-                              SubEng.getStateManager());
+    StmtNodeBuilder Builder(L.getBlock(), 0, Pred, this);
     SubEng.processCFGElement(E, Builder);
   }
   else
@@ -347,6 +347,10 @@ void CoreEngine::HandleBlockExit(const CFGBlock * B, ExplodedNode *Pred) {
 
       case Stmt::DoStmtClass:
         HandleBranch(cast<DoStmt>(Term)->getCond(), Term, B, Pred);
+        return;
+
+      case Stmt::CXXForRangeStmtClass:
+        HandleBranch(cast<CXXForRangeStmt>(Term)->getCond(), Term, B, Pred);
         return;
 
       case Stmt::ForStmtClass:
@@ -425,8 +429,7 @@ void CoreEngine::HandlePostStmt(const CFGBlock *B, unsigned StmtIdx,
   if (StmtIdx == B->size())
     HandleBlockExit(B, Pred);
   else {
-    StmtNodeBuilder Builder(B, StmtIdx, Pred, this,
-                              SubEng.getStateManager());
+    StmtNodeBuilder Builder(B, StmtIdx, Pred, this);
     SubEng.processCFGElement((*B)[StmtIdx], Builder);
   }
 }
@@ -475,9 +478,8 @@ GenericNodeBuilderImpl::generateNodeImpl(const ProgramState *state,
 StmtNodeBuilder::StmtNodeBuilder(const CFGBlock *b,
                                  unsigned idx,
                                  ExplodedNode *N,
-                                 CoreEngine* e,
-                                 ProgramStateManager &mgr)
-  : Eng(*e), B(*b), Idx(idx), Pred(N), Mgr(mgr),
+                                 CoreEngine* e)
+  : Eng(*e), B(*b), Idx(idx), Pred(N),
     PurgingDeadSymbols(false), BuildSinks(false), hasGeneratedNode(false),
     PointKind(ProgramPoint::PostStmtKind), Tag(0) {
   Deferred.insert(N);
@@ -541,31 +543,6 @@ ExplodedNode *StmtNodeBuilder::MakeNode(ExplodedNodeSet &Dst,
   return N;
 }
 
-static ProgramPoint GetProgramPoint(const Stmt *S, ProgramPoint::Kind K,
-                                    const LocationContext *LC,
-                                    const ProgramPointTag *tag){
-  switch (K) {
-    default:
-      llvm_unreachable("Unhandled ProgramPoint kind");    
-    case ProgramPoint::PreStmtKind:
-      return PreStmt(S, LC, tag);
-    case ProgramPoint::PostStmtKind:
-      return PostStmt(S, LC, tag);
-    case ProgramPoint::PreLoadKind:
-      return PreLoad(S, LC, tag);
-    case ProgramPoint::PostLoadKind:
-      return PostLoad(S, LC, tag);
-    case ProgramPoint::PreStoreKind:
-      return PreStore(S, LC, tag);
-    case ProgramPoint::PostStoreKind:
-      return PostStore(S, LC, tag);
-    case ProgramPoint::PostLValueKind:
-      return PostLValue(S, LC, tag);
-    case ProgramPoint::PostPurgeDeadSymbolsKind:
-      return PostPurgeDeadSymbols(S, LC, tag);
-  }
-}
-
 ExplodedNode*
 StmtNodeBuilder::generateNodeInternal(const Stmt *S,
                                       const ProgramState *state,
@@ -573,8 +550,8 @@ StmtNodeBuilder::generateNodeInternal(const Stmt *S,
                                       ProgramPoint::Kind K,
                                       const ProgramPointTag *tag) {
   
-  const ProgramPoint &L = GetProgramPoint(S, K, Pred->getLocationContext(),
-                                          tag);
+  const ProgramPoint &L = ProgramPoint::getProgramPoint(S, K,
+                                        Pred->getLocationContext(), tag);
   return generateNodeInternal(L, state, Pred);
 }
 

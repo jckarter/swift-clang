@@ -468,6 +468,11 @@ void StmtProfiler::VisitGenericSelectionExpr(const GenericSelectionExpr *S) {
   }
 }
 
+void StmtProfiler::VisitAtomicExpr(const AtomicExpr *S) {
+  VisitExpr(S);
+  ID.AddInteger(S->getOp());
+}
+
 static Stmt::StmtClass DecodeOperatorCall(const CXXOperatorCallExpr *S,
                                           UnaryOperatorKind &UnaryOp,
                                           BinaryOperatorKind &BinaryOp) {

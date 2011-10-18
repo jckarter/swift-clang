@@ -45,6 +45,7 @@
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Support/Timer.h"
 #include "llvm/Support/FileSystem.h"
+#include "llvm/Support/Mutex.h"
 #include "llvm/Support/CrashRecoveryContext.h"
 #include <cstdlib>
 #include <cstdio>
@@ -99,7 +100,6 @@ ASTUnit::ASTUnit(bool _MainFileIsAST)
     TUKind(TU_Complete), WantTiming(getenv("LIBCLANG_TIMING")),
     OwnsRemappedFileBuffers(true),
     NumStoredDiagnosticsFromDriver(0),
-    ConcurrencyCheckValue(CheckUnlocked), 
     PreambleRebuildCounter(0), SavedMainFileBuffer(0), PreambleBuffer(0),
     ShouldCacheCodeCompletionResults(false),
     NestedMacroExpansions(true),
@@ -114,7 +114,6 @@ ASTUnit::ASTUnit(bool _MainFileIsAST)
 }
 
 ASTUnit::~ASTUnit() {
-  ConcurrencyCheckValue = CheckLocked;
   CleanTemporaryFiles();
   if (!PreambleFile.empty())
     llvm::sys::Path(PreambleFile).eraseFromDisk();
@@ -1512,30 +1511,33 @@ ASTUnit *ASTUnit::create(CompilerInvocation *CI,
   AST->Invocation = CI;
   AST->FileSystemOpts = CI->getFileSystemOpts();
   AST->FileMgr = new FileManager(AST->FileSystemOpts);
-  AST->SourceMgr = new SourceManager(*Diags, *AST->FileMgr);
+  AST->SourceMgr = new SourceManager(AST->getDiagnostics(), *AST->FileMgr);
 
   return AST.take();
 }
 
 ASTUnit *ASTUnit::LoadFromCompilerInvocationAction(CompilerInvocation *CI,
                               llvm::IntrusiveRefCntPtr<DiagnosticsEngine> Diags,
-                                             ASTFrontendAction *Action) {
+                                             ASTFrontendAction *Action,
+                                             ASTUnit *Unit) {
   assert(CI && "A CompilerInvocation is required");
 
-  // Create the AST unit.
-  llvm::OwningPtr<ASTUnit> AST;
-  AST.reset(new ASTUnit(false));
-  ConfigureDiags(Diags, 0, 0, *AST, /*CaptureDiagnostics*/false);
-  AST->Diagnostics = Diags;
+  llvm::OwningPtr<ASTUnit> OwnAST;
+  ASTUnit *AST = Unit;
+  if (!AST) {
+    // Create the AST unit.
+    OwnAST.reset(create(CI, Diags));
+    AST = OwnAST.get();
+  }
+  
   AST->OnlyLocalDecls = false;
   AST->CaptureDiagnostics = false;
   AST->TUKind = Action ? Action->getTranslationUnitKind() : TU_Complete;
   AST->ShouldCacheCodeCompletionResults = false;
-  AST->Invocation = CI;
 
   // Recover resources if we crash before exiting this method.
   llvm::CrashRecoveryContextCleanupRegistrar<ASTUnit>
-    ASTUnitCleanup(AST.get());
+    ASTUnitCleanup(OwnAST.get());
   llvm::CrashRecoveryContextCleanupRegistrar<DiagnosticsEngine,
     llvm::CrashRecoveryContextReleaseRefCleanup<DiagnosticsEngine> >
     DiagCleanup(Diags.getPtr());
@@ -1583,9 +1585,6 @@ ASTUnit *ASTUnit::LoadFromCompilerInvocationAction(CompilerInvocation *CI,
          "IR inputs not supported here!");
 
   // Configure the various subsystems.
-  AST->FileSystemOpts = Clang->getFileSystemOpts();
-  AST->FileMgr = new FileManager(AST->FileSystemOpts);
-  AST->SourceMgr = new SourceManager(AST->getDiagnostics(), *AST->FileMgr);
   AST->TheSema.reset();
   AST->Ctx = 0;
   AST->PP = 0;
@@ -1626,7 +1625,10 @@ ASTUnit *ASTUnit::LoadFromCompilerInvocationAction(CompilerInvocation *CI,
   
   Act->EndSourceFile();
 
-  return AST.take();
+  if (OwnAST)
+    return OwnAST.take();
+  else
+    return AST;
 }
 
 bool ASTUnit::LoadFromCompilerInvocation(bool PrecompilePreamble) {
@@ -2414,3 +2416,30 @@ void ASTUnit::PreambleData::countLines() const {
   if (Buffer.back() != '\n')
     ++NumLines;
 }
+
+#ifndef NDEBUG
+ASTUnit::ConcurrencyState::ConcurrencyState() {
+  Mutex = new llvm::sys::MutexImpl(/*recursive=*/true);
+}
+
+ASTUnit::ConcurrencyState::~ConcurrencyState() {
+  delete static_cast<llvm::sys::MutexImpl *>(Mutex);
+}
+
+void ASTUnit::ConcurrencyState::start() {
+  bool acquired = static_cast<llvm::sys::MutexImpl *>(Mutex)->tryacquire();
+  assert(acquired && "Concurrent access to ASTUnit!");
+}
+
+void ASTUnit::ConcurrencyState::finish() {
+  static_cast<llvm::sys::MutexImpl *>(Mutex)->release();
+}
+
+#else // NDEBUG
+
+ASTUnit::ConcurrencyState::ConcurrencyState() {}
+ASTUnit::ConcurrencyState::~ConcurrencyState() {}
+void ASTUnit::ConcurrencyState::start() {}
+void ASTUnit::ConcurrencyState::finish() {}
+
+#endif

@@ -846,6 +846,15 @@ Sema::CheckClassTemplate(Scope *S, unsigned TagSpec, TagUseKind TUK,
     if (RequireCompleteDeclContext(SS, SemanticContext))
       return true;
 
+    // If we're adding a template to a dependent context, we may need to 
+    // rebuilding some of the types used within the template parameter list, 
+    // now that we know what the current instantiation is.
+    if (SemanticContext->isDependentContext()) {
+      ContextRAII SavedContext(*this, SemanticContext);
+      if (RebuildTemplateParamsInCurrentInstantiation(TemplateParams))
+        Invalid = true;
+    }
+        
     LookupQualifiedName(Previous, SemanticContext);
   } else {
     SemanticContext = CurContext;
@@ -2007,7 +2016,7 @@ QualType Sema::CheckTemplateIdType(TemplateName Name,
       Decl = ClassTemplateSpecializationDecl::Create(Context,
                             ClassTemplate->getTemplatedDecl()->getTagKind(),
                                                 ClassTemplate->getDeclContext(),
-                                                ClassTemplate->getLocation(),
+                            ClassTemplate->getTemplatedDecl()->getLocStart(),
                                                 ClassTemplate->getLocation(),
                                                      ClassTemplate,
                                                      Converted.data(),
@@ -3244,6 +3253,10 @@ bool UnnamedLocalNoLinkageFinder::VisitObjCInterfaceType(
 bool UnnamedLocalNoLinkageFinder::VisitObjCObjectPointerType(
                                                 const ObjCObjectPointerType *) {
   return false;
+}
+
+bool UnnamedLocalNoLinkageFinder::VisitAtomicType(const AtomicType* T) {
+  return Visit(T->getValueType());
 }
 
 bool UnnamedLocalNoLinkageFinder::VisitTagDecl(const TagDecl *Tag) {
@@ -5146,7 +5159,7 @@ Sema::ActOnClassTemplateSpecialization(Scope *S, unsigned TagSpec,
 Decl *Sema::ActOnTemplateDeclarator(Scope *S,
                               MultiTemplateParamsArg TemplateParameterLists,
                                     Declarator &D) {
-  return HandleDeclarator(S, D, move(TemplateParameterLists), false);
+  return HandleDeclarator(S, D, move(TemplateParameterLists));
 }
 
 Decl *Sema::ActOnStartOfFunctionTemplateDef(Scope *FnBodyScope,
@@ -5161,9 +5174,9 @@ Decl *Sema::ActOnStartOfFunctionTemplateDef(Scope *FnBodyScope,
 
   Scope *ParentScope = FnBodyScope->getParent();
 
+  D.setFunctionDefinition(true);
   Decl *DP = HandleDeclarator(ParentScope, D,
-                              move(TemplateParameterLists),
-                              /*IsFunctionDefinition=*/true);
+                              move(TemplateParameterLists));
   if (FunctionTemplateDecl *FunctionTemplate
         = dyn_cast_or_null<FunctionTemplateDecl>(DP))
     return ActOnStartOfFunctionDef(FnBodyScope,
@@ -5715,45 +5728,41 @@ static bool CheckExplicitInstantiationScope(Sema &S, NamedDecl *D,
     return true;
   }
 
-  // C++0x [temp.explicit]p2:
+  // C++11 [temp.explicit]p3:
   //   An explicit instantiation shall appear in an enclosing namespace of its
-  //   template.
+  //   template. If the name declared in the explicit instantiation is an
+  //   unqualified name, the explicit instantiation shall appear in the
+  //   namespace where its template is declared or, if that namespace is inline
+  //   (7.3.1), any namespace from its enclosing namespace set.
   //
   // This is DR275, which we do not retroactively apply to C++98/03.
-  if (S.getLangOptions().CPlusPlus0x &&
-      !CurContext->Encloses(OrigContext)) {
-    if (NamespaceDecl *NS = dyn_cast<NamespaceDecl>(OrigContext))
+  if (WasQualifiedName) {
+    if (CurContext->Encloses(OrigContext))
+      return false;
+  } else {
+    if (CurContext->InEnclosingNamespaceSetOf(OrigContext))
+      return false;
+  }
+
+  if (NamespaceDecl *NS = dyn_cast<NamespaceDecl>(OrigContext)) {
+    if (WasQualifiedName)
       S.Diag(InstLoc,
              S.getLangOptions().CPlusPlus0x?
-                 diag::err_explicit_instantiation_out_of_scope
-               : diag::warn_explicit_instantiation_out_of_scope_0x)
+               diag::err_explicit_instantiation_out_of_scope :
+               diag::warn_explicit_instantiation_out_of_scope_0x)
         << D << NS;
     else
       S.Diag(InstLoc,
              S.getLangOptions().CPlusPlus0x?
-                 diag::err_explicit_instantiation_must_be_global
-               : diag::warn_explicit_instantiation_out_of_scope_0x)
-        << D;
-    S.Diag(D->getLocation(), diag::note_explicit_instantiation_here);
-    return false;
-  }
-
-  // C++0x [temp.explicit]p2:
-  //   If the name declared in the explicit instantiation is an unqualified
-  //   name, the explicit instantiation shall appear in the namespace where
-  //   its template is declared or, if that namespace is inline (7.3.1), any
-  //   namespace from its enclosing namespace set.
-  if (WasQualifiedName)
-    return false;
-
-  if (CurContext->InEnclosingNamespaceSetOf(OrigContext))
-    return false;
-
-  S.Diag(InstLoc,
-         S.getLangOptions().CPlusPlus0x?
-             diag::err_explicit_instantiation_unqualified_wrong_namespace
-           : diag::warn_explicit_instantiation_unqualified_wrong_namespace_0x)
-    << D << OrigContext;
+               diag::err_explicit_instantiation_unqualified_wrong_namespace :
+               diag::warn_explicit_instantiation_unqualified_wrong_namespace_0x)
+        << D << NS;
+  } else
+    S.Diag(InstLoc,
+           S.getLangOptions().CPlusPlus0x?
+             diag::err_explicit_instantiation_must_be_global :
+             diag::warn_explicit_instantiation_must_be_global_0x)
+      << D;
   S.Diag(D->getLocation(), diag::note_explicit_instantiation_here);
   return false;
 }
@@ -5763,7 +5772,7 @@ static bool ScopeSpecifierHasTemplateId(const CXXScopeSpec &SS) {
   if (!SS.isSet())
     return false;
 
-  // C++0x [temp.explicit]p2:
+  // C++11 [temp.explicit]p3:
   //   If the explicit instantiation is for a member function, a member class
   //   or a static data member of a class template specialization, the name of
   //   the class template specialization in the qualified-id for the member
@@ -6148,12 +6157,17 @@ DeclResult Sema::ActOnExplicitInstantiation(Scope *S,
   //   inline or constexpr specifiers.
   // Presumably, this also applies to member functions of class templates as
   // well.
-  if (D.getDeclSpec().isInlineSpecified() && getLangOptions().CPlusPlus0x)
+  if (D.getDeclSpec().isInlineSpecified())
     Diag(D.getDeclSpec().getInlineSpecLoc(),
-         diag::err_explicit_instantiation_inline)
-      <<FixItHint::CreateRemoval(D.getDeclSpec().getInlineSpecLoc());
-
-  // FIXME: check for constexpr specifier.
+         getLangOptions().CPlusPlus0x ?
+           diag::err_explicit_instantiation_inline :
+           diag::warn_explicit_instantiation_inline_0x)
+      << FixItHint::CreateRemoval(D.getDeclSpec().getInlineSpecLoc());
+  if (D.getDeclSpec().isConstexprSpecified())
+    // FIXME: Add a fix-it to remove the 'constexpr' and add a 'const' if one is
+    // not already specified.
+    Diag(D.getDeclSpec().getConstexprSpecLoc(),
+         diag::err_explicit_instantiation_constexpr);
 
   // C++0x [temp.explicit]p2:
   //   There are two forms of explicit instantiation: an explicit instantiation
@@ -6692,6 +6706,45 @@ bool Sema::RebuildNestedNameSpecifierInCurrentInstantiation(CXXScopeSpec &SS) {
     return true;
 
   SS.Adopt(Rebuilt);
+  return false;
+}
+
+/// \brief Rebuild the template parameters now that we know we're in a current
+/// instantiation.
+bool Sema::RebuildTemplateParamsInCurrentInstantiation(
+                                               TemplateParameterList *Params) {
+  for (unsigned I = 0, N = Params->size(); I != N; ++I) {
+    Decl *Param = Params->getParam(I);
+    
+    // There is nothing to rebuild in a type parameter.
+    if (isa<TemplateTypeParmDecl>(Param))
+      continue;
+    
+    // Rebuild the template parameter list of a template template parameter.
+    if (TemplateTemplateParmDecl *TTP 
+        = dyn_cast<TemplateTemplateParmDecl>(Param)) {
+      if (RebuildTemplateParamsInCurrentInstantiation(
+            TTP->getTemplateParameters()))
+        return true;
+      
+      continue;
+    }
+    
+    // Rebuild the type of a non-type template parameter.
+    NonTypeTemplateParmDecl *NTTP = cast<NonTypeTemplateParmDecl>(Param);
+    TypeSourceInfo *NewTSI 
+      = RebuildTypeInCurrentInstantiation(NTTP->getTypeSourceInfo(), 
+                                          NTTP->getLocation(), 
+                                          NTTP->getDeclName());
+    if (!NewTSI)
+      return true;
+    
+    if (NewTSI != NTTP->getTypeSourceInfo()) {
+      NTTP->setTypeSourceInfo(NewTSI);
+      NTTP->setType(NewTSI->getType());
+    }
+  }
+  
   return false;
 }
 

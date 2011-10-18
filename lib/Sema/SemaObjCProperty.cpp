@@ -16,6 +16,7 @@
 #include "clang/Sema/Initialization.h"
 #include "clang/AST/DeclObjC.h"
 #include "clang/AST/ExprObjC.h"
+#include "clang/AST/ExprCXX.h"
 #include "llvm/ADT/DenseSet.h"
 
 using namespace clang;
@@ -38,7 +39,7 @@ static Qualifiers::ObjCLifetime getImpliedARCOwnership(
   if (attrs & (ObjCPropertyDecl::OBJC_PR_retain |
                ObjCPropertyDecl::OBJC_PR_strong |
                ObjCPropertyDecl::OBJC_PR_copy)) {
-    return Qualifiers::OCL_Strong;
+    return type->getObjCARCImplicitLifetime();
   } else if (attrs & ObjCPropertyDecl::OBJC_PR_weak) {
     return Qualifiers::OCL_Weak;
   } else if (attrs & ObjCPropertyDecl::OBJC_PR_unsafe_unretained) {
@@ -238,7 +239,7 @@ Sema::HandlePropertyInClassExtension(Scope *S,
   if (PIDecl->getType().getCanonicalType() 
       != PDecl->getType().getCanonicalType()) {
     Diag(AtLoc, 
-         diag::error_type_mismatch_continuation_class) << PDecl->getType();
+         diag::warn_type_mismatch_continuation_class) << PDecl->getType();
     Diag(PIDecl->getLocation(), diag::note_property_declare);
   }
     
@@ -800,6 +801,17 @@ Decl *Sema::ActOnPropertyImplDecl(Scope *S,
                                             VK_LValue, SourceLocation());
       ExprResult Res = BuildBinOp(S, lhs->getLocEnd(), 
                                   BO_Assign, lhs, rhs);
+      if (property->getPropertyAttributes() & 
+          ObjCPropertyDecl::OBJC_PR_atomic) {
+        Expr *callExpr = Res.takeAs<Expr>();
+        if (const CXXOperatorCallExpr *CXXCE = 
+              dyn_cast_or_null<CXXOperatorCallExpr>(callExpr))
+          if (const FunctionDecl *FuncDecl = CXXCE->getDirectCallee())
+            if (!FuncDecl->isTrivial())
+              Diag(PropertyLoc, 
+                   diag::warn_atomic_property_nontrivial_assign_op) 
+                    << property->getType();
+      }
       PIDecl->setSetterCXXAssignment(Res.takeAs<Expr>());
     }
   }
@@ -887,7 +899,7 @@ Sema::DiagnosePropertyMismatch(ObjCPropertyDecl *Property,
       != (SAttr & ObjCPropertyDecl::OBJC_PR_copy))
     Diag(Property->getLocation(), diag::warn_property_attribute)
       << Property->getDeclName() << "copy" << inheritedName;
-  else {
+  else if (!(SAttr & ObjCPropertyDecl::OBJC_PR_readonly)){
     unsigned CAttrRetain = 
       (CAttr & 
        (ObjCPropertyDecl::OBJC_PR_retain | ObjCPropertyDecl::OBJC_PR_strong));
@@ -924,9 +936,11 @@ Sema::DiagnosePropertyMismatch(ObjCPropertyDecl *Property,
     QualType ConvertedType;
     if (!isObjCPointerConversion(RHSType, LHSType, 
                                  ConvertedType, IncompatibleObjC) ||
-        IncompatibleObjC)
+        IncompatibleObjC) {
         Diag(Property->getLocation(), diag::warn_property_types_are_incompatible)
         << Property->getType() << SuperProperty->getType() << inheritedName;
+      Diag(SuperProperty->getLocation(), diag::note_property_declare);
+    }
   }
 }
 
@@ -934,7 +948,8 @@ bool Sema::DiagnosePropertyAccessorMismatch(ObjCPropertyDecl *property,
                                             ObjCMethodDecl *GetterMethod,
                                             SourceLocation Loc) {
   if (GetterMethod &&
-      GetterMethod->getResultType() != property->getType()) {
+      GetterMethod->getResultType().getNonReferenceType() 
+      != property->getType().getNonReferenceType()) {
     AssignConvertType result = Incompatible;
     if (property->getType()->isObjCObjectPointerType())
       result = CheckAssignmentConstraints(Loc, GetterMethod->getResultType(),
@@ -1417,7 +1432,9 @@ Sema::AtomicPropertySetterGetterRules (ObjCImplDecl* IMPDecl,
           (GetterMethod ? GetterMethod->getLocation()
                         : SetterMethod->getLocation());
         Diag(MethodLoc, diag::warn_atomic_property_rule)
-          << Property->getIdentifier();
+          << Property->getIdentifier() << (GetterMethod != 0)
+          << (SetterMethod != 0);
+        Diag(MethodLoc, diag::note_atomic_property_fixup_suggest);
         Diag(Property->getLocation(), diag::note_property_declare);
       }
     }
@@ -1446,7 +1463,7 @@ void Sema::DiagnoseOwningPropertyGetterSynthesis(const ObjCImplementationDecl *D
         if (getLangOptions().ObjCAutoRefCount)
           Diag(PID->getLocation(), diag::err_ownin_getter_rule);
         else
-          Diag(PID->getLocation(), diag::warn_ownin_getter_rule);
+          Diag(PID->getLocation(), diag::warn_owning_getter_rule);
         Diag(PD->getLocation(), diag::note_property_declare);
       }
     }
@@ -1494,7 +1511,8 @@ void Sema::ProcessPropertyDecl(ObjCPropertyDecl *property,
       Diag(SetterMethod->getLocation(), diag::err_setter_type_void);
     if (SetterMethod->param_size() != 1 ||
         !Context.hasSameUnqualifiedType(
-          (*SetterMethod->param_begin())->getType(), property->getType())) {
+          (*SetterMethod->param_begin())->getType().getNonReferenceType(), 
+          property->getType().getNonReferenceType())) {
       Diag(property->getLocation(),
            diag::warn_accessor_property_type_mismatch)
         << property->getDeclName()
@@ -1576,7 +1594,8 @@ void Sema::ProcessPropertyDecl(ObjCPropertyDecl *property,
                                                   SC_None,
                                                   SC_None,
                                                   0);
-      SetterMethod->setMethodParams(Context, &Argument, 1, 1);
+      SetterMethod->setMethodParams(Context, Argument,
+                                    ArrayRef<SourceLocation>());
 
       AddPropertyAttrs(*this, SetterMethod, property);
 
@@ -1727,6 +1746,13 @@ void Sema::CheckObjCPropertyAttributes(Decl *PDecl,
       Diag(Loc, diag::err_objc_property_attr_mutually_exclusive)
         << "strong" << "weak";
       Attributes &= ~ObjCDeclSpec::DQ_PR_weak;
+  }
+
+  if ((Attributes & ObjCDeclSpec::DQ_PR_atomic) &&
+      (Attributes & ObjCDeclSpec::DQ_PR_nonatomic)) {
+      Diag(Loc, diag::err_objc_property_attr_mutually_exclusive)
+        << "atomic" << "nonatomic";
+      Attributes &= ~ObjCDeclSpec::DQ_PR_atomic;
   }
 
   // Warn if user supplied no assignment attribute, property is

@@ -205,7 +205,10 @@ public:
   void dumpBlockLiveness(const SourceManager& M);
 
   LiveVariablesImpl(AnalysisContext &ac, bool KillAtAssign)
-    : analysisContext(ac), killAtAssign(KillAtAssign) {}
+    : analysisContext(ac),
+      SSetFact(false), // Do not canonicalize ImmutableSets by default.
+      DSetFact(false), // This is a *major* performance win.
+      killAtAssign(KillAtAssign) {}
 };
 }
 
@@ -255,6 +258,8 @@ LiveVariablesImpl::merge(LiveVariables::LivenessValues valsA,
   SSetRefA = mergeSets(SSetRefA, SSetRefB);
   DSetRefA = mergeSets(DSetRefA, DSetRefB);
   
+  // asImmutableSet() canonicalizes the tree, allowing us to do an easy
+  // comparison afterwards.
   return LiveVariables::LivenessValues(SSetRefA.asImmutableSet(),
                                        DSetRefA.asImmutableSet());  
 }
@@ -347,9 +352,10 @@ void TransferFunctions::Visit(Stmt *S) {
     case Stmt::CXXMemberCallExprClass: {
       // Include the implicit "this" pointer as being live.
       CXXMemberCallExpr *CE = cast<CXXMemberCallExpr>(S);
-      val.liveStmts =
-        LV.SSetFact.add(val.liveStmts,
-                        CE->getImplicitObjectArgument()->IgnoreParens());
+      if (Expr *ImplicitObj = CE->getImplicitObjectArgument()) {
+        ImplicitObj = ImplicitObj->IgnoreParens();        
+        val.liveStmts = LV.SSetFact.add(val.liveStmts, ImplicitObj);
+      }
       break;
     }
     case Stmt::DeclStmtClass: {
@@ -370,10 +376,6 @@ void TransferFunctions::Visit(Stmt *S) {
     }
     case Stmt::CXXBindTemporaryExprClass: {
       S = cast<CXXBindTemporaryExpr>(S)->getSubExpr();
-      break;
-    }
-    case Stmt::MaterializeTemporaryExprClass: {
-      S = cast<MaterializeTemporaryExpr>(S)->GetTemporaryExpr();
       break;
     }
     case Stmt::UnaryExprOrTypeTraitExprClass: {
@@ -668,3 +670,5 @@ void LiveVariablesImpl::dumpBlockLiveness(const SourceManager &M) {
   llvm::errs() << "\n";  
 }
 
+const void *LiveVariables::getTag() { static int x; return &x; }
+const void *RelaxedLiveVariables::getTag() { static int x; return &x; }

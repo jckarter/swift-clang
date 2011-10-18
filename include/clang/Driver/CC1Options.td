@@ -117,6 +117,8 @@ def fforbid_guard_variables : Flag<"-fforbid-guard-variables">,
 def g : Flag<"-g">, HelpText<"Generate source level debug information">;
 def fno_dwarf2_cfi_asm : Flag<"-fno-dwarf2-cfi-asm">,
   HelpText<"Don't use the cfi directives">;
+def fno_dwarf_directory_asm : Flag<"-fno-dwarf-directory-asm">,
+  HelpText<"Don't separate directory and filename in .file directives">;
 def fcatch_undefined_behavior : Flag<"-fcatch-undefined-behavior">,
   HelpText<"Generate runtime checks for undefined behavior.">;
 def flimit_debug_info : Flag<"-flimit-debug-info">,
@@ -524,8 +526,8 @@ def fobjc_default_synthesize_properties : Flag<"-fobjc-default-synthesize-proper
   HelpText<"enable the default synthesis of Objective-C properties">;
 def print_ivar_layout : Flag<"-print-ivar-layout">,
   HelpText<"Enable Objective-C Ivar layout bitmap print trace">;
-def fobjc_nonfragile_abi : Flag<"-fobjc-nonfragile-abi">,
-  HelpText<"enable objective-c's nonfragile abi">;
+def fobjc_fragile_abi : Flag<"-fobjc-fragile-abi">,
+  HelpText<"Use Objective-C's fragile ABI">;
 def fno_objc_infer_related_result_type : Flag<
     "-fno-objc-infer-related-result-type">,
   HelpText<
@@ -541,6 +543,8 @@ def pic_level : Separate<"-pic-level">,
   HelpText<"Value for __PIC__">;
 def pthread : Flag<"-pthread">,
   HelpText<"Support POSIX threads in generated code">;
+def fpack_struct : Separate<"-fpack-struct">,
+  HelpText<"Specify the default maximum struct packing alignment">;
 def fpascal_strings : Flag<"-fpascal-strings">,
   HelpText<"Recognize and construct Pascal-style string literals">;
 def fno_rtti : Flag<"-fno-rtti">,
@@ -600,8 +604,8 @@ def fno_deprecated_macro : Flag<"-fno-deprecated-macro">,
 // Header Search Options
 //===----------------------------------------------------------------------===//
 
-def nostdinc : Flag<"-nostdinc">,
-  HelpText<"Disable standard #include directories">;
+def nostdsysteminc : Flag<"-nostdsysteminc">,
+  HelpText<"Disable standard system #include directories">;
 def nostdincxx : Flag<"-nostdinc++">,
   HelpText<"Disable standard #include directories for the C++ standard library">;
 def nobuiltininc : Flag<"-nobuiltininc">,
@@ -712,3 +716,10 @@ def cl_mad_enable : Flag<"-cl-mad-enable">,
   HelpText<"OpenCL only. Enable less precise MAD instructions to be generated.">;
 def cl_std_EQ : Joined<"-cl-std=">,
   HelpText<"OpenCL language standard to compile for">;
+
+//===----------------------------------------------------------------------===//
+// CUDA Options
+//===----------------------------------------------------------------------===//
+
+def fcuda_is_device : Flag<"-fcuda-is-device">,
+  HelpText<"Generate code for CUDA device">;

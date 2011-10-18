@@ -1427,6 +1427,23 @@ static void handleUnusedAttr(Sema &S, Decl *D, const AttributeList &Attr) {
   D->addAttr(::new (S.Context) UnusedAttr(Attr.getRange(), S.Context));
 }
 
+static void handleReturnsTwiceAttr(Sema &S, Decl *D,
+                                   const AttributeList &Attr) {
+  // check the attribute arguments.
+  if (Attr.hasParameterOrArguments()) {
+    S.Diag(Attr.getLoc(), diag::err_attribute_wrong_number_arguments) << 0;
+    return;
+  }
+
+  if (!isa<FunctionDecl>(D)) {
+    S.Diag(Attr.getLoc(), diag::warn_attribute_wrong_decl_type)
+      << Attr.getName() << ExpectedFunction;
+    return;
+  }
+
+  D->addAttr(::new (S.Context) ReturnsTwiceAttr(Attr.getRange(), S.Context));
+}
+
 static void handleUsedAttr(Sema &S, Decl *D, const AttributeList &Attr) {
   // check the attribute arguments.
   if (Attr.hasParameterOrArguments()) {
@@ -2432,7 +2449,7 @@ static void handleTransparentUnionAttr(Sema &S, Decl *D,
     return;
   }
 
-  if (!RD->isDefinition()) {
+  if (!RD->isCompleteDefinition()) {
     S.Diag(Attr.getLoc(),
         diag::warn_transparent_union_attribute_not_definition);
     return;
@@ -3119,10 +3136,14 @@ static void handleLaunchBoundsAttr(Sema &S, Decl *D, const AttributeList &Attr){
 //===----------------------------------------------------------------------===//
 
 static bool isValidSubjectOfNSAttribute(Sema &S, QualType type) {
-  return type->isObjCObjectPointerType() || S.Context.isObjCNSObjectType(type);
+  return type->isDependentType() || 
+         type->isObjCObjectPointerType() || 
+         S.Context.isObjCNSObjectType(type);
 }
 static bool isValidSubjectOfCFAttribute(Sema &S, QualType type) {
-  return type->isPointerType() || isValidSubjectOfNSAttribute(S, type);
+  return type->isDependentType() || 
+         type->isPointerType() || 
+         isValidSubjectOfNSAttribute(S, type);
 }
 
 static void handleNSConsumedAttr(Sema &S, Decl *D, const AttributeList &Attr) {
@@ -3250,7 +3271,9 @@ static void handleObjCReturnsInnerPointerAttr(Sema &S, Decl *D,
 
   // Check that the method returns a normal pointer.
   QualType resultType = method->getResultType();
-  if (!resultType->isPointerType() || resultType->isObjCRetainableType()) {
+    
+  if (!resultType->isReferenceType() &&
+      (!resultType->isPointerType() || resultType->isObjCRetainableType())) {
     S.Diag(method->getLocStart(), diag::warn_ns_attribute_wrong_return_type)
       << SourceRange(loc)
       << attr.getName() << /*method*/ 1 << /*non-retainable pointer*/ 2;
@@ -3565,6 +3588,9 @@ static void ProcessInheritableDeclAttr(Sema &S, Scope *scope, Decl *D,
     handleArcWeakrefUnavailableAttr (S, D, Attr); 
     break;
   case AttributeList::AT_unused:      handleUnusedAttr      (S, D, Attr); break;
+  case AttributeList::AT_returns_twice:
+    handleReturnsTwiceAttr(S, D, Attr);
+    break;
   case AttributeList::AT_used:        handleUsedAttr        (S, D, Attr); break;
   case AttributeList::AT_visibility:  handleVisibilityAttr  (S, D, Attr); break;
   case AttributeList::AT_warn_unused_result: handleWarnUnusedResult(S, D, Attr);
@@ -3717,6 +3743,50 @@ void Sema::ProcessDeclAttributeList(Scope *S, Decl *D,
   }
 }
 
+// Annotation attributes are the only attributes allowed after an access
+// specifier.
+bool Sema::ProcessAccessDeclAttributeList(AccessSpecDecl *ASDecl,
+                                          const AttributeList *AttrList) {
+  for (const AttributeList* l = AttrList; l; l = l->getNext()) {
+    if (l->getKind() == AttributeList::AT_annotate) {
+      handleAnnotateAttr(*this, ASDecl, *l);
+    } else {
+      Diag(l->getLoc(), diag::err_only_annotate_after_access_spec);
+      return true;
+    }
+  }
+
+  return false;
+}
+
+/// checkUnusedDeclAttributes - Check a list of attributes to see if it
+/// contains any decl attributes that we should warn about.
+static void checkUnusedDeclAttributes(Sema &S, const AttributeList *A) {
+  for ( ; A; A = A->getNext()) {
+    // Only warn if the attribute is an unignored, non-type attribute.
+    if (A->isUsedAsTypeAttr()) continue;
+    if (A->getKind() == AttributeList::IgnoredAttribute) continue;
+
+    if (A->getKind() == AttributeList::UnknownAttribute) {
+      S.Diag(A->getLoc(), diag::warn_unknown_attribute_ignored)
+        << A->getName() << A->getRange();
+    } else {
+      S.Diag(A->getLoc(), diag::warn_attribute_not_on_decl)
+        << A->getName() << A->getRange();
+    }
+  }
+}
+
+/// checkUnusedDeclAttributes - Given a declarator which is not being
+/// used to build a declaration, complain about any decl attributes
+/// which might be lying around on it.
+void Sema::checkUnusedDeclAttributes(Declarator &D) {
+  ::checkUnusedDeclAttributes(*this, D.getDeclSpec().getAttributes().getList());
+  ::checkUnusedDeclAttributes(*this, D.getAttributes());
+  for (unsigned i = 0, e = D.getNumTypeObjects(); i != e; ++i)
+    ::checkUnusedDeclAttributes(*this, D.getTypeObject(i).getAttrs());
+}
+
 /// DeclClonePragmaWeak - clone existing decl (maybe definition),
 /// #pragma weak needs a non-definition decl and source may not have one
 NamedDecl * Sema::DeclClonePragmaWeak(NamedDecl *ND, IdentifierInfo *II,
@@ -3854,6 +3924,17 @@ static void handleDelayedForbiddenType(Sema &S, DelayedDiagnostic &diag,
                         "this system declaration uses an unsupported type"));
     return;
   }
+  if (S.getLangOptions().ObjCAutoRefCount)
+    if (const FunctionDecl *FD = dyn_cast<FunctionDecl>(decl)) {
+      // FIXME. we may want to supress diagnostics for all
+      // kind of forbidden type messages on unavailable functions. 
+      if (FD->hasAttr<UnavailableAttr>() &&
+          diag.getForbiddenTypeDiagnostic() == 
+          diag::err_arc_array_param_no_ownership) {
+        diag.Triggered = true;
+        return;
+      }
+    }
 
   S.Diag(diag.Loc, diag.getForbiddenTypeDiagnostic())
     << diag.getForbiddenTypeOperand() << diag.getForbiddenTypeArgument();
@@ -3941,6 +4022,9 @@ static bool isDeclDeprecated(Decl *D) {
   do {
     if (D->isDeprecated())
       return true;
+    // A category implicitly has the availability of the interface.
+    if (const ObjCCategoryDecl *CatD = dyn_cast<ObjCCategoryDecl>(D))
+      return CatD->getClassInterface()->isDeprecated();
   } while ((D = cast_or_null<Decl>(D->getDeclContext())));
   return false;
 }
@@ -3970,7 +4054,7 @@ void Sema::EmitDeprecationWarning(NamedDecl *D, StringRef Message,
   }
 
   // Otherwise, don't warn if our current context is deprecated.
-  if (isDeclDeprecated(cast<Decl>(CurContext)))
+  if (isDeclDeprecated(cast<Decl>(getCurLexicalContext())))
     return;
   if (!Message.empty())
     Diag(Loc, diag::warn_deprecated_message) << D->getDeclName() 

@@ -635,7 +635,8 @@ bool Sema::containsUnexpandedParameterPacks(Declarator &D) {
   switch (DS.getTypeSpecType()) {
   case TST_typename:
   case TST_typeofType:
-  case TST_underlyingType: {
+  case TST_underlyingType:
+  case TST_atomic: {
     QualType T = DS.getRepAsType().get();
     if (!T.isNull() && T->containsUnexpandedParameterPack())
       return true;
@@ -656,6 +657,7 @@ bool Sema::containsUnexpandedParameterPacks(Declarator &D) {
   case TST_char16:
   case TST_char32:
   case TST_int:
+  case TST_half:
   case TST_float:
   case TST_double:
   case TST_bool:

@@ -705,6 +705,7 @@ void MicrosoftCXXNameMangler::mangleType(const BuiltinType *T) {
   case BuiltinType::Dependent:
   case BuiltinType::UnknownAny:
   case BuiltinType::BoundMember:
+  case BuiltinType::ARCUnbridgedCast:
     llvm_unreachable(
            "Overloaded and dependent types shouldn't get to name mangling");
   case BuiltinType::ObjCId: Out << "PAUobjc_object@@"; break;
@@ -713,6 +714,7 @@ void MicrosoftCXXNameMangler::mangleType(const BuiltinType *T) {
 
   case BuiltinType::Char16:
   case BuiltinType::Char32:
+  case BuiltinType::Half:
   case BuiltinType::NullPtr:
     llvm_unreachable("Don't know how to mangle this type");
   }
@@ -1111,6 +1113,10 @@ void MicrosoftCXXNameMangler::mangleType(const UnaryTransformType *T) {
 
 void MicrosoftCXXNameMangler::mangleType(const AutoType *T) {
   llvm_unreachable("Don't know how to mangle AutoTypes yet!");
+}
+
+void MicrosoftCXXNameMangler::mangleType(const AtomicType *T) {
+  llvm_unreachable("Don't know how to mangle AtomicTypes yet!");
 }
 
 void MicrosoftMangleContext::mangleName(const NamedDecl *D,

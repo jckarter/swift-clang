@@ -697,7 +697,7 @@ Sema::BuildAnonymousStructUnionMemberReference(const CXXScopeSpec &SS,
     // We've found a member of an anonymous struct/union that is
     // inside a non-anonymous struct/union, so in a well-formed
     // program our base object expression is "this".
-    QualType ThisTy = getAndCaptureCurrentThisType();
+    QualType ThisTy = getCurrentThisType();
     if (ThisTy.isNull()) {
       Diag(loc, diag::err_invalid_member_use_in_static_method)
         << indirectField->getDeclName();
@@ -813,6 +813,15 @@ Sema::BuildMemberReferenceExpr(Expr *BaseExpr, QualType BaseExprType,
       !SuppressQualifierCheck &&
       CheckQualifiedMemberReference(BaseExpr, BaseType, SS, R))
     return ExprError();
+  
+  // Perform a property load on the base regardless of whether we
+  // actually need it for the declaration.
+  if (BaseExpr && BaseExpr->getObjectKind() == OK_ObjCProperty) {
+    ExprResult Result = ConvertPropertyForRValue(BaseExpr);
+    if (Result.isInvalid())
+      return ExprError();
+    BaseExpr = Result.take();
+  }
 
   // Construct an unresolved result if we in fact got an unresolved
   // result.
@@ -868,15 +877,6 @@ Sema::BuildMemberReferenceExpr(Expr *BaseExpr, QualType BaseExprType,
   if (ShouldCheckUse && DiagnoseUseOfDecl(MemberDecl, MemberLoc)) {
     Owned(BaseExpr);
     return ExprError();
-  }
-
-  // Perform a property load on the base regardless of whether we
-  // actually need it for the declaration.
-  if (BaseExpr->getObjectKind() == OK_ObjCProperty) {
-    ExprResult Result = ConvertPropertyForRValue(BaseExpr);
-    if (Result.isInvalid())
-      return ExprError();
-    BaseExpr = Result.take();
   }
 
   if (FieldDecl *FD = dyn_cast<FieldDecl>(MemberDecl))
@@ -970,6 +970,15 @@ static bool ShouldTryAgainWithRedefinitionType(Sema &S, ExprResult &base) {
   return true;
 }
 
+static bool isRecordType(QualType T) {
+  return T->isRecordType();
+}
+static bool isPointerToRecordType(QualType T) {
+  if (const PointerType *PT = T->getAs<PointerType>())
+    return PT->getPointeeType()->isRecordType();
+  return false;
+}
+
 /// Look up the given member of the given non-type-dependent
 /// expression.  This can return in one of two ways:
 ///  * If it returns a sentinel null-but-valid result, the caller will
@@ -989,6 +998,8 @@ Sema::LookupMemberExpr(LookupResult &R, ExprResult &BaseExpr,
 
   // Perform default conversions.
   BaseExpr = DefaultFunctionArrayConversion(BaseExpr.take());
+  if (BaseExpr.isInvalid())
+    return ExprError();
 
   if (IsArrow) {
     BaseExpr = DefaultLvalueConversion(BaseExpr.take());
@@ -1045,6 +1056,13 @@ Sema::LookupMemberExpr(LookupResult &R, ExprResult &BaseExpr,
 
   // Handle ivar access to Objective-C objects.
   if (const ObjCObjectType *OTy = BaseType->getAs<ObjCObjectType>()) {
+    if (!SS.isEmpty() && !SS.isInvalid()) {
+      Diag(SS.getRange().getBegin(), diag::err_qualified_objc_access)
+        << 1 << SS.getScopeRep()
+        << FixItHint::CreateRemoval(SS.getRange());
+      SS.clear();
+    }
+    
     IdentifierInfo *Member = MemberName.getAsIdentifierInfo();
 
     // There are three cases for the base type:
@@ -1163,6 +1181,13 @@ Sema::LookupMemberExpr(LookupResult &R, ExprResult &BaseExpr,
   // Objective-C property access.
   const ObjCObjectPointerType *OPT;
   if (!IsArrow && (OPT = BaseType->getAs<ObjCObjectPointerType>())) {
+    if (!SS.isEmpty() && !SS.isInvalid()) {
+      Diag(SS.getRange().getBegin(), diag::err_qualified_objc_access)
+        << 0 << SS.getScopeRep()
+        << FixItHint::CreateRemoval(SS.getRange());
+      SS.clear();
+    }
+
     // This actually uses the base as an r-value.
     BaseExpr = DefaultLvalueConversion(BaseExpr.take());
     if (BaseExpr.isInvalid())
@@ -1356,50 +1381,15 @@ Sema::LookupMemberExpr(LookupResult &R, ExprResult &BaseExpr,
 
   // If the user is trying to apply -> or . to a function name, it's probably
   // because they forgot parentheses to call that function.
-  QualType ZeroArgCallTy;
-  UnresolvedSet<4> Overloads;
-  if (isExprCallable(*BaseExpr.get(), ZeroArgCallTy, Overloads)) {
-    if (ZeroArgCallTy.isNull()) {
-      Diag(BaseExpr.get()->getExprLoc(), diag::err_member_reference_needs_call)
-          << (Overloads.size() > 1) << 0 << BaseExpr.get()->getSourceRange();
-      UnresolvedSet<2> PlausibleOverloads;
-      for (OverloadExpr::decls_iterator It = Overloads.begin(),
-           DeclsEnd = Overloads.end(); It != DeclsEnd; ++It) {
-        const FunctionDecl *OverloadDecl = cast<FunctionDecl>(*It);
-        QualType OverloadResultTy = OverloadDecl->getResultType();
-        if ((!IsArrow && OverloadResultTy->isRecordType()) ||
-            (IsArrow && OverloadResultTy->isPointerType() &&
-             OverloadResultTy->getPointeeType()->isRecordType()))
-          PlausibleOverloads.addDecl(It.getDecl());
-      }
-      NoteOverloads(PlausibleOverloads, BaseExpr.get()->getExprLoc());
+  if (tryToRecoverWithCall(BaseExpr,
+                           PDiag(diag::err_member_reference_needs_call),
+                           /*complain*/ false,
+                           IsArrow ? &isRecordType : &isPointerToRecordType)) {
+    if (BaseExpr.isInvalid())
       return ExprError();
-    }
-    if ((!IsArrow && ZeroArgCallTy->isRecordType()) ||
-        (IsArrow && ZeroArgCallTy->isPointerType() &&
-         ZeroArgCallTy->getPointeeType()->isRecordType())) {
-      // At this point, we know BaseExpr looks like it's potentially callable
-      // with 0 arguments, and that it returns something of a reasonable type,
-      // so we can emit a fixit and carry on pretending that BaseExpr was
-      // actually a CallExpr.
-      SourceLocation ParenInsertionLoc =
-          PP.getLocForEndOfToken(BaseExpr.get()->getLocEnd());
-      Diag(BaseExpr.get()->getExprLoc(), diag::err_member_reference_needs_call)
-          << (Overloads.size() > 1) << 1 << BaseExpr.get()->getSourceRange()
-          << FixItHint::CreateInsertion(ParenInsertionLoc, "()");
-      // FIXME: Try this before emitting the fixit, and suppress diagnostics
-      // while doing so.
-      ExprResult NewBase =
-          ActOnCallExpr(0, BaseExpr.take(), ParenInsertionLoc,
-                        MultiExprArg(*this, 0, 0),
-                        ParenInsertionLoc.getLocWithOffset(1));
-      if (NewBase.isInvalid())
-        return ExprError();
-      BaseExpr = NewBase;
-      BaseExpr = DefaultFunctionArrayConversion(BaseExpr.take());
-      return LookupMemberExpr(R, BaseExpr, IsArrow, OpLoc, SS,
-                              ObjCImpDecl, HasTemplateArgs);
-    }
+    BaseExpr = DefaultFunctionArrayConversion(BaseExpr.take());
+    return LookupMemberExpr(R, BaseExpr, IsArrow, OpLoc, SS,
+                            ObjCImpDecl, HasTemplateArgs);
   }
 
   Diag(MemberLoc, diag::err_typecheck_member_reference_struct_union)
@@ -1579,7 +1569,7 @@ Sema::BuildImplicitMemberExpr(const CXXScopeSpec &SS,
   // If this is known to be an instance access, go ahead and build an
   // implicit 'this' expression now.
   // 'this' expression now.
-  QualType ThisTy = getAndCaptureCurrentThisType();
+  QualType ThisTy = getCurrentThisType();
   assert(!ThisTy.isNull() && "didn't correctly pre-flight capture of 'this'");
   
   Expr *baseExpr = 0; // null signifies implicit access

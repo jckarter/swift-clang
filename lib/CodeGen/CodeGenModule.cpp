@@ -16,6 +16,7 @@
 #include "CodeGenFunction.h"
 #include "CodeGenTBAA.h"
 #include "CGCall.h"
+#include "CGCUDARuntime.h"
 #include "CGCXXABI.h"
 #include "CGObjCRuntime.h"
 #include "CGOpenCLRuntime.h"
@@ -66,9 +67,9 @@ CodeGenModule::CodeGenModule(ASTContext &C, const CodeGenOptions &CGO,
     ABI(createCXXABI(*this)), 
     Types(C, M, TD, getTargetCodeGenInfo().getABIInfo(), ABI, CGO),
     TBAA(0),
-    VTables(*this), ObjCRuntime(0), OpenCLRuntime(0), DebugInfo(0), ARCData(0),
-    RRData(0), CFConstantStringClassRef(0), ConstantStringClassRef(0),
-    NSConstantStringType(0),
+    VTables(*this), ObjCRuntime(0), OpenCLRuntime(0), CUDARuntime(0),
+    DebugInfo(0), ARCData(0), RRData(0), CFConstantStringClassRef(0),
+    ConstantStringClassRef(0), NSConstantStringType(0),
     VMContext(M.getContext()),
     NSConcreteGlobalBlock(0), NSConcreteStackBlock(0),
     BlockObjectAssign(0), BlockObjectDispose(0),
@@ -77,6 +78,8 @@ CodeGenModule::CodeGenModule(ASTContext &C, const CodeGenOptions &CGO,
     createObjCRuntime();
   if (Features.OpenCL)
     createOpenCLRuntime();
+  if (Features.CUDA)
+    createCUDARuntime();
 
   // Enable TBAA unless it's suppressed.
   if (!CodeGenOpts.RelaxedAliasing && CodeGenOpts.OptimizationLevel > 0)
@@ -113,6 +116,8 @@ CodeGenModule::CodeGenModule(ASTContext &C, const CodeGenOptions &CGO,
 CodeGenModule::~CodeGenModule() {
   delete ObjCRuntime;
   delete OpenCLRuntime;
+  delete CUDARuntime;
+  delete TheTargetCodeGenInfo;
   delete &ABI;
   delete TBAA;
   delete DebugInfo;
@@ -129,6 +134,10 @@ void CodeGenModule::createObjCRuntime() {
 
 void CodeGenModule::createOpenCLRuntime() {
   OpenCLRuntime = new CGOpenCLRuntime(*this);
+}
+
+void CodeGenModule::createCUDARuntime() {
+  CUDARuntime = CreateNVCUDARuntime(*this);
 }
 
 void CodeGenModule::Release() {
@@ -460,12 +469,32 @@ void CodeGenModule::SetLLVMFunctionAttributes(const Decl *D,
   F->setCallingConv(static_cast<llvm::CallingConv::ID>(CallingConv));
 }
 
+/// Determines whether the language options require us to model
+/// unwind exceptions.  We treat -fexceptions as mandating this
+/// except under the fragile ObjC ABI with only ObjC exceptions
+/// enabled.  This means, for example, that C with -fexceptions
+/// enables this.
+static bool hasUnwindExceptions(const LangOptions &Features) {
+  // If exceptions are completely disabled, obviously this is false.
+  if (!Features.Exceptions) return false;
+
+  // If C++ exceptions are enabled, this is true.
+  if (Features.CXXExceptions) return true;
+
+  // If ObjC exceptions are enabled, this depends on the ABI.
+  if (Features.ObjCExceptions) {
+    if (!Features.ObjCNonFragileABI) return false;
+  }
+
+  return true;
+}
+
 void CodeGenModule::SetLLVMFunctionAttributesForDefinition(const Decl *D,
                                                            llvm::Function *F) {
   if (CodeGenOpts.UnwindTables)
     F->setHasUWTable();
 
-  if (!Features.Exceptions && !Features.ObjCNonFragileABI)
+  if (!hasUnwindExceptions(Features))
     F->addFnAttr(llvm::Attribute::NoUnwind);
 
   if (D->hasAttr<NakedAttr>()) {
@@ -756,6 +785,23 @@ void CodeGenModule::EmitGlobal(GlobalDecl GD) {
   // emit it now.
   if (Global->hasAttr<AliasAttr>())
     return EmitAliasDefinition(GD);
+
+  // If this is CUDA, be selective about which declarations we emit.
+  if (Features.CUDA) {
+    if (CodeGenOpts.CUDAIsDevice) {
+      if (!Global->hasAttr<CUDADeviceAttr>() &&
+          !Global->hasAttr<CUDAGlobalAttr>() &&
+          !Global->hasAttr<CUDAConstantAttr>() &&
+          !Global->hasAttr<CUDASharedAttr>())
+        return;
+    } else {
+      if (!Global->hasAttr<CUDAHostAttr>() && (
+            Global->hasAttr<CUDADeviceAttr>() ||
+            Global->hasAttr<CUDAConstantAttr>() ||
+            Global->hasAttr<CUDASharedAttr>()))
+        return;
+    }
+  }
 
   // Ignore declarations, they will be emitted on their first use.
   if (const FunctionDecl *FD = dyn_cast<FunctionDecl>(Global)) {
@@ -1346,10 +1392,8 @@ void CodeGenModule::EmitGlobalVarDefinition(const VarDecl *D) {
     EmitCXXGlobalVarDeclInitFunc(D, GV);
 
   // Emit global variable debug information.
-  if (CGDebugInfo *DI = getModuleDebugInfo()) {
-    DI->setLocation(D->getLocation());
+  if (CGDebugInfo *DI = getModuleDebugInfo())
     DI->EmitGlobalVariable(GV, D);
-  }
 }
 
 llvm::GlobalValue::LinkageTypes
@@ -1722,7 +1766,7 @@ CodeGenModule::GetAddrOfConstantCFString(const StringLiteral *Literal) {
   llvm::StructType *STy =
     cast<llvm::StructType>(getTypes().ConvertType(CFTy));
 
-  std::vector<llvm::Constant*> Fields(4);
+  llvm::Constant *Fields[4];
 
   // Class pointer.
   Fields[0] = CFConstantStringClassRef;
@@ -1863,7 +1907,7 @@ CodeGenModule::GetAddrOfConstantString(const StringLiteral *Literal) {
     NSConstantStringType = cast<llvm::StructType>(getTypes().ConvertType(NSTy));
   }
   
-  std::vector<llvm::Constant*> Fields(3);
+  llvm::Constant *Fields[3];
   
   // Class pointer.
   Fields[0] = ConstantStringClassRef;
@@ -2133,7 +2177,8 @@ void CodeGenModule::EmitObjCIvarInitializations(ObjCImplementationDecl *D) {
   // The constructor returns 'self'.
   ObjCMethodDecl *CTORMethod = ObjCMethodDecl::Create(getContext(), 
                                                 D->getLocation(),
-                                                D->getLocation(), cxxSelector,
+                                                D->getLocation(),
+                                                cxxSelector,
                                                 getContext().getObjCIdType(), 0, 
                                                 D, /*isInstance=*/true,
                                                 /*isVariadic=*/false,

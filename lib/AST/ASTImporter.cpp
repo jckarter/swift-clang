@@ -810,8 +810,70 @@ static bool IsStructurallyEquivalent(StructuralEquivalenceContext &Context,
       return false;
     break;
   }
-      
+
+  case Type::Atomic: {
+    if (!IsStructurallyEquivalent(Context,
+                                  cast<AtomicType>(T1)->getValueType(),
+                                  cast<AtomicType>(T2)->getValueType()))
+      return false;
+    break;
+  }
+
   } // end switch
+
+  return true;
+}
+
+/// \brief Determine structural equivalence of two fields.
+static bool IsStructurallyEquivalent(StructuralEquivalenceContext &Context,
+                                     FieldDecl *Field1, FieldDecl *Field2) {
+  RecordDecl *Owner2 = cast<RecordDecl>(Field2->getDeclContext());
+  
+  if (!IsStructurallyEquivalent(Context, 
+                                Field1->getType(), Field2->getType())) {
+    Context.Diag2(Owner2->getLocation(), diag::warn_odr_tag_type_inconsistent)
+    << Context.C2.getTypeDeclType(Owner2);
+    Context.Diag2(Field2->getLocation(), diag::note_odr_field)
+    << Field2->getDeclName() << Field2->getType();
+    Context.Diag1(Field1->getLocation(), diag::note_odr_field)
+    << Field1->getDeclName() << Field1->getType();
+    return false;
+  }
+  
+  if (Field1->isBitField() != Field2->isBitField()) {
+    Context.Diag2(Owner2->getLocation(), diag::warn_odr_tag_type_inconsistent)
+    << Context.C2.getTypeDeclType(Owner2);
+    if (Field1->isBitField()) {
+      Context.Diag1(Field1->getLocation(), diag::note_odr_bit_field)
+      << Field1->getDeclName() << Field1->getType()
+      << Field1->getBitWidthValue(Context.C1);
+      Context.Diag2(Field2->getLocation(), diag::note_odr_not_bit_field)
+      << Field2->getDeclName();
+    } else {
+      Context.Diag2(Field2->getLocation(), diag::note_odr_bit_field)
+      << Field2->getDeclName() << Field2->getType()
+      << Field2->getBitWidthValue(Context.C2);
+      Context.Diag1(Field1->getLocation(), diag::note_odr_not_bit_field)
+      << Field1->getDeclName();
+    }
+    return false;
+  }
+  
+  if (Field1->isBitField()) {
+    // Make sure that the bit-fields are the same length.
+    unsigned Bits1 = Field1->getBitWidthValue(Context.C1);
+    unsigned Bits2 = Field2->getBitWidthValue(Context.C2);
+    
+    if (Bits1 != Bits2) {
+      Context.Diag2(Owner2->getLocation(), diag::warn_odr_tag_type_inconsistent)
+      << Context.C2.getTypeDeclType(Owner2);
+      Context.Diag2(Field2->getLocation(), diag::note_odr_bit_field)
+      << Field2->getDeclName() << Field2->getType() << Bits2;
+      Context.Diag1(Field1->getLocation(), diag::note_odr_bit_field)
+      << Field1->getDeclName() << Field1->getType() << Bits1;
+      return false;
+    }
+  }
 
   return true;
 }
@@ -933,61 +995,8 @@ static bool IsStructurallyEquivalent(StructuralEquivalenceContext &Context,
       return false;
     }
     
-    if (!IsStructurallyEquivalent(Context, 
-                                  Field1->getType(), Field2->getType())) {
-      Context.Diag2(D2->getLocation(), diag::warn_odr_tag_type_inconsistent)
-        << Context.C2.getTypeDeclType(D2);
-      Context.Diag2(Field2->getLocation(), diag::note_odr_field)
-        << Field2->getDeclName() << Field2->getType();
-      Context.Diag1(Field1->getLocation(), diag::note_odr_field)
-        << Field1->getDeclName() << Field1->getType();
-      return false;
-    }
-    
-    if (Field1->isBitField() != Field2->isBitField()) {
-      Context.Diag2(D2->getLocation(), diag::warn_odr_tag_type_inconsistent)
-        << Context.C2.getTypeDeclType(D2);
-      if (Field1->isBitField()) {
-        llvm::APSInt Bits;
-        Field1->getBitWidth()->isIntegerConstantExpr(Bits, Context.C1);
-        Context.Diag1(Field1->getLocation(), diag::note_odr_bit_field)
-          << Field1->getDeclName() << Field1->getType()
-          << Bits.toString(10, false);
-        Context.Diag2(Field2->getLocation(), diag::note_odr_not_bit_field)
-          << Field2->getDeclName();
-      } else {
-        llvm::APSInt Bits;
-        Field2->getBitWidth()->isIntegerConstantExpr(Bits, Context.C2);
-        Context.Diag2(Field2->getLocation(), diag::note_odr_bit_field)
-          << Field2->getDeclName() << Field2->getType()
-          << Bits.toString(10, false);
-        Context.Diag1(Field1->getLocation(), 
-                          diag::note_odr_not_bit_field)
-        << Field1->getDeclName();
-      }
-      return false;
-    }
-    
-    if (Field1->isBitField()) {
-      // Make sure that the bit-fields are the same length.
-      llvm::APSInt Bits1, Bits2;
-      if (!Field1->getBitWidth()->isIntegerConstantExpr(Bits1, Context.C1))
-        return false;
-      if (!Field2->getBitWidth()->isIntegerConstantExpr(Bits2, Context.C2))
-        return false;
-      
-      if (!IsSameValue(Bits1, Bits2)) {
-        Context.Diag2(D2->getLocation(), diag::warn_odr_tag_type_inconsistent)
-          << Context.C2.getTypeDeclType(D2);
-        Context.Diag2(Field2->getLocation(), diag::note_odr_bit_field)
-          << Field2->getDeclName() << Field2->getType()
-          << Bits2.toString(10, false);
-        Context.Diag1(Field1->getLocation(), diag::note_odr_bit_field)
-          << Field1->getDeclName() << Field1->getType()
-          << Bits1.toString(10, false);
-        return false;
-      }
-    }
+    if (!IsStructurallyEquivalent(Context, *Field1, *Field2))
+      return false;    
   }
   
   if (Field2 != Field2End) {
@@ -1365,6 +1374,7 @@ QualType ASTNodeImporter::VisitBuiltinType(const BuiltinType *T) {
   case BuiltinType::Long : return Importer.getToContext().LongTy;
   case BuiltinType::LongLong : return Importer.getToContext().LongLongTy;
   case BuiltinType::Int128 : return Importer.getToContext().Int128Ty;
+  case BuiltinType::Half: return Importer.getToContext().HalfTy;
   case BuiltinType::Float: return Importer.getToContext().FloatTy;
   case BuiltinType::Double: return Importer.getToContext().DoubleTy;
   case BuiltinType::LongDouble: return Importer.getToContext().LongDoubleTy;
@@ -1377,6 +1387,8 @@ QualType ASTNodeImporter::VisitBuiltinType(const BuiltinType *T) {
   case BuiltinType::Dependent: return Importer.getToContext().DependentTy;
   case BuiltinType::UnknownAny: return Importer.getToContext().UnknownAnyTy;
   case BuiltinType::BoundMember: return Importer.getToContext().BoundMemberTy;
+  case BuiltinType::ARCUnbridgedCast:
+    return Importer.getToContext().ARCUnbridgedCastTy;
 
   case BuiltinType::ObjCId:
     // FIXME: Make sure that the "to" context supports Objective-C!
@@ -2038,19 +2050,19 @@ Decl *ASTNodeImporter::VisitNamespaceDecl(NamespaceDecl *D) {
       MergeWithNamespace = cast<NamespaceDecl>(DC)->getAnonymousNamespace();
   } else {
     SmallVector<NamedDecl *, 4> ConflictingDecls;
-    for (DeclContext::lookup_result Lookup = DC->lookup(Name);
-         Lookup.first != Lookup.second; 
-         ++Lookup.first) {
-      if (!(*Lookup.first)->isInIdentifierNamespace(Decl::IDNS_Namespace))
+    llvm::SmallVector<NamedDecl *, 2> FoundDecls;
+    DC->localUncachedLookup(Name, FoundDecls);
+    for (unsigned I = 0, N = FoundDecls.size(); I != N; ++I) {
+      if (!FoundDecls[I]->isInIdentifierNamespace(Decl::IDNS_Namespace))
         continue;
       
-      if (NamespaceDecl *FoundNS = dyn_cast<NamespaceDecl>(*Lookup.first)) {
+      if (NamespaceDecl *FoundNS = dyn_cast<NamespaceDecl>(FoundDecls[I])) {
         MergeWithNamespace = FoundNS;
         ConflictingDecls.clear();
         break;
       }
       
-      ConflictingDecls.push_back(*Lookup.first);
+      ConflictingDecls.push_back(FoundDecls[I]);
     }
     
     if (!ConflictingDecls.empty()) {
@@ -2099,19 +2111,19 @@ Decl *ASTNodeImporter::VisitTypedefNameDecl(TypedefNameDecl *D, bool IsAlias) {
   if (!DC->isFunctionOrMethod()) {
     SmallVector<NamedDecl *, 4> ConflictingDecls;
     unsigned IDNS = Decl::IDNS_Ordinary;
-    for (DeclContext::lookup_result Lookup = DC->lookup(Name);
-         Lookup.first != Lookup.second; 
-         ++Lookup.first) {
-      if (!(*Lookup.first)->isInIdentifierNamespace(IDNS))
+    llvm::SmallVector<NamedDecl *, 2> FoundDecls;
+    DC->localUncachedLookup(Name, FoundDecls);
+    for (unsigned I = 0, N = FoundDecls.size(); I != N; ++I) {
+      if (!FoundDecls[I]->isInIdentifierNamespace(IDNS))
         continue;
       if (TypedefNameDecl *FoundTypedef =
-            dyn_cast<TypedefNameDecl>(*Lookup.first)) {
+            dyn_cast<TypedefNameDecl>(FoundDecls[I])) {
         if (Importer.IsStructurallyEquivalent(D->getUnderlyingType(),
                                             FoundTypedef->getUnderlyingType()))
           return Importer.Imported(D, FoundTypedef);
       }
       
-      ConflictingDecls.push_back(*Lookup.first);
+      ConflictingDecls.push_back(FoundDecls[I]);
     }
     
     if (!ConflictingDecls.empty()) {
@@ -2133,15 +2145,16 @@ Decl *ASTNodeImporter::VisitTypedefNameDecl(TypedefNameDecl *D, bool IsAlias) {
   SourceLocation StartL = Importer.Import(D->getLocStart());
   TypedefNameDecl *ToTypedef;
   if (IsAlias)
+    ToTypedef = TypeAliasDecl::Create(Importer.getToContext(), DC,
+                                      StartL, Loc,
+                                      Name.getAsIdentifierInfo(),
+                                      TInfo);
+  else
     ToTypedef = TypedefDecl::Create(Importer.getToContext(), DC,
                                     StartL, Loc,
                                     Name.getAsIdentifierInfo(),
                                     TInfo);
-  else
-    ToTypedef = TypeAliasDecl::Create(Importer.getToContext(), DC,
-                                  StartL, Loc,
-                                  Name.getAsIdentifierInfo(),
-                                  TInfo);
+  
   ToTypedef->setAccess(D->getAccess());
   ToTypedef->setLexicalDeclContext(LexicalDC);
   Importer.Imported(D, ToTypedef);
@@ -2178,13 +2191,13 @@ Decl *ASTNodeImporter::VisitEnumDecl(EnumDecl *D) {
   // We may already have an enum of the same name; try to find and match it.
   if (!DC->isFunctionOrMethod() && SearchName) {
     SmallVector<NamedDecl *, 4> ConflictingDecls;
-    for (DeclContext::lookup_result Lookup = DC->lookup(SearchName);
-         Lookup.first != Lookup.second; 
-         ++Lookup.first) {
-      if (!(*Lookup.first)->isInIdentifierNamespace(IDNS))
+    llvm::SmallVector<NamedDecl *, 2> FoundDecls;
+    DC->localUncachedLookup(SearchName, FoundDecls);
+    for (unsigned I = 0, N = FoundDecls.size(); I != N; ++I) {
+      if (!FoundDecls[I]->isInIdentifierNamespace(IDNS))
         continue;
       
-      Decl *Found = *Lookup.first;
+      Decl *Found = FoundDecls[I];
       if (TypedefNameDecl *Typedef = dyn_cast<TypedefNameDecl>(Found)) {
         if (const TagType *Tag = Typedef->getUnderlyingType()->getAs<TagType>())
           Found = Tag->getDecl();
@@ -2195,7 +2208,7 @@ Decl *ASTNodeImporter::VisitEnumDecl(EnumDecl *D) {
           return Importer.Imported(D, FoundEnum);
       }
       
-      ConflictingDecls.push_back(*Lookup.first);
+      ConflictingDecls.push_back(FoundDecls[I]);
     }
     
     if (!ConflictingDecls.empty()) {
@@ -2225,7 +2238,7 @@ Decl *ASTNodeImporter::VisitEnumDecl(EnumDecl *D) {
   D2->setIntegerType(ToIntegerType);
   
   // Import the definition
-  if (D->isDefinition() && ImportDefinition(D, D2))
+  if (D->isCompleteDefinition() && ImportDefinition(D, D2))
     return 0;
 
   return D2;
@@ -2264,13 +2277,13 @@ Decl *ASTNodeImporter::VisitRecordDecl(RecordDecl *D) {
   RecordDecl *AdoptDecl = 0;
   if (!DC->isFunctionOrMethod() && SearchName) {
     SmallVector<NamedDecl *, 4> ConflictingDecls;
-    for (DeclContext::lookup_result Lookup = DC->lookup(SearchName);
-         Lookup.first != Lookup.second; 
-         ++Lookup.first) {
-      if (!(*Lookup.first)->isInIdentifierNamespace(IDNS))
+    llvm::SmallVector<NamedDecl *, 2> FoundDecls;
+    DC->localUncachedLookup(SearchName, FoundDecls);
+    for (unsigned I = 0, N = FoundDecls.size(); I != N; ++I) {
+      if (!FoundDecls[I]->isInIdentifierNamespace(IDNS))
         continue;
       
-      Decl *Found = *Lookup.first;
+      Decl *Found = FoundDecls[I];
       if (TypedefNameDecl *Typedef = dyn_cast<TypedefNameDecl>(Found)) {
         if (const TagType *Tag = Typedef->getUnderlyingType()->getAs<TagType>())
           Found = Tag->getDecl();
@@ -2278,7 +2291,7 @@ Decl *ASTNodeImporter::VisitRecordDecl(RecordDecl *D) {
       
       if (RecordDecl *FoundRecord = dyn_cast<RecordDecl>(Found)) {
         if (RecordDecl *FoundDef = FoundRecord->getDefinition()) {
-          if (!D->isDefinition() || IsStructuralMatch(D, FoundDef)) {
+          if (!D->isCompleteDefinition() || IsStructuralMatch(D, FoundDef)) {
             // The record types structurally match, or the "from" translation
             // unit only had a forward declaration anyway; call it the same
             // function.
@@ -2293,7 +2306,7 @@ Decl *ASTNodeImporter::VisitRecordDecl(RecordDecl *D) {
         }          
       }
       
-      ConflictingDecls.push_back(*Lookup.first);
+      ConflictingDecls.push_back(FoundDecls[I]);
     }
     
     if (!ConflictingDecls.empty()) {
@@ -2326,7 +2339,7 @@ Decl *ASTNodeImporter::VisitRecordDecl(RecordDecl *D) {
   
   Importer.Imported(D, D2);
 
-  if (D->isDefinition() && ImportDefinition(D, D2))
+  if (D->isCompleteDefinition() && ImportDefinition(D, D2))
     return 0;
   
   return D2;
@@ -2349,13 +2362,13 @@ Decl *ASTNodeImporter::VisitEnumConstantDecl(EnumConstantDecl *D) {
   if (!LexicalDC->isFunctionOrMethod()) {
     SmallVector<NamedDecl *, 4> ConflictingDecls;
     unsigned IDNS = Decl::IDNS_Ordinary;
-    for (DeclContext::lookup_result Lookup = DC->lookup(Name);
-         Lookup.first != Lookup.second; 
-         ++Lookup.first) {
-      if (!(*Lookup.first)->isInIdentifierNamespace(IDNS))
+    llvm::SmallVector<NamedDecl *, 2> FoundDecls;
+    DC->localUncachedLookup(Name, FoundDecls);
+    for (unsigned I = 0, N = FoundDecls.size(); I != N; ++I) {
+      if (!FoundDecls[I]->isInIdentifierNamespace(IDNS))
         continue;
       
-      ConflictingDecls.push_back(*Lookup.first);
+      ConflictingDecls.push_back(FoundDecls[I]);
     }
     
     if (!ConflictingDecls.empty()) {
@@ -2395,13 +2408,13 @@ Decl *ASTNodeImporter::VisitFunctionDecl(FunctionDecl *D) {
   if (!LexicalDC->isFunctionOrMethod()) {
     SmallVector<NamedDecl *, 4> ConflictingDecls;
     unsigned IDNS = Decl::IDNS_Ordinary;
-    for (DeclContext::lookup_result Lookup = DC->lookup(Name);
-         Lookup.first != Lookup.second; 
-         ++Lookup.first) {
-      if (!(*Lookup.first)->isInIdentifierNamespace(IDNS))
+    llvm::SmallVector<NamedDecl *, 2> FoundDecls;
+    DC->localUncachedLookup(Name, FoundDecls);
+    for (unsigned I = 0, N = FoundDecls.size(); I != N; ++I) {
+      if (!FoundDecls[I]->isInIdentifierNamespace(IDNS))
         continue;
     
-      if (FunctionDecl *FoundFunction = dyn_cast<FunctionDecl>(*Lookup.first)) {
+      if (FunctionDecl *FoundFunction = dyn_cast<FunctionDecl>(FoundDecls[I])) {
         if (isExternalLinkage(FoundFunction->getLinkage()) &&
             isExternalLinkage(D->getLinkage())) {
           if (Importer.IsStructurallyEquivalent(D->getType(), 
@@ -2426,7 +2439,7 @@ Decl *ASTNodeImporter::VisitFunctionDecl(FunctionDecl *D) {
         }
       }
       
-      ConflictingDecls.push_back(*Lookup.first);
+      ConflictingDecls.push_back(FoundDecls[I]);
     }
     
     if (!ConflictingDecls.empty()) {
@@ -2555,6 +2568,25 @@ Decl *ASTNodeImporter::VisitFieldDecl(FieldDecl *D) {
   if (ImportDeclParts(D, DC, LexicalDC, Name, Loc))
     return 0;
   
+  // Determine whether we've already imported this field. 
+  llvm::SmallVector<NamedDecl *, 2> FoundDecls;
+  DC->localUncachedLookup(Name, FoundDecls);
+  for (unsigned I = 0, N = FoundDecls.size(); I != N; ++I) {
+    if (FieldDecl *FoundField = dyn_cast<FieldDecl>(FoundDecls[I])) {
+      if (Importer.IsStructurallyEquivalent(D->getType(), 
+                                            FoundField->getType())) {
+        Importer.Imported(D, FoundField);
+        return FoundField;
+      }
+      
+      Importer.ToDiag(Loc, diag::err_odr_field_type_inconsistent)
+        << Name << D->getType() << FoundField->getType();
+      Importer.ToDiag(FoundField->getLocation(), diag::note_odr_value_here)
+        << FoundField->getType();
+      return 0;
+    }
+  }
+
   // Import the type.
   QualType T = Importer.Import(D->getType());
   if (T.isNull())
@@ -2586,6 +2618,26 @@ Decl *ASTNodeImporter::VisitIndirectFieldDecl(IndirectFieldDecl *D) {
   SourceLocation Loc;
   if (ImportDeclParts(D, DC, LexicalDC, Name, Loc))
     return 0;
+
+  // Determine whether we've already imported this field. 
+  llvm::SmallVector<NamedDecl *, 2> FoundDecls;
+  DC->localUncachedLookup(Name, FoundDecls);
+  for (unsigned I = 0, N = FoundDecls.size(); I != N; ++I) {
+    if (IndirectFieldDecl *FoundField 
+                                = dyn_cast<IndirectFieldDecl>(FoundDecls[I])) {
+      if (Importer.IsStructurallyEquivalent(D->getType(), 
+                                            FoundField->getType())) {
+        Importer.Imported(D, FoundField);
+        return FoundField;
+      }
+      
+      Importer.ToDiag(Loc, diag::err_odr_field_type_inconsistent)
+        << Name << D->getType() << FoundField->getType();
+      Importer.ToDiag(FoundField->getLocation(), diag::note_odr_value_here)
+        << FoundField->getType();
+      return 0;
+    }
+  }
 
   // Import the type.
   QualType T = Importer.Import(D->getType());
@@ -2624,10 +2676,10 @@ Decl *ASTNodeImporter::VisitObjCIvarDecl(ObjCIvarDecl *D) {
     return 0;
   
   // Determine whether we've already imported this ivar 
-  for (DeclContext::lookup_result Lookup = DC->lookup(Name);
-       Lookup.first != Lookup.second; 
-       ++Lookup.first) {
-    if (ObjCIvarDecl *FoundIvar = dyn_cast<ObjCIvarDecl>(*Lookup.first)) {
+  llvm::SmallVector<NamedDecl *, 2> FoundDecls;
+  DC->localUncachedLookup(Name, FoundDecls);
+  for (unsigned I = 0, N = FoundDecls.size(); I != N; ++I) {
+    if (ObjCIvarDecl *FoundIvar = dyn_cast<ObjCIvarDecl>(FoundDecls[I])) {
       if (Importer.IsStructurallyEquivalent(D->getType(), 
                                             FoundIvar->getType())) {
         Importer.Imported(D, FoundIvar);
@@ -2679,13 +2731,13 @@ Decl *ASTNodeImporter::VisitVarDecl(VarDecl *D) {
     VarDecl *MergeWithVar = 0;
     SmallVector<NamedDecl *, 4> ConflictingDecls;
     unsigned IDNS = Decl::IDNS_Ordinary;
-    for (DeclContext::lookup_result Lookup = DC->lookup(Name);
-         Lookup.first != Lookup.second; 
-         ++Lookup.first) {
-      if (!(*Lookup.first)->isInIdentifierNamespace(IDNS))
+    llvm::SmallVector<NamedDecl *, 2> FoundDecls;
+    DC->localUncachedLookup(Name, FoundDecls);
+    for (unsigned I = 0, N = FoundDecls.size(); I != N; ++I) {
+      if (!FoundDecls[I]->isInIdentifierNamespace(IDNS))
         continue;
       
-      if (VarDecl *FoundVar = dyn_cast<VarDecl>(*Lookup.first)) {
+      if (VarDecl *FoundVar = dyn_cast<VarDecl>(FoundDecls[I])) {
         // We have found a variable that we may need to merge with. Check it.
         if (isExternalLinkage(FoundVar->getLinkage()) &&
             isExternalLinkage(D->getLinkage())) {
@@ -2724,7 +2776,7 @@ Decl *ASTNodeImporter::VisitVarDecl(VarDecl *D) {
         }
       }
       
-      ConflictingDecls.push_back(*Lookup.first);
+      ConflictingDecls.push_back(FoundDecls[I]);
     }
 
     if (MergeWithVar) {
@@ -2850,10 +2902,10 @@ Decl *ASTNodeImporter::VisitObjCMethodDecl(ObjCMethodDecl *D) {
   if (ImportDeclParts(D, DC, LexicalDC, Name, Loc))
     return 0;
   
-  for (DeclContext::lookup_result Lookup = DC->lookup(Name);
-       Lookup.first != Lookup.second; 
-       ++Lookup.first) {
-    if (ObjCMethodDecl *FoundMethod = dyn_cast<ObjCMethodDecl>(*Lookup.first)) {
+  llvm::SmallVector<NamedDecl *, 2> FoundDecls;
+  DC->localUncachedLookup(Name, FoundDecls);
+  for (unsigned I = 0, N = FoundDecls.size(); I != N; ++I) {
+    if (ObjCMethodDecl *FoundMethod = dyn_cast<ObjCMethodDecl>(FoundDecls[I])) {
       if (FoundMethod->isInstanceMethod() != D->isInstanceMethod())
         continue;
 
@@ -2954,9 +3006,9 @@ Decl *ASTNodeImporter::VisitObjCMethodDecl(ObjCMethodDecl *D) {
     ToParams[I]->setOwningFunction(ToMethod);
     ToMethod->addDecl(ToParams[I]);
   }
-  ToMethod->setMethodParams(Importer.getToContext(), 
-                            ToParams.data(), ToParams.size(),
-                            ToParams.size());
+  SmallVector<SourceLocation, 12> SelLocs;
+  D->getSelectorLocs(SelLocs);
+  ToMethod->setMethodParams(Importer.getToContext(), ToParams, SelLocs); 
 
   ToMethod->setLexicalDeclContext(LexicalDC);
   Importer.Imported(D, ToMethod);
@@ -2983,7 +3035,7 @@ Decl *ASTNodeImporter::VisitObjCCategoryDecl(ObjCCategoryDecl *D) {
   ObjCCategoryDecl *ToCategory = MergeWithCategory;
   if (!ToCategory) {
     ToCategory = ObjCCategoryDecl::Create(Importer.getToContext(), DC,
-                                          Importer.Import(D->getAtLoc()),
+                                          Importer.Import(D->getAtStartLoc()),
                                           Loc, 
                                        Importer.Import(D->getCategoryNameLoc()), 
                                           Name.getAsIdentifierInfo(),
@@ -3043,21 +3095,23 @@ Decl *ASTNodeImporter::VisitObjCProtocolDecl(ObjCProtocolDecl *D) {
     return 0;
 
   ObjCProtocolDecl *MergeWithProtocol = 0;
-  for (DeclContext::lookup_result Lookup = DC->lookup(Name);
-       Lookup.first != Lookup.second; 
-       ++Lookup.first) {
-    if (!(*Lookup.first)->isInIdentifierNamespace(Decl::IDNS_ObjCProtocol))
+  llvm::SmallVector<NamedDecl *, 2> FoundDecls;
+  DC->localUncachedLookup(Name, FoundDecls);
+  for (unsigned I = 0, N = FoundDecls.size(); I != N; ++I) {
+    if (!FoundDecls[I]->isInIdentifierNamespace(Decl::IDNS_ObjCProtocol))
       continue;
     
-    if ((MergeWithProtocol = dyn_cast<ObjCProtocolDecl>(*Lookup.first)))
+    if ((MergeWithProtocol = dyn_cast<ObjCProtocolDecl>(FoundDecls[I])))
       break;
   }
   
   ObjCProtocolDecl *ToProto = MergeWithProtocol;
   if (!ToProto || ToProto->isForwardDecl()) {
     if (!ToProto) {
-      ToProto = ObjCProtocolDecl::Create(Importer.getToContext(), DC, Loc,
-                                         Name.getAsIdentifierInfo());
+      ToProto = ObjCProtocolDecl::Create(Importer.getToContext(), DC,
+                                         Name.getAsIdentifierInfo(), Loc,
+                                         Importer.Import(D->getAtStartLoc()),
+                                         D->isInitiallyForwardDecl());
       ToProto->setForwardDecl(D->isForwardDecl());
       ToProto->setLexicalDeclContext(LexicalDC);
       LexicalDC->addDecl(ToProto);
@@ -3103,23 +3157,22 @@ Decl *ASTNodeImporter::VisitObjCInterfaceDecl(ObjCInterfaceDecl *D) {
     return 0;
 
   ObjCInterfaceDecl *MergeWithIface = 0;
-  for (DeclContext::lookup_result Lookup = DC->lookup(Name);
-       Lookup.first != Lookup.second; 
-       ++Lookup.first) {
-    if (!(*Lookup.first)->isInIdentifierNamespace(Decl::IDNS_Ordinary))
+  llvm::SmallVector<NamedDecl *, 2> FoundDecls;
+  DC->localUncachedLookup(Name, FoundDecls);
+  for (unsigned I = 0, N = FoundDecls.size(); I != N; ++I) {
+    if (!FoundDecls[I]->isInIdentifierNamespace(Decl::IDNS_Ordinary))
       continue;
     
-    if ((MergeWithIface = dyn_cast<ObjCInterfaceDecl>(*Lookup.first)))
+    if ((MergeWithIface = dyn_cast<ObjCInterfaceDecl>(FoundDecls[I])))
       break;
   }
   
   ObjCInterfaceDecl *ToIface = MergeWithIface;
   if (!ToIface || ToIface->isForwardDecl()) {
     if (!ToIface) {
-      ToIface = ObjCInterfaceDecl::Create(Importer.getToContext(),
-                                          DC, Loc,
-                                          Name.getAsIdentifierInfo(),
-                                          Importer.Import(D->getClassLoc()),
+      ToIface = ObjCInterfaceDecl::Create(Importer.getToContext(), DC,
+                                          Importer.Import(D->getAtStartLoc()),
+                                          Name.getAsIdentifierInfo(), Loc,
                                           D->isForwardDecl(),
                                           D->isImplicitInterfaceDecl());
       ToIface->setForwardDecl(D->isForwardDecl());
@@ -3229,9 +3282,10 @@ Decl *ASTNodeImporter::VisitObjCCategoryImplDecl(ObjCCategoryImplDecl *D) {
       return 0;
     
     ToImpl = ObjCCategoryImplDecl::Create(Importer.getToContext(), DC,
-                                          Importer.Import(D->getLocation()),
                                           Importer.Import(D->getIdentifier()),
-                                          Category->getClassInterface());
+                                          Category->getClassInterface(),
+                                          Importer.Import(D->getLocation()),
+                                          Importer.Import(D->getAtStartLoc()));
     
     DeclContext *LexicalDC = DC;
     if (D->getDeclContext() != D->getLexicalDeclContext()) {
@@ -3273,8 +3327,9 @@ Decl *ASTNodeImporter::VisitObjCImplementationDecl(ObjCImplementationDecl *D) {
     // now.
     Impl = ObjCImplementationDecl::Create(Importer.getToContext(),
                                   Importer.ImportContext(D->getDeclContext()),
+                                          Iface, Super,
                                           Importer.Import(D->getLocation()),
-                                          Iface, Super);
+                                          Importer.Import(D->getAtStartLoc()));
     
     if (D->getDeclContext() != D->getLexicalDeclContext()) {
       DeclContext *LexicalDC
@@ -3333,11 +3388,11 @@ Decl *ASTNodeImporter::VisitObjCPropertyDecl(ObjCPropertyDecl *D) {
     return 0;
 
   // Check whether we have already imported this property.
-  for (DeclContext::lookup_result Lookup = DC->lookup(Name);
-       Lookup.first != Lookup.second; 
-       ++Lookup.first) {
+  llvm::SmallVector<NamedDecl *, 2> FoundDecls;
+  DC->localUncachedLookup(Name, FoundDecls);
+  for (unsigned I = 0, N = FoundDecls.size(); I != N; ++I) {
     if (ObjCPropertyDecl *FoundProp
-                                = dyn_cast<ObjCPropertyDecl>(*Lookup.first)) {
+                                = dyn_cast<ObjCPropertyDecl>(FoundDecls[I])) {
       // Check property types.
       if (!Importer.IsStructurallyEquivalent(D->getType(), 
                                              FoundProp->getType())) {
@@ -3638,13 +3693,13 @@ Decl *ASTNodeImporter::VisitClassTemplateDecl(ClassTemplateDecl *D) {
   // We may already have a template of the same name; try to find and match it.
   if (!DC->isFunctionOrMethod()) {
     SmallVector<NamedDecl *, 4> ConflictingDecls;
-    for (DeclContext::lookup_result Lookup = DC->lookup(Name);
-         Lookup.first != Lookup.second; 
-         ++Lookup.first) {
-      if (!(*Lookup.first)->isInIdentifierNamespace(Decl::IDNS_Ordinary))
+    llvm::SmallVector<NamedDecl *, 2> FoundDecls;
+    DC->localUncachedLookup(Name, FoundDecls);
+    for (unsigned I = 0, N = FoundDecls.size(); I != N; ++I) {
+      if (!FoundDecls[I]->isInIdentifierNamespace(Decl::IDNS_Ordinary))
         continue;
       
-      Decl *Found = *Lookup.first;
+      Decl *Found = FoundDecls[I];
       if (ClassTemplateDecl *FoundTemplate 
                                         = dyn_cast<ClassTemplateDecl>(Found)) {
         if (IsStructuralMatch(D, FoundTemplate)) {
@@ -3657,7 +3712,7 @@ Decl *ASTNodeImporter::VisitClassTemplateDecl(ClassTemplateDecl *D) {
         }         
       }
       
-      ConflictingDecls.push_back(*Lookup.first);
+      ConflictingDecls.push_back(FoundDecls[I]);
     }
     
     if (!ConflictingDecls.empty()) {
@@ -3703,7 +3758,8 @@ Decl *ASTNodeImporter::VisitClassTemplateDecl(ClassTemplateDecl *D) {
   Importer.Imported(D, D2);
   Importer.Imported(DTemplated, D2Templated);
 
-  if (DTemplated->isDefinition() && !D2Templated->isDefinition()) {
+  if (DTemplated->isCompleteDefinition() &&
+      !D2Templated->isCompleteDefinition()) {
     // FIXME: Import definition!
   }
   
@@ -3765,7 +3821,7 @@ Decl *ASTNodeImporter::VisitClassTemplateSpecializationDecl(
     // FIXME: Check for specialization vs. instantiation errors.
     
     if (RecordDecl *FoundDef = D2->getDefinition()) {
-      if (!D->isDefinition() || IsStructuralMatch(D, FoundDef)) {
+      if (!D->isCompleteDefinition() || IsStructuralMatch(D, FoundDef)) {
         // The record types structurally match, or the "from" translation
         // unit only had a forward declaration anyway; call it the same
         // function.
@@ -3795,7 +3851,7 @@ Decl *ASTNodeImporter::VisitClassTemplateSpecializationDecl(
   }
   Importer.Imported(D, D2);
   
-  if (D->isDefinition() && ImportDefinition(D, D2))
+  if (D->isCompleteDefinition() && ImportDefinition(D, D2))
     return 0;
   
   return D2;
@@ -3835,14 +3891,17 @@ Expr *ASTNodeImporter::VisitDeclRefExpr(DeclRefExpr *E) {
   QualType T = Importer.Import(E->getType());
   if (T.isNull())
     return 0;
-  
-  return DeclRefExpr::Create(Importer.getToContext(), 
-                             Importer.Import(E->getQualifierLoc()),
-                             ToD,
-                             Importer.Import(E->getLocation()),
-                             T, E->getValueKind(),
-                             FoundD,
-                             /*FIXME:TemplateArgs=*/0);
+
+  DeclRefExpr *DRE = DeclRefExpr::Create(Importer.getToContext(), 
+                                         Importer.Import(E->getQualifierLoc()),
+                                         ToD,
+                                         Importer.Import(E->getLocation()),
+                                         T, E->getValueKind(),
+                                         FoundD,
+                                         /*FIXME:TemplateArgs=*/0);
+  if (E->hadMultipleCandidates())
+    DRE->setHadMultipleCandidates(true);
+  return DRE;
 }
 
 Expr *ASTNodeImporter::VisitIntegerLiteral(IntegerLiteral *E) {

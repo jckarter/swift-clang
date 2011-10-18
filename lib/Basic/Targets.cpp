@@ -247,11 +247,12 @@ protected:
                             MacroBuilder &Builder) const {
     // FreeBSD defines; list based off of gcc output
 
-    // FIXME: Move version number handling to llvm::Triple.
-    StringRef Release = Triple.getOSName().substr(strlen("freebsd"), 1);
+    unsigned Release = Triple.getOSMajorVersion();
+    if (Release == 0U)
+      Release = 8;
 
-    Builder.defineMacro("__FreeBSD__", Release);
-    Builder.defineMacro("__FreeBSD_cc_version", Release + "00001");
+    Builder.defineMacro("__FreeBSD__", Twine(Release));
+    Builder.defineMacro("__FreeBSD_cc_version", Twine(Release * 100000U + 1U));
     Builder.defineMacro("__KPRINTF_ATTRIBUTE__");
     DefineStd(Builder, "unix", Opts);
     Builder.defineMacro("__ELF__");
@@ -327,6 +328,10 @@ public:
     : OSTargetInfo<Target>(triple) {
     this->UserLabelPrefix = "";
     this->WIntType = TargetInfo::UnsignedInt;
+  }
+
+  virtual const char *getStaticInitSectionSpecifier() const {
+    return ".text.startup";
   }
 };
 
@@ -878,6 +883,11 @@ public:
 } // end anonymous namespace.
 
 namespace {
+  static const unsigned PTXAddrSpaceMap[] = {
+    0,    // opencl_global
+    4,    // opencl_local
+    1     // opencl_constant
+  };
   class PTXTargetInfo : public TargetInfo {
     static const char * const GCCRegNames[];
     static const Builtin::Info BuiltinInfo[];
@@ -886,6 +896,7 @@ namespace {
     PTXTargetInfo(const std::string& triple) : TargetInfo(triple) {
       TLSSupported = false;
       LongWidth = LongAlign = 64;
+      AddrSpaceMap = &PTXAddrSpaceMap;
       // Define available target features
       // These must be defined in sorted order!      
       AvailableFeatures.push_back("compute10");
@@ -1968,7 +1979,7 @@ public:
     LongDoubleAlign = 32;
     DescriptionString = "e-p:32:32:32-i1:8:8-i8:8:8-i16:16:16-i32:32:32-"
                         "i64:32:64-f32:32:32-f64:32:64-v64:64:64-v128:128:128-"
-                        "a0:0:64-f80:32:32-n8:16:32";
+                        "a0:0:64-f80:32:32-n8:16:32-S128";
     SizeType = UnsignedInt;
     PtrDiffType = SignedInt;
     IntPtrType = SignedInt;
@@ -1978,6 +1989,11 @@ public:
     RealTypeUsesObjCFPRet = ((1 << TargetInfo::Float) |
                              (1 << TargetInfo::Double) |
                              (1 << TargetInfo::LongDouble));
+
+    // x86-32 has atomics up to 8 bytes
+    // FIXME: Check that we actually have cmpxchg8b before setting
+    // MaxAtomicInlineWidth. (cmpxchg8b is an i586 instruction.)
+    MaxAtomicPromoteWidth = MaxAtomicInlineWidth = 64;
   }
   virtual const char *getVAListDeclaration() const {
     return "typedef char* __builtin_va_list;";
@@ -2014,7 +2030,7 @@ public:
     IntPtrType = SignedLong;
     DescriptionString = "e-p:32:32:32-i1:8:8-i8:8:8-i16:16:16-i32:32:32-"
                         "i64:32:64-f32:32:32-f64:32:64-v64:64:64-v128:128:128-"
-                        "a0:0:64-f80:128:128-n8:16:32";
+                        "a0:0:64-f80:128:128-n8:16:32-S128";
     HasAlignMac68kSupport = true;
   }
 
@@ -2032,7 +2048,7 @@ public:
     DoubleAlign = LongLongAlign = 64;
     DescriptionString = "e-p:32:32:32-i1:8:8-i8:8:8-i16:16:16-i32:32:32-"
                         "i64:64:64-f32:32:32-f64:64:64-f80:128:128-v64:64:64-"
-                        "v128:128:128-a0:0:64-f80:32:32-n8:16:32";
+                        "v128:128:128-a0:0:64-f80:32:32-n8:16:32-S32";
   }
   virtual void getTargetDefines(const LangOptions &Opts,
                                 MacroBuilder &Builder) const {
@@ -2102,7 +2118,7 @@ public:
     DoubleAlign = LongLongAlign = 64;
     DescriptionString = "e-p:32:32:32-i1:8:8-i8:8:8-i16:16:16-i32:32:32-"
                         "i64:64:64-f32:32:32-f64:64:64-v64:64:64-v128:128:128-"
-                        "a0:0:64-f80:32:32-n8:16:32";
+                        "a0:0:64-f80:32:32-n8:16:32-S32";
   }
   virtual void getTargetDefines(const LangOptions &Opts,
                                 MacroBuilder &Builder) const {
@@ -2209,10 +2225,16 @@ public:
 
     DescriptionString = "e-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-"
                         "i64:64:64-f32:32:32-f64:64:64-v64:64:64-v128:128:128-"
-                        "a0:0:64-s0:64:64-f80:128:128-n8:16:32:64";
+                        "a0:0:64-s0:64:64-f80:128:128-n8:16:32:64-S128";
 
     // Use fpret only for long double.
     RealTypeUsesObjCFPRet = (1 << TargetInfo::LongDouble);
+
+    // x86-64 has atomics up to 16 bytes.
+    // FIXME: Once the backend is fixed, increase MaxAtomicInlineWidth to 128
+    // on CPUs with cmpxchg16b
+    MaxAtomicPromoteWidth = 128;
+    MaxAtomicInlineWidth = 64;
   }
   virtual const char *getVAListDeclaration() const {
     return "typedef struct __va_list_tag {"
@@ -2376,15 +2398,19 @@ public:
       // so set preferred for small types to 32.
       DescriptionString = ("e-p:32:32:32-i1:8:32-i8:8:32-i16:16:32-i32:32:32-"
                            "i64:64:64-f32:32:32-f64:64:64-"
-                           "v64:64:64-v128:64:128-a0:0:32-n32");
+                           "v64:64:64-v128:64:128-a0:0:32-n32-S64");
     } else {
       DescriptionString = ("e-p:32:32:32-i1:8:8-i8:8:8-i16:16:16-i32:32:32-"
                            "i64:64:64-f32:32:32-f64:64:64-"
-                           "v64:64:64-v128:64:128-a0:0:64-n32");
+                           "v64:64:64-v128:64:128-a0:0:64-n32-S64");
     }
 
     // ARM targets default to using the ARM C++ ABI.
     CXXABI = CXXABI_ARM;
+
+    // ARM has atomics up to 8 bytes
+    // FIXME: Set MaxAtomicInlineWidth if we have the feature v6e
+    MaxAtomicPromoteWidth = 64;
   }
   virtual const char *getABI() const { return ABI.c_str(); }
   virtual bool setABI(const std::string &Name) {
@@ -2418,11 +2444,11 @@ public:
         // so set preferred for small types to 32.
         DescriptionString = ("e-p:32:32:32-i1:8:32-i8:8:32-i16:16:32-i32:32:32-"
                              "i64:32:64-f32:32:32-f64:32:64-"
-                             "v64:32:64-v128:32:128-a0:0:32-n32");
+                             "v64:32:64-v128:32:128-a0:0:32-n32-S32");
       } else {
         DescriptionString = ("e-p:32:32:32-i1:8:8-i8:8:8-i16:16:16-i32:32:32-"
                              "i64:32:64-f32:32:32-f64:32:64-"
-                             "v64:32:64-v128:32:128-a0:0:32-n32");
+                             "v64:32:64-v128:32:128-a0:0:32-n32-S32");
       }
 
       // FIXME: Override "preferred align" for double and long long.
@@ -2702,6 +2728,9 @@ public:
   DarwinARMTargetInfo(const std::string& triple)
     : DarwinTargetInfo<ARMTargetInfo>(triple) {
     HasAlignMac68kSupport = true;
+    // iOS always has 64-bit atomic instructions.
+    // FIXME: This should be based off of the target features in ARMTargetInfo.
+    MaxAtomicInlineWidth = 64;
   }
 };
 } // end anonymous namespace.
@@ -3047,6 +3076,12 @@ namespace {
   // target processor and program binary. TCE co-design environment is
   // publicly available in http://tce.cs.tut.fi
 
+  static const unsigned TCEOpenCLAddrSpaceMap[] = {
+      3, // opencl_global
+      4, // opencl_local
+      5  // opencl_constant
+  };
+
   class TCETargetInfo : public TargetInfo{
   public:
     TCETargetInfo(const std::string& triple) : TargetInfo(triple) {
@@ -3075,6 +3110,7 @@ namespace {
                           "i16:16:32-i32:32:32-i64:32:32-"
                           "f32:32:32-f64:32:32-v64:32:32-"
                           "v128:32:32-a0:0:32-n32";
+      AddrSpaceMap = &TCEOpenCLAddrSpaceMap;
     }
 
     virtual void getTargetDefines(const LangOptions &Opts,
@@ -3405,6 +3441,7 @@ public:
     this->SizeType = TargetInfo::UnsignedInt;
     this->PtrDiffType = TargetInfo::SignedInt;
     this->IntPtrType = TargetInfo::SignedInt;
+    this->RegParmMax = 2;
     DescriptionString = "e-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-"
                         "f32:32:32-f64:64:64-p:32:32:32-v128:32:32";
   }
@@ -3568,6 +3605,8 @@ static TargetInfo *AllocateTarget(const std::string &T) {
     if (Triple.isOSDarwin())
       return new DarwinPPC32TargetInfo(T);
     switch (os) {
+    case llvm::Triple::Linux:
+      return new LinuxTargetInfo<PPC32TargetInfo>(T);
     case llvm::Triple::FreeBSD:
       return new FreeBSDTargetInfo<PPC32TargetInfo>(T);
     case llvm::Triple::NetBSD:
@@ -3582,6 +3621,8 @@ static TargetInfo *AllocateTarget(const std::string &T) {
     if (Triple.isOSDarwin())
       return new DarwinPPC64TargetInfo(T);
     switch (os) {
+    case llvm::Triple::Linux:
+      return new LinuxTargetInfo<PPC64TargetInfo>(T);
     case llvm::Triple::Lv2:
       return new PS3PPUTargetInfo<PPC64TargetInfo>(T);
     case llvm::Triple::FreeBSD:
@@ -3602,6 +3643,8 @@ static TargetInfo *AllocateTarget(const std::string &T) {
 
   case llvm::Triple::sparc:
     switch (os) {
+    case llvm::Triple::Linux:
+      return new LinuxTargetInfo<SparcV8TargetInfo>(T);
     case llvm::Triple::AuroraUX:
       return new AuroraUXSparcV8TargetInfo(T);
     case llvm::Triple::Solaris:

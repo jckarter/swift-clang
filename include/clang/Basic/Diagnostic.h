@@ -778,6 +778,8 @@ public:
   void AddFixItHint(const FixItHint &Hint) const {
     assert(NumFixItHints < DiagnosticsEngine::MaxFixItHints &&
            "Too many fix-it hints!");
+    if (NumFixItHints >= DiagnosticsEngine::MaxFixItHints)
+      return;  // Don't crash in release builds
     if (DiagObj)
       DiagObj->FixItHints[NumFixItHints++] = Hint;
   }
@@ -947,6 +949,11 @@ public:
   const CharSourceRange &getRange(unsigned Idx) const {
     assert(Idx < DiagObj->NumDiagRanges && "Invalid diagnostic range index!");
     return DiagObj->DiagRanges[Idx];
+  }
+
+  /// \brief Return an array reference for this diagnostic's ranges.
+  ArrayRef<CharSourceRange> getRanges() const {
+    return llvm::makeArrayRef(DiagObj->DiagRanges, DiagObj->NumDiagRanges);
   }
 
   unsigned getNumFixItHints() const {

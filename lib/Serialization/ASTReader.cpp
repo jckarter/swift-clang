@@ -1283,8 +1283,9 @@ void ASTReader::ReadMacroRecord(Module &F, uint64_t Offset) {
       MI->setIsUsed(isUsed);
       MI->setIsFromAST();
 
-      unsigned NextIndex = 3;
-      MI->setExportLocation(ReadSourceLocation(F, Record, NextIndex));
+      bool IsPublic = Record[3];
+      unsigned NextIndex = 4;
+      MI->setVisibility(IsPublic, ReadSourceLocation(F, Record, NextIndex));
       
       if (RecType == PP_MACRO_FUNCTION_LIKE) {
         // Decode function-like macro info.
@@ -1399,7 +1400,8 @@ HeaderFileInfoTrait::ReadData(const internal_key_type, const unsigned char *d,
   HFI.Resolved = (Flags >> 1) & 0x01;
   HFI.IndexHeaderMapHeader = Flags & 0x01;
   HFI.NumIncludes = ReadUnalignedLE16(d);
-  HFI.ControllingMacroID = Reader.getGlobalDeclID(M, ReadUnalignedLE32(d));
+  HFI.ControllingMacroID = Reader.getGlobalIdentifierID(M, 
+                                                        ReadUnalignedLE32(d));
   if (unsigned FrameworkOffset = ReadUnalignedLE32(d)) {
     // The framework offset is 1 greater than the actual offset, 
     // since 0 is used as an indicator for "no framework name".
@@ -3526,6 +3528,15 @@ QualType ASTReader::readTypeRecord(unsigned Index) {
     const_cast<Type*>(T.getTypePtr())->setDependent(IsDependent);
     return T;
   }
+
+  case TYPE_ATOMIC: {
+    if (Record.size() != 1) {
+      Error("Incorrect encoding of atomic type");
+      return QualType();
+    }
+    QualType ValueType = readType(*Loc.F, Record, Idx);
+    return Context.getAtomicType(ValueType);
+  }
   }
   // Suppress a GCC warning
   return QualType();
@@ -3760,6 +3771,11 @@ void TypeLocReader::VisitObjCObjectTypeLoc(ObjCObjectTypeLoc TL) {
 void TypeLocReader::VisitObjCObjectPointerTypeLoc(ObjCObjectPointerTypeLoc TL) {
   TL.setStarLoc(ReadSourceLocation(Record, Idx));
 }
+void TypeLocReader::VisitAtomicTypeLoc(AtomicTypeLoc TL) {
+  TL.setKWLoc(ReadSourceLocation(Record, Idx));
+  TL.setLParenLoc(ReadSourceLocation(Record, Idx));
+  TL.setRParenLoc(ReadSourceLocation(Record, Idx));
+}
 
 TypeSourceInfo *ASTReader::GetTypeSourceInfo(Module &F,
                                              const RecordData &Record,
@@ -3805,6 +3821,7 @@ QualType ASTReader::GetType(TypeID ID) {
     case PREDEF_TYPE_LONG_ID:       T = Context.LongTy;             break;
     case PREDEF_TYPE_LONGLONG_ID:   T = Context.LongLongTy;         break;
     case PREDEF_TYPE_INT128_ID:     T = Context.Int128Ty;           break;
+    case PREDEF_TYPE_HALF_ID:       T = Context.HalfTy;             break;
     case PREDEF_TYPE_FLOAT_ID:      T = Context.FloatTy;            break;
     case PREDEF_TYPE_DOUBLE_ID:     T = Context.DoubleTy;           break;
     case PREDEF_TYPE_LONGDOUBLE_ID: T = Context.LongDoubleTy;       break;
@@ -3823,6 +3840,11 @@ QualType ASTReader::GetType(TypeID ID) {
     case PREDEF_TYPE_AUTO_RREF_DEDUCT: 
       T = Context.getAutoRRefDeductType(); 
       break;
+
+    case PREDEF_TYPE_ARC_UNBRIDGED_CAST:
+      T = Context.ARCUnbridgedCastTy;
+      break;
+
     }
 
     assert(!T.isNull() && "Unknown predefined type");
