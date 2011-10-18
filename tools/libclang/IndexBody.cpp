@@ -63,6 +63,27 @@ public:
     IndexCtx.handleReference(D, E->getLocation(), 0, ParentDC, E);
     return true;
   }
+
+  bool VisitObjCMessageExpr(ObjCMessageExpr *E) {
+    if (ObjCMethodDecl *MD = E->getMethodDecl())
+      IndexCtx.handleReference(MD, E->getSelectorStartLoc(), 0, ParentDC, E);
+    return true;
+  }
+
+  bool VisitObjCPropertyRefExpr(ObjCPropertyRefExpr *E) {
+    if (E->isImplicitProperty()) {
+      if (ObjCMethodDecl *MD = E->getImplicitPropertyGetter())
+        IndexCtx.handleReference(MD, E->getLocation(), 0, ParentDC, E,
+                                 CXIdxEntityRef_ImplicitProperty);
+      if (ObjCMethodDecl *MD = E->getImplicitPropertySetter())
+        IndexCtx.handleReference(MD, E->getLocation(), 0, ParentDC, E,
+                                 CXIdxEntityRef_ImplicitProperty);
+    } else {
+      IndexCtx.handleReference(E->getExplicitProperty(), E->getLocation(), 0,
+                               ParentDC, E);
+    }
+    return true;
+  }
 };
 
 } // anonymous namespace

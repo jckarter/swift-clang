@@ -636,7 +636,7 @@ ExprResult Sema::CheckCXXThrowOperand(SourceLocation ThrowLoc, Expr *E,
   return Owned(E);
 }
 
-QualType Sema::getAndCaptureCurrentThisType() {
+QualType Sema::getCurrentThisType(bool Capture) {
   // Ignore block scopes: we can capture through them.
   // Ignore nested enum scopes: we'll diagnose non-constant expressions
   // where they're invalid, and other uses are legitimate.
@@ -666,11 +666,13 @@ QualType Sema::getAndCaptureCurrentThisType() {
       ThisTy = Context.getPointerType(Context.getRecordType(RD));
   }
 
+  if (!Capture || ThisTy.isNull())
+    return ThisTy;
+  
   // Mark that we're closing on 'this' in all the block scopes we ignored.
-  if (!ThisTy.isNull())
-    for (unsigned idx = FunctionScopes.size() - 1;
-         NumBlocks; --idx, --NumBlocks)
-      cast<BlockScopeInfo>(FunctionScopes[idx])->CapturesCXXThis = true;
+  for (unsigned idx = FunctionScopes.size() - 1;
+       NumBlocks; --idx, --NumBlocks)
+    cast<BlockScopeInfo>(FunctionScopes[idx])->CapturesCXXThis = true;
 
   return ThisTy;
 }
@@ -680,7 +682,7 @@ ExprResult Sema::ActOnCXXThis(SourceLocation Loc) {
   /// is a non-lvalue expression whose value is the address of the object for
   /// which the function is called.
 
-  QualType ThisTy = getAndCaptureCurrentThisType();
+  QualType ThisTy = getCurrentThisType();
   if (ThisTy.isNull()) return Diag(Loc, diag::err_invalid_this_use);
 
   return Owned(new (Context) CXXThisExpr(Loc, ThisTy, /*isImplicit=*/false));
@@ -961,17 +963,18 @@ Sema::BuildCXXNew(SourceLocation StartLoc, bool UseGlobal,
 
     QualType SizeType = ArraySize->getType();
 
-    ExprResult ConvertedSize
-      = ConvertToIntegralOrEnumerationType(StartLoc, ArraySize,
-                                       PDiag(diag::err_array_size_not_integral),
-                                     PDiag(diag::err_array_size_incomplete_type)
-                                       << ArraySize->getSourceRange(),
-                               PDiag(diag::err_array_size_explicit_conversion),
-                                       PDiag(diag::note_array_size_conversion),
-                               PDiag(diag::err_array_size_ambiguous_conversion),
-                                       PDiag(diag::note_array_size_conversion),
-                          PDiag(getLangOptions().CPlusPlus0x? 0
-                                            : diag::ext_array_size_conversion));
+    ExprResult ConvertedSize = ConvertToIntegralOrEnumerationType(
+      StartLoc, ArraySize,
+      PDiag(diag::err_array_size_not_integral),
+      PDiag(diag::err_array_size_incomplete_type)
+        << ArraySize->getSourceRange(),
+      PDiag(diag::err_array_size_explicit_conversion),
+      PDiag(diag::note_array_size_conversion),
+      PDiag(diag::err_array_size_ambiguous_conversion),
+      PDiag(diag::note_array_size_conversion),
+      PDiag(getLangOptions().CPlusPlus0x ?
+              diag::warn_cxx98_compat_array_size_conversion :
+              diag::ext_array_size_conversion));
     if (ConvertedSize.isInvalid())
       return ExprError();
 
