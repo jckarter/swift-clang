@@ -1343,7 +1343,7 @@ bool CursorVisitor::VisitBuiltinTypeLoc(BuiltinTypeLoc TL) {
   // Some builtin types (such as Objective-C's "id", "sel", and
   // "Class") have associated declarations. Create cursors for those.
   QualType VisitType;
-  switch (TL.getType()->getAs<BuiltinType>()->getKind()) {
+  switch (TL.getTypePtr()->getKind()) {
   case BuiltinType::Void:
   case BuiltinType::Bool:
   case BuiltinType::Char_U:
@@ -2814,7 +2814,7 @@ void clang_getExpansionLocation(CXSourceLocation location,
   FileID fileID = SM.getFileID(ExpansionLoc);
   bool Invalid = false;
   const SrcMgr::SLocEntry &sloc = SM.getSLocEntry(fileID, &Invalid);
-  if (!sloc.isFile() || Invalid) {
+  if (Invalid || !sloc.isFile()) {
     createNullLocation(file, line, column, offset);
     return;
   }
