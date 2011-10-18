@@ -1070,6 +1070,18 @@ static bool ShouldDisableCFI(const ArgList &Args,
   return false;
 }
 
+static bool ShouldDisableDwarfDirectory(const ArgList &Args,
+                                        const ToolChain &TC) {
+  bool IsIADefault = TC.IsIntegratedAssemblerDefault();
+  bool UseIntegratedAs = Args.hasFlag(options::OPT_integrated_as,
+                                      options::OPT_no_integrated_as,
+                                      IsIADefault);
+  bool UseDwarfDirectory = Args.hasFlag(options::OPT_fdwarf_directory_asm,
+                                        options::OPT_fno_dwarf_directory_asm,
+                                        UseIntegratedAs);
+  return !UseDwarfDirectory;
+}
+
 /// \brief Check whether the given input tree contains any compilation actions.
 static bool ContainsCompileAction(const Action *A) {
   if (isa<CompileJobAction>(A))
@@ -1623,6 +1635,9 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
 
   if (ShouldDisableCFI(Args, getToolChain()))
     CmdArgs.push_back("-fno-dwarf2-cfi-asm");
+
+  if (ShouldDisableDwarfDirectory(Args, getToolChain()))
+    CmdArgs.push_back("-fno-dwarf-directory-asm");
 
   if (Arg *A = Args.getLastArg(options::OPT_ftemplate_depth_)) {
     CmdArgs.push_back("-ftemplate-depth");
@@ -4243,6 +4258,30 @@ void linuxtools::Assemble::ConstructJob(Compilation &C, const JobAction &JA,
   C.addCommand(new Command(JA, *this, Exec, CmdArgs));
 }
 
+static void AddLibgcc(const Driver &D, ArgStringList &CmdArgs,
+                      const ArgList &Args) {
+  bool StaticLibgcc = Args.hasArg(options::OPT_static) ||
+    Args.hasArg(options::OPT_static_libgcc);
+  if (!D.CCCIsCXX)
+    CmdArgs.push_back("-lgcc");
+
+  if (StaticLibgcc) {
+    if (D.CCCIsCXX)
+      CmdArgs.push_back("-lgcc");
+  } else {
+    if (!D.CCCIsCXX)
+      CmdArgs.push_back("--as-needed");
+    CmdArgs.push_back("-lgcc_s");
+    if (!D.CCCIsCXX)
+      CmdArgs.push_back("--no-as-needed");
+  }
+
+  if (StaticLibgcc)
+    CmdArgs.push_back("-lgcc_eh");
+  else if (!Args.hasArg(options::OPT_shared) && D.CCCIsCXX)
+    CmdArgs.push_back("-lgcc");
+}
+
 void linuxtools::Link::ConstructJob(Compilation &C, const JobAction &JA,
                                     const InputInfo &Output,
                                     const InputInfoList &Inputs,
@@ -4361,7 +4400,13 @@ void linuxtools::Link::ConstructJob(Compilation &C, const JobAction &JA,
   AddLinkerInputs(ToolChain, Inputs, Args, CmdArgs);
 
   if (D.CCCIsCXX && !Args.hasArg(options::OPT_nostdlib)) {
+    bool OnlyLibstdcxxStatic = Args.hasArg(options::OPT_static_libstdcxx) &&
+      !Args.hasArg(options::OPT_static);
+    if (OnlyLibstdcxxStatic)
+      CmdArgs.push_back("-Bstatic");
     ToolChain.AddCXXStdlibLibArgs(Args, CmdArgs);
+    if (OnlyLibstdcxxStatic)
+      CmdArgs.push_back("-Bdynamic");
     CmdArgs.push_back("-lm");
   }
 
@@ -4369,24 +4414,7 @@ void linuxtools::Link::ConstructJob(Compilation &C, const JobAction &JA,
     if (Args.hasArg(options::OPT_static))
       CmdArgs.push_back("--start-group");
 
-    if (!D.CCCIsCXX)
-      CmdArgs.push_back("-lgcc");
-
-    if (Args.hasArg(options::OPT_static)) {
-      if (D.CCCIsCXX)
-        CmdArgs.push_back("-lgcc");
-    } else {
-      if (!D.CCCIsCXX)
-        CmdArgs.push_back("--as-needed");
-      CmdArgs.push_back("-lgcc_s");
-      if (!D.CCCIsCXX)
-        CmdArgs.push_back("--no-as-needed");
-    }
-
-    if (Args.hasArg(options::OPT_static))
-      CmdArgs.push_back("-lgcc_eh");
-    else if (!Args.hasArg(options::OPT_shared) && D.CCCIsCXX)
-      CmdArgs.push_back("-lgcc");
+    AddLibgcc(D, CmdArgs, Args);
 
     if (Args.hasArg(options::OPT_pthread) ||
         Args.hasArg(options::OPT_pthreads))
@@ -4396,19 +4424,8 @@ void linuxtools::Link::ConstructJob(Compilation &C, const JobAction &JA,
 
     if (Args.hasArg(options::OPT_static))
       CmdArgs.push_back("--end-group");
-    else {
-      if (!D.CCCIsCXX)
-        CmdArgs.push_back("-lgcc");
-
-      if (!D.CCCIsCXX)
-        CmdArgs.push_back("--as-needed");
-      CmdArgs.push_back("-lgcc_s");
-      if (!D.CCCIsCXX)
-        CmdArgs.push_back("--no-as-needed");
-
-      if (!Args.hasArg(options::OPT_shared) && D.CCCIsCXX)
-        CmdArgs.push_back("-lgcc");
-    }
+    else
+      AddLibgcc(D, CmdArgs, Args);
 
 
     if (!Args.hasArg(options::OPT_nostartfiles)) {
