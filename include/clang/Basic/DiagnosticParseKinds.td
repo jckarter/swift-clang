@@ -52,9 +52,9 @@ def err_friend_storage_spec : Error<"'%0' is invalid in friend declarations">;
 def ext_ident_list_in_param : Extension<
   "type-less parameter names in function declaration">;
 def ext_c99_variable_decl_in_for_loop : Extension<
-  "variable declaration in for loop is a C99-specific feature">;
+  "variable declaration in for loop is a C99-specific feature">, InGroup<C99>;
 def ext_c99_compound_literal : Extension<
-  "compound literals are a C99-specific feature">;
+  "compound literals are a C99-specific feature">, InGroup<C99>;
 def ext_enumerator_list_comma : Extension<
   "commas at the end of enumerator lists are a %select{C99|C++11}0-specific "
   "feature">;
@@ -70,6 +70,9 @@ def ext_ms_enum_fixed_underlying_type : Extension<
   InGroup<Microsoft>;
 def warn_cxx98_compat_enum_fixed_underlying_type : Warning<
   "enumeration types with a fixed underlying type are incompatible with C++98">,
+  InGroup<CXX98Compat>, DefaultIgnore;
+def warn_cxx98_compat_alignof : Warning<
+  "alignof expressions are incompatible with C++98">,
   InGroup<CXX98Compat>, DefaultIgnore;
 
 def ext_c1x_generic_selection : Extension<
@@ -228,7 +231,7 @@ def warn_auto_storage_class : Warning<
   InGroup<CXX11Compat>;
 def ext_auto_storage_class : ExtWarn<
   "'auto' storage class specifier is not permitted in C++11, and will not "
-  "be supported in future releases">;
+  "be supported in future releases">, InGroup<DiagGroup<"auto-storage-class">>;
 def ext_for_range : ExtWarn<
   "range-based for loop is a C++11 extension">, InGroup<CXX11>;
 def warn_cxx98_compat_for_range : Warning<
@@ -290,6 +293,9 @@ def err_bool_redeclaration : Error<
   "redeclaration of C++ built-in type 'bool'">;
 def ext_c1x_static_assert : Extension<
   "_Static_assert is a C1X-specific feature">, InGroup<C1X>;
+def warn_cxx98_compat_static_assert : Warning<
+  "static_assert declarations are incompatible with C++98">,
+  InGroup<CXX98Compat>, DefaultIgnore;
 
 /// Objective-C parser diagnostics
 def err_expected_minus_or_plus : Error<
@@ -371,6 +377,9 @@ def ext_ellipsis_exception_spec : Extension<
   "exception specification of '...' is a Microsoft extension">;
 def err_dynamic_and_noexcept_specification : Error<
   "cannot have both throw() and noexcept() clause on the same function">;
+def warn_cxx98_compat_noexcept_decl : Warning<
+  "noexcept specifications are incompatible with C++98">,
+  InGroup<CXX98Compat>, DefaultIgnore;
 def err_expected_catch : Error<"expected catch">;
 def err_expected_lbrace_or_comma : Error<"expected '{' or ','">;
 def err_using_namespace_in_class : Error<
@@ -400,6 +409,12 @@ def err_anon_type_definition : Error<
 def err_default_delete_in_multiple_declaration : Error<
   "'= %select{default|delete}0' is a function definition and must occur in a "
   "standalone declaration">;
+
+def warn_cxx98_compat_noexcept_expr : Warning<
+  "noexcept expressions are incompatible with C++98">,
+  InGroup<CXX98Compat>, DefaultIgnore;
+def warn_cxx98_compat_nullptr : Warning<
+  "'nullptr' is incompatible with C++98">, InGroup<CXX98Compat>, DefaultIgnore;
 
 def warn_cxx98_compat_alignas : Warning<"'alignas' is incompatible with C++98">,
   InGroup<CXX98Compat>, DefaultIgnore;

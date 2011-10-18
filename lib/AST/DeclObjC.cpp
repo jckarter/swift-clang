@@ -452,6 +452,10 @@ ObjCMethodDecl *ObjCMethodDecl::getCanonicalDecl() {
         return MD;
   }
 
+  if (isRedeclaration())
+    return cast<ObjCContainerDecl>(CtxD)->getMethod(getSelector(),
+                                                    isInstanceMethod());
+
   return this;
 }
 
@@ -623,8 +627,9 @@ ObjCInterfaceDecl(DeclContext *DC, SourceLocation atLoc, IdentifierInfo *Id,
                   SourceLocation CLoc, bool FD, bool isInternal)
   : ObjCContainerDecl(ObjCInterface, DC, Id, CLoc, atLoc),
     TypeForDecl(0), SuperClass(0),
-    CategoryList(0), IvarList(0), 
-    ForwardDecl(FD), InternalInterface(isInternal), ExternallyCompleted(false) {
+    CategoryList(0), IvarList(0),
+    InitiallyForwardDecl(FD), ForwardDecl(FD),
+    InternalInterface(isInternal), ExternallyCompleted(false) {
 }
 
 void ObjCInterfaceDecl::LoadExternalDefinition() const {
@@ -866,8 +871,9 @@ ObjCAtDefsFieldDecl
 ObjCProtocolDecl *ObjCProtocolDecl::Create(ASTContext &C, DeclContext *DC,
                                            IdentifierInfo *Id,
                                            SourceLocation nameLoc,
-                                           SourceLocation atStartLoc) {
-  return new (C) ObjCProtocolDecl(DC, Id, nameLoc, atStartLoc);
+                                           SourceLocation atStartLoc,
+                                           bool isForwardDecl) {
+  return new (C) ObjCProtocolDecl(DC, Id, nameLoc, atStartLoc, isForwardDecl);
 }
 
 ObjCProtocolDecl *ObjCProtocolDecl::lookupProtocolNamed(IdentifierInfo *Name) {

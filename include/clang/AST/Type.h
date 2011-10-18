@@ -1751,7 +1751,12 @@ public:
     /// like debuggers that don't know what type to give something.
     /// Only a small number of operations are valid on expressions of
     /// unknown type, most notably explicit casts.
-    UnknownAny
+    UnknownAny,
+
+    /// The type of a cast which, in ARC, would normally require a
+    /// __bridge, but which might be okay depending on the immediate
+    /// context.
+    ARCUnbridgedCast
   };
 
 public:
@@ -1785,11 +1790,16 @@ public:
     return getKind() >= Half && getKind() <= LongDouble;
   }
 
+  /// Determines whether the given kind corresponds to a placeholder type.
+  static bool isPlaceholderTypeKind(Kind K) {
+    return K >= Overload;
+  }
+
   /// Determines whether this type is a placeholder type, i.e. a type
   /// which cannot appear in arbitrary positions in a fully-formed
   /// expression.
   bool isPlaceholderType() const {
-    return getKind() >= Overload;
+    return isPlaceholderTypeKind(getKind());
   }
 
   static bool classof(const Type *T) { return T->getTypeClass() == Builtin; }
@@ -4770,6 +4780,7 @@ inline const BuiltinType *Type::getAsPlaceholderType() const {
 }
 
 inline bool Type::isSpecificPlaceholderType(unsigned K) const {
+  assert(BuiltinType::isPlaceholderTypeKind((BuiltinType::Kind) K));
   if (const BuiltinType *BT = dyn_cast<BuiltinType>(this))
     return (BT->getKind() == (BuiltinType::Kind) K);
   return false;
