@@ -48,7 +48,7 @@ void test_literals(id k1, id o1, id k2, id o2, id k3) {
 // CHECK-LITERALS: Punctuation: "," [33:21 - 33:22] UnexposedExpr=
 // CHECK-LITERALS: Identifier: "o2" [33:23 - 33:25] DeclRefExpr=o2:32:44
 // CHECK-LITERALS: Punctuation: "]" [33:26 - 33:27] UnexposedExpr=
-// CHECK-LITERALS: Punctuation: ";" [33:27 - 33:28] UnexposedStmt=
+// CHECK-LITERALS: Punctuation: ";" [33:27 - 33:28] DeclStmt=
 // CHECK-LITERALS: Identifier: "id" [34:3 - 34:5] TypeRef=id:0:0
 // CHECK-LITERALS: Identifier: "dict" [34:6 - 34:10] VarDecl=dict:34:6 (Definition)
 // CHECK-LITERALS: Punctuation: "=" [34:11 - 34:12] VarDecl=dict:34:6 (Definition)
@@ -65,8 +65,8 @@ void test_literals(id k1, id o1, id k2, id o2, id k3) {
 // CHECK-LITERALS: Identifier: "k3" [36:16 - 36:18] DeclRefExpr=k3:32:51
 // CHECK-LITERALS: Punctuation: ":" [36:19 - 36:20] UnexposedExpr=
 // CHECK-LITERALS: Punctuation: "@" [36:21 - 36:22] UnexposedExpr=
-// CHECK-LITERALS: Literal: "17" [36:22 - 36:24] UnexposedExpr=
+// CHECK-LITERALS: Literal: "17" [36:22 - 36:24] IntegerLiteral=
 // CHECK-LITERALS: Punctuation: "}" [36:25 - 36:26] UnexposedExpr=
-// CHECK-LITERALS: Punctuation: ";" [36:26 - 36:27] UnexposedStmt=
-// CHECK-LITERALS: Punctuation: "}" [37:1 - 37:2] UnexposedStmt=
+// CHECK-LITERALS: Punctuation: ";" [36:26 - 36:27] DeclStmt=
+// CHECK-LITERALS: Punctuation: "}" [37:1 - 37:2] CompoundStmt=
 

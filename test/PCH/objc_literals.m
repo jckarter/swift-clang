@@ -42,18 +42,18 @@ static inline void test_numeric_literals() {
   // CHECK-PRINT: id intlit = @17
   // CHECK-IR: {{call.*17}}
   id intlit = @17;
-  // CHECK-PRINT: id floatlit = @1.745
+  // CHECK-PRINT: id floatlit = @17.45
   // CHECK-IR: {{call.*1.745}}
   id floatlit = @17.45;
 }
 
 static inline void test_array_literals() {
-  // CHECK-PRINT: id arraylit = @[ @17, @1.745
+  // CHECK-PRINT: id arraylit = @[ @17, @17.45
   id arraylit = @[@17, @17.45];
 }
 
 static inline void test_dictionary_literals() {
-  // CHECK-PRINT: id dictlit = @{ @17 : {{@1.745[^,]*}}, @"hello" : @"world" };
+  // CHECK-PRINT: id dictlit = @{ @17 : {{@17.45[^,]*}}, @"hello" : @"world" };
   id dictlit = @{@17 : @17.45, @"hello" : @"world" };
 }
 
