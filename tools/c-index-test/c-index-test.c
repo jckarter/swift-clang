@@ -1620,7 +1620,7 @@ static void index_diagnostic(CXClientData client_data,
 
   str = clang_formatDiagnostic(diag, clang_defaultDiagnosticDisplayOptions());
   cstr = clang_getCString(str);
-  printf("diagnostic: %s", cstr);
+  printf("diagnostic: %s\n", cstr);
   clang_disposeString(str);  
 }
 
@@ -1920,6 +1920,11 @@ static void index_indexEntityReference(CXClientData client_data,
   printCXIndexEntity(info->parentEntity);
   printf(" | container: ");
   printCXIndexContainer(info->container);
+  printf(" | kind: ");
+  switch (info->kind) {
+  case CXIdxEntityRef_Direct: printf("direct"); break;
+  case CXIdxEntityRef_ImplicitProperty: printf("implicit prop"); break;
+  }
   printf("\n");
 }
 
