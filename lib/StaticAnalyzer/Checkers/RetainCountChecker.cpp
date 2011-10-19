@@ -23,7 +23,6 @@
 #include "clang/StaticAnalyzer/Core/BugReporter/BugType.h"
 #include "clang/StaticAnalyzer/Core/BugReporter/PathDiagnostic.h"
 #include "clang/StaticAnalyzer/Core/PathSensitive/CheckerContext.h"
-#include "clang/StaticAnalyzer/Core/PathSensitive/ExprEngineBuilders.h"
 #include "clang/StaticAnalyzer/Core/PathSensitive/ProgramStateTrait.h"
 #include "clang/StaticAnalyzer/Core/PathSensitive/SymbolManager.h"
 #include "clang/StaticAnalyzer/Core/PathSensitive/ObjCMessage.h"
@@ -54,12 +53,18 @@ public:
   GenericNodeBuilderRefCount(EndOfFunctionNodeBuilder &enb)
   : C(0), tag(0), ENB(&enb) {}
 
-  ExplodedNode *MakeNode(const ProgramState *state, ExplodedNode *Pred) {
-    if (C)
-      return C->generateNode(state, Pred, tag, false);
+  ExplodedNode *MakeNode(const ProgramState *state, ExplodedNode *Pred,
+                         bool MarkAsSink = false) {
+    if (C) {
+        return C->generateNode(state, Pred, tag, false, MarkAsSink);
+    }
 
     assert(ENB);
-    return ENB->generateNode(state, Pred);
+    ExplodedNode *N = ENB->generateNode(state, Pred);
+    if (MarkAsSink) 
+      N->markAsSink();
+    
+    return N;
   }
 };
 } // end anonymous namespace
@@ -3366,9 +3371,7 @@ RetainCountChecker::handleAutoreleaseCounts(const ProgramState *state,
   V = V ^ RefVal::ErrorOverAutorelease;
   state = state->set<RefBindings>(Sym, V);
 
-  if (ExplodedNode *N = Bd.MakeNode(state, Pred)) {
-    N->markAsSink();
-
+  if (ExplodedNode *N = Bd.MakeNode(state, Pred, true)) {
     llvm::SmallString<128> sbuf;
     llvm::raw_svector_ostream os(sbuf);
     os << "Object over-autoreleased: object was sent -autorelease ";

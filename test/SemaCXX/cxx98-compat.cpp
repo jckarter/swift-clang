@@ -170,3 +170,19 @@ struct BadFriends {
 };
 
 int n = {}; // expected-warning {{scalar initialized from empty initializer list is incompatible with C++98}}
+
+class PrivateMember {
+  struct ImPrivate {};
+};
+template<typename T> typename T::ImPrivate SFINAEAccessControl(T t) { // expected-warning {{substitution failure due to access control is incompatible with C++98}} expected-note {{while substituting deduced template arguments into function template 'SFINAEAccessControl' [with T = PrivateMember]}}
+  return typename T::ImPrivate();
+}
+int SFINAEAccessControl(...) { return 0; }
+int CheckSFINAEAccessControl = SFINAEAccessControl(PrivateMember());
+
+template<typename T>
+struct FriendRedefinition {
+  friend void Friend() {} // expected-warning {{friend function 'Friend' would be implicitly redefined in C++98}} expected-note {{previous}}
+};
+FriendRedefinition<int> FriendRedef1;
+FriendRedefinition<char> FriendRedef2; // expected-note {{requested here}}
