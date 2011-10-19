@@ -53,6 +53,7 @@ class ExplodedGraph;
 class ExplodedNode : public llvm::FoldingSetNode {
   friend class ExplodedGraph;
   friend class CoreEngine;
+  friend class NodeBuilder;
   friend class StmtNodeBuilder;
   friend class BranchNodeBuilder;
   friend class IndirectGotoNodeBuilder;
@@ -378,11 +379,6 @@ public:
 
   inline void Add(ExplodedNode *N) {
     if (N && !static_cast<ExplodedNode*>(N)->isSink()) Impl.insert(N);
-  }
-
-  ExplodedNodeSet &operator=(const ExplodedNodeSet &X) {
-    Impl = X.Impl;
-    return *this;
   }
 
   typedef ImplTy::iterator       iterator;
