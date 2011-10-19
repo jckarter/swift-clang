@@ -1934,7 +1934,8 @@ Sema::LookupInObjCMethod(LookupResult &Lookup, Scope *S,
   if (LookForIvars) {
     IFace = CurMethod->getClassInterface();
     ObjCInterfaceDecl *ClassDeclared;
-    if (ObjCIvarDecl *IV = IFace->lookupInstanceVariable(II, ClassDeclared)) {
+    ObjCIvarDecl *IV = 0;
+    if (IFace && (IV = IFace->lookupInstanceVariable(II, ClassDeclared))) {
       // Diagnose using an ivar in a class method.
       if (IsClassMethod)
         return ExprError(Diag(Loc, diag::error_ivar_use_in_class_method)
@@ -3424,6 +3425,7 @@ bool Sema::GatherArgumentsForCall(SourceLocation CallLoc,
     QualType ProtoArgType = Proto->getArgType(i);
 
     Expr *Arg;
+    ParmVarDecl *Param;
     if (ArgIx < NumArgs) {
       Arg = Args[ArgIx++];
 
@@ -3434,7 +3436,7 @@ bool Sema::GatherArgumentsForCall(SourceLocation CallLoc,
         return true;
 
       // Pass the argument
-      ParmVarDecl *Param = 0;
+      Param = 0;
       if (FDecl && i < FDecl->getNumParams())
         Param = FDecl->getParamDecl(i);
 
@@ -3456,7 +3458,7 @@ bool Sema::GatherArgumentsForCall(SourceLocation CallLoc,
 
       Arg = ArgE.takeAs<Expr>();
     } else {
-      ParmVarDecl *Param = FDecl->getParamDecl(i);
+      Param = FDecl->getParamDecl(i);
 
       ExprResult ArgExpr =
         BuildCXXDefaultArgExpr(CallLoc, FDecl, Param);
@@ -3470,6 +3472,9 @@ bool Sema::GatherArgumentsForCall(SourceLocation CallLoc,
     // check only triggers warnings when the argument isn't a more complex Expr
     // with its own checking, such as a BinaryOperator.
     CheckArrayAccess(Arg);
+
+    // Check for violations of C99 static array rules (C99 6.7.5.3p7).
+    CheckStaticArrayArgument(CallLoc, Param, Arg);
 
     AllArgs.push_back(Arg);
   }
@@ -3506,6 +3511,60 @@ bool Sema::GatherArgumentsForCall(SourceLocation CallLoc,
       CheckArrayAccess(Args[i]);
   }
   return Invalid;
+}
+
+static void DiagnoseCalleeStaticArrayParam(Sema &S, ParmVarDecl *PVD) {
+  TypeLoc TL = PVD->getTypeSourceInfo()->getTypeLoc();
+  if (ArrayTypeLoc *ATL = dyn_cast<ArrayTypeLoc>(&TL))
+    S.Diag(PVD->getLocation(), diag::note_callee_static_array)
+      << ATL->getLocalSourceRange();
+}
+
+/// CheckStaticArrayArgument - If the given argument corresponds to a static
+/// array parameter, check that it is non-null, and that if it is formed by
+/// array-to-pointer decay, the underlying array is sufficiently large.
+///
+/// C99 6.7.5.3p7: If the keyword static also appears within the [ and ] of the
+/// array type derivation, then for each call to the function, the value of the
+/// corresponding actual argument shall provide access to the first element of
+/// an array with at least as many elements as specified by the size expression.
+void
+Sema::CheckStaticArrayArgument(SourceLocation CallLoc,
+                               ParmVarDecl *Param,
+                               const Expr *ArgExpr) {
+  // Static array parameters are not supported in C++.
+  if (!Param || getLangOptions().CPlusPlus)
+    return;
+
+  QualType OrigTy = Param->getOriginalType();
+
+  const ArrayType *AT = Context.getAsArrayType(OrigTy);
+  if (!AT || AT->getSizeModifier() != ArrayType::Static)
+    return;
+
+  if (ArgExpr->isNullPointerConstant(Context,
+                                     Expr::NPC_NeverValueDependent)) {
+    Diag(CallLoc, diag::warn_null_arg) << ArgExpr->getSourceRange();
+    DiagnoseCalleeStaticArrayParam(*this, Param);
+    return;
+  }
+
+  const ConstantArrayType *CAT = dyn_cast<ConstantArrayType>(AT);
+  if (!CAT)
+    return;
+
+  const ConstantArrayType *ArgCAT =
+    Context.getAsConstantArrayType(ArgExpr->IgnoreParenImpCasts()->getType());
+  if (!ArgCAT)
+    return;
+
+  if (ArgCAT->getSize().ult(CAT->getSize())) {
+    Diag(CallLoc, diag::warn_static_array_too_small)
+      << ArgExpr->getSourceRange()
+      << (unsigned) ArgCAT->getSize().getZExtValue()
+      << (unsigned) CAT->getSize().getZExtValue();
+    DiagnoseCalleeStaticArrayParam(*this, Param);
+  }
 }
 
 /// Given a function expression of unknown-any type, try to rebuild it

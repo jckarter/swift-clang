@@ -27,6 +27,8 @@ class ProgramPointTag;
   
 namespace ento {
 
+class NodeBuilder;
+
 //===----------------------------------------------------------------------===//
 /// CoreEngine - Implements the core logic of the graph-reachability
 ///   analysis. It traverses the CFG and generates the ExplodedGraph.
@@ -37,6 +39,8 @@ namespace ento {
 ///   at the statement and block-level.  The analyses themselves must implement
 ///   any transfer function logic and the sub-expression level (if any).
 class CoreEngine {
+  friend class CommonNodeBuilder;
+  friend class NodeBuilder;
   friend class StmtNodeBuilder;
   friend class GenericNodeBuilderImpl;
   friend class BranchNodeBuilder;
@@ -159,59 +163,156 @@ public:
   BlocksAborted::const_iterator blocks_aborted_end() const {
     return blocksAborted.end();
   }
+
+  /// Enqueue the results of the node builder onto the work list.
+  void enqueue(NodeBuilder &NB);
 };
 
-class StmtNodeBuilder {
-  CoreEngine& Eng;
-  const CFGBlock &B;
-  const unsigned Idx;
-  ExplodedNode *Pred;
+struct NodeBuilderContext {
+  CoreEngine &Eng;
+  const CFGBlock *Block;
+  ExplodedNode *ContextPred;
+  NodeBuilderContext(CoreEngine &E, const CFGBlock *B, ExplodedNode *N)
+    : Eng(E), Block(B), ContextPred(N) { assert(B); assert(!N->isSink()); }
+};
 
+/// This is the simplest builder which generates nodes in the ExplodedGraph.
+class NodeBuilder {
+protected:
+  friend class StmtNodeBuilder;
+
+  ExplodedNode *BuilderPred;
+
+// TODO: Context should become protected after refactoring is done.
+public:
+  const NodeBuilderContext &C;
+protected:
+
+  /// Specifies if the builder results have been finalized. For example, if it
+  /// is set to false, autotransitions are yet to be generated.
+  bool Finalized;
+
+  bool HasGeneratedNodes;
+
+  /// \brief The frontier set - a set of nodes which need to be propagated after
+  /// the builder dies.
+  typedef llvm::SmallPtrSet<ExplodedNode*,5> DeferredTy;
+  DeferredTy Deferred;
+
+  BlockCounter getBlockCounter() const { return C.Eng.WList->getBlockCounter();}
+
+  /// Checkes if the results are ready.
+  virtual bool checkResults() {
+    if (!Finalized)
+      return false;
+    for (DeferredTy::iterator I=Deferred.begin(), E=Deferred.end(); I!=E; ++I)
+      if ((*I)->isSink())
+        return false;
+    return true;
+  }
+
+  /// Allow subclasses to finalize results before result_begin() is executed.
+  virtual void finalizeResults() {}
+  
+  ExplodedNode *generateNodeImpl(const ProgramPoint &PP,
+                                 const ProgramState *State,
+                                 ExplodedNode *Pred,
+                                 bool MarkAsSink = false);
+
+public:
+  NodeBuilder(NodeBuilderContext &Ctx, bool F = true)
+    : C(Ctx), Finalized(F), HasGeneratedNodes(false) {
+    Deferred.insert(C.ContextPred);
+  }
+
+  /// Create a new builder using the parent builder's context.
+  NodeBuilder(const NodeBuilder &ParentBldr, bool F = true)
+    : C(ParentBldr.C), Finalized(F), HasGeneratedNodes(false) {
+    Deferred.insert(C.ContextPred);
+  }
+
+  virtual ~NodeBuilder() {}
+
+  /// \brief Generates a node in the ExplodedGraph.
+  ///
+  /// When a node is marked as sink, the exploration from the node is stopped -
+  /// the node becomes the last node on the path.
+  ExplodedNode *generateNode(const ProgramPoint &PP,
+                             const ProgramState *State,
+                             ExplodedNode *Pred,
+                             bool MarkAsSink = false) {
+    return generateNodeImpl(PP, State, Pred, MarkAsSink);
+  }
+
+  // TODO: will get removed.
+  bool hasGeneratedNodes() const {
+    return HasGeneratedNodes;
+  }
+
+  typedef DeferredTy::iterator iterator;
+  /// \brief Iterators through the results frontier.
+  inline iterator results_begin() {
+    finalizeResults();
+    assert(checkResults());
+    return Deferred.begin();
+  }
+  inline iterator results_end() {
+    finalizeResults();
+    return Deferred.end();
+  }
+
+  /// \brief Return the CFGBlock associated with this builder.
+  const CFGBlock *getBlock() const { return C.Block; }
+
+  /// \brief Returns the number of times the current basic block has been
+  /// visited on the exploded graph path.
+  unsigned getCurrentBlockCount() const {
+    return getBlockCounter().getNumVisited(
+                    C.ContextPred->getLocationContext()->getCurrentStackFrame(),
+                    C.Block->getBlockID());
+  }
+};
+
+class CommonNodeBuilder {
+protected:
+  ExplodedNode *Pred;
+  CoreEngine& Eng;
+
+  CommonNodeBuilder(CoreEngine* E, ExplodedNode *P) : Pred(P), Eng(*E) {}
+  BlockCounter getBlockCounter() const { return Eng.WList->getBlockCounter(); }
+};
+
+
+class StmtNodeBuilder: public NodeBuilder {
+  const unsigned Idx;
 
 public:
   bool PurgingDeadSymbols;
   bool BuildSinks;
+  // TODO: Remove the flag. We should be able to use the method in the parent.
   bool hasGeneratedNode;
   ProgramPoint::Kind PointKind;
   const ProgramPointTag *Tag;
 
-  typedef llvm::SmallPtrSet<ExplodedNode*,5> DeferredTy;
-  DeferredTy Deferred;
-
   void GenerateAutoTransition(ExplodedNode *N);
 
 public:
-  StmtNodeBuilder(const CFGBlock *b,
-                  unsigned idx,
-                  ExplodedNode *N,
-                  CoreEngine* e);
+  StmtNodeBuilder(ExplodedNode *N, unsigned idx, NodeBuilderContext &Ctx);
 
   ~StmtNodeBuilder();
-
-  ExplodedNode *getPredecessor() const { return Pred; }
-
-  // FIXME: This should not be exposed.
-  WorkList *getWorkList() { return Eng.WList; }
-
-  BlockCounter getBlockCounter() const { return Eng.WList->getBlockCounter();}
-
-  unsigned getCurrentBlockCount() const {
-    return getBlockCounter().getNumVisited(
-                            Pred->getLocationContext()->getCurrentStackFrame(),
-                                           B.getBlockID());
-  }
-
+  
   ExplodedNode *generateNode(const Stmt *S,
                              const ProgramState *St,
                              ExplodedNode *Pred,
                              ProgramPoint::Kind K,
-                             const ProgramPointTag *tag = 0) {
-    hasGeneratedNode = true;
-
+                             const ProgramPointTag *tag = 0,
+                             bool MarkAsSink = false) {
     if (PurgingDeadSymbols)
       K = ProgramPoint::PostPurgeDeadSymbolsKind;
 
-    return generateNodeInternal(S, St, Pred, K, tag ? tag : Tag);
+    const ProgramPoint &L = ProgramPoint::getProgramPoint(S, K,
+                                  Pred->getLocationContext(), tag ? tag : Tag);
+    return generateNodeImpl(L, St, Pred, MarkAsSink);
   }
 
   ExplodedNode *generateNode(const Stmt *S,
@@ -224,32 +325,15 @@ public:
   ExplodedNode *generateNode(const ProgramPoint &PP,
                              const ProgramState *State,
                              ExplodedNode *Pred) {
-    hasGeneratedNode = true;
-    return generateNodeInternal(PP, State, Pred);
+    return generateNodeImpl(PP, State, Pred, false);
   }
-
-  ExplodedNode*
-  generateNodeInternal(const ProgramPoint &PP,
-                       const ProgramState *State,
-                       ExplodedNode *Pred);
-
-  ExplodedNode*
-  generateNodeInternal(const Stmt *S,
-                       const ProgramState *State,
-                       ExplodedNode *Pred,
-                       ProgramPoint::Kind K,
-                       const ProgramPointTag *tag = 0);
 
   /// getStmt - Return the current block-level expression associated with
   ///  this builder.
   const Stmt *getStmt() const { 
-    const CFGStmt *CS = B[Idx].getAs<CFGStmt>();
+    const CFGStmt *CS = (*C.Block)[Idx].getAs<CFGStmt>();
     return CS ? CS->getStmt() : 0;
   }
-
-  /// getBlock - Return the CFGBlock associated with the block-level expression
-  ///  of this builder.
-  const CFGBlock *getBlock() const { return &B; }
 
   unsigned getIndex() const { return Idx; }
 
@@ -276,43 +360,37 @@ public:
     BuildSinks = Tmp;
     return N;
   }
+
+  void importNodesFromBuilder(const NodeBuilder &NB) {
+    ExplodedNode *NBPred = const_cast<ExplodedNode*>(NB.C.ContextPred);
+    if (NB.hasGeneratedNodes()) {
+      Deferred.erase(NBPred);
+      Deferred.insert(NB.Deferred.begin(), NB.Deferred.end());
+    }
+  }
 };
 
-class BranchNodeBuilder {
-  CoreEngine& Eng;
-  const CFGBlock *Src;
+class BranchNodeBuilder: public NodeBuilder {
   const CFGBlock *DstT;
   const CFGBlock *DstF;
-  ExplodedNode *Pred;
 
-  typedef SmallVector<ExplodedNode*,3> DeferredTy;
-  DeferredTy Deferred;
-
-  bool GeneratedTrue;
-  bool GeneratedFalse;
   bool InFeasibleTrue;
   bool InFeasibleFalse;
 
 public:
-  BranchNodeBuilder(const CFGBlock *src, const CFGBlock *dstT, 
-                      const CFGBlock *dstF, ExplodedNode *pred, CoreEngine* e)
-  : Eng(*e), Src(src), DstT(dstT), DstF(dstF), Pred(pred),
-    GeneratedTrue(false), GeneratedFalse(false),
+  BranchNodeBuilder(NodeBuilderContext &C,
+                    const CFGBlock *dstT, const CFGBlock *dstF)
+  : NodeBuilder(C), DstT(dstT), DstF(dstF),
     InFeasibleTrue(!DstT), InFeasibleFalse(!DstF) {}
 
-  ~BranchNodeBuilder();
+  /// Create a new builder using the parent builder's context.
+  BranchNodeBuilder(BranchNodeBuilder &ParentBldr)
+  : NodeBuilder(ParentBldr), DstT(ParentBldr.DstT),
+    DstF(ParentBldr.DstF),
+    InFeasibleTrue(!DstT), InFeasibleFalse(!DstF) {}
 
-  ExplodedNode *getPredecessor() const { return Pred; }
-
-  const ExplodedGraph& getGraph() const { return *Eng.G; }
-
-  BlockCounter getBlockCounter() const { return Eng.WList->getBlockCounter();}
-
-  /// This function generates a new ExplodedNode but not a new
-  /// branch(block edge).
-  ExplodedNode *generateNode(const Stmt *Condition, const ProgramState *State);
-
-  ExplodedNode *generateNode(const ProgramState *State, bool branch);
+  ExplodedNode *generateNode(const ProgramState *State, bool branch,
+                             ExplodedNode *Pred);
 
   const CFGBlock *getTargetBlock(bool branch) const {
     return branch ? DstT : DstF;
@@ -320,17 +398,13 @@ public:
 
   void markInfeasible(bool branch) {
     if (branch)
-      InFeasibleTrue = GeneratedTrue = true;
+      InFeasibleTrue = true;
     else
-      InFeasibleFalse = GeneratedFalse = true;
+      InFeasibleFalse = true;
   }
 
   bool isFeasible(bool branch) {
     return branch ? !InFeasibleTrue : !InFeasibleFalse;
-  }
-
-  const ProgramState *getState() const {
-    return getPredecessor()->getState();
   }
 };
 
@@ -472,10 +546,8 @@ public:
   const PP_T &getProgramPoint() const { return cast<PP_T>(pp); }
 };
 
-class EndOfFunctionNodeBuilder {
-  CoreEngine &Eng;
+class EndOfFunctionNodeBuilder : public CommonNodeBuilder {
   const CFGBlock &B;
-  ExplodedNode *Pred;
   const ProgramPointTag *Tag;
 
 public:
@@ -484,7 +556,7 @@ public:
 public:
   EndOfFunctionNodeBuilder(const CFGBlock *b, ExplodedNode *N, CoreEngine* e,
                            const ProgramPointTag *tag = 0)
-    : Eng(*e), B(*b), Pred(N), Tag(tag), hasGeneratedNode(false) {}
+    : CommonNodeBuilder(e, N), B(*b), Tag(tag), hasGeneratedNode(false) {}
 
   ~EndOfFunctionNodeBuilder();
 
@@ -495,10 +567,6 @@ public:
   WorkList &getWorkList() { return *Eng.WList; }
 
   ExplodedNode *getPredecessor() const { return Pred; }
-
-  BlockCounter getBlockCounter() const {
-    return Eng.WList->getBlockCounter();
-  }
 
   unsigned getCurrentBlockCount() const {
     return getBlockCounter().getNumVisited(
