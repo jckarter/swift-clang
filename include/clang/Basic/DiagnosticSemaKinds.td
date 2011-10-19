@@ -808,6 +808,9 @@ def note_access_constrained_by_path : Note<
   " inheritance here">;
 def note_access_protected_restricted : Note<
   "object type %select{|%1 }0must derive from context type %2">;
+def warn_cxx98_compat_sfinae_access_control : Warning<
+  "substitution failure due to access control is incompatible with C++98">,
+  InGroup<CXX98Compat>, DefaultIgnore, NoSFINAE;
   
 // C++ name lookup
 def err_incomplete_nested_name_spec : Error<
@@ -2649,6 +2652,9 @@ def err_definition_of_explicitly_defaulted_member : Error<
 def err_redefinition_extern_inline : Error<
   "redefinition of a 'extern inline' function %0 is not supported in "
   "%select{C99 mode|C++}1">;
+def warn_cxx98_compat_friend_redefinition : Warning<
+  "friend function %0 would be implicitly redefined in C++98">,
+  InGroup<CXX98Compat>, DefaultIgnore;
 
 // This should eventually be an error.
 def warn_undefined_internal : Warning<

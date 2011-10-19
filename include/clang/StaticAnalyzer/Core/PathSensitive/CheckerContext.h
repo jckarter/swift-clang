@@ -24,34 +24,35 @@ namespace ento {
 
 class CheckerContext {
   ExplodedNodeSet &Dst;
-  StmtNodeBuilder &B;
   ExprEngine &Eng;
   ExplodedNode *Pred;
-  SaveAndRestore<bool> OldSink;
-  SaveOr OldHasGen;
   const ProgramPoint Location;
   const ProgramState *ST;
   const unsigned size;
+  // TODO: Use global context.
+  NodeBuilderContext Ctx;
+  NodeBuilder &NB;
 public:
   bool *respondsToCallback;
 public:
   CheckerContext(ExplodedNodeSet &dst,
-                 StmtNodeBuilder &builder,
+                 NodeBuilder &builder,
                  ExprEngine &eng,
                  ExplodedNode *pred,
                  const ProgramPoint &loc,
                  bool *respondsToCB = 0,
                  const ProgramState *st = 0)
     : Dst(dst),
-      B(builder),
       Eng(eng),
       Pred(pred),
-      OldSink(B.BuildSinks),
-      OldHasGen(B.hasGeneratedNode),
       Location(loc),
       ST(st),
       size(Dst.size()),
-      respondsToCallback(respondsToCB) {}
+      Ctx(builder.C.Eng, builder.getBlock(), pred),
+      NB(builder),
+      respondsToCallback(respondsToCB) {
+    assert(!(ST && ST != Pred->getState()));
+  }
 
   ~CheckerContext();
 
@@ -71,13 +72,12 @@ public:
     return Eng.getStoreManager();
   }
 
-  ExplodedNodeSet &getNodeSet() { return Dst; }
   ExplodedNode *&getPredecessor() { return Pred; }
   const ProgramState *getState() { return ST ? ST : Pred->getState(); }
 
   /// \brief Returns the number of times the current block has been visited
   /// along the analyzed path.
-  unsigned getCurrentBlockCount() {return B.getCurrentBlockCount();}
+  unsigned getCurrentBlockCount() {return NB.getCurrentBlockCount();}
 
   ASTContext &getASTContext() {
     return Eng.getContext();
@@ -114,10 +114,9 @@ public:
   ExplodedNode *generateNode(const ProgramState *state,
                              ExplodedNode *pred,
                              const ProgramPointTag *tag = 0,
-                             bool autoTransition = true) {
-    ExplodedNode *N = generateNodeImpl(state, false, pred, tag);
-    if (N && autoTransition)
-      addTransition(N);
+                             bool autoTransition = true,
+                             bool isSink = false) {
+    ExplodedNode *N = generateNodeImpl(state, isSink, pred, tag);
     return N;
   }
 
@@ -126,8 +125,6 @@ public:
                              bool autoTransition = true,
                              const ProgramPointTag *tag = 0) {
     ExplodedNode *N = generateNodeImpl(state, false, 0, tag);
-    if (N && autoTransition)
-      addTransition(N);
     return N;
   }
 
@@ -137,20 +134,13 @@ public:
     return generateNodeImpl(state ? state : getState(), true);
   }
 
-  void addTransition(ExplodedNode *node) {
-    Dst.Add(node);
-  }
-  
   void addTransition(const ProgramState *state,
                      const ProgramPointTag *tag = 0) {
     assert(state);
     // If the 'state' is not new, we need to check if the cached state 'ST'
     // is new.
-    if (state != getState() || (ST && ST != Pred->getState()))
-      // state is new or equals to ST.
+    if (state != getState())
       generateNode(state, true, tag);
-    else
-      Dst.Add(Pred);
   }
 
   void EmitReport(BugReport *R) {
@@ -167,11 +157,9 @@ private:
                                  ExplodedNode *pred = 0,
                                  const ProgramPointTag *tag = 0) {
 
-    ExplodedNode *node = B.generateNode(tag ? Location.withTag(tag) : Location,
+    ExplodedNode *node = NB.generateNode(tag ? Location.withTag(tag) : Location,
                                         state,
-                                        pred ? pred : Pred);
-    if (markAsSink && node)
-      node->markAsSink();
+                                        pred ? pred : Pred, markAsSink);
     return node;
   }
 };
