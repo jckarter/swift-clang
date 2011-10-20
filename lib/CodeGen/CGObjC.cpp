@@ -950,13 +950,12 @@ bool UseOptimizedSetter(CodeGenModule &CGM) {
   if (TargetPlatform.compare("macosx") ||
       TargetMinVersion.getMajor() <= 9)
     return false;
-  // FIXME. Somehow, minor is always 6 and subminor has correct value.
-  // When -triple x86_64-apple-darwin10.8.0 is specified.
-  unsigned subminor = 0;
-  if (llvm::Optional<unsigned> Subminor = TargetMinVersion.getSubminor())
-    subminor = *Subminor;
   
-  return (subminor >= 8);
+  unsigned minor = 0;
+  if (llvm::Optional<unsigned> Minor = TargetMinVersion.getMinor())
+    minor = *Minor;
+  
+  return (minor >= 8);
 }
 
 void
