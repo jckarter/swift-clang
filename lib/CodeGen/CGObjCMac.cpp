@@ -239,6 +239,41 @@ public:
     return CGM.CreateRuntimeFunction(FTy, "objc_setProperty");
   }
 
+  llvm::Constant *getOptimizedSetPropertyFn(bool atomic, bool copy) {
+    CodeGen::CodeGenTypes &Types = CGM.getTypes();
+    ASTContext &Ctx = CGM.getContext();
+    // void objc_setProperty_atomic(id self, SEL _cmd, 
+    //                              id newValue, ptrdiff_t offset);
+    // void objc_setProperty_nonatomic(id self, SEL _cmd, 
+    //                                 id newValue, ptrdiff_t offset);
+    // void objc_setProperty_atomic_copy(id self, SEL _cmd, 
+    //                                   id newValue, ptrdiff_t offset);
+    // void objc_setProperty_nonatomic_copy(id self, SEL _cmd, 
+    //                                      id newValue, ptrdiff_t offset);
+    
+    SmallVector<CanQualType,4> Params;
+    CanQualType IdType = Ctx.getCanonicalParamType(Ctx.getObjCIdType());
+    CanQualType SelType = Ctx.getCanonicalParamType(Ctx.getObjCSelType());
+    Params.push_back(IdType);
+    Params.push_back(SelType);
+    Params.push_back(IdType);
+    Params.push_back(Ctx.getPointerDiffType()->getCanonicalTypeUnqualified());
+    llvm::FunctionType *FTy =
+    Types.GetFunctionType(Types.getFunctionInfo(Ctx.VoidTy, Params,
+                                                FunctionType::ExtInfo()),
+                          false);
+    const char *name;
+    if (atomic && copy)
+      name = "objc_setProperty_atomic_copy";
+    else if (atomic && !copy)
+      name = "objc_setProperty_atomic";
+    else if (!atomic && copy)
+      name = "objc_setProperty_nonatomic_copy";
+    else
+      name = "objc_setProperty_nonatomic";
+      
+    return CGM.CreateRuntimeFunction(FTy, name);
+  }
   
   llvm::Constant *getCopyStructFn() {
     CodeGen::CodeGenTypes &Types = CGM.getTypes();
@@ -1021,6 +1056,8 @@ public:
 
   virtual llvm::Constant *GetPropertyGetFunction();
   virtual llvm::Constant *GetPropertySetFunction();
+  virtual llvm::Constant *GetOptimizedPropertySetFunction(bool atomic, 
+                                                          bool copy);
   virtual llvm::Constant *GetGetStructFunction();
   virtual llvm::Constant *GetSetStructFunction();
   virtual llvm::Constant *EnumerationMutationFunction();
@@ -1277,6 +1314,11 @@ public:
   }
   virtual llvm::Constant *GetPropertySetFunction() {
     return ObjCTypes.getSetPropertyFn();
+  }
+  
+  virtual llvm::Constant *GetOptimizedPropertySetFunction(bool atomic, 
+                                                          bool copy) {
+    return ObjCTypes.getOptimizedSetPropertyFn(atomic, copy);
   }
   
   virtual llvm::Constant *GetSetStructFunction() {
@@ -2548,6 +2590,11 @@ llvm::Constant *CGObjCMac::GetPropertyGetFunction() {
 
 llvm::Constant *CGObjCMac::GetPropertySetFunction() {
   return ObjCTypes.getSetPropertyFn();
+}
+
+llvm::Constant *CGObjCMac::GetOptimizedPropertySetFunction(bool atomic, 
+                                                           bool copy) {
+  return ObjCTypes.getOptimizedSetPropertyFn(atomic, copy);
 }
 
 llvm::Constant *CGObjCMac::GetGetStructFunction() {

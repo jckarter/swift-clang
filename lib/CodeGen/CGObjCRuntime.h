@@ -196,6 +196,10 @@ public:
   /// Return the runtime function for setting properties.
   virtual llvm::Constant *GetPropertySetFunction() = 0;
 
+  /// Return the runtime function for optimized setting properties.
+  virtual llvm::Constant *GetOptimizedPropertySetFunction(bool atomic, 
+                                                          bool copy) = 0;
+
   // API for atomic copying of qualified aggregates in getter.
   virtual llvm::Constant *GetGetStructFunction() = 0;
   // API for atomic copying of qualified aggregates in setter.

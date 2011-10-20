@@ -935,6 +935,30 @@ static bool hasTrivialSetExpr(const ObjCPropertyImplDecl *PID) {
   return false;
 }
 
+bool UseOptimizedSetter(CodeGenModule &CGM) {
+  if (CGM.getLangOptions().getGC() != LangOptions::NonGC)
+    return false;
+  const TargetInfo &Target = CGM.getContext().getTargetInfo();
+  StringRef TargetPlatform = Target.getPlatformName();
+  if (TargetPlatform.empty())
+    return false;
+  VersionTuple TargetMinVersion = Target.getPlatformMinVersion();
+  
+  if (!TargetPlatform.compare("ios") &&
+      TargetMinVersion.getMajor() >= 6)
+    return true;
+  if (TargetPlatform.compare("macosx") ||
+      TargetMinVersion.getMajor() <= 9)
+    return false;
+  // FIXME. Somehow, minor is always 6 and subminor has correct value.
+  // When -triple x86_64-apple-darwin10.8.0 is specified.
+  unsigned subminor = 0;
+  if (llvm::Optional<unsigned> Subminor = TargetMinVersion.getSubminor())
+    subminor = *Subminor;
+  
+  return (subminor >= 8);
+}
+
 void
 CodeGenFunction::generateObjCSetterBody(const ObjCImplementationDecl *classImpl,
                                         const ObjCPropertyImplDecl *propImpl) {
@@ -981,13 +1005,27 @@ CodeGenFunction::generateObjCSetterBody(const ObjCImplementationDecl *classImpl,
 
   case PropertyImplStrategy::GetSetProperty:
   case PropertyImplStrategy::SetPropertyAndExpressionGet: {
-    llvm::Value *setPropertyFn =
-      CGM.getObjCRuntime().GetPropertySetFunction();
-    if (!setPropertyFn) {
-      CGM.ErrorUnsupported(propImpl, "Obj-C setter requiring atomic copy");
-      return;
+  
+    llvm::Value *setOptimizedPropertyFn = 0;
+    llvm::Value *setPropertyFn = 0;
+    if (UseOptimizedSetter(CGM)) {
+      // 10.8 and iOS 6.0 code and GC is off
+      setOptimizedPropertyFn = 
+        CGM.getObjCRuntime().GetOptimizedPropertySetFunction(strategy.isAtomic(),
+                                                             strategy.isCopy());
+      if (!setOptimizedPropertyFn) {
+        CGM.ErrorUnsupported(propImpl, "Obj-C optimized setter - NYI");
+        return;
+      }
     }
-
+    else {
+      setPropertyFn = CGM.getObjCRuntime().GetPropertySetFunction();
+      if (!setPropertyFn) {
+        CGM.ErrorUnsupported(propImpl, "Obj-C setter requiring atomic copy");
+        return;
+      }
+    }
+   
     // Emit objc_setProperty((id) self, _cmd, offset, arg,
     //                       <is-atomic>, <is-copy>).
     llvm::Value *cmd =
@@ -1002,17 +1040,27 @@ CodeGenFunction::generateObjCSetterBody(const ObjCImplementationDecl *classImpl,
     CallArgList args;
     args.add(RValue::get(self), getContext().getObjCIdType());
     args.add(RValue::get(cmd), getContext().getObjCSelType());
-    args.add(RValue::get(ivarOffset), getContext().getPointerDiffType());
-    args.add(RValue::get(arg), getContext().getObjCIdType());
-    args.add(RValue::get(Builder.getInt1(strategy.isAtomic())),
-             getContext().BoolTy);
-    args.add(RValue::get(Builder.getInt1(strategy.isCopy())),
-             getContext().BoolTy);
-    // FIXME: We shouldn't need to get the function info here, the runtime
-    // already should have computed it to build the function.
-    EmitCall(getTypes().getFunctionInfo(getContext().VoidTy, args,
-                                        FunctionType::ExtInfo()),
-             setPropertyFn, ReturnValueSlot(), args);
+    if (setOptimizedPropertyFn) {
+      args.add(RValue::get(arg), getContext().getObjCIdType());
+      args.add(RValue::get(ivarOffset), getContext().getPointerDiffType());
+      EmitCall(getTypes().getFunctionInfo(getContext().VoidTy, args,
+                                          FunctionType::ExtInfo()),
+               setOptimizedPropertyFn, ReturnValueSlot(), args);
+    }
+    else {
+      args.add(RValue::get(ivarOffset), getContext().getPointerDiffType());
+      args.add(RValue::get(arg), getContext().getObjCIdType());
+      args.add(RValue::get(Builder.getInt1(strategy.isAtomic())),
+               getContext().BoolTy);
+      args.add(RValue::get(Builder.getInt1(strategy.isCopy())),
+               getContext().BoolTy);
+      // FIXME: We shouldn't need to get the function info here, the runtime
+      // already should have computed it to build the function.
+      EmitCall(getTypes().getFunctionInfo(getContext().VoidTy, args,
+                                          FunctionType::ExtInfo()),
+               setPropertyFn, ReturnValueSlot(), args);
+    }
+    
     return;
   }
 
