@@ -833,6 +833,9 @@ def err_incomplete_member_access : Error<
   "member access into incomplete type %0">;
 def err_incomplete_type : Error<
   "incomplete type %0 where a complete type is required">;
+def warn_cxx98_compat_enum_nested_name_spec : Warning<
+  "enumeration type in nested name specifier is incompatible with C++98">,
+  InGroup<CXX98Compat>, DefaultIgnore;
   
 // C++ class members
 def err_storageclass_invalid_for_member : Error<
@@ -897,6 +900,11 @@ def err_illegal_union_or_anon_struct_member : Error<
   "%select{anonymous struct|union}0 member %1 has a non-trivial "
   "%select{constructor|copy constructor|move constructor|copy assignment "
   "operator|move assignment operator|destructor}2">;
+def warn_cxx98_compat_nontrivial_union_or_anon_struct_member : Warning<
+  "%select{anonymous struct|union}0 member %1 with a non-trivial "
+  "%select{constructor|copy constructor|move constructor|copy assignment "
+  "operator|move assignment operator|destructor}2 is incompatible with C++98">,
+  InGroup<CXX98Compat>, DefaultIgnore;
 def note_nontrivial_has_virtual : Note<
   "because type %0 has a virtual %select{member function|base class}1">;
 def note_nontrivial_has_nontrivial : Note<
@@ -1095,6 +1103,14 @@ def err_temp_copy_deleted : Error<
   "of type %1 invokes deleted constructor">;
 def err_temp_copy_incomplete : Error<
   "copying a temporary object of incomplete type %0">;
+def warn_cxx98_compat_temp_copy : Warning<
+  "%select{copying variable|copying parameter|returning object|throwing "
+  "object|copying member subobject|copying array element|allocating object|"
+  "copying temporary|initializing base subobject|initializing vector element}1 "
+  "of type %2 when binding a reference to a temporary would %select{invoke "
+  "an inaccessible constructor|find no viable constructor|find ambiguous "
+  "constructors|invoke a deleted constructor}0 in C++98">,
+  InGroup<CXX98Compat>, DefaultIgnore;
 
 // C++11 decltype
 def err_cannot_determine_declared_type_of_overloaded_function : Error<
@@ -2980,9 +2996,12 @@ def ext_flexible_array_empty_aggregate_gnu : Extension<
 def ext_flexible_array_union_gnu : Extension<
   "flexible array member %0 in a union is a GNU extension">, InGroup<GNU>;
 
-let CategoryName = "Automatic Reference Counting Issue" in {
+let CategoryName = "ARC Issue" in {
 
 // ARC-mode diagnostics.
+
+let CategoryName = "ARC Weak References" in {
+
 def err_arc_weak_no_runtime : Error<
   "the current deployment target does not support automated __weak references">;
 def err_arc_unsupported_weak_class : Error<
@@ -2992,6 +3011,11 @@ def err_arc_weak_unavailable_assign : Error<
 def err_arc_convesion_of_weak_unavailable : Error<
   "%select{implicit conversion|cast}0 of weak-unavailable object of type %1 to"
   " a __weak object of type %2">;
+
+} // end "ARC Weak References" category
+
+let CategoryName = "ARC Restrictions" in {
+
 def err_arc_illegal_explicit_message : Error<
   "ARC forbids explicit message send of %0">;
 def err_arc_unused_init_message : Error<
@@ -3011,6 +3035,9 @@ def err_arc_illegal_selector : Error<
   "ARC forbids use of %0 in a @selector">;
 def err_arc_illegal_method_def : Error<
   "ARC forbids implementation of %0">;
+  
+} // end "ARC Restrictions" category
+  
 def err_arc_lost_method_convention : Error<
   "method was declared as %select{an 'alloc'|a 'copy'|an 'init'|a 'new'}0 "
   "method, but its implementation doesn't match because %select{"
@@ -3083,18 +3110,26 @@ def err_arc_collection_forward : Error<
 def err_arc_multiple_method_decl : Error< 
   "multiple methods named %0 found with mismatched result, "
   "parameter type or attributes">;
+
+let CategoryName = "ARC Retain Cycle" in {
+
 def warn_arc_retain_cycle : Warning<
   "capturing %0 strongly in this block is likely to lead to a retain cycle">,
   InGroup<ARCRetainCycles>;
 def note_arc_retain_cycle_owner : Note<
   "block will be retained by %select{the captured object|an object strongly "
   "retained by the captured object}0">;
+
+} // end "ARC Retain Cycle" category
+
 def note_nontrivial_objc_ownership : Note<
   "because type %0 has %select{no|no|__strong|__weak|__autoreleasing}1 "
   "ownership">;
 def warn_arc_object_memaccess : Warning<
   "%select{destination for|source of}0 this %1 call is a pointer to "
   "ownership-qualified type %2">, InGroup<ARCNonPodMemAccess>;
+
+let CategoryName = "ARC and @properties" in {
 
 def err_arc_strong_property_ownership : Error<
   "existing ivar %1 for strong property %0 may not be "
@@ -3105,9 +3140,14 @@ def err_arc_assign_property_ownership : Error<
 def err_arc_inconsistent_property_ownership : Error<
   "%select{|unsafe_unretained|strong|weak}1 property %0 may not also be "
   "declared %select{|__unsafe_unretained|__strong|__weak|__autoreleasing}2">;
+
+} // end "ARC and @properties" category
+
 def err_arc_atomic_ownership : Error<
   "cannot perform atomic operation on a pointer to type %0: type has "
   "non-trivial ownership">;
+
+let CategoryName = "ARC Casting Rules" in {
 
 def err_arc_bridge_cast_incompatible : Error<
   "incompatible types casting %0 to %1 with a %select{__bridge|"
@@ -3126,6 +3166,8 @@ def note_arc_bridge_transfer : Note<
   "use __bridge_transfer to transfer ownership of a +1 %0 into ARC">;
 def note_arc_bridge_retained : Note<
   "use __bridge_retained to make an ARC object available as a +1 %0">;
+
+} // ARC Casting category
 
 } // ARC category name
 
