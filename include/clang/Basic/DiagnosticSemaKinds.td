@@ -833,6 +833,9 @@ def err_incomplete_member_access : Error<
   "member access into incomplete type %0">;
 def err_incomplete_type : Error<
   "incomplete type %0 where a complete type is required">;
+def warn_cxx98_compat_enum_nested_name_spec : Warning<
+  "enumeration type in nested name specifier is incompatible with C++98">,
+  InGroup<CXX98Compat>, DefaultIgnore;
   
 // C++ class members
 def err_storageclass_invalid_for_member : Error<
@@ -897,6 +900,11 @@ def err_illegal_union_or_anon_struct_member : Error<
   "%select{anonymous struct|union}0 member %1 has a non-trivial "
   "%select{constructor|copy constructor|move constructor|copy assignment "
   "operator|move assignment operator|destructor}2">;
+def warn_cxx98_compat_nontrivial_union_or_anon_struct_member : Warning<
+  "%select{anonymous struct|union}0 member %1 with a non-trivial "
+  "%select{constructor|copy constructor|move constructor|copy assignment "
+  "operator|move assignment operator|destructor}2 is incompatible with C++98">,
+  InGroup<CXX98Compat>, DefaultIgnore;
 def note_nontrivial_has_virtual : Note<
   "because type %0 has a virtual %select{member function|base class}1">;
 def note_nontrivial_has_nontrivial : Note<
@@ -1095,6 +1103,14 @@ def err_temp_copy_deleted : Error<
   "of type %1 invokes deleted constructor">;
 def err_temp_copy_incomplete : Error<
   "copying a temporary object of incomplete type %0">;
+def warn_cxx98_compat_temp_copy : Warning<
+  "%select{copying variable|copying parameter|returning object|throwing "
+  "object|copying member subobject|copying array element|allocating object|"
+  "copying temporary|initializing base subobject|initializing vector element}1 "
+  "of type %2 when binding a reference to a temporary would %select{invoke "
+  "an inaccessible constructor|find no viable constructor|find ambiguous "
+  "constructors|invoke a deleted constructor}0 in C++98">,
+  InGroup<CXX98Compat>, DefaultIgnore;
 
 // C++11 decltype
 def err_cannot_determine_declared_type_of_overloaded_function : Error<
