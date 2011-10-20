@@ -815,7 +815,7 @@ class Cursor(Structure):
     The Cursor class represents a reference to an element within the AST. It
     acts as a kind of iterator.
     """
-    _fields_ = [("_kind_id", c_int), ("data", c_void_p * 3)]
+    _fields_ = [("_kind_id", c_int), ("xdata", c_int), ("data", c_void_p * 3)]
 
     def __eq__(self, other):
         return Cursor_eq(self, other)
@@ -969,7 +969,7 @@ class TypeKind(object):
     @staticmethod
     def from_id(id):
         if id >= len(TypeKind._kinds) or TypeKind._kinds[id] is None:
-            raise ValueError,'Unknown cursor kind'
+            raise ValueError,'Unknown type kind %d' % id
         return TypeKind._kinds[id]
 
     def __repr__(self):
@@ -1019,7 +1019,7 @@ TypeKind.OBJCINTERFACE = TypeKind(108)
 TypeKind.OBJCOBJECTPOINTER = TypeKind(109)
 TypeKind.FUNCTIONNOPROTO = TypeKind(110)
 TypeKind.FUNCTIONPROTO = TypeKind(111)
-
+TypeKind.CONSTANTARRAY = TypeKind(112)
 
 class Type(Structure):
     """
@@ -1090,6 +1090,18 @@ class Type(Structure):
         Retrieve the result type associated with a function type.
         """
         return Type_get_result(self)
+
+    def get_array_element_type(self):
+        """
+        Retrieve the type of the elements of the array type.
+        """
+        return Type_get_array_element(self)
+
+    def get_array_size(self):
+        """
+        Retrieve the size of the constant array.
+        """
+        return Type_get_array_size(self)
 
 ## CIndex Objects ##
 
@@ -1688,6 +1700,14 @@ Type_get_result.argtypes = [Type]
 Type_get_result.restype = Type
 Type_get_result.errcheck = Type.from_result
 
+Type_get_array_element = lib.clang_getArrayElementType
+Type_get_array_element.argtypes = [Type]
+Type_get_array_element.restype = Type
+Type_get_array_element.errcheck = Type.from_result
+
+Type_get_array_size = lib.clang_getArraySize
+Type_get_array_size.argtype = [Type]
+Type_get_array_size.restype = c_longlong
 
 # Index Functions
 Index_create = lib.clang_createIndex
