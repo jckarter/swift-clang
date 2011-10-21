@@ -6492,9 +6492,7 @@ Decl *Sema::ActOnAliasDeclaration(Scope *S,
   // Warn about shadowing the name of a template parameter.
   if (Previous.isSingleResult() &&
       Previous.getFoundDecl()->isTemplateParameter()) {
-    if (DiagnoseTemplateParameterShadow(Name.StartLocation,
-                                        Previous.getFoundDecl()))
-      Invalid = true;
+    DiagnoseTemplateParameterShadow(Name.StartLocation,Previous.getFoundDecl());
     Previous.clear();
   }
 
@@ -9585,6 +9583,7 @@ Decl *Sema::ActOnExceptionDeclarator(Scope *S, Declarator &D) {
     if (PrevDecl->isTemplateParameter()) {
       // Maybe we will complain about the shadowed template parameter.
       DiagnoseTemplateParameterShadow(D.getIdentifierLoc(), PrevDecl);
+      PrevDecl = 0;
     }
   }
 
@@ -9746,8 +9745,6 @@ Decl *Sema::ActOnTemplatedFriendTag(Scope *S, SourceLocation FriendLoc,
 
   if (Invalid) return 0;
 
-  assert(SS.isNotEmpty() && "valid templated tag with no SS and no direct?");
-
   bool isAllExplicitSpecializations = true;
   for (unsigned I = TempParamLists.size(); I-- > 0; ) {
     if (TempParamLists.get()[I]->size()) {
@@ -9762,6 +9759,18 @@ Decl *Sema::ActOnTemplatedFriendTag(Scope *S, SourceLocation FriendLoc,
   // about the template header and build an appropriate non-templated
   // friend.  TODO: for source fidelity, remember the headers.
   if (isAllExplicitSpecializations) {
+    if (SS.isEmpty()) {
+      bool Owned = false;
+      bool IsDependent = false;
+      return ActOnTag(S, TagSpec, TUK_Friend, TagLoc, SS, Name, NameLoc,
+                      Attr, AS_public, 
+                      /*ModulePrivateLoc=*/SourceLocation(),
+                      MultiTemplateParamsArg(), Owned, IsDependent, 
+                      /*ScopedEnum=*/false,
+                      /*ScopedEnumUsesClassTag=*/false,
+                      /*UnderlyingType=*/TypeResult());          
+    }
+    
     NestedNameSpecifierLoc QualifierLoc = SS.getWithLocInContext(Context);
     ElaboratedTypeKeyword Keyword
       = TypeWithKeyword::getKeywordForTagTypeKind(Kind);
@@ -9789,6 +9798,10 @@ Decl *Sema::ActOnTemplatedFriendTag(Scope *S, SourceLocation FriendLoc,
     CurContext->addDecl(Friend);
     return Friend;
   }
+  
+  assert(SS.isNotEmpty() && "valid templated tag with no SS and no direct?");
+  
+
 
   // Handle the case of a templated-scope friend class.  e.g.
   //   template <class T> class A<T>::B;
