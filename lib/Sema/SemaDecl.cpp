@@ -6592,11 +6592,16 @@ Decl *Sema::ActOnParamDeclarator(Scope *S, Declarator &D) {
   const DeclSpec &DS = D.getDeclSpec();
 
   // Verify C99 6.7.5.3p2: The only SCS allowed is 'register'.
+  // C++03 [dcl.stc]p2 also permits 'auto'.
   VarDecl::StorageClass StorageClass = SC_None;
   VarDecl::StorageClass StorageClassAsWritten = SC_None;
   if (DS.getStorageClassSpec() == DeclSpec::SCS_register) {
     StorageClass = SC_Register;
     StorageClassAsWritten = SC_Register;
+  } else if (getLangOptions().CPlusPlus &&
+             DS.getStorageClassSpec() == DeclSpec::SCS_auto) {
+    StorageClass = SC_Auto;
+    StorageClassAsWritten = SC_Auto;
   } else if (DS.getStorageClassSpec() != DeclSpec::SCS_unspecified) {
     Diag(DS.getStorageClassSpecLoc(),
          diag::err_invalid_storage_class_in_func_decl);
@@ -8416,16 +8421,25 @@ FieldDecl *Sema::HandleField(Scope *S, RecordDecl *Record,
       << 2;
   
   // Check to see if this name was declared as a member previously
+  NamedDecl *PrevDecl = 0;
   LookupResult Previous(*this, II, Loc, LookupMemberName, ForRedeclaration);
   LookupName(Previous, S);
-  assert((Previous.empty() || Previous.isOverloadedResult() || 
-          Previous.isSingleResult()) 
-    && "Lookup of member name should be either overloaded, single or null");
-
-  // If the name is overloaded then get any declaration else get the single 
-  // result
-  NamedDecl *PrevDecl = Previous.isOverloadedResult() ?
-    Previous.getRepresentativeDecl() : Previous.getAsSingle<NamedDecl>();
+  switch (Previous.getResultKind()) {
+    case LookupResult::Found:
+    case LookupResult::FoundUnresolvedValue:
+      PrevDecl = Previous.getAsSingle<NamedDecl>();
+      break;
+      
+    case LookupResult::FoundOverloaded:
+      PrevDecl = Previous.getRepresentativeDecl();
+      break;
+      
+    case LookupResult::NotFound:
+    case LookupResult::NotFoundInCurrentInstantiation:
+    case LookupResult::Ambiguous:
+      break;
+  }
+  Previous.suppressDiagnostics();
 
   if (PrevDecl && PrevDecl->isTemplateParameter()) {
     // Maybe we will complain about the shadowed template parameter.
@@ -9303,7 +9317,29 @@ void Sema::ActOnFields(Scope* S,
       // FIXME. Class extension does not have a LocEnd field.
       // CDecl->setLocEnd(RBrac);
       // Add ivar's to class extension's DeclContext.
+      // Diagnose redeclaration of private ivars.
+      ObjCInterfaceDecl *IDecl = CDecl->getClassInterface();
       for (unsigned i = 0, e = RecFields.size(); i != e; ++i) {
+        if (IDecl) {
+          if (const ObjCIvarDecl *ClsIvar = 
+              IDecl->getIvarDecl(ClsFields[i]->getIdentifier())) {
+            Diag(ClsFields[i]->getLocation(), 
+                 diag::err_duplicate_ivar_declaration); 
+            Diag(ClsIvar->getLocation(), diag::note_previous_definition);
+            continue;
+          }
+          for (const ObjCCategoryDecl *ClsExtDecl = 
+                IDecl->getFirstClassExtension();
+               ClsExtDecl; ClsExtDecl = ClsExtDecl->getNextClassExtension()) {
+            if (const ObjCIvarDecl *ClsExtIvar = 
+                ClsExtDecl->getIvarDecl(ClsFields[i]->getIdentifier())) {
+              Diag(ClsFields[i]->getLocation(), 
+                   diag::err_duplicate_ivar_declaration); 
+              Diag(ClsExtIvar->getLocation(), diag::note_previous_definition);
+              continue;
+            }
+          }
+        }
         ClsFields[i]->setLexicalDeclContext(CDecl);
         CDecl->addDecl(ClsFields[i]);
       }
