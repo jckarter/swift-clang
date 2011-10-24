@@ -382,10 +382,12 @@ static ExprResult CheckObjCCollectionLiteralElement(Sema &S, Expr *Element,
     if (isa<IntegerLiteral>(OrigElement) || 
         isa<CharacterLiteral>(OrigElement) ||
         isa<FloatingLiteral>(OrigElement) ||
+        isa<ObjCBoolLiteralExpr>(OrigElement) ||
         isa<CXXBoolLiteralExpr>(OrigElement)) {
       if (getNSNumberFactoryMethodKind(OrigElement->getType())) {
         int Which = isa<CharacterLiteral>(OrigElement) ? 1
-                  : isa<CXXBoolLiteralExpr>(OrigElement) ? 2
+                  : (isa<CXXBoolLiteralExpr>(OrigElement) ||
+                     isa<ObjCBoolLiteralExpr>(OrigElement)) ? 2
                   : 3;
         
         S.Diag(OrigElement->getLocStart(), diag::err_box_literal_collection)
