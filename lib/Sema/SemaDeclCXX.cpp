@@ -1635,6 +1635,12 @@ Sema::ActOnCXXInClassMemberInitializer(Decl *D, SourceLocation EqualLoc,
     return;
   }
 
+  if (DiagnoseUnexpandedParameterPack(InitExpr, UPPC_Initializer)) {
+    FD->setInvalidDecl();
+    FD->removeInClassInitializer();
+    return;
+  }
+
   ExprResult Init = InitExpr;
   if (!FD->getType()->isDependentType() && !InitExpr->isTypeDependent()) {
     // FIXME: if there is no EqualLoc, this is list-initialization.
@@ -1778,28 +1784,17 @@ Sema::BuildMemInitializer(Decl *ConstructorD,
   //   using a qualified name. ]
   if (!SS.getScopeRep() && !TemplateTypeTy) {
     // Look for a member, first.
-    FieldDecl *Member = 0;
     DeclContext::lookup_result Result
       = ClassDecl->lookup(MemberOrBase);
     if (Result.first != Result.second) {
-      Member = dyn_cast<FieldDecl>(*Result.first);
-
-      if (Member) {
+      ValueDecl *Member;
+      if ((Member = dyn_cast<FieldDecl>(*Result.first)) ||
+          (Member = dyn_cast<IndirectFieldDecl>(*Result.first))) {
         if (EllipsisLoc.isValid())
           Diag(EllipsisLoc, diag::err_pack_expansion_member_init)
             << MemberOrBase << SourceRange(IdLoc, Args.getEndLoc());
 
         return BuildMemberInitializer(Member, Args, IdLoc);
-      }
-
-      // Handle anonymous union case.
-      if (IndirectFieldDecl* IndirectField
-            = dyn_cast<IndirectFieldDecl>(*Result.first)) {
-        if (EllipsisLoc.isValid())
-          Diag(EllipsisLoc, diag::err_pack_expansion_member_init)
-            << MemberOrBase << SourceRange(IdLoc, Args.getEndLoc());
-
-         return BuildMemberInitializer(IndirectField, Args, IdLoc);
       }
     }
   }
@@ -2041,6 +2036,9 @@ Sema::BuildMemberInitializer(ValueDecl *Member,
   IndirectFieldDecl *IndirectMember = dyn_cast<IndirectFieldDecl>(Member);
   assert((DirectMember || IndirectMember) &&
          "Member must be a FieldDecl or IndirectFieldDecl");
+
+  if (Args.DiagnoseUnexpandedParameterPack(*this))
+    return true;
 
   if (Member->isInvalidDecl())
     return true;

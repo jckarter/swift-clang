@@ -1651,7 +1651,7 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
   if (const char *pwd = ::getenv("PWD")) {
     // GCC also verifies that stat(pwd) and stat(".") have the same inode
     // number. Not doing those because stats are slow, but we could.
-    if (pwd[0] == '/') {
+    if (llvm::sys::path::is_absolute(pwd)) {
       std::string CompDir = pwd;
       CmdArgs.push_back("-fdebug-compilation-dir");
       CmdArgs.push_back(Args.MakeArgString(CompDir));
@@ -1875,8 +1875,12 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
     CmdArgs.push_back("-fms-extensions");
 
   // -fms-compatibility=0 is default.
-  if (Args.hasFlag(options::OPT_fms_compatibility, options::OPT_fno_ms_compatibility,
-                   getToolChain().getTriple().getOS() == llvm::Triple::Win32))
+  if (Args.hasFlag(options::OPT_fms_compatibility, 
+                   options::OPT_fno_ms_compatibility,
+                   (getToolChain().getTriple().getOS() == llvm::Triple::Win32 &&
+                    Args.hasFlag(options::OPT_fms_extensions, 
+                                 options::OPT_fno_ms_extensions,
+                                 true))))
     CmdArgs.push_back("-fms-compatibility");
 
   // -fmsc-version=1300 is default.
