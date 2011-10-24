@@ -168,6 +168,7 @@ namespace  {
     void VisitObjCProtocolExpr(ObjCProtocolExpr *Node);
     void VisitObjCPropertyRefExpr(ObjCPropertyRefExpr *Node);
     void VisitObjCIvarRefExpr(ObjCIvarRefExpr *Node);
+    void VisitObjCBoolLiteralExpr(ObjCBoolLiteralExpr *Node);
   };
 }
 
@@ -667,6 +668,11 @@ void StmtDumper::VisitObjCPropertyRefExpr(ObjCPropertyRefExpr *Node) {
 
   if (Node->isSuperReceiver())
     OS << " super";
+}
+
+void StmtDumper::VisitObjCBoolLiteralExpr(ObjCBoolLiteralExpr *Node) {
+  DumpExpr(Node);
+  OS << " " << (Node->getValue() ? "__objc_yes" : "__objc_no");
 }
 
 //===----------------------------------------------------------------------===//

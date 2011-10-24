@@ -576,6 +576,7 @@ void ExprEngine::Visit(const Stmt *S, ExplodedNode *Pred,
     case Stmt::IntegerLiteralClass:
     case Stmt::CharacterLiteralClass:
     case Stmt::CXXBoolLiteralExprClass:
+    case Stmt::ObjCBoolLiteralExprClass:
     case Stmt::FloatingLiteralClass:
     case Stmt::SizeOfPackExprClass:
     case Stmt::CXXNullPtrLiteralExprClass:

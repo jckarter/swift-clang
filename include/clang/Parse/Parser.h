@@ -1305,6 +1305,8 @@ private:
   ExprResult ParseStringLiteralExpression();
 
   ExprResult ParseGenericSelectionExpression();
+  
+  ExprResult ParseObjCBoolLiteral();
 
   //===--------------------------------------------------------------------===//
   // C++ Expressions

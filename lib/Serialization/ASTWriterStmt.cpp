@@ -961,6 +961,13 @@ void ASTStmtWriter::VisitObjCAtThrowStmt(ObjCAtThrowStmt *S) {
   Code = serialization::STMT_OBJC_AT_THROW;
 }
 
+void ASTStmtWriter::VisitObjCBoolLiteralExpr(ObjCBoolLiteralExpr *E) {
+  VisitExpr(E);
+  Record.push_back(E->getValue());
+  Writer.AddSourceLocation(E->getLocation(), Record);
+  Code = serialization::EXPR_OBJC_BOOL_LITERAL;
+}
+
 //===----------------------------------------------------------------------===//
 // C++ Expressions and Statements.
 //===----------------------------------------------------------------------===//

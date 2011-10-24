@@ -177,6 +177,9 @@ public:
   Value *VisitCharacterLiteral(const CharacterLiteral *E) {
     return llvm::ConstantInt::get(ConvertType(E->getType()), E->getValue());
   }
+  Value *VisitObjCBoolLiteralExpr(const ObjCBoolLiteralExpr *E) {
+    return llvm::ConstantInt::get(ConvertType(E->getType()), E->getValue());
+  }
   Value *VisitCXXBoolLiteralExpr(const CXXBoolLiteralExpr *E) {
     return llvm::ConstantInt::get(ConvertType(E->getType()), E->getValue());
   }

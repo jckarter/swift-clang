@@ -258,6 +258,9 @@ KEYWORD(_Generic                    , KEYALL)
 KEYWORD(_Imaginary                  , KEYALL)
 KEYWORD(_Static_assert              , KEYALL)
 KEYWORD(__func__                    , KEYALL)
+KEYWORD(__objc_yes                  , KEYALL)
+KEYWORD(__objc_no                   , KEYALL)
+
 
 // C++ 2.11p1: Keywords.
 KEYWORD(asm                         , KEYCXX|KEYGNU)
@@ -548,9 +551,6 @@ OBJC2_AT_KEYWORD(required)
 OBJC2_AT_KEYWORD(optional)
 OBJC2_AT_KEYWORD(synthesize)
 OBJC2_AT_KEYWORD(dynamic)
-
-OBJC2_AT_KEYWORD(__yes)
-OBJC2_AT_KEYWORD(__no)
 
 // TODO: What to do about context-sensitive keywords like:
 //       bycopy/byref/in/inout/oneway/out?

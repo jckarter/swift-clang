@@ -997,6 +997,12 @@ void ASTStmtReader::VisitObjCAtThrowStmt(ObjCAtThrowStmt *S) {
   S->setThrowLoc(ReadSourceLocation(Record, Idx));
 }
 
+void ASTStmtReader::VisitObjCBoolLiteralExpr(ObjCBoolLiteralExpr *E) {
+  VisitExpr(E);
+  E->setValue(Record[Idx++]);
+  E->setLocation(ReadSourceLocation(Record, Idx));
+}
+
 //===----------------------------------------------------------------------===//
 // C++ Expressions and Statements
 //===----------------------------------------------------------------------===//
@@ -1863,6 +1869,9 @@ Stmt *ASTReader::ReadStmtFromStream(Module &F) {
       break;
     case STMT_OBJC_AUTORELEASE_POOL:
       S = new (Context) ObjCAutoreleasePoolStmt(Empty);
+      break;
+    case EXPR_OBJC_BOOL_LITERAL:
+      S = new (Context) ObjCBoolLiteralExpr(Empty);
       break;
     case STMT_SEH_EXCEPT:
       S = new (Context) SEHExceptStmt(Empty);

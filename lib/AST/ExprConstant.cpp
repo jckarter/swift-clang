@@ -1081,6 +1081,10 @@ public:
     return Success(E->getValue(), E);
   }
 
+  bool VisitObjCBoolLiteralExpr(const ObjCBoolLiteralExpr *E) {
+    return Success(E->getValue(), E);
+  }
+    
   // Note, GNU defines __null as an integer, not a pointer.
   bool VisitGNUNullExpr(const GNUNullExpr *E) {
     return ValueInitialization(E);
@@ -2925,6 +2929,7 @@ static ICEDiag CheckICE(const Expr* E, ASTContext &Ctx) {
     return CheckICE(cast<GenericSelectionExpr>(E)->getResultExpr(), Ctx);
   case Expr::IntegerLiteralClass:
   case Expr::CharacterLiteralClass:
+  case Expr::ObjCBoolLiteralExprClass:
   case Expr::CXXBoolLiteralExprClass:
   case Expr::CXXScalarValueInitExprClass:
   case Expr::UnaryTypeTraitExprClass:

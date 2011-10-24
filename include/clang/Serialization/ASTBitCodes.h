@@ -1023,6 +1023,8 @@ namespace clang {
       STMT_OBJC_AT_THROW,
       /// \brief An ObjCAutoreleasePoolStmt record.
       STMT_OBJC_AUTORELEASE_POOL,
+      /// \brief A ObjCBoolLiteralExpr record.
+      EXPR_OBJC_BOOL_LITERAL,
 
       // C++
       

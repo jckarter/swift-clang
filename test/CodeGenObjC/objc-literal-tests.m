@@ -49,12 +49,9 @@ int main() {
   NSNumber *fortyTwoLongLong = @42ll;
   NSNumber *piFloat = @3.141592654f;
   NSNumber *piDouble = @3.1415926535;
-  NSNumber *yesNumber = @__yes;
-  NSNumber *noNumber = @__no;
-#ifdef __cplusplus
-  NSNumber *trueNumber = @__yes;
-  NSNumber *falseNumber = @__no;
-#endif
+  NSNumber *yesNumber = @__objc_yes;
+  NSNumber *noNumber = @__objc_no;
 NSDictionary *dictionary = @{@"name" : NSUserName(), 
                              @"date" : [NSDate date] }; 
+  return __objc_yes == __objc_no;
 }

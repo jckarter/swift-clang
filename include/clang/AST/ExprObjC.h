@@ -57,6 +57,36 @@ public:
   child_range children() { return child_range(&String, &String+1); }
 };
 
+/// ObjCBoolLiteralExpr - Objective-C Boolean Literal.
+///
+class ObjCBoolLiteralExpr : public Expr {
+  bool Value;
+  SourceLocation Loc;
+public:
+  ObjCBoolLiteralExpr(bool val, QualType Ty, SourceLocation l) :
+  Expr(ObjCBoolLiteralExprClass, Ty, VK_RValue, OK_Ordinary, false, false,
+       false, false), Value(val), Loc(l) {}
+    
+  explicit ObjCBoolLiteralExpr(EmptyShell Empty)
+  : Expr(ObjCBoolLiteralExprClass, Empty) { }
+    
+  bool getValue() const { return Value; }
+  void setValue(bool V) { Value = V; }
+    
+  SourceRange getSourceRange() const { return SourceRange(Loc); }
+    
+  SourceLocation getLocation() const { return Loc; }
+  void setLocation(SourceLocation L) { Loc = L; }
+    
+  static bool classof(const Stmt *T) {
+    return T->getStmtClass() == ObjCBoolLiteralExprClass;
+  }
+  static bool classof(const ObjCBoolLiteralExpr *) { return true; }
+    
+  // Iterators
+  child_range children() { return child_range(); }
+};
+
 /// ObjCNumericLiteral - used for objective-c numeric literals;
 /// as in: @42 or @true (c++/objc++) or @__yes (c/objc)
 class ObjCNumericLiteral : public Expr {

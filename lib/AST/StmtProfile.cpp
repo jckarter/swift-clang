@@ -994,6 +994,11 @@ void StmtProfiler::VisitObjCIsaExpr(const ObjCIsaExpr *S) {
   ID.AddBoolean(S->isArrow());
 }
 
+void StmtProfiler::VisitObjCBoolLiteralExpr(const ObjCBoolLiteralExpr *S) {
+  VisitExpr(S);
+  ID.AddBoolean(S->getValue());
+}
+
 void StmtProfiler::VisitObjCIndirectCopyRestoreExpr(
     const ObjCIndirectCopyRestoreExpr *S) {
   VisitExpr(S);

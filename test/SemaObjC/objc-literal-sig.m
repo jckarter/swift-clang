@@ -34,7 +34,7 @@ typedef unsigned char BOOL;
 @end
 
 void test_sig() {
-  (void)@__yes; // expected-error{{literal construction method 'numberWithBool:' has incompatible signature}}
+  (void)@__objc_yes; // expected-error{{literal construction method 'numberWithBool:' has incompatible signature}}
   id array = @[ @17 ]; // expected-error{{literal construction method 'arrayWithObjects:count:' has incompatible signature}}
   id dict = @{ @"hello" : @17 }; // expected-error{{literal construction method 'dictionaryWithObjects:forKeys:count:' has incompatible signature}}
 }

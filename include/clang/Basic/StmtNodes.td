@@ -140,6 +140,7 @@ def ObjCIvarRefExpr : DStmt<Expr>;
 def ObjCPropertyRefExpr : DStmt<Expr>;
 def ObjCIsaExpr : DStmt<Expr>;
 def ObjCIndirectCopyRestoreExpr : DStmt<Expr>;
+def ObjCBoolLiteralExpr : DStmt<Expr>;
 
 // Obj-C ARC Expressions.
 def ObjCBridgedCastExpr : DStmt<ExplicitCastExpr>;

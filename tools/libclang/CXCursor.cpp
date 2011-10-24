@@ -387,7 +387,11 @@ CXCursor cxcursor::MakeCXCursor(Stmt *S, Decl *Parent, CXTranslationUnit TU,
   case Stmt::ObjCProtocolExprClass:
     K = CXCursor_ObjCProtocolExpr;
     break;
-
+      
+  case Stmt::ObjCBoolLiteralExprClass:
+    K = CXCursor_ObjCBoolLiteralExpr;
+    break;
+      
   case Stmt::ObjCBridgedCastExprClass:
     K = CXCursor_ObjCBridgedCastExpr;
     break;

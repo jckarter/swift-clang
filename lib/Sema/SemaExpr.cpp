@@ -10134,3 +10134,12 @@ bool Sema::CheckCaseExpression(Expr *E) {
     return E->getType()->isIntegralOrEnumerationType();
   return false;
 }
+
+/// ActOnObjCBoolLiteral - Parse {__objc_yes,__objc_no} literals.
+ExprResult
+Sema::ActOnObjCBoolLiteral(SourceLocation OpLoc, tok::TokenKind Kind) {
+  assert((Kind == tok::kw___objc_yes || Kind == tok::kw___objc_no) &&
+         "Unknown Objective-C Boolean value!");
+  return Owned(new (Context) CXXBoolLiteralExpr(Kind == tok::kw___objc_yes,
+                                                Context.SignedCharTy, OpLoc));
+}

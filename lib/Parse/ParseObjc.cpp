@@ -1935,8 +1935,10 @@ ExprResult Parser::ParseObjCAtExpression(SourceLocation AtLoc) {
     return ParsePostfixExpressionSuffix(ParseObjCNumericLiteral(AtLoc));
 
   case tok::kw_true:  // Objective-C++, etc.
+  case tok::kw___objc_yes: // c/c++/objc/objc++ __objc_yes
     return ParsePostfixExpressionSuffix(ParseObjCBooleanLiteral(AtLoc, true));
   case tok::kw_false: // Objective-C++, etc.
+  case tok::kw___objc_no: // c/c++/objc/objc++ __objc_no
     return ParsePostfixExpressionSuffix(ParseObjCBooleanLiteral(AtLoc, false));
     
   case tok::l_square:
@@ -1958,12 +1960,6 @@ ExprResult Parser::ParseObjCAtExpression(SourceLocation AtLoc) {
       return ParsePostfixExpressionSuffix(ParseObjCProtocolExpression(AtLoc));
     case tok::objc_selector:
       return ParsePostfixExpressionSuffix(ParseObjCSelectorExpression(AtLoc));
-    case tok::objc___yes:
-        return ParsePostfixExpressionSuffix(ParseObjCBooleanLiteral(AtLoc, 
-                                                                    true));
-    case tok::objc___no:
-        return ParsePostfixExpressionSuffix(ParseObjCBooleanLiteral(AtLoc,
-                                                                    false));
     default:
       return ExprError(Diag(AtLoc, diag::err_unexpected_at));
     }
@@ -2433,7 +2429,7 @@ ExprResult Parser::ParseObjCStringLiteral(SourceLocation AtLoc) {
 /// ParseObjCBooleanLiteral -
 /// objc-scalar-literal : '@' boolean-keyword
 ///                        ;
-/// boolean-keyword: 'true' | 'false' | '__yes' | '__no'
+/// boolean-keyword: 'true' | 'false' | '__objc_yes' | '__objc_no'
 ///                        ;
 ExprResult Parser::ParseObjCBooleanLiteral(SourceLocation AtLoc, 
                                            bool ArgValue) {
