@@ -3109,140 +3109,6 @@ namespace {
   }
 }
 
-
-namespace {
-  class SystemZTargetInfo : public TargetInfo {
-    static const char * const GCCRegNames[];
-  public:
-    SystemZTargetInfo(const std::string& triple) : TargetInfo(triple) {
-      TLSSupported = false;
-      IntWidth = IntAlign = 32;
-      LongWidth = LongLongWidth = LongAlign = LongLongAlign = 64;
-      PointerWidth = PointerAlign = 64;
-      DescriptionString = "E-p:64:64:64-i8:8:16-i16:16:16-i32:32:32-"
-      "i64:64:64-f32:32:32-f64:64:64-f128:128:128-a0:16:16-n32:64";
-   }
-    virtual void getTargetDefines(const LangOptions &Opts,
-                                  MacroBuilder &Builder) const {
-      Builder.defineMacro("__s390__");
-      Builder.defineMacro("__s390x__");
-    }
-    virtual void getTargetBuiltins(const Builtin::Info *&Records,
-                                   unsigned &NumRecords) const {
-      // FIXME: Implement.
-      Records = 0;
-      NumRecords = 0;
-    }
-
-    virtual void getGCCRegNames(const char * const *&Names,
-                                unsigned &NumNames) const;
-    virtual void getGCCRegAliases(const GCCRegAlias *&Aliases,
-                                  unsigned &NumAliases) const {
-      // No aliases.
-      Aliases = 0;
-      NumAliases = 0;
-    }
-    virtual bool validateAsmConstraint(const char *&Name,
-                                       TargetInfo::ConstraintInfo &info) const {
-      // FIXME: implement
-      return true;
-    }
-    virtual const char *getClobbers() const {
-      // FIXME: Is this really right?
-      return "";
-    }
-    virtual const char *getVAListDeclaration() const {
-      // FIXME: implement
-      return "typedef char* __builtin_va_list;";
-   }
-  };
-
-  const char * const SystemZTargetInfo::GCCRegNames[] = {
-    "r0", "r1", "r2", "r3", "r4", "r5", "r6", "r7",
-    "r8", "r9", "r10", "r11", "r12", "r13", "r14", "r15"
-  };
-
-  void SystemZTargetInfo::getGCCRegNames(const char * const *&Names,
-                                         unsigned &NumNames) const {
-    Names = GCCRegNames;
-    NumNames = llvm::array_lengthof(GCCRegNames);
-  }
-}
-
-namespace {
-  class BlackfinTargetInfo : public TargetInfo {
-    static const char * const GCCRegNames[];
-  public:
-    BlackfinTargetInfo(const std::string& triple) : TargetInfo(triple) {
-      TLSSupported = false;
-      DoubleAlign = 32;
-      LongLongAlign = 32;
-      LongDoubleAlign = 32;
-      DescriptionString = "e-p:32:32-i64:32-f64:32-n32";
-    }
-
-    virtual void getTargetDefines(const LangOptions &Opts,
-                                  MacroBuilder &Builder) const {
-      DefineStd(Builder, "bfin", Opts);
-      DefineStd(Builder, "BFIN", Opts);
-      Builder.defineMacro("__ADSPBLACKFIN__");
-      // FIXME: This one is really dependent on -mcpu
-      Builder.defineMacro("__ADSPLPBLACKFIN__");
-      // FIXME: Add cpu-dependent defines and __SILICON_REVISION__
-    }
-
-    virtual void getTargetBuiltins(const Builtin::Info *&Records,
-                                   unsigned &NumRecords) const {
-      // FIXME: Implement.
-      Records = 0;
-      NumRecords = 0;
-    }
-
-    virtual void getGCCRegNames(const char * const *&Names,
-                                unsigned &NumNames) const;
-
-    virtual void getGCCRegAliases(const GCCRegAlias *&Aliases,
-                                  unsigned &NumAliases) const {
-      // No aliases.
-      Aliases = 0;
-      NumAliases = 0;
-    }
-
-    virtual bool validateAsmConstraint(const char *&Name,
-                                       TargetInfo::ConstraintInfo &Info) const {
-      if (strchr("adzDWeABbvfcCtukxywZY", Name[0])) {
-        Info.setAllowsRegister();
-        return true;
-      }
-      return false;
-    }
-
-    virtual const char *getClobbers() const {
-      return "";
-    }
-
-    virtual const char *getVAListDeclaration() const {
-      return "typedef char* __builtin_va_list;";
-    }
-  };
-
-  const char * const BlackfinTargetInfo::GCCRegNames[] = {
-    "r0", "r1", "r2", "r3", "r4", "r5", "r6", "r7",
-    "p0", "p1", "p2", "p3", "p4", "p5", "sp", "fp",
-    "i0", "i1", "i2", "i3", "b0", "b1", "b2", "b3",
-    "l0", "l1", "l2", "l3", "m0", "m1", "m2", "m3",
-    "a0", "a1", "cc",
-    "rets", "reti", "retx", "retn", "rete", "astat", "seqstat", "usp",
-    "argp", "lt0", "lt1", "lc0", "lc1", "lb0", "lb1"
-  };
-
-  void BlackfinTargetInfo::getGCCRegNames(const char * const *&Names,
-                                          unsigned &NumNames) const {
-    Names = GCCRegNames;
-    NumNames = llvm::array_lengthof(GCCRegNames);
-  }
-}
-
 namespace {
 
   // LLVM and Clang cannot be used directly to output native binaries for
@@ -3726,11 +3592,6 @@ static TargetInfo *AllocateTarget(const std::string &T) {
       return new ARMTargetInfo(T);
     }
 
-  case llvm::Triple::bfin:
-    if ( os == llvm::Triple::RTEMS )
-      return new RTEMSTargetInfo<BlackfinTargetInfo>(T);
-    return new BlackfinTargetInfo(T);
-
   case llvm::Triple::msp430:
     return new MSP430TargetInfo(T);
 
@@ -3857,9 +3718,6 @@ static TargetInfo *AllocateTarget(const std::string &T) {
   // FIXME: Need a real SPU target.
   case llvm::Triple::cellspu:
     return new PS3SPUTargetInfo<PPC64TargetInfo>(T);
-
-  case llvm::Triple::systemz:
-    return new SystemZTargetInfo(T);
 
   case llvm::Triple::tce:
     return new TCETargetInfo(T);

@@ -2591,8 +2591,41 @@ public:
 
   bool CheckCaseExpression(Expr *E);
 
-  bool CheckMicrosoftIfExistsSymbol(CXXScopeSpec &SS, UnqualifiedId &Name);
+  /// \brief Describes the result of an "if-exists" condition check.
+  enum IfExistsResult {
+    /// \brief The symbol exists.
+    IER_Exists,
+    
+    /// \brief The symbol does not exist.
+    IER_DoesNotExist,
+    
+    /// \brief The name is a dependent name, so the results will differ
+    /// from one instantiation to the next.
+    IER_Dependent,
+    
+    /// \brief An error occurred.
+    IER_Error
+  };
 
+  IfExistsResult 
+  CheckMicrosoftIfExistsSymbol(Scope *S, CXXScopeSpec &SS, 
+                               const DeclarationNameInfo &TargetNameInfo);
+
+  IfExistsResult 
+  CheckMicrosoftIfExistsSymbol(Scope *S, SourceLocation KeywordLoc,
+                               bool IsIfExists, CXXScopeSpec &SS, 
+                               UnqualifiedId &Name);
+
+  StmtResult BuildMSDependentExistsStmt(SourceLocation KeywordLoc,
+                                        bool IsIfExists,
+                                        NestedNameSpecifierLoc QualifierLoc,
+                                        DeclarationNameInfo NameInfo,
+                                        Stmt *Nested);
+  StmtResult ActOnMSDependentExistsStmt(SourceLocation KeywordLoc, 
+                                        bool IsIfExists,
+                                        CXXScopeSpec &SS, UnqualifiedId &Name,
+                                        Stmt *Nested);
+  
   //===------------------------- "Block" Extension ------------------------===//
 
   /// ActOnBlockStart - This callback is invoked when a block literal is
@@ -4208,8 +4241,26 @@ public:
     UPPC_ExceptionType,
     
     /// \brief Partial specialization.
-    UPPC_PartialSpecialization
-  };
+    UPPC_PartialSpecialization,
+    
+    /// \brief Microsoft __if_exists.
+    UPPC_IfExists,
+
+    /// \brief Microsoft __if_not_exists.
+    UPPC_IfNotExists
+};
+
+  /// \brief Diagnose unexpanded parameter packs.
+  ///
+  /// \param Loc The location at which we should emit the diagnostic.
+  ///
+  /// \param UPPC The context in which we are diagnosing unexpanded 
+  /// parameter packs.
+  ///
+  /// \param Unexpanded the set of unexpanded parameter packs.
+  void DiagnoseUnexpandedParameterPacks(SourceLocation Loc,
+                                        UnexpandedParameterPackContext UPPC,
+                    const SmallVectorImpl<UnexpandedParameterPack> &Unexpanded);
 
   /// \brief If the given type contains an unexpanded parameter pack,
   /// diagnose the error.
@@ -4307,6 +4358,22 @@ public:
   /// unexpanded parameter packs.
   void collectUnexpandedParameterPacks(TypeLoc TL,
                    SmallVectorImpl<UnexpandedParameterPack> &Unexpanded);
+
+  /// \brief Collect the set of unexpanded parameter packs within the given
+  /// nested-name-specifier.  
+  ///
+  /// \param SS The nested-name-specifier that will be traversed to find
+  /// unexpanded parameter packs.
+  void collectUnexpandedParameterPacks(CXXScopeSpec &SS,
+                         SmallVectorImpl<UnexpandedParameterPack> &Unexpanded);
+
+  /// \brief Collect the set of unexpanded parameter packs within the given
+  /// name.  
+  ///
+  /// \param NameInfo The name that will be traversed to find
+  /// unexpanded parameter packs.
+  void collectUnexpandedParameterPacks(const DeclarationNameInfo &NameInfo,
+                         SmallVectorImpl<UnexpandedParameterPack> &Unexpanded);
 
   /// \brief Invoked when parsing a template argument followed by an
   /// ellipsis, which creates a pack expansion.
