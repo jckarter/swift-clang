@@ -23,32 +23,24 @@ namespace clang {
 namespace ento {
 
 class CheckerContext {
-  ExplodedNodeSet &Dst;
   ExprEngine &Eng;
   ExplodedNode *Pred;
   const ProgramPoint Location;
   const ProgramState *ST;
-  const unsigned size;
-  // TODO: Use global context.
-  NodeBuilderContext Ctx;
   NodeBuilder &NB;
 public:
   bool *respondsToCallback;
 public:
-  CheckerContext(ExplodedNodeSet &dst,
-                 NodeBuilder &builder,
+  CheckerContext(NodeBuilder &builder,
                  ExprEngine &eng,
                  ExplodedNode *pred,
                  const ProgramPoint &loc,
                  bool *respondsToCB = 0,
                  const ProgramState *st = 0)
-    : Dst(dst),
-      Eng(eng),
+    : Eng(eng),
       Pred(pred),
       Location(loc),
       ST(st),
-      size(Dst.size()),
-      Ctx(builder.C.Eng, builder.getBlock(), pred),
       NB(builder),
       respondsToCallback(respondsToCB) {
     assert(!(ST && ST != Pred->getState()));
@@ -77,7 +69,9 @@ public:
 
   /// \brief Returns the number of times the current block has been visited
   /// along the analyzed path.
-  unsigned getCurrentBlockCount() {return NB.getCurrentBlockCount();}
+  unsigned getCurrentBlockCount() {
+    return NB.getContext().getCurrentBlockCount();
+  }
 
   ASTContext &getASTContext() {
     return Eng.getContext();
@@ -156,7 +150,6 @@ private:
                                  bool markAsSink,
                                  ExplodedNode *pred = 0,
                                  const ProgramPointTag *tag = 0) {
-
     ExplodedNode *node = NB.generateNode(tag ? Location.withTag(tag) : Location,
                                         state,
                                         pred ? pred : Pred, markAsSink);

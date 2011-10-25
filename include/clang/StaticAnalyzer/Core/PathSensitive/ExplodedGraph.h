@@ -54,7 +54,6 @@ class ExplodedNode : public llvm::FoldingSetNode {
   friend class ExplodedGraph;
   friend class CoreEngine;
   friend class NodeBuilder;
-  friend class StmtNodeBuilder;
   friend class BranchNodeBuilder;
   friend class IndirectGotoNodeBuilder;
   friend class SwitchNodeBuilder;
@@ -386,6 +385,7 @@ public:
 
   unsigned size() const { return Impl.size();  }
   bool empty()    const { return Impl.empty(); }
+  bool erase(ExplodedNode *N) { return Impl.erase(N); }
 
   void clear() { Impl.clear(); }
   void insert(const ExplodedNodeSet &S) {
