@@ -261,6 +261,39 @@ static APFloat HandleIntToFloatCast(QualType DestType, QualType SrcType,
   return Result;
 }
 
+/// Try to evaluate the initializer for a variable declaration.
+static APValue *EvaluateVarDeclInit(EvalInfo &Info, const VarDecl *VD) {
+  if (isa<ParmVarDecl>(VD))
+    return 0;
+
+  const Expr *Init = VD->getAnyInitializer();
+  if (!Init)
+    return 0;
+
+  if (APValue *V = VD->getEvaluatedValue())
+    return V;
+
+  if (VD->isEvaluatingValue())
+    return 0;
+
+  VD->setEvaluatingValue();
+
+  // FIXME: If the initializer isn't a constant expression, propagate up any
+  // diagnostic explaining why not.
+  Expr::EvalResult EResult;
+  if (Init->Evaluate(EResult, Info.Ctx) && !EResult.HasSideEffects)
+    VD->setEvaluatedValue(EResult.Val);
+  else
+    VD->setEvaluatedValue(APValue());
+
+  return VD->getEvaluatedValue();
+}
+
+bool IsConstNonVolatile(QualType T) {
+  Qualifiers Quals = T.getQualifiers();
+  return Quals.hasConst() && !Quals.hasVolatile();
+}
+
 namespace {
 class HasSideEffect
   : public ConstStmtVisitor<HasSideEffect, bool> {
@@ -460,6 +493,12 @@ public:
     return DerivedValueInitialization(E);
   }
 
+  /// Visit a value which is evaluated, but whose value is ignored.
+  void VisitIgnoredValue(const Expr *E) {
+    APValue Scratch;
+    if (!Evaluate(Scratch, Info, E))
+      Info.EvalStatus.HasSideEffects = true;
+  }
 };
 
 }
@@ -977,9 +1016,7 @@ VectorExprEvaluator::ValueInitialization(const Expr *E) {
 }
 
 bool VectorExprEvaluator::VisitUnaryImag(const UnaryOperator *E) {
-  APValue Scratch;
-  if (!Evaluate(Scratch, Info, E->getSubExpr()))
-    Info.EvalStatus.HasSideEffects = true;
+  VisitIgnoredValue(E->getSubExpr());
   return ValueInitialization(E);
 }
 
@@ -1163,38 +1200,11 @@ bool IntExprEvaluator::CheckReferencedDecl(const Expr* E, const Decl* D) {
 
   // In C++, const, non-volatile integers initialized with ICEs are ICEs.
   // In C, they can also be folded, although they are not ICEs.
-  if (Info.Ctx.getCanonicalType(E->getType()).getCVRQualifiers() 
-                                                        == Qualifiers::Const) {
-
-    if (isa<ParmVarDecl>(D))
-      return false;
-
+  if (IsConstNonVolatile(E->getType())) {
     if (const VarDecl *VD = dyn_cast<VarDecl>(D)) {
-      if (const Expr *Init = VD->getAnyInitializer()) {
-        if (APValue *V = VD->getEvaluatedValue()) {
-          if (V->isInt())
-            return Success(V->getInt(), E);
-          return false;
-        }
-
-        if (VD->isEvaluatingValue())
-          return false;
-
-        VD->setEvaluatingValue();
-
-        Expr::EvalResult EResult;
-        // FIXME: Produce a diagnostic if the initializer isn't a constant
-        // expression.
-        if (Init->Evaluate(EResult, Info.Ctx) && !EResult.HasSideEffects &&
-            EResult.Val.isInt()) {
-          // Cache the evaluated value in the variable declaration.
-          Result = EResult.Val;
-          VD->setEvaluatedValue(Result);
-          return true;
-        }
-
-        VD->setEvaluatedValue(APValue());
-      }
+      APValue *V = EvaluateVarDeclInit(Info, VD);
+      if (V && V->isInt())
+        return Success(V->getInt(), E);
     }
   }
 
@@ -1402,16 +1412,8 @@ bool IntExprEvaluator::VisitCallExpr(const CallExpr *E) {
 
 bool IntExprEvaluator::VisitBinaryOperator(const BinaryOperator *E) {
   if (E->getOpcode() == BO_Comma) {
-    if (!Visit(E->getRHS()))
-      return false;
-
-    // If we can't evaluate the LHS, it might have side effects;
-    // conservatively mark it.
-    APValue Scratch;
-    if (!Evaluate(Scratch, Info, E->getLHS()))
-      Info.EvalStatus.HasSideEffects = true;
-
-    return true;
+    VisitIgnoredValue(E->getLHS());
+    return Visit(E->getRHS());
   }
 
   if (E->isLogicalOp()) {
@@ -2001,9 +2003,7 @@ bool IntExprEvaluator::VisitUnaryImag(const UnaryOperator *E) {
     return Success(LV.getComplexIntImag(), E);
   }
 
-  APValue Scratch;
-  if (!Evaluate(Scratch, Info, E->getSubExpr()))
-    Info.EvalStatus.HasSideEffects = true;
+  VisitIgnoredValue(E->getSubExpr());
   return Success(0, E);
 }
 
@@ -2145,41 +2145,14 @@ bool FloatExprEvaluator::VisitDeclRefExpr(const DeclRefExpr *E) {
   if (ExprEvaluatorBaseTy::VisitDeclRefExpr(E))
     return true;
 
-  const Decl *D = E->getDecl();
-  if (!isa<VarDecl>(D) || isa<ParmVarDecl>(D)) return false;
-  const VarDecl *VD = cast<VarDecl>(D);
-
-  // Require the qualifiers to be const and not volatile.
-  CanQualType T = Info.Ctx.getCanonicalType(E->getType());
-  if (!T.isConstQualified() || T.isVolatileQualified())
-    return false;
-
-  const Expr *Init = VD->getAnyInitializer();
-  if (!Init) return false;
-
-  if (APValue *V = VD->getEvaluatedValue()) {
-    if (V->isFloat()) {
+  const VarDecl *VD = dyn_cast<VarDecl>(E->getDecl());
+  if (VD && IsConstNonVolatile(VD->getType())) {
+    APValue *V = EvaluateVarDeclInit(Info, VD);
+    if (V && V->isFloat()) {
       Result = V->getFloat();
       return true;
     }
-    return false;
   }
-
-  if (VD->isEvaluatingValue())
-    return false;
-
-  VD->setEvaluatingValue();
-
-  Expr::EvalResult InitResult;
-  if (Init->Evaluate(InitResult, Info.Ctx) && !InitResult.HasSideEffects &&
-      InitResult.Val.isFloat()) {
-    // Cache the evaluated value in the variable declaration.
-    Result = InitResult.Val.getFloat();
-    VD->setEvaluatedValue(InitResult.Val);
-    return true;
-  }
-
-  VD->setEvaluatedValue(APValue());
   return false;
 }
 
@@ -2204,9 +2177,7 @@ bool FloatExprEvaluator::VisitUnaryImag(const UnaryOperator *E) {
     return true;
   }
 
-  APValue Scratch;
-  if (!Evaluate(Scratch, Info, E->getSubExpr()))
-    Info.EvalStatus.HasSideEffects = true;
+  VisitIgnoredValue(E->getSubExpr());
   const llvm::fltSemantics &Sem = Info.Ctx.getFloatTypeSemantics(E->getType());
   Result = llvm::APFloat::getZero(Sem);
   return true;
@@ -2231,16 +2202,8 @@ bool FloatExprEvaluator::VisitUnaryOperator(const UnaryOperator *E) {
 
 bool FloatExprEvaluator::VisitBinaryOperator(const BinaryOperator *E) {
   if (E->getOpcode() == BO_Comma) {
-    if (!EvaluateFloat(E->getRHS(), Result, Info))
-      return false;
-
-    // If we can't evaluate the LHS, it might have side effects;
-    // conservatively mark it.
-    APValue Scratch;
-    if (!Evaluate(Scratch, Info, E->getLHS()))
-      Info.EvalStatus.HasSideEffects = true;
-
-    return true;
+    VisitIgnoredValue(E->getLHS());
+    return Visit(E->getRHS());
   }
 
   // We can't evaluate pointer-to-member operations.
@@ -2516,16 +2479,8 @@ bool ComplexExprEvaluator::VisitCastExpr(const CastExpr *E) {
 
 bool ComplexExprEvaluator::VisitBinaryOperator(const BinaryOperator *E) {
   if (E->getOpcode() == BO_Comma) {
-    if (!Visit(E->getRHS()))
-      return false;
-
-    // If we can't evaluate the LHS, it might have side effects;
-    // conservatively mark it.
-    APValue Scratch;
-    if (!Evaluate(Scratch, Info, E->getLHS()))
-      Info.EvalStatus.HasSideEffects = true;
-
-    return true;
+    VisitIgnoredValue(E->getLHS());
+    return Visit(E->getRHS());
   }
   if (!Visit(E->getLHS()))
     return false;
@@ -2939,6 +2894,9 @@ static ICEDiag CheckICE(const Expr* E, ASTContext &Ctx) {
     return NoDiag();
   case Expr::CallExprClass:
   case Expr::CXXOperatorCallExprClass: {
+    // C99 6.6/3 allows function calls within unevaluated subexpressions of
+    // constant expressions, but they can never be ICEs because an ICE cannot
+    // contain an operand of (pointer to) function type.
     const CallExpr *CE = cast<CallExpr>(E);
     if (CE->isBuiltinCall(Ctx))
       return CheckEvalInICE(E, Ctx);
@@ -2947,8 +2905,7 @@ static ICEDiag CheckICE(const Expr* E, ASTContext &Ctx) {
   case Expr::DeclRefExprClass:
     if (isa<EnumConstantDecl>(cast<DeclRefExpr>(E)->getDecl()))
       return NoDiag();
-    if (Ctx.getLangOptions().CPlusPlus &&
-        E->getType().getCVRQualifiers() == Qualifiers::Const) {
+    if (Ctx.getLangOptions().CPlusPlus && IsConstNonVolatile(E->getType())) {
       const NamedDecl *D = cast<DeclRefExpr>(E)->getDecl();
 
       // Parameter variables are never constants.  Without this check,
@@ -2961,10 +2918,6 @@ static ICEDiag CheckICE(const Expr* E, ASTContext &Ctx) {
       //   A variable of non-volatile const-qualified integral or enumeration
       //   type initialized by an ICE can be used in ICEs.
       if (const VarDecl *Dcl = dyn_cast<VarDecl>(D)) {
-        Qualifiers Quals = Ctx.getCanonicalType(Dcl->getType()).getQualifiers();
-        if (Quals.hasVolatile() || !Quals.hasConst())
-          return ICEDiag(2, cast<DeclRefExpr>(E)->getLocation());
-        
         // Look for a declaration of this variable that has an initializer.
         const VarDecl *ID = 0;
         const Expr *Init = Dcl->getAnyInitializer(ID);
@@ -3004,6 +2957,9 @@ static ICEDiag CheckICE(const Expr* E, ASTContext &Ctx) {
     case UO_PreDec:
     case UO_AddrOf:
     case UO_Deref:
+      // C99 6.6/3 allows increment and decrement within unevaluated
+      // subexpressions of constant expressions, but they can never be ICEs
+      // because an ICE cannot contain an lvalue operand.
       return ICEDiag(2, E->getLocStart());
     case UO_Extension:
     case UO_LNot:
@@ -3020,7 +2976,7 @@ static ICEDiag CheckICE(const Expr* E, ASTContext &Ctx) {
   case Expr::OffsetOfExprClass: {
       // Note that per C99, offsetof must be an ICE. And AFAIK, using
       // Evaluate matches the proposed gcc behavior for cases like
-      // "offsetof(struct s{int x[4];}, x[!.0])".  This doesn't affect
+      // "offsetof(struct s{int x[4];}, x[1.0])".  This doesn't affect
       // compliance: we should warn earlier for offsetof expressions with
       // array subscripts that aren't ICEs, and if the array subscripts
       // are ICEs, the value of the offsetof must be an integer constant.
@@ -3049,6 +3005,9 @@ static ICEDiag CheckICE(const Expr* E, ASTContext &Ctx) {
     case BO_AndAssign:
     case BO_XorAssign:
     case BO_OrAssign:
+      // C99 6.6/3 allows assignments within unevaluated subexpressions of
+      // constant expressions, but they can never be ICEs because an ICE cannot
+      // contain an lvalue operand.
       return ICEDiag(2, E->getLocStart());
 
     case BO_Mul:
@@ -3140,9 +3099,12 @@ static ICEDiag CheckICE(const Expr* E, ASTContext &Ctx) {
   case Expr::CXXFunctionalCastExprClass:
   case Expr::CXXStaticCastExprClass:
   case Expr::CXXReinterpretCastExprClass:
-  case Expr::CXXConstCastExprClass: 
+  case Expr::CXXConstCastExprClass:
   case Expr::ObjCBridgedCastExprClass: {
     const Expr *SubExpr = cast<CastExpr>(E)->getSubExpr();
+    if (isa<ExplicitCastExpr>(E) &&
+        isa<FloatingLiteral>(SubExpr->IgnoreParenImpCasts()))
+      return NoDiag();
     switch (cast<CastExpr>(E)->getCastKind()) {
     case CK_LValueToRValue:
     case CK_NoOp:
@@ -3150,8 +3112,6 @@ static ICEDiag CheckICE(const Expr* E, ASTContext &Ctx) {
     case CK_IntegralCast:
       return CheckICE(SubExpr, Ctx);
     default:
-      if (isa<FloatingLiteral>(SubExpr->IgnoreParens()))
-        return NoDiag();
       return ICEDiag(2, E->getLocStart());
     }
   }

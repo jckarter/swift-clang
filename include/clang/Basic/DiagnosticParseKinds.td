@@ -75,6 +75,10 @@ def warn_cxx98_compat_alignof : Warning<
   "alignof expressions are incompatible with C++98">,
   InGroup<CXX98Compat>, DefaultIgnore;
 
+def warn_microsoft_dependent_exists : Warning<
+  "dependent %select{__if_not_exists|__if_exists}0 declarations are ignored">, 
+  InGroup<DiagGroup<"microsoft-exists">>;
+
 def ext_c1x_generic_selection : Extension<
   "generic selections are a C1X-specific feature">, InGroup<C1X>;
 def err_duplicate_default_assoc : Error<
@@ -229,7 +233,7 @@ def ext_auto_type_specifier : ExtWarn<
   "'auto' type specifier is a C++11 extension">, InGroup<CXX11>;
 def warn_auto_storage_class : Warning<
   "'auto' storage class specifier is redundant and incompatible with C++11">,
-  InGroup<CXX11Compat>;
+  InGroup<CXX11Compat>, DefaultIgnore;
 def ext_auto_storage_class : ExtWarn<
   "'auto' storage class specifier is not permitted in C++11, and will not "
   "be supported in future releases">, InGroup<DiagGroup<"auto-storage-class">>;
