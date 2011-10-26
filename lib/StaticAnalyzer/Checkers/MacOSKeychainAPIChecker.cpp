@@ -58,7 +58,7 @@ public:
   void checkPreStmt(const ReturnStmt *S, CheckerContext &C) const;
   void checkPostStmt(const CallExpr *S, CheckerContext &C) const;
   void checkDeadSymbols(SymbolReaper &SR, CheckerContext &C) const;
-  void checkEndPath(EndOfFunctionNodeBuilder &B, ExprEngine &Eng) const;
+  void checkEndPath(CheckerContext &Ctx) const;
 
 private:
   typedef std::pair<SymbolRef, const AllocationState*> AllocationPair;
@@ -400,7 +400,7 @@ void MacOSKeychainAPIChecker::checkPreStmt(const CallExpr *CE,
         // custom deallocator which does the right thing.
         if (DE->getFoundDecl()->getName() != "kCFAllocatorNull") {
           State = State->remove<AllocatedData>(ArgSM);
-          C.addTransition(State);
+          C.generateNode(State);
           return;
         }
       }
@@ -434,7 +434,7 @@ void MacOSKeychainAPIChecker::checkPreStmt(const CallExpr *CE,
     return;
   }
 
-  C.addTransition(State);
+  C.generateNode(State);
 }
 
 void MacOSKeychainAPIChecker::checkPostStmt(const CallExpr *CE,
@@ -482,7 +482,7 @@ void MacOSKeychainAPIChecker::checkPostStmt(const CallExpr *CE,
     State = State->set<AllocatedData>(V, AllocationState(ArgExpr, idx,
                                                          RetStatusSymbol));
     assert(State);
-    C.addTransition(State);
+    C.generateNode(State);
   }
 }
 
@@ -500,7 +500,7 @@ void MacOSKeychainAPIChecker::checkPreStmt(const ReturnStmt *S,
   state = state->remove<AllocatedData>(getSymbolForRegion(C, V));
 
   // Proceed from the new state.
-  C.addTransition(state);
+  C.generateNode(state);
 }
 
 BugReport *MacOSKeychainAPIChecker::
@@ -557,9 +557,8 @@ void MacOSKeychainAPIChecker::checkDeadSymbols(SymbolReaper &SR,
 }
 
 // TODO: Remove this after we ensure that checkDeadSymbols are always called.
-void MacOSKeychainAPIChecker::checkEndPath(EndOfFunctionNodeBuilder &B,
-                                           ExprEngine &Eng) const {
-  const ProgramState *state = B.getState();
+void MacOSKeychainAPIChecker::checkEndPath(CheckerContext &Ctx) const {
+  const ProgramState *state = Ctx.getState();
   AllocatedSetTy AS = state->get<AllocatedData>();
   if (AS.isEmpty())
     return;
@@ -575,7 +574,7 @@ void MacOSKeychainAPIChecker::checkEndPath(EndOfFunctionNodeBuilder &B,
     // allocation, do not report.
     if (state->getSymVal(I.getKey()) ||
         definitelyReturnedError(I->second.Region, state,
-                                Eng.getSValBuilder())) {
+                                Ctx.getSValBuilder())) {
       continue;
     }
     Errors.push_back(std::make_pair(I->first, &I->second));
@@ -585,15 +584,14 @@ void MacOSKeychainAPIChecker::checkEndPath(EndOfFunctionNodeBuilder &B,
   if (!Changed)
     return;
 
-  ExplodedNode *N = B.generateNode(state);
+  ExplodedNode *N = Ctx.generateNode(state);
   if (!N)
     return;
 
   // Generate the error reports.
   for (AllocationPairVec::iterator I = Errors.begin(), E = Errors.end();
                                                        I != E; ++I) {
-    Eng.getBugReporter().EmitReport(
-      generateAllocatedDataNotReleasedReport(*I, N));
+    Ctx.EmitReport(generateAllocatedDataNotReleasedReport(*I, N));
   }
 }
 

@@ -15,42 +15,28 @@
 #ifndef LLVM_CLANG_SA_CORE_PATHSENSITIVE_CHECKERCONTEXT
 #define LLVM_CLANG_SA_CORE_PATHSENSITIVE_CHECKERCONTEXT
 
-#include "clang/Analysis/Support/SaveAndRestore.h"
 #include "clang/StaticAnalyzer/Core/PathSensitive/ExprEngine.h"
 
 namespace clang {
-
 namespace ento {
 
 class CheckerContext {
   ExprEngine &Eng;
   ExplodedNode *Pred;
   const ProgramPoint Location;
-  const ProgramState *ST;
   NodeBuilder &NB;
-public:
-  bool *respondsToCallback;
+
 public:
   CheckerContext(NodeBuilder &builder,
                  ExprEngine &eng,
                  ExplodedNode *pred,
-                 const ProgramPoint &loc,
-                 bool *respondsToCB = 0,
-                 const ProgramState *st = 0)
+                 const ProgramPoint &loc)
     : Eng(eng),
       Pred(pred),
       Location(loc),
-      ST(st),
-      NB(builder),
-      respondsToCallback(respondsToCB) {
-    assert(!(ST && ST != Pred->getState()));
-  }
+      NB(builder) {}
 
   ~CheckerContext();
-
-  ExprEngine &getEngine() {
-    return Eng;
-  }
 
   AnalysisManager &getAnalysisManager() {
     return Eng.getAnalysisManager();
@@ -65,7 +51,7 @@ public:
   }
 
   ExplodedNode *&getPredecessor() { return Pred; }
-  const ProgramState *getState() { return ST ? ST : Pred->getState(); }
+  const ProgramState *getState() { return Pred->getState(); }
 
   /// \brief Returns the number of times the current block has been visited
   /// along the analyzed path.
@@ -97,29 +83,34 @@ public:
     return Eng.isObjCGCEnabled();
   }
 
+  ProgramStateManager &getStateManager() {
+    return Eng.getStateManager();
+  }
+
+
+  AnalysisDeclContext *getCurrentAnalysisDeclContext() const {
+    return Pred->getLocationContext()->getAnalysisDeclContext();
+  }
+
   /// \brief Generate a default checker node (containing checker tag but no
   /// checker state changes).
-  ExplodedNode *generateNode(bool autoTransition = true) {
-    return generateNode(getState(), autoTransition);
+  ExplodedNode *generateNode() {
+    return generateNode(getState());
   }
   
+  /// \brief Generate a new checker node.
+  ExplodedNode *generateNode(const ProgramState *state,
+                             const ProgramPointTag *tag = 0) {
+    return generateNodeImpl(state, false, 0, tag);
+  }
+
   /// \brief Generate a new checker node with the given predecessor.
   /// Allows checkers to generate a chain of nodes.
   ExplodedNode *generateNode(const ProgramState *state,
                              ExplodedNode *pred,
                              const ProgramPointTag *tag = 0,
-                             bool autoTransition = true,
                              bool isSink = false) {
-    ExplodedNode *N = generateNodeImpl(state, isSink, pred, tag);
-    return N;
-  }
-
-  /// \brief Generate a new checker node.
-  ExplodedNode *generateNode(const ProgramState *state,
-                             bool autoTransition = true,
-                             const ProgramPointTag *tag = 0) {
-    ExplodedNode *N = generateNodeImpl(state, false, 0, tag);
-    return N;
+    return generateNodeImpl(state, isSink, pred, tag);
   }
 
   /// \brief Generate a sink node. Generating sink stops exploration of the
@@ -128,21 +119,17 @@ public:
     return generateNodeImpl(state ? state : getState(), true);
   }
 
-  void addTransition(const ProgramState *state,
-                     const ProgramPointTag *tag = 0) {
-    assert(state);
-    // If the 'state' is not new, we need to check if the cached state 'ST'
-    // is new.
-    if (state != getState())
-      generateNode(state, true, tag);
-  }
-
+  /// \brief Emit the diagnostics report.
   void EmitReport(BugReport *R) {
     Eng.getBugReporter().EmitReport(R);
   }
 
-  AnalysisDeclContext *getCurrentAnalysisDeclContext() const {
-    return Pred->getLocationContext()->getAnalysisDeclContext();
+  void EmitBasicReport(StringRef Name,
+                       StringRef Category,
+                       StringRef Str, PathDiagnosticLocation Loc,
+                       SourceRange* RBeg, unsigned NumRanges) {
+    Eng.getBugReporter().EmitBasicReport(Name, Category, Str, Loc,
+                                         RBeg, NumRanges);
   }
 
 private:
@@ -150,6 +137,7 @@ private:
                                  bool markAsSink,
                                  ExplodedNode *pred = 0,
                                  const ProgramPointTag *tag = 0) {
+    assert(state);
     ExplodedNode *node = NB.generateNode(tag ? Location.withTag(tag) : Location,
                                         state,
                                         pred ? pred : Pred, markAsSink);
