@@ -199,9 +199,9 @@ public:
 
 class EndPath {
   template <typename CHECKER>
-  static void _checkEndPath(void *checker, EndOfFunctionNodeBuilder &B,
-                            ExprEngine &Eng) {
-    ((const CHECKER *)checker)->checkEndPath(B, Eng);
+  static void _checkEndPath(void *checker,
+                            CheckerContext &C) {
+    ((const CHECKER *)checker)->checkEndPath(C);
   }
 
 public:
@@ -214,10 +214,9 @@ public:
 
 class BranchCondition {
   template <typename CHECKER>
-  static void _checkBranchCondition(void *checker, const Stmt *condition,
-                                    NodeBuilder &B, ExplodedNode *Pred,
-                                    ExprEngine &Eng) {
-    ((const CHECKER *)checker)->checkBranchCondition(condition, B, Pred, Eng);
+  static void _checkBranchCondition(void *checker, const Stmt *Condition,
+                                    CheckerContext & C) {
+    ((const CHECKER *)checker)->checkBranchCondition(Condition, C);
   }
 
 public:

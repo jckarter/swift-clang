@@ -13,7 +13,6 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "clang/Analysis/Support/SaveAndRestore.h"
 #include "clang/StaticAnalyzer/Core/CheckerManager.h"
 #include "clang/StaticAnalyzer/Core/BugReporter/BugType.h"
 #include "clang/StaticAnalyzer/Core/PathSensitive/AnalysisManager.h"
@@ -217,10 +216,13 @@ void ExprEngine::processCFGElement(const CFGElement E, ExplodedNode *Pred,
       ProcessImplicitDtor(*E.getAs<CFGImplicitDtor>(), Pred);
       return;
   }
+  currentStmtIdx = 0;
+  currentBuilderContext = 0;
 }
 
 const Stmt *ExprEngine::getStmt() const {
-  const CFGStmt *CS = (*currentBuilderContext->getBlock())[currentStmtIdx].getAs<CFGStmt>();
+  const CFGStmt *CS = (*currentBuilderContext->getBlock())[currentStmtIdx]
+                                                            .getAs<CFGStmt>();
   return CS ? CS->getStmt() : 0;
 }
 
@@ -1033,6 +1035,8 @@ void ExprEngine::processBranch(const Stmt *Condition, const Stmt *Term,
                                ExplodedNodeSet &Dst,
                                const CFGBlock *DstT,
                                const CFGBlock *DstF) {
+  currentBuilderContext = &BldCtx;
+
   // Check for NULL conditions; e.g. "for(;;)"
   if (!Condition) {
     BranchNodeBuilder NullCondBldr(Pred, Dst, BldCtx, DstT, DstF);
@@ -1045,17 +1049,16 @@ void ExprEngine::processBranch(const Stmt *Condition, const Stmt *Term,
                                 Condition->getLocStart(),
                                 "Error evaluating branch");
 
-  ExplodedNodeSet TmpCheckersOut;
-  NodeBuilder CheckerBldr(Pred, TmpCheckersOut, BldCtx);
-  getCheckerManager().runCheckersForBranchCondition(Condition, CheckerBldr,
+  ExplodedNodeSet CheckersOutSet;
+  getCheckerManager().runCheckersForBranchCondition(Condition, CheckersOutSet,
                                                     Pred, *this);
   // We generated only sinks.
-  if (TmpCheckersOut.empty())
+  if (CheckersOutSet.empty())
     return;
 
-  BranchNodeBuilder builder(CheckerBldr.getResults(), Dst, BldCtx, DstT, DstF);
-  for (NodeBuilder::iterator I = CheckerBldr.begin(),
-                             E = CheckerBldr.end(); E != I; ++I) {
+  BranchNodeBuilder builder(CheckersOutSet, Dst, BldCtx, DstT, DstF);
+  for (NodeBuilder::iterator I = CheckersOutSet.begin(),
+                             E = CheckersOutSet.end(); E != I; ++I) {
     ExplodedNode *PredI = *I;
 
     if (PredI->isSink())
@@ -1107,6 +1110,7 @@ void ExprEngine::processBranch(const Stmt *Condition, const Stmt *Term,
         builder.markInfeasible(false);
     }
   }
+  currentBuilderContext = 0;
 }
 
 /// processIndirectGoto - Called by CoreEngine.  Used to generate successor
@@ -1153,11 +1157,42 @@ void ExprEngine::processIndirectGoto(IndirectGotoNodeBuilder &builder) {
     builder.generateNode(I, state);
 }
 
+// TODO: The next two functions should be moved into CoreEngine.
+void ExprEngine::GenerateCallExitNode(ExplodedNode *N) {
+  // Create a CallExit node and enqueue it.
+  const StackFrameContext *LocCtx
+                         = cast<StackFrameContext>(N->getLocationContext());
+  const Stmt *CE = LocCtx->getCallSite();
+
+  // Use the the callee location context.
+  CallExit Loc(CE, LocCtx);
+
+  bool isNew;
+  ExplodedNode *Node = Engine.G->getNode(Loc, N->getState(), &isNew);
+  Node->addPredecessor(N, *Engine.G);
+
+  if (isNew)
+    Engine.WList->enqueue(Node);
+}
+
+void ExprEngine::enqueueEndOfPath(ExplodedNodeSet &S) {
+  for (ExplodedNodeSet::iterator I = S.begin(), E = S.end(); I != E; ++I) {
+    ExplodedNode *N = *I;
+    // If we are in an inlined call, generate CallExit node.
+    if (N->getLocationContext()->getParent())
+      GenerateCallExitNode(N);
+    else
+      Engine.G->addEndOfPath(N);
+  }
+}
+
 /// ProcessEndPath - Called by CoreEngine.  Used to generate end-of-path
 ///  nodes when the control reaches the end of a function.
-void ExprEngine::processEndOfFunction(EndOfFunctionNodeBuilder& builder) {
-  StateMgr.EndPath(builder.getState());
-  getCheckerManager().runCheckersForEndPath(builder, *this);
+void ExprEngine::processEndOfFunction(NodeBuilderContext& BC) {
+  StateMgr.EndPath(BC.Pred->getState());
+  ExplodedNodeSet Dst;
+  getCheckerManager().runCheckersForEndPath(BC, Dst, *this);
+  enqueueEndOfPath(Dst);
 }
 
 /// ProcessSwitch - Called by CoreEngine.  Used to generate successor
