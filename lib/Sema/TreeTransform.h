@@ -2145,6 +2145,19 @@ public:
     CXXScopeSpec SS;
     SS.Adopt(QualifierLoc);
 
+    if (BaseE) {
+      ExprResult BaseResult = getSema().DefaultFunctionArrayConversion(BaseE);
+      if (BaseResult.isInvalid())
+        return ExprError();
+      if (IsArrow) {
+        BaseResult = getSema().DefaultLvalueConversion(BaseResult.take());
+        if (BaseResult.isInvalid())
+          return ExprError();
+      }
+      BaseE = BaseResult.take();
+      BaseType = BaseE->getType();
+    }
+
     return SemaRef.BuildMemberReferenceExpr(BaseE, BaseType,
                                             OperatorLoc, IsArrow,
                                             SS, FirstQualifierInScope,
@@ -7694,7 +7707,6 @@ TreeTransform<Derived>::TransformUnresolvedMemberExpr(UnresolvedMemberExpr *Old)
     Base = getDerived().TransformExpr(Old->getBase());
     if (Base.isInvalid())
       return ExprError();
-    BaseType = ((Expr*) Base.get())->getType();
   } else {
     BaseType = getDerived().TransformType(Old->getBaseType());
   }
