@@ -395,8 +395,7 @@ const MemRegion *IteratorsChecker::getRegion(const ProgramState *state,
 // with the same tag.
 void IteratorsChecker::checkExpr(CheckerContext &C, const Expr *E) const {
   const ProgramState *state = C.getState();
-  const MemRegion *MR = getRegion(state, E,
-                   C.getPredecessor()->getLocationContext());
+  const MemRegion *MR = getRegion(state, E, C.getLocationContext());
   if (!MR)
     return;
 
@@ -405,7 +404,7 @@ void IteratorsChecker::checkExpr(CheckerContext &C, const Expr *E) const {
   if (!RS)
     return;
   if (RS->isInvalid()) {
-    if (ExplodedNode *N = C.generateNode()) {
+    if (ExplodedNode *N = C.addTransition()) {
       if (!BT_Invalid)
         // FIXME: We are eluding constness here.
         const_cast<IteratorsChecker*>(this)->BT_Invalid = new BuiltinBug("");
@@ -428,7 +427,7 @@ void IteratorsChecker::checkExpr(CheckerContext &C, const Expr *E) const {
     }
   }
   else if (RS->isUndefined()) {
-    if (ExplodedNode *N = C.generateNode()) {
+    if (ExplodedNode *N = C.addTransition()) {
       if (!BT_Undefined)
         // FIXME: We are eluding constness here.
         const_cast<IteratorsChecker*>(this)->BT_Undefined =
@@ -466,13 +465,13 @@ void IteratorsChecker::checkPreStmt(const CallExpr *CE,
 void IteratorsChecker::checkPreStmt(const CXXOperatorCallExpr *OCE,
                                     CheckerContext &C) const
 {
-  const LocationContext *LC = C.getPredecessor()->getLocationContext();
+  const LocationContext *LC = C.getLocationContext();
   const ProgramState *state = C.getState();
   OverloadedOperatorKind Kind = OCE->getOperator();
   if (Kind == OO_Equal) {
     checkExpr(C, OCE->getArg(1));
     state = handleAssign(state, OCE->getArg(0), OCE->getArg(1), LC);
-    C.generateNode(state);
+    C.addTransition(state);
     return;
   }
   else {
@@ -497,7 +496,7 @@ void IteratorsChecker::checkPreStmt(const CXXOperatorCallExpr *OCE,
       if (!RS1)
         return;
       if (RS0->getMemRegion() != RS1->getMemRegion()) {
-      if (ExplodedNode *N = C.generateNode()) {
+      if (ExplodedNode *N = C.addTransition()) {
           if (!BT_Incompatible)
             const_cast<IteratorsChecker*>(this)->BT_Incompatible =
               new BuiltinBug(
@@ -525,7 +524,7 @@ void IteratorsChecker::checkPreStmt(const DeclStmt *DS,
 
   // Get the MemRegion associated with the iterator and mark it as Undefined.
   const ProgramState *state = C.getState();
-  Loc VarLoc = state->getLValue(VD, C.getPredecessor()->getLocationContext());
+  Loc VarLoc = state->getLValue(VD, C.getLocationContext());
   const MemRegion *MR = VarLoc.getAsRegion();
   if (!MR)
     return;
@@ -545,12 +544,11 @@ void IteratorsChecker::checkPreStmt(const DeclStmt *DS,
           E = M->GetTemporaryExpr();
         if (const ImplicitCastExpr *ICE = dyn_cast<ImplicitCastExpr>(E))
           InitEx = ICE->getSubExpr();
-        state = handleAssign(state, MR, InitEx,
-                                  C.getPredecessor()->getLocationContext());
+        state = handleAssign(state, MR, InitEx, C.getLocationContext());
       }
     }
   }
-  C.generateNode(state);
+  C.addTransition(state);
 }
 
 
@@ -600,6 +598,6 @@ void IteratorsChecker::checkPreStmt(const CXXMemberCallExpr *MCE,
     state = state->add<CalledReserved>(MR);
   
   if (state != C.getState())
-    C.generateNode(state);
+    C.addTransition(state);
 }
 
