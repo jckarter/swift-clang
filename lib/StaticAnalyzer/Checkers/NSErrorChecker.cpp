@@ -193,12 +193,12 @@ template <typename T>
 static void setFlag(const ProgramState *state, SVal val, CheckerContext &C) {
   // We tag the symbol that the SVal wraps.
   if (SymbolRef sym = val.getAsSymbol())
-    C.generateNode(state->set<T>(sym, true));
+    C.addTransition(state->set<T>(sym, true));
 }
 
 static QualType parameterTypeFromSVal(SVal val, CheckerContext &C) {
   const StackFrameContext *
-    SFC = C.getPredecessor()->getLocationContext()->getCurrentStackFrame();
+    SFC = C.getLocationContext()->getCurrentStackFrame();
   if (const loc::MemRegionVal* X = dyn_cast<loc::MemRegionVal>(&val)) {
     const MemRegion* R = X->getRegion();
     if (const VarRegion *VR = R->getAs<VarRegion>())

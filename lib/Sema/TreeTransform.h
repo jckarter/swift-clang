@@ -1468,6 +1468,8 @@ public:
                                NamedDecl *FoundDecl,
                         const TemplateArgumentListInfo *ExplicitTemplateArgs,
                                NamedDecl *FirstQualifierInScope) {
+    ExprResult BaseResult = getSema().PerformMemberExprBaseConversion(Base,
+                                                                      isArrow);
     if (!Member->getDeclName()) {
       // We have a reference to an unnamed field.  This is always the
       // base of an anonymous struct/union member access, i.e. the
@@ -1476,17 +1478,12 @@ public:
       assert(Member->getType()->isRecordType() &&
              "unnamed member not of record type?");
 
-      ExprResult BaseResult =
-        getSema().PerformObjectMemberConversion(Base, 
+      BaseResult =
+        getSema().PerformObjectMemberConversion(BaseResult.take(),
                                                 QualifierLoc.getNestedNameSpecifier(),
                                                 FoundDecl, Member);
       if (BaseResult.isInvalid())
         return ExprError();
-      if (isArrow) {
-        BaseResult = getSema().DefaultLvalueConversion(BaseResult.take());
-        if (BaseResult.isInvalid())
-          return ExprError();
-      }
       Base = BaseResult.take();
       ExprValueKind VK = isArrow ? VK_LValue : Base->getValueKind();
       MemberExpr *ME =
@@ -1500,14 +1497,6 @@ public:
     CXXScopeSpec SS;
     SS.Adopt(QualifierLoc);
 
-    ExprResult BaseResult = getSema().DefaultFunctionArrayConversion(Base);
-    if (BaseResult.isInvalid())
-      return ExprError();
-    if (isArrow) {
-      BaseResult = getSema().DefaultLvalueConversion(BaseResult.get());
-      if (BaseResult.isInvalid())
-        return ExprError();
-    }
     Base = BaseResult.take();
     QualType BaseType = Base->getType();
 
@@ -2134,13 +2123,12 @@ public:
   ///
   /// By default, performs semantic analysis to build the new expression.
   /// Subclasses may override this routine to provide different behavior.
-  ExprResult RebuildUnresolvedMemberExpr(Expr *BaseE,
-                                               QualType BaseType,
-                                               SourceLocation OperatorLoc,
-                                               bool IsArrow,
-                                           NestedNameSpecifierLoc QualifierLoc,
-                                               NamedDecl *FirstQualifierInScope,
-                                               LookupResult &R,
+  ExprResult RebuildUnresolvedMemberExpr(Expr *BaseE, QualType BaseType,
+                                         SourceLocation OperatorLoc,
+                                         bool IsArrow,
+                                         NestedNameSpecifierLoc QualifierLoc,
+                                         NamedDecl *FirstQualifierInScope,
+                                         LookupResult &R,
                                 const TemplateArgumentListInfo *TemplateArgs) {
     CXXScopeSpec SS;
     SS.Adopt(QualifierLoc);
@@ -7694,7 +7682,11 @@ TreeTransform<Derived>::TransformUnresolvedMemberExpr(UnresolvedMemberExpr *Old)
     Base = getDerived().TransformExpr(Old->getBase());
     if (Base.isInvalid())
       return ExprError();
-    BaseType = ((Expr*) Base.get())->getType();
+    Base = getSema().PerformMemberExprBaseConversion(Base.take(),
+                                                     Old->isArrow());
+    if (Base.isInvalid())
+      return ExprError();
+    BaseType = Base.get()->getType();
   } else {
     BaseType = getDerived().TransformType(Old->getBaseType());
   }
