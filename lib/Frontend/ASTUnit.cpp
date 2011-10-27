@@ -46,6 +46,7 @@
 #include "llvm/Support/Timer.h"
 #include "llvm/Support/FileSystem.h"
 #include "llvm/Support/Mutex.h"
+#include "llvm/Support/MutexGuard.h"
 #include "llvm/Support/CrashRecoveryContext.h"
 #include <cstdlib>
 #include <cstdio>
@@ -81,6 +82,114 @@ namespace {
       }
     }
   };
+  
+  struct OnDiskData {
+    /// \brief The file in which the precompiled preamble is stored.
+    std::string PreambleFile;
+
+    /// \brief Temporary files that should be removed when the ASTUnit is 
+    /// destroyed.
+    SmallVector<llvm::sys::Path, 4> TemporaryFiles;
+    
+    /// \brief Erase temporary files.
+    void CleanTemporaryFiles();
+
+    /// \brief Erase the preamble file.
+    void CleanPreambleFile();
+
+    /// \brief Erase temporary files and the preamble file.
+    void Cleanup();
+  };
+}
+
+static llvm::sys::SmartMutex<false> &getOnDiskMutex() {
+  static llvm::sys::SmartMutex<false> M(/* recursive = */ true);
+  return M;
+}
+
+static void cleanupOnDiskMapAtExit(void);
+
+typedef llvm::DenseMap<const ASTUnit *, OnDiskData *> OnDiskDataMap;
+static OnDiskDataMap &getOnDiskDataMap() {
+  static OnDiskDataMap M;
+  static bool hasRegisteredAtExit = false;
+  if (!hasRegisteredAtExit) {
+    hasRegisteredAtExit = true;
+    atexit(cleanupOnDiskMapAtExit);
+  }
+  return M;
+}
+
+static void cleanupOnDiskMapAtExit(void) {
+  // No mutex required here since we are leaving the program.
+  OnDiskDataMap &M = getOnDiskDataMap();
+  for (OnDiskDataMap::iterator I = M.begin(), E = M.end(); I != E; ++I) {
+    // We don't worry about freeing the memory associated with OnDiskDataMap.
+    // All we care about is erasing stale files.
+    I->second->Cleanup();
+  }
+}
+
+static OnDiskData &getOnDiskData(const ASTUnit *AU) {
+  // We require the mutex since we are modifying the structure of the
+  // DenseMap.
+  llvm::MutexGuard Guard(getOnDiskMutex());
+  OnDiskDataMap &M = getOnDiskDataMap();
+  OnDiskData *&D = M[AU];
+  if (!D)
+    D = new OnDiskData();
+  return *D;
+}
+
+static void erasePreambleFile(const ASTUnit *AU) {
+  getOnDiskData(AU).CleanPreambleFile();
+}
+
+static void removeOnDiskEntry(const ASTUnit *AU) {
+  // We require the mutex since we are modifying the structure of the
+  // DenseMap.
+  llvm::MutexGuard Guard(getOnDiskMutex());
+  OnDiskDataMap &M = getOnDiskDataMap();
+  OnDiskDataMap::iterator I = M.find(AU);
+  if (I != M.end()) {
+    I->second->Cleanup();
+    delete I->second;
+    M.erase(AU);
+  }
+}
+
+static void setPreambleFile(const ASTUnit *AU, llvm::StringRef preambleFile) {
+  getOnDiskData(AU).PreambleFile = preambleFile;
+}
+
+static const std::string &getPreambleFile(const ASTUnit *AU) {
+  return getOnDiskData(AU).PreambleFile;  
+}
+
+void OnDiskData::CleanTemporaryFiles() {
+  for (unsigned I = 0, N = TemporaryFiles.size(); I != N; ++I)
+    TemporaryFiles[I].eraseFromDisk();
+  TemporaryFiles.clear(); 
+}
+
+void OnDiskData::CleanPreambleFile() {
+  if (!PreambleFile.empty()) {
+    llvm::sys::Path(PreambleFile).eraseFromDisk();
+    PreambleFile.clear();
+  }
+}
+
+void OnDiskData::Cleanup() {
+  CleanTemporaryFiles();
+  CleanPreambleFile();
+}
+
+void ASTUnit::CleanTemporaryFiles() {
+  getOnDiskData(this).CleanTemporaryFiles();
+}
+
+void ASTUnit::addTemporaryFile(const llvm::sys::Path &TempFile) {
+  getOnDiskData(this).TemporaryFiles.push_back(TempFile);
 }
 
 /// \brief After failing to build a precompiled preamble (due to
@@ -114,10 +223,9 @@ ASTUnit::ASTUnit(bool _MainFileIsAST)
 }
 
 ASTUnit::~ASTUnit() {
-  CleanTemporaryFiles();
-  if (!PreambleFile.empty())
-    llvm::sys::Path(PreambleFile).eraseFromDisk();
-  
+  // Clean up the temporary files and the preamble file.
+  removeOnDiskEntry(this);
+
   // Free the buffers associated with remapped files. We are required to
   // perform this operation here because we explicitly request that the
   // compiler instance *not* free these buffers for each invocation of the
@@ -141,12 +249,6 @@ ASTUnit::~ASTUnit() {
     llvm::sys::AtomicDecrement(&ActiveASTUnitObjects);
     fprintf(stderr, "--- %d translation units\n", ActiveASTUnitObjects);
   }    
-}
-
-void ASTUnit::CleanTemporaryFiles() {
-  for (unsigned I = 0, N = TemporaryFiles.size(); I != N; ++I)
-    TemporaryFiles[I].eraseFromDisk();
-  TemporaryFiles.clear();
 }
 
 /// \brief Determine the set of code-completion contexts in which this 
@@ -939,7 +1041,7 @@ bool ASTUnit::Parse(llvm::MemoryBuffer *OverrideMainBuffer) {
     PreprocessorOpts.PrecompiledPreambleBytes.first = Preamble.size();
     PreprocessorOpts.PrecompiledPreambleBytes.second
                                                     = PreambleEndsAtStartOfLine;
-    PreprocessorOpts.ImplicitPCHInclude = PreambleFile;
+    PreprocessorOpts.ImplicitPCHInclude = getPreambleFile(this);
     PreprocessorOpts.DisablePCHValidation = true;
     
     // The stored diagnostic has the old source manager in it; update
@@ -971,7 +1073,7 @@ bool ASTUnit::Parse(llvm::MemoryBuffer *OverrideMainBuffer) {
     goto error;
 
   if (OverrideMainBuffer) {
-    std::string ModName = PreambleFile;
+    std::string ModName = getPreambleFile(this);
     TranslateStoredDiagnostics(Clang->getModuleManager(), ModName,
                                getSourceManager(), PreambleDiagnostics,
                                StoredDiagnostics);
@@ -1172,10 +1274,7 @@ llvm::MemoryBuffer *ASTUnit::getMainBufferWithPrecompiledPreamble(
     // We couldn't find a preamble in the main source. Clear out the current
     // preamble, if we have one. It's obviously no good any more.
     Preamble.clear();
-    if (!PreambleFile.empty()) {
-      llvm::sys::Path(PreambleFile).eraseFromDisk();
-      PreambleFile.clear();
-    }
+    erasePreambleFile(this);
 
     // The next time we actually see a preamble, precompile it.
     PreambleRebuildCounter = 1;
@@ -1281,7 +1380,7 @@ llvm::MemoryBuffer *ASTUnit::getMainBufferWithPrecompiledPreamble(
     // We can't reuse the previously-computed preamble. Build a new one.
     Preamble.clear();
     PreambleDiagnostics.clear();
-    llvm::sys::Path(PreambleFile).eraseFromDisk();
+    erasePreambleFile(this);
     PreambleRebuildCounter = 1;
   } else if (!AllowRebuild) {
     // We aren't allowed to rebuild the precompiled preamble; just
@@ -1439,7 +1538,7 @@ llvm::MemoryBuffer *ASTUnit::getMainBufferWithPrecompiledPreamble(
   StoredDiagnostics.erase(stored_diag_afterDriver_begin(), stored_diag_end());
   
   // Keep track of the preamble we precompiled.
-  PreambleFile = FrontendOpts.OutputFile;
+  setPreambleFile(this, FrontendOpts.OutputFile);
   NumWarningsInPreamble = getDiagnostics().getNumWarnings();
   
   // Keep track of all of the files that the source manager knows about,
@@ -1802,7 +1901,7 @@ bool ASTUnit::Reparse(RemappedFile *RemappedFiles, unsigned NumRemappedFiles) {
   // If we have a preamble file lying around, or if we might try to
   // build a precompiled preamble, do so now.
   llvm::MemoryBuffer *OverrideMainBuffer = 0;
-  if (!PreambleFile.empty() || PreambleRebuildCounter > 0)
+  if (!getPreambleFile(this).empty() || PreambleRebuildCounter > 0)
     OverrideMainBuffer = getMainBufferWithPrecompiledPreamble(*Invocation);
     
   // Clear out the diagnostics state.
@@ -2173,7 +2272,7 @@ void ASTUnit::CodeComplete(StringRef File, unsigned Line, unsigned Column,
   // point is within the main file, after the end of the precompiled
   // preamble.
   llvm::MemoryBuffer *OverrideMainBuffer = 0;
-  if (!PreambleFile.empty()) {
+  if (!getPreambleFile(this).empty()) {
     using llvm::sys::FileStatus;
     llvm::sys::PathWithStatus CompleteFilePath(File);
     llvm::sys::PathWithStatus MainPath(OriginalSourceFile);
@@ -2197,7 +2296,7 @@ void ASTUnit::CodeComplete(StringRef File, unsigned Line, unsigned Column,
     PreprocessorOpts.PrecompiledPreambleBytes.first = Preamble.size();
     PreprocessorOpts.PrecompiledPreambleBytes.second
                                                     = PreambleEndsAtStartOfLine;
-    PreprocessorOpts.ImplicitPCHInclude = PreambleFile;
+    PreprocessorOpts.ImplicitPCHInclude = getPreambleFile(this);
     PreprocessorOpts.DisablePCHValidation = true;
     
     OwnedBuffers.push_back(OverrideMainBuffer);
@@ -2214,7 +2313,7 @@ void ASTUnit::CodeComplete(StringRef File, unsigned Line, unsigned Column,
   if (Act->BeginSourceFile(*Clang.get(), Clang->getFrontendOpts().Inputs[0].second,
                            Clang->getFrontendOpts().Inputs[0].first)) {
     if (OverrideMainBuffer) {
-      std::string ModName = PreambleFile;
+      std::string ModName = getPreambleFile(this);
       TranslateStoredDiagnostics(Clang->getModuleManager(), ModName,
                                  getSourceManager(), PreambleDiagnostics,
                                  StoredDiagnostics);

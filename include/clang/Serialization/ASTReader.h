@@ -679,7 +679,8 @@ private:
   RecordLocation TypeCursorForIndex(unsigned Index);
   void LoadedDecl(unsigned Index, Decl *D);
   Decl *ReadDeclRecord(serialization::DeclID ID);
-  RecordLocation DeclCursorForID(serialization::DeclID ID);
+  RecordLocation DeclCursorForID(serialization::DeclID ID,
+                                 unsigned &RawLocation);
   void loadDeclUpdateRecords(serialization::DeclID ID, Decl *D);
   void loadObjCChainedCategories(serialization::GlobalDeclID ID,
                                  ObjCInterfaceDecl *D);
@@ -1255,6 +1256,9 @@ public:
 
   /// \brief Read the macro definition for this identifier.
   virtual void LoadMacroDefinition(IdentifierInfo *II);
+
+  /// \brief Update an out-of-date identifier.
+  virtual void updateOutOfDateIdentifier(IdentifierInfo &II);
 
   /// \brief Read the macro definition corresponding to this iterator
   /// into the unread macro record offsets table.
