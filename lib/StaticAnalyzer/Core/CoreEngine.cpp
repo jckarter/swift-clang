@@ -454,12 +454,87 @@ void CoreEngine::generateNode(const ProgramPoint &Loc,
   if (IsNew) WList->enqueue(Node);
 }
 
-void CoreEngine::enqueue(ExplodedNodeSet &S) {
-  for (ExplodedNodeSet::iterator I = S.begin(),
-                                 E = S.end(); I != E; ++I) {
+void CoreEngine::enqueueStmtNode(ExplodedNode *N,
+                                 const CFGBlock *Block, unsigned Idx) {
+  assert (!N->isSink());
+
+  // Check if this node entered a callee.
+  if (isa<CallEnter>(N->getLocation())) {
+    // Still use the index of the CallExpr. It's needed to create the callee
+    // StackFrameContext.
+    WList->enqueue(N, Block, Idx);
+    return;
+  }
+
+  // Do not create extra nodes. Move to the next CFG element.
+  if (isa<PostInitializer>(N->getLocation())) {
+    WList->enqueue(N, Block, Idx+1);
+    return;
+  }
+
+  const CFGStmt *CS = (*Block)[Idx].getAs<CFGStmt>();
+  const Stmt *St = CS ? CS->getStmt() : 0;
+  PostStmt Loc(St, N->getLocationContext());
+
+  if (Loc == N->getLocation()) {
+    // Note: 'N' should be a fresh node because otherwise it shouldn't be
+    // a member of Deferred.
+    WList->enqueue(N, Block, Idx+1);
+    return;
+  }
+
+  bool IsNew;
+  ExplodedNode *Succ = G->getNode(Loc, N->getState(), &IsNew);
+  Succ->addPredecessor(N, *G);
+
+  if (IsNew)
+    WList->enqueue(Succ, Block, Idx+1);
+}
+
+ExplodedNode *CoreEngine::generateCallExitNode(ExplodedNode *N) {
+  // Create a CallExit node and enqueue it.
+  const StackFrameContext *LocCtx
+                         = cast<StackFrameContext>(N->getLocationContext());
+  const Stmt *CE = LocCtx->getCallSite();
+
+  // Use the the callee location context.
+  CallExit Loc(CE, LocCtx);
+
+  bool isNew;
+  ExplodedNode *Node = G->getNode(Loc, N->getState(), &isNew);
+  Node->addPredecessor(N, *G);
+  return isNew ? Node : 0;
+}
+
+
+void CoreEngine::enqueue(ExplodedNodeSet &Set) {
+  for (ExplodedNodeSet::iterator I = Set.begin(),
+                                 E = Set.end(); I != E; ++I) {
     WList->enqueue(*I);
   }
 }
+
+void CoreEngine::enqueue(ExplodedNodeSet &Set,
+                         const CFGBlock *Block, unsigned Idx) {
+  for (ExplodedNodeSet::iterator I = Set.begin(),
+                                 E = Set.end(); I != E; ++I) {
+    enqueueStmtNode(*I, Block, Idx);
+  }
+}
+
+void CoreEngine::enqueueEndOfFunction(ExplodedNodeSet &Set) {
+  for (ExplodedNodeSet::iterator I = Set.begin(), E = Set.end(); I != E; ++I) {
+    ExplodedNode *N = *I;
+    // If we are in an inlined call, generate CallExit node.
+    if (N->getLocationContext()->getParent()) {
+      N = generateCallExitNode(N);
+      if (N)
+        WList->enqueue(N);
+    } else
+      G->addEndOfPath(N);
+  }
+}
+
 
 ExplodedNode* NodeBuilder::generateNodeImpl(const ProgramPoint &Loc,
                                             const ProgramState *State,

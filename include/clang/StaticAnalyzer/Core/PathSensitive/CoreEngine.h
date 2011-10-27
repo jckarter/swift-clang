@@ -47,7 +47,6 @@ class CoreEngine {
   friend class EndOfFunctionNodeBuilder;
   friend class CallEnterNodeBuilder;
   friend class CallExitNodeBuilder;
-  friend class ExprEngine;
 
 public:
   typedef std::vector<std::pair<BlockEdge, const ExplodedNode*> >
@@ -99,6 +98,11 @@ private:
 private:
   CoreEngine(const CoreEngine&); // Do not implement.
   CoreEngine& operator=(const CoreEngine&);
+
+  void enqueueStmtNode(ExplodedNode *N,
+                       const CFGBlock *Block, unsigned Idx);
+
+  ExplodedNode *generateCallExitNode(ExplodedNode *N);
 
 public:
   /// Construct a CoreEngine object to analyze the provided CFG using
@@ -163,8 +167,16 @@ public:
     return blocksAborted.end();
   }
 
-  /// Enqueue the results of the node builder onto the work list.
-  void enqueue(ExplodedNodeSet &NB);
+  /// \brief Enqueue the given set of nodes onto the work list.
+  void enqueue(ExplodedNodeSet &Set);
+
+  /// \brief Enqueue nodes that were created as a result of processing
+  /// a statement onto the work list.
+  void enqueue(ExplodedNodeSet &Set, const CFGBlock *Block, unsigned Idx);
+
+  /// \brief enqueue the nodes corresponding to the end of function onto the
+  /// end of path / work list.
+  void enqueueEndOfFunction(ExplodedNodeSet &Set);
 };
 
 // TODO: Turn into a calss.
