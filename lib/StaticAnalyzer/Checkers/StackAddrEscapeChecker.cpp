@@ -150,7 +150,7 @@ void StackAddrEscapeChecker::checkEndPath(CheckerContext &Ctx) const {
 
     CallBack(CheckerContext &CC) :
       Ctx(CC),
-      CurSFC(CC.getPredecessor()->getLocationContext()->getCurrentStackFrame())
+      CurSFC(CC.getLocationContext()->getCurrentStackFrame())
     {}
     
     bool HandleBinding(StoreManager &SMgr, Store store,
@@ -188,7 +188,7 @@ void StackAddrEscapeChecker::checkEndPath(CheckerContext &Ctx) const {
     return;
 
   // Generate an error node.
-  ExplodedNode *N = Ctx.generateNode(state);
+  ExplodedNode *N = Ctx.addTransition(state);
   if (!N)
     return;
 
