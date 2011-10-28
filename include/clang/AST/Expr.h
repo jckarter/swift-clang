@@ -465,7 +465,8 @@ public:
   /// Evaluate - Return true if this is a constant which we can fold using
   /// any crazy technique (that has nothing to do with language standards) that
   /// we want to.  If this function returns true, it returns the folded constant
-  /// in Result.
+  /// in Result. If this expression is a glvalue, an lvalue-to-rvalue conversion
+  /// will be applied.
   bool Evaluate(EvalResult &Result, const ASTContext &Ctx) const;
 
   /// EvaluateAsBooleanCondition - Return true if this is a constant
@@ -1957,6 +1958,9 @@ public:
   /// \brief Retrieve the call arguments.
   Expr **getArgs() {
     return reinterpret_cast<Expr **>(SubExprs+getNumPreArgs()+PREARGS_START);
+  }
+  const Expr *const *getArgs() const {
+    return const_cast<CallExpr*>(this)->getArgs();
   }
   
   /// getArg - Return the specified argument.
