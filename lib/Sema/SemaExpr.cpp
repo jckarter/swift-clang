@@ -4334,7 +4334,9 @@ ExprResult Sema::BuildVectorLiteral(SourceLocation LParenLoc,
     // be replicated to all the components of the vector
     if (numExprs == 1) {
       QualType ElemTy = Ty->getAs<VectorType>()->getElementType();
-      ExprResult Literal = Owned(exprs[0]);
+      ExprResult Literal = DefaultLvalueConversion(exprs[0]);
+      if (Literal.isInvalid())
+        return ExprError();
       Literal = ImpCastExprToType(Literal.take(), ElemTy,
                                   PrepareScalarCast(Literal, ElemTy));
       return BuildCStyleCastExpr(LParenLoc, TInfo, RParenLoc, Literal.take());
@@ -4355,7 +4357,9 @@ ExprResult Sema::BuildVectorLiteral(SourceLocation LParenLoc,
         VTy->getVectorKind() == VectorType::GenericVector &&
         numExprs == 1) {
         QualType ElemTy = Ty->getAs<VectorType>()->getElementType();
-        ExprResult Literal = Owned(exprs[0]);
+        ExprResult Literal = DefaultLvalueConversion(exprs[0]);
+        if (Literal.isInvalid())
+          return ExprError();
         Literal = ImpCastExprToType(Literal.take(), ElemTy,
                                     PrepareScalarCast(Literal, ElemTy));
         return BuildCStyleCastExpr(LParenLoc, TInfo, RParenLoc, Literal.take());
@@ -5718,6 +5722,15 @@ QualType Sema::InvalidOperands(SourceLocation Loc, ExprResult &LHS,
 
 QualType Sema::CheckVectorOperands(ExprResult &LHS, ExprResult &RHS,
                                    SourceLocation Loc, bool IsCompAssign) {
+  if (!IsCompAssign) {
+    LHS = DefaultFunctionArrayLvalueConversion(LHS.take());
+    if (LHS.isInvalid())
+      return QualType();
+  }
+  RHS = DefaultFunctionArrayLvalueConversion(RHS.take());
+  if (RHS.isInvalid())
+    return QualType();
+
   // For conversion purposes, we ignore any qualifiers.
   // For example, "const float" and "float" are equivalent.
   QualType LHSType =
@@ -6815,8 +6828,10 @@ QualType Sema::CheckVectorCompareOperands(ExprResult &LHS, ExprResult &RHS,
   // x == x, x != x, x < x, etc.  These always evaluate to a constant, and
   // often indicate logic errors in the program.
   if (!LHSType->hasFloatingRepresentation()) {
-    if (DeclRefExpr* DRL = dyn_cast<DeclRefExpr>(LHS.get()->IgnoreParens()))
-      if (DeclRefExpr* DRR = dyn_cast<DeclRefExpr>(RHS.get()->IgnoreParens()))
+    if (DeclRefExpr* DRL
+          = dyn_cast<DeclRefExpr>(LHS.get()->IgnoreParenImpCasts()))
+      if (DeclRefExpr* DRR
+            = dyn_cast<DeclRefExpr>(RHS.get()->IgnoreParenImpCasts()))
         if (DRL->getDecl() == DRR->getDecl())
           DiagRuntimeBehavior(Loc, 0,
                               PDiag(diag::warn_comparison_always)
@@ -8003,6 +8018,12 @@ static ExprResult BuildOverloadedBinOp(Sema &S, Scope *Sc, SourceLocation OpLoc,
 ExprResult Sema::BuildBinOp(Scope *S, SourceLocation OpLoc,
                             BinaryOperatorKind Opc,
                             Expr *LHSExpr, Expr *RHSExpr) {
+  // We want to end up calling one of checkPseudoObjectAssignment
+  // (if the LHS is a pseudo-object), BuildOverloadedBinOp (if
+  // both expressions are overloadable or either is type-dependent),
+  // or CreateBuiltinBinOp (in any other case).  We also want to get
+  // any placeholder types out of the way.
+
   // Handle pseudo-objects in the LHS.
   if (const BuiltinType *pty = LHSExpr->getType()->getAsPlaceholderType()) {
     // Assignments with a pseudo-object l-value need special analysis.
@@ -8014,12 +8035,15 @@ ExprResult Sema::BuildBinOp(Scope *S, SourceLocation OpLoc,
     if (pty->getKind() == BuiltinType::Overload) {
       // We can't actually test that if we still have a placeholder,
       // though.  Fortunately, none of the exceptions we see in that
-      // code below are valid when the LHS is an overload set.
+      // code below are valid when the LHS is an overload set.  Note
+      // that an overload set can be dependently-typed, but it never
+      // instantiates to having an overloadable type.
       ExprResult resolvedRHS = CheckPlaceholderExpr(RHSExpr);
       if (resolvedRHS.isInvalid()) return ExprError();
       RHSExpr = resolvedRHS.take();
 
-      if (RHSExpr->getType()->isOverloadableType())
+      if (RHSExpr->isTypeDependent() ||
+          RHSExpr->getType()->isOverloadableType())
         return BuildOverloadedBinOp(*this, S, OpLoc, Opc, LHSExpr, RHSExpr);
     }
         
@@ -8032,8 +8056,12 @@ ExprResult Sema::BuildBinOp(Scope *S, SourceLocation OpLoc,
   if (const BuiltinType *pty = RHSExpr->getType()->getAsPlaceholderType()) {
     // An overload in the RHS can potentially be resolved by the type
     // being assigned to.
-    if (Opc == BO_Assign && pty->getKind() == BuiltinType::Overload)
+    if (Opc == BO_Assign && pty->getKind() == BuiltinType::Overload) {
+      if (LHSExpr->isTypeDependent() || RHSExpr->isTypeDependent())
+        return BuildOverloadedBinOp(*this, S, OpLoc, Opc, LHSExpr, RHSExpr);
+
       return CreateBuiltinBinOp(OpLoc, Opc, LHSExpr, RHSExpr);
+    }
 
     // Don't resolve overloads if the other type is overloadable.
     if (pty->getKind() == BuiltinType::Overload &&
@@ -8046,16 +8074,15 @@ ExprResult Sema::BuildBinOp(Scope *S, SourceLocation OpLoc,
   }
 
   if (getLangOptions().CPlusPlus) {
-    bool UseBuiltinOperator;
+    // If either expression is type-dependent, always build an
+    // overloaded op.
+    if (LHSExpr->isTypeDependent() || RHSExpr->isTypeDependent())
+      return BuildOverloadedBinOp(*this, S, OpLoc, Opc, LHSExpr, RHSExpr);
 
-    if (LHSExpr->isTypeDependent() || RHSExpr->isTypeDependent()) {
-      UseBuiltinOperator = false;
-    } else {
-      UseBuiltinOperator = !LHSExpr->getType()->isOverloadableType() &&
-                           !RHSExpr->getType()->isOverloadableType();
-    }
-
-    if (!UseBuiltinOperator)
+    // Otherwise, build an overloaded op if either expression has an
+    // overloadable type.
+    if (LHSExpr->getType()->isOverloadableType() ||
+        RHSExpr->getType()->isOverloadableType())
       return BuildOverloadedBinOp(*this, S, OpLoc, Opc, LHSExpr, RHSExpr);
   }
 

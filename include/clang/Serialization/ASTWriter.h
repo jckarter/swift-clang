@@ -44,6 +44,7 @@ class CXXBaseSpecifier;
 class CXXCtorInitializer;
 class FPOptions;
 class HeaderSearch;
+class IdentifierResolver;
 class MacroDefinition;
 class MemorizeStatCalls;
 class OpaqueValueExpr;
@@ -141,7 +142,7 @@ private:
 
   /// \brief Offset of each declaration in the bitstream, indexed by
   /// the declaration's ID.
-  std::vector<uint32_t> DeclOffsets;
+  std::vector<serialization::DeclOffset> DeclOffsets;
 
   /// \brief The first ID number we can use for our own types.
   serialization::TypeID FirstTypeID;
@@ -355,7 +356,8 @@ private:
   void WriteTypeDeclOffsets();
   void WriteSelectors(Sema &SemaRef);
   void WriteReferencedSelectorsPool(Sema &SemaRef);
-  void WriteIdentifierTable(Preprocessor &PP, bool IsModule);
+  void WriteIdentifierTable(Preprocessor &PP, IdentifierResolver &IdResolver,
+                            bool IsModule);
   void WriteAttributes(const AttrVec &Attrs, RecordDataImpl &Record);
   void ResolveDeclUpdatesBlocks();
   void WriteDeclUpdatesBlocks();

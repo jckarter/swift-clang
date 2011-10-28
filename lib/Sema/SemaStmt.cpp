@@ -497,7 +497,7 @@ Sema::ActOnStartOfSwitchStmt(SourceLocation SwitchLoc, Expr *Cond,
     return StmtError();
 
   CondResult
-    = ConvertToIntegralOrEnumerationType(SwitchLoc, Cond,
+    = ConvertToIntegralOrEnumerationType(SwitchLoc, CondResult.take(),
                           PDiag(diag::err_typecheck_statement_requires_integer),
                                    PDiag(diag::err_switch_incomplete_class_type)
                                      << Cond->getSourceRange(),
@@ -639,6 +639,9 @@ Sema::ActOnFinishSwitchStmt(SourceLocation SwitchLoc, Stmt *Switch,
 
       // If the LHS is not the same type as the condition, insert an implicit
       // cast.
+      // FIXME: In C++11, the value is a converted constant expression of the
+      // promoted type of the switch condition.
+      Lo = DefaultLvalueConversion(Lo).take();
       Lo = ImpCastExprToType(Lo, CondType, CK_IntegralCast).take();
       CS->setLHS(Lo);
 
@@ -716,8 +719,11 @@ Sema::ActOnFinishSwitchStmt(SourceLocation SwitchLoc, Stmt *Switch,
                                            Hi->getLocStart(),
                                            diag::warn_case_value_overflow);
 
-        // If the LHS is not the same type as the condition, insert an implicit
+        // If the RHS is not the same type as the condition, insert an implicit
         // cast.
+        // FIXME: In C++11, the value is a converted constant expression of the
+        // promoted type of the switch condition.
+        Hi = DefaultLvalueConversion(Hi).take();
         Hi = ImpCastExprToType(Hi, CondType, CK_IntegralCast).take();
         CR->setRHS(Hi);
 
