@@ -146,7 +146,7 @@ private:
   /// the declaration's ID.
   std::vector<serialization::DeclOffset> DeclOffsets;
 
-  /// \brief Vector of pairs of raw location/DeclID.
+  /// \brief Sorted (by file offset) vector of pairs of file offset/DeclID.
   typedef SmallVector<std::pair<unsigned, serialization::DeclID>, 64>
     LocDeclIDsTy;
   struct DeclIDInFileInfo {
@@ -162,8 +162,7 @@ private:
   /// that it contains.
   FileDeclIDsTy FileDeclIDs;
 
-  void associateDeclWithFile(const Decl *D, serialization::DeclID,
-                             SourceLocation FileLoc);
+  void associateDeclWithFile(const Decl *D, serialization::DeclID);
 
   /// \brief The first ID number we can use for our own types.
   serialization::TypeID FirstTypeID;

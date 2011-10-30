@@ -3486,19 +3486,24 @@ static inline bool compLocDecl(std::pair<unsigned, serialization::DeclID> L,
   return L.first < R.first;
 }
 
-void ASTWriter::associateDeclWithFile(const Decl *D, DeclID ID,
-                                      SourceLocation FileLoc) {
+void ASTWriter::associateDeclWithFile(const Decl *D, DeclID ID) {
   assert(ID);
-  assert(FileLoc.isValid());
-  assert(FileLoc.isFileID());
+  assert(D);
+
+  SourceLocation Loc = D->getLocation();
+  if (Loc.isInvalid())
+    return;
 
   // We only keep track of the file-level declarations of each file.
   if (!D->getLexicalDeclContext()->isFileContext())
     return;
 
   SourceManager &SM = Context->getSourceManager();
+  SourceLocation FileLoc = SM.getFileLoc(Loc);
   assert(SM.isLocalSourceLocation(FileLoc));
-  FileID FID = SM.getFileID(FileLoc);
+  FileID FID;
+  unsigned Offset;
+  llvm::tie(FID, Offset) = SM.getDecomposedLoc(FileLoc);
   if (FID.isInvalid())
     return;
   const SrcMgr::SLocEntry *Entry = &SM.getSLocEntry(FID);
@@ -3508,11 +3513,10 @@ void ASTWriter::associateDeclWithFile(const Decl *D, DeclID ID,
   if (!Info)
     Info = new DeclIDInFileInfo();
 
-  unsigned RawLoc = FileLoc.getRawEncoding();
-  std::pair<unsigned, serialization::DeclID> LocDecl(RawLoc, ID);
+  std::pair<unsigned, serialization::DeclID> LocDecl(Offset, ID);
   LocDeclIDsTy &Decls = Info->DeclIDs;
 
-  if (Decls.empty() || Decls.back().first <= RawLoc) {
+  if (Decls.empty() || Decls.back().first <= Offset) {
     Decls.push_back(LocDecl);
     return;
   }
