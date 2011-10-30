@@ -745,11 +745,27 @@ CGDebugInfo::getOrCreateMethodType(const CXXMethodDecl *Method,
   if (!Method->isStatic()) {
     // "this" pointer is always first argument.
     QualType ThisPtr = Method->getThisType(CGM.getContext());
-    llvm::DIType ThisPtrType =
-      DBuilder.createArtificialType(getOrCreateType(ThisPtr, Unit));
-    
-    TypeCache[ThisPtr.getAsOpaquePtr()] = ThisPtrType;
-    Elts.push_back(ThisPtrType);
+
+    const CXXRecordDecl *RD = Method->getParent();
+    if (isa<ClassTemplateSpecializationDecl>(RD)) {
+      // Create pointer type directly in this case.
+      const PointerType *ThisPtrTy = cast<PointerType>(ThisPtr);
+      QualType PointeeTy = ThisPtrTy->getPointeeType();
+      unsigned AS = CGM.getContext().getTargetAddressSpace(PointeeTy);
+      uint64_t Size = CGM.getContext().getTargetInfo().getPointerWidth(AS);
+      uint64_t Align = CGM.getContext().getTypeAlign(ThisPtrTy);
+      llvm::DIType PointeeType =  getOrCreateType(PointeeTy, Unit);
+      llvm::DIType ThisPtrType =
+        DBuilder.createArtificialType
+        (DBuilder.createPointerType(PointeeType, Size, Align));
+      TypeCache[ThisPtr.getAsOpaquePtr()] = ThisPtrType;
+      Elts.push_back(ThisPtrType);
+    } else {
+      llvm::DIType ThisPtrType =
+        DBuilder.createArtificialType(getOrCreateType(ThisPtr, Unit));
+      TypeCache[ThisPtr.getAsOpaquePtr()] = ThisPtrType;
+      Elts.push_back(ThisPtrType);
+    }
   }
 
   // Copy rest of the arguments.
@@ -1096,7 +1112,8 @@ llvm::DIType CGDebugInfo::CreateType(const RecordType *Ty) {
     if (const VarDecl *V = dyn_cast<VarDecl>(*I)) {
       if (const Expr *Init = V->getInit()) {
         Expr::EvalResult Result;
-        if (Init->Evaluate(Result, CGM.getContext()) && Result.Val.isInt()) {
+        if (Init->EvaluateAsRValue(Result, CGM.getContext()) &&
+            Result.Val.isInt()) {
           llvm::ConstantInt *CI 
             = llvm::ConstantInt::get(CGM.getLLVMContext(), Result.Val.getInt());
           
