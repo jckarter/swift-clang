@@ -1180,7 +1180,7 @@ static bool isArraySizeVLA(Expr *ArraySize, llvm::APSInt &SizeVal, Sema &S) {
   // If we're in a GNU mode (like gnu99, but not c99) accept any evaluatable
   // value as an extension.
   Expr::EvalResult Result;
-  if (S.LangOpts.GNUMode && ArraySize->Evaluate(Result, S.Context)) {
+  if (S.LangOpts.GNUMode && ArraySize->EvaluateAsRValue(Result, S.Context)) {
     if (!Result.hasSideEffects() && Result.Val.isInt()) {
       SizeVal = Result.Val.getInt();
       S.Diag(ArraySize->getLocStart(), diag::ext_vla_folded_to_constant);
@@ -2665,6 +2665,7 @@ static void transferARCOwnershipToDeclaratorChunk(TypeProcessingState &state,
   // TODO: mark whether we did this inference?
 }
 
+/// \brief Used for transfering ownership in casts resulting in l-values.
 static void transferARCOwnership(TypeProcessingState &state,
                                  QualType &declSpecTy,
                                  Qualifiers::ObjCLifetime ownership) {
@@ -2672,6 +2673,7 @@ static void transferARCOwnership(TypeProcessingState &state,
   Declarator &D = state.getDeclarator();
 
   int inner = -1;
+  bool hasIndirection = false;
   for (unsigned i = 0, e = D.getNumTypeObjects(); i != e; ++i) {
     DeclaratorChunk &chunk = D.getTypeObject(i);
     switch (chunk.Kind) {
@@ -2682,11 +2684,15 @@ static void transferARCOwnership(TypeProcessingState &state,
     case DeclaratorChunk::Array:
     case DeclaratorChunk::Reference:
     case DeclaratorChunk::Pointer:
+      if (inner != -1)
+        hasIndirection = true;
       inner = i;
       break;
 
     case DeclaratorChunk::BlockPointer:
-      return transferARCOwnershipToDeclaratorChunk(state, ownership, i);
+      if (inner != -1)
+        transferARCOwnershipToDeclaratorChunk(state, ownership, i);
+      return;
 
     case DeclaratorChunk::Function:
     case DeclaratorChunk::MemberPointer:
@@ -2695,13 +2701,13 @@ static void transferARCOwnership(TypeProcessingState &state,
   }
 
   if (inner == -1)
-    return transferARCOwnershipToDeclSpec(S, declSpecTy, ownership);
+    return;
 
   DeclaratorChunk &chunk = D.getTypeObject(inner); 
   if (chunk.Kind == DeclaratorChunk::Pointer) {
     if (declSpecTy->isObjCRetainableType())
       return transferARCOwnershipToDeclSpec(S, declSpecTy, ownership);
-    if (declSpecTy->isObjCObjectType())
+    if (declSpecTy->isObjCObjectType() && hasIndirection)
       return transferARCOwnershipToDeclaratorChunk(state, ownership, inner);
   } else {
     assert(chunk.Kind == DeclaratorChunk::Array ||

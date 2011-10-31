@@ -1078,6 +1078,7 @@ static void ParseCodeGenArgs(CodeGenOptions &Opts, ArgList &Args, InputKind IK,
   Opts.EmitGcovNotes = Args.hasArg(OPT_femit_coverage_notes);
   Opts.CoverageFile = Args.getLastArgValue(OPT_coverage_file);
   Opts.DebugCompilationDir = Args.getLastArgValue(OPT_fdebug_compilation_dir);
+  Opts.LinkBitcodeFile = Args.getLastArgValue(OPT_mlink_bitcode_file);
 
   if (Arg *A = Args.getLastArg(OPT_fobjc_dispatch_method_EQ)) {
     StringRef Name = A->getValue(Args);
@@ -1109,6 +1110,8 @@ static void ParseDiagnosticArgs(DiagnosticOptions &Opts, ArgList &Args,
                                 DiagnosticsEngine &Diags) {
   using namespace cc1options;
   Opts.DiagnosticLogFile = Args.getLastArgValue(OPT_diagnostic_log_file);
+  Opts.DiagnosticSerializationFile =
+    Args.getLastArgValue(OPT_diagnostic_serialized_file);
   Opts.IgnoreWarnings = Args.hasArg(OPT_w);
   Opts.NoRewriteMacros = Args.hasArg(OPT_Wno_rewrite_macros);
   Opts.Pedantic = Args.hasArg(OPT_pedantic);
