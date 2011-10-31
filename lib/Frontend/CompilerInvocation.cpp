@@ -131,6 +131,10 @@ static void CodeGenOptsToArgs(const CodeGenOptions &Opts,
     Res.push_back("-disable-llvm-optzns");
   if (Opts.DisableRedZone)
     Res.push_back("-disable-red-zone");
+  if (!Opts.DebugCompilationDir.empty()) {
+    Res.push_back("-fdebug-compilation-dir");
+    Res.push_back(Opts.DebugCompilationDir);
+  }
   if (!Opts.DwarfDebugFlags.empty()) {
     Res.push_back("-dwarf-debug-flags");
     Res.push_back(Opts.DwarfDebugFlags);
@@ -623,6 +627,8 @@ static void LangOptsToArgs(const LangOptions &Opts,
     Res.push_back("-fgnu-keywords");
   if (Opts.MicrosoftExt)
     Res.push_back("-fms-extensions");
+  if (Opts.MicrosoftMode)
+    Res.push_back("-fms-compatibility");
   if (Opts.MSCVersion != 0)
     Res.push_back("-fmsc-version=" + llvm::utostr(Opts.MSCVersion));
   if (Opts.Borland)
@@ -1071,6 +1077,8 @@ static void ParseCodeGenArgs(CodeGenOptions &Opts, ArgList &Args, InputKind IK,
   Opts.EmitGcovArcs = Args.hasArg(OPT_femit_coverage_data);
   Opts.EmitGcovNotes = Args.hasArg(OPT_femit_coverage_notes);
   Opts.CoverageFile = Args.getLastArgValue(OPT_coverage_file);
+  Opts.DebugCompilationDir = Args.getLastArgValue(OPT_fdebug_compilation_dir);
+  Opts.LinkBitcodeFile = Args.getLastArgValue(OPT_mlink_bitcode_file);
 
   if (Arg *A = Args.getLastArg(OPT_fobjc_dispatch_method_EQ)) {
     StringRef Name = A->getValue(Args);
@@ -1102,6 +1110,8 @@ static void ParseDiagnosticArgs(DiagnosticOptions &Opts, ArgList &Args,
                                 DiagnosticsEngine &Diags) {
   using namespace cc1options;
   Opts.DiagnosticLogFile = Args.getLastArgValue(OPT_diagnostic_log_file);
+  Opts.DiagnosticSerializationFile =
+    Args.getLastArgValue(OPT_diagnostic_serialized_file);
   Opts.IgnoreWarnings = Args.hasArg(OPT_w);
   Opts.NoRewriteMacros = Args.hasArg(OPT_Wno_rewrite_macros);
   Opts.Pedantic = Args.hasArg(OPT_pedantic);
@@ -1450,6 +1460,10 @@ static void ParseHeaderSearchArgs(HeaderSearchOptions &Opts, ArgList &Args) {
          OPT_iwithsysroot), ie = Args.filtered_end(); it != ie; ++it)
     Opts.AddPath((*it)->getValue(Args), frontend::System, true, false,
                  !(*it)->getOption().matches(OPT_iwithsysroot));
+  for (arg_iterator it = Args.filtered_begin(OPT_iframework),
+         ie = Args.filtered_end(); it != ie; ++it)
+    Opts.AddPath((*it)->getValue(Args), frontend::System, true, true,
+                 true);
 
   // Add the paths for the various language specific isystem flags.
   for (arg_iterator it = Args.filtered_begin(OPT_c_isystem),
@@ -1688,7 +1702,8 @@ static void ParseLangArgs(LangOptions &Opts, ArgList &Args, InputKind IK,
                                    OPT_fno_dollars_in_identifiers,
                                    Opts.DollarIdents);
   Opts.PascalStrings = Args.hasArg(OPT_fpascal_strings);
-  Opts.MicrosoftExt = Args.hasArg(OPT_fms_extensions);
+  Opts.MicrosoftExt
+    = Args.hasArg(OPT_fms_extensions) || Args.hasArg(OPT_fms_compatibility);
   Opts.MicrosoftMode = Args.hasArg(OPT_fms_compatibility);
   Opts.MSCVersion = Args.getLastArgIntValue(OPT_fmsc_version, 0, Diags);
   Opts.Borland = Args.hasArg(OPT_fborland_extensions);

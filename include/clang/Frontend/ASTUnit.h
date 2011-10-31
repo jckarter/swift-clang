@@ -147,10 +147,6 @@ private:
   /// the next.
   unsigned NumStoredDiagnosticsFromDriver;
   
-  /// \brief Temporary files that should be removed when the ASTUnit is 
-  /// destroyed.
-  SmallVector<llvm::sys::Path, 4> TemporaryFiles;
-  
   /// \brief Counter that determines when we want to try building a
   /// precompiled preamble.
   ///
@@ -161,10 +157,7 @@ private:
   /// building the precompiled preamble fails, we won't try again for
   /// some number of calls.
   unsigned PreambleRebuildCounter;
-  
-  /// \brief The file in which the precompiled preamble is stored.
-  std::string PreambleFile;
-  
+
 public:
   class PreambleData {
     const FileEntry *File;
@@ -468,9 +461,7 @@ public:
   /// \brief Add a temporary file that the ASTUnit depends on.
   ///
   /// This file will be erased when the ASTUnit is destroyed.
-  void addTemporaryFile(const llvm::sys::Path &TempFile) {
-    TemporaryFiles.push_back(TempFile);
-  }
+  void addTemporaryFile(const llvm::sys::Path &TempFile);
                         
   bool getOnlyLocalDecls() const { return OnlyLocalDecls; }
 
@@ -546,6 +537,11 @@ public:
   /// preamble, otherwise it returns \arg Loc.
   SourceLocation mapLocationToPreamble(SourceLocation Loc);
 
+  bool isInPreambleFileID(SourceLocation Loc);
+  bool isInMainFileID(SourceLocation Loc);
+  SourceLocation getStartOfMainFileID();
+  SourceLocation getEndOfPreambleFileID();
+
   /// \brief \see mapLocationFromPreamble.
   SourceRange mapRangeFromPreamble(SourceRange R) {
     return SourceRange(mapLocationFromPreamble(R.getBegin()),
@@ -559,17 +555,26 @@ public:
   }
   
   // Retrieve the diagnostics associated with this AST
-  typedef const StoredDiagnostic *stored_diag_iterator;
-  stored_diag_iterator stored_diag_begin() const { 
+  typedef StoredDiagnostic *stored_diag_iterator;
+  typedef const StoredDiagnostic *stored_diag_const_iterator;
+  stored_diag_const_iterator stored_diag_begin() const { 
     return StoredDiagnostics.begin(); 
   }
-  stored_diag_iterator stored_diag_end() const { 
+  stored_diag_iterator stored_diag_begin() { 
+    return StoredDiagnostics.begin(); 
+  }
+  stored_diag_const_iterator stored_diag_end() const { 
+    return StoredDiagnostics.end(); 
+  }
+  stored_diag_iterator stored_diag_end() { 
     return StoredDiagnostics.end(); 
   }
   unsigned stored_diag_size() const { return StoredDiagnostics.size(); }
-  
-  SmallVector<StoredDiagnostic, 4> &getStoredDiagnostics() { 
-    return StoredDiagnostics; 
+
+  stored_diag_iterator stored_diag_afterDriver_begin() {
+    if (NumStoredDiagnosticsFromDriver > StoredDiagnostics.size())
+      NumStoredDiagnosticsFromDriver = 0;
+    return StoredDiagnostics.begin() + NumStoredDiagnosticsFromDriver; 
   }
 
   typedef std::vector<CachedCodeCompletionResult>::iterator

@@ -98,7 +98,7 @@ Sema::Sema(Preprocessor &pp, ASTContext &ctxt, ASTConsumer &consumer,
     CurContext(0), OriginalLexicalContext(0),
     PackContext(0), MSStructPragmaOn(false), VisContext(0),
     ExprNeedsCleanups(0), LateTemplateParser(0), OpaqueParser(0),
-    IdResolver(pp.getLangOptions()), CXXTypeInfoDecl(0), MSVCGuidDecl(0),
+    IdResolver(pp), CXXTypeInfoDecl(0), MSVCGuidDecl(0),
     NSNumberDecl(0), NSArrayDecl(0), ArrayWithObjectsMethod(0), 
     NSDictionaryDecl(0), DictionaryWithObjectsMethod(0),
     GlobalNewDeleteDeclared(false), 
@@ -147,11 +147,11 @@ void Sema::Initialize() {
     // If either of the 128-bit integer types are unavailable to name lookup,
     // define them now.
     DeclarationName Int128 = &Context.Idents.get("__int128_t");
-    if (IdentifierResolver::begin(Int128) == IdentifierResolver::end())
+    if (IdResolver.begin(Int128) == IdResolver.end())
       PushOnScopeChains(Context.getInt128Decl(), TUScope);
 
     DeclarationName UInt128 = &Context.Idents.get("__uint128_t");
-    if (IdentifierResolver::begin(UInt128) == IdentifierResolver::end())
+    if (IdResolver.begin(UInt128) == IdResolver.end())
       PushOnScopeChains(Context.getUInt128Decl(), TUScope);
   }
   
@@ -161,18 +161,18 @@ void Sema::Initialize() {
     // If 'SEL' does not yet refer to any declarations, make it refer to the
     // predefined 'SEL'.
     DeclarationName SEL = &Context.Idents.get("SEL");
-    if (IdentifierResolver::begin(SEL) == IdentifierResolver::end())
+    if (IdResolver.begin(SEL) == IdResolver.end())
       PushOnScopeChains(Context.getObjCSelDecl(), TUScope);
 
     // If 'id' does not yet refer to any declarations, make it refer to the
     // predefined 'id'.
     DeclarationName Id = &Context.Idents.get("id");
-    if (IdentifierResolver::begin(Id) == IdentifierResolver::end())
+    if (IdResolver.begin(Id) == IdResolver.end())
       PushOnScopeChains(Context.getObjCIdDecl(), TUScope);
     
     // Create the built-in typedef for 'Class'.
     DeclarationName Class = &Context.Idents.get("Class");
-    if (IdentifierResolver::begin(Class) == IdentifierResolver::end())
+    if (IdResolver.begin(Class) == IdResolver.end())
       PushOnScopeChains(Context.getObjCClassDecl(), TUScope);
   }
 }
@@ -244,6 +244,20 @@ ExprResult Sema::ImpCastExprToType(Expr *E, QualType Ty,
                                    CastKind Kind, ExprValueKind VK,
                                    const CXXCastPath *BasePath,
                                    CheckedConversionKind CCK) {
+#ifndef NDEBUG
+  if (VK == VK_RValue && !E->isRValue()) {
+    switch (Kind) {
+    default:
+      assert(0 && "can't implicitly cast lvalue to rvalue with this cast kind");
+    case CK_LValueToRValue:
+    case CK_ArrayToPointerDecay:
+    case CK_FunctionToPointerDecay:
+    case CK_ToVoid:
+      break;
+    }
+  }
+#endif
+
   QualType ExprTy = Context.getCanonicalType(E->getType());
   QualType TypeTy = Context.getCanonicalType(Ty);
 
@@ -629,18 +643,9 @@ Sema::SemaDiagnosticBuilder::~SemaDiagnosticBuilder() {
   if (llvm::Optional<TemplateDeductionInfo*> Info = SemaRef.isSFINAEContext()) {
     switch (DiagnosticIDs::getDiagnosticSFINAEResponse(getDiagID())) {
     case DiagnosticIDs::SFINAE_Report:
-      // Fall through; we'll report the diagnostic below.
+      // We'll report the diagnostic below.
       break;
       
-    case DiagnosticIDs::SFINAE_AccessControl:
-      // Per C++ Core Issue 1170, access control is part of SFINAE.
-      // Additionally, the AccessCheckingSFINAE flag can be used to temporary
-      // make access control a part of SFINAE for the purposes of checking
-      // type traits.
-      if (!SemaRef.AccessCheckingSFINAE &&
-          !SemaRef.getLangOptions().CPlusPlus0x)
-        break;
-        
     case DiagnosticIDs::SFINAE_SubstitutionFailure:
       // Count this failure so that we know that template argument deduction
       // has failed.
@@ -650,6 +655,33 @@ Sema::SemaDiagnosticBuilder::~SemaDiagnosticBuilder() {
       Clear();
       return;
       
+    case DiagnosticIDs::SFINAE_AccessControl: {
+      // Per C++ Core Issue 1170, access control is part of SFINAE.
+      // Additionally, the AccessCheckingSFINAE flag can be used to temporary
+      // make access control a part of SFINAE for the purposes of checking
+      // type traits.
+      if (!SemaRef.AccessCheckingSFINAE &&
+          !SemaRef.getLangOptions().CPlusPlus0x)
+        break;
+
+      SourceLocation Loc = getLocation();
+
+      // Suppress this diagnostic.
+      ++SemaRef.NumSFINAEErrors;
+      SemaRef.Diags.setLastDiagnosticIgnored();
+      SemaRef.Diags.Clear();
+      Clear();
+
+      // Now the diagnostic state is clear, produce a C++98 compatibility
+      // warning.
+      SemaRef.Diag(Loc, diag::warn_cxx98_compat_sfinae_access_control);
+
+      // The last diagnostic which Sema produced was ignored. Suppress any
+      // notes attached to it.
+      SemaRef.Diags.setLastDiagnosticIgnored();
+      return;
+    }
+
     case DiagnosticIDs::SFINAE_Suppress:
       // Make a copy of this suppressed diagnostic and store it with the
       // template-deduction information;

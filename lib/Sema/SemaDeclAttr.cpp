@@ -805,7 +805,7 @@ static void handleIBOutletCollection(Sema &S, Decl *D,
 
   IdentifierInfo *II = Attr.getParameterName();
   if (!II)
-    II = &S.Context.Idents.get("id");
+    II = &S.Context.Idents.get("NSObject");
   
   ParsedType TypeRep = S.getTypeName(*II, Attr.getLoc(), 
                         S.getScopeForContext(D->getDeclContext()->getParent()));
@@ -818,8 +818,7 @@ static void handleIBOutletCollection(Sema &S, Decl *D,
   // FIXME. Gnu attribute extension ignores use of builtin types in
   // attributes. So, __attribute__((iboutletcollection(char))) will be
   // treated as __attribute__((iboutletcollection())).
-  if (!QT->isObjCIdType() && !QT->isObjCClassType() &&
-      !QT->isObjCObjectType()) {
+  if (!QT->isObjCIdType() && !QT->isObjCObjectType()) {
     S.Diag(Attr.getLoc(), diag::err_iboutletcollection_type) << II;
     return;
   }
@@ -1915,6 +1914,10 @@ static void handleWeakAttr(Sema &S, Decl *D, const AttributeList &Attr) {
   }
 
   if (!isa<VarDecl>(D) && !isa<FunctionDecl>(D)) {
+    if (isa<CXXRecordDecl>(D)) {
+      D->addAttr(::new (S.Context) WeakAttr(Attr.getRange(), S.Context));
+      return;
+    }
     S.Diag(Attr.getLoc(), diag::warn_attribute_wrong_decl_type)
       << Attr.getName() << ExpectedVariableOrFunction;
     return;
@@ -1946,7 +1949,7 @@ static void handleWeakImportAttr(Sema &S, Decl *D, const AttributeList &Attr) {
         << "weak_import" << 2 /*variable and function*/;
     else if (isa<ObjCPropertyDecl>(D) || isa<ObjCMethodDecl>(D) ||
              (S.Context.getTargetInfo().getTriple().isOSDarwin() &&
-              isa<ObjCInterfaceDecl>(D))) {
+              (isa<ObjCInterfaceDecl>(D) || isa<EnumDecl>(D)))) {
       // Nothing to warn about here.
     } else
       S.Diag(Attr.getLoc(), diag::warn_attribute_wrong_decl_type)
@@ -2541,6 +2544,10 @@ static void handleAlignedAttr(Sema &S, Decl *D, const AttributeList &Attr) {
 }
 
 void Sema::AddAlignedAttr(SourceRange AttrRange, Decl *D, Expr *E) {
+  // FIXME: Handle pack-expansions here.
+  if (DiagnoseUnexpandedParameterPack(E))
+    return;
+
   if (E->isTypeDependent() || E->isValueDependent()) {
     // Save dependent expressions in the AST to be instantiated.
     D->addAttr(::new (Context) AlignedAttr(AttrRange, Context, true, E));

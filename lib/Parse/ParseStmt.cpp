@@ -355,7 +355,8 @@ StmtResult Parser::ParseSEHTryBlockCommon(SourceLocation TryLoc) {
     return move(TryBlock);
 
   StmtResult Handler;
-  if(Tok.is(tok::kw___except)) {
+  if (Tok.is(tok::identifier) && 
+      Tok.getIdentifierInfo() == getSEHExceptKeyword()) {
     SourceLocation Loc = ConsumeToken();
     Handler = ParseSEHExceptBlock(Loc);
   } else if (Tok.is(tok::kw___finally)) {
@@ -2037,10 +2038,13 @@ StmtResult Parser::ParseCXXTryBlockCommon(SourceLocation TryLoc) {
     return move(TryBlock);
 
   // Borland allows SEH-handlers with 'try'
-  if(Tok.is(tok::kw___except) || Tok.is(tok::kw___finally)) {
+  
+  if((Tok.is(tok::identifier) && 
+      Tok.getIdentifierInfo() == getSEHExceptKeyword()) || 
+     Tok.is(tok::kw___finally)) {
     // TODO: Factor into common return ParseSEHHandlerCommon(...)
     StmtResult Handler;
-    if(Tok.is(tok::kw___except)) {
+    if(Tok.getIdentifierInfo() == getSEHExceptKeyword()) {
       SourceLocation Loc = ConsumeToken();
       Handler = ParseSEHExceptBlock(Loc);
     }
@@ -2132,19 +2136,52 @@ StmtResult Parser::ParseCXXCatchBlock() {
 }
 
 void Parser::ParseMicrosoftIfExistsStatement(StmtVector &Stmts) {
-  bool Result;
+  IfExistsCondition Result;
   if (ParseMicrosoftIfExistsCondition(Result))
     return;
 
-  if (Tok.isNot(tok::l_brace)) {
+  // Handle dependent statements by parsing the braces as a compound statement.
+  // This is not the same behavior as Visual C++, which don't treat this as a
+  // compound statement, but for Clang's type checking we can't have anything
+  // inside these braces escaping to the surrounding code.
+  if (Result.Behavior == IEB_Dependent) {
+    if (!Tok.is(tok::l_brace)) {
+      Diag(Tok, diag::err_expected_lbrace);
+      return;      
+    }
+    
+    ParsedAttributes Attrs(AttrFactory);
+    StmtResult Compound = ParseCompoundStatement(Attrs);
+    if (Compound.isInvalid())
+      return;
+    
+    StmtResult DepResult = Actions.ActOnMSDependentExistsStmt(Result.KeywordLoc,
+                                                              Result.IsIfExists,
+                                                              Result.SS, 
+                                                              Result.Name,
+                                                              Compound.get());
+    if (DepResult.isUsable())
+      Stmts.push_back(DepResult.get());
+    return;
+  }
+  
+  BalancedDelimiterTracker Braces(*this, tok::l_brace);
+  if (Braces.consumeOpen()) {
     Diag(Tok, diag::err_expected_lbrace);
     return;
   }
-  ConsumeBrace();
 
-  // Condition is false skip all inside the {}.
-  if (!Result) {
-    SkipUntil(tok::r_brace, false);
+  switch (Result.Behavior) {
+  case IEB_Parse:
+    // Parse the statements below.
+    break;
+      
+  case IEB_Dependent:
+    llvm_unreachable("Dependent case handled above");
+    break;
+      
+  case IEB_Skip:
+    Braces.skipToEnd();
     return;
   }
 
@@ -2154,10 +2191,5 @@ void Parser::ParseMicrosoftIfExistsStatement(StmtVector &Stmts) {
     if (R.isUsable())
       Stmts.push_back(R.release());
   }
-
-  if (Tok.isNot(tok::r_brace)) {
-    Diag(Tok, diag::err_expected_rbrace);
-    return;
-  }
-  ConsumeBrace();
+  Braces.consumeClose();
 }

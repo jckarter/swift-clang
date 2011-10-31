@@ -514,6 +514,7 @@ IdentifierInfo *ASTIdentifierLookupTrait::ReadData(const internal_key_type& k,
       II = &Reader.getIdentifierTable().getOwn(StringRef(k.first, k.second));
     Reader.SetIdentifierInfo(ID, II);
     II->setIsFromAST();
+    II->setOutOfDate(false);
     return II;
   }
 
@@ -539,7 +540,8 @@ IdentifierInfo *ASTIdentifierLookupTrait::ReadData(const internal_key_type& k,
   IdentifierInfo *II = KnownII;
   if (!II)
     II = &Reader.getIdentifierTable().getOwn(StringRef(k.first, k.second));
-  Reader.SetIdentifierInfo(ID, II);
+  II->setOutOfDate(false);
+  II->setIsFromAST();
 
   // Set or check the various bits in the IdentifierInfo structure.
   // Token IDs are read-only.
@@ -564,6 +566,8 @@ IdentifierInfo *ASTIdentifierLookupTrait::ReadData(const internal_key_type& k,
     DataLen -= 4;
   }
 
+  Reader.SetIdentifierInfo(ID, II);
+
   // Read all of the declarations visible at global scope with this
   // name.
   if (DataLen > 0) {
@@ -573,7 +577,6 @@ IdentifierInfo *ASTIdentifierLookupTrait::ReadData(const internal_key_type& k,
     Reader.SetGloballyVisibleDecls(II, DeclIDs);
   }
 
-  II->setIsFromAST();
   return II;
 }
 
@@ -1131,6 +1134,13 @@ ASTReader::ASTReadResult ASTReader::ReadSLocEntryRecord(int ID) {
     FileInfo.NumCreatedFIDs = Record[6];
     if (Record[3])
       FileInfo.setHasLineDirectives();
+
+    const DeclID *FirstDecl = F->FileSortedDecls + Record[7];
+    unsigned NumFileDecls = Record[8];
+    if (NumFileDecls) {
+      assert(F->FileSortedDecls && "FILE_SORTED_DECLS not encountered yet ?");
+      FileDeclIDs[FID] = llvm::makeArrayRef(FirstDecl, NumFileDecls);
+    }
     
     break;
   }
@@ -1276,6 +1286,7 @@ void ASTReader::ReadMacroRecord(Module &F, uint64_t Offset) {
         Error("macro must have a name in AST file");
         return;
       }
+      
       SourceLocation Loc = ReadSourceLocation(F, Record[1]);
       bool isUsed = Record[2];
 
@@ -1500,6 +1511,46 @@ void ASTReader::LoadMacroDefinition(IdentifierInfo *II) {
   LoadMacroDefinition(Pos);
 }
 
+namespace {
+  /// \brief Visitor class used to look up identifirs in an AST file.
+  class IdentifierLookupVisitor {
+    StringRef Name;
+    IdentifierInfo *Found;
+  public:
+    explicit IdentifierLookupVisitor(StringRef Name) : Name(Name), Found() { }
+    
+    static bool visit(Module &M, void *UserData) {
+      IdentifierLookupVisitor *This
+        = static_cast<IdentifierLookupVisitor *>(UserData);
+      
+      ASTIdentifierLookupTable *IdTable
+        = (ASTIdentifierLookupTable *)M.IdentifierLookupTable;
+      if (!IdTable)
+        return false;
+      
+      std::pair<const char*, unsigned> Key(This->Name.begin(), 
+                                           This->Name.size());
+      ASTIdentifierLookupTable::iterator Pos = IdTable->find(Key);
+      if (Pos == IdTable->end())
+        return false;
+      
+      // Dereferencing the iterator has the effect of building the
+      // IdentifierInfo node and populating it with the various
+      // declarations it needs.
+      This->Found = *Pos;
+      return true;
+    }
+    
+    // \brief Retrieve the identifier info found within the module
+    // files.
+    IdentifierInfo *getIdentifierInfo() const { return Found; }
+  };
+}
+
+void ASTReader::updateOutOfDateIdentifier(IdentifierInfo &II) {
+  get(II.getName());
+}
+
 const FileEntry *ASTReader::getFileEntry(StringRef filenameStrRef) {
   std::string Filename = filenameStrRef;
   MaybeAddSystemRootToFilename(Filename);
@@ -1712,7 +1763,7 @@ ASTReader::ReadASTBlock(Module &F) {
         Error("duplicate DECL_OFFSET record in AST file");
         return Failure;
       }
-      F.DeclOffsets = (const uint32_t *)BlobStart;
+      F.DeclOffsets = (const DeclOffset *)BlobStart;
       F.LocalNumDecls = Record[0];
       unsigned LocalBaseDeclID = Record[1];
       F.BaseDeclID = getTotalNumDecls();
@@ -1915,6 +1966,10 @@ ASTReader::ReadASTBlock(Module &F) {
     case PP_COUNTER_VALUE:
       if (!Record.empty() && Listener)
         Listener->ReadCounter(Record[0]);
+      break;
+      
+    case FILE_SORTED_DECLS:
+      F.FileSortedDecls = (const DeclID *)BlobStart;
       break;
 
     case SOURCE_LOCATION_OFFSETS: {
@@ -2329,43 +2384,6 @@ ASTReader::ASTReadResult ASTReader::validateFileEntries(Module &M) {
   return Success;
 }
 
-namespace {
-  /// \brief Visitor class used to look up identifirs in an AST file.
-  class IdentifierLookupVisitor {
-    StringRef Name;
-    IdentifierInfo *Found;
-  public:
-    explicit IdentifierLookupVisitor(StringRef Name) : Name(Name), Found() { }
-    
-    static bool visit(Module &M, void *UserData) {
-      IdentifierLookupVisitor *This
-      = static_cast<IdentifierLookupVisitor *>(UserData);
-      
-      ASTIdentifierLookupTable *IdTable
-        = (ASTIdentifierLookupTable *)M.IdentifierLookupTable;
-      if (!IdTable)
-        return false;
-      
-      std::pair<const char*, unsigned> Key(This->Name.begin(), 
-                                           This->Name.size());
-      ASTIdentifierLookupTable::iterator Pos = IdTable->find(Key);
-      if (Pos == IdTable->end())
-        return false;
-      
-      // Dereferencing the iterator has the effect of building the
-      // IdentifierInfo node and populating it with the various
-      // declarations it needs.
-      This->Found = *Pos;
-      return true;
-    }
-    
-    // \brief Retrieve the identifier info found within the module
-    // files.
-    IdentifierInfo *getIdentifierInfo() const { return Found; }
-  };
-}
-
-
 ASTReader::ASTReadResult ASTReader::ReadAST(const std::string &FileName,
                                             ModuleKind Type) {
   switch(ReadASTCore(FileName, Type, /*ImportedBy=*/0)) {
@@ -2384,33 +2402,13 @@ ASTReader::ASTReadResult ASTReader::ReadAST(const std::string &FileName,
       CheckPredefinesBuffers())
     return IgnorePCH;
 
-  // Initialization of keywords and pragmas occurs before the
-  // AST file is read, so there may be some identifiers that were
-  // loaded into the IdentifierTable before we intercepted the
-  // creation of identifiers. Iterate through the list of known
-  // identifiers and determine whether we have to establish
-  // preprocessor definitions or top-level identifier declaration
-  // chains for those identifiers.
-  //
-  // We copy the IdentifierInfo pointers to a small vector first,
-  // since de-serializing declarations or macro definitions can add
-  // new entries into the identifier table, invalidating the
-  // iterators.
-  //
-  // FIXME: We need a lazier way to load this information, e.g., by marking
-  // the identifier data as 'dirty', so that it will be looked up in the
-  // AST file(s) if it is uttered in the source. This could save us some
-  // module load time.
-  SmallVector<IdentifierInfo *, 128> Identifiers;
+  // Mark all of the identifiers in the identifier table as being out of date,
+  // so that various accessors know to check the loaded modules when the
+  // identifier is used.
   for (IdentifierTable::iterator Id = PP.getIdentifierTable().begin(),
                               IdEnd = PP.getIdentifierTable().end();
        Id != IdEnd; ++Id)
-    Identifiers.push_back(Id->second);
-  
-  for (unsigned I = 0, N = Identifiers.size(); I != N; ++I) {
-    IdentifierLookupVisitor Visitor(Identifiers[I]->getName());
-    ModuleMgr.visit(IdentifierLookupVisitor::visit, &Visitor);
-  }
+    Id->second->setOutOfDate(true);
 
   InitializeContext();
 
@@ -2778,14 +2776,22 @@ bool ASTReader::ParseLanguageOptions(
   return false;
 }
 
-PreprocessedEntity *ASTReader::ReadPreprocessedEntity(unsigned Index) {
-  PreprocessedEntityID PPID = Index+1;
+std::pair<Module *, unsigned>
+ASTReader::getModulePreprocessedEntity(unsigned GlobalIndex) {
   GlobalPreprocessedEntityMapType::iterator
-    I = GlobalPreprocessedEntityMap.find(Index);
+  I = GlobalPreprocessedEntityMap.find(GlobalIndex);
   assert(I != GlobalPreprocessedEntityMap.end() && 
          "Corrupted global preprocessed entity map");
-  Module &M = *I->second;
-  unsigned LocalIndex = Index - M.BasePreprocessedEntityID;
+  Module *M = I->second;
+  unsigned LocalIndex = GlobalIndex - M->BasePreprocessedEntityID;
+  return std::make_pair(M, LocalIndex);
+}
+
+PreprocessedEntity *ASTReader::ReadPreprocessedEntity(unsigned Index) {
+  PreprocessedEntityID PPID = Index+1;
+  std::pair<Module *, unsigned> PPInfo = getModulePreprocessedEntity(Index);
+  Module &M = *PPInfo.first;
+  unsigned LocalIndex = PPInfo.second;
   const PPEntityOffset &PPOffs = M.PreprocessedEntityOffsets[LocalIndex];
 
   SavedStreamPosition SavedPosition(M.PreprocessorDetailCursor);  
@@ -3020,6 +3026,28 @@ std::pair<unsigned, unsigned>
   PreprocessedEntityID BeginID = findBeginPreprocessedEntity(Range.getBegin());
   PreprocessedEntityID EndID = findEndPreprocessedEntity(Range.getEnd());
   return std::make_pair(BeginID, EndID);
+}
+
+/// \brief Optionally returns true or false if the preallocated preprocessed
+/// entity with index \arg Index came from file \arg FID.
+llvm::Optional<bool> ASTReader::isPreprocessedEntityInFileID(unsigned Index,
+                                                             FileID FID) {
+  if (FID.isInvalid())
+    return false;
+
+  std::pair<Module *, unsigned> PPInfo = getModulePreprocessedEntity(Index);
+  Module &M = *PPInfo.first;
+  unsigned LocalIndex = PPInfo.second;
+  const PPEntityOffset &PPOffs = M.PreprocessedEntityOffsets[LocalIndex];
+  
+  SourceLocation Loc = ReadSourceLocation(M, PPOffs.Begin);
+  if (Loc.isInvalid())
+    return false;
+  
+  if (SourceMgr.isInFileID(SourceMgr.getFileLoc(Loc), FID))
+    return true;
+  else
+    return false;
 }
 
 namespace {
@@ -3827,6 +3855,7 @@ QualType ASTReader::GetType(TypeID ID) {
     case PREDEF_TYPE_LONGDOUBLE_ID: T = Context.LongDoubleTy;       break;
     case PREDEF_TYPE_OVERLOAD_ID:   T = Context.OverloadTy;         break;
     case PREDEF_TYPE_BOUND_MEMBER:  T = Context.BoundMemberTy;      break;
+    case PREDEF_TYPE_PSEUDO_OBJECT: T = Context.PseudoObjectTy;     break;
     case PREDEF_TYPE_DEPENDENT_ID:  T = Context.DependentTy;        break;
     case PREDEF_TYPE_UNKNOWN_ANY:   T = Context.UnknownAnyTy;       break;
     case PREDEF_TYPE_NULLPTR_ID:    T = Context.NullPtrTy;          break;
@@ -4381,10 +4410,8 @@ void ASTReader::InitializeSema(Sema &S) {
   // Makes sure any declarations that were deserialized "too early"
   // still get added to the identifier's declaration chains.
   for (unsigned I = 0, N = PreloadedDecls.size(); I != N; ++I) {
-    if (SemaObj->TUScope)
-      SemaObj->TUScope->AddDecl(PreloadedDecls[I]);
-
-    SemaObj->IdResolver.AddDecl(PreloadedDecls[I]);
+    SemaObj->pushExternalDeclIntoScope(PreloadedDecls[I], 
+                                       PreloadedDecls[I]->getDeclName());
   }
   PreloadedDecls.clear();
 
@@ -4415,7 +4442,10 @@ void ASTReader::InitializeSema(Sema &S) {
 IdentifierInfo* ASTReader::get(const char *NameStart, const char *NameEnd) {
   IdentifierLookupVisitor Visitor(StringRef(NameStart, NameEnd - NameStart));
   ModuleMgr.visit(IdentifierLookupVisitor::visit, &Visitor);
-  return Visitor.getIdentifierInfo();
+  IdentifierInfo *II = Visitor.getIdentifierInfo();
+  if (II)
+    II->setOutOfDate(false);
+  return II;
 }
 
 namespace clang {
@@ -4744,13 +4774,10 @@ ASTReader::SetGloballyVisibleDecls(IdentifierInfo *II,
   for (unsigned I = 0, N = DeclIDs.size(); I != N; ++I) {
     NamedDecl *D = cast<NamedDecl>(GetDecl(DeclIDs[I]));
     if (SemaObj) {
-      if (SemaObj->TUScope) {
-        // Introduce this declaration into the translation-unit scope
-        // and add it to the declaration chain for this identifier, so
-        // that (unqualified) name lookup will find it.
-        SemaObj->TUScope->AddDecl(D);
-      }
-      SemaObj->IdResolver.AddDeclToIdentifierChain(II, D);
+      // Introduce this declaration into the translation-unit scope
+      // and add it to the declaration chain for this identifier, so
+      // that (unqualified) name lookup will find it.
+      SemaObj->pushExternalDeclIntoScope(D, II);
     } else {
       // Queue this declaration so that it will be added to the
       // translation unit scope and identifier's declaration chain

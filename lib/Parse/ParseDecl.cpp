@@ -248,7 +248,17 @@ void Parser::ParseGNUAttributeArgs(IdentifierInfo *AttrName,
   else if (Tok.is(tok::less) && AttrName->isStr("iboutletcollection")) {
     if (!ExpectAndConsume(tok::less, diag::err_expected_less_after, "<",
                           tok::greater)) {
-      Diag(Tok, diag::err_iboutletcollection_with_protocol);
+      while (Tok.is(tok::identifier)) {
+        ConsumeToken();
+        if (Tok.is(tok::greater))
+          break;
+        if (Tok.is(tok::comma)) {
+          ConsumeToken();
+          continue;
+        }
+      }
+      if (Tok.isNot(tok::greater))
+        Diag(Tok, diag::err_iboutletcollection_with_protocol);
       SkipUntil(tok::r_paren, false, true); // skip until ')'
     }
   }
@@ -955,6 +965,61 @@ Parser::DeclGroupPtrTy Parser::ParseSimpleDeclaration(StmtVector &Stmts,
   return ParseDeclGroup(DS, Context, /*FunctionDefs=*/ false, &DeclEnd, FRI);  
 }
 
+/// Returns true if this might be the start of a declarator, or a common typo
+/// for a declarator.
+bool Parser::MightBeDeclarator(unsigned Context) {
+  switch (Tok.getKind()) {
+  case tok::annot_cxxscope:
+  case tok::annot_template_id:
+  case tok::caret:
+  case tok::code_completion:
+  case tok::coloncolon:
+  case tok::ellipsis:
+  case tok::kw___attribute:
+  case tok::kw_operator:
+  case tok::l_paren:
+  case tok::star:
+    return true;
+
+  case tok::amp:
+  case tok::ampamp:
+  case tok::colon: // Might be a typo for '::'.
+    return getLang().CPlusPlus;
+
+  case tok::identifier:
+    switch (NextToken().getKind()) {
+    case tok::code_completion:
+    case tok::coloncolon:
+    case tok::comma:
+    case tok::equal:
+    case tok::equalequal: // Might be a typo for '='.
+    case tok::kw_alignas:
+    case tok::kw_asm:
+    case tok::kw___attribute:
+    case tok::l_brace:
+    case tok::l_paren:
+    case tok::l_square:
+    case tok::less:
+    case tok::r_brace:
+    case tok::r_paren:
+    case tok::r_square:
+    case tok::semi:
+      return true;
+
+    case tok::colon:
+      // At namespace scope, 'identifier:' is probably a typo for 'identifier::'
+      // and in block scope it's probably a label.
+      return getLang().CPlusPlus && Context == Declarator::FileContext;
+
+    default:
+      return false;
+    }
+
+  default:
+    return false;
+  }
+}
+
 /// ParseDeclGroup - Having concluded that this is either a function
 /// definition or a group of object declarations, actually parse the
 /// result.
@@ -1032,11 +1097,22 @@ Parser::DeclGroupPtrTy Parser::ParseDeclGroup(ParsingDeclSpec &DS,
   if (FirstDecl)
     DeclsInGroup.push_back(FirstDecl);
 
+  bool ExpectSemi = Context != Declarator::ForContext;
+
   // If we don't have a comma, it is either the end of the list (a ';') or an
   // error, bail out.
   while (Tok.is(tok::comma)) {
-    // Consume the comma.
-    ConsumeToken();
+    SourceLocation CommaLoc = ConsumeToken();
+
+    if (Tok.isAtStartOfLine() && ExpectSemi && !MightBeDeclarator(Context)) {
+      // This comma was followed by a line-break and something which can't be
+      // the start of a declarator. The comma was probably a typo for a
+      // semicolon.
+      Diag(CommaLoc, diag::err_expected_semi_declaration)
+        << FixItHint::CreateReplacement(CommaLoc, ";");
+      ExpectSemi = false;
+      break;
+    }
 
     // Parse the next declarator.
     D.clear();
@@ -1061,7 +1137,7 @@ Parser::DeclGroupPtrTy Parser::ParseDeclGroup(ParsingDeclSpec &DS,
   if (DeclEnd)
     *DeclEnd = Tok.getLocation();
 
-  if (Context != Declarator::ForContext &&
+  if (ExpectSemi &&
       ExpectAndConsume(tok::semi,
                        Context == Declarator::FileContext
                          ? diag::err_invalid_token_after_toplevel_declarator
@@ -1476,19 +1552,26 @@ Parser::getDeclSpecContextFromDeclaratorContext(unsigned Context) {
 /// FIXME: Simply returns an alignof() expression if the argument is a
 /// type. Ideally, the type should be propagated directly into Sema.
 ///
-/// [C1X/C++0x] type-id
-/// [C1X]       constant-expression
-/// [C++0x]     assignment-expression
-ExprResult Parser::ParseAlignArgument(SourceLocation Start) {
+/// [C1X]   type-id
+/// [C1X]   constant-expression
+/// [C++0x] type-id ...[opt]
+/// [C++0x] assignment-expression ...[opt]
+ExprResult Parser::ParseAlignArgument(SourceLocation Start,
+                                      SourceLocation &EllipsisLoc) {
+  ExprResult ER;
   if (isTypeIdInParens()) {
-    EnterExpressionEvaluationContext Unevaluated(Actions, Sema::Unevaluated);
     SourceLocation TypeLoc = Tok.getLocation();
     ParsedType Ty = ParseTypeName().get();
     SourceRange TypeRange(Start, Tok.getLocation());
-    return Actions.ActOnUnaryExprOrTypeTraitExpr(TypeLoc, UETT_AlignOf, true,
-                                                Ty.getAsOpaquePtr(), TypeRange);
+    ER = Actions.ActOnUnaryExprOrTypeTraitExpr(TypeLoc, UETT_AlignOf, true,
+                                               Ty.getAsOpaquePtr(), TypeRange);
   } else
-    return ParseConstantExpression();
+    ER = ParseConstantExpression();
+
+  if (getLang().CPlusPlus0x && Tok.is(tok::ellipsis))
+    EllipsisLoc = ConsumeToken();
+
+  return ER;
 }
 
 /// ParseAlignmentSpecifier - Parse an alignment-specifier, and add the
@@ -1497,8 +1580,8 @@ ExprResult Parser::ParseAlignArgument(SourceLocation Start) {
 /// alignment-specifier:
 /// [C1X]   '_Alignas' '(' type-id ')'
 /// [C1X]   '_Alignas' '(' constant-expression ')'
-/// [C++0x] 'alignas' '(' type-id ')'
-/// [C++0x] 'alignas' '(' assignment-expression ')'
+/// [C++0x] 'alignas' '(' type-id ...[opt] ')'
+/// [C++0x] 'alignas' '(' assignment-expression ...[opt] ')'
 void Parser::ParseAlignmentSpecifier(ParsedAttributes &Attrs,
                                      SourceLocation *endLoc) {
   assert((Tok.is(tok::kw_alignas) || Tok.is(tok::kw__Alignas)) &&
@@ -1511,7 +1594,8 @@ void Parser::ParseAlignmentSpecifier(ParsedAttributes &Attrs,
   if (T.expectAndConsume(diag::err_expected_lparen))
     return;
 
-  ExprResult ArgExpr = ParseAlignArgument(T.getOpenLocation());
+  SourceLocation EllipsisLoc;
+  ExprResult ArgExpr = ParseAlignArgument(T.getOpenLocation(), EllipsisLoc);
   if (ArgExpr.isInvalid()) {
     SkipUntil(tok::r_paren);
     return;
@@ -1520,6 +1604,12 @@ void Parser::ParseAlignmentSpecifier(ParsedAttributes &Attrs,
   T.consumeClose();
   if (endLoc)
     *endLoc = T.getCloseLocation();
+
+  // FIXME: Handle pack-expansions here.
+  if (EllipsisLoc.isValid()) {
+    Diag(EllipsisLoc, diag::err_alignas_pack_exp_unsupported);
+    return;
+  }
 
   ExprVector ArgExprs(Actions);
   ArgExprs.push_back(ArgExpr.release());
@@ -3561,6 +3651,9 @@ void Parser::ParseDeclarator(Declarator &D) {
 /// isn't parsed at all, making this function effectively parse the C++
 /// ptr-operator production.
 ///
+/// If the grammar of this construct is extended, matching changes must also be
+/// made to TryParseDeclarator and MightBeDeclarator.
+///
 ///       declarator: [C99 6.7.5] [C++ 8p4, dcl.decl]
 /// [C]     pointer[opt] direct-declarator
 /// [C++]   direct-declarator
@@ -4021,6 +4114,8 @@ void Parser::ParseFunctionDeclarator(Declarator &D,
   DeclSpec DS(AttrFactory);
   bool RefQualifierIsLValueRef = true;
   SourceLocation RefQualifierLoc;
+  SourceLocation ConstQualifierLoc;
+  SourceLocation VolatileQualifierLoc;
   ExceptionSpecificationType ESpecType = EST_None;
   SourceRange ESpecRange;
   SmallVector<ParsedType, 2> DynamicExceptions;
@@ -4059,8 +4154,11 @@ void Parser::ParseFunctionDeclarator(Declarator &D,
 
       // Parse cv-qualifier-seq[opt].
       ParseTypeQualifierListOpt(DS, false /*no attributes*/);
-        if (!DS.getSourceRange().getEnd().isInvalid())
+        if (!DS.getSourceRange().getEnd().isInvalid()) {
           EndLoc = DS.getSourceRange().getEnd();
+          ConstQualifierLoc = DS.getConstSpecLoc();
+          VolatileQualifierLoc = DS.getVolatileSpecLoc();
+        }
 
       // Parse ref-qualifier[opt].
       if (Tok.is(tok::amp) || Tok.is(tok::ampamp)) {
@@ -4102,7 +4200,8 @@ void Parser::ParseFunctionDeclarator(Declarator &D,
                                              ParamInfo.data(), ParamInfo.size(),
                                              DS.getTypeQualifiers(),
                                              RefQualifierIsLValueRef,
-                                             RefQualifierLoc,
+                                             RefQualifierLoc, ConstQualifierLoc,
+                                             VolatileQualifierLoc,
                                              /*MutableLoc=*/SourceLocation(),
                                              ESpecType, ESpecRange.getBegin(),
                                              DynamicExceptions.data(),

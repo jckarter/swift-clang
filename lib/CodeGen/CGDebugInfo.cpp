@@ -250,6 +250,9 @@ unsigned CGDebugInfo::getColumnNumber(SourceLocation Loc) {
 }
 
 StringRef CGDebugInfo::getCurrentDirname() {
+  if (!CGM.getCodeGenOpts().DebugCompilationDir.empty())
+    return CGM.getCodeGenOpts().DebugCompilationDir;
+
   if (!CWDName.empty())
     return CWDName;
   llvm::SmallString<256> CWD;
@@ -321,16 +324,12 @@ llvm::DIType CGDebugInfo::CreateType(const BuiltinType *BT) {
   unsigned Encoding = 0;
   const char *BTName = NULL;
   switch (BT->getKind()) {
+#define BUILTIN_TYPE(Id, SingletonId)
+#define PLACEHOLDER_TYPE(Id, SingletonId) \
+  case BuiltinType::Id:
+#include "clang/AST/BuiltinTypes.def"
   case BuiltinType::Dependent:
-    llvm_unreachable("Unexpected builtin type Dependent");
-  case BuiltinType::Overload:
-    llvm_unreachable("Unexpected builtin type Overload");
-  case BuiltinType::BoundMember:
-    llvm_unreachable("Unexpected builtin type BoundMember");
-  case BuiltinType::UnknownAny:
-    llvm_unreachable("Unexpected builtin type UnknownAny");
-  case BuiltinType::ARCUnbridgedCast:
-    llvm_unreachable("Unexpected builtin type ARCUnbridgedCast");
+    llvm_unreachable("Unexpected builtin type");
   case BuiltinType::NullPtr:
     return DBuilder.
       createNullPtrType(BT->getName(CGM.getContext().getLangOptions()));
@@ -487,7 +486,13 @@ llvm::DIType CGDebugInfo::CreatePointeeType(QualType PointeeTy,
                                             llvm::DIFile Unit) {
   if (!CGM.getCodeGenOpts().LimitDebugInfo)
     return getOrCreateType(PointeeTy, Unit);
-  
+
+  // Limit debug info for the pointee type.
+
+  // Handle qualifiers.
+  if (PointeeTy.hasLocalQualifiers())
+    return CreateQualifiedType(PointeeTy, Unit);
+
   if (const RecordType *RTy = dyn_cast<RecordType>(PointeeTy)) {
     RecordDecl *RD = RTy->getDecl();
     llvm::DIFile DefUnit = getOrCreateFile(RD->getLocation());
@@ -740,11 +745,27 @@ CGDebugInfo::getOrCreateMethodType(const CXXMethodDecl *Method,
   if (!Method->isStatic()) {
     // "this" pointer is always first argument.
     QualType ThisPtr = Method->getThisType(CGM.getContext());
-    llvm::DIType ThisPtrType =
-      DBuilder.createArtificialType(getOrCreateType(ThisPtr, Unit));
-    
-    TypeCache[ThisPtr.getAsOpaquePtr()] = ThisPtrType;
-    Elts.push_back(ThisPtrType);
+
+    const CXXRecordDecl *RD = Method->getParent();
+    if (isa<ClassTemplateSpecializationDecl>(RD)) {
+      // Create pointer type directly in this case.
+      const PointerType *ThisPtrTy = cast<PointerType>(ThisPtr);
+      QualType PointeeTy = ThisPtrTy->getPointeeType();
+      unsigned AS = CGM.getContext().getTargetAddressSpace(PointeeTy);
+      uint64_t Size = CGM.getContext().getTargetInfo().getPointerWidth(AS);
+      uint64_t Align = CGM.getContext().getTypeAlign(ThisPtrTy);
+      llvm::DIType PointeeType =  getOrCreateType(PointeeTy, Unit);
+      llvm::DIType ThisPtrType =
+        DBuilder.createArtificialType
+        (DBuilder.createPointerType(PointeeType, Size, Align));
+      TypeCache[ThisPtr.getAsOpaquePtr()] = ThisPtrType;
+      Elts.push_back(ThisPtrType);
+    } else {
+      llvm::DIType ThisPtrType =
+        DBuilder.createArtificialType(getOrCreateType(ThisPtr, Unit));
+      TypeCache[ThisPtr.getAsOpaquePtr()] = ThisPtrType;
+      Elts.push_back(ThisPtrType);
+    }
   }
 
   // Copy rest of the arguments.
@@ -1091,7 +1112,8 @@ llvm::DIType CGDebugInfo::CreateType(const RecordType *Ty) {
     if (const VarDecl *V = dyn_cast<VarDecl>(*I)) {
       if (const Expr *Init = V->getInit()) {
         Expr::EvalResult Result;
-        if (Init->Evaluate(Result, CGM.getContext()) && Result.Val.isInt()) {
+        if (Init->EvaluateAsRValue(Result, CGM.getContext()) &&
+            Result.Val.isInt()) {
           llvm::ConstantInt *CI 
             = llvm::ConstantInt::get(CGM.getLLVMContext(), Result.Val.getInt());
           

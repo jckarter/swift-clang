@@ -203,7 +203,6 @@ class ASTContext : public llvm::RefCountedBase<ASTContext> {
   mutable TypedefDecl *ObjCSelDecl;
 
   QualType ObjCProtoType;
-  const RecordType *ProtoStructType;
 
   /// \brief The typedef for the predefined 'Class' type.
   mutable TypedefDecl *ObjCClassDecl;
@@ -497,7 +496,7 @@ public:
   CanQualType FloatComplexTy, DoubleComplexTy, LongDoubleComplexTy;
   CanQualType VoidPtrTy, NullPtrTy;
   CanQualType DependentTy, OverloadTy, BoundMemberTy, UnknownAnyTy;
-  CanQualType ARCUnbridgedCastTy;
+  CanQualType PseudoObjectTy, ARCUnbridgedCastTy;
   CanQualType ObjCBuiltinIdTy, ObjCBuiltinClassTy, ObjCBuiltinSelTy;
 
   // Types for deductions in C++0x [stmt.ranged]'s desugaring. Built on demand.
@@ -836,6 +835,14 @@ public:
   /// in <stddef.h>. The sizeof operator requires this (C99 6.5.3.4p4).
   CanQualType getSizeType() const;
 
+  /// getIntMaxType - Return the unique type for "intmax_t" (C99 7.18.1.5),
+  /// defined in <stdint.h>.
+  CanQualType getIntMaxType() const;
+
+  /// getUIntMaxType - Return the unique type for "uintmax_t" (C99 7.18.1.5),
+  /// defined in <stdint.h>.
+  CanQualType getUIntMaxType() const;
+
   /// getWCharType - In C++, this returns the unique wchar_t type.  In C99, this
   /// returns a type compatible with the type defined in <stddef.h> as defined
   /// by the target.
@@ -849,7 +856,7 @@ public:
   /// Used when in C++, as a GCC extension.
   QualType getUnsignedWCharType() const;
 
-  /// getPointerDiffType - Return the unique type for "ptrdiff_t" (ref?)
+  /// getPointerDiffType - Return the unique type for "ptrdiff_t" (C99 7.17)
   /// defined in <stddef.h>. Pointer - pointer requires this (C99 6.5.6p9).
   QualType getPointerDiffType() const;
 
@@ -1267,7 +1274,7 @@ public:
   CanQualType getCanonicalParamType(QualType T) const;
 
   /// \brief Determine whether the given types are equivalent.
-  bool hasSameType(QualType T1, QualType T2) {
+  bool hasSameType(QualType T1, QualType T2) const {
     return getCanonicalType(T1) == getCanonicalType(T2);
   }
 
@@ -1287,7 +1294,7 @@ public:
 
   /// \brief Determine whether the given types are equivalent after
   /// cvr-qualifiers have been removed.
-  bool hasSameUnqualifiedType(QualType T1, QualType T2) {
+  bool hasSameUnqualifiedType(QualType T1, QualType T2) const {
     return getCanonicalType(T1).getTypePtr() ==
            getCanonicalType(T2).getTypePtr();
   }

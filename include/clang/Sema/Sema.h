@@ -1281,8 +1281,8 @@ public:
   /// scope for parsing/looking-up C constructs.
   ///
   /// Must be followed by a call to \see ActOnObjCReenterContainerContext
-  void ActOnObjCTemporaryExitContainerContext();
-  void ActOnObjCReenterContainerContext();
+  void ActOnObjCTemporaryExitContainerContext(DeclContext *DC);
+  void ActOnObjCReenterContainerContext(DeclContext *DC);
 
   /// ActOnTagDefinitionError - Invoked when there was an unrecoverable
   /// error parsing the definition of a tag.
@@ -1338,6 +1338,14 @@ public:
   /// Add this decl to the scope shadowed decl chains.
   void PushOnScopeChains(NamedDecl *D, Scope *S, bool AddToContext = true);
 
+  /// \brief Make the given externally-produced declaration visible at the
+  /// top level scope.
+  ///
+  /// \param D The externally-produced declaration to push.
+  ///
+  /// \param Name The name of the externally-produced declaration.
+  void pushExternalDeclIntoScope(NamedDecl *D, DeclarationName Name);
+  
   /// isDeclInScope - If 'Ctx' is a function/method, isDeclInScope returns true
   /// if 'D' is in Scope 'S', otherwise 'S' is ignored and isDeclInScope returns
   /// true if 'D' belongs to the given declaration context.
@@ -2480,6 +2488,7 @@ public:
                                  const TemplateArgumentListInfo *TemplateArgs,
                                       bool SuppressQualifierCheck = false);
 
+  ExprResult PerformMemberExprBaseConversion(Expr *Base, bool IsArrow);
   ExprResult LookupMemberExpr(LookupResult &R, ExprResult &Base,
                               bool &IsArrow, SourceLocation OpLoc,
                               CXXScopeSpec &SS,
@@ -2512,6 +2521,9 @@ public:
                                Expr **Args, unsigned NumArgs,
                                SourceLocation RParenLoc,
                                bool ExecConfig = false);
+  void CheckStaticArrayArgument(SourceLocation CallLoc,
+                                ParmVarDecl *Param,
+                                const Expr *ArgExpr);
 
   /// ActOnCallExpr - Handle a call to Fn with the specified array of arguments.
   /// This provides the location of the left/right parens and a list of comma
@@ -2625,8 +2637,41 @@ public:
 
   bool CheckCaseExpression(Expr *E);
 
-  bool CheckMicrosoftIfExistsSymbol(CXXScopeSpec &SS, UnqualifiedId &Name);
+  /// \brief Describes the result of an "if-exists" condition check.
+  enum IfExistsResult {
+    /// \brief The symbol exists.
+    IER_Exists,
+    
+    /// \brief The symbol does not exist.
+    IER_DoesNotExist,
+    
+    /// \brief The name is a dependent name, so the results will differ
+    /// from one instantiation to the next.
+    IER_Dependent,
+    
+    /// \brief An error occurred.
+    IER_Error
+  };
 
+  IfExistsResult 
+  CheckMicrosoftIfExistsSymbol(Scope *S, CXXScopeSpec &SS, 
+                               const DeclarationNameInfo &TargetNameInfo);
+
+  IfExistsResult 
+  CheckMicrosoftIfExistsSymbol(Scope *S, SourceLocation KeywordLoc,
+                               bool IsIfExists, CXXScopeSpec &SS, 
+                               UnqualifiedId &Name);
+
+  StmtResult BuildMSDependentExistsStmt(SourceLocation KeywordLoc,
+                                        bool IsIfExists,
+                                        NestedNameSpecifierLoc QualifierLoc,
+                                        DeclarationNameInfo NameInfo,
+                                        Stmt *Nested);
+  StmtResult ActOnMSDependentExistsStmt(SourceLocation KeywordLoc, 
+                                        bool IsIfExists,
+                                        CXXScopeSpec &SS, UnqualifiedId &Name,
+                                        Stmt *Nested);
+  
   //===------------------------- "Block" Extension ------------------------===//
 
   /// ActOnBlockStart - This callback is invoked when a block literal is
@@ -3621,7 +3666,8 @@ public:
                                      Expr *AssertMessageExpr,
                                      SourceLocation RParenLoc);
 
-  FriendDecl *CheckFriendTypeDecl(SourceLocation FriendLoc,
+  FriendDecl *CheckFriendTypeDecl(SourceLocation Loc,
+                                  SourceLocation FriendLoc,
                                   TypeSourceInfo *TSInfo);
   Decl *ActOnFriendTypeDecl(Scope *S, const DeclSpec &DS,
                             MultiTemplateParamsArg TemplateParams);
@@ -3833,7 +3879,7 @@ public:
                                    TemplateTy &SuggestedTemplate,
                                    TemplateNameKind &SuggestedKind);
 
-  bool DiagnoseTemplateParameterShadow(SourceLocation Loc, Decl *PrevDecl);
+  void DiagnoseTemplateParameterShadow(SourceLocation Loc, Decl *PrevDecl);
   TemplateDecl *AdjustDeclIfTemplate(Decl *&Decl);
 
   Decl *ActOnTypeParameter(Scope *S, bool Typename, bool Ellipsis,
@@ -4260,8 +4306,26 @@ public:
     UPPC_ExceptionType,
     
     /// \brief Partial specialization.
-    UPPC_PartialSpecialization
-  };
+    UPPC_PartialSpecialization,
+    
+    /// \brief Microsoft __if_exists.
+    UPPC_IfExists,
+
+    /// \brief Microsoft __if_not_exists.
+    UPPC_IfNotExists
+};
+
+  /// \brief Diagnose unexpanded parameter packs.
+  ///
+  /// \param Loc The location at which we should emit the diagnostic.
+  ///
+  /// \param UPPC The context in which we are diagnosing unexpanded 
+  /// parameter packs.
+  ///
+  /// \param Unexpanded the set of unexpanded parameter packs.
+  void DiagnoseUnexpandedParameterPacks(SourceLocation Loc,
+                                        UnexpandedParameterPackContext UPPC,
+                    const SmallVectorImpl<UnexpandedParameterPack> &Unexpanded);
 
   /// \brief If the given type contains an unexpanded parameter pack,
   /// diagnose the error.
@@ -4359,6 +4423,22 @@ public:
   /// unexpanded parameter packs.
   void collectUnexpandedParameterPacks(TypeLoc TL,
                    SmallVectorImpl<UnexpandedParameterPack> &Unexpanded);
+
+  /// \brief Collect the set of unexpanded parameter packs within the given
+  /// nested-name-specifier.  
+  ///
+  /// \param SS The nested-name-specifier that will be traversed to find
+  /// unexpanded parameter packs.
+  void collectUnexpandedParameterPacks(CXXScopeSpec &SS,
+                         SmallVectorImpl<UnexpandedParameterPack> &Unexpanded);
+
+  /// \brief Collect the set of unexpanded parameter packs within the given
+  /// name.  
+  ///
+  /// \param NameInfo The name that will be traversed to find
+  /// unexpanded parameter packs.
+  void collectUnexpandedParameterPacks(const DeclarationNameInfo &NameInfo,
+                         SmallVectorImpl<UnexpandedParameterPack> &Unexpanded);
 
   /// \brief Invoked when parsing a template argument followed by an
   /// ellipsis, which creates a pack expansion.
@@ -5304,6 +5384,8 @@ public:
   ObjCMethodDecl *LookupMethodInQualifiedType(Selector Sel,
                                               const ObjCObjectPointerType *OPT,
                                               bool IsInstance);
+  ObjCMethodDecl *LookupMethodInObjectType(Selector Sel, QualType Ty,
+                                           bool IsInstance);
 
   bool inferObjCARCLifetime(ValueDecl *decl);
     
@@ -5762,10 +5844,13 @@ public:
   // For compound assignment, pass both expressions and the converted type.
   QualType CheckAssignmentOperands( // C99 6.5.16.[1,2]
     Expr *LHSExpr, ExprResult &RHS, SourceLocation Loc, QualType CompoundType);
-  
-  void ConvertPropertyForLValue(ExprResult &LHS, ExprResult &RHS,
-                                QualType& LHSTy);
-  ExprResult ConvertPropertyForRValue(Expr *E);
+
+  ExprResult checkPseudoObjectIncDec(Scope *S, SourceLocation OpLoc,
+                                     UnaryOperatorKind Opcode, Expr *Op);
+  ExprResult checkPseudoObjectAssignment(Scope *S, SourceLocation OpLoc,
+                                         BinaryOperatorKind Opcode,
+                                         Expr *LHS, Expr *RHS);
+  ExprResult checkPseudoObjectRValue(Expr *E);
                                    
   QualType CheckConditionalOperands( // C99 6.5.15
     ExprResult &Cond, ExprResult &LHS, ExprResult &RHS,
@@ -6156,20 +6241,17 @@ private:
 
   bool SemaCheckStringLiteral(const Expr *E, const CallExpr *TheCall,
                               bool HasVAListArg, unsigned format_idx,
-                              unsigned firstDataArg, bool isPrintf);
+                              unsigned firstDataArg, bool isPrintf,
+                              bool inFunctionCall = true);
 
   void CheckFormatString(const StringLiteral *FExpr, const Expr *OrigFormatExpr,
                          const CallExpr *TheCall, bool HasVAListArg,
                          unsigned format_idx, unsigned firstDataArg,
-                         bool isPrintf);
+                         bool isPrintf, bool inFunctionCall);
 
   void CheckNonNullArguments(const NonNullAttr *NonNull,
                              const Expr * const *ExprArgs,
                              SourceLocation CallSiteLoc);
-
-  void CheckStaticArrayArguments(const FunctionDecl *FDecl,
-                                 const Expr * const *ExprArgs,
-                                 SourceLocation CallSiteLoc);
 
   void CheckPrintfScanfArguments(const CallExpr *TheCall, bool HasVAListArg,
                                  unsigned format_idx, unsigned firstDataArg,

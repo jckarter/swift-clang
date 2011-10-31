@@ -1286,6 +1286,7 @@ class X86TargetInfo : public TargetInfo {
     CK_K8SSE3,
     CK_Opteron,
     CK_OpteronSSE3,
+    CK_AMDFAM10,
 
     /// This specification is deprecated and will be removed in the future.
     /// Users should prefer \see CK_K8.
@@ -1385,6 +1386,7 @@ public:
       .Case("k8-sse3", CK_K8SSE3)
       .Case("opteron", CK_Opteron)
       .Case("opteron-sse3", CK_OpteronSSE3)
+      .Case("amdfam10", CK_AMDFAM10)
       .Case("x86-64", CK_x86_64)
       .Case("geode", CK_Geode)
       .Default(CK_Generic);
@@ -1445,6 +1447,7 @@ public:
     case CK_K8SSE3:
     case CK_Opteron:
     case CK_OpteronSSE3:
+    case CK_AMDFAM10:
     case CK_x86_64:
       return true;
     }
@@ -1463,11 +1466,9 @@ void X86TargetInfo::getDefaultFeatures(llvm::StringMap<bool> &Features) const {
   Features["ssse3"] = false;
   Features["sse41"] = false;
   Features["sse42"] = false;
+  Features["sse4a"] = false;
   Features["aes"] = false;
   Features["avx"] = false;
-
-  // LLVM does not currently recognize this.
-  // Features["sse4a"] = false;
 
   // FIXME: This *really* should not be here.
 
@@ -1565,6 +1566,11 @@ void X86TargetInfo::getDefaultFeatures(llvm::StringMap<bool> &Features) const {
     setFeatureEnabled(Features, "sse3", true);
     setFeatureEnabled(Features, "3dnowa", true);
     break;
+  case CK_AMDFAM10:
+    setFeatureEnabled(Features, "sse3", true);
+    setFeatureEnabled(Features, "sse4a", true);
+    setFeatureEnabled(Features, "3dnowa", true);
+    break;
   case CK_C3_2:
     setFeatureEnabled(Features, "mmx", true);
     setFeatureEnabled(Features, "sse", true);
@@ -1608,6 +1614,8 @@ bool X86TargetInfo::setFeatureEnabled(llvm::StringMap<bool> &Features,
     else if (Name == "avx")
       Features["avx"] = Features["sse"] = Features["sse2"] = Features["sse3"] =
         Features["ssse3"] = Features["sse41"] = Features["sse42"] = true;
+    else if (Name == "sse4a")
+      Features["sse4a"] = true;
   } else {
     if (Name == "mmx")
       Features["mmx"] = Features["3dnow"] = Features["3dnowa"] = false;
@@ -1634,6 +1642,8 @@ bool X86TargetInfo::setFeatureEnabled(llvm::StringMap<bool> &Features,
       Features["aes"] = false;
     else if (Name == "avx")
       Features["avx"] = false;
+    else if (Name == "sse4a")
+      Features["sse4a"] = false;
   }
 
   return true;
@@ -1829,6 +1839,11 @@ void X86TargetInfo::getTargetDefines(const LangOptions &Opts,
     Builder.defineMacro("__k8");
     Builder.defineMacro("__k8__");
     Builder.defineMacro("__tune_k8__");
+    break;
+  case CK_AMDFAM10:
+    Builder.defineMacro("__amdfam10");
+    Builder.defineMacro("__amdfam10__");
+    Builder.defineMacro("__tune_amdfam10__");
     break;
   case CK_Geode:
     Builder.defineMacro("__geode");
@@ -2932,140 +2947,6 @@ namespace {
   }
 }
 
-
-namespace {
-  class SystemZTargetInfo : public TargetInfo {
-    static const char * const GCCRegNames[];
-  public:
-    SystemZTargetInfo(const std::string& triple) : TargetInfo(triple) {
-      TLSSupported = false;
-      IntWidth = IntAlign = 32;
-      LongWidth = LongLongWidth = LongAlign = LongLongAlign = 64;
-      PointerWidth = PointerAlign = 64;
-      DescriptionString = "E-p:64:64:64-i8:8:16-i16:16:16-i32:32:32-"
-      "i64:64:64-f32:32:32-f64:64:64-f128:128:128-a0:16:16-n32:64";
-   }
-    virtual void getTargetDefines(const LangOptions &Opts,
-                                  MacroBuilder &Builder) const {
-      Builder.defineMacro("__s390__");
-      Builder.defineMacro("__s390x__");
-    }
-    virtual void getTargetBuiltins(const Builtin::Info *&Records,
-                                   unsigned &NumRecords) const {
-      // FIXME: Implement.
-      Records = 0;
-      NumRecords = 0;
-    }
-
-    virtual void getGCCRegNames(const char * const *&Names,
-                                unsigned &NumNames) const;
-    virtual void getGCCRegAliases(const GCCRegAlias *&Aliases,
-                                  unsigned &NumAliases) const {
-      // No aliases.
-      Aliases = 0;
-      NumAliases = 0;
-    }
-    virtual bool validateAsmConstraint(const char *&Name,
-                                       TargetInfo::ConstraintInfo &info) const {
-      // FIXME: implement
-      return true;
-    }
-    virtual const char *getClobbers() const {
-      // FIXME: Is this really right?
-      return "";
-    }
-    virtual const char *getVAListDeclaration() const {
-      // FIXME: implement
-      return "typedef char* __builtin_va_list;";
-   }
-  };
-
-  const char * const SystemZTargetInfo::GCCRegNames[] = {
-    "r0", "r1", "r2", "r3", "r4", "r5", "r6", "r7",
-    "r8", "r9", "r10", "r11", "r12", "r13", "r14", "r15"
-  };
-
-  void SystemZTargetInfo::getGCCRegNames(const char * const *&Names,
-                                         unsigned &NumNames) const {
-    Names = GCCRegNames;
-    NumNames = llvm::array_lengthof(GCCRegNames);
-  }
-}
-
-namespace {
-  class BlackfinTargetInfo : public TargetInfo {
-    static const char * const GCCRegNames[];
-  public:
-    BlackfinTargetInfo(const std::string& triple) : TargetInfo(triple) {
-      TLSSupported = false;
-      DoubleAlign = 32;
-      LongLongAlign = 32;
-      LongDoubleAlign = 32;
-      DescriptionString = "e-p:32:32-i64:32-f64:32-n32";
-    }
-
-    virtual void getTargetDefines(const LangOptions &Opts,
-                                  MacroBuilder &Builder) const {
-      DefineStd(Builder, "bfin", Opts);
-      DefineStd(Builder, "BFIN", Opts);
-      Builder.defineMacro("__ADSPBLACKFIN__");
-      // FIXME: This one is really dependent on -mcpu
-      Builder.defineMacro("__ADSPLPBLACKFIN__");
-      // FIXME: Add cpu-dependent defines and __SILICON_REVISION__
-    }
-
-    virtual void getTargetBuiltins(const Builtin::Info *&Records,
-                                   unsigned &NumRecords) const {
-      // FIXME: Implement.
-      Records = 0;
-      NumRecords = 0;
-    }
-
-    virtual void getGCCRegNames(const char * const *&Names,
-                                unsigned &NumNames) const;
-
-    virtual void getGCCRegAliases(const GCCRegAlias *&Aliases,
-                                  unsigned &NumAliases) const {
-      // No aliases.
-      Aliases = 0;
-      NumAliases = 0;
-    }
-
-    virtual bool validateAsmConstraint(const char *&Name,
-                                       TargetInfo::ConstraintInfo &Info) const {
-      if (strchr("adzDWeABbvfcCtukxywZY", Name[0])) {
-        Info.setAllowsRegister();
-        return true;
-      }
-      return false;
-    }
-
-    virtual const char *getClobbers() const {
-      return "";
-    }
-
-    virtual const char *getVAListDeclaration() const {
-      return "typedef char* __builtin_va_list;";
-    }
-  };
-
-  const char * const BlackfinTargetInfo::GCCRegNames[] = {
-    "r0", "r1", "r2", "r3", "r4", "r5", "r6", "r7",
-    "p0", "p1", "p2", "p3", "p4", "p5", "sp", "fp",
-    "i0", "i1", "i2", "i3", "b0", "b1", "b2", "b3",
-    "l0", "l1", "l2", "l3", "m0", "m1", "m2", "m3",
-    "a0", "a1", "cc",
-    "rets", "reti", "retx", "retn", "rete", "astat", "seqstat", "usp",
-    "argp", "lt0", "lt1", "lc0", "lc1", "lb0", "lb1"
-  };
-
-  void BlackfinTargetInfo::getGCCRegNames(const char * const *&Names,
-                                          unsigned &NumNames) const {
-    Names = GCCRegNames;
-    NumNames = llvm::array_lengthof(GCCRegNames);
-  }
-}
-
 namespace {
 
   // LLVM and Clang cannot be used directly to output native binaries for
@@ -3310,14 +3191,26 @@ class Mips64TargetInfoBase : public MipsTargetInfoBase {
   virtual void SetDescriptionString(const std::string &Name) = 0;
 public:
   Mips64TargetInfoBase(const std::string& triple) :
-    MipsTargetInfoBase(triple, "n64") {}
+    MipsTargetInfoBase(triple, "n64") {
+    LongWidth = LongAlign = 64;
+    PointerWidth = PointerAlign = 64;
+    LongDoubleWidth = LongDoubleAlign = 128;
+    LongDoubleFormat = &llvm::APFloat::IEEEquad;
+  }
   virtual bool setABI(const std::string &Name) {
     SetDescriptionString(Name);
-    if ((Name == "n32") || (Name == "n64")) {
-      ABI = Name;
-      return true;
-    } else
+
+    if (Name != "n32" && Name != "n64")
       return false;
+
+    ABI = Name;
+
+    if (Name == "n32") {
+      LongWidth = LongAlign = 32;
+      PointerWidth = PointerAlign = 32;
+    }
+
+    return true;
   }
   virtual void getArchDefines(const LangOptions &Opts,
                               MacroBuilder &Builder) const {
@@ -3379,13 +3272,15 @@ class Mips64EBTargetInfo : public Mips64TargetInfoBase {
     // Change DescriptionString only if ABI is n32.  
     if (Name == "n32")
       DescriptionString = "E-p:32:32:32-i1:8:8-i8:8:32-i16:16:32-i32:32:32-"
-                          "i64:64:64-f32:32:32-f64:64:64-v64:64:64-n32";      
+                          "i64:64:64-f32:32:32-f64:64:64-f128:128:128-"
+                          "v64:64:64-n32";      
   }
 public:
   Mips64EBTargetInfo(const std::string& triple) : Mips64TargetInfoBase(triple) {
     // Default ABI is n64.  
     DescriptionString = "E-p:64:64:64-i1:8:8-i8:8:32-i16:16:32-i32:32:32-"
-                        "i64:64:64-f32:32:32-f64:64:64-v64:64:64-n32";
+                        "i64:64:64-f32:32:32-f64:64:64-f128:128:128-"
+                        "v64:64:64-n32";
   }
   virtual void getTargetDefines(const LangOptions &Opts,
                                 MacroBuilder &Builder) const {
@@ -3403,13 +3298,15 @@ class Mips64ELTargetInfo : public Mips64TargetInfoBase {
     // Change DescriptionString only if ABI is n32.  
     if (Name == "n32")
       DescriptionString = "e-p:32:32:32-i1:8:8-i8:8:32-i16:16:32-i32:32:32-"
-                          "i64:64:64-f32:32:32-f64:64:64-v64:64:64-n32";      
+                          "i64:64:64-f32:32:32-f64:64:64-f128:128:128"
+                          "-v64:64:64-n32";      
   }
 public:
   Mips64ELTargetInfo(const std::string& triple) : Mips64TargetInfoBase(triple) {
     // Default ABI is n64.  
     DescriptionString = "e-p:64:64:64-i1:8:8-i8:8:32-i16:16:32-i32:32:32-"
-                        "i64:64:64-f32:32:32-f64:64:64-v64:64:64-n32";
+                        "i64:64:64-f32:32:32-f64:64:64-f128:128:128-"
+                        "v64:64:64-n32";
   }
   virtual void getTargetDefines(const LangOptions &Opts,
                                 MacroBuilder &Builder) const {
@@ -3528,11 +3425,6 @@ static TargetInfo *AllocateTarget(const std::string &T) {
     default:
       return new ARMTargetInfo(T);
     }
-
-  case llvm::Triple::bfin:
-    if ( os == llvm::Triple::RTEMS )
-      return new RTEMSTargetInfo<BlackfinTargetInfo>(T);
-    return new BlackfinTargetInfo(T);
 
   case llvm::Triple::msp430:
     return new MSP430TargetInfo(T);
@@ -3660,9 +3552,6 @@ static TargetInfo *AllocateTarget(const std::string &T) {
   // FIXME: Need a real SPU target.
   case llvm::Triple::cellspu:
     return new PS3SPUTargetInfo<PPC64TargetInfo>(T);
-
-  case llvm::Triple::systemz:
-    return new SystemZTargetInfo(T);
 
   case llvm::Triple::tce:
     return new TCETargetInfo(T);

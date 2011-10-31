@@ -1151,6 +1151,10 @@ bool Sema::AttachBaseSpecifiers(CXXRecordDecl *Class, CXXBaseSpecifier **Bases,
       // Okay, add this new base class.
       KnownBaseTypes[NewBaseType] = Bases[idx];
       Bases[NumGoodBases++] = Bases[idx];
+      if (const RecordType *Record = NewBaseType->getAs<RecordType>())
+        if (const CXXRecordDecl *RD = cast<CXXRecordDecl>(Record->getDecl()))
+          if (RD->hasAttr<WeakAttr>())
+            Class->addAttr(::new (Context) WeakAttr(SourceRange(), Context));
     }
   }
 
@@ -1631,6 +1635,12 @@ Sema::ActOnCXXInClassMemberInitializer(Decl *D, SourceLocation EqualLoc,
     return;
   }
 
+  if (DiagnoseUnexpandedParameterPack(InitExpr, UPPC_Initializer)) {
+    FD->setInvalidDecl();
+    FD->removeInClassInitializer();
+    return;
+  }
+
   ExprResult Init = InitExpr;
   if (!FD->getType()->isDependentType() && !InitExpr->isTypeDependent()) {
     // FIXME: if there is no EqualLoc, this is list-initialization.
@@ -1774,28 +1784,17 @@ Sema::BuildMemInitializer(Decl *ConstructorD,
   //   using a qualified name. ]
   if (!SS.getScopeRep() && !TemplateTypeTy) {
     // Look for a member, first.
-    FieldDecl *Member = 0;
     DeclContext::lookup_result Result
       = ClassDecl->lookup(MemberOrBase);
     if (Result.first != Result.second) {
-      Member = dyn_cast<FieldDecl>(*Result.first);
-
-      if (Member) {
+      ValueDecl *Member;
+      if ((Member = dyn_cast<FieldDecl>(*Result.first)) ||
+          (Member = dyn_cast<IndirectFieldDecl>(*Result.first))) {
         if (EllipsisLoc.isValid())
           Diag(EllipsisLoc, diag::err_pack_expansion_member_init)
             << MemberOrBase << SourceRange(IdLoc, Args.getEndLoc());
 
         return BuildMemberInitializer(Member, Args, IdLoc);
-      }
-
-      // Handle anonymous union case.
-      if (IndirectFieldDecl* IndirectField
-            = dyn_cast<IndirectFieldDecl>(*Result.first)) {
-        if (EllipsisLoc.isValid())
-          Diag(EllipsisLoc, diag::err_pack_expansion_member_init)
-            << MemberOrBase << SourceRange(IdLoc, Args.getEndLoc());
-
-         return BuildMemberInitializer(IndirectField, Args, IdLoc);
       }
     }
   }
@@ -2038,6 +2037,9 @@ Sema::BuildMemberInitializer(ValueDecl *Member,
   assert((DirectMember || IndirectMember) &&
          "Member must be a FieldDecl or IndirectFieldDecl");
 
+  if (Args.DiagnoseUnexpandedParameterPack(*this))
+    return true;
+
   if (Member->isInvalidDecl())
     return true;
 
@@ -2127,8 +2129,9 @@ Sema::BuildDelegatingInitializer(TypeSourceInfo *TInfo,
                                  CXXRecordDecl *ClassDecl) {
   SourceLocation Loc = TInfo->getTypeLoc().getLocalSourceRange().getBegin();
   if (!LangOpts.CPlusPlus0x)
-    return Diag(Loc, diag::err_delegation_0x_only)
+    return Diag(Loc, diag::err_delegating_ctor)
       << TInfo->getTypeLoc().getLocalSourceRange();
+  Diag(Loc, diag::warn_cxx98_compat_delegating_ctor);
 
   // Initialize the object.
   InitializedEntity DelegationEntity = InitializedEntity::InitializeDelegation(
@@ -5342,9 +5345,11 @@ void Sema::CheckConversionDeclarator(Declarator &D, QualType &R,
     R = Context.getFunctionType(ConvType, 0, 0, Proto->getExtProtoInfo());
 
   // C++0x explicit conversion operators.
-  if (D.getDeclSpec().isExplicitSpecified() && !getLangOptions().CPlusPlus0x)
+  if (D.getDeclSpec().isExplicitSpecified())
     Diag(D.getDeclSpec().getExplicitSpecLoc(),
-         diag::warn_explicit_conversion_functions)
+         getLangOptions().CPlusPlus0x ?
+           diag::warn_cxx98_compat_explicit_conversion_functions :
+           diag::ext_explicit_conversion_functions)
       << SourceRange(D.getDeclSpec().getExplicitSpecLoc());
 }
 
@@ -5791,10 +5796,14 @@ Decl *Sema::ActOnUsingDeclaration(Scope *S,
   case UnqualifiedId::IK_ConstructorName:
   case UnqualifiedId::IK_ConstructorTemplateId:
     // C++0x inherited constructors.
+    Diag(Name.getSourceRange().getBegin(),
+         getLangOptions().CPlusPlus0x ?
+           diag::warn_cxx98_compat_using_decl_constructor :
+           diag::err_using_decl_constructor)
+      << SS.getRange();
+
     if (getLangOptions().CPlusPlus0x) break;
 
-    Diag(Name.getSourceRange().getBegin(), diag::err_using_decl_constructor)
-      << SS.getRange();
     return 0;
       
   case UnqualifiedId::IK_DestructorName:
@@ -6485,9 +6494,7 @@ Decl *Sema::ActOnAliasDeclaration(Scope *S,
   // Warn about shadowing the name of a template parameter.
   if (Previous.isSingleResult() &&
       Previous.getFoundDecl()->isTemplateParameter()) {
-    if (DiagnoseTemplateParameterShadow(Name.StartLocation,
-                                        Previous.getFoundDecl()))
-      Invalid = true;
+    DiagnoseTemplateParameterShadow(Name.StartLocation,Previous.getFoundDecl());
     Previous.clear();
   }
 
@@ -7432,7 +7439,7 @@ Sema::ComputeDefaultedCopyAssignmentExceptionSpecAndConst(
                             &HasConstCopyAssignment);
   }
 
-  // In C++0x, the above citation has "or virtual added"
+  // In C++11, the above citation has "or virtual" added
   if (LangOpts.CPlusPlus0x) {
     for (CXXRecordDecl::base_class_iterator Base = ClassDecl->vbases_begin(),
                                          BaseEnd = ClassDecl->vbases_end();
@@ -9578,6 +9585,7 @@ Decl *Sema::ActOnExceptionDeclarator(Scope *S, Declarator &D) {
     if (PrevDecl->isTemplateParameter()) {
       // Maybe we will complain about the shadowed template parameter.
       DiagnoseTemplateParameterShadow(D.getIdentifierLoc(), PrevDecl);
+      PrevDecl = 0;
     }
   }
 
@@ -9638,46 +9646,54 @@ Decl *Sema::ActOnStaticAssertDeclaration(SourceLocation StaticAssertLoc,
 /// \brief Perform semantic analysis of the given friend type declaration.
 ///
 /// \returns A friend declaration that.
-FriendDecl *Sema::CheckFriendTypeDecl(SourceLocation FriendLoc, 
+FriendDecl *Sema::CheckFriendTypeDecl(SourceLocation Loc,
+                                      SourceLocation FriendLoc,
                                       TypeSourceInfo *TSInfo) {
   assert(TSInfo && "NULL TypeSourceInfo for friend type declaration");
   
   QualType T = TSInfo->getType();
   SourceRange TypeRange = TSInfo->getTypeLoc().getLocalSourceRange();
   
-  if (!getLangOptions().CPlusPlus0x) {
-    // C++03 [class.friend]p2:
-    //   An elaborated-type-specifier shall be used in a friend declaration
-    //   for a class.*
-    //
-    //   * The class-key of the elaborated-type-specifier is required.
-    if (!ActiveTemplateInstantiations.empty()) {
-      // Do not complain about the form of friend template types during
-      // template instantiation; we will already have complained when the
-      // template was declared.
-    } else if (!T->isElaboratedTypeSpecifier()) {
-      // If we evaluated the type to a record type, suggest putting
-      // a tag in front.
-      if (const RecordType *RT = T->getAs<RecordType>()) {
-        RecordDecl *RD = RT->getDecl();
-        
-        std::string InsertionText = std::string(" ") + RD->getKindName();
-        
-        Diag(TypeRange.getBegin(), diag::ext_unelaborated_friend_type)
-          << (unsigned) RD->getTagKind()
-          << T
-          << FixItHint::CreateInsertion(PP.getLocForEndOfToken(FriendLoc),
-                                        InsertionText);
-      } else {
-        Diag(FriendLoc, diag::ext_nonclass_type_friend)
-          << T
-          << SourceRange(FriendLoc, TypeRange.getEnd());
-      }
-    } else if (T->getAs<EnumType>()) {
-      Diag(FriendLoc, diag::ext_enum_friend)
+  // C++03 [class.friend]p2:
+  //   An elaborated-type-specifier shall be used in a friend declaration
+  //   for a class.*
+  //
+  //   * The class-key of the elaborated-type-specifier is required.
+  if (!ActiveTemplateInstantiations.empty()) {
+    // Do not complain about the form of friend template types during
+    // template instantiation; we will already have complained when the
+    // template was declared.
+  } else if (!T->isElaboratedTypeSpecifier()) {
+    // If we evaluated the type to a record type, suggest putting
+    // a tag in front.
+    if (const RecordType *RT = T->getAs<RecordType>()) {
+      RecordDecl *RD = RT->getDecl();
+      
+      std::string InsertionText = std::string(" ") + RD->getKindName();
+      
+      Diag(TypeRange.getBegin(),
+           getLangOptions().CPlusPlus0x ?
+             diag::warn_cxx98_compat_unelaborated_friend_type :
+             diag::ext_unelaborated_friend_type)
+        << (unsigned) RD->getTagKind()
+        << T
+        << FixItHint::CreateInsertion(PP.getLocForEndOfToken(FriendLoc),
+                                      InsertionText);
+    } else {
+      Diag(FriendLoc,
+           getLangOptions().CPlusPlus0x ?
+             diag::warn_cxx98_compat_nonclass_type_friend :
+             diag::ext_nonclass_type_friend)
         << T
         << SourceRange(FriendLoc, TypeRange.getEnd());
     }
+  } else if (T->getAs<EnumType>()) {
+    Diag(FriendLoc,
+         getLangOptions().CPlusPlus0x ?
+           diag::warn_cxx98_compat_enum_friend :
+           diag::ext_enum_friend)
+      << T
+      << SourceRange(FriendLoc, TypeRange.getEnd());
   }
   
   // C++0x [class.friend]p3:
@@ -9688,7 +9704,7 @@ FriendDecl *Sema::CheckFriendTypeDecl(SourceLocation FriendLoc,
   // FIXME: C++0x has some syntactic restrictions on friend type declarations
   // in [class.friend]p3 that we do not implement.
   
-  return FriendDecl::Create(Context, CurContext, FriendLoc, TSInfo, FriendLoc);
+  return FriendDecl::Create(Context, CurContext, Loc, TSInfo, FriendLoc);
 }
 
 /// Handle a friend tag declaration where the scope specifier was
@@ -9732,8 +9748,6 @@ Decl *Sema::ActOnTemplatedFriendTag(Scope *S, SourceLocation FriendLoc,
 
   if (Invalid) return 0;
 
-  assert(SS.isNotEmpty() && "valid templated tag with no SS and no direct?");
-
   bool isAllExplicitSpecializations = true;
   for (unsigned I = TempParamLists.size(); I-- > 0; ) {
     if (TempParamLists.get()[I]->size()) {
@@ -9748,6 +9762,18 @@ Decl *Sema::ActOnTemplatedFriendTag(Scope *S, SourceLocation FriendLoc,
   // about the template header and build an appropriate non-templated
   // friend.  TODO: for source fidelity, remember the headers.
   if (isAllExplicitSpecializations) {
+    if (SS.isEmpty()) {
+      bool Owned = false;
+      bool IsDependent = false;
+      return ActOnTag(S, TagSpec, TUK_Friend, TagLoc, SS, Name, NameLoc,
+                      Attr, AS_public, 
+                      /*ModulePrivateLoc=*/SourceLocation(),
+                      MultiTemplateParamsArg(), Owned, IsDependent, 
+                      /*ScopedEnum=*/false,
+                      /*ScopedEnumUsesClassTag=*/false,
+                      /*UnderlyingType=*/TypeResult());          
+    }
+    
     NestedNameSpecifierLoc QualifierLoc = SS.getWithLocInContext(Context);
     ElaboratedTypeKeyword Keyword
       = TypeWithKeyword::getKeywordForTagTypeKind(Kind);
@@ -9775,6 +9801,10 @@ Decl *Sema::ActOnTemplatedFriendTag(Scope *S, SourceLocation FriendLoc,
     CurContext->addDecl(Friend);
     return Friend;
   }
+  
+  assert(SS.isNotEmpty() && "valid templated tag with no SS and no direct?");
+  
+
 
   // Handle the case of a templated-scope friend class.  e.g.
   //   template <class T> class A<T>::B;
@@ -9871,7 +9901,7 @@ Decl *Sema::ActOnFriendTypeDecl(Scope *S, const DeclSpec &DS,
                                    TSI,
                                    DS.getFriendSpecLoc());
   else
-    D = CheckFriendTypeDecl(DS.getFriendSpecLoc(), TSI);
+    D = CheckFriendTypeDecl(Loc, DS.getFriendSpecLoc(), TSI);
   
   if (!D)
     return 0;
@@ -9996,12 +10026,14 @@ Decl *Sema::ActOnFriendFunctionDecl(Scope *S, Declarator &D,
 
     // C++ [class.friend]p1: A friend of a class is a function or
     //   class that is not a member of the class . . .
-    // C++0x changes this for both friend types and functions.
+    // C++11 changes this for both friend types and functions.
     // Most C++ 98 compilers do seem to give an error here, so
     // we do, too.
-    if (!Previous.empty() && DC->Equals(CurContext)
-        && !getLangOptions().CPlusPlus0x)
-      Diag(DS.getFriendSpecLoc(), diag::err_friend_is_member);
+    if (!Previous.empty() && DC->Equals(CurContext))
+      Diag(DS.getFriendSpecLoc(),
+           getLangOptions().CPlusPlus0x ?
+             diag::warn_cxx98_compat_friend_is_member :
+             diag::err_friend_is_member);
 
     DCScope = getScopeForDeclContext(S, DC);
 
@@ -10046,7 +10078,10 @@ Decl *Sema::ActOnFriendFunctionDecl(Scope *S, Declarator &D,
     // C++ [class.friend]p1: A friend of a class is a function or
     //   class that is not a member of the class . . .
     if (DC->Equals(CurContext))
-      Diag(DS.getFriendSpecLoc(), diag::err_friend_is_member);
+      Diag(DS.getFriendSpecLoc(),
+           getLangOptions().CPlusPlus0x ?
+             diag::warn_cxx98_compat_friend_is_member :
+             diag::err_friend_is_member);
     
     if (D.isFunctionDefinition()) {
       // C++ [class.friend]p6:

@@ -51,9 +51,13 @@ void Preprocessor::setMacroInfo(IdentifierInfo *II, MacroInfo *MI) {
   if (MI) {
     Macros[II] = MI;
     II->setHasMacroDefinition(true);
+    if (II->isFromAST())
+      II->setChangedSinceDeserialization();
   } else if (II->hasMacroDefinition()) {
     Macros.erase(II);
     II->setHasMacroDefinition(false);
+    if (II->isFromAST())
+      II->setChangedSinceDeserialization();
   }
 }
 
@@ -611,6 +615,7 @@ static bool HasFeature(const Preprocessor &PP, const IdentifierInfo *II) {
            .Case("ownership_returns", true)
            .Case("ownership_takes", true)
            .Case("objc_bool", true)
+           .Case("arc_cf_code_audited", true)
            // C1X features
            .Case("c_alignas", LangOpts.C1X)
            .Case("c_generic_selections", LangOpts.C1X)

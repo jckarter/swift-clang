@@ -2,6 +2,8 @@
 // RUN: %clang_cc1 -x objective-c++ -fsyntax-only -verify %s
 // rdar://8308053
 
+@class NSObject;
+
 @interface I {
     __attribute__((iboutletcollection(I))) id ivar1;
     __attribute__((iboutletcollection(id))) id ivar2;
@@ -37,5 +39,5 @@ typedef void *PV;
 
 @interface RDar10296078  : ParentRDar10296078
 @property (nonatomic, strong) 
-  __attribute__((iboutletcollection(RDar10296078_OtherClass<RDar10296078_Protocol>))) NSArray *stuff; // expected-error {{invalid argument of iboutletcollection attribute}}
+  __attribute__((iboutletcollection(RDar10296078_OtherClass<RDar10296078_Protocol>))) NSArray *stuff; 
 @end

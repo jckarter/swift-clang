@@ -696,18 +696,51 @@ void Parser::ParseUnderlyingTypeSpecifier(DeclSpec &DS) {
     Diag(StartLoc, DiagID) << PrevSpec;
 }
 
-/// ParseClassName - Parse a C++ class-name, which names a class. Note
-/// that we only check that the result names a type; semantic analysis
-/// will need to verify that the type names a class. The result is
-/// either a type or NULL, depending on whether a type name was
-/// found.
+/// ParseBaseTypeSpecifier - Parse a C++ base-type-specifier which is either a
+/// class name or decltype-specifier. Note that we only check that the result 
+/// names a type; semantic analysis will need to verify that the type names a 
+/// class. The result is either a type or null, depending on whether a type 
+/// name was found.
 ///
+///       base-type-specifier: [C++ 10.1]
+///         class-or-decltype
+///       class-or-decltype: [C++ 10.1]
+///         nested-name-specifier[opt] class-name
+///         decltype-specifier
 ///       class-name: [C++ 9.1]
 ///         identifier
 ///         simple-template-id
 ///
-Parser::TypeResult Parser::ParseClassName(SourceLocation &EndLocation,
-                                          CXXScopeSpec &SS) {
+Parser::TypeResult Parser::ParseBaseTypeSpecifier(SourceLocation &BaseLoc,
+                                                  SourceLocation &EndLocation) {
+  // Ignore attempts to use typename
+  if (Tok.is(tok::kw_typename)) {
+    Diag(Tok, diag::err_expected_class_name_not_template)
+      << FixItHint::CreateRemoval(Tok.getLocation());
+    ConsumeToken();
+  }
+
+  // Parse optional nested-name-specifier
+  CXXScopeSpec SS;
+  ParseOptionalCXXScopeSpecifier(SS, ParsedType(), /*EnteringContext=*/false);
+
+  BaseLoc = Tok.getLocation();
+
+  // Parse decltype-specifier
+  if (Tok.is(tok::kw_decltype)) {
+    if (SS.isNotEmpty())
+      Diag(SS.getBeginLoc(), diag::err_unexpected_scope_on_base_decltype)
+        << FixItHint::CreateRemoval(SS.getRange());
+    // Fake up a Declarator to use with ActOnTypeName.
+    DeclSpec DS(AttrFactory);
+
+    ParseDecltypeSpecifier(DS);    
+    EndLocation = DS.getSourceRange().getEnd();
+
+    Declarator DeclaratorInfo(DS, Declarator::TypeNameContext);
+    return Actions.ActOnTypeName(getCurScope(), DeclaratorInfo);
+  }
+
   // Check whether we have a template-id that names a type.
   if (Tok.is(tok::annot_template_id)) {
     TemplateIdAnnotation *TemplateId = takeTemplateIdAnnotation(Tok);
@@ -1363,9 +1396,9 @@ void Parser::ParseBaseClause(Decl *ClassDecl) {
 ///       base-specifier: [C++ class.derived]
 ///         ::[opt] nested-name-specifier[opt] class-name
 ///         'virtual' access-specifier[opt] ::[opt] nested-name-specifier[opt]
-///                        class-name
+///                        base-type-specifier
 ///         access-specifier 'virtual'[opt] ::[opt] nested-name-specifier[opt]
-///                        class-name
+///                        base-type-specifier
 Parser::BaseResult Parser::ParseBaseSpecifier(Decl *ClassDecl) {
   bool IsVirtual = false;
   SourceLocation StartLoc = Tok.getLocation();
@@ -1394,16 +1427,10 @@ Parser::BaseResult Parser::ParseBaseSpecifier(Decl *ClassDecl) {
     IsVirtual = true;
   }
 
-  // Parse optional '::' and optional nested-name-specifier.
-  CXXScopeSpec SS;
-  ParseOptionalCXXScopeSpecifier(SS, ParsedType(), /*EnteringContext=*/false);
-
-  // The location of the base class itself.
-  SourceLocation BaseLoc = Tok.getLocation();
-
   // Parse the class-name.
   SourceLocation EndLocation;
-  TypeResult BaseType = ParseClassName(EndLocation, SS);
+  SourceLocation BaseLoc;
+  TypeResult BaseType = ParseBaseTypeSpecifier(BaseLoc, EndLocation);
   if (BaseType.isInvalid())
     return true;
 
@@ -2757,25 +2784,32 @@ void Parser::ParseMicrosoftAttributes(ParsedAttributes &attrs,
 
 void Parser::ParseMicrosoftIfExistsClassDeclaration(DeclSpec::TST TagType,
                                                     AccessSpecifier& CurAS) {
-  bool Result;
+  IfExistsCondition Result;
   if (ParseMicrosoftIfExistsCondition(Result))
     return;
   
-  if (Tok.isNot(tok::l_brace)) {
+  BalancedDelimiterTracker Braces(*this, tok::l_brace);
+  if (Braces.consumeOpen()) {
     Diag(Tok, diag::err_expected_lbrace);
     return;
   }
-  ConsumeBrace();
 
-  // Condition is false skip all inside the {}.
-  if (!Result) {
-    SkipUntil(tok::r_brace, false);
+  switch (Result.Behavior) {
+  case IEB_Parse:
+    // Parse the declarations below.
+    break;
+        
+  case IEB_Dependent:
+    Diag(Result.KeywordLoc, diag::warn_microsoft_dependent_exists)
+      << Result.IsIfExists;
+    // Fall through to skip.
+      
+  case IEB_Skip:
+    Braces.skipToEnd();
     return;
   }
 
-  // Condition is true, parse the declaration.
-  while (Tok.isNot(tok::r_brace)) {
-
+  while (Tok.isNot(tok::r_brace) && Tok.isNot(tok::eof)) {
     // __if_exists, __if_not_exists can nest.
     if ((Tok.is(tok::kw___if_exists) || Tok.is(tok::kw___if_not_exists))) {
       ParseMicrosoftIfExistsClassDeclaration((DeclSpec::TST)TagType, CurAS);
@@ -2808,10 +2842,6 @@ void Parser::ParseMicrosoftIfExistsClassDeclaration(DeclSpec::TST TagType,
     // Parse all the comma separated declarators.
     ParseCXXClassMemberDeclaration(CurAS, 0);
   }
-
-  if (Tok.isNot(tok::r_brace)) {
-    Diag(Tok, diag::err_expected_rbrace);
-    return;
-  }
-  ConsumeBrace();
+  
+  Braces.consumeClose();
 }

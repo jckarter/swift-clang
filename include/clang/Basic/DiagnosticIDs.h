@@ -35,7 +35,7 @@ namespace clang {
       DIAG_START_FRONTEND = DIAG_START_DRIVER   +  100,
       DIAG_START_LEX      = DIAG_START_FRONTEND +  120,
       DIAG_START_PARSE    = DIAG_START_LEX      +  300,
-      DIAG_START_AST      = DIAG_START_PARSE    +  300,
+      DIAG_START_AST      = DIAG_START_PARSE    +  310,
       DIAG_START_SEMA     = DIAG_START_AST      +  100,
       DIAG_START_ANALYSIS = DIAG_START_SEMA     + 3000,
       DIAG_UPPER_LIMIT    = DIAG_START_ANALYSIS +  100
@@ -182,6 +182,10 @@ public:
   /// category.
   static StringRef getCategoryNameFromID(unsigned CategoryID);
   
+  /// isARCDiagnostic - Return true if a given diagnostic falls into an
+  /// ARC diagnostic category;
+  static bool isARCDiagnostic(unsigned DiagID);
+
   /// \brief Enumeration describing how the the emission of a diagnostic should
   /// be treated when it occurs during C++ template argument deduction.
   enum SFINAEResponse {

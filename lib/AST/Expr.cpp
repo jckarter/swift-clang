@@ -1394,6 +1394,7 @@ Expr *InitListExpr::updateInit(ASTContext &C, unsigned Init, Expr *expr) {
 }
 
 void InitListExpr::setArrayFiller(Expr *filler) {
+  assert(!hasArrayFiller() && "Filler already set!");
   ArrayFillerOrUnionFieldInit = filler;
   // Fill out any "holes" in the array due to designated initializers.
   Expr **inits = getInits();
@@ -1766,7 +1767,7 @@ bool Expr::isBoundMemberFunction(ASTContext &Ctx) const {
 }
 
 QualType Expr::findBoundMemberType(const Expr *expr) {
-  assert(expr->getType()->isSpecificPlaceholderType(BuiltinType::BoundMember));
+  assert(expr->hasPlaceholderType(BuiltinType::BoundMember));
 
   // Bound member expressions are always one of these possibilities:
   //   x->m      x.m      x->*y      x.*y

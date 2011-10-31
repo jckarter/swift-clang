@@ -1598,9 +1598,8 @@ public:
   }
 
   static bool classof(SEHTryStmt *) { return true; }
-
 };
-
+  
 }  // end namespace clang
 
 #endif

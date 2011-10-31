@@ -2142,7 +2142,7 @@ void Sema::ActOnAtEnd(Scope *S, SourceRange AtEnd,
   if (!isInterfaceDeclKind && AtEnd.isInvalid()) {
     // FIXME: This is wrong.  We shouldn't be pretending that there is
     //  an '@end' in the declaration.
-    SourceLocation L = ClassDecl->getLocation();
+    SourceLocation L = OCD->getAtStartLoc();
     AtEnd.setBegin(L);
     AtEnd.setEnd(L);
     Diag(L, diag::err_missing_atend);
@@ -2318,13 +2318,36 @@ CvtQTToAstBitMask(ObjCDeclSpec::ObjCDeclQualifier PQTVal) {
 }
 
 static inline
-bool containsInvalidMethodImplAttribute(const AttrVec &A) {
-  // The 'ibaction' attribute is allowed on method definitions because of
-  // how the IBAction macro is used on both method declarations and definitions.
-  // If the method definitions contains any other attributes, return true.
-  for (AttrVec::const_iterator i = A.begin(), e = A.end(); i != e; ++i)
-    if ((*i)->getKind() != attr::IBAction)
+bool containsInvalidMethodImplAttribute(ObjCMethodDecl *IMD,
+                                        const AttrVec &A) {
+  // If method is only declared in implementation (private method),
+  // No need to issue any diagnostics on method definition with attributes.
+  if (!IMD)
+    return false;
+
+  // method declared in interface has no attribute. 
+  // But implementation has attributes. This is invalid
+  if (!IMD->hasAttrs())
+    return true;
+
+  const AttrVec &D = IMD->getAttrs();
+  if (D.size() != A.size())
+    return true;
+
+  // attributes on method declaration and definition must match exactly.
+  // Note that we have at most a couple of attributes on methods, so this
+  // n*n search is good enough.
+  for (AttrVec::const_iterator i = A.begin(), e = A.end(); i != e; ++i) {
+    bool match = false;
+    for (AttrVec::const_iterator i1 = D.begin(), e1 = D.end(); i1 != e1; ++i1) {
+      if ((*i)->getKind() == (*i1)->getKind()) {
+        match = true;
+        break;
+      }
+    }
+    if (!match)
       return true;
+  }
   return false;
 }
 
@@ -2656,8 +2679,12 @@ Decl *Sema::ActOnMethodDeclaration(
       ImpDecl->addClassMethod(ObjCMethod);
     }
 
+    ObjCMethodDecl *IMD = 0;
+    if (ObjCInterfaceDecl *IDecl = ImpDecl->getClassInterface())
+      IMD = IDecl->lookupMethod(ObjCMethod->getSelector(), 
+                                ObjCMethod->isInstanceMethod());
     if (ObjCMethod->hasAttrs() &&
-        containsInvalidMethodImplAttribute(ObjCMethod->getAttrs()))
+        containsInvalidMethodImplAttribute(IMD, ObjCMethod->getAttrs()))
       Diag(EndLoc, diag::warn_attribute_method_def);
   } else {
     cast<DeclContext>(ClassDecl)->addDecl(ObjCMethod);

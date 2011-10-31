@@ -115,6 +115,9 @@ public:
   /// Enable additional debugging information.
   std::string DebugPass;
 
+  /// The string to embed in debug information as the current working directory.
+  std::string DebugCompilationDir;
+
   /// The string to embed in the debug information for the compile unit, if
   /// non-empty.
   std::string DwarfDebugFlags;
@@ -124,6 +127,9 @@ public:
 
   /// The float precision limit to use, if non-empty.
   std::string LimitFloatPrecision;
+
+  /// The name of the bitcode file to link before optzns.
+  std::string LinkBitcodeFile;
 
   /// The kind of inlining to perform.
   InliningMethod Inlining;

@@ -437,7 +437,7 @@ CXCursor cxcursor::MakeCXCursor(Stmt *S, Decl *Parent, CXTranslationUnit TU,
     K = CXCursor_CallExpr;
     break;
       
-  case Stmt::ObjCMessageExprClass:      
+  case Stmt::ObjCMessageExprClass: {
     K = CXCursor_ObjCMessageExpr;
     int SelectorIdIndex = -1;
     // Check if cursor points to a selector id.
@@ -452,6 +452,11 @@ CXCursor cxcursor::MakeCXCursor(Stmt *S, Decl *Parent, CXTranslationUnit TU,
     }
     CXCursor C = { K, 0, { Parent, S, TU } };
     return getSelectorIdentifierCursor(SelectorIdIndex, C);
+  }
+      
+  case Stmt::MSDependentExistsStmtClass:
+    K = CXCursor_UnexposedStmt;
+    break;
   }
   
   CXCursor C = { K, 0, { Parent, S, TU } };

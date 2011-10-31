@@ -761,6 +761,7 @@ static MemberExpr *BuildMemberExpr(ASTContext &C, Expr *Base, bool isArrow,
                                    QualType Ty,
                                    ExprValueKind VK, ExprObjectKind OK,
                                    const TemplateArgumentListInfo *TemplateArgs = 0) {
+  assert((!isArrow || Base->isRValue()) && "-> base must be a pointer rvalue");
   return MemberExpr::Create(C, Base, isArrow, SS.getWithLocInContext(C),
                             Member, FoundDecl, MemberNameInfo,
                             TemplateArgs, Ty, VK, OK);
@@ -777,7 +778,7 @@ Sema::BuildMemberReferenceExpr(Expr *BaseExpr, QualType BaseExprType,
   QualType BaseType = BaseExprType;
   if (IsArrow) {
     assert(BaseType->isPointerType());
-    BaseType = BaseType->getAs<PointerType>()->getPointeeType();
+    BaseType = BaseType->castAs<PointerType>()->getPointeeType();
   }
   R.setBaseObjectType(BaseType);
 
@@ -814,15 +815,6 @@ Sema::BuildMemberReferenceExpr(Expr *BaseExpr, QualType BaseExprType,
       CheckQualifiedMemberReference(BaseExpr, BaseType, SS, R))
     return ExprError();
   
-  // Perform a property load on the base regardless of whether we
-  // actually need it for the declaration.
-  if (BaseExpr && BaseExpr->getObjectKind() == OK_ObjCProperty) {
-    ExprResult Result = ConvertPropertyForRValue(BaseExpr);
-    if (Result.isInvalid())
-      return ExprError();
-    BaseExpr = Result.take();
-  }
-
   // Construct an unresolved result if we in fact got an unresolved
   // result.
   if (R.isOverloadedResult() || R.isUnresolvableResult()) {
@@ -979,6 +971,17 @@ static bool isPointerToRecordType(QualType T) {
   return false;
 }
 
+/// Perform conversions on the LHS of a member access expression.
+ExprResult
+Sema::PerformMemberExprBaseConversion(Expr *Base, bool IsArrow) {
+  ExprResult BaseResult = DefaultFunctionArrayConversion(Base);
+
+  if (!BaseResult.isInvalid() && IsArrow)
+    BaseResult = DefaultLvalueConversion(BaseResult.take());
+
+  return BaseResult;
+}
+
 /// Look up the given member of the given non-type-dependent
 /// expression.  This can return in one of two ways:
 ///  * If it returns a sentinel null-but-valid result, the caller will
@@ -997,15 +1000,9 @@ Sema::LookupMemberExpr(LookupResult &R, ExprResult &BaseExpr,
   assert(BaseExpr.get() && "no base expression");
 
   // Perform default conversions.
-  BaseExpr = DefaultFunctionArrayConversion(BaseExpr.take());
+  BaseExpr = PerformMemberExprBaseConversion(BaseExpr.take(), IsArrow);
   if (BaseExpr.isInvalid())
     return ExprError();
-
-  if (IsArrow) {
-    BaseExpr = DefaultLvalueConversion(BaseExpr.take());
-    if (BaseExpr.isInvalid())
-      return ExprError();
-  }
 
   QualType BaseType = BaseExpr.get()->getType();
   assert(!BaseType->isDependentType());
@@ -1209,11 +1206,8 @@ Sema::LookupMemberExpr(LookupResult &R, ExprResult &BaseExpr,
           if (DiagnoseUseOfDecl(PD, MemberLoc))
             return ExprError();
 
-          QualType T = PD->getType();
-          if (ObjCMethodDecl *Getter = PD->getGetterMethodDecl())
-            T = getMessageSendResultType(BaseType, Getter, false, false);
-         
-          return Owned(new (Context) ObjCPropertyRefExpr(PD, T,
+          return Owned(new (Context) ObjCPropertyRefExpr(PD,
+                                                         Context.PseudoObjectTy,
                                                          VK_LValue,
                                                          OK_ObjCProperty,
                                                          MemberLoc, 
@@ -1231,16 +1225,10 @@ Sema::LookupMemberExpr(LookupResult &R, ExprResult &BaseExpr,
           if (Decl *SDecl = FindGetterSetterNameDecl(OPT, /*Property id*/0, 
                                                      SetterSel, Context))
             SMD = dyn_cast<ObjCMethodDecl>(SDecl);
-          QualType PType = getMessageSendResultType(BaseType, OMD, false, 
-                                                    false);
           
-          ExprValueKind VK = VK_LValue;
-          if (!getLangOptions().CPlusPlus && PType.isCForbiddenLValueType())
-            VK = VK_RValue;
-          ExprObjectKind OK = (VK == VK_RValue ? OK_Ordinary : OK_ObjCProperty);
-
-          return Owned(new (Context) ObjCPropertyRefExpr(OMD, SMD, PType,
-                                                         VK, OK,
+          return Owned(new (Context) ObjCPropertyRefExpr(OMD, SMD,
+                                                         Context.PseudoObjectTy,
+                                                         VK_LValue, OK_ObjCProperty,
                                                          MemberLoc, BaseExpr.take()));
         }
       }
@@ -1295,23 +1283,9 @@ Sema::LookupMemberExpr(LookupResult &R, ExprResult &BaseExpr,
         return ExprError();
 
       if (Getter || Setter) {
-        QualType PType;
-
-        ExprValueKind VK = VK_LValue;
-        if (Getter) {
-          PType = getMessageSendResultType(QualType(OT, 0), Getter, true, 
-                                           false);
-          if (!getLangOptions().CPlusPlus && PType.isCForbiddenLValueType())
-            VK = VK_RValue;
-        } else {
-          // Get the expression type from Setter's incoming parameter.
-          PType = (*(Setter->param_end() -1))->getType();
-        }
-        ExprObjectKind OK = (VK == VK_RValue ? OK_Ordinary : OK_ObjCProperty);
-
-        // FIXME: we must check that the setter has property type.
         return Owned(new (Context) ObjCPropertyRefExpr(Getter, Setter,
-                                                       PType, VK, OK,
+                                                       Context.PseudoObjectTy,
+                                                       VK_LValue, OK_ObjCProperty,
                                                        MemberLoc, BaseExpr.take()));
       }
 

@@ -192,6 +192,10 @@ class CursorVisitor : public DeclVisitor<CursorVisitor, bool>,
   /// \brief Whether we should visit the preprocessing record entries last, 
   /// after visiting other declarations.
   bool VisitPreprocessorLast;
+
+  /// \brief Whether we should visit the preprocessing record entries that are
+  /// #included inside the \arg RegionOfInterest.
+  bool VisitIncludedPreprocessingEntries;
   
   /// \brief When valid, a source range to which the cursor should restrict
   /// its search.
@@ -240,10 +244,12 @@ public:
   CursorVisitor(CXTranslationUnit TU, CXCursorVisitor Visitor,
                 CXClientData ClientData,
                 bool VisitPreprocessorLast,
+                bool VisitIncludedPreprocessingEntries = false,
                 SourceRange RegionOfInterest = SourceRange())
     : TU(TU), AU(static_cast<ASTUnit*>(TU->TUData)),
       Visitor(Visitor), ClientData(ClientData),
       VisitPreprocessorLast(VisitPreprocessorLast),
+      VisitIncludedPreprocessingEntries(VisitIncludedPreprocessingEntries),
       RegionOfInterest(RegionOfInterest), DI_current(0)
   {
     Parent.kind = CXCursor_NoDeclFound;
@@ -268,8 +274,14 @@ public:
   
   bool visitPreprocessedEntitiesInRegion();
 
+  bool shouldVisitIncludedPreprocessingEntries() const {
+    return VisitIncludedPreprocessingEntries;
+  }
+
   template<typename InputIterator>
-  bool visitPreprocessedEntities(InputIterator First, InputIterator Last);
+  bool visitPreprocessedEntities(InputIterator First, InputIterator Last,
+                                 PreprocessingRecord &PPRec,
+                                 FileID FID = FileID());
 
   bool VisitChildren(CXCursor Parent);
 
@@ -399,45 +411,95 @@ bool CursorVisitor::Visit(CXCursor Cursor, bool CheckedRegionOfInterest) {
   return false;
 }
 
+static bool visitPreprocessedEntitiesInRange(SourceRange R,
+                                             PreprocessingRecord &PPRec,
+                                             CursorVisitor &Visitor) {
+  SourceManager &SM = Visitor.getASTUnit()->getSourceManager();
+  FileID FID;
+  
+  if (!Visitor.shouldVisitIncludedPreprocessingEntries()) {
+    // If the begin/end of the range lie in the same FileID, do the optimization
+    // where we skip preprocessed entities that do not come from the same FileID.
+    FID = SM.getFileID(R.getBegin());
+    if (FID != SM.getFileID(R.getEnd()))
+      FID = FileID();
+  }
+
+  std::pair<PreprocessingRecord::iterator, PreprocessingRecord::iterator>
+    Entities = PPRec.getPreprocessedEntitiesInRange(R);
+  return Visitor.visitPreprocessedEntities(Entities.first, Entities.second,
+                                           PPRec, FID);
+}
+
 bool CursorVisitor::visitPreprocessedEntitiesInRegion() {
   PreprocessingRecord &PPRec
     = *AU->getPreprocessor().getPreprocessingRecord();
+  SourceManager &SM = AU->getSourceManager();
   
   if (RegionOfInterest.isValid()) {
     SourceRange MappedRange = AU->mapRangeToPreamble(RegionOfInterest);
-    std::pair<PreprocessingRecord::iterator, PreprocessingRecord::iterator>
-      Entities = PPRec.getPreprocessedEntitiesInRange(MappedRange);
-    return visitPreprocessedEntities(Entities.first, Entities.second);
+    SourceLocation B = MappedRange.getBegin();
+    SourceLocation E = MappedRange.getEnd();
+
+    if (AU->isInPreambleFileID(B)) {
+      if (SM.isLoadedSourceLocation(E))
+        return visitPreprocessedEntitiesInRange(SourceRange(B, E),
+                                                 PPRec, *this);
+
+      // Beginning of range lies in the preamble but it also extends beyond
+      // it into the main file. Split the range into 2 parts, one covering
+      // the preamble and another covering the main file. This allows subsequent
+      // calls to visitPreprocessedEntitiesInRange to accept a source range that
+      // lies in the same FileID, allowing it to skip preprocessed entities that
+      // do not come from the same FileID.
+      bool breaked =
+        visitPreprocessedEntitiesInRange(
+                                   SourceRange(B, AU->getEndOfPreambleFileID()),
+                                          PPRec, *this);
+      if (breaked) return true;
+      return visitPreprocessedEntitiesInRange(
+                                    SourceRange(AU->getStartOfMainFileID(), E),
+                                        PPRec, *this);
+    }
+
+    return visitPreprocessedEntitiesInRange(SourceRange(B, E), PPRec, *this);
   }
 
   bool OnlyLocalDecls
     = !AU->isMainFileAST() && AU->getOnlyLocalDecls(); 
   
   if (OnlyLocalDecls)
-    return visitPreprocessedEntities(PPRec.local_begin(), PPRec.local_end());
+    return visitPreprocessedEntities(PPRec.local_begin(), PPRec.local_end(),
+                                     PPRec);
 
-  return visitPreprocessedEntities(PPRec.begin(), PPRec.end());
+  return visitPreprocessedEntities(PPRec.begin(), PPRec.end(), PPRec);
 }
 
 template<typename InputIterator>
 bool CursorVisitor::visitPreprocessedEntities(InputIterator First,
-                                              InputIterator Last) {
+                                              InputIterator Last,
+                                              PreprocessingRecord &PPRec,
+                                              FileID FID) {
   for (; First != Last; ++First) {
-    if (MacroExpansion *ME = dyn_cast<MacroExpansion>(*First)) {
+    if (!FID.isInvalid() && !PPRec.isEntityInFileID(First, FID))
+      continue;
+
+    PreprocessedEntity *PPE = *First;
+    if (MacroExpansion *ME = dyn_cast<MacroExpansion>(PPE)) {
       if (Visit(MakeMacroExpansionCursor(ME, TU)))
         return true;
       
       continue;
     }
     
-    if (MacroDefinition *MD = dyn_cast<MacroDefinition>(*First)) {
+    if (MacroDefinition *MD = dyn_cast<MacroDefinition>(PPE)) {
       if (Visit(MakeMacroDefinitionCursor(MD, TU)))
         return true;
       
       continue;
     }
     
-    if (InclusionDirective *ID = dyn_cast<InclusionDirective>(*First)) {
+    if (InclusionDirective *ID = dyn_cast<InclusionDirective>(PPE)) {
       if (Visit(MakeInclusionDirectiveCursor(ID, TU)))
         return true;
       
@@ -1343,37 +1405,17 @@ bool CursorVisitor::VisitBuiltinTypeLoc(BuiltinTypeLoc TL) {
   // Some builtin types (such as Objective-C's "id", "sel", and
   // "Class") have associated declarations. Create cursors for those.
   QualType VisitType;
-  switch (TL.getType()->getAs<BuiltinType>()->getKind()) {
+  switch (TL.getTypePtr()->getKind()) {
+
   case BuiltinType::Void:
-  case BuiltinType::Bool:
-  case BuiltinType::Char_U:
-  case BuiltinType::UChar:
-  case BuiltinType::Char16:
-  case BuiltinType::Char32:
-  case BuiltinType::UShort:
-  case BuiltinType::UInt:
-  case BuiltinType::ULong:
-  case BuiltinType::ULongLong:
-  case BuiltinType::UInt128:
-  case BuiltinType::Char_S:
-  case BuiltinType::SChar:
-  case BuiltinType::WChar_U:
-  case BuiltinType::WChar_S:
-  case BuiltinType::Short:
-  case BuiltinType::Int:
-  case BuiltinType::Long:
-  case BuiltinType::LongLong:
-  case BuiltinType::Int128:
-  case BuiltinType::Half:
-  case BuiltinType::Float:
-  case BuiltinType::Double:
-  case BuiltinType::LongDouble:
   case BuiltinType::NullPtr:
-  case BuiltinType::Overload:
-  case BuiltinType::BoundMember:
   case BuiltinType::Dependent:
-  case BuiltinType::UnknownAny:
-  case BuiltinType::ARCUnbridgedCast:
+#define BUILTIN_TYPE(Id, SingletonId)
+#define SIGNED_TYPE(Id, SingletonId) case BuiltinType::Id:
+#define UNSIGNED_TYPE(Id, SingletonId) case BuiltinType::Id:
+#define FLOATING_TYPE(Id, SingletonId) case BuiltinType::Id:
+#define PLACEHOLDER_TYPE(Id, SingletonId) case BuiltinType::Id:
+#include "clang/AST/BuiltinTypes.def"
     break;
 
   case BuiltinType::ObjCId:
@@ -1712,6 +1754,8 @@ public:
     switch (S->getStmtClass()) {
     default:
       llvm_unreachable("Unhandled Stmt");
+    case clang::Stmt::MSDependentExistsStmtClass:
+      return cast<MSDependentExistsStmt>(S)->getNameInfo();
     case Stmt::CXXDependentScopeMemberExprClass:
       return cast<CXXDependentScopeMemberExpr>(S)->getMemberNameInfo();
     case Stmt::DependentScopeDeclRefExprClass:
@@ -1746,6 +1790,7 @@ public:
   void VisitCompoundLiteralExpr(CompoundLiteralExpr *E);
   void VisitCompoundStmt(CompoundStmt *S);
   void VisitCXXDefaultArgExpr(CXXDefaultArgExpr *E) { /* Do nothing. */ }
+  void VisitMSDependentExistsStmt(MSDependentExistsStmt *S);
   void VisitCXXDependentScopeMemberExpr(CXXDependentScopeMemberExpr *E);
   void VisitCXXNewExpr(CXXNewExpr *E);
   void VisitCXXScalarValueInitExpr(CXXScalarValueInitExpr *E);
@@ -1855,6 +1900,14 @@ void EnqueueVisitor::VisitCompoundStmt(CompoundStmt *S) {
     AddStmt(*I);
   }
 }
+void EnqueueVisitor::
+VisitMSDependentExistsStmt(MSDependentExistsStmt *S) {
+  AddStmt(S->getSubStmt());
+  AddDeclarationNameInfo(S);
+  if (NestedNameSpecifierLoc QualifierLoc = S->getQualifierLoc())
+    AddNestedNameSpecifierLoc(QualifierLoc);
+}
+
 void EnqueueVisitor::
 VisitCXXDependentScopeMemberExpr(CXXDependentScopeMemberExpr *E) {
   AddExplicitTemplateArgs(E->getOptionalExplicitTemplateArgs());
@@ -2665,6 +2718,12 @@ int clang_reparseTranslationUnit(CXTranslationUnit TU,
                                  unsigned options) {
   ReparseTranslationUnitInfo RTUI = { TU, num_unsaved_files, unsaved_files,
                                       options, 0 };
+
+  if (getenv("LIBCLANG_NOTHREADS")) {
+    clang_reparseTranslationUnit_Impl(&RTUI);
+    return RTUI.result;
+  }
+
   llvm::CrashRecoveryContext CRC;
 
   if (!RunSafely(CRC, clang_reparseTranslationUnit_Impl, &RTUI)) {
@@ -2814,7 +2873,7 @@ void clang_getExpansionLocation(CXSourceLocation location,
   FileID fileID = SM.getFileID(ExpansionLoc);
   bool Invalid = false;
   const SrcMgr::SLocEntry &sloc = SM.getSLocEntry(fileID, &Invalid);
-  if (!sloc.isFile() || Invalid) {
+  if (Invalid || !sloc.isFile()) {
     createNullLocation(file, line, column, offset);
     return;
   }
@@ -3027,8 +3086,8 @@ extern "C" {
 unsigned clang_visitChildren(CXCursor parent,
                              CXCursorVisitor visitor,
                              CXClientData client_data) {
-  CursorVisitor CursorVis(getCursorTU(parent), visitor, client_data, 
-                          false);
+  CursorVisitor CursorVis(getCursorTU(parent), visitor, client_data,
+                          /*VisitPreprocessorLast=*/false);
   return CursorVis.VisitChildren(parent);
 }
 
@@ -3917,6 +3976,7 @@ CXCursor cxcursor::getCursor(CXTranslationUnit TU, SourceLocation SLoc) {
     CXCursor Parent = clang_getTranslationUnitCursor(TU);
     CursorVisitor CursorVis(TU, GetCursorVisitor, &ResultData,
                             /*VisitPreprocessorLast=*/true, 
+                            /*VisitIncludedPreprocessingEntries=*/false,
                             SourceLocation(SLoc));
     CursorVis.VisitChildren(Parent);
   }
@@ -4744,7 +4804,10 @@ public:
     : Annotated(annotated), Tokens(tokens), Cursors(cursors),
       NumTokens(numTokens), TokIdx(0), PreprocessingTokIdx(0),
       AnnotateVis(tu,
-                  AnnotateTokensVisitor, this, true, RegionOfInterest),
+                  AnnotateTokensVisitor, this,
+                  /*VisitPreprocessorLast=*/true,
+                  /*VisitIncludedPreprocessingEntries=*/false,
+                  RegionOfInterest),
       SrcMgr(static_cast<ASTUnit*>(tu->TUData)->getSourceManager()),
       HasContextSensitiveKeywords(false) { }
 
@@ -5219,7 +5282,9 @@ static void clang_annotateTokensImpl(void *UserData) {
                                       Tokens, NumTokens);
     CursorVisitor MacroArgMarker(TU,
                                  MarkMacroArgTokensVisitorDelegate, &Visitor,
-                                 true, RegionOfInterest);
+                                 /*VisitPreprocessorLast=*/true,
+                                 /*VisitIncludedPreprocessingEntries=*/false,
+                                 RegionOfInterest);
     MacroArgMarker.visitPreprocessedEntitiesInRegion();
   }
   

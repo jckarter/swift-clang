@@ -195,11 +195,11 @@ static bool TypeInfoIsInStandardLibrary(const BuiltinType *Ty) {
     case BuiltinType::UInt128:
       return true;
       
-    case BuiltinType::Overload:
     case BuiltinType::Dependent:
-    case BuiltinType::BoundMember:
-    case BuiltinType::UnknownAny:
-    case BuiltinType::ARCUnbridgedCast:
+#define BUILTIN_TYPE(Id, SingletonId)
+#define PLACEHOLDER_TYPE(Id, SingletonId) \
+    case BuiltinType::Id:
+#include "clang/AST/BuiltinTypes.def"
       llvm_unreachable("asking for RRTI for a placeholder type!");
       
     case BuiltinType::ObjCId:
@@ -336,6 +336,8 @@ getTypeInfoLinkage(CodeGenModule &CGM, QualType Ty) {
 
     if (const RecordType *Record = dyn_cast<RecordType>(Ty)) {
       const CXXRecordDecl *RD = cast<CXXRecordDecl>(Record->getDecl());
+      if (RD->hasAttr<WeakAttr>())
+        return llvm::GlobalValue::WeakODRLinkage;
       if (RD->isDynamicClass())
         return CGM.getVTableLinkage(RD);
     }

@@ -555,6 +555,8 @@ static void maybeSynthesizeBlockSignature(TypeProcessingState &state,
                              /*args*/ 0, 0,
                              /*type quals*/ 0,
                              /*ref-qualifier*/true, SourceLocation(),
+                             /*const qualifier*/SourceLocation(),
+                             /*volatile qualifier*/SourceLocation(),
                              /*mutable qualifier*/SourceLocation(),
                              /*EH*/ EST_None, SourceLocation(), 0, 0, 0, 0,
                              /*parens*/ loc, loc,
@@ -689,9 +691,10 @@ static QualType ConvertDeclSpecToType(TypeProcessingState &state) {
         Result = Context.LongLongTy;
           
         // long long is a C99 feature.
-        if (!S.getLangOptions().C99 &&
-            !S.getLangOptions().CPlusPlus0x)
-          S.Diag(DS.getTypeSpecWidthLoc(), diag::ext_longlong);
+        if (!S.getLangOptions().C99)
+          S.Diag(DS.getTypeSpecWidthLoc(),
+                 S.getLangOptions().CPlusPlus0x ?
+                   diag::warn_cxx98_compat_longlong : diag::ext_longlong);
         break;
       }
     } else {
@@ -703,9 +706,10 @@ static QualType ConvertDeclSpecToType(TypeProcessingState &state) {
         Result = Context.UnsignedLongLongTy;
           
         // long long is a C99 feature.
-        if (!S.getLangOptions().C99 &&
-            !S.getLangOptions().CPlusPlus0x)
-          S.Diag(DS.getTypeSpecWidthLoc(), diag::ext_longlong);
+        if (!S.getLangOptions().C99)
+          S.Diag(DS.getTypeSpecWidthLoc(),
+                 S.getLangOptions().CPlusPlus0x ?
+                   diag::warn_cxx98_compat_longlong : diag::ext_longlong);
         break;
       }
     }
@@ -1176,7 +1180,7 @@ static bool isArraySizeVLA(Expr *ArraySize, llvm::APSInt &SizeVal, Sema &S) {
   // If we're in a GNU mode (like gnu99, but not c99) accept any evaluatable
   // value as an extension.
   Expr::EvalResult Result;
-  if (S.LangOpts.GNUMode && ArraySize->Evaluate(Result, S.Context)) {
+  if (S.LangOpts.GNUMode && ArraySize->EvaluateAsRValue(Result, S.Context)) {
     if (!Result.hasSideEffects() && Result.Val.isInt()) {
       SizeVal = Result.Val.getInt();
       S.Diag(ArraySize->getLocStart(), diag::ext_vla_folded_to_constant);
@@ -2429,10 +2433,37 @@ static TypeSourceInfo *GetFullTypeForDeclarator(TypeProcessingState &state,
           << Quals;
       } else {
         if (FnTy->getTypeQuals() != 0) {
-          if (D.isFunctionDeclarator())
-            S.Diag(D.getIdentifierLoc(), 
-                 diag::err_invalid_qualified_function_type);
-          else
+          if (D.isFunctionDeclarator()) {
+            SourceRange Range = D.getIdentifierLoc();
+            for (unsigned I = 0, N = D.getNumTypeObjects(); I != N; ++I) {
+              const DeclaratorChunk &Chunk = D.getTypeObject(N-I-1);
+              if (Chunk.Kind == DeclaratorChunk::Function &&
+                  Chunk.Fun.TypeQuals != 0) {
+                switch (Chunk.Fun.TypeQuals) {
+                case Qualifiers::Const:
+                  Range = Chunk.Fun.getConstQualifierLoc();
+                  break;
+                case Qualifiers::Volatile:
+                  Range = Chunk.Fun.getVolatileQualifierLoc();
+                  break;
+                case Qualifiers::Const | Qualifiers::Volatile: {
+                    SourceLocation CLoc = Chunk.Fun.getConstQualifierLoc();
+                    SourceLocation VLoc = Chunk.Fun.getVolatileQualifierLoc();
+                    if (S.getSourceManager()
+                        .isBeforeInTranslationUnit(CLoc, VLoc)) {
+                      Range = SourceRange(CLoc, VLoc);
+                    } else {
+                      Range = SourceRange(VLoc, CLoc);
+                    }
+                  }
+                  break;
+                }
+                break;
+              }
+            }
+            S.Diag(Range.getBegin(), diag::err_invalid_qualified_function_type)
+                << FixItHint::CreateRemoval(Range);
+          } else
             S.Diag(D.getIdentifierLoc(),
                  diag::err_invalid_qualified_typedef_function_type_use)
               << FreeFunction;
@@ -2634,6 +2665,7 @@ static void transferARCOwnershipToDeclaratorChunk(TypeProcessingState &state,
   // TODO: mark whether we did this inference?
 }
 
+/// \brief Used for transfering ownership in casts resulting in l-values.
 static void transferARCOwnership(TypeProcessingState &state,
                                  QualType &declSpecTy,
                                  Qualifiers::ObjCLifetime ownership) {
@@ -2641,6 +2673,7 @@ static void transferARCOwnership(TypeProcessingState &state,
   Declarator &D = state.getDeclarator();
 
   int inner = -1;
+  bool hasIndirection = false;
   for (unsigned i = 0, e = D.getNumTypeObjects(); i != e; ++i) {
     DeclaratorChunk &chunk = D.getTypeObject(i);
     switch (chunk.Kind) {
@@ -2651,11 +2684,15 @@ static void transferARCOwnership(TypeProcessingState &state,
     case DeclaratorChunk::Array:
     case DeclaratorChunk::Reference:
     case DeclaratorChunk::Pointer:
+      if (inner != -1)
+        hasIndirection = true;
       inner = i;
       break;
 
     case DeclaratorChunk::BlockPointer:
-      return transferARCOwnershipToDeclaratorChunk(state, ownership, i);
+      if (inner != -1)
+        transferARCOwnershipToDeclaratorChunk(state, ownership, i);
+      return;
 
     case DeclaratorChunk::Function:
     case DeclaratorChunk::MemberPointer:
@@ -2664,13 +2701,13 @@ static void transferARCOwnership(TypeProcessingState &state,
   }
 
   if (inner == -1)
-    return transferARCOwnershipToDeclSpec(S, declSpecTy, ownership);
+    return;
 
   DeclaratorChunk &chunk = D.getTypeObject(inner); 
   if (chunk.Kind == DeclaratorChunk::Pointer) {
     if (declSpecTy->isObjCRetainableType())
       return transferARCOwnershipToDeclSpec(S, declSpecTy, ownership);
-    if (declSpecTy->isObjCObjectType())
+    if (declSpecTy->isObjCObjectType() && hasIndirection)
       return transferARCOwnershipToDeclaratorChunk(state, ownership, inner);
   } else {
     assert(chunk.Kind == DeclaratorChunk::Array ||

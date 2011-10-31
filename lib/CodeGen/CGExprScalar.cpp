@@ -211,7 +211,7 @@ public:
   // l-values.
   Value *VisitDeclRefExpr(DeclRefExpr *E) {
     Expr::EvalResult Result;
-    if (!E->Evaluate(Result, CGF.getContext()))
+    if (!E->EvaluateAsRValue(Result, CGF.getContext()))
       return EmitLoadOfLValue(E);
 
     assert(!Result.HasSideEffects && "Constant declref with side-effect?!");
@@ -813,7 +813,7 @@ Value *ScalarExprEmitter::VisitShuffleVectorExpr(ShuffleVectorExpr *E) {
 }
 Value *ScalarExprEmitter::VisitMemberExpr(MemberExpr *E) {
   Expr::EvalResult Result;
-  if (E->Evaluate(Result, CGF.getContext()) && Result.Val.isInt()) {
+  if (E->EvaluateAsRValue(Result, CGF.getContext()) && Result.Val.isInt()) {
     if (E->isArrow())
       CGF.EmitScalarExpr(E->getBase());
     else
@@ -1179,10 +1179,10 @@ Value *ScalarExprEmitter::VisitCastExpr(CastExpr *CE) {
     break;
 
   case CK_GetObjCProperty: {
-    assert(CGF.getContext().hasSameUnqualifiedType(E->getType(), DestTy));
     assert(E->isGLValue() && E->getObjectKind() == OK_ObjCProperty &&
            "CK_GetObjCProperty for non-lvalue or non-ObjCProperty");
-    RValue RV = CGF.EmitLoadOfLValue(CGF.EmitLValue(E));
+    LValue LV = CGF.EmitObjCPropertyRefLValue(E->getObjCProperty());
+    RValue RV = CGF.EmitLoadOfPropertyRefLValue(LV);
     return RV.getScalarVal();
   }
 
@@ -1486,7 +1486,7 @@ Value *ScalarExprEmitter::VisitUnaryLNot(const UnaryOperator *E) {
 Value *ScalarExprEmitter::VisitOffsetOfExpr(OffsetOfExpr *E) {
   // Try folding the offsetof to a constant.
   Expr::EvalResult EvalResult;
-  if (E->Evaluate(EvalResult, CGF.getContext()))
+  if (E->EvaluateAsRValue(EvalResult, CGF.getContext()))
     return Builder.getInt(EvalResult.Val.getInt());
 
   // Loop over the components of the offsetof to compute the value.
@@ -1609,7 +1609,7 @@ ScalarExprEmitter::VisitUnaryExprOrTypeTraitExpr(
   // If this isn't sizeof(vla), the result must be constant; use the constant
   // folding logic so we don't have to duplicate it here.
   Expr::EvalResult Result;
-  E->Evaluate(Result, CGF.getContext());
+  E->EvaluateAsRValue(Result, CGF.getContext());
   return Builder.getInt(Result.Val.getInt());
 }
 
@@ -1784,8 +1784,18 @@ Value *ScalarExprEmitter::EmitDiv(const BinOpInfo &Ops) {
       Builder.SetInsertPoint(DivCont);
     }
   }
-  if (Ops.LHS->getType()->isFPOrFPVectorTy())
-    return Builder.CreateFDiv(Ops.LHS, Ops.RHS, "div");
+  if (Ops.LHS->getType()->isFPOrFPVectorTy()) {
+    llvm::Value *Val = Builder.CreateFDiv(Ops.LHS, Ops.RHS, "div");
+    if (CGF.getContext().getLangOptions().OpenCL) {
+      // OpenCL 1.1 7.4: minimum accuracy of single precision / is 2.5ulp
+      llvm::Type *ValTy = Val->getType();
+      if (ValTy->isFloatTy() ||
+          (isa<llvm::VectorType>(ValTy) &&
+           cast<llvm::VectorType>(ValTy)->getElementType()->isFloatTy()))
+        CGF.SetFPAccuracy(Val, 5, 2);
+    }
+    return Val;
+  }
   else if (Ops.Ty->hasUnsignedIntegerRepresentation())
     return Builder.CreateUDiv(Ops.LHS, Ops.RHS, "div");
   else

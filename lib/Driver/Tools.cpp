@@ -507,9 +507,6 @@ static bool isSignedCharDefault(const llvm::Triple &Triple) {
     if (Triple.isOSDarwin())
       return true;
     return false;
-
-  case llvm::Triple::systemz:
-    return false;
   }
 }
 
@@ -1039,17 +1036,9 @@ static bool ShouldDisableCFI(const ArgList &Args,
   if (TC.getTriple().isOSDarwin()) {
     // The native darwin assembler doesn't support cfi directives, so
     // we disable them if we think the .s file will be passed to it.
-
-    // FIXME: Duplicated code with ToolChains.cpp
-    // FIXME: This doesn't belong here, but ideally we will support static soon
-    // anyway.
-    bool HasStatic = (Args.hasArg(options::OPT_mkernel) ||
-                      Args.hasArg(options::OPT_static) ||
-                      Args.hasArg(options::OPT_fapple_kext));
-    bool IsIADefault = TC.IsIntegratedAssemblerDefault() && !HasStatic;
     bool UseIntegratedAs = Args.hasFlag(options::OPT_integrated_as,
                                         options::OPT_no_integrated_as,
-                                        IsIADefault);
+                                        TC.IsIntegratedAssemblerDefault());
     bool UseCFI = Args.hasFlag(options::OPT_fdwarf2_cfi_asm,
                                options::OPT_fno_dwarf2_cfi_asm,
                                UseIntegratedAs);
@@ -1437,10 +1426,6 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
   types::ID InputType = Inputs[0].getType();
   if (!Args.hasArg(options::OPT_fallow_unsupported)) {
     Arg *Unsupported;
-    if ((Unsupported = Args.getLastArg(options::OPT_iframework)))
-      D.Diag(diag::err_drv_clang_unsupported)
-        << Unsupported->getOption().getName();
-
     if (types::isCXX(InputType) &&
         getToolChain().getTriple().isOSDarwin() &&
         getToolChain().getTriple().getArch() == llvm::Triple::x86) {
@@ -1629,6 +1614,16 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
   if (ShouldDisableDwarfDirectory(Args, getToolChain()))
     CmdArgs.push_back("-fno-dwarf-directory-asm");
 
+  if (const char *pwd = ::getenv("PWD")) {
+    // GCC also verifies that stat(pwd) and stat(".") have the same inode
+    // number. Not doing those because stats are slow, but we could.
+    if (llvm::sys::path::is_absolute(pwd)) {
+      std::string CompDir = pwd;
+      CmdArgs.push_back("-fdebug-compilation-dir");
+      CmdArgs.push_back(Args.MakeArgString(CompDir));
+    }
+  }
+
   if (Arg *A = Args.getLastArg(options::OPT_ftemplate_depth_)) {
     CmdArgs.push_back("-ftemplate-depth");
     CmdArgs.push_back(A->getValue(Args));
@@ -1701,6 +1696,7 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
   Args.AddLastArg(CmdArgs, options::OPT_femit_all_decls);
   Args.AddLastArg(CmdArgs, options::OPT_fheinous_gnu_extensions);
   Args.AddLastArg(CmdArgs, options::OPT_flimit_debug_info);
+  Args.AddLastArg(CmdArgs, options::OPT_fno_operator_names);
   if (getToolChain().SupportsProfiling())
     Args.AddLastArg(CmdArgs, options::OPT_pg);
 
@@ -1846,8 +1842,12 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
     CmdArgs.push_back("-fms-extensions");
 
   // -fms-compatibility=0 is default.
-  if (Args.hasFlag(options::OPT_fms_compatibility, options::OPT_fno_ms_compatibility,
-                   getToolChain().getTriple().getOS() == llvm::Triple::Win32))
+  if (Args.hasFlag(options::OPT_fms_compatibility, 
+                   options::OPT_fno_ms_compatibility,
+                   (getToolChain().getTriple().getOS() == llvm::Triple::Win32 &&
+                    Args.hasFlag(options::OPT_fms_extensions, 
+                                 options::OPT_fno_ms_extensions,
+                                 true))))
     CmdArgs.push_back("-fms-compatibility");
 
   // -fmsc-version=1300 is default.

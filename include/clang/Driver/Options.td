@@ -392,6 +392,7 @@ def fno_objc_default_synthesize_properties
 def fno_objc_exceptions: Flag<"-fno-objc-exceptions">, Group<f_Group>;
 def fno_objc_legacy_dispatch : Flag<"-fno-objc-legacy-dispatch">, Group<f_Group>;
 def fno_omit_frame_pointer : Flag<"-fno-omit-frame-pointer">, Group<f_Group>;
+def fno_operator_names : Flag<"-fno-operator-names">, Group<f_Group>;
 def fno_pascal_strings : Flag<"-fno-pascal-strings">, Group<f_Group>;
 def fno_rtti : Flag<"-fno-rtti">, Group<f_Group>;
 def fno_short_enums : Flag<"-fno-short-enums">, Group<f_Group>;
@@ -517,7 +518,7 @@ def g_Joined : Joined<"-g">, Group<g_Group>;
 def headerpad__max__install__names : Joined<"-headerpad_max_install_names">;
 def index_header_map : Flag<"-index-header-map">;
 def idirafter : JoinedOrSeparate<"-idirafter">, Group<clang_i_Group>;
-def iframework : JoinedOrSeparate<"-iframework">, Group<clang_i_Group>;
+def iframework : Joined<"-iframework">, Group<clang_i_Group>;
 def imacros : JoinedOrSeparate<"-imacros">, Group<clang_i_Group>;
 def image__base : Separate<"-image_base">;
 def include_ : JoinedOrSeparate<"-include">, Group<clang_i_Group>, EnumName<"include">;

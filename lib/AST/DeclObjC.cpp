@@ -237,6 +237,9 @@ const ObjCCategoryDecl* ObjCCategoryDecl::getNextClassExtension() const {
 
 ObjCIvarDecl *ObjCInterfaceDecl::lookupInstanceVariable(IdentifierInfo *ID,
                                               ObjCInterfaceDecl *&clsDeclared) {
+  if (ExternallyCompleted)
+    LoadExternalDefinition();
+
   ObjCInterfaceDecl* ClassDecl = this;
   while (ClassDecl != NULL) {
     if (ObjCIvarDecl *I = ClassDecl->getIvarDecl(ID)) {
@@ -261,6 +264,9 @@ ObjCIvarDecl *ObjCInterfaceDecl::lookupInstanceVariable(IdentifierInfo *ID,
 /// the it returns NULL.
 ObjCInterfaceDecl *ObjCInterfaceDecl::lookupInheritedClass(
                                         const IdentifierInfo*ICName) {
+  if (ExternallyCompleted)
+    LoadExternalDefinition();
+
   ObjCInterfaceDecl* ClassDecl = this;
   while (ClassDecl != NULL) {
     if (ClassDecl->getIdentifier() == ICName)
@@ -315,6 +321,9 @@ ObjCMethodDecl *ObjCInterfaceDecl::lookupMethod(Selector Sel,
 ObjCMethodDecl *ObjCInterfaceDecl::lookupPrivateMethod(
                                    const Selector &Sel,
                                    bool Instance) {
+  if (ExternallyCompleted)
+    LoadExternalDefinition();
+
   ObjCMethodDecl *Method = 0;
   if (ObjCImplementationDecl *ImpDecl = getImplementation())
     Method = Instance ? ImpDecl->getInstanceMethod(Sel) 
@@ -568,13 +577,13 @@ void ObjCMethodDecl::createImplicitParams(ASTContext &Context,
     selfIsConsumed = hasAttr<NSConsumesSelfAttr>();
 
     // 'self' is always __strong.  It's actually pseudo-strong except
-    // in init methods, though.
+    // in init methods (or methods labeled ns_consumes_self), though.
     Qualifiers qs;
     qs.setObjCLifetime(Qualifiers::OCL_Strong);
     selfTy = Context.getQualifiedType(selfTy, qs);
 
     // In addition, 'self' is const unless this is an init method.
-    if (getMethodFamily() != OMF_init) {
+    if (getMethodFamily() != OMF_init && !selfIsConsumed) {
       selfTy = selfTy.withConst();
       selfIsPseudoStrong = true;
     }

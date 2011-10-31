@@ -1232,6 +1232,16 @@ public:
   /// semantic context via makeDeclVisibleInContext.
   void addDecl(Decl *D);
 
+  /// @brief Add the declaration D into this context, but suppress
+  /// searches for external declarations with the same name.
+  ///
+  /// Although analogous in function to addDecl, this removes an
+  /// important check.  This is only useful if the Decl is being
+  /// added in response to an external search; in all other cases,
+  /// addDecl() is the right function to use.
+  /// See the ASTImporter for use cases.
+  void addDeclInternal(Decl *D);
+
   /// @brief Add the declaration D to this context without modifying
   /// any lookup tables.
   ///
@@ -1354,12 +1364,22 @@ public:
 
 private:
   void LoadLexicalDeclsFromExternalStorage() const;
+    
+  /// @brief Makes a declaration visible within this context, but 
+  /// suppresses searches for external declarations with the same
+  /// name.
+  ///
+  /// Analogous to makeDeclVisibleInContext, but for the exclusive
+  /// use of addDeclInternal().
+  void makeDeclVisibleInContextInternal(NamedDecl *D,
+                                        bool Recoverable = true);
 
   friend class DependentDiagnostic;
   StoredDeclsMap *CreateStoredDeclsMap(ASTContext &C) const;
 
   void buildLookup(DeclContext *DCtx);
-  void makeDeclVisibleInContextImpl(NamedDecl *D);
+  void makeDeclVisibleInContextWithFlags(NamedDecl *D, bool Internal, bool Recoverable);
+  void makeDeclVisibleInContextImpl(NamedDecl *D, bool Internal);
 };
 
 inline bool Decl::isTemplateParameter() const {

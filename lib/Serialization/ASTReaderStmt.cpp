@@ -1037,6 +1037,15 @@ void ASTStmtReader::VisitCXXForRangeStmt(CXXForRangeStmt *S) {
   S->setBody(Reader.ReadSubStmt());
 }
 
+void ASTStmtReader::VisitMSDependentExistsStmt(MSDependentExistsStmt *S) {
+  VisitStmt(S);
+  S->KeywordLoc = ReadSourceLocation(Record, Idx);
+  S->IsIfExists = Record[Idx++];
+  S->QualifierLoc = Reader.ReadNestedNameSpecifierLoc(F, Record, Idx);
+  ReadDeclarationNameInfo(S->NameInfo, Record, Idx);
+  S->SubStmt = Reader.ReadSubStmt();
+}
+
 void ASTStmtReader::VisitCXXOperatorCallExpr(CXXOperatorCallExpr *E) {
   VisitCallExpr(E);
   E->setOperator((OverloadedOperatorKind)Record[Idx++]);
@@ -1489,6 +1498,10 @@ Stmt *ASTReader::ReadStmtFromStream(Module &F) {
 
   ReadingKindTracker ReadingKind(Read_Stmt, *this);
   llvm::BitstreamCursor &Cursor = F.DeclsCursor;
+  
+  // Map of offset to previously deserialized stmt. The offset points
+  /// just after the stmt record.
+  llvm::DenseMap<uint64_t, Stmt *> StmtEntries;
 
 #ifndef NDEBUG
   unsigned PrevNumStmts = StmtStack.size();
@@ -1528,9 +1541,17 @@ Stmt *ASTReader::ReadStmtFromStream(Module &F) {
     Idx = 0;
     Record.clear();
     bool Finished = false;
+    bool IsStmtReference = false;
     switch ((StmtCode)Cursor.ReadRecord(Code, Record)) {
     case STMT_STOP:
       Finished = true;
+      break;
+
+    case STMT_REF_PTR:
+      IsStmtReference = true;
+      assert(StmtEntries.find(Record[0]) != StmtEntries.end() &&
+             "No stmt was recorded for this offset reference!");
+      S = StmtEntries[Record[Idx++]];
       break;
 
     case STMT_NULL_PTR:
@@ -1895,6 +1916,13 @@ Stmt *ASTReader::ReadStmtFromStream(Module &F) {
       S = new (Context) CXXForRangeStmt(Empty);
       break;
 
+    case STMT_MS_DEPENDENT_EXISTS:
+      S = new (Context) MSDependentExistsStmt(SourceLocation(), true,
+                                              NestedNameSpecifierLoc(),
+                                              DeclarationNameInfo(),
+                                              0);
+      break;
+        
     case EXPR_CXX_OPERATOR_CALL:
       S = new (Context) CXXOperatorCallExpr(Context, Empty);
       break;
@@ -2101,8 +2129,11 @@ Stmt *ASTReader::ReadStmtFromStream(Module &F) {
 
     ++NumStatementsRead;
 
-    if (S)
+    if (S && !IsStmtReference) {
       Reader.Visit(S);
+      StmtEntries[Cursor.GetCurrentBitNo()] = S;
+    }
+
 
     assert(Idx == Record.size() && "Invalid deserialization of statement");
     StmtStack.push_back(S);

@@ -578,11 +578,10 @@ void USRGenerator::VisitType(QualType T) {
           c = 'D'; break;
         case BuiltinType::NullPtr:
           c = 'n'; break;
-        case BuiltinType::Overload:
-        case BuiltinType::BoundMember:
+#define BUILTIN_TYPE(Id, SingletonId)
+#define PLACEHOLDER_TYPE(Id, SingletonId) case BuiltinType::Id:
+#include "clang/AST/BuiltinTypes.def"
         case BuiltinType::Dependent:
-        case BuiltinType::UnknownAny:
-        case BuiltinType::ARCUnbridgedCast:
           IgnoreResults = true;
           return;
         case BuiltinType::ObjCId:
@@ -818,7 +817,7 @@ bool cxcursor::getDeclCursorUSR(const Decl *D, SmallVectorImpl<char> &Buf) {
 
   {
     USRGenerator UG(&D->getASTContext(), &Buf);
-    UG->Visit((Decl*)D);
+    UG->Visit(const_cast<Decl*>(D));
 
     if (UG->ignoreResults())
       return true;

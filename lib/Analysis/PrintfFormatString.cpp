@@ -297,14 +297,14 @@ ArgTypeResult PrintfSpecifier::getArgType(ASTContext &Ctx) const {
       case LengthModifier::AsLongDouble:
         return ArgTypeResult::Invalid();
       case LengthModifier::None: return Ctx.IntTy;
-      case LengthModifier::AsChar: return Ctx.SignedCharTy;
+      case LengthModifier::AsChar: return ArgTypeResult::AnyCharTy;
       case LengthModifier::AsShort: return Ctx.ShortTy;
       case LengthModifier::AsLong: return Ctx.LongTy;
       case LengthModifier::AsLongLong: return Ctx.LongLongTy;
-      case LengthModifier::AsIntMax:
-        // FIXME: Return unknown for now.
+      case LengthModifier::AsIntMax: return Ctx.getIntMaxType();
+      case LengthModifier::AsSizeT:
+        // FIXME: How to get the corresponding signed version of size_t?
         return ArgTypeResult();
-      case LengthModifier::AsSizeT: return Ctx.getSizeType();
       case LengthModifier::AsPtrDiff: return Ctx.getPointerDiffType();
     }
 
@@ -317,13 +317,9 @@ ArgTypeResult PrintfSpecifier::getArgType(ASTContext &Ctx) const {
       case LengthModifier::AsShort: return Ctx.UnsignedShortTy;
       case LengthModifier::AsLong: return Ctx.UnsignedLongTy;
       case LengthModifier::AsLongLong: return Ctx.UnsignedLongLongTy;
-      case LengthModifier::AsIntMax:
-        // FIXME: Return unknown for now.
-        return ArgTypeResult();
+      case LengthModifier::AsIntMax: return Ctx.getUIntMaxType();
       case LengthModifier::AsSizeT:
-        // FIXME: How to get the corresponding unsigned
-        // version of size_t?
-        return ArgTypeResult();
+        return Ctx.getSizeType();
       case LengthModifier::AsPtrDiff:
         // FIXME: How to get the corresponding unsigned
         // version of ptrdiff_t?
@@ -372,11 +368,9 @@ bool PrintfSpecifier::fixType(QualType QT, const LangOptions &LangOpt) {
   }
 
   // We can only work with builtin types.
-  if (!QT->isBuiltinType())
-    return false;
-
-  // Everything else should be a base type
   const BuiltinType *BT = QT->getAs<BuiltinType>();
+  if (!BT)
+    return false;
 
   // Set length modifier
   switch (BT->getKind()) {
@@ -388,19 +382,15 @@ bool PrintfSpecifier::fixType(QualType QT, const LangOptions &LangOpt) {
   case BuiltinType::UInt128:
   case BuiltinType::Int128:
   case BuiltinType::Half:
-    // Integral types which are non-trivial to correct.
+    // Various types which are non-trivial to correct.
     return false;
 
-  case BuiltinType::Void:
-  case BuiltinType::NullPtr:
-  case BuiltinType::ObjCId:
-  case BuiltinType::ObjCClass:
-  case BuiltinType::ObjCSel:
-  case BuiltinType::Dependent:
-  case BuiltinType::Overload:
-  case BuiltinType::BoundMember:
-  case BuiltinType::UnknownAny:
-  case BuiltinType::ARCUnbridgedCast:
+#define SIGNED_TYPE(Id, SingletonId)
+#define UNSIGNED_TYPE(Id, SingletonId)
+#define FLOATING_TYPE(Id, SingletonId)
+#define BUILTIN_TYPE(Id, SingletonId) \
+  case BuiltinType::Id:
+#include "clang/AST/BuiltinTypes.def"
     // Misc other stuff which doesn't make sense here.
     return false;
 

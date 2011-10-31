@@ -492,8 +492,12 @@ Sema::ActOnStartOfSwitchStmt(SourceLocation SwitchLoc, Expr *Cond,
   if (!Cond)
     return StmtError();
 
+  CondResult = CheckPlaceholderExpr(Cond);
+  if (CondResult.isInvalid())
+    return StmtError();
+
   CondResult
-    = ConvertToIntegralOrEnumerationType(SwitchLoc, Cond,
+    = ConvertToIntegralOrEnumerationType(SwitchLoc, CondResult.take(),
                           PDiag(diag::err_typecheck_statement_requires_integer),
                                    PDiag(diag::err_switch_incomplete_class_type)
                                      << Cond->getSourceRange(),
@@ -635,6 +639,9 @@ Sema::ActOnFinishSwitchStmt(SourceLocation SwitchLoc, Stmt *Switch,
 
       // If the LHS is not the same type as the condition, insert an implicit
       // cast.
+      // FIXME: In C++11, the value is a converted constant expression of the
+      // promoted type of the switch condition.
+      Lo = DefaultLvalueConversion(Lo).take();
       Lo = ImpCastExprToType(Lo, CondType, CK_IntegralCast).take();
       CS->setLHS(Lo);
 
@@ -659,7 +666,8 @@ Sema::ActOnFinishSwitchStmt(SourceLocation SwitchLoc, Stmt *Switch,
     bool ShouldCheckConstantCond = false;
     if (!HasDependentValue && !TheDefaultStmt) {
       Expr::EvalResult Result;
-      HasConstantCond = CondExprBeforePromotion->Evaluate(Result, Context);
+      HasConstantCond
+        = CondExprBeforePromotion->EvaluateAsRValue(Result, Context);
       if (HasConstantCond) {
         assert(Result.Val.isInt() && "switch condition evaluated to non-int");
         ConstantCondValue = Result.Val.getInt();
@@ -712,8 +720,11 @@ Sema::ActOnFinishSwitchStmt(SourceLocation SwitchLoc, Stmt *Switch,
                                            Hi->getLocStart(),
                                            diag::warn_case_value_overflow);
 
-        // If the LHS is not the same type as the condition, insert an implicit
+        // If the RHS is not the same type as the condition, insert an implicit
         // cast.
+        // FIXME: In C++11, the value is a converted constant expression of the
+        // promoted type of the switch condition.
+        Hi = DefaultLvalueConversion(Hi).take();
         Hi = ImpCastExprToType(Hi, CondType, CK_IntegralCast).take();
         CR->setRHS(Hi);
 
@@ -2483,4 +2494,27 @@ Sema::ActOnSEHFinallyBlock(SourceLocation Loc,
                            Stmt *Block) {
   assert(Block);
   return Owned(SEHFinallyStmt::Create(Context,Loc,Block));
+}
+
+StmtResult Sema::BuildMSDependentExistsStmt(SourceLocation KeywordLoc,
+                                            bool IsIfExists,
+                                            NestedNameSpecifierLoc QualifierLoc,
+                                            DeclarationNameInfo NameInfo,
+                                            Stmt *Nested)
+{
+  return new (Context) MSDependentExistsStmt(KeywordLoc, IsIfExists,
+                                             QualifierLoc, NameInfo, 
+                                             cast<CompoundStmt>(Nested));
+}
+
+
+StmtResult Sema::ActOnMSDependentExistsStmt(SourceLocation KeywordLoc, 
+                                            bool IsIfExists,
+                                            CXXScopeSpec &SS, 
+                                            UnqualifiedId &Name,
+                                            Stmt *Nested) {
+  return BuildMSDependentExistsStmt(KeywordLoc, IsIfExists, 
+                                    SS.getWithLocInContext(Context),
+                                    GetNameFromUnqualifiedId(Name),
+                                    Nested);
 }

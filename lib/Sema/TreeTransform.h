@@ -1291,7 +1291,20 @@ public:
     return getSema().BuildCXXForRangeStmt(ForLoc, ColonLoc, Range, BeginEnd,
                                           Cond, Inc, LoopVar, RParenLoc);
   }
-  
+
+  /// \brief Build a new C++0x range-based for statement.
+  ///
+  /// By default, performs semantic analysis to build the new statement.
+  /// Subclasses may override this routine to provide different behavior.
+  StmtResult RebuildMSDependentExistsStmt(SourceLocation KeywordLoc, 
+                                          bool IsIfExists,
+                                          NestedNameSpecifierLoc QualifierLoc,
+                                          DeclarationNameInfo NameInfo,
+                                          Stmt *Nested) {
+    return getSema().BuildMSDependentExistsStmt(KeywordLoc, IsIfExists,
+                                                QualifierLoc, NameInfo, Nested);
+  }
+
   /// \brief Attach body to a C++0x range-based for statement.
   ///
   /// By default, performs semantic analysis to finish the new statement.
@@ -1455,6 +1468,8 @@ public:
                                NamedDecl *FoundDecl,
                         const TemplateArgumentListInfo *ExplicitTemplateArgs,
                                NamedDecl *FirstQualifierInScope) {
+    ExprResult BaseResult = getSema().PerformMemberExprBaseConversion(Base,
+                                                                      isArrow);
     if (!Member->getDeclName()) {
       // We have a reference to an unnamed field.  This is always the
       // base of an anonymous struct/union member access, i.e. the
@@ -1463,8 +1478,8 @@ public:
       assert(Member->getType()->isRecordType() &&
              "unnamed member not of record type?");
 
-      ExprResult BaseResult =
-        getSema().PerformObjectMemberConversion(Base, 
+      BaseResult =
+        getSema().PerformObjectMemberConversion(BaseResult.take(),
                                                 QualifierLoc.getNestedNameSpecifier(),
                                                 FoundDecl, Member);
       if (BaseResult.isInvalid())
@@ -1482,9 +1497,6 @@ public:
     CXXScopeSpec SS;
     SS.Adopt(QualifierLoc);
 
-    ExprResult BaseResult = getSema().DefaultFunctionArrayConversion(Base);
-    if (BaseResult.isInvalid())
-      return ExprError();
     Base = BaseResult.take();
     QualType BaseType = Base->getType();
 
@@ -2111,13 +2123,12 @@ public:
   ///
   /// By default, performs semantic analysis to build the new expression.
   /// Subclasses may override this routine to provide different behavior.
-  ExprResult RebuildUnresolvedMemberExpr(Expr *BaseE,
-                                               QualType BaseType,
-                                               SourceLocation OperatorLoc,
-                                               bool IsArrow,
-                                           NestedNameSpecifierLoc QualifierLoc,
-                                               NamedDecl *FirstQualifierInScope,
-                                               LookupResult &R,
+  ExprResult RebuildUnresolvedMemberExpr(Expr *BaseE, QualType BaseType,
+                                         SourceLocation OperatorLoc,
+                                         bool IsArrow,
+                                         NestedNameSpecifierLoc QualifierLoc,
+                                         NamedDecl *FirstQualifierInScope,
+                                         LookupResult &R,
                                 const TemplateArgumentListInfo *TemplateArgs) {
     CXXScopeSpec SS;
     SS.Adopt(QualifierLoc);
@@ -2246,8 +2257,8 @@ public:
   /// By default, performs semantic analysis to build the new expression.
   /// Subclasses may override this routine to provide different behavior.
   ExprResult RebuildObjCPropertyRefExpr(Expr *BaseArg, 
-                                              ObjCPropertyDecl *Property,
-                                              SourceLocation PropertyLoc) {
+                                        ObjCPropertyDecl *Property,
+                                        SourceLocation PropertyLoc) {
     CXXScopeSpec SS;
     ExprResult Base = getSema().Owned(BaseArg);
     LookupResult R(getSema(), Property->getDeclName(), PropertyLoc,
@@ -2649,6 +2660,9 @@ TreeTransform<Derived>::TransformNestedNameSpecifierLoc(
            TL.getType()->isEnumeralType())) {
         assert(!TL.getType().hasLocalQualifiers() && 
                "Can't get cv-qualifiers here");
+        if (TL.getType()->isEnumeralType())
+          SemaRef.Diag(TL.getBeginLoc(),
+                       diag::warn_cxx98_compat_enum_nested_name_spec);
         SS.Extend(SemaRef.Context, /*FIXME:*/SourceLocation(), TL,
                   Q.getLocalEndLoc());
         break;
@@ -5759,6 +5773,75 @@ TreeTransform<Derived>::TransformCXXForRangeStmt(CXXForRangeStmt *S) {
 
 template<typename Derived>
 StmtResult
+TreeTransform<Derived>::TransformMSDependentExistsStmt(
+                                                    MSDependentExistsStmt *S) {
+  // Transform the nested-name-specifier, if any.
+  NestedNameSpecifierLoc QualifierLoc;
+  if (S->getQualifierLoc()) {
+    QualifierLoc 
+      = getDerived().TransformNestedNameSpecifierLoc(S->getQualifierLoc());
+    if (!QualifierLoc)
+      return StmtError();
+  }
+
+  // Transform the declaration name.
+  DeclarationNameInfo NameInfo = S->getNameInfo();
+  if (NameInfo.getName()) {
+    NameInfo = getDerived().TransformDeclarationNameInfo(NameInfo);
+    if (!NameInfo.getName())
+      return StmtError();
+  }
+
+  // Check whether anything changed.
+  if (!getDerived().AlwaysRebuild() &&
+      QualifierLoc == S->getQualifierLoc() &&
+      NameInfo.getName() == S->getNameInfo().getName())
+    return S;
+  
+  // Determine whether this name exists, if we can.
+  CXXScopeSpec SS;
+  SS.Adopt(QualifierLoc);
+  bool Dependent = false;
+  switch (getSema().CheckMicrosoftIfExistsSymbol(/*S=*/0, SS, NameInfo)) {
+  case Sema::IER_Exists:
+    if (S->isIfExists())
+      break;
+      
+    return new (getSema().Context) NullStmt(S->getKeywordLoc());
+
+  case Sema::IER_DoesNotExist:
+    if (S->isIfNotExists())
+      break;
+    
+    return new (getSema().Context) NullStmt(S->getKeywordLoc());
+      
+  case Sema::IER_Dependent:
+    Dependent = true;
+    break;
+      
+  case Sema::IER_Error:
+    return StmtError();
+  }
+  
+  // We need to continue with the instantiation, so do so now.
+  StmtResult SubStmt = getDerived().TransformCompoundStmt(S->getSubStmt());
+  if (SubStmt.isInvalid())
+    return StmtError();
+  
+  // If we have resolved the name, just transform to the substatement.
+  if (!Dependent)
+    return SubStmt;
+  
+  // The name is still dependent, so build a dependent expression again.
+  return getDerived().RebuildMSDependentExistsStmt(S->getKeywordLoc(),
+                                                   S->isIfExists(),
+                                                   QualifierLoc,
+                                                   NameInfo,
+                                                   SubStmt.get());
+}
+
+template<typename Derived>
+StmtResult
 TreeTransform<Derived>::TransformSEHTryStmt(SEHTryStmt *S) {
   StmtResult TryBlock; //  = getDerived().TransformCompoundStmt(S->getTryBlock());
   if(TryBlock.isInvalid()) return StmtError();
@@ -7619,7 +7702,11 @@ TreeTransform<Derived>::TransformUnresolvedMemberExpr(UnresolvedMemberExpr *Old)
     Base = getDerived().TransformExpr(Old->getBase());
     if (Base.isInvalid())
       return ExprError();
-    BaseType = ((Expr*) Base.get())->getType();
+    Base = getSema().PerformMemberExprBaseConversion(Base.take(),
+                                                     Old->isArrow());
+    if (Base.isInvalid())
+      return ExprError();
+    BaseType = Base.get()->getType();
   } else {
     BaseType = getDerived().TransformType(Old->getBaseType());
   }
@@ -8126,7 +8213,7 @@ TreeTransform<Derived>::TransformObjCPropertyRefExpr(ObjCPropertyRefExpr *E) {
                                                    E->getLocation());
 
   return getDerived().RebuildObjCPropertyRefExpr(Base.get(),
-                                                 E->getType(),
+                                                 SemaRef.Context.PseudoObjectTy,
                                                  E->getImplicitPropertyGetter(),
                                                  E->getImplicitPropertySetter(),
                                                  E->getLocation());

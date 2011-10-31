@@ -75,6 +75,10 @@ def warn_cxx98_compat_alignof : Warning<
   "alignof expressions are incompatible with C++98">,
   InGroup<CXX98Compat>, DefaultIgnore;
 
+def warn_microsoft_dependent_exists : Warning<
+  "dependent %select{__if_not_exists|__if_exists}0 declarations are ignored">, 
+  InGroup<DiagGroup<"microsoft-exists">>;
+
 def ext_c1x_generic_selection : Extension<
   "generic selections are a C1X-specific feature">, InGroup<C1X>;
 def err_duplicate_default_assoc : Error<
@@ -229,7 +233,7 @@ def ext_auto_type_specifier : ExtWarn<
   "'auto' type specifier is a C++11 extension">, InGroup<CXX11>;
 def warn_auto_storage_class : Warning<
   "'auto' storage class specifier is redundant and incompatible with C++11">,
-  InGroup<CXX11Compat>;
+  InGroup<CXX11Compat>, DefaultIgnore;
 def ext_auto_storage_class : ExtWarn<
   "'auto' storage class specifier is not permitted in C++11, and will not "
   "be supported in future releases">, InGroup<DiagGroup<"auto-storage-class">>;
@@ -245,7 +249,11 @@ def err_missing_comma_before_ellipsis : Error<
   "C requires a comma prior to the ellipsis in a variadic function type">;
 def err_unexpected_typedef_ident : Error<
   "unexpected type name %0: expected identifier">;
+def err_unexpected_scope_on_base_decltype : Error<
+  "unexpected namespace scope prior to decltype">;
 def err_expected_class_name : Error<"expected class name">;
+def err_expected_class_name_not_template : 
+  Error<"'typename' is redundant; base classes are implicitly types">;
 def err_unspecified_vla_size_with_static : Error<
   "'static' may not be used with an unspecified variable length array size">;
 
@@ -427,8 +435,10 @@ def warn_cxx98_compat_attribute : Warning<
 def err_cxx0x_attribute_forbids_arguments : Error<
   "C++11 attribute '%0' cannot have an argument list">;
 def err_cxx0x_attribute_requires_arguments : Error<
-  "C++1 attribute '%0' must have an argument list">;
+  "C++11 attribute '%0' must have an argument list">;
 def err_attributes_not_allowed : Error<"an attribute list cannot appear here">;
+def err_alignas_pack_exp_unsupported : Error<
+  "pack expansions in alignment specifiers are not supported yet">;
 
 /// C++ Templates
 def err_expected_template : Error<"expected template">;
@@ -471,6 +481,11 @@ def err_missing_dependent_template_keyword : Error<
 def warn_missing_dependent_template_keyword : ExtWarn<
   "use 'template' keyword to treat '%0' as a dependent template name">;
 
+def ext_extern_template : Extension<
+  "extern templates are a C++11 extension">, InGroup<CXX11>;
+def warn_cxx98_compat_extern_template : Warning<
+  "extern templates are incompatible with C++98">,
+  InGroup<CXX98CompatPedantic>, DefaultIgnore;
 def warn_static_inline_explicit_inst_ignored : Warning<
   "ignoring '%select{static|inline}0' keyword on explicit template "
   "instantiation">;
