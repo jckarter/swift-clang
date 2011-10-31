@@ -1286,6 +1286,7 @@ class X86TargetInfo : public TargetInfo {
     CK_K8SSE3,
     CK_Opteron,
     CK_OpteronSSE3,
+    CK_AMDFAM10,
 
     /// This specification is deprecated and will be removed in the future.
     /// Users should prefer \see CK_K8.
@@ -1385,6 +1386,7 @@ public:
       .Case("k8-sse3", CK_K8SSE3)
       .Case("opteron", CK_Opteron)
       .Case("opteron-sse3", CK_OpteronSSE3)
+      .Case("amdfam10", CK_AMDFAM10)
       .Case("x86-64", CK_x86_64)
       .Case("geode", CK_Geode)
       .Default(CK_Generic);
@@ -1445,6 +1447,7 @@ public:
     case CK_K8SSE3:
     case CK_Opteron:
     case CK_OpteronSSE3:
+    case CK_AMDFAM10:
     case CK_x86_64:
       return true;
     }
@@ -1463,11 +1466,9 @@ void X86TargetInfo::getDefaultFeatures(llvm::StringMap<bool> &Features) const {
   Features["ssse3"] = false;
   Features["sse41"] = false;
   Features["sse42"] = false;
+  Features["sse4a"] = false;
   Features["aes"] = false;
   Features["avx"] = false;
-
-  // LLVM does not currently recognize this.
-  // Features["sse4a"] = false;
 
   // FIXME: This *really* should not be here.
 
@@ -1565,6 +1566,11 @@ void X86TargetInfo::getDefaultFeatures(llvm::StringMap<bool> &Features) const {
     setFeatureEnabled(Features, "sse3", true);
     setFeatureEnabled(Features, "3dnowa", true);
     break;
+  case CK_AMDFAM10:
+    setFeatureEnabled(Features, "sse3", true);
+    setFeatureEnabled(Features, "sse4a", true);
+    setFeatureEnabled(Features, "3dnowa", true);
+    break;
   case CK_C3_2:
     setFeatureEnabled(Features, "mmx", true);
     setFeatureEnabled(Features, "sse", true);
@@ -1608,6 +1614,8 @@ bool X86TargetInfo::setFeatureEnabled(llvm::StringMap<bool> &Features,
     else if (Name == "avx")
       Features["avx"] = Features["sse"] = Features["sse2"] = Features["sse3"] =
         Features["ssse3"] = Features["sse41"] = Features["sse42"] = true;
+    else if (Name == "sse4a")
+      Features["sse4a"] = true;
   } else {
     if (Name == "mmx")
       Features["mmx"] = Features["3dnow"] = Features["3dnowa"] = false;
@@ -1634,6 +1642,8 @@ bool X86TargetInfo::setFeatureEnabled(llvm::StringMap<bool> &Features,
       Features["aes"] = false;
     else if (Name == "avx")
       Features["avx"] = false;
+    else if (Name == "sse4a")
+      Features["sse4a"] = false;
   }
 
   return true;
@@ -1829,6 +1839,11 @@ void X86TargetInfo::getTargetDefines(const LangOptions &Opts,
     Builder.defineMacro("__k8");
     Builder.defineMacro("__k8__");
     Builder.defineMacro("__tune_k8__");
+    break;
+  case CK_AMDFAM10:
+    Builder.defineMacro("__amdfam10");
+    Builder.defineMacro("__amdfam10__");
+    Builder.defineMacro("__tune_amdfam10__");
     break;
   case CK_Geode:
     Builder.defineMacro("__geode");
