@@ -197,9 +197,31 @@ constexpr bool s4 = &x >= &x;
 constexpr bool s5 = &x < &x;
 constexpr bool s6 = &x > &x;
 
+constexpr S* sptr = &s;
+constexpr bool dyncast = sptr == dynamic_cast<S*>(sptr);
+
+extern char externalvar[];
+constexpr bool constaddress = (void *)externalvar == (void *)0x4000UL;  // expected-error {{must be initialized by a constant expression}}
+
 using check = int[m1 + (m2<<1) + (m3<<2) + (m4<<3) + (m5<<4) + (m6<<5) +
                   (n1<<6) + (n2<<7) + (n7<<8) + (n8<<9) + (g1<<10) + (g2<<11) +
                (s1<<12) + (s2<<13) + (s3<<14) + (s4<<15) + (s5<<16) + (s6<<17)];
 using check = int[2+4+16+128+512+2048+4096+16384+32768];
+
+}
+
+namespace MaterializeTemporary {
+
+constexpr int f(const int &r) { return r; }
+constexpr int n = f(1);
+
+constexpr bool same(const int &a, const int &b) { return &a == &b; }
+constexpr bool sameTemporary(const int &n) { return same(n, n); }
+
+using check_value = int[1];
+using check_value = int[n];
+using check_value = int[!same(4, 4)];
+using check_value = int[same(n, n)];
+using check_value = int[sameTemporary(9)];
 
 }
