@@ -641,8 +641,9 @@ public:
   /// specified memory buffer.  This does no caching of the buffer and takes
   /// ownership of the MemoryBuffer, so only pass a MemoryBuffer to this once.
   FileID createFileIDForMemBuffer(const llvm::MemoryBuffer *Buffer,
-                                  int LoadedID = 0, unsigned LoadedOffset = 0) {
-    return createFileID(createMemBufferContentCache(Buffer), SourceLocation(),
+                                  int LoadedID = 0, unsigned LoadedOffset = 0,
+                                 SourceLocation IncludeLoc = SourceLocation()) {
+    return createFileID(createMemBufferContentCache(Buffer), IncludeLoc,
                         SrcMgr::C_User, LoadedID, LoadedOffset);
   }
 
@@ -1258,6 +1259,17 @@ public:
   /// \brief Returns true if \arg Loc did not come from a PCH/Module.
   bool isLocalSourceLocation(SourceLocation Loc) const {
     return Loc.getOffset() < NextLocalOffset;
+  }
+
+  /// \brief Returns true if \arg FID came from a PCH/Module.
+  bool isLoadedFileID(FileID FID) const {
+    assert(FID.ID != -1 && "Using FileID sentinel value");
+    return FID.ID < 0;
+  }
+
+  /// \brief Returns true if \arg FID did not come from a PCH/Module.
+  bool isLocalFileID(FileID FID) const {
+    return !isLoadedFileID(FID);
   }
 
 private:
