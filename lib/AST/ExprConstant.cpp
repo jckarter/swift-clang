@@ -270,14 +270,15 @@ static bool IsLiteralLValue(const LValue &Value) {
          !isa<MaterializeTemporaryExpr>(Value.Base);
 }
 
-static bool IsWeakLValue(const LValue &Value) {
-  const ValueDecl *Decl = GetLValueBaseDecl(Value);
-  if (!Decl)
-    return false;
-
+static bool IsWeakDecl(const ValueDecl *Decl) {
   return Decl->hasAttr<WeakAttr>() ||
          Decl->hasAttr<WeakRefAttr>() ||
          Decl->isWeakImported();
+}
+
+static bool IsWeakLValue(const LValue &Value) {
+  const ValueDecl *Decl = GetLValueBaseDecl(Value);
+  return Decl && IsWeakDecl(Decl);
 }
 
 static bool EvalPointerValueAsBool(const LValue &Value, bool &Result) {
@@ -394,6 +395,11 @@ static bool EvaluateVarDeclInit(EvalInfo &Info, const VarDecl *VD,
     return true;
   }
 
+  // Never evaluate the initializer of a weak variable. We can't be sure that
+  // this is the definition which will be used.
+  if (IsWeakDecl(VD))
+    return false;
+
   const Expr *Init = VD->getAnyInitializer();
   if (!Init)
     return false;
@@ -461,7 +467,8 @@ bool HandleLValueToRValueConversion(EvalInfo &Info, QualType Type,
     // them are not permitted.
     const VarDecl *VD = dyn_cast<VarDecl>(D);
     if (!VD || !(IsConstNonVolatile(VD->getType()) || isa<ParmVarDecl>(VD)) ||
-        !Type->isLiteralType() || !EvaluateVarDeclInit(Info, VD, Frame, RVal))
+        !(Type->isIntegralOrEnumerationType() || Type->isRealFloatingType()) ||
+        !EvaluateVarDeclInit(Info, VD, Frame, RVal))
       return false;
 
     if (isa<ParmVarDecl>(VD) || !VD->getAnyInitializer()->isLValue())
