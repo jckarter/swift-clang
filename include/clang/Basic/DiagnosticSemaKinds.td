@@ -502,6 +502,9 @@ def warn_objc_property_copy_missing_on_block : Warning<
 def warn_objc_property_retain_of_block : Warning<
     "retain'ed block property does not copy the block "
     "- use copy attribute instead">, InGroup<ObjCRetainBlockProperty>;
+def warn_objc_readonly_property_has_setter : Warning<
+    "setter cannot be specified for a readonly property">,
+    InGroup<ObjCReadonlyPropertyHasSetter>;
 def warn_atomic_property_rule : Warning<
   "writable atomic property %0 cannot pair a synthesized %select{getter|setter}1 "
   "with a user defined %select{getter|setter}2">,
@@ -1695,9 +1698,10 @@ def warn_attribute_ibaction: Warning<
   "ibaction attribute can only be applied to Objective-C instance methods">;
 def err_iboutletcollection_type : Error<
   "invalid type %0 as argument of iboutletcollection attribute">;
-def err_iboutlet_object_type : Error<
+def warn_iboutlet_object_type : Warning<
   "%select{ivar|property}2 with %0 attribute must "
-  "be an object type (invalid %1)">;
+  "be an object type (invalid %1)">,
+  InGroup<DiagGroup<"invalid-iboutlet">>;
 def err_attribute_overloadable_not_function : Error<
   "'overloadable' attribute can only be applied to a function">;
 def err_attribute_overloadable_missing : Error<
