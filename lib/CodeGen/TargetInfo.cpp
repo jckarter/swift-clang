@@ -2834,7 +2834,7 @@ ABIArgInfo ARMABIInfo::classifyReturnType(QualType RetTy) const {
   // Check for homogeneous aggregates with AAPCS-VFP.
   if (getABIKind() == AAPCS_VFP) {
     const Type *Base = 0;
-    if (isHomogeneousAggregate(RetTy, Base, getContext()))
+    if (isHomogeneousAggregate(RetTy, Base, getContext(), false))
       // Homogeneous Aggregates are returned directly.
       return ABIArgInfo::getDirect();
   }
