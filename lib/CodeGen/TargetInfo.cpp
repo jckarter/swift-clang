@@ -2406,6 +2406,11 @@ ABIArgInfo ARM64ABIInfo::classifyReturnType(QualType RetTy) const {
   if (isEmptyRecord(getContext(), RetTy, true))
     return ABIArgInfo::getIgnore();
 
+  const Type *Base = 0;
+  if (isHomogeneousAggregate(RetTy, Base, getContext(), true))
+    // Homogeneous Floating-point Aggregates (HFAs) are returned directly.
+    return ABIArgInfo::getDirect();
+
   // Aggregates <= 16 bytes are returned directly in registers or on the stack.
   uint64_t Size = getContext().getTypeSize(RetTy);
   if (Size <= 128) {
