@@ -777,6 +777,8 @@ static void LangOptsToArgs(const LangOptions &Opts,
     Res.push_back("-fdelayed-template-parsing");
   if (Opts.Deprecated)
     Res.push_back("-fdeprecated-macro");
+  if (Opts.ApplePragmaPack)
+    Res.push_back("-fapple-pragma-pack");
 }
 
 static void PreprocessorOptsToArgs(const PreprocessorOptions &Opts,
@@ -1763,6 +1765,7 @@ static void ParseLangArgs(LangOptions &Opts, ArgList &Args, InputKind IK,
   Opts.FakeAddressSpaceMap = Args.hasArg(OPT_ffake_address_space_map);
   Opts.ParseUnknownAnytype = Args.hasArg(OPT_funknown_anytype);
   Opts.DebuggerSupport = Args.hasArg(OPT_fdebugger_support);
+  Opts.ApplePragmaPack = Args.hasArg(OPT_fapple_pragma_pack);
 
   // Record whether the __DEPRECATED define was requested.
   Opts.Deprecated = Args.hasFlag(OPT_fdeprecated_macro,
@@ -1915,9 +1918,9 @@ static void ParseTargetArgs(TargetOptions &Opts, ArgList &Args) {
   Opts.LinkerVersion = Args.getLastArgValue(OPT_target_linker_version);
   Opts.Triple = llvm::Triple::normalize(Args.getLastArgValue(OPT_triple));
 
-  // Use the host triple if unspecified.
+  // Use the default target triple if unspecified.
   if (Opts.Triple.empty())
-    Opts.Triple = llvm::sys::getHostTriple();
+    Opts.Triple = llvm::sys::getDefaultTargetTriple();
 }
 
 //
