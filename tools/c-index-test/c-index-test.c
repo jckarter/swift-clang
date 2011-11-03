@@ -39,6 +39,8 @@ static unsigned getDefaultParsingOptions() {
     options |= CXTranslationUnit_CacheCompletionResults;
   if (getenv("CINDEXTEST_NESTED_MACROS"))
     options |= CXTranslationUnit_NestedMacroExpansions;
+  if (getenv("CINDEXTEST_COMPLETION_NO_CACHING"))
+    options &= ~CXTranslationUnit_CacheCompletionResults;
   
   return options;
 }
@@ -338,7 +340,7 @@ static const char* GetCursorSource(CXCursor Cursor) {
   CXSourceLocation Loc = clang_getCursorLocation(Cursor);
   CXString source;
   CXFile file;
-  clang_getSpellingLocation(Loc, &file, 0, 0, 0);
+  clang_getExpansionLocation(Loc, &file, 0, 0, 0);
   source = clang_getFileName(file);
   if (!clang_getCString(source)) {
     clang_disposeString(source);
