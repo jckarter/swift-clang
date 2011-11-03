@@ -896,6 +896,15 @@ void ASTStmtReader::VisitObjCPropertyRefExpr(ObjCPropertyRefExpr *E) {
   }
 }
 
+void ASTStmtReader::VisitObjCSubscriptRefExpr(ObjCSubscriptRefExpr *E) {
+  VisitExpr(E);
+  E->setSourceRange(ReadSourceRange(Record, Idx));
+  E->setBaseExpr(Reader.ReadSubExpr());
+  E->setKeyExpr(Reader.ReadSubExpr());
+  E->setGetAtIndexMethodDecl(ReadDeclAs<ObjCMethodDecl>(Record, Idx));
+  E->setSetAtIndexMethodDecl(ReadDeclAs<ObjCMethodDecl>(Record, Idx));
+}
+
 void ASTStmtReader::VisitObjCMessageExpr(ObjCMessageExpr *E) {
   VisitExpr(E);
   assert(Record[Idx] == E->getNumArgs());
@@ -1850,6 +1859,9 @@ Stmt *ASTReader::ReadStmtFromStream(Module &F) {
       break;
     case EXPR_OBJC_PROPERTY_REF_EXPR:
       S = new (Context) ObjCPropertyRefExpr(Empty);
+      break;
+    case EXPR_OBJC_SUBSCRIPT_REF_EXPR:
+      S = new (Context) ObjCSubscriptRefExpr(Empty);
       break;
     case EXPR_OBJC_KVC_REF_EXPR:
       llvm_unreachable("mismatching AST file");

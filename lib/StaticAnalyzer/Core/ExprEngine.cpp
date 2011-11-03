@@ -526,6 +526,10 @@ void ExprEngine::Visit(const Stmt *S, ExplodedNode *Pred,
       Bldr.addNodes(Dst);
       break;
 
+    // FIXME.
+    case Stmt::ObjCSubscriptRefExprClass:
+      break;
+      
     case Stmt::ObjCPropertyRefExprClass:
       // Implicitly handled by Environment::getSVal().
       break;

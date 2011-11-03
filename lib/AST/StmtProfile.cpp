@@ -990,6 +990,12 @@ void StmtProfiler::VisitObjCPropertyRefExpr(const ObjCPropertyRefExpr *S) {
   }
 }
 
+void StmtProfiler::VisitObjCSubscriptRefExpr(const ObjCSubscriptRefExpr *S) {
+  VisitExpr(S);
+  VisitDecl(S->getAtIndexMethodDecl());
+  VisitDecl(S->setAtIndexMethodDecl());
+}
+
 void StmtProfiler::VisitObjCMessageExpr(const ObjCMessageExpr *S) {
   VisitExpr(S);
   VisitName(S->getSelector());

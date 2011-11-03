@@ -2171,6 +2171,11 @@ public:
     return getSema().BuildObjCArrayLiteral(Range, 
                                            MultiExprArg(Elements, NumElements));
   }
+ 
+  ExprResult RebuildObjCSubscriptRefExpr(SourceRange Range, Expr *Key) {
+    assert (false && "RebuildObjCSubscriptRefExpr - NYI");
+    return ExprError();
+  }
 
   /// \brief Build a new Objective-C dictionary literal.
   ///
@@ -8217,6 +8222,22 @@ TreeTransform<Derived>::TransformObjCPropertyRefExpr(ObjCPropertyRefExpr *E) {
                                                  E->getImplicitPropertyGetter(),
                                                  E->getImplicitPropertySetter(),
                                                  E->getLocation());
+}
+
+template<typename Derived>
+ExprResult
+TreeTransform<Derived>::TransformObjCSubscriptRefExpr(ObjCSubscriptRefExpr *E) {
+   // Transform the key expression.
+  ExprResult Key = getDerived().TransformExpr(E->getKeyExpr());
+  if (Key.isInvalid())
+    return ExprError();
+
+  // If nothing changed, just retain the existing expression.
+  if (!getDerived().AlwaysRebuild() &&
+      Key.get() == E->getKeyExpr())
+    return SemaRef.Owned(E);
+
+  return getDerived().RebuildObjCSubscriptRefExpr(E->getSourceRange(), Key.get());
 }
 
 template<typename Derived>

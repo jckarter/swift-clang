@@ -597,6 +597,14 @@ void StmtPrinter::VisitObjCPropertyRefExpr(ObjCPropertyRefExpr *Node) {
     OS << Node->getExplicitProperty()->getName();
 }
 
+void StmtPrinter::VisitObjCSubscriptRefExpr(ObjCSubscriptRefExpr *Node) {
+  
+  PrintExpr(Node->getBaseExpr());
+  OS << "[";
+  PrintExpr(Node->getKeyExpr());
+  OS << "]";
+}
+
 void StmtPrinter::VisitPredefinedExpr(PredefinedExpr *Node) {
   switch (Node->getIdentType()) {
     default:

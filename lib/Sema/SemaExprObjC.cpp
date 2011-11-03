@@ -183,6 +183,7 @@ getNSNumberFactoryMethodKind(QualType T) {
   case BuiltinType::UnknownAny:
   case BuiltinType::ARCUnbridgedCast:
   case BuiltinType::Half:
+  case BuiltinType::PseudoObject:
     break;
   }
   

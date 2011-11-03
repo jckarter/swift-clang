@@ -2246,6 +2246,7 @@ recurse:
   case Expr::ObjCNumericLiteralClass:
   case Expr::ObjCArrayLiteralClass:
   case Expr::ObjCDictionaryLiteralClass:
+  case Expr::ObjCSubscriptRefExprClass:
   case Expr::ObjCIndirectCopyRestoreExprClass:
   case Expr::OffsetOfExprClass:
   case Expr::PredefinedExprClass:

@@ -1023,6 +1023,8 @@ namespace clang {
       EXPR_OBJC_IVAR_REF_EXPR,
       /// \brief An ObjCPropertyRefExpr record.
       EXPR_OBJC_PROPERTY_REF_EXPR,
+      /// \brief An ObjCSubscriptRefExpr record.
+      EXPR_OBJC_SUBSCRIPT_REF_EXPR,
       /// \brief UNUSED
       EXPR_OBJC_KVC_REF_EXPR,
       /// \brief An ObjCMessageExpr record.

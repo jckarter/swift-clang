@@ -706,6 +706,84 @@ private:
   void setLocation(SourceLocation L) { IdLoc = L; }
   void setReceiverLocation(SourceLocation Loc) { ReceiverLoc = Loc; }
 };
+  
+/// ObjCSubscriptRefExpr - used for array and dictionary subscripting.
+/// array[4] = array[3]; dictionary[key] = dictionary[alt_key];
+///
+class ObjCSubscriptRefExpr : public Expr {
+  // Range starts at objective and end at ']'
+  SourceRange Range;
+  // array/dictionary base expression.
+  Stmt *Base;
+  
+  // for arrays, this is a numeric expression. For dictionaries, this is
+  // an objective-c object pointer expression.
+  Stmt *KeyExpr;
+  
+  ObjCMethodDecl *GetAtIndexMethodDecl;
+  
+  // For immutable objects this is null. When ObjCSubscriptRefExpr is to read
+  // an indexed object this is null too.
+  ObjCMethodDecl *SetAtIndexMethodDecl;
+  
+  ObjCSubscriptRefExpr(Stmt *base, Stmt *key, QualType T, ObjCMethodDecl *getMethod,
+                       ObjCMethodDecl *setMethod, SourceRange SR)
+  : Expr(ObjCSubscriptRefExprClass, T, VK_RValue, OK_Ordinary, 
+         false, false, false, false), 
+    Range(SR), Base(base), KeyExpr(key), GetAtIndexMethodDecl(getMethod), 
+  SetAtIndexMethodDecl(setMethod) {}
+
+public:
+  explicit ObjCSubscriptRefExpr(EmptyShell Empty)
+  : Expr(ObjCSubscriptRefExprClass, Empty) {}
+  
+  static ObjCSubscriptRefExpr *Create(ASTContext &C,
+                                      Stmt *base,
+                                      Stmt *key, QualType T, 
+                                      ObjCMethodDecl *getMethod,
+                                      ObjCMethodDecl *setMethod, 
+                                      SourceRange SR);
+  
+  SourceRange getSourceRange() const { return Range; }
+  void setSourceRange(SourceRange R) { Range = R; }
+  
+  static bool classof(const Stmt *T) {
+    return T->getStmtClass() == ObjCSubscriptRefExprClass;
+  }
+  static bool classof(const ObjCSubscriptRefExpr *) { return true; }
+  
+  Expr *getBaseExpr() const { return cast<Expr>(Base); }
+  void setBaseExpr(Stmt *S) { Base = S; }
+  
+  Expr *getKeyExpr() const { return cast<Expr>(KeyExpr); }
+  void setKeyExpr(Stmt *S) { KeyExpr = S; }
+  
+  ObjCMethodDecl *getAtIndexMethodDecl() const {
+    return GetAtIndexMethodDecl;
+  }
+  void setGetAtIndexMethodDecl(ObjCMethodDecl *MD) { 
+    GetAtIndexMethodDecl = MD; 
+  }
+
+  ObjCMethodDecl *setAtIndexMethodDecl() const {
+    return SetAtIndexMethodDecl;
+  }
+  void setSetAtIndexMethodDecl(ObjCMethodDecl *MD) { 
+    SetAtIndexMethodDecl = MD;
+  }
+  
+  bool isArraySubscriptRefExpr() const {
+    return getKeyExpr()->getType()->isIntegralOrEnumerationType();
+  }
+  
+  child_range children() { 
+    Stmt **begin = reinterpret_cast<Stmt**>(&Base); // hack!
+    return child_range(begin, begin+2); // Yes, it must be 2!
+  }
+private:
+  friend class ASTStmtReader;
+};
+  
 
 /// \brief An expression that sends a message to the given Objective-C
 /// object or class.

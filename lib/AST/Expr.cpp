@@ -3417,6 +3417,16 @@ ObjCDictionaryLiteral::CreateEmpty(ASTContext &C, unsigned NumElements,
                                          HasPackExpansions);
 }
 
+ObjCSubscriptRefExpr *ObjCSubscriptRefExpr::Create(ASTContext &C,
+                                                   Stmt *base,
+                                                   Stmt *key, QualType T, 
+                                                   ObjCMethodDecl *getMethod,
+                                                   ObjCMethodDecl *setMethod, 
+                                                   SourceRange SR) {
+  void *Mem = C.Allocate(sizeof(ObjCSubscriptRefExpr));
+  return new (Mem) ObjCSubscriptRefExpr(base, key, T, getMethod, setMethod, SR);
+}
+
 AtomicExpr::AtomicExpr(SourceLocation BLoc, Expr **args, unsigned nexpr,
                        QualType t, AtomicOp op, SourceLocation RP)
   : Expr(AtomicExprClass, t, VK_RValue, OK_Ordinary,

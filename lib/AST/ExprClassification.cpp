@@ -109,6 +109,7 @@ static Cl::Kinds ClassifyInternal(ASTContext &Ctx, const Expr *E) {
     // __func__ and friends are too.
   case Expr::PredefinedExprClass:
     // Property references are lvalues
+  case Expr::ObjCSubscriptRefExprClass:
   case Expr::ObjCPropertyRefExprClass:
     // C++ [expr.typeid]p1: The result of a typeid expression is an lvalue of...
   case Expr::CXXTypeidExprClass:

@@ -861,6 +861,15 @@ void ASTStmtWriter::VisitObjCPropertyRefExpr(ObjCPropertyRefExpr *E) {
   Code = serialization::EXPR_OBJC_PROPERTY_REF_EXPR;
 }
 
+void ASTStmtWriter::VisitObjCSubscriptRefExpr(ObjCSubscriptRefExpr *E) {
+  VisitExpr(E);
+  Writer.AddSourceRange(E->getSourceRange(), Record);
+  Writer.AddStmt(E->getBaseExpr());
+  Writer.AddStmt(E->getKeyExpr());
+  Writer.AddDeclRef(E->getAtIndexMethodDecl(), Record);
+  Writer.AddDeclRef(E->setAtIndexMethodDecl(), Record);
+}
+
 void ASTStmtWriter::VisitObjCMessageExpr(ObjCMessageExpr *E) {
   VisitExpr(E);
   Record.push_back(E->getNumArgs());
