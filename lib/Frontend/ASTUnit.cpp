@@ -1388,8 +1388,6 @@ llvm::MemoryBuffer *ASTUnit::getMainBufferWithPrecompiledPreamble(
 
         // Set the state of the diagnostic object to mimic its state
         // after parsing the preamble.
-        // FIXME: This won't catch any #pragma push warning changes that
-        // have occurred in the preamble.
         getDiagnostics().Reset();
         ProcessWarningOptions(getDiagnostics(), 
                               PreambleInvocation->getDiagnosticOpts());
@@ -1940,11 +1938,11 @@ bool ASTUnit::Reparse(RemappedFile *RemappedFiles, unsigned NumRemappedFiles) {
     OverrideMainBuffer = getMainBufferWithPrecompiledPreamble(*Invocation);
     
   // Clear out the diagnostics state.
-  if (!OverrideMainBuffer) {
-    getDiagnostics().Reset();
-    ProcessWarningOptions(getDiagnostics(), Invocation->getDiagnosticOpts());
-  }
-  
+  getDiagnostics().Reset();
+  ProcessWarningOptions(getDiagnostics(), Invocation->getDiagnosticOpts());
+  if (OverrideMainBuffer)
+    getDiagnostics().setNumWarnings(NumWarningsInPreamble);
+
   // Parse the sources
   bool Result = Parse(OverrideMainBuffer);
   
