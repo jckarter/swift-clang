@@ -22,6 +22,7 @@ def VADDW   : Inst<"vaddw", "wwd", "csiUcUsUi", OP_ADDW>;
 def VHADD   : SInst<"vhadd", "ddd", "csiUcUsUiQcQsQiQUcQUsQUi">;
 def VRHADD  : SInst<"vrhadd", "ddd", "csiUcUsUiQcQsQiQUcQUsQUi">;
 def VQADD   : SInst<"vqadd", "ddd", "csilUcUsUiUlQcQsQiQlQUcQUsQUiQUl">;
+def VUSQADD : IInst<"vusqadd", "ddd", "csilUcUsUiUlQcQsQiQlQUcQUsQUiQUl">;
 def VADDHN  : IInst<"vaddhn", "hkk", "silUsUiUl">;
 def VRADDHN : IInst<"vraddhn", "hkk", "silUsUiUl">;
 def VADDL_HIGH : SInst<"vaddl_high", "ndd", "RcRsRiRUcRUsRUi">;

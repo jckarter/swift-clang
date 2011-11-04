@@ -2122,6 +2122,10 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
   case ARM64::BI__builtin_arm64_vqaddq_v:
     Int = usgn ? Intrinsic::arm64_neon_uqadd : Intrinsic::arm64_neon_sqadd;
     return EmitNeonCall(CGM.getIntrinsic(Int, Ty), Ops, "vqadd");
+  case ARM64::BI__builtin_arm64_vusqadd_v:
+  case ARM64::BI__builtin_arm64_vusqaddq_v:
+    Int = Intrinsic::arm64_neon_usqadd;
+    return EmitNeonCall(CGM.getIntrinsic(Int, Ty), Ops, "vusqadd");
   case ARM64::BI__builtin_arm64_vaddhn_v:
     Int = Intrinsic::arm64_neon_addhn;
     return EmitNeonCall(CGM.getIntrinsic(Int, Ty), Ops, "vaddhn");
