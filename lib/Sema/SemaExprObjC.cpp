@@ -435,6 +435,78 @@ static ExprResult CheckObjCCollectionLiteralElement(Sema &S, Expr *Element,
   return Result;
 }
 
+ExprResult Sema::BuildObjCSubscriptExpression(SourceRange SR, Expr *BaseExpr,
+                                        Expr *IndexExpr) {
+  // If the expression is type-dependent, there's nothing for us to do.
+  if (BaseExpr->isTypeDependent() ||
+      IndexExpr->isTypeDependent())
+    return ExprError();
+  ExprResult Result = CheckPlaceholderExpr(IndexExpr);
+  if (Result.isInvalid())
+    return ExprError();
+  IndexExpr = Result.get();
+  
+  QualType BaseT = BaseExpr->getType();
+  QualType IndexT = IndexExpr->getType();
+  // Only Arrays for now.
+  if (!IndexT->isIntegralOrEnumerationType())
+    return ExprError();
+  
+  ObjCInterfaceDecl *IDecl = 0;
+  if (const ObjCObjectPointerType *PTy =
+      BaseT->getAs<ObjCObjectPointerType>()) {
+    QualType ResultType = PTy->getPointeeType();
+    if (const ObjCInterfaceType *iFaceTy = 
+        ResultType->getAs<ObjCInterfaceType>())
+      IDecl = iFaceTy->getDecl();
+    else if (const ObjCObjectType *iQFaceTy = 
+             ResultType->getAsObjCQualifiedInterfaceType()) {
+      ResultType = iQFaceTy->getBaseType();
+      if (const ObjCInterfaceType *iFaceTy = 
+         ResultType->getAs<ObjCInterfaceType>())
+      IDecl = iFaceTy->getDecl();
+    }
+  }
+  if (!IDecl)
+    return ExprError();
+  // - (id)objectAtIndexedSubscript:(size_t)index;
+  IdentifierInfo *KeyIdents[] = {
+    &Context.Idents.get("objectAtIndexedSubscript")  
+  };
+  Selector Sel = Context.Selectors.getSelector(1, KeyIdents);
+  ObjCMethodDecl *GetIndexMethod = IDecl->lookupInstanceMethod(Sel);
+  if (!GetIndexMethod || 
+      !GetIndexMethod->getResultType()->isObjCObjectPointerType())
+    return ExprError();
+  QualType T = GetIndexMethod->param_begin()[0]->getType();
+  if (!T->isIntegerType())
+    return ExprError();
+  
+  // Perform lvalue-to-rvalue conversion.
+  Result = DefaultLvalueConversion(BaseExpr);
+  if (Result.isInvalid())
+    return ExprError();
+  BaseExpr = Result.get();
+  Result = DefaultLvalueConversion(IndexExpr);
+  if (Result.isInvalid())
+    return ExprError();
+  IndexExpr = Result.get();
+  // Make sure that the Index has the type that the subscripting 
+  // method expects.
+  if (!Context.hasSameType(T, IndexExpr->getType())) {
+    Result = PerformImplicitConversion(IndexExpr, T, Sema::AA_Sending);
+    IndexExpr = Result.get();
+  }
+  return MaybeBindToTemporary(
+                              ObjCSubscriptRefExpr::Create(Context, 
+                                                           BaseExpr,
+                                                           IndexExpr,
+                                                           Context.PseudoObjectTy,
+                                                           GetIndexMethod,
+                                                           0, SR));
+  
+}
+
 ExprResult Sema::BuildObjCArrayLiteral(SourceRange SR, MultiExprArg Elements) {
   // Look up the NSArray class, if we haven't done so already.
   if (!NSArrayDecl) {
@@ -2235,6 +2307,7 @@ namespace {
         case CK_LValueToRValue:
         case CK_BitCast:
         case CK_GetObjCProperty:
+        case CK_GetObjCSubscript:
         case CK_CPointerToObjCPointerCast:
         case CK_BlockPointerToObjCPointerCast:
         case CK_AnyPointerToBlockPointerCast:

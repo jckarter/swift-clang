@@ -3140,6 +3140,10 @@ Sema::CreateBuiltinArraySubscriptExpr(Expr *Base, SourceLocation LLoc,
                LHSTy->getAs<ObjCObjectPointerType>()) {
     BaseExpr = LHSExp;
     IndexExpr = RHSExp;
+    Result = BuildObjCSubscriptExpression(SourceRange(LLoc, RLoc),
+                                          BaseExpr, IndexExpr);
+    if (!Result.isInvalid())
+      return Owned(Result.take());
     ResultType = PTy->getPointeeType();
   } else if (const ObjCObjectPointerType *PTy =
                RHSTy->getAs<ObjCObjectPointerType>()) {

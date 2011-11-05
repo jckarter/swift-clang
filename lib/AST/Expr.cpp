@@ -1036,6 +1036,7 @@ void CastExpr::CheckCastConsistency() const {
   case CK_Dependent:
   case CK_LValueToRValue:
   case CK_GetObjCProperty:
+  case CK_GetObjCSubscript:
   case CK_NoOp:
   case CK_PointerToBoolean:
   case CK_IntegralToBoolean:
@@ -1063,6 +1064,8 @@ const char *CastExpr::getCastKindName() const {
     return "LValueToRValue";
   case CK_GetObjCProperty:
     return "GetObjCProperty";
+  case CK_GetObjCSubscript:
+    return "GetObjCSubscript";
   case CK_NoOp:
     return "NoOp";
   case CK_BaseToDerived:
@@ -3424,7 +3427,9 @@ ObjCSubscriptRefExpr *ObjCSubscriptRefExpr::Create(ASTContext &C,
                                                    ObjCMethodDecl *setMethod, 
                                                    SourceRange SR) {
   void *Mem = C.Allocate(sizeof(ObjCSubscriptRefExpr));
-  return new (Mem) ObjCSubscriptRefExpr(base, key, T, getMethod, setMethod, SR);
+  return new (Mem) ObjCSubscriptRefExpr(base, key, T, VK_LValue, 
+                                        OK_ObjCSubscript,
+                                        getMethod, setMethod, SR);
 }
 
 AtomicExpr::AtomicExpr(SourceLocation BLoc, Expr **args, unsigned nexpr,

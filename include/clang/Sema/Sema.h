@@ -3468,6 +3468,9 @@ public:
   ExprResult ActOnObjCBoolLiteral(SourceLocation AtLoc, SourceLocation ValueLoc,
                                   bool Value);
   ExprResult BuildObjCArrayLiteral(SourceRange SR, MultiExprArg Elements);
+  
+  ExprResult BuildObjCSubscriptExpression(SourceRange SR, Expr *BaseExpr,
+                                          Expr *IndexExpr);
     
   ExprResult BuildObjCDictionaryLiteral(SourceRange SR,                                         
                                         ObjCDictionaryElement *Elements,

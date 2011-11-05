@@ -2016,6 +2016,7 @@ EmitConditionalOperatorLValue(const AbstractConditionalOperator *expr) {
 /// cast from scalar to union.
 LValue CodeGenFunction::EmitCastLValue(const CastExpr *E) {
   switch (E->getCastKind()) {
+  case CK_GetObjCSubscript:
   case CK_ToVoid:
     return EmitUnsupportedLValue(E, "unexpected cast lvalue");
 

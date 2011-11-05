@@ -58,7 +58,13 @@ enum CastKind {
   /// gl-value if the property reference is to an implicit property
   /// for a method that returns a reference type.
   CK_GetObjCProperty,
-    
+  
+  /// CK_GetObjCSubscript - A conversion which calls an Objective-C
+  /// array/dictionary accessor method. The operand is an OK_ObjCSubscript 
+  ///  l-value; the result will be an r-value. Accessors do not return
+  /// a reference type so result cannot be a gl-lvalue.
+  CK_GetObjCSubscript,
+  
   /// CK_NoOp - A conversion which does not affect the type other than
   /// (possibly) adding qualifiers.
   ///   int    -> int

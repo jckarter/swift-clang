@@ -112,6 +112,7 @@ namespace  {
       case OK_Ordinary: break;
       case OK_BitField: OS << " bitfield"; break;
       case OK_ObjCProperty: OS << " objcproperty"; break;
+      case OK_ObjCSubscript: OS << " objcsubscript"; break;
       case OK_VectorComponent: OS << " vectorcomponent"; break;
       }
     }
