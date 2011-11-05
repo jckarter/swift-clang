@@ -10,6 +10,8 @@
 #ifndef LLVM_CLANG_FRONTEND_SERIALIZE_DIAGNOSTIC_PRINTER_H_
 #define LLVM_CLANG_FRONTEND_SERIALIZE_DIAGNOSTIC_PRINTER_H_
 
+#include "llvm/Bitcode/BitstreamWriter.h"
+
 namespace llvm {
 class raw_ostream;
 }
@@ -19,6 +21,21 @@ class DiagnosticConsumer;
 class DiagnosticsEngine;
 
 namespace serialized_diags {
+  
+enum BlockIDs {
+  /// \brief The DIAG block, which acts as a container around a diagnostic.
+  BLOCK_DIAG = llvm::bitc::FIRST_APPLICATION_BLOCKID
+};
+
+enum RecordIDs {
+  RECORD_DIAG = 1,
+  RECORD_SOURCE_RANGE,
+  RECORD_DIAG_FLAG,
+  RECORD_CATEGORY,
+  RECORD_FILENAME,
+  RECORD_FIXIT
+};
+
 /// \brief Returns a DiagnosticConsumer that serializes diagnostics to
 ///  a bitcode file.
 ///
