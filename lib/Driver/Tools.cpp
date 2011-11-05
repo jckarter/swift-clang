@@ -364,16 +364,6 @@ void Clang::AddPreprocessingOptions(const Driver &D,
   Args.AddAllArgs(CmdArgs, options::OPT_I_Group, options::OPT_F,
                   options::OPT_index_header_map);
 
-  // Add C++ include arguments, if needed.
-  types::ID InputType = Inputs[0].getType();
-  if (types::isCXX(InputType)) {
-    bool ObjCXXAutoRefCount
-      = types::isObjC(InputType) && isObjCAutoRefCount(Args);
-    getToolChain().AddClangCXXStdlibIncludeArgs(Args, CmdArgs,
-                                                ObjCXXAutoRefCount);
-    Args.AddAllArgs(CmdArgs, options::OPT_stdlib_EQ);
-  }
-
   // Add -Wp, and -Xassembler if using the preprocessor.
 
   // FIXME: There is a very unfortunate problem here, some troubled
@@ -413,6 +403,8 @@ void Clang::AddPreprocessingOptions(const Driver &D,
   Args.AddAllArgs(CmdArgs, options::OPT_fauto_module_import);
 
   // Parse additional include paths from environment variables.
+  // FIXME: We should probably sink the logic for handling these from the
+  // frontend into the driver. It will allow deleting 4 otherwise unused flags.
   // CPATH - included following the user specified includes (but prior to
   // builtin and standard includes).
   AddIncludeDirectoryList(Args, CmdArgs, "-I", ::getenv("CPATH"));
@@ -428,6 +420,13 @@ void Clang::AddPreprocessingOptions(const Driver &D,
   // OBJCPLUS_INCLUDE_PATH - system includes enabled when compiling ObjC++.
   AddIncludeDirectoryList(Args, CmdArgs, "-objcxx-isystem",
                           ::getenv("OBJCPLUS_INCLUDE_PATH"));
+
+  // Add system include arguments.
+  getToolChain().AddClangSystemIncludeArgs(Args, CmdArgs);
+
+  // Add C++ include arguments, if needed.
+  if (types::isCXX(Inputs[0].getType()))
+    getToolChain().AddClangCXXStdlibIncludeArgs(Args, CmdArgs);
 }
 
 /// getARMTargetCPU - Get the (LLVM) name of the ARM cpu we are targeting.
@@ -1479,8 +1478,24 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
   // wrong.
   Args.ClaimAllArgs(options::OPT_g_Group);
   if (Arg *A = Args.getLastArg(options::OPT_g_Group))
-    if (!A->getOption().matches(options::OPT_g0))
-      CmdArgs.push_back("-g");
+    if (!A->getOption().matches(options::OPT_g0)) {
+      StringRef ArgString = A->getAsString(Args);
+      bool Valid_g = llvm::StringSwitch<bool>(ArgString)
+        .Case("-g", true)
+        .Case("-g3", true)
+        .Case("-gdwarf-2", true)
+        .Case("-gstabs", true)
+        .Case("-gstabs+", true)
+        .Case("-gstabs1", true)
+        .Case("-gstabs2", true)
+        .Case("-gfull", true)
+        .Case("-gused", true)
+        .Default(false);
+      if (Valid_g)
+        CmdArgs.push_back("-g");
+      else
+        D.Diag(diag::warn_drv_clang_unsupported) << ArgString;
+    }
 
   Args.AddAllArgs(CmdArgs, options::OPT_ffunction_sections);
   Args.AddAllArgs(CmdArgs, options::OPT_fdata_sections);
@@ -1719,6 +1734,7 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
   Args.AddLastArg(CmdArgs, options::OPT_femit_all_decls);
   Args.AddLastArg(CmdArgs, options::OPT_fheinous_gnu_extensions);
   Args.AddLastArg(CmdArgs, options::OPT_flimit_debug_info);
+  Args.AddLastArg(CmdArgs, options::OPT_fno_limit_debug_info);
   Args.AddLastArg(CmdArgs, options::OPT_fno_operator_names);
   if (getToolChain().SupportsProfiling())
     Args.AddLastArg(CmdArgs, options::OPT_pg);
@@ -2002,6 +2018,16 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
   bool ARC = isObjCAutoRefCount(Args);
   if (ARC) {
     CmdArgs.push_back("-fobjc-arc");
+
+    // FIXME: It seems like this entire block, and several around it should be
+    // wrapped in isObjC, but for now we just use it here as this is where it
+    // was being used previously.
+    if (types::isCXX(InputType) && types::isObjC(InputType)) {
+      if (getToolChain().GetCXXStdlibType(Args) == ToolChain::CST_Libcxx)
+        CmdArgs.push_back("-fobjc-arc-cxxlib=libc++");
+      else
+        CmdArgs.push_back("-fobjc-arc-cxxlib=libstdc++");
+    }
 
     // Allow the user to enable full exceptions code emission.
     // We define off for Objective-CC, on for Objective-C++.
@@ -4459,7 +4485,7 @@ void linuxtools::Link::ConstructJob(Compilation &C, const JobAction &JA,
 
   addProfileRT(getToolChain(), Args, CmdArgs, getToolChain().getTriple());
 
-  if (Args.hasArg(options::OPT_use_gold_plugin)) {
+  if (D.IsUsingLTO(Args) || Args.hasArg(options::OPT_use_gold_plugin)) {
     CmdArgs.push_back("-plugin");
     std::string Plugin = ToolChain.getDriver().Dir + "/../lib/LLVMgold.so";
     CmdArgs.push_back(Args.MakeArgString(Plugin));
