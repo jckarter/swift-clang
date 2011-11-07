@@ -1084,7 +1084,6 @@ void CastExpr::CheckCastConsistency() const {
 
   case CK_Dependent:
   case CK_LValueToRValue:
-  case CK_GetObjCProperty:
   case CK_NoOp:
   case CK_PointerToBoolean:
   case CK_IntegralToBoolean:
@@ -1110,8 +1109,6 @@ const char *CastExpr::getCastKindName() const {
     return "LValueBitCast";
   case CK_LValueToRValue:
     return "LValueToRValue";
-  case CK_GetObjCProperty:
-    return "GetObjCProperty";
   case CK_NoOp:
     return "NoOp";
   case CK_BaseToDerived:
@@ -1693,6 +1690,19 @@ bool Expr::isUnusedResultAWarning(SourceLocation &Loc, SourceRange &R1,
     Loc = getExprLoc();
     R1 = getSourceRange();
     return true;
+
+  case PseudoObjectExprClass: {
+    const PseudoObjectExpr *PO = cast<PseudoObjectExpr>(this);
+
+    // Only complain about things that have the form of a getter.
+    if (isa<UnaryOperator>(PO->getSyntacticForm()) ||
+        isa<BinaryOperator>(PO->getSyntacticForm()))
+      return false;
+
+    Loc = getExprLoc();
+    R1 = getSourceRange();
+    return true;
+  }
 
   case StmtExprClass: {
     // Statement exprs don't logically have side effects themselves, but are
@@ -2598,6 +2608,9 @@ Expr::isNullPointerConstant(ASTContext &Ctx,
   } else if (const MaterializeTemporaryExpr *M 
                                    = dyn_cast<MaterializeTemporaryExpr>(this)) {
     return M->GetTemporaryExpr()->isNullPointerConstant(Ctx, NPC);
+  } else if (const OpaqueValueExpr *OVE = dyn_cast<OpaqueValueExpr>(this)) {
+    if (const Expr *Source = OVE->getSourceExpr())
+      return Source->isNullPointerConstant(Ctx, NPC);
   }
 
   // C++0x nullptr_t is always a null pointer constant.
@@ -3304,6 +3317,72 @@ const OpaqueValueExpr *OpaqueValueExpr::findInCopyConstruct(const Expr *e) {
   while (const ImplicitCastExpr *ice = dyn_cast<ImplicitCastExpr>(e))
     e = ice->getSubExpr();
   return cast<OpaqueValueExpr>(e);
+}
+
+PseudoObjectExpr *PseudoObjectExpr::Create(ASTContext &Context, EmptyShell sh,
+                                           unsigned numSemanticExprs) {
+  void *buffer = Context.Allocate(sizeof(PseudoObjectExpr) +
+                                    (1 + numSemanticExprs) * sizeof(Expr*),
+                                  llvm::alignOf<PseudoObjectExpr>());
+  return new(buffer) PseudoObjectExpr(sh, numSemanticExprs);
+}
+
+PseudoObjectExpr::PseudoObjectExpr(EmptyShell shell, unsigned numSemanticExprs)
+  : Expr(PseudoObjectExprClass, shell) {
+  PseudoObjectExprBits.NumSubExprs = numSemanticExprs + 1;
+}
+
+PseudoObjectExpr *PseudoObjectExpr::Create(ASTContext &C, Expr *syntax,
+                                           ArrayRef<Expr*> semantics,
+                                           unsigned resultIndex) {
+  assert(syntax && "no syntactic expression!");
+  assert(semantics.size() && "no semantic expressions!");
+
+  QualType type;
+  ExprValueKind VK;
+  if (resultIndex == NoResult) {
+    type = C.VoidTy;
+    VK = VK_RValue;
+  } else {
+    assert(resultIndex < semantics.size());
+    type = semantics[resultIndex]->getType();
+    VK = semantics[resultIndex]->getValueKind();
+    assert(semantics[resultIndex]->getObjectKind() == OK_Ordinary);
+  }
+
+  void *buffer = C.Allocate(sizeof(PseudoObjectExpr) +
+                              (1 + semantics.size()) * sizeof(Expr*),
+                            llvm::alignOf<PseudoObjectExpr>());
+  return new(buffer) PseudoObjectExpr(type, VK, syntax, semantics,
+                                      resultIndex);
+}
+
+PseudoObjectExpr::PseudoObjectExpr(QualType type, ExprValueKind VK,
+                                   Expr *syntax, ArrayRef<Expr*> semantics,
+                                   unsigned resultIndex)
+  : Expr(PseudoObjectExprClass, type, VK, OK_Ordinary,
+         /*filled in at end of ctor*/ false, false, false, false) {
+  PseudoObjectExprBits.NumSubExprs = semantics.size() + 1;
+  PseudoObjectExprBits.ResultIndex = resultIndex + 1;
+
+  for (unsigned i = 0, e = semantics.size() + 1; i != e; ++i) {
+    Expr *E = (i == 0 ? syntax : semantics[i-1]);
+    getSubExprsBuffer()[i] = E;
+
+    if (E->isTypeDependent())
+      ExprBits.TypeDependent = true;
+    if (E->isValueDependent())
+      ExprBits.ValueDependent = true;
+    if (E->isInstantiationDependent())
+      ExprBits.InstantiationDependent = true;
+    if (E->containsUnexpandedParameterPack())
+      ExprBits.ContainsUnexpandedParameterPack = true;
+
+    if (isa<OpaqueValueExpr>(E))
+      assert(cast<OpaqueValueExpr>(E)->getSourceExpr() != 0 &&
+             "opaque-value semantic expressions for pseudo-object "
+             "operations must have sources");
+  }
 }
 
 //===----------------------------------------------------------------------===//

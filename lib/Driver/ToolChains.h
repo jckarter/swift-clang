@@ -27,6 +27,85 @@ namespace toolchains {
 /// command line options.
 class LLVM_LIBRARY_VISIBILITY Generic_GCC : public ToolChain {
 protected:
+  /// \brief Struct to store and manipulate GCC versions.
+  ///
+  /// We rely on assumptions about the form and structure of GCC version
+  /// numbers: they consist of at most three '.'-separated components, and each
+  /// component is a non-negative integer except for the last component. For
+  /// the last component we are very flexible in order to tolerate release
+  /// candidates or 'x' wildcards.
+  ///
+  /// Note that the ordering established among GCCVersions is based on the
+  /// preferred version string to use. For example we prefer versions without
+  /// a hard-coded patch number to those with a hard coded patch number.
+  ///
+  /// Currently this doesn't provide any logic for textual suffixes to patches
+  /// in the way that (for example) Debian's version format does. If that ever
+  /// becomes necessary, it can be added.
+  struct GCCVersion {
+    /// \brief The unparsed text of the version.
+    std::string Text;
+
+    /// \brief The parsed major, minor, and patch numbers.
+    int Major, Minor, Patch;
+
+    /// \brief Any textual suffix on the patch number.
+    std::string PatchSuffix;
+
+    static GCCVersion Parse(StringRef VersionText);
+    bool operator<(const GCCVersion &RHS) const;
+    bool operator>(const GCCVersion &RHS) const { return RHS < *this; }
+    bool operator<=(const GCCVersion &RHS) const { return !(*this > RHS); }
+    bool operator>=(const GCCVersion &RHS) const { return !(*this < RHS); }
+  };
+
+
+  /// \brief This is a class to find a viable GCC installation for Clang to
+  /// use.
+  ///
+  /// This class tries to find a GCC installation on the system, and report
+  /// information about it. It starts from the host information provided to the
+  /// Driver, and has logic for fuzzing that where appropriate.
+  class GCCInstallationDetector {
+
+    bool IsValid;
+    std::string GccTriple;
+
+    // FIXME: These might be better as path objects.
+    std::string GccInstallPath;
+    std::string GccParentLibPath;
+
+    GCCVersion Version;
+
+  public:
+    GCCInstallationDetector(const Driver &D);
+
+    /// \brief Check whether we detected a valid GCC install.
+    bool isValid() const { return IsValid; }
+
+    /// \brief Get the GCC triple for the detected install.
+    StringRef getTriple() const { return GccTriple; }
+
+    /// \brief Get the detected GCC installation path.
+    StringRef getInstallPath() const { return GccInstallPath; }
+
+    /// \brief Get the detected GCC parent lib path.
+    StringRef getParentLibPath() const { return GccParentLibPath; }
+
+    /// \brief Get the detected GCC version string.
+    StringRef getVersion() const { return Version.Text; }
+
+  private:
+    static void CollectLibDirsAndTriples(llvm::Triple::ArchType HostArch,
+                                         SmallVectorImpl<StringRef> &LibDirs,
+                                         SmallVectorImpl<StringRef> &Triples);
+
+    void ScanLibDirForGCCTriple(const std::string &LibDir,
+                                StringRef CandidateTriple);
+  };
+
+  GCCInstallationDetector GCCInstallation;
+
   mutable llvm::DenseMap<unsigned, Tool*> Tools;
 
 public:
@@ -39,6 +118,21 @@ public:
   virtual bool IsUnwindTablesDefault() const;
   virtual const char *GetDefaultRelocationModel() const;
   virtual const char *GetForcedPicModel() const;
+
+protected:
+  /// \name ToolChain Implementation Helper Functions
+  /// @{
+
+  /// \brief Check whether the target triple's architecture is 64-bits.
+  bool isTarget64Bit() const {
+    return (getTriple().getArch() == llvm::Triple::x86_64 ||
+            getTriple().getArch() == llvm::Triple::ppc64);
+  }
+  /// \brief Check whether the target triple's architecture is 32-bits.
+  /// FIXME: This should likely do more than just negate the 64-bit query.
+  bool isTarget32Bit() const { return !isTarget64Bit(); }
+
+  /// @}
 };
 
 /// Darwin - The base Darwin tool chain.
@@ -373,50 +467,6 @@ public:
 };
 
 class LLVM_LIBRARY_VISIBILITY Linux : public Generic_ELF {
-  struct GCCVersion;
-
-  /// \brief This is a class to find a viable GCC installation for Clang to
-  /// use.
-  ///
-  /// This class tries to find a GCC installation on the system, and report
-  /// information about it. It starts from the host information provided to the
-  /// Driver, and has logic for fuzzing that where appropriate.
-  class GCCInstallationDetector {
-
-    bool IsValid;
-    std::string GccTriple;
-
-    // FIXME: These might be better as path objects.
-    std::string GccInstallPath;
-    std::string GccParentLibPath;
-
-  public:
-    GCCInstallationDetector(const Driver &D);
-
-    /// \brief Check whether we detected a valid GCC install.
-    bool isValid() const { return IsValid; }
-
-    /// \brief Get the GCC triple for the detected install.
-    const std::string &getTriple() const { return GccTriple; }
-
-    /// \brief Get the detected GCC installation path.
-    const std::string &getInstallPath() const { return GccInstallPath; }
-
-    /// \brief Get the detected GCC parent lib path.
-    const std::string &getParentLibPath() const { return GccParentLibPath; }
-
-  private:
-    static void CollectLibDirsAndTriples(llvm::Triple::ArchType HostArch,
-                                         SmallVectorImpl<StringRef> &LibDirs,
-                                         SmallVectorImpl<StringRef> &Triples);
-
-    void ScanLibDirForGCCTriple(const std::string &LibDir,
-                                StringRef CandidateTriple,
-                                GCCVersion &BestVersion);
-  };
-
-  GCCInstallationDetector GCCInstallation;
-
 public:
   Linux(const HostInfo &Host, const llvm::Triple& Triple);
 

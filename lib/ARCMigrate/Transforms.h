@@ -37,7 +37,6 @@ void rewriteUnbridgedCasts(MigrationPass &pass);
 void makeAssignARCSafe(MigrationPass &pass);
 void removeRetainReleaseDeallocFinalize(MigrationPass &pass);
 void removeZeroOutPropsInDeallocFinalize(MigrationPass &pass);
-void rewriteProperties(MigrationPass &pass);
 void rewriteBlockObjCVariable(MigrationPass &pass);
 void rewriteUnusedInitDelegate(MigrationPass &pass);
 void checkAPIUses(MigrationPass &pass);
@@ -58,21 +57,48 @@ public:
   Stmt *getTopStmt() { return TopStmt; }
 };
 
+class ObjCImplementationContext {
+  MigrationContext &MigrateCtx;
+  ObjCImplementationDecl *ImpD;
+
+public:
+  ObjCImplementationContext(MigrationContext &MigrateCtx,
+                            ObjCImplementationDecl *D)
+    : MigrateCtx(MigrateCtx), ImpD(D) {}
+
+  MigrationContext &getMigrationContext() { return MigrateCtx; }
+  ObjCImplementationDecl *getImplementationDecl() { return ImpD; }
+};
+
 class ASTTraverser {
 public:
   virtual ~ASTTraverser();
+  virtual void traverseTU(MigrationContext &MigrateCtx) { }
   virtual void traverseBody(BodyContext &BodyCtx) { }
+  virtual void traverseObjCImplementation(ObjCImplementationContext &ImplCtx) {}
 };
 
 class MigrationContext {
-  MigrationPass &Pass;
   std::vector<ASTTraverser *> Traversers;
 
 public:
+  MigrationPass &Pass;
+
+  struct GCAttrOccurrence {
+    enum AttrKind { Weak, Strong } Kind;
+    SourceLocation Loc;
+    QualType ModifiedType;
+    Decl *Dcl;
+    /// \brief true if the attribute is owned, e.g. it is in a body and not just
+    /// in an interface.
+    bool FullyMigratable;
+  };
+  std::vector<GCAttrOccurrence> GCAttrs;
+
+  llvm::DenseSet<unsigned> AttrSet;
+
   explicit MigrationContext(MigrationPass &pass) : Pass(pass) {}
   ~MigrationContext();
-
-  MigrationPass &getPass() { return Pass; }
   
   typedef std::vector<ASTTraverser *>::iterator traverser_iterator;
   traverser_iterator traversers_begin() { return Traversers.begin(); }
@@ -85,9 +111,21 @@ public:
   bool isGCOwnedNonObjC(QualType T);
 
   void traverse(TranslationUnitDecl *TU);
+
+  void dumpGCAttrs();
+};
+
+class PropertyRewriteTraverser : public ASTTraverser {
+public:
+  virtual void traverseObjCImplementation(ObjCImplementationContext &ImplCtx);
 };
 
 // GC transformations
+
+class GCAttrsTraverser : public ASTTraverser {
+public:
+  virtual void traverseTU(MigrationContext &MigrateCtx);
+};
 
 class GCCollectableCallsTraverser : public ASTTraverser {
 public:
