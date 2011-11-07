@@ -4158,22 +4158,6 @@ static bool findRetainCycleOwner(Expr *e, RetainCycleOwner &owner) {
         e = cast->getSubExpr();
         continue;
 
-      case CK_GetObjCProperty: {
-        // Bail out if this isn't a strong explicit property.
-        const ObjCPropertyRefExpr *pre = cast->getSubExpr()->getObjCProperty();
-        if (pre->isImplicitProperty()) return false;
-        ObjCPropertyDecl *property = pre->getExplicitProperty();
-        if (!property->isRetaining() &&
-            !(property->getPropertyIvarDecl() &&
-              property->getPropertyIvarDecl()->getType()
-                .getObjCLifetime() == Qualifiers::OCL_Strong))
-          return false;
-
-        owner.Indirect = true;
-        e = const_cast<Expr*>(pre->getBase());
-        continue;
-      }
-        
       default:
         return false;
       }
@@ -4210,6 +4194,26 @@ static bool findRetainCycleOwner(Expr *e, RetainCycleOwner &owner) {
 
       // Don't count this as an indirect ownership.
       e = member->getBase();
+      continue;
+    }
+
+    if (PseudoObjectExpr *pseudo = dyn_cast<PseudoObjectExpr>(e)) {
+      // Only pay attention to pseudo-objects on property references.
+      ObjCPropertyRefExpr *pre
+        = dyn_cast<ObjCPropertyRefExpr>(pseudo->getSyntacticForm()
+                                              ->IgnoreParens());
+      if (!pre) return false;
+      if (pre->isImplicitProperty()) return false;
+      ObjCPropertyDecl *property = pre->getExplicitProperty();
+      if (!property->isRetaining() &&
+          !(property->getPropertyIvarDecl() &&
+            property->getPropertyIvarDecl()->getType()
+              .getObjCLifetime() == Qualifiers::OCL_Strong))
+          return false;
+
+      owner.Indirect = true;
+      e = const_cast<Expr*>(cast<OpaqueValueExpr>(pre->getBase())
+                              ->getSourceExpr());
       continue;
     }
 

@@ -46,6 +46,24 @@ namespace {
   struct CallStackFrame;
   struct EvalInfo;
 
+  /// Determine whether the described subobject is an array element.
+  static bool SubobjectIsArrayElement(QualType Base,
+                                      ArrayRef<APValue::LValuePathEntry> Path) {
+    bool IsArrayElement = false;
+    const Type *T = Base.getTypePtr();
+    for (unsigned I = 0, N = Path.size(); I != N; ++I) {
+      IsArrayElement = T && T->isArrayType();
+      if (IsArrayElement)
+        T = T->getBaseElementTypeUnsafe();
+      else if (const FieldDecl *FD = dyn_cast<FieldDecl>(Path[I].BaseOrMember))
+        T = FD->getType().getTypePtr();
+      else
+        // Path[I] describes a base class.
+        T = 0;
+    }
+    return IsArrayElement;
+  }
+
   /// A path from a glvalue to a subobject of that glvalue.
   struct SubobjectDesignator {
     /// True if the subobject was named in a manner not supported by C++11. Such
@@ -59,19 +77,27 @@ namespace {
     /// Whether this designates 'one past the end' of the current subobject.
     bool OnePastTheEnd : 1;
 
-    union PathEntry {
-      /// If the current subobject is of class type, this indicates which
-      /// subobject of that type is accessed next.
-      const Decl *BaseOrMember;
-      /// If the current subobject is of array type, this indicates which index
-      /// within that array is accessed next.
-      uint64_t Index;
-    };
+    typedef APValue::LValuePathEntry PathEntry;
+
     /// The entries on the path from the glvalue to the designated subobject.
     SmallVector<PathEntry, 8> Entries;
 
     SubobjectDesignator() :
       Invalid(false), ArrayElement(false), OnePastTheEnd(false) {}
+
+    SubobjectDesignator(const APValue &V) :
+      Invalid(!V.isLValue() || !V.hasLValuePath()), ArrayElement(false),
+      OnePastTheEnd(false) {
+      if (!Invalid) {
+        ArrayRef<PathEntry> VEntries = V.getLValuePath();
+        Entries.insert(Entries.end(), VEntries.begin(), VEntries.end());
+        if (V.getLValueBase())
+          ArrayElement = SubobjectIsArrayElement(V.getLValueBase()->getType(),
+                                                 V.getLValuePath());
+        else
+          assert(V.getLValuePath().empty() &&"Null pointer with nonempty path");
+      }
+    }
 
     void setInvalid() {
       Invalid = true;
@@ -85,7 +111,7 @@ namespace {
         return;
       }
       PathEntry Entry;
-      Entry.Index = N;
+      Entry.ArrayIndex = N;
       Entries.push_back(Entry);
       ArrayElement = true;
     }
@@ -106,7 +132,7 @@ namespace {
     void adjustIndex(uint64_t N) {
       if (Invalid) return;
       if (ArrayElement) {
-        Entries.back().Index += N;
+        Entries.back().ArrayIndex += N;
         return;
       }
       if (OnePastTheEnd && N == (uint64_t)-1)
@@ -141,9 +167,9 @@ namespace {
     CCValue(const CCValue &V) : APValue(V), CallFrame(V.CallFrame) {}
     CCValue(const Expr *B, const CharUnits &O, CallStackFrame *F,
             const SubobjectDesignator &D) :
-      APValue(B, O), CallFrame(F), Designator(D) {}
+      APValue(B, O, APValue::NoLValuePath()), CallFrame(F), Designator(D) {}
     CCValue(const APValue &V, GlobalValue) :
-      APValue(V), CallFrame(0), Designator() {}
+      APValue(V), CallFrame(0), Designator(V) {}
 
     CallStackFrame *getLValueFrame() const {
       assert(getKind() == LValue);
@@ -336,15 +362,37 @@ static bool IsGlobalLValue(const Expr* E) {
   return true;
 }
 
+/// Check that this reference or pointer core constant expression is a valid
+/// value for a constant expression. Type T should be either LValue or CCValue.
+template<typename T>
+static bool CheckLValueConstantExpression(const T &LVal, APValue &Value) {
+  if (!IsGlobalLValue(LVal.getLValueBase()))
+    return false;
+
+  const SubobjectDesignator &Designator = LVal.getLValueDesignator();
+  // A constant expression must refer to an object or be a null pointer.
+  if (Designator.Invalid || Designator.OnePastTheEnd ||
+      (!LVal.getLValueBase() && !Designator.Entries.empty())) {
+    // FIXME: Check for out-of-bounds array indices.
+    // FIXME: This is not a constant expression.
+    Value = APValue(LVal.getLValueBase(), LVal.getLValueOffset(),
+                    APValue::NoLValuePath());
+    return true;
+  }
+
+  Value = APValue(LVal.getLValueBase(), LVal.getLValueOffset(),
+                  Designator.Entries);
+  return true;
+}
+
 /// Check that this core constant expression value is a valid value for a
 /// constant expression, and if it is, produce the corresponding constant value.
 static bool CheckConstantExpression(const CCValue &CCValue, APValue &Value) {
-  if (CCValue.isLValue() && !IsGlobalLValue(CCValue.getLValueBase()))
-    return false;
-
-  // Slice off the extra bits.
-  Value = CCValue;
-  return true;
+  if (!CCValue.isLValue()) {
+    Value = CCValue;
+    return true;
+  }
+  return CheckLValueConstantExpression(CCValue, Value);
 }
 
 const ValueDecl *GetLValueBaseDecl(const LValue &LVal) {
@@ -558,12 +606,14 @@ bool HandleLValueToRValueConversion(EvalInfo &Info, QualType Type,
     // them are not permitted.
     const VarDecl *VD = dyn_cast<VarDecl>(D);
     QualType VT = VD->getType();
-    if (!VD)
+    if (!VD || VD->isInvalidDecl())
       return false;
     if (!isa<ParmVarDecl>(VD)) {
       if (!IsConstNonVolatile(VT))
         return false;
-      if (!VT->isIntegralOrEnumerationType() && !VT->isRealFloatingType())
+      // FIXME: Allow folding of values of any literal type in all languages.
+      if (!VT->isIntegralOrEnumerationType() && !VT->isRealFloatingType() &&
+          !VD->isConstexpr())
         return false;
     }
     if (!EvaluateVarDeclInit(Info, VD, Frame, RVal))
@@ -593,7 +643,7 @@ bool HandleLValueToRValueConversion(EvalInfo &Info, QualType Type,
       return false;
 
     assert(Type->isIntegerType() && "string element not integer type");
-    uint64_t Index = Designator.Entries[0].Index;
+    uint64_t Index = Designator.Entries[0].ArrayIndex;
     if (Index > S->getLength())
       return false;
     APSInt Value(S->getCharByteWidth() * Info.Ctx.getCharWidth(),
@@ -1952,7 +2002,7 @@ static bool HasSameBase(const LValue &A, const LValue &B) {
     if (!ADecl)
       return false;
     const Decl *BDecl = GetLValueBaseDecl(B);
-    if (ADecl != BDecl)
+    if (!BDecl || ADecl->getCanonicalDecl() != BDecl->getCanonicalDecl())
       return false;
   }
 
@@ -2476,7 +2526,6 @@ bool IntExprEvaluator::VisitCastExpr(const CastExpr *E) {
 
   case CK_BitCast:
   case CK_Dependent:
-  case CK_GetObjCProperty:
   case CK_LValueBitCast:
   case CK_UserDefinedConversion:
   case CK_ARCProduceObject:
@@ -2937,7 +2986,6 @@ bool ComplexExprEvaluator::VisitCastExpr(const CastExpr *E) {
     return ExprEvaluatorBaseTy::VisitCastExpr(E);
 
   case CK_Dependent:
-  case CK_GetObjCProperty:
   case CK_LValueBitCast:
   case CK_UserDefinedConversion:
     return false;
@@ -3291,24 +3339,8 @@ bool Expr::EvaluateAsLValue(EvalResult &Result, const ASTContext &Ctx) const {
   EvalInfo Info(Ctx, Result);
 
   LValue LV;
-  if (EvaluateLValue(this, LV, Info) && !Result.HasSideEffects &&
-      IsGlobalLValue(LV.Base)) {
-    Result.Val = APValue(LV.Base, LV.Offset);
-    return true;
-  }
-  return false;
-}
-
-bool Expr::EvaluateAsAnyLValue(EvalResult &Result,
-                               const ASTContext &Ctx) const {
-  EvalInfo Info(Ctx, Result);
-
-  LValue LV;
-  if (EvaluateLValue(this, LV, Info)) {
-    Result.Val = APValue(LV.Base, LV.Offset);
-    return true;
-  }
-  return false;
+  return EvaluateLValue(this, LV, Info) && !Result.HasSideEffects &&
+         CheckLValueConstantExpression(LV, Result.Val);
 }
 
 /// isEvaluatable - Call EvaluateAsRValue to see if this expression can be
@@ -3450,6 +3482,7 @@ static ICEDiag CheckICE(const Expr* E, ASTContext &Ctx) {
   case Expr::AsTypeExprClass:
   case Expr::ObjCIndirectCopyRestoreExprClass:
   case Expr::MaterializeTemporaryExprClass:
+  case Expr::PseudoObjectExprClass:
   case Expr::AtomicExprClass:
     return ICEDiag(2, E->getLocStart());
 
