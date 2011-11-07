@@ -302,6 +302,18 @@ class ASTTransform : public RecursiveASTVisitor<ASTTransform> {
 public:
   ASTTransform(MigrationContext &MigrateCtx) : MigrateCtx(MigrateCtx) { }
 
+  bool shouldWalkTypesOfTypeLocs() const { return false; }
+
+  bool TraverseObjCImplementationDecl(ObjCImplementationDecl *D) {
+    ObjCImplementationContext ImplCtx(MigrateCtx, D);
+    for (MigrationContext::traverser_iterator
+           I = MigrateCtx.traversers_begin(),
+           E = MigrateCtx.traversers_end(); I != E; ++I)
+      (*I)->traverseObjCImplementation(ImplCtx);
+
+    return true;
+  }
+
   bool TraverseStmt(Stmt *rootS) {
     if (!rootS)
       return true;
@@ -345,6 +357,10 @@ bool MigrationContext::isGCOwnedNonObjC(QualType T) {
 }
 
 void MigrationContext::traverse(TranslationUnitDecl *TU) {
+  for (traverser_iterator
+         I = traversers_begin(), E = traversers_end(); I != E; ++I)
+    (*I)->traverseTU(*this);
+
   ASTTransform(*this).TraverseDecl(TU);
 }
 
@@ -357,14 +373,15 @@ static void traverseAST(MigrationPass &pass) {
 
   if (pass.isGCMigration()) {
     MigrateCtx.addTraverser(new GCCollectableCallsTraverser);
+    MigrateCtx.addTraverser(new GCAttrsTraverser());
   }
+  MigrateCtx.addTraverser(new PropertyRewriteTraverser());
 
   MigrateCtx.traverse(pass.Ctx.getTranslationUnitDecl());
 }
 
 static void independentTransforms(MigrationPass &pass) {
   rewriteAutoreleasePool(pass);
-  rewriteProperties(pass);
   removeRetainReleaseDeallocFinalize(pass);
   rewriteUnusedInitDelegate(pass);
   removeZeroOutPropsInDeallocFinalize(pass);

@@ -4,6 +4,6 @@
 // REQUIRES: shell
 // REQUIRES: crash-recovery
 
-// XFAIL: darwin,msys
+// XFAIL: darwin
 
 #pragma clang __debug crash
