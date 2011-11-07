@@ -135,7 +135,6 @@ namespace ParameterScopes {
 
 }
 
-#if 0
 namespace Pointers {
 
   constexpr int f(int n, const int *a, const int *b, const int *c) {
@@ -165,10 +164,9 @@ namespace FunctionPointers {
 
   static_assert_fold(1 + Apply(Select(4), 5) + Apply(Select(3), 7) == 42, "");
 
-  constexpr int Invalid = Apply(Select(0), 0); // xpected-error {{must be initialized by a constant expression}}
+  constexpr int Invalid = Apply(Select(0), 0); // expected-error {{must be initialized by a constant expression}}
 
 }
-#endif
 
 namespace PointerComparison {
 
@@ -211,12 +209,10 @@ static_assert_fold(&x >= &x, "");
 static_assert_fold(&x < &x, "false"); // expected-error {{false}}
 static_assert_fold(&x > &x, "false"); // expected-error {{false}}
 
-#if 0
 constexpr S* sptr = &s;
 // FIXME: This is not a constant expression; check we reject this and move this
 // test elsewhere.
 constexpr bool dyncast = sptr == dynamic_cast<S*>(sptr);
-#endif
 
 extern char externalvar[];
 // FIXME: This is not a constant expression; check we reject this and move this
@@ -264,5 +260,23 @@ constexpr char c1 = "nice index"[10];
 constexpr char c2 = "nasty index"[12]; // expected-error {{must be initialized by a constant expression}} expected-warning {{indexes past the end}}
 constexpr char c3 = "negative index"[-1]; // expected-error {{must be initialized by a constant expression}} expected-warning {{indexes before the beginning}}
 constexpr char c4 = ((char*)(int*)"no reinterpret_casts allowed")[14]; // expected-error {{must be initialized by a constant expression}}
+
+constexpr const char *p = "test" + 2;
+static_assert_fold(*p == 's', "");
+
+constexpr const char *max_iter(const char *a, const char *b) {
+  return *a < *b ? b : a;
+}
+constexpr const char *max_element(const char *a, const char *b) {
+  return (a+1 >= b) ? a : max_iter(a, max_element(a+1, b));
+}
+
+constexpr const char *begin(const char (&arr)[45]) { return arr; }
+constexpr const char *end(const char (&arr)[45]) { return arr + 45; }
+
+constexpr char str[] = "the quick brown fox jumped over the lazy dog";
+constexpr const char *max = max_element(begin(str), end(str));
+static_assert_fold(*max == 'z', "");
+static_assert_fold(max == str + 38, "");
 
 }
