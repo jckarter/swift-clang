@@ -94,8 +94,12 @@ public:
     bool FullyMigratable;
   };
   std::vector<GCAttrOccurrence> GCAttrs;
-
   llvm::DenseSet<unsigned> AttrSet;
+  llvm::DenseSet<unsigned> RemovedAttrSet;
+
+  /// \brief Set of raw '@' locations for 'assign' properties group that contain
+  /// GC __weak.
+  llvm::DenseSet<unsigned> AtPropsWeak;
 
   explicit MigrationContext(MigrationPass &pass) : Pass(pass) {}
   ~MigrationContext();
@@ -109,6 +113,8 @@ public:
   }
 
   bool isGCOwnedNonObjC(QualType T);
+  bool rewritePropertyAttribute(StringRef fromAttr, StringRef toAttr,
+                                SourceLocation atLoc);
 
   void traverse(TranslationUnitDecl *TU);
 
@@ -137,7 +143,8 @@ public:
 //===----------------------------------------------------------------------===//
 
 /// \brief Determine whether we can add weak to the given type.
-bool canApplyWeak(ASTContext &Ctx, QualType type);
+bool canApplyWeak(ASTContext &Ctx, QualType type,
+                  bool AllowOnUnknownClass = false);
 
 /// \brief 'Loc' is the end of a statement range. This returns the location
 /// immediately after the semicolon following the statement.
