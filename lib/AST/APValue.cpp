@@ -50,7 +50,17 @@ struct APValue::LV : LVBase {
   bool hasPathPtr() const { return hasPath() && PathLength > InlinePathSpace; }
 
   LValuePathEntry *getPath() { return hasPathPtr() ? PathPtr : Path; }
+  const LValuePathEntry *getPath() const {
+    return hasPathPtr() ? PathPtr : Path;
+  }
 };
+
+// FIXME: Reduce the malloc traffic here.
+
+APValue::Arr::Arr(unsigned NumElts, unsigned Size) :
+  Elts(new APValue[NumElts + (NumElts != Size ? 1 : 0)]),
+  NumElts(NumElts), ArrSize(Size) {}
+APValue::Arr::~Arr() { delete [] Elts; }
 
 APValue::APValue(const Expr* B) : Kind(Uninitialized) {
   MakeLValue();
@@ -72,6 +82,8 @@ const APValue &APValue::operator=(const APValue &RHS) {
       MakeComplexFloat();
     else if (RHS.isLValue())
       MakeLValue();
+    else if (RHS.isArray())
+      MakeArray(RHS.getArrayInitializedElts(), RHS.getArraySize());
   }
   if (isInt())
     setInt(RHS.getInt());
@@ -89,6 +101,11 @@ const APValue &APValue::operator=(const APValue &RHS) {
       setLValue(RHS.getLValueBase(), RHS.getLValueOffset(),RHS.getLValuePath());
     else
       setLValue(RHS.getLValueBase(), RHS.getLValueOffset(), NoLValuePath());
+  } else if (isArray()) {
+    for (unsigned I = 0, N = RHS.getArrayInitializedElts(); I != N; ++I)
+      getArrayInitializedElt(I) = RHS.getArrayInitializedElt(I);
+    if (RHS.hasArrayFiller())
+      getArrayFiller() = RHS.getArrayFiller();
   }
   return *this;
 }
@@ -104,9 +121,10 @@ void APValue::MakeUninit() {
     ((ComplexAPSInt*)(char*)Data)->~ComplexAPSInt();
   else if (Kind == ComplexFloat)
     ((ComplexAPFloat*)(char*)Data)->~ComplexAPFloat();
-  else if (Kind == LValue) {
+  else if (Kind == LValue)
     ((LV*)(char*)Data)->~LV();
-  }
+  else if (Kind == Array)
+    ((Arr*)(char*)Data)->~Arr();
   Kind = Uninitialized;
 }
 
@@ -146,8 +164,19 @@ void APValue::print(raw_ostream &OS) const {
   case ComplexFloat:
     OS << "ComplexFloat: " << GetApproxValue(getComplexFloatReal())
        << ", " << GetApproxValue(getComplexFloatImag());
+    return;
   case LValue:
     OS << "LValue: <todo>";
+    return;
+  case Array:
+    OS << "Array: ";
+    for (unsigned I = 0, N = getArrayInitializedElts(); I != N; ++I) {
+      OS << getArrayInitializedElt(I);
+      if (I != getArraySize() - 1) OS << ", ";
+    }
+    if (hasArrayFiller())
+      OS << getArraySize() - getArrayInitializedElts() << " x "
+         << getArrayFiller();
     return;
   }
 }
@@ -184,6 +213,15 @@ static void WriteShortAPValueToStream(raw_ostream& Out,
   case APValue::LValue:
     Out << "LValue: <todo>";
     break;
+  case APValue::Array:
+    Out << '{';
+    if (unsigned N = V.getArrayInitializedElts()) {
+      Out << V.getArrayInitializedElt(0);
+      for (unsigned I = 1; I != N; ++I)
+        Out << ", " << V.getArrayInitializedElt(I);
+    }
+    Out << '}';
+    break;
   }
 }
 
@@ -207,12 +245,12 @@ CharUnits &APValue::getLValueOffset() {
 
 bool APValue::hasLValuePath() const {
   assert(isLValue() && "Invalid accessor");
-  return ((LV*)(char*)Data)->hasPath();
+  return ((const LV*)(const char*)Data)->hasPath();
 }
 
 ArrayRef<APValue::LValuePathEntry> APValue::getLValuePath() const {
   assert(isLValue() && hasLValuePath() && "Invalid accessor");
-  LV &LVal = *((LV*)(char*)Data);
+  const LV &LVal = *((const LV*)(const char*)Data);
   return ArrayRef<LValuePathEntry>(LVal.getPath(), LVal.PathLength);
 }
 
@@ -231,6 +269,7 @@ void APValue::setLValue(const Expr *B, const CharUnits &O,
   LVal.Base = B;
   LVal.Offset = O;
   LVal.PathLength = Path.size();
+  LVal.allocPath();
   memcpy(LVal.getPath(), Path.data(), Path.size() * sizeof(LValuePathEntry));
 }
 
@@ -239,4 +278,10 @@ void APValue::MakeLValue() {
   assert(sizeof(LV) <= MaxSize && "LV too big");
   new ((void*)(char*)Data) LV();
   Kind = LValue;
+}
+
+void APValue::MakeArray(unsigned InitElts, unsigned Size) {
+  assert(isUninit() && "Bad state change");
+  new ((void*)(char*)Data) Arr(InitElts, Size);
+  Kind = Array;
 }

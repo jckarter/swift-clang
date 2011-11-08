@@ -157,15 +157,14 @@ static void addProfileRT(const ToolChain &TC, const ArgList &Args,
   // the link line. We cannot do the same thing because unlike gcov there is a
   // libprofile_rt.so. We used to use the -l:libprofile_rt.a syntax, but that is
   // not supported by old linkers.
-  Twine ProfileRT =
-    Twine(TC.getDriver().Dir) + "/../lib/" + "libprofile_rt.a";
+  std::string ProfileRT =
+    std::string(TC.getDriver().Dir) + "/../lib/libprofile_rt.a";
 
   if (Triple.isOSDarwin()) {
     // On Darwin, if the static library doesn't exist try the dylib.
     bool Exists;
-    if (llvm::sys::fs::exists(ProfileRT.str(), Exists) || !Exists)
-      ProfileRT =
-        Twine(TC.getDriver().Dir) + "/../lib/" + "libprofile_rt.dylib";
+    if (llvm::sys::fs::exists(ProfileRT, Exists) || !Exists)
+      ProfileRT.replace(ProfileRT.size() - 1, 1, "dylib");
   }
 
   CmdArgs.push_back(Args.MakeArgString(ProfileRT));
@@ -1482,22 +1481,7 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
   Args.ClaimAllArgs(options::OPT_g_Group);
   if (Arg *A = Args.getLastArg(options::OPT_g_Group))
     if (!A->getOption().matches(options::OPT_g0)) {
-      const std::string &ArgString = A->getAsString(Args);
-      bool Valid_g = llvm::StringSwitch<bool>(ArgString)
-        .Case("-g", true)
-        .Case("-g3", true)
-        .Case("-gdwarf-2", true)
-        .Case("-gstabs", true)
-        .Case("-gstabs+", true)
-        .Case("-gstabs1", true)
-        .Case("-gstabs2", true)
-        .Case("-gfull", true)
-        .Case("-gused", true)
-        .Default(false);
-      if (Valid_g)
-        CmdArgs.push_back("-g");
-      else
-        D.Diag(diag::warn_drv_clang_unsupported) << ArgString;
+      CmdArgs.push_back("-g");
     }
 
   Args.AddAllArgs(CmdArgs, options::OPT_ffunction_sections);

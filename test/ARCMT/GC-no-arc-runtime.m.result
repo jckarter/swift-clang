@@ -1,7 +1,7 @@
-// RUN: %clang_cc1 -triple x86_64-apple-macosx10.7 -fsyntax-only -fobjc-runtime-has-weak -fobjc-arc -x objective-c %s.result
-// RUN: arcmt-test --args -triple x86_64-apple-macosx10.7 -fsyntax-only -fobjc-gc-only -x objective-c %s > %t
+// RUN: %clang_cc1 -triple x86_64-apple-macosx10.6 -fsyntax-only -fobjc-runtime-has-weak -fobjc-arc -x objective-c %s.result
+// RUN: arcmt-test --args -triple x86_64-apple-macosx10.6 -fsyntax-only -fobjc-gc-only -x objective-c %s > %t
 // RUN: diff %t %s.result
-// RUN: arcmt-test --args -triple x86_64-apple-macosx10.7 -fsyntax-only -fobjc-gc-only -x objective-c++ %s > %t
+// RUN: arcmt-test --args -triple x86_64-apple-macosx10.6 -fsyntax-only -fobjc-gc-only -x objective-c++ %s > %t
 // RUN: diff %t %s.result
 
 #include "Common.h"
@@ -39,13 +39,13 @@ void test1(CFTypeRef *cft) {
 
 __attribute__((objc_arc_weak_reference_unavailable))
 @interface QQ {
-  __weak id s;
+  __unsafe_unretained id s;
   __unsafe_unretained QQ *q;
 }
 @end
 
 @interface I3
-@property (weak) I3 * pw1, * pw2;
+@property (unsafe_unretained) I3 * pw1, * pw2;
 @property (strong) I3 * ps;
 @property (assign) I3 * pds;
 @end
@@ -53,7 +53,7 @@ __attribute__((objc_arc_weak_reference_unavailable))
 @interface I4Impl {
   I4Impl *pds2;
 }
-@property (weak) I4Impl * pw1, * pw2;
+@property (unsafe_unretained) I4Impl * pw1, * pw2;
 @property  I4Impl * ps;
 @property  I4Impl * pds;
 @property  I4Impl * pds2;

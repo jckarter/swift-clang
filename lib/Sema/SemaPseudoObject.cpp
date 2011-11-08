@@ -141,6 +141,8 @@ namespace {
       : S(S), ResultIndex(PseudoObjectExpr::NoResult),
         GenericLoc(genericLoc) {}
 
+    virtual ~PseudoOpBuilder() {}
+
     /// Add a normal semantic expression.
     void addSemanticExpr(Expr *semantic) {
       Semantics.push_back(semantic);
@@ -415,7 +417,14 @@ static ObjCMethodDecl *LookupMethodInReceiverType(Sema &S, Selector sel,
 bool ObjCPropertyOpBuilder::findGetter() {
   if (Getter) return true;
 
-  Getter = LookupMethodInReceiverType(S, RefExpr->getGetterSelector(), RefExpr);
+  // For implicit properties, just trust the lookup we already did.
+  if (RefExpr->isImplicitProperty()) {
+    Getter = RefExpr->getImplicitPropertyGetter();
+    return (Getter != 0);
+  }
+
+  ObjCPropertyDecl *prop = RefExpr->getExplicitProperty();
+  Getter = LookupMethodInReceiverType(S, prop->getGetterName(), RefExpr);
   return (Getter != 0);
 }
 
