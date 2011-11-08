@@ -3145,7 +3145,7 @@ static bool RebuildDeclaratorInCurrentInstantiation(Sema &S, Declarator &D,
 }
 
 Decl *Sema::ActOnDeclarator(Scope *S, Declarator &D) {
-  D.setFunctionDefinition(false);
+  D.setFunctionDefinitionKind(FDK_Declaration);
   return HandleDeclarator(S, D, MultiTemplateParamsArg(*this));
 }
 
@@ -4803,7 +4803,7 @@ Sema::ActOnFunctionDeclarator(Scope *S, Declarator &D, DeclContext *DC,
     // scope specifier, or is the object of a friend declaration, the
     // lexical context will be different from the semantic context.
     NewFD->setLexicalDeclContext(CurContext);
-    
+        
     // Match up the template parameter lists with the scope specifier, then
     // determine whether we have a template or a template specialization.
     bool Invalid = false;
@@ -4995,10 +4995,26 @@ Sema::ActOnFunctionDeclarator(Scope *S, Declarator &D, DeclContext *DC,
       NewFD->setAccess(AS_public);
     }
 
+    // If a function is defined as defaulted or deleted, mark it as such now.
+    switch (D.getFunctionDefinitionKind()) {
+      case FDK_Declaration:
+      case FDK_Definition:
+        break;
+        
+      case FDK_Defaulted:
+        NewFD->setDefaulted();
+        break;
+        
+      case FDK_Deleted:
+        NewFD->setDeletedAsWritten();
+        break;
+    }
+
     if (isa<CXXMethodDecl>(NewFD) && DC == CurContext &&
         D.isFunctionDefinition()) {
-      // A method is implicitly inline if it's defined in its class
-      // definition.
+      // C++ [class.mfct]p2:
+      //   A member function may be defined (8.4) in its class definition, in 
+      //   which case it is an inline member function (7.1.2)
       NewFD->setImplicitlyInline();
     }
 
@@ -6175,17 +6191,6 @@ void Sema::AddInitializerToDecl(Decl *RealDecl, Expr *Init,
   if (!VDecl->isInvalidDecl())
     checkUnsafeAssigns(VDecl->getLocation(), VDecl->getType(), Init);
 
-  if (VDecl->isConstexpr() && !VDecl->isInvalidDecl() &&
-      !VDecl->getType()->isDependentType() &&
-      !Init->isTypeDependent() && !Init->isValueDependent() &&
-      !Init->isConstantInitializer(Context,
-                                   VDecl->getType()->isReferenceType())) {
-    // FIXME: Improve this diagnostic to explain why the initializer is not
-    // a constant expression.
-    Diag(VDecl->getLocation(), diag::err_constexpr_var_requires_const_init)
-      << VDecl << Init->getSourceRange();
-  }
-  
   Init = MaybeCreateExprWithCleanups(Init);
   // Attach the initializer to the decl.
   VDecl->setInit(Init);
@@ -6250,16 +6255,12 @@ void Sema::ActOnUninitializedDecl(Decl *RealDecl,
       return;
     }
 
-    // C++0x [dcl.constexpr]p9: An object or reference declared constexpr must
-    // have an initializer.
     // C++0x [class.static.data]p3: A static data member can be declared with
     // the constexpr specifier; if so, its declaration shall specify
     // a brace-or-equal-initializer.
-    //
-    // A static data member's definition may inherit an initializer from an
-    // in-class declaration.
-    if (Var->isConstexpr() && !Var->getAnyInitializer()) {
-      Diag(Var->getLocation(), diag::err_constexpr_var_requires_init)
+    if (Var->isConstexpr() && Var->isStaticDataMember() &&
+        !Var->isThisDeclarationADefinition()) {
+      Diag(Var->getLocation(), diag::err_constexpr_static_mem_var_requires_init)
         << Var->getDeclName();
       Var->setInvalidDecl();
       return;
@@ -6517,15 +6518,21 @@ void Sema::CheckCompleteVariableDeclaration(VarDecl *var) {
     }
   }
 
-  // Check for global constructors.
+  Expr *Init = var->getInit();
+  bool IsGlobal = var->hasGlobalStorage() && !var->isStaticLocal();
+
   if (!var->getDeclContext()->isDependentContext() &&
-      var->hasGlobalStorage() &&
-      !var->isStaticLocal() &&
-      var->getInit() &&
-      !var->getInit()->isConstantInitializer(Context,
-                                             baseType->isReferenceType()))
-    Diag(var->getLocation(), diag::warn_global_constructor)
-      << var->getInit()->getSourceRange();
+      (var->isConstexpr() || IsGlobal) && Init &&
+      !Init->isConstantInitializer(Context, baseType->isReferenceType())) {
+    // FIXME: Improve this diagnostic to explain why the initializer is not
+    // a constant expression.
+    if (var->isConstexpr())
+      Diag(var->getLocation(), diag::err_constexpr_var_requires_const_init)
+        << var << Init->getSourceRange();
+    if (IsGlobal)
+      Diag(var->getLocation(), diag::warn_global_constructor)
+        << Init->getSourceRange();
+  }
 
   // Require the destructor.
   if (const RecordType *recordType = baseType->getAs<RecordType>())
@@ -6885,7 +6892,7 @@ Decl *Sema::ActOnStartOfFunctionDef(Scope *FnBodyScope,
   assert(D.isFunctionDeclarator() && "Not a function declarator!");
   Scope *ParentScope = FnBodyScope->getParent();
 
-  D.setFunctionDefinition(true);
+  D.setFunctionDefinitionKind(FDK_Definition);
   Decl *DP = HandleDeclarator(ParentScope, D,
                               MultiTemplateParamsArg(*this));
   return ActOnStartOfFunctionDef(FnBodyScope, DP);

@@ -1934,12 +1934,9 @@ void Linux::AddClangSystemIncludeArgs(const ArgList &DriverArgs,
     addSystemInclude(DriverArgs, CC1Args, D.SysRoot + "/usr/local/include");
 
   if (!DriverArgs.hasArg(options::OPT_nobuiltininc)) {
-    // Ignore the sysroot, we *always* look for clang headers relative to
-    // supplied path.
     llvm::sys::Path P(D.ResourceDir);
     P.appendComponent("include");
-    CC1Args.push_back("-internal-nosysroot-isystem");
-    CC1Args.push_back(DriverArgs.MakeArgString(P.str()));
+    addSystemInclude(DriverArgs, CC1Args, P.str());
   }
 
   if (DriverArgs.hasArg(options::OPT_nostdlibinc))
@@ -2023,6 +2020,14 @@ void Linux::AddClangCXXStdlibIncludeArgs(const ArgList &DriverArgs,
   if (DriverArgs.hasArg(options::OPT_nostdlibinc) ||
       DriverArgs.hasArg(options::OPT_nostdincxx))
     return;
+
+  // Check if libc++ has been enabled and provide its include paths if so.
+  if (GetCXXStdlibType(DriverArgs) == ToolChain::CST_Libcxx) {
+    // libc++ is always installed at a fixed path on Linux currently.
+    addSystemInclude(DriverArgs, CC1Args,
+                     getDriver().SysRoot + "/usr/include/c++/v1");
+    return;
+  }
 
   const llvm::Triple &TargetTriple = getTriple();
 
@@ -2387,12 +2392,9 @@ void Windows::AddClangSystemIncludeArgs(const ArgList &DriverArgs,
     return;
 
   if (!DriverArgs.hasArg(options::OPT_nobuiltininc)) {
-    // Ignore the sysroot, we *always* look for clang headers relative to
-    // supplied path.
     llvm::sys::Path P(getDriver().ResourceDir);
     P.appendComponent("include");
-    CC1Args.push_back("-internal-nosysroot-isystem");
-    CC1Args.push_back(DriverArgs.MakeArgString(P.str()));
+    addSystemInclude(DriverArgs, CC1Args, P.str());
   }
 
   if (DriverArgs.hasArg(options::OPT_nostdlibinc))

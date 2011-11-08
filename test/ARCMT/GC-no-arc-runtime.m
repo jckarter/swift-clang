@@ -1,7 +1,7 @@
-// RUN: %clang_cc1 -triple x86_64-apple-macosx10.7 -fsyntax-only -fobjc-runtime-has-weak -fobjc-arc -x objective-c %s.result
-// RUN: arcmt-test --args -triple x86_64-apple-macosx10.7 -fsyntax-only -fobjc-gc-only -x objective-c %s > %t
+// RUN: %clang_cc1 -triple x86_64-apple-macosx10.6 -fsyntax-only -fobjc-runtime-has-weak -fobjc-arc -x objective-c %s.result
+// RUN: arcmt-test --args -triple x86_64-apple-macosx10.6 -fsyntax-only -fobjc-gc-only -x objective-c %s > %t
 // RUN: diff %t %s.result
-// RUN: arcmt-test --args -triple x86_64-apple-macosx10.7 -fsyntax-only -fobjc-gc-only -x objective-c++ %s > %t
+// RUN: arcmt-test --args -triple x86_64-apple-macosx10.6 -fsyntax-only -fobjc-gc-only -x objective-c++ %s > %t
 // RUN: diff %t %s.result
 
 #include "Common.h"
