@@ -27,8 +27,8 @@ def VADDHN  : IInst<"vaddhn", "hkk", "silUsUiUl">;
 def VRADDHN : IInst<"vraddhn", "hkk", "silUsUiUl">;
 def VADDL_HIGH : SInst<"vaddl_high", "ndd", "RcRsRiRUcRUsRUi">;
 def VADDW_HIGH : SInst<"vaddw_high", "ndd", "RcRsRiRUcRUsRUi">;
-def VADDHN_HIGH  : SInst<"vaddhn_high",  "hdd", "RsRiRlRUsRUiRUl">;
-def VRADDHN_HIGH : SInst<"vraddhn_high", "hdd", "RsRiRlRUsRUiRUl">;
+def VADDHN_HIGH  : SInst<"vaddhn_high",  "hhdd", "RsRiRlRUsRUiRUl">;
+def VRADDHN_HIGH : SInst<"vraddhn_high", "hhdd", "RsRiRlRUsRUiRUl">;
 
 ////////////////////////////////////////////////////////////////////////////////
 // Multiplication
@@ -78,8 +78,8 @@ def VSUBHN  : IInst<"vsubhn", "hkk", "silUsUiUl">;
 def VRSUBHN : IInst<"vrsubhn", "hkk", "silUsUiUl">;
 def VSUBL_HIGH   : SInst<"vsubl_high",   "ndd", "RcRsRiRUcRUsRUi">;
 def VSUBW_HIGH   : SInst<"vsubw_high",   "ndd", "RcRsRiRUcRUsRUi">;
-def VRSUBHN_HIGH : SInst<"vrsubhn_high", "hdd", "RsRiRl">;
-def VSUBHN_HIGH  : SInst<"vsubhn_high",   "hdd", "RsRiRl">;
+def VRSUBHN_HIGH : SInst<"vrsubhn_high", "hhdd", "RsRiRl">;
+def VSUBHN_HIGH  : SInst<"vsubhn_high",   "hhdd", "RsRiRl">;
 
 ////////////////////////////////////////////////////////////////////////////////
 // Comparison
@@ -148,8 +148,8 @@ def VQSHRN_N   : SInst<"vqshrn_n", "hki", "silUsUiUl">;
 def VRSHRN_N   : IInst<"vrshrn_n", "hki", "silUsUiUl">;
 def VQRSHRN_N  : SInst<"vqrshrn_n", "hki", "silUsUiUl">;
 def VSHLL_N    : SInst<"vshll_n", "wdi", "csiUcUsUi">;
-def VRSHRN_HIGH : SInst<"vrshrn_high", "hki", "RsRiRlRUsRUiRUl">;
-def VSHRN_HIGH  : SInst<"vshrn_high",  "hki", "RsRiRlRUsRUiRUl">;
+def VRSHRN_HIGH : SInst<"vrshrn_high", "hhki", "RsRiRlRUsRUiRUl">;
+def VSHRN_HIGH  : SInst<"vshrn_high",  "hhki", "RsRiRlRUsRUiRUl">;
 
 ////////////////////////////////////////////////////////////////////////////////
 // Shifts with insert
@@ -173,7 +173,7 @@ def VCVTI_P : SInst<"vcvti_p", "fdi", "iUiQiQUiQlQUl">;
 def VCVTI_Z : SInst<"vcvti_z", "fdi", "iUiQiQUiQlQUl">;
 }
 def VCVT  : SInst<"vcvt_f32",  "bd", "Rd">;
-def VCVT2 : SInst<"vcvt2_f32", "hd", "Rd">;
+def VCVT2 : SInst<"vcvt2_f32", "hhd", "Rd">;
 def VRND_A : SInst<"vrnd_a", "dd", "fQfQd">;
 def VRND_I : SInst<"vrnd_i", "dd", "fQfQd">;
 def VRND_M : SInst<"vrnd_m", "dd", "fQfQd">;
@@ -252,9 +252,9 @@ def VMOVL        : SInst<"vmovl", "wd",  "csiUcUsUi">;
 def VQMOVN       : SInst<"vqmovn", "hk",  "silUsUiUl">;
 def VQMOVUN      : SInst<"vqmovun", "ek",  "sil">;
 def VXTL_HIGH    : SInst<"vxtl_high",   "nd", "RcRsRiRUcRUsRUi">;
-def VQXTN_HIGH   : SInst<"vqxtn_high",  "hd", "RsRiRlRUsRUiRUl">;
-def VQXTUN_HIGH  : SInst<"vqxtun_high", "hd", "RsRiRl">;
-def VMOVN_HIGH   : SInst<"vmovn_high",  "hd", "RsRiRlRUsRUiRUl">;
+def VQXTN_HIGH   : SInst<"vqxtn_high",  "hhd", "RsRiRlRUsRUiRUl">;
+def VQXTUN_HIGH  : SInst<"vqxtun_high", "hhd", "RsRiRl">;
+def VMOVN_HIGH   : SInst<"vmovn_high",  "hhd", "RsRiRlRUsRUiRUl">;
 def VMOVL_HIGH   : SInst<"vmovl_high",  "nd", "RcRsRiRUcRUsRUi">;
 
 ////////////////////////////////////////////////////////////////////////////////
