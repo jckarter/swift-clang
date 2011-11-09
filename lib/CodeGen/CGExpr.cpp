@@ -2138,7 +2138,7 @@ LValue CodeGenFunction::EmitNullInitializationLValue(
 }
 
 LValue CodeGenFunction::EmitOpaqueValueLValue(const OpaqueValueExpr *e) {
-  assert(e->isGLValue() || e->getType()->isRecordType());
+  assert(OpaqueValueMappingData::shouldBindAsLValue(e));
   return getOpaqueLValueMapping(e);
 }
 
