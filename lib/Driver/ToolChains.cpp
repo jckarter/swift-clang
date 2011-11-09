@@ -1160,7 +1160,7 @@ Generic_GCC::GCCInstallationDetector::GCCInstallationDetector(const Driver &D)
       if (!llvm::sys::fs::exists(LibDir))
         continue;
       for (unsigned k = 0, ke = CandidateTriples.size(); k < ke; ++k)
-        ScanLibDirForGCCTriple(LibDir, CandidateTriples[k]);
+        ScanLibDirForGCCTriple(HostArch, LibDir, CandidateTriples[k]);
     }
   }
 }
@@ -1205,6 +1205,20 @@ Generic_GCC::GCCInstallationDetector::GCCInstallationDetector(const Driver &D)
     };
     LibDirs.append(X86LibDirs, X86LibDirs + llvm::array_lengthof(X86LibDirs));
     Triples.append(X86Triples, X86Triples + llvm::array_lengthof(X86Triples));
+  } else if (HostArch == llvm::Triple::mips) {
+    static const char *const MIPSLibDirs[] = { "/lib" };
+    static const char *const MIPSTriples[] = { "mips-linux-gnu" };
+    LibDirs.append(MIPSLibDirs,
+                   MIPSLibDirs + llvm::array_lengthof(MIPSLibDirs));
+    Triples.append(MIPSTriples,
+                   MIPSTriples + llvm::array_lengthof(MIPSTriples));
+  } else if (HostArch == llvm::Triple::mipsel) {
+    static const char *const MIPSELLibDirs[] = { "/lib" };
+    static const char *const MIPSELTriples[] = { "mipsel-linux-gnu" };
+    LibDirs.append(MIPSELLibDirs,
+                   MIPSELLibDirs + llvm::array_lengthof(MIPSELLibDirs));
+    Triples.append(MIPSELTriples,
+                   MIPSELTriples + llvm::array_lengthof(MIPSELTriples));
   } else if (HostArch == llvm::Triple::ppc) {
     static const char *const PPCLibDirs[] = { "/lib32", "/lib" };
     static const char *const PPCTriples[] = {
@@ -1226,7 +1240,8 @@ Generic_GCC::GCCInstallationDetector::GCCInstallationDetector(const Driver &D)
 }
 
 void Generic_GCC::GCCInstallationDetector::ScanLibDirForGCCTriple(
-    const std::string &LibDir, StringRef CandidateTriple) {
+    llvm::Triple::ArchType HostArch, const std::string &LibDir,
+    StringRef CandidateTriple) {
   // There are various different suffixes involving the triple we
   // check for. We also record what is necessary to walk from each back
   // up to the lib directory.
@@ -1238,7 +1253,7 @@ void Generic_GCC::GCCInstallationDetector::ScanLibDirForGCCTriple(
     // match.
     // FIXME: It may be worthwhile to generalize this and look for a second
     // triple.
-    "/" + CandidateTriple.str() + "/gcc/i686-linux-gnu"
+    "/i386-linux-gnu/gcc/" + CandidateTriple.str()
   };
   const std::string InstallSuffixes[] = {
     "/../../..",
@@ -1247,7 +1262,7 @@ void Generic_GCC::GCCInstallationDetector::ScanLibDirForGCCTriple(
   };
   // Only look at the final, weird Ubuntu suffix for i386-linux-gnu.
   const unsigned NumSuffixes = (llvm::array_lengthof(Suffixes) -
-                                (CandidateTriple != "i386-linux-gnu"));
+                                (HostArch != llvm::Triple::x86));
   for (unsigned i = 0; i < NumSuffixes; ++i) {
     StringRef Suffix = Suffixes[i];
     llvm::error_code EC;
@@ -1787,6 +1802,14 @@ static std::string getMultiarchTriple(const llvm::Triple TargetTriple,
     if (llvm::sys::fs::exists(SysRoot + "/lib/x86_64-linux-gnu"))
       return "x86_64-linux-gnu";
     return TargetTriple.str();
+  case llvm::Triple::mips:
+    if (llvm::sys::fs::exists(SysRoot + "/lib/mips-linux-gnu"))
+      return "mips-linux-gnu";
+    return TargetTriple.str();
+  case llvm::Triple::mipsel:
+    if (llvm::sys::fs::exists(SysRoot + "/lib/mipsel-linux-gnu"))
+      return "mipsel-linux-gnu";
+    return TargetTriple.str();
   }
 }
 
@@ -1843,6 +1866,8 @@ Linux::Linux(const HostInfo &Host, const llvm::Triple &Triple)
   // to the link paths.
   path_list &Paths = getFilePaths();
   const bool Is32Bits = (getArch() == llvm::Triple::x86 ||
+                         getArch() == llvm::Triple::mips ||
+                         getArch() == llvm::Triple::mipsel ||
                          getArch() == llvm::Triple::ppc);
 
   const std::string Suffix32 = Arch == llvm::Triple::x86_64 ? "/32" : "";
@@ -1879,12 +1904,9 @@ Linux::Linux(const HostInfo &Host, const llvm::Triple &Triple)
     if (!Suffix.empty())
       addPathIfExists(GCCInstallation.getInstallPath(), Paths);
     addPathIfExists(LibPath + "/../" + GccTriple + "/lib", Paths);
-    addPathIfExists(LibPath + "/" + MultiarchTriple, Paths);
     addPathIfExists(LibPath, Paths);
   }
-  addPathIfExists(SysRoot + "/lib/" + MultiarchTriple, Paths);
   addPathIfExists(SysRoot + "/lib", Paths);
-  addPathIfExists(SysRoot + "/usr/lib/" + MultiarchTriple, Paths);
   addPathIfExists(SysRoot + "/usr/lib", Paths);
 }
 
@@ -1992,7 +2014,7 @@ void Linux::AddClangSystemIncludeArgs(const ArgList &DriverArgs,
   for (ArrayRef<StringRef>::iterator I = MultiarchIncludeDirs.begin(),
                                      E = MultiarchIncludeDirs.end();
        I != E; ++I) {
-    if (llvm::sys::fs::exists(*I)) {
+    if (llvm::sys::fs::exists(D.SysRoot + *I)) {
       addExternCSystemInclude(DriverArgs, CC1Args, D.SysRoot + *I);
       break;
     }
@@ -2000,6 +2022,11 @@ void Linux::AddClangSystemIncludeArgs(const ArgList &DriverArgs,
 
   if (getTriple().getOS() == llvm::Triple::RTEMS)
     return;
+
+  // Add an include of '/include' directly. This isn't provided by default by
+  // system GCCs, but is often used with cross-compiling GCCs, and harmless to
+  // add even when Clang is acting as-if it were a system compiler.
+  addExternCSystemInclude(DriverArgs, CC1Args, D.SysRoot + "/include");
 
   addExternCSystemInclude(DriverArgs, CC1Args, D.SysRoot + "/usr/include");
 }
