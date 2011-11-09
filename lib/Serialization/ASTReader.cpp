@@ -1139,7 +1139,8 @@ ASTReader::ASTReadResult ASTReader::ReadSLocEntryRecord(int ID) {
     unsigned NumFileDecls = Record[8];
     if (NumFileDecls) {
       assert(F->FileSortedDecls && "FILE_SORTED_DECLS not encountered yet ?");
-      FileDeclIDs[FID] = llvm::makeArrayRef(FirstDecl, NumFileDecls);
+      FileDeclIDs[FID] = FileDeclsInfo(F, llvm::makeArrayRef(FirstDecl,
+                                                             NumFileDecls));
     }
     
     break;
@@ -2216,13 +2217,13 @@ ASTReader::ReadASTBlock(Module &F) {
     }
 
     case DECL_REPLACEMENTS: {
-      if (Record.size() % 2 != 0) {
+      if (Record.size() % 3 != 0) {
         Error("invalid DECL_REPLACEMENTS block in AST file");
         return Failure;
       }
-      for (unsigned I = 0, N = Record.size(); I != N; I += 2)
+      for (unsigned I = 0, N = Record.size(); I != N; I += 3)
         ReplacedDecls[getGlobalDeclID(F, Record[I])]
-          = std::make_pair(&F, Record[I+1]);
+          = ReplacedDeclInfo(&F, Record[I+1], Record[I+2]);
       break;
     }
 
@@ -4019,6 +4020,25 @@ bool ASTReader::isDeclIDFromModule(serialization::GlobalDeclID ID,
   return &M == I->second;
 }
 
+SourceLocation ASTReader::getSourceLocationForDeclID(GlobalDeclID ID) {
+  if (ID < NUM_PREDEF_DECL_IDS)
+    return SourceLocation();
+  
+  unsigned Index = ID - NUM_PREDEF_DECL_IDS;
+
+  if (Index > DeclsLoaded.size()) {
+    Error("declaration ID out-of-range for AST file");
+    return SourceLocation();
+  }
+  
+  if (Decl *D = DeclsLoaded[Index])
+    return D->getLocation();
+
+  unsigned RawLocation = 0;
+  RecordLocation Rec = DeclCursorForID(ID, RawLocation);
+  return ReadSourceLocation(*Rec.F, RawLocation);
+}
+
 Decl *ASTReader::GetDecl(DeclID ID) {
   if (ID < NUM_PREDEF_DECL_IDS) {    
     switch ((PredefinedDeclIDs)ID) {
@@ -4159,6 +4179,74 @@ ExternalLoadResult ASTReader::FindExternalLexicalDecls(const DeclContext *DC,
   ModuleMgr.visitDepthFirst(&FindExternalLexicalDeclsVisitor::visit, &Visitor);
   ++NumLexicalDeclContextsRead;
   return ELR_Success;
+}
+
+namespace {
+
+class DeclIDComp {
+  ASTReader &Reader;
+  Module &Mod;
+
+public:
+  DeclIDComp(ASTReader &Reader, Module &M) : Reader(Reader), Mod(M) {}
+
+  bool operator()(LocalDeclID L, LocalDeclID R) const {
+    SourceLocation LHS = getLocation(L);
+    SourceLocation RHS = getLocation(R);
+    return Reader.getSourceManager().isBeforeInTranslationUnit(LHS, RHS);
+  }
+
+  bool operator()(SourceLocation LHS, LocalDeclID R) const {
+    SourceLocation RHS = getLocation(R);
+    return Reader.getSourceManager().isBeforeInTranslationUnit(LHS, RHS);
+  }
+
+  bool operator()(LocalDeclID L, SourceLocation RHS) const {
+    SourceLocation LHS = getLocation(L);
+    return Reader.getSourceManager().isBeforeInTranslationUnit(LHS, RHS);
+  }
+
+  SourceLocation getLocation(LocalDeclID ID) const {
+    return Reader.getSourceManager().getFileLoc(
+            Reader.getSourceLocationForDeclID(Reader.getGlobalDeclID(Mod, ID)));
+  }
+};
+
+}
+
+void ASTReader::FindFileRegionDecls(FileID File,
+                                    unsigned Offset, unsigned Length,
+                                    SmallVectorImpl<Decl *> &Decls) {
+  SourceManager &SM = getSourceManager();
+
+  llvm::DenseMap<FileID, FileDeclsInfo>::iterator I = FileDeclIDs.find(File);
+  if (I == FileDeclIDs.end())
+    return;
+
+  FileDeclsInfo &DInfo = I->second;
+  if (DInfo.Decls.empty())
+    return;
+
+  SourceLocation
+    BeginLoc = SM.getLocForStartOfFile(File).getLocWithOffset(Offset);
+  SourceLocation EndLoc = BeginLoc.getLocWithOffset(Length);
+
+  DeclIDComp DIDComp(*this, *DInfo.Mod);
+  ArrayRef<serialization::LocalDeclID>::iterator
+    BeginIt = std::lower_bound(DInfo.Decls.begin(), DInfo.Decls.end(),
+                               BeginLoc, DIDComp);
+  if (BeginIt != DInfo.Decls.begin())
+    --BeginIt;
+
+  ArrayRef<serialization::LocalDeclID>::iterator
+    EndIt = std::upper_bound(DInfo.Decls.begin(), DInfo.Decls.end(),
+                             EndLoc, DIDComp);
+  if (EndIt != DInfo.Decls.end())
+    ++EndIt;
+  
+  for (ArrayRef<serialization::LocalDeclID>::iterator
+         DIt = BeginIt; DIt != EndIt; ++DIt)
+    Decls.push_back(GetDecl(getGlobalDeclID(*DInfo.Mod, *DIt)));
 }
 
 namespace {
@@ -5151,21 +5239,20 @@ ASTReader::ReadCXXCtorInitializers(Module &F, const RecordData &Record,
     CtorInitializers
         = new (Context) CXXCtorInitializer*[NumInitializers];
     for (unsigned i=0; i != NumInitializers; ++i) {
-      TypeSourceInfo *BaseClassInfo = 0;
+      TypeSourceInfo *TInfo = 0;
       bool IsBaseVirtual = false;
       FieldDecl *Member = 0;
       IndirectFieldDecl *IndirectMember = 0;
-      CXXConstructorDecl *Target = 0;
 
       CtorInitializerType Type = (CtorInitializerType)Record[Idx++];
       switch (Type) {
-       case CTOR_INITIALIZER_BASE:
-        BaseClassInfo = GetTypeSourceInfo(F, Record, Idx);
+      case CTOR_INITIALIZER_BASE:
+        TInfo = GetTypeSourceInfo(F, Record, Idx);
         IsBaseVirtual = Record[Idx++];
         break;
-
-       case CTOR_INITIALIZER_DELEGATING:
-        Target = ReadDeclAs<CXXConstructorDecl>(F, Record, Idx);
+          
+      case CTOR_INITIALIZER_DELEGATING:
+        TInfo = GetTypeSourceInfo(F, Record, Idx);
         break;
 
        case CTOR_INITIALIZER_MEMBER:
@@ -5195,12 +5282,12 @@ ASTReader::ReadCXXCtorInitializers(Module &F, const RecordData &Record,
 
       CXXCtorInitializer *BOMInit;
       if (Type == CTOR_INITIALIZER_BASE) {
-        BOMInit = new (Context) CXXCtorInitializer(Context, BaseClassInfo, IsBaseVirtual,
+        BOMInit = new (Context) CXXCtorInitializer(Context, TInfo, IsBaseVirtual,
                                              LParenLoc, Init, RParenLoc,
                                              MemberOrEllipsisLoc);
       } else if (Type == CTOR_INITIALIZER_DELEGATING) {
-        BOMInit = new (Context) CXXCtorInitializer(Context, MemberOrEllipsisLoc, LParenLoc,
-                                             Target, Init, RParenLoc);
+        BOMInit = new (Context) CXXCtorInitializer(Context, TInfo, LParenLoc,
+                                                   Init, RParenLoc);
       } else if (IsWritten) {
         if (Member)
           BOMInit = new (Context) CXXCtorInitializer(Context, Member, MemberOrEllipsisLoc,

@@ -500,10 +500,6 @@ public:
   /// lvalue with link time known address, with no side-effects.
   bool EvaluateAsLValue(EvalResult &Result, const ASTContext &Ctx) const;
 
-  /// EvaluateAsLValue - Evaluate an expression to see if we can fold it to an
-  /// lvalue, even if the expression has side-effects.
-  bool EvaluateAsAnyLValue(EvalResult &Result, const ASTContext &Ctx) const;
-
   /// \brief Enumeration used to describe the kind of Null pointer constant
   /// returned from \c isNullPointerConstant().
   enum NullPointerConstantKind {
@@ -1271,8 +1267,13 @@ public:
 private:
   friend class ASTStmtReader;
 
-  const char *StrData;
-  unsigned ByteLength;
+  union {
+    const char *asChar;
+    const uint16_t *asUInt16;
+    const uint32_t *asUInt32;
+  } StrData;
+  unsigned Length;
+  unsigned CharByteWidth;
   unsigned NumConcatenated;
   unsigned Kind : 3;
   bool IsPascal : 1;
@@ -1281,6 +1282,8 @@ private:
   StringLiteral(QualType Ty) :
     Expr(StringLiteralClass, Ty, VK_LValue, OK_Ordinary, false, false, false,
          false) {}
+
+  static int mapCharByteWidth(TargetInfo const &target,StringKind k);
 
 public:
   /// This is the "fully general" constructor that allows representation of
@@ -1300,15 +1303,52 @@ public:
   static StringLiteral *CreateEmpty(ASTContext &C, unsigned NumStrs);
 
   StringRef getString() const {
-    return StringRef(StrData, ByteLength);
+    assert(CharByteWidth==1
+           && "This function is used in places that assume strings use char");
+    return StringRef(StrData.asChar, getByteLength());
   }
 
-  unsigned getByteLength() const { return ByteLength; }
+  /// Allow clients that need the byte representation, such as ASTWriterStmt
+  /// ::VisitStringLiteral(), access.
+  StringRef getBytes() const {
+    // FIXME: StringRef may not be the right type to use as a result for this...
+    assert((CharByteWidth==1 || CharByteWidth==2 || CharByteWidth==4)
+           && "unsupported CharByteWidth");
+    if (CharByteWidth==4) {
+      return StringRef(reinterpret_cast<const char*>(StrData.asUInt32),
+                       getByteLength());
+    } else if (CharByteWidth==2) {
+      return StringRef(reinterpret_cast<const char*>(StrData.asUInt16),
+                       getByteLength());
+    } else {
+      return StringRef(StrData.asChar, getByteLength());
+    }
+  }
+
+  uint32_t getCodeUnit(size_t i) const {
+    assert(i<Length && "out of bounds access");
+    assert((CharByteWidth==1 || CharByteWidth==2 || CharByteWidth==4)
+           && "unsupported CharByteWidth");
+    if (CharByteWidth==4) {
+      return StrData.asUInt32[i];
+    } else if (CharByteWidth==2) {
+      return StrData.asUInt16[i];
+    } else {
+      return static_cast<unsigned char>(StrData.asChar[i]);
+    }
+  }
+
+  unsigned getByteLength() const { return CharByteWidth*Length; }
+  unsigned getLength() const { return Length; }
+  unsigned getCharByteWidth() const { return CharByteWidth; }
 
   /// \brief Sets the string data to the given string data.
-  void setString(ASTContext &C, StringRef Str);
+  void setString(ASTContext &C, StringRef Str,
+                 StringKind Kind, bool IsPascal);
 
   StringKind getKind() const { return static_cast<StringKind>(Kind); }
+  
+  
   bool isAscii() const { return Kind == Ascii; }
   bool isWide() const { return Kind == Wide; }
   bool isUTF8() const { return Kind == UTF8; }
@@ -1323,6 +1363,7 @@ public:
         return true;
     return false;
   }
+  
   /// getNumConcatenated - Get the number of string literal tokens that were
   /// concatenated in translation phase #6 to form this string literal.
   unsigned getNumConcatenated() const { return NumConcatenated; }
@@ -2712,6 +2753,13 @@ public:
   }
   bool isCompoundAssignmentOp() const {
     return isCompoundAssignmentOp(getOpcode());
+  }
+  static Opcode getOpForCompoundAssignment(Opcode Opc) {
+    assert(isCompoundAssignmentOp(Opc));
+    if (Opc >= BO_XorAssign)
+      return Opcode(unsigned(Opc) - BO_XorAssign + BO_Xor);
+    else
+      return Opcode(unsigned(Opc) - BO_MulAssign + BO_Mul);
   }
 
   static bool isShiftAssignOp(Opcode Opc) {
@@ -4204,6 +4252,140 @@ public:
   
   // Iterators
   child_range children() { return child_range(&SrcExpr, &SrcExpr+1); }
+};
+
+/// PseudoObjectExpr - An expression which accesses a pseudo-object
+/// l-value.  A pseudo-object is an abstract object, accesses to which
+/// are translated to calls.  The pseudo-object expression has a
+/// syntactic form, which shows how the expression was actually
+/// written in the source code, and a semantic form, which is a series
+/// of expressions to be executed in order which detail how the
+/// operation is actually evaluated.  Optionally, one of the semantic
+/// forms may also provide a result value for the expression.
+///
+/// If any of the semantic-form expressions is an OpaqueValueExpr,
+/// that OVE is required to have a source expression, and it is bound
+/// to the result of that source expression.  Such OVEs may appear
+/// only in subsequent semantic-form expressions and as
+/// sub-expressions of the syntactic form.
+///
+/// PseudoObjectExpr should be used only when an operation can be
+/// usefully described in terms of fairly simple rewrite rules on
+/// objects and functions that are meant to be used by end-developers.
+/// For example, under the Itanium ABI, dynamic casts are implemented
+/// as a call to a runtime function called __dynamic_cast; using this
+/// class to describe that would be inappropriate because that call is
+/// not really part of the user-visible semantics, and instead the
+/// cast is properly reflected in the AST and IR-generation has been
+/// taught to generate the call as necessary.  In contrast, an
+/// Objective-C property access is semantically defined to be
+/// equivalent to a particular message send, and this is very much
+/// part of the user model.  The name of this class encourages this
+/// modelling design.
+class PseudoObjectExpr : public Expr {
+  // PseudoObjectExprBits.NumSubExprs - The number of sub-expressions.
+  // Always at least two, because the first sub-expression is the
+  // syntactic form.
+
+  // PseudoObjectExprBits.ResultIndex - The index of the
+  // sub-expression holding the result.  0 means the result is void,
+  // which is unambiguous because it's the index of the syntactic
+  // form.  Note that this is therefore 1 higher than the value passed
+  // in to Create, which is an index within the semantic forms.
+  // Note also that ASTStmtWriter assumes this encoding.
+
+  Expr **getSubExprsBuffer() { return reinterpret_cast<Expr**>(this + 1); }
+  const Expr * const *getSubExprsBuffer() const {
+    return reinterpret_cast<const Expr * const *>(this + 1);
+  }
+
+  friend class ASTStmtReader;
+
+  PseudoObjectExpr(QualType type, ExprValueKind VK,
+                   Expr *syntactic, ArrayRef<Expr*> semantic,
+                   unsigned resultIndex);
+
+  PseudoObjectExpr(EmptyShell shell, unsigned numSemanticExprs);
+
+  unsigned getNumSubExprs() const {
+    return PseudoObjectExprBits.NumSubExprs;
+  }
+
+public:
+  /// NoResult - A value for the result index indicating that there is
+  /// no semantic result.
+  enum { NoResult = ~0U };
+
+  static PseudoObjectExpr *Create(ASTContext &Context, Expr *syntactic,
+                                  ArrayRef<Expr*> semantic,
+                                  unsigned resultIndex);
+
+  static PseudoObjectExpr *Create(ASTContext &Context, EmptyShell shell,
+                                  unsigned numSemanticExprs);
+
+  /// Return the syntactic form of this expression, i.e. the
+  /// expression it actually looks like.  Likely to be expressed in
+  /// terms of OpaqueValueExprs bound in the semantic form.
+  Expr *getSyntacticForm() { return getSubExprsBuffer()[0]; }
+  const Expr *getSyntacticForm() const { return getSubExprsBuffer()[0]; }
+
+  /// Return the index of the result-bearing expression into the semantics
+  /// expressions, or PseudoObjectExpr::NoResult if there is none.
+  unsigned getResultExprIndex() const {
+    if (PseudoObjectExprBits.ResultIndex == 0) return NoResult;
+    return PseudoObjectExprBits.ResultIndex - 1;
+  }
+
+  /// Return the result-bearing expression, or null if there is none.
+  Expr *getResultExpr() {
+    if (PseudoObjectExprBits.ResultIndex == 0)
+      return 0;
+    return getSubExprsBuffer()[PseudoObjectExprBits.ResultIndex];
+  }
+  const Expr *getResultExpr() const {
+    return const_cast<PseudoObjectExpr*>(this)->getResultExpr();
+  }
+
+  unsigned getNumSemanticExprs() const { return getNumSubExprs() - 1; }
+
+  typedef Expr * const *semantics_iterator;
+  typedef const Expr * const *const_semantics_iterator;
+  semantics_iterator semantics_begin() {
+    return getSubExprsBuffer() + 1;
+  }
+  const_semantics_iterator semantics_begin() const {
+    return getSubExprsBuffer() + 1;
+  }
+  semantics_iterator semantics_end() {
+    return getSubExprsBuffer() + getNumSubExprs();
+  }
+  const_semantics_iterator semantics_end() const {
+    return getSubExprsBuffer() + getNumSubExprs();
+  }
+  Expr *getSemanticExpr(unsigned index) {
+    assert(index + 1 < getNumSubExprs());
+    return getSubExprsBuffer()[index + 1];
+  }
+  const Expr *getSemanticExpr(unsigned index) const {
+    return const_cast<PseudoObjectExpr*>(this)->getSemanticExpr(index);
+  }
+
+  SourceLocation getExprLoc() const {
+    return getSyntacticForm()->getExprLoc();
+  }
+  SourceRange getSourceRange() const {
+    return getSyntacticForm()->getSourceRange();
+  }
+
+  child_range children() {
+    Stmt **cs = reinterpret_cast<Stmt**>(getSubExprsBuffer());
+    return child_range(cs, cs + getNumSubExprs());
+  }
+
+  static bool classof(const Stmt *T) {
+    return T->getStmtClass() == PseudoObjectExprClass;
+  }
+  static bool classof(const PseudoObjectExpr *) { return true; }
 };
 
 /// AtomicExpr - Variadic atomic builtins: __atomic_exchange, __atomic_fetch_*,

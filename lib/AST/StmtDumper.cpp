@@ -149,6 +149,7 @@ namespace  {
     void VisitCompoundAssignOperator(CompoundAssignOperator *Node);
     void VisitAddrLabelExpr(AddrLabelExpr *Node);
     void VisitBlockExpr(BlockExpr *Node);
+    void VisitOpaqueValueExpr(OpaqueValueExpr *Node);
 
     // C++
     void VisitCXXNamedCastExpr(CXXNamedCastExpr *Node);
@@ -428,7 +429,7 @@ void StmtDumper::VisitPredefinedExpr(PredefinedExpr *Node) {
 
 void StmtDumper::VisitCharacterLiteral(CharacterLiteral *Node) {
   DumpExpr(Node);
-  OS << Node->getValue();
+  OS << " " << Node->getValue();
 }
 
 void StmtDumper::VisitIntegerLiteral(IntegerLiteral *Node) {
@@ -525,6 +526,15 @@ void StmtDumper::VisitBlockExpr(BlockExpr *Node) {
   IndentLevel--;
 
   DumpSubTree(block->getBody());
+}
+
+void StmtDumper::VisitOpaqueValueExpr(OpaqueValueExpr *Node) {
+  DumpExpr(Node);
+
+  if (Expr *Source = Node->getSourceExpr()) {
+    OS << '\n';
+    DumpSubTree(Source);
+  }
 }
 
 // GNU extensions.

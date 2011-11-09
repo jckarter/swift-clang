@@ -331,7 +331,7 @@ void ASTStmtWriter::VisitStringLiteral(StringLiteral *E) {
   // StringLiteral. However, we can't do so now because we have no
   // provision for coping with abbreviations when we're jumping around
   // the AST file during deserialization.
-  Record.append(E->getString().begin(), E->getString().end());
+  Record.append(E->getBytes().begin(), E->getBytes().end());
   for (unsigned I = 0, N = E->getNumConcatenated(); I != N; ++I)
     Writer.AddSourceLocation(E->getStrTokenLoc(I), Record);
   Code = serialization::EXPR_STRING_LITERAL;
@@ -734,6 +734,25 @@ void ASTStmtWriter::VisitGenericSelectionExpr(GenericSelectionExpr *E) {
   Writer.AddSourceLocation(E->getDefaultLoc(), Record);
   Writer.AddSourceLocation(E->getRParenLoc(), Record);
   Code = serialization::EXPR_GENERIC_SELECTION;
+}
+
+void ASTStmtWriter::VisitPseudoObjectExpr(PseudoObjectExpr *E) {
+  VisitExpr(E);
+  Record.push_back(E->getNumSemanticExprs());
+
+  // Push the result index.  Currently, this needs to exactly match
+  // the encoding used internally for ResultIndex.
+  unsigned result = E->getResultExprIndex();
+  result = (result == PseudoObjectExpr::NoResult ? 0 : result + 1);
+  Record.push_back(result);
+
+  Writer.AddStmt(E->getSyntacticForm());
+  for (PseudoObjectExpr::semantics_iterator
+         i = E->semantics_begin(), e = E->semantics_end(); i != e; ++i) {
+    Writer.AddStmt(*i);
+    if (OpaqueValueExpr *OVE = dyn_cast<OpaqueValueExpr>(*i))
+      Writer.AddStmt(OVE->getSourceExpr());
+  }
 }
 
 void ASTStmtWriter::VisitAtomicExpr(AtomicExpr *E) {

@@ -1261,6 +1261,17 @@ void ASTContext::setObjCImplementation(ObjCCategoryDecl *CatD,
   ObjCImpls[CatD] = ImplD;
 }
 
+ObjCInterfaceDecl *ASTContext::getObjContainingInterface(NamedDecl *ND) const {
+  if (ObjCInterfaceDecl *ID = dyn_cast<ObjCInterfaceDecl>(ND->getDeclContext()))
+    return ID;
+  if (ObjCCategoryDecl *CD = dyn_cast<ObjCCategoryDecl>(ND->getDeclContext()))
+    return CD->getClassInterface();
+  if (ObjCImplDecl *IMD = dyn_cast<ObjCImplDecl>(ND->getDeclContext()))
+    return IMD->getClassInterface();
+
+  return 0;
+}
+
 /// \brief Get the copy initialization expression of VarDecl,or NULL if 
 /// none exists.
 Expr *ASTContext::getBlockVarCopyInits(const VarDecl*VD) {
@@ -2874,7 +2885,7 @@ static QualType getDecltypeForExpr(const Expr *e, const ASTContext &Context) {
 /// DecltypeType AST's. The only motivation to unique these nodes would be
 /// memory savings. Since decltype(t) is fairly uncommon, space shouldn't be
 /// an issue. This doesn't effect the type checker, since it operates
-/// on canonical type's (which are always unique).
+/// on canonical types (which are always unique).
 QualType ASTContext::getDecltypeType(Expr *e) const {
   DecltypeType *dt;
   

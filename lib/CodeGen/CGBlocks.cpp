@@ -380,13 +380,15 @@ static void computeBlockInfo(CodeGenModule &CGM, CGBlockInfo &info) {
       }
     }
 
-    CharUnits size = C.getTypeSizeInChars(variable->getType());
+    QualType VT = variable->getType();
+    CharUnits size = C.getTypeSizeInChars(VT);
     CharUnits align = C.getDeclAlign(variable);
+    
     maxFieldAlign = std::max(maxFieldAlign, align);
 
     llvm::Type *llvmType =
-      CGM.getTypes().ConvertTypeForMem(variable->getType());
-
+      CGM.getTypes().ConvertTypeForMem(VT);
+    
     layout.push_back(BlockLayoutChunk(align, size, &*ci, llvmType));
   }
 

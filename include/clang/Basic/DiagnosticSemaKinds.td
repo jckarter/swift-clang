@@ -502,6 +502,9 @@ def warn_objc_property_copy_missing_on_block : Warning<
 def warn_objc_property_retain_of_block : Warning<
     "retain'ed block property does not copy the block "
     "- use copy attribute instead">, InGroup<ObjCRetainBlockProperty>;
+def warn_objc_readonly_property_has_setter : Warning<
+    "setter cannot be specified for a readonly property">,
+    InGroup<ObjCReadonlyPropertyHasSetter>;
 def warn_atomic_property_rule : Warning<
   "writable atomic property %0 cannot pair a synthesized %select{getter|setter}1 "
   "with a user defined %select{getter|setter}2">,
@@ -1247,8 +1250,8 @@ def err_constexpr_no_declarators : Error<
   "constexpr can only be used in variable and function declarations">;
 def err_invalid_constexpr_var_decl : Error<
   "constexpr variable declaration must be a definition">;
-def err_constexpr_var_requires_init : Error<
-  "declaration of constexpr variable %0 requires an initializer">;
+def err_constexpr_static_mem_var_requires_init : Error<
+  "declaration of constexpr static data member %0 requires an initializer">;
 def err_constexpr_var_requires_const_init : Error<
   "constexpr variable %0 must be initialized by a constant expression">;
 def err_constexpr_redecl_mismatch : Error<
@@ -1722,9 +1725,10 @@ def warn_attribute_ibaction: Warning<
   "ibaction attribute can only be applied to Objective-C instance methods">;
 def err_iboutletcollection_type : Error<
   "invalid type %0 as argument of iboutletcollection attribute">;
-def err_iboutlet_object_type : Error<
+def warn_iboutlet_object_type : Warning<
   "%select{ivar|property}2 with %0 attribute must "
-  "be an object type (invalid %1)">;
+  "be an object type (invalid %1)">,
+  InGroup<DiagGroup<"invalid-iboutlet">>;
 def err_attribute_overloadable_not_function : Error<
   "'overloadable' attribute can only be applied to a function">;
 def err_attribute_overloadable_missing : Error<
@@ -3070,7 +3074,7 @@ def err_arc_mismatched_cast : Error<
   "an Objective-C pointer|an indirect pointer to an Objective-C pointer}1"
   " to %3 is disallowed with ARC">;
 def err_arc_nolifetime_behavior : Error<
-  "explicit ownership qualifier on cast result would have no effect">;
+  "explicit ownership qualifier on cast result has no effect">;
 def err_arc_objc_object_in_struct : Error<
   "ARC forbids Objective-C objects in structs or unions">;
 def err_arc_objc_property_default_assign_on_object : Error<

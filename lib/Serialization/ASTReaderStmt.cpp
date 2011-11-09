@@ -372,12 +372,13 @@ void ASTStmtReader::VisitStringLiteral(StringLiteral *E) {
   assert(Record[Idx] == E->getNumConcatenated() &&
          "Wrong number of concatenated tokens!");
   ++Idx;
-  E->Kind = static_cast<StringLiteral::StringKind>(Record[Idx++]);
-  E->IsPascal = Record[Idx++];
+  StringLiteral::StringKind kind =
+        static_cast<StringLiteral::StringKind>(Record[Idx++]);
+  bool isPascal = Record[Idx++];
 
   // Read string data
   llvm::SmallString<16> Str(&Record[Idx], &Record[Idx] + Len);
-  E->setString(Reader.getContext(), Str.str());
+  E->setString(Reader.getContext(), Str.str(), kind, isPascal);
   Idx += Len;
 
   // Read source locations
@@ -772,6 +773,24 @@ void ASTStmtReader::VisitGenericSelectionExpr(GenericSelectionExpr *E) {
   E->GenericLoc = ReadSourceLocation(Record, Idx);
   E->DefaultLoc = ReadSourceLocation(Record, Idx);
   E->RParenLoc = ReadSourceLocation(Record, Idx);
+}
+
+void ASTStmtReader::VisitPseudoObjectExpr(PseudoObjectExpr *E) {
+  VisitExpr(E);
+  unsigned numSemanticExprs = Record[Idx++];
+  assert(numSemanticExprs + 1 == E->PseudoObjectExprBits.NumSubExprs);
+  E->PseudoObjectExprBits.ResultIndex = Record[Idx++];
+
+  // Read the syntactic expression.
+  E->getSubExprsBuffer()[0] = Reader.ReadSubExpr();
+
+  // Read all the semantic expressions.
+  for (unsigned i = 0; i != numSemanticExprs; ++i) {
+    Expr *subExpr = Reader.ReadSubExpr();
+    if (isa<OpaqueValueExpr>(subExpr))
+      cast<OpaqueValueExpr>(subExpr)->setSourceExpr(Reader.ReadSubExpr());
+    E->getSubExprsBuffer()[i+1] = subExpr;
+  }
 }
 
 void ASTStmtReader::VisitAtomicExpr(AtomicExpr *E) {
@@ -2129,6 +2148,12 @@ Stmt *ASTReader::ReadStmtFromStream(Module &F) {
     case EXPR_ASTYPE:
       S = new (Context) AsTypeExpr(Empty);
       break;
+
+    case EXPR_PSEUDO_OBJECT: {
+      unsigned numSemanticExprs = Record[ASTStmtReader::NumExprFields];
+      S = PseudoObjectExpr::Create(Context, Empty, numSemanticExprs);
+      break;
+    }
 
     case EXPR_ATOMIC:
       S = new (Context) AtomicExpr(Empty);

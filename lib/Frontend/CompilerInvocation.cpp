@@ -575,10 +575,18 @@ static void HeaderSearchOptsToArgs(const HeaderSearchOptions &Opts,
         break;
       }
     } else {
-      if (E.Group != frontend::Angled && E.Group != frontend::System)
-        llvm::report_fatal_error("Invalid option set!");
-      Res.push_back(E.Group == frontend::Angled ? "-iwithprefixbefore" :
-                    "-iwithprefix");
+      if (E.IsInternal) {
+        assert(E.Group == frontend::System && "Unexpected header search group");
+        if (E.ImplicitExternC)
+          Res.push_back("-internal-externc-isystem");
+        else
+          Res.push_back("-internal-isystem");
+      } else {
+        if (E.Group != frontend::Angled && E.Group != frontend::System)
+          llvm::report_fatal_error("Invalid option set!");
+        Res.push_back(E.Group == frontend::Angled ? "-iwithprefixbefore" :
+                      "-iwithprefix");
+      }
     }
     Res.push_back(E.Path);
   }
@@ -690,11 +698,12 @@ static void LangOptsToArgs(const LangOptions &Opts,
   case LangOptions::SOB_Undefined: break;
   case LangOptions::SOB_Defined:   Res.push_back("-fwrapv"); break;
   case LangOptions::SOB_Trapping:
-    Res.push_back("-ftrapv"); break;
+    Res.push_back("-ftrapv");
     if (!Opts.OverflowHandler.empty()) {
       Res.push_back("-ftrapv-handler");
       Res.push_back(Opts.OverflowHandler);
     }
+    break;
   }
   if (Opts.HeinousExtensions)
     Res.push_back("-fheinous-gnu-extensions");
@@ -777,6 +786,8 @@ static void LangOptsToArgs(const LangOptions &Opts,
     Res.push_back("-fdelayed-template-parsing");
   if (Opts.Deprecated)
     Res.push_back("-fdeprecated-macro");
+  if (Opts.ApplePragmaPack)
+    Res.push_back("-fapple-pragma-pack");
 }
 
 static void PreprocessorOptsToArgs(const PreprocessorOptions &Opts,
@@ -1016,7 +1027,8 @@ static void ParseCodeGenArgs(CodeGenOptions &Opts, ArgList &Args, InputKind IK,
     : CodeGenOptions::OnlyAlwaysInlining;
 
   Opts.DebugInfo = Args.hasArg(OPT_g);
-  Opts.LimitDebugInfo = Args.hasArg(OPT_flimit_debug_info);
+  Opts.LimitDebugInfo = !Args.hasArg(OPT_fno_limit_debug_info)
+    || Args.hasArg(OPT_flimit_debug_info);
   Opts.DisableLLVMOpts = Args.hasArg(OPT_disable_llvm_optzns);
   Opts.DisableRedZone = Args.hasArg(OPT_disable_red_zone);
   Opts.ForbidGuardVariables = Args.hasArg(OPT_fforbid_guard_variables);
@@ -1479,6 +1491,15 @@ static void ParseHeaderSearchArgs(HeaderSearchOptions &Opts, ArgList &Args) {
        ie = Args.filtered_end(); it != ie; ++it)
     Opts.AddPath((*it)->getValue(Args), frontend::ObjCXXSystem, true, false,
                  true);
+
+  // Add the internal paths from a driver that detects standard include paths.
+  for (arg_iterator I = Args.filtered_begin(OPT_internal_isystem,
+                                            OPT_internal_externc_isystem),
+                    E = Args.filtered_end();
+       I != E; ++I)
+    Opts.AddPath((*I)->getValue(Args), frontend::System,
+                 false, false, /*IgnoreSysRoot=*/true, /*IsInternal=*/true,
+                 (*I)->getOption().matches(OPT_internal_externc_isystem));
 }
 
 void CompilerInvocation::setLangDefaults(LangOptions &Opts, InputKind IK,
@@ -1763,6 +1784,7 @@ static void ParseLangArgs(LangOptions &Opts, ArgList &Args, InputKind IK,
   Opts.FakeAddressSpaceMap = Args.hasArg(OPT_ffake_address_space_map);
   Opts.ParseUnknownAnytype = Args.hasArg(OPT_funknown_anytype);
   Opts.DebuggerSupport = Args.hasArg(OPT_fdebugger_support);
+  Opts.ApplePragmaPack = Args.hasArg(OPT_fapple_pragma_pack);
 
   // Record whether the __DEPRECATED define was requested.
   Opts.Deprecated = Args.hasFlag(OPT_fdeprecated_macro,
@@ -1915,9 +1937,9 @@ static void ParseTargetArgs(TargetOptions &Opts, ArgList &Args) {
   Opts.LinkerVersion = Args.getLastArgValue(OPT_target_linker_version);
   Opts.Triple = llvm::Triple::normalize(Args.getLastArgValue(OPT_triple));
 
-  // Use the host triple if unspecified.
+  // Use the default target triple if unspecified.
   if (Opts.Triple.empty())
-    Opts.Triple = llvm::sys::getHostTriple();
+    Opts.Triple = llvm::sys::getDefaultTargetTriple();
 }
 
 //

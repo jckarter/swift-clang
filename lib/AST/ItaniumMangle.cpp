@@ -2261,6 +2261,7 @@ recurse:
   case Expr::CXXNoexceptExprClass:
   case Expr::CUDAKernelCallExprClass:
   case Expr::AsTypeExprClass:
+  case Expr::PseudoObjectExprClass:
   case Expr::AtomicExprClass:
   {
     // As bad as this diagnostic is, it's better than crashing.

@@ -1134,7 +1134,9 @@ private:
   Decl *ParseCXXInlineMethodDef(AccessSpecifier AS, AttributeList *AccessAttrs,
                                 ParsingDeclarator &D,
                                 const ParsedTemplateInfo &TemplateInfo,
-                                const VirtSpecifiers& VS, ExprResult& Init);
+                                const VirtSpecifiers& VS, 
+                                FunctionDefinitionKind DefinitionKind,
+                                ExprResult& Init);
   void ParseCXXNonStaticMemberInitializer(Decl *VarD);
   void ParseLexedAttributes(ParsingClass &Class);
   void ParseLexedAttribute(LateParsedAttribute &LA);
@@ -2004,6 +2006,7 @@ private:
                            DeclSpec &DS,
                 const ParsedTemplateInfo &TemplateInfo = ParsedTemplateInfo(),
                            AccessSpecifier AS = AS_none,
+                           bool EnteringContext = false,
                            bool SuppressDeclarations = false);
   void ParseCXXMemberSpecification(SourceLocation StartLoc, unsigned TagType,
                                    Decl *TagDecl);

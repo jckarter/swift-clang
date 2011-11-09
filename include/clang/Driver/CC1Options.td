@@ -131,6 +131,8 @@ def no_implicit_float : Flag<"-no-implicit-float">,
   HelpText<"Don't generate implicit floating point instructions (x86-only)">;
 def finstrument_functions : Flag<"-finstrument-functions">,
   HelpText<"Generate calls to instrument function entry and exit">;
+def fno_limit_debug_info : Flag<"-fno-limit-debug-info">,
+  HelpText<"Do not limit debug information produced to reduce size of debug binary">;
 def fno_merge_all_constants : Flag<"-fno-merge-all-constants">,
   HelpText<"Disallow merging of constants.">;
 def fno_threadsafe_statics : Flag<"-fno-threadsafe-statics">,
@@ -608,6 +610,8 @@ def fdeprecated_macro : Flag<"-fdeprecated-macro">,
   HelpText<"Defines the __DEPRECATED macro">;
 def fno_deprecated_macro : Flag<"-fno-deprecated-macro">,
   HelpText<"Undefines the __DEPRECATED macro">;
+def fapple_pragma_pack : Flag<"-fapple-pragma-pack">,
+  HelpText<"Enable Apple gcc-compatible #pragma pack handling">;
 
 //===----------------------------------------------------------------------===//
 // Header Search Options
@@ -655,6 +659,17 @@ def isystem : JoinedOrSeparate<"-isystem">, MetaVarName<"<directory>">,
 def iwithsysroot : JoinedOrSeparate<"-iwithsysroot">,MetaVarName<"<directory>">,
   HelpText<"Add directory to SYSTEM include search path, "
            "absolute paths are relative to -isysroot">;
+def internal_isystem : JoinedOrSeparate<"-internal-isystem">,
+  MetaVarName<"<directory>">,
+  HelpText<"Add directory to the internal system include search path; these "
+           "are assumed to not be user-provided and are used to model system "
+           "and standard headers' paths.">;
+def internal_externc_isystem : JoinedOrSeparate<"-internal-externc-isystem">,
+  MetaVarName<"<directory>">,
+  HelpText<"Add directory to the internal system include search path with "
+           "implicit extern \"C\" semantics; these are assumed to not be "
+           "user-provided and are used to model system and standard headers' "
+           "paths.">;
 def iprefix : JoinedOrSeparate<"-iprefix">, MetaVarName<"<prefix>">,
   HelpText<"Set the -iwithprefix/-iwithprefixbefore prefix">;
 def iwithprefix : JoinedOrSeparate<"-iwithprefix">, MetaVarName<"<dir>">,

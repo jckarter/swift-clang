@@ -2129,6 +2129,7 @@ Sema::PerformImplicitConversion(Expr *From, QualType ToType,
       FunctionDecl *FD = ICS.UserDefined.ConversionFunction;
       CastKind CastKind;
       QualType BeforeToType;
+      assert(FD && "FIXME: aggregate initialization from init list");
       if (const CXXConversionDecl *Conv = dyn_cast<CXXConversionDecl>(FD)) {
         CastKind = CK_UserDefinedConversion;
 
@@ -4086,11 +4087,6 @@ ExprResult Sema::MaybeBindToTemporary(Expr *E) {
       } else if (ObjCDictionaryLiteral *DictLit
                                         = dyn_cast<ObjCDictionaryLiteral>(E)) {
         D = DictLit->getDictWithObjectsMethod();
-      } else {
-        CastExpr *CE = cast<CastExpr>(E);
-        assert(CE->getCastKind() == CK_GetObjCProperty);
-        const ObjCPropertyRefExpr *PRE = CE->getSubExpr()->getObjCProperty();
-        D = (PRE->isImplicitProperty() ? PRE->getImplicitPropertyGetter() : 0);
       }
 
       ReturnsRetained = (D && D->hasAttr<NSReturnsRetainedAttr>());

@@ -432,11 +432,12 @@ void ExprEngine::ProcessTemporaryDtor(const CFGTemporaryDtor D,
                                       ExplodedNodeSet &Dst) {}
 
 void ExprEngine::Visit(const Stmt *S, ExplodedNode *Pred, 
-                       ExplodedNodeSet &Dst) {
+                       ExplodedNodeSet &DstTop) {
   PrettyStackTraceLoc CrashInfo(getContext().getSourceManager(),
                                 S->getLocStart(),
                                 "Error evaluating statement");
-  StmtNodeBuilder Bldr(Pred, Dst, *currentBuilderContext);
+  ExplodedNodeSet Dst;
+  StmtNodeBuilder Bldr(Pred, DstTop, *currentBuilderContext);
 
   // Expressions to ignore.
   if (const Expr *Ex = dyn_cast<Expr>(S))
@@ -861,6 +862,21 @@ void ExprEngine::Visit(const Stmt *S, ExplodedNode *Pred,
       }
       else
         VisitUnaryOperator(U, Pred, Dst);
+      Bldr.addNodes(Dst);
+      break;
+    }
+
+    case Stmt::PseudoObjectExprClass: {
+      Bldr.takeNodes(Pred);
+      const ProgramState *state = Pred->getState();
+      const PseudoObjectExpr *PE = cast<PseudoObjectExpr>(S);
+      if (const Expr *Result = PE->getResultExpr()) { 
+        SVal V = state->getSVal(Result);
+        Bldr.generateNode(S, Pred, state->BindExpr(S, V));
+      }
+      else
+        Bldr.generateNode(S, Pred, state->BindExpr(S, UnknownVal()));
+
       Bldr.addNodes(Dst);
       break;
     }
@@ -1291,9 +1307,10 @@ void ExprEngine::VisitLvalArraySubscriptExpr(const ArraySubscriptExpr *A,
 
 /// VisitMemberExpr - Transfer function for member expressions.
 void ExprEngine::VisitMemberExpr(const MemberExpr *M, ExplodedNode *Pred,
-                                 ExplodedNodeSet &Dst) {
+                                 ExplodedNodeSet &TopDst) {
 
-  StmtNodeBuilder Bldr(Pred, Dst, *currentBuilderContext);
+  StmtNodeBuilder Bldr(Pred, TopDst, *currentBuilderContext);
+  ExplodedNodeSet Dst;
   Decl *member = M->getMemberDecl();
   if (VarDecl *VD = dyn_cast<VarDecl>(member)) {
     assert(M->isLValue());
@@ -1601,7 +1618,7 @@ ExprEngine::getEagerlyAssumeTags() {
 }
 
 void ExprEngine::evalEagerlyAssume(ExplodedNodeSet &Dst, ExplodedNodeSet &Src,
-                                     const Expr *Ex) {
+                                   const Expr *Ex) {
   StmtNodeBuilder Bldr(Src, Dst, *currentBuilderContext);
   
   for (ExplodedNodeSet::iterator I=Src.begin(), E=Src.end(); I!=E; ++I) {

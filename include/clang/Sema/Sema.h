@@ -1970,6 +1970,7 @@ public:
                                        const bool isAssign,
                                        const bool isReadWrite,
                                        const unsigned Attributes,
+                                       const unsigned AttributesAsWritten,
                                        bool *isOverridingProperty,
                                        TypeSourceInfo *T,
                                        tok::ObjCKeywordKind MethodImplKind);
@@ -1985,6 +1986,7 @@ public:
                                        const bool isAssign,
                                        const bool isReadWrite,
                                        const unsigned Attributes,
+                                       const unsigned AttributesAsWritten,
                                        TypeSourceInfo *T,
                                        tok::ObjCKeywordKind MethodImplKind,
                                        DeclContext *lexicalDC = 0);
@@ -3576,7 +3578,6 @@ public:
 
   MemInitResult BuildDelegatingInitializer(TypeSourceInfo *TInfo,
                                            const MultiInitializer &Args,
-                                           SourceLocation BaseLoc,
                                            CXXRecordDecl *ClassDecl);
 
   bool SetDelegatingInitializer(CXXConstructorDecl *Constructor,
@@ -3813,7 +3814,7 @@ public:
                                     bool ForceCheck = false,
                                     bool ForceUnprivileged = false);
   void CheckLookupAccess(const LookupResult &R);
-  bool IsSimplyAccessible(NamedDecl *decl, CXXRecordDecl *Class);
+  bool IsSimplyAccessible(NamedDecl *decl, DeclContext *Ctx);
 
   void HandleDependentAccessCheck(const DependentDiagnostic &DD,
                          const MultiLevelTemplateArgumentList &TemplateArgs);

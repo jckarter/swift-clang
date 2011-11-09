@@ -1189,11 +1189,9 @@ namespace {
     virtual void FoundDecl(NamedDecl *ND, NamedDecl *Hiding, DeclContext *Ctx,
                            bool InBaseClass) {
       bool Accessible = true;
-      if (Ctx) {
-        if (CXXRecordDecl *Class = dyn_cast<CXXRecordDecl>(Ctx))
-          Accessible = Results.getSema().IsSimplyAccessible(ND, Class);
-        // FIXME: ObjC access checks are missing.
-      }
+      if (Ctx)
+        Accessible = Results.getSema().IsSimplyAccessible(ND, Ctx);
+      
       ResultBuilder::Result Result(ND, 0, false, Accessible);
       Results.AddResult(Result, CurContext, Hiding, InBaseClass);
     }
@@ -1381,6 +1379,7 @@ static PrintingPolicy getCompletionPrintingPolicy(Sema &S) {
   PrintingPolicy Policy = S.getPrintingPolicy();
   Policy.AnonymousTagLocations = false;
   Policy.SuppressStrongLifetime = true;
+  Policy.SuppressUnwrittenScope = true;
   return Policy;
 }
 

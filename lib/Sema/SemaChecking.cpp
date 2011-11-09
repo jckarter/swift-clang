@@ -245,29 +245,52 @@ Sema::CheckBuiltinFunctionCall(unsigned BuiltinID, CallExpr *TheCall) {
 
 // Get the valid immediate range for the specified NEON type code.
 static unsigned RFT(unsigned t, bool shift = false) {
-  bool quad = t & 0x10;
-  
-  switch (t & 0x7) {
-    case 0: // i8
-      return shift ? 7 : (8 << (int)quad) - 1;
-    case 1: // i16
-      return shift ? 15 : (4 << (int)quad) - 1;
-    case 2: // i32
-      return shift ? 31 : (2 << (int)quad) - 1;
-    case 3: // i64
-      return shift ? 63 : (1 << (int)quad) - 1;
-    case 4: // f32
-      assert(!shift && "cannot shift float types!");
-      return (2 << (int)quad) - 1;
-    case 5: // poly8
-      return shift ? 7 : (8 << (int)quad) - 1;
-    case 6: // poly16
-      return shift ? 15 : (4 << (int)quad) - 1;
-    case 7: // float16
-      assert(!shift && "cannot shift float types!");
-      return (4 << (int)quad) - 1;
+  NeonTypeFlags Type(t);
+  int IsQuad = Type.isQuad();
+  switch (Type.getEltType()) {
+  case NeonTypeFlags::Int8:
+  case NeonTypeFlags::Poly8:
+    return shift ? 7 : (8 << IsQuad) - 1;
+  case NeonTypeFlags::Int16:
+  case NeonTypeFlags::Poly16:
+    return shift ? 15 : (4 << IsQuad) - 1;
+  case NeonTypeFlags::Int32:
+    return shift ? 31 : (2 << IsQuad) - 1;
+  case NeonTypeFlags::Int64:
+    return shift ? 63 : (1 << IsQuad) - 1;
+  case NeonTypeFlags::Float16:
+    assert(!shift && "cannot shift float types!");
+    return (4 << IsQuad) - 1;
+  case NeonTypeFlags::Float32:
+    assert(!shift && "cannot shift float types!");
+    return (2 << IsQuad) - 1;
   }
   return 0;
+}
+
+/// getNeonEltType - Return the QualType corresponding to the elements of
+/// the vector type specified by the NeonTypeFlags.  This is used to check
+/// the pointer arguments for Neon load/store intrinsics.
+static QualType getNeonEltType(NeonTypeFlags Flags, ASTContext &Context) {
+  switch (Flags.getEltType()) {
+  case NeonTypeFlags::Int8:
+    return Flags.isUnsigned() ? Context.UnsignedCharTy : Context.SignedCharTy;
+  case NeonTypeFlags::Int16:
+    return Flags.isUnsigned() ? Context.UnsignedShortTy : Context.ShortTy;
+  case NeonTypeFlags::Int32:
+    return Flags.isUnsigned() ? Context.UnsignedIntTy : Context.IntTy;
+  case NeonTypeFlags::Int64:
+    return Flags.isUnsigned() ? Context.UnsignedLongLongTy : Context.LongLongTy;
+  case NeonTypeFlags::Poly8:
+    return Context.SignedCharTy;
+  case NeonTypeFlags::Poly16:
+    return Context.ShortTy;
+  case NeonTypeFlags::Float16:
+    return Context.UnsignedShortTy;
+  case NeonTypeFlags::Float32:
+    return Context.FloatTy;
+  }
+  return QualType();
 }
 
 bool Sema::CheckARMBuiltinFunctionCall(unsigned BuiltinID, CallExpr *TheCall) {
@@ -275,6 +298,8 @@ bool Sema::CheckARMBuiltinFunctionCall(unsigned BuiltinID, CallExpr *TheCall) {
 
   unsigned mask = 0;
   unsigned TV = 0;
+  bool HasPtr = false;
+  bool HasConstPtr = false;
   switch (BuiltinID) {
 #define GET_NEON_OVERLOAD_CHECK
 #include "clang/Basic/arm_neon.inc"
@@ -283,15 +308,39 @@ bool Sema::CheckARMBuiltinFunctionCall(unsigned BuiltinID, CallExpr *TheCall) {
   
   // For NEON intrinsics which are overloaded on vector element type, validate
   // the immediate which specifies which variant to emit.
+  unsigned ImmArg = TheCall->getNumArgs()-1;
   if (mask) {
-    unsigned ArgNo = TheCall->getNumArgs()-1;
-    if (SemaBuiltinConstantArg(TheCall, ArgNo, Result))
+    if (SemaBuiltinConstantArg(TheCall, ImmArg, Result))
       return true;
     
-    TV = Result.getLimitedValue(32);
-    if ((TV > 31) || (mask & (1 << TV)) == 0)
+    TV = Result.getLimitedValue(64);
+    if ((TV > 63) || (mask & (1 << TV)) == 0)
       return Diag(TheCall->getLocStart(), diag::err_invalid_neon_type_code)
-        << TheCall->getArg(ArgNo)->getSourceRange();
+        << TheCall->getArg(ImmArg)->getSourceRange();
+  }
+
+  if (HasPtr || HasConstPtr) {
+    // Check that pointer arguments have the specified type.
+    for (unsigned ArgNo = 0; ArgNo < ImmArg; ++ArgNo) {
+      Expr *Arg = TheCall->getArg(ArgNo);
+      if (ImplicitCastExpr *ICE = dyn_cast<ImplicitCastExpr>(Arg))
+        Arg = ICE->getSubExpr();
+      ExprResult RHS = DefaultFunctionArrayLvalueConversion(Arg);
+      QualType RHSTy = RHS.get()->getType();
+      if (!RHSTy->isPointerType())
+        continue;
+      QualType EltTy = getNeonEltType(NeonTypeFlags(TV), Context);
+      if (HasConstPtr)
+        EltTy = EltTy.withConst();
+      QualType LHSTy = Context.getPointerType(EltTy);
+      AssignConvertType ConvTy;
+      ConvTy = CheckSingleAssignmentConstraints(LHSTy, RHS);
+      if (RHS.isInvalid())
+        return true;
+      if (DiagnoseAssignmentResult(ConvTy, Arg->getLocStart(), LHSTy, RHSTy,
+                                   RHS.get(), AA_Assigning))
+        return true;
+    }
   }
   
   // For NEON intrinsics which take an immediate value as part of the 
@@ -4158,22 +4207,6 @@ static bool findRetainCycleOwner(Expr *e, RetainCycleOwner &owner) {
         e = cast->getSubExpr();
         continue;
 
-      case CK_GetObjCProperty: {
-        // Bail out if this isn't a strong explicit property.
-        const ObjCPropertyRefExpr *pre = cast->getSubExpr()->getObjCProperty();
-        if (pre->isImplicitProperty()) return false;
-        ObjCPropertyDecl *property = pre->getExplicitProperty();
-        if (!property->isRetaining() &&
-            !(property->getPropertyIvarDecl() &&
-              property->getPropertyIvarDecl()->getType()
-                .getObjCLifetime() == Qualifiers::OCL_Strong))
-          return false;
-
-        owner.Indirect = true;
-        e = const_cast<Expr*>(pre->getBase());
-        continue;
-      }
-        
       default:
         return false;
       }
@@ -4210,6 +4243,26 @@ static bool findRetainCycleOwner(Expr *e, RetainCycleOwner &owner) {
 
       // Don't count this as an indirect ownership.
       e = member->getBase();
+      continue;
+    }
+
+    if (PseudoObjectExpr *pseudo = dyn_cast<PseudoObjectExpr>(e)) {
+      // Only pay attention to pseudo-objects on property references.
+      ObjCPropertyRefExpr *pre
+        = dyn_cast<ObjCPropertyRefExpr>(pseudo->getSyntacticForm()
+                                              ->IgnoreParens());
+      if (!pre) return false;
+      if (pre->isImplicitProperty()) return false;
+      ObjCPropertyDecl *property = pre->getExplicitProperty();
+      if (!property->isRetaining() &&
+          !(property->getPropertyIvarDecl() &&
+            property->getPropertyIvarDecl()->getType()
+              .getObjCLifetime() == Qualifiers::OCL_Strong))
+          return false;
+
+      owner.Indirect = true;
+      e = const_cast<Expr*>(cast<OpaqueValueExpr>(pre->getBase())
+                              ->getSourceExpr());
       continue;
     }
 

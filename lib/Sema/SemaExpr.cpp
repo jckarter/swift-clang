@@ -1141,7 +1141,7 @@ Sema::ActOnStringLiteral(const Token *StringToks, unsigned NumStringToks) {
     StrTy = Context.Char16Ty;
   else if (Literal.isUTF32())
     StrTy = Context.Char32Ty;
-  else if (Literal.Pascal)
+  else if (Literal.isPascal())
     StrTy = Context.UnsignedCharTy;
 
   StringLiteral::StringKind Kind = StringLiteral::Ascii;
@@ -1304,7 +1304,7 @@ static CaptureResult shouldCaptureValueReference(Sema &S, SourceLocation loc,
   // Okay, we descended all the way to the block that defines the variable.
   // Actually try to capture it.
   QualType type = var->getType();
-
+  
   // Prohibit variably-modified types.
   if (type->isVariablyModifiedType()) {
     S.Diag(loc, diag::err_ref_vm_type);
@@ -7476,7 +7476,7 @@ static QualType CheckAddressOfOperand(Sema &S, ExprResult &OrigOp,
     // The operand must be either an l-value or a function designator
     if (!op->getType()->isFunctionType()) {
       // Use a special diagnostic for loads from property references.
-      if (isa<ObjCPropertyRefExpr>(op->IgnoreImplicit()->IgnoreParens())) {
+      if (isa<PseudoObjectExpr>(op)) {
         AddressOfError = AO_Property_Expansion;
       } else {
         // FIXME: emit more specific diag...
@@ -7491,9 +7491,6 @@ static QualType CheckAddressOfOperand(Sema &S, ExprResult &OrigOp,
   } else if (op->getObjectKind() == OK_VectorComponent) {
     // The operand cannot be an element of a vector
     AddressOfError = AO_Vector_Element;
-  } else if (op->getObjectKind() == OK_ObjCProperty) {
-    // cannot take address of a property expression.
-    AddressOfError = AO_Property_Expansion;
   } else if (dcl) { // C99 6.5.3.2p1
     // We have an lvalue with a decl. Make sure the decl is not declared
     // with the register storage-class specifier.
@@ -8959,8 +8956,15 @@ static void MakeObjCStringLiteralFixItHint(Sema& SemaRef, QualType DstType,
       return;
   }
 
-  // Strip off any parens and casts.
-  StringLiteral *SL = dyn_cast<StringLiteral>(SrcExpr->IgnoreParenCasts());
+  // Ignore any parens, implicit casts (should only be
+  // array-to-pointer decays), and not-so-opaque values.  The last is
+  // important for making this trigger for property assignments.
+  SrcExpr = SrcExpr->IgnoreParenImpCasts();
+  if (OpaqueValueExpr *OV = dyn_cast<OpaqueValueExpr>(SrcExpr))
+    if (OV->getSourceExpr())
+      SrcExpr = OV->getSourceExpr()->IgnoreParenImpCasts();
+
+  StringLiteral *SL = dyn_cast<StringLiteral>(SrcExpr);
   if (!SL || !SL->isAscii())
     return;
 

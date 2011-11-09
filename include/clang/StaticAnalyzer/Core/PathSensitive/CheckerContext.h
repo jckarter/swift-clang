@@ -36,8 +36,6 @@ public:
       Location(loc),
       NB(builder) {}
 
-  ~CheckerContext();
-
   AnalysisManager &getAnalysisManager() {
     return Eng.getAnalysisManager();
   }
@@ -50,6 +48,9 @@ public:
     return Eng.getStoreManager();
   }
 
+  /// \brief Returns the previous node in the exploded graph, which includes
+  /// the state of the program before the checker ran. Note, checkers should
+  /// not retain the node in their state since the nodes might get invalidated.
   ExplodedNode *getPredecessor() { return Pred; }
   const ProgramState *getState() { return Pred->getState(); }
 
