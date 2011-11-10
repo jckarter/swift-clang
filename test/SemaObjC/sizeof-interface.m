@@ -55,7 +55,7 @@ int bar(I0 *P) {
   P = 5+P;  // expected-error {{arithmetic on pointer to interface 'I0', which is not a constant size in non-fragile ABI}}
   P = P-5;  // expected-error {{arithmetic on pointer to interface 'I0', which is not a constant size in non-fragile ABI}}
   
-  return P[4].x[2];  // expected-error {{subscript requires size of interface 'I0', which is not constant in non-fragile ABI}}
+  return P[4].x[2];  // expected-error {{expected method to read array element not found on object of type 'I0 *'}}
 }
 
 

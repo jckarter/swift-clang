@@ -2581,6 +2581,8 @@ def err_template_id_not_a_type : Error<
 def note_template_declared_here : Note<
   "%select{function template|class template|type alias template|template template parameter}0 "
   "%1 declared here">;
+def note_parameter_type : Note<
+  "parameter of type %0 is declared here">;
 
 // C++11 Variadic Templates
 def err_template_param_pack_default_arg : Error<
@@ -3630,6 +3632,16 @@ def err_invalid_property_name : Error<
   "%0 is not a valid property name (accessing an object of type %1)">;
 def err_getter_not_found : Error<
   "expected getter method not found on object of type %0">;
+def err_objc_subscript_method_not_found : Error<
+  "expected method to %select{read|write}1 array element not "
+  "found on object of type %0">;
+def err_objc_subscript_index_type : Error<
+  "type of the method's index parameter is not integral type">;
+def err_objc_subscript_object_type : Error<
+  "cannot assign to this array because assigning method's 2nd parameter"
+  " of type %0 is not objective-c pointer type">;
+def err_objc_subscript_base_type : Error<
+  "type of array base must be an objective-c pointer instead of %0">;
 def err_property_not_found_forward_class : Error<
   "property %0 cannot be found in forward class object %1">;
 def err_property_not_as_forward_class : Error<

@@ -437,6 +437,9 @@ static ExprResult CheckObjCCollectionLiteralElement(Sema &S, Expr *Element,
 
 ExprResult Sema::BuildObjCSubscriptExpression(SourceRange SR, Expr *BaseExpr,
                                         Expr *IndexExpr) {
+  // Feature support is for modern abi.
+  if (!LangOpts.ObjCNonFragileABI)
+    return ExprError();
   // If the expression is type-dependent, there's nothing for us to do.
   if (BaseExpr->isTypeDependent() ||
       IndexExpr->isTypeDependent())
@@ -467,19 +470,7 @@ ExprResult Sema::BuildObjCSubscriptExpression(SourceRange SR, Expr *BaseExpr,
       IDecl = iFaceTy->getDecl();
     }
   }
-  if (!IDecl)
-    return ExprError();
-  // - (id)objectAtIndexedSubscript:(size_t)index;
-  IdentifierInfo *KeyIdents[] = {
-    &Context.Idents.get("objectAtIndexedSubscript")  
-  };
-  Selector Sel = Context.Selectors.getSelector(1, KeyIdents);
-  ObjCMethodDecl *GetIndexMethod = IDecl->lookupInstanceMethod(Sel);
-  if (!GetIndexMethod || 
-      !GetIndexMethod->getResultType()->isObjCObjectPointerType())
-    return ExprError();
-  QualType T = GetIndexMethod->param_begin()[0]->getType();
-  if (!T->isIntegerType())
+  if (!IDecl || IDecl->isForwardDecl())
     return ExprError();
   
   // Perform lvalue-to-rvalue conversion.
@@ -491,18 +482,12 @@ ExprResult Sema::BuildObjCSubscriptExpression(SourceRange SR, Expr *BaseExpr,
   if (Result.isInvalid())
     return ExprError();
   IndexExpr = Result.get();
-  // Make sure that the Index has the type that the subscripting 
-  // method expects.
-  if (!Context.hasSameType(T, IndexExpr->getType())) {
-    Result = PerformImplicitConversion(IndexExpr, T, Sema::AA_Sending);
-    IndexExpr = Result.get();
-  }
   return MaybeBindToTemporary(
                               ObjCSubscriptRefExpr::Create(Context, 
                                                            BaseExpr,
                                                            IndexExpr,
                                                            Context.PseudoObjectTy,
-                                                           GetIndexMethod,
+                                                           0,
                                                            0, SR));
   
 }

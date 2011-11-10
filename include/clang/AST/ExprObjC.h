@@ -726,6 +726,8 @@ class ObjCSubscriptRefExpr : public Expr {
   // an indexed object this is null too.
   ObjCMethodDecl *SetAtIndexMethodDecl;
   
+public:
+  
   ObjCSubscriptRefExpr(Stmt *base, Stmt *key, QualType T,
                        ExprValueKind VK, ExprObjectKind OK,
                        ObjCMethodDecl *getMethod,
@@ -735,7 +737,6 @@ class ObjCSubscriptRefExpr : public Expr {
     Range(SR), Base(base), KeyExpr(key), GetAtIndexMethodDecl(getMethod), 
   SetAtIndexMethodDecl(setMethod) {}
 
-public:
   explicit ObjCSubscriptRefExpr(EmptyShell Empty)
   : Expr(ObjCSubscriptRefExprClass, Empty) {}
   
