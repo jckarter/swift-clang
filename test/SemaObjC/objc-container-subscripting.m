@@ -21,5 +21,9 @@ int main() {
   I* iarray;
   iarray[3] = 0; // expected-error {{expected method to write array element not found on object of type 'I *'}}
   I* p = iarray[4]; // expected-error {{expected method to read array element not found on object of type 'I *'}}
+
+  oldObject = array[10]++; // expected-error {{illegal operation on objective-c container subscripting}}
+  oldObject = array[10]--; // expected-error {{illegal operation on objective-c container subscripting}}
+  oldObject = --array[10]; // expected-error {{illegal operation on objective-c container subscripting}}
 }
 

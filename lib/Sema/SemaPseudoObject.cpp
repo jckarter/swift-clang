@@ -1078,6 +1078,9 @@ ExprResult Sema::checkPseudoObjectIncDec(Scope *Sc, SourceLocation opcLoc,
         = dyn_cast<ObjCPropertyRefExpr>(opaqueRef)) {
     ObjCPropertyOpBuilder builder(*this, refExpr);
     return builder.buildIncDecOperation(Sc, opcLoc, opcode, op);
+  } else if (isa<ObjCSubscriptRefExpr>(opaqueRef)) {
+    Diag(opcLoc, diag::err_illegal_container_subscriptin_op);
+    return ExprError();
   } else {
     llvm_unreachable("unknown pseudo-object kind!");
   }

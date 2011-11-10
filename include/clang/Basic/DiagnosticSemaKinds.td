@@ -3642,6 +3642,8 @@ def err_objc_subscript_object_type : Error<
   " of type %0 is not objective-c pointer type">;
 def err_objc_subscript_base_type : Error<
   "type of array base must be an objective-c pointer instead of %0">;
+def err_illegal_container_subscriptin_op : Error<
+  "illegal operation on objective-c container subscripting">;
 def err_property_not_found_forward_class : Error<
   "property %0 cannot be found in forward class object %1">;
 def err_property_not_as_forward_class : Error<
