@@ -454,25 +454,7 @@ ExprResult Sema::BuildObjCSubscriptExpression(SourceRange SR, Expr *BaseExpr,
   // Only Arrays for now.
   if (!IndexT->isIntegralOrEnumerationType())
     return ExprError();
-  
-  ObjCInterfaceDecl *IDecl = 0;
-  if (const ObjCObjectPointerType *PTy =
-      BaseT->getAs<ObjCObjectPointerType>()) {
-    QualType ResultType = PTy->getPointeeType();
-    if (const ObjCInterfaceType *iFaceTy = 
-        ResultType->getAs<ObjCInterfaceType>())
-      IDecl = iFaceTy->getDecl();
-    else if (const ObjCObjectType *iQFaceTy = 
-             ResultType->getAsObjCQualifiedInterfaceType()) {
-      ResultType = iQFaceTy->getBaseType();
-      if (const ObjCInterfaceType *iFaceTy = 
-         ResultType->getAs<ObjCInterfaceType>())
-      IDecl = iFaceTy->getDecl();
-    }
-  }
-  if (!IDecl || IDecl->isForwardDecl())
-    return ExprError();
-  
+    
   // Perform lvalue-to-rvalue conversion.
   Result = DefaultLvalueConversion(BaseExpr);
   if (Result.isInvalid())

@@ -9,7 +9,7 @@ int g0 = sizeof(I0); // expected-error{{invalid application of 'sizeof' to an in
 void *g3(I0 *P) {
   P = P+5;        // expected-error {{arithmetic on a pointer to an incomplete type 'I0'}}
 
-  return &P[4];   // expected-error{{subscript of pointer to incomplete type 'I0'}}
+  return &P[4];   // expected-error{{expected method to read array element not found on object of type 'I0 *'}}
 }
 
 
