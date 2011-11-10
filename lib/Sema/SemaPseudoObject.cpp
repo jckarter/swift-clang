@@ -835,9 +835,6 @@ Expr *ObjCSubscriptOpBuilder::rebuildAndCaptureObject(Expr *syntacticBase) {
   // form to use the OVE as its base expression.
   InstanceBase = capture(RefExpr->getBaseExpr());
   InstanceKey = capture(RefExpr->getKeyExpr());
-  assert (InstanceKey && 
-          "ObjCSubscriptOpBuilder::rebuildAndCaptureObject"
-          "- InstanceKey(null)");
     
   syntacticBase =
     ObjCSubscriptRefRebuilder(S, InstanceBase, 
@@ -968,11 +965,10 @@ ExprResult ObjCSubscriptOpBuilder::buildGet() {
                                  Sema::AA_Assigning))
     return ExprError();
   
-  InstanceKey = capture(opResult.take());
-  assert(InstanceKey && "successful assignment left argument invalid?");
+  Expr *Index = opResult.take();
   
   // Arguments.
-  Expr *args[] = { InstanceKey };
+  Expr *args[] = { Index };
   assert(InstanceBase);
   msg = S.BuildInstanceMessage(InstanceBase, receiverType, 
                                SourceLocation() /*superLoc */,
@@ -1006,7 +1002,7 @@ ExprResult ObjCSubscriptOpBuilder::buildSet(Expr *op, SourceLocation opcLoc,
                                  Sema::AA_Assigning))
     return ExprError();
   
-  InstanceKey = capture(IndexResult.take());
+  Expr *Index = IndexResult.take();
   assert(InstanceKey && "successful assignment left argument invalid?");
 
   // Use assignment constraints when possible; they give us better
@@ -1029,7 +1025,7 @@ ExprResult ObjCSubscriptOpBuilder::buildSet(Expr *op, SourceLocation opcLoc,
   }
   
   // Arguments.
-  Expr *args[] = { InstanceKey, op };
+  Expr *args[] = { Index, op };
   
   // Build a message-send.
   ExprResult msg = S.BuildInstanceMessage(InstanceBase, 
