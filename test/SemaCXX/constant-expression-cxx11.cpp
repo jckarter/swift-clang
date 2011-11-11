@@ -608,3 +608,64 @@ static_assert_fold(*(&(u[1].b) + 1 + 1) == 3, ""); // expected-error {{constant 
 static_assert_fold((&(u[1]) + 1 + 1)->b == 3, "");
 
 }
+
+namespace Complex {
+
+class complex {
+  int re, im;
+public:
+  constexpr complex(int re = 0, int im = 0) : re(re), im(im) {}
+  constexpr complex(const complex &o) : re(o.re), im(o.im) {}
+  constexpr complex operator-() const { return complex(-re, -im); }
+  friend constexpr complex operator+(const complex &l, const complex &r) {
+    return complex(l.re + r.re, l.im + r.im);
+  }
+  friend constexpr complex operator-(const complex &l, const complex &r) {
+    return l + -r;
+  }
+  friend constexpr complex operator*(const complex &l, const complex &r) {
+    return complex(l.re * r.re - l.im * r.im, l.re * r.im + l.im * r.re);
+  }
+  friend constexpr bool operator==(const complex &l, const complex &r) {
+    return l.re == r.re && l.im == r.im;
+  }
+  constexpr bool operator!=(const complex &r) const {
+    return re != r.re || im != r.im;
+  }
+  constexpr int real() const { return re; }
+  constexpr int imag() const { return im; }
+};
+
+constexpr complex i = complex(0, 1);
+constexpr complex k = (3 + 4*i) * (6 - 4*i);
+static_assert_fold(complex(1,0).real() == 1, "");
+static_assert_fold(complex(1,0).imag() == 0, "");
+static_assert_fold(((complex)1).imag() == 0, "");
+static_assert_fold(k.real() == 34, "");
+static_assert_fold(k.imag() == 12, "");
+static_assert_fold(k - 34 == 12*i, "");
+static_assert_fold((complex)1 == complex(1), "");
+static_assert_fold((complex)1 != complex(0, 1), "");
+static_assert_fold(complex(1) == complex(1), "");
+static_assert_fold(complex(1) != complex(0, 1), "");
+constexpr complex makeComplex(int re, int im) { return complex(re, im); }
+static_assert_fold(makeComplex(1,0) == complex(1), "");
+static_assert_fold(makeComplex(1,0) != complex(0, 1), "");
+
+class complex_wrap : public complex {
+public:
+  constexpr complex_wrap(int re, int im = 0) : complex(re, im) {}
+  constexpr complex_wrap(const complex_wrap &o) : complex(o) {}
+};
+
+static_assert_fold((complex_wrap)1 == complex(1), "");
+static_assert_fold((complex)1 != complex_wrap(0, 1), "");
+static_assert_fold(complex(1) == complex_wrap(1), "");
+static_assert_fold(complex_wrap(1) != complex(0, 1), "");
+constexpr complex_wrap makeComplexWrap(int re, int im) {
+  return complex_wrap(re, im);
+}
+static_assert_fold(makeComplexWrap(1,0) == complex(1), "");
+static_assert_fold(makeComplexWrap(1,0) != complex(0, 1), "");
+
+}
