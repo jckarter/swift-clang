@@ -870,11 +870,9 @@ bool ObjCSubscriptOpBuilder::findAtIndexGetter() {
     &S.Context.Idents.get("objectAtIndexedSubscript")  
   };
   
-  Selector Sel = S.Context.Selectors.getSelector(1, KeyIdents);
-  AtIndexGetter = S.LookupMethodInObjectType(Sel, ResultType, 
+  AtIndexGetterSelector = S.Context.Selectors.getSelector(1, KeyIdents);
+  AtIndexGetter = S.LookupMethodInObjectType(AtIndexGetterSelector, ResultType, 
                                              true /*instance*/);
-  AtIndexGetterSelector = Sel;
-  
   bool receiverIdType = (BaseT->isObjCIdType() ||
                          BaseT->isObjCQualifiedIdType());
   
@@ -885,7 +883,8 @@ bool ObjCSubscriptOpBuilder::findAtIndexGetter() {
       return false;
     }
     AtIndexGetter = 
-      S.LookupInstanceMethodInGlobalPool(Sel, RefExpr->getSourceRange(), 
+      S.LookupInstanceMethodInGlobalPool(AtIndexGetterSelector, 
+                                         RefExpr->getSourceRange(), 
                                          true, false);
   }
   
