@@ -3633,15 +3633,19 @@ def err_invalid_property_name : Error<
 def err_getter_not_found : Error<
   "expected getter method not found on object of type %0">;
 def err_objc_subscript_method_not_found : Error<
-  "expected method to %select{read|write}1 array element not "
+  "expected method to %select{read|write}1 %select{dictionary|array}2 element not "
   "found on object of type %0">;
 def err_objc_subscript_index_type : Error<
   "type of the method's index parameter is not integral type">;
+def err_objc_subscript_key_type : Error<
+  "type of the method's key parameter is not object type">;
+def err_objc_subscript_dic_object_type : Error<
+  "type of dictionary method's object parameter is not object type">;
 def err_objc_subscript_object_type : Error<
-  "cannot assign to this array because assigning method's 2nd parameter"
+  "cannot assign to this %select{dictionary|array}1 because assigning method's 2nd parameter"
   " of type %0 is not objective-c pointer type">;
 def err_objc_subscript_base_type : Error<
-  "type of array base must be an objective-c pointer instead of %0">;
+  "type of %select{dictionary|array}1 base must be an objective-c pointer instead of %0">;
 def err_illegal_container_subscriptin_op : Error<
   "illegal operation on objective-c container subscripting">;
 def err_property_not_found_forward_class : Error<

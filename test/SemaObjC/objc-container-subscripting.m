@@ -8,9 +8,7 @@ typedef unsigned int size_t;
 - (void)objectAtIndexedSubscript:(void *)index put:(id*)object; // expected-note {{parameter of type 'void *' is declared here}} \
                                                                 // expected-note {{parameter of type 'id *' is declared here}}
 @end
-
-@interface I
-@end
+@interface I @end
 
 int main() {
   NSMutableArray<P> * array;
@@ -25,5 +23,22 @@ int main() {
   oldObject = array[10]++; // expected-error {{illegal operation on objective-c container subscripting}}
   oldObject = array[10]--; // expected-error {{illegal operation on objective-c container subscripting}}
   oldObject = --array[10]; // expected-error {{illegal operation on objective-c container subscripting}}
+}
+
+
+@interface NSMutableDictionary
+- (id)objectForKeyedSubscript:(id*)key; // expected-note {{parameter of type 'id *' is declared here}}
+- (void)setObject:(void*)object forKeyedSubscript:(id*)key; // expected-note {{parameter of type 'void *' is declared here}} \
+                                                            // expected-note {{parameter of type 'id *' is declared here}}
+@end
+@class NSString;
+
+void testDict() {
+  NSMutableDictionary *dictionary;
+  NSString *key;
+  id newObject, oldObject;
+  oldObject = dictionary[key];  // expected-error {{type of the method's key parameter is not object type}}
+  dictionary[key] = newObject;  // expected-error {{type of the method's key parameter is not object type}} \
+                                // expected-error {{type of dictionary method's object parameter is not object type}}
 }
 

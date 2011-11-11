@@ -451,9 +451,6 @@ ExprResult Sema::BuildObjCSubscriptExpression(SourceRange SR, Expr *BaseExpr,
   
   QualType BaseT = BaseExpr->getType();
   QualType IndexT = IndexExpr->getType();
-  // Only Arrays for now.
-  if (!IndexT->isIntegralOrEnumerationType())
-    return ExprError();
     
   // Perform lvalue-to-rvalue conversion.
   Result = DefaultLvalueConversion(BaseExpr);

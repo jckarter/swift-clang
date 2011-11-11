@@ -13,6 +13,13 @@ typedef unsigned int size_t;
 - (void)objectAtIndexedSubscript:(size_t)index put:(id)object;
 @end
 
+@interface NSMutableDictionary
+- (id)objectForKeyedSubscript:(id)key;
+- (void)setObject:(id)object forKeyedSubscript:(id)key;
+@end
+
+@class NSString;
+
 int main() {
   NSMutableArray<P> * array;
   id oldObject = array[10];
@@ -23,5 +30,12 @@ int main() {
   oldObject = unknown_array[1];
 
   unknown_array[1] = oldObject;
+
+  NSMutableDictionary *dictionary;
+  NSString *key;
+  id newObject;
+  oldObject = dictionary[key];
+  dictionary[key] = newObject;	// replace oldObject with newObject
+
 }
 

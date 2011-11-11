@@ -859,18 +859,29 @@ bool ObjCSubscriptOpBuilder::findAtIndexGetter() {
         ResultType->getAsObjCQualifiedInterfaceType())
       ResultType = iQFaceTy->getBaseType();
   }
+  bool arrayRef = RefExpr->isArraySubscriptRefExpr();
   if (ResultType.isNull()) {
     S.Diag(BaseExpr->getExprLoc(), diag::err_objc_subscript_base_type)
-      << BaseExpr->getType();
+      << BaseExpr->getType() << arrayRef;
     return false;
   }
+  if (!arrayRef) {
+    // dictionary subscirpting.
+    // - (id)objectForKeyedSubscript:(id)key;
+    IdentifierInfo *KeyIdents[] = {
+      &S.Context.Idents.get("objectForKeyedSubscript")  
+    };
+    AtIndexGetterSelector = S.Context.Selectors.getSelector(1, KeyIdents);
+  }
+  else {
+    // - (id)objectAtIndexedSubscript:(size_t)index;
+    IdentifierInfo *KeyIdents[] = {
+      &S.Context.Idents.get("objectAtIndexedSubscript")  
+    };
   
-  // - (id)objectAtIndexedSubscript:(size_t)index;
-  IdentifierInfo *KeyIdents[] = {
-    &S.Context.Idents.get("objectAtIndexedSubscript")  
-  };
+    AtIndexGetterSelector = S.Context.Selectors.getSelector(1, KeyIdents);
+  }
   
-  AtIndexGetterSelector = S.Context.Selectors.getSelector(1, KeyIdents);
   AtIndexGetter = S.LookupMethodInObjectType(AtIndexGetterSelector, ResultType, 
                                              true /*instance*/);
   bool receiverIdType = (BaseT->isObjCIdType() ||
@@ -879,7 +890,7 @@ bool ObjCSubscriptOpBuilder::findAtIndexGetter() {
   if (!AtIndexGetter) {
     if (!receiverIdType) {
       S.Diag(BaseExpr->getExprLoc(), diag::err_objc_subscript_method_not_found)
-      << BaseExpr->getType() << 0;
+      << BaseExpr->getType() << 0 << arrayRef;
       return false;
     }
     AtIndexGetter = 
@@ -890,9 +901,11 @@ bool ObjCSubscriptOpBuilder::findAtIndexGetter() {
   
   if (AtIndexGetter) {
     QualType T = AtIndexGetter->param_begin()[0]->getType();
-    if (!T->isIntegerType()) {
+    if ((arrayRef && !T->isIntegerType()) ||
+        (!arrayRef && !T->isObjCObjectPointerType())) {
       S.Diag(RefExpr->getKeyExpr()->getExprLoc(), 
-             diag::err_objc_subscript_index_type);
+             arrayRef ? diag::err_objc_subscript_index_type
+                      : diag::err_objc_subscript_key_type);
       S.Diag(AtIndexGetter->param_begin()[0]->getLocation(), 
              diag::note_parameter_type) << T;
       return false;
@@ -917,18 +930,30 @@ bool ObjCSubscriptOpBuilder::findAtIndexSetter() {
         ResultType->getAsObjCQualifiedInterfaceType())
       ResultType = iQFaceTy->getBaseType();
   }
+  bool arrayRef = RefExpr->isArraySubscriptRefExpr();
   if (ResultType.isNull()) {
     S.Diag(BaseExpr->getExprLoc(), diag::err_objc_subscript_base_type)
-      << BaseExpr->getType();
+      << BaseExpr->getType() << arrayRef;
     return false;
   }
   
-  // - (void)objectAtIndexedSubscript:(size_t)index put:(id)object;
-  IdentifierInfo *KeyIdents[] = {
-    &S.Context.Idents.get("objectAtIndexedSubscript"),
-    &S.Context.Idents.get("put")
-  };
-  AtIndexSetterSelector = S.Context.Selectors.getSelector(2, KeyIdents);
+  if (!arrayRef) {
+    // dictionary subscripting.
+    // - (void)setObject:(id)object forKeyedSubscript:(id)key;
+    IdentifierInfo *KeyIdents[] = {
+      &S.Context.Idents.get("setObject"),
+      &S.Context.Idents.get("forKeyedSubscript")
+    };
+    AtIndexSetterSelector = S.Context.Selectors.getSelector(2, KeyIdents);
+  }
+  else {
+    // - (void)objectAtIndexedSubscript:(size_t)index put:(id)object;
+    IdentifierInfo *KeyIdents[] = {
+      &S.Context.Idents.get("objectAtIndexedSubscript"),
+      &S.Context.Idents.get("put")
+    };
+    AtIndexSetterSelector = S.Context.Selectors.getSelector(2, KeyIdents);
+  }
   AtIndexSetter = S.LookupMethodInObjectType(AtIndexSetterSelector, ResultType, 
                                              true /*instance*/);
   
@@ -939,7 +964,7 @@ bool ObjCSubscriptOpBuilder::findAtIndexSetter() {
     if (!receiverIdType) {
       S.Diag(BaseExpr->getExprLoc(), 
              diag::err_objc_subscript_method_not_found)
-      << BaseExpr->getType() << 1;
+      << BaseExpr->getType() << 1 << arrayRef;
       return false;
     }
     AtIndexSetter = 
@@ -949,7 +974,7 @@ bool ObjCSubscriptOpBuilder::findAtIndexSetter() {
   }
   
   bool err = false;
-  if (AtIndexSetter) {
+  if (AtIndexSetter && arrayRef) {
     QualType T = AtIndexSetter->param_begin()[0]->getType();
     if (!T->isIntegerType()) {
       S.Diag(RefExpr->getKeyExpr()->getExprLoc(), 
@@ -961,12 +986,28 @@ bool ObjCSubscriptOpBuilder::findAtIndexSetter() {
     T = AtIndexSetter->param_begin()[1]->getType();
     if (!T->getAs<ObjCObjectPointerType>()) {
       S.Diag(RefExpr->getBaseExpr()->getExprLoc(), 
-             diag::err_objc_subscript_object_type) << T;
+             diag::err_objc_subscript_object_type) << T << arrayRef;
       S.Diag(AtIndexSetter->param_begin()[1]->getLocation(), 
              diag::note_parameter_type) << T;
       err = true;
     }
   }
+  else if (AtIndexSetter && !arrayRef)
+    for (unsigned i=0; i <2; i++) {
+      QualType T = AtIndexSetter->param_begin()[i]->getType();
+      if (!T->isObjCObjectPointerType()) {
+        if (i == 1)
+          S.Diag(RefExpr->getKeyExpr()->getExprLoc(),
+                 diag::err_objc_subscript_key_type);
+        else
+          S.Diag(RefExpr->getBaseExpr()->getExprLoc(),
+                 diag::err_objc_subscript_dic_object_type);
+        S.Diag(AtIndexSetter->param_begin()[i]->getLocation(), 
+               diag::note_parameter_type) << T;
+        err = true;
+      }
+    }
+
   return !err;
 }
 
@@ -1061,6 +1102,11 @@ ExprResult ObjCSubscriptOpBuilder::buildSet(Expr *op, SourceLocation opcLoc,
   
   // Arguments.
   Expr *args[] = { Index, op };
+  if (!RefExpr->isArraySubscriptRefExpr()) {
+    // weird but true; order for dictionaries is reversed for key-value pair.
+    args[0] = op;
+    args[1] = Index;
+  }
   
   // Build a message-send.
   ExprResult msg = S.BuildInstanceMessage(InstanceBase, 
