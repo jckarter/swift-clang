@@ -436,7 +436,9 @@ static ExprResult CheckObjCCollectionLiteralElement(Sema &S, Expr *Element,
 }
 
 ExprResult Sema::BuildObjCSubscriptExpression(SourceRange SR, Expr *BaseExpr,
-                                        Expr *IndexExpr) {
+                                        Expr *IndexExpr,
+                                        ObjCMethodDecl *getterMethod,
+                                        ObjCMethodDecl *setterMethod) {
   // Feature support is for modern abi.
   if (!LangOpts.ObjCNonFragileABI)
     return ExprError();
@@ -466,8 +468,8 @@ ExprResult Sema::BuildObjCSubscriptExpression(SourceRange SR, Expr *BaseExpr,
                                                            BaseExpr,
                                                            IndexExpr,
                                                            Context.PseudoObjectTy,
-                                                           0,
-                                                           0, SR));
+                                                           getterMethod,
+                                                           setterMethod, SR));
   
 }
 

@@ -2172,9 +2172,12 @@ public:
                                            MultiExprArg(Elements, NumElements));
   }
  
-  ExprResult RebuildObjCSubscriptRefExpr(SourceRange Range, Expr *Key) {
-    assert (false && "RebuildObjCSubscriptRefExpr - NYI");
-    return ExprError();
+  ExprResult RebuildObjCSubscriptRefExpr(SourceRange Range, 
+                                         Expr *Base, Expr *Key,
+                                         ObjCMethodDecl *getterMethod,
+                                         ObjCMethodDecl *setterMethod) {
+    return  getSema().BuildObjCSubscriptExpression(Range, Base, Key,
+                                                   getterMethod, setterMethod);
   }
 
   /// \brief Build a new Objective-C dictionary literal.
@@ -8243,17 +8246,25 @@ TreeTransform<Derived>::TransformObjCPropertyRefExpr(ObjCPropertyRefExpr *E) {
 template<typename Derived>
 ExprResult
 TreeTransform<Derived>::TransformObjCSubscriptRefExpr(ObjCSubscriptRefExpr *E) {
-   // Transform the key expression.
+  // Transform the base expression.
+  ExprResult Base = getDerived().TransformExpr(E->getBaseExpr());
+  if (Base.isInvalid())
+    return ExprError();
+
+  // Transform the key expression.
   ExprResult Key = getDerived().TransformExpr(E->getKeyExpr());
   if (Key.isInvalid())
     return ExprError();
 
   // If nothing changed, just retain the existing expression.
   if (!getDerived().AlwaysRebuild() &&
-      Key.get() == E->getKeyExpr())
+      Key.get() == E->getKeyExpr() && Base.get() == E->getBaseExpr())
     return SemaRef.Owned(E);
 
-  return getDerived().RebuildObjCSubscriptRefExpr(E->getSourceRange(), Key.get());
+  return getDerived().RebuildObjCSubscriptRefExpr(E->getSourceRange(), 
+                                                  Base.get(), Key.get(),
+                                                  E->getAtIndexMethodDecl(),
+                                                  E->setAtIndexMethodDecl());
 }
 
 template<typename Derived>

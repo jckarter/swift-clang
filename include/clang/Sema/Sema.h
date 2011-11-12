@@ -3472,7 +3472,9 @@ public:
   ExprResult BuildObjCArrayLiteral(SourceRange SR, MultiExprArg Elements);
   
   ExprResult BuildObjCSubscriptExpression(SourceRange SR, Expr *BaseExpr,
-                                          Expr *IndexExpr);
+                                          Expr *IndexExpr,
+                                          ObjCMethodDecl *getterMethod,
+                                          ObjCMethodDecl *setterMethod);
     
   ExprResult BuildObjCDictionaryLiteral(SourceRange SR,                                         
                                         ObjCDictionaryElement *Elements,
