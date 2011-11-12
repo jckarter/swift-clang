@@ -394,7 +394,6 @@ private:
   void ResolveDeclUpdatesBlocks();
   void WriteDeclUpdatesBlocks();
   void WriteDeclReplacementsBlock();
-  void ResolveChainedObjCCategories();
   void WriteChainedObjCCategories();
   void WriteDeclContextVisibleUpdate(const DeclContext *DC);
   void WriteFPPragmaOptions(const FPOptions &Opts);
@@ -588,8 +587,10 @@ public:
 
   void RewriteDecl(const Decl *D) {
     DeclsToRewrite.insert(D);
-    // Reset the flag, so that we don't add this decl multiple times.
-    const_cast<Decl *>(D)->setChangedSinceDeserialization(false);
+  }
+
+  bool isRewritten(const Decl *D) const {
+    return DeclsToRewrite.count(D);
   }
 
   /// \brief Note that the identifier II occurs at the given offset
@@ -665,6 +666,8 @@ public:
   virtual void StaticDataMemberInstantiated(const VarDecl *D);
   virtual void AddedObjCCategoryToInterface(const ObjCCategoryDecl *CatD,
                                             const ObjCInterfaceDecl *IFD);
+  virtual void CompletedObjCForwardRef(const ObjCContainerDecl *D);
+  virtual void UpdatedAttributeList(const Decl *D);
 };
 
 /// \brief AST and semantic-analysis consumer that generates a
