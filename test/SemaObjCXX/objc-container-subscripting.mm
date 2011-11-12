@@ -1,4 +1,4 @@
-// RUN: %clang_cc1 -triple x86_64-apple-darwin11 -fsyntax-only -verify %s
+// RUN: %clang_cc1 -fblocks -triple x86_64-apple-darwin11 -fsyntax-only -std=c++11 -verify %s
 
 @class NSArray;
 
@@ -43,3 +43,36 @@ enum E { e };
 template void  test_array_subscripts(NSMutableArray *, E, id);
 
 template void  test_array_subscripts(NSMutableArray *, double, id); // expected-note {{in instantiation of function template specialization 'test_array_subscripts<NSMutableArray *, double, id>' requested here}}
+
+template<typename T>
+struct ConvertibleTo {
+  operator T();
+};
+
+template<typename T>
+struct ExplicitlyConvertibleTo {
+  explicit operator T();
+};
+
+template<typename T> ConvertibleTo<T> makeConvertible();
+
+struct X {
+  ConvertibleTo<id> x;
+  ConvertibleTo<id> get();
+};
+
+NSMutableArray *test_convertibility(ConvertibleTo<NSMutableArray*> toArray,
+                         ConvertibleTo<id> toId,
+                         ConvertibleTo<int (^)(int)> toBlock,
+                         ConvertibleTo<int> toInt,
+                         ExplicitlyConvertibleTo<NSMutableArray *> toArrayExplicit) {
+  id array;
+
+  array[1] = toArray;
+
+  array[4] = array[1];
+
+  return array[toInt];
+  
+}
+
