@@ -2960,8 +2960,6 @@ void ASTWriter::WriteASTCore(Sema &SemaRef, MemorizeStatCalls *StatCalls,
        I != E; ++I) {
     if (!(*I)->isFromASTFile())
       NewGlobalDecls.push_back(std::make_pair((*I)->getKind(), GetDeclRef(*I)));
-    else if ((*I)->isChangedSinceDeserialization())
-      (void)GetDeclRef(*I); // Make sure it's written, but don't record it.
   }
   
   llvm::BitCodeAbbrev *Abv = new llvm::BitCodeAbbrev();
@@ -2995,7 +2993,6 @@ void ASTWriter::WriteASTCore(Sema &SemaRef, MemorizeStatCalls *StatCalls,
   // Resolve any declaration pointers within the declaration updates block and
   // chained Objective-C categories block to declaration IDs.
   ResolveDeclUpdatesBlocks();
-  ResolveChainedObjCCategories();
   
   // Form the record of special types.
   RecordData SpecialTypes;
@@ -3183,7 +3180,7 @@ void ASTWriter::ResolveDeclUpdatesBlocks() {
     const Decl *D = I->first;
     UpdateRecord &URec = I->second;
     
-    if (DeclsToRewrite.count(D))
+    if (isRewritten(D))
       continue; // The decl will be written completely
 
     unsigned Idx = 0, N = URec.size();
@@ -3216,7 +3213,7 @@ void ASTWriter::WriteDeclUpdatesBlocks() {
     const Decl *D = I->first;
     UpdateRecord &URec = I->second;
 
-    if (DeclsToRewrite.count(D))
+    if (isRewritten(D))
       continue; // The decl will be written completely,no need to store updates.
 
     uint64_t Offset = Stream.GetCurrentBitNo();
@@ -3243,17 +3240,6 @@ void ASTWriter::WriteDeclReplacementsBlock() {
   Stream.EmitRecord(DECL_REPLACEMENTS, Record);
 }
 
-void ASTWriter::ResolveChainedObjCCategories() {
-  for (SmallVector<ChainedObjCCategoriesData, 16>::iterator
-       I = LocalChainedObjCCategories.begin(),
-       E = LocalChainedObjCCategories.end(); I != E; ++I) {
-    ChainedObjCCategoriesData &Data = *I;
-    Data.InterfaceID = GetDeclRef(Data.Interface);
-    Data.TailCategoryID = GetDeclRef(Data.TailCategory);
-  }
-
-}
-
 void ASTWriter::WriteChainedObjCCategories() {
   if (LocalChainedObjCCategories.empty())
     return;
@@ -3263,13 +3249,16 @@ void ASTWriter::WriteChainedObjCCategories() {
          I = LocalChainedObjCCategories.begin(),
          E = LocalChainedObjCCategories.end(); I != E; ++I) {
     ChainedObjCCategoriesData &Data = *I;
+    if (isRewritten(Data.Interface))
+      continue;
+
     serialization::DeclID
         HeadCatID = getDeclID(Data.Interface->getCategoryList());
     assert(HeadCatID != 0 && "Category not written ?");
 
-    Record.push_back(Data.InterfaceID);
+    Record.push_back(GetDeclRef(Data.Interface));
     Record.push_back(HeadCatID);
-    Record.push_back(Data.TailCategoryID);
+    Record.push_back(GetDeclRef(Data.TailCategory));
   }
   Stream.EmitRecord(OBJC_CHAINED_CATEGORIES, Record);
 }
@@ -3463,12 +3452,6 @@ DeclID ASTWriter::GetDeclRef(const Decl *D) {
     // enqueue it in the list of declarations to emit.
     ID = NextDeclID++;
     DeclTypesToEmit.push(const_cast<Decl *>(D));
-  } else if (ID < FirstDeclID && D->isChangedSinceDeserialization()) {
-    // We don't add it to the replacement collection here, because we don't
-    // have the offset yet.
-    DeclTypesToEmit.push(const_cast<Decl *>(D));
-    // Reset the flag, so that we don't add this decl multiple times.
-    const_cast<Decl *>(D)->setChangedSinceDeserialization(false);
   }
 
   return ID;
@@ -4135,4 +4118,20 @@ void ASTWriter::AddedObjCCategoryToInterface(const ObjCCategoryDecl *CatD,
 
   ChainedObjCCategoriesData Data =  { IFD, CatD, 0, 0 };
   LocalChainedObjCCategories.push_back(Data);
+}
+
+void ASTWriter::CompletedObjCForwardRef(const ObjCContainerDecl *D) {
+  assert(!WritingAST && "Already writing the AST!");
+  if (!D->isFromASTFile())
+    return; // Declaration not imported from PCH.
+
+  RewriteDecl(D);
+}
+
+void ASTWriter::UpdatedAttributeList(const Decl *D) {
+  assert(!WritingAST && "Already writing the AST!");
+  if (!D->isFromASTFile())
+    return; // Declaration not imported from PCH.
+
+  RewriteDecl(D);
 }
