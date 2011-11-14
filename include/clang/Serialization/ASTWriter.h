@@ -276,12 +276,6 @@ private:
     /// \brief The local tail category ID that got chained to the imported
     /// interface.
     const ObjCCategoryDecl *TailCategory;
-
-    /// \brief ID corresponding to \c Interface.
-    serialization::DeclID InterfaceID;
-
-    /// \brief ID corresponding to TailCategoryID.
-    serialization::DeclID TailCategoryID;
   };
   /// \brief ObjC categories that got chained to an interface imported from
   /// another module.
@@ -377,7 +371,7 @@ private:
                                const Preprocessor &PP,
                                StringRef isysroot);
   void WritePreprocessor(const Preprocessor &PP, bool IsModule);
-  void WriteHeaderSearch(HeaderSearch &HS, StringRef isysroot);
+  void WriteHeaderSearch(const HeaderSearch &HS, StringRef isysroot);
   void WritePreprocessorDetail(PreprocessingRecord &PPRec);
   void WritePragmaDiagnosticMappings(const DiagnosticsEngine &Diag);
   void WriteCXXBaseSpecifiersOffsets();
@@ -667,6 +661,9 @@ public:
   virtual void AddedObjCCategoryToInterface(const ObjCCategoryDecl *CatD,
                                             const ObjCInterfaceDecl *IFD);
   virtual void CompletedObjCForwardRef(const ObjCContainerDecl *D);
+  virtual void AddedObjCPropertyInClassExtension(const ObjCPropertyDecl *Prop,
+                                            const ObjCPropertyDecl *OrigProp,
+                                            const ObjCCategoryDecl *ClassExt);
   virtual void UpdatedAttributeList(const Decl *D);
 };
 

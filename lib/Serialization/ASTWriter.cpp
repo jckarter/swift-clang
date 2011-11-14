@@ -1220,14 +1220,14 @@ namespace {
   // Trait used for the on-disk hash table of header search information.
   class HeaderFileInfoTrait {
     ASTWriter &Writer;
-    HeaderSearch &HS;
+    const HeaderSearch &HS;
     
     // Keep track of the framework names we've used during serialization.
     SmallVector<char, 128> FrameworkStringData;
     llvm::StringMap<unsigned> FrameworkNameOffset;
     
   public:
-    HeaderFileInfoTrait(ASTWriter &Writer, HeaderSearch &HS) 
+    HeaderFileInfoTrait(ASTWriter &Writer, const HeaderSearch &HS) 
       : Writer(Writer), HS(HS) { }
     
     typedef const char *key_type;
@@ -1306,7 +1306,7 @@ namespace {
 /// \param HS The header search structure to save.
 ///
 /// \param Chain Whether we're creating a chained AST file.
-void ASTWriter::WriteHeaderSearch(HeaderSearch &HS, StringRef isysroot) {
+void ASTWriter::WriteHeaderSearch(const HeaderSearch &HS, StringRef isysroot) {
   SmallVector<const FileEntry *, 16> FilesByUID;
   HS.getFileMgr().GetUniqueIDMapping(FilesByUID);
   
@@ -1322,7 +1322,9 @@ void ASTWriter::WriteHeaderSearch(HeaderSearch &HS, StringRef isysroot) {
     if (!File)
       continue;
 
-    const HeaderFileInfo &HFI = HS.header_file_begin()[UID];
+    // Use HeaderSearch's getFileInfo to make sure we get the HeaderFileInfo
+    // from the external source if it was not provided already.
+    const HeaderFileInfo &HFI = HS.getFileInfo(File);
     if (HFI.External && Chain)
       continue;
 
@@ -2990,8 +2992,7 @@ void ASTWriter::WriteASTCore(Sema &SemaRef, MemorizeStatCalls *StatCalls,
     }
   }
   
-  // Resolve any declaration pointers within the declaration updates block and
-  // chained Objective-C categories block to declaration IDs.
+  // Resolve any declaration pointers within the declaration updates block.
   ResolveDeclUpdatesBlocks();
   
   // Form the record of special types.
@@ -3005,6 +3006,7 @@ void ASTWriter::WriteASTCore(Sema &SemaRef, MemorizeStatCalls *StatCalls,
   AddTypeRef(Context.ObjCIdRedefinitionType, SpecialTypes);
   AddTypeRef(Context.ObjCClassRedefinitionType, SpecialTypes);
   AddTypeRef(Context.ObjCSelRedefinitionType, SpecialTypes);
+  AddTypeRef(Context.getucontext_tType(), SpecialTypes);
   
   // Keep writing types and declarations until all types and
   // declarations have been written.
@@ -3252,13 +3254,13 @@ void ASTWriter::WriteChainedObjCCategories() {
     if (isRewritten(Data.Interface))
       continue;
 
+    assert(Data.Interface->getCategoryList());
     serialization::DeclID
         HeadCatID = getDeclID(Data.Interface->getCategoryList());
-    assert(HeadCatID != 0 && "Category not written ?");
 
-    Record.push_back(GetDeclRef(Data.Interface));
+    Record.push_back(getDeclID(Data.Interface));
     Record.push_back(HeadCatID);
-    Record.push_back(GetDeclRef(Data.TailCategory));
+    Record.push_back(getDeclID(Data.TailCategory));
   }
   Stream.EmitRecord(OBJC_CHAINED_CATEGORIES, Record);
 }
@@ -4116,11 +4118,25 @@ void ASTWriter::AddedObjCCategoryToInterface(const ObjCCategoryDecl *CatD,
     return; // We already recorded that the tail of a category chain should be
             // attached to an interface.
 
-  ChainedObjCCategoriesData Data =  { IFD, CatD, 0, 0 };
+  ChainedObjCCategoriesData Data =  { IFD, CatD };
   LocalChainedObjCCategories.push_back(Data);
 }
 
 void ASTWriter::CompletedObjCForwardRef(const ObjCContainerDecl *D) {
+  assert(!WritingAST && "Already writing the AST!");
+  if (!D->isFromASTFile())
+    return; // Declaration not imported from PCH.
+
+  RewriteDecl(D);
+}
+
+void ASTWriter::AddedObjCPropertyInClassExtension(const ObjCPropertyDecl *Prop,
+                                          const ObjCPropertyDecl *OrigProp,
+                                          const ObjCCategoryDecl *ClassExt) {
+  const ObjCInterfaceDecl *D = ClassExt->getClassInterface();
+  if (!D)
+    return;
+
   assert(!WritingAST && "Already writing the AST!");
   if (!D->isFromASTFile())
     return; // Declaration not imported from PCH.
