@@ -99,3 +99,25 @@ id test_dict_convertibility(ConvertibleTo<NSMutableDictionary*> toDict,
 }
 
 
+template<typename ...Args>
+void test_bad_variadic_array_subscripting(Args ...args) {
+  id arr1;
+  arr1[3] = args; // expected-error {{expression contains unexpanded parameter pack 'args'}}
+}
+
+template<typename ...Args>
+void test_variadic_array_subscripting(Args ...args) {
+  id arr[] = {args[3]...}; // which means: {a[3], b[3], c[3]};
+}
+
+template void test_variadic_array_subscripting(id arg1, NSMutableArray* arg2, id arg3);
+
+@class Key;
+
+template<typename Index, typename ...Args>
+void test_variadic_dictionary_subscripting(Index I, Args ...args) {
+  id arr[] = {args[I]...}; // which means: {a[3], b[3], c[3]};
+}
+
+template void test_variadic_dictionary_subscripting(Key *key, id arg1, NSMutableDictionary* arg2, id arg3);
+
