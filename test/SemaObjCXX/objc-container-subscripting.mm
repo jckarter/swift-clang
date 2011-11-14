@@ -32,8 +32,8 @@ template void test_dictionary_subscripts(NSMutableDictionary*, id, int); // expe
 
 template<typename T, typename U, typename O>
 void test_array_subscripts(T base, U index, O obj) {
-  base[index] = obj; // expected-error {{expected method to write array element not found on object of type 'NSMutableArray *'}}
-  obj = base[index]; // expected-error {{expected method to read array element not found on object of type 'NSMutableArray *'}}
+  base[index] = obj; // expected-error {{expected method to write dictionary element not found on object of type 'NSMutableArray *'}}
+  obj = base[index]; // expected-error {{expected method to read dictionary element not found on object of type 'NSMutableArray *'}}
 }
 
 template void  test_array_subscripts(NSMutableArray *, int, id);
@@ -61,7 +61,7 @@ struct X {
   ConvertibleTo<id> get();
 };
 
-NSMutableArray *test_convertibility(ConvertibleTo<NSMutableArray*> toArray,
+NSMutableArray *test_array_convertibility(ConvertibleTo<NSMutableArray*> toArray,
                          ConvertibleTo<id> toId,
                          ConvertibleTo<int (^)(int)> toBlock,
                          ConvertibleTo<int> toInt,
@@ -71,8 +71,31 @@ NSMutableArray *test_convertibility(ConvertibleTo<NSMutableArray*> toArray,
   array[1] = toArray;
 
   array[4] = array[1];
+ 
+  toArrayExplicit[2] = toId; // expected-error {{type 'ExplicitlyConvertibleTo<NSMutableArray *>' does not provide a subscript operator}}
 
   return array[toInt];
   
 }
+
+id test_dict_convertibility(ConvertibleTo<NSMutableDictionary*> toDict,
+                         ConvertibleTo<id> toId,
+                         ConvertibleTo<int (^)(int)> toBlock,
+                         ConvertibleTo<int> toInt,
+                         ExplicitlyConvertibleTo<NSMutableDictionary *> toDictExplicit) {
+
+
+  NSMutableDictionary *Dict;
+  id Id;
+  Dict[toId] = toBlock;
+
+  Dict[toBlock] = toBlock;
+
+  Dict[toBlock] = Dict[toId] = Dict[toBlock];
+
+  Id = toDictExplicit[toId] = Id; // expected-error {{no viable overloaded operator[] for type 'ExplicitlyConvertibleTo<NSMutableDictionary *>'}}
+
+  return Dict[toBlock];
+}
+
 

@@ -844,6 +844,32 @@ Expr *ObjCSubscriptOpBuilder::rebuildAndCaptureObject(Expr *syntacticBase) {
   return syntacticBase;
 }
 
+static bool IsArraySubscriptRefExpr(Sema &S, 
+                                    ObjCSubscriptRefExpr *RefExpr) {
+  if (RefExpr->isArraySubscriptRefExpr())
+    return true;
+  
+  if (!S.getLangOptions().CPlusPlus)
+    return false;
+  
+  Expr *Key = RefExpr->getKeyExpr();
+  QualType KT = Key->getType();
+  
+  if (!KT->isRecordType())
+    return false;
+  
+  // There could be a type-conversion operator function.
+  ImplicitConversionSequence ICS = 
+    S.TryImplicitConversion(Key, S.Context.IntTy,
+                          // FIXME: Are these flags correct?
+                          /*SuppressUserConversions=*/false,
+                          /*AllowExplicit=*/true,
+                          /*InOverloadResolution=*/false,
+                          /*CStyle=*/false,
+                          /*AllowObjCWritebackConversion=*/false);
+  return !ICS.isBad();
+}
+
 bool ObjCSubscriptOpBuilder::findAtIndexGetter() {
   if (AtIndexGetter)
     return true;
@@ -859,9 +885,9 @@ bool ObjCSubscriptOpBuilder::findAtIndexGetter() {
         ResultType->getAsObjCQualifiedInterfaceType())
       ResultType = iQFaceTy->getBaseType();
   }
-  bool arrayRef = RefExpr->isArraySubscriptRefExpr();
-  bool diagnoseArrayRef = arrayRef ||
-                          !RefExpr->getKeyExpr()->getType()->isAnyPointerType();
+  bool arrayRef = IsArraySubscriptRefExpr(S, RefExpr);
+  bool diagnoseArrayRef = arrayRef;
+  
   if (ResultType.isNull()) {
     S.Diag(BaseExpr->getExprLoc(), diag::err_objc_subscript_base_type)
       << BaseExpr->getType() << diagnoseArrayRef;
@@ -932,9 +958,8 @@ bool ObjCSubscriptOpBuilder::findAtIndexSetter() {
         ResultType->getAsObjCQualifiedInterfaceType())
       ResultType = iQFaceTy->getBaseType();
   }
-  bool arrayRef = RefExpr->isArraySubscriptRefExpr();
-  bool diagnoseArrayRef = arrayRef || 
-                          !RefExpr->getKeyExpr()->getType()->isAnyPointerType();
+  bool arrayRef = IsArraySubscriptRefExpr(S, RefExpr);
+  bool diagnoseArrayRef = arrayRef;
   if (ResultType.isNull()) {
     S.Diag(BaseExpr->getExprLoc(), diag::err_objc_subscript_base_type)
       << BaseExpr->getType() << diagnoseArrayRef;
