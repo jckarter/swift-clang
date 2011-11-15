@@ -753,6 +753,7 @@ void ASTStmtWriter::VisitPseudoObjectExpr(PseudoObjectExpr *E) {
     if (OpaqueValueExpr *OVE = dyn_cast<OpaqueValueExpr>(*i))
       Writer.AddStmt(OVE->getSourceExpr());
   }
+  Code = serialization::EXPR_PSEUDO_OBJECT;
 }
 
 void ASTStmtWriter::VisitAtomicExpr(AtomicExpr *E) {
@@ -768,6 +769,8 @@ void ASTStmtWriter::VisitAtomicExpr(AtomicExpr *E) {
   }
   Writer.AddSourceLocation(E->getBuiltinLoc(), Record);
   Writer.AddSourceLocation(E->getRParenLoc(), Record);
+  
+  Code = serialization::EXPR_ATOMIC;
 }
 
 //===----------------------------------------------------------------------===//
@@ -887,6 +890,8 @@ void ASTStmtWriter::VisitObjCSubscriptRefExpr(ObjCSubscriptRefExpr *E) {
   Writer.AddStmt(E->getKeyExpr());
   Writer.AddDeclRef(E->getAtIndexMethodDecl(), Record);
   Writer.AddDeclRef(E->setAtIndexMethodDecl(), Record);
+  
+  Code = serialization::EXPR_OBJC_SUBSCRIPT_REF_EXPR;
 }
 
 void ASTStmtWriter::VisitObjCMessageExpr(ObjCMessageExpr *E) {
