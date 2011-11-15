@@ -4310,6 +4310,9 @@ def warn_unused_voidptr : Warning<
 def warn_unused_property_expr : Warning<
  "property access result unused - getters should not be used for side effects">,
   InGroup<UnusedValue>;
+def warn_unused_container_subscript_expr : Warning<
+ "container access result unused - container access should not be used for side effects">,
+  InGroup<UnusedValue>;
 def warn_unused_call : Warning<
   "ignoring return value of function declared with %0 attribute">,
   InGroup<UnusedValue>;

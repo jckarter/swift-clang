@@ -41,4 +41,3 @@ void testDict() {
   dictionary[key] = newObject;  // expected-error {{type of the method's key parameter is not object type}} \
                                 // expected-error {{type of dictionary method's object parameter is not object type}}
 }
-
