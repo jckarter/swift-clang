@@ -3976,10 +3976,7 @@ Sema::ActOnInitList(SourceLocation LBraceLoc, MultiExprArg InitArgList,
   // Immediately handle non-overload placeholders.  Overloads can be
   // resolved contextually, but everything else here can't.
   for (unsigned I = 0; I != NumInit; ++I) {
-    if (const BuiltinType *pty
-          = InitList[I]->getType()->getAsPlaceholderType()) {
-      if (pty->getKind() == BuiltinType::Overload) continue;
-
+    if (InitList[I]->getType()->isNonOverloadPlaceholderType()) {
       ExprResult result = CheckPlaceholderExpr(InitList[I]);
 
       // Ignore failures; dropping the entire initializer list because
@@ -7063,7 +7060,9 @@ static bool CheckForModifiableLvalue(Expr *E, SourceLocation Loc, Sema &S) {
           //  - self
           ObjCMethodDecl *method = S.getCurMethodDecl();
           if (method && var == method->getSelfDecl())
-            Diag = diag::err_typecheck_arr_assign_self;
+            Diag = method->isClassMethod()
+              ? diag::err_typecheck_arc_assign_self_class_method
+              : diag::err_typecheck_arc_assign_self;
 
           //  - fast enumeration variables
           else
