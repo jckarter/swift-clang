@@ -108,6 +108,10 @@ public:
   }
 
   bool VisitObjCImplementationDecl(ObjCImplementationDecl *D) {
+    const ObjCInterfaceDecl *Class = D->getClassInterface();
+    if (Class->isImplicitInterfaceDecl())
+      IndexCtx.handleObjCInterface(Class);
+
     IndexCtx.handleObjCImplementation(D);
 
     IndexCtx.indexTUDeclsInObjCContainer();
@@ -172,17 +176,19 @@ void IndexingContext::indexDeclContext(const DeclContext *DC) {
   }
 }
 
+void IndexingContext::indexTopLevelDecl(Decl *D) {
+  if (isNotFromSourceFile(D->getLocation()))
+    return;
+
+  if (isa<ObjCMethodDecl>(D))
+    return; // Wait for the objc container.
+
+  indexDecl(D);
+}
+
 void IndexingContext::indexDeclGroupRef(DeclGroupRef DG) {
-  for (DeclGroupRef::iterator I = DG.begin(), E = DG.end(); I != E; ++I) {
-    Decl *D = *I;
-    if (isNotFromSourceFile(D->getLocation()))
-      return;
-
-    if (isa<ObjCMethodDecl>(D))
-      continue; // Wait for the objc container.
-
-    indexDecl(D);
-  }
+  for (DeclGroupRef::iterator I = DG.begin(), E = DG.end(); I != E; ++I)
+    indexTopLevelDecl(*I);
 }
 
 void IndexingContext::indexTUDeclsInObjCContainer() {
