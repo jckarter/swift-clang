@@ -1624,7 +1624,8 @@ static const char *getEntityKindString(CXIdxEntityKind kind) {
   case CXIdxEntity_ObjCClass: return "objc-class";
   case CXIdxEntity_ObjCProtocol: return "objc-protocol";
   case CXIdxEntity_ObjCCategory: return "objc-category";
-  case CXIdxEntity_ObjCMethod: return "objc-method";
+  case CXIdxEntity_ObjCInstanceMethod: return "objc-instance-method";
+  case CXIdxEntity_ObjCClassMethod: return "objc-class-method";
   case CXIdxEntity_ObjCProperty: return "objc-property";
   case CXIdxEntity_ObjCIvar: return "objc-ivar";
   case CXIdxEntity_Enum: return "enum";
@@ -1651,6 +1652,20 @@ static void printEntityInfo(const char *cb,
   printf("%s: kind: %s", cb, getEntityKindString(info->kind));
   printf(" | name: %s", name);
   printf(" | USR: %s", info->USR);
+}
+
+static void printProtocolList(const CXIdxObjCProtocolRefListInfo *ProtoInfo,
+                              CXClientData client_data) {
+  unsigned i;
+  for (i = 0; i < ProtoInfo->numProtocols; ++i) {
+    printEntityInfo("     <protocol>", client_data,
+                    ProtoInfo->protocols[i]->protocol);
+    printf(" | cursor: ");
+    PrintCursor(ProtoInfo->protocols[i]->cursor);
+    printf(" | loc: ");
+    printCXIndexLoc(ProtoInfo->protocols[i]->loc);
+    printf("\n");
+  }
 }
 
 static void index_diagnostic(CXClientData client_data,
@@ -1717,8 +1732,7 @@ static void index_indexDeclaration(CXClientData client_data,
   IndexData *index_data;
   const CXIdxObjCCategoryDeclInfo *CatInfo;
   const CXIdxObjCInterfaceDeclInfo *InterInfo;
-  const CXIdxObjCProtocolDeclInfo *ProtoInfo;
-  unsigned i;
+  const CXIdxObjCProtocolRefListInfo *ProtoInfo;
   index_data = (IndexData *)client_data;
 
   printEntityInfo("[indexDeclaration]", client_data, info->entityInfo);
@@ -1729,7 +1743,9 @@ static void index_indexDeclaration(CXClientData client_data,
   printf(" | container: ");
   printCXIndexContainer(info->container);
   printf(" | isRedecl: %d", info->isRedeclaration);
-  printf(" | isDef: %d\n", info->isDefinition);
+  printf(" | isDef: %d", info->isDefinition);
+  printf(" | isContainer: %d", info->isContainer);
+  printf(" | isImplicit: %d\n", info->isImplicit);
 
   if (clang_index_isEntityObjCContainerKind(info->entityInfo->kind)) {
     const char *kindName = 0;
@@ -1749,12 +1765,16 @@ static void index_indexDeclaration(CXClientData client_data,
   if ((CatInfo = clang_index_getObjCCategoryDeclInfo(info))) {
     printEntityInfo("     <ObjCCategoryInfo>: class", client_data,
                     CatInfo->objcClass);
+    printf(" | cursor: ");
+    PrintCursor(CatInfo->classCursor);
+    printf(" | loc: ");
+    printCXIndexLoc(CatInfo->classLoc);
     printf("\n");
   }
 
   if ((InterInfo = clang_index_getObjCInterfaceDeclInfo(info))) {
     if (InterInfo->superInfo) {
-      printEntityInfo("     <ObjCInterfaceInfo>: base", client_data,
+      printEntityInfo("     <base>", client_data,
                       InterInfo->superInfo->base);
       printf(" | cursor: ");
       PrintCursor(InterInfo->superInfo->cursor);
@@ -1762,27 +1782,10 @@ static void index_indexDeclaration(CXClientData client_data,
       printCXIndexLoc(InterInfo->superInfo->loc);
       printf("\n");
     }
-    for (i = 0; i < InterInfo->numProtocols; ++i) {
-      printEntityInfo("     <ObjCInterfaceInfo>: protocol", client_data,
-                      InterInfo->protocols[i]->protocol);
-      printf(" | cursor: ");
-      PrintCursor(InterInfo->protocols[i]->cursor);
-      printf(" | loc: ");
-      printCXIndexLoc(InterInfo->protocols[i]->loc);
-      printf("\n");
-    }
   }
 
-  if ((ProtoInfo = clang_index_getObjCProtocolDeclInfo(info))) {
-    for (i = 0; i < ProtoInfo->numProtocols; ++i) {
-      printEntityInfo("     <ObjCProtocolInfo>: protocol", client_data,
-                      ProtoInfo->protocols[i]->protocol);
-      printf(" | cursor: ");
-      PrintCursor(ProtoInfo->protocols[i]->cursor);
-      printf(" | loc: ");
-      printCXIndexLoc(ProtoInfo->protocols[i]->loc);
-      printf("\n");
-    }
+  if ((ProtoInfo = clang_index_getObjCProtocolRefListInfo(info))) {
+    printProtocolList(ProtoInfo, client_data);
   }
 
   if (outData->outContainer)
@@ -1799,7 +1802,7 @@ static void index_indexEntityReference(CXClientData client_data,
   printEntityInfo(" | <parent>:", client_data, info->parentEntity);
   printf(" | container: ");
   printCXIndexContainer(info->container);
-  printf(" | kind: ");
+  printf(" | refkind: ");
   switch (info->kind) {
   case CXIdxEntityRef_Direct: printf("direct"); break;
   case CXIdxEntityRef_ImplicitProperty: printf("implicit prop"); break;
@@ -1843,9 +1846,51 @@ static int index_file(int argc, const char **argv) {
   index_data.first_check_printed = 0;
   index_data.fail_for_error = 0;
 
-  result = clang_indexTranslationUnit(CIdx, &index_data,
-                                      &IndexCB,sizeof(IndexCB),
-                                      0, 0, argv, argc, 0, 0, 0, 0);
+  result = clang_indexSourceFile(CIdx, &index_data,
+                                 &IndexCB,sizeof(IndexCB),
+                                 0, 0, argv, argc, 0, 0, 0, 0);
+  if (index_data.fail_for_error)
+    return -1;
+
+  return result;
+}
+
+static int index_tu(int argc, const char **argv) {
+  CXIndex Idx;
+  CXTranslationUnit TU;
+  const char *check_prefix;
+  IndexData index_data;
+  int result;
+
+  check_prefix = 0;
+  if (argc > 0) {
+    if (strstr(argv[0], "-check-prefix=") == argv[0]) {
+      check_prefix = argv[0] + strlen("-check-prefix=");
+      ++argv;
+      --argc;
+    }
+  }
+
+  if (argc == 0) {
+    fprintf(stderr, "no ast file\n");
+    return -1;
+  }
+
+  if (!(Idx = clang_createIndex(/* excludeDeclsFromPCH */ 1,
+                                /* displayDiagnosics=*/1))) {
+    fprintf(stderr, "Could not create Index\n");
+    return 1;
+  }
+
+  if (!CreateTranslationUnit(Idx, argv[0], &TU))
+    return 1;
+
+  index_data.check_prefix = check_prefix;
+  index_data.first_check_printed = 0;
+  index_data.fail_for_error = 0;
+
+  result = clang_indexTranslationUnit(TU, &index_data,
+                                      &IndexCB,sizeof(IndexCB), 0);
   if (index_data.fail_for_error)
     return -1;
 
@@ -2395,6 +2440,7 @@ static void print_usage(void) {
     "       c-index-test -cursor-at=<site> <compiler arguments>\n"
     "       c-index-test -file-refs-at=<site> <compiler arguments>\n"
     "       c-index-test -index-file [-check-prefix=<FileCheck prefix>] <compiler arguments>\n"
+    "       c-index-test -index-tu [-check-prefix=<FileCheck prefix>] <AST file>\n"
     "       c-index-test -test-file-scan <AST file> <source file> "
           "[FileCheck prefix]\n");
   fprintf(stderr,
@@ -2450,6 +2496,8 @@ int cindextest_main(int argc, const char **argv) {
     return find_file_refs_at(argc, argv);
   if (argc > 2 && strcmp(argv[1], "-index-file") == 0)
     return index_file(argc - 2, argv + 2);
+  if (argc > 2 && strcmp(argv[1], "-index-tu") == 0)
+    return index_tu(argc - 2, argv + 2);
   else if (argc >= 4 && strncmp(argv[1], "-test-load-tu", 13) == 0) {
     CXCursorVisitor I = GetVisitor(argv[1] + 13);
     if (I)
