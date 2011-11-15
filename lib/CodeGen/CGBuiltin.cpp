@@ -2426,17 +2426,15 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
   }
   case ARM64::BI__builtin_arm64_vcvtf_n_v:
   case ARM64::BI__builtin_arm64_vcvtfq_n_v: {
-    bool Double = 
+    Int = usgn ? Intrinsic::arm64_neon_fcvtnu : Intrinsic::arm64_neon_fcvtns;
+    bool Double =
       (cast<llvm::IntegerType>(VTy->getElementType())->getBitWidth() == 64);
     llvm::Type *InTy =
       GetNeonType(getLLVMContext(),
                   NeonTypeFlags(Double ? NeonTypeFlags::Float64
                                        : NeonTypeFlags::Float32, false, quad));
-    Ops[0] = Builder.CreateBitCast(Ops[0], InTy);
-    if (usgn)
-      return Builder.CreateFPToUI(Ops[0], Ty);
-    else
-      return Builder.CreateFPToSI(Ops[0], Ty);
+    llvm::Type *Tys[2] = { Ty, InTy };
+    return EmitNeonCall(CGM.getIntrinsic(Int, Tys), Ops, "vcvtf_n");
   }
   case ARM64::BI__builtin_arm64_vcvtf_p_v:
   case ARM64::BI__builtin_arm64_vcvtfq_p_v: {
@@ -2452,15 +2450,17 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
   }
   case ARM64::BI__builtin_arm64_vcvtf_z_v:
   case ARM64::BI__builtin_arm64_vcvtfq_z_v: {
-    Int = usgn ? Intrinsic::arm64_neon_fcvtzu : Intrinsic::arm64_neon_fcvtzs;
-    bool Double =
+    bool Double = 
       (cast<llvm::IntegerType>(VTy->getElementType())->getBitWidth() == 64);
     llvm::Type *InTy =
       GetNeonType(getLLVMContext(),
                   NeonTypeFlags(Double ? NeonTypeFlags::Float64
                                        : NeonTypeFlags::Float32, false, quad));
-    llvm::Type *Tys[2] = { Ty, InTy };
-    return EmitNeonCall(CGM.getIntrinsic(Int, Tys), Ops, "vcvtf_z");
+    Ops[0] = Builder.CreateBitCast(Ops[0], InTy);
+    if (usgn)
+      return Builder.CreateFPToUI(Ops[0], Ty);
+    else
+      return Builder.CreateFPToSI(Ops[0], Ty);
   }
   case ARM64::BI__builtin_arm64_vcvti_m_v:
   case ARM64::BI__builtin_arm64_vcvtiq_m_v: {
