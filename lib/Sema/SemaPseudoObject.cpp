@@ -852,7 +852,7 @@ static bool IsArraySubscriptRefExpr(Sema &S,
   Expr *Key = RefExpr->getKeyExpr();
   QualType KT = Key->getType();
     
-  // There could be a type-conversion operator function.
+  // Allow array indexing if index can be converted to an intergal type.
   ImplicitConversionSequence ICS = 
     S.TryImplicitConversion(Key, S.Context.IntTy,
                           // FIXME: Are these flags correct?
