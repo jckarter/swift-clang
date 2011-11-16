@@ -2,7 +2,7 @@
 
 @interface NSMutableArray
 - (id)objectAtIndexedSubscript:(unsigned int)index;
-- (void)objectAtIndexedSubscript:(unsigned int)index put:(id)object;
+- (void)setObject:(id)object atIndexedSubscript:(unsigned int)index;
 @end
 
 @interface NSMutableDictionary

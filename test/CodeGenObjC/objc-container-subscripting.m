@@ -5,12 +5,12 @@ typedef unsigned int size_t;
 
 @interface NSMutableArray
 - (id)objectAtIndexedSubscript:(size_t)index;
-- (void)objectAtIndexedSubscript:(size_t)index put:(id)object;
+- (void)setObject:(id)object atIndexedSubscript:(size_t)index;
 @end
 
 @interface XNSMutableArray
 - (id)objectAtIndexedSubscript:(size_t)index;
-- (void)objectAtIndexedSubscript:(size_t)index put:(id)object;
+- (void)setObject:(id)object atIndexedSubscript:(size_t)index;
 @end
 
 @interface NSMutableDictionary

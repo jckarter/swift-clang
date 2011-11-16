@@ -5,8 +5,8 @@ typedef unsigned int size_t;
 
 @interface NSMutableArray
 - (id)objectAtIndexedSubscript:(double)index; // expected-note {{parameter of type 'double' is declared here}}
-- (void)objectAtIndexedSubscript:(void *)index put:(id*)object; // expected-note {{parameter of type 'void *' is declared here}} \
-                                                                // expected-note {{parameter of type 'id *' is declared here}}
+- (void)setObject:(id *)object atIndexedSubscript:(void *)index; // expected-note {{parameter of type 'void *' is declared here}} \
+								 // expected-note {{parameter of type 'id *' is declared here}}
 @end
 @interface I @end
 

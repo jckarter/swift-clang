@@ -5,7 +5,7 @@ typedef unsigned int size_t;
 
 @interface NSMutableArray
 - (id)objectAtIndexedSubscript:(size_t)index;
-- (void)objectAtIndexedSubscript:(size_t)index put:(id)object;
+- (void)setObject:(id)object atIndexedSubscript:(size_t)index;
 @end
 
 @interface NSMutableDictionary
@@ -28,7 +28,7 @@ int main() {
 // CHECK-NEXT: [[FOUR:%.*]] = load i8** [[oldObject:%.*]], align 8
 // CHECK-NEXT: [[FIVE:%.*]] = load i8** @"\01L_OBJC_SELECTOR_REFERENCES_2"
 // CHECK-NEXT: [[SIX:%.*]] = bitcast {{%.*}} [[THREE]] to i8*
-// CHECK-NEXT: call void bitcast (i8* (i8*, i8*, ...)* @objc_msgSend to void (i8*, i8*, i32, i8*)*)(i8* [[SIX]], i8* [[FIVE]], i32 10, i8* [[FOUR]])
+// CHECK-NEXT: call void bitcast (i8* (i8*, i8*, ...)* @objc_msgSend to void (i8*, i8*, i8*, i32)*)(i8* [[SIX]], i8* [[FIVE]], i8* [[FOUR]], i32 10)
 
   NSMutableDictionary *dictionary;
   id key;

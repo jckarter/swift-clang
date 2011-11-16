@@ -27,7 +27,7 @@ template void test_dictionary_subscripts(NSMutableDictionary*, id, int); // expe
 
 @interface NSMutableArray
 - (id)objectAtIndexedSubscript:(int)index;
-- (void)objectAtIndexedSubscript:(int)index put:(id)object;
+- (void)setObject:(id)object atIndexedSubscript:(int)index;
 @end
 
 template<typename T, typename U, typename O>

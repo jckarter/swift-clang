@@ -976,10 +976,10 @@ bool ObjCSubscriptOpBuilder::findAtIndexSetter() {
     AtIndexSetterSelector = S.Context.Selectors.getSelector(2, KeyIdents);
   }
   else {
-    // - (void)objectAtIndexedSubscript:(size_t)index put:(id)object;
+    // - (void)setObject:(id)object atIndexedSubscript:(NSInteger)index;
     IdentifierInfo *KeyIdents[] = {
-      &S.Context.Idents.get("objectAtIndexedSubscript"),
-      &S.Context.Idents.get("put")
+      &S.Context.Idents.get("setObject"),
+      &S.Context.Idents.get("atIndexedSubscript")
     };
     AtIndexSetterSelector = S.Context.Selectors.getSelector(2, KeyIdents);
   }
@@ -1004,19 +1004,19 @@ bool ObjCSubscriptOpBuilder::findAtIndexSetter() {
   
   bool err = false;
   if (AtIndexSetter && arrayRef) {
-    QualType T = AtIndexSetter->param_begin()[0]->getType();
+    QualType T = AtIndexSetter->param_begin()[1]->getType();
     if (!T->isIntegerType()) {
       S.Diag(RefExpr->getKeyExpr()->getExprLoc(), 
              diag::err_objc_subscript_index_type);
-      S.Diag(AtIndexSetter->param_begin()[0]->getLocation(), 
+      S.Diag(AtIndexSetter->param_begin()[1]->getLocation(), 
              diag::note_parameter_type) << T;
       err = true;
     }
-    T = AtIndexSetter->param_begin()[1]->getType();
+    T = AtIndexSetter->param_begin()[0]->getType();
     if (!T->getAs<ObjCObjectPointerType>()) {
       S.Diag(RefExpr->getBaseExpr()->getExprLoc(), 
              diag::err_objc_subscript_object_type) << T << diagnoseArrayRef;
-      S.Diag(AtIndexSetter->param_begin()[1]->getLocation(), 
+      S.Diag(AtIndexSetter->param_begin()[0]->getLocation(), 
              diag::note_parameter_type) << T;
       err = true;
     }
@@ -1080,8 +1080,7 @@ ExprResult ObjCSubscriptOpBuilder::buildGet() {
 
 /// Store into the container the "op" object at "Index"'ed location
 /// by building this messaging expression:
-/// - (void)objectAtIndexedSubscript:(size_t)index put:(id)object;
-///
+/// - (void)setObject:(id)object atIndexedSubscript:(NSInteger)index;
 /// \param bindSetValueAsResult - If true, capture the actual
 ///   value being set as the value of the property operation.
 ExprResult ObjCSubscriptOpBuilder::buildSet(Expr *op, SourceLocation opcLoc,
@@ -1095,7 +1094,7 @@ ExprResult ObjCSubscriptOpBuilder::buildSet(Expr *op, SourceLocation opcLoc,
   if (AtIndexSetter) {
     // Convert "Index" to the type of Indexing method's first argument.
     // Note that all c++ specific conversions are already done at this point.
-    QualType paramType = (*AtIndexSetter->param_begin())->getType();
+    QualType paramType = AtIndexSetter->param_begin()[1]->getType();
     ExprResult IndexResult = RefExpr->getKeyExpr();
     Sema::AssignConvertType assignResult
       = S.CheckSingleAssignmentConstraints(paramType, IndexResult);
@@ -1113,7 +1112,7 @@ ExprResult ObjCSubscriptOpBuilder::buildSet(Expr *op, SourceLocation opcLoc,
     // diagnostics.  "When possible" basically means anything except a
     // C++ class type.
     if (!S.getLangOptions().CPlusPlus || !op->getType()->isRecordType()) {
-      QualType paramType = AtIndexSetter->param_begin()[1]->getType();
+      QualType paramType = AtIndexSetter->param_begin()[0]->getType();
       if (!S.getLangOptions().CPlusPlus || !paramType->isRecordType()) {
         ExprResult opResult = op;
         Sema::AssignConvertType assignResult
@@ -1130,12 +1129,7 @@ ExprResult ObjCSubscriptOpBuilder::buildSet(Expr *op, SourceLocation opcLoc,
   }
   
   // Arguments.
-  Expr *args[] = { Index, op };
-  if (!RefExpr->isArraySubscriptRefExpr()) {
-    // weird but true; order for dictionaries is reversed for key-value pair.
-    args[0] = op;
-    args[1] = Index;
-  }
+  Expr *args[] = { op, Index };
   
   // Build a message-send.
   ExprResult msg = S.BuildInstanceMessage(InstanceBase, 
