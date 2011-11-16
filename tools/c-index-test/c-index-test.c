@@ -1610,7 +1610,10 @@ static CXIdxClientContainer makeClientContainer(const CXIdxEntityInfo *info,
 }
 
 static void printCXIndexContainer(CXIdxClientContainer container) {
-  printf("[%s]", (const char *)container);
+  if (!container)
+    printf("[<<NULL>>]");
+  else
+    printf("[%s]", (const char *)container);
 }
 
 static const char *getEntityKindString(CXIdxEntityKind kind) {
@@ -1644,6 +1647,11 @@ static void printEntityInfo(const char *cb,
   IndexData *index_data;
   index_data = (IndexData *)client_data;
   printCheck(index_data);
+
+  if (!info) {
+    printf("%s: <<NULL>>", cb);
+    return;
+  }
 
   name = info->name;
   if (!name)
@@ -1848,7 +1856,8 @@ static int index_file(int argc, const char **argv) {
 
   result = clang_indexSourceFile(CIdx, &index_data,
                                  &IndexCB,sizeof(IndexCB),
-                                 0, 0, argv, argc, 0, 0, 0, 0);
+                                 CXIndexOpt_OneRefPerFile,
+                                 0, argv, argc, 0, 0, 0, 0);
   if (index_data.fail_for_error)
     return -1;
 
@@ -1890,7 +1899,8 @@ static int index_tu(int argc, const char **argv) {
   index_data.fail_for_error = 0;
 
   result = clang_indexTranslationUnit(TU, &index_data,
-                                      &IndexCB,sizeof(IndexCB), 0);
+                                      &IndexCB,sizeof(IndexCB),
+                                      CXIndexOpt_OneRefPerFile);
   if (index_data.fail_for_error)
     return -1;
 
