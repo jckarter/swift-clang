@@ -880,11 +880,10 @@ bool ObjCSubscriptOpBuilder::findAtIndexGetter() {
       ResultType = iQFaceTy->getBaseType();
   }
   bool arrayRef = IsArraySubscriptRefExpr(S, RefExpr);
-  bool diagnoseArrayRef = arrayRef;
   
   if (ResultType.isNull()) {
     S.Diag(BaseExpr->getExprLoc(), diag::err_objc_subscript_base_type)
-      << BaseExpr->getType() << diagnoseArrayRef;
+      << BaseExpr->getType() << arrayRef;
     return false;
   }
   if (!arrayRef) {
@@ -912,7 +911,7 @@ bool ObjCSubscriptOpBuilder::findAtIndexGetter() {
   if (!AtIndexGetter) {
     if (!receiverIdType) {
       S.Diag(BaseExpr->getExprLoc(), diag::err_objc_subscript_method_not_found)
-      << BaseExpr->getType() << 0 << diagnoseArrayRef;
+      << BaseExpr->getType() << 0 << arrayRef;
       return false;
     }
     AtIndexGetter = 
@@ -926,8 +925,8 @@ bool ObjCSubscriptOpBuilder::findAtIndexGetter() {
     if ((arrayRef && !T->isIntegerType()) ||
         (!arrayRef && !T->isObjCObjectPointerType())) {
       S.Diag(RefExpr->getKeyExpr()->getExprLoc(), 
-             diagnoseArrayRef ? diag::err_objc_subscript_index_type
-                              : diag::err_objc_subscript_key_type);
+             arrayRef ? diag::err_objc_subscript_index_type
+                      : diag::err_objc_subscript_key_type);
       S.Diag(AtIndexGetter->param_begin()[0]->getLocation(), 
              diag::note_parameter_type) << T;
       return false;
@@ -953,10 +952,10 @@ bool ObjCSubscriptOpBuilder::findAtIndexSetter() {
       ResultType = iQFaceTy->getBaseType();
   }
   bool arrayRef = IsArraySubscriptRefExpr(S, RefExpr);
-  bool diagnoseArrayRef = arrayRef;
+
   if (ResultType.isNull()) {
     S.Diag(BaseExpr->getExprLoc(), diag::err_objc_subscript_base_type)
-      << BaseExpr->getType() << diagnoseArrayRef;
+      << BaseExpr->getType() << arrayRef;
     return false;
   }
   
@@ -987,7 +986,7 @@ bool ObjCSubscriptOpBuilder::findAtIndexSetter() {
     if (!receiverIdType) {
       S.Diag(BaseExpr->getExprLoc(), 
              diag::err_objc_subscript_method_not_found)
-      << BaseExpr->getType() << 1 << diagnoseArrayRef;
+      << BaseExpr->getType() << 1 << arrayRef;
       return false;
     }
     AtIndexSetter = 
@@ -1009,7 +1008,7 @@ bool ObjCSubscriptOpBuilder::findAtIndexSetter() {
     T = AtIndexSetter->param_begin()[0]->getType();
     if (!T->getAs<ObjCObjectPointerType>()) {
       S.Diag(RefExpr->getBaseExpr()->getExprLoc(), 
-             diag::err_objc_subscript_object_type) << T << diagnoseArrayRef;
+             diag::err_objc_subscript_object_type) << T << arrayRef;
       S.Diag(AtIndexSetter->param_begin()[0]->getLocation(), 
              diag::note_parameter_type) << T;
       err = true;
