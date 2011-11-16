@@ -32,8 +32,8 @@ template void test_dictionary_subscripts(NSMutableDictionary*, id, int); // expe
 
 template<typename T, typename U, typename O>
 void test_array_subscripts(T base, U index, O obj) {
-  base[index] = obj; // expected-error {{expected method to write dictionary element not found on object of type 'NSMutableArray *'}}
-  obj = base[index]; // expected-error {{expected method to read dictionary element not found on object of type 'NSMutableArray *'}}
+  base[index] = obj;
+  obj = base[index];
 }
 
 template void  test_array_subscripts(NSMutableArray *, int, id);
@@ -42,7 +42,7 @@ enum E { e };
 
 template void  test_array_subscripts(NSMutableArray *, E, id);
 
-template void  test_array_subscripts(NSMutableArray *, double, id); // expected-note {{in instantiation of function template specialization 'test_array_subscripts<NSMutableArray *, double, id>' requested here}}
+template void  test_array_subscripts(NSMutableArray *, double, id);
 
 template<typename T>
 struct ConvertibleTo {

@@ -13,6 +13,13 @@ typedef unsigned int size_t;
 - (void)setObject:(id)object forKeyedSubscript:(size_t)key;
 @end
 
+id func() {
+  NSMutableArray *array;
+  float f; 
+  array[f] = array;
+  return array[3.14];
+}
+
 void test_unused() {
   NSMutableArray *array;
   array[10]; // expected-warning {{container access result unused - container access should not be used for side effects}} 

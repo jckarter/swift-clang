@@ -849,15 +849,9 @@ static bool IsArraySubscriptRefExpr(Sema &S,
   if (RefExpr->isArraySubscriptRefExpr())
     return true;
   
-  if (!S.getLangOptions().CPlusPlus)
-    return false;
-  
   Expr *Key = RefExpr->getKeyExpr();
   QualType KT = Key->getType();
-  
-  if (!KT->isRecordType())
-    return false;
-  
+    
   // There could be a type-conversion operator function.
   ImplicitConversionSequence ICS = 
     S.TryImplicitConversion(Key, S.Context.IntTy,

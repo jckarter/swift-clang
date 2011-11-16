@@ -25,7 +25,6 @@ int main() {
   oldObject = --array[10]; // expected-error {{illegal operation on objective-c container subscripting}}
 }
 
-
 @interface NSMutableDictionary
 - (id)objectForKeyedSubscript:(id*)key; // expected-note {{parameter of type 'id *' is declared here}}
 - (void)setObject:(void*)object forKeyedSubscript:(id*)key; // expected-note {{parameter of type 'void *' is declared here}} \
