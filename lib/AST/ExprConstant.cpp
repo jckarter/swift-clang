@@ -3197,6 +3197,7 @@ bool IntExprEvaluator::VisitCastExpr(const CastExpr *E) {
       if (Info.Ctx.getTypeSize(DestType) != Info.Ctx.getTypeSize(SrcType))
         return false;
 
+      LV.Designator.setInvalid();
       LV.moveInto(Result);
       return true;
     }
@@ -3694,10 +3695,14 @@ bool ComplexExprEvaluator::VisitCastExpr(const CastExpr *E) {
 }
 
 bool ComplexExprEvaluator::VisitBinaryOperator(const BinaryOperator *E) {
+  if (E->isPtrMemOp() || E->isAssignmentOp())
+    return ExprEvaluatorBaseTy::VisitBinaryOperator(E);
+
   if (E->getOpcode() == BO_Comma) {
     VisitIgnoredValue(E->getLHS());
     return Visit(E->getRHS());
   }
+
   if (!Visit(E->getLHS()))
     return false;
 

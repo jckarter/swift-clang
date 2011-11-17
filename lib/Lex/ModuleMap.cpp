@@ -31,6 +31,15 @@ using namespace clang;
 // Module
 //----------------------------------------------------------------------------//
 
+ModuleMap::Module::~Module() {
+  for (llvm::StringMap<Module *>::iterator I = SubModules.begin(), 
+                                        IEnd = SubModules.end();
+       I != IEnd; ++I) {
+    delete I->getValue();
+  }
+
+}
+
 std::string ModuleMap::Module::getFullModuleName() const {
   llvm::SmallVector<StringRef, 2> Names;
   
@@ -72,6 +81,12 @@ ModuleMap::ModuleMap(FileManager &FileMgr, const DiagnosticConsumer &DC) {
 }
 
 ModuleMap::~ModuleMap() {
+  for (llvm::StringMap<Module *>::iterator I = Modules.begin(), 
+                                        IEnd = Modules.end();
+       I != IEnd; ++I) {
+    delete I->getValue();
+  }
+  
   delete SourceMgr;
 }
 
@@ -80,6 +95,41 @@ ModuleMap::Module *ModuleMap::findModuleForHeader(const FileEntry *File) {
     = Headers.find(File);
   if (Known != Headers.end())
     return Known->second;
+  
+  const DirectoryEntry *Dir = File->getDir();
+  llvm::DenseMap<const DirectoryEntry *, Module *>::iterator KnownDir
+    = UmbrellaDirs.find(Dir);
+  if (KnownDir != UmbrellaDirs.end())
+    return KnownDir->second;
+
+  // Walk up the directory hierarchy looking for umbrella headers.
+  llvm::SmallVector<const DirectoryEntry *, 2> SkippedDirs;
+  StringRef DirName = Dir->getName();
+  do {
+    // Retrieve our parent path.
+    DirName = llvm::sys::path::parent_path(DirName);
+    if (DirName.empty())
+      break;
+    
+    // Resolve the parent path to a directory entry.
+    Dir = SourceMgr->getFileManager().getDirectory(DirName);
+    if (!Dir)
+      break;
+    
+    KnownDir = UmbrellaDirs.find(Dir);
+    if (KnownDir != UmbrellaDirs.end()) {
+      Module *Result = KnownDir->second;
+      
+      // Record each of the directories we stepped through as being part of
+      // the module we found, since the umbrella header covers them all.
+      for (unsigned I = 0, N = SkippedDirs.size(); I != N; ++I)
+        UmbrellaDirs[SkippedDirs[I]] = Result;
+      
+      return Result;
+    }
+    
+    SkippedDirs.push_back(Dir);
+  } while (true);
   
   return 0;
 }
@@ -90,6 +140,34 @@ ModuleMap::Module *ModuleMap::findModule(StringRef Name) {
     return Known->getValue();
   
   return 0;
+}
+
+ModuleMap::Module *
+ModuleMap::inferFrameworkModule(StringRef ModuleName, 
+                                const DirectoryEntry *FrameworkDir) {
+  // Check whether we've already found this module.
+  if (Module *Module = findModule(ModuleName))
+    return Module;
+  
+  // Look for an umbrella header.
+  llvm::SmallString<128> UmbrellaName = StringRef(FrameworkDir->getName());
+  llvm::sys::path::append(UmbrellaName, "Headers");
+  llvm::sys::path::append(UmbrellaName, ModuleName + ".h");
+  const FileEntry *UmbrellaHeader
+    = SourceMgr->getFileManager().getFile(UmbrellaName);
+  
+  // FIXME: If there's no umbrella header, we could probably scan the
+  // framework to load *everything*. But, it's not clear that this is a good
+  // idea.
+  if (!UmbrellaHeader)
+    return 0;
+  
+  Module *Result = new Module(ModuleName, SourceLocation());
+  Result->UmbrellaHeader = UmbrellaHeader;
+  Headers[UmbrellaHeader] = Result;
+  UmbrellaDirs[FrameworkDir] = Result;
+  Modules[ModuleName] = Result;
+  return Result;
 }
 
 static void indent(llvm::raw_ostream &OS, unsigned Spaces) {
@@ -493,10 +571,15 @@ void ModuleMapParser::parseUmbrellaDecl() {
       Diags.Report(FileNameLoc, diag::err_mmap_header_conflict)
         << FileName << OwningModule->getFullModuleName();
       HadError = true;
+    } else if ((OwningModule = Map.UmbrellaDirs[Directory])) {
+      Diags.Report(UmbrellaLoc, diag::err_mmap_umbrella_clash)
+        << OwningModule->getFullModuleName();
+      HadError = true;
     } else {
       // Record this umbrella header.
       ActiveModule->UmbrellaHeader = File;
       Map.Headers[File] = ActiveModule;
+      Map.UmbrellaDirs[Directory] = ActiveModule;
     }
   } else {
     Diags.Report(FileNameLoc, diag::err_mmap_header_not_found)
