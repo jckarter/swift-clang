@@ -27,6 +27,7 @@
 
 namespace clang {
   
+class DirectoryEntry;
 class FileEntry;
 class FileManager;
 class DiagnosticConsumer;
@@ -72,7 +73,9 @@ public:
       : Name(Name), DefinitionLoc(DefinitionLoc), Parent(Parent), 
         UmbrellaHeader(0), IsExplicit(IsExplicit) {
     }
-           
+     
+    ~Module();
+    
     /// \brief Determine whether this module is a submodule.
     bool isSubModule() const { return Parent != 0; }
     
@@ -95,6 +98,14 @@ private:
   /// \brief Mapping from each header to the module that owns the contents of the
   /// that header.
   llvm::DenseMap<const FileEntry *, Module *> Headers;
+  
+  /// \brief Mapping from directories with umbrella headers to the module
+  /// that is generated from the umbrella header.
+  ///
+  /// This mapping is used to map headers that haven't explicitly been named
+  /// in the module map over to the module that includes them via its umbrella
+  /// header.
+  llvm::DenseMap<const DirectoryEntry *, Module *> UmbrellaDirs;
   
   friend class ModuleMapParser;
   
@@ -128,6 +139,11 @@ public:
   /// \returns The named module, if known; otherwise, returns null.
   Module *findModule(StringRef Name);
   
+  /// \brief Infer the contents of a framework module map from the given
+  /// framework directory.
+  Module *inferFrameworkModule(StringRef ModuleName, 
+                               const DirectoryEntry *FrameworkDir);
+                               
   /// \brief Parse the given module map file, and record any modules we 
   /// encounter.
   ///
