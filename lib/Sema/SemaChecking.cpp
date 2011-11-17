@@ -382,7 +382,7 @@ bool Sema::CheckARM64BuiltinFunctionCall(unsigned BuiltinID,
 
   unsigned mask = 0;
   unsigned TV = 0;
-  bool HasPtr = false;
+  int PtrArgNum = -1;
   bool HasConstPtr = false;
   switch (BuiltinID) {
 #define GET_NEON_OVERLOAD_CHECK
@@ -403,28 +403,24 @@ bool Sema::CheckARM64BuiltinFunctionCall(unsigned BuiltinID,
         << TheCall->getArg(ImmArg)->getSourceRange();
   }
 
-  if (HasPtr || HasConstPtr) {
+  if (PtrArgNum >= 0) {
     // Check that pointer arguments have the specified type.
-    for (unsigned ArgNo = 0; ArgNo < ImmArg; ++ArgNo) {
-      Expr *Arg = TheCall->getArg(ArgNo);
-      if (ImplicitCastExpr *ICE = dyn_cast<ImplicitCastExpr>(Arg))
-        Arg = ICE->getSubExpr();
-      ExprResult RHS = DefaultFunctionArrayLvalueConversion(Arg);
-      QualType RHSTy = RHS.get()->getType();
-      if (!RHSTy->isPointerType())
-        continue;
-      QualType EltTy = getNeonEltType(NeonTypeFlags(TV), Context);
-      if (HasConstPtr)
-        EltTy = EltTy.withConst();
-      QualType LHSTy = Context.getPointerType(EltTy);
-      AssignConvertType ConvTy;
-      ConvTy = CheckSingleAssignmentConstraints(LHSTy, RHS);
-      if (RHS.isInvalid())
-        return true;
-      if (DiagnoseAssignmentResult(ConvTy, Arg->getLocStart(), LHSTy, RHSTy,
-                                   RHS.get(), AA_Assigning))
-        return true;
-    }
+    Expr *Arg = TheCall->getArg(PtrArgNum);
+    if (ImplicitCastExpr *ICE = dyn_cast<ImplicitCastExpr>(Arg))
+      Arg = ICE->getSubExpr();
+    ExprResult RHS = DefaultFunctionArrayLvalueConversion(Arg);
+    QualType RHSTy = RHS.get()->getType();
+    QualType EltTy = getNeonEltType(NeonTypeFlags(TV), Context);
+    if (HasConstPtr)
+      EltTy = EltTy.withConst();
+    QualType LHSTy = Context.getPointerType(EltTy);
+    AssignConvertType ConvTy;
+    ConvTy = CheckSingleAssignmentConstraints(LHSTy, RHS);
+    if (RHS.isInvalid())
+      return true;
+    if (DiagnoseAssignmentResult(ConvTy, Arg->getLocStart(), LHSTy, RHSTy,
+                                 RHS.get(), AA_Assigning))
+      return true;
   }
   
   // For SIMD intrinsics which take an immediate value as part of the
