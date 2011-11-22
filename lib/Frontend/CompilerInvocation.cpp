@@ -153,8 +153,6 @@ static void CodeGenOptsToArgs(const CodeGenOptions &Opts,
     Res.push_back("-dwarf-debug-flags");
     Res.push_back(Opts.DwarfDebugFlags);
   }
-  if (Opts.AddressSanitizer)
-    Res.push_back("-faddress-sanitizer");
   if (Opts.ObjCRuntimeHasARC)
     Res.push_back("-fobjc-runtime-has-arc");
   if (Opts.ObjCRuntimeHasTerminate)
@@ -669,6 +667,8 @@ static void LangOptsToArgs(const LangOptions &Opts,
     Res.push_back("-fpascal-strings");
   if (Opts.CatchUndefined)
     Res.push_back("-fcatch-undefined-behavior");
+  if (Opts.AddressSanitizer)
+    Res.push_back("-faddress-sanitizer");
   if (Opts.WritableStrings)
     Res.push_back("-fwritable-strings");
   if (Opts.ConstStrings)
@@ -788,6 +788,10 @@ static void LangOptsToArgs(const LangOptions &Opts,
   if (Opts.InstantiationDepth != DefaultLangOpts.InstantiationDepth) {
     Res.push_back("-ftemplate-depth");
     Res.push_back(llvm::utostr(Opts.InstantiationDepth));
+  }
+  if (Opts.ConstexprCallDepth != DefaultLangOpts.ConstexprCallDepth) {
+    Res.push_back("-fconstexpr-depth");
+    Res.push_back(llvm::utostr(Opts.ConstexprCallDepth));
   }
   if (!Opts.ObjCConstantStringClass.empty()) {
     Res.push_back("-fconstant-string-class");
@@ -1065,7 +1069,6 @@ static void ParseCodeGenArgs(CodeGenOptions &Opts, ArgList &Args, InputKind IK,
   Opts.UnrollLoops = Args.hasArg(OPT_funroll_loops) ||
                      (Opts.OptimizationLevel > 1 && !Opts.OptimizeSize);
 
-  Opts.AddressSanitizer = Args.hasArg(OPT_faddress_sanitizer);
   Opts.AsmVerbose = Args.hasArg(OPT_masm_verbose);
   Opts.ObjCAutoRefCountExceptions = Args.hasArg(OPT_fobjc_arc_exceptions);
   Opts.ObjCRuntimeHasARC = Args.hasArg(OPT_fobjc_runtime_has_arc);
@@ -1777,7 +1780,9 @@ static void ParseLangArgs(LangOptions &Opts, ArgList &Args, InputKind IK,
   Opts.ElideConstructors = !Args.hasArg(OPT_fno_elide_constructors);
   Opts.MathErrno = Args.hasArg(OPT_fmath_errno);
   Opts.InstantiationDepth = Args.getLastArgIntValue(OPT_ftemplate_depth, 1024,
-                                               Diags);
+                                                    Diags);
+  Opts.ConstexprCallDepth = Args.getLastArgIntValue(OPT_fconstexpr_depth, 512,
+                                                    Diags);
   Opts.DelayedTemplateParsing = Args.hasArg(OPT_fdelayed_template_parsing);
   Opts.NumLargeByValueCopy = Args.getLastArgIntValue(OPT_Wlarge_by_value_copy,
                                                     0, Diags);
@@ -1806,6 +1811,7 @@ static void ParseLangArgs(LangOptions &Opts, ArgList &Args, InputKind IK,
   Opts.FakeAddressSpaceMap = Args.hasArg(OPT_ffake_address_space_map);
   Opts.ParseUnknownAnytype = Args.hasArg(OPT_funknown_anytype);
   Opts.DebuggerSupport = Args.hasArg(OPT_fdebugger_support);
+  Opts.AddressSanitizer = Args.hasArg(OPT_faddress_sanitizer);
   Opts.ApplePragmaPack = Args.hasArg(OPT_fapple_pragma_pack);
   Opts.CurrentModule = Args.getLastArgValue(OPT_fmodule_name);
 
