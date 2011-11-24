@@ -154,6 +154,7 @@ void ASTDeclWriter::VisitDecl(Decl *D) {
   Record.push_back(D->isImplicit());
   Record.push_back(D->isUsed(false));
   Record.push_back(D->isReferenced());
+  Record.push_back(D->TopLevelDeclInObjCContainer);
   Record.push_back(D->getAccess());
   Record.push_back(D->ModulePrivate);
 }
@@ -183,6 +184,7 @@ void ASTDeclWriter::VisitTypedefDecl(TypedefDecl *D) {
       D->RedeclLink.getNext() == D &&
       !D->isInvalidDecl() &&
       !D->isReferenced() &&
+      !D->isTopLevelDeclInObjCContainer() &&
       D->getAccess() == AS_none &&
       !D->isModulePrivate() &&
       D->getDeclName().getNameKind() == DeclarationName::Identifier)
@@ -233,6 +235,7 @@ void ASTDeclWriter::VisitEnumDecl(EnumDecl *D) {
       D->RedeclLink.getNext() == D &&
       !D->isInvalidDecl() &&
       !D->isReferenced() &&
+      !D->isTopLevelDeclInObjCContainer() &&
       D->getAccess() == AS_none &&
       !D->isModulePrivate() &&
       !CXXRecordDecl::classofKind(D->getKind()) &&
@@ -256,6 +259,7 @@ void ASTDeclWriter::VisitRecordDecl(RecordDecl *D) {
       D->RedeclLink.getNext() == D &&
       !D->isInvalidDecl() &&
       !D->isReferenced() &&
+      !D->isTopLevelDeclInObjCContainer() &&
       D->getAccess() == AS_none &&
       !D->isModulePrivate() &&
       !CXXRecordDecl::classofKind(D->getKind()) &&
@@ -626,6 +630,7 @@ void ASTDeclWriter::VisitFieldDecl(FieldDecl *D) {
       !D->isUsed(false) &&
       !D->isInvalidDecl() &&
       !D->isReferenced() &&
+      !D->isTopLevelDeclInObjCContainer() &&
       !D->isModulePrivate() &&
       !D->getBitWidth() &&
       !D->hasInClassInitializer() &&
@@ -678,6 +683,7 @@ void ASTDeclWriter::VisitVarDecl(VarDecl *D) {
       !D->isUsed(false) &&
       !D->isInvalidDecl() &&
       !D->isReferenced() &&
+      !D->isTopLevelDeclInObjCContainer() &&
       D->getAccess() == AS_none &&
       !D->isModulePrivate() &&
       D->getDeclName().getNameKind() == DeclarationName::Identifier &&
@@ -1278,6 +1284,7 @@ void ASTWriter::WriteDeclsBlockAbbrevs() {
   Abv->Add(BitCodeAbbrevOp(0));                       // isImplicit
   Abv->Add(BitCodeAbbrevOp(0));                       // isUsed
   Abv->Add(BitCodeAbbrevOp(0));                       // isReferenced
+  Abv->Add(BitCodeAbbrevOp(0));                   // TopLevelDeclInObjCContainer
   Abv->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::Fixed, 2));  // AccessSpecifier
   Abv->Add(BitCodeAbbrevOp(0));                       // ModulePrivate
   // NamedDecl
@@ -1308,6 +1315,7 @@ void ASTWriter::WriteDeclsBlockAbbrevs() {
   Abv->Add(BitCodeAbbrevOp(0));                       // isImplicit
   Abv->Add(BitCodeAbbrevOp(0));                       // isUsed
   Abv->Add(BitCodeAbbrevOp(0));                       // isReferenced
+  Abv->Add(BitCodeAbbrevOp(0));                   // TopLevelDeclInObjCContainer
   Abv->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::Fixed, 2));  // AccessSpecifier
   Abv->Add(BitCodeAbbrevOp(0));                       // ModulePrivate
   // NamedDecl
@@ -1343,6 +1351,7 @@ void ASTWriter::WriteDeclsBlockAbbrevs() {
   Abv->Add(BitCodeAbbrevOp(0));                       // isImplicit
   Abv->Add(BitCodeAbbrevOp(0));                       // isUsed
   Abv->Add(BitCodeAbbrevOp(0));                       // isReferenced
+  Abv->Add(BitCodeAbbrevOp(0));                   // TopLevelDeclInObjCContainer
   Abv->Add(BitCodeAbbrevOp(AS_none));                 // C++ AccessSpecifier
   Abv->Add(BitCodeAbbrevOp(0));                       // ModulePrivate
   // NamedDecl
@@ -1388,6 +1397,7 @@ void ASTWriter::WriteDeclsBlockAbbrevs() {
   Abv->Add(BitCodeAbbrevOp(0));                       // isImplicit
   Abv->Add(BitCodeAbbrevOp(0));                       // isUsed
   Abv->Add(BitCodeAbbrevOp(0));                       // isReferenced
+  Abv->Add(BitCodeAbbrevOp(0));                   // TopLevelDeclInObjCContainer
   Abv->Add(BitCodeAbbrevOp(AS_none));                 // C++ AccessSpecifier
   Abv->Add(BitCodeAbbrevOp(0));                       // ModulePrivate
   // NamedDecl
@@ -1427,6 +1437,7 @@ void ASTWriter::WriteDeclsBlockAbbrevs() {
   Abv->Add(BitCodeAbbrevOp(0));                       // isImplicit
   Abv->Add(BitCodeAbbrevOp(0));                       // isUsed
   Abv->Add(BitCodeAbbrevOp(0));                       // isReferenced
+  Abv->Add(BitCodeAbbrevOp(0));                   // TopLevelDeclInObjCContainer
   Abv->Add(BitCodeAbbrevOp(AS_none));                 // C++ AccessSpecifier
   Abv->Add(BitCodeAbbrevOp(0));                       // ModulePrivate
   // NamedDecl
@@ -1473,6 +1484,7 @@ void ASTWriter::WriteDeclsBlockAbbrevs() {
   Abv->Add(BitCodeAbbrevOp(0));                       // isImplicit
   Abv->Add(BitCodeAbbrevOp(0));                       // isUsed
   Abv->Add(BitCodeAbbrevOp(0));                       // isReferenced
+  Abv->Add(BitCodeAbbrevOp(0));                   // TopLevelDeclInObjCContainer
   Abv->Add(BitCodeAbbrevOp(AS_none));                 // C++ AccessSpecifier
   Abv->Add(BitCodeAbbrevOp(0));                       // ModulePrivate
   // NamedDecl
@@ -1499,6 +1511,7 @@ void ASTWriter::WriteDeclsBlockAbbrevs() {
   Abv->Add(BitCodeAbbrevOp(0));                       // isImplicit
   Abv->Add(BitCodeAbbrevOp(0));                       // isUsed
   Abv->Add(BitCodeAbbrevOp(0));                       // isReferenced
+  Abv->Add(BitCodeAbbrevOp(0));                   // TopLevelDeclInObjCContainer
   Abv->Add(BitCodeAbbrevOp(AS_none));                 // C++ AccessSpecifier
   Abv->Add(BitCodeAbbrevOp(0));                       // ModulePrivate
   // NamedDecl
