@@ -87,9 +87,6 @@ Clang's support for those languages.</p>
 the history. Anything still here needs to be distilled and turned into proper
 prose in a section of its own. When doing that, delete the notes.</p>
 <ul>
-  <li>Make analyzer (especially as used w/ warnings in Clang) much faster</li>
-  <li>OpenCL support -- need details from Tanya and Peter -- separate language
-  section?</li>
   <li>Building Clang on windows -- mingw, 32 and 64 bit, native windows builds,
   cygwin. get chapuni to flesh out details.</li>
   <li>Compiling C/C++ w/ MinGW (32/64) and Cygwin on Windows -- chapuni</li>
@@ -99,25 +96,11 @@ prose in a section of its own. When doing that, delete the notes.</p>
   to differentiate between the possibility of an uninitialized use and the
   certainty of an uninitialized use.</li>
   <li>Support for language specific address spaces</li>
-  <li>Support for compiling on NetBSD systems -- Joerg Sonnenberger to fill
-  out</li>
-  <li>Support for '--sysroot' based cross-compilation</li>
   <li>Crash recovery handling for libclang clients -- Ted</li>
   <li>Driver support for automatic preparation of reproduction steps for
   compiler crashes -- Chad</li>
   <li>OS Availability attribute -- r128127</li>
   <li>GNU ObjectiveC Runtime support -- David Chisnall</li>
-  <li>Diagnostic improvements bucket?
-    <ul>
-      <li>Emitting fewer include stacks</li>
-      <li>Significantly better recovery when encountering misspelled type names
-      in a declaration context. r130082</li>
-      <li>Expanded typo correction, most especially namespace-aware typo
-      correction in C++</li>
-      <li>Significantly more rich diagnostics w.r.t. macro expansion backtraces,
-      especially when macro arguments are involved.</li>
-    </ul>
-  </li>
   <li>libclang improvements bucket
     <ul>
       <li>Better Python Bindings</li>
@@ -129,8 +112,7 @@ prose in a section of its own. When doing that, delete the notes.</p>
       <li>Improved code completion for in-class member functions.</li>
     </ul>
   </li>
-  <li>C++ -- supported in the static analyzer: methods, new, constructors,
-  destructors, etc.</li>
+  <li>Basic C++ support in the static analyzer.</li>
   <li>Improved AST support for partially constructed nodes and incomplete
   information for LLDB and other clients which dynamically build AST nodes.</li>
   <li>Largely complete MSVC-compatible parsing mode -- fpichet</li>
@@ -147,32 +129,70 @@ prose in a section of its own. When doing that, delete the notes.</p>
   <li>NRVO for blocks.</li>
   <li>Major improvements to the interactions between serializing and
   deserializing the AST and the preprocessor -- argiris</li>
-  <li>Major driver and system compatibility changes:
-    <ul>
-      <li>Correct support for many more hardware architecture pre-defined macros
-      (e.g., __i686__).</li>
-      <li>Much more robust detection of library and header search paths on Linux
-      distributions.</li>
-      <li>Partial support for sysroot based cross compiling on Linux (like)
-      systems.</li>
-      <li>Improved support for locating and using libcxx, especially on
-      Darwin.</li>
-    </ul>
+</ul>
+
+<h4 id="diagnostics">A multitude of improvements to Clang's diagnostics</h4>
+Clang's diagnostics are constantly being improved to catch more issues, explain
+them more clearly, and provide more accurate source information about them.
+A few improvements since the 2.9 release that have a particularly high impact:
+<ul>
+  <li>Substantially shorter messages due to better recovery, fewer include
+  stacks, and tuning verbose features such as 'a.k.a.' type printing.</li>
+  <li>
+    Able to recover and correct from misspelled type names at the begging of statements. For example, Clang now emits:
+    <code>t.c:6:3: error: use of undeclared identifier 'integer'; did you mean
+'Integer'?
+  integer *i = 0;
+  ^~~~~~~
+  Integer
+t.c:1:13: note: 'Integer' declared here
+typedef int Integer;
+            ^</code>
   </li>
-  <li>Initial steps of CUDA support -- Peter</li>
-  <li>Atomic builtins and C1X specifiers using the new LLVM atomic instructions
-  and memory model -- efriedma, jyasskin</li>
+  <li>Expanded typo correction to (among other improvements) look across
+  namespaces and suggest namespace qualifiers in addition to misspellings of the
+  identifier itself.</li>
+  <li>More rich macro expansion backtraces and some (limited) fix-it hints when
+  diagnostics stem from macro arguments.</li>
+</ul>
+
+<h4 id="driver">The Clang GCC-compatible command-line driver improved dramatically</h4>
+A great deal of work went into the GCC-compatible driver for the 3.0 release
+making it support more operating systems, emulate GCC behavior more accurately,
+and support a much broader range of Linux distributions out of the box.
+<ul>
+  <li>More accurate support for hardware architecture pre-defined macros (e.g.,
+  __i686__).</li>
+  <li>Robust library and header search paths for the vast majority of x86 and
+  x86-64 Linux distributions.</li>
+  <li>Improved support for newer Darwin platforms.</li>
+  <li>Partial support for <code>--sysroot=...</code> based cross-compiling on
+  Linux (and similar) host systems.</li>
+  <li>Improved support for locating and using libcxx when installed, especially
+  on Darwin.</li>
+  <!-- There are likely more Darwin-specific improvements to mention here? -->
+  <!-- What support was added for FreeBSD? NetBSD? Anything noteworthy? -->
 </ul>
 
 <h4 id="ppcallbacks">Expanded support for instrumenting the preprocessor through
   callbacks</h4>
-Several enhancements were made to the <code>PPCallbacks</code> interface to expand the information available to tools and library users of Clang that wish to introspect the preprocessing.
+Several enhancements were made to the <code>PPCallbacks</code> interface to
+expand the information available to tools and library users of Clang that wish
+to introspect the preprocessing.
 <ul>
   <li>The exact text used between the <code>""</code>s or <code>&lt;&gt;</code>s is reported.</li>
   <li>The header search path used to locate the header is reported.</li>
   <li>Missing files during including headers reported.</li>
   <li>The exact source range for expanded macros can be retrieved.</li>
 </ul>
+
+<!--
+Need Peter and/or Tanya to flesh this out if we want it in 3.0's notes.. The
+state isn't clear just from documentation or commit logs.
+
+<h4 id="opencl">Initial work to support compiling OpenCL with Clang</h4>
+Clang has some (limited) support for compiling OpenCL.
+-->
 
 <!-- = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = -->
 <h3 id="cchanges">C Language Changes in Clang</h3>
@@ -183,35 +203,37 @@ Several enhancements were made to the <code>PPCallbacks</code> interface to expa
 <!-- = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = -->
 
 <h4 id="cxx11changes">C++11 Feature Support</h4>
-
 <p>Clang 3.0 adds support for
 <a href="http://clang.llvm.org/cxx_status.html#cxx11">more of the language
 features</a> added in the latest ISO C++ standard, C++11. Use
-<tt>-std=c++11</tt> or <tt>-std=gnu++11</tt> to enable support for these
+<code>-std=c++11</code> or <code>-std=gnu++11</code> to enable support for these
 features. The following are now considered to be of production quality:
 <ul>
-  <li>Range-based <tt>for</tt> loops</li>
-  <li>Alias declarations (a new syntax for <tt>typedef</tt> declarations),
-  including their <tt>template</tt> forms</li>
+  <li>Range-based <code>for</code> loops</li>
+  <li>Alias declarations (a new syntax for <code>typedef</code> declarations),
+  including their <code>template</code> forms</li>
   <li>Specifying default values for class data members within a class
   definition</li>
   <li>Constructors delegating to other constructors of the same class</li>
-  <li>The <tt>override</tt> context-sensitive keyword for virtual member
+  <li>The <code>override</code> context-sensitive keyword for virtual member
   function declarations</li>
-  <li>Explicitly generating default function definitions with <tt>= default</tt>
-  </li>
-  <li>The <tt>nullptr</tt> keyword, and the corresponding type</li>
+  <li>Explicitly generating default function definitions with
+  <code>= default</code></li>
+  <li>The <code>nullptr</code> keyword, and the corresponding type</li>
   <li>Raw string literals with arbitary delimiters (for instance,
-  <tt>R"delim(str"ing)delim"</tt>)</li>
-  <li>Unicode string literals (for instance, <tt>U"\u1234"</tt>) and the
-  <tt>char16_t</tt> and <tt>char32_t</tt> built-in types
-  <li><tt>noexcept</tt> expressions and the <tt>noexcept</tt> specifier on
-  function declarations</li>
-  <li><tt>alignof</tt> expressions and the <tt>alignas</tt> specifier on
+  <code>R"delim(str"ing)delim"</code>)</li>
+  <li>Unicode string literals (for instance, <code>U"\u1234"</code>) and the
+  <code>char16_t</code> and <code>char32_t</code> built-in types
+  <li><code>noexcept</code> expressions and the <code>noexcept</code> specifier
+  on function declarations</li>
+  <li><code>alignof</code> expressions and the <code>alignas</code> specifier on
   variable declarations</li>
   <li>A full set of <a href="http://clang.llvm.org/docs/LanguageExtensions.html#checking_type_traits">type traits</a>,
   sufficient to support C++11 standard libraries</li>
 </ul>
+All warning and language selection flags which previously accepted
+<code>c++0x</code> now accept <code>c++11</code>. The old <code>c++0x</code>
+form remains as an alias.
 
 <!-- = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = -->
 <h3 id="objcchanges">Objective-C Language Changes in Clang</h3>
@@ -274,6 +296,19 @@ tree.</p>
 <p>If you have any questions or comments about Clang, please feel free to
 contact us via the <a href="http://lists.cs.uiuc.edu/mailman/listinfo/cfe-dev">
 mailing list</a>.</p>
+
+
+<!-- ======================================================================= -->
+<!-- Likely 3.1 release notes -->
+<!-- ======================================================================= -->
+<!--
+This is just a section to hold things that have already gotten started and
+should likely pick up proper release notes in 3.1.
+
+- C1X and C++11 atomics infrastructure and support
+- CUDA support?
+
+-->
 
 </body>
 </html>
