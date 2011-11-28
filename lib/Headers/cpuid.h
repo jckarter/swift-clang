@@ -1,4 +1,4 @@
-/*===---- stddef.h - Basic type definitions --------------------------------===
+/*===---- cpuid.h - Basic type definitions ---------------------------------===
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -20,6 +20,10 @@
  *
  *===-----------------------------------------------------------------------===
  */
+
+#if !(__x86_64__ || __i386__)
+#error this header is for x86 only
+#endif
 
 static inline int __get_cpuid (unsigned int level, unsigned int *eax,
                                unsigned int *ebx, unsigned int *ecx,
