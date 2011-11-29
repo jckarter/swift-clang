@@ -334,8 +334,11 @@ void DarwinClang::AddLinkSearchPathArgs(const ArgList &Args,
   // Unfortunately, we still might depend on a few of the libraries that are
   // only available in the gcc library directory (in particular
   // libstdc++.dylib). For now, hardcode the path to the known install location.
+  // FIXME: This should get ripped out someday.  However, when building on
+  // 10.6 (darwin10), we're still relying on this to find libstdc++.dylib.
   llvm::sys::Path P(getDriver().Dir);
   P.eraseComponent(); // .../usr/bin -> ../usr
+  P.appendComponent("llvm-gcc-4.2");
   P.appendComponent("lib");
   P.appendComponent("gcc");
   switch (getTriple().getArch()) {
@@ -449,6 +452,19 @@ void DarwinClang::AddLinkRuntimeLibArgs(const ArgList &Args,
     getDriver().Diag(diag::err_drv_unsupported_opt)
       << A->getAsString(Args);
     return;
+  }
+
+  // If we are building profile support, link that library in.
+  if (Args.hasArg(options::OPT_fprofile_arcs) ||
+      Args.hasArg(options::OPT_fprofile_generate) ||
+      Args.hasArg(options::OPT_fcreate_profile) ||
+      Args.hasArg(options::OPT_coverage)) {
+    // Select the appropriate runtime library for the target.
+    if (isTargetIPhoneOS()) {
+      AddLinkRuntimeLib(Args, CmdArgs, "libclang_rt.profile_ios.a");
+    } else {
+      AddLinkRuntimeLib(Args, CmdArgs, "libclang_rt.profile_osx.a");
+    }
   }
 
   // Otherwise link libSystem, then the dynamic runtime library, and finally any
@@ -709,6 +725,8 @@ void DarwinClang::AddCXXStdlibLibArgs(const ArgList &Args,
     }
 
     // Otherwise, look in the root.
+    // FIXME: This should be removed someday when we don't have to care about
+    // 10.6 and earlier, where /usr/lib/libstdc++.dylib does not exist.
     if ((llvm::sys::fs::exists("/usr/lib/libstdc++.dylib", Exists) || !Exists)&&
       (!llvm::sys::fs::exists("/usr/lib/libstdc++.6.dylib", Exists) && Exists)){
       CmdArgs.push_back("/usr/lib/libstdc++.6.dylib");
@@ -1216,7 +1234,8 @@ Generic_GCC::GCCInstallationDetector::GCCInstallationDetector(const Driver &D)
   } else if (HostArch == llvm::Triple::ppc64) {
     static const char *const PPC64LibDirs[] = { "/lib64", "/lib" };
     static const char *const PPC64Triples[] = {
-      "powerpc64-unknown-linux-gnu"
+      "powerpc64-unknown-linux-gnu",
+      "ppc64-redhat-linux"
     };
     LibDirs.append(PPC64LibDirs,
                    PPC64LibDirs + llvm::array_lengthof(PPC64LibDirs));
@@ -1989,6 +2008,12 @@ void Linux::AddClangSystemIncludeArgs(const ArgList &DriverArgs,
   const StringRef ARMMultiarchIncludeDirs[] = {
     "/usr/include/arm-linux-gnueabi"
   };
+  const StringRef MIPSMultiarchIncludeDirs[] = {
+    "/usr/include/mips-linux-gnu"
+  };
+  const StringRef MIPSELMultiarchIncludeDirs[] = {
+    "/usr/include/mipsel-linux-gnu"
+  };
   ArrayRef<StringRef> MultiarchIncludeDirs;
   if (getTriple().getArch() == llvm::Triple::x86_64) {
     MultiarchIncludeDirs = X86_64MultiarchIncludeDirs;
@@ -1996,6 +2021,10 @@ void Linux::AddClangSystemIncludeArgs(const ArgList &DriverArgs,
     MultiarchIncludeDirs = X86MultiarchIncludeDirs;
   } else if (getTriple().getArch() == llvm::Triple::arm) {
     MultiarchIncludeDirs = ARMMultiarchIncludeDirs;
+  } else if (getTriple().getArch() == llvm::Triple::mips) {
+    MultiarchIncludeDirs = MIPSMultiarchIncludeDirs;
+  } else if (getTriple().getArch() == llvm::Triple::mipsel) {
+    MultiarchIncludeDirs = MIPSELMultiarchIncludeDirs;
   }
   for (ArrayRef<StringRef>::iterator I = MultiarchIncludeDirs.begin(),
                                      E = MultiarchIncludeDirs.end();

@@ -769,7 +769,6 @@ void ASTStmtWriter::VisitAtomicExpr(AtomicExpr *E) {
   }
   Writer.AddSourceLocation(E->getBuiltinLoc(), Record);
   Writer.AddSourceLocation(E->getRParenLoc(), Record);
-  
   Code = serialization::EXPR_ATOMIC;
 }
 
@@ -1241,9 +1240,9 @@ void ASTStmtWriter::VisitCXXPseudoDestructorExpr(CXXPseudoDestructorExpr *E) {
 
 void ASTStmtWriter::VisitExprWithCleanups(ExprWithCleanups *E) {
   VisitExpr(E);
-  Record.push_back(E->getNumTemporaries());
-  for (unsigned i = 0, e = E->getNumTemporaries(); i != e; ++i)
-    Writer.AddCXXTemporary(E->getTemporary(i), Record);
+  Record.push_back(E->getNumObjects());
+  for (unsigned i = 0, e = E->getNumObjects(); i != e; ++i)
+    Writer.AddDeclRef(E->getObject(i), Record);
   
   Writer.AddStmt(E->getSubExpr());
   Code = serialization::EXPR_EXPR_WITH_CLEANUPS;

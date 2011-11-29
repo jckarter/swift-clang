@@ -58,6 +58,7 @@ CXTranslationUnit cxtu::MakeCXTranslationUnit(ASTUnit *TU) {
   CXTranslationUnit D = new CXTranslationUnitImpl();
   D->TUData = TU;
   D->StringPool = createCXStringPool();
+  D->Diagnostics = 0;
   return D;
 }
 
@@ -236,6 +237,18 @@ void CursorVisitor::visitFileRegion() {
     visitPreprocessedEntitiesInRegion();
 }
 
+static bool isInLexicalContext(Decl *D, DeclContext *DC) {
+  if (!DC)
+    return false;
+
+  for (DeclContext *DeclDC = D->getLexicalDeclContext();
+         DeclDC; DeclDC = DeclDC->getLexicalParent()) {
+    if (DeclDC == DC)
+      return true;
+  }
+  return false;
+}
+
 void CursorVisitor::visitDeclsFromFileRegion(FileID File,
                                              unsigned Offset, unsigned Length) {
   ASTUnit *Unit = static_cast<ASTUnit *>(TU->TUData);
@@ -247,7 +260,7 @@ void CursorVisitor::visitDeclsFromFileRegion(FileID File,
 
   // If we didn't find any file level decls for the file, try looking at the
   // file that it was included from.
-  while (Decls.empty()) {
+  while (Decls.empty() || Decls.front()->isTopLevelDeclInObjCContainer()) {
     bool Invalid = false;
     const SrcMgr::SLocEntry &SLEntry = SM.getSLocEntry(File, &Invalid);
     if (Invalid)
@@ -269,9 +282,17 @@ void CursorVisitor::visitDeclsFromFileRegion(FileID File,
   assert(!Decls.empty());
 
   bool VisitedAtLeastOnce = false;
+  DeclContext *CurDC = 0;
   SmallVector<Decl *, 16>::iterator DIt = Decls.begin();
   for (SmallVector<Decl *, 16>::iterator DE = Decls.end(); DIt != DE; ++DIt) {
     Decl *D = *DIt;
+    if (D->getSourceRange().isInvalid())
+      continue;
+
+    if (isInLexicalContext(D, CurDC))
+      continue;
+
+    CurDC = dyn_cast<DeclContext>(D);
 
     // We handle forward decls via ObjCClassDecl.
     if (ObjCInterfaceDecl *InterD = dyn_cast<ObjCInterfaceDecl>(D)) {
@@ -284,6 +305,10 @@ void CursorVisitor::visitDeclsFromFileRegion(FileID File,
         continue;
     }
 
+    if (TagDecl *TD = dyn_cast<TagDecl>(D))
+      if (!TD->isFreeStanding())
+        continue;
+
     RangeComparisonResult CompRes = RangeCompare(SM, D->getSourceRange(),Range);
     if (CompRes == RangeBefore)
       continue;
@@ -292,6 +317,14 @@ void CursorVisitor::visitDeclsFromFileRegion(FileID File,
 
     assert(CompRes == RangeOverlap);
     VisitedAtLeastOnce = true;
+
+    if (isa<ObjCContainerDecl>(D)) {
+      FileDI_current = &DIt;
+      FileDE_current = DE;
+    } else {
+      FileDI_current = 0;
+    }
+
     if (Visit(MakeCXCursor(D, TU, Range), /*CheckedRegionOfInterest=*/true))
       break;
   }
@@ -815,6 +848,27 @@ bool CursorVisitor::VisitObjCMethodDecl(ObjCMethodDecl *ND) {
   return false;
 }
 
+template <typename DeclIt>
+static void addRangedDeclsInContainer(DeclIt *DI_current, DeclIt DE_current,
+                                      SourceManager &SM, SourceLocation EndLoc,
+                                      SmallVectorImpl<Decl *> &Decls) {
+  DeclIt next = *DI_current;
+  while (++next != DE_current) {
+    Decl *D_next = *next;
+    if (!D_next)
+      break;
+    SourceLocation L = D_next->getLocStart();
+    if (!L.isValid())
+      break;
+    if (SM.isBeforeInTranslationUnit(L, EndLoc)) {
+      *DI_current = next;
+      Decls.push_back(D_next);
+      continue;
+    }
+    break;
+  }
+}
+
 namespace {
   struct ContainerDeclsSort {
     SourceManager &SM;
@@ -833,7 +887,7 @@ bool CursorVisitor::VisitObjCContainerDecl(ObjCContainerDecl *D) {
   // an @implementation can lexically contain Decls that are not properly
   // nested in the AST.  When we identify such cases, we need to retrofit
   // this nesting here.
-  if (!DI_current)
+  if (!DI_current && !FileDI_current)
     return VisitDeclContext(D);
 
   // Scan the Decls that immediately come after the container
@@ -844,20 +898,12 @@ bool CursorVisitor::VisitObjCContainerDecl(ObjCContainerDecl *D) {
   SourceLocation EndLoc = D->getSourceRange().getEnd();
   SourceManager &SM = AU->getSourceManager();
   if (EndLoc.isValid()) {
-    DeclContext::decl_iterator next = *DI_current;
-    while (++next != DE_current) {
-      Decl *D_next = *next;
-      if (!D_next)
-        break;
-      SourceLocation L = D_next->getLocStart();
-      if (!L.isValid())
-        break;
-      if (SM.isBeforeInTranslationUnit(L, EndLoc)) {
-        *DI_current = next;
-        DeclsInContainer.push_back(D_next);
-        continue;
-      }
-      break;
+    if (DI_current) {
+      addRangedDeclsInContainer(DI_current, DE_current, SM, EndLoc,
+                                DeclsInContainer);
+    } else {
+      addRangedDeclsInContainer(FileDI_current, FileDE_current, SM, EndLoc,
+                                DeclsInContainer);
     }
   }
 
@@ -2562,6 +2608,7 @@ void clang_disposeTranslationUnit(CXTranslationUnit CTUnit) {
 
     delete static_cast<ASTUnit *>(CTUnit->TUData);
     disposeCXStringPool(CTUnit->StringPool);
+    delete static_cast<CXDiagnosticSetImpl *>(CTUnit->Diagnostics);
     delete CTUnit;
   }
 }
@@ -2582,6 +2629,11 @@ static void clang_reparseTranslationUnit_Impl(void *UserData) {
   ReparseTranslationUnitInfo *RTUI =
     static_cast<ReparseTranslationUnitInfo*>(UserData);
   CXTranslationUnit TU = RTUI->TU;
+
+  // Reset the associated diagnostics.
+  delete static_cast<CXDiagnosticSetImpl*>(TU->Diagnostics);
+  TU->Diagnostics = 0;
+
   unsigned num_unsaved_files = RTUI->num_unsaved_files;
   struct CXUnsavedFile *unsaved_files = RTUI->unsaved_files;
   unsigned options = RTUI->options;
@@ -4490,10 +4542,7 @@ public:
 
   void VisitChildren(CXCursor C) { AnnotateVis.VisitChildren(C); }
   enum CXChildVisitResult Visit(CXCursor cursor, CXCursor parent);
-  void AnnotateTokens(CXCursor parent);
-  void AnnotateTokens() {
-    AnnotateTokens(clang_getTranslationUnitCursor(AnnotateVis.getTU()));
-  }
+  void AnnotateTokens();
   
   /// \brief Determine whether the annotator saw any cursors that have 
   /// context-sensitive keywords.
@@ -4503,10 +4552,10 @@ public:
 };
 }
 
-void AnnotateTokensWorker::AnnotateTokens(CXCursor parent) {
+void AnnotateTokensWorker::AnnotateTokens() {
   // Walk the AST within the region of interest, annotating tokens
   // along the way.
-  VisitChildren(parent);
+  AnnotateVis.visitFileRegion();
 
   for (unsigned I = 0 ; I < TokIdx ; ++I) {
     AnnotateTokensData::iterator Pos = Annotated.find(Tokens[I].int_data[1]);
@@ -4522,6 +4571,9 @@ void AnnotateTokensWorker::AnnotateTokens(CXCursor parent) {
 
   const CXCursor &C = clang_getNullCursor();
   for (unsigned I = TokIdx ; I < NumTokens ; ++I) {
+    if (I < PreprocessingTokIdx && clang_isPreprocessing(Cursors[I].kind))
+      continue;
+
     AnnotateTokensData::iterator Pos = Annotated.find(Tokens[I].int_data[1]);
     Cursors[I] = (Pos == Annotated.end()) ? C : Pos->second;
   }
@@ -5234,6 +5286,10 @@ void clang_getOverriddenCursors(CXCursor cursor,
 
   SmallVector<CXCursor, 8> Overridden;
   cxcursor::getOverriddenCursors(cursor, Overridden);
+
+  // Don't allocate memory if we have no overriden cursors.
+  if (Overridden.size() == 0)
+    return;
 
   *num_overridden = Overridden.size();
   *overridden = new CXCursor [Overridden.size()];

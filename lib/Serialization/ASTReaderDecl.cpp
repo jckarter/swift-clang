@@ -249,6 +249,7 @@ void ASTDeclReader::VisitDecl(Decl *D) {
   D->setImplicit(Record[Idx++]);
   D->setUsed(Record[Idx++]);
   D->setReferenced(Record[Idx++]);
+  D->TopLevelDeclInObjCContainer = Record[Idx++];
   D->setAccess((AccessSpecifier)Record[Idx++]);
   D->FromASTFile = true;
   D->ModulePrivate = Record[Idx++];
@@ -558,8 +559,7 @@ void ASTDeclReader::VisitObjCInterfaceDecl(ObjCInterfaceDecl *ID) {
   // We will rebuild this list lazily.
   ID->setIvarList(0);
   ID->InitiallyForwardDecl = Record[Idx++];
-  ID->setForwardDecl(Record[Idx++]);
-  ID->setImplicitInterfaceDecl(Record[Idx++]);
+  ID->ForwardDecl = Record[Idx++];
   ID->setSuperClassLoc(ReadSourceLocation(Record, Idx));
   ID->setLocEnd(ReadSourceLocation(Record, Idx));
 }
@@ -576,7 +576,7 @@ void ASTDeclReader::VisitObjCIvarDecl(ObjCIvarDecl *IVD) {
 void ASTDeclReader::VisitObjCProtocolDecl(ObjCProtocolDecl *PD) {
   VisitObjCContainerDecl(PD);
   PD->InitiallyForwardDecl = Record[Idx++];
-  PD->setForwardDecl(Record[Idx++]);
+  PD->isForwardProtoDecl = Record[Idx++];
   PD->setLocEnd(ReadSourceLocation(Record, Idx));
   unsigned NumProtoRefs = Record[Idx++];
   SmallVector<ObjCProtocolDecl *, 16> ProtoRefs;
@@ -1772,9 +1772,11 @@ Decl *ASTReader::ReadDeclRecord(DeclID ID) {
 
   // Load any relevant update records.
   loadDeclUpdateRecords(ID, D);
-  
+
+  // Load the category chain after recursive loading is finished.
   if (ObjCChainedCategoriesInterfaces.count(ID))
-    loadObjCChainedCategories(ID, cast<ObjCInterfaceDecl>(D));
+    PendingChainedObjCCategories.push_back(
+                                std::make_pair(cast<ObjCInterfaceDecl>(D), ID));
   
   // If we have deserialized a declaration that has a definition the
   // AST consumer might need to know about, queue it.

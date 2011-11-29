@@ -1249,13 +1249,13 @@ void ASTStmtReader::VisitCXXPseudoDestructorExpr(CXXPseudoDestructorExpr *E) {
 
 void ASTStmtReader::VisitExprWithCleanups(ExprWithCleanups *E) {
   VisitExpr(E);
-  unsigned NumTemps = Record[Idx++];
-  if (NumTemps) {
-    E->setNumTemporaries(Reader.getContext(), NumTemps);
-    for (unsigned i = 0; i != NumTemps; ++i)
-      E->setTemporary(i, Reader.ReadCXXTemporary(F, Record, Idx));
-  }
-  E->setSubExpr(Reader.ReadSubExpr());
+
+  unsigned NumObjects = Record[Idx++];
+  assert(NumObjects == E->getNumObjects());
+  for (unsigned i = 0; i != NumObjects; ++i)
+    E->getObjectsBuffer()[i] = ReadDeclAs<BlockDecl>(Record, Idx);
+
+  E->SubExpr = Reader.ReadSubExpr();
 }
 
 void
@@ -2046,7 +2046,8 @@ Stmt *ASTReader::ReadStmtFromStream(Module &F) {
       break;
         
     case EXPR_EXPR_WITH_CLEANUPS:
-      S = new (Context) ExprWithCleanups(Empty);
+      S = ExprWithCleanups::Create(Context, Empty,
+                                   Record[ASTStmtReader::NumExprFields]);
       break;
       
     case EXPR_CXX_DEPENDENT_SCOPE_MEMBER:

@@ -1312,6 +1312,12 @@ NamedDecl *Sema::LazilyCreateBuiltin(IdentifierInfo *II, unsigned bid,
       Diag(Loc, diag::warn_implicit_decl_requires_setjmp)
         << Context.BuiltinInfo.GetName(BID);
     return 0;
+
+  case ASTContext::GE_Missing_ucontext:
+    if (ForRedeclaration)
+      Diag(Loc, diag::warn_implicit_decl_requires_ucontext)
+        << Context.BuiltinInfo.GetName(BID);
+    return 0;
   }
 
   if (!ForRedeclaration && Context.BuiltinInfo.isPredefinedLibFunction(BID)) {
@@ -3146,7 +3152,13 @@ static bool RebuildDeclaratorInCurrentInstantiation(Sema &S, Declarator &D,
 
 Decl *Sema::ActOnDeclarator(Scope *S, Declarator &D) {
   D.setFunctionDefinitionKind(FDK_Declaration);
-  return HandleDeclarator(S, D, MultiTemplateParamsArg(*this));
+  Decl *Dcl = HandleDeclarator(S, D, MultiTemplateParamsArg(*this));
+
+  if (OriginalLexicalContext && OriginalLexicalContext->isObjCContainer() &&
+      Dcl->getDeclContext()->isFileContext())
+    Dcl->setTopLevelDeclInObjCContainer();
+
+  return Dcl;
 }
 
 /// DiagnoseClassNameShadow - Implement C++ [class.mem]p13:
@@ -3661,6 +3673,8 @@ Sema::ActOnTypedefNameDecl(Scope *S, DeclContext *DC, TypedefNameDecl *NewTD,
         Context.setjmp_bufDecl(NewTD);
       else if (II->isStr("sigjmp_buf"))
         Context.setsigjmp_bufDecl(NewTD);
+      else if (II->isStr("ucontext_t"))
+        Context.setucontext_tDecl(NewTD);
       else if (II->isStr("__builtin_va_list"))
         Context.setBuiltinVaListType(Context.getTypedefType(NewTD));
     }
@@ -4779,6 +4793,9 @@ Sema::ActOnFunctionDeclarator(Scope *S, Declarator &D, DeclContext *DC,
   FunctionDecl *NewFD = CreateNewFunctionDecl(*this, D, DC, R, TInfo, SC,
                                               isVirtualOkay);
   if (!NewFD) return 0;
+
+  if (OriginalLexicalContext && OriginalLexicalContext->isObjCContainer())
+    NewFD->setTopLevelDeclInObjCContainer();
 
   if (getLangOptions().CPlusPlus) {
     bool isInline = D.getDeclSpec().isInlineSpecified();
@@ -6182,7 +6199,7 @@ void Sema::AddInitializerToDecl(Decl *RealDecl, Expr *Init,
   // "ary" transitions from a VariableArrayType to a ConstantArrayType.
   if (!VDecl->isInvalidDecl() && (DclT != SavT)) {
     VDecl->setType(DclT);
-    Init->setType(DclT);
+    Init->setType(DclT.getNonReferenceType());
   }
   
   // Check any implicit conversions within the expression.
@@ -7190,8 +7207,7 @@ Decl *Sema::ActOnFinishFunctionBody(Decl *dcl, Stmt *Body,
     // deletion in some later function.
     if (PP.getDiagnostics().hasErrorOccurred() ||
         PP.getDiagnostics().getSuppressAllDiagnostics()) {
-      ExprTemporaries.clear();
-      ExprNeedsCleanups = false;
+      DiscardCleanupsInEvaluationContext();
     } else if (!isa<FunctionTemplateDecl>(dcl)) {
       // Since the body is valid, issue any analysis-based warnings that are
       // enabled.
@@ -7202,7 +7218,7 @@ Decl *Sema::ActOnFinishFunctionBody(Decl *dcl, Stmt *Body,
         !CheckConstexprFunctionBody(FD, Body))
       FD->setInvalidDecl();
 
-    assert(ExprTemporaries.empty() && "Leftover temporaries in function");
+    assert(ExprCleanupObjects.empty() && "Leftover temporaries in function");
     assert(!ExprNeedsCleanups && "Unaccounted cleanups in function");
   }
   
@@ -7215,8 +7231,7 @@ Decl *Sema::ActOnFinishFunctionBody(Decl *dcl, Stmt *Body,
   // been leftover. This ensures that these temporaries won't be picked up for
   // deletion in some later function.
   if (getDiagnostics().hasErrorOccurred()) {
-    ExprTemporaries.clear();
-    ExprNeedsCleanups = false;
+    DiscardCleanupsInEvaluationContext();
   }
 
   return dcl;

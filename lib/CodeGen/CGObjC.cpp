@@ -2360,6 +2360,7 @@ static TryEmitResult
 tryEmitARCRetainScalarExpr(CodeGenFunction &CGF, const Expr *e) {
   // Look through cleanups.
   if (const ExprWithCleanups *cleanups = dyn_cast<ExprWithCleanups>(e)) {
+    CGF.enterFullExpression(cleanups);
     CodeGenFunction::RunCleanupsScope scope(CGF);
     return tryEmitARCRetainScalarExpr(CGF, cleanups->getSubExpr());
   }
@@ -2559,10 +2560,12 @@ llvm::Value *CodeGenFunction::EmitObjCThrowOperand(const Expr *expr) {
     //   @throw A().foo;
     // where a full retain+autorelease is required and would
     // otherwise happen after the destructor for the temporary.
-    CodeGenFunction::RunCleanupsScope cleanups(*this);
-    if (const ExprWithCleanups *ewc = dyn_cast<ExprWithCleanups>(expr))
+    if (const ExprWithCleanups *ewc = dyn_cast<ExprWithCleanups>(expr)) {
+      enterFullExpression(ewc);
       expr = ewc->getSubExpr();
+    }
 
+    CodeGenFunction::RunCleanupsScope cleanups(*this);
     return EmitARCRetainAutoreleaseScalarExpr(expr);
   }
 

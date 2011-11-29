@@ -45,6 +45,7 @@ namespace llvm {
 namespace clang {
   class APValue;
   class ASTContext;
+  class BlockDecl;
   class CXXDestructorDecl;
   class CXXForRangeStmt;
   class CXXTryStmt;
@@ -610,6 +611,9 @@ public:
 
   unsigned NextCleanupDestIndex;
 
+  /// FirstBlockInfo - The head of a singly-linked-list of block layouts.
+  CGBlockInfo *FirstBlockInfo;
+
   /// EHResumeBlock - Unified block containing a call to llvm.eh.resume.
   llvm::BasicBlock *EHResumeBlock;
 
@@ -625,10 +629,6 @@ public:
   llvm::BasicBlock *EmitLandingPad();
 
   llvm::BasicBlock *getInvokeDestImpl();
-
-  /// Set up the last cleaup that was pushed as a conditional
-  /// full-expression cleanup.
-  void initFullExprCleanup();
 
   template <class T>
   typename DominatingValue<T>::saved_type saveValueInCond(T value) {
@@ -740,6 +740,10 @@ public:
     initFullExprCleanup();
   }
 
+  /// Set up the last cleaup that was pushed as a conditional
+  /// full-expression cleanup.
+  void initFullExprCleanup();
+
   /// PushDestructorCleanup - Push a cleanup to call the
   /// complete-object destructor of an object of the given type at the
   /// given address.  Does nothing if T is not a C++ class type with a
@@ -759,11 +763,23 @@ public:
   /// DeactivateCleanupBlock - Deactivates the given cleanup block.
   /// The block cannot be reactivated.  Pops it if it's the top of the
   /// stack.
-  void DeactivateCleanupBlock(EHScopeStack::stable_iterator Cleanup);
+  ///
+  /// \param DominatingIP - An instruction which is known to
+  ///   dominate the current IP (if set) and which lies along
+  ///   all paths of execution between the current IP and the
+  ///   the point at which the cleanup comes into scope.
+  void DeactivateCleanupBlock(EHScopeStack::stable_iterator Cleanup,
+                              llvm::Instruction *DominatingIP);
 
   /// ActivateCleanupBlock - Activates an initially-inactive cleanup.
   /// Cannot be used to resurrect a deactivated cleanup.
-  void ActivateCleanupBlock(EHScopeStack::stable_iterator Cleanup);
+  ///
+  /// \param DominatingIP - An instruction which is known to
+  ///   dominate the current IP (if set) and which lies along
+  ///   all paths of execution between the current IP and the
+  ///   the point at which the cleanup comes into scope.
+  void ActivateCleanupBlock(EHScopeStack::stable_iterator Cleanup,
+                            llvm::Instruction *DominatingIP);
 
   /// \brief Enters a new scope for capturing cleanups, all of which
   /// will be executed once the scope is exited.
@@ -918,6 +934,12 @@ public:
   /// isInConditionalBranch - Return true if we're currently emitting
   /// one branch or the other of a conditional expression.
   bool isInConditionalBranch() const { return OutermostConditional != 0; }
+
+  void setBeforeOutermostConditional(llvm::Value *value, llvm::Value *addr) {
+    assert(isInConditionalBranch());
+    llvm::BasicBlock *block = OutermostConditional->getStartingBlock();
+    new llvm::StoreInst(value, addr, &block->back());    
+  }
 
   /// An RAII object to record that we're evaluating a statement
   /// expression.
@@ -1169,6 +1191,7 @@ private:
 
 public:
   CodeGenFunction(CodeGenModule &cgm);
+  ~CodeGenFunction();
 
   CodeGenTypes &getTypes() const { return CGM.getTypes(); }
   ASTContext &getContext() const { return CGM.getContext(); }
@@ -1297,6 +1320,8 @@ public:
   //===--------------------------------------------------------------------===//
 
   llvm::Value *EmitBlockLiteral(const BlockExpr *);
+  llvm::Value *EmitBlockLiteral(const CGBlockInfo &Info);
+  static void destroyBlockInfos(CGBlockInfo *info);
   llvm::Constant *BuildDescriptorBlockDecl(const BlockExpr *,
                                            const CGBlockInfo &Info,
                                            llvm::StructType *,
@@ -1513,6 +1538,15 @@ public:
   //===--------------------------------------------------------------------===//
 
   LValue MakeAddrLValue(llvm::Value *V, QualType T, unsigned Alignment = 0) {
+    return LValue::MakeAddr(V, T, Alignment, getContext(),
+                            CGM.getTBAAInfo(T));
+  }
+  LValue MakeNaturalAlignAddrLValue(llvm::Value *V, QualType T) {
+    unsigned Alignment;
+    if (T->isIncompleteType())
+      Alignment = 0;
+    else
+      Alignment = getContext().getTypeAlignInChars(T).getQuantity();
     return LValue::MakeAddr(V, T, Alignment, getContext(),
                             CGM.getTBAAInfo(T));
   }
@@ -1747,7 +1781,8 @@ public:
   void EmitNewArrayInitializer(const CXXNewExpr *E, QualType elementType,
                                llvm::Value *NewPtr, llvm::Value *NumElements);
 
-  void EmitCXXTemporary(const CXXTemporary *Temporary, llvm::Value *Ptr);
+  void EmitCXXTemporary(const CXXTemporary *Temporary, QualType TempType,
+                        llvm::Value *Ptr);
 
   llvm::Value *EmitCXXNewExpr(const CXXNewExpr *E);
   void EmitCXXDeleteExpr(const CXXDeleteExpr *E);
@@ -2074,7 +2109,6 @@ public:
 
   LValue EmitCXXConstructLValue(const CXXConstructExpr *E);
   LValue EmitCXXBindTemporaryLValue(const CXXBindTemporaryExpr *E);
-  LValue EmitExprWithCleanupsLValue(const ExprWithCleanups *E);
   LValue EmitCXXTypeidLValue(const CXXTypeidExpr *E);
 
   LValue EmitObjCMessageExprLValue(const ObjCMessageExpr *E);
@@ -2353,8 +2387,11 @@ public:
   void EmitSynthesizedCXXCopyCtor(llvm::Value *Dest, llvm::Value *Src,
                                   const Expr *Exp);
 
-  RValue EmitExprWithCleanups(const ExprWithCleanups *E,
-                              AggValueSlot Slot =AggValueSlot::ignored());
+  void enterFullExpression(const ExprWithCleanups *E) {
+    if (E->getNumObjects() == 0) return;
+    enterNonTrivialFullExpression(E);
+  }
+  void enterNonTrivialFullExpression(const ExprWithCleanups *E);
 
   void EmitCXXThrowExpr(const CXXThrowExpr *E);
 

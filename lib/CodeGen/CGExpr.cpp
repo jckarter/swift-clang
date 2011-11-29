@@ -210,6 +210,13 @@ EmitExprForReferenceBinding(CodeGenFunction &CGF, const Expr *E,
                             const CXXDestructorDecl *&ReferenceTemporaryDtor,
                             QualType &ObjCARCReferenceLifetimeType,
                             const NamedDecl *InitializedDecl) {
+  // Look through single-element init lists that claim to be lvalues. They're
+  // just syntactic wrappers in this case.
+  if (const InitListExpr *ILE = dyn_cast<InitListExpr>(E)) {
+    if (ILE->getNumInits() == 1 && ILE->isGLValue())
+      E = ILE->getInit(0);
+  }
+
   // Look through expressions for materialized temporaries (for now).
   if (const MaterializeTemporaryExpr *M 
                                       = dyn_cast<MaterializeTemporaryExpr>(E)) {
@@ -229,10 +236,11 @@ EmitExprForReferenceBinding(CodeGenFunction &CGF, const Expr *E,
   if (const CXXDefaultArgExpr *DAE = dyn_cast<CXXDefaultArgExpr>(E))
     E = DAE->getExpr();
   
-  if (const ExprWithCleanups *TE = dyn_cast<ExprWithCleanups>(E)) {
+  if (const ExprWithCleanups *EWC = dyn_cast<ExprWithCleanups>(E)) {
+    CGF.enterFullExpression(EWC);
     CodeGenFunction::RunCleanupsScope Scope(CGF);
 
-    return EmitExprForReferenceBinding(CGF, TE->getSubExpr(), 
+    return EmitExprForReferenceBinding(CGF, EWC->getSubExpr(), 
                                        ReferenceTemporary, 
                                        ReferenceTemporaryDtor,
                                        ObjCARCReferenceLifetimeType,
@@ -668,6 +676,10 @@ LValue CodeGenFunction::EmitLValue(const Expr *E) {
     return EmitObjCEncodeExprLValue(cast<ObjCEncodeExpr>(E));
   case Expr::PseudoObjectExprClass:
     return EmitPseudoObjectLValue(cast<PseudoObjectExpr>(E));
+  case Expr::InitListExprClass:
+    assert(cast<InitListExpr>(E)->getNumInits() == 1 &&
+           "Only single-element init list can be lvalue.");
+    return EmitLValue(cast<InitListExpr>(E)->getInit(0));
 
   case Expr::BlockDeclRefExprClass:
     return EmitBlockDeclRefLValue(cast<BlockDeclRefExpr>(E));
@@ -677,8 +689,14 @@ LValue CodeGenFunction::EmitLValue(const Expr *E) {
     return EmitCXXConstructLValue(cast<CXXConstructExpr>(E));
   case Expr::CXXBindTemporaryExprClass:
     return EmitCXXBindTemporaryLValue(cast<CXXBindTemporaryExpr>(E));
-  case Expr::ExprWithCleanupsClass:
-    return EmitExprWithCleanupsLValue(cast<ExprWithCleanups>(E));
+
+  case Expr::ExprWithCleanupsClass: {
+    const ExprWithCleanups *cleanups = cast<ExprWithCleanups>(E);
+    enterFullExpression(cleanups);
+    RunCleanupsScope Scope(*this);
+    return EmitLValue(cleanups->getSubExpr());
+  }
+
   case Expr::CXXScalarValueInitExprClass:
     return EmitNullInitializationLValue(cast<CXXScalarValueInitExpr>(E));
   case Expr::CXXDefaultArgExprClass:
@@ -721,7 +739,7 @@ LValue CodeGenFunction::EmitLValue(const Expr *E) {
   case Expr::CXXConstCastExprClass:
   case Expr::ObjCBridgedCastExprClass:
     return EmitCastLValue(cast<CastExpr>(E));
-      
+
   case Expr::MaterializeTemporaryExprClass:
     return EmitMaterializeTemporaryExpr(cast<MaterializeTemporaryExpr>(E));
   }
@@ -1312,14 +1330,19 @@ static LValue EmitGlobalVarDeclLValue(CodeGenFunction &CGF,
          "Var decl must have external storage or be a file var decl!");
 
   llvm::Value *V = CGF.CGM.GetAddrOfGlobalVar(VD);
-  if (VD->getType()->isReferenceType())
-    V = CGF.Builder.CreateLoad(V);
-  
-  V = EmitBitCastOfLValueToProperType(CGF, V,
-                                CGF.getTypes().ConvertTypeForMem(E->getType()));
-
+  llvm::Type *RealVarTy = CGF.getTypes().ConvertTypeForMem(VD->getType());
+  V = EmitBitCastOfLValueToProperType(CGF, V, RealVarTy);
   unsigned Alignment = CGF.getContext().getDeclAlign(VD).getQuantity();
-  LValue LV = CGF.MakeAddrLValue(V, E->getType(), Alignment);
+  QualType T = E->getType();
+  LValue LV;
+  if (VD->getType()->isReferenceType()) {
+    llvm::LoadInst *LI = CGF.Builder.CreateLoad(V);
+    LI->setAlignment(Alignment);
+    V = LI;
+    LV = CGF.MakeNaturalAlignAddrLValue(V, T);
+  } else {
+    LV = CGF.MakeAddrLValue(V, E->getType(), Alignment);
+  }
   setObjCGCLValueClass(CGF.getContext(), E, LV);
   return LV;
 }
@@ -1346,6 +1369,7 @@ static LValue EmitFunctionDeclLValue(CodeGenFunction &CGF,
 LValue CodeGenFunction::EmitDeclRefLValue(const DeclRefExpr *E) {
   const NamedDecl *ND = E->getDecl();
   unsigned Alignment = getContext().getDeclAlign(ND).getQuantity();
+  QualType T = E->getType();
 
   if (ND->hasAttr<WeakRefAttr>()) {
     const ValueDecl *VD = cast<ValueDecl>(ND);
@@ -1370,14 +1394,17 @@ LValue CodeGenFunction::EmitDeclRefLValue(const DeclRefExpr *E) {
 
     if (VD->hasAttr<BlocksAttr>())
       V = BuildBlockByrefAddress(V, VD);
-    
-    if (VD->getType()->isReferenceType())
-      V = Builder.CreateLoad(V);
 
-    V = EmitBitCastOfLValueToProperType(*this, V,
-                                    getTypes().ConvertTypeForMem(E->getType()));
+    LValue LV;
+    if (VD->getType()->isReferenceType()) {
+      llvm::LoadInst *LI = Builder.CreateLoad(V);
+      LI->setAlignment(Alignment);
+      V = LI;
+      LV = MakeNaturalAlignAddrLValue(V, T);
+    } else {
+      LV = MakeAddrLValue(V, T, Alignment);
+    }
 
-    LValue LV = MakeAddrLValue(V, E->getType(), Alignment);
     if (NonGCable) {
       LV.getQuals().removeObjCGCAttr();
       LV.setNonGC(true);
@@ -1836,6 +1863,7 @@ LValue CodeGenFunction::EmitLValueForField(llvm::Value *baseAddr,
 
   const RecordDecl *rec = field->getParent();
   QualType type = field->getType();
+  unsigned alignment = getContext().getDeclAlign(field).getQuantity();
 
   bool mayAlias = rec->hasAttr<MayAliasAttr>();
 
@@ -1852,6 +1880,7 @@ LValue CodeGenFunction::EmitLValueForField(llvm::Value *baseAddr,
     if (const ReferenceType *refType = type->getAs<ReferenceType>()) {
       llvm::LoadInst *load = Builder.CreateLoad(addr, "ref");
       if (cvr & Qualifiers::Volatile) load->setVolatile(true);
+      load->setAlignment(alignment);
 
       if (CGM.shouldUseTBAA()) {
         llvm::MDNode *tbaa;
@@ -1865,6 +1894,10 @@ LValue CodeGenFunction::EmitLValueForField(llvm::Value *baseAddr,
       addr = load;
       mayAlias = false;
       type = refType->getPointeeType();
+      if (type->isIncompleteType())
+        alignment = 0;
+      else
+        alignment = getContext().getTypeAlignInChars(type).getQuantity();
       cvr = 0; // qualifiers don't recursively apply to referencee
     }
   }
@@ -1880,7 +1913,6 @@ LValue CodeGenFunction::EmitLValueForField(llvm::Value *baseAddr,
   if (field->hasAttr<AnnotateAttr>())
     addr = EmitFieldAnnotations(field, addr);
 
-  unsigned alignment = getContext().getDeclAlign(field).getQuantity();
   LValue LV = MakeAddrLValue(addr, type, alignment);
   LV.getQuals().addCVRQualifiers(cvr);
 
@@ -1926,6 +1958,11 @@ CodeGenFunction::EmitLValueForFieldInitialization(llvm::Value *BaseValue,
 }
 
 LValue CodeGenFunction::EmitCompoundLiteralLValue(const CompoundLiteralExpr *E){
+  if (E->isFileScope()) {
+    llvm::Value *GlobalPtr = CGM.GetAddrOfConstantCompoundLiteral(E);
+    return MakeAddrLValue(GlobalPtr, E->getType());
+  }
+
   llvm::Value *DeclPtr = CreateMemTemp(E->getType(), ".compoundliteral");
   const Expr *InitExpr = E->getInitializer();
   LValue Result = MakeAddrLValue(DeclPtr, E->getType());
@@ -2316,7 +2353,7 @@ CodeGenFunction::EmitCXXBindTemporaryLValue(const CXXBindTemporaryExpr *E) {
   AggValueSlot Slot = CreateAggTemp(E->getType(), "temp.lvalue");
   Slot.setExternallyDestructed();
   EmitAggExpr(E->getSubExpr(), Slot);
-  EmitCXXTemporary(E->getTemporary(), Slot.getAddr());
+  EmitCXXTemporary(E->getTemporary(), E->getType(), Slot.getAddr());
   return MakeAddrLValue(Slot.getAddr(), E->getType());
 }
 

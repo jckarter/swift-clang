@@ -68,6 +68,13 @@ static AvailabilityResult DiagnoseAvailabilityOfDecl(Sema &S,
   // See if this declaration is unavailable or deprecated.
   std::string Message;
   AvailabilityResult Result = D->getAvailability(&Message);
+  if (const EnumConstantDecl *ECD = dyn_cast<EnumConstantDecl>(D))
+    if (Result == AR_Available) {
+      const DeclContext *DC = ECD->getDeclContext();
+      if (const EnumDecl *TheEnumDecl = dyn_cast<EnumDecl>(DC))
+        Result = TheEnumDecl->getAvailability(&Message);
+    }
+  
   switch (Result) {
     case AR_Available:
     case AR_NotYetIntroduced:
@@ -144,22 +151,11 @@ bool Sema::DiagnoseUseOfDecl(NamedDecl *D, SourceLocation Loc,
       return true;
     }
   }
-  AvailabilityResult Result =
-    DiagnoseAvailabilityOfDecl(*this, D, Loc, UnknownObjCClass);
+  DiagnoseAvailabilityOfDecl(*this, D, Loc, UnknownObjCClass);
 
   // Warn if this is used but marked unused.
   if (D->hasAttr<UnusedAttr>())
     Diag(Loc, diag::warn_used_but_marked_unused) << D->getDeclName();
-  // For available enumerator, it will become unavailable/deprecated
-  // if its enum declaration is as such.
-  if (Result == AR_Available)
-    if (const EnumConstantDecl *ECD = dyn_cast<EnumConstantDecl>(D)) {
-      const DeclContext *DC = ECD->getDeclContext();
-      if (const EnumDecl *TheEnumDecl = dyn_cast<EnumDecl>(DC))
-        DiagnoseAvailabilityOfDecl(*this,
-                          const_cast< EnumDecl *>(TheEnumDecl), 
-                          Loc, UnknownObjCClass);
-    }
   return false;
 }
 
@@ -823,14 +819,21 @@ static QualType handleComplexIntConversion(Sema &S, ExprResult &LHS,
 
   if (LHSComplexInt) {
     // int -> _Complex int
+    // FIXME: This needs to take integer ranks into account
+    RHS = S.ImpCastExprToType(RHS.take(), LHSComplexInt->getElementType(),
+                              CK_IntegralCast);
     RHS = S.ImpCastExprToType(RHS.take(), LHSType, CK_IntegralRealToComplex);
     return LHSType;
   }
 
   assert(RHSComplexInt);
   // int -> _Complex int
-  if (!IsCompAssign)
+  // FIXME: This needs to take integer ranks into account
+  if (!IsCompAssign) {
+    LHS = S.ImpCastExprToType(LHS.take(), RHSComplexInt->getElementType(),
+                              CK_IntegralCast);
     LHS = S.ImpCastExprToType(LHS.take(), RHSType, CK_IntegralRealToComplex);
+  }
   return RHSType;
 }
 
@@ -1504,8 +1507,8 @@ bool Sema::DiagnoseEmptyLookup(Scope *S, CXXScopeSpec &SS, LookupResult &R,
   // unqualified lookup.  This is useful when (for example) the
   // original lookup would not have found something because it was a
   // dependent name.
-  for (DeclContext *DC = SS.isEmpty() ? CurContext : 0;
-       DC; DC = DC->getParent()) {
+  DeclContext *DC = SS.isEmpty() ? CurContext : 0;
+  while (DC) {
     if (isa<CXXRecordDecl>(DC)) {
       LookupQualifiedName(R, DC);
 
@@ -1513,10 +1516,17 @@ bool Sema::DiagnoseEmptyLookup(Scope *S, CXXScopeSpec &SS, LookupResult &R,
         // Don't give errors about ambiguities in this lookup.
         R.suppressDiagnostics();
 
+        // During a default argument instantiation the CurContext points
+        // to a CXXMethodDecl; but we can't apply a this-> fixit inside a
+        // function parameter list, hence add an explicit check.
+        bool isDefaultArgument = !ActiveTemplateInstantiations.empty() &&
+                              ActiveTemplateInstantiations.back().Kind ==
+            ActiveTemplateInstantiation::DefaultFunctionArgumentInstantiation;
         CXXMethodDecl *CurMethod = dyn_cast<CXXMethodDecl>(CurContext);
         bool isInstance = CurMethod &&
                           CurMethod->isInstance() &&
-                          DC == CurMethod->getParent();
+                          DC == CurMethod->getParent() && !isDefaultArgument;
+                          
 
         // Give a code modification hint to insert 'this->'.
         // TODO: fixit for inserting 'Base<T>::' in the other cases.
@@ -1527,7 +1537,7 @@ bool Sema::DiagnoseEmptyLookup(Scope *S, CXXScopeSpec &SS, LookupResult &R,
           CXXMethodDecl *DepMethod = cast_or_null<CXXMethodDecl>(
               CurMethod->getInstantiatedFromMemberFunction());
           if (DepMethod) {
-            if (getLangOptions().MicrosoftExt)
+            if (getLangOptions().MicrosoftMode)
               diagnostic = diag::warn_found_via_dependent_bases_lookup;
             Diag(R.getNameLoc(), diagnostic) << Name
               << FixItHint::CreateInsertion(R.getNameLoc(), "this->");
@@ -1553,6 +1563,8 @@ bool Sema::DiagnoseEmptyLookup(Scope *S, CXXScopeSpec &SS, LookupResult &R,
             Diag(R.getNameLoc(), diagnostic) << Name;
           }
         } else {
+          if (getLangOptions().MicrosoftMode)
+            diagnostic = diag::warn_found_via_dependent_bases_lookup;
           Diag(R.getNameLoc(), diagnostic) << Name;
         }
 
@@ -1560,12 +1572,32 @@ bool Sema::DiagnoseEmptyLookup(Scope *S, CXXScopeSpec &SS, LookupResult &R,
         for (LookupResult::iterator I = R.begin(), E = R.end(); I != E; ++I)
           Diag((*I)->getLocation(), diag::note_dependent_var_use);
 
+        // Return true if we are inside a default argument instantiation
+        // and the found name refers to an instance member function, otherwise
+        // the function calling DiagnoseEmptyLookup will try to create an
+        // implicit member call and this is wrong for default argument.
+        if (isDefaultArgument && ((*R.begin())->isCXXInstanceMember())) {
+          Diag(R.getNameLoc(), diag::err_member_call_without_object);
+          return true;
+        }
+
         // Tell the callee to try to recover.
         return false;
       }
 
       R.clear();
     }
+
+    // In Microsoft mode, if we are performing lookup from within a friend
+    // function definition declared at class scope then we must set
+    // DC to the lexical parent to be able to search into the parent
+    // class.
+    if (getLangOptions().MicrosoftMode && DC->isFunctionOrMethod() &&
+        cast<FunctionDecl>(DC)->getFriendObjectKind() &&
+        DC->getLexicalParent()->isRecord())
+      DC = DC->getLexicalParent();
+    else
+      DC = DC->getParent();
   }
 
   // We didn't find anything, so try to correct for a typo.
@@ -3300,12 +3332,18 @@ ExprResult Sema::BuildCXXDefaultArgExpr(SourceLocation CallLoc,
   // be properly destroyed.
   // FIXME: We should really be rebuilding the default argument with new
   // bound temporaries; see the comment in PR5810.
-  for (unsigned i = 0, e = Param->getNumDefaultArgTemporaries(); i != e; ++i) {
-    CXXTemporary *Temporary = Param->getDefaultArgTemporary(i);
-    MarkDeclarationReferenced(Param->getDefaultArg()->getLocStart(), 
-                    const_cast<CXXDestructorDecl*>(Temporary->getDestructor()));
-    ExprTemporaries.push_back(Temporary);
+  // We don't need to do that with block decls, though, because
+  // blocks in default argument expression can never capture anything.
+  if (isa<ExprWithCleanups>(Param->getInit())) {
+    // Set the "needs cleanups" bit regardless of whether there are
+    // any explicit objects.
     ExprNeedsCleanups = true;
+
+    // Append all the objects to the cleanup list.  Right now, this
+    // should always be a no-op, because blocks in default argument
+    // expressions should never be able to capture anything.
+    assert(!cast<ExprWithCleanups>(Param->getInit())->getNumObjects() &&
+           "default argument expression has capturing blocks?");
   }
 
   // We already type-checked the argument, so we know it works. 
@@ -3972,10 +4010,7 @@ Sema::ActOnInitList(SourceLocation LBraceLoc, MultiExprArg InitArgList,
   // Immediately handle non-overload placeholders.  Overloads can be
   // resolved contextually, but everything else here can't.
   for (unsigned I = 0; I != NumInit; ++I) {
-    if (const BuiltinType *pty
-          = InitList[I]->getType()->getAsPlaceholderType()) {
-      if (pty->getKind() == BuiltinType::Overload) continue;
-
+    if (InitList[I]->getType()->isNonOverloadPlaceholderType()) {
       ExprResult result = CheckPlaceholderExpr(InitList[I]);
 
       // Ignore failures; dropping the entire initializer list because
@@ -7059,7 +7094,9 @@ static bool CheckForModifiableLvalue(Expr *E, SourceLocation Loc, Sema &S) {
           //  - self
           ObjCMethodDecl *method = S.getCurMethodDecl();
           if (method && var == method->getSelfDecl())
-            Diag = diag::err_typecheck_arr_assign_self;
+            Diag = method->isClassMethod()
+              ? diag::err_typecheck_arc_assign_self_class_method
+              : diag::err_typecheck_arc_assign_self;
 
           //  - fast enumeration variables
           else
@@ -8618,6 +8655,10 @@ void Sema::ActOnBlockStart(SourceLocation CaretLoc, Scope *CurScope) {
     PushDeclContext(CurScope, Block);
   else
     CurContext = Block;
+
+  // Enter a new evaluation context to insulate the block from any
+  // cleanups from the enclosing full-expression.
+  PushExpressionEvaluationContext(PotentiallyEvaluated);  
 }
 
 void Sema::ActOnBlockArguments(Declarator &ParamInfo, Scope *CurScope) {
@@ -8745,6 +8786,10 @@ void Sema::ActOnBlockArguments(Declarator &ParamInfo, Scope *CurScope) {
 /// ActOnBlockError - If there is an error parsing a block, this callback
 /// is invoked to pop the information about the block from the action impl.
 void Sema::ActOnBlockError(SourceLocation CaretLoc, Scope *CurScope) {
+  // Leave the expression-evaluation context.
+  DiscardCleanupsInEvaluationContext();
+  PopExpressionEvaluationContext();
+
   // Pop off CurBlock, handle nested blocks.
   PopDeclContext();
   PopFunctionOrBlockScope();
@@ -8757,6 +8802,10 @@ ExprResult Sema::ActOnBlockStmtExpr(SourceLocation CaretLoc,
   // If blocks are disabled, emit an error.
   if (!LangOpts.Blocks)
     Diag(CaretLoc, diag::err_blocks_disable);
+
+  // Leave the expression-evaluation context.
+  assert(!ExprNeedsCleanups && "cleanups within block not correctly bound!");
+  PopExpressionEvaluationContext();
 
   BlockScopeInfo *BSI = cast<BlockScopeInfo>(FunctionScopes.back());
   
@@ -8836,6 +8885,13 @@ ExprResult Sema::ActOnBlockStmtExpr(SourceLocation CaretLoc,
   BlockExpr *Result = new (Context) BlockExpr(BSI->TheDecl, BlockTy);
   const AnalysisBasedWarnings::Policy &WP = AnalysisWarnings.getDefaultPolicy();
   PopFunctionOrBlockScope(&WP, Result->getBlockDecl(), Result);
+
+  // If the block isn't obviously global, i.e. it captures anything at
+  // all, mark this full-expression as needing a cleanup.
+  if (Result->getBlockDecl()->hasCaptures()) {
+    ExprCleanupObjects.push_back(Result->getBlockDecl());
+    ExprNeedsCleanups = true;
+  }
 
   return Owned(Result);
 }
@@ -8988,6 +9044,7 @@ bool Sema::DiagnoseAssignmentResult(AssignConvertType ConvTy,
   FixItHint Hint;
   ConversionFixItGenerator ConvHints;
   bool MayHaveConvFixit = false;
+  bool MayHaveFunctionDiff = false;
 
   switch (ConvTy) {
   default: llvm_unreachable("Unknown conversion type");
@@ -9077,6 +9134,7 @@ bool Sema::DiagnoseAssignmentResult(AssignConvertType ConvTy,
     ConvHints.tryToFixConversion(SrcExpr, SrcType, DstType, *this);
     MayHaveConvFixit = true;
     isInvalid = true;
+    MayHaveFunctionDiff = true;
     break;
   }
 
@@ -9115,7 +9173,14 @@ bool Sema::DiagnoseAssignmentResult(AssignConvertType ConvTy,
   }
   if (MayHaveConvFixit) { FDiag << (unsigned) (ConvHints.Kind); }
 
+  if (MayHaveFunctionDiff)
+    HandleFunctionTypeMismatch(FDiag, SecondType, FirstType);
+
   Diag(Loc, FDiag);
+
+  if (SecondType == Context.OverloadTy)
+    NoteAllOverloadCandidates(OverloadExpr::find(SrcExpr).Expression,
+                              FirstType);
 
   if (CheckInferredResultType)
     EmitRelatedResultTypeNote(SrcExpr);
@@ -9167,7 +9232,7 @@ void
 Sema::PushExpressionEvaluationContext(ExpressionEvaluationContext NewContext) {
   ExprEvalContexts.push_back(
              ExpressionEvaluationContextRecord(NewContext,
-                                               ExprTemporaries.size(),
+                                               ExprCleanupObjects.size(),
                                                ExprNeedsCleanups));
   ExprNeedsCleanups = false;
 }
@@ -9204,8 +9269,8 @@ void Sema::PopExpressionEvaluationContext() {
   // the expression in that context: they aren't relevant because they
   // will never be constructed.
   if (Rec.Context == Unevaluated) {
-    ExprTemporaries.erase(ExprTemporaries.begin() + Rec.NumTemporaries,
-                          ExprTemporaries.end());
+    ExprCleanupObjects.erase(ExprCleanupObjects.begin() + Rec.NumCleanupObjects,
+                             ExprCleanupObjects.end());
     ExprNeedsCleanups = Rec.ParentNeedsCleanups;
 
   // Otherwise, merge the contexts together.
@@ -9218,9 +9283,9 @@ void Sema::PopExpressionEvaluationContext() {
 }
 
 void Sema::DiscardCleanupsInEvaluationContext() {
-  ExprTemporaries.erase(
-              ExprTemporaries.begin() + ExprEvalContexts.back().NumTemporaries,
-              ExprTemporaries.end());
+  ExprCleanupObjects.erase(
+         ExprCleanupObjects.begin() + ExprEvalContexts.back().NumCleanupObjects,
+         ExprCleanupObjects.end());
   ExprNeedsCleanups = false;
 }
 
@@ -9461,6 +9526,12 @@ namespace {
     void VisitMemberExpr(MemberExpr *E) {
       S.MarkDeclarationReferenced(E->getMemberLoc(), E->getMemberDecl());
       Inherited::VisitMemberExpr(E);
+    }
+    
+    void VisitCXXBindTemporaryExpr(CXXBindTemporaryExpr *E) {
+      S.MarkDeclarationReferenced(E->getLocStart(),
+            const_cast<CXXDestructorDecl*>(E->getTemporary()->getDestructor()));
+      Visit(E->getSubExpr());
     }
     
     void VisitCXXNewExpr(CXXNewExpr *E) {

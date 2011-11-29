@@ -27,6 +27,7 @@
 #include "clang/Frontend/FrontendActions.h"
 #include "clang/Frontend/FrontendDiagnostic.h"
 #include "clang/Frontend/FrontendOptions.h"
+#include "clang/Frontend/MultiplexConsumer.h"
 #include "clang/Frontend/Utils.h"
 #include "clang/Serialization/ASTReader.h"
 #include "clang/Serialization/ASTWriter.h"
@@ -664,7 +665,8 @@ ASTUnit *ASTUnit::LoadFromASTFile(const std::string &Filename,
   AST->FileMgr = new FileManager(FileSystemOpts);
   AST->SourceMgr = new SourceManager(AST->getDiagnostics(),
                                      AST->getFileManager());
-  AST->HeaderInfo.reset(new HeaderSearch(AST->getFileManager()));
+  AST->HeaderInfo.reset(new HeaderSearch(AST->getFileManager(),
+                                         AST->getDiagnostics()));
   
   for (unsigned I = 0; I != NumRemappedFiles; ++I) {
     FilenameOrMemBuf fileOrBuf = RemappedFiles[I].second;
@@ -852,6 +854,9 @@ public:
   }
 
   void handleTopLevelDecl(Decl *D) {
+    if (!D)
+      return;
+
     // FIXME: Currently ObjC method declarations are incorrectly being
     // reported as top-level declarations, even though their DeclContext
     // is the containing ObjC @interface/@implementation.  This is a
@@ -874,9 +879,10 @@ public:
     }
   }
 
-  void HandleTopLevelDecl(DeclGroupRef D) {
+  bool HandleTopLevelDecl(DeclGroupRef D) {
     for (DeclGroupRef::iterator it = D.begin(), ie = D.end(); it != ie; ++it)
       handleTopLevelDecl(*it);
+    return true;
   }
 
   // We're not interested in "interesting" decls.
@@ -922,7 +928,7 @@ public:
     Hash = 0;
   }
 
-  virtual void HandleTopLevelDecl(DeclGroupRef D) {
+  virtual bool HandleTopLevelDecl(DeclGroupRef D) {
     for (DeclGroupRef::iterator it = D.begin(), ie = D.end(); it != ie; ++it) {
       Decl *D = *it;
       // FIXME: Currently ObjC method declarations are incorrectly being
@@ -934,6 +940,7 @@ public:
       AddTopLevelDeclarationToHash(D, Hash);
       TopLevelDecls.push_back(D);
     }
+    return true;
   }
 
   virtual void HandleTranslationUnit(ASTContext &Ctx) {
@@ -1037,6 +1044,7 @@ bool ASTUnit::Parse(llvm::MemoryBuffer *OverrideMainBuffer) {
 
   // Configure the various subsystems.
   // FIXME: Should we retain the previous file manager?
+  LangOpts = &Clang->getLangOpts();
   FileSystemOpts = Clang->getFileSystemOpts();
   FileMgr = new FileManager(FileSystemOpts);
   SourceMgr = new SourceManager(getDiagnostics(), *FileMgr);
@@ -1243,7 +1251,7 @@ ASTUnit::ComputePreamble(CompilerInvocation &Invocation,
   }
   
   return std::make_pair(Buffer, Lexer::ComputePreamble(Buffer,
-                                                       Invocation.getLangOpts(),
+                                                       *Invocation.getLangOpts(),
                                                        MaxLines));
 }
 
@@ -1625,10 +1633,11 @@ StringRef ASTUnit::getMainFileName() const {
 }
 
 ASTUnit *ASTUnit::create(CompilerInvocation *CI,
-                         llvm::IntrusiveRefCntPtr<DiagnosticsEngine> Diags) {
+                         llvm::IntrusiveRefCntPtr<DiagnosticsEngine> Diags,
+                         bool CaptureDiagnostics) {
   llvm::OwningPtr<ASTUnit> AST;
   AST.reset(new ASTUnit(false));
-  ConfigureDiags(Diags, 0, 0, *AST, /*CaptureDiagnostics=*/false);
+  ConfigureDiags(Diags, 0, 0, *AST, CaptureDiagnostics);
   AST->Diagnostics = Diags;
   AST->Invocation = CI;
   AST->FileSystemOpts = CI->getFileSystemOpts();
@@ -1641,21 +1650,33 @@ ASTUnit *ASTUnit::create(CompilerInvocation *CI,
 ASTUnit *ASTUnit::LoadFromCompilerInvocationAction(CompilerInvocation *CI,
                               llvm::IntrusiveRefCntPtr<DiagnosticsEngine> Diags,
                                              ASTFrontendAction *Action,
-                                             ASTUnit *Unit) {
+                                             ASTUnit *Unit,
+                                             bool Persistent,
+                                             StringRef ResourceFilesPath,
+                                             bool OnlyLocalDecls,
+                                             bool CaptureDiagnostics,
+                                             bool PrecompilePreamble,
+                                             bool CacheCodeCompletionResults) {
   assert(CI && "A CompilerInvocation is required");
 
   llvm::OwningPtr<ASTUnit> OwnAST;
   ASTUnit *AST = Unit;
   if (!AST) {
     // Create the AST unit.
-    OwnAST.reset(create(CI, Diags));
+    OwnAST.reset(create(CI, Diags, CaptureDiagnostics));
     AST = OwnAST.get();
   }
   
-  AST->OnlyLocalDecls = false;
-  AST->CaptureDiagnostics = false;
+  if (!ResourceFilesPath.empty()) {
+    // Override the resources path.
+    CI->getHeaderSearchOpts().ResourceDir = ResourceFilesPath;
+  }
+  AST->OnlyLocalDecls = OnlyLocalDecls;
+  AST->CaptureDiagnostics = CaptureDiagnostics;
+  if (PrecompilePreamble)
+    AST->PreambleRebuildCounter = 2;
   AST->TUKind = Action ? Action->getTranslationUnitKind() : TU_Complete;
-  AST->ShouldCacheCodeCompletionResults = false;
+  AST->ShouldCacheCodeCompletionResults = CacheCodeCompletionResults;
 
   // Recover resources if we crash before exiting this method.
   llvm::CrashRecoveryContextCleanupRegistrar<ASTUnit>
@@ -1734,7 +1755,17 @@ ASTUnit *ASTUnit::LoadFromCompilerInvocationAction(CompilerInvocation *CI,
                             Clang->getFrontendOpts().Inputs[0].second,
                             Clang->getFrontendOpts().Inputs[0].first))
     return 0;
-  
+
+  if (Persistent && !TrackerAct) {
+    Clang->getPreprocessor().addPPCallbacks(
+     new MacroDefinitionTrackerPPCallbacks(AST->getCurrentTopLevelHashValue()));
+    std::vector<ASTConsumer*> Consumers;
+    if (Clang->hasASTConsumer())
+      Consumers.push_back(Clang->takeASTConsumer());
+    Consumers.push_back(new TopLevelDeclTrackerConsumer(*AST,
+                                           AST->getCurrentTopLevelHashValue()));
+    Clang->setASTConsumer(new MultiplexConsumer(Consumers));
+  }
   Act->Execute();
   
   // Steal the created target, context, and preprocessor.
@@ -1873,7 +1904,7 @@ ASTUnit *ASTUnit::LoadFromCommandLine(const char **ArgBegin,
   AST.reset(new ASTUnit(false));
   ConfigureDiags(Diags, ArgBegin, ArgEnd, *AST, CaptureDiagnostics);
   AST->Diagnostics = Diags;
-
+  Diags = 0; // Zero out now to ease cleanup during crash recovery.
   AST->FileSystemOpts = CI->getFileSystemOpts();
   AST->FileMgr = new FileManager(AST->FileSystemOpts);
   AST->OnlyLocalDecls = OnlyLocalDecls;
@@ -1883,17 +1914,12 @@ ASTUnit *ASTUnit::LoadFromCommandLine(const char **ArgBegin,
   AST->NumStoredDiagnosticsFromDriver = StoredDiagnostics.size();
   AST->StoredDiagnostics.swap(StoredDiagnostics);
   AST->Invocation = CI;
+  CI = 0; // Zero out now to ease cleanup during crash recovery.
   AST->NestedMacroExpansions = NestedMacroExpansions;
   
   // Recover resources if we crash before exiting this method.
   llvm::CrashRecoveryContextCleanupRegistrar<ASTUnit>
     ASTUnitCleanup(AST.get());
-  llvm::CrashRecoveryContextCleanupRegistrar<CompilerInvocation,
-    llvm::CrashRecoveryContextReleaseRefCleanup<CompilerInvocation> >
-    CICleanup(CI.getPtr());
-  llvm::CrashRecoveryContextCleanupRegistrar<DiagnosticsEngine,
-    llvm::CrashRecoveryContextReleaseRefCleanup<DiagnosticsEngine> >
-    DiagCleanup(Diags.getPtr());
 
   return AST->LoadFromCompilerInvocation(PrecompilePreamble) ? 0 : AST.take();
 }
@@ -2231,7 +2257,7 @@ void ASTUnit::CodeComplete(StringRef File, unsigned Line, unsigned Column,
   FrontendOpts.CodeCompletionAt.Column = Column;
 
   // Set the language options appropriately.
-  LangOpts = CCInvocation->getLangOpts();
+  LangOpts = *CCInvocation->getLangOpts();
 
   llvm::OwningPtr<CompilerInstance> Clang(new CompilerInstance());
 
@@ -2542,6 +2568,13 @@ void ASTUnit::findFileRegionDecls(FileID File, unsigned Offset, unsigned Length,
     BeginIt = std::lower_bound(LocDecls.begin(), LocDecls.end(),
                                std::make_pair(Offset, (Decl*)0), compLocDecl);
   if (BeginIt != LocDecls.begin())
+    --BeginIt;
+
+  // If we are pointing at a top-level decl inside an objc container, we need
+  // to backtrack until we find it otherwise we will fail to report that the
+  // region overlaps with an objc container.
+  while (BeginIt != LocDecls.begin() &&
+         BeginIt->second->isTopLevelDeclInObjCContainer())
     --BeginIt;
 
   LocDeclsTy::iterator

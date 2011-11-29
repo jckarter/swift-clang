@@ -66,6 +66,11 @@ Decl *Parser::ParseCXXInlineMethodDef(AccessSpecifier AS,
   if (Tok.is(tok::equal)) {
     ConsumeToken();
 
+    if (!FnD) {
+      SkipUntil(tok::semi);
+      return 0;
+    }
+
     bool Delete = false;
     SourceLocation KWLoc;
     if (Tok.is(tok::kw_delete)) {
@@ -105,8 +110,7 @@ Decl *Parser::ParseCXXInlineMethodDef(AccessSpecifier AS,
   if (getLang().DelayedTemplateParsing && 
       ((Actions.CurContext->isDependentContext() ||
         TemplateInfo.Kind != ParsedTemplateInfo::NonTemplate) && 
-        !Actions.IsInsideALocalClassWithinATemplateFunction()) &&
-        !D.getDeclSpec().isFriendSpecified()) {
+        !Actions.IsInsideALocalClassWithinATemplateFunction())) {
 
     if (FnD) {
       LateParsedTemplatedFunction *LPT =

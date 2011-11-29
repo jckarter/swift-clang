@@ -340,7 +340,7 @@ private:
     SIK_Default = IK_Default, ///< Default initialization
     SIK_Value = IK_Value,     ///< Value initialization
     SIK_ImplicitValue,        ///< Implicit value initialization
-    SIK_DirectCast,  ///< Direct initialization due to a cast
+    SIK_DirectStaticCast,  ///< Direct initialization due to a static cast
     /// \brief Direct initialization due to a C-style cast.
     SIK_DirectCStyleCast,
     /// \brief Direct initialization due to a functional-style cast.
@@ -372,8 +372,8 @@ public:
 
   /// \brief Create a direct initialization due to a cast that isn't a C-style 
   /// or functional cast.
-  static InitializationKind CreateCast(SourceRange TypeRange) {
-    return InitializationKind(SIK_DirectCast,
+  static InitializationKind CreateStaticCast(SourceRange TypeRange) {
+    return InitializationKind(SIK_DirectStaticCast,
                               TypeRange.getBegin(), TypeRange.getBegin(), 
                               TypeRange.getEnd());
   }
@@ -425,7 +425,7 @@ public:
   
   /// \brief Determine whether this initialization is an explicit cast.
   bool isExplicitCast() const {
-    return Kind == SIK_DirectCast || 
+    return Kind == SIK_DirectStaticCast || 
            Kind == SIK_DirectCStyleCast ||
            Kind == SIK_DirectFunctionalCast;
   }
@@ -440,6 +440,11 @@ public:
     return Kind == SIK_DirectCStyleCast;
   }
 
+  /// brief Determine whether this is a static cast.
+  bool isStaticCast() const {
+    return Kind == SIK_DirectStaticCast;
+  }
+  
   /// brief Determine whether this is a functional-style cast.
   bool isFunctionalCast() const {
     return Kind == SIK_DirectFunctionalCast;
@@ -530,6 +535,10 @@ public:
     SK_ListInitialization,
     /// \brief Perform list-initialization with a constructor.
     SK_ListConstructorCall,
+    /// \brief Unwrap the single-element initializer list for a reference.
+    SK_UnwrapInitList,
+    /// \brief Rewrap the single-element initializer list for a reference.
+    SK_RewrapInitList,
     /// \brief Perform initialization via a constructor.
     SK_ConstructorInitialization,
     /// \brief Zero-initialize the object
@@ -579,8 +588,12 @@ public:
       } Function;
 
       /// \brief When Kind = SK_ConversionSequence, the implicit conversion
-      /// sequence 
+      /// sequence.
       ImplicitConversionSequence *ICS;
+
+      /// \brief When Kind = SK_RewrapInitList, the syntactic form of the
+      /// wrapping list.
+      InitListExpr *WrappingSyntacticList;
     };
 
     void Destroy();
@@ -766,8 +779,9 @@ public:
   /// \param Function the function to which the overloaded function reference
   /// resolves.
   void AddAddressOverloadResolutionStep(FunctionDecl *Function,
-                                        DeclAccessPair Found);
-  
+                                        DeclAccessPair Found,
+                                        bool HadMultipleCandidates);
+
   /// \brief Add a new step in the initialization that performs a derived-to-
   /// base cast.
   ///
@@ -804,8 +818,9 @@ public:
   /// a constructor or a conversion function.
   void AddUserConversionStep(FunctionDecl *Function,
                              DeclAccessPair FoundDecl,
-                             QualType T);
-  
+                             QualType T,
+                             bool HadMultipleCandidates);
+
   /// \brief Add a new step that performs a qualification conversion to the
   /// given type.
   void AddQualificationConversionStep(QualType Ty,
@@ -821,7 +836,8 @@ public:
   /// \brief Add a constructor-initialization step.
   void AddConstructorInitializationStep(CXXConstructorDecl *Constructor,
                                         AccessSpecifier Access,
-                                        QualType T);
+                                        QualType T,
+                                        bool HadMultipleCandidates);
 
   /// \brief Add a zero-initialization step.
   void AddZeroInitializationStep(QualType T);
@@ -849,6 +865,10 @@ public:
   /// \brief Add a step to "produce" an Objective-C object (by
   /// retaining it).
   void AddProduceObjCObjectStep(QualType T);
+
+  /// \brief Add steps to unwrap a initializer list for a reference around a
+  /// single element and rewrap it at the end.
+  void RewrapReferenceInitList(QualType T, InitListExpr *Syntactic);
 
   /// \brief Note that this initialization sequence failed.
   void SetFailed(FailureKind Failure) {

@@ -356,7 +356,9 @@ public:
   }
 
   Value *VisitExprWithCleanups(ExprWithCleanups *E) {
-    return CGF.EmitExprWithCleanups(E).getScalarVal();
+    CGF.enterFullExpression(E);
+    CodeGenFunction::RunCleanupsScope Scope(CGF);
+    return Visit(E->getSubExpr());
   }
   Value *VisitCXXNewExpr(const CXXNewExpr *E) {
     return CGF.EmitCXXNewExpr(E);

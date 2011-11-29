@@ -1,4 +1,4 @@
-// RUN: %clang_cc1 -fsyntax-only -verify %s
+// RUN: %clang_cc1 -fsyntax-only -verify -triple i686-linux %s
 
 #define EVAL_EXPR(testno, expr) int test##testno = sizeof(struct{char qq[expr];});
 int x;
@@ -81,6 +81,9 @@ EVAL_EXPR(38, __builtin_expect(1,1) == 1 ? 1 : -1)
 EVAL_EXPR(39, __real__(1.f) == 1 ? 1 : -1)
 EVAL_EXPR(40, __imag__(1.f) == 0 ? 1 : -1)
 
+// From gcc testsuite
+EVAL_EXPR(41, (int)(1+(_Complex unsigned)2))
+
 // rdar://8875946
 void rdar8875946() {
   double _Complex  P;
@@ -102,3 +105,10 @@ int weak_int_test = weak_int; // expected-error {{not a compile-time constant}}
 
 int literalVsNull1 = "foo" == 0;
 int literalVsNull2 = 0 == "foo";
+
+// PR11385.
+int castViaInt[*(int*)(unsigned long)"test"]; // expected-error {{variable length array}}
+
+// PR11391.
+struct PR11391 { _Complex float f; } pr11391;
+EVAL_EXPR(42, __builtin_constant_p(pr11391.f = 1))

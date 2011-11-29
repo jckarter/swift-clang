@@ -304,3 +304,25 @@ extern void func42(SA s);
 void func43(SA s) {
   func42(s);
 }
+
+// CHECK: define i32 @f44
+// CHECK: ptrtoint
+// CHECK-NEXT: and {{.*}}, -32
+// CHECK-NEXT: inttoptr
+typedef int T44 __attribute((vector_size(32)));
+struct s44 { T44 x; int y; };
+int f44(int i, ...) {
+  __builtin_va_list ap;
+  __builtin_va_start(ap, i);
+  struct s44 s = __builtin_va_arg(ap, struct s44);
+  __builtin_va_end(ap);
+  return s.y;
+}
+
+// Text that vec3 returns the correct LLVM IR type.
+// CHECK: define i32 @foo(<3 x i64> %X)
+typedef long long3 __attribute((ext_vector_type(3)));
+int foo(long3 X)
+{
+  return 0;
+}

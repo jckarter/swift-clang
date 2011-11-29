@@ -177,7 +177,12 @@ CodeGenFunction::CreateStaticVarDecl(const VarDecl &D,
   QualType Ty = D.getType();
   assert(Ty->isConstantSizeType() && "VLAs can't be static");
 
-  std::string Name = GetStaticDeclName(*this, D, Separator);
+  // Use the label if the variable is renamed with the asm-label extension.
+  std::string Name;
+  if (D.hasAttr<AsmLabelAttr>())
+    Name = CGM.getMangledName(&D);
+  else
+    Name = GetStaticDeclName(*this, D, Separator);
 
   llvm::Type *LTy = CGM.getTypes().ConvertTypeForMem(Ty);
   llvm::GlobalVariable *GV =
@@ -496,9 +501,11 @@ void CodeGenFunction::EmitScalarInit(const Expr *init,
 
   // If we're emitting a value with lifetime, we have to do the
   // initialization *before* we leave the cleanup scopes.
-  CodeGenFunction::RunCleanupsScope Scope(*this);
-  if (const ExprWithCleanups *ewc = dyn_cast<ExprWithCleanups>(init))
+  if (const ExprWithCleanups *ewc = dyn_cast<ExprWithCleanups>(init)) {
+    enterFullExpression(ewc);
     init = ewc->getSubExpr();
+  }
+  CodeGenFunction::RunCleanupsScope Scope(*this);
 
   // We have to maintain the illusion that the variable is
   // zero-initialized.  If the variable might be accessed in its

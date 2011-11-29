@@ -37,6 +37,7 @@
 #include "clang/Basic/FileManager.h"
 #include "clang/Basic/PartialDiagnostic.h"
 #include "clang/Basic/TargetInfo.h"
+
 using namespace clang;
 using namespace sema;
 
@@ -97,7 +98,7 @@ Sema::Sema(Preprocessor &pp, ASTContext &ctxt, ASTConsumer &consumer,
     CollectStats(false), ExternalSource(0), CodeCompleter(CodeCompleter),
     CurContext(0), OriginalLexicalContext(0),
     PackContext(0), MSStructPragmaOn(false), VisContext(0),
-    ExprNeedsCleanups(0), LateTemplateParser(0), OpaqueParser(0),
+    ExprNeedsCleanups(false), LateTemplateParser(0), OpaqueParser(0),
     IdResolver(pp), CXXTypeInfoDecl(0), MSVCGuidDecl(0),
     NSNumberDecl(0), NSArrayDecl(0), ArrayWithObjectsMethod(0), 
     NSDictionaryDecl(0), DictionaryWithObjectsMethod(0),
@@ -237,13 +238,16 @@ void Sema::PrintStats() const {
   AnalysisWarnings.PrintStats();
 }
 
-/// ImpCastExprToType - If Expr is not of type 'Type', insert an implicit cast.
-/// If there is already an implicit cast, merge into the existing one.
-/// The result is of the given category.
-ExprResult Sema::ImpCastExprToType(Expr *E, QualType Ty,
-                                   CastKind Kind, ExprValueKind VK,
-                                   const CXXCastPath *BasePath,
-                                   CheckedConversionKind CCK) {
+/// CastExprToType - If Expr is not of type 'Type', insert a cast of the
+/// specified kind.
+/// Redundant implicit casts are merged together.
+/// Pay attention: if CCK != CCK_ImplicitConversion,
+/// users of this function must fill
+/// SourceTypeInfos and SourceLocations later
+ExprResult Sema::CastExprToType(Expr *E, QualType Ty,
+                                CastKind Kind, ExprValueKind VK,
+                                const CXXCastPath *BasePath,
+                                CheckedConversionKind CCK) {
 #ifndef NDEBUG
   if (VK == VK_RValue && !E->isRValue()) {
     switch (Kind) {
@@ -256,6 +260,7 @@ ExprResult Sema::ImpCastExprToType(Expr *E, QualType Ty,
       break;
     }
   }
+  assert((VK == VK_RValue || !E->isRValue()) && "can't cast rvalue to lvalue");
 #endif
 
   QualType ExprTy = Context.getCanonicalType(E->getType());
@@ -278,16 +283,41 @@ ExprResult Sema::ImpCastExprToType(Expr *E, QualType Ty,
       MarkVTableUsed(E->getLocStart(), 
                      cast<CXXRecordDecl>(RecordTy->getDecl()));
   }
-
-  if (ImplicitCastExpr *ImpCast = dyn_cast<ImplicitCastExpr>(E)) {
-    if (ImpCast->getCastKind() == Kind && (!BasePath || BasePath->empty())) {
-      ImpCast->setType(Ty);
-      ImpCast->setValueKind(VK);
-      return Owned(E);
-    }
+  
+  switch(CCK) {
+    default:
+      llvm_unreachable("Unexpected CheckedConversionKind");
+    case CCK_ImplicitConversion:
+      if (ImplicitCastExpr *ImpCast = dyn_cast<ImplicitCastExpr>(E)) {
+        if (ImpCast->getCastKind() == Kind && (!BasePath || BasePath->empty())) {
+          ImpCast->setType(Ty);
+          ImpCast->setValueKind(VK);
+          return Owned(E);
+        }
+      }
+      return Owned(ImplicitCastExpr::Create(Context, Ty, Kind, E, BasePath, VK));
+    case CCK_CStyleCast:
+      return Owned(CStyleCastExpr::Create(Context, Ty, VK, Kind, E, BasePath,
+                                          0, SourceLocation(), SourceLocation()));
+    case CCK_FunctionalCast:
+      return Owned(CXXFunctionalCastExpr::Create(Context, Ty, VK, 0,
+                                                 SourceLocation(), Kind, E,
+                                                 BasePath, SourceLocation()));
+    case CCK_StaticCast:
+      return Owned(CXXStaticCastExpr::Create(Context, Ty, VK, Kind, E, BasePath,
+                                             0, SourceLocation(),
+                                             SourceLocation()));
   }
+  
+}
 
-  return Owned(ImplicitCastExpr::Create(Context, Ty, Kind, E, BasePath, VK));
+/// ImpCastExprToType - If Expr is not of type 'Type', insert an implicit cast.
+/// If there is already an implicit cast, merge into the existing one.
+/// The result is of the given category.
+ExprResult Sema::ImpCastExprToType(Expr *E, QualType Ty,
+                                   CastKind Kind, ExprValueKind VK,
+                                   const CXXCastPath *BasePath) {
+  return CastExprToType(E, Ty, Kind, VK, BasePath, CCK_ImplicitConversion);
 }
 
 /// ScalarTypeToBooleanCastKind - Returns the cast kind corresponding
@@ -971,7 +1001,7 @@ static void noteOverloads(Sema &S, const UnresolvedSetImpl &Overloads,
     }
 
     NamedDecl *Fn = (*It)->getUnderlyingDecl();
-    S.Diag(Fn->getLocStart(), diag::note_possible_target_of_call);
+    S.Diag(Fn->getLocation(), diag::note_possible_target_of_call);
     ++ShownOverloads;
   }
 

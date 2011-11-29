@@ -160,13 +160,6 @@ static void addProfileRT(const ToolChain &TC, const ArgList &Args,
   std::string ProfileRT =
     std::string(TC.getDriver().Dir) + "/../lib/libprofile_rt.a";
 
-  if (Triple.isOSDarwin()) {
-    // On Darwin, if the static library doesn't exist try the dylib.
-    bool Exists;
-    if (llvm::sys::fs::exists(ProfileRT, Exists) || !Exists)
-      ProfileRT.replace(ProfileRT.size() - 1, 1, "dylib");
-  }
-
   CmdArgs.push_back(Args.MakeArgString(ProfileRT));
 }
 
@@ -225,13 +218,13 @@ void Clang::AddPreprocessingOptions(Compilation &C,
       DepFile = Output.getFilename();
     } else if (Arg *MF = Args.getLastArg(options::OPT_MF)) {
       DepFile = MF->getValue(Args);
-      C.addResultFile(DepFile);
+      C.addFailureResultFile(DepFile);
     } else if (A->getOption().matches(options::OPT_M) ||
                A->getOption().matches(options::OPT_MM)) {
       DepFile = "-";
     } else {
       DepFile = darwin::CC1::getDependencyFileName(Args, Inputs);
-      C.addResultFile(DepFile);
+      C.addFailureResultFile(DepFile);
     }
     CmdArgs.push_back("-dependency-file");
     CmdArgs.push_back(DepFile);
@@ -1626,8 +1619,14 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
     }
   }
 
-  if (Arg *A = Args.getLastArg(options::OPT_ftemplate_depth_)) {
+  if (Arg *A = Args.getLastArg(options::OPT_ftemplate_depth_,
+                               options::OPT_ftemplate_depth_EQ)) {
     CmdArgs.push_back("-ftemplate-depth");
+    CmdArgs.push_back(A->getValue(Args));
+  }
+
+  if (Arg *A = Args.getLastArg(options::OPT_fconstexpr_depth_EQ)) {
+    CmdArgs.push_back("-fconstexpr-depth");
     CmdArgs.push_back(A->getValue(Args));
   }
 
@@ -1702,6 +1701,10 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
   Args.AddLastArg(CmdArgs, options::OPT_fno_operator_names);
   if (getToolChain().SupportsProfiling())
     Args.AddLastArg(CmdArgs, options::OPT_pg);
+
+  if (Args.hasFlag(options::OPT_faddress_sanitizer,
+                   options::OPT_fno_address_sanitizer, false))
+    CmdArgs.push_back("-faddress-sanitizer");
 
   // -flax-vector-conversions is default.
   if (!Args.hasFlag(options::OPT_flax_vector_conversions,
@@ -2213,6 +2216,12 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
 
   Args.AddLastArg(CmdArgs, options::OPT_dM);
   Args.AddLastArg(CmdArgs, options::OPT_dD);
+  
+  // Handle serialized diagnostics.
+  if (Arg *A = Args.getLastArg(options::OPT__serialize_diags)) {
+    CmdArgs.push_back("-serialize-diagnostic-file");
+    CmdArgs.push_back(Args.MakeArgString(A->getValue(Args)));
+  }
 
   // Forward -Xclang arguments to -cc1, and -mllvm arguments to the LLVM option
   // parser.
@@ -3581,8 +3590,6 @@ void darwin::Link::ConstructJob(Compilation &C, const JobAction &JA,
     // endfile_spec is empty.
   }
 
-  addProfileRT(getToolChain(), Args, CmdArgs, getToolChain().getTriple());
-
   Args.AddAllArgs(CmdArgs, options::OPT_T_Group);
   Args.AddAllArgs(CmdArgs, options::OPT_F);
 
@@ -3957,7 +3964,7 @@ void freebsd::Link::ConstructJob(Compilation &C, const JobAction &JA,
 
   if (getToolChain().getArchName() == "powerpc") {
     CmdArgs.push_back("-m");
-    CmdArgs.push_back("elf32ppc");
+    CmdArgs.push_back("elf32ppc_fbsd");
   }
 
   if (Output.isFilename()) {
@@ -4242,6 +4249,14 @@ void linuxtools::Assemble::ConstructJob(Compilation &C, const JobAction &JA,
     CmdArgs.push_back("--32");
   } else if (getToolChain().getArch() == llvm::Triple::x86_64) {
     CmdArgs.push_back("--64");
+  } else if (getToolChain().getArch() == llvm::Triple::ppc) {
+    CmdArgs.push_back("-a32");
+    CmdArgs.push_back("-mppc");
+    CmdArgs.push_back("-many");
+  } else if (getToolChain().getArch() == llvm::Triple::ppc64) {
+    CmdArgs.push_back("-a64");
+    CmdArgs.push_back("-mppc64");
+    CmdArgs.push_back("-many");
   } else if (getToolChain().getArch() == llvm::Triple::arm) {
     StringRef MArch = getToolChain().getArchName();
     if (MArch == "armv7" || MArch == "armv7a" || MArch == "armv7-a")
