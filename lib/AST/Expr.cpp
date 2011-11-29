@@ -3562,11 +3562,11 @@ ObjCSubscriptRefExpr *ObjCSubscriptRefExpr::Create(ASTContext &C,
                                                    Stmt *key, QualType T, 
                                                    ObjCMethodDecl *getMethod,
                                                    ObjCMethodDecl *setMethod, 
-                                                   SourceRange SR) {
+                                                   SourceLocation RB) {
   void *Mem = C.Allocate(sizeof(ObjCSubscriptRefExpr));
   return new (Mem) ObjCSubscriptRefExpr(base, key, T, VK_LValue, 
                                         OK_ObjCSubscript,
-                                        getMethod, setMethod, SR);
+                                        getMethod, setMethod, RB);
 }
 
 AtomicExpr::AtomicExpr(SourceLocation BLoc, Expr **args, unsigned nexpr,

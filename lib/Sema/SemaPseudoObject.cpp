@@ -148,7 +148,7 @@ namespace {
                              refExpr->getType(), refExpr->getValueKind(),
                              refExpr->getObjectKind(),refExpr->getAtIndexMethodDecl(),
                              refExpr->setAtIndexMethodDecl(),
-                             refExpr->getSourceRange());
+                             refExpr->getRBracket());
     }
   };
   
@@ -1046,7 +1046,7 @@ ExprResult ObjCSubscriptOpBuilder::buildGet() {
   Expr *Index = RefExpr->getKeyExpr();
   
   if (AtIndexGetter) {
-    // Convert "Index" to the type of Indeving method's first argument.
+    // Convert "Index" to the type of Indexing method's first argument.
     // Note that all c++ specific conversions are already done at this point.
     QualType paramType = (*AtIndexGetter->param_begin())->getType();
     ExprResult opResult = RefExpr->getKeyExpr();

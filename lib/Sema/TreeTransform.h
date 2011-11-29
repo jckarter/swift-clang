@@ -2172,11 +2172,11 @@ public:
                                            MultiExprArg(Elements, NumElements));
   }
  
-  ExprResult RebuildObjCSubscriptRefExpr(SourceRange Range, 
+  ExprResult RebuildObjCSubscriptRefExpr(SourceLocation RB, 
                                          Expr *Base, Expr *Key,
                                          ObjCMethodDecl *getterMethod,
                                          ObjCMethodDecl *setterMethod) {
-    return  getSema().BuildObjCSubscriptExpression(Range, Base, Key,
+    return  getSema().BuildObjCSubscriptExpression(RB, Base, Key,
                                                    getterMethod, setterMethod);
   }
 
@@ -8261,7 +8261,7 @@ TreeTransform<Derived>::TransformObjCSubscriptRefExpr(ObjCSubscriptRefExpr *E) {
       Key.get() == E->getKeyExpr() && Base.get() == E->getBaseExpr())
     return SemaRef.Owned(E);
 
-  return getDerived().RebuildObjCSubscriptRefExpr(E->getSourceRange(), 
+  return getDerived().RebuildObjCSubscriptRefExpr(E->getRBracket(), 
                                                   Base.get(), Key.get(),
                                                   E->getAtIndexMethodDecl(),
                                                   E->setAtIndexMethodDecl());

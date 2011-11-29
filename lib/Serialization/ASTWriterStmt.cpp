@@ -884,7 +884,7 @@ void ASTStmtWriter::VisitObjCPropertyRefExpr(ObjCPropertyRefExpr *E) {
 
 void ASTStmtWriter::VisitObjCSubscriptRefExpr(ObjCSubscriptRefExpr *E) {
   VisitExpr(E);
-  Writer.AddSourceRange(E->getSourceRange(), Record);
+  Writer.AddSourceRange(E->getRBracket(), Record);
   Writer.AddStmt(E->getBaseExpr());
   Writer.AddStmt(E->getKeyExpr());
   Writer.AddDeclRef(E->getAtIndexMethodDecl(), Record);

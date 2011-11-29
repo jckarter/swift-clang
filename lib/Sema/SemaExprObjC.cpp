@@ -435,7 +435,7 @@ static ExprResult CheckObjCCollectionLiteralElement(Sema &S, Expr *Element,
   return Result;
 }
 
-ExprResult Sema::BuildObjCSubscriptExpression(SourceRange SR, Expr *BaseExpr,
+ExprResult Sema::BuildObjCSubscriptExpression(SourceLocation RB, Expr *BaseExpr,
                                         Expr *IndexExpr,
                                         ObjCMethodDecl *getterMethod,
                                         ObjCMethodDecl *setterMethod) {
@@ -469,7 +469,7 @@ ExprResult Sema::BuildObjCSubscriptExpression(SourceRange SR, Expr *BaseExpr,
                                                            IndexExpr,
                                                            Context.PseudoObjectTy,
                                                            getterMethod,
-                                                           setterMethod, SR));
+                                                           setterMethod, RB));
   
 }
 

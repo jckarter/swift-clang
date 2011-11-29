@@ -3479,7 +3479,7 @@ public:
                                   bool Value);
   ExprResult BuildObjCArrayLiteral(SourceRange SR, MultiExprArg Elements);
   
-  ExprResult BuildObjCSubscriptExpression(SourceRange SR, Expr *BaseExpr,
+  ExprResult BuildObjCSubscriptExpression(SourceLocation RB, Expr *BaseExpr,
                                           Expr *IndexExpr,
                                           ObjCMethodDecl *getterMethod,
                                           ObjCMethodDecl *setterMethod);

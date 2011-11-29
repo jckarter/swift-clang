@@ -711,8 +711,8 @@ private:
 /// array[4] = array[3]; dictionary[key] = dictionary[alt_key];
 ///
 class ObjCSubscriptRefExpr : public Expr {
-  // Range starts at objective and end at ']'
-  SourceRange Range;
+  // Location of ']' in an indexing expression.
+  SourceLocation RBracket;
   // array/dictionary base expression.
   Stmt *Base;
   
@@ -731,24 +731,28 @@ public:
   ObjCSubscriptRefExpr(Stmt *base, Stmt *key, QualType T,
                        ExprValueKind VK, ExprObjectKind OK,
                        ObjCMethodDecl *getMethod,
-                       ObjCMethodDecl *setMethod, SourceRange SR)
-  : Expr(ObjCSubscriptRefExprClass, T, VK, OK, 
-         false, false, false, false), 
-    Range(SR), Base(base), KeyExpr(key), GetAtIndexMethodDecl(getMethod), 
+                       ObjCMethodDecl *setMethod, SourceLocation RB)
+    : Expr(ObjCSubscriptRefExprClass, T, VK, OK, 
+           false, false, false, false), 
+    RBracket(RB), Base(base), KeyExpr(key), 
+  GetAtIndexMethodDecl(getMethod), 
   SetAtIndexMethodDecl(setMethod) {}
 
   explicit ObjCSubscriptRefExpr(EmptyShell Empty)
-  : Expr(ObjCSubscriptRefExprClass, Empty) {}
+    : Expr(ObjCSubscriptRefExprClass, Empty) {}
   
   static ObjCSubscriptRefExpr *Create(ASTContext &C,
                                       Stmt *base,
                                       Stmt *key, QualType T, 
                                       ObjCMethodDecl *getMethod,
                                       ObjCMethodDecl *setMethod, 
-                                      SourceRange SR);
+                                      SourceLocation RB);
   
-  SourceRange getSourceRange() const { return Range; }
-  void setSourceRange(SourceRange R) { Range = R; }
+  SourceLocation getRBracket() const { return RBracket; }
+  void setRBracket(SourceLocation RB) { RBracket = RB; }
+  SourceRange getSourceRange() const {
+    return SourceRange(Base->getLocStart(), RBracket);
+  }
   
   static bool classof(const Stmt *T) {
     return T->getStmtClass() == ObjCSubscriptRefExprClass;

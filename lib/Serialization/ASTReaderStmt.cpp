@@ -917,7 +917,7 @@ void ASTStmtReader::VisitObjCPropertyRefExpr(ObjCPropertyRefExpr *E) {
 
 void ASTStmtReader::VisitObjCSubscriptRefExpr(ObjCSubscriptRefExpr *E) {
   VisitExpr(E);
-  E->setSourceRange(ReadSourceRange(Record, Idx));
+  E->setRBracket(ReadSourceLocation(Record, Idx));
   E->setBaseExpr(Reader.ReadSubExpr());
   E->setKeyExpr(Reader.ReadSubExpr());
   E->setGetAtIndexMethodDecl(ReadDeclAs<ObjCMethodDecl>(Record, Idx));
