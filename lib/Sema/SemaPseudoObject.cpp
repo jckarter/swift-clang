@@ -926,7 +926,7 @@ bool ObjCSubscriptOpBuilder::findAtIndexGetter() {
         (!arrayRef && !T->isObjCObjectPointerType())) {
       S.Diag(RefExpr->getKeyExpr()->getExprLoc(), 
              arrayRef ? diag::err_objc_subscript_index_type
-                      : diag::err_objc_subscript_key_type);
+                      : diag::err_objc_subscript_key_type) << T;
       S.Diag(AtIndexGetter->param_begin()[0]->getLocation(), 
              diag::note_parameter_type) << T;
       return false;
@@ -1000,7 +1000,7 @@ bool ObjCSubscriptOpBuilder::findAtIndexSetter() {
     QualType T = AtIndexSetter->param_begin()[1]->getType();
     if (!T->isIntegerType()) {
       S.Diag(RefExpr->getKeyExpr()->getExprLoc(), 
-             diag::err_objc_subscript_index_type);
+             diag::err_objc_subscript_index_type) << T;
       S.Diag(AtIndexSetter->param_begin()[1]->getLocation(), 
              diag::note_parameter_type) << T;
       err = true;
@@ -1020,10 +1020,10 @@ bool ObjCSubscriptOpBuilder::findAtIndexSetter() {
       if (!T->isObjCObjectPointerType()) {
         if (i == 1)
           S.Diag(RefExpr->getKeyExpr()->getExprLoc(),
-                 diag::err_objc_subscript_key_type);
+                 diag::err_objc_subscript_key_type) << T;
         else
           S.Diag(RefExpr->getBaseExpr()->getExprLoc(),
-                 diag::err_objc_subscript_dic_object_type);
+                 diag::err_objc_subscript_dic_object_type) << T;
         S.Diag(AtIndexSetter->param_begin()[i]->getLocation(), 
                diag::note_parameter_type) << T;
         err = true;
@@ -1176,7 +1176,7 @@ ExprResult Sema::checkPseudoObjectIncDec(Scope *Sc, SourceLocation opcLoc,
     ObjCPropertyOpBuilder builder(*this, refExpr);
     return builder.buildIncDecOperation(Sc, opcLoc, opcode, op);
   } else if (isa<ObjCSubscriptRefExpr>(opaqueRef)) {
-    Diag(opcLoc, diag::err_illegal_container_subscriptin_op);
+    Diag(opcLoc, diag::err_illegal_container_subscripting_op);
     return ExprError();
   } else {
     llvm_unreachable("unknown pseudo-object kind!");

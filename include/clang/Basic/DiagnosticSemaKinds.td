@@ -3667,17 +3667,17 @@ def err_objc_subscript_method_not_found : Error<
   "expected method to %select{read|write}1 %select{dictionary|array}2 element not "
   "found on object of type %0">;
 def err_objc_subscript_index_type : Error<
-  "type of the method's index parameter is not integral type">;
+  "method index parameter type %0 is not integral type">;
 def err_objc_subscript_key_type : Error<
-  "type of the method's key parameter is not object type">;
+  "method key parameter type %0 is not object type">;
 def err_objc_subscript_dic_object_type : Error<
-  "type of dictionary method's object parameter is not object type">;
+  "method object parameter type %0 is not object type">;
 def err_objc_subscript_object_type : Error<
   "cannot assign to this %select{dictionary|array}1 because assigning method's 2nd parameter"
-  " of type %0 is not objective-c pointer type">;
+  " of type %0 is not an objective-C pointer type">;
 def err_objc_subscript_base_type : Error<
-  "type of %select{dictionary|array}1 base must be an objective-c pointer instead of %0">;
-def err_illegal_container_subscriptin_op : Error<
+  "%select{dictionary|array}1 subscript base type %0 is not an Objective-C object">;
+def err_illegal_container_subscripting_op : Error<
   "illegal operation on objective-c container subscripting">;
 def err_property_not_found_forward_class : Error<
   "property %0 cannot be found in forward class object %1">;

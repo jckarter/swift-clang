@@ -12,9 +12,9 @@ typedef unsigned int size_t;
 
 int main() {
   NSMutableArray<P> * array;
-  id  oldObject = array[10]; // expected-error {{type of the method's index parameter is not integral type}}
-  array[3] = 0; // expected-error {{type of the method's index parameter is not integral type}} \
-                // expected-error {{cannot assign to this array because assigning method's 2nd parameter of type 'id *' is not objective-c pointer type}}
+  id  oldObject = array[10]; // expected-error {{method index parameter type 'double' is not integral type}}
+  array[3] = 0; // expected-error {{method index parameter type 'void *' is not integral type}} \
+                // expected-error {{cannot assign to this array because assigning method's 2nd parameter of type 'id *' is not an objective-C pointer type}}
 
   I* iarray;
   iarray[3] = 0; // expected-error {{expected method to write array element not found on object of type 'I *'}}
@@ -36,7 +36,7 @@ void testDict() {
   NSMutableDictionary *dictionary;
   NSString *key;
   id newObject, oldObject;
-  oldObject = dictionary[key];  // expected-error {{type of the method's key parameter is not object type}}
-  dictionary[key] = newObject;  // expected-error {{type of the method's key parameter is not object type}} \
-                                // expected-error {{type of dictionary method's object parameter is not object type}}
+  oldObject = dictionary[key];  // expected-error {{method key parameter type 'id *' is not object type}}
+  dictionary[key] = newObject;  // expected-error {{method object parameter type 'void *' is not object type}} \
+                                // expected-error {{method key parameter type 'id *' is not object type}}
 }
