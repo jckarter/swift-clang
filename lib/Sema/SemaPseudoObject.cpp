@@ -852,7 +852,7 @@ static bool IsArraySubscriptRefExpr(Sema &S,
   Expr *Key = RefExpr->getKeyExpr();
   QualType KT = Key->getType();
     
-  // Allow array indexing if index can be converted to an intergal type.
+  // Allow array indexing if index can be converted to an integral type.
   ImplicitConversionSequence ICS = 
     S.TryImplicitConversion(Key, S.Context.IntTy,
                           // FIXME: Are these flags correct?
@@ -887,7 +887,7 @@ bool ObjCSubscriptOpBuilder::findAtIndexGetter() {
     return false;
   }
   if (!arrayRef) {
-    // dictionary subscirpting.
+    // dictionary subscripting.
     // - (id)objectForKeyedSubscript:(id)key;
     IdentifierInfo *KeyIdents[] = {
       &S.Context.Idents.get("objectForKeyedSubscript")  
@@ -922,7 +922,7 @@ bool ObjCSubscriptOpBuilder::findAtIndexGetter() {
   
   if (AtIndexGetter) {
     QualType T = AtIndexGetter->param_begin()[0]->getType();
-    if ((arrayRef && !T->isIntegerType()) ||
+    if ((arrayRef && !T->isIntegralOrEnumerationType()) ||
         (!arrayRef && !T->isObjCObjectPointerType())) {
       S.Diag(RefExpr->getKeyExpr()->getExprLoc(), 
              arrayRef ? diag::err_objc_subscript_index_type
@@ -998,7 +998,7 @@ bool ObjCSubscriptOpBuilder::findAtIndexSetter() {
   bool err = false;
   if (AtIndexSetter && arrayRef) {
     QualType T = AtIndexSetter->param_begin()[1]->getType();
-    if (!T->isIntegerType()) {
+    if (!T->isIntegralOrEnumerationType()) {
       S.Diag(RefExpr->getKeyExpr()->getExprLoc(), 
              diag::err_objc_subscript_index_type) << T;
       S.Diag(AtIndexSetter->param_begin()[1]->getLocation(), 
@@ -1006,7 +1006,7 @@ bool ObjCSubscriptOpBuilder::findAtIndexSetter() {
       err = true;
     }
     T = AtIndexSetter->param_begin()[0]->getType();
-    if (!T->getAs<ObjCObjectPointerType>()) {
+    if (!T->isObjCObjectPointerType()) {
       S.Diag(RefExpr->getBaseExpr()->getExprLoc(), 
              diag::err_objc_subscript_object_type) << T << arrayRef;
       S.Diag(AtIndexSetter->param_begin()[0]->getLocation(), 
