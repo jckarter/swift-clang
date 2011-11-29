@@ -1045,21 +1045,6 @@ ExprResult ObjCSubscriptOpBuilder::buildGet() {
   ExprResult msg;
   Expr *Index = RefExpr->getKeyExpr();
   
-  if (AtIndexGetter) {
-    // Convert "Index" to the type of Indexing method's first argument.
-    // Note that all c++ specific conversions are already done at this point.
-    QualType paramType = (*AtIndexGetter->param_begin())->getType();
-    ExprResult opResult = RefExpr->getKeyExpr();
-    Sema::AssignConvertType assignResult
-      = S.CheckSingleAssignmentConstraints(paramType, opResult);
-    if (S.DiagnoseAssignmentResult(assignResult, InstanceKey->getLocation(), paramType,
-                                   InstanceKey->getType(), opResult.get(),
-                                   Sema::AA_Assigning))
-      return ExprError();
-  
-    Index = opResult.take();
-  }
-  
   // Arguments.
   Expr *args[] = { Index };
   assert(InstanceBase);
@@ -1083,43 +1068,6 @@ ExprResult ObjCSubscriptOpBuilder::buildSet(Expr *op, SourceLocation opcLoc,
   
   QualType receiverType = InstanceBase->getType();
   Expr *Index = RefExpr->getKeyExpr();
-  
-  if (AtIndexSetter) {
-    // Convert "Index" to the type of Indexing method's first argument.
-    // Note that all c++ specific conversions are already done at this point.
-    QualType paramType = AtIndexSetter->param_begin()[1]->getType();
-    ExprResult IndexResult = RefExpr->getKeyExpr();
-    Sema::AssignConvertType assignResult
-      = S.CheckSingleAssignmentConstraints(paramType, IndexResult);
-    if (S.DiagnoseAssignmentResult(assignResult, InstanceKey->getLocation(), 
-                                   paramType,
-                                   InstanceKey->getType(), IndexResult.get(),
-                                   Sema::AA_Assigning))
-      return ExprError();
-  
-    Index = IndexResult.take();
-  
-    assert(InstanceKey && "successful assignment left argument invalid?");
-
-    // Use assignment constraints when possible; they give us better
-    // diagnostics.  "When possible" basically means anything except a
-    // C++ class type.
-    if (!S.getLangOptions().CPlusPlus || !op->getType()->isRecordType()) {
-      QualType paramType = AtIndexSetter->param_begin()[0]->getType();
-      if (!S.getLangOptions().CPlusPlus || !paramType->isRecordType()) {
-        ExprResult opResult = op;
-        Sema::AssignConvertType assignResult
-          = S.CheckSingleAssignmentConstraints(paramType, opResult);
-        if (S.DiagnoseAssignmentResult(assignResult, opcLoc, paramType,
-                                       op->getType(), opResult.get(),
-                                       Sema::AA_Assigning))
-          return ExprError();
-      
-        op = opResult.take();
-        assert(op && "successful assignment left argument invalid?");
-      }
-    }
-  }
   
   // Arguments.
   Expr *args[] = { op, Index };

@@ -4,13 +4,13 @@
 
 @interface NSMutableDictionary
 - (id)objectForKeyedSubscript:(id)key;
-- (void)setObject:(id)object forKeyedSubscript:(id)key;
+- (void)setObject:(id)object forKeyedSubscript:(id)key; // expected-note {{passing argument to parameter 'object' here}}
 @end
 
 template<typename T, typename U, typename O>
 void test_dictionary_subscripts(T base, U key, O obj) {
   base[key] = obj; // expected-error {{expected method to write array element not found on object of type 'NSMutableDictionary *'}} \
-                   // expected-error {{assigning to 'id' from incompatible type 'int';}}
+                   // expected-error {{cannot initialize a parameter of type 'id' with an lvalue of type 'int'}}
   obj = base[key];  // expected-error {{expected method to read array element not found on object of type 'NSMutableDictionary *'}} \
                     // expected-error {{assigning to 'int' from incompatible type 'id'; }}
      
