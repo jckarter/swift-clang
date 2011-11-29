@@ -710,6 +710,21 @@ static void doCompileModule(void *UserData) {
 }
 
 namespace {
+  struct CompileModuleMapData {
+    CompilerInstance &Instance;
+    GenerateModuleAction &CreateModuleAction;
+  };
+}
+
+/// \brief Helper function that executes the module-generating action under
+/// a crash recovery context.
+static void doCompileMapModule(void *UserData) {
+  CompileModuleMapData &Data
+    = *reinterpret_cast<CompileModuleMapData *>(UserData);
+  Data.Instance.ExecuteAction(Data.CreateModuleAction);
+}
+
+namespace {
   /// \brief Class that manages the creation of a lock file to aid
   /// implicit coordination between different processes.
   ///
@@ -958,13 +973,11 @@ void LockFileManager::waitForUnlock() {
   // Give up.
 }
 
-/// \brief Compile a module file for the given module name with the given
-/// umbrella header, using the options provided by the importing compiler
-/// instance.
+/// \brief Compile a module file for the given module, using the options 
+/// provided by the importing compiler instance.
 static void compileModule(CompilerInstance &ImportingInstance,
-                          StringRef ModuleName,
-                          StringRef ModuleFileName,
-                          StringRef UmbrellaHeader) {
+                          ModuleMap::Module *Module,
+                          StringRef ModuleFileName) {
   LockFileManager Locked(ModuleFileName);
   switch (Locked) {
   case LockFileManager::LFS_Error:
@@ -981,6 +994,9 @@ static void compileModule(CompilerInstance &ImportingInstance,
     break;
   }
 
+  ModuleMap &ModMap 
+    = ImportingInstance.getPreprocessor().getHeaderSearchInfo().getModuleMap();
+    
   // Construct a compiler invocation for creating this module.
   llvm::IntrusiveRefCntPtr<CompilerInvocation> Invocation
     (new CompilerInvocation(ImportingInstance.getInvocation()));
@@ -991,11 +1007,56 @@ static void compileModule(CompilerInstance &ImportingInstance,
   Invocation->getPreprocessorOpts().resetNonModularOptions();
 
   // Note the name of the module we're building.
-  Invocation->getLangOpts()->CurrentModule = ModuleName;
+  Invocation->getLangOpts()->CurrentModule = Module->getTopLevelModuleName();
 
   // Note that this module is part of the module build path, so that we
   // can detect cycles in the module graph.
-  Invocation->getPreprocessorOpts().ModuleBuildPath.push_back(ModuleName);
+  Invocation->getPreprocessorOpts().ModuleBuildPath
+    .push_back(Module->getTopLevelModuleName());
+
+  if (const FileEntry *ModuleMapFile
+                                  = ModMap.getContainingModuleMapFile(Module)) {
+    // If there is a module map file, build the module using the module map.
+    // Set up the inputs/outputs so that we build the module from its umbrella
+    // header.
+    FrontendOptions &FrontendOpts = Invocation->getFrontendOpts();
+    FrontendOpts.OutputFile = ModuleFileName.str();
+    FrontendOpts.DisableFree = false;
+    FrontendOpts.Inputs.clear();
+    FrontendOpts.Inputs.push_back(
+      std::make_pair(getSourceInputKindFromOptions(*Invocation->getLangOpts()),
+                     ModuleMapFile->getName()));
+    
+    Invocation->getDiagnosticOpts().VerifyDiagnostics = 0;
+    
+    
+    assert(ImportingInstance.getInvocation().getModuleHash() ==
+           Invocation->getModuleHash() && "Module hash mismatch!");
+    
+    // Construct a compiler instance that will be used to actually create the
+    // module.
+    CompilerInstance Instance;
+    Instance.setInvocation(&*Invocation);
+    Instance.createDiagnostics(/*argc=*/0, /*argv=*/0,
+                               &ImportingInstance.getDiagnosticClient(),
+                               /*ShouldOwnClient=*/true,
+                               /*ShouldCloneClient=*/true);
+    
+    // Construct a module-generating action.
+    GenerateModuleAction CreateModuleAction;
+    
+    // Execute the action to actually build the module in-place. Use a separate
+    // thread so that we get a stack large enough.
+    const unsigned ThreadStackSize = 8 << 20;
+    llvm::CrashRecoveryContext CRC;
+    CompileModuleMapData Data = { Instance, CreateModuleAction };
+    CRC.RunSafelyOnThread(&doCompileMapModule, &Data, ThreadStackSize);
+    return;
+  } 
+  
+  // FIXME: Temporary fallback: generate the module from the umbrella header.
+  // This is currently used when we infer a module map from a framework.
+  assert(Module->UmbrellaHeader && "Inferred module map needs umbrella header");
 
   // Set up the inputs/outputs so that we build the module from its umbrella
   // header.
@@ -1005,7 +1066,7 @@ static void compileModule(CompilerInstance &ImportingInstance,
   FrontendOpts.Inputs.clear();
   FrontendOpts.Inputs.push_back(
     std::make_pair(getSourceInputKindFromOptions(*Invocation->getLangOpts()),
-                                                 UmbrellaHeader));
+                                           Module->UmbrellaHeader->getName()));
 
   Invocation->getDiagnosticOpts().VerifyDiagnostics = 0;
 
@@ -1052,10 +1113,9 @@ ModuleKey CompilerInstance::loadModule(SourceLocation ImportLoc,
                                              &ModuleFileName);
 
   bool BuildingModule = false;
-  if (!ModuleFile && Module && Module->UmbrellaHeader) {
-    // We didn't find the module, but there is an umbrella header that
-    // can be used to create the module file. Create a separate compilation
-    // module to do so.
+  if (!ModuleFile && Module) {
+    // The module is not cached, but we have a module map from which we can
+    // build the module.
 
     // Check whether there is a cycle in the module graph.
     SmallVectorImpl<std::string> &ModuleBuildPath
@@ -1079,8 +1139,7 @@ ModuleKey CompilerInstance::loadModule(SourceLocation ImportLoc,
     getDiagnostics().Report(ModuleNameLoc, diag::warn_module_build)
       << ModuleName.getName();
     BuildingModule = true;
-    compileModule(*this, ModuleName.getName(), ModuleFileName, 
-                  Module->UmbrellaHeader->getName());
+    compileModule(*this, Module, ModuleFileName);
     ModuleFile = FileMgr->getFile(ModuleFileName);
   }
 
