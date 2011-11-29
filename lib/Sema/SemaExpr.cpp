@@ -3121,7 +3121,7 @@ Sema::ActOnArraySubscriptExpr(Scope *S, Expr *Base, SourceLocation LLoc,
        LHSExp->getType()->isEnumeralType() ||
        RHSExp->getType()->isRecordType() ||
        RHSExp->getType()->isEnumeralType()) &&
-      !isa<ObjCObjectPointerType>(LHSExp->getType())) {
+      !LHSExp->getType()->isObjCObjectPointerType()) {
     return CreateOverloadedArraySubscriptExpr(LLoc, RLoc, Base, Idx);
   }
 

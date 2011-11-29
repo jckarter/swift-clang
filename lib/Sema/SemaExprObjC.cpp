@@ -443,9 +443,8 @@ ExprResult Sema::BuildObjCSubscriptExpression(SourceLocation RB, Expr *BaseExpr,
   if (!LangOpts.ObjCNonFragileABI)
     return ExprError();
   // If the expression is type-dependent, there's nothing for us to do.
-  if (BaseExpr->isTypeDependent() ||
-      IndexExpr->isTypeDependent())
-    return ExprError();
+  assert ((!BaseExpr->isTypeDependent() && !IndexExpr->isTypeDependent()) &&
+          "base or index cannot have dependent type here");
   ExprResult Result = CheckPlaceholderExpr(IndexExpr);
   if (Result.isInvalid())
     return ExprError();
