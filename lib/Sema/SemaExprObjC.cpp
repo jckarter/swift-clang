@@ -458,17 +458,12 @@ ExprResult Sema::BuildObjCSubscriptExpression(SourceLocation RB, Expr *BaseExpr,
   if (Result.isInvalid())
     return ExprError();
   BaseExpr = Result.get();
-  Result = DefaultLvalueConversion(IndexExpr);
-  if (Result.isInvalid())
-    return ExprError();
-  IndexExpr = Result.get();
-  return MaybeBindToTemporary(
-                              ObjCSubscriptRefExpr::Create(Context, 
-                                                           BaseExpr,
-                                                           IndexExpr,
-                                                           Context.PseudoObjectTy,
-                                                           getterMethod,
-                                                           setterMethod, RB));
+  return Owned(ObjCSubscriptRefExpr::Create(Context, 
+                                            BaseExpr,
+                                            IndexExpr,
+                                            Context.PseudoObjectTy,
+                                            getterMethod,
+                                            setterMethod, RB));
   
 }
 
