@@ -82,55 +82,6 @@ Clang's support for those languages.</p>
 <h3 id="majorfeatures">Major New Features</h3>
 <!-- = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = -->
 
-<h4 id="notes">Unorganized Notes</h4>
-<p>These are completely random notes as I'm organizing my thoughts and reviewing
-the history. Anything still here needs to be distilled and turned into proper
-prose in a section of its own. When doing that, delete the notes.</p>
-<ul>
-  <li>Building Clang on windows -- mingw, 32 and 64 bit, native windows builds,
-  cygwin. get chapuni to flesh out details.</li>
-  <li>Compiling C/C++ w/ MinGW (32/64) and Cygwin on Windows -- chapuni</li>
-  <li>C++ -- Parsing and AST support for Windows Structured Exception
-  Handling.</li>
-  <li>Uninitialized values Clang warning rewrite -- more accurate, faster, able
-  to differentiate between the possibility of an uninitialized use and the
-  certainty of an uninitialized use.</li>
-  <li>Support for language specific address spaces</li>
-  <li>Crash recovery handling for libclang clients -- Ted</li>
-  <li>Driver support for automatic preparation of reproduction steps for
-  compiler crashes -- Chad</li>
-  <li>OS Availability attribute -- r128127</li>
-  <li>GNU ObjectiveC Runtime support -- David Chisnall</li>
-  <li>libclang improvements bucket
-    <ul>
-      <li>Better Python Bindings</li>
-      <li>More AST coverage</li>
-      <li>Improved cursor support within macros, especially function-style macro
-      arguments.</li>
-      <li>Improved code completion surrounding macros, macro arguments, and
-      token pasting.</li>
-      <li>Improved code completion for in-class member functions.</li>
-    </ul>
-  </li>
-  <li>Basic C++ support in the static analyzer.</li>
-  <li>Improved AST support for partially constructed nodes and incomplete
-  information for LLDB and other clients which dynamically build AST nodes.</li>
-  <li>Largely complete MSVC-compatible parsing mode -- fpichet</li>
-  <li>C1X -- static asserts and generic selections</li>
-  <li>Memory reduction -- initializers, macro expansions, source locations,
-  etc.</li>
-  <li>The Embarcadero
-  <a href="http://docwiki.embarcadero.com/RADStudio/en/Is_lvalue_expr"><tt>__is_lvalue_expr</tt></a> and
-  <a href="http://docwiki.embarcadero.com/RADStudio/en/Is_rvalue_expr"><tt>__is_rvalue_expr</tt></a> expression traits.</li>
-  <li>CFI-based debug info -- nlewycky/espindola details</li>
-  <li>ObjC ARC -- get a blurb from rjmccall</li>
-  <li>ObjC related result type/instancetype</li>
-  <li>Thread Safety attributes and correctness analysis added to Clang.</li>
-  <li>NRVO for blocks.</li>
-  <li>Major improvements to the interactions between serializing and
-  deserializing the AST and the preprocessor -- argiris</li>
-</ul>
-
 <h4 id="diagnostics">A multitude of improvements to Clang's diagnostics</h4>
 Clang's diagnostics are constantly being improved to catch more issues, explain
 them more clearly, and provide more accurate source information about them.
@@ -139,21 +90,42 @@ A few improvements since the 2.9 release that have a particularly high impact:
   <li>Substantially shorter messages due to better recovery, fewer include
   stacks, and tuning verbose features such as 'a.k.a.' type printing.</li>
   <li>
-    Able to recover and correct from misspelled type names at the begging of statements. For example, Clang now emits:
-    <code>t.c:6:3: error: use of undeclared identifier 'integer'; did you mean
-'Integer'?
+    Able to recover and correct from misspelled type names at the beging of
+    statements. For example, Clang now emits:
+<pre><b>t.c:6:3: <span class="error">error:</span> use of undeclared identifier 'integer'; did you mean 'Integer'?</b>
   integer *i = 0;
-  ^~~~~~~
+  <span class="caret">^~~~~~~</span>
   Integer
-t.c:1:13: note: 'Integer' declared here
+<b>t.c:1:13: note:</b> 'Integer' declared here
 typedef int Integer;
-            ^</code>
+            <span class="caret">^</span></pre>
   </li>
   <li>Expanded typo correction to (among other improvements) look across
   namespaces and suggest namespace qualifiers in addition to misspellings of the
   identifier itself.</li>
   <li>More rich macro expansion backtraces and some (limited) fix-it hints when
   diagnostics stem from macro arguments.</li>
+  <li>Many new warnings have been added to catch common, bug-prone code
+  patterns.</li>
+  <li>Uninitialized values Clang warning was rewritten to be more accurate,
+  faster, and able to differentiate between the <em>possibility</em> of an
+  uninitialized use and the <em>certainty</em> of an uninitialized use.</li>
+</ul>
+
+<h4 id="libclang">This release saw significant improvements to <code>libclang</code></h4>
+<ul>
+  <li>A broader set of the <code>libclang</code> API is exposed in the Python
+  bindings.</li>
+  <li>Much more of the Clang AST is exposed through <code>libclang</code>'s APIs
+  and cursors.</li>
+  <li>Cursors can now walk more effectively through macros, especially arguments
+  to function-style macros, and resolve to the underlying AST.</li>
+  <li>Improved code completion surrounding macros, macro arguments, and
+  token pasting.</li>
+  <li>Improved code completion for in-class member functions.</li>
+  <li>Crash recovery for <code>libclang</code> clients.</li>
+  <!-- Doug or Ted may want to flesh this out if there are relevant details I'm
+  glossing over... -->
 </ul>
 
 <h4 id="driver">The Clang GCC-compatible command-line driver improved dramatically</h4>
@@ -172,6 +144,9 @@ and support a much broader range of Linux distributions out of the box.
   on Darwin.</li>
   <!-- There are likely more Darwin-specific improvements to mention here? -->
   <!-- What support was added for FreeBSD? NetBSD? Anything noteworthy? -->
+  <li>Automatic detection of Clang crashes in the driver and preparation of
+  reproduction steps for filing bug reports.</li><!-- Chad, feel free to add
+  more details here. -->
 </ul>
 
 <h4 id="ppcallbacks">Expanded support for instrumenting the preprocessor through
@@ -186,6 +161,56 @@ to introspect the preprocessing.
   <li>The exact source range for expanded macros can be retrieved.</li>
 </ul>
 
+<h4 id="windows">Clang is building and tested regularly on Windows and can
+  compile limited subsets of code on Windows</h4>
+Clang is regularly built and tested on a variety of Windows platforms including
+MinGW 32-bit and 64-bit, Cygwin, and natively with MSVC. In addition, Clang can
+be used as a compiler in a few Windows contexts.
+<ul>
+  <li>Normal compilation supported for the MinGW target platform, in both 32-bit
+  and 64-bit, and the Cygwin target platform.</li>
+  <li>Parsing and AST support for Windows Structured Exception Handling.</li>
+  <li>New -fms-compatibility flag to handle MSVC constructs that could change 
+  the meaning of an otherwise well formed program</li>
+  <li>clang can now parse all the MSVC 2010 standard C++ header files
+  in the nominal case, (still need to specifiy -nobuiltininc for some headers).</li>
+  <li>Improved support for MFC code parsing, (still a work in progress).</li>
+  <li>Add support for function template specialization at class scope (-fms-extensions mode).</li>
+  <li>Add support for Microsoft __if_exists/__if_not_exists statements (-fms-extensions mode).</li>
+</ul>
+
+<h4 id="availability">New availability attribute to detect and warn about API
+usage across OS X and iOS versions</h4>
+Clang now supports an attribute which documents the availability of an API
+across various platforms and releases, allowing interfaces to include
+information about what OS versions support the relevant features. Based on the
+targeted version of a compile, warnings for deprecated and unavailable
+interfaces will automatically be provided by Clang.
+
+<h4 id="threadsafety">Thread Safety annotations and analysis-based warnings</h4>
+A set of annotations were introduced to Clang to describe the various
+thread-safety concerns of a program, and an accompanying set of analysis based
+warnings will diagnose clearly unsafe code patterns. The annotations are
+described in the
+<a href="http://clang.llvm.org/docs/LanguageExtensions.html#threadsafety">extension specification</a>,
+and the warnings currently supported include:
+<ul>
+  <li>Calling functions without the required locks</li>
+  <li>Reading variables without the required locks</li>
+  <li>Writing to variables without an exclusive lock (even if holding a shared
+  lock)</li>
+  <li>Imbalance between locks and unlocks across loop entries and exits</li>
+  <li>Acquiring or releasing locks out of order</li>
+</ul>
+
+<h4 id="incompleteast">Improved support for partially constructed and/or
+incomplete ASTs</h4>
+For users such as LLDB that are dynamically forming C++ ASTs, sometimes it is
+either necessary or useful to form a partial or incomplete AST. Support for
+these use cases have improved through the introduction of "unknown" types and
+other AST constructs designed specifically for use cases without complete
+information about the C++ construct being formed.
+
 <!--
 Need Peter and/or Tanya to flesh this out if we want it in 3.0's notes.. The
 state isn't clear just from documentation or commit logs.
@@ -198,6 +223,17 @@ Clang has some (limited) support for compiling OpenCL.
 <h3 id="cchanges">C Language Changes in Clang</h3>
 <!-- = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = -->
 
+<h4 id="c1xchanges">C1X Feature Support</h4>
+
+<p>Clang 3.0 adds support for the
+<a href="http://clang.llvm.org/docs/LanguageExtensions.html#c1x">
+<code>_Alignas</code>, <code>_Generic</code>, and <code>_Static_assert</code>
+keywords</a>, drafted for inclusion in the next C standard, which is
+provisionally known as C1X. Use <code>-std=c1x</code> or <code>-std=gnu1x</code>
+to enable support for the new language standard. These features are
+backwards-compatible and are available as an extension in all language
+modes.</p>
+
 <!-- = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = -->
 <h3 id="cxxchanges">C++ Language Changes in Clang</h3>
 <!-- = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = -->
@@ -205,9 +241,10 @@ Clang has some (limited) support for compiling OpenCL.
 <h4 id="cxx11changes">C++11 Feature Support</h4>
 <p>Clang 3.0 adds support for
 <a href="http://clang.llvm.org/cxx_status.html#cxx11">more of the language
-features</a> added in the latest ISO C++ standard, C++11. Use
-<code>-std=c++11</code> or <code>-std=gnu++11</code> to enable support for these
-features. The following are now considered to be of production quality:
+features</a> added in the latest ISO C++ standard,
+<a href="http://www.iso.org/iso/iso_catalogue/catalogue_tc/catalogue_detail.htm?csnumber=50372">C++ 2011</a>.
+Use <code>-std=c++11</code> or <code>-std=gnu++11</code> to enable support for
+these features. The following are now considered to be of production quality:
 <ul>
   <li>Range-based <code>for</code> loops</li>
   <li>Alias declarations (a new syntax for <code>typedef</code> declarations),
@@ -238,6 +275,31 @@ form remains as an alias.
 <!-- = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = -->
 <h3 id="objcchanges">Objective-C Language Changes in Clang</h3>
 <!-- = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = -->
+Clang 3.0 introduces several new Objective-C language features and improvements.
+
+<h4 id="objc_arc">Objective-C Automatic Reference Counting</h4>
+<!-- This is really just a stub for John to flesh out regarding ARC. -->
+ARC provides automated memory management for Objective-C programs that is
+compatible with existing retain/release code.  ARC is carefully built to
+be a reliable programming model that errs on the side of producing a
+compiler error instead of silently producing a runtime memory problem.
+ARC automates Objective-C objects, not malloc data, file descriptors,
+CoreFoundation datatypes or anything else. For more details, see the
+<a href="http://clang.llvm.org/docs/AutomaticReferenceCounting.html">full specification</a>.
+
+<h4 id="objc_instancetype">Objective-C Related Result Types / Instance
+Types</h4>
+Allows declaring new methods which follow the Cocoa conventions for methods
+such as <code>init</code> which always return objects that are an instance of
+the receiving class's type. For more details, see the
+<a href="http://clang.llvm.org/docs/LanguageExtensions.html#objc_instancetype">language extension documentation</a>.
+
+<!--
+This is a stub for David Chisnall to fill out.
+
+<h4 id="objc_gnuruntime">Improved support for the GNU Runtime</h4>
+....
+-->
 
 <!-- = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = -->
 <h3 id="apichanges">Internal API Changes</h3>
