@@ -920,8 +920,8 @@ void ASTStmtReader::VisitObjCSubscriptRefExpr(ObjCSubscriptRefExpr *E) {
   E->setRBracket(ReadSourceLocation(Record, Idx));
   E->setBaseExpr(Reader.ReadSubExpr());
   E->setKeyExpr(Reader.ReadSubExpr());
-  E->setGetAtIndexMethodDecl(ReadDeclAs<ObjCMethodDecl>(Record, Idx));
-  E->setSetAtIndexMethodDecl(ReadDeclAs<ObjCMethodDecl>(Record, Idx));
+  E->GetAtIndexMethodDecl = ReadDeclAs<ObjCMethodDecl>(Record, Idx);
+  E->SetAtIndexMethodDecl = ReadDeclAs<ObjCMethodDecl>(Record, Idx);
 }
 
 void ASTStmtReader::VisitObjCMessageExpr(ObjCMessageExpr *E) {

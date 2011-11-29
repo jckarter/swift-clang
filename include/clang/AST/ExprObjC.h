@@ -714,11 +714,10 @@ class ObjCSubscriptRefExpr : public Expr {
   // Location of ']' in an indexing expression.
   SourceLocation RBracket;
   // array/dictionary base expression.
-  Stmt *Base;
-  
   // for arrays, this is a numeric expression. For dictionaries, this is
   // an objective-c object pointer expression.
-  Stmt *KeyExpr;
+  enum { BASE, KEY, END_EXPR };
+  Stmt* SubExprs[END_EXPR];
   
   ObjCMethodDecl *GetAtIndexMethodDecl;
   
@@ -733,10 +732,13 @@ public:
                        ObjCMethodDecl *getMethod,
                        ObjCMethodDecl *setMethod, SourceLocation RB)
     : Expr(ObjCSubscriptRefExprClass, T, VK, OK, 
-           false, false, false, false), 
-    RBracket(RB), Base(base), KeyExpr(key), 
+           /*TypeDependent=*/false, 
+           /*ValueDependent=*/true,
+           /*InstantiationDependent=*/true,
+           /*ContainsUnexpandedParameterPack=*/false), RBracket(RB), 
   GetAtIndexMethodDecl(getMethod), 
-  SetAtIndexMethodDecl(setMethod) {}
+  SetAtIndexMethodDecl(setMethod) 
+    {SubExprs[BASE] = base; SubExprs[KEY] = key;}
 
   explicit ObjCSubscriptRefExpr(EmptyShell Empty)
     : Expr(ObjCSubscriptRefExprClass, Empty) {}
@@ -751,7 +753,7 @@ public:
   SourceLocation getRBracket() const { return RBracket; }
   void setRBracket(SourceLocation RB) { RBracket = RB; }
   SourceRange getSourceRange() const {
-    return SourceRange(Base->getLocStart(), RBracket);
+    return SourceRange(SubExprs[BASE]->getLocStart(), RBracket);
   }
   
   static bool classof(const Stmt *T) {
@@ -759,33 +761,26 @@ public:
   }
   static bool classof(const ObjCSubscriptRefExpr *) { return true; }
   
-  Expr *getBaseExpr() const { return cast<Expr>(Base); }
-  void setBaseExpr(Stmt *S) { Base = S; }
+  Expr *getBaseExpr() const { return cast<Expr>(SubExprs[BASE]); }
+  void setBaseExpr(Stmt *S) { SubExprs[BASE] = S; }
   
-  Expr *getKeyExpr() const { return cast<Expr>(KeyExpr); }
-  void setKeyExpr(Stmt *S) { KeyExpr = S; }
+  Expr *getKeyExpr() const { return cast<Expr>(SubExprs[KEY]); }
+  void setKeyExpr(Stmt *S) { SubExprs[KEY] = S; }
   
   ObjCMethodDecl *getAtIndexMethodDecl() const {
     return GetAtIndexMethodDecl;
   }
-  void setGetAtIndexMethodDecl(ObjCMethodDecl *MD) { 
-    GetAtIndexMethodDecl = MD; 
-  }
-
+ 
   ObjCMethodDecl *setAtIndexMethodDecl() const {
     return SetAtIndexMethodDecl;
-  }
-  void setSetAtIndexMethodDecl(ObjCMethodDecl *MD) { 
-    SetAtIndexMethodDecl = MD;
   }
   
   bool isArraySubscriptRefExpr() const {
     return getKeyExpr()->getType()->isIntegralOrEnumerationType();
   }
   
-  child_range children() { 
-    Stmt **begin = reinterpret_cast<Stmt**>(&Base); // hack!
-    return child_range(begin, begin+2); // Yes, it must be 2!
+  child_range children() {
+    return child_range(SubExprs, SubExprs+END_EXPR);
   }
 private:
   friend class ASTStmtReader;

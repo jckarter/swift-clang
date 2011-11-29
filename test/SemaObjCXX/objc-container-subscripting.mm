@@ -121,3 +121,8 @@ void test_variadic_dictionary_subscripting(Index I, Args ...args) {
 
 template void test_variadic_dictionary_subscripting(Key *key, id arg1, NSMutableDictionary* arg2, id arg3);
 
+template<int N>
+id get(NSMutableArray *array) {
+ return array[N]; // array[N] should be a value- and instantiation-dependent ObjCSubscriptRefExpr
+}
+
