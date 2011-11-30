@@ -4297,8 +4297,11 @@ static bool IsTailPaddedMemberArray(Sema &S, llvm::APInt Size,
     return false;
 
   const RecordDecl *RD = dyn_cast<RecordDecl>(FD->getDeclContext());
-  if (!RD || !RD->isStruct())
-    return false;
+  if (!RD) return false;
+  if (RD->isUnion()) return false;
+  if (const CXXRecordDecl *CRD = dyn_cast<CXXRecordDecl>(RD)) {
+    if (!CRD->isStandardLayout()) return false;
+  }
 
   // See if this is the last field decl in the record.
   const Decl *D = FD;
@@ -4390,6 +4393,17 @@ void Sema::CheckArrayAccess(const Expr *BaseExpr, const Expr *IndexExpr,
     DiagRuntimeBehavior(BaseExpr->getLocStart(), BaseExpr,
                         PDiag(DiagID) << index.toString(10, true)
                           << IndexExpr->getSourceRange());
+  }
+
+  if (!ND) {
+    // Try harder to find a NamedDecl to point at in the note.
+    while (const ArraySubscriptExpr *ASE =
+           dyn_cast<ArraySubscriptExpr>(BaseExpr))
+      BaseExpr = ASE->getBase()->IgnoreParenCasts();
+    if (const DeclRefExpr *DRE = dyn_cast<DeclRefExpr>(BaseExpr))
+      ND = dyn_cast<NamedDecl>(DRE->getDecl());
+    if (const MemberExpr *ME = dyn_cast<MemberExpr>(BaseExpr))
+      ND = dyn_cast<NamedDecl>(ME->getMemberDecl());
   }
 
   if (ND)
