@@ -1349,10 +1349,9 @@ def warn_cxx98_compat_unicode_type : Warning<
 // Objective-C++
 def err_objc_decls_may_only_appear_in_global_scope : Error<
   "Objective-C declarations may only appear in global scope">;
+// Attributes
 def err_nsobject_attribute : Error<
   "__attribute ((NSObject)) is for pointer types only">;
-
-// Attributes
 def err_attribute_can_be_applied_only_to_symbol_declaration : Error<
   "%0 attribute can be applied only to symbol declaration">;
 def err_attributes_are_not_compatible : Error<
@@ -1491,6 +1490,9 @@ def warn_attribute_weak_on_field : Warning<
   "__weak attribute cannot be specified on a field declaration">;
 def warn_gc_attribute_weak_on_local : Warning<
   "Objective-C GC does not allow weak variables on the stack">;
+def warn_nsobject_attribute : Warning<
+  "__attribute ((NSObject)) may be put on a typedef only, "
+  "attribute is ignored">, InGroup<NSobjectAttribute>;
 def warn_attribute_weak_on_local : Warning<
   "__weak attribute cannot be specified on an automatic variable">;
 def warn_weak_identifier_undeclared : Warning<
@@ -3790,10 +3792,12 @@ def err_incomplete_type_objc_at_encode : Error<
 def warn_setter_getter_impl_required : Warning<
   "property %0 requires method %1 to be defined - "
   "use @synthesize, @dynamic or provide a method implementation "
-  "in this class implementation">;
+  "in this class implementation">,
+  InGroup<ObjCPropertyImpl>;
 def warn_setter_getter_impl_required_in_category : Warning<
   "property %0 requires method %1 to be defined - "
-  "use @dynamic or provide a method implementation in this category">;
+  "use @dynamic or provide a method implementation in this category">,
+  InGroup<ObjCPropertyImpl>;
 def note_property_impl_required : Note<
   "implementation is here">;
 def note_parameter_named_here : Note<

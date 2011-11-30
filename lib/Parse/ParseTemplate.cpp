@@ -240,6 +240,20 @@ Parser::ParseSingleDeclarationAfterTemplate(
     return 0;
   }
 
+  // Check for a stray semicolon in a function definition.
+  if (DeclaratorInfo.isFunctionDeclarator() && Tok.is(tok::semi) &&
+      Context == Declarator::FileContext) {
+    const Token &Next = NextToken();
+    if (Next.is(tok::l_brace) || Next.is(tok::kw_try) ||
+        Next.is(tok::equal) || Next.is(tok::colon)) {
+      SourceLocation SemiLoc = ConsumeToken();
+      Diag(SemiLoc, diag::err_stray_semi_function_definition)
+        << FixItHint::CreateRemoval(SemiLoc);
+      assert(!isDeclarationAfterDeclarator() &&
+             isStartOfFunctionDefinition(DeclaratorInfo));
+    }
+  }
+
   // If we have a declaration or declarator list, handle it.
   if (isDeclarationAfterDeclarator()) {
     // Parse this declaration.
@@ -262,18 +276,12 @@ Parser::ParseSingleDeclarationAfterTemplate(
   if (DeclaratorInfo.isFunctionDeclarator() &&
       isStartOfFunctionDefinition(DeclaratorInfo)) {
     if (DS.getStorageClassSpec() == DeclSpec::SCS_typedef) {
-      Diag(Tok, diag::err_function_declared_typedef);
-
-      if (Tok.is(tok::l_brace)) {
-        // This recovery skips the entire function body. It would be nice
-        // to simply call ParseFunctionDefinition() below, however Sema
-        // assumes the declarator represents a function, not a typedef.
-        ConsumeBrace();
-        SkipUntil(tok::r_brace, true);
-      } else {
-        SkipUntil(tok::semi);
-      }
-      return 0;
+      // Recover by ignoring the 'typedef'. This was probably supposed to be
+      // the 'typename' keyword, which we should have already suggested adding
+      // if it's appropriate.
+      Diag(DS.getStorageClassSpecLoc(), diag::err_function_declared_typedef)
+        << FixItHint::CreateRemoval(DS.getStorageClassSpecLoc());
+      DS.ClearStorageClassSpecs();
     }
     return ParseFunctionDefinition(DeclaratorInfo, TemplateInfo);
   }

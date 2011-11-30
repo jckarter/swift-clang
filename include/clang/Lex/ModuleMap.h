@@ -94,13 +94,20 @@ public:
       return false;
     }
     
-    
     /// \brief Retrieve the full name of this module, including the path from
     /// its top-level module.
     std::string getFullModuleName() const;
     
     /// \brief Retrieve the name of the top-level module.
+    ///
     StringRef getTopLevelModuleName() const;
+    
+    /// \brief Print the module map for this module to the given stream. 
+    ///
+    void print(llvm::raw_ostream &OS, unsigned Indent = 0) const;
+    
+    /// \brief Dump the contents of this module to the given output stream.
+    void dump() const;
   };
   
 private:
@@ -155,11 +162,38 @@ public:
   /// \returns The named module, if known; otherwise, returns null.
   Module *findModule(StringRef Name);
   
+  /// \brief Find a new module or submodule, or create it if it does not already
+  /// exist.
+  ///
+  /// \param Name The name of the module to find or create.
+  ///
+  /// \param Parent The module that will act as the parent of this submodule,
+  /// or NULL to indicate that this is a top-level module.
+  ///
+  /// \param IsFramework Whether this is a framework module.
+  ///
+  /// \param IsExplicit Whether this is an explicit submodule.
+  ///
+  /// \returns The found or newly-created module, along with a boolean value
+  /// that will be true if the module is newly-created.
+  std::pair<Module *, bool> findOrCreateModule(StringRef Name, Module *Parent, 
+                                               bool IsFramework,
+                                               bool IsExplicit);
+                       
   /// \brief Infer the contents of a framework module map from the given
   /// framework directory.
   Module *inferFrameworkModule(StringRef ModuleName, 
                                const DirectoryEntry *FrameworkDir);
-                               
+  
+  /// \brief Retrieve the module map file containing the definition of the given
+  /// module.
+  ///
+  /// \param Module The module whose module map file will be returned, if known.
+  ///
+  /// \returns The file entry for the module map file containing the given
+  /// module, or NULL if the module definition was inferred.
+  const FileEntry *getContainingModuleMapFile(ModuleMap::Module *Module);
+  
   /// \brief Parse the given module map file, and record any modules we 
   /// encounter.
   ///
