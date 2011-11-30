@@ -68,37 +68,8 @@ StringRef ModuleMap::Module::getTopLevelModuleName() const {
   return Top->Name;
 }
 
-static void indent(llvm::raw_ostream &OS, unsigned Spaces) {
-  OS << std::string(Spaces, ' ');
-}
-
-static void printEscapedString(llvm::raw_ostream &OS, StringRef String) {
-  for (StringRef::iterator I = String.begin(), E = String.end(); I != E; ++I) {
-    unsigned char Char = *I;
-    
-    switch (Char) {
-    default:
-      if (isprint(Char))
-        OS << (char)Char;
-      else  // Output anything hard as an octal escape.
-        OS << '\\'
-        << (char)('0'+ ((Char >> 6) & 7))
-        << (char)('0'+ ((Char >> 3) & 7))
-        << (char)('0'+ ((Char >> 0) & 7));
-      break;
-      // Handle some common non-printable cases to make dumps prettier.
-    case '\\': OS << "\\\\"; break;
-    case '"': OS << "\\\""; break;
-    case '\n': OS << "\\n"; break;
-    case '\t': OS << "\\t"; break;
-    case '\a': OS << "\\a"; break;
-    case '\b': OS << "\\b"; break;
-    }
-  }
-}
-
 void ModuleMap::Module::print(llvm::raw_ostream &OS, unsigned Indent) const {
-  indent(OS, Indent);
+  OS.indent(Indent);
   if (IsFramework)
     OS << "framework ";
   if (IsExplicit)
@@ -106,16 +77,16 @@ void ModuleMap::Module::print(llvm::raw_ostream &OS, unsigned Indent) const {
   OS << "module " << Name << " {\n";
   
   if (UmbrellaHeader) {
-    indent(OS, Indent + 2);
+    OS.indent(Indent + 2);
     OS << "umbrella \"";
-    printEscapedString(OS, UmbrellaHeader->getName());
+    OS.write_escaped(UmbrellaHeader->getName());
     OS << "\"\n";
   }
   
   for (unsigned I = 0, N = Headers.size(); I != N; ++I) {
-    indent(OS, Indent + 2);
+    OS.indent(Indent + 2);
     OS << "header \"";
-    printEscapedString(OS, Headers[I]->getName());
+    OS.write_escaped(Headers[I]->getName());
     OS << "\"\n";
   }
   
@@ -124,7 +95,7 @@ void ModuleMap::Module::print(llvm::raw_ostream &OS, unsigned Indent) const {
        MI != MIEnd; ++MI)
     MI->getValue()->print(OS, Indent + 2);
   
-  indent(OS, Indent);
+  OS.indent(Indent);
   OS << "}\n";
 }
 
@@ -204,6 +175,23 @@ ModuleMap::Module *ModuleMap::findModule(StringRef Name) {
     return Known->getValue();
   
   return 0;
+}
+
+std::pair<ModuleMap::Module *, bool> 
+ModuleMap::findOrCreateModule(StringRef Name, Module *Parent, bool IsFramework,
+                              bool IsExplicit) {
+  // Try to find an existing module with this name.
+  if (Module *Found = Parent? Parent->SubModules[Name] : Modules[Name])
+    return std::make_pair(Found, false);
+  
+  // Create a new module with this name.
+  Module *Result = new Module(Name, SourceLocation(), Parent, IsFramework, 
+                              IsExplicit);
+  if (Parent)
+    Parent->SubModules[Name] = Result;
+  else
+    Modules[Name] = Result;
+  return std::make_pair(Result, true);
 }
 
 ModuleMap::Module *

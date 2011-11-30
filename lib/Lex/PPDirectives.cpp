@@ -22,6 +22,7 @@
 #include "clang/Basic/FileManager.h"
 #include "clang/Basic/SourceManager.h"
 #include "llvm/ADT/APInt.h"
+#include "llvm/Support/ErrorHandling.h"
 using namespace clang;
 
 //===----------------------------------------------------------------------===//
@@ -1208,6 +1209,7 @@ void Preprocessor::HandleIncludeDirective(SourceLocation HashLoc,
   llvm::SmallString<128> FilenameBuffer;
   StringRef Filename;
   SourceLocation End;
+  SourceLocation CharEnd; // the end of this directive, in characters
   
   switch (FilenameTok.getKind()) {
   case tok::eod:
@@ -1218,6 +1220,7 @@ void Preprocessor::HandleIncludeDirective(SourceLocation HashLoc,
   case tok::string_literal:
     Filename = getSpelling(FilenameTok, FilenameBuffer);
     End = FilenameTok.getLocation();
+    CharEnd = End.getLocWithOffset(Filename.size());
     break;
 
   case tok::less:
@@ -1227,6 +1230,7 @@ void Preprocessor::HandleIncludeDirective(SourceLocation HashLoc,
     if (ConcatenateIncludeName(FilenameBuffer, End))
       return;   // Found <eod> but no ">"?  Diagnostic already emitted.
     Filename = FilenameBuffer.str();
+    CharEnd = getLocForEndOfToken(End);
     break;
   default:
     Diag(FilenameTok.getLocation(), diag::err_pp_expects_filename);
@@ -1276,6 +1280,35 @@ void Preprocessor::HandleIncludeDirective(SourceLocation HashLoc,
       Callbacks ? &SearchPath : NULL, Callbacks ? &RelativePath : NULL,
       AutoModuleImport? &SuggestedModule : 0);
 
+  if (Callbacks) {
+    if (!File) {
+      // Give the clients a chance to recover.
+      llvm::SmallString<128> RecoveryPath;
+      if (Callbacks->FileNotFound(Filename, RecoveryPath)) {
+        if (const DirectoryEntry *DE = FileMgr.getDirectory(RecoveryPath)) {
+          // Add the recovery path to the list of search paths.
+          DirectoryLookup DL(DE, SrcMgr::C_User, true, false);
+          HeaderInfo.AddSearchPath(DL, isAngled);
+          
+          // Try the lookup again, skipping the cache.
+          File = LookupFile(Filename, isAngled, LookupFrom, CurDir, 0, 0,
+                            AutoModuleImport ? &SuggestedModule : 0,
+                            /*SkipCache*/true);
+        }
+      }
+    }
+    
+    // Notify the callback object that we've seen an inclusion directive.
+    Callbacks->InclusionDirective(HashLoc, IncludeTok, Filename, isAngled, File,
+                                  End, SearchPath, RelativePath);
+  }
+  
+  if (File == 0) {
+    if (!SuppressIncludeNotFoundError)
+      Diag(FilenameTok, diag::err_pp_file_not_found) << Filename;
+    return;
+  }
+
   // If we are supposed to import a module rather than including the header,
   // do so now.
   if (SuggestedModule) {
@@ -1288,40 +1321,50 @@ void Preprocessor::HandleIncludeDirective(SourceLocation HashLoc,
                                     FilenameTok.getLocation()));
     std::reverse(Path.begin(), Path.end());
 
+    // Warn that we're replacing the include/import with a module import.
+    llvm::SmallString<128> PathString;
+    for (unsigned I = 0, N = Path.size(); I != N; ++I) {
+      if (I)
+        PathString += '.';
+      PathString += Path[I].first->getName();
+    }
+    int IncludeKind = 0;
+    
+    switch (IncludeTok.getIdentifierInfo()->getPPKeywordID()) {
+    case tok::pp_include:
+      IncludeKind = 0;
+      break;
+      
+    case tok::pp_import:
+      IncludeKind = 1;
+      break;        
+        
+    case tok::pp_include_next:
+      IncludeKind = 2;
+      break;
+        
+    case tok::pp___include_macros:
+      IncludeKind = 3;
+      break;
+        
+    default:
+      llvm_unreachable("unknown include directive kind");
+      break;
+    }
+
+    CharSourceRange ReplaceRange(SourceRange(HashLoc, CharEnd), 
+                                 /*IsTokenRange=*/false);
+    Diag(HashLoc, diag::warn_auto_module_import)
+      << IncludeKind << PathString 
+      << FixItHint::CreateReplacement(ReplaceRange,
+           "__import_module__ " + PathString.str().str() + ";");
+    
     // Load the module.
+    // FIXME: Deal with __include_macros here.
     TheModuleLoader.loadModule(IncludeTok.getLocation(), Path);
     return;
   }
   
-  if (Callbacks) {
-    if (!File) {
-      // Give the clients a chance to recover.
-      llvm::SmallString<128> RecoveryPath;
-      if (Callbacks->FileNotFound(Filename, RecoveryPath)) {
-        if (const DirectoryEntry *DE = FileMgr.getDirectory(RecoveryPath)) {
-          // Add the recovery path to the list of search paths.
-          DirectoryLookup DL(DE, SrcMgr::C_User, true, false);
-          HeaderInfo.AddSearchPath(DL, isAngled);
-
-          // Try the lookup again, skipping the cache.
-          File = LookupFile(Filename, isAngled, LookupFrom, CurDir, 0, 0,
-                            AutoModuleImport ? &SuggestedModule : 0,
-                            /*SkipCache*/true);
-        }
-      }
-    }
-
-    // Notify the callback object that we've seen an inclusion directive.
-    Callbacks->InclusionDirective(HashLoc, IncludeTok, Filename, isAngled, File,
-                                  End, SearchPath, RelativePath);
-  }
-
-  if (File == 0) {
-    if (!SuppressIncludeNotFoundError)
-      Diag(FilenameTok, diag::err_pp_file_not_found) << Filename;
-    return;
-  }
-
   // The #included file will be considered to be a system header if either it is
   // in a system include directory, or if the #includer is a system include
   // header.
