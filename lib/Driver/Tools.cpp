@@ -705,10 +705,10 @@ void Clang::AddARMTargetArgs(const ArgList &Args,
 
 // Get default architecture.
 static const char* getMipsArchFromCPU(StringRef CPUName) {
-  if (CPUName == "mips32r1" || CPUName == "4ke")
+  if (CPUName == "mips32" || CPUName == "mips32r2")
     return "mips";
 
-  assert((CPUName == "mips64r1" || CPUName == "mips64r2") &&
+  assert((CPUName == "mips64" || CPUName == "mips64r2") &&
          "Unexpected cpu name.");
 
   return "mips64";
@@ -717,9 +717,9 @@ static const char* getMipsArchFromCPU(StringRef CPUName) {
 // Get default target cpu.
 static const char* getMipsCPUFromArch(StringRef ArchName, const Driver &D) {
   if (ArchName == "mips" || ArchName == "mipsel")
-    return "mips32r1";
+    return "mips32";
   else if (ArchName == "mips64" || ArchName == "mips64el")
-    return "mips64r1";
+    return "mips64";
   else
     D.Diag(diag::err_drv_invalid_arch_name) << ArchName;
 
@@ -1096,6 +1096,27 @@ static bool UseRelaxAll(Compilation &C, const ArgList &Args) {
 
   return Args.hasFlag(options::OPT_mrelax_all, options::OPT_mno_relax_all,
     RelaxDefault);
+}
+
+/// If AddressSanitizer is enabled, add appropriate linker flags (Linux).
+/// This needs to be called before we add the C run-time (malloc, etc).
+static void addAsanRTLinux(const ToolChain &TC, const ArgList &Args,
+                      ArgStringList &CmdArgs) {
+  // Add asan linker flags when linking an executable, but not a shared object.
+  if (Args.hasArg(options::OPT_shared) ||
+      !Args.hasFlag(options::OPT_faddress_sanitizer,
+                    options::OPT_fno_address_sanitizer, false))
+    return;
+  // LibAsan is "../lib/clang/linux/ArchName/libclang_rt.asan.a
+  llvm::SmallString<128> LibAsan =
+      llvm::sys::path::parent_path(StringRef(TC.getDriver().Dir));
+  llvm::sys::path::append(LibAsan, "lib", "clang", "linux", TC.getArchName());
+  llvm::sys::path::append(LibAsan, "libclang_rt.asan.a");
+  CmdArgs.push_back(Args.MakeArgString(LibAsan));
+  CmdArgs.push_back("-lpthread");
+  CmdArgs.push_back("-ldl");
+  CmdArgs.push_back("-export-dynamic");
+  TC.AddCXXStdlibLibArgs(Args, CmdArgs);
 }
 
 void Clang::ConstructJob(Compilation &C, const JobAction &JA,
@@ -4450,6 +4471,9 @@ void linuxtools::Link::ConstructJob(Compilation &C, const JobAction &JA,
       CmdArgs.push_back("-Bdynamic");
     CmdArgs.push_back("-lm");
   }
+
+  // Call this before we add the C run-time.
+  addAsanRTLinux(getToolChain(), Args, CmdArgs);
 
   if (!Args.hasArg(options::OPT_nostdlib)) {
     if (Args.hasArg(options::OPT_static))
