@@ -844,24 +844,78 @@ Expr *ObjCSubscriptOpBuilder::rebuildAndCaptureObject(Expr *syntacticBase) {
   return syntacticBase;
 }
 
-static bool IsArraySubscriptRefExpr(Sema &S, 
-                                    ObjCSubscriptRefExpr *RefExpr) {
-  if (RefExpr->isArraySubscriptRefExpr())
-    return true;
+/// CheckSubscriptingKind - This routine decide what type 
+/// of indexing represented by "FromE" is being done.
+Sema::ObjCSubscriptKind 
+  Sema::CheckSubscriptingKind(Expr *FromE) {
+  // If the expression already has integral or enumeration type, we're golden.
+  QualType T = FromE->getType();
+  if (T->isIntegralOrEnumerationType())
+    return OS_Array;
   
-  Expr *Key = RefExpr->getKeyExpr();
-  QualType KT = Key->getType();
+  // If we don't have a class type in C++, there's no way we can get an
+  // expression of integral or enumeration type.
+  const RecordType *RecordTy = T->getAs<RecordType>();
+  if (!RecordTy)
+    // All other scalar cases are assumed to be dictionary indexing which
+    // caller handles, with diagnostics if needed.
+    return OS_Dictionary;
+  if (!getLangOptions().CPlusPlus || RecordTy->isIncompleteType()) {
+    // No indexing can be done. Issue diagnostics and quit.
+    Diag(FromE->getExprLoc(), diag::err_objc_subscript_type_conversion)
+    << FromE->getType();
+    return OS_Error;
+  }
+  
+  // We must have a complete class type.
+  if (RequireCompleteType(FromE->getExprLoc(), T, 
+                          PDiag(diag::err_objc_index_incomplete_class_type)
+                          << FromE->getSourceRange()))
+    return OS_Error;
+  
+  // Look for a conversion to an integral, enumeration type, or
+  // objective-C pointer type.
+  UnresolvedSet<4> ViableConversions;
+  UnresolvedSet<4> ExplicitConversions;
+  const UnresolvedSetImpl *Conversions
+    = cast<CXXRecordDecl>(RecordTy->getDecl())->getVisibleConversionFunctions();
+  
+  int NoIntegrals=0, NoObjCIdPointers=0;
+  SmallVector<CXXConversionDecl *, 4> ConversionDecls;
     
-  // Allow array indexing if index can be converted to an integral type.
-  ImplicitConversionSequence ICS = 
-    S.TryImplicitConversion(Key, S.Context.IntTy,
-                          // FIXME: Are these flags correct?
-                          /*SuppressUserConversions=*/false,
-                          /*AllowExplicit=*/true,
-                          /*InOverloadResolution=*/false,
-                          /*CStyle=*/false,
-                          /*AllowObjCWritebackConversion=*/false);
-  return !ICS.isBad();
+  for (UnresolvedSetImpl::iterator I = Conversions->begin(),
+       E = Conversions->end();
+       I != E;
+       ++I) {
+    if (CXXConversionDecl *Conversion
+        = dyn_cast<CXXConversionDecl>((*I)->getUnderlyingDecl())) {
+      QualType CT = Conversion->getConversionType().getNonReferenceType();
+      if (CT->isIntegralOrEnumerationType()) {
+        ++NoIntegrals;
+        ConversionDecls.push_back(Conversion);
+      }
+      else if (CT->isObjCIdType() ||CT->isBlockPointerType()) {
+        ++NoObjCIdPointers;
+        ConversionDecls.push_back(Conversion);
+      }
+    }
+  }
+  if (NoIntegrals ==1 && NoObjCIdPointers == 0)
+    return OS_Array;
+  if (NoIntegrals == 0 && NoObjCIdPointers == 1)
+    return OS_Dictionary;
+  if (NoIntegrals == 0 && NoObjCIdPointers == 0) {
+    // No conversion function was found. Issue diagnostic and return.
+    Diag(FromE->getExprLoc(), diag::err_objc_subscript_type_conversion)
+      << FromE->getType();
+    return OS_Error;
+  }
+  Diag(FromE->getExprLoc(), diag::err_objc_multiple_subscript_type_conversion)
+      << FromE->getType();
+  for (unsigned int i = 0; i < ConversionDecls.size(); i++)
+    Diag(ConversionDecls[i]->getLocation(), diag::not_conv_function_declared_at);
+    
+  return OS_Error;
 }
 
 bool ObjCSubscriptOpBuilder::findAtIndexGetter() {
@@ -879,7 +933,11 @@ bool ObjCSubscriptOpBuilder::findAtIndexGetter() {
         ResultType->getAsObjCQualifiedInterfaceType())
       ResultType = iQFaceTy->getBaseType();
   }
-  bool arrayRef = IsArraySubscriptRefExpr(S, RefExpr);
+  Sema::ObjCSubscriptKind Res = 
+    S.CheckSubscriptingKind(RefExpr->getKeyExpr());
+  if (Res == Sema::OS_Error)
+    return false;
+  bool arrayRef = (Res == Sema::OS_Array);
   
   if (ResultType.isNull()) {
     S.Diag(BaseExpr->getExprLoc(), diag::err_objc_subscript_base_type)
@@ -951,8 +1009,13 @@ bool ObjCSubscriptOpBuilder::findAtIndexSetter() {
         ResultType->getAsObjCQualifiedInterfaceType())
       ResultType = iQFaceTy->getBaseType();
   }
-  bool arrayRef = IsArraySubscriptRefExpr(S, RefExpr);
-
+  
+  Sema::ObjCSubscriptKind Res = 
+    S.CheckSubscriptingKind(RefExpr->getKeyExpr());
+  if (Res == Sema::OS_Error)
+    return false;
+  bool arrayRef = (Res == Sema::OS_Array);
+  
   if (ResultType.isNull()) {
     S.Diag(BaseExpr->getExprLoc(), diag::err_objc_subscript_base_type)
       << BaseExpr->getType() << arrayRef;

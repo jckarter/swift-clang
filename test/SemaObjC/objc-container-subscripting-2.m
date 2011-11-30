@@ -16,8 +16,8 @@ typedef unsigned int size_t;
 id func() {
   NSMutableArray *array;
   float f; 
-  array[f] = array;
-  return array[3.14];
+  array[f] = array; // expected-error {{expected method to write dictionary element not found on object of type 'NSMutableArray *'}}
+  return array[3.14]; // expected-error {{expected method to read dictionary element not found on object of type 'NSMutableArray *'}}
 }
 
 void test_unused() {

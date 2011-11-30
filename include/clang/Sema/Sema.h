@@ -1488,6 +1488,12 @@ public:
                                      const PartialDiagnostic &AmbigDiag,
                                      const PartialDiagnostic &AmbigNote,
                                      const PartialDiagnostic &ConvDiag);
+  enum ObjCSubscriptKind {
+    OS_Array,
+    OS_Dictionary,
+    OS_Error
+  };
+  ObjCSubscriptKind CheckSubscriptingKind(Expr *FromE);
 
   ExprResult PerformObjectMemberConversion(Expr *From,
                                            NestedNameSpecifier *Qualifier,

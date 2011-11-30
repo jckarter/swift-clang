@@ -485,6 +485,7 @@ def warn_strict_multiple_method_decl : Warning<
 def warn_accessor_property_type_mismatch : Warning<
   "type of property %0 does not match type of accessor %1">;
 def note_declared_at : Note<"declared here">;
+def not_conv_function_declared_at : Note<"type conversion function declared here">;
 def note_method_declared_at : Note<"method declared here">;
 def err_setter_type_void : Error<"type of setter must be void">;
 def err_duplicate_method_decl : Error<"duplicate declaration of method %0">;
@@ -3677,6 +3678,14 @@ def err_objc_subscript_object_type : Error<
   " of type %0 is not an objective-C pointer type">;
 def err_objc_subscript_base_type : Error<
   "%select{dictionary|array}1 subscript base type %0 is not an Objective-C object">;
+def err_objc_multiple_subscript_type_conversion : Error<
+  "indexing expression is invalid because subscript type %0 has "
+  "multiple type conversion functions">;
+def err_objc_subscript_type_conversion : Error<
+  "indexing expression is invalid because subscript type %0 is not an intergal"
+  "or objective-C pointer type">;
+def err_objc_index_incomplete_class_type : Error<
+  "objective-C index expression has incomplete class type %0">;
 def err_illegal_container_subscripting_op : Error<
   "illegal operation on objective-c container subscripting">;
 def err_property_not_found_forward_class : Error<

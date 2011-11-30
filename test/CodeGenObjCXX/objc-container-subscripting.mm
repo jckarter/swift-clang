@@ -21,7 +21,7 @@ struct S {
 int main() {
   NSMutableArray<P> * array;
   S s;
-  id oldObject = array[s];
+  id oldObject = array[(int)s];
 
   NSMutableDictionary<P> *dict;
   dict[(id)s] = oldObject;
