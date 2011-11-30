@@ -69,7 +69,32 @@ StringRef ModuleMap::Module::getTopLevelModuleName() const {
 }
 
 static void indent(llvm::raw_ostream &OS, unsigned Spaces) {
-  OS << std::string(' ', Spaces);
+  OS << std::string(Spaces, ' ');
+}
+
+static void printEscapedString(llvm::raw_ostream &OS, StringRef String) {
+  for (StringRef::iterator I = String.begin(), E = String.end(); I != E; ++I) {
+    unsigned char Char = *I;
+    
+    switch (Char) {
+    default:
+      if (isprint(Char))
+        OS << (char)Char;
+      else  // Output anything hard as an octal escape.
+        OS << '\\'
+        << (char)('0'+ ((Char >> 6) & 7))
+        << (char)('0'+ ((Char >> 3) & 7))
+        << (char)('0'+ ((Char >> 0) & 7));
+      break;
+      // Handle some common non-printable cases to make dumps prettier.
+    case '\\': OS << "\\\\"; break;
+    case '"': OS << "\\\""; break;
+    case '\n': OS << "\\n"; break;
+    case '\t': OS << "\\t"; break;
+    case '\a': OS << "\\a"; break;
+    case '\b': OS << "\\b"; break;
+    }
+  }
 }
 
 void ModuleMap::Module::print(llvm::raw_ostream &OS, unsigned Indent) const {
@@ -78,16 +103,20 @@ void ModuleMap::Module::print(llvm::raw_ostream &OS, unsigned Indent) const {
     OS << "framework ";
   if (IsExplicit)
     OS << "explicit ";
-  OS << Name << " {\n";
+  OS << "module " << Name << " {\n";
   
   if (UmbrellaHeader) {
     indent(OS, Indent + 2);
-    OS << "umbrella \"" << UmbrellaHeader->getName() << "\"\n";
+    OS << "umbrella \"";
+    printEscapedString(OS, UmbrellaHeader->getName());
+    OS << "\"\n";
   }
   
   for (unsigned I = 0, N = Headers.size(); I != N; ++I) {
     indent(OS, Indent + 2);
-    OS << "header \"" << Headers[I]->getName() << "\"\n";
+    OS << "header \"";
+    printEscapedString(OS, Headers[I]->getName());
+    OS << "\"\n";
   }
   
   for (llvm::StringMap<Module *>::const_iterator MI = SubModules.begin(), 
@@ -586,28 +615,35 @@ void ModuleMapParser::parseUmbrellaDecl() {
   
   // Look for this file.
   llvm::SmallString<128> PathName;
-  PathName += Directory->getName();
-  unsigned PathLength = PathName.size();
   const FileEntry *File = 0;
-  if (ActiveModule->isPartOfFramework()) {
-    // Check whether this file is in the public headers.
-    llvm::sys::path::append(PathName, "Headers");
-    llvm::sys::path::append(PathName, FileName);
+  
+  if (llvm::sys::path::is_absolute(FileName)) {
+    PathName = FileName;
     File = SourceMgr.getFileManager().getFile(PathName);
+  } else {
+    // Search for the header file within the search directory.
+    PathName += Directory->getName();
+    unsigned PathLength = PathName.size();
+    if (ActiveModule->isPartOfFramework()) {
+      // Check whether this file is in the public headers.
+      llvm::sys::path::append(PathName, "Headers");
+      llvm::sys::path::append(PathName, FileName);
+      File = SourceMgr.getFileManager().getFile(PathName);
 
-    if (!File) {
-      // Check whether this file is in the private headers.
-      PathName.resize(PathLength);
-      llvm::sys::path::append(PathName, "PrivateHeaders");
+      if (!File) {
+        // Check whether this file is in the private headers.
+        PathName.resize(PathLength);
+        llvm::sys::path::append(PathName, "PrivateHeaders");
+        llvm::sys::path::append(PathName, FileName);
+        File = SourceMgr.getFileManager().getFile(PathName);
+      }
+      
+      // FIXME: Deal with subframeworks.
+    } else {
+      // Lookup for normal headers.
       llvm::sys::path::append(PathName, FileName);
       File = SourceMgr.getFileManager().getFile(PathName);
     }
-    
-    // FIXME: Deal with subframeworks.
-  } else {
-    // Lookup for normal headers.
-    llvm::sys::path::append(PathName, FileName);
-    File = SourceMgr.getFileManager().getFile(PathName);
   }
   
   // FIXME: We shouldn't be eagerly stat'ing every file named in a module map.
@@ -654,11 +690,14 @@ void ModuleMapParser::parseHeaderDecl() {
   
   // Look for this file.
   llvm::SmallString<128> PathName;
-  PathName += Directory->getName();
+  if (llvm::sys::path::is_relative(FileName)) {
+    // FIXME: Change this search to also look for private headers!
+    PathName += Directory->getName();
+    
+    if (ActiveModule->isPartOfFramework())
+      llvm::sys::path::append(PathName, "Headers");
+  }
   
-  if (ActiveModule->isPartOfFramework())
-    llvm::sys::path::append(PathName, "Headers");
-
   llvm::sys::path::append(PathName, FileName);
   
   // FIXME: We shouldn't be eagerly stat'ing every file named in a module map.
