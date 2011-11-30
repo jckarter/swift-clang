@@ -29,6 +29,7 @@
 #include "clang/AST/DeclarationName.h"
 #include "clang/AST/ExternalASTSource.h"
 #include "clang/AST/TypeLoc.h"
+#include "clang/Lex/ModuleLoader.h"
 #include "clang/Basic/Specifiers.h"
 #include "clang/Basic/TemplateKinds.h"
 #include "clang/Basic/TypeTraits.h"
@@ -126,6 +127,7 @@ namespace clang {
   class ParmVarDecl;
   class Preprocessor;
   class PseudoDestructorTypeStorage;
+  class PseudoObjectExpr;
   class QualType;
   class StandardConversionSequence;
   class Stmt;
@@ -1109,12 +1111,8 @@ public:
   ///
   /// \param ImportLoc The location of the '__import_module__' keyword.
   ///
-  /// \param ModuleName The name of the module.
-  ///
-  /// \param ModuleNameLoc The location of the module name.
-  DeclResult ActOnModuleImport(SourceLocation ImportLoc,
-                               IdentifierInfo &ModuleName,
-                               SourceLocation ModuleNameLoc);
+  /// \param Path The module access path.
+  DeclResult ActOnModuleImport(SourceLocation ImportLoc, ModuleIdPath Path);
 
   /// \brief Diagnose that \p New is a module-private redeclaration of
   /// \p Old.
@@ -5557,26 +5555,18 @@ public:
     CCK_CStyleCast,
     /// \brief A functional-style cast.
     CCK_FunctionalCast,
-    /// \breif A static cast
-    CCK_StaticCast,
     /// \brief A cast other than a C-style cast.
     CCK_OtherCast
   };
 
-  /// CastExprToType - If Expr is not of type 'Type', insert a cast of the
-  /// specified kind.
-  /// Redundant implicit casts are merged together.
-  ExprResult CastExprToType(Expr *E, QualType Ty,
-                            CastKind Kind, ExprValueKind VK,
-                            const CXXCastPath *BasePath,
-                            CheckedConversionKind CCK);
-     
-  /// ImpCastExprToType - If Expr is not of type 'Type', insert an implicit cast.
-  /// If there is already an implicit cast, merge into the existing one.
-  /// The result is of the given category.
+  /// ImpCastExprToType - If Expr is not of type 'Type', insert an implicit
+  /// cast.  If there is already an implicit cast, merge into the existing one.
+  /// If isLvalue, the result of the cast is an lvalue.
   ExprResult ImpCastExprToType(Expr *E, QualType Type, CastKind CK,
                                ExprValueKind VK = VK_RValue,
-                               const CXXCastPath *BasePath = 0);
+                               const CXXCastPath *BasePath = 0,
+                               CheckedConversionKind CCK
+                                  = CCK_ImplicitConversion);
 
   /// ScalarTypeToBooleanCastKind - Returns the cast kind corresponding
   /// to the conversion from scalar type ScalarTy to the Boolean type.
@@ -5765,10 +5755,10 @@ public:
                                        AssignmentAction Action,
                                        CheckedConversionKind CCK
                                           = CCK_ImplicitConversion);
-  ExprResult PerformConversion(Expr *From, QualType ToType,
-                               const StandardConversionSequence& SCS,
-                               AssignmentAction Action,
-                               CheckedConversionKind CCK);
+  ExprResult PerformImplicitConversion(Expr *From, QualType ToType,
+                                       const StandardConversionSequence& SCS,
+                                       AssignmentAction Action,
+                                       CheckedConversionKind CCK);
 
   /// the following "Check" methods will return a valid/converted QualType
   /// or a null QualType (indicating an error diagnostic was issued).
@@ -5814,6 +5804,7 @@ public:
                                          BinaryOperatorKind Opcode,
                                          Expr *LHS, Expr *RHS);
   ExprResult checkPseudoObjectRValue(Expr *E);
+  Expr *recreateSyntacticForm(PseudoObjectExpr *E);
 
   QualType CheckConditionalOperands( // C99 6.5.15
     ExprResult &Cond, ExprResult &LHS, ExprResult &RHS,
