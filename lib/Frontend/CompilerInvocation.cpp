@@ -38,7 +38,8 @@ CompilerInvocationBase::CompilerInvocationBase()
   : LangOpts(new LangOptions()) {}
 
 CompilerInvocationBase::CompilerInvocationBase(const CompilerInvocationBase &X)
-  : LangOpts(new LangOptions(*X.getLangOpts())) {}
+  : llvm::RefCountedBase<CompilerInvocation>(),
+    LangOpts(new LangOptions(*X.getLangOpts())) {}
 
 //===----------------------------------------------------------------------===//
 // Utility functions.
@@ -408,7 +409,6 @@ static const char *getActionName(frontend::ActionKind Kind) {
   case frontend::EmitObj:                return "-emit-obj";
   case frontend::FixIt:                  return "-fixit";
   case frontend::GenerateModule:         return "-emit-module";
-  case frontend::GenerateModuleFromMap:  return "-emit-module-from-map";
   case frontend::GeneratePCH:            return "-emit-pch";
   case frontend::GeneratePTH:            return "-emit-pth";
   case frontend::InitOnly:               return "-init-only";
@@ -1273,8 +1273,6 @@ static InputKind ParseFrontendArgs(FrontendOptions &Opts, ArgList &Args,
       Opts.ProgramAction = frontend::FixIt; break;
     case OPT_emit_module:
       Opts.ProgramAction = frontend::GenerateModule; break;
-    case OPT_emit_module_from_map:
-      Opts.ProgramAction = frontend::GenerateModuleFromMap; break;
     case OPT_emit_pch:
       Opts.ProgramAction = frontend::GeneratePCH; break;
     case OPT_emit_pth:

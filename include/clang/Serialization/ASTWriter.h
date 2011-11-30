@@ -18,6 +18,7 @@
 #include "clang/AST/DeclarationName.h"
 #include "clang/AST/TemplateBase.h"
 #include "clang/AST/ASTMutationListener.h"
+#include "clang/Lex/ModuleMap.h"
 #include "clang/Serialization/ASTBitCodes.h"
 #include "clang/Serialization/ASTDeserializationListener.h"
 #include "clang/Sema/SemaConsumer.h"
@@ -357,6 +358,10 @@ private:
   /// in the order they should be written.
   SmallVector<QueuedCXXBaseSpecifiers, 2> CXXBaseSpecifiersToWrite;
 
+  /// \brief A mapping from each known submodule to its ID number, which will
+  /// be a positive integer.
+  llvm::DenseMap<ModuleMap::Module *, unsigned> SubmoduleIDs;
+                    
   /// \brief Write the given subexpression to the bitstream.
   void WriteSubStmt(Stmt *S,
                     llvm::DenseMap<Stmt *, uint64_t> &SubStmtEntries,
@@ -373,6 +378,7 @@ private:
   void WritePreprocessor(const Preprocessor &PP, bool IsModule);
   void WriteHeaderSearch(const HeaderSearch &HS, StringRef isysroot);
   void WritePreprocessorDetail(PreprocessingRecord &PPRec);
+  void WriteSubmodules(ModuleMap::Module *WritingModule);
   void WritePragmaDiagnosticMappings(const DiagnosticsEngine &Diag);
   void WriteCXXBaseSpecifiersOffsets();
   void WriteType(QualType T);
@@ -412,7 +418,7 @@ private:
 
   void WriteASTCore(Sema &SemaRef, MemorizeStatCalls *StatCalls,
                     StringRef isysroot, const std::string &OutputFile,
-                    bool IsModule);
+                    ModuleMap::Module *WritingModule);
 
 public:
   /// \brief Create a new precompiled header writer that outputs to
@@ -428,14 +434,14 @@ public:
   /// \param StatCalls the object that cached all of the stat() calls made while
   /// searching for source files and headers.
   ///
-  /// \param IsModule Whether we're writing a module (otherwise, we're writing a
-  /// precompiled header).
+  /// \param WritingModule The module that we are writing. If null, we are
+  /// writing a precompiled header.
   ///
   /// \param isysroot if non-empty, write a relocatable file whose headers
   /// are relative to the given system root.
   void WriteAST(Sema &SemaRef, MemorizeStatCalls *StatCalls,
                 const std::string &OutputFile,
-                bool IsModule, StringRef isysroot);
+                ModuleMap::Module *WritingModule, StringRef isysroot);
 
   /// \brief Emit a source location.
   void AddSourceLocation(SourceLocation Loc, RecordDataImpl &Record);
@@ -672,7 +678,7 @@ public:
 class PCHGenerator : public SemaConsumer {
   const Preprocessor &PP;
   std::string OutputFile;
-  bool IsModule;
+  ModuleMap::Module *Module;
   std::string isysroot;
   raw_ostream *Out;
   Sema *SemaPtr;
@@ -687,7 +693,7 @@ protected:
 
 public:
   PCHGenerator(const Preprocessor &PP, StringRef OutputFile,
-               bool IsModule,
+               ModuleMap::Module *Module,
                StringRef isysroot, raw_ostream *Out);
   ~PCHGenerator();
   virtual void InitializeSema(Sema &S) { SemaPtr = &S; }
