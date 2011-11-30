@@ -10,3 +10,17 @@
 - (void)setObject:(id)object forKeyedSubscript:(id)key;
 @end
 
+void all() {
+  NSMutableArray *array;
+  id oldObject = array[10];
+
+  array[10] = oldObject;
+
+  NSMutableDictionary *dictionary;
+  id key;
+  id newObject;
+  oldObject = dictionary[key];
+
+  dictionary[key] = newObject;
+}
+
