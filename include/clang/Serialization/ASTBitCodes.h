@@ -127,7 +127,7 @@ namespace clang {
     /// \brief The number of predefined identifier IDs.
     const unsigned int NUM_PREDEF_IDENT_IDS = 1;
     
-    /// \brief An ID number that refers to an ObjC selctor in an AST file.
+    /// \brief An ID number that refers to an ObjC selector in an AST file.
     typedef uint32_t SelectorID;
 
     /// \brief The number of predefined selector IDs.
@@ -140,6 +140,12 @@ namespace clang {
     /// \brief An ID number that refers to an entity in the detailed
     /// preprocessing record.
     typedef uint32_t PreprocessedEntityID;
+
+    /// \brief An ID number that refers to a submodule in a module file.
+    typedef uint32_t SubmoduleID;
+    
+    /// \brief The number of predefined submodule IDs.
+    const unsigned int NUM_PREDEF_SUBMODULE_IDS = 1;
 
     /// \brief Source range/offset of a preprocessed entity.
     struct PPEntityOffset {
@@ -198,7 +204,10 @@ namespace clang {
       DECL_UPDATES_BLOCK_ID,
       
       /// \brief The block containing the detailed preprocessing record.
-      PREPROCESSOR_DETAIL_BLOCK_ID
+      PREPROCESSOR_DETAIL_BLOCK_ID,
+      
+      /// \brief The block containing the submodule structure.
+      SUBMODULE_BLOCK_ID
     };
 
     /// \brief Record types that occur within the AST block itself.
@@ -490,6 +499,20 @@ namespace clang {
       /// \brief Describes an inclusion directive within the preprocessing
       /// record.
       PPD_INCLUSION_DIRECTIVE = 2
+    };
+    
+    /// \brief Record types used within a submodule description block.
+    enum SubmoduleRecordTypes {
+      /// \brief Defines the major attributes of a submodule, including its
+      /// name and parent.
+      SUBMODULE_DEFINITION = 0,
+      /// \brief Specifies the umbrella header used to create this module,
+      /// if any.
+      SUBMODULE_UMBRELLA = 1,
+      /// \brief Specifies a header that falls into this (sub)module.
+      SUBMODULE_HEADER = 2,
+      /// \brief Metadata for submodules as a whole.
+      SUBMODULE_METADATA = 3
     };
     
     /// \defgroup ASTAST AST file AST constants

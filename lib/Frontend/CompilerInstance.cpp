@@ -962,7 +962,7 @@ void LockFileManager::waitForUnlock() {
 /// \brief Compile a module file for the given module, using the options 
 /// provided by the importing compiler instance.
 static void compileModule(CompilerInstance &ImportingInstance,
-                          ModuleMap::Module *Module,
+                          Module *Module,
                           StringRef ModuleFileName) {
   LockFileManager Locked(ModuleFileName);
   switch (Locked) {
@@ -1068,13 +1068,13 @@ static void compileModule(CompilerInstance &ImportingInstance,
     llvm::sys::Path(TempModuleMapFileName).eraseFromDisk();
 }
 
-ModuleKey CompilerInstance::loadModule(SourceLocation ImportLoc, 
-                                       ModuleIdPath Path) {
+Module *CompilerInstance::loadModule(SourceLocation ImportLoc, 
+                                     ModuleIdPath Path) {
   // If we've already handled this import, just return the cached result.
   // This one-element cache is important to eliminate redundant diagnostics
   // when both the preprocessor and parser see the same import declaration.
   if (!ImportLoc.isInvalid() && LastModuleImportLoc == ImportLoc)
-    return LastModuleImportResult.getOpaqueValue();
+    return LastModuleImportResult;
   
   // Determine what file we're searching from.
   SourceManager &SourceMgr = getSourceManager();
@@ -1087,12 +1087,13 @@ ModuleKey CompilerInstance::loadModule(SourceLocation ImportLoc,
   StringRef ModuleName = Path[0].first->getName();
   SourceLocation ModuleNameLoc = Path[0].second;
 
-  ModuleMap::Module *Module = 0;
+  clang::Module *Module = 0;
   const FileEntry *ModuleFile = 0;
   
   // If we don't already have information on this module, load the module now.
-  KnownModule &Known = KnownModules[Path[0].first];
-  if (Known.isNull()) {  
+  llvm::DenseMap<const IdentifierInfo *, clang::Module *>::iterator Known
+    = KnownModules.find(Path[0].first);
+  if (Known == KnownModules.end()) {  
     // Search for a module with the given name.
     std::string ModuleFileName;
     ModuleFile
@@ -1173,47 +1174,57 @@ ModuleKey CompilerInstance::loadModule(SourceLocation ImportLoc,
     case ASTReader::IgnorePCH:
       // FIXME: The ASTReader will already have complained, but can we showhorn
       // that diagnostic information into a more useful form?
+      KnownModules[Path[0].first] = 0;
       return 0;
 
     case ASTReader::Failure:
-      // Already complained.
+      // Already complained, but note now that we failed.
+      KnownModules[Path[0].first] = 0;
       return 0;
     }
     
-    if (Module)
-      Known = Module;
-    else
-      Known = ModuleFile;
+    if (!Module) {
+      // If we loaded the module directly, without finding a module map first,
+      // we'll have loaded the module's information from the module itself.
+      Module = PP->getHeaderSearchInfo().getModuleMap()
+                 .findModule((Path[0].first->getName()));
+    }
+    
+    // Cache the result of this top-level module lookup for later.
+    Known = KnownModules.insert(std::make_pair(Path[0].first, Module)).first;
   } else {
-    Module = Known.dyn_cast<ModuleMap::Module *>();
+    // Retrieve the cached top-level module.
+    Module = Known->second;
   }
+  
+  // If we never found the module, fail.
+  if (!Module)
+    return 0;
   
   // Verify that the rest of the module path actually corresponds to
   // a submodule.
-  ModuleMap::Module *Sub = 0;
-  if (Module && Path.size() > 1) {
-    Sub = Module;
+  if (Path.size() > 1) {
     for (unsigned I = 1, N = Path.size(); I != N; ++I) {
       StringRef Name = Path[I].first->getName();
-      llvm::StringMap<ModuleMap::Module *>::iterator Pos
-        = Sub->SubModules.find(Name);
+      llvm::StringMap<clang::Module *>::iterator Pos
+        = Module->SubModules.find(Name);
       
-      if (Pos == Sub->SubModules.end()) {
+      if (Pos == Module->SubModules.end()) {
         // Attempt to perform typo correction to find a module name that works.
         llvm::SmallVector<StringRef, 2> Best;
         unsigned BestEditDistance = (std::numeric_limits<unsigned>::max)();
         
-        for (llvm::StringMap<ModuleMap::Module *>::iterator 
-                  I = Sub->SubModules.begin(), 
-               IEnd = Sub->SubModules.end();
-             I != IEnd; ++I) {
-          unsigned ED = Name.edit_distance(I->getValue()->Name,
+        for (llvm::StringMap<clang::Module *>::iterator
+                  J = Module->SubModules.begin(), 
+               JEnd = Module->SubModules.end();
+             J != JEnd; ++J) {
+          unsigned ED = Name.edit_distance(J->getValue()->Name,
                                            /*AllowReplacements=*/true,
                                            BestEditDistance);
           if (ED <= BestEditDistance) {
             if (ED < BestEditDistance)
               Best.clear();
-            Best.push_back(I->getValue()->Name);
+            Best.push_back(J->getValue()->Name);
           }
         }
         
@@ -1221,34 +1232,30 @@ ModuleKey CompilerInstance::loadModule(SourceLocation ImportLoc,
         if (Best.size() == 1) {
           getDiagnostics().Report(Path[I].second, 
                                   diag::err_no_submodule_suggest)
-            << Path[I].first << Sub->getFullModuleName() << Best[0]
+            << Path[I].first << Module->getFullModuleName() << Best[0]
             << SourceRange(Path[0].second, Path[I-1].second)
             << FixItHint::CreateReplacement(SourceRange(Path[I].second),
                                             Best[0]);
-          Pos = Sub->SubModules.find(Best[0]);
+          Pos = Module->SubModules.find(Best[0]);
         }
       }
       
-      if (Pos == Sub->SubModules.end()) {
+      if (Pos == Module->SubModules.end()) {
         // No submodule by this name. Complain, and don't look for further
         // submodules.
         getDiagnostics().Report(Path[I].second, diag::err_no_submodule)
-          << Path[I].first << Sub->getFullModuleName()
+          << Path[I].first << Module->getFullModuleName()
           << SourceRange(Path[0].second, Path[I-1].second);
         break;
       }
       
-      Sub = Pos->getValue();
+      Module = Pos->getValue();
     }
   }
   
   // FIXME: Tell the AST reader to make the named submodule visible.
   
-  // FIXME: The module file's FileEntry makes a poor key indeed! Once we 
-  // eliminate the need for FileEntry here, the module itself will become the
-  // key (which does make sense).
   LastModuleImportLoc = ImportLoc;
-  LastModuleImportResult = Known;
-  return Known.getOpaqueValue();
+  LastModuleImportResult = Module;
+  return Module;
 }
-

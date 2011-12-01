@@ -12,7 +12,6 @@
 
 #include "clang/Frontend/CompilerInvocation.h"
 #include "clang/Lex/ModuleLoader.h"
-#include "clang/Lex/ModuleMap.h"
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/IntrusiveRefCntPtr.h"
@@ -39,6 +38,7 @@ class ExternalASTSource;
 class FileEntry;
 class FileManager;
 class FrontendAction;
+class Module;
 class Preprocessor;
 class Sema;
 class SourceManager;
@@ -99,15 +99,9 @@ class CompilerInstance : public ModuleLoader {
   /// \brief Non-owning reference to the ASTReader, if one exists.
   ASTReader *ModuleManager;
 
-  /// \brief A module that we have already attempted to load, which is known
-  /// by either a file entry (FIXME: a temporary measure) or via its module
-  /// definition.
-  typedef llvm::PointerUnion<const FileEntry *, ModuleMap::Module *> 
-    KnownModule;
-  
   /// \brief The set of top-level modules that has already been loaded,
   /// along with the module map
-  llvm::DenseMap<const IdentifierInfo *, KnownModule> KnownModules;
+  llvm::DenseMap<const IdentifierInfo *, Module *> KnownModules;
   
   /// \brief The location of the module-import keyword for the last module
   /// import. 
@@ -115,7 +109,7 @@ class CompilerInstance : public ModuleLoader {
   
   /// \brief The result of the last module import.
   ///
-  KnownModule LastModuleImportResult;
+  Module *LastModuleImportResult;
   
   /// \brief Holds information about the output file.
   ///
@@ -647,7 +641,7 @@ public:
 
   /// }
   
-  virtual ModuleKey loadModule(SourceLocation ImportLoc, ModuleIdPath Path);
+  virtual Module *loadModule(SourceLocation ImportLoc, ModuleIdPath Path);
 };
 
 } // end namespace clang
