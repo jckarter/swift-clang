@@ -1,4 +1,4 @@
-// RUN: %clang_cc1 -triple x86_64-apple-darwin10 -emit-llvm  -o /dev/null %s
+// RUN: %clang_cc1 -emit-llvm -triple x86_64-apple-darwin -o - %s | FileCheck %s
 
 typedef unsigned int size_t;
 @protocol P @end
@@ -28,3 +28,22 @@ int main() {
   oldObject = dict[(id)s];
 
 }
+
+template <class T> void test2(NSMutableArray *a) {
+  a[10] = 0;
+}
+template void test2<int>(NSMutableArray*);
+// CHECK: define weak_odr void @_Z5test2IiEvP14NSMutableArray
+// CHECK: @objc_msgSend 
+// CHECK: ret void
+
+
+template <class T> void test3(NSMutableArray *a) {
+  a[sizeof(T)] = 0;
+}
+
+template void test3<int>(NSMutableArray*);
+// CHECK: define weak_odr void @_Z5test3IiEvP14NSMutableArray
+// CHECK: @objc_msgSend
+// CHECK: ret void
+

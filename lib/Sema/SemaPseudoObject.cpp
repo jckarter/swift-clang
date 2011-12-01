@@ -1232,6 +1232,12 @@ static Expr *stripOpaqueValuesFromPseudoObjectRef(Sema &S, Expr *E) {
         = dyn_cast<ObjCPropertyRefExpr>(opaqueRef)) {
     OpaqueValueExpr *baseOVE = cast<OpaqueValueExpr>(refExpr->getBase());
     return ObjCPropertyRefRebuilder(S, baseOVE->getSourceExpr()).rebuild(E);
+  } else if (ObjCSubscriptRefExpr *refExpr
+               = dyn_cast<ObjCSubscriptRefExpr>(opaqueRef)) {
+    OpaqueValueExpr *baseOVE = cast<OpaqueValueExpr>(refExpr->getBaseExpr());
+    OpaqueValueExpr *keyOVE = cast<OpaqueValueExpr>(refExpr->getKeyExpr());
+    return ObjCSubscriptRefRebuilder(S, baseOVE->getSourceExpr(), 
+                                     keyOVE->getSourceExpr()).rebuild(E);
   } else {
     llvm_unreachable("unknown pseudo-object kind!");
   }
