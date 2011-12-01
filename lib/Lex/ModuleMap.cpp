@@ -27,115 +27,6 @@
 #include "llvm/ADT/StringSwitch.h"
 using namespace clang;
 
-//----------------------------------------------------------------------------//
-// Module
-//----------------------------------------------------------------------------//
-
-ModuleMap::Module::~Module() {
-  for (llvm::StringMap<Module *>::iterator I = SubModules.begin(), 
-                                        IEnd = SubModules.end();
-       I != IEnd; ++I) {
-    delete I->getValue();
-  }
-
-}
-
-std::string ModuleMap::Module::getFullModuleName() const {
-  llvm::SmallVector<StringRef, 2> Names;
-  
-  // Build up the set of module names (from innermost to outermost).
-  for (const Module *M = this; M; M = M->Parent)
-    Names.push_back(M->Name);
-  
-  std::string Result;
-  for (llvm::SmallVector<StringRef, 2>::reverse_iterator I = Names.rbegin(),
-                                                      IEnd = Names.rend(); 
-       I != IEnd; ++I) {
-    if (!Result.empty())
-      Result += '.';
-    
-    Result += *I;
-  }
-  
-  return Result;
-}
-
-StringRef ModuleMap::Module::getTopLevelModuleName() const {
-  const Module *Top = this;
-  while (Top->Parent)
-    Top = Top->Parent;
-  
-  return Top->Name;
-}
-
-static void indent(llvm::raw_ostream &OS, unsigned Spaces) {
-  OS << std::string(Spaces, ' ');
-}
-
-static void printEscapedString(llvm::raw_ostream &OS, StringRef String) {
-  for (StringRef::iterator I = String.begin(), E = String.end(); I != E; ++I) {
-    unsigned char Char = *I;
-    
-    switch (Char) {
-    default:
-      if (isprint(Char))
-        OS << (char)Char;
-      else  // Output anything hard as an octal escape.
-        OS << '\\'
-        << (char)('0'+ ((Char >> 6) & 7))
-        << (char)('0'+ ((Char >> 3) & 7))
-        << (char)('0'+ ((Char >> 0) & 7));
-      break;
-      // Handle some common non-printable cases to make dumps prettier.
-    case '\\': OS << "\\\\"; break;
-    case '"': OS << "\\\""; break;
-    case '\n': OS << "\\n"; break;
-    case '\t': OS << "\\t"; break;
-    case '\a': OS << "\\a"; break;
-    case '\b': OS << "\\b"; break;
-    }
-  }
-}
-
-void ModuleMap::Module::print(llvm::raw_ostream &OS, unsigned Indent) const {
-  indent(OS, Indent);
-  if (IsFramework)
-    OS << "framework ";
-  if (IsExplicit)
-    OS << "explicit ";
-  OS << "module " << Name << " {\n";
-  
-  if (UmbrellaHeader) {
-    indent(OS, Indent + 2);
-    OS << "umbrella \"";
-    printEscapedString(OS, UmbrellaHeader->getName());
-    OS << "\"\n";
-  }
-  
-  for (unsigned I = 0, N = Headers.size(); I != N; ++I) {
-    indent(OS, Indent + 2);
-    OS << "header \"";
-    printEscapedString(OS, Headers[I]->getName());
-    OS << "\"\n";
-  }
-  
-  for (llvm::StringMap<Module *>::const_iterator MI = SubModules.begin(), 
-                                              MIEnd = SubModules.end();
-       MI != MIEnd; ++MI)
-    MI->getValue()->print(OS, Indent + 2);
-  
-  indent(OS, Indent);
-  OS << "}\n";
-}
-
-void ModuleMap::Module::dump() const {
-  print(llvm::errs());
-}
-
-//----------------------------------------------------------------------------//
-// Module map
-//----------------------------------------------------------------------------//
-
 ModuleMap::ModuleMap(FileManager &FileMgr, const DiagnosticConsumer &DC) {
   llvm::IntrusiveRefCntPtr<DiagnosticIDs> DiagIDs(new DiagnosticIDs);
   Diags = llvm::IntrusiveRefCntPtr<DiagnosticsEngine>(
@@ -154,7 +45,7 @@ ModuleMap::~ModuleMap() {
   delete SourceMgr;
 }
 
-ModuleMap::Module *ModuleMap::findModuleForHeader(const FileEntry *File) {
+Module *ModuleMap::findModuleForHeader(const FileEntry *File) {
   llvm::DenseMap<const FileEntry *, Module *>::iterator Known
     = Headers.find(File);
   if (Known != Headers.end())
@@ -198,7 +89,7 @@ ModuleMap::Module *ModuleMap::findModuleForHeader(const FileEntry *File) {
   return 0;
 }
 
-ModuleMap::Module *ModuleMap::findModule(StringRef Name) {
+Module *ModuleMap::findModule(StringRef Name) {
   llvm::StringMap<Module *>::iterator Known = Modules.find(Name);
   if (Known != Modules.end())
     return Known->getValue();
@@ -206,7 +97,24 @@ ModuleMap::Module *ModuleMap::findModule(StringRef Name) {
   return 0;
 }
 
-ModuleMap::Module *
+std::pair<Module *, bool> 
+ModuleMap::findOrCreateModule(StringRef Name, Module *Parent, bool IsFramework,
+                              bool IsExplicit) {
+  // Try to find an existing module with this name.
+  if (Module *Found = Parent? Parent->SubModules[Name] : Modules[Name])
+    return std::make_pair(Found, false);
+  
+  // Create a new module with this name.
+  Module *Result = new Module(Name, SourceLocation(), Parent, IsFramework, 
+                              IsExplicit);
+  if (Parent)
+    Parent->SubModules[Name] = Result;
+  else
+    Modules[Name] = Result;
+  return std::make_pair(Result, true);
+}
+
+Module *
 ModuleMap::inferFrameworkModule(StringRef ModuleName, 
                                 const DirectoryEntry *FrameworkDir) {
   // Check whether we've already found this module.
@@ -236,7 +144,7 @@ ModuleMap::inferFrameworkModule(StringRef ModuleName,
 }
 
 const FileEntry *
-ModuleMap::getContainingModuleMapFile(ModuleMap::Module *Module) {
+ModuleMap::getContainingModuleMapFile(Module *Module) {
   if (Module->DefinitionLoc.isInvalid() || !SourceMgr)
     return 0;
 
@@ -327,7 +235,7 @@ namespace clang {
     MMToken Tok;
     
     /// \brief The active module.
-    ModuleMap::Module *ActiveModule;
+    Module *ActiveModule;
     
     /// \brief Consume the current token and return its location.
     SourceLocation consumeToken();
@@ -341,8 +249,6 @@ namespace clang {
     void parseHeaderDecl();
     
   public:
-    typedef ModuleMap::Module Module;
-    
     explicit ModuleMapParser(Lexer &L, SourceManager &SourceMgr, 
                              DiagnosticsEngine &Diags,
                              ModuleMap &Map,
