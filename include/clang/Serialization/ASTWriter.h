@@ -18,7 +18,6 @@
 #include "clang/AST/DeclarationName.h"
 #include "clang/AST/TemplateBase.h"
 #include "clang/AST/ASTMutationListener.h"
-#include "clang/Lex/ModuleMap.h"
 #include "clang/Serialization/ASTBitCodes.h"
 #include "clang/Serialization/ASTDeserializationListener.h"
 #include "clang/Sema/SemaConsumer.h"
@@ -51,6 +50,7 @@ class MemorizeStatCalls;
 class OpaqueValueExpr;
 class OpenCLOptions;
 class ASTReader;
+class Module;
 class PreprocessedEntity;
 class PreprocessingRecord;
 class Preprocessor;
@@ -94,6 +94,9 @@ private:
 
   /// \brief The ASTContext we're writing.
   ASTContext *Context;
+
+  /// \brief The preprocessor we're writing.
+  Preprocessor *PP;
 
   /// \brief The reader of existing AST files, if we're chaining.
   ASTReader *Chain;
@@ -204,10 +207,16 @@ private:
   /// table.
   std::vector<uint32_t> IdentifierOffsets;
 
+  /// \brief The first ID number we can use for our own submodules.
+  serialization::SubmoduleID FirstSubmoduleID;
+  
+  /// \brief The submodule ID that will be assigned to the next new submodule.
+  serialization::SubmoduleID NextSubmoduleID;
+
   /// \brief The first ID number we can use for our own selectors.
   serialization::SelectorID FirstSelectorID;
 
-  /// \brief The selector ID that will be assigned to the next new identifier.
+  /// \brief The selector ID that will be assigned to the next new selector.
   serialization::SelectorID NextSelectorID;
 
   /// \brief Map that provides the ID numbers of each Selector.
@@ -358,6 +367,10 @@ private:
   /// in the order they should be written.
   SmallVector<QueuedCXXBaseSpecifiers, 2> CXXBaseSpecifiersToWrite;
 
+  /// \brief A mapping from each known submodule to its ID number, which will
+  /// be a positive integer.
+  llvm::DenseMap<Module *, unsigned> SubmoduleIDs;
+                    
   /// \brief Write the given subexpression to the bitstream.
   void WriteSubStmt(Stmt *S,
                     llvm::DenseMap<Stmt *, uint64_t> &SubStmtEntries,
@@ -374,6 +387,12 @@ private:
   void WritePreprocessor(const Preprocessor &PP, bool IsModule);
   void WriteHeaderSearch(const HeaderSearch &HS, StringRef isysroot);
   void WritePreprocessorDetail(PreprocessingRecord &PPRec);
+  void WriteSubmodules(Module *WritingModule);
+                    
+  /// \brief Infer the submodule ID that contains an entity at the given
+  /// source location.
+  serialization::SubmoduleID inferSubmoduleIDFromLocation(SourceLocation Loc);
+                    
   void WritePragmaDiagnosticMappings(const DiagnosticsEngine &Diag);
   void WriteCXXBaseSpecifiersOffsets();
   void WriteType(QualType T);
@@ -413,7 +432,7 @@ private:
 
   void WriteASTCore(Sema &SemaRef, MemorizeStatCalls *StatCalls,
                     StringRef isysroot, const std::string &OutputFile,
-                    ModuleMap::Module *WritingModule);
+                    Module *WritingModule);
 
 public:
   /// \brief Create a new precompiled header writer that outputs to
@@ -436,7 +455,7 @@ public:
   /// are relative to the given system root.
   void WriteAST(Sema &SemaRef, MemorizeStatCalls *StatCalls,
                 const std::string &OutputFile,
-                ModuleMap::Module *WritingModule, StringRef isysroot);
+                Module *WritingModule, StringRef isysroot);
 
   /// \brief Emit a source location.
   void AddSourceLocation(SourceLocation Loc, RecordDataImpl &Record);
@@ -673,7 +692,7 @@ public:
 class PCHGenerator : public SemaConsumer {
   const Preprocessor &PP;
   std::string OutputFile;
-  ModuleMap::Module *Module;
+  clang::Module *Module;
   std::string isysroot;
   raw_ostream *Out;
   Sema *SemaPtr;
@@ -688,7 +707,7 @@ protected:
 
 public:
   PCHGenerator(const Preprocessor &PP, StringRef OutputFile,
-               ModuleMap::Module *Module,
+               clang::Module *Module,
                StringRef isysroot, raw_ostream *Out);
   ~PCHGenerator();
   virtual void InitializeSema(Sema &S) { SemaPtr = &S; }

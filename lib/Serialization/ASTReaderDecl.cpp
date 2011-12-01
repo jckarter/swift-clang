@@ -32,7 +32,7 @@ using namespace clang::serialization;
 namespace clang {
   class ASTDeclReader : public DeclVisitor<ASTDeclReader, void> {
     ASTReader &Reader;
-    Module &F;
+    ModuleFile &F;
     llvm::BitstreamCursor &Cursor;
     const DeclID ThisDeclID;
     const unsigned RawLocation;
@@ -93,7 +93,7 @@ namespace clang {
                                      CXXRecordDecl *DefinitionDecl,
                                      const RecordData &Record, unsigned &Idx);
   public:
-    ASTDeclReader(ASTReader &Reader, Module &F,
+    ASTDeclReader(ASTReader &Reader, ModuleFile &F,
                   llvm::BitstreamCursor &Cursor, DeclID thisDeclID,
                   unsigned RawLocation,
                   const RecordData &Record, unsigned &Idx)
@@ -105,7 +105,7 @@ namespace clang {
 
     void Visit(Decl *D);
 
-    void UpdateDecl(Decl *D, Module &Module,
+    void UpdateDecl(Decl *D, ModuleFile &ModuleFile,
                     const RecordData &Record);
 
     static void setNextObjCCategory(ObjCCategoryDecl *Cat,
@@ -253,6 +253,10 @@ void ASTDeclReader::VisitDecl(Decl *D) {
   D->setAccess((AccessSpecifier)Record[Idx++]);
   D->FromASTFile = true;
   D->ModulePrivate = Record[Idx++];
+  
+  unsigned SubmoduleID = Record[Idx++];
+  // FIXME: Actual use the submodule ID to determine visibility.
+  (void)SubmoduleID;
 }
 
 void ASTDeclReader::VisitTranslationUnitDecl(TranslationUnitDecl *TU) {
@@ -1391,7 +1395,7 @@ void ASTDeclReader::VisitRedeclarable(Redeclarable<T> *D) {
 //===----------------------------------------------------------------------===//
 
 /// \brief Reads attributes from the current stream position.
-void ASTReader::ReadAttributes(Module &F, AttrVec &Attrs,
+void ASTReader::ReadAttributes(ModuleFile &F, AttrVec &Attrs,
                                const RecordData &Record, unsigned &Idx) {
   for (unsigned i = 0, e = Record[Idx++]; i != e; ++i) {
     Attr *New = 0;
@@ -1456,7 +1460,7 @@ ASTReader::DeclCursorForID(DeclID ID, unsigned &RawLocation) {
 
   GlobalDeclMapType::iterator I = GlobalDeclMap.find(ID);
   assert(I != GlobalDeclMap.end() && "Corrupted global declaration map");
-  Module *M = I->second;
+  ModuleFile *M = I->second;
   const DeclOffset &
     DOffs =  M->DeclOffsets[ID - M->BaseDeclID - NUM_PREDEF_DECL_IDS];
   RawLocation = DOffs.Loc;
@@ -1464,14 +1468,14 @@ ASTReader::DeclCursorForID(DeclID ID, unsigned &RawLocation) {
 }
 
 ASTReader::RecordLocation ASTReader::getLocalBitOffset(uint64_t GlobalOffset) {
-  ContinuousRangeMap<uint64_t, Module*, 4>::iterator I
+  ContinuousRangeMap<uint64_t, ModuleFile*, 4>::iterator I
     = GlobalBitOffsetsMap.find(GlobalOffset);
 
   assert(I != GlobalBitOffsetsMap.end() && "Corrupted global bit offsets map");
   return RecordLocation(I->second, GlobalOffset - I->second->GlobalBitOffset);
 }
 
-uint64_t ASTReader::getGlobalBitOffset(Module &M, uint32_t LocalOffset) {
+uint64_t ASTReader::getGlobalBitOffset(ModuleFile &M, uint32_t LocalOffset) {
   return LocalOffset + M.GlobalBitOffset;
 }
 
@@ -1797,7 +1801,7 @@ void ASTReader::loadDeclUpdateRecords(serialization::DeclID ID, Decl *D) {
     FileOffsetsTy &UpdateOffsets = UpdI->second;
     for (FileOffsetsTy::iterator
          I = UpdateOffsets.begin(), E = UpdateOffsets.end(); I != E; ++I) {
-      Module *F = I->first;
+      ModuleFile *F = I->first;
       uint64_t Offset = I->second;
       llvm::BitstreamCursor &Cursor = F->DeclsCursor;
       SavedStreamPosition SavedPosition(Cursor);
@@ -1832,16 +1836,16 @@ namespace {
       : Reader(Reader), InterfaceID(InterfaceID), Interface(Interface),
         GlobHeadCat(0), GlobTailCat(0) { }
 
-    static bool visit(Module &M, void *UserData) {
+    static bool visit(ModuleFile &M, void *UserData) {
       return static_cast<ObjCChainedCategoriesVisitor *>(UserData)->visit(M);
     }
 
-    bool visit(Module &M) {
+    bool visit(ModuleFile &M) {
       if (Reader.isDeclIDFromModule(InterfaceID, M))
         return true; // We reached the module where the interface originated
                     // from. Stop traversing the imported modules.
 
-      Module::ChainedObjCCategoriesMap::iterator
+      ModuleFile::ChainedObjCCategoriesMap::iterator
         I = M.ChainedObjCCategories.find(InterfaceID);
       if (I == M.ChainedObjCCategories.end())
         return false;
@@ -1941,7 +1945,7 @@ void ASTReader::loadObjCChainedCategories(serialization::GlobalDeclID ID,
   D->setCategoryList(Visitor.getHeadCategory());
 }
 
-void ASTDeclReader::UpdateDecl(Decl *D, Module &Module,
+void ASTDeclReader::UpdateDecl(Decl *D, ModuleFile &ModuleFile,
                                const RecordData &Record) {
   unsigned Idx = 0;
   while (Idx < Record.size()) {
@@ -1949,24 +1953,24 @@ void ASTDeclReader::UpdateDecl(Decl *D, Module &Module,
     case UPD_CXX_SET_DEFINITIONDATA: {
       CXXRecordDecl *RD = cast<CXXRecordDecl>(D);
       CXXRecordDecl *DefinitionDecl
-        = Reader.ReadDeclAs<CXXRecordDecl>(Module, Record, Idx);
+        = Reader.ReadDeclAs<CXXRecordDecl>(ModuleFile, Record, Idx);
       assert(!RD->DefinitionData && "DefinitionData is already set!");
       InitializeCXXDefinitionData(RD, DefinitionDecl, Record, Idx);
       break;
     }
 
     case UPD_CXX_ADDED_IMPLICIT_MEMBER:
-      cast<CXXRecordDecl>(D)->addedMember(Reader.ReadDecl(Module, Record, Idx));
+      cast<CXXRecordDecl>(D)->addedMember(Reader.ReadDecl(ModuleFile, Record, Idx));
       break;
 
     case UPD_CXX_ADDED_TEMPLATE_SPECIALIZATION:
       // It will be added to the template's specializations set when loaded.
-      (void)Reader.ReadDecl(Module, Record, Idx);
+      (void)Reader.ReadDecl(ModuleFile, Record, Idx);
       break;
 
     case UPD_CXX_ADDED_ANONYMOUS_NAMESPACE: {
       NamespaceDecl *Anon
-        = Reader.ReadDeclAs<NamespaceDecl>(Module, Record, Idx);
+        = Reader.ReadDeclAs<NamespaceDecl>(ModuleFile, Record, Idx);
       // Guard against these being loaded out of original order. Don't use
       // getNextNamespace(), since it tries to access the context and can't in
       // the middle of deserialization.
@@ -1981,7 +1985,7 @@ void ASTDeclReader::UpdateDecl(Decl *D, Module &Module,
 
     case UPD_CXX_INSTANTIATED_STATIC_DATA_MEMBER:
       cast<VarDecl>(D)->getMemberSpecializationInfo()->setPointOfInstantiation(
-          Reader.ReadSourceLocation(Module, Record, Idx));
+          Reader.ReadSourceLocation(ModuleFile, Record, Idx));
       break;
     }
   }
