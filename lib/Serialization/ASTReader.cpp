@@ -562,8 +562,28 @@ IdentifierInfo *ASTIdentifierLookupTrait::ReadData(const internal_key_type& k,
   if (hasMacroDefinition) {
     // FIXME: Check for conflicts?
     uint32_t Offset = ReadUnalignedLE32(d);
-    Reader.SetIdentifierIsMacro(II, F, Offset);
-    DataLen -= 4;
+    unsigned LocalSubmoduleID = ReadUnalignedLE32(d);
+    
+    // Determine whether this macro definition should be visible now, or
+    // whether it is in a hidden submodule.
+    bool Visible = true;
+    if (SubmoduleID GlobalSubmoduleID
+          = Reader.getGlobalSubmoduleID(F, LocalSubmoduleID)) {
+      if (Module *Owner = Reader.getSubmodule(GlobalSubmoduleID)) {
+        if (Owner->NameVisibility == Module::Hidden) {
+          // The owning module is not visible, and this macro definition should
+          // not be, either.
+          Visible = false;
+          
+          // Note that this macro definition was hidden because its owning 
+          // module is not yet visible.
+          Reader.HiddenNamesMap[Owner].push_back(II);
+        }
+      } 
+    }
+    
+    Reader.setIdentifierIsMacro(II, F, Offset, Visible);
+    DataLen -= 8;
   }
 
   Reader.SetIdentifierInfo(ID, II);
@@ -1454,10 +1474,12 @@ HeaderFileInfoTrait::ReadData(const internal_key_type, const unsigned char *d,
   return HFI;
 }
 
-void ASTReader::SetIdentifierIsMacro(IdentifierInfo *II, ModuleFile &F,
-                                     uint64_t LocalOffset) {
-  // Note that this identifier has a macro definition.
-  II->setHasMacroDefinition(true);
+void ASTReader::setIdentifierIsMacro(IdentifierInfo *II, ModuleFile &F,
+                                     uint64_t LocalOffset, bool Visible) {
+  if (Visible) {
+    // Note that this identifier has a macro definition.
+    II->setHasMacroDefinition(true);
+  }
   
   // Adjust the offset to a global offset.
   UnreadMacroRecordOffsets[II] = F.GlobalBitOffset + LocalOffset;
@@ -2440,8 +2462,12 @@ ASTReader::ASTReadResult ASTReader::validateFileEntries(ModuleFile &M) {
 }
 
 void ASTReader::makeNamesVisible(const HiddenNames &Names) {
-  for (unsigned I = 0, N = Names.size(); I != N; ++I)
-    Names[I]->ModulePrivate = false;    
+  for (unsigned I = 0, N = Names.size(); I != N; ++I) {
+    if (Decl *D = Names[I].dyn_cast<Decl *>())
+      D->ModulePrivate = false;
+    else
+      Names[I].get<IdentifierInfo *>()->setHasMacroDefinition(true);
+  }
 }
 
 void ASTReader::makeModuleVisible(Module *Mod, 
@@ -2478,6 +2504,18 @@ void ASTReader::makeModuleVisible(Module *Mod,
       if (!Sub->getValue()->IsExplicit && Visited.insert(Sub->getValue()))
         Stack.push_back(Sub->getValue());
     }
+    
+    // Push any exported modules onto the stack to be marked as visible.
+    for (unsigned I = 0, N = Mod->Exports.size(); I != N; ++I) {
+      Module *Exported = Mod->Exports[I].getPointer();
+      if (Visited.insert(Exported)) {
+        // FIXME: The intent of wildcards is to re-export any imported modules.
+        // However, we don't yet have the module-dependency information to do
+        // this, so we ignore wildcards for now.
+        if (!Mod->Exports[I].getInt())
+          Stack.push_back(Exported);
+      }
+    }
   }
 }
 
@@ -2507,6 +2545,19 @@ ASTReader::ASTReadResult ASTReader::ReadAST(const std::string &FileName,
        Id != IdEnd; ++Id)
     Id->second->setOutOfDate(true);
 
+  // Resolve any unresolved module exports.
+  for (unsigned I = 0, N = UnresolvedModuleExports.size(); I != N; ++I) {
+    UnresolvedModuleExport &Unresolved = UnresolvedModuleExports[I];
+    SubmoduleID GlobalID = getGlobalSubmoduleID(*Unresolved.File,
+                                                Unresolved.ExportedID);
+    if (Module *Exported = getSubmodule(GlobalID)) {
+      Module *Exportee = Unresolved.ModuleAndWildcard.getPointer();
+      bool Wildcard = Unresolved.ModuleAndWildcard.getInt();
+      Exportee->Exports.push_back(Module::ExportDecl(Exported, Wildcard));
+    }
+  }
+  UnresolvedModuleExports.clear();
+  
   InitializeContext();
 
   if (DeserializationListener)
@@ -2947,6 +2998,12 @@ ASTReader::ASTReadResult ASTReader::ReadSubmoduleBlock(ModuleFile &F) {
         Error("too many submodules");
         return Failure;
       }
+      
+      if (DeserializationListener)
+        DeserializationListener->ModuleRead(
+          CurrentModuleGlobalIndex + NUM_PREDEF_SUBMODULE_IDS, 
+          CurrentModule);
+      
       SubmodulesLoaded[CurrentModuleGlobalIndex++] = CurrentModule;
       break;
     }
@@ -3016,6 +3073,30 @@ ASTReader::ASTReadResult ASTReader::ReadSubmoduleBlock(ModuleFile &F) {
         
         SubmodulesLoaded.resize(SubmodulesLoaded.size() + F.LocalNumSubmodules);
       }      
+      break;
+    }
+        
+    case SUBMODULE_EXPORTS: {
+      if (First) {
+        Error("missing submodule metadata record at beginning of block");
+        return Failure;
+      }
+      
+      if (!CurrentModule)
+        break;
+      
+      for (unsigned Idx = 0; Idx + 1 < Record.size(); Idx += 2) {
+        UnresolvedModuleExport Unresolved;
+        Unresolved.File = &F;
+        Unresolved.ModuleAndWildcard.setPointer(CurrentModule);
+        Unresolved.ModuleAndWildcard.setInt(Record[Idx + 1]);
+        Unresolved.ExportedID = Record[Idx];
+        UnresolvedModuleExports.push_back(Unresolved);
+      }
+      
+      // Once we've loaded the set of exports, there's no reason to keep 
+      // the parsed, unresolved exports around.
+      CurrentModule->UnresolvedExports.clear();
       break;
     }
     }
