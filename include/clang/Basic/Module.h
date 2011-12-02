@@ -15,10 +15,12 @@
 #define LLVM_CLANG_BASIC_MODULE_H
 
 #include "clang/Basic/SourceLocation.h"
+#include "llvm/ADT/PointerIntPair.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/StringMap.h"
 #include "llvm/ADT/StringRef.h"
 #include <string>
+#include <utility>
 
 namespace llvm {
   class raw_ostream;
@@ -28,6 +30,10 @@ namespace clang {
   
 class FileEntry;
 
+/// \brief Describes the name of a module.
+typedef llvm::SmallVector<std::pair<std::string, SourceLocation>, 2>
+  ModuleId;
+  
 /// \brief Describes a module or submodule.
 class Module {
 public:
@@ -58,17 +64,60 @@ public:
   /// \brief Whether this is an explicit submodule.
   bool IsExplicit;
   
+  /// \brief Describes the visibility of the various names within a
+  /// particular module.
+  enum NameVisibilityKind {
+    /// \brief All of the names in this module are hidden.
+    ///
+    Hidden,
+    /// \brief Only the macro names in this module are visible.
+    MacrosVisible,
+    /// \brief All of the names in this module are visible.
+    AllVisible
+  };  
+  
+  ///\ brief The visibility of names within this particular module.
+  NameVisibilityKind NameVisibility;
+  
+  /// \brief Describes an exported module.
+  ///
+  /// The pointer is the module being re-exported, while the bit will be true
+  /// to indicate that this is a wildcard export.
+  typedef llvm::PointerIntPair<Module *, 1, bool> ExportDecl;
+  
+  /// \brief The set of export declarations.
+  llvm::SmallVector<ExportDecl, 2> Exports;
+  
+  /// \brief Describes an exported module that has not yet been resolved
+  /// (perhaps because the module it refers to has not yet been loaded).
+  struct UnresolvedExportDecl {
+    /// \brief The location of the 'export' keyword in the module map file.
+    SourceLocation ExportLoc;
+    
+    /// \brief The name of the module.
+    ModuleId Id;
+    
+    /// \brief Whether this export declaration ends in a wildcard, indicating
+    /// that all of its submodules should be exported (rather than the named
+    /// module itself).
+    bool Wildcard;
+  };
+  
+  /// \brief The set of export declarations that have yet to be resolved.
+  llvm::SmallVector<UnresolvedExportDecl, 2> UnresolvedExports;
+  
   /// \brief Construct a top-level module.
   explicit Module(StringRef Name, SourceLocation DefinitionLoc,
                   bool IsFramework)
     : Name(Name), DefinitionLoc(DefinitionLoc), Parent(0), UmbrellaHeader(0),
-      IsFramework(IsFramework), IsExplicit(false) { }
+      IsFramework(IsFramework), IsExplicit(false), NameVisibility(Hidden) { }
   
   /// \brief Construct  a new module or submodule.
   Module(StringRef Name, SourceLocation DefinitionLoc, Module *Parent, 
          bool IsFramework, bool IsExplicit)
     : Name(Name), DefinitionLoc(DefinitionLoc), Parent(Parent), 
-      UmbrellaHeader(0), IsFramework(IsFramework), IsExplicit(IsExplicit) { }
+      UmbrellaHeader(0), IsFramework(IsFramework), IsExplicit(IsExplicit), 
+      NameVisibility(Hidden) { }
   
   ~Module();
   

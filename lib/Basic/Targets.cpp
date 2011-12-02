@@ -1150,6 +1150,8 @@ static const char* const GCCRegNames[] = {
   "mm0", "mm1", "mm2", "mm3", "mm4", "mm5", "mm6", "mm7",
   "r8", "r9", "r10", "r11", "r12", "r13", "r14", "r15",
   "xmm8", "xmm9", "xmm10", "xmm11", "xmm12", "xmm13", "xmm14", "xmm15",
+  "ymm0", "ymm1", "ymm2", "ymm3", "ymm4", "ymm5", "ymm6", "ymm7",
+  "ymm8", "ymm9", "ymm10", "ymm11", "ymm12", "ymm13", "ymm14", "ymm15",
 };
 
 const TargetInfo::AddlRegName AddlRegNames[] = {
@@ -1288,6 +1290,12 @@ class X86TargetInfo : public TargetInfo {
     CK_OpteronSSE3,
     CK_AMDFAM10,
 
+    /// \name K10
+    /// K10 architecture processors.
+    //@{
+    CK_BDVER1,
+    CK_BDVER2,
+
     /// This specification is deprecated and will be removed in the future.
     /// Users should prefer \see CK_K8.
     // FIXME: Warn on this when the CPU is set to it.
@@ -1341,7 +1349,11 @@ public:
   virtual void getDefaultFeatures(llvm::StringMap<bool> &Features) const;
   virtual void HandleTargetFeatures(std::vector<std::string> &Features);
   virtual const char* getABI() const {
-    return MMX3DNowLevel == NoMMX3DNow ? "no-mmx" : "";
+    if (PointerWidth == 64 && HasAVX)
+      return "avx";
+    else if (PointerWidth == 32 && MMX3DNowLevel == NoMMX3DNow)
+      return "no-mmx";
+    return "";
   }
   virtual bool setCPU(const std::string &Name) {
     CPU = llvm::StringSwitch<CPUKind>(Name)
@@ -1387,6 +1399,8 @@ public:
       .Case("opteron", CK_Opteron)
       .Case("opteron-sse3", CK_OpteronSSE3)
       .Case("amdfam10", CK_AMDFAM10)
+      .Case("bdver1", CK_BDVER1)
+      .Case("bdver2", CK_BDVER2)
       .Case("x86-64", CK_x86_64)
       .Case("geode", CK_Geode)
       .Default(CK_Generic);
@@ -1448,6 +1462,8 @@ public:
     case CK_Opteron:
     case CK_OpteronSSE3:
     case CK_AMDFAM10:
+    case CK_BDVER1:
+    case CK_BDVER2:
     case CK_x86_64:
       return true;
     }
@@ -1570,6 +1586,12 @@ void X86TargetInfo::getDefaultFeatures(llvm::StringMap<bool> &Features) const {
     setFeatureEnabled(Features, "sse3", true);
     setFeatureEnabled(Features, "sse4a", true);
     setFeatureEnabled(Features, "3dnowa", true);
+    break;
+  case CK_BDVER1:
+  case CK_BDVER2:
+    setFeatureEnabled(Features, "sse4", true);
+    setFeatureEnabled(Features, "sse4a", true);
+    setFeatureEnabled(Features, "aes", true);
     break;
   case CK_C3_2:
     setFeatureEnabled(Features, "mmx", true);
@@ -1848,6 +1870,16 @@ void X86TargetInfo::getTargetDefines(const LangOptions &Opts,
     Builder.defineMacro("__amdfam10");
     Builder.defineMacro("__amdfam10__");
     Builder.defineMacro("__tune_amdfam10__");
+    break;
+  case CK_BDVER1:
+    Builder.defineMacro("__bdver1");
+    Builder.defineMacro("__bdver1__");
+    Builder.defineMacro("__tune__bdver1__");
+    break;
+  case CK_BDVER2:
+    Builder.defineMacro("__bdver2");
+    Builder.defineMacro("__bdver2__");
+    Builder.defineMacro("__tune__bdver2__");
     break;
   case CK_Geode:
     Builder.defineMacro("__geode");
