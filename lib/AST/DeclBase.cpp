@@ -501,6 +501,7 @@ unsigned Decl::getIdentifierNamespaceForKind(Kind DeclKind) {
     case ObjCImplementation:
     case ObjCCategory:
     case ObjCCategoryImpl:
+    case Import:
       // Never looked up by name.
       return 0;
   }
@@ -1009,6 +1010,13 @@ void DeclContext::addHiddenDecl(Decl *D) {
   // update it's class-specific state.
   if (CXXRecordDecl *Record = dyn_cast<CXXRecordDecl>(this))
     Record->addedMember(D);
+
+  // If this is a newly-created (not de-serialized) import declaration, wire
+  // it in to the list of local import declarations.
+  if (!D->isFromASTFile()) {
+    if (ImportDecl *Import = dyn_cast<ImportDecl>(D))
+      D->getASTContext().addedLocalImportDecl(Import);
+  }
 }
 
 void DeclContext::addDecl(Decl *D) {

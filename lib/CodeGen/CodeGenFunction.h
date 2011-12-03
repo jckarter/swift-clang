@@ -1537,16 +1537,15 @@ public:
   //                                  Helpers
   //===--------------------------------------------------------------------===//
 
-  LValue MakeAddrLValue(llvm::Value *V, QualType T, unsigned Alignment = 0) {
+  LValue MakeAddrLValue(llvm::Value *V, QualType T,
+                        CharUnits Alignment = CharUnits()) {
     return LValue::MakeAddr(V, T, Alignment, getContext(),
                             CGM.getTBAAInfo(T));
   }
   LValue MakeNaturalAlignAddrLValue(llvm::Value *V, QualType T) {
-    unsigned Alignment;
-    if (T->isIncompleteType())
-      Alignment = 0;
-    else
-      Alignment = getContext().getTypeAlignInChars(T).getQuantity();
+    CharUnits Alignment;
+    if (!T->isIncompleteType())
+      Alignment = getContext().getTypeAlignInChars(T);
     return LValue::MakeAddr(V, T, Alignment, getContext(),
                             CGM.getTBAAInfo(T));
   }
@@ -1574,7 +1573,9 @@ public:
   /// CreateAggTemp - Create a temporary memory object for the given
   /// aggregate type.
   AggValueSlot CreateAggTemp(QualType T, const Twine &Name = "tmp") {
-    return AggValueSlot::forAddr(CreateMemTemp(T, Name), T.getQualifiers(),
+    CharUnits Alignment = getContext().getTypeAlignInChars(T);
+    return AggValueSlot::forAddr(CreateMemTemp(T, Name), Alignment,
+                                 T.getQualifiers(),
                                  AggValueSlot::IsNotDestructed,
                                  AggValueSlot::DoesNotNeedGCBarriers,
                                  AggValueSlot::IsNotAliased);
