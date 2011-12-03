@@ -541,6 +541,9 @@ private:
   /// \brief A list of the namespaces we've seen.
   SmallVector<uint64_t, 4> KnownNamespaces;
 
+  /// \brief A list of modules that were imported by precompiled headers or
+  /// any other non-module AST file.
+  SmallVector<serialization::SubmoduleID, 2> ImportedModules;
   //@}
 
   /// \brief The original file name that was used to build the primary AST file,
@@ -581,9 +584,6 @@ private:
   /// Statements usually don't have IDs, but switch cases need them, so that the
   /// switch statement can refer to them.
   std::map<unsigned, SwitchCase *> SwitchCaseStmts;
-
-  /// \brief Mapping from opaque value IDs to OpaqueValueExprs.
-  std::map<unsigned, OpaqueValueExpr*> OpaqueValueExprs;
 
   /// \brief The number of stat() calls that hit/missed the stat
   /// cache.

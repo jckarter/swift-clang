@@ -16,6 +16,7 @@
 #define CLANG_CODEGEN_CGVALUE_H
 
 #include "clang/AST/ASTContext.h"
+#include "clang/AST/CharUnits.h"
 #include "clang/AST/Type.h"
 
 namespace llvm {
@@ -220,6 +221,7 @@ public:
   unsigned getAddressSpace() const { return Quals.getAddressSpace(); }
 
   unsigned getAlignment() const { return Alignment; }
+  void setAlignment(unsigned A) { Alignment = A; }
 
   // simple lvalue
   llvm::Value *getAddress() const { assert(isSimple()); return V; }
@@ -298,6 +300,11 @@ public:
     R.Initialize(type, type.getQualifiers());
     return R;
   }
+
+  RValue asAggregateRValue() const {
+    // FIMXE: Alignment
+    return RValue::getAggregate(getAddress(), isVolatileQualified());
+  }
 };
 
 /// An aggregate value slot.
@@ -307,6 +314,8 @@ class AggValueSlot {
 
   // Qualifiers
   Qualifiers Quals;
+
+  unsigned short Alignment;
 
   /// DestructedFlag - This is set to true if some external code is
   /// responsible for setting up a destructor for the slot.  Otherwise
@@ -363,13 +372,15 @@ public:
   ///   for calling destructors on this object
   /// \param needsGC - true if the slot is potentially located
   ///   somewhere that ObjC GC calls should be emitted for
-  static AggValueSlot forAddr(llvm::Value *addr, Qualifiers quals,
+  static AggValueSlot forAddr(llvm::Value *addr, CharUnits align,
+                              Qualifiers quals,
                               IsDestructed_t isDestructed,
                               NeedsGCBarriers_t needsGC,
                               IsAliased_t isAliased,
                               IsZeroed_t isZeroed = IsNotZeroed) {
     AggValueSlot AV;
     AV.Addr = addr;
+    AV.Alignment = align.getQuantity();
     AV.Quals = quals;
     AV.DestructedFlag = isDestructed;
     AV.ObjCGCFlag = needsGC;
@@ -382,8 +393,8 @@ public:
                                 NeedsGCBarriers_t needsGC,
                                 IsAliased_t isAliased,
                                 IsZeroed_t isZeroed = IsNotZeroed) {
-    return forAddr(LV.getAddress(), LV.getQuals(),
-                   isDestructed, needsGC, isAliased, isZeroed);
+    return forAddr(LV.getAddress(), CharUnits::fromQuantity(LV.getAlignment()),
+                   LV.getQuals(), isDestructed, needsGC, isAliased, isZeroed);
   }
 
   IsDestructed_t isExternallyDestructed() const {
@@ -415,10 +426,15 @@ public:
     return Addr == 0;
   }
 
+  CharUnits getAlignment() const {
+    return CharUnits::fromQuantity(Alignment);
+  }
+
   IsAliased_t isPotentiallyAliased() const {
     return IsAliased_t(AliasedFlag);
   }
 
+  // FIXME: Alignment?
   RValue asRValue() const {
     return RValue::getAggregate(getAddr(), isVolatile());
   }
