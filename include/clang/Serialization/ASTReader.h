@@ -384,13 +384,30 @@ private:
   GlobalSubmoduleMapType GlobalSubmoduleMap;
 
   /// \brief A set of hidden declarations.
-  typedef llvm::SmallVector<Decl *, 2> HiddenNames;
+  typedef llvm::SmallVector<llvm::PointerUnion<Decl *, IdentifierInfo *>, 2>
+    HiddenNames;
   
   typedef llvm::DenseMap<Module *, HiddenNames> HiddenNamesMapType;
 
   /// \brief A mapping from each of the hidden submodules to the deserialized
   /// declarations in that submodule that could be made visible.
   HiddenNamesMapType HiddenNamesMap;
+  
+  /// \brief A module export that hasn't yet been resolved.
+  struct UnresolvedModuleExport {
+    /// \brief The file in which this module resides.
+    ModuleFile *File;
+    
+    /// \brief The module that is exporting, along with a bit that specifies
+    /// whether this is a wildcard export.
+    llvm::PointerIntPair<Module *, 1, bool> ModuleAndWildcard;
+    
+    /// \brief The local ID of the module that is being exported.
+    unsigned ExportedID;
+  };
+  
+  /// \brief The set of module exports that still need to be resolved.
+  llvm::SmallVector<UnresolvedModuleExport, 2> UnresolvedModuleExports;
   
   /// \brief A vector containing selectors that have already been loaded.
   ///
@@ -524,6 +541,9 @@ private:
   /// \brief A list of the namespaces we've seen.
   SmallVector<uint64_t, 4> KnownNamespaces;
 
+  /// \brief A list of modules that were imported by precompiled headers or
+  /// any other non-module AST file.
+  SmallVector<serialization::SubmoduleID, 2> ImportedModules;
   //@}
 
   /// \brief The original file name that was used to build the primary AST file,
@@ -564,9 +584,6 @@ private:
   /// Statements usually don't have IDs, but switch cases need them, so that the
   /// switch statement can refer to them.
   std::map<unsigned, SwitchCase *> SwitchCaseStmts;
-
-  /// \brief Mapping from opaque value IDs to OpaqueValueExprs.
-  std::map<unsigned, OpaqueValueExpr*> OpaqueValueExprs;
 
   /// \brief The number of stat() calls that hit/missed the stat
   /// cache.
@@ -1343,8 +1360,17 @@ public:
 
   /// \brief Note that the identifier is a macro whose record will be loaded
   /// from the given AST file at the given (file-local) offset.
-  void SetIdentifierIsMacro(IdentifierInfo *II, ModuleFile &F,
-                            uint64_t Offset);
+  ///
+  /// \param II The name of the macro.
+  ///
+  /// \param F The module file from which the macro definition was deserialized.
+  ///
+  /// \param Offset The offset into the module file at which the macro 
+  /// definition is located.
+  ///
+  /// \param Visible Whether the macro should be made visible.
+  void setIdentifierIsMacro(IdentifierInfo *II, ModuleFile &F,
+                            uint64_t Offset, bool Visible);
 
   /// \brief Read the set of macros defined by this external macro source.
   virtual void ReadDefinedMacros();
