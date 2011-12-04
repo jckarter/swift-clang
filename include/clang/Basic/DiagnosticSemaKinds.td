@@ -3993,6 +3993,8 @@ def err_typecheck_deleted_function : Error<
   "conversion function from %0 to %1 invokes a deleted function">;
   
 def err_expected_class_or_namespace : Error<"expected a class or namespace">;
+def err_expected_class : Error<"%0 is not a class%select{ or namespace|, "
+  "namespace, or scoped enumeration}1">;
 def err_missing_qualified_for_redecl : Error<
   "must qualify the name %0 to declare %q1 in this scope">;
 def err_invalid_declarator_scope : Error<
@@ -4061,6 +4063,9 @@ def err_typecheck_convert_incompatible : Error<
   "volatile and restrict|const, volatile, and restrict}5 vs "
   "%select{none|const|restrict|const and restrict|volatile|const and volatile|"
   "volatile and restrict|const, volatile, and restrict}6)}4">;
+def err_typecheck_missing_return_type_incompatible : Error<
+  "return type %0 must match previous return type %1 when block"
+  " literal has unspecified explicit return type">;
 
 def warn_incompatible_qualified_id : Warning<
   "%select{assigning to|passing|returning|converting|initializing|sending|casting}2"
