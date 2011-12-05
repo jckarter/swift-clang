@@ -31,6 +31,12 @@ Module::ExportDecl
 ModuleMap::resolveExport(Module *Mod, 
                          const Module::UnresolvedExportDecl &Unresolved,
                          bool Complain) {
+  // We may have just a wildcard.
+  if (Unresolved.Id.empty()) {
+    assert(Unresolved.Wildcard && "Invalid unresolved export");
+    return Module::ExportDecl(0, true);
+  }
+  
   // Find the starting module.
   Module *Context = lookupModuleUnqualified(Unresolved.Id[0].first, Mod);
   if (!Context) {
@@ -191,9 +197,14 @@ ModuleMap::inferFrameworkModule(StringRef ModuleName,
   
   Module *Result = new Module(ModuleName, SourceLocation(), 
                               /*IsFramework=*/true);
+  // umbrella "umbrella-header-name"
   Result->UmbrellaHeader = UmbrellaHeader;
   Headers[UmbrellaHeader] = Result;
   UmbrellaDirs[FrameworkDir] = Result;
+  
+  // export *
+  Result->Exports.push_back(Module::ExportDecl(0, true));
+  
   Modules[ModuleName] = Result;
   return Result;
 }
@@ -229,13 +240,33 @@ bool ModuleMap::resolveExports(Module *Mod, bool Complain) {
   for (unsigned I = 0, N = Mod->UnresolvedExports.size(); I != N; ++I) {
     Module::ExportDecl Export = resolveExport(Mod, Mod->UnresolvedExports[I], 
                                               Complain);
-    if (Export.getPointer())
+    if (Export.getPointer() || Export.getInt())
       Mod->Exports.push_back(Export);
     else
       HadError = true;
   }
   Mod->UnresolvedExports.clear();
   return HadError;
+}
+
+Module *ModuleMap::inferModuleFromLocation(FullSourceLoc Loc) {
+  if (Loc.isInvalid())
+    return 0;
+  
+  // Use the expansion location to determine which module we're in.
+  FullSourceLoc ExpansionLoc = Loc.getExpansionLoc();
+  if (!ExpansionLoc.isFileID())
+    return 0;  
+  
+  
+  const SourceManager &SrcMgr = Loc.getManager();
+  FileID ExpansionFileID = ExpansionLoc.getFileID();
+  const FileEntry *ExpansionFile = SrcMgr.getFileEntryForID(ExpansionFileID);
+  if (!ExpansionFile)
+    return 0;
+  
+  // Find the module that owns this header.
+  return findModuleForHeader(ExpansionFile);
 }
 
 //----------------------------------------------------------------------------//
@@ -744,6 +775,7 @@ void ModuleMapParser::parseExportDecl() {
     
     if(Tok.is(MMToken::Star)) {
       Wildcard = true;
+      consumeToken();
       break;
     }
     

@@ -2520,15 +2520,60 @@ void ASTReader::makeModuleVisible(Module *Mod,
     }
     
     // Push any exported modules onto the stack to be marked as visible.
+    bool AnyWildcard = false;
+    bool UnrestrictedWildcard = false;
+    llvm::SmallVector<Module *, 4> WildcardRestrictions;
     for (unsigned I = 0, N = Mod->Exports.size(); I != N; ++I) {
       Module *Exported = Mod->Exports[I].getPointer();
-      if (Visited.insert(Exported)) {
-        // FIXME: The intent of wildcards is to re-export any imported modules.
-        // However, we don't yet have the module-dependency information to do
-        // this, so we ignore wildcards for now.
-        if (!Mod->Exports[I].getInt())
+      if (!Mod->Exports[I].getInt()) {
+        // Export a named module directly; no wildcards involved.
+        if (Visited.insert(Exported))
           Stack.push_back(Exported);
+        
+        continue;
       }
+      
+      // Wildcard export: export all of the imported modules that match
+      // the given pattern.
+      AnyWildcard = true;
+      if (UnrestrictedWildcard)
+        continue;
+
+      if (Module *Restriction = Mod->Exports[I].getPointer())
+        WildcardRestrictions.push_back(Restriction);
+      else {
+        WildcardRestrictions.clear();
+        UnrestrictedWildcard = true;
+      }
+    }
+    
+    // If there were any wildcards, push any imported modules that were
+    // re-exported by the wildcard restriction.
+    if (!AnyWildcard)
+      continue;
+    
+    for (unsigned I = 0, N = Mod->Imports.size(); I != N; ++I) {
+      Module *Imported = Mod->Imports[I];
+      if (Visited.count(Imported))
+        continue;
+      
+      bool Acceptable = UnrestrictedWildcard;
+      if (!Acceptable) {
+        // Check whether this module meets one of the restrictions.
+        for (unsigned R = 0, NR = WildcardRestrictions.size(); R != NR; ++R) {
+          Module *Restriction = WildcardRestrictions[R];
+          if (Imported == Restriction || Imported->isSubModuleOf(Restriction)) {
+            Acceptable = true;
+            break;
+          }
+        }
+      }
+      
+      if (!Acceptable)
+        continue;
+      
+      Visited.insert(Imported);
+      Stack.push_back(Imported);
     }
   }
 }
@@ -2560,17 +2605,22 @@ ASTReader::ASTReadResult ASTReader::ReadAST(const std::string &FileName,
     Id->second->setOutOfDate(true);
 
   // Resolve any unresolved module exports.
-  for (unsigned I = 0, N = UnresolvedModuleExports.size(); I != N; ++I) {
-    UnresolvedModuleExport &Unresolved = UnresolvedModuleExports[I];
-    SubmoduleID GlobalID = getGlobalSubmoduleID(*Unresolved.File,
-                                                Unresolved.ExportedID);
-    if (Module *Exported = getSubmodule(GlobalID)) {
-      Module *Exportee = Unresolved.ModuleAndWildcard.getPointer();
-      bool Wildcard = Unresolved.ModuleAndWildcard.getInt();
-      Exportee->Exports.push_back(Module::ExportDecl(Exported, Wildcard));
+  for (unsigned I = 0, N = UnresolvedModuleImportExports.size(); I != N; ++I) {
+    UnresolvedModuleImportExport &Unresolved = UnresolvedModuleImportExports[I];
+    SubmoduleID GlobalID = getGlobalSubmoduleID(*Unresolved.File,Unresolved.ID);
+    Module *ResolvedMod = getSubmodule(GlobalID);
+    
+    if (Unresolved.IsImport) {
+      if (ResolvedMod)
+        Unresolved.Mod->Imports.push_back(ResolvedMod);
+      continue;
     }
+
+    if (ResolvedMod || Unresolved.IsWildcard)
+      Unresolved.Mod->Exports.push_back(
+        Module::ExportDecl(ResolvedMod, Unresolved.IsWildcard));
   }
-  UnresolvedModuleExports.clear();
+  UnresolvedModuleImportExports.clear();
   
   InitializeContext();
 
@@ -3097,6 +3147,27 @@ ASTReader::ASTReadResult ASTReader::ReadSubmoduleBlock(ModuleFile &F) {
       break;
     }
         
+    case SUBMODULE_IMPORTS: {
+      if (First) {
+        Error("missing submodule metadata record at beginning of block");
+        return Failure;
+      }
+      
+      if (!CurrentModule)
+        break;
+      
+      for (unsigned Idx = 0; Idx != Record.size(); ++Idx) {
+        UnresolvedModuleImportExport Unresolved;
+        Unresolved.File = &F;
+        Unresolved.Mod = CurrentModule;
+        Unresolved.ID = Record[Idx];
+        Unresolved.IsImport = true;
+        Unresolved.IsWildcard = false;
+        UnresolvedModuleImportExports.push_back(Unresolved);
+      }
+      break;
+    }
+
     case SUBMODULE_EXPORTS: {
       if (First) {
         Error("missing submodule metadata record at beginning of block");
@@ -3107,12 +3178,13 @@ ASTReader::ASTReadResult ASTReader::ReadSubmoduleBlock(ModuleFile &F) {
         break;
       
       for (unsigned Idx = 0; Idx + 1 < Record.size(); Idx += 2) {
-        UnresolvedModuleExport Unresolved;
+        UnresolvedModuleImportExport Unresolved;
         Unresolved.File = &F;
-        Unresolved.ModuleAndWildcard.setPointer(CurrentModule);
-        Unresolved.ModuleAndWildcard.setInt(Record[Idx + 1]);
-        Unresolved.ExportedID = Record[Idx];
-        UnresolvedModuleExports.push_back(Unresolved);
+        Unresolved.Mod = CurrentModule;
+        Unresolved.ID = Record[Idx];
+        Unresolved.IsImport = false;
+        Unresolved.IsWildcard = Record[Idx + 1];
+        UnresolvedModuleImportExports.push_back(Unresolved);
       }
       
       // Once we've loaded the set of exports, there's no reason to keep 

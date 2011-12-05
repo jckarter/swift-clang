@@ -78,6 +78,10 @@ public:
   
   ///\ brief The visibility of names within this particular module.
   NameVisibilityKind NameVisibility;
+
+  /// \brief The set of modules imported by this module, and on which this
+  /// module depends.
+  llvm::SmallVector<Module *, 2> Imports;
   
   /// \brief Describes an exported module.
   ///
@@ -89,7 +93,7 @@ public:
   llvm::SmallVector<ExportDecl, 2> Exports;
   
   /// \brief Describes an exported module that has not yet been resolved
-  /// (perhaps because the module it refers to has not yet been loaded).
+  /// (perhaps because tASThe module it refers to has not yet been loaded).
   struct UnresolvedExportDecl {
     /// \brief The location of the 'export' keyword in the module map file.
     SourceLocation ExportLoc;
@@ -123,6 +127,10 @@ public:
   
   /// \brief Determine whether this module is a submodule.
   bool isSubModule() const { return Parent != 0; }
+  
+  /// \brief Determine whether this module is a submodule of the given other
+  /// module.
+  bool isSubModuleOf(Module *Other) const;
   
   /// \brief Determine whether this module is a part of a framework,
   /// either because it is a framework module or because it is a submodule
