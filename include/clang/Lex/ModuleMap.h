@@ -167,6 +167,23 @@ public:
   /// false otherwise.
   bool resolveExports(Module *Mod, bool Complain);
 
+  /// \brief Infers the (sub)module based on the given source location and 
+  /// source manager.
+  ///
+  /// \param Loc The location within the source that we are querying, along
+  /// with its source manager.
+  ///
+  /// \returns The module that owns this source location, or null if no
+  /// module owns this source location.
+  Module *inferModuleFromLocation(FullSourceLoc Loc);
+  
+  /// \brief Sets the umbrella header of the given module to the given
+  /// header.
+  void setUmbrellaHeader(Module *Mod, const FileEntry *UmbrellaHeader);
+  
+  /// \brief Adds this header to the given module.
+  void addHeader(Module *Mod, const FileEntry *Header);
+  
   /// \brief Parse the given module map file, and record any modules we 
   /// encounter.
   ///

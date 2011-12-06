@@ -1650,6 +1650,9 @@ def warn_impcast_bool_to_null_pointer : Warning<
 def warn_impcast_null_pointer_to_integer : Warning<
     "implicit conversion of NULL constant to integer">,
     InGroup<DiagGroup<"conversion">>, DefaultIgnore;
+def warn_impcast_function_to_bool : Warning<
+    "address of function %q0 will always evaluate to 'true'">,
+    InGroup<BoolConversions>;
 
 def warn_cast_align : Warning<
   "cast from %0 to %1 increases required alignment from %2 to %3">,
@@ -5022,7 +5025,7 @@ def error_protected_ivar_access : Error<"instance variable %0 is protected">,
   AccessControl;
 def warn_maynot_respond : Warning<"%0 may not respond to %1">;
 def warn_attribute_method_def : Warning<
-  "method attribute can only be specified on method declarations">,
+  "attributes on method implementation and its declaration must match">,
   InGroup<DiagGroup<"mismatched-method-attributes">>;
 def ext_typecheck_base_super : Warning<
   "method parameter type %0 does not match "
