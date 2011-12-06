@@ -317,6 +317,8 @@ bool EmitAssemblyHelper::AddEmitPasses(BackendAction Action,
   Options.NoZerosInBSS = CodeGenOpts.NoZeroInitializedInBSS;
   Options.UnsafeFPMath = CodeGenOpts.UnsafeFPMath;
   Options.UseSoftFloat = CodeGenOpts.SoftFloat;
+  Options.StackAlignmentOverride = CodeGenOpts.StackAlignment;
+  Options.RealignStack = CodeGenOpts.StackRealignment;
 
   TargetMachine *TM = TheTarget->createTargetMachine(Triple, TargetOpts.CPU,
                                                      FeaturesStr, Options,

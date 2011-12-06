@@ -1128,7 +1128,6 @@ static void addAsanRTLinux(const ToolChain &TC, const ArgList &Args,
   CmdArgs.push_back("-lpthread");
   CmdArgs.push_back("-ldl");
   CmdArgs.push_back("-export-dynamic");
-  TC.AddCXXStdlibLibArgs(Args, CmdArgs);
 }
 
 void Clang::ConstructJob(Compilation &C, const JobAction &JA,
@@ -1808,9 +1807,19 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
   }
 
   // Translate -mstackrealign
-  if (Args.hasArg(options::OPT_mstackrealign)) {
+  if (Args.hasFlag(options::OPT_mstackrealign, options::OPT_mno_stackrealign,
+                   false)) {
     CmdArgs.push_back("-backend-option");
     CmdArgs.push_back("-force-align-stack");
+  }
+  if (!Args.hasFlag(options::OPT_mno_stackrealign, options::OPT_mstackrealign,
+                   false)) {
+    CmdArgs.push_back(Args.MakeArgString("-mstackrealign"));
+  }
+
+  if (Args.hasArg(options::OPT_mstack_alignment)) {
+    StringRef alignment = Args.getLastArgValue(options::OPT_mstack_alignment);
+    CmdArgs.push_back(Args.MakeArgString("-mstack-alignment=" + alignment));
   }
 
   // Forward -f options with positive and negative forms; we translate

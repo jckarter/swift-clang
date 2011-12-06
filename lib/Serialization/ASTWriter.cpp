@@ -1845,6 +1845,14 @@ void ASTWriter::WritePreprocessorDetail(PreprocessingRecord &PPRec) {
   }
 }
 
+unsigned ASTWriter::getSubmoduleID(Module *Mod) {
+  llvm::DenseMap<Module *, unsigned>::iterator Known = SubmoduleIDs.find(Mod);
+  if (Known != SubmoduleIDs.end())
+    return Known->second;
+  
+  return SubmoduleIDs[Mod] = NextSubmoduleID++;
+}
+
 /// \brief Compute the number of modules within the given tree (including the
 /// given module).
 static unsigned getNumberOfModules(Module *Mod) {
@@ -1858,6 +1866,22 @@ static unsigned getNumberOfModules(Module *Mod) {
 }
 
 void ASTWriter::WriteSubmodules(Module *WritingModule) {
+  // Determine the dependencies of our module and each of it's submodules.
+  // FIXME: This feels like it belongs somewhere else, but there are no
+  // other consumers of this information.
+  SourceManager &SrcMgr = PP->getSourceManager();
+  ModuleMap &ModMap = PP->getHeaderSearchInfo().getModuleMap();
+  for (ASTContext::import_iterator I = Context->local_import_begin(),
+                                IEnd = Context->local_import_end();
+       I != IEnd; ++I) {
+    assert(SubmoduleIDs.find(I->getImportedModule()) != SubmoduleIDs.end());
+    if (Module *ImportedFrom
+          = ModMap.inferModuleFromLocation(FullSourceLoc(I->getLocation(), 
+                                                         SrcMgr))) {
+      ImportedFrom->Imports.push_back(I->getImportedModule());
+    }
+  }
+  
   // Enter the submodule description block.
   Stream.EnterSubblock(SUBMODULE_BLOCK_ID, NUM_ALLOWED_ABBREVS_SIZE);
   
@@ -1865,9 +1889,13 @@ void ASTWriter::WriteSubmodules(Module *WritingModule) {
   using namespace llvm;
   BitCodeAbbrev *Abbrev = new BitCodeAbbrev();
   Abbrev->Add(BitCodeAbbrevOp(SUBMODULE_DEFINITION));
+  Abbrev->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::VBR, 6)); // ID
   Abbrev->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::VBR, 6)); // Parent
   Abbrev->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::Fixed, 1)); // IsFramework
   Abbrev->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::Fixed, 1)); // IsExplicit
+  Abbrev->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::Fixed, 1)); // InferExplicit...
+  Abbrev->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::Fixed, 1)); // IsExplicit
+  Abbrev->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::Fixed, 1)); // InferExportWild...
   Abbrev->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::Blob)); // Name
   unsigned DefinitionAbbrev = Stream.EmitAbbrev(Abbrev);
 
@@ -1893,12 +1921,12 @@ void ASTWriter::WriteSubmodules(Module *WritingModule) {
   while (!Q.empty()) {
     Module *Mod = Q.front();
     Q.pop();
-    assert(SubmoduleIDs.find(Mod) == SubmoduleIDs.end());
-    SubmoduleIDs[Mod] = NextSubmoduleID++;
+    unsigned ID = getSubmoduleID(Mod);
     
     // Emit the definition of the block.
     Record.clear();
     Record.push_back(SUBMODULE_DEFINITION);
+    Record.push_back(ID);
     if (Mod->Parent) {
       assert(SubmoduleIDs[Mod->Parent] && "Submodule parent not written?");
       Record.push_back(SubmoduleIDs[Mod->Parent]);
@@ -1907,6 +1935,9 @@ void ASTWriter::WriteSubmodules(Module *WritingModule) {
     }
     Record.push_back(Mod->IsFramework);
     Record.push_back(Mod->IsExplicit);
+    Record.push_back(Mod->InferSubmodules);
+    Record.push_back(Mod->InferExplicitSubmodules);
+    Record.push_back(Mod->InferExportWildcard);
     Stream.EmitRecordWithBlob(DefinitionAbbrev, Record, Mod->Name);
     
     // Emit the umbrella header, if there is one.
@@ -1924,13 +1955,25 @@ void ASTWriter::WriteSubmodules(Module *WritingModule) {
       Stream.EmitRecordWithBlob(HeaderAbbrev, Record, 
                                 Mod->Headers[I]->getName());
     }
-    
+
+    // Emit the imports. 
+    if (!Mod->Imports.empty()) {
+      Record.clear();
+      for (unsigned I = 0, N = Mod->Imports.size(); I != N; ++I) {
+        unsigned ImportedID = SubmoduleIDs[Mod->Imports[I]];
+        assert(ImportedID && "Unknown submodule!");                                           
+        Record.push_back(ImportedID);
+      }
+      Stream.EmitRecord(SUBMODULE_IMPORTS, Record);
+    }
+
     // Emit the exports. 
     if (!Mod->Exports.empty()) {
       Record.clear();
       for (unsigned I = 0, N = Mod->Exports.size(); I != N; ++I) {
         unsigned ExportedID = SubmoduleIDs[Mod->Exports[I].getPointer()];
-        assert(ExportedID && "Unknown submodule!");                                           
+        assert((ExportedID || !Mod->Exports[I].getPointer()) &&
+               "Unknown submodule!");                                           
         Record.push_back(ExportedID);
         Record.push_back(Mod->Exports[I].getInt());
       }
@@ -1954,38 +1997,28 @@ void ASTWriter::WriteSubmodules(Module *WritingModule) {
   }
   
   Stream.ExitBlock();
+  
+  assert((NextSubmoduleID - FirstSubmoduleID
+            == getNumberOfModules(WritingModule)) && "Wrong # of submodules");
 }
 
 serialization::SubmoduleID 
 ASTWriter::inferSubmoduleIDFromLocation(SourceLocation Loc) {
-  if (Loc.isInvalid() || SubmoduleIDs.empty())
+  if (Loc.isInvalid() || !WritingModule)
     return 0; // No submodule
-  
-  // Use the expansion location to determine which module we're in.
-  SourceManager &SrcMgr = PP->getSourceManager();
-  SourceLocation ExpansionLoc = SrcMgr.getExpansionLoc(Loc);
-  if (!ExpansionLoc.isFileID())
-    return 0;  
-
-  
-  FileID ExpansionFileID = SrcMgr.getFileID(ExpansionLoc);
-  const FileEntry *ExpansionFile = SrcMgr.getFileEntryForID(ExpansionFileID);
-  if (!ExpansionFile)
-    return 0;
-  
-  // Find the module that owns this header.
+    
+  // Find the module that owns this location.
   ModuleMap &ModMap = PP->getHeaderSearchInfo().getModuleMap();
-  Module *OwningMod = ModMap.findModuleForHeader(ExpansionFile);
+  Module *OwningMod 
+    = ModMap.inferModuleFromLocation(FullSourceLoc(Loc,PP->getSourceManager()));
   if (!OwningMod)
     return 0;
   
-  // Check whether we known about this submodule.
-  llvm::DenseMap<Module *, unsigned>::iterator Known
-    = SubmoduleIDs.find(OwningMod);
-  if (Known == SubmoduleIDs.end())
+  // Check whether this submodule is part of our own module.
+  if (WritingModule != OwningMod && !OwningMod->isSubModuleOf(WritingModule))
     return 0;
   
-  return Known->second;
+  return getSubmoduleID(OwningMod);
 }
 
 void ASTWriter::WritePragmaDiagnosticMappings(const DiagnosticsEngine &Diag) {
@@ -2910,7 +2943,8 @@ void ASTWriter::SetSelectorOffset(Selector Sel, uint32_t Offset) {
 }
 
 ASTWriter::ASTWriter(llvm::BitstreamWriter &Stream)
-  : Stream(Stream), Context(0), PP(0), Chain(0), WritingAST(false),
+  : Stream(Stream), Context(0), PP(0), Chain(0), WritingModule(0),
+    WritingAST(false),
     FirstDeclID(NUM_PREDEF_DECL_IDS), NextDeclID(FirstDeclID),
     FirstTypeID(NUM_PREDEF_TYPE_IDS), NextTypeID(FirstTypeID),
     FirstIdentID(NUM_PREDEF_IDENT_IDS), NextIdentID(FirstIdentID), 
@@ -2952,9 +2986,11 @@ void ASTWriter::WriteAST(Sema &SemaRef, MemorizeStatCalls *StatCalls,
 
   Context = &SemaRef.Context;
   PP = &SemaRef.PP;
+  this->WritingModule = WritingModule;
   WriteASTCore(SemaRef, StatCalls, isysroot, OutputFile, WritingModule);
   Context = 0;
   PP = 0;
+  this->WritingModule = 0;
   
   WritingAST = false;
 }
@@ -3178,10 +3214,6 @@ void ASTWriter::WriteASTCore(Sema &SemaRef, MemorizeStatCalls *StatCalls,
   AddTypeRef(Context.ObjCSelRedefinitionType, SpecialTypes);
   AddTypeRef(Context.getucontext_tType(), SpecialTypes);
 
-  // If we're emitting a module, write out the submodule information.  
-  if (WritingModule)
-    WriteSubmodules(WritingModule);
-
   // Keep writing types and declarations until all types and
   // declarations have been written.
   Stream.EnterSubblock(DECLTYPES_BLOCK_ID, NUM_ALLOWED_ABBREVS_SIZE);
@@ -3259,6 +3291,10 @@ void ASTWriter::WriteASTCore(Sema &SemaRef, MemorizeStatCalls *StatCalls,
 
   WriteCXXBaseSpecifiersOffsets();
   
+  // If we're emitting a module, write out the submodule information.  
+  if (WritingModule)
+    WriteSubmodules(WritingModule);
+
   Stream.EmitRecord(SPECIAL_TYPES, SpecialTypes);
 
   /// Build a record containing first declarations from a chained PCH and the
