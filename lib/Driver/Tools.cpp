@@ -1318,7 +1318,9 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
                       ((Args.hasArg(options::OPT_mkernel) ||
                         Args.hasArg(options::OPT_fapple_kext)) &&
                        (Triple.getOS() != llvm::Triple::IOS ||
-                        Triple.isOSVersionLT(6))));
+                        Triple.isOSVersionLT(6) ||
+                        getToolChain().getTriple().getArch() ==
+                        llvm::Triple::arm64)));
   const char *Model = getToolChain().GetForcedPicModel();
   if (!Model) {
     if (Args.hasArg(options::OPT_mdynamic_no_pic))
@@ -2784,7 +2786,8 @@ void darwin::CC1::AddCC1Args(const ArgList &Args,
   // Derived from cc1 spec.
   if ((!Args.hasArg(options::OPT_mkernel) ||
        (getDarwinToolChain().isTargetIPhoneOS() &&
-        !getDarwinToolChain().isIPhoneOSVersionLT(6, 0))) &&
+        !getDarwinToolChain().isIPhoneOSVersionLT(6, 0) &&
+        getToolChain().getTriple().getArch() != llvm::Triple::arm64)) &&
       !Args.hasArg(options::OPT_static) &&
       !Args.hasArg(options::OPT_mdynamic_no_pic))
     CmdArgs.push_back("-fPIC");
@@ -3240,7 +3243,8 @@ void darwin::Assemble::ConstructJob(Compilation &C, const JobAction &JA,
       (((Args.hasArg(options::OPT_mkernel) ||
          Args.hasArg(options::OPT_fapple_kext)) &&
         (!getDarwinToolChain().isTargetIPhoneOS() ||
-         getDarwinToolChain().isIPhoneOSVersionLT(6, 0))) ||
+         getDarwinToolChain().isIPhoneOSVersionLT(6, 0) ||
+         getToolChain().getTriple().getArch() == llvm::Triple::arm64)) ||
        Args.hasArg(options::OPT_static)))
     CmdArgs.push_back("-static");
 
