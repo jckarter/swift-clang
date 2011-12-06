@@ -25,6 +25,26 @@ Module::~Module() {
   
 }
 
+bool Module::isSubModuleOf(Module *Other) const {
+  const Module *This = this;
+  do {
+    if (This == Other)
+      return true;
+    
+    This = This->Parent;
+  } while (This);
+  
+  return false;
+}
+
+const Module *Module::getTopLevelModule() const {
+  const Module *Result = this;
+  while (Result->Parent)
+    Result = Result->Parent;
+  
+  return Result;
+}
+
 std::string Module::getFullModuleName() const {
   llvm::SmallVector<StringRef, 2> Names;
   
@@ -43,14 +63,6 @@ std::string Module::getFullModuleName() const {
   }
   
   return Result;
-}
-
-StringRef Module::getTopLevelModuleName() const {
-  const Module *Top = this;
-  while (Top->Parent)
-    Top = Top->Parent;
-  
-  return Top->Name;
 }
 
 static void printModuleId(llvm::raw_ostream &OS, const ModuleId &Id) {
@@ -84,15 +96,20 @@ void Module::print(llvm::raw_ostream &OS, unsigned Indent) const {
   }
   
   for (llvm::StringMap<Module *>::const_iterator MI = SubModules.begin(), 
-       MIEnd = SubModules.end();
+                                              MIEnd = SubModules.end();
        MI != MIEnd; ++MI)
     MI->getValue()->print(OS, Indent + 2);
   
   for (unsigned I = 0, N = Exports.size(); I != N; ++I) {
     OS.indent(Indent + 2);
-    OS << "export " << Exports[I].getPointer()->getFullModuleName();
-    if (Exports[I].getInt())
-      OS << ".*";
+    OS << "export ";
+    if (Module *Restriction = Exports[I].getPointer()) {
+      OS << Restriction->getFullModuleName();
+      if (Exports[I].getInt())
+        OS << ".*";
+    } else {
+      OS << "*";
+    }
     OS << "\n";
   }
 
@@ -100,11 +117,28 @@ void Module::print(llvm::raw_ostream &OS, unsigned Indent) const {
     OS.indent(Indent + 2);
     OS << "export ";
     printModuleId(OS, UnresolvedExports[I].Id);
-    if (UnresolvedExports[I].Wildcard)
-      OS << ".*";
+    if (UnresolvedExports[I].Wildcard) {
+      if (UnresolvedExports[I].Id.empty())
+        OS << "*";
+      else
+        OS << ".*";
+    }
     OS << "\n";
   }
 
+  if (InferSubmodules) {
+    OS.indent(Indent + 2);
+    if (InferExplicitSubmodules)
+      OS << "explicit ";
+    OS << "module * {\n";
+    if (InferExportWildcard) {
+      OS.indent(Indent + 4);
+      OS << "export *\n";
+    }
+    OS.indent(Indent + 2);
+    OS << "}\n";
+  }
+  
   OS.indent(Indent);
   OS << "}\n";
 }
