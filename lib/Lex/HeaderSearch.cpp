@@ -341,15 +341,12 @@ const FileEntry *DirectoryLookup::DoFrameworkLookup(
   }
 
   // Determine whether this is the module we're building or not.
-  // FIXME: Do we still need the ".." hack?
-  bool AutomaticImport = Module &&
-    !Filename.substr(SlashPos + 1).startswith("..");
-  
+  bool AutomaticImport = Module;  
   FrameworkName.append(Filename.begin()+SlashPos+1, Filename.end());
   if (const FileEntry *FE = FileMgr.getFile(FrameworkName.str(),
                                             /*openFile=*/!AutomaticImport)) {
     if (AutomaticImport)
-      *SuggestedModule = Module;
+      *SuggestedModule = HS.findModuleForHeader(FE);
     return FE;
   }
 
@@ -364,7 +361,7 @@ const FileEntry *DirectoryLookup::DoFrameworkLookup(
   const FileEntry *FE = FileMgr.getFile(FrameworkName.str(), 
                                         /*openFile=*/!AutomaticImport);
   if (FE && AutomaticImport)
-    *SuggestedModule = Module;
+    *SuggestedModule = HS.findModuleForHeader(FE);
   return FE;
 }
 
@@ -852,7 +849,7 @@ Module *HeaderSearch::getFrameworkModule(StringRef Name,
   }
   
   // Try to infer a module map.
-  return ModMap.inferFrameworkModule(Name, Dir);
+  return ModMap.inferFrameworkModule(Name, Dir, /*Parent=*/0);
 }
 
 
@@ -873,15 +870,33 @@ HeaderSearch::loadModuleMapFile(const DirectoryEntry *Dir) {
   
   llvm::SmallString<128> ModuleMapFileName;
   ModuleMapFileName += Dir->getName();
+  unsigned ModuleMapDirNameLen = ModuleMapFileName.size();
   llvm::sys::path::append(ModuleMapFileName, "module.map");
   if (const FileEntry *ModuleMapFile = FileMgr.getFile(ModuleMapFileName)) {
     // We have found a module map file. Try to parse it.
-    if (!ModMap.parseModuleMapFile(ModuleMapFile)) {
-      // This directory has a module map.
-      DirectoryHasModuleMap[Dir] = true;
-      
-      return LMM_NewlyLoaded;
+    if (ModMap.parseModuleMapFile(ModuleMapFile)) {
+      // No suitable module map.
+      DirectoryHasModuleMap[Dir] = false;
+      return LMM_InvalidModuleMap;
     }
+
+    // This directory has a module map.
+    DirectoryHasModuleMap[Dir] = true;
+    
+    // Check whether there is a private module map that we need to load as well.
+    ModuleMapFileName.erase(ModuleMapFileName.begin() + ModuleMapDirNameLen,
+                            ModuleMapFileName.end());
+    llvm::sys::path::append(ModuleMapFileName, "module_private.map");
+    if (const FileEntry *PrivateModuleMapFile
+                                        = FileMgr.getFile(ModuleMapFileName)) {
+      if (ModMap.parseModuleMapFile(PrivateModuleMapFile)) {
+        // No suitable module map.
+        DirectoryHasModuleMap[Dir] = false;
+        return LMM_InvalidModuleMap;
+      }      
+    }
+    
+    return LMM_NewlyLoaded;
   }
   
   // No suitable module map.

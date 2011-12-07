@@ -141,6 +141,7 @@ def warn_implicit_function_decl : Warning<
 def ext_implicit_function_decl : ExtWarn<
   "implicit declaration of function %0 is invalid in C99">,
   InGroup<ImplicitFunctionDeclare>;
+def note_function_suggestion : Note<"did you mean %0?">;
 
 def err_ellipsis_first_arg : Error<
   "ISO C requires a named argument before '...'">;
@@ -272,7 +273,7 @@ def warn_redecl_library_builtin : Warning<
 def err_builtin_definition : Error<"definition of builtin function %0">;
 def err_types_compatible_p_in_cplusplus : Error<
   "__builtin_types_compatible_p is not valid in C++">;
-def warn_builtin_unknown : Warning<"use of unknown builtin %0">, DefaultError;
+def err_builtin_unknown : Error<"use of unknown builtin %0">;
 def warn_dyn_class_memaccess : Warning<
   "%select{destination for|source of|first operand of|second operand of}0 this "
   "%1 call is a pointer to dynamic class %2; vtable pointer will be "
@@ -488,7 +489,6 @@ def note_declared_at : Note<"declared here">;
 def note_method_declared_at : Note<"method declared here">;
 def err_setter_type_void : Error<"type of setter must be void">;
 def err_duplicate_method_decl : Error<"duplicate declaration of method %0">;
-def err_missing_atend : Error<"'@end' is missing in implementation context">;
 def err_objc_var_decl_inclass : 
     Error<"cannot declare variable inside @interface or @protocol">;
 def error_missing_method_context : Error<
