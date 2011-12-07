@@ -553,6 +553,7 @@ bool ScanReachableSymbols::scan(const SymExpr *sym) {
   if (!visitor.VisitSymbol(sym))
     return false;
   
+  // TODO: should be rewritten using SymExpr::symbol_iterator.
   switch (sym->getKind()) {
     case SymExpr::RegionValueKind:
     case SymExpr::ConjuredKind:
@@ -560,6 +561,8 @@ bool ScanReachableSymbols::scan(const SymExpr *sym) {
     case SymExpr::ExtentKind:
     case SymExpr::MetadataKind:
       break;
+    case SymExpr::CastSymbolKind:
+      return scan(cast<SymbolCast>(sym)->getOperand());
     case SymExpr::SymIntKind:
       return scan(cast<SymIntExpr>(sym)->getLHS());
     case SymExpr::SymSymKind: {
@@ -661,34 +664,54 @@ const ProgramState* ProgramState::addTaint(SymbolRef Sym,
 }
 
 bool ProgramState::isTainted(const Stmt *S, TaintTagType Kind) const {
+  SVal val = getSVal(S);
   return isTainted(getSVal(S), Kind);
 }
 
 bool ProgramState::isTainted(SVal V, TaintTagType Kind) const {
-  return isTainted(V.getAsSymExpr(), Kind);
+  if (const SymExpr *Sym = V.getAsSymExpr())
+    return isTainted(Sym, Kind);
+  if (loc::MemRegionVal *RegVal = dyn_cast<loc::MemRegionVal>(&V))
+    return isTainted(RegVal->getRegion(), Kind);
+  return false;
+}
+
+bool ProgramState::isTainted(const MemRegion *Reg, TaintTagType K) const {
+  if (!Reg)
+    return false;
+
+  // Element region (array element) is tainted if either the base or the offset
+  // are tainted.
+  if (const ElementRegion *ER = dyn_cast<ElementRegion>(Reg))
+    return isTainted(ER->getSuperRegion(), K) || isTainted(ER->getIndex(), K);
+
+  if (const SymbolicRegion *SR = dyn_cast<SymbolicRegion>(Reg))
+    return isTainted(SR->getSymbol(), K);
+
+  if (const SubRegion *ER = dyn_cast<SubRegion>(Reg))
+    return isTainted(ER->getSuperRegion(), K);
+
+  return false;
 }
 
 bool ProgramState::isTainted(const SymExpr* Sym, TaintTagType Kind) const {
   if (!Sym)
     return false;
+  
+  // Traverse all the symbols this symbol depends on to see if any are tainted.
+  bool Tainted = false;
+  for (SymExpr::symbol_iterator SI = Sym->symbol_begin(), SE =Sym->symbol_end();
+       SI != SE; ++SI) {
+    assert(isa<SymbolData>(*SI));
+    const TaintTagType *Tag = get<TaintMap>(*SI);
+    Tainted = (Tag && *Tag == Kind);
 
-  // Check taint on derived symbols.
-  if (const SymbolDerived *SD = dyn_cast<SymbolDerived>(Sym))
-    return isTainted(SD->getParentSymbol(), Kind);
-
-  if (const SymIntExpr *SIE = dyn_cast<SymIntExpr>(Sym))
-    return isTainted(SIE->getLHS(), Kind);
-
-  if (const SymSymExpr *SSE = dyn_cast<SymSymExpr>(Sym))
-    return (isTainted(SSE->getLHS(), Kind) || isTainted(SSE->getRHS(), Kind));
-
-  // Check taint on the current symbol.
-  if (const SymbolData *SymR = dyn_cast<SymbolData>(Sym)) {
-    const TaintTagType *Tag = get<TaintMap>(SymR);
-    return (Tag && *Tag == Kind);
+    // If this is a SymbolDerived with a tainted parent, it's also tainted.
+    if (const SymbolDerived *SD = dyn_cast<SymbolDerived>(*SI))
+      Tainted = Tainted || isTainted(SD->getParentSymbol(), Kind);
+    if (Tainted)
+      return true;
   }
-
-  // TODO: Remove llvm unreachable.
-  llvm_unreachable("We do not know show to check taint on this symbol.");
-  return false;
+  
+  return Tainted;
 }

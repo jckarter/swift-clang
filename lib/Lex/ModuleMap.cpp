@@ -20,6 +20,7 @@
 #include "clang/Basic/TargetInfo.h"
 #include "clang/Basic/TargetOptions.h"
 #include "llvm/Support/Allocator.h"
+#include "llvm/Support/FileSystem.h"
 #include "llvm/Support/Host.h"
 #include "llvm/Support/PathV2.h"
 #include "llvm/Support/raw_ostream.h"
@@ -103,8 +104,14 @@ Module *ModuleMap::findModuleForHeader(const FileEntry *File) {
       = UmbrellaDirs.find(Dir);
     if (KnownDir != UmbrellaDirs.end()) {
       Module *Result = KnownDir->second;
-      Module *TopModule = Result->getTopLevelModule();
-      if (TopModule->InferSubmodules) {
+      
+      // Search up the module stack until we find a module with an umbrella
+      // header.
+      Module *UmbrellaModule = Result;
+      while (!UmbrellaModule->UmbrellaHeader && UmbrellaModule->Parent)
+        UmbrellaModule = UmbrellaModule->Parent;
+      
+      if (UmbrellaModule->InferSubmodules) {
         // Infer submodules for each of the directories we found between
         // the directory of the umbrella header and the directory where 
         // the actual header is located.
@@ -114,32 +121,32 @@ Module *ModuleMap::findModuleForHeader(const FileEntry *File) {
         // FIXME: Should we tack on an "explicit" for PrivateHeaders? That
         // might be what we want, but it feels like a hack.
         unsigned LastSkippedDir = SkippedDirs.size();
-        if (LastSkippedDir && TopModule->IsFramework)
+        if (LastSkippedDir && UmbrellaModule->IsFramework)
           --LastSkippedDir;
         
         for (unsigned I = LastSkippedDir; I != 0; --I) {
           // Find or create the module that corresponds to this directory name.
           StringRef Name = llvm::sys::path::stem(SkippedDirs[I-1]->getName());
           Result = findOrCreateModule(Name, Result, /*IsFramework=*/false,
-                                      TopModule->InferExplicitSubmodules).first;
+                                      UmbrellaModule->InferExplicitSubmodules).first;
           
           // Associate the module and the directory.
           UmbrellaDirs[SkippedDirs[I-1]] = Result;
 
           // If inferred submodules export everything they import, add a 
           // wildcard to the set of exports.
-          if (TopModule->InferExportWildcard && Result->Exports.empty())
+          if (UmbrellaModule->InferExportWildcard && Result->Exports.empty())
             Result->Exports.push_back(Module::ExportDecl(0, true));
         }
         
         // Infer a submodule with the same name as this header file.
         StringRef Name = llvm::sys::path::stem(File->getName());
         Result = findOrCreateModule(Name, Result, /*IsFramework=*/false,
-                                    TopModule->InferExplicitSubmodules).first;
+                                    UmbrellaModule->InferExplicitSubmodules).first;
         
         // If inferred submodules export everything they import, add a 
         // wildcard to the set of exports.
-        if (TopModule->InferExportWildcard && Result->Exports.empty())
+        if (UmbrellaModule->InferExportWildcard && Result->Exports.empty())
           Result->Exports.push_back(Module::ExportDecl(0, true));
       } else {
         // Record each of the directories we stepped through as being part of
@@ -213,17 +220,19 @@ ModuleMap::findOrCreateModule(StringRef Name, Module *Parent, bool IsFramework,
 
 Module *
 ModuleMap::inferFrameworkModule(StringRef ModuleName, 
-                                const DirectoryEntry *FrameworkDir) {
+                                const DirectoryEntry *FrameworkDir,
+                                Module *Parent) {
   // Check whether we've already found this module.
-  if (Module *Module = findModule(ModuleName))
-    return Module;
+  if (Module *Mod = lookupModuleQualified(ModuleName, Parent))
+    return Mod;
+  
+  FileManager &FileMgr = SourceMgr->getFileManager();
   
   // Look for an umbrella header.
   llvm::SmallString<128> UmbrellaName = StringRef(FrameworkDir->getName());
   llvm::sys::path::append(UmbrellaName, "Headers");
   llvm::sys::path::append(UmbrellaName, ModuleName + ".h");
-  const FileEntry *UmbrellaHeader
-    = SourceMgr->getFileManager().getFile(UmbrellaName);
+  const FileEntry *UmbrellaHeader = FileMgr.getFile(UmbrellaName);
   
   // FIXME: If there's no umbrella header, we could probably scan the
   // framework to load *everything*. But, it's not clear that this is a good
@@ -231,8 +240,14 @@ ModuleMap::inferFrameworkModule(StringRef ModuleName,
   if (!UmbrellaHeader)
     return 0;
   
-  Module *Result = new Module(ModuleName, SourceLocation(), 
-                              /*IsFramework=*/true);
+  Module *Result = new Module(ModuleName, SourceLocation(), Parent,
+                              /*IsFramework=*/true, /*IsExplicit=*/false);
+  
+  if (Parent)
+    Parent->SubModules[ModuleName] = Result;
+  else
+    Modules[ModuleName] = Result;
+
   // umbrella "umbrella-header-name"
   Result->UmbrellaHeader = UmbrellaHeader;
   Headers[UmbrellaHeader] = Result;
@@ -245,7 +260,24 @@ ModuleMap::inferFrameworkModule(StringRef ModuleName,
   Result->InferSubmodules = true;
   Result->InferExportWildcard = true;
   
-  Modules[ModuleName] = Result;
+  // Look for subframeworks.
+  llvm::error_code EC;
+  llvm::SmallString<128> SubframeworksDirName = StringRef(FrameworkDir->getName());
+  llvm::sys::path::append(SubframeworksDirName, "Frameworks");
+  for (llvm::sys::fs::directory_iterator Dir(SubframeworksDirName.str(), EC),
+                                         DirEnd;
+       Dir != DirEnd && !EC; Dir.increment(EC)) {
+    if (!StringRef(Dir->path()).endswith(".framework"))
+      continue;
+    
+    if (const DirectoryEntry *SubframeworkDir
+          = FileMgr.getDirectory(Dir->path())) {
+      // FIXME: Do we want to warn about subframeworks without umbrella headers?
+      inferFrameworkModule(llvm::sys::path::stem(Dir->path()), SubframeworkDir,
+                           Result);
+    }
+  }
+  
   return Result;
 }
 
@@ -553,24 +585,25 @@ void ModuleMapParser::parseModuleDecl() {
   assert(Tok.is(MMToken::ExplicitKeyword) || Tok.is(MMToken::ModuleKeyword) ||
          Tok.is(MMToken::FrameworkKeyword));
 
-  // Parse 'framework' or 'explicit' keyword, if present.
-  bool Framework = false;
+  // Parse 'explicit' or 'framework' keyword, if present.
   bool Explicit = false;
+  bool Framework = false;
 
+  // Parse 'explicit' keyword, if present.
+  if (Tok.is(MMToken::ExplicitKeyword)) {
+    consumeToken();
+    Explicit = true;
+  }
+
+  // Parse 'framework' keyword, if present.
   if (Tok.is(MMToken::FrameworkKeyword)) {
     consumeToken();
     Framework = true;
   } 
-  // Parse 'explicit' keyword, if present.
-  else if (Tok.is(MMToken::ExplicitKeyword)) {
-    consumeToken();
-    Explicit = true;
-  }
   
   // Parse 'module' keyword.
   if (!Tok.is(MMToken::ModuleKeyword)) {
-    Diags.Report(Tok.getLocation(), 
-                 diag::err_mmap_expected_module_after_explicit);
+    Diags.Report(Tok.getLocation(), diag::err_mmap_expected_module);
     consumeToken();
     HadError = true;
     return;
@@ -634,6 +667,7 @@ void ModuleMapParser::parseModuleDecl() {
       break;
         
     case MMToken::ExplicitKeyword:
+    case MMToken::FrameworkKeyword:
     case MMToken::ModuleKeyword:
       parseModuleDecl();
       break;
@@ -668,7 +702,27 @@ void ModuleMapParser::parseModuleDecl() {
   // We're done parsing this module. Pop back to our parent scope.
   ActiveModule = ActiveModule->Parent;
 }
- 
+
+/// \brief Append to \p Paths the set of paths needed to get to the 
+/// subframework in which the given module lives.
+void appendSubframeworkPaths(Module *Mod, llvm::SmallVectorImpl<char> &Path) {
+  // Collect the framework names from the given module to the top-level module.
+  llvm::SmallVector<StringRef, 2> Paths;
+  for (; Mod; Mod = Mod->Parent) {
+    if (Mod->IsFramework)
+      Paths.push_back(Mod->Name);
+  }
+  
+  if (Paths.empty())
+    return;
+  
+  // Add Frameworks/Name.framework for each subframework.
+  for (unsigned I = Paths.size() - 1; I != 0; --I) {
+    llvm::sys::path::append(Path, "Frameworks");
+    llvm::sys::path::append(Path, Paths[I-1] + ".framework");
+  }
+}
+
 /// \brief Parse an umbrella header declaration.
 ///
 ///   umbrella-declaration:
@@ -696,14 +750,6 @@ void ModuleMapParser::parseUmbrellaDecl() {
     return;
   }
   
-  // Only top-level modules can have umbrella headers.
-  if (ActiveModule->Parent) {
-    Diags.Report(UmbrellaLoc, diag::err_mmap_umbrella_header_submodule)
-      << ActiveModule->getFullModuleName();
-    HadError = true;
-    return;
-  }
-  
   // Look for this file.
   llvm::SmallString<128> PathName;
   const FileEntry *File = 0;
@@ -715,7 +761,10 @@ void ModuleMapParser::parseUmbrellaDecl() {
     // Search for the header file within the search directory.
     PathName += Directory->getName();
     unsigned PathLength = PathName.size();
+    
     if (ActiveModule->isPartOfFramework()) {
+      appendSubframeworkPaths(ActiveModule, PathName);
+      
       // Check whether this file is in the public headers.
       llvm::sys::path::append(PathName, "Headers");
       llvm::sys::path::append(PathName, FileName);
@@ -728,8 +777,6 @@ void ModuleMapParser::parseUmbrellaDecl() {
         llvm::sys::path::append(PathName, FileName);
         File = SourceMgr.getFileManager().getFile(PathName);
       }
-      
-      // FIXME: Deal with subframeworks.
     } else {
       // Lookup for normal headers.
       llvm::sys::path::append(PathName, FileName);
@@ -791,8 +838,10 @@ void ModuleMapParser::parseHeaderDecl() {
     // FIXME: Change this search to also look for private headers!
     PathName += Directory->getName();
     
-    if (ActiveModule->isPartOfFramework())
+    if (ActiveModule->isPartOfFramework()) {
+      appendSubframeworkPaths(ActiveModule, PathName);
       llvm::sys::path::append(PathName, "Headers");
+    }
   }
   
   llvm::sys::path::append(PathName, FileName);
@@ -874,16 +923,16 @@ void ModuleMapParser::parseInferredSubmoduleDecl(bool Explicit) {
   }
   
   // Inferred modules must have umbrella headers.
-  if (!Failed && !ActiveModule->getTopLevelModule()->UmbrellaHeader) {
+  if (!Failed && !ActiveModule->UmbrellaHeader) {
     Diags.Report(StarLoc, diag::err_mmap_inferred_no_umbrella);
     Failed = true;
   }
   
   // Check for redefinition of an inferred module.
-  if (!Failed && ActiveModule->getTopLevelModule()->InferSubmodules) {
+  if (!Failed && ActiveModule->InferSubmodules) {
     Diags.Report(StarLoc, diag::err_mmap_inferred_redef);
-    if (ActiveModule->getTopLevelModule()->InferredSubmoduleLoc.isValid())
-      Diags.Report(ActiveModule->getTopLevelModule()->InferredSubmoduleLoc,
+    if (ActiveModule->InferredSubmoduleLoc.isValid())
+      Diags.Report(ActiveModule->InferredSubmoduleLoc,
                    diag::note_mmap_prev_definition);
     Failed = true;
   }
@@ -901,10 +950,9 @@ void ModuleMapParser::parseInferredSubmoduleDecl(bool Explicit) {
   }
   
   // Note that we have an inferred submodule.
-  Module *TopModule = ActiveModule->getTopLevelModule();
-  TopModule->InferSubmodules = true;
-  TopModule->InferredSubmoduleLoc = StarLoc;
-  TopModule->InferExplicitSubmodules = Explicit;
+  ActiveModule->InferSubmodules = true;
+  ActiveModule->InferredSubmoduleLoc = StarLoc;
+  ActiveModule->InferExplicitSubmodules = Explicit;
   
   // Parse the opening brace.
   if (!Tok.is(MMToken::LBrace)) {
@@ -926,7 +974,7 @@ void ModuleMapParser::parseInferredSubmoduleDecl(bool Explicit) {
     case MMToken::ExportKeyword: {
       consumeToken();
       if (Tok.is(MMToken::Star)) 
-        TopModule->InferExportWildcard = true;
+        ActiveModule->InferExportWildcard = true;
       else
         Diags.Report(Tok.getLocation(), 
                      diag::err_mmap_expected_export_wildcard);

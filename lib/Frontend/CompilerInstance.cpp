@@ -1024,10 +1024,12 @@ static void compileModule(CompilerInstance &ImportingInstance,
     int FD;
     if (llvm::sys::fs::unique_file(TempModuleMapFileName.str(), FD, 
                                    TempModuleMapFileName,
-                                   /*makeAbsolute=*/false)
-          != llvm::errc::success)
+                                   /*makeAbsolute=*/true)
+          != llvm::errc::success) {
+      ImportingInstance.getDiagnostics().Report(diag::err_module_map_temp_file)
+        << TempModuleMapFileName;
       return;
-
+    }
     // Print the module map to this file.
     llvm::raw_fd_ostream OS(FD, /*shouldClose=*/true);
     Module->print(OS);

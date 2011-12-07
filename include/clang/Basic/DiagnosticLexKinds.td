@@ -377,8 +377,6 @@ def err_pp_eof_in_arc_cf_code_audited : Error<
 // Module map parsing
 def err_mmap_unknown_token : Error<"skipping stray token">;
 def err_mmap_expected_module : Error<"expected module declaration">;
-def err_mmap_expected_module_after_explicit : Error<
-  "expected 'module' keyword after 'explicit'">;
 def err_mmap_expected_module_name : Error<"expected module name">;
 def err_mmap_expected_lbrace : Error<"expected '{' to start module '%0'">;
 def err_mmap_expected_rbrace : Error<"expected '}'">;
@@ -395,8 +393,6 @@ def err_mmap_header_not_found : Error<
   "%select{|umbrella }0header '%1' not found">;
 def err_mmap_umbrella_header_conflict : Error<
   "module '%0' already has an umbrella header ('%1')">;
-def err_mmap_umbrella_header_submodule : Error<
-  "submodule '%0' can not have an umbrella header">;
 def err_mmap_umbrella_clash : Error<
   "umbrella header for module '%0' already covers this directory">;
 def err_mmap_export_module_id : Error<
