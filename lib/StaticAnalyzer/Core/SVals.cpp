@@ -91,6 +91,7 @@ SymbolRef SVal::getLocSymbolInBase() const {
   return 0;
 }
 
+// TODO: The next 3 functions have to be simplified.
 /// getAsSymbol - If this Sval wraps a symbol return that SymbolRef.
 ///  Otherwise return 0.
 // FIXME: should we consider SymbolRef wrapped in CodeTextRegion?
@@ -135,50 +136,6 @@ const MemRegion *SVal::getAsRegion() const {
 const MemRegion *loc::MemRegionVal::stripCasts() const {
   const MemRegion *R = getRegion();
   return R ?  R->StripCasts() : NULL;
-}
-
-bool SVal::symbol_iterator::operator==(const symbol_iterator &X) const {
-  return itr == X.itr;
-}
-
-bool SVal::symbol_iterator::operator!=(const symbol_iterator &X) const {
-  return itr != X.itr;
-}
-
-SVal::symbol_iterator::symbol_iterator(const SymExpr *SE) {
-  itr.push_back(SE);
-  while (!isa<SymbolData>(itr.back())) expand();
-}
-
-SVal::symbol_iterator &SVal::symbol_iterator::operator++() {
-  assert(!itr.empty() && "attempting to iterate on an 'end' iterator");
-  assert(isa<SymbolData>(itr.back()));
-  itr.pop_back();
-  if (!itr.empty())
-    while (!isa<SymbolData>(itr.back())) expand();
-  return *this;
-}
-
-SymbolRef SVal::symbol_iterator::operator*() {
-  assert(!itr.empty() && "attempting to dereference an 'end' iterator");
-  return cast<SymbolData>(itr.back());
-}
-
-void SVal::symbol_iterator::expand() {
-  const SymExpr *SE = itr.back();
-  itr.pop_back();
-
-  if (const SymIntExpr *SIE = dyn_cast<SymIntExpr>(SE)) {
-    itr.push_back(SIE->getLHS());
-    return;
-  }
-  else if (const SymSymExpr *SSE = dyn_cast<SymSymExpr>(SE)) {
-    itr.push_back(SSE->getLHS());
-    itr.push_back(SSE->getRHS());
-    return;
-  }
-
-  llvm_unreachable("unhandled expansion case");
 }
 
 const void *nonloc::LazyCompoundVal::getStore() const {
