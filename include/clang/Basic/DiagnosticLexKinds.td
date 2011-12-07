@@ -377,8 +377,6 @@ def err_pp_eof_in_arc_cf_code_audited : Error<
 // Module map parsing
 def err_mmap_unknown_token : Error<"skipping stray token">;
 def err_mmap_expected_module : Error<"expected module declaration">;
-def err_mmap_expected_module_after_explicit : Error<
-  "expected 'module' keyword after 'explicit'">;
 def err_mmap_expected_module_name : Error<"expected module name">;
 def err_mmap_expected_lbrace : Error<"expected '{' to start module '%0'">;
 def err_mmap_expected_rbrace : Error<"expected '}'">;
@@ -395,8 +393,6 @@ def err_mmap_header_not_found : Error<
   "%select{|umbrella }0header '%1' not found">;
 def err_mmap_umbrella_header_conflict : Error<
   "module '%0' already has an umbrella header ('%1')">;
-def err_mmap_umbrella_header_submodule : Error<
-  "submodule '%0' can not have an umbrella header">;
 def err_mmap_umbrella_clash : Error<
   "umbrella header for module '%0' already covers this directory">;
 def err_mmap_export_module_id : Error<
@@ -417,7 +413,11 @@ def err_mmap_expected_wildcard_member : Error<
   "expected module export wildcard">;
 def err_mmap_expected_export_wildcard : Error<
   "only '*' can be exported from an inferred submodule">;
-
+def err_mmap_explicit_top_level : Error<
+  "'explicit' is not permitted on top-level modules">;
+def err_mmap_nested_submodule_id : Error<
+  "qualified module name can only be used to define modules at the top level">;
+  
 def warn_auto_module_import : Warning<
   "treating #%select{include|import|include_next|__include_macros}0 as an "
   "import of module '%1'">, InGroup<AutoImport>, DefaultIgnore;

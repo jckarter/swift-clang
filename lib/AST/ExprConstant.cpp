@@ -2502,11 +2502,9 @@ static bool EvaluateVector(const Expr* E, APValue& Result, EvalInfo &Info) {
 
 bool VectorExprEvaluator::VisitCastExpr(const CastExpr* E) {
   const VectorType *VTy = E->getType()->castAs<VectorType>();
-  QualType EltTy = VTy->getElementType();
   unsigned NElts = VTy->getNumElements();
-  unsigned EltWidth = Info.Ctx.getTypeSize(EltTy);
 
-  const Expr* SE = E->getSubExpr();
+  const Expr *SE = E->getSubExpr();
   QualType SETy = SE->getType();
 
   switch (E->getCastKind()) {
@@ -2528,34 +2526,6 @@ bool VectorExprEvaluator::VisitCastExpr(const CastExpr* E) {
 
     // Splat and create vector APValue.
     SmallVector<APValue, 4> Elts(NElts, Val);
-    return Success(Elts, E);
-  }
-  case CK_BitCast: {
-    // FIXME: this is wrong for any cast other than a no-op cast.
-    if (SETy->isVectorType())
-      return Visit(SE);
-
-    if (!SETy->isIntegerType())
-      return Error(E);
-
-    APSInt Init;
-    if (!EvaluateInteger(SE, Init, Info))
-      return Error(E);
-
-    assert((EltTy->isIntegerType() || EltTy->isRealFloatingType()) &&
-           "Vectors must be composed of ints or floats");
-
-    SmallVector<APValue, 4> Elts;
-    for (unsigned i = 0; i != NElts; ++i) {
-      APSInt Tmp = Init.extOrTrunc(EltWidth);
-
-      if (EltTy->isIntegerType())
-        Elts.push_back(APValue(Tmp));
-      else
-        Elts.push_back(APValue(APFloat(Tmp)));
-
-      Init >>= EltWidth;
-    }
     return Success(Elts, E);
   }
   default:
@@ -4363,6 +4333,37 @@ bool ComplexExprEvaluator::VisitUnaryOperator(const UnaryOperator *E) {
 }
 
 //===----------------------------------------------------------------------===//
+// Void expression evaluation, primarily for a cast to void on the LHS of a
+// comma operator
+//===----------------------------------------------------------------------===//
+
+namespace {
+class VoidExprEvaluator
+  : public ExprEvaluatorBase<VoidExprEvaluator, bool> {
+public:
+  VoidExprEvaluator(EvalInfo &Info) : ExprEvaluatorBaseTy(Info) {}
+
+  bool Success(const CCValue &V, const Expr *e) { return true; }
+  bool Error(const Expr *E) { return false; }
+
+  bool VisitCastExpr(const CastExpr *E) {
+    switch (E->getCastKind()) {
+    default:
+      return ExprEvaluatorBaseTy::VisitCastExpr(E);
+    case CK_ToVoid:
+      VisitIgnoredValue(E->getSubExpr());
+      return true;
+    }
+  }
+};
+} // end anonymous namespace
+
+static bool EvaluateVoid(const Expr *E, EvalInfo &Info) {
+  assert(E->isRValue() && E->getType()->isVoidType());
+  return VoidExprEvaluator(Info).Visit(E);
+}
+
+//===----------------------------------------------------------------------===//
 // Top level Expr::EvaluateAsRValue method.
 //===----------------------------------------------------------------------===//
 
@@ -4413,6 +4414,9 @@ static bool Evaluate(CCValue &Result, EvalInfo &Info, const Expr *E) {
     if (!EvaluateRecord(E, LV, Info.CurrentCall->Temporaries[E], Info))
       return false;
     Result = Info.CurrentCall->Temporaries[E];
+  } else if (E->getType()->isVoidType()) {
+    if (!EvaluateVoid(E, Info))
+      return false;
   } else
     return false;
 
