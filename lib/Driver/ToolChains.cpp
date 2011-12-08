@@ -789,7 +789,14 @@ void DarwinClang::AddCCKextLibArgs(const ArgList &Args,
   llvm::sys::Path P(getDriver().ResourceDir);
   P.appendComponent("lib");
   P.appendComponent("darwin");
-  P.appendComponent("libclang_rt.cc_kext.a");
+
+  // Use the newer cc_kext for iOS ARM after 6.0.
+  if (isTargetIPhoneOS() && !isTargetIOSSimulator() &&
+      !isIPhoneOSVersionLT(6, 0)) {
+    P.appendComponent("libclang_rt.cc_kext_6.0.a");
+  } else {
+    P.appendComponent("libclang_rt.cc_kext.a");
+  }
 
   // For now, allow missing resource libraries to support developers who may
   // not have compiler-rt checked out or integrated into their build.
