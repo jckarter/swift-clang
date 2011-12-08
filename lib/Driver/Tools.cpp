@@ -516,7 +516,9 @@ void Clang::AddARMTargetArgs(const ArgList &Args,
                              ArgStringList &CmdArgs,
                              bool KernelOrKext) const {
   const Driver &D = getToolChain().getDriver();
-  llvm::Triple Triple = getToolChain().getTriple();
+  // Get the effective triple, which takes into account the deployment target.
+  std::string TripleStr = getToolChain().ComputeEffectiveClangTriple(Args);
+  llvm::Triple Triple(TripleStr);
 
   // Select the ABI to use.
   //
@@ -682,8 +684,6 @@ void Clang::AddARMTargetArgs(const ArgList &Args,
 
   // Kernel code has more strict alignment requirements.
   if (KernelOrKext) {
-    std::string TripleStr = getToolChain().ComputeEffectiveClangTriple(Args);
-    llvm::Triple Triple(TripleStr);
     if (Triple.getOS() != llvm::Triple::IOS || Triple.isOSVersionLT(6)) {
       CmdArgs.push_back("-backend-option");
       CmdArgs.push_back("-arm-long-calls");
