@@ -519,7 +519,9 @@ void Clang::AddARMTargetArgs(const ArgList &Args,
                              ArgStringList &CmdArgs,
                              bool KernelOrKext) const {
   const Driver &D = getToolChain().getDriver();
-  llvm::Triple Triple = getToolChain().getTriple();
+  // Get the effective triple, which takes into account the deployment target.
+  std::string TripleStr = getToolChain().ComputeEffectiveClangTriple(Args);
+  llvm::Triple Triple(TripleStr);
 
   // Select the ABI to use.
   //
@@ -569,7 +571,6 @@ void Clang::AddARMTargetArgs(const ArgList &Args,
 
   // If unspecified, choose the default based on the platform.
   if (FloatABI.empty()) {
-    const llvm::Triple &Triple = getToolChain().getTriple();
     switch (Triple.getOS()) {
     case llvm::Triple::Darwin:
     case llvm::Triple::MacOSX:
@@ -587,7 +588,7 @@ void Clang::AddARMTargetArgs(const ArgList &Args,
     }
 
     case llvm::Triple::Linux: {
-      if (getToolChain().getTriple().getEnvironment() == llvm::Triple::GNUEABI) {
+      if (Triple.getEnvironment() == llvm::Triple::GNUEABI) {
         FloatABI = "softfp";
         break;
       }
@@ -1130,11 +1131,13 @@ static void addAsanRTLinux(const ToolChain &TC, const ArgList &Args,
       !Args.hasFlag(options::OPT_faddress_sanitizer,
                     options::OPT_fno_address_sanitizer, false))
     return;
-  // LibAsan is "../lib/clang/linux/ArchName/libclang_rt.asan.a"
-  llvm::SmallString<128> LibAsan =
-      llvm::sys::path::parent_path(StringRef(TC.getDriver().Dir));
-  llvm::sys::path::append(LibAsan, "lib", "clang", "linux", TC.getArchName());
-  llvm::sys::path::append(LibAsan, "libclang_rt.asan.a");
+
+  // LibAsan is "libclang_rt.asan-<ArchName>.a" in the Linux library resource
+  // directory.
+  llvm::SmallString<128> LibAsan(TC.getDriver().ResourceDir);
+  llvm::sys::path::append(LibAsan, "lib", "linux",
+                          (Twine("libclang_rt.asan-") +
+                           TC.getArchName() + ".a"));
   CmdArgs.push_back(Args.MakeArgString(LibAsan));
   CmdArgs.push_back("-lpthread");
   CmdArgs.push_back("-ldl");
