@@ -77,7 +77,7 @@ RuntimeDirs :=
 ifeq ($(OS),Darwin)
 RuntimeDirs += darwin
 RuntimeLibrary.darwin.Configs := \
-	eprintf 10.4 osx ios cc_kext \
+	eprintf 10.4 osx ios cc_kext cc_kext_6.0 \
 	asan_osx profile_osx profile_ios
 
 # On Darwin, fake Clang into using the iOS assembler (since compiler-rt wants to
