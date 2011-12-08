@@ -798,11 +798,11 @@ void DarwinClang::AddCCKextLibArgs(const ArgList &Args,
   P.appendComponent("darwin");
 
   // Use the newer cc_kext for iOS ARM after 6.0.
-  if (isTargetIPhoneOS() && !isTargetIOSSimulator() &&
+  if (!isTargetIPhoneOS() || isTargetIOSSimulator() ||
       !isIPhoneOSVersionLT(6, 0)) {
-    P.appendComponent("libclang_rt.cc_kext_6.0.a");
-  } else {
     P.appendComponent("libclang_rt.cc_kext.a");
+  } else {
+    P.appendComponent("libclang_rt.cc_kext_ios5.a");
   }
 
   // For now, allow missing resource libraries to support developers who may
