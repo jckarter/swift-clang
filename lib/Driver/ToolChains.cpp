@@ -1012,25 +1012,6 @@ DerivedArgList *Darwin::TranslateArgs(const DerivedArgList &Args,
   // argument.
   AddDeploymentTarget(*DAL);
 
-  // For iOS 6, undo the translation to add -static for -mkernel/-fapple-kext.
-  // FIXME: It would be far better to avoid inserting those -static arguments,
-  // but we can't check the deployment target in the translation code until
-  // it is set here.
-  if (isTargetIPhoneOS() && !isIPhoneOSVersionLT(6, 0)) {
-    for (ArgList::iterator it = DAL->begin(), ie = DAL->end(); it != ie; ) {
-      Arg *A = *it;
-      ++it;
-      if (A->getOption().getID() != options::OPT_mkernel &&
-          A->getOption().getID() != options::OPT_fapple_kext)
-        continue;
-      assert(it != ie && "unexpected argument translation");
-      A = *it;
-      assert(A->getOption().getID() == options::OPT_static &&
-             "missing expected -static argument");
-      it = DAL->getArgs().erase(it);
-    }
-  }
-
   // Validate the C++ standard library choice.
   CXXStdlibType Type = GetCXXStdlibType(*DAL);
   if (Type == ToolChain::CST_Libcxx) {
