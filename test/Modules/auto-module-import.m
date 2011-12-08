@@ -42,3 +42,9 @@ void testModuleSubFrameworkAgain() {
 
 // Test inclusion of private headers.
 #include <DependsOnModule/DependsOnModulePrivate.h> // expected-warning{{treating #include as an import of module 'DependsOnModule.Private.DependsOnModule'}}
+
+int getDependsOnModulePrivate() { return depends_on_module_private; }
+
+#include <Module/ModulePrivate.h> // expected-warning{{treating #include as an import of module 'Module.Private.ModulePrivate'}}
+
+int getModulePrivate() { return module_private; }
