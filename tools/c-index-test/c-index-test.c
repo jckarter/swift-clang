@@ -1641,7 +1641,6 @@ static const char *getEntityKindString(CXIdxEntityKind kind) {
   case CXIdxEntity_CXXNamespace: return "namespace";
   case CXIdxEntity_CXXNamespaceAlias: return "namespace-alias";
   case CXIdxEntity_CXXStaticVariable: return "c++-static-var";
-  case CXIdxEntity_CXXInstanceVariable: return "c++-instance-var";
   case CXIdxEntity_CXXStaticMethod: return "c++-static-method";
   case CXIdxEntity_CXXInstanceMethod: return "c++-instance-method";
   case CXIdxEntity_CXXConstructor: return "constructor";
@@ -1665,6 +1664,17 @@ static const char *getEntityTemplateKindString(CXIdxEntityCXXTemplateKind kind) 
   return 0;
 }
 
+static const char *getEntityLanguageString(CXIdxEntityLanguage kind) {
+  switch (kind) {
+  case CXIdxEntityLang_None: return "<none>";
+  case CXIdxEntityLang_C: return "C";
+  case CXIdxEntityLang_ObjC: return "ObjC";
+  case CXIdxEntityLang_CXX: return "C++";
+  }
+  assert(0 && "Garbage language kind");
+  return 0;
+}
+
 static void printEntityInfo(const char *cb,
                             CXClientData client_data,
                             const CXIdxEntityInfo *info) {
@@ -1684,8 +1694,18 @@ static void printEntityInfo(const char *cb,
 
   printf("%s: kind: %s%s", cb, getEntityKindString(info->kind),
          getEntityTemplateKindString(info->templateKind));
+  printf(" | lang: %s", getEntityLanguageString(info->lang));
   printf(" | name: %s", name);
   printf(" | USR: %s", info->USR);
+}
+
+static void printBaseClassInfo(CXClientData client_data,
+                               const CXIdxBaseClassInfo *info) {
+  printEntityInfo("     <base>", client_data, info->base);
+  printf(" | cursor: ");
+  PrintCursor(info->cursor);
+  printf(" | loc: ");
+  printCXIndexLoc(info->loc);
 }
 
 static void printProtocolList(const CXIdxObjCProtocolRefListInfo *ProtoInfo,
@@ -1772,6 +1792,7 @@ static void index_indexDeclaration(CXClientData client_data,
   const CXIdxObjCCategoryDeclInfo *CatInfo;
   const CXIdxObjCInterfaceDeclInfo *InterInfo;
   const CXIdxObjCProtocolRefListInfo *ProtoInfo;
+  const CXIdxCXXClassDeclInfo *CXXClassInfo;
   unsigned i;
   index_data = (IndexData *)client_data;
 
@@ -1780,8 +1801,10 @@ static void index_indexDeclaration(CXClientData client_data,
   PrintCursor(info->cursor);
   printf(" | loc: ");
   printCXIndexLoc(info->loc);
-  printf(" | container: ");
-  printCXIndexContainer(info->container);
+  printf(" | semantic-container: ");
+  printCXIndexContainer(info->semanticContainer);
+  printf(" | lexical-container: ");
+  printCXIndexContainer(info->lexicalContainer);
   printf(" | isRedecl: %d", info->isRedeclaration);
   printf(" | isDef: %d", info->isDefinition);
   printf(" | isContainer: %d", info->isContainer);
@@ -1821,18 +1844,20 @@ static void index_indexDeclaration(CXClientData client_data,
 
   if ((InterInfo = clang_index_getObjCInterfaceDeclInfo(info))) {
     if (InterInfo->superInfo) {
-      printEntityInfo("     <base>", client_data,
-                      InterInfo->superInfo->base);
-      printf(" | cursor: ");
-      PrintCursor(InterInfo->superInfo->cursor);
-      printf(" | loc: ");
-      printCXIndexLoc(InterInfo->superInfo->loc);
+      printBaseClassInfo(client_data, InterInfo->superInfo);
       printf("\n");
     }
   }
 
   if ((ProtoInfo = clang_index_getObjCProtocolRefListInfo(info))) {
     printProtocolList(ProtoInfo, client_data);
+  }
+
+  if ((CXXClassInfo = clang_index_getCXXClassDeclInfo(info))) {
+    for (i = 0; i != CXXClassInfo->numBases; ++i) {
+      printBaseClassInfo(client_data, CXXClassInfo->bases[i]);
+      printf("\n");
+    }
   }
 
   if (info->declAsContainer)
