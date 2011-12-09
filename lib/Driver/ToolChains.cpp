@@ -799,6 +799,7 @@ void DarwinClang::AddCCKextLibArgs(const ArgList &Args,
 
   // Use the newer cc_kext for iOS ARM after 6.0.
   if (!isTargetIPhoneOS() || isTargetIOSSimulator() ||
+      getTriple().getArch() == llvm::Triple::arm64 ||
       !isIPhoneOSVersionLT(6, 0)) {
     P.appendComponent("libclang_rt.cc_kext.a");
   } else {
