@@ -115,7 +115,7 @@ llvm::Value *CodeGenFunction::EmitObjCCollectionLiteral(const Expr *E,
       const Expr *Rhs = ALE->getElement(i);
       LValue LV = LValue::MakeAddr(Builder.CreateStructGEP(Objects, i),
                                    ElementType,
-                                   Context.getTypeAlign(Rhs->getType()),
+                                   Context.getTypeAlignInChars(Rhs->getType()),
                                    Context);
       EmitScalarInit(Rhs, /*D=*/0, LV, /*capturedByInit=*/false);
     } else {      
@@ -123,7 +123,7 @@ llvm::Value *CodeGenFunction::EmitObjCCollectionLiteral(const Expr *E,
       const Expr *Key = DLE->getKeyValueElement(i).Key;
       LValue KeyLV = LValue::MakeAddr(Builder.CreateStructGEP(Keys, i),
                                       ElementType,
-                                      Context.getTypeAlign(Key->getType()),
+                                    Context.getTypeAlignInChars(Key->getType()),
                                       Context);
       EmitScalarInit(Key, /*D=*/0, KeyLV, /*capturedByInit=*/false);
 
@@ -131,7 +131,7 @@ llvm::Value *CodeGenFunction::EmitObjCCollectionLiteral(const Expr *E,
       const Expr *Value = DLE->getKeyValueElement(i).Value;  
       LValue ValueLV = LValue::MakeAddr(Builder.CreateStructGEP(Objects, i), 
                                         ElementType,
-                                        Context.getTypeAlign(Value->getType()),
+                                  Context.getTypeAlignInChars(Value->getType()),
                                         Context);
       EmitScalarInit(Value, /*D=*/0, ValueLV, /*capturedByInit=*/false);
     }
