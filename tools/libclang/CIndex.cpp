@@ -1737,6 +1737,7 @@ public:
   void VisitCXXTypeidExpr(CXXTypeidExpr *E);
   void VisitCXXUnresolvedConstructExpr(CXXUnresolvedConstructExpr *E);
   void VisitCXXUuidofExpr(CXXUuidofExpr *E);
+  void VisitCXXCatchStmt(CXXCatchStmt *S);
   void VisitDeclRefExpr(DeclRefExpr *D);
   void VisitDeclStmt(DeclStmt *S);
   void VisitDependentScopeDeclRefExpr(DependentScopeDeclRefExpr *E);
@@ -1909,6 +1910,12 @@ void EnqueueVisitor::VisitCXXUuidofExpr(CXXUuidofExpr *E) {
   if (E->isTypeOperand())
     AddTypeLoc(E->getTypeOperandSourceInfo());
 }
+
+void EnqueueVisitor::VisitCXXCatchStmt(CXXCatchStmt *S) {
+  EnqueueChildren(S);
+  AddDecl(S->getExceptionDecl());
+}
+
 void EnqueueVisitor::VisitDeclRefExpr(DeclRefExpr *DR) {
   if (DR->hasExplicitTemplateArgs()) {
     AddExplicitTemplateArgs(&DR->getExplicitTemplateArgs());
@@ -2077,7 +2084,6 @@ void EnqueueVisitor::VisitOpaqueValueExpr(OpaqueValueExpr *E) {
   // visit that.  This is useful for (e.g.) pseudo-object expressions.
   if (Expr *SourceExpr = E->getSourceExpr())
     return Visit(SourceExpr);
-  AddStmt(E);
 }
 void EnqueueVisitor::VisitPseudoObjectExpr(PseudoObjectExpr *E) {
   // Treat the expression like its syntactic form.
@@ -3006,6 +3012,11 @@ CXString clang_getCursorSpelling(CXCursor C) {
     return createCXString(AA->getAnnotation());
   }
 
+  if (C.kind == CXCursor_AsmLabelAttr) {
+    AsmLabelAttr *AA = cast<AsmLabelAttr>(cxcursor::getCursorAttr(C));
+    return createCXString(AA->getLabel());
+  }
+
   return createCXString("");
 }
 
@@ -3331,6 +3342,8 @@ CXString clang_getCursorKindSpelling(enum CXCursorKind Kind) {
       return createCXString("attribute(override)");
   case CXCursor_AnnotateAttr:
     return createCXString("attribute(annotate)");
+  case CXCursor_AsmLabelAttr:
+    return createCXString("asm label");
   case CXCursor_PreprocessingDirective:
     return createCXString("preprocessing directive");
   case CXCursor_MacroDefinition:
@@ -4002,6 +4015,7 @@ CXCursor clang_getCursorDefinition(CXCursor C) {
   case Decl::Block:
   case Decl::Label:  // FIXME: Is this right??
   case Decl::ClassScopeFunctionSpecialization:
+  case Decl::Import:
     return C;
 
   // Declaration kinds that don't make any sense here, but are

@@ -141,6 +141,7 @@ def warn_implicit_function_decl : Warning<
 def ext_implicit_function_decl : ExtWarn<
   "implicit declaration of function %0 is invalid in C99">,
   InGroup<ImplicitFunctionDeclare>;
+def note_function_suggestion : Note<"did you mean %0?">;
 
 def err_ellipsis_first_arg : Error<
   "ISO C requires a named argument before '...'">;
@@ -272,7 +273,7 @@ def warn_redecl_library_builtin : Warning<
 def err_builtin_definition : Error<"definition of builtin function %0">;
 def err_types_compatible_p_in_cplusplus : Error<
   "__builtin_types_compatible_p is not valid in C++">;
-def warn_builtin_unknown : Warning<"use of unknown builtin %0">, DefaultError;
+def err_builtin_unknown : Error<"use of unknown builtin %0">;
 def warn_dyn_class_memaccess : Warning<
   "%select{destination for|source of|first operand of|second operand of}0 this "
   "%1 call is a pointer to dynamic class %2; vtable pointer will be "
@@ -489,7 +490,6 @@ def not_conv_function_declared_at : Note<"type conversion function declared here
 def note_method_declared_at : Note<"method declared here">;
 def err_setter_type_void : Error<"type of setter must be void">;
 def err_duplicate_method_decl : Error<"duplicate declaration of method %0">;
-def err_missing_atend : Error<"'@end' is missing in implementation context">;
 def err_objc_var_decl_inclass : 
     Error<"cannot declare variable inside @interface or @protocol">;
 def error_missing_method_context : Error<
@@ -1678,6 +1678,9 @@ def warn_impcast_bool_to_null_pointer : Warning<
 def warn_impcast_null_pointer_to_integer : Warning<
     "implicit conversion of NULL constant to integer">,
     InGroup<DiagGroup<"conversion">>, DefaultIgnore;
+def warn_impcast_function_to_bool : Warning<
+    "address of function %q0 will always evaluate to 'true'">,
+    InGroup<BoolConversions>;
 
 def warn_cast_align : Warning<
   "cast from %0 to %1 increases required alignment from %2 to %3">,
@@ -4047,6 +4050,8 @@ def err_typecheck_deleted_function : Error<
   "conversion function from %0 to %1 invokes a deleted function">;
   
 def err_expected_class_or_namespace : Error<"expected a class or namespace">;
+def err_expected_class : Error<"%0 is not a class%select{ or namespace|, "
+  "namespace, or scoped enumeration}1">;
 def err_missing_qualified_for_redecl : Error<
   "must qualify the name %0 to declare %q1 in this scope">;
 def err_invalid_declarator_scope : Error<
@@ -4115,6 +4120,9 @@ def err_typecheck_convert_incompatible : Error<
   "volatile and restrict|const, volatile, and restrict}5 vs "
   "%select{none|const|restrict|const and restrict|volatile|const and volatile|"
   "volatile and restrict|const, volatile, and restrict}6)}4">;
+def err_typecheck_missing_return_type_incompatible : Error<
+  "return type %0 must match previous return type %1 when block"
+  " literal has unspecified explicit return type">;
 
 def warn_incompatible_qualified_id : Warning<
   "%select{assigning to|passing|returning|converting|initializing|sending|casting}2"
@@ -5074,7 +5082,7 @@ def error_protected_ivar_access : Error<"instance variable %0 is protected">,
   AccessControl;
 def warn_maynot_respond : Warning<"%0 may not respond to %1">;
 def warn_attribute_method_def : Warning<
-  "method attribute can only be specified on method declarations">,
+  "attributes on method implementation and its declaration must match">,
   InGroup<DiagGroup<"mismatched-method-attributes">>;
 def ext_typecheck_base_super : Warning<
   "method parameter type %0 does not match "

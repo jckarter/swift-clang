@@ -46,6 +46,7 @@ static CXCursorKind GetCursorKind(const Attr *A) {
     case attr::Final: return CXCursor_CXXFinalAttr;
     case attr::Override: return CXCursor_CXXOverrideAttr;
     case attr::Annotate: return CXCursor_AnnotateAttr;
+    case attr::AsmLabel: return CXCursor_AsmLabelAttr;
   }
 
   return CXCursor_UnexposedAttr;
@@ -753,8 +754,10 @@ ASTContext &cxcursor::getCursorContext(CXCursor Cursor) {
 }
 
 ASTUnit *cxcursor::getCursorASTUnit(CXCursor Cursor) {
-  return static_cast<ASTUnit *>(static_cast<CXTranslationUnit>(Cursor.data[2])
-                                  ->TUData);
+  CXTranslationUnit TU = static_cast<CXTranslationUnit>(Cursor.data[2]);
+  if (!TU)
+    return 0;
+  return static_cast<ASTUnit *>(TU->TUData);
 }
 
 CXTranslationUnit cxcursor::getCursorTU(CXCursor Cursor) {

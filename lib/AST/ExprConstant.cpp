@@ -580,15 +580,9 @@ static bool IsLiteralLValue(const LValue &Value) {
   return Value.Base.dyn_cast<const Expr*>() && !Value.Frame;
 }
 
-static bool IsWeakDecl(const ValueDecl *Decl) {
-  return Decl->hasAttr<WeakAttr>() ||
-         Decl->hasAttr<WeakRefAttr>() ||
-         Decl->isWeakImported();
-}
-
 static bool IsWeakLValue(const LValue &Value) {
   const ValueDecl *Decl = GetLValueBaseDecl(Value);
-  return Decl && IsWeakDecl(Decl);
+  return Decl && Decl->isWeak();
 }
 
 static bool EvalPointerValueAsBool(const CCValue &Value, bool &Result) {
@@ -607,7 +601,7 @@ static bool EvalPointerValueAsBool(const CCValue &Value, bool &Result) {
   // a weak declaration it can be null at runtime.
   Result = true;
   const ValueDecl *Decl = Value.getLValueBase().dyn_cast<const ValueDecl*>();
-  return !Decl || !IsWeakDecl(Decl);
+  return !Decl || !Decl->isWeak();
 }
 
 static bool HandleConversionToBool(const CCValue &Val, bool &Result) {
@@ -866,7 +860,7 @@ static bool EvaluateVarDeclInit(EvalInfo &Info, const VarDecl *VD,
 
   // Never evaluate the initializer of a weak variable. We can't be sure that
   // this is the definition which will be used.
-  if (IsWeakDecl(VD))
+  if (VD->isWeak())
     return false;
 
   const Expr *Init = VD->getAnyInitializer();
@@ -1563,9 +1557,16 @@ public:
 
   RetTy VisitOpaqueValueExpr(const OpaqueValueExpr *E) {
     const CCValue *Value = Info.getOpaqueValue(E);
-    if (!Value)
-      return (E->getSourceExpr() ? StmtVisitorTy::Visit(E->getSourceExpr())
-                                 : DerivedError(E));
+    if (!Value) {
+      const Expr *Source = E->getSourceExpr();
+      if (!Source)
+        return DerivedError(E);
+      if (Source == E) { // sanity checking.
+        assert(0 && "OpaqueValueExpr recursively refers to itself");
+        return DerivedError(E);
+      }
+      return StmtVisitorTy::Visit(Source);
+    }
     return DerivedSuccess(*Value, E);
   }
 
@@ -2510,11 +2511,9 @@ static bool EvaluateVector(const Expr* E, APValue& Result, EvalInfo &Info) {
 
 bool VectorExprEvaluator::VisitCastExpr(const CastExpr* E) {
   const VectorType *VTy = E->getType()->castAs<VectorType>();
-  QualType EltTy = VTy->getElementType();
   unsigned NElts = VTy->getNumElements();
-  unsigned EltWidth = Info.Ctx.getTypeSize(EltTy);
 
-  const Expr* SE = E->getSubExpr();
+  const Expr *SE = E->getSubExpr();
   QualType SETy = SE->getType();
 
   switch (E->getCastKind()) {
@@ -2536,34 +2535,6 @@ bool VectorExprEvaluator::VisitCastExpr(const CastExpr* E) {
 
     // Splat and create vector APValue.
     SmallVector<APValue, 4> Elts(NElts, Val);
-    return Success(Elts, E);
-  }
-  case CK_BitCast: {
-    // FIXME: this is wrong for any cast other than a no-op cast.
-    if (SETy->isVectorType())
-      return Visit(SE);
-
-    if (!SETy->isIntegerType())
-      return Error(E);
-
-    APSInt Init;
-    if (!EvaluateInteger(SE, Init, Info))
-      return Error(E);
-
-    assert((EltTy->isIntegerType() || EltTy->isRealFloatingType()) &&
-           "Vectors must be composed of ints or floats");
-
-    SmallVector<APValue, 4> Elts;
-    for (unsigned i = 0; i != NElts; ++i) {
-      APSInt Tmp = Init.extOrTrunc(EltWidth);
-
-      if (EltTy->isIntegerType())
-        Elts.push_back(APValue(Tmp));
-      else
-        Elts.push_back(APValue(APFloat(Tmp)));
-
-      Init >>= EltWidth;
-    }
     return Success(Elts, E);
   }
   default:
@@ -3077,11 +3048,53 @@ bool IntExprEvaluator::VisitCallExpr(const CallExpr *E) {
   case Builtin::BI__builtin_classify_type:
     return Success(EvaluateBuiltinClassifyType(E), E);
 
-  case Builtin::BI__builtin_constant_p:
-    // __builtin_constant_p always has one operand: it returns true if that
-    // operand can be folded, false otherwise.
-    return Success(E->getArg(0)->isEvaluatable(Info.Ctx), E);
-      
+  case Builtin::BI__builtin_constant_p: {
+    const Expr *Arg = E->getArg(0);
+    QualType ArgType = Arg->getType();
+    // __builtin_constant_p always has one operand. The rules which gcc follows
+    // are not precisely documented, but are as follows:
+    //
+    //  - If the operand is of integral, floating, complex or enumeration type,
+    //    and can be folded to a known value of that type, it returns 1.
+    //  - If the operand and can be folded to a pointer to the first character
+    //    of a string literal (or such a pointer cast to an integral type), it
+    //    returns 1.
+    //
+    // Otherwise, it returns 0.
+    //
+    // FIXME: GCC also intends to return 1 for literals of aggregate types, but
+    // its support for this does not currently work.
+    int IsConstant = 0;
+    if (ArgType->isIntegralOrEnumerationType()) {
+      // Note, a pointer cast to an integral type is only a constant if it is
+      // a pointer to the first character of a string literal.
+      Expr::EvalResult Result;
+      if (Arg->EvaluateAsRValue(Result, Info.Ctx) && !Result.HasSideEffects) {
+        APValue &V = Result.Val;
+        if (V.getKind() == APValue::LValue) {
+          if (const Expr *E = V.getLValueBase().dyn_cast<const Expr*>())
+            IsConstant = isa<StringLiteral>(E) && V.getLValueOffset().isZero();
+        } else {
+          IsConstant = 1;
+        }
+      }
+    } else if (ArgType->isFloatingType() || ArgType->isAnyComplexType()) {
+      IsConstant = Arg->isEvaluatable(Info.Ctx);
+    } else if (ArgType->isPointerType() || Arg->isGLValue()) {
+      LValue LV;
+      // Use a separate EvalInfo: ignore constexpr parameter and 'this' bindings
+      // during the check.
+      Expr::EvalStatus Status;
+      EvalInfo SubInfo(Info.Ctx, Status);
+      if ((Arg->isGLValue() ? EvaluateLValue(Arg, LV, SubInfo)
+                            : EvaluatePointer(Arg, LV, SubInfo)) &&
+          !Status.HasSideEffects)
+        if (const Expr *E = LV.getLValueBase().dyn_cast<const Expr*>())
+          IsConstant = isa<StringLiteral>(E) && LV.getLValueOffset().isZero();
+    }
+
+    return Success(IsConstant, E);
+  }
   case Builtin::BI__builtin_eh_return_data_regno: {
     int Operand = E->getArg(0)->EvaluateKnownConstInt(Info.Ctx).getZExtValue();
     Operand = Info.Ctx.getTargetInfo().getEHDataRegisterNumber(Operand);
@@ -4375,6 +4388,37 @@ bool ComplexExprEvaluator::VisitUnaryOperator(const UnaryOperator *E) {
 }
 
 //===----------------------------------------------------------------------===//
+// Void expression evaluation, primarily for a cast to void on the LHS of a
+// comma operator
+//===----------------------------------------------------------------------===//
+
+namespace {
+class VoidExprEvaluator
+  : public ExprEvaluatorBase<VoidExprEvaluator, bool> {
+public:
+  VoidExprEvaluator(EvalInfo &Info) : ExprEvaluatorBaseTy(Info) {}
+
+  bool Success(const CCValue &V, const Expr *e) { return true; }
+  bool Error(const Expr *E) { return false; }
+
+  bool VisitCastExpr(const CastExpr *E) {
+    switch (E->getCastKind()) {
+    default:
+      return ExprEvaluatorBaseTy::VisitCastExpr(E);
+    case CK_ToVoid:
+      VisitIgnoredValue(E->getSubExpr());
+      return true;
+    }
+  }
+};
+} // end anonymous namespace
+
+static bool EvaluateVoid(const Expr *E, EvalInfo &Info) {
+  assert(E->isRValue() && E->getType()->isVoidType());
+  return VoidExprEvaluator(Info).Visit(E);
+}
+
+//===----------------------------------------------------------------------===//
 // Top level Expr::EvaluateAsRValue method.
 //===----------------------------------------------------------------------===//
 
@@ -4425,6 +4469,9 @@ static bool Evaluate(CCValue &Result, EvalInfo &Info, const Expr *E) {
     if (!EvaluateRecord(E, LV, Info.CurrentCall->Temporaries[E], Info))
       return false;
     Result = Info.CurrentCall->Temporaries[E];
+  } else if (E->getType()->isVoidType()) {
+    if (!EvaluateVoid(E, Info))
+      return false;
   } else
     return false;
 

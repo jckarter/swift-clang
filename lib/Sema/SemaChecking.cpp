@@ -2014,7 +2014,7 @@ bool CheckPrintfHandler::HandleAmount(
 
       if (!ATR.matchesType(S.Context, T)) {
         EmitFormatDiagnostic(S.PDiag(diag::warn_printf_asterisk_wrong_type)
-                               << k << ATR.getRepresentativeType(S.Context)
+                               << k << ATR.getRepresentativeTypeName(S.Context)
                                << T << Arg->getSourceRange(),
                              getLocationOfByte(Amt.getStart()),
                              /*IsStringLocation*/true,
@@ -2234,7 +2234,7 @@ CheckPrintfHandler::HandlePrintfSpecifier(const analyze_printf::PrintfSpecifier
       // type is 'wint_t' (which is defined in the system headers).
       EmitFormatDiagnostic(
         S.PDiag(diag::warn_printf_conversion_argument_type_mismatch)
-          << ATR.getRepresentativeType(S.Context) << Ex->getType()
+          << ATR.getRepresentativeTypeName(S.Context) << Ex->getType()
           << Ex->getSourceRange(),
         getLocationOfByte(CS.getStart()),
         /*IsStringLocation*/true,
@@ -2246,7 +2246,7 @@ CheckPrintfHandler::HandlePrintfSpecifier(const analyze_printf::PrintfSpecifier
     else {
       S.Diag(getLocationOfByte(CS.getStart()),
              diag::warn_printf_conversion_argument_type_mismatch)
-        << ATR.getRepresentativeType(S.Context) << Ex->getType()
+        << ATR.getRepresentativeTypeName(S.Context) << Ex->getType()
         << getSpecifierRange(startSpecifier, specifierLen)
         << Ex->getSourceRange();
     }
@@ -3758,6 +3758,26 @@ void CheckImplicitConversion(Sema &S, Expr *E, QualType T,
       // by a check in AnalyzeImplicitConversions().
       return DiagnoseImpCast(S, E, T, CC,
                              diag::warn_impcast_string_literal_to_bool);
+    if (Source->isFunctionType()) {
+      // Warn on function to bool. Checks free functions and static member
+      // functions. Weakly imported functions are excluded from the check,
+      // since it's common to test their value to check whether the linker
+      // found a definition for them.
+      ValueDecl *D = 0;
+      if (DeclRefExpr* R = dyn_cast<DeclRefExpr>(E)) {
+        D = R->getDecl();
+      } else if (MemberExpr *M = dyn_cast<MemberExpr>(E)) {
+        D = M->getMemberDecl();
+      }
+
+      if (D && !D->isWeak()) {
+        if (FunctionDecl* F = dyn_cast<FunctionDecl>(D)) {
+          S.Diag(E->getExprLoc(), diag::warn_impcast_function_to_bool)
+            << F << E->getSourceRange() << SourceRange(CC);
+          return;
+        }
+      }
+    }
     return; // Other casts to bool are not checked.
   }
 
@@ -4533,8 +4553,14 @@ static bool isSetterLikeSelector(Selector sel) {
 
   StringRef str = sel.getNameForSlot(0);
   while (!str.empty() && str.front() == '_') str = str.substr(1);
-  if (str.startswith("set") || str.startswith("add"))
+  if (str.startswith("set"))
     str = str.substr(3);
+  else if (str.startswith("add")) {
+    // Specially whitelist 'addOperationWithBlock:'.
+    if (sel.getNumArgs() == 1 && str.startswith("addOperationWithBlock"))
+      return false;
+    str = str.substr(3);
+  }
   else
     return false;
 

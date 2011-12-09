@@ -558,7 +558,6 @@ void Clang::AddARMTargetArgs(const ArgList &Args,
 
   // If unspecified, choose the default based on the platform.
   if (FloatABI.empty()) {
-    const llvm::Triple &Triple = getToolChain().getTriple();
     switch (Triple.getOS()) {
     case llvm::Triple::Darwin:
     case llvm::Triple::MacOSX:
@@ -576,7 +575,7 @@ void Clang::AddARMTargetArgs(const ArgList &Args,
     }
 
     case llvm::Triple::Linux: {
-      if (getToolChain().getTriple().getEnvironment() == llvm::Triple::GNUEABI) {
+      if (Triple.getEnvironment() == llvm::Triple::GNUEABI) {
         FloatABI = "softfp";
         break;
       }
@@ -1103,22 +1102,23 @@ static bool UseRelaxAll(Compilation &C, const ArgList &Args) {
 /// If AddressSanitizer is enabled, add appropriate linker flags (Linux).
 /// This needs to be called before we add the C run-time (malloc, etc).
 static void addAsanRTLinux(const ToolChain &TC, const ArgList &Args,
-                      ArgStringList &CmdArgs) {
+                           ArgStringList &CmdArgs) {
   // Add asan linker flags when linking an executable, but not a shared object.
   if (Args.hasArg(options::OPT_shared) ||
       !Args.hasFlag(options::OPT_faddress_sanitizer,
                     options::OPT_fno_address_sanitizer, false))
     return;
-  // LibAsan is "../lib/clang/linux/ArchName/libclang_rt.asan.a
-  llvm::SmallString<128> LibAsan =
-      llvm::sys::path::parent_path(StringRef(TC.getDriver().Dir));
-  llvm::sys::path::append(LibAsan, "lib", "clang", "linux", TC.getArchName());
-  llvm::sys::path::append(LibAsan, "libclang_rt.asan.a");
+
+  // LibAsan is "libclang_rt.asan-<ArchName>.a" in the Linux library resource
+  // directory.
+  llvm::SmallString<128> LibAsan(TC.getDriver().ResourceDir);
+  llvm::sys::path::append(LibAsan, "lib", "linux",
+                          (Twine("libclang_rt.asan-") +
+                           TC.getArchName() + ".a"));
   CmdArgs.push_back(Args.MakeArgString(LibAsan));
   CmdArgs.push_back("-lpthread");
   CmdArgs.push_back("-ldl");
   CmdArgs.push_back("-export-dynamic");
-  TC.AddCXXStdlibLibArgs(Args, CmdArgs);
 }
 
 void Clang::ConstructJob(Compilation &C, const JobAction &JA,
@@ -1798,9 +1798,19 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
   }
 
   // Translate -mstackrealign
-  if (Args.hasArg(options::OPT_mstackrealign)) {
+  if (Args.hasFlag(options::OPT_mstackrealign, options::OPT_mno_stackrealign,
+                   false)) {
     CmdArgs.push_back("-backend-option");
     CmdArgs.push_back("-force-align-stack");
+  }
+  if (!Args.hasFlag(options::OPT_mno_stackrealign, options::OPT_mstackrealign,
+                   false)) {
+    CmdArgs.push_back(Args.MakeArgString("-mstackrealign"));
+  }
+
+  if (Args.hasArg(options::OPT_mstack_alignment)) {
+    StringRef alignment = Args.getLastArgValue(options::OPT_mstack_alignment);
+    CmdArgs.push_back(Args.MakeArgString("-mstack-alignment=" + alignment));
   }
 
   // Forward -f options with positive and negative forms; we translate
@@ -3577,6 +3587,18 @@ void darwin::Link::ConstructJob(Compilation &C, const JobAction &JA,
 
   Args.AddAllArgs(CmdArgs, options::OPT_L);
 
+  // If we're building a dynamic lib with -faddress-sanitizer, unresolved
+  // symbols may appear. Mark all of them as dynamic_lookup.
+  // Linking executables is handled in lib/Driver/ToolChains.cpp.
+  if (Args.hasFlag(options::OPT_faddress_sanitizer,
+                   options::OPT_fno_address_sanitizer, false)) {
+    if (Args.hasArg(options::OPT_dynamiclib) ||
+        Args.hasArg(options::OPT_bundle)) {
+      CmdArgs.push_back("-undefined");
+      CmdArgs.push_back("dynamic_lookup");
+    }
+  }
+
   if (Args.hasArg(options::OPT_fopenmp))
     // This is more complicated in gcc...
     CmdArgs.push_back("-lgomp");
@@ -4553,7 +4575,7 @@ void minix::Assemble::ConstructJob(Compilation &C, const JobAction &JA,
   }
 
   const char *Exec =
-    Args.MakeArgString(getToolChain().GetProgramPath("gas"));
+    Args.MakeArgString(getToolChain().GetProgramPath("as"));
   C.addCommand(new Command(JA, *this, Exec, CmdArgs));
 }
 
@@ -4573,9 +4595,12 @@ void minix::Link::ConstructJob(Compilation &C, const JobAction &JA,
   }
 
   if (!Args.hasArg(options::OPT_nostdlib) &&
-      !Args.hasArg(options::OPT_nostartfiles))
-    CmdArgs.push_back(Args.MakeArgString(getToolChain().GetFilePath(
-                                                      "/usr/gnu/lib/crtso.o")));
+      !Args.hasArg(options::OPT_nostartfiles)) {
+      CmdArgs.push_back(Args.MakeArgString(getToolChain().GetFilePath("crt1.o")));
+      CmdArgs.push_back(Args.MakeArgString(getToolChain().GetFilePath("crti.o")));
+      CmdArgs.push_back(Args.MakeArgString(getToolChain().GetFilePath("crtbegin.o")));
+      CmdArgs.push_back(Args.MakeArgString(getToolChain().GetFilePath("crtn.o")));
+  }
 
   Args.AddAllArgs(CmdArgs, options::OPT_L);
   Args.AddAllArgs(CmdArgs, options::OPT_T_Group);
@@ -4583,33 +4608,28 @@ void minix::Link::ConstructJob(Compilation &C, const JobAction &JA,
 
   AddLinkerInputs(getToolChain(), Inputs, Args, CmdArgs);
 
+  addProfileRT(getToolChain(), Args, CmdArgs, getToolChain().getTriple());
+
   if (!Args.hasArg(options::OPT_nostdlib) &&
       !Args.hasArg(options::OPT_nodefaultlibs)) {
     if (D.CCCIsCXX) {
       getToolChain().AddCXXStdlibLibArgs(Args, CmdArgs);
       CmdArgs.push_back("-lm");
     }
-
-    if (Args.hasArg(options::OPT_pthread))
-      CmdArgs.push_back("-lpthread");
-    CmdArgs.push_back("-lc");
-    CmdArgs.push_back("-lgcc");
-    CmdArgs.push_back("-L/usr/gnu/lib");
-    // FIXME: fill in the correct search path for the final
-    // support libraries.
-    CmdArgs.push_back("-L/usr/gnu/lib/gcc/i686-pc-minix/4.4.3");
   }
 
   if (!Args.hasArg(options::OPT_nostdlib) &&
       !Args.hasArg(options::OPT_nostartfiles)) {
-    CmdArgs.push_back(Args.MakeArgString(getToolChain().GetFilePath(
-                                              "/usr/gnu/lib/libend.a")));
+    if (Args.hasArg(options::OPT_pthread))
+      CmdArgs.push_back("-lpthread");
+    CmdArgs.push_back("-lc");
+    CmdArgs.push_back("-lCompilerRT-Generic");
+    CmdArgs.push_back("-L/usr/pkg/compiler-rt/lib");
+    CmdArgs.push_back(
+	 Args.MakeArgString(getToolChain().GetFilePath("crtend.o")));
   }
 
-  addProfileRT(getToolChain(), Args, CmdArgs, getToolChain().getTriple());
-
-  const char *Exec =
-    Args.MakeArgString(getToolChain().GetProgramPath("/usr/gnu/bin/gld"));
+  const char *Exec = Args.MakeArgString(getToolChain().GetProgramPath("ld"));
   C.addCommand(new Command(JA, *this, Exec, CmdArgs));
 }
 

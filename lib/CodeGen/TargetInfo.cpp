@@ -98,7 +98,8 @@ unsigned TargetCodeGenInfo::getSizeOfUnwindException() const {
   return 32;
 }
 
-bool TargetCodeGenInfo::isNoProtoCallVariadic(CallingConv CC) const {
+bool TargetCodeGenInfo::isNoProtoCallVariadic(
+                                       const CodeGen::CGFunctionInfo &) const {
   // The following conventions are known to require this to be false:
   //   x86_stdcall
   //   MIPS
@@ -916,6 +917,8 @@ class X86_64ABIInfo : public ABIInfo {
                                   unsigned &neededInt,
                                   unsigned &neededSSE) const;
 
+  bool IsIllegalVectorType(QualType Ty) const;
+
   /// The 0.98 ABI revision clarified a lot of ambiguities,
   /// unfortunately in ways that were not always consistent with
   /// certain previous compilers.  In particular, platforms which
@@ -925,8 +928,11 @@ class X86_64ABIInfo : public ABIInfo {
     return !getContext().getTargetInfo().getTriple().isOSDarwin();
   }
 
+  bool HasAVX;
+
 public:
-  X86_64ABIInfo(CodeGen::CodeGenTypes &CGT) : ABIInfo(CGT) {}
+  X86_64ABIInfo(CodeGen::CodeGenTypes &CGT, bool hasavx) :
+      ABIInfo(CGT), HasAVX(hasavx) {}
 
   virtual void computeInfo(CGFunctionInfo &FI) const;
 
@@ -950,8 +956,8 @@ public:
 
 class X86_64TargetCodeGenInfo : public TargetCodeGenInfo {
 public:
-  X86_64TargetCodeGenInfo(CodeGen::CodeGenTypes &CGT)
-    : TargetCodeGenInfo(new X86_64ABIInfo(CGT)) {}
+  X86_64TargetCodeGenInfo(CodeGen::CodeGenTypes &CGT, bool HasAVX)
+    : TargetCodeGenInfo(new X86_64ABIInfo(CGT, HasAVX)) {}
 
   int getDwarfEHStackPointer(CodeGen::CodeGenModule &CGM) const {
     return 7;
@@ -978,13 +984,33 @@ public:
     return X86AdjustInlineAsmType(CGF, Constraint, Ty);
   }
 
-  bool isNoProtoCallVariadic(CallingConv CC) const {
+  bool isNoProtoCallVariadic(const CodeGen::CGFunctionInfo &FI) const {
     // The default CC on x86-64 sets %al to the number of SSA
     // registers used, and GCC sets this when calling an unprototyped
-    // function, so we override the default behavior.
-    if (CC == CC_Default || CC == CC_C) return true;
+    // function, so we override the default behavior.  However, don't do
+    // that when AVX types are involved: the ABI explicitly states it is
+    // undefined, and it doesn't work in practice because of how the ABI
+    // defines varargs anyway.
+    if (FI.getCallingConvention() == llvm::CallingConv::C) {
+      bool HasAVXType = false;
+      for (CGFunctionInfo::const_arg_iterator it = FI.arg_begin(),
+                                              ie = FI.arg_end();
+           it != ie; ++it) {
+        if (it->info.isDirect()) {
+          llvm::Type *Ty = it->info.getCoerceToType();
+          if (llvm::VectorType *VTy = dyn_cast_or_null<llvm::VectorType>(Ty)) {
+            if (VTy->getBitWidth() > 128) {
+              HasAVXType = true;
+              break;
+            }
+          }
+        }
+      }
+      if (!HasAVXType)
+        return true;
+    }
 
-    return TargetCodeGenInfo::isNoProtoCallVariadic(CC);
+    return TargetCodeGenInfo::isNoProtoCallVariadic(FI);
   }
 
 };
@@ -1175,7 +1201,7 @@ void X86_64ABIInfo::classify(QualType Ty, uint64_t OffsetBase,
       // split.
       if (OffsetBase && OffsetBase != 64)
         Hi = Lo;
-    } else if (Size == 128 || Size == 256) {
+    } else if (Size == 128 || (HasAVX && Size == 256)) {
       // Arguments of 256-bits are split into four eightbyte chunks. The
       // least significant one belongs to class SSE and all the others to class
       // SSEUP. The original Lo and Hi design considers that types can't be
@@ -1388,10 +1414,21 @@ ABIArgInfo X86_64ABIInfo::getIndirectReturnResult(QualType Ty) const {
   return ABIArgInfo::getIndirect(0);
 }
 
+bool X86_64ABIInfo::IsIllegalVectorType(QualType Ty) const {
+  if (const VectorType *VecTy = Ty->getAs<VectorType>()) {
+    uint64_t Size = getContext().getTypeSize(VecTy);
+    unsigned LargestVector = HasAVX ? 256 : 128;
+    if (Size <= 64 || Size > LargestVector)
+      return true;
+  }
+
+  return false;
+}
+
 ABIArgInfo X86_64ABIInfo::getIndirectResult(QualType Ty) const {
   // If this is a scalar LLVM value then assume LLVM will pass it in the right
   // place naturally.
-  if (!isAggregateTypeForABI(Ty)) {
+  if (!isAggregateTypeForABI(Ty) && !IsIllegalVectorType(Ty)) {
     // Treat an enum type as its underlying type.
     if (const EnumType *EnumTy = Ty->getAs<EnumType>())
       Ty = EnumTy->getDecl()->getIntegerType();
@@ -3354,14 +3391,18 @@ const TargetCodeGenInfo &CodeGenModule::getTargetCodeGenInfo() {
     }
   }
 
-  case llvm::Triple::x86_64:
+  case llvm::Triple::x86_64: {
+    bool HasAVX = strcmp(getContext().getTargetInfo().getABI(), "avx") == 0;
+
     switch (Triple.getOS()) {
     case llvm::Triple::Win32:
     case llvm::Triple::MinGW32:
     case llvm::Triple::Cygwin:
       return *(TheTargetCodeGenInfo = new WinX86_64TargetCodeGenInfo(Types));
     default:
-      return *(TheTargetCodeGenInfo = new X86_64TargetCodeGenInfo(Types));
+      return *(TheTargetCodeGenInfo = new X86_64TargetCodeGenInfo(Types,
+                                                                  HasAVX));
     }
+  }
   }
 }

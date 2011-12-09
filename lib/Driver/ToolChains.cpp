@@ -440,6 +440,16 @@ void DarwinClang::AddLinkRuntimeLib(const ArgList &Args,
 
 void DarwinClang::AddLinkRuntimeLibArgs(const ArgList &Args,
                                         ArgStringList &CmdArgs) const {
+  // Darwin only supports the compiler-rt based runtime libraries.
+  switch (GetRuntimeLibType(Args)) {
+  case ToolChain::RLT_CompilerRT:
+    break;
+  default:
+    getDriver().Diag(diag::err_drv_unsupported_rtlib_for_platform)
+      << Args.getLastArg(options::OPT_rtlib_EQ)->getValue(Args) << "darwin";
+    return;
+  }
+
   // Darwin doesn't support real static executables, don't link any runtime
   // libraries with -static.
   if (Args.hasArg(options::OPT_static))
@@ -464,6 +474,25 @@ void DarwinClang::AddLinkRuntimeLibArgs(const ArgList &Args,
       AddLinkRuntimeLib(Args, CmdArgs, "libclang_rt.profile_ios.a");
     } else {
       AddLinkRuntimeLib(Args, CmdArgs, "libclang_rt.profile_osx.a");
+    }
+  }
+
+  // Add ASAN runtime library, if required. Dynamic libraries and bundles
+  // should not be linked with the runtime library.
+  if (Args.hasFlag(options::OPT_faddress_sanitizer,
+                   options::OPT_fno_address_sanitizer, false)) {
+    if (Args.hasArg(options::OPT_dynamiclib) ||
+        Args.hasArg(options::OPT_bundle)) return;
+    if (isTargetIPhoneOS()) {
+      getDriver().Diag(diag::err_drv_clang_unsupported_per_platform)
+        << "-faddress-sanitizer";
+    } else {
+      AddLinkRuntimeLib(Args, CmdArgs, "libclang_rt.asan_osx.a");
+
+      // The ASAN runtime library requires C++ and CoreFoundation.
+      AddCXXStdlibLibArgs(Args, CmdArgs);
+      CmdArgs.push_back("-framework");
+      CmdArgs.push_back("CoreFoundation");
     }
   }
 
@@ -1227,7 +1256,8 @@ Generic_GCC::GCCInstallationDetector::GCCInstallationDetector(const Driver &D)
     static const char *const PPCLibDirs[] = { "/lib32", "/lib" };
     static const char *const PPCTriples[] = {
       "powerpc-linux-gnu",
-      "powerpc-unknown-linux-gnu"
+      "powerpc-unknown-linux-gnu",
+      "powerpc-suse-linux"
     };
     LibDirs.append(PPCLibDirs, PPCLibDirs + llvm::array_lengthof(PPCLibDirs));
     Triples.append(PPCTriples, PPCTriples + llvm::array_lengthof(PPCTriples));
@@ -1235,6 +1265,7 @@ Generic_GCC::GCCInstallationDetector::GCCInstallationDetector(const Driver &D)
     static const char *const PPC64LibDirs[] = { "/lib64", "/lib" };
     static const char *const PPC64Triples[] = {
       "powerpc64-unknown-linux-gnu",
+      "powerpc64-suse-linux",
       "ppc64-redhat-linux"
     };
     LibDirs.append(PPC64LibDirs,
@@ -1280,6 +1311,16 @@ void Generic_GCC::GCCInstallationDetector::ScanLibDirForGCCTriple(
         continue;
       if (CandidateVersion <= Version)
         continue;
+
+      // Some versions of SUSE and Fedora on ppc64 put 32-bit libs
+      // in what would normally be GccInstallPath and put the 64-bit
+      // libs in a subdirectory named 64. We need the 64-bit libs
+      // for linking.
+      bool UseSlash64 = false;
+      if (HostArch == llvm::Triple::ppc64 &&
+            llvm::sys::fs::exists(LI->path() + "/64/crtbegin.o"))
+        UseSlash64 = true;
+
       if (!llvm::sys::fs::exists(LI->path() + "/crtbegin.o"))
         continue;
 
@@ -1290,6 +1331,7 @@ void Generic_GCC::GCCInstallationDetector::ScanLibDirForGCCTriple(
       // Linux.
       GccInstallPath = LibDir + Suffixes[i] + "/" + VersionText.str();
       GccParentLibPath = GccInstallPath + InstallSuffixes[i];
+      if (UseSlash64) GccInstallPath = GccInstallPath + "/64";
       IsValid = true;
     }
   }
@@ -1570,11 +1612,9 @@ Tool &NetBSD::SelectTool(const Compilation &C, const JobAction &JA,
 /// Minix - Minix tool chain which can call as(1) and ld(1) directly.
 
 Minix::Minix(const HostInfo &Host, const llvm::Triple& Triple)
-  : Generic_GCC(Host, Triple) {
+  : Generic_ELF(Host, Triple) {
   getFilePaths().push_back(getDriver().Dir + "/../lib");
   getFilePaths().push_back("/usr/lib");
-  getFilePaths().push_back("/usr/gnu/lib");
-  getFilePaths().push_back("/usr/gnu/lib/gcc/i686-pc-minix/4.4.3");
 }
 
 Tool &Minix::SelectTool(const Compilation &C, const JobAction &JA,
@@ -1842,13 +1882,24 @@ Linux::Linux(const HostInfo &Host, const llvm::Triple &Triple)
   if (Arch == llvm::Triple::arm || Arch == llvm::Triple::thumb)
     ExtraOpts.push_back("-X");
 
-  if (IsRedhat(Distro) || IsOpenSuse(Distro) || Distro == UbuntuMaverick ||
-      Distro == UbuntuNatty || Distro == UbuntuOneiric)
-    ExtraOpts.push_back("--hash-style=gnu");
+  const bool IsMips = Arch == llvm::Triple::mips ||
+                      Arch == llvm::Triple::mipsel ||
+                      Arch == llvm::Triple::mips64 ||
+                      Arch == llvm::Triple::mips64el;
 
-  if (IsDebian(Distro) || IsOpenSuse(Distro) || Distro == UbuntuLucid ||
-      Distro == UbuntuJaunty || Distro == UbuntuKarmic)
-    ExtraOpts.push_back("--hash-style=both");
+  // Do not use 'gnu' hash style for Mips targets because .gnu.hash
+  // and the MIPS ABI require .dynsym to be sorted in different ways.
+  // .gnu.hash needs symbols to be grouped by hash code whereas the MIPS
+  // ABI requires a mapping between the GOT and the symbol table.
+  if (!IsMips) {
+    if (IsRedhat(Distro) || IsOpenSuse(Distro) || Distro == UbuntuMaverick ||
+        Distro == UbuntuNatty || Distro == UbuntuOneiric)
+      ExtraOpts.push_back("--hash-style=gnu");
+
+    if (IsDebian(Distro) || IsOpenSuse(Distro) || Distro == UbuntuLucid ||
+        Distro == UbuntuJaunty || Distro == UbuntuKarmic)
+      ExtraOpts.push_back("--hash-style=both");
+  }
 
   if (IsRedhat(Distro))
     ExtraOpts.push_back("--no-add-needed");
@@ -1875,8 +1926,15 @@ Linux::Linux(const HostInfo &Host, const llvm::Triple &Triple)
                          getArch() == llvm::Triple::mipsel ||
                          getArch() == llvm::Triple::ppc);
 
-  const std::string Suffix32 = Arch == llvm::Triple::x86_64 ? "/32" : "";
-  const std::string Suffix64 = Arch == llvm::Triple::x86_64 ? "" : "/64";
+  StringRef Suffix32;
+  StringRef Suffix64;
+  if (Arch == llvm::Triple::x86_64 || Arch == llvm::Triple::ppc64) {
+    Suffix32 = "/32";
+    Suffix64 = "";
+  } else {
+    Suffix32 = "";
+    Suffix64 = "/64";
+  }
   const std::string Suffix = Is32Bits ? Suffix32 : Suffix64;
   const std::string Multilib = Is32Bits ? "lib32" : "lib64";
   const std::string MultiarchTriple = getMultiarchTriple(Triple, SysRoot);

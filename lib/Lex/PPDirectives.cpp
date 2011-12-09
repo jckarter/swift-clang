@@ -487,7 +487,7 @@ const FileEntry *Preprocessor::LookupFile(
     const DirectoryLookup *&CurDir,
     SmallVectorImpl<char> *SearchPath,
     SmallVectorImpl<char> *RelativePath,
-    ModuleMap::Module **SuggestedModule,
+    Module **SuggestedModule,
     bool SkipCache) {
   // If the header lookup mechanism may be relative to the current file, pass in
   // info about where the current file is.
@@ -1274,7 +1274,7 @@ void Preprocessor::HandleIncludeDirective(SourceLocation HashLoc,
   llvm::SmallString<1024> RelativePath;
   // We get the raw path only if we have 'Callbacks' to which we later pass
   // the path.
-  ModuleMap::Module *SuggestedModule = 0;
+  Module *SuggestedModule = 0;
   const FileEntry *File = LookupFile(
       Filename, isAngled, LookupFrom, CurDir,
       Callbacks ? &SearchPath : NULL, Callbacks ? &RelativePath : NULL,
@@ -1316,7 +1316,7 @@ void Preprocessor::HandleIncludeDirective(SourceLocation HashLoc,
     // FIXME: Should we have a second loadModule() overload to avoid this
     // extra lookup step?
     llvm::SmallVector<std::pair<IdentifierInfo *, SourceLocation>, 2> Path;
-    for (ModuleMap::Module *Mod = SuggestedModule; Mod; Mod = Mod->Parent)
+    for (Module *Mod = SuggestedModule; Mod; Mod = Mod->Parent)
       Path.push_back(std::make_pair(getIdentifierInfo(Mod->Name),
                                     FilenameTok.getLocation()));
     std::reverse(Path.begin(), Path.end());
@@ -1352,17 +1352,32 @@ void Preprocessor::HandleIncludeDirective(SourceLocation HashLoc,
       break;
     }
 
-    CharSourceRange ReplaceRange(SourceRange(HashLoc, CharEnd), 
-                                 /*IsTokenRange=*/false);
-    Diag(HashLoc, diag::warn_auto_module_import)
-      << IncludeKind << PathString 
-      << FixItHint::CreateReplacement(ReplaceRange,
-           "__import_module__ " + PathString.str().str() + ";");
+    // Determine whether we are actually building the module that this
+    // include directive maps to.
+    bool BuildingImportedModule
+      = Path[0].first->getName() == getLangOptions().CurrentModule;
+    
+    if (!BuildingImportedModule) {
+      // If we're not building the imported module, warn that we're going
+      // to automatically turn this inclusion directive into a module import.
+      CharSourceRange ReplaceRange(SourceRange(HashLoc, CharEnd), 
+                                   /*IsTokenRange=*/false);
+      Diag(HashLoc, diag::warn_auto_module_import)
+        << IncludeKind << PathString 
+        << FixItHint::CreateReplacement(ReplaceRange,
+             "__import_module__ " + PathString.str().str() + ";");
+    }
     
     // Load the module.
-    // FIXME: Deal with __include_macros here.
-    TheModuleLoader.loadModule(IncludeTok.getLocation(), Path);
-    return;
+    // If this was an #__include_macros directive, only make macros visible.
+    Module::NameVisibilityKind Visibility 
+      = (IncludeKind == 3)? Module::MacrosVisible : Module::AllVisible;
+    TheModuleLoader.loadModule(IncludeTok.getLocation(), Path, Visibility,
+                               /*IsIncludeDirective=*/true);
+    
+    // If this header isn't part of the module we're building, we're done.
+    if (!BuildingImportedModule)
+      return;
   }
   
   // The #included file will be considered to be a system header if either it is

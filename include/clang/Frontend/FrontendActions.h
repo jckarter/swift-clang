@@ -11,12 +11,13 @@
 #define LLVM_CLANG_FRONTEND_FRONTENDACTIONS_H
 
 #include "clang/Frontend/FrontendAction.h"
-#include "clang/Lex/ModuleMap.h"
 #include <string>
 #include <vector>
 
 namespace clang {
 
+class Module;
+  
 //===----------------------------------------------------------------------===//
 // Custom Consumer Actions
 //===----------------------------------------------------------------------===//
@@ -68,14 +69,12 @@ protected:
 };
 
 class GeneratePCHAction : public ASTFrontendAction {
-  bool MakeModule;
-  
 protected:
   virtual ASTConsumer *CreateASTConsumer(CompilerInstance &CI,
                                          StringRef InFile);
 
-  virtual TranslationUnitKind getTranslationUnitKind() { 
-    return MakeModule? TU_Module : TU_Prefix;
+  virtual TranslationUnitKind getTranslationUnitKind() {
+    return TU_Prefix;
   }
 
   virtual bool hasASTFileSupport() const { return false; }
@@ -93,7 +92,7 @@ public:
 };
 
 class GenerateModuleAction : public ASTFrontendAction {
-  ModuleMap::Module *Module;
+  clang::Module *Module;
   
 protected:
   virtual ASTConsumer *CreateASTConsumer(CompilerInstance &CI,

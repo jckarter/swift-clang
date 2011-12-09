@@ -8322,6 +8322,8 @@ TreeTransform<Derived>::TransformBlockExpr(BlockExpr *E) {
   // in above, CapturesCXXThis need be set here from the block
   // expression.
   blockScope->CapturesCXXThis = oldBlock->capturesCXXThis();
+  blockScope->TheDecl->setBlockMissingReturnType(
+                         oldBlock->blockMissingReturnType());
   
   SmallVector<ParmVarDecl*, 4> params;
   SmallVector<QualType, 4> paramTypes;

@@ -1720,9 +1720,9 @@ void removeDeadBindingsWorker::VisitBinding(SVal V) {
   if (const MemRegion *R = V.getAsRegion())
     AddToWorkList(R);
 
-    // Update the set of live symbols.
-  for (SVal::symbol_iterator SI=V.symbol_begin(), SE=V.symbol_end();
-       SI!=SE;++SI)
+  // Update the set of live symbols.
+  for (SymExpr::symbol_iterator SI = V.symbol_begin(), SE = V.symbol_end();
+       SI!=SE; ++SI)
     SymReaper.markLive(*SI);
 }
 
@@ -1810,7 +1810,7 @@ StoreRef RegionStoreManager::removeDeadBindings(Store store,
       SymReaper.maybeDead(SymR->getSymbol());
 
     SVal X = I.getData();
-    SVal::symbol_iterator SI = X.symbol_begin(), SE = X.symbol_end();
+    SymExpr::symbol_iterator SI = X.symbol_begin(), SE = X.symbol_end();
     for (; SI != SE; ++SI)
       SymReaper.maybeDead(*SI);
   }

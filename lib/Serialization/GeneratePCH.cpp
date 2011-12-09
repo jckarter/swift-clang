@@ -1,4 +1,4 @@
-//===--- GeneratePCH.cpp - AST Consumer for PCH Generation ------*- C++ -*-===//
+//===--- GeneratePCH.cpp - Sema Consumer for PCH Generation -----*- C++ -*-===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -7,12 +7,11 @@
 //
 //===----------------------------------------------------------------------===//
 //
-//  This file defines the CreatePCHGenerate function, which creates an
-//  ASTConsumer that generates a PCH file.
+//  This file defines the PCHGenerator, which as a SemaConsumer that generates
+//  a PCH file.
 //
 //===----------------------------------------------------------------------===//
 
-#include "clang/Frontend/ASTConsumers.h"
 #include "clang/Serialization/ASTWriter.h"
 #include "clang/Sema/SemaConsumer.h"
 #include "clang/AST/ASTContext.h"
@@ -28,7 +27,7 @@ using namespace clang;
 
 PCHGenerator::PCHGenerator(const Preprocessor &PP,
                            StringRef OutputFile,
-                           ModuleMap::Module *Module,
+                           clang::Module *Module,
                            StringRef isysroot,
                            raw_ostream *OS)
   : PP(PP), OutputFile(OutputFile), Module(Module), 

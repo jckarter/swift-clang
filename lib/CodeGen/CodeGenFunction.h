@@ -1537,16 +1537,15 @@ public:
   //                                  Helpers
   //===--------------------------------------------------------------------===//
 
-  LValue MakeAddrLValue(llvm::Value *V, QualType T, unsigned Alignment = 0) {
+  LValue MakeAddrLValue(llvm::Value *V, QualType T,
+                        CharUnits Alignment = CharUnits()) {
     return LValue::MakeAddr(V, T, Alignment, getContext(),
                             CGM.getTBAAInfo(T));
   }
   LValue MakeNaturalAlignAddrLValue(llvm::Value *V, QualType T) {
-    unsigned Alignment;
-    if (T->isIncompleteType())
-      Alignment = 0;
-    else
-      Alignment = getContext().getTypeAlignInChars(T).getQuantity();
+    CharUnits Alignment;
+    if (!T->isIncompleteType())
+      Alignment = getContext().getTypeAlignInChars(T);
     return LValue::MakeAddr(V, T, Alignment, getContext(),
                             CGM.getTBAAInfo(T));
   }
@@ -1574,7 +1573,9 @@ public:
   /// CreateAggTemp - Create a temporary memory object for the given
   /// aggregate type.
   AggValueSlot CreateAggTemp(QualType T, const Twine &Name = "tmp") {
-    return AggValueSlot::forAddr(CreateMemTemp(T, Name), T.getQualifiers(),
+    CharUnits Alignment = getContext().getTypeAlignInChars(T);
+    return AggValueSlot::forAddr(CreateMemTemp(T, Name), Alignment,
+                                 T.getQualifiers(),
                                  AggValueSlot::IsNotDestructed,
                                  AggValueSlot::DoesNotNeedGCBarriers,
                                  AggValueSlot::IsNotAliased);
@@ -1623,7 +1624,8 @@ public:
   /// \param isVolatile - True iff either the source or the destination is
   /// volatile.
   void EmitAggregateCopy(llvm::Value *DestPtr, llvm::Value *SrcPtr,
-                         QualType EltTy, bool isVolatile=false);
+                         QualType EltTy, bool isVolatile=false,
+                         unsigned Alignment = 0);
 
   /// StartBlock - Start new block named N. If insert block is a dummy block
   /// then reuse it.

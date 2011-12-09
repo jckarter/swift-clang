@@ -265,6 +265,22 @@ ParsedType Sema::getDestructorName(SourceLocation TildeLoc,
   return ParsedType();
 }
 
+ParsedType Sema::getDestructorType(const DeclSpec& DS, ParsedType ObjectType) {
+    if (DS.getTypeSpecType() == DeclSpec::TST_error)
+      return ParsedType();
+    assert(DS.getTypeSpecType() == DeclSpec::TST_decltype 
+           && "only get destructor types from declspecs");
+    QualType T = BuildDecltypeType(DS.getRepAsExpr(), DS.getTypeSpecTypeLoc());
+    QualType SearchType = GetTypeFromParser(ObjectType);
+    if (SearchType->isDependentType() || Context.hasSameUnqualifiedType(SearchType, T)) {
+      return ParsedType::make(T);
+    }
+      
+    Diag(DS.getTypeSpecTypeLoc(), diag::err_destructor_expr_type_mismatch)
+      << T << SearchType;
+    return ParsedType();
+}
+
 /// \brief Build a C++ typeid expression with a type operand.
 ExprResult Sema::BuildCXXTypeId(QualType TypeInfoType,
                                 SourceLocation TypeidLoc,
@@ -2650,6 +2666,9 @@ static bool CheckUnaryTypeTraitTypeCompleteness(Sema &S,
   case UTT_IsAbstract:
     // Fall-through
 
+  // These traits require a complete type.
+  case UTT_IsFinal:
+
     // These trait expressions are designed to help implement predicates in
     // [meta.unary.prop] despite not being named the same. They are specified
     // by both GCC and the Embarcadero C++ compiler, and require the complete
@@ -2774,6 +2793,10 @@ static bool EvaluateUnaryTypeTrait(Sema &Self, UnaryTypeTrait UTT,
   case UTT_IsAbstract:
     if (const CXXRecordDecl *RD = T->getAsCXXRecordDecl())
       return RD->isAbstract();
+    return false;
+  case UTT_IsFinal:
+    if (const CXXRecordDecl *RD = T->getAsCXXRecordDecl())
+      return RD->hasAttr<FinalAttr>();
     return false;
   case UTT_IsSigned:
     return T->isSignedIntegerType();
