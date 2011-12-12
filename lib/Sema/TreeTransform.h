@@ -7916,19 +7916,19 @@ TreeTransform<Derived>::TransformMaterializeTemporaryExpr(
 template<typename Derived>
 ExprResult
 TreeTransform<Derived>::TransformObjCStringLiteral(ObjCStringLiteral *E) {
-  return SemaRef.Owned(E);
+  return SemaRef.MaybeBindToTemporary(E);
 }
 
 template<typename Derived>
 ExprResult
 TreeTransform<Derived>::TransformObjCBoolLiteralExpr(ObjCBoolLiteralExpr *E) {
-  return SemaRef.Owned(E);
+  return SemaRef.MaybeBindToTemporary(E);
 }
 
 template<typename Derived>
 ExprResult
 TreeTransform<Derived>::TransformObjCNumericLiteral(ObjCNumericLiteral *E) {
-  return SemaRef.Owned(E);
+  return SemaRef.MaybeBindToTemporary(E);
 }
 
 template<typename Derived>
@@ -7942,7 +7942,7 @@ TreeTransform<Derived>::TransformObjCArrayLiteral(ObjCArrayLiteral *E) {
     return ExprError();
   
   if (!getDerived().AlwaysRebuild() && !ArgChanged)
-    return Owned(E);
+    return SemaRef.MaybeBindToTemporary(E);
   
   return getDerived().RebuildObjCArrayLiteral(E->getSourceRange(),
                                               Elements.data(),
@@ -8064,7 +8064,7 @@ TreeTransform<Derived>::TransformObjCDictionaryLiteral(
   }
   
   if (!getDerived().AlwaysRebuild() && !ArgChanged)
-    return Owned(E);
+    return SemaRef.MaybeBindToTemporary(E);
 
   return getDerived().RebuildObjCDictionaryLiteral(E->getSourceRange(),
                                                    Elements.data(),
