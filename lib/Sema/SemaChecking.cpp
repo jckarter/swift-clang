@@ -2229,9 +2229,6 @@ CheckPrintfHandler::HandlePrintfSpecifier(const analyze_printf::PrintfSpecifier
       llvm::raw_svector_ostream os(buf);
       fixedFS.toString(os);
 
-      // FIXME: getRepresentativeType() perhaps should return a string
-      // instead of a QualType to better handle when the representative
-      // type is 'wint_t' (which is defined in the system headers).
       EmitFormatDiagnostic(
         S.PDiag(diag::warn_printf_conversion_argument_type_mismatch)
           << ATR.getRepresentativeTypeName(S.Context) << Ex->getType()
@@ -2374,8 +2371,38 @@ bool CheckScanfHandler::HandleScanfSpecifier(
   if (!CheckNumArgs(FS, CS, startSpecifier, specifierLen, argIndex))
     return false;
   
-  // FIXME: Check that the argument type matches the format specifier.
-  
+  // Check that the argument type matches the format specifier.
+  const Expr *Ex = getDataArg(argIndex);
+  const analyze_scanf::ScanfArgTypeResult &ATR = FS.getArgType(S.Context);
+  if (ATR.isValid() && !ATR.matchesType(S.Context, Ex->getType())) {
+    ScanfSpecifier fixedFS = FS;
+    bool success = fixedFS.fixType(Ex->getType(), S.getLangOptions());
+
+    if (success) {
+      // Get the fix string from the fixed format specifier.
+      llvm::SmallString<128> buf;
+      llvm::raw_svector_ostream os(buf);
+      fixedFS.toString(os);
+
+      EmitFormatDiagnostic(
+        S.PDiag(diag::warn_printf_conversion_argument_type_mismatch)
+          << ATR.getRepresentativeTypeName(S.Context) << Ex->getType()
+          << Ex->getSourceRange(),
+        getLocationOfByte(CS.getStart()),
+        /*IsStringLocation*/true,
+        getSpecifierRange(startSpecifier, specifierLen),
+        FixItHint::CreateReplacement(
+          getSpecifierRange(startSpecifier, specifierLen),
+          os.str()));
+    } else {
+      S.Diag(getLocationOfByte(CS.getStart()),
+             diag::warn_printf_conversion_argument_type_mismatch)
+          << ATR.getRepresentativeTypeName(S.Context) << Ex->getType()
+          << getSpecifierRange(startSpecifier, specifierLen)
+          << Ex->getSourceRange();
+    }
+  }
+
   return true;
 }
 
@@ -3774,6 +3801,16 @@ void CheckImplicitConversion(Sema &S, Expr *E, QualType T,
         if (FunctionDecl* F = dyn_cast<FunctionDecl>(D)) {
           S.Diag(E->getExprLoc(), diag::warn_impcast_function_to_bool)
             << F << E->getSourceRange() << SourceRange(CC);
+          S.Diag(E->getExprLoc(), diag::note_function_to_bool_silence)
+            << FixItHint::CreateInsertion(E->getExprLoc(), "&");
+          QualType ReturnType;
+          UnresolvedSet<4> NonTemplateOverloads;
+          S.isExprCallable(*E, ReturnType, NonTemplateOverloads);
+          if (!ReturnType.isNull() 
+              && ReturnType->isSpecificBuiltinType(BuiltinType::Bool))
+            S.Diag(E->getExprLoc(), diag::note_function_to_bool_call)
+              << FixItHint::CreateInsertion(
+                 S.getPreprocessor().getLocForEndOfToken(E->getLocEnd()), "()");
           return;
         }
       }

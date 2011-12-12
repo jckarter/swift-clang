@@ -702,6 +702,10 @@ def warn_weak_vtable : Warning<
   "%0 has no out-of-line virtual method definitions; its vtable will be "
   "emitted in every translation unit">,
   InGroup<DiagGroup<"weak-vtables">>, DefaultIgnore;
+def warn_weak_template_vtable : Warning<
+  "explicit template instantiation %0 will emit a vtable in every "
+  "translation unit">,
+  InGroup<DiagGroup<"weak-template-vtables">>, DefaultIgnore;
 
 def ext_using_undefined_std : ExtWarn<
   "using directive refers to implicitly-defined namespace 'std'">;
@@ -1681,6 +1685,10 @@ def warn_impcast_null_pointer_to_integer : Warning<
 def warn_impcast_function_to_bool : Warning<
     "address of function %q0 will always evaluate to 'true'">,
     InGroup<BoolConversions>;
+def note_function_to_bool_silence : Note<
+    "prefix with the address-of operator to silence this warning">;
+def note_function_to_bool_call : Note<
+    "suffix with parentheses to turn this into a function call">;
 
 def warn_cast_align : Warning<
   "cast from %0 to %1 increases required alignment from %2 to %3">,
@@ -3092,6 +3100,9 @@ def err_arc_unsupported_weak_class : Error<
   "class is incompatible with __weak references">;
 def err_arc_weak_unavailable_assign : Error<
   "assignment of a weak-unavailable object to a __weak object">;
+def err_arc_weak_unavailable_property : Error<
+  "synthesis of a weak-unavailable property is disallowed "
+  "because it requires synthesis of an ivar of the __weak object">;
 def err_arc_convesion_of_weak_unavailable : Error<
   "%select{implicit conversion|cast}0 of weak-unavailable object of type %1 to"
   " a __weak object of type %2">;
