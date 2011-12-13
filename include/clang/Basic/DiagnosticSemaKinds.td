@@ -1144,6 +1144,8 @@ def err_cannot_determine_declared_type_of_overloaded_function : Error<
 def warn_cxx98_compat_decltype : Warning<
   "'decltype' type specifier is incompatible with C++98">,
   InGroup<CXX98Compat>, DefaultIgnore;
+def err_decltype_in_declarator : Error<
+    "'decltype' cannot be used to name a declaration">;
     
 // C++11 auto
 def warn_cxx98_compat_auto_type_specifier : Warning<
@@ -3057,7 +3059,7 @@ def ext_flexible_array_empty_aggregate_gnu : Extension<
 def ext_flexible_array_union_gnu : Extension<
   "flexible array member %0 in a union is a GNU extension">, InGroup<GNU>;
 
-let CategoryName = "ARC Issue" in {
+let CategoryName = "ARC Semantic Issue" in {
 
 // ARC-mode diagnostics.
 
