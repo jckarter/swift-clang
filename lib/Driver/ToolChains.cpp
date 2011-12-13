@@ -466,7 +466,9 @@ void DarwinClang::AddLinkRuntimeLibArgs(const ArgList &Args,
 
   // Darwin doesn't support real static executables, don't link any runtime
   // libraries with -static.
-  if (Args.hasArg(options::OPT_static))
+  if (Args.hasArg(options::OPT_static) ||
+      Args.hasArg(options::OPT_fapple_kext) ||
+      Args.hasArg(options::OPT_mkernel))
     return;
 
   // Reject -static-libgcc for now, we can deal with this when and if someone
