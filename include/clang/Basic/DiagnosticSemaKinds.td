@@ -485,7 +485,6 @@ def warn_strict_multiple_method_decl : Warning<
   "multiple methods named %0 found">, InGroup<StrictSelector>, DefaultIgnore;
 def warn_accessor_property_type_mismatch : Warning<
   "type of property %0 does not match type of accessor %1">;
-def note_declared_at : Note<"declared here">;
 def note_method_declared_at : Note<"method declared here">;
 def err_setter_type_void : Error<"type of setter must be void">;
 def err_duplicate_method_decl : Error<"duplicate declaration of method %0">;
@@ -3094,7 +3093,7 @@ def err_arc_mismatched_cast : Error<
 def err_arc_nolifetime_behavior : Error<
   "explicit ownership qualifier on cast result has no effect">;
 def err_arc_objc_object_in_struct : Error<
-  "ARC forbids Objective-C objects in structs or unions">;
+  "ARC forbids %select{Objective-C objects|blocks}0 in structs or unions">;
 def err_arc_objc_property_default_assign_on_object : Error<
   "ARC forbids synthesizing a property of an Objective-C object "
   "with unspecified ownership or storage attribute">;
