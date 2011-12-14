@@ -616,6 +616,9 @@ static bool HasFeature(const Preprocessor &PP, const IdentifierInfo *II) {
            .Case("ownership_returns", true)
            .Case("ownership_takes", true)
            .Case("objc_bool", true)
+           .Case("objc_subscripting", LangOpts.ObjCNonFragileABI)
+           .Case("objc_array_literals", LangOpts.ObjC2)
+           .Case("objc_dictionary_literals", LangOpts.ObjC2)
            .Case("arc_cf_code_audited", true)
            // C1X features
            .Case("c_alignas", LangOpts.C1X)

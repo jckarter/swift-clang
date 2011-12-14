@@ -4,13 +4,17 @@ typedef unsigned int size_t;
 @protocol P @end
 
 @interface NSMutableArray
+#if __has_feature(objc_subscripting)
 - (id)objectAtIndexedSubscript:(size_t)index;
 - (void)setObject:(id)object atIndexedSubscript:(size_t)index;
+#endif
 @end
 
+#if __has_feature(objc_subscripting)
 @interface XNSMutableArray
 - (id)objectAtIndexedSubscript:(size_t)index;
 - (void)setObject:(id)object atIndexedSubscript:(size_t)index;
+#endif
 @end
 
 @interface NSMutableDictionary

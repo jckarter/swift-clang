@@ -22,6 +22,7 @@ typedef unsigned char BOOL;
 @interface NSNumber @end
 
 @interface NSNumber (NSNumberCreation)
+#if __has_feature(objc_array_literals)
 + (NSNumber *)numberWithChar:(char)value;
 + (NSNumber *)numberWithUnsignedChar:(unsigned char)value;
 + (NSNumber *)numberWithShort:(short)value;
@@ -37,15 +38,18 @@ typedef unsigned char BOOL;
 + (NSNumber *)numberWithBool:(BOOL)value;
 + (NSNumber *)numberWithInteger:(NSInteger)value ;
 + (NSNumber *)numberWithUnsignedInteger:(NSUInteger)value ;
+#endif
 @end
 
 @interface NSDate
 + (NSDate *) date;
 @end
 
+#if __has_feature(objc_dictionary_literals)
 @interface NSDictionary
 + (id)dictionaryWithObjects:(const id [])objects forKeys:(const id [])keys count:(NSUInteger)cnt;
 @end
+#endif
 
 id NSUserName();
 
