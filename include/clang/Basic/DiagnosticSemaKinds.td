@@ -488,6 +488,9 @@ def warn_accessor_property_type_mismatch : Warning<
 def note_method_declared_at : Note<"method declared here">;
 def err_setter_type_void : Error<"type of setter must be void">;
 def err_duplicate_method_decl : Error<"duplicate declaration of method %0">;
+def warn_duplicate_method_decl : 
+  Warning<"multiple declarations of method %0 found and ignored">, 
+  InGroup<MethodDuplicate>;
 def err_objc_var_decl_inclass : 
     Error<"cannot declare variable inside @interface or @protocol">;
 def error_missing_method_context : Error<
@@ -1020,7 +1023,7 @@ def err_init_conversion_failed : Error<
   "%select{rvalue|lvalue}2 of type %3"
   "%select{|: different classes (%5 vs %6)"
   "|: different number of parameters (%5 vs %6)"
-  "|: type mismatch in %ordinal5 parameter (%6 vs %7)"
+  "|: type mismatch at %ordinal5 parameter (%6 vs %7)"
   "|: different return type (%5 vs %6)"
   "|: different qualifiers ("
   "%select{none|const|restrict|const and restrict|volatile|const and volatile|"
@@ -1852,7 +1855,7 @@ def note_ovl_candidate : Note<"candidate "
     "is an inherited constructor}0%1"
     "%select{| has different class (expected %3 but has %4)"
     "| has different number of parameters (expected %3 but has %4)"
-    "| has type mismatch in %ordinal3 parameter (expected %4 but has %5)"
+    "| has type mismatch at %ordinal3 parameter (expected %4 but has %5)"
     "| has different return type (%3 expected but has %4)"
     "| has different qualifiers (expected "
     "%select{none|const|restrict|const and restrict|volatile|const and volatile"
