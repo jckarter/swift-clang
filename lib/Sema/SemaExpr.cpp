@@ -10251,5 +10251,5 @@ Sema::ActOnObjCBoolLiteral(SourceLocation OpLoc, tok::TokenKind Kind) {
   assert((Kind == tok::kw___objc_yes || Kind == tok::kw___objc_no) &&
          "Unknown Objective-C Boolean value!");
   return Owned(new (Context) ObjCBoolLiteralExpr(Kind == tok::kw___objc_yes,
-                                                Context.SignedCharTy, OpLoc));
+                                                Context.BoolTy, OpLoc));
 }

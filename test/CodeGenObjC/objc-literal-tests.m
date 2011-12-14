@@ -1,5 +1,5 @@
-// RUN: %clang_cc1 -x objective-c -emit-llvm %s -o /dev/null
-// RUN: %clang_cc1 -x objective-c++ -emit-llvm %s -o /dev/null
+// RUN: %clang_cc1 -x objective-c -fblocks -emit-llvm %s -o /dev/null
+// RUN: %clang_cc1 -x objective-c++ -fblocks -emit-llvm %s -o /dev/null
 // rdar://10111397
 
 #if __has_feature(objc_bool)
@@ -17,7 +17,11 @@ typedef long NSInteger;
 typedef unsigned int NSUInteger;
 typedef int NSInteger;
 #endif
-typedef unsigned char BOOL;
+#ifdef __cplusplus
+typedef bool BOOL;
+#else
+typedef _Bool BOOL;
+#endif
 
 @interface NSNumber @end
 
@@ -68,4 +72,12 @@ int main() {
 NSDictionary *dictionary = @{@"name" : NSUserName(), 
                              @"date" : [NSDate date] }; 
   return __objc_yes == __objc_no;
+}
+
+// rdar://10579122
+typedef BOOL (^foo)(void);
+extern void bar(foo a);
+
+void baz(void) {
+  bar(^(void) { return YES; });
 }

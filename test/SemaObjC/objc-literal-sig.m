@@ -1,5 +1,5 @@
 // RUN: %clang_cc1 -fsyntax-only -verify %s
-typedef unsigned char BOOL;
+typedef _Bool BOOL;
 
 @interface NSNumber @end
 
