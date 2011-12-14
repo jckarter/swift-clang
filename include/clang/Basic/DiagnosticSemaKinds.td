@@ -485,7 +485,6 @@ def warn_strict_multiple_method_decl : Warning<
   "multiple methods named %0 found">, InGroup<StrictSelector>, DefaultIgnore;
 def warn_accessor_property_type_mismatch : Warning<
   "type of property %0 does not match type of accessor %1">;
-def note_declared_at : Note<"declared here">;
 def not_conv_function_declared_at : Note<"type conversion function declared here">;
 def note_method_declared_at : Note<"method declared here">;
 def err_setter_type_void : Error<"type of setter must be void">;
@@ -1146,6 +1145,8 @@ def err_cannot_determine_declared_type_of_overloaded_function : Error<
 def warn_cxx98_compat_decltype : Warning<
   "'decltype' type specifier is incompatible with C++98">,
   InGroup<CXX98Compat>, DefaultIgnore;
+def err_decltype_in_declarator : Error<
+    "'decltype' cannot be used to name a declaration">;
     
 // C++11 auto
 def warn_cxx98_compat_auto_type_specifier : Warning<
@@ -3088,7 +3089,7 @@ def ext_flexible_array_empty_aggregate_gnu : Extension<
 def ext_flexible_array_union_gnu : Extension<
   "flexible array member %0 in a union is a GNU extension">, InGroup<GNU>;
 
-let CategoryName = "ARC Issue" in {
+let CategoryName = "ARC Semantic Issue" in {
 
 // ARC-mode diagnostics.
 
@@ -3124,7 +3125,7 @@ def err_arc_mismatched_cast : Error<
 def err_arc_nolifetime_behavior : Error<
   "explicit ownership qualifier on cast result has no effect">;
 def err_arc_objc_object_in_struct : Error<
-  "ARC forbids Objective-C objects in structs or unions">;
+  "ARC forbids %select{Objective-C objects|blocks}0 in structs or unions">;
 def err_arc_objc_property_default_assign_on_object : Error<
   "ARC forbids synthesizing a property of an Objective-C object "
   "with unspecified ownership or storage attribute">;

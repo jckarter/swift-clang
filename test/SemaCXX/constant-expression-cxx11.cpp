@@ -10,7 +10,7 @@ static_assert(false, "test"); // expected-error {{test}}
 
 // FIXME: support const T& parameters here.
 //template<typename T> constexpr T id(const T &t) { return t; }
-template<typename T> constexpr T id(T t) { return t; }
+template<typename T> constexpr T id(T t) { return t; } // expected-note {{here}}
 // FIXME: support templates here.
 //template<typename T> constexpr T min(const T &a, const T &b) {
 //  return a < b ? a : b;
@@ -95,9 +95,9 @@ namespace CaseStatements {
   void f(int n) {
     switch (n) {
     // FIXME: Produce the 'add ()' fixit for this.
-    case MemberZero().zero: // desired-error {{did you mean to call it with no arguments?}} expected-error {{not an integer constant expression}}
+    case MemberZero().zero: // desired-error {{did you mean to call it with no arguments?}} expected-error {{not an integer constant expression}} expected-note {{non-literal type '<bound member function type>'}}
     // FIXME: This should be accepted once we implement the new ICE rules.
-    case id(1): // expected-error {{not an integer constant expression}}
+    case id(1): // expected-error {{not an integer constant expression}} expected-note {{undefined function}}
       return;
     }
   }
@@ -301,25 +301,25 @@ struct Str {
   // FIXME: In C++ mode, we should say 'integral' not 'integer'
   int a : dynamic_cast<S*>(sptr) == dynamic_cast<S*>(sptr); // \
     expected-warning {{not integer constant expression}} \
-    expected-note {{dynamic_cast not allowed in a constant expression}}
+    expected-note {{dynamic_cast is not allowed in a constant expression}}
   int b : reinterpret_cast<S*>(sptr) == reinterpret_cast<S*>(sptr); // \
     expected-warning {{not integer constant expression}} \
-    expected-note {{reinterpret_cast not allowed in a constant expression}}
+    expected-note {{reinterpret_cast is not allowed in a constant expression}}
   int c : (S*)(long)(sptr) == (S*)(long)(sptr); // \
     expected-warning {{not integer constant expression}} \
-    expected-note {{reinterpreting cast not allowed in a constant expression}}
+    expected-note {{cast which performs the conversions of a reinterpret_cast is not allowed in a constant expression}}
   int d : (S*)(42) == (S*)(42); // \
     expected-warning {{not integer constant expression}} \
-    expected-note {{reinterpreting cast not allowed in a constant expression}}
+    expected-note {{cast which performs the conversions of a reinterpret_cast is not allowed in a constant expression}}
   int e : (Str*)(sptr) == (Str*)(sptr); // \
     expected-warning {{not integer constant expression}} \
-    expected-note {{reinterpreting cast not allowed in a constant expression}}
+    expected-note {{cast which performs the conversions of a reinterpret_cast is not allowed in a constant expression}}
   int f : &(Str&)(*sptr) == &(Str&)(*sptr); // \
     expected-warning {{not integer constant expression}} \
-    expected-note {{reinterpreting cast not allowed in a constant expression}}
+    expected-note {{cast which performs the conversions of a reinterpret_cast is not allowed in a constant expression}}
   int g : (S*)(void*)(sptr) == sptr; // \
     expected-warning {{not integer constant expression}} \
-    expected-note {{reinterpreting cast not allowed in a constant expression}}
+    expected-note {{cast from 'void *' is not allowed in a constant expression}}
 };
 
 extern char externalvar[];

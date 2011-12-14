@@ -7,12 +7,12 @@ typedef __WCHAR_TYPE__ wchar_t;
 
 int fscanf(FILE * restrict, const char * restrict, ...) ;
 int scanf(const char * restrict, ...) ;
-int sscanf(char * restrict, const char * restrict, ...) ;
+int sscanf(const char * restrict, const char * restrict, ...) ;
 int my_scanf(const char * restrict, ...) __attribute__((__format__(__scanf__, 1, 2)));
 
 int vscanf(const char * restrict, va_list);
 int vfscanf(FILE * restrict, const char * restrict, va_list);
-int vsscanf(char * restrict, const char * restrict, va_list);
+int vsscanf(const char * restrict, const char * restrict, va_list);
 
 void test(const char *s, int *i) {
   scanf(s, i); // expected-warning{{ormat string is not a string literal}}

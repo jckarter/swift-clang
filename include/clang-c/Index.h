@@ -4243,13 +4243,6 @@ typedef struct {
 } CXIdxObjCContainerDeclInfo;
 
 typedef struct {
-  const CXIdxObjCContainerDeclInfo *containerInfo;
-  const CXIdxEntityInfo *objcClass;
-  CXCursor classCursor;
-  CXIdxLoc classLoc;
-} CXIdxObjCCategoryDeclInfo;
-
-typedef struct {
   const CXIdxEntityInfo *base;
   CXCursor cursor;
   CXIdxLoc loc;
@@ -4271,6 +4264,14 @@ typedef struct {
   const CXIdxBaseClassInfo *superInfo;
   const CXIdxObjCProtocolRefListInfo *protocols;
 } CXIdxObjCInterfaceDeclInfo;
+
+typedef struct {
+  const CXIdxObjCContainerDeclInfo *containerInfo;
+  const CXIdxEntityInfo *objcClass;
+  CXCursor classCursor;
+  CXIdxLoc classLoc;
+  const CXIdxObjCProtocolRefListInfo *protocols;
+} CXIdxObjCCategoryDeclInfo;
 
 typedef struct {
   const CXIdxDeclInfo *declInfo;
@@ -4315,11 +4316,12 @@ typedef struct {
    * \endcode
    * 
    * The parent of reference of type 'Foo' is the variable 'var'.
-   * parentEntity will be null for references inside statement bodies.
+   * For references inside statement bodies of functions/methods,
+   * the parentEntity will be the function/method.
    */
   const CXIdxEntityInfo *parentEntity;
   /**
-   * \brief Container context of the reference.
+   * \brief Lexical container context of the reference.
    */
   const CXIdxContainerInfo *container;
 } CXIdxEntityRefInfo;
