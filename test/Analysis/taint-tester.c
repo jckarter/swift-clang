@@ -1,5 +1,7 @@
 // RUN: %clang_cc1  -analyze -analyzer-checker=experimental.security.taint,debug.TaintTest -verify %s
 
+#include <stdarg.h>
+
 int scanf(const char *restrict format, ...);
 int getchar(void);
 
@@ -54,6 +56,10 @@ void taintTracking(int x) {
   int tx = xy.x; // expected-warning {{tainted}}
   int ty = xy.y; // FIXME: This should be tainted as well.
   char ntz = xy.z;// no warning
+  // Now, scanf scans both.
+  scanf("%d %d", &xy.y, &xy.x);
+  int ttx = xy.x; // expected-warning {{tainted}}
+  int tty = xy.y; // expected-warning {{tainted}}
 }
 
 void BitwiseOp(int in, char inn) {
