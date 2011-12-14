@@ -315,7 +315,16 @@ def fexceptions : Flag<"-fexceptions">, Group<f_Group>;
 def fextdirs_EQ : Joined<"-fextdirs=">, Group<f_Group>;
 def fhosted : Flag<"-fhosted">, Group<f_Group>;
 def ffast_math : Flag<"-ffast-math">, Group<clang_ignored_f_Group>;
-def ffinite_math_only : Flag<"-ffinite-math-only">, Group<clang_ignored_f_Group>;
+def ffinite_math_only : Flag<"-ffinite-math-only">, Group<f_Group>;
+def fhonor_nans : Flag<"-fhonor-nans">, Group<f_Group>;
+def fno_honor_nans : Flag<"-fno-honor-nans">, Group<f_Group>;
+def fhonor_infinities : Flag<"-fhonor-infinities">, Group<f_Group>;
+def fno_honor_infinities : Flag<"-fno-honor-infinities">, Group<f_Group>;
+// Sic. This option was misspelled originally.
+def fhonor_infinites : Flag<"-fhonor-infinites">, Group<f_Group>,
+    Alias<fhonor_infinities>;
+def fno_honor_infinites : Flag<"-fno-honor-infinites">, Group<f_Group>,
+    Alias<fno_honor_infinities>;
 
 def ffor_scope : Flag<"-ffor-scope">, Group<f_Group>;
 def fno_for_scope : Flag<"-fno-for-scope">, Group<f_Group>;
@@ -571,6 +580,7 @@ def mllvm : Separate<"-mllvm">;
 def mmacosx_version_min_EQ : Joined<"-mmacosx-version-min=">, Group<m_Group>;
 def mms_bitfields : Flag<"-mms-bitfields">, Group<m_Group>;
 def mstackrealign : Flag<"-mstackrealign">, Group<m_Group>;
+def mstack_alignment : Joined<"-mstack-alignment=">, Group<m_Group>;
 def mmmx : Flag<"-mmmx">, Group<m_x86_Features_Group>;
 def mno_3dnowa : Flag<"-mno-3dnowa">, Group<m_x86_Features_Group>;
 def mno_3dnow : Flag<"-mno-3dnow">, Group<m_x86_Features_Group>;
@@ -582,6 +592,7 @@ def mno_red_zone : Flag<"-mno-red-zone">, Group<m_Group>;
 def mno_relax_all : Flag<"-mno-relax-all">, Group<m_Group>;
 def mno_rtd: Flag<"-mno-rtd">, Group<m_Group>;
 def mno_soft_float : Flag<"-mno-soft-float">, Group<m_Group>;
+def mno_stackrealign : Flag<"-mno-stackrealign">, Group<m_Group>;
 def mno_sse2 : Flag<"-mno-sse2">, Group<m_x86_Features_Group>;
 def mno_sse3 : Flag<"-mno-sse3">, Group<m_x86_Features_Group>;
 def mno_sse4a : Flag<"-mno-sse4a">, Group<m_x86_Features_Group>;
@@ -677,6 +688,7 @@ def rewrite_objc : Flag<"-rewrite-objc">, Flags<[DriverOption]>,
   HelpText<"Rewrite Objective-C source to C++">;
 def rdynamic : Flag<"-rdynamic">;
 def rpath : Separate<"-rpath">, Flags<[LinkerInput]>;
+def rtlib_EQ : Joined<"-rtlib=">;
 def r : Flag<"-r">;
 def save_temps : Flag<"-save-temps">, Flags<[DriverOption]>,
   HelpText<"Save intermediate compilation results">;
@@ -849,6 +861,8 @@ def _relocatable_pch : Flag<"--relocatable-pch">,
   HelpText<"Build a relocatable precompiled header">;
 def _resource_EQ : Joined<"--resource=">, Alias<fcompile_resource_EQ>;
 def _resource : Separate<"--resource">, Alias<fcompile_resource_EQ>;
+def _rtlib_EQ : Joined<"--rtlib=">, Alias<rtlib_EQ>;
+def _rtlib : Separate<"--rtlib">, Alias<rtlib_EQ>;
 def _save_temps : Flag<"--save-temps">, Alias<save_temps>;
 def _serialize_diags : Separate<"--serialize-diagnostics">, Flags<[DriverOption]>,
   HelpText<"Serialize compiler diagnostics to a file">;

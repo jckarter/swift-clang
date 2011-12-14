@@ -166,6 +166,10 @@ def mdebug_pass : Separate<"-mdebug-pass">,
   HelpText<"Enable additional debug output">;
 def mdisable_fp_elim : Flag<"-mdisable-fp-elim">,
   HelpText<"Disable frame pointer elimination optimization">;
+def menable_no_infinities : Flag<"-menable-no-infs">,
+  HelpText<"Allow optimization to assume there are no infinities.">;
+def menable_no_nans : Flag<"-menable-no-nans">,
+  HelpText<"Allow optimization to assume there are no NaNs.">;
 def mfloat_abi : Separate<"-mfloat-abi">,
   HelpText<"The float ABI to use">;
 def mno_global_merge : Flag<"-mno-global-merge">,
@@ -200,6 +204,8 @@ def mms_bitfields : Flag<"-mms-bitfields">,
   HelpText<"Set the default structure layout to be compatible with the Microsoft compiler standard.">;
 def mstackrealign : Flag<"-mstackrealign">,
   HelpText<"Force realign the stack at entry to every function.">;
+def mstack_alignment : Joined<"-mstack-alignment=">,
+  HelpText<"Set the stack alignment">;
 def mlink_bitcode_file : Separate<"-mlink-bitcode-file">,
   HelpText<"Link the given bitcode file before performing optimizations.">;
 def O : Joined<"-O">, HelpText<"Optimization level">;

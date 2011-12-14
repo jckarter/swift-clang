@@ -1,4 +1,4 @@
-// RUN: %clang_cc1 -fsyntax-only -verify %s
+// RUN: %clang_cc1 -fsyntax-only -verify -Wno-bool-conversions %s
 
 typedef __typeof__(((int*)0)-((int*)0)) ptrdiff_t;
 
@@ -100,8 +100,8 @@ int main()
   { (void) reinterpret_cast<int>(two); } //expected-error {{reinterpret_cast}}
   { (void) reinterpret_cast<int (*)(char, double)>(two); } //expected-error {{reinterpret_cast}}
 
-  { bool b = (twoT<int>); } // ok
-  { bool b = (twoT<int, int>); } //ok
+  { bool b = (twoT<int>); } 
+  { bool b = (twoT<int, int>); } 
 
   { bool b = &twoT<int>; //&foo<int>; }
     b = &(twoT<int>); }

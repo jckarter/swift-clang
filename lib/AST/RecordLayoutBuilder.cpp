@@ -1399,10 +1399,8 @@ void RecordLayoutBuilder::Layout(const CXXRecordDecl *RD) {
   }
 
   // Finally, round the size of the total struct up to the alignment
-  // of the struct itself.  Amazingly, this does not occur in the MS
-  // ABI after virtual base layout.
-  if (!isMicrosoftCXXABI() || RD->getNumVBases())
-    FinishLayout(RD);
+  // of the struct itself.
+  FinishLayout(RD);
 
 #ifndef NDEBUG
   // Check that we have base offsets for all bases.
@@ -1692,18 +1690,20 @@ void RecordLayoutBuilder::LayoutBitField(const FieldDecl *D) {
   UnpackedFieldAlign = std::max(UnpackedFieldAlign, D->getMaxAlignment());
 
   // The maximum field alignment overrides the aligned attribute.
-  if (!MaxFieldAlignment.isZero()) {
+  if (!MaxFieldAlignment.isZero() && FieldSize != 0) {
     unsigned MaxFieldAlignmentInBits = Context.toBits(MaxFieldAlignment);
     FieldAlign = std::min(FieldAlign, MaxFieldAlignmentInBits);
     UnpackedFieldAlign = std::min(UnpackedFieldAlign, MaxFieldAlignmentInBits);
   }
 
   // Check if we need to add padding to give the field the correct alignment.
-  if (FieldSize == 0 || (FieldOffset & (FieldAlign-1)) + FieldSize > TypeSize)
+  if (FieldSize == 0 || (MaxFieldAlignment.isZero() &&
+                         (FieldOffset & (FieldAlign-1)) + FieldSize > TypeSize))
     FieldOffset = llvm::RoundUpToAlignment(FieldOffset, FieldAlign);
 
   if (FieldSize == 0 ||
-      (UnpackedFieldOffset & (UnpackedFieldAlign-1)) + FieldSize > TypeSize)
+      (MaxFieldAlignment.isZero() &&
+       (UnpackedFieldOffset & (UnpackedFieldAlign-1)) + FieldSize > TypeSize))
     UnpackedFieldOffset = llvm::RoundUpToAlignment(UnpackedFieldOffset,
                                                    UnpackedFieldAlign);
 
@@ -1882,6 +1882,13 @@ void RecordLayoutBuilder::FinishLayout(const NamedDecl *D) {
     else
       setSize(CharUnits::One());
   }
+
+  // MSVC doesn't round up to the alignment of the record with virtual bases.
+  if (const CXXRecordDecl *RD = dyn_cast<CXXRecordDecl>(D)) {
+    if (isMicrosoftCXXABI() && RD->getNumVBases())
+      return;
+  }
+
   // Finally, round the size of the record up to the alignment of the
   // record itself.
   uint64_t UnpaddedSize = getSizeInBits() - UnfilledBitsInLastByte;

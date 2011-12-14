@@ -62,7 +62,8 @@ bool Sema::CanUseDecl(NamedDecl *D) {
   return true;
 }
 
-static AvailabilityResult DiagnoseAvailabilityOfDecl(Sema &S,
+AvailabilityResult 
+Sema::DiagnoseAvailabilityOfDecl(
                               NamedDecl *D, SourceLocation Loc,
                               const ObjCInterfaceDecl *UnknownObjCClass) {
   // See if this declaration is unavailable or deprecated.
@@ -81,22 +82,22 @@ static AvailabilityResult DiagnoseAvailabilityOfDecl(Sema &S,
       break;
             
     case AR_Deprecated:
-      S.EmitDeprecationWarning(D, Message, Loc, UnknownObjCClass);
+      EmitDeprecationWarning(D, Message, Loc, UnknownObjCClass);
       break;
             
     case AR_Unavailable:
-      if (S.getCurContextAvailability() != AR_Unavailable) {
+      if (getCurContextAvailability() != AR_Unavailable) {
         if (Message.empty()) {
           if (!UnknownObjCClass)
-            S.Diag(Loc, diag::err_unavailable) << D->getDeclName();
+            Diag(Loc, diag::err_unavailable) << D->getDeclName();
           else
-            S.Diag(Loc, diag::warn_unavailable_fwdclass_message) 
+            Diag(Loc, diag::warn_unavailable_fwdclass_message) 
               << D->getDeclName();
         }
         else 
-          S.Diag(Loc, diag::err_unavailable_message) 
+          Diag(Loc, diag::err_unavailable_message) 
             << D->getDeclName() << Message;
-          S.Diag(D->getLocation(), diag::note_unavailable_here) 
+          Diag(D->getLocation(), diag::note_unavailable_here) 
           << isa<FunctionDecl>(D) << false;
       }
       break;
@@ -151,7 +152,7 @@ bool Sema::DiagnoseUseOfDecl(NamedDecl *D, SourceLocation Loc,
       return true;
     }
   }
-  DiagnoseAvailabilityOfDecl(*this, D, Loc, UnknownObjCClass);
+  DiagnoseAvailabilityOfDecl(D, Loc, UnknownObjCClass);
 
   // Warn if this is used but marked unused.
   if (D->hasAttr<UnusedAttr>())
@@ -3699,6 +3700,11 @@ Sema::ActOnCallExpr(Scope *S, Expr *Fn, SourceLocation LParenLoc,
   }
 
   // If we're directly calling a function, get the appropriate declaration.
+  if (Fn->getType() == Context.UnknownAnyTy) {
+    ExprResult result = rebuildUnknownAnyFunction(*this, Fn);
+    if (result.isInvalid()) return ExprError();
+    Fn = result.take();
+  }
 
   Expr *NakedFn = Fn->IgnoreParens();
 
@@ -8718,8 +8724,10 @@ void Sema::ActOnBlockArguments(Declarator &ParamInfo, Scope *CurScope) {
   // return type.  TODO:  what should we do with declarators like:
   //   ^ * { ... }
   // If the answer is "apply template argument deduction"....
-  if (RetTy != Context.DependentTy)
+  if (RetTy != Context.DependentTy) {
     CurBlock->ReturnType = RetTy;
+    CurBlock->TheDecl->setBlockMissingReturnType(false);
+  }
 
   // Push block parameters from the declarator if we had them.
   SmallVector<ParmVarDecl*, 8> Params;
@@ -9190,6 +9198,8 @@ bool Sema::DiagnoseAssignmentResult(AssignConvertType ConvTy,
 }
 
 bool Sema::VerifyIntegerConstantExpression(const Expr *E, llvm::APSInt *Result){
+  // FIXME: In C++11, this evaluates the expression even if it's not an ICE.
+  //        Don't evaluate it a second time below just to get the diagnostics.
   llvm::APSInt ICEResult;
   if (E->isIntegerConstantExpr(ICEResult, Context)) {
     if (Result)
@@ -9198,29 +9208,33 @@ bool Sema::VerifyIntegerConstantExpression(const Expr *E, llvm::APSInt *Result){
   }
 
   Expr::EvalResult EvalResult;
+  llvm::SmallVector<PartialDiagnosticAt, 8> Notes;
+  EvalResult.Diag = &Notes;
 
   if (!E->EvaluateAsRValue(EvalResult, Context) || !EvalResult.Val.isInt() ||
       EvalResult.HasSideEffects) {
     Diag(E->getExprLoc(), diag::err_expr_not_ice) << E->getSourceRange();
 
-    if (EvalResult.Diag) {
-      // We only show the note if it's not the usual "invalid subexpression"
-      // or if it's actually in a subexpression.
-      if (EvalResult.Diag != diag::note_invalid_subexpr_in_ice ||
-          E->IgnoreParens() != EvalResult.DiagExpr->IgnoreParens())
-        Diag(EvalResult.DiagLoc, EvalResult.Diag);
+    // We only show the notes if they're not the usual "invalid subexpression"
+    // or if they are actually in a subexpression.
+    if (!Notes.empty() &&
+        (Notes.size() != 1 ||
+         Notes[0].second.getDiagID() != diag::note_invalid_subexpr_in_const_expr
+         || Notes[0].first != E->IgnoreParens()->getExprLoc())) {
+      for (unsigned I = 0, N = Notes.size(); I != N; ++I)
+        Diag(Notes[I].first, Notes[I].second);
     }
 
     return true;
   }
 
-  Diag(E->getExprLoc(), diag::ext_expr_not_ice) <<
-    E->getSourceRange();
+  Diag(E->getExprLoc(), diag::ext_expr_not_ice) << E->getSourceRange();
 
-  if (EvalResult.Diag &&
-      Diags.getDiagnosticLevel(diag::ext_expr_not_ice, EvalResult.DiagLoc)
+  if (Notes.size() &&
+      Diags.getDiagnosticLevel(diag::ext_expr_not_ice, E->getExprLoc())
           != DiagnosticsEngine::Ignored)
-    Diag(EvalResult.DiagLoc, EvalResult.Diag);
+    for (unsigned I = 0, N = Notes.size(); I != N; ++I)
+      Diag(Notes[I].first, Notes[I].second);
 
   if (Result)
     *Result = EvalResult.Val.getInt();
@@ -10116,6 +10130,10 @@ ExprResult Sema::checkUnknownAnyCast(SourceRange TypeRange, QualType CastType,
   CastKind = CK_NoOp;
 
   return CastExpr;
+}
+
+ExprResult Sema::forceUnknownAnyToType(Expr *E, QualType ToType) {
+  return RebuildUnknownAnyExpr(*this, ToType).Visit(E);
 }
 
 static ExprResult diagnoseUnknownAnyExpr(Sema &S, Expr *E) {

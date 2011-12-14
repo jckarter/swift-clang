@@ -301,6 +301,7 @@ public:
   bool isTainted(const Stmt *S, TaintTagType Kind = TaintTagGeneric) const;
   bool isTainted(SVal V, TaintTagType Kind = TaintTagGeneric) const;
   bool isTainted(const SymExpr* Sym, TaintTagType Kind = TaintTagGeneric) const;
+  bool isTainted(const MemRegion *Reg, TaintTagType Kind=TaintTagGeneric) const;
 
   //==---------------------------------------------------------------------==//
   // Accessing the Generic Data Map (GDM).
@@ -356,12 +357,14 @@ public:
   }
 
   // Pretty-printing.
-  void print(raw_ostream &Out, CFG &C, const char *nl = "\n",
+  void print(raw_ostream &Out, CFG *C, const char *nl = "\n",
              const char *sep = "") const;
 
-  void printStdErr(CFG &C) const;
+  void dump(CFG &C) const;
 
   void printDOT(raw_ostream &Out, CFG &C) const;
+
+  void dump() const;
 
 private:
   /// Increments the number of times this state is referenced by ExplodeNodes.

@@ -54,7 +54,8 @@ struct DeclInfo : public CXIdxDeclInfo {
   DInfoKind Kind;
 
   EntityInfo EntInfo;
-  ContainerInfo Container;
+  ContainerInfo SemanticContainer;
+  ContainerInfo LexicalContainer;
   ContainerInfo DeclAsContainer;
 
   DeclInfo(bool isRedeclaration, bool isDefinition, bool isContainer)
@@ -64,7 +65,7 @@ struct DeclInfo : public CXIdxDeclInfo {
     this->isContainer = isContainer;
     attributes = 0;
     numAttributes = 0;
-    declAsContainer = container = 0;
+    declAsContainer = semanticContainer = lexicalContainer = 0;
   }
   DeclInfo(DInfoKind K,
            bool isRedeclaration, bool isDefinition, bool isContainer)
@@ -74,7 +75,7 @@ struct DeclInfo : public CXIdxDeclInfo {
     this->isContainer = isContainer;
     attributes = 0;
     numAttributes = 0;
-    declAsContainer = container = 0;
+    declAsContainer = semanticContainer = lexicalContainer = 0;
   }
 
   static bool classof(const DeclInfo *) { return true; }
@@ -293,6 +294,9 @@ class IndexingContext {
 
     CXXBasesListInfo(const CXXRecordDecl *D,
                      IndexingContext &IdxCtx, IndexingContext::StrAdapter &SA);
+
+  private:
+    SourceLocation getBaseLoc(const CXXBaseSpecifier &Base) const;
   };
 
 public:
@@ -311,6 +315,8 @@ public:
   }
 
   bool shouldAbort();
+
+  bool hasDiagnosticCallback() const { return CB.diagnostic; }
 
   void enteredMainFile(const FileEntry *File);
 
@@ -368,6 +374,8 @@ public:
 
   bool handleObjCProperty(const ObjCPropertyDecl *D);
 
+  bool handleNamespace(const NamespaceDecl *D);
+
   bool handleClassTemplate(const ClassTemplateDecl *D);
   bool handleFunctionTemplate(const FunctionTemplateDecl *D);
   bool handleTypeAliasTemplate(const TypeAliasTemplateDecl *D);
@@ -419,12 +427,6 @@ private:
   const NamedDecl *getEntityDecl(const NamedDecl *D) const;
 
   const DeclContext *getEntityContainer(const Decl *D) const;
-
-  CXIdxClientContainer getClientContainer(const NamedDecl *D) const {
-    return getClientContainerForDC(D->getDeclContext());
-  }
-
-  const DeclContext *getScopedContext(const DeclContext *DC) const;
 
   CXIdxClientFile getIndexFile(const FileEntry *File);
   

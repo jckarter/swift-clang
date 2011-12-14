@@ -185,6 +185,7 @@ public:
     return EndScanList ? EndScanList - Position : 1;
   }
 
+  bool isUIntArg() const { return kind >= UIntArgBeg && kind <= UIntArgEnd; }
   const char *toString() const;
 
   bool isPrintfKind() const { return IsPrintf; }
@@ -203,11 +204,14 @@ public:
 private:
   const Kind K;
   QualType T;
-  ArgTypeResult(bool) : K(InvalidTy) {}
+  const char *Name;
+  ArgTypeResult(bool) : K(InvalidTy), Name(0) {}
 public:
-  ArgTypeResult(Kind k = UnknownTy) : K(k) {}
-  ArgTypeResult(QualType t) : K(SpecificTy), T(t) {}
-  ArgTypeResult(CanQualType t) : K(SpecificTy), T(t) {}
+  ArgTypeResult(Kind k = UnknownTy) : K(k), Name(0) {}
+  ArgTypeResult(Kind k, const char *n) : K(k), Name(n) {}
+  ArgTypeResult(QualType t) : K(SpecificTy), T(t), Name(0) {}
+  ArgTypeResult(QualType t, const char *n) : K(SpecificTy), T(t), Name(n)  {}
+  ArgTypeResult(CanQualType t) : K(SpecificTy), T(t), Name(0) {}
 
   static ArgTypeResult Invalid() { return ArgTypeResult(true); }
 
@@ -222,6 +226,8 @@ public:
   bool matchesAnyObjCObjectRef() const { return K == ObjCPointerTy; }
 
   QualType getRepresentativeType(ASTContext &C) const;
+
+  std::string getRepresentativeTypeName(ASTContext &C) const;
 };
 
 class OptionalAmount {
@@ -359,7 +365,6 @@ public:
 
   bool isObjCArg() const { return kind >= ObjCBeg && kind <= ObjCEnd; }
   bool isIntArg() const { return kind >= IntArgBeg && kind <= IntArgEnd; }
-  bool isUIntArg() const { return kind >= UIntArgBeg && kind <= UIntArgEnd; }
   bool isDoubleArg() const { return kind >= DoubleArgBeg &&
                                     kind <= DoubleArgBeg; }
   unsigned getLength() const {
@@ -501,9 +506,34 @@ public:
   }
 };
 
+using analyze_format_string::ArgTypeResult;
 using analyze_format_string::LengthModifier;
 using analyze_format_string::OptionalAmount;
 using analyze_format_string::OptionalFlag;
+
+class ScanfArgTypeResult : public ArgTypeResult {
+public:
+  enum Kind { UnknownTy, InvalidTy, CStrTy, WCStrTy, PtrToArgTypeResultTy };
+private:
+  Kind K;
+  ArgTypeResult A;
+  const char *Name;
+  QualType getRepresentativeType(ASTContext &C) const;
+public:
+  ScanfArgTypeResult(Kind k = UnknownTy, const char* n = 0) : K(k), Name(n) {}
+  ScanfArgTypeResult(ArgTypeResult a, const char *n = 0)
+      : K(PtrToArgTypeResultTy), A(a), Name(n) {
+    assert(A.isValid());
+  }
+
+  static ScanfArgTypeResult Invalid() { return ScanfArgTypeResult(InvalidTy); }
+
+  bool isValid() const { return K != InvalidTy; }
+
+  bool matchesType(ASTContext& C, QualType argTy) const;
+
+  std::string getRepresentativeTypeName(ASTContext& C) const;
+};
 
 class ScanfSpecifier : public analyze_format_string::FormatSpecifier {
   OptionalFlag SuppressAssignment; // '*'
@@ -532,6 +562,12 @@ public:
   bool consumesDataArgument() const {
     return CS.consumesDataArgument() && !SuppressAssignment;
   }
+
+  ScanfArgTypeResult getArgType(ASTContext &Ctx) const;
+
+  bool fixType(QualType QT, const LangOptions &LangOpt);
+
+  void toString(raw_ostream &os) const;
 
   static ScanfSpecifier Parse(const char *beg, const char *end);
 };

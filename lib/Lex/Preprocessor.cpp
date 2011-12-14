@@ -369,7 +369,12 @@ void Preprocessor::CreateString(const char *Buf, unsigned Len, Token &Tok,
     Tok.setLiteralData(DestPtr);
 }
 
-
+Module *Preprocessor::getCurrentModule() {
+  if (getLangOptions().CurrentModule.empty())
+    return 0;
+  
+  return getHeaderSearchInfo().getModule(getLangOptions().CurrentModule);
+}
 
 //===----------------------------------------------------------------------===//
 // Preprocessor Initialization Methods
@@ -593,7 +598,9 @@ void Preprocessor::LexAfterModuleImport(Token &Result) {
 
   // If we have a non-empty module path, load the named module.
   if (!ModuleImportPath.empty())
-    (void)TheModuleLoader.loadModule(ModuleImportLoc, ModuleImportPath);
+    (void)TheModuleLoader.loadModule(ModuleImportLoc, ModuleImportPath,
+                                     Module::MacrosVisible,
+                                     /*IsIncludeDirective=*/false);
 }
 
 void Preprocessor::AddCommentHandler(CommentHandler *Handler) {

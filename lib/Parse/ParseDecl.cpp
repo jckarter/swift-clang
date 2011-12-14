@@ -522,7 +522,7 @@ VersionTuple Parser::ParseVersionTuple(SourceRange &Range) {
 /// \brief Parse the contents of the "availability" attribute.
 ///
 /// availability-attribute:
-///   'availability' '(' platform ',' version-arg-list ')'
+///   'availability' '(' platform ',' version-arg-list, opt-message')'
 ///
 /// platform:
 ///   identifier
@@ -536,6 +536,8 @@ VersionTuple Parser::ParseVersionTuple(SourceRange &Range) {
 ///   'deprecated' '=' version
 ///   'removed' = version
 ///   'unavailable'
+/// opt-message:
+///   'message' '=' <string>
 void Parser::ParseAvailabilityAttribute(IdentifierInfo &Availability,
                                         SourceLocation AvailabilityLoc,
                                         ParsedAttributes &attrs,
@@ -545,6 +547,7 @@ void Parser::ParseAvailabilityAttribute(IdentifierInfo &Availability,
 
   enum { Introduced, Deprecated, Obsoleted, Unknown };
   AvailabilityChange Changes[Unknown];
+  ExprResult MessageExpr;
 
   // Opening '('.
   BalancedDelimiterTracker T(*this, tok::l_paren);
@@ -573,6 +576,7 @@ void Parser::ParseAvailabilityAttribute(IdentifierInfo &Availability,
     Ident_deprecated = PP.getIdentifierInfo("deprecated");
     Ident_obsoleted = PP.getIdentifierInfo("obsoleted");
     Ident_unavailable = PP.getIdentifierInfo("unavailable");
+    Ident_message = PP.getIdentifierInfo("message");
   }
 
   // Parse the set of introductions/deprecations/removals.
@@ -599,7 +603,7 @@ void Parser::ParseAvailabilityAttribute(IdentifierInfo &Availability,
       ConsumeToken();
       continue;
     } 
-
+    
     if (Tok.isNot(tok::equal)) {
       Diag(Tok, diag::err_expected_equal_after)
         << Keyword;
@@ -607,6 +611,15 @@ void Parser::ParseAvailabilityAttribute(IdentifierInfo &Availability,
       return;
     }
     ConsumeToken();
+    if (Keyword == Ident_message) {
+      if (!isTokenStringLiteral()) {
+        Diag(Tok, diag::err_expected_string_literal);
+        SkipUntil(tok::r_paren);
+        return;
+      }
+      MessageExpr = ParseStringLiteralExpression();
+      break;
+    }
     
     SourceRange VersionRange;
     VersionTuple Version = ParseVersionTuple(VersionRange);
@@ -682,7 +695,8 @@ void Parser::ParseAvailabilityAttribute(IdentifierInfo &Availability,
                Changes[Introduced],
                Changes[Deprecated],
                Changes[Obsoleted], 
-               UnavailableLoc, false, false);
+               UnavailableLoc, MessageExpr.take(),
+               false, false);
 }
 
 
@@ -1041,28 +1055,13 @@ Parser::DeclGroupPtrTy Parser::ParseDeclGroup(ParsingDeclSpec &DS,
     return DeclGroupPtrTy();
   }
 
-  // Do we have a stray semicolon in the middle of a function definition?
-  if (AllowFunctionDefinitions && D.isFunctionDeclarator() &&
-      Tok.is(tok::semi) && Context == Declarator::FileContext) {
-    const Token &Next = NextToken();
-    if (Next.is(tok::l_brace) || Next.is(tok::kw_try) ||
-        (getLang().CPlusPlus &&
-         (Next.is(tok::colon) || Next.is(tok::equal)))) {
-      // Pretend we didn't see the semicolon.
-      SourceLocation SemiLoc = ConsumeToken();
-      Diag(SemiLoc, diag::err_stray_semi_function_definition)
-        << FixItHint::CreateRemoval(SemiLoc);
-      assert(isStartOfFunctionDefinition(D) && "expected a function defn");
-    }
-  }
-
   // Check to see if we have a function *definition* which must have a body.
   if (AllowFunctionDefinitions && D.isFunctionDeclarator() &&
       // Look at the next token to make sure that this isn't a function
       // declaration.  We have to check this because __attribute__ might be the
       // start of a function definition in GCC-extended K&R C.
       !isDeclarationAfterDeclarator()) {
-
+    
     if (isStartOfFunctionDefinition(D)) {
       if (DS.getStorageClassSpec() == DeclSpec::SCS_typedef) {
         Diag(Tok, diag::err_function_declared_typedef);
@@ -1904,6 +1903,7 @@ void Parser::ParseDeclarationSpecifiers(DeclSpec &DS,
       goto DoneWithDeclSpec;
         
       // typedef-name
+    case tok::kw_decltype:
     case tok::identifier: {
       // In C++, check to see if this is a scope specifier like foo::bar::, if
       // so handle it as such.  This is important for ctor parsing.
@@ -2263,7 +2263,7 @@ void Parser::ParseDeclarationSpecifiers(DeclSpec &DS,
       ParseTypeofSpecifier(DS);
       continue;
 
-    case tok::kw_decltype:
+    case tok::annot_decltype:
       ParseDecltypeSpecifier(DS);
       continue;
 
@@ -2385,6 +2385,7 @@ bool Parser::ParseOptionalTypeSpecifier(DeclSpec &DS, bool& isInvalid,
     if (TryAltiVecToken(DS, Loc, PrevSpec, DiagID, isInvalid))
       break;
     // Fall through.
+  case tok::kw_decltype:
   case tok::kw_typename:  // typename foo::bar
     // Annotate typenames and C++ scope specifiers.  If we get one, just
     // recurse to handle whatever we get.
@@ -2547,7 +2548,7 @@ bool Parser::ParseOptionalTypeSpecifier(DeclSpec &DS, bool& isInvalid,
     return true;
 
   // C++0x decltype support.
-  case tok::kw_decltype:
+  case tok::annot_decltype:
     ParseDecltypeSpecifier(DS);
     return true;
 
@@ -3112,6 +3113,8 @@ void Parser::ParseEnumBody(SourceLocation StartLoc, Decl *EnumDecl) {
 
     SourceLocation EqualLoc;
     ExprResult AssignedVal;
+    ParsingDeclRAIIObject PD(*this);
+    
     if (Tok.is(tok::equal)) {
       EqualLoc = ConsumeToken();
       AssignedVal = ParseConstantExpression();
@@ -3125,6 +3128,8 @@ void Parser::ParseEnumBody(SourceLocation StartLoc, Decl *EnumDecl) {
                                                     IdentLoc, Ident,
                                                     attrs.getList(), EqualLoc,
                                                     AssignedVal.release());
+    PD.complete(EnumConstDecl);
+    
     EnumConstantDecls.push_back(EnumConstDecl);
     LastEnumConstDecl = EnumConstDecl;
 
@@ -3361,6 +3366,7 @@ bool Parser::isDeclarationSpecifier(bool DisambiguatingWithExpression) {
     if (TryAltiVecVectorToken())
       return true;
     // Fall through.
+  case tok::kw_decltype: // decltype(T())::type
   case tok::kw_typename: // typename T::type
     // Annotate typenames and C++ scope specifiers.  If we get one, just
     // recurse to handle whatever we get.
@@ -3456,7 +3462,7 @@ bool Parser::isDeclarationSpecifier(bool DisambiguatingWithExpression) {
     return true;
 
     // C++0x decltype.
-  case tok::kw_decltype:
+  case tok::annot_decltype:
     return true;
 
     // C1x _Atomic()
@@ -3983,6 +3989,10 @@ void Parser::ParseDirectDeclarator(Declarator &D) {
 
   while (1) {
     if (Tok.is(tok::l_paren)) {
+      // Enter function-declaration scope, limiting any declarators to the
+      // function prototype scope, including parameter declarators.
+      ParseScope PrototypeScope(this,
+                                Scope::FunctionPrototypeScope|Scope::DeclScope);
       // The paren may be part of a C++ direct initializer, eg. "int x(1);".
       // In such a case, check if we actually have a function declarator; if it
       // is not, the declarator has been fully parsed.
@@ -3997,13 +4007,14 @@ void Parser::ParseDirectDeclarator(Declarator &D) {
       BalancedDelimiterTracker T(*this, tok::l_paren);
       T.consumeOpen();
       ParseFunctionDeclarator(D, attrs, T);
+      PrototypeScope.Exit();
     } else if (Tok.is(tok::l_square)) {
       ParseBracketDeclarator(D);
     } else {
       break;
     }
   }
-}
+} 
 
 /// ParseParenDeclarator - We parsed the declarator D up to a paren.  This is
 /// only called before the identifier, so these are most likely just grouping
@@ -4099,7 +4110,12 @@ void Parser::ParseParenDeclarator(Declarator &D) {
   // ParseFunctionDeclarator to handle of argument list.
   D.SetIdentifier(0, Tok.getLocation());
 
+  // Enter function-declaration scope, limiting any declarators to the
+  // function prototype scope, including parameter declarators.
+  ParseScope PrototypeScope(this,
+                            Scope::FunctionPrototypeScope|Scope::DeclScope);
   ParseFunctionDeclarator(D, attrs, T, RequiresArg);
+  PrototypeScope.Exit();
 }
 
 /// ParseFunctionDeclarator - We are after the identifier and have parsed the
@@ -4124,6 +4140,8 @@ void Parser::ParseFunctionDeclarator(Declarator &D,
                                      ParsedAttributes &attrs,
                                      BalancedDelimiterTracker &Tracker,
                                      bool RequiresArg) {
+  assert(getCurScope()->isFunctionPrototypeScope() && 
+         "Should call from a Function scope");
   // lparen is already consumed!
   assert(D.isPastIdentifier() && "Should not call before identifier!");
 
@@ -4157,11 +4175,6 @@ void Parser::ParseFunctionDeclarator(Declarator &D,
     Tracker.consumeClose();
     EndLoc = Tracker.getCloseLocation();
   } else {
-    // Enter function-declaration scope, limiting any declarators to the
-    // function prototype scope, including parameter declarators.
-    ParseScope PrototypeScope(this,
-                              Scope::FunctionPrototypeScope|Scope::DeclScope);
-
     if (Tok.isNot(tok::r_paren))
       ParseParameterDeclarationClause(D, attrs, ParamInfo, EllipsisLoc);
     else if (RequiresArg)
@@ -4212,9 +4225,6 @@ void Parser::ParseFunctionDeclarator(Declarator &D,
           EndLoc = Range.getEnd();
       }
     }
-
-    // Leave prototype scope.
-    PrototypeScope.Exit();
   }
 
   // Remember that we parsed a function type, and remember the attributes.

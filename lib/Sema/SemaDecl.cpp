@@ -18,7 +18,6 @@
 #include "clang/Sema/Scope.h"
 #include "clang/Sema/ScopeInfo.h"
 #include "TypeLocBuilder.h"
-#include "clang/AST/APValue.h"
 #include "clang/AST/ASTConsumer.h"
 #include "clang/AST/ASTContext.h"
 #include "clang/AST/CXXInheritance.h"
@@ -3465,14 +3464,12 @@ static QualType TryToFixInvalidVariablyModifiedType(QualType T,
   if (VLATy->getElementType()->isVariablyModifiedType())
     return QualType();
 
-  Expr::EvalResult EvalResult;
+  llvm::APSInt Res;
   if (!VLATy->getSizeExpr() ||
-      !VLATy->getSizeExpr()->EvaluateAsRValue(EvalResult, Context) ||
-      !EvalResult.Val.isInt())
+      !VLATy->getSizeExpr()->EvaluateAsInt(Res, Context))
     return QualType();
 
   // Check whether the array size is negative.
-  llvm::APSInt &Res = EvalResult.Val.getInt();
   if (Res.isSigned() && Res.isNegative()) {
     SizeIsNegative = true;
     return QualType();
@@ -7263,12 +7260,36 @@ NamedDecl *Sema::ImplicitlyDefineFunction(SourceLocation Loc,
   }
 
   // Extension in C99.  Legal in C90, but warn about it.
+  unsigned diag_id;
   if (II.getName().startswith("__builtin_"))
-    Diag(Loc, diag::warn_builtin_unknown) << &II;
+    diag_id = diag::err_builtin_unknown;
   else if (getLangOptions().C99)
-    Diag(Loc, diag::ext_implicit_function_decl) << &II;
+    diag_id = diag::ext_implicit_function_decl;
   else
-    Diag(Loc, diag::warn_implicit_function_decl) << &II;
+    diag_id = diag::warn_implicit_function_decl;
+  Diag(Loc, diag_id) << &II;
+
+  // Because typo correction is expensive, only do it if the implicit
+  // function declaration is going to be treated as an error.
+  if (Diags.getDiagnosticLevel(diag_id, Loc) >= DiagnosticsEngine::Error) {
+    TypoCorrection Corrected;
+    if (S && (Corrected = CorrectTypo(DeclarationNameInfo(&II, Loc),
+                                      LookupOrdinaryName, S, 0))) {
+      NamedDecl *Decl = Corrected.getCorrectionDecl();
+      if (FunctionDecl *Func = dyn_cast_or_null<FunctionDecl>(Decl)) {
+        std::string CorrectedStr = Corrected.getAsString(getLangOptions());
+        std::string CorrectedQuotedStr = Corrected.getQuoted(getLangOptions());
+
+        Diag(Loc, diag::note_function_suggestion) << CorrectedQuotedStr
+            << FixItHint::CreateReplacement(Loc, CorrectedStr);
+
+        if (Func->getLocation().isValid()
+            && !II.getName().startswith("__builtin_"))
+          Diag(Func->getLocation(), diag::note_previous_decl)
+              << CorrectedQuotedStr;
+      }
+    }
+  }
 
   // Set a Declarator for the implicit definition: int foo();
   const char *Dummy;
@@ -9449,6 +9470,9 @@ EnumConstantDecl *Sema::CheckEnumConstant(EnumDecl *Enum,
   if (Val && DiagnoseUnexpandedParameterPack(Val, UPPC_EnumeratorValue))
     Val = 0;
 
+  if (Val)
+    Val = DefaultLvalueConversion(Val).take();
+
   if (Val) {
     if (Enum->isDependentType() || Val->isTypeDependent())
       EltTy = Context.DependentTy;
@@ -9892,13 +9916,30 @@ Decl *Sema::ActOnFileScopeAsmDecl(Expr *expr,
 }
 
 DeclResult Sema::ActOnModuleImport(SourceLocation ImportLoc, ModuleIdPath Path) {
-  ModuleKey Module = PP.getModuleLoader().loadModule(ImportLoc, Path);
-  if (!Module)
+  Module *Mod = PP.getModuleLoader().loadModule(ImportLoc, Path, 
+                                                Module::AllVisible,
+                                                /*IsIncludeDirective=*/false);
+  if (!Mod)
     return true;
   
-  // FIXME: Actually create a declaration to describe the module import.
-  (void)Module;
-  return DeclResult((Decl *)0);
+  llvm::SmallVector<SourceLocation, 2> IdentifierLocs;
+  Module *ModCheck = Mod;
+  for (unsigned I = 0, N = Path.size(); I != N; ++I) {
+    // If we've run out of module parents, just drop the remaining identifiers.
+    // We need the length to be consistent.
+    if (!ModCheck)
+      break;
+    ModCheck = ModCheck->Parent;
+    
+    IdentifierLocs.push_back(Path[I].second);
+  }
+
+  ImportDecl *Import = ImportDecl::Create(Context, 
+                                          Context.getTranslationUnitDecl(),
+                                          ImportLoc, Mod,
+                                          IdentifierLocs);
+  Context.getTranslationUnitDecl()->addDecl(Import);
+  return Import;
 }
 
 void 

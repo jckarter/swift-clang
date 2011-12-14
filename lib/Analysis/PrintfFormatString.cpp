@@ -235,46 +235,6 @@ bool clang::analyze_format_string::ParsePrintfString(FormatStringHandler &H,
 }
 
 //===----------------------------------------------------------------------===//
-// Methods on ConversionSpecifier.
-//===----------------------------------------------------------------------===//
-const char *ConversionSpecifier::toString() const {
-  switch (kind) {
-  case dArg: return "d";
-  case iArg: return "i";
-  case oArg: return "o";
-  case uArg: return "u";
-  case xArg: return "x";
-  case XArg: return "X";
-  case fArg: return "f";
-  case FArg: return "F";
-  case eArg: return "e";
-  case EArg: return "E";
-  case gArg: return "g";
-  case GArg: return "G";
-  case aArg: return "a";
-  case AArg: return "A";
-  case cArg: return "c";
-  case sArg: return "s";
-  case pArg: return "p";
-  case nArg: return "n";
-  case PercentArg:  return "%";
-  case ScanListArg: return "[";
-  case InvalidSpecifier: return NULL;
-
-  // MacOS X unicode extensions.
-  case CArg: return "C";
-  case SArg: return "S";
-
-  // Objective-C specific specifiers.
-  case ObjCObjArg: return "@";
-
-  // GlibC specific specifiers.
-  case PrintErrno: return "m";
-  }
-  return NULL;
-}
-
-//===----------------------------------------------------------------------===//
 // Methods on PrintfSpecifier.
 //===----------------------------------------------------------------------===//
 
@@ -287,7 +247,8 @@ ArgTypeResult PrintfSpecifier::getArgType(ASTContext &Ctx) const {
   if (CS.getKind() == ConversionSpecifier::cArg)
     switch (LM.getKind()) {
       case LengthModifier::None: return Ctx.IntTy;
-      case LengthModifier::AsLong: return ArgTypeResult::WIntTy;
+      case LengthModifier::AsLong:
+        return ArgTypeResult(ArgTypeResult::WIntTy, "wint_t");
       default:
         return ArgTypeResult::Invalid();
     }
@@ -301,11 +262,13 @@ ArgTypeResult PrintfSpecifier::getArgType(ASTContext &Ctx) const {
       case LengthModifier::AsShort: return Ctx.ShortTy;
       case LengthModifier::AsLong: return Ctx.LongTy;
       case LengthModifier::AsLongLong: return Ctx.LongLongTy;
-      case LengthModifier::AsIntMax: return Ctx.getIntMaxType();
+      case LengthModifier::AsIntMax:
+        return ArgTypeResult(Ctx.getIntMaxType(), "intmax_t");
       case LengthModifier::AsSizeT:
         // FIXME: How to get the corresponding signed version of size_t?
         return ArgTypeResult();
-      case LengthModifier::AsPtrDiff: return Ctx.getPointerDiffType();
+      case LengthModifier::AsPtrDiff:
+        return ArgTypeResult(Ctx.getPointerDiffType(), "ptrdiff_t");
     }
 
   if (CS.isUIntArg())
@@ -317,9 +280,10 @@ ArgTypeResult PrintfSpecifier::getArgType(ASTContext &Ctx) const {
       case LengthModifier::AsShort: return Ctx.UnsignedShortTy;
       case LengthModifier::AsLong: return Ctx.UnsignedLongTy;
       case LengthModifier::AsLongLong: return Ctx.UnsignedLongLongTy;
-      case LengthModifier::AsIntMax: return Ctx.getUIntMaxType();
+      case LengthModifier::AsIntMax:
+        return ArgTypeResult(Ctx.getUIntMaxType(), "uintmax_t");
       case LengthModifier::AsSizeT:
-        return Ctx.getSizeType();
+        return ArgTypeResult(Ctx.getSizeType(), "size_t");
       case LengthModifier::AsPtrDiff:
         // FIXME: How to get the corresponding unsigned
         // version of ptrdiff_t?
@@ -334,13 +298,14 @@ ArgTypeResult PrintfSpecifier::getArgType(ASTContext &Ctx) const {
 
   switch (CS.getKind()) {
     case ConversionSpecifier::sArg:
-      return ArgTypeResult(LM.getKind() == LengthModifier::AsWideChar ?
-          ArgTypeResult::WCStrTy : ArgTypeResult::CStrTy);
+      if (LM.getKind() == LengthModifier::AsWideChar)
+        return ArgTypeResult(ArgTypeResult::WCStrTy, "wchar_t *");
+      return ArgTypeResult::CStrTy;
     case ConversionSpecifier::SArg:
       // FIXME: This appears to be Mac OS X specific.
-      return ArgTypeResult::WCStrTy;
+      return ArgTypeResult(ArgTypeResult::WCStrTy, "wchar_t *");
     case ConversionSpecifier::CArg:
-      return Ctx.WCharTy;
+      return ArgTypeResult(Ctx.WCharTy, "wchar_t");
     case ConversionSpecifier::pArg:
       return ArgTypeResult::CPointerTy;
     default:
@@ -363,6 +328,8 @@ bool PrintfSpecifier::fixType(QualType QT, const LangOptions &LangOpt) {
     // Set the long length modifier for wide characters
     if (QT->getPointeeType()->isWideCharType())
       LM.setKind(LengthModifier::AsWideChar);
+    else
+      LM.setKind(LengthModifier::None);
 
     return true;
   }

@@ -885,7 +885,7 @@ Decl *Parser::ParseFunctionDefinition(ParsingDeclarator &D,
     D.getMutableDeclSpec().abort();
 
     if (DP) {
-      LateParsedTemplatedFunction *LPT = new LateParsedTemplatedFunction(this, DP);
+      LateParsedTemplatedFunction *LPT = new LateParsedTemplatedFunction(DP);
 
       FunctionDecl *FnD = 0;
       if (FunctionTemplateDecl *FunTmpl = dyn_cast<FunctionTemplateDecl>(DP))
@@ -1104,15 +1104,22 @@ void Parser::ParseKNRParamDeclarations(Declarator &D) {
 ///         string-literal
 ///
 Parser::ExprResult Parser::ParseAsmStringLiteral() {
-  if (!isTokenStringLiteral()) {
-    Diag(Tok, diag::err_expected_string_literal);
-    return ExprError();
+  switch (Tok.getKind()) {
+    case tok::string_literal:
+      break;
+    case tok::wide_string_literal: {
+      SourceLocation L = Tok.getLocation();
+      Diag(Tok, diag::err_asm_operand_wide_string_literal)
+        << SourceRange(L, L);
+      return ExprError();
+    }
+    default:
+      Diag(Tok, diag::err_expected_string_literal);
+      return ExprError();
   }
 
   ExprResult Res(ParseStringLiteralExpression());
   if (Res.isInvalid()) return move(Res);
-
-  // TODO: Diagnose: wide string literal in 'asm'
 
   return move(Res);
 }
@@ -1195,8 +1202,8 @@ TemplateIdAnnotation *Parser::takeTemplateIdAnnotation(const Token &tok) {
 /// as the current tokens, so only call it in contexts where these are invalid.
 bool Parser::TryAnnotateTypeOrScopeToken(bool EnteringContext, bool NeedType) {
   assert((Tok.is(tok::identifier) || Tok.is(tok::coloncolon)
-          || Tok.is(tok::kw_typename) || Tok.is(tok::annot_cxxscope)) &&
-         "Cannot be a type or scope token!");
+          || Tok.is(tok::kw_typename) || Tok.is(tok::annot_cxxscope)
+          || Tok.is(tok::kw_decltype)) && "Cannot be a type or scope token!");
 
   if (Tok.is(tok::kw_typename)) {
     // Parse a C++ typename-specifier, e.g., "typename T::type".
@@ -1375,8 +1382,8 @@ bool Parser::TryAnnotateCXXScopeToken(bool EnteringContext) {
   assert(getLang().CPlusPlus &&
          "Call sites of this function should be guarded by checking for C++");
   assert((Tok.is(tok::identifier) || Tok.is(tok::coloncolon) ||
-          (Tok.is(tok::annot_template_id) && NextToken().is(tok::coloncolon)))&&
-         "Cannot be a type or scope token!");
+          (Tok.is(tok::annot_template_id) && NextToken().is(tok::coloncolon)) ||
+         Tok.is(tok::kw_decltype)) && "Cannot be a type or scope token!");
 
   CXXScopeSpec SS;
   if (ParseOptionalCXXScopeSpecifier(SS, ParsedType(), EnteringContext))

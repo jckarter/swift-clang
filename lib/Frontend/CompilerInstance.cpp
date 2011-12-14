@@ -11,6 +11,7 @@
 #include "clang/Sema/Sema.h"
 #include "clang/AST/ASTConsumer.h"
 #include "clang/AST/ASTContext.h"
+#include "clang/AST/Decl.h"
 #include "clang/Basic/Diagnostic.h"
 #include "clang/Basic/FileManager.h"
 #include "clang/Basic/SourceManager.h"
@@ -169,7 +170,7 @@ static void SetupSerializedDiagnostics(const DiagnosticOptions &DiagOpts,
   }
   
   DiagnosticConsumer *SerializedConsumer =
-    clang::serialized_diags::create(OS.take(), Diags);
+    clang::serialized_diags::create(OS.take());
 
   
   Diags.setClient(new ChainedDiagnosticConsumer(Diags.takeClient(),
@@ -277,8 +278,7 @@ void CompilerInstance::createPreprocessor() {
   if (!getHeaderSearchOpts().DisableModuleHash)
     llvm::sys::path::append(SpecificModuleCache,
                             getInvocation().getModuleHash());
-  PP->getHeaderSearchInfo().configureModules(SpecificModuleCache,
-                                             getLangOpts().CurrentModule);
+  PP->getHeaderSearchInfo().setModuleCachePath(SpecificModuleCache);
 
   // Handle generating dependencies, if requested.
   const DependencyOutputOptions &DepOpts = getDependencyOutputOpts();
@@ -659,6 +659,9 @@ bool CompilerInstance::ExecuteAction(FrontendAction &Act) {
     }
   }
 
+  // Notify the diagnostic client that all files were processed.
+  getDiagnostics().getClient()->finish();
+
   if (getDiagnosticOpts().ShowCarets) {
     // We can have multiple diagnostics sharing one diagnostic client.
     // Get the total number of warnings/errors from the client.
@@ -962,7 +965,7 @@ void LockFileManager::waitForUnlock() {
 /// \brief Compile a module file for the given module, using the options 
 /// provided by the importing compiler instance.
 static void compileModule(CompilerInstance &ImportingInstance,
-                          ModuleMap::Module *Module,
+                          Module *Module,
                           StringRef ModuleFileName) {
   LockFileManager Locked(ModuleFileName);
   switch (Locked) {
@@ -1023,10 +1026,12 @@ static void compileModule(CompilerInstance &ImportingInstance,
     int FD;
     if (llvm::sys::fs::unique_file(TempModuleMapFileName.str(), FD, 
                                    TempModuleMapFileName,
-                                   /*makeAbsolute=*/false)
-          != llvm::errc::success)
+                                   /*makeAbsolute=*/true)
+          != llvm::errc::success) {
+      ImportingInstance.getDiagnostics().Report(diag::err_module_map_temp_file)
+        << TempModuleMapFileName;
       return;
-
+    }
     // Print the module map to this file.
     llvm::raw_fd_ostream OS(FD, /*shouldClose=*/true);
     Module->print(OS);
@@ -1068,13 +1073,19 @@ static void compileModule(CompilerInstance &ImportingInstance,
     llvm::sys::Path(TempModuleMapFileName).eraseFromDisk();
 }
 
-ModuleKey CompilerInstance::loadModule(SourceLocation ImportLoc, 
-                                       ModuleIdPath Path) {
+Module *CompilerInstance::loadModule(SourceLocation ImportLoc, 
+                                     ModuleIdPath Path,
+                                     Module::NameVisibilityKind Visibility,
+                                     bool IsInclusionDirective) {
   // If we've already handled this import, just return the cached result.
   // This one-element cache is important to eliminate redundant diagnostics
   // when both the preprocessor and parser see the same import declaration.
-  if (!ImportLoc.isInvalid() && LastModuleImportLoc == ImportLoc)
+  if (!ImportLoc.isInvalid() && LastModuleImportLoc == ImportLoc) {
+    // Make the named module visible.
+    if (LastModuleImportResult)
+      ModuleManager->makeModuleVisible(LastModuleImportResult, Visibility);
     return LastModuleImportResult;
+  }
   
   // Determine what file we're searching from.
   SourceManager &SourceMgr = getSourceManager();
@@ -1087,13 +1098,20 @@ ModuleKey CompilerInstance::loadModule(SourceLocation ImportLoc,
   StringRef ModuleName = Path[0].first->getName();
   SourceLocation ModuleNameLoc = Path[0].second;
 
-  ModuleMap::Module *Module = 0;
+  clang::Module *Module = 0;
   const FileEntry *ModuleFile = 0;
   
   // If we don't already have information on this module, load the module now.
-  llvm::DenseMap<const IdentifierInfo *, ModuleMap::Module *>::iterator Known
+  llvm::DenseMap<const IdentifierInfo *, clang::Module *>::iterator Known
     = KnownModules.find(Path[0].first);
-  if (Known == KnownModules.end()) {  
+  if (Known != KnownModules.end()) {
+    // Retrieve the cached top-level module.
+    Module = Known->second;    
+  } else if (ModuleName == getLangOpts().CurrentModule) {
+    // This is the module we're building. 
+    Module = PP->getHeaderSearchInfo().getModuleMap().findModule(ModuleName);
+    Known = KnownModules.insert(std::make_pair(Path[0].first, Module)).first;
+  } else {
     // Search for a module with the given name.
     std::string ModuleFileName;
     ModuleFile
@@ -1192,9 +1210,6 @@ ModuleKey CompilerInstance::loadModule(SourceLocation ImportLoc,
     
     // Cache the result of this top-level module lookup for later.
     Known = KnownModules.insert(std::make_pair(Path[0].first, Module)).first;
-  } else {
-    // Retrieve the cached top-level module.
-    Module = Known->second;
   }
   
   // If we never found the module, fail.
@@ -1206,7 +1221,7 @@ ModuleKey CompilerInstance::loadModule(SourceLocation ImportLoc,
   if (Path.size() > 1) {
     for (unsigned I = 1, N = Path.size(); I != N; ++I) {
       StringRef Name = Path[I].first->getName();
-      llvm::StringMap<ModuleMap::Module *>::iterator Pos
+      llvm::StringMap<clang::Module *>::iterator Pos
         = Module->SubModules.find(Name);
       
       if (Pos == Module->SubModules.end()) {
@@ -1214,7 +1229,7 @@ ModuleKey CompilerInstance::loadModule(SourceLocation ImportLoc,
         llvm::SmallVector<StringRef, 2> Best;
         unsigned BestEditDistance = (std::numeric_limits<unsigned>::max)();
         
-        for (llvm::StringMap<ModuleMap::Module *>::iterator
+        for (llvm::StringMap<clang::Module *>::iterator
                   J = Module->SubModules.begin(), 
                JEnd = Module->SubModules.end();
              J != JEnd; ++J) {
@@ -1253,7 +1268,19 @@ ModuleKey CompilerInstance::loadModule(SourceLocation ImportLoc,
     }
   }
   
-  // FIXME: Tell the AST reader to make the named submodule visible.
+  // Make the named module visible, if it's not already part of the module
+  // we are parsing.
+  if (ModuleName != getLangOpts().CurrentModule)
+    ModuleManager->makeModuleVisible(Module, Visibility);
+
+  // If this module import was due to an inclusion directive, create an 
+  // implicit import declaration to capture it in the AST.
+  if (IsInclusionDirective && hasASTContext()) {
+    TranslationUnitDecl *TU = getASTContext().getTranslationUnitDecl();
+    TU->addDecl(ImportDecl::CreateImplicit(getASTContext(), TU,
+                                           ImportLoc, Module, 
+                                           Path.back().second));
+  }
   
   LastModuleImportLoc = ImportLoc;
   LastModuleImportResult = Module;

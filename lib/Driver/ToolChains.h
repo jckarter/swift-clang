@@ -347,6 +347,9 @@ public:
       (!isMacosxVersionLT(10, 6) ||
          (!isMacosxVersionLT(10, 5) && !KernelOrKext));
   }
+  virtual RuntimeLibType GetDefaultRuntimeLibType() const {
+    return ToolChain::RLT_CompilerRT;
+  }
   virtual const char *GetDefaultRelocationModel() const;
   virtual const char *GetForcedPicModel() const;
 
@@ -450,7 +453,7 @@ public:
                            const ActionList &Inputs) const;
 };
 
-class LLVM_LIBRARY_VISIBILITY Minix : public Generic_GCC {
+class LLVM_LIBRARY_VISIBILITY Minix : public Generic_ELF {
 public:
   Minix(const HostInfo &Host, const llvm::Triple& Triple);
 

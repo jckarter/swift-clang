@@ -282,13 +282,20 @@ static AvailabilityResult CheckAvailability(ASTContext &Context,
   // Match the platform name.
   if (A->getPlatform()->getName() != TargetPlatform)
     return AR_Available;
-
+  
+  std::string HintMessage;
+  if (!A->getMessage().empty()) {
+    HintMessage = " - ";
+    HintMessage += A->getMessage();
+  }
+  
   // Make sure that this declaration has not been marked 'unavailable'.
   if (A->getUnavailable()) {
     if (Message) {
       Message->clear();
       llvm::raw_string_ostream Out(*Message);
-      Out << "not available on " << PrettyPlatformName;
+      Out << "not available on " << PrettyPlatformName 
+          << HintMessage;
     }
 
     return AR_Unavailable;
@@ -301,7 +308,7 @@ static AvailabilityResult CheckAvailability(ASTContext &Context,
       Message->clear();
       llvm::raw_string_ostream Out(*Message);
       Out << "introduced in " << PrettyPlatformName << ' ' 
-          << A->getIntroduced();
+          << A->getIntroduced() << HintMessage;
     }
 
     return AR_NotYetIntroduced;
@@ -313,7 +320,7 @@ static AvailabilityResult CheckAvailability(ASTContext &Context,
       Message->clear();
       llvm::raw_string_ostream Out(*Message);
       Out << "obsoleted in " << PrettyPlatformName << ' ' 
-          << A->getObsoleted();
+          << A->getObsoleted() << HintMessage;
     }
     
     return AR_Unavailable;
@@ -325,7 +332,7 @@ static AvailabilityResult CheckAvailability(ASTContext &Context,
       Message->clear();
       llvm::raw_string_ostream Out(*Message);
       Out << "first deprecated in " << PrettyPlatformName << ' '
-          << A->getDeprecated();
+          << A->getDeprecated() << HintMessage;
     }
     
     return AR_Deprecated;
@@ -501,6 +508,7 @@ unsigned Decl::getIdentifierNamespaceForKind(Kind DeclKind) {
     case ObjCImplementation:
     case ObjCCategory:
     case ObjCCategoryImpl:
+    case Import:
       // Never looked up by name.
       return 0;
   }
@@ -1009,6 +1017,13 @@ void DeclContext::addHiddenDecl(Decl *D) {
   // update it's class-specific state.
   if (CXXRecordDecl *Record = dyn_cast<CXXRecordDecl>(this))
     Record->addedMember(D);
+
+  // If this is a newly-created (not de-serialized) import declaration, wire
+  // it in to the list of local import declarations.
+  if (!D->isFromASTFile()) {
+    if (ImportDecl *Import = dyn_cast<ImportDecl>(D))
+      D->getASTContext().addedLocalImportDecl(Import);
+  }
 }
 
 void DeclContext::addDecl(Decl *D) {

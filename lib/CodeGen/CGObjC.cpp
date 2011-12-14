@@ -115,7 +115,7 @@ llvm::Value *CodeGenFunction::EmitObjCCollectionLiteral(const Expr *E,
       const Expr *Rhs = ALE->getElement(i);
       LValue LV = LValue::MakeAddr(Builder.CreateStructGEP(Objects, i),
                                    ElementType,
-                                   Context.getTypeAlign(Rhs->getType()),
+                                   Context.getTypeAlignInChars(Rhs->getType()),
                                    Context);
       EmitScalarInit(Rhs, /*D=*/0, LV, /*capturedByInit=*/false);
     } else {      
@@ -123,7 +123,7 @@ llvm::Value *CodeGenFunction::EmitObjCCollectionLiteral(const Expr *E,
       const Expr *Key = DLE->getKeyValueElement(i).Key;
       LValue KeyLV = LValue::MakeAddr(Builder.CreateStructGEP(Keys, i),
                                       ElementType,
-                                      Context.getTypeAlign(Key->getType()),
+                                    Context.getTypeAlignInChars(Key->getType()),
                                       Context);
       EmitScalarInit(Key, /*D=*/0, KeyLV, /*capturedByInit=*/false);
 
@@ -131,7 +131,7 @@ llvm::Value *CodeGenFunction::EmitObjCCollectionLiteral(const Expr *E,
       const Expr *Value = DLE->getKeyValueElement(i).Value;  
       LValue ValueLV = LValue::MakeAddr(Builder.CreateStructGEP(Objects, i), 
                                         ElementType,
-                                        Context.getTypeAlign(Value->getType()),
+                                  Context.getTypeAlignInChars(Value->getType()),
                                         Context);
       EmitScalarInit(Value, /*D=*/0, ValueLV, /*capturedByInit=*/false);
     }
@@ -1883,7 +1883,8 @@ llvm::Value *CodeGenFunction::EmitARCStoreStrong(LValue dst,
   // lvalue is inadequately aligned.
   if (shouldUseFusedARCCalls() &&
       !isBlock &&
-      !(dst.getAlignment() && dst.getAlignment() < PointerAlignInBytes)) {
+      (dst.getAlignment().isZero() ||
+       dst.getAlignment() >= CharUnits::fromQuantity(PointerAlignInBytes))) {
     return EmitARCStoreStrongCall(dst.getAddress(), newValue, ignored);
   }
 
@@ -2599,12 +2600,8 @@ CodeGenFunction::EmitARCStoreStrong(const BinaryOperator *e,
   // If the RHS was emitted retained, expand this.
   if (hasImmediateRetain) {
     llvm::Value *oldValue =
-      EmitLoadOfScalar(lvalue.getAddress(), lvalue.isVolatileQualified(),
-                       lvalue.getAlignment(), e->getType(),
-                       lvalue.getTBAAInfo());
-    EmitStoreOfScalar(value, lvalue.getAddress(),
-                      lvalue.isVolatileQualified(), lvalue.getAlignment(),
-                      e->getType(), lvalue.getTBAAInfo());
+      EmitLoadOfScalar(lvalue);
+    EmitStoreOfScalar(value, lvalue);
     EmitARCRelease(oldValue, /*precise*/ false);
   } else {
     value = EmitARCStoreStrong(lvalue, value, ignored);
@@ -2618,9 +2615,7 @@ CodeGenFunction::EmitARCStoreAutoreleasing(const BinaryOperator *e) {
   llvm::Value *value = EmitARCRetainAutoreleaseScalarExpr(e->getRHS());
   LValue lvalue = EmitLValue(e->getLHS());
 
-  EmitStoreOfScalar(value, lvalue.getAddress(),
-                    lvalue.isVolatileQualified(), lvalue.getAlignment(),
-                    e->getType(), lvalue.getTBAAInfo());
+  EmitStoreOfScalar(value, lvalue);
 
   return std::pair<LValue,llvm::Value*>(lvalue, value);
 }

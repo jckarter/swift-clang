@@ -21,6 +21,8 @@ using namespace cxcursor;
 static void getTopOverriddenMethods(CXTranslationUnit TU,
                                     Decl *D,
                                     SmallVectorImpl<Decl *> &Methods) {
+  if (!D)
+    return;
   if (!isa<ObjCMethodDecl>(D) && !isa<CXXMethodDecl>(D))
     return;
 
@@ -73,17 +75,26 @@ struct FindFileIdRefVisitData {
   /// we consider the canonical decl of the constructor decl to be the class
   /// itself, so both 'C' can be highlighted.
   Decl *getCanonical(Decl *D) const {
+    if (!D)
+      return 0;
+
     D = D->getCanonicalDecl();
 
-    if (ObjCImplDecl *ImplD = dyn_cast<ObjCImplDecl>(D))
-      return getCanonical(ImplD->getClassInterface());
-    if (CXXConstructorDecl *CXXCtorD = dyn_cast<CXXConstructorDecl>(D))
+    if (ObjCImplDecl *ImplD = dyn_cast<ObjCImplDecl>(D)) {
+      if (ImplD->getClassInterface())
+        return getCanonical(ImplD->getClassInterface());
+
+    } else if (CXXConstructorDecl *CXXCtorD = dyn_cast<CXXConstructorDecl>(D)) {
       return getCanonical(CXXCtorD->getParent());
+    }
     
     return D;
   }
 
   bool isHit(Decl *D) const {
+    if (!D)
+      return false;
+
     D = getCanonical(D);
     if (D == Dcl)
       return true;
@@ -138,6 +149,9 @@ static enum CXChildVisitResult findFileIdRefVisit(CXCursor cursor,
     return CXChildVisit_Recurse;
 
   Decl *D = cxcursor::getCursorDecl(declCursor);
+  if (!D)
+    return CXChildVisit_Continue;
+
   FindFileIdRefVisitData *data = (FindFileIdRefVisitData *)client_data;
   if (data->isHit(D)) {
     cursor = cxcursor::getSelectorIdentifierCursor(data->SelectorIdIdx, cursor);
@@ -203,6 +217,9 @@ static void findIdRefsInFile(CXTranslationUnit TU, CXCursor declCursor,
 
   FileID FID = SM.translateFile(File);
   Decl *Dcl = cxcursor::getCursorDecl(declCursor);
+  if (!Dcl)
+    return;
+
   FindFileIdRefVisitData data(TU, FID, Dcl,
                               cxcursor::getSelectorIdentifierIndex(declCursor),
                               Visitor);
@@ -330,6 +347,11 @@ void clang_findReferencesInFile(CXCursor cursor, CXFile file,
   if (clang_Cursor_isNull(cursor)) {
     if (Logging)
       llvm::errs() << "clang_findReferencesInFile: Null cursor\n";
+    return;
+  }
+  if (cursor.kind == CXCursor_NoDeclFound) {
+    if (Logging)
+      llvm::errs() << "clang_findReferencesInFile: Got CXCursor_NoDeclFound\n";
     return;
   }
   if (!file) {
