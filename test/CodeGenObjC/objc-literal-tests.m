@@ -1,5 +1,5 @@
-// RUN: %clang_cc1 -x objective-c -fblocks -emit-llvm %s -o /dev/null
-// RUN: %clang_cc1 -x objective-c++ -fblocks -emit-llvm %s -o /dev/null
+// RUN: %clang_cc1 -x objective-c -triple x86_64-apple-darwin10 -fblocks -emit-llvm %s -o /dev/null
+// RUN: %clang_cc1 -x objective-c++ -triple x86_64-apple-darwin10 -fblocks -emit-llvm %s -o /dev/null
 // rdar://10111397
 
 #if __has_feature(objc_bool)
@@ -17,11 +17,7 @@ typedef long NSInteger;
 typedef unsigned int NSUInteger;
 typedef int NSInteger;
 #endif
-#ifdef __cplusplus
-typedef bool BOOL;
-#else
-typedef _Bool BOOL;
-#endif
+typedef signed char BOOL;
 
 @interface NSNumber @end
 
