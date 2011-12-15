@@ -46,6 +46,16 @@
 #include "llvm/Support/Signals.h"
 #include "llvm/Support/Threading.h"
 #include "llvm/Support/Compiler.h"
+#include <cstdlib>
+
+#if LLVM_ON_WIN32
+#include <windows.h>
+#include <io.h>
+#include <fcntl.h>
+#endif
+#if LLVM_ON_UNIX
+#include <unistd.h>
+#endif
 
 using namespace clang;
 using namespace clang::cxcursor;
@@ -1065,7 +1075,7 @@ bool CursorVisitor::VisitObjCForwardProtocolDecl(ObjCForwardProtocolDecl *D) {
 
 bool CursorVisitor::VisitObjCClassDecl(ObjCClassDecl *D) {
   if (Visit(MakeCursorObjCClassRef(D->getForwardInterfaceDecl(), 
-                                   D->getForwardDecl()->getLocation(), TU)))
+                                   D->getNameLoc(), TU)))
       return true;
   return false;
 }
@@ -2336,6 +2346,17 @@ RefNamePieces buildPieces(unsigned NameFlags, bool IsMemberRefExpr,
 static llvm::sys::Mutex EnableMultithreadingMutex;
 static bool EnabledMultithreading;
 
+static void fatal_error_handler(void *user_data, const std::string& reason) {
+  llvm::SmallString<64> Buffer;
+  llvm::raw_svector_ostream OS(Buffer);
+  OS << "LIBCLANG FATAL ERROR: " << reason << "\n";
+  StringRef MessageStr = OS.str();
+  // Write the result out to stderr avoiding errs() because raw_ostreams can
+  // call report_fatal_error.
+  ::write(2, MessageStr.data(), MessageStr.size());
+  ::abort();
+}
+
 extern "C" {
 CXIndex clang_createIndex(int excludeDeclarationsFromPCH,
                           int displayDiagnostics) {
@@ -2351,6 +2372,7 @@ CXIndex clang_createIndex(int excludeDeclarationsFromPCH,
   {
     llvm::sys::ScopedLock L(EnableMultithreadingMutex);
     if (!EnabledMultithreading) {
+      llvm::install_fatal_error_handler(fatal_error_handler, 0);
       llvm::llvm_start_multithreaded();
       EnabledMultithreading = true;
     }

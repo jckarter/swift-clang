@@ -1209,6 +1209,24 @@ static void addAsanRTLinux(const ToolChain &TC, const ArgList &Args,
   CmdArgs.push_back("-export-dynamic");
 }
 
+static bool shouldUseFramePointer(const ArgList &Args,
+                                  const llvm::Triple &Triple) {
+  if (Arg *A = Args.getLastArg(options::OPT_fno_omit_frame_pointer,
+                               options::OPT_fomit_frame_pointer))
+    return A->getOption().matches(options::OPT_fno_omit_frame_pointer);
+
+  // Don't use a frame pointer on linux x86 and x86_64 if optimizing.
+  if ((Triple.getArch() == llvm::Triple::x86_64 ||
+       Triple.getArch() == llvm::Triple::x86) &&
+      Triple.getOS() == llvm::Triple::Linux) {
+    if (Arg *A = Args.getLastArg(options::OPT_O_Group))
+      if (!A->getOption().matches(options::OPT_O0))
+        return false;
+  }
+
+  return true;
+}
+
 void Clang::ConstructJob(Compilation &C, const JobAction &JA,
                          const InputInfo &Output,
                          const InputInfoList &Inputs,
@@ -1426,8 +1444,7 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
     CmdArgs.push_back("-mrtd");
 
   // FIXME: Set --enable-unsafe-fp-math.
-  if (Args.hasFlag(options::OPT_fno_omit_frame_pointer,
-                   options::OPT_fomit_frame_pointer))
+  if (shouldUseFramePointer(Args, getToolChain().getTriple()))
     CmdArgs.push_back("-mdisable-fp-elim");
   if (!Args.hasFlag(options::OPT_fzero_initialized_in_bss,
                     options::OPT_fno_zero_initialized_in_bss))
@@ -4172,8 +4189,12 @@ void openbsd::Link::ConstructJob(Compilation &C, const JobAction &JA,
   if (!Args.hasArg(options::OPT_nostdlib) &&
       !Args.hasArg(options::OPT_nostartfiles)) {
     if (!Args.hasArg(options::OPT_shared)) {
-      CmdArgs.push_back(Args.MakeArgString(
-                              getToolChain().GetFilePath("crt0.o")));
+      if (Args.hasArg(options::OPT_pg))  
+        CmdArgs.push_back(Args.MakeArgString(
+                                getToolChain().GetFilePath("gcrt0.o")));
+      else
+        CmdArgs.push_back(Args.MakeArgString(
+                                getToolChain().GetFilePath("crt0.o")));
       CmdArgs.push_back(Args.MakeArgString(
                               getToolChain().GetFilePath("crtbegin.o")));
     } else {
@@ -4198,7 +4219,10 @@ void openbsd::Link::ConstructJob(Compilation &C, const JobAction &JA,
       !Args.hasArg(options::OPT_nodefaultlibs)) {
     if (D.CCCIsCXX) {
       getToolChain().AddCXXStdlibLibArgs(Args, CmdArgs);
-      CmdArgs.push_back("-lm");
+      if (Args.hasArg(options::OPT_pg)) 
+        CmdArgs.push_back("-lm_p");
+      else
+        CmdArgs.push_back("-lm");
     }
 
     // FIXME: For some reason GCC passes -lgcc before adding
@@ -4208,7 +4232,10 @@ void openbsd::Link::ConstructJob(Compilation &C, const JobAction &JA,
     if (Args.hasArg(options::OPT_pthread))
       CmdArgs.push_back("-lpthread");
     if (!Args.hasArg(options::OPT_shared))
-      CmdArgs.push_back("-lc");
+      if (Args.hasArg(options::OPT_pg)) 
+         CmdArgs.push_back("-lc_p");
+      else
+         CmdArgs.push_back("-lc");
     CmdArgs.push_back("-lgcc");
   }
 
