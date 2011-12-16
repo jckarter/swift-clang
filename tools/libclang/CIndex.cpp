@@ -46,16 +46,6 @@
 #include "llvm/Support/Signals.h"
 #include "llvm/Support/Threading.h"
 #include "llvm/Support/Compiler.h"
-#include <cstdlib>
-
-#if LLVM_ON_WIN32
-#include <windows.h>
-#include <io.h>
-#include <fcntl.h>
-#endif
-#if LLVM_ON_UNIX
-#include <unistd.h>
-#endif
 
 using namespace clang;
 using namespace clang::cxcursor;
@@ -309,12 +299,7 @@ void CursorVisitor::visitDeclsFromFileRegion(FileID File,
 
     // We handle forward decls via ObjCClassDecl.
     if (ObjCInterfaceDecl *InterD = dyn_cast<ObjCInterfaceDecl>(D)) {
-      if (InterD->isForwardDecl())
-        continue;
-      // An interface that started as a forward decl may have changed location
-      // because its @interface was parsed.
-      if (InterD->isInitiallyForwardDecl() &&
-          !SM.isInFileID(SM.getFileLoc(InterD->getLocation()), File))
+      if (!InterD->isThisDeclarationADefinition())
         continue;
     }
 
@@ -2347,13 +2332,9 @@ static llvm::sys::Mutex EnableMultithreadingMutex;
 static bool EnabledMultithreading;
 
 static void fatal_error_handler(void *user_data, const std::string& reason) {
-  llvm::SmallString<64> Buffer;
-  llvm::raw_svector_ostream OS(Buffer);
-  OS << "LIBCLANG FATAL ERROR: " << reason << "\n";
-  StringRef MessageStr = OS.str();
   // Write the result out to stderr avoiding errs() because raw_ostreams can
   // call report_fatal_error.
-  ::write(2, MessageStr.data(), MessageStr.size());
+  fprintf(stderr, "LIBCLANG FATAL ERROR: %s\n", reason.c_str());
   ::abort();
 }
 
@@ -3962,8 +3943,13 @@ CXCursor clang_getCursorReferenced(CXCursor C) {
     case CXCursor_ObjCProtocolRef: {
       return MakeCXCursor(getCursorObjCProtocolRef(C).first, tu);
 
-    case CXCursor_ObjCClassRef:
-      return MakeCXCursor(getCursorObjCClassRef(C).first, tu );
+    case CXCursor_ObjCClassRef: {
+      ObjCInterfaceDecl *Class = getCursorObjCClassRef(C).first;
+      if (ObjCInterfaceDecl *Def = Class->getDefinition())
+        return MakeCXCursor(Def, tu);
+
+      return MakeCXCursor(Class, tu);
+    }
 
     case CXCursor_TypeRef:
       return MakeCXCursor(getCursorTypeRef(C).first, tu );
@@ -4161,8 +4147,8 @@ CXCursor clang_getCursorDefinition(CXCursor C) {
     // the definition; when we were provided with the interface,
     // produce the @implementation as the definition.
     if (WasReference) {
-      if (!cast<ObjCInterfaceDecl>(D)->isForwardDecl())
-        return C;
+      if (ObjCInterfaceDecl *Def = cast<ObjCInterfaceDecl>(D)->getDefinition())
+        return MakeCXCursor(Def, TU);
     } else if (ObjCImplementationDecl *Impl
                               = cast<ObjCInterfaceDecl>(D)->getImplementation())
       return MakeCXCursor(Impl, TU);
@@ -4176,8 +4162,8 @@ CXCursor clang_getCursorDefinition(CXCursor C) {
   case Decl::ObjCCompatibleAlias:
     if (ObjCInterfaceDecl *Class
           = cast<ObjCCompatibleAliasDecl>(D)->getClassInterface())
-      if (!Class->isForwardDecl())
-        return MakeCXCursor(Class, TU);
+      if (ObjCInterfaceDecl *Def = Class->getDefinition())
+        return MakeCXCursor(Def, TU);
 
     return clang_getNullCursor();
 
