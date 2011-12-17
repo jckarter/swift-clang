@@ -4372,7 +4372,7 @@ static bool IsTailPaddedMemberArray(Sema &S, llvm::APInt Size,
 
 void Sema::CheckArrayAccess(const Expr *BaseExpr, const Expr *IndexExpr,
                             const ArraySubscriptExpr *ASE,
-                            bool AllowOnePastEnd) {
+                            bool AllowOnePastEnd, bool IndexNegated) {
   IndexExpr = IndexExpr->IgnoreParenCasts();
   if (IndexExpr->isValueDependent())
     return;
@@ -4387,6 +4387,8 @@ void Sema::CheckArrayAccess(const Expr *BaseExpr, const Expr *IndexExpr,
   llvm::APSInt index;
   if (!IndexExpr->EvaluateAsInt(index, Context))
     return;
+  if (IndexNegated)
+    index = -index;
 
   const NamedDecl *ND = NULL;
   if (const DeclRefExpr *DRE = dyn_cast<DeclRefExpr>(BaseExpr))
