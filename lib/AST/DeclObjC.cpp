@@ -225,7 +225,11 @@ void ObjCInterfaceDecl::mergeClassExtensionProtocolList(
 void ObjCInterfaceDecl::allocateDefinitionData() {
   assert(!hasDefinition() && "ObjC class already has a definition");
   Data = new (getASTContext()) DefinitionData();
-  Data->Definition = this;  
+  Data->Definition = this;
+
+  // Make the type point at the definition, now that we have one.
+  if (TypeForDecl)
+    cast<ObjCInterfaceType>(TypeForDecl)->Decl = this;
 }
 
 void ObjCInterfaceDecl::startDefinition() {
@@ -679,28 +683,29 @@ ObjCInterfaceDecl *ObjCInterfaceDecl::Create(ASTContext &C,
                                              SourceLocation ClassLoc,
                                              bool isInternal){
   ObjCInterfaceDecl *Result = new (C) ObjCInterfaceDecl(DC, atLoc, Id, ClassLoc, 
-                                                        isInternal);
+                                                        PrevDecl, isInternal);
   C.getObjCInterfaceType(Result, PrevDecl);
-  
-  if (PrevDecl) {
-    Result->Data = PrevDecl->Data;
-    Result->setPreviousDeclaration(PrevDecl);
-  }
-
   return Result;
 }
 
 ObjCInterfaceDecl *ObjCInterfaceDecl::CreateEmpty(ASTContext &C) {
   return new (C) ObjCInterfaceDecl(0, SourceLocation(), 0, SourceLocation(),
-                                   false);
+                                   0, false);
 }
 
 ObjCInterfaceDecl::
 ObjCInterfaceDecl(DeclContext *DC, SourceLocation atLoc, IdentifierInfo *Id,
-                  SourceLocation CLoc, bool isInternal)
+                  SourceLocation CLoc, ObjCInterfaceDecl *PrevDecl,
+                  bool isInternal)
   : ObjCContainerDecl(ObjCInterface, DC, Id, CLoc, atLoc),
     TypeForDecl(0), Data()
 {
+  setPreviousDeclaration(PrevDecl);
+  
+  // Copy the 'data' pointer over.
+  if (PrevDecl)
+    Data = PrevDecl->Data;
+  
   setImplicit(isInternal);
 }
 
