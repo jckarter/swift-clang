@@ -1882,16 +1882,6 @@ ASTReader::ReadASTBlock(ModuleFile &F) {
       break;
     }
 
-    case REDECLS_UPDATE_LATEST: {
-      assert(Record.size() % 2 == 0 && "Expected pairs of DeclIDs");
-      for (unsigned i = 0, e = Record.size(); i < e; /* in loop */) {
-        DeclID First = ReadDeclID(F, Record, i);
-        DeclID Latest = ReadDeclID(F, Record, i);
-        FirstLatestDeclIDs[First] = Latest;
-      }
-      break;
-    }
-
     case LANGUAGE_OPTIONS:
       if (ParseLanguageOptions(Record) && !DisableValidation)
         return IgnorePCH;
@@ -6149,9 +6139,6 @@ void ASTReader::FinishedDeserializing() {
 
     finishPendingActions();
     PendingDeclChainsKnown.clear();
-
-    assert(PendingForwardRefs.size() == 0 &&
-           "Some forward refs did not get linked to the definition!");
   }
   --NumCurrentElementsDeserializing;
 }
