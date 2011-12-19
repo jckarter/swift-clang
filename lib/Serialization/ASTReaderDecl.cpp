@@ -134,6 +134,7 @@ namespace clang {
     void VisitUsingDirectiveDecl(UsingDirectiveDecl *D);
     void VisitNamespaceAliasDecl(NamespaceAliasDecl *D);
     void VisitTypeDecl(TypeDecl *TD);
+    void VisitTypedefNameDecl(TypedefNameDecl *TD);
     void VisitTypedefDecl(TypedefDecl *TD);
     void VisitTypeAliasDecl(TypeAliasDecl *TD);
     void VisitUnresolvedUsingTypenameDecl(UnresolvedUsingTypenameDecl *D);
@@ -307,16 +308,18 @@ void ASTDeclReader::VisitTypeDecl(TypeDecl *TD) {
   TypeIDForTypeDecl = Reader.getGlobalTypeID(F, Record[Idx++]);
 }
 
-void ASTDeclReader::VisitTypedefDecl(TypedefDecl *TD) {
+void ASTDeclReader::VisitTypedefNameDecl(TypedefNameDecl *TD) {
   VisitRedeclarable(TD);
   VisitTypeDecl(TD);
-  TD->setTypeSourceInfo(GetTypeSourceInfo(Record, Idx));
+  TD->setTypeSourceInfo(GetTypeSourceInfo(Record, Idx));  
+}
+
+void ASTDeclReader::VisitTypedefDecl(TypedefDecl *TD) {
+  VisitTypedefNameDecl(TD);
 }
 
 void ASTDeclReader::VisitTypeAliasDecl(TypeAliasDecl *TD) {
-  VisitRedeclarable(TD);
-  VisitTypeDecl(TD);
-  TD->setTypeSourceInfo(GetTypeSourceInfo(Record, Idx));
+  VisitTypedefNameDecl(TD);
 }
 
 void ASTDeclReader::VisitTagDecl(TagDecl *TD) {
@@ -627,6 +630,9 @@ void ASTDeclReader::VisitObjCInterfaceDecl(ObjCInterfaceDecl *ID) {
       // pending references were linked.
       Reader.PendingForwardRefs.erase(ID);
 #endif
+      
+      // Note that we have deserialized a definition.
+      Reader.PendingDefinitions.insert(ID);
     }
   } else if (Def) {
     if (Def->Data) {
@@ -1027,6 +1033,9 @@ void ASTDeclReader::InitializeCXXDefinitionData(CXXRecordDecl *D,
       Reader.PendingForwardRefs.erase(D);
 #endif
     }
+    
+    // Note that we have deserialized a definition.
+    Reader.PendingDefinitions.insert(D);
   } else if (DefinitionDecl) {
     if (DefinitionDecl->DefinitionData) {
       D->DefinitionData = DefinitionDecl->DefinitionData;
@@ -1159,53 +1168,60 @@ void ASTDeclReader::VisitTemplateDecl(TemplateDecl *D) {
 void ASTDeclReader::VisitRedeclarableTemplateDecl(RedeclarableTemplateDecl *D) {
   // Initialize CommonOrPrev before VisitTemplateDecl so that getCommonPtr()
   // can be used while this is still initializing.
+  enum RedeclKind { FirstDeclaration, FirstInFile, PointsToPrevious };
+  RedeclKind Kind = (RedeclKind)Record[Idx++];
+  
+  // Determine the first declaration ID.
+  DeclID FirstDeclID;
+  switch (Kind) {
+  case FirstDeclaration: {
+    FirstDeclID = ThisDeclID;
 
-  assert(D->CommonOrPrev.isNull() && "getCommonPtr was called earlier on this");
-  DeclID PreviousDeclID = ReadDeclID(Record, Idx);
-  DeclID FirstDeclID =  PreviousDeclID ? ReadDeclID(Record, Idx) : 0;
-  // We delay loading of the redeclaration chain to avoid deeply nested calls.
-  // We temporarily set the first (canonical) declaration as the previous one
-  // which is the one that matters and mark the real previous DeclID to be
-  // loaded & attached later on.
-  RedeclarableTemplateDecl *FirstDecl =
-      cast_or_null<RedeclarableTemplateDecl>(Reader.GetDecl(FirstDeclID));
-  assert((FirstDecl == 0 || FirstDecl->getKind() == D->getKind()) &&
-         "FirstDecl kind mismatch");
-  if (FirstDecl) {
-    D->CommonOrPrev = FirstDecl;
-    // Mark the real previous DeclID to be loaded & attached later on.
-    if (PreviousDeclID != FirstDeclID)
-      Reader.PendingPreviousDecls.push_back(std::make_pair(D, PreviousDeclID));
-  } else {
-    D->CommonOrPrev = D->newCommon(Reader.getContext());
+    // Since this is the first declaration of the template, fill in the 
+    // information for the 'common' pointer.
+    if (D->CommonOrPrev.isNull()) {
+      RedeclarableTemplateDecl::CommonBase *Common
+        = D->newCommon(Reader.getContext());
+      Common->Latest = D;
+      D->CommonOrPrev = Common;
+    }
+    
     if (RedeclarableTemplateDecl *RTD
-          = ReadDeclAs<RedeclarableTemplateDecl>(Record, Idx)) {
+        = ReadDeclAs<RedeclarableTemplateDecl>(Record, Idx)) {
       assert(RTD->getKind() == D->getKind() &&
              "InstantiatedFromMemberTemplate kind mismatch");
       D->setInstantiatedFromMemberTemplateImpl(RTD);
       if (Record[Idx++])
         D->setMemberSpecialization();
     }
-
-    RedeclarableTemplateDecl *LatestDecl
-      = ReadDeclAs<RedeclarableTemplateDecl>(Record, Idx);
-  
-    // This decl is a first one and the latest declaration that it points to is
-    // in the same AST file. However, if this actually needs to point to a
-    // redeclaration in another AST file, we need to update it by checking
-    // the FirstLatestDeclIDs map which tracks this kind of decls.
-    assert(Reader.GetDecl(ThisDeclID) == D && "Invalid ThisDeclID ?");
-    ASTReader::FirstLatestDeclIDMap::iterator I
-        = Reader.FirstLatestDeclIDs.find(ThisDeclID);
-    if (I != Reader.FirstLatestDeclIDs.end()) {
-      if (Decl *NewLatest = Reader.GetDecl(I->second))
-        LatestDecl = cast<RedeclarableTemplateDecl>(NewLatest);
-    }
-
-    assert(LatestDecl->getKind() == D->getKind() && "Latest kind mismatch");
-    D->getCommonPtr()->Latest = LatestDecl;
+    break;
   }
-
+   
+  case FirstInFile:
+  case PointsToPrevious: {
+    FirstDeclID = ReadDeclID(Record, Idx);
+    DeclID PrevDeclID = ReadDeclID(Record, Idx);
+    
+    RedeclarableTemplateDecl *FirstDecl
+      = cast_or_null<RedeclarableTemplateDecl>(Reader.GetDecl(FirstDeclID));
+    
+    // We delay loading of the redeclaration chain to avoid deeply nested calls.
+    // We temporarily set the first (canonical) declaration as the previous one
+    // which is the one that matters and mark the real previous DeclID to be
+    // loaded and attached later on.
+    D->CommonOrPrev = FirstDecl;
+    
+    if (Kind == PointsToPrevious) {
+      // Make a note that we need to wire up this declaration to its
+      // previous declaration, later. We don't need to do this for the first
+      // declaration in any given module file, because those will be wired 
+      // together later.
+      Reader.PendingPreviousDecls.push_back(std::make_pair(D, PrevDeclID));
+    }
+    break;
+  }
+  }
+  
   VisitTemplateDecl(D);
   D->IdentifierNamespace = Record[Idx++];
 }
@@ -1407,25 +1423,21 @@ ASTDeclReader::VisitDeclContext(DeclContext *DC) {
 
 template <typename T>
 void ASTDeclReader::VisitRedeclarable(Redeclarable<T> *D) {
-  enum RedeclKind { FirstInFile, PointsToPrevious };
+  enum RedeclKind { FirstDeclaration = 0, FirstInFile, PointsToPrevious };
   RedeclKind Kind = (RedeclKind)Record[Idx++];
   
-  // Read the first declaration ID, and note that we need to reconstruct
-  // the redeclaration chain once we hit the top level.
-  DeclID FirstDeclID = ReadDeclID(Record, Idx);
-  if (Reader.PendingDeclChainsKnown.insert(FirstDeclID))
-    Reader.PendingDeclChains.push_back(FirstDeclID);
-
-  T *FirstDecl = cast_or_null<T>(Reader.GetDecl(FirstDeclID));
-
+  DeclID FirstDeclID;
   switch (Kind) {
-  case FirstInFile:
-    if (FirstDecl != D)
-      D->RedeclLink = typename Redeclarable<T>::PreviousDeclLink(FirstDecl);
+  case FirstDeclaration:
+    FirstDeclID = ThisDeclID;
     break;
-      
+    
+  case FirstInFile:
   case PointsToPrevious: {
-    DeclID PreviousDeclID = ReadDeclID(Record, Idx);
+    FirstDeclID = ReadDeclID(Record, Idx);
+    DeclID PrevDeclID = ReadDeclID(Record, Idx);
+    
+    T *FirstDecl = cast_or_null<T>(Reader.GetDecl(FirstDeclID));
     
     // We delay loading of the redeclaration chain to avoid deeply nested calls.
     // We temporarily set the first (canonical) declaration as the previous one
@@ -1433,13 +1445,21 @@ void ASTDeclReader::VisitRedeclarable(Redeclarable<T> *D) {
     // loaded & attached later on.
     D->RedeclLink = typename Redeclarable<T>::PreviousDeclLink(FirstDecl);
     
-    // Make a note that we need to wire up this declaration to its
-    // previous declaration, later.
-    Reader.PendingPreviousDecls.push_back(std::make_pair(static_cast<T*>(D),
-                                                         PreviousDeclID));
+    if (Kind == PointsToPrevious) {
+      // Make a note that we need to wire up this declaration to its
+      // previous declaration, later. We don't need to do this for the first
+      // declaration in any given module file, because those will be wired 
+      // together later.
+      Reader.PendingPreviousDecls.push_back(std::make_pair(static_cast<T*>(D),
+                                                           PrevDeclID));
+    }
     break;
   }
   }
+
+  // Note that we need to load the other declaration chains for this ID.
+  if (Reader.PendingDeclChainsKnown.insert(ThisDeclID))
+    Reader.PendingDeclChains.push_back(ThisDeclID);
 }
 
 //===----------------------------------------------------------------------===//
