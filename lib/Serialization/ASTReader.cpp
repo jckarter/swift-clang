@@ -1817,8 +1817,9 @@ ASTReader::ReadASTBlock(ModuleFile &F) {
         GlobalTypeMap.insert(std::make_pair(getTotalNumTypes(), &F));
         
         // Introduce the local -> global mapping for types within this module.
-        F.TypeRemap.insert(std::make_pair(LocalBaseTypeIndex, 
-                             F.BaseTypeIndex - LocalBaseTypeIndex));
+        F.TypeRemap.insertOrReplace(
+          std::make_pair(LocalBaseTypeIndex, 
+                         F.BaseTypeIndex - LocalBaseTypeIndex));
         
         TypesLoaded.resize(TypesLoaded.size() + F.LocalNumTypes);
       }
@@ -1843,8 +1844,8 @@ ASTReader::ReadASTBlock(ModuleFile &F) {
         
         // Introduce the local -> global mapping for declarations within this
         // module.
-        F.DeclRemap.insert(std::make_pair(LocalBaseDeclID, 
-                                          F.BaseDeclID - LocalBaseDeclID));
+        F.DeclRemap.insertOrReplace(
+          std::make_pair(LocalBaseDeclID, F.BaseDeclID - LocalBaseDeclID));
         
         // Introduce the global -> local mapping for declarations within this
         // module.
@@ -1878,16 +1879,6 @@ ASTReader::ReadASTBlock(ModuleFile &F) {
         TU->setHasExternalVisibleStorage(true);
       } else
         PendingVisibleUpdates[ID].push_back(std::make_pair(Table, &F));
-      break;
-    }
-
-    case REDECLS_UPDATE_LATEST: {
-      assert(Record.size() % 2 == 0 && "Expected pairs of DeclIDs");
-      for (unsigned i = 0, e = Record.size(); i < e; /* in loop */) {
-        DeclID First = ReadDeclID(F, Record, i);
-        DeclID Latest = ReadDeclID(F, Record, i);
-        FirstLatestDeclIDs[First] = Latest;
-      }
       break;
     }
 
@@ -1927,9 +1918,9 @@ ASTReader::ReadASTBlock(ModuleFile &F) {
         
         // Introduce the local -> global mapping for identifiers within this
         // module.
-        F.IdentifierRemap.insert(
-                            std::make_pair(LocalBaseIdentifierID,
-                              F.BaseIdentifierID - LocalBaseIdentifierID));
+        F.IdentifierRemap.insertOrReplace(
+          std::make_pair(LocalBaseIdentifierID,
+                         F.BaseIdentifierID - LocalBaseIdentifierID));
         
         IdentifiersLoaded.resize(IdentifiersLoaded.size() 
                                  + F.LocalNumIdentifiers);
@@ -2004,8 +1995,9 @@ ASTReader::ReadASTBlock(ModuleFile &F) {
         
         // Introduce the local -> global mapping for selectors within this 
         // module.
-        F.SelectorRemap.insert(std::make_pair(LocalBaseSelectorID,
-                                 F.BaseSelectorID - LocalBaseSelectorID));
+        F.SelectorRemap.insertOrReplace(
+          std::make_pair(LocalBaseSelectorID,
+                         F.BaseSelectorID - LocalBaseSelectorID));
 
         SelectorsLoaded.resize(SelectorsLoaded.size() + F.LocalNumSelectors);        
       }
@@ -2275,7 +2267,7 @@ ASTReader::ReadASTBlock(ModuleFile &F) {
        
         // Introduce the local -> global mapping for preprocessed entities in
         // this module.
-        F.PreprocessedEntityRemap.insert(
+        F.PreprocessedEntityRemap.insertOrReplace(
           std::make_pair(LocalBasePreprocessedEntityID,
             F.BasePreprocessedEntityID - LocalBasePreprocessedEntityID));
       }
@@ -3094,6 +3086,7 @@ ASTReader::ASTReadResult ASTReader::ReadSubmoduleBlock(ModuleFile &F) {
         return Failure;
       }
       
+      CurrentModule->IsFromModuleFile = true;
       CurrentModule->InferSubmodules = InferSubmodules;
       CurrentModule->InferExplicitSubmodules = InferExplicitSubmodules;
       CurrentModule->InferExportWildcard = InferExportWildcard;
@@ -3184,7 +3177,7 @@ ASTReader::ASTReadResult ASTReader::ReadSubmoduleBlock(ModuleFile &F) {
         
         // Introduce the local -> global mapping for submodules within this 
         // module.
-        F.SubmoduleRemap.insert(
+        F.SubmoduleRemap.insertOrReplace(
           std::make_pair(LocalBaseSubmoduleID,
                          F.BaseSubmoduleID - LocalBaseSubmoduleID));
         
@@ -4571,7 +4564,7 @@ Decl *ASTReader::GetDecl(DeclID ID) {
   
   unsigned Index = ID - NUM_PREDEF_DECL_IDS;
 
-  if (Index > DeclsLoaded.size()) {
+  if (Index >= DeclsLoaded.size()) {
     Error("declaration ID out-of-range for AST file");
     return 0;
   }
@@ -6093,6 +6086,29 @@ void ASTReader::finishPendingActions() {
     }
     PendingChainedObjCCategories.clear();
   }
+  
+  // If we deserialized any C++ or Objective-C class definitions, make sure
+  // that all redeclarations point to the definitions. Note that this can only 
+  // happen now, after the redeclaration chains have been fully wired.
+  for (llvm::SmallPtrSet<Decl *, 4>::iterator D = PendingDefinitions.begin(),
+                                           DEnd = PendingDefinitions.end();
+       D != DEnd; ++D) {
+    if (CXXRecordDecl *RD = dyn_cast<CXXRecordDecl>(*D)) {
+      for (CXXRecordDecl::redecl_iterator R = RD->redecls_begin(),
+                                       REnd = RD->redecls_end();
+           R != REnd; ++R)
+        cast<CXXRecordDecl>(*R)->DefinitionData = RD->DefinitionData;
+      
+      continue;
+    }
+    
+    ObjCInterfaceDecl *ID = cast<ObjCInterfaceDecl>(*D);
+    for (ObjCInterfaceDecl::redecl_iterator R = ID->redecls_begin(),
+                                         REnd = ID->redecls_end();
+         R != REnd; ++R)
+      R->Data = ID->Data;
+  }
+  PendingDefinitions.clear();
 }
 
 void ASTReader::FinishedDeserializing() {
@@ -6124,9 +6140,6 @@ void ASTReader::FinishedDeserializing() {
 
     finishPendingActions();
     PendingDeclChainsKnown.clear();
-
-    assert(PendingForwardRefs.size() == 0 &&
-           "Some forward refs did not get linked to the definition!");
   }
   --NumCurrentElementsDeserializing;
 }

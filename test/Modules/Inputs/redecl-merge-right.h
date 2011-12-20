@@ -7,3 +7,11 @@ __import_module__ redecl_merge_top;
 - (Super*)init;
 @end
 
+@class B;
+
+#ifdef __cplusplus
+template<typename T> class Vector { 
+public:
+  void push_back(const T&);
+};
+#endif
