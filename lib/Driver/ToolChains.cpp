@@ -191,11 +191,18 @@ std::string Darwin::ComputeEffectiveClangTriple(const ArgList &Args,
   unsigned Version[3];
   getTargetVersion(Version);
 
-  llvm::SmallString<16> Str;
-  llvm::raw_svector_ostream(Str)
-    << (isTargetIPhoneOS() ? "ios" : "macosx")
-    << Version[0] << "." << Version[1] << "." << Version[2];
-  Triple.setOSName(Str.str());
+  if (Triple.getArchName() == "thumbv6m" ||
+      Triple.getArchName() == "thumbv7m") {
+    // OS is ios or macosx unless it's the v6m or v7m.
+    Triple.setOS(llvm::Triple::Darwin);
+    Triple.setEnvironment(llvm::Triple::EABI);
+  } else {
+    llvm::SmallString<16> Str;
+    llvm::raw_svector_ostream(Str)
+      << (isTargetIPhoneOS() ? "ios" : "macosx")
+      << Version[0] << "." << Version[1] << "." << Version[2];
+    Triple.setOSName(Str.str());
+  }
 
   return Triple.getTriple();
 }
