@@ -247,11 +247,12 @@ Parser::ParseAssignmentExprWithObjCMessageExprStart(SourceLocation LBracLoc,
 
 
 ExprResult Parser::ParseConstantExpression() {
-  // C++ [basic.def.odr]p2:
+  // C++03 [basic.def.odr]p2:
   //   An expression is potentially evaluated unless it appears where an
   //   integral constant expression is required (see 5.19) [...].
+  // C++98 and C++11 have no such rule, but this is only a defect in C++98.
   EnterExpressionEvaluationContext Unevaluated(Actions,
-                                               Sema::Unevaluated);
+                                               Sema::ConstantEvaluated);
 
   ExprResult LHS(ParseCastExpression(false));
   return ParseRHSOfBinaryExpression(LHS, prec::Conditional);
@@ -1041,7 +1042,7 @@ ExprResult Parser::ParseCastExpression(bool isUnaryExpression,
 
     if (T.expectAndConsume(diag::err_expected_lparen_after, "noexcept"))
       return ExprError();
-    // C++ [expr.unary.noexcept]p1:
+    // C++11 [expr.unary.noexcept]p1:
     //   The noexcept operator determines whether the evaluation of its operand,
     //   which is an unevaluated operand, can throw an exception.
     EnterExpressionEvaluationContext Unevaluated(Actions, Sema::Unevaluated);
@@ -1439,8 +1440,8 @@ Parser::ParseExprAfterUnaryExprOrTypeTrait(const Token &OpTok,
     //   [...] The operand is either an expression, which is an unevaluated
     //   operand (Clause 5) [...]
     //
-    // The GNU typeof and alignof extensions also behave as unevaluated
-    // operands.
+    // The GNU typeof and GNU/C++11 alignof extensions also behave as
+    // unevaluated operands.
     EnterExpressionEvaluationContext Unevaluated(Actions,
                                                  Sema::Unevaluated);
     Operand = ParseCastExpression(true/*isUnaryExpression*/);
@@ -1456,8 +1457,8 @@ Parser::ParseExprAfterUnaryExprOrTypeTrait(const Token &OpTok,
     //   [...] The operand is either an expression, which is an unevaluated
     //   operand (Clause 5) [...]
     //
-    // The GNU typeof and alignof extensions also behave as unevaluated
-    // operands.
+    // The GNU typeof and GNU/C++11 alignof extensions also behave as
+    // unevaluated operands.
     EnterExpressionEvaluationContext Unevaluated(Actions,
                                                  Sema::Unevaluated);
     Operand = ParseParenExpression(ExprType, true/*stopIfCastExpr*/, 
@@ -1817,9 +1818,24 @@ Parser::ParseParenExpression(ParenParseOption &ExprType, bool stopIfCastExpr,
     return ExprError();
   }
 
+  // Diagnose use of bridge casts in non-arc mode.
+  bool BridgeCast = (getLang().ObjC2 &&
+                     (Tok.is(tok::kw___bridge) || 
+                      Tok.is(tok::kw___bridge_transfer) ||
+                      Tok.is(tok::kw___bridge_retained) ||
+                      Tok.is(tok::kw___bridge_retain)));
+  if (BridgeCast && !getLang().ObjCAutoRefCount) {
+    StringRef BridgeCastName = Tok.getName();
+    SourceLocation BridgeKeywordLoc = ConsumeToken();
+    if (!PP.getSourceManager().isInSystemHeader(BridgeKeywordLoc))
+      Diag(BridgeKeywordLoc, diag::err_arc_bridge_cast_nonarc)
+        << BridgeCastName
+        << FixItHint::CreateReplacement(BridgeKeywordLoc, "");
+    BridgeCast = false;
+  }
+  
   // None of these cases should fall through with an invalid Result
   // unless they've already reported an error.
-  
   if (ExprType >= CompoundStmt && Tok.is(tok::l_brace)) {
     Diag(Tok, diag::ext_gnu_statement_expr);
     ParsedAttributes attrs(AttrFactory);
@@ -1829,11 +1845,7 @@ Parser::ParseParenExpression(ParenParseOption &ExprType, bool stopIfCastExpr,
     // If the substmt parsed correctly, build the AST node.
     if (!Stmt.isInvalid())
       Result = Actions.ActOnStmtExpr(OpenLoc, Stmt.take(), Tok.getLocation());
-  } else if (ExprType >= CompoundLiteral && 
-             (Tok.is(tok::kw___bridge) || 
-              Tok.is(tok::kw___bridge_transfer) ||
-              Tok.is(tok::kw___bridge_retained) ||
-              Tok.is(tok::kw___bridge_retain))) {
+  } else if (ExprType >= CompoundLiteral && BridgeCast) {
     tok::TokenKind tokenKind = Tok.getKind();
     SourceLocation BridgeKeywordLoc = ConsumeToken();
 

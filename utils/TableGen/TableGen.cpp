@@ -105,7 +105,6 @@ namespace {
   ClangComponent("clang-component",
                  cl::desc("Only use warnings from specified component"),
                  cl::value_desc("component"), cl::Hidden);
-}
 
 class ClangTableGenAction : public TableGenAction {
 public:
@@ -183,6 +182,7 @@ public:
     return false;
   }
 };
+}
 
 int main(int argc, char **argv) {
   sys::PrintStackTraceOnErrorSignal();

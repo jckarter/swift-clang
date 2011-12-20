@@ -778,7 +778,7 @@ void ASTWriter::WriteBlockInfoBlock() {
   RECORD(IMPORTS);
   RECORD(REFERENCED_SELECTOR_POOL);
   RECORD(TU_UPDATE_LEXICAL);
-  RECORD(REDECLS_UPDATE_LATEST);
+  RECORD(LOCAL_REDECLARATIONS);
   RECORD(SEMA_DECL_REFS);
   RECORD(WEAK_UNDECLARED_IDENTIFIERS);
   RECORD(PENDING_IMPLICIT_INSTANTIATIONS);
@@ -798,8 +798,10 @@ void ASTWriter::WriteBlockInfoBlock() {
   RECORD(KNOWN_NAMESPACES);
   RECORD(MODULE_OFFSET_MAP);
   RECORD(SOURCE_MANAGER_LINE_TABLE);
-  RECORD(LOCAL_REDECLARATIONS);
-         
+  RECORD(OBJC_CHAINED_CATEGORIES);
+  RECORD(FILE_SORTED_DECLS);
+  RECORD(IMPORTED_MODULES);
+  
   // SourceManager Block.
   BLOCK(SOURCE_MANAGER_BLOCK);
   RECORD(SM_SLOC_FILE_ENTRY);
@@ -1875,7 +1877,6 @@ void ASTWriter::WriteSubmodules(Module *WritingModule) {
   for (ASTContext::import_iterator I = Context->local_import_begin(),
                                 IEnd = Context->local_import_end();
        I != IEnd; ++I) {
-    assert(SubmoduleIDs.find(I->getImportedModule()) != SubmoduleIDs.end());
     if (Module *ImportedFrom
           = ModMap.inferModuleFromLocation(FullSourceLoc(I->getLocation(), 
                                                          SrcMgr))) {
@@ -3312,19 +3313,6 @@ void ASTWriter::WriteASTCore(Sema &SemaRef, MemorizeStatCalls *StatCalls,
     WriteSubmodules(WritingModule);
 
   Stream.EmitRecord(SPECIAL_TYPES, SpecialTypes);
-
-  /// Build a record containing first declarations from a chained PCH and the
-  /// most recent declarations in this AST that they point to.
-  RecordData FirstLatestDeclIDs;
-  for (FirstLatestDeclMap::iterator I = FirstLatestDecls.begin(), 
-                                    E = FirstLatestDecls.end(); 
-       I != E; ++I) {
-    AddDeclRef(I->first, FirstLatestDeclIDs);
-    AddDeclRef(I->second, FirstLatestDeclIDs);
-  }
-  
-  if (!FirstLatestDeclIDs.empty())
-    Stream.EmitRecord(REDECLS_UPDATE_LATEST, FirstLatestDeclIDs);
 
   // Write the record containing external, unnamed definitions.
   if (!ExternalDefinitions.empty())

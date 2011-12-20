@@ -1799,6 +1799,10 @@ public:
     { return StmtVisitorTy::Visit(E->getReplacement()); }
   RetTy VisitCXXDefaultArgExpr(const CXXDefaultArgExpr *E)
     { return StmtVisitorTy::Visit(E->getExpr()); }
+  // We cannot create any objects for which cleanups are required, so there is
+  // nothing to do here; all cleanups must come from unevaluated subexpressions.
+  RetTy VisitExprWithCleanups(const ExprWithCleanups *E)
+    { return StmtVisitorTy::Visit(E->getSubExpr()); }
 
   RetTy VisitCXXReinterpretCastExpr(const CXXReinterpretCastExpr *E) {
     CCEDiag(E, diag::note_constexpr_invalid_cast) << 0;
@@ -2059,9 +2063,7 @@ public:
         return false;
       BaseTy = E->getBase()->getType()->getAs<PointerType>()->getPointeeType();
     } else if (E->getBase()->isRValue()) {
-      if (!E->getBase()->getType()->isRecordType() ||
-          !E->getBase()->getType()->isLiteralType())
-        return false;
+      assert(E->getBase()->getType()->isRecordType());
       if (!EvaluateTemporary(E->getBase(), Result, this->Info))
         return false;
       BaseTy = E->getBase()->getType();
@@ -2242,7 +2244,7 @@ bool LValueExprEvaluator::VisitVarDecl(const Expr *E, const VarDecl *VD) {
 bool LValueExprEvaluator::VisitMaterializeTemporaryExpr(
     const MaterializeTemporaryExpr *E) {
   if (E->GetTemporaryExpr()->isRValue()) {
-    if (E->getType()->isRecordType() && E->getType()->isLiteralType())
+    if (E->getType()->isRecordType())
       return EvaluateTemporary(E->GetTemporaryExpr(), Result, Info);
 
     Result.set(E, Info.CurrentCall);
@@ -2770,8 +2772,15 @@ public:
 
 /// Evaluate an expression of record type as a temporary.
 static bool EvaluateTemporary(const Expr *E, LValue &Result, EvalInfo &Info) {
-  assert(E->isRValue() && E->getType()->isRecordType() &&
-         E->getType()->isLiteralType());
+  assert(E->isRValue() && E->getType()->isRecordType());
+  if (!E->getType()->isLiteralType()) {
+    if (Info.getLangOpts().CPlusPlus0x)
+      Info.Diag(E->getExprLoc(), diag::note_constexpr_nonliteral)
+        << E->getType();
+    else
+      Info.Diag(E->getExprLoc(), diag::note_invalid_subexpr_in_const_expr);
+    return false;
+  }
   return TemporaryExprEvaluator(Info, Result).Visit(E);
 }
 
