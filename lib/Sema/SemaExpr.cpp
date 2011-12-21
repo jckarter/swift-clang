@@ -2010,6 +2010,12 @@ Sema::LookupInObjCMethod(LookupResult &Lookup, Scope *S,
           Diag(Loc, diag::warn_ivar_use_hidden) << IV->getDeclName();
       }
     }
+  } else if (Lookup.isSingleResult() &&
+             Lookup.getFoundDecl()->isDefinedOutsideFunctionOrMethod()) {
+    // If accessing a stand-alone ivar in a class method, this is an error.
+    if (const ObjCIvarDecl *IV = dyn_cast<ObjCIvarDecl>(Lookup.getFoundDecl()))
+      return ExprError(Diag(Loc, diag::error_ivar_use_in_class_method)
+                       << IV->getDeclName());
   }
 
   if (Lookup.empty() && II && AllowBuiltinCreation) {
@@ -9485,6 +9491,11 @@ void Sema::MarkDeclarationReferenced(SourceLocation Loc, Decl *D) {
             cast<CXXRecordDecl>(Function->getDeclContext())->isLocalClass())
           PendingLocalImplicitInstantiations.push_back(std::make_pair(Function,
                                                                       Loc));
+        else if (Function->getTemplateInstantiationPattern()->isConstexpr())
+          // Do not defer instantiations of constexpr functions, to avoid the
+          // expression evaluator needing to call back into Sema if it sees a
+          // call to such a function.
+          InstantiateFunctionDefinition(Loc, Function);
         else
           PendingInstantiations.push_back(std::make_pair(Function, Loc));
       }
@@ -9520,7 +9531,12 @@ void Sema::MarkDeclarationReferenced(SourceLocation Loc, Decl *D) {
         // This is a modification of an existing AST node. Notify listeners.
         if (ASTMutationListener *L = getASTMutationListener())
           L->StaticDataMemberInstantiated(Var);
-        PendingInstantiations.push_back(std::make_pair(Var, Loc));
+        if (Var->isUsableInConstantExpressions())
+          // Do not defer instantiations of variables which could be used in a
+          // constant expression.
+          InstantiateStaticDataMemberDefinition(Loc, Var);
+        else
+          PendingInstantiations.push_back(std::make_pair(Var, Loc));
       }
     }
 
