@@ -300,6 +300,11 @@ namespace SrcMgr {
         SourceLocation::getFromRawEncoding(ExpansionLocEnd).isInvalid();
     }
 
+    bool isFunctionMacroExpansion() const {
+      return getExpansionLocStart().isValid() &&
+          getExpansionLocStart() != getExpansionLocEnd();
+    }
+
     /// create - Return a ExpansionInfo for an expansion. Start and End specify
     /// the expansion range (where the macro is expanded), and SpellingLoc
     /// specifies the spelling location (where the characters from the token
@@ -438,8 +443,7 @@ public:
     // to determine which came first. This will also take care the case where
     // one of the locations points at the inclusion/expansion point of the other
     // in which case its FileID will come before the other.
-    if (LOffset == ROffset &&
-        (LQueryFID != CommonFID || RQueryFID != CommonFID))
+    if (LOffset == ROffset)
       return IsLQFIDBeforeRQFID;
 
     return LOffset < ROffset;

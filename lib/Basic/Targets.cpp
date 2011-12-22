@@ -911,6 +911,7 @@ namespace {
     std::vector<llvm::StringRef> AvailableFeatures;
   public:
     PTXTargetInfo(const std::string& triple) : TargetInfo(triple) {
+      BigEndian = false;
       TLSSupported = false;
       LongWidth = LongAlign = 64;
       AddrSpaceMap = &PTXAddrSpaceMap;
@@ -1332,6 +1333,7 @@ public:
   X86TargetInfo(const std::string& triple)
     : TargetInfo(triple), SSELevel(NoSSE), MMX3DNowLevel(NoMMX3DNow),
       HasAES(false), HasAVX(false), HasAVX2(false), CPU(CK_Generic) {
+    BigEndian = false;
     LongDoubleFormat = &llvm::APFloat::x87DoubleExtended;
   }
   virtual void getTargetBuiltins(const Builtin::Info *&Records,
@@ -2483,6 +2485,7 @@ public:
   ARMTargetInfo(const std::string &TripleStr)
     : TargetInfo(TripleStr), ABI("aapcs-linux"), CPU("arm1136j-s")
   {
+    BigEndian = false;
     SizeType = UnsignedInt;
     PtrDiffType = SignedInt;
     // AAPCS 7.1.1, ARM-Linux ABI 2.4: type of wchar_t is unsigned int.
@@ -3025,6 +3028,7 @@ class HexagonTargetInfo : public TargetInfo {
   std::string CPU;
 public:
   HexagonTargetInfo(const std::string& triple) : TargetInfo(triple)  {
+    BigEndian = false;
     DescriptionString = ("e-p:32:32:32-"
                          "i64:64:64-i32:32:32-"
                          "i16:16:16-i1:32:32-a:0:0");
@@ -3154,6 +3158,7 @@ class SparcV8TargetInfo : public TargetInfo {
 public:
   SparcV8TargetInfo(const std::string& triple) : TargetInfo(triple) {
     // FIXME: Support Sparc quad-precision long double?
+    BigEndian = false;
     DescriptionString = "e-p:32:32:32-i1:8:8-i8:8:8-i16:16:16-i32:32:32-"
                         "i64:64:64-f32:32:32-f64:64:64-v64:64:64-n32";
   }
@@ -3283,6 +3288,7 @@ namespace {
     static const char * const GCCRegNames[];
   public:
     MSP430TargetInfo(const std::string& triple) : TargetInfo(triple) {
+      BigEndian = false;
       TLSSupported = false;
       IntWidth = 16; IntAlign = 16;
       LongWidth = 32; LongLongWidth = 64;
@@ -3577,6 +3583,7 @@ public:
 class Mips32ELTargetInfo : public Mips32TargetInfoBase {
 public:
   Mips32ELTargetInfo(const std::string& triple) : Mips32TargetInfoBase(triple) {
+    BigEndian = false;
     DescriptionString = "e-p:32:32:32-i1:8:8-i8:8:32-i16:16:32-i32:32:32-"
                         "i64:64:64-f32:32:32-f64:64:64-v64:64:64-n32";
   }
@@ -3708,7 +3715,8 @@ class Mips64ELTargetInfo : public Mips64TargetInfoBase {
   }
 public:
   Mips64ELTargetInfo(const std::string& triple) : Mips64TargetInfoBase(triple) {
-    // Default ABI is n64.  
+    // Default ABI is n64.
+    BigEndian = false;
     DescriptionString = "e-p:64:64:64-i1:8:8-i8:8:32-i16:16:32-i32:32:32-"
                         "i64:64:64-f32:32:32-f64:64:64-f128:128:128-"
                         "v64:64:64-n32";
@@ -3729,6 +3737,7 @@ namespace {
 class PNaClTargetInfo : public TargetInfo {
 public:
   PNaClTargetInfo(const std::string& triple) : TargetInfo(triple) {
+    BigEndian = false;
     this->UserLabelPrefix = "";
     this->LongAlign = 32;
     this->LongWidth = 32;
