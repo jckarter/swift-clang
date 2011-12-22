@@ -86,7 +86,7 @@ namespace TemplateArgumentConversion {
 
   using IntParam0 = IntParam<0>;
   using IntParam0 = IntParam<id(0)>;
-  using IntParam0 = IntParam<MemberZero().zero>; // expected-error {{did you mean to call it with no arguments?}} expected-error {{not an integral constant expression}}
+  using IntParam0 = IntParam<MemberZero().zero>; // expected-error {{did you mean to call it with no arguments?}}
 }
 
 namespace CaseStatements {
@@ -391,6 +391,20 @@ struct S {
   int n : "foo"[4]; // expected-error {{constant expression}} expected-note {{read of dereferenced one-past-the-end pointer is not allowed in a constant expression}}
 };
 
+struct T {
+  char c[6];
+  constexpr T() : c{"foo"} {}
+};
+constexpr T t;
+
+static_assert(t.c[0] == 'f', "");
+static_assert(t.c[1] == 'o', "");
+static_assert(t.c[2] == 'o', "");
+static_assert(t.c[3] == 0, "");
+static_assert(t.c[4] == 0, "");
+static_assert(t.c[5] == 0, "");
+static_assert(t.c[6] == 0, ""); // expected-error {{constant expression}} expected-note {{one-past-the-end}}
+
 }
 
 namespace Array {
@@ -503,16 +517,15 @@ struct D {
 };
 static_assert(D().c.n == 42, "");
 
-struct E { // expected-note {{here}}
+struct E {
   constexpr E() : p(&p) {} // expected-note {{pointer to temporary cannot be used to initialize a member in a constant expression}}
   void *p;
 };
 constexpr const E &e1 = E(); // expected-error {{constant expression}} expected-note {{in call to 'E()'}} expected-note {{temporary created here}}
 // This is a constant expression if we elide the copy constructor call, and
 // is not a constant expression if we don't! But we do, so it is.
-// FIXME: The move constructor is not currently implicitly defined as constexpr.
-constexpr E e2 = E(); // unexpected-error {{constant expression}} unexpected-note {{here}} unexpected-note {{non-constexpr constructor 'E' cannot be used in a constant expression}}
-static_assert(e2.p == &e2.p, ""); // unexpected-error {{constant expression}} unexpected-note {{initializer of 'e2' is not a constant expression}}
+constexpr E e2 = E();
+static_assert(e2.p == &e2.p, "");
 constexpr E e3;
 static_assert(e3.p == &e3.p, "");
 
