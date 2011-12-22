@@ -621,13 +621,34 @@ ExprResult Sema::BuildObjCDictionaryLiteral(SourceRange SR,
   if (!PtrKey || 
       !Context.hasSameUnqualifiedType(PtrKey->getPointeeType(),
                                       Context.getObjCIdType())) {
-    Diag(SR.getBegin(), diag::err_objc_literal_method_sig)
-      << DictionaryWithObjectsMethod->getSelector();
-    Diag(DictionaryWithObjectsMethod->param_begin()[1]->getLocation(),
-         diag::note_objc_literal_method_param)
-      << 1 << KeyT
-      << Context.getPointerType(Context.getObjCIdType().withConst());
-    return ExprError();
+    bool err = true;
+    if (PtrKey) {
+      static QualType QIDNSCopying;
+      if (QIDNSCopying.isNull()) {
+        // key argument of selector is id<NSCopying>?
+        if (ObjCProtocolDecl *NSCopyingPDecl =
+            LookupProtocol(&Context.Idents.get("NSCopying"), SR.getBegin())) {
+          ObjCProtocolDecl *PQ[] = {NSCopyingPDecl};
+          QIDNSCopying = 
+            Context.getObjCObjectType(Context.ObjCBuiltinIdTy,
+                                      (ObjCProtocolDecl**) PQ,1);
+          QIDNSCopying = Context.getObjCObjectPointerType(QIDNSCopying);
+        }
+      }
+      if (!QIDNSCopying.isNull())
+        err = !Context.hasSameUnqualifiedType(PtrKey->getPointeeType(),
+                                              QIDNSCopying);
+    }
+    
+    if (err) {
+      Diag(SR.getBegin(), diag::err_objc_literal_method_sig)
+        << DictionaryWithObjectsMethod->getSelector();
+      Diag(DictionaryWithObjectsMethod->param_begin()[1]->getLocation(),
+           diag::note_objc_literal_method_param)
+        << 1 << KeyT
+        << Context.getPointerType(Context.getObjCIdType().withConst());
+      return ExprError();
+    }
   }
   KeyT = PtrKey->getPointeeType();
 
