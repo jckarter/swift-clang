@@ -913,6 +913,53 @@ static bool HandleIntToFloatCast(EvalInfo &Info, const Expr *E,
   return true;
 }
 
+static bool EvalAndBitcastToAPInt(EvalInfo &Info, const Expr *E,
+                                  llvm::APInt &Res) {
+  CCValue SVal;
+  if (!Evaluate(SVal, Info, E))
+    return false;
+  if (SVal.isInt()) {
+    Res = SVal.getInt();
+    return true;
+  }
+  if (SVal.isFloat()) {
+    Res = SVal.getFloat().bitcastToAPInt();
+    return true;
+  }
+  if (SVal.isVector()) {
+    QualType VecTy = E->getType();
+    unsigned VecSize = Info.Ctx.getTypeSize(VecTy);
+    QualType EltTy = VecTy->castAs<VectorType>()->getElementType();
+    unsigned EltSize = Info.Ctx.getTypeSize(EltTy);
+    bool BigEndian = Info.Ctx.getTargetInfo().isBigEndian();
+    Res = llvm::APInt::getNullValue(VecSize);
+    for (unsigned i = 0; i < SVal.getVectorLength(); i++) {
+      APValue &Elt = SVal.getVectorElt(i);
+      llvm::APInt EltAsInt;
+      if (Elt.isInt()) {
+        EltAsInt = Elt.getInt();
+      } else if (Elt.isFloat()) {
+        EltAsInt = Elt.getFloat().bitcastToAPInt();
+      } else {
+        // Don't try to handle vectors of anything other than int or float
+        // (not sure if it's possible to hit this case).
+        Info.Diag(E->getExprLoc(), diag::note_invalid_subexpr_in_const_expr);
+        return false;
+      }
+      unsigned BaseEltSize = EltAsInt.getBitWidth();
+      if (BigEndian)
+        Res |= EltAsInt.zextOrTrunc(VecSize).rotr(i*EltSize+BaseEltSize);
+      else
+        Res |= EltAsInt.zextOrTrunc(VecSize).rotl(i*EltSize);
+    }
+    return true;
+  }
+  // Give up if the input isn't an int, float, or vector.  For example, we
+  // reject "(v4i16)(intptr_t)&a".
+  Info.Diag(E->getExprLoc(), diag::note_invalid_subexpr_in_const_expr);
+  return false;
+}
+
 static bool FindMostDerivedObject(EvalInfo &Info, const LValue &LVal,
                                   const CXXRecordDecl *&MostDerivedType,
                                   unsigned &MostDerivedPathLength,
@@ -1589,6 +1636,29 @@ static EvalStmtResult EvaluateStmt(APValue &Result, EvalInfo &Info,
     return ESR_Succeeded;
   }
   }
+}
+
+/// CheckTrivialDefaultConstructor - Check whether a constructor is a trivial
+/// default constructor. If so, we'll fold it whether or not it's marked as
+/// constexpr. If it is marked as constexpr, we will never implicitly define it,
+/// so we need special handling.
+static bool CheckTrivialDefaultConstructor(EvalInfo &Info, SourceLocation Loc,
+                                    const CXXConstructorDecl *CD) {
+  if (!CD->isTrivial() || !CD->isDefaultConstructor())
+    return false;
+
+  if (!CD->isConstexpr()) {
+    if (Info.getLangOpts().CPlusPlus0x) {
+      // FIXME: If DiagDecl is an implicitly-declared special member function,
+      // we should be much more explicit about why it's not constexpr.
+      Info.CCEDiag(Loc, diag::note_constexpr_invalid_function, 1)
+        << /*IsConstexpr*/0 << /*IsConstructor*/1 << CD;
+      Info.Note(CD->getLocation(), diag::note_declared_at);
+    } else {
+      Info.CCEDiag(Loc, diag::note_invalid_subexpr_in_const_expr);
+    }
+  }
+  return true;
 }
 
 /// CheckConstexprFunction - Check that a function can be called in a constant
@@ -2790,6 +2860,16 @@ bool RecordExprEvaluator::VisitInitListExpr(const InitListExpr *E) {
 
 bool RecordExprEvaluator::VisitCXXConstructExpr(const CXXConstructExpr *E) {
   const CXXConstructorDecl *FD = E->getConstructor();
+  if (CheckTrivialDefaultConstructor(Info, E->getExprLoc(), FD)) {
+    const CXXRecordDecl *RD = FD->getParent();
+    if (RD->isUnion())
+      Result = APValue((FieldDecl*)0);
+    else
+      Result = APValue(APValue::UninitStruct(), RD->getNumBases(),
+                       std::distance(RD->field_begin(), RD->field_end()));
+    return true;
+  }
+
   const FunctionDecl *Definition = 0;
   FD->getBody(Definition);
 
@@ -2944,6 +3024,44 @@ bool VectorExprEvaluator::VisitCastExpr(const CastExpr* E) {
     SmallVector<APValue, 4> Elts(NElts, Val);
     return Success(Elts, E);
   }
+  case CK_BitCast: {
+    // Evaluate the operand into an APInt we can extract from.
+    llvm::APInt SValInt;
+    if (!EvalAndBitcastToAPInt(Info, SE, SValInt))
+      return false;
+    // Extract the elements
+    QualType EltTy = VTy->getElementType();
+    unsigned EltSize = Info.Ctx.getTypeSize(EltTy);
+    bool BigEndian = Info.Ctx.getTargetInfo().isBigEndian();
+    SmallVector<APValue, 4> Elts;
+    if (EltTy->isRealFloatingType()) {
+      const llvm::fltSemantics &Sem = Info.Ctx.getFloatTypeSemantics(EltTy);
+      bool isIEESem = &Sem != &APFloat::PPCDoubleDouble;
+      unsigned FloatEltSize = EltSize;
+      if (&Sem == &APFloat::x87DoubleExtended)
+        FloatEltSize = 80;
+      for (unsigned i = 0; i < NElts; i++) {
+        llvm::APInt Elt;
+        if (BigEndian)
+          Elt = SValInt.rotl(i*EltSize+FloatEltSize).trunc(FloatEltSize);
+        else
+          Elt = SValInt.rotr(i*EltSize).trunc(FloatEltSize);
+        Elts.push_back(APValue(APFloat(Elt, isIEESem)));
+      }
+    } else if (EltTy->isIntegerType()) {
+      for (unsigned i = 0; i < NElts; i++) {
+        llvm::APInt Elt;
+        if (BigEndian)
+          Elt = SValInt.rotl(i*EltSize+EltSize).zextOrTrunc(EltSize);
+        else
+          Elt = SValInt.rotr(i*EltSize).zextOrTrunc(EltSize);
+        Elts.push_back(APValue(APSInt(Elt, EltTy->isSignedIntegerType())));
+      }
+    } else {
+      return Error(E);
+    }
+    return Success(Elts, E);
+  }
   default:
     return ExprEvaluatorBaseTy::VisitCastExpr(E);
   }
@@ -3084,6 +3202,32 @@ bool ArrayExprEvaluator::VisitInitListExpr(const InitListExpr *E) {
   if (!CAT)
     return Error(E);
 
+  // C++11 [dcl.init.string]p1: A char array [...] can be initialized by [...]
+  // an appropriately-typed string literal enclosed in braces.
+  if (E->getNumInits() == 1 && CAT->getElementType()->isAnyCharacterType() &&
+      Info.Ctx.hasSameUnqualifiedType(E->getType(), E->getInit(0)->getType())) {
+    LValue LV;
+    if (!EvaluateLValue(E->getInit(0), LV, Info))
+      return false;
+    uint64_t NumElements = CAT->getSize().getZExtValue();
+    Result = APValue(APValue::UninitArray(), NumElements, NumElements);
+
+    // Copy the string literal into the array. FIXME: Do this better.
+    LV.Designator.addIndex(0);
+    for (uint64_t I = 0; I < NumElements; ++I) {
+      CCValue Char;
+      if (!HandleLValueToRValueConversion(Info, E->getInit(0),
+                                          CAT->getElementType(), LV, Char))
+        return false;
+      if (!CheckConstantExpression(Info, E->getInit(0), Char,
+                                   Result.getArrayInitializedElt(I)))
+        return false;
+      if (!HandleLValueArrayAdjustment(Info, LV, CAT->getElementType(), 1))
+        return false;
+    }
+    return true;
+  }
+
   Result = APValue(APValue::UninitArray(), E->getNumInits(),
                    CAT->getSize().getZExtValue());
   LValue Subobject = This;
@@ -3118,6 +3262,18 @@ bool ArrayExprEvaluator::VisitCXXConstructExpr(const CXXConstructExpr *E) {
     return true;
 
   const CXXConstructorDecl *FD = E->getConstructor();
+
+  if (CheckTrivialDefaultConstructor(Info, E->getExprLoc(), FD)) {
+    const CXXRecordDecl *RD = FD->getParent();
+    if (RD->isUnion())
+      Result.getArrayFiller() = APValue((FieldDecl*)0);
+    else
+      Result.getArrayFiller() =
+          APValue(APValue::UninitStruct(), RD->getNumBases(),
+                  std::distance(RD->field_begin(), RD->field_end()));
+    return true;
+  }
+
   const FunctionDecl *Definition = 0;
   FD->getBody(Definition);
 
