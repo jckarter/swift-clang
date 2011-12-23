@@ -675,6 +675,13 @@ private:
   /// \brief Keeps track of the elements added to PendingDeclChains.
   llvm::SmallSet<serialization::DeclID, 16> PendingDeclChainsKnown;
 
+  /// \brief Reverse mapping from declarations to their global declaration IDs.
+  /// 
+  /// FIXME: This data structure is currently only used for ObjCInterfaceDecls, 
+  /// support declaration merging. If we must have this for other declarations,
+  /// allocate it along with the Decl itself.
+  llvm::DenseMap<Decl *, serialization::GlobalDeclID> DeclToID;
+  
   typedef llvm::DenseMap<Decl *, llvm::SmallVector<serialization::DeclID, 2> >
     MergedDeclsMap;
     
@@ -682,6 +689,26 @@ private:
   /// (global, previously-canonical) declaration IDs that have been merged with
   /// that canonical declaration.
   MergedDeclsMap MergedDecls;
+  
+  typedef llvm::DenseMap<serialization::GlobalDeclID, 
+                         llvm::SmallVector<serialization::DeclID, 2> >
+    StoredMergedDeclsMap;
+  
+  /// \brief A mapping from canonical declaration IDs to the set of additional
+  /// declaration IDs that have been merged with that canonical declaration.
+  ///
+  /// This is the deserialized representation of the entries in MergedDecls.
+  /// When we query entries in MergedDecls, they will be augmented with entries
+  /// from StoredMergedDecls.
+  StoredMergedDeclsMap StoredMergedDecls;
+  
+  /// \brief Combine the stored merged declarations for the given canonical
+  /// declaration into the set of merged declarations.
+  ///
+  /// \returns An iterator into MergedDecls that corresponds to the position of
+  /// the given canonical declaration.
+  MergedDeclsMap::iterator
+  combineStoredMergedDecls(Decl *Canon, serialization::GlobalDeclID CanonID);
   
   /// \brief We delay loading the chain of objc categories after recursive
   /// loading of declarations is finished.

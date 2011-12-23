@@ -643,8 +643,10 @@ public:
     FK_InitListBadDestinationType,
     /// \brief Overloading for a user-defined conversion failed.
     FK_UserConversionOverloadFailed,
-    /// \brief Overloaded for initialization by constructor failed.
+    /// \brief Overloading for initialization by constructor failed.
     FK_ConstructorOverloadFailed,
+    /// \brief Overloading for list-initialization by constructor failed.
+    FK_ListConstructorOverloadFailed,
     /// \brief Default-initialization of a 'const' object.
     FK_DefaultInitOfConst,
     /// \brief Initialization of an incomplete type.
@@ -825,18 +827,19 @@ public:
   void AddConversionSequenceStep(const ImplicitConversionSequence &ICS,
                                  QualType T);
 
-  /// \brief Add a list-initialiation step.
+  /// \brief Add a list-initialization step.
   void AddListInitializationStep(QualType T);
 
   /// \brief Add a constructor-initialization step.
   void AddConstructorInitializationStep(CXXConstructorDecl *Constructor,
                                         AccessSpecifier Access,
                                         QualType T,
-                                        bool HadMultipleCandidates);
+                                        bool HadMultipleCandidates,
+                                        bool FromInitList);
 
   /// \brief Add a zero-initialization step.
   void AddZeroInitializationStep(QualType T);
-  
+
   /// \brief Add a C assignment step.
   //
   // FIXME: It isn't clear whether this should ever be needed;
