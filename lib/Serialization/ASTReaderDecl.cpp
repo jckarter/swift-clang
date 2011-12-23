@@ -131,6 +131,14 @@ namespace clang {
       }
 
       ~RedeclarableResult() {
+        // FIXME: We want to suppress this when the declaration is local to
+        // a function, since there's no reason to search other AST files
+        // for redeclarations (they can't exist). However, this is hard to 
+        // do locally because the declaration hasn't necessarily loaded its
+        // declaration context yet. Also, local externs still have the function
+        // as their (semantic) declaration context, which is wrong and would
+        // break this optimize.
+        
         if (FirstID && Owning && Reader.PendingDeclChainsKnown.insert(FirstID))
           Reader.PendingDeclChains.push_back(FirstID);
       }
@@ -643,10 +651,13 @@ void ASTDeclReader::VisitObjCContainerDecl(ObjCContainerDecl *CD) {
 }
 
 void ASTDeclReader::VisitObjCInterfaceDecl(ObjCInterfaceDecl *ID) {
+  // Record the declaration -> global ID mapping.
+  Reader.DeclToID[ID] = ThisDeclID;
+  
   RedeclarableResult Redecl = VisitRedeclarable(ID);
   VisitObjCContainerDecl(ID);
   TypeIDForTypeDecl = Reader.getGlobalTypeID(F, Record[Idx++]);
-  
+                  
   // Determine whether we need to merge this declaration with another @interface
   // with the same name.
   // FIXME: Not needed unless the module file graph is a DAG.
@@ -660,10 +671,27 @@ void ASTDeclReader::VisitObjCInterfaceDecl(ObjCInterfaceDecl *ID) {
         // appropriate canonical declaration.
         ID->RedeclLink = ObjCInterfaceDecl::PreviousDeclLink(ExistingCanon);
         
+        // Don't introduce IDCanon into the set of pending declaration chains.
+        Redecl.suppress();
+        
+        // Introduce ExistingCanon into the set of pending declaration chains,
+        // if in fact it came from a module file.
+        if (ExistingCanon->isFromASTFile()) {
+          GlobalDeclID ExistingCanonID = Reader.DeclToID[ExistingCanon];
+          assert(ExistingCanonID && "Unrecorded canonical declaration ID?");
+          if (Reader.PendingDeclChainsKnown.insert(ExistingCanonID))
+            Reader.PendingDeclChains.push_back(ExistingCanonID);
+        }
+        
         // If this declaration was the canonical declaration, make a note of 
-        // that.
-        if (IDCanon == ID)
-          Reader.MergedDecls[ExistingCanon].push_back(Redecl.getFirstID());
+        // that. We accept the linear algorithm here because the number of 
+        // unique canonical declarations of an entity should always be tiny.
+        if (IDCanon == ID) {
+          SmallVectorImpl<DeclID> &Merged = Reader.MergedDecls[ExistingCanon];
+          if (std::find(Merged.begin(), Merged.end(), Redecl.getFirstID())
+                == Merged.end())
+            Merged.push_back(Redecl.getFirstID());
+        }
       }
     }
   }
@@ -1710,6 +1738,29 @@ void ASTDeclReader::attachLatestDecl(Decl *D, Decl *Latest) {
   }
 }
 
+ASTReader::MergedDeclsMap::iterator
+ASTReader::combineStoredMergedDecls(Decl *Canon, GlobalDeclID CanonID) {
+  // If we don't have any stored merged declarations, just look in the
+  // merged declarations set.
+  StoredMergedDeclsMap::iterator StoredPos = StoredMergedDecls.find(CanonID);
+  if (StoredPos == StoredMergedDecls.end())
+    return MergedDecls.find(Canon);
+
+  // Append the stored merged declarations to the merged declarations set.
+  MergedDeclsMap::iterator Pos = MergedDecls.find(Canon);
+  if (Pos == MergedDecls.end())
+    Pos = MergedDecls.insert(std::make_pair(Canon, 
+                                            SmallVector<DeclID, 2>())).first;
+  Pos->second.append(StoredPos->second.begin(), StoredPos->second.end());
+  StoredMergedDecls.erase(StoredPos);
+  
+  // Sort and uniquify the set of merged declarations.
+  llvm::array_pod_sort(Pos->second.begin(), Pos->second.end());
+  Pos->second.erase(std::unique(Pos->second.begin(), Pos->second.end()),
+                    Pos->second.end());
+  return Pos;
+}
+
 void ASTReader::loadAndAttachPreviousDecl(Decl *D, serialization::DeclID ID) {
   Decl *previous = GetDecl(ID);
   ASTDeclReader::attachPreviousDecl(D, previous);
@@ -2171,7 +2222,7 @@ static Decl *getMostRecentDecl(Decl *D) {
 void ASTReader::loadPendingDeclChain(serialization::GlobalDeclID ID) {
   Decl *D = GetDecl(ID);  
   Decl *CanonDecl = D->getCanonicalDecl();
-    
+  
   // Determine the set of declaration IDs we'll be searching for.
   llvm::SmallVector<DeclID, 1> SearchDecls;
   GlobalDeclID CanonID = 0;
@@ -2179,7 +2230,7 @@ void ASTReader::loadPendingDeclChain(serialization::GlobalDeclID ID) {
     SearchDecls.push_back(ID); // Always first.
     CanonID = ID;
   }
-  MergedDeclsMap::iterator MergedPos = MergedDecls.find(CanonDecl);
+  MergedDeclsMap::iterator MergedPos = combineStoredMergedDecls(CanonDecl, ID);
   if (MergedPos != MergedDecls.end())
     SearchDecls.append(MergedPos->second.begin(), MergedPos->second.end());  
   
@@ -2191,7 +2242,6 @@ void ASTReader::loadPendingDeclChain(serialization::GlobalDeclID ID) {
   ArrayRef<std::pair<Decl *, Decl *> > Chains = Visitor.getChains();
   if (Chains.empty())
     return;
-    
     
   // Capture all of the parsed declarations and put them at the end.
   Decl *MostRecent = getMostRecentDecl(CanonDecl);
