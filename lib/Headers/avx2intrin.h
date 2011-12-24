@@ -405,10 +405,222 @@ _mm256_cvtepu32_epi64(__m128i __V)
   return (__m256i)__builtin_ia32_pmovzxdq256((__v4si)__V);
 }
 
+static __inline__  __m256i __attribute__((__always_inline__, __nodebug__))
+_mm256_mul_epi32(__m256i a, __m256i b)
+{
+  return (__m256i)__builtin_ia32_pmuldq256((__v8si)a, (__v8si)b);
+}
+
+static __inline__ __m256i __attribute__((__always_inline__, __nodebug__))
+_mm256_mulhrs_epi16(__m256i a, __m256i b)
+{
+  return (__m256i)__builtin_ia32_pmulhrsw256((__v16hi)a, (__v16hi)b);
+}
+
+static __inline__ __m256i __attribute__((__always_inline__, __nodebug__))
+_mm256_mulhi_epu16(__m256i a, __m256i b)
+{
+  return (__m256i)__builtin_ia32_pmulhuw256((__v16hi)a, (__v16hi)b);
+}
+
+static __inline__ __m256i __attribute__((__always_inline__, __nodebug__))
+_mm256_mulhi_epi16(__m256i a, __m256i b)
+{
+  return (__m256i)__builtin_ia32_pmulhw256((__v16hi)a, (__v16hi)b);
+}
+
+static __inline__ __m256i __attribute__((__always_inline__, __nodebug__))
+_mm256_mullo_epi16(__m256i a, __m256i b)
+{
+  return (__m256i)((__v16hi)a * (__v16hi)b);
+}
+
+static __inline__  __m256i __attribute__((__always_inline__, __nodebug__))
+_mm256_mullo_epi32 (__m256i a, __m256i b)
+{
+  return (__m256i)((__v8si)a * (__v8si)b);
+}
+
+static __inline__ __m256i __attribute__((__always_inline__, __nodebug__))
+_mm256_mul_epu32(__m256i a, __m256i b)
+{
+  return __builtin_ia32_pmuludq256((__v8si)a, (__v8si)b);
+}
+
 static __inline__ __m256i __attribute__((__always_inline__, __nodebug__))
 _mm256_or_si256(__m256i a, __m256i b)
 {
   return a | b;
+}
+
+static __inline__ __m256i __attribute__((__always_inline__, __nodebug__))
+_mm256_sad_epu8(__m256i a, __m256i b)
+{
+  return __builtin_ia32_psadbw256((__v32qi)a, (__v32qi)b);
+}
+
+static __inline__ __m256i __attribute__((__always_inline__, __nodebug__))
+_mm256_shuffle_epi8(__m256i a, __m256i b)
+{
+  return (__m256i)__builtin_ia32_pshufb256((__v32qi)a, (__v32qi)b);
+}
+
+#define _mm256_shuffle_epi32(a, imm) __extension__ ({ \
+  __m256i __a = (a); \
+  (__m256i)__builtin_shufflevector((__v8si)__a, (__v8si)_mm256_set1_epi32(0), \
+                                   (imm) & 0x3, ((imm) & 0xc) >> 2, \
+                                   ((imm) & 0x30) >> 4, ((imm) & 0xc0) >> 6, \
+                                   4 + (((imm) & 0x03) >> 0), \
+                                   4 + (((imm) & 0x0c) >> 2), \
+                                   4 + (((imm) & 0x30) >> 4), \
+                                   4 + (((imm) & 0xc0) >> 6)); })
+
+#define _mm256_shufflehi_epi16(a, imm) __extension__ ({ \
+  __m256i __a = (a); \
+  (__m256i)__builtin_shufflevector((__v16hi)__a, (__v16hi)_mm256_set1_epi16(0), \
+                                   0, 1, 2, 3, \
+                                   4 + (((imm) & 0x03) >> 0), \
+                                   4 + (((imm) & 0x0c) >> 2), \
+                                   4 + (((imm) & 0x30) >> 4), \
+                                   4 + (((imm) & 0xc0) >> 6), \
+                                   8, 9, 10, 11, \
+                                   12 + (((imm) & 0x03) >> 0), \
+                                   12 + (((imm) & 0x0c) >> 2), \
+                                   12 + (((imm) & 0x30) >> 4), \
+                                   12 + (((imm) & 0xc0) >> 6)); })
+
+#define _mm256_shufflelo_epi16(a, imm) __extension__ ({ \
+  __m256i __a = (a); \
+  (__m256i)__builtin_shufflevector((__v16hi)__a, (__v16hi)_mm256_set1_epi16(0), \
+                                   (imm) & 0x3,((imm) & 0xc) >> 2, \
+                                   ((imm) & 0x30) >> 4, ((imm) & 0xc0) >> 6, \
+                                   4, 5, 6, 7, \
+                                   8 + (((imm) & 0x03) >> 0), \
+                                   8 + (((imm) & 0x0c) >> 2), \
+                                   8 + (((imm) & 0x30) >> 4), \
+                                   8 + (((imm) & 0xc0) >> 6), \
+                                   12, 13, 14, 15); })
+
+static __inline__ __m256i __attribute__((__always_inline__, __nodebug__))
+_mm256_sign_epi8(__m256i a, __m256i b)
+{
+    return (__m256i)__builtin_ia32_psignb256((__v32qi)a, (__v32qi)b);
+}
+
+static __inline__ __m256i __attribute__((__always_inline__, __nodebug__))
+_mm256_sign_epi16(__m256i a, __m256i b)
+{
+    return (__m256i)__builtin_ia32_psignw256((__v16hi)a, (__v16hi)b);
+}
+
+static __inline__ __m256i __attribute__((__always_inline__, __nodebug__))
+_mm256_sign_epi32(__m256i a, __m256i b)
+{
+    return (__m256i)__builtin_ia32_psignd256((__v8si)a, (__v8si)b);
+}
+
+#define _mm256_slli_si256(a, count) __extension__ ({ \
+  __m256i __a = (a); \
+  (__m256i)__builtin_ia32_pslldqi256(__a, (count)*8); })
+
+static __inline__ __m256i __attribute__((__always_inline__, __nodebug__))
+_mm256_slli_epi16(__m256i a, int count)
+{
+  return (__m256i)__builtin_ia32_psllwi256((__v16hi)a, count);
+}
+
+static __inline__ __m256i __attribute__((__always_inline__, __nodebug__))
+_mm256_sll_epi16(__m256i a, __m128i count)
+{
+  return (__m256i)__builtin_ia32_psllw256((__v16hi)a, (__v8hi)count);
+}
+
+static __inline__ __m256i __attribute__((__always_inline__, __nodebug__))
+_mm256_slli_epi32(__m256i a, int count)
+{
+  return (__m256i)__builtin_ia32_pslldi256((__v8si)a, count);
+}
+
+static __inline__ __m256i __attribute__((__always_inline__, __nodebug__))
+_mm256_sll_epi32(__m256i a, __m128i count)
+{
+  return (__m256i)__builtin_ia32_pslld256((__v8si)a, (__v4si)count);
+}
+
+static __inline__ __m256i __attribute__((__always_inline__, __nodebug__))
+_mm256_slli_epi64(__m256i a, int count)
+{
+  return __builtin_ia32_psllqi256(a, count);
+}
+
+static __inline__ __m256i __attribute__((__always_inline__, __nodebug__))
+_mm256_sll_epi64(__m256i a, __m128i count)
+{
+  return __builtin_ia32_psllq256(a, count);
+}
+
+static __inline__ __m256i __attribute__((__always_inline__, __nodebug__))
+_mm256_srai_epi16(__m256i a, int count)
+{
+  return (__m256i)__builtin_ia32_psrawi256((__v16hi)a, count);
+}
+
+static __inline__ __m256i __attribute__((__always_inline__, __nodebug__))
+_mm256_sra_epi16(__m256i a, __m128i count)
+{
+  return (__m256i)__builtin_ia32_psraw256((__v16hi)a, (__v8hi)count);
+}
+
+static __inline__ __m256i __attribute__((__always_inline__, __nodebug__))
+_mm256_srai_epi32(__m256i a, int count)
+{
+  return (__m256i)__builtin_ia32_psradi256((__v8si)a, count);
+}
+
+static __inline__ __m256i __attribute__((__always_inline__, __nodebug__))
+_mm256_sra_epi32(__m256i a, __m128i count)
+{
+  return (__m256i)__builtin_ia32_psrad256((__v8si)a, (__v4si)count);
+}
+
+#define _mm256_srli_si256(a, count) __extension__ ({ \
+  __m256i __a = (a); \
+  (__m256i)__builtin_ia32_psrldqi256(__a, (count)*8); })
+
+static __inline__ __m256i __attribute__((__always_inline__, __nodebug__))
+_mm256_srli_epi16(__m256i a, int count)
+{
+  return (__m256i)__builtin_ia32_psrlwi256((__v16hi)a, count);
+}
+
+static __inline__ __m256i __attribute__((__always_inline__, __nodebug__))
+_mm256_srl_epi16(__m256i a, __m128i count)
+{
+  return (__m256i)__builtin_ia32_psrlw256((__v16hi)a, (__v8hi)count);
+}
+
+static __inline__ __m256i __attribute__((__always_inline__, __nodebug__))
+_mm256_srli_epi32(__m256i a, int count)
+{
+  return (__m256i)__builtin_ia32_psrldi256((__v8si)a, count);
+}
+
+static __inline__ __m256i __attribute__((__always_inline__, __nodebug__))
+_mm256_srl_epi32(__m256i a, __m128i count)
+{
+  return (__m256i)__builtin_ia32_psrld256((__v8si)a, (__v4si)count);
+}
+
+static __inline__ __m256i __attribute__((__always_inline__, __nodebug__))
+_mm256_srli_epi64(__m256i a, int count)
+{
+  return __builtin_ia32_psrlqi256(a, count);
+}
+
+static __inline__ __m256i __attribute__((__always_inline__, __nodebug__))
+_mm256_srl_epi64(__m256i a, __m128i count)
+{
+  return __builtin_ia32_psrlq256(a, count);
 }
 
 static __inline__ __m256i __attribute__((__always_inline__, __nodebug__))
@@ -460,7 +672,95 @@ _mm256_subs_epu16(__m256i a, __m256i b)
 }
 
 static __inline__ __m256i __attribute__((__always_inline__, __nodebug__))
+_mm256_unpackhi_epi8(__m256i a, __m256i b)
+{
+  return (__m256i)__builtin_shufflevector((__v32qi)a, (__v32qi)b, 8, 32+8, 9, 32+9, 10, 32+10, 11, 32+11, 12, 32+12, 13, 32+13, 14, 32+14, 15, 32+15, 24, 32+24, 25, 32+25, 26, 32+26, 27, 32+27, 28, 32+28, 29, 32+29, 30, 32+30, 31, 32+31);
+}
+
+static __inline__ __m256i __attribute__((__always_inline__, __nodebug__))
+_mm256_unpackhi_epi16(__m256i a, __m256i b)
+{
+  return (__m256i)__builtin_shufflevector((__v16hi)a, (__v16hi)b, 4, 16+4, 5, 16+5, 6, 16+6, 7, 16+7, 12, 16+12, 13, 16+13, 14, 16+14, 15, 16+15);
+}
+
+static __inline__ __m256i __attribute__((__always_inline__, __nodebug__))
+_mm256_unpackhi_epi32(__m256i a, __m256i b)
+{
+  return (__m256i)__builtin_shufflevector((__v8si)a, (__v8si)b, 2, 8+2, 3, 8+3, 6, 8+6, 7, 8+7);
+}
+
+static __inline__ __m256i __attribute__((__always_inline__, __nodebug__))
+_mm256_unpackhi_epi64(__m256i a, __m256i b)
+{
+  return (__m256i)__builtin_shufflevector(a, b, 1, 4+1, 3, 4+3);
+}
+
+static __inline__ __m256i __attribute__((__always_inline__, __nodebug__))
+_mm256_unpacklo_epi8(__m256i a, __m256i b)
+{
+  return (__m256i)__builtin_shufflevector((__v32qi)a, (__v32qi)b, 0, 32+0, 1, 32+1, 2, 32+2, 3, 32+3, 4, 32+4, 5, 32+5, 6, 32+6, 7, 32+7, 16, 32+16, 17, 32+17, 18, 32+18, 19, 32+19, 20, 32+20, 21, 32+21, 22, 32+22, 23, 32+23);
+}
+
+static __inline__ __m256i __attribute__((__always_inline__, __nodebug__))
+_mm256_unpacklo_epi16(__m256i a, __m256i b)
+{
+  return (__m256i)__builtin_shufflevector((__v16hi)a, (__v16hi)b, 0, 16+0, 1, 16+1, 2, 16+2, 3, 16+3, 8, 16+8, 9, 16+9, 10, 16+10, 11, 16+11);
+}
+
+static __inline__ __m256i __attribute__((__always_inline__, __nodebug__))
+_mm256_unpacklo_epi32(__m256i a, __m256i b)
+{
+  return (__m256i)__builtin_shufflevector((__v8si)a, (__v8si)b, 0, 8+0, 1, 8+1, 4, 8+4, 5, 8+5);
+}
+
+static __inline__ __m256i __attribute__((__always_inline__, __nodebug__))
+_mm256_unpacklo_epi64(__m256i a, __m256i b)
+{
+  return (__m256i)__builtin_shufflevector(a, b, 0, 4+0, 2, 4+2);
+}
+
+static __inline__ __m256i __attribute__((__always_inline__, __nodebug__))
 _mm256_xor_si256(__m256i a, __m256i b)
 {
   return a ^ b;
 }
+
+static __inline__ __m256i __attribute__((__always_inline__, __nodebug__))
+_mm256_stream_load_si256(__m256i *__V)
+{
+  return (__m256i)__builtin_ia32_movntdqa256((__v4di *)__V);
+}
+
+static __inline__ __m128 __attribute__((__always_inline__, __nodebug__))
+_mm_broadcastss_ps(__m128 __X)
+{
+  return (__m128)__builtin_ia32_vbroadcastss_ps((__v4sf)__X);
+}
+
+static __inline__ __m256 __attribute__((__always_inline__, __nodebug__))
+_mm256_broadcastss_ps(__m128 __X)
+{
+  return (__m256)__builtin_ia32_vbroadcastss_ps256((__v4sf)__X);
+}
+
+static __inline__ __m256d __attribute__((__always_inline__, __nodebug__))
+_mm256_broadcastsd_pd(__m128d __X)
+{
+  return (__m256d)__builtin_ia32_vbroadcastsd_pd256((__v2df)__X);
+}
+
+static __inline__ __m256i __attribute__((__always_inline__, __nodebug__))
+_mm_broadcastsi128_si256(__m128i const *a)
+{
+  return (__m256i)__builtin_ia32_vbroadcastsi256(a);
+}
+
+#define _mm_blend_epi32(V1, V2, M) __extension__ ({ \
+  __m128i __V1 = (V1); \
+  __m128i __V2 = (V2); \
+  (__m128i)__builtin_ia32_pblendd128((__v4si)__V1, (__v4si)__V2, M); })
+
+#define _mm256_blend_epi32(V1, V2, M) __extension__ ({ \
+  __m256i __V1 = (V1); \
+  __m256i __V2 = (V2); \
+  (__m256i)__builtin_ia32_pblendd256((__v8si)__V1, (__v8si)__V2, M); })
