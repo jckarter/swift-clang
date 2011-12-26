@@ -601,5 +601,15 @@ BUILTIN(__builtin_clzs, "UsUs", "")
 
 // BMI
 BUILTIN(__builtin_ctzs, "UsUs", "")
+BUILTIN(__builtin_ia32_bextr_u32, "UiUiUi", "")
+BUILTIN(__builtin_ia32_bextr_u64, "ULLiULLiULLi", "")
+
+// BMI2
+BUILTIN(__builtin_ia32_bzhi_si, "UiUiUi", "")
+BUILTIN(__builtin_ia32_bzhi_di, "ULLiULLiULLi", "")
+BUILTIN(__builtin_ia32_pdep_si, "UiUiUi", "")
+BUILTIN(__builtin_ia32_pdep_di, "ULLiULLiULLi", "")
+BUILTIN(__builtin_ia32_pext_si, "UiUiUi", "")
+BUILTIN(__builtin_ia32_pext_di, "ULLiULLiULLi", "")
 
 #undef BUILTIN
