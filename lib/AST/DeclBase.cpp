@@ -495,7 +495,6 @@ unsigned Decl::getIdentifierNamespaceForKind(Kind DeclKind) {
     case LinkageSpec:
     case FileScopeAsm:
     case StaticAssert:
-    case ObjCClass:
     case ObjCPropertyImpl:
     case ObjCForwardProtocol:
     case Block:
@@ -779,9 +778,16 @@ DeclContext *DeclContext::getPrimaryContext() {
     return this;
 
   case Decl::ObjCInterface:
+    if (ObjCInterfaceDecl *Def = cast<ObjCInterfaceDecl>(this)->getDefinition())
+      return Def;
+      
+    return this;
+      
   case Decl::ObjCProtocol:
+    // FIXME: Update when protocols properly model forward declarations.
+    // For now, it's fine to fall through
+      
   case Decl::ObjCCategory:
-    // FIXME: Can Objective-C interfaces be forward-declared?
     return this;
 
   case Decl::ObjCImplementation:
@@ -1055,11 +1061,6 @@ void DeclContext::buildLookup(DeclContext *DCtx) {
         if (D->getDeclContext() == DCtx)
           makeDeclVisibleInContextImpl(ND, false);
 
-      // Insert any forward-declared Objective-C interface into the lookup
-      // data structure.
-      if (ObjCClassDecl *Class = dyn_cast<ObjCClassDecl>(*D))
-        makeDeclVisibleInContextImpl(Class->getForwardInterfaceDecl(), false);
-      
       // If this declaration is itself a transparent declaration context or
       // inline namespace, add its members (recursively).
       if (DeclContext *InnerCtx = dyn_cast<DeclContext>(*D))

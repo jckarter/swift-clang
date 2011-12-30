@@ -25,6 +25,8 @@ using namespace ento;
 // Basic SVal creation.
 //===----------------------------------------------------------------------===//
 
+void SValBuilder::anchor() { }
+
 DefinedOrUnknownSVal SValBuilder::makeZeroVal(QualType type) {
   if (Loc::isLocType(type))
     return makeNull();
@@ -326,10 +328,6 @@ SVal SValBuilder::evalCast(SVal val, QualType castTy, QualType originalTy) {
     R = storeMgr.castRegion(R, castTy);
     return R ? SVal(loc::MemRegionVal(R)) : UnknownVal();
   }
-
-  // Check for casts from integers to integers.
-  if (castTy->isIntegerType() && originalTy->isIntegerType())
-    return dispatchCast(val, castTy);
 
   return dispatchCast(val, castTy);
 }

@@ -165,10 +165,13 @@ namespace {
     // Top Level Driver code.
     virtual bool HandleTopLevelDecl(DeclGroupRef D) {
       for (DeclGroupRef::iterator I = D.begin(), E = D.end(); I != E; ++I) {
-        if (isa<ObjCClassDecl>((*I))) {
-          RewriteForwardClassDecl(D);
-          break;
+        if (ObjCInterfaceDecl *Class = dyn_cast<ObjCInterfaceDecl>(*I)) {
+          if (!Class->isThisDeclarationADefinition()) {
+            RewriteForwardClassDecl(D);
+            break;
+          }
         }
+
         HandleTopLevelSingleDecl(*I);
       }
       return true;
@@ -256,7 +259,7 @@ namespace {
     void RewriteInclude();
     void RewriteForwardClassDecl(DeclGroupRef D);
     void RewriteForwardClassDecl(const llvm::SmallVector<Decl*, 8> &DG);
-    void RewriteForwardClassEpilogue(ObjCClassDecl *ClassDecl, 
+    void RewriteForwardClassEpilogue(ObjCInterfaceDecl *ClassDecl, 
                                      const std::string &typedefString);
     void RewriteImplementations();
     void RewritePropertyImplDecl(ObjCPropertyImplDecl *PID,
@@ -653,8 +656,9 @@ void RewriteObjC::HandleTopLevelSingleDecl(Decl *D) {
       ConstantStringClassReference = FVD;
       return;
     }
-  } else if (ObjCInterfaceDecl *MD = dyn_cast<ObjCInterfaceDecl>(D)) {
-    RewriteInterfaceDecl(MD);
+  } else if (ObjCInterfaceDecl *ID = dyn_cast<ObjCInterfaceDecl>(D)) {
+    if (ID->isThisDeclarationADefinition())
+      RewriteInterfaceDecl(ID);
   } else if (ObjCCategoryDecl *CD = dyn_cast<ObjCCategoryDecl>(D)) {
     RewriteCategoryDecl(CD);
   } else if (ObjCProtocolDecl *PD = dyn_cast<ObjCProtocolDecl>(D)) {
@@ -667,18 +671,23 @@ void RewriteObjC::HandleTopLevelSingleDecl(Decl *D) {
     for (DeclContext::decl_iterator DI = LSD->decls_begin(),
                                  DIEnd = LSD->decls_end();
          DI != DIEnd; ) {
-      if (isa<ObjCClassDecl>((*DI))) {
-        SmallVector<Decl *, 8> DG;
-        Decl *D = (*DI);
-        SourceLocation Loc = D->getLocation();
-        while (DI != DIEnd &&
-               isa<ObjCClassDecl>(D) && D->getLocation() == Loc) {
-          DG.push_back(D);
-          ++DI;
-          D = (*DI);
+      if (ObjCInterfaceDecl *IFace = dyn_cast<ObjCInterfaceDecl>((*DI))) {
+        if (!IFace->isThisDeclarationADefinition()) {
+          SmallVector<Decl *, 8> DG;
+          SourceLocation StartLoc = IFace->getLocStart();
+          do {
+            if (isa<ObjCInterfaceDecl>(*DI) &&
+                !cast<ObjCInterfaceDecl>(*DI)->isThisDeclarationADefinition() &&
+                StartLoc == (*DI)->getLocStart())
+              DG.push_back(*DI);
+            else
+              break;
+            
+            ++DI;
+          } while (DI != DIEnd);
+          RewriteForwardClassDecl(DG);
+          continue;
         }
-        RewriteForwardClassDecl(DG);
-        continue;
       }
       HandleTopLevelSingleDecl(*DI);
       ++DI;
@@ -863,9 +872,9 @@ static void RewriteOneForwardClassDecl(ObjCInterfaceDecl *ForwardDecl,
   typedefString += ";\n#endif\n";
 }
 
-void RewriteObjC::RewriteForwardClassEpilogue(ObjCClassDecl *ClassDecl,
+void RewriteObjC::RewriteForwardClassEpilogue(ObjCInterfaceDecl *ClassDecl,
                                               const std::string &typedefString) {
-    SourceLocation startLoc = ClassDecl->getLocation();
+    SourceLocation startLoc = ClassDecl->getLocStart();
     const char *startBuf = SM->getCharacterData(startLoc);
     const char *semiPtr = strchr(startBuf, ';'); 
     // Replace the @class with typedefs corresponding to the classes.
@@ -875,8 +884,7 @@ void RewriteObjC::RewriteForwardClassEpilogue(ObjCClassDecl *ClassDecl,
 void RewriteObjC::RewriteForwardClassDecl(DeclGroupRef D) {
   std::string typedefString;
   for (DeclGroupRef::iterator I = D.begin(), E = D.end(); I != E; ++I) {
-    ObjCClassDecl *ClassDecl = cast<ObjCClassDecl>(*I);
-    ObjCInterfaceDecl *ForwardDecl = ClassDecl->getForwardInterfaceDecl();
+    ObjCInterfaceDecl *ForwardDecl = cast<ObjCInterfaceDecl>(*I);
     if (I == D.begin()) {
       // Translate to typedef's that forward reference structs with the same name
       // as the class. As a convenience, we include the original declaration
@@ -888,15 +896,14 @@ void RewriteObjC::RewriteForwardClassDecl(DeclGroupRef D) {
     RewriteOneForwardClassDecl(ForwardDecl, typedefString);
   }
   DeclGroupRef::iterator I = D.begin();
-  RewriteForwardClassEpilogue(cast<ObjCClassDecl>(*I), typedefString);
+  RewriteForwardClassEpilogue(cast<ObjCInterfaceDecl>(*I), typedefString);
 }
 
 void RewriteObjC::RewriteForwardClassDecl(
                                 const llvm::SmallVector<Decl*, 8> &D) {
   std::string typedefString;
   for (unsigned i = 0; i < D.size(); i++) {
-    ObjCClassDecl *ClassDecl = cast<ObjCClassDecl>(D[i]);
-    ObjCInterfaceDecl *ForwardDecl = ClassDecl->getForwardInterfaceDecl();
+    ObjCInterfaceDecl *ForwardDecl = cast<ObjCInterfaceDecl>(D[i]);
     if (i == 0) {
       typedefString += "// @class ";
       typedefString += ForwardDecl->getNameAsString();
@@ -904,7 +911,7 @@ void RewriteObjC::RewriteForwardClassDecl(
     }
     RewriteOneForwardClassDecl(ForwardDecl, typedefString);
   }
-  RewriteForwardClassEpilogue(cast<ObjCClassDecl>(D[0]), typedefString);
+  RewriteForwardClassEpilogue(cast<ObjCInterfaceDecl>(D[0]), typedefString);
 }
 
 void RewriteObjC::RewriteMethodDeclaration(ObjCMethodDecl *Method) {
@@ -1179,7 +1186,7 @@ void RewriteObjC::RewriteImplementationDecl(Decl *OID) {
 
 void RewriteObjC::RewriteInterfaceDecl(ObjCInterfaceDecl *ClassDecl) {
   std::string ResultStr;
-  if (!ObjCForwardDecls.count(ClassDecl)) {
+  if (!ObjCForwardDecls.count(ClassDecl->getCanonicalDecl())) {
     // we haven't seen a forward decl - generate a typedef.
     ResultStr = "#ifndef _REWRITER_typedef_";
     ResultStr += ClassDecl->getNameAsString();
@@ -1191,7 +1198,7 @@ void RewriteObjC::RewriteInterfaceDecl(ObjCInterfaceDecl *ClassDecl) {
     ResultStr += ClassDecl->getNameAsString();
     ResultStr += ";\n#endif\n";
     // Mark this typedef as having been generated.
-    ObjCForwardDecls.insert(ClassDecl);
+    ObjCForwardDecls.insert(ClassDecl->getCanonicalDecl());
   }
   RewriteObjCInternalStruct(ClassDecl, ResultStr);
 
@@ -2468,7 +2475,7 @@ void RewriteObjC::SynthGetSuperClassFunctionDecl() {
                                                    false);
 }
 
-// SynthGetMetaClassFunctionDecl - id objc_getClass(const char *name);
+// SynthGetMetaClassFunctionDecl - id objc_getMetaClass(const char *name);
 void RewriteObjC::SynthGetMetaClassFunctionDecl() {
   IdentifierInfo *getClassIdent = &Context->Idents.get("objc_getMetaClass");
   SmallVector<QualType, 16> ArgTys;
@@ -2663,7 +2670,7 @@ Stmt *RewriteObjC::SynthMessageExpr(ObjCMessageExpr *Exp,
     // (Class)objc_getClass("CurrentClass")
     CastExpr *ArgExpr = NoTypeInfoCStyleCastExpr(Context,
                                              Context->getObjCClassType(),
-                                             CK_CPointerToObjCPointerCast, Cls);
+                                             CK_BitCast, Cls);
     ClsExprs.clear();
     ClsExprs.push_back(ArgExpr);
     Cls = SynthesizeCallToFunctionDecl(GetSuperClassFunctionDecl,
@@ -3123,14 +3130,14 @@ void RewriteObjC::RewriteObjCInternalStruct(ObjCInterfaceDecl *CDecl,
   ObjCInterfaceDecl *RCDecl = CDecl->getSuperClass();
   int NumIvars = CDecl->ivar_size();
   SourceLocation LocStart = CDecl->getLocStart();
-  SourceLocation LocEnd = CDecl->getLocEnd();
+  SourceLocation LocEnd = CDecl->getEndOfDefinitionLoc();
 
   const char *startBuf = SM->getCharacterData(LocStart);
   const char *endBuf = SM->getCharacterData(LocEnd);
 
   // If no ivars and no root or if its root, directly or indirectly,
   // have no ivars (thus not synthesized) then no need to synthesize this class.
-  if ((CDecl->isForwardDecl() || NumIvars == 0) &&
+  if ((!CDecl->isThisDeclarationADefinition() || NumIvars == 0) &&
       (!RCDecl || !ObjCSynthesizedStructs.count(RCDecl))) {
     endBuf += Lexer::MeasureTokenLength(LocEnd, *SM, LangOpts);
     ReplaceText(LocStart, endBuf-startBuf, Result);
@@ -4980,10 +4987,6 @@ void RewriteObjC::HandleDeclInMainFile(Decl *D) {
         RewriteRecordBody(RD);
       break;
     }
-    case Decl::ObjCClass: {
-      llvm_unreachable("RewriteObjC::HandleDeclInMainFile - ObjCClassDecl");
-      break;
-    }
     default:
       break;
   }
@@ -5357,7 +5360,7 @@ void RewriteObjCFragileABI::RewriteObjCClassMetaData(ObjCImplementationDecl *IDe
   
   // Explicitly declared @interface's are already synthesized.
   if (CDecl->isImplicitInterfaceDecl()) {
-    // FIXME: Implementation of a class with no @interface (legacy) doese not
+    // FIXME: Implementation of a class with no @interface (legacy) does not
     // produce correct synthesis as yet.
     RewriteObjCInternalStruct(CDecl, Result);
   }
@@ -5938,7 +5941,7 @@ Stmt *RewriteObjCFragileABI::RewriteObjCIvarRefExpr(ObjCIvarRefExpr *IV) {
                                               OldRange.getEnd(),
                                               castExpr);
       if (IV->isFreeIvar() &&
-          CurMethodDef->getClassInterface() == iFaceDecl->getDecl()) {
+          declaresSameEntity(CurMethodDef->getClassInterface(), iFaceDecl->getDecl())) {
         MemberExpr *ME = new (Context) MemberExpr(PE, true, D,
                                                   IV->getLocation(),
                                                   D->getType(),

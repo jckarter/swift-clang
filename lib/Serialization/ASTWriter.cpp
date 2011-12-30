@@ -782,7 +782,7 @@ void ASTWriter::WriteBlockInfoBlock() {
   RECORD(IMPORTS);
   RECORD(REFERENCED_SELECTOR_POOL);
   RECORD(TU_UPDATE_LEXICAL);
-  RECORD(REDECLS_UPDATE_LATEST);
+  RECORD(LOCAL_REDECLARATIONS);
   RECORD(SEMA_DECL_REFS);
   RECORD(WEAK_UNDECLARED_IDENTIFIERS);
   RECORD(PENDING_IMPLICIT_INSTANTIATIONS);
@@ -802,6 +802,9 @@ void ASTWriter::WriteBlockInfoBlock() {
   RECORD(KNOWN_NAMESPACES);
   RECORD(MODULE_OFFSET_MAP);
   RECORD(SOURCE_MANAGER_LINE_TABLE);
+  RECORD(OBJC_CHAINED_CATEGORIES);
+  RECORD(FILE_SORTED_DECLS);
+  RECORD(IMPORTED_MODULES);
   
   // SourceManager Block.
   BLOCK(SOURCE_MANAGER_BLOCK);
@@ -866,7 +869,6 @@ void ASTWriter::WriteBlockInfoBlock() {
   RECORD(DECL_OBJC_PROTOCOL);
   RECORD(DECL_OBJC_IVAR);
   RECORD(DECL_OBJC_AT_DEFS_FIELD);
-  RECORD(DECL_OBJC_CLASS);
   RECORD(DECL_OBJC_FORWARD_PROTOCOL);
   RECORD(DECL_OBJC_CATEGORY);
   RECORD(DECL_OBJC_CATEGORY_IMPL);
@@ -1661,8 +1663,9 @@ void ASTWriter::WritePreprocessor(const Preprocessor &PP, bool IsModule) {
   for (Preprocessor::macro_iterator I = PP.macro_begin(Chain == 0), 
                                     E = PP.macro_end(Chain == 0);
        I != E; ++I) {
+    const IdentifierInfo *Name = I->first;
     if (!IsModule || I->second->isPublic()) {
-      MacroDefinitionsSeen.insert(I->first);
+      MacroDefinitionsSeen.insert(Name);
       MacrosToEmit.push_back(std::make_pair(I->first, I->second));
     }
   }
@@ -1878,7 +1881,6 @@ void ASTWriter::WriteSubmodules(Module *WritingModule) {
   for (ASTContext::import_iterator I = Context->local_import_begin(),
                                 IEnd = Context->local_import_end();
        I != IEnd; ++I) {
-    assert(SubmoduleIDs.find(I->getImportedModule()) != SubmoduleIDs.end());
     if (Module *ImportedFrom
           = ModMap.inferModuleFromLocation(FullSourceLoc(I->getLocation(), 
                                                          SrcMgr))) {
@@ -2522,6 +2524,7 @@ public:
     uint32_t Bits = 0;
     bool HasMacroDefinition = hasMacroDefinition(II, Macro);
     Bits = (uint32_t)II->getObjCOrBuiltinID();
+    assert((Bits & 0x7ff) == Bits && "ObjCOrBuiltinID too big for ASTReader.");
     Bits = (Bits << 1) | unsigned(HasMacroDefinition);
     Bits = (Bits << 1) | unsigned(II->isExtensionToken());
     Bits = (Bits << 1) | unsigned(II->isPoisoned());
@@ -2901,6 +2904,25 @@ void ASTWriter::WriteOpenCLExtensions(Sema &SemaRef) {
 #define OPENCLEXT(nm)  Record.push_back(Opts.nm);
 #include "clang/Basic/OpenCLExtensions.def"
   Stream.EmitRecord(OPENCL_EXTENSIONS, Record);
+}
+
+void ASTWriter::WriteMergedDecls() {
+  if (!Chain || Chain->MergedDecls.empty())
+    return;
+  
+  RecordData Record;
+  for (ASTReader::MergedDeclsMap::iterator I = Chain->MergedDecls.begin(),
+                                        IEnd = Chain->MergedDecls.end();
+       I != IEnd; ++I) {
+    DeclID CanonID = I->first->isFromASTFile()? Chain->DeclToID[I->first]
+                                              : getDeclID(I->first);
+    assert(CanonID && "Merged declaration not known?");
+    
+    Record.push_back(CanonID);
+    Record.push_back(I->second.size());
+    Record.append(I->second.begin(), I->second.end());
+  }
+  Stream.EmitRecord(MERGED_DECLARATIONS, Record);
 }
 
 //===----------------------------------------------------------------------===//
@@ -3315,19 +3337,6 @@ void ASTWriter::WriteASTCore(Sema &SemaRef, MemorizeStatCalls *StatCalls,
 
   Stream.EmitRecord(SPECIAL_TYPES, SpecialTypes);
 
-  /// Build a record containing first declarations from a chained PCH and the
-  /// most recent declarations in this AST that they point to.
-  RecordData FirstLatestDeclIDs;
-  for (FirstLatestDeclMap::iterator I = FirstLatestDecls.begin(), 
-                                    E = FirstLatestDecls.end(); 
-       I != E; ++I) {
-    AddDeclRef(I->first, FirstLatestDeclIDs);
-    AddDeclRef(I->second, FirstLatestDeclIDs);
-  }
-  
-  if (!FirstLatestDeclIDs.empty())
-    Stream.EmitRecord(REDECLS_UPDATE_LATEST, FirstLatestDeclIDs);
-
   // Write the record containing external, unnamed definitions.
   if (!ExternalDefinitions.empty())
     Stream.EmitRecord(EXTERNAL_DEFINITIONS, ExternalDefinitions);
@@ -3414,7 +3423,27 @@ void ASTWriter::WriteASTCore(Sema &SemaRef, MemorizeStatCalls *StatCalls,
   WriteDeclUpdatesBlocks();
   WriteDeclReplacementsBlock();
   WriteChainedObjCCategories();
+  WriteMergedDecls();
+  
+  if (!LocalRedeclarations.empty()) {
+    // Sort the local redeclarations info by the first declaration ID,
+    // since the reader will be perforing binary searches on this information.
+    llvm::array_pod_sort(LocalRedeclarations.begin(),LocalRedeclarations.end());
+    
+    llvm::BitCodeAbbrev *Abbrev = new BitCodeAbbrev();
+    Abbrev->Add(BitCodeAbbrevOp(LOCAL_REDECLARATIONS));
+    Abbrev->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::VBR, 6)); // # of entries
+    Abbrev->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::Blob));
+    unsigned AbbrevID = Stream.EmitAbbrev(Abbrev);
 
+    Record.clear();
+    Record.push_back(LOCAL_REDECLARATIONS);
+    Record.push_back(LocalRedeclarations.size());
+    Stream.EmitRecordWithBlob(AbbrevID, Record, 
+      reinterpret_cast<char*>(LocalRedeclarations.data()),
+      LocalRedeclarations.size() * sizeof(LocalRedeclarationsInfo));
+  }
+  
   // Some simple statistics
   Record.clear();
   Record.push_back(NumStatements);
@@ -3443,6 +3472,7 @@ void ASTWriter::ResolveDeclUpdatesBlocks() {
       case UPD_CXX_ADDED_IMPLICIT_MEMBER:
       case UPD_CXX_ADDED_TEMPLATE_SPECIALIZATION:
       case UPD_CXX_ADDED_ANONYMOUS_NAMESPACE:
+      case UPD_OBJC_SET_CLASS_DEFINITIONDATA:
         URec[Idx] = GetDeclRef(reinterpret_cast<Decl *>(URec[Idx]));
         ++Idx;
         break;
@@ -4256,6 +4286,10 @@ void ASTWriter::MacroDefinitionRead(serialization::PreprocessedEntityID ID,
   MacroDefinitions[MD] = ID;
 }
 
+void ASTWriter::MacroVisible(IdentifierInfo *II) {
+  DeserializedMacroNames.push_back(II);
+}
+
 void ASTWriter::ModuleRead(serialization::SubmoduleID ID, Module *Mod) {
   assert(SubmoduleIDs.find(Mod) == SubmoduleIDs.end());
   SubmoduleIDs[Mod] = ID;
@@ -4383,10 +4417,26 @@ void ASTWriter::AddedObjCCategoryToInterface(const ObjCCategoryDecl *CatD,
 
 void ASTWriter::CompletedObjCForwardRef(const ObjCContainerDecl *D) {
   assert(!WritingAST && "Already writing the AST!");
-  if (!D->isFromASTFile())
-    return; // Declaration not imported from PCH.
+  if (D->isFromASTFile())
+    RewriteDecl(D);
 
-  RewriteDecl(D);
+  if (const ObjCInterfaceDecl *ID = dyn_cast<ObjCInterfaceDecl>(D)) {
+    for (ObjCInterfaceDecl::redecl_iterator I = ID->redecls_begin(), 
+                                            E = ID->redecls_end(); 
+         I != E; ++I) {
+      if (*I == ID)
+        continue;
+      
+      // We are interested when a PCH decl is modified.
+      if (I->isFromASTFile()) {
+        UpdateRecord &Record = DeclUpdates[*I];
+        Record.push_back(UPD_OBJC_SET_CLASS_DEFINITIONDATA);
+        assert((*I)->hasDefinition());
+        assert((*I)->getDefinition() == D);
+        Record.push_back(reinterpret_cast<uint64_t>(D)); // the DefinitionDecl
+      }
+    }
+  }
 }
 
 void ASTWriter::AddedObjCPropertyInClassExtension(const ObjCPropertyDecl *Prop,

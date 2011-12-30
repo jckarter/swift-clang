@@ -548,11 +548,16 @@ public:
   /// evaluated at run-time, if at all.
   enum ExpressionEvaluationContext {
     /// \brief The current expression and its subexpressions occur within an
-    /// unevaluated operand (C++0x [expr]p8), such as a constant expression
-    /// or the subexpression of \c sizeof, where the type or the value of the
-    /// expression may be significant but no code will be generated to evaluate
-    /// the value of the expression at run time.
+    /// unevaluated operand (C++11 [expr]p7), such as the subexpression of
+    /// \c sizeof, where the type of the expression may be significant but
+    /// no code will be generated to evaluate the value of the expression at
+    /// run time.
     Unevaluated,
+
+    /// \brief The current expression and its subexpressions occur within a
+    /// constant expression. Such a context is not potentially-evaluated in
+    /// C++98, but is potentially-evaluated in C++11.
+    ConstantEvaluated,
 
     /// \brief The current expression is potentially evaluated at run time,
     /// which means that code may be generated to evaluate the value of the
@@ -1150,12 +1155,6 @@ public:
   /// \param Path The module access path.
   DeclResult ActOnModuleImport(SourceLocation ImportLoc, ModuleIdPath Path);
 
-  /// \brief Diagnose that \p New is a module-private redeclaration of
-  /// \p Old.
-  void diagnoseModulePrivateRedeclaration(NamedDecl *New, NamedDecl *Old,
-                                          SourceLocation ModulePrivateKeyword
-                                            = SourceLocation());
-
   /// \brief Retrieve a suitable printing policy.
   PrintingPolicy getPrintingPolicy() const;
 
@@ -1363,6 +1362,7 @@ public:
   /// Subroutines of ActOnDeclarator().
   TypedefDecl *ParseTypedefDecl(Scope *S, Declarator &D, QualType T,
                                 TypeSourceInfo *TInfo);
+  bool isIncompatibleTypedef(TypeDecl *Old, TypedefNameDecl *New);
   void MergeTypedefNameDecl(TypedefNameDecl *New, LookupResult &OldDecls);
   bool MergeFunctionDecl(FunctionDecl *New, Decl *Old);
   bool MergeCompatibleFunctionDecls(FunctionDecl *New, FunctionDecl *Old);
@@ -3295,6 +3295,13 @@ public:
                                        SourceLocation CCLoc,
                                        SourceLocation TildeLoc,
                                        UnqualifiedId &SecondTypeName,
+                                       bool HasTrailingLParen);
+
+  ExprResult ActOnPseudoDestructorExpr(Scope *S, Expr *Base,
+                                       SourceLocation OpLoc,
+                                       tok::TokenKind OpKind,
+                                       SourceLocation TildeLoc, 
+                                       const DeclSpec& DS,
                                        bool HasTrailingLParen);
 
   /// MaybeCreateExprWithCleanups - If the current full-expression
@@ -6068,10 +6075,12 @@ public:
   /// in the global scope.
   bool CheckObjCDeclScope(Decl *D);
 
-  /// VerifyIntegerConstantExpression - verifies that an expression is an ICE,
+  /// VerifyIntegerConstantExpression - Verifies that an expression is an ICE,
   /// and reports the appropriate diagnostics. Returns false on success.
   /// Can optionally return the value of the expression.
-  bool VerifyIntegerConstantExpression(const Expr *E, llvm::APSInt *Result = 0);
+  bool VerifyIntegerConstantExpression(const Expr *E, llvm::APSInt *Result = 0,
+                                       unsigned DiagId = 0,
+                                       bool AllowFold = true);
 
   /// VerifyBitField - verifies that a bit field expression is an ICE and has
   /// the correct width, and that the field type is valid.
@@ -6256,7 +6265,8 @@ public:
 
 private:
   void CheckArrayAccess(const Expr *BaseExpr, const Expr *IndexExpr,
-                        bool isSubscript=false, bool AllowOnePastEnd=true);
+                        const ArraySubscriptExpr *ASE=0,
+                        bool AllowOnePastEnd=true, bool IndexNegated=false);
   void CheckArrayAccess(const Expr *E);
   bool CheckFunctionCall(FunctionDecl *FDecl, CallExpr *TheCall);
   bool CheckBlockCall(NamedDecl *NDecl, CallExpr *TheCall);

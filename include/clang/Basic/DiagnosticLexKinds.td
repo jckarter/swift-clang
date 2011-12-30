@@ -202,8 +202,11 @@ def warn_cxx98_compat_variadic_macro : Warning<
   InGroup<CXX98CompatPedantic>, DefaultIgnore;
 def ext_named_variadic_macro : Extension<
   "named variadic macros are a GNU extension">, InGroup<VariadicMacros>;
+def err_embedded_include : Error<
+  "embedding a #%0 directive within macro arguments is not supported">;
 def ext_embedded_directive : Extension<
-  "embedding a directive within macro arguments is not portable">;
+  "embedding a directive within macro arguments has undefined behavior">,
+  InGroup<DiagGroup<"embedded-directive">>;
 def ext_missing_varargs_arg : Extension<
   "varargs argument missing, but tolerated as an extension">;
 def ext_empty_fnmacro_arg : Extension<
@@ -422,5 +425,7 @@ def err_mmap_nested_submodule_id : Error<
 def warn_auto_module_import : Warning<
   "treating #%select{include|import|include_next|__include_macros}0 as an "
   "import of module '%1'">, InGroup<AutoImport>, DefaultIgnore;
+def warn_uncovered_module_header : Warning<
+  "umbrella header does not include header '%0'">, InGroup<IncompleteUmbrella>;
 
 }

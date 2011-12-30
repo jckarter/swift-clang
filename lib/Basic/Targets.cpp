@@ -99,13 +99,6 @@ static void getDarwinDefines(MacroBuilder &Builder, const LangOptions &Opts,
     // allow this in C, since one might have block pointers in structs that
     // are used in pure C code and in Objective-C ARC.
     Builder.defineMacro("__unsafe_unretained", "");
-
-    // The Objective-C bridged cast keywords are defined to nothing in non-ARC
-    // mode; then they become normal, C-style casts.
-    Builder.defineMacro("__bridge", "");
-    Builder.defineMacro("__bridge_transfer", "");
-    Builder.defineMacro("__bridge_retained", "");
-    Builder.defineMacro("__bridge_retain", "");
   }
 
   if (Opts.Static)
@@ -372,7 +365,26 @@ protected:
   }
 public:
   OpenBSDTargetInfo(const std::string &triple)
-    : OSTargetInfo<Target>(triple) {}
+    : OSTargetInfo<Target>(triple) {
+      this->UserLabelPrefix = "";
+
+      llvm::Triple Triple(triple);
+      switch (Triple.getArch()) {
+        default:
+        case llvm::Triple::x86:
+        case llvm::Triple::x86_64:
+        case llvm::Triple::arm:
+	case llvm::Triple::sparc:
+          this->MCountName = "__mcount";
+          break;
+        case llvm::Triple::mips64:
+        case llvm::Triple::mips64el:
+        case llvm::Triple::ppc:
+	case llvm::Triple::sparcv9:
+          this->MCountName = "_mcount";
+          break;
+      }
+  }
 };
 
 // PSP Target
@@ -413,13 +425,14 @@ public:
   PS3PPUTargetInfo(const std::string& triple)
     : OSTargetInfo<Target>(triple) {
     this->UserLabelPrefix = "";
-    this->LongWidth = this->LongAlign = this->PointerWidth = this->PointerAlign = 32;
+    this->LongWidth = this->LongAlign = 32;
+    this->PointerWidth = this->PointerAlign = 32;
     this->IntMaxType = TargetInfo::SignedLongLong;
     this->UIntMaxType = TargetInfo::UnsignedLongLong;
     this->Int64Type = TargetInfo::SignedLongLong;
     this->SizeType = TargetInfo::UnsignedInt;
     this->DescriptionString = "E-p:32:32:32-i1:8:8-i8:8:8-i16:16:16-i32:32:32-"
-                        "i64:64:64-f32:32:32-f64:64:64-v128:128:128-n32";
+                              "i64:64:64-f32:32:32-f64:64:64-v128:128:128-n32";
   }
 };
 
@@ -867,6 +880,7 @@ public:
     : DarwinTargetInfo<PPC32TargetInfo>(triple) {
     HasAlignMac68kSupport = true;
     BoolWidth = BoolAlign = 32; //XXX support -mone-byte-bool?
+    SuitableAlign = 128;
   }
   virtual const char *getVAListDeclaration() const {
     return "typedef char* __builtin_va_list;";
@@ -879,6 +893,7 @@ public:
   DarwinPPC64TargetInfo(const std::string& triple)
     : DarwinTargetInfo<PPC64TargetInfo>(triple) {
     HasAlignMac68kSupport = true;
+    SuitableAlign = 128;
   }
 };
 } // end anonymous namespace.
@@ -895,6 +910,7 @@ namespace {
     std::vector<llvm::StringRef> AvailableFeatures;
   public:
     PTXTargetInfo(const std::string& triple) : TargetInfo(triple) {
+      BigEndian = false;
       TLSSupported = false;
       LongWidth = LongAlign = 64;
       AddrSpaceMap = &PTXAddrSpaceMap;
@@ -1178,6 +1194,11 @@ class X86TargetInfo : public TargetInfo {
 
   bool HasAES;
   bool HasAVX;
+  bool HasAVX2;
+  bool HasLZCNT;
+  bool HasBMI;
+  bool HasBMI2;
+  bool HasPOPCNT;
 
   /// \brief Enumeration of all of the X86 CPUs supported by Clang.
   ///
@@ -1259,6 +1280,7 @@ class X86TargetInfo : public TargetInfo {
     CK_Corei7,
     CK_Corei7AVX,
     CK_CoreAVXi,
+    CK_CoreAVX2,
     //@}
 
     /// \name K6
@@ -1313,8 +1335,14 @@ class X86TargetInfo : public TargetInfo {
 public:
   X86TargetInfo(const std::string& triple)
     : TargetInfo(triple), SSELevel(NoSSE), MMX3DNowLevel(NoMMX3DNow),
-      HasAES(false), HasAVX(false), CPU(CK_Generic) {
+      HasAES(false), HasAVX(false), HasAVX2(false), HasLZCNT(false),
+      HasBMI(false), HasBMI2(false), HasPOPCNT(false), CPU(CK_Generic) {
+    BigEndian = false;
     LongDoubleFormat = &llvm::APFloat::x87DoubleExtended;
+  }
+  virtual unsigned getFloatEvalMethod() const {
+    // X87 evaluates with 80 bits "long double" precision.
+    return SSELevel == NoSSE ? 2 : 0;
   }
   virtual void getTargetBuiltins(const Builtin::Info *&Records,
                                  unsigned &NumRecords) const {
@@ -1384,6 +1412,7 @@ public:
       .Case("corei7", CK_Corei7)
       .Case("corei7-avx", CK_Corei7AVX)
       .Case("core-avx-i", CK_CoreAVXi)
+      .Case("core-avx2", CK_CoreAVX2)
       .Case("k6", CK_K6)
       .Case("k6-2", CK_K6_2)
       .Case("k6-3", CK_K6_3)
@@ -1455,6 +1484,7 @@ public:
     case CK_Corei7:
     case CK_Corei7AVX:
     case CK_CoreAVXi:
+    case CK_CoreAVX2:
     case CK_Athlon64:
     case CK_Athlon64SSE3:
     case CK_AthlonFX:
@@ -1486,6 +1516,11 @@ void X86TargetInfo::getDefaultFeatures(llvm::StringMap<bool> &Features) const {
   Features["sse4a"] = false;
   Features["aes"] = false;
   Features["avx"] = false;
+  Features["avx2"] = false;
+  Features["lzcnt"] = false;
+  Features["bmi"] = false;
+  Features["bmi2"] = false;
+  Features["popcnt"] = false;
 
   // FIXME: This *really* should not be here.
 
@@ -1548,6 +1583,15 @@ void X86TargetInfo::getDefaultFeatures(llvm::StringMap<bool> &Features) const {
     setFeatureEnabled(Features, "sse4", true);
     setFeatureEnabled(Features, "aes", true);
     //setFeatureEnabled(Features, "avx", true);
+    break;
+  case CK_CoreAVX2:
+    setFeatureEnabled(Features, "mmx", true);
+    setFeatureEnabled(Features, "sse4", true);
+    setFeatureEnabled(Features, "aes", true);
+    setFeatureEnabled(Features, "lzcnt", true);
+    setFeatureEnabled(Features, "bmi", true);
+    setFeatureEnabled(Features, "bmi2", true);
+    //setFeatureEnabled(Features, "avx2", true);
     break;
   case CK_K6:
   case CK_WinChipC6:
@@ -1627,7 +1671,8 @@ bool X86TargetInfo::setFeatureEnabled(llvm::StringMap<bool> &Features,
         Features["ssse3"] = true;
     else if (Name == "sse4" || Name == "sse4.2")
       Features["mmx"] = Features["sse"] = Features["sse2"] = Features["sse3"] =
-        Features["ssse3"] = Features["sse41"] = Features["sse42"] = true;
+        Features["ssse3"] = Features["sse41"] = Features["sse42"] =
+        Features["popcnt"] = true;
     else if (Name == "sse4.1")
       Features["mmx"] = Features["sse"] = Features["sse2"] = Features["sse3"] =
         Features["ssse3"] = Features["sse41"] = true;
@@ -1640,9 +1685,21 @@ bool X86TargetInfo::setFeatureEnabled(llvm::StringMap<bool> &Features,
     else if (Name == "avx")
       Features["mmx"] = Features["sse"] = Features["sse2"] = Features["sse3"] =
         Features["ssse3"] = Features["sse41"] = Features["sse42"] =
-        Features["avx"] = true;
+        Features["popcnt"] = Features["avx"] = true;
+    else if (Name == "avx2")
+      Features["mmx"] = Features["sse"] = Features["sse2"] = Features["sse3"] =
+        Features["ssse3"] = Features["sse41"] = Features["sse42"] =
+        Features["popcnt"] = Features["avx"] = Features["avx2"] = true;
     else if (Name == "sse4a")
       Features["mmx"] = Features["sse4a"] = true;
+    else if (Name == "lzcnt")
+      Features["lzcnt"] = true;
+    else if (Name == "bmi")
+      Features["bmi"] = true;
+    else if (Name == "bmi2")
+      Features["bmi2"] = true;
+    else if (Name == "popcnt")
+      Features["popcnt"] = true;
   } else {
     if (Name == "mmx")
       Features["mmx"] = Features["3dnow"] = Features["3dnowa"] = false;
@@ -1668,9 +1725,19 @@ bool X86TargetInfo::setFeatureEnabled(llvm::StringMap<bool> &Features,
     else if (Name == "aes")
       Features["aes"] = false;
     else if (Name == "avx")
-      Features["avx"] = false;
+      Features["avx"] = Features["avx2"] = false;
+    else if (Name == "avx2")
+      Features["avx2"] = false;
     else if (Name == "sse4a")
       Features["sse4a"] = false;
+    else if (Name == "lzcnt")
+      Features["lzcnt"] = false;
+    else if (Name == "bmi")
+      Features["bmi"] = false;
+    else if (Name == "bmi2")
+      Features["bmi2"] = false;
+    else if (Name == "popcnt")
+      Features["popcnt"] = false;
   }
 
   return true;
@@ -1690,8 +1757,33 @@ void X86TargetInfo::HandleTargetFeatures(std::vector<std::string> &Features) {
       continue;
     }
 
+    if (Features[i].substr(1) == "lzcnt") {
+      HasLZCNT = true;
+      continue;
+    }
+
+    if (Features[i].substr(1) == "bmi") {
+      HasBMI = true;
+      continue;
+    }
+
+    if (Features[i].substr(1) == "bmi2") {
+      HasBMI2 = true;
+      continue;
+    }
+
+    if (Features[i].substr(1) == "popcnt") {
+      HasPOPCNT = true;
+      continue;
+    }
+
     // FIXME: Not sure yet how to treat AVX in regard to SSE levels.
     // For now let it be enabled together with other SSE levels.
+    if (Features[i].substr(1) == "avx2") {
+      HasAVX = true;
+      HasAVX2 = true;
+      continue;
+    }
     if (Features[i].substr(1) == "avx") {
       HasAVX = true;
       continue;
@@ -1820,6 +1912,7 @@ void X86TargetInfo::getTargetDefines(const LangOptions &Opts,
   case CK_Corei7:
   case CK_Corei7AVX:
   case CK_CoreAVXi:
+  case CK_CoreAVX2:
     Builder.defineMacro("__corei7");
     Builder.defineMacro("__corei7__");
     Builder.defineMacro("__tune_corei7__");
@@ -1903,6 +1996,20 @@ void X86TargetInfo::getTargetDefines(const LangOptions &Opts,
 
   if (HasAVX)
     Builder.defineMacro("__AVX__");
+  if (HasAVX2)
+    Builder.defineMacro("__AVX2__");
+
+  if (HasLZCNT)
+    Builder.defineMacro("__LZCNT__");
+
+  if (HasBMI)
+    Builder.defineMacro("__BMI__");
+
+  if (HasBMI2)
+    Builder.defineMacro("__BMI2__");
+
+  if (HasPOPCNT)
+    Builder.defineMacro("__POPCNT__");
 
   // Each case falls through to the previous one here.
   switch (SSELevel) {
@@ -2029,6 +2136,7 @@ public:
     DoubleAlign = LongLongAlign = 32;
     LongDoubleWidth = 96;
     LongDoubleAlign = 32;
+    SuitableAlign = 128;
     DescriptionString = "e-p:32:32:32-i1:8:8-i8:8:8-i16:16:16-i32:32:32-"
                         "i64:32:64-f32:32:32-f64:32:64-v64:64:64-v128:128:128-"
                         "a0:0:64-f80:32:32-n8:16:32-S128";
@@ -2078,6 +2186,7 @@ public:
     DarwinTargetInfo<X86_32TargetInfo>(triple) {
     LongDoubleWidth = 128;
     LongDoubleAlign = 128;
+    SuitableAlign = 128;
     SizeType = UnsignedLong;
     IntPtrType = SignedLong;
     DescriptionString = "e-p:32:32:32-i1:8:8-i8:8:8-i16:16:16-i32:32:32-"
@@ -2270,6 +2379,7 @@ public:
     LongDoubleAlign = 128;
     LargeArrayMinWidth = 128;
     LargeArrayAlign = 128;
+    SuitableAlign = 128;
     IntMaxType = SignedLong;
     UIntMaxType = UnsignedLong;
     Int64Type = SignedLong;
@@ -2439,6 +2549,7 @@ public:
   ARMTargetInfo(const std::string &TripleStr)
     : TargetInfo(TripleStr), ABI("aapcs-linux"), CPU("arm1136j-s")
   {
+    BigEndian = false;
     SizeType = UnsignedInt;
     PtrDiffType = SignedInt;
     // AAPCS 7.1.1, ARM-Linux ABI 2.4: type of wchar_t is unsigned int.
@@ -2478,7 +2589,7 @@ public:
     // FIXME: We need support for -meabi... we could just mangle it into the
     // name.
     if (Name == "apcs-gnu") {
-      DoubleAlign = LongLongAlign = LongDoubleAlign = 32;
+      DoubleAlign = LongLongAlign = LongDoubleAlign = SuitableAlign = 32;
       SizeType = UnsignedLong;
 
       // Revert to using SignedInt on apcs-gnu to comply with existing behaviour.
@@ -2804,6 +2915,7 @@ class HexagonTargetInfo : public TargetInfo {
   std::string CPU;
 public:
   HexagonTargetInfo(const std::string& triple) : TargetInfo(triple)  {
+    BigEndian = false;
     DescriptionString = ("e-p:32:32:32-"
                          "i64:64:64-i32:32:32-"
                          "i16:16:16-i1:32:32-a:0:0");
@@ -2933,6 +3045,7 @@ class SparcV8TargetInfo : public TargetInfo {
 public:
   SparcV8TargetInfo(const std::string& triple) : TargetInfo(triple) {
     // FIXME: Support Sparc quad-precision long double?
+    BigEndian = false;
     DescriptionString = "e-p:32:32:32-i1:8:8-i8:8:8-i16:16:16-i32:32:32-"
                         "i64:64:64-f32:32:32-f64:64:64-v64:64:64-n32";
   }
@@ -3062,11 +3175,13 @@ namespace {
     static const char * const GCCRegNames[];
   public:
     MSP430TargetInfo(const std::string& triple) : TargetInfo(triple) {
+      BigEndian = false;
       TLSSupported = false;
       IntWidth = 16; IntAlign = 16;
       LongWidth = 32; LongLongWidth = 64;
       LongAlign = LongLongAlign = 16;
       PointerWidth = 16; PointerAlign = 16;
+      SuitableAlign = 16;
       SizeType = UnsignedInt;
       IntMaxType = SignedLong;
       UIntMaxType = UnsignedLong;
@@ -3148,6 +3263,7 @@ namespace {
       IntAlign = 32;
       LongAlign = LongLongAlign = 32;
       PointerAlign = 32;
+      SuitableAlign = 32;
       SizeType = UnsignedInt;
       IntMaxType = SignedLong;
       UIntMaxType = UnsignedLong;
@@ -3354,6 +3470,7 @@ public:
 class Mips32ELTargetInfo : public Mips32TargetInfoBase {
 public:
   Mips32ELTargetInfo(const std::string& triple) : Mips32TargetInfoBase(triple) {
+    BigEndian = false;
     DescriptionString = "e-p:32:32:32-i1:8:8-i8:8:32-i16:16:32-i32:32:32-"
                         "i64:64:64-f32:32:32-f64:64:64-v64:64:64-n32";
   }
@@ -3377,6 +3494,7 @@ public:
     PointerWidth = PointerAlign = 64;
     LongDoubleWidth = LongDoubleAlign = 128;
     LongDoubleFormat = &llvm::APFloat::IEEEquad;
+    SuitableAlign = 128;
   }
   virtual bool setABI(const std::string &Name) {
     SetDescriptionString(Name);
@@ -3484,7 +3602,8 @@ class Mips64ELTargetInfo : public Mips64TargetInfoBase {
   }
 public:
   Mips64ELTargetInfo(const std::string& triple) : Mips64TargetInfoBase(triple) {
-    // Default ABI is n64.  
+    // Default ABI is n64.
+    BigEndian = false;
     DescriptionString = "e-p:64:64:64-i1:8:8-i8:8:32-i16:16:32-i32:32:32-"
                         "i64:64:64-f32:32:32-f64:64:64-f128:128:128-"
                         "v64:64:64-n32";
@@ -3505,6 +3624,7 @@ namespace {
 class PNaClTargetInfo : public TargetInfo {
 public:
   PNaClTargetInfo(const std::string& triple) : TargetInfo(triple) {
+    BigEndian = false;
     this->UserLabelPrefix = "";
     this->LongAlign = 32;
     this->LongWidth = 32;

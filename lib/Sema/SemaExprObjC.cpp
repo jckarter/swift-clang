@@ -1102,6 +1102,9 @@ ObjCMethodDecl *Sema::LookupPrivateClassMethod(Selector Sel,
 
 ObjCMethodDecl *Sema::LookupPrivateInstanceMethod(Selector Sel,
                                               ObjCInterfaceDecl *ClassDecl) {
+  if (!ClassDecl->hasDefinition())
+    return 0;
+
   ObjCMethodDecl *Method = 0;
   while (ClassDecl && !Method) {
     // If we have implementations in scope, check "private" methods.
@@ -1929,12 +1932,10 @@ ExprResult Sema::BuildInstanceMessage(Expr *Receiver,
             return ExprError();
           
           forwardClass = OCIType->getInterfaceDecl();
+          Method = 0;
+        } else {
+          Method = ClassDecl->lookupInstanceMethod(Sel);
         }
-        
-        // FIXME: consider using LookupInstanceMethodInGlobalPool, since it will be
-        // faster than the following method (which can do *many* linear searches).
-        // The idea is to add class info to MethodPool.
-        Method = ClassDecl->lookupInstanceMethod(Sel);
 
         if (!Method)
           // Search protocol qualifiers.

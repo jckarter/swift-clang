@@ -2781,14 +2781,20 @@ CXCursorKind clang::getCursorKindForDecl(Decl *D) {
       return CXCursor_FunctionDecl;
     case Decl::ObjCCategory:       return CXCursor_ObjCCategoryDecl;
     case Decl::ObjCCategoryImpl:   return CXCursor_ObjCCategoryImplDecl;
-    case Decl::ObjCClass:
       // FIXME
       return CXCursor_UnexposedDecl;
     case Decl::ObjCForwardProtocol:
       // FIXME
       return CXCursor_UnexposedDecl;      
     case Decl::ObjCImplementation: return CXCursor_ObjCImplementationDecl;
-    case Decl::ObjCInterface:      return CXCursor_ObjCInterfaceDecl;
+
+    case Decl::ObjCInterface:
+      if (cast<ObjCInterfaceDecl>(D)->isThisDeclarationADefinition())
+        return CXCursor_ObjCInterfaceDecl;
+      
+      // Forward declarations are not directly exposed.
+      return CXCursor_UnexposedDecl;
+
     case Decl::ObjCIvar:           return CXCursor_ObjCIvarDecl; 
     case Decl::ObjCMethod:
       return cast<ObjCMethodDecl>(D)->isInstanceMethod()
@@ -4578,7 +4584,7 @@ static void AddObjCMethods(ObjCContainerDecl *Container,
   }
   
   ObjCInterfaceDecl *IFace = dyn_cast<ObjCInterfaceDecl>(Container);
-  if (!IFace)
+  if (!IFace || !IFace->hasDefinition())
     return;
   
   // Add methods in protocols.
@@ -5507,18 +5513,9 @@ static void AddInterfaceResults(DeclContext *Ctx, DeclContext *CurContext,
        D != DEnd; ++D) {
     // Record any interfaces we find.
     if (ObjCInterfaceDecl *Class = dyn_cast<ObjCInterfaceDecl>(*D))
-      if ((!OnlyForwardDeclarations || Class->isForwardDecl()) &&
+      if ((!OnlyForwardDeclarations || !Class->hasDefinition()) &&
           (!OnlyUnimplemented || !Class->getImplementation()))
         Results.AddResult(Result(Class, 0), CurContext, 0, false);
-
-    // Record any forward-declared interfaces we find.
-    if (ObjCClassDecl *Forward = dyn_cast<ObjCClassDecl>(*D)) {
-      ObjCInterfaceDecl *IDecl = Forward->getForwardInterfaceDecl();
-      if ((!OnlyForwardDeclarations || IDecl->isForwardDecl()) &&
-          (!OnlyUnimplemented || !IDecl->getImplementation()))
-        Results.AddResult(Result(IDecl, 0), CurContext,
-                          0, false);
-    }
   }
 }
 
@@ -5803,6 +5800,9 @@ static void FindImplementableMethods(ASTContext &Context,
                                      bool InOriginalClass = true) {
   if (ObjCInterfaceDecl *IFace = dyn_cast<ObjCInterfaceDecl>(Container)) {
     // Recurse into protocols.
+    if (!IFace->hasDefinition())
+      return;
+    
     const ObjCList<ObjCProtocolDecl> &Protocols
       = IFace->getReferencedProtocols();
     for (ObjCList<ObjCProtocolDecl>::iterator I = Protocols.begin(),

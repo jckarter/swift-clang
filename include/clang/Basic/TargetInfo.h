@@ -64,6 +64,7 @@ class TargetInfo : public llvm::RefCountedBase<TargetInfo> {
 protected:
   // Target values set by the ctor of the actual target implementation.  Default
   // values are specified by the TargetInfo constructor.
+  bool BigEndian;
   bool TLSSupported;
   bool NoAsmVariants;  // True if {|} are normal characters.
   unsigned char PointerWidth, PointerAlign;
@@ -76,6 +77,7 @@ protected:
   unsigned char LargeArrayMinWidth, LargeArrayAlign;
   unsigned char LongWidth, LongAlign;
   unsigned char LongLongWidth, LongLongAlign;
+  unsigned char SuitableAlign;
   unsigned char MaxAtomicPromoteWidth, MaxAtomicInlineWidth;
   const char *DescriptionString;
   const char *UserLabelPrefix;
@@ -212,6 +214,10 @@ public:
   unsigned getLongLongWidth() const { return LongLongWidth; }
   unsigned getLongLongAlign() const { return LongLongAlign; }
 
+  /// getSuitableAlign - Return the alignment that is suitable for storing any
+  /// object with a fundamental alignment requirement.
+  unsigned getSuitableAlign() const { return SuitableAlign; }
+
   /// getWCharWidth/Align - Return the size of 'wchar_t' for this target, in
   /// bits.
   unsigned getWCharWidth() const { return getTypeWidth(WCharType); }
@@ -249,6 +255,9 @@ public:
   const llvm::fltSemantics &getLongDoubleFormat() const {
     return *LongDoubleFormat;
   }
+
+  /// getFloatEvalMethod - Return the value for the C99 FLT_EVAL_METHOD macro.
+  virtual unsigned getFloatEvalMethod() const { return 0; }
 
   // getLargeArrayMinWidth/Align - Return the minimum array size that is
   // 'large' and its alignment.
@@ -615,6 +624,8 @@ public:
   /// \brief Retrieve the minimum desired version of the platform, to
   /// which the program should be compiled.
   VersionTuple getPlatformMinVersion() const { return PlatformMinVersion; }
+
+  bool isBigEndian() const { return BigEndian; }
 
 protected:
   virtual uint64_t getPointerWidthV(unsigned AddrSpace) const {

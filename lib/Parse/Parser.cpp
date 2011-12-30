@@ -284,9 +284,6 @@ bool Parser::SkipUntil(const tok::TokenKind *Toks, unsigned NumToks,
       ConsumeStringToken();
       break;
         
-    case tok::at:
-      return false;
-      
     case tok::semi:
       if (StopAtSemi)
         return false;
@@ -659,7 +656,8 @@ Parser::ParseExternalDeclaration(ParsedAttributesWithRange &attrs,
              diag::ext_extern_template) << SourceRange(ExternLoc, TemplateLoc);
       SourceLocation DeclEnd;
       return Actions.ConvertDeclToDeclGroup(
-                  ParseExplicitInstantiation(ExternLoc, TemplateLoc, DeclEnd));
+                  ParseExplicitInstantiation(Declarator::FileContext,
+                                             ExternLoc, TemplateLoc, DeclEnd));
     }
     // FIXME: Detect C++ linkage specifications here?
     goto dont_know;
@@ -935,7 +933,7 @@ Decl *Parser::ParseFunctionDefinition(ParsingDeclarator &D,
     if (Tok.is(tok::kw_delete)) {
       Diag(Tok, getLang().CPlusPlus0x ?
            diag::warn_cxx98_compat_deleted_function :
-           diag::warn_deleted_function_accepted_as_extension);
+           diag::ext_deleted_function);
 
       KWLoc = ConsumeToken();
       Actions.SetDeclDeleted(Res, KWLoc);
@@ -943,7 +941,7 @@ Decl *Parser::ParseFunctionDefinition(ParsingDeclarator &D,
     } else if (Tok.is(tok::kw_default)) {
       Diag(Tok, getLang().CPlusPlus0x ?
            diag::warn_cxx98_compat_defaulted_function :
-           diag::warn_defaulted_function_accepted_as_extension);
+           diag::ext_defaulted_function);
 
       KWLoc = ConsumeToken();
       Actions.SetDeclDefaulted(Res, KWLoc);

@@ -366,10 +366,10 @@ namespace clang {
       /// \brief Record code for an update to the TU's lexically contained
       /// declarations.
       TU_UPDATE_LEXICAL = 28,
-
-      /// \brief Record code for an update to first decls pointing to the
-      /// latest redeclarations.
-      REDECLS_UPDATE_LATEST = 29,
+      
+      /// \brief Record code for the array describing the first/last local
+      /// redeclarations of each entity.
+      LOCAL_REDECLARATIONS = 29,
 
       /// \brief Record code for declarations that Sema keeps references of.
       SEMA_DECL_REFS = 30,
@@ -445,14 +445,17 @@ namespace clang {
 
       /// \brief Record code for ObjC categories in a module that are chained to
       /// an interface.
-      OBJC_CHAINED_CATEGORIES,
+      OBJC_CHAINED_CATEGORIES = 49,
 
       /// \brief Record code for a file sorted array of DeclIDs in a module.
-      FILE_SORTED_DECLS,
+      FILE_SORTED_DECLS = 50,
       
       /// \brief Record code for an array of all of the (sub)modules that were
       /// imported by the AST file.
-      IMPORTED_MODULES
+      IMPORTED_MODULES = 51,
+      
+      /// \brief Record code for the set of merged declarations in an AST file.
+      MERGED_DECLARATIONS = 52
     };
 
     /// \brief Record types used within a source manager block.
@@ -811,8 +814,6 @@ namespace clang {
       DECL_OBJC_IVAR,
       /// \brief A ObjCAtDefsFieldDecl record.
       DECL_OBJC_AT_DEFS_FIELD,
-      /// \brief A ObjCClassDecl record.
-      DECL_OBJC_CLASS,
       /// \brief A ObjCForwardProtocolDecl record.
       DECL_OBJC_FORWARD_PROTOCOL,
       /// \brief A ObjCCategoryDecl record.
@@ -1198,6 +1199,33 @@ namespace clang {
       CTOR_INITIALIZER_DELEGATING,
       CTOR_INITIALIZER_MEMBER,
       CTOR_INITIALIZER_INDIRECT_MEMBER
+    };
+
+    /// \brief Describes the redeclarations of a declaration.
+    struct LocalRedeclarationsInfo {
+      DeclID FirstID;      // The ID of the first declaration
+      DeclID FirstLocalID; // The ID of the first local declaration
+      DeclID LastLocalID;  // The ID of the last local declaration
+      
+      friend bool operator<(const LocalRedeclarationsInfo &X,
+                            const LocalRedeclarationsInfo &Y) {
+        return X.FirstID < Y.FirstID;
+      }
+      
+      friend bool operator>(const LocalRedeclarationsInfo &X,
+                            const LocalRedeclarationsInfo &Y) {
+        return X.FirstID > Y.FirstID;
+      }
+      
+      friend bool operator<=(const LocalRedeclarationsInfo &X,
+                             const LocalRedeclarationsInfo &Y) {
+        return X.FirstID <= Y.FirstID;
+      }
+      
+      friend bool operator>=(const LocalRedeclarationsInfo &X,
+                             const LocalRedeclarationsInfo &Y) {
+        return X.FirstID >= Y.FirstID;
+      }
     };
 
     /// @}

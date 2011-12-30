@@ -291,6 +291,8 @@ def fmacro_backtrace_limit : Separate<"-fmacro-backtrace-limit">, MetaVarName<"<
   HelpText<"Set the maximum number of entries to print in a macro expansion backtrace (0 = no limit).">;
 def ftemplate_backtrace_limit : Separate<"-ftemplate-backtrace-limit">, MetaVarName<"<N>">,
   HelpText<"Set the maximum number of entries to print in a template instantiation backtrace (0 = no limit).">;
+def fconstexpr_backtrace_limit : Separate<"-fconstexpr-backtrace-limit">, MetaVarName<"<N>">,
+  HelpText<"Set the maximum number of entries to print in a constexpr evaluation backtrace (0 = no limit).">;
 def fmessage_length : Separate<"-fmessage-length">, MetaVarName<"<N>">,
   HelpText<"Format message diagnostics so that they fit within N columns or fewer, when possible.">;
 def fcolor_diagnostics : Flag<"-fcolor-diagnostics">,
@@ -395,9 +397,6 @@ def emit_llvm : Flag<"-emit-llvm">,
   HelpText<"Build ASTs then convert to LLVM, emit .ll file">;
 def emit_llvm_bc : Flag<"-emit-llvm-bc">,
   HelpText<"Build ASTs then convert to LLVM, emit .bc file">;
-def emit_llvm_bc_verify : Flag<"-emit-llvm-bc-verify">,
-  HelpText<"Build ASTs then convert to LLVM, emit .bc file"
-           " and finally verify bitcode serialization/deserialization">;
 def emit_llvm_only : Flag<"-emit-llvm-only">,
   HelpText<"Build ASTs and convert to LLVM, discarding output">;
 def emit_codegen_only : Flag<"-emit-codegen-only">,

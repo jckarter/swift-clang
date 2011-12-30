@@ -740,11 +740,6 @@ struct XMLDumper : public XMLDeclVisitor<XMLDumper>,
     visitDeclContext(D);
   }
 
-  // ObjCClassDecl
-  void visitObjCClassDeclChildren(ObjCClassDecl *D) {
-    visitDeclRef(D->getForwardInterfaceDecl());
-  }
-
   // ObjCInterfaceDecl
   void visitCategoryList(ObjCCategoryDecl *D) {
     if (!D) return;
@@ -755,7 +750,7 @@ struct XMLDumper : public XMLDeclVisitor<XMLDumper>,
   }
   void visitObjCInterfaceDeclAttrs(ObjCInterfaceDecl *D) {
     setPointer("typeptr", D->getTypeForDecl());
-    setFlag("forward_decl", D->isForwardDecl());
+    setFlag("forward_decl", !D->isThisDeclarationADefinition());
     setFlag("implicit_interface", D->isImplicitInterfaceDecl());
   }
   void visitObjCInterfaceDeclChildren(ObjCInterfaceDecl *D) {

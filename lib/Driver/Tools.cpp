@@ -800,9 +800,8 @@ void Clang::AddSparcTargetArgs(const ArgList &Args,
   const Driver &D = getToolChain().getDriver();
 
   if (const Arg *A = Args.getLastArg(options::OPT_march_EQ)) {
-    StringRef MArch = A->getValue(Args);
     CmdArgs.push_back("-target-cpu");
-    CmdArgs.push_back(MArch.str().c_str());
+    CmdArgs.push_back(A->getValue(Args));
   }
 
   // Select the float ABI as determined by -msoft-float, -mhard-float, and
@@ -1195,6 +1194,24 @@ static void addAsanRTLinux(const ToolChain &TC, const ArgList &Args,
   CmdArgs.push_back("-export-dynamic");
 }
 
+static bool shouldUseFramePointer(const ArgList &Args,
+                                  const llvm::Triple &Triple) {
+  if (Arg *A = Args.getLastArg(options::OPT_fno_omit_frame_pointer,
+                               options::OPT_fomit_frame_pointer))
+    return A->getOption().matches(options::OPT_fno_omit_frame_pointer);
+
+  // Don't use a frame pointer on linux x86 and x86_64 if optimizing.
+  if ((Triple.getArch() == llvm::Triple::x86_64 ||
+       Triple.getArch() == llvm::Triple::x86) &&
+      Triple.getOS() == llvm::Triple::Linux) {
+    if (Arg *A = Args.getLastArg(options::OPT_O_Group))
+      if (!A->getOption().matches(options::OPT_O0))
+        return false;
+  }
+
+  return true;
+}
+
 void Clang::ConstructJob(Compilation &C, const JobAction &JA,
                          const InputInfo &Output,
                          const InputInfoList &Inputs,
@@ -1408,8 +1425,7 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
     CmdArgs.push_back("-mrtd");
 
   // FIXME: Set --enable-unsafe-fp-math.
-  if (Args.hasFlag(options::OPT_fno_omit_frame_pointer,
-                   options::OPT_fomit_frame_pointer))
+  if (shouldUseFramePointer(Args, getToolChain().getTriple()))
     CmdArgs.push_back("-mdisable-fp-elim");
   if (!Args.hasFlag(options::OPT_fzero_initialized_in_bss,
                     options::OPT_fno_zero_initialized_in_bss))
@@ -1791,6 +1807,11 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
     CmdArgs.push_back(A->getValue(Args));
   }
 
+  if (Arg *A = Args.getLastArg(options::OPT_fconstexpr_backtrace_limit_EQ)) {
+    CmdArgs.push_back("-fconstexpr-backtrace-limit");
+    CmdArgs.push_back(A->getValue(Args));
+  }
+
   // Pass -fmessage-length=.
   CmdArgs.push_back("-fmessage-length");
   if (Arg *A = Args.getLastArg(options::OPT_fmessage_length_EQ)) {
@@ -1822,6 +1843,7 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
   Args.AddLastArg(CmdArgs, options::OPT_flimit_debug_info);
   Args.AddLastArg(CmdArgs, options::OPT_fno_limit_debug_info);
   Args.AddLastArg(CmdArgs, options::OPT_fno_operator_names);
+  Args.AddLastArg(CmdArgs, options::OPT_faltivec);
   if (getToolChain().SupportsProfiling())
     Args.AddLastArg(CmdArgs, options::OPT_pg);
 
@@ -2479,7 +2501,32 @@ void ClangAs::ConstructJob(Compilation &C, const JobAction &JA,
   // Ignore explicit -force_cpusubtype_ALL option.
   (void) Args.hasArg(options::OPT_force__cpusubtype__ALL);
 
-  // FIXME: Add -g support, once we have it.
+  // Same as Clang::ConstructJob() we special case debug options to only pass
+  // -g to clang. I guess if it is wrong there then it is wrong here too :) .
+  Args.ClaimAllArgs(options::OPT_g_Group);
+  if (Arg *A = Args.getLastArg(options::OPT_g_Group))
+    if (!A->getOption().matches(options::OPT_g0)) {
+      CmdArgs.push_back("-g");
+    }
+
+  // Optionally embed the -cc1as level arguments into the debug info, for build
+  // analysis.
+  if (getToolChain().UseDwarfDebugFlags()) {
+    ArgStringList OriginalArgs;
+    for (ArgList::const_iterator it = Args.begin(),
+           ie = Args.end(); it != ie; ++it)
+      (*it)->render(Args, OriginalArgs);
+
+    llvm::SmallString<256> Flags;
+    const char *Exec = getToolChain().getDriver().getClangProgramPath();
+    Flags += Exec;
+    for (unsigned i = 0, e = OriginalArgs.size(); i != e; ++i) {
+      Flags += " ";
+      Flags += OriginalArgs[i];
+    }
+    CmdArgs.push_back("-dwarf-debug-flags");
+    CmdArgs.push_back(Args.MakeArgString(Flags.str()));
+  }
 
   // FIXME: Add -static support, once we have it.
 
@@ -2842,6 +2889,8 @@ const char *darwin::CC1::getCC1Name(types::ID Type) const {
     return "cc1objplus";
   }
 }
+
+void darwin::CC1::anchor() {}
 
 const char *darwin::CC1::getBaseInputName(const ArgList &Args,
                                           const InputInfoList &Inputs) {
@@ -3486,6 +3535,8 @@ void darwin::Assemble::ConstructJob(Compilation &C, const JobAction &JA,
     Args.MakeArgString(getToolChain().GetProgramPath("as"));
   C.addCommand(new Command(JA, *this, Exec, CmdArgs));
 }
+
+void darwin::DarwinTool::anchor() {}
 
 void darwin::DarwinTool::AddDarwinArch(const ArgList &Args,
                                        ArgStringList &CmdArgs) const {
@@ -4149,8 +4200,12 @@ void openbsd::Link::ConstructJob(Compilation &C, const JobAction &JA,
   if (!Args.hasArg(options::OPT_nostdlib) &&
       !Args.hasArg(options::OPT_nostartfiles)) {
     if (!Args.hasArg(options::OPT_shared)) {
-      CmdArgs.push_back(Args.MakeArgString(
-                              getToolChain().GetFilePath("crt0.o")));
+      if (Args.hasArg(options::OPT_pg))  
+        CmdArgs.push_back(Args.MakeArgString(
+                                getToolChain().GetFilePath("gcrt0.o")));
+      else
+        CmdArgs.push_back(Args.MakeArgString(
+                                getToolChain().GetFilePath("crt0.o")));
       CmdArgs.push_back(Args.MakeArgString(
                               getToolChain().GetFilePath("crtbegin.o")));
     } else {
@@ -4175,7 +4230,10 @@ void openbsd::Link::ConstructJob(Compilation &C, const JobAction &JA,
       !Args.hasArg(options::OPT_nodefaultlibs)) {
     if (D.CCCIsCXX) {
       getToolChain().AddCXXStdlibLibArgs(Args, CmdArgs);
-      CmdArgs.push_back("-lm");
+      if (Args.hasArg(options::OPT_pg)) 
+        CmdArgs.push_back("-lm_p");
+      else
+        CmdArgs.push_back("-lm");
     }
 
     // FIXME: For some reason GCC passes -lgcc before adding
@@ -4184,8 +4242,12 @@ void openbsd::Link::ConstructJob(Compilation &C, const JobAction &JA,
 
     if (Args.hasArg(options::OPT_pthread))
       CmdArgs.push_back("-lpthread");
-    if (!Args.hasArg(options::OPT_shared))
-      CmdArgs.push_back("-lc");
+    if (!Args.hasArg(options::OPT_shared)) {
+      if (Args.hasArg(options::OPT_pg)) 
+         CmdArgs.push_back("-lc_p");
+      else
+         CmdArgs.push_back("-lc");
+    }
     CmdArgs.push_back("-lgcc");
   }
 

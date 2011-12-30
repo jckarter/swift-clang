@@ -870,7 +870,8 @@ public:
       // Note that due to the nature of compound literals, this is guaranteed
       // to be the only use of the variable, so we just generate it here.
       CompoundLiteralExpr *CLE = cast<CompoundLiteralExpr>(E);
-      llvm::Constant* C = Visit(CLE->getInitializer());
+      llvm::Constant* C = CGM.EmitConstantExpr(CLE->getInitializer(),
+                                               CLE->getType(), CGF);
       // FIXME: "Leaked" on failure.
       if (C)
         C = new llvm::GlobalVariable(CGM.getModule(), C->getType(),
@@ -932,6 +933,15 @@ public:
         FunctionName = "global";
 
       return CGM.GetAddrOfGlobalBlock(cast<BlockExpr>(E), FunctionName.c_str());
+    }
+    case Expr::CXXTypeidExprClass: {
+      CXXTypeidExpr *Typeid = cast<CXXTypeidExpr>(E);
+      QualType T;
+      if (Typeid->isTypeOperand())
+        T = Typeid->getTypeOperand();
+      else
+        T = Typeid->getExprOperand()->getType();
+      return CGM.GetAddrOfRTTIDescriptor(T);
     }
     }
 

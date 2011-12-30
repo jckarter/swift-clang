@@ -247,11 +247,12 @@ Parser::ParseAssignmentExprWithObjCMessageExprStart(SourceLocation LBracLoc,
 
 
 ExprResult Parser::ParseConstantExpression() {
-  // C++ [basic.def.odr]p2:
+  // C++03 [basic.def.odr]p2:
   //   An expression is potentially evaluated unless it appears where an
   //   integral constant expression is required (see 5.19) [...].
+  // C++98 and C++11 have no such rule, but this is only a defect in C++98.
   EnterExpressionEvaluationContext Unevaluated(Actions,
-                                               Sema::Unevaluated);
+                                               Sema::ConstantEvaluated);
 
   ExprResult LHS(ParseCastExpression(false));
   return ParseRHSOfBinaryExpression(LHS, prec::Conditional);
@@ -465,7 +466,7 @@ ExprResult Parser::ParseCastExpression(bool isUnaryExpression,
 /// [C++]   boolean-literal  [C++ 2.13.5]
 /// [C++0x] 'nullptr'        [C++0x 2.14.7]
 ///         '(' expression ')'
-/// [C1X]   generic-selection
+/// [C11]   generic-selection
 ///         '__func__'        [C99 6.4.2.2]
 /// [GNU]   '__FUNCTION__'
 /// [GNU]   '__PRETTY_FUNCTION__'
@@ -681,7 +682,8 @@ ExprResult Parser::ParseCastExpression(bool isUnaryExpression,
       if (Next.is(tok::coloncolon) ||
           (!ColonIsSacred && Next.is(tok::colon)) ||
           Next.is(tok::less) ||
-          Next.is(tok::l_paren)) {
+          Next.is(tok::l_paren) ||
+          Next.is(tok::l_brace)) {
         // If TryAnnotateTypeOrScopeToken annotates the token, tail recurse.
         if (TryAnnotateTypeOrScopeToken())
           return ExprError();
@@ -796,7 +798,7 @@ ExprResult Parser::ParseCastExpression(bool isUnaryExpression,
   case tok::utf32_string_literal:
     Res = ParseStringLiteralExpression();
     break;
-  case tok::kw__Generic:   // primary-expression: generic-selection [C1X 6.5.1]
+  case tok::kw__Generic:   // primary-expression: generic-selection [C11 6.5.1]
     Res = ParseGenericSelectionExpression();
     break;
   case tok::kw___builtin_va_arg:
@@ -1045,7 +1047,7 @@ ExprResult Parser::ParseCastExpression(bool isUnaryExpression,
 
     if (T.expectAndConsume(diag::err_expected_lparen_after, "noexcept"))
       return ExprError();
-    // C++ [expr.unary.noexcept]p1:
+    // C++11 [expr.unary.noexcept]p1:
     //   The noexcept operator determines whether the evaluation of its operand,
     //   which is an unevaluated operand, can throw an exception.
     EnterExpressionEvaluationContext Unevaluated(Actions, Sema::Unevaluated);
@@ -1443,8 +1445,8 @@ Parser::ParseExprAfterUnaryExprOrTypeTrait(const Token &OpTok,
     //   [...] The operand is either an expression, which is an unevaluated
     //   operand (Clause 5) [...]
     //
-    // The GNU typeof and alignof extensions also behave as unevaluated
-    // operands.
+    // The GNU typeof and GNU/C++11 alignof extensions also behave as
+    // unevaluated operands.
     EnterExpressionEvaluationContext Unevaluated(Actions,
                                                  Sema::Unevaluated);
     Operand = ParseCastExpression(true/*isUnaryExpression*/);
@@ -1460,8 +1462,8 @@ Parser::ParseExprAfterUnaryExprOrTypeTrait(const Token &OpTok,
     //   [...] The operand is either an expression, which is an unevaluated
     //   operand (Clause 5) [...]
     //
-    // The GNU typeof and alignof extensions also behave as unevaluated
-    // operands.
+    // The GNU typeof and GNU/C++11 alignof extensions also behave as
+    // unevaluated operands.
     EnterExpressionEvaluationContext Unevaluated(Actions,
                                                  Sema::Unevaluated);
     Operand = ParseParenExpression(ExprType, true/*stopIfCastExpr*/, 
@@ -1821,9 +1823,24 @@ Parser::ParseParenExpression(ParenParseOption &ExprType, bool stopIfCastExpr,
     return ExprError();
   }
 
+  // Diagnose use of bridge casts in non-arc mode.
+  bool BridgeCast = (getLang().ObjC2 &&
+                     (Tok.is(tok::kw___bridge) || 
+                      Tok.is(tok::kw___bridge_transfer) ||
+                      Tok.is(tok::kw___bridge_retained) ||
+                      Tok.is(tok::kw___bridge_retain)));
+  if (BridgeCast && !getLang().ObjCAutoRefCount) {
+    StringRef BridgeCastName = Tok.getName();
+    SourceLocation BridgeKeywordLoc = ConsumeToken();
+    if (!PP.getSourceManager().isInSystemHeader(BridgeKeywordLoc))
+      Diag(BridgeKeywordLoc, diag::err_arc_bridge_cast_nonarc)
+        << BridgeCastName
+        << FixItHint::CreateReplacement(BridgeKeywordLoc, "");
+    BridgeCast = false;
+  }
+  
   // None of these cases should fall through with an invalid Result
   // unless they've already reported an error.
-  
   if (ExprType >= CompoundStmt && Tok.is(tok::l_brace)) {
     Diag(Tok, diag::ext_gnu_statement_expr);
     ParsedAttributes attrs(AttrFactory);
@@ -1833,11 +1850,7 @@ Parser::ParseParenExpression(ParenParseOption &ExprType, bool stopIfCastExpr,
     // If the substmt parsed correctly, build the AST node.
     if (!Stmt.isInvalid())
       Result = Actions.ActOnStmtExpr(OpenLoc, Stmt.take(), Tok.getLocation());
-  } else if (ExprType >= CompoundLiteral && 
-             (Tok.is(tok::kw___bridge) || 
-              Tok.is(tok::kw___bridge_transfer) ||
-              Tok.is(tok::kw___bridge_retained) ||
-              Tok.is(tok::kw___bridge_retain))) {
+  } else if (ExprType >= CompoundLiteral && BridgeCast) {
     tok::TokenKind tokenKind = Tok.getKind();
     SourceLocation BridgeKeywordLoc = ConsumeToken();
 
@@ -2041,8 +2054,8 @@ ExprResult Parser::ParseStringLiteralExpression() {
   return Actions.ActOnStringLiteral(&StringToks[0], StringToks.size());
 }
 
-/// ParseGenericSelectionExpression - Parse a C1X generic-selection
-/// [C1X 6.5.1.1].
+/// ParseGenericSelectionExpression - Parse a C11 generic-selection
+/// [C11 6.5.1.1].
 ///
 ///    generic-selection:
 ///           _Generic ( assignment-expression , generic-assoc-list )
@@ -2056,8 +2069,8 @@ ExprResult Parser::ParseGenericSelectionExpression() {
   assert(Tok.is(tok::kw__Generic) && "_Generic keyword expected");
   SourceLocation KeyLoc = ConsumeToken();
 
-  if (!getLang().C1X)
-    Diag(KeyLoc, diag::ext_c1x_generic_selection);
+  if (!getLang().C11)
+    Diag(KeyLoc, diag::ext_c11_generic_selection);
 
   BalancedDelimiterTracker T(*this, tok::l_paren);
   if (T.expectAndConsume(diag::err_expected_lparen))
@@ -2065,7 +2078,7 @@ ExprResult Parser::ParseGenericSelectionExpression() {
 
   ExprResult ControllingExpr;
   {
-    // C1X 6.5.1.1p3 "The controlling expression of a generic selection is
+    // C11 6.5.1.1p3 "The controlling expression of a generic selection is
     // not evaluated."
     EnterExpressionEvaluationContext Unevaluated(Actions, Sema::Unevaluated);
     ControllingExpr = ParseAssignmentExpression();
@@ -2086,7 +2099,7 @@ ExprResult Parser::ParseGenericSelectionExpression() {
   while (1) {
     ParsedType Ty;
     if (Tok.is(tok::kw_default)) {
-      // C1X 6.5.1.1p2 "A generic selection shall have no more than one default
+      // C11 6.5.1.1p2 "A generic selection shall have no more than one default
       // generic association."
       if (!DefaultLoc.isInvalid()) {
         Diag(Tok, diag::err_duplicate_default_assoc);
