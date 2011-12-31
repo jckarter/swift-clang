@@ -1200,6 +1200,7 @@ class X86TargetInfo : public TargetInfo {
   bool HasBMI;
   bool HasBMI2;
   bool HasPOPCNT;
+  bool HasFMA4;
 
   /// \brief Enumeration of all of the X86 CPUs supported by Clang.
   ///
@@ -1337,7 +1338,8 @@ public:
   X86TargetInfo(const std::string& triple)
     : TargetInfo(triple), SSELevel(NoSSE), MMX3DNowLevel(NoMMX3DNow),
       HasAES(false), HasAVX(false), HasAVX2(false), HasLZCNT(false),
-      HasBMI(false), HasBMI2(false), HasPOPCNT(false), CPU(CK_Generic) {
+      HasBMI(false), HasBMI2(false), HasPOPCNT(false), HasFMA4(false),
+      CPU(CK_Generic) {
     BigEndian = false;
     LongDoubleFormat = &llvm::APFloat::x87DoubleExtended;
   }
@@ -1522,6 +1524,7 @@ void X86TargetInfo::getDefaultFeatures(llvm::StringMap<bool> &Features) const {
   Features["bmi"] = false;
   Features["bmi2"] = false;
   Features["popcnt"] = false;
+  Features["fma4"] = false;
 
   // FIXME: This *really* should not be here.
 
@@ -1691,8 +1694,13 @@ bool X86TargetInfo::setFeatureEnabled(llvm::StringMap<bool> &Features,
       Features["mmx"] = Features["sse"] = Features["sse2"] = Features["sse3"] =
         Features["ssse3"] = Features["sse41"] = Features["sse42"] =
         Features["popcnt"] = Features["avx"] = Features["avx2"] = true;
+    else if (Name == "fma4")
+        Features["mmx"] = Features["sse"] = Features["sse2"] = Features["sse3"] =
+        Features["ssse3"] = Features["sse41"] = Features["sse42"] =
+        Features["popcnt"] = Features["avx"] = Features["fma4"] = true;
     else if (Name == "sse4a")
-      Features["mmx"] = Features["sse4a"] = true;
+      Features["mmx"] = Features["sse"] = Features["sse2"] = Features["sse3"] =
+        Features["sse4a"] = true;
     else if (Name == "lzcnt")
       Features["lzcnt"] = true;
     else if (Name == "bmi")
@@ -1706,13 +1714,14 @@ bool X86TargetInfo::setFeatureEnabled(llvm::StringMap<bool> &Features,
       Features["mmx"] = Features["3dnow"] = Features["3dnowa"] = false;
     else if (Name == "sse")
       Features["sse"] = Features["sse2"] = Features["sse3"] =
-        Features["ssse3"] = Features["sse41"] = Features["sse42"] = false;
+        Features["ssse3"] = Features["sse41"] = Features["sse42"] =
+        Features["sse4a"] = false;
     else if (Name == "sse2")
       Features["sse2"] = Features["sse3"] = Features["ssse3"] =
-        Features["sse41"] = Features["sse42"] = false;
+        Features["sse41"] = Features["sse42"] = Features["sse4a"] = false;
     else if (Name == "sse3")
       Features["sse3"] = Features["ssse3"] = Features["sse41"] =
-        Features["sse42"] = false;
+        Features["sse42"] = Features["sse4a"] = false;
     else if (Name == "ssse3")
       Features["ssse3"] = Features["sse41"] = Features["sse42"] = false;
     else if (Name == "sse4" || Name == "sse4.1")
@@ -1726,7 +1735,7 @@ bool X86TargetInfo::setFeatureEnabled(llvm::StringMap<bool> &Features,
     else if (Name == "aes")
       Features["aes"] = false;
     else if (Name == "avx")
-      Features["avx"] = Features["avx2"] = false;
+      Features["avx"] = Features["avx2"] = Features["fma4"] = false;
     else if (Name == "avx2")
       Features["avx2"] = false;
     else if (Name == "sse4a")
@@ -1739,6 +1748,8 @@ bool X86TargetInfo::setFeatureEnabled(llvm::StringMap<bool> &Features,
       Features["bmi2"] = false;
     else if (Name == "popcnt")
       Features["popcnt"] = false;
+    else if (Name == "fma4")
+      Features["fma4"] = false;
   }
 
   return true;
@@ -1778,10 +1789,14 @@ void X86TargetInfo::HandleTargetFeatures(std::vector<std::string> &Features) {
       continue;
     }
 
+    if (Features[i].substr(1) == "fma4") {
+      HasFMA4 = true;
+      continue;
+    }
+
     // FIXME: Not sure yet how to treat AVX in regard to SSE levels.
     // For now let it be enabled together with other SSE levels.
     if (Features[i].substr(1) == "avx2") {
-      HasAVX = true;
       HasAVX2 = true;
       continue;
     }
@@ -2011,6 +2026,9 @@ void X86TargetInfo::getTargetDefines(const LangOptions &Opts,
 
   if (HasPOPCNT)
     Builder.defineMacro("__POPCNT__");
+
+  if (HasFMA4)
+    Builder.defineMacro("__FMA4__");
 
   // Each case falls through to the previous one here.
   switch (SSELevel) {
