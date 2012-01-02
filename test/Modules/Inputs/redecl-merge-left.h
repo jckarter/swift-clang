@@ -10,6 +10,11 @@ __import_module__ redecl_merge_top;
 
 @class A;
 
+@protocol P1;
+@protocol P2
+- (void)protoMethod2;
+@end
+
 // Test declarations in different modules with no common initial
 // declaration.
 @class C;
@@ -29,6 +34,10 @@ void accept_a_C3(C3*);
 int *explicit_func(void);
 
 struct explicit_struct;
+
+@protocol P3, P4;
+
+@protocol P3;
 
 #ifdef __cplusplus
 template<typename T> class Vector;

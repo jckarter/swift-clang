@@ -6,6 +6,7 @@
 @class C3;
 __import_module__ redecl_merge_left;
 
+@protocol P4;
 @class C3;
 @class C3;
 __import_module__ redecl_merge_right;
@@ -25,6 +26,11 @@ B *f1() {
 }
 
 @class B;
+
+void testProtoMerge(id<P1> p1, id<P2> p2) {
+  [p1 protoMethod1];
+  [p2 protoMethod2];
+}
 
 // Test redeclarations of entities in explicit submodules, to make
 // sure we're maintaining the declaration chains even when normal name
@@ -77,6 +83,13 @@ void test_C4b() {
 void g(A *a) {
   [a init];
 }
+
+@protocol P3
+- (void)p3_method;
+@end
+
+id<P4> p4;
+id<P3> p3;
 
 #ifdef __cplusplus
 void testVector() {
