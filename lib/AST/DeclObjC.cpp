@@ -967,12 +967,26 @@ ObjCAtDefsFieldDecl
 
 void ObjCProtocolDecl::anchor() { }
 
+ObjCProtocolDecl::ObjCProtocolDecl(DeclContext *DC, IdentifierInfo *Id,
+                                   SourceLocation nameLoc, 
+                                   SourceLocation atStartLoc,
+                                   ObjCProtocolDecl *PrevDecl)
+  : ObjCContainerDecl(ObjCProtocol, DC, Id, nameLoc, atStartLoc), Data()
+{
+  setPreviousDeclaration(PrevDecl);
+  if (PrevDecl)
+    Data = PrevDecl->Data;
+}
+
 ObjCProtocolDecl *ObjCProtocolDecl::Create(ASTContext &C, DeclContext *DC,
                                            IdentifierInfo *Id,
                                            SourceLocation nameLoc,
                                            SourceLocation atStartLoc,
-                                           bool isForwardDecl) {
-  return new (C) ObjCProtocolDecl(DC, Id, nameLoc, atStartLoc, isForwardDecl);
+                                           ObjCProtocolDecl *PrevDecl) {
+  ObjCProtocolDecl *Result 
+    = new (C) ObjCProtocolDecl(DC, Id, nameLoc, atStartLoc, PrevDecl);
+  
+  return Result;
 }
 
 ObjCProtocolDecl *ObjCProtocolDecl::lookupProtocolNamed(IdentifierInfo *Name) {
@@ -1003,35 +1017,22 @@ ObjCMethodDecl *ObjCProtocolDecl::lookupMethod(Selector Sel,
   return NULL;
 }
 
-void ObjCProtocolDecl::completedForwardDecl() {
-  assert(isForwardDecl() && "Only valid to call for forward refs");
-  isForwardProtoDecl = false;
+void ObjCProtocolDecl::allocateDefinitionData() {
+  assert(!Data && "Protocol already has a definition!");
+  Data = new (getASTContext()) DefinitionData;
+  Data->Definition = this;
+}
+
+void ObjCProtocolDecl::startDefinition() {
+  allocateDefinitionData();
+  
+  // Update all of the declarations with a pointer to the definition.
+  for (redecl_iterator RD = redecls_begin(), RDEnd = redecls_end();
+       RD != RDEnd; ++RD)
+    RD->Data = this->Data;
+  
   if (ASTMutationListener *L = getASTContext().getASTMutationListener())
     L->CompletedObjCForwardRef(this);
-}
-
-//===----------------------------------------------------------------------===//
-// ObjCForwardProtocolDecl
-//===----------------------------------------------------------------------===//
-
-void ObjCForwardProtocolDecl::anchor() { }
-
-ObjCForwardProtocolDecl::
-ObjCForwardProtocolDecl(DeclContext *DC, SourceLocation L,
-                        ObjCProtocolDecl *const *Elts, unsigned nElts,
-                        const SourceLocation *Locs, ASTContext &C)
-: Decl(ObjCForwardProtocol, DC, L) {
-  ReferencedProtocols.set(Elts, nElts, Locs, C);
-}
-
-
-ObjCForwardProtocolDecl *
-ObjCForwardProtocolDecl::Create(ASTContext &C, DeclContext *DC,
-                                SourceLocation L,
-                                ObjCProtocolDecl *const *Elts,
-                                unsigned NumElts,
-                                const SourceLocation *Locs) {
-  return new (C) ObjCForwardProtocolDecl(DC, L, Elts, NumElts, Locs, C);
 }
 
 //===----------------------------------------------------------------------===//

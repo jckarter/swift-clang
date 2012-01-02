@@ -545,6 +545,10 @@ bool Sema::CheckForwardProtocolDeclarationForCircularDependency(
         Diag(PrevLoc, diag::note_previous_definition);
         res = true;
       }
+      
+      if (!PDecl->hasDefinition())
+        continue;
+      
       if (CheckForwardProtocolDeclarationForCircularDependency(PName, Ploc,
             PDecl->getLocation(), PDecl->getReferencedProtocols()))
         res = true;
@@ -565,49 +569,52 @@ Sema::ActOnStartProtocolInterface(SourceLocation AtProtoInterfaceLoc,
   bool err = false;
   // FIXME: Deal with AttrList.
   assert(ProtocolName && "Missing protocol identifier");
-  ObjCProtocolDecl *PDecl = LookupProtocol(ProtocolName, ProtocolLoc);
-  if (PDecl) {
-    // Protocol already seen. Better be a forward protocol declaration
-    if (!PDecl->isForwardDecl()) {
-      Diag(ProtocolLoc, diag::warn_duplicate_protocol_def) << ProtocolName;
-      Diag(PDecl->getLocation(), diag::note_previous_definition);
+  ObjCProtocolDecl *PrevDecl = LookupProtocol(ProtocolName, ProtocolLoc,
+                                              ForRedeclaration);
+  ObjCProtocolDecl *PDecl = 0;
+  if (ObjCProtocolDecl *Def = PrevDecl? PrevDecl->getDefinition() : 0) {
+    // If we already have a definition, complain.
+    Diag(ProtocolLoc, diag::warn_duplicate_protocol_def) << ProtocolName;
+    Diag(Def->getLocation(), diag::note_previous_definition);
 
-      // Create a new one; the other may be in a different DeclContex, (e.g.
-      // this one may be in a LinkageSpecDecl while the other is not) which
-      // will break invariants.
-      // We will not add it to scope chains to ignore it as the warning says.
-      PDecl = ObjCProtocolDecl::Create(Context, CurContext, ProtocolName,
-                                       ProtocolLoc, AtProtoInterfaceLoc,
-                                       /*isForwardDecl=*/false);
-
-    } else {
+    // Create a new protocol that is completely distinct from previous
+    // declarations, and do not make this protocol available for name lookup.
+    // That way, we'll end up completely ignoring the duplicate.
+    // FIXME: Can we turn this into an error?
+    PDecl = ObjCProtocolDecl::Create(Context, CurContext, ProtocolName,
+                                     ProtocolLoc, AtProtoInterfaceLoc,
+                                     /*PrevDecl=*/0);
+    PDecl->startDefinition();
+  } else {
+    if (PrevDecl) {
+      // Check for circular dependencies among protocol declarations. This can
+      // only happen if this protocol was forward-declared.
       ObjCList<ObjCProtocolDecl> PList;
       PList.set((ObjCProtocolDecl *const*)ProtoRefs, NumProtoRefs, Context);
       err = CheckForwardProtocolDeclarationForCircularDependency(
-              ProtocolName, ProtocolLoc, PDecl->getLocation(), PList);
-  
-      // Make sure the cached decl gets a valid start location.
-      PDecl->setAtStartLoc(AtProtoInterfaceLoc);
-      PDecl->setLocation(ProtocolLoc);
-      // Since this ObjCProtocolDecl was created by a forward declaration,
-      // we now add it to the DeclContext since it wasn't added before
-      PDecl->setLexicalDeclContext(CurContext);
-      CurContext->addDecl(PDecl);
-      PDecl->completedForwardDecl();
+              ProtocolName, ProtocolLoc, PrevDecl->getLocation(), PList);
     }
-  } else {
+
+    // Create the new declaration.
     PDecl = ObjCProtocolDecl::Create(Context, CurContext, ProtocolName,
                                      ProtocolLoc, AtProtoInterfaceLoc,
-                                     /*isForwardDecl=*/false);
+                                     /*PrevDecl=*/PrevDecl);
+    
     PushOnScopeChains(PDecl, TUScope);
+    PDecl->startDefinition();
   }
+  
   if (AttrList)
     ProcessDeclAttributeList(TUScope, PDecl, AttrList);
+  
+  // Merge attributes from previous declarations.
+  if (PrevDecl)
+    mergeDeclAttributes(PDecl, PrevDecl);
+
   if (!err && NumProtoRefs ) {
     /// Check then save referenced protocols.
     PDecl->setProtocolList((ObjCProtocolDecl**)ProtoRefs, NumProtoRefs,
                            ProtoLocs, Context);
-    PDecl->setLocEnd(EndProtoLoc);
   }
 
   CheckObjCDeclScope(PDecl);
@@ -647,7 +654,7 @@ Sema::FindProtocolDeclaration(bool WarnOnDeclarations,
 
     // If this is a forward declaration and we are supposed to warn in this
     // case, do it.
-    if (WarnOnDeclarations && PDecl->isForwardDecl())
+    if (WarnOnDeclarations && !PDecl->hasDefinition())
       Diag(ProtocolId[i].second, diag::warn_undef_protocolref)
         << ProtocolId[i].first;
     Protocols.push_back(PDecl);
@@ -684,43 +691,34 @@ void Sema::DiagnoseClassExtensionDupMethods(ObjCCategoryDecl *CAT,
 }
 
 /// ActOnForwardProtocolDeclaration - Handle @protocol foo;
-Decl *
+Sema::DeclGroupPtrTy
 Sema::ActOnForwardProtocolDeclaration(SourceLocation AtProtocolLoc,
                                       const IdentifierLocPair *IdentList,
                                       unsigned NumElts,
                                       AttributeList *attrList) {
-  SmallVector<ObjCProtocolDecl*, 32> Protocols;
-  SmallVector<SourceLocation, 8> ProtoLocs;
-
+  SmallVector<Decl *, 8> DeclsInGroup;
   for (unsigned i = 0; i != NumElts; ++i) {
     IdentifierInfo *Ident = IdentList[i].first;
-    ObjCProtocolDecl *PDecl = LookupProtocol(Ident, IdentList[i].second);
-    bool isNew = false;
-    if (PDecl == 0) { // Not already seen?
-      PDecl = ObjCProtocolDecl::Create(Context, CurContext, Ident,
-                                       IdentList[i].second, AtProtocolLoc,
-                                       /*isForwardDecl=*/true);
-      PushOnScopeChains(PDecl, TUScope, false);
-      isNew = true;
-    }
-    if (attrList) {
+    ObjCProtocolDecl *PrevDecl = LookupProtocol(Ident, IdentList[i].second,
+                                                ForRedeclaration);
+    ObjCProtocolDecl *PDecl
+      = ObjCProtocolDecl::Create(Context, CurContext, Ident, 
+                                 IdentList[i].second, AtProtocolLoc,
+                                 PrevDecl);
+        
+    PushOnScopeChains(PDecl, TUScope);
+    CheckObjCDeclScope(PDecl);
+    
+    if (attrList)
       ProcessDeclAttributeList(TUScope, PDecl, attrList);
-      if (!isNew) {
-        if (ASTMutationListener *L = Context.getASTMutationListener())
-          L->UpdatedAttributeList(PDecl);
-      }
-    }
-    Protocols.push_back(PDecl);
-    ProtoLocs.push_back(IdentList[i].second);
+    
+    if (PrevDecl)
+      mergeDeclAttributes(PDecl, PrevDecl);
+
+    DeclsInGroup.push_back(PDecl);
   }
 
-  ObjCForwardProtocolDecl *PDecl =
-    ObjCForwardProtocolDecl::Create(Context, CurContext, AtProtocolLoc,
-                                    Protocols.data(), Protocols.size(),
-                                    ProtoLocs.data());
-  CurContext->addDecl(PDecl);
-  CheckObjCDeclScope(PDecl);
-  return PDecl;
+  return BuildDeclaratorGroup(DeclsInGroup.data(), DeclsInGroup.size(), false);
 }
 
 Decl *Sema::
@@ -2497,6 +2495,9 @@ private:
   }
 
   void searchFrom(ObjCProtocolDecl *protocol) {
+    if (!protocol->hasDefinition())
+      return;
+    
     // A method in a protocol declaration overrides declarations from
     // referenced ("parent") protocols.
     search(protocol->getReferencedProtocols());
