@@ -279,7 +279,6 @@ namespace clang {
     void VisitObjCIvarDecl(ObjCIvarDecl *D);
     void VisitObjCProtocolDecl(ObjCProtocolDecl *D);
     void VisitObjCAtDefsFieldDecl(ObjCAtDefsFieldDecl *D);
-    void VisitObjCForwardProtocolDecl(ObjCForwardProtocolDecl *D);
     void VisitObjCCategoryDecl(ObjCCategoryDecl *D);
     void VisitObjCImplDecl(ObjCImplDecl *D);
     void VisitObjCCategoryImplDecl(ObjCCategoryImplDecl *D);
@@ -760,40 +759,77 @@ void ASTDeclReader::VisitObjCIvarDecl(ObjCIvarDecl *IVD) {
 }
 
 void ASTDeclReader::VisitObjCProtocolDecl(ObjCProtocolDecl *PD) {
+  // Record the declaration -> global ID mapping.
+  Reader.DeclToID[PD] = ThisDeclID;
+  
+  RedeclarableResult Redecl = VisitRedeclarable(PD);
   VisitObjCContainerDecl(PD);
-  PD->InitiallyForwardDecl = Record[Idx++];
-  PD->isForwardProtoDecl = Record[Idx++];
-  PD->setLocEnd(ReadSourceLocation(Record, Idx));
-  unsigned NumProtoRefs = Record[Idx++];
-  SmallVector<ObjCProtocolDecl *, 16> ProtoRefs;
-  ProtoRefs.reserve(NumProtoRefs);
-  for (unsigned I = 0; I != NumProtoRefs; ++I)
-    ProtoRefs.push_back(ReadDeclAs<ObjCProtocolDecl>(Record, Idx));
-  SmallVector<SourceLocation, 16> ProtoLocs;
-  ProtoLocs.reserve(NumProtoRefs);
-  for (unsigned I = 0; I != NumProtoRefs; ++I)
-    ProtoLocs.push_back(ReadSourceLocation(Record, Idx));
-  PD->setProtocolList(ProtoRefs.data(), NumProtoRefs, ProtoLocs.data(),
-                      Reader.getContext());
+  
+  // Determine whether we need to merge this declaration with another @protocol
+  // with the same name.
+  // FIXME: Not needed unless the module file graph is a DAG.
+  if (FindExistingResult ExistingRes = findExisting(PD)) {
+    if (ObjCProtocolDecl *Existing = ExistingRes) {
+      ObjCProtocolDecl *ExistingCanon = Existing->getCanonicalDecl();
+      ObjCProtocolDecl *PDCanon = PD->getCanonicalDecl();
+      if (ExistingCanon != PDCanon) {
+        // Have our redeclaration link point back at the canonical declaration
+        // of the existing declaration, so that this declaration has the 
+        // appropriate canonical declaration.
+        PD->RedeclLink = ObjCProtocolDecl::PreviousDeclLink(ExistingCanon);
+        
+        // Don't introduce IDCanon into the set of pending declaration chains.
+        Redecl.suppress();
+        
+        // Introduce ExistingCanon into the set of pending declaration chains,
+        // if in fact it came from a module file.
+        if (ExistingCanon->isFromASTFile()) {
+          GlobalDeclID ExistingCanonID = Reader.DeclToID[ExistingCanon];
+          assert(ExistingCanonID && "Unrecorded canonical declaration ID?");
+          if (Reader.PendingDeclChainsKnown.insert(ExistingCanonID))
+            Reader.PendingDeclChains.push_back(ExistingCanonID);
+        }
+        
+        // If this declaration was the canonical declaration, make a note of 
+        // that. We accept the linear algorithm here because the number of 
+        // unique canonical declarations of an entity should always be tiny.
+        if (PDCanon == PD) {
+          SmallVectorImpl<DeclID> &Merged = Reader.MergedDecls[ExistingCanon];
+          if (std::find(Merged.begin(), Merged.end(), Redecl.getFirstID())
+                == Merged.end())
+            Merged.push_back(Redecl.getFirstID());
+        }
+      }
+    }
+  }
+
+  
+  ObjCProtocolDecl *Def = ReadDeclAs<ObjCProtocolDecl>(Record, Idx);
+  if (PD == Def) {
+    // Read the definition.
+    PD->allocateDefinitionData();
+    
+    unsigned NumProtoRefs = Record[Idx++];
+    SmallVector<ObjCProtocolDecl *, 16> ProtoRefs;
+    ProtoRefs.reserve(NumProtoRefs);
+    for (unsigned I = 0; I != NumProtoRefs; ++I)
+      ProtoRefs.push_back(ReadDeclAs<ObjCProtocolDecl>(Record, Idx));
+    SmallVector<SourceLocation, 16> ProtoLocs;
+    ProtoLocs.reserve(NumProtoRefs);
+    for (unsigned I = 0; I != NumProtoRefs; ++I)
+      ProtoLocs.push_back(ReadSourceLocation(Record, Idx));
+    PD->setProtocolList(ProtoRefs.data(), NumProtoRefs, ProtoLocs.data(),
+                        Reader.getContext());
+    
+    // Note that we have deserialized a definition.
+    Reader.PendingDefinitions.insert(PD);
+  } else if (Def && Def->Data) {
+    PD->Data = Def->Data;
+  }
 }
 
 void ASTDeclReader::VisitObjCAtDefsFieldDecl(ObjCAtDefsFieldDecl *FD) {
   VisitFieldDecl(FD);
-}
-
-void ASTDeclReader::VisitObjCForwardProtocolDecl(ObjCForwardProtocolDecl *FPD) {
-  VisitDecl(FPD);
-  unsigned NumProtoRefs = Record[Idx++];
-  SmallVector<ObjCProtocolDecl *, 16> ProtoRefs;
-  ProtoRefs.reserve(NumProtoRefs);
-  for (unsigned I = 0; I != NumProtoRefs; ++I)
-    ProtoRefs.push_back(ReadDeclAs<ObjCProtocolDecl>(Record, Idx));
-  SmallVector<SourceLocation, 16> ProtoLocs;
-  ProtoLocs.reserve(NumProtoRefs);
-  for (unsigned I = 0; I != NumProtoRefs; ++I)
-    ProtoLocs.push_back(ReadSourceLocation(Record, Idx));
-  FPD->setProtocolList(ProtoRefs.data(), NumProtoRefs, ProtoLocs.data(),
-                       Reader.getContext());
 }
 
 void ASTDeclReader::VisitObjCCategoryDecl(ObjCCategoryDecl *CD) {
@@ -1648,8 +1684,8 @@ static bool isSameEntity(NamedDecl *X, NamedDecl *Y) {
          Y->getDeclContext()->getRedeclContext()))
     return false;
   
-  // Objective-C classes with the same name always match.
-  if (isa<ObjCInterfaceDecl>(X))
+  // Objective-C classes and protocols with the same name always match.
+  if (isa<ObjCInterfaceDecl>(X) || isa<ObjCProtocolDecl>(X))
     return true;
   
   // FIXME: Many other cases to implement.
@@ -1700,6 +1736,8 @@ void ASTDeclReader::attachPreviousDecl(Decl *D, Decl *previous) {
     TD->RedeclLink.setPointer(cast<TypedefNameDecl>(previous));
   } else if (ObjCInterfaceDecl *ID = dyn_cast<ObjCInterfaceDecl>(D)) {
     ID->RedeclLink.setPointer(cast<ObjCInterfaceDecl>(previous));
+  } else if (ObjCProtocolDecl *PD = dyn_cast<ObjCProtocolDecl>(D)) {
+    PD->RedeclLink.setPointer(cast<ObjCProtocolDecl>(previous));
   } else {
     RedeclarableTemplateDecl *TD = cast<RedeclarableTemplateDecl>(D);
     TD->CommonOrPrev = cast<RedeclarableTemplateDecl>(previous);
@@ -1725,6 +1763,10 @@ void ASTDeclReader::attachLatestDecl(Decl *D, Decl *Latest) {
     ID->RedeclLink
       = Redeclarable<ObjCInterfaceDecl>::LatestDeclLink(
                                               cast<ObjCInterfaceDecl>(Latest));
+  } else if (ObjCProtocolDecl *PD = dyn_cast<ObjCProtocolDecl>(D)) {
+    PD->RedeclLink
+      = Redeclarable<ObjCProtocolDecl>::LatestDeclLink(
+                                                cast<ObjCProtocolDecl>(Latest));
   } else {
     RedeclarableTemplateDecl *TD = cast<RedeclarableTemplateDecl>(D);
     TD->getCommonPtr()->Latest = cast<RedeclarableTemplateDecl>(Latest);
@@ -1936,9 +1978,6 @@ Decl *ASTReader::ReadDeclRecord(DeclID ID) {
   case DECL_OBJC_AT_DEFS_FIELD:
     D = ObjCAtDefsFieldDecl::Create(Context, 0, SourceLocation(),
                                     SourceLocation(), 0, QualType(), 0);
-    break;
-  case DECL_OBJC_FORWARD_PROTOCOL:
-    D = ObjCForwardProtocolDecl::Create(Context, 0, SourceLocation());
     break;
   case DECL_OBJC_CATEGORY:
     D = ObjCCategoryDecl::Create(Context, Decl::EmptyShell());
@@ -2189,6 +2228,8 @@ static Decl *getPreviousDecl(Decl *D) {
     return TD->getPreviousDeclaration();
   if (ObjCInterfaceDecl *ID = dyn_cast<ObjCInterfaceDecl>(D))
     return ID->getPreviousDeclaration();
+  if (ObjCProtocolDecl *PD = dyn_cast<ObjCProtocolDecl>(D))
+    return PD->getPreviousDeclaration();
   
   return cast<RedeclarableTemplateDecl>(D)->getPreviousDeclaration();
 }
@@ -2205,6 +2246,8 @@ static Decl *getMostRecentDecl(Decl *D) {
     return TD->getMostRecentDeclaration();
   if (ObjCInterfaceDecl *ID = dyn_cast<ObjCInterfaceDecl>(D))
     return ID->getMostRecentDeclaration();
+  if (ObjCProtocolDecl *PD = dyn_cast<ObjCProtocolDecl>(D))
+    return PD->getMostRecentDeclaration();
   
   return cast<RedeclarableTemplateDecl>(D)->getMostRecentDeclaration();
 }
@@ -2438,6 +2481,15 @@ void ASTDeclReader::UpdateDecl(Decl *D, ModuleFile &ModuleFile,
       ObjCInterfaceDecl *ID = cast<ObjCInterfaceDecl>(D);
       ObjCInterfaceDecl *Def
         = Reader.ReadDeclAs<ObjCInterfaceDecl>(ModuleFile, Record, Idx);
+      if (Def->Data)
+        ID->Data = Def->Data;
+      break;
+    }
+
+    case UPD_OBJC_SET_PROTOCOL_DEFINITIONDATA: {
+      ObjCProtocolDecl *ID = cast<ObjCProtocolDecl>(D);
+      ObjCProtocolDecl *Def
+        = Reader.ReadDeclAs<ObjCProtocolDecl>(ModuleFile, Record, Idx);
       if (Def->Data)
         ID->Data = Def->Data;
       break;
