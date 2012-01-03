@@ -2783,9 +2783,6 @@ CXCursorKind clang::getCursorKindForDecl(Decl *D) {
     case Decl::ObjCCategoryImpl:   return CXCursor_ObjCCategoryImplDecl;
       // FIXME
       return CXCursor_UnexposedDecl;
-    case Decl::ObjCForwardProtocol:
-      // FIXME
-      return CXCursor_UnexposedDecl;      
     case Decl::ObjCImplementation: return CXCursor_ObjCImplementationDecl;
 
     case Decl::ObjCInterface:
@@ -2804,7 +2801,12 @@ CXCursorKind clang::getCursorKindForDecl(Decl *D) {
     case Decl::CXXDestructor:      return CXCursor_Destructor;
     case Decl::CXXConversion:      return CXCursor_ConversionFunction;
     case Decl::ObjCProperty:       return CXCursor_ObjCPropertyDecl;
-    case Decl::ObjCProtocol:       return CXCursor_ObjCProtocolDecl;
+    case Decl::ObjCProtocol:       
+      if (cast<ObjCProtocolDecl>(D)->isThisDeclarationADefinition())
+        return CXCursor_ObjCProtocolDecl;
+      
+      return CXCursor_UnexposedDecl;
+      
     case Decl::ParmVar:            return CXCursor_ParmDecl;
     case Decl::Typedef:            return CXCursor_TypedefDecl;
     case Decl::TypeAlias:          return CXCursor_TypeAliasDecl;
@@ -4574,13 +4576,16 @@ static void AddObjCMethods(ObjCContainerDecl *Container,
   
   // Visit the protocols of protocols.
   if (ObjCProtocolDecl *Protocol = dyn_cast<ObjCProtocolDecl>(Container)) {
-    const ObjCList<ObjCProtocolDecl> &Protocols
-      = Protocol->getReferencedProtocols();
-    for (ObjCList<ObjCProtocolDecl>::iterator I = Protocols.begin(),
-                                              E = Protocols.end(); 
-         I != E; ++I)
-      AddObjCMethods(*I, WantInstanceMethods, WantKind, SelIdents, NumSelIdents, 
-                     CurContext, Selectors, AllowSameLength, Results, false);    
+    if (Protocol->hasDefinition()) {
+      const ObjCList<ObjCProtocolDecl> &Protocols
+        = Protocol->getReferencedProtocols();
+      for (ObjCList<ObjCProtocolDecl>::iterator I = Protocols.begin(),
+                                                E = Protocols.end(); 
+           I != E; ++I)
+        AddObjCMethods(*I, WantInstanceMethods, WantKind, SelIdents, 
+                       NumSelIdents, CurContext, Selectors, AllowSameLength, 
+                       Results, false);
+    }
   }
   
   ObjCInterfaceDecl *IFace = dyn_cast<ObjCInterfaceDecl>(Container);
@@ -5437,19 +5442,8 @@ static void AddProtocolResults(DeclContext *Ctx, DeclContext *CurContext,
        D != DEnd; ++D) {
     // Record any protocols we find.
     if (ObjCProtocolDecl *Proto = dyn_cast<ObjCProtocolDecl>(*D))
-      if (!OnlyForwardDeclarations || Proto->isForwardDecl())
+      if (!OnlyForwardDeclarations || !Proto->hasDefinition())
         Results.AddResult(Result(Proto, 0), CurContext, 0, false);
-
-    // Record any forward-declared protocols we find.
-    if (ObjCForwardProtocolDecl *Forward
-          = dyn_cast<ObjCForwardProtocolDecl>(*D)) {
-      for (ObjCForwardProtocolDecl::protocol_iterator 
-             P = Forward->protocol_begin(),
-             PEnd = Forward->protocol_end();
-           P != PEnd; ++P)
-        if (!OnlyForwardDeclarations || (*P)->isForwardDecl())
-          Results.AddResult(Result(*P, 0), CurContext, 0, false);
-    }
   }
 }
 
@@ -5843,14 +5837,16 @@ static void FindImplementableMethods(ASTContext &Context,
   }
 
   if (ObjCProtocolDecl *Protocol = dyn_cast<ObjCProtocolDecl>(Container)) {
-    // Recurse into protocols.
-    const ObjCList<ObjCProtocolDecl> &Protocols
-      = Protocol->getReferencedProtocols();
-    for (ObjCList<ObjCProtocolDecl>::iterator I = Protocols.begin(),
-           E = Protocols.end(); 
-         I != E; ++I)
-      FindImplementableMethods(Context, *I, WantInstanceMethods, ReturnType,
-                               KnownMethods, false);
+    if (Protocol->hasDefinition()) {
+      // Recurse into protocols.
+      const ObjCList<ObjCProtocolDecl> &Protocols
+        = Protocol->getReferencedProtocols();
+      for (ObjCList<ObjCProtocolDecl>::iterator I = Protocols.begin(),
+             E = Protocols.end(); 
+           I != E; ++I)
+        FindImplementableMethods(Context, *I, WantInstanceMethods, ReturnType,
+                                 KnownMethods, false);
+    }
   }
 
   // Add methods in this container. This operation occurs last because

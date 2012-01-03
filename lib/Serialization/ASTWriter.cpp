@@ -869,7 +869,6 @@ void ASTWriter::WriteBlockInfoBlock() {
   RECORD(DECL_OBJC_PROTOCOL);
   RECORD(DECL_OBJC_IVAR);
   RECORD(DECL_OBJC_AT_DEFS_FIELD);
-  RECORD(DECL_OBJC_FORWARD_PROTOCOL);
   RECORD(DECL_OBJC_CATEGORY);
   RECORD(DECL_OBJC_CATEGORY_IMPL);
   RECORD(DECL_OBJC_IMPLEMENTATION);
@@ -1920,6 +1919,11 @@ void ASTWriter::WriteSubmodules(Module *WritingModule) {
   Abbrev->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::Blob)); // Name
   unsigned UmbrellaDirAbbrev = Stream.EmitAbbrev(Abbrev);
 
+  Abbrev = new BitCodeAbbrev();
+  Abbrev->Add(BitCodeAbbrevOp(SUBMODULE_REQUIRES));
+  Abbrev->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::Blob)); // Feature
+  unsigned RequiresAbbrev = Stream.EmitAbbrev(Abbrev);
+
   // Write the submodule metadata block.
   RecordData Record;
   Record.push_back(getNumberOfModules(WritingModule));
@@ -1951,6 +1955,15 @@ void ASTWriter::WriteSubmodules(Module *WritingModule) {
     Record.push_back(Mod->InferExportWildcard);
     Stream.EmitRecordWithBlob(DefinitionAbbrev, Record, Mod->Name);
     
+    // Emit the requirements.
+    for (unsigned I = 0, N = Mod->Requires.size(); I != N; ++I) {
+      Record.clear();
+      Record.push_back(SUBMODULE_REQUIRES);
+      Stream.EmitRecordWithBlob(RequiresAbbrev, Record,
+                                Mod->Requires[I].data(),
+                                Mod->Requires[I].size());
+    }
+
     // Emit the umbrella header, if there is one.
     if (const FileEntry *UmbrellaHeader = Mod->getUmbrellaHeader()) {
       Record.clear();
@@ -3473,6 +3486,7 @@ void ASTWriter::ResolveDeclUpdatesBlocks() {
       case UPD_CXX_ADDED_TEMPLATE_SPECIALIZATION:
       case UPD_CXX_ADDED_ANONYMOUS_NAMESPACE:
       case UPD_OBJC_SET_CLASS_DEFINITIONDATA:
+      case UPD_OBJC_SET_PROTOCOL_DEFINITIONDATA:
         URec[Idx] = GetDeclRef(reinterpret_cast<Decl *>(URec[Idx]));
         ++Idx;
         break;
@@ -4417,8 +4431,6 @@ void ASTWriter::AddedObjCCategoryToInterface(const ObjCCategoryDecl *CatD,
 
 void ASTWriter::CompletedObjCForwardRef(const ObjCContainerDecl *D) {
   assert(!WritingAST && "Already writing the AST!");
-  if (D->isFromASTFile())
-    RewriteDecl(D);
 
   if (const ObjCInterfaceDecl *ID = dyn_cast<ObjCInterfaceDecl>(D)) {
     for (ObjCInterfaceDecl::redecl_iterator I = ID->redecls_begin(), 
@@ -4431,6 +4443,24 @@ void ASTWriter::CompletedObjCForwardRef(const ObjCContainerDecl *D) {
       if (I->isFromASTFile()) {
         UpdateRecord &Record = DeclUpdates[*I];
         Record.push_back(UPD_OBJC_SET_CLASS_DEFINITIONDATA);
+        assert((*I)->hasDefinition());
+        assert((*I)->getDefinition() == D);
+        Record.push_back(reinterpret_cast<uint64_t>(D)); // the DefinitionDecl
+      }
+    }
+  }
+
+  if (const ObjCProtocolDecl *PD = dyn_cast<ObjCProtocolDecl>(D)) {
+    for (ObjCProtocolDecl::redecl_iterator I = PD->redecls_begin(), 
+                                           E = PD->redecls_end(); 
+         I != E; ++I) {
+      if (*I == PD)
+        continue;
+      
+      // We are interested when a PCH decl is modified.
+      if (I->isFromASTFile()) {
+        UpdateRecord &Record = DeclUpdates[*I];
+        Record.push_back(UPD_OBJC_SET_PROTOCOL_DEFINITIONDATA);
         assert((*I)->hasDefinition());
         assert((*I)->getDefinition() == D);
         Record.push_back(reinterpret_cast<uint64_t>(D)); // the DefinitionDecl
@@ -4453,10 +4483,3 @@ void ASTWriter::AddedObjCPropertyInClassExtension(const ObjCPropertyDecl *Prop,
   RewriteDecl(D);
 }
 
-void ASTWriter::UpdatedAttributeList(const Decl *D) {
-  assert(!WritingAST && "Already writing the AST!");
-  if (!D->isFromASTFile())
-    return; // Declaration not imported from PCH.
-
-  RewriteDecl(D);
-}

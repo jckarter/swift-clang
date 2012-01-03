@@ -248,6 +248,12 @@ public:
   /// This is only necessary for issuing pretty diagnostics.
   ExtVectorDeclsType ExtVectorDecls;
 
+  /// \brief The set of types for which we have already complained about the
+  /// definitions being hidden.
+  ///
+  /// This set is used to suppress redundant diagnostics.
+  llvm::SmallPtrSet<NamedDecl *, 4> HiddenDefinitions;
+  
   /// FieldCollector - Collects CXXFieldDecls during parsing of C++ classes.
   llvm::OwningPtr<CXXFieldCollector> FieldCollector;
 
@@ -1363,10 +1369,11 @@ public:
   TypedefDecl *ParseTypedefDecl(Scope *S, Declarator &D, QualType T,
                                 TypeSourceInfo *TInfo);
   bool isIncompatibleTypedef(TypeDecl *Old, TypedefNameDecl *New);
+  void mergeDeclAttributes(Decl *New, Decl *Old, bool MergeDeprecation = true);
   void MergeTypedefNameDecl(TypedefNameDecl *New, LookupResult &OldDecls);
   bool MergeFunctionDecl(FunctionDecl *New, Decl *Old);
   bool MergeCompatibleFunctionDecls(FunctionDecl *New, FunctionDecl *Old);
-  void mergeObjCMethodDecls(ObjCMethodDecl *New, const ObjCMethodDecl *Old);
+  void mergeObjCMethodDecls(ObjCMethodDecl *New, ObjCMethodDecl *Old);
   void MergeVarDecl(VarDecl *New, LookupResult &OldDecls);
   void MergeVarDeclTypes(VarDecl *New, VarDecl *Old);
   void MergeVarDeclExceptionSpecs(VarDecl *New, VarDecl *Old);
@@ -1797,7 +1804,9 @@ public:
   bool LookupParsedName(LookupResult &R, Scope *S, CXXScopeSpec *SS,
                         bool AllowBuiltinCreation = false,
                         bool EnteringContext = false);
-  ObjCProtocolDecl *LookupProtocol(IdentifierInfo *II, SourceLocation IdLoc);
+  ObjCProtocolDecl *LookupProtocol(IdentifierInfo *II, SourceLocation IdLoc,
+                                   RedeclarationKind Redecl
+                                     = NotForRedeclaration);
 
   void LookupOverloadedOperatorName(OverloadedOperatorKind Op, Scope *S,
                                     QualType T1, QualType T2,
@@ -5318,7 +5327,7 @@ public:
                                      SourceLocation *IdentLocs,
                                      unsigned NumElts);
 
-  Decl *ActOnForwardProtocolDeclaration(SourceLocation AtProtoclLoc,
+  DeclGroupPtrTy ActOnForwardProtocolDeclaration(SourceLocation AtProtoclLoc,
                                         const IdentifierLocPair *IdentList,
                                         unsigned NumElts,
                                         AttributeList *attrList);

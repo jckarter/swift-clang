@@ -527,7 +527,9 @@ namespace clang {
       SUBMODULE_IMPORTS = 5,
       /// \brief Specifies the submodules that are re-exported from this 
       /// submodule.
-      SUBMODULE_EXPORTS = 6
+      SUBMODULE_EXPORTS = 6,
+      /// \brief Specifies a required feature.
+      SUBMODULE_REQUIRES = 7
     };
     
     /// \defgroup ASTAST AST file AST constants
@@ -814,8 +816,6 @@ namespace clang {
       DECL_OBJC_IVAR,
       /// \brief A ObjCAtDefsFieldDecl record.
       DECL_OBJC_AT_DEFS_FIELD,
-      /// \brief A ObjCForwardProtocolDecl record.
-      DECL_OBJC_FORWARD_PROTOCOL,
       /// \brief A ObjCCategoryDecl record.
       DECL_OBJC_CATEGORY,
       /// \brief A ObjCCategoryImplDecl record.

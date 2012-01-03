@@ -1067,6 +1067,8 @@ static NamedDecl *getPreviousDeclaration(NamedDecl *D) {
     return TD->getPreviousDeclaration();
   if (ObjCInterfaceDecl *ID = dyn_cast<ObjCInterfaceDecl>(D))
     return ID->getPreviousDeclaration();
+  if (ObjCProtocolDecl *PD = dyn_cast<ObjCProtocolDecl>(D))
+    return PD->getPreviousDeclaration();
   
   return 0;
 }
@@ -2178,9 +2180,10 @@ NamedDecl *Sema::LookupSingleName(Scope *S, DeclarationName Name,
 
 /// \brief Find the protocol with the given name, if any.
 ObjCProtocolDecl *Sema::LookupProtocol(IdentifierInfo *II,
-                                       SourceLocation IdLoc) {
+                                       SourceLocation IdLoc,
+                                       RedeclarationKind Redecl) {
   Decl *D = LookupSingleName(TUScope, II, IdLoc,
-                             LookupObjCProtocolName);
+                             LookupObjCProtocolName, Redecl);
   return cast_or_null<ObjCProtocolDecl>(D);
 }
 
@@ -2763,18 +2766,6 @@ static void LookupVisibleDecls(DeclContext *Ctx, LookupResult &Result,
         if ((ND = Result.getAcceptableDecl(ND))) {
           Consumer.FoundDecl(ND, Visited.checkHidden(ND), Ctx, InBaseClass);
           Visited.add(ND);
-        }
-      } else if (ObjCForwardProtocolDecl *ForwardProto
-                                      = dyn_cast<ObjCForwardProtocolDecl>(*D)) {
-        for (ObjCForwardProtocolDecl::protocol_iterator
-                  P = ForwardProto->protocol_begin(),
-               PEnd = ForwardProto->protocol_end();
-             P != PEnd;
-             ++P) {
-          if (NamedDecl *ND = Result.getAcceptableDecl(*P)) {
-            Consumer.FoundDecl(ND, Visited.checkHidden(ND), Ctx, InBaseClass);
-            Visited.add(ND);
-          }
         }
       }
       

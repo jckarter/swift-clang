@@ -667,7 +667,8 @@ ASTUnit *ASTUnit::LoadFromASTFile(const std::string &Filename,
   AST->SourceMgr = new SourceManager(AST->getDiagnostics(),
                                      AST->getFileManager());
   AST->HeaderInfo.reset(new HeaderSearch(AST->getFileManager(),
-                                         AST->getDiagnostics()));
+                                         AST->getDiagnostics(),
+                                         AST->ASTFileLangOpts));
   
   for (unsigned I = 0; I != NumRemappedFiles; ++I) {
     FilenameOrMemBuf fileOrBuf = RemappedFiles[I].second;
@@ -826,17 +827,7 @@ void AddTopLevelDeclarationToHash(Decl *D, unsigned &Hash) {
       Hash = llvm::HashString(NameStr, Hash);
     }
     return;
-  }
-  
-  if (ObjCForwardProtocolDecl *Forward 
-      = dyn_cast<ObjCForwardProtocolDecl>(D)) {
-    for (ObjCForwardProtocolDecl::protocol_iterator 
-         P = Forward->protocol_begin(),
-         PEnd = Forward->protocol_end();
-         P != PEnd; ++P)
-      AddTopLevelDeclarationToHash(*P, Hash);
-    return;
-  }
+  }  
 }
 
 class TopLevelDeclTrackerConsumer : public ASTConsumer {
