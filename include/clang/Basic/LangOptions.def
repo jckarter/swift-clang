@@ -42,7 +42,7 @@
 #endif
 
 LANGOPT(C99               , 1, 0, "C99")
-LANGOPT(C1X               , 1, 0, "C1X")
+LANGOPT(C11               , 1, 0, "C11")
 LANGOPT(MicrosoftExt      , 1, 0, "Microsoft extensions")
 LANGOPT(MicrosoftMode     , 1, 0, "Microsoft compatibility mode")
 LANGOPT(Borland           , 1, 0, "Borland extensions")
@@ -100,6 +100,7 @@ VALUE_LANGOPT(PICLevel          , 2, 0, "__PIC__ level")
 LANGOPT(GNUInline         , 1, 0, "GNU inline semantics")
 LANGOPT(NoInline          , 1, 0, "__NO_INLINE__ predefined macro")
 LANGOPT(Deprecated        , 1, 0, "__DEPRECATED predefined macro")
+LANGOPT(FastMath          , 1, 0, "__FAST_MATH__ predefined macro")
 
 BENIGN_LANGOPT(ObjCGCBitmapPrint , 1, 0, "printing of GC's bitmap layout for __weak/__strong ivars")
 

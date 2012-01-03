@@ -46,6 +46,8 @@ void ObjCProtocolList::set(ObjCProtocolDecl* const* InList, unsigned Elts,
 // ObjCInterfaceDecl
 //===----------------------------------------------------------------------===//
 
+void ObjCContainerDecl::anchor() { }
+
 /// getIvarDecl - This method looks up an ivar in this ContextDecl.
 ///
 ObjCIvarDecl *
@@ -147,6 +149,8 @@ ObjCContainerDecl::FindPropertyDeclaration(IdentifierInfo *PropertyId) const {
   return 0;
 }
 
+void ObjCInterfaceDecl::anchor() { }
+
 /// FindPropertyVisibleInPrimaryClass - Finds declaration of the property
 /// with name 'PropertyId' in the primary class; including those in protocols
 /// (direct or indirect) used by the primary class.
@@ -154,7 +158,11 @@ ObjCContainerDecl::FindPropertyDeclaration(IdentifierInfo *PropertyId) const {
 ObjCPropertyDecl *
 ObjCInterfaceDecl::FindPropertyVisibleInPrimaryClass(
                                             IdentifierInfo *PropertyId) const {
-  if (ExternallyCompleted)
+  // FIXME: Should make sure no callers ever do this.
+  if (!hasDefinition())
+    return 0;
+  
+  if (data().ExternallyCompleted)
     LoadExternalDefinition();
 
   if (ObjCPropertyDecl *PD =
@@ -175,11 +183,12 @@ void ObjCInterfaceDecl::mergeClassExtensionProtocolList(
                               ObjCProtocolDecl *const* ExtList, unsigned ExtNum,
                               ASTContext &C)
 {
-  if (ExternallyCompleted)
+  if (data().ExternallyCompleted)
     LoadExternalDefinition();
 
-  if (AllReferencedProtocols.empty() && ReferencedProtocols.empty()) {
-    AllReferencedProtocols.set(ExtList, ExtNum, C);
+  if (data().AllReferencedProtocols.empty() && 
+      data().ReferencedProtocols.empty()) {
+    data().AllReferencedProtocols.set(ExtList, ExtNum, C);
     return;
   }
   
@@ -214,12 +223,29 @@ void ObjCInterfaceDecl::mergeClassExtensionProtocolList(
     ProtocolRefs.push_back(*p);
   }
 
-  AllReferencedProtocols.set(ProtocolRefs.data(), ProtocolRefs.size(), C);
+  data().AllReferencedProtocols.set(ProtocolRefs.data(), ProtocolRefs.size(),C);
 }
 
-void ObjCInterfaceDecl::completedForwardDecl() {
-  assert(isForwardDecl() && "Only valid to call for forward refs");
-  ForwardDecl = false;
+void ObjCInterfaceDecl::allocateDefinitionData() {
+  assert(!hasDefinition() && "ObjC class already has a definition");
+  Data = new (getASTContext()) DefinitionData();
+  Data->Definition = this;
+
+  // Make the type point at the definition, now that we have one.
+  if (TypeForDecl)
+    cast<ObjCInterfaceType>(TypeForDecl)->Decl = this;
+}
+
+void ObjCInterfaceDecl::startDefinition() {
+  allocateDefinitionData();
+
+  // Update all of the declarations with a pointer to the definition.
+  for (redecl_iterator RD = redecls_begin(), RDEnd = redecls_end();
+       RD != RDEnd; ++RD) {
+    if (*RD != this)
+      RD->Data = Data;
+  }
+
   if (ASTMutationListener *L = getASTContext().getASTMutationListener())
     L->CompletedObjCForwardRef(this);
 }
@@ -244,7 +270,11 @@ const ObjCCategoryDecl* ObjCCategoryDecl::getNextClassExtension() const {
 
 ObjCIvarDecl *ObjCInterfaceDecl::lookupInstanceVariable(IdentifierInfo *ID,
                                               ObjCInterfaceDecl *&clsDeclared) {
-  if (ExternallyCompleted)
+  // FIXME: Should make sure no callers ever do this.
+  if (!hasDefinition())
+    return 0;  
+
+  if (data().ExternallyCompleted)
     LoadExternalDefinition();
 
   ObjCInterfaceDecl* ClassDecl = this;
@@ -271,7 +301,11 @@ ObjCIvarDecl *ObjCInterfaceDecl::lookupInstanceVariable(IdentifierInfo *ID,
 /// the it returns NULL.
 ObjCInterfaceDecl *ObjCInterfaceDecl::lookupInheritedClass(
                                         const IdentifierInfo*ICName) {
-  if (ExternallyCompleted)
+  // FIXME: Should make sure no callers ever do this.
+  if (!hasDefinition())
+    return 0;
+
+  if (data().ExternallyCompleted)
     LoadExternalDefinition();
 
   ObjCInterfaceDecl* ClassDecl = this;
@@ -287,10 +321,14 @@ ObjCInterfaceDecl *ObjCInterfaceDecl::lookupInheritedClass(
 /// the class, its categories, and its super classes (using a linear search).
 ObjCMethodDecl *ObjCInterfaceDecl::lookupMethod(Selector Sel,
                                                 bool isInstance) const {
+  // FIXME: Should make sure no callers ever do this.
+  if (!hasDefinition())
+    return 0;
+
   const ObjCInterfaceDecl* ClassDecl = this;
   ObjCMethodDecl *MethodDecl = 0;
 
-  if (ExternallyCompleted)
+  if (data().ExternallyCompleted)
     LoadExternalDefinition();
 
   while (ClassDecl != NULL) {
@@ -328,7 +366,11 @@ ObjCMethodDecl *ObjCInterfaceDecl::lookupMethod(Selector Sel,
 ObjCMethodDecl *ObjCInterfaceDecl::lookupPrivateMethod(
                                    const Selector &Sel,
                                    bool Instance) {
-  if (ExternallyCompleted)
+  // FIXME: Should make sure no callers ever do this.
+  if (!hasDefinition())
+    return 0;
+
+  if (data().ExternallyCompleted)
     LoadExternalDefinition();
 
   ObjCMethodDecl *Method = 0;
@@ -641,26 +683,39 @@ ObjCInterfaceDecl *ObjCInterfaceDecl::Create(ASTContext &C,
                                              DeclContext *DC,
                                              SourceLocation atLoc,
                                              IdentifierInfo *Id,
+                                             ObjCInterfaceDecl *PrevDecl,
                                              SourceLocation ClassLoc,
-                                             bool ForwardDecl, bool isInternal){
-  return new (C) ObjCInterfaceDecl(DC, atLoc, Id, ClassLoc, ForwardDecl,
-                                     isInternal);
+                                             bool isInternal){
+  ObjCInterfaceDecl *Result = new (C) ObjCInterfaceDecl(DC, atLoc, Id, ClassLoc, 
+                                                        PrevDecl, isInternal);
+  C.getObjCInterfaceType(Result, PrevDecl);
+  return Result;
+}
+
+ObjCInterfaceDecl *ObjCInterfaceDecl::CreateEmpty(ASTContext &C) {
+  return new (C) ObjCInterfaceDecl(0, SourceLocation(), 0, SourceLocation(),
+                                   0, false);
 }
 
 ObjCInterfaceDecl::
 ObjCInterfaceDecl(DeclContext *DC, SourceLocation atLoc, IdentifierInfo *Id,
-                  SourceLocation CLoc, bool FD, bool isInternal)
+                  SourceLocation CLoc, ObjCInterfaceDecl *PrevDecl,
+                  bool isInternal)
   : ObjCContainerDecl(ObjCInterface, DC, Id, CLoc, atLoc),
-    TypeForDecl(0), SuperClass(0),
-    CategoryList(0), IvarList(0),
-    InitiallyForwardDecl(FD), ForwardDecl(FD),
-    ExternallyCompleted(false) {
+    TypeForDecl(0), Data()
+{
+  setPreviousDeclaration(PrevDecl);
+  
+  // Copy the 'data' pointer over.
+  if (PrevDecl)
+    Data = PrevDecl->Data;
+  
   setImplicit(isInternal);
 }
 
 void ObjCInterfaceDecl::LoadExternalDefinition() const {
-  assert(ExternallyCompleted && "Class is not externally completed");
-  ExternallyCompleted = false;
+  assert(data().ExternallyCompleted && "Class is not externally completed");
+  data().ExternallyCompleted = false;
   getASTContext().getExternalSource()->CompleteType(
                                         const_cast<ObjCInterfaceDecl *>(this));
 }
@@ -668,35 +723,44 @@ void ObjCInterfaceDecl::LoadExternalDefinition() const {
 void ObjCInterfaceDecl::setExternallyCompleted() {
   assert(getASTContext().getExternalSource() && 
          "Class can't be externally completed without an external source");
-  assert(!ForwardDecl && 
+  assert(hasDefinition() && 
          "Forward declarations can't be externally completed");
-  ExternallyCompleted = true;
+  data().ExternallyCompleted = true;
 }
 
 ObjCImplementationDecl *ObjCInterfaceDecl::getImplementation() const {
-  if (ExternallyCompleted)
-    LoadExternalDefinition();
-
-  return getASTContext().getObjCImplementation(
-                                          const_cast<ObjCInterfaceDecl*>(this));
+  if (const ObjCInterfaceDecl *Def = getDefinition()) {
+    if (data().ExternallyCompleted)
+      LoadExternalDefinition();
+    
+    return getASTContext().getObjCImplementation(
+             const_cast<ObjCInterfaceDecl*>(Def));
+  }
+  
+  // FIXME: Should make sure no callers ever do this.
+  return 0;
 }
 
 void ObjCInterfaceDecl::setImplementation(ObjCImplementationDecl *ImplD) {
-  getASTContext().setObjCImplementation(this, ImplD);
+  getASTContext().setObjCImplementation(getDefinition(), ImplD);
 }
 
 /// all_declared_ivar_begin - return first ivar declared in this class,
 /// its extensions and its implementation. Lazily build the list on first
 /// access.
 ObjCIvarDecl *ObjCInterfaceDecl::all_declared_ivar_begin() {
-  if (IvarList)
-    return IvarList;
+  // FIXME: Should make sure no callers ever do this.
+  if (!hasDefinition())
+    return 0;
+  
+  if (data().IvarList)
+    return data().IvarList;
   
   ObjCIvarDecl *curIvar = 0;
   if (!ivar_empty()) {
     ObjCInterfaceDecl::ivar_iterator I = ivar_begin(), E = ivar_end();
-    IvarList = (*I); ++I;
-    for (curIvar = IvarList; I != E; curIvar = *I, ++I)
+    data().IvarList = (*I); ++I;
+    for (curIvar = data().IvarList; I != E; curIvar = *I, ++I)
       curIvar->setNextIvar(*I);
   }
   
@@ -705,9 +769,9 @@ ObjCIvarDecl *ObjCInterfaceDecl::all_declared_ivar_begin() {
     if (!CDecl->ivar_empty()) {
       ObjCCategoryDecl::ivar_iterator I = CDecl->ivar_begin(),
                                           E = CDecl->ivar_end();
-      if (!IvarList) {
-        IvarList = (*I); ++I;
-        curIvar = IvarList;
+      if (!data().IvarList) {
+        data().IvarList = (*I); ++I;
+        curIvar = data().IvarList;
       }
       for ( ;I != E; curIvar = *I, ++I)
         curIvar->setNextIvar(*I);
@@ -718,15 +782,15 @@ ObjCIvarDecl *ObjCInterfaceDecl::all_declared_ivar_begin() {
     if (!ImplDecl->ivar_empty()) {
       ObjCImplementationDecl::ivar_iterator I = ImplDecl->ivar_begin(),
                                             E = ImplDecl->ivar_end();
-      if (!IvarList) {
-        IvarList = (*I); ++I;
-        curIvar = IvarList;
+      if (!data().IvarList) {
+        data().IvarList = (*I); ++I;
+        curIvar = data().IvarList;
       }
       for ( ;I != E; curIvar = *I, ++I)
         curIvar->setNextIvar(*I);
     }
   }
-  return IvarList;
+  return data().IvarList;
 }
 
 /// FindCategoryDeclaration - Finds category declaration in the list of
@@ -735,7 +799,7 @@ ObjCIvarDecl *ObjCInterfaceDecl::all_declared_ivar_begin() {
 ///
 ObjCCategoryDecl *
 ObjCInterfaceDecl::FindCategoryDeclaration(IdentifierInfo *CategoryId) const {
-  if (ExternallyCompleted)
+  if (data().ExternallyCompleted)
     LoadExternalDefinition();
 
   for (ObjCCategoryDecl *Category = getCategoryList();
@@ -770,6 +834,9 @@ ObjCMethodDecl *ObjCInterfaceDecl::getCategoryClassMethod(Selector Sel) const {
 bool ObjCInterfaceDecl::ClassImplementsProtocol(ObjCProtocolDecl *lProto,
                                     bool lookupCategory,
                                     bool RHSIsQualifiedID) {
+  if (!hasDefinition())
+    return false;
+  
   ObjCInterfaceDecl *IDecl = this;
   // 1st, look up the class.
   const ObjCList<ObjCProtocolDecl> &Protocols =
@@ -812,6 +879,8 @@ bool ObjCInterfaceDecl::ClassImplementsProtocol(ObjCProtocolDecl *lProto,
 //===----------------------------------------------------------------------===//
 // ObjCIvarDecl
 //===----------------------------------------------------------------------===//
+
+void ObjCIvarDecl::anchor() { }
 
 ObjCIvarDecl *ObjCIvarDecl::Create(ASTContext &C, ObjCContainerDecl *DC,
                                    SourceLocation StartLoc,
@@ -883,6 +952,8 @@ const ObjCInterfaceDecl *ObjCIvarDecl::getContainingInterface() const {
 // ObjCAtDefsFieldDecl
 //===----------------------------------------------------------------------===//
 
+void ObjCAtDefsFieldDecl::anchor() { }
+
 ObjCAtDefsFieldDecl
 *ObjCAtDefsFieldDecl::Create(ASTContext &C, DeclContext *DC,
                              SourceLocation StartLoc,  SourceLocation IdLoc,
@@ -894,12 +965,28 @@ ObjCAtDefsFieldDecl
 // ObjCProtocolDecl
 //===----------------------------------------------------------------------===//
 
+void ObjCProtocolDecl::anchor() { }
+
+ObjCProtocolDecl::ObjCProtocolDecl(DeclContext *DC, IdentifierInfo *Id,
+                                   SourceLocation nameLoc, 
+                                   SourceLocation atStartLoc,
+                                   ObjCProtocolDecl *PrevDecl)
+  : ObjCContainerDecl(ObjCProtocol, DC, Id, nameLoc, atStartLoc), Data()
+{
+  setPreviousDeclaration(PrevDecl);
+  if (PrevDecl)
+    Data = PrevDecl->Data;
+}
+
 ObjCProtocolDecl *ObjCProtocolDecl::Create(ASTContext &C, DeclContext *DC,
                                            IdentifierInfo *Id,
                                            SourceLocation nameLoc,
                                            SourceLocation atStartLoc,
-                                           bool isForwardDecl) {
-  return new (C) ObjCProtocolDecl(DC, Id, nameLoc, atStartLoc, isForwardDecl);
+                                           ObjCProtocolDecl *PrevDecl) {
+  ObjCProtocolDecl *Result 
+    = new (C) ObjCProtocolDecl(DC, Id, nameLoc, atStartLoc, PrevDecl);
+  
+  return Result;
 }
 
 ObjCProtocolDecl *ObjCProtocolDecl::lookupProtocolNamed(IdentifierInfo *Name) {
@@ -930,70 +1017,29 @@ ObjCMethodDecl *ObjCProtocolDecl::lookupMethod(Selector Sel,
   return NULL;
 }
 
-void ObjCProtocolDecl::completedForwardDecl() {
-  assert(isForwardDecl() && "Only valid to call for forward refs");
-  isForwardProtoDecl = false;
+void ObjCProtocolDecl::allocateDefinitionData() {
+  assert(!Data && "Protocol already has a definition!");
+  Data = new (getASTContext()) DefinitionData;
+  Data->Definition = this;
+}
+
+void ObjCProtocolDecl::startDefinition() {
+  allocateDefinitionData();
+  
+  // Update all of the declarations with a pointer to the definition.
+  for (redecl_iterator RD = redecls_begin(), RDEnd = redecls_end();
+       RD != RDEnd; ++RD)
+    RD->Data = this->Data;
+  
   if (ASTMutationListener *L = getASTContext().getASTMutationListener())
     L->CompletedObjCForwardRef(this);
 }
 
 //===----------------------------------------------------------------------===//
-// ObjCClassDecl
-//===----------------------------------------------------------------------===//
-
-ObjCClassDecl::ObjCClassDecl(DeclContext *DC, SourceLocation L,
-                             ObjCInterfaceDecl *const Elt,
-                             const SourceLocation Loc,
-                             ASTContext &C)
-  : Decl(ObjCClass, DC, L) {
-  setClass(C, Elt, Loc);
-}
-
-ObjCClassDecl *ObjCClassDecl::Create(ASTContext &C, DeclContext *DC,
-                                     SourceLocation L,
-                                     ObjCInterfaceDecl *const Elt,
-                                     const SourceLocation Loc) {
-  return new (C) ObjCClassDecl(DC, L, Elt, Loc, C);
-}
-
-void ObjCClassDecl::setClass(ASTContext &C, ObjCInterfaceDecl*const Cls,
-                             const SourceLocation Loc) {
-    
-  ForwardDecl = (ObjCClassRef*) C.Allocate(sizeof(ObjCClassRef),
-                                           llvm::alignOf<ObjCClassRef>());
-  new (ForwardDecl) ObjCClassRef(Cls, Loc);
-}
-    
-SourceRange ObjCClassDecl::getSourceRange() const {
-  // FIXME: We should include the semicolon
-  return SourceRange(getLocation(), ForwardDecl->getLocation());
-}
-
-//===----------------------------------------------------------------------===//
-// ObjCForwardProtocolDecl
-//===----------------------------------------------------------------------===//
-
-ObjCForwardProtocolDecl::
-ObjCForwardProtocolDecl(DeclContext *DC, SourceLocation L,
-                        ObjCProtocolDecl *const *Elts, unsigned nElts,
-                        const SourceLocation *Locs, ASTContext &C)
-: Decl(ObjCForwardProtocol, DC, L) {
-  ReferencedProtocols.set(Elts, nElts, Locs, C);
-}
-
-
-ObjCForwardProtocolDecl *
-ObjCForwardProtocolDecl::Create(ASTContext &C, DeclContext *DC,
-                                SourceLocation L,
-                                ObjCProtocolDecl *const *Elts,
-                                unsigned NumElts,
-                                const SourceLocation *Locs) {
-  return new (C) ObjCForwardProtocolDecl(DC, L, Elts, NumElts, Locs, C);
-}
-
-//===----------------------------------------------------------------------===//
 // ObjCCategoryDecl
 //===----------------------------------------------------------------------===//
+
+void ObjCCategoryDecl::anchor() { }
 
 ObjCCategoryDecl *ObjCCategoryDecl::Create(ASTContext &C, DeclContext *DC,
                                            SourceLocation AtLoc, 
@@ -1007,9 +1053,11 @@ ObjCCategoryDecl *ObjCCategoryDecl::Create(ASTContext &C, DeclContext *DC,
   if (IDecl) {
     // Link this category into its class's category list.
     CatDecl->NextClassCategory = IDecl->getCategoryList();
-    IDecl->setCategoryList(CatDecl);
-    if (ASTMutationListener *L = C.getASTMutationListener())
-      L->AddedObjCCategoryToInterface(CatDecl, IDecl);
+    if (IDecl->hasDefinition()) {
+      IDecl->setCategoryList(CatDecl);
+      if (ASTMutationListener *L = C.getASTMutationListener())
+        L->AddedObjCCategoryToInterface(CatDecl, IDecl);
+    }
   }
 
   return CatDecl;
@@ -1034,6 +1082,8 @@ void ObjCCategoryDecl::setImplementation(ObjCCategoryImplDecl *ImplD) {
 // ObjCCategoryImplDecl
 //===----------------------------------------------------------------------===//
 
+void ObjCCategoryImplDecl::anchor() { }
+
 ObjCCategoryImplDecl *
 ObjCCategoryImplDecl::Create(ASTContext &C, DeclContext *DC,
                              IdentifierInfo *Id,
@@ -1041,6 +1091,8 @@ ObjCCategoryImplDecl::Create(ASTContext &C, DeclContext *DC,
                              SourceLocation nameLoc,
                              SourceLocation atStartLoc,
                              SourceLocation CategoryNameLoc) {
+  if (ClassInterface && ClassInterface->hasDefinition())
+    ClassInterface = ClassInterface->getDefinition();
   return new (C) ObjCCategoryImplDecl(DC, Id, ClassInterface,
                                       nameLoc, atStartLoc, CategoryNameLoc);
 }
@@ -1052,6 +1104,8 @@ ObjCCategoryDecl *ObjCCategoryImplDecl::getCategoryDecl() const {
   return 0;
 }
 
+
+void ObjCImplDecl::anchor() { }
 
 void ObjCImplDecl::addPropertyImplementation(ObjCPropertyImplDecl *property) {
   // FIXME: The context should be correct before we get here.
@@ -1115,12 +1169,16 @@ raw_ostream &clang::operator<<(raw_ostream &OS,
 // ObjCImplementationDecl
 //===----------------------------------------------------------------------===//
 
+void ObjCImplementationDecl::anchor() { }
+
 ObjCImplementationDecl *
 ObjCImplementationDecl::Create(ASTContext &C, DeclContext *DC,
                                ObjCInterfaceDecl *ClassInterface,
                                ObjCInterfaceDecl *SuperDecl,
                                SourceLocation nameLoc,
                                SourceLocation atStartLoc) {
+  if (ClassInterface && ClassInterface->hasDefinition())
+    ClassInterface = ClassInterface->getDefinition();
   return new (C) ObjCImplementationDecl(DC, ClassInterface, SuperDecl,
                                         nameLoc, atStartLoc);
 }
@@ -1148,6 +1206,8 @@ raw_ostream &clang::operator<<(raw_ostream &OS,
 // ObjCCompatibleAliasDecl
 //===----------------------------------------------------------------------===//
 
+void ObjCCompatibleAliasDecl::anchor() { }
+
 ObjCCompatibleAliasDecl *
 ObjCCompatibleAliasDecl::Create(ASTContext &C, DeclContext *DC,
                                 SourceLocation L,
@@ -1159,6 +1219,8 @@ ObjCCompatibleAliasDecl::Create(ASTContext &C, DeclContext *DC,
 //===----------------------------------------------------------------------===//
 // ObjCPropertyDecl
 //===----------------------------------------------------------------------===//
+
+void ObjCPropertyDecl::anchor() { }
 
 ObjCPropertyDecl *ObjCPropertyDecl::Create(ASTContext &C, DeclContext *DC,
                                            SourceLocation L,

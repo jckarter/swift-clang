@@ -27,6 +27,7 @@
 #include "clang/Lex/Preprocessor.h"
 #include "clang/Sema/DeclSpec.h"
 #include "clang/Sema/DelayedDiagnostic.h"
+#include "clang/Sema/Lookup.h"
 #include "llvm/ADT/SmallPtrSet.h"
 #include "llvm/Support/ErrorHandling.h"
 using namespace clang;
@@ -1055,7 +1056,8 @@ static QualType inferARCLifetimeForPointee(Sema &S, QualType type,
 
   // If we are in an unevaluated context, like sizeof, assume ExplicitNone and
   // don't give error.
-  } else if (S.ExprEvalContexts.back().Context == Sema::Unevaluated) {
+  } else if (S.ExprEvalContexts.back().Context == Sema::Unevaluated ||
+             S.ExprEvalContexts.back().Context == Sema::ConstantEvaluated) {
     implicitLifetime = Qualifiers::OCL_ExplicitNone;
 
   // If that failed, give an error and recover using __autoreleasing.
@@ -1179,13 +1181,9 @@ static bool isArraySizeVLA(Expr *ArraySize, llvm::APSInt &SizeVal, Sema &S) {
     
   // If we're in a GNU mode (like gnu99, but not c99) accept any evaluatable
   // value as an extension.
-  Expr::EvalResult Result;
-  if (S.LangOpts.GNUMode && ArraySize->EvaluateAsRValue(Result, S.Context)) {
-    if (!Result.hasSideEffects() && Result.Val.isInt()) {
-      SizeVal = Result.Val.getInt();
-      S.Diag(ArraySize->getLocStart(), diag::ext_vla_folded_to_constant);
-      return false;
-    }
+  if (S.LangOpts.GNUMode && ArraySize->EvaluateAsInt(SizeVal, S.Context)) {
+    S.Diag(ArraySize->getLocStart(), diag::ext_vla_folded_to_constant);
+    return false;
   }
 
   return true;
@@ -1360,9 +1358,9 @@ QualType Sema::BuildArrayType(QualType T, ArrayType::ArraySizeModifier ASM,
       else
         Diag(Loc, diag::ext_vla);
     } else if (ASM != ArrayType::Normal || Quals != 0)
-      Diag(Loc, 
+      Diag(Loc,
            getLangOptions().CPlusPlus? diag::err_c99_array_usage_cxx
-                                     : diag::ext_c99_array_usage);
+                                     : diag::ext_c99_array_usage) << ASM;
   }
 
   return T;
@@ -4062,9 +4060,52 @@ bool Sema::RequireCompleteType(SourceLocation Loc, QualType T,
   //         "Can't ask whether a dependent type is complete");
 
   // If we have a complete type, we're done.
-  if (!T->isIncompleteType())
+  NamedDecl *Def = 0;
+  if (!T->isIncompleteType(&Def)) {
+    // If we know about the definition but it is not visible, complain.
+    if (diag != 0 && Def && !LookupResult::isVisible(Def)) {
+      // Suppress this error outside of a SFINAE context if we've already
+      // emitted the error once for this type. There's no usefulness in 
+      // repeating the diagnostic.
+      // FIXME: Add a Fix-It that imports the corresponding module or includes
+      // the header.
+      if (isSFINAEContext() || HiddenDefinitions.insert(Def)) {
+        Diag(Loc, diag::err_module_private_definition) << T;
+        Diag(Def->getLocation(), diag::note_previous_definition);
+      }
+    }
+    
     return false;
+  }
 
+  const TagType *Tag = T->getAs<TagType>();
+  const ObjCInterfaceType *IFace = 0;
+  
+  if (Tag) {
+    // Avoid diagnosing invalid decls as incomplete.
+    if (Tag->getDecl()->isInvalidDecl())
+      return true;
+
+    // Give the external AST source a chance to complete the type.
+    if (Tag->getDecl()->hasExternalLexicalStorage()) {
+      Context.getExternalSource()->CompleteType(Tag->getDecl());
+      if (!Tag->isIncompleteType())
+        return false;
+    }
+  }
+  else if ((IFace = T->getAs<ObjCInterfaceType>())) {
+    // Avoid diagnosing invalid decls as incomplete.
+    if (IFace->getDecl()->isInvalidDecl())
+      return true;
+    
+    // Give the external AST source a chance to complete the type.
+    if (IFace->getDecl()->hasExternalLexicalStorage()) {
+      Context.getExternalSource()->CompleteType(IFace->getDecl());
+      if (!IFace->isIncompleteType())
+        return false;
+    }
+  }
+    
   // If we have a class template specialization or a class member of a
   // class template specialization, or an array with known size of such,
   // try to instantiate it.
@@ -4096,34 +4137,6 @@ bool Sema::RequireCompleteType(SourceLocation Loc, QualType T,
 
   if (diag == 0)
     return true;
-
-  const TagType *Tag = T->getAs<TagType>();
-  const ObjCInterfaceType *IFace = 0;
-  
-  if (Tag) {
-    // Avoid diagnosing invalid decls as incomplete.
-    if (Tag->getDecl()->isInvalidDecl())
-      return true;
-
-    // Give the external AST source a chance to complete the type.
-    if (Tag->getDecl()->hasExternalLexicalStorage()) {
-      Context.getExternalSource()->CompleteType(Tag->getDecl());
-      if (!Tag->isIncompleteType())
-        return false;
-    }
-  }
-  else if ((IFace = T->getAs<ObjCInterfaceType>())) {
-    // Avoid diagnosing invalid decls as incomplete.
-    if (IFace->getDecl()->isInvalidDecl())
-      return true;
-    
-    // Give the external AST source a chance to complete the type.
-    if (IFace->getDecl()->hasExternalLexicalStorage()) {
-      Context.getExternalSource()->CompleteType(IFace->getDecl());
-      if (!IFace->isIncompleteType())
-        return false;
-    }
-  }
     
   // We have an incomplete type. Produce a diagnostic.
   Diag(Loc, PD) << T;

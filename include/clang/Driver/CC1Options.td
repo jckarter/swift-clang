@@ -170,6 +170,9 @@ def menable_no_infinities : Flag<"-menable-no-infs">,
   HelpText<"Allow optimization to assume there are no infinities.">;
 def menable_no_nans : Flag<"-menable-no-nans">,
   HelpText<"Allow optimization to assume there are no NaNs.">;
+def menable_unsafe_fp_math : Flag<"-menable-unsafe-fp-math">,
+  HelpText<"Allow unsafe floating-point math optimizations which may decrease "
+           "precision">;
 def mfloat_abi : Separate<"-mfloat-abi">,
   HelpText<"The float ABI to use">;
 def mno_global_merge : Flag<"-mno-global-merge">,
@@ -291,6 +294,8 @@ def fmacro_backtrace_limit : Separate<"-fmacro-backtrace-limit">, MetaVarName<"<
   HelpText<"Set the maximum number of entries to print in a macro expansion backtrace (0 = no limit).">;
 def ftemplate_backtrace_limit : Separate<"-ftemplate-backtrace-limit">, MetaVarName<"<N>">,
   HelpText<"Set the maximum number of entries to print in a template instantiation backtrace (0 = no limit).">;
+def fconstexpr_backtrace_limit : Separate<"-fconstexpr-backtrace-limit">, MetaVarName<"<N>">,
+  HelpText<"Set the maximum number of entries to print in a constexpr evaluation backtrace (0 = no limit).">;
 def fmessage_length : Separate<"-fmessage-length">, MetaVarName<"<N>">,
   HelpText<"Format message diagnostics so that they fit within N columns or fewer, when possible.">;
 def fcolor_diagnostics : Flag<"-fcolor-diagnostics">,
@@ -395,9 +400,6 @@ def emit_llvm : Flag<"-emit-llvm">,
   HelpText<"Build ASTs then convert to LLVM, emit .ll file">;
 def emit_llvm_bc : Flag<"-emit-llvm-bc">,
   HelpText<"Build ASTs then convert to LLVM, emit .bc file">;
-def emit_llvm_bc_verify : Flag<"-emit-llvm-bc-verify">,
-  HelpText<"Build ASTs then convert to LLVM, emit .bc file"
-           " and finally verify bitcode serialization/deserialization">;
 def emit_llvm_only : Flag<"-emit-llvm-only">,
   HelpText<"Build ASTs and convert to LLVM, discarding output">;
 def emit_codegen_only : Flag<"-emit-codegen-only">,
@@ -483,6 +485,10 @@ def fcxx_exceptions : Flag<"-fcxx-exceptions">,
   HelpText<"Enable C++ exceptions">;
 def fsjlj_exceptions : Flag<"-fsjlj-exceptions">,
   HelpText<"Use SjLj style exceptions">;
+def ffast_math : Flag<"-ffast-math">,
+  HelpText<"Enable the *frontend*'s 'fast-math' mode. This has no effect on "
+           "optimizations, but provides a preprocessor macro __FAST_MATH__ the "
+           "same as GCC's -ffast-math flag.">;
 def ffreestanding : Flag<"-ffreestanding">,
   HelpText<"Assert that the compilation takes place in a freestanding environment">;
 def fgnu_runtime : Flag<"-fgnu-runtime">,

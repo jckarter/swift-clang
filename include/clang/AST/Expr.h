@@ -471,10 +471,12 @@ public:
   /// side-effects.
   bool EvaluateAsBooleanCondition(bool &Result, const ASTContext &Ctx) const;
 
+  enum SideEffectsKind { SE_NoSideEffects, SE_AllowSideEffects };
+
   /// EvaluateAsInt - Return true if this is a constant which we can fold and
-  /// convert to an integer without side-effects, using any crazy technique that
-  /// we want to.
-  bool EvaluateAsInt(llvm::APSInt &Result, const ASTContext &Ctx) const;
+  /// convert to an integer, using any crazy technique that we want to.
+  bool EvaluateAsInt(llvm::APSInt &Result, const ASTContext &Ctx,
+                     SideEffectsKind AllowSideEffects = SE_NoSideEffects) const;
 
   /// isEvaluatable - Call EvaluateAsRValue to see if this expression can be
   /// constant folded without side-effects, but discard the result.
@@ -494,6 +496,14 @@ public:
   /// EvaluateAsLValue - Evaluate an expression to see if we can fold it to an
   /// lvalue with link time known address, with no side-effects.
   bool EvaluateAsLValue(EvalResult &Result, const ASTContext &Ctx) const;
+
+  /// EvaluateAsInitializer - Evaluate an expression as if it were the
+  /// initializer of the given declaration. Returns true if the initializer
+  /// can be folded to a constant, and produces any relevant notes. In C++11,
+  /// notes will be produced if the expression is not a constant expression.
+  bool EvaluateAsInitializer(APValue &Result, const ASTContext &Ctx,
+                             const VarDecl *VD,
+                       llvm::SmallVectorImpl<PartialDiagnosticAt> &Notes) const;
 
   /// \brief Enumeration used to describe the kind of Null pointer constant
   /// returned from \c isNullPointerConstant().
@@ -3940,9 +3950,9 @@ public:
 };
 
 
-/// \brief Represents a C1X generic selection.
+/// \brief Represents a C11 generic selection.
 ///
-/// A generic selection (C1X 6.5.1.1) contains an unevaluated controlling
+/// A generic selection (C11 6.5.1.1) contains an unevaluated controlling
 /// expression, followed by one or more generic associations.  Each generic
 /// association specifies a type name and an expression, or "default" and an
 /// expression (in which case it is known as a default generic association).

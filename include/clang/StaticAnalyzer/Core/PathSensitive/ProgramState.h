@@ -297,6 +297,10 @@ public:
   const ProgramState* addTaint(SymbolRef S,
                                TaintTagType Kind = TaintTagGeneric) const;
 
+  /// Create a new state in which the region symbol is marked as tainted.
+  const ProgramState* addTaint(const MemRegion *R,
+                               TaintTagType Kind = TaintTagGeneric) const;
+
   /// Check if the statement is tainted in the current state.
   bool isTainted(const Stmt *S, TaintTagType Kind = TaintTagGeneric) const;
   bool isTainted(SVal V, TaintTagType Kind = TaintTagGeneric) const;
@@ -802,6 +806,7 @@ CB ProgramState::scanReachableSymbols(const MemRegion * const *beg,
 /// A Utility class that allows to visit the reachable symbols using a custom
 /// SymbolVisitor.
 class ScanReachableSymbols : public SubRegionMap::Visitor  {
+  virtual void anchor();
   typedef llvm::DenseMap<const void*, unsigned> VisitedItems;
 
   VisitedItems visited;

@@ -813,13 +813,13 @@ Value *ScalarExprEmitter::VisitShuffleVectorExpr(ShuffleVectorExpr *E) {
   return Builder.CreateShuffleVector(V1, V2, SV, "shuffle");
 }
 Value *ScalarExprEmitter::VisitMemberExpr(MemberExpr *E) {
-  Expr::EvalResult Result;
-  if (E->EvaluateAsRValue(Result, CGF.getContext()) && Result.Val.isInt()) {
+  llvm::APSInt Value;
+  if (E->EvaluateAsInt(Value, CGF.getContext(), Expr::SE_AllowSideEffects)) {
     if (E->isArrow())
       CGF.EmitScalarExpr(E->getBase());
     else
       EmitLValue(E->getBase());
-    return Builder.getInt(Result.Val.getInt());
+    return Builder.getInt(Value);
   }
 
   // Emit debug info for aggregate now, if it was delayed to reduce 
@@ -1066,7 +1066,7 @@ Value *ScalarExprEmitter::VisitCastExpr(CastExpr *CE) {
     Value *V = EmitLValue(E).getAddress();
     V = Builder.CreateBitCast(V, 
                           ConvertType(CGF.getContext().getPointerType(DestTy)));
-    return EmitLoadOfLValue(CGF.MakeAddrLValue(V, DestTy));
+    return EmitLoadOfLValue(CGF.MakeNaturalAlignAddrLValue(V, DestTy));
   }
 
   case CK_CPointerToObjCPointerCast:
@@ -1478,9 +1478,9 @@ Value *ScalarExprEmitter::VisitUnaryLNot(const UnaryOperator *E) {
 
 Value *ScalarExprEmitter::VisitOffsetOfExpr(OffsetOfExpr *E) {
   // Try folding the offsetof to a constant.
-  Expr::EvalResult EvalResult;
-  if (E->EvaluateAsRValue(EvalResult, CGF.getContext()))
-    return Builder.getInt(EvalResult.Val.getInt());
+  llvm::APSInt Value;
+  if (E->EvaluateAsInt(Value, CGF.getContext()))
+    return Builder.getInt(Value);
 
   // Loop over the components of the offsetof to compute the value.
   unsigned n = E->getNumComponents();
@@ -1601,9 +1601,7 @@ ScalarExprEmitter::VisitUnaryExprOrTypeTraitExpr(
 
   // If this isn't sizeof(vla), the result must be constant; use the constant
   // folding logic so we don't have to duplicate it here.
-  Expr::EvalResult Result;
-  E->EvaluateAsRValue(Result, CGF.getContext());
-  return Builder.getInt(Result.Val.getInt());
+  return Builder.getInt(E->EvaluateKnownConstInt(CGF.getContext()));
 }
 
 Value *ScalarExprEmitter::VisitUnaryReal(const UnaryOperator *E) {
@@ -2752,11 +2750,11 @@ LValue CodeGenFunction::EmitObjCIsaExpr(const ObjCIsaExpr *E) {
 
   Expr *BaseExpr = E->getBase();
   if (BaseExpr->isRValue()) {
-    V = CreateTempAlloca(ClassPtrTy, "resval");
+    V = CreateMemTemp(E->getType(), "resval");
     llvm::Value *Src = EmitScalarExpr(BaseExpr);
     Builder.CreateStore(Src, V);
     V = ScalarExprEmitter(*this).EmitLoadOfLValue(
-      MakeAddrLValue(V, E->getType()));
+      MakeNaturalAlignAddrLValue(V, E->getType()));
   } else {
     if (E->isArrow())
       V = ScalarExprEmitter(*this).EmitLoadOfLValue(BaseExpr);
@@ -2767,7 +2765,7 @@ LValue CodeGenFunction::EmitObjCIsaExpr(const ObjCIsaExpr *E) {
   // build Class* type
   ClassPtrTy = ClassPtrTy->getPointerTo();
   V = Builder.CreateBitCast(V, ClassPtrTy);
-  return MakeAddrLValue(V, E->getType());
+  return MakeNaturalAlignAddrLValue(V, E->getType());
 }
 
 

@@ -1166,7 +1166,7 @@ static bool IsMicrosoftUsingDeclarationAccessBug(Sema& S,
     if (Entity.getTargetDecl()->getAccess() == AS_private && 
         (OrigDecl->getAccess() == AS_public ||
          OrigDecl->getAccess() == AS_protected)) {
-      S.Diag(AccessLoc, diag::war_ms_using_declaration_inaccessible) 
+      S.Diag(AccessLoc, diag::ext_ms_using_declaration_inaccessible)
         << Shadow->getUsingDecl()->getQualifiedNameAsString()
         << OrigDecl->getQualifiedNameAsString();
       return true;
@@ -1701,7 +1701,7 @@ bool Sema::IsSimplyAccessible(NamedDecl *Decl, DeclContext *Ctx) {
       return false;
     
     // If we're inside the same interface that owns the ivar, we're fine.
-    if (ClassOfMethodDecl == Ivar->getContainingInterface())
+    if (declaresSameEntity(ClassOfMethodDecl, Ivar->getContainingInterface()))
       return true;
     
     // If the ivar is private, it's inaccessible.

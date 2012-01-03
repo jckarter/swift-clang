@@ -1198,10 +1198,10 @@ void ASTContext::CollectInheritedProtocols(const Decl *CDecl,
     for (ObjCInterfaceDecl::all_protocol_iterator P = OI->all_referenced_protocol_begin(),
          PE = OI->all_referenced_protocol_end(); P != PE; ++P) {
       ObjCProtocolDecl *Proto = (*P);
-      Protocols.insert(Proto);
+      Protocols.insert(Proto->getCanonicalDecl());
       for (ObjCProtocolDecl::protocol_iterator P = Proto->protocol_begin(),
            PE = Proto->protocol_end(); P != PE; ++P) {
-        Protocols.insert(*P);
+        Protocols.insert((*P)->getCanonicalDecl());
         CollectInheritedProtocols(*P, Protocols);
       }
     }
@@ -1219,7 +1219,7 @@ void ASTContext::CollectInheritedProtocols(const Decl *CDecl,
     for (ObjCCategoryDecl::protocol_iterator P = OC->protocol_begin(),
          PE = OC->protocol_end(); P != PE; ++P) {
       ObjCProtocolDecl *Proto = (*P);
-      Protocols.insert(Proto);
+      Protocols.insert(Proto->getCanonicalDecl());
       for (ObjCProtocolDecl::protocol_iterator P = Proto->protocol_begin(),
            PE = Proto->protocol_end(); P != PE; ++P)
         CollectInheritedProtocols(*P, Protocols);
@@ -1228,7 +1228,7 @@ void ASTContext::CollectInheritedProtocols(const Decl *CDecl,
     for (ObjCProtocolDecl::protocol_iterator P = OP->protocol_begin(),
          PE = OP->protocol_end(); P != PE; ++P) {
       ObjCProtocolDecl *Proto = (*P);
-      Protocols.insert(Proto);
+      Protocols.insert(Proto->getCanonicalDecl());
       for (ObjCProtocolDecl::protocol_iterator P = Proto->protocol_begin(),
            PE = Proto->protocol_end(); P != PE; ++P)
         CollectInheritedProtocols(*P, Protocols);
@@ -2713,8 +2713,12 @@ static bool areSortedAndUniqued(ObjCProtocolDecl * const *Protocols,
                                 unsigned NumProtocols) {
   if (NumProtocols == 0) return true;
 
+  if (Protocols[0]->getCanonicalDecl() != Protocols[0])
+    return false;
+  
   for (unsigned i = 1; i != NumProtocols; ++i)
-    if (!CmpProtocolNames(Protocols[i-1], Protocols[i]))
+    if (!CmpProtocolNames(Protocols[i-1], Protocols[i]) ||
+        Protocols[i]->getCanonicalDecl() != Protocols[i])
       return false;
   return true;
 }
@@ -2726,6 +2730,10 @@ static void SortAndUniqueProtocols(ObjCProtocolDecl **Protocols,
   // Sort protocols, keyed by name.
   std::sort(Protocols, Protocols+NumProtocols, CmpProtocolNames);
 
+  // Canonicalize.
+  for (unsigned I = 0, N = NumProtocols; I != N; ++I)
+    Protocols[I] = Protocols[I]->getCanonicalDecl();
+  
   // Remove duplicates.
   ProtocolsEnd = std::unique(Protocols, ProtocolsEnd);
   NumProtocols = ProtocolsEnd-Protocols;
@@ -2811,11 +2819,21 @@ QualType ASTContext::getObjCObjectPointerType(QualType ObjectT) const {
 
 /// getObjCInterfaceType - Return the unique reference to the type for the
 /// specified ObjC interface decl. The list of protocols is optional.
-QualType ASTContext::getObjCInterfaceType(const ObjCInterfaceDecl *Decl) const {
+QualType ASTContext::getObjCInterfaceType(const ObjCInterfaceDecl *Decl,
+                                          ObjCInterfaceDecl *PrevDecl) const {
   if (Decl->TypeForDecl)
     return QualType(Decl->TypeForDecl, 0);
 
-  // FIXME: redeclarations?
+  if (PrevDecl) {
+    assert(PrevDecl->TypeForDecl && "previous decl has no TypeForDecl");
+    Decl->TypeForDecl = PrevDecl->TypeForDecl;
+    return QualType(PrevDecl->TypeForDecl, 0);
+  }
+
+  // Prefer the definition, if there is one.
+  if (const ObjCInterfaceDecl *Def = Decl->getDefinition())
+    Decl = Def;
+  
   void *Mem = Allocate(sizeof(ObjCInterfaceType), TypeAlignment);
   ObjCInterfaceType *T = new (Mem) ObjCInterfaceType(Decl);
   Decl->TypeForDecl = T;
@@ -5171,7 +5189,7 @@ bool ASTContext::areCompatibleVectorTypes(QualType FirstVec,
 bool
 ASTContext::ProtocolCompatibleWithProtocol(ObjCProtocolDecl *lProto,
                                            ObjCProtocolDecl *rProto) const {
-  if (lProto == rProto)
+  if (declaresSameEntity(lProto, rProto))
     return true;
   for (ObjCProtocolDecl::protocol_iterator PI = rProto->protocol_begin(),
        E = rProto->protocol_end(); PI != E; ++PI)
@@ -5472,7 +5490,7 @@ QualType ASTContext::areCommonBaseCompatible(
   const ObjCObjectType *RHS = Rptr->getObjectType();
   const ObjCInterfaceDecl* LDecl = LHS->getInterface();
   const ObjCInterfaceDecl* RDecl = RHS->getInterface();
-  if (!LDecl || !RDecl || (LDecl == RDecl))
+  if (!LDecl || !RDecl || (declaresSameEntity(LDecl, RDecl)))
     return QualType();
   
   do {

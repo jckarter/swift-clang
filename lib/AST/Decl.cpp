@@ -115,7 +115,7 @@ struct LVFlags {
 
 /// \brief Get the most restrictive linkage for the types in the given
 /// template parameter list.
-static LVPair 
+static LVPair
 getLVForTemplateParameterList(const TemplateParameterList *Params) {
   LVPair LV(ExternalLinkage, DefaultVisibility);
   for (TemplateParameterList::const_iterator P = Params->begin(),
@@ -130,7 +130,7 @@ getLVForTemplateParameterList(const TemplateParameterList *Params) {
         }
         continue;
       }
-      
+
       if (!NTTP->getType()->isDependentType()) {
         LV = merge(LV, NTTP->getType()->getLinkageAndVisibility());
         continue;
@@ -162,7 +162,7 @@ static LVPair getLVForTemplateArgumentList(const TemplateArgument *Args,
     case TemplateArgument::Integral:
     case TemplateArgument::Expression:
       break;
-      
+
     case TemplateArgument::Type:
       LV = merge(LV, Args[I].getAsType()->getLinkageAndVisibility());
       break;
@@ -178,7 +178,7 @@ static LVPair getLVForTemplateArgumentList(const TemplateArgument *Args,
 
     case TemplateArgument::Template:
     case TemplateArgument::TemplateExpansion:
-      if (TemplateDecl *Template 
+      if (TemplateDecl *Template
                 = Args[I].getAsTemplateOrTemplatePattern().getAsTemplateDecl())
         LV = merge(LV, getLVForDecl(Template, F));
       break;
@@ -297,10 +297,10 @@ static LinkageInfo getLVForNamespaceScopeDecl(const NamedDecl *D, LVFlags F) {
       for (const DeclContext *DC = D->getDeclContext();
            !isa<TranslationUnitDecl>(DC);
            DC = DC->getParent()) {
-        if (!isa<NamespaceDecl>(DC)) continue;
-        if (llvm::Optional<Visibility> Vis
-                           = cast<NamespaceDecl>(DC)->getExplicitVisibility()) {
-          LV.setVisibility(*Vis, false);
+        const NamespaceDecl *ND = dyn_cast<NamespaceDecl>(DC);
+        if (!ND) continue;
+        if (llvm::Optional<Visibility> Vis = ND->getExplicitVisibility()) {
+          LV.setVisibility(*Vis, true);
           F.ConsiderGlobalVisibility = false;
           break;
         }
@@ -568,6 +568,7 @@ static LinkageInfo getLVForClassMember(const NamedDecl *D, LVFlags F) {
     // about whether containing classes have visibility attributes,
     // and that's intentional.
     if (TSK != TSK_ExplicitInstantiationDeclaration &&
+        TSK != TSK_ExplicitInstantiationDefinition &&
         F.ConsiderGlobalVisibility &&
         MD->getASTContext().getLangOptions().InlineVisibilityHidden) {
       // InlineVisibilityHidden only applies to definitions, and
@@ -623,6 +624,8 @@ static void clearLinkageForClass(const CXXRecordDecl *record) {
       cast<NamedDecl>(child)->ClearLinkageCache();
   }
 }
+
+void NamedDecl::anchor() { }
 
 void NamedDecl::ClearLinkageCache() {
   // Note that we can't skip clearing the linkage of children just
@@ -730,7 +733,6 @@ static LinkageInfo getLVForDecl(const NamedDecl *D, LVFlags Flags) {
     case Decl::ObjCCategory:
     case Decl::ObjCCategoryImpl:
     case Decl::ObjCCompatibleAlias:
-    case Decl::ObjCForwardProtocol:
     case Decl::ObjCImplementation:
     case Decl::ObjCMethod:
     case Decl::ObjCProperty:
@@ -1335,6 +1337,114 @@ void VarDecl::setInit(Expr *I) {
   }
 
   Init = I;
+}
+
+bool VarDecl::isUsableInConstantExpressions() const {
+  const LangOptions &Lang = getASTContext().getLangOptions();
+
+  // Only const variables can be used in constant expressions in C++. C++98 does
+  // not require the variable to be non-volatile, but we consider this to be a
+  // defect.
+  if (!Lang.CPlusPlus ||
+      !getType().isConstQualified() || getType().isVolatileQualified())
+    return false;
+
+  // In C++, const, non-volatile variables of integral or enumeration types
+  // can be used in constant expressions.
+  if (getType()->isIntegralOrEnumerationType())
+    return true;
+
+  // Additionally, in C++11, non-volatile constexpr variables and references can
+  // be used in constant expressions.
+  return Lang.CPlusPlus0x && (isConstexpr() || getType()->isReferenceType());
+}
+
+/// Convert the initializer for this declaration to the elaborated EvaluatedStmt
+/// form, which contains extra information on the evaluated value of the
+/// initializer.
+EvaluatedStmt *VarDecl::ensureEvaluatedStmt() const {
+  EvaluatedStmt *Eval = Init.dyn_cast<EvaluatedStmt *>();
+  if (!Eval) {
+    Stmt *S = Init.get<Stmt *>();
+    Eval = new (getASTContext()) EvaluatedStmt;
+    Eval->Value = S;
+    Init = Eval;
+  }
+  return Eval;
+}
+
+bool VarDecl::evaluateValue(
+                      llvm::SmallVectorImpl<PartialDiagnosticAt> &Notes) const {
+  EvaluatedStmt *Eval = ensureEvaluatedStmt();
+
+  // We only produce notes indicating why an initializer is non-constant the
+  // first time it is evaluated. FIXME: The notes won't always be emitted the
+  // first time we try evaluation, so might not be produced at all.
+  if (Eval->WasEvaluated)
+    return !Eval->Evaluated.isUninit();
+
+  const Expr *Init = cast<Expr>(Eval->Value);
+  assert(!Init->isValueDependent());
+
+  if (Eval->IsEvaluating) {
+    // FIXME: Produce a diagnostic for self-initialization.
+    Eval->CheckedICE = true;
+    Eval->IsICE = false;
+    return false;
+  }
+
+  Eval->IsEvaluating = true;
+
+  bool Result = Init->EvaluateAsInitializer(Eval->Evaluated, getASTContext(),
+                                            this, Notes);
+
+  // Ensure the result is an uninitialized APValue if evaluation fails.
+  if (!Result)
+    Eval->Evaluated = APValue();
+
+  Eval->IsEvaluating = false;
+  Eval->WasEvaluated = true;
+
+  // In C++11, we have determined whether the initializer was a constant
+  // expression as a side-effect.
+  if (getASTContext().getLangOptions().CPlusPlus0x && !Eval->CheckedICE) {
+    Eval->CheckedICE = true;
+    Eval->IsICE = Notes.empty();
+  }
+
+  return Result;
+}
+
+bool VarDecl::checkInitIsICE() const {
+  EvaluatedStmt *Eval = ensureEvaluatedStmt();
+  if (Eval->CheckedICE)
+    // We have already checked whether this subexpression is an
+    // integral constant expression.
+    return Eval->IsICE;
+
+  const Expr *Init = cast<Expr>(Eval->Value);
+  assert(!Init->isValueDependent());
+
+  // In C++11, evaluate the initializer to check whether it's a constant
+  // expression.
+  if (getASTContext().getLangOptions().CPlusPlus0x) {
+    llvm::SmallVector<PartialDiagnosticAt, 8> Notes;
+    evaluateValue(Notes);
+    return Eval->IsICE;
+  }
+
+  // It's an ICE whether or not the definition we found is
+  // out-of-line.  See DR 721 and the discussion in Clang PR
+  // 6206 for details.
+
+  if (Eval->CheckingICE)
+    return false;
+  Eval->CheckingICE = true;
+
+  Eval->IsICE = Init->isIntegerConstantExpr(getASTContext());
+  Eval->CheckingICE = false;
+  Eval->CheckedICE = true;
+  return Eval->IsICE;
 }
 
 bool VarDecl::extendsLifetimeOfTemporary() const {
@@ -2336,6 +2446,8 @@ void TagDecl::setTemplateParameterListsInfo(ASTContext &Context,
 // EnumDecl Implementation
 //===----------------------------------------------------------------------===//
 
+void EnumDecl::anchor() { }
+
 EnumDecl *EnumDecl::Create(ASTContext &C, DeclContext *DC,
                            SourceLocation StartLoc, SourceLocation IdLoc,
                            IdentifierInfo *Id,
@@ -2499,9 +2611,13 @@ SourceRange BlockDecl::getSourceRange() const {
 // Other Decl Allocation/Deallocation Method Implementations
 //===----------------------------------------------------------------------===//
 
+void TranslationUnitDecl::anchor() { }
+
 TranslationUnitDecl *TranslationUnitDecl::Create(ASTContext &C) {
   return new (C) TranslationUnitDecl(C);
 }
+
+void LabelDecl::anchor() { }
 
 LabelDecl *LabelDecl::Create(ASTContext &C, DeclContext *DC,
                              SourceLocation IdentL, IdentifierInfo *II) {
@@ -2515,6 +2631,7 @@ LabelDecl *LabelDecl::Create(ASTContext &C, DeclContext *DC,
   return new (C) LabelDecl(DC, IdentL, II, 0, GnuLabelL);
 }
 
+void NamespaceDecl::anchor() { }
 
 NamespaceDecl *NamespaceDecl::Create(ASTContext &C, DeclContext *DC,
                                      SourceLocation StartLoc,
@@ -2526,6 +2643,10 @@ NamespaceDecl *NamespaceDecl::getNextNamespace() {
   return dyn_cast_or_null<NamespaceDecl>(
                        NextNamespace.get(getASTContext().getExternalSource()));
 }
+
+void ValueDecl::anchor() { }
+
+void ImplicitParamDecl::anchor() { }
 
 ImplicitParamDecl *ImplicitParamDecl::Create(ASTContext &C, DeclContext *DC,
                                              SourceLocation IdLoc,
@@ -2561,6 +2682,8 @@ EnumConstantDecl *EnumConstantDecl::Create(ASTContext &C, EnumDecl *CD,
   return new (C) EnumConstantDecl(CD, L, Id, T, E, V);
 }
 
+void IndirectFieldDecl::anchor() { }
+
 IndirectFieldDecl *
 IndirectFieldDecl::Create(ASTContext &C, DeclContext *DC, SourceLocation L,
                           IdentifierInfo *Id, QualType T, NamedDecl **CH,
@@ -2575,11 +2698,15 @@ SourceRange EnumConstantDecl::getSourceRange() const {
   return SourceRange(getLocation(), End);
 }
 
+void TypeDecl::anchor() { }
+
 TypedefDecl *TypedefDecl::Create(ASTContext &C, DeclContext *DC,
                                  SourceLocation StartLoc, SourceLocation IdLoc,
                                  IdentifierInfo *Id, TypeSourceInfo *TInfo) {
   return new (C) TypedefDecl(DC, StartLoc, IdLoc, Id, TInfo);
 }
+
+void TypedefNameDecl::anchor() { }
 
 TypeAliasDecl *TypeAliasDecl::Create(ASTContext &C, DeclContext *DC,
                                      SourceLocation StartLoc,
@@ -2603,6 +2730,8 @@ SourceRange TypeAliasDecl::getSourceRange() const {
     RangeEnd = TInfo->getTypeLoc().getSourceRange().getEnd();
   return SourceRange(getLocStart(), RangeEnd);
 }
+
+void FileScopeAsmDecl::anchor() { }
 
 FileScopeAsmDecl *FileScopeAsmDecl::Create(ASTContext &C, DeclContext *DC,
                                            StringLiteral *Str,
@@ -2687,4 +2816,3 @@ SourceRange ImportDecl::getSourceRange() const {
   
   return SourceRange(getLocation(), getIdentifierLocs().back());
 }
-

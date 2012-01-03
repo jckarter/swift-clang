@@ -1833,6 +1833,10 @@ llvm::Constant *CGObjCMac::GetOrEmitProtocol(const ObjCProtocolDecl *PD) {
   if (Entry && Entry->hasInitializer())
     return Entry;
 
+  // Use the protocol definition, if there is one.
+  if (const ObjCProtocolDecl *Def = PD->getDefinition())
+    PD = Def;
+
   // FIXME: I don't understand why gcc generates this, or where it is
   // resolved. Investigate. Its also wasteful to look this up over and over.
   LazySymbols.insert(&CGM.getContext().Idents.get("Protocol"));
@@ -3096,6 +3100,7 @@ void CGObjCMac::EmitTryOrSynchronizedStmt(CodeGen::CodeGenFunction &CGF,
   llvm::CallInst *SetJmpResult =
     CGF.Builder.CreateCall(ObjCTypes.getSetJmpFn(), SetJmpBuffer, "setjmp_result");
   SetJmpResult->setDoesNotThrow();
+  SetJmpResult->setCanReturnTwice();
 
   // If setjmp returned 0, enter the protected block; otherwise,
   // branch to the handler.
@@ -3161,6 +3166,7 @@ void CGObjCMac::EmitTryOrSynchronizedStmt(CodeGen::CodeGenFunction &CGF,
         CGF.Builder.CreateCall(ObjCTypes.getSetJmpFn(), SetJmpBuffer,
                                "setjmp.result");
       SetJmpResult->setDoesNotThrow();
+      SetJmpResult->setCanReturnTwice();
 
       llvm::Value *Threw =
         CGF.Builder.CreateIsNotNull(SetJmpResult, "did_catch_exception");
@@ -5462,6 +5468,10 @@ llvm::Constant *CGObjCNonFragileABIMac::GetOrEmitProtocol(
   if (Entry && Entry->hasInitializer())
     return Entry;
 
+  // Use the protocol definition, if there is one.
+  if (const ObjCProtocolDecl *Def = PD->getDefinition())
+    PD = Def;
+  
   // Construct method lists.
   std::vector<llvm::Constant*> InstanceMethods, ClassMethods;
   std::vector<llvm::Constant*> OptInstanceMethods, OptClassMethods;

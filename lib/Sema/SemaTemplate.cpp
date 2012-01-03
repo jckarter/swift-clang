@@ -1013,15 +1013,8 @@ Sema::CheckClassTemplate(Scope *S, unsigned TagSpec, TagUseKind TUK,
                                 NewClass, PrevClassTemplate);
   NewClass->setDescribedClassTemplate(NewTemplate);
   
-  if (PrevClassTemplate && PrevClassTemplate->isModulePrivate()) {
+  if (ModulePrivateLoc.isValid())
     NewTemplate->setModulePrivate();
-  } else if (ModulePrivateLoc.isValid()) {
-    if (PrevClassTemplate && !PrevClassTemplate->isModulePrivate())
-      diagnoseModulePrivateRedeclaration(NewTemplate, PrevClassTemplate,
-                                         ModulePrivateLoc);
-    else
-      NewTemplate->setModulePrivate();
-  }
   
   // Build the type for the class template declaration now.
   QualType T = NewTemplate->getInjectedClassNameSpecialization();
@@ -5351,9 +5344,17 @@ Sema::CheckSpecializationInstantiationRedecl(SourceLocation NewLoc,
       //   translation unit, the definition shall follow the declaration.
       Diag(NewLoc,
            diag::err_explicit_instantiation_declaration_after_definition);
-      Diag(PrevPointOfInstantiation,
-           diag::note_explicit_instantiation_definition_here);
-      assert(PrevPointOfInstantiation.isValid() &&
+
+      // Explicit instantiations following a specialization have no effect and
+      // hence no PrevPointOfInstantiation. In that case, walk decl backwards
+      // until a valid name loc is found.
+      SourceLocation PrevDiagLoc = PrevPointOfInstantiation;
+      for (NamedDecl *Prev = PrevDecl; Prev && !PrevDiagLoc.isValid();
+          Prev = getPreviousDecl(Prev)) {
+        PrevDiagLoc = Prev->getLocation();
+      }
+      Diag(PrevDiagLoc, diag::note_explicit_instantiation_definition_here);
+      assert(PrevDiagLoc.isValid() &&
              "Explicit instantiation without point of instantiation?");
       HasNoEffect = true;
       return false;
@@ -5390,6 +5391,20 @@ Sema::CheckSpecializationInstantiationRedecl(SourceLocation NewLoc,
     case TSK_ExplicitInstantiationDeclaration:
       // We're explicity instantiating a definition for something for which we
       // were previously asked to suppress instantiations. That's fine.
+
+      // C++0x [temp.explicit]p4:
+      //   For a given set of template parameters, if an explicit instantiation
+      //   of a template appears after a declaration of an explicit
+      //   specialization for that template, the explicit instantiation has no
+      //   effect.
+      for (NamedDecl *Prev = PrevDecl; Prev; Prev = getPreviousDecl(Prev)) {
+        // Is there any previous explicit specialization declaration?
+        if (getTemplateSpecializationKind(Prev) == TSK_ExplicitSpecialization) {
+          HasNoEffect = true;
+          break;
+        }
+      }
+
       return false;
 
     case TSK_ExplicitInstantiationDefinition:
@@ -5684,7 +5699,7 @@ Sema::CheckMemberSpecialization(NamedDecl *Member, LookupResult &Previous) {
 
   // C++ [temp.expl.spec]p6:
   //   If a template, a member template or the member of a class template is
-  //   explicitly specialized then that spe- cialization shall be declared
+  //   explicitly specialized then that specialization shall be declared
   //   before the first use of that specialization that would cause an implicit
   //   instantiation to take place, in every translation unit in which such a
   //   use occurs; no diagnostic is required.
@@ -5972,6 +5987,9 @@ Sema::ActOnExplicitInstantiation(Scope *S,
   // Set source locations for keywords.
   Specialization->setExternLoc(ExternLoc);
   Specialization->setTemplateKeywordLoc(TemplateLoc);
+
+  if (Attr)
+    ProcessDeclAttributeList(S, Specialization, Attr);
 
   // Add the explicit instantiation into its lexical context. However,
   // since explicit instantiations are never found by name lookup, we

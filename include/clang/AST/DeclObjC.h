@@ -426,6 +426,8 @@ public:
 /// ObjCProtocolDecl, and ObjCImplDecl.
 ///
 class ObjCContainerDecl : public NamedDecl, public DeclContext {
+  virtual void anchor();
+
   SourceLocation AtStart;
 
   // These two locations in the range mark the end of the method container.
@@ -540,62 +542,94 @@ public:
 ///   Unlike C++, ObjC is a single-rooted class model. In Cocoa, classes
 ///   typically inherit from NSObject (an exception is NSProxy).
 ///
-class ObjCInterfaceDecl : public ObjCContainerDecl {
+class ObjCInterfaceDecl : public ObjCContainerDecl
+                        , public Redeclarable<ObjCInterfaceDecl> {
+  virtual void anchor();
+
   /// TypeForDecl - This indicates the Type object that represents this
   /// TypeDecl.  It is a cache maintained by ASTContext::getObjCInterfaceType
   mutable const Type *TypeForDecl;
   friend class ASTContext;
+  
+  struct DefinitionData {
+    /// \brief The definition of this class, for quick access from any 
+    /// declaration.
+    ObjCInterfaceDecl *Definition;
+    
+    /// Class's super class.
+    ObjCInterfaceDecl *SuperClass;
 
-  /// Class's super class.
-  ObjCInterfaceDecl *SuperClass;
+    /// Protocols referenced in the @interface  declaration
+    ObjCProtocolList ReferencedProtocols;
 
-  /// Protocols referenced in the @interface  declaration
-  ObjCProtocolList ReferencedProtocols;
+    /// Protocols reference in both the @interface and class extensions.
+    ObjCList<ObjCProtocolDecl> AllReferencedProtocols;
 
-  /// Protocols reference in both the @interface and class extensions.
-  ObjCList<ObjCProtocolDecl> AllReferencedProtocols;
+    /// \brief List of categories and class extensions defined for this class.
+    ///
+    /// Categories are stored as a linked list in the AST, since the categories
+    /// and class extensions come long after the initial interface declaration,
+    /// and we avoid dynamically-resized arrays in the AST wherever possible.
+    ObjCCategoryDecl *CategoryList;
 
-  /// \brief List of categories and class extensions defined for this class.
-  ///
-  /// Categories are stored as a linked list in the AST, since the categories
-  /// and class extensions come long after the initial interface declaration,
-  /// and we avoid dynamically-resized arrays in the AST wherever possible.
-  ObjCCategoryDecl *CategoryList;
+    /// IvarList - List of all ivars defined by this class; including class
+    /// extensions and implementation. This list is built lazily.
+    ObjCIvarDecl *IvarList;
 
-  /// IvarList - List of all ivars defined by this class; including class
-  /// extensions and implementation. This list is built lazily.
-  ObjCIvarDecl *IvarList;
+    /// \brief Indicates that the contents of this Objective-C class will be
+    /// completed by the external AST source when required.
+    mutable bool ExternallyCompleted : 1;
 
-  /// \brief True if it was initially declared with @class.
-  /// Differs with \see ForwardDecl in that \see ForwardDecl will change to
-  /// false when we see the @interface, but InitiallyForwardDecl will remain
-  /// true.
-  bool InitiallyForwardDecl : 1;
-  bool ForwardDecl:1; // declared with @class.
+    /// \brief The location of the superclass, if any.
+    SourceLocation SuperClassLoc;
+    
+    /// \brief The location of the last location in this declaration, before
+    /// the properties/methods. For example, this will be the '>', '}', or 
+    /// identifier, 
+    SourceLocation EndLoc; 
 
-  /// \brief Indicates that the contents of this Objective-C class will be
-  /// completed by the external AST source when required.
-  mutable bool ExternallyCompleted : 1;
-
-  SourceLocation SuperClassLoc; // location of the super class identifier.
-  SourceLocation EndLoc; // marks the '>', '}', or identifier.
+    DefinitionData() : Definition(), SuperClass(), CategoryList(), IvarList(), 
+                       ExternallyCompleted() { }
+  };
 
   ObjCInterfaceDecl(DeclContext *DC, SourceLocation atLoc, IdentifierInfo *Id,
-                    SourceLocation CLoc, bool FD, bool isInternal);
+                    SourceLocation CLoc, ObjCInterfaceDecl *PrevDecl,
+                    bool isInternal);
 
   void LoadExternalDefinition() const;
+
+  /// \brief Contains a pointer to the data associated with this class,
+  /// which will be NULL if this class has not yet been defined.
+  DefinitionData *Data;
+
+  DefinitionData &data() const {
+    assert(Data != 0 && "Declaration has no definition!");
+    return *Data;
+  }
+
+  /// \brief Allocate the definition data for this class.
+  void allocateDefinitionData();
+  
+  typedef Redeclarable<ObjCInterfaceDecl> redeclarable_base;
+  virtual ObjCInterfaceDecl *getNextRedeclaration() { 
+    return RedeclLink.getNext(); 
+  }
+
 public:
   static ObjCInterfaceDecl *Create(ASTContext &C, DeclContext *DC,
                                    SourceLocation atLoc,
                                    IdentifierInfo *Id,
+                                   ObjCInterfaceDecl *PrevDecl,
                                    SourceLocation ClassLoc = SourceLocation(),
-                                   bool ForwardDecl = false,
                                    bool isInternal = false);
 
+  static ObjCInterfaceDecl *CreateEmpty(ASTContext &C);
+
   virtual SourceRange getSourceRange() const {
-    if (isForwardDecl())
-      return SourceRange(getAtStartLoc(), getLocation());
-    return ObjCContainerDecl::getSourceRange();
+    if (isThisDeclarationADefinition())
+      return ObjCContainerDecl::getSourceRange();
+    
+    return SourceRange(getAtStartLoc(), getLocation());
   }
 
   /// \brief Indicate that this Objective-C class is complete, but that
@@ -604,10 +638,10 @@ public:
   void setExternallyCompleted();
 
   const ObjCProtocolList &getReferencedProtocols() const {
-    if (ExternallyCompleted)
+    if (data().ExternallyCompleted)
       LoadExternalDefinition();
 
-    return ReferencedProtocols;
+    return data().ReferencedProtocols;
   }
 
   ObjCImplementationDecl *getImplementation() const;
@@ -626,55 +660,93 @@ public:
   typedef ObjCProtocolList::iterator protocol_iterator;
 
   protocol_iterator protocol_begin() const {
-    if (ExternallyCompleted)
+    // FIXME: Should make sure no callers ever do this.
+    if (!hasDefinition())
+      return protocol_iterator();
+    
+    if (data().ExternallyCompleted)
       LoadExternalDefinition();
 
-    return ReferencedProtocols.begin();
+    return data().ReferencedProtocols.begin();
   }
   protocol_iterator protocol_end() const {
-    if (ExternallyCompleted)
+    // FIXME: Should make sure no callers ever do this.
+    if (!hasDefinition())
+      return protocol_iterator();
+
+    if (data().ExternallyCompleted)
       LoadExternalDefinition();
 
-    return ReferencedProtocols.end();
+    return data().ReferencedProtocols.end();
   }
 
   typedef ObjCProtocolList::loc_iterator protocol_loc_iterator;
 
   protocol_loc_iterator protocol_loc_begin() const {
-    if (ExternallyCompleted)
+    // FIXME: Should make sure no callers ever do this.
+    if (!hasDefinition())
+      return protocol_loc_iterator();
+
+    if (data().ExternallyCompleted)
       LoadExternalDefinition();
 
-    return ReferencedProtocols.loc_begin();
+    return data().ReferencedProtocols.loc_begin();
   }
 
   protocol_loc_iterator protocol_loc_end() const {
-    if (ExternallyCompleted)
+    // FIXME: Should make sure no callers ever do this.
+    if (!hasDefinition())
+      return protocol_loc_iterator();
+
+    if (data().ExternallyCompleted)
       LoadExternalDefinition();
 
-    return ReferencedProtocols.loc_end();
+    return data().ReferencedProtocols.loc_end();
   }
 
   typedef ObjCList<ObjCProtocolDecl>::iterator all_protocol_iterator;
 
   all_protocol_iterator all_referenced_protocol_begin() const {
-    if (ExternallyCompleted)
+    // FIXME: Should make sure no callers ever do this.
+    if (!hasDefinition())
+      return all_protocol_iterator();
+
+    if (data().ExternallyCompleted)
       LoadExternalDefinition();
 
-    return AllReferencedProtocols.empty() ? protocol_begin()
-      : AllReferencedProtocols.begin();
+    return data().AllReferencedProtocols.empty()  
+             ? protocol_begin()
+             : data().AllReferencedProtocols.begin();
   }
   all_protocol_iterator all_referenced_protocol_end() const {
-    if (ExternallyCompleted)
+    // FIXME: Should make sure no callers ever do this.
+    if (!hasDefinition())
+      return all_protocol_iterator();
+    
+    if (data().ExternallyCompleted)
       LoadExternalDefinition();
 
-    return AllReferencedProtocols.empty() ? protocol_end()
-      : AllReferencedProtocols.end();
+    return data().AllReferencedProtocols.empty() 
+             ? protocol_end()
+             : data().AllReferencedProtocols.end();
   }
 
   typedef specific_decl_iterator<ObjCIvarDecl> ivar_iterator;
 
-  ivar_iterator ivar_begin() const { return ivar_iterator(decls_begin()); }
-  ivar_iterator ivar_end() const { return ivar_iterator(decls_end()); }
+  ivar_iterator ivar_begin() const { 
+    if (const ObjCInterfaceDecl *Def = getDefinition())
+      return ivar_iterator(Def->decls_begin()); 
+    
+    // FIXME: Should make sure no callers ever do this.
+    return ivar_iterator();
+  }
+  ivar_iterator ivar_end() const { 
+    if (const ObjCInterfaceDecl *Def = getDefinition())
+      return ivar_iterator(Def->decls_end()); 
+
+    // FIXME: Should make sure no callers ever do this.
+    return ivar_iterator();
+  }
 
   unsigned ivar_size() const {
     return std::distance(ivar_begin(), ivar_end());
@@ -688,13 +760,13 @@ public:
     // the ivar chain is essentially a cached property of ObjCInterfaceDecl.
     return const_cast<ObjCInterfaceDecl *>(this)->all_declared_ivar_begin();
   }
-  void setIvarList(ObjCIvarDecl *ivar) { IvarList = ivar; }
+  void setIvarList(ObjCIvarDecl *ivar) { data().IvarList = ivar; }
 
   /// setProtocolList - Set the list of protocols that this interface
   /// implements.
   void setProtocolList(ObjCProtocolDecl *const* List, unsigned Num,
                        const SourceLocation *Locs, ASTContext &C) {
-    ReferencedProtocols.set(List, Num, Locs, C);
+    data().ReferencedProtocols.set(List, Num, Locs, C);
   }
 
   /// mergeClassExtensionProtocolList - Merge class extension's protocol list
@@ -703,33 +775,63 @@ public:
                                        unsigned Num,
                                        ASTContext &C);
 
-  /// \brief True if it was initially declared with @class.
-  /// Differs with \see isForwardDecl in that \see isForwardDecl will change to
-  /// false when we see the @interface, but this will remain true.
-  bool isInitiallyForwardDecl() const { return InitiallyForwardDecl; }
-
-  bool isForwardDecl() const { return ForwardDecl; }
-
-  void completedForwardDecl();
-
-  ObjCInterfaceDecl *getSuperClass() const {
-    if (ExternallyCompleted)
-      LoadExternalDefinition();
-
-    return SuperClass;
+  /// \brief Determine whether this particular declaration of this class is
+  /// actually also a definition.
+  bool isThisDeclarationADefinition() const { 
+    return Data && Data->Definition == this;
+  }
+                          
+  /// \brief Determine whether this class has been defined.
+  bool hasDefinition() const { return Data; }
+                        
+  /// \brief Retrieve the definition of this class, or NULL if this class 
+  /// has been forward-declared (with @class) but not yet defined (with 
+  /// @interface).
+  ObjCInterfaceDecl *getDefinition() {
+    return hasDefinition()? Data->Definition : 0;
   }
 
-  void setSuperClass(ObjCInterfaceDecl * superCls) { SuperClass = superCls; }
+  /// \brief Retrieve the definition of this class, or NULL if this class 
+  /// has been forward-declared (with @class) but not yet defined (with 
+  /// @interface).
+  const ObjCInterfaceDecl *getDefinition() const {
+    return hasDefinition()? Data->Definition : 0;
+  }
 
-  ObjCCategoryDecl* getCategoryList() const {
-    if (ExternallyCompleted)
+  /// \brief Starts the definition of this Objective-C class, taking it from
+  /// a forward declaration (@class) to a definition (@interface).
+  void startDefinition();
+  
+  ObjCInterfaceDecl *getSuperClass() const {
+    // FIXME: Should make sure no callers ever do this.
+    if (!hasDefinition())
+      return 0;
+    
+    if (data().ExternallyCompleted)
       LoadExternalDefinition();
 
-    return CategoryList;
+    return data().SuperClass;
+  }
+
+  void setSuperClass(ObjCInterfaceDecl * superCls) { 
+    data().SuperClass = 
+      (superCls && superCls->hasDefinition()) ? superCls->getDefinition() 
+                                              : superCls; 
+  }
+
+  ObjCCategoryDecl* getCategoryList() const {
+    // FIXME: Should make sure no callers ever do this.
+    if (!hasDefinition())
+      return 0;
+    
+    if (data().ExternallyCompleted)
+      LoadExternalDefinition();
+
+    return data().CategoryList;
   }
 
   void setCategoryList(ObjCCategoryDecl *category) {
-    CategoryList = category;
+    data().CategoryList = category;
   }
 
   ObjCCategoryDecl* getFirstClassExtension() const;
@@ -742,8 +844,9 @@ public:
   bool isSuperClassOf(const ObjCInterfaceDecl *I) const {
     // If RHS is derived from LHS it is OK; else it is not OK.
     while (I != NULL) {
-      if (this == I)
+      if (declaresSameEntity(this, I))
         return true;
+      
       I = I->getSuperClass();
     }
     return false;
@@ -782,19 +885,24 @@ public:
   // Lookup a method in the classes implementation hierarchy.
   ObjCMethodDecl *lookupPrivateMethod(const Selector &Sel, bool Instance=true);
 
-  // Location information, modeled after the Stmt API.
-  SourceLocation getLocStart() const { return getAtStartLoc(); } // '@'interface
-  SourceLocation getLocEnd() const { return EndLoc; }
-  void setLocEnd(SourceLocation LE) { EndLoc = LE; }
+  SourceLocation getEndOfDefinitionLoc() const { 
+    if (!hasDefinition())
+      return getLocation();
+    
+    return data().EndLoc; 
+  }
+                          
+  void setEndOfDefinitionLoc(SourceLocation LE) { data().EndLoc = LE; }
 
-  void setSuperClassLoc(SourceLocation Loc) { SuperClassLoc = Loc; }
-  SourceLocation getSuperClassLoc() const { return SuperClassLoc; }
+  void setSuperClassLoc(SourceLocation Loc) { data().SuperClassLoc = Loc; }
+  SourceLocation getSuperClassLoc() const { return data().SuperClassLoc; }
 
   /// isImplicitInterfaceDecl - check that this is an implicitly declared
   /// ObjCInterfaceDecl node. This is for legacy objective-c @implementation
   /// declaration without an @interface declaration.
-  bool isImplicitInterfaceDecl() const { return isImplicit(); }
-  void setImplicitInterfaceDecl(bool val) { setImplicit(val); }
+  bool isImplicitInterfaceDecl() const { 
+    return hasDefinition() ? Data->Definition->isImplicit() : isImplicit(); 
+  }
 
   /// ClassImplementsProtocol - Checks that 'lProto' protocol
   /// has been implemented in IDecl class, its super class or categories (if
@@ -802,6 +910,22 @@ public:
   bool ClassImplementsProtocol(ObjCProtocolDecl *lProto,
                                bool lookupCategory,
                                bool RHSIsQualifiedID = false);
+
+  typedef redeclarable_base::redecl_iterator redecl_iterator;
+  redecl_iterator redecls_begin() const {
+    return redeclarable_base::redecls_begin();
+  }
+  redecl_iterator redecls_end() const {
+    return redeclarable_base::redecls_end();
+  }
+
+  /// Retrieves the canonical declaration of this Objective-C class.
+  ObjCInterfaceDecl *getCanonicalDecl() {
+    return getFirstDeclaration();
+  }
+  const ObjCInterfaceDecl *getCanonicalDecl() const {
+    return getFirstDeclaration();
+  }
 
   // Low-level accessor
   const Type *getTypeForDecl() const { return TypeForDecl; }
@@ -811,6 +935,7 @@ public:
   static bool classof(const ObjCInterfaceDecl *D) { return true; }
   static bool classofKind(Kind K) { return K == ObjCInterface; }
 
+  friend class ASTReader;
   friend class ASTDeclReader;
   friend class ASTDeclWriter;
 };
@@ -831,6 +956,8 @@ public:
 ///   }
 ///
 class ObjCIvarDecl : public FieldDecl {
+  virtual void anchor();
+
 public:
   enum AccessControl {
     None, Private, Protected, Public, Package
@@ -892,7 +1019,7 @@ private:
 /// ObjCAtDefsFieldDecl - Represents a field declaration created by an
 ///  @defs(...).
 class ObjCAtDefsFieldDecl : public FieldDecl {
-private:
+  virtual void anchor();
   ObjCAtDefsFieldDecl(DeclContext *DC, SourceLocation StartLoc,
                       SourceLocation IdLoc, IdentifierInfo *Id,
                       QualType T, Expr *BW)
@@ -936,50 +1063,86 @@ public:
 ///
 /// id <NSDraggingInfo> anyObjectThatImplementsNSDraggingInfo;
 ///
-class ObjCProtocolDecl : public ObjCContainerDecl {
-  /// Referenced protocols
-  ObjCProtocolList ReferencedProtocols;
+class ObjCProtocolDecl : public ObjCContainerDecl,
+                         public Redeclarable<ObjCProtocolDecl> {
+  virtual void anchor();
 
-  bool InitiallyForwardDecl : 1;
-  bool isForwardProtoDecl : 1; // declared with @protocol.
+  struct DefinitionData {
+    // \brief The declaration that defines this protocol.
+    ObjCProtocolDecl *Definition;
 
-  SourceLocation EndLoc; // marks the '>' or identifier.
+    /// \brief Referenced protocols
+    ObjCProtocolList ReferencedProtocols;    
+  };
+  
+  DefinitionData *Data;
 
+  DefinitionData &data() const {
+    assert(Data && "Objective-C protocol has no definition!");
+    return *Data;
+  }
+  
   ObjCProtocolDecl(DeclContext *DC, IdentifierInfo *Id,
                    SourceLocation nameLoc, SourceLocation atStartLoc,
-                   bool isForwardDecl)
-    : ObjCContainerDecl(ObjCProtocol, DC, Id, nameLoc, atStartLoc),
-      InitiallyForwardDecl(isForwardDecl),
-      isForwardProtoDecl(isForwardDecl) {
-  }
+                   ObjCProtocolDecl *PrevDecl);
 
+  void allocateDefinitionData();
+
+  typedef Redeclarable<ObjCProtocolDecl> redeclarable_base;
+  virtual ObjCProtocolDecl *getNextRedeclaration() { 
+    return RedeclLink.getNext(); 
+  }
+                           
 public:
   static ObjCProtocolDecl *Create(ASTContext &C, DeclContext *DC,
                                   IdentifierInfo *Id,
                                   SourceLocation nameLoc,
                                   SourceLocation atStartLoc,
-                                  bool isForwardDecl);
+                                  ObjCProtocolDecl *PrevDecl);
 
   const ObjCProtocolList &getReferencedProtocols() const {
-    return ReferencedProtocols;
+    assert(hasDefinition() && "No definition available!");
+    return data().ReferencedProtocols;
   }
   typedef ObjCProtocolList::iterator protocol_iterator;
-  protocol_iterator protocol_begin() const {return ReferencedProtocols.begin();}
-  protocol_iterator protocol_end() const { return ReferencedProtocols.end(); }
+  protocol_iterator protocol_begin() const {
+    if (!hasDefinition())
+      return protocol_iterator();
+    
+    return data().ReferencedProtocols.begin();
+  }
+  protocol_iterator protocol_end() const { 
+    if (!hasDefinition())
+      return protocol_iterator();
+    
+    return data().ReferencedProtocols.end(); 
+  }
   typedef ObjCProtocolList::loc_iterator protocol_loc_iterator;
   protocol_loc_iterator protocol_loc_begin() const {
-    return ReferencedProtocols.loc_begin();
+    if (!hasDefinition())
+      return protocol_loc_iterator();
+    
+    return data().ReferencedProtocols.loc_begin();
   }
   protocol_loc_iterator protocol_loc_end() const {
-    return ReferencedProtocols.loc_end();
+    if (!hasDefinition())
+      return protocol_loc_iterator();
+    
+    return data().ReferencedProtocols.loc_end();
   }
-  unsigned protocol_size() const { return ReferencedProtocols.size(); }
+  unsigned protocol_size() const { 
+    if (!hasDefinition())
+      return 0;
+    
+    return data().ReferencedProtocols.size(); 
+  }
 
   /// setProtocolList - Set the list of protocols that this interface
   /// implements.
   void setProtocolList(ObjCProtocolDecl *const*List, unsigned Num,
                        const SourceLocation *Locs, ASTContext &C) {
-    ReferencedProtocols.set(List, Num, Locs, C);
+    assert(Data && "Protocol is not defined");
+    data().ReferencedProtocols.set(List, Num, Locs, C);
   }
 
   ObjCProtocolDecl *lookupProtocolNamed(IdentifierInfo *PName);
@@ -994,113 +1157,58 @@ public:
     return lookupMethod(Sel, false/*isInstance*/);
   }
 
-  /// \brief True if it was initially a forward reference.
-  /// Differs with \see isForwardDecl in that \see isForwardDecl will change to
-  /// false when we see the definition, but this will remain true.
-  bool isInitiallyForwardDecl() const { return InitiallyForwardDecl; }
+  /// \brief Determine whether this protocol has a definition.
+  bool hasDefinition() const { return Data != 0; }
 
-  bool isForwardDecl() const { return isForwardProtoDecl; }
+  /// \brief Retrieve the definition of this protocol, if any.
+  ObjCProtocolDecl *getDefinition() {
+    return Data? Data->Definition : 0;
+  }
 
-  void completedForwardDecl();
+  /// \brief Retrieve the definition of this protocol, if any.
+  const ObjCProtocolDecl *getDefinition() const {
+    return Data? Data->Definition : 0;
+  }
 
-  // Location information, modeled after the Stmt API.
-  SourceLocation getLocStart() const { return getAtStartLoc(); } // '@'protocol
-  SourceLocation getLocEnd() const { return EndLoc; }
-  void setLocEnd(SourceLocation LE) { EndLoc = LE; }
+  /// \brief Determine whether this particular declaration is also the 
+  /// definition.
+  bool isThisDeclarationADefinition() const {
+    return getDefinition() == this;
+  }
+  
+  /// \brief Starts the definition of this Objective-C protocol.
+  void startDefinition();
+
+  virtual SourceRange getSourceRange() const {
+    if (isThisDeclarationADefinition())
+      return ObjCContainerDecl::getSourceRange();
+   
+    return SourceRange(getAtStartLoc(), getLocation());
+  }
+                           
+  typedef redeclarable_base::redecl_iterator redecl_iterator;
+  redecl_iterator redecls_begin() const {
+    return redeclarable_base::redecls_begin();
+  }
+  redecl_iterator redecls_end() const {
+    return redeclarable_base::redecls_end();
+  }
+                           
+  /// Retrieves the canonical declaration of this Objective-C protocol.
+  ObjCProtocolDecl *getCanonicalDecl() {
+    return getFirstDeclaration();
+  }
+  const ObjCProtocolDecl *getCanonicalDecl() const {
+    return getFirstDeclaration();
+  }
 
   static bool classof(const Decl *D) { return classofKind(D->getKind()); }
   static bool classof(const ObjCProtocolDecl *D) { return true; }
   static bool classofKind(Kind K) { return K == ObjCProtocol; }
 
+  friend class ASTReader;
   friend class ASTDeclReader;
   friend class ASTDeclWriter;
-};
-
-/// ObjCClassDecl - Specifies a list of forward class declarations. For example:
-///
-/// @class NSCursor, NSImage, NSPasteboard, NSWindow;
-///
-class ObjCClassDecl : public Decl {
-public:
-  class ObjCClassRef {
-    ObjCInterfaceDecl *ID;
-    SourceLocation L;
-  public:
-    ObjCClassRef(ObjCInterfaceDecl *d, SourceLocation l) : ID(d), L(l) {}
-    SourceLocation getLocation() const { return L; }
-    ObjCInterfaceDecl *getInterface() const { return ID; }
-  };
-private:
-  ObjCClassRef *ForwardDecl;
-
-  ObjCClassDecl(DeclContext *DC, SourceLocation L,
-                ObjCInterfaceDecl *const Elt, const SourceLocation Loc,
-                ASTContext &C);
-public:
-  static ObjCClassDecl *Create(ASTContext &C, DeclContext *DC, SourceLocation L,
-                               ObjCInterfaceDecl *const Elt = 0,
-                               const SourceLocation Locs = SourceLocation());
-
-  ObjCInterfaceDecl *getForwardInterfaceDecl() {
-    return ForwardDecl->getInterface();
-  }
-  ObjCClassRef *getForwardDecl() { return ForwardDecl; }
-  const ObjCClassRef *getForwardDecl() const { return ForwardDecl; }
-  void setClass(ASTContext &C, ObjCInterfaceDecl*const Cls,
-                const SourceLocation Locs);
-
-  virtual SourceRange getSourceRange() const;
-
-  static bool classof(const Decl *D) { return classofKind(D->getKind()); }
-  static bool classof(const ObjCClassDecl *D) { return true; }
-  static bool classofKind(Kind K) { return K == ObjCClass; }
-};
-
-/// ObjCForwardProtocolDecl - Specifies a list of forward protocol declarations.
-/// For example:
-///
-/// @protocol NSTextInput, NSChangeSpelling, NSDraggingInfo;
-///
-class ObjCForwardProtocolDecl : public Decl {
-  ObjCProtocolList ReferencedProtocols;
-
-  ObjCForwardProtocolDecl(DeclContext *DC, SourceLocation L,
-                          ObjCProtocolDecl *const *Elts, unsigned nElts,
-                          const SourceLocation *Locs, ASTContext &C);
-
-public:
-  static ObjCForwardProtocolDecl *Create(ASTContext &C, DeclContext *DC,
-                                         SourceLocation L,
-                                         ObjCProtocolDecl *const *Elts,
-                                         unsigned Num,
-                                         const SourceLocation *Locs);
-
-  static ObjCForwardProtocolDecl *Create(ASTContext &C, DeclContext *DC,
-                                         SourceLocation L) {
-    return Create(C, DC, L, 0, 0, 0);
-  }
-
-  typedef ObjCProtocolList::iterator protocol_iterator;
-  protocol_iterator protocol_begin() const {return ReferencedProtocols.begin();}
-  protocol_iterator protocol_end() const { return ReferencedProtocols.end(); }
-  typedef ObjCProtocolList::loc_iterator protocol_loc_iterator;
-  protocol_loc_iterator protocol_loc_begin() const {
-    return ReferencedProtocols.loc_begin();
-  }
-  protocol_loc_iterator protocol_loc_end() const {
-    return ReferencedProtocols.loc_end();
-  }
-
-  unsigned protocol_size() const { return ReferencedProtocols.size(); }
-
-  /// setProtocolList - Set the list of forward protocols.
-  void setProtocolList(ObjCProtocolDecl *const*List, unsigned Num,
-                       const SourceLocation *Locs, ASTContext &C) {
-    ReferencedProtocols.set(List, Num, Locs, C);
-  }
-  static bool classof(const Decl *D) { return classofKind(D->getKind()); }
-  static bool classof(const ObjCForwardProtocolDecl *D) { return true; }
-  static bool classofKind(Kind K) { return K == ObjCForwardProtocol; }
 };
 
 /// ObjCCategoryDecl - Represents a category declaration. A category allows
@@ -1121,6 +1229,8 @@ public:
 /// don't support this level of dynamism, which is both powerful and dangerous.
 ///
 class ObjCCategoryDecl : public ObjCContainerDecl {
+  virtual void anchor();
+
   /// Interface belonging to this category
   ObjCInterfaceDecl *ClassInterface;
 
@@ -1217,6 +1327,8 @@ public:
 };
 
 class ObjCImplDecl : public ObjCContainerDecl {
+  virtual void anchor();
+
   /// Class interface for this class/category implementation
   ObjCInterfaceDecl *ClassInterface;
 
@@ -1280,6 +1392,8 @@ public:
 ///
 /// ObjCCategoryImplDecl
 class ObjCCategoryImplDecl : public ObjCImplDecl {
+  virtual void anchor();
+
   // Category name
   IdentifierInfo *Id;
 
@@ -1368,6 +1482,7 @@ raw_ostream &operator<<(raw_ostream &OS,
 /// specified, they need to be *identical* to the interface.
 ///
 class ObjCImplementationDecl : public ObjCImplDecl {
+  virtual void anchor();
   /// Implementation Class's super class.
   ObjCInterfaceDecl *SuperClass;
   /// Support for ivar initialization.
@@ -1498,6 +1613,7 @@ raw_ostream &operator<<(raw_ostream &OS,
 /// ObjCCompatibleAliasDecl - Represents alias of a class. This alias is
 /// declared as @compatibility_alias alias class.
 class ObjCCompatibleAliasDecl : public NamedDecl {
+  virtual void anchor();
   /// Class that this is an alias of.
   ObjCInterfaceDecl *AliasedClass;
 
@@ -1524,6 +1640,7 @@ public:
 /// @property (assign, readwrite) int MyProperty;
 ///
 class ObjCPropertyDecl : public NamedDecl {
+  virtual void anchor();
 public:
   enum PropertyAttributeKind {
     OBJC_PR_noattr    = 0x00,

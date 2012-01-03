@@ -312,7 +312,11 @@ private:
   /// serialized again. In this case, it is registered here, so that the reader
   /// knows to read the updated version.
   SmallVector<ReplacedDeclInfo, 16> ReplacedDecls;
-
+                    
+  /// \brief The list of local redeclarations of entities that were
+  /// first declared non-locally.
+  SmallVector<serialization::LocalRedeclarationsInfo, 2> LocalRedeclarations;
+                  
   /// \brief Statements that we've encountered while serializing a
   /// declaration or type.
   SmallVector<Stmt *, 16> StmtsToEmit;
@@ -411,7 +415,8 @@ private:
   void WriteDeclContextVisibleUpdate(const DeclContext *DC);
   void WriteFPPragmaOptions(const FPOptions &Opts);
   void WriteOpenCLExtensions(Sema &SemaRef);
-
+  void WriteMergedDecls();
+                        
   unsigned DeclParmVarAbbrev;
   unsigned DeclContextLexicalAbbrev;
   unsigned DeclContextVisibleLookupAbbrev;
@@ -667,6 +672,7 @@ public:
   void SelectorRead(serialization::SelectorID ID, Selector Sel);
   void MacroDefinitionRead(serialization::PreprocessedEntityID ID,
                            MacroDefinition *MD);
+  void MacroVisible(IdentifierInfo *II);
   void ModuleRead(serialization::SubmoduleID ID, Module *Mod);
                     
   // ASTMutationListener implementation.
@@ -685,7 +691,6 @@ public:
   virtual void AddedObjCPropertyInClassExtension(const ObjCPropertyDecl *Prop,
                                             const ObjCPropertyDecl *OrigProp,
                                             const ObjCCategoryDecl *ClassExt);
-  virtual void UpdatedAttributeList(const Decl *D);
 };
 
 /// \brief AST and semantic-analysis consumer that generates a

@@ -227,7 +227,6 @@ SVal StoreManager::CastRetrievedVal(SVal V, const TypedValueRegion *R,
     return V;
   }
   
-  assert(isa<Loc>(&V) || isa<NonLoc>(&V));
   return svalBuilder.dispatchCast(V, castTy);
 }
 
@@ -332,3 +331,5 @@ SVal StoreManager::getLValueElement(QualType elementType, NonLoc Offset,
 
 StoreManager::BindingsHandler::~BindingsHandler() {}
 
+void SubRegionMap::anchor() { }
+void SubRegionMap::Visitor::anchor() { }

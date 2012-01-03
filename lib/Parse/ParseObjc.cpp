@@ -50,15 +50,13 @@ Parser::DeclGroupPtrTy Parser::ParseObjCAtDirectives() {
   }
   case tok::objc_protocol: {
     ParsedAttributes attrs(AttrFactory);
-    SingleDecl = ParseObjCAtProtocolDeclaration(AtLoc, attrs);
-    break;
+    return ParseObjCAtProtocolDeclaration(AtLoc, attrs);
   }
   case tok::objc_implementation:
     SingleDecl = ParseObjCAtImplementationDeclaration(AtLoc);
     break;
   case tok::objc_end:
     return ParseObjCAtEndDeclaration(AtLoc);
-    break;
   case tok::objc_compatibility_alias:
     SingleDecl = ParseObjCAtAliasDeclaration(AtLoc);
     break;
@@ -284,6 +282,9 @@ Decl *Parser::ParseObjCAtInterfaceDeclaration(SourceLocation AtLoc,
 /// The Objective-C property callback.  This should be defined where
 /// it's used, but instead it's been lifted to here to support VS2005.
 struct Parser::ObjCPropertyCallback : FieldCallback {
+private:
+  virtual void anchor();
+public:
   Parser &P;
   SmallVectorImpl<Decl *> &Props;
   ObjCDeclSpec &OCDS;
@@ -337,6 +338,9 @@ struct Parser::ObjCPropertyCallback : FieldCallback {
   }
 };
 
+void Parser::ObjCPropertyCallback::anchor() {
+}
+
 ///   objc-interface-decl-list:
 ///     empty
 ///     objc-interface-decl-list objc-property-decl [OBJC2]
@@ -366,8 +370,12 @@ void Parser::ParseObjCInterfaceDeclList(tok::ObjCKeywordKind contextKey,
       allMethods.push_back(methodPrototype);
       // Consume the ';' here, since ParseObjCMethodPrototype() is re-used for
       // method definitions.
-      ExpectAndConsume(tok::semi, diag::err_expected_semi_after_method_proto,
-                       "", tok::semi);
+      if (ExpectAndConsumeSemi(diag::err_expected_semi_after_method_proto)) {
+        // We didn't find a semi and we error'ed out. Skip until a ';' or '@'.
+        SkipUntil(tok::at, /*StopAtSemi=*/true, /*DontConsume=*/true);
+        if (Tok.is(tok::semi))
+          ConsumeToken();
+      }
       continue;
     }
     if (Tok.is(tok::l_paren)) {
@@ -1339,8 +1347,9 @@ void Parser::ParseObjCClassInstanceVariables(Decl *interfaceDecl,
 ///   "@protocol identifier ;" should be resolved as "@protocol
 ///   identifier-list ;": objc-interface-decl-list may not start with a
 ///   semicolon in the first alternative if objc-protocol-refs are omitted.
-Decl *Parser::ParseObjCAtProtocolDeclaration(SourceLocation AtLoc,
-                                             ParsedAttributes &attrs) {
+Parser::DeclGroupPtrTy 
+Parser::ParseObjCAtProtocolDeclaration(SourceLocation AtLoc,
+                                       ParsedAttributes &attrs) {
   assert(Tok.isObjCAtKeyword(tok::objc_protocol) &&
          "ParseObjCAtProtocolDeclaration(): Expected @protocol");
   ConsumeToken(); // the "protocol" identifier
@@ -1348,12 +1357,12 @@ Decl *Parser::ParseObjCAtProtocolDeclaration(SourceLocation AtLoc,
   if (Tok.is(tok::code_completion)) {
     Actions.CodeCompleteObjCProtocolDecl(getCurScope());
     cutOffParsing();
-    return 0;
+    return DeclGroupPtrTy();
   }
 
   if (Tok.isNot(tok::identifier)) {
     Diag(Tok, diag::err_expected_ident); // missing protocol name.
-    return 0;
+    return DeclGroupPtrTy();
   }
   // Save the protocol name, then consume it.
   IdentifierInfo *protocolName = Tok.getIdentifierInfo();
@@ -1378,7 +1387,7 @@ Decl *Parser::ParseObjCAtProtocolDeclaration(SourceLocation AtLoc,
       if (Tok.isNot(tok::identifier)) {
         Diag(Tok, diag::err_expected_ident);
         SkipUntil(tok::semi);
-        return 0;
+        return DeclGroupPtrTy();
       }
       ProtocolRefs.push_back(IdentifierLocPair(Tok.getIdentifierInfo(),
                                                Tok.getLocation()));
@@ -1389,7 +1398,7 @@ Decl *Parser::ParseObjCAtProtocolDeclaration(SourceLocation AtLoc,
     }
     // Consume the ';'.
     if (ExpectAndConsume(tok::semi, diag::err_expected_semi_after, "@protocol"))
-      return 0;
+      return DeclGroupPtrTy();
 
     return Actions.ActOnForwardProtocolDeclaration(AtLoc,
                                                    &ProtocolRefs[0],
@@ -1405,7 +1414,7 @@ Decl *Parser::ParseObjCAtProtocolDeclaration(SourceLocation AtLoc,
   if (Tok.is(tok::less) &&
       ParseObjCProtocolReferences(ProtocolRefs, ProtocolLocs, false,
                                   LAngleLoc, EndProtoLoc))
-    return 0;
+    return DeclGroupPtrTy();
 
   Decl *ProtoType =
     Actions.ActOnStartProtocolInterface(AtLoc, protocolName, nameLoc,
@@ -1415,7 +1424,7 @@ Decl *Parser::ParseObjCAtProtocolDeclaration(SourceLocation AtLoc,
                                         EndProtoLoc, attrs.getList());
 
   ParseObjCInterfaceDeclList(tok::objc_protocol, ProtoType);
-  return ProtoType;
+  return Actions.ConvertDeclToDeclGroup(ProtoType);
 }
 
 ///   objc-implementation:
@@ -2714,7 +2723,10 @@ ExprResult Parser::ParseObjCSelectorExpression(SourceLocation AtLoc) {
  }
 
 Decl *Parser::ParseLexedObjCMethodDefs(LexedMethod &LM) {
-    
+
+  // Save the current token position.
+  SourceLocation OrigLoc = Tok.getLocation();
+
   assert(!LM.Toks.empty() && "ParseLexedObjCMethodDef - Empty body!");
   // Append the current token at the end of the new token stream so that it
   // doesn't get lost.
@@ -2753,5 +2765,19 @@ Decl *Parser::ParseLexedObjCMethodDefs(LexedMethod &LM) {
   // Leave the function body scope.
   BodyScope.Exit();
     
-  return Actions.ActOnFinishFunctionBody(MDecl, FnBody.take());
+  MDecl = Actions.ActOnFinishFunctionBody(MDecl, FnBody.take());
+
+  if (Tok.getLocation() != OrigLoc) {
+    // Due to parsing error, we either went over the cached tokens or
+    // there are still cached tokens left. If it's the latter case skip the
+    // leftover tokens.
+    // Since this is an uncommon situation that should be avoided, use the
+    // expensive isBeforeInTranslationUnit call.
+    if (PP.getSourceManager().isBeforeInTranslationUnit(Tok.getLocation(),
+                                                     OrigLoc))
+      while (Tok.getLocation() != OrigLoc && Tok.isNot(tok::eof))
+        ConsumeAnyToken();
+  }
+  
+  return MDecl;
 }

@@ -24,7 +24,7 @@
 #include "clang/Lex/LiteralSupport.h"
 #include "llvm/ADT/StringSwitch.h"
 #include "llvm/ADT/STLExtras.h"
-#include "llvm/Config/config.h"
+#include "llvm/Config/llvm-config.h"
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Support/ErrorHandling.h"
 #include <cstdio>
@@ -115,6 +115,11 @@ static bool isTrivialSingleTokenExpansion(const MacroInfo *MI,
 
   // If the token isn't an identifier, it's always literally expanded.
   if (II == 0) return true;
+
+  // If the information about this identifier is out of date, update it from
+  // the external source.
+  if (II->isOutOfDate())
+    PP.getExternalSource()->updateOutOfDateIdentifier(*II);
 
   // If the identifier is a macro, and if that macro is enabled, it may be
   // expanded so it's not a trivial expansion.
@@ -300,8 +305,10 @@ bool Preprocessor::HandleMacroExpandedIdentifier(Token &Identifier,
     // unexpandable.
     if (IdentifierInfo *NewII = Identifier.getIdentifierInfo()) {
       if (MacroInfo *NewMI = getMacroInfo(NewII))
-        if (!NewMI->isEnabled() || NewMI == MI)
+        if (!NewMI->isEnabled() || NewMI == MI) {
           Identifier.setFlag(Token::DisableExpand);
+          Diag(Identifier, diag::pp_disabled_macro_expansion);
+        }
     }
 
     // Since this is not an identifier token, it can't be macro expanded, so
@@ -620,10 +627,10 @@ static bool HasFeature(const Preprocessor &PP, const IdentifierInfo *II) {
            .Case("objc_array_literals", LangOpts.ObjC2)
            .Case("objc_dictionary_literals", LangOpts.ObjC2)
            .Case("arc_cf_code_audited", true)
-           // C1X features
-           .Case("c_alignas", LangOpts.C1X)
-           .Case("c_generic_selections", LangOpts.C1X)
-           .Case("c_static_assert", LangOpts.C1X)
+           // C11 features
+           .Case("c_alignas", LangOpts.C11)
+           .Case("c_generic_selections", LangOpts.C11)
+           .Case("c_static_assert", LangOpts.C11)
            // C++0x features
            .Case("cxx_access_control_sfinae", LangOpts.CPlusPlus0x)
            .Case("cxx_alias_templates", LangOpts.CPlusPlus0x)
@@ -717,7 +724,7 @@ static bool HasExtension(const Preprocessor &PP, const IdentifierInfo *II) {
   // Because we inherit the feature list from HasFeature, this string switch
   // must be less restrictive than HasFeature's.
   return llvm::StringSwitch<bool>(II->getName())
-           // C1X features supported by other languages as extensions.
+           // C11 features supported by other languages as extensions.
            .Case("c_alignas", true)
            .Case("c_generic_selections", true)
            .Case("c_static_assert", true)

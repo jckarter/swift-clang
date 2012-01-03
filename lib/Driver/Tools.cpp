@@ -800,9 +800,8 @@ void Clang::AddSparcTargetArgs(const ArgList &Args,
   const Driver &D = getToolChain().getDriver();
 
   if (const Arg *A = Args.getLastArg(options::OPT_march_EQ)) {
-    StringRef MArch = A->getValue(Args);
     CmdArgs.push_back("-target-cpu");
-    CmdArgs.push_back(MArch.str().c_str());
+    CmdArgs.push_back(A->getValue(Args));
   }
 
   // Select the float ABI as determined by -msoft-float, -mhard-float, and
@@ -1195,6 +1194,24 @@ static void addAsanRTLinux(const ToolChain &TC, const ArgList &Args,
   CmdArgs.push_back("-export-dynamic");
 }
 
+static bool shouldUseFramePointer(const ArgList &Args,
+                                  const llvm::Triple &Triple) {
+  if (Arg *A = Args.getLastArg(options::OPT_fno_omit_frame_pointer,
+                               options::OPT_fomit_frame_pointer))
+    return A->getOption().matches(options::OPT_fno_omit_frame_pointer);
+
+  // Don't use a frame pointer on linux x86 and x86_64 if optimizing.
+  if ((Triple.getArch() == llvm::Triple::x86_64 ||
+       Triple.getArch() == llvm::Triple::x86) &&
+      Triple.getOS() == llvm::Triple::Linux) {
+    if (Arg *A = Args.getLastArg(options::OPT_O_Group))
+      if (!A->getOption().matches(options::OPT_O0))
+        return false;
+  }
+
+  return true;
+}
+
 void Clang::ConstructJob(Compilation &C, const JobAction &JA,
                          const InputInfo &Output,
                          const InputInfoList &Inputs,
@@ -1408,8 +1425,7 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
     CmdArgs.push_back("-mrtd");
 
   // FIXME: Set --enable-unsafe-fp-math.
-  if (Args.hasFlag(options::OPT_fno_omit_frame_pointer,
-                   options::OPT_fomit_frame_pointer))
+  if (shouldUseFramePointer(Args, getToolChain().getTriple()))
     CmdArgs.push_back("-mdisable-fp-elim");
   if (!Args.hasFlag(options::OPT_fzero_initialized_in_bss,
                     options::OPT_fno_zero_initialized_in_bss))
@@ -1419,18 +1435,90 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
                     getToolChain().IsStrictAliasingDefault()))
     CmdArgs.push_back("-relaxed-aliasing");
 
-  // Handle -f{no-}honor-infinities, -f{no-}honor-nans, and -ffinite-math-only.
-  bool HonorInfinities = Args.hasFlag(options::OPT_fhonor_infinities,
-                                      options::OPT_fno_honor_infinities);
-  bool HonorNaNs = Args.hasFlag(options::OPT_fhonor_nans,
-                                options::OPT_fno_honor_nans);
-  if (Args.hasArg(options::OPT_ffinite_math_only))
-    HonorInfinities = HonorNaNs = false;
-  if (!HonorInfinities)
-    CmdArgs.push_back("-menable-no-infs");
-  if (!HonorNaNs)
-    CmdArgs.push_back("-menable-no-nans");
-    
+  // Handle various floating point optimization flags, mapping them to the
+  // appropriate LLVM code generation flags. The pattern for all of these is to
+  // default off the codegen optimizations, and if any flag enables them and no
+  // flag disables them after the flag enabling them, enable the codegen
+  // optimization. This is complicated by several "umbrella" flags.
+  if (Arg *A = Args.getLastArg(options::OPT_ffast_math,
+                               options::OPT_ffinite_math_only,
+                               options::OPT_fno_finite_math_only,
+                               options::OPT_fhonor_infinities,
+                               options::OPT_fno_honor_infinities))
+    if (A->getOption().getID() != options::OPT_fno_finite_math_only &&
+        A->getOption().getID() != options::OPT_fhonor_infinities)
+      CmdArgs.push_back("-menable-no-infs");
+  if (Arg *A = Args.getLastArg(options::OPT_ffast_math,
+                               options::OPT_ffinite_math_only,
+                               options::OPT_fno_finite_math_only,
+                               options::OPT_fhonor_nans,
+                               options::OPT_fno_honor_nans))
+    if (A->getOption().getID() != options::OPT_fno_finite_math_only &&
+        A->getOption().getID() != options::OPT_fhonor_nans)
+      CmdArgs.push_back("-menable-no-nans");
+
+  // -fno-math-errno is default.
+  bool MathErrno = false;
+  if (Arg *A = Args.getLastArg(options::OPT_ffast_math,
+                               options::OPT_fmath_errno,
+                               options::OPT_fno_math_errno)) {
+    if (A->getOption().getID() == options::OPT_fmath_errno) {
+      CmdArgs.push_back("-fmath-errno");
+      MathErrno = true;
+    }
+  }
+
+  // There are several flags which require disabling very specific
+  // optimizations. Any of these being disabled forces us to turn off the
+  // entire set of LLVM optimizations, so collect them through all the flag
+  // madness.
+  bool AssociativeMath = false;
+  if (Arg *A = Args.getLastArg(options::OPT_ffast_math,
+                               options::OPT_funsafe_math_optimizations,
+                               options::OPT_fno_unsafe_math_optimizations,
+                               options::OPT_fassociative_math,
+                               options::OPT_fno_associative_math))
+    if (A->getOption().getID() != options::OPT_fno_unsafe_math_optimizations &&
+        A->getOption().getID() != options::OPT_fno_associative_math)
+      AssociativeMath = true;
+  bool ReciprocalMath = false;
+  if (Arg *A = Args.getLastArg(options::OPT_ffast_math,
+                               options::OPT_funsafe_math_optimizations,
+                               options::OPT_fno_unsafe_math_optimizations,
+                               options::OPT_freciprocal_math,
+                               options::OPT_fno_reciprocal_math))
+    if (A->getOption().getID() != options::OPT_fno_unsafe_math_optimizations &&
+        A->getOption().getID() != options::OPT_fno_reciprocal_math)
+      ReciprocalMath = true;
+  bool SignedZeros = true;
+  if (Arg *A = Args.getLastArg(options::OPT_ffast_math,
+                               options::OPT_funsafe_math_optimizations,
+                               options::OPT_fno_unsafe_math_optimizations,
+                               options::OPT_fsigned_zeros,
+                               options::OPT_fno_signed_zeros))
+    if (A->getOption().getID() != options::OPT_fno_unsafe_math_optimizations &&
+        A->getOption().getID() != options::OPT_fsigned_zeros)
+      SignedZeros = false;
+  bool TrappingMath = true;
+  if (Arg *A = Args.getLastArg(options::OPT_ffast_math,
+                               options::OPT_funsafe_math_optimizations,
+                               options::OPT_fno_unsafe_math_optimizations,
+                               options::OPT_ftrapping_math,
+                               options::OPT_fno_trapping_math))
+    if (A->getOption().getID() != options::OPT_fno_unsafe_math_optimizations &&
+        A->getOption().getID() != options::OPT_ftrapping_math)
+      TrappingMath = false;
+  if (!MathErrno && AssociativeMath && ReciprocalMath && !SignedZeros &&
+      !TrappingMath)
+    CmdArgs.push_back("-menable-unsafe-fp-math");
+
+  // We separately look for the '-ffast-math' flag, and if we find it, tell the
+  // frontend to provide the appropriate preprocessor macros. This is distinct
+  // from enabling any optimizations as it induces a language change which must
+  // survive serialization and deserialization, etc.
+  if (Args.hasArg(options::OPT_ffast_math))
+    CmdArgs.push_back("-ffast-math");
+
   // Decide whether to use verbose asm. Verbose assembly is the default on
   // toolchains which have the integrated assembler on by default.
   bool IsVerboseAsmDefault = getToolChain().IsIntegratedAssemblerDefault();
@@ -1531,12 +1619,6 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
                    options::OPT_mno_omit_leaf_frame_pointer,
                    !getToolChain().getTriple().isOSDarwin()))
     CmdArgs.push_back("-momit-leaf-frame-pointer");
-
-  // -fno-math-errno is default.
-  if (Args.hasFlag(options::OPT_fmath_errno,
-                   options::OPT_fno_math_errno,
-                   false))
-    CmdArgs.push_back("-fmath-errno");
 
   // Explicitly error on some things we know we don't support and can't just
   // ignore.
@@ -1791,6 +1873,11 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
     CmdArgs.push_back(A->getValue(Args));
   }
 
+  if (Arg *A = Args.getLastArg(options::OPT_fconstexpr_backtrace_limit_EQ)) {
+    CmdArgs.push_back("-fconstexpr-backtrace-limit");
+    CmdArgs.push_back(A->getValue(Args));
+  }
+
   // Pass -fmessage-length=.
   CmdArgs.push_back("-fmessage-length");
   if (Arg *A = Args.getLastArg(options::OPT_fmessage_length_EQ)) {
@@ -1822,6 +1909,7 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
   Args.AddLastArg(CmdArgs, options::OPT_flimit_debug_info);
   Args.AddLastArg(CmdArgs, options::OPT_fno_limit_debug_info);
   Args.AddLastArg(CmdArgs, options::OPT_fno_operator_names);
+  Args.AddLastArg(CmdArgs, options::OPT_faltivec);
   if (getToolChain().SupportsProfiling())
     Args.AddLastArg(CmdArgs, options::OPT_pg);
 
@@ -2479,7 +2567,32 @@ void ClangAs::ConstructJob(Compilation &C, const JobAction &JA,
   // Ignore explicit -force_cpusubtype_ALL option.
   (void) Args.hasArg(options::OPT_force__cpusubtype__ALL);
 
-  // FIXME: Add -g support, once we have it.
+  // Same as Clang::ConstructJob() we special case debug options to only pass
+  // -g to clang. I guess if it is wrong there then it is wrong here too :) .
+  Args.ClaimAllArgs(options::OPT_g_Group);
+  if (Arg *A = Args.getLastArg(options::OPT_g_Group))
+    if (!A->getOption().matches(options::OPT_g0)) {
+      CmdArgs.push_back("-g");
+    }
+
+  // Optionally embed the -cc1as level arguments into the debug info, for build
+  // analysis.
+  if (getToolChain().UseDwarfDebugFlags()) {
+    ArgStringList OriginalArgs;
+    for (ArgList::const_iterator it = Args.begin(),
+           ie = Args.end(); it != ie; ++it)
+      (*it)->render(Args, OriginalArgs);
+
+    llvm::SmallString<256> Flags;
+    const char *Exec = getToolChain().getDriver().getClangProgramPath();
+    Flags += Exec;
+    for (unsigned i = 0, e = OriginalArgs.size(); i != e; ++i) {
+      Flags += " ";
+      Flags += OriginalArgs[i];
+    }
+    CmdArgs.push_back("-dwarf-debug-flags");
+    CmdArgs.push_back(Args.MakeArgString(Flags.str()));
+  }
 
   // FIXME: Add -static support, once we have it.
 
@@ -2842,6 +2955,8 @@ const char *darwin::CC1::getCC1Name(types::ID Type) const {
     return "cc1objplus";
   }
 }
+
+void darwin::CC1::anchor() {}
 
 const char *darwin::CC1::getBaseInputName(const ArgList &Args,
                                           const InputInfoList &Inputs) {
@@ -3486,6 +3601,8 @@ void darwin::Assemble::ConstructJob(Compilation &C, const JobAction &JA,
     Args.MakeArgString(getToolChain().GetProgramPath("as"));
   C.addCommand(new Command(JA, *this, Exec, CmdArgs));
 }
+
+void darwin::DarwinTool::anchor() {}
 
 void darwin::DarwinTool::AddDarwinArch(const ArgList &Args,
                                        ArgStringList &CmdArgs) const {
@@ -4149,8 +4266,12 @@ void openbsd::Link::ConstructJob(Compilation &C, const JobAction &JA,
   if (!Args.hasArg(options::OPT_nostdlib) &&
       !Args.hasArg(options::OPT_nostartfiles)) {
     if (!Args.hasArg(options::OPT_shared)) {
-      CmdArgs.push_back(Args.MakeArgString(
-                              getToolChain().GetFilePath("crt0.o")));
+      if (Args.hasArg(options::OPT_pg))  
+        CmdArgs.push_back(Args.MakeArgString(
+                                getToolChain().GetFilePath("gcrt0.o")));
+      else
+        CmdArgs.push_back(Args.MakeArgString(
+                                getToolChain().GetFilePath("crt0.o")));
       CmdArgs.push_back(Args.MakeArgString(
                               getToolChain().GetFilePath("crtbegin.o")));
     } else {
@@ -4175,7 +4296,10 @@ void openbsd::Link::ConstructJob(Compilation &C, const JobAction &JA,
       !Args.hasArg(options::OPT_nodefaultlibs)) {
     if (D.CCCIsCXX) {
       getToolChain().AddCXXStdlibLibArgs(Args, CmdArgs);
-      CmdArgs.push_back("-lm");
+      if (Args.hasArg(options::OPT_pg)) 
+        CmdArgs.push_back("-lm_p");
+      else
+        CmdArgs.push_back("-lm");
     }
 
     // FIXME: For some reason GCC passes -lgcc before adding
@@ -4184,8 +4308,12 @@ void openbsd::Link::ConstructJob(Compilation &C, const JobAction &JA,
 
     if (Args.hasArg(options::OPT_pthread))
       CmdArgs.push_back("-lpthread");
-    if (!Args.hasArg(options::OPT_shared))
-      CmdArgs.push_back("-lc");
+    if (!Args.hasArg(options::OPT_shared)) {
+      if (Args.hasArg(options::OPT_pg)) 
+         CmdArgs.push_back("-lc_p");
+      else
+         CmdArgs.push_back("-lc");
+    }
     CmdArgs.push_back("-lgcc");
   }
 

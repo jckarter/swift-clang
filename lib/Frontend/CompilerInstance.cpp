@@ -170,7 +170,7 @@ static void SetupSerializedDiagnostics(const DiagnosticOptions &DiagOpts,
   }
   
   DiagnosticConsumer *SerializedConsumer =
-    clang::serialized_diags::create(OS.take());
+    clang::serialized_diags::create(OS.take(), DiagOpts);
 
   
   Diags.setClient(new ChainedDiagnosticConsumer(Diags.takeClient(),
@@ -252,7 +252,8 @@ void CompilerInstance::createPreprocessor() {
 
   // Create the Preprocessor.
   HeaderSearch *HeaderInfo = new HeaderSearch(getFileManager(), 
-                                              getDiagnostics());
+                                              getDiagnostics(),
+                                              getLangOpts());
   PP = new Preprocessor(getDiagnostics(), getLangOpts(), &getTarget(),
                         getSourceManager(), *HeaderInfo, *this, PTHMgr,
                         /*OwnsHeaderSearch=*/true);
@@ -1270,9 +1271,36 @@ Module *CompilerInstance::loadModule(SourceLocation ImportLoc,
   
   // Make the named module visible, if it's not already part of the module
   // we are parsing.
-  if (ModuleName != getLangOpts().CurrentModule)
-    ModuleManager->makeModuleVisible(Module, Visibility);
+  if (ModuleName != getLangOpts().CurrentModule) {
+    if (!Module->IsFromModuleFile) {
+      // We have an umbrella header or directory that doesn't actually include
+      // all of the headers within the directory it covers. Complain about
+      // this missing submodule and recover by forgetting that we ever saw
+      // this submodule.
+      // FIXME: Should we detect this at module load time? It seems fairly
+      // expensive (and rare).
+      getDiagnostics().Report(ImportLoc, diag::warn_missing_submodule)
+        << Module->getFullModuleName()
+        << SourceRange(Path.front().second, Path.back().second);
+      
+      return 0;
+    }
 
+    // Check whether this module is available.
+    StringRef Feature;
+    if (!Module->isAvailable(getLangOpts(), Feature)) {
+      getDiagnostics().Report(ImportLoc, diag::err_module_unavailable)
+        << Module->getFullModuleName()
+        << Feature
+        << SourceRange(Path.front().second, Path.back().second);
+      LastModuleImportLoc = ImportLoc;
+      LastModuleImportResult = 0;
+      return 0;
+    }
+
+    ModuleManager->makeModuleVisible(Module, Visibility);
+  }
+  
   // If this module import was due to an inclusion directive, create an 
   // implicit import declaration to capture it in the AST.
   if (IsInclusionDirective && hasASTContext()) {
