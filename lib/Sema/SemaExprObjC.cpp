@@ -70,7 +70,11 @@ ExprResult Sema::ParseObjCStringLiteral(SourceLocation *AtLocs,
                               Context.getPointerType(Context.CharTy),
                               &StrLocs[0], StrLocs.size());
   }
+  
+  return BuildObjCStringLiteral(AtLocs[0], S);
+}
 
+ExprResult Sema::BuildObjCStringLiteral(SourceLocation AtLoc, StringLiteral *S){
   // Verify that this composite string is acceptable for ObjC strings.
   if (CheckObjCString(S))
     return true;
@@ -91,7 +95,7 @@ ExprResult Sema::ParseObjCStringLiteral(SourceLocation *AtLocs,
     else
       NSIdent = &Context.Idents.get(StringClass);
     
-    NamedDecl *IF = LookupSingleName(TUScope, NSIdent, AtLocs[0],
+    NamedDecl *IF = LookupSingleName(TUScope, NSIdent, AtLoc,
                                      LookupOrdinaryName);
     if (ObjCInterfaceDecl *StrIF = dyn_cast_or_null<ObjCInterfaceDecl>(IF)) {
       Context.setObjCConstantStringInterface(StrIF);
@@ -106,7 +110,7 @@ ExprResult Sema::ParseObjCStringLiteral(SourceLocation *AtLocs,
     }
   } else {
     IdentifierInfo *NSIdent = &Context.Idents.get("NSString");
-    NamedDecl *IF = LookupSingleName(TUScope, NSIdent, AtLocs[0],
+    NamedDecl *IF = LookupSingleName(TUScope, NSIdent, AtLoc,
                                      LookupOrdinaryName);
     if (ObjCInterfaceDecl *StrIF = dyn_cast_or_null<ObjCInterfaceDecl>(IF)) {
       Context.setObjCConstantStringInterface(StrIF);
@@ -119,7 +123,593 @@ ExprResult Sema::ParseObjCStringLiteral(SourceLocation *AtLocs,
     }
   }
 
-  return new (Context) ObjCStringLiteral(S, Ty, AtLocs[0]);
+  return new (Context) ObjCStringLiteral(S, Ty, AtLoc);
+}
+
+/// \brief Determine the appropriate NSNumber factory method kind for a
+/// literal of the given type.
+static llvm::Optional<Sema::NSNumberLiteralMethodKinds>
+getNSNumberFactoryMethodKind(QualType T) {
+  const BuiltinType *BT = T->getAs<BuiltinType>();
+  if (!BT)
+    return llvm::Optional<Sema::NSNumberLiteralMethodKinds>();
+  
+  
+  switch (BT->getKind()) {
+  case BuiltinType::Char_S:
+  case BuiltinType::SChar:
+    return Sema::NSNumberWithChar;
+  case BuiltinType::Char_U:
+  case BuiltinType::UChar:
+    return Sema::NSNumberWithUnsignedChar;
+  case BuiltinType::Short:
+    return Sema::NSNumberWithShort;
+  case BuiltinType::UShort:
+    return Sema::NSNumberWithUnsignedShort;
+  case BuiltinType::Int:
+    return Sema::NSNumberWithInt;
+  case BuiltinType::UInt:
+    return Sema::NSNumberWithUnsignedInt;
+  case BuiltinType::Long:
+    return Sema::NSNumberWithLong;
+  case BuiltinType::ULong:
+    return Sema::NSNumberWithUnsignedLong;
+  case BuiltinType::LongLong:
+    return Sema::NSNumberWithLongLong;
+  case BuiltinType::ULongLong:
+    return Sema::NSNumberWithUnsignedLongLong;
+  case BuiltinType::Float:
+    return Sema::NSNumberWithFloat;
+  case BuiltinType::Double:
+    return Sema::NSNumberWithDouble;
+  case BuiltinType::Bool:
+    return Sema::NSNumberWithBool;
+    
+  case BuiltinType::Void:
+  case BuiltinType::WChar_U:
+  case BuiltinType::WChar_S:
+  case BuiltinType::Char16:
+  case BuiltinType::Char32:
+  case BuiltinType::Int128:
+  case BuiltinType::LongDouble:
+  case BuiltinType::UInt128:
+  case BuiltinType::NullPtr:
+  case BuiltinType::ObjCClass:
+  case BuiltinType::ObjCId:
+  case BuiltinType::ObjCSel:
+  case BuiltinType::BoundMember:
+  case BuiltinType::Dependent:
+  case BuiltinType::Overload:
+  case BuiltinType::UnknownAny:
+  case BuiltinType::ARCUnbridgedCast:
+  case BuiltinType::Half:
+  case BuiltinType::PseudoObject:
+    break;
+  }
+  
+  return llvm::Optional<Sema::NSNumberLiteralMethodKinds>();
+}
+
+/// \brief Retrieve the NSNumber factory method that should be used to create
+/// an Objective-C literal for the given type.
+static ObjCMethodDecl *getNSNumberFactoryMethod(Sema &S, SourceLocation Loc,
+                                                QualType T, 
+                                                SourceRange Range) {
+  llvm::Optional<Sema::NSNumberLiteralMethodKinds> Kind 
+    = getNSNumberFactoryMethodKind(T);
+  
+  if (!Kind) {
+    S.Diag(Loc, diag::err_invalid_nsnumber_type)
+      << T << Range;
+    return 0;
+  }
+    
+  // If we already looked up this method, we're done.
+  if (S.NSNumberLiteralMethods[*Kind])
+    return S.NSNumberLiteralMethods[*Kind];
+  
+  // Determine the selector for the factory method we will use.
+  static const char *SelectorName[Sema::NumNSNumberLiteralMethods] = {
+    "numberWithChar",
+    "numberWithUnsignedChar",
+    "numberWithShort",
+    "numberWithUnsignedShort",
+    "numberWithInt",
+    "numberWithUnsignedInt",
+    "numberWithLong",
+    "numberWithUnsignedLong",
+    "numberWithLongLong",
+    "numberWithUnsignedLongLong",
+    "numberWithFloat",
+    "numberWithDouble",
+    "numberWithBool"
+  };
+  
+  Selector Sel
+    = S.Context.Selectors.getUnarySelector(
+        &S.Context.Idents.get(SelectorName[*Kind]));
+  
+  // Look for the appropriate method within NSNumber.
+  ObjCMethodDecl *Method = S.NSNumberDecl->lookupClassMethod(Sel);;
+  if (!Method) {
+    S.Diag(Loc, diag::err_undeclared_nsnumber_method) << Sel;
+    return 0;
+  }
+  
+  // Make sure the return type is reasonable.
+  if (!Method->getResultType()->isObjCObjectPointerType()) {
+    S.Diag(Loc, diag::err_objc_literal_method_sig)
+      << Sel;
+    S.Diag(Method->getLocation(), diag::note_objc_literal_method_return)
+      << Method->getResultType();
+    return 0;
+  }
+
+  // Note: if the parameter type is out-of-line, we'll catch it later in the
+  // implicit conversion.
+  
+  S.NSNumberLiteralMethods[*Kind] = Method;
+  return Method;
+}
+
+/// BuildObjCNumericLiteral - builds an ObjCNumericLiteral AST node for the
+/// numeric literal expression. Type of the expression will be "NSNumber *"
+/// or "id" if NSNumber is unavailable.
+ExprResult Sema::BuildObjCNumericLiteral(SourceLocation AtLoc, Expr *Number) {
+  // Look up the NSNumber class, if we haven't done so already.
+  if (!NSNumberDecl) {
+    IdentifierInfo *NSIdent = &Context.Idents.get("NSNumber");
+    NamedDecl *IF = LookupSingleName(TUScope, NSIdent, AtLoc,
+                                     LookupOrdinaryName);
+    NSNumberDecl = dyn_cast_or_null<ObjCInterfaceDecl>(IF);
+    
+    if (!NSNumberDecl) {
+      Diag(AtLoc, diag::err_undeclared_nsnumber);
+      return ExprError();
+    }
+  }
+  
+  // Determine the type of the literal.
+  QualType NumberType = Number->getType();
+  if (CharacterLiteral *Char = dyn_cast<CharacterLiteral>(Number)) {
+    // In C, character literals have type 'int'. That's not the type we want
+    // to use to determine the Objective-c literal kind.
+    switch (Char->getKind()) {
+    case CharacterLiteral::Ascii:
+      NumberType = Context.CharTy;
+      break;
+      
+    case CharacterLiteral::Wide:
+      NumberType = Context.getWCharType();
+      break;
+      
+    case CharacterLiteral::UTF16:
+      NumberType = Context.Char16Ty;
+      break;
+      
+    case CharacterLiteral::UTF32:
+      NumberType = Context.Char32Ty;
+      break;
+    }
+  }
+  
+  // Look for the appropriate method within NSNumber.
+  ObjCMethodDecl *Method  = getNSNumberFactoryMethod(*this, AtLoc, 
+                                                     NumberType, 
+                                                     Number->getSourceRange());
+  if (!Method)
+    return ExprError();
+  
+  // Convert the number to the type that the parameter expects.
+  QualType ElementT = Method->param_begin()[0]->getType();
+  ExprResult ConvertedNumber = PerformImplicitConversion(Number, ElementT,
+                                                         AA_Sending);
+  if (ConvertedNumber.isInvalid())
+    return ExprError();
+  Number = ConvertedNumber.get();
+  
+  // Construct the literal.
+  QualType Ty
+    = Context.getObjCObjectPointerType(
+                                    Context.getObjCInterfaceType(NSNumberDecl));
+  return MaybeBindToTemporary(
+           new (Context) ObjCNumericLiteral(Number, Ty, Method, AtLoc));
+}
+
+ExprResult Sema::ActOnObjCBoolLiteral(SourceLocation AtLoc, 
+                                      SourceLocation ValueLoc,
+                                      bool Value) {
+  ExprResult Inner;
+  if (getLangOptions().CPlusPlus) {
+    Inner = ActOnCXXBoolLiteral(ValueLoc, Value? tok::kw_true : tok::kw_false);
+  } else {
+    // C doesn't actually have a way to represent literal values of type 
+    // _Bool. So, we'll use 0/1 and implicit cast to _Bool.
+    Inner = ActOnIntegerConstant(ValueLoc, Value? 1 : 0);
+    Inner = ImpCastExprToType(Inner.get(), Context.BoolTy, 
+                              CK_IntegralToBoolean);
+  }
+  
+  return BuildObjCNumericLiteral(AtLoc, Inner.get());
+}
+
+/// \brief Check that the given expression is a valid element of an Objective-C
+/// collection literal.
+static ExprResult CheckObjCCollectionLiteralElement(Sema &S, Expr *Element, 
+                                                    QualType T) {  
+  // If the expression is type-dependent, there's nothing for us to do.
+  if (Element->isTypeDependent())
+    return Element;
+
+  ExprResult Result = S.CheckPlaceholderExpr(Element);
+  if (Result.isInvalid())
+    return ExprError();
+  Element = Result.get();
+
+  Expr *OrigElement = Element;
+  // In C++, check for an implicit conversion to an Objective-C object pointer 
+  // type.
+  if (S.getLangOptions().CPlusPlus && Element->getType()->isRecordType()) {
+    QualType Id = S.Context.getObjCIdType();
+    ImplicitConversionSequence ICS
+      = S.TryImplicitConversion(Element, Id,
+                                /*SuppressUserConversions=*/false,
+                                /*AllowExplicit=*/false,
+                                /*InOverloadResolution=*/false,
+                                /*CStyle=*/false,
+                                /*AllowObjCWritebackConversion=*/false);
+    if (ICS.isUserDefined()) {
+      ExprResult Converted = S.PerformImplicitConversion(Element, Id, ICS,
+                                                         Sema::AA_Converting);
+      if (Converted.isInvalid())
+        return ExprError();
+      
+      Element = Converted.get();
+    }
+  }
+
+  // Perform lvalue-to-rvalue conversion.
+  Result = S.DefaultLvalueConversion(Element);
+  if (Result.isInvalid())
+    return ExprError();
+  Element = Result.get();
+  
+  // Make sure that we have an Objective-C pointer type or block.
+  if (!Element->getType()->isObjCObjectPointerType() &&
+      !Element->getType()->isBlockPointerType()) {
+    bool Recovered = false;
+    
+    // If this is potentially an Objective-C numeric literal, add the '@'.
+    if (isa<IntegerLiteral>(OrigElement) || 
+        isa<CharacterLiteral>(OrigElement) ||
+        isa<FloatingLiteral>(OrigElement) ||
+        isa<ObjCBoolLiteralExpr>(OrigElement) ||
+        isa<CXXBoolLiteralExpr>(OrigElement)) {
+      if (getNSNumberFactoryMethodKind(OrigElement->getType())) {
+        int Which = isa<CharacterLiteral>(OrigElement) ? 1
+                  : (isa<CXXBoolLiteralExpr>(OrigElement) ||
+                     isa<ObjCBoolLiteralExpr>(OrigElement)) ? 2
+                  : 3;
+        
+        S.Diag(OrigElement->getLocStart(), diag::err_box_literal_collection)
+          << Which << OrigElement->getSourceRange()
+          << FixItHint::CreateInsertion(OrigElement->getLocStart(), "@");
+        
+        Result = S.BuildObjCNumericLiteral(OrigElement->getLocStart(),
+                                           OrigElement);
+        if (Result.isInvalid())
+          return ExprError();
+        
+        Element = Result.get();
+        Recovered = true;
+      }
+    }
+    // If this is potentially an Objective-C string literal, add the '@'.
+    else if (StringLiteral *String = dyn_cast<StringLiteral>(OrigElement)) {
+      if (String->isAscii()) {
+        S.Diag(OrigElement->getLocStart(), diag::err_box_literal_collection)
+          << 0 << OrigElement->getSourceRange()
+          << FixItHint::CreateInsertion(OrigElement->getLocStart(), "@");
+
+        Result = S.BuildObjCStringLiteral(OrigElement->getLocStart(), String);
+        if (Result.isInvalid())
+          return ExprError();
+        
+        Element = Result.get();
+        Recovered = true;
+      }
+    }
+    
+    if (!Recovered) {
+      S.Diag(Element->getLocStart(), diag::err_invalid_collection_element)
+        << Element->getType();
+      return ExprError();
+    }
+  }
+  
+  // Make sure that the element has the type that the container factory 
+  // function expects. 
+  if (!S.Context.hasSameType(T, Element->getType()))
+    Result = S.PerformImplicitConversion(Element, T, Sema::AA_Sending);
+  
+  return Result;
+}
+
+ExprResult Sema::BuildObjCSubscriptExpression(SourceLocation RB, Expr *BaseExpr,
+                                        Expr *IndexExpr,
+                                        ObjCMethodDecl *getterMethod,
+                                        ObjCMethodDecl *setterMethod) {
+  // Feature support is for modern abi.
+  if (!LangOpts.ObjCNonFragileABI)
+    return ExprError();
+  // If the expression is type-dependent, there's nothing for us to do.
+  assert ((!BaseExpr->isTypeDependent() && !IndexExpr->isTypeDependent()) &&
+          "base or index cannot have dependent type here");
+  ExprResult Result = CheckPlaceholderExpr(IndexExpr);
+  if (Result.isInvalid())
+    return ExprError();
+  IndexExpr = Result.get();
+  
+  QualType BaseT = BaseExpr->getType();
+  QualType IndexT = IndexExpr->getType();
+    
+  // Perform lvalue-to-rvalue conversion.
+  Result = DefaultLvalueConversion(BaseExpr);
+  if (Result.isInvalid())
+    return ExprError();
+  BaseExpr = Result.get();
+  return Owned(ObjCSubscriptRefExpr::Create(Context, 
+                                            BaseExpr,
+                                            IndexExpr,
+                                            Context.PseudoObjectTy,
+                                            getterMethod,
+                                            setterMethod, RB));
+  
+}
+
+ExprResult Sema::BuildObjCArrayLiteral(SourceRange SR, MultiExprArg Elements) {
+  // Look up the NSArray class, if we haven't done so already.
+  if (!NSArrayDecl) {
+    IdentifierInfo *NSIdent = &Context.Idents.get("NSArray");
+    NamedDecl *IF = LookupSingleName(TUScope, NSIdent, SR.getBegin(),
+                                     LookupOrdinaryName);
+    NSArrayDecl = dyn_cast_or_null<ObjCInterfaceDecl>(IF);
+    if (!NSArrayDecl) {
+      Diag(SR.getBegin(), diag::err_undeclared_nsarray);
+      return ExprError();
+    }
+  }
+  
+  // Find the arrayWithObjects:count: method, if we haven't done so already.
+  if (!ArrayWithObjectsMethod) {
+    IdentifierInfo *KeyIdents[] = {
+      &Context.Idents.get("arrayWithObjects"),
+      &Context.Idents.get("count")
+    };
+    
+    Selector Sel = Context.Selectors.getSelector(2, KeyIdents);
+    ArrayWithObjectsMethod = NSArrayDecl->lookupClassMethod(Sel);
+    if (!ArrayWithObjectsMethod) {
+      Diag(SR.getBegin(), diag::err_undeclared_arraywithobjects) << Sel;
+      return ExprError();
+    }
+  }
+  
+  // Make sure the return type is reasonable.
+  if (!ArrayWithObjectsMethod->getResultType()->isObjCObjectPointerType()) {
+    Diag(SR.getBegin(), diag::err_objc_literal_method_sig)
+      << ArrayWithObjectsMethod->getSelector();
+    Diag(ArrayWithObjectsMethod->getLocation(),
+         diag::note_objc_literal_method_return)
+      << ArrayWithObjectsMethod->getResultType();
+    return ExprError();
+  }
+
+  // Dig out the type that all elements should be converted to.
+  QualType T = ArrayWithObjectsMethod->param_begin()[0]->getType();
+  const PointerType *PtrT = T->getAs<PointerType>();
+  if (!PtrT || 
+      !Context.hasSameUnqualifiedType(PtrT->getPointeeType(),
+                                      Context.getObjCIdType())) {
+    Diag(SR.getBegin(), diag::err_objc_literal_method_sig)
+      << ArrayWithObjectsMethod->getSelector();
+    Diag(ArrayWithObjectsMethod->param_begin()[0]->getLocation(),
+         diag::note_objc_literal_method_param)
+      << 0 << T 
+      << Context.getPointerType(Context.getObjCIdType().withConst());
+    return ExprError();
+  }
+  T = PtrT->getPointeeType();
+  
+  // Check that the 'count' parameter is integral.
+  if (!ArrayWithObjectsMethod->param_begin()[1]->getType()->isIntegerType()) {
+    Diag(SR.getBegin(), diag::err_objc_literal_method_sig)
+      << ArrayWithObjectsMethod->getSelector();
+    Diag(ArrayWithObjectsMethod->param_begin()[1]->getLocation(),
+         diag::note_objc_literal_method_param)
+      << 1 
+      << ArrayWithObjectsMethod->param_begin()[1]->getType()
+      << "integral";
+    return ExprError();
+  }
+
+  // Check that each of the elements provided is valid in a collection literal,
+  // performing conversions as necessary.
+  Expr **ElementsBuffer = Elements.get();
+  for (unsigned I = 0, N = Elements.size(); I != N; ++I) {
+    ExprResult Converted = CheckObjCCollectionLiteralElement(*this,
+                                                             ElementsBuffer[I],
+                                                             T);
+    if (Converted.isInvalid())
+      return ExprError();
+    
+    ElementsBuffer[I] = Converted.get();
+  }
+    
+  QualType Ty 
+    = Context.getObjCObjectPointerType(
+                                    Context.getObjCInterfaceType(NSArrayDecl));
+
+  return MaybeBindToTemporary(
+           ObjCArrayLiteral::Create(Context, 
+                                    llvm::makeArrayRef(Elements.get(), 
+                                                       Elements.size()), 
+                                    Ty, ArrayWithObjectsMethod, SR));
+}
+
+ExprResult Sema::BuildObjCDictionaryLiteral(SourceRange SR, 
+                                            ObjCDictionaryElement *Elements,
+                                            unsigned NumElements) {
+  // Look up the NSDictionary class, if we haven't done so already.
+  if (!NSDictionaryDecl) {
+    IdentifierInfo *NSIdent = &Context.Idents.get("NSDictionary");
+    NamedDecl *IF = LookupSingleName(TUScope, NSIdent, SR.getBegin(),
+                                     LookupOrdinaryName);
+    NSDictionaryDecl = dyn_cast_or_null<ObjCInterfaceDecl>(IF);
+    if (!NSDictionaryDecl) {
+      Diag(SR.getBegin(), diag::err_undeclared_nsdictionary);
+      return ExprError();    
+    }
+  }
+  
+  // Find the dictionaryWithObjects:forKeys:count: method, if we haven't done
+  // so already.
+  if (!DictionaryWithObjectsMethod) {
+    IdentifierInfo *KeyIdents[] = {
+      &Context.Idents.get("dictionaryWithObjects"),
+      &Context.Idents.get("forKeys"),
+      &Context.Idents.get("count")
+    };
+    
+    Selector Sel = Context.Selectors.getSelector(3, KeyIdents);
+    DictionaryWithObjectsMethod = NSDictionaryDecl->lookupClassMethod(Sel);
+    if (!DictionaryWithObjectsMethod) {
+      Diag(SR.getBegin(), diag::err_undeclared_dictwithobjects) << Sel;
+      return ExprError();    
+    }
+  }
+  
+  // Make sure the return type is reasonable.
+  if (!DictionaryWithObjectsMethod->getResultType()->isObjCObjectPointerType()){
+    Diag(SR.getBegin(), diag::err_objc_literal_method_sig)
+    << DictionaryWithObjectsMethod->getSelector();
+    Diag(DictionaryWithObjectsMethod->getLocation(),
+         diag::note_objc_literal_method_return)
+    << DictionaryWithObjectsMethod->getResultType();
+    return ExprError();
+  }
+
+  // Dig out the type that all values should be converted to.
+  QualType ValueT = DictionaryWithObjectsMethod->param_begin()[0]->getType();
+  const PointerType *PtrValue = ValueT->getAs<PointerType>();
+  if (!PtrValue || 
+      !Context.hasSameUnqualifiedType(PtrValue->getPointeeType(),
+                                      Context.getObjCIdType())) {
+    Diag(SR.getBegin(), diag::err_objc_literal_method_sig)
+      << DictionaryWithObjectsMethod->getSelector();
+    Diag(DictionaryWithObjectsMethod->param_begin()[0]->getLocation(),
+         diag::note_objc_literal_method_param)
+      << 0 << ValueT
+      << Context.getPointerType(Context.getObjCIdType().withConst());
+    return ExprError();
+  }
+  ValueT = PtrValue->getPointeeType();
+
+  // Dig out the type that all keys should be converted to.
+  QualType KeyT = DictionaryWithObjectsMethod->param_begin()[1]->getType();
+  const PointerType *PtrKey = KeyT->getAs<PointerType>();
+  if (!PtrKey || 
+      !Context.hasSameUnqualifiedType(PtrKey->getPointeeType(),
+                                      Context.getObjCIdType())) {
+    bool err = true;
+    if (PtrKey) {
+      static QualType QIDNSCopying;
+      if (QIDNSCopying.isNull()) {
+        // key argument of selector is id<NSCopying>?
+        if (ObjCProtocolDecl *NSCopyingPDecl =
+            LookupProtocol(&Context.Idents.get("NSCopying"), SR.getBegin())) {
+          ObjCProtocolDecl *PQ[] = {NSCopyingPDecl};
+          QIDNSCopying = 
+            Context.getObjCObjectType(Context.ObjCBuiltinIdTy,
+                                      (ObjCProtocolDecl**) PQ,1);
+          QIDNSCopying = Context.getObjCObjectPointerType(QIDNSCopying);
+        }
+      }
+      if (!QIDNSCopying.isNull())
+        err = !Context.hasSameUnqualifiedType(PtrKey->getPointeeType(),
+                                              QIDNSCopying);
+    }
+    
+    if (err) {
+      Diag(SR.getBegin(), diag::err_objc_literal_method_sig)
+        << DictionaryWithObjectsMethod->getSelector();
+      Diag(DictionaryWithObjectsMethod->param_begin()[1]->getLocation(),
+           diag::note_objc_literal_method_param)
+        << 1 << KeyT
+        << Context.getPointerType(Context.getObjCIdType().withConst());
+      return ExprError();
+    }
+  }
+  KeyT = PtrKey->getPointeeType();
+
+  // Check that the 'count' parameter is integral.
+  if (!DictionaryWithObjectsMethod->param_begin()[2]->getType()
+                                                            ->isIntegerType()) {
+    Diag(SR.getBegin(), diag::err_objc_literal_method_sig)
+      << DictionaryWithObjectsMethod->getSelector();
+    Diag(DictionaryWithObjectsMethod->param_begin()[2]->getLocation(),
+         diag::note_objc_literal_method_param)
+      << 2
+      << DictionaryWithObjectsMethod->param_begin()[2]->getType()
+      << "integral";
+    return ExprError();
+  }
+
+  // Check that each of the keys and values provided is valid in a collection 
+  // literal, performing conversions as necessary.
+  bool HasPackExpansions = false;
+  for (unsigned I = 0, N = NumElements; I != N; ++I) {
+    // Check the key.
+    ExprResult Key = CheckObjCCollectionLiteralElement(*this, Elements[I].Key, 
+                                                       KeyT);
+    if (Key.isInvalid())
+      return ExprError();
+    
+    // Check the value.
+    ExprResult Value
+      = CheckObjCCollectionLiteralElement(*this, Elements[I].Value, ValueT);
+    if (Value.isInvalid())
+      return ExprError();
+    
+    Elements[I].Key = Key.get();
+    Elements[I].Value = Value.get();
+    
+    if (Elements[I].EllipsisLoc.isInvalid())
+      continue;
+    
+    if (!Elements[I].Key->containsUnexpandedParameterPack() &&
+        !Elements[I].Value->containsUnexpandedParameterPack()) {
+      Diag(Elements[I].EllipsisLoc, 
+           diag::err_pack_expansion_without_parameter_packs)
+        << SourceRange(Elements[I].Key->getLocStart(),
+                       Elements[I].Value->getLocEnd());
+      return ExprError();
+    }
+    
+    HasPackExpansions = true;
+  }
+
+  
+  QualType Ty
+    = Context.getObjCObjectPointerType(
+                                Context.getObjCInterfaceType(NSDictionaryDecl));  
+  return MaybeBindToTemporary(
+           ObjCDictionaryLiteral::Create(Context, 
+                                         llvm::makeArrayRef(Elements, 
+                                                            NumElements),
+                                         HasPackExpansions,
+                                         Ty, 
+                                         DictionaryWithObjectsMethod, SR));
 }
 
 ExprResult Sema::BuildObjCEncodeExpression(SourceLocation AtLoc,

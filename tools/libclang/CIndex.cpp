@@ -3224,6 +3224,8 @@ CXString clang_getCursorKindSpelling(enum CXCursorKind Kind) {
       return createCXString("UnaryExpr");
   case CXCursor_ObjCStringLiteral:
       return createCXString("ObjCStringLiteral");
+  case CXCursor_ObjCBoolLiteralExpr:
+      return createCXString("ObjCBoolLiteralExpr");
   case CXCursor_ObjCEncodeExpr:
       return createCXString("ObjCEncodeExpr");
   case CXCursor_ObjCSelectorExpr:
