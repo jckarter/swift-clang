@@ -567,6 +567,10 @@ void ExprEngine::Visit(const Stmt *S, ExplodedNode *Pred,
       Bldr.addNodes(Dst);
       break;
 
+    // FIXME.
+    case Stmt::ObjCSubscriptRefExprClass:
+      break;
+      
     case Stmt::ObjCPropertyRefExprClass:
       // Implicitly handled by Environment::getSVal().
       break;
@@ -598,6 +602,9 @@ void ExprEngine::Visit(const Stmt *S, ExplodedNode *Pred,
     case Stmt::ObjCProtocolExprClass:
     case Stmt::ObjCSelectorExprClass:
     case Stmt::ObjCStringLiteralClass:
+    case Expr::ObjCNumericLiteralClass:
+    case Expr::ObjCArrayLiteralClass:
+    case Expr::ObjCDictionaryLiteralClass:
     case Stmt::ParenListExprClass:
     case Stmt::PredefinedExprClass:
     case Stmt::ShuffleVectorExprClass:
@@ -614,6 +621,7 @@ void ExprEngine::Visit(const Stmt *S, ExplodedNode *Pred,
     case Stmt::IntegerLiteralClass:
     case Stmt::CharacterLiteralClass:
     case Stmt::CXXBoolLiteralExprClass:
+    case Stmt::ObjCBoolLiteralExprClass:
     case Stmt::FloatingLiteralClass:
     case Stmt::SizeOfPackExprClass:
     case Stmt::CXXNullPtrLiteralExprClass:

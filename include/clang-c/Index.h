@@ -1746,7 +1746,11 @@ enum CXCursorKind {
    */
   CXCursor_SizeOfPackExpr                = 143,
 
-  CXCursor_LastExpr                      = CXCursor_SizeOfPackExpr,
+  /** \brief Objective-c Boolean Literal.
+   */
+  CXCursor_ObjCBoolLiteralExpr            = 144,
+
+  CXCursor_LastExpr                      = CXCursor_ObjCBoolLiteralExpr,
 
   /* Statements */
   CXCursor_FirstStmt                     = 200,

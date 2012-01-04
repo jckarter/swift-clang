@@ -1333,6 +1333,8 @@ private:
   ExprResult ParseStringLiteralExpression();
 
   ExprResult ParseGenericSelectionExpression();
+  
+  ExprResult ParseObjCBoolLiteral();
 
   //===--------------------------------------------------------------------===//
   // C++ Expressions
@@ -1460,6 +1462,11 @@ private:
   // Objective-C Expressions
   ExprResult ParseObjCAtExpression(SourceLocation AtLocation);
   ExprResult ParseObjCStringLiteral(SourceLocation AtLoc);
+  ExprResult ParseObjCCharacterLiteral(SourceLocation AtLoc);
+  ExprResult ParseObjCNumericLiteral(SourceLocation AtLoc);
+  ExprResult ParseObjCBooleanLiteral(SourceLocation AtLoc, bool ArgValue);
+  ExprResult ParseObjCArrayLiteral(SourceLocation AtLoc);
+  ExprResult ParseObjCDictionaryLiteral(SourceLocation AtLoc);
   ExprResult ParseObjCEncodeExpression(SourceLocation AtLoc);
   ExprResult ParseObjCSelectorExpression(SourceLocation AtLoc);
   ExprResult ParseObjCProtocolExpression(SourceLocation AtLoc);
@@ -1473,7 +1480,7 @@ private:
       SourceLocation LBracloc, SourceLocation SuperLoc,
       ParsedType ReceiverType, ExprArg ReceiverExpr);
   bool ParseObjCXXMessageReceiver(bool &IsExpr, void *&TypeOrExpr);
-
+    
   //===--------------------------------------------------------------------===//
   // C99 6.8: Statements and Blocks.
 

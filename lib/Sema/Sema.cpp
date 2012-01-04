@@ -101,6 +101,8 @@ Sema::Sema(Preprocessor &pp, ASTContext &ctxt, ASTConsumer &consumer,
     PackContext(0), MSStructPragmaOn(false), VisContext(0),
     ExprNeedsCleanups(false), LateTemplateParser(0), OpaqueParser(0),
     IdResolver(pp), CXXTypeInfoDecl(0), MSVCGuidDecl(0),
+    NSNumberDecl(0), NSArrayDecl(0), ArrayWithObjectsMethod(0), 
+    NSDictionaryDecl(0), DictionaryWithObjectsMethod(0),
     GlobalNewDeleteDeclared(false), 
     ObjCShouldCallSuperDealloc(false),
     ObjCShouldCallSuperFinalize(false),
@@ -113,6 +115,8 @@ Sema::Sema(Preprocessor &pp, ASTContext &ctxt, ASTConsumer &consumer,
 {
   TUScope = 0;
   LoadedExternalKnownNamespaces = false;
+  for (unsigned I = 0; I != NumNSNumberLiteralMethods; ++I)
+    NSNumberLiteralMethods[I] = 0;
   
   if (getLangOptions().CPlusPlus)
     FieldCollector.reset(new CXXFieldCollector());
