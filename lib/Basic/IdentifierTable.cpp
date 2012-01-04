@@ -40,6 +40,7 @@ IdentifierInfo::IdentifierInfo() {
   ChangedAfterLoad = false;
   RevertedTokenID = false;
   OutOfDate = false;
+  IsImport = false;
   FETokenInfo = 0;
   Entry = 0;
 }
@@ -216,7 +217,7 @@ tok::PPKeywordKind IdentifierInfo::getPPKeywordID() const {
   CASE( 6, 'i', 'n', ifndef);
   CASE( 6, 'i', 'p', import);
   CASE( 6, 'p', 'a', pragma);
-
+      
   CASE( 7, 'd', 'f', defined);
   CASE( 7, 'i', 'c', include);
   CASE( 7, 'w', 'r', warning);
@@ -224,10 +225,11 @@ tok::PPKeywordKind IdentifierInfo::getPPKeywordID() const {
   CASE( 8, 'u', 'a', unassert);
   CASE(12, 'i', 'c', include_next);
 
-  CASE(16, '_', 'i', __include_macros);
-  CASE(16, '_', 'e', __export_macro__);
+  CASE(14, '_', 'p', __public_macro);
       
-  CASE(17, '_', 'p', __private_macro__);
+  CASE(15, '_', 'p', __private_macro);
+
+  CASE(16, '_', 'i', __include_macros);
 #undef CASE
 #undef HASH
   }

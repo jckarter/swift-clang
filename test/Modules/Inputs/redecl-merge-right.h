@@ -1,4 +1,4 @@
-__import_module__ redecl_merge_top;
+@import redecl_merge_top;
 
 @interface Super
 @end
@@ -20,6 +20,12 @@ __import_module__ redecl_merge_top;
 @protocol P2;
 
 @protocol P2;
+
+struct S1;
+struct S2;
+
+void consume_S1(struct S1*);
+struct S2 *produce_S2(void);
 
 // Test declarations in different modules with no common initial
 // declaration.
@@ -47,6 +53,15 @@ struct explicit_struct;
 @protocol P3;
 @protocol P3;
 
+struct S3;
+struct S4;
+
+void consume_S3(struct S3*);
+struct S4 *produce_S4(void);
+
+typedef int T1;
+typedef double T2;
+
 #ifdef __cplusplus
 template<typename T> class Vector { 
 public:
@@ -55,5 +70,5 @@ public:
 #endif
 
 int ONE;
-__import_module__ redecl_merge_top.Explicit;
+@import redecl_merge_top.Explicit;
 const int one = ONE;

@@ -938,6 +938,12 @@ bool NamedDecl::declarationReplaces(NamedDecl *OldD) const {
                                         cast<UsingDecl>(OldD)->getQualifier());
   }
 
+  // A typedef of an Objective-C class type can replace an Objective-C class
+  // declaration or definition, and vice versa.
+  if ((isa<TypedefNameDecl>(this) && isa<ObjCInterfaceDecl>(OldD)) ||
+      (isa<ObjCInterfaceDecl>(this) && isa<TypedefNameDecl>(OldD)))
+    return true;
+  
   // For non-function declarations, if the declarations are of the
   // same kind then this must be a redeclaration, or semantic analysis
   // would not have given us the new declaration.
@@ -2755,10 +2761,10 @@ static unsigned getNumModuleIdentifiers(Module *Mod) {
   return Result;
 }
 
-ImportDecl::ImportDecl(DeclContext *DC, SourceLocation ImportLoc, 
+ImportDecl::ImportDecl(DeclContext *DC, SourceLocation StartLoc, 
                        Module *Imported,
                        ArrayRef<SourceLocation> IdentifierLocs)
-  : Decl(Import, DC, ImportLoc), ImportedAndComplete(Imported, true),
+  : Decl(Import, DC, StartLoc), ImportedAndComplete(Imported, true),
     NextLocalImport()
 {
   assert(getNumModuleIdentifiers(Imported) == IdentifierLocs.size());
@@ -2767,28 +2773,28 @@ ImportDecl::ImportDecl(DeclContext *DC, SourceLocation ImportLoc,
          IdentifierLocs.size() * sizeof(SourceLocation));
 }
 
-ImportDecl::ImportDecl(DeclContext *DC, SourceLocation ImportLoc, 
+ImportDecl::ImportDecl(DeclContext *DC, SourceLocation StartLoc, 
                        Module *Imported, SourceLocation EndLoc)
-  : Decl(Import, DC, ImportLoc), ImportedAndComplete(Imported, false),
+  : Decl(Import, DC, StartLoc), ImportedAndComplete(Imported, false),
     NextLocalImport()
 {
   *reinterpret_cast<SourceLocation *>(this + 1) = EndLoc;
 }
 
 ImportDecl *ImportDecl::Create(ASTContext &C, DeclContext *DC, 
-                               SourceLocation ImportLoc, Module *Imported,
+                               SourceLocation StartLoc, Module *Imported,
                                ArrayRef<SourceLocation> IdentifierLocs) {
   void *Mem = C.Allocate(sizeof(ImportDecl) + 
                          IdentifierLocs.size() * sizeof(SourceLocation));
-  return new (Mem) ImportDecl(DC, ImportLoc, Imported, IdentifierLocs);
+  return new (Mem) ImportDecl(DC, StartLoc, Imported, IdentifierLocs);
 }
 
 ImportDecl *ImportDecl::CreateImplicit(ASTContext &C, DeclContext *DC, 
-                                       SourceLocation ImportLoc,
+                                       SourceLocation StartLoc,
                                        Module *Imported, 
                                        SourceLocation EndLoc) {
   void *Mem = C.Allocate(sizeof(ImportDecl) + sizeof(SourceLocation));
-  ImportDecl *Import = new (Mem) ImportDecl(DC, ImportLoc, Imported, EndLoc);
+  ImportDecl *Import = new (Mem) ImportDecl(DC, StartLoc, Imported, EndLoc);
   Import->setImplicit();
   return Import;
 }
