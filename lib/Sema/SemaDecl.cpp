@@ -8010,8 +8010,6 @@ Decl *Sema::ActOnTag(Scope *S, unsigned TagSpec, TagUseKind TUK,
     // lookup.  This is only actually possible in C++, where a few
     // things like templates still live in the tag namespace.
     } else {
-      assert(getLangOptions().CPlusPlus);
-
       // Use a better diagnostic if an elaborated-type-specifier
       // found the wrong kind of type on the first
       // (non-redeclaration) lookup.
@@ -9896,7 +9894,9 @@ Decl *Sema::ActOnFileScopeAsmDecl(Expr *expr,
   return New;
 }
 
-DeclResult Sema::ActOnModuleImport(SourceLocation ImportLoc, ModuleIdPath Path) {
+DeclResult Sema::ActOnModuleImport(SourceLocation AtLoc, 
+                                   SourceLocation ImportLoc, 
+                                   ModuleIdPath Path) {
   Module *Mod = PP.getModuleLoader().loadModule(ImportLoc, Path, 
                                                 Module::AllVisible,
                                                 /*IsIncludeDirective=*/false);
@@ -9917,8 +9917,8 @@ DeclResult Sema::ActOnModuleImport(SourceLocation ImportLoc, ModuleIdPath Path) 
 
   ImportDecl *Import = ImportDecl::Create(Context, 
                                           Context.getTranslationUnitDecl(),
-                                          ImportLoc, Mod,
-                                          IdentifierLocs);
+                                          AtLoc.isValid()? AtLoc : ImportLoc, 
+                                          Mod, IdentifierLocs);
   Context.getTranslationUnitDecl()->addDecl(Import);
   return Import;
 }
