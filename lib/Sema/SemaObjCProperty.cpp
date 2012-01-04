@@ -856,7 +856,8 @@ Decl *Sema::ActOnPropertyImplDecl(Scope *S,
     }
     IC->addPropertyImplementation(PIDecl);
     if (getLangOptions().ObjCDefaultSynthProperties &&
-        getLangOptions().ObjCNonFragileABI2) {
+        getLangOptions().ObjCNonFragileABI2 &&
+        !IDecl->isObjCSuppressAutosynthesis()) {
       // Diagnose if an ivar was lazily synthesdized due to a previous
       // use and if 1) property is @dynamic or 2) property is synthesized
       // but it requires an ivar of different name.
@@ -1355,7 +1356,8 @@ void Sema::DefaultSynthesizeProperties(Scope *S, Decl *D) {
   if (!IC)
     return;
   if (ObjCInterfaceDecl* IDecl = IC->getClassInterface())
-    DefaultSynthesizeProperties(S, IC, IDecl);
+    if (!IDecl->isObjCSuppressAutosynthesis())
+      DefaultSynthesizeProperties(S, IC, IDecl);
 }
 
 void Sema::DiagnoseUnimplementedProperties(Scope *S, ObjCImplDecl* IMPDecl,
@@ -1795,6 +1797,14 @@ void Sema::CheckObjCPropertyAttributes(Decl *PDecl,
         // not specified; including when property is 'readonly'.
         PropertyDecl->setPropertyAttributes(ObjCPropertyDecl::OBJC_PR_strong);
       else if (!(Attributes & ObjCDeclSpec::DQ_PR_readonly)) {
+        bool isAnyClassTy = 
+          (PropertyTy->isObjCClassType() || 
+           PropertyTy->isObjCQualifiedClassType());
+        // In non-gc, non-arc mode, 'Class' is treated as a 'void *' no need to
+        // issue any warning.
+        if (isAnyClassTy && getLangOptions().getGC() == LangOptions::NonGC)
+          ;
+        else {
           // Skip this warning in gc-only mode.
           if (getLangOptions().getGC() != LangOptions::GCOnly)
             Diag(Loc, diag::warn_objc_property_no_assignment_attribute);
@@ -1802,6 +1812,7 @@ void Sema::CheckObjCPropertyAttributes(Decl *PDecl,
           // If non-gc code warn that this is likely inappropriate.
           if (getLangOptions().getGC() == LangOptions::NonGC)
             Diag(Loc, diag::warn_objc_property_default_assign_on_object);
+        }
       }
 
     // FIXME: Implement warning dependent on NSCopying being
