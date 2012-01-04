@@ -380,8 +380,7 @@ def fmsc_version : Joined<"-fmsc-version=">, Group<f_Group>;
 def fdelayed_template_parsing : Flag<"-fdelayed-template-parsing">, Group<f_Group>;
 def fmodule_cache_path : Separate<"-fmodule-cache-path">, Group<i_Group>, 
   Flags<[NoForward]>;
-def fauto_module_import : Flag <"-fauto-module-import">, Group<f_Group>,
-  Flags<[NoForward]>;
+def fmodules : Flag <"-fmodules">, Group<f_Group>, Flags<[NoForward]>;
   
 def fmudflapth : Flag<"-fmudflapth">, Group<f_Group>;
 def fmudflap : Flag<"-fmudflap">, Group<f_Group>;
@@ -418,6 +417,7 @@ def fno_lax_vector_conversions : Flag<"-fno-lax-vector-conversions">, Group<f_Gr
 def fno_limit_debug_info : Flag<"-fno-limit-debug-info">, Group<f_Group>,
   HelpText<"Do not limit debug information produced to reduce size of debug binary">;
 def fno_merge_all_constants : Flag<"-fno-merge-all-constants">, Group<f_Group>;
+def fno_modules : Flag <"-fno-modules">, Group<f_Group>, Flags<[NoForward]>;
 def fno_ms_extensions : Flag<"-fno-ms-extensions">, Group<f_Group>;
 def fno_ms_compatibility : Flag<"-fno-ms-compatibility">, Group<f_Group>;
 def fno_delayed_template_parsing : Flag<"-fno-delayed-template-parsing">, Group<f_Group>;

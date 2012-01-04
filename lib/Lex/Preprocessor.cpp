@@ -130,7 +130,6 @@ void Preprocessor::Initialize(const TargetInfo &Target) {
   KeepComments = false;
   KeepMacroComments = false;
   SuppressIncludeNotFoundError = false;
-  AutoModuleImport = false;
   
   // Macro expansion is enabled.
   DisableMacroExpansion = false;
@@ -265,6 +264,17 @@ Preprocessor::macro_end(bool IncludeExternalMacros) const {
   }
 
   return Macros.end();
+}
+
+void Preprocessor::recomputeCurLexerKind() {
+  if (CurLexer)
+    CurLexerKind = CLK_Lexer;
+  else if (CurPTHLexer)
+    CurLexerKind = CLK_PTHLexer;
+  else if (CurTokenLexer)
+    CurLexerKind = CLK_TokenLexer;
+  else 
+    CurLexerKind = CLK_CachingLexer;
 }
 
 bool Preprocessor::SetCodeCompletionPoint(const FileEntry *File,
@@ -549,10 +559,14 @@ void Preprocessor::HandleIdentifier(Token &Identifier) {
   if (II.isExtensionToken() && !DisableMacroExpansion)
     Diag(Identifier, diag::ext_token_used);
   
-  // If this is the '__import_module__' keyword, note that the next token
+  // If this is the 'import' contextual keyword, note that the next token 
   // indicates a module name.
-  if (II.getTokenID() == tok::kw___import_module__ &&
-      !InMacroArgs && !DisableMacroExpansion) {
+  //
+  // Note that we do not treat 'import' as a contextual keyword when we're
+  // in a caching lexer, because caching lexers only get used in contexts where
+  // import declarations are disallowed.
+  if (II.isImport() && !InMacroArgs && !DisableMacroExpansion &&
+      getLangOptions().Modules && CurLexerKind != CLK_CachingLexer) {
     ModuleImportLoc = Identifier.getLocation();
     ModuleImportPath.clear();
     ModuleImportExpectsIdentifier = true;
@@ -560,27 +574,21 @@ void Preprocessor::HandleIdentifier(Token &Identifier) {
   }
 }
 
-/// \brief Lex a token following the __import_module__ keyword.
+/// \brief Lex a token following the 'import' contextual keyword.
+///
 void Preprocessor::LexAfterModuleImport(Token &Result) {
   // Figure out what kind of lexer we actually have.
-  if (CurLexer)
-    CurLexerKind = CLK_Lexer;
-  else if (CurPTHLexer)
-    CurLexerKind = CLK_PTHLexer;
-  else if (CurTokenLexer)
-    CurLexerKind = CLK_TokenLexer;
-  else 
-    CurLexerKind = CLK_CachingLexer;
+  recomputeCurLexerKind();
   
   // Lex the next token.
   Lex(Result);
 
   // The token sequence 
   //
-  //   __import_module__ identifier (. identifier)*
+  //   import identifier (. identifier)*
   //
-  // indicates a module import directive. We already saw the __import_module__
-  // keyword, so now we're looking for the identifiers.
+  // indicates a module import directive. We already saw the 'import' 
+  // contextual keyword, so now we're looking for the identifiers.
   if (ModuleImportExpectsIdentifier && Result.getKind() == tok::identifier) {
     // We expected to see an identifier here, and we did; continue handling
     // identifiers.
