@@ -2519,6 +2519,10 @@ public:
   DarwinX86_64TargetInfo(const std::string& triple)
       : DarwinTargetInfo<X86_64TargetInfo>(triple) {
     Int64Type = SignedLongLong;
+    // The 64-bit iOS simulator uses the builtin bool type for Objective-C.
+    llvm::Triple T = llvm::Triple(triple);
+    if (T.getOS() == llvm::Triple::IOS)
+      UseSignedCharForObjCBool = false;
   }
 };
 } // end anonymous namespace
@@ -3097,6 +3101,7 @@ public:
   DarwinARM64TargetInfo(const std::string& triple)
       : DarwinTargetInfo<ARM64TargetInfo>(triple) {
     Int64Type = SignedLongLong;
+    UseSignedCharForObjCBool = false;
   }
 };
 } // end anonymous namespace
