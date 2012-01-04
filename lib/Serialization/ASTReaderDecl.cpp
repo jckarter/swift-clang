@@ -182,6 +182,10 @@ namespace clang {
       
       ~FindExistingResult();
       
+      /// \brief Suppress the addition of this result into the known set of
+      /// names.
+      void suppress() { AddResult = false; }
+      
       operator NamedDecl*() const { return Existing; }
       
       template<typename T>
@@ -269,9 +273,12 @@ namespace clang {
 
     std::pair<uint64_t, uint64_t> VisitDeclContext(DeclContext *DC);
     
-    template <typename T> 
+    template<typename T> 
     RedeclarableResult VisitRedeclarable(Redeclarable<T> *D);
 
+    template<typename T>
+    void mergeRedeclarable(Redeclarable<T> *D, RedeclarableResult &Redecl);
+    
     // FIXME: Reorder according to DeclNodes.td?
     void VisitObjCMethodDecl(ObjCMethodDecl *D);
     void VisitObjCContainerDecl(ObjCContainerDecl *D);
@@ -409,20 +416,27 @@ void ASTDeclReader::VisitTypeAliasDecl(TypeAliasDecl *TD) {
 }
 
 void ASTDeclReader::VisitTagDecl(TagDecl *TD) {
-  VisitRedeclarable(TD);
+  // Record the declaration -> global ID mapping.
+  Reader.DeclToID[TD] = ThisDeclID;
+    
+  RedeclarableResult Redecl = VisitRedeclarable(TD);
   VisitTypeDecl(TD);
+  
   TD->IdentifierNamespace = Record[Idx++];
   TD->setTagKind((TagDecl::TagKind)Record[Idx++]);
   TD->setCompleteDefinition(Record[Idx++]);
   TD->setEmbeddedInDeclarator(Record[Idx++]);
   TD->setFreeStanding(Record[Idx++]);
   TD->setRBraceLoc(ReadSourceLocation(Record, Idx));
+  
   if (Record[Idx++]) { // hasExtInfo
     TagDecl::ExtInfo *Info = new (Reader.getContext()) TagDecl::ExtInfo();
     ReadQualifierInfo(*Info, Record, Idx);
     TD->TypedefNameDeclOrQualifier = Info;
   } else
     TD->setTypedefNameForAnonDecl(ReadDeclAs<TypedefNameDecl>(Record, Idx));
+
+  mergeRedeclarable(TD, Redecl);  
 }
 
 void ASTDeclReader::VisitEnumDecl(EnumDecl *ED) {
@@ -655,44 +669,7 @@ void ASTDeclReader::VisitObjCInterfaceDecl(ObjCInterfaceDecl *ID) {
   RedeclarableResult Redecl = VisitRedeclarable(ID);
   VisitObjCContainerDecl(ID);
   TypeIDForTypeDecl = Reader.getGlobalTypeID(F, Record[Idx++]);
-                  
-  // Determine whether we need to merge this declaration with another @interface
-  // with the same name.
-  // FIXME: Not needed unless the module file graph is a DAG.
-  if (FindExistingResult ExistingRes = findExisting(ID)) {
-    if (ObjCInterfaceDecl *Existing = ExistingRes) {
-      ObjCInterfaceDecl *ExistingCanon = Existing->getCanonicalDecl();
-      ObjCInterfaceDecl *IDCanon = ID->getCanonicalDecl();
-      if (ExistingCanon != IDCanon) {
-        // Have our redeclaration link point back at the canonical declaration
-        // of the existing declaration, so that this declaration has the 
-        // appropriate canonical declaration.
-        ID->RedeclLink = ObjCInterfaceDecl::PreviousDeclLink(ExistingCanon);
-        
-        // Don't introduce IDCanon into the set of pending declaration chains.
-        Redecl.suppress();
-        
-        // Introduce ExistingCanon into the set of pending declaration chains,
-        // if in fact it came from a module file.
-        if (ExistingCanon->isFromASTFile()) {
-          GlobalDeclID ExistingCanonID = Reader.DeclToID[ExistingCanon];
-          assert(ExistingCanonID && "Unrecorded canonical declaration ID?");
-          if (Reader.PendingDeclChainsKnown.insert(ExistingCanonID))
-            Reader.PendingDeclChains.push_back(ExistingCanonID);
-        }
-        
-        // If this declaration was the canonical declaration, make a note of 
-        // that. We accept the linear algorithm here because the number of 
-        // unique canonical declarations of an entity should always be tiny.
-        if (IDCanon == ID) {
-          SmallVectorImpl<DeclID> &Merged = Reader.MergedDecls[ExistingCanon];
-          if (std::find(Merged.begin(), Merged.end(), Redecl.getFirstID())
-                == Merged.end())
-            Merged.push_back(Redecl.getFirstID());
-        }
-      }
-    }
-  }
+  mergeRedeclarable(ID, Redecl);
   
   ObjCInterfaceDecl *Def = ReadDeclAs<ObjCInterfaceDecl>(Record, Idx);
   if (ID == Def) {
@@ -764,45 +741,7 @@ void ASTDeclReader::VisitObjCProtocolDecl(ObjCProtocolDecl *PD) {
   
   RedeclarableResult Redecl = VisitRedeclarable(PD);
   VisitObjCContainerDecl(PD);
-  
-  // Determine whether we need to merge this declaration with another @protocol
-  // with the same name.
-  // FIXME: Not needed unless the module file graph is a DAG.
-  if (FindExistingResult ExistingRes = findExisting(PD)) {
-    if (ObjCProtocolDecl *Existing = ExistingRes) {
-      ObjCProtocolDecl *ExistingCanon = Existing->getCanonicalDecl();
-      ObjCProtocolDecl *PDCanon = PD->getCanonicalDecl();
-      if (ExistingCanon != PDCanon) {
-        // Have our redeclaration link point back at the canonical declaration
-        // of the existing declaration, so that this declaration has the 
-        // appropriate canonical declaration.
-        PD->RedeclLink = ObjCProtocolDecl::PreviousDeclLink(ExistingCanon);
-        
-        // Don't introduce IDCanon into the set of pending declaration chains.
-        Redecl.suppress();
-        
-        // Introduce ExistingCanon into the set of pending declaration chains,
-        // if in fact it came from a module file.
-        if (ExistingCanon->isFromASTFile()) {
-          GlobalDeclID ExistingCanonID = Reader.DeclToID[ExistingCanon];
-          assert(ExistingCanonID && "Unrecorded canonical declaration ID?");
-          if (Reader.PendingDeclChainsKnown.insert(ExistingCanonID))
-            Reader.PendingDeclChains.push_back(ExistingCanonID);
-        }
-        
-        // If this declaration was the canonical declaration, make a note of 
-        // that. We accept the linear algorithm here because the number of 
-        // unique canonical declarations of an entity should always be tiny.
-        if (PDCanon == PD) {
-          SmallVectorImpl<DeclID> &Merged = Reader.MergedDecls[ExistingCanon];
-          if (std::find(Merged.begin(), Merged.end(), Redecl.getFirstID())
-                == Merged.end())
-            Merged.push_back(Redecl.getFirstID());
-        }
-      }
-    }
-  }
-
+  mergeRedeclarable(PD, Redecl);
   
   ObjCProtocolDecl *Def = ReadDeclAs<ObjCProtocolDecl>(Record, Idx);
   if (PD == Def) {
@@ -1579,6 +1518,60 @@ ASTDeclReader::VisitRedeclarable(Redeclarable<T> *D) {
   return RedeclarableResult(Reader, FirstDeclID);
 }
 
+/// \brief Attempts to merge the given declaration (D) with another declaration
+/// of the same entity.
+template<typename T>
+void ASTDeclReader::mergeRedeclarable(Redeclarable<T> *D, 
+                                      RedeclarableResult &Redecl) {
+  // If modules are not available, there is no reason to perform this merge.
+  if (!Reader.getContext().getLangOptions().Modules)
+    return;
+  
+  if (FindExistingResult ExistingRes = findExisting(static_cast<T*>(D))) {
+    if (T *Existing = ExistingRes) {
+      T *ExistingCanon = Existing->getCanonicalDecl();
+      T *DCanon = static_cast<T*>(D)->getCanonicalDecl();
+      if (ExistingCanon != DCanon) {
+        // Have our redeclaration link point back at the canonical declaration
+        // of the existing declaration, so that this declaration has the 
+        // appropriate canonical declaration.
+        D->RedeclLink 
+          = typename Redeclarable<T>::PreviousDeclLink(ExistingCanon);
+        
+        // Don't introduce DCanon into the set of pending declaration chains.
+        Redecl.suppress();
+        
+        // Introduce ExistingCanon into the set of pending declaration chains,
+        // if in fact it came from a module file.
+        if (ExistingCanon->isFromASTFile()) {
+          GlobalDeclID ExistingCanonID = Reader.DeclToID[ExistingCanon];
+          assert(ExistingCanonID && "Unrecorded canonical declaration ID?");
+          if (Reader.PendingDeclChainsKnown.insert(ExistingCanonID))
+            Reader.PendingDeclChains.push_back(ExistingCanonID);
+        }
+        
+        // If this declaration was the canonical declaration, make a note of 
+        // that. We accept the linear algorithm here because the number of 
+        // unique canonical declarations of an entity should always be tiny.
+        if (DCanon == static_cast<T*>(D)) {
+          SmallVectorImpl<DeclID> &Merged = Reader.MergedDecls[ExistingCanon];
+          if (std::find(Merged.begin(), Merged.end(), Redecl.getFirstID())
+                == Merged.end())
+            Merged.push_back(Redecl.getFirstID());
+          
+          // If ExistingCanon did not come from a module file, introduce the
+          // first declaration that *does* come from a module file is in the 
+          // set of pending declaration chains, so that we merge this 
+          // declaration.
+          if (!ExistingCanon->isFromASTFile() &&
+              Reader.PendingDeclChainsKnown.insert(Redecl.getFirstID()))
+            Reader.PendingDeclChains.push_back(Merged[0]);
+        }
+      }
+    }
+  }
+}
+
 //===----------------------------------------------------------------------===//
 // Attribute Reading
 //===----------------------------------------------------------------------===//
@@ -1688,6 +1681,15 @@ static bool isSameEntity(NamedDecl *X, NamedDecl *Y) {
   if (isa<ObjCInterfaceDecl>(X) || isa<ObjCProtocolDecl>(X))
     return true;
   
+  // Compatible tags match.
+  if (TagDecl *TagX = dyn_cast<TagDecl>(X)) {
+    TagDecl *TagY = cast<TagDecl>(Y);
+    if ((TagX->getTagKind() == TagY->getTagKind()) ||
+        ((TagX->getTagKind() == TTK_Struct || TagX->getTagKind() == TTK_Class)&&
+         (TagY->getTagKind() == TTK_Struct || TagY->getTagKind() == TTK_Class)))
+      return true;
+  }
+        
   // FIXME: Many other cases to implement.
   return false;
 }
@@ -1705,13 +1707,21 @@ ASTDeclReader::FindExistingResult::~FindExistingResult() {
 }
 
 ASTDeclReader::FindExistingResult ASTDeclReader::findExisting(NamedDecl *D) {
+  DeclarationName Name = D->getDeclName();
+  if (!Name) {
+    // Don't bother trying to find unnamed declarations.
+    FindExistingResult Result(Reader, D, /*Existing=*/0);
+    Result.suppress();
+    return Result;
+  }
+  
   DeclContext *DC = D->getDeclContext()->getRedeclContext();
   if (!DC->isFileContext())
     return FindExistingResult(Reader);
   
   if (DC->isTranslationUnit() && Reader.SemaObj) {
     IdentifierResolver &IdResolver = Reader.SemaObj->IdResolver;
-    for (IdentifierResolver::iterator I = IdResolver.begin(D->getDeclName()), 
+    for (IdentifierResolver::iterator I = IdResolver.begin(Name), 
                                    IEnd = IdResolver.end();
          I != IEnd; ++I) {
       if (isSameEntity(*I, D))

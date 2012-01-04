@@ -1156,10 +1156,13 @@ public:
 
   /// \brief The parser has processed a module import declaration.
   ///
-  /// \param ImportLoc The location of the '__import_module__' keyword.
+  /// \param AtLoc The location of the '@' symbol, if any.
+  ///
+  /// \param ImportLoc The location of the 'import' keyword.
   ///
   /// \param Path The module access path.
-  DeclResult ActOnModuleImport(SourceLocation ImportLoc, ModuleIdPath Path);
+  DeclResult ActOnModuleImport(SourceLocation AtLoc, SourceLocation ImportLoc, 
+                               ModuleIdPath Path);
 
   /// \brief Retrieve a suitable printing policy.
   PrintingPolicy getPrintingPolicy() const;
@@ -3492,6 +3495,23 @@ public:
   /// ActOnCXXExitDeclInitializer - Invoked after we are finished parsing an
   /// initializer for the declaration 'Dcl'.
   void ActOnCXXExitDeclInitializer(Scope *S, Decl *Dcl);
+
+  /// ActOnLambdaStart - This callback is invoked when a lambda expression is
+  /// started.
+  void ActOnLambdaStart(SourceLocation StartLoc, Scope *CurScope);
+
+  /// ActOnLambdaArguments - This callback allows processing of lambda arguments.
+  /// If there are no arguments, this is still invoked.
+  void ActOnLambdaArguments(Declarator &ParamInfo, Scope *CurScope);
+
+  /// ActOnLambdaError - If there is an error parsing a lambda, this callback
+  /// is invoked to pop the information about the lambda from the action impl.
+  void ActOnLambdaError(SourceLocation StartLoc, Scope *CurScope);
+
+  /// ActOnLambdaExpr - This is called when the body of a lambda expression
+  /// was successfully completed.
+  ExprResult ActOnLambdaExpr(SourceLocation StartLoc, Stmt *Body,
+                             Scope *CurScope);
 
   // ParseObjCStringLiteral - Parse Objective-C string literals.
   ExprResult ParseObjCStringLiteral(SourceLocation *AtLocs,

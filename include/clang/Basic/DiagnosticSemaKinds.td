@@ -1370,6 +1370,9 @@ def err_attribute_wrong_number_arguments : Error<
   ":requires exactly %0 arguments}0">;
 def err_attribute_too_many_arguments : Error<
   "attribute takes no more than %0 argument%s0">;
+def err_suppress_autosynthesis : Error<
+  "objc_suppress_autosynthesis attribute may only be specified on a class"
+  "to a class declaration">;
 def err_attribute_too_few_arguments : Error<
   "attribute takes at least %0 argument%s0">;
 def err_attribute_missing_parameter_name : Error<
@@ -4034,6 +4037,8 @@ def err_throw_incomplete_ptr : Error<
   "cannot throw pointer to object of incomplete type %0">;
 def err_return_in_constructor_handler : Error<
   "return in the catch of a function try block of a constructor is illegal">;
+
+def err_lambda_unsupported : Error<"lambda expressions are not supported yet">;
 
 def err_operator_arrow_circular : Error<
   "circular pointer delegation detected">;

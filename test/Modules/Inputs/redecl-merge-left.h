@@ -1,4 +1,4 @@
-__import_module__ redecl_merge_top;
+@import redecl_merge_top;
 
 @class A;
 
@@ -14,6 +14,14 @@ __import_module__ redecl_merge_top;
 @protocol P2
 - (void)protoMethod2;
 @end
+
+struct S1;
+struct S2 {
+  int field;
+};
+
+struct S1 *produce_S1(void);
+void consume_S2(struct S2*);
 
 // Test declarations in different modules with no common initial
 // declaration.
@@ -38,6 +46,18 @@ struct explicit_struct;
 @protocol P3, P4;
 
 @protocol P3;
+
+struct S3;
+struct S3;
+struct S4 {
+  int field;
+};
+
+struct S3 *produce_S3(void);
+void consume_S4(struct S4*);
+
+typedef int T1;
+typedef float T2;
 
 #ifdef __cplusplus
 template<typename T> class Vector;
