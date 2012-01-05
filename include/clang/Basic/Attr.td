@@ -525,7 +525,7 @@ def ArcWeakrefUnavailable : InheritableAttr {
 }
 
 def ObjCSuppressAutosynthesis : InheritableAttr {
-  let Spellings = ["objc_suppress_autosynhesis"];
+  let Spellings = ["objc_disable_automatic_synthesis"];
 }
 
 def Unused : InheritableAttr {
