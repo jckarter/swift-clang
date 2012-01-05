@@ -380,7 +380,7 @@ def note_implementation_declared : Note<
 def note_class_declared : Note<
   "class is declared here">;
 def note_suppressed_class_declare : Note<
-  "class with specified objc_disable_automatic_synthesis attribute is declared here">;
+  "class with specified objc_requires_property_definitions attribute is declared here">;
 def warn_dup_category_def : Warning<
   "duplicate definition of category %1 on interface %0">;
 def err_conflicting_super_class : Error<"conflicting super class name %0">;
@@ -1172,6 +1172,8 @@ def err_auto_var_requires_init : Error<
   "declaration of variable %0 with type %1 requires an initializer">;
 def err_auto_new_requires_ctor_arg : Error<
   "new expression for type %0 requires a constructor argument">;
+def err_auto_var_init_no_expression : Error<
+  "initializer for variable %0 with type %1 is empty">;
 def err_auto_var_init_multiple_expressions : Error<
   "initializer for variable %0 with type %1 contains multiple expressions">;
 def err_auto_new_ctor_multiple_expressions : Error<
@@ -1372,7 +1374,7 @@ def err_attribute_wrong_number_arguments : Error<
 def err_attribute_too_many_arguments : Error<
   "attribute takes no more than %0 argument%s0">;
 def err_suppress_autosynthesis : Error<
-  "objc_disable_automatic_synthesis attribute may only be specified on a class"
+  "objc_requires_property_definitions attribute may only be specified on a class"
   "to a class declaration">;
 def err_attribute_too_few_arguments : Error<
   "attribute takes at least %0 argument%s0">;
