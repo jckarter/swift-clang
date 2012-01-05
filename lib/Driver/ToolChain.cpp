@@ -55,6 +55,7 @@ void ToolChain::configureObjCRuntime(ObjCRuntime &runtime) const {
     // Assume a minimal NeXT runtime.
     runtime.HasARC = false;
     runtime.HasWeak = false;
+    runtime.HasSubscripting = false;
     runtime.HasTerminate = false;
     return;
 
@@ -62,6 +63,7 @@ void ToolChain::configureObjCRuntime(ObjCRuntime &runtime) const {
     // Assume a maximal GNU runtime.
     runtime.HasARC = true;
     runtime.HasWeak = true;
+    runtime.HasSubscripting = false; // to be added
     runtime.HasTerminate = false; // to be added
     return;
   }

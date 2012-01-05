@@ -178,6 +178,12 @@ private:
   } ARCRuntimeForSimulator;
 
   mutable enum {
+    SubscriptSimulator_None,
+    SubscriptSimulator_NotAvailable,
+    SubscriptSimulator_Available
+  } SubscriptRuntimeForSimulator;
+
+  mutable enum {
     LibCXXSimulator_None,
     LibCXXSimulator_NotAvailable,
     LibCXXSimulator_Available
@@ -198,6 +204,7 @@ private:
   std::string MacosxVersionMin;
 
   bool hasARCRuntime() const;
+  bool hasSubscriptingRuntime() const;
 
 private:
   void AddDeploymentTarget(DerivedArgList &Args) const;
