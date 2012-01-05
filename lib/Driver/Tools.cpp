@@ -144,6 +144,13 @@ static bool isObjCAutoRefCount(const ArgList &Args) {
   return Args.hasFlag(options::OPT_fobjc_arc, options::OPT_fno_objc_arc, false);
 }
 
+/// \brief Determine whether we are linking the ObjC runtime.
+static bool isObjCRuntimeLinked(const ArgList &Args) {
+  if (isObjCAutoRefCount(Args))
+    return true;
+  return Args.hasArg(options::OPT_fobjc_link_runtime);
+}
+
 static void addProfileRT(const ToolChain &TC, const ArgList &Args,
                          ArgStringList &CmdArgs,
                          llvm::Triple Triple) {
@@ -3981,13 +3988,15 @@ void darwin::Link::ConstructJob(Compilation &C, const JobAction &JA,
 
   getDarwinToolChain().AddLinkSearchPathArgs(Args, CmdArgs);
 
-  // In ARC, if we don't have runtime support, link in the runtime
-  // stubs.  We have to do this *before* adding any of the normal
-  // linker inputs so that its initializer gets run first.
-  if (isObjCAutoRefCount(Args)) {
+  if (isObjCRuntimeLinked(Args)) {
+    // If we don't have ARC or subscripting runtime support, link in the runtime
+    // stubs.  We have to do this *before* adding any of the normal
+    // linker inputs so that its initializer gets run first.
     ObjCRuntime runtime;
     getDarwinToolChain().configureObjCRuntime(runtime);
-    if (!runtime.HasARC)
+    // We use arclite library for both ARC and subscripting support.
+    if ((!runtime.HasARC && isObjCAutoRefCount(Args)) ||
+        !runtime.HasSubscripting)
       getDarwinToolChain().AddLinkARCArgs(Args, CmdArgs);
   }
 
