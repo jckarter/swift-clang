@@ -3455,7 +3455,7 @@ public:
   }
 
   bool Success(const CCValue &V, const Expr *E) {
-    if (V.isLValue()) {
+    if (V.isLValue() || V.isAddrLabelDiff()) {
       Result = V;
       return true;
     }
@@ -4008,8 +4008,6 @@ bool IntExprEvaluator::VisitBinaryOperator(const BinaryOperator *E) {
       if (!HasSameBase(LHSValue, RHSValue)) {
         if (E->getOpcode() == BO_Sub) {
           // Handle &&A - &&B.
-          // FIXME: We're missing a check that both labels have the same
-          // associated function; I'm not sure how to write this check.
           if (!LHSValue.Offset.isZero() || !RHSValue.Offset.isZero())
             return false;
           const Expr *LHSExpr = LHSValue.Base.dyn_cast<const Expr*>();
@@ -4019,6 +4017,10 @@ bool IntExprEvaluator::VisitBinaryOperator(const BinaryOperator *E) {
           const AddrLabelExpr *LHSAddrExpr = dyn_cast<AddrLabelExpr>(LHSExpr);
           const AddrLabelExpr *RHSAddrExpr = dyn_cast<AddrLabelExpr>(RHSExpr);
           if (!LHSAddrExpr || !RHSAddrExpr)
+            return false;
+          // Make sure both labels come from the same function.
+          if (LHSAddrExpr->getLabel()->getDeclContext() !=
+              RHSAddrExpr->getLabel()->getDeclContext())
             return false;
           Result = CCValue(LHSAddrExpr, RHSAddrExpr);
           return true;
@@ -4119,8 +4121,6 @@ bool IntExprEvaluator::VisitBinaryOperator(const BinaryOperator *E) {
 
   if (E->getOpcode() == BO_Sub && LHSVal.isLValue() && RHSVal.isLValue()) {
     // Handle (intptr_t)&&A - (intptr_t)&&B.
-    // FIXME: We're missing a check that both labels have the same
-    // associated function; I'm not sure how to write this check.
     if (!LHSVal.getLValueOffset().isZero() ||
         !RHSVal.getLValueOffset().isZero())
       return false;
@@ -4131,6 +4131,10 @@ bool IntExprEvaluator::VisitBinaryOperator(const BinaryOperator *E) {
     const AddrLabelExpr *LHSAddrExpr = dyn_cast<AddrLabelExpr>(LHSExpr);
     const AddrLabelExpr *RHSAddrExpr = dyn_cast<AddrLabelExpr>(RHSExpr);
     if (!LHSAddrExpr || !RHSAddrExpr)
+      return false;
+    // Make sure both labels come from the same function.
+    if (LHSAddrExpr->getLabel()->getDeclContext() !=
+        RHSAddrExpr->getLabel()->getDeclContext())
       return false;
     Result = CCValue(LHSAddrExpr, RHSAddrExpr);
     return true;

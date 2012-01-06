@@ -2918,7 +2918,7 @@ void ASTWriter::WriteMergedDecls() {
   for (ASTReader::MergedDeclsMap::iterator I = Chain->MergedDecls.begin(),
                                         IEnd = Chain->MergedDecls.end();
        I != IEnd; ++I) {
-    DeclID CanonID = I->first->isFromASTFile()? Chain->DeclToID[I->first]
+    DeclID CanonID = I->first->isFromASTFile()? I->first->getGlobalID()
                                               : getDeclID(I->first);
     assert(CanonID && "Merged declaration not known?");
     
@@ -3733,6 +3733,12 @@ DeclID ASTWriter::GetDeclRef(const Decl *D) {
   if (D == 0) {
     return 0;
   }
+  
+  // If D comes from an AST file, its declaration ID is already known and
+  // fixed.
+  if (D->isFromASTFile())
+    return D->getGlobalID();
+  
   assert(!(reinterpret_cast<uintptr_t>(D) & 0x01) && "Invalid decl pointer");
   DeclID &ID = DeclIDs[D];
   if (ID == 0) {
@@ -3748,6 +3754,11 @@ DeclID ASTWriter::GetDeclRef(const Decl *D) {
 DeclID ASTWriter::getDeclID(const Decl *D) {
   if (D == 0)
     return 0;
+
+  // If D comes from an AST file, its declaration ID is already known and
+  // fixed.
+  if (D->isFromASTFile())
+    return D->getGlobalID();
 
   assert(DeclIDs.find(D) != DeclIDs.end() && "Declaration not emitted!");
   return DeclIDs[D];
@@ -4275,10 +4286,6 @@ void ASTWriter::TypeRead(TypeIdx Idx, QualType T) {
   TypeIdx &StoredIdx = TypeIdxs[T];
   if (Idx.getIndex() >= StoredIdx.getIndex())
     StoredIdx = Idx;
-}
-
-void ASTWriter::DeclRead(DeclID ID, const Decl *D) {
-  DeclIDs[D] = ID;
 }
 
 void ASTWriter::SelectorRead(SelectorID ID, Selector S) {

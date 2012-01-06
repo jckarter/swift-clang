@@ -41,6 +41,22 @@ using namespace clang;
 
 static bool StatSwitch = false;
 
+void *Decl::AllocateDeserializedDecl(const ASTContext &Context, 
+                                     unsigned ID,
+                                     unsigned Size) {
+  // Allocate an extra 8 bytes worth of storage, which ensures that the
+  // resulting pointer will still be 8-byte aligned. At present, we're only
+  // using the latter 4 bytes of this storage.
+  void *Start = Context.Allocate(Size + 8);
+  void *Result = (char*)Start + 8;
+  
+  // Store the global declaration ID 
+  unsigned *IDPtr = (unsigned*)Result - 1;
+  *IDPtr = ID;
+  
+  return Result;
+}
+
 const char *Decl::getDeclKindName() const {
   switch (DeclKind) {
   default: llvm_unreachable("Declaration not in DeclNodes.inc!");

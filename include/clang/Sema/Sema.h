@@ -165,6 +165,7 @@ namespace sema {
   class BlockScopeInfo;
   class DelayedDiagnostic;
   class FunctionScopeInfo;
+  class LambdaScopeInfo;
   class TemplateDeductionInfo;
 }
 
@@ -815,6 +816,9 @@ public:
 
   /// \brief Retrieve the current block, if any.
   sema::BlockScopeInfo *getCurBlock();
+
+  /// \brief Retrieve the current lambda expression, if any.
+  sema::LambdaScopeInfo *getCurLambda();
 
   /// WeakTopLevelDeclDecls - access to #pragma weak-generated Decls
   SmallVector<Decl*,2> &WeakTopLevelDecls() { return WeakTopLevelDecl; }
