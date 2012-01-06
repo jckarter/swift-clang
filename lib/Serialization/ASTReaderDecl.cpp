@@ -360,21 +360,21 @@ void ASTDeclReader::VisitDecl(Decl *D) {
   D->setImplicit(Record[Idx++]);
   D->setUsed(Record[Idx++]);
   D->setReferenced(Record[Idx++]);
-  D->TopLevelDeclInObjCContainer = Record[Idx++];
+  D->setTopLevelDeclInObjCContainer(Record[Idx++]);
   D->setAccess((AccessSpecifier)Record[Idx++]);
   D->FromASTFile = true;
-  D->ModulePrivate = Record[Idx++];
-
+  D->setModulePrivate(Record[Idx++]);
+  D->Hidden = D->isModulePrivate();
+  
   // Determine whether this declaration is part of a (sub)module. If so, it
   // may not yet be visible.
   if (unsigned SubmoduleID = readSubmoduleID(Record, Idx)) {
     // Module-private declarations are never visible, so there is no work to do.
-    if (!D->ModulePrivate) {
+    if (!D->isModulePrivate()) {
       if (Module *Owner = Reader.getSubmodule(SubmoduleID)) {
         if (Owner->NameVisibility != Module::AllVisible) {
-          // The owning module is not visible. Mark this declaration as
-          // module-private, 
-          D->ModulePrivate = true;
+          // The owning module is not visible. Mark this declaration as hidden.
+          D->Hidden = true;
           
           // Note that this declaration was hidden because its owning module is 
           // not yet visible.
@@ -1226,7 +1226,7 @@ void ASTDeclReader::VisitRedeclarableTemplateDecl(RedeclarableTemplateDecl *D) {
   RedeclKind Kind = (RedeclKind)Record[Idx++];
   
   // Determine the first declaration ID.
-  DeclID FirstDeclID;
+  DeclID FirstDeclID = 0;
   switch (Kind) {
   case FirstDeclaration: {
     FirstDeclID = ThisDeclID;
@@ -1481,7 +1481,7 @@ ASTDeclReader::VisitRedeclarable(Redeclarable<T> *D) {
   enum RedeclKind { FirstDeclaration = 0, FirstInFile, PointsToPrevious };
   RedeclKind Kind = (RedeclKind)Record[Idx++];
   
-  DeclID FirstDeclID;
+  DeclID FirstDeclID = 0;
   switch (Kind) {
   case FirstDeclaration:
     FirstDeclID = ThisDeclID;
