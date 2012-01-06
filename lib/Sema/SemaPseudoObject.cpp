@@ -1145,8 +1145,8 @@ ExprResult ObjCSubscriptOpBuilder::buildSet(Expr *op, SourceLocation opcLoc,
   if (!msg.isInvalid() && captureSetValueAsResult) {
     ObjCMessageExpr *msgExpr =
       cast<ObjCMessageExpr>(msg.get()->IgnoreImplicit());
-    Expr *arg = msgExpr->getArg(1);
-    msgExpr->setArg(1, captureValueAsResult(arg));
+    Expr *arg = msgExpr->getArg(0);
+    msgExpr->setArg(0, captureValueAsResult(arg));
   }
   
   return msg;
