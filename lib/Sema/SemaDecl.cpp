@@ -1107,7 +1107,7 @@ static bool ShouldDiagnoseUnusedDecl(const NamedDecl *D) {
     return false;
 
   // Types of valid local variables should be complete, so this should succeed.
-  if (const ValueDecl *VD = dyn_cast<ValueDecl>(D)) {
+  if (const VarDecl *VD = dyn_cast<VarDecl>(D)) {
 
     // White-list anything with an __attribute__((unused)) type.
     QualType Ty = VD->getType();
@@ -1129,11 +1129,18 @@ static bool ShouldDiagnoseUnusedDecl(const NamedDecl *D) {
         return false;
 
       if (const CXXRecordDecl *RD = dyn_cast<CXXRecordDecl>(Tag)) {
-        // FIXME: Checking for the presence of a user-declared constructor
-        // isn't completely accurate; we'd prefer to check that the initializer
-        // has no side effects.
-        if (RD->hasUserDeclaredConstructor() || !RD->hasTrivialDestructor())
+        if (!RD->hasTrivialDestructor())
           return false;
+
+        if (const Expr *Init = VD->getInit()) {
+          const CXXConstructExpr *Construct =
+            dyn_cast<CXXConstructExpr>(Init);
+          if (Construct && !Construct->isElidable()) {
+            CXXConstructorDecl *CD = Construct->getConstructor();
+            if (!CD->isTrivial())
+              return false;
+          }
+        }
       }
     }
 
@@ -4902,6 +4909,24 @@ Sema::ActOnFunctionDeclarator(Scope *S, Declarator &D, DeclContext *DC,
       NewFD->setInvalidDecl();
       if (FunctionTemplate)
         FunctionTemplate->setInvalidDecl();
+    }
+
+    // If we see "T var();" at block scope, where T is a class type, it is
+    // probably an attempt to initialize a variable, not a function declaration.
+    // We don't catch this case earlier, since there is no ambiguity here.
+    if (!FunctionTemplate && D.getFunctionDefinitionKind() == FDK_Declaration &&
+        CurContext->isFunctionOrMethod() &&
+        D.getNumTypeObjects() == 1 && D.isFunctionDeclarator() &&
+        D.getDeclSpec().getStorageClassSpecAsWritten()
+          == DeclSpec::SCS_unspecified) {
+      QualType T = R->getAs<FunctionType>()->getResultType();
+      DeclaratorChunk &C = D.getTypeObject(0);
+      if (!T->isVoidType() && C.Fun.NumArgs == 0 && !C.Fun.isVariadic &&
+          !C.Fun.TrailingReturnType &&
+          C.Fun.getExceptionSpecType() == EST_None) {
+        Diag(C.Loc, diag::warn_empty_parens_are_function_decl)
+          << SourceRange(C.Loc, C.EndLoc);
+      }
     }
 
     // C++ [dcl.fct.spec]p5:
