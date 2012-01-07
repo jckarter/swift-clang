@@ -475,6 +475,7 @@ public:
   virtual llvm::Constant *GetOptimizedPropertySetFunction(bool atomic, 
                                                           bool copy);
   virtual llvm::Constant *GetSetStructFunction();
+  virtual llvm::Constant *GetCppAtomicObjectFunction();
   virtual llvm::Constant *GetGetStructFunction();
   virtual llvm::Constant *EnumerationMutationFunction();
 
@@ -2398,6 +2399,9 @@ llvm::Constant *CGObjCGNU::GetGetStructFunction() {
 }
 llvm::Constant *CGObjCGNU::GetSetStructFunction() {
   return SetStructPropertyFn;
+}
+llvm::Constant *CGObjCGNU::GetCppAtomicObjectFunction() {
+  return 0;
 }
 
 llvm::Constant *CGObjCGNU::EnumerationMutationFunction() {

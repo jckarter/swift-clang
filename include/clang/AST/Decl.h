@@ -185,16 +185,12 @@ public:
   /// \brief Determine whether this declaration has linkage.
   bool hasLinkage() const;
 
-  /// \brief Whether this declaration was marked as being private to the
-  /// module in which it was defined.
-  bool isModulePrivate() const { return ModulePrivate; }
-
-  /// \brief Specify whether this declaration was marked as being private
-  /// to the module in which it was defined.
-  void setModulePrivate(bool MP = true) {
-    ModulePrivate = MP;
-  }
-
+  using Decl::isModulePrivate;
+  using Decl::setModulePrivate;
+  
+  /// \brief Determine whether this declaration is hidden from name lookup.
+  bool isHidden() const { return Hidden; }
+  
   /// \brief Determine whether this declaration is a C++ class member.
   bool isCXXClassMember() const {
     const DeclContext *DC = getDeclContext();
