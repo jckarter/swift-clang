@@ -28,24 +28,46 @@ namespace {
   int ReturnExpr::TagInt; 
 }
 
-void ExprEngine::processCallEnter(CallEnterNodeBuilder &B) {
-  const ProgramState *state =
-    B.getState()->enterStackFrame(B.getCalleeContext());
-  B.generateNode(state);
+void ExprEngine::processCallEnter(CallEnter CE, ExplodedNode *Pred) {
+  // Get the entry block in the CFG of the callee.
+  const StackFrameContext *SFC = CE.getCalleeContext();
+  const CFG *CalleeCFG = SFC->getCFG();
+  const CFGBlock *Entry = &(CalleeCFG->getEntry());
+  
+  // Validate the CFG.
+  assert(Entry->empty());
+  assert(Entry->succ_size() == 1);
+  
+  // Get the solitary sucessor.
+  const CFGBlock *Succ = *(Entry->succ_begin());
+  
+  // Construct an edge representing the starting location in the callee.
+  BlockEdge Loc(Entry, Succ, SFC);
+
+  // Construct a new state which contains the mapping from actual to
+  // formal arguments.
+  const ProgramState *state = Pred->getState()->enterStackFrame(SFC);
+  
+  // Construct a new node and add it to the worklist.
+  bool isNew;
+  ExplodedNode *Node = G.getNode(Loc, state, false, &isNew);
+  Node->addPredecessor(Pred, G);
+  if (isNew)
+    Engine.getWorkList()->enqueue(Node);
 }
 
-void ExprEngine::processCallExit(CallExitNodeBuilder &B) {
-  const ProgramState *state = B.getState();
-  const ExplodedNode *Pred = B.getPredecessor();
+void ExprEngine::processCallExit(ExplodedNode *Pred) {
+  const ProgramState *state = Pred->getState();
   const StackFrameContext *calleeCtx = 
-    cast<StackFrameContext>(Pred->getLocationContext());
+    Pred->getLocationContext()->getCurrentStackFrame();
   const Stmt *CE = calleeCtx->getCallSite();
   
   // If the callee returns an expression, bind its value to CallExpr.
   const Stmt *ReturnedExpr = state->get<ReturnExpr>();
   if (ReturnedExpr) {
-    SVal RetVal = state->getSVal(ReturnedExpr);
-    state = state->BindExpr(CE, RetVal);
+    const LocationContext *LCtx = Pred->getLocationContext();
+    SVal RetVal = state->getSVal(ReturnedExpr, LCtx);
+    state = state->BindExpr(CE, LCtx, RetVal);
     // Clear the return expr GDM.
     state = state->remove<ReturnExpr>();
   }
@@ -57,10 +79,26 @@ void ExprEngine::processCallExit(CallExitNodeBuilder &B) {
     
     SVal ThisV = state->getSVal(ThisR);
     // Always bind the region to the CXXConstructExpr.
-    state = state->BindExpr(CCE, ThisV);
+    state = state->BindExpr(CCE, Pred->getLocationContext(), ThisV);
   }
   
-  B.generateNode(state);
+  PostStmt Loc(CE, calleeCtx->getParent());
+  bool isNew;
+  ExplodedNode *N = G.getNode(Loc, state, false, &isNew);
+  N->addPredecessor(Pred, G);
+  if (!isNew)
+    return;
+  
+  // Perform the post-condition check of the CallExpr.
+  ExplodedNodeSet Dst;
+  getCheckerManager().runCheckersForPostStmt(Dst, N, CE, *this);
+  
+  // Enqueue the next element in the block.
+  for (ExplodedNodeSet::iterator I = Dst.begin(), E = Dst.end(); I != E; ++I) {
+    Engine.getWorkList()->enqueue(*I,
+                                  calleeCtx->getCallSiteBlock(),
+                                  calleeCtx->getIndex()+1);
+  }
 }
 
 static bool isPointerToConst(const ParmVarDecl *ParamDecl) {
@@ -231,7 +269,7 @@ void ExprEngine::VisitCallExpr(const CallExpr *CE, ExplodedNode *Pred,
       // Get the callee.
       const Expr *Callee = CE->getCallee()->IgnoreParens();
       const ProgramState *state = Pred->getState();
-      SVal L = state->getSVal(Callee);
+      SVal L = state->getSVal(Callee, Pred->getLocationContext());
 
       // Figure out the result type. We do this dance to handle references.
       QualType ResultTy;
@@ -249,11 +287,12 @@ void ExprEngine::VisitCallExpr(const CallExpr *CE, ExplodedNode *Pred,
       SVal RetVal = SVB.getConjuredSymbolVal(0, CE, ResultTy, Count);
 
       // Generate a new state with the return value set.
-      state = state->BindExpr(CE, RetVal);
+      const LocationContext *LCtx = Pred->getLocationContext();
+      state = state->BindExpr(CE, LCtx, RetVal);
 
       // Invalidate the arguments.
-      const LocationContext *LC = Pred->getLocationContext();
-      state = Eng.invalidateArguments(state, CallOrObjCMessage(CE, state), LC);
+      state = Eng.invalidateArguments(state, CallOrObjCMessage(CE, state, LCtx),
+                                      LCtx);
 
       // And make the result node.
       Bldr.generateNode(CE, Pred, state);
