@@ -1106,7 +1106,7 @@ ExprResult ObjCSubscriptOpBuilder::buildGet() {
     
   // Build a message-send.
   ExprResult msg;
-  Expr *Index = RefExpr->getKeyExpr();
+  Expr *Index = InstanceKey;
   
   // Arguments.
   Expr *args[] = { Index };
@@ -1130,7 +1130,7 @@ ExprResult ObjCSubscriptOpBuilder::buildSet(Expr *op, SourceLocation opcLoc,
     return ExprError();
   
   QualType receiverType = InstanceBase->getType();
-  Expr *Index = RefExpr->getKeyExpr();
+  Expr *Index = InstanceKey;
   
   // Arguments.
   Expr *args[] = { op, Index };
