@@ -747,7 +747,7 @@ ASTDeclContextNameLookupTrait::ReadData(internal_key_type,
                                       unsigned DataLen) {
   using namespace clang::io;
   unsigned NumDecls = ReadUnalignedLE16(d);
-  DeclID *Start = (DeclID *)d;
+  LE32DeclID *Start = (LE32DeclID *)d;
   return std::make_pair(Start, Start + NumDecls);
 }
 
@@ -2496,7 +2496,7 @@ ASTReader::ASTReadResult ASTReader::validateFileEntries(ModuleFile &M) {
 void ASTReader::makeNamesVisible(const HiddenNames &Names) {
   for (unsigned I = 0, N = Names.size(); I != N; ++I) {
     if (Decl *D = Names[I].dyn_cast<Decl *>())
-      D->ModulePrivate = false;
+      D->Hidden = false;
     else {
       IdentifierInfo *II = Names[I].get<IdentifierInfo *>();
       if (!II->hasMacroDefinition()) {
