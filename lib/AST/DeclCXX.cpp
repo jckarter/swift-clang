@@ -1767,20 +1767,30 @@ NamespaceDecl *UsingDirectiveDecl::getNominatedNamespace() {
 
 void NamespaceDecl::anchor() { }
 
+NamespaceDecl::NamespaceDecl(DeclContext *DC, bool Inline, 
+                             SourceLocation StartLoc,
+                             SourceLocation IdLoc, IdentifierInfo *Id,
+                             NamespaceDecl *PrevDecl)
+  : NamedDecl(Namespace, DC, IdLoc, Id), DeclContext(Namespace),
+    LocStart(StartLoc), RBraceLoc(), AnonOrFirstNamespaceAndInline(0, Inline) 
+{
+  setPreviousDeclaration(PrevDecl);
+  
+  if (PrevDecl)
+    AnonOrFirstNamespaceAndInline.setPointer(PrevDecl->getOriginalNamespace());
+}
+
 NamespaceDecl *NamespaceDecl::Create(ASTContext &C, DeclContext *DC,
-                                     SourceLocation StartLoc,
-                                     SourceLocation IdLoc, IdentifierInfo *Id) {
-  return new (C) NamespaceDecl(DC, StartLoc, IdLoc, Id);
+                                     bool Inline, SourceLocation StartLoc,
+                                     SourceLocation IdLoc, IdentifierInfo *Id,
+                                     NamespaceDecl *PrevDecl) {
+  return new (C) NamespaceDecl(DC, Inline, StartLoc, IdLoc, Id, PrevDecl);
 }
 
 NamespaceDecl *NamespaceDecl::CreateDeserialized(ASTContext &C, unsigned ID) {
   void *Mem = AllocateDeserializedDecl(C, ID, sizeof(NamespaceDecl));
-  return new (Mem) NamespaceDecl(0, SourceLocation(), SourceLocation(), 0);
-}
-
-NamespaceDecl *NamespaceDecl::getNextNamespace() {
-  return dyn_cast_or_null<NamespaceDecl>(
-                                         NextNamespace.get(getASTContext().getExternalSource()));
+  return new (Mem) NamespaceDecl(0, false, SourceLocation(), SourceLocation(), 
+                                 0, 0);
 }
 
 void NamespaceAliasDecl::anchor() { }
@@ -1829,9 +1839,9 @@ void UsingDecl::addShadowDecl(UsingShadowDecl *S) {
          "declaration already in set");
   assert(S->getUsingDecl() == this);
 
-  if (FirstUsingShadow)
-    S->UsingOrNextShadow = FirstUsingShadow;
-  FirstUsingShadow = S;
+  if (FirstUsingShadow.getPointer())
+    S->UsingOrNextShadow = FirstUsingShadow.getPointer();
+  FirstUsingShadow.setPointer(S);
 }
 
 void UsingDecl::removeShadowDecl(UsingShadowDecl *S) {
@@ -1841,13 +1851,14 @@ void UsingDecl::removeShadowDecl(UsingShadowDecl *S) {
 
   // Remove S from the shadow decl chain. This is O(n) but hopefully rare.
 
-  if (FirstUsingShadow == S) {
-    FirstUsingShadow = dyn_cast<UsingShadowDecl>(S->UsingOrNextShadow);
+  if (FirstUsingShadow.getPointer() == S) {
+    FirstUsingShadow.setPointer(
+      dyn_cast<UsingShadowDecl>(S->UsingOrNextShadow));
     S->UsingOrNextShadow = this;
     return;
   }
 
-  UsingShadowDecl *Prev = FirstUsingShadow;
+  UsingShadowDecl *Prev = FirstUsingShadow.getPointer();
   while (Prev->UsingOrNextShadow != S)
     Prev = cast<UsingShadowDecl>(Prev->UsingOrNextShadow);
   Prev->UsingOrNextShadow = S->UsingOrNextShadow;
