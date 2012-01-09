@@ -369,6 +369,9 @@ void ASTDeclReader::VisitDecl(Decl *D) {
   // Determine whether this declaration is part of a (sub)module. If so, it
   // may not yet be visible.
   if (unsigned SubmoduleID = readSubmoduleID(Record, Idx)) {
+    // Store the owning submodule ID in the declaration.
+    D->setOwningModuleID(SubmoduleID);
+    
     // Module-private declarations are never visible, so there is no work to do.
     if (!D->isModulePrivate()) {
       if (Module *Owner = Reader.getSubmodule(SubmoduleID)) {
@@ -972,12 +975,15 @@ void ASTDeclReader::VisitNamespaceDecl(NamespaceDecl *D) {
   D->setInline(Record[Idx++]);
   D->LocStart = ReadSourceLocation(Record, Idx);
   D->RBraceLoc = ReadSourceLocation(Record, Idx);
-  
+  mergeRedeclarable(D, Redecl);
+
   if (Redecl.getFirstID() == ThisDeclID) {
-    // FIXME: If there's already an anonymous namespace, do we merge it with
-    // this one? Or do we, when loading modules, just forget about anonymous
-    // namespace entirely?
-    D->setAnonymousNamespace(ReadDeclAs<NamespaceDecl>(Record, Idx));
+    // Each module has its own anonymous namespace, which is disjoint from
+    // any other module's anonymous namespaces, so don't attach the anonymous
+    // namespace at all.
+    NamespaceDecl *Anon = ReadDeclAs<NamespaceDecl>(Record, Idx);
+    if (F.Kind != MK_Module)
+      D->setAnonymousNamespace(Anon);
   } else {
     // Link this namespace back to the first declaration, which has already
     // been deserialized.
@@ -1232,7 +1238,7 @@ ASTDeclReader::VisitRedeclarableTemplateDecl(RedeclarableTemplateDecl *D) {
   RedeclKind Kind = (RedeclKind)Record[Idx++];
   
   // Determine the first declaration ID.
-  DeclID FirstDeclID;
+  DeclID FirstDeclID = 0;
   switch (Kind) {
   case FirstDeclaration: {
     FirstDeclID = ThisDeclID;
@@ -1489,7 +1495,7 @@ ASTDeclReader::VisitRedeclarable(Redeclarable<T> *D) {
   enum RedeclKind { FirstDeclaration = 0, FirstInFile, PointsToPrevious };
   RedeclKind Kind = (RedeclKind)Record[Idx++];
   
-  DeclID FirstDeclID;
+  DeclID FirstDeclID = 0;
   switch (Kind) {
   case FirstDeclaration:
     FirstDeclID = ThisDeclID;
@@ -1544,6 +1550,13 @@ void ASTDeclReader::mergeRedeclarable(Redeclarable<T> *D,
         // appropriate canonical declaration.
         D->RedeclLink 
           = typename Redeclarable<T>::PreviousDeclLink(ExistingCanon);
+        
+        // When we merge a namespace, update its pointer to the first namespace.
+        if (NamespaceDecl *Namespace
+              = dyn_cast<NamespaceDecl>(static_cast<T*>(D))) {
+          Namespace->AnonOrFirstNamespaceAndInline.setPointer(
+            static_cast<NamespaceDecl *>(static_cast<void*>(ExistingCanon)));
+        }
         
         // Don't introduce DCanon into the set of pending declaration chains.
         Redecl.suppress();
@@ -1719,19 +1732,25 @@ static bool isSameEntity(NamedDecl *X, NamedDecl *Y) {
       VarX->getASTContext().hasSameType(VarX->getType(), VarY->getType());
   }
   
+  // Namespaces with the same name and inlinedness match.
+  if (NamespaceDecl *NamespaceX = dyn_cast<NamespaceDecl>(X)) {
+    NamespaceDecl *NamespaceY = cast<NamespaceDecl>(Y);
+    return NamespaceX->isInline() == NamespaceY->isInline();
+  }
+      
   // FIXME: Many other cases to implement.
   return false;
 }
 
 ASTDeclReader::FindExistingResult::~FindExistingResult() {
-  if (!AddResult)
+  if (!AddResult || Existing)
     return;
   
   DeclContext *DC = New->getDeclContext()->getRedeclContext();
   if (DC->isTranslationUnit() && Reader.SemaObj) {
-    if (!Existing) {
-      Reader.SemaObj->IdResolver.tryAddTopLevelDecl(New, New->getDeclName());
-    }
+    Reader.SemaObj->IdResolver.tryAddTopLevelDecl(New, New->getDeclName());
+  } else if (DC->isNamespace()) {
+    DC->addDecl(New);
   }
 }
 
@@ -1758,7 +1777,13 @@ ASTDeclReader::FindExistingResult ASTDeclReader::findExisting(NamedDecl *D) {
     }
   }
 
-  // FIXME: Search in the DeclContext.
+  if (DC->isNamespace()) {
+    for (DeclContext::lookup_result R = DC->lookup(Name);
+         R.first != R.second; ++R.first) {
+      if (isSameEntity(*R.first, D))
+        return FindExistingResult(Reader, D, *R.first);
+    }
+  }
   
   return FindExistingResult(Reader, D, /*Existing=*/0);
 }
@@ -2461,10 +2486,16 @@ void ASTDeclReader::UpdateDecl(Decl *D, ModuleFile &ModuleFile,
     case UPD_CXX_ADDED_ANONYMOUS_NAMESPACE: {
       NamespaceDecl *Anon
         = Reader.ReadDeclAs<NamespaceDecl>(ModuleFile, Record, Idx);
-      if (TranslationUnitDecl *TU = dyn_cast<TranslationUnitDecl>(D))
-        TU->setAnonymousNamespace(Anon);
-      else
-        cast<NamespaceDecl>(D)->setAnonymousNamespace(Anon);
+      
+      // Each module has its own anonymous namespace, which is disjoint from
+      // any other module's anonymous namespaces, so don't attach the anonymous
+      // namespace at all.
+      if (ModuleFile.Kind != MK_Module) {
+        if (TranslationUnitDecl *TU = dyn_cast<TranslationUnitDecl>(D))
+          TU->setAnonymousNamespace(Anon);
+        else
+          cast<NamespaceDecl>(D)->setAnonymousNamespace(Anon);
+      }
       break;
     }
 
