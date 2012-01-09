@@ -1509,6 +1509,10 @@ void Sema::MergeTypedefNameDecl(TypedefNameDecl *New, LookupResult &OldDecls) {
     return New->setInvalidDecl();
   }
 
+  // Modules always permit redefinition of typedefs.
+  if (getLangOptions().Modules)
+    return;
+  
   // If we have a redefinition of a typedef in C, emit a warning.  This warning
   // is normally mapped to an error, but can be controlled with
   // -Wtypedef-redefinition.  If either the original or the redefinition is
@@ -7253,7 +7257,7 @@ NamedDecl *Sema::ImplicitlyDefineFunction(SourceLocation Loc,
   // Extension in C99.  Legal in C90, but warn about it.
   unsigned diag_id;
   if (II.getName().startswith("__builtin_"))
-    diag_id = diag::err_builtin_unknown;
+    diag_id = diag::warn_builtin_unknown;
   else if (getLangOptions().C99)
     diag_id = diag::ext_implicit_function_decl;
   else
