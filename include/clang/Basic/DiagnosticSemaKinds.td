@@ -525,9 +525,9 @@ def warn_atomic_property_rule : Warning<
   InGroup<DiagGroup<"atomic-property-with-user-defined-accessor">>;
 def note_atomic_property_fixup_suggest : Note<"setter and getter must both be "
   "synthesized, or both be user defined,or the property must be nonatomic">;
-def warn_atomic_property_nontrivial_assign_op : Warning<
-  "atomic property of type %0 synthesizing setter using non-trivial assignment"
-  " operator">, InGroup<DiagGroup<"objc-property-atomic-setter-synthesis">>;
+def err_atomic_property_nontrivial_assign_op : Error<
+  "atomic property of reference type %0 cannot have non-trivial assignment"
+  " operator">;
 def warn_owning_getter_rule : Warning<
   "property's synthesized getter follows Cocoa naming"
   " convention for returning 'owned' objects">,
@@ -1229,6 +1229,9 @@ def err_enum_redeclare_fixed_mismatch : Error<
   "enumeration previously declared with %select{non|}0fixed underlying type">;
 def err_enum_redeclare_scoped_mismatch : Error<
   "enumeration previously declared as %select{un|}0scoped">;
+def err_enum_class_reference : Error<
+  "reference to %select{|scoped }0enumeration must use 'enum' "
+  "not 'enum class'">;
 def err_only_enums_have_underlying_types : Error<
   "only enumeration types have underlying types">;
 def err_incomplete_type_no_underlying_type : Error<
