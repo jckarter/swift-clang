@@ -644,7 +644,6 @@ DeclContext *Sema::getFunctionLevelDeclContext() {
     if (isa<BlockDecl>(DC) || isa<EnumDecl>(DC)) {
       DC = DC->getParent();
     } else if (isa<CXXMethodDecl>(DC) &&
-               cast<CXXRecordDecl>(DC->getParent())->hasDefinition() &&
                cast<CXXRecordDecl>(DC->getParent())->isLambda()) {
       DC = DC->getParent()->getParent();
     }
