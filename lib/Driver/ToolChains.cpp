@@ -285,7 +285,7 @@ void DarwinClang::AddGCCLibexecPath(unsigned darwinVersion) {
   ToolChainDir += "/4.2.1";
 
   std::string Path = getDriver().Dir;
-  Path += "/../llvm-gcc-4.2/libexec/gcc/";
+  Path += "/../../../../usr/llvm-gcc-4.2/libexec/gcc/";
   Path += ToolChainDir;
   getProgramPaths().push_back(Path);
 
