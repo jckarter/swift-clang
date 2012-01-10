@@ -726,6 +726,12 @@ static_assert((&u[1].b)[1] == 2, ""); // expected-error {{constant expression}} 
 static_assert(*(&(u[1].b) + 1 + 1) == 3, ""); // expected-error {{constant expression}} expected-note {{cannot refer to element 2 of non-array object}}
 static_assert((&(u[1]) + 1 + 1)->b == 3, "");
 
+// Make sure we handle trivial copy constructors for unions.
+constexpr U x = {42};
+constexpr U y = x;
+static_assert(y.a == 42, "");
+static_assert(y.b == 42, ""); // expected-error {{constant expression}} expected-note {{'b' of union with active member 'a'}}
+
 }
 
 namespace MemberPointer {
@@ -969,4 +975,13 @@ namespace ExternConstexpr {
     constexpr int j = 0;
     constexpr int k; // expected-error {{default initialization of an object of const type}}
   }
+}
+
+namespace ComplexConstexpr {
+  constexpr _Complex float test1 = {};
+  constexpr _Complex float test2 = {1};
+  constexpr _Complex double test3 = {1,2};
+  constexpr _Complex int test4 = {4};
+  constexpr _Complex int test5 = 4;
+  constexpr _Complex int test6 = {5,6};
 }
