@@ -5617,7 +5617,6 @@ Decl *Sema::ActOnStartNamespaceDef(Scope *NamespcScope,
       Diag(Loc, diag::err_inline_namespace_mismatch)
         << IsInline;
       Diag(PrevNS->getLocation(), diag::note_previous_definition);
-      IsInvalid = true;
       
       // Recover by ignoring the new namespace's inline status.
       IsInline = PrevNS->isInline();
@@ -5626,6 +5625,8 @@ Decl *Sema::ActOnStartNamespaceDef(Scope *NamespcScope,
   
   NamespaceDecl *Namespc = NamespaceDecl::Create(Context, CurContext, IsInline,
                                                  StartLoc, Loc, II, PrevNS);
+  if (IsInvalid)
+    Namespc->setInvalidDecl();
   
   ProcessDeclAttributeList(DeclRegionScope, Namespc, AttrList);
 

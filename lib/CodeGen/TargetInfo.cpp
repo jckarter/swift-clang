@@ -2535,7 +2535,7 @@ public:
 
   bool isEABI() const {
     StringRef Env = getContext().getTargetInfo().getTriple().getEnvironmentName();
-    return (Env == "gnueabi" || Env == "eabi");
+    return (Env == "gnueabi" || Env == "eabi" || Env == "androideabi");
   }
 
 private:
@@ -3205,7 +3205,8 @@ namespace {
 class MipsABIInfo : public ABIInfo {
   bool IsO32;
   unsigned MinABIStackAlignInBytes;
-  llvm::Type* HandleStructTy(QualType Ty) const;
+  llvm::Type* GetFloatingPointTy(const BuiltinType *BT) const;
+  llvm::Type* HandleAggregates(QualType Ty) const;
   llvm::Type* returnAggregateInRegs(QualType RetTy, uint64_t Size) const;
   llvm::Type* getPaddingType(uint64_t Align, uint64_t Offset) const;
 public:
@@ -3239,11 +3240,35 @@ public:
 };
 }
 
+llvm::Type *MipsABIInfo::GetFloatingPointTy(const BuiltinType *BT) const {
+  switch (BT->getKind()) {
+  case BuiltinType::Float:
+    return llvm::Type::getFloatTy(getVMContext());
+  case BuiltinType::Double:
+    return llvm::Type::getDoubleTy(getVMContext());
+  case BuiltinType::LongDouble:
+    return llvm::Type::getFP128Ty(getVMContext());
+  default:
+    assert(false && "Unexpected floating point type.");
+    return 0;
+  }
+}
+
 // In N32/64, an aligned double precision floating point field is passed in
 // a register.
-llvm::Type* MipsABIInfo::HandleStructTy(QualType Ty) const {
+llvm::Type* MipsABIInfo::HandleAggregates(QualType Ty) const {
   if (IsO32)
     return 0;
+
+  SmallVector<llvm::Type*, 8> ArgList;
+
+  if (Ty->isComplexType()) {
+    const ComplexType *CT = Ty->getAs<ComplexType>();
+    const BuiltinType *BT = CT->getElementType()->getAs<BuiltinType>();
+    llvm::Type *FT = GetFloatingPointTy(BT);
+    ArgList.append(2, FT);
+    return llvm::StructType::get(getVMContext(), ArgList);
+  }
 
   const RecordType *RT = Ty->getAsStructureType();
 
@@ -3255,7 +3280,6 @@ llvm::Type* MipsABIInfo::HandleStructTy(QualType Ty) const {
   uint64_t StructSize = getContext().getTypeSize(Ty);
   assert(!(StructSize % 8) && "Size of structure must be multiple of 8.");
   
-  SmallVector<llvm::Type*, 8> ArgList;
   uint64_t LastOffset = 0;
   unsigned idx = 0;
   llvm::IntegerType *I64 = llvm::IntegerType::get(getVMContext(), 64);
@@ -3307,7 +3331,7 @@ llvm::Type *MipsABIInfo::getPaddingType(uint64_t Align, uint64_t Offset) const {
   return (Align == 16 && Offset & 0xf) ?
     llvm::IntegerType::get(getVMContext(), 64) : 0;
 }
- 
+
 ABIArgInfo
 MipsABIInfo::classifyArgumentType(QualType Ty, uint64_t &Offset) const {
   uint64_t OrigOffset = Offset;
@@ -3333,8 +3357,8 @@ MipsABIInfo::classifyArgumentType(QualType Ty, uint64_t &Offset) const {
     // byval pointer or directly by coercing to another structure type. In the
     // latter case, padding is inserted if the offset of the aggregate is
     // unaligned.
-    llvm::Type *ResType = HandleStructTy(Ty);
-    
+    llvm::Type *ResType = HandleAggregates(Ty);
+
     if (!ResType)
       return ABIArgInfo::getIndirect(0);
 
@@ -3366,19 +3390,7 @@ MipsABIInfo::returnAggregateInRegs(QualType RetTy, uint64_t Size) const {
       if (!BT || !BT->isFloatingPoint())
         break;
 
-      switch (BT->getKind()) {
-      case BuiltinType::Float:
-        RTList.push_back(llvm::Type::getFloatTy(getVMContext()));
-        break;
-      case BuiltinType::Double:
-        RTList.push_back(llvm::Type::getDoubleTy(getVMContext()));
-        break;
-      case BuiltinType::LongDouble:
-        RTList.push_back(llvm::Type::getFP128Ty(getVMContext()));
-        break;
-      default:
-        assert(false && "Unexpexted floating point type.");
-      }
+      RTList.push_back(GetFloatingPointTy(BT));
     }
 
     if (i == e)
@@ -3771,7 +3783,6 @@ const TargetCodeGenInfo &CodeGenModule::getTargetCodeGenInfo() {
     case llvm::Triple::DragonFly:
     case llvm::Triple::FreeBSD:
     case llvm::Triple::OpenBSD:
-    case llvm::Triple::NetBSD:
       return *(TheTargetCodeGenInfo =
                new X86_32TargetCodeGenInfo(Types, false, true, DisableMMX));
 

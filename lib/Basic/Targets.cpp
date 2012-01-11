@@ -54,6 +54,14 @@ static void DefineStd(MacroBuilder &Builder, StringRef MacroName,
   Builder.defineMacro("__" + MacroName + "__");
 }
 
+static void defineCPUMacros(MacroBuilder &Builder, StringRef CPUName,
+                            bool Tuning = true) {
+  Builder.defineMacro("__" + CPUName);
+  Builder.defineMacro("__" + CPUName + "__");
+  if (Tuning)
+    Builder.defineMacro("__tune_" + CPUName + "__");
+}
+
 //===----------------------------------------------------------------------===//
 // Defines specific to certain operating systems.
 //===----------------------------------------------------------------------===//
@@ -1312,12 +1320,20 @@ class X86TargetInfo : public TargetInfo {
     CK_Opteron,
     CK_OpteronSSE3,
     CK_AMDFAM10,
+    //@}
 
-    /// \name K10
-    /// K10 architecture processors.
+    /// \name Bobcat
+    /// Bobcat architecture processors.
+    //@{
+    CK_BTVER1,
+    //@}
+
+    /// \name Bulldozer
+    /// Bulldozer architecture processors.
     //@{
     CK_BDVER1,
     CK_BDVER2,
+    //@}
 
     /// This specification is deprecated and will be removed in the future.
     /// Users should prefer \see CK_K8.
@@ -1429,6 +1445,7 @@ public:
       .Case("opteron", CK_Opteron)
       .Case("opteron-sse3", CK_OpteronSSE3)
       .Case("amdfam10", CK_AMDFAM10)
+      .Case("btver1", CK_BTVER1)
       .Case("bdver1", CK_BDVER1)
       .Case("bdver2", CK_BDVER2)
       .Case("x86-64", CK_x86_64)
@@ -1493,6 +1510,7 @@ public:
     case CK_Opteron:
     case CK_OpteronSSE3:
     case CK_AMDFAM10:
+    case CK_BTVER1:
     case CK_BDVER1:
     case CK_BDVER2:
     case CK_x86_64:
@@ -1632,6 +1650,9 @@ void X86TargetInfo::getDefaultFeatures(llvm::StringMap<bool> &Features) const {
     setFeatureEnabled(Features, "sse4a", true);
     setFeatureEnabled(Features, "3dnowa", true);
     break;
+  case CK_BTVER1:
+    setFeatureEnabled(Features, "ssse3", true);
+    setFeatureEnabled(Features, "sse4a", true);
   case CK_BDVER1:
   case CK_BDVER2:
     setFeatureEnabled(Features, "sse4", true);
@@ -1696,7 +1717,7 @@ bool X86TargetInfo::setFeatureEnabled(llvm::StringMap<bool> &Features,
         Features["popcnt"] = Features["avx"] = Features["fma4"] = true;
     else if (Name == "sse4a")
       Features["mmx"] = Features["sse"] = Features["sse2"] = Features["sse3"] =
-        Features["sse4a"] = true;
+        Features["lzcnt"] = Features["popcnt"] = Features["sse4a"] = true;
     else if (Name == "lzcnt")
       Features["lzcnt"] = true;
     else if (Name == "bmi")
@@ -1851,9 +1872,7 @@ void X86TargetInfo::getTargetDefines(const LangOptions &Opts,
   case CK_WinChipC6:
   case CK_WinChip2:
   case CK_C3:
-    Builder.defineMacro("__i486");
-    Builder.defineMacro("__i486__");
-    Builder.defineMacro("__tune_i486__");
+    defineCPUMacros(Builder, "i486");
     break;
   case CK_PentiumMMX:
     Builder.defineMacro("__pentium_mmx__");
@@ -1861,12 +1880,8 @@ void X86TargetInfo::getTargetDefines(const LangOptions &Opts,
     // Fallthrough
   case CK_i586:
   case CK_Pentium:
-    Builder.defineMacro("__i586");
-    Builder.defineMacro("__i586__");
-    Builder.defineMacro("__tune_i586__");
-    Builder.defineMacro("__pentium");
-    Builder.defineMacro("__pentium__");
-    Builder.defineMacro("__tune_pentium__");
+    defineCPUMacros(Builder, "i586");
+    defineCPUMacros(Builder, "pentium");
     break;
   case CK_Pentium3:
   case CK_Pentium3M:
@@ -1890,35 +1905,25 @@ void X86TargetInfo::getTargetDefines(const LangOptions &Opts,
     break;
   case CK_Pentium4:
   case CK_Pentium4M:
-    Builder.defineMacro("__pentium4");
-    Builder.defineMacro("__pentium4__");
-    Builder.defineMacro("__tune_pentium4__");
+    defineCPUMacros(Builder, "pentium4");
     break;
   case CK_Yonah:
   case CK_Prescott:
   case CK_Nocona:
-    Builder.defineMacro("__nocona");
-    Builder.defineMacro("__nocona__");
-    Builder.defineMacro("__tune_nocona__");
+    defineCPUMacros(Builder, "nocona");
     break;
   case CK_Core2:
   case CK_Penryn:
-    Builder.defineMacro("__core2");
-    Builder.defineMacro("__core2__");
-    Builder.defineMacro("__tune_core2__");
+    defineCPUMacros(Builder, "core2");
     break;
   case CK_Atom:
-    Builder.defineMacro("__atom");
-    Builder.defineMacro("__atom__");
-    Builder.defineMacro("__tune_atom__");
+    defineCPUMacros(Builder, "atom");
     break;
   case CK_Corei7:
   case CK_Corei7AVX:
   case CK_CoreAVXi:
   case CK_CoreAVX2:
-    Builder.defineMacro("__corei7");
-    Builder.defineMacro("__corei7__");
-    Builder.defineMacro("__tune_corei7__");
+    defineCPUMacros(Builder, "corei7");
     break;
   case CK_K6_2:
     Builder.defineMacro("__k6_2__");
@@ -1934,18 +1939,14 @@ void X86TargetInfo::getTargetDefines(const LangOptions &Opts,
     }
     // Fallthrough
   case CK_K6:
-    Builder.defineMacro("__k6");
-    Builder.defineMacro("__k6__");
-    Builder.defineMacro("__tune_k6__");
+    defineCPUMacros(Builder, "k6");
     break;
   case CK_Athlon:
   case CK_AthlonThunderbird:
   case CK_Athlon4:
   case CK_AthlonXP:
   case CK_AthlonMP:
-    Builder.defineMacro("__athlon");
-    Builder.defineMacro("__athlon__");
-    Builder.defineMacro("__tune_athlon__");
+    defineCPUMacros(Builder, "athlon");
     if (SSELevel != NoSSE) {
       Builder.defineMacro("__athlon_sse__");
       Builder.defineMacro("__tune_athlon_sse__");
@@ -1959,29 +1960,22 @@ void X86TargetInfo::getTargetDefines(const LangOptions &Opts,
   case CK_Athlon64:
   case CK_Athlon64SSE3:
   case CK_AthlonFX:
-    Builder.defineMacro("__k8");
-    Builder.defineMacro("__k8__");
-    Builder.defineMacro("__tune_k8__");
+    defineCPUMacros(Builder, "k8");
     break;
   case CK_AMDFAM10:
-    Builder.defineMacro("__amdfam10");
-    Builder.defineMacro("__amdfam10__");
-    Builder.defineMacro("__tune_amdfam10__");
+    defineCPUMacros(Builder, "amdfam10");
+    break;
+  case CK_BTVER1:
+    defineCPUMacros(Builder, "btver1");
     break;
   case CK_BDVER1:
-    Builder.defineMacro("__bdver1");
-    Builder.defineMacro("__bdver1__");
-    Builder.defineMacro("__tune__bdver1__");
+    defineCPUMacros(Builder, "bdver1");
     break;
   case CK_BDVER2:
-    Builder.defineMacro("__bdver2");
-    Builder.defineMacro("__bdver2__");
-    Builder.defineMacro("__tune__bdver2__");
+    defineCPUMacros(Builder, "bdver2");
     break;
   case CK_Geode:
-    Builder.defineMacro("__geode");
-    Builder.defineMacro("__geode__");
-    Builder.defineMacro("__tune_geode__");
+    defineCPUMacros(Builder, "geode");
     break;
   }
 
