@@ -536,6 +536,7 @@ void Clang::AddARMTargetArgs(const ArgList &Args,
   } else {
     // Select the default based on the platform.
     switch(Triple.getEnvironment()) {
+    case llvm::Triple::ANDROIDEABI:
     case llvm::Triple::GNUEABI:
       ABIName = "aapcs-linux";
       break;
@@ -608,6 +609,15 @@ void Clang::AddARMTargetArgs(const ArgList &Args,
         // EABI is always AAPCS, and if it was not marked 'hard', it's softfp
         FloatABI = "softfp";
         break;
+      case llvm::Triple::ANDROIDEABI: {
+        StringRef ArchName =
+          getLLVMArchSuffixForARM(getARMTargetCPU(Args, Triple));
+        if (ArchName.startswith("v7"))
+          FloatABI = "softfp";
+        else
+          FloatABI = "soft";
+        break;
+      }
       default:
         // Assume "soft", but warn the user we are guessing.
         FloatABI = "soft";

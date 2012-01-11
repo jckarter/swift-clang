@@ -314,7 +314,7 @@ void DarwinClang::AddGCCLibexecPath(unsigned darwinVersion) {
   ToolChainDir += "/4.2.1";
 
   std::string Path = getDriver().Dir;
-  Path += "/../llvm-gcc-4.2/libexec/gcc/";
+  Path += "/../../../../usr/llvm-gcc-4.2/libexec/gcc/";
   Path += ToolChainDir;
   getProgramPaths().push_back(Path);
 
@@ -1242,7 +1242,10 @@ Generic_GCC::GCCInstallationDetector::GCCInstallationDetector(const Driver &D)
     SmallVectorImpl<StringRef> &Triples) {
   if (HostArch == llvm::Triple::arm || HostArch == llvm::Triple::thumb) {
     static const char *const ARMLibDirs[] = { "/lib" };
-    static const char *const ARMTriples[] = { "arm-linux-gnueabi" };
+    static const char *const ARMTriples[] = {
+      "arm-linux-gnueabi",
+      "arm-linux-androideabi"
+    };
     LibDirs.append(ARMLibDirs, ARMLibDirs + llvm::array_lengthof(ARMLibDirs));
     Triples.append(ARMTriples, ARMTriples + llvm::array_lengthof(ARMTriples));
   } else if (HostArch == llvm::Triple::x86_64) {
