@@ -1097,11 +1097,10 @@ ExprResult ObjCSubscriptOpBuilder::buildGet() {
   // Arguments.
   Expr *args[] = { Index };
   assert(InstanceBase);
-  msg = S.BuildInstanceMessage(InstanceBase, receiverType, 
-                               SourceLocation() /*superLoc */,
-                               AtIndexGetterSelector, AtIndexGetter,
-                               GenericLoc, GenericLoc, GenericLoc,
-                               MultiExprArg(args, 1));
+  msg = S.BuildInstanceMessageImplicit(InstanceBase, receiverType,
+                                       GenericLoc,
+                                       AtIndexGetterSelector, AtIndexGetter,
+                                       MultiExprArg(args, 1));
   return msg;
 }
 
@@ -1122,11 +1121,11 @@ ExprResult ObjCSubscriptOpBuilder::buildSet(Expr *op, SourceLocation opcLoc,
   Expr *args[] = { op, Index };
   
   // Build a message-send.
-  ExprResult msg = S.BuildInstanceMessage(InstanceBase, 
-                                 receiverType, SourceLocation() /*superLoc*/,
-                                 AtIndexSetterSelector, AtIndexSetter,
-                                 GenericLoc, GenericLoc, GenericLoc,
-                                 MultiExprArg(args, 2));
+  ExprResult msg = S.BuildInstanceMessageImplicit(InstanceBase, receiverType,
+                                                  GenericLoc,
+                                                  AtIndexSetterSelector,
+                                                  AtIndexSetter,
+                                                  MultiExprArg(args, 2));
   
   if (!msg.isInvalid() && captureSetValueAsResult) {
     ObjCMessageExpr *msgExpr =
