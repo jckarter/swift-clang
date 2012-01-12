@@ -1835,10 +1835,18 @@ public:
   TypoCorrection CorrectTypo(const DeclarationNameInfo &Typo,
                              Sema::LookupNameKind LookupKind,
                              Scope *S, CXXScopeSpec *SS,
-                             DeclContext *MemberContext = NULL,
+                             DeclContext *MemberContext = 0,
                              bool EnteringContext = false,
                              CorrectTypoContext CTC = CTC_Unknown,
-                             const ObjCObjectPointerType *OPT = NULL);
+                             const ObjCObjectPointerType *OPT = 0);
+
+  TypoCorrection CorrectTypo(const DeclarationNameInfo &Typo,
+                             Sema::LookupNameKind LookupKind,
+                             Scope *S, CXXScopeSpec *SS,
+                             CorrectionCandidateCallback *CCC,
+                             DeclContext *MemberContext = 0,
+                             bool EnteringContext = false,
+                             const ObjCObjectPointerType *OPT = 0);
 
   void FindAssociatedClassesAndNamespaces(Expr **Args, unsigned NumArgs,
                                    AssociatedNamespaceSet &AssociatedNamespaces,
@@ -5457,7 +5465,15 @@ public:
                                SourceLocation LBracLoc,
                                ArrayRef<SourceLocation> SelectorLocs,
                                SourceLocation RBracLoc,
-                               MultiExprArg Args);
+                               MultiExprArg Args,
+                               bool isImplicit = false);
+
+  ExprResult BuildClassMessageImplicit(QualType ReceiverType,
+                                       bool isSuperReceiver,
+                                       SourceLocation Loc,
+                                       Selector Sel,
+                                       ObjCMethodDecl *Method,
+                                       MultiExprArg Args);
 
   ExprResult ActOnClassMessage(Scope *S,
                                ParsedType Receiver,
@@ -5475,7 +5491,15 @@ public:
                                   SourceLocation LBracLoc,
                                   ArrayRef<SourceLocation> SelectorLocs,
                                   SourceLocation RBracLoc,
-                                  MultiExprArg Args);
+                                  MultiExprArg Args,
+                                  bool isImplicit = false);
+
+  ExprResult BuildInstanceMessageImplicit(Expr *Receiver,
+                                          QualType ReceiverType,
+                                          SourceLocation Loc,
+                                          Selector Sel,
+                                          ObjCMethodDecl *Method,
+                                          MultiExprArg Args);
 
   ExprResult ActOnInstanceMessage(Scope *S,
                                   Expr *Receiver,
