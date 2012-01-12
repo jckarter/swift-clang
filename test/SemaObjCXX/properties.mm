@@ -40,3 +40,21 @@ void test3(Test3 *t) {
   char vla[t.length] = {}; // expected-error {{variable-sized object may not be initialized}}
   char *heaparray = new char[t.length];
 }
+
+// <rdar://problem/10672501>
+namespace std {
+  template<typename T> void count();
+}
+
+@interface Test4 {
+@public
+  int count;
+}
+@property int count;
+@end
+
+void test4(Test4* t4) {
+  if (t4.count < 2) { }
+  if (t4->count < 2) { }
+}
+

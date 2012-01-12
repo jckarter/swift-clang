@@ -2671,7 +2671,8 @@ public:
                                  const std::string &Name,
                                  bool Enabled) const {
     if (Name == "soft-float" || Name == "soft-float-abi" ||
-        Name == "vfp2" || Name == "vfp3" || Name == "vfp4" || Name == "neon") {
+        Name == "vfp2" || Name == "vfp3" || Name == "vfp4" || Name == "neon" ||
+        Name == "d16") {
       Features[Name] = Enabled;
     } else
       return false;

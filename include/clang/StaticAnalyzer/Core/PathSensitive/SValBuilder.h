@@ -17,6 +17,7 @@
 
 #include "clang/AST/Expr.h"
 #include "clang/AST/ExprCXX.h"
+#include "clang/AST/ExprObjC.h"
 #include "clang/StaticAnalyzer/Core/PathSensitive/SVals.h"
 #include "clang/StaticAnalyzer/Core/PathSensitive/BasicValueFactory.h"
 #include "clang/StaticAnalyzer/Core/PathSensitive/MemRegion.h"
@@ -209,9 +210,13 @@ public:
         BasicVals.getValue(integer->getValue(),
                      integer->getType()->isUnsignedIntegerOrEnumerationType()));
   }
-
+  
   nonloc::ConcreteInt makeBoolVal(const CXXBoolLiteralExpr *boolean) {
     return makeTruthVal(boolean->getValue());
+  }
+  
+  nonloc::ConcreteInt makeBoolVal(const ObjCBoolLiteralExpr *boolean) {
+    return makeTruthVal(boolean->getValue(), boolean->getType());
   }
 
   nonloc::ConcreteInt makeIntVal(const llvm::APSInt& integer) {

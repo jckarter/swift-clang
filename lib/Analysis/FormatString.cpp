@@ -212,6 +212,13 @@ clang::analyze_format_string::ParseLengthModifier(FormatSpecifier &FS,
         --I;
       }
       return false;
+    case 'm':
+      if (IsScanf) {
+        lmKind = LengthModifier::AsMAllocate;
+        ++I;
+        break;
+      }
+      return false;
   }
   LengthModifier lm(lmPosition, lmKind);
   FS.setLengthModifier(lm);
@@ -409,6 +416,8 @@ analyze_format_string::LengthModifier::toString() const {
     return "L";
   case AsAllocate:
     return "a";
+  case AsMAllocate:
+    return "m";
   case None:
     return "";
   }
@@ -550,6 +559,19 @@ bool FormatSpecifier::hasValidLengthModifier() const {
       switch (CS.getKind()) {
         case ConversionSpecifier::sArg:
         case ConversionSpecifier::SArg:
+        case ConversionSpecifier::ScanListArg:
+          return true;
+        default:
+          return false;
+      }
+
+    case LengthModifier::AsMAllocate:
+      switch (CS.getKind()) {
+        case ConversionSpecifier::cArg:
+        case ConversionSpecifier::CArg:
+        case ConversionSpecifier::sArg:
+        case ConversionSpecifier::SArg:
+        case ConversionSpecifier::ScanListArg:
           return true;
         default:
           return false;
