@@ -5531,7 +5531,15 @@ public:
                                SourceLocation LBracLoc,
                                ArrayRef<SourceLocation> SelectorLocs,
                                SourceLocation RBracLoc,
-                               MultiExprArg Args);
+                               MultiExprArg Args,
+                               bool isImplicit = false);
+
+  ExprResult BuildClassMessageImplicit(QualType ReceiverType,
+                                       bool isSuperReceiver,
+                                       SourceLocation Loc,
+                                       Selector Sel,
+                                       ObjCMethodDecl *Method,
+                                       MultiExprArg Args);
 
   ExprResult ActOnClassMessage(Scope *S,
                                ParsedType Receiver,
@@ -5549,7 +5557,15 @@ public:
                                   SourceLocation LBracLoc,
                                   ArrayRef<SourceLocation> SelectorLocs,
                                   SourceLocation RBracLoc,
-                                  MultiExprArg Args);
+                                  MultiExprArg Args,
+                                  bool isImplicit = false);
+
+  ExprResult BuildInstanceMessageImplicit(Expr *Receiver,
+                                          QualType ReceiverType,
+                                          SourceLocation Loc,
+                                          Selector Sel,
+                                          ObjCMethodDecl *Method,
+                                          MultiExprArg Args);
 
   ExprResult ActOnInstanceMessage(Scope *S,
                                   Expr *Receiver,

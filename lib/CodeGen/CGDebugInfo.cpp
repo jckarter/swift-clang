@@ -863,7 +863,7 @@ CGDebugInfo::CreateCXXMemberFunction(const CXXMethodDecl *Method,
 }
 
 /// CollectCXXMemberFunctions - A helper function to collect debug info for
-/// C++ member functions.This is used while creating debug info entry for 
+/// C++ member functions. This is used while creating debug info entry for 
 /// a Record.
 void CGDebugInfo::
 CollectCXXMemberFunctions(const CXXRecordDecl *RD, llvm::DIFile Unit,
@@ -887,7 +887,7 @@ void CGDebugInfo::
 CollectCXXFriends(const CXXRecordDecl *RD, llvm::DIFile Unit,
                 SmallVectorImpl<llvm::Value *> &EltTys,
                 llvm::DIType RecordTy) {
-  for (CXXRecordDecl::friend_iterator BI =  RD->friend_begin(),
+  for (CXXRecordDecl::friend_iterator BI = RD->friend_begin(),
          BE = RD->friend_end(); BI != BE; ++BI) {
     if ((*BI)->isUnsupportedFriend())
       continue;
