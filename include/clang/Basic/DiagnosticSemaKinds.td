@@ -115,6 +115,12 @@ def warn_decl_in_param_list : Warning<
 def warn_empty_parens_are_function_decl : Warning<
   "empty parentheses interpreted as a function declaration">,
   InGroup<VexingParse>;
+def note_empty_parens_function_call : Note<
+  "change this ',' to a ';' to call %0">;
+def note_empty_parens_default_ctor : Note<
+  "remove parentheses to declare a variable">;
+def note_empty_parens_zero_initialize : Note<
+  "replace parentheses with an initializer to declare a variable">;
 def warn_unused_function : Warning<"unused function %0">,
   InGroup<UnusedFunction>, DefaultIgnore;
 def warn_unused_member_function : Warning<"unused member function %0">,
@@ -1302,11 +1308,13 @@ def note_constexpr_redecl_mismatch : Note<
 def err_constexpr_virtual : Error<"virtual function cannot be constexpr">;
 def note_constexpr_tmpl_virtual : Note<"function template instantiation is not "
   "constexpr because it is virtual">;
-def err_constexpr_virtual_base : Error<"constexpr constructor not allowed in "
-  "%select{class|struct}0 with virtual base %plural{1:class|:classes}1">;
-def note_constexpr_tmpl_virtual_base : Note<"constructor template instantiation is "
-  "not constexpr because %select{class|struct}0 has virtual base "
-  "%plural{1:class|:classes}1">;
+def err_constexpr_virtual_base : Error<
+  "constexpr %select{member function|constructor}0 not allowed in "
+  "%select{class|struct}1 with virtual base %plural{1:class|:classes}2">;
+def note_constexpr_tmpl_virtual_base : Note<
+  "%select{function|constructor}0 template instantiation is "
+  "not constexpr because %select{class|struct}1 has virtual base "
+  "%plural{1:class|:classes}2">;
 def note_non_literal_virtual_base : Note<"%select{class|struct}0 with virtual "
   "base %plural{1:class|:classes}1 is not a literal type">;
 def note_constexpr_virtual_base_here : Note<"virtual base class declared here">;
@@ -3436,7 +3444,7 @@ def err_typecheck_member_reference_unknown : Error<
   "cannot refer to member %0 in %1 with '%select{.|->}2'">;
 def err_member_reference_needs_call : Error<
   "base of member reference is a function; perhaps you meant to call "
-  "it%select{| with no arguments}?">;
+  "it%select{| with no arguments}0?">;
 def warn_subscript_is_char : Warning<"array subscript is of type 'char'">,
   InGroup<CharSubscript>, DefaultIgnore;
 
