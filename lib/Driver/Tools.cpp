@@ -1368,8 +1368,6 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
     // Add default argument set.
     if (!Args.hasArg(options::OPT__analyzer_no_default_checks)) {
       CmdArgs.push_back("-analyzer-checker=core");
-      CmdArgs.push_back("-analyzer-checker=deadcode");
-      CmdArgs.push_back("-analyzer-checker=security");
 
       if (getToolChain().getTriple().getOS() != llvm::Triple::Win32)
         CmdArgs.push_back("-analyzer-checker=unix");
