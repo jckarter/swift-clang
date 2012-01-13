@@ -178,12 +178,6 @@ private:
   } ARCRuntimeForSimulator;
 
   mutable enum {
-    SubscriptSimulator_None,
-    SubscriptSimulator_NotAvailable,
-    SubscriptSimulator_Available
-  } SubscriptRuntimeForSimulator;
-
-  mutable enum {
     LibCXXSimulator_None,
     LibCXXSimulator_NotAvailable,
     LibCXXSimulator_Available

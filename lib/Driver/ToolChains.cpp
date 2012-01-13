@@ -49,7 +49,6 @@ using namespace clang;
 Darwin::Darwin(const HostInfo &Host, const llvm::Triple& Triple)
   : ToolChain(Host, Triple), TargetInitialized(false),
     ARCRuntimeForSimulator(ARCSimulator_None),
-    SubscriptRuntimeForSimulator(SubscriptSimulator_None),
     LibCXXForSimulator(LibCXXSimulator_None)
 {
   // Compute the initial Darwin version based on the host.
@@ -98,21 +97,7 @@ bool Darwin::hasARCRuntime() const {
 }
 
 bool Darwin::hasSubscriptingRuntime() const {
-  // FIXME: Remove this once we move to -mios-simulator-version-min completely
-  // and stop using __IPHONE_OS_VERSION_MIN_REQUIRED.
-  switch (SubscriptRuntimeForSimulator) {
-  case SubscriptSimulator_None:
-    break;
-  case SubscriptSimulator_Available:
-    return true;
-  case SubscriptSimulator_NotAvailable:
-    return false;
-  }
-
-  if (isTargetIPhoneOS())
-    return !isIPhoneOSVersionLT(6);
-  else
-    return !isMacosxVersionLT(10, 8);
+    return !isTargetIPhoneOS() && !isMacosxVersionLT(10, 8);
 }
 
 /// Darwin provides an ARC runtime starting in MacOS X 10.7 and iOS 5.0.
@@ -570,9 +555,6 @@ void Darwin::AddDeploymentTarget(DerivedArgList &Args) const {
                                              : ARCSimulator_HasARCRuntime;
           LibCXXForSimulator = Major < 5 ? LibCXXSimulator_NotAvailable
                                          : LibCXXSimulator_Available;
-          SubscriptRuntimeForSimulator =
-              Major < 6 ? SubscriptSimulator_NotAvailable
-                        : SubscriptSimulator_Available;
         }
         break;
       }
