@@ -47,3 +47,23 @@ class some_name {}; // expected-note {{'some_name' declared here}}
 somename Foo; // expected-error {{unknown type name 'somename'; did you mean 'some_name'?}}
 namespace SomeName {} // expected-note {{namespace 'SomeName' defined here}}
 using namespace somename; // expected-error {{no namespace named 'somename'; did you mean 'SomeName'?}}
+
+
+// Without the callback object, CorrectTypo would choose "field1" as the
+// correction for "fielda" as it is closer than "FieldA", but that correction
+// would be later discarded by the caller and no suggestion would be given.
+struct st {
+  struct {
+    int field1;
+  };
+  double FieldA; // expected-note{{'FieldA' declared here}}
+};
+st var = { .fielda = 0.0 }; // expected-error{{field designator 'fielda' does not refer to any field in type 'st'; did you mean 'FieldA'?}}
+
+// Test the improvement from passing a  callback object to CorrectTypo in
+// Sema::BuildCXXNestedNameSpecifier.
+typedef char* another_str;
+namespace AnotherStd { // expected-note{{'AnotherStd' declared here}}
+  class string {};
+}
+another_std::string str; // expected-error{{use of undeclared identifier 'another_std'; did you mean 'AnotherStd'?}}
