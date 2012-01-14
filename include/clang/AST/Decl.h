@@ -252,6 +252,14 @@ public:
     }
 
     void mergeVisibility(Visibility V, bool E = false) {
+      // If one has explicit visibility and the other doesn't, keep the
+      // explicit one.
+      if (visibilityExplicit() && !E)
+        return;
+      if (!visibilityExplicit() && E)
+        setVisibility(V, E);
+
+      // If both are explicit or both are implicit, keep the minimum.
       setVisibility(minVisibility(visibility(), V), visibilityExplicit() || E);
     }
     void mergeVisibility(LinkageInfo Other) {
@@ -261,10 +269,6 @@ public:
     void merge(LinkageInfo Other) {
       mergeLinkage(Other);
       mergeVisibility(Other);
-    }
-    void merge(std::pair<Linkage,Visibility> LV) {
-      mergeLinkage(LV.first);
-      mergeVisibility(LV.second);
     }
 
     friend LinkageInfo merge(LinkageInfo L, LinkageInfo R) {
@@ -1020,9 +1024,11 @@ public:
 
   /// \brief Attempt to evaluate the value of the initializer attached to this
   /// declaration, and produce notes explaining why it cannot be evaluated or is
-  /// not a constant expression. Returns true if evaluation succeeded.
-  /// The value can be obtained by calling getEvaluatedValue.
-  bool evaluateValue(llvm::SmallVectorImpl<PartialDiagnosticAt> &Notes) const;
+  /// not a constant expression. Returns a pointer to the value if evaluation
+  /// succeeded, 0 otherwise.
+  APValue *evaluateValue() const;
+  APValue *evaluateValue(
+    llvm::SmallVectorImpl<PartialDiagnosticAt> &Notes) const;
 
   /// \brief Return the already-evaluated value of this variable's
   /// initializer, or NULL if the value is not yet known. Returns pointer
@@ -1967,6 +1973,27 @@ public:
   /// \brief Determine whether this is or was instantiated from an out-of-line
   /// definition of a member function.
   virtual bool isOutOfLine() const;
+
+  /// \brief Enumeration used to identify memory setting or copying functions
+  /// identified by getMemoryFunctionKind().
+  enum MemoryFunctionKind {
+    MFK_Memset,
+    MFK_Memcpy,
+    MFK_Memmove,
+    MFK_Memcmp,
+    MFK_Strncpy,
+    MFK_Strncmp,
+    MFK_Strncasecmp,
+    MFK_Strncat,
+    MFK_Strndup,
+    MFK_Strlcpy,
+    MFK_Strlcat,
+    MFK_Invalid
+  };
+
+  /// \brief If the given function is a memory copy or setting function, return
+  /// it's kind. If the function is not a memory function, returns MFK_Invalid.
+  MemoryFunctionKind getMemoryFunctionKind();
 
   // Implement isa/cast/dyncast/etc.
   static bool classof(const Decl *D) { return classofKind(D->getKind()); }
