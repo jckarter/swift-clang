@@ -1101,7 +1101,7 @@ bool Generic_GCC::GCCVersion::operator<(const GCCVersion &RHS) const {
 /// Once constructed, a GCCInstallation is esentially immutable.
 Generic_GCC::GCCInstallationDetector::GCCInstallationDetector(const Driver &D)
   : IsValid(false),
-    GccTriple(D.DefaultHostTriple) {
+    GccTriple(D.DefaultTargetTriple) {
   // FIXME: Using CXX_INCLUDE_ROOT is here is a bit of a hack, but
   // avoids adding yet another option to configure/cmake.
   // It would probably be cleaner to break it in two variables
@@ -1139,7 +1139,7 @@ Generic_GCC::GCCInstallationDetector::GCCInstallationDetector(const Driver &D)
 
   // Always include the default host triple as the final fallback if no
   // specific triple is detected.
-  CandidateTriples.push_back(D.DefaultHostTriple);
+  CandidateTriples.push_back(D.DefaultTargetTriple);
 
   // Compute the set of prefixes for our search.
   SmallVector<std::string, 8> Prefixes(D.PrefixDirs.begin(),
@@ -1546,12 +1546,12 @@ FreeBSD::FreeBSD(const HostInfo &Host, const llvm::Triple& Triple)
   // Determine if we are compiling 32-bit code on an x86_64 platform.
   bool Lib32 = false;
   if (Triple.getArch() == llvm::Triple::x86 &&
-      llvm::Triple(getDriver().DefaultHostTriple).getArch() ==
+      llvm::Triple(getDriver().DefaultTargetTriple).getArch() ==
         llvm::Triple::x86_64)
     Lib32 = true;
 
   if (Triple.getArch() == llvm::Triple::ppc &&
-      llvm::Triple(getDriver().DefaultHostTriple).getArch() ==
+      llvm::Triple(getDriver().DefaultTargetTriple).getArch() ==
         llvm::Triple::ppc64)
     Lib32 = true;
 
@@ -1897,7 +1897,7 @@ static std::string getMultiarchTriple(const llvm::Triple TargetTriple,
 Linux::Linux(const HostInfo &Host, const llvm::Triple &Triple)
   : Generic_ELF(Host, Triple) {
   llvm::Triple::ArchType Arch =
-    llvm::Triple(getDriver().DefaultHostTriple).getArch();
+    llvm::Triple(getDriver().DefaultTargetTriple).getArch();
   const std::string &SysRoot = getDriver().SysRoot;
 
   // OpenSuse stores the linker with the compiler, add that to the search
@@ -1923,11 +1923,14 @@ Linux::Linux(const HostInfo &Host, const llvm::Triple &Triple)
                       Arch == llvm::Triple::mips64 ||
                       Arch == llvm::Triple::mips64el;
 
+  const bool IsAndroid = Triple.getEnvironment() == llvm::Triple::ANDROIDEABI;
+
   // Do not use 'gnu' hash style for Mips targets because .gnu.hash
   // and the MIPS ABI require .dynsym to be sorted in different ways.
   // .gnu.hash needs symbols to be grouped by hash code whereas the MIPS
   // ABI requires a mapping between the GOT and the symbol table.
-  if (!IsMips) {
+  // Android loader does not support .gnu.hash.
+  if (!IsMips && !IsAndroid) {
     if (IsRedhat(Distro) || IsOpenSuse(Distro) || Distro == UbuntuMaverick ||
         Distro == UbuntuNatty || Distro == UbuntuOneiric)
       ExtraOpts.push_back("--hash-style=gnu");
@@ -2186,7 +2189,7 @@ void Linux::AddClangCXXStdlibIncludeArgs(const ArgList &DriverArgs,
   // only support the suffix-based bi-arch-like header scheme for host/target
   // mismatches of just bit width.
   llvm::Triple::ArchType HostArch =
-    llvm::Triple(getDriver().DefaultHostTriple).getArch();
+    llvm::Triple(getDriver().DefaultTargetTriple).getArch();
   llvm::Triple::ArchType TargetArch = TargetTriple.getArch();
   StringRef Suffix;
   if ((HostArch == llvm::Triple::x86 && TargetArch == llvm::Triple::x86_64) ||
