@@ -541,7 +541,11 @@ OverloadCandidate::DeductionFailureInfo::getSecondArg() {
 }
 
 void OverloadCandidateSet::clear() {
-  inherited::clear();
+  for (iterator i = begin(), e = end(); i != e; ++i)
+    for (unsigned ii = 0, ie = i->NumConversions; ii != ie; ++ii)
+      i->Conversions[ii].~ImplicitConversionSequence();
+  NumInlineSequences = 0;
+  Candidates.clear();
   Functions.clear();
 }
 
@@ -4647,8 +4651,7 @@ Sema::AddOverloadCandidate(FunctionDecl *Function,
   }
 
   // Add this candidate
-  CandidateSet.push_back(OverloadCandidate());
-  OverloadCandidate& Candidate = CandidateSet.back();
+  OverloadCandidate &Candidate = CandidateSet.addCandidate(NumArgs);
   Candidate.FoundDecl = FoundDecl;
   Candidate.Function = Function;
   Candidate.Viable = true;
@@ -4692,7 +4695,6 @@ Sema::AddOverloadCandidate(FunctionDecl *Function,
 
   // Determine the implicit conversion sequences for each of the
   // arguments.
-  Candidate.Conversions.resize(NumArgs);
   for (unsigned ArgIdx = 0; ArgIdx < NumArgs; ++ArgIdx) {
     if (ArgIdx < NumArgsInProto) {
       // (C++ 13.3.2p3): for F to be a viable function, there shall
@@ -4815,8 +4817,7 @@ Sema::AddMethodCandidate(CXXMethodDecl *Method, DeclAccessPair FoundDecl,
   EnterExpressionEvaluationContext Unevaluated(*this, Sema::Unevaluated);
 
   // Add this candidate
-  CandidateSet.push_back(OverloadCandidate());
-  OverloadCandidate& Candidate = CandidateSet.back();
+  OverloadCandidate &Candidate = CandidateSet.addCandidate(NumArgs + 1);
   Candidate.FoundDecl = FoundDecl;
   Candidate.Function = Method;
   Candidate.IsSurrogate = false;
@@ -4848,7 +4849,6 @@ Sema::AddMethodCandidate(CXXMethodDecl *Method, DeclAccessPair FoundDecl,
   }
 
   Candidate.Viable = true;
-  Candidate.Conversions.resize(NumArgs + 1);
 
   if (Method->isStatic() || ObjectType.isNull())
     // The implicit object argument is ignored.
@@ -4925,8 +4925,7 @@ Sema::AddMethodTemplateCandidate(FunctionTemplateDecl *MethodTmpl,
   if (TemplateDeductionResult Result
       = DeduceTemplateArguments(MethodTmpl, ExplicitTemplateArgs,
                                 Args, NumArgs, Specialization, Info)) {
-    CandidateSet.push_back(OverloadCandidate());
-    OverloadCandidate &Candidate = CandidateSet.back();
+    OverloadCandidate &Candidate = CandidateSet.addCandidate();
     Candidate.FoundDecl = FoundDecl;
     Candidate.Function = MethodTmpl->getTemplatedDecl();
     Candidate.Viable = false;
@@ -4976,8 +4975,7 @@ Sema::AddTemplateOverloadCandidate(FunctionTemplateDecl *FunctionTemplate,
   if (TemplateDeductionResult Result
         = DeduceTemplateArguments(FunctionTemplate, ExplicitTemplateArgs,
                                   Args, NumArgs, Specialization, Info)) {
-    CandidateSet.push_back(OverloadCandidate());
-    OverloadCandidate &Candidate = CandidateSet.back();
+    OverloadCandidate &Candidate = CandidateSet.addCandidate();
     Candidate.FoundDecl = FoundDecl;
     Candidate.Function = FunctionTemplate->getTemplatedDecl();
     Candidate.Viable = false;
@@ -5019,8 +5017,7 @@ Sema::AddConversionCandidate(CXXConversionDecl *Conversion,
   EnterExpressionEvaluationContext Unevaluated(*this, Sema::Unevaluated);
 
   // Add this candidate
-  CandidateSet.push_back(OverloadCandidate());
-  OverloadCandidate& Candidate = CandidateSet.back();
+  OverloadCandidate &Candidate = CandidateSet.addCandidate(1);
   Candidate.FoundDecl = FoundDecl;
   Candidate.Function = Conversion;
   Candidate.IsSurrogate = false;
@@ -5029,7 +5026,6 @@ Sema::AddConversionCandidate(CXXConversionDecl *Conversion,
   Candidate.FinalConversion.setFromType(ConvType);
   Candidate.FinalConversion.setAllToTypes(ToType);
   Candidate.Viable = true;
-  Candidate.Conversions.resize(1);
   Candidate.ExplicitCallArguments = 1;
 
   // C++ [over.match.funcs]p4:
@@ -5163,8 +5159,7 @@ Sema::AddTemplateConversionCandidate(FunctionTemplateDecl *FunctionTemplate,
   if (TemplateDeductionResult Result
         = DeduceTemplateArguments(FunctionTemplate, ToType,
                                   Specialization, Info)) {
-    CandidateSet.push_back(OverloadCandidate());
-    OverloadCandidate &Candidate = CandidateSet.back();
+    OverloadCandidate &Candidate = CandidateSet.addCandidate();
     Candidate.FoundDecl = FoundDecl;
     Candidate.Function = FunctionTemplate->getTemplatedDecl();
     Candidate.Viable = false;
@@ -5202,15 +5197,13 @@ void Sema::AddSurrogateCandidate(CXXConversionDecl *Conversion,
   // Overload resolution is always an unevaluated context.
   EnterExpressionEvaluationContext Unevaluated(*this, Sema::Unevaluated);
 
-  CandidateSet.push_back(OverloadCandidate());
-  OverloadCandidate& Candidate = CandidateSet.back();
+  OverloadCandidate &Candidate = CandidateSet.addCandidate(NumArgs + 1);
   Candidate.FoundDecl = FoundDecl;
   Candidate.Function = 0;
   Candidate.Surrogate = Conversion;
   Candidate.Viable = true;
   Candidate.IsSurrogate = true;
   Candidate.IgnoreObjectArgument = false;
-  Candidate.Conversions.resize(NumArgs + 1);
   Candidate.ExplicitCallArguments = NumArgs;
 
   // Determine the implicit conversion sequence for the implicit
@@ -5355,8 +5348,7 @@ void Sema::AddBuiltinCandidate(QualType ResultTy, QualType *ParamTys,
   EnterExpressionEvaluationContext Unevaluated(*this, Sema::Unevaluated);
 
   // Add this candidate
-  CandidateSet.push_back(OverloadCandidate());
-  OverloadCandidate& Candidate = CandidateSet.back();
+  OverloadCandidate &Candidate = CandidateSet.addCandidate(NumArgs);
   Candidate.FoundDecl = DeclAccessPair::make(0, AS_none);
   Candidate.Function = 0;
   Candidate.IsSurrogate = false;
@@ -5368,7 +5360,6 @@ void Sema::AddBuiltinCandidate(QualType ResultTy, QualType *ParamTys,
   // Determine the implicit conversion sequences for each of the
   // arguments.
   Candidate.Viable = true;
-  Candidate.Conversions.resize(NumArgs);
   Candidate.ExplicitCallArguments = NumArgs;
   for (unsigned ArgIdx = 0; ArgIdx < NumArgs; ++ArgIdx) {
     // C++ [over.match.oper]p4:
@@ -7031,8 +7022,8 @@ isBetterOverloadCandidate(Sema &S,
   //   A viable function F1 is defined to be a better function than another
   //   viable function F2 if for all arguments i, ICSi(F1) is not a worse
   //   conversion sequence than ICSi(F2), and then...
-  unsigned NumArgs = Cand1.Conversions.size();
-  assert(Cand2.Conversions.size() == NumArgs && "Overload candidate mismatch");
+  unsigned NumArgs = Cand1.NumConversions;
+  assert(Cand2.NumConversions == NumArgs && "Overload candidate mismatch");
   bool HasBetterConversion = false;
   for (unsigned ArgIdx = StartArg; ArgIdx < NumArgs; ++ArgIdx) {
     switch (CompareImplicitConversionSequences(S,
@@ -7486,9 +7477,8 @@ void DiagnoseBadConversion(Sema &S, OverloadCandidate *Cand, unsigned I) {
     << (unsigned) (Cand->Fix.Kind);
 
   // If we can fix the conversion, suggest the FixIts.
-  for (SmallVector<FixItHint, 1>::iterator
-      HI = Cand->Fix.Hints.begin(), HE = Cand->Fix.Hints.end();
-      HI != HE; ++HI)
+  for (std::vector<FixItHint>::iterator HI = Cand->Fix.Hints.begin(),
+       HE = Cand->Fix.Hints.end(); HI != HE; ++HI)
     FDiag << *HI;
   S.Diag(Fn->getLocation(), FDiag);
 
@@ -7731,7 +7721,7 @@ void NoteFunctionCandidate(Sema &S, OverloadCandidate *Cand,
 
   case ovl_fail_bad_conversion: {
     unsigned I = (Cand->IgnoreObjectArgument ? 1 : 0);
-    for (unsigned N = Cand->Conversions.size(); I != N; ++I)
+    for (unsigned N = Cand->NumConversions; I != N; ++I)
       if (Cand->Conversions[I].isBad())
         return DiagnoseBadConversion(S, Cand, I);
 
@@ -7783,12 +7773,12 @@ void NoteBuiltinOperatorCandidate(Sema &S,
                                   const char *Opc,
                                   SourceLocation OpLoc,
                                   OverloadCandidate *Cand) {
-  assert(Cand->Conversions.size() <= 2 && "builtin operator is not binary");
+  assert(Cand->NumConversions <= 2 && "builtin operator is not binary");
   std::string TypeStr("operator");
   TypeStr += Opc;
   TypeStr += "(";
   TypeStr += Cand->BuiltinTypes.ParamTypes[0].getAsString();
-  if (Cand->Conversions.size() == 1) {
+  if (Cand->NumConversions == 1) {
     TypeStr += ")";
     S.Diag(OpLoc, diag::note_ovl_builtin_unary_candidate) << TypeStr;
   } else {
@@ -7801,7 +7791,7 @@ void NoteBuiltinOperatorCandidate(Sema &S,
 
 void NoteAmbiguousUserConversions(Sema &S, SourceLocation OpLoc,
                                   OverloadCandidate *Cand) {
-  unsigned NoOperands = Cand->Conversions.size();
+  unsigned NoOperands = Cand->NumConversions;
   for (unsigned ArgIdx = 0; ArgIdx < NoOperands; ++ArgIdx) {
     const ImplicitConversionSequence &ICS = Cand->Conversions[ArgIdx];
     if (ICS.isBad()) break; // all meaningless after first invalid
@@ -7905,11 +7895,11 @@ struct CompareOverloadCandidatesForDisplay {
 
         // If there's any ordering between the defined conversions...
         // FIXME: this might not be transitive.
-        assert(L->Conversions.size() == R->Conversions.size());
+        assert(L->NumConversions == R->NumConversions);
 
         int leftBetter = 0;
         unsigned I = (L->IgnoreObjectArgument || R->IgnoreObjectArgument);
-        for (unsigned E = L->Conversions.size(); I != E; ++I) {
+        for (unsigned E = L->NumConversions; I != E; ++I) {
           switch (CompareImplicitConversionSequences(S,
                                                      L->Conversions[I],
                                                      R->Conversions[I])) {
@@ -7972,7 +7962,7 @@ void CompleteNonViableCandidate(Sema &S, OverloadCandidate *Cand,
 
   // Skip forward to the first bad conversion.
   unsigned ConvIdx = (Cand->IgnoreObjectArgument ? 1 : 0);
-  unsigned ConvCount = Cand->Conversions.size();
+  unsigned ConvCount = Cand->NumConversions;
   while (true) {
     assert(ConvIdx != ConvCount && "no bad conversion in candidate");
     ConvIdx++;

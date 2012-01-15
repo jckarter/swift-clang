@@ -1234,72 +1234,40 @@ void ASTDeclReader::VisitTemplateDecl(TemplateDecl *D) {
 
 ASTDeclReader::RedeclarableResult 
 ASTDeclReader::VisitRedeclarableTemplateDecl(RedeclarableTemplateDecl *D) {
-  // Initialize CommonOrPrev before VisitTemplateDecl so that getCommonPtr()
-  // can be used while this is still initializing.
-  enum RedeclKind { FirstDeclaration, FirstInFile, PointsToPrevious };
-  RedeclKind Kind = (RedeclKind)Record[Idx++];
-  
-  // Determine the first declaration ID.
-  DeclID FirstDeclID = 0;
-  switch (Kind) {
-  case FirstDeclaration: {
-    FirstDeclID = ThisDeclID;
+  RedeclarableResult Redecl = VisitRedeclarable(D);
 
-    // Since this is the first declaration of the template, fill in the 
-    // information for the 'common' pointer.
-    if (D->CommonOrPrev.isNull()) {
-      RedeclarableTemplateDecl::CommonBase *Common
-        = D->newCommon(Reader.getContext());
-      Common->Latest = D;
-      D->CommonOrPrev = Common;
-    }
+  // Make sure we've allocated the Common pointer first. We do this before
+  // VisitTemplateDecl so that getCommonPtr() can be used during initialization.
+  RedeclarableTemplateDecl *CanonD = D->getCanonicalDecl();
+  if (!CanonD->Common) {
+    CanonD->Common = CanonD->newCommon(Reader.getContext());
+    Reader.PendingDefinitions.insert(CanonD);
+  }
+  D->Common = CanonD->Common;
 
+  // If this is the first declaration of the template, fill in the information
+  // for the 'common' pointer.
+  if (ThisDeclID == Redecl.getFirstID()) {
     if (RedeclarableTemplateDecl *RTD
           = ReadDeclAs<RedeclarableTemplateDecl>(Record, Idx)) {
       assert(RTD->getKind() == D->getKind() &&
              "InstantiatedFromMemberTemplate kind mismatch");
-      D->setInstantiatedFromMemberTemplateImpl(RTD);
+      D->setInstantiatedFromMemberTemplate(RTD);
       if (Record[Idx++])
         D->setMemberSpecialization();
     }
-    break;
   }
-   
-  case FirstInFile:
-  case PointsToPrevious: {
-    FirstDeclID = ReadDeclID(Record, Idx);
-    DeclID PrevDeclID = ReadDeclID(Record, Idx);
-    
-    RedeclarableTemplateDecl *FirstDecl
-      = cast_or_null<RedeclarableTemplateDecl>(Reader.GetDecl(FirstDeclID));
-    
-    // We delay loading of the redeclaration chain to avoid deeply nested calls.
-    // We temporarily set the first (canonical) declaration as the previous one
-    // which is the one that matters and mark the real previous DeclID to be
-    // loaded and attached later on.
-    D->CommonOrPrev = FirstDecl;
-    
-    if (Kind == PointsToPrevious) {
-      // Make a note that we need to wire up this declaration to its
-      // previous declaration, later. We don't need to do this for the first
-      // declaration in any given module file, because those will be wired 
-      // together later.
-      Reader.PendingPreviousDecls.push_back(std::make_pair(D, PrevDeclID));
-    }
-    break;
-  }
-  }
-  
+     
   VisitTemplateDecl(D);
   D->IdentifierNamespace = Record[Idx++];
   
-  return RedeclarableResult(Reader, FirstDeclID);
+  return Redecl;
 }
 
 void ASTDeclReader::VisitClassTemplateDecl(ClassTemplateDecl *D) {
-  VisitRedeclarableTemplateDecl(D);
+  RedeclarableResult Redecl = VisitRedeclarableTemplateDecl(D);
 
-  if (D->getPreviousDeclaration() == 0) {
+  if (ThisDeclID == Redecl.getFirstID()) {
     // This ClassTemplateDecl owns a CommonPtr; read it to keep track of all of
     // the specializations.
     SmallVector<serialization::DeclID, 2> SpecIDs;
@@ -1321,6 +1289,7 @@ void ASTDeclReader::VisitClassTemplateDecl(ClassTemplateDecl *D) {
       typedef serialization::DeclID DeclID;
       
       ClassTemplateDecl::Common *CommonPtr = D->getCommonPtr();
+      // FIXME: Append specializations!
       CommonPtr->LazySpecializations
         = new (Reader.getContext()) DeclID [SpecIDs.size()];
       memcpy(CommonPtr->LazySpecializations, SpecIDs.data(), 
@@ -1401,7 +1370,7 @@ void ASTDeclReader::VisitClassTemplatePartialSpecializationDecl(
   D->SequenceNumber = Record[Idx++];
 
   // These are read/set from/to the first declaration.
-  if (D->getPreviousDeclaration() == 0) {
+  if (D->getPreviousDecl() == 0) {
     D->InstantiatedFromMember.setPointer(
       ReadDeclAs<ClassTemplatePartialSpecializationDecl>(Record, Idx));
     D->InstantiatedFromMember.setInt(Record[Idx++]);
@@ -1415,9 +1384,9 @@ void ASTDeclReader::VisitClassScopeFunctionSpecializationDecl(
 }
 
 void ASTDeclReader::VisitFunctionTemplateDecl(FunctionTemplateDecl *D) {
-  VisitRedeclarableTemplateDecl(D);
+  RedeclarableResult Redecl = VisitRedeclarableTemplateDecl(D);
 
-  if (D->getPreviousDeclaration() == 0) {
+  if (ThisDeclID == Redecl.getFirstID()) {
     // This FunctionTemplateDecl owns a CommonPtr; read it.
 
     // Read the function specialization declarations.
@@ -1808,7 +1777,7 @@ void ASTDeclReader::attachPreviousDecl(Decl *D, Decl *previous) {
     ND->RedeclLink.setPointer(cast<NamespaceDecl>(previous));
   } else {
     RedeclarableTemplateDecl *TD = cast<RedeclarableTemplateDecl>(D);
-    TD->CommonOrPrev = cast<RedeclarableTemplateDecl>(previous);
+    TD->RedeclLink.setPointer(cast<RedeclarableTemplateDecl>(previous));
   }
 }
 
@@ -1841,7 +1810,9 @@ void ASTDeclReader::attachLatestDecl(Decl *D, Decl *Latest) {
                                                    cast<NamespaceDecl>(Latest));
   } else {
     RedeclarableTemplateDecl *TD = cast<RedeclarableTemplateDecl>(D);
-    TD->getCommonPtr()->Latest = cast<RedeclarableTemplateDecl>(Latest);
+    TD->RedeclLink
+      = Redeclarable<RedeclarableTemplateDecl>::LatestDeclLink(
+                                        cast<RedeclarableTemplateDecl>(Latest));
   }
 }
 
@@ -2240,46 +2211,6 @@ namespace {
   };
 }
 
-/// \brief Retrieve the previous declaration to D.
-static Decl *getPreviousDecl(Decl *D) {
-  if (TagDecl *TD = dyn_cast<TagDecl>(D))
-    return TD->getPreviousDeclaration();
-  if (FunctionDecl *FD = dyn_cast<FunctionDecl>(D))
-    return FD->getPreviousDeclaration();
-  if (VarDecl *VD = dyn_cast<VarDecl>(D))
-    return VD->getPreviousDeclaration();
-  if (TypedefNameDecl *TD = dyn_cast<TypedefNameDecl>(D))
-    return TD->getPreviousDeclaration();
-  if (ObjCInterfaceDecl *ID = dyn_cast<ObjCInterfaceDecl>(D))
-    return ID->getPreviousDeclaration();
-  if (ObjCProtocolDecl *PD = dyn_cast<ObjCProtocolDecl>(D))
-    return PD->getPreviousDeclaration();
-  if (NamespaceDecl *ND = dyn_cast<NamespaceDecl>(D))
-    return ND->getPreviousDeclaration();
-  
-  return cast<RedeclarableTemplateDecl>(D)->getPreviousDeclaration();
-}
-
-/// \brief Retrieve the most recent declaration of D.
-static Decl *getMostRecentDecl(Decl *D) {
-  if (TagDecl *TD = dyn_cast<TagDecl>(D))
-    return TD->getMostRecentDeclaration();
-  if (FunctionDecl *FD = dyn_cast<FunctionDecl>(D))
-    return FD->getMostRecentDeclaration();
-  if (VarDecl *VD = dyn_cast<VarDecl>(D))
-    return VD->getMostRecentDeclaration();
-  if (TypedefNameDecl *TD = dyn_cast<TypedefNameDecl>(D))
-    return TD->getMostRecentDeclaration();
-  if (ObjCInterfaceDecl *ID = dyn_cast<ObjCInterfaceDecl>(D))
-    return ID->getMostRecentDeclaration();
-  if (ObjCProtocolDecl *PD = dyn_cast<ObjCProtocolDecl>(D))
-    return PD->getMostRecentDeclaration();
-  if (NamespaceDecl *ND = dyn_cast<NamespaceDecl>(D))
-    return ND->getMostRecentDeclaration();
-
-  return cast<RedeclarableTemplateDecl>(D)->getMostRecentDeclaration();
-}
-
 void ASTReader::loadPendingDeclChain(serialization::GlobalDeclID ID) {
   Decl *D = GetDecl(ID);  
   Decl *CanonDecl = D->getCanonicalDecl();
@@ -2305,11 +2236,11 @@ void ASTReader::loadPendingDeclChain(serialization::GlobalDeclID ID) {
     return;
     
   // Capture all of the parsed declarations and put them at the end.
-  Decl *MostRecent = getMostRecentDecl(CanonDecl);
+  Decl *MostRecent = CanonDecl->getMostRecentDecl();
   Decl *FirstParsed = MostRecent;
   if (CanonDecl != MostRecent && !MostRecent->isFromASTFile()) {
     Decl *Current = MostRecent;
-    while (Decl *Prev = getPreviousDecl(Current)) {
+    while (Decl *Prev = Current->getPreviousDecl()) {
       if (Prev == CanonDecl)
         break;
       
