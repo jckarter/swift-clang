@@ -9220,9 +9220,8 @@ bool Sema::DiagnoseAssignmentResult(AssignConvertType ConvTy,
   // If we can fix the conversion, suggest the FixIts.
   assert(ConvHints.isNull() || Hint.isNull());
   if (!ConvHints.isNull()) {
-    for (llvm::SmallVector<FixItHint, 1>::iterator
-        HI = ConvHints.Hints.begin(), HE = ConvHints.Hints.end();
-        HI != HE; ++HI)
+    for (std::vector<FixItHint>::iterator HI = ConvHints.Hints.begin(),
+         HE = ConvHints.Hints.end(); HI != HE; ++HI)
       FDiag << *HI;
   } else {
     FDiag << Hint;
@@ -9277,9 +9276,11 @@ bool Sema::VerifyIntegerConstantExpression(const Expr *E, llvm::APSInt *Result,
   }
 
   if (!Folded || !AllowFold) {
-    Diag(E->getSourceRange().getBegin(),
-         DiagID ? DiagID : unsigned(diag::err_expr_not_ice))
-      << E->getSourceRange();
+    if (DiagID)
+      Diag(E->getSourceRange().getBegin(), DiagID) << E->getSourceRange();
+    else
+      Diag(E->getSourceRange().getBegin(), diag::err_expr_not_ice)
+        << E->getSourceRange() << LangOpts.CPlusPlus;
 
     // We only show the notes if they're not the usual "invalid subexpression"
     // or if they are actually in a subexpression.
@@ -9294,12 +9295,9 @@ bool Sema::VerifyIntegerConstantExpression(const Expr *E, llvm::APSInt *Result,
   }
 
   Diag(E->getSourceRange().getBegin(), diag::ext_expr_not_ice)
-    << E->getSourceRange();
-
-  if (Diags.getDiagnosticLevel(diag::ext_expr_not_ice, E->getExprLoc())
-          != DiagnosticsEngine::Ignored)
-    for (unsigned I = 0, N = Notes.size(); I != N; ++I)
-      Diag(Notes[I].first, Notes[I].second);
+    << E->getSourceRange() << LangOpts.CPlusPlus;
+  for (unsigned I = 0, N = Notes.size(); I != N; ++I)
+    Diag(Notes[I].first, Notes[I].second);
 
   if (Result)
     *Result = EvalResult.Val.getInt();
