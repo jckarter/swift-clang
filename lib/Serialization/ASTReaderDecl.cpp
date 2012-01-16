@@ -103,10 +103,6 @@ namespace clang {
     void ReadCXXDefinitionData(struct CXXRecordDecl::DefinitionData &Data,
                                const RecordData &R, unsigned &I);
 
-    void InitializeCXXDefinitionData(CXXRecordDecl *D,
-                                     CXXRecordDecl *DefinitionDecl,
-                                     const RecordData &Record, unsigned &Idx);
-    
     /// \brief RAII class used to capture the first ID within a redeclaration
     /// chain and to introduce it into the list of pending redeclaration chains
     /// on destruction.
@@ -672,10 +668,13 @@ void ASTDeclReader::VisitObjCInterfaceDecl(ObjCInterfaceDecl *ID) {
   TypeIDForTypeDecl = Reader.getGlobalTypeID(F, Record[Idx++]);
   mergeRedeclarable(ID, Redecl);
   
-  ObjCInterfaceDecl *Def = ReadDeclAs<ObjCInterfaceDecl>(Record, Idx);
-  if (ID == Def) {
+  if (Record[Idx++]) {
     // Read the definition.
     ID->allocateDefinitionData();
+    
+    // Set the definition data of the canonical declaration, so other
+    // redeclarations will see it.
+    ID->getCanonicalDecl()->Data = ID->Data;
     
     ObjCInterfaceDecl::DefinitionData &Data = ID->data();
     
@@ -722,8 +721,8 @@ void ASTDeclReader::VisitObjCInterfaceDecl(ObjCInterfaceDecl *ID) {
     
     // Note that we have deserialized a definition.
     Reader.PendingDefinitions.insert(ID);
-  } else if (Def && Def->Data) {
-    ID->Data = Def->Data;
+  } else {
+    ID->Data = ID->getCanonicalDecl()->Data;
   }
 }
 
@@ -741,11 +740,14 @@ void ASTDeclReader::VisitObjCProtocolDecl(ObjCProtocolDecl *PD) {
   VisitObjCContainerDecl(PD);
   mergeRedeclarable(PD, Redecl);
   
-  ObjCProtocolDecl *Def = ReadDeclAs<ObjCProtocolDecl>(Record, Idx);
-  if (PD == Def) {
+  if (Record[Idx++]) {
     // Read the definition.
     PD->allocateDefinitionData();
     
+    // Set the definition data of the canonical declaration, so other
+    // redeclarations will see it.
+    PD->getCanonicalDecl()->Data = PD->Data;
+
     unsigned NumProtoRefs = Record[Idx++];
     SmallVector<ObjCProtocolDecl *, 16> ProtoRefs;
     ProtoRefs.reserve(NumProtoRefs);
@@ -760,8 +762,8 @@ void ASTDeclReader::VisitObjCProtocolDecl(ObjCProtocolDecl *PD) {
     
     // Note that we have deserialized a definition.
     Reader.PendingDefinitions.insert(PD);
-  } else if (Def && Def->Data) {
-    PD->Data = Def->Data;
+  } else {
+    PD->Data = PD->getCanonicalDecl()->Data;
   }
 }
 
@@ -1096,30 +1098,28 @@ void ASTDeclReader::ReadCXXDefinitionData(
   Data.FirstFriend = ReadDeclAs<FriendDecl>(Record, Idx);
 }
 
-void ASTDeclReader::InitializeCXXDefinitionData(CXXRecordDecl *D,
-                                                CXXRecordDecl *DefinitionDecl,
-                                                const RecordData &Record,
-                                                unsigned &Idx) {
-  ASTContext &C = Reader.getContext();
-
-  if (D == DefinitionDecl) {
-    D->DefinitionData = new (C) struct CXXRecordDecl::DefinitionData(D);
-    ReadCXXDefinitionData(*D->DefinitionData, Record, Idx);
-
-    // Note that we have deserialized a definition.
-    Reader.PendingDefinitions.insert(D);
-  } else if (DefinitionDecl && DefinitionDecl->DefinitionData) {
-    D->DefinitionData = DefinitionDecl->DefinitionData;
-  }
-}
-
 void ASTDeclReader::VisitCXXRecordDecl(CXXRecordDecl *D) {
   VisitRecordDecl(D);
 
-  CXXRecordDecl *DefinitionDecl = ReadDeclAs<CXXRecordDecl>(Record, Idx);
-  InitializeCXXDefinitionData(D, DefinitionDecl, Record, Idx);
-
   ASTContext &C = Reader.getContext();
+  if (Record[Idx++]) {
+    D->DefinitionData = new (C) struct CXXRecordDecl::DefinitionData(D);
+    
+    // Propagate the DefinitionData pointer to the canonical declaration, so
+    // that all other deserialized declarations will see it.
+    // FIXME: Complain if there already is a DefinitionData!
+    D->getCanonicalDecl()->DefinitionData = D->DefinitionData;
+    
+    ReadCXXDefinitionData(*D->DefinitionData, Record, Idx);
+    
+    // Note that we have deserialized a definition. Any declarations 
+    // deserialized before this one will be be given the DefinitionData pointer
+    // at the end.
+    Reader.PendingDefinitions.insert(D);
+  } else {
+    // Propagate DefinitionData pointer from the canonical declaration.
+    D->DefinitionData = D->getCanonicalDecl()->DefinitionData;    
+  }
 
   enum CXXRecKind {
     CXXRecNotTemplate = 0, CXXRecTemplate, CXXRecMemberSpecialization
@@ -1463,41 +1463,26 @@ ASTDeclReader::VisitDeclContext(DeclContext *DC) {
 template <typename T>
 ASTDeclReader::RedeclarableResult 
 ASTDeclReader::VisitRedeclarable(Redeclarable<T> *D) {
-  enum RedeclKind { FirstDeclaration = 0, FirstInFile, PointsToPrevious };
-  RedeclKind Kind = (RedeclKind)Record[Idx++];
+  DeclID FirstDeclID = ReadDeclID(Record, Idx);
   
-  DeclID FirstDeclID = 0;
-  switch (Kind) {
-  case FirstDeclaration:
+  // 0 indicates that this declaration was the only declaration of its entity,
+  // and is used for space optimization.
+  if (FirstDeclID == 0)
     FirstDeclID = ThisDeclID;
-    break;
-    
-  case FirstInFile:
-  case PointsToPrevious: {
-    FirstDeclID = ReadDeclID(Record, Idx);
-    DeclID PrevDeclID = ReadDeclID(Record, Idx);
-    
-    T *FirstDecl = cast_or_null<T>(Reader.GetDecl(FirstDeclID));
-    
+  
+  T *FirstDecl = cast_or_null<T>(Reader.GetDecl(FirstDeclID));
+  if (FirstDecl != D) {
     // We delay loading of the redeclaration chain to avoid deeply nested calls.
     // We temporarily set the first (canonical) declaration as the previous one
     // which is the one that matters and mark the real previous DeclID to be
     // loaded & attached later on.
     D->RedeclLink = typename Redeclarable<T>::PreviousDeclLink(FirstDecl);
-    
-    if (Kind == PointsToPrevious) {
-      // Make a note that we need to wire up this declaration to its
-      // previous declaration, later. We don't need to do this for the first
-      // declaration in any given module file, because those will be wired 
-      // together later.
-      Reader.PendingPreviousDecls.push_back(std::make_pair(static_cast<T*>(D),
-                                                           PrevDeclID));
-    }
-    break;
-  }
-  }
-
-  // The result structure takes care of note that we need to load the 
+  }    
+  
+  // Note that this declaration has been deserialized.
+  Reader.RedeclsDeserialized.insert(static_cast<T *>(D));
+                             
+  // The result structure takes care to note that we need to load the 
   // other declaration chains for this ID.
   return RedeclarableResult(Reader, FirstDeclID);
 }
@@ -1551,7 +1536,7 @@ void ASTDeclReader::mergeRedeclarable(Redeclarable<T> *D,
             Merged.push_back(Redecl.getFirstID());
           
           // If ExistingCanon did not come from a module file, introduce the
-          // first declaration that *does* come from a module file is in the 
+          // first declaration that *does* come from a module file to the 
           // set of pending declaration chains, so that we merge this 
           // declaration.
           if (!ExistingCanon->isFromASTFile() &&
@@ -2140,19 +2125,32 @@ namespace {
   class RedeclChainVisitor {
     ASTReader &Reader;
     SmallVectorImpl<DeclID> &SearchDecls;
+    llvm::SmallPtrSet<Decl *, 16> &Deserialized;
     GlobalDeclID CanonID;
-    llvm::SmallVector<std::pair<Decl *, Decl *>, 4> Chains;
+    llvm::SmallVector<Decl *, 4> Chain;
     
   public:
     RedeclChainVisitor(ASTReader &Reader, SmallVectorImpl<DeclID> &SearchDecls,
+                       llvm::SmallPtrSet<Decl *, 16> &Deserialized,
                        GlobalDeclID CanonID)
-      : Reader(Reader), SearchDecls(SearchDecls), CanonID(CanonID) { }
+      : Reader(Reader), SearchDecls(SearchDecls), Deserialized(Deserialized),
+        CanonID(CanonID) { }
     
     static bool visit(ModuleFile &M, bool Preorder, void *UserData) {
       if (Preorder)
         return false;
       
       return static_cast<RedeclChainVisitor *>(UserData)->visit(M);
+    }
+    
+    void addToChain(Decl *D) {
+      if (!D)
+        return;
+      
+      if (Deserialized.count(D)) {
+        Deserialized.erase(D);
+        Chain.push_back(D);
+      }
     }
     
     void searchForID(ModuleFile &M, GlobalDeclID GlobalID) {
@@ -2165,10 +2163,10 @@ namespace {
       // Perform a binary search to find the local redeclarations for this
       // declaration (if any).
       const LocalRedeclarationsInfo *Result
-        = std::lower_bound(M.RedeclarationsInfo,
-                           M.RedeclarationsInfo + M.LocalNumRedeclarationsInfos, 
+        = std::lower_bound(M.RedeclarationsMap,
+                           M.RedeclarationsMap + M.LocalNumRedeclarationsInMap, 
                            ID, CompareLocalRedeclarationsInfoToID());
-      if (Result == M.RedeclarationsInfo + M.LocalNumRedeclarationsInfos ||
+      if (Result == M.RedeclarationsMap + M.LocalNumRedeclarationsInMap ||
           Result->FirstID != ID) {
         // If we have a previously-canonical singleton declaration that was 
         // merged into another redeclaration chain, create a trivial chain
@@ -2177,21 +2175,18 @@ namespace {
         if (GlobalID != CanonID && 
             GlobalID - NUM_PREDEF_DECL_IDS >= M.BaseDeclID && 
             GlobalID - NUM_PREDEF_DECL_IDS < M.BaseDeclID + M.LocalNumDecls) {
-          if (Decl *D = Reader.GetDecl(GlobalID))
-            Chains.push_back(std::make_pair(D, D));
+          addToChain(Reader.GetDecl(GlobalID));
         }
         
         return;
       }
       
       // Dig out the starting/ending declarations.
-      Decl *FirstLocalDecl = Reader.GetLocalDecl(M, Result->FirstLocalID);
-      Decl *LastLocalDecl = Reader.GetLocalDecl(M, Result->LastLocalID);
-      if (!FirstLocalDecl || !LastLocalDecl)
-        return;
-      
-      // Append this redeclaration chain to the list.
-      Chains.push_back(std::make_pair(FirstLocalDecl, LastLocalDecl));
+      unsigned Offset = Result->Offset;
+      unsigned N = M.RedeclarationChains[Offset];
+      M.RedeclarationChains[Offset++] = 0; // Don't try to deserialize again
+      for (unsigned I = 0; I != N; ++I)
+        addToChain(Reader.GetLocalDecl(M, M.RedeclarationChains[Offset++]));
     }
     
     bool visit(ModuleFile &M) {
@@ -2201,12 +2196,8 @@ namespace {
       return false;
     }
     
-    ArrayRef<std::pair<Decl *, Decl *> > getChains() const {
-      return Chains;
-    }
-    
-    void addParsed(Decl *FirstParsedDecl, Decl *LastParsedDecl) {
-      Chains.push_back(std::make_pair(FirstParsedDecl, LastParsedDecl));
+    ArrayRef<Decl *> getChain() const {
+      return Chain;
     }
   };
 }
@@ -2226,45 +2217,26 @@ void ASTReader::loadPendingDeclChain(serialization::GlobalDeclID ID) {
   if (MergedPos != MergedDecls.end())
     SearchDecls.append(MergedPos->second.begin(), MergedPos->second.end());  
   
-  // Build up the list of redeclaration chains.
-  RedeclChainVisitor Visitor(*this, SearchDecls, CanonID);
+  // Build up the list of redeclarations.
+  RedeclChainVisitor Visitor(*this, SearchDecls, RedeclsDeserialized, CanonID);
   ModuleMgr.visitDepthFirst(&RedeclChainVisitor::visit, &Visitor);
   
   // Retrieve the chains.
-  ArrayRef<std::pair<Decl *, Decl *> > Chains = Visitor.getChains();
-  if (Chains.empty())
+  ArrayRef<Decl *> Chain = Visitor.getChain();
+  if (Chain.empty())
     return;
     
-  // Capture all of the parsed declarations and put them at the end.
+  // Hook up the chains.
   Decl *MostRecent = CanonDecl->getMostRecentDecl();
-  Decl *FirstParsed = MostRecent;
-  if (CanonDecl != MostRecent && !MostRecent->isFromASTFile()) {
-    Decl *Current = MostRecent;
-    while (Decl *Prev = Current->getPreviousDecl()) {
-      if (Prev == CanonDecl)
-        break;
-      
-      if (Prev->isFromASTFile()) {
-        Current = Prev;
-        continue;
-      }
-            
-      // Chain all of the parsed declarations together.
-      ASTDeclReader::attachPreviousDecl(FirstParsed, Prev);
-      FirstParsed = Prev;
-      Current = Prev;
-    }
+  for (unsigned I = 0, N = Chain.size(); I != N; ++I) {
+    if (Chain[I] == CanonDecl)
+      continue;
     
-    Visitor.addParsed(FirstParsed, MostRecent);
+    ASTDeclReader::attachPreviousDecl(Chain[I], MostRecent);
+    MostRecent = Chain[I];
   }
-
-  // Hook up the separate chains.
-  Chains = Visitor.getChains();
-  if (Chains[0].first != CanonDecl)
-    ASTDeclReader::attachPreviousDecl(Chains[0].first, CanonDecl);
-  for (unsigned I = 1, N = Chains.size(); I != N; ++I)
-    ASTDeclReader::attachPreviousDecl(Chains[I].first, Chains[I-1].second);    
-  ASTDeclReader::attachLatestDecl(CanonDecl, Chains.back().second);
+  
+  ASTDeclReader::attachLatestDecl(CanonDecl, MostRecent);  
 }
 
 namespace {
@@ -2398,15 +2370,6 @@ void ASTDeclReader::UpdateDecl(Decl *D, ModuleFile &ModuleFile,
   unsigned Idx = 0;
   while (Idx < Record.size()) {
     switch ((DeclUpdateKind)Record[Idx++]) {
-    case UPD_CXX_SET_DEFINITIONDATA: {
-      CXXRecordDecl *RD = cast<CXXRecordDecl>(D);
-      CXXRecordDecl *DefinitionDecl
-        = Reader.ReadDeclAs<CXXRecordDecl>(ModuleFile, Record, Idx);
-      assert(!RD->DefinitionData && "DefinitionData is already set!");
-      InitializeCXXDefinitionData(RD, DefinitionDecl, Record, Idx);
-      break;
-    }
-
     case UPD_CXX_ADDED_IMPLICIT_MEMBER:
       cast<CXXRecordDecl>(D)->addedMember(Reader.ReadDecl(ModuleFile, Record, Idx));
       break;
@@ -2436,24 +2399,6 @@ void ASTDeclReader::UpdateDecl(Decl *D, ModuleFile &ModuleFile,
       cast<VarDecl>(D)->getMemberSpecializationInfo()->setPointOfInstantiation(
           Reader.ReadSourceLocation(ModuleFile, Record, Idx));
       break;
-    
-    case UPD_OBJC_SET_CLASS_DEFINITIONDATA: {
-      ObjCInterfaceDecl *ID = cast<ObjCInterfaceDecl>(D);
-      ObjCInterfaceDecl *Def
-        = Reader.ReadDeclAs<ObjCInterfaceDecl>(ModuleFile, Record, Idx);
-      if (Def->Data)
-        ID->Data = Def->Data;
-      break;
-    }
-
-    case UPD_OBJC_SET_PROTOCOL_DEFINITIONDATA: {
-      ObjCProtocolDecl *ID = cast<ObjCProtocolDecl>(D);
-      ObjCProtocolDecl *Def
-        = Reader.ReadDeclAs<ObjCProtocolDecl>(ModuleFile, Record, Idx);
-      if (Def->Data)
-        ID->Data = Def->Data;
-      break;
-    }
     }
   }
 }
