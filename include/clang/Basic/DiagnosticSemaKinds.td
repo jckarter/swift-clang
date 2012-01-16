@@ -1557,6 +1557,18 @@ def err_invalid_collection_element : Error<
 def err_box_literal_collection : Error<
   "%select{string|character|boolean|numeric}0 literal must be prefixed by '@' "
   "in a collection">;
+
+let CategoryName = "Cocoa API Issue" in {
+def warn_objc_redundant_literal_use : Warning<
+  "using %0 with a literal is redundant">, InGroup<ObjCRedundantLiteralUse>;
+def warn_objc_legacy_literal_creation : Warning<
+  "using legacy creation method %0 instead of modern literal syntax">,
+  InGroup<ObjCLegacyLiteralConstruction>, DefaultIgnore;
+def warn_objc_legacy_container_subscript : Warning<
+  "using legacy subscript method %0 instead of modern subscript syntax">,
+  InGroup<ObjCLegacyContainerSubscript>, DefaultIgnore;
+}
+
 def err_only_annotate_after_access_spec : Error<
   "access specifier can only have annotation attributes">;
 def err_attribute_section_invalid_for_target : Error<

@@ -50,6 +50,10 @@ public:
   /// insertion hint.
   CharSourceRange RemoveRange;
 
+  /// \brief Code in the specific range that should be inserted in the insertion
+  /// location.
+  CharSourceRange InsertFromRange;
+
   /// \brief The actual code to insert at the insertion location, as a
   /// string.
   std::string CodeToInsert;
@@ -70,6 +74,17 @@ public:
     Hint.RemoveRange =
       CharSourceRange(SourceRange(InsertionLoc, InsertionLoc), false);
     Hint.CodeToInsert = Code;
+    return Hint;
+  }
+  
+  /// \brief Create a code modification hint that inserts the given
+  /// code from \arg FromRange at a specific location.
+  static FixItHint CreateInsertionFromRange(SourceLocation InsertionLoc,
+                                            CharSourceRange FromRange) {
+    FixItHint Hint;
+    Hint.RemoveRange =
+      CharSourceRange(SourceRange(InsertionLoc, InsertionLoc), false);
+    Hint.InsertFromRange = FromRange;
     return Hint;
   }
 
