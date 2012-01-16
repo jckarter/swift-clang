@@ -782,7 +782,7 @@ void ASTWriter::WriteBlockInfoBlock() {
   RECORD(IMPORTS);
   RECORD(REFERENCED_SELECTOR_POOL);
   RECORD(TU_UPDATE_LEXICAL);
-  RECORD(LOCAL_REDECLARATIONS);
+  RECORD(LOCAL_REDECLARATIONS_MAP);
   RECORD(SEMA_DECL_REFS);
   RECORD(WEAK_UNDECLARED_IDENTIFIERS);
   RECORD(PENDING_IMPLICIT_INSTANTIATIONS);
@@ -805,7 +805,9 @@ void ASTWriter::WriteBlockInfoBlock() {
   RECORD(OBJC_CHAINED_CATEGORIES);
   RECORD(FILE_SORTED_DECLS);
   RECORD(IMPORTED_MODULES);
-  
+  RECORD(MERGED_DECLARATIONS);
+  RECORD(LOCAL_REDECLARATIONS);
+
   // SourceManager Block.
   BLOCK(SOURCE_MANAGER_BLOCK);
   RECORD(SM_SLOC_FILE_ENTRY);
@@ -2910,6 +2912,73 @@ void ASTWriter::WriteOpenCLExtensions(Sema &SemaRef) {
   Stream.EmitRecord(OPENCL_EXTENSIONS, Record);
 }
 
+void ASTWriter::WriteRedeclarations() {
+  RecordData LocalRedeclChains;
+  SmallVector<serialization::LocalRedeclarationsInfo, 2> LocalRedeclsMap;
+
+  for (unsigned I = 0, N = Redeclarations.size(); I != N; ++I) {
+    Decl *First = Redeclarations[I];
+    assert(First->getPreviousDecl() == 0 && "Not the first declaration?");
+    
+    Decl *MostRecent = First->getMostRecentDecl();
+    
+    // If we only have a single declaration, there is no point in storing
+    // a redeclaration chain.
+    if (First == MostRecent)
+      continue;
+    
+    unsigned Offset = LocalRedeclChains.size();
+    unsigned Size = 0;
+    LocalRedeclChains.push_back(0); // Placeholder for the size.
+    
+    // Collect the set of local redeclarations of this declaration.
+    for (Decl *Prev = MostRecent; Prev != First; 
+         Prev = Prev->getPreviousDecl()) { 
+      if (!Prev->isFromASTFile()) {
+        AddDeclRef(Prev, LocalRedeclChains);
+        ++Size;
+      }
+    }
+    LocalRedeclChains[Offset] = Size;
+    
+    // Reverse the set of local redeclarations, so that we store them in
+    // order (since we found them in reverse order).
+    std::reverse(LocalRedeclChains.end() - Size, LocalRedeclChains.end());
+    
+    // Add the mapping from the first ID to the set of local declarations.
+    LocalRedeclarationsInfo Info = { getDeclID(First), Offset };
+    LocalRedeclsMap.push_back(Info);
+    
+    assert(N == Redeclarations.size() && 
+           "Deserialized a declaration we shouldn't have");
+  }
+  
+  if (LocalRedeclChains.empty())
+    return;
+  
+  // Sort the local redeclarations map by the first declaration ID,
+  // since the reader will be performing binary searches on this information.
+  llvm::array_pod_sort(LocalRedeclsMap.begin(), LocalRedeclsMap.end());
+  
+  // Emit the local redeclarations map.
+  using namespace llvm;
+  llvm::BitCodeAbbrev *Abbrev = new BitCodeAbbrev();
+  Abbrev->Add(BitCodeAbbrevOp(LOCAL_REDECLARATIONS_MAP));
+  Abbrev->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::VBR, 6)); // # of entries
+  Abbrev->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::Blob));
+  unsigned AbbrevID = Stream.EmitAbbrev(Abbrev);
+  
+  RecordData Record;
+  Record.push_back(LOCAL_REDECLARATIONS_MAP);
+  Record.push_back(LocalRedeclsMap.size());
+  Stream.EmitRecordWithBlob(AbbrevID, Record, 
+    reinterpret_cast<char*>(LocalRedeclsMap.data()),
+    LocalRedeclsMap.size() * sizeof(LocalRedeclarationsInfo));
+
+  // Emit the redeclaration chains.
+  Stream.EmitRecord(LOCAL_REDECLARATIONS, LocalRedeclChains);
+}
+
 void ASTWriter::WriteMergedDecls() {
   if (!Chain || Chain->MergedDecls.empty())
     return;
@@ -3428,25 +3497,7 @@ void ASTWriter::WriteASTCore(Sema &SemaRef, MemorizeStatCalls *StatCalls,
   WriteDeclReplacementsBlock();
   WriteChainedObjCCategories();
   WriteMergedDecls();
-  
-  if (!LocalRedeclarations.empty()) {
-    // Sort the local redeclarations info by the first declaration ID,
-    // since the reader will be perforing binary searches on this information.
-    llvm::array_pod_sort(LocalRedeclarations.begin(),LocalRedeclarations.end());
-    
-    llvm::BitCodeAbbrev *Abbrev = new BitCodeAbbrev();
-    Abbrev->Add(BitCodeAbbrevOp(LOCAL_REDECLARATIONS));
-    Abbrev->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::VBR, 6)); // # of entries
-    Abbrev->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::Blob));
-    unsigned AbbrevID = Stream.EmitAbbrev(Abbrev);
-
-    Record.clear();
-    Record.push_back(LOCAL_REDECLARATIONS);
-    Record.push_back(LocalRedeclarations.size());
-    Stream.EmitRecordWithBlob(AbbrevID, Record, 
-      reinterpret_cast<char*>(LocalRedeclarations.data()),
-      LocalRedeclarations.size() * sizeof(LocalRedeclarationsInfo));
-  }
+  WriteRedeclarations();
   
   // Some simple statistics
   Record.clear();
@@ -3472,12 +3523,9 @@ void ASTWriter::ResolveDeclUpdatesBlocks() {
     unsigned Idx = 0, N = URec.size();
     while (Idx < N) {
       switch ((DeclUpdateKind)URec[Idx++]) {
-      case UPD_CXX_SET_DEFINITIONDATA:
       case UPD_CXX_ADDED_IMPLICIT_MEMBER:
       case UPD_CXX_ADDED_TEMPLATE_SPECIALIZATION:
       case UPD_CXX_ADDED_ANONYMOUS_NAMESPACE:
-      case UPD_OBJC_SET_CLASS_DEFINITIONDATA:
-      case UPD_OBJC_SET_PROTOCOL_DEFINITIONDATA:
         URec[Idx] = GetDeclRef(reinterpret_cast<Decl *>(URec[Idx]));
         ++Idx;
         break;
@@ -4318,22 +4366,6 @@ void ASTWriter::CompletedTagDefinition(const TagDecl *D) {
       // have created a new definition decl instead ?
       RewriteDecl(RD);
     }
-
-    for (CXXRecordDecl::redecl_iterator
-           I = RD->redecls_begin(), E = RD->redecls_end(); I != E; ++I) {
-      CXXRecordDecl *Redecl = cast<CXXRecordDecl>(*I);
-      if (Redecl == RD)
-        continue;
-
-      // We are interested when a PCH decl is modified.
-      if (Redecl->isFromASTFile()) {
-        UpdateRecord &Record = DeclUpdates[Redecl];
-        Record.push_back(UPD_CXX_SET_DEFINITIONDATA);
-        assert(Redecl->DefinitionData);
-        assert(Redecl->DefinitionData->Definition == D);
-        Record.push_back(reinterpret_cast<uint64_t>(D)); // the DefinitionDecl
-      }
-    }
   }
 }
 void ASTWriter::AddedVisibleDecl(const DeclContext *DC, const Decl *D) {
@@ -4427,45 +4459,6 @@ void ASTWriter::AddedObjCCategoryToInterface(const ObjCCategoryDecl *CatD,
   LocalChainedObjCCategories.push_back(Data);
 }
 
-void ASTWriter::CompletedObjCForwardRef(const ObjCContainerDecl *D) {
-  assert(!WritingAST && "Already writing the AST!");
-
-  if (const ObjCInterfaceDecl *ID = dyn_cast<ObjCInterfaceDecl>(D)) {
-    for (ObjCInterfaceDecl::redecl_iterator I = ID->redecls_begin(), 
-                                            E = ID->redecls_end(); 
-         I != E; ++I) {
-      if (*I == ID)
-        continue;
-      
-      // We are interested when a PCH decl is modified.
-      if (I->isFromASTFile()) {
-        UpdateRecord &Record = DeclUpdates[*I];
-        Record.push_back(UPD_OBJC_SET_CLASS_DEFINITIONDATA);
-        assert((*I)->hasDefinition());
-        assert((*I)->getDefinition() == D);
-        Record.push_back(reinterpret_cast<uint64_t>(D)); // the DefinitionDecl
-      }
-    }
-  }
-
-  if (const ObjCProtocolDecl *PD = dyn_cast<ObjCProtocolDecl>(D)) {
-    for (ObjCProtocolDecl::redecl_iterator I = PD->redecls_begin(), 
-                                           E = PD->redecls_end(); 
-         I != E; ++I) {
-      if (*I == PD)
-        continue;
-      
-      // We are interested when a PCH decl is modified.
-      if (I->isFromASTFile()) {
-        UpdateRecord &Record = DeclUpdates[*I];
-        Record.push_back(UPD_OBJC_SET_PROTOCOL_DEFINITIONDATA);
-        assert((*I)->hasDefinition());
-        assert((*I)->getDefinition() == D);
-        Record.push_back(reinterpret_cast<uint64_t>(D)); // the DefinitionDecl
-      }
-    }
-  }
-}
 
 void ASTWriter::AddedObjCPropertyInClassExtension(const ObjCPropertyDecl *Prop,
                                           const ObjCPropertyDecl *OrigProp,
