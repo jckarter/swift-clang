@@ -1173,7 +1173,13 @@ public:
                                ModuleIdPath Path);
 
   /// \brief Retrieve a suitable printing policy.
-  PrintingPolicy getPrintingPolicy() const;
+  PrintingPolicy getPrintingPolicy() const {
+    return getPrintingPolicy(Context, PP);
+  }
+
+  /// \brief Retrieve a suitable printing policy.
+  static PrintingPolicy getPrintingPolicy(const ASTContext &Ctx,
+                                          const Preprocessor &PP);
 
   /// Scope actions.
   void ActOnPopScope(SourceLocation Loc, Scope *S);
@@ -4787,7 +4793,12 @@ public:
                                   unsigned Depth,
                                   SmallVectorImpl<bool> &Used);
   void MarkDeducedTemplateParameters(FunctionTemplateDecl *FunctionTemplate,
-                                     SmallVectorImpl<bool> &Deduced);
+                                     SmallVectorImpl<bool> &Deduced) {
+    return MarkDeducedTemplateParameters(Context, FunctionTemplate, Deduced);
+  }
+  static void MarkDeducedTemplateParameters(ASTContext &Ctx,
+                                         FunctionTemplateDecl *FunctionTemplate,
+                                         SmallVectorImpl<bool> &Deduced);
 
   //===--------------------------------------------------------------------===//
   // C++ Template Instantiation
@@ -6381,7 +6392,7 @@ private:
                                  bool isPrintf);
 
   void CheckMemaccessArguments(const CallExpr *Call,
-                               FunctionDecl::MemoryFunctionKind CMF,
+                               unsigned BId,
                                IdentifierInfo *FnName);
 
   void CheckStrlcpycatArguments(const CallExpr *Call,
