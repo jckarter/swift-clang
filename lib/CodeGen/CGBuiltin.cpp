@@ -1193,7 +1193,6 @@ Value *CodeGenFunction::EmitTargetBuiltinExpr(unsigned BuiltinID,
 static llvm::VectorType *GetNeonType(LLVMContext &C, NeonTypeFlags TypeFlags) {
   int IsQuad = TypeFlags.isQuad();
   switch (TypeFlags.getEltType()) {
-  default: break;
   case NeonTypeFlags::Int8:
   case NeonTypeFlags::Poly8:
     return llvm::VectorType::get(llvm::Type::getInt8Ty(C), 8 << IsQuad);
@@ -1209,8 +1208,8 @@ static llvm::VectorType *GetNeonType(LLVMContext &C, NeonTypeFlags TypeFlags) {
     return llvm::VectorType::get(llvm::Type::getFloatTy(C), 2 << IsQuad);
   case NeonTypeFlags::Float64:
     return llvm::VectorType::get(llvm::Type::getDoubleTy(C), 1 << IsQuad);
-  };
-  return 0;
+  }
+  llvm_unreachable("Invalid NeonTypeFlags element type!");
 }
 
 Value *CodeGenFunction::EmitNeonSplat(Value *V, Constant *C) {

@@ -174,9 +174,6 @@ public:
     case GenArm64SIMDTest:
       NeonEmitter(Records, true).runTests(OS);
       break;
-    default:
-      assert(1 && "Invalid Action");
-      return true;
     }
 
     return false;
