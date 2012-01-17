@@ -1060,6 +1060,9 @@ void StmtPrinter::VisitPseudoObjectExpr(PseudoObjectExpr *Node) {
 void StmtPrinter::VisitAtomicExpr(AtomicExpr *Node) {
   const char *Name = 0;
   switch (Node->getOp()) {
+    case AtomicExpr::Init:
+      Name = "__atomic_init(";
+      break;
     case AtomicExpr::Load:
       Name = "__atomic_load(";
       break;
@@ -1102,7 +1105,8 @@ void StmtPrinter::VisitAtomicExpr(AtomicExpr *Node) {
     PrintExpr(Node->getVal2());
     OS << ", ";
   }
-  PrintExpr(Node->getOrder());
+  if (Node->getOp() != AtomicExpr::Init)
+    PrintExpr(Node->getOrder());
   if (Node->isCmpXChg()) {
     OS << ", ";
     PrintExpr(Node->getOrderFail());
