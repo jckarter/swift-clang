@@ -1193,8 +1193,6 @@ CGObjCGNU::GenerateMessageSend(CodeGenFunction &CGF,
   // functions.  These are not supported on all platforms (or all runtimes on a
   // given platform), so we 
   switch (CGM.getCodeGenOpts().getObjCDispatchMethod()) {
-    default:
-      llvm_unreachable("Invalid dispatch method!");
     case CodeGenOptions::Legacy:
       imp = LookupIMP(CGF, Receiver, cmd, node);
       break;

@@ -3572,7 +3572,7 @@ QualType ASTContext::getFloatingTypeOfSizeWithinDomain(QualType Size,
   FloatingRank EltRank = getFloatingRank(Size);
   if (Domain->isComplexType()) {
     switch (EltRank) {
-    default: llvm_unreachable("getFloatingRank(): illegal value for rank");
+    case HalfRank: llvm_unreachable("Complex half is not supported");
     case FloatRank:      return FloatComplexTy;
     case DoubleRank:     return DoubleComplexTy;
     case LongDoubleRank: return LongDoubleComplexTy;
@@ -3581,11 +3581,12 @@ QualType ASTContext::getFloatingTypeOfSizeWithinDomain(QualType Size,
 
   assert(Domain->isRealFloatingType() && "Unknown domain!");
   switch (EltRank) {
-  default: llvm_unreachable("getFloatingRank(): illegal value for rank");
+  case HalfRank: llvm_unreachable("Half ranks are not valid here");
   case FloatRank:      return FloatTy;
   case DoubleRank:     return DoubleTy;
   case LongDoubleRank: return LongDoubleTy;
   }
+  llvm_unreachable("getFloatingRank(): illegal value for rank");
 }
 
 /// getFloatingTypeOrder - Compare the rank of the two specified floating
