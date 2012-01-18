@@ -112,15 +112,16 @@ struct RefParamPartialOrderingComparison {
 
 
 static Sema::TemplateDeductionResult
-DeduceTemplateArguments(Sema &S,
-                        TemplateParameterList *TemplateParams,
-                        QualType Param,
-                        QualType Arg,
-                        TemplateDeductionInfo &Info,
-                        SmallVectorImpl<DeducedTemplateArgument> &Deduced,
-                        unsigned TDF,
-                        bool PartialOrdering = false,
-                      SmallVectorImpl<RefParamPartialOrderingComparison> *
+DeduceTemplateArgumentsByTypeMatch(Sema &S,
+                                   TemplateParameterList *TemplateParams,
+                                   QualType Param,
+                                   QualType Arg,
+                                   TemplateDeductionInfo &Info,
+                                   SmallVectorImpl<DeducedTemplateArgument> &
+                                                      Deduced,
+                                   unsigned TDF,
+                                   bool PartialOrdering = false,
+                            SmallVectorImpl<RefParamPartialOrderingComparison> *
                                                       RefParamComparisons = 0);
 
 static Sema::TemplateDeductionResult
@@ -705,12 +706,11 @@ DeduceTemplateArguments(Sema &S,
       }
 
       if (Sema::TemplateDeductionResult Result
-            = DeduceTemplateArguments(S, TemplateParams,
-                                      Params[ParamIdx],
-                                      Args[ArgIdx],
-                                      Info, Deduced, TDF,
-                                      PartialOrdering,
-                                      RefParamComparisons))
+            = DeduceTemplateArgumentsByTypeMatch(S, TemplateParams,
+                                                 Params[ParamIdx], Args[ArgIdx],
+                                                 Info, Deduced, TDF,
+                                                 PartialOrdering,
+                                                 RefParamComparisons))
         return Result;
 
       ++ArgIdx;
@@ -766,9 +766,10 @@ DeduceTemplateArguments(Sema &S,
 
       // Deduce template arguments from the pattern.
       if (Sema::TemplateDeductionResult Result
-            = DeduceTemplateArguments(S, TemplateParams, Pattern, Args[ArgIdx],
-                                      Info, Deduced, TDF, PartialOrdering,
-                                      RefParamComparisons))
+            = DeduceTemplateArgumentsByTypeMatch(S, TemplateParams, Pattern,
+                                                 Args[ArgIdx], Info, Deduced,
+                                                 TDF, PartialOrdering,
+                                                 RefParamComparisons))
         return Result;
 
       // Capture the deduced template arguments for each parameter pack expanded
@@ -858,14 +859,15 @@ static bool hasInconsistentOrSupersetQualifiersOf(QualType ParamType,
 /// "success" result means that template argument deduction has not yet failed,
 /// but it may still fail, later, for other reasons.
 static Sema::TemplateDeductionResult
-DeduceTemplateArguments(Sema &S,
-                        TemplateParameterList *TemplateParams,
-                        QualType ParamIn, QualType ArgIn,
-                        TemplateDeductionInfo &Info,
-                     SmallVectorImpl<DeducedTemplateArgument> &Deduced,
-                        unsigned TDF,
-                        bool PartialOrdering,
-    SmallVectorImpl<RefParamPartialOrderingComparison> *RefParamComparisons) {
+DeduceTemplateArgumentsByTypeMatch(Sema &S,
+                                   TemplateParameterList *TemplateParams,
+                                   QualType ParamIn, QualType ArgIn,
+                                   TemplateDeductionInfo &Info,
+                            SmallVectorImpl<DeducedTemplateArgument> &Deduced,
+                                   unsigned TDF,
+                                   bool PartialOrdering,
+                            SmallVectorImpl<RefParamPartialOrderingComparison> *
+                                                          RefParamComparisons) {
   // We only want to look at the canonical types, since typedefs and
   // sugar are not part of template argument deduction.
   QualType Param = S.Context.getCanonicalType(ParamIn);
@@ -1110,17 +1112,17 @@ DeduceTemplateArguments(Sema &S,
     //     _Complex T   [placeholder extension]  
     case Type::Complex:
       if (const ComplexType *ComplexArg = Arg->getAs<ComplexType>())
-        return DeduceTemplateArguments(S, TemplateParams, 
+        return DeduceTemplateArgumentsByTypeMatch(S, TemplateParams, 
                                     cast<ComplexType>(Param)->getElementType(), 
-                                       ComplexArg->getElementType(),
-                                       Info, Deduced, TDF);
+                                    ComplexArg->getElementType(),
+                                    Info, Deduced, TDF);
 
       return Sema::TDK_NonDeducedMismatch;
 
     //     _Atomic T   [extension]
     case Type::Atomic:
       if (const AtomicType *AtomicArg = Arg->getAs<AtomicType>())
-        return DeduceTemplateArguments(S, TemplateParams,
+        return DeduceTemplateArgumentsByTypeMatch(S, TemplateParams,
                                        cast<AtomicType>(Param)->getValueType(),
                                        AtomicArg->getValueType(),
                                        Info, Deduced, TDF);
@@ -1140,8 +1142,8 @@ DeduceTemplateArguments(Sema &S,
       }
 
       unsigned SubTDF = TDF & (TDF_IgnoreQualifiers | TDF_DerivedClass);
-      return DeduceTemplateArguments(S, TemplateParams,
-                                   cast<PointerType>(Param)->getPointeeType(),
+      return DeduceTemplateArgumentsByTypeMatch(S, TemplateParams,
+                                     cast<PointerType>(Param)->getPointeeType(),
                                      PointeeType,
                                      Info, Deduced, SubTDF);
     }
@@ -1152,10 +1154,9 @@ DeduceTemplateArguments(Sema &S,
       if (!ReferenceArg)
         return Sema::TDK_NonDeducedMismatch;
 
-      return DeduceTemplateArguments(S, TemplateParams,
+      return DeduceTemplateArgumentsByTypeMatch(S, TemplateParams,
                            cast<LValueReferenceType>(Param)->getPointeeType(),
-                                     ReferenceArg->getPointeeType(),
-                                     Info, Deduced, 0);
+                           ReferenceArg->getPointeeType(), Info, Deduced, 0);
     }
 
     //     T && [C++0x]
@@ -1164,10 +1165,10 @@ DeduceTemplateArguments(Sema &S,
       if (!ReferenceArg)
         return Sema::TDK_NonDeducedMismatch;
 
-      return DeduceTemplateArguments(S, TemplateParams,
-                           cast<RValueReferenceType>(Param)->getPointeeType(),
-                                     ReferenceArg->getPointeeType(),
-                                     Info, Deduced, 0);
+      return DeduceTemplateArgumentsByTypeMatch(S, TemplateParams,
+                             cast<RValueReferenceType>(Param)->getPointeeType(),
+                             ReferenceArg->getPointeeType(),
+                             Info, Deduced, 0);
     }
 
     //     T [] (implied, but not stated explicitly)
@@ -1178,10 +1179,10 @@ DeduceTemplateArguments(Sema &S,
         return Sema::TDK_NonDeducedMismatch;
 
       unsigned SubTDF = TDF & TDF_IgnoreQualifiers;
-      return DeduceTemplateArguments(S, TemplateParams,
-                     S.Context.getAsIncompleteArrayType(Param)->getElementType(),
-                                     IncompleteArrayArg->getElementType(),
-                                     Info, Deduced, SubTDF);
+      return DeduceTemplateArgumentsByTypeMatch(S, TemplateParams,
+                    S.Context.getAsIncompleteArrayType(Param)->getElementType(),
+                    IncompleteArrayArg->getElementType(),
+                    Info, Deduced, SubTDF);
     }
 
     //     T [integer-constant]
@@ -1197,10 +1198,10 @@ DeduceTemplateArguments(Sema &S,
         return Sema::TDK_NonDeducedMismatch;
 
       unsigned SubTDF = TDF & TDF_IgnoreQualifiers;
-      return DeduceTemplateArguments(S, TemplateParams,
-                                     ConstantArrayParm->getElementType(),
-                                     ConstantArrayArg->getElementType(),
-                                     Info, Deduced, SubTDF);
+      return DeduceTemplateArgumentsByTypeMatch(S, TemplateParams,
+                                           ConstantArrayParm->getElementType(),
+                                           ConstantArrayArg->getElementType(),
+                                           Info, Deduced, SubTDF);
     }
 
     //     type [i]
@@ -1215,10 +1216,10 @@ DeduceTemplateArguments(Sema &S,
       const DependentSizedArrayType *DependentArrayParm
         = S.Context.getAsDependentSizedArrayType(Param);
       if (Sema::TemplateDeductionResult Result
-            = DeduceTemplateArguments(S, TemplateParams,
-                                      DependentArrayParm->getElementType(),
-                                      ArrayArg->getElementType(),
-                                      Info, Deduced, SubTDF))
+            = DeduceTemplateArgumentsByTypeMatch(S, TemplateParams,
+                                          DependentArrayParm->getElementType(),
+                                          ArrayArg->getElementType(),
+                                          Info, Deduced, SubTDF))
         return Result;
 
       // Determine the array bound is something we can deduce.
@@ -1272,10 +1273,10 @@ DeduceTemplateArguments(Sema &S,
 
       // Check return types.
       if (Sema::TemplateDeductionResult Result
-            = DeduceTemplateArguments(S, TemplateParams,
-                                      FunctionProtoParam->getResultType(),
-                                      FunctionProtoArg->getResultType(),
-                                      Info, Deduced, 0))
+            = DeduceTemplateArgumentsByTypeMatch(S, TemplateParams,
+                                            FunctionProtoParam->getResultType(),
+                                            FunctionProtoArg->getResultType(),
+                                            Info, Deduced, 0))
         return Result;
 
       return DeduceTemplateArguments(S, TemplateParams,
@@ -1399,17 +1400,17 @@ DeduceTemplateArguments(Sema &S,
         return Sema::TDK_NonDeducedMismatch;
 
       if (Sema::TemplateDeductionResult Result
-            = DeduceTemplateArguments(S, TemplateParams,
-                                      MemPtrParam->getPointeeType(),
-                                      MemPtrArg->getPointeeType(),
-                                      Info, Deduced,
-                                      TDF & TDF_IgnoreQualifiers))
+            = DeduceTemplateArgumentsByTypeMatch(S, TemplateParams,
+                                                 MemPtrParam->getPointeeType(),
+                                                 MemPtrArg->getPointeeType(),
+                                                 Info, Deduced,
+                                                 TDF & TDF_IgnoreQualifiers))
         return Result;
 
-      return DeduceTemplateArguments(S, TemplateParams,
-                                     QualType(MemPtrParam->getClass(), 0),
-                                     QualType(MemPtrArg->getClass(), 0),
-                                     Info, Deduced, 0);
+      return DeduceTemplateArgumentsByTypeMatch(S, TemplateParams,
+                                           QualType(MemPtrParam->getClass(), 0),
+                                           QualType(MemPtrArg->getClass(), 0),
+                                           Info, Deduced, 0);
     }
 
     //     (clang extension)
@@ -1424,10 +1425,10 @@ DeduceTemplateArguments(Sema &S,
       if (!BlockPtrArg)
         return Sema::TDK_NonDeducedMismatch;
 
-      return DeduceTemplateArguments(S, TemplateParams,
-                                     BlockPtrParam->getPointeeType(),
-                                     BlockPtrArg->getPointeeType(), Info,
-                                     Deduced, 0);
+      return DeduceTemplateArgumentsByTypeMatch(S, TemplateParams,
+                                                BlockPtrParam->getPointeeType(),
+                                                BlockPtrArg->getPointeeType(),
+                                                Info, Deduced, 0);
     }
 
     //     (clang extension)
@@ -1441,11 +1442,10 @@ DeduceTemplateArguments(Sema &S,
           return Sema::TDK_NonDeducedMismatch;
         
         // Perform deduction on the element types.
-        return DeduceTemplateArguments(S, TemplateParams,
-                                       VectorParam->getElementType(),
-                                       VectorArg->getElementType(),
-                                       Info, Deduced,
-                                       TDF);
+        return DeduceTemplateArgumentsByTypeMatch(S, TemplateParams,
+                                                  VectorParam->getElementType(),
+                                                  VectorArg->getElementType(),
+                                                  Info, Deduced, TDF);
       }
       
       if (const DependentSizedExtVectorType *VectorArg 
@@ -1455,11 +1455,10 @@ DeduceTemplateArguments(Sema &S,
         // ordering.
 
         // Perform deduction on the element types.
-        return DeduceTemplateArguments(S, TemplateParams,
-                                       VectorParam->getElementType(),
-                                       VectorArg->getElementType(),
-                                       Info, Deduced,
-                                       TDF);
+        return DeduceTemplateArgumentsByTypeMatch(S, TemplateParams,
+                                                  VectorParam->getElementType(),
+                                                  VectorArg->getElementType(),
+                                                  Info, Deduced, TDF);
       }
       
       return Sema::TDK_NonDeducedMismatch;
@@ -1475,11 +1474,10 @@ DeduceTemplateArguments(Sema &S,
       if (const ExtVectorType *VectorArg = dyn_cast<ExtVectorType>(Arg)) {
         // Perform deduction on the element types.
         if (Sema::TemplateDeductionResult Result
-              = DeduceTemplateArguments(S, TemplateParams,
-                                        VectorParam->getElementType(),
-                                        VectorArg->getElementType(),
-                                        Info, Deduced,
-                                        TDF))
+              = DeduceTemplateArgumentsByTypeMatch(S, TemplateParams,
+                                                  VectorParam->getElementType(),
+                                                   VectorArg->getElementType(),
+                                                   Info, Deduced, TDF))
           return Result;
         
         // Perform deduction on the vector size, if we can.
@@ -1498,11 +1496,10 @@ DeduceTemplateArguments(Sema &S,
                                 = dyn_cast<DependentSizedExtVectorType>(Arg)) {
         // Perform deduction on the element types.
         if (Sema::TemplateDeductionResult Result
-            = DeduceTemplateArguments(S, TemplateParams,
-                                      VectorParam->getElementType(),
-                                      VectorArg->getElementType(),
-                                      Info, Deduced,
-                                      TDF))
+            = DeduceTemplateArgumentsByTypeMatch(S, TemplateParams,
+                                                 VectorParam->getElementType(),
+                                                 VectorArg->getElementType(),
+                                                 Info, Deduced, TDF))
           return Result;
         
         // Perform deduction on the vector size, if we can.
@@ -1553,8 +1550,10 @@ DeduceTemplateArguments(Sema &S,
 
   case TemplateArgument::Type:
     if (Arg.getKind() == TemplateArgument::Type)
-      return DeduceTemplateArguments(S, TemplateParams, Param.getAsType(),
-                                     Arg.getAsType(), Info, Deduced, 0);
+      return DeduceTemplateArgumentsByTypeMatch(S, TemplateParams,
+                                                Param.getAsType(),
+                                                Arg.getAsType(),
+                                                Info, Deduced, 0);
     Info.FirstArg = Param;
     Info.SecondArg = Arg;
     return Sema::TDK_NonDeducedMismatch;
@@ -2737,9 +2736,8 @@ ResolveOverloadForDeduction(Sema &S, TemplateParameterList *TemplateParams,
       Deduced(TemplateParams->size());
     TemplateDeductionInfo Info(S.Context, Ovl->getNameLoc());
     Sema::TemplateDeductionResult Result
-      = DeduceTemplateArguments(S, TemplateParams,
-                                ParamType, ArgType,
-                                Info, Deduced, TDF);
+      = DeduceTemplateArgumentsByTypeMatch(S, TemplateParams, ParamType,
+                                           ArgType, Info, Deduced, TDF);
     if (Result) continue;
     if (!Match.isNull()) return QualType();
     Match = ArgType;
@@ -2973,15 +2971,37 @@ Sema::DeduceTemplateArguments(FunctionTemplateDecl *FunctionTemplate,
       if (!hasDeducibleTemplateParameters(*this, FunctionTemplate, ParamType))
         continue;
 
+      // If the argument is an initializer list ...
+      if (InitListExpr *ILE = dyn_cast<InitListExpr>(Arg)) {
+        // ... then the parameter is an undeduced context, unless the parameter
+        // type is (reference to cv) std::initializer_list<P'>, in which case
+        // deduction is done for each element of the initializer list, and the
+        // result is the deduced type if it's the same for all elements.
+        QualType X;
+        // Removing references was already done.
+        if (!isStdInitializerList(ParamType, &X))
+          continue;
+
+        for (unsigned i = 0, e = ILE->getNumInits(); i < e; ++i) {
+          if (TemplateDeductionResult Result =
+                DeduceTemplateArgumentsByTypeMatch(*this, TemplateParams, X,
+                                                   ILE->getInit(i)->getType(),
+                                                   Info, Deduced, TDF))
+            return Result;
+        }
+        // Don't track the argument type, since an initializer list has none.
+        continue;
+      }
+
       // Keep track of the argument type and corresponding parameter index,
       // so we can check for compatibility between the deduced A and A.
       OriginalCallArgs.push_back(OriginalCallArg(OrigParamType, ArgIdx-1, 
                                                  ArgType));
 
       if (TemplateDeductionResult Result
-            = ::DeduceTemplateArguments(*this, TemplateParams,
-                                        ParamType, ArgType, Info, Deduced,
-                                        TDF))
+            = DeduceTemplateArgumentsByTypeMatch(*this, TemplateParams,
+                                                 ParamType, ArgType,
+                                                 Info, Deduced, TDF))
         return Result;
 
       continue;
@@ -3044,17 +3064,35 @@ Sema::DeduceTemplateArguments(FunctionTemplateDecl *FunctionTemplate,
         break;
       }
 
-      // Keep track of the argument type and corresponding argument index,
-      // so we can check for compatibility between the deduced A and A.
-      if (hasDeducibleTemplateParameters(*this, FunctionTemplate, ParamType))
-        OriginalCallArgs.push_back(OriginalCallArg(OrigParamType, ArgIdx, 
-                                                   ArgType));
+      // As above, initializer lists need special handling.
+      if (InitListExpr *ILE = dyn_cast<InitListExpr>(Arg)) {
+        QualType X;
+        if (!isStdInitializerList(ParamType, &X)) {
+          ++ArgIdx;
+          break;
+        }
 
-      if (TemplateDeductionResult Result
-          = ::DeduceTemplateArguments(*this, TemplateParams,
-                                      ParamType, ArgType, Info, Deduced,
-                                      TDF))
-        return Result;
+        for (unsigned i = 0, e = ILE->getNumInits(); i < e; ++i) {
+          if (TemplateDeductionResult Result =
+                DeduceTemplateArgumentsByTypeMatch(*this, TemplateParams, X,
+                                                   ILE->getInit(i)->getType(),
+                                                   Info, Deduced, TDF))
+            return Result;
+        }
+      } else {
+
+        // Keep track of the argument type and corresponding argument index,
+        // so we can check for compatibility between the deduced A and A.
+        if (hasDeducibleTemplateParameters(*this, FunctionTemplate, ParamType))
+          OriginalCallArgs.push_back(OriginalCallArg(OrigParamType, ArgIdx, 
+                                                     ArgType));
+
+        if (TemplateDeductionResult Result
+            = DeduceTemplateArgumentsByTypeMatch(*this, TemplateParams,
+                                                 ParamType, ArgType, Info,
+                                                 Deduced, TDF))
+          return Result;
+      }
 
       // Capture the deduced template arguments for each parameter pack expanded
       // by this pack expansion, add them to the list of arguments we've deduced
@@ -3144,7 +3182,7 @@ Sema::DeduceTemplateArguments(FunctionTemplateDecl *FunctionTemplate,
   if (!ArgFunctionType.isNull()) {
     // Deduce template arguments from the function type.
     if (TemplateDeductionResult Result
-          = ::DeduceTemplateArguments(*this, TemplateParams,
+          = DeduceTemplateArgumentsByTypeMatch(*this, TemplateParams,
                                       FunctionType, ArgFunctionType, Info,
                                       Deduced, TDF_TopLevelParameterTypeList))
       return Result;
@@ -3255,8 +3293,8 @@ Sema::DeduceTemplateArguments(FunctionTemplateDecl *FunctionTemplate,
       (P->isMemberPointerType() && A->isMemberPointerType()))
     TDF |= TDF_IgnoreQualifiers;
   if (TemplateDeductionResult Result
-        = ::DeduceTemplateArguments(*this, TemplateParams,
-                                    P, A, Info, Deduced, TDF))
+        = DeduceTemplateArgumentsByTypeMatch(*this, TemplateParams,
+                                             P, A, Info, Deduced, TDF))
     return Result;
 
   // Finish template argument deduction.
@@ -3384,20 +3422,36 @@ Sema::DeduceAutoType(TypeSourceInfo *Type, Expr *&Init,
     return false;
 
   TemplateDeductionInfo Info(Context, Loc);
-  if (::DeduceTemplateArguments(*this, &TemplateParams,
-                                FuncParam, InitType, Info, Deduced,
-                                TDF))
-    return false;
+
+  InitListExpr * InitList = dyn_cast<InitListExpr>(Init);
+  if (InitList) {
+    for (unsigned i = 0, e = InitList->getNumInits(); i < e; ++i) {
+      if (DeduceTemplateArgumentsByTypeMatch(*this, &TemplateParams, FuncParam,
+                                             InitList->getInit(i)->getType(),
+                                             Info, Deduced, TDF))
+        return false;
+    }
+  } else {
+    if (DeduceTemplateArgumentsByTypeMatch(*this, &TemplateParams, FuncParam,
+                                           InitType, Info, Deduced, TDF))
+      return false;
+  }
 
   QualType DeducedType = Deduced[0].getAsType();
   if (DeducedType.isNull())
     return false;
-  
+
+  if (InitList) {
+    DeducedType = BuildStdInitializerList(DeducedType, Loc);
+    if (DeducedType.isNull())
+      return false;
+  }
+
   Result = SubstituteAutoTransform(*this, DeducedType).TransformType(Type);
-  
+
   // Check that the deduced argument type is compatible with the original
   // argument type per C++ [temp.deduct.call]p4.
-  if (Result &&
+  if (!InitList && Result &&
       CheckOriginalCallArgDeduction(*this, 
                                     Sema::OriginalCallArg(FuncParam,0,InitType),
                                     Result->getType())) {
@@ -3406,6 +3460,17 @@ Sema::DeduceAutoType(TypeSourceInfo *Type, Expr *&Init,
   }
 
   return true;
+}
+
+void Sema::DiagnoseAutoDeductionFailure(VarDecl *VDecl, Expr *Init) {
+  if (isa<InitListExpr>(Init))
+    Diag(VDecl->getLocation(),
+         diag::err_auto_var_deduction_failure_from_init_list)
+      << VDecl->getDeclName() << VDecl->getType() << Init->getSourceRange();
+  else
+    Diag(VDecl->getLocation(), diag::err_auto_var_deduction_failure)
+      << VDecl->getDeclName() << VDecl->getType() << Init->getType()
+      << Init->getSourceRange();
 }
 
 static void
@@ -3521,19 +3586,23 @@ static bool isAtLeastAsSpecializedAs(Sema &S,
   case TPOC_Conversion:
     //   - In the context of a call to a conversion operator, the return types
     //     of the conversion function templates are used.
-    if (DeduceTemplateArguments(S, TemplateParams, Proto2->getResultType(),
-                                Proto1->getResultType(), Info, Deduced,
-                                TDF_None, /*PartialOrdering=*/true,
-                                RefParamComparisons))
+    if (DeduceTemplateArgumentsByTypeMatch(S, TemplateParams,
+                                           Proto2->getResultType(),
+                                           Proto1->getResultType(),
+                                           Info, Deduced, TDF_None,
+                                           /*PartialOrdering=*/true,
+                                           RefParamComparisons))
       return false;
     break;
 
   case TPOC_Other:
     //   - In other contexts (14.6.6.2) the function template's function type
     //     is used.
-    if (DeduceTemplateArguments(S, TemplateParams, FD2->getType(),
-                                FD1->getType(), Info, Deduced, TDF_None,
-                                /*PartialOrdering=*/true, RefParamComparisons))
+    if (DeduceTemplateArgumentsByTypeMatch(S, TemplateParams,
+                                           FD2->getType(), FD1->getType(),
+                                           Info, Deduced, TDF_None,
+                                           /*PartialOrdering=*/true,
+                                           RefParamComparisons))
       return false;
     break;
   }
@@ -3900,7 +3969,8 @@ Sema::getMoreSpecializedPartialSpecialization(
 
   // Determine whether PS1 is at least as specialized as PS2
   Deduced.resize(PS2->getTemplateParameters()->size());
-  bool Better1 = !::DeduceTemplateArguments(*this, PS2->getTemplateParameters(),
+  bool Better1 = !DeduceTemplateArgumentsByTypeMatch(*this,
+                                            PS2->getTemplateParameters(),
                                             PT2, PT1, Info, Deduced, TDF_None,
                                             /*PartialOrdering=*/true,
                                             /*RefParamComparisons=*/0);
@@ -3915,7 +3985,8 @@ Sema::getMoreSpecializedPartialSpecialization(
   // Determine whether PS2 is at least as specialized as PS1
   Deduced.clear();
   Deduced.resize(PS1->getTemplateParameters()->size());
-  bool Better2 = !::DeduceTemplateArguments(*this, PS1->getTemplateParameters(),
+  bool Better2 = !DeduceTemplateArgumentsByTypeMatch(*this,
+                                            PS1->getTemplateParameters(),
                                             PT1, PT2, Info, Deduced, TDF_None,
                                             /*PartialOrdering=*/true,
                                             /*RefParamComparisons=*/0);

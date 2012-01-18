@@ -12,8 +12,10 @@
 //===----------------------------------------------------------------------===//
 
 #include "clang/Sema/SemaInternal.h"
+#include "clang/Sema/DelayedDiagnostic.h"
 #include "clang/Sema/Initialization.h"
 #include "clang/Sema/Lookup.h"
+#include "clang/Sema/ScopeInfo.h"
 #include "clang/Sema/AnalysisBasedWarnings.h"
 #include "clang/AST/ASTContext.h"
 #include "clang/AST/ASTMutationListener.h"
@@ -1485,7 +1487,7 @@ Sema::DecomposeUnqualifiedId(const UnqualifiedId &Id,
 ///
 /// \return false if new lookup candidates were found
 bool Sema::DiagnoseEmptyLookup(Scope *S, CXXScopeSpec &SS, LookupResult &R,
-                               CorrectTypoContext CTC,
+                               CorrectionCandidateCallback &CCC,
                                TemplateArgumentListInfo *ExplicitTemplateArgs,
                                Expr **Args, unsigned NumArgs) {
   DeclarationName Name = R.getLookupName();
@@ -1600,7 +1602,7 @@ bool Sema::DiagnoseEmptyLookup(Scope *S, CXXScopeSpec &SS, LookupResult &R,
   // We didn't find anything, so try to correct for a typo.
   TypoCorrection Corrected;
   if (S && (Corrected = CorrectTypo(R.getLookupNameInfo(), R.getLookupKind(),
-                                    S, &SS, NULL, false, CTC))) {
+                                    S, &SS, &CCC))) {
     std::string CorrectedStr(Corrected.getAsString(getLangOptions()));
     std::string CorrectedQuotedStr(Corrected.getQuoted(getLangOptions()));
     R.setLookupName(Corrected.getCorrection());
@@ -1815,7 +1817,8 @@ ExprResult Sema::ActOnIdExpression(Scope *S,
         return ActOnDependentIdExpression(SS, NameInfo, IsAddressOfOperand,
                                           TemplateArgs);
 
-      if (DiagnoseEmptyLookup(S, SS, R, CTC_Unknown))
+      CorrectionCandidateCallback DefaultValidator;
+      if (DiagnoseEmptyLookup(S, SS, R, DefaultValidator))
         return ExprError();
 
       assert(!R.empty() &&
@@ -2392,13 +2395,11 @@ Sema::BuildDeclarationNameExpr(const CXXScopeSpec &SS,
     case Decl::type:
 #include "clang/AST/DeclNodes.inc"
       llvm_unreachable("invalid value decl kind");
-      return ExprError();
 
     // These shouldn't make it here.
     case Decl::ObjCAtDefsField:
     case Decl::ObjCIvar:
       llvm_unreachable("forming non-member reference to ivar?");
-      return ExprError();
 
     // Enum constants are always r-values and never references.
     // Unresolved using declarations are dependent.
@@ -2519,7 +2520,6 @@ Sema::BuildDeclarationNameExpr(const CXXScopeSpec &SS,
   }
 
   llvm_unreachable("unknown capture result");
-  return ExprError();
 }
 
 ExprResult Sema::ActOnPredefinedExpr(SourceLocation Loc, tok::TokenKind Kind) {
@@ -2569,16 +2569,14 @@ ExprResult Sema::ActOnCharacterConstant(const Token &Tok) {
     return ExprError();
 
   QualType Ty;
-  if (!getLangOptions().CPlusPlus)
-    Ty = Context.IntTy;   // 'x' and L'x' -> int in C.
-  else if (Literal.isWide())
-    Ty = Context.WCharTy; // L'x' -> wchar_t in C++.
+  if (Literal.isWide())
+    Ty = Context.WCharTy; // L'x' -> wchar_t in C and C++.
   else if (Literal.isUTF16())
-    Ty = Context.Char16Ty; // u'x' -> char16_t in C++0x.
+    Ty = Context.Char16Ty; // u'x' -> char16_t in C11 and C++11.
   else if (Literal.isUTF32())
-    Ty = Context.Char32Ty; // U'x' -> char32_t in C++0x.
-  else if (Literal.isMultiChar())
-    Ty = Context.IntTy;   // 'wxyz' -> int in C++.
+    Ty = Context.Char32Ty; // U'x' -> char32_t in C11 and C++11.
+  else if (!getLangOptions().CPlusPlus || Literal.isMultiChar())
+    Ty = Context.IntTy;   // 'x' -> int in C, 'wxyz' -> int in C++.
   else
     Ty = Context.CharTy;  // 'x' -> char in C++
 
@@ -4098,12 +4096,10 @@ CastKind Sema::PrepareScalarCast(ExprResult &Src, QualType DestTy) {
     case Type::STK_ObjCObjectPointer:
       if (SrcKind == Type::STK_ObjCObjectPointer)
         return CK_BitCast;
-      else if (SrcKind == Type::STK_CPointer)
+      if (SrcKind == Type::STK_CPointer)
         return CK_CPointerToObjCPointerCast;
-      else {
-        maybeExtendBlockObject(*this, Src);
-        return CK_BlockPointerToObjCPointerCast;
-      }
+      maybeExtendBlockObject(*this, Src);
+      return CK_BlockPointerToObjCPointerCast;
     case Type::STK_Bool:
       return CK_PointerToBoolean;
     case Type::STK_Integral:
@@ -4114,7 +4110,7 @@ CastKind Sema::PrepareScalarCast(ExprResult &Src, QualType DestTy) {
     case Type::STK_MemberPointer:
       llvm_unreachable("illegal cast from pointer");
     }
-    break;
+    llvm_unreachable("Should have returned before this");
 
   case Type::STK_Bool: // casting from bool is like casting from an integer
   case Type::STK_Integral:
@@ -4145,7 +4141,7 @@ CastKind Sema::PrepareScalarCast(ExprResult &Src, QualType DestTy) {
     case Type::STK_MemberPointer:
       llvm_unreachable("member pointer type in C");
     }
-    break;
+    llvm_unreachable("Should have returned before this");
 
   case Type::STK_Floating:
     switch (DestTy->getScalarTypeKind()) {
@@ -4172,7 +4168,7 @@ CastKind Sema::PrepareScalarCast(ExprResult &Src, QualType DestTy) {
     case Type::STK_MemberPointer:
       llvm_unreachable("member pointer type in C");
     }
-    break;
+    llvm_unreachable("Should have returned before this");
 
   case Type::STK_FloatingComplex:
     switch (DestTy->getScalarTypeKind()) {
@@ -4201,7 +4197,7 @@ CastKind Sema::PrepareScalarCast(ExprResult &Src, QualType DestTy) {
     case Type::STK_MemberPointer:
       llvm_unreachable("member pointer type in C");
     }
-    break;
+    llvm_unreachable("Should have returned before this");
 
   case Type::STK_IntegralComplex:
     switch (DestTy->getScalarTypeKind()) {
@@ -4230,7 +4226,7 @@ CastKind Sema::PrepareScalarCast(ExprResult &Src, QualType DestTy) {
     case Type::STK_MemberPointer:
       llvm_unreachable("member pointer type in C");
     }
-    break;
+    llvm_unreachable("Should have returned before this");
   }
 
   llvm_unreachable("Unhandled scalar cast");
@@ -7209,7 +7205,6 @@ static bool CheckForModifiableLvalue(Expr *E, SourceLocation Loc, Sema &S) {
   case Expr::MLV_ReadonlyProperty:
   case Expr::MLV_NoSetterProperty:
     llvm_unreachable("readonly properties should be processed differently");
-    break;
   case Expr::MLV_InvalidMessageExpression:
     Diag = diag::error_readonly_message_assignment;
     break;
@@ -8171,6 +8166,9 @@ ExprResult Sema::BuildBinOp(Scope *S, SourceLocation OpLoc,
     // being assigned to.
     if (Opc == BO_Assign && pty->getKind() == BuiltinType::Overload) {
       if (LHSExpr->isTypeDependent() || RHSExpr->isTypeDependent())
+        return BuildOverloadedBinOp(*this, S, OpLoc, Opc, LHSExpr, RHSExpr);
+
+      if (LHSExpr->getType()->isOverloadableType())
         return BuildOverloadedBinOp(*this, S, OpLoc, Opc, LHSExpr, RHSExpr);
 
       return CreateBuiltinBinOp(OpLoc, Opc, LHSExpr, RHSExpr);
@@ -9371,6 +9369,39 @@ bool Sema::VerifyIntegerConstantExpression(const Expr *E, llvm::APSInt *Result,
   return false;
 }
 
+void Sema::ExpressionEvaluationContextRecord::Destroy() {
+  delete PotentiallyReferenced;
+  delete SavedDiag;
+  delete SavedRuntimeDiag;
+  delete SavedDelayedDiag;
+  PotentiallyReferenced = 0;
+  SavedDiag = 0;
+  SavedRuntimeDiag = 0;
+  SavedDelayedDiag = 0;
+}
+
+void Sema::ExpressionEvaluationContextRecord::addDiagnostic(
+        SourceLocation Loc, const PartialDiagnostic &PD) {
+  if (!SavedDiag)
+    SavedDiag = new PotentiallyEmittedDiagnostics;
+  SavedDiag->push_back(std::make_pair(Loc, PD));
+}
+
+void Sema::ExpressionEvaluationContextRecord::addRuntimeDiagnostic(
+        const sema::PossiblyUnreachableDiag &PUD) {
+  if (!SavedRuntimeDiag)
+    SavedRuntimeDiag = new PotentiallyEmittedPossiblyUnreachableDiag;
+  SavedRuntimeDiag->push_back(PUD);
+}
+
+void Sema::ExpressionEvaluationContextRecord::addDelayedDiagnostic(
+        const sema::DelayedDiagnostic &DD) {
+  if (!SavedDelayedDiag)
+    SavedDelayedDiag = new PotentiallyEmittedDelayedDiag;
+  SavedDelayedDiag->push_back(DD);
+}
+
+
 void
 Sema::PushExpressionEvaluationContext(ExpressionEvaluationContext NewContext) {
   ExprEvalContexts.push_back(
@@ -9397,13 +9428,31 @@ void Sema::PopExpressionEvaluationContext() {
         MarkDeclarationReferenced(I->first, I->second);
     }
 
-    if (Rec.PotentiallyDiagnosed) {
+    if (Rec.SavedDiag) {
       // Emit any pending diagnostics.
       for (PotentiallyEmittedDiagnostics::iterator
-                I = Rec.PotentiallyDiagnosed->begin(),
-             IEnd = Rec.PotentiallyDiagnosed->end();
+                I = Rec.SavedDiag->begin(),
+             IEnd = Rec.SavedDiag->end();
            I != IEnd; ++I)
         Diag(I->first, I->second);
+    }
+
+    if (Rec.SavedDelayedDiag) {
+      // Emit any pending delayed diagnostics.
+      for (PotentiallyEmittedDelayedDiag::iterator
+                I = Rec.SavedDelayedDiag->begin(),
+             IEnd = Rec.SavedDelayedDiag->end();
+           I != IEnd; ++I)
+        DelayedDiagnostics.add(*I);
+    }
+
+    if (Rec.SavedRuntimeDiag) {
+      // Emit any pending runtime diagnostics.
+      for (PotentiallyEmittedPossiblyUnreachableDiag::iterator
+                I = Rec.SavedRuntimeDiag->begin(),
+             IEnd = Rec.SavedRuntimeDiag->end();
+           I != IEnd; ++I)
+             FunctionScopes.back()->PossiblyUnreachableDiags.push_back(*I);
     }
   }
 
@@ -9770,7 +9819,8 @@ bool Sema::DiagRuntimeBehavior(SourceLocation Loc, const Stmt *Statement,
     return true;
 
   case PotentiallyPotentiallyEvaluated:
-    ExprEvalContexts.back().addDiagnostic(Loc, PD);
+    ExprEvalContexts.back().addRuntimeDiagnostic(
+        sema::PossiblyUnreachableDiag(PD, Loc, Statement));
     break;
   }
 
@@ -9932,7 +9982,6 @@ namespace {
 
     ExprResult VisitStmt(Stmt *S) {
       llvm_unreachable("unexpected statement!");
-      return ExprError();
     }
 
     ExprResult VisitExpr(Expr *E) {
@@ -10025,7 +10074,6 @@ namespace {
 
     ExprResult VisitStmt(Stmt *S) {
       llvm_unreachable("unexpected statement!");
-      return ExprError();
     }
 
     ExprResult VisitExpr(Expr *E) {

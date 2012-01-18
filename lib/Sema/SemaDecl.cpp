@@ -5976,9 +5976,7 @@ void Sema::AddInitializerToDecl(Decl *RealDecl, Expr *Init,
   if (TypeMayContainAuto && VDecl->getType()->getContainedAutoType()) {
     TypeSourceInfo *DeducedType = 0;
     if (!DeduceAutoType(VDecl->getTypeSourceInfo(), Init, DeducedType))
-      Diag(VDecl->getLocation(), diag::err_auto_var_deduction_failure)
-        << VDecl->getDeclName() << VDecl->getType() << Init->getType()
-        << Init->getSourceRange();
+      DiagnoseAutoDeductionFailure(VDecl, Init);
     if (!DeducedType) {
       RealDecl->setInvalidDecl();
       return;
@@ -7872,7 +7870,8 @@ Decl *Sema::ActOnTag(Scope *S, unsigned TagSpec, TagUseKind TUK,
       // Find the context where we'll be declaring the tag.
       // FIXME: We would like to maintain the current DeclContext as the
       // lexical context,
-      while (SearchDC->isRecord() || SearchDC->isTransparentContext())
+      while (SearchDC->isRecord() || SearchDC->isTransparentContext() ||
+             SearchDC->isObjCContainer())
         SearchDC = SearchDC->getParent();
 
       // Find the scope where we'll be declaring the tag.

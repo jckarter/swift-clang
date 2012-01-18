@@ -166,6 +166,7 @@ namespace sema {
   class DelayedDiagnostic;
   class FunctionScopeInfo;
   class LambdaScopeInfo;
+  class PossiblyUnreachableDiag;
   class TemplateDeductionInfo;
 }
 
@@ -489,6 +490,10 @@ public:
   /// standard library.
   LazyDeclPtr StdBadAlloc;
 
+  /// \brief The C++ "std::initializer_list" template, which is defined in
+  /// <initializer_list>.
+  ClassTemplateDecl *StdInitializerList;
+
   /// \brief The C++ "type_info" declaration, which is defined in <typeinfo>.
   RecordDecl *CXXTypeInfoDecl;
 
@@ -551,6 +556,12 @@ public:
   typedef SmallVector<std::pair<SourceLocation, PartialDiagnostic>, 10>
     PotentiallyEmittedDiagnostics;
 
+  typedef SmallVector<sema::DelayedDiagnostic, 10>
+    PotentiallyEmittedDelayedDiag;
+
+  typedef SmallVector<sema::PossiblyUnreachableDiag, 10>
+    PotentiallyEmittedPossiblyUnreachableDiag;
+
   /// \brief Describes how the expressions currently being parsed are
   /// evaluated at run-time, if at all.
   enum ExpressionEvaluationContext {
@@ -611,16 +622,20 @@ public:
     /// evaluated.
     PotentiallyReferencedDecls *PotentiallyReferenced;
 
-    /// \brief The set of diagnostics to emit should this potentially
-    /// potentially-evaluated context become evaluated.
-    PotentiallyEmittedDiagnostics *PotentiallyDiagnosed;
+    // There are three kinds of diagnostics we care about in
+    // PotentiallyPotentiallyEvaluated contexts: regular Diag diagnostics,
+    // DelayedDiagnostics, and DiagRuntimeBehavior diagnostics.  
+    PotentiallyEmittedDiagnostics *SavedDiag;
+    PotentiallyEmittedDelayedDiag *SavedDelayedDiag;
+    PotentiallyEmittedPossiblyUnreachableDiag *SavedRuntimeDiag;
 
     ExpressionEvaluationContextRecord(ExpressionEvaluationContext Context,
                                       unsigned NumCleanupObjects,
                                       bool ParentNeedsCleanups)
       : Context(Context), ParentNeedsCleanups(ParentNeedsCleanups),
         NumCleanupObjects(NumCleanupObjects),
-        PotentiallyReferenced(0), PotentiallyDiagnosed(0) { }
+        PotentiallyReferenced(0), SavedDiag(0), SavedDelayedDiag(0), 
+        SavedRuntimeDiag(0) { }
 
     void addReferencedDecl(SourceLocation Loc, Decl *Decl) {
       if (!PotentiallyReferenced)
@@ -628,18 +643,13 @@ public:
       PotentiallyReferenced->push_back(std::make_pair(Loc, Decl));
     }
 
-    void addDiagnostic(SourceLocation Loc, const PartialDiagnostic &PD) {
-      if (!PotentiallyDiagnosed)
-        PotentiallyDiagnosed = new PotentiallyEmittedDiagnostics;
-      PotentiallyDiagnosed->push_back(std::make_pair(Loc, PD));
-    }
+    void addDiagnostic(SourceLocation Loc, const PartialDiagnostic &PD);
 
-    void Destroy() {
-      delete PotentiallyReferenced;
-      delete PotentiallyDiagnosed;
-      PotentiallyReferenced = 0;
-      PotentiallyDiagnosed = 0;
-    }
+    void addRuntimeDiagnostic(const sema::PossiblyUnreachableDiag &PUD);
+
+    void addDelayedDiagnostic(const sema::DelayedDiagnostic &DD);
+
+    void Destroy();
   };
 
   /// A stack of expression evaluation contexts.
@@ -2404,7 +2414,7 @@ public:
                               const TemplateArgumentListInfo *&TemplateArgs);
 
   bool DiagnoseEmptyLookup(Scope *S, CXXScopeSpec &SS, LookupResult &R,
-                           CorrectTypoContext CTC = CTC_Unknown,
+                           CorrectionCandidateCallback &CCC,
                            TemplateArgumentListInfo *ExplicitTemplateArgs = 0,
                            Expr **Args = 0, unsigned NumArgs = 0);
 
@@ -2763,6 +2773,20 @@ public:
   NamespaceDecl *getOrCreateStdNamespace();
 
   CXXRecordDecl *getStdBadAlloc() const;
+
+  /// \brief Tests whether Ty is an instance of std::initializer_list and, if
+  /// it is and Element is not NULL, assigns the element type to Element.
+  bool isStdInitializerList(QualType Ty, QualType *Element);
+
+  /// \brief Looks for the std::initializer_list template and instantiates it
+  /// with Element, or emits an error if it's not found.
+  ///
+  /// \returns The instantiated template, or null on error.
+  QualType BuildStdInitializerList(QualType Element, SourceLocation Loc);
+
+  /// \brief Determine whether Ctor is an initializer-list constructor, as
+  /// defined in [dcl.init.list]p2.
+  bool isInitListConstructor(const CXXConstructorDecl *Ctor);
 
   Decl *ActOnUsingDirective(Scope *CurScope,
                             SourceLocation UsingLoc,
@@ -4765,6 +4789,7 @@ public:
 
   bool DeduceAutoType(TypeSourceInfo *AutoType, Expr *&Initializer,
                       TypeSourceInfo *&Result);
+  void DiagnoseAutoDeductionFailure(VarDecl *VDecl, Expr *Init);
 
   FunctionTemplateDecl *getMoreSpecializedTemplate(FunctionTemplateDecl *FT1,
                                                    FunctionTemplateDecl *FT2,
@@ -4912,7 +4937,7 @@ public:
 
       }
 
-      return true;
+      llvm_unreachable("Invalid InstantiationKind!");
     }
 
     friend bool operator!=(const ActiveTemplateInstantiation &X,
@@ -6347,9 +6372,12 @@ private:
                         bool AllowOnePastEnd=true, bool IndexNegated=false);
   void CheckArrayAccess(const Expr *E);
   bool CheckFunctionCall(FunctionDecl *FDecl, CallExpr *TheCall);
+  bool CheckObjCMethodCall(ObjCMethodDecl *Method, SourceLocation loc, 
+                           Expr **Args, unsigned NumArgs);
   bool CheckBlockCall(NamedDecl *NDecl, CallExpr *TheCall);
 
-  bool CheckablePrintfAttr(const FormatAttr *Format, CallExpr *TheCall);
+  bool CheckablePrintfAttr(const FormatAttr *Format, Expr **Args, 
+                           unsigned NumArgs, bool IsCXXMemberCall);
   bool CheckObjCString(Expr *Arg);
 
   ExprResult CheckBuiltinFunctionCall(unsigned BuiltinID, CallExpr *TheCall);
@@ -6373,13 +6401,13 @@ private:
   bool SemaBuiltinConstantArg(CallExpr *TheCall, int ArgNum,
                               llvm::APSInt &Result);
 
-  bool SemaCheckStringLiteral(const Expr *E, const CallExpr *TheCall,
+  bool SemaCheckStringLiteral(const Expr *E, Expr **Args, unsigned NumArgs,
                               bool HasVAListArg, unsigned format_idx,
                               unsigned firstDataArg, bool isPrintf,
                               bool inFunctionCall = true);
 
   void CheckFormatString(const StringLiteral *FExpr, const Expr *OrigFormatExpr,
-                         const CallExpr *TheCall, bool HasVAListArg,
+                         Expr **Args, unsigned NumArgs, bool HasVAListArg,
                          unsigned format_idx, unsigned firstDataArg,
                          bool isPrintf, bool inFunctionCall);
 
@@ -6387,9 +6415,14 @@ private:
                              const Expr * const *ExprArgs,
                              SourceLocation CallSiteLoc);
 
-  void CheckPrintfScanfArguments(const CallExpr *TheCall, bool HasVAListArg,
-                                 unsigned format_idx, unsigned firstDataArg,
-                                 bool isPrintf);
+  void CheckFormatArguments(const FormatAttr *Format, CallExpr *TheCall);
+  void CheckFormatArguments(const FormatAttr *Format, Expr **Args,
+                            unsigned NumArgs, bool IsCXXMember,
+                            SourceLocation Loc, SourceRange Range);
+  void CheckPrintfScanfArguments(Expr **Args, unsigned NumArgs,
+                                 bool HasVAListArg, unsigned format_idx,
+                                 unsigned firstDataArg, bool isPrintf,
+                                 SourceLocation Loc, SourceRange range);
 
   void CheckMemaccessArguments(const CallExpr *Call,
                                unsigned BId,

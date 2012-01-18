@@ -883,8 +883,9 @@ namespace {
       unsigned BuiltinID = FD->getBuiltinID();
       if (!BuiltinID)
         return true;
-      const char *BuiltinName = BI.GetName(BuiltinID) + strlen("__builtin_");
-      if (Name == BuiltinName) {
+      StringRef BuiltinName = BI.GetName(BuiltinID);
+      if (BuiltinName.startswith("__builtin_") &&
+          Name == BuiltinName.slice(strlen("__builtin_"), StringRef::npos)) {
         Result = true;
         return false;
       }
@@ -900,7 +901,7 @@ bool
 CodeGenModule::isTriviallyRecursive(const FunctionDecl *FD) {
   StringRef Name;
   if (getCXXABI().getMangleContext().shouldMangleDeclName(FD)) {
-    // asm labels are a special king of mangling we have to support.
+    // asm labels are a special kind of mangling we have to support.
     AsmLabelAttr *Attr = FD->getAttr<AsmLabelAttr>();
     if (!Attr)
       return false;
@@ -2119,6 +2120,7 @@ CodeGenModule::GetAddrOfConstantStringFromLiteral(const StringLiteral *S) {
                              !Features.WritableStrings,
                              llvm::GlobalValue::PrivateLinkage,
                              C,".str");
+
   GV->setAlignment(Align.getQuantity());
   GV->setUnnamedAddr(true);
   

@@ -888,7 +888,10 @@ public:
     : DarwinTargetInfo<PPC32TargetInfo>(triple) {
     HasAlignMac68kSupport = true;
     BoolWidth = BoolAlign = 32; //XXX support -mone-byte-bool?
+    LongLongAlign = 32;
     SuitableAlign = 128;
+    DescriptionString = "E-p:32:32:32-i1:8:8-i8:8:8-i16:16:16-i32:32:32-"
+                        "i64:32:64-f32:32:32-f64:64:64-v128:128:128-n32";
   }
   virtual const char *getVAListDeclaration() const {
     return "typedef char* __builtin_va_list;";
@@ -2103,7 +2106,6 @@ X86TargetInfo::validateAsmConstraint(const char *&Name,
             // x86_64 instructions.
     return true;
   }
-  return false;
 }
 
 
@@ -3397,7 +3399,6 @@ public:
       Info.setAllowsRegister();
       return true;
     }
-    return false;
   }
 
   virtual const char *getClobbers() const {

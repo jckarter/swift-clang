@@ -239,7 +239,7 @@ void ASTTypeWriter::VisitAutoType(const AutoType *T) {
 
 void ASTTypeWriter::VisitTagType(const TagType *T) {
   Record.push_back(T->isDependentType());
-  Writer.AddDeclRef(T->getDecl(), Record);
+  Writer.AddDeclRef(T->getDecl()->getCanonicalDecl(), Record);
   assert(!T->isBeingDefined() &&
          "Cannot serialize in the middle of a type definition");
 }
@@ -369,7 +369,7 @@ void ASTTypeWriter::VisitInjectedClassNameType(const InjectedClassNameType *T) {
 }
 
 void ASTTypeWriter::VisitObjCInterfaceType(const ObjCInterfaceType *T) {
-  Writer.AddDeclRef(T->getDecl(), Record);
+  Writer.AddDeclRef(T->getDecl()->getCanonicalDecl(), Record);
   Code = TYPE_OBJC_INTERFACE;
 }
 
@@ -3138,6 +3138,8 @@ void ASTWriter::WriteASTCore(Sema &SemaRef, MemorizeStatCalls *StatCalls,
     DeclIDs[Context.ObjCSelDecl] = PREDEF_DECL_OBJC_SEL_ID;
   if (Context.ObjCClassDecl)
     DeclIDs[Context.ObjCClassDecl] = PREDEF_DECL_OBJC_CLASS_ID;
+  if (Context.ObjCProtocolClassDecl)
+    DeclIDs[Context.ObjCProtocolClassDecl] = PREDEF_DECL_OBJC_PROTOCOL_ID;
   if (Context.Int128Decl)
     DeclIDs[Context.Int128Decl] = PREDEF_DECL_INT_128_ID;
   if (Context.UInt128Decl)
@@ -3317,7 +3319,6 @@ void ASTWriter::WriteASTCore(Sema &SemaRef, MemorizeStatCalls *StatCalls,
   // Form the record of special types.
   RecordData SpecialTypes;
   AddTypeRef(Context.getBuiltinVaListType(), SpecialTypes);
-  AddTypeRef(Context.ObjCProtoType, SpecialTypes);
   AddTypeRef(Context.getRawCFConstantStringType(), SpecialTypes);
   AddTypeRef(Context.getFILEType(), SpecialTypes);
   AddTypeRef(Context.getjmp_bufType(), SpecialTypes);
