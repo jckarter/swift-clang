@@ -77,19 +77,6 @@ void Sema::ActOnTranslationUnitScope(Scope *S) {
   PushDeclContext(S, Context.getTranslationUnitDecl());
 
   VAListTagName = PP.getIdentifierInfo("__va_list_tag");
-
-  if (PP.getLangOptions().ObjC1) {
-    // Synthesize "@class Protocol;
-    if (Context.getObjCProtoType().isNull()) {
-      ObjCInterfaceDecl *ProtocolDecl =
-        ObjCInterfaceDecl::Create(Context, CurContext, SourceLocation(),
-                                  &Context.Idents.get("Protocol"),
-                                  /*PrevDecl=*/0,
-                                  SourceLocation(), true);
-      Context.setObjCProtoType(Context.getObjCInterfaceType(ProtocolDecl));
-      PushOnScopeChains(ProtocolDecl, TUScope, false);
-    }  
-  }
 }
 
 Sema::Sema(Preprocessor &pp, ASTContext &ctxt, ASTConsumer &consumer,
@@ -102,7 +89,7 @@ Sema::Sema(Preprocessor &pp, ASTContext &ctxt, ASTConsumer &consumer,
     CurContext(0), OriginalLexicalContext(0),
     PackContext(0), MSStructPragmaOn(false), VisContext(0),
     ExprNeedsCleanups(false), LateTemplateParser(0), OpaqueParser(0),
-    IdResolver(pp), CXXTypeInfoDecl(0), MSVCGuidDecl(0),
+    IdResolver(pp), StdInitializerList(0), CXXTypeInfoDecl(0), MSVCGuidDecl(0),
     GlobalNewDeleteDeclared(false), 
     ObjCShouldCallSuperDealloc(false),
     ObjCShouldCallSuperFinalize(false),
@@ -174,6 +161,11 @@ void Sema::Initialize() {
     DeclarationName Class = &Context.Idents.get("Class");
     if (IdResolver.begin(Class) == IdResolver.end())
       PushOnScopeChains(Context.getObjCClassDecl(), TUScope);
+
+    // Create the built-in forward declaratino for 'Protocol'.
+    DeclarationName Protocol = &Context.Idents.get("Protocol");
+    if (IdResolver.begin(Protocol) == IdResolver.end())
+      PushOnScopeChains(Context.getObjCProtocolDecl(), TUScope);
   }
 }
 

@@ -4786,8 +4786,8 @@ Sema::CheckMicrosoftIfExistsSymbol(Scope *S,
   case LookupResult::NotFoundInCurrentInstantiation:
     return IER_Dependent;
   }
-  
-  return IER_DoesNotExist;  
+
+  llvm_unreachable("Invalid LookupResult Kind!");
 }
 
 Sema::IfExistsResult 
@@ -4880,9 +4880,11 @@ void Sema::ActOnStartOfLambdaDefinition(LambdaIntroducer &Intro,
     LookupParsedName(R, CurScope, &ScopeSpec);
     if (R.isAmbiguous())
       continue;
-    if (R.empty())
-      if (DiagnoseEmptyLookup(CurScope, ScopeSpec, R, CTC_Unknown))
+    if (R.empty()) {
+      DeclFilterCCC<VarDecl> Validator;
+      if (DiagnoseEmptyLookup(CurScope, ScopeSpec, R, Validator))
         continue;
+    }
 
     VarDecl *Var = R.getAsSingle<VarDecl>();
     if (!Var) {
