@@ -258,6 +258,163 @@ isPointerConversionToVoidPointer(ASTContext& Context) const {
   return false;
 }
 
+/// Skip any implicit casts which could be either part of a narrowing conversion
+/// or after one in an implicit conversion.
+static const Expr *IgnoreNarrowingConversion(const Expr *Converted) {
+  while (const ImplicitCastExpr *ICE = dyn_cast<ImplicitCastExpr>(Converted)) {
+    switch (ICE->getCastKind()) {
+    case CK_NoOp:
+    case CK_IntegralCast:
+    case CK_IntegralToBoolean:
+    case CK_IntegralToFloating:
+    case CK_FloatingToIntegral:
+    case CK_FloatingToBoolean:
+    case CK_FloatingCast:
+      Converted = ICE->getSubExpr();
+      continue;
+
+    default:
+      return Converted;
+    }
+  }
+
+  return Converted;
+}
+
+/// Check if this standard conversion sequence represents a narrowing
+/// conversion, according to C++11 [dcl.init.list]p7.
+///
+/// \param Ctx  The AST context.
+/// \param Converted  The result of applying this standard conversion sequence.
+/// \param ConstantValue  If this is an NK_Constant_Narrowing conversion, the
+///        value of the expression prior to the narrowing conversion.
+NarrowingKind
+StandardConversionSequence::isNarrowing(ASTContext &Ctx, const Expr *Converted,
+                                        APValue &ConstantValue) const {
+  assert(Ctx.getLangOptions().CPlusPlus && "narrowing check outside C++");
+
+  // C++11 [dcl.init.list]p7:
+  //   A narrowing conversion is an implicit conversion ...
+  QualType FromType = getToType(0);
+  QualType ToType = getToType(1);
+  switch (Second) {
+  // -- from a floating-point type to an integer type, or
+  //
+  // -- from an integer type or unscoped enumeration type to a floating-point
+  //    type, except where the source is a constant expression and the actual
+  //    value after conversion will fit into the target type and will produce
+  //    the original value when converted back to the original type, or
+  case ICK_Floating_Integral:
+    if (FromType->isRealFloatingType() && ToType->isIntegralType(Ctx)) {
+      return NK_Type_Narrowing;
+    } else if (FromType->isIntegralType(Ctx) && ToType->isRealFloatingType()) {
+      llvm::APSInt IntConstantValue;
+      const Expr *Initializer = IgnoreNarrowingConversion(Converted);
+      if (Initializer &&
+          Initializer->isIntegerConstantExpr(IntConstantValue, Ctx)) {
+        // Convert the integer to the floating type.
+        llvm::APFloat Result(Ctx.getFloatTypeSemantics(ToType));
+        Result.convertFromAPInt(IntConstantValue, IntConstantValue.isSigned(),
+                                llvm::APFloat::rmNearestTiesToEven);
+        // And back.
+        llvm::APSInt ConvertedValue = IntConstantValue;
+        bool ignored;
+        Result.convertToInteger(ConvertedValue,
+                                llvm::APFloat::rmTowardZero, &ignored);
+        // If the resulting value is different, this was a narrowing conversion.
+        if (IntConstantValue != ConvertedValue) {
+          ConstantValue = APValue(IntConstantValue);
+          return NK_Constant_Narrowing;
+        }
+      } else {
+        // Variables are always narrowings.
+        return NK_Variable_Narrowing;
+      }
+    }
+    return NK_Not_Narrowing;
+
+  // -- from long double to double or float, or from double to float, except
+  //    where the source is a constant expression and the actual value after
+  //    conversion is within the range of values that can be represented (even
+  //    if it cannot be represented exactly), or
+  case ICK_Floating_Conversion:
+    if (FromType->isRealFloatingType() && ToType->isRealFloatingType() &&
+        Ctx.getFloatingTypeOrder(FromType, ToType) == 1) {
+      // FromType is larger than ToType.
+      const Expr *Initializer = IgnoreNarrowingConversion(Converted);
+      if (Initializer->isCXX11ConstantExpr(Ctx, &ConstantValue)) {
+        // Constant!
+        assert(ConstantValue.isFloat());
+        llvm::APFloat FloatVal = ConstantValue.getFloat();
+        // Convert the source value into the target type.
+        bool ignored;
+        llvm::APFloat::opStatus ConvertStatus = FloatVal.convert(
+          Ctx.getFloatTypeSemantics(ToType),
+          llvm::APFloat::rmNearestTiesToEven, &ignored);
+        // If there was no overflow, the source value is within the range of
+        // values that can be represented.
+        if (ConvertStatus & llvm::APFloat::opOverflow)
+          return NK_Constant_Narrowing;
+      } else {
+        return NK_Variable_Narrowing;
+      }
+    }
+    return NK_Not_Narrowing;
+
+  // -- from an integer type or unscoped enumeration type to an integer type
+  //    that cannot represent all the values of the original type, except where
+  //    the source is a constant expression and the actual value after
+  //    conversion will fit into the target type and will produce the original
+  //    value when converted back to the original type.
+  case ICK_Boolean_Conversion:  // Bools are integers too.
+    if (!FromType->isIntegralOrUnscopedEnumerationType()) {
+      // Boolean conversions can be from pointers and pointers to members
+      // [conv.bool], and those aren't considered narrowing conversions.
+      return NK_Not_Narrowing;
+    }  // Otherwise, fall through to the integral case.
+  case ICK_Integral_Conversion: {
+    assert(FromType->isIntegralOrUnscopedEnumerationType());
+    assert(ToType->isIntegralOrUnscopedEnumerationType());
+    const bool FromSigned = FromType->isSignedIntegerOrEnumerationType();
+    const unsigned FromWidth = Ctx.getIntWidth(FromType);
+    const bool ToSigned = ToType->isSignedIntegerOrEnumerationType();
+    const unsigned ToWidth = Ctx.getIntWidth(ToType);
+
+    if (FromWidth > ToWidth ||
+        (FromWidth == ToWidth && FromSigned != ToSigned)) {
+      // Not all values of FromType can be represented in ToType.
+      llvm::APSInt InitializerValue;
+      const Expr *Initializer = IgnoreNarrowingConversion(Converted);
+      if (Initializer->isIntegerConstantExpr(InitializerValue, Ctx)) {
+        ConstantValue = APValue(InitializerValue);
+
+        // Add a bit to the InitializerValue so we don't have to worry about
+        // signed vs. unsigned comparisons.
+        InitializerValue = InitializerValue.extend(
+          InitializerValue.getBitWidth() + 1);
+        // Convert the initializer to and from the target width and signed-ness.
+        llvm::APSInt ConvertedValue = InitializerValue;
+        ConvertedValue = ConvertedValue.trunc(ToWidth);
+        ConvertedValue.setIsSigned(ToSigned);
+        ConvertedValue = ConvertedValue.extend(InitializerValue.getBitWidth());
+        ConvertedValue.setIsSigned(InitializerValue.isSigned());
+        // If the result is different, this was a narrowing conversion.
+        if (ConvertedValue != InitializerValue)
+          return NK_Constant_Narrowing;
+      } else {
+        // Variables are always narrowings.
+        return NK_Variable_Narrowing;
+      }
+    }
+    return NK_Not_Narrowing;
+  }
+
+  default:
+    // Other kinds of conversions are not narrowings.
+    return NK_Not_Narrowing;
+  }
+}
+
 /// DebugPrint - Print this standard conversion sequence to standard
 /// error. Useful for debugging overloading issues.
 void StandardConversionSequence::DebugPrint() const {
@@ -2762,7 +2919,8 @@ IsUserDefinedConversion(Sema &S, Expr *From, QualType ToType,
       User.After.setFromType(ThisType->getAs<PointerType>()->getPointeeType());
       User.After.setAllToTypes(ToType);
       return OR_Success;
-    } else if (CXXConversionDecl *Conversion
+    }
+    if (CXXConversionDecl *Conversion
                  = dyn_cast<CXXConversionDecl>(Best->Function)) {
       S.MarkDeclarationReferenced(From->getLocStart(), Conversion);
 
@@ -2789,10 +2947,8 @@ IsUserDefinedConversion(Sema &S, Expr *From, QualType ToType,
       //   13.3.3.1).
       User.After = Best->FinalConversion;
       return OR_Success;
-    } else {
-      llvm_unreachable("Not a constructor or conversion function?");
-      return OR_No_Viable_Function;
     }
+    llvm_unreachable("Not a constructor or conversion function?");
 
   case OR_No_Viable_Function:
     return OR_No_Viable_Function;
@@ -2804,7 +2960,7 @@ IsUserDefinedConversion(Sema &S, Expr *From, QualType ToType,
     return OR_Ambiguous;
   }
 
-  return OR_No_Viable_Function;
+  llvm_unreachable("Invalid OverloadResult!");
 }
 
 bool
@@ -2852,7 +3008,7 @@ CompareImplicitConversionSequences(Sema &S,
   //   from any other user-defined conversion sequence.
   if (ICS1.getKindRank() < ICS2.getKindRank())
     return ImplicitConversionSequence::Better;
-  else if (ICS2.getKindRank() < ICS1.getKindRank())
+  if (ICS2.getKindRank() < ICS1.getKindRank())
     return ImplicitConversionSequence::Worse;
 
   // The following checks require both conversion sequences to be of
@@ -3664,7 +3820,7 @@ FindConversionForRefInit(Sema &S, ImplicitConversionSequence &ICS,
     return false;
   }
 
-  return false;
+  llvm_unreachable("Invalid OverloadResult!");
 }
 
 /// \brief Compute an implicit conversion sequence for reference
@@ -3954,15 +4110,42 @@ TryListConversion(Sema &S, InitListExpr *From, QualType ToType,
   Result.setBad(BadConversionSequence::no_conversion, From, ToType);
   Result.setListInitializationSequence();
 
+  // We need a complete type for what follows. Incomplete types can bever be
+  // initialized from init lists.
+  if (S.RequireCompleteType(From->getLocStart(), ToType, S.PDiag()))
+    return Result;
+
   // C++11 [over.ics.list]p2:
   //   If the parameter type is std::initializer_list<X> or "array of X" and
   //   all the elements can be implicitly converted to X, the implicit
   //   conversion sequence is the worst conversion necessary to convert an
   //   element of the list to X.
-  // FIXME: Recognize std::initializer_list.
-  // FIXME: Implement arrays.
+  QualType X;
   if (ToType->isArrayType())
+    X = S.Context.getBaseElementType(ToType);
+  else
+    (void)S.isStdInitializerList(ToType, &X);
+  if (!X.isNull()) {
+    for (unsigned i = 0, e = From->getNumInits(); i < e; ++i) {
+      Expr *Init = From->getInit(i);
+      ImplicitConversionSequence ICS =
+          TryCopyInitialization(S, Init, X, SuppressUserConversions,
+                                InOverloadResolution,
+                                AllowObjCWritebackConversion);
+      // If a single element isn't convertible, fail.
+      if (ICS.isBad()) {
+        Result = ICS;
+        break;
+      }
+      // Otherwise, look for the worst conversion.
+      if (Result.isBad() ||
+          CompareImplicitConversionSequences(S, ICS, Result) ==
+              ImplicitConversionSequence::Worse)
+        Result = ICS;
+    }
+    Result.setListInitializationSequence();
     return Result;
+  }
 
   // C++11 [over.ics.list]p3:
   //   Otherwise, if the parameter is a non-aggregate class X and overload
@@ -4079,7 +4262,6 @@ TryListConversion(Sema &S, InitListExpr *From, QualType ToType,
     //    - if the initializer list has one element, the implicit conversion
     //      sequence is the one required to convert the element to the
     //      parameter type.
-    // FIXME: Catch narrowing here?
     unsigned NumInits = From->getNumInits();
     if (NumInits == 1)
       Result = TryCopyInitialization(S, From->getInit(0), ToType,
@@ -8848,10 +9030,13 @@ BuildRecoveryCallExpr(Sema &SemaRef, Scope *S, Expr *Fn,
 
   LookupResult R(SemaRef, ULE->getName(), ULE->getNameLoc(),
                  Sema::LookupOrdinaryName);
+  CorrectionCandidateCallback Validator;
+  Validator.WantTypeSpecifiers = SemaRef.getLangOptions().CPlusPlus;
+  Validator.WantRemainingKeywords = false;
   if (!DiagnoseTwoPhaseLookup(SemaRef, Fn->getExprLoc(), SS, R,
                               ExplicitTemplateArgs, Args, NumArgs) &&
       (!EmptyLookup ||
-       SemaRef.DiagnoseEmptyLookup(S, SS, R, Sema::CTC_Expression,
+       SemaRef.DiagnoseEmptyLookup(S, SS, R, Validator,
                                    ExplicitTemplateArgs, Args, NumArgs)))
     return ExprError();
 
@@ -8993,7 +9178,6 @@ Sema::BuildOverloadedCallExpr(Scope *S, Expr *Fn, UnresolvedLookupExpr *ULE,
       return BuildResolvedCallExpr(Fn, FDecl, LParenLoc, Args, NumArgs,
                                    RParenLoc, ExecConfig);
     }
-    break;
   }
 
   // Overload resolution failed.
@@ -10422,7 +10606,6 @@ Expr *Sema::FixOverloadedFunctionReference(Expr *E, DeclAccessPair Found,
   }
 
   llvm_unreachable("Invalid reference to overloaded function");
-  return E;
 }
 
 ExprResult Sema::FixOverloadedFunctionReference(ExprResult E,

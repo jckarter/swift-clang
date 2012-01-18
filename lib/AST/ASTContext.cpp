@@ -193,7 +193,7 @@ CXXABI *ASTContext::createCXXABI(const TargetInfo &T) {
   case CXXABI_Microsoft:
     return CreateMicrosoftCXXABI(*this);
   }
-  return 0;
+  llvm_unreachable("Invalid CXXABI type!");
 }
 
 static const LangAS::Map *getAddressSpaceMap(const TargetInfo &T,
@@ -224,7 +224,7 @@ ASTContext::ASTContext(LangOptions& LOpts, SourceManager &SM,
     SubstTemplateTemplateParmPacks(this_()),
     GlobalNestedNameSpecifier(0), 
     Int128Decl(0), UInt128Decl(0),
-    ObjCIdDecl(0), ObjCSelDecl(0), ObjCClassDecl(0),
+    ObjCIdDecl(0), ObjCSelDecl(0), ObjCClassDecl(0), ObjCProtocolClassDecl(0),
     CFConstantStringTypeDecl(0), ObjCInstanceTypeDecl(0),
     FILEDecl(0), 
     jmp_bufDecl(0), sigjmp_bufDecl(0), ucontext_tDecl(0),
@@ -833,7 +833,6 @@ ASTContext::getTypeInfo(const Type *T) const {
 #define DEPENDENT_TYPE(Class, Base) case Type::Class:
 #include "clang/AST/TypeNodes.def"
     llvm_unreachable("Should not see dependent types");
-    break;
 
   case Type::FunctionNoProto:
   case Type::FunctionProto:
@@ -3407,8 +3406,7 @@ ASTContext::getCanonicalNestedNameSpecifier(NestedNameSpecifier *NNS) const {
     return NNS;
   }
 
-  // Required to silence a GCC warning
-  return 0;
+  llvm_unreachable("Invalid NestedNameSpecifier::Kind!");
 }
 
 
@@ -4908,10 +4906,6 @@ TypedefDecl *ASTContext::getObjCSelDecl() const {
   return ObjCSelDecl;
 }
 
-void ASTContext::setObjCProtoType(QualType QT) {
-  ObjCProtoType = QT;
-}
-
 TypedefDecl *ASTContext::getObjCClassDecl() const {
   if (!ObjCClassDecl) {
     QualType T = getObjCObjectType(ObjCBuiltinClassTy, 0, 0);
@@ -4924,6 +4918,19 @@ TypedefDecl *ASTContext::getObjCClassDecl() const {
   }
   
   return ObjCClassDecl;
+}
+
+ObjCInterfaceDecl *ASTContext::getObjCProtocolDecl() const {
+  if (!ObjCProtocolClassDecl) {
+    ObjCProtocolClassDecl 
+      = ObjCInterfaceDecl::Create(*this, getTranslationUnitDecl(), 
+                                  SourceLocation(),
+                                  &Idents.get("Protocol"),
+                                  /*PrevDecl=*/0,
+                                  SourceLocation(), true);    
+  }
+  
+  return ObjCProtocolClassDecl;
 }
 
 void ASTContext::setObjCConstantStringInterface(ObjCInterfaceDecl *Decl) {
@@ -6087,7 +6094,7 @@ QualType ASTContext::mergeTypes(QualType LHS, QualType RHS,
                                           LHS->getAs<ObjCObjectPointerType>(),
                                           RHS->getAs<ObjCObjectPointerType>(),
                                           BlockReturnType))
-      return LHS;
+        return LHS;
       return QualType();
     }
     if (canAssignObjCInterfaces(LHS->getAs<ObjCObjectPointerType>(),
@@ -6095,10 +6102,10 @@ QualType ASTContext::mergeTypes(QualType LHS, QualType RHS,
       return LHS;
 
     return QualType();
-    }
+  }
   }
 
-  return QualType();
+  llvm_unreachable("Invalid Type::Class!");
 }
 
 bool ASTContext::FunctionTypesMatchOnNSConsumedAttrs(
@@ -6613,7 +6620,7 @@ GVALinkage ASTContext::GetGVALinkageForVariable(const VarDecl *VD) {
     }
   }
 
-  return GVA_StrongExternal;
+  llvm_unreachable("Invalid Linkage!");
 }
 
 bool ASTContext::DeclMustBeEmitted(const Decl *D) {
