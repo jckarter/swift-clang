@@ -1756,18 +1756,16 @@ static bool CheckTrivialDefaultConstructor(EvalInfo &Info, SourceLocation Loc,
   if (!CD->isTrivial() || !CD->isDefaultConstructor())
     return false;
 
-  if (!CD->isConstexpr()) {
+  // Value-initialization does not call a trivial default constructor, so such a
+  // call is a core constant expression whether or not the constructor is
+  // constexpr.
+  if (!CD->isConstexpr() && !IsValueInitialization) {
     if (Info.getLangOpts().CPlusPlus0x) {
-      // Value-initialization does not call a trivial default constructor, so
-      // such a call is a core constant expression whether or not the
-      // constructor is constexpr.
-      if (!IsValueInitialization) {
-        // FIXME: If DiagDecl is an implicitly-declared special member function,
-        // we should be much more explicit about why it's not constexpr.
-        Info.CCEDiag(Loc, diag::note_constexpr_invalid_function, 1)
-          << /*IsConstexpr*/0 << /*IsConstructor*/1 << CD;
-        Info.Note(CD->getLocation(), diag::note_declared_at);
-      }
+      // FIXME: If DiagDecl is an implicitly-declared special member function,
+      // we should be much more explicit about why it's not constexpr.
+      Info.CCEDiag(Loc, diag::note_constexpr_invalid_function, 1)
+        << /*IsConstexpr*/0 << /*IsConstructor*/1 << CD;
+      Info.Note(CD->getLocation(), diag::note_declared_at);
     } else {
       Info.CCEDiag(Loc, diag::note_invalid_subexpr_in_const_expr);
     }
@@ -2280,6 +2278,7 @@ public:
     case CK_AtomicToNonAtomic:
     case CK_NonAtomicToAtomic:
     case CK_NoOp:
+    case CK_UserDefinedConversion:
       return StmtVisitorTy::Visit(E->getSubExpr());
 
     case CK_LValueToRValue: {
@@ -3896,8 +3895,15 @@ bool IntExprEvaluator::VisitCallExpr(const CallExpr *E) {
 
   case Builtin::BI__builtin_expect:
     return Visit(E->getArg(0));
-      
+
   case Builtin::BIstrlen:
+    // A call to strlen is not a constant expression.
+    if (Info.getLangOpts().CPlusPlus0x)
+      Info.CCEDiag(E->getExprLoc(), diag::note_constexpr_invalid_function)
+        << /*isConstexpr*/0 << /*isConstructor*/0 << "'strlen'";
+    else
+      Info.CCEDiag(E->getExprLoc(), diag::note_invalid_subexpr_in_const_expr);
+    // Fall through.
   case Builtin::BI__builtin_strlen:
     // As an extension, we support strlen() and __builtin_strlen() as constant
     // expressions when the argument is a string literal.
@@ -4531,13 +4537,13 @@ bool IntExprEvaluator::VisitCastExpr(const CastExpr *E) {
   case CK_BitCast:
   case CK_Dependent:
   case CK_LValueBitCast:
-  case CK_UserDefinedConversion:
   case CK_ARCProduceObject:
   case CK_ARCConsumeObject:
   case CK_ARCReclaimReturnedObject:
   case CK_ARCExtendBlockObject:
     return Error(E);
 
+  case CK_UserDefinedConversion:
   case CK_LValueToRValue:
   case CK_AtomicToNonAtomic:
   case CK_NonAtomicToAtomic:
@@ -5947,24 +5953,12 @@ static bool EvaluateCPlusPlus11IntegralConstantExpr(ASTContext &Ctx,
     return false;
   }
 
-  Expr::EvalResult Result;
-  llvm::SmallVector<PartialDiagnosticAt, 8> Diags;
-  Result.Diag = &Diags;
-  EvalInfo Info(Ctx, Result);
-
-  bool IsICE = EvaluateAsRValue(Info, E, Result.Val);
-  if (!Diags.empty()) {
-    IsICE = false;
-    if (Loc) *Loc = Diags[0].first;
-  } else if (!IsICE && Loc) {
-    *Loc = E->getExprLoc();
-  }
-
-  if (!IsICE)
+  APValue Result;
+  if (!E->isCXX11ConstantExpr(Ctx, &Result, Loc))
     return false;
 
-  assert(Result.Val.isInt() && "pointer cast to int is not an ICE");
-  if (Value) *Value = Result.Val.getInt();
+  assert(Result.isInt() && "pointer cast to int is not an ICE");
+  if (Value) *Value = Result.getInt();
   return true;
 }
 
@@ -5990,4 +5984,29 @@ bool Expr::isIntegerConstantExpr(llvm::APSInt &Value, ASTContext &Ctx,
   if (!EvaluateAsInt(Value, Ctx))
     llvm_unreachable("ICE cannot be evaluated!");
   return true;
+}
+
+bool Expr::isCXX11ConstantExpr(ASTContext &Ctx, APValue *Result,
+                               SourceLocation *Loc) const {
+  // We support this checking in C++98 mode in order to diagnose compatibility
+  // issues.
+  assert(Ctx.getLangOptions().CPlusPlus);
+
+  Expr::EvalStatus Status;
+  llvm::SmallVector<PartialDiagnosticAt, 8> Diags;
+  Status.Diag = &Diags;
+  EvalInfo Info(Ctx, Status);
+
+  APValue Scratch;
+  bool IsConstExpr = ::EvaluateAsRValue(Info, this, Result ? *Result : Scratch);
+
+  if (!Diags.empty()) {
+    IsConstExpr = false;
+    if (Loc) *Loc = Diags[0].first;
+  } else if (!IsConstExpr) {
+    // FIXME: This shouldn't happen.
+    if (Loc) *Loc = getExprLoc();
+  }
+
+  return IsConstExpr;
 }

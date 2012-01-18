@@ -28,6 +28,7 @@
 #include "llvm/ADT/SmallString.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/StringExtras.h"
+#include "llvm/Support/ErrorHandling.h"
 #include <string>
 
 using namespace llvm;
@@ -58,7 +59,6 @@ static void ParseTypes(Record *r, std::string &s,
       default:
         throw TGError(r->getLoc(),
                       "Unexpected letter: " + std::string(data + len, 1));
-        break;
     }
     TV.push_back(StringRef(data, len + 1));
     data += len + 1;
@@ -82,7 +82,6 @@ static char Widen(const char t) {
       return 'd';
     default: throw "unhandled type in widen!";
   }
-  return '\0';
 }
 
 /// Narrow - Convert a type code into the next smaller type.  short -> char,
@@ -101,7 +100,6 @@ static char Narrow(const char t) {
       return 'f';
     default: throw "unhandled type in narrow!";
   }
-  return '\0';
 }
 
 // ToFloat - Convert a type code into the equivalent FP type.
@@ -305,7 +303,6 @@ static std::string TypeString(const char mod, StringRef typestr) {
       break;
     default:
       throw "unhandled type!";
-      break;
   }
 
   if (mod == '2')
@@ -498,7 +495,6 @@ static std::string MangleName(const std::string &name, StringRef typestr,
     break;
   default:
     throw "unhandled type!";
-    break;
   }
   if (ck == ClassB)
     s += "_v";
@@ -638,7 +634,6 @@ static unsigned GetNumElements(StringRef typestr, bool &quad) {
   case 'd': nElts = 1; break;
   default:
     throw "unhandled type!";
-    break;
   }
   if (quad) nElts <<= 1;
   return nElts;
@@ -884,7 +879,6 @@ static std::string GenOpString(OpKind op, const std::string &proto,
   }
   default:
     throw "unknown OpKind!";
-    break;
   }
   return s;
 }
@@ -934,7 +928,6 @@ static unsigned GetNeonEnum(const std::string &proto, StringRef typestr) {
       break;
     default:
       throw "unhandled type!";
-      break;
   }
   NeonTypeFlags Flags(ET, usgn, quad && proto[1] != 'g');
   return Flags.getFlags();
@@ -1339,10 +1332,7 @@ static unsigned RangeFromType(const char mod, StringRef typestr) {
       return (1 << (int)quad) - 1;
     default:
       throw "unhandled type!";
-      break;
   }
-  assert(0 && "unreachable");
-  return 0;
 }
 
 /// runHeader - Emit a file with sections defining:

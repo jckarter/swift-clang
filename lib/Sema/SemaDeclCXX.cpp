@@ -5767,6 +5767,133 @@ NamespaceDecl *Sema::getOrCreateStdNamespace() {
   return getStdNamespace();
 }
 
+bool Sema::isStdInitializerList(QualType Ty, QualType *Element) {
+  assert(getLangOptions().CPlusPlus &&
+         "Looking for std::initializer_list outside of C++.");
+
+  // We're looking for implicit instantiations of
+  // template <typename E> class std::initializer_list.
+
+  if (!StdNamespace) // If we haven't seen namespace std yet, this can't be it.
+    return false;
+
+  ClassTemplateDecl *Template = 0;
+  const TemplateArgument *Arguments = 0;
+
+  if (const RecordType *RT = Ty->getAs<RecordType>()) {
+
+    ClassTemplateSpecializationDecl *Specialization =
+        dyn_cast<ClassTemplateSpecializationDecl>(RT->getDecl());
+    if (!Specialization)
+      return false;
+
+    if (Specialization->getSpecializationKind() != TSK_ImplicitInstantiation)
+      return false;
+
+    Template = Specialization->getSpecializedTemplate();
+    Arguments = Specialization->getTemplateArgs().data();
+  } else if (const TemplateSpecializationType *TST =
+                 Ty->getAs<TemplateSpecializationType>()) {
+    Template = dyn_cast_or_null<ClassTemplateDecl>(
+        TST->getTemplateName().getAsTemplateDecl());
+    Arguments = TST->getArgs();
+  }
+  if (!Template)
+    return false;
+
+  if (!StdInitializerList) {
+    // Haven't recognized std::initializer_list yet, maybe this is it.
+    CXXRecordDecl *TemplateClass = Template->getTemplatedDecl();
+    if (TemplateClass->getIdentifier() !=
+            &PP.getIdentifierTable().get("initializer_list") ||
+        !TemplateClass->getDeclContext()->Equals(getStdNamespace()))
+      return false;
+    // This is a template called std::initializer_list, but is it the right
+    // template?
+    TemplateParameterList *Params = Template->getTemplateParameters();
+    if (Params->size() != 1)
+      return false;
+    if (!isa<TemplateTypeParmDecl>(Params->getParam(0)))
+      return false;
+
+    // It's the right template.
+    StdInitializerList = Template;
+  }
+
+  if (Template != StdInitializerList)
+    return false;
+
+  // This is an instance of std::initializer_list. Find the argument type.
+  if (Element)
+    *Element = Arguments[0].getAsType();
+  return true;
+}
+
+static ClassTemplateDecl *LookupStdInitializerList(Sema &S, SourceLocation Loc){
+  NamespaceDecl *Std = S.getStdNamespace();
+  if (!Std) {
+    S.Diag(Loc, diag::err_implied_std_initializer_list_not_found);
+    return 0;
+  }
+
+  LookupResult Result(S, &S.PP.getIdentifierTable().get("initializer_list"),
+                      Loc, Sema::LookupOrdinaryName);
+  if (!S.LookupQualifiedName(Result, Std)) {
+    S.Diag(Loc, diag::err_implied_std_initializer_list_not_found);
+    return 0;
+  }
+  ClassTemplateDecl *Template = Result.getAsSingle<ClassTemplateDecl>();
+  if (!Template) {
+    Result.suppressDiagnostics();
+    // We found something weird. Complain about the first thing we found.
+    NamedDecl *Found = *Result.begin();
+    S.Diag(Found->getLocation(), diag::err_malformed_std_initializer_list);
+    return 0;
+  }
+
+  // We found some template called std::initializer_list. Now verify that it's
+  // correct.
+  TemplateParameterList *Params = Template->getTemplateParameters();
+  if (Params->size() != 1 || !isa<TemplateTypeParmDecl>(Params->getParam(0))) {
+    S.Diag(Template->getLocation(), diag::err_malformed_std_initializer_list);
+    return 0;
+  }
+
+  return Template;
+}
+
+QualType Sema::BuildStdInitializerList(QualType Element, SourceLocation Loc) {
+  if (!StdInitializerList) {
+    StdInitializerList = LookupStdInitializerList(*this, Loc);
+    if (!StdInitializerList)
+      return QualType();
+  }
+
+  TemplateArgumentListInfo Args(Loc, Loc);
+  Args.addArgument(TemplateArgumentLoc(TemplateArgument(Element),
+                                       Context.getTrivialTypeSourceInfo(Element,
+                                                                        Loc)));
+  return Context.getCanonicalType(
+      CheckTemplateIdType(TemplateName(StdInitializerList), Loc, Args));
+}
+
+bool Sema::isInitListConstructor(const CXXConstructorDecl* Ctor) {
+  // C++ [dcl.init.list]p2:
+  //   A constructor is an initializer-list constructor if its first parameter
+  //   is of type std::initializer_list<E> or reference to possibly cv-qualified
+  //   std::initializer_list<E> for some type E, and either there are no other
+  //   parameters or else all other parameters have default arguments.
+  if (Ctor->getNumParams() < 1 ||
+      (Ctor->getNumParams() > 1 && !Ctor->getParamDecl(1)->hasDefaultArg()))
+    return false;
+
+  QualType ArgType = Ctor->getParamDecl(0)->getType();
+  if (const ReferenceType *RT = ArgType->getAs<ReferenceType>())
+    ArgType = RT->getPointeeType().getUnqualifiedType();
+
+  return isStdInitializerList(ArgType, 0);
+}
+
 /// \brief Determine whether a using statement is in a context where it will be
 /// apply in all contexts.
 static bool IsUsingDirectiveInToplevelContext(DeclContext *CurContext) {
@@ -8965,9 +9092,7 @@ void Sema::AddCXXDirectInitializerToDecl(Decl *RealDecl,
     Expr *Init = Exprs.get()[0];
     TypeSourceInfo *DeducedType = 0;
     if (!DeduceAutoType(VDecl->getTypeSourceInfo(), Init, DeducedType))
-      Diag(VDecl->getLocation(), diag::err_auto_var_deduction_failure)
-        << VDecl->getDeclName() << VDecl->getType() << Init->getType()
-        << Init->getSourceRange();
+      DiagnoseAutoDeductionFailure(VDecl, Init);
     if (!DeducedType) {
       RealDecl->setInvalidDecl();
       return;

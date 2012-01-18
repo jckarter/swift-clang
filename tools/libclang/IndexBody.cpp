@@ -74,11 +74,6 @@ public:
     return true;
   }
 
-  bool TraversePseudoObjectExpr(PseudoObjectExpr *E) {
-    SaveAndRestore<bool> InPseudo(InPseudoObject, true);
-    return base::TraversePseudoObjectExpr(E);
-  }
-
   bool VisitObjCNumericLiteral(ObjCNumericLiteral *E) {
     if (ObjCMethodDecl *MD = E->getObjCNumericLiteralMethod())
       IndexCtx.handleReference(MD, E->getLocStart(),

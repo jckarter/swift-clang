@@ -1398,10 +1398,8 @@ void ASTReader::ReadMacroRecord(ModuleFile &F, uint64_t Offset) {
       Macro->AddTokenToBody(Tok);
       break;
     }
+    }
   }
-  }
-  
-  return;
 }
 
 PreprocessedEntityID 
@@ -2815,15 +2813,10 @@ void ASTReader::InitializeContext() {
   // built-in types. Right now, we just ignore the problem.
   
   // Load the special types.
-  if (SpecialTypes.size() > NumSpecialTypeIDs) {
+  if (SpecialTypes.size() >= NumSpecialTypeIDs) {
     if (Context.getBuiltinVaListType().isNull()) {
       Context.setBuiltinVaListType(
         GetType(SpecialTypes[SPECIAL_TYPE_BUILTIN_VA_LIST]));
-    }
-    
-    if (unsigned Proto = SpecialTypes[SPECIAL_TYPE_OBJC_PROTOCOL]) {
-      if (Context.ObjCProtoType.isNull())
-        Context.ObjCProtoType = GetType(Proto);
     }
     
     if (unsigned String = SpecialTypes[SPECIAL_TYPE_CF_CONSTANT_STRING]) {
@@ -3275,8 +3268,6 @@ ASTReader::ASTReadResult ASTReader::ReadSubmoduleBlock(ModuleFile &F) {
     }
     }
   }
-
-  return Success;
 }
 
 /// \brief Parse the record that corresponds to a LangOptions data
@@ -3413,9 +3404,8 @@ PreprocessedEntity *ASTReader::ReadPreprocessedEntity(unsigned Index) {
     return ID;
   }
   }
-  
-  Error("invalid offset in preprocessor detail block");
-  return 0;
+
+  llvm_unreachable("Invalid PreprocessorDetailRecordTypes");
 }
 
 /// \brief \arg SLocMapI points at a chunk of a module that contains no
@@ -3911,8 +3901,9 @@ QualType ASTReader::readTypeRecord(unsigned Index) {
     }
     unsigned Idx = 0;
     bool IsDependent = Record[Idx++];
-    QualType T
-      = Context.getRecordType(ReadDeclAs<RecordDecl>(*Loc.F, Record, Idx));
+    RecordDecl *RD = ReadDeclAs<RecordDecl>(*Loc.F, Record, Idx);
+    RD = cast_or_null<RecordDecl>(RD->getCanonicalDecl());
+    QualType T = Context.getRecordType(RD);
     const_cast<Type*>(T.getTypePtr())->setDependent(IsDependent);
     return T;
   }
@@ -3976,7 +3967,7 @@ QualType ASTReader::readTypeRecord(unsigned Index) {
     unsigned Idx = 0;
     ObjCInterfaceDecl *ItfD
       = ReadDeclAs<ObjCInterfaceDecl>(*Loc.F, Record, Idx);
-    return Context.getObjCInterfaceType(ItfD);
+    return Context.getObjCInterfaceType(ItfD->getCanonicalDecl());
   }
 
   case TYPE_OBJC_OBJECT: {
@@ -4101,8 +4092,7 @@ QualType ASTReader::readTypeRecord(unsigned Index) {
     return Context.getAtomicType(ValueType);
   }
   }
-  // Suppress a GCC warning
-  return QualType();
+  llvm_unreachable("Invalid TypeCode!");
 }
 
 class clang::TypeLocReader : public TypeLocVisitor<TypeLocReader> {
@@ -4483,7 +4473,6 @@ ASTReader::GetTemplateArgumentLocInfo(ModuleFile &F,
     return TemplateArgumentLocInfo();
   }
   llvm_unreachable("unexpected template argument loc");
-  return TemplateArgumentLocInfo();
 }
 
 TemplateArgumentLoc
@@ -4591,6 +4580,9 @@ Decl *ASTReader::GetDecl(DeclID ID) {
     case PREDEF_DECL_OBJC_CLASS_ID:
       return Context.getObjCClassDecl();
         
+    case PREDEF_DECL_OBJC_PROTOCOL_ID:
+      return Context.getObjCProtocolDecl();
+        
     case PREDEF_DECL_INT_128_ID:
       return Context.getInt128Decl();
 
@@ -4600,15 +4592,12 @@ Decl *ASTReader::GetDecl(DeclID ID) {
     case PREDEF_DECL_OBJC_INSTANCETYPE_ID:
       return Context.getObjCInstanceTypeDecl();
     }
-    
-    return 0;
   }
   
   unsigned Index = ID - NUM_PREDEF_DECL_IDS;
 
   if (Index >= DeclsLoaded.size()) {
     Error("declaration ID out-of-range for AST file");
-    return 0;
   }
   
   if (!DeclsLoaded[Index]) {
@@ -5636,8 +5625,7 @@ ASTReader::ReadDeclarationName(ModuleFile &F,
     return DeclarationName::getUsingDirectiveName();
   }
 
-  // Required to silence GCC warning
-  return DeclarationName();
+  llvm_unreachable("Invalid NameKind!");
 }
 
 void ASTReader::ReadDeclarationNameLoc(ModuleFile &F,
@@ -6137,6 +6125,7 @@ void ASTReader::finishPendingActions() {
     // Load pending declaration chains.
     for (unsigned I = 0; I != PendingDeclChains.size(); ++I) {
       loadPendingDeclChain(PendingDeclChains[I]);
+      PendingDeclChainsKnown.erase(PendingDeclChains[I]);
     }
     PendingDeclChains.clear();
     
@@ -6156,16 +6145,28 @@ void ASTReader::finishPendingActions() {
   for (llvm::SmallPtrSet<Decl *, 4>::iterator D = PendingDefinitions.begin(),
                                            DEnd = PendingDefinitions.end();
        D != DEnd; ++D) {
-    if (CXXRecordDecl *RD = dyn_cast<CXXRecordDecl>(*D)) {
-      for (CXXRecordDecl::redecl_iterator R = RD->redecls_begin(),
-                                       REnd = RD->redecls_end();
-           R != REnd; ++R)
-        cast<CXXRecordDecl>(*R)->DefinitionData = RD->DefinitionData;
+    if (TagDecl *TD = dyn_cast<TagDecl>(*D)) {
+      if (const TagType *TagT = dyn_cast<TagType>(TD->TypeForDecl)) {
+        // Make sure that the TagType points at the definition.
+        const_cast<TagType*>(TagT)->decl = TD;
+      }
       
+      if (CXXRecordDecl *RD = dyn_cast<CXXRecordDecl>(*D)) {
+        for (CXXRecordDecl::redecl_iterator R = RD->redecls_begin(),
+                                         REnd = RD->redecls_end();
+             R != REnd; ++R)
+          cast<CXXRecordDecl>(*R)->DefinitionData = RD->DefinitionData;
+        
+      }
+
       continue;
     }
     
     if (ObjCInterfaceDecl *ID = dyn_cast<ObjCInterfaceDecl>(*D)) {
+      // Make sure that the ObjCInterfaceType points at the definition.
+      const_cast<ObjCInterfaceType *>(cast<ObjCInterfaceType>(ID->TypeForDecl))
+        ->Decl = ID;
+      
       for (ObjCInterfaceDecl::redecl_iterator R = ID->redecls_begin(),
                                            REnd = ID->redecls_end();
            R != REnd; ++R)
