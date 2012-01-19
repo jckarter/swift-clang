@@ -1474,6 +1474,15 @@ public:
   ExprResult PerformContextuallyConvertToBool(Expr *From);
   ExprResult PerformContextuallyConvertToObjCPointer(Expr *From);
 
+  /// Contexts in which a converted constant expression is required.
+  enum CCEKind {
+    CCEK_CaseValue,  ///< Expression in a case label.
+    CCEK_Enumerator, ///< Enumerator value with fixed underlying type.
+    CCEK_TemplateArg ///< Value of a non-type template parameter.
+  };
+  ExprResult CheckConvertedConstantExpression(Expr *From, QualType T,
+                                              llvm::APSInt &Value, CCEKind CCE);
+
   ExprResult
   ConvertToIntegralOrEnumerationType(SourceLocation Loc, Expr *FromE,
                                      const PartialDiagnostic &NotIntDiag,
@@ -1823,41 +1832,6 @@ public:
   void LookupVisibleDecls(DeclContext *Ctx, LookupNameKind Kind,
                           VisibleDeclConsumer &Consumer,
                           bool IncludeGlobalScope = true);
-
-  /// \brief The context in which typo-correction occurs.
-  ///
-  /// The typo-correction context affects which keywords (if any) are
-  /// considered when trying to correct for typos.
-  enum CorrectTypoContext {
-    /// \brief An unknown context, where any keyword might be valid.
-    CTC_Unknown,
-    /// \brief A context where no keywords are used (e.g. we expect an actual
-    /// name).
-    CTC_NoKeywords,
-    /// \brief A context where we're correcting a type name.
-    CTC_Type,
-    /// \brief An expression context.
-    CTC_Expression,
-    /// \brief A type cast, or anything else that can be followed by a '<'.
-    CTC_CXXCasts,
-    /// \brief A member lookup context.
-    CTC_MemberLookup,
-    /// \brief An Objective-C ivar lookup context (e.g., self->ivar).
-    CTC_ObjCIvarLookup,
-    /// \brief An Objective-C property lookup context (e.g., self.prop).
-    CTC_ObjCPropertyLookup,
-    /// \brief The receiver of an Objective-C message send within an
-    /// Objective-C method where 'super' is a valid keyword.
-    CTC_ObjCMessageReceiver
-  };
-
-  TypoCorrection CorrectTypo(const DeclarationNameInfo &Typo,
-                             Sema::LookupNameKind LookupKind,
-                             Scope *S, CXXScopeSpec *SS,
-                             DeclContext *MemberContext = 0,
-                             bool EnteringContext = false,
-                             CorrectTypoContext CTC = CTC_Unknown,
-                             const ObjCObjectPointerType *OPT = 0);
 
   TypoCorrection CorrectTypo(const DeclarationNameInfo &Typo,
                              Sema::LookupNameKind LookupKind,
@@ -5964,7 +5938,7 @@ public:
   QualType GetSignedVectorType(QualType V);
   QualType CheckVectorCompareOperands(ExprResult &LHS, ExprResult &RHS,
                                       SourceLocation Loc, bool isRelational);
-  QualType CheckVectorLogicalOperands(ExprResult LHS, ExprResult RHS,
+  QualType CheckVectorLogicalOperands(ExprResult &LHS, ExprResult &RHS,
                                       SourceLocation Loc);
 
   /// type checking declaration initializers (C99 6.7.8)

@@ -20,6 +20,17 @@ def err_expr_not_ice : Error<
 def ext_expr_not_ice : Extension<
   "expression is not an %select{integer|integral}0 constant expression; "
   "folding it to a constant is a GNU extension">, InGroup<GNU>;
+def err_typecheck_converted_constant_expression : Error<
+  "value of type %0 is not implicitly convertible to %1">;
+def err_typecheck_converted_constant_expression_disallowed : Error<
+  "conversion from %0 to %1 is not allowed in a converted constant expression">;
+def err_expr_not_cce : Error<
+  "%select{case value|enumerator value|non-type template argument}0 "
+  "is not a constant expression">;
+def err_cce_narrowing : Error<
+  "%select{case value|enumerator value|non-type template argument}0 "
+  "%select{cannot be narrowed from type %2 to %3|"
+  "evaluates to %2, which cannot be narrowed to type %3}1">;
 
 // Semantic analysis of constant literals.
 def ext_predef_outside_function : Warning<
@@ -511,6 +522,10 @@ def err_objc_property_requires_object : Error<
 def warn_objc_property_no_assignment_attribute : Warning<
   "no 'assign', 'retain', or 'copy' attribute is specified - "
   "'assign' is assumed">;
+def warn_objc_isa_use : Warning<
+  "direct access to objective-c's isa is deprecated "
+  "in favor of object_setClass() and object_getClass()">,
+  InGroup<DiagGroup<"deprecated-objc-isa-usage">>;
 def warn_objc_property_default_assign_on_object : Warning<
   "default property attribute 'assign' not appropriate for non-gc object">;
 def warn_property_attr_mismatch : Warning<
@@ -3476,7 +3491,7 @@ def err_member_def_does_not_match : Error<
   "out-of-line definition of %0 does not match any declaration in %1">;
 def err_member_def_does_not_match_suggest : Error<
   "out-of-line definition of %0 does not match any declaration in %1; "
-  "did you mean %2">;
+  "did you mean %2?">;
 def err_member_def_does_not_match_ret_type : Error<
   "out-of-line definition of %q0 differs from the declaration in the return type">;
 def err_nonstatic_member_out_of_line : Error<
