@@ -313,15 +313,37 @@ public:
 
   /// \brief Returns true if the given MacroID location points at the first
   /// token of the macro expansion.
+  ///
+  /// \param MacroBegin If non-null and function returns true, it is set to
+  /// begin location of the macro.
   static bool isAtStartOfMacroExpansion(SourceLocation loc,
-                                            const SourceManager &SM,
-                                            const LangOptions &LangOpts);
+                                        const SourceManager &SM,
+                                        const LangOptions &LangOpts,
+                                        SourceLocation *MacroBegin = 0);
 
   /// \brief Returns true if the given MacroID location points at the last
   /// token of the macro expansion.
+  ///
+  /// \param MacroBegin If non-null and function returns true, it is set to
+  /// end location of the macro.
   static bool isAtEndOfMacroExpansion(SourceLocation loc,
-                                          const SourceManager &SM,
-                                          const LangOptions &LangOpts);
+                                      const SourceManager &SM,
+                                      const LangOptions &LangOpts,
+                                      SourceLocation *MacroEnd = 0);
+
+  /// \brief Accepts a token source range and returns a character range with
+  /// file locations.
+  /// Returns a null range if a part of the range resides inside a macro
+  /// expansion or the range does not reside on the same FileID.
+  static CharSourceRange makeFileCharRange(SourceRange TokenRange,
+                                           const SourceManager &SM,
+                                           const LangOptions &LangOpts);
+
+  /// \brief Returns a string for the source that the range encompasses.
+  static StringRef getSourceText(CharSourceRange Range,
+                                 const SourceManager &SM,
+                                 const LangOptions &LangOpts,
+                                 bool *Invalid = 0);
 
   /// \brief Retrieve the name of the immediate macro expansion.
   ///
