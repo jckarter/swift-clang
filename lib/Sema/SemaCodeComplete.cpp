@@ -2455,45 +2455,34 @@ CodeCompletionResult::CreateCodeCompletionString(ASTContext &Ctx,
     
     // Format a function-like macro with placeholders for the arguments.
     Result.AddChunk(Chunk(CodeCompletionString::CK_LeftParen));
-    bool CombineVariadicArgument = false;
     MacroInfo::arg_iterator A = MI->arg_begin(), AEnd = MI->arg_end();
-    if (MI->isVariadic() && AEnd - A > 1) {
-      AEnd -= 2;
-      CombineVariadicArgument = true;
+    
+    // C99 variadic macros add __VA_ARGS__ at the end. Skip it.
+    if (MI->isC99Varargs()) {
+      --AEnd;
+      
+      if (A == AEnd) {
+        Result.AddPlaceholderChunk("...");
+      }
     }
+    
     for (MacroInfo::arg_iterator A = MI->arg_begin(); A != AEnd; ++A) {
       if (A != MI->arg_begin())
         Result.AddChunk(Chunk(CodeCompletionString::CK_Comma));
-      
-      if (!MI->isVariadic() || A + 1 != AEnd) {
-        // Non-variadic argument.
-        Result.AddPlaceholderChunk(
-                            Result.getAllocator().CopyString((*A)->getName()));
-        continue;
-      }
-      
-      // Variadic argument; cope with the difference between GNU and C99
-      // variadic macros, providing a single placeholder for the rest of the
-      // arguments.
-      if ((*A)->isStr("__VA_ARGS__"))
-        Result.AddPlaceholderChunk("...");
-      else {
-        std::string Arg = (*A)->getName();
-        Arg += "...";
+
+      if (MI->isVariadic() && (A+1) == AEnd) {
+        llvm::SmallString<32> Arg = (*A)->getName();
+        if (MI->isC99Varargs())
+          Arg += ", ...";
+        else
+          Arg += "...";
         Result.AddPlaceholderChunk(Result.getAllocator().CopyString(Arg));
+        break;
       }
-    }
-     
-    if (CombineVariadicArgument) {
-      // Handle the next-to-last argument, combining it with the variadic
-      // argument.
-      std::string LastArg = (*A)->getName();
-      ++A;
-      if ((*A)->isStr("__VA_ARGS__"))
-        LastArg += ", ...";
-      else
-        LastArg += ", " + (*A)->getName().str() + "...";
-      Result.AddPlaceholderChunk(Result.getAllocator().CopyString(LastArg));
+
+      // Non-variadic macros are simple.
+      Result.AddPlaceholderChunk(
+                          Result.getAllocator().CopyString((*A)->getName()));
     }
     Result.AddChunk(Chunk(CodeCompletionString::CK_RightParen));
     return Result.TakeString();
@@ -4284,25 +4273,27 @@ static void AddObjCExpressionResults(ResultBuilder &Results, bool NeedAt) {
   Builder.AddChunk(CodeCompletionString::CK_RightParen);
   Results.AddResult(Result(Builder.TakeString()));
   
-  // @[ objects, ... ]
-  Builder.AddTypedTextChunk(OBJC_AT_KEYWORD_NAME(NeedAt,[));
-  Builder.AddChunk(CodeCompletionString::CK_HorizontalSpace);
-  Builder.AddPlaceholderChunk("objects, ...");
-  Builder.AddChunk(CodeCompletionString::CK_HorizontalSpace);
-  Builder.AddChunk(CodeCompletionString::CK_RightBracket);
-  Results.AddResult(Result(Builder.TakeString()));
+  if (Results.includeCodePatterns()) {
+    // @[ objects, ... ]
+    Builder.AddTypedTextChunk(OBJC_AT_KEYWORD_NAME(NeedAt,[));
+    Builder.AddChunk(CodeCompletionString::CK_HorizontalSpace);
+    Builder.AddPlaceholderChunk("objects, ...");
+    Builder.AddChunk(CodeCompletionString::CK_HorizontalSpace);
+    Builder.AddChunk(CodeCompletionString::CK_RightBracket);
+    Results.AddResult(Result(Builder.TakeString()));
 
-  // @{ key : object, ... }
-  Builder.AddTypedTextChunk(OBJC_AT_KEYWORD_NAME(NeedAt,{));
-  Builder.AddChunk(CodeCompletionString::CK_HorizontalSpace);
-  Builder.AddPlaceholderChunk("key");
-  Builder.AddChunk(CodeCompletionString::CK_HorizontalSpace);
-  Builder.AddChunk(CodeCompletionString::CK_Colon);
-  Builder.AddChunk(CodeCompletionString::CK_HorizontalSpace);
-  Builder.AddPlaceholderChunk("object, ...");
-  Builder.AddChunk(CodeCompletionString::CK_HorizontalSpace);
-  Builder.AddChunk(CodeCompletionString::CK_RightBrace);
-  Results.AddResult(Result(Builder.TakeString()));
+    // @{ key : object, ... }
+    Builder.AddTypedTextChunk(OBJC_AT_KEYWORD_NAME(NeedAt,{));
+    Builder.AddChunk(CodeCompletionString::CK_HorizontalSpace);
+    Builder.AddPlaceholderChunk("key");
+    Builder.AddChunk(CodeCompletionString::CK_HorizontalSpace);
+    Builder.AddChunk(CodeCompletionString::CK_Colon);
+    Builder.AddChunk(CodeCompletionString::CK_HorizontalSpace);
+    Builder.AddPlaceholderChunk("object, ...");
+    Builder.AddChunk(CodeCompletionString::CK_HorizontalSpace);
+    Builder.AddChunk(CodeCompletionString::CK_RightBrace);
+    Results.AddResult(Result(Builder.TakeString()));
+  }
 }
 
 static void AddObjCStatementResults(ResultBuilder &Results, bool NeedAt) {
