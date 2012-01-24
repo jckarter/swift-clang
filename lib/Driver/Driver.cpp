@@ -57,6 +57,7 @@ Driver::Driver(StringRef ClangExecutable,
     DefaultImageName(DefaultImageName),
     DriverTitle("clang \"gcc-compatible\" driver"),
     Host(0),
+    TargetTriple(llvm::Triple::normalize(DefaultTargetTriple)),
     CCPrintOptionsFilename(0), CCPrintHeadersFilename(0),
     CCLogDiagnosticsFilename(0), CCCIsCXX(false),
     CCCIsCPP(false),CCCEcho(false), CCCPrintBindings(false),
@@ -236,6 +237,18 @@ DerivedArgList *Driver::TranslateInputArgs(const InputArgList &Args) const {
   return DAL;
 }
 
+/// \brief Compute target triple from args.
+///
+/// This routine provides the logic to compute a target triple from various
+/// args passed to the driver and the default triple string.
+static llvm::Triple computeTargetTriple(StringRef DefaultTargetTriple,
+                                        const ArgList &Args) {
+  if (const Arg *A = Args.getLastArg(options::OPT_target))
+    DefaultTargetTriple = A->getValue(Args);
+
+  return llvm::Triple(llvm::Triple::normalize(DefaultTargetTriple));
+}
+
 Compilation *Driver::BuildCompilation(ArrayRef<const char *> ArgList) {
   llvm::PrettyStackTraceString CrashInfo("Compilation construction");
 
@@ -304,10 +317,6 @@ Compilation *Driver::BuildCompilation(ArrayRef<const char *> ArgList) {
       Cur = Split.second;
     }
   }
-  // FIXME: We shouldn't overwrite the default host triple here, but we have
-  // nowhere else to put this currently.
-  if (const Arg *A = Args->getLastArg(options::OPT_target))
-    DefaultTargetTriple = A->getValue(*Args);
   if (const Arg *A = Args->getLastArg(options::OPT_ccc_install_dir))
     Dir = InstalledDir = A->getValue(*Args);
   for (arg_iterator it = Args->filtered_begin(options::OPT_B),
@@ -321,7 +330,9 @@ Compilation *Driver::BuildCompilation(ArrayRef<const char *> ArgList) {
   if (Args->hasArg(options::OPT_nostdlib))
     UseStdLib = false;
 
-  Host = GetHostInfo(DefaultTargetTriple.c_str());
+  // Recompute the target triple based on the args.
+  TargetTriple = computeTargetTriple(DefaultTargetTriple, *Args);
+  Host = GetHostInfo(TargetTriple);
 
   // Perform the default argument translations.
   DerivedArgList *TranslatedArgs = TranslateInputArgs(*Args);
@@ -343,8 +354,9 @@ Compilation *Driver::BuildCompilation(ArrayRef<const char *> ArgList) {
   InputList Inputs;
   BuildInputs(C->getDefaultToolChain(), C->getArgs(), Inputs);
 
-  // Construct the list of abstract actions to perform for this compilation.
-  if (Host->useDriverDriver())
+  // Construct the list of abstract actions to perform for this compilation. On
+  // Darwin target OSes this uses the driver-driver and universal actions.
+  if (TargetTriple.isOSDarwin())
     BuildUniversalActions(C->getDefaultToolChain(), C->getArgs(),
                           Inputs, C->getActions());
   else
@@ -432,8 +444,9 @@ void Driver::generateCompilationDiagnostics(Compilation &C,
     return;
   }
 
-  // Construct the list of abstract actions to perform for this compilation.
-  if (Host->useDriverDriver())
+  // Construct the list of abstract actions to perform for this compilation. On
+  // Darwin OSes this uses the driver-driver and builds universal actions.
+  if (TargetTriple.isOSDarwin())
     BuildUniversalActions(C.getDefaultToolChain(), C.getArgs(),
                           Inputs, C.getActions());
   else
@@ -1571,9 +1584,8 @@ std::string Driver::GetTemporaryPath(StringRef Prefix, const char *Suffix)
   return P.str();
 }
 
-const HostInfo *Driver::GetHostInfo(const char *TripleStr) const {
+const HostInfo *Driver::GetHostInfo(const llvm::Triple &Triple) const {
   llvm::PrettyStackTraceString CrashInfo("Constructing host");
-  llvm::Triple Triple(llvm::Triple::normalize(TripleStr).c_str());
 
   // TCE is an osless target
   if (Triple.getArchName() == "tce")
