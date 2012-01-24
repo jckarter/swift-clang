@@ -465,6 +465,9 @@ bool IndexingContext::handleObjCCategoryImpl(const ObjCCategoryImplDecl *D) {
   SourceLocation CategoryLoc = D->getCategoryNameLoc();
   getEntityInfo(IFaceD, ClassEntity, SA);
 
+  if (suppressRefs())
+    markEntityOccurrenceInFile(IFaceD, ClassLoc);
+
   CatDInfo.ObjCCatDeclInfo.containerInfo = &CatDInfo.ObjCContDeclInfo;
   if (IFaceD) {
     CatDInfo.ObjCCatDeclInfo.objcClass = &ClassEntity;
@@ -814,12 +817,9 @@ void IndexingContext::getEntityInfo(const NamedDecl *D,
       EntityInfo.kind = CXIdxEntity_Enum; break;
     }
 
-    if (const CXXRecordDecl *CXXRec = dyn_cast<CXXRecordDecl>(D)) {
-      // FIXME: isPOD check is not sufficient, a POD can contain methods,
-      // we want a isCStructLike check.
-      if (CXXRec->hasDefinition() && !CXXRec->isPOD())
+    if (const CXXRecordDecl *CXXRec = dyn_cast<CXXRecordDecl>(D))
+      if (!CXXRec->isCLike())
         EntityInfo.lang = CXIdxEntityLang_CXX;
-    }
 
     if (isa<ClassTemplatePartialSpecializationDecl>(D)) {
       EntityInfo.templateKind = CXIdxEntity_TemplatePartialSpecialization;
