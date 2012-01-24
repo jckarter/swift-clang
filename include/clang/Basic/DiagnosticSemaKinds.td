@@ -4962,16 +4962,16 @@ def warn_missing_case_for_condition :
   Warning<"no case matching constant switch condition '%0'">;
 
 def warn_def_missing_case1 : Warning<
-  "enumeration value %0 not handled in switch">,
+  "enumeration value %0 not explicitly handled in switch">,
   InGroup<SwitchEnum>, DefaultIgnore;
 def warn_def_missing_case2 : Warning<
-  "enumeration values %0 and %1 not handled in switch">,
+  "enumeration values %0 and %1 not explicitly handled in switch">,
   InGroup<SwitchEnum>, DefaultIgnore;
 def warn_def_missing_case3 : Warning<
-  "enumeration values %0, %1, and %2 not handled in switch">,
+  "enumeration values %0, %1, and %2 not explicitly handled in switch">,
   InGroup<SwitchEnum>, DefaultIgnore;
 def warn_def_missing_cases : Warning<
-  "%0 enumeration values not handled in switch: %1, %2, %3...">,
+  "%0 enumeration values not explicitly handled in switch: %1, %2, %3...">,
   InGroup<SwitchEnum>, DefaultIgnore;
 
 def warn_missing_case1 : Warning<"enumeration value %0 not handled in switch">,
@@ -4987,8 +4987,8 @@ def warn_missing_cases : Warning<
   InGroup<Switch>;
 
 def warn_unreachable_default : Warning<
-  "default is unreachable as all enumeration values are accounted for">,
-  InGroup<SwitchRedundantDefault>;
+  "default label in switch which covers all enumeration values">,
+  InGroup<CoveredSwitchDefault>;
 def warn_not_in_enum : Warning<"case value not in enumerated type %0">,
   InGroup<Switch>; 
 def err_typecheck_statement_requires_scalar : Error<
