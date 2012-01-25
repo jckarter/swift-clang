@@ -686,7 +686,7 @@ public:
   /// of -Wselector.
   llvm::DenseMap<Selector, SourceLocation> ReferencedSelectors;
 
-  GlobalMethodPool::iterator ReadMethodPool(Selector Sel);
+  void ReadMethodPool(Selector Sel);
 
   /// Private Helper predicate to check for 'self'.
   bool isSelfExpr(Expr *RExpr);
@@ -2005,6 +2005,9 @@ public:
   /// warns each time an exact match is found.
   void CheckCategoryVsClassMethodMatches(ObjCCategoryImplDecl *CatIMP);
 
+  /// \brief Add the given method to the list of globally-known methods.
+  void addMethodToGlobalList(ObjCMethodList *List, ObjCMethodDecl *Method);
+  
 private:
   /// AddMethodToGlobalPool - Add an instance or factory method to the global
   /// pool. See descriptoin of AddInstanceMethodToGlobalPool.
