@@ -1113,7 +1113,9 @@ bool Generic_GCC::GCCVersion::operator<(const GCCVersion &RHS) const {
 /// Once constructed, a GCCInstallation is esentially immutable.
 Generic_GCC::GCCInstallationDetector::GCCInstallationDetector(const Driver &D)
   : IsValid(false),
-    GccTriple(D.DefaultTargetTriple) {
+    // FIXME: GCCTriple is using the target triple as both the target and host
+    // triple here.
+    GCCTriple(D.TargetTriple) {
   // FIXME: Using CXX_INCLUDE_ROOT is here is a bit of a hack, but
   // avoids adding yet another option to configure/cmake.
   // It would probably be cleaner to break it in two variables
@@ -1132,17 +1134,17 @@ Generic_GCC::GCCInstallationDetector::GCCInstallationDetector(const Driver &D)
     llvm::sys::path::remove_filename(CxxIncludeRoot); // remove the version
     llvm::sys::path::remove_filename(CxxIncludeRoot); // remove the c++
     llvm::sys::path::remove_filename(CxxIncludeRoot); // remove the include
-    GccInstallPath = CxxIncludeRoot.str();
-    GccInstallPath.append("/lib/gcc/");
-    GccInstallPath.append(CXX_INCLUDE_ARCH);
-    GccInstallPath.append("/");
-    GccInstallPath.append(Version);
-    GccParentLibPath = GccInstallPath + "/../../..";
+    GCCInstallPath = CxxIncludeRoot.str();
+    GCCInstallPath.append("/lib/gcc/");
+    GCCInstallPath.append(CXX_INCLUDE_ARCH);
+    GCCInstallPath.append("/");
+    GCCInstallPath.append(Version);
+    GCCParentLibPath = GCCInstallPath + "/../../..";
     IsValid = true;
     return;
   }
 
-  llvm::Triple::ArchType HostArch = llvm::Triple(GccTriple).getArch();
+  llvm::Triple::ArchType HostArch = GCCTriple.getArch();
   // The library directories which may contain GCC installations.
   SmallVector<StringRef, 4> CandidateLibDirs;
   // The compatible GCC triples for this particular architecture.
@@ -1151,7 +1153,8 @@ Generic_GCC::GCCInstallationDetector::GCCInstallationDetector(const Driver &D)
 
   // Always include the default host triple as the final fallback if no
   // specific triple is detected.
-  CandidateTriples.push_back(D.DefaultTargetTriple);
+  // FIXME: This is using the Driver's target triple as the host triple!
+  CandidateTriples.push_back(D.TargetTriple.str());
 
   // Compute the set of prefixes for our search.
   SmallVector<std::string, 8> Prefixes(D.PrefixDirs.begin(),
@@ -1294,7 +1297,7 @@ void Generic_GCC::GCCInstallationDetector::ScanLibDirForGCCTriple(
         continue;
 
       // Some versions of SUSE and Fedora on ppc64 put 32-bit libs
-      // in what would normally be GccInstallPath and put the 64-bit
+      // in what would normally be GCCInstallPath and put the 64-bit
       // libs in a subdirectory named 64. We need the 64-bit libs
       // for linking.
       bool UseSlash64 = false;
@@ -1306,13 +1309,13 @@ void Generic_GCC::GCCInstallationDetector::ScanLibDirForGCCTriple(
         continue;
 
       Version = CandidateVersion;
-      GccTriple = CandidateTriple.str();
+      GCCTriple.setTriple(CandidateTriple);
       // FIXME: We hack together the directory name here instead of
       // using LI to ensure stable path separators across Windows and
       // Linux.
-      GccInstallPath = LibDir + Suffixes[i] + "/" + VersionText.str();
-      GccParentLibPath = GccInstallPath + InstallSuffixes[i];
-      if (UseSlash64) GccInstallPath = GccInstallPath + "/64";
+      GCCInstallPath = LibDir + Suffixes[i] + "/" + VersionText.str();
+      GCCParentLibPath = GCCInstallPath + InstallSuffixes[i];
+      if (UseSlash64) GCCInstallPath = GCCInstallPath + "/64";
       IsValid = true;
     }
   }
@@ -1557,14 +1560,14 @@ FreeBSD::FreeBSD(const HostInfo &Host, const llvm::Triple& Triple)
 
   // Determine if we are compiling 32-bit code on an x86_64 platform.
   bool Lib32 = false;
+  // FIXME: This is using the Driver's target triple as the host triple!
   if (Triple.getArch() == llvm::Triple::x86 &&
-      llvm::Triple(getDriver().DefaultTargetTriple).getArch() ==
-        llvm::Triple::x86_64)
+      getDriver().TargetTriple.getArch() == llvm::Triple::x86_64)
     Lib32 = true;
 
+  // FIXME: This is using the Driver's target triple as the host triple!
   if (Triple.getArch() == llvm::Triple::ppc &&
-      llvm::Triple(getDriver().DefaultTargetTriple).getArch() ==
-        llvm::Triple::ppc64)
+      getDriver().TargetTriple.getArch() == llvm::Triple::ppc64)
     Lib32 = true;
 
   if (Lib32) {
@@ -1908,15 +1911,14 @@ static std::string getMultiarchTriple(const llvm::Triple TargetTriple,
 
 Linux::Linux(const HostInfo &Host, const llvm::Triple &Triple)
   : Generic_ELF(Host, Triple) {
-  llvm::Triple::ArchType Arch =
-    llvm::Triple(getDriver().DefaultTargetTriple).getArch();
+  llvm::Triple::ArchType Arch = Triple.getArch();
   const std::string &SysRoot = getDriver().SysRoot;
 
   // OpenSuse stores the linker with the compiler, add that to the search
   // path.
   ToolChain::path_list &PPaths = getProgramPaths();
   PPaths.push_back(Twine(GCCInstallation.getParentLibPath() + "/../" +
-                         GCCInstallation.getTriple() + "/bin").str());
+                         GCCInstallation.getTriple().str() + "/bin").str());
 
   Linker = GetProgramPath("ld");
 
@@ -1972,30 +1974,35 @@ Linux::Linux(const HostInfo &Host, const llvm::Triple &Triple)
   // possible permutations of these directories, and seeing which ones it added
   // to the link paths.
   path_list &Paths = getFilePaths();
-  const bool Is32Bits = (getArch() == llvm::Triple::x86 ||
-                         getArch() == llvm::Triple::mips ||
-                         getArch() == llvm::Triple::mipsel ||
-                         getArch() == llvm::Triple::ppc);
 
-  StringRef Suffix32;
-  StringRef Suffix64;
-  if (Arch == llvm::Triple::x86_64 || Arch == llvm::Triple::ppc64) {
-    Suffix32 = "/32";
-    Suffix64 = "";
-  } else {
-    Suffix32 = "";
-    Suffix64 = "/64";
-  }
-  const std::string Suffix = Is32Bits ? Suffix32 : Suffix64;
+  const bool Is32Bits = (Arch == llvm::Triple::x86 ||
+                         Arch == llvm::Triple::mips ||
+                         Arch == llvm::Triple::mipsel ||
+                         Arch == llvm::Triple::ppc);
+
   const std::string Multilib = Is32Bits ? "lib32" : "lib64";
   const std::string MultiarchTriple = getMultiarchTriple(Triple, SysRoot);
 
   // Add the multilib suffixed paths where they are available.
+  bool SuffixedGCCInstallation = false;
   if (GCCInstallation.isValid()) {
+    StringRef Suffix32;
+    StringRef Suffix64;
+    const llvm::Triple &GCCTriple = GCCInstallation.getTriple();
+    if (GCCTriple.getArch() == llvm::Triple::x86_64 ||
+        GCCTriple.getArch() == llvm::Triple::ppc64) {
+      Suffix32 = "/32";
+      Suffix64 = "";
+    } else {
+      Suffix32 = "";
+      Suffix64 = "/64";
+    }
+    const std::string Suffix = Is32Bits ? Suffix32 : Suffix64;
+    SuffixedGCCInstallation = !Suffix.empty();
+
     const std::string &LibPath = GCCInstallation.getParentLibPath();
-    const std::string &GccTriple = GCCInstallation.getTriple();
     addPathIfExists(GCCInstallation.getInstallPath() + Suffix, Paths);
-    addPathIfExists(LibPath + "/../" + GccTriple + "/lib/../" + Multilib,
+    addPathIfExists(LibPath + "/../" + GCCTriple.str() + "/lib/../" + Multilib,
                     Paths);
     addPathIfExists(LibPath + "/" + MultiarchTriple, Paths);
     addPathIfExists(LibPath + "/../" + Multilib, Paths);
@@ -2008,16 +2015,16 @@ Linux::Linux(const HostInfo &Host, const llvm::Triple &Triple)
   // Try walking via the GCC triple path in case of multiarch GCC
   // installations with strange symlinks.
   if (GCCInstallation.isValid())
-    addPathIfExists(SysRoot + "/usr/lib/" + GCCInstallation.getTriple() +
+    addPathIfExists(SysRoot + "/usr/lib/" + GCCInstallation.getTriple().str() +
                     "/../../" + Multilib, Paths);
 
   // Add the non-multilib suffixed paths (if potentially different).
   if (GCCInstallation.isValid()) {
     const std::string &LibPath = GCCInstallation.getParentLibPath();
-    const std::string &GccTriple = GCCInstallation.getTriple();
-    if (!Suffix.empty())
+    const llvm::Triple &GCCTriple = GCCInstallation.getTriple();
+    if (SuffixedGCCInstallation)
       addPathIfExists(GCCInstallation.getInstallPath(), Paths);
-    addPathIfExists(LibPath + "/../" + GccTriple + "/lib", Paths);
+    addPathIfExists(LibPath + "/../" + GCCTriple.str() + "/lib", Paths);
     addPathIfExists(LibPath, Paths);
   }
   addPathIfExists(SysRoot + "/lib", Paths);
@@ -2200,8 +2207,8 @@ void Linux::AddClangCXXStdlibIncludeArgs(const ArgList &DriverArgs,
   // Check if the target architecture specific dirs need a suffix. Note that we
   // only support the suffix-based bi-arch-like header scheme for host/target
   // mismatches of just bit width.
-  llvm::Triple::ArchType HostArch =
-    llvm::Triple(getDriver().DefaultTargetTriple).getArch();
+  // FIXME: This is using the Driver's target triple to emulate the host triple!
+  llvm::Triple::ArchType HostArch = getDriver().TargetTriple.getArch();
   llvm::Triple::ArchType TargetArch = TargetTriple.getArch();
   StringRef Suffix;
   if ((HostArch == llvm::Triple::x86 && TargetArch == llvm::Triple::x86_64) ||
@@ -2218,12 +2225,12 @@ void Linux::AddClangCXXStdlibIncludeArgs(const ArgList &DriverArgs,
   StringRef InstallDir = GCCInstallation.getInstallPath();
   StringRef Version = GCCInstallation.getVersion();
   if (!addLibStdCXXIncludePaths(LibDir + "/../include/c++/" + Version,
-                                GCCInstallation.getTriple() + Suffix,
+                                GCCInstallation.getTriple().str() + Suffix,
                                 DriverArgs, CC1Args)) {
     // Gentoo is weird and places its headers inside the GCC install, so if the
     // first attempt to find the headers fails, try this pattern.
     addLibStdCXXIncludePaths(InstallDir + "/include/g++-v4",
-                             GCCInstallation.getTriple() + Suffix,
+                             GCCInstallation.getTriple().str() + Suffix,
                              DriverArgs, CC1Args);
   }
 }
