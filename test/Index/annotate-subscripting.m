@@ -35,7 +35,7 @@ void testDict() {
   NSDictionary *dict = @{ key: newObject, key: oldObject };
 }
 
-// RUN: c-index-test -test-annotate-tokens=%s:22:1:36:1 -ccc-host-triple x86_64-apple-macosx10.7 %s | FileCheck %s
+// RUN: c-index-test -test-annotate-tokens=%s:22:1:36:1 -target x86_64-apple-macosx10.7 %s | FileCheck %s
 // CHECK: Identifier: "array" [24:3 - 24:8] DeclRefExpr=array:23:19
 // CHECK: Punctuation: "[" [24:8 - 24:9] UnexposedExpr=
 // CHECK: Literal: "3" [24:9 - 24:10] IntegerLiteral=

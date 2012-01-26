@@ -487,21 +487,17 @@ CodeGenFunction::EmitReferenceBindingToExpr(const Expr *E,
     case Qualifiers::OCL_Strong: {
       bool precise = VD && VD->hasAttr<ObjCPreciseLifetimeAttr>();
       CleanupKind cleanupKind = getARCCleanupKind();
-      // This local is a GCC and MSVC compiler workaround.
-      Destroyer *destroyer = precise ? &destroyARCStrongPrecise :
-                                       &destroyARCStrongImprecise;
       pushDestroy(cleanupKind, ReferenceTemporary, ObjCARCReferenceLifetimeType,
-                  *destroyer, cleanupKind & EHCleanup);
+                  precise ? destroyARCStrongPrecise : destroyARCStrongImprecise,
+                  cleanupKind & EHCleanup);
       break;
     }
         
     case Qualifiers::OCL_Weak: {
-      // This local is a GCC and MSVC compiler workaround.
-      Destroyer *destroyer = &destroyARCWeak;
       // __weak objects always get EH cleanups; otherwise, exceptions
       // could cause really nasty crashes instead of mere leaks.
       pushDestroy(NormalAndEHCleanup, ReferenceTemporary,
-                  ObjCARCReferenceLifetimeType, *destroyer, true);
+                  ObjCARCReferenceLifetimeType, destroyARCWeak, true);
       break;        
     }
     }
@@ -1728,7 +1724,7 @@ LValue CodeGenFunction::EmitArraySubscriptExpr(const ArraySubscriptExpr *E) {
 }
 
 static
-llvm::Constant *GenerateConstantVector(llvm::IRBuilder<> &Builder,
+llvm::Constant *GenerateConstantVector(CGBuilderTy &Builder,
                                        SmallVector<unsigned, 4> &Elts) {
   SmallVector<llvm::Constant*, 4> CElts;
   for (unsigned i = 0, e = Elts.size(); i != e; ++i)
