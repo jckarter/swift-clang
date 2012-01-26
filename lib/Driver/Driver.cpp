@@ -1643,7 +1643,8 @@ const ToolChain &Driver::getToolChain(const ArgList &Args,
       if (Target.getArch() == llvm::Triple::x86 ||
           Target.getArch() == llvm::Triple::x86_64 ||
           Target.getArch() == llvm::Triple::arm ||
-          Target.getArch() == llvm::Triple::thumb)
+          Target.getArch() == llvm::Triple::thumb ||
+          Target.getArch() == llvm::Triple::arm64)
         TC = new toolchains::DarwinClang(*this, Target);
       else
         TC = new toolchains::Darwin_Generic_GCC(*this, Target);
