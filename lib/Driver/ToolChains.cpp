@@ -594,6 +594,9 @@ void Darwin::AddDeploymentTarget(DerivedArgList &Args) const {
                                              : ARCSimulator_HasARCRuntime;
           LibCXXForSimulator = Major < 5 ? LibCXXSimulator_NotAvailable
                                          : LibCXXSimulator_Available;
+          SubscriptRuntimeForSimulator =
+              Major < 6 ? SubscriptSimulator_NotAvailable
+                        : SubscriptSimulator_Available;
         }
         break;
       }
