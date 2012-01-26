@@ -2519,7 +2519,8 @@ public:
     Int64Type = SignedLongLong;
     // The 64-bit iOS simulator uses the builtin bool type for Objective-C.
     llvm::Triple T = llvm::Triple(triple);
-    if (T.getOS() == llvm::Triple::IOS)
+    // FIXME: Temporarily use signed char for 64-bit iOS.
+    if (0 && T.getOS() == llvm::Triple::IOS)
       UseSignedCharForObjCBool = false;
   }
 };
