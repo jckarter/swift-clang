@@ -62,4 +62,4 @@ void testDict() {
 // CHECK-NEXT: DeclRefExpr=newObject:32:6 =[34:21 - 34:30]
 // CHECK-NEXT: DeclRefExpr=newObject:32:6 =[35:32 - 35:41]
 
-// RUN:   -ccc-host-triple x86_64-apple-macosx10.7 %s | FileCheck %s
+// RUN:   -target x86_64-apple-macosx10.7 %s | FileCheck %s

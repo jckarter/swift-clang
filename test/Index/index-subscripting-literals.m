@@ -39,7 +39,7 @@ void testDict() {
   NSDictionary *dict = @{ key: newObject, key: oldObject };
 }
 
-// RUN: c-index-test -index-file -ccc-host-triple x86_64-apple-macosx10.7 %s | FileCheck %s
+// RUN: c-index-test -index-file -target x86_64-apple-macosx10.7 %s | FileCheck %s
 
 // CHECK:      [indexEntityReference]: kind: variable | name: idx | USR: c:@idx | lang: C | cursor: DeclRefExpr=idx:22:5 | loc: 27:9
 // CHECK-NEXT: [indexEntityReference]: kind: variable | name: p | USR: c:@p | lang: C | cursor: DeclRefExpr=p:23:4 | loc: 27:16 | <parent>:: kind: function | name: testArray | USR: c:@F@testArray | lang: C | container: [testArray:25:4] | refkind: direct
