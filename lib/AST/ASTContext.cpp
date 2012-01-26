@@ -5936,7 +5936,11 @@ QualType ASTContext::mergeTypes(QualType LHS, QualType RHS,
       if (ETy->getDecl()->getIntegerType() == LHSCan.getUnqualifiedType())
         return LHS;
     }
-
+    // allow block pointer type to match an 'id' type.
+    if (OfBlockPointer && !BlockReturnType &&
+        LHS->isObjCIdType() && RHS->isBlockPointerType())
+      return LHS;
+    
     return QualType();
   }
 
