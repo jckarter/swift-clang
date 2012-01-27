@@ -1098,6 +1098,7 @@ Sema::SemaBuiltinAtomicOverloaded(ExprResult TheCallResult) {
   DeclRefExpr* NewDRE = DeclRefExpr::Create(
       Context,
       DRE->getQualifierLoc(),
+      SourceLocation(),
       NewBuiltinDecl,
       DRE->getLocation(),
       NewBuiltinDecl->getType(),

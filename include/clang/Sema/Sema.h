@@ -887,6 +887,7 @@ public:
                          bool isClassName = false,
                          bool HasTrailingDot = false,
                          ParsedType ObjectType = ParsedType(),
+                         bool IsCtorOrDtorName = false,
                          bool WantNontrivialTypeSourceInfo = false,
                          IdentifierInfo **CorrectedII = 0);
   TypeSpecifierType isTagName(IdentifierInfo &II, Scope *S);
@@ -2333,7 +2334,9 @@ public:
   // Primary Expressions.
   SourceRange getExprRange(Expr *E) const;
 
-  ExprResult ActOnIdExpression(Scope *S, CXXScopeSpec &SS, UnqualifiedId &Id,
+  ExprResult ActOnIdExpression(Scope *S, CXXScopeSpec &SS,
+                               SourceLocation TemplateKWLoc,
+                               UnqualifiedId &Id,
                                bool HasTrailingLParen, bool IsAddressOfOperand,
                                CorrectionCandidateCallback *CCC = 0);
 
@@ -2352,6 +2355,7 @@ public:
                                 bool AllowBuiltinCreation=false);
 
   ExprResult ActOnDependentIdExpression(const CXXScopeSpec &SS,
+                                        SourceLocation TemplateKWLoc,
                                         const DeclarationNameInfo &NameInfo,
                                         bool isAddressOfOperand,
                                 const TemplateArgumentListInfo *TemplateArgs);
@@ -2371,9 +2375,11 @@ public:
                                            Expr *baseObjectExpr = 0,
                                       SourceLocation opLoc = SourceLocation());
   ExprResult BuildPossibleImplicitMemberExpr(const CXXScopeSpec &SS,
+                                             SourceLocation TemplateKWLoc,
                                              LookupResult &R,
                                 const TemplateArgumentListInfo *TemplateArgs);
   ExprResult BuildImplicitMemberExpr(const CXXScopeSpec &SS,
+                                     SourceLocation TemplateKWLoc,
                                      LookupResult &R,
                                 const TemplateArgumentListInfo *TemplateArgs,
                                      bool IsDefiniteInstance);
@@ -2382,8 +2388,10 @@ public:
                                   bool HasTrailingLParen);
 
   ExprResult BuildQualifiedDeclarationNameExpr(CXXScopeSpec &SS,
+                                               SourceLocation TemplateKWLoc,
                                          const DeclarationNameInfo &NameInfo);
   ExprResult BuildDependentDeclRefExpr(const CXXScopeSpec &SS,
+                                       SourceLocation TemplateKWLoc,
                                 const DeclarationNameInfo &NameInfo,
                                 const TemplateArgumentListInfo *TemplateArgs);
 
@@ -2465,6 +2473,7 @@ public:
   ExprResult BuildMemberReferenceExpr(Expr *Base, QualType BaseType,
                                       SourceLocation OpLoc, bool IsArrow,
                                       CXXScopeSpec &SS,
+                                      SourceLocation TemplateKWLoc,
                                       NamedDecl *FirstQualifierInScope,
                                 const DeclarationNameInfo &NameInfo,
                                 const TemplateArgumentListInfo *TemplateArgs);
@@ -2472,6 +2481,7 @@ public:
   ExprResult BuildMemberReferenceExpr(Expr *Base, QualType BaseType,
                                       SourceLocation OpLoc, bool IsArrow,
                                       const CXXScopeSpec &SS,
+                                      SourceLocation TemplateKWLoc,
                                       NamedDecl *FirstQualifierInScope,
                                       LookupResult &R,
                                  const TemplateArgumentListInfo *TemplateArgs,
@@ -2491,6 +2501,7 @@ public:
   ExprResult ActOnDependentMemberExpr(Expr *Base, QualType BaseType,
                                       bool IsArrow, SourceLocation OpLoc,
                                       const CXXScopeSpec &SS,
+                                      SourceLocation TemplateKWLoc,
                                       NamedDecl *FirstQualifierInScope,
                                const DeclarationNameInfo &NameInfo,
                                const TemplateArgumentListInfo *TemplateArgs);
@@ -2499,6 +2510,7 @@ public:
                                    SourceLocation OpLoc,
                                    tok::TokenKind OpKind,
                                    CXXScopeSpec &SS,
+                                   SourceLocation TemplateKWLoc,
                                    UnqualifiedId &Member,
                                    Decl *ObjCImpDecl,
                                    bool HasTrailingLParen);
@@ -3391,29 +3403,27 @@ public:
   ///
   /// \param S The scope in which this nested-name-specifier occurs.
   ///
-  /// \param TemplateLoc The location of the 'template' keyword, if any.
-  ///
   /// \param SS The nested-name-specifier, which is both an input
   /// parameter (the nested-name-specifier before this type) and an
   /// output parameter (containing the full nested-name-specifier,
   /// including this new type).
   ///
-  /// \param TemplateLoc the location of the 'template' keyword, if any.
+  /// \param TemplateKWLoc the location of the 'template' keyword, if any.
   /// \param TemplateName The template name.
   /// \param TemplateNameLoc The location of the template name.
   /// \param LAngleLoc The location of the opening angle bracket  ('<').
   /// \param TemplateArgs The template arguments.
   /// \param RAngleLoc The location of the closing angle bracket  ('>').
   /// \param CCLoc The location of the '::'.
-
+  ///
   /// \param EnteringContext Whether we're entering the context of the
   /// nested-name-specifier.
   ///
   ///
   /// \returns true if an error occurred, false otherwise.
   bool ActOnCXXNestedNameSpecifier(Scope *S,
-                                   SourceLocation TemplateLoc,
                                    CXXScopeSpec &SS,
+                                   SourceLocation TemplateKWLoc,
                                    TemplateTy Template,
                                    SourceLocation TemplateNameLoc,
                                    SourceLocation LAngleLoc,
@@ -4007,7 +4017,8 @@ public:
                       TemplateTy Template, SourceLocation TemplateLoc,
                       SourceLocation LAngleLoc,
                       ASTTemplateArgsPtr TemplateArgs,
-                      SourceLocation RAngleLoc);
+                      SourceLocation RAngleLoc,
+                      bool IsCtorOrDtorName = false);
 
   /// \brief Parsed an elaborated-type-specifier that refers to a template-id,
   /// such as \c class T::template apply<U>.
@@ -4025,16 +4036,19 @@ public:
 
 
   ExprResult BuildTemplateIdExpr(const CXXScopeSpec &SS,
+                                 SourceLocation TemplateKWLoc,
                                  LookupResult &R,
                                  bool RequiresADL,
                                const TemplateArgumentListInfo &TemplateArgs);
+
   ExprResult BuildQualifiedTemplateIdExpr(CXXScopeSpec &SS,
+                                          SourceLocation TemplateKWLoc,
                                const DeclarationNameInfo &NameInfo,
                                const TemplateArgumentListInfo &TemplateArgs);
 
   TemplateNameKind ActOnDependentTemplateName(Scope *S,
-                                              SourceLocation TemplateKWLoc,
                                               CXXScopeSpec &SS,
+                                              SourceLocation TemplateKWLoc,
                                               UnqualifiedId &Name,
                                               ParsedType ObjectType,
                                               bool EnteringContext,
