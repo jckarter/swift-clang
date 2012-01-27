@@ -4572,8 +4572,7 @@ void netbsd::Assemble::ConstructJob(Compilation &C, const JobAction &JA,
 
   // When building 32-bit code on NetBSD/amd64, we have to explicitly
   // instruct as in the base system to assemble 32-bit code.
-  if (ToolTriple.getArch() == llvm::Triple::x86_64 &&
-      getToolChain().getArch() == llvm::Triple::x86)
+  if (getToolChain().getArch() == llvm::Triple::x86)
     CmdArgs.push_back("--32");
 
 
@@ -4626,8 +4625,7 @@ void netbsd::Link::ConstructJob(Compilation &C, const JobAction &JA,
 
   // When building 32-bit code on NetBSD/amd64, we have to explicitly
   // instruct ld in the base system to link 32-bit code.
-  if (ToolTriple.getArch() == llvm::Triple::x86_64 &&
-      getToolChain().getArch() == llvm::Triple::x86) {
+  if (getToolChain().getArch() == llvm::Triple::x86) {
     CmdArgs.push_back("-m");
     CmdArgs.push_back("elf_i386");
   }

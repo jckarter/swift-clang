@@ -2802,6 +2802,7 @@ public:
     Records = BuiltinInfo;
     NumRecords = clang::ARM::LastTSBuiltin-Builtin::FirstTSBuiltin;
   }
+  virtual bool isCLZForZeroUndef() const { return false; }
   virtual const char *getVAListDeclaration() const {
     return "typedef void* __builtin_va_list;";
   }
