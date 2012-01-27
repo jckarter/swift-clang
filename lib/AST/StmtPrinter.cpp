@@ -544,6 +544,8 @@ void StmtPrinter::VisitSEHFinallyStmt(SEHFinallyStmt *Node) {
 void StmtPrinter::VisitDeclRefExpr(DeclRefExpr *Node) {
   if (NestedNameSpecifier *Qualifier = Node->getQualifier())
     Qualifier->print(OS, Policy);
+  if (Node->hasTemplateKeyword())
+    OS << "template ";
   OS << Node->getNameInfo();
   if (Node->hasExplicitTemplateArgs())
     OS << TemplateSpecializationType::PrintTemplateArgumentList(
@@ -556,6 +558,8 @@ void StmtPrinter::VisitDependentScopeDeclRefExpr(
                                            DependentScopeDeclRefExpr *Node) {
   if (NestedNameSpecifier *Qualifier = Node->getQualifier())
     Qualifier->print(OS, Policy);
+  if (Node->hasTemplateKeyword())
+    OS << "template ";
   OS << Node->getNameInfo();
   if (Node->hasExplicitTemplateArgs())
     OS << TemplateSpecializationType::PrintTemplateArgumentList(
@@ -567,6 +571,8 @@ void StmtPrinter::VisitDependentScopeDeclRefExpr(
 void StmtPrinter::VisitUnresolvedLookupExpr(UnresolvedLookupExpr *Node) {
   if (Node->getQualifier())
     Node->getQualifier()->print(OS, Policy);
+  if (Node->hasTemplateKeyword())
+    OS << "template ";
   OS << Node->getNameInfo();
   if (Node->hasExplicitTemplateArgs())
     OS << TemplateSpecializationType::PrintTemplateArgumentList(
@@ -891,9 +897,9 @@ void StmtPrinter::VisitMemberExpr(MemberExpr *Node) {
   OS << (Node->isArrow() ? "->" : ".");
   if (NestedNameSpecifier *Qualifier = Node->getQualifier())
     Qualifier->print(OS, Policy);
-
+  if (Node->hasTemplateKeyword())
+    OS << "template ";
   OS << Node->getMemberNameInfo();
-
   if (Node->hasExplicitTemplateArgs())
     OS << TemplateSpecializationType::PrintTemplateArgumentList(
                                                     Node->getTemplateArgs(),
@@ -1379,12 +1385,9 @@ void StmtPrinter::VisitCXXDependentScopeMemberExpr(
   }
   if (NestedNameSpecifier *Qualifier = Node->getQualifier())
     Qualifier->print(OS, Policy);
-  else if (Node->hasExplicitTemplateArgs())
-    // FIXME: Track use of "template" keyword explicitly?
+  if (Node->hasTemplateKeyword())
     OS << "template ";
-
   OS << Node->getMemberNameInfo();
-
   if (Node->hasExplicitTemplateArgs()) {
     OS << TemplateSpecializationType::PrintTemplateArgumentList(
                                                     Node->getTemplateArgs(),
@@ -1400,11 +1403,9 @@ void StmtPrinter::VisitUnresolvedMemberExpr(UnresolvedMemberExpr *Node) {
   }
   if (NestedNameSpecifier *Qualifier = Node->getQualifier())
     Qualifier->print(OS, Policy);
-
-  // FIXME: this might originally have been written with 'template'
-
+  if (Node->hasTemplateKeyword())
+    OS << "template ";
   OS << Node->getMemberNameInfo();
-
   if (Node->hasExplicitTemplateArgs()) {
     OS << TemplateSpecializationType::PrintTemplateArgumentList(
                                                     Node->getTemplateArgs(),
