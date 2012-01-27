@@ -2072,13 +2072,13 @@ private:
   AccessSpecifier getAccessSpecifierIfPresent() const;
 
   bool ParseUnqualifiedIdTemplateId(CXXScopeSpec &SS,
+                                    SourceLocation TemplateKWLoc,
                                     IdentifierInfo *Name,
                                     SourceLocation NameLoc,
                                     bool EnteringContext,
                                     ParsedType ObjectType,
                                     UnqualifiedId &Id,
-                                    bool AssumeTemplateId,
-                                    SourceLocation TemplateKWLoc);
+                                    bool AssumeTemplateId);
   bool ParseUnqualifiedIdOperator(CXXScopeSpec &SS, bool EnteringContext,
                                   ParsedType ObjectType,
                                   UnqualifiedId &Result);
@@ -2086,6 +2086,7 @@ private:
                           bool AllowDestructorName,
                           bool AllowConstructorName,
                           ParsedType ObjectType,
+                          SourceLocation& TemplateKWLoc,
                           UnqualifiedId &Result);
 
   //===--------------------------------------------------------------------===//
@@ -2131,8 +2132,8 @@ private:
 
   bool AnnotateTemplateIdToken(TemplateTy Template, TemplateNameKind TNK,
                                CXXScopeSpec &SS,
+                               SourceLocation TemplateKWLoc,
                                UnqualifiedId &TemplateName,
-                               SourceLocation TemplateKWLoc = SourceLocation(),
                                bool AllowTypeAnnotation = true);
   void AnnotateTemplateIdTokenAsType();
   bool IsTemplateArgumentList(unsigned Skip = 0);

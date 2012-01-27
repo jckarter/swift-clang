@@ -1267,7 +1267,9 @@ static ExprResult BuildForRangeBeginEndCall(Sema &SemaRef, Scope *S,
     ExprResult MemberRef =
       SemaRef.BuildMemberReferenceExpr(Range, Range->getType(), Loc,
                                        /*IsPtr=*/false, CXXScopeSpec(),
-                                       /*Qualifier=*/0, MemberLookup,
+                                       /*TemplateKWLoc=*/SourceLocation(),
+                                       /*FirstQualifierInScope=*/0,
+                                       MemberLookup,
                                        /*TemplateArgs=*/0);
     if (MemberRef.isInvalid())
       return ExprError();
