@@ -3001,6 +3001,8 @@ public:
     NumRecords = clang::ARM64::LastTSBuiltin-Builtin::FirstTSBuiltin;
   }
 
+  virtual bool isCLZForZeroUndef() const { return false; }
+
   virtual const char *getVAListDeclaration() const {
     return "typedef char* __builtin_va_list;";
   }
