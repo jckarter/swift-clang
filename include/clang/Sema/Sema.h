@@ -6225,6 +6225,7 @@ public:
     PCC_LocalDeclarationSpecifiers
   };
 
+  void CodeCompleteModuleImport(SourceLocation ImportLoc, ModuleIdPath Path);
   void CodeCompleteOrdinaryName(Scope *S,
                                 ParserCompletionContext CompletionContext);
   void CodeCompleteDeclSpec(Scope *S, DeclSpec &DS,

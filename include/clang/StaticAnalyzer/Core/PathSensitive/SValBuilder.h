@@ -23,6 +23,9 @@
 #include "clang/StaticAnalyzer/Core/PathSensitive/MemRegion.h"
 
 namespace clang {
+
+class CXXBoolLiteralExpr;
+
 namespace ento {
 
 class SValBuilder {
