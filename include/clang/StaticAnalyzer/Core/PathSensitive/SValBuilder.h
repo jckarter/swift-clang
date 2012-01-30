@@ -210,9 +210,9 @@ public:
         BasicVals.getValue(integer->getValue(),
                      integer->getType()->isUnsignedIntegerOrEnumerationType()));
   }
-  
-  nonloc::ConcreteInt makeBoolVal(const CXXBoolLiteralExpr *boolean) {
-    return makeTruthVal(boolean->getValue());
+
+  nonloc::ConcreteInt makeBoolVal(const ObjCBoolLiteralExpr *boolean) {
+    return makeTruthVal(boolean->getValue(), boolean->getType());
   }
 
   nonloc::ConcreteInt makeBoolVal(const CXXBoolLiteralExpr *boolean);
