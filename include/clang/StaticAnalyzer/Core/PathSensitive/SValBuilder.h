@@ -23,6 +23,9 @@
 #include "clang/StaticAnalyzer/Core/PathSensitive/MemRegion.h"
 
 namespace clang {
+
+class CXXBoolLiteralExpr;
+
 namespace ento {
 
 class SValBuilder {
@@ -211,10 +214,8 @@ public:
   nonloc::ConcreteInt makeBoolVal(const CXXBoolLiteralExpr *boolean) {
     return makeTruthVal(boolean->getValue());
   }
-  
-  nonloc::ConcreteInt makeBoolVal(const ObjCBoolLiteralExpr *boolean) {
-    return makeTruthVal(boolean->getValue(), boolean->getType());
-  }
+
+  nonloc::ConcreteInt makeBoolVal(const CXXBoolLiteralExpr *boolean);
 
   nonloc::ConcreteInt makeIntVal(const llvm::APSInt& integer) {
     return nonloc::ConcreteInt(BasicVals.getValue(integer));
