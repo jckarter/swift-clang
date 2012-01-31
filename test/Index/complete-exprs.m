@@ -17,7 +17,7 @@ __strong id global;
 }
 @end
 
-// RUN: env CINDEXTEST_CODE_COMPLETE_PATTERNS=1 c-index-test -code-completion-at=%s:13:2 %s | FileCheck -check-prefix=CHECK-CC1 %s
+// RUN: c-index-test -code-completion-at=%s:13:2 %s | FileCheck -check-prefix=CHECK-CC1 %s
 // CHECK-CC1: NotImplemented:{TypedText @[}{HorizontalSpace  }{Placeholder objects, ...}{HorizontalSpace  }{RightBracket ]} (40)
 // CHECK-CC1: NotImplemented:{TypedText @{}{HorizontalSpace  }{Placeholder key}{HorizontalSpace  }{Colon :}{HorizontalSpace  }{Placeholder object, ...}{HorizontalSpace  }{RightBrace }} (40)
 // CHECK-CC1: NotImplemented:{ResultType SEL}{TypedText _cmd} (80)
@@ -37,9 +37,9 @@ __strong id global;
 // CHECK-CC3: VarDecl:{ResultType id}{TypedText global} (50)
 // CHECK-CC3: ParmDecl:{ResultType id}{TypedText param1} (34)
 
-// RUN: env CINDEXTEST_CODE_COMPLETE_PATTERNS=1 c-index-test -code-completion-at=%s:15:5 %s | FileCheck -check-prefix=CHECK-CC4 %s
-// RUN: env CINDEXTEST_CODE_COMPLETE_PATTERNS=1 c-index-test -code-completion-at=%s:16:5 %s | FileCheck -check-prefix=CHECK-CC4 %s
-// RUN: env CINDEXTEST_CODE_COMPLETE_PATTERNS=1 c-index-test -code-completion-at=%s:16:14 %s | FileCheck -check-prefix=CHECK-CC4 %s
+// RUN: c-index-test -code-completion-at=%s:15:5 %s | FileCheck -check-prefix=CHECK-CC4 %s
+// RUN: c-index-test -code-completion-at=%s:16:5 %s | FileCheck -check-prefix=CHECK-CC4 %s
+// RUN: c-index-test -code-completion-at=%s:16:14 %s | FileCheck -check-prefix=CHECK-CC4 %s
 // CHECK-CC4: NotImplemented:{TypedText @[}{HorizontalSpace  }{Placeholder objects, ...}{HorizontalSpace  }{RightBracket ]} (40)
 // CHECK-CC4: NotImplemented:{TypedText @{}{HorizontalSpace  }{Placeholder key}{HorizontalSpace  }{Colon :}{HorizontalSpace  }{Placeholder object, ...}{HorizontalSpace  }{RightBrace }} (40)
 // CHECK-CC4: NotImplemented:{ResultType SEL}{TypedText _cmd} (80)

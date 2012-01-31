@@ -261,6 +261,12 @@ public:
     return TargetIsIPhoneOSSimulator;
   }
 
+  bool isTargetMacOS() const {
+    return !isTargetIOSSimulator() &&
+           !isTargetIPhoneOS() &&
+           ARCRuntimeForSimulator == ARCSimulator_None;
+  }
+
   bool isTargetInitialized() const { return TargetInitialized; }
 
   void getTargetVersion(unsigned (&Res)[3]) const {
