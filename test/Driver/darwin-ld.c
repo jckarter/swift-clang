@@ -109,3 +109,7 @@
 // RUN: FileCheck -check-prefix=LINK_LAZY_LIBRARY %s < %t.log
 // LINK_LAZY_LIBRARY: {{ld(.exe)?"}}
 // LINK_LAZY_LIBRARY: "-lazy_library" "Library"
+
+// RUN: %clang -target x86_64-apple-darwin12 -### %t.o 2> %t.log
+// RUN: FileCheck -check-prefix=LINK_NO_CRT1 %s < %t.log
+// LINK_NO_CRT1-NOT: crt

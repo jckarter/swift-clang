@@ -119,8 +119,7 @@ protected:
   mutable llvm::DenseMap<unsigned, Tool*> Tools;
 
 public:
-  Generic_GCC(const Driver &D, const llvm::Triple& Triple,
-              const std::string &UserTriple);
+  Generic_GCC(const Driver &D, const llvm::Triple& Triple);
   ~Generic_GCC();
 
   virtual Tool &SelectTool(const Compilation &C, const JobAction &JA,
@@ -151,8 +150,7 @@ protected:
   mutable llvm::DenseMap<unsigned, Tool*> Tools;
 
 public:
-  Hexagon_TC(const Driver &D, const llvm::Triple& Triple,
-             const std::string &UserTriple);
+  Hexagon_TC(const Driver &D, const llvm::Triple& Triple);
   ~Hexagon_TC();
 
   virtual Tool &SelectTool(const Compilation &C, const JobAction &JA,
@@ -221,8 +219,7 @@ private:
   void AddDeploymentTarget(DerivedArgList &Args) const;
 
 public:
-  Darwin(const Driver &D, const llvm::Triple& Triple,
-         const std::string &UserTriple);
+  Darwin(const Driver &D, const llvm::Triple& Triple);
   ~Darwin();
 
   std::string ComputeEffectiveClangTriple(const ArgList &Args,
@@ -262,6 +259,12 @@ public:
   bool isTargetIOSSimulator() const {
     assert(TargetInitialized && "Target not initialized!");
     return TargetIsIPhoneOSSimulator;
+  }
+
+  bool isTargetMacOS() const {
+    return !isTargetIOSSimulator() &&
+           !isTargetIPhoneOS() &&
+           ARCRuntimeForSimulator == ARCSimulator_None;
   }
 
   bool isTargetInitialized() const { return TargetInitialized; }
@@ -406,8 +409,7 @@ private:
   void AddGCCLibexecPath(unsigned darwinVersion);
 
 public:
-  DarwinClang(const Driver &D, const llvm::Triple& Triple,
-              const std::string &UserTriple);
+  DarwinClang(const Driver &D, const llvm::Triple& Triple);
 
   /// @name Darwin ToolChain Implementation
   /// {
@@ -434,9 +436,8 @@ public:
 /// Darwin_Generic_GCC - Generic Darwin tool chain using gcc.
 class LLVM_LIBRARY_VISIBILITY Darwin_Generic_GCC : public Generic_GCC {
 public:
-  Darwin_Generic_GCC(const Driver &D, const llvm::Triple& Triple,
-                     const std::string &UserTriple)
-    : Generic_GCC(D, Triple, UserTriple) {}
+  Darwin_Generic_GCC(const Driver &D, const llvm::Triple& Triple)
+    : Generic_GCC(D, Triple) {}
 
   std::string ComputeEffectiveClangTriple(const ArgList &Args,
                                           types::ID InputType) const;
@@ -447,9 +448,8 @@ public:
 class LLVM_LIBRARY_VISIBILITY Generic_ELF : public Generic_GCC {
   virtual void anchor();
 public:
-  Generic_ELF(const Driver &D, const llvm::Triple& Triple,
-              const std::string &UserTriple)
-    : Generic_GCC(D, Triple, UserTriple) {}
+  Generic_ELF(const Driver &D, const llvm::Triple& Triple)
+    : Generic_GCC(D, Triple) {}
 
   virtual bool IsIntegratedAssemblerDefault() const {
     // Default integrated assembler to on for x86.
@@ -460,8 +460,7 @@ public:
 
 class LLVM_LIBRARY_VISIBILITY AuroraUX : public Generic_GCC {
 public:
-  AuroraUX(const Driver &D, const llvm::Triple& Triple,
-           const std::string &UserTriple);
+  AuroraUX(const Driver &D, const llvm::Triple& Triple);
 
   virtual Tool &SelectTool(const Compilation &C, const JobAction &JA,
                            const ActionList &Inputs) const;
@@ -469,8 +468,7 @@ public:
 
 class LLVM_LIBRARY_VISIBILITY OpenBSD : public Generic_ELF {
 public:
-  OpenBSD(const Driver &D, const llvm::Triple& Triple,
-          const std::string &UserTriple);
+  OpenBSD(const Driver &D, const llvm::Triple& Triple);
 
   virtual Tool &SelectTool(const Compilation &C, const JobAction &JA,
                            const ActionList &Inputs) const;
@@ -478,8 +476,7 @@ public:
 
 class LLVM_LIBRARY_VISIBILITY FreeBSD : public Generic_ELF {
 public:
-  FreeBSD(const Driver &D, const llvm::Triple& Triple,
-          const std::string &UserTriple);
+  FreeBSD(const Driver &D, const llvm::Triple& Triple);
 
   virtual Tool &SelectTool(const Compilation &C, const JobAction &JA,
                            const ActionList &Inputs) const;
@@ -487,8 +484,7 @@ public:
 
 class LLVM_LIBRARY_VISIBILITY NetBSD : public Generic_ELF {
 public:
-  NetBSD(const Driver &D, const llvm::Triple& Triple,
-         const std::string &UserTriple);
+  NetBSD(const Driver &D, const llvm::Triple& Triple);
 
   virtual Tool &SelectTool(const Compilation &C, const JobAction &JA,
                            const ActionList &Inputs) const;
@@ -496,8 +492,7 @@ public:
 
 class LLVM_LIBRARY_VISIBILITY Minix : public Generic_ELF {
 public:
-  Minix(const Driver &D, const llvm::Triple& Triple,
-        const std::string &UserTriple);
+  Minix(const Driver &D, const llvm::Triple& Triple);
 
   virtual Tool &SelectTool(const Compilation &C, const JobAction &JA,
                            const ActionList &Inputs) const;
@@ -505,8 +500,7 @@ public:
 
 class LLVM_LIBRARY_VISIBILITY DragonFly : public Generic_ELF {
 public:
-  DragonFly(const Driver &D, const llvm::Triple& Triple,
-            const std::string &UserTriple);
+  DragonFly(const Driver &D, const llvm::Triple& Triple);
 
   virtual Tool &SelectTool(const Compilation &C, const JobAction &JA,
                            const ActionList &Inputs) const;
@@ -514,8 +508,7 @@ public:
 
 class LLVM_LIBRARY_VISIBILITY Linux : public Generic_ELF {
 public:
-  Linux(const Driver &D, const llvm::Triple& Triple,
-        const std::string &UserTriple);
+  Linux(const Driver &D, const llvm::Triple& Triple);
 
   virtual bool HasNativeLLVMSupport() const;
 
@@ -541,8 +534,7 @@ private:
 /// all subcommands. See http://tce.cs.tut.fi for our peculiar target.
 class LLVM_LIBRARY_VISIBILITY TCEToolChain : public ToolChain {
 public:
-  TCEToolChain(const Driver &D, const llvm::Triple& Triple,
-               const std::string &UserTriple);
+  TCEToolChain(const Driver &D, const llvm::Triple& Triple);
   ~TCEToolChain();
 
   virtual Tool &SelectTool(const Compilation &C, const JobAction &JA,
@@ -561,8 +553,7 @@ class LLVM_LIBRARY_VISIBILITY Windows : public ToolChain {
   mutable llvm::DenseMap<unsigned, Tool*> Tools;
 
 public:
-  Windows(const Driver &D, const llvm::Triple& Triple,
-          const std::string &UserTriple);
+  Windows(const Driver &D, const llvm::Triple& Triple);
 
   virtual Tool &SelectTool(const Compilation &C, const JobAction &JA,
                            const ActionList &Inputs) const;

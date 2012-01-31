@@ -1382,7 +1382,6 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
       CmdArgs.push_back("-analyzer-checker=deadcode");
       
       // Enable the following experimental checkers for testing. 
-      CmdArgs.push_back("-analyzer-checker=experimental.osx.cocoa.ContainerAPI");
       CmdArgs.push_back("-analyzer-checker=security.insecureAPI.UncheckedReturn");
       CmdArgs.push_back("-analyzer-checker=security.insecureAPI.getpw");
       CmdArgs.push_back("-analyzer-checker=security.insecureAPI.gets");
@@ -3996,7 +3995,7 @@ void darwin::Link::ConstructJob(Compilation &C, const JobAction &JA,
                 CmdArgs.push_back("-lcrt1.o");
               else if (getDarwinToolChain().isMacosxVersionLT(10, 6))
                 CmdArgs.push_back("-lcrt1.10.5.o");
-              else
+              else if (getDarwinToolChain().isMacosxVersionLT(10, 8))
                 CmdArgs.push_back("-lcrt1.10.6.o");
 
               // darwin_crt2 spec is empty.
@@ -4035,7 +4034,9 @@ void darwin::Link::ConstructJob(Compilation &C, const JobAction &JA,
 
   getDarwinToolChain().AddLinkSearchPathArgs(Args, CmdArgs);
 
-  if (isObjCRuntimeLinked(Args)) {
+  if (isObjCRuntimeLinked(Args) &&
+      (!getDarwinToolChain().isTargetMacOS() ||
+       getDarwinToolChain().getArchName() != "i386")) {
     // If we don't have ARC or subscripting runtime support, link in the runtime
     // stubs.  We have to do this *before* adding any of the normal
     // linker inputs so that its initializer gets run first.

@@ -571,7 +571,10 @@ class PPCTargetInfo : public TargetInfo {
   static const char * const GCCRegNames[];
   static const TargetInfo::GCCRegAlias GCCRegAliases[];
 public:
-  PPCTargetInfo(const std::string& triple) : TargetInfo(triple) {}
+  PPCTargetInfo(const std::string& triple) : TargetInfo(triple) {
+    LongDoubleWidth = LongDoubleAlign = 128;
+    LongDoubleFormat = &llvm::APFloat::PPCDoubleDouble;
+  }
 
   virtual void getTargetBuiltins(const Builtin::Info *&Records,
                                  unsigned &NumRecords) const {
@@ -855,6 +858,7 @@ public:
                         "i64:64:64-f32:32:32-f64:64:64-v128:128:128-n32";
 
     switch (getTriple().getOS()) {
+    case llvm::Triple::Linux:
     case llvm::Triple::FreeBSD:
     case llvm::Triple::NetBSD:
       SizeType = UnsignedInt;
