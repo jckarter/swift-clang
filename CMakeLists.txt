@@ -223,6 +223,7 @@ install(DIRECTORY include/
   FILES_MATCHING
   PATTERN "*.def"
   PATTERN "*.h"
+  PATTERN "config.h" EXCLUDE
   PATTERN ".svn" EXCLUDE
   )
 
@@ -233,7 +234,7 @@ install(DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/include/
   PATTERN "*.inc"
   )
 
-add_definitions( -D_GNU_SOURCE -DHAVE_CLANG_CONFIG_H )
+add_definitions( -D_GNU_SOURCE )
 
 # Clang version information
 set(CLANG_EXECUTABLE_VERSION
