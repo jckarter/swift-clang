@@ -134,6 +134,7 @@ namespace UndefinedBehavior {
   constexpr int div0 = 3 / 0; // expected-error {{constant expression}} expected-note {{division by zero}} expected-warning {{undefined}}
   constexpr int mod0 = 3 % 0; // expected-error {{constant expression}} expected-note {{division by zero}} expected-warning {{undefined}}
   constexpr int int_min_div_minus_1 = int_min / -1; // expected-error {{constant expression}} expected-note {{value 2147483648 is outside the range}}
+  constexpr int int_min_mod_minus_1 = int_min % -1; // expected-error {{constant expression}} expected-note {{value 2147483648 is outside the range}}
 
   constexpr int shl_m1 = 0 << -1; // expected-error {{constant expression}} expected-note {{negative shift count -1}} expected-warning {{negative}}
   constexpr int shl_0 = 0 << 0; // ok
@@ -185,6 +186,56 @@ namespace UndefinedBehavior {
     static_assert((B*)na == 0, "");
     constexpr const int &nf = nb->n; // expected-error {{constant expression}} expected-note {{cannot access field of null pointer}}
     constexpr const int &np = (*(int(*)[4])nullptr)[2]; // expected-error {{constant expression}} expected-note {{cannot access array element of null pointer}}
+
+    struct C {
+      constexpr int f() { return 0; }
+    } constexpr c = C();
+    constexpr int k1 = c.f(); // ok
+    constexpr int k2 = ((C*)nullptr)->f(); // expected-error {{constant expression}} expected-note {{cannot call member function on null pointer}}
+    constexpr int k3 = (&c)[1].f(); // expected-error {{constant expression}} expected-note {{cannot call member function on pointer past the end of object}}
+    C c2;
+    constexpr int k4 = c2.f(); // ok!
+  }
+
+  namespace Overflow {
+    // Signed int overflow.
+    constexpr int n1 = 2 * 3 * 3 * 7 * 11 * 31 * 151 * 331; // ok
+    constexpr int n2 = 65536 * 32768; // expected-error {{constant expression}} expected-note {{value 2147483648 is outside the range of }}
+    constexpr int n3 = n1 + 1; // ok
+    constexpr int n4 = n3 + 1; // expected-error {{constant expression}} expected-note {{value 2147483648 is outside the range of }}
+    constexpr int n5 = -65536 * 32768; // ok
+    constexpr int n6 = 3 * -715827883; // expected-error {{constant expression}} expected-note {{value -2147483649 is outside the range of }}
+    constexpr int n7 = -n3 + -1; // ok
+    constexpr int n8 = -1 + n7; // expected-error {{constant expression}} expected-note {{value -2147483649 is outside the range of }}
+    constexpr int n9 = n3 - 0; // ok
+    constexpr int n10 = n3 - -1; // expected-error {{constant expression}} expected-note {{value 2147483648 is outside the range of }}
+    constexpr int n11 = -1 - n3; // ok
+    constexpr int n12 = -2 - n3; // expected-error {{constant expression}} expected-note {{value -2147483649 is outside the range of }}
+    constexpr int n13 = n5 + n5; // expected-error {{constant expression}} expected-note {{value -4294967296 is outside the range of }}
+    constexpr int n14 = n3 - n5; // expected-error {{constant expression}} expected-note {{value 4294967295 is outside the range of }}
+    constexpr int n15 = n5 * n5; // expected-error {{constant expression}} expected-note {{value 4611686018427387904 is outside the range of }}
+    constexpr signed char c1 = 100 * 2; // ok
+    constexpr signed char c2 = '\x64' * '\2'; // also ok
+    constexpr long long ll1 = 0x7fffffffffffffff; // ok
+    constexpr long long ll2 = ll1 + 1; // expected-error {{constant}} expected-note {{ 9223372036854775808 }}
+    constexpr long long ll3 = -ll1 - 1; // ok
+    constexpr long long ll4 = ll3 - 1; // expected-error {{constant}} expected-note {{ -9223372036854775809 }}
+    constexpr long long ll5 = ll3 * ll3; // expected-error {{constant}} expected-note {{ 85070591730234615865843651857942052864 }}
+
+    // Unsigned int overflow.
+    static_assert(65536u * 65536u == 0u, ""); // ok
+    static_assert(4294967295u + 1u == 0u, ""); // ok
+    static_assert(0u - 1u == 4294967295u, ""); // ok
+    static_assert(~0u * ~0u == 1u, ""); // ok
+
+    // Floating-point overflow and NaN.
+    constexpr float f1 = 1e38f * 3.4028f; // ok
+    constexpr float f2 = 1e38f * 3.4029f; // expected-error {{constant expression}} expected-note {{floating point arithmetic produces an infinity}}
+    constexpr float f3 = 1e38f / -.2939f; // ok
+    constexpr float f4 = 1e38f / -.2938f; // expected-error {{constant expression}} expected-note {{floating point arithmetic produces an infinity}}
+    constexpr float f5 = 2e38f + 2e38f; // expected-error {{constant expression}} expected-note {{floating point arithmetic produces an infinity}}
+    constexpr float f6 = -2e38f - 2e38f; // expected-error {{constant expression}} expected-note {{floating point arithmetic produces an infinity}}
+    constexpr float f7 = 0.f / 0.f; // expected-error {{constant expression}} expected-note {{floating point arithmetic produces a NaN}}
   }
 }
 

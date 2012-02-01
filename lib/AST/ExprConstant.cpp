@@ -45,6 +45,7 @@
 #include "clang/Basic/TargetInfo.h"
 #include "llvm/ADT/SmallString.h"
 #include <cstring>
+#include <functional>
 
 using namespace clang;
 using llvm::APSInt;
@@ -127,7 +128,8 @@ namespace {
 
   // The order of this enum is important for diagnostics.
   enum CheckSubobjectKind {
-    CSK_Base, CSK_Derived, CSK_Field, CSK_ArrayToPointer, CSK_ArrayIndex
+    CSK_Base, CSK_Derived, CSK_Field, CSK_ArrayToPointer, CSK_ArrayIndex,
+    CSK_This
   };
 
   /// A path from a glvalue to a subobject of that glvalue.
@@ -812,6 +814,15 @@ namespace {
       return castBack(Base);
     }
   };
+
+  /// Compare two member pointers, which are assumed to be of the same type.
+  static bool operator==(const MemberPtr &LHS, const MemberPtr &RHS) {
+    if (!LHS.getDecl() || !RHS.getDecl())
+      return !LHS.getDecl() && !RHS.getDecl();
+    if (LHS.getDecl()->getCanonicalDecl() != RHS.getDecl()->getCanonicalDecl())
+      return false;
+    return LHS.Path == RHS.Path;
+  }
 
   /// Kinds of constant expression checking, for diagnostics.
   enum CheckConstantExpressionKind {
@@ -2352,6 +2363,9 @@ public:
         return Error(E);
     } else
       return Error(E);
+
+    if (This && !This->checkSubobject(Info, E, CSK_This))
+      return false;
 
     const FunctionDecl *Definition = 0;
     Stmt *Body = FD->getBody(Definition);
@@ -4125,6 +4139,23 @@ static bool HasSameBase(const LValue &A, const LValue &B) {
          A.getLValueFrame() == B.getLValueFrame();
 }
 
+/// Perform the given integer operation, which is known to need at most BitWidth
+/// bits, and check for overflow in the original type (if that type was not an
+/// unsigned type).
+template<typename Operation>
+static APSInt CheckedIntArithmetic(EvalInfo &Info, const Expr *E,
+                                   const APSInt &LHS, const APSInt &RHS,
+                                   unsigned BitWidth, Operation Op) {
+  if (LHS.isUnsigned())
+    return Op(LHS, RHS);
+
+  APSInt Value(Op(LHS.extend(BitWidth), RHS.extend(BitWidth)), false);
+  APSInt Result = Value.trunc(LHS.getBitWidth());
+  if (Result.extend(BitWidth) != Value)
+    HandleOverflow(Info, E, Value, E->getType());
+  return Result;
+}
+
 bool IntExprEvaluator::VisitBinaryOperator(const BinaryOperator *E) {
   if (E->isAssignmentOp())
     return Error(E);
@@ -4295,9 +4326,9 @@ bool IntExprEvaluator::VisitBinaryOperator(const BinaryOperator *E) {
             (!RHSValue.Base && !RHSValue.Offset.isZero()))
           return Error(E);
         // It's implementation-defined whether distinct literals will have
-        // distinct addresses. In clang, we do not guarantee the addresses are
-        // distinct. However, we do know that the address of a literal will be
-        // non-null.
+        // distinct addresses. In clang, the result of such a comparison is
+        // unspecified, so it is not a constant expression. However, we do know
+        // that the address of a literal will be non-null.
         if ((IsLiteralLValue(LHSValue) || IsLiteralLValue(RHSValue)) &&
             LHSValue.Base && RHSValue.Base)
           return Error(E);
@@ -4354,6 +4385,45 @@ bool IntExprEvaluator::VisitBinaryOperator(const BinaryOperator *E) {
       }
     }
   }
+
+  if (LHSTy->isMemberPointerType()) {
+    assert(E->isEqualityOp() && "unexpected member pointer operation");
+    assert(RHSTy->isMemberPointerType() && "invalid comparison");
+
+    MemberPtr LHSValue, RHSValue;
+
+    bool LHSOK = EvaluateMemberPointer(E->getLHS(), LHSValue, Info);
+    if (!LHSOK && Info.keepEvaluatingAfterFailure())
+      return false;
+
+    if (!EvaluateMemberPointer(E->getRHS(), RHSValue, Info) || !LHSOK)
+      return false;
+
+    // C++11 [expr.eq]p2:
+    //   If both operands are null, they compare equal. Otherwise if only one is
+    //   null, they compare unequal.
+    if (!LHSValue.getDecl() || !RHSValue.getDecl()) {
+      bool Equal = !LHSValue.getDecl() && !RHSValue.getDecl();
+      return Success(E->getOpcode() == BO_EQ ? Equal : !Equal, E);
+    }
+
+    //   Otherwise if either is a pointer to a virtual member function, the
+    //   result is unspecified.
+    if (const CXXMethodDecl *MD = dyn_cast<CXXMethodDecl>(LHSValue.getDecl()))
+      if (MD->isVirtual())
+        CCEDiag(E, diag::note_constexpr_compare_virtual_mem_ptr) << MD;
+    if (const CXXMethodDecl *MD = dyn_cast<CXXMethodDecl>(RHSValue.getDecl()))
+      if (MD->isVirtual())
+        CCEDiag(E, diag::note_constexpr_compare_virtual_mem_ptr) << MD;
+
+    //   Otherwise they compare equal if and only if they would refer to the
+    //   same member of the same most derived object or the same subobject if
+    //   they were dereferenced with a hypothetical object of the associated
+    //   class type.
+    bool Equal = LHSValue == RHSValue;
+    return Success(E->getOpcode() == BO_EQ ? Equal : !Equal, E);
+  }
+
   if (!LHSTy->isIntegralOrEnumerationType() ||
       !RHSTy->isIntegralOrEnumerationType()) {
     // We can't continue from here for non-integral types.
@@ -4424,24 +4494,31 @@ bool IntExprEvaluator::VisitBinaryOperator(const BinaryOperator *E) {
   switch (E->getOpcode()) {
   default:
     return Error(E);
-  case BO_Mul: return Success(LHS * RHS, E);
-  case BO_Add: return Success(LHS + RHS, E);
-  case BO_Sub: return Success(LHS - RHS, E);
+  case BO_Mul:
+    return Success(CheckedIntArithmetic(Info, E, LHS, RHS,
+                                        LHS.getBitWidth() * 2,
+                                        std::multiplies<APSInt>()), E);
+  case BO_Add:
+    return Success(CheckedIntArithmetic(Info, E, LHS, RHS,
+                                        LHS.getBitWidth() + 1,
+                                        std::plus<APSInt>()), E);
+  case BO_Sub:
+    return Success(CheckedIntArithmetic(Info, E, LHS, RHS,
+                                        LHS.getBitWidth() + 1,
+                                        std::minus<APSInt>()), E);
   case BO_And: return Success(LHS & RHS, E);
   case BO_Xor: return Success(LHS ^ RHS, E);
   case BO_Or:  return Success(LHS | RHS, E);
   case BO_Div:
-    if (RHS == 0)
-      return Error(E, diag::note_expr_divide_by_zero);
-    // Check for overflow case: INT_MIN / -1.
-    if (RHS.isNegative() && RHS.isAllOnesValue() &&
-        LHS.isSigned() && LHS.isMinSignedValue())
-      HandleOverflow(Info, E, -LHS.extend(LHS.getBitWidth() + 1), E->getType());
-    return Success(LHS / RHS, E);
   case BO_Rem:
     if (RHS == 0)
       return Error(E, diag::note_expr_divide_by_zero);
-    return Success(LHS % RHS, E);
+    // Check for overflow case: INT_MIN / -1 or INT_MIN % -1. The latter is not
+    // actually undefined behavior in C++11 due to a language defect.
+    if (RHS.isNegative() && RHS.isAllOnesValue() &&
+        LHS.isSigned() && LHS.isMinSignedValue())
+      HandleOverflow(Info, E, -LHS.extend(LHS.getBitWidth() + 1), E->getType());
+    return Success(E->getOpcode() == BO_Rem ? LHS % RHS : LHS / RHS, E);
   case BO_Shl: {
     // During constant-folding, a negative shift is an opposite shift. Such a
     // shift is not a constant expression.
@@ -5028,17 +5105,21 @@ bool FloatExprEvaluator::VisitBinaryOperator(const BinaryOperator *E) {
   default: return Error(E);
   case BO_Mul:
     Result.multiply(RHS, APFloat::rmNearestTiesToEven);
-    return true;
+    break;
   case BO_Add:
     Result.add(RHS, APFloat::rmNearestTiesToEven);
-    return true;
+    break;
   case BO_Sub:
     Result.subtract(RHS, APFloat::rmNearestTiesToEven);
-    return true;
+    break;
   case BO_Div:
     Result.divide(RHS, APFloat::rmNearestTiesToEven);
-    return true;
+    break;
   }
+
+  if (Result.isInfinity() || Result.isNaN())
+    CCEDiag(E, diag::note_constexpr_float_arithmetic) << Result.isNaN();
+  return true;
 }
 
 bool FloatExprEvaluator::VisitFloatingLiteral(const FloatingLiteral *E) {
