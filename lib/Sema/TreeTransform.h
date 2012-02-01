@@ -5326,6 +5326,7 @@ TreeTransform<Derived>::TransformIndirectGotoStmt(IndirectGotoStmt *S) {
   ExprResult Target = getDerived().TransformExpr(S->getTarget());
   if (Target.isInvalid())
     return StmtError();
+  Target = SemaRef.MaybeCreateExprWithCleanups(Target.take());
 
   if (!getDerived().AlwaysRebuild() &&
       Target.get() == S->getTarget())
@@ -5738,10 +5739,18 @@ TreeTransform<Derived>::TransformCXXForRangeStmt(CXXForRangeStmt *S) {
   ExprResult Cond = getDerived().TransformExpr(S->getCond());
   if (Cond.isInvalid())
     return StmtError();
+  if (Cond.get())
+    Cond = SemaRef.CheckBooleanCondition(Cond.take(), S->getColonLoc());
+  if (Cond.isInvalid())
+    return StmtError();
+  if (Cond.get())
+    Cond = SemaRef.MaybeCreateExprWithCleanups(Cond.take());
 
   ExprResult Inc = getDerived().TransformExpr(S->getInc());
   if (Inc.isInvalid())
     return StmtError();
+  if (Inc.get())
+    Inc = SemaRef.MaybeCreateExprWithCleanups(Inc.take());
 
   StmtResult LoopVar = getDerived().TransformStmt(S->getLoopVarStmt());
   if (LoopVar.isInvalid())
