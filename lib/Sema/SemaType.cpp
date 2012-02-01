@@ -4213,7 +4213,8 @@ bool Sema::RequireLiteralType(SourceLocation Loc, QualType T,
   assert(!T->isDependentType() && "type should not be dependent");
 
   bool Incomplete = RequireCompleteType(Loc, T, 0);
-  if (T->isLiteralType() || (AllowIncompleteType && Incomplete))
+  if (T->isLiteralType() ||
+      (AllowIncompleteType && Incomplete && !T->isVoidType()))
     return false;
 
   if (PD.getDiagID() == 0)

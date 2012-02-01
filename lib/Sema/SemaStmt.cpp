@@ -1615,6 +1615,7 @@ Sema::ActOnIndirectGotoStmt(SourceLocation GotoLoc, SourceLocation StarLoc,
     E = ExprRes.take();
     if (DiagnoseAssignmentResult(ConvTy, StarLoc, DestTy, ETy, E, AA_Passing))
       return StmtError();
+    E = MaybeCreateExprWithCleanups(E);
   }
 
   getCurFunction()->setHasIndirectGoto();

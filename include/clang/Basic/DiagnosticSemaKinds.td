@@ -3339,9 +3339,9 @@ def err_arc_cast_requires_bridge : Error<
 def note_arc_bridge : Note<
   "use __bridge to convert directly (no change in ownership)">;
 def note_arc_bridge_transfer : Note<
-  "use __bridge_transfer to transfer ownership of a +1 %0 into ARC">;
+  "use CFBridgeRelease call to transfer ownership of a +1 %0 into ARC">;
 def note_arc_bridge_retained : Note<
-  "use __bridge_retained to make an ARC object available as a +1 %0">;
+  "use CFBridgeRetain call to make an ARC object available as a +1 %0">;
 
 } // ARC Casting category
 
@@ -4122,7 +4122,9 @@ def err_capture_non_automatic_variable : Error<
   "%0 cannot be captured because it does not have automatic storage duration">;
 def err_implicit_this_capture : Error<
   "'this' cannot be implicitly captured in this context">;
-
+def err_lambda_capture_block : Error<
+  "__block variable %0 cannot be captured in a lambda">;
+  
 def err_operator_arrow_circular : Error<
   "circular pointer delegation detected">;
 def err_pseudo_dtor_base_not_scalar : Error<

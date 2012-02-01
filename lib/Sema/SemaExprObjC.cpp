@@ -855,7 +855,8 @@ ObjCMethodDecl *Sema::tryCaptureObjCSelf() {
     if (captureIndex) break;
 
     bool nested = isa<BlockScopeInfo>(FunctionScopes[idx-1]);
-    blockScope->AddCapture(self, /*byref*/ false, nested, /*copy*/ 0);
+    blockScope->AddCapture(self, /*byref*/ false, nested, self->getLocation(),
+                           /*copy*/ 0);
     captureIndex = blockScope->Captures.size(); // +1
   }
 
@@ -1294,7 +1295,7 @@ HandleExprPropertyRefExpr(const ObjCObjectPointerType *OPT,
   DeclFilterCCC<ObjCPropertyDecl> Validator;
   if (TypoCorrection Corrected = CorrectTypo(
       DeclarationNameInfo(MemberName, MemberLoc), LookupOrdinaryName, NULL,
-      NULL, &Validator, IFace, false, OPT)) {
+      NULL, Validator, IFace, false, OPT)) {
     ObjCPropertyDecl *Property =
         Corrected.getCorrectionDeclAs<ObjCPropertyDecl>();
     DeclarationName TypoResult = Corrected.getCorrection();
@@ -1526,7 +1527,7 @@ Sema::ObjCMessageKind Sema::getObjCMessageKind(Scope *S,
   ObjCInterfaceOrSuperCCC Validator(getCurMethodDecl());
   if (TypoCorrection Corrected = CorrectTypo(Result.getLookupNameInfo(),
                                              Result.getLookupKind(), S, NULL,
-                                             &Validator)) {
+                                             Validator)) {
     if (Corrected.isKeyword()) {
       // If we've found the keyword "super" (the only keyword that would be
       // returned by CorrectTypo), this is a send to super.
@@ -2541,7 +2542,7 @@ diagnoseObjCARCConversion(Sema &S, SourceRange castRange,
     S.Diag(noteLoc, diag::note_arc_bridge_transfer)
       << castExprType
       << (CCK != Sema::CCK_CStyleCast ? FixItHint() :
-            FixItHint::CreateInsertion(afterLParen, "__bridge_transfer "));
+            FixItHint::CreateInsertion(afterLParen, "CFBridgeRelease "));
 
     return;
   }
@@ -2563,7 +2564,7 @@ diagnoseObjCARCConversion(Sema &S, SourceRange castRange,
     S.Diag(noteLoc, diag::note_arc_bridge_retained)
       << castType
       << (CCK != Sema::CCK_CStyleCast ? FixItHint() :
-            FixItHint::CreateInsertion(afterLParen, "__bridge_retained "));
+            FixItHint::CreateInsertion(afterLParen, "CFBridgeRetain "));
 
     return;
   }
@@ -2807,7 +2808,7 @@ ExprResult Sema::BuildObjCBridgedCast(SourceLocation LParenLoc,
       Diag(BridgeKeywordLoc, diag::note_arc_bridge_transfer)
         << FromType
         << FixItHint::CreateReplacement(BridgeKeywordLoc, 
-                                        "__bridge_transfer ");
+                                        "CFBridgeRelease ");
 
       Kind = OBC_Bridge;
       break;
@@ -2847,7 +2848,7 @@ ExprResult Sema::BuildObjCBridgedCast(SourceLocation LParenLoc,
         << FixItHint::CreateReplacement(BridgeKeywordLoc, "__bridge ");
       Diag(BridgeKeywordLoc, diag::note_arc_bridge_retained)
         << T
-        << FixItHint::CreateReplacement(BridgeKeywordLoc, "__bridge_retained ");
+        << FixItHint::CreateReplacement(BridgeKeywordLoc, "CFBridgeRetain ");
         
       Kind = OBC_Bridge;
       break;
