@@ -5977,7 +5977,7 @@ TreeTransform<Derived>::TransformDeclRefExpr(DeclRefExpr *E) {
 
     // Mark it referenced in the new context regardless.
     // FIXME: this is a bit instantiation-specific.
-    SemaRef.MarkDeclarationReferenced(E->getLocation(), ND);
+    SemaRef.MarkDeclRefReferenced(E);
 
     return SemaRef.Owned(E);
   }
@@ -6321,7 +6321,8 @@ TreeTransform<Derived>::TransformMemberExpr(MemberExpr *E) {
     
     // Mark it referenced in the new context regardless.
     // FIXME: this is a bit instantiation-specific.
-    SemaRef.MarkDeclarationReferenced(E->getMemberLoc(), Member);
+    SemaRef.MarkMemberReferenced(E);
+
     return SemaRef.Owned(E);
   }
 
@@ -7145,11 +7146,11 @@ TreeTransform<Derived>::TransformCXXNewExpr(CXXNewExpr *E) {
     // Mark any declarations we need as referenced.
     // FIXME: instantiation-specific.
     if (Constructor)
-      SemaRef.MarkDeclarationReferenced(E->getLocStart(), Constructor);
+      SemaRef.MarkFunctionReferenced(E->getLocStart(), Constructor);
     if (OperatorNew)
-      SemaRef.MarkDeclarationReferenced(E->getLocStart(), OperatorNew);
+      SemaRef.MarkFunctionReferenced(E->getLocStart(), OperatorNew);
     if (OperatorDelete)
-      SemaRef.MarkDeclarationReferenced(E->getLocStart(), OperatorDelete);
+      SemaRef.MarkFunctionReferenced(E->getLocStart(), OperatorDelete);
     
     if (E->isArray() && Constructor && 
         !E->getAllocatedType()->isDependentType()) {
@@ -7158,7 +7159,7 @@ TreeTransform<Derived>::TransformCXXNewExpr(CXXNewExpr *E) {
       if (const RecordType *RecordT = ElementType->getAs<RecordType>()) {
         CXXRecordDecl *Record = cast<CXXRecordDecl>(RecordT->getDecl());
         if (CXXDestructorDecl *Destructor = SemaRef.LookupDestructor(Record)) {
-          SemaRef.MarkDeclarationReferenced(E->getLocStart(), Destructor);
+          SemaRef.MarkFunctionReferenced(E->getLocStart(), Destructor);
         }
       }
     }
@@ -7230,15 +7231,15 @@ TreeTransform<Derived>::TransformCXXDeleteExpr(CXXDeleteExpr *E) {
     // Mark any declarations we need as referenced.
     // FIXME: instantiation-specific.
     if (OperatorDelete)
-      SemaRef.MarkDeclarationReferenced(E->getLocStart(), OperatorDelete);
+      SemaRef.MarkFunctionReferenced(E->getLocStart(), OperatorDelete);
     
     if (!E->getArgument()->isTypeDependent()) {
       QualType Destroyed = SemaRef.Context.getBaseElementType(
                                                          E->getDestroyedType());
       if (const RecordType *DestroyedRec = Destroyed->getAs<RecordType>()) {
         CXXRecordDecl *Record = cast<CXXRecordDecl>(DestroyedRec->getDecl());
-        SemaRef.MarkDeclarationReferenced(E->getLocStart(), 
-                                          SemaRef.LookupDestructor(Record));
+        SemaRef.MarkFunctionReferenced(E->getLocStart(), 
+                                       SemaRef.LookupDestructor(Record));
       }
     }
     
@@ -7568,7 +7569,7 @@ TreeTransform<Derived>::TransformCXXConstructExpr(CXXConstructExpr *E) {
       !ArgumentChanged) {
     // Mark the constructor as referenced.
     // FIXME: Instantiation-specific
-    SemaRef.MarkDeclarationReferenced(E->getLocStart(), Constructor);
+    SemaRef.MarkFunctionReferenced(E->getLocStart(), Constructor);
     return SemaRef.Owned(E);
   }
 
@@ -7629,7 +7630,7 @@ TreeTransform<Derived>::TransformCXXTemporaryObjectExpr(
       Constructor == E->getConstructor() &&
       !ArgumentChanged) {
     // FIXME: Instantiation-specific
-    SemaRef.MarkDeclarationReferenced(E->getLocStart(), Constructor);
+    SemaRef.MarkFunctionReferenced(E->getLocStart(), Constructor);
     return SemaRef.MaybeBindToTemporary(E);
   }
   
@@ -8457,7 +8458,7 @@ TreeTransform<Derived>::TransformBlockDeclRefExpr(BlockDeclRefExpr *E) {
       ND == E->getDecl()) {
     // Mark it referenced in the new context regardless.
     // FIXME: this is a bit instantiation-specific.
-    SemaRef.MarkDeclarationReferenced(E->getLocation(), ND);
+    SemaRef.MarkBlockDeclRefReferenced(E);
     
     return SemaRef.Owned(E);
   }

@@ -372,6 +372,14 @@ def warn_pragma_unused_expected_var_arg : Warning<
   "only variables can be arguments to '#pragma unused'">;
 def err_unsupported_pragma_weak : Error<
   "using '#pragma weak' to refer to an undeclared identifier is not yet supported">;
+def err_pragma_push_visibility_mismatch : Error<
+  "#pragma visibility push with no matching #pragma visibility pop">;
+def note_surrounding_namespace_ends_here : Note<
+  "surrounding namespace with visibility attribute ends here">;
+def err_pragma_pop_visibility_mismatch : Error<
+  "#pragma visibility pop with no matching #pragma visibility push">;
+def note_surrounding_namespace_starts_here : Note<
+  "surrounding namespace with visibility attribute starts here">;
 
 /// Objective-C parser diagnostics
 def err_duplicate_class_def : Error<
@@ -3348,9 +3356,11 @@ def err_arc_cast_requires_bridge : Error<
 def note_arc_bridge : Note<
   "use __bridge to convert directly (no change in ownership)">;
 def note_arc_bridge_transfer : Note<
-  "use CFBridgeRelease call to transfer ownership of a +1 %0 into ARC">;
+  "use %select{__bridge_transfer|CFBridgingRelease call}1 to transfer "
+  "ownership of a +1 %0 into ARC">;
 def note_arc_bridge_retained : Note<
-  "use CFBridgeRetain call to make an ARC object available as a +1 %0">;
+  "use %select{__bridge_retained|CFBridgingRetain call}1 to make an "
+  "ARC object available as a +1 %0">;
 
 } // ARC Casting category
 
