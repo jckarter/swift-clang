@@ -1983,8 +1983,7 @@ ExprResult Parser::ParseObjCAtExpression(SourceLocation AtLoc) {
     return ExprError();
 
   case tok::minus:
-  case tok::plus:
-  case tok::tilde: {
+  case tok::plus: {
     tok::TokenKind Kind = Tok.getKind();
     SourceLocation OpLoc = ConsumeToken();
 
@@ -1993,7 +1992,6 @@ ExprResult Parser::ParseObjCAtExpression(SourceLocation AtLoc) {
       switch (Kind) {
       case tok::minus: Symbol = "-"; break;
       case tok::plus: Symbol = "+"; break;
-      case tok::tilde: Symbol = "~"; break;
       default: llvm_unreachable("missing unary operator case");
       }
       Diag(Tok, diag::err_nsnumber_nonliteral_unary)
