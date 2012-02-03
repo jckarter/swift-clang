@@ -172,6 +172,13 @@ void DiagnosticsEngine::setDiagnosticMapping(diag::kind Diag, diag::Mapping Map,
 
   FullSourceLoc Loc(L, *SourceMgr);
   FullSourceLoc LastStateChangePos = DiagStatePoints.back().Loc;
+  // Don't allow a mapping to a warning override an error/fatal mapping.
+  if (Map == diag::MAP_WARNING) {
+    DiagnosticMappingInfo &Info = GetCurDiagState()->getOrAddMappingInfo(Diag);
+    if (Info.getMapping() == diag::MAP_ERROR ||
+        Info.getMapping() == diag::MAP_FATAL)
+      Map = Info.getMapping();
+  }
   DiagnosticMappingInfo MappingInfo = makeMappingInfo(Map, L);
 
   // Common case; setting all the diagnostics of a group in one place.
@@ -323,14 +330,11 @@ void DiagnosticsEngine::Report(const StoredDiagnostic &storedDiag) {
          RE = storedDiag.range_end(); RI != RE; ++RI)
     DiagRanges[i++] = *RI;
 
-  NumFixItHints = storedDiag.fixit_size();
-  assert(NumFixItHints < DiagnosticsEngine::MaxFixItHints &&
-      "Too many fix-it hints!");
-  i = 0;
+  FixItHints.clear();
   for (StoredDiagnostic::fixit_iterator
          FI = storedDiag.fixit_begin(),
          FE = storedDiag.fixit_end(); FI != FE; ++FI)
-    FixItHints[i++] = *FI;
+    FixItHints.push_back(*FI);
 
   assert(Client && "DiagnosticConsumer not set!");
   Level DiagLevel = storedDiag.getLevel();
@@ -347,7 +351,6 @@ void DiagnosticsEngine::Report(const StoredDiagnostic &storedDiag) {
 void DiagnosticBuilder::FlushCounts() {
   DiagObj->NumDiagArgs = NumArgs;
   DiagObj->NumDiagRanges = NumRanges;
-  DiagObj->NumFixItHints = NumFixItHints;
 }
 
 bool DiagnosticBuilder::Emit() {

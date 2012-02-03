@@ -154,6 +154,8 @@ def ffunction_sections : Flag<"-ffunction-sections">,
   HelpText<"Place each function in its own section (ELF Only)">;
 def fdata_sections : Flag<"-fdata-sections">,
   HelpText<"Place each data in its own section (ELF Only)">;
+def ftrap_function_EQ : Joined<"-ftrap-function=">,
+  HelpText<"Issue call to specified function rather than a trap instruction">;
 def funroll_loops : Flag<"-funroll-loops">,
   HelpText<"Turn on loop unroller">;
 def femit_coverage_notes : Flag<"-femit-coverage-notes">,
@@ -233,8 +235,8 @@ def pg : Flag<"-pg">, HelpText<"Enable mcount instrumentation">;
 
 def dependency_file : Separate<"-dependency-file">,
   HelpText<"Filename (or -) to write dependency output to">;
-def dependency_graphviz : Separate<"-dependency-graphviz">,
-  HelpText<"Filename to write GraphViz-formatted header dependencies to">;
+def dependency_dot : Separate<"-dependency-dot">,
+  HelpText<"Filename to write DOT-formatted header dependencies to">;
 def sys_header_deps : Flag<"-sys-header-deps">,
   HelpText<"Include system headers in dependency output">;
 def header_include_file : Separate<"-header-include-file">,

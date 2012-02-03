@@ -1982,6 +1982,37 @@ ExprResult Parser::ParseObjCAtExpression(SourceLocation AtLoc) {
     cutOffParsing();
     return ExprError();
 
+  case tok::minus:
+  case tok::plus: {
+    tok::TokenKind Kind = Tok.getKind();
+    SourceLocation OpLoc = ConsumeToken();
+
+    if (!Tok.is(tok::numeric_constant)) {
+      const char *Symbol = 0;
+      switch (Kind) {
+      case tok::minus: Symbol = "-"; break;
+      case tok::plus: Symbol = "+"; break;
+      default: llvm_unreachable("missing unary operator case");
+      }
+      Diag(Tok, diag::err_nsnumber_nonliteral_unary)
+        << Symbol;
+      return ExprError();
+    }
+
+    ExprResult Lit(Actions.ActOnNumericConstant(Tok));
+    if (Lit.isInvalid()) {
+      return move(Lit);
+    }
+    SourceLocation EndLoc = ConsumeToken();         // consume the literal token.
+
+    Lit = Actions.ActOnUnaryOp(getCurScope(), OpLoc, Kind, Lit.take());
+    if (Lit.isInvalid())
+      return move(Lit);
+
+    return ParsePostfixExpressionSuffix(
+             Actions.BuildObjCNumericLiteral(AtLoc, Lit.take()));
+  }
+
   case tok::string_literal:    // primary-expression: string-literal
   case tok::wide_string_literal:
     return ParsePostfixExpressionSuffix(ParseObjCStringLiteral(AtLoc));
