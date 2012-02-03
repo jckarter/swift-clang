@@ -1,5 +1,5 @@
-// RUN: %clang_cc1 -x objective-c -triple x86_64-apple-darwin10 -fblocks -emit-llvm %s -o /dev/null
-// RUN: %clang_cc1 -x objective-c++ -triple x86_64-apple-darwin10 -fblocks -emit-llvm %s -o /dev/null
+// RUN: %clang_cc1 -x objective-c -triple x86_64-apple-darwin10 -fblocks -emit-llvm %s -o - | FileCheck %s
+// RUN: %clang_cc1 -x objective-c++ -triple x86_64-apple-darwin10 -fblocks -emit-llvm %s -o - | FileCheck %s
 // rdar://10111397
 
 #if __has_feature(objc_bool)
@@ -53,17 +53,33 @@ typedef signed char BOOL;
 
 id NSUserName();
 
+// CHECK: define i32 @main() nounwind 
 int main() {
+  // CHECK: call{{.*}}@objc_msgSend{{.*}}i8 signext 97
   NSNumber *aNumber = @'a';
+  // CHECK: call{{.*}}@objc_msgSend{{.*}}i32 42
   NSNumber *fortyTwo = @42;
+  // CHECK: call{{.*}}@objc_msgSend{{.*}}i32 -42
+  NSNumber *negativeFortyTwo = @-42;
+  // CHECK: call{{.*}}@objc_msgSend{{.*}}i32 42
+  NSNumber *positiveFortyTwo = @+42;
+  // CHECK: call{{.*}}@objc_msgSend{{.*}}i32 42
   NSNumber *fortyTwoUnsigned = @42u;
+  // CHECK: call{{.*}}@objc_msgSend{{.*}}i64 42
   NSNumber *fortyTwoLong = @42l;
+  // CHECK: call{{.*}}@objc_msgSend{{.*}}i64 42
   NSNumber *fortyTwoLongLong = @42ll;
+  // CHECK: call{{.*}}@objc_msgSend{{.*}}float 0x400921FB60000000
   NSNumber *piFloat = @3.141592654f;
+  // CHECK: call{{.*}}@objc_msgSend{{.*}}double 0x400921FB54411744
   NSNumber *piDouble = @3.1415926535;
+  // CHECK: call{{.*}}@objc_msgSend{{.*}}i8 signext 1
   NSNumber *yesNumber = @__objc_yes;
+  // CHECK: call{{.*}}@objc_msgSend{{.*}}i8 signext 0
   NSNumber *noNumber = @__objc_no;
+  // CHECK: call{{.*}}@objc_msgSend{{.*}}i8 signext 1
   NSNumber *yesNumber1 = @YES;
+  // CHECK: call{{.*}}@objc_msgSend{{.*}}i8 signext 0
   NSNumber *noNumber1 = @NO;
 NSDictionary *dictionary = @{@"name" : NSUserName(), 
                              @"date" : [NSDate date] }; 

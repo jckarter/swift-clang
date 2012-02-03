@@ -1143,6 +1143,7 @@ static bool ParseCodeGenArgs(CodeGenOptions &Opts, ArgList &Args, InputKind IK,
                       Args.hasArg(OPT_cl_fast_relaxed_math);
   Opts.UnwindTables = Args.hasArg(OPT_munwind_tables);
   Opts.RelocationModel = Args.getLastArgValue(OPT_mrelocation_model, "pic");
+  Opts.TrapFuncName = Args.getLastArgValue(OPT_ftrap_function_EQ);
 
   Opts.FunctionSections = Args.hasArg(OPT_ffunction_sections);
   Opts.DataSections = Args.hasArg(OPT_fdata_sections);
@@ -1191,7 +1192,7 @@ static void ParseDependencyOutputArgs(DependencyOutputOptions &Opts,
   Opts.ShowHeaderIncludes = Args.hasArg(OPT_H);
   Opts.HeaderIncludeOutputFile = Args.getLastArgValue(OPT_header_include_file);
   Opts.AddMissingHeaderDeps = Args.hasArg(OPT_MG);
-  Opts.GraphvizOutputFile = Args.getLastArgValue(OPT_dependency_graphviz);
+  Opts.DOTOutputFile = Args.getLastArgValue(OPT_dependency_dot);
 }
 
 static bool ParseDiagnosticArgs(DiagnosticOptions &Opts, ArgList &Args,
