@@ -1714,10 +1714,12 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
 
   Args.AddLastArg(CmdArgs, options::OPT_working_directory);
 
+  bool ARCMTEnabled = false;
   if (!Args.hasArg(options::OPT_fno_objc_arc)) {
     if (const Arg *A = Args.getLastArg(options::OPT_ccc_arcmt_check,
                                        options::OPT_ccc_arcmt_modify,
                                        options::OPT_ccc_arcmt_migrate)) {
+      ARCMTEnabled = true;
       switch (A->getOption().getID()) {
       default:
         llvm_unreachable("missed a case");
@@ -1729,13 +1731,32 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
         break;
       case options::OPT_ccc_arcmt_migrate:
         CmdArgs.push_back("-arcmt-migrate");
-        CmdArgs.push_back("-arcmt-migrate-directory");
+        CmdArgs.push_back("-mt-migrate-directory");
         CmdArgs.push_back(A->getValue(Args));
 
         Args.AddLastArg(CmdArgs, options::OPT_arcmt_migrate_report_output);
         Args.AddLastArg(CmdArgs, options::OPT_arcmt_migrate_emit_arc_errors);
         break;
       }
+    }
+  }
+
+  if (const Arg *A = Args.getLastArg(options::OPT_ccc_objcmt_migrate)) {
+    if (ARCMTEnabled) {
+      D.Diag(diag::err_drv_argument_not_allowed_with)
+        << A->getAsString(Args) << "-ccc-arcmt-migrate";
+    }
+    CmdArgs.push_back("-mt-migrate-directory");
+    CmdArgs.push_back(A->getValue(Args));
+
+    if (!Args.hasArg(options::OPT_objcmt_migrate_literals,
+                     options::OPT_objcmt_migrate_subscripting)) {
+      // None specified, means enable them all.
+      CmdArgs.push_back("-objcmt-migrate-literals");
+      CmdArgs.push_back("-objcmt-migrate-subscripting");
+    } else {
+      Args.AddLastArg(CmdArgs, options::OPT_objcmt_migrate_literals);
+      Args.AddLastArg(CmdArgs, options::OPT_objcmt_migrate_subscripting);
     }
   }
 

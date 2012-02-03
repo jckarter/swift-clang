@@ -105,7 +105,7 @@ static FrontendAction *CreateFrontendAction(CompilerInstance &CI) {
     break;
   case FrontendOptions::ARCMT_Migrate:
     Act = new arcmt::MigrateAction(Act,
-                                   FEOpts.ARCMTMigrateDir,
+                                   FEOpts.MTMigrateDir,
                                    FEOpts.ARCMTMigrateReportOut,
                                    FEOpts.ARCMTMigrateEmitARCErrors);
     break;
