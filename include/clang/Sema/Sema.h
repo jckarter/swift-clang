@@ -233,6 +233,8 @@ public:
   /// element type here is ExprWithCleanups::Object.
   SmallVector<BlockDecl*, 8> ExprCleanupObjects;
 
+  llvm::SmallPtrSet<Expr*, 8> MaybeODRUseExprs;
+
   /// \brief Stack containing information about each of the nested
   /// function, block, and method scopes that are currently active.
   ///
@@ -555,6 +557,8 @@ public:
     /// \brief The number of active cleanup objects when we entered
     /// this expression evaluation context.
     unsigned NumCleanupObjects;
+
+    llvm::SmallPtrSet<Expr*, 8> SavedMaybeODRUseExprs;
 
     ExpressionEvaluationContextRecord(ExpressionEvaluationContext Context,
                                       unsigned NumCleanupObjects,
@@ -1377,7 +1381,6 @@ public:
                                  QualType &ConvertedType);
   bool IsBlockPointerConversion(QualType FromType, QualType ToType,
                                 QualType& ConvertedType);
-  bool isSentinelNullExpr(const Expr *E) const;
   bool FunctionArgTypesAreEqual(const FunctionProtoType *OldType,
                                 const FunctionProtoType *NewType,
                                 unsigned *ArgPos = 0);
@@ -2277,6 +2280,10 @@ public:
   void MarkBlockDeclRefReferenced(BlockDeclRefExpr *E);
   void MarkDeclRefReferenced(DeclRefExpr *E);
   void MarkMemberReferenced(MemberExpr *E);
+
+  void UpdateMarkingForLValueToRValue(Expr *E);
+  void CleanupVarDeclMarking();
+
 
   void MarkDeclarationsReferencedInType(SourceLocation Loc, QualType T);
   void MarkDeclarationsReferencedInExpr(Expr *E);

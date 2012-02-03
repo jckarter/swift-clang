@@ -417,6 +417,8 @@ def note_implementation_declared : Note<
   "class implementation is declared here">;
 def note_class_declared : Note<
   "class is declared here">;
+def note_receiver_is_id : Note<
+  "receiver is treated with 'id' type for purpose of method lookup">;
 def note_suppressed_class_declare : Note<
   "class with specified objc_requires_property_definitions attribute is declared here">;
 def warn_dup_category_def : Warning<
@@ -1640,12 +1642,13 @@ def warn_no_unlock : Warning<
   "mutex '%0' is still locked at the end of function">,
   InGroup<ThreadSafety>, DefaultIgnore;
 // FIXME: improve the error message about locks not in scope
-def warn_lock_at_end_of_scope : Warning<
-  "mutex '%0' is still locked at the end of its scope">,
+def warn_lock_some_predecessors : Warning<
+  "mutex '%0' is not locked on every path through here">,
   InGroup<ThreadSafety>, DefaultIgnore;
 def warn_expecting_lock_held_on_loop : Warning<
   "expecting mutex '%0' to be locked at start of each loop">,
   InGroup<ThreadSafety>, DefaultIgnore;
+def note_locked_here : Note<"mutex acquired here">;
 def warn_lock_exclusive_and_shared : Warning<
   "mutex '%0' is locked exclusively and shared in the same scope">,
   InGroup<ThreadSafety>, DefaultIgnore;
@@ -3268,6 +3271,9 @@ def err_arc_may_not_respond : Error<
   "no visible @interface for %0 declares the selector %1">;
 def err_arc_receiver_forward_instance : Error<
   "receiver type %0 for instance message is a forward declaration">;
+def warn_receiver_forward_instance : Warning<
+  "receiver type %0 for instance message is a forward declaration">,
+  InGroup<DiagGroup<"receiver-forward-class">>, DefaultIgnore;
 def err_arc_collection_forward : Error<
   "collection expression type %0 is a forward declaration">;
 def err_arc_multiple_method_decl : Error< 
