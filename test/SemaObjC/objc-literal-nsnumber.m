@@ -10,6 +10,7 @@ typedef unsigned int NSUInteger;
 @interface NSNumber
 + (NSNumber *)numberWithChar:(char)value;
 + (NSNumber *)numberWithInt:(int)value;
++ (NSNumber *)numberWithFloat:(float)value;
 @end
 
 int main() {
@@ -18,6 +19,18 @@ int main() {
   NSNumber * NInt = @1000;
   NSNumber * NLongDouble = @1000.0l; // expected-error{{'long double' is not a valid literal type for NSNumber}}
   id character = @ 'a';
+
+  NSNumber *NNegativeInt = @-1000;
+  NSNumber *NPositiveInt = @+1000;
+  NSNumber *NMaskInt = @~1000;
+  NSNumber *NNegativeFloat = @-1000.1f;
+  NSNumber *NPositiveFloat = @+1000.1f;
+  NSNumber *NMaskFloat = @~1000.1f; // expected-error{{invalid argument type 'float' to unary expression}}
+
+  int five = 5;
+  @-five; // expected-error{{@- must be followed by a number to form an NSNumber object}}
+  @+five; // expected-error{{@+ must be followed by a number to form an NSNumber object}}
+  @~five; // expected-error{{@~ must be followed by a number to form an NSNumber object}}
 }
 
 // Dictionary test

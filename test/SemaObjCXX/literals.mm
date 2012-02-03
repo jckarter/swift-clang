@@ -48,6 +48,12 @@ struct X {
   ConvertibleTo<id> get();
 };
 
+template<typename T> T test_numeric_instantiation() {
+  return @-17.42;
+}
+
+template id test_numeric_instantiation();
+
 void test_convertibility(ConvertibleTo<NSArray*> toArray,
                          ConvertibleTo<id> toId,
                          ConvertibleTo<int (^)(int)> toBlock,

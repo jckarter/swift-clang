@@ -326,6 +326,8 @@ def warn_objc_protocol_qualifier_missing_id : Warning<
 def err_objc_unknown_at : Error<"expected an Objective-C directive after '@'">;
 def err_illegal_super_cast : Error<
   "cannot cast 'super' (it isn't an expression)">;
+def err_nsnumber_nonliteral_unary : Error<
+  "@%0 must be followed by a number to form an NSNumber object">;
 
 let CategoryName = "ARC Parse Issue" in {
 def err_arc_bridge_retain : Error<
