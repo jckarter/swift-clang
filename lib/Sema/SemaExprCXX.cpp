@@ -1018,28 +1018,44 @@ Sema::BuildCXXNew(SourceLocation StartLoc, bool UseGlobal,
     if (!SizeType->isIntegralOrUnscopedEnumerationType())
       return ExprError();
 
-    // Let's see if this is a constant < 0. If so, we reject it out of hand.
-    // We don't care about special rules, so we tell the machinery it's not
-    // evaluated - it gives us a result in more cases.
+    // C++98 [expr.new]p7:
+    //   The expression in a direct-new-declarator shall have integral type
+    //   with a non-negative value.
+    //
+    // Let's see if this is a constant < 0. If so, we reject it out of
+    // hand. Otherwise, if it's not a constant, we must have an unparenthesized
+    // array type.
+    //
+    // Note: such a construct has well-defined semantics in C++11: it throws
+    // std::bad_array_new_length.
     if (!ArraySize->isValueDependent()) {
       llvm::APSInt Value;
-      if (ArraySize->isIntegerConstantExpr(Value, Context, 0, false)) {
+      if (ArraySize->isIntegerConstantExpr(Value, Context)) {
         if (Value < llvm::APSInt(
                         llvm::APInt::getNullValue(Value.getBitWidth()),
-                                 Value.isUnsigned()))
-          return ExprError(Diag(ArraySize->getSourceRange().getBegin(),
-                                diag::err_typecheck_negative_array_size)
-            << ArraySize->getSourceRange());
-
-        if (!AllocType->isDependentType()) {
-          unsigned ActiveSizeBits
-            = ConstantArrayType::getNumAddressingBits(Context, AllocType, Value);
-          if (ActiveSizeBits > ConstantArrayType::getMaxSizeBits(Context)) {
+                                 Value.isUnsigned())) {
+          if (getLangOptions().CPlusPlus0x)
             Diag(ArraySize->getSourceRange().getBegin(),
-                 diag::err_array_too_large)
-              << Value.toString(10)
+                 diag::warn_typecheck_negative_array_new_size)
               << ArraySize->getSourceRange();
-            return ExprError();
+          else
+            return ExprError(Diag(ArraySize->getSourceRange().getBegin(),
+                                  diag::err_typecheck_negative_array_size)
+                             << ArraySize->getSourceRange());
+        } else if (!AllocType->isDependentType()) {
+          unsigned ActiveSizeBits =
+            ConstantArrayType::getNumAddressingBits(Context, AllocType, Value);
+          if (ActiveSizeBits > ConstantArrayType::getMaxSizeBits(Context)) {
+            if (getLangOptions().CPlusPlus0x)
+              Diag(ArraySize->getSourceRange().getBegin(),
+                   diag::warn_array_new_too_large)
+                << Value.toString(10)
+                << ArraySize->getSourceRange();
+            else
+              return ExprError(Diag(ArraySize->getSourceRange().getBegin(),
+                                    diag::err_array_too_large)
+                               << Value.toString(10)
+                               << ArraySize->getSourceRange());
           }
         }
       } else if (TypeIdParens.isValid()) {
@@ -1105,7 +1121,7 @@ Sema::BuildCXXNew(SourceLocation StartLoc, bool UseGlobal,
 
   // Warn if the type is over-aligned and is being allocated by global operator
   // new.
-  if (OperatorNew &&
+  if (NumPlaceArgs == 0 && OperatorNew && 
       (OperatorNew->isImplicit() ||
        getSourceManager().isInSystemHeader(OperatorNew->getLocStart()))) {
     if (unsigned Align = Context.getPreferredTypeAlign(AllocType.getTypePtr())){
@@ -4767,7 +4783,7 @@ ExprResult Sema::ActOnFinishFullExpr(Expr *FE) {
     return ExprError();
 
   // Top-level message sends default to 'id' when we're in a debugger.
-  if (getLangOptions().DebuggerSupport &&
+  if (getLangOptions().DebuggerCastResultToId &&
       FullExpr.get()->getType() == Context.UnknownAnyTy &&
       isa<ObjCMessageExpr>(FullExpr.get())) {
     FullExpr = forceUnknownAnyToType(FullExpr.take(), Context.getObjCIdType());
@@ -5030,12 +5046,6 @@ void Sema::ActOnStartOfLambdaDefinition(LambdaIntroducer &Intro,
       Diag(Var->getLocation(), diag::note_previous_decl) << C->Id;
       continue;
     }
-    
-    if (Var->hasAttr<BlocksAttr>()) {
-      Diag(C->Loc, diag::err_lambda_capture_block) << C->Id;
-      Diag(Var->getLocation(), diag::note_previous_decl) << C->Id;
-      continue;
-    }
 
     // C++11 [expr.prim.lambda]p8:
     //   An identifier or this shall not appear more than once in a 
@@ -5046,12 +5056,10 @@ void Sema::ActOnStartOfLambdaDefinition(LambdaIntroducer &Intro,
         << SourceRange(LSI->getCapture(Var).getLocation());
       continue;
     }
-    
-    // FIXME: If this is capture by copy, make sure that we can in fact copy
-    // the variable.
-    // FIXME: Unify with normal capture path, so we get all of the necessary
-    // nested captures.
-    LSI->AddCapture(Var, C->Kind == LCK_ByRef, /*isNested=*/false, C->Loc, 0);
+
+    TryCaptureKind Kind = C->Kind == LCK_ByRef ? TryCapture_ExplicitByRef :
+                                                 TryCapture_ExplicitByVal;
+    TryCaptureVar(Var, C->Loc, Kind);
   }
   LSI->finishedExplicitCaptures();
 

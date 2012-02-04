@@ -2284,6 +2284,11 @@ public:
   void UpdateMarkingForLValueToRValue(Expr *E);
   void CleanupVarDeclMarking();
 
+  enum TryCaptureKind {
+    TryCapture_Implicit, TryCapture_ExplicitByVal, TryCapture_ExplicitByRef
+  };
+  void TryCaptureVar(VarDecl *var, SourceLocation loc,
+                     TryCaptureKind Kind = TryCapture_Implicit);
 
   void MarkDeclarationsReferencedInType(SourceLocation Loc, QualType T);
   void MarkDeclarationsReferencedInExpr(Expr *E);
@@ -4133,12 +4138,18 @@ public:
   /// \param Converted Will receive the converted, canonicalized template
   /// arguments.
   ///
+  ///
+  /// \param ExpansionIntoFixedList If non-NULL, will be set true to indicate
+  /// when the template arguments contain a pack expansion that is being
+  /// expanded into a fixed parameter list.
+  ///
   /// \returns True if an error occurred, false otherwise.
   bool CheckTemplateArgumentList(TemplateDecl *Template,
                                  SourceLocation TemplateLoc,
                                  TemplateArgumentListInfo &TemplateArgs,
                                  bool PartialTemplateArgs,
-                           SmallVectorImpl<TemplateArgument> &Converted);
+                           SmallVectorImpl<TemplateArgument> &Converted,
+                                 bool *ExpansionIntoFixedList = 0);
 
   bool CheckTemplateTypeArgument(TemplateTypeParmDecl *Param,
                                  const TemplateArgumentLoc &Arg,
@@ -5460,7 +5471,7 @@ public:
                             SourceLocation receiverNameLoc,
                             SourceLocation propertyNameLoc);
 
-  ObjCMethodDecl *tryCaptureObjCSelf();
+  ObjCMethodDecl *tryCaptureObjCSelf(SourceLocation Loc);
 
   /// \brief Describes the kind of message expression indicated by a message
   /// send that starts with an identifier.
