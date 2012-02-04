@@ -2679,18 +2679,20 @@ StorageClassSpecToFunctionDeclStorageClass(DeclSpec::SCS StorageClassSpec) {
 
 /// BuildAnonymousStructOrUnion - Handle the declaration of an
 /// anonymous structure or union. Anonymous unions are a C++ feature
-/// (C++ [class.union]) and a GNU C extension; anonymous structures
-/// are a GNU C and GNU C++ extension.
+/// (C++ [class.union]) and a C11 feature; anonymous structures
+/// are a C11 feature and GNU C++ extension.
 Decl *Sema::BuildAnonymousStructOrUnion(Scope *S, DeclSpec &DS,
                                              AccessSpecifier AS,
                                              RecordDecl *Record) {
   DeclContext *Owner = Record->getDeclContext();
 
   // Diagnose whether this anonymous struct/union is an extension.
-  if (Record->isUnion() && !getLangOptions().CPlusPlus)
+  if (Record->isUnion() && !getLangOptions().CPlusPlus && !getLangOptions().C11)
     Diag(Record->getLocation(), diag::ext_anonymous_union);
-  else if (!Record->isUnion())
-    Diag(Record->getLocation(), diag::ext_anonymous_struct);
+  else if (!Record->isUnion() && getLangOptions().CPlusPlus)
+    Diag(Record->getLocation(), diag::ext_gnu_anonymous_struct);
+  else if (!Record->isUnion() && !getLangOptions().C11)
+    Diag(Record->getLocation(), diag::ext_c11_anonymous_struct);
 
   // C and C++ require different kinds of checks for anonymous
   // structs/unions.
@@ -5776,8 +5778,8 @@ bool Sema::CheckFunctionDeclaration(Scope *S, FunctionDecl *NewFD,
 }
 
 void Sema::CheckMain(FunctionDecl* FD, const DeclSpec& DS) {
-  // C++ [basic.start.main]p3:  A program that declares main to be inline
-  //   or static is ill-formed.
+  // C++11 [basic.start.main]p3:  A program that declares main to be inline,
+  //   static or constexpr is ill-formed.
   // C99 6.7.4p4:  In a hosted environment, the inline function specifier
   //   shall not appear in a declaration of main.
   // static main is not an error under C99, but we should warn about it.
@@ -5788,6 +5790,11 @@ void Sema::CheckMain(FunctionDecl* FD, const DeclSpec& DS) {
   if (FD->isInlineSpecified())
     Diag(DS.getInlineSpecLoc(), diag::err_inline_main) 
       << FixItHint::CreateRemoval(DS.getInlineSpecLoc());
+  if (FD->isConstexpr()) {
+    Diag(DS.getConstexprSpecLoc(), diag::err_constexpr_main)
+      << FixItHint::CreateRemoval(DS.getConstexprSpecLoc());
+    FD->setConstexpr(false);
+  }
 
   QualType T = FD->getType();
   assert(T->isFunctionType() && "function decl is not of function type");
