@@ -330,6 +330,8 @@ def warn_static_main : Warning<"'main' should not be declared static">,
     InGroup<Main>;
 def err_static_main : Error<"'main' is not allowed to be declared static">;
 def err_inline_main : Error<"'main' is not allowed to be declared inline">;
+def err_constexpr_main : Error<
+  "'main' is not allowed to be declared constexpr">;
 def err_main_template_decl : Error<"'main' cannot be a template">;
 def err_main_returns_nonint : Error<"'main' must return 'int'">;
 def err_main_surplus_args : Error<"too many parameters (%0) for 'main': "
@@ -2898,6 +2900,9 @@ def err_vm_func_decl : Error<
   "function declaration cannot have variably modified type">;
 def err_array_too_large : Error<
   "array is too large (%0 elements)">;
+def warn_array_new_too_large : Warning<"array is too large (%0 elements)">,
+  // FIXME PR11644: ", will throw std::bad_array_new_length at runtime"
+  InGroup<DiagGroup<"bad-array-new-length">>;
 
 // -Wpadded, -Wpacked
 def warn_padded_struct_field : Warning<
@@ -2913,6 +2918,9 @@ def warn_unnecessary_packed : Warning<
   "packed attribute is unnecessary for %0">, InGroup<Packed>, DefaultIgnore;
 
 def err_typecheck_negative_array_size : Error<"array size is negative">;
+def warn_typecheck_negative_array_new_size : Warning<"array size is negative">,
+  // FIXME PR11644: ", will throw std::bad_array_new_length at runtime"
+  InGroup<DiagGroup<"bad-array-new-length">>;
 def warn_typecheck_function_qualifiers : Warning<
   "qualifier on function type %0 has unspecified behavior">;
 def err_typecheck_invalid_restrict_not_pointer : Error<
