@@ -4094,8 +4094,18 @@ def err_capture_non_automatic_variable : Error<
 def err_this_capture : Error<
   "'this' cannot be %select{implicitly |}0captured in this context">;
 def err_lambda_capture_block : Error<
-  "__block variable %0 cannot be captured in a lambda">;
-  
+  "__block variable %0 cannot be captured in a lambda expression">;
+def err_lambda_capture_anonymous_var : Error<
+  "unnamed variable cannot be implicitly captured in a lambda expression">;
+def err_lambda_capture_vm_type : Error<
+  "variable %0 with variably modified type cannot be captured in "
+  "a lambda expression">;
+def err_lambda_impcap : Error<
+  "variable %0 cannot be implicitly captured in a lambda with no "
+  "capture-default specified">;
+def note_lambda_decl : Note<"lambda expression begins here">;
+
+
 def err_operator_arrow_circular : Error<
   "circular pointer delegation detected">;
 def err_pseudo_dtor_base_not_scalar : Error<
@@ -4570,9 +4580,11 @@ def ext_in_class_initializer_non_constant : Extension<
 
 // C++ anonymous unions and GNU anonymous structs/unions
 def ext_anonymous_union : Extension<
-  "anonymous unions are a GNU extension in C">, InGroup<GNU>;
-def ext_anonymous_struct : Extension<
+  "anonymous unions are a C11 extension">, InGroup<C11>;
+def ext_gnu_anonymous_struct : Extension<
   "anonymous structs are a GNU extension">, InGroup<GNU>;
+def ext_c11_anonymous_struct : Extension<
+  "anonymous structs are a C11 extension">, InGroup<C11>;
 def err_anonymous_union_not_static : Error<
   "anonymous unions at namespace or global scope must be declared 'static'">;
 def err_anonymous_union_with_storage_spec : Error<
