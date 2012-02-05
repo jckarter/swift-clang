@@ -27,6 +27,7 @@
 #include "clang/Basic/LangOptions.h"
 #include "clang/Basic/PartialDiagnostic.h"
 #include "llvm/ADT/SmallBitVector.h"
+#include "llvm/ADT/SmallString.h"
 #include "llvm/ADT/StringExtras.h"
 using namespace clang;
 using namespace sema;
@@ -3912,11 +3913,11 @@ ExprResult Sema::CheckTemplateArgument(NonTypeTemplateParmDecl *Param,
         << ArgType << Arg->getSourceRange();
       Diag(Param->getLocation(), diag::note_template_param_here);
       return ExprError();
-    } else if (!Arg->isValueDependent() &&
-               !Arg->isIntegerConstantExpr(Value, Context, &NonConstantLoc)) {
-      Diag(NonConstantLoc, diag::err_template_arg_not_ice)
-        << ArgType << Arg->getSourceRange();
-      return ExprError();
+    } else if (!Arg->isValueDependent()) {
+      Arg = VerifyIntegerConstantExpression(Arg, &Value,
+        PDiag(diag::err_template_arg_not_ice) << ArgType, false).take();
+      if (!Arg)
+        return ExprError();
     }
 
     // From here on out, all we care about are the unqualified forms
@@ -6943,7 +6944,7 @@ std::string
 Sema::getTemplateArgumentBindingsText(const TemplateParameterList *Params,
                                       const TemplateArgument *Args,
                                       unsigned NumArgs) {
-  llvm::SmallString<128> Str;
+  SmallString<128> Str;
   llvm::raw_svector_ostream Out(Str);
 
   if (!Params || Params->size() == 0 || NumArgs == 0)

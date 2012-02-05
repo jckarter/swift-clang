@@ -14,7 +14,7 @@
 #include "clang/Basic/Diagnostic.h"
 #include "clang/Basic/IdentifierTable.h"
 #include "clang/Basic/PartialDiagnostic.h"
-#include "llvm/ADT/SmallVector.h"
+#include "llvm/ADT/SmallString.h"
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Support/CrashRecoveryContext.h"
 
@@ -809,7 +809,7 @@ StoredDiagnostic::StoredDiagnostic(DiagnosticsEngine::Level Level,
        "Valid source location without setting a source manager for diagnostic");
   if (Info.getLocation().isValid())
     Loc = FullSourceLoc(Info.getLocation(), Info.getSourceManager());
-  llvm::SmallString<64> Message;
+  SmallString<64> Message;
   Info.FormatDiagnostic(Message);
   this->Message.assign(Message.begin(), Message.end());
 
@@ -842,13 +842,13 @@ bool DiagnosticConsumer::IncludeInDiagnosticCounts() const { return true; }
 
 void IgnoringDiagConsumer::anchor() { }
 
-PartialDiagnostic::StorageAllocator::StorageAllocator() {
+PartialDiagnosticStorageAllocator::PartialDiagnosticStorageAllocator() {
   for (unsigned I = 0; I != NumCached; ++I)
     FreeList[I] = Cached + I;
   NumFreeListEntries = NumCached;
 }
 
-PartialDiagnostic::StorageAllocator::~StorageAllocator() {
+PartialDiagnosticStorageAllocator::~PartialDiagnosticStorageAllocator() {
   // Don't assert if we are in a CrashRecovery context, as this
   // invariant may be invalidated during a crash.
   assert((NumFreeListEntries == NumCached || llvm::CrashRecoveryContext::isRecoveringFromCrash()) && "A partial is on the lamb");

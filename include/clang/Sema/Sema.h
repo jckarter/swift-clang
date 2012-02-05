@@ -30,6 +30,7 @@
 #include "clang/AST/ExternalASTSource.h"
 #include "clang/AST/TypeLoc.h"
 #include "clang/Lex/ModuleLoader.h"
+#include "clang/Basic/PartialDiagnostic.h"
 #include "clang/Basic/Specifiers.h"
 #include "clang/Basic/TemplateKinds.h"
 #include "clang/Basic/TypeTraits.h"
@@ -259,14 +260,14 @@ public:
   llvm::SmallPtrSet<NamedDecl *, 4> HiddenDefinitions;
   
   /// FieldCollector - Collects CXXFieldDecls during parsing of C++ classes.
-  llvm::OwningPtr<CXXFieldCollector> FieldCollector;
+  OwningPtr<CXXFieldCollector> FieldCollector;
 
   typedef llvm::SmallPtrSet<const CXXRecordDecl*, 8> RecordDeclSetTy;
 
   /// PureVirtualClassDiagSet - a set of class declarations which we have
   /// emitted a list of pure virtual functions. Used to prevent emitting the
   /// same list more than once.
-  llvm::OwningPtr<RecordDeclSetTy> PureVirtualClassDiagSet;
+  OwningPtr<RecordDeclSetTy> PureVirtualClassDiagSet;
 
   /// ParsingInitForAutoVars - a set of declarations with auto types for which
   /// we are currently parsing the initializer.
@@ -1015,7 +1016,8 @@ public:
   };
   bool CheckConstexprFunctionDecl(const FunctionDecl *FD,
                                   CheckConstexprKind CCK);
-  bool CheckConstexprFunctionBody(const FunctionDecl *FD, Stmt *Body);
+  bool CheckConstexprFunctionBody(const FunctionDecl *FD, Stmt *Body,
+                                  bool IsInstantiation);
 
   void DiagnoseHiddenVirtualMethods(CXXRecordDecl *DC, CXXMethodDecl *MD);
   // Returns true if the function declaration is a redeclaration
@@ -1443,7 +1445,8 @@ public:
                                      const PartialDiagnostic &ExplicitConvNote,
                                      const PartialDiagnostic &AmbigDiag,
                                      const PartialDiagnostic &AmbigNote,
-                                     const PartialDiagnostic &ConvDiag);
+                                     const PartialDiagnostic &ConvDiag,
+                                     bool AllowScopedEnumerations);
 
   ExprResult PerformObjectMemberConversion(Expr *From,
                                            NestedNameSpecifier *Qualifier,
@@ -1454,11 +1457,6 @@ public:
   // TODO: make this is a typesafe union.
   typedef llvm::SmallPtrSet<DeclContext   *, 16> AssociatedNamespaceSet;
   typedef llvm::SmallPtrSet<CXXRecordDecl *, 16> AssociatedClassSet;
-
-  void AddOverloadCandidate(NamedDecl *Function,
-                            DeclAccessPair FoundDecl,
-                            Expr **Args, unsigned NumArgs,
-                            OverloadCandidateSet &CandidateSet);
 
   void AddOverloadCandidate(FunctionDecl *Function,
                             DeclAccessPair FoundDecl,
@@ -6119,17 +6117,25 @@ public:
   /// VerifyIntegerConstantExpression - Verifies that an expression is an ICE,
   /// and reports the appropriate diagnostics. Returns false on success.
   /// Can optionally return the value of the expression.
-  bool VerifyIntegerConstantExpression(const Expr *E, llvm::APSInt *Result = 0,
-                                       unsigned DiagId = 0,
-                                       bool AllowFold = true);
+  ExprResult VerifyIntegerConstantExpression(Expr *E, llvm::APSInt *Result,
+                                             PartialDiagnostic Diag,
+                                             bool AllowFold,
+                                             PartialDiagnostic FoldDiag);
+  ExprResult VerifyIntegerConstantExpression(Expr *E, llvm::APSInt *Result,
+                                             PartialDiagnostic Diag,
+                                             bool AllowFold = true) {
+    return VerifyIntegerConstantExpression(E, Result, Diag, AllowFold,
+                                           PDiag(0));
+  }
+  ExprResult VerifyIntegerConstantExpression(Expr *E, llvm::APSInt *Result = 0);
 
   /// VerifyBitField - verifies that a bit field expression is an ICE and has
   /// the correct width, and that the field type is valid.
   /// Returns false on success.
   /// Can optionally return whether the bit-field is of width 0
-  bool VerifyBitField(SourceLocation FieldLoc, IdentifierInfo *FieldName,
-                      QualType FieldTy, const Expr *BitWidth,
-                      bool *ZeroWidth = 0);
+  ExprResult VerifyBitField(SourceLocation FieldLoc, IdentifierInfo *FieldName,
+                            QualType FieldTy, Expr *BitWidth,
+                            bool *ZeroWidth = 0);
 
   enum CUDAFunctionTarget {
     CFT_Device,
