@@ -31,6 +31,18 @@ def err_cce_narrowing : Error<
   "%select{case value|enumerator value|non-type template argument}0 "
   "%select{cannot be narrowed from type %2 to %3|"
   "evaluates to %2, which cannot be narrowed to type %3}1">;
+def err_ice_not_integral : Error<
+  "integral constant expression must have integral or unscoped enumeration "
+  "type, not %0">;
+def err_ice_incomplete_type : Error<
+  "integral constant expression has incomplete class type %0">;
+def err_ice_explicit_conversion : Error<
+  "integral constant expression requires explicit conversion from %0 to %1">;
+def note_ice_conversion_here : Note<
+  "conversion to %select{integral|enumeration}0 type %1 declared here">;
+def err_ice_ambiguous_conversion : Error<
+  "ambiguous conversion from type %0 to an integral or unscoped "
+  "enumeration type">;
 
 // Semantic analysis of constant literals.
 def ext_predef_outside_function : Warning<
@@ -3976,7 +3988,8 @@ def err_placement_new_non_placement_delete : Error<
   "'new' expression with placement arguments refers to non-placement "
   "'operator delete'">;
 def err_array_size_not_integral : Error<
-  "array size expression must have integral or enumerated type, not %0">;
+  "array size expression must have integral or %select{|unscoped }0"
+  "enumeration type, not %1">;
 def err_array_size_incomplete_type : Error<
   "array size expression has incomplete class type %0">;
 def err_array_size_explicit_conversion : Error<
