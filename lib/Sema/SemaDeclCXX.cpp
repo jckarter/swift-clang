@@ -32,6 +32,7 @@
 #include "clang/Basic/PartialDiagnostic.h"
 #include "clang/Lex/Preprocessor.h"
 #include "llvm/ADT/DenseSet.h"
+#include "llvm/ADT/SmallString.h"
 #include "llvm/ADT/STLExtras.h"
 #include <map>
 #include <set>
@@ -836,7 +837,8 @@ static void CheckConstexprCtorInitializer(Sema &SemaRef,
 /// the permitted types of statement. C++11 [dcl.constexpr]p3,p4.
 ///
 /// \return true if the body is OK, false if we have diagnosed a problem.
-bool Sema::CheckConstexprFunctionBody(const FunctionDecl *Dcl, Stmt *Body) {
+bool Sema::CheckConstexprFunctionBody(const FunctionDecl *Dcl, Stmt *Body,
+                                      bool IsInstantiation) {
   if (isa<CXXTryStmt>(Body)) {
     // C++11 [dcl.constexpr]p3:
     //  The definition of a constexpr function shall satisfy the following
@@ -988,7 +990,7 @@ bool Sema::CheckConstexprFunctionBody(const FunctionDecl *Dcl, Stmt *Body) {
   // can't produce constant expressions.
   llvm::SmallVector<PartialDiagnosticAt, 8> Diags;
   if (!Context.getSourceManager().isInSystemHeader(Dcl->getLocation()) &&
-      !Expr::isPotentialConstantExpr(Dcl, Diags)) {
+      !IsInstantiation && !Expr::isPotentialConstantExpr(Dcl, Diags)) {
     Diag(Dcl->getLocation(), diag::err_constexpr_function_never_constant_expr)
       << isa<CXXConstructorDecl>(Dcl);
     for (size_t I = 0, N = Diags.size(); I != N; ++I)
@@ -2524,7 +2526,7 @@ BuildImplicitMemberInitializer(Sema &SemaRef, CXXConstructorDecl *Constructor,
       // Create the iteration variable for this array index.
       IdentifierInfo *IterationVarName = 0;
       {
-        llvm::SmallString<8> Str;
+        SmallString<8> Str;
         llvm::raw_svector_ostream OS(Str);
         OS << "__i" << IndexVariables.size();
         IterationVarName = &SemaRef.Context.Idents.get(OS.str());
@@ -5823,9 +5825,6 @@ bool Sema::isStdInitializerList(QualType Ty, QualType *Element) {
     if (!Specialization)
       return false;
 
-    if (Specialization->getSpecializationKind() != TSK_ImplicitInstantiation)
-      return false;
-
     Template = Specialization->getSpecializedTemplate();
     Arguments = Specialization->getTemplateArgs().data();
   } else if (const TemplateSpecializationType *TST =
@@ -7653,7 +7652,7 @@ BuildSingleCopyAssign(Sema &S, SourceLocation Loc, QualType T,
   // Create the iteration variable.
   IdentifierInfo *IterationVarName = 0;
   {
-    llvm::SmallString<8> Str;
+    SmallString<8> Str;
     llvm::raw_svector_ostream OS(Str);
     OS << "__i" << Depth;
     IterationVarName = &S.Context.Idents.get(OS.str());
@@ -9918,10 +9917,16 @@ Decl *Sema::ActOnStaticAssertDeclaration(SourceLocation StaticAssertLoc,
   StringLiteral *AssertMessage = cast<StringLiteral>(AssertMessageExpr_);
 
   if (!AssertExpr->isTypeDependent() && !AssertExpr->isValueDependent()) {
+    // In a static_assert-declaration, the constant-expression shall be a
+    // constant expression that can be contextually converted to bool.
+    ExprResult Converted = PerformContextuallyConvertToBool(AssertExpr);
+    if (Converted.isInvalid())
+      return 0;
+
     llvm::APSInt Cond;
-    if (VerifyIntegerConstantExpression(AssertExpr, &Cond,
-                             diag::err_static_assert_expression_is_not_constant,
-                                        /*AllowFold=*/false))
+    if (VerifyIntegerConstantExpression(Converted.get(), &Cond,
+          PDiag(diag::err_static_assert_expression_is_not_constant),
+          /*AllowFold=*/false).isInvalid())
       return 0;
 
     if (!Cond)
