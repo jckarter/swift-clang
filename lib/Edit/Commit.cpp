@@ -87,6 +87,19 @@ bool Commit::remove(CharSourceRange range) {
   return true;
 }
 
+bool Commit::insertWrap(StringRef before, CharSourceRange range,
+                        StringRef after) {
+  bool commitableBefore = insert(range.getBegin(), before, /*afterToken=*/false,
+                                 /*beforePreviousInsertions=*/true);
+  bool commitableAfter;
+  if (range.isTokenRange())
+    commitableAfter = insertAfterToken(range.getEnd(), after);
+  else
+    commitableAfter = insert(range.getEnd(), after);
+
+  return commitableBefore && commitableAfter;
+}
+
 bool Commit::replace(CharSourceRange range, StringRef text) {
   if (text.empty())
     return remove(range);

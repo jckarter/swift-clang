@@ -146,17 +146,20 @@ void FixItRewriter::HandleDiagnostic(DiagnosticsEngine::Level DiagLevel,
     const FixItHint &Hint = Info.getFixItHint(Idx);
 
     if (Hint.CodeToInsert.empty()) {
-      // We're removing code or inserting code from range.
       if (Hint.InsertFromRange.isValid())
-        commit.insertFromRange(Hint.RemoveRange.getBegin(), Hint.InsertFromRange);
+        commit.insertFromRange(Hint.RemoveRange.getBegin(),
+                           Hint.InsertFromRange, /*afterToken=*/false,
+                           Hint.BeforePreviousInsertions);
       else
         commit.remove(Hint.RemoveRange);
-      commit.remove(Hint.RemoveRange);
-      continue;
+    } else {
+      if (Hint.RemoveRange.isTokenRange() ||
+          Hint.RemoveRange.getBegin() != Hint.RemoveRange.getEnd())
+        commit.replace(Hint.RemoveRange, Hint.CodeToInsert);
+      else
+        commit.insert(Hint.RemoveRange.getBegin(), Hint.CodeToInsert,
+                    /*afterToken=*/false, Hint.BeforePreviousInsertions);
     }
-
-    // We're replacing code.
-    commit.replace(Hint.RemoveRange, Hint.CodeToInsert);
   }
   bool CanRewrite = Info.getNumFixItHints() > 0 && commit.isCommitable();
 

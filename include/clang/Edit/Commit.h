@@ -64,9 +64,14 @@ public:
                         bool beforePreviousInsertions = false) {
     return insert(loc, text, /*afterToken=*/true, beforePreviousInsertions);
   }
+  bool insertBefore(SourceLocation loc, StringRef text) {
+    return insert(loc, text, /*afterToken=*/false,
+                  /*beforePreviousInsertions=*/true);
+  }
   bool insertFromRange(SourceLocation loc, CharSourceRange range,
                        bool afterToken = false,
                        bool beforePreviousInsertions = false);
+  bool insertWrap(StringRef before, CharSourceRange range, StringRef after);
 
   bool remove(CharSourceRange range);
 
@@ -80,6 +85,9 @@ public:
                        bool beforePreviousInsertions = false) {
     return insertFromRange(loc, CharSourceRange::getTokenRange(TokenRange),
                            afterToken, beforePreviousInsertions);
+  }
+  bool insertWrap(StringRef before, SourceRange TokenRange, StringRef after) {
+    return insertWrap(before, CharSourceRange::getTokenRange(TokenRange), after);
   }
   bool remove(SourceRange TokenRange) {
     return remove(CharSourceRange::getTokenRange(TokenRange));

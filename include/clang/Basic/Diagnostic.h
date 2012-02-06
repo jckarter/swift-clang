@@ -58,9 +58,11 @@ public:
   /// string.
   std::string CodeToInsert;
 
+  bool BeforePreviousInsertions;
+
   /// \brief Empty code modification hint, indicating that no code
   /// modification is known.
-  FixItHint() : RemoveRange() { }
+  FixItHint() : BeforePreviousInsertions(false) { }
 
   bool isNull() const {
     return !RemoveRange.isValid();
@@ -69,22 +71,26 @@ public:
   /// \brief Create a code modification hint that inserts the given
   /// code string at a specific location.
   static FixItHint CreateInsertion(SourceLocation InsertionLoc,
-                                   StringRef Code) {
+                                   StringRef Code,
+                                   bool BeforePreviousInsertions = false) {
     FixItHint Hint;
     Hint.RemoveRange =
       CharSourceRange(SourceRange(InsertionLoc, InsertionLoc), false);
     Hint.CodeToInsert = Code;
+    Hint.BeforePreviousInsertions = BeforePreviousInsertions;
     return Hint;
   }
   
   /// \brief Create a code modification hint that inserts the given
   /// code from \arg FromRange at a specific location.
   static FixItHint CreateInsertionFromRange(SourceLocation InsertionLoc,
-                                            CharSourceRange FromRange) {
+                                            CharSourceRange FromRange,
+                                        bool BeforePreviousInsertions = false) {
     FixItHint Hint;
     Hint.RemoveRange =
       CharSourceRange(SourceRange(InsertionLoc, InsertionLoc), false);
     Hint.InsertFromRange = FromRange;
+    Hint.BeforePreviousInsertions = BeforePreviousInsertions;
     return Hint;
   }
 

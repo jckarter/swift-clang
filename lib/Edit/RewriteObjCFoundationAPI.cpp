@@ -95,8 +95,7 @@ static void maybePutParensOnReceiver(const Expr *Receiver, Commit &commit) {
   Receiver = Receiver->IgnoreImpCasts();
   if (isa<BinaryOperator>(Receiver) || isa<UnaryOperator>(Receiver)) {
     SourceRange RecRange = Receiver->getSourceRange();
-    commit.insert(RecRange.getBegin(), "(");
-    commit.insertAfterToken(RecRange.getEnd(), ")");
+    commit.insertWrap("(", RecRange, ")");
   }
 }
 
@@ -116,8 +115,7 @@ static bool rewriteToSubscriptGet(const ObjCMessageExpr *Msg, Commit &commit) {
                          CharSourceRange::getTokenRange(RecRange));
   commit.replaceWithInner(SourceRange(ArgRange.getBegin(), MsgRange.getEnd()),
                          ArgRange);
-  commit.insert(ArgRange.getBegin(), "[");
-  commit.insertAfterToken(ArgRange.getEnd(), "]");
+  commit.insertWrap("[", ArgRange, "]");
   maybePutParensOnReceiver(Rec, commit);
   return true;
 }
@@ -143,8 +141,9 @@ static bool rewriteToArraySubscriptSet(const ObjCMessageExpr *Msg,
                          CharSourceRange::getTokenRange(Arg0Range));
   commit.replaceWithInner(SourceRange(Arg1Range.getBegin(), MsgRange.getEnd()),
                          Arg1Range);
-  commit.insert(Arg0Range.getBegin(), "[");
-  commit.insert(Arg1Range.getBegin(), "] = ");
+  commit.insertWrap("[", CharSourceRange::getCharRange(Arg0Range.getBegin(),
+                                                       Arg1Range.getBegin()),
+                    "] = ");
   maybePutParensOnReceiver(Rec, commit);
   return true;
 }
@@ -163,9 +162,10 @@ static bool rewriteToDictionarySubscriptSet(const ObjCMessageExpr *Msg,
   SourceRange Arg1Range = Msg->getArg(1)->getSourceRange();
 
   SourceLocation LocBeforeVal = Arg0Range.getBegin();
-  commit.insert(LocBeforeVal, "[");
-  commit.insertFromRange(LocBeforeVal, Arg1Range);
-  commit.insert(LocBeforeVal, "] = ");
+  commit.insertBefore(LocBeforeVal, "] = ");
+  commit.insertFromRange(LocBeforeVal, Arg1Range, /*afterToken=*/false,
+                         /*beforePreviousInsertions=*/true);
+  commit.insertBefore(LocBeforeVal, "[");
   commit.replaceWithInner(CharSourceRange::getCharRange(MsgRange.getBegin(),
                                                        Arg0Range.getBegin()),
                          CharSourceRange::getTokenRange(RecRange));
@@ -260,8 +260,7 @@ static bool rewriteToArrayLiteral(const ObjCMessageExpr *Msg,
       return false;
     SourceRange ArgRange = Msg->getArg(0)->getSourceRange();
     commit.replaceWithInner(MsgRange, ArgRange);
-    commit.insert(ArgRange.getBegin(), "@[ ");
-    commit.insertAfterToken(ArgRange.getEnd(), " ]");
+    commit.insertWrap("@[ ", ArgRange, " ]");
     return true;
   }
 
@@ -280,8 +279,7 @@ static bool rewriteToArrayLiteral(const ObjCMessageExpr *Msg,
     SourceRange ArgRange(Msg->getArg(0)->getLocStart(),
                          Msg->getArg(Msg->getNumArgs()-2)->getLocEnd());
     commit.replaceWithInner(MsgRange, ArgRange);
-    commit.insert(ArgRange.getBegin(), "@[ ");
-    commit.insertAfterToken(ArgRange.getEnd(), " ]");
+    commit.insertWrap("@[ ", ArgRange, " ]");
     return true;
   }
 
@@ -310,11 +308,12 @@ static bool rewriteToDictionaryLiteral(const ObjCMessageExpr *Msg,
       return false;
     SourceRange ValRange = Msg->getArg(0)->getSourceRange();
     SourceRange KeyRange = Msg->getArg(1)->getSourceRange();
-    commit.insert(ValRange.getBegin(), "@{ ");
     // Insert key before the value.
+    commit.insertBefore(ValRange.getBegin(), ": ");
     commit.insertFromRange(ValRange.getBegin(),
-                          CharSourceRange::getTokenRange(KeyRange));
-    commit.insert(ValRange.getBegin(), ": ");
+                           CharSourceRange::getTokenRange(KeyRange),
+                       /*afterToken=*/false, /*beforePreviousInsertions=*/true);
+    commit.insertBefore(ValRange.getBegin(), "@{ ");
     commit.insertAfterToken(ValRange.getEnd(), " }");
     commit.replaceWithInner(MsgRange, ValRange);
     return true;
@@ -349,8 +348,7 @@ static bool rewriteToDictionaryLiteral(const ObjCMessageExpr *Msg,
     // key.
     SourceRange ArgRange(Msg->getArg(1)->getLocStart(),
                          Msg->getArg(SentinelIdx-1)->getLocEnd());
-    commit.insert(ArgRange.getBegin(), "@{ ");
-    commit.insertAfterToken(ArgRange.getEnd(), " }");
+    commit.insertWrap("@{ ", ArgRange, " }");
     commit.replaceWithInner(MsgRange, ArgRange);
     return true;
   }

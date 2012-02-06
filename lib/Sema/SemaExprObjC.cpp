@@ -1542,12 +1542,14 @@ static void applyCocoaAPICheck(Sema &S, const ObjCMessageExpr *Msg,
       switch (Edit.Kind) {
       case edit::Commit::Act_Insert:
         Builder.AddFixItHint(FixItHint::CreateInsertion(Edit.OrigLoc,
-                                                        Edit.Text));
+                                                        Edit.Text,
+                                                        Edit.BeforePrev));
         break;
       case edit::Commit::Act_InsertFromRange:
         Builder.AddFixItHint(
             FixItHint::CreateInsertionFromRange(Edit.OrigLoc,
-                                                Edit.getInsertFromRange(SM)));
+                                                Edit.getInsertFromRange(SM),
+                                                Edit.BeforePrev));
         break;
       case edit::Commit::Act_Remove:
         Builder.AddFixItHint(FixItHint::CreateRemoval(Edit.getFileRange(SM)));

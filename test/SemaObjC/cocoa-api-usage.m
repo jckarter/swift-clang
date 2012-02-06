@@ -97,6 +97,7 @@ void foo() {
   id o = [arr objectAtIndex:2]; // expected-warning {{legacy subscript}}
   o = [dict objectForKey:@"key"]; // expected-warning {{legacy subscript}}
   o = TWO([dict objectForKey:@"key"]); // expected-warning 2 {{legacy subscript}}
+  o = [NSDictionary dictionaryWithObject:[NSDictionary dictionary] forKey:@"key"]; // expected-warning 2 {{legacy creation}}
   NSMutableArray *marr = 0;
   NSMutableDictionary *mdict = 0;
   [marr replaceObjectAtIndex:2 withObject:@"val"]; // expected-warning {{legacy subscript}}

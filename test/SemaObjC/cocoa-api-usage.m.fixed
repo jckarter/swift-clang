@@ -97,6 +97,7 @@ void foo() {
   id o = arr[2]; // expected-warning {{legacy subscript}}
   o = dict[@"key"]; // expected-warning {{legacy subscript}}
   o = TWO(dict[@"key"]); // expected-warning 2 {{legacy subscript}}
+  o = @{ @"key": @{} }; // expected-warning 2 {{legacy creation}}
   NSMutableArray *marr = 0;
   NSMutableDictionary *mdict = 0;
   marr[2] = @"val"; // expected-warning {{legacy subscript}}

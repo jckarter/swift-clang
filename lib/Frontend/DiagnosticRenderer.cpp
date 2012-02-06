@@ -157,11 +157,18 @@ static void mergeFixits(ArrayRef<FixItHint> FixItHints,
     const FixItHint &Hint = *I;
     if (Hint.CodeToInsert.empty()) {
       if (Hint.InsertFromRange.isValid())
-        commit.insertFromRange(Hint.RemoveRange.getBegin(), Hint.InsertFromRange);
+        commit.insertFromRange(Hint.RemoveRange.getBegin(),
+                           Hint.InsertFromRange, /*afterToken=*/false,
+                           Hint.BeforePreviousInsertions);
       else
         commit.remove(Hint.RemoveRange);
     } else {
-      commit.replace(Hint.RemoveRange, Hint.CodeToInsert);
+      if (Hint.RemoveRange.isTokenRange() ||
+          Hint.RemoveRange.getBegin() != Hint.RemoveRange.getEnd())
+        commit.replace(Hint.RemoveRange, Hint.CodeToInsert);
+      else
+        commit.insert(Hint.RemoveRange.getBegin(), Hint.CodeToInsert,
+                    /*afterToken=*/false, Hint.BeforePreviousInsertions);
     }
   }
 
