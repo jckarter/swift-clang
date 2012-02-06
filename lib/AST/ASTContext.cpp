@@ -24,6 +24,7 @@
 #include "clang/AST/RecordLayout.h"
 #include "clang/AST/Mangle.h"
 #include "clang/Basic/Builtins.h"
+#include "clang/Basic/PartialDiagnostic.h"
 #include "clang/Basic/SourceManager.h"
 #include "clang/Basic/TargetInfo.h"
 #include "llvm/ADT/SmallString.h"
@@ -241,6 +242,9 @@ ASTContext::ASTContext(LangOptions& LOpts, SourceManager &SM,
     LastSDM(0, 0),
     UniqueBlockByRefTypeID(0) 
 {
+  // Create a new allocator for partial diagnostics.
+  DiagAllocator = new (BumpAlloc) PartialDiagnosticStorageAllocator;
+
   if (size_reserve > 0) Types.reserve(size_reserve);
   TUDecl = TranslationUnitDecl::Create(*this);
   
@@ -285,6 +289,9 @@ ASTContext::~ASTContext() {
                                                     AEnd = DeclAttrs.end();
        A != AEnd; ++A)
     A->second->~AttrVec();
+
+  // Destroy the partial diagnostic allocator.
+  DiagAllocator->~PartialDiagnosticStorageAllocator();
 }
 
 void ASTContext::AddDeallocation(void (*Callback)(void*), void *Data) {
@@ -292,7 +299,7 @@ void ASTContext::AddDeallocation(void (*Callback)(void*), void *Data) {
 }
 
 void
-ASTContext::setExternalSource(llvm::OwningPtr<ExternalASTSource> &Source) {
+ASTContext::setExternalSource(OwningPtr<ExternalASTSource> &Source) {
   ExternalSource.reset(Source.take());
 }
 
@@ -2427,6 +2434,7 @@ ASTContext::getTemplateSpecializationTypeInfo(TemplateName Name,
   TypeSourceInfo *DI = CreateTypeSourceInfo(TST);
   TemplateSpecializationTypeLoc TL
     = cast<TemplateSpecializationTypeLoc>(DI->getTypeLoc());
+  TL.setTemplateKeywordLoc(SourceLocation());
   TL.setTemplateNameLoc(NameLoc);
   TL.setLAngleLoc(Args.getLAngleLoc());
   TL.setRAngleLoc(Args.getRAngleLoc());
@@ -3962,7 +3970,7 @@ ASTContext::BuildByRefType(StringRef DeclName, QualType Ty) const {
   bool HasCopyAndDispose = BlockRequiresCopying(Ty);
 
   // FIXME: Move up
-  llvm::SmallString<36> Name;
+  SmallString<36> Name;
   llvm::raw_svector_ostream(Name) << "__Block_byref_" <<
                                   ++UniqueBlockByRefTypeID << '_' << DeclName;
   RecordDecl *T;

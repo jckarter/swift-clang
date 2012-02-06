@@ -218,7 +218,7 @@ std::string Darwin::ComputeEffectiveClangTriple(const ArgList &Args,
     Triple.setOS(llvm::Triple::Darwin);
     Triple.setEnvironment(llvm::Triple::EABI);
   } else {
-    llvm::SmallString<16> Str;
+    SmallString<16> Str;
     llvm::raw_svector_ostream(Str)
       << (isTargetIPhoneOS() ? "ios" : "macosx")
       << Version[0] << "." << Version[1] << "." << Version[2];
@@ -1210,7 +1210,7 @@ Generic_GCC::GCCInstallationDetector::GCCInstallationDetector(
   SmallVector<std::string, 8> Prefixes(D.PrefixDirs.begin(),
                                        D.PrefixDirs.end());
 
-  llvm::SmallString<128> CxxInstallRoot(GCC_INSTALL_PREFIX);
+  SmallString<128> CxxInstallRoot(GCC_INSTALL_PREFIX);
   if (CxxInstallRoot != "") {
     if (CxxInstallRoot.back() == '/')
       llvm::sys::path::remove_filename(CxxInstallRoot); // remove the /
@@ -1862,6 +1862,7 @@ enum LinuxDistro {
   Fedora13,
   Fedora14,
   Fedora15,
+  Fedora16,
   FedoraRawhide,
   OpenSuse11_3,
   OpenSuse11_4,
@@ -1874,62 +1875,55 @@ enum LinuxDistro {
   UbuntuMaverick,
   UbuntuNatty,
   UbuntuOneiric,
+  UbuntuPrecise,
   UnknownDistro
 };
 
 static bool IsRedhat(enum LinuxDistro Distro) {
-  return Distro == Fedora13 || Distro == Fedora14 ||
-         Distro == Fedora15 || Distro == FedoraRawhide ||
-         Distro == RHEL4 || Distro == RHEL5 || Distro == RHEL6;
+  return (Distro >= Fedora13 && Distro <= FedoraRawhide) ||
+         (Distro >= RHEL4    && Distro <= RHEL6);
 }
 
 static bool IsOpenSuse(enum LinuxDistro Distro) {
-  return Distro == OpenSuse11_3 || Distro == OpenSuse11_4 ||
-         Distro == OpenSuse12_1;
+  return Distro >= OpenSuse11_3 && Distro <= OpenSuse12_1;
 }
 
 static bool IsDebian(enum LinuxDistro Distro) {
-  return Distro == DebianLenny || Distro == DebianSqueeze ||
-         Distro == DebianWheezy;
+  return Distro >= DebianLenny && Distro <= DebianWheezy;
 }
 
 static bool IsUbuntu(enum LinuxDistro Distro) {
-  return Distro == UbuntuHardy  || Distro == UbuntuIntrepid ||
-         Distro == UbuntuLucid  || Distro == UbuntuMaverick ||
-         Distro == UbuntuJaunty || Distro == UbuntuKarmic ||
-         Distro == UbuntuNatty  || Distro == UbuntuOneiric;
+  return Distro >= UbuntuHardy && Distro <= UbuntuPrecise;
 }
 
 static LinuxDistro DetectLinuxDistro(llvm::Triple::ArchType Arch) {
-  llvm::OwningPtr<llvm::MemoryBuffer> File;
+  OwningPtr<llvm::MemoryBuffer> File;
   if (!llvm::MemoryBuffer::getFile("/etc/lsb-release", File)) {
     StringRef Data = File.get()->getBuffer();
     SmallVector<StringRef, 8> Lines;
     Data.split(Lines, "\n");
-    for (unsigned int i = 0, s = Lines.size(); i < s; ++ i) {
-      if (Lines[i] == "DISTRIB_CODENAME=hardy")
-        return UbuntuHardy;
-      else if (Lines[i] == "DISTRIB_CODENAME=intrepid")
-        return UbuntuIntrepid;
-      else if (Lines[i] == "DISTRIB_CODENAME=jaunty")
-        return UbuntuJaunty;
-      else if (Lines[i] == "DISTRIB_CODENAME=karmic")
-        return UbuntuKarmic;
-      else if (Lines[i] == "DISTRIB_CODENAME=lucid")
-        return UbuntuLucid;
-      else if (Lines[i] == "DISTRIB_CODENAME=maverick")
-        return UbuntuMaverick;
-      else if (Lines[i] == "DISTRIB_CODENAME=natty")
-        return UbuntuNatty;
-      else if (Lines[i] == "DISTRIB_CODENAME=oneiric")
-        return UbuntuOneiric;
-    }
-    return UnknownDistro;
+    LinuxDistro Version = UnknownDistro;
+    for (unsigned i = 0, s = Lines.size(); i != s; ++i)
+      if (Version == UnknownDistro && Lines[i].startswith("DISTRIB_CODENAME="))
+        Version = llvm::StringSwitch<LinuxDistro>(Lines[i].substr(17))
+          .Case("hardy", UbuntuHardy)
+          .Case("intrepid", UbuntuIntrepid)
+          .Case("jaunty", UbuntuJaunty)
+          .Case("karmic", UbuntuKarmic)
+          .Case("lucid", UbuntuLucid)
+          .Case("maverick", UbuntuMaverick)
+          .Case("natty", UbuntuNatty)
+          .Case("oneiric", UbuntuOneiric)
+          .Case("precise", UbuntuPrecise)
+          .Default(UnknownDistro);
+    return Version;
   }
 
   if (!llvm::MemoryBuffer::getFile("/etc/redhat-release", File)) {
     StringRef Data = File.get()->getBuffer();
-    if (Data.startswith("Fedora release 15"))
+    if (Data.startswith("Fedora release 16"))
+      return Fedora16;
+    else if (Data.startswith("Fedora release 15"))
       return Fedora15;
     else if (Data.startswith("Fedora release 14"))
       return Fedora14;
@@ -1963,16 +1957,12 @@ static LinuxDistro DetectLinuxDistro(llvm::Triple::ArchType Arch) {
     return UnknownDistro;
   }
 
-  if (!llvm::MemoryBuffer::getFile("/etc/SuSE-release", File)) {
-    StringRef Data = File.get()->getBuffer();
-    if (Data.startswith("openSUSE 11.3"))
-      return OpenSuse11_3;
-    else if (Data.startswith("openSUSE 11.4"))
-      return OpenSuse11_4;
-    else if (Data.startswith("openSUSE 12.1"))
-      return OpenSuse12_1;
-    return UnknownDistro;
-  }
+  if (!llvm::MemoryBuffer::getFile("/etc/SuSE-release", File))
+    return llvm::StringSwitch<LinuxDistro>(File.get()->getBuffer())
+      .StartsWith("openSUSE 11.3", OpenSuse11_3)
+      .StartsWith("openSUSE 11.4", OpenSuse11_4)
+      .StartsWith("openSUSE 12.1", OpenSuse12_1)
+      .Default(UnknownDistro);
 
   bool Exists;
   if (!llvm::sys::fs::exists("/etc/exherbo-release", Exists) && Exists)
@@ -2061,8 +2051,8 @@ Linux::Linux(const Driver &D, const llvm::Triple &Triple)
   // ABI requires a mapping between the GOT and the symbol table.
   // Android loader does not support .gnu.hash.
   if (!IsMips && !IsAndroid) {
-    if (IsRedhat(Distro) || IsOpenSuse(Distro) || Distro == UbuntuMaverick ||
-        Distro == UbuntuNatty || Distro == UbuntuOneiric)
+    if (IsRedhat(Distro) || IsOpenSuse(Distro) ||
+        (IsUbuntu(Distro) && Distro >= UbuntuMaverick))
       ExtraOpts.push_back("--hash-style=gnu");
 
     if (IsDebian(Distro) || IsOpenSuse(Distro) || Distro == UbuntuLucid ||
@@ -2076,9 +2066,7 @@ Linux::Linux(const Driver &D, const llvm::Triple &Triple)
   if (Distro == DebianSqueeze || Distro == DebianWheezy ||
       IsOpenSuse(Distro) ||
       (IsRedhat(Distro) && Distro != RHEL4 && Distro != RHEL5) ||
-      Distro == UbuntuLucid ||
-      Distro == UbuntuMaverick || Distro == UbuntuKarmic ||
-      Distro == UbuntuNatty || Distro == UbuntuOneiric)
+      (IsUbuntu(Distro) && Distro >= UbuntuKarmic))
     ExtraOpts.push_back("--build-id");
 
   if (IsOpenSuse(Distro))
