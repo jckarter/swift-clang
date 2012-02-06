@@ -2411,7 +2411,6 @@ public:
                                   bool HasTrailingLParen);
 
   ExprResult BuildQualifiedDeclarationNameExpr(CXXScopeSpec &SS,
-                                               SourceLocation TemplateKWLoc,
                                          const DeclarationNameInfo &NameInfo);
   ExprResult BuildDependentDeclRefExpr(const CXXScopeSpec &SS,
                                        SourceLocation TemplateKWLoc,
@@ -4041,7 +4040,7 @@ public:
                               TemplateArgumentListInfo &TemplateArgs);
 
   TypeResult
-  ActOnTemplateIdType(CXXScopeSpec &SS,
+  ActOnTemplateIdType(CXXScopeSpec &SS, SourceLocation TemplateKWLoc,
                       TemplateTy Template, SourceLocation TemplateLoc,
                       SourceLocation LAngleLoc,
                       ASTTemplateArgsPtr TemplateArgs,
@@ -4056,6 +4055,7 @@ public:
                                     TypeSpecifierType TagSpec,
                                     SourceLocation TagLoc,
                                     CXXScopeSpec &SS,
+                                    SourceLocation TemplateKWLoc,
                                     TemplateTy TemplateD,
                                     SourceLocation TemplateLoc,
                                     SourceLocation LAngleLoc,
@@ -4067,12 +4067,12 @@ public:
                                  SourceLocation TemplateKWLoc,
                                  LookupResult &R,
                                  bool RequiresADL,
-                               const TemplateArgumentListInfo &TemplateArgs);
+                               const TemplateArgumentListInfo *TemplateArgs);
 
   ExprResult BuildQualifiedTemplateIdExpr(CXXScopeSpec &SS,
                                           SourceLocation TemplateKWLoc,
                                const DeclarationNameInfo &NameInfo,
-                               const TemplateArgumentListInfo &TemplateArgs);
+                               const TemplateArgumentListInfo *TemplateArgs);
 
   TemplateNameKind ActOnDependentTemplateName(Scope *S,
                                               CXXScopeSpec &SS,
