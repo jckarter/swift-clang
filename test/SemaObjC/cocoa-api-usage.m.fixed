@@ -1,5 +1,6 @@
 // RUN: %clang_cc1 -triple x86_64-apple-darwin10 %s -fsyntax-only -Wobjc-cocoa-api -verify
 // RUN: %clang_cc1 -triple x86_64-apple-darwin10 -fobjc-arc %s -fsyntax-only -Wobjc-cocoa-api -verify
+// RUN: %clang_cc1 -triple x86_64-apple-darwin10 -x objective-c %s.fixed -fsyntax-only
 // RUN: cp %s %t.m
 // RUN: %clang_cc1 -triple x86_64-apple-darwin10 %t.m -fixit -Wobjc-cocoa-api
 // RUN: diff %s.fixed %t.m
@@ -105,4 +106,6 @@ void foo() {
   mdict[dict[@"key2"]] = @"val"; // expected-warning 2 {{legacy subscript}}
   mdict[dict[@[@"arrkey"]]] = dict[@"key1"];  // expected-warning {{legacy creation}} \
                                                                         // expected-warning 3 {{legacy subscript}}
+  __strong NSArray **parr = 0;
+  o = (*parr)[2]; // expected-warning {{legacy subscript}}
 }

@@ -91,6 +91,15 @@ bool edit::rewriteObjCRedundantCallWithLiteral(const ObjCMessageExpr *Msg,
 // rewriteToObjCSubscriptSyntax.
 //===----------------------------------------------------------------------===//
 
+static void maybePutParensOnReceiver(const Expr *Receiver, Commit &commit) {
+  Receiver = Receiver->IgnoreImpCasts();
+  if (isa<BinaryOperator>(Receiver) || isa<UnaryOperator>(Receiver)) {
+    SourceRange RecRange = Receiver->getSourceRange();
+    commit.insert(RecRange.getBegin(), "(");
+    commit.insertAfterToken(RecRange.getEnd(), ")");
+  }
+}
+
 static bool rewriteToSubscriptGet(const ObjCMessageExpr *Msg, Commit &commit) {
   if (Msg->getNumArgs() != 1)
     return false;
@@ -109,6 +118,7 @@ static bool rewriteToSubscriptGet(const ObjCMessageExpr *Msg, Commit &commit) {
                          ArgRange);
   commit.insert(ArgRange.getBegin(), "[");
   commit.insertAfterToken(ArgRange.getEnd(), "]");
+  maybePutParensOnReceiver(Rec, commit);
   return true;
 }
 
@@ -135,6 +145,7 @@ static bool rewriteToArraySubscriptSet(const ObjCMessageExpr *Msg,
                          Arg1Range);
   commit.insert(Arg0Range.getBegin(), "[");
   commit.insert(Arg1Range.getBegin(), "] = ");
+  maybePutParensOnReceiver(Rec, commit);
   return true;
 }
 
@@ -160,6 +171,7 @@ static bool rewriteToDictionarySubscriptSet(const ObjCMessageExpr *Msg,
                          CharSourceRange::getTokenRange(RecRange));
   commit.replaceWithInner(SourceRange(Arg0Range.getBegin(), MsgRange.getEnd()),
                          Arg0Range);
+  maybePutParensOnReceiver(Rec, commit);
   return true;
 }
 

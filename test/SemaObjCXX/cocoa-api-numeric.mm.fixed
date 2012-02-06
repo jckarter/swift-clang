@@ -1,5 +1,6 @@
 // RUN: %clang_cc1 -triple x86_64-apple-darwin10 %s -fsyntax-only -Wobjc-cocoa-api -verify
 // RUN: %clang_cc1 -triple x86_64-apple-darwin10 -fobjc-arc %s -fsyntax-only -Wobjc-cocoa-api -verify
+// RUN: %clang_cc1 -triple x86_64-apple-darwin10 -x objective-c++ %s.fixed -fsyntax-only
 // RUN: cp %s %t.mm
 // RUN: %clang_cc1 -triple x86_64-apple-darwin10 %t.mm -fixit -Wobjc-cocoa-api
 // RUN: diff %s.fixed %t.mm
