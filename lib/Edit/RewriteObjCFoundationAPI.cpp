@@ -334,21 +334,22 @@ static bool rewriteToDictionaryLiteral(const ObjCMessageExpr *Msg,
       commit.replace(MsgRange, "@{}");
       return true;
     }
-    // Range of arguments up until and including the last value.
-    // The sentinel and last key are cut off, the key will move in front of the
-    // value.
-    SourceRange ArgRange(Msg->getArg(0)->getLocStart(),
-                         Msg->getArg(SentinelIdx-2)->getLocEnd());
-    commit.insert(ArgRange.getBegin(), "@{ ");
+
     for (unsigned i = 0; i < SentinelIdx; i += 2) {
       SourceRange ValRange = Msg->getArg(i)->getSourceRange();
       SourceRange KeyRange = Msg->getArg(i+1)->getSourceRange();
-      // Insert key before the value.
-      commit.insertFromRange(ValRange.getBegin(), KeyRange);
-      commit.insert(ValRange.getBegin(), ": ");
-      commit.remove(CharSourceRange::getCharRange(KeyRange.getBegin(),
-                                              Msg->getArg(i+2)->getLocStart()));
+      // Insert value after key.
+      commit.insertAfterToken(KeyRange.getEnd(), ": ");
+      commit.insertFromRange(KeyRange.getEnd(), ValRange, /*afterToken=*/true);
+      commit.remove(CharSourceRange::getCharRange(ValRange.getBegin(),
+                                                  KeyRange.getBegin()));
     }
+    // Range of arguments up until and including the last key.
+    // The sentinel and first value are cut off, the value will move after the
+    // key.
+    SourceRange ArgRange(Msg->getArg(1)->getLocStart(),
+                         Msg->getArg(SentinelIdx-1)->getLocEnd());
+    commit.insert(ArgRange.getBegin(), "@{ ");
     commit.insertAfterToken(ArgRange.getEnd(), " }");
     commit.replaceWithInner(MsgRange, ArgRange);
     return true;
