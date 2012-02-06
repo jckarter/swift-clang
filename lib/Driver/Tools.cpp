@@ -4010,18 +4010,22 @@ void darwin::Link::ConstructJob(Compilation &C, const JobAction &JA,
 
   getDarwinToolChain().AddLinkSearchPathArgs(Args, CmdArgs);
 
-  if (isObjCRuntimeLinked(Args) &&
-      (!getDarwinToolChain().isTargetMacOS() ||
-       getDarwinToolChain().getArchName() != "i386")) {
-    // If we don't have ARC or subscripting runtime support, link in the runtime
-    // stubs.  We have to do this *before* adding any of the normal
-    // linker inputs so that its initializer gets run first.
-    ObjCRuntime runtime;
-    getDarwinToolChain().configureObjCRuntime(runtime);
-    // We use arclite library for both ARC and subscripting support.
-    if ((!runtime.HasARC && isObjCAutoRefCount(Args)) ||
-        !runtime.HasSubscripting)
-      getDarwinToolChain().AddLinkARCArgs(Args, CmdArgs);
+  if (isObjCRuntimeLinked(Args)) {
+    // Avoid linking compatibility stubs on i386 mac.
+    if (!getDarwinToolChain().isTargetMacOS() ||
+        getDarwinToolChain().getArchName() != "i386") {
+      // If we don't have ARC or subscripting runtime support, link in the
+      // runtime stubs.  We have to do this *before* adding any of the normal
+      // linker inputs so that its initializer gets run first.
+      ObjCRuntime runtime;
+      getDarwinToolChain().configureObjCRuntime(runtime);
+      // We use arclite library for both ARC and subscripting support.
+      if ((!runtime.HasARC && isObjCAutoRefCount(Args)) ||
+          !runtime.HasSubscripting)
+        getDarwinToolChain().AddLinkARCArgs(Args, CmdArgs);
+    }
+    // Link libobj.
+    CmdArgs.push_back("-lobjc");
   }
 
   AddLinkerInputs(getToolChain(), Inputs, Args, CmdArgs);
