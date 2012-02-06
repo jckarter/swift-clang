@@ -260,8 +260,8 @@ static bool rewriteToArrayLiteral(const ObjCMessageExpr *Msg,
       return false;
     SourceRange ArgRange = Msg->getArg(0)->getSourceRange();
     commit.replaceWithInner(MsgRange, ArgRange);
-    commit.insert(ArgRange.getBegin(), "@[");
-    commit.insertAfterToken(ArgRange.getEnd(), "]");
+    commit.insert(ArgRange.getBegin(), "@[ ");
+    commit.insertAfterToken(ArgRange.getEnd(), " ]");
     return true;
   }
 
@@ -280,8 +280,8 @@ static bool rewriteToArrayLiteral(const ObjCMessageExpr *Msg,
     SourceRange ArgRange(Msg->getArg(0)->getLocStart(),
                          Msg->getArg(Msg->getNumArgs()-2)->getLocEnd());
     commit.replaceWithInner(MsgRange, ArgRange);
-    commit.insert(ArgRange.getBegin(), "@[");
-    commit.insertAfterToken(ArgRange.getEnd(), "]");
+    commit.insert(ArgRange.getBegin(), "@[ ");
+    commit.insertAfterToken(ArgRange.getEnd(), " ]");
     return true;
   }
 
@@ -310,12 +310,12 @@ static bool rewriteToDictionaryLiteral(const ObjCMessageExpr *Msg,
       return false;
     SourceRange ValRange = Msg->getArg(0)->getSourceRange();
     SourceRange KeyRange = Msg->getArg(1)->getSourceRange();
-    commit.insert(ValRange.getBegin(), "@{");
+    commit.insert(ValRange.getBegin(), "@{ ");
     // Insert key before the value.
     commit.insertFromRange(ValRange.getBegin(),
                           CharSourceRange::getTokenRange(KeyRange));
     commit.insert(ValRange.getBegin(), ": ");
-    commit.insertAfterToken(ValRange.getEnd(), "}");
+    commit.insertAfterToken(ValRange.getEnd(), " }");
     commit.replaceWithInner(MsgRange, ValRange);
     return true;
   }
@@ -339,7 +339,7 @@ static bool rewriteToDictionaryLiteral(const ObjCMessageExpr *Msg,
     // value.
     SourceRange ArgRange(Msg->getArg(0)->getLocStart(),
                          Msg->getArg(SentinelIdx-2)->getLocEnd());
-    commit.insert(ArgRange.getBegin(), "@{");
+    commit.insert(ArgRange.getBegin(), "@{ ");
     for (unsigned i = 0; i < SentinelIdx; i += 2) {
       SourceRange ValRange = Msg->getArg(i)->getSourceRange();
       SourceRange KeyRange = Msg->getArg(i+1)->getSourceRange();
@@ -349,7 +349,7 @@ static bool rewriteToDictionaryLiteral(const ObjCMessageExpr *Msg,
       commit.remove(CharSourceRange::getCharRange(KeyRange.getBegin(),
                                               Msg->getArg(i+2)->getLocStart()));
     }
-    commit.insertAfterToken(ArgRange.getEnd(), "}");
+    commit.insertAfterToken(ArgRange.getEnd(), " }");
     commit.replaceWithInner(MsgRange, ArgRange);
     return true;
   }

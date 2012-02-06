@@ -87,11 +87,11 @@ void foo() {
   NSDictionary *dict = @{str: arr}; // expected-warning {{redundant}}
 
   arr = @[]; // expected-warning {{legacy creation}}
-  arr = @[str]; // expected-warning {{legacy creation}}
-  arr = @[str, str]; // expected-warning {{legacy creation}}
+  arr = @[ str ]; // expected-warning {{legacy creation}}
+  arr = @[ str, str ]; // expected-warning {{legacy creation}}
   dict = @{}; // expected-warning {{legacy creation}}
-  dict = @{str: arr}; // expected-warning {{legacy creation}}
-  dict = @{@"key1": @"value1", @"key2": @"value2"}; // expected-warning {{legacy creation}}
+  dict = @{ str: arr }; // expected-warning {{legacy creation}}
+  dict = @{ @"key1": @"value1", @"key2": @"value2" }; // expected-warning {{legacy creation}}
   dict = [NSDictionary dictionaryWithObjectsAndKeys: PAIR(1), PAIR(2), nil]; // expected-warning 3 {{legacy creation}}
 
   id o = arr[2]; // expected-warning {{legacy subscript}}
@@ -104,7 +104,7 @@ void foo() {
   marr[2] = arr[4]; // expected-warning 2 {{legacy subscript}}
   mdict[@"key"] = dict[@"key2"]; // expected-warning 2 {{legacy subscript}}
   mdict[dict[@"key2"]] = @"val"; // expected-warning 2 {{legacy subscript}}
-  mdict[dict[@[@"arrkey"]]] = dict[@"key1"];  // expected-warning {{legacy creation}} \
+  mdict[dict[@[ @"arrkey" ]]] = dict[@"key1"];  // expected-warning {{legacy creation}} \
                                                                         // expected-warning 3 {{legacy subscript}}
   __strong NSArray **parr = 0;
   o = (*parr)[2]; // expected-warning {{legacy subscript}}
