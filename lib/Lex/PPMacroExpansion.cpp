@@ -780,7 +780,7 @@ static bool EvaluateHasIncludeCommon(Token &Tok,
   PP.getCurrentLexer()->LexIncludeFilename(Tok);
 
   // Reserve a buffer to get the spelling.
-  llvm::SmallString<128> FilenameBuffer;
+  SmallString<128> FilenameBuffer;
   StringRef Filename;
   SourceLocation EndLoc;
   
@@ -882,7 +882,7 @@ void Preprocessor::ExpandBuiltinMacro(Token &Tok) {
 
   ++NumBuiltinMacroExpanded;
 
-  llvm::SmallString<128> TmpBuffer;
+  SmallString<128> TmpBuffer;
   llvm::raw_svector_ostream OS(TmpBuffer);
 
   // Set up the return result.
@@ -929,7 +929,7 @@ void Preprocessor::ExpandBuiltinMacro(Token &Tok) {
     }
 
     // Escape this filename.  Turn '\' -> '\\' '"' -> '\"'
-    llvm::SmallString<128> FN;
+    SmallString<128> FN;
     if (PLoc.isValid()) {
       FN += PLoc.getFilename();
       Lexer::Stringify(FN);
