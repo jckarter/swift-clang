@@ -8,8 +8,9 @@
 //===----------------------------------------------------------------------===//
 
 #include "clang/ARCMigrate/FileRemapper.h"
-#include "clang/Frontend/CompilerInvocation.h"
+#include "clang/Frontend/PreprocessorOptions.h"
 #include "clang/Basic/FileManager.h"
+#include "clang/Basic/Diagnostic.h"
 #include "llvm/Support/MemoryBuffer.h"
 #include "llvm/Support/Path.h"
 #include "llvm/Support/FileSystem.h"
@@ -189,8 +190,7 @@ bool FileRemapper::overwriteOriginal(DiagnosticsEngine &Diag,
   return false;
 }
 
-void FileRemapper::applyMappings(CompilerInvocation &CI) const {
-  PreprocessorOptions &PPOpts = CI.getPreprocessorOpts();
+void FileRemapper::applyMappings(PreprocessorOptions &PPOpts) const {
   for (MappingsTy::const_iterator
          I = FromToMappings.begin(), E = FromToMappings.end(); I != E; ++I) {
     if (const FileEntry *FE = I->second.dyn_cast<const FileEntry *>()) {
@@ -204,8 +204,7 @@ void FileRemapper::applyMappings(CompilerInvocation &CI) const {
   PPOpts.RetainRemappedFileBuffers = true;
 }
 
-void FileRemapper::transferMappingsAndClear(CompilerInvocation &CI) {
-  PreprocessorOptions &PPOpts = CI.getPreprocessorOpts();
+void FileRemapper::transferMappingsAndClear(PreprocessorOptions &PPOpts) {
   for (MappingsTy::iterator
          I = FromToMappings.begin(), E = FromToMappings.end(); I != E; ++I) {
     if (const FileEntry *FE = I->second.dyn_cast<const FileEntry *>()) {

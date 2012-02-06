@@ -111,6 +111,12 @@ static FrontendAction *CreateFrontendAction(CompilerInstance &CI) {
     break;
   }
 
+  if (FEOpts.ObjCMTAction != FrontendOptions::ObjCMT_None) {
+    Act = new arcmt::ObjCMigrateAction(Act, FEOpts.MTMigrateDir,
+                   FEOpts.ObjCMTAction & ~FrontendOptions::ObjCMT_Literals,
+                   FEOpts.ObjCMTAction & ~FrontendOptions::ObjCMT_Subscripting);
+  }
+
   // If there are any AST files to merge, create a frontend action
   // adaptor to perform the merge.
   if (!FEOpts.ASTMergeFiles.empty())
