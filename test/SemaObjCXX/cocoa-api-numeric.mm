@@ -211,6 +211,9 @@ void foo() {
   (void)[[NSNumber alloc] initWithInt:2]; // expected-warning {{legacy}}
   (void)[[NSNumber alloc] initWithInt:2U]; // expected-warning {{legacy}}
 
+  [NSNumber numberWithInt:+2]; // expected-warning {{legacy}}
+  [NSNumber numberWithInt:-2]; // expected-warning {{legacy}}
+
   [NSNumber numberWithUnsignedInt:'a'];
   [NSNumber numberWithUnsignedInt:L'a'];
   [NSNumber numberWithUnsignedInt:2]; // expected-warning {{legacy}}

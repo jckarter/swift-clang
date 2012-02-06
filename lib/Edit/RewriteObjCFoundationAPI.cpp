@@ -472,9 +472,15 @@ static bool rewriteToNumberLiteral(const ObjCMessageExpr *Msg,
   if (const CXXBoolLiteralExpr *BE = dyn_cast<CXXBoolLiteralExpr>(Arg))
     return rewriteToBoolLiteral(Msg, BE, NS, commit);
 
+  const Expr *literalE = Arg;
+  if (const UnaryOperator *UOE = dyn_cast<UnaryOperator>(literalE)) {
+    if (UOE->getOpcode() == UO_Plus || UOE->getOpcode() == UO_Minus)
+      literalE = UOE->getSubExpr();
+  }
+
   // Only integer and floating literals; non-literals or imaginary literal
   // cannot be rewritten.
-  if (!isa<IntegerLiteral>(Arg) && !isa<FloatingLiteral>(Arg))
+  if (!isa<IntegerLiteral>(literalE) && !isa<FloatingLiteral>(literalE))
     return false;
 
   ASTContext &Ctx = NS.getASTContext();
@@ -553,7 +559,7 @@ static bool rewriteToNumberLiteral(const ObjCMessageExpr *Msg,
   
   LiteralInfo LitInfo;
   bool isIntZero = false;
-  if (const IntegerLiteral *IntE = dyn_cast<IntegerLiteral>(Arg))
+  if (const IntegerLiteral *IntE = dyn_cast<IntegerLiteral>(literalE))
     isIntZero = !IntE->getValue().getBoolValue();
   if (!getLiteralInfo(ArgRange, LitIsFloat, isIntZero, Ctx, LitInfo))
     return false;
