@@ -4,4 +4,5 @@
 // RUN: %clang -### -target i386-apple-darwin10 -fobjc-link-runtime -mmacosx-version-min=10.7 %t.o 2>&1 | FileCheck -check-prefix=CHECK-NOARCLITE %s
 
 // CHECK-ARCLITE-OSX: libarclite_macosx.a
+// CHECK-ARCLITE-OSX: -lobjc
 // CHECK-NOARCLITE-NOT: libarclite

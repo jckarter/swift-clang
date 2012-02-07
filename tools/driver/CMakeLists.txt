@@ -9,6 +9,7 @@ set( LLVM_USED_LIBS
   clangIndex
   clangLex
   clangParse
+  clangEdit
   clangARCMigrate
   clangRewrite
   clangSema

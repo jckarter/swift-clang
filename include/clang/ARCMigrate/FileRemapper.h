@@ -24,7 +24,7 @@ namespace clang {
   class FileManager;
   class FileEntry;
   class DiagnosticsEngine;
-  class CompilerInvocation;
+  class PreprocessorOptions;
 
 namespace arcmt {
 
@@ -52,9 +52,9 @@ public:
   void remap(StringRef filePath, llvm::MemoryBuffer *memBuf);
   void remap(StringRef filePath, StringRef newPath);
 
-  void applyMappings(CompilerInvocation &CI) const;
+  void applyMappings(PreprocessorOptions &PPOpts) const;
 
-  void transferMappingsAndClear(CompilerInvocation &CI);
+  void transferMappingsAndClear(PreprocessorOptions &PPOpts);
 
   void clear(StringRef outputDir = StringRef());
 

@@ -366,3 +366,18 @@ def Microsoft : DiagGroup<"microsoft">;
 def ObjCNonUnifiedException : DiagGroup<"objc-nonunified-exceptions">;
 
 def ObjCProtocolMethodImpl : DiagGroup<"objc-protocol-method-implementation">;
+
+// ObjC API warning groups.
+def ObjCRedundantLiteralUse : DiagGroup<"objc-redundant-literal-use">;
+def ObjCRedundantAPIUse : DiagGroup<"objc-redundant-api-use", [
+    ObjCRedundantLiteralUse
+  ]>;
+def ObjCLegacyLiteralConstruction :
+    DiagGroup<"objc-legacy-literal-construction">;
+def ObjCLegacyContainerSubscript : DiagGroup<"objc-legacy-container-subscript">;
+
+def ObjCCocoaAPI : DiagGroup<"objc-cocoa-api", [
+    ObjCRedundantAPIUse,
+    ObjCLegacyLiteralConstruction,
+    ObjCLegacyContainerSubscript
+  ]>;

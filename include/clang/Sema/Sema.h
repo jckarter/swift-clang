@@ -30,6 +30,7 @@
 #include "clang/AST/DeclarationName.h"
 #include "clang/AST/ExternalASTSource.h"
 #include "clang/AST/TypeLoc.h"
+#include "clang/AST/NSAPI.h"
 #include "clang/Lex/ModuleLoader.h"
 #include "clang/Basic/PartialDiagnostic.h"
 #include "clang/Basic/Specifiers.h"
@@ -504,29 +505,14 @@ public:
   /// \brief The MSVC "_GUID" struct, which is defined in MSVC header files.
   RecordDecl *MSVCGuidDecl;
 
+  /// \brief Caches identifiers/selectors for NSFoundation APIs.
+  llvm::OwningPtr<NSAPI> NSAPIObj;
+
   /// \brief The declaration of the Objective-C NSNumber class.
   ObjCInterfaceDecl *NSNumberDecl;
-
-  /// \brief Enumerates the NSNumber methods used to generate literals.
-  enum NSNumberLiteralMethodKinds {
-    NSNumberWithChar,
-    NSNumberWithUnsignedChar,
-    NSNumberWithShort,
-    NSNumberWithUnsignedShort,
-    NSNumberWithInt,
-    NSNumberWithUnsignedInt,
-    NSNumberWithLong,
-    NSNumberWithUnsignedLong,
-    NSNumberWithLongLong,
-    NSNumberWithUnsignedLongLong,
-    NSNumberWithFloat,
-    NSNumberWithDouble,
-    NSNumberWithBool
-  };
-  static const unsigned NumNSNumberLiteralMethods = 13;
   
   /// \brief The Objective-C NSNumber methods used to create NSNumber literals.
-  ObjCMethodDecl *NSNumberLiteralMethods[NumNSNumberLiteralMethods];
+  ObjCMethodDecl *NSNumberLiteralMethods[NSAPI::NumNSNumberLiteralMethods];
   
   /// \brief The declaration of the Objective-C NSArray class.
   ObjCInterfaceDecl *NSArrayDecl;
