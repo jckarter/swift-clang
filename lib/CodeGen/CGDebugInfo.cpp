@@ -233,7 +233,8 @@ llvm::DIFile CGDebugInfo::getOrCreateMainFile() {
 /// getLineNumber - Get line number for the location. If location is invalid
 /// then use current location.
 unsigned CGDebugInfo::getLineNumber(SourceLocation Loc) {
-  assert((Loc.isValid() || CurLoc.isValid()) && "Invalid current location!");
+  if (Loc.isInvalid() && CurLoc.isInvalid())
+    return 0;
   SourceManager &SM = CGM.getContext().getSourceManager();
   PresumedLoc PLoc = SM.getPresumedLoc(Loc.isValid() ? Loc : CurLoc);
   return PLoc.isValid()? PLoc.getLine() : 0;
@@ -242,7 +243,8 @@ unsigned CGDebugInfo::getLineNumber(SourceLocation Loc) {
 /// getColumnNumber - Get column number for the location. If location is 
 /// invalid then use current location.
 unsigned CGDebugInfo::getColumnNumber(SourceLocation Loc) {
-  assert((Loc.isValid() || CurLoc.isValid()) && "Invalid current location!");
+  if (Loc.isInvalid() && CurLoc.isInvalid())
+    return 0;
   SourceManager &SM = CGM.getContext().getSourceManager();
   PresumedLoc PLoc = SM.getPresumedLoc(Loc.isValid() ? Loc : CurLoc);
   return PLoc.isValid()? PLoc.getColumn() : 0;
@@ -2139,7 +2141,7 @@ void CGDebugInfo::EmitDeclare(const VarDecl *VD, unsigned Tag,
     if (VD->hasAttr<BlocksAttr>()) {
       CharUnits offset = CharUnits::fromQuantity(32);
       SmallVector<llvm::Value *, 9> addr;
-      llvm::Type *Int64Ty = llvm::Type::getInt64Ty(CGM.getLLVMContext());
+      llvm::Type *Int64Ty = CGM.Int64Ty;
       addr.push_back(llvm::ConstantInt::get(Int64Ty, llvm::DIBuilder::OpPlus));
       // offset of __forwarding field
       offset = CGM.getContext().toCharUnitsFromBits(
@@ -2244,7 +2246,7 @@ void CGDebugInfo::EmitDeclareOfBlockDeclRefVariable(
           ->getElementOffset(blockInfo.getCapture(VD).getIndex()));
 
   SmallVector<llvm::Value *, 9> addr;
-  llvm::Type *Int64Ty = llvm::Type::getInt64Ty(CGM.getLLVMContext());
+  llvm::Type *Int64Ty = CGM.Int64Ty;
   addr.push_back(llvm::ConstantInt::get(Int64Ty, llvm::DIBuilder::OpPlus));
   addr.push_back(llvm::ConstantInt::get(Int64Ty, offset.getQuantity()));
   if (isByRef) {
