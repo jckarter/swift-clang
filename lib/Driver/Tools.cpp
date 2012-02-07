@@ -1732,10 +1732,12 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
 
   Args.AddLastArg(CmdArgs, options::OPT_working_directory);
 
+  bool ARCMTEnabled = false;
   if (!Args.hasArg(options::OPT_fno_objc_arc)) {
     if (const Arg *A = Args.getLastArg(options::OPT_ccc_arcmt_check,
                                        options::OPT_ccc_arcmt_modify,
                                        options::OPT_ccc_arcmt_migrate)) {
+      ARCMTEnabled = true;
       switch (A->getOption().getID()) {
       default:
         llvm_unreachable("missed a case");
@@ -1747,13 +1749,32 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
         break;
       case options::OPT_ccc_arcmt_migrate:
         CmdArgs.push_back("-arcmt-migrate");
-        CmdArgs.push_back("-arcmt-migrate-directory");
+        CmdArgs.push_back("-mt-migrate-directory");
         CmdArgs.push_back(A->getValue(Args));
 
         Args.AddLastArg(CmdArgs, options::OPT_arcmt_migrate_report_output);
         Args.AddLastArg(CmdArgs, options::OPT_arcmt_migrate_emit_arc_errors);
         break;
       }
+    }
+  }
+
+  if (const Arg *A = Args.getLastArg(options::OPT_ccc_objcmt_migrate)) {
+    if (ARCMTEnabled) {
+      D.Diag(diag::err_drv_argument_not_allowed_with)
+        << A->getAsString(Args) << "-ccc-arcmt-migrate";
+    }
+    CmdArgs.push_back("-mt-migrate-directory");
+    CmdArgs.push_back(A->getValue(Args));
+
+    if (!Args.hasArg(options::OPT_objcmt_migrate_literals,
+                     options::OPT_objcmt_migrate_subscripting)) {
+      // None specified, means enable them all.
+      CmdArgs.push_back("-objcmt-migrate-literals");
+      CmdArgs.push_back("-objcmt-migrate-subscripting");
+    } else {
+      Args.AddLastArg(CmdArgs, options::OPT_objcmt_migrate_literals);
+      Args.AddLastArg(CmdArgs, options::OPT_objcmt_migrate_subscripting);
     }
   }
 
@@ -3028,11 +3049,25 @@ void darwin::CC1::RemoveCC1UnsupportedArgs(ArgStringList &CmdArgs) const {
     StringRef Option = *it;
     bool RemoveOption = false;
 
-    // Remove -faltivec
-    if (Option.equals("-faltivec")) {
-      it = CmdArgs.erase(it);
+    // Erase both -fmodule-cache-path and its argument.
+    if (Option.equals("-fmodule-cache-path") && it+2 != ie) {
+      it = CmdArgs.erase(it, it+2);
       ie = CmdArgs.end();
       continue;
+    }
+
+    // Remove unsupported -f options.
+    if (Option.startswith("-f")) {
+      // Remove -f/-fno- to reduce the number of cases.
+      if (Option.startswith("-fno-"))
+        Option = Option.substr(5);
+      else
+        Option = Option.substr(2);
+      RemoveOption = llvm::StringSwitch<bool>(Option)
+        .Case("altivec", true)
+        .Case("modules", true)
+        .Case("diagnostics-show-note-include-stack", true)
+        .Default(false);
     }
 
     // Handle machine specific options.
@@ -4012,18 +4047,22 @@ void darwin::Link::ConstructJob(Compilation &C, const JobAction &JA,
 
   getDarwinToolChain().AddLinkSearchPathArgs(Args, CmdArgs);
 
-  if (isObjCRuntimeLinked(Args) &&
-      (!getDarwinToolChain().isTargetMacOS() ||
-       getDarwinToolChain().getArchName() != "i386")) {
-    // If we don't have ARC or subscripting runtime support, link in the runtime
-    // stubs.  We have to do this *before* adding any of the normal
-    // linker inputs so that its initializer gets run first.
-    ObjCRuntime runtime;
-    getDarwinToolChain().configureObjCRuntime(runtime);
-    // We use arclite library for both ARC and subscripting support.
-    if ((!runtime.HasARC && isObjCAutoRefCount(Args)) ||
-        !runtime.HasSubscripting)
-      getDarwinToolChain().AddLinkARCArgs(Args, CmdArgs);
+  if (isObjCRuntimeLinked(Args)) {
+    // Avoid linking compatibility stubs on i386 mac.
+    if (!getDarwinToolChain().isTargetMacOS() ||
+        getDarwinToolChain().getArchName() != "i386") {
+      // If we don't have ARC or subscripting runtime support, link in the
+      // runtime stubs.  We have to do this *before* adding any of the normal
+      // linker inputs so that its initializer gets run first.
+      ObjCRuntime runtime;
+      getDarwinToolChain().configureObjCRuntime(runtime);
+      // We use arclite library for both ARC and subscripting support.
+      if ((!runtime.HasARC && isObjCAutoRefCount(Args)) ||
+          !runtime.HasSubscripting)
+        getDarwinToolChain().AddLinkARCArgs(Args, CmdArgs);
+    }
+    // Link libobj.
+    CmdArgs.push_back("-lobjc");
   }
 
   AddLinkerInputs(getToolChain(), Inputs, Args, CmdArgs);
@@ -4113,6 +4152,9 @@ void darwin::VerifyDebug::ConstructJob(Compilation &C, const JobAction &JA,
 				       const char *LinkingOutput) const {
   ArgStringList CmdArgs;
   CmdArgs.push_back("--verify");
+  CmdArgs.push_back("--debug-info");
+  CmdArgs.push_back("--eh-frame");
+  CmdArgs.push_back("--quiet");
 
   assert(Inputs.size() == 1 && "Unable to handle multiple inputs.");
   const InputInfo &Input = Inputs[0];

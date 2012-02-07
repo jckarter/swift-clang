@@ -1557,6 +1557,18 @@ def err_invalid_collection_element : Error<
 def err_box_literal_collection : Error<
   "%select{string|character|boolean|numeric}0 literal must be prefixed by '@' "
   "in a collection">;
+
+let CategoryName = "Cocoa API Issue" in {
+def warn_objc_redundant_literal_use : Warning<
+  "using %0 with a literal is redundant">, InGroup<ObjCRedundantLiteralUse>;
+def warn_objc_legacy_literal_creation : Warning<
+  "using legacy creation method %0 instead of modern literal syntax">,
+  InGroup<ObjCLegacyLiteralConstruction>, DefaultIgnore;
+def warn_objc_legacy_container_subscript : Warning<
+  "using legacy subscript method %0 instead of modern subscript syntax">,
+  InGroup<ObjCLegacyContainerSubscript>, DefaultIgnore;
+}
+
 def err_only_annotate_after_access_spec : Error<
   "access specifier can only have annotation attributes">;
 def err_attribute_section_invalid_for_target : Error<
@@ -4693,7 +4705,14 @@ def ext_ms_anonymous_struct : ExtWarn<
 
 // C++ local classes
 def err_reference_to_local_var_in_enclosing_function : Error<
-  "reference to local variable %0 declared in enclosed function %1">;
+  "reference to local variable %0 declared in enclosing function %1">;
+def err_reference_to_local_var_in_enclosing_block : Error<
+  "reference to local variable %0 declared in enclosing block literal">;
+def err_reference_to_local_var_in_enclosing_lambda : Error<
+  "reference to local variable %0 declared in enclosing lambda expression">;
+def err_reference_to_local_var_in_enclosing_context : Error<
+  "reference to local variable %0 declared in enclosing context">;
+
 def note_local_variable_declared_here : Note<
   "%0 declared here">;
 def err_static_data_member_not_allowed_in_local_class : Error<

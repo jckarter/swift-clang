@@ -11,6 +11,7 @@
 #define LLVM_CLANG_ARCMIGRATE_ARCMT_ACTION_H
 
 #include "clang/Frontend/FrontendAction.h"
+#include "clang/ARCMigrate/FileRemapper.h"
 #include "llvm/ADT/OwningPtr.h"
 
 namespace clang {
@@ -43,6 +44,23 @@ public:
   MigrateAction(FrontendAction *WrappedAction, StringRef migrateDir,
                 StringRef plistOut,
                 bool emitPremigrationARCErrors);
+};
+
+/// \brief Migrates to modern ObjC syntax.
+class ObjCMigrateAction : public WrapperFrontendAction {
+  std::string MigrateDir;
+  bool MigrateLiterals;
+  bool MigrateSubscripting;
+  FileRemapper Remapper;
+  CompilerInstance *CompInst;
+public:
+  ObjCMigrateAction(FrontendAction *WrappedAction, StringRef migrateDir,
+                    bool migrateLiterals,
+                    bool migrateSubscripting);
+
+protected:
+  virtual ASTConsumer *CreateASTConsumer(CompilerInstance &CI,StringRef InFile);
+  virtual bool BeginInvocation(CompilerInstance &CI);
 };
 
 }

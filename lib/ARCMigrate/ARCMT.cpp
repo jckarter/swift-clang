@@ -398,9 +398,9 @@ bool arcmt::getFileRemappings(std::vector<std::pair<std::string,std::string> > &
   if (err)
     return true;
 
-  CompilerInvocation CI;
-  remapper.applyMappings(CI);
-  remap = CI.getPreprocessorOpts().RemappedFiles;
+  PreprocessorOptions PPOpts;
+  remapper.applyMappings(PPOpts);
+  remap = PPOpts.RemappedFiles;
 
   return false;
 }
@@ -504,7 +504,7 @@ bool MigrationProcess::applyTransform(TransformFn trans,
   CInvok.reset(createInvocationForMigration(OrigCI));
   CInvok->getDiagnosticOpts().IgnoreWarnings = true;
 
-  Remapper.applyMappings(*CInvok);
+  Remapper.applyMappings(CInvok->getPreprocessorOpts());
 
   CapturedDiagList capturedDiags;
   std::vector<SourceLocation> ARCMTMacroLocs;

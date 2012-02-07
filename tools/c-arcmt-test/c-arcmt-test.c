@@ -40,14 +40,14 @@ static int print_remappings(const char *path) {
 
 static void print_usage(void) {
   fprintf(stderr,
-    "usage: c-arcmt-test -arcmt-migrate-directory <path>\n\n\n");
+    "usage: c-arcmt-test -mt-migrate-directory <path>\n\n\n");
 }
 
 /***/
 
 int carcmttest_main(int argc, const char **argv) {
   clang_enableStackTraces();
-  if (argc == 3 && strncmp(argv[1], "-arcmt-migrate-directory", 24) == 0)
+  if (argc == 3 && strncmp(argv[1], "-mt-migrate-directory", 21) == 0)
     return print_remappings(argv[2]);
 
   print_usage();

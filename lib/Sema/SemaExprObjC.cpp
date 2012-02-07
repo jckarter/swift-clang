@@ -17,6 +17,8 @@
 #include "clang/Sema/ScopeInfo.h"
 #include "clang/Sema/Initialization.h"
 #include "clang/Analysis/DomainSpecific/CocoaConventions.h"
+#include "clang/Edit/Rewriters.h"
+#include "clang/Edit/Commit.h"
 #include "clang/AST/ASTContext.h"
 #include "clang/AST/DeclObjC.h"
 #include "clang/AST/ExprObjC.h"
@@ -126,77 +128,13 @@ ExprResult Sema::BuildObjCStringLiteral(SourceLocation AtLoc, StringLiteral *S){
   return new (Context) ObjCStringLiteral(S, Ty, AtLoc);
 }
 
-/// \brief Determine the appropriate NSNumber factory method kind for a
-/// literal of the given type.
-static llvm::Optional<Sema::NSNumberLiteralMethodKinds>
-getNSNumberFactoryMethodKind(QualType T) {
-  const BuiltinType *BT = T->getAs<BuiltinType>();
-  if (!BT)
-    return llvm::Optional<Sema::NSNumberLiteralMethodKinds>();
-  
-  
-  switch (BT->getKind()) {
-  case BuiltinType::Char_S:
-  case BuiltinType::SChar:
-    return Sema::NSNumberWithChar;
-  case BuiltinType::Char_U:
-  case BuiltinType::UChar:
-    return Sema::NSNumberWithUnsignedChar;
-  case BuiltinType::Short:
-    return Sema::NSNumberWithShort;
-  case BuiltinType::UShort:
-    return Sema::NSNumberWithUnsignedShort;
-  case BuiltinType::Int:
-    return Sema::NSNumberWithInt;
-  case BuiltinType::UInt:
-    return Sema::NSNumberWithUnsignedInt;
-  case BuiltinType::Long:
-    return Sema::NSNumberWithLong;
-  case BuiltinType::ULong:
-    return Sema::NSNumberWithUnsignedLong;
-  case BuiltinType::LongLong:
-    return Sema::NSNumberWithLongLong;
-  case BuiltinType::ULongLong:
-    return Sema::NSNumberWithUnsignedLongLong;
-  case BuiltinType::Float:
-    return Sema::NSNumberWithFloat;
-  case BuiltinType::Double:
-    return Sema::NSNumberWithDouble;
-  case BuiltinType::Bool:
-    return Sema::NSNumberWithBool;
-    
-  case BuiltinType::Void:
-  case BuiltinType::WChar_U:
-  case BuiltinType::WChar_S:
-  case BuiltinType::Char16:
-  case BuiltinType::Char32:
-  case BuiltinType::Int128:
-  case BuiltinType::LongDouble:
-  case BuiltinType::UInt128:
-  case BuiltinType::NullPtr:
-  case BuiltinType::ObjCClass:
-  case BuiltinType::ObjCId:
-  case BuiltinType::ObjCSel:
-  case BuiltinType::BoundMember:
-  case BuiltinType::Dependent:
-  case BuiltinType::Overload:
-  case BuiltinType::UnknownAny:
-  case BuiltinType::ARCUnbridgedCast:
-  case BuiltinType::Half:
-  case BuiltinType::PseudoObject:
-    break;
-  }
-  
-  return llvm::Optional<Sema::NSNumberLiteralMethodKinds>();
-}
-
 /// \brief Retrieve the NSNumber factory method that should be used to create
 /// an Objective-C literal for the given type.
 static ObjCMethodDecl *getNSNumberFactoryMethod(Sema &S, SourceLocation Loc,
                                                 QualType T, 
                                                 SourceRange Range) {
-  llvm::Optional<Sema::NSNumberLiteralMethodKinds> Kind 
-    = getNSNumberFactoryMethodKind(T);
+  llvm::Optional<NSAPI::NSNumberLiteralMethodKind> Kind 
+    = S.NSAPIObj->getNSNumberFactoryMethodKind(T);
   
   if (!Kind) {
     S.Diag(Loc, diag::err_invalid_nsnumber_type)
@@ -208,26 +146,8 @@ static ObjCMethodDecl *getNSNumberFactoryMethod(Sema &S, SourceLocation Loc,
   if (S.NSNumberLiteralMethods[*Kind])
     return S.NSNumberLiteralMethods[*Kind];
   
-  // Determine the selector for the factory method we will use.
-  static const char *SelectorName[Sema::NumNSNumberLiteralMethods] = {
-    "numberWithChar",
-    "numberWithUnsignedChar",
-    "numberWithShort",
-    "numberWithUnsignedShort",
-    "numberWithInt",
-    "numberWithUnsignedInt",
-    "numberWithLong",
-    "numberWithUnsignedLong",
-    "numberWithLongLong",
-    "numberWithUnsignedLongLong",
-    "numberWithFloat",
-    "numberWithDouble",
-    "numberWithBool"
-  };
-  
-  Selector Sel
-    = S.Context.Selectors.getUnarySelector(
-        &S.Context.Idents.get(SelectorName[*Kind]));
+  Selector Sel = S.NSAPIObj->getNSNumberLiteralSelector(*Kind,
+                                                        /*Instance=*/false);
   
   // Look for the appropriate method within NSNumber.
   ObjCMethodDecl *Method = S.NSNumberDecl->lookupClassMethod(Sel);;
@@ -258,9 +178,9 @@ static ObjCMethodDecl *getNSNumberFactoryMethod(Sema &S, SourceLocation Loc,
 ExprResult Sema::BuildObjCNumericLiteral(SourceLocation AtLoc, Expr *Number) {
   // Look up the NSNumber class, if we haven't done so already.
   if (!NSNumberDecl) {
-    IdentifierInfo *NSIdent = &Context.Idents.get("NSNumber");
-    NamedDecl *IF = LookupSingleName(TUScope, NSIdent, AtLoc,
-                                     LookupOrdinaryName);
+    NamedDecl *IF = LookupSingleName(TUScope,
+                                NSAPIObj->getNSClassId(NSAPI::ClassId_NSNumber),
+                                AtLoc, LookupOrdinaryName);
     NSNumberDecl = dyn_cast_or_null<ObjCInterfaceDecl>(IF);
     
     if (!NSNumberDecl) {
@@ -385,7 +305,7 @@ static ExprResult CheckObjCCollectionLiteralElement(Sema &S, Expr *Element,
         isa<FloatingLiteral>(OrigElement) ||
         isa<ObjCBoolLiteralExpr>(OrigElement) ||
         isa<CXXBoolLiteralExpr>(OrigElement)) {
-      if (getNSNumberFactoryMethodKind(OrigElement->getType())) {
+      if (S.NSAPIObj->getNSNumberFactoryMethodKind(OrigElement->getType())) {
         int Which = isa<CharacterLiteral>(OrigElement) ? 1
                   : (isa<CXXBoolLiteralExpr>(OrigElement) ||
                      isa<ObjCBoolLiteralExpr>(OrigElement)) ? 2
@@ -470,9 +390,10 @@ ExprResult Sema::BuildObjCSubscriptExpression(SourceLocation RB, Expr *BaseExpr,
 ExprResult Sema::BuildObjCArrayLiteral(SourceRange SR, MultiExprArg Elements) {
   // Look up the NSArray class, if we haven't done so already.
   if (!NSArrayDecl) {
-    IdentifierInfo *NSIdent = &Context.Idents.get("NSArray");
-    NamedDecl *IF = LookupSingleName(TUScope, NSIdent, SR.getBegin(),
-                                     LookupOrdinaryName);
+    NamedDecl *IF = LookupSingleName(TUScope,
+                                 NSAPIObj->getNSClassId(NSAPI::ClassId_NSArray),
+                                 SR.getBegin(),
+                                 LookupOrdinaryName);
     NSArrayDecl = dyn_cast_or_null<ObjCInterfaceDecl>(IF);
     if (!NSArrayDecl) {
       Diag(SR.getBegin(), diag::err_undeclared_nsarray);
@@ -482,12 +403,8 @@ ExprResult Sema::BuildObjCArrayLiteral(SourceRange SR, MultiExprArg Elements) {
   
   // Find the arrayWithObjects:count: method, if we haven't done so already.
   if (!ArrayWithObjectsMethod) {
-    IdentifierInfo *KeyIdents[] = {
-      &Context.Idents.get("arrayWithObjects"),
-      &Context.Idents.get("count")
-    };
-    
-    Selector Sel = Context.Selectors.getSelector(2, KeyIdents);
+    Selector
+      Sel = NSAPIObj->getNSArraySelector(NSAPI::NSArr_arrayWithObjectsCount);
     ArrayWithObjectsMethod = NSArrayDecl->lookupClassMethod(Sel);
     if (!ArrayWithObjectsMethod) {
       Diag(SR.getBegin(), diag::err_undeclared_arraywithobjects) << Sel;
@@ -562,9 +479,9 @@ ExprResult Sema::BuildObjCDictionaryLiteral(SourceRange SR,
                                             unsigned NumElements) {
   // Look up the NSDictionary class, if we haven't done so already.
   if (!NSDictionaryDecl) {
-    IdentifierInfo *NSIdent = &Context.Idents.get("NSDictionary");
-    NamedDecl *IF = LookupSingleName(TUScope, NSIdent, SR.getBegin(),
-                                     LookupOrdinaryName);
+    NamedDecl *IF = LookupSingleName(TUScope,
+                            NSAPIObj->getNSClassId(NSAPI::ClassId_NSDictionary),
+                            SR.getBegin(), LookupOrdinaryName);
     NSDictionaryDecl = dyn_cast_or_null<ObjCInterfaceDecl>(IF);
     if (!NSDictionaryDecl) {
       Diag(SR.getBegin(), diag::err_undeclared_nsdictionary);
@@ -575,13 +492,8 @@ ExprResult Sema::BuildObjCDictionaryLiteral(SourceRange SR,
   // Find the dictionaryWithObjects:forKeys:count: method, if we haven't done
   // so already.
   if (!DictionaryWithObjectsMethod) {
-    IdentifierInfo *KeyIdents[] = {
-      &Context.Idents.get("dictionaryWithObjects"),
-      &Context.Idents.get("forKeys"),
-      &Context.Idents.get("count")
-    };
-    
-    Selector Sel = Context.Selectors.getSelector(3, KeyIdents);
+    Selector Sel = NSAPIObj->getNSDictionarySelector(
+                                    NSAPI::NSDict_dictionaryWithObjectsForKeysCount);
     DictionaryWithObjectsMethod = NSDictionaryDecl->lookupClassMethod(Sel);
     if (!DictionaryWithObjectsMethod) {
       Diag(SR.getBegin(), diag::err_undeclared_dictwithobjects) << Sel;
@@ -1608,6 +1520,54 @@ ExprResult Sema::BuildClassMessageImplicit(QualType ReceiverType,
 
 }
 
+static void applyCocoaAPICheck(Sema &S, const ObjCMessageExpr *Msg,
+                               unsigned DiagID,
+                               bool (*refactor)(const ObjCMessageExpr *,
+                                              const NSAPI &, edit::Commit &)) {
+  SourceLocation MsgLoc = Msg->getExprLoc();
+  if (S.Diags.getDiagnosticLevel(DiagID, MsgLoc) == DiagnosticsEngine::Ignored)
+    return;
+
+  SourceManager &SM = S.SourceMgr;
+  edit::Commit ECommit(SM, S.LangOpts);
+  if (refactor(Msg,*S.NSAPIObj, ECommit)) {
+    DiagnosticBuilder Builder = S.Diag(MsgLoc, DiagID)
+                        << Msg->getSelector() << Msg->getSourceRange();
+    // FIXME: Don't emit diagnostic at all if fixits are non-commitable.
+    if (!ECommit.isCommitable())
+      return;
+    for (edit::Commit::edit_iterator
+           I = ECommit.edit_begin(), E = ECommit.edit_end(); I != E; ++I) {
+      const edit::Commit::Edit &Edit = *I;
+      switch (Edit.Kind) {
+      case edit::Commit::Act_Insert:
+        Builder.AddFixItHint(FixItHint::CreateInsertion(Edit.OrigLoc,
+                                                        Edit.Text,
+                                                        Edit.BeforePrev));
+        break;
+      case edit::Commit::Act_InsertFromRange:
+        Builder.AddFixItHint(
+            FixItHint::CreateInsertionFromRange(Edit.OrigLoc,
+                                                Edit.getInsertFromRange(SM),
+                                                Edit.BeforePrev));
+        break;
+      case edit::Commit::Act_Remove:
+        Builder.AddFixItHint(FixItHint::CreateRemoval(Edit.getFileRange(SM)));
+        break;
+      }
+    }
+  }
+}
+
+static void checkCocoaAPI(Sema &S, const ObjCMessageExpr *Msg) {
+  applyCocoaAPICheck(S, Msg, diag::warn_objc_redundant_literal_use,
+                     edit::rewriteObjCRedundantCallWithLiteral);
+  applyCocoaAPICheck(S, Msg, diag::warn_objc_legacy_literal_creation,
+                     edit::rewriteToObjCLiteralSyntax);
+  applyCocoaAPICheck(S, Msg, diag::warn_objc_legacy_container_subscript,
+                     edit::rewriteToObjCSubscriptSyntax);
+}
+
 /// \brief Build an Objective-C class message expression.
 ///
 /// This routine takes care of both normal class messages and
@@ -1724,18 +1684,21 @@ ExprResult Sema::BuildClassMessage(TypeSourceInfo *ReceiverTypeInfo,
     return ExprError();
 
   // Construct the appropriate ObjCMessageExpr.
-  Expr *Result;
+  ObjCMessageExpr *Result;
   if (SuperLoc.isValid())
     Result = ObjCMessageExpr::Create(Context, ReturnType, VK, LBracLoc, 
                                      SuperLoc, /*IsInstanceSuper=*/false, 
                                      ReceiverType, Sel, SelectorLocs,
                                      Method, makeArrayRef(Args, NumArgs),
                                      RBracLoc, isImplicit);
-  else
+  else {
     Result = ObjCMessageExpr::Create(Context, ReturnType, VK, LBracLoc, 
                                      ReceiverTypeInfo, Sel, SelectorLocs,
                                      Method, makeArrayRef(Args, NumArgs),
                                      RBracLoc, isImplicit);
+    if (!isImplicit)
+      checkCocoaAPI(*this, Result);
+  }
   return MaybeBindToTemporary(Result);
 }
 
@@ -2141,11 +2104,14 @@ ExprResult Sema::BuildInstanceMessage(Expr *Receiver,
                                      ReceiverType, Sel, SelectorLocs, Method, 
                                      makeArrayRef(Args, NumArgs), RBracLoc,
                                      isImplicit);
-  else
+  else {
     Result = ObjCMessageExpr::Create(Context, ReturnType, VK, LBracLoc,
                                      Receiver, Sel, SelectorLocs, Method,
                                      makeArrayRef(Args, NumArgs), RBracLoc,
                                      isImplicit);
+    if (!isImplicit)
+      checkCocoaAPI(*this, Result);
+  }
 
   if (getLangOptions().ObjCAutoRefCount) {
     // In ARC, annotate delegate init calls.
