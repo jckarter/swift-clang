@@ -230,6 +230,7 @@ CXCursor cxcursor::MakeCXCursor(Stmt *S, Decl *Parent, CXTranslationUnit TU,
   case Stmt::ObjCDictionaryLiteralClass:
   case Stmt::ObjCNumericLiteralClass:
   case Stmt::ObjCSubscriptRefExprClass:
+  case Stmt::LambdaExprClass:
     K = CXCursor_UnexposedExpr;
     break;
 
