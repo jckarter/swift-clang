@@ -1102,6 +1102,11 @@ void ASTStmtReader::VisitCXXTemporaryObjectExpr(CXXTemporaryObjectExpr *E) {
   E->Type = GetTypeSourceInfo(Record, Idx);
 }
 
+void ASTStmtReader::VisitLambdaExpr(LambdaExpr *E) {
+  VisitExpr(E);
+  assert(false && "Cannot deserialize lambda expressions yet");
+}
+
 void ASTStmtReader::VisitCXXNamedCastExpr(CXXNamedCastExpr *E) {
   VisitExplicitCastExpr(E);
   SourceRange R = ReadSourceRange(Record, Idx);

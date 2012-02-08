@@ -129,12 +129,25 @@ public:
 
     return true;
   }
+
+  bool TraverseObjCMessageExpr(ObjCMessageExpr *E) {
+    // Do depth first; we want to rewrite the subexpressions first so that if
+    // we have to move expressions we will move them already rewritten.
+    for (Stmt::child_range range = E->children(); range; ++range)
+      if (!TraverseStmt(*range))
+        return false;
+
+    return WalkUpFromObjCMessageExpr(E);
+  }
 };
 }
 
 void ObjCMigrateASTConsumer::migrateDecl(Decl *D) {
   if (!D)
     return;
+  if (isa<ObjCMethodDecl>(D))
+    return; // Wait for the ObjC container declaration.
+
   ObjCMigrator(*this).TraverseDecl(D);
 }
 

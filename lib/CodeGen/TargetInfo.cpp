@@ -3380,7 +3380,7 @@ ABIArgInfo MipsABIInfo::classifyReturnType(QualType RetTy) const {
       if (RetTy->isAnyComplexType())
         return ABIArgInfo::getDirect();
 
-      if (!IsO32)
+      if (!IsO32 && !isRecordWithNonTrivialDestructorOrCopyConstructor(RetTy))
         return ABIArgInfo::getDirect(returnAggregateInRegs(RetTy, Size));
     }
 
