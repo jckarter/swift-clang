@@ -2094,7 +2094,7 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
                                         "vget_lane");
   }
 
-  llvm::VectorType *VTy = GetNeonType(getLLVMContext(), Type);
+  llvm::VectorType *VTy = GetNeonType(this, Type);
   llvm::Type *Ty = VTy;
   if (!Ty)
     return 0;
@@ -2418,7 +2418,7 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     bool Double =
       (cast<llvm::IntegerType>(VTy->getElementType())->getBitWidth() == 64);
     llvm::Type *InTy =
-      GetNeonType(getLLVMContext(),
+      GetNeonType(this,
                   NeonTypeFlags(Double ? NeonTypeFlags::Float64
                                        : NeonTypeFlags::Float32, false, quad));
     llvm::Type *Tys[2] = { Ty, InTy };
@@ -2430,7 +2430,7 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     bool Double =
       (cast<llvm::IntegerType>(VTy->getElementType())->getBitWidth() == 64);
     llvm::Type *InTy =
-      GetNeonType(getLLVMContext(),
+      GetNeonType(this,
                   NeonTypeFlags(Double ? NeonTypeFlags::Float64
                                        : NeonTypeFlags::Float32, false, quad));
     llvm::Type *Tys[2] = { Ty, InTy };
@@ -2442,7 +2442,7 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     bool Double =
       (cast<llvm::IntegerType>(VTy->getElementType())->getBitWidth() == 64);
     llvm::Type *InTy =
-      GetNeonType(getLLVMContext(),
+      GetNeonType(this,
                   NeonTypeFlags(Double ? NeonTypeFlags::Float64
                                        : NeonTypeFlags::Float32, false, quad));
     llvm::Type *Tys[2] = { Ty, InTy };
@@ -2454,7 +2454,7 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     bool Double =
       (cast<llvm::IntegerType>(VTy->getElementType())->getBitWidth() == 64);
     llvm::Type *InTy =
-      GetNeonType(getLLVMContext(),
+      GetNeonType(this,
                   NeonTypeFlags(Double ? NeonTypeFlags::Float64
                                        : NeonTypeFlags::Float32, false, quad));
     llvm::Type *Tys[2] = { Ty, InTy };
@@ -2465,7 +2465,7 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     bool Double = 
       (cast<llvm::IntegerType>(VTy->getElementType())->getBitWidth() == 64);
     llvm::Type *InTy =
-      GetNeonType(getLLVMContext(),
+      GetNeonType(this,
                   NeonTypeFlags(Double ? NeonTypeFlags::Float64
                                        : NeonTypeFlags::Float32, false, quad));
     Ops[0] = Builder.CreateBitCast(Ops[0], InTy);
@@ -2480,7 +2480,7 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     bool Double =
       (cast<llvm::IntegerType>(VTy->getElementType())->getBitWidth() == 64);
     llvm::Type *InTy =
-      GetNeonType(getLLVMContext(),
+      GetNeonType(this,
                   NeonTypeFlags(Double ? NeonTypeFlags::Float64
                                        : NeonTypeFlags::Float32, false, quad));
     llvm::Type *Tys[2] = { Ty, InTy };
@@ -2492,7 +2492,7 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     bool Double =
       (cast<llvm::IntegerType>(VTy->getElementType())->getBitWidth() == 64);
     llvm::Type *InTy =
-      GetNeonType(getLLVMContext(),
+      GetNeonType(this,
                   NeonTypeFlags(Double ? NeonTypeFlags::Float64
                                        : NeonTypeFlags::Float32, false, quad));
     llvm::Type *Tys[2] = { Ty, InTy };
@@ -2504,7 +2504,7 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     bool Double =
       (cast<llvm::IntegerType>(VTy->getElementType())->getBitWidth() == 64);
     llvm::Type *InTy =
-      GetNeonType(getLLVMContext(),
+      GetNeonType(this,
                   NeonTypeFlags(Double ? NeonTypeFlags::Float64
                                        : NeonTypeFlags::Float32, false, quad));
     llvm::Type *Tys[2] = { Ty, InTy };
@@ -2516,7 +2516,7 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     bool Double =
       (cast<llvm::IntegerType>(VTy->getElementType())->getBitWidth() == 64);
     llvm::Type *InTy =
-      GetNeonType(getLLVMContext(),
+      GetNeonType(this,
                   NeonTypeFlags(Double ? NeonTypeFlags::Float64
                                        : NeonTypeFlags::Float32, false, quad));
     llvm::Type *Tys[2] = { Ty, InTy };
@@ -2560,7 +2560,7 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
   case ARM64::BI__builtin_arm64_vcvt_f32_v: {
     Int = Intrinsic::arm64_neon_fcvtxn;
     llvm::Type *InTy =
-      GetNeonType(getLLVMContext(),
+      GetNeonType(this,
                   NeonTypeFlags(NeonTypeFlags::Float64, false, true));
     llvm::Type *Tys[2] = { Ty, InTy };
     return EmitNeonCall(CGM.getIntrinsic(Int, Tys), Ops, "vcvt_f32");
@@ -2568,7 +2568,7 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
   case ARM64::BI__builtin_arm64_vcvt2_f32_v: {
     Int = Intrinsic::arm64_neon_fcvtxn2;
     llvm::Type *InTy =
-      GetNeonType(getLLVMContext(),
+      GetNeonType(this,
                   NeonTypeFlags(NeonTypeFlags::Float64, false, true));
     llvm::Type *Tys[2] = { Ty, InTy };
     return EmitNeonCall(CGM.getIntrinsic(Int, Tys), Ops, "vcvt2_f32");
