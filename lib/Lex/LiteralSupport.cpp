@@ -549,13 +549,24 @@ void NumericLiteralParser::ParseNumberStartingWithZero(SourceLocation TokLoc) {
     radix = 16;
     DigitsBegin = s;
     s = SkipHexDigits(s);
+    bool noSignificand = (s == DigitsBegin);
     if (s == ThisTokEnd) {
       // Done.
     } else if (*s == '.') {
       s++;
       saw_period = true;
+      const char *floatDigitsBegin = s;
       s = SkipHexDigits(s);
+      noSignificand &= (floatDigitsBegin == s);
     }
+
+    if (noSignificand) {
+      PP.Diag(PP.AdvanceToTokenCharacter(TokLoc, s-ThisTokBegin), \
+        diag::err_hexconstant_requires_digits);
+      hadError = true;
+      return;
+    }
+
     // A binary exponent can appear with or with a '.'. If dotted, the
     // binary exponent is required.
     if (*s == 'p' || *s == 'P') {

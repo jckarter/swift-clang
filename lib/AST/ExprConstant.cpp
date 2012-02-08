@@ -42,7 +42,6 @@
 #include "clang/AST/ASTDiagnostic.h"
 #include "clang/AST/Expr.h"
 #include "clang/Basic/Builtins.h"
-#include "clang/Basic/PartialDiagnostic.h"
 #include "clang/Basic/TargetInfo.h"
 #include "llvm/ADT/SmallString.h"
 #include <cstring>
@@ -2940,6 +2939,18 @@ bool PointerExprEvaluator::VisitBinaryOperator(const BinaryOperator *E) {
 }
 
 bool PointerExprEvaluator::VisitUnaryAddrOf(const UnaryOperator *E) {
+  QualType SrcTy = E->getSubExpr()->getType();
+  // In C++, taking the address of an object of incomplete class type has
+  // undefined behavior if the complete class type has an overloaded operator&.
+  // DR1458 makes such expressions non-constant.
+  if (Info.getLangOpts().CPlusPlus &&
+      SrcTy->isRecordType() && SrcTy->isIncompleteType()) {
+    const RecordType *RT = SrcTy->getAs<RecordType>();
+    Info.CCEDiag(E->getExprLoc(), diag::note_constexpr_addr_of_incomplete, 1)
+      << SrcTy;
+    Info.Note(RT->getDecl()->getLocation(), diag::note_forward_declaration)
+      << RT->getDecl();
+  }
   return EvaluateLValue(E->getSubExpr(), Result, Info);
 }
 
@@ -4711,12 +4722,11 @@ bool IntExprEvaluator::VisitBinaryOperator(const BinaryOperator *E) {
         << RHS << E->getType() << LHS.getBitWidth();
     } else if (LHS.isSigned()) {
       // C++11 [expr.shift]p2: A signed left shift must have a non-negative
-      // operand, and must not overflow.
+      // operand, and must not overflow the corresponding unsigned type.
       if (LHS.isNegative())
         CCEDiag(E, diag::note_constexpr_lshift_of_negative) << LHS;
-      else if (LHS.countLeadingZeros() <= SA)
-        HandleOverflow(Info, E, LHS.extend(LHS.getBitWidth() + SA) << SA,
-                       E->getType());
+      else if (LHS.countLeadingZeros() < SA)
+        CCEDiag(E, diag::note_constexpr_lshift_discards);
     }
 
     return Success(LHS << SA, E);
@@ -6096,6 +6106,7 @@ static ICEDiag CheckICE(const Expr* E, ASTContext &Ctx) {
   case Expr::PseudoObjectExprClass:
   case Expr::AtomicExprClass:
   case Expr::InitListExprClass:
+  case Expr::LambdaExprClass:
     return ICEDiag(2, E->getLocStart());
 
   case Expr::SizeOfPackExprClass:
