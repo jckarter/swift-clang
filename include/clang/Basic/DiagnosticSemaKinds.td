@@ -1526,7 +1526,7 @@ def err_arg_with_address_space : Error<
 def err_attr_objc_ownership_bad_type : Error<
   "the type %0 cannot be retained">;
 def err_attr_objc_ownership_redundant : Error<
-  "the type %0 already has retainment attributes set on it">;
+  "the type %0 is already explicitly ownership-qualified">;
 def err_attribute_not_string : Error<
   "argument to %0 attribute was not a string literal">;
 def err_only_annotate_after_access_spec : Error<
@@ -5064,7 +5064,7 @@ def warn_missing_cases : Warning<
 
 def warn_unreachable_default : Warning<
   "default label in switch which covers all enumeration values">,
-  InGroup<CoveredSwitchDefault>;
+  InGroup<CoveredSwitchDefault>, DefaultIgnore;
 def warn_not_in_enum : Warning<"case value not in enumerated type %0">,
   InGroup<Switch>; 
 def err_typecheck_statement_requires_scalar : Error<
