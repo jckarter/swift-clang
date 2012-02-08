@@ -1,0 +1,109 @@
+// RUN: rm -rf %t
+// RUN: %clang_cc1 -objcmt-migrate-literals -objcmt-migrate-subscripting -mt-migrate-directory %t %s -x objective-c 
+// RUN: c-arcmt-test -mt-migrate-directory %t | arcmt-test -verify-transformed-files %s.result
+
+typedef signed char BOOL;
+#define nil ((void*) 0)
+
+@interface NSObject
++ (id)alloc;
+@end
+
+@interface NSString : NSObject
++ (id)stringWithString:(NSString *)string;
+- (id)initWithString:(NSString *)aString;
+@end
+
+@interface NSArray : NSObject
+- (id)objectAtIndex:(unsigned long)index;
+- (id)objectAtIndexedSubscript:(int)index;
+@end
+
+@interface NSArray (NSArrayCreation)
++ (id)array;
++ (id)arrayWithObject:(id)anObject;
++ (id)arrayWithObjects:(const id [])objects count:(unsigned long)cnt;
++ (id)arrayWithObjects:(id)firstObj, ...;
++ (id)arrayWithArray:(NSArray *)array;
+
+- (id)initWithObjects:(const id [])objects count:(unsigned long)cnt;
+- (id)initWithObjects:(id)firstObj, ...;
+- (id)initWithArray:(NSArray *)array;
+
+- (id)objectAtIndex:(unsigned long)index;
+@end
+
+@interface NSMutableArray : NSArray
+- (void)replaceObjectAtIndex:(unsigned long)index withObject:(id)anObject;
+- (void)setObject:(id)object atIndexedSubscript:(int)index;
+@end
+
+@interface NSDictionary : NSObject
+- (id)objectForKeyedSubscript:(id)key;
+@end
+
+@interface NSDictionary (NSDictionaryCreation)
++ (id)dictionary;
++ (id)dictionaryWithObject:(id)object forKey:(id)key;
++ (id)dictionaryWithObjects:(const id [])objects forKeys:(const id [])keys count:(unsigned long)cnt;
++ (id)dictionaryWithObjectsAndKeys:(id)firstObject, ...;
++ (id)dictionaryWithDictionary:(NSDictionary *)dict;
++ (id)dictionaryWithObjects:(NSArray *)objects forKeys:(NSArray *)keys;
+
+- (id)initWithObjects:(const id [])objects forKeys:(const id [])keys count:(unsigned long)cnt;
+- (id)initWithObjectsAndKeys:(id)firstObject, ...;
+- (id)initWithDictionary:(NSDictionary *)otherDictionary;
+- (id)initWithObjects:(NSArray *)objects forKeys:(NSArray *)keys;
+
+- (id)objectForKey:(id)aKey;
+@end
+
+@interface NSMutableDictionary : NSDictionary
+- (void)setObject:(id)anObject forKey:(id)aKey;
+- (void)setObject:(id)object forKeyedSubscript:(id)key;
+@end
+
+@interface NSNumber : NSObject
+@end
+
+@interface NSNumber (NSNumberCreation)
++ (NSNumber *)numberWithInt:(int)value;
+@end
+
+#define M(x) (x)
+#define PAIR(x) @#x, [NSNumber numberWithInt:(x)]
+#define TWO(x) ((x), (x))
+
+@interface I
+@end
+@implementation I
+-(void) foo {
+  NSString *str;
+  NSArray *arr;
+  NSDictionary *dict;
+
+  arr = @[]; // expected-warning {{legacy creation}}
+  arr = @[ str ]; // expected-warning {{legacy creation}}
+  arr = @[ str, str ]; // expected-warning {{legacy creation}}
+  dict = @{}; // expected-warning {{legacy creation}}
+  dict = @{ str: arr }; // expected-warning {{legacy creation}}
+  dict = @{ @"key1": @"value1", @"key2": @"value2" }; // expected-warning {{legacy creation}}
+  dict = [NSDictionary dictionaryWithObjectsAndKeys: PAIR(1), PAIR(2), nil]; // expected-warning 3 {{legacy creation}}
+
+  id o = arr[2]; // expected-warning {{legacy subscript}}
+  o = dict[@"key"]; // expected-warning {{legacy subscript}}
+  o = TWO(dict[@"key"]); // expected-warning 2 {{legacy subscript}}
+  o = @{ @"key": @{} }; // expected-warning 2 {{legacy creation}}
+  NSMutableArray *marr = 0;
+  NSMutableDictionary *mdict = 0;
+  marr[2] = @"val"; // expected-warning {{legacy subscript}}
+  mdict[@"key"] = @"value"; // expected-warning {{legacy subscript}}
+  marr[2] = arr[4]; // expected-warning 2 {{legacy subscript}}
+  mdict[@"key"] = dict[@"key2"]; // expected-warning 2 {{legacy subscript}}
+  mdict[dict[@"key2"]] = @"val"; // expected-warning 2 {{legacy subscript}}
+  mdict[dict[@[ @"arrkey" ]]] = dict[@"key1"];  // expected-warning {{legacy creation}} \
+                                                                        // expected-warning 3 {{legacy subscript}}
+  __strong NSArray **parr = 0;
+  o = (*parr)[2]; // expected-warning {{legacy subscript}}
+}
+@end
