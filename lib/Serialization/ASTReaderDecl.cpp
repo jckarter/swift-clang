@@ -324,12 +324,11 @@ void ASTDeclReader::Visit(Decl *D) {
   } else if (D->isTemplateParameter()) {
     // If we have a fully initialized template parameter, we can now
     // set its DeclContext.
-    D->setDeclContext(
-          cast_or_null<DeclContext>(
-                            Reader.GetDecl(DeclContextIDForTemplateParmDecl)));
-    D->setLexicalDeclContext(
-          cast_or_null<DeclContext>(
-                      Reader.GetDecl(LexicalDeclContextIDForTemplateParmDecl)));
+    DeclContext *SemaDC = cast<DeclContext>(
+                              Reader.GetDecl(DeclContextIDForTemplateParmDecl));
+    DeclContext *LexicalDC = cast<DeclContext>(
+                       Reader.GetDecl(LexicalDeclContextIDForTemplateParmDecl));
+    D->setDeclContextsImpl(SemaDC, LexicalDC, Reader.getContext());
   }
 }
 
@@ -343,15 +342,16 @@ void ASTDeclReader::VisitDecl(Decl *D) {
     LexicalDeclContextIDForTemplateParmDecl = ReadDeclID(Record, Idx);
     D->setDeclContext(Reader.getContext().getTranslationUnitDecl()); 
   } else {
-    D->setDeclContext(ReadDeclAs<DeclContext>(Record, Idx));
-    D->setLexicalDeclContext(ReadDeclAs<DeclContext>(Record, Idx));
+    DeclContext *SemaDC = ReadDeclAs<DeclContext>(Record, Idx);
+    DeclContext *LexicalDC = ReadDeclAs<DeclContext>(Record, Idx);
+    D->setDeclContextsImpl(SemaDC, LexicalDC, Reader.getContext());
   }
   D->setLocation(Reader.ReadSourceLocation(F, RawLocation));
   D->setInvalidDecl(Record[Idx++]);
   if (Record[Idx++]) { // hasAttrs
     AttrVec Attrs;
     Reader.ReadAttributes(F, Attrs, Record, Idx);
-    D->setAttrs(Attrs);
+    D->setAttrsImpl(Attrs, Reader.getContext());
   }
   D->setImplicit(Record[Idx++]);
   D->setUsed(Record[Idx++]);
@@ -2018,6 +2018,10 @@ Decl *ASTReader::ReadDeclRecord(DeclID ID) {
 
   assert(D && "Unknown declaration reading AST file");
   LoadedDecl(Index, D);
+  // Set the DeclContext before doing any deserialization, to make sure internal
+  // calls to Decl::getASTContext() by Decl's methods will find the
+  // TranslationUnitDecl without crashing.
+  D->setDeclContext(Context.getTranslationUnitDecl());
   Reader.Visit(D);
 
   // If this declaration is also a declaration context, get the
