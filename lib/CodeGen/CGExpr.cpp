@@ -2363,10 +2363,8 @@ CodeGenFunction::EmitCXXBindTemporaryLValue(const CXXBindTemporaryExpr *E) {
 
 LValue
 CodeGenFunction::EmitLambdaLValue(const LambdaExpr *E) {
-  if (E->capture_begin() != E->capture_end())
-    return EmitUnsupportedLValue(E, "lambda expression");
-
   AggValueSlot Slot = CreateAggTemp(E->getType(), "temp.lvalue");
+  EmitLambdaExpr(E, Slot);
   return MakeAddrLValue(Slot.getAddr(), E->getType());
 }
 
