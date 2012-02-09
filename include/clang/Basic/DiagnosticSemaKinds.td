@@ -163,7 +163,9 @@ def warn_parameter_size: Warning<
 def warn_return_value_size: Warning<
   "return value of %0 is a large (%1 bytes) pass-by-value object; "
   "pass it by reference instead ?">, InGroup<LargeByValueCopy>;
-
+def warn_return_value_udt: Warning<
+  "%0 has C-linkage specified, but returns user-defined type %1 which is "
+  "incompatible with C">, InGroup<ReturnType>;
 def warn_implicit_function_decl : Warning<
   "implicit declaration of function %0">,
   InGroup<ImplicitFunctionDeclare>, DefaultIgnore;
@@ -1424,8 +1426,6 @@ def note_non_literal_user_provided_dtor : Note<
   "%0 is not literal because it has a user-provided destructor">;
 def note_non_literal_nontrivial_dtor : Note<
   "%0 is not literal because it has a non-trivial destructor">;
-def note_non_literal_mutable_field : Note<
-  "%0 is not literal because it has a mutable data member">;
 
 // C++11 char16_t/char32_t
 def warn_cxx98_compat_unicode_type : Warning<
