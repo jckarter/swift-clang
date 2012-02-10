@@ -294,6 +294,7 @@ ExprResult Sema::ActOnLambdaExpr(SourceLocation StartLoc,
   bool LambdaExprNeedsCleanups;
   {
     LambdaScopeInfo *LSI = getCurLambda();
+    CXXMethodDecl *CallOperator = LSI->CallOperator;
     Class = LSI->Lambda;
     IntroducerRange = LSI->IntroducerRange;
     ExplicitParams = LSI->ExplicitParams;
@@ -342,6 +343,51 @@ ExprResult Sema::ActOnLambdaExpr(SourceLocation StartLoc,
       break;
     }
 
+    // C++11 [expr.prim.lambda]p4:
+    //   If a lambda-expression does not include a
+    //   trailing-return-type, it is as if the trailing-return-type
+    //   denotes the following type:
+    // FIXME: Assumes current resolution to core issue 975.
+    if (LSI->HasImplicitReturnType) {
+      //   - if there are no return statements in the
+      //     compound-statement, or all return statements return
+      //     either an expression of type void or no expression or
+      //     braced-init-list, the type void;
+      if (LSI->ReturnType.isNull()) {
+        LSI->ReturnType = Context.VoidTy;
+      } else {
+        // C++11 [expr.prim.lambda]p4:
+        //   - if the compound-statement is of the form
+        //
+        //       { attribute-specifier-seq[opt] return expression ; }
+        //
+        //     the type of the returned expression after
+        //     lvalue-to-rvalue conversion (4.1), array-to-pointer
+        //     conver- sion (4.2), and function-to-pointer conversion
+        //     (4.3);
+        //
+        // Since we're accepting the resolution to a post-C++11 core
+        // issue with a non-trivial extension, provide a warning (by
+        // default).
+        CompoundStmt *CompoundBody = cast<CompoundStmt>(Body);
+        if (!(CompoundBody->size() == 1 &&
+              isa<ReturnStmt>(*CompoundBody->body_begin())) &&
+            !Context.hasSameType(LSI->ReturnType, Context.VoidTy))
+          Diag(IntroducerRange.getBegin(), 
+               diag::ext_lambda_implies_void_return);
+      }
+
+      // Create a function type with the inferred return type.
+      const FunctionProtoType *Proto
+        = CallOperator->getType()->getAs<FunctionProtoType>();
+      QualType FunctionTy
+        = Context.getFunctionType(LSI->ReturnType,
+                                  Proto->arg_type_begin(),
+                                  Proto->getNumArgs(),
+                                  Proto->getExtProtoInfo());
+      CallOperator->setType(FunctionTy);
+    }
+
     // Finalize the lambda class.
     SmallVector<Decl*, 4> Fields(Class->field_begin(), Class->field_end());
     ActOnFields(0, Class->getLocation(), Class, Fields, 
@@ -351,16 +397,34 @@ ExprResult Sema::ActOnLambdaExpr(SourceLocation StartLoc,
     // C++ [expr.prim.lambda]p7:
     //   The lambda-expression's compound-statement yields the
     //   function-body (8.4) of the function call operator [...].
-    ActOnFinishFunctionBody(LSI->CallOperator, Body, /*IsInstantation=*/false);
+    ActOnFinishFunctionBody(CallOperator, Body, /*IsInstantation=*/false);
+    CallOperator->setLexicalDeclContext(Class);
   }
 
   if (LambdaExprNeedsCleanups)
     ExprNeedsCleanups = true;
 
-  Expr *Lambda = LambdaExpr::Create(Context, Class, IntroducerRange, 
-                                    CaptureDefault, Captures, ExplicitParams, 
-                                    CaptureInits, Body->getLocEnd());
-  Diag(StartLoc, diag::err_lambda_unsupported);
+  LambdaExpr *Lambda = LambdaExpr::Create(Context, Class, IntroducerRange, 
+                                          CaptureDefault, Captures, 
+                                          ExplicitParams, CaptureInits, 
+                                          Body->getLocEnd());
+
+  // C++11 [expr.prim.lambda]p2:
+  //   A lambda-expression shall not appear in an unevaluated operand
+  //   (Clause 5).
+  switch (ExprEvalContexts.back().Context) {
+  case Unevaluated:
+    // We don't actually diagnose this case immediately, because we
+    // could be within a context where we might find out later that
+    // the expression is potentially evaluated (e.g., for typeid).
+    ExprEvalContexts.back().Lambdas.push_back(Lambda);
+    break;
+
+  case ConstantEvaluated:
+  case PotentiallyEvaluated:
+  case PotentiallyEvaluatedIfUsed:
+    break;
+  }
 
   return MaybeBindToTemporary(Lambda);
 }
