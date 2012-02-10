@@ -65,8 +65,7 @@ bool Sema::CanUseDecl(NamedDecl *D) {
   return true;
 }
 
-AvailabilityResult 
-Sema::DiagnoseAvailabilityOfDecl(
+static AvailabilityResult DiagnoseAvailabilityOfDecl(Sema &S,
                               NamedDecl *D, SourceLocation Loc,
                               const ObjCInterfaceDecl *UnknownObjCClass) {
   // See if this declaration is unavailable or deprecated.
@@ -85,22 +84,22 @@ Sema::DiagnoseAvailabilityOfDecl(
       break;
             
     case AR_Deprecated:
-      EmitDeprecationWarning(D, Message, Loc, UnknownObjCClass);
+      S.EmitDeprecationWarning(D, Message, Loc, UnknownObjCClass);
       break;
             
     case AR_Unavailable:
-      if (getCurContextAvailability() != AR_Unavailable) {
+      if (S.getCurContextAvailability() != AR_Unavailable) {
         if (Message.empty()) {
           if (!UnknownObjCClass)
-            Diag(Loc, diag::err_unavailable) << D->getDeclName();
+            S.Diag(Loc, diag::err_unavailable) << D->getDeclName();
           else
-            Diag(Loc, diag::warn_unavailable_fwdclass_message) 
+            S.Diag(Loc, diag::warn_unavailable_fwdclass_message) 
               << D->getDeclName();
         }
         else 
-          Diag(Loc, diag::err_unavailable_message) 
+          S.Diag(Loc, diag::err_unavailable_message) 
             << D->getDeclName() << Message;
-          Diag(D->getLocation(), diag::note_unavailable_here) 
+          S.Diag(D->getLocation(), diag::note_unavailable_here) 
           << isa<FunctionDecl>(D) << false;
       }
       break;
@@ -155,7 +154,7 @@ bool Sema::DiagnoseUseOfDecl(NamedDecl *D, SourceLocation Loc,
       return true;
     }
   }
-  DiagnoseAvailabilityOfDecl(D, Loc, UnknownObjCClass);
+  DiagnoseAvailabilityOfDecl(*this, D, Loc, UnknownObjCClass);
 
   // Warn if this is used but marked unused.
   if (D->hasAttr<UnusedAttr>())
@@ -9282,6 +9281,12 @@ namespace {
       return BaseTransform::TransformUnaryOperator(E);
     }
 
+    /// \brief Transform the capture expressions in the lambda
+    /// expression.
+    ExprResult TransformLambdaExpr(LambdaExpr *E) {
+      // Lambdas never need to be transformed.
+      return E;
+    }
   };
 }
 
@@ -9307,6 +9312,29 @@ Sema::PushExpressionEvaluationContext(ExpressionEvaluationContext NewContext) {
 void Sema::PopExpressionEvaluationContext() {
   ExpressionEvaluationContextRecord& Rec = ExprEvalContexts.back();
 
+  if (!Rec.Lambdas.empty()) {
+    if (Rec.Context == Unevaluated) {
+      // C++11 [expr.prim.lambda]p2:
+      //   A lambda-expression shall not appear in an unevaluated operand
+      //   (Clause 5).
+      for (unsigned I = 0, N = Rec.Lambdas.size(); I != N; ++I)
+        Diag(Rec.Lambdas[I]->getLocStart(), 
+             diag::err_lambda_unevaluated_operand);
+    } else {
+      // Mark the capture expressions odr-used. This was deferred
+      // during lambda expression creation.
+      for (unsigned I = 0, N = Rec.Lambdas.size(); I != N; ++I) {
+        LambdaExpr *Lambda = Rec.Lambdas[I];
+        for (LambdaExpr::capture_init_iterator 
+                  C = Lambda->capture_init_begin(),
+               CEnd = Lambda->capture_init_end();
+             C != CEnd; ++C) {
+          MarkDeclarationsReferencedInExpr(*C);
+        }
+      }
+    }
+  }
+
   // When are coming out of an unevaluated context, clear out any
   // temporaries that we may have created as part of the evaluation of
   // the expression in that context: they aren't relevant because they
@@ -9318,6 +9346,8 @@ void Sema::PopExpressionEvaluationContext() {
     CleanupVarDeclMarking();
     std::swap(MaybeODRUseExprs, Rec.SavedMaybeODRUseExprs);
 
+    if (Rec.Context == Unevaluated) {
+    }
   // Otherwise, merge the contexts together.
   } else {
     ExprNeedsCleanups |= Rec.ParentNeedsCleanups;
@@ -9589,8 +9619,9 @@ static ExprResult captureInLambda(Sema &S, LambdaScopeInfo *LSI,
   //
   // FIXME: Introduce an initialization entity for lambda captures.
       
-  // Introduce a new evaluation context for the initialization, so that
-  // temporaries introduced as part of the capture
+  // Introduce a new evaluation context for the initialization, so
+  // that temporaries introduced as part of the capture are retained
+  // to be re-"exported" from the lambda expression itself.
   S.PushExpressionEvaluationContext(Sema::PotentiallyEvaluated);
 
   Expr *Ref = new (S.Context) DeclRefExpr(Var, Type.getNonReferenceType(),
