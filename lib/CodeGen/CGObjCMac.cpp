@@ -890,11 +890,12 @@ protected:
                                        const ObjCCommonTypesHelper &ObjCTypes);
 
   /// PushProtocolProperties - Push protocol's property on the input stack.
-  void PushProtocolProperties(llvm::SmallPtrSet<const IdentifierInfo*, 16> &PropertySet,
-                              std::vector<llvm::Constant*> &Properties,
-                              const Decl *Container,
-                              const ObjCProtocolDecl *PROTO,
-                              const ObjCCommonTypesHelper &ObjCTypes);
+  void PushProtocolProperties(
+    llvm::SmallPtrSet<const IdentifierInfo*, 16> &PropertySet,
+    llvm::SmallVectorImpl<llvm::Constant*> &Properties,
+    const Decl *Container,
+    const ObjCProtocolDecl *PROTO,
+    const ObjCCommonTypesHelper &ObjCTypes);
 
   /// GetProtocolRef - Return a reference to the internal protocol
   /// description, creating an empty one if it has not been
@@ -2069,16 +2070,16 @@ CGObjCMac::EmitProtocolExtension(const ObjCProtocolDecl *PD,
 
 /*
   struct objc_protocol_list {
-  struct objc_protocol_list *next;
-  long count;
-  Protocol *list[];
+    struct objc_protocol_list *next;
+    long count;
+    Protocol *list[];
   };
 */
 llvm::Constant *
 CGObjCMac::EmitProtocolList(Twine Name,
                             ObjCProtocolDecl::protocol_iterator begin,
                             ObjCProtocolDecl::protocol_iterator end) {
-  std::vector<llvm::Constant*> ProtocolRefs;
+  llvm::SmallVector<llvm::Constant*, 16> ProtocolRefs;
 
   for (; begin != end; ++begin)
     ProtocolRefs.push_back(GetProtocolRef(*begin));
@@ -2109,7 +2110,7 @@ CGObjCMac::EmitProtocolList(Twine Name,
 
 void CGObjCCommonMac::
 PushProtocolProperties(llvm::SmallPtrSet<const IdentifierInfo*,16> &PropertySet,
-                       std::vector<llvm::Constant*> &Properties,
+                       llvm::SmallVectorImpl<llvm::Constant*> &Properties,
                        const Decl *Container,
                        const ObjCProtocolDecl *PROTO,
                        const ObjCCommonTypesHelper &ObjCTypes) {
@@ -2131,21 +2132,21 @@ PushProtocolProperties(llvm::SmallPtrSet<const IdentifierInfo*,16> &PropertySet,
 
 /*
   struct _objc_property {
-  const char * const name;
-  const char * const attributes;
+    const char * const name;
+    const char * const attributes;
   };
 
   struct _objc_property_list {
-  uint32_t entsize; // sizeof (struct _objc_property)
-  uint32_t prop_count;
-  struct _objc_property[prop_count];
+    uint32_t entsize; // sizeof (struct _objc_property)
+    uint32_t prop_count;
+    struct _objc_property[prop_count];
   };
 */
 llvm::Constant *CGObjCCommonMac::EmitPropertyList(Twine Name,
                                        const Decl *Container,
                                        const ObjCContainerDecl *OCD,
                                        const ObjCCommonTypesHelper &ObjCTypes) {
-  std::vector<llvm::Constant*> Properties;
+  llvm::SmallVector<llvm::Constant*, 16> Properties;
   llvm::SmallPtrSet<const IdentifierInfo*, 16> PropertySet;
   for (ObjCContainerDecl::prop_iterator I = OCD->prop_begin(),
          E = OCD->prop_end(); I != E; ++I) {
@@ -2280,7 +2281,7 @@ void CGObjCMac::GenerateCategory(const ObjCCategoryImplDecl *OCD) {
   llvm::raw_svector_ostream(ExtName) << Interface->getName() << '_'
                                      << OCD->getName();
 
-  std::vector<llvm::Constant*> InstanceMethods, ClassMethods;
+  llvm::SmallVector<llvm::Constant*, 16> InstanceMethods, ClassMethods;
   for (ObjCCategoryImplDecl::instmeth_iterator
          i = OCD->instmeth_begin(), e = OCD->instmeth_end(); i != e; ++i) {
     // Instance methods should always be defined.
@@ -2386,7 +2387,7 @@ void CGObjCMac::GenerateClass(const ObjCImplementationDecl *ID) {
   if (ID->getClassInterface()->getVisibility() == HiddenVisibility)
     Flags |= eClassFlags_Hidden;
 
-  std::vector<llvm::Constant*> InstanceMethods, ClassMethods;
+  llvm::SmallVector<llvm::Constant*, 16> InstanceMethods, ClassMethods;
   for (ObjCImplementationDecl::instmeth_iterator
          i = ID->instmeth_begin(), e = ID->instmeth_end(); i != e; ++i) {
     // Instance methods should always be defined.
@@ -4208,9 +4209,7 @@ llvm::Constant *CGObjCCommonMac::GetMethodVarType(const FieldDecl *Field) {
 llvm::Constant *CGObjCCommonMac::GetMethodVarType(const ObjCMethodDecl *D,
                                                   bool Extended) {
   std::string TypeStr;
-  if (CGM.getContext().getObjCEncodingForMethodDecl(
-                                                const_cast<ObjCMethodDecl*>(D),
-                                                    TypeStr, Extended))
+  if (CGM.getContext().getObjCEncodingForMethodDecl(D, TypeStr, Extended))
     return 0;
 
   llvm::GlobalVariable *&Entry = MethodVarTypes[TypeStr];
@@ -5665,7 +5664,7 @@ llvm::Constant *
 CGObjCNonFragileABIMac::EmitProtocolList(Twine Name,
                                       ObjCProtocolDecl::protocol_iterator begin,
                                       ObjCProtocolDecl::protocol_iterator end) {
-  std::vector<llvm::Constant*> ProtocolRefs;
+  llvm::SmallVector<llvm::Constant*, 16> ProtocolRefs;
 
   // Just return null for empty protocol lists
   if (begin == end)
@@ -5690,10 +5689,9 @@ CGObjCNonFragileABIMac::EmitProtocolList(Twine Name,
   Values[0] =
     llvm::ConstantInt::get(ObjCTypes.LongTy, ProtocolRefs.size() - 1);
   Values[1] =
-    llvm::ConstantArray::get(
-      llvm::ArrayType::get(ObjCTypes.ProtocolnfABIPtrTy,
-                           ProtocolRefs.size()),
-      ProtocolRefs);
+    llvm::ConstantArray::get(llvm::ArrayType::get(ObjCTypes.ProtocolnfABIPtrTy,
+                                                  ProtocolRefs.size()),
+                             ProtocolRefs);
 
   llvm::Constant *Init = llvm::ConstantStruct::getAnon(Values);
   GV = new llvm::GlobalVariable(CGM.getModule(), Init->getType(), false,

@@ -4165,7 +4165,6 @@ def err_throw_incomplete_ptr : Error<
 def err_return_in_constructor_handler : Error<
   "return in the catch of a function try block of a constructor is illegal">;
 
-def err_lambda_unsupported : Error<"lambda expressions are not supported yet">;
 def err_capture_more_than_once : Error<
   "%0 can appear only once in a capture list">;
 def err_reference_capture_with_reference_default : Error<
@@ -4191,7 +4190,14 @@ def err_lambda_impcap : Error<
   "variable %0 cannot be implicitly captured in a lambda with no "
   "capture-default specified">;
 def note_lambda_decl : Note<"lambda expression begins here">;
-
+def err_lambda_unevaluated_operand : Error<
+  "lambda expression in an unevaluated operand">;
+def ext_lambda_implies_void_return : ExtWarn<
+  "C++11 requires lambda with omitted result type to consist of a single "
+  "return statement">,
+  InGroup<DiagGroup<"lambda-return">>;
+def err_lambda_return_init_list : Error<
+  "cannot deduce lambda return type from initializer list">;
 
 def err_operator_arrow_circular : Error<
   "circular pointer delegation detected">;
