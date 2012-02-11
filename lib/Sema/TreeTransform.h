@@ -666,7 +666,8 @@ public:
   QualType RebuildFunctionProtoType(QualType T,
                                     QualType *ParamTypes,
                                     unsigned NumParamTypes,
-                                    bool Variadic, unsigned Quals,
+                                    bool Variadic, bool HasTrailingReturn,
+                                    unsigned Quals,
                                     RefQualifierKind RefQualifier,
                                     const FunctionType::ExtInfo &Info);
 
@@ -4165,6 +4166,7 @@ TreeTransform<Derived>::TransformFunctionProtoType(TypeLocBuilder &TLB,
                                                    ParamTypes.data(),
                                                    ParamTypes.size(),
                                                    T->isVariadic(),
+                                                   T->hasTrailingReturn(),
                                                    T->getTypeQuals(),
                                                    T->getRefQualifier(),
                                                    T->getExtInfo());
@@ -8413,7 +8415,7 @@ TreeTransform<Derived>::TransformBlockExpr(BlockExpr *E) {
                                                         paramTypes.data(),
                                                         paramTypes.size(),
                                                         oldBlock->isVariadic(),
-                                                        0, RQ_None,
+                                                        false, 0, RQ_None,
                                                exprFunctionType->getExtInfo());
   blockScope->FunctionType = functionType;
 
@@ -8656,11 +8658,12 @@ QualType TreeTransform<Derived>::RebuildFunctionProtoType(QualType T,
                                                           QualType *ParamTypes,
                                                         unsigned NumParamTypes,
                                                           bool Variadic,
+                                                         bool HasTrailingReturn,
                                                           unsigned Quals,
                                                   RefQualifierKind RefQualifier,
                                             const FunctionType::ExtInfo &Info) {
   return SemaRef.BuildFunctionType(T, ParamTypes, NumParamTypes, Variadic,
-                                   Quals, RefQualifier,
+                                   HasTrailingReturn, Quals, RefQualifier,
                                    getDerived().getBaseLocation(),
                                    getDerived().getBaseEntity(),
                                    Info);
