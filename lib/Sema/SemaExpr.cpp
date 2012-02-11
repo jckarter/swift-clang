@@ -18,6 +18,7 @@
 #include "clang/Sema/ScopeInfo.h"
 #include "clang/Sema/AnalysisBasedWarnings.h"
 #include "clang/AST/ASTContext.h"
+#include "clang/AST/ASTConsumer.h"
 #include "clang/AST/ASTMutationListener.h"
 #include "clang/AST/CXXInheritance.h"
 #include "clang/AST/DeclObjC.h"
@@ -9345,9 +9346,6 @@ void Sema::PopExpressionEvaluationContext() {
     ExprNeedsCleanups = Rec.ParentNeedsCleanups;
     CleanupVarDeclMarking();
     std::swap(MaybeODRUseExprs, Rec.SavedMaybeODRUseExprs);
-
-    if (Rec.Context == Unevaluated) {
-    }
   // Otherwise, merge the contexts together.
   } else {
     ExprNeedsCleanups |= Rec.ParentNeedsCleanups;
@@ -9486,8 +9484,11 @@ void Sema::MarkFunctionReferenced(SourceLocation Loc, FunctionDecl *Func) {
         // expression evaluator needing to call back into Sema if it sees a
         // call to such a function.
         InstantiateFunctionDefinition(Loc, Func);
-      else
+      else {
         PendingInstantiations.push_back(std::make_pair(Func, Loc));
+        // Notify the consumer that a function was implicitly instantiated.
+        Consumer.HandleCXXImplicitFunctionInstantiation(Func);
+      }
     }
   } else {
     // Walk redefinitions, as some of them may be instantiable.
@@ -9624,8 +9625,12 @@ static ExprResult captureInLambda(Sema &S, LambdaScopeInfo *LSI,
   // to be re-"exported" from the lambda expression itself.
   S.PushExpressionEvaluationContext(Sema::PotentiallyEvaluated);
 
+  // C++ [expr.prim.labda]p12:
+  //   An entity captured by a lambda-expression is odr-used (3.2) in
+  //   the scope containing the lambda-expression.
   Expr *Ref = new (S.Context) DeclRefExpr(Var, Type.getNonReferenceType(),
                                           VK_LValue, Loc);
+  Var->setUsed(true);
 
   // When the field has array type, create index variables for each
   // dimension of the array. We use these index variables to subscript
@@ -9999,7 +10004,7 @@ void Sema::MarkMemberReferenced(MemberExpr *E) {
   MarkExprReferenced(*this, E->getMemberLoc(), E->getMemberDecl(), E);
 }
 
-/// \brief Perform marking for a reference to an aribitrary declaration.  It
+/// \brief Perform marking for a reference to an arbitrary declaration.  It
 /// marks the declaration referenced, and performs odr-use checking for functions
 /// and variables. This method should not be used when building an normal
 /// expression which refers to a variable.
