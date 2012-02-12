@@ -1,4 +1,6 @@
 // RUN: %clang_cc1 -analyze -analyzer-checker=core,experimental.deadcode.UnreachableCode,experimental.core.CastSize,experimental.unix.Malloc -analyzer-store=region -verify %s
+#include "system-header-simulator.h"
+
 typedef __typeof(sizeof(int)) size_t;
 void *malloc(size_t);
 void free(void *);
@@ -237,6 +239,11 @@ void mallocFreeUse_params() {
   int *p = malloc(12);
   free(p);
   myfoo(p); //expected-warning{{Use of dynamically allocated memory after it is freed}}
+}
+
+void mallocFreeUse_params2() {
+  int *p = malloc(12);
+  free(p);
   myfooint(*p); //expected-warning{{Use of dynamically allocated memory after it is freed}}
 }
 
@@ -251,6 +258,20 @@ void mallocFailedOrNot() {
 struct StructWithInt {
   int g;
 };
+
+int *mallocReturnFreed() {
+  int *p = malloc(12);
+  free(p);
+  return p; // expected-warning {{Use of dynamically allocated}}
+}
+
+int useAfterFreeStruct() {
+  struct StructWithInt *px= malloc(sizeof(struct StructWithInt));
+  px->g = 5;
+  free(px);
+  return px->g; // expected-warning {{Use of dynamically allocated}}
+}
+
 void nonSymbolAsFirstArg(int *pp, struct StructWithInt *p);
 
 void mallocEscapeFooNonSymbolArg() {
@@ -259,6 +280,13 @@ void mallocEscapeFooNonSymbolArg() {
   return; // no warning
 }
 
+void mallocFailedOrNotLeak() {
+  int *p = malloc(12);
+  if (p == 0)
+    return; // no warning
+  else
+    return; // expected-warning {{Allocated memory never released. Potential memory leak.}}
+}
 
 int *Gl;
 struct GlStTy {
@@ -286,23 +314,62 @@ void GlobalStructMallocFree() {
   free(GlS.x);
 }
 
+// Region escape testing.
 
-// Below are the known false positives.
+unsigned takePtrToPtr(int **p);
+void PassTheAddrOfAllocatedData(int f) {
+  int *p = malloc(12);
+  // We don't know what happens after the call. Should stop tracking here.
+  if (takePtrToPtr(&p))
+    f++;
+  free(p); // no warning
+}
 
-// TODO: There should be no warning here.
+struct X {
+  int *p;
+};
+unsigned takePtrToStruct(struct X *s);
+int ** foo2(int *g, int f) {
+  int *p = malloc(12);
+  struct X *px= malloc(sizeof(struct X));
+  px->p = p;
+  // We don't know what happens after this call. Should not track px nor p.
+  if (takePtrToStruct(px))
+    f++;
+  free(p);
+  return 0;
+}
+
+struct X* RegInvalidationDetect1(struct X *s2) {
+  struct X *px= malloc(sizeof(struct X));
+  px->p = 0;
+  px = s2;
+  return px; // expected-warning {{Allocated memory never released. Potential memory leak.}}
+}
+
+struct X* RegInvalidationGiveUp1() {
+  int *p = malloc(12);
+  struct X *px= malloc(sizeof(struct X));
+  px->p = p;
+  return px;
+}
+
+int **RegInvalidationDetect2(int **pp) {
+  int *p = malloc(12);
+  pp = &p;
+  pp++;
+  return 0;// expected-warning {{Allocated memory never released. Potential memory leak.}}
+}
+
 extern void exit(int) __attribute__ ((__noreturn__));
 void mallocExit(int *g) {
   struct xx *p = malloc(12);
-
-  if (g != 0) {
-    exit(1); // expected-warning{{Allocated memory never released. Potential memory leak}}
-  }
+  if (g != 0)
+    exit(1);
   free(p);
   return;
 }
 
-
-// TODO: There should be no warning here.
 extern void __assert_fail (__const char *__assertion, __const char *__file,
     unsigned int __line, __const char *__function)
      __attribute__ ((__noreturn__));
@@ -311,20 +378,18 @@ extern void __assert_fail (__const char *__assertion, __const char *__file,
 void mallocAssert(int *g) {
   struct xx *p = malloc(12);
 
-  assert(g != 0); // expected-warning{{Allocated memory never released. Potential memory leak}}
+  assert(g != 0);
   free(p);
   return;
 }
 
-// TODO: There should be no warning here.
-unsigned takePtrToPtr(int **p);
-void PassTheAddrOfAllocatedData(int *g, int f) {
-  int *p = malloc(12);
-  // This call is causing the problem.
-  if (takePtrToPtr(&p))
-    f++; // expected-warning{{Allocated memory never released. Potential memory leak}}
-  free(p); // expected-warning{{Allocated memory never released. Potential memory leak}}
+void doNotInvalidateWhenPassedToSystemCalls(char *s) {
+  char *p = malloc(12);
+  strlen(p);
+  strcpy(p, s); // expected-warning {{leak}}
 }
+
+// Below are the known false positives.
 
 // TODO: There should be no warning here.
 void reallocFails(int *g, int f) {
