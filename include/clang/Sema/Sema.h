@@ -857,8 +857,7 @@ public:
                                          PartialDiagnostic> Note);
 
   bool RequireLiteralType(SourceLocation Loc, QualType T,
-                          const PartialDiagnostic &PD,
-                          bool AllowIncompleteType = false);
+                          const PartialDiagnostic &PD);
 
   QualType getElaboratedType(ElaboratedTypeKeyword Keyword,
                              const CXXScopeSpec &SS, QualType T);
@@ -1026,23 +1025,8 @@ public:
                                      bool &AddToScope);
   bool AddOverriddenMethods(CXXRecordDecl *DC, CXXMethodDecl *MD);
 
-  /// \brief The kind of constexpr declaration checking we are performing.
-  ///
-  /// The kind affects which diagnostics (if any) are emitted if the function
-  /// does not satisfy the requirements of a constexpr function declaration.
-  enum CheckConstexprKind {
-    /// \brief Check a constexpr function declaration, and produce errors if it
-    /// does not satisfy the requirements.
-    CCK_Declaration,
-    /// \brief Check a constexpr function template instantiation.
-    CCK_Instantiation,
-    /// \brief Produce notes explaining why an instantiation was not constexpr.
-    CCK_NoteNonConstexprInstantiation
-  };
-  bool CheckConstexprFunctionDecl(const FunctionDecl *FD,
-                                  CheckConstexprKind CCK);
-  bool CheckConstexprFunctionBody(const FunctionDecl *FD, Stmt *Body,
-                                  bool IsInstantiation);
+  bool CheckConstexprFunctionDecl(const FunctionDecl *FD);
+  bool CheckConstexprFunctionBody(const FunctionDecl *FD, Stmt *Body);
 
   void DiagnoseHiddenVirtualMethods(CXXRecordDecl *DC, CXXMethodDecl *MD);
   // Returns true if the function declaration is a redeclaration
@@ -2309,6 +2293,34 @@ public:
 
   void UpdateMarkingForLValueToRValue(Expr *E);
   void CleanupVarDeclMarking();
+
+  /// \brief Determine whether we can capture the given variable in
+  /// the given scope.
+  ///
+  /// \param Explicit Whether this is an explicit capture (vs. an
+  /// implicit capture).
+  ///
+  /// \param Diagnose Diagnose errors that occur when attempting to perform
+  /// the capture.
+  ///
+  /// \param Var The variable to check for capture.
+  ///
+  /// \param Type Will be set to the type used to perform the capture.
+  ///
+  /// \param FunctionScopesIndex Will be set to the index of the first 
+  /// scope in which capture will need to be performed.
+  ///
+  /// \param Nested Whether this will be a nested capture.
+  bool canCaptureVariable(VarDecl *Var, SourceLocation Loc, bool Explicit,
+                          bool Diagnose, QualType &Type, 
+                          unsigned &FunctionScopesIndex, bool &Nested);
+
+  /// \brief Determine the type of the field that will capture the
+  /// given variable in a lambda expression.
+  ///
+  /// \param T The type of the variable being captured.
+  /// \param ByRef Whether we are capturing by reference or by value.
+  QualType getLambdaCaptureFieldType(QualType T, bool ByRef);
 
   enum TryCaptureKind {
     TryCapture_Implicit, TryCapture_ExplicitByVal, TryCapture_ExplicitByRef
