@@ -77,7 +77,7 @@ namespace {
     void CheckReinterpretCast();
     void CheckStaticCast();
     void CheckDynamicCast();
-    void CheckCXXCStyleCast(bool FunctionalCast);
+    void CheckCXXCStyleCast(bool FunctionalCast, bool ListInitialization);
     void CheckCStyleCast();
 
     /// Complete an apparently-successful cast operation that yields
@@ -190,15 +190,15 @@ static TryCastResult TryStaticImplicitCast(Sema &Self, ExprResult &SrcExpr,
                                            QualType DestType, 
                                            Sema::CheckedConversionKind CCK,
                                            const SourceRange &OpRange,
-                                           unsigned &msg,
-                                           CastKind &Kind);
+                                           unsigned &msg, CastKind &Kind,
+                                           bool ListInitialization);
 static TryCastResult TryStaticCast(Sema &Self, ExprResult &SrcExpr,
                                    QualType DestType, 
                                    Sema::CheckedConversionKind CCK,
                                    const SourceRange &OpRange,
-                                   unsigned &msg,
-                                   CastKind &Kind,
-                                   CXXCastPath &BasePath);
+                                   unsigned &msg, CastKind &Kind,
+                                   CXXCastPath &BasePath,
+                                   bool ListInitialization);
 static TryCastResult TryConstCast(Sema &Self, Expr *SrcExpr, QualType DestType,
                                   bool CStyle, unsigned &msg);
 static TryCastResult TryReinterpretCast(Sema &Self, ExprResult &SrcExpr,
@@ -320,11 +320,13 @@ static bool tryDiagnoseOverloadedCast(Sema &S, CastType CT,
   if (!destType->isRecordType() && !srcType->isRecordType())
     return false;
 
+  bool initList = isa<InitListExpr>(src);
   InitializedEntity entity = InitializedEntity::InitializeTemporary(destType);
   InitializationKind initKind
     = (CT == CT_CStyle)? InitializationKind::CreateCStyleCast(range.getBegin(),
-                                                              range)
-    : (CT == CT_Functional)? InitializationKind::CreateFunctionalCast(range)
+                                                              range, initList)
+    : (CT == CT_Functional)? InitializationKind::CreateFunctionalCast(range,
+                                                                      initList)
     : InitializationKind::CreateCast(/*type range?*/ range);
   InitializationSequence sequence(S, entity, initKind, &src, 1);
 
@@ -750,7 +752,7 @@ void CastOperation::CheckStaticCast() {
   unsigned msg = diag::err_bad_cxx_cast_generic;
   TryCastResult tcr
     = TryStaticCast(Self, SrcExpr, DestType, Sema::CCK_OtherCast, OpRange, msg,
-                    Kind, BasePath);
+                    Kind, BasePath, /*ListInitialization=*/false);
   if (tcr != TC_Success && msg != 0) {
     if (SrcExpr.isInvalid())
       return;
@@ -780,8 +782,8 @@ static TryCastResult TryStaticCast(Sema &Self, ExprResult &SrcExpr,
                                    QualType DestType, 
                                    Sema::CheckedConversionKind CCK,
                                    const SourceRange &OpRange, unsigned &msg,
-                                   CastKind &Kind,
-                                   CXXCastPath &BasePath) {
+                                   CastKind &Kind, CXXCastPath &BasePath,
+                                   bool ListInitialization) {
   // Determine whether we have the semantics of a C-style cast.
   bool CStyle 
     = (CCK == Sema::CCK_CStyleCast || CCK == Sema::CCK_FunctionalCast);
@@ -806,23 +808,23 @@ static TryCastResult TryStaticCast(Sema &Self, ExprResult &SrcExpr,
   // C++ 5.2.9p5, reference downcast.
   // See the function for details.
   // DR 427 specifies that this is to be applied before paragraph 2.
-  tcr = TryStaticReferenceDowncast(Self, SrcExpr.get(), DestType, CStyle, OpRange,
-                                   msg, Kind, BasePath);
+  tcr = TryStaticReferenceDowncast(Self, SrcExpr.get(), DestType, CStyle,
+                                   OpRange, msg, Kind, BasePath);
   if (tcr != TC_NotApplicable)
     return tcr;
 
   // C++0x [expr.static.cast]p3: 
   //   A glvalue of type "cv1 T1" can be cast to type "rvalue reference to cv2
   //   T2" if "cv2 T2" is reference-compatible with "cv1 T1".
-  tcr = TryLValueToRValueCast(Self, SrcExpr.get(), DestType, CStyle, Kind, BasePath, 
-                              msg);
+  tcr = TryLValueToRValueCast(Self, SrcExpr.get(), DestType, CStyle, Kind, 
+                              BasePath, msg);
   if (tcr != TC_NotApplicable)
     return tcr;
 
   // C++ 5.2.9p2: An expression e can be explicitly converted to a type T
   //   [...] if the declaration "T t(e);" is well-formed, [...].
   tcr = TryStaticImplicitCast(Self, SrcExpr, DestType, CCK, OpRange, msg,
-                              Kind);
+                              Kind, ListInitialization);
   if (SrcExpr.isInvalid())
     return TC_Failed;
   if (tcr != TC_NotApplicable)
@@ -1293,7 +1295,7 @@ TryCastResult
 TryStaticImplicitCast(Sema &Self, ExprResult &SrcExpr, QualType DestType,
                       Sema::CheckedConversionKind CCK, 
                       const SourceRange &OpRange, unsigned &msg,
-                      CastKind &Kind) {
+                      CastKind &Kind, bool ListInitialization) {
   if (DestType->isRecordType()) {
     if (Self.RequireCompleteType(OpRange.getBegin(), DestType,
                                  diag::err_bad_dynamic_cast_incomplete)) {
@@ -1301,13 +1303,14 @@ TryStaticImplicitCast(Sema &Self, ExprResult &SrcExpr, QualType DestType,
       return TC_Failed;
     }
   }
-  
+
   InitializedEntity Entity = InitializedEntity::InitializeTemporary(DestType);
   InitializationKind InitKind
     = (CCK == Sema::CCK_CStyleCast)
-        ? InitializationKind::CreateCStyleCast(OpRange.getBegin(), OpRange)
+        ? InitializationKind::CreateCStyleCast(OpRange.getBegin(), OpRange,
+                                               ListInitialization)
     : (CCK == Sema::CCK_FunctionalCast)
-        ? InitializationKind::CreateFunctionalCast(OpRange)
+        ? InitializationKind::CreateFunctionalCast(OpRange, ListInitialization)
     : InitializationKind::CreateCast(OpRange);
   Expr *SrcExprRaw = SrcExpr.get();
   InitializationSequence InitSeq(Self, Entity, InitKind, &SrcExprRaw, 1);
@@ -1751,7 +1754,8 @@ static TryCastResult TryReinterpretCast(Sema &Self, ExprResult &SrcExpr,
   return TC_Success;
 }                                     
 
-void CastOperation::CheckCXXCStyleCast(bool FunctionalStyle) {
+void CastOperation::CheckCXXCStyleCast(bool FunctionalStyle,
+                                       bool ListInitialization) {
   // Handle placeholders.
   if (isPlaceholder()) {
     // C-style casts can resolve __unknown_any types.
@@ -1834,7 +1838,7 @@ void CastOperation::CheckCXXCStyleCast(bool FunctionalStyle) {
   if (tcr == TC_NotApplicable) {
     // ... or if that is not possible, a static_cast, ignoring const, ...
     tcr = TryStaticCast(Self, SrcExpr, DestType, CCK, OpRange,
-                        msg, Kind, BasePath);
+                        msg, Kind, BasePath, ListInitialization);
     if (SrcExpr.isInvalid())
       return;
 
@@ -2068,7 +2072,8 @@ ExprResult Sema::BuildCStyleCastExpr(SourceLocation LPLoc,
   Op.OpRange = SourceRange(LPLoc, CastExpr->getLocEnd());
 
   if (getLangOptions().CPlusPlus) {
-    Op.CheckCXXCStyleCast(/*FunctionalStyle=*/ false);
+    Op.CheckCXXCStyleCast(/*FunctionalStyle=*/ false,
+                          isa<InitListExpr>(CastExpr));
   } else {
     Op.CheckCStyleCast();
   }
@@ -2085,11 +2090,14 @@ ExprResult Sema::BuildCXXFunctionalCastExpr(TypeSourceInfo *CastTypeInfo,
                                             SourceLocation LPLoc,
                                             Expr *CastExpr,
                                             SourceLocation RPLoc) {
+  bool ListInitialization = LPLoc.isInvalid();
+  assert((!ListInitialization || isa<InitListExpr>(CastExpr)) &&
+         "List initialization must have initializer list as expression.");
   CastOperation Op(*this, CastTypeInfo->getType(), CastExpr);
   Op.DestRange = CastTypeInfo->getTypeLoc().getSourceRange();
   Op.OpRange = SourceRange(Op.DestRange.getBegin(), CastExpr->getLocEnd());
 
-  Op.CheckCXXCStyleCast(/*FunctionalStyle=*/ true);
+  Op.CheckCXXCStyleCast(/*FunctionalStyle=*/ true, ListInitialization);
   if (Op.SrcExpr.isInvalid())
     return ExprError();
 

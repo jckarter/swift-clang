@@ -632,9 +632,9 @@ void Sema::CheckCXXDefaultArguments(FunctionDecl *FD) {
 
 // CheckConstexprParameterTypes - Check whether a function's parameter types
 // are all literal types. If so, return true. If not, produce a suitable
-// diagnostic depending on @p CCK and return false.
-static bool CheckConstexprParameterTypes(Sema &SemaRef, const FunctionDecl *FD,
-                                         Sema::CheckConstexprKind CCK) {
+// diagnostic and return false.
+static bool CheckConstexprParameterTypes(Sema &SemaRef,
+                                         const FunctionDecl *FD) {
   unsigned ArgIndex = 0;
   const FunctionProtoType *FT = FD->getType()->getAs<FunctionProtoType>();
   for (FunctionProtoType::arg_type_iterator i = FT->arg_type_begin(),
@@ -642,63 +642,37 @@ static bool CheckConstexprParameterTypes(Sema &SemaRef, const FunctionDecl *FD,
     const ParmVarDecl *PD = FD->getParamDecl(ArgIndex);
     SourceLocation ParamLoc = PD->getLocation();
     if (!(*i)->isDependentType() &&
-        SemaRef.RequireLiteralType(ParamLoc, *i, CCK == Sema::CCK_Declaration ?
+        SemaRef.RequireLiteralType(ParamLoc, *i,
                             SemaRef.PDiag(diag::err_constexpr_non_literal_param)
                                      << ArgIndex+1 << PD->getSourceRange()
-                                     << isa<CXXConstructorDecl>(FD) :
-                                   SemaRef.PDiag(),
-                                   /*AllowIncompleteType*/ true)) {
-      if (CCK == Sema::CCK_NoteNonConstexprInstantiation)
-        SemaRef.Diag(ParamLoc, diag::note_constexpr_tmpl_non_literal_param)
-          << ArgIndex+1 << PD->getSourceRange()
-          << isa<CXXConstructorDecl>(FD) << *i;
+                                     << isa<CXXConstructorDecl>(FD)))
       return false;
-    }
   }
   return true;
 }
 
 // CheckConstexprFunctionDecl - Check whether a function declaration satisfies
-// the requirements of a constexpr function declaration or a constexpr
-// constructor declaration. Return true if it does, false if not.
+// the requirements of a constexpr function definition or a constexpr
+// constructor definition. If so, return true. If not, produce appropriate
+// diagnostics and return false.
 //
-// This implements C++11 [dcl.constexpr]p3,4, as amended by N3308.
-//
-// \param CCK Specifies whether to produce diagnostics if the function does not
-// satisfy the requirements.
-bool Sema::CheckConstexprFunctionDecl(const FunctionDecl *NewFD,
-                                      CheckConstexprKind CCK) {
-  assert((CCK != CCK_NoteNonConstexprInstantiation ||
-          (NewFD->getTemplateInstantiationPattern() &&
-           NewFD->getTemplateInstantiationPattern()->isConstexpr())) &&
-         "only constexpr templates can be instantiated non-constexpr");
-
+// This implements C++11 [dcl.constexpr]p3,4, as amended by DR1360.
+bool Sema::CheckConstexprFunctionDecl(const FunctionDecl *NewFD) {
   const CXXMethodDecl *MD = dyn_cast<CXXMethodDecl>(NewFD);
   if (MD && MD->isInstance()) {
-    // C++11 [dcl.constexpr]p4: In the definition of a constexpr constructor...
-    //  In addition, either its function-body shall be = delete or = default or
-    //  it shall satisfy the following constraints:
+    // C++11 [dcl.constexpr]p4:
+    //  The definition of a constexpr constructor shall satisfy the following
+    //  constraints:
     //  - the class shall not have any virtual base classes;
-    //
-    // We apply this to constexpr member functions too: the class cannot be a
-    // literal type, so the members are not permitted to be constexpr.
     const CXXRecordDecl *RD = MD->getParent();
     if (RD->getNumVBases()) {
-      // Note, this is still illegal if the body is = default, since the
-      // implicit body does not satisfy the requirements of a constexpr
-      // constructor. We also reject cases where the body is = delete, as
-      // required by N3308.
-      if (CCK != CCK_Instantiation) {
-        Diag(NewFD->getLocation(),
-             CCK == CCK_Declaration ? diag::err_constexpr_virtual_base
-                                    : diag::note_constexpr_tmpl_virtual_base)
-          << isa<CXXConstructorDecl>(NewFD) << RD->isStruct()
-          << RD->getNumVBases();
-        for (CXXRecordDecl::base_class_const_iterator I = RD->vbases_begin(),
-               E = RD->vbases_end(); I != E; ++I)
-          Diag(I->getSourceRange().getBegin(),
-               diag::note_constexpr_virtual_base_here) << I->getSourceRange();
-      }
+      Diag(NewFD->getLocation(), diag::err_constexpr_virtual_base)
+        << isa<CXXConstructorDecl>(NewFD) << RD->isStruct()
+        << RD->getNumVBases();
+      for (CXXRecordDecl::base_class_const_iterator I = RD->vbases_begin(),
+             E = RD->vbases_end(); I != E; ++I)
+        Diag(I->getSourceRange().getBegin(),
+             diag::note_constexpr_virtual_base_here) << I->getSourceRange();
       return false;
     }
   }
@@ -710,39 +684,29 @@ bool Sema::CheckConstexprFunctionDecl(const FunctionDecl *NewFD,
     // - it shall not be virtual;
     const CXXMethodDecl *Method = dyn_cast<CXXMethodDecl>(NewFD);
     if (Method && Method->isVirtual()) {
-      if (CCK != CCK_Instantiation) {
-        Diag(NewFD->getLocation(),
-             CCK == CCK_Declaration ? diag::err_constexpr_virtual
-                                    : diag::note_constexpr_tmpl_virtual);
+      Diag(NewFD->getLocation(), diag::err_constexpr_virtual);
 
-        // If it's not obvious why this function is virtual, find an overridden
-        // function which uses the 'virtual' keyword.
-        const CXXMethodDecl *WrittenVirtual = Method;
-        while (!WrittenVirtual->isVirtualAsWritten())
-          WrittenVirtual = *WrittenVirtual->begin_overridden_methods();
-        if (WrittenVirtual != Method)
-          Diag(WrittenVirtual->getLocation(),
-               diag::note_overridden_virtual_function);
-      }
+      // If it's not obvious why this function is virtual, find an overridden
+      // function which uses the 'virtual' keyword.
+      const CXXMethodDecl *WrittenVirtual = Method;
+      while (!WrittenVirtual->isVirtualAsWritten())
+        WrittenVirtual = *WrittenVirtual->begin_overridden_methods();
+      if (WrittenVirtual != Method)
+        Diag(WrittenVirtual->getLocation(),
+             diag::note_overridden_virtual_function);
       return false;
     }
 
     // - its return type shall be a literal type;
     QualType RT = NewFD->getResultType();
     if (!RT->isDependentType() &&
-        RequireLiteralType(NewFD->getLocation(), RT, CCK == CCK_Declaration ?
-                           PDiag(diag::err_constexpr_non_literal_return) :
-                           PDiag(),
-                           /*AllowIncompleteType*/ true)) {
-      if (CCK == CCK_NoteNonConstexprInstantiation)
-        Diag(NewFD->getLocation(),
-             diag::note_constexpr_tmpl_non_literal_return) << RT;
+        RequireLiteralType(NewFD->getLocation(), RT,
+                           PDiag(diag::err_constexpr_non_literal_return)))
       return false;
-    }
   }
 
   // - each of its parameter types shall be a literal type;
-  if (!CheckConstexprParameterTypes(*this, NewFD, CCK))
+  if (!CheckConstexprParameterTypes(*this, NewFD))
     return false;
 
   return true;
@@ -854,8 +818,7 @@ static void CheckConstexprCtorInitializer(Sema &SemaRef,
 /// the permitted types of statement. C++11 [dcl.constexpr]p3,p4.
 ///
 /// \return true if the body is OK, false if we have diagnosed a problem.
-bool Sema::CheckConstexprFunctionBody(const FunctionDecl *Dcl, Stmt *Body,
-                                      bool IsInstantiation) {
+bool Sema::CheckConstexprFunctionBody(const FunctionDecl *Dcl, Stmt *Body) {
   if (isa<CXXTryStmt>(Body)) {
     // C++11 [dcl.constexpr]p3:
     //  The definition of a constexpr function shall satisfy the following
@@ -1005,7 +968,7 @@ bool Sema::CheckConstexprFunctionBody(const FunctionDecl *Dcl, Stmt *Body,
   //   - every constructor involved in initializing non-static data members and
   //     base class sub-objects shall be a constexpr constructor.
   llvm::SmallVector<PartialDiagnosticAt, 8> Diags;
-  if (!IsInstantiation && !Expr::isPotentialConstantExpr(Dcl, Diags)) {
+  if (!Expr::isPotentialConstantExpr(Dcl, Diags)) {
     Diag(Dcl->getLocation(), diag::err_constexpr_function_never_constant_expr)
       << isa<CXXConstructorDecl>(Dcl);
     for (size_t I = 0, N = Diags.size(); I != N; ++I)
@@ -2150,18 +2113,22 @@ Sema::BuildMemberInitializer(ValueDecl *Member, Expr *Init,
     // any of the arguments are type-dependent expressions.
     DiscardCleanupsInEvaluationContext();
   } else {
+    bool InitList = false;
+    if (isa<InitListExpr>(Init)) {
+      InitList = true;
+      Args = &Init;
+      NumArgs = 1;
+    }
+
     // Initialize the member.
     InitializedEntity MemberEntity =
       DirectMember ? InitializedEntity::InitializeMember(DirectMember, 0)
                    : InitializedEntity::InitializeMember(IndirectMember, 0);
     InitializationKind Kind =
-      InitializationKind::CreateDirect(IdLoc, InitRange.getBegin(),
-                                       InitRange.getEnd());
+      InitList ? InitializationKind::CreateDirectList(IdLoc)
+               : InitializationKind::CreateDirect(IdLoc, InitRange.getBegin(),
+                                                  InitRange.getEnd());
 
-    if (isa<InitListExpr>(Init)) {
-      Args = &Init;
-      NumArgs = 1;
-    }
     InitializationSequence InitSeq(*this, MemberEntity, Kind, Args, NumArgs);
     ExprResult MemberInit = InitSeq.Perform(*this, MemberEntity, Kind,
                                             MultiExprArg(*this, Args, NumArgs),
@@ -2214,20 +2181,23 @@ Sema::BuildDelegatingInitializer(TypeSourceInfo *TInfo, Expr *Init,
       << TInfo->getTypeLoc().getLocalSourceRange();
   Diag(NameLoc, diag::warn_cxx98_compat_delegating_ctor);
 
+  bool InitList = true;
+  Expr **Args = &Init;
+  unsigned NumArgs = 1;
+  if (ParenListExpr *ParenList = dyn_cast<ParenListExpr>(Init)) {
+    InitList = false;
+    Args = ParenList->getExprs();
+    NumArgs = ParenList->getNumExprs();
+  }
+
   SourceRange InitRange = Init->getSourceRange();
   // Initialize the object.
   InitializedEntity DelegationEntity = InitializedEntity::InitializeDelegation(
                                      QualType(ClassDecl->getTypeForDecl(), 0));
   InitializationKind Kind =
-    InitializationKind::CreateDirect(NameLoc, InitRange.getBegin(),
-                                     InitRange.getEnd());
-
-  Expr **Args = &Init;
-  unsigned NumArgs = 1;
-  if (ParenListExpr *ParenList = dyn_cast<ParenListExpr>(Init)) {
-    Args = ParenList->getExprs();
-    NumArgs = ParenList->getNumExprs();
-  }
+    InitList ? InitializationKind::CreateDirectList(NameLoc)
+             : InitializationKind::CreateDirect(NameLoc, InitRange.getBegin(),
+                                                InitRange.getEnd());
   InitializationSequence InitSeq(*this, DelegationEntity, Kind, Args, NumArgs);
   ExprResult DelegationInit = InitSeq.Perform(*this, DelegationEntity, Kind,
                                               MultiExprArg(*this, Args,NumArgs),
@@ -2341,18 +2311,21 @@ Sema::BuildBaseInitializer(QualType BaseType, TypeSourceInfo *BaseTInfo,
     BaseSpec = const_cast<CXXBaseSpecifier *>(VirtualBaseSpec);
 
   // Initialize the base.
-  InitializedEntity BaseEntity =
-    InitializedEntity::InitializeBase(Context, BaseSpec, VirtualBaseSpec);
-  InitializationKind Kind = 
-    InitializationKind::CreateDirect(BaseLoc, InitRange.getBegin(),
-                                     InitRange.getEnd());
-
+  bool InitList = true;
   Expr **Args = &Init;
   unsigned NumArgs = 1;
   if (ParenListExpr *ParenList = dyn_cast<ParenListExpr>(Init)) {
+    InitList = false;
     Args = ParenList->getExprs();
     NumArgs = ParenList->getNumExprs();
   }
+
+  InitializedEntity BaseEntity =
+    InitializedEntity::InitializeBase(Context, BaseSpec, VirtualBaseSpec);
+  InitializationKind Kind =
+    InitList ? InitializationKind::CreateDirectList(BaseLoc)
+             : InitializationKind::CreateDirect(BaseLoc, InitRange.getBegin(),
+                                                InitRange.getEnd());
   InitializationSequence InitSeq(*this, BaseEntity, Kind, Args, NumArgs);
   ExprResult BaseInit = InitSeq.Perform(*this, BaseEntity, Kind,
                                           MultiExprArg(*this, Args, NumArgs),
@@ -3745,9 +3718,6 @@ void Sema::CheckCompletedCXXClass(CXXRecordDecl *Record) {
   // const. [...] The class of which that function is a member shall be
   // a literal type.
   //
-  // It's fine to diagnose constructors here too: such constructors cannot
-  // produce a constant expression, so are ill-formed (no diagnostic required).
-  //
   // If the class has virtual bases, any constexpr members will already have
   // been diagnosed by the checks performed on the member declaration, so
   // suppress this (less useful) diagnostic.
@@ -3756,16 +3726,14 @@ void Sema::CheckCompletedCXXClass(CXXRecordDecl *Record) {
     for (CXXRecordDecl::method_iterator M = Record->method_begin(),
                                      MEnd = Record->method_end();
          M != MEnd; ++M) {
-      if (M->isConstexpr() && M->isInstance()) {
+      if (M->isConstexpr() && M->isInstance() && !isa<CXXConstructorDecl>(*M)) {
         switch (Record->getTemplateSpecializationKind()) {
         case TSK_ImplicitInstantiation:
         case TSK_ExplicitInstantiationDeclaration:
         case TSK_ExplicitInstantiationDefinition:
           // If a template instantiates to a non-literal type, but its members
           // instantiate to constexpr functions, the template is technically
-          // ill-formed, but we allow it for sanity. Such members are treated as
-          // non-constexpr.
-          (*M)->setConstexpr(false);
+          // ill-formed, but we allow it for sanity.
           continue;
 
         case TSK_Undeclared:
@@ -4330,6 +4298,13 @@ bool Sema::ShouldDeleteSpecialMember(CXXMethodDecl *MD, CXXSpecialMember CSM) {
   switch (CSM) {
   case CXXDefaultConstructor:
     IsConstructor = true;
+
+    // C++11 [expr.lambda.prim]p19:
+    //   The closure type associated with a lambda-expression has a
+    //   deleted (8.4.3) default constructor.
+    if (RD->isLambda())
+      return true;
+
     break;
   case CXXCopyConstructor:
     IsConstructor = true;
@@ -4610,6 +4585,12 @@ bool Sema::ShouldDeleteCopyAssignmentOperator(CXXMethodDecl *MD) {
   assert(!RD->isDependentType() && "do deletion after instantiation");
   if (!LangOpts.CPlusPlus0x || RD->isInvalidDecl())
     return false;
+
+  // C++11 [expr.lambda.prim]p19:
+  //   The closure type associated with a lambda-expression has a
+  //   [...] deleted copy assignment operator.
+  if (RD->isLambda())
+    return true;
 
   SourceLocation Loc = MD->getLocation();
 
