@@ -1233,6 +1233,8 @@ def err_auto_var_requires_init : Error<
   "declaration of variable %0 with type %1 requires an initializer">;
 def err_auto_new_requires_ctor_arg : Error<
   "new expression for type %0 requires a constructor argument">;
+def err_auto_new_requires_parens : Error<
+  "new expression for type %0 cannot use list-initialization">;
 def err_auto_var_init_no_expression : Error<
   "initializer for variable %0 with type %1 is empty">;
 def err_auto_var_init_multiple_expressions : Error<
@@ -1258,6 +1260,10 @@ def err_implied_std_initializer_list_not_found : Error<
   "not found; include <initializer_list>">;
 def err_malformed_std_initializer_list : Error<
   "std::initializer_list must be a class template with a single type parameter">;
+def warn_dangling_std_initializer_list : Warning<
+  "array backing the initializer list will be destroyed at the end of "
+  "%select{the full-expression|the constructor}0">,
+  InGroup<DiagGroup<"dangling-initializer-list">>;
 
 // C++11 override control
 def override_keyword_only_allowed_on_virtual_member_functions : Error<
@@ -1356,6 +1362,8 @@ def err_invalid_constexpr_var_decl : Error<
   "constexpr variable declaration must be a definition">;
 def err_constexpr_static_mem_var_requires_init : Error<
   "declaration of constexpr static data member %0 requires an initializer">;
+def err_constexpr_var_non_literal : Error<
+  "constexpr variable cannot have non-literal type %0">;
 def err_constexpr_var_requires_const_init : Error<
   "constexpr variable %0 must be initialized by a constant expression">;
 def err_constexpr_redecl_mismatch : Error<
@@ -1364,29 +1372,17 @@ def err_constexpr_redecl_mismatch : Error<
 def note_constexpr_redecl_mismatch : Note<
   "previous declaration was %select{not |}0marked constexpr">;
 def err_constexpr_virtual : Error<"virtual function cannot be constexpr">;
-def note_constexpr_tmpl_virtual : Note<"function template instantiation is not "
-  "constexpr because it is virtual">;
 def err_constexpr_virtual_base : Error<
   "constexpr %select{member function|constructor}0 not allowed in "
   "%select{class|struct}1 with virtual base %plural{1:class|:classes}2">;
-def note_constexpr_tmpl_virtual_base : Note<
-  "%select{function|constructor}0 template instantiation is "
-  "not constexpr because %select{class|struct}1 has virtual base "
-  "%plural{1:class|:classes}2">;
 def note_non_literal_virtual_base : Note<"%select{class|struct}0 with virtual "
   "base %plural{1:class|:classes}1 is not a literal type">;
 def note_constexpr_virtual_base_here : Note<"virtual base class declared here">;
 def err_constexpr_non_literal_return : Error<
   "constexpr function's return type %0 is not a literal type">;
-def note_constexpr_tmpl_non_literal_return : Note<
-  "function template instantiation is not constexpr because return type %0 is "
-  "not a literal type">;
 def err_constexpr_non_literal_param : Error<
   "constexpr %select{function|constructor}1's %ordinal0 parameter type %2 is "
   "not a literal type">;
-def note_constexpr_tmpl_non_literal_param : Note<
-  "%select{function|constructor}1 template instantiation is not constexpr "
-  "because %ordinal0 parameter type %2 is not a literal type">;
 def err_constexpr_body_invalid_stmt : Error<
   "statement not allowed in constexpr %select{function|constructor}0">;
 def err_constexpr_type_definition : Error<
@@ -1421,7 +1417,8 @@ def note_non_literal_no_constexpr_ctors : Note<
 def note_non_literal_base_class : Note<
   "%0 is not literal because it has base class %1 of non-literal type">;
 def note_non_literal_field : Note<
-  "%0 is not literal because it has data member %1 of non-literal type %2">;
+  "%0 is not literal because it has data member %1 of "
+  "%select{non-literal|volatile}3 type %2">;
 def note_non_literal_user_provided_dtor : Note<
   "%0 is not literal because it has a user-provided destructor">;
 def note_non_literal_nontrivial_dtor : Note<
