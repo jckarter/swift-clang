@@ -2583,15 +2583,15 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     Int = Intrinsic::arm64_neon_fmulx;
     return EmitNeonCall(CGM.getIntrinsic(Int, Ty), Ops, "vmulx");
   }
-  case ARM64::BI__builtin_arm64_vmaxnmp_v:
-  case ARM64::BI__builtin_arm64_vmaxnmpq_v: {
+  case ARM64::BI__builtin_arm64_vpmaxnm_v:
+  case ARM64::BI__builtin_arm64_vpmaxnmq_v: {
     Int = Intrinsic::arm64_neon_fmaxnmp;
-    return EmitNeonCall(CGM.getIntrinsic(Int, Ty), Ops, "vmaxnmp");
+    return EmitNeonCall(CGM.getIntrinsic(Int, Ty), Ops, "vpmaxnm");
   }
-  case ARM64::BI__builtin_arm64_vminnmp_v:
-  case ARM64::BI__builtin_arm64_vminnmpq_v: {
+  case ARM64::BI__builtin_arm64_vpminnm_v:
+  case ARM64::BI__builtin_arm64_vpminnmq_v: {
     Int = Intrinsic::arm64_neon_fminnmp;
-    return EmitNeonCall(CGM.getIntrinsic(Int, Ty), Ops, "vminnmp");
+    return EmitNeonCall(CGM.getIntrinsic(Int, Ty), Ops, "vpminnm");
   }
   case ARM64::BI__builtin_arm64_vsqrt_v:
   case ARM64::BI__builtin_arm64_vsqrtq_v: {
