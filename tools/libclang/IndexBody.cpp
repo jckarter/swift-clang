@@ -113,7 +113,7 @@ public:
   }
 
   bool VisitDeclStmt(DeclStmt *S) {
-    if (IndexCtx.indexFunctionLocalSymbols())
+    if (IndexCtx.shouldIndexFunctionLocalSymbols())
       IndexCtx.indexDeclGroupRef(S->getDeclGroup());
     return true;
   }
