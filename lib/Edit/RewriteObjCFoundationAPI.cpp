@@ -513,13 +513,13 @@ static bool rewriteToNumberLiteral(const ObjCMessageExpr *Msg,
   case NSAPI::NSNumberWithShort:
   case NSAPI::NSNumberWithUnsignedShort:
   case NSAPI::NSNumberWithBool:
-  case NSAPI::NSNumberWithInteger:
-  case NSAPI::NSNumberWithUnsignedInteger:
     return false;
 
   case NSAPI::NSNumberWithUnsignedInt:
+  case NSAPI::NSNumberWithUnsignedInteger:
     CallIsUnsigned = true;
   case NSAPI::NSNumberWithInt:
+  case NSAPI::NSNumberWithInteger:
     CallIsInteger = true;
     break;
 
