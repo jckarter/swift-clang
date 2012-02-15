@@ -76,6 +76,7 @@ static FrontendAction *CreateFrontendBaseAction(CompilerInstance &CI) {
   case RewriteObjC:            return new RewriteObjCAction();
   case RewriteTest:            return new RewriteTestAction();
   case RunAnalysis:            return new ento::AnalysisAction();
+  case MigrateSource:          return new arcmt::MigrateSourceAction();
   case RunPreprocessorOnly:    return new PreprocessOnlyAction();
   }
   llvm_unreachable("Invalid program action!");

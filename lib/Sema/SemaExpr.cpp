@@ -4235,8 +4235,7 @@ ExprResult Sema::BuildVectorLiteral(SourceLocation LParenLoc,
       return ExprError();
     }
     else
-      for (unsigned i = 0, e = numExprs; i != e; ++i)
-        initExprs.push_back(exprs[i]);
+      initExprs.append(exprs, exprs + numExprs);
   }
   else {
     // For OpenCL, when the number of initializers is a single value,
@@ -4253,8 +4252,7 @@ ExprResult Sema::BuildVectorLiteral(SourceLocation LParenLoc,
         return BuildCStyleCastExpr(LParenLoc, TInfo, RParenLoc, Literal.take());
     }
     
-    for (unsigned i = 0, e = numExprs; i != e; ++i)
-      initExprs.push_back(exprs[i]);
+    initExprs.append(exprs, exprs + numExprs);
   }
   // FIXME: This means that pretty-printing the final AST will produce curly
   // braces instead of the original commas.
@@ -9414,7 +9412,11 @@ void Sema::MarkFunctionReferenced(SourceLocation Loc, FunctionDecl *Func) {
 
   Func->setReferenced();
 
-  if (Func->isUsed(false))
+  // Don't mark this function as used multiple times, unless it's a constexpr
+  // function which we need to instantiate.
+  if (Func->isUsed(false) &&
+      !(Func->isConstexpr() && !Func->getBody() &&
+        Func->isImplicitlyInstantiable()))
     return;
 
   if (!IsPotentiallyEvaluatedContext(*this))
@@ -9465,34 +9467,40 @@ void Sema::MarkFunctionReferenced(SourceLocation Loc, FunctionDecl *Func) {
   // class templates.
   if (Func->isImplicitlyInstantiable()) {
     bool AlreadyInstantiated = false;
+    SourceLocation PointOfInstantiation = Loc;
     if (FunctionTemplateSpecializationInfo *SpecInfo
                               = Func->getTemplateSpecializationInfo()) {
       if (SpecInfo->getPointOfInstantiation().isInvalid())
         SpecInfo->setPointOfInstantiation(Loc);
       else if (SpecInfo->getTemplateSpecializationKind()
-                 == TSK_ImplicitInstantiation)
+                 == TSK_ImplicitInstantiation) {
         AlreadyInstantiated = true;
+        PointOfInstantiation = SpecInfo->getPointOfInstantiation();
+      }
     } else if (MemberSpecializationInfo *MSInfo
                                 = Func->getMemberSpecializationInfo()) {
       if (MSInfo->getPointOfInstantiation().isInvalid())
         MSInfo->setPointOfInstantiation(Loc);
       else if (MSInfo->getTemplateSpecializationKind()
-                 == TSK_ImplicitInstantiation)
+                 == TSK_ImplicitInstantiation) {
         AlreadyInstantiated = true;
+        PointOfInstantiation = MSInfo->getPointOfInstantiation();
+      }
     }
 
-    if (!AlreadyInstantiated) {
+    if (!AlreadyInstantiated || Func->isConstexpr()) {
       if (isa<CXXRecordDecl>(Func->getDeclContext()) &&
           cast<CXXRecordDecl>(Func->getDeclContext())->isLocalClass())
-        PendingLocalImplicitInstantiations.push_back(std::make_pair(Func,
-                                                                    Loc));
-      else if (Func->getTemplateInstantiationPattern()->isConstexpr())
+        PendingLocalImplicitInstantiations.push_back(
+            std::make_pair(Func, PointOfInstantiation));
+      else if (Func->isConstexpr())
         // Do not defer instantiations of constexpr functions, to avoid the
         // expression evaluator needing to call back into Sema if it sees a
         // call to such a function.
-        InstantiateFunctionDefinition(Loc, Func);
+        InstantiateFunctionDefinition(PointOfInstantiation, Func);
       else {
-        PendingInstantiations.push_back(std::make_pair(Func, Loc));
+        PendingInstantiations.push_back(std::make_pair(Func,
+                                                       PointOfInstantiation));
         // Notify the consumer that a function was implicitly instantiated.
         Consumer.HandleCXXImplicitFunctionInstantiation(Func);
       }
@@ -9625,8 +9633,6 @@ static ExprResult captureInLambda(Sema &S, LambdaScopeInfo *LSI,
   //   direct-initialized in increasing subscript order.) These
   //   initializations are performed in the (unspecified) order in
   //   which the non-static data members are declared.
-  //
-  // FIXME: Introduce an initialization entity for lambda captures.
       
   // Introduce a new evaluation context for the initialization, so
   // that temporaries introduced as part of the capture are retained
@@ -9697,7 +9703,8 @@ static ExprResult captureInLambda(Sema &S, LambdaScopeInfo *LSI,
   // of array-subscript entities. 
   SmallVector<InitializedEntity, 4> Entities;
   Entities.reserve(1 + IndexVariables.size());
-  Entities.push_back(InitializedEntity::InitializeMember(Field));
+  Entities.push_back(
+    InitializedEntity::InitializeLambdaCapture(Var, Field, Loc));
   for (unsigned I = 0, N = IndexVariables.size(); I != N; ++I)
     Entities.push_back(InitializedEntity::InitializeElement(S.Context,
                                                             0,
@@ -9841,7 +9848,7 @@ bool Sema::canCaptureVariable(VarDecl *Var, SourceLocation Loc, bool Explicit,
 // Check if the variable needs to be captured; if so, try to perform
 // the capture.
 void Sema::TryCaptureVar(VarDecl *var, SourceLocation loc,
-                         TryCaptureKind Kind) {
+                         TryCaptureKind Kind, SourceLocation EllipsisLoc) {
   QualType type;
   unsigned functionScopesIndex;
   bool Nested;
@@ -9919,7 +9926,8 @@ void Sema::TryCaptureVar(VarDecl *var, SourceLocation loc,
       }
     }
 
-    CSI->AddCapture(var, hasBlocksAttr, byRef, Nested, loc, copyExpr);
+    CSI->AddCapture(var, hasBlocksAttr, byRef, Nested, loc, EllipsisLoc, 
+                    copyExpr);
 
     Nested = true;
     if (shouldAddConstForScope(CSI, var))
@@ -9987,22 +9995,26 @@ static void DoMarkVarDeclReferenced(Sema &SemaRef, SourceLocation Loc,
     return;
 
   // Implicit instantiation of static data members of class templates.
-  if (Var->isStaticDataMember() &&
-      Var->getInstantiatedFromStaticDataMember()) {
+  if (Var->isStaticDataMember() && Var->getInstantiatedFromStaticDataMember()) {
     MemberSpecializationInfo *MSInfo = Var->getMemberSpecializationInfo();
     assert(MSInfo && "Missing member specialization information?");
-    if (MSInfo->getPointOfInstantiation().isInvalid() &&
-        MSInfo->getTemplateSpecializationKind()== TSK_ImplicitInstantiation) {
-      MSInfo->setPointOfInstantiation(Loc);
-      // This is a modification of an existing AST node. Notify listeners.
-      if (ASTMutationListener *L = SemaRef.getASTMutationListener())
-        L->StaticDataMemberInstantiated(Var);
+    bool AlreadyInstantiated = !MSInfo->getPointOfInstantiation().isInvalid();
+    if (MSInfo->getTemplateSpecializationKind() == TSK_ImplicitInstantiation &&
+        (!AlreadyInstantiated || Var->isUsableInConstantExpressions())) {
+      if (!AlreadyInstantiated) {
+        // This is a modification of an existing AST node. Notify listeners.
+        if (ASTMutationListener *L = SemaRef.getASTMutationListener())
+          L->StaticDataMemberInstantiated(Var);
+        MSInfo->setPointOfInstantiation(Loc);
+      }
+      SourceLocation PointOfInstantiation = MSInfo->getPointOfInstantiation();
       if (Var->isUsableInConstantExpressions())
         // Do not defer instantiations of variables which could be used in a
         // constant expression.
-        SemaRef.InstantiateStaticDataMemberDefinition(Loc, Var);
+        SemaRef.InstantiateStaticDataMemberDefinition(PointOfInstantiation,Var);
       else
-        SemaRef.PendingInstantiations.push_back(std::make_pair(Var, Loc));
+        SemaRef.PendingInstantiations.push_back(
+            std::make_pair(Var, PointOfInstantiation));
     }
   }
 

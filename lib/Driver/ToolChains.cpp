@@ -33,11 +33,7 @@
 
 #include <cstdlib> // ::getenv
 
-#ifdef HAVE_CLANG_CONFIG_H
-# include "clang/Config/config.h"
-#endif
-
-#include "llvm/Config/config.h" // for GCC_INSTALL_PREFIX
+#include "clang/Config/config.h" // for GCC_INSTALL_PREFIX
 
 using namespace clang::driver;
 using namespace clang::driver::toolchains;
@@ -261,6 +257,7 @@ Tool &Darwin::SelectTool(const Compilation &C, const JobAction &JA,
     case Action::PreprocessJobClass:
       T = new tools::darwin::Preprocess(*this); break;
     case Action::AnalyzeJobClass:
+    case Action::MigrateJobClass:
       T = new tools::Clang(*this); break;
     case Action::PrecompileJobClass:
     case Action::CompileJobClass:
@@ -1472,6 +1469,7 @@ Tool &Generic_GCC::SelectTool(const Compilation &C,
     case Action::PrecompileJobClass:
       T = new tools::gcc::Precompile(*this); break;
     case Action::AnalyzeJobClass:
+    case Action::MigrateJobClass:
       T = new tools::Clang(*this); break;
     case Action::CompileJobClass:
       T = new tools::gcc::Compile(*this); break;
@@ -1837,6 +1835,41 @@ Tool &AuroraUX::SelectTool(const Compilation &C, const JobAction &JA,
   return *T;
 }
 
+/// Solaris - Solaris tool chain which can call as(1) and ld(1) directly.
+
+Solaris::Solaris(const Driver &D, const llvm::Triple& Triple)
+  : Generic_GCC(D, Triple) {
+
+  getProgramPaths().push_back(getDriver().getInstalledDir());
+  if (getDriver().getInstalledDir() != getDriver().Dir)
+    getProgramPaths().push_back(getDriver().Dir);
+
+  getFilePaths().push_back(getDriver().Dir + "/../lib");
+  getFilePaths().push_back("/usr/lib");
+}
+
+Tool &Solaris::SelectTool(const Compilation &C, const JobAction &JA,
+                           const ActionList &Inputs) const {
+  Action::ActionClass Key;
+  if (getDriver().ShouldUseClangCompiler(C, JA, getTriple()))
+    Key = Action::AnalyzeJobClass;
+  else
+    Key = JA.getKind();
+
+  Tool *&T = Tools[Key];
+  if (!T) {
+    switch (Key) {
+    case Action::AssembleJobClass:
+      T = new tools::solaris::Assemble(*this); break;
+    case Action::LinkJobClass:
+      T = new tools::solaris::Link(*this); break;
+    default:
+      T = &Generic_GCC::SelectTool(C, JA, Inputs);
+    }
+  }
+
+  return *T;
+}
 
 /// Linux toolchain (very bare-bones at the moment).
 

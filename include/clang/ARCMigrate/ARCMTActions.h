@@ -33,6 +33,13 @@ public:
   ModifyAction(FrontendAction *WrappedAction);
 };
 
+class MigrateSourceAction : public ASTFrontendAction {
+  FileRemapper Remapper;
+protected:
+  virtual ASTConsumer *CreateASTConsumer(CompilerInstance &CI,
+                                         StringRef InFile);
+};
+
 class MigrateAction : public WrapperFrontendAction {
   std::string MigrateDir;
   std::string PlistOut;

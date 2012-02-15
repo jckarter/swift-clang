@@ -260,7 +260,7 @@ static bool rewriteToArrayLiteral(const ObjCMessageExpr *Msg,
       return false;
     SourceRange ArgRange = Msg->getArg(0)->getSourceRange();
     commit.replaceWithInner(MsgRange, ArgRange);
-    commit.insertWrap("@[ ", ArgRange, " ]");
+    commit.insertWrap("@[", ArgRange, "]");
     return true;
   }
 
@@ -279,7 +279,7 @@ static bool rewriteToArrayLiteral(const ObjCMessageExpr *Msg,
     SourceRange ArgRange(Msg->getArg(0)->getLocStart(),
                          Msg->getArg(Msg->getNumArgs()-2)->getLocEnd());
     commit.replaceWithInner(MsgRange, ArgRange);
-    commit.insertWrap("@[ ", ArgRange, " ]");
+    commit.insertWrap("@[", ArgRange, "]");
     return true;
   }
 
@@ -313,8 +313,8 @@ static bool rewriteToDictionaryLiteral(const ObjCMessageExpr *Msg,
     commit.insertFromRange(ValRange.getBegin(),
                            CharSourceRange::getTokenRange(KeyRange),
                        /*afterToken=*/false, /*beforePreviousInsertions=*/true);
-    commit.insertBefore(ValRange.getBegin(), "@{ ");
-    commit.insertAfterToken(ValRange.getEnd(), " }");
+    commit.insertBefore(ValRange.getBegin(), "@{");
+    commit.insertAfterToken(ValRange.getEnd(), "}");
     commit.replaceWithInner(MsgRange, ValRange);
     return true;
   }
@@ -348,7 +348,7 @@ static bool rewriteToDictionaryLiteral(const ObjCMessageExpr *Msg,
     // key.
     SourceRange ArgRange(Msg->getArg(1)->getLocStart(),
                          Msg->getArg(SentinelIdx-1)->getLocEnd());
-    commit.insertWrap("@{ ", ArgRange, " }");
+    commit.insertWrap("@{", ArgRange, "}");
     commit.replaceWithInner(MsgRange, ArgRange);
     return true;
   }
@@ -513,13 +513,13 @@ static bool rewriteToNumberLiteral(const ObjCMessageExpr *Msg,
   case NSAPI::NSNumberWithShort:
   case NSAPI::NSNumberWithUnsignedShort:
   case NSAPI::NSNumberWithBool:
-  case NSAPI::NSNumberWithInteger:
-  case NSAPI::NSNumberWithUnsignedInteger:
     return false;
 
   case NSAPI::NSNumberWithUnsignedInt:
+  case NSAPI::NSNumberWithUnsignedInteger:
     CallIsUnsigned = true;
   case NSAPI::NSNumberWithInt:
+  case NSAPI::NSNumberWithInteger:
     CallIsInteger = true;
     break;
 
