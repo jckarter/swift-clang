@@ -123,6 +123,8 @@ def arcmt_migrate_report_output : Separate<"-arcmt-migrate-report-output">,
 def arcmt_migrate_emit_arc_errors : Flag<"-arcmt-migrate-emit-errors">,
   HelpText<"Emit ARC errors even if the migrator can fix them">;
 
+def _migrate : Flag<"--migrate">, Flags<[DriverOption]>,
+  HelpText<"Run the migrator">;
 def ccc_objcmt_migrate : Separate<"-ccc-objcmt-migrate">, CCCDriverOpt,
   HelpText<"Apply modifications and produces temporary files to migrate to "
    "modern ObjC syntax">;
