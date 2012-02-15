@@ -1141,24 +1141,24 @@ def err_temp_copy_no_viable : Error<
   "no viable constructor %select{copying variable|copying parameter|"
   "returning object|throwing object|copying member subobject|copying array "
   "element|allocating object|copying temporary|initializing base subobject|"
-  "initializing vector element}0 of type %1">;
+  "initializing vector element|capturing value}0 of type %1">;
 def ext_rvalue_to_reference_temp_copy_no_viable : ExtWarn<
   "no viable constructor %select{copying variable|copying parameter|"
   "returning object|throwing object|copying member subobject|copying array "
   "element|allocating object|copying temporary|initializing base subobject|"
-  "initializing vector element}0 of type %1; C++98 requires a copy "
+  "initializing vector element|capturing value}0 of type %1; C++98 requires a copy "
   "constructor when binding a reference to a temporary">,
   InGroup<BindToTemporaryCopy>;
 def err_temp_copy_ambiguous : Error<
   "ambiguous constructor call when %select{copying variable|copying "
   "parameter|returning object|throwing object|copying member subobject|copying "
   "array element|allocating object|copying temporary|initializing base subobject|"
-  "initializing vector element}0 of type %1">;
+  "initializing vector element|capturing value}0 of type %1">;
 def err_temp_copy_deleted : Error<
   "%select{copying variable|copying parameter|returning object|throwing "
   "object|copying member subobject|copying array element|allocating object|"
   "copying temporary|initializing base subobject|initializing vector element}0 "
-  "of type %1 invokes deleted constructor">;
+  "of type %1 invokes deleted constructor|capturing value">;
 def err_temp_copy_incomplete : Error<
   "copying a temporary object of incomplete type %0">;
 def warn_cxx98_compat_temp_copy : Warning<
@@ -4045,6 +4045,20 @@ let CategoryName = "Lambda Issue" in {
   def ext_lambda_default_arguments : ExtWarn<
     "C++11 forbids default arguments for lambda expressions">,
     InGroup<LambdaExtensions>;
+  def err_noreturn_lambda_has_return_expr : Error<
+    "lambda declared 'noreturn' should not return">;
+  def warn_maybe_falloff_nonvoid_lambda : Warning<
+    "control may reach end of non-void lambda">,
+    InGroup<ReturnType>;
+  def warn_falloff_nonvoid_lambda : Warning<
+    "control reaches end of non-void lambda">,
+    InGroup<ReturnType>;
+  def err_access_lambda_capture : Error<
+    // The ERRORs represent other special members that aren't constructors, in
+    // hopes that someone will bother noticing and reporting if they appear
+    "capture of variable '%0' as type %1 calls %select{private|protected}3 "
+    "%select{default |copy |move |*ERROR* |*ERROR* |*ERROR* |}2constructor">,
+    AccessControl;
 }
 
 def err_operator_arrow_circular : Error<
@@ -4142,8 +4156,8 @@ def err_typecheck_convert_incompatible : Error<
   "%select{none|const|restrict|const and restrict|volatile|const and volatile|"
   "volatile and restrict|const, volatile, and restrict}6)}4">;
 def err_typecheck_missing_return_type_incompatible : Error<
-  "return type %0 must match previous return type %1 when block"
-  " literal has unspecified explicit return type">;
+  "return type %0 must match previous return type %1 when %select{block "
+  "literal|lambda expression}2 has unspecified explicit return type">;
 
 def warn_incompatible_qualified_id : Warning<
   "%select{assigning to|passing|returning|converting|initializing|sending|casting}2"
