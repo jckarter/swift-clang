@@ -229,6 +229,18 @@ void Sema::DiagnoseUnusedExprResult(const Stmt *S) {
   DiagRuntimeBehavior(Loc, 0, PDiag(DiagID) << R1 << R2);
 }
 
+void Sema::ActOnStartOfCompoundStmt() {
+  PushCompoundScope();
+}
+
+void Sema::ActOnFinishOfCompoundStmt() {
+  PopCompoundScope();
+}
+
+sema::CompoundScopeInfo &Sema::getCurCompoundScope() const {
+  return getCurFunction()->CompoundScopes.back();
+}
+
 StmtResult
 Sema::ActOnCompoundStmt(SourceLocation L, SourceLocation R,
                         MultiStmtArg elts, bool isStmtExpr) {
@@ -259,6 +271,15 @@ Sema::ActOnCompoundStmt(SourceLocation L, SourceLocation R,
       continue;
 
     DiagnoseUnusedExprResult(Elts[i]);
+  }
+
+  // Check for suspicious empty body (null statement) in `for' and `while'
+  // statements.  Don't do anything for template instantiations, this just adds
+  // noise.
+  if (NumElts != 0 && !CurrentInstantiationScope &&
+      getCurCompoundScope().HasEmptyLoopBodies) {
+    for (unsigned i = 0; i != NumElts - 1; ++i)
+      DiagnoseEmptyLoopBody(Elts[i], Elts[i + 1]);
   }
 
   return Owned(new (Context) CompoundStmt(Context, Elts, NumElts, L, R));
@@ -359,21 +380,9 @@ Sema::ActOnIfStmt(SourceLocation IfLoc, FullExprArg CondVal, Decl *CondVar,
 
   DiagnoseUnusedExprResult(thenStmt);
 
-  // Warn if the if block has a null body without an else value.
-  // this helps prevent bugs due to typos, such as
-  // if (condition);
-  //   do_stuff();
-  //
   if (!elseStmt) {
-    if (NullStmt* stmt = dyn_cast<NullStmt>(thenStmt))
-      // But do not warn if the body is a macro that expands to nothing, e.g:
-      //
-      // #define CALL(x)
-      // if (condition)
-      //   CALL(0);
-      //
-      if (!stmt->hasLeadingEmptyMacro())
-        Diag(stmt->getSemiLoc(), diag::warn_empty_if_body);
+    DiagnoseEmptyStmtBody(ConditionExpr->getLocEnd(), thenStmt,
+                          diag::warn_empty_if_body);
   }
 
   DiagnoseUnusedExprResult(elseStmt);
@@ -961,6 +970,9 @@ Sema::ActOnFinishSwitchStmt(SourceLocation SwitchLoc, Stmt *Switch,
     }
   }
 
+  DiagnoseEmptyStmtBody(CondExpr->getLocEnd(), BodyStmt,
+                        diag::warn_empty_switch_body);
+
   // FIXME: If the case list was broken is some way, we don't have a good system
   // to patch it up.  Instead, just return the whole substmt as broken.
   if (CaseListIsErroneous)
@@ -986,6 +998,9 @@ Sema::ActOnWhileStmt(SourceLocation WhileLoc, FullExprArg Cond,
     return StmtError();
 
   DiagnoseUnusedExprResult(Body);
+
+  if (isa<NullStmt>(Body))
+    getCurCompoundScope().setHasEmptyLoopBodies();
 
   return Owned(new (Context) WhileStmt(Context, ConditionVar, ConditionExpr,
                                        Body, WhileLoc));
@@ -1049,6 +1064,9 @@ Sema::ActOnForStmt(SourceLocation ForLoc, SourceLocation LParenLoc,
   DiagnoseUnusedExprResult(First);
   DiagnoseUnusedExprResult(Third);
   DiagnoseUnusedExprResult(Body);
+
+  if (isa<NullStmt>(Body))
+    getCurCompoundScope().setHasEmptyLoopBodies();
 
   return Owned(new (Context) ForStmt(Context, First,
                                      SecondResult.take(), ConditionVar,
@@ -1591,7 +1609,12 @@ StmtResult Sema::FinishCXXForRangeStmt(Stmt *S, Stmt *B) {
   if (!S || !B)
     return StmtError();
 
-  cast<CXXForRangeStmt>(S)->setBody(B);
+  CXXForRangeStmt *ForStmt = cast<CXXForRangeStmt>(S);
+  ForStmt->setBody(B);
+
+  DiagnoseEmptyStmtBody(ForStmt->getRParenLoc(), B,
+                        diag::warn_empty_range_based_for_body);
+
   return S;
 }
 
@@ -1828,9 +1851,9 @@ Sema::ActOnCapScopeReturnStmt(SourceLocation ReturnLoc, Expr *RetValExp) {
         !CurCap->ReturnType->isDependentType() &&
         !ReturnT->isDependentType() &&
         !Context.hasSameType(ReturnT, CurCap->ReturnType)) { 
-      // FIXME: Adapt diagnostic for lambdas.
       Diag(ReturnLoc, diag::err_typecheck_missing_return_type_incompatible) 
-          << ReturnT << CurCap->ReturnType;
+          << ReturnT << CurCap->ReturnType
+          << (getCurLambda() != 0);
       return StmtError();
     }
     CurCap->ReturnType = ReturnT;
@@ -1838,12 +1861,18 @@ Sema::ActOnCapScopeReturnStmt(SourceLocation ReturnLoc, Expr *RetValExp) {
   QualType FnRetType = CurCap->ReturnType;
   assert(!FnRetType.isNull());
 
-  if (BlockScopeInfo *CurBlock = dyn_cast<BlockScopeInfo>(CurCap))
+  if (BlockScopeInfo *CurBlock = dyn_cast<BlockScopeInfo>(CurCap)) {
     if (CurBlock->FunctionType->getAs<FunctionType>()->getNoReturnAttr()) {
       Diag(ReturnLoc, diag::err_noreturn_block_has_return_expr);
       return StmtError();
     }
-  // FIXME: [[noreturn]] for lambdas!
+  } else {
+    LambdaScopeInfo *LSI = cast<LambdaScopeInfo>(CurCap);
+    if (LSI->CallOperator->getType()->getAs<FunctionType>()->getNoReturnAttr()){
+      Diag(ReturnLoc, diag::err_noreturn_lambda_has_return_expr);
+      return StmtError();
+    }
+  }
 
   // Otherwise, verify that this result type matches the previous one.  We are
   // pickier with blocks than for normal functions because we don't have GCC

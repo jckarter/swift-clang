@@ -615,7 +615,7 @@ ExprResult Parser::TryParseLambdaExpression() {
 /// ParseLambdaExpression - Parse a lambda introducer.
 ///
 /// Returns a DiagnosticID if it hit something unexpected.
-llvm::Optional<unsigned> Parser::ParseLambdaIntroducer(LambdaIntroducer &Intro) {
+llvm::Optional<unsigned> Parser::ParseLambdaIntroducer(LambdaIntroducer &Intro){
   typedef llvm::Optional<unsigned> DiagResult;
 
   assert(Tok.is(tok::l_square) && "Lambda expressions begin with '['.");
@@ -640,18 +640,39 @@ llvm::Optional<unsigned> Parser::ParseLambdaIntroducer(LambdaIntroducer &Intro) 
 
   while (Tok.isNot(tok::r_square)) {
     if (!first) {
-      if (Tok.isNot(tok::comma))
+      if (Tok.isNot(tok::comma)) {
+        if (Tok.is(tok::code_completion)) {
+          Actions.CodeCompleteLambdaIntroducer(getCurScope(), Intro, 
+                                               /*AfterAmpersand=*/false);
+          ConsumeCodeCompletionToken();
+          break;
+        }
+
         return DiagResult(diag::err_expected_comma_or_rsquare);
+      }
       ConsumeToken();
     }
 
-    first = false;
+    if (Tok.is(tok::code_completion)) {
+      // If we're in Objective-C++ and we have a bare '[', then this is more
+      // likely to be a message receiver.
+      if (getLang().ObjC1 && first)
+        Actions.CodeCompleteObjCMessageReceiver(getCurScope());
+      else
+        Actions.CodeCompleteLambdaIntroducer(getCurScope(), Intro, 
+                                             /*AfterAmpersand=*/false);
+      ConsumeCodeCompletionToken();
+      break;
+    }
 
+    first = false;
+    
     // Parse capture.
     LambdaCaptureKind Kind = LCK_ByCopy;
     SourceLocation Loc;
     IdentifierInfo* Id = 0;
-
+    SourceLocation EllipsisLoc;
+    
     if (Tok.is(tok::kw_this)) {
       Kind = LCK_This;
       Loc = ConsumeToken();
@@ -659,11 +680,21 @@ llvm::Optional<unsigned> Parser::ParseLambdaIntroducer(LambdaIntroducer &Intro) 
       if (Tok.is(tok::amp)) {
         Kind = LCK_ByRef;
         ConsumeToken();
+
+        if (Tok.is(tok::code_completion)) {
+          Actions.CodeCompleteLambdaIntroducer(getCurScope(), Intro, 
+                                               /*AfterAmpersand=*/true);
+          ConsumeCodeCompletionToken();
+          break;
+        }
       }
 
       if (Tok.is(tok::identifier)) {
         Id = Tok.getIdentifierInfo();
         Loc = ConsumeToken();
+        
+        if (Tok.is(tok::ellipsis))
+          EllipsisLoc = ConsumeToken();
       } else if (Tok.is(tok::kw_this)) {
         // FIXME: If we want to suggest a fixit here, will need to return more
         // than just DiagnosticID. Perhaps full DiagnosticBuilder that can be
@@ -674,7 +705,7 @@ llvm::Optional<unsigned> Parser::ParseLambdaIntroducer(LambdaIntroducer &Intro) 
       }
     }
 
-    Intro.addCapture(Kind, Loc, Id);
+    Intro.addCapture(Kind, Loc, Id, EllipsisLoc);
   }
 
   T.consumeClose();
@@ -683,7 +714,7 @@ llvm::Optional<unsigned> Parser::ParseLambdaIntroducer(LambdaIntroducer &Intro) 
   return DiagResult();
 }
 
-/// TryParseLambdaExpression - Tentatively parse a lambda introducer.
+/// TryParseLambdaIntroducer - Tentatively parse a lambda introducer.
 ///
 /// Returns true if it hit something unexpected.
 bool Parser::TryParseLambdaIntroducer(LambdaIntroducer &Intro) {

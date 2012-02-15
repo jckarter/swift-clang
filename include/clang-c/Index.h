@@ -1500,7 +1500,13 @@ enum CXCursorKind {
    */
   CXCursor_OverloadedDeclRef             = 49,
   
-  CXCursor_LastRef                       = CXCursor_OverloadedDeclRef,
+  /**
+   * \brief A reference to a variable that occurs in some non-expression 
+   * context, e.g., a C++ lambda capture list.
+   */
+  CXCursor_VariableRef                   = 50,
+  
+  CXCursor_LastRef                       = CXCursor_VariableRef,
 
   /* Error conditions */
   CXCursor_FirstInvalid                  = 70,
@@ -1746,9 +1752,23 @@ enum CXCursorKind {
    */
   CXCursor_SizeOfPackExpr                = 143,
 
+  /* \brief Represents a C++ lambda expression that produces a local function
+   * object.
+   *
+   * \code
+   * void abssort(float *x, unsigned N) {
+   *   std::sort(x, x + N,
+   *             [](float a, float b) {
+   *               return std::abs(a) < std::abs(b);
+   *             });
+   * }
+   * \endcode
+   */
+  CXCursor_LambdaExpr                    = 144,
+  
   /** \brief Objective-c Boolean Literal.
    */
-  CXCursor_ObjCBoolLiteralExpr            = 144,
+  CXCursor_ObjCBoolLiteralExpr           = 145,
 
   CXCursor_LastExpr                      = CXCursor_ObjCBoolLiteralExpr,
 
@@ -3984,6 +4004,20 @@ typedef void *CXRemapping;
 CINDEX_LINKAGE CXRemapping clang_getRemappings(const char *path);
 
 /**
+ * \brief Retrieve a remapping.
+ *
+ * \param filePaths pointer to an array of file paths containing remapping info.
+ *
+ * \param numFiles number of file paths.
+ *
+ * \returns the requested remapping. This remapping must be freed
+ * via a call to \c clang_remap_dispose(). Can return NULL if an error occurred.
+ */
+CINDEX_LINKAGE
+CXRemapping clang_getRemappingsFromFileList(const char **filePaths,
+                                            unsigned numFiles);
+
+/**
  * \brief Determine the number of remappings.
  */
 CINDEX_LINKAGE unsigned clang_remap_getNumFiles(CXRemapping);
@@ -4465,7 +4499,13 @@ typedef enum {
    * \brief Function-local symbols should be indexed. If this is not set
    * function-local symbols will be ignored.
    */
-  CXIndexOpt_IndexFunctionLocalSymbols = 0x2
+  CXIndexOpt_IndexFunctionLocalSymbols = 0x2,
+
+  /**
+   * \brief Implicit function/class template instantiations should be indexed.
+   * If this is not set, implicit instantiations will be ignored.
+   */
+  CXIndexOpt_IndexImplicitTemplateInstantiations = 0x4
 } CXIndexOptFlags;
 
 /**

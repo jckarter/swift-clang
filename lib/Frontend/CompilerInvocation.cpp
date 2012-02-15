@@ -430,6 +430,7 @@ static const char *getActionName(frontend::ActionKind Kind) {
   case frontend::RewriteObjC:            return "-rewrite-objc";
   case frontend::RewriteTest:            return "-rewrite-test";
   case frontend::RunAnalysis:            return "-analyze";
+  case frontend::MigrateSource:          return "-migrate";
   case frontend::RunPreprocessorOnly:    return "-Eonly";
   }
 
@@ -1371,6 +1372,8 @@ static InputKind ParseFrontendArgs(FrontendOptions &Opts, ArgList &Args,
       Opts.ProgramAction = frontend::RewriteTest; break;
     case OPT_analyze:
       Opts.ProgramAction = frontend::RunAnalysis; break;
+    case OPT_migrate:
+      Opts.ProgramAction = frontend::MigrateSource; break;
     case OPT_Eonly:
       Opts.ProgramAction = frontend::RunPreprocessorOnly; break;
     }

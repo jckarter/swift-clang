@@ -1578,7 +1578,8 @@ static TryCastResult TryReinterpretCast(Sema &Self, ExprResult &SrcExpr,
     }
 
     // A valid member pointer cast.
-    Kind = IsLValueCast? CK_LValueBitCast : CK_BitCast;
+    assert(!IsLValueCast);
+    Kind = CK_ReinterpretMemberPointer;
     return TC_Success;
   }
 

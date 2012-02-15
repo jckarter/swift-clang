@@ -44,7 +44,10 @@ public:
   
   bool initFromDisk(StringRef outputDir, DiagnosticsEngine &Diag,
                     bool ignoreIfFilesChanged);
+  bool initFromFile(StringRef filePath, DiagnosticsEngine &Diag,
+                    bool ignoreIfFilesChanged);
   bool flushToDisk(StringRef outputDir, DiagnosticsEngine &Diag);
+  bool flushToFile(StringRef outputPath, DiagnosticsEngine &Diag);
 
   bool overwriteOriginal(DiagnosticsEngine &Diag,
                          StringRef outputDir = StringRef());

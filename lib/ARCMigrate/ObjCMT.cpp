@@ -37,16 +37,18 @@ public:
   llvm::OwningPtr<edit::EditedSource> Editor;
   FileRemapper &Remapper;
   FileManager &FileMgr;
+  bool IsOutputFile;
 
   ObjCMigrateASTConsumer(StringRef migrateDir,
                          bool migrateLiterals,
                          bool migrateSubscripting,
                          FileRemapper &remapper,
-                         FileManager &fileMgr)
+                         FileManager &fileMgr,
+                         bool isOutputFile = false)
   : MigrateDir(migrateDir),
     MigrateLiterals(migrateLiterals),
     MigrateSubscripting(migrateSubscripting),
-    Remapper(remapper), FileMgr(fileMgr) { }
+    Remapper(remapper), FileMgr(fileMgr), IsOutputFile(isOutputFile) { }
 
 protected:
   virtual void Initialize(ASTContext &Context) {
@@ -191,5 +193,19 @@ void ObjCMigrateASTConsumer::HandleTranslationUnit(ASTContext &Ctx) {
     Remapper.remap(filePath.str(), memBuf);
   }
 
-  Remapper.flushToDisk(MigrateDir, Ctx.getDiagnostics());
+  if (IsOutputFile) {
+    Remapper.flushToFile(MigrateDir, Ctx.getDiagnostics());
+  } else {
+    Remapper.flushToDisk(MigrateDir, Ctx.getDiagnostics());
+  }
+}
+
+ASTConsumer *MigrateSourceAction::CreateASTConsumer(CompilerInstance &CI,
+                                                  StringRef InFile) {
+  return new ObjCMigrateASTConsumer(CI.getFrontendOpts().OutputFile,
+                                    /*MigrateLiterals=*/true,
+                                    /*MigrateSubscripting=*/true,
+                                    Remapper,
+                                    CI.getFileManager(),
+                                    /*isOutputFile=*/true); 
 }
