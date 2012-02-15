@@ -1134,6 +1134,7 @@ Value *ScalarExprEmitter::VisitCastExpr(CastExpr *CE) {
     return CGF.CGM.getCXXABI().EmitNullMemberPointer(MPT);
   }
 
+  case CK_ReinterpretMemberPointer:
   case CK_BaseToDerivedMemberPointer:
   case CK_DerivedToBaseMemberPointer: {
     Value *Src = Visit(E);
