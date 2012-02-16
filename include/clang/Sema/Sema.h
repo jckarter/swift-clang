@@ -3227,9 +3227,7 @@ public:
                          MultiExprArg PlacementArgs,
                          SourceLocation PlacementRParen,
                          SourceRange TypeIdParens, Declarator &D,
-                         SourceLocation ConstructorLParen,
-                         MultiExprArg ConstructorArgs,
-                         SourceLocation ConstructorRParen);
+                         Expr *Initializer);
   ExprResult BuildCXXNew(SourceLocation StartLoc, bool UseGlobal,
                          SourceLocation PlacementLParen,
                          MultiExprArg PlacementArgs,
@@ -3238,9 +3236,8 @@ public:
                          QualType AllocType,
                          TypeSourceInfo *AllocTypeInfo,
                          Expr *ArraySize,
-                         SourceLocation ConstructorLParen,
-                         MultiExprArg ConstructorArgs,
-                         SourceLocation ConstructorRParen,
+                         SourceRange DirectInitRange,
+                         Expr *Initializer,
                          bool TypeMayContainAuto = true);
 
   bool CheckAllocatedType(QualType AllocType, SourceLocation Loc,
