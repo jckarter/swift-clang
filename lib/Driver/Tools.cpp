@@ -2413,11 +2413,6 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
                     options::OPT_fno_diagnostics_fixit_info))
     CmdArgs.push_back("-fno-diagnostics-fixit-info");
 
-  // Enable -fdiagnostics-show-name by default.
-  if (Args.hasFlag(options::OPT_fdiagnostics_show_name,
-                   options::OPT_fno_diagnostics_show_name, false))
-    CmdArgs.push_back("-fdiagnostics-show-name");
-
   // Enable -fdiagnostics-show-option by default.
   if (Args.hasFlag(options::OPT_fdiagnostics_show_option,
                    options::OPT_fno_diagnostics_show_option))
@@ -4349,7 +4344,7 @@ void solaris::Link::ConstructJob(Compilation &C, const JobAction &JA,
   if (!Args.hasArg(options::OPT_nostdlib) &&
       !Args.hasArg(options::OPT_nodefaultlibs)) {
     CmdArgs.push_back("-lgcc");
-    CmdArgs.push_back("-lgcc_eh");
+    CmdArgs.push_back("-lgcc_s");
     if (!Args.hasArg(options::OPT_shared))
       CmdArgs.push_back("-lc");
 
