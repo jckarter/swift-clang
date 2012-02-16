@@ -1157,8 +1157,8 @@ def err_temp_copy_ambiguous : Error<
 def err_temp_copy_deleted : Error<
   "%select{copying variable|copying parameter|returning object|throwing "
   "object|copying member subobject|copying array element|allocating object|"
-  "copying temporary|initializing base subobject|initializing vector element}0 "
-  "of type %1 invokes deleted constructor|capturing value">;
+  "copying temporary|initializing base subobject|initializing vector element|"
+  "capturing value}0 of type %1 invokes deleted constructor">;
 def err_temp_copy_incomplete : Error<
   "copying a temporary object of incomplete type %0">;
 def warn_cxx98_compat_temp_copy : Warning<
@@ -2104,6 +2104,10 @@ def err_ref_init_ambiguous : Error<
   "reference initialization of type %0 with initializer of type %1 is ambiguous">;
 def err_ovl_deleted_init : Error<
   "call to %select{unavailable|deleted}0 constructor of %1">;
+def err_ovl_deleted_special_init : Error<
+  "call to implicitly-deleted %select{default constructor|copy constructor|"
+  "move constructor|copy assignment operator|move assignment operator|"
+  "destructor|function}0 of %1">;
 def err_ovl_ambiguous_oper_unary : Error<
   "use of overloaded operator '%0' is ambiguous (operand type %1)">;
 def err_ovl_ambiguous_oper_binary : Error<
@@ -2111,6 +2115,10 @@ def err_ovl_ambiguous_oper_binary : Error<
 def err_ovl_no_viable_oper : Error<"no viable overloaded '%0'">;
 def err_ovl_deleted_oper : Error<
   "overload resolution selected %select{unavailable|deleted}0 operator '%1'%2">;
+def err_ovl_deleted_special_oper : Error<
+  "overload resolution selected implicitly-deleted %select{default constructor|"
+  "copy constructor|move constructor|copy assignment operator|move assignment "
+  "operator|destructor|'%1'}0%2">;
 def err_ovl_no_viable_subscript :
     Error<"no viable overloaded operator[] for type %0">;
 def err_ovl_no_oper :
@@ -3542,7 +3550,11 @@ def err_array_init_non_constant_array : Error<
   "cannot initialize array of type %0 with non-constant array of type %1">;
 def ext_array_init_copy : Extension<
   "initialization of an array of type %0 from a compound literal of type %1 is "
-  "a GNU extension">;
+  "a GNU extension">, InGroup<GNU>;
+// This is intentionally not disabled by -Wno-gnu.
+def ext_array_init_parens : ExtWarn<
+  "parenthesized initialization of a member array is a GNU extension">,
+  InGroup<DiagGroup<"gnu-array-member-paren-init">>, DefaultError;
 def warn_deprecated_string_literal_conversion : Warning<
   "conversion from string literal to %0 is deprecated">, InGroup<DeprecatedWritableStr>;
 def err_realimag_invalid_type : Error<"invalid type %0 to %1 operator">;
@@ -4059,6 +4071,9 @@ let CategoryName = "Lambda Issue" in {
     "capture of variable '%0' as type %1 calls %select{private|protected}3 "
     "%select{default |copy |move |*ERROR* |*ERROR* |*ERROR* |}2constructor">,
     AccessControl;
+  def note_lambda_to_block_conv : Note<
+    "implicit capture of lambda object due to conversion to block pointer "
+    "here">;
 }
 
 def err_operator_arrow_circular : Error<
@@ -4307,6 +4322,8 @@ def err_typecheck_call_too_many_args_at_most : Error<
   "expected at most %1, have %2">;
 def note_callee_decl : Note<
   "%0 declared here">;
+def note_defined_here : Note<"%0 defined here">;
+
 def warn_call_wrong_number_of_arguments : Warning<
   "too %select{few|many}0 arguments in call to %1">;
 def err_atomic_builtin_must_be_pointer : Error<
