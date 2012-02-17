@@ -5,6 +5,7 @@ set( LLVM_USED_LIBS
   clangBasic
   clangCodeGen
   clangDriver
+  clangEdit
   clangFrontend
   clangIndex
   clangLex

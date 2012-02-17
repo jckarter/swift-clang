@@ -2,7 +2,16 @@
 
 typedef unsigned char BOOL;
 
-@interface NSNumber @end
+@protocol NSCopying
+- copy;
+@end
+
+@interface NSObject
+@end
+
+@interface NSNumber : NSObject <NSCopying>
+-copy;
+@end
 
 @interface NSNumber (NSNumberCreation)
 + (NSNumber *)numberWithChar:(char)value;
@@ -20,7 +29,8 @@ typedef unsigned char BOOL;
 + (NSNumber *)numberWithBool:(BOOL)value;
 @end
 
-@interface NSArray
+@interface NSArray : NSObject <NSCopying>
+-copy;
 @end
 
 @interface NSArray (NSArrayCreation)
@@ -28,7 +38,7 @@ typedef unsigned char BOOL;
 @end
 
 @interface NSDictionary
-+ (id)dictionaryWithObjects:(const id [])objects forKeys:(const id [])keys count:(unsigned long)cnt;
++ (id)dictionaryWithObjects:(const id [])objects forKeys:(const id<NSCopying> [])keys count:(unsigned long)cnt;
 @end
 
 template<typename T>
@@ -39,6 +49,12 @@ struct ConvertibleTo {
 template<typename T>
 struct ExplicitlyConvertibleTo {
   explicit operator T();
+};
+
+template<typename T>
+class PrivateConvertibleTo {
+private:
+  operator T(); // expected-note{{declared private here}}
 };
 
 template<typename T> ConvertibleTo<T> makeConvertible();
@@ -75,6 +91,7 @@ void test_convertibility(ConvertibleTo<NSArray*> toArray,
   X x;
   id array4 = @[ x.x ];
   id array5 = @[ x.get ]; // expected-error{{reference to non-static member function must be called}}
+  id array6 = @[ PrivateConvertibleTo<NSArray*>() ]; // expected-error{{operator NSArray *' is a private member of 'PrivateConvertibleTo<NSArray *>'}}
 }
 
 template<typename T>
@@ -88,10 +105,15 @@ template void test_array_literals(int); // expected-note{{in instantiation of fu
 
 template<typename T, typename U>
 void test_dictionary_literals(T t, U u) {
+  NSObject *object;
   id dict = @{ 
     @17 : t, // expected-error{{collection element of type 'int' is not an Objective-C object}}
     u : @42 // expected-error{{collection element of type 'int' is not an Objective-C object}}
   };
+
+  id dict2 = @{ 
+    object : @"object" // expected-error{{cannot initialize a parameter of type 'const id<NSCopying>' with an rvalue of type 'NSObject *'}}
+  }; 
 }
 
 template void test_dictionary_literals(id, NSArray*);
