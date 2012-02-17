@@ -7,7 +7,11 @@ typedef unsigned long NSUInteger;
 typedef unsigned int NSUInteger;
 #endif
 
-@interface NSNumber
+@interface NSObject
++ (NSObject*)nsobject;
+@end
+
+@interface NSNumber : NSObject
 + (NSNumber *)numberWithChar:(char)value;
 + (NSNumber *)numberWithInt:(int)value;
 + (NSNumber *)numberWithFloat:(float)value;
@@ -37,12 +41,16 @@ NSDictionary *err() {
   return @{@"name" : @"value"}; // expected-error {{declaration of 'dictionaryWithObjects:forKeys:count:' is missing in NSDictionary class}}
 }
 
-@interface NSDate
+@interface NSDate : NSObject
 + (NSDate *) date;
 @end
 
-@interface NSDictionary
-+ (id)dictionaryWithObjects:(const id [])objects forKeys:(const id [])keys count:(NSUInteger)cnt;
+@protocol NSCopying
+- copy;
+@end
+
+@interface NSDictionary : NSObject
++ (id)dictionaryWithObjects:(const id [])objects forKeys:(const id<NSCopying> [])keys count:(NSUInteger)cnt;
 @end
 
 id NSUserName();
@@ -55,6 +63,13 @@ NSDictionary * blocks() {
 
 NSDictionary * warn() {
   NSDictionary *dictionary = @{@"name" : NSUserName(),
+                               @"date" : [NSDate date],
+                               @"name2" : @"other",
+                               NSObject.nsobject : @"nsobject" }; // expected-warning{{passing 'NSObject *' to parameter of incompatible type 'const id<NSCopying>'}}
+  NSDictionary *dictionary2 = @{@"name" : Int()}; // expected-error {{collection element of type 'int' is not an Objective-C object}}
+
+  NSObject *o;
+  NSDictionary *dictionary3 = @{o : o, // expected-warning{{passing 'NSObject *' to parameter of incompatible type 'const id<NSCopying>'}}
                                @"date" : [NSDate date] };
-  return @{@"name" : Int()}; // expected-error {{collection element of type 'int' is not an Objective-C object}}
+  return dictionary3;
 }

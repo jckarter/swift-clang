@@ -266,34 +266,26 @@ static ExprResult CheckObjCCollectionLiteralElement(Sema &S, Expr *Element,
     return ExprError();
   Element = Result.get();
 
-  Expr *OrigElement = Element;
   // In C++, check for an implicit conversion to an Objective-C object pointer 
   // type.
   if (S.getLangOptions().CPlusPlus && Element->getType()->isRecordType()) {
-    QualType Id = S.Context.getObjCIdType();
-    ImplicitConversionSequence ICS
-      = S.TryImplicitConversion(Element, Id,
-                                /*SuppressUserConversions=*/false,
-                                /*AllowExplicit=*/false,
-                                /*InOverloadResolution=*/false,
-                                /*CStyle=*/false,
-                                /*AllowObjCWritebackConversion=*/false);
-    if (ICS.isUserDefined()) {
-      ExprResult Converted = S.PerformImplicitConversion(Element, Id, ICS,
-                                                         Sema::AA_Converting);
-      if (Converted.isInvalid())
-        return ExprError();
-      
-      Element = Converted.get();
-    }
+    InitializedEntity Entity
+      = InitializedEntity::InitializeParameter(S.Context, T, /*Consumed=*/false);
+    InitializationKind Kind
+      = InitializationKind::CreateCopy(Element->getLocStart(), SourceLocation());
+    InitializationSequence Seq(S, Entity, Kind, &Element, 1);
+    if (!Seq.Failed())
+      return Seq.Perform(S, Entity, Kind, MultiExprArg(S, &Element, 1));
   }
+
+  Expr *OrigElement = Element;
 
   // Perform lvalue-to-rvalue conversion.
   Result = S.DefaultLvalueConversion(Element);
   if (Result.isInvalid())
     return ExprError();
-  Element = Result.get();
-  
+  Element = Result.get();  
+
   // Make sure that we have an Objective-C pointer type or block.
   if (!Element->getType()->isObjCObjectPointerType() &&
       !Element->getType()->isBlockPointerType()) {
@@ -349,10 +341,10 @@ static ExprResult CheckObjCCollectionLiteralElement(Sema &S, Expr *Element,
   
   // Make sure that the element has the type that the container factory 
   // function expects. 
-  if (!S.Context.hasSameType(T, Element->getType()))
-    Result = S.PerformImplicitConversion(Element, T, Sema::AA_Sending);
-  
-  return Result;
+  return S.PerformCopyInitialization(
+           InitializedEntity::InitializeParameter(S.Context, T, 
+                                                  /*Consumed=*/false),
+           Element->getLocStart(), Element);
 }
 
 ExprResult Sema::BuildObjCSubscriptExpression(SourceLocation RB, Expr *BaseExpr,
