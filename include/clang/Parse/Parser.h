@@ -1475,6 +1475,7 @@ private:
       return ParseAssignmentExpression();
     return ParseBraceInitializer();
   }
+  bool MayBeDesignationStart();
   ExprResult ParseBraceInitializer();
   ExprResult ParseInitializerWithPotentialDesignator();
 
