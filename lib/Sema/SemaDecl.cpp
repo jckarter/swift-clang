@@ -3920,20 +3920,24 @@ Sema::ActOnVariableDeclarator(Scope *S, Declarator &D, DeclContext *DC,
       } else if (SC == SC_None)
         SC = SC_Static;
     }
-    if (SC == SC_Static) {
+    if (SC == SC_Static && CurContext->isRecord()) {
       if (const CXXRecordDecl *RD = dyn_cast<CXXRecordDecl>(DC)) {
         if (RD->isLocalClass())
           Diag(D.getIdentifierLoc(),
                diag::err_static_data_member_not_allowed_in_local_class)
             << Name << RD->getDeclName();
 
-        // C++ [class.union]p1: If a union contains a static data member,
-        // the program is ill-formed.
-        //
-        // We also disallow static data members in anonymous structs.
-        if (CurContext->isRecord() && (RD->isUnion() || !RD->getDeclName()))
+        // C++98 [class.union]p1: If a union contains a static data member,
+        // the program is ill-formed. C++11 drops this restriction.
+        if (RD->isUnion())
           Diag(D.getIdentifierLoc(),
-               diag::err_static_data_member_not_allowed_in_union_or_anon_struct)
+               getLangOptions().CPlusPlus0x
+                 ? diag::warn_cxx98_compat_static_data_member_in_union
+                 : diag::ext_static_data_member_in_union) << Name;
+        // We conservatively disallow static data members in anonymous structs.
+        else if (!RD->getDeclName())
+          Diag(D.getIdentifierLoc(),
+               diag::err_static_data_member_not_allowed_in_anon_struct)
             << Name << RD->isUnion();
       }
     }
@@ -4435,11 +4439,26 @@ namespace {
 namespace {
 
 // Callback to only accept typo corrections that have a non-zero edit distance.
+// Also only accept corrections that have the same parent decl.
 class DifferentNameValidatorCCC : public CorrectionCandidateCallback {
  public:
+  DifferentNameValidatorCCC(CXXRecordDecl *Parent)
+      : ExpectedParent(Parent ? Parent->getCanonicalDecl() : 0) {}
+
   virtual bool ValidateCandidate(const TypoCorrection &candidate) {
-    return candidate.getEditDistance() > 0;
+    if (candidate.getEditDistance() == 0)
+      return false;
+
+    if (CXXMethodDecl *MD = candidate.getCorrectionDeclAs<CXXMethodDecl>()) {
+      CXXRecordDecl *Parent = MD->getParent();
+      return Parent && Parent->getCanonicalDecl() == ExpectedParent;
+    }
+
+    return !ExpectedParent;
   }
+
+ private:
+  CXXRecordDecl *ExpectedParent;
 };
 
 }
@@ -4473,7 +4492,8 @@ static NamedDecl* DiagnoseInvalidRedeclaration(
   SemaRef.LookupQualifiedName(Prev, NewDC);
   assert(!Prev.isAmbiguous() &&
          "Cannot have an ambiguity in previous-declaration lookup");
-  DifferentNameValidatorCCC Validator;
+  CXXMethodDecl *MD = dyn_cast<CXXMethodDecl>(NewFD);
+  DifferentNameValidatorCCC Validator(MD ? MD->getParent() : 0);
   if (!Prev.empty()) {
     for (LookupResult::iterator Func = Prev.begin(), FuncEnd = Prev.end();
          Func != FuncEnd; ++Func) {

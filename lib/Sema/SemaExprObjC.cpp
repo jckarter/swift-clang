@@ -266,34 +266,26 @@ static ExprResult CheckObjCCollectionLiteralElement(Sema &S, Expr *Element,
     return ExprError();
   Element = Result.get();
 
-  Expr *OrigElement = Element;
   // In C++, check for an implicit conversion to an Objective-C object pointer 
   // type.
   if (S.getLangOptions().CPlusPlus && Element->getType()->isRecordType()) {
-    QualType Id = S.Context.getObjCIdType();
-    ImplicitConversionSequence ICS
-      = S.TryImplicitConversion(Element, Id,
-                                /*SuppressUserConversions=*/false,
-                                /*AllowExplicit=*/false,
-                                /*InOverloadResolution=*/false,
-                                /*CStyle=*/false,
-                                /*AllowObjCWritebackConversion=*/false);
-    if (ICS.isUserDefined()) {
-      ExprResult Converted = S.PerformImplicitConversion(Element, Id, ICS,
-                                                         Sema::AA_Converting);
-      if (Converted.isInvalid())
-        return ExprError();
-      
-      Element = Converted.get();
-    }
+    InitializedEntity Entity
+      = InitializedEntity::InitializeParameter(S.Context, T, /*Consumed=*/false);
+    InitializationKind Kind
+      = InitializationKind::CreateCopy(Element->getLocStart(), SourceLocation());
+    InitializationSequence Seq(S, Entity, Kind, &Element, 1);
+    if (!Seq.Failed())
+      return Seq.Perform(S, Entity, Kind, MultiExprArg(S, &Element, 1));
   }
+
+  Expr *OrigElement = Element;
 
   // Perform lvalue-to-rvalue conversion.
   Result = S.DefaultLvalueConversion(Element);
   if (Result.isInvalid())
     return ExprError();
-  Element = Result.get();
-  
+  Element = Result.get();  
+
   // Make sure that we have an Objective-C pointer type or block.
   if (!Element->getType()->isObjCObjectPointerType() &&
       !Element->getType()->isBlockPointerType()) {
@@ -349,10 +341,10 @@ static ExprResult CheckObjCCollectionLiteralElement(Sema &S, Expr *Element,
   
   // Make sure that the element has the type that the container factory 
   // function expects. 
-  if (!S.Context.hasSameType(T, Element->getType()))
-    Result = S.PerformImplicitConversion(Element, T, Sema::AA_Sending);
-  
-  return Result;
+  return S.PerformCopyInitialization(
+           InitializedEntity::InitializeParameter(S.Context, T, 
+                                                  /*Consumed=*/false),
+           Element->getLocStart(), Element);
 }
 
 ExprResult Sema::BuildObjCSubscriptExpression(SourceLocation RB, Expr *BaseExpr,
@@ -2445,6 +2437,68 @@ KnownName(Sema &S, const char *name) {
   return S.LookupName(R, S.TUScope, false);
 }
 
+static void addFixitForObjCARCConversion(Sema &S,
+                                         DiagnosticBuilder &DiagB,
+                                         Sema::CheckedConversionKind CCK,
+                                         SourceLocation afterLParen,
+                                         QualType castType,
+                                         Expr *castExpr,
+                                         const char *bridgeKeyword,
+                                         const char *CFBridgeName) {
+  // We handle C-style and implicit casts here.
+  switch (CCK) {
+  case Sema::CCK_ImplicitConversion:
+  case Sema::CCK_CStyleCast:
+    break;
+  case Sema::CCK_FunctionalCast:
+  case Sema::CCK_OtherCast:
+    return;
+  }
+
+  if (CFBridgeName) {
+    Expr *castedE = castExpr;
+    if (CStyleCastExpr *CCE = dyn_cast<CStyleCastExpr>(castedE))
+      castedE = CCE->getSubExpr();
+    castedE = castedE->IgnoreImpCasts();
+    SourceRange range = castedE->getSourceRange();
+    if (isa<ParenExpr>(castedE)) {
+      DiagB.AddFixItHint(FixItHint::CreateInsertion(range.getBegin(),
+                         CFBridgeName));
+    } else {
+      std::string namePlusParen = CFBridgeName;
+      namePlusParen += "(";
+      DiagB.AddFixItHint(FixItHint::CreateInsertion(range.getBegin(),
+                                                    namePlusParen));
+      DiagB.AddFixItHint(FixItHint::CreateInsertion(
+                                       S.PP.getLocForEndOfToken(range.getEnd()),
+                                       ")"));
+    }
+    return;
+  }
+
+  if (CCK == Sema::CCK_CStyleCast) {
+    DiagB.AddFixItHint(FixItHint::CreateInsertion(afterLParen, bridgeKeyword));
+  } else {
+    std::string castCode = "(";
+    castCode += bridgeKeyword;
+    castCode += castType.getAsString();
+    castCode += ")";
+    Expr *castedE = castExpr->IgnoreImpCasts();
+    SourceRange range = castedE->getSourceRange();
+    if (isa<ParenExpr>(castedE)) {
+      DiagB.AddFixItHint(FixItHint::CreateInsertion(range.getBegin(),
+                         castCode));
+    } else {
+      castCode += "(";
+      DiagB.AddFixItHint(FixItHint::CreateInsertion(range.getBegin(),
+                                                    castCode));
+      DiagB.AddFixItHint(FixItHint::CreateInsertion(
+                                       S.PP.getLocForEndOfToken(range.getEnd()),
+                                       ")"));
+    }
+  }
+}
+
 static void
 diagnoseObjCARCConversion(Sema &S, SourceRange castRange,
                           QualType castType, ARCConversionTypeClass castACTC,
@@ -2490,14 +2544,18 @@ diagnoseObjCARCConversion(Sema &S, SourceRange castRange,
       << castRange
       << castExpr->getSourceRange();
     bool br = KnownName(S, "CFBridgingRelease");
-    S.Diag(noteLoc, diag::note_arc_bridge)
-      << (CCK != Sema::CCK_CStyleCast ? FixItHint() :
-            FixItHint::CreateInsertion(afterLParen, "__bridge "));
-    S.Diag(noteLoc, diag::note_arc_bridge_transfer)
-      << castExprType << br 
-      << (CCK != Sema::CCK_CStyleCast ? FixItHint() :
-          FixItHint::CreateInsertion(afterLParen, 
-                                br ? "CFBridgingRelease " : "__bridge_transfer "));
+    {
+      DiagnosticBuilder DiagB = S.Diag(noteLoc, diag::note_arc_bridge);
+      addFixitForObjCARCConversion(S, DiagB, CCK, afterLParen,
+                                   castType, castExpr, "__bridge ", 0);
+    }
+    {
+      DiagnosticBuilder DiagB = S.Diag(noteLoc, diag::note_arc_bridge_transfer)
+        << castExprType << br;
+      addFixitForObjCARCConversion(S, DiagB, CCK, afterLParen,
+                                   castType, castExpr, "__bridge_transfer ",
+                                   br ? "CFBridgingRelease" : 0);
+    }
 
     return;
   }
@@ -2514,14 +2572,18 @@ diagnoseObjCARCConversion(Sema &S, SourceRange castRange,
       << castRange
       << castExpr->getSourceRange();
 
-    S.Diag(noteLoc, diag::note_arc_bridge)
-      << (CCK != Sema::CCK_CStyleCast ? FixItHint() :
-            FixItHint::CreateInsertion(afterLParen, "__bridge "));
-    S.Diag(noteLoc, diag::note_arc_bridge_retained)
-      << castType << br
-      << (CCK != Sema::CCK_CStyleCast ? FixItHint() :
-          FixItHint::CreateInsertion(afterLParen, 
-                              br ? "CFBridgingRetain " : "__bridge_retained"));
+    {
+      DiagnosticBuilder DiagB = S.Diag(noteLoc, diag::note_arc_bridge);
+      addFixitForObjCARCConversion(S, DiagB, CCK, afterLParen,
+                                   castType, castExpr, "__bridge ", 0);
+    }
+    {
+      DiagnosticBuilder DiagB = S.Diag(noteLoc, diag::note_arc_bridge_retained)
+        << castType << br;
+      addFixitForObjCARCConversion(S, DiagB, CCK, afterLParen,
+                                   castType, castExpr, "__bridge_retained ",
+                                   br ? "CFBridgingRetain" : 0);
+    }
 
     return;
   }
