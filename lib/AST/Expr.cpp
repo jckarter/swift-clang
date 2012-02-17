@@ -1512,9 +1512,10 @@ SourceRange InitListExpr::getSourceRange() const {
 
 /// getFunctionType - Return the underlying function type for this block.
 ///
-const FunctionType *BlockExpr::getFunctionType() const {
-  return getType()->getAs<BlockPointerType>()->
-                    getPointeeType()->getAs<FunctionType>();
+const FunctionProtoType *BlockExpr::getFunctionType() const {
+  // The block pointer is never sugared, but the function type might be.
+  return cast<BlockPointerType>(getType())
+           ->getPointeeType()->castAs<FunctionProtoType>();
 }
 
 SourceLocation BlockExpr::getCaretLocation() const {
@@ -2041,10 +2042,7 @@ Expr::CanThrowResult Expr::CanThrow(ASTContext &C) const {
     if (isTypeDependent())
       CT = CT_Dependent;
     else
-      CT = MergeCanThrow(
-        CanCalleeThrow(C, this, cast<CXXNewExpr>(this)->getOperatorNew()),
-        CanCalleeThrow(C, this, cast<CXXNewExpr>(this)->getConstructor(),
-                       /*NullThrows*/false));
+      CT = CanCalleeThrow(C, this, cast<CXXNewExpr>(this)->getOperatorNew());
     if (CT == CT_Can)
       return CT;
     return MergeCanThrow(CT, CanSubExprsThrow(C, this));
