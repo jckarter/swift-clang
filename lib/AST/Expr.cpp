@@ -2080,6 +2080,16 @@ Expr::CanThrowResult Expr::CanThrow(ASTContext &C) const {
     // specs.
   case ObjCMessageExprClass:
   case ObjCPropertyRefExprClass:
+  case ObjCSubscriptRefExprClass:
+    return CT_Can;
+
+    // All the ObjC literals that are implemented as calls are
+    // potentially throwing unless we decide to close off that
+    // possibility.
+  case ObjCArrayLiteralClass:
+  case ObjCBoolLiteralExprClass:
+  case ObjCDictionaryLiteralClass:
+  case ObjCNumericLiteralClass:
     return CT_Can;
 
     // Many other things have subexpressions, so we have to test those.
