@@ -27,8 +27,8 @@ def VADDHN  : IInst<"vaddhn", "hkk", "silUsUiUl">;
 def VRADDHN : IInst<"vraddhn", "hkk", "silUsUiUl">;
 def VADDL_HIGH : SInst<"vaddl_high", "ndd", "RcRsRiRUcRUsRUi">;
 def VADDW_HIGH : SInst<"vaddw_high", "ndd", "RcRsRiRUcRUsRUi">;
-def VADDHN_HIGH  : SInst<"vaddhn_high",  "hhdd", "RsRiRlRUsRUiRUl">;
-def VRADDHN_HIGH : SInst<"vraddhn_high", "hhdd", "RsRiRlRUsRUiRUl">;
+def VADDHN_HIGH  : SInst<"vaddhn_high",  "hbdd", "RsRiRlRUsRUiRUl">;
+def VRADDHN_HIGH : SInst<"vraddhn_high", "hbdd", "RsRiRlRUsRUiRUl">;
 
 ////////////////////////////////////////////////////////////////////////////////
 // Multiplication
@@ -78,8 +78,8 @@ def VSUBHN  : IInst<"vsubhn", "hkk", "silUsUiUl">;
 def VRSUBHN : IInst<"vrsubhn", "hkk", "silUsUiUl">;
 def VSUBL_HIGH   : SInst<"vsubl_high",   "ndd", "RcRsRiRUcRUsRUi">;
 def VSUBW_HIGH   : SInst<"vsubw_high",   "ndd", "RcRsRiRUcRUsRUi">;
-def VRSUBHN_HIGH : SInst<"vrsubhn_high", "hhdd", "RsRiRl">;
-def VSUBHN_HIGH  : SInst<"vsubhn_high",   "hhdd", "RsRiRl">;
+def VRSUBHN_HIGH : SInst<"vrsubhn_high", "hbdd", "RsRiRl">;
+def VSUBHN_HIGH  : SInst<"vsubhn_high",   "hbdd", "RsRiRl">;
 
 ////////////////////////////////////////////////////////////////////////////////
 // Comparison
