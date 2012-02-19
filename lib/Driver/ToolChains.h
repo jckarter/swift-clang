@@ -79,7 +79,8 @@ protected:
     GCCVersion Version;
 
   public:
-    GCCInstallationDetector(const Driver &D, const llvm::Triple &TargetTriple);
+    GCCInstallationDetector(const Driver &D, const llvm::Triple &TargetTriple,
+                            const ArgList &Args);
 
     /// \brief Check whether we detected a valid GCC install.
     bool isValid() const { return IsValid; }
@@ -119,7 +120,7 @@ protected:
   mutable llvm::DenseMap<unsigned, Tool*> Tools;
 
 public:
-  Generic_GCC(const Driver &D, const llvm::Triple& Triple);
+  Generic_GCC(const Driver &D, const llvm::Triple& Triple, const ArgList &Args);
   ~Generic_GCC();
 
   virtual Tool &SelectTool(const Compilation &C, const JobAction &JA,
@@ -433,8 +434,8 @@ public:
 /// Darwin_Generic_GCC - Generic Darwin tool chain using gcc.
 class LLVM_LIBRARY_VISIBILITY Darwin_Generic_GCC : public Generic_GCC {
 public:
-  Darwin_Generic_GCC(const Driver &D, const llvm::Triple& Triple)
-    : Generic_GCC(D, Triple) {}
+  Darwin_Generic_GCC(const Driver &D, const llvm::Triple& Triple, const ArgList &Args)
+    : Generic_GCC(D, Triple, Args) {}
 
   std::string ComputeEffectiveClangTriple(const ArgList &Args,
                                           types::ID InputType) const;
@@ -445,8 +446,8 @@ public:
 class LLVM_LIBRARY_VISIBILITY Generic_ELF : public Generic_GCC {
   virtual void anchor();
 public:
-  Generic_ELF(const Driver &D, const llvm::Triple& Triple)
-    : Generic_GCC(D, Triple) {}
+  Generic_ELF(const Driver &D, const llvm::Triple& Triple, const ArgList &Args)
+    : Generic_GCC(D, Triple, Args) {}
 
   virtual bool IsIntegratedAssemblerDefault() const {
     // Default integrated assembler to on for x86.
@@ -457,7 +458,7 @@ public:
 
 class LLVM_LIBRARY_VISIBILITY AuroraUX : public Generic_GCC {
 public:
-  AuroraUX(const Driver &D, const llvm::Triple& Triple);
+  AuroraUX(const Driver &D, const llvm::Triple& Triple, const ArgList &Args);
 
   virtual Tool &SelectTool(const Compilation &C, const JobAction &JA,
                            const ActionList &Inputs) const;
@@ -465,7 +466,7 @@ public:
 
 class LLVM_LIBRARY_VISIBILITY Solaris : public Generic_GCC {
 public:
-  Solaris(const Driver &D, const llvm::Triple& Triple);
+  Solaris(const Driver &D, const llvm::Triple& Triple, const ArgList &Args);
 
   virtual Tool &SelectTool(const Compilation &C, const JobAction &JA,
                            const ActionList &Inputs) const;
@@ -476,7 +477,7 @@ public:
 
 class LLVM_LIBRARY_VISIBILITY OpenBSD : public Generic_ELF {
 public:
-  OpenBSD(const Driver &D, const llvm::Triple& Triple);
+  OpenBSD(const Driver &D, const llvm::Triple& Triple, const ArgList &Args);
 
   virtual Tool &SelectTool(const Compilation &C, const JobAction &JA,
                            const ActionList &Inputs) const;
@@ -484,7 +485,7 @@ public:
 
 class LLVM_LIBRARY_VISIBILITY FreeBSD : public Generic_ELF {
 public:
-  FreeBSD(const Driver &D, const llvm::Triple& Triple);
+  FreeBSD(const Driver &D, const llvm::Triple& Triple, const ArgList &Args);
 
   virtual Tool &SelectTool(const Compilation &C, const JobAction &JA,
                            const ActionList &Inputs) const;
@@ -492,7 +493,7 @@ public:
 
 class LLVM_LIBRARY_VISIBILITY NetBSD : public Generic_ELF {
 public:
-  NetBSD(const Driver &D, const llvm::Triple& Triple);
+  NetBSD(const Driver &D, const llvm::Triple& Triple, const ArgList &Args);
 
   virtual Tool &SelectTool(const Compilation &C, const JobAction &JA,
                            const ActionList &Inputs) const;
@@ -500,7 +501,7 @@ public:
 
 class LLVM_LIBRARY_VISIBILITY Minix : public Generic_ELF {
 public:
-  Minix(const Driver &D, const llvm::Triple& Triple);
+  Minix(const Driver &D, const llvm::Triple& Triple, const ArgList &Args);
 
   virtual Tool &SelectTool(const Compilation &C, const JobAction &JA,
                            const ActionList &Inputs) const;
@@ -508,7 +509,7 @@ public:
 
 class LLVM_LIBRARY_VISIBILITY DragonFly : public Generic_ELF {
 public:
-  DragonFly(const Driver &D, const llvm::Triple& Triple);
+  DragonFly(const Driver &D, const llvm::Triple& Triple, const ArgList &Args);
 
   virtual Tool &SelectTool(const Compilation &C, const JobAction &JA,
                            const ActionList &Inputs) const;
@@ -516,7 +517,7 @@ public:
 
 class LLVM_LIBRARY_VISIBILITY Linux : public Generic_ELF {
 public:
-  Linux(const Driver &D, const llvm::Triple& Triple);
+  Linux(const Driver &D, const llvm::Triple& Triple, const ArgList &Args);
 
   virtual bool HasNativeLLVMSupport() const;
 
