@@ -21,6 +21,7 @@
 #include "clang/Basic/PartialDiagnostic.h"
 #include "clang/Basic/VersionTuple.h"
 #include "clang/AST/Decl.h"
+#include "clang/AST/LambdaMangleContext.h"
 #include "clang/AST/NestedNameSpecifier.h"
 #include "clang/AST/PrettyPrinter.h"
 #include "clang/AST/TemplateName.h"
@@ -81,7 +82,7 @@ namespace clang {
 
 /// ASTContext - This class holds long-lived AST nodes (such as types and
 /// decls) that can be referred to throughout the semantic analysis of a file.
-class ASTContext : public llvm::RefCountedBase<ASTContext> {
+class ASTContext : public RefCountedBase<ASTContext> {
   ASTContext &this_() { return *this; }
 
   mutable std::vector<Type*> Types;
@@ -325,6 +326,10 @@ class ASTContext : public llvm::RefCountedBase<ASTContext> {
   /// \brief Mapping from lambda-to-block-pointer conversion functions to the
   /// expression used to copy the lambda object.
   llvm::DenseMap<const CXXConversionDecl *, Expr *> LambdaBlockPointerInits;
+  
+  /// \brief Mapping from each declaration context to its corresponding lambda 
+  /// mangling context.
+  llvm::DenseMap<const DeclContext *, LambdaMangleContext> LambdaMangleContexts;
   
   friend class CXXConversionDecl;
   
@@ -1766,6 +1771,8 @@ public:
   /// it is not used.
   bool DeclMustBeEmitted(const Decl *D);
 
+  /// \brief Retrieve the lambda mangling number for a lambda expression.
+  unsigned getLambdaManglingNumber(CXXMethodDecl *CallOperator);
   
   /// \brief Used by ParmVarDecl to store on the side the
   /// index of the parameter when it exceeds the size of the normal bitfield.
