@@ -960,14 +960,16 @@ void Driver::BuildInputs(const ToolChain &TC, const DerivedArgList &Args,
       // Check that the file exists, if enabled.
       if (CheckInputsExist && memcmp(Value, "-", 2) != 0) {
         SmallString<64> Path(Value);
-        if (Arg *WorkDir = Args.getLastArg(options::OPT_working_directory))
-          if (llvm::sys::path::is_absolute(Path.str())) {
-            Path = WorkDir->getValue(Args);
-            llvm::sys::path::append(Path, Value);
+        if (Arg *WorkDir = Args.getLastArg(options::OPT_working_directory)) {
+          SmallString<64> Directory(WorkDir->getValue(Args));
+          if (llvm::sys::path::is_absolute(Directory.str())) {
+            llvm::sys::path::append(Directory, Value);
+            Path.assign(Directory);
           }
+        }
 
         bool exists = false;
-        if (/*error_code ec =*/llvm::sys::fs::exists(Value, exists) || !exists)
+        if (llvm::sys::fs::exists(Path.c_str(), exists) || !exists)
           Diag(clang::diag::err_drv_no_such_file) << Path.str();
         else
           Inputs.push_back(std::make_pair(Ty, A));
@@ -1629,7 +1631,7 @@ const ToolChain &Driver::getToolChain(const ArgList &Args,
   if (!TC) {
     switch (Target.getOS()) {
     case llvm::Triple::AuroraUX:
-      TC = new toolchains::AuroraUX(*this, Target);
+      TC = new toolchains::AuroraUX(*this, Target, Args);
       break;
     case llvm::Triple::Darwin:
     case llvm::Triple::MacOSX:
@@ -1640,31 +1642,31 @@ const ToolChain &Driver::getToolChain(const ArgList &Args,
           Target.getArch() == llvm::Triple::thumb)
         TC = new toolchains::DarwinClang(*this, Target);
       else
-        TC = new toolchains::Darwin_Generic_GCC(*this, Target);
+        TC = new toolchains::Darwin_Generic_GCC(*this, Target, Args);
       break;
     case llvm::Triple::DragonFly:
-      TC = new toolchains::DragonFly(*this, Target);
+      TC = new toolchains::DragonFly(*this, Target, Args);
       break;
     case llvm::Triple::OpenBSD:
-      TC = new toolchains::OpenBSD(*this, Target);
+      TC = new toolchains::OpenBSD(*this, Target, Args);
       break;
     case llvm::Triple::NetBSD:
-      TC = new toolchains::NetBSD(*this, Target);
+      TC = new toolchains::NetBSD(*this, Target, Args);
       break;
     case llvm::Triple::FreeBSD:
-      TC = new toolchains::FreeBSD(*this, Target);
+      TC = new toolchains::FreeBSD(*this, Target, Args);
       break;
     case llvm::Triple::Minix:
-      TC = new toolchains::Minix(*this, Target);
+      TC = new toolchains::Minix(*this, Target, Args);
       break;
     case llvm::Triple::Linux:
       if (Target.getArch() == llvm::Triple::hexagon)
         TC = new toolchains::Hexagon_TC(*this, Target);
       else
-        TC = new toolchains::Linux(*this, Target);
+        TC = new toolchains::Linux(*this, Target, Args);
       break;
     case llvm::Triple::Solaris:
-      TC = new toolchains::Solaris(*this, Target);
+      TC = new toolchains::Solaris(*this, Target, Args);
       break;
     case llvm::Triple::Win32:
       TC = new toolchains::Windows(*this, Target);
@@ -1678,7 +1680,7 @@ const ToolChain &Driver::getToolChain(const ArgList &Args,
         break;
       }
 
-      TC = new toolchains::Generic_GCC(*this, Target);
+      TC = new toolchains::Generic_GCC(*this, Target, Args);
       break;
     }
   }

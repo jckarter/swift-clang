@@ -1137,6 +1137,33 @@ class Type(Structure):
         """Return the kind of this type."""
         return TypeKind.from_id(self._kind_id)
 
+    @property
+    def element_type(self):
+        """Retrieve the Type of elements within this Type.
+
+        If accessed on a type that is not an array, complex, or vector type, an
+        exception will be raised.
+        """
+        result = Type_get_element_type(self)
+        if result.kind == TypeKind.INVALID:
+            raise Exception('Element type not available on this type.')
+
+        return result
+
+    @property
+    def element_count(self):
+        """Retrieve the number of elements in this type.
+
+        Returns an int.
+
+        If the Type is not an array or vector, this raises.
+        """
+        result = Type_get_num_elements(self)
+        if result < 0:
+            raise Exception('Type does not have elements.')
+
+        return result
+
     @staticmethod
     def from_result(res, fn, args):
         assert isinstance(res, Type)
@@ -1177,6 +1204,12 @@ class Type(Structure):
         "restrict" at a different level.
         """
         return Type_is_restrict_qualified(self)
+
+    def is_function_variadic(self):
+        """Determine whether this function Type is a variadic function type."""
+        assert self.kind == TypeKind.FUNCTIONPROTO
+
+        return Type_is_variadic(self)
 
     def is_pod(self):
         """Determine whether this Type represents plain old data (POD)."""
@@ -1866,6 +1899,10 @@ Type_is_pod = lib.clang_isPODType
 Type_is_pod.argtypes = [Type]
 Type_is_pod.restype = bool
 
+Type_is_variadic = lib.clang_isFunctionTypeVariadic
+Type_is_variadic.argtypes = [Type]
+Type_is_variadic.restype = bool
+
 Type_get_pointee = lib.clang_getPointeeType
 Type_get_pointee.argtypes = [Type]
 Type_get_pointee.restype = Type
@@ -1880,6 +1917,15 @@ Type_get_result = lib.clang_getResultType
 Type_get_result.argtypes = [Type]
 Type_get_result.restype = Type
 Type_get_result.errcheck = Type.from_result
+
+Type_get_element_type = lib.clang_getElementType
+Type_get_element_type.argtypes = [Type]
+Type_get_element_type.restype = Type
+Type_get_element_type.errcheck = Type.from_result
+
+Type_get_num_elements = lib.clang_getNumElements
+Type_get_num_elements.argtypes = [Type]
+Type_get_num_elements.restype = c_longlong
 
 Type_get_array_element = lib.clang_getArrayElementType
 Type_get_array_element.argtypes = [Type]

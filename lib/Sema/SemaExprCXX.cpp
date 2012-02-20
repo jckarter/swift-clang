@@ -637,8 +637,8 @@ ExprResult Sema::CheckCXXThrowOperand(SourceLocation ThrowLoc, Expr *E,
   if (isPointer)
     return Owned(E);
 
-  // If the class has a non-trivial destructor, we must be able to call it.
-  if (RD->hasTrivialDestructor())
+  // If the class has a destructor, we must be able to call it.
+  if (RD->hasIrrelevantDestructor())
     return Owned(E);
 
   CXXDestructorDecl *Destructor
@@ -649,6 +649,7 @@ ExprResult Sema::CheckCXXThrowOperand(SourceLocation ThrowLoc, Expr *E,
   MarkFunctionReferenced(E->getExprLoc(), Destructor);
   CheckDestructorAccess(E->getExprLoc(), Destructor,
                         PDiag(diag::err_access_dtor_exception) << Ty);
+  DiagnoseUseOfDecl(Destructor, E->getExprLoc());
   return Owned(E);
 }
 
@@ -709,9 +710,9 @@ void Sema::CheckCXXThisCapture(SourceLocation Loc, bool Explicit) {
        NumClosures; --idx, --NumClosures) {
     CapturingScopeInfo *CSI = cast<CapturingScopeInfo>(FunctionScopes[idx]);
     Expr *ThisExpr = 0;
+    QualType ThisTy = getCurrentThisType();
     if (LambdaScopeInfo *LSI = dyn_cast<LambdaScopeInfo>(CSI)) {
       // For lambda expressions, build a field and an initializing expression.
-      QualType ThisTy = getCurrentThisType();
       CXXRecordDecl *Lambda = LSI->Lambda;
       FieldDecl *Field
         = FieldDecl::Create(Context, Lambda, Loc, Loc, 0, ThisTy,
@@ -723,7 +724,7 @@ void Sema::CheckCXXThisCapture(SourceLocation Loc, bool Explicit) {
       ThisExpr = new (Context) CXXThisExpr(Loc, ThisTy, /*isImplicit=*/true);
     }
     bool isNested = NumClosures > 1;
-    CSI->AddThisCapture(isNested, Loc, ThisExpr);
+    CSI->addThisCapture(isNested, Loc, ThisTy, ThisExpr);
   }
 }
 
@@ -981,11 +982,8 @@ static bool isLegalArrayNewInitializer(CXXNewExpr::InitializationStyle Style,
                                        Expr *Init) {
   if (!Init)
     return true;
-  if (ParenListExpr *PLE = dyn_cast<ParenListExpr>(Init)) {
-    if (PLE->getNumExprs() != 1)
-      return PLE->getNumExprs() == 0;
-    Init = PLE->getExpr(0);
-  }
+  if (ParenListExpr *PLE = dyn_cast<ParenListExpr>(Init))
+    return PLE->getNumExprs() == 0;
   if (isa<ImplicitValueInitExpr>(Init))
     return true;
   else if (CXXConstructExpr *CCE = dyn_cast<CXXConstructExpr>(Init))
@@ -1089,7 +1087,7 @@ Sema::BuildCXXNew(SourceLocation StartLoc, bool UseGlobal,
   if (initStyle == CXXNewExpr::ListInit && isStdInitializerList(AllocType, 0)) {
     Diag(AllocTypeInfo->getTypeLoc().getBeginLoc(),
          diag::warn_dangling_std_initializer_list)
-      << /*at end of FE*/0 << Inits[0]->getSourceRange();
+        << /*at end of FE*/0 << Inits[0]->getSourceRange();
   }
 
   // In ARC, infer 'retaining' for the allocated 
@@ -1230,6 +1228,11 @@ Sema::BuildCXXNew(SourceLocation StartLoc, bool UseGlobal,
     NumPlaceArgs = AllPlaceArgs.size();
     if (NumPlaceArgs > 0)
       PlaceArgs = &AllPlaceArgs[0];
+
+    DiagnoseSentinelCalls(OperatorNew, PlacementLParen,
+                          PlaceArgs, NumPlaceArgs);
+
+    // FIXME: Missing call to CheckFunctionCall or equivalent
   }
 
   // Warn if the type is over-aligned and is being allocated by global operator
@@ -1321,6 +1324,7 @@ Sema::BuildCXXNew(SourceLocation StartLoc, bool UseGlobal,
       CheckDestructorAccess(StartLoc, dtor, 
                             PDiag(diag::err_access_dtor)
                               << Context.getBaseElementType(AllocType));
+      DiagnoseUseOfDecl(dtor, StartLoc);
     }
   }
 
@@ -2067,7 +2071,7 @@ Sema::ActOnCXXDelete(SourceLocation StartLoc, bool UseGlobal,
           UsualArrayDeleteWantsSize = (OperatorDelete->getNumParams() == 2);
       }
 
-      if (!PointeeRD->hasTrivialDestructor())
+      if (!PointeeRD->hasIrrelevantDestructor())
         if (CXXDestructorDecl *Dtor = LookupDestructor(PointeeRD)) {
           MarkFunctionReferenced(StartLoc,
                                     const_cast<CXXDestructorDecl*>(Dtor));
@@ -4312,23 +4316,28 @@ ExprResult Sema::MaybeBindToTemporary(Expr *E) {
   }
 
   // That should be enough to guarantee that this type is complete.
-  // If it has a trivial destructor, we can avoid the extra copy.
   CXXRecordDecl *RD = cast<CXXRecordDecl>(RT->getDecl());
-  if (RD->isInvalidDecl() || RD->hasTrivialDestructor())
+  if (RD->isInvalidDecl() || RD->isDependentContext())
     return Owned(E);
-
   CXXDestructorDecl *Destructor = LookupDestructor(RD);
 
-  CXXTemporary *Temp = CXXTemporary::Create(Context, Destructor);
   if (Destructor) {
     MarkFunctionReferenced(E->getExprLoc(), Destructor);
     CheckDestructorAccess(E->getExprLoc(), Destructor,
                           PDiag(diag::err_access_dtor_temp)
                             << E->getType());
+    DiagnoseUseOfDecl(Destructor, E->getExprLoc());
+  }
 
+  // If destructor is trivial, we can avoid the extra copy.
+  if (Destructor->isTrivial())
+    return Owned(E);
+
+  if (Destructor)
     // We need a cleanup, but we don't need to remember the temporary.
     ExprNeedsCleanups = true;
-  }
+
+  CXXTemporary *Temp = CXXTemporary::Create(Context, Destructor);
   return Owned(CXXBindTemporaryExpr::Create(Context, Temp, E));
 }
 

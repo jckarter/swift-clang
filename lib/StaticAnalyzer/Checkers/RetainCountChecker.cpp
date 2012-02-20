@@ -655,10 +655,11 @@ private:
     ObjCMethodSummaries[S] = Summ;
   }
 
-  void addClassMethSummary(const char* Cls, const char* nullaryName,
-                           const RetainSummary *Summ) {
+  void addClassMethSummary(const char* Cls, const char* name,
+                           const RetainSummary *Summ, bool isNullary = true) {
     IdentifierInfo* ClsII = &Ctx.Idents.get(Cls);
-    Selector S = GetNullarySelector(nullaryName, Ctx);
+    Selector S = isNullary ? GetNullarySelector(name, Ctx) 
+                           : GetUnarySelector(name, Ctx);
     ObjCClassMethodSummaries[ObjCSummaryKey(ClsII, S)]  = Summ;
   }
 
@@ -1508,6 +1509,7 @@ void RetainSummaryManager::InitializeMethodSummaries() {
   // Don't track allocated autorelease pools yet, as it is okay to prematurely
   // exit a method.
   addClassMethSummary("NSAutoreleasePool", "alloc", NoTrackYet);
+  addClassMethSummary("NSAutoreleasePool", "allocWithZone", NoTrackYet, false);
 
   // Create summaries QCRenderer/QCView -createSnapShotImageOfType:
   addInstMethSummary("QCRenderer", AllocSumm,
@@ -3037,7 +3039,7 @@ bool RetainCountChecker::evalCall(const CallExpr *CE, CheckerContext &C) const {
     // If the receiver is unknown, conjure a return value.
     SValBuilder &SVB = C.getSValBuilder();
     unsigned Count = C.getCurrentBlockCount();
-    SVal RetVal = SVB.getConjuredSymbolVal(0, CE, ResultTy, Count);
+    SVal RetVal = SVB.getConjuredSymbolVal(0, CE, LCtx, ResultTy, Count);
   }
   state = state->BindExpr(CE, LCtx, RetVal, false);
 
@@ -3052,7 +3054,7 @@ bool RetainCountChecker::evalCall(const CallExpr *CE, CheckerContext &C) const {
 
     // Invalidate the argument region.
     unsigned Count = C.getCurrentBlockCount();
-    state = state->invalidateRegions(ArgRegion, CE, Count);
+    state = state->invalidateRegions(ArgRegion, CE, Count, LCtx);
 
     // Restore the refcount status of the argument.
     if (Binding)

@@ -1433,9 +1433,10 @@ InitListExpr::InitListExpr(ASTContext &C, SourceLocation lbraceloc,
   : Expr(InitListExprClass, QualType(), VK_RValue, OK_Ordinary, false, false,
          false, false),
     InitExprs(C, numInits),
-    LBraceLoc(lbraceloc), RBraceLoc(rbraceloc), SyntacticForm(0),
-    HadArrayRangeDesignator(false) 
-{      
+    LBraceLoc(lbraceloc), RBraceLoc(rbraceloc), SyntacticForm(0)
+{
+  sawArrayRangeDesignator(false);
+  setInitializesStdInitializerList(false);
   for (unsigned I = 0; I != numInits; ++I) {
     if (initExprs[I]->isTypeDependent())
       ExprBits.TypeDependent = true;
@@ -2978,8 +2979,8 @@ void ObjCMessageExpr::initArgsAndSelLocs(ArrayRef<Expr *> Args,
     MyArgs[I] = Args[I];
   }
 
+  SelLocsKind = SelLocsK;
   if (!isImplicit()) {
-    SelLocsKind = SelLocsK;
     if (SelLocsK == SelLoc_NonStandard)
       std::copy(SelLocs.begin(), SelLocs.end(), getStoredSelLocs());
   }
