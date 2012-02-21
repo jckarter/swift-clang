@@ -163,7 +163,7 @@ public:
   
 public:
   PreprocessorOptions() : UsePredefines(true), DetailedRecord(false),
-                          DetailedRecordIncludesNestedMacroExpansions(true),
+                          DetailedRecordIncludesNestedMacroExpansions(false),
                           DisablePCHValidation(false), DisableStatCache(false),
                           DumpDeserializedPCHDecls(false),
                           PrecompiledPreambleBytes(0, true),
