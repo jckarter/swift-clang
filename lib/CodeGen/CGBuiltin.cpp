@@ -2522,40 +2522,40 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     llvm::Type *Tys[2] = { Ty, InTy };
     return EmitNeonCall(CGM.getIntrinsic(Int, Tys), Ops, "vcvti_z");
   }
-  case ARM64::BI__builtin_arm64_vrnd_a_v:
-  case ARM64::BI__builtin_arm64_vrndq_a_v: {
+  case ARM64::BI__builtin_arm64_vrnda_v:
+  case ARM64::BI__builtin_arm64_vrndqa_v: {
     Int = Intrinsic::arm64_neon_frinta;
-    return EmitNeonCall(CGM.getIntrinsic(Int, Ty), Ops, "vrnd_a");
+    return EmitNeonCall(CGM.getIntrinsic(Int, Ty), Ops, "vrnda");
   }
-  case ARM64::BI__builtin_arm64_vrnd_i_v:
-  case ARM64::BI__builtin_arm64_vrndq_i_v: {
+  case ARM64::BI__builtin_arm64_vrndi_v:
+  case ARM64::BI__builtin_arm64_vrndqi_v: {
     Int = Intrinsic::arm64_neon_frinti;
-    return EmitNeonCall(CGM.getIntrinsic(Int, Ty), Ops, "vrnd_i");
+    return EmitNeonCall(CGM.getIntrinsic(Int, Ty), Ops, "vrndi");
   }
-  case ARM64::BI__builtin_arm64_vrnd_m_v:
-  case ARM64::BI__builtin_arm64_vrndq_m_v: {
+  case ARM64::BI__builtin_arm64_vrndm_v:
+  case ARM64::BI__builtin_arm64_vrndqm_v: {
     Int = Intrinsic::arm64_neon_frintm;
-    return EmitNeonCall(CGM.getIntrinsic(Int, Ty), Ops, "vrnd_m");
+    return EmitNeonCall(CGM.getIntrinsic(Int, Ty), Ops, "vrndm");
   }
-  case ARM64::BI__builtin_arm64_vrnd_n_v:
-  case ARM64::BI__builtin_arm64_vrndq_n_v: {
+  case ARM64::BI__builtin_arm64_vrndn_v:
+  case ARM64::BI__builtin_arm64_vrndqn_v: {
     Int = Intrinsic::arm64_neon_frintn;
-    return EmitNeonCall(CGM.getIntrinsic(Int, Ty), Ops, "vrnd_n");
+    return EmitNeonCall(CGM.getIntrinsic(Int, Ty), Ops, "vrndn");
   }
-  case ARM64::BI__builtin_arm64_vrnd_p_v:
-  case ARM64::BI__builtin_arm64_vrndq_p_v: {
+  case ARM64::BI__builtin_arm64_vrndp_v:
+  case ARM64::BI__builtin_arm64_vrndqp_v: {
     Int = Intrinsic::arm64_neon_frintp;
-    return EmitNeonCall(CGM.getIntrinsic(Int, Ty), Ops, "vrnd_p");
+    return EmitNeonCall(CGM.getIntrinsic(Int, Ty), Ops, "vrndp");
   }
-  case ARM64::BI__builtin_arm64_vrnd_x_v:
-  case ARM64::BI__builtin_arm64_vrndq_x_v: {
+  case ARM64::BI__builtin_arm64_vrndx_v:
+  case ARM64::BI__builtin_arm64_vrndqx_v: {
     Int = Intrinsic::arm64_neon_frintx;
-    return EmitNeonCall(CGM.getIntrinsic(Int, Ty), Ops, "vrnd_x");
+    return EmitNeonCall(CGM.getIntrinsic(Int, Ty), Ops, "vrndx");
   }
-  case ARM64::BI__builtin_arm64_vrnd_z_v:
-  case ARM64::BI__builtin_arm64_vrndq_z_v: {
+  case ARM64::BI__builtin_arm64_vrndz_v:
+  case ARM64::BI__builtin_arm64_vrndqz_v: {
     Int = Intrinsic::arm64_neon_frintz;
-    return EmitNeonCall(CGM.getIntrinsic(Int, Ty), Ops, "vrnd_z");
+    return EmitNeonCall(CGM.getIntrinsic(Int, Ty), Ops, "vrndz");
   }
   case ARM64::BI__builtin_arm64_vcvt_f32_v: {
     Int = Intrinsic::arm64_neon_fcvtxn;
