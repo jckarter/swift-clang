@@ -6752,6 +6752,13 @@ size_t ASTContext::getSideTableAllocatedMemory() const {
     + llvm::capacity_in_bytes(ClassScopeSpecializationPattern);
 }
 
+unsigned ASTContext::getLambdaManglingNumber(CXXMethodDecl *CallOperator) {
+  CXXRecordDecl *Lambda = CallOperator->getParent();
+  return LambdaMangleContexts[Lambda->getDeclContext()]
+           .getManglingNumber(CallOperator);
+}
+
+
 void ASTContext::setParameterIndex(const ParmVarDecl *D, unsigned int index) {
   ParamIndices[D] = index;
 }
