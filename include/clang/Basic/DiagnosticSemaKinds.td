@@ -3761,6 +3761,9 @@ def err_objc_multiple_subscript_type_conversion : Error<
 def err_objc_subscript_type_conversion : Error<
   "indexing expression is invalid because subscript type %0 is not an intergal"
   "or objective-C pointer type">;
+def err_objc_indexing_method_result_type : Error<
+  "method for accessing %select{dictionary|array}1 element must have Objective-C"
+  " object return type instead of %0">;
 def err_objc_index_incomplete_class_type : Error<
   "objective-C index expression has incomplete class type %0">;
 def err_illegal_container_subscripting_op : Error<

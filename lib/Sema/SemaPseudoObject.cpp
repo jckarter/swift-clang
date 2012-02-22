@@ -975,8 +975,13 @@ bool ObjCSubscriptOpBuilder::findAtIndexGetter() {
              diag::note_parameter_type) << T;
       return false;
     }
+    QualType R = AtIndexGetter->getResultType();
+    if (!R->isObjCObjectPointerType()) {
+      S.Diag(RefExpr->getKeyExpr()->getExprLoc(),
+             diag::err_objc_indexing_method_result_type) << R << arrayRef;
+      S.Diag(AtIndexGetter->getLocation(), diag::note_method_declared_at);
+    }
   }
-
   return true;
 }
 
