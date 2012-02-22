@@ -172,8 +172,12 @@ typedef double NSTimeInterval;
 + (id)dataWithBytesNoCopy:(void *)bytes length:(NSUInteger)length;
 + (id)dataWithBytesNoCopy:(void *)bytes length:(NSUInteger)length freeWhenDone:(BOOL)b;
 @end   @class NSLocale, NSDate, NSCalendar, NSTimeZone, NSError, NSArray, NSMutableDictionary;
-@interface NSDictionary : NSObject <NSCopying, NSMutableCopying, NSCoding, NSFastEnumeration>  - (NSUInteger)count;
-@end    @interface NSMutableDictionary : NSDictionary  - (void)removeObjectForKey:(id)aKey;
+@interface NSDictionary : NSObject <NSCopying, NSMutableCopying, NSCoding, NSFastEnumeration>
+- (NSUInteger)count;
++ (id)dictionaryWithObjects:(NSArray *)objects forKeys:(NSArray *)keys;
++ (id)dictionaryWithObjects:(const id [])objects forKeys:(const id <NSCopying> [])keys count:(NSUInteger)cnt;
+@end
+@interface NSMutableDictionary : NSDictionary  - (void)removeObjectForKey:(id)aKey;
 - (void)setObject:(id)anObject forKey:(id)aKey;
 @end  @interface NSMutableDictionary (NSMutableDictionaryCreation)  + (id)dictionaryWithCapacity:(NSUInteger)numItems;
 @end  typedef double CGFloat;
@@ -1667,9 +1671,27 @@ void test_objc_arrays() {
 
     { // CASE THREE -- OBJECT IN RETAINED @[]
         NSObject *o = [[NSObject alloc] init];
-        NSArray *a3 = [@[o] retain];
+        NSArray *a3 = [@[o] retain]; // expected-warning {{leak}}
         [o release];        
         [a3 description];
+        [o description];
+    }
+    
+    { // CASE FOUR -- OBJECT IN ARRAY CREATED BY DUPING @[]
+        NSObject *o = [[NSObject alloc] init];
+        NSArray *a = [[NSArray alloc] initWithArray:@[o]]; // expected-warning {{redundant}} expected-warning {{leak}}
+        [o release];
+        
+        [a description];
+        [o description];
+    }
+    
+    { // CASE FIVE -- OBJECT IN RETAINED @{}
+        NSValue *o = [[NSValue alloc] init];
+        NSDictionary *a = [@{o : o} retain]; // expected-warning {{leak}}
+        [o release];
+        
+        [a description];
         [o description];
     }
 }
