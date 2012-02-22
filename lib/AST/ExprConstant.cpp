@@ -5215,6 +5215,7 @@ bool IntExprEvaluator::VisitCastExpr(const CastExpr *E) {
   case CK_ARCConsumeObject:
   case CK_ARCReclaimReturnedObject:
   case CK_ARCExtendBlockObject:
+  case CK_CopyAndAutoreleaseBlockObject:
     return Error(E);
 
   case CK_UserDefinedConversion:
@@ -5690,6 +5691,7 @@ bool ComplexExprEvaluator::VisitCastExpr(const CastExpr *E) {
   case CK_ARCConsumeObject:
   case CK_ARCReclaimReturnedObject:
   case CK_ARCExtendBlockObject:
+  case CK_CopyAndAutoreleaseBlockObject:
     llvm_unreachable("invalid cast kind for complex value");
 
   case CK_LValueToRValue:
