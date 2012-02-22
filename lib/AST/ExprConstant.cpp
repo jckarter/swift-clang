@@ -538,8 +538,10 @@ namespace {
                                  = diag::note_invalid_subexpr_in_const_expr,
                                unsigned ExtraNotes = 0) {
       // Don't override a previous diagnostic.
-      if (!EvalStatus.Diag || !EvalStatus.Diag->empty())
+      if (!EvalStatus.Diag || !EvalStatus.Diag->empty()) {
+        HasActiveDiagnostic = false;
         return OptionalDiagnostic();
+      }
       return Diag(Loc, DiagId, ExtraNotes);
     }
 
@@ -5207,6 +5209,7 @@ bool IntExprEvaluator::VisitCastExpr(const CastExpr *E) {
   case CK_ARCConsumeObject:
   case CK_ARCReclaimReturnedObject:
   case CK_ARCExtendBlockObject:
+  case CK_CopyAndAutoreleaseBlockObject:
     return Error(E);
 
   case CK_UserDefinedConversion:
@@ -5682,6 +5685,7 @@ bool ComplexExprEvaluator::VisitCastExpr(const CastExpr *E) {
   case CK_ARCConsumeObject:
   case CK_ARCReclaimReturnedObject:
   case CK_ARCExtendBlockObject:
+  case CK_CopyAndAutoreleaseBlockObject:
     llvm_unreachable("invalid cast kind for complex value");
 
   case CK_LValueToRValue:
