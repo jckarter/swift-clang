@@ -1107,6 +1107,7 @@ void ASTDeclReader::ReadCXXDefinitionData(
     typedef LambdaExpr::Capture Capture;
     CXXRecordDecl::LambdaDefinitionData &Lambda
       = static_cast<CXXRecordDecl::LambdaDefinitionData &>(Data);
+    Lambda.Dependent = Record[Idx++];
     Lambda.NumCaptures = Record[Idx++];
     Lambda.NumExplicitCaptures = Record[Idx++];
     Lambda.ManglingNumber = Record[Idx++];
@@ -1134,7 +1135,7 @@ void ASTDeclReader::VisitCXXRecordDecl(CXXRecordDecl *D) {
     // allocate the appropriate DefinitionData structure.
     bool IsLambda = Record[Idx++];
     if (IsLambda)
-      D->DefinitionData = new (C) CXXRecordDecl::LambdaDefinitionData(D);
+      D->DefinitionData = new (C) CXXRecordDecl::LambdaDefinitionData(D, false);
     else
       D->DefinitionData = new (C) struct CXXRecordDecl::DefinitionData(D);
     
@@ -1212,8 +1213,6 @@ void ASTDeclReader::VisitCXXDestructorDecl(CXXDestructorDecl *D) {
 void ASTDeclReader::VisitCXXConversionDecl(CXXConversionDecl *D) {
   VisitCXXMethodDecl(D);
   D->IsExplicitSpecified = Record[Idx++];
-  if (D->isLambdaToBlockPointerConversion())
-    D->setLambdaToBlockPointerCopyInit(Reader.ReadExpr(F));
 }
 
 void ASTDeclReader::VisitImportDecl(ImportDecl *D) {

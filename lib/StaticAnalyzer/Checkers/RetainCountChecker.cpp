@@ -1861,41 +1861,49 @@ PathDiagnosticPiece *CFRefReportVisitor::VisitNode(const ExplodedNode *N,
   if (!PrevT) {
     const Stmt *S = cast<StmtPoint>(N->getLocation()).getStmt();
 
-    if (const CallExpr *CE = dyn_cast<CallExpr>(S)) {
-      // Get the name of the callee (if it is available).
-      SVal X = CurrSt->getSValAsScalarOrLoc(CE->getCallee(), LCtx);
-      if (const FunctionDecl *FD = X.getAsFunctionDecl())
-        os << "Call to function '" << *FD << '\'';
-      else
-        os << "function call";
+    if (isa<ObjCArrayLiteral>(S)) {
+      os << "NSArray literal is an object with a +0 retain count";
     }
-    else {
-      assert(isa<ObjCMessageExpr>(S));      
-      // The message expression may have between written directly or as
-      // a property access.  Lazily determine which case we are looking at.
-      os << (isPropertyAccess(S, N->getParentMap()) ? "Property" : "Method");
+    else if (isa<ObjCDictionaryLiteral>(S)) {
+      os << "NSDictionary literal is an object with a +0 retain count";
     }
-
-    if (CurrV.getObjKind() == RetEffect::CF) {
-      os << " returns a Core Foundation object with a ";
-    }
-    else {
-      assert (CurrV.getObjKind() == RetEffect::ObjC);
-      os << " returns an Objective-C object with a ";
-    }
-
-    if (CurrV.isOwned()) {
-      os << "+1 retain count";
-
-      if (GCEnabled) {
-        assert(CurrV.getObjKind() == RetEffect::CF);
-        os << ".  "
-        "Core Foundation objects are not automatically garbage collected.";
+    else {      
+      if (const CallExpr *CE = dyn_cast<CallExpr>(S)) {
+        // Get the name of the callee (if it is available).
+        SVal X = CurrSt->getSValAsScalarOrLoc(CE->getCallee(), LCtx);
+        if (const FunctionDecl *FD = X.getAsFunctionDecl())
+          os << "Call to function '" << *FD << '\'';
+        else
+          os << "function call";
       }
-    }
-    else {
-      assert (CurrV.isNotOwned());
-      os << "+0 retain count";
+      else {
+        assert(isa<ObjCMessageExpr>(S));      
+        // The message expression may have between written directly or as
+        // a property access.  Lazily determine which case we are looking at.
+        os << (isPropertyAccess(S, N->getParentMap()) ? "Property" : "Method");
+      }
+
+      if (CurrV.getObjKind() == RetEffect::CF) {
+        os << " returns a Core Foundation object with a ";
+      }
+      else {
+        assert (CurrV.getObjKind() == RetEffect::ObjC);
+        os << " returns an Objective-C object with a ";
+      }
+
+      if (CurrV.isOwned()) {
+        os << "+1 retain count";
+
+        if (GCEnabled) {
+          assert(CurrV.getObjKind() == RetEffect::CF);
+          os << ".  "
+          "Core Foundation objects are not automatically garbage collected.";
+        }
+      }
+      else {
+        assert (CurrV.isNotOwned());
+        os << "+0 retain count";
+      }
     }
 
     PathDiagnosticLocation Pos(S, BRC.getSourceManager(),

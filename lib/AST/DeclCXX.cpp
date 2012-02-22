@@ -83,11 +83,11 @@ CXXRecordDecl *CXXRecordDecl::Create(const ASTContext &C, TagKind TK,
 }
 
 CXXRecordDecl *CXXRecordDecl::CreateLambda(const ASTContext &C, DeclContext *DC,
-                                           SourceLocation Loc) {
+                                           SourceLocation Loc, bool Dependent) {
   CXXRecordDecl* R = new (C) CXXRecordDecl(CXXRecord, TTK_Class, DC, Loc, Loc,
                                            0, 0);
   R->IsBeingDefined = true;
-  R->DefinitionData = new (C) struct LambdaDefinitionData(R);
+  R->DefinitionData = new (C) struct LambdaDefinitionData(R, Dependent);
   C.getTypeDeclType(R, /*PrevDecl=*/0);
   return R;
 }
@@ -1768,16 +1768,6 @@ CXXConversionDecl::Create(ASTContext &C, CXXRecordDecl *RD,
 bool CXXConversionDecl::isLambdaToBlockPointerConversion() const {
   return isImplicit() && getParent()->isLambda() &&
          getConversionType()->isBlockPointerType();
-}
-
-Expr *CXXConversionDecl::getLambdaToBlockPointerCopyInit() const {
-  assert(isLambdaToBlockPointerConversion());
-  return getASTContext().LambdaBlockPointerInits[this];
-}
-
-void CXXConversionDecl::setLambdaToBlockPointerCopyInit(Expr *Init) {
-  assert(isLambdaToBlockPointerConversion());
-  getASTContext().LambdaBlockPointerInits[this] = Init;
 }
 
 void LinkageSpecDecl::anchor() { }
