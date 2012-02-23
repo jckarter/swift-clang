@@ -2159,10 +2159,17 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
   case ARM64::BI__builtin_arm64_vraddhn_v:
     Int = Intrinsic::arm64_neon_raddhn;
     return EmitNeonCall(CGM.getIntrinsic(Int, Ty), Ops, "vraddhn");
-  case ARM64::BI__builtin_arm64_vmla_v:
-  case ARM64::BI__builtin_arm64_vmlaq_v: // Only used for FP types
+  case ARM64::BI__builtin_arm64_vfma_v:
+  case ARM64::BI__builtin_arm64_vfmaq_v: { // Only used for FP types
     Int = Intrinsic::fma;
+    // The ARM builtins (and instructions) have the addend as the first
+    // operand, but the 'fma' intrinsics have it last. Swap it around here.
+    Value *Addend = Ops[0];
+    Value *Multiplicand = Ops[2];
+    Ops[0] = Multiplicand;
+    Ops[2] = Addend;
     return EmitNeonCall(CGM.getIntrinsic(Int, Ty), Ops, "fmla");
+  }
   case ARM64::BI__builtin_arm64_vmulx_lane_v:
   case ARM64::BI__builtin_arm64_vmulxq_lane_v: { // Only used for FP types
     llvm::Constant *cst = cast<Constant>(Ops[2]);
@@ -2172,8 +2179,15 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     Int = Intrinsic::arm64_neon_fmulx;
     return EmitNeonCall(CGM.getIntrinsic(Int, Ty), Ops, "vmulx");
   }
-  case ARM64::BI__builtin_arm64_vmla_lane_v:
-  case ARM64::BI__builtin_arm64_vmlaq_lane_v: { // Only used for FP types
+  case ARM64::BI__builtin_arm64_vfma_lane_v:
+  case ARM64::BI__builtin_arm64_vfmaq_lane_v: { // Only used for FP types
+    // The ARM builtins (and instructions) have the addend as the first
+    // operand, but the 'fma' intrinsics have it last. Swap it around here.
+    Value *Subtrahend = Ops[0];
+    Value *Multiplicand = Ops[2];
+    Ops[0] = Multiplicand;
+    Ops[2] = Subtrahend;
+    // Now adjust things to handle the lane access.
     llvm::Constant *cst = cast<Constant>(Ops[3]);
     Ops[2] = Builder.CreateBitCast(Ops[2], VTy);
     Ops[2] = EmitNeonSplat(Ops[2], cst);
@@ -2181,8 +2195,16 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     Int = Intrinsic::fma;
     return EmitNeonCall(CGM.getIntrinsic(Int, Ty), Ops, "fmla");
   }
-  case ARM64::BI__builtin_arm64_vmls_lane_v:
-  case ARM64::BI__builtin_arm64_vmlsq_lane_v: { // Only used for FP types
+  case ARM64::BI__builtin_arm64_vfms_lane_v:
+  case ARM64::BI__builtin_arm64_vfmsq_lane_v: { // Only used for FP types
+    // The ARM builtins (and instructions) have the addend as the first
+    // operand, but the 'fma' intrinsics have it last. Swap it around here.
+    Value *Subtrahend = Ops[0];
+    Value *Multiplicand = Ops[2];
+    Ops[0] = Multiplicand;
+    Ops[2] = Subtrahend;
+    // Now adjust things to handle the lane access and the negation of
+    // one multiplicand so we get a subtract.
     llvm::Constant *cst = cast<Constant>(Ops[3]);
     Ops[1] = Builder.CreateBitCast(Ops[1], VTy);
     Ops[1] = Builder.CreateFNeg(Ops[1]);
@@ -2192,12 +2214,19 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     Int = Intrinsic::fma;
     return EmitNeonCall(CGM.getIntrinsic(Int, Ty), Ops, "fmls");
   }
-  case ARM64::BI__builtin_arm64_vmls_v:
-  case ARM64::BI__builtin_arm64_vmlsq_v:  // Only used for FP types
+  case ARM64::BI__builtin_arm64_vfms_v:
+  case ARM64::BI__builtin_arm64_vfmsq_v: {  // Only used for FP types
+    // The ARM builtins (and instructions) have the addend as the first
+    // operand, but the 'fma' intrinsics have it last. Swap it around here.
+    Value *Subtrahend = Ops[0];
+    Value *Multiplicand = Ops[2];
+    Ops[0] = Multiplicand;
+    Ops[2] = Subtrahend;
     Ops[1] = Builder.CreateBitCast(Ops[1], VTy);
     Ops[1] = Builder.CreateFNeg(Ops[1]);
     Int = Intrinsic::fma;
     return EmitNeonCall(CGM.getIntrinsic(Int, Ty), Ops, "fmls");
+  }
   case ARM64::BI__builtin_arm64_vmul_v:
   case ARM64::BI__builtin_arm64_vmulq_v: // Only used for PMUL.
     Int = Intrinsic::arm64_neon_pmul;
