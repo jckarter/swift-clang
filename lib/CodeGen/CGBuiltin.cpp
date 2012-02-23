@@ -2189,8 +2189,8 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     Ops[2] = Subtrahend;
     // Now adjust things to handle the lane access.
     llvm::Constant *cst = cast<Constant>(Ops[3]);
-    Ops[2] = Builder.CreateBitCast(Ops[2], VTy);
-    Ops[2] = EmitNeonSplat(Ops[2], cst);
+    Ops[1] = Builder.CreateBitCast(Ops[1], VTy);
+    Ops[1] = EmitNeonSplat(Ops[1], cst);
     Ops.pop_back();
     Int = Intrinsic::fma;
     return EmitNeonCall(CGM.getIntrinsic(Int, Ty), Ops, "fmla");
@@ -2206,10 +2206,10 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     // Now adjust things to handle the lane access and the negation of
     // one multiplicand so we get a subtract.
     llvm::Constant *cst = cast<Constant>(Ops[3]);
+    Ops[0] = Builder.CreateBitCast(Ops[0], VTy);
+    Ops[0] = Builder.CreateFNeg(Ops[0]);
     Ops[1] = Builder.CreateBitCast(Ops[1], VTy);
-    Ops[1] = Builder.CreateFNeg(Ops[1]);
-    Ops[2] = Builder.CreateBitCast(Ops[2], VTy);
-    Ops[2] = EmitNeonSplat(Ops[2], cst);
+    Ops[1] = EmitNeonSplat(Ops[1], cst);
     Ops.pop_back();
     Int = Intrinsic::fma;
     return EmitNeonCall(CGM.getIntrinsic(Int, Ty), Ops, "fmls");
