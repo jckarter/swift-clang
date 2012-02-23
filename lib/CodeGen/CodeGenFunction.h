@@ -2230,7 +2230,7 @@ public:
                              llvm::SmallVectorImpl<llvm::Value*> &O,
                              const char *name);
 
-  llvm::Value *BuildVector(const SmallVectorImpl<llvm::Value*> &Ops);
+  llvm::Value *BuildVector(ArrayRef<llvm::Value*> Ops);
   llvm::Value *EmitX86BuiltinExpr(unsigned BuiltinID, const CallExpr *E);
   llvm::Value *EmitHexagonBuiltinExpr(unsigned BuiltinID, const CallExpr *E);
   llvm::Value *EmitPPCBuiltinExpr(unsigned BuiltinID, const CallExpr *E);

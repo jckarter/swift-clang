@@ -1758,7 +1758,20 @@ public:
 
   void HandleIncompleteSpecifier(const char *startSpecifier,
                                  unsigned specifierLen);
-    
+
+  void HandleNonStandardLengthModifier(
+      const analyze_format_string::LengthModifier &LM,
+      const char *startSpecifier, unsigned specifierLen);
+
+  void HandleNonStandardConversionSpecifier(
+      const analyze_format_string::ConversionSpecifier &CS,
+      const char *startSpecifier, unsigned specifierLen);
+
+  void HandleNonStandardConversionSpecification(
+      const analyze_format_string::LengthModifier &LM,
+      const analyze_format_string::ConversionSpecifier &CS,
+      const char *startSpecifier, unsigned specifierLen);
+
   virtual void HandleInvalidPosition(const char *startSpecifier,
                                      unsigned specifierLen,
                                      analyze_format_string::PositionContext p);
@@ -1830,6 +1843,37 @@ void CheckFormatHandler::HandleIncompleteSpecifier(const char *startSpecifier,
                                                    unsigned specifierLen){
   EmitFormatDiagnostic(S.PDiag(diag::warn_printf_incomplete_specifier),
                        getLocationOfByte(startSpecifier),
+                       /*IsStringLocation*/true,
+                       getSpecifierRange(startSpecifier, specifierLen));
+}
+
+void CheckFormatHandler::HandleNonStandardLengthModifier(
+    const analyze_format_string::LengthModifier &LM,
+    const char *startSpecifier, unsigned specifierLen) {
+  EmitFormatDiagnostic(S.PDiag(diag::warn_format_non_standard) << LM.toString()
+                       << "length modifier",
+                       getLocationOfByte(LM.getStart()),
+                       /*IsStringLocation*/true,
+                       getSpecifierRange(startSpecifier, specifierLen));
+}
+
+void CheckFormatHandler::HandleNonStandardConversionSpecifier(
+    const analyze_format_string::ConversionSpecifier &CS,
+    const char *startSpecifier, unsigned specifierLen) {
+  EmitFormatDiagnostic(S.PDiag(diag::warn_format_non_standard) << CS.toString()
+                       << "conversion specifier",
+                       getLocationOfByte(CS.getStart()),
+                       /*IsStringLocation*/true,
+                       getSpecifierRange(startSpecifier, specifierLen));
+}
+
+void CheckFormatHandler::HandleNonStandardConversionSpecification(
+    const analyze_format_string::LengthModifier &LM,
+    const analyze_format_string::ConversionSpecifier &CS,
+    const char *startSpecifier, unsigned specifierLen) {
+  EmitFormatDiagnostic(S.PDiag(diag::warn_format_non_standard_conversion_spec)
+                       << LM.toString() << CS.toString(),
+                       getLocationOfByte(LM.getStart()),
                        /*IsStringLocation*/true,
                        getSpecifierRange(startSpecifier, specifierLen));
 }
@@ -2252,6 +2296,13 @@ CheckPrintfHandler::HandlePrintfSpecifier(const analyze_printf::PrintfSpecifier
                          FixItHint::CreateRemoval(
                            getSpecifierRange(LM.getStart(),
                                              LM.getLength())));
+  if (!FS.hasStandardLengthModifier())
+    HandleNonStandardLengthModifier(LM, startSpecifier, specifierLen);
+  if (!FS.hasStandardConversionSpecifier(S.getLangOptions()))
+    HandleNonStandardConversionSpecifier(CS, startSpecifier, specifierLen);
+  if (!FS.hasStandardLengthConversionCombination())
+    HandleNonStandardConversionSpecification(LM, CS, startSpecifier,
+                                             specifierLen);
 
   // Are we using '%n'?
   if (CS.getKind() == ConversionSpecifier::nArg) {
@@ -2437,6 +2488,14 @@ bool CheckScanfHandler::HandleScanfSpecifier(
                          /*IsStringLocation*/true, R,
                          FixItHint::CreateRemoval(R));
   }
+
+  if (!FS.hasStandardLengthModifier())
+    HandleNonStandardLengthModifier(LM, startSpecifier, specifierLen);
+  if (!FS.hasStandardConversionSpecifier(S.getLangOptions()))
+    HandleNonStandardConversionSpecifier(CS, startSpecifier, specifierLen);
+  if (!FS.hasStandardLengthConversionCombination())
+    HandleNonStandardConversionSpecification(LM, CS, startSpecifier,
+                                             specifierLen);
 
   // The remaining checks depend on the data arguments.
   if (HasVAListArg)
@@ -5066,4 +5125,3 @@ void Sema::DiagnoseEmptyLoopBody(const Stmt *S,
     Diag(NBody->getSemiLoc(), diag::note_empty_body_on_separate_line);
   }
 }
-
