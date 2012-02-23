@@ -3756,8 +3756,8 @@ ObjCDictionaryLiteral::CreateEmpty(ASTContext &C, unsigned NumElements,
 }
 
 ObjCSubscriptRefExpr *ObjCSubscriptRefExpr::Create(ASTContext &C,
-                                                   Stmt *base,
-                                                   Stmt *key, QualType T, 
+                                                   Expr *base,
+                                                   Expr *key, QualType T, 
                                                    ObjCMethodDecl *getMethod,
                                                    ObjCMethodDecl *setMethod, 
                                                    SourceLocation RB) {
