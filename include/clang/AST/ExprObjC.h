@@ -727,15 +727,17 @@ class ObjCSubscriptRefExpr : public Expr {
   
 public:
   
-  ObjCSubscriptRefExpr(Stmt *base, Stmt *key, QualType T,
+  ObjCSubscriptRefExpr(Expr *base, Expr *key, QualType T,
                        ExprValueKind VK, ExprObjectKind OK,
                        ObjCMethodDecl *getMethod,
                        ObjCMethodDecl *setMethod, SourceLocation RB)
     : Expr(ObjCSubscriptRefExprClass, T, VK, OK, 
-           /*TypeDependent=*/false, 
-           /*ValueDependent=*/true,
-           /*InstantiationDependent=*/true,
-           /*ContainsUnexpandedParameterPack=*/false), RBracket(RB), 
+           base->isTypeDependent() || key->isTypeDependent(), 
+           base->isValueDependent() || key->isValueDependent(),
+           base->isInstantiationDependent() || key->isInstantiationDependent(),
+           (base->containsUnexpandedParameterPack() ||
+            key->containsUnexpandedParameterPack())),
+      RBracket(RB), 
   GetAtIndexMethodDecl(getMethod), 
   SetAtIndexMethodDecl(setMethod) 
     {SubExprs[BASE] = base; SubExprs[KEY] = key;}
@@ -744,8 +746,8 @@ public:
     : Expr(ObjCSubscriptRefExprClass, Empty) {}
   
   static ObjCSubscriptRefExpr *Create(ASTContext &C,
-                                      Stmt *base,
-                                      Stmt *key, QualType T, 
+                                      Expr *base,
+                                      Expr *key, QualType T, 
                                       ObjCMethodDecl *getMethod,
                                       ObjCMethodDecl *setMethod, 
                                       SourceLocation RB);

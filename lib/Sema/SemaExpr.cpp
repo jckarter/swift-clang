@@ -4907,7 +4907,8 @@ ExprResult Sema::ActOnConditionalOp(SourceLocation QuestionLoc,
     opaqueValue = new (Context) OpaqueValueExpr(commonExpr->getExprLoc(),
                                                 commonExpr->getType(),
                                                 commonExpr->getValueKind(),
-                                                commonExpr->getObjectKind());
+                                                commonExpr->getObjectKind(),
+                                                commonExpr);
     LHSExpr = CondExpr = opaqueValue;
   }
 
