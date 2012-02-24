@@ -18,7 +18,8 @@ int main() {
 
    NSMutableDictionary *dict;
    id key, val;
-   val = dict[key]; // expected-error {{method for accessing dictionary element must have Objective-C object return type instead of 'int'}}
+   val = dict[key]; // expected-error {{method for accessing dictionary element must have Objective-C object return type instead of 'int'}} \
+                    // expected-warning {{incompatible integer to pointer conversion assigning to 'id' from 'int'}}
    dict[key] = val; // expected-error {{method object parameter type 'int' is not object type}}
 }
 
