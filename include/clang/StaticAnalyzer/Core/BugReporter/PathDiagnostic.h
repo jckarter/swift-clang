@@ -409,6 +409,8 @@ public:
   
   static PathDiagnosticCallPiece *construct(PathPieces &pieces);
   
+  virtual void Profile(llvm::FoldingSetNodeID &ID) const;
+
   static inline bool classof(const PathDiagnosticPiece *P) {
     return P->getKind() == Call;
   }
@@ -520,6 +522,8 @@ public:
     return pathImpl;
   }
     
+  /// Return the unrolled size of the path.
+  unsigned full_size();
 
   void pushActivePath(PathPieces *p) { pathStack.push_back(p); }
   void popActivePath() { if (!pathStack.empty()) pathStack.pop_back(); }
@@ -540,11 +544,7 @@ public:
   meta_iterator meta_end() const { return OtherDesc.end(); }
   void addMeta(StringRef s) { OtherDesc.push_back(s); }
 
-  PathDiagnosticLocation getLocation() const {
-    assert(path.size() > 0 &&
-           "getLocation() requires a non-empty PathDiagnostic.");
-    return (*path.rbegin())->getLocation();
-  }
+  PathDiagnosticLocation getLocation() const;
 
   void flattenLocations() {
     for (PathPieces::iterator I = pathImpl.begin(), E = pathImpl.end(); 

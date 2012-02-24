@@ -96,9 +96,12 @@ void PathDiagnosticConsumer::HandlePathDiagnostic(PathDiagnostic *D) {
 
   if (PathDiagnostic *orig = Diags.FindNodeOrInsertPos(profile, InsertPos)) {
     // Keep the PathDiagnostic with the shorter path.
-    if (orig->path.size() <= D->path.size()) {
+    const unsigned orig_size = orig->full_size();
+    const unsigned new_size = D->full_size();
+    
+    if (orig_size <= new_size) {
       bool shouldKeepOriginal = true;
-      if (orig->path.size() == D->path.size()) {
+      if (orig_size == new_size) {
         // Here we break ties in a fairly arbitrary, but deterministic, way.
         llvm::FoldingSetNodeID fullProfile, fullProfileOrig;
         D->FullProfile(fullProfile);
@@ -421,6 +424,23 @@ void PathDiagnosticLocation::flatten() {
   }
 }
 
+PathDiagnosticLocation PathDiagnostic::getLocation() const {
+  assert(path.size() > 0 &&
+         "getLocation() requires a non-empty PathDiagnostic.");
+  
+  PathDiagnosticPiece *p = path.rbegin()->getPtr();
+  
+  while (true) {
+    if (PathDiagnosticCallPiece *cp = dyn_cast<PathDiagnosticCallPiece>(p)) {
+      assert(!cp->path.empty());
+      p = cp->path.rbegin()->getPtr();
+      continue;
+    }
+    break;
+  }
+  
+  return p->getLocation();
+}
 
 //===----------------------------------------------------------------------===//
 // Manipulation of PathDiagnosticCallPieces.
@@ -459,7 +479,7 @@ PathDiagnosticCallPiece::construct(PathPieces &path) {
 void PathDiagnosticCallPiece::setCallee(const CallEnter &CE,
                                         const SourceManager &SM) {
   const Decl *D = CE.getCalleeContext()->getDecl();
-  Caller = D;
+  Callee = D;
   callEnter = PathDiagnosticLocation(CE.getCallExpr(), SM,
                                      CE.getLocationContext());  
 }
@@ -493,6 +513,25 @@ PathDiagnosticCallPiece::getCallExitEvent() const {
   return new PathDiagnosticEventPiece(callReturn, Out.str());
 }
 
+static void compute_path_size(const PathPieces &pieces, unsigned &size) {
+  for (PathPieces::const_iterator it = pieces.begin(),
+                                  et = pieces.end(); it != et; ++it) {
+    const PathDiagnosticPiece *piece = it->getPtr();
+    if (const PathDiagnosticCallPiece *cp = 
+        dyn_cast<PathDiagnosticCallPiece>(piece)) {
+      compute_path_size(cp->path, size);
+    }
+    else
+      ++size;
+  }
+}
+
+unsigned PathDiagnostic::full_size() {
+  unsigned size = 0;
+  compute_path_size(path, size);
+  return size;
+}
+
 //===----------------------------------------------------------------------===//
 // FoldingSet profiling methods.
 //===----------------------------------------------------------------------===//
@@ -513,6 +552,14 @@ void PathDiagnosticPiece::Profile(llvm::FoldingSetNodeID &ID) const {
     ID.AddInteger(I->getBegin().getRawEncoding());
     ID.AddInteger(I->getEnd().getRawEncoding());
   }  
+}
+
+void PathDiagnosticCallPiece::Profile(llvm::FoldingSetNodeID &ID) const {
+  PathDiagnosticPiece::Profile(ID);
+  for (PathPieces::const_iterator it = path.begin(), 
+       et = path.end(); it != et; ++it) {
+    ID.Add(**it);
+  }
 }
 
 void PathDiagnosticSpotPiece::Profile(llvm::FoldingSetNodeID &ID) const {

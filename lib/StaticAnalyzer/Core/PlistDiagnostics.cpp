@@ -252,19 +252,19 @@ static void ReportCall(raw_ostream &o,
                        const FIDMap& FM, const SourceManager &SM,
                        const LangOptions &LangOpts,
                        unsigned indent) {
-
-  IntrusiveRefCntPtr<PathDiagnosticEventPiece> callExit =
-    P.getCallExitEvent();
-  if (callExit)  
-    ReportPiece(o, *callExit, FM, SM, LangOpts, indent, true);
-
-  for (PathPieces::const_iterator I = P.path.begin(), E = P.path.end();I!=E;++I)
-    ReportPiece(o, **I, FM, SM, LangOpts, indent, true);
   
   IntrusiveRefCntPtr<PathDiagnosticEventPiece> callEnter =
     P.getCallEnterEvent();  
   if (callEnter)
     ReportPiece(o, *callEnter, FM, SM, LangOpts, indent, true);
+
+  for (PathPieces::const_iterator I = P.path.begin(), E = P.path.end();I!=E;++I)
+    ReportPiece(o, **I, FM, SM, LangOpts, indent, true);
+  
+  IntrusiveRefCntPtr<PathDiagnosticEventPiece> callExit =
+    P.getCallExitEvent();
+  if (callExit)  
+    ReportPiece(o, *callExit, FM, SM, LangOpts, indent, true);
 }
 
 static void ReportMacro(raw_ostream &o,
