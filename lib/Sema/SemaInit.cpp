@@ -4628,11 +4628,9 @@ PerformConstructorInitialization(Sema &S,
     // Force even a trivial, implicit default constructor to be
     // semantically checked. We do this explicitly because we don't build
     // the definition for completely trivial constructors.
-    CXXRecordDecl *ClassDecl = Constructor->getParent();
-    assert(ClassDecl && "No parent class for constructor.");
+    assert(Constructor->getParent() && "No parent class for constructor.");
     if (Constructor->isDefaulted() && Constructor->isDefaultConstructor() &&
-        ClassDecl->hasTrivialDefaultConstructor() &&
-        !Constructor->isUsed(false))
+        Constructor->isTrivial() && !Constructor->isUsed(false))
       S.DefineImplicitDefaultConstructor(Loc, Constructor);
   }
 
