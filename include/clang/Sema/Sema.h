@@ -1480,7 +1480,8 @@ public:
   ExprResult PerformCopyInitialization(const InitializedEntity &Entity,
                                        SourceLocation EqualLoc,
                                        ExprResult Init,
-                                       bool TopLevelOfInitList = false);
+                                       bool TopLevelOfInitList = false,
+                                       bool AllowExplicit = false);
   ExprResult PerformObjectArgumentInitialization(Expr *From,
                                                  NestedNameSpecifier *Qualifier,
                                                  NamedDecl *FoundDecl,
@@ -1530,7 +1531,8 @@ public:
                             Expr **Args, unsigned NumArgs,
                             OverloadCandidateSet& CandidateSet,
                             bool SuppressUserConversions = false,
-                            bool PartialOverloading = false);
+                            bool PartialOverloading = false,
+                            bool AllowExplicit = false);
   void AddFunctionCandidates(const UnresolvedSetImpl &Functions,
                              Expr **Args, unsigned NumArgs,
                              OverloadCandidateSet& CandidateSet,
@@ -1594,7 +1596,7 @@ public:
                                     Expr **Args, unsigned NumArgs,
                                     OverloadCandidateSet& CandidateSet);
   void AddArgumentDependentLookupCandidates(DeclarationName Name,
-                                            bool Operator,
+                                            bool Operator, SourceLocation Loc,
                                             Expr **Args, unsigned NumArgs,
                                 TemplateArgumentListInfo *ExplicitTemplateArgs,
                                             OverloadCandidateSet& CandidateSet,
@@ -1840,6 +1842,7 @@ public:
   CXXDestructorDecl *LookupDestructor(CXXRecordDecl *Class);
 
   void ArgumentDependentLookup(DeclarationName Name, bool Operator,
+                               SourceLocation Loc,
                                Expr **Args, unsigned NumArgs,
                                ADLResult &Functions,
                                bool StdNamespaceIsAssociated = false);
@@ -3157,7 +3160,8 @@ public:
   bool CompleteConstructorCall(CXXConstructorDecl *Constructor,
                                MultiExprArg ArgsPtr,
                                SourceLocation Loc,
-                               ASTOwningVector<Expr*> &ConvertedArgs);
+                               ASTOwningVector<Expr*> &ConvertedArgs,
+                               bool AllowExplicit = false);
 
   ParsedType getDestructorName(SourceLocation TildeLoc,
                                IdentifierInfo &II, SourceLocation NameLoc,
@@ -3350,6 +3354,14 @@ public:
                                   TypeSourceInfo *RhsT,
                                   SourceLocation RParen);
 
+  /// \brief Parsed one of the type trait support pseudo-functions.
+  ExprResult ActOnTypeTrait(TypeTrait Kind, SourceLocation KWLoc,
+                            ArrayRef<ParsedType> Args,
+                            SourceLocation RParenLoc);
+  ExprResult BuildTypeTrait(TypeTrait Kind, SourceLocation KWLoc,
+                            ArrayRef<TypeSourceInfo *> Args,
+                            SourceLocation RParenLoc);
+  
   /// ActOnArrayTypeTrait - Parsed one of the bianry type trait support
   /// pseudo-functions.
   ExprResult ActOnArrayTypeTrait(ArrayTypeTrait ATT,
@@ -5955,7 +5967,8 @@ public:
                               unsigned FirstProtoArg,
                               Expr **Args, unsigned NumArgs,
                               SmallVector<Expr *, 8> &AllArgs,
-                              VariadicCallType CallType = VariadicDoesNotApply);
+                              VariadicCallType CallType = VariadicDoesNotApply,
+                              bool AllowExplicit = false);
 
   // DefaultVariadicArgumentPromotion - Like DefaultArgumentPromotion, but
   // will warn if the resulting type is not a POD type.
