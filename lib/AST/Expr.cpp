@@ -2179,6 +2179,7 @@ Expr::CanThrowResult Expr::CanThrow(ASTContext &C) const {
   case AddrLabelExprClass:
   case ArrayTypeTraitExprClass:
   case BinaryTypeTraitExprClass:
+  case TypeTraitExprClass:
   case CXXBoolLiteralExprClass:
   case CXXNoexceptExprClass:
   case CXXNullPtrLiteralExprClass:
