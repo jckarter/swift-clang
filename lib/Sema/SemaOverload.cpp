@@ -740,8 +740,6 @@ namespace {
 /// Return true on unrecoverable error.
 static bool checkPlaceholderForOverload(Sema &S, Expr *&E,
                                         UnbridgedCastsSet *unbridgedCasts = 0) {
-  S.RequireCompleteType(E->getExprLoc(), E->getType(), 0);
-
   if (const BuiltinType *placeholder =  E->getType()->getAsPlaceholderType()) {
     // We can't handle overloaded expressions here because overload
     // resolution might reasonably tweak them.
@@ -4213,7 +4211,8 @@ static ImplicitConversionSequence
 TryCopyInitialization(Sema &S, Expr *From, QualType ToType,
                       bool SuppressUserConversions,
                       bool InOverloadResolution,
-                      bool AllowObjCWritebackConversion);
+                      bool AllowObjCWritebackConversion,
+                      bool AllowExplicit = false);
 
 /// TryListConversion - Try to copy-initialize a value of type ToType from the
 /// initializer list From.
@@ -4413,7 +4412,8 @@ static ImplicitConversionSequence
 TryCopyInitialization(Sema &S, Expr *From, QualType ToType,
                       bool SuppressUserConversions,
                       bool InOverloadResolution,
-                      bool AllowObjCWritebackConversion) {
+                      bool AllowObjCWritebackConversion,
+                      bool AllowExplicit) {
   if (InitListExpr *FromInitList = dyn_cast<InitListExpr>(From))
     return TryListConversion(S, FromInitList, ToType, SuppressUserConversions,
                              InOverloadResolution,AllowObjCWritebackConversion);
@@ -4422,7 +4422,7 @@ TryCopyInitialization(Sema &S, Expr *From, QualType ToType,
     return TryReferenceInit(S, From, ToType,
                             /*FIXME:*/From->getLocStart(),
                             SuppressUserConversions,
-                            /*AllowExplicit=*/false);
+                            AllowExplicit);
 
   return TryImplicitConversion(S, From, ToType,
                                SuppressUserConversions,
@@ -5103,7 +5103,8 @@ Sema::AddOverloadCandidate(FunctionDecl *Function,
                            Expr **Args, unsigned NumArgs,
                            OverloadCandidateSet& CandidateSet,
                            bool SuppressUserConversions,
-                           bool PartialOverloading) {
+                           bool PartialOverloading,
+                           bool AllowExplicit) {
   const FunctionProtoType* Proto
     = dyn_cast<FunctionProtoType>(Function->getType()->getAs<FunctionType>());
   assert(Proto && "Functions without a prototype cannot be overloaded");
@@ -5204,7 +5205,8 @@ Sema::AddOverloadCandidate(FunctionDecl *Function,
                                 SuppressUserConversions,
                                 /*InOverloadResolution=*/true,
                                 /*AllowObjCWritebackConversion=*/
-                                  getLangOptions().ObjCAutoRefCount);
+                                  getLangOptions().ObjCAutoRefCount,
+                                AllowExplicit);
       if (Candidate.Conversions[ArgIdx].isBad()) {
         Candidate.Viable = false;
         Candidate.FailureKind = ovl_fail_bad_conversion;
@@ -7444,7 +7446,7 @@ Sema::AddBuiltinOperatorCandidates(OverloadedOperatorKind Op,
 /// candidate set (C++ [basic.lookup.argdep]).
 void
 Sema::AddArgumentDependentLookupCandidates(DeclarationName Name,
-                                           bool Operator,
+                                           bool Operator, SourceLocation Loc,
                                            Expr **Args, unsigned NumArgs,
                                  TemplateArgumentListInfo *ExplicitTemplateArgs,
                                            OverloadCandidateSet& CandidateSet,
@@ -7460,7 +7462,7 @@ Sema::AddArgumentDependentLookupCandidates(DeclarationName Name,
   // we supposed to consider on ADL candidates, anyway?
 
   // FIXME: Pass in the explicit template arguments?
-  ArgumentDependentLookup(Name, Operator, Args, NumArgs, Fns,
+  ArgumentDependentLookup(Name, Operator, Loc, Args, NumArgs, Fns,
                           StdNamespaceIsAssociated);
 
   // Erase all of the candidates we already knew about.
@@ -9219,6 +9221,7 @@ void Sema::AddOverloadedCallCandidates(UnresolvedLookupExpr *ULE,
 
   if (ULE->requiresADL())
     AddArgumentDependentLookupCandidates(ULE->getName(), /*Operator*/ false,
+                                         ULE->getExprLoc(),
                                          Args, NumArgs,
                                          ExplicitTemplateArgs,
                                          CandidateSet,
@@ -9661,7 +9664,7 @@ Sema::CreateOverloadedUnaryOp(SourceLocation OpLoc, unsigned OpcIn,
 
   // Add candidates from ADL.
   AddArgumentDependentLookupCandidates(OpName, /*Operator*/ true,
-                                       Args, NumArgs,
+                                       OpLoc, Args, NumArgs,
                                        /*ExplicitTemplateArgs*/ 0,
                                        CandidateSet);
 
@@ -9882,7 +9885,7 @@ Sema::CreateOverloadedBinOp(SourceLocation OpLoc,
 
   // Add candidates from ADL.
   AddArgumentDependentLookupCandidates(OpName, /*Operator*/ true,
-                                       Args, 2,
+                                       OpLoc, Args, 2,
                                        /*ExplicitTemplateArgs*/ 0,
                                        CandidateSet);
 
