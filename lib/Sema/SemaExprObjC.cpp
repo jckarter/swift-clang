@@ -195,6 +195,12 @@ ExprResult Sema::BuildObjCNumericLiteral(SourceLocation AtLoc, Expr *Number) {
                                 AtLoc, LookupOrdinaryName);
     NSNumberDecl = dyn_cast_or_null<ObjCInterfaceDecl>(IF);
     
+    if (!NSNumberDecl && getLangOptions().DebuggerSupport)
+      NSNumberDecl =  ObjCInterfaceDecl::Create (Context,
+                        Context.getTranslationUnitDecl(),
+                        SourceLocation(), 
+                        NSAPIObj->getNSClassId(NSAPI::ClassId_NSNumber),
+                        0, SourceLocation());
     if (!NSNumberDecl) {
       Diag(AtLoc, diag::err_undeclared_nsnumber);
       return ExprError();
@@ -225,20 +231,24 @@ ExprResult Sema::BuildObjCNumericLiteral(SourceLocation AtLoc, Expr *Number) {
     }
   }
   
-  // Look for the appropriate method within NSNumber.
-  ObjCMethodDecl *Method  = getNSNumberFactoryMethod(*this, AtLoc, 
-                                                     NumberType, 
-                                                     Number->getSourceRange());
-  if (!Method)
-    return ExprError();
-  
-  // Convert the number to the type that the parameter expects.
-  QualType ElementT = Method->param_begin()[0]->getType();
-  ExprResult ConvertedNumber = PerformImplicitConversion(Number, ElementT,
-                                                         AA_Sending);
-  if (ConvertedNumber.isInvalid())
-    return ExprError();
-  Number = ConvertedNumber.get();
+  ObjCMethodDecl *Method = 0;
+  if (!getLangOptions().DebuggerSupport) {
+    // Look for the appropriate method within NSNumber.
+    Method  = getNSNumberFactoryMethod(*this, AtLoc, 
+                                       NumberType, 
+                                       Number->getSourceRange());
+
+    if (!Method)
+      return ExprError();
+
+    // Convert the number to the type that the parameter expects.
+    QualType ElementT = Method->param_begin()[0]->getType();
+    ExprResult ConvertedNumber = PerformImplicitConversion(Number, ElementT,
+                                                           AA_Sending);
+    if (ConvertedNumber.isInvalid())
+      return ExprError();
+    Number = ConvertedNumber.get();
+  }
   
   // Construct the literal.
   QualType Ty
