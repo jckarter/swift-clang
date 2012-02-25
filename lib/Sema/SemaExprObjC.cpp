@@ -163,6 +163,20 @@ static ObjCMethodDecl *getNSNumberFactoryMethod(Sema &S, SourceLocation Loc,
   
   // Look for the appropriate method within NSNumber.
   ObjCMethodDecl *Method = S.NSNumberDecl->lookupClassMethod(Sel);;
+  if (!Method && S.getLangOptions().DebuggerSupport) {
+    TypeSourceInfo *ResultTInfo = 0;
+    QualType ReturnType = S.Context.getObjCIdType();
+    Method = ObjCMethodDecl::Create(S.Context, SourceLocation(), SourceLocation(), Sel,
+                           ReturnType,
+                           ResultTInfo,
+                           S.Context.getTranslationUnitDecl(),
+                           false /*Instance*/, false/*isVariadic*/,
+                           /*isSynthesized=*/false,
+                           /*isImplicitlyDeclared=*/true, /*isDefined=*/false,
+                           ObjCMethodDecl::Required,
+                           false);
+  }
+
   if (!Method) {
     S.Diag(Loc, diag::err_undeclared_nsnumber_method) << Sel;
     return 0;
@@ -232,15 +246,15 @@ ExprResult Sema::BuildObjCNumericLiteral(SourceLocation AtLoc, Expr *Number) {
   }
   
   ObjCMethodDecl *Method = 0;
+  // Look for the appropriate method within NSNumber.
+  Method  = getNSNumberFactoryMethod(*this, AtLoc, 
+                                     NumberType, 
+                                     Number->getSourceRange());
+
+  if (!Method)
+    return ExprError();
+
   if (!getLangOptions().DebuggerSupport) {
-    // Look for the appropriate method within NSNumber.
-    Method  = getNSNumberFactoryMethod(*this, AtLoc, 
-                                       NumberType, 
-                                       Number->getSourceRange());
-
-    if (!Method)
-      return ExprError();
-
     // Convert the number to the type that the parameter expects.
     QualType ElementT = Method->param_begin()[0]->getType();
     ExprResult ConvertedNumber = PerformImplicitConversion(Number, ElementT,
