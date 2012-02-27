@@ -163,7 +163,7 @@ static ObjCMethodDecl *getNSNumberFactoryMethod(Sema &S, SourceLocation Loc,
   
   // Look for the appropriate method within NSNumber.
   ObjCMethodDecl *Method = S.NSNumberDecl->lookupClassMethod(Sel);;
-  if (!Method && S.getLangOptions().DebuggerSupport) {
+  if (!Method && S.getLangOptions().DebuggerObjCLiteral) {
     TypeSourceInfo *ResultTInfo = 0;
     QualType ReturnType = S.Context.getObjCIdType();
     Method = ObjCMethodDecl::Create(S.Context, SourceLocation(), SourceLocation(), Sel,
@@ -209,7 +209,7 @@ ExprResult Sema::BuildObjCNumericLiteral(SourceLocation AtLoc, Expr *Number) {
                                 AtLoc, LookupOrdinaryName);
     NSNumberDecl = dyn_cast_or_null<ObjCInterfaceDecl>(IF);
     
-    if (!NSNumberDecl && getLangOptions().DebuggerSupport)
+    if (!NSNumberDecl && getLangOptions().DebuggerObjCLiteral)
       NSNumberDecl =  ObjCInterfaceDecl::Create (Context,
                         Context.getTranslationUnitDecl(),
                         SourceLocation(), 
@@ -254,7 +254,7 @@ ExprResult Sema::BuildObjCNumericLiteral(SourceLocation AtLoc, Expr *Number) {
   if (!Method)
     return ExprError();
 
-  if (!getLangOptions().DebuggerSupport) {
+  if (!getLangOptions().DebuggerObjCLiteral) {
     // Convert the number to the type that the parameter expects.
     QualType ElementT = Method->param_begin()[0]->getType();
     ExprResult ConvertedNumber = PerformImplicitConversion(Number, ElementT,
@@ -416,7 +416,6 @@ ExprResult Sema::BuildObjCSubscriptExpression(SourceLocation RB, Expr *BaseExpr,
 }
 
 ExprResult Sema::BuildObjCArrayLiteral(SourceRange SR, MultiExprArg Elements) {
-  bool Debugging = getLangOptions().DebuggerSupport;
   // Look up the NSArray class, if we haven't done so already.
   if (!NSArrayDecl) {
     NamedDecl *IF = LookupSingleName(TUScope,
@@ -424,7 +423,7 @@ ExprResult Sema::BuildObjCArrayLiteral(SourceRange SR, MultiExprArg Elements) {
                                  SR.getBegin(),
                                  LookupOrdinaryName);
     NSArrayDecl = dyn_cast_or_null<ObjCInterfaceDecl>(IF);
-    if (!NSArrayDecl && Debugging)
+    if (!NSArrayDecl && getLangOptions().DebuggerObjCLiteral)
       NSArrayDecl =  ObjCInterfaceDecl::Create (Context,
                             Context.getTranslationUnitDecl(),
                             SourceLocation(),
@@ -443,7 +442,7 @@ ExprResult Sema::BuildObjCArrayLiteral(SourceRange SR, MultiExprArg Elements) {
     Selector
       Sel = NSAPIObj->getNSArraySelector(NSAPI::NSArr_arrayWithObjectsCount);
     ArrayWithObjectsMethod = NSArrayDecl->lookupClassMethod(Sel);
-    if (!ArrayWithObjectsMethod && Debugging) {
+    if (!ArrayWithObjectsMethod && getLangOptions().DebuggerObjCLiteral) {
       TypeSourceInfo *ResultTInfo = 0;
       ArrayWithObjectsMethod =
                          ObjCMethodDecl::Create(Context,
@@ -456,6 +455,28 @@ ExprResult Sema::BuildObjCArrayLiteral(SourceRange SR, MultiExprArg Elements) {
                            /*isImplicitlyDeclared=*/true, /*isDefined=*/false,
                            ObjCMethodDecl::Required,
                            false);
+      SmallVector<ParmVarDecl *, 2> Params;
+      ParmVarDecl *objects = ParmVarDecl::Create(Context, ArrayWithObjectsMethod,
+                                                SourceLocation(), SourceLocation(),
+                                                &Context.Idents.get("objects"),
+                                                Context.getPointerType(IdT),
+                                                /*TInfo=*/0,
+                                                SC_None,
+                                                SC_None,
+                                                0);
+      Params.push_back(objects);
+      ParmVarDecl *cnt = ParmVarDecl::Create(Context, ArrayWithObjectsMethod,
+                                                SourceLocation(), SourceLocation(),
+                                                &Context.Idents.get("cnt"),
+                                                Context.UnsignedLongTy,
+                                                /*TInfo=*/0,
+                                                SC_None,
+                                                SC_None,
+                                                0);
+      Params.push_back(cnt);
+      ArrayWithObjectsMethod->setMethodParams(Context, Params,
+                                              ArrayRef<SourceLocation>());
+
 
     }
 
@@ -466,8 +487,7 @@ ExprResult Sema::BuildObjCArrayLiteral(SourceRange SR, MultiExprArg Elements) {
   }
   
   // Make sure the return type is reasonable.
-  if (!Debugging &&
-      !ArrayWithObjectsMethod->getResultType()->isObjCObjectPointerType()) {
+  if (!ArrayWithObjectsMethod->getResultType()->isObjCObjectPointerType()) {
     Diag(SR.getBegin(), diag::err_objc_literal_method_sig)
       << ArrayWithObjectsMethod->getSelector();
     Diag(ArrayWithObjectsMethod->getLocation(),
@@ -477,9 +497,7 @@ ExprResult Sema::BuildObjCArrayLiteral(SourceRange SR, MultiExprArg Elements) {
   }
 
   // Dig out the type that all elements should be converted to.
-  QualType T = 
-    Debugging ? Context.getPointerType(IdT)
-              : ArrayWithObjectsMethod->param_begin()[0]->getType();
+  QualType T = ArrayWithObjectsMethod->param_begin()[0]->getType();
   const PointerType *PtrT = T->getAs<PointerType>();
   if (!PtrT || 
       !Context.hasSameUnqualifiedType(PtrT->getPointeeType(), IdT)) {
@@ -494,8 +512,7 @@ ExprResult Sema::BuildObjCArrayLiteral(SourceRange SR, MultiExprArg Elements) {
   T = PtrT->getPointeeType();
   
   // Check that the 'count' parameter is integral.
-  if (!Debugging &&
-      !ArrayWithObjectsMethod->param_begin()[1]->getType()->isIntegerType()) {
+  if (!ArrayWithObjectsMethod->param_begin()[1]->getType()->isIntegerType()) {
     Diag(SR.getBegin(), diag::err_objc_literal_method_sig)
       << ArrayWithObjectsMethod->getSelector();
     Diag(ArrayWithObjectsMethod->param_begin()[1]->getLocation(),
@@ -534,13 +551,12 @@ ExprResult Sema::BuildObjCDictionaryLiteral(SourceRange SR,
                                             ObjCDictionaryElement *Elements,
                                             unsigned NumElements) {
   // Look up the NSDictionary class, if we haven't done so already.
-  bool Debugging = getLangOptions().DebuggerSupport;
   if (!NSDictionaryDecl) {
     NamedDecl *IF = LookupSingleName(TUScope,
                             NSAPIObj->getNSClassId(NSAPI::ClassId_NSDictionary),
                             SR.getBegin(), LookupOrdinaryName);
     NSDictionaryDecl = dyn_cast_or_null<ObjCInterfaceDecl>(IF);
-    if (!NSDictionaryDecl && Debugging)
+    if (!NSDictionaryDecl && getLangOptions().DebuggerObjCLiteral)
       NSDictionaryDecl =  ObjCInterfaceDecl::Create (Context,
                             Context.getTranslationUnitDecl(),
                             SourceLocation(),
@@ -560,20 +576,48 @@ ExprResult Sema::BuildObjCDictionaryLiteral(SourceRange SR,
     Selector Sel = NSAPIObj->getNSDictionarySelector(
                                     NSAPI::NSDict_dictionaryWithObjectsForKeysCount);
     DictionaryWithObjectsMethod = NSDictionaryDecl->lookupClassMethod(Sel);
-    if (!DictionaryWithObjectsMethod && Debugging) {
-      TypeSourceInfo *ResultTInfo = 0;
+    if (!DictionaryWithObjectsMethod && getLangOptions().DebuggerObjCLiteral) {
       DictionaryWithObjectsMethod = 
                          ObjCMethodDecl::Create(Context,  
                            SourceLocation(), SourceLocation(), Sel,
                            IdT,
-                           ResultTInfo,
+                           0 /*TypeSourceInfo */,
                            Context.getTranslationUnitDecl(),
                            false /*Instance*/, false/*isVariadic*/,
                            /*isSynthesized=*/false,
                            /*isImplicitlyDeclared=*/true, /*isDefined=*/false,
                            ObjCMethodDecl::Required,
                            false);
-
+      SmallVector<ParmVarDecl *, 3> Params;
+      ParmVarDecl *objects = ParmVarDecl::Create(Context, DictionaryWithObjectsMethod,
+                                                SourceLocation(), SourceLocation(),
+                                                &Context.Idents.get("objects"),
+                                                Context.getPointerType(IdT),
+                                                /*TInfo=*/0,
+                                                SC_None,
+                                                SC_None,
+                                                0);
+      Params.push_back(objects);
+      ParmVarDecl *keys = ParmVarDecl::Create(Context, DictionaryWithObjectsMethod,
+                                                SourceLocation(), SourceLocation(),
+                                                &Context.Idents.get("keys"),
+                                                Context.getPointerType(IdT),
+                                                /*TInfo=*/0,
+                                                SC_None,
+                                                SC_None,
+                                                0);
+      Params.push_back(keys);
+      ParmVarDecl *cnt = ParmVarDecl::Create(Context, DictionaryWithObjectsMethod,
+                                                SourceLocation(), SourceLocation(),
+                                                &Context.Idents.get("cnt"),
+                                                Context.UnsignedLongTy,
+                                                /*TInfo=*/0,
+                                                SC_None,
+                                                SC_None,
+                                                0);
+      Params.push_back(cnt);
+      DictionaryWithObjectsMethod->setMethodParams(Context, Params, 
+                                                   ArrayRef<SourceLocation>());
     }
 
     if (!DictionaryWithObjectsMethod) {
@@ -593,9 +637,7 @@ ExprResult Sema::BuildObjCDictionaryLiteral(SourceRange SR,
   }
 
   // Dig out the type that all values should be converted to.
-  QualType ValueT =  
-    Debugging ? Context.getPointerType(IdT) 
-              : DictionaryWithObjectsMethod->param_begin()[0]->getType();
+  QualType ValueT =  DictionaryWithObjectsMethod->param_begin()[0]->getType();
   const PointerType *PtrValue = ValueT->getAs<PointerType>();
   if (!PtrValue || 
       !Context.hasSameUnqualifiedType(PtrValue->getPointeeType(), IdT)) {
@@ -610,9 +652,7 @@ ExprResult Sema::BuildObjCDictionaryLiteral(SourceRange SR,
   ValueT = PtrValue->getPointeeType();
 
   // Dig out the type that all keys should be converted to.
-  QualType KeyT = 
-    Debugging ? Context.getPointerType(IdT)
-              : DictionaryWithObjectsMethod->param_begin()[1]->getType();
+  QualType KeyT = DictionaryWithObjectsMethod->param_begin()[1]->getType();
   const PointerType *PtrKey = KeyT->getAs<PointerType>();
   if (!PtrKey || 
       !Context.hasSameUnqualifiedType(PtrKey->getPointeeType(),
@@ -649,8 +689,7 @@ ExprResult Sema::BuildObjCDictionaryLiteral(SourceRange SR,
   KeyT = PtrKey->getPointeeType();
 
   // Check that the 'count' parameter is integral.
-  if (!Debugging &&
-      !DictionaryWithObjectsMethod->param_begin()[2]->getType()
+  if (!DictionaryWithObjectsMethod->param_begin()[2]->getType()
                                                             ->isIntegerType()) {
     Diag(SR.getBegin(), diag::err_objc_literal_method_sig)
       << DictionaryWithObjectsMethod->getSelector();

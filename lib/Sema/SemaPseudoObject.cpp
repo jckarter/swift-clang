@@ -952,6 +952,31 @@ bool ObjCSubscriptOpBuilder::findAtIndexGetter() {
   bool receiverIdType = (BaseT->isObjCIdType() ||
                          BaseT->isObjCQualifiedIdType());
   
+  if (!AtIndexGetter && S.getLangOptions().DebuggerObjCLiteral) {
+    AtIndexGetter = ObjCMethodDecl::Create(S.Context, SourceLocation(), 
+                           SourceLocation(), AtIndexGetterSelector,
+                           S.Context.getObjCIdType() /*ReturnType*/,
+                           0 /*TypeSourceInfo */,
+                           S.Context.getTranslationUnitDecl(),
+                           true /*Instance*/, false/*isVariadic*/,
+                           /*isSynthesized=*/false,
+                           /*isImplicitlyDeclared=*/true, /*isDefined=*/false,
+                           ObjCMethodDecl::Required,
+                           false);
+    ParmVarDecl *Argument = ParmVarDecl::Create(S.Context, AtIndexGetter,
+                                                SourceLocation(), SourceLocation(),
+                                                arrayRef ? &S.Context.Idents.get("index")
+                                                         : &S.Context.Idents.get("key"),
+                                                arrayRef ? S.Context.UnsignedLongTy
+                                                         : S.Context.getObjCIdType(),
+                                                /*TInfo=*/0,
+                                                SC_None,
+                                                SC_None,
+                                                0);
+    AtIndexGetter->setMethodParams(S.Context, Argument, 
+                                   ArrayRef<SourceLocation>());
+  }
+
   if (!AtIndexGetter) {
     if (!receiverIdType) {
       S.Diag(BaseExpr->getExprLoc(), diag::err_objc_subscript_method_not_found)
@@ -1035,6 +1060,43 @@ bool ObjCSubscriptOpBuilder::findAtIndexSetter() {
   
   bool receiverIdType = (BaseT->isObjCIdType() ||
                          BaseT->isObjCQualifiedIdType());
+
+  if (!AtIndexSetter && S.getLangOptions().DebuggerObjCLiteral) {
+    TypeSourceInfo *ResultTInfo = 0;
+    QualType ReturnType = S.Context.VoidTy;
+    AtIndexSetter = ObjCMethodDecl::Create(S.Context, SourceLocation(),
+                           SourceLocation(), AtIndexSetterSelector,
+                           ReturnType,
+                           ResultTInfo,
+                           S.Context.getTranslationUnitDecl(),
+                           true /*Instance*/, false/*isVariadic*/,
+                           /*isSynthesized=*/false,
+                           /*isImplicitlyDeclared=*/true, /*isDefined=*/false,
+                           ObjCMethodDecl::Required,
+                           false); 
+    SmallVector<ParmVarDecl *, 2> Params;
+    ParmVarDecl *object = ParmVarDecl::Create(S.Context, AtIndexSetter,
+                                                SourceLocation(), SourceLocation(),
+                                                &S.Context.Idents.get("object"),
+                                                S.Context.getObjCIdType(),
+                                                /*TInfo=*/0,
+                                                SC_None,
+                                                SC_None,
+                                                0);
+    Params.push_back(object);
+    ParmVarDecl *key = ParmVarDecl::Create(S.Context, AtIndexSetter,
+                                                SourceLocation(), SourceLocation(),
+                                                arrayRef ?  &S.Context.Idents.get("index")
+                                                         :  &S.Context.Idents.get("key"),
+                                                arrayRef ? S.Context.UnsignedLongTy
+                                                         : S.Context.getObjCIdType(),
+                                                /*TInfo=*/0,
+                                                SC_None,
+                                                SC_None,
+                                                0);
+    Params.push_back(key);
+    AtIndexSetter->setMethodParams(S.Context, Params, ArrayRef<SourceLocation>());
+  }
   
   if (!AtIndexSetter) {
     if (!receiverIdType) {
