@@ -175,6 +175,11 @@ static ObjCMethodDecl *getNSNumberFactoryMethod(Sema &S, SourceLocation Loc,
                            /*isImplicitlyDeclared=*/true, /*isDefined=*/false,
                            ObjCMethodDecl::Required,
                            false);
+    ParmVarDecl *value = ParmVarDecl::Create(S.Context, Method,
+                                             SourceLocation(), SourceLocation(),
+                                             &S.Context.Idents.get("value"),
+                                             T, /*TInfo=*/0, SC_None, SC_None, 0);
+    Method->setMethodParams(S.Context, value, ArrayRef<SourceLocation>());
   }
 
   if (!Method) {
@@ -254,15 +259,13 @@ ExprResult Sema::BuildObjCNumericLiteral(SourceLocation AtLoc, Expr *Number) {
   if (!Method)
     return ExprError();
 
-  if (!getLangOptions().DebuggerObjCLiteral) {
-    // Convert the number to the type that the parameter expects.
-    QualType ElementT = Method->param_begin()[0]->getType();
-    ExprResult ConvertedNumber = PerformImplicitConversion(Number, ElementT,
-                                                           AA_Sending);
-    if (ConvertedNumber.isInvalid())
-      return ExprError();
-    Number = ConvertedNumber.get();
-  }
+  // Convert the number to the type that the parameter expects.
+  QualType ElementT = Method->param_begin()[0]->getType();
+  ExprResult ConvertedNumber = PerformImplicitConversion(Number, ElementT,
+                                                         AA_Sending);
+  if (ConvertedNumber.isInvalid())
+    return ExprError();
+  Number = ConvertedNumber.get();
   
   // Construct the literal.
   QualType Ty
