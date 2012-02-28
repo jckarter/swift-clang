@@ -539,7 +539,7 @@ def warn_strict_multiple_method_decl : Warning<
 def warn_accessor_property_type_mismatch : Warning<
   "type of property %0 does not match type of accessor %1">;
 def not_conv_function_declared_at : Note<"type conversion function declared here">;
-def note_method_declared_at : Note<"method declared here">;
+def note_method_declared_at : Note<"method %0 declared here">;
 def err_setter_type_void : Error<"type of setter must be void">;
 def err_duplicate_method_decl : Error<"duplicate declaration of method %0">;
 def warn_duplicate_method_decl : 
@@ -680,7 +680,7 @@ def warn_auto_implicit_atomic_property : Warning<
 def warn_unimplemented_selector:  Warning<
   "unimplemented selector %0">, InGroup<Selector>, DefaultIgnore;
 def warn_unimplemented_protocol_method : Warning<
-  "method in protocol not implemented">, InGroup<Protocol>;
+  "method %0 in protocol not implemented">, InGroup<Protocol>;
 
 // C++ declarations
 def err_static_assert_expression_is_not_constant : Error<
@@ -3761,6 +3761,9 @@ def err_objc_multiple_subscript_type_conversion : Error<
 def err_objc_subscript_type_conversion : Error<
   "indexing expression is invalid because subscript type %0 is not an intergal"
   "or objective-C pointer type">;
+def err_objc_indexing_method_result_type : Error<
+  "method for accessing %select{dictionary|array}1 element must have Objective-C"
+  " object return type instead of %0">;
 def err_objc_index_incomplete_class_type : Error<
   "objective-C index expression has incomplete class type %0">;
 def err_illegal_container_subscripting_op : Error<

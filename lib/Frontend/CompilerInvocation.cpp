@@ -832,6 +832,8 @@ static void LangOptsToArgs(const LangOptions &Opts,
     Res.push_back("-fdebugger-support");
   if (Opts.DebuggerCastResultToId)
     Res.push_back("-fdebugger-cast-result-to-id");
+  if (Opts.DebuggerObjCLiteral)
+    Res.push_back("-fdebugger-objc-literal");
   if (Opts.DelayedTemplateParsing)
     Res.push_back("-fdelayed-template-parsing");
   if (Opts.Deprecated)
@@ -1049,6 +1051,7 @@ static bool ParseAnalyzerArgs(AnalyzerOptions &Opts, ArgList &Args,
   Opts.MaxLoop = Args.getLastArgIntValue(OPT_analyzer_max_loop, 4, Diags);
   Opts.EagerlyTrimEGraph = !Args.hasArg(OPT_analyzer_no_eagerly_trim_egraph);
   Opts.InlineCall = Args.hasArg(OPT_analyzer_inline_call);
+  Opts.PrintStats = Args.hasArg(OPT_analyzer_stats);
 
   Opts.CheckersControlList.clear();
   for (arg_iterator it = Args.filtered_begin(OPT_analyzer_checker,
@@ -1904,6 +1907,7 @@ static void ParseLangArgs(LangOptions &Opts, ArgList &Args, InputKind IK,
   Opts.ParseUnknownAnytype = Args.hasArg(OPT_funknown_anytype);
   Opts.DebuggerSupport = Args.hasArg(OPT_fdebugger_support);
   Opts.DebuggerCastResultToId = Args.hasArg(OPT_fdebugger_cast_result_to_id);
+  Opts.DebuggerObjCLiteral = Args.hasArg(OPT_fdebugger_objc_literal);
   Opts.AddressSanitizer = Args.hasArg(OPT_faddress_sanitizer);
   Opts.ApplePragmaPack = Args.hasArg(OPT_fapple_pragma_pack);
   Opts.CurrentModule = Args.getLastArgValue(OPT_fmodule_name);
