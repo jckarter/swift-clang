@@ -82,7 +82,7 @@ typedef signed char BOOL;
 
 void foo() {
   NSString *str = M(@"foo"); // expected-warning {{redundant}}
-  str = @"foo"; // expected-warning {{redundant}}
+  str = [[NSString alloc] initWithString:@"foo"];
   NSArray *arr = @[str]; // expected-warning {{redundant}}
   NSDictionary *dict = @{str: arr}; // expected-warning {{redundant}}
 

@@ -21,9 +21,6 @@
 using namespace clang;
 using namespace edit;
 
-typedef bool (*rewriteFn)(const ObjCMessageExpr *Msg,
-                          const NSAPI &NS, Commit &commit);
-
 static bool checkForLiteralCreation(const ObjCMessageExpr *Msg,
                                     IdentifierInfo *&ClassId) {
   if (!Msg || Msg->isImplicit() || !Msg->getMethodDecl())
@@ -36,14 +33,6 @@ static bool checkForLiteralCreation(const ObjCMessageExpr *Msg,
 
   if (Msg->getReceiverKind() == ObjCMessageExpr::Class)
     return true;
-
-  if (Msg->getReceiverKind() == ObjCMessageExpr::Instance) {
-    if (const ObjCMessageExpr *Rec = dyn_cast<ObjCMessageExpr>(
-                           Msg->getInstanceReceiver()->IgnoreParenImpCasts())) {
-      if (Rec->getMethodFamily() == OMF_alloc)
-        return true;
-    }
-  }
 
   return false;
 }
@@ -65,19 +54,16 @@ bool edit::rewriteObjCRedundantCallWithLiteral(const ObjCMessageExpr *Msg,
 
   if ((isa<ObjCStringLiteral>(Arg) &&
        NS.getNSClassId(NSAPI::ClassId_NSString) == II &&
-       (NS.getNSStringSelector(NSAPI::NSStr_stringWithString) == Sel ||
-        NS.getNSStringSelector(NSAPI::NSStr_initWithString) == Sel))    ||
+       NS.getNSStringSelector(NSAPI::NSStr_stringWithString) == Sel)    ||
 
       (isa<ObjCArrayLiteral>(Arg) &&
        NS.getNSClassId(NSAPI::ClassId_NSArray) == II &&
-       (NS.getNSArraySelector(NSAPI::NSArr_arrayWithArray) == Sel ||
-        NS.getNSArraySelector(NSAPI::NSArr_initWithArray) == Sel))      ||
+       NS.getNSArraySelector(NSAPI::NSArr_arrayWithArray) == Sel)      ||
 
       (isa<ObjCDictionaryLiteral>(Arg) &&
        NS.getNSClassId(NSAPI::ClassId_NSDictionary) == II &&
-       (NS.getNSDictionarySelector(
-                               NSAPI::NSDict_dictionaryWithDictionary) == Sel ||
-        NS.getNSDictionarySelector(NSAPI::NSDict_initWithDictionary) == Sel))) {
+       NS.getNSDictionarySelector(
+                              NSAPI::NSDict_dictionaryWithDictionary) == Sel)) {
     
     commit.replaceWithInner(Msg->getSourceRange(),
                            Msg->getArg(0)->getSourceRange());
@@ -264,8 +250,7 @@ static bool rewriteToArrayLiteral(const ObjCMessageExpr *Msg,
     return true;
   }
 
-  if (Sel == NS.getNSArraySelector(NSAPI::NSArr_arrayWithObjects) ||
-      Sel == NS.getNSArraySelector(NSAPI::NSArr_initWithObjects)) {
+  if (Sel == NS.getNSArraySelector(NSAPI::NSArr_arrayWithObjects)) {
     if (Msg->getNumArgs() == 0)
       return false;
     const Expr *SentinelExpr = Msg->getArg(Msg->getNumArgs() - 1);
@@ -320,8 +305,7 @@ static bool rewriteToDictionaryLiteral(const ObjCMessageExpr *Msg,
   }
 
   if (Sel == NS.getNSDictionarySelector(
-                                  NSAPI::NSDict_dictionaryWithObjectsAndKeys) ||
-      Sel == NS.getNSDictionarySelector(NSAPI::NSDict_initWithObjectsAndKeys)) {
+                                  NSAPI::NSDict_dictionaryWithObjectsAndKeys)) {
     if (Msg->getNumArgs() % 2 != 1)
       return false;
     unsigned SentinelIdx = Msg->getNumArgs() - 1;

@@ -209,8 +209,8 @@ void foo() {
   @VAL_INT; // expected-warning {{legacy}}
   [NSNumber numberWithInt:VAL_UINT];
 
-  (void)@2; // expected-warning {{legacy}}
-  (void)@2; // expected-warning {{legacy}}
+  (void)[[NSNumber alloc] initWithInt:2];
+  (void)[[NSNumber alloc] initWithInt:2U];
 
   @+2; // expected-warning {{legacy}}
   @-2; // expected-warning {{legacy}}

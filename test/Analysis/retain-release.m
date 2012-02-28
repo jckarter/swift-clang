@@ -1679,7 +1679,7 @@ void test_objc_arrays() {
     
     { // CASE FOUR -- OBJECT IN ARRAY CREATED BY DUPING @[]
         NSObject *o = [[NSObject alloc] init];
-        NSArray *a = [[NSArray alloc] initWithArray:@[o]]; // expected-warning {{redundant}} expected-warning {{leak}}
+        NSArray *a = [[NSArray alloc] initWithArray:@[o]]; // expected-warning {{leak}}
         [o release];
         
         [a description];
