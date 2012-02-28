@@ -580,7 +580,6 @@ void ExprEngine::Visit(const Stmt *S, ExplodedNode *Pred,
     case Stmt::ObjCIsaExprClass:
     case Stmt::ObjCProtocolExprClass:
     case Stmt::ObjCSelectorExprClass:
-    case Stmt::ObjCStringLiteralClass:
     case Expr::ObjCNumericLiteralClass:
     case Stmt::ParenListExprClass:
     case Stmt::PredefinedExprClass:
@@ -601,6 +600,8 @@ void ExprEngine::Visit(const Stmt *S, ExplodedNode *Pred,
     case Stmt::ObjCBoolLiteralExprClass:
     case Stmt::FloatingLiteralClass:
     case Stmt::SizeOfPackExprClass:
+    case Stmt::StringLiteralClass:
+    case Stmt::ObjCStringLiteralClass:
     case Stmt::CXXNullPtrLiteralExprClass: {
       Bldr.takeNodes(Pred);
       ExplodedNodeSet preVisit;
@@ -921,14 +922,6 @@ void ExprEngine::Visit(const Stmt *S, ExplodedNode *Pred,
                                                   Pred->getLocationContext())));
       }
       break;
-    }
-
-    case Stmt::StringLiteralClass: {
-      ProgramStateRef state = Pred->getState();
-      SVal V = state->getLValue(cast<StringLiteral>(S));
-      Bldr.generateNode(S, Pred, state->BindExpr(S, Pred->getLocationContext(),
-                                                 V));
-      return;
     }
 
     case Stmt::UnaryOperatorClass: {
