@@ -85,28 +85,4 @@ void foo() {
   str = [[NSString alloc] initWithString:@"foo"];
   NSArray *arr = [NSArray arrayWithArray:@[str]]; // expected-warning {{redundant}}
   NSDictionary *dict = [NSDictionary dictionaryWithDictionary:@{str: arr}]; // expected-warning {{redundant}}
-
-  arr = [NSArray array]; // expected-warning {{legacy creation}}
-  arr = [NSArray arrayWithObject:str]; // expected-warning {{legacy creation}}
-  arr = [NSArray arrayWithObjects:str, str, nil]; // expected-warning {{legacy creation}}
-  dict = [NSDictionary dictionary]; // expected-warning {{legacy creation}}
-  dict = [NSDictionary dictionaryWithObject:arr forKey:str]; // expected-warning {{legacy creation}}
-  dict = [NSDictionary dictionaryWithObjectsAndKeys: @"value1", @"key1", @"value2", @"key2", nil]; // expected-warning {{legacy creation}}
-  dict = [NSDictionary dictionaryWithObjectsAndKeys: PAIR(1), PAIR(2), nil]; // expected-warning 3 {{legacy creation}}
-
-  id o = [arr objectAtIndex:2]; // expected-warning {{legacy subscript}}
-  o = [dict objectForKey:@"key"]; // expected-warning {{legacy subscript}}
-  o = TWO([dict objectForKey:@"key"]); // expected-warning 2 {{legacy subscript}}
-  o = [NSDictionary dictionaryWithObject:[NSDictionary dictionary] forKey:@"key"]; // expected-warning 2 {{legacy creation}}
-  NSMutableArray *marr = 0;
-  NSMutableDictionary *mdict = 0;
-  [marr replaceObjectAtIndex:2 withObject:@"val"]; // expected-warning {{legacy subscript}}
-  [mdict setObject:@"value" forKey:@"key"]; // expected-warning {{legacy subscript}}
-  [marr replaceObjectAtIndex:2 withObject:[arr objectAtIndex:4]]; // expected-warning 2 {{legacy subscript}}
-  [mdict setObject:[dict objectForKey:@"key2"] forKey:@"key"]; // expected-warning 2 {{legacy subscript}}
-  [mdict setObject:@"val" forKey:[dict objectForKey:@"key2"]]; // expected-warning 2 {{legacy subscript}}
-  [mdict setObject:[dict objectForKey:@"key1"] forKey:[dict objectForKey:[NSArray arrayWithObject:@"arrkey"]]];  // expected-warning {{legacy creation}} \
-                                                                        // expected-warning 3 {{legacy subscript}}
-  __strong NSArray **parr = 0;
-  o = [*parr objectAtIndex:2]; // expected-warning {{legacy subscript}}
 }

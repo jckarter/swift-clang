@@ -1685,10 +1685,6 @@ static void applyCocoaAPICheck(Sema &S, const ObjCMessageExpr *Msg,
 static void checkCocoaAPI(Sema &S, const ObjCMessageExpr *Msg) {
   applyCocoaAPICheck(S, Msg, diag::warn_objc_redundant_literal_use,
                      edit::rewriteObjCRedundantCallWithLiteral);
-  applyCocoaAPICheck(S, Msg, diag::warn_objc_legacy_literal_creation,
-                     edit::rewriteToObjCLiteralSyntax);
-  applyCocoaAPICheck(S, Msg, diag::warn_objc_legacy_container_subscript,
-                     edit::rewriteToObjCSubscriptSyntax);
 }
 
 /// \brief Build an Objective-C class message expression.
