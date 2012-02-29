@@ -2225,6 +2225,9 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
   // NOTE: This logic is duplicated in ToolChains.cpp.
   bool ARC = isObjCAutoRefCount(Args);
   if (ARC) {
+    if (!getToolChain().SupportsObjCARC())
+      D.Diag(diag::err_arc_unsupported);
+
     CmdArgs.push_back("-fobjc-arc");
 
     // FIXME: It seems like this entire block, and several around it should be
@@ -4275,6 +4278,7 @@ void solaris::Link::ConstructJob(Compilation &C, const JobAction &JA,
     if (!Args.hasArg(options::OPT_shared)) {
       CmdArgs.push_back("-lgcc");
       CmdArgs.push_back("-lc");
+      CmdArgs.push_back("-lm");
     }
   }
 
