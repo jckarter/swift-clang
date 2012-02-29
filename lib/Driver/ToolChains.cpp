@@ -1025,6 +1025,10 @@ bool Darwin::SupportsObjCGC() const {
   return !isTargetIPhoneOS();
 }
 
+bool Darwin::SupportsObjCARC() const {
+  return isTargetIPhoneOS() || !isMacosxVersionLT(10, 6);
+}
+
 std::string
 Darwin_Generic_GCC::ComputeEffectiveClangTriple(const ArgList &Args,
                                                 types::ID InputType) const {
