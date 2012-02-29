@@ -2,12 +2,12 @@
 // rdar://10904488
 
 @interface Test
-- (int)objectAtIndexedSubscript:(int)index; // expected-note {{method declared here}}
+- (int)objectAtIndexedSubscript:(int)index; // expected-note {{method 'objectAtIndexedSubscript:' declared here}}
 - (void)setObject:(int)object atIndexedSubscript:(int)index; // expected-note {{parameter of type 'int' is declared here}}
 @end
 
 @interface NSMutableDictionary
-- (int)objectForKeyedSubscript:(id)key; // expected-note {{method declared here}}
+- (int)objectForKeyedSubscript:(id)key; // expected-note {{method 'objectForKeyedSubscript:' declared here}}
 - (void)setObject:(int)object forKeyedSubscript:(id)key; // expected-note {{parameter of type 'int' is declared here}}
 @end
 

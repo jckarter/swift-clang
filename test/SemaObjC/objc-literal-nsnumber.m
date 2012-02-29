@@ -53,6 +53,9 @@ NSDictionary *err() {
 + (id)dictionaryWithObjects:(const id [])objects forKeys:(const id<NSCopying> [])keys count:(NSUInteger)cnt;
 @end
 
+@interface NSString<NSCopying>
+@end
+
 id NSUserName();
 
 int Int();

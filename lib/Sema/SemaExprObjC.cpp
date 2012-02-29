@@ -143,7 +143,7 @@ ExprResult Sema::BuildObjCStringLiteral(SourceLocation AtLoc, StringLiteral *S){
 /// \brief Retrieve the NSNumber factory method that should be used to create
 /// an Objective-C literal for the given type.
 static ObjCMethodDecl *getNSNumberFactoryMethod(Sema &S, SourceLocation Loc,
-                                                QualType T, 
+                                                QualType T, QualType ReturnType,
                                                 SourceRange Range) {
   llvm::Optional<NSAPI::NSNumberLiteralMethodKind> Kind 
     = S.NSAPIObj->getNSNumberFactoryMethodKind(T);
@@ -165,7 +165,6 @@ static ObjCMethodDecl *getNSNumberFactoryMethod(Sema &S, SourceLocation Loc,
   ObjCMethodDecl *Method = S.NSNumberDecl->lookupClassMethod(Sel);;
   if (!Method && S.getLangOptions().DebuggerObjCLiteral) {
     TypeSourceInfo *ResultTInfo = 0;
-    QualType ReturnType = S.Context.getObjCIdType();
     Method = ObjCMethodDecl::Create(S.Context, SourceLocation(), SourceLocation(), Sel,
                            ReturnType,
                            ResultTInfo,
@@ -252,8 +251,12 @@ ExprResult Sema::BuildObjCNumericLiteral(SourceLocation AtLoc, Expr *Number) {
   
   ObjCMethodDecl *Method = 0;
   // Look for the appropriate method within NSNumber.
+  // Construct the literal.
+  QualType Ty
+    = Context.getObjCObjectPointerType(
+                                    Context.getObjCInterfaceType(NSNumberDecl));
   Method  = getNSNumberFactoryMethod(*this, AtLoc, 
-                                     NumberType, 
+                                     NumberType, Ty, 
                                      Number->getSourceRange());
 
   if (!Method)
@@ -267,10 +270,6 @@ ExprResult Sema::BuildObjCNumericLiteral(SourceLocation AtLoc, Expr *Number) {
     return ExprError();
   Number = ConvertedNumber.get();
   
-  // Construct the literal.
-  QualType Ty
-    = Context.getObjCObjectPointerType(
-                                    Context.getObjCInterfaceType(NSNumberDecl));
   return MaybeBindToTemporary(
            new (Context) ObjCNumericLiteral(Number, Ty, Method, AtLoc));
 }
@@ -401,9 +400,6 @@ ExprResult Sema::BuildObjCSubscriptExpression(SourceLocation RB, Expr *BaseExpr,
     return ExprError();
   IndexExpr = Result.get();
   
-  QualType BaseT = BaseExpr->getType();
-  QualType IndexT = IndexExpr->getType();
-    
   // Perform lvalue-to-rvalue conversion.
   Result = DefaultLvalueConversion(BaseExpr);
   if (Result.isInvalid())
@@ -1689,10 +1685,6 @@ static void applyCocoaAPICheck(Sema &S, const ObjCMessageExpr *Msg,
 static void checkCocoaAPI(Sema &S, const ObjCMessageExpr *Msg) {
   applyCocoaAPICheck(S, Msg, diag::warn_objc_redundant_literal_use,
                      edit::rewriteObjCRedundantCallWithLiteral);
-  applyCocoaAPICheck(S, Msg, diag::warn_objc_legacy_literal_creation,
-                     edit::rewriteToObjCLiteralSyntax);
-  applyCocoaAPICheck(S, Msg, diag::warn_objc_legacy_container_subscript,
-                     edit::rewriteToObjCSubscriptSyntax);
 }
 
 /// \brief Build an Objective-C class message expression.

@@ -2978,6 +2978,7 @@ bool TreeTransform<Derived>::TransformTemplateArgument(
       EnterExpressionEvaluationContext Unevaluated(getSema(),
                                                    Sema::ConstantEvaluated);
       ExprResult E = getDerived().TransformExpr(SourceExpr);
+      E = SemaRef.ActOnConstantExpression(E);
       SourceExpr = (E.isInvalid() ? 0 : E.take());
     }
 
@@ -3018,6 +3019,7 @@ bool TreeTransform<Derived>::TransformTemplateArgument(
     if (!InputExpr) InputExpr = Input.getArgument().getAsExpr();
 
     ExprResult E = getDerived().TransformExpr(InputExpr);
+    E = SemaRef.ActOnConstantExpression(E);
     if (E.isInvalid()) return true;
     Output = TemplateArgumentLoc(TemplateArgument(E.take()), E.take());
     return false;
@@ -3682,6 +3684,7 @@ TreeTransform<Derived>::TransformConstantArrayType(TypeLocBuilder &TLB,
     EnterExpressionEvaluationContext Unevaluated(SemaRef,
                                                  Sema::ConstantEvaluated);
     Size = getDerived().TransformExpr(Size).template takeAs<Expr>();
+    Size = SemaRef.ActOnConstantExpression(Size).take();
   }
   NewTL.setSizeExpr(Size);
 
@@ -3772,6 +3775,7 @@ TreeTransform<Derived>::TransformDependentSizedArrayType(TypeLocBuilder &TLB,
 
   ExprResult sizeResult
     = getDerived().TransformExpr(origSize);
+  sizeResult = SemaRef.ActOnConstantExpression(sizeResult);
   if (sizeResult.isInvalid())
     return QualType();
 
@@ -3816,6 +3820,7 @@ QualType TreeTransform<Derived>::TransformDependentSizedExtVectorType(
                                                Sema::ConstantEvaluated);
 
   ExprResult Size = getDerived().TransformExpr(T->getSizeExpr());
+  Size = SemaRef.ActOnConstantExpression(Size);
   if (Size.isInvalid())
     return QualType();
 
@@ -4294,6 +4299,10 @@ QualType TreeTransform<Derived>::TransformTypeOfExprType(TypeLocBuilder &TLB,
   EnterExpressionEvaluationContext Unevaluated(SemaRef, Sema::Unevaluated);
 
   ExprResult E = getDerived().TransformExpr(TL.getUnderlyingExpr());
+  if (E.isInvalid())
+    return QualType();
+
+  E = SemaRef.HandleExprEvaluationContextForTypeof(E.get());
   if (E.isInvalid())
     return QualType();
 
@@ -5089,11 +5098,13 @@ TreeTransform<Derived>::TransformCaseStmt(CaseStmt *S) {
 
     // Transform the left-hand case value.
     LHS = getDerived().TransformExpr(S->getLHS());
+    LHS = SemaRef.ActOnConstantExpression(LHS);
     if (LHS.isInvalid())
       return StmtError();
 
     // Transform the right-hand case value (for the GNU case-range extension).
     RHS = getDerived().TransformExpr(S->getRHS());
+    RHS = SemaRef.ActOnConstantExpression(RHS);
     if (RHS.isInvalid())
       return StmtError();
   }
@@ -6255,20 +6266,17 @@ TreeTransform<Derived>::TransformUnaryExprOrTypeTraitExpr(
                                                     E->getSourceRange());
   }
 
-  ExprResult SubExpr;
-  {
-    // C++0x [expr.sizeof]p1:
-    //   The operand is either an expression, which is an unevaluated operand
-    //   [...]
-    EnterExpressionEvaluationContext Unevaluated(SemaRef, Sema::Unevaluated);
+  // C++0x [expr.sizeof]p1:
+  //   The operand is either an expression, which is an unevaluated operand
+  //   [...]
+  EnterExpressionEvaluationContext Unevaluated(SemaRef, Sema::Unevaluated);
 
-    SubExpr = getDerived().TransformExpr(E->getArgumentExpr());
-    if (SubExpr.isInvalid())
-      return ExprError();
+  ExprResult SubExpr = getDerived().TransformExpr(E->getArgumentExpr());
+  if (SubExpr.isInvalid())
+    return ExprError();
 
-    if (!getDerived().AlwaysRebuild() && SubExpr.get() == E->getArgumentExpr())
-      return SemaRef.Owned(E);
-  }
+  if (!getDerived().AlwaysRebuild() && SubExpr.get() == E->getArgumentExpr())
+    return SemaRef.Owned(E);
 
   return getDerived().RebuildUnaryExprOrTypeTrait(SubExpr.get(),
                                                   E->getOperatorLoc(),

@@ -14,6 +14,9 @@ typedef unsigned long NSUInteger;
 + (id)dictionaryWithObjects:(const id [])objects forKeys:(const id <NSCopying> [])keys count:(NSUInteger)cnt;
 @end
 
+@interface NSString<NSCopying>
+@end
+
 int main() {
 	NSDictionary *dict = @{ @"name":@666 };
 	NSDictionary *dict1 = @{ @"name":@666 };

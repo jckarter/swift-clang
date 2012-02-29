@@ -380,12 +380,7 @@ def ObjCRedundantLiteralUse : DiagGroup<"objc-redundant-literal-use">;
 def ObjCRedundantAPIUse : DiagGroup<"objc-redundant-api-use", [
     ObjCRedundantLiteralUse
   ]>;
-def ObjCLegacyLiteralConstruction :
-    DiagGroup<"objc-legacy-literal-construction">;
-def ObjCLegacyContainerSubscript : DiagGroup<"objc-legacy-container-subscript">;
 
 def ObjCCocoaAPI : DiagGroup<"objc-cocoa-api", [
-    ObjCRedundantAPIUse,
-    ObjCLegacyLiteralConstruction,
-    ObjCLegacyContainerSubscript
+    ObjCRedundantAPIUse
   ]>;
