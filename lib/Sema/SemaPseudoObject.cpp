@@ -1004,7 +1004,8 @@ bool ObjCSubscriptOpBuilder::findAtIndexGetter() {
     if (!R->isObjCObjectPointerType()) {
       S.Diag(RefExpr->getKeyExpr()->getExprLoc(),
              diag::err_objc_indexing_method_result_type) << R << arrayRef;
-      S.Diag(AtIndexGetter->getLocation(), diag::note_method_declared_at);
+      S.Diag(AtIndexGetter->getLocation(), diag::note_method_declared_at) <<
+        AtIndexGetter->getDeclName();
     }
   }
   return true;

@@ -392,6 +392,8 @@ public:
 
   virtual bool SupportsObjCGC() const;
 
+  virtual bool SupportsObjCARC() const;
+
   virtual bool UseDwarfDebugFlags() const;
 
   virtual bool UseSjLjExceptions() const;

@@ -1,12 +1,6 @@
-// RUN: %clang_cc1 -triple x86_64-apple-darwin10 %s -fsyntax-only -Wobjc-cocoa-api -verify
-// RUN: %clang_cc1 -triple x86_64-apple-darwin10 -fobjc-arc %s -fsyntax-only -Wobjc-cocoa-api -verify
-// RUN: %clang_cc1 -triple x86_64-apple-darwin10 -x objective-c++ %s.fixed -fsyntax-only
-// RUN: cp %s %t.mm
-// RUN: %clang_cc1 -triple x86_64-apple-darwin10 %t.mm -fixit -Wobjc-cocoa-api
-// RUN: diff %s.fixed %t.mm
-// RUN: cp %s %t.mm
-// RUN: %clang_cc1 -triple x86_64-apple-darwin10 -fobjc-arc %t.mm -fixit -Wobjc-cocoa-api
-// RUN: diff %s.fixed %t.mm
+// RUN: rm -rf %t
+// RUN: %clang_cc1 -objcmt-migrate-literals -objcmt-migrate-subscripting -mt-migrate-directory %t %s -x objective-c++ 
+// RUN: c-arcmt-test -mt-migrate-directory %t | arcmt-test -verify-transformed-files %s.result
 
 #define YES __objc_yes
 #define NO __objc_no
@@ -62,7 +56,7 @@ typedef signed char BOOL;
 #define VAL_CHAR 'a'
 
 void foo() {
-  @'a'; // expected-warning {{legacy}}
+  @'a';
   [NSNumber numberWithChar:L'a'];
   [NSNumber numberWithChar:2];
   [NSNumber numberWithChar:2U];
@@ -90,7 +84,7 @@ void foo() {
   [NSNumber numberWithChar:false];
   [NSNumber numberWithChar:VAL_INT];
   [NSNumber numberWithChar:VAL_UINT];
-  @VAL_CHAR; // expected-warning {{legacy}}
+  @VAL_CHAR;
 
   [NSNumber numberWithUnsignedChar:'a'];
   [NSNumber numberWithUnsignedChar:L'a'];
@@ -182,89 +176,89 @@ void foo() {
 
   [NSNumber numberWithInt:'a'];
   [NSNumber numberWithInt:L'a'];
-  @2; // expected-warning {{legacy}}
-  @2; // expected-warning {{legacy}}
-  @2; // expected-warning {{legacy}}
-  @2; // expected-warning {{legacy}}
-  @2; // expected-warning {{legacy}}
-  @2; // expected-warning {{legacy}}
-  @2; // expected-warning {{legacy}}
-  @2; // expected-warning {{legacy}}
-  @2; // expected-warning {{legacy}}
-  @2; // expected-warning {{legacy}}
-  @2; // expected-warning {{legacy}}
+  @2;
+  @2;
+  @2;
+  @2;
+  @2;
+  @2;
+  @2;
+  @2;
+  @2;
+  @2;
+  @2;
   [NSNumber numberWithInt:2.0];
   [NSNumber numberWithInt:2.0f];
   [NSNumber numberWithInt:2.0F];
   [NSNumber numberWithInt:2.0l];
   [NSNumber numberWithInt:2.0L];
-  @0x2f; // expected-warning {{legacy}}
-  @04; // expected-warning {{legacy}}
-  @0; // expected-warning {{legacy}}
+  @0x2f;
+  @04;
+  @0;
   [NSNumber numberWithInt:0.0];
   [NSNumber numberWithInt:YES];
   [NSNumber numberWithInt:NO];
   [NSNumber numberWithInt:true];
   [NSNumber numberWithInt:false];
-  @VAL_INT; // expected-warning {{legacy}}
+  @VAL_INT;
   [NSNumber numberWithInt:VAL_UINT];
 
-  (void)@2; // expected-warning {{legacy}}
-  (void)@2; // expected-warning {{legacy}}
+  (void)[[NSNumber alloc] initWithInt:2];
+  (void)[[NSNumber alloc] initWithInt:2U];
 
-  @+2; // expected-warning {{legacy}}
-  @-2; // expected-warning {{legacy}}
+  @+2;
+  @-2;
 
   [NSNumber numberWithUnsignedInt:'a'];
   [NSNumber numberWithUnsignedInt:L'a'];
-  @2U; // expected-warning {{legacy}}
-  @2U; // expected-warning {{legacy}}
-  @2u; // expected-warning {{legacy}}
-  @2U; // expected-warning {{legacy}}
-  @2u; // expected-warning {{legacy}}
-  @2U; // expected-warning {{legacy}}
-  @2u; // expected-warning {{legacy}}
-  @2u; // expected-warning {{legacy}}
-  @2u; // expected-warning {{legacy}}
-  @2u; // expected-warning {{legacy}}
-  @2u; // expected-warning {{legacy}}
+  @2U;
+  @2U;
+  @2u;
+  @2U;
+  @2u;
+  @2U;
+  @2u;
+  @2u;
+  @2u;
+  @2u;
+  @2u;
   [NSNumber numberWithUnsignedInt:2.0];
   [NSNumber numberWithUnsignedInt:2.0f];
   [NSNumber numberWithUnsignedInt:2.0F];
   [NSNumber numberWithUnsignedInt:2.0l];
   [NSNumber numberWithUnsignedInt:2.0L];
-  @0x2fU; // expected-warning {{legacy}}
-  @04U; // expected-warning {{legacy}}
-  @0U; // expected-warning {{legacy}}
+  @0x2fU;
+  @04U;
+  @0U;
   [NSNumber numberWithUnsignedInt:0.0];
   [NSNumber numberWithUnsignedInt:YES];
   [NSNumber numberWithUnsignedInt:NO];
   [NSNumber numberWithUnsignedInt:true];
   [NSNumber numberWithUnsignedInt:false];
   [NSNumber numberWithUnsignedInt:VAL_INT];
-  @VAL_UINT; // expected-warning {{legacy}}
+  @VAL_UINT;
 
   [NSNumber numberWithLong:'a'];
   [NSNumber numberWithLong:L'a'];
-  @2L; // expected-warning {{legacy}}
-  @2L; // expected-warning {{legacy}}
-  @2l; // expected-warning {{legacy}}
-  @2L; // expected-warning {{legacy}}
-  @2l; // expected-warning {{legacy}}
-  @2L; // expected-warning {{legacy}}
-  @2l; // expected-warning {{legacy}}
-  @2l; // expected-warning {{legacy}}
-  @2l; // expected-warning {{legacy}}
-  @2l; // expected-warning {{legacy}}
-  @2l; // expected-warning {{legacy}}
+  @2L;
+  @2L;
+  @2l;
+  @2L;
+  @2l;
+  @2L;
+  @2l;
+  @2l;
+  @2l;
+  @2l;
+  @2l;
   [NSNumber numberWithLong:2.0];
   [NSNumber numberWithLong:2.0f];
   [NSNumber numberWithLong:2.0F];
   [NSNumber numberWithLong:2.0l];
   [NSNumber numberWithLong:2.0L];
-  @0x2fL; // expected-warning {{legacy}}
-  @04L; // expected-warning {{legacy}}
-  @0L; // expected-warning {{legacy}}
+  @0x2fL;
+  @04L;
+  @0L;
   [NSNumber numberWithLong:0.0];
   [NSNumber numberWithLong:YES];
   [NSNumber numberWithLong:NO];
@@ -275,25 +269,25 @@ void foo() {
 
   [NSNumber numberWithUnsignedLong:'a'];
   [NSNumber numberWithUnsignedLong:L'a'];
-  @2UL; // expected-warning {{legacy}}
-  @2UL; // expected-warning {{legacy}}
-  @2ul; // expected-warning {{legacy}}
-  @2UL; // expected-warning {{legacy}}
-  @2ul; // expected-warning {{legacy}}
-  @2UL; // expected-warning {{legacy}}
-  @2ul; // expected-warning {{legacy}}
-  @2ul; // expected-warning {{legacy}}
-  @2lu; // expected-warning {{legacy}}
-  @2ul; // expected-warning {{legacy}}
-  @2ul; // expected-warning {{legacy}}
+  @2UL;
+  @2UL;
+  @2ul;
+  @2UL;
+  @2ul;
+  @2UL;
+  @2ul;
+  @2ul;
+  @2lu;
+  @2ul;
+  @2ul;
   [NSNumber numberWithUnsignedLong:2.0];
   [NSNumber numberWithUnsignedLong:2.0f];
   [NSNumber numberWithUnsignedLong:2.0F];
   [NSNumber numberWithUnsignedLong:2.0l];
   [NSNumber numberWithUnsignedLong:2.0L];
-  @0x2fUL; // expected-warning {{legacy}}
-  @04UL; // expected-warning {{legacy}}
-  @0UL; // expected-warning {{legacy}}
+  @0x2fUL;
+  @04UL;
+  @0UL;
   [NSNumber numberWithUnsignedLong:0.0];
   [NSNumber numberWithUnsignedLong:YES];
   [NSNumber numberWithUnsignedLong:NO];
@@ -304,25 +298,25 @@ void foo() {
 
   [NSNumber numberWithLongLong:'a'];
   [NSNumber numberWithLongLong:L'a'];
-  @2LL; // expected-warning {{legacy}}
-  @2LL; // expected-warning {{legacy}}
-  @2ll; // expected-warning {{legacy}}
-  @2LL; // expected-warning {{legacy}}
-  @2ll; // expected-warning {{legacy}}
-  @2LL; // expected-warning {{legacy}}
-  @2ll; // expected-warning {{legacy}}
-  @2ll; // expected-warning {{legacy}}
-  @2ll; // expected-warning {{legacy}}
-  @2ll; // expected-warning {{legacy}}
-  @2ll; // expected-warning {{legacy}}
+  @2LL;
+  @2LL;
+  @2ll;
+  @2LL;
+  @2ll;
+  @2LL;
+  @2ll;
+  @2ll;
+  @2ll;
+  @2ll;
+  @2ll;
   [NSNumber numberWithLongLong:2.0];
   [NSNumber numberWithLongLong:2.0f];
   [NSNumber numberWithLongLong:2.0F];
   [NSNumber numberWithLongLong:2.0l];
   [NSNumber numberWithLongLong:2.0L];
-  @0x2fLL; // expected-warning {{legacy}}
-  @04LL; // expected-warning {{legacy}}
-  @0LL; // expected-warning {{legacy}}
+  @0x2fLL;
+  @04LL;
+  @0LL;
   [NSNumber numberWithLongLong:0.0];
   [NSNumber numberWithLongLong:YES];
   [NSNumber numberWithLongLong:NO];
@@ -333,25 +327,25 @@ void foo() {
 
   [NSNumber numberWithUnsignedLongLong:'a'];
   [NSNumber numberWithUnsignedLongLong:L'a'];
-  @2ULL; // expected-warning {{legacy}}
-  @2ULL; // expected-warning {{legacy}}
-  @2ull; // expected-warning {{legacy}}
-  @2ULL; // expected-warning {{legacy}}
-  @2ull; // expected-warning {{legacy}}
-  @2ULL; // expected-warning {{legacy}}
-  @2ull; // expected-warning {{legacy}}
-  @2ull; // expected-warning {{legacy}}
-  @2ull; // expected-warning {{legacy}}
-  @2ull; // expected-warning {{legacy}}
-  @2llu; // expected-warning {{legacy}}
+  @2ULL;
+  @2ULL;
+  @2ull;
+  @2ULL;
+  @2ull;
+  @2ULL;
+  @2ull;
+  @2ull;
+  @2ull;
+  @2ull;
+  @2llu;
   [NSNumber numberWithUnsignedLongLong:2.0];
   [NSNumber numberWithUnsignedLongLong:2.0f];
   [NSNumber numberWithUnsignedLongLong:2.0F];
   [NSNumber numberWithUnsignedLongLong:2.0l];
   [NSNumber numberWithUnsignedLongLong:2.0L];
-  @0x2fULL; // expected-warning {{legacy}}
-  @04ULL; // expected-warning {{legacy}}
-  @0ULL; // expected-warning {{legacy}}
+  @0x2fULL;
+  @04ULL;
+  @0ULL;
   [NSNumber numberWithUnsignedLongLong:0.0];
   [NSNumber numberWithUnsignedLongLong:YES];
   [NSNumber numberWithUnsignedLongLong:NO];
@@ -362,26 +356,26 @@ void foo() {
 
   [NSNumber numberWithFloat:'a'];
   [NSNumber numberWithFloat:L'a'];
-  @2.0f; // expected-warning {{legacy}}
-  @2.0f; // expected-warning {{legacy}}
-  @2.0f; // expected-warning {{legacy}}
-  @2.0f; // expected-warning {{legacy}}
-  @2.0f; // expected-warning {{legacy}}
-  @2.0f; // expected-warning {{legacy}}
-  @2.0f; // expected-warning {{legacy}}
-  @2.0f; // expected-warning {{legacy}}
-  @2.0f; // expected-warning {{legacy}}
-  @2.0f; // expected-warning {{legacy}}
-  @2.0f; // expected-warning {{legacy}}
-  @2.0f; // expected-warning {{legacy}}
-  @2.0f; // expected-warning {{legacy}}
-  @2.0F; // expected-warning {{legacy}}
-  @2.0f; // expected-warning {{legacy}}
-  @2.0f; // expected-warning {{legacy}}
+  @2.0f;
+  @2.0f;
+  @2.0f;
+  @2.0f;
+  @2.0f;
+  @2.0f;
+  @2.0f;
+  @2.0f;
+  @2.0f;
+  @2.0f;
+  @2.0f;
+  @2.0f;
+  @2.0f;
+  @2.0F;
+  @2.0f;
+  @2.0f;
   [NSNumber numberWithFloat:0x2f];
   [NSNumber numberWithFloat:04];
-  @0.0f; // expected-warning {{legacy}}
-  @0.0f; // expected-warning {{legacy}}
+  @0.0f;
+  @0.0f;
   [NSNumber numberWithFloat:YES];
   [NSNumber numberWithFloat:NO];
   [NSNumber numberWithFloat:true];
@@ -391,26 +385,26 @@ void foo() {
 
   [NSNumber numberWithDouble:'a'];
   [NSNumber numberWithDouble:L'a'];
-  @2.0; // expected-warning {{legacy}}
-  @2.0; // expected-warning {{legacy}}
-  @2.0; // expected-warning {{legacy}}
-  @2.0; // expected-warning {{legacy}}
-  @2.0; // expected-warning {{legacy}}
-  @2.0; // expected-warning {{legacy}}
-  @2.0; // expected-warning {{legacy}}
-  @2.0; // expected-warning {{legacy}}
-  @2.0; // expected-warning {{legacy}}
-  @2.0; // expected-warning {{legacy}}
-  @2.0; // expected-warning {{legacy}}
-  @2.0; // expected-warning {{legacy}}
-  @2.0; // expected-warning {{legacy}}
-  @2.0; // expected-warning {{legacy}}
-  @2.0; // expected-warning {{legacy}}
-  @2.0; // expected-warning {{legacy}}
+  @2.0;
+  @2.0;
+  @2.0;
+  @2.0;
+  @2.0;
+  @2.0;
+  @2.0;
+  @2.0;
+  @2.0;
+  @2.0;
+  @2.0;
+  @2.0;
+  @2.0;
+  @2.0;
+  @2.0;
+  @2.0;
   [NSNumber numberWithDouble:0x2f];
   [NSNumber numberWithDouble:04];
-  @0.0; // expected-warning {{legacy}}
-  @0.0; // expected-warning {{legacy}}
+  @0.0;
+  @0.0;
   [NSNumber numberWithDouble:YES];
   [NSNumber numberWithDouble:NO];
   [NSNumber numberWithDouble:true];
@@ -440,34 +434,34 @@ void foo() {
   [NSNumber numberWithBool:04];
   [NSNumber numberWithBool:0];
   [NSNumber numberWithBool:0.0];
-  @YES; // expected-warning {{legacy}}
-  @NO; // expected-warning {{legacy}}
-  @true; // expected-warning {{legacy}}
-  @false; // expected-warning {{legacy}}
+  @YES;
+  @NO;
+  @true;
+  @false;
   [NSNumber numberWithBool:VAL_INT];
   [NSNumber numberWithBool:VAL_UINT];
 
   [NSNumber numberWithInteger:'a'];
   [NSNumber numberWithInteger:L'a'];
-  @2; // expected-warning {{legacy}}
-  @2; // expected-warning {{legacy}}
-  @2; // expected-warning {{legacy}}
-  @2L; // expected-warning {{legacy}}
-  @2l; // expected-warning {{legacy}}
-  @2; // expected-warning {{legacy}}
-  @2; // expected-warning {{legacy}}
-  @2; // expected-warning {{legacy}}
-  @2; // expected-warning {{legacy}}
-  @2; // expected-warning {{legacy}}
-  @2; // expected-warning {{legacy}}
+  @2;
+  @2;
+  @2;
+  @2L;
+  @2l;
+  @2;
+  @2;
+  @2;
+  @2;
+  @2;
+  @2;
   [NSNumber numberWithInteger:2.0];
   [NSNumber numberWithInteger:2.0f];
   [NSNumber numberWithInteger:2.0F];
   [NSNumber numberWithInteger:2.0l];
   [NSNumber numberWithInteger:2.0L];
-  @0x2f; // expected-warning {{legacy}}
-  @04; // expected-warning {{legacy}}
-  @0; // expected-warning {{legacy}}
+  @0x2f;
+  @04;
+  @0;
   [NSNumber numberWithInteger:0.0];
   [NSNumber numberWithInteger:YES];
   [NSNumber numberWithInteger:NO];
@@ -478,25 +472,25 @@ void foo() {
 
   [NSNumber numberWithUnsignedInteger:'a'];
   [NSNumber numberWithUnsignedInteger:L'a'];
-  @2U; // expected-warning {{legacy}}
-  @2U; // expected-warning {{legacy}}
-  @2u; // expected-warning {{legacy}}
-  @2U; // expected-warning {{legacy}}
-  @2u; // expected-warning {{legacy}}
-  @2U; // expected-warning {{legacy}}
-  @2u; // expected-warning {{legacy}}
-  @2ul; // expected-warning {{legacy}}
-  @2lu; // expected-warning {{legacy}}
-  @2u; // expected-warning {{legacy}}
-  @2u; // expected-warning {{legacy}}
+  @2U;
+  @2U;
+  @2u;
+  @2U;
+  @2u;
+  @2U;
+  @2u;
+  @2ul;
+  @2lu;
+  @2u;
+  @2u;
   [NSNumber numberWithUnsignedInteger:2.0];
   [NSNumber numberWithUnsignedInteger:2.0f];
   [NSNumber numberWithUnsignedInteger:2.0F];
   [NSNumber numberWithUnsignedInteger:2.0l];
   [NSNumber numberWithUnsignedInteger:2.0L];
-  @0x2fU; // expected-warning {{legacy}}
-  @04U; // expected-warning {{legacy}}
-  @0U; // expected-warning {{legacy}}
+  @0x2fU;
+  @04U;
+  @0U;
   [NSNumber numberWithUnsignedInteger:0.0];
   [NSNumber numberWithUnsignedInteger:YES];
   [NSNumber numberWithUnsignedInteger:NO];
