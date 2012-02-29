@@ -9308,6 +9308,8 @@ namespace {
 }
 
 ExprResult Sema::TranformToPotentiallyEvaluated(Expr *E) {
+  assert(ExprEvalContexts.back().Context == Unevaluated &&
+         "Should only transform unevaluated expressions");
   ExprEvalContexts.back().Context =
       ExprEvalContexts[ExprEvalContexts.size()-2].Context;
   if (ExprEvalContexts.back().Context == Unevaluated)
@@ -10021,6 +10023,18 @@ void Sema::UpdateMarkingForLValueToRValue(Expr *E) {
   // is immediately applied."  This function handles the lvalue-to-rvalue
   // conversion part.
   MaybeODRUseExprs.erase(E->IgnoreParens());
+}
+
+ExprResult Sema::ActOnConstantExpression(ExprResult Res) {
+  if (!Res.isUsable())
+    return Res;
+
+  // If a constant-expression is a reference to a variable where we delay
+  // deciding whether it is an odr-use, just assume we will apply the
+  // lvalue-to-rvalue conversion.  In the one case where this doesn't happen
+  // (a non-type template argument), we have special handling anyway.
+  UpdateMarkingForLValueToRValue(Res.get());
+  return Res;
 }
 
 void Sema::CleanupVarDeclMarking() {
