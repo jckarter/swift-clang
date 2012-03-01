@@ -1988,6 +1988,7 @@ public:
   ////  class extensions.
   Decl *HandlePropertyInClassExtension(Scope *S,
                                        SourceLocation AtLoc,
+                                       SourceLocation LParenLoc,
                                        FieldDeclarator &FD,
                                        Selector GetterSel,
                                        Selector SetterSel,
@@ -2004,6 +2005,7 @@ public:
   ObjCPropertyDecl *CreatePropertyDecl(Scope *S,
                                        ObjCContainerDecl *CDecl,
                                        SourceLocation AtLoc,
+                                       SourceLocation LParenLoc,
                                        FieldDeclarator &FD,
                                        Selector GetterSel,
                                        Selector SetterSel,
@@ -3717,7 +3719,7 @@ public:
                                   TypeSourceInfo *EncodedTypeInfo,
                                   SourceLocation RParenLoc);
   ExprResult BuildCXXMemberCallExpr(Expr *Exp, NamedDecl *FoundDecl,
-                                    CXXMethodDecl *Method,
+                                    CXXConversionDecl *Method,
                                     bool HadMultipleCandidates);
 
   ExprResult ParseObjCEncodeExpression(SourceLocation AtLoc,
@@ -5619,6 +5621,7 @@ public:
                    DeclGroupPtrTy *allTUVars = 0, unsigned tuvNum = 0);
 
   Decl *ActOnProperty(Scope *S, SourceLocation AtLoc,
+                      SourceLocation LParenLoc,
                       FieldDeclarator &FD, ObjCDeclSpec &ODS,
                       Selector GetterSel, Selector SetterSel,
                       bool *OverridingProperty,
