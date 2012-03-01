@@ -533,7 +533,10 @@ public:
 
   /// \brief The declaration of the dictionaryWithObjects:forKeys:count: method.
   ObjCMethodDecl *DictionaryWithObjectsMethod;
-  
+
+  /// \brief id<NSCopying> type.
+  QualType QIDNSCopying;
+
   /// A flag to remember whether the implicit forms of operator new and delete
   /// have been declared.
   bool GlobalNewDeleteDeclared;
@@ -924,6 +927,17 @@ public:
   // Symbol table / Decl tracking callbacks: SemaDecl.cpp.
   //
 
+  /// List of decls defined in a function prototype. This contains EnumConstants
+  /// that incorrectly end up in translation unit scope because there is no
+  /// function to pin them on. ActOnFunctionDeclarator reads this list and patches
+  /// them into the FunctionDecl.
+  std::vector<NamedDecl*> DeclsInPrototypeScope;
+  /// Nonzero if we are currently parsing a function declarator. This is a counter
+  /// as opposed to a boolean so we can deal with nested function declarators
+  /// such as:
+  ///     void f(void (*g)(), ...)
+  unsigned InFunctionDeclarator;
+
   DeclGroupPtrTy ConvertDeclToDeclGroup(Decl *Ptr, Decl *OwnedType = 0);
 
   void DiagnoseUseOfUnimplementedSelectors();
@@ -1070,6 +1084,8 @@ public:
   // Returns true if the variable declaration is a redeclaration
   bool CheckVariableDeclaration(VarDecl *NewVD, LookupResult &Previous);
   void CheckCompleteVariableDeclaration(VarDecl *var);
+  void ActOnStartFunctionDeclarator();
+  void ActOnEndFunctionDeclarator();
   NamedDecl* ActOnFunctionDeclarator(Scope* S, Declarator& D, DeclContext* DC,
                                      TypeSourceInfo *TInfo,
                                      LookupResult &Previous,
@@ -1972,6 +1988,7 @@ public:
   ////  class extensions.
   Decl *HandlePropertyInClassExtension(Scope *S,
                                        SourceLocation AtLoc,
+                                       SourceLocation LParenLoc,
                                        FieldDeclarator &FD,
                                        Selector GetterSel,
                                        Selector SetterSel,
@@ -1988,6 +2005,7 @@ public:
   ObjCPropertyDecl *CreatePropertyDecl(Scope *S,
                                        ObjCContainerDecl *CDecl,
                                        SourceLocation AtLoc,
+                                       SourceLocation LParenLoc,
                                        FieldDeclarator &FD,
                                        Selector GetterSel,
                                        Selector SetterSel,
@@ -3672,7 +3690,12 @@ public:
   /// block pointer conversion.
   void DefineImplicitLambdaToBlockPointerConversion(SourceLocation CurrentLoc,
                                                     CXXConversionDecl *Conv);
-  
+
+  ExprResult BuildBlockForLambdaConversion(SourceLocation CurrentLocation,
+                                           SourceLocation ConvLocation,
+                                           CXXConversionDecl *Conv,
+                                           Expr *Src);
+
   // ParseObjCStringLiteral - Parse Objective-C string literals.
   ExprResult ParseObjCStringLiteral(SourceLocation *AtLocs,
                                     Expr **Strings,
@@ -3701,7 +3724,7 @@ public:
                                   TypeSourceInfo *EncodedTypeInfo,
                                   SourceLocation RParenLoc);
   ExprResult BuildCXXMemberCallExpr(Expr *Exp, NamedDecl *FoundDecl,
-                                    CXXMethodDecl *Method,
+                                    CXXConversionDecl *Method,
                                     bool HadMultipleCandidates);
 
   ExprResult ParseObjCEncodeExpression(SourceLocation AtLoc,
@@ -5603,6 +5626,7 @@ public:
                    DeclGroupPtrTy *allTUVars = 0, unsigned tuvNum = 0);
 
   Decl *ActOnProperty(Scope *S, SourceLocation AtLoc,
+                      SourceLocation LParenLoc,
                       FieldDeclarator &FD, ObjCDeclSpec &ODS,
                       Selector GetterSel, Selector SetterSel,
                       bool *OverridingProperty,

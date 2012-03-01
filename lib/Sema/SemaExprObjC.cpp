@@ -658,7 +658,6 @@ ExprResult Sema::BuildObjCDictionaryLiteral(SourceRange SR,
                                       IdT)) {
     bool err = true;
     if (PtrKey) {
-      static QualType QIDNSCopying;
       if (QIDNSCopying.isNull()) {
         // key argument of selector is id<NSCopying>?
         if (ObjCProtocolDecl *NSCopyingPDecl =
