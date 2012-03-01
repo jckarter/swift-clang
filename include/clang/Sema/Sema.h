@@ -533,7 +533,10 @@ public:
 
   /// \brief The declaration of the dictionaryWithObjects:forKeys:count: method.
   ObjCMethodDecl *DictionaryWithObjectsMethod;
-  
+
+  /// \brief id<NSCopying> type.
+  QualType QIDNSCopying;
+
   /// A flag to remember whether the implicit forms of operator new and delete
   /// have been declared.
   bool GlobalNewDeleteDeclared;
