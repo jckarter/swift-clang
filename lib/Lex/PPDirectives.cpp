@@ -120,8 +120,15 @@ void Preprocessor::ReadMacroName(Token &MacroNameTok, char isDefineUndef) {
     std::string Spelling = getSpelling(MacroNameTok, &Invalid);
     if (Invalid)
       return;
-    
+
     const IdentifierInfo &Info = Identifiers.get(Spelling);
+
+    // Allow #defining |and| and friends in microsoft mode.
+    if (Info.isCPlusPlusOperatorKeyword() && getLangOptions().MicrosoftMode) {
+      MacroNameTok.setIdentifierInfo(getIdentifierInfo(Spelling));
+      return;
+    }
+
     if (Info.isCPlusPlusOperatorKeyword())
       // C++ 2.5p2: Alternative tokens behave the same as its primary token
       // except for their spellings.
@@ -1296,6 +1303,9 @@ void Preprocessor::HandleIncludeDirective(SourceLocation HashLoc,
     // Immediately leave the pragma.
     PragmaARCCFCodeAuditedLoc = SourceLocation();
   }
+
+  // Map the filename
+  Filename = HeaderInfo.MapHeader(Filename, isAngled);
 
   // Search include directories.
   const DirectoryLookup *CurDir;
