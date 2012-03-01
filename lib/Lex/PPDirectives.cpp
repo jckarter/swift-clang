@@ -1304,9 +1304,6 @@ void Preprocessor::HandleIncludeDirective(SourceLocation HashLoc,
     PragmaARCCFCodeAuditedLoc = SourceLocation();
   }
 
-  // Map the filename
-  Filename = HeaderInfo.MapHeader(Filename, isAngled);
-
   // Search include directories.
   const DirectoryLookup *CurDir;
   SmallString<1024> SearchPath;
@@ -1404,7 +1401,7 @@ void Preprocessor::HandleIncludeDirective(SourceLocation HashLoc,
       Diag(HashLoc, diag::warn_auto_module_import)
         << IncludeKind << PathString 
         << FixItHint::CreateReplacement(ReplaceRange,
-             "@import " + PathString.str().str() + ";");
+             "@__experimental_modules_import " + PathString.str().str() + ";");
     }
     
     // Load the module.
