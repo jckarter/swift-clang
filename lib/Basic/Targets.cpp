@@ -498,7 +498,7 @@ protected:
       Builder.defineMacro("_XOPEN_SOURCE", "600");
     else
       Builder.defineMacro("_XOPEN_SOURCE", "500");
-    if (Opts.CPlusPlus0x)
+    if (Opts.CPlusPlus)
       Builder.defineMacro("__C99FEATURES__");
     Builder.defineMacro("_LARGEFILE_SOURCE");
     Builder.defineMacro("_LARGEFILE64_SOURCE");
@@ -865,6 +865,8 @@ public:
     case llvm::Triple::FreeBSD:
     case llvm::Triple::NetBSD:
       SizeType = UnsignedInt;
+      PtrDiffType = SignedInt;
+      IntPtrType = SignedInt;
       break;
     default:
       break;
