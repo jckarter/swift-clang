@@ -690,6 +690,8 @@ static void LangOptsToArgs(const LangOptions &Opts,
     Res.push_back("-fcatch-undefined-behavior");
   if (Opts.AddressSanitizer)
     Res.push_back("-faddress-sanitizer");
+  if (Opts.ThreadSanitizer)
+    Res.push_back("-fthread-sanitizer");
   if (Opts.WritableStrings)
     Res.push_back("-fwritable-strings");
   if (Opts.ConstStrings)
@@ -1050,7 +1052,8 @@ static bool ParseAnalyzerArgs(AnalyzerOptions &Opts, ArgList &Args,
   Opts.MaxNodes = Args.getLastArgIntValue(OPT_analyzer_max_nodes, 150000,Diags);
   Opts.MaxLoop = Args.getLastArgIntValue(OPT_analyzer_max_loop, 4, Diags);
   Opts.EagerlyTrimEGraph = !Args.hasArg(OPT_analyzer_no_eagerly_trim_egraph);
-  Opts.InlineCall = Args.hasArg(OPT_analyzer_inline_call);
+  if (Args.hasArg(OPT_analyzer_inline_call))
+    Opts.InlineCall = 1;
   Opts.PrintStats = Args.hasArg(OPT_analyzer_stats);
 
   Opts.CheckersControlList.clear();
@@ -1909,6 +1912,7 @@ static void ParseLangArgs(LangOptions &Opts, ArgList &Args, InputKind IK,
   Opts.DebuggerCastResultToId = Args.hasArg(OPT_fdebugger_cast_result_to_id);
   Opts.DebuggerObjCLiteral = Args.hasArg(OPT_fdebugger_objc_literal);
   Opts.AddressSanitizer = Args.hasArg(OPT_faddress_sanitizer);
+  Opts.ThreadSanitizer = Args.hasArg(OPT_fthread_sanitizer);
   Opts.ApplePragmaPack = Args.hasArg(OPT_fapple_pragma_pack);
   Opts.CurrentModule = Args.getLastArgValue(OPT_fmodule_name);
 
