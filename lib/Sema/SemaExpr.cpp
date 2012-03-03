@@ -587,11 +587,10 @@ ExprResult Sema::DefaultVariadicArgumentPromotion(Expr *E, VariadicCallType CT,
       E = Comma.get();
     }
   }
-  // c++ rules are enfroced elsewhere.
+  // c++ rules are enforced elsewhere.
   if (!getLangOptions().CPlusPlus &&
-      !E->getType()->isVoidType() &&
       RequireCompleteType(E->getExprLoc(), E->getType(),
-                          diag::err_incomplete_type))
+                          diag::err_call_incomplete_argument))
     return ExprError();
   
   return Owned(E);
@@ -5957,6 +5956,46 @@ static bool checkArithmethicPointerOnNonFragileABI(Sema &S,
   return false;
 }
 
+/// diagnoseStringPlusInt - Emit a warning when adding an integer to a string
+/// literal.
+static void diagnoseStringPlusInt(Sema &Self, SourceLocation OpLoc,
+                                  Expr *LHSExpr, Expr *RHSExpr) {
+  StringLiteral* StrExpr = dyn_cast<StringLiteral>(LHSExpr->IgnoreImpCasts());
+  Expr* IndexExpr = RHSExpr;
+  if (!StrExpr) {
+    StrExpr = dyn_cast<StringLiteral>(RHSExpr->IgnoreImpCasts());
+    IndexExpr = LHSExpr;
+  }
+
+  bool IsStringPlusInt = StrExpr &&
+      IndexExpr->getType()->isIntegralOrUnscopedEnumerationType();
+  if (!IsStringPlusInt)
+    return;
+
+  llvm::APSInt index;
+  if (IndexExpr->EvaluateAsInt(index, Self.getASTContext())) {
+    unsigned StrLenWithNull = StrExpr->getLength() + 1;
+    if (index.isNonNegative() &&
+        index <= llvm::APSInt(llvm::APInt(index.getBitWidth(), StrLenWithNull),
+                              index.isUnsigned()))
+      return;
+  }
+
+  SourceRange DiagRange(LHSExpr->getLocStart(), RHSExpr->getLocEnd());
+  Self.Diag(OpLoc, diag::warn_string_plus_int)
+      << DiagRange << IndexExpr->IgnoreImpCasts()->getType();
+
+  // Only print a fixit for "str" + int, not for int + "str".
+  if (IndexExpr == RHSExpr) {
+    SourceLocation EndLoc = Self.PP.getLocForEndOfToken(RHSExpr->getLocEnd());
+    Self.Diag(OpLoc, diag::note_string_plus_int_silence)
+        << FixItHint::CreateInsertion(LHSExpr->getLocStart(), "&")
+        << FixItHint::CreateReplacement(SourceRange(OpLoc), "[")
+        << FixItHint::CreateInsertion(EndLoc, "]");
+  } else
+    Self.Diag(OpLoc, diag::note_string_plus_int_silence);
+}
+
 /// \brief Emit error when two pointers are incompatible.
 static void diagnosePointerIncompatibility(Sema &S, SourceLocation Loc,
                                            Expr *LHSExpr, Expr *RHSExpr) {
@@ -5968,7 +6007,8 @@ static void diagnosePointerIncompatibility(Sema &S, SourceLocation Loc,
 }
 
 QualType Sema::CheckAdditionOperands( // C99 6.5.6
-  ExprResult &LHS, ExprResult &RHS, SourceLocation Loc, QualType* CompLHSTy) {
+    ExprResult &LHS, ExprResult &RHS, SourceLocation Loc, unsigned Opc,
+    QualType* CompLHSTy) {
   checkArithmeticNull(*this, LHS, RHS, Loc, /*isCompare=*/false);
 
   if (LHS.get()->getType()->isVectorType() ||
@@ -5981,6 +6021,10 @@ QualType Sema::CheckAdditionOperands( // C99 6.5.6
   QualType compType = UsualArithmeticConversions(LHS, RHS, CompLHSTy);
   if (LHS.isInvalid() || RHS.isInvalid())
     return QualType();
+
+  // Diagnose "string literal" '+' int.
+  if (Opc == BO_Add)
+    diagnoseStringPlusInt(*this, Loc, LHS.get(), RHS.get());
 
   // handle the common case first (both operands are arithmetic).
   if (LHS.get()->getType()->isArithmeticType() &&
@@ -7678,7 +7722,7 @@ ExprResult Sema::CreateBuiltinBinOp(SourceLocation OpLoc,
     ResultTy = CheckRemainderOperands(LHS, RHS, OpLoc);
     break;
   case BO_Add:
-    ResultTy = CheckAdditionOperands(LHS, RHS, OpLoc);
+    ResultTy = CheckAdditionOperands(LHS, RHS, OpLoc, Opc);
     break;
   case BO_Sub:
     ResultTy = CheckSubtractionOperands(LHS, RHS, OpLoc);
@@ -7721,7 +7765,7 @@ ExprResult Sema::CreateBuiltinBinOp(SourceLocation OpLoc,
       ResultTy = CheckAssignmentOperands(LHS.get(), RHS, OpLoc, CompResultTy);
     break;
   case BO_AddAssign:
-    CompResultTy = CheckAdditionOperands(LHS, RHS, OpLoc, &CompLHSTy);
+    CompResultTy = CheckAdditionOperands(LHS, RHS, OpLoc, Opc, &CompLHSTy);
     if (!CompResultTy.isNull() && !LHS.isInvalid() && !RHS.isInvalid())
       ResultTy = CheckAssignmentOperands(LHS.get(), RHS, OpLoc, CompResultTy);
     break;
