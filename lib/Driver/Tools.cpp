@@ -4104,6 +4104,8 @@ void darwin::Link::ConstructJob(Compilation &C, const JobAction &JA,
       if ((!runtime.HasARC && isObjCAutoRefCount(Args)) ||
           !runtime.HasSubscripting)
         getDarwinToolChain().AddLinkARCArgs(Args, CmdArgs);
+      CmdArgs.push_back("-framework");
+      CmdArgs.push_back("Foundation");
     }
     // Link libobj.
     CmdArgs.push_back("-lobjc");
