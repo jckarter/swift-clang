@@ -781,11 +781,11 @@ CollectRecordFields(const RecordDecl *record, llvm::DIFile tunit,
     }
   } else {
     bool IsMsStruct = record->hasAttr<MsStructAttr>();
+    const FieldDecl *LastFD = 0;
     for (RecordDecl::field_iterator I = record->field_begin(),
            E = record->field_end();
          I != E; ++I, ++fieldNo) {
       FieldDecl *field = *I;
-      const FieldDecl *LastFD = 0;
 
       if (IsMsStruct) {
         // Zero-length bitfields following non-bitfield members are ignored

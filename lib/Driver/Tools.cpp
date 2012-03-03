@@ -1371,6 +1371,8 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
 
     CmdArgs.push_back("-analyzer-eagerly-assume");
 
+    CmdArgs.push_back("-analyzer-inline-call");
+
     // Add default argument set.
     if (!Args.hasArg(options::OPT__analyzer_no_default_checks)) {
       CmdArgs.push_back("-analyzer-checker=core");
@@ -1990,6 +1992,10 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
   if (Args.hasFlag(options::OPT_faddress_sanitizer,
                    options::OPT_fno_address_sanitizer, false))
     CmdArgs.push_back("-faddress-sanitizer");
+
+  if (Args.hasFlag(options::OPT_fthread_sanitizer,
+                   options::OPT_fno_thread_sanitizer, false))
+    CmdArgs.push_back("-fthread-sanitizer");
 
   // -flax-vector-conversions is default.
   if (!Args.hasFlag(options::OPT_flax_vector_conversions,
@@ -4141,6 +4147,8 @@ void darwin::Link::ConstructJob(Compilation &C, const JobAction &JA,
       if ((!runtime.HasARC && isObjCAutoRefCount(Args)) ||
           !runtime.HasSubscripting)
         getDarwinToolChain().AddLinkARCArgs(Args, CmdArgs);
+      CmdArgs.push_back("-framework");
+      CmdArgs.push_back("Foundation");
     }
     // Link libobj.
     CmdArgs.push_back("-lobjc");
@@ -4300,6 +4308,9 @@ void solaris::Link::ConstructJob(Compilation &C, const JobAction &JA,
   }
 
   ArgStringList CmdArgs;
+
+  // Demangle C++ names in errors
+  CmdArgs.push_back("-C");
 
   if ((!Args.hasArg(options::OPT_nostdlib)) &&
       (!Args.hasArg(options::OPT_shared))) {
