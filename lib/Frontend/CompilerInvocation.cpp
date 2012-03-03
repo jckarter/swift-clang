@@ -794,6 +794,9 @@ static void LangOptsToArgs(const LangOptions &Opts,
   
   if (Opts.AppleKext)
     Res.push_back("-fapple-kext");
+
+  if (Opts.ObjCNoDirectAccessIsa)
+    Res.push_back("-fobjc-no-direct-access-isa");
   
   if (Opts.getVisibilityMode() != DefaultVisibility) {
     Res.push_back("-fvisibility");
@@ -1795,6 +1798,9 @@ static void ParseLangArgs(LangOptions &Opts, ArgList &Args, InputKind IK,
       Opts.AppleKext = 1;
   }
 
+  if (Args.hasArg(OPT_fobjc_no_direct_access_isa))
+    Opts.ObjCNoDirectAccessIsa = 1;
+
   if (Args.hasArg(OPT_print_ivar_layout))
     Opts.ObjCGCBitmapPrint = 1;
   if (Args.hasArg(OPT_fno_constant_cfstrings))
@@ -2122,6 +2128,9 @@ bool CompilerInvocation::CreateFromArgs(CompilerInvocation &Res,
   ParsePreprocessorArgs(Res.getPreprocessorOpts(), *Args, FileMgr, Diags);
   ParsePreprocessorOutputArgs(Res.getPreprocessorOutputOpts(), *Args);
   ParseTargetArgs(Res.getTargetOpts(), *Args);
+  llvm::Triple T(Res.getTargetOpts().Triple);
+  if (T.getArch() == llvm::Triple::arm64)
+    Res.getLangOpts()->ObjCNoDirectAccessIsa = 1;
 
   return Success;
 }

@@ -579,6 +579,8 @@ def fobjc_gc_only : Flag<"-fobjc-gc-only">,
   HelpText<"Use GC exclusively for Objective-C related memory management">;
 def fapple_kext : Flag<"-fapple-kext">,
   HelpText<"Use Apple's kernel extensions ABI">;
+def fobjc_no_direct_access_isa : Flag<"-fobjc-no-direct-access-isa">,
+  HelpText<"Cannot access isa directly">;
 def fobjc_dispatch_method_EQ : Joined<"-fobjc-dispatch-method=">,
   HelpText<"Objective-C dispatch method to use">;
 def fobjc_default_synthesize_properties : Flag<"-fobjc-default-synthesize-properties">,
