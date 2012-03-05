@@ -36,6 +36,7 @@ public:
 class MigrateSourceAction : public ASTFrontendAction {
   FileRemapper Remapper;
 protected:
+  virtual bool BeginInvocation(CompilerInstance &CI);
   virtual ASTConsumer *CreateASTConsumer(CompilerInstance &CI,
                                          StringRef InFile);
 };

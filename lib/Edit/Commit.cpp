@@ -10,6 +10,7 @@
 #include "clang/Edit/Commit.h"
 #include "clang/Edit/EditedSource.h"
 #include "clang/Lex/Lexer.h"
+#include "clang/Lex/PreprocessingRecord.h"
 #include "clang/Basic/SourceManager.h"
 
 using namespace clang;
@@ -36,6 +37,7 @@ CharSourceRange Commit::Edit::getInsertFromRange(SourceManager &SM) const {
 
 Commit::Commit(EditedSource &Editor)
   : SourceMgr(Editor.getSourceManager()), LangOpts(Editor.getLangOptions()),
+    PPRec(Editor.getPreprocessingRecord()),
     Editor(&Editor), IsCommitable(true) { }
 
 bool Commit::insert(SourceLocation loc, StringRef text,
@@ -67,6 +69,12 @@ bool Commit::insertFromRange(SourceLocation loc,
   FileOffset Offs;
   if ((!afterToken && !canInsert(loc, Offs)) ||
       ( afterToken && !canInsertAfterToken(loc, Offs, loc))) {
+    IsCommitable = false;
+    return false;
+  }
+
+  if (PPRec &&
+      PPRec->areInDifferentConditionalDirectiveRegion(loc, range.getBegin())) {
     IsCommitable = false;
     return false;
   }
@@ -295,6 +303,9 @@ bool Commit::canRemoveRange(CharSourceRange range,
     return false;
   if (SM.isInSystemHeader(range.getBegin()) ||
       SM.isInSystemHeader(range.getEnd()))
+    return false;
+
+  if (PPRec && PPRec->rangeIntersectsConditionalDirective(range.getAsRange()))
     return false;
 
   std::pair<FileID, unsigned> beginInfo = SM.getDecomposedLoc(range.getBegin());

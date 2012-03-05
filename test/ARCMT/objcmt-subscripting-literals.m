@@ -89,6 +89,14 @@ typedef signed char BOOL;
   dict = [NSDictionary dictionaryWithObject:arr forKey:str];
   dict = [NSDictionary dictionaryWithObjectsAndKeys: @"value1", @"key1", @"value2", @"key2", nil];
   dict = [NSDictionary dictionaryWithObjectsAndKeys: PAIR(1), PAIR(2), nil];
+  dict = [NSDictionary dictionaryWithObjectsAndKeys:
+                                               @"value1", @"key1",
+#ifdef BLAH
+                                               @"value2", @"key2",
+#else
+                                               @"value3", @"key3",
+#endif
+                                               nil ];
 
   id o = [arr objectAtIndex:2];
   o = [dict objectForKey:@"key"];
@@ -100,6 +108,27 @@ typedef signed char BOOL;
   [mdict setObject:@"value" forKey:@"key"];
   [marr replaceObjectAtIndex:2 withObject:[arr objectAtIndex:4]];
   [mdict setObject:[dict objectForKey:@"key2"] forKey:@"key"];
+  [mdict setObject:[dict objectForKey:@"key2"] forKey:
+#if 1
+                     @"key1"
+#else
+                     @"key2"
+#endif
+                    ];
+  [mdict setObject:[dict objectForKey:
+#if 2
+                     @"key3"
+#else
+                     @"key4"
+#endif
+                   ] forKey:@"key"];
+  [mdict setObject:@"value" forKey:[dict objectForKey:
+#if 3
+                     @"key5"
+#else
+                     @"key6"
+#endif
+                   ] ];
   [mdict setObject:@"val" forKey:[dict objectForKey:@"key2"]];
   [mdict setObject:[dict objectForKey:@"key1"] forKey:[dict objectForKey:[NSArray arrayWithObject:@"arrkey"]]];
   __strong NSArray **parr = 0;
