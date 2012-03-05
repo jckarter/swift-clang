@@ -18,6 +18,7 @@
 
 namespace clang {
   class LangOptions;
+  class PreprocessingRecord;
 
 namespace edit {
   class Commit;
@@ -26,7 +27,7 @@ namespace edit {
 class EditedSource {
   const SourceManager &SourceMgr;
   const LangOptions &LangOpts;
-  
+  const PreprocessingRecord *PPRec;
 
   struct FileEdit {
     StringRef Text;
@@ -43,12 +44,14 @@ class EditedSource {
   llvm::BumpPtrAllocator StrAlloc;
 
 public:
-  EditedSource(const SourceManager &SM, const LangOptions &LangOpts)
-    : SourceMgr(SM), LangOpts(LangOpts),
-      StrAlloc(/*size=*/128) { }
+  EditedSource(const SourceManager &SM, const LangOptions &LangOpts,
+               const PreprocessingRecord *PPRec = 0)
+    : SourceMgr(SM), LangOpts(LangOpts), PPRec(PPRec),
+      StrAlloc(/*size=*/512) { }
 
   const SourceManager &getSourceManager() const { return SourceMgr; }
   const LangOptions &getLangOptions() const { return LangOpts; }
+  const PreprocessingRecord *getPreprocessingRecord() const { return PPRec; }
 
   bool canInsertInOffset(SourceLocation OrigLoc, FileOffset Offs);
 

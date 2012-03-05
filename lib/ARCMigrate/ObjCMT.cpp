@@ -18,6 +18,7 @@
 #include "clang/Edit/Commit.h"
 #include "clang/Edit/EditsReceiver.h"
 #include "clang/Rewrite/Rewriter.h"
+#include "clang/Lex/Preprocessor.h"
 #include "clang/Basic/FileManager.h"
 #include "llvm/ADT/SmallString.h"
 
@@ -37,6 +38,7 @@ public:
   llvm::OwningPtr<edit::EditedSource> Editor;
   FileRemapper &Remapper;
   FileManager &FileMgr;
+  const PreprocessingRecord *PPRec;
   bool IsOutputFile;
 
   ObjCMigrateASTConsumer(StringRef migrateDir,
@@ -44,17 +46,20 @@ public:
                          bool migrateSubscripting,
                          FileRemapper &remapper,
                          FileManager &fileMgr,
+                         const PreprocessingRecord *PPRec,
                          bool isOutputFile = false)
   : MigrateDir(migrateDir),
     MigrateLiterals(migrateLiterals),
     MigrateSubscripting(migrateSubscripting),
-    Remapper(remapper), FileMgr(fileMgr), IsOutputFile(isOutputFile) { }
+    Remapper(remapper), FileMgr(fileMgr), PPRec(PPRec),
+    IsOutputFile(isOutputFile) { }
 
 protected:
   virtual void Initialize(ASTContext &Context) {
     NSAPIObj.reset(new NSAPI(Context));
     Editor.reset(new edit::EditedSource(Context.getSourceManager(),
-                                        Context.getLangOptions()));
+                                        Context.getLangOptions(),
+                                        PPRec));
   }
 
   virtual bool HandleTopLevelDecl(DeclGroupRef DG) {
@@ -93,7 +98,8 @@ ASTConsumer *ObjCMigrateAction::CreateASTConsumer(CompilerInstance &CI,
                                                        MigrateLiterals,
                                                        MigrateSubscripting,
                                                        Remapper,
-                                                    CompInst->getFileManager()); 
+                                                    CompInst->getFileManager(),
+                          CompInst->getPreprocessor().getPreprocessingRecord()); 
   ASTConsumer *Consumers[] = { MTConsumer, WrappedConsumer };
   return new MultiplexConsumer(Consumers);
 }
@@ -103,6 +109,8 @@ bool ObjCMigrateAction::BeginInvocation(CompilerInstance &CI) {
                         /*ignoreIfFilesChanges=*/true);
   CompInst = &CI;
   CI.getDiagnostics().setIgnoreAllWarnings(true);
+  CI.getPreprocessorOpts().DetailedRecord = true;
+  CI.getPreprocessorOpts().DetailedRecordConditionalDirectives = true;
   return true;
 }
 
@@ -200,6 +208,12 @@ void ObjCMigrateASTConsumer::HandleTranslationUnit(ASTContext &Ctx) {
   }
 }
 
+bool MigrateSourceAction::BeginInvocation(CompilerInstance &CI) {
+  CI.getPreprocessorOpts().DetailedRecord = true;
+  CI.getPreprocessorOpts().DetailedRecordConditionalDirectives = true;
+  return true;
+}
+
 ASTConsumer *MigrateSourceAction::CreateASTConsumer(CompilerInstance &CI,
                                                   StringRef InFile) {
   return new ObjCMigrateASTConsumer(CI.getFrontendOpts().OutputFile,
@@ -207,5 +221,6 @@ ASTConsumer *MigrateSourceAction::CreateASTConsumer(CompilerInstance &CI,
                                     /*MigrateSubscripting=*/true,
                                     Remapper,
                                     CI.getFileManager(),
+                                  CI.getPreprocessor().getPreprocessingRecord(),
                                     /*isOutputFile=*/true); 
 }

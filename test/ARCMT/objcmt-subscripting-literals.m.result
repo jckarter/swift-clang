@@ -89,6 +89,14 @@ typedef signed char BOOL;
   dict = @{str: arr};
   dict = @{@"key1": @"value1", @"key2": @"value2"};
   dict = [NSDictionary dictionaryWithObjectsAndKeys: PAIR(1), PAIR(2), nil];
+  dict = [NSDictionary dictionaryWithObjectsAndKeys:
+                                               @"value1", @"key1",
+#ifdef BLAH
+                                               @"value2", @"key2",
+#else
+                                               @"value3", @"key3",
+#endif
+                                               nil ];
 
   id o = arr[2];
   o = dict[@"key"];
@@ -100,6 +108,27 @@ typedef signed char BOOL;
   mdict[@"key"] = @"value";
   marr[2] = arr[4];
   mdict[@"key"] = dict[@"key2"];
+  [mdict setObject:dict[@"key2"] forKey:
+#if 1
+                     @"key1"
+#else
+                     @"key2"
+#endif
+                    ];
+  mdict[@"key"] = [dict objectForKey:
+#if 2
+                     @"key3"
+#else
+                     @"key4"
+#endif
+                   ];
+  mdict[[dict objectForKey:
+#if 3
+                     @"key5"
+#else
+                     @"key6"
+#endif
+                   ]] = @"value";
   mdict[dict[@"key2"]] = @"val";
   mdict[dict[@[@"arrkey"]]] = dict[@"key1"];
   __strong NSArray **parr = 0;
