@@ -599,7 +599,7 @@ public:
   ///
   /// \return - False on error (invalid feature name).
   virtual bool setFeatureEnabled(llvm::StringMap<bool> &Features,
-                                 const std::string &Name,
+                                 StringRef Name,
                                  bool Enabled) const {
     return false;
   }
