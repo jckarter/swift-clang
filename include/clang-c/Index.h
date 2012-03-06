@@ -1745,7 +1745,11 @@ enum CXCursorKind {
    */
   CXCursor_LambdaExpr                    = 144,
   
-  CXCursor_LastExpr                      = CXCursor_LambdaExpr,
+  /** \brief Objective-c Boolean Literal.
+   */
+  CXCursor_ObjCBoolLiteralExpr           = 145,
+
+  CXCursor_LastExpr                      = CXCursor_ObjCBoolLiteralExpr,
 
   /* Statements */
   CXCursor_FirstStmt                     = 200,
@@ -3977,6 +3981,20 @@ typedef void *CXRemapping;
  * via a call to \c clang_remap_dispose(). Can return NULL if an error occurred.
  */
 CINDEX_LINKAGE CXRemapping clang_getRemappings(const char *path);
+
+/**
+ * \brief Retrieve a remapping.
+ *
+ * \param filePaths pointer to an array of file paths containing remapping info.
+ *
+ * \param numFiles number of file paths.
+ *
+ * \returns the requested remapping. This remapping must be freed
+ * via a call to \c clang_remap_dispose(). Can return NULL if an error occurred.
+ */
+CINDEX_LINKAGE
+CXRemapping clang_getRemappingsFromFileList(const char **filePaths,
+                                            unsigned numFiles);
 
 /**
  * \brief Determine the number of remappings.
