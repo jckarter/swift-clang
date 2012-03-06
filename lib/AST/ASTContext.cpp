@@ -2965,7 +2965,7 @@ QualType ASTContext::getUnaryTransformType(QualType BaseType,
     new (*this, TypeAlignment) UnaryTransformType (BaseType, UnderlyingType, 
                                                    Kind,
                                  UnderlyingType->isDependentType() ?
-                                    QualType() : UnderlyingType);
+                                 QualType() : getCanonicalType(UnderlyingType));
   Types.push_back(Ty);
   return QualType(Ty, 0);
 }
