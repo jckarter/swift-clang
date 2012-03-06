@@ -688,7 +688,7 @@ def warn_unimplemented_protocol_method : Warning<
 // C++ declarations
 def err_static_assert_expression_is_not_constant : Error<
   "static_assert expression is not an integral constant expression">;
-def err_static_assert_failed : Error<"static_assert failed \"%0\"">;
+def err_static_assert_failed : Error<"static_assert failed %0">;
 
 def warn_inline_namespace_reopened_noninline : Warning<
   "inline namespace cannot be re-opened as a non-inline namespace">;
@@ -4955,8 +4955,7 @@ def err_block_returning_array_function : Error<
   "block cannot return %select{array|function}0 type %1">;
 def warn_block_missing_return_type : Warning<
   "block literal is missing explicit return type and "
-  "returns non-void values">, 
-  InGroup<DiagGroup<"block-missing-explicit-return-type">>, DefaultIgnore;
+  "returns non-void values">, InGroup<BlockMissingReturnType>, DefaultIgnore;
 
 // Builtin annotation string.
 def err_builtin_annotation_not_string_constant : Error<
