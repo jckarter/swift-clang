@@ -99,8 +99,6 @@ class MallocChecker : public Checker<check::DeadSymbols,
   mutable IdentifierInfo *II_malloc, *II_free, *II_realloc, *II_calloc,
                          *II_valloc, *II_reallocf, *II_strndup, *II_strdup;
 
-  static const unsigned InvalidArgIndex = UINT_MAX;
-
 public:
   MallocChecker() : II_malloc(0), II_free(0), II_realloc(0), II_calloc(0),
                     II_valloc(0), II_reallocf(0), II_strndup(0), II_strdup(0) {}
@@ -1086,7 +1084,7 @@ bool MallocChecker::doesNotFreeMemory(const CallOrObjCMessage *Call,
   ASTContext &ASTC = State->getStateManager().getContext();
 
   // If it's one of the allocation functions we can reason about, we model
-  // it's behavior explicitly.
+  // its behavior explicitly.
   if (isa<FunctionDecl>(D) && isMemFunction(cast<FunctionDecl>(D), ASTC)) {
     return true;
   }
@@ -1097,7 +1095,7 @@ bool MallocChecker::doesNotFreeMemory(const CallOrObjCMessage *Call,
     return false;
 
   // Process C/ObjC functions.
-  if (const FunctionDecl *FD  = dyn_cast_or_null<FunctionDecl>(D)) {
+  if (const FunctionDecl *FD  = dyn_cast<FunctionDecl>(D)) {
     // White list the system functions whose arguments escape.
     const IdentifierInfo *II = FD->getIdentifier();
     if (!II)
