@@ -144,7 +144,7 @@ const {
              (PhaseArg = DAL.getLastArg(options::OPT_rewrite_objc)) ||
              (PhaseArg = DAL.getLastArg(options::OPT__migrate)) ||
              (PhaseArg = DAL.getLastArg(options::OPT__analyze,
-                                              options::OPT__analyze_auto)) ||
+                                        options::OPT__analyze_auto)) ||
              (PhaseArg = DAL.getLastArg(options::OPT_emit_ast)) ||
              (PhaseArg = DAL.getLastArg(options::OPT_S))) {
     FinalPhase = phases::Compile;
@@ -376,6 +376,10 @@ Compilation *Driver::BuildCompilation(ArrayRef<const char *> ArgList) {
 void Driver::generateCompilationDiagnostics(Compilation &C,
                                             const Command *FailingCommand) {
   if (C.getArgs().hasArg(options::OPT_fno_crash_diagnostics))
+    return;  
+
+  // Don't try to generate diagnostics for link jobs.
+  if (FailingCommand->getCreator().isLinkJob())
     return;
 
   Diag(clang::diag::note_drv_command_failed_diag_msg)
