@@ -696,6 +696,9 @@ static void AddStmtsExprs(llvm::BitstreamWriter &Stream,
   RECORD(EXPR_BLOCK_DECL_REF);
   RECORD(EXPR_GENERIC_SELECTION);
   RECORD(EXPR_OBJC_STRING_LITERAL);
+  RECORD(EXPR_OBJC_NUMERIC_LITERAL);
+  RECORD(EXPR_OBJC_ARRAY_LITERAL);
+  RECORD(EXPR_OBJC_DICTIONARY_LITERAL);
   RECORD(EXPR_OBJC_ENCODE);
   RECORD(EXPR_OBJC_SELECTOR_EXPR);
   RECORD(EXPR_OBJC_PROTOCOL_EXPR);
@@ -709,6 +712,7 @@ static void AddStmtsExprs(llvm::BitstreamWriter &Stream,
   RECORD(STMT_OBJC_AT_TRY);
   RECORD(STMT_OBJC_AT_SYNCHRONIZED);
   RECORD(STMT_OBJC_AT_THROW);
+  RECORD(EXPR_OBJC_BOOL_LITERAL);
   RECORD(EXPR_CXX_OPERATOR_CALL);
   RECORD(EXPR_CXX_CONSTRUCT);
   RECORD(EXPR_CXX_STATIC_CAST);
@@ -977,6 +981,7 @@ void ASTWriter::WriteMetadata(ASTContext &Context, StringRef isysroot,
   MetaAbbrev->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::Fixed, 16)); // Clang major
   MetaAbbrev->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::Fixed, 16)); // Clang minor
   MetaAbbrev->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::Fixed, 1)); // Relocatable
+  MetaAbbrev->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::Fixed, 1)); // Has errors
   MetaAbbrev->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::Blob)); // Target triple
   unsigned MetaAbbrevCode = Stream.EmitAbbrev(MetaAbbrev);
 
@@ -987,6 +992,7 @@ void ASTWriter::WriteMetadata(ASTContext &Context, StringRef isysroot,
   Record.push_back(CLANG_VERSION_MAJOR);
   Record.push_back(CLANG_VERSION_MINOR);
   Record.push_back(!isysroot.empty());
+  Record.push_back(ASTHasCompilerErrors);
   const std::string &Triple = Target.getTriple().getTriple();
   Stream.EmitRecordWithBlob(MetaAbbrevCode, Record, Triple);
 
@@ -3111,7 +3117,7 @@ void ASTWriter::SetSelectorOffset(Selector Sel, uint32_t Offset) {
 
 ASTWriter::ASTWriter(llvm::BitstreamWriter &Stream)
   : Stream(Stream), Context(0), PP(0), Chain(0), WritingModule(0),
-    WritingAST(false),
+    WritingAST(false), ASTHasCompilerErrors(false),
     FirstDeclID(NUM_PREDEF_DECL_IDS), NextDeclID(FirstDeclID),
     FirstTypeID(NUM_PREDEF_TYPE_IDS), NextTypeID(FirstTypeID),
     FirstIdentID(NUM_PREDEF_IDENT_IDS), NextIdentID(FirstIdentID), 
@@ -3140,8 +3146,11 @@ ASTWriter::~ASTWriter() {
 
 void ASTWriter::WriteAST(Sema &SemaRef, MemorizeStatCalls *StatCalls,
                          const std::string &OutputFile,
-                         Module *WritingModule, StringRef isysroot) {
+                         Module *WritingModule, StringRef isysroot,
+                         bool hasErrors) {
   WritingAST = true;
+  
+  ASTHasCompilerErrors = hasErrors;
   
   // Emit the file header.
   Stream.Emit((unsigned)'C', 8);
