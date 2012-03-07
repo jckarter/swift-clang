@@ -1104,6 +1104,9 @@ static bool ParseCodeGenArgs(CodeGenOptions &Opts, ArgList &Args, InputKind IK,
   // We must always run at least the always inlining pass.
   Opts.Inlining = (Opts.OptimizationLevel > 1) ? CodeGenOptions::NormalInlining
     : CodeGenOptions::OnlyAlwaysInlining;
+  // -fno-inline-functions overrides OptimizationLevel > 1.
+  Opts.Inlining = Args.hasArg(OPT_fno_inline_functions) ? 
+    CodeGenOptions::OnlyAlwaysInlining : Opts.Inlining;
 
   Opts.DebugInfo = Args.hasArg(OPT_g);
   Opts.LimitDebugInfo = !Args.hasArg(OPT_fno_limit_debug_info)
