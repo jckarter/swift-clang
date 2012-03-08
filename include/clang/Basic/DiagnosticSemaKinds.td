@@ -1143,6 +1143,11 @@ def warn_uninit_var_captured_by_block : Warning<
 def warn_maybe_uninit_var_captured_by_block : Warning<
   "variable %0 may be uninitialized when captured by block">,
   InGroup<UninitializedMaybe>, DefaultIgnore;
+def warn_uninit_byref_blockvar_captured_by_block : Warning<
+  "block pointer variable %0 is uninitialized when captured by block">,
+  InGroup<Uninitialized>, DefaultIgnore;
+def note_block_var_fixit_add_initialization : Note<
+  "maybe you meant to use __block %0">;
 def note_var_fixit_add_initialization : Note<
   "initialize the variable %0 to silence this warning">;
 def err_init_incomplete_type : Error<"initialization of incomplete type %0">;
@@ -4752,13 +4757,11 @@ def err_literal_operator_params : Error<
   "parameter declaration for literal operator %0 is not valid">;
 def err_literal_operator_extern_c : Error<
   "literal operator must have C++ linkage">;
-def warn_user_literal_hexfloat : Warning<
-  "user-defined literal with suffix '%0' is preempted by C99 hexfloat "
-  "extension">, InGroup<UserDefinedLiterals>;
 def warn_user_literal_reserved : Warning<
-  "user-defined literals not starting with '_' are reserved by the "
-  "implementation">, InGroup<UserDefinedLiterals>;
-  
+  "user-defined literal suffixes not starting with '_' are reserved; "
+  "no literal will invoke this operator">,
+  InGroup<UserDefinedLiterals>;
+
 // C++ conversion functions
 def err_conv_function_not_member : Error<
   "conversion function must be a non-static member function">;

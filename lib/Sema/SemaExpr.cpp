@@ -1122,6 +1122,14 @@ Sema::CreateGenericSelectionExpr(SourceLocation KeyLoc,
                  ResultIndex));
 }
 
+/// getUDSuffixLoc - Create a SourceLocation for a ud-suffix, given the
+/// location of the token and the offset of the ud-suffix within it.
+static SourceLocation getUDSuffixLoc(Sema &S, SourceLocation TokLoc,
+                                     unsigned Offset) {
+  return Lexer::AdvanceToTokenCharacter(TokLoc, Offset, S.getSourceManager(),
+                                        S.getLangOptions());
+}
+
 /// ActOnStringLiteral - The specified tokens were lexed as pasted string
 /// fragments (e.g. "foo" "bar" L"baz").  The result string has to handle string
 /// concatenation ([C99 5.1.1.2, translation phase #6]), so it may come from
@@ -1172,10 +1180,28 @@ Sema::ActOnStringLiteral(const Token *StringToks, unsigned NumStringToks) {
                                        ArrayType::Normal, 0);
 
   // Pass &StringTokLocs[0], StringTokLocs.size() to factory!
-  return Owned(StringLiteral::Create(Context, Literal.GetString(),
-                                     Kind, Literal.Pascal, StrTy,
-                                     &StringTokLocs[0],
-                                     StringTokLocs.size()));
+  StringLiteral *Lit = StringLiteral::Create(Context, Literal.GetString(),
+                                             Kind, Literal.Pascal, StrTy,
+                                             &StringTokLocs[0],
+                                             StringTokLocs.size());
+  if (Literal.getUDSuffix().empty())
+    return Owned(Lit);
+
+  // We're building a user-defined literal.
+  IdentifierInfo *UDSuffix = &Context.Idents.get(Literal.getUDSuffix());
+  SourceLocation UDSuffixLoc =
+    getUDSuffixLoc(*this, StringTokLocs[Literal.getUDSuffixToken()],
+                   Literal.getUDSuffixOffset());
+
+  // C++11 [lex.ext]p5: The literal L is treated as a call of the form
+  //   operator "" X (str, len)
+  QualType SizeType = Context.getSizeType();
+  llvm::APInt Len(Context.getIntWidth(SizeType), Literal.GetNumStringChars());
+  IntegerLiteral *LenArg = IntegerLiteral::Create(Context, Len, SizeType,
+                                                  StringTokLocs[0]);
+  Expr *Args[] = { Lit, LenArg };
+  return BuildLiteralOperatorCall(UDSuffix, UDSuffixLoc, Args,
+                                  StringTokLocs.back());
 }
 
 ExprResult
@@ -2387,8 +2413,22 @@ ExprResult Sema::ActOnCharacterConstant(const Token &Tok) {
   else if (Literal.isUTF32())
     Kind = CharacterLiteral::UTF32;
 
-  return Owned(new (Context) CharacterLiteral(Literal.getValue(), Kind, Ty,
-                                              Tok.getLocation()));
+  Expr *Lit = new (Context) CharacterLiteral(Literal.getValue(), Kind, Ty,
+                                             Tok.getLocation());
+
+  if (Literal.getUDSuffix().empty())
+    return Owned(Lit);
+
+  // We're building a user-defined literal.
+  IdentifierInfo *UDSuffix = &Context.Idents.get(Literal.getUDSuffix());
+  SourceLocation UDSuffixLoc =
+    getUDSuffixLoc(*this, Tok.getLocation(), Literal.getUDSuffixOffset());
+
+  // C++11 [lex.ext]p6: The literal L is treated as a call of the form
+  //   operator "" X (ch)
+  return BuildLiteralOperatorCall(UDSuffix, UDSuffixLoc,
+                                  llvm::makeArrayRef(&Lit, 1),
+                                  Tok.getLocation());
 }
 
 ExprResult Sema::ActOnIntegerConstant(SourceLocation Loc, uint64_t Val) {

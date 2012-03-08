@@ -205,8 +205,8 @@ public:
     return DC->isRecord();
   }
 
-  /// \brief Given that this declaration is a C++ class member,
-  /// determine whether it's an instance member of its class.
+  /// \brief Determine whether the given declaration is an instance member of
+  /// a C++ class.
   bool isCXXInstanceMember() const;
 
   class LinkageInfo {
@@ -3281,6 +3281,14 @@ void Redeclarable<decl_type>::setPreviousDeclaration(decl_type *PrevDecl) {
 /// Type.h and Decl.h.
 inline bool IsEnumDeclComplete(EnumDecl *ED) {
   return ED->isComplete();
+}
+
+/// \brief Check if the given decl is scoped.
+///
+/// We use this function to break a cycle between the inline definitions in
+/// Type.h and Decl.h.
+inline bool IsEnumDeclScoped(EnumDecl *ED) {
+  return ED->isScoped();
 }
 
 }  // end namespace clang
