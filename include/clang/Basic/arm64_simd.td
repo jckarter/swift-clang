@@ -223,7 +223,7 @@ def VST4_LANE : WInst<"vst4_lane", "vp4i", "QUsQUiQsQiQhQfQPsUcUsUicsihfPcPs">;
 ////////////////////////////////////////////////////////////////////////////////
 // Extract lanes from a vector
 def VGET_LANE : SInst<"vget_lane", "sdi",
-                      "RcRsRiRlRUcRUsRUiRUlRfRPcRPs">;
+                      "csilUcUsUiUlfPcPsQcQsQiQlQUcQUsQUiQUlQfQPcQPs">;
 
 ////////////////////////////////////////////////////////////////////////////////
 // Set lanes within a vector
