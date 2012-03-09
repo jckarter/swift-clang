@@ -9306,9 +9306,15 @@ bool Sema::CheckLiteralOperatorDeclaration(FunctionDecl *FnDecl) {
 
   bool Valid = false;
 
+  // This might be the definition of a literal operator template.
+  FunctionTemplateDecl *TpDecl = FnDecl->getDescribedFunctionTemplate();
+  // This might be a specialization of a literal operator template.
+  if (!TpDecl)
+    TpDecl = FnDecl->getPrimaryTemplate();
+
   // template <char...> type operator "" name() is the only valid template
   // signature, and the only valid signature with no parameters.
-  if (FunctionTemplateDecl *TpDecl = FnDecl->getDescribedFunctionTemplate()) {
+  if (TpDecl) {
     if (FnDecl->param_size() == 0) {
       // Must have only one template parameter
       TemplateParameterList *Params = TpDecl->getTemplateParameters();
@@ -9381,6 +9387,19 @@ FinishedParams:
     Diag(FnDecl->getLocation(), diag::err_literal_operator_params)
       << FnDecl->getDeclName();
     return true;
+  }
+
+  // A parameter-declaration-clause containing a default argument is not
+  // equivalent to any of the permitted forms.
+  for (FunctionDecl::param_iterator Param = FnDecl->param_begin(),
+                                    ParamEnd = FnDecl->param_end();
+       Param != ParamEnd; ++Param) {
+    if ((*Param)->hasDefaultArg()) {
+      Diag((*Param)->getDefaultArgRange().getBegin(),
+           diag::err_literal_operator_default_argument)
+        << (*Param)->getDefaultArgRange();
+      break;
+    }
   }
 
   StringRef LiteralName
