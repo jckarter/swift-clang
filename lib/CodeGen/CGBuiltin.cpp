@@ -2518,6 +2518,12 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     Function *F = CGM.getIntrinsic(Intrinsic::arm64_neon_vcvthf2fp);
     return EmitNeonCall(F, Ops, "vcvt");
   }
+  case ARM64::BI__builtin_arm64_vcvt_f16_v: {
+    assert(Type.getEltType() == NeonTypeFlags::Float16 && !quad &&
+           "unexpected vcvt_f16_v builtin");
+    Function *F = CGM.getIntrinsic(Intrinsic::arm64_neon_vcvtfp2hf);
+    return EmitNeonCall(F, Ops, "vcvt");
+  }
   case ARM64::BI__builtin_arm64_vdiv_v:
   case ARM64::BI__builtin_arm64_vdivq_v:
     Ops[0] = Builder.CreateBitCast(Ops[0], Ty);

@@ -163,7 +163,10 @@ def VSLI_N : WInst<"vsli_n", "dddi",
 // Vector FP->Int Conversions
 
 def VCVT_F32     : SInst<"vcvt_f32", "fd", "iUiQiQUi">;
+// F16->F32
 def VCVT_F32_F16 : SInst<"vcvt_f32_f16", "fd", "h">;
+// F32->F16
+def VCVT_F16     : SInst<"vcvt_f16", "hk",  "f">;
 
 // FIXME: These all need replaced with the new versions.
 //def VCVTF_A : SInst<"vcvtf_a", "df", "iUiQiQUiQlQUl">;
