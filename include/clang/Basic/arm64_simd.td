@@ -161,19 +161,25 @@ def VSLI_N : WInst<"vsli_n", "dddi",
 
 ////////////////////////////////////////////////////////////////////////////////
 // Vector FP->Int Conversions
-def VCVTF_A : SInst<"vcvtf_a", "df", "iUiQiQUiQlQUl">;
-def VCVTF_M : SInst<"vcvtf_m", "df", "iUiQiQUiQlQUl">;
-def VCVTF_N : SInst<"vcvtf_n", "df", "iUiQiQUiQlQUl">;
-def VCVTF_P : SInst<"vcvtf_p", "df", "iUiQiQUiQlQUl">;
-def VCVTF_Z : SInst<"vcvtf_z", "df", "iUiQiQUiQlQUl">;
-let isShift = 1 in {
-def VCVTI_M : SInst<"vcvti_m", "fdi", "iUiQiQUiQlQUl">;
-def VCVTI_N : SInst<"vcvti_n", "fdi", "iUiQiQUiQlQUl">;
-def VCVTI_P : SInst<"vcvti_p", "fdi", "iUiQiQUiQlQUl">;
-def VCVTI_Z : SInst<"vcvti_z", "fdi", "iUiQiQUiQlQUl">;
-}
-def VCVT  : SInst<"vcvt_f32",  "bd", "Rd">;
-def VCVT2 : SInst<"vcvt2_f32", "hhd", "Rd">;
+
+def VCVT_F32     : SInst<"vcvt_f32", "fd", "iUiQiQUi">;
+def VCVT_F32_F16 : SInst<"vcvt_f32_f16", "fd", "h">;
+
+// FIXME: These all need replaced with the new versions.
+//def VCVTF_A : SInst<"vcvtf_a", "df", "iUiQiQUiQlQUl">;
+//def VCVTF_M : SInst<"vcvtf_m", "df", "iUiQiQUiQlQUl">;
+//def VCVTF_N : SInst<"vcvtf_n", "df", "iUiQiQUiQlQUl">;
+//def VCVTF_P : SInst<"vcvtf_p", "df", "iUiQiQUiQlQUl">;
+//def VCVTF_Z : SInst<"vcvtf_z", "df", "iUiQiQUiQlQUl">;
+//let isShift = 1 in {
+//def VCVTI_M : SInst<"vcvti_m", "fdi", "iUiQiQUiQlQUl">;
+//def VCVTI_N : SInst<"vcvti_n", "fdi", "iUiQiQUiQlQUl">;
+//def VCVTI_P : SInst<"vcvti_p", "fdi", "iUiQiQUiQlQUl">;
+//def VCVTI_Z : SInst<"vcvti_z", "fdi", "iUiQiQUiQlQUl">;
+//}
+//def VCVT  : SInst<"vcvt_f32",  "bd", "Rd">;
+//def VCVT2 : SInst<"vcvt2_f32", "hhd", "Rd">;
+
 def VRND_A : SInst<"vrnda", "dd", "f">;
 def VRND_I : SInst<"vrndi", "dd", "f">;
 def VRND_M : SInst<"vrndm", "dd", "f">;
