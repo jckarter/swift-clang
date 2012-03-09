@@ -106,6 +106,9 @@ class NamedDecl : public Decl {
   /// constructor, Objective-C selector, etc.)
   DeclarationName Name;
 
+private:
+  NamedDecl *getUnderlyingDeclImpl();
+
 protected:
   NamedDecl(Kind DK, DeclContext *DC, SourceLocation L, DeclarationName N)
     : Decl(DK, DC, L), Name(N) { }
@@ -323,7 +326,14 @@ public:
 
   /// \brief Looks through UsingDecls and ObjCCompatibleAliasDecls for
   /// the underlying named decl.
-  NamedDecl *getUnderlyingDecl();
+  NamedDecl *getUnderlyingDecl() {
+    // Fast-path the common case.
+    if (this->getKind() != UsingShadow &&
+        this->getKind() != ObjCCompatibleAlias)
+      return this;
+
+    return getUnderlyingDeclImpl();
+  }
   const NamedDecl *getUnderlyingDecl() const {
     return const_cast<NamedDecl*>(this)->getUnderlyingDecl();
   }
