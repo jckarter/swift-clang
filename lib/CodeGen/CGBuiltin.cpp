@@ -2524,6 +2524,32 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     Function *F = CGM.getIntrinsic(Intrinsic::arm64_neon_vcvtfp2hf);
     return EmitNeonCall(F, Ops, "vcvt");
   }
+  case ARM64::BI__builtin_arm64_vcvt_n_f32_v:
+  case ARM64::BI__builtin_arm64_vcvtq_n_f32_v: {
+    llvm::Type *FloatTy =
+      GetNeonType(this, NeonTypeFlags(NeonTypeFlags::Float32, false, quad));
+    llvm::Type *Tys[2] = { FloatTy, Ty };
+    Int = usgn ? Intrinsic::arm64_neon_vcvtfxu2fp
+               : Intrinsic::arm64_neon_vcvtfxs2fp;
+    Function *F = CGM.getIntrinsic(Int, Tys);
+    return EmitNeonCall(F, Ops, "vcvt_n");
+  }
+  case ARM64::BI__builtin_arm64_vcvt_n_s32_v:
+  case ARM64::BI__builtin_arm64_vcvtq_n_s32_v: {
+    llvm::Type *FloatTy =
+      GetNeonType(this, NeonTypeFlags(NeonTypeFlags::Float32, false, quad));
+    llvm::Type *Tys[2] = { Ty, FloatTy };
+    Function *F = CGM.getIntrinsic(Intrinsic::arm64_neon_vcvtfp2fxs, Tys);
+    return EmitNeonCall(F, Ops, "vcvt_n");
+  }
+  case ARM64::BI__builtin_arm64_vcvt_n_u32_v:
+  case ARM64::BI__builtin_arm64_vcvtq_n_u32_v: {
+    llvm::Type *FloatTy =
+      GetNeonType(this, NeonTypeFlags(NeonTypeFlags::Float32, false, quad));
+    llvm::Type *Tys[2] = { Ty, FloatTy };
+    Function *F = CGM.getIntrinsic(Intrinsic::arm64_neon_vcvtfp2fxu, Tys);
+    return EmitNeonCall(F, Ops, "vcvt_n");
+  }
   case ARM64::BI__builtin_arm64_vdiv_v:
   case ARM64::BI__builtin_arm64_vdivq_v:
     Ops[0] = Builder.CreateBitCast(Ops[0], Ty);

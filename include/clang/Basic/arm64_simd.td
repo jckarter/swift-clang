@@ -167,6 +167,14 @@ def VCVT_F32     : SInst<"vcvt_f32", "fd", "iUiQiQUi">;
 def VCVT_F32_F16 : SInst<"vcvt_f32_f16", "fd", "h">;
 // F32->F16
 def VCVT_F16     : SInst<"vcvt_f16", "hk",  "f">;
+let isVCVT_N = 1 in {
+// signed-fixed-point -> f32
+def VCVT_N_S32   : SInst<"vcvt_n_s32", "xdi", "fQf">;
+// unsigned-fixed-point -> f32
+def VCVT_N_U32   : SInst<"vcvt_n_u32", "udi", "fQf">;
+// f32 -> fixed point
+def VCVT_N_F32   : SInst<"vcvt_n_f32", "fdi", "iUiQiQUi">;
+}
 
 // FIXME: These all need replaced with the new versions.
 //def VCVTF_A : SInst<"vcvtf_a", "df", "iUiQiQUiQlQUl">;
