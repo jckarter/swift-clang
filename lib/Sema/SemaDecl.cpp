@@ -6721,7 +6721,7 @@ void Sema::CheckCompleteVariableDeclaration(VarDecl *var) {
 
     if (type->isStructureOrClassType()) {
       SourceLocation poi = var->getLocation();
-      Expr *varRef = new (Context) DeclRefExpr(var, type, VK_LValue, poi);
+      Expr *varRef =new (Context) DeclRefExpr(var, false, type, VK_LValue, poi);
       ExprResult result =
         PerformCopyInitialization(
                         InitializedEntity::InitializeBlock(poi, type, false),
@@ -8029,6 +8029,7 @@ Decl *Sema::ActOnTag(Scope *S, unsigned TagSpec, TagUseKind TUK,
   } else if (S->isFunctionPrototypeScope()) {
     // If this is an enum declaration in function prototype scope, set its
     // initial context to the translation unit.
+    // FIXME: [citation needed]
     SearchDC = Context.getTranslationUnitDecl();
   }
 
@@ -8091,8 +8092,7 @@ Decl *Sema::ActOnTag(Scope *S, unsigned TagSpec, TagUseKind TUK,
       // Find the context where we'll be declaring the tag.
       // FIXME: We would like to maintain the current DeclContext as the
       // lexical context,
-      while (SearchDC->isRecord() || SearchDC->isTransparentContext() ||
-             SearchDC->isObjCContainer())
+      while (!SearchDC->isFileContext() && !SearchDC->isFunctionOrMethod())
         SearchDC = SearchDC->getParent();
 
       // Find the scope where we'll be declaring the tag.
