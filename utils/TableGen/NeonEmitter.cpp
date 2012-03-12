@@ -161,14 +161,18 @@ static char ModType(const char mod, char type, bool &quad, bool &poly,
     case 'u':
       usgn = true;
       poly = false;
-      if (type == 'f' || type == 'd')
+      if (type == 'f')
         type = 'i';
+      else if (type == 'd')
+        type = 'l';
       break;
     case 'x':
       usgn = false;
       poly = false;
       if (type == 'f')
         type = 'i';
+      else if (type == 'd')
+        type = 'l';
       break;
     case 'f':
       if (type == 'h')

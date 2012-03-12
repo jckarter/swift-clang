@@ -182,14 +182,24 @@ def VCVT_N_F32   : SInst<"vcvt_n_f32", "fdi", "iUiQiQUi">;
 
 def VCVTA_S32 : SInst<"vcvta_s32", "xd", "fQf">;
 def VCVTA_U32 : SInst<"vcvta_u32", "ud", "fQf">;
+def VCVTA_S64 : SInst<"vcvta_s64", "xd", "Qd">;
+def VCVTA_U64 : SInst<"vcvta_u64", "ud", "Qd">;
 def VCVTM_S32 : SInst<"vcvtm_s32", "xd", "fQf">;
 def VCVTM_U32 : SInst<"vcvtm_u32", "ud", "fQf">;
+def VCVTM_S64 : SInst<"vcvtm_s64", "xd", "Qd">;
+def VCVTM_U64 : SInst<"vcvtm_u64", "ud", "Qd">;
 def VCVTN_S32 : SInst<"vcvtn_s32", "xd", "fQf">;
 def VCVTN_U32 : SInst<"vcvtn_u32", "ud", "fQf">;
+def VCVTN_S64 : SInst<"vcvtn_s64", "xd", "Qd">;
+def VCVTN_U64 : SInst<"vcvtn_u64", "ud", "Qd">;
 def VCVTP_S32 : SInst<"vcvtp_s32", "xd", "fQf">;
 def VCVTP_U32 : SInst<"vcvtp_u32", "ud", "fQf">;
+def VCVTP_S64 : SInst<"vcvtp_s64", "xd", "Qd">;
+def VCVTP_U64 : SInst<"vcvtp_u64", "ud", "Qd">;
 def VCVTZ_S32 : SInst<"vcvtz_s32", "xd", "fQf">;
 def VCVTZ_U32 : SInst<"vcvtz_u32", "ud", "fQf">;
+def VCVTZ_S64 : SInst<"vcvtz_s64", "xd", "Qd">;
+def VCVTZ_U64 : SInst<"vcvtz_u64", "ud", "Qd">;
 //let isShift = 1 in {
 //def VCVTI_M : SInst<"vcvti_m", "fdi", "iUiQiQUiQlQUl">;
 //def VCVTI_N : SInst<"vcvti_n", "fdi", "iUiQiQUiQlQUl">;
