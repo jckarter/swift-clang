@@ -745,7 +745,7 @@ public:
   /// initialized but before it parses anything.
   void Initialize();
 
-  const LangOptions &getLangOptions() const { return LangOpts; }
+  const LangOptions &getLangOpts() const { return LangOpts; }
   OpenCLOptions &getOpenCLOptions() { return OpenCLFeatures; }
   FPOptions     &getFPOptions() { return FPFeatures; }
 
@@ -2419,7 +2419,6 @@ public:
   void MarkAnyDeclReferenced(SourceLocation Loc, Decl *D);
   void MarkFunctionReferenced(SourceLocation Loc, FunctionDecl *Func);
   void MarkVariableReferenced(SourceLocation Loc, VarDecl *Var);
-  void MarkBlockDeclRefReferenced(BlockDeclRefExpr *E);
   void MarkDeclRefReferenced(DeclRefExpr *E);
   void MarkMemberReferenced(MemberExpr *E);
 
@@ -3025,7 +3024,7 @@ public:
   public:
     explicit ImplicitExceptionSpecification(ASTContext &Context)
       : Context(&Context), ComputedEST(EST_BasicNoexcept) {
-      if (!Context.getLangOptions().CPlusPlus0x)
+      if (!Context.getLangOpts().CPlusPlus0x)
         ComputedEST = EST_DynamicNone;
     }
 
@@ -4132,8 +4131,10 @@ public:
   //===--------------------------------------------------------------------===//
   // C++ Templates [C++ 14]
   //
-  void FilterAcceptableTemplateNames(LookupResult &R);
-  bool hasAnyAcceptableTemplateNames(LookupResult &R);
+  void FilterAcceptableTemplateNames(LookupResult &R, 
+                                     bool AllowFunctionTemplates = true);
+  bool hasAnyAcceptableTemplateNames(LookupResult &R, 
+                                     bool AllowFunctionTemplates = true);
 
   void LookupTemplateName(LookupResult &R, Scope *S, CXXScopeSpec &SS,
                           QualType ObjectType, bool EnteringContext,
