@@ -43,7 +43,7 @@ using namespace sema;
 SourceLocation Sema::getLocationOfStringLiteralByte(const StringLiteral *SL,
                                                     unsigned ByteNo) const {
   return SL->getLocationOfByte(ByteNo, PP.getSourceManager(),
-                               PP.getLangOptions(), PP.getTargetInfo());
+                               PP.getLangOpts(), PP.getTargetInfo());
 }
 
 /// Checks that a call expression's argument count is the desired number.
@@ -1078,6 +1078,7 @@ Sema::SemaBuiltinAtomicOverloaded(ExprResult TheCallResult) {
       DRE->getQualifierLoc(),
       SourceLocation(),
       NewBuiltinDecl,
+      /*enclosing*/ false,
       DRE->getLocation(),
       NewBuiltinDecl->getType(),
       DRE->getValueKind());
@@ -2308,7 +2309,7 @@ CheckPrintfHandler::HandlePrintfSpecifier(const analyze_printf::PrintfSpecifier
                                              LM.getLength())));
   if (!FS.hasStandardLengthModifier())
     HandleNonStandardLengthModifier(LM, startSpecifier, specifierLen);
-  if (!FS.hasStandardConversionSpecifier(S.getLangOptions()))
+  if (!FS.hasStandardConversionSpecifier(S.getLangOpts()))
     HandleNonStandardConversionSpecifier(CS, startSpecifier, specifierLen);
   if (!FS.hasStandardLengthConversionCombination())
     HandleNonStandardConversionSpecification(LM, CS, startSpecifier,
@@ -2351,7 +2352,7 @@ CheckPrintfHandler::HandlePrintfSpecifier(const analyze_printf::PrintfSpecifier
 
     // We may be able to offer a FixItHint if it is a supported type.
     PrintfSpecifier fixedFS = FS;
-    bool success = fixedFS.fixType(Ex->getType(), S.getLangOptions(),
+    bool success = fixedFS.fixType(Ex->getType(), S.getLangOpts(),
                                    S.Context, IsObjCLiteral);
 
     if (success) {
@@ -2501,7 +2502,7 @@ bool CheckScanfHandler::HandleScanfSpecifier(
 
   if (!FS.hasStandardLengthModifier())
     HandleNonStandardLengthModifier(LM, startSpecifier, specifierLen);
-  if (!FS.hasStandardConversionSpecifier(S.getLangOptions()))
+  if (!FS.hasStandardConversionSpecifier(S.getLangOpts()))
     HandleNonStandardConversionSpecifier(CS, startSpecifier, specifierLen);
   if (!FS.hasStandardLengthConversionCombination())
     HandleNonStandardConversionSpecification(LM, CS, startSpecifier,
@@ -2519,7 +2520,7 @@ bool CheckScanfHandler::HandleScanfSpecifier(
   const analyze_scanf::ScanfArgTypeResult &ATR = FS.getArgType(S.Context);
   if (ATR.isValid() && !ATR.matchesType(S.Context, Ex->getType())) {
     ScanfSpecifier fixedFS = FS;
-    bool success = fixedFS.fixType(Ex->getType(), S.getLangOptions(),
+    bool success = fixedFS.fixType(Ex->getType(), S.getLangOpts(),
                                    S.Context);
 
     if (success) {
@@ -2590,7 +2591,7 @@ void Sema::CheckFormatString(const StringLiteral *FExpr,
                          inFunctionCall);
   
     if (!analyze_format_string::ParsePrintfString(H, Str, Str + StrLen,
-                                                  getLangOptions()))
+                                                  getLangOpts()))
       H.DoneProcessing();
   } else if (Type == FST_Scanf) {
     CheckScanfHandler H(*this, FExpr, OrigFormatExpr, firstDataArg,
@@ -2599,7 +2600,7 @@ void Sema::CheckFormatString(const StringLiteral *FExpr,
                         inFunctionCall);
     
     if (!analyze_format_string::ParseScanfString(H, Str, Str + StrLen,
-                                                 getLangOptions()))
+                                                 getLangOpts()))
       H.DoneProcessing();
   } // TODO: handle other formats
 }
@@ -2985,7 +2986,7 @@ Sema::CheckReturnStackAddr(Expr *RetValExp, QualType lhsType,
   // Perform checking for returned stack addresses, local blocks,
   // label addresses or references to temporaries.
   if (lhsType->isPointerType() ||
-      (!getLangOptions().ObjCAutoRefCount && lhsType->isBlockPointerType())) {
+      (!getLangOpts().ObjCAutoRefCount && lhsType->isBlockPointerType())) {
     stackE = EvalAddr(RetValExp, refVars);
   } else if (lhsType->isReferenceType()) {
     stackE = EvalVal(RetValExp, refVars);
@@ -4232,7 +4233,7 @@ void CheckImplicitConversion(Sema &S, Expr *E, QualType T,
   // In C, we pretend that the type of an EnumConstantDecl is its enumeration
   // type, to give us better diagnostics.
   QualType SourceType = E->getType();
-  if (!S.getLangOptions().CPlusPlus) {
+  if (!S.getLangOpts().CPlusPlus) {
     if (DeclRefExpr *DRE = dyn_cast<DeclRefExpr>(E))
       if (EnumConstantDecl *ECD = dyn_cast<EnumConstantDecl>(DRE->getDecl())) {
         EnumDecl *Enum = cast<EnumDecl>(ECD->getDeclContext());
@@ -4432,7 +4433,7 @@ bool Sema::CheckParmsForFunctionDef(ParmVarDecl **P, ParmVarDecl **PEnd,
     if (CheckParameterNames &&
         Param->getIdentifier() == 0 &&
         !Param->isImplicit() &&
-        !getLangOptions().CPlusPlus)
+        !getLangOpts().CPlusPlus)
       Diag(Param->getLocation(), diag::err_parameter_name_omitted);
 
     // C99 6.7.5.3p12:
@@ -4769,12 +4770,6 @@ static bool findRetainCycleOwner(Sema &S, Expr *e, RetainCycleOwner &owner) {
       return considerVariable(var, ref, owner);
     }
 
-    if (BlockDeclRefExpr *ref = dyn_cast<BlockDeclRefExpr>(e)) {
-      owner.Variable = ref->getDecl();
-      owner.setLocsFrom(ref);
-      return true;
-    }
-
     if (MemberExpr *member = dyn_cast<MemberExpr>(e)) {
       if (member->isArrow()) return false;
 
@@ -4827,11 +4822,6 @@ namespace {
     Expr *Capturer;
 
     void VisitDeclRefExpr(DeclRefExpr *ref) {
-      if (ref->getDecl() == Variable && !Capturer)
-        Capturer = ref;
-    }
-
-    void VisitBlockDeclRefExpr(BlockDeclRefExpr *ref) {
       if (ref->getDecl() == Variable && !Capturer)
         Capturer = ref;
     }

@@ -225,7 +225,7 @@ EmitExprForReferenceBinding(CodeGenFunction &CGF, const Expr *E,
     // Objective-C++ ARC:
     //   If we are binding a reference to a temporary that has ownership, we 
     //   need to perform retain/release operations on the temporary.
-    if (CGF.getContext().getLangOptions().ObjCAutoRefCount &&        
+    if (CGF.getContext().getLangOpts().ObjCAutoRefCount &&        
         E->getType()->isObjCLifetimeType() &&
         (E->getType().getObjCLifetime() == Qualifiers::OCL_Strong ||
          E->getType().getObjCLifetime() == Qualifiers::OCL_Weak ||
@@ -679,9 +679,6 @@ LValue CodeGenFunction::EmitLValue(const Expr *E) {
            "Only single-element init list can be lvalue.");
     return EmitLValue(cast<InitListExpr>(E)->getInit(0));
 
-  case Expr::BlockDeclRefExprClass:
-    return EmitBlockDeclRefLValue(cast<BlockDeclRefExpr>(E));
-
   case Expr::CXXTemporaryObjectExprClass:
   case Expr::CXXConstructExprClass:
     return EmitCXXConstructLValue(cast<CXXConstructExpr>(E));
@@ -796,7 +793,9 @@ static ConstantEmissionKind checkVarTypeForConstantEmission(QualType type) {
 /// in a block or lambda, which means const int variables or constexpr
 /// literals or similar.
 CodeGenFunction::ConstantEmission
-CodeGenFunction::tryEmitAsConstant(ValueDecl *value, Expr *refExpr) {
+CodeGenFunction::tryEmitAsConstant(DeclRefExpr *refExpr) {
+  ValueDecl *value = refExpr->getDecl();
+
   // The value needs to be an enum constant or a constant variable.
   ConstantEmissionKind CEK;
   if (isa<ParmVarDecl>(value)) {
@@ -810,25 +809,19 @@ CodeGenFunction::tryEmitAsConstant(ValueDecl *value, Expr *refExpr) {
   }
   if (CEK == CEK_None) return ConstantEmission();
 
-  // We evaluate use an on-stack DeclRefExpr because the constant
-  // evaluator (quite reasonably) ignores BlockDeclRefExprs.
-  DeclRefExpr stackRef(value, refExpr->getType(), refExpr->getValueKind(),
-                       refExpr->getExprLoc());
-
-  // If it's okay to evaluate as a 
   Expr::EvalResult result;
   bool resultIsReference;
   QualType resultType;
 
   // It's best to evaluate all the way as an r-value if that's permitted.
   if (CEK != CEK_AsReferenceOnly &&
-      stackRef.EvaluateAsRValue(result, getContext())) {
+      refExpr->EvaluateAsRValue(result, getContext())) {
     resultIsReference = false;
     resultType = refExpr->getType();
 
   // Otherwise, try to evaluate as an l-value.
   } else if (CEK != CEK_AsValueOnly &&
-             stackRef.EvaluateAsLValue(result, getContext())) {
+             refExpr->EvaluateAsLValue(result, getContext())) {
     resultIsReference = true;
     resultType = value->getType();
 
@@ -848,10 +841,10 @@ CodeGenFunction::tryEmitAsConstant(ValueDecl *value, Expr *refExpr) {
   // This should probably fire even for 
   if (isa<VarDecl>(value)) {
     if (!getContext().DeclMustBeEmitted(cast<VarDecl>(value)))
-      EmitDeclRefExprDbgValue(&stackRef, C);
+      EmitDeclRefExprDbgValue(refExpr, C);
   } else {
     assert(isa<EnumConstantDecl>(value));
-    EmitDeclRefExprDbgValue(&stackRef, C);
+    EmitDeclRefExprDbgValue(refExpr, C);
   }
 
   // If we emitted a reference constant, we need to dereference that.
@@ -1336,7 +1329,7 @@ void CodeGenFunction::EmitStoreThroughExtVectorComponentLValue(RValue Src,
 static void setObjCGCLValueClass(const ASTContext &Ctx, const Expr *E,
                                  LValue &LV,
                                  bool IsMemberAccess=false) {
-  if (Ctx.getLangOptions().getGC() == LangOptions::NonGC)
+  if (Ctx.getLangOpts().getGC() == LangOptions::NonGC)
     return;
   
   if (isa<ObjCIvarRefExpr>(E)) {
@@ -1499,27 +1492,34 @@ LValue CodeGenFunction::EmitDeclRefLValue(const DeclRefExpr *E) {
   }
 
   if (const VarDecl *VD = dyn_cast<VarDecl>(ND)) {
-    
     // Check if this is a global variable.
     if (VD->hasExternalStorage() || VD->isFileVarDecl()) 
       return EmitGlobalVarDeclLValue(*this, E, VD);
 
+    bool isBlockVariable = VD->hasAttr<BlocksAttr>();
+
     bool NonGCable = VD->hasLocalStorage() &&
                      !VD->getType()->isReferenceType() &&
-                     !VD->hasAttr<BlocksAttr>();
+                     !isBlockVariable;
 
     llvm::Value *V = LocalDeclMap[VD];
     if (!V && VD->isStaticLocal()) 
       V = CGM.getStaticLocalDeclAddress(VD);
 
     // Use special handling for lambdas.
-    if (!V)
+    if (!V) {
       if (FieldDecl *FD = LambdaCaptureFields.lookup(VD))
         return EmitLValueForField(CXXABIThisValue, FD, 0);
 
+      assert(isa<BlockDecl>(CurCodeDecl) && E->refersToEnclosingLocal());
+      CharUnits alignment = getContext().getDeclAlign(VD);
+      return MakeAddrLValue(GetAddrOfBlockDecl(VD, isBlockVariable),
+                            E->getType(), alignment);
+    }
+
     assert(V && "DeclRefExpr not entered in LocalDeclMap?");
 
-    if (VD->hasAttr<BlocksAttr>())
+    if (isBlockVariable)
       V = BuildBlockByrefAddress(V, VD);
 
     LValue LV;
@@ -1546,11 +1546,6 @@ LValue CodeGenFunction::EmitDeclRefLValue(const DeclRefExpr *E) {
   llvm_unreachable("Unhandled DeclRefExpr");
 }
 
-LValue CodeGenFunction::EmitBlockDeclRefLValue(const BlockDeclRefExpr *E) {
-  CharUnits Alignment = getContext().getDeclAlign(E->getDecl());
-  return MakeAddrLValue(GetAddrOfBlockDecl(E), E->getType(), Alignment);
-}
-
 LValue CodeGenFunction::EmitUnaryOpLValue(const UnaryOperator *E) {
   // __extension__ doesn't affect lvalue-ness.
   if (E->getOpcode() == UO_Extension)
@@ -1570,8 +1565,8 @@ LValue CodeGenFunction::EmitUnaryOpLValue(const UnaryOperator *E) {
     // of a pointer to object; as in void foo (__weak id *param); *param = 0;
     // But, we continue to generate __strong write barrier on indirect write
     // into a pointer to object.
-    if (getContext().getLangOptions().ObjC1 &&
-        getContext().getLangOptions().getGC() != LangOptions::NonGC &&
+    if (getContext().getLangOpts().ObjC1 &&
+        getContext().getLangOpts().getGC() != LangOptions::NonGC &&
         LV.isObjCWeak())
       LV.setNonGC(!E->isOBJCGCCandidate(getContext()));
     return LV;
@@ -1771,7 +1766,7 @@ LValue CodeGenFunction::EmitArraySubscriptExpr(const ArraySubscriptExpr *E) {
     // GEP indexes are signed, and scaling an index isn't permitted to
     // signed-overflow, so we use the same semantics for our explicit
     // multiply.  We suppress this if overflow is not undefined behavior.
-    if (getLangOptions().isSignedOverflowDefined()) {
+    if (getLangOpts().isSignedOverflowDefined()) {
       Idx = Builder.CreateMul(Idx, numElements);
       Address = Builder.CreateGEP(Address, Idx, "arrayidx");
     } else {
@@ -1806,14 +1801,14 @@ LValue CodeGenFunction::EmitArraySubscriptExpr(const ArraySubscriptExpr *E) {
     // Propagate the alignment from the array itself to the result.
     ArrayAlignment = ArrayLV.getAlignment();
 
-    if (getContext().getLangOptions().isSignedOverflowDefined())
+    if (getContext().getLangOpts().isSignedOverflowDefined())
       Address = Builder.CreateGEP(ArrayPtr, Args, "arrayidx");
     else
       Address = Builder.CreateInBoundsGEP(ArrayPtr, Args, "arrayidx");
   } else {
     // The base must be a pointer, which is not an aggregate.  Emit it.
     llvm::Value *Base = EmitScalarExpr(E->getBase());
-    if (getContext().getLangOptions().isSignedOverflowDefined())
+    if (getContext().getLangOpts().isSignedOverflowDefined())
       Address = Builder.CreateGEP(Base, Idx, "arrayidx");
     else
       Address = Builder.CreateInBoundsGEP(Base, Idx, "arrayidx");
@@ -1836,8 +1831,8 @@ LValue CodeGenFunction::EmitArraySubscriptExpr(const ArraySubscriptExpr *E) {
 
   LV.getQuals().setAddressSpace(E->getBase()->getType().getAddressSpace());
 
-  if (getContext().getLangOptions().ObjC1 &&
-      getContext().getLangOptions().getGC() != LangOptions::NonGC) {
+  if (getContext().getLangOpts().ObjC1 &&
+      getContext().getLangOpts().getGC() != LangOptions::NonGC) {
     LV.setNonGC(!E->isOBJCGCCandidate(getContext()));
     setObjCGCLValueClass(getContext(), E, LV);
   }
@@ -2345,7 +2340,7 @@ RValue CodeGenFunction::EmitCallExpr(const CallExpr *E,
   if (const CXXPseudoDestructorExpr *PseudoDtor 
           = dyn_cast<CXXPseudoDestructorExpr>(E->getCallee()->IgnoreParens())) {
     QualType DestroyedType = PseudoDtor->getDestroyedType();
-    if (getContext().getLangOptions().ObjCAutoRefCount &&
+    if (getContext().getLangOpts().ObjCAutoRefCount &&
         DestroyedType->isObjCLifetimeType() &&
         (DestroyedType.getObjCLifetime() == Qualifiers::OCL_Strong ||
          DestroyedType.getObjCLifetime() == Qualifiers::OCL_Weak)) {
