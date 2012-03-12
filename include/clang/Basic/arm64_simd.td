@@ -180,12 +180,16 @@ def VCVT_N_U32   : SInst<"vcvt_n_u32", "udi", "fQf">;
 def VCVT_N_F32   : SInst<"vcvt_n_f32", "fdi", "iUiQiQUi">;
 }
 
-// FIXME: These all need replaced with the new versions.
-//def VCVTF_A : SInst<"vcvtf_a", "df", "iUiQiQUiQlQUl">;
-//def VCVTF_M : SInst<"vcvtf_m", "df", "iUiQiQUiQlQUl">;
-//def VCVTF_N : SInst<"vcvtf_n", "df", "iUiQiQUiQlQUl">;
-//def VCVTF_P : SInst<"vcvtf_p", "df", "iUiQiQUiQlQUl">;
-//def VCVTF_Z : SInst<"vcvtf_z", "df", "iUiQiQUiQlQUl">;
+def VCVTA_S32 : SInst<"vcvta_s32", "xd", "fQf">;
+def VCVTA_U32 : SInst<"vcvta_u32", "ud", "fQf">;
+def VCVTM_S32 : SInst<"vcvtm_s32", "xd", "fQf">;
+def VCVTM_U32 : SInst<"vcvtm_u32", "ud", "fQf">;
+def VCVTN_S32 : SInst<"vcvtn_s32", "xd", "fQf">;
+def VCVTN_U32 : SInst<"vcvtn_u32", "ud", "fQf">;
+def VCVTP_S32 : SInst<"vcvtp_s32", "xd", "fQf">;
+def VCVTP_U32 : SInst<"vcvtp_u32", "ud", "fQf">;
+def VCVTZ_S32 : SInst<"vcvtz_s32", "xd", "fQf">;
+def VCVTZ_U32 : SInst<"vcvtz_u32", "ud", "fQf">;
 //let isShift = 1 in {
 //def VCVTI_M : SInst<"vcvti_m", "fdi", "iUiQiQUiQlQUl">;
 //def VCVTI_N : SInst<"vcvti_n", "fdi", "iUiQiQUiQlQUl">;
