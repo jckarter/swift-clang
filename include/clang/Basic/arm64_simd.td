@@ -162,6 +162,9 @@ def VSLI_N : WInst<"vsli_n", "dddi",
 ////////////////////////////////////////////////////////////////////////////////
 // Vector FP->Int Conversions
 
+// F32->Integer
+def VCVT_S32     : SInst<"vcvt_s32", "xd",  "fQf">;
+def VCVT_U32     : SInst<"vcvt_u32", "ud",  "fQf">;
 // Integer->F32
 def VCVT_F32     : SInst<"vcvt_f32", "fd", "iUiQiQUi">;
 // F16->F32

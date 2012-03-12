@@ -2550,6 +2550,16 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     Function *F = CGM.getIntrinsic(Intrinsic::arm64_neon_vcvtfp2fxu, Tys);
     return EmitNeonCall(F, Ops, "vcvt_n");
   }
+  case ARM64::BI__builtin_arm64_vcvt_s32_v:
+  case ARM64::BI__builtin_arm64_vcvt_u32_v:
+  case ARM64::BI__builtin_arm64_vcvtq_s32_v:
+  case ARM64::BI__builtin_arm64_vcvtq_u32_v: {
+    llvm::Type *FloatTy =
+      GetNeonType(this, NeonTypeFlags(NeonTypeFlags::Float32, false, quad));
+    Ops[0] = Builder.CreateBitCast(Ops[0], FloatTy);
+    return usgn ? Builder.CreateFPToUI(Ops[0], Ty, "vcvt")
+                : Builder.CreateFPToSI(Ops[0], Ty, "vcvt");
+  }
   case ARM64::BI__builtin_arm64_vdiv_v:
   case ARM64::BI__builtin_arm64_vdivq_v:
     Ops[0] = Builder.CreateBitCast(Ops[0], Ty);
