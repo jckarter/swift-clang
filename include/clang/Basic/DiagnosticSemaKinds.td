@@ -1572,16 +1572,15 @@ def err_alias_not_supported_on_darwin : Error <
 def warn_attribute_wrong_decl_type : Warning<
   "%0 attribute only applies to %select{functions|unions|"
   "variables and functions|functions and methods|parameters|"
-  "parameters and methods|functions, methods and blocks|"
-  "classes and virtual methods|functions, methods, and parameters|"
-  "classes|virtual methods|class members|variables|methods|"
-  "variables, functions and labels|fields and global variables}1">;
+  "functions, methods and blocks|functions, methods, and parameters|"
+  "classes|variables|methods|variables, functions and labels|"
+  "fields and global variables|structs}1">;
 def err_attribute_wrong_decl_type : Error<
   "%0 attribute only applies to %select{functions|unions|"
   "variables and functions|functions and methods|parameters|"
-  "parameters and methods|functions, methods and blocks|"
-  "classes and virtual methods|functions, methods, and parameters|"
-  "classes|virtual methods|class members|variables|methods|structs}1">;
+  "functions, methods and blocks|functions, methods, and parameters|"
+  "classes|variables|methods|variables, functions and labels|"
+  "fields and global variables|structs}1">;
 def warn_function_attribute_wrong_type : Warning<
   "'%0' only applies to function types; type here is %1">;
 def warn_pointer_attribute_wrong_type : Warning<
@@ -1705,10 +1704,10 @@ def warn_impcast_float_integer : Warning<
   InGroup<DiagGroup<"conversion">>, DefaultIgnore;
 def warn_impcast_integer_sign : Warning<
   "implicit conversion changes signedness: %0 to %1">,
-  InGroup<DiagGroup<"sign-conversion">>, DefaultIgnore;
+  InGroup<SignConversion>, DefaultIgnore;
 def warn_impcast_integer_sign_conditional : Warning<
   "operand of ? changes signedness: %0 to %1">,
-  InGroup<DiagGroup<"sign-conversion">>, DefaultIgnore;
+  InGroup<SignConversion>, DefaultIgnore;
 def warn_impcast_integer_precision : Warning<
   "implicit conversion loses integer precision: %0 to %1">,
   InGroup<DiagGroup<"conversion">>, DefaultIgnore;
@@ -1717,29 +1716,29 @@ def warn_impcast_integer_64_32 : Warning<
   InGroup<DiagGroup<"shorten-64-to-32">>, DefaultIgnore;
 def warn_impcast_integer_precision_constant : Warning<
   "implicit conversion from %2 to %3 changes value from %0 to %1">,
-  InGroup<DiagGroup<"constant-conversion">>;
+  InGroup<ConstantConversion>;
 def warn_impcast_bitfield_precision_constant : Warning<
   "implicit truncation from %2 to bitfield changes value from %0 to %1">,
-  InGroup<DiagGroup<"constant-conversion">>;
+  InGroup<ConstantConversion>;
 def warn_impcast_literal_float_to_integer : Warning<
   "implicit conversion turns literal floating-point number into integer: "
   "%0 to %1">,
-  InGroup<DiagGroup<"literal-conversion">>, DefaultIgnore;
+  InGroup<LiteralConversion>, DefaultIgnore;
 def warn_impcast_string_literal_to_bool : Warning<
   "implicit conversion turns string literal into bool: %0 to %1">,
-  InGroup<DiagGroup<"string-conversion">>, DefaultIgnore;
+  InGroup<StringConversion>, DefaultIgnore;
 def warn_impcast_different_enum_types : Warning<
   "implicit conversion from enumeration type %0 to different enumeration type "
   "%1">, InGroup<DiagGroup<"conversion">>;
 def warn_impcast_bool_to_null_pointer : Warning<
     "initialization of pointer of type %0 to null from a constant boolean "
-    "expression">, InGroup<BoolConversions>;
+    "expression">, InGroup<BoolConversion>;
 def warn_impcast_null_pointer_to_integer : Warning<
     "implicit conversion of NULL constant to integer">,
-    InGroup<DiagGroup<"conversion">>, DefaultIgnore;
+    InGroup<NullConversion>;
 def warn_impcast_function_to_bool : Warning<
     "address of function %q0 will always evaluate to 'true'">,
-    InGroup<BoolConversions>;
+    InGroup<BoolConversion>;
 def note_function_to_bool_silence : Note<
     "prefix with the address-of operator to silence this warning">;
 def note_function_to_bool_call : Note<
@@ -2533,6 +2532,8 @@ def note_function_template_spec_here : Note<
   "in instantiation of function template specialization %q0 requested here">;
 def note_template_static_data_member_def_here : Note<
   "in instantiation of static data member %q0 requested here">;
+def note_template_enum_def_here : Note<
+  "in instantiation of enumeration %q0 requested here">;
 def note_template_type_alias_instantiation_here : Note<
   "in instantiation of template type alias %0 requested here">;
   
@@ -3035,7 +3036,7 @@ def err_anon_bitfield_width_exceeds_type_size : Error<
   "size of anonymous bit-field (%0 bits) exceeds size of its type (%1 bits)">;
 def err_incorrect_number_of_vector_initializers : Error<
   "number of elements must be either one or match the size of the vector">;
-  
+
 // Used by C++ which allows bit-fields that are wider than the type.
 def warn_bitfield_width_exceeds_type_size: Warning<
   "size of bit-field %0 (%1 bits) exceeds the size of its type; value will be "
@@ -4285,7 +4286,7 @@ def ext_typecheck_convert_pointer_int : ExtWarn<
   "take the address with &|"
   "remove *|"
   "remove &}3">,
-  InGroup<IntConversions>;
+  InGroup<IntConversion>;
 def ext_typecheck_convert_int_pointer : ExtWarn<
   "incompatible integer to pointer conversion "
   "%select{assigning to|passing|returning|converting|initializing|sending|casting}2"
@@ -4296,7 +4297,7 @@ def ext_typecheck_convert_int_pointer : ExtWarn<
   "take the address with &|"
   "remove *|"
   "remove &}3">,
-  InGroup<IntConversions>;
+  InGroup<IntConversion>;
 def ext_typecheck_convert_pointer_void_func : Extension<
   "%select{assigning to|passing|returning|converting|initializing|sending|casting}2"
   " %0 "
@@ -4341,7 +4342,7 @@ def warn_incompatible_vectors : Warning<
   " %0 "
   "%select{from|to parameter of type|from a function with result type|to type|"
   "with an expression of type|to parameter of type|to type}2 %1">,
-  InGroup<VectorConversions>, DefaultIgnore;
+  InGroup<VectorConversion>, DefaultIgnore;
 def err_int_to_block_pointer : Error<
   "invalid block pointer conversion "
   "%select{assigning to|passing|returning|converting|initializing|sending|casting}2"
@@ -5099,7 +5100,7 @@ def warn_unreachable_default : Warning<
   "default label in switch which covers all enumeration values">,
   InGroup<CoveredSwitchDefault>, DefaultIgnore;
 def warn_not_in_enum : Warning<"case value not in enumerated type %0">,
-  InGroup<Switch>; 
+  InGroup<Switch>;
 def err_typecheck_statement_requires_scalar : Error<
   "statement requires expression of scalar type (%0 invalid)">;
 def err_typecheck_statement_requires_integer : Error<
