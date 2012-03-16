@@ -1835,24 +1835,93 @@ void RewriteModernObjC::RewriteSyncReturnStmts(Stmt *S, std::string syncExitBuf)
 }
 
 Stmt *RewriteModernObjC::RewriteObjCTryStmt(ObjCAtTryStmt *S) {
+  ObjCAtFinallyStmt *finalStmt = S->getFinallyStmt();
+  bool noCatch = S->getNumCatchStmts() == 0;
+  std::string buf;
+  
+  if (finalStmt) {
+    if (noCatch)
+      buf = "{ id volatile _rethrow = 0;\n";
+    else {
+      buf = "{ id volatile _rethrow = 0;\ntry {\n";
+    }
+  }
   // Get the start location and compute the semi location.
   SourceLocation startLoc = S->getLocStart();
   const char *startBuf = SM->getCharacterData(startLoc);
 
   assert((*startBuf == '@') && "bogus @try location");
-  // @try -> try
-  ReplaceText(startLoc, 1, "");
-
+  if (finalStmt)
+    ReplaceText(startLoc, 1, buf);
+  else
+    // @try -> try
+    ReplaceText(startLoc, 1, "");
+  
   for (unsigned I = 0, N = S->getNumCatchStmts(); I != N; ++I) {
     ObjCAtCatchStmt *Catch = S->getCatchStmt(I);
+    VarDecl *catchDecl = Catch->getCatchParamDecl();
     
     startLoc = Catch->getLocStart();
-    startBuf = SM->getCharacterData(startLoc);
-    assert((*startBuf == '@') && "bogus @catch location");
-    // @catch -> catch
-    ReplaceText(startLoc, 1, "");
+    bool AtRemoved = false;
+    if (catchDecl) {
+      QualType t = catchDecl->getType();
+      if (const ObjCObjectPointerType *Ptr = t->getAs<ObjCObjectPointerType>()) {
+        // Should be a pointer to a class.
+        ObjCInterfaceDecl *IDecl = Ptr->getObjectType()->getInterface();
+        if (IDecl) {
+          std::string Result;
+          startBuf = SM->getCharacterData(startLoc);
+          assert((*startBuf == '@') && "bogus @catch location");
+          SourceLocation rParenLoc = Catch->getRParenLoc();
+          const char *rParenBuf = SM->getCharacterData(rParenLoc);
+          
+          // _objc_exc_Foo *_e as argument to catch.
+          Result = "catch (_objc_exc_"; Result += IDecl->getNameAsString();
+          Result += " *_"; Result += catchDecl->getNameAsString();
+          Result += ")";
+          ReplaceText(startLoc, rParenBuf-startBuf+1, Result);
+          // Foo *e = (Foo *)_e;
+          Result.clear();
+          Result = "{ ";
+          Result += IDecl->getNameAsString();
+          Result += " *"; Result += catchDecl->getNameAsString();
+          Result += " = ("; Result += IDecl->getNameAsString(); Result += "*)";
+          Result += "_"; Result += catchDecl->getNameAsString();
+          
+          Result += "; ";
+          SourceLocation lBraceLoc = Catch->getCatchBody()->getLocStart();
+          ReplaceText(lBraceLoc, 1, Result);
+          AtRemoved = true;
+        }
+      }
+    }
+    if (!AtRemoved)
+      // @catch -> catch
+      ReplaceText(startLoc, 1, "");
       
   }
+  if (finalStmt) {
+    buf.clear();
+    if (noCatch)
+      buf = "catch (id e) {_rethrow = e;}\n";
+    else 
+      buf = "}\ncatch (id e) {_rethrow = e;}\n";
+
+    SourceLocation startFinalLoc = finalStmt->getLocStart();
+    ReplaceText(startFinalLoc, 8, buf);
+    Stmt *body = finalStmt->getFinallyBody();
+    SourceLocation startFinalBodyLoc = body->getLocStart();
+    buf.clear();
+    buf = "{ struct _FIN { _FIN(id reth) : rethrow(reth) {}\n";
+    buf += "\t~_FIN() { if (rethrow) objc_exception_throw(rethrow); }\n";
+    buf += "\tid rethrow;\n";
+    buf += "\t} _fin_force_rethow(_rethrow);";
+    ReplaceText(startFinalBodyLoc, 1, buf);
+    
+    SourceLocation endFinalBodyLoc = body->getLocEnd();
+    ReplaceText(endFinalBodyLoc, 1, "}\n}");
+  }
+
   return 0;
 }
 
@@ -2991,7 +3060,8 @@ QualType RewriteModernObjC::getProtocolType() {
 /// The forward references (and metadata) are generated in
 /// RewriteModernObjC::HandleTranslationUnit().
 Stmt *RewriteModernObjC::RewriteObjCProtocolExpr(ObjCProtocolExpr *Exp) {
-  std::string Name = "_OBJC_PROTOCOL_" + Exp->getProtocol()->getNameAsString();
+  std::string Name = "_OBJC_PROTOCOL_REFERENCE_$_" + 
+                      Exp->getProtocol()->getNameAsString();
   IdentifierInfo *ID = &Context->Idents.get(Name);
   VarDecl *VD = VarDecl::Create(*Context, TUDecl, SourceLocation(),
                                 SourceLocation(), ID, getProtocolType(), 0,
@@ -4971,6 +5041,23 @@ void RewriteModernObjC::HandleDeclInMainFile(Decl *D) {
   // Nothing yet.
 }
 
+/// Write_ProtocolExprReferencedMetadata - This routine writer out the
+/// protocol reference symbols in the for of:
+/// struct _protocol_t *PROTOCOL_REF = &PROTOCOL_METADATA.
+static void Write_ProtocolExprReferencedMetadata(ASTContext *Context, 
+                                                 ObjCProtocolDecl *PDecl,
+                                                 std::string &Result) {
+  // Also output .objc_protorefs$B section and its meta-data.
+  if (Context->getLangOpts().MicrosoftExt)
+    Result += "__declspec(allocate(\".objc_protorefs$B\")) ";
+  Result += "struct _protocol_t *";
+  Result += "_OBJC_PROTOCOL_REFERENCE_$_";
+  Result += PDecl->getNameAsString();
+  Result += " = &";
+  Result += "_OBJC_PROTOCOL_"; Result += PDecl->getNameAsString();
+  Result += ";\n";
+}
+
 void RewriteModernObjC::HandleTranslationUnit(ASTContext &C) {
   if (Diags.hasErrorOccurred())
     return;
@@ -4980,8 +5067,10 @@ void RewriteModernObjC::HandleTranslationUnit(ASTContext &C) {
   // Here's a great place to add any extra declarations that may be needed.
   // Write out meta data for each @protocol(<expr>).
   for (llvm::SmallPtrSet<ObjCProtocolDecl *,8>::iterator I = ProtocolExprDecls.begin(),
-       E = ProtocolExprDecls.end(); I != E; ++I)
+       E = ProtocolExprDecls.end(); I != E; ++I) {
     RewriteObjCProtocolMetaData(*I, Preamble);
+    Write_ProtocolExprReferencedMetadata(Context, (*I), Preamble);
+  }
 
   InsertText(SM->getLocForStartOfFile(MainFileID), Preamble, false);
   for (unsigned i = 0, e = ObjCInterfacesSeen.size(); i < e; i++) {
@@ -5046,21 +5135,19 @@ void RewriteModernObjC::Initialize(ASTContext &context) {
     Preamble += "#pragma section(\".objc_imageinfo$B\", long, read, write)\n";
     Preamble += "#pragma section(\".objc_nlclslist$B\", long, read, write)\n";
     Preamble += "#pragma section(\".objc_nlcatlist$B\", long, read, write)\n";
-    
-    // These need be generated. But they are not,using API calls instead.
-    Preamble += "#pragma section(\".objc_selrefs$B\", long, read, write)\n";
-    Preamble += "#pragma section(\".objc_classrefs$B\", long, read, write)\n";
-    Preamble += "#pragma section(\".objc_superrefs$B\", long, read, write)\n";
-    
     Preamble += "#pragma section(\".objc_protorefs$B\", long, read, write)\n";
-    
-    
     // These are generated but not necessary for functionality.
     Preamble += "#pragma section(\".datacoal_nt$B\", long, read, write)\n";
     Preamble += "#pragma section(\".cat_cls_meth$B\", long, read, write)\n";
     Preamble += "#pragma section(\".inst_meth$B\", long, read, write)\n";
     Preamble += "#pragma section(\".cls_meth$B\", long, read, write)\n";
     Preamble += "#pragma section(\".objc_ivar$B\", long, read, write)\n";
+    
+    // These need be generated for performance. Currently they are not,
+    // using API calls instead.
+    Preamble += "#pragma section(\".objc_selrefs$B\", long, read, write)\n";
+    Preamble += "#pragma section(\".objc_classrefs$B\", long, read, write)\n";
+    Preamble += "#pragma section(\".objc_superrefs$B\", long, read, write)\n";
     
     // Add a constructor for creating temporary objects.
     Preamble += "__rw_objc_super(struct objc_object *o, struct objc_object *s) "
@@ -5093,7 +5180,7 @@ void RewriteModernObjC::Initialize(ASTContext &context) {
   Preamble += "(struct objc_class *);\n";
   Preamble += "__OBJC_RW_DLLIMPORT struct objc_object *objc_getMetaClass";
   Preamble += "(const char *);\n";
-  Preamble += "__OBJC_RW_DLLIMPORT void objc_exception_throw(struct objc_object *);\n";
+  Preamble += "__OBJC_RW_DLLIMPORT void objc_exception_throw(id);\n";
   Preamble += "__OBJC_RW_DLLIMPORT void objc_exception_try_enter(void *);\n";
   Preamble += "__OBJC_RW_DLLIMPORT void objc_exception_try_exit(void *);\n";
   Preamble += "__OBJC_RW_DLLIMPORT struct objc_object *objc_exception_extract(void *);\n";
@@ -5935,7 +6022,7 @@ void RewriteModernObjC::RewriteObjCProtocolMetaData(ObjCProtocolDecl *PDecl,
   Result += "\n";
   if (LangOpts.MicrosoftExt)
     Result += "__declspec(allocate(\".datacoal_nt$B\")) ";
-  Result += "static struct _protocol_t _OBJC_PROTOCOL_";
+  Result += "struct _protocol_t _OBJC_PROTOCOL_";
   Result += PDecl->getNameAsString();
   Result += " __attribute__ ((used, section (\"__DATA,__datacoal_nt,coalesced\"))) = {\n";
   Result += "\t0,\n"; // id is; is null
@@ -6317,7 +6404,7 @@ void RewriteModernObjC::WriteImageInfo(std::string &Result) {
   
   Result += "static struct IMAGE_INFO { unsigned version; unsigned flag; } ";
   // version 0, ObjCABI is 2
-  Result += "L_OBJC_IMAGE_INFO = { 0, 2 };\n";
+  Result += "_OBJC_IMAGE_INFO = { 0, 2 };\n";
 }
 
 /// RewriteObjCCategoryImplDecl - Rewrite metadata for each category
