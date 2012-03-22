@@ -1072,6 +1072,13 @@ DerivedArgList *Darwin::TranslateArgs(const DerivedArgList &Args,
           getDriver().Diag(clang::diag::err_drv_invalid_libcxx_deployment)
             << "iOS 5.0";
         }
+      } else {
+        // The following check is Apple-internal only.  Open source users
+        // may have installed private copies of libc++.
+        if (isMacosxVersionLT(10, 7)) {
+          getDriver().Diag(clang::diag::err_drv_invalid_libcxx_deployment)
+            << "OS X 10.7";
+        }
       }
       break;
     case LibCXXSimulator_NotAvailable:
