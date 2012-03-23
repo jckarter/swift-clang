@@ -2617,7 +2617,7 @@ class ARMTargetInfo : public TargetInfo {
     VFP4FPU = (1 << 2),
     NeonFPU = (1 << 3)
   };
-  
+
   static bool FPUModeIsVFP(FPUMode Mode) {
     return Mode & (VFP2FPU | VFP3FPU | VFP4FPU | NeonFPU);
   }

@@ -44,6 +44,12 @@ STATISTIC(NumRemoveDeadBindings,
             "The # of times RemoveDeadBindings is called");
 STATISTIC(NumRemoveDeadBindingsSkipped,
             "The # of times RemoveDeadBindings is skipped");
+STATISTIC(NumMaxBlockCountReached,
+            "The # of aborted paths due to reaching the maximum block count in "
+            "a top level function");
+STATISTIC(NumMaxBlockCountReachedInInlined,
+            "The # of aborted paths due to reaching the maximum block count in "
+            "an inlined function");
 
 //===----------------------------------------------------------------------===//
 // Utility functions.
@@ -975,6 +981,14 @@ void ExprEngine::processCFGBlockEntrance(NodeBuilderWithSinks &nodeBuilder) {
   if (nodeBuilder.getContext().getCurrentBlockCount() >= AMgr.getMaxVisit()) {
     static SimpleProgramPointTag tag("ExprEngine : Block count exceeded");
     nodeBuilder.generateNode(pred->getState(), pred, &tag, true);
+
+    // Check if we stopped at the top level function or not.
+    // Root node should have the location context of the top most function.
+    if ((*G.roots_begin())->getLocation().getLocationContext() !=
+        pred->getLocation().getLocationContext())
+      NumMaxBlockCountReachedInInlined++;
+    else
+      NumMaxBlockCountReached++;
   }
 }
 
@@ -1370,6 +1384,13 @@ void ExprEngine::VisitCommonDeclRefExpr(const Expr *Ex, const NamedDecl *D,
                       ProgramPoint::PostLValueKind);
     return;
   }
+  if (isa<FieldDecl>(D)) {
+    // FIXME: Compute lvalue of fields.
+    Bldr.generateNode(Ex, Pred, state->BindExpr(Ex, LCtx, UnknownVal()),
+		      false, 0, ProgramPoint::PostLValueKind);
+    return;
+  }
+
   assert (false &&
           "ValueDecl support for this ValueDecl not implemented.");
 }
