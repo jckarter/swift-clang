@@ -81,14 +81,14 @@ enum e11 g11(enum e11 *x) {
   return *x;
 }
 // CHECK: define i64 @_Z3g11P3e11
-// CHECK: load i64* %x, align 8, !range !7
+// CHECK: load i64* %x, align {{[84]}}, !range !7
 
 enum e12 {e12_a = 9223372036854775808U };
 enum e12 g12(enum e12 *x) {
   return *x;
 }
 // CHECK: define i64 @_Z3g12P3e12
-// CHECK: load i64* %x, align 8
+// CHECK: load i64* %x, align {{[84]}}
 // CHECK-NOT: range
 // CHECK: ret
 
@@ -106,6 +106,24 @@ e14 g14(e14 *x) {
   return *x;
 }
 // CHECK: define i32 @_Z3g14P3e14
+// CHECK: load i32* %x, align 4
+// CHECK-NOT: range
+// CHECK: ret
+
+enum e15 { e15_a = 2147483648 };
+e15 g15(e15 *x) {
+  return *x;
+}
+// CHECK: define i32 @_Z3g15P3e15
+// CHECK: load i32* %x, align 4
+// CHECK-NOT: range
+// CHECK: ret
+
+enum e16 { e16_a = -2147483648 };
+e16 g16(e16 *x) {
+  return *x;
+}
+// CHECK: define i32 @_Z3g16P3e16
 // CHECK: load i32* %x, align 4
 // CHECK-NOT: range
 // CHECK: ret
