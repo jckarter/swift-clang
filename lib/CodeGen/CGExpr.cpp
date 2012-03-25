@@ -879,33 +879,34 @@ llvm::MDNode *CodeGenFunction::getRangeForLoadFromType(QualType Ty) {
   if (!IsBool && !IsRegularCPlusPlusEnum)
     return NULL;
 
-  uint64_t Min;
-  uint64_t End;
+  llvm::APInt Min;
+  llvm::APInt End;
   if (IsBool) {
-    Min = 0;
-    End = 2;
+    Min = llvm::APInt(8, 0);
+    End = llvm::APInt(8, 2);
     LTy = Int8Ty;
   } else {
     const EnumDecl *ED = ET->getDecl();
     LTy = ConvertTypeForMem(ED->getIntegerType());
+    unsigned Bitwidth = LTy->getScalarSizeInBits();
     unsigned NumNegativeBits = ED->getNumNegativeBits();
     unsigned NumPositiveBits = ED->getNumPositiveBits();
 
     if (NumNegativeBits) {
       unsigned NumBits = std::max(NumNegativeBits, NumPositiveBits + 1);
-      assert(NumBits <= 64);
-      End = 1ULL << (NumBits - 1);
+      assert(NumBits <= Bitwidth);
+      End = llvm::APInt(Bitwidth, 1) << (NumBits - 1);
       Min = -End;
     } else {
-      assert(NumPositiveBits <= 64);
-      if (NumPositiveBits == 64)
-        return NULL;
-      End = 1ULL << NumPositiveBits;
-      Min = 0;
+      assert(NumPositiveBits <= Bitwidth);
+      End = llvm::APInt(Bitwidth, 1) << NumPositiveBits;
+      Min = llvm::APInt(Bitwidth, 0);
     }
   }
 
-  assert(End != Min);
+  if (End == Min)
+    return NULL;
+
   llvm::Value *LowAndHigh[2];
   LowAndHigh[0] = llvm::ConstantInt::get(LTy, Min);
   LowAndHigh[1] = llvm::ConstantInt::get(LTy, End);
