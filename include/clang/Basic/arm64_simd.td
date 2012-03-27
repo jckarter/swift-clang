@@ -80,6 +80,7 @@ def VSUBL_HIGH   : SInst<"vsubl_high",   "ndd", "RcRsRiRUcRUsRUi">;
 def VSUBW_HIGH   : SInst<"vsubw_high",   "ndd", "RcRsRiRUcRUsRUi">;
 def VRSUBHN_HIGH : SInst<"vrsubhn_high", "hbdd", "RsRiRl">;
 def VSUBHN_HIGH  : SInst<"vsubhn_high",   "hbdd", "RsRiRl">;
+def VSUBD : Inst<"vsubd", "sss", "lUl", OP_SUB>;
 
 ////////////////////////////////////////////////////////////////////////////////
 // Comparison
