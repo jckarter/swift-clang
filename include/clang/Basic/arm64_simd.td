@@ -172,14 +172,20 @@ def VCVT_F32_F16 : SInst<"vcvt_f32_f16", "fd", "h">;
 // F32->F16
 def VCVT_F16     : SInst<"vcvt_f16", "hk",  "f">;
 let isVCVT_N = 1 in {
-// signed-fixed-point -> f32
+// f32 -> signed-fixed-point
 def VCVT_N_S32   : SInst<"vcvt_n_s32", "xdi", "fQf">;
-// unsigned-fixed-point -> f32
+// f32 -> unsigned-fixed-point
 def VCVT_N_U32   : SInst<"vcvt_n_u32", "udi", "fQf">;
-// f32 -> fixed point
+// fixed point -> f32
 def VCVT_N_F32   : SInst<"vcvt_n_f32", "fdi", "iUiQiQUi">;
+// f64 -> signed-fixed-point
+def VCVT_N_S64   : SInst<"vcvt_n_s64", "xdi", "Qd">;
+// f64 -> unsigned-fixed-point
+def VCVT_N_U64   : SInst<"vcvt_n_u64", "udi", "Qd">;
+// fixed point -> f64
+def VCVT_N_F64   : SInst<"vcvtq_n_f64", "fdi", "RlRUl">;
 }
-
+// f32/f64 -> integer w/ rounding mode.
 def VCVTA_S32 : SInst<"vcvta_s32", "xd", "fQf">;
 def VCVTA_U32 : SInst<"vcvta_u32", "ud", "fQf">;
 def VCVTA_S64 : SInst<"vcvta_s64", "xd", "Qd">;
