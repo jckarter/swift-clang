@@ -102,6 +102,8 @@ def VABA  : Inst<"vaba", "dddd", "csiUcUsUiQcQsQiQUcQUsQUi", OP_ABA>;
 def VABAL : SInst<"vabal", "wwdd", "csiUcUsUi">;
 def VABAL_HIGH : SInst<"vabal_high", "nndd", "RcRsRiRUcRUsRUi">;
 def VABDL_HIGH : SInst<"vabdl_high", "ndd",  "RcRsRiRUcRUsRUi">;
+def VABDS : SInst<"vabds", "sss", "f">;
+def VABDD : SInst<"vabdd", "sss", "d">;
 
 ////////////////////////////////////////////////////////////////////////////////
 // Max/Min
