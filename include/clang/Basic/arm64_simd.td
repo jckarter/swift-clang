@@ -269,6 +269,11 @@ def VST4_LANE : WInst<"vst4_lane", "vp4i", "QUsQUiQsQiQhQfQPsUcUsUicsihfPcPs">;
 // Extract lanes from a vector
 def VGET_LANE : SInst<"vget_lane", "sdi",
                       "csilUcUsUiUlfPcPsQcQsQiQlQUcQUsQUiQUlQfQPcQPs">;
+// vdup<bhsd>_lane* is a synonym for vget_lane.
+def VDUPB_LANE : SInst<"vdupb_lane", "sdi", "RcRUc">;
+def VDUPH_LANE : SInst<"vduph_lane", "sdi", "RsRUs">;
+def VDUPS_LANE : SInst<"vdups_lane", "sdi", "RiRUi">;
+def VDUPD_LANE : SInst<"vdupd_lane", "sdi", "RlRUl">;
 
 ////////////////////////////////////////////////////////////////////////////////
 // Set lanes within a vector
