@@ -509,7 +509,7 @@ public:
   SolarisTargetInfo(const std::string& triple)
     : OSTargetInfo<Target>(triple) {
     this->UserLabelPrefix = "";
-    this->WCharType = this->SignedLong;
+    this->WCharType = this->SignedInt;
     // FIXME: WIntType should be SignedLong
   }
 };
@@ -3855,6 +3855,7 @@ public:
     if (Opts.CPlusPlus)
       Builder.defineMacro("_GNU_SOURCE");
 
+    Builder.defineMacro("__LITTLE_ENDIAN__");
     Builder.defineMacro("__native_client__");
     getArchDefines(Opts, Builder);
   }
