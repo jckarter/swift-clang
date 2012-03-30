@@ -2808,6 +2808,7 @@ public:
 #endif // !__OPEN_SOURCE__
       .Case("swift", "7S")
       .Case("cortex-m3", "7M")
+      .Case("cortex-m4", "7M")
       .Case("cortex-m0", "6M")
       .Default(0);
   }
