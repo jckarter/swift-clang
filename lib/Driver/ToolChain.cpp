@@ -143,6 +143,7 @@ static const char *getLLVMArchSuffixForARM(StringRef CPU) {
     .Cases("cortex-a8", "cortex-a9", "v7")
     .Case("cortex-a9-mp", "v7f")
     .Case("cortex-m3", "v7m")
+    .Case("cortex-m4", "v7m")
     .Case("cortex-m0", "v6m")
 #ifndef __OPEN_SOURCE__
     .Case("pj4b", "v7k")
