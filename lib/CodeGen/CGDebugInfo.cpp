@@ -1324,11 +1324,16 @@ llvm::DIType CGDebugInfo::CreateType(const ObjCInterfaceType *Ty,
   for (ObjCContainerDecl::prop_iterator I = ID->prop_begin(),
          E = ID->prop_end(); I != E; ++I) {
     const ObjCPropertyDecl *PD = *I;
+    SourceLocation Loc = PD->getLocation();
+    llvm::DIFile PUnit = getOrCreateFile(Loc);
+    unsigned PLine = getLineNumber(Loc);
     llvm::MDNode *PropertyNode =
       DBuilder.createObjCProperty(PD->getName(),
+				  PUnit, PLine,
                                   getSelectorName(PD->getGetterName()),
                                   getSelectorName(PD->getSetterName()),
-                                  PD->getPropertyAttributes());
+                                  PD->getPropertyAttributes(),
+				  getOrCreateType(PD->getType(), PUnit));
     EltTys.push_back(PropertyNode);
   }
 
@@ -1380,11 +1385,16 @@ llvm::DIType CGDebugInfo::CreateType(const ObjCInterfaceType *Ty,
       if (ObjCPropertyImplDecl *PImpD = 
           ImpD->FindPropertyImplIvarDecl(Field->getIdentifier())) {
         if (ObjCPropertyDecl *PD = PImpD->getPropertyDecl()) {
-          PropertyNode =
-            DBuilder.createObjCProperty(PD->getName(),
+	  SourceLocation Loc = PD->getLocation();
+	  llvm::DIFile PUnit = getOrCreateFile(Loc);
+	  unsigned PLine = getLineNumber(Loc);
+	  PropertyNode =
+	    DBuilder.createObjCProperty(PD->getName(),
+					PUnit, PLine,
                                         getSelectorName(PD->getGetterName()),
                                         getSelectorName(PD->getSetterName()),
-                                        PD->getPropertyAttributes());
+					PD->getPropertyAttributes(),
+					getOrCreateType(PD->getType(),PUnit));
         }
       }
     }
