@@ -2799,6 +2799,7 @@ public:
       .Case("pj4b", "7K")
 #endif // !__OPEN_SOURCE__
       .Case("cortex-m3", "7M")
+      .Case("cortex-m4", "7M")
       .Case("cortex-m0", "6M")
       .Default(0);
   }

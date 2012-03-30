@@ -27,7 +27,12 @@ def err_typecheck_converted_constant_expression_disallowed : Error<
 def err_expr_not_cce : Error<
   "%select{case value|enumerator value|non-type template argument}0 "
   "is not a constant expression">;
-def err_cce_narrowing : Error<
+def err_cce_narrowing : ExtWarn<
+  "%select{case value|enumerator value|non-type template argument}0 "
+  "%select{cannot be narrowed from type %2 to %3|"
+  "evaluates to %2, which cannot be narrowed to type %3}1">,
+  InGroup<CXX11Narrowing>, DefaultError;
+def err_cce_narrowing_sfinae : Error<
   "%select{case value|enumerator value|non-type template argument}0 "
   "%select{cannot be narrowed from type %2 to %3|"
   "evaluates to %2, which cannot be narrowed to type %3}1">;
@@ -2990,18 +2995,18 @@ def err_illegal_initializer : Error<
 def err_illegal_initializer_type : Error<"illegal initializer type %0">;
 def err_init_list_type_narrowing_sfinae : Error<
   "type %0 cannot be narrowed to %1 in initializer list">;
-def err_init_list_type_narrowing : Warning<
+def err_init_list_type_narrowing : ExtWarn<
   "type %0 cannot be narrowed to %1 in initializer list">, 
   InGroup<CXX11Narrowing>, DefaultError;
 def err_init_list_variable_narrowing_sfinae : Error<
   "non-constant-expression cannot be narrowed from type %0 to %1 in "
   "initializer list">;
-def err_init_list_variable_narrowing : Warning<
+def err_init_list_variable_narrowing : ExtWarn<
   "non-constant-expression cannot be narrowed from type %0 to %1 in "
   "initializer list">, InGroup<CXX11Narrowing>, DefaultError;
 def err_init_list_constant_narrowing_sfinae : Error<
   "constant expression evaluates to %0 which cannot be narrowed to type %1">;
-def err_init_list_constant_narrowing : Warning<
+def err_init_list_constant_narrowing : ExtWarn<
   "constant expression evaluates to %0 which cannot be narrowed to type %1">,
   InGroup<CXX11Narrowing>, DefaultError;
 def warn_init_list_type_narrowing : Warning<
@@ -3265,6 +3270,9 @@ def warn_err_new_delete_object_array : Warning<
 def err_arc_autoreleasing_var : Error<
   "%select{__block variables|global variables|fields|ivars}0 cannot have "
   "__autoreleasing ownership">;
+def err_arc_autoreleasing_capture : Error<
+  "cannot capture __autoreleasing variable in a "
+  "%select{block|lambda by copy}0">;
 def err_arc_thread_ownership : Error<
   "thread-local variable has non-trivial ownership: type is %0">;
 def err_arc_indirect_no_ownership : Error<
