@@ -138,7 +138,7 @@ bool ExprEngine::shouldInlineDecl(const FunctionDecl *FD, ExplodedNode *Pred) {
         == AMgr.InlineMaxStackDepth)
     return false;
 
-  if (FunctionSummaries->hasReachedMaxBlockCount(FD))
+  if (Engine.FunctionSummaries->hasReachedMaxBlockCount(FD))
     return false;
 
   if (CalleeCFG->getNumBlockIDs() > AMgr.InlineMaxFunctionSize)
@@ -202,10 +202,11 @@ bool ExprEngine::InlineCall(ExplodedNodeSet &Dst,
       
       CallEnter Loc(CE, CalleeSFC, Pred->getLocationContext());
       bool isNew;
-      ExplodedNode *N = G.getNode(Loc, state, false, &isNew);
-      N->addPredecessor(Pred, G);
-      if (isNew)
-        Engine.getWorkList()->enqueue(N);
+      if (ExplodedNode *N = G.getNode(Loc, state, false, &isNew)) {
+        N->addPredecessor(Pred, G);
+        if (isNew)
+          Engine.getWorkList()->enqueue(N);
+      }
       return true;
     }
   }
