@@ -1992,8 +1992,9 @@ def note_ovl_candidate_deleted : Note<
     "constructor (the implicit move constructor)|"
     "function (the implicit copy assignment operator)|"
     "function (the implicit move assignment operator)|"
-    "constructor (inherited)}0%1 "
-    "has been explicitly %select{made unavailable|deleted}2">;
+    "constructor (inherited)}0%1 has been "
+    "%select{explicitly made unavailable|explicitly deleted|"
+    "implicitly deleted}2">;
 
 // Giving the index of the bad argument really clutters this message, and
 // it's relatively unimportant because 1) it's generally obvious which
@@ -2511,7 +2512,7 @@ def err_function_template_spec_no_match : Error<
     "no function template matches function template specialization %0">;
 def err_function_template_spec_ambiguous : Error<
     "function template specialization %0 ambiguously refers to more than one "
-    "function template; explicitly specify%select{|additional }1 template "
+    "function template; explicitly specify%select{| additional}1 template "
     "arguments to identify a particular function template">;
 def note_function_template_spec_matched : Note<
     "function template matches specialization %0">;
@@ -2801,6 +2802,8 @@ def warn_unavailable_fwdclass_message : Warning<
 def note_unavailable_here : Note<
   "%select{declaration|function}0 has been explicitly marked "
   "%select{unavailable|deleted|deprecated}1 here">;
+def note_implicitly_deleted : Note<
+  "explicitly defaulted function was implicitly deleted here">;
 def warn_not_enough_argument : Warning<
   "not enough variable arguments in %0 declaration to fit a sentinel">,
   InGroup<Sentinel>;
@@ -2855,9 +2858,6 @@ def note_deleted_copy_user_declared_move : Note<
 def note_deleted_assign_field : Note<
   "%select{copy|move}0 assignment operator of %0 is implicitly deleted "
   "because field %1 is of %select{reference|const-qualified}3 type %2">;
-def note_deleted_move_assign_virtual_base : Note<
-  "move assignment operator of %0 is implicitly deleted because it has a "
-  "virtual base class %1">;
 
 // This should eventually be an error.
 def warn_undefined_internal : Warning<
