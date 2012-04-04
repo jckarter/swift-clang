@@ -504,6 +504,70 @@ static bool isSignedCharDefault(const llvm::Triple &Triple) {
   }
 }
 
+// Handle -mfpu=.
+//
+// FIXME: Centralize feature selection, defaulting shouldn't be also in the
+// frontend target.
+static void addFPUArgs(const Driver &D, const Arg *A, const ArgList &Args,
+                       ArgStringList &CmdArgs) {
+  StringRef FPU = A->getValue(Args);
+
+  // Set the target features based on the FPU.
+  if (FPU == "fpa" || FPU == "fpe2" || FPU == "fpe3" || FPU == "maverick") {
+    // Disable any default FPU support.
+    CmdArgs.push_back("-target-feature");
+    CmdArgs.push_back("-vfp2");
+    CmdArgs.push_back("-target-feature");
+    CmdArgs.push_back("-vfp3");
+    CmdArgs.push_back("-target-feature");
+    CmdArgs.push_back("-neon");
+  } else if (FPU == "vfp3-d16" || FPU == "vfpv3-d16") {
+    CmdArgs.push_back("-target-feature");
+    CmdArgs.push_back("+vfp3");
+    CmdArgs.push_back("-target-feature");
+    CmdArgs.push_back("+d16");
+    CmdArgs.push_back("-target-feature");
+    CmdArgs.push_back("-neon");
+  } else if (FPU == "vfp") {
+    CmdArgs.push_back("-target-feature");
+    CmdArgs.push_back("+vfp2");
+    CmdArgs.push_back("-target-feature");
+    CmdArgs.push_back("-neon");
+  } else if (FPU == "vfp3" || FPU == "vfpv3") {
+    CmdArgs.push_back("-target-feature");
+    CmdArgs.push_back("+vfp3");
+    CmdArgs.push_back("-target-feature");
+    CmdArgs.push_back("-neon");
+  } else if (FPU == "neon") {
+    CmdArgs.push_back("-target-feature");
+    CmdArgs.push_back("+neon");
+  } else
+    D.Diag(diag::err_drv_clang_unsupported) << A->getAsString(Args);
+}
+
+// Handle -mfpmath=.
+static void addFPMathArgs(const Driver &D, const Arg *A, const ArgList &Args,
+                          ArgStringList &CmdArgs, StringRef CPU) {
+  StringRef FPMath = A->getValue(Args);
+  
+  // Set the target features based on the FPMath.
+  if (FPMath == "neon") {
+    CmdArgs.push_back("-target-feature");
+    CmdArgs.push_back("+neonfp");
+    
+    if (CPU != "cortex-a8" && CPU != "cortex-a9" && CPU != "cortex-a9-mp")    
+      D.Diag(diag::err_drv_invalid_feature) << "-mfpmath=neon" << CPU;
+    
+  } else if (FPMath == "vfp" || FPMath == "vfp2" || FPMath == "vfp3" ||
+             FPMath == "vfp4") {
+    CmdArgs.push_back("-target-feature");
+    CmdArgs.push_back("-neonfp");
+
+    // FIXME: Add warnings when disabling a feature not present for a given CPU.    
+  } else
+    D.Diag(diag::err_drv_clang_unsupported) << A->getAsString(Args);
+}
+
 void Clang::AddARMTargetArgs(const ArgList &Args,
                              ArgStringList &CmdArgs,
                              bool KernelOrKext) const {
@@ -647,44 +711,12 @@ void Clang::AddARMTargetArgs(const ArgList &Args,
   }
 
   // Honor -mfpu=.
-  //
-  // FIXME: Centralize feature selection, defaulting shouldn't be also in the
-  // frontend target.
-  if (const Arg *A = Args.getLastArg(options::OPT_mfpu_EQ)) {
-    StringRef FPU = A->getValue(Args);
+  if (const Arg *A = Args.getLastArg(options::OPT_mfpu_EQ))
+    addFPUArgs(D, A, Args, CmdArgs);
 
-    // Set the target features based on the FPU.
-    if (FPU == "fpa" || FPU == "fpe2" || FPU == "fpe3" || FPU == "maverick") {
-      // Disable any default FPU support.
-      CmdArgs.push_back("-target-feature");
-      CmdArgs.push_back("-vfp2");
-      CmdArgs.push_back("-target-feature");
-      CmdArgs.push_back("-vfp3");
-      CmdArgs.push_back("-target-feature");
-      CmdArgs.push_back("-neon");
-    } else if (FPU == "vfp3-d16" || FPU == "vfpv3-d16") {
-      CmdArgs.push_back("-target-feature");
-      CmdArgs.push_back("+vfp3");
-      CmdArgs.push_back("-target-feature");
-      CmdArgs.push_back("+d16");
-      CmdArgs.push_back("-target-feature");
-      CmdArgs.push_back("-neon");
-    } else if (FPU == "vfp") {
-      CmdArgs.push_back("-target-feature");
-      CmdArgs.push_back("+vfp2");
-      CmdArgs.push_back("-target-feature");
-      CmdArgs.push_back("-neon");
-    } else if (FPU == "vfp3" || FPU == "vfpv3") {
-      CmdArgs.push_back("-target-feature");
-      CmdArgs.push_back("+vfp3");
-      CmdArgs.push_back("-target-feature");
-      CmdArgs.push_back("-neon");
-    } else if (FPU == "neon") {
-      CmdArgs.push_back("-target-feature");
-      CmdArgs.push_back("+neon");
-    } else
-      D.Diag(diag::err_drv_clang_unsupported) << A->getAsString(Args);
-  }
+  // Honor -mfpmath=.
+  if (const Arg *A = Args.getLastArg(options::OPT_mfpmath_EQ))
+    addFPMathArgs(D, A, Args, CmdArgs, getARMTargetCPU(Args, Triple));
 
   // Setting -msoft-float effectively disables NEON because of the GCC
   // implementation, although the same isn't true of VFP or VFP3.
@@ -1445,7 +1477,11 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
                      Args.hasArg(options::OPT_fPIE) ||
                      Args.hasArg(options::OPT_fpie));
   bool PICDisabled = (Args.hasArg(options::OPT_mkernel) ||
-                      Args.hasArg(options::OPT_static));
+                      Args.hasArg(options::OPT_static) ||
+                      Args.hasArg(options::OPT_fno_PIC) ||
+                      Args.hasArg(options::OPT_fno_pic) ||
+                      Args.hasArg(options::OPT_fno_PIE) ||
+                      Args.hasArg(options::OPT_fno_pie));
   const char *Model = getToolChain().GetForcedPicModel();
   if (!Model) {
     if (Args.hasArg(options::OPT_mdynamic_no_pic))
@@ -2650,44 +2686,12 @@ void ClangAs::AddARMTargetArgs(const ArgList &Args,
   CmdArgs.push_back(getARMTargetCPU(Args, Triple));
 
   // Honor -mfpu=.
-  //
-  // FIXME: Centralize feature selection, defaulting shouldn't be also in the
-  // frontend target.
-  if (const Arg *A = Args.getLastArg(options::OPT_mfpu_EQ)) {
-    StringRef FPU = A->getValue(Args);
+  if (const Arg *A = Args.getLastArg(options::OPT_mfpu_EQ))
+    addFPUArgs(D, A, Args, CmdArgs);
 
-    // Set the target features based on the FPU.
-    if (FPU == "fpa" || FPU == "fpe2" || FPU == "fpe3" || FPU == "maverick") {
-      // Disable any default FPU support.
-      CmdArgs.push_back("-target-feature");
-      CmdArgs.push_back("-vfp2");
-      CmdArgs.push_back("-target-feature");
-      CmdArgs.push_back("-vfp3");
-      CmdArgs.push_back("-target-feature");
-      CmdArgs.push_back("-neon");
-    } else if (FPU == "vfp3-d16" || FPU == "vfpv3-d16") {
-      CmdArgs.push_back("-target-feature");
-      CmdArgs.push_back("+vfp3");
-      CmdArgs.push_back("-target-feature");
-      CmdArgs.push_back("+d16");
-      CmdArgs.push_back("-target-feature");
-      CmdArgs.push_back("-neon");
-    } else if (FPU == "vfp") {
-      CmdArgs.push_back("-target-feature");
-      CmdArgs.push_back("+vfp2");
-      CmdArgs.push_back("-target-feature");
-      CmdArgs.push_back("-neon");
-    } else if (FPU == "vfp3" || FPU == "vfpv3") {
-      CmdArgs.push_back("-target-feature");
-      CmdArgs.push_back("+vfp3");
-      CmdArgs.push_back("-target-feature");
-      CmdArgs.push_back("-neon");
-    } else if (FPU == "neon") {
-      CmdArgs.push_back("-target-feature");
-      CmdArgs.push_back("+neon");
-    } else
-      D.Diag(diag::err_drv_clang_unsupported) << A->getAsString(Args);
-  }
+  // Honor -mfpmath=.
+  if (const Arg *A = Args.getLastArg(options::OPT_mfpmath_EQ))
+    addFPMathArgs(D, A, Args, CmdArgs, getARMTargetCPU(Args, Triple));
 }
 
 void ClangAs::ConstructJob(Compilation &C, const JobAction &JA,
@@ -3630,8 +3634,7 @@ void darwin::Compile::ConstructJob(Compilation &C, const JobAction &JA,
   Args.ClaimAllArgs(options::OPT__serialize_diags);
 
   types::ID InputType = Inputs[0].getType();
-  const Arg *A;
-  if ((A = Args.getLastArg(options::OPT_traditional)))
+  if (const Arg *A = Args.getLastArg(options::OPT_traditional))
     D.Diag(diag::err_drv_argument_only_allowed_with)
       << A->getAsString(Args) << "-E";
 
@@ -4851,7 +4854,6 @@ void netbsd::Assemble::ConstructJob(Compilation &C, const JobAction &JA,
   // instruct as in the base system to assemble 32-bit code.
   if (getToolChain().getArch() == llvm::Triple::x86)
     CmdArgs.push_back("--32");
-
 
   // Set byte order explicitly
   if (getToolChain().getArchName() == "mips")
