@@ -3663,6 +3663,10 @@ public:
       Builder.defineMacro("__mips_hard_float", Twine(1));
     else
       llvm_unreachable("Invalid float ABI for Mips.");
+
+    Builder.defineMacro("_MIPS_SZPTR", Twine(getPointerWidth(0)));
+    Builder.defineMacro("_MIPS_SZINT", Twine(getIntWidth()));
+    Builder.defineMacro("_MIPS_SZLONG", Twine(getLongWidth()));
   }
 
   virtual void getTargetDefines(const LangOptions &Opts,
@@ -3772,10 +3776,6 @@ public:
   virtual void getArchDefines(const LangOptions &Opts,
                               MacroBuilder &Builder) const {
     MipsTargetInfoBase::getArchDefines(Opts, Builder);
-
-    Builder.defineMacro("_MIPS_SZPTR", Twine(getPointerWidth(0)));
-    Builder.defineMacro("_MIPS_SZINT", Twine(getIntWidth()));
-    Builder.defineMacro("_MIPS_SZLONG", Twine(getLongWidth()));
 
     if (ABI == "o32") {
       Builder.defineMacro("__mips_o32");
