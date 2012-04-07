@@ -3314,8 +3314,11 @@ ASTContext::getCanonicalTemplateArgument(const TemplateArgument &Arg) const {
     case TemplateArgument::Expression:
       return Arg;
 
-    case TemplateArgument::Declaration:
-      return TemplateArgument(Arg.getAsDecl()->getCanonicalDecl());
+    case TemplateArgument::Declaration: {
+      if (Decl *D = Arg.getAsDecl())
+          return TemplateArgument(D->getCanonicalDecl());
+      return TemplateArgument((Decl*)0);
+    }
 
     case TemplateArgument::Template:
       return TemplateArgument(getCanonicalTemplateName(Arg.getAsTemplate()));
