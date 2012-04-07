@@ -884,8 +884,13 @@ def note_access_natural : Note<
 def note_access_constrained_by_path : Note<
   "constrained by %select{|implicitly }1%select{private|protected}0"
   " inheritance here">;
-def note_access_protected_restricted : Note<
-  "object type %select{|%1 }0must derive from context type %2">;
+def note_access_protected_restricted_noobject : Note<
+  "must name member using the type of the current context %0">;
+def note_access_protected_restricted_ctordtor : Note<
+  "protected %select{constructor|destructor}0 can only be used to "
+  "%select{construct|destroy}0 a base class subobject">;
+def note_access_protected_restricted_object : Note<
+  "can only access this member on an object of type %0">;
 def warn_cxx98_compat_sfinae_access_control : Warning<
   "substitution failure due to access control is incompatible with C++98">,
   InGroup<CXX98Compat>, DefaultIgnore, NoSFINAE;
@@ -2339,6 +2344,8 @@ def err_template_arg_not_integral_or_enumeral : Error<
 def err_template_arg_not_ice : Error<
   "non-type template argument of type %0 is not an integral constant "
   "expression">;
+def err_template_arg_untyped_null_constant : Error<
+  "null non-type template argument must be cast to template parameter type %0">;
 def err_deduced_non_type_template_arg_type_mismatch : Error<
   "deduced non-type template argument does not have the same type as the "
   "its corresponding template parameter (%0 vs %1)">;
