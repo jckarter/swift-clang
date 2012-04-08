@@ -795,38 +795,46 @@ static const char* getMipsABIFromArch(StringRef ArchName) {
     return "n64";
 }
 
-void Clang::AddMIPSTargetArgs(const ArgList &Args,
-                             ArgStringList &CmdArgs) const {
-  const Driver &D = getToolChain().getDriver();
-
+// Get CPU and ABI names. They are not independent
+// so we have to calculate them together.
+static void getMipsCPUAndABI(const ArgList &Args,
+                             const ToolChain &TC,
+                             StringRef &CPUName,
+                             StringRef &ABIName) {
   StringRef ArchName;
-  const char *CPUName;
 
-  // Set target cpu and architecture.
+  // Select target cpu and architecture.
   if (Arg *A = Args.getLastArg(options::OPT_mcpu_EQ)) {
     CPUName = A->getValue(Args);
     ArchName = getMipsArchFromCPU(CPUName);
   }
   else {
-    ArchName = Args.MakeArgString(getToolChain().getArchName());
+    ArchName = Args.MakeArgString(TC.getArchName());
     if (!checkMipsArchName(ArchName))
-      D.Diag(diag::err_drv_invalid_arch_name) << ArchName;
+      TC.getDriver().Diag(diag::err_drv_invalid_arch_name) << ArchName;
     else
       CPUName = getMipsCPUFromArch(ArchName);
   }
-
-  CmdArgs.push_back("-target-cpu");
-  CmdArgs.push_back(CPUName);
  
   // Select the ABI to use.
-  const char *ABIName = 0;
   if (Arg *A = Args.getLastArg(options::OPT_mabi_EQ))
     ABIName = A->getValue(Args);
   else 
     ABIName = getMipsABIFromArch(ArchName);
+}
+
+void Clang::AddMIPSTargetArgs(const ArgList &Args,
+                             ArgStringList &CmdArgs) const {
+  const Driver &D = getToolChain().getDriver();
+  StringRef CPUName;
+  StringRef ABIName;
+  getMipsCPUAndABI(Args, getToolChain(), CPUName, ABIName);
+
+  CmdArgs.push_back("-target-cpu");
+  CmdArgs.push_back(CPUName.data());
 
   CmdArgs.push_back("-target-abi");
-  CmdArgs.push_back(ABIName);
+  CmdArgs.push_back(ABIName.data());
 
   // Select the float ABI as determined by -msoft-float, -mhard-float,
   // and -mfloat-abi=.
@@ -5029,17 +5037,21 @@ void linuxtools::Assemble::ConstructJob(Compilation &C, const JobAction &JA,
              getToolChain().getArch() == llvm::Triple::mipsel ||
              getToolChain().getArch() == llvm::Triple::mips64 ||
              getToolChain().getArch() == llvm::Triple::mips64el) {
-    // Get Mips CPU name and pass it to 'as'.
-    const char *CPUName;
-    if (Arg *A = Args.getLastArg(options::OPT_mcpu_EQ))
-      CPUName = A->getValue(Args);
-    else
-      CPUName = getMipsCPUFromArch(getToolChain().getArchName());
+    StringRef CPUName;
+    StringRef ABIName;
+    getMipsCPUAndABI(Args, getToolChain(), CPUName, ABIName);
 
-    if (CPUName) {
-      CmdArgs.push_back("-march");
-      CmdArgs.push_back(CPUName);
-    }
+    CmdArgs.push_back("-march");
+    CmdArgs.push_back(CPUName.data());
+
+    // Convert ABI name to the GNU tools acceptable variant.
+    if (ABIName == "o32")
+      ABIName = "32";
+    else if (ABIName == "n64")
+      ABIName = "64";
+
+    CmdArgs.push_back("-mabi");
+    CmdArgs.push_back(ABIName.data());
 
     if (getToolChain().getArch() == llvm::Triple::mips ||
         getToolChain().getArch() == llvm::Triple::mips64)
