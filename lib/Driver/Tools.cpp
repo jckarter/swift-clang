@@ -1539,7 +1539,8 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
   // PIC or PIE options above, if these show up, PIC is disabled.
   if ((Args.hasArg(options::OPT_mkernel) ||
        Args.hasArg(options::OPT_fapple_kext)) &&
-      (Triple.getOS() != llvm::Triple::IOS || Triple.isOSVersionLT(6) ||
+      (getToolChain().getTriple().getOS() != llvm::Triple::IOS ||
+       getToolChain().getTriple().isOSVersionLT(6) ||
        getToolChain().getTriple().getArch() == llvm::Triple::arm64))
     PICDisabled = true;
   if (Args.hasArg(options::OPT_static))
