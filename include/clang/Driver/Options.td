@@ -432,8 +432,6 @@ def fno_modules : Flag <"-fno-modules">, Group<f_Group>, Flags<[NoForward]>;
 def fno_ms_extensions : Flag<"-fno-ms-extensions">, Group<f_Group>;
 def fno_ms_compatibility : Flag<"-fno-ms-compatibility">, Group<f_Group>;
 def fno_delayed_template_parsing : Flag<"-fno-delayed-template-parsing">, Group<f_Group>;
-def fno_objc_default_synthesize_properties 
-  : Flag<"-fno-objc-default-synthesize-properties">, Group<f_Group>;
 def fno_objc_exceptions: Flag<"-fno-objc-exceptions">, Group<f_Group>;
 def fno_objc_legacy_dispatch : Flag<"-fno-objc-legacy-dispatch">, Group<f_Group>;
 def fno_omit_frame_pointer : Flag<"-fno-omit-frame-pointer">, Group<f_Group>;
@@ -462,8 +460,6 @@ def fobjc_arc_exceptions : Flag<"-fobjc-arc-exceptions">, Group<f_Group>;
 def fno_objc_arc_exceptions : Flag<"-fno-objc-arc-exceptions">, Group<f_Group>;
 def fobjc_atdefs : Flag<"-fobjc-atdefs">, Group<clang_ignored_f_Group>;
 def fobjc_call_cxx_cdtors : Flag<"-fobjc-call-cxx-cdtors">, Group<clang_ignored_f_Group>;
-def fobjc_default_synthesize_properties : 
-  Flag<"-fobjc-default-synthesize-properties">, Group<f_Group>;
 def fobjc_exceptions: Flag<"-fobjc-exceptions">, Group<f_Group>;
 
 def fobjc_gc_only : Flag<"-fobjc-gc-only">, Group<f_Group>;
