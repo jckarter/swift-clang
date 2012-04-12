@@ -2785,7 +2785,7 @@ CodeGenFunction::GenerateObjCAtomicSetterCopyHelperFunction(
                                           SC_Static,
                                           SC_None,
                                           false,
-                                          true);
+                                          false);
   
   QualType DestTy = C.getPointerType(Ty);
   QualType SrcTy = Ty;
@@ -2871,7 +2871,7 @@ CodeGenFunction::GenerateObjCAtomicGetterCopyHelperFunction(
                                           SC_Static,
                                           SC_None,
                                           false,
-                                          true);
+                                          false);
   
   QualType DestTy = C.getPointerType(Ty);
   QualType SrcTy = Ty;
