@@ -374,10 +374,6 @@ ExprResult Sema::DefaultLvalueConversion(Expr *E) {
   QualType T = E->getType();
   assert(!T.isNull() && "r-value conversion on typeless expression?");
 
-  // We can't do lvalue-to-rvalue on atomics yet.
-  if (T->isAtomicType())
-    return Owned(E);
-
   // We don't want to throw lvalue-to-rvalue casts on top of
   // expressions of certain types in C++.
   if (getLangOpts().CPlusPlus &&
@@ -413,6 +409,15 @@ ExprResult Sema::DefaultLvalueConversion(Expr *E) {
   ExprResult Res = Owned(ImplicitCastExpr::Create(Context, T, CK_LValueToRValue,
                                                   E, 0, VK_RValue));
 
+  // C11 6.3.2.1p2:
+  //   ... if the lvalue has atomic type, the value has the non-atomic version 
+  //   of the type of the lvalue ...
+  if (const AtomicType *Atomic = T->getAs<AtomicType>()) {
+    T = Atomic->getValueType().getUnqualifiedType();
+    Res = Owned(ImplicitCastExpr::Create(Context, T, CK_AtomicToNonAtomic,
+                                         Res.get(), 0, VK_RValue));
+  }
+  
   return Res;
 }
 
@@ -11259,6 +11264,18 @@ ExprResult
 Sema::ActOnObjCBoolLiteral(SourceLocation OpLoc, tok::TokenKind Kind) {
   assert((Kind == tok::kw___objc_yes || Kind == tok::kw___objc_no) &&
          "Unknown Objective-C Boolean value!");
+  QualType ObjCBoolLiteralQT = Context.ObjCBuiltinBoolTy;
+  // signed char is the default type for boolean literals. Use 'BOOL'
+  // instead, if BOOL typedef is visible in its scope instead.
+  Decl *TD = 
+    LookupSingleName(TUScope, &Context.Idents.get("BOOL"), 
+                     SourceLocation(), LookupOrdinaryName);
+  if (TypeDecl *BoolTD = dyn_cast_or_null<TypeDecl>(TD)) {
+    QualType QT = QualType(BoolTD->getTypeForDecl(), 0);
+    if (!QT.isNull())
+      ObjCBoolLiteralQT = QT;
+  }
+  
   return Owned(new (Context) ObjCBoolLiteralExpr(Kind == tok::kw___objc_yes,
-                                        Context.ObjCBuiltinBoolTy, OpLoc));
+                                        ObjCBoolLiteralQT, OpLoc));
 }
