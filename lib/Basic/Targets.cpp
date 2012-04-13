@@ -3636,8 +3636,11 @@ protected:
   std::string ABI;
 
 public:
-  MipsTargetInfoBase(const std::string& triple, const std::string& ABIStr)
+  MipsTargetInfoBase(const std::string& triple,
+                     const std::string& ABIStr,
+                     const std::string& CPUStr)
     : TargetInfo(triple),
+      CPU(CPUStr),
       SoftFloat(false), SingleFloat(false),
       ABI(ABIStr)
   {}
@@ -3762,7 +3765,7 @@ public:
 class Mips32TargetInfoBase : public MipsTargetInfoBase {
 public:
   Mips32TargetInfoBase(const std::string& triple) :
-    MipsTargetInfoBase(triple, "o32") {
+    MipsTargetInfoBase(triple, "o32", "mips32") {
     SizeType = UnsignedInt;
     PtrDiffType = SignedInt;
   }
@@ -3866,7 +3869,7 @@ class Mips64TargetInfoBase : public MipsTargetInfoBase {
   virtual void SetDescriptionString(const std::string &Name) = 0;
 public:
   Mips64TargetInfoBase(const std::string& triple) :
-    MipsTargetInfoBase(triple, "n64") {
+    MipsTargetInfoBase(triple, "n64", "mips64") {
     LongWidth = LongAlign = 64;
     PointerWidth = PointerAlign = 64;
     LongDoubleWidth = LongDoubleAlign = 128;

@@ -1550,6 +1550,9 @@ def warn_objc_redundant_literal_use : Warning<
   "using %0 with a literal is redundant">, InGroup<ObjCRedundantLiteralUse>;
 }
 
+def warn_bool_for_boolean_literal : Warning<
+  "BOOL of type %0 is non-intergal and unsuitable for a "
+  "boolean literal - ignored">, InGroup<DiagGroup<"numeric-literals">>;
 def err_only_annotate_after_access_spec : Error<
   "access specifier can only have annotation attributes">;
 def err_attribute_section_invalid_for_target : Error<
@@ -4296,8 +4299,8 @@ def err_typecheck_deleted_function : Error<
 def err_expected_class_or_namespace : Error<"expected a class or namespace">;
 def err_expected_class : Error<"%0 is not a class%select{ or namespace|, "
   "namespace, or scoped enumeration}1">;
-def err_invalid_declarator_scope : Error<
-  "definition or redeclaration of %0 not in a namespace enclosing %1">;
+def err_invalid_declarator_scope : Error<"cannot define or redeclare %0 here "
+  "because namespace %1 does not enclose namespace %2">;
 def err_invalid_declarator_global_scope : Error<
   "definition or redeclaration of %0 cannot name the global scope">;
 def err_invalid_declarator_in_function : Error<

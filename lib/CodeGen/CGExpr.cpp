@@ -867,6 +867,9 @@ static bool hasBooleanRepresentation(QualType Ty) {
   if (const EnumType *ET = Ty->getAs<EnumType>())
     return ET->getDecl()->getIntegerType()->isBooleanType();
 
+  if (const AtomicType *AT = Ty->getAs<AtomicType>())
+    return hasBooleanRepresentation(AT->getValueType());
+
   return false;
 }
 
@@ -1227,7 +1230,7 @@ void CodeGenFunction::EmitStoreThroughBitfieldLValue(RValue Src, LValue Dst,
   // Get the source value, truncated to the width of the bit-field.
   llvm::Value *SrcVal = Src.getScalarVal();
 
-  if (Dst.getType()->isBooleanType())
+  if (hasBooleanRepresentation(Dst.getType()))
     SrcVal = Builder.CreateIntCast(SrcVal, ResLTy, /*IsSigned=*/false);
 
   SrcVal = Builder.CreateAnd(SrcVal, llvm::APInt::getLowBitsSet(ResSizeInBits,
@@ -2843,10 +2846,11 @@ RValue CodeGenFunction::EmitAtomicExpr(AtomicExpr *E, llvm::Value *Dest) {
   if (E->getOp() == AtomicExpr::AO__c11_atomic_init) {
     assert(!Dest && "Init does not return a value");
     if (!hasAggregateLLVMType(E->getVal1()->getType())) {
-      llvm::StoreInst *Store =
-        Builder.CreateStore(EmitScalarExpr(E->getVal1()), Ptr);
-      Store->setAlignment(Size);
-      Store->setVolatile(E->isVolatile());
+      QualType PointeeType
+        = E->getPtr()->getType()->getAs<PointerType>()->getPointeeType();
+      EmitScalarInit(EmitScalarExpr(E->getVal1()),
+                     LValue::MakeAddr(Ptr, PointeeType, alignChars,
+                                      getContext()));
     } else if (E->getType()->isAnyComplexType()) {
       EmitComplexExprIntoAddr(E->getVal1(), Ptr, E->isVolatile());
     } else {
@@ -2900,13 +2904,11 @@ RValue CodeGenFunction::EmitAtomicExpr(AtomicExpr *E, llvm::Value *Dest) {
 
   case AtomicExpr::AO__c11_atomic_fetch_add:
   case AtomicExpr::AO__c11_atomic_fetch_sub:
-  case AtomicExpr::AO__atomic_fetch_add:
-  case AtomicExpr::AO__atomic_fetch_sub:
-  case AtomicExpr::AO__atomic_add_fetch:
-  case AtomicExpr::AO__atomic_sub_fetch:
     if (MemTy->isPointerType()) {
       // For pointer arithmetic, we're required to do a bit of math:
       // adding 1 to an int* is not the same as adding 1 to a uintptr_t.
+      // ... but only for the C11 builtins. The GNU builtins expect the
+      // user to multiply by sizeof(T).
       QualType Val1Ty = E->getVal1()->getType();
       llvm::Value *Val1Scalar = EmitScalarExpr(E->getVal1());
       CharUnits PointeeIncAmt =
@@ -2917,6 +2919,10 @@ RValue CodeGenFunction::EmitAtomicExpr(AtomicExpr *E, llvm::Value *Dest) {
       break;
     }
     // Fall through.
+  case AtomicExpr::AO__atomic_fetch_add:
+  case AtomicExpr::AO__atomic_fetch_sub:
+  case AtomicExpr::AO__atomic_add_fetch:
+  case AtomicExpr::AO__atomic_sub_fetch:
   case AtomicExpr::AO__c11_atomic_store:
   case AtomicExpr::AO__c11_atomic_exchange:
   case AtomicExpr::AO__atomic_store_n:
