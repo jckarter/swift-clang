@@ -377,10 +377,11 @@ void Clang::AddPreprocessingOptions(Compilation &C,
 
   // If we have a --sysroot, and don't have an explicit -isysroot flag, add an
   // -isysroot to the CC1 invocation.
-  if (Arg *A = Args.getLastArg(options::OPT__sysroot_EQ)) {
+  StringRef sysroot = C.getSysRoot();
+  if (sysroot != "") {
     if (!Args.hasArg(options::OPT_isysroot)) {
       CmdArgs.push_back("-isysroot");
-      CmdArgs.push_back(A->getValue(Args));
+      CmdArgs.push_back(C.getArgs().MakeArgString(sysroot));
     }
   }
   
@@ -487,7 +488,7 @@ static const char *getLLVMArchSuffixForARM(StringRef CPU) {
     .Cases("arm1136j-s",  "arm1136jf-s",  "arm1176jz-s", "v6")
     .Cases("arm1176jzf-s",  "mpcorenovfp",  "mpcore", "v6")
     .Cases("arm1156t2-s",  "arm1156t2f-s", "v6t2")
-    .Cases("cortex-a8", "cortex-a9", "v7")
+    .Cases("cortex-a7", "cortex-a8", "cortex-a9", "v7")
     .Case("cortex-m3", "v7m")
     .Case("cortex-m4", "v7m")
     .Case("cortex-m0", "v6m")
@@ -566,7 +567,8 @@ static void addFPMathArgs(const Driver &D, const Arg *A, const ArgList &Args,
     CmdArgs.push_back("-target-feature");
     CmdArgs.push_back("+neonfp");
     
-    if (CPU != "cortex-a8" && CPU != "cortex-a9" && CPU != "cortex-a9-mp")    
+    if (CPU != "cortex-a7" && CPU != "cortex-a8" &&
+        CPU != "cortex-a9" && CPU != "cortex-a9-mp")
       D.Diag(diag::err_drv_invalid_feature) << "-mfpmath=neon" << CPU;
     
   } else if (FPMath == "vfp" || FPMath == "vfp2" || FPMath == "vfp3" ||
@@ -4055,9 +4057,10 @@ void darwin::Link::AddLinkArgs(Compilation &C,
 
   // Give --sysroot= preference, over the Apple specific behavior to also use
   // --isysroot as the syslibroot.
-  if (const Arg *A = Args.getLastArg(options::OPT__sysroot_EQ)) {
+  StringRef sysroot = C.getSysRoot();
+  if (sysroot != "") {
     CmdArgs.push_back("-syslibroot");
-    CmdArgs.push_back(A->getValue(Args));
+    CmdArgs.push_back(C.getArgs().MakeArgString(sysroot));
   } else if (const Arg *A = Args.getLastArg(options::OPT_isysroot)) {
     CmdArgs.push_back("-syslibroot");
     CmdArgs.push_back(A->getValue(Args));

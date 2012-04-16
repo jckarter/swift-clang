@@ -1590,6 +1590,16 @@ void InitListExpr::setArrayFiller(Expr *filler) {
       inits[i] = filler;
 }
 
+bool InitListExpr::isStringLiteralInit() const {
+  if (getNumInits() != 1)
+    return false;
+  const ConstantArrayType *CAT = dyn_cast<ConstantArrayType>(getType());
+  if (!CAT || !CAT->getElementType()->isIntegerType())
+    return false;
+  const Expr *Init = getInit(0)->IgnoreParenImpCasts();
+  return isa<StringLiteral>(Init) || isa<ObjCEncodeExpr>(Init);
+}
+
 SourceRange InitListExpr::getSourceRange() const {
   if (SyntacticForm)
     return SyntacticForm->getSourceRange();
@@ -3879,11 +3889,13 @@ unsigned AtomicExpr::getNumSubExprs(AtomicOp Op) {
   case AO__atomic_fetch_and:
   case AO__atomic_fetch_or:
   case AO__atomic_fetch_xor:
+  case AO__atomic_fetch_nand:
   case AO__atomic_add_fetch:
   case AO__atomic_sub_fetch:
   case AO__atomic_and_fetch:
   case AO__atomic_or_fetch:
   case AO__atomic_xor_fetch:
+  case AO__atomic_nand_fetch:
     return 3;
 
   case AO__atomic_exchange:

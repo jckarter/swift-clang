@@ -446,11 +446,13 @@ public:
     Sema &S;
     DeclContext *SavedContext;
     ProcessingContextState SavedContextState;
-
+    QualType SavedCXXThisTypeOverride;
+    
   public:
     ContextRAII(Sema &S, DeclContext *ContextToPush)
       : S(S), SavedContext(S.CurContext),
-        SavedContextState(S.DelayedDiagnostics.pushContext())
+        SavedContextState(S.DelayedDiagnostics.pushContext()),
+        SavedCXXThisTypeOverride(S.CXXThisTypeOverride)
     {
       assert(ContextToPush && "pushing null context");
       S.CurContext = ContextToPush;
@@ -460,6 +462,7 @@ public:
       if (!SavedContext) return;
       S.CurContext = SavedContext;
       S.DelayedDiagnostics.popContext(SavedContextState);
+      S.CXXThisTypeOverride = SavedCXXThisTypeOverride;
       SavedContext = 0;
     }
 
@@ -646,7 +649,7 @@ public:
 
   /// A stack of expression evaluation contexts.
   SmallVector<ExpressionEvaluationContextRecord, 8> ExprEvalContexts;
-
+  
   /// SpecialMemberOverloadResult - The overloading result for a special member
   /// function.
   ///
@@ -1974,6 +1977,10 @@ public:
   bool CheckCallingConvAttr(const AttributeList &attr, CallingConv &CC);
   bool CheckNoReturnAttr(const AttributeList &attr);
 
+  /// \brief Stmt attributes - this routine is the top level dispatcher.
+  StmtResult ProcessStmtAttributes(Stmt *Stmt, AttributeList *Attrs,
+                                   SourceRange Range);
+
   void WarnUndefinedMethod(SourceLocation ImpLoc, ObjCMethodDecl *method,
                            bool &IncompleteImpl, unsigned DiagID);
   void WarnConflictingTypedMethods(ObjCMethodDecl *Method,
@@ -2250,6 +2257,9 @@ public:
                                       Stmt *SubStmt, Scope *CurScope);
   StmtResult ActOnLabelStmt(SourceLocation IdentLoc, LabelDecl *TheDecl,
                             SourceLocation ColonLoc, Stmt *SubStmt);
+
+  StmtResult ActOnAttributedStmt(SourceLocation AttrLoc, const AttrVec &Attrs,
+                                 Stmt *SubStmt);
 
   StmtResult ActOnIfStmt(SourceLocation IfLoc,
                          FullExprArg CondVal, Decl *CondVar,
@@ -3240,6 +3250,18 @@ public:
   /// special member function.
   bool isImplicitlyDeleted(FunctionDecl *FD);
   
+  /// \brief Check wither 'this' shows up in the type of a static member
+  /// function after the (naturally empty) cv-qualifier-seq would be.
+  ///
+  /// \returns true if an error occurred.
+  bool checkThisInStaticMemberFunctionType(CXXMethodDecl *Method);
+  
+  /// \brief Check wither 'this' shows up in the attributes of the given 
+  /// static member function.
+  ///
+  /// \returns true if an error occurred.
+  bool checkThisInStaticMemberFunctionAttributes(CXXMethodDecl *Method);
+  
   /// MaybeBindToTemporary - If the passed in expression has a record type with
   /// a non-trivial destructor, this will return CXXBindTemporaryExpr. Otherwise
   /// it simply returns the passed in expression.
@@ -3321,6 +3343,29 @@ public:
   /// \returns The type of 'this', if possible. Otherwise, returns a NULL type.
   QualType getCurrentThisType();
 
+  /// \brief When non-NULL, the C++ 'this' expression is allowed despite the 
+  /// current context not being a non-static member function. In such cases,
+  /// this provides the type used for 'this'.
+  QualType CXXThisTypeOverride;
+  
+  /// \brief RAII object used to temporarily allow the C++ 'this' expression
+  /// to be used, with the given qualifiers on the current class type.
+  class CXXThisScopeRAII {
+    Sema &S;
+    QualType OldCXXThisTypeOverride;
+    bool Enabled;
+    
+  public:
+    /// \brief Introduce a new scope where 'this' may be allowed (when enabled),
+    /// using the given declaration (which is either a class template or a 
+    /// class) along with the given qualifiers.
+    /// along with the qualifiers placed on '*this'.
+    CXXThisScopeRAII(Sema &S, Decl *ContextDecl, unsigned CXXThisTypeQuals, 
+                     bool Enabled = true);
+    
+    ~CXXThisScopeRAII();
+  };
+  
   /// \brief Make sure the value of 'this' is actually available in the current
   /// context, if it is a potentially evaluated context.
   ///
@@ -3330,6 +3375,11 @@ public:
   /// capture list.
   void CheckCXXThisCapture(SourceLocation Loc, bool Explicit = false);
 
+  /// \brief Determine whether the given type is the type of *this that is used
+  /// outside of the body of a member function for a type that is currently 
+  /// being defined.
+  bool isThisOutsideMemberFunctionBody(QualType BaseType);
+  
   /// ActOnCXXBoolLiteral - Parse {true,false} literals.
   ExprResult ActOnCXXBoolLiteral(SourceLocation OpLoc, tok::TokenKind Kind);
   
@@ -5474,7 +5524,9 @@ public:
   TypeSourceInfo *SubstFunctionDeclType(TypeSourceInfo *T,
                             const MultiLevelTemplateArgumentList &TemplateArgs,
                                         SourceLocation Loc,
-                                        DeclarationName Entity);
+                                        DeclarationName Entity,
+                                        CXXRecordDecl *ThisContext,
+                                        unsigned ThisTypeQuals);
   ParmVarDecl *SubstParmVarDecl(ParmVarDecl *D,
                             const MultiLevelTemplateArgumentList &TemplateArgs,
                                 int indexAdjustment,

@@ -19,9 +19,11 @@
 #include "clang/Basic/MacroBuilder.h"
 #include "clang/Basic/TargetBuiltins.h"
 #include "clang/Basic/TargetOptions.h"
+#include "clang/Basic/Version.h"
 #include "llvm/ADT/APFloat.h"
 #include "llvm/ADT/OwningPtr.h"
 #include "llvm/ADT/STLExtras.h"
+#include "llvm/ADT/StringExtras.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/ADT/StringSwitch.h"
 #include "llvm/ADT/Triple.h"
@@ -92,6 +94,31 @@ static void getDarwinDefines(MacroBuilder &Builder, const LangOptions &Opts,
   Builder.defineMacro("__APPLE__");
   Builder.defineMacro("__MACH__");
   Builder.defineMacro("OBJC_NEW_PROPERTIES");
+
+  // If this is an Apple Clang tag, then include a define for the build number.
+  //
+  // <rdar://problem/10895774> Xcode/clang: provide a way to distinguish minor
+  // builds of clang at compile time
+  const StringRef TagPrefix = "tags/Apple/clang-";
+  std::string RepositoryPath = getClangRepositoryPath();
+  if (StringRef(RepositoryPath).startswith(TagPrefix)) {
+    StringRef BuildNumber = StringRef(RepositoryPath).substr(TagPrefix.size());
+
+    // Extract the version components.
+    std::pair<StringRef,StringRef> Split0 = BuildNumber.split('.');
+    std::pair<StringRef,StringRef> Split1 = Split0.second.split('.');
+    std::pair<StringRef,StringRef> Split2 = Split1.second.split('.');
+    unsigned Major = 0, Minor = 0, Micro = 0;
+    Split0.first.getAsInteger(/*Radix=*/10, Major);
+    Split1.first.getAsInteger(/*Radix=*/10, Minor);
+    Split2.first.getAsInteger(/*Radix=*/10, Micro);
+
+    // Combine the components into a single build number.
+    unsigned CombinedBuildNumber =
+      (Major * 100 + std::min(Minor, 99u)) * 100 + std::min(Micro, 99u);
+    Builder.defineMacro("__apple_build_version__",
+                        llvm::utostr(CombinedBuildNumber));
+  }
 
   if (!Opts.ObjCAutoRefCount) {
     // __weak is always defined, for use in blocks and with objc pointers.
@@ -2734,7 +2761,7 @@ public:
 #endif // !__OPEN_SOURCE__
     else if (CPU == "cortex-a8" || CPU == "cortex-a9" || CPU == "cortex-a9-mp")
       Features["neon"] = true;
-    else if (CPU == "swift") {
+    else if (CPU == "swift" || CPU == "cortex-a7") {
       Features["vfp4"] = true;
       Features["neon"] = true;
     }
@@ -2806,7 +2833,7 @@ public:
       .Cases("arm1176jz-s", "arm1176jzf-s", "6ZK")
       .Cases("arm1136jf-s", "mpcorenovfp", "mpcore", "6K")
       .Cases("arm1156t2-s", "arm1156t2f-s", "6T2")
-      .Cases("cortex-a8", "cortex-a9", "7A")
+      .Cases("cortex-a8", "cortex-a9", "cortex-a7", "7A")
       .Case("cortex-a9-mp", "7F")
 #ifndef __OPEN_SOURCE__
       .Case("pj4b", "7K")

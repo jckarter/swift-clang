@@ -872,8 +872,6 @@ ExprResult Parser::ParseLambdaExpressionAfterIntroducer(
   // FIXME: Rename BlockScope -> ClosureScope if we decide to continue using
   // it.
   unsigned ScopeFlags = Scope::BlockScope | Scope::FnScope | Scope::DeclScope;
-  if (getCurScope()->getFlags() & Scope::ThisScope)
-    ScopeFlags |= Scope::ThisScope;
   ParseScope BodyScope(this, ScopeFlags);
 
   Actions.ActOnStartOfLambdaDefinition(Intro, D, getCurScope());
@@ -1711,7 +1709,7 @@ bool Parser::ParseUnqualifiedIdTemplateId(CXXScopeSpec &SS,
     // Form a parsed representation of the template-id to be stored in the
     // UnqualifiedId.
     TemplateIdAnnotation *TemplateId
-      = TemplateIdAnnotation::Allocate(TemplateArgs.size());
+      = TemplateIdAnnotation::Allocate(TemplateArgs.size(), TemplateIds);
 
     if (Id.getKind() == UnqualifiedId::IK_Identifier) {
       TemplateId->Name = Id.Identifier;

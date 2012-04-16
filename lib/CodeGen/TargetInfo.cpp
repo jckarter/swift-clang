@@ -2688,7 +2688,7 @@ void ARMABIInfo::computeInfo(CGFunctionInfo &FI) const {
 static bool isHomogeneousAggregate(QualType Ty, const Type *&Base,
                                    ASTContext &Context,
                                    bool FPOnly, uint64_t *HAMembers) {
-  uint64_t Members;
+  uint64_t Members = 0;
   if (const ConstantArrayType *AT = Context.getAsConstantArrayType(Ty)) {
     if (!isHomogeneousAggregate(AT->getElementType(), Base, Context, FPOnly,
                                 &Members))
@@ -2696,12 +2696,9 @@ static bool isHomogeneousAggregate(QualType Ty, const Type *&Base,
     Members *= AT->getSize().getZExtValue();
   } else if (const RecordType *RT = Ty->getAs<RecordType>()) {
     const RecordDecl *RD = RT->getDecl();
-    if (RD->isUnion() || RD->hasFlexibleArrayMember())
+    if (RD->hasFlexibleArrayMember())
       return false;
-    if (const CXXRecordDecl *CXXRD = dyn_cast<CXXRecordDecl>(RD)) {
-      if (!CXXRD->isAggregate())
-        return false;
-    }
+
     Members = 0;
     for (RecordDecl::field_iterator i = RD->field_begin(), e = RD->field_end();
          i != e; ++i) {
@@ -2710,7 +2707,9 @@ static bool isHomogeneousAggregate(QualType Ty, const Type *&Base,
       if (!isHomogeneousAggregate(FD->getType(), Base, Context, FPOnly,
                                   &FldMembers))
         return false;
-      Members += FldMembers;
+
+      Members = (RD->isUnion() ?
+                 std::max(Members, FldMembers) : Members + FldMembers);
     }
   } else {
     Members = 1;
@@ -2749,7 +2748,8 @@ static bool isHomogeneousAggregate(QualType Ty, const Type *&Base,
   // Homogeneous Aggregates can have at most 4 members of the base type.
   if (HAMembers)
     *HAMembers = Members;
-  return (Members <= 4);
+
+  return (Members > 0 && Members <= 4);
 }
 
 ABIArgInfo ARMABIInfo::classifyArgumentType(QualType Ty) const {
@@ -2774,8 +2774,10 @@ ABIArgInfo ARMABIInfo::classifyArgumentType(QualType Ty) const {
   if (getABIKind() == ARMABIInfo::AAPCS_VFP) {
     // Homogeneous Aggregates need to be expanded.
     const Type *Base = 0;
-    if (isHomogeneousAggregate(Ty, Base, getContext(), false))
+    if (isHomogeneousAggregate(Ty, Base, getContext(), false)) {
+      assert(Base && "Base class should be set for homogeneous aggregate");
       return ABIArgInfo::getExpand();
+    }
   }
 
   // Otherwise, pass by coercing to a structure of the appropriate size.
@@ -2941,9 +2943,11 @@ ABIArgInfo ARMABIInfo::classifyReturnType(QualType RetTy) const {
   // Check for homogeneous aggregates with AAPCS-VFP.
   if (getABIKind() == AAPCS_VFP) {
     const Type *Base = 0;
-    if (isHomogeneousAggregate(RetTy, Base, getContext(), false))
+    if (isHomogeneousAggregate(RetTy, Base, getContext(), false)) {
+      assert(Base && "Base class should be set for homogeneous aggregate");
       // Homogeneous Aggregates are returned directly.
       return ABIArgInfo::getDirect();
+    }
   }
 
   // Aggregates <= 4 bytes are returned in r0; other aggregates
