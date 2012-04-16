@@ -1563,6 +1563,9 @@ def warn_redeclaration_without_attribute_prev_attribute_ignored : Warning<
 def warn_attribute_ignored : Warning<"%0 attribute ignored">;
 def warn_unknown_attribute_ignored : Warning<
   "unknown attribute %0 ignored">, InGroup<UnknownAttributes>;
+def warn_attribute_invalid_on_stmt : Warning<
+  "attribute %0 cannot be specified on a statement">,
+  InGroup<IgnoredAttributes>;
 def warn_declspec_attribute_ignored : Warning<
   "attribute %0 is ignored, place it after \"%select{class|struct|union|enum}1\" to apply attribute to type declaration">, InGroup<IgnoredAttributes>;
 def warn_attribute_precede_definition : Warning<
@@ -3798,6 +3801,9 @@ def warn_null_in_comparison_operation : Warning<
 
 def err_invalid_this_use : Error<
   "invalid use of 'this' outside of a non-static member function">;
+def err_this_static_member_func : Error<
+  "'this' cannot be%select{| implicitly}0 used in a static member function "
+  "declaration">;
 def err_invalid_member_use_in_static_method : Error<
   "invalid use of member %0 in static member function">;
 def err_invalid_qualified_function_type : Error<
