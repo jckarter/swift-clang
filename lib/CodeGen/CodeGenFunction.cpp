@@ -22,8 +22,9 @@
 #include "clang/AST/DeclCXX.h"
 #include "clang/AST/StmtCXX.h"
 #include "clang/Frontend/CodeGenOptions.h"
-#include "llvm/Target/TargetData.h"
 #include "llvm/Intrinsics.h"
+#include "llvm/Support/MDBuilder.h"
+#include "llvm/Target/TargetData.h"
 using namespace clang;
 using namespace CodeGen;
 

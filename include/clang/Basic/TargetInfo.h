@@ -310,6 +310,9 @@ public:
   bool useSignedCharForObjCBool() const {
     return UseSignedCharForObjCBool;
   }
+  void noSignedCharForObjCBool() {
+    UseSignedCharForObjCBool = false;
+  }
 
   /// useBitFieldTypeAlignment() - Check whether the alignment of bit-field 
   /// types is respected when laying out structures.

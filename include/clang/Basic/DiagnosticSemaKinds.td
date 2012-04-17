@@ -1550,9 +1550,6 @@ def warn_objc_redundant_literal_use : Warning<
   "using %0 with a literal is redundant">, InGroup<ObjCRedundantLiteralUse>;
 }
 
-def warn_bool_for_boolean_literal : Warning<
-  "BOOL of type %0 is non-intergal and unsuitable for a "
-  "boolean literal - ignored">, InGroup<DiagGroup<"numeric-literals">>;
 def err_only_annotate_after_access_spec : Error<
   "access specifier can only have annotation attributes">;
 def err_attribute_section_invalid_for_target : Error<
@@ -2589,6 +2586,8 @@ def note_template_enum_def_here : Note<
   "in instantiation of enumeration %q0 requested here">;
 def note_template_type_alias_instantiation_here : Note<
   "in instantiation of template type alias %0 requested here">;
+def note_template_exception_spec_instantiation_here : Note<
+  "in instantiation of exception specification for %0 requested here">;
   
 def note_default_arg_instantiation_here : Note<
   "in instantiation of default argument for '%0' required here">;

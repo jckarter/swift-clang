@@ -901,11 +901,15 @@ public:
   TypeSourceInfo *GetTypeForDeclaratorCast(Declarator &D, QualType FromTy);
   TypeSourceInfo *GetTypeSourceInfoForDeclarator(Declarator &D, QualType T,
                                                TypeSourceInfo *ReturnTypeInfo);
+    
   /// \brief Package the given type and TSI into a ParsedType.
   ParsedType CreateParsedType(QualType T, TypeSourceInfo *TInfo);
   DeclarationNameInfo GetNameForDeclarator(Declarator &D);
   DeclarationNameInfo GetNameFromUnqualifiedId(const UnqualifiedId &Name);
   static QualType GetTypeFromParser(ParsedType Ty, TypeSourceInfo **TInfo = 0);
+  CanThrowResult canThrow(const Expr *E);
+  const FunctionProtoType *ResolveExceptionSpec(SourceLocation Loc,
+                                                const FunctionProtoType *FPT);
   bool CheckSpecifiedExceptionType(QualType T, const SourceRange &Range);
   bool CheckDistantExceptionSpec(QualType T);
   bool CheckEquivalentExceptionSpec(FunctionDecl *Old, FunctionDecl *New);
@@ -3049,7 +3053,7 @@ public:
   /// implicitly-declared special member functions.
   class ImplicitExceptionSpecification {
     // Pointer to allow copying
-    ASTContext *Context;
+    Sema *Self;
     // We order exception specifications thus:
     // noexcept is the most restrictive, but is only used in C++0x.
     // throw() comes next.
@@ -3073,9 +3077,9 @@ public:
     }
 
   public:
-    explicit ImplicitExceptionSpecification(ASTContext &Context)
-      : Context(&Context), ComputedEST(EST_BasicNoexcept) {
-      if (!Context.getLangOpts().CPlusPlus0x)
+    explicit ImplicitExceptionSpecification(Sema &Self)
+      : Self(&Self), ComputedEST(EST_BasicNoexcept) {
+      if (!Self.Context.getLangOpts().CPlusPlus0x)
         ComputedEST = EST_DynamicNone;
     }
 
@@ -3093,7 +3097,7 @@ public:
     const QualType *data() const { return Exceptions.data(); }
 
     /// \brief Integrate another called method into the collected data.
-    void CalledDecl(CXXMethodDecl *Method);
+    void CalledDecl(SourceLocation CallLoc, CXXMethodDecl *Method);
 
     /// \brief Integrate an invoked expression into the collected data.
     void CalledExpr(Expr *E);
@@ -3144,6 +3148,25 @@ public:
   /// destructor of a class will have.
   ImplicitExceptionSpecification
   ComputeDefaultedDtorExceptionSpec(CXXRecordDecl *ClassDecl);
+
+  /// \brief Check the given exception-specification and update the
+  /// extended prototype information with the results.
+  void checkExceptionSpecification(ExceptionSpecificationType EST,
+                                   ArrayRef<ParsedType> DynamicExceptions,
+                                   ArrayRef<SourceRange> DynamicExceptionRanges,
+                                   Expr *NoexceptExpr,
+                                   llvm::SmallVectorImpl<QualType> &Exceptions,
+                                   FunctionProtoType::ExtProtoInfo &EPI);
+
+  /// \brief Add an exception-specification to the given member function
+  /// (or member function template). The exception-specification was parsed
+  /// after the method itself was declared.
+  void actOnDelayedExceptionSpecification(Decl *Method,
+         ExceptionSpecificationType EST,
+         SourceRange SpecificationRange,
+         ArrayRef<ParsedType> DynamicExceptions,
+         ArrayRef<SourceRange> DynamicExceptionRanges,
+         Expr *NoexceptExpr);
 
   /// \brief Determine if a special member function should have a deleted
   /// definition when it is defaulted.
@@ -3250,13 +3273,17 @@ public:
   /// special member function.
   bool isImplicitlyDeleted(FunctionDecl *FD);
   
-  /// \brief Check wither 'this' shows up in the type of a static member
+  /// \brief Check whether 'this' shows up in the type of a static member
   /// function after the (naturally empty) cv-qualifier-seq would be.
   ///
   /// \returns true if an error occurred.
   bool checkThisInStaticMemberFunctionType(CXXMethodDecl *Method);
-  
-  /// \brief Check wither 'this' shows up in the attributes of the given 
+
+  /// \brief Whether this' shows up in the exception specification of a static
+  /// member function.
+  bool checkThisInStaticMemberFunctionExceptionSpec(CXXMethodDecl *Method);
+
+  /// \brief Check whether 'this' shows up in the attributes of the given
   /// static member function.
   ///
   /// \returns true if an error occurred.
@@ -5170,7 +5197,11 @@ public:
 
       /// We are checking the validity of a default template argument that
       /// has been used when naming a template-id.
-      DefaultTemplateArgumentChecking
+      DefaultTemplateArgumentChecking,
+
+      /// We are instantiating the exception specification for a function
+      /// template which was deferred until it was needed.
+      ExceptionSpecInstantiation
     } Kind;
 
     /// \brief The point of instantiation within the source code.
@@ -5218,6 +5249,7 @@ public:
 
       switch (X.Kind) {
       case TemplateInstantiation:
+      case ExceptionSpecInstantiation:
         return true;
 
       case PriorTemplateArgumentSubstitution:
@@ -5333,6 +5365,13 @@ public:
     /// function template, or a member thereof.
     InstantiatingTemplate(Sema &SemaRef, SourceLocation PointOfInstantiation,
                           Decl *Entity,
+                          SourceRange InstantiationRange = SourceRange());
+
+    struct ExceptionSpecification {};
+    /// \brief Note that we are instantiating an exception specification
+    /// of a function template.
+    InstantiatingTemplate(Sema &SemaRef, SourceLocation PointOfInstantiation,
+                          FunctionDecl *Entity, ExceptionSpecification,
                           SourceRange InstantiationRange = SourceRange());
 
     /// \brief Note that we are instantiating a default argument in a
@@ -5634,6 +5673,8 @@ public:
              TemplateArgumentListInfo &Result,
              const MultiLevelTemplateArgumentList &TemplateArgs);
 
+  void InstantiateExceptionSpec(SourceLocation PointOfInstantiation,
+                                FunctionDecl *Function);
   void InstantiateFunctionDefinition(SourceLocation PointOfInstantiation,
                                      FunctionDecl *Function,
                                      bool Recursive = false,
