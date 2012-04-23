@@ -34,10 +34,10 @@ def VRADDHN_HIGH : SInst<"vraddhn_high", "hbdd", "RsRiRlRUsRUiRUl">;
 // Multiplication
 def VMUL     : Inst<"vmul", "ddd", "csifUcUsUiQcQsQiQfQUcQUsQUi", OP_MUL>;
 def VMULP    : SInst<"vmul", "ddd", "PcQPc">;
-def VMLA     : Inst<"vmla", "dddd", "csiUcUsUiQcQsQiQUcQUsQUi", OP_MLA>;
+def VMLA     : Inst<"vmla", "dddd", "csifUcUsUiQcQsQiQfQUcQUsQUi", OP_MLA>;
 def VFMA     : IInst<"vfma", "dddd", "fQf">;
 def VMLAL    : Inst<"vmlal", "wwdd", "csiUcUsUi", OP_MLAL>;
-def VMLS     : Inst<"vmls", "dddd", "csiUcUsUiQcQsQiQUcQUsQUi", OP_MLS>;
+def VMLS     : Inst<"vmls", "dddd", "csifUcUsUiQcQsQiQfQUcQUsQUi", OP_MLS>;
 def VFMS     : IInst<"vfms", "dddd", "fQf">;
 def VMLSL    : Inst<"vmlsl", "wwdd", "csiUcUsUi", OP_MLSL>;
 def VQDMULH  : SInst<"vqdmulh", "ddd", "siQsQi">;
