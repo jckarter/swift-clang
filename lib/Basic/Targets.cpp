@@ -393,7 +393,7 @@ protected:
     DefineStd(Builder, "unix", Opts);
     Builder.defineMacro("__ELF__");
     if (Opts.POSIXThreads)
-      Builder.defineMacro("_POSIX_THREADS");
+      Builder.defineMacro("_REENTRANT");
   }
 public:
   OpenBSDTargetInfo(const std::string &triple)
