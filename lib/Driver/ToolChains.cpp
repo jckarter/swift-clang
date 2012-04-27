@@ -938,7 +938,7 @@ DerivedArgList *Darwin::TranslateArgs(const DerivedArgList &Args,
       DAL->AddJoinedArg(0, Opts.getOption(options::OPT_mtune_EQ), "core2");
 
   // Add the arch options based on the particular spelling of -arch, to match
-  // how the driver works.
+  // how the driver driver works.
   if (BoundArch) {
     StringRef Name = BoundArch;
     const Option *MCpu = Opts.getOption(options::OPT_mcpu_EQ);
@@ -1039,7 +1039,8 @@ DerivedArgList *Darwin::TranslateArgs(const DerivedArgList &Args,
   // Add an explicit version min argument for the deployment target. We do this
   // after argument translation because -Xarch_ arguments may add a version min
   // argument.
-  AddDeploymentTarget(*DAL);
+  if (BoundArch)
+    AddDeploymentTarget(*DAL);
 
   // For iOS 6, undo the translation to add -static for -mkernel/-fapple-kext.
   // FIXME: It would be far better to avoid inserting those -static arguments,
