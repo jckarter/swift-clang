@@ -5925,10 +5925,12 @@ Decl *Sema::ActOnUsingDeclaration(Scope *S,
       
   case UnqualifiedId::IK_ConstructorName:
   case UnqualifiedId::IK_ConstructorTemplateId:
-    // C++0x inherited constructors.
+    // C++11 inheriting constructors.
     Diag(Name.getLocStart(),
          getLangOpts().CPlusPlus0x ?
-           diag::warn_cxx98_compat_using_decl_constructor :
+           // FIXME: Produce warn_cxx98_compat_using_decl_constructor
+           //        instead once inheriting constructors work.
+           diag::err_using_decl_constructor_unsupported :
            diag::err_using_decl_constructor)
       << SS.getRange();
 
@@ -8165,7 +8167,7 @@ hasMoveOrIsTriviallyCopyable(Sema &S, QualType Type, bool IsConstructor) {
   // reference types, are supposed to return false here, but that appears
   // to be a standard defect.
   CXXRecordDecl *ClassDecl = Type->getAsCXXRecordDecl();
-  if (!ClassDecl)
+  if (!ClassDecl || !ClassDecl->getDefinition())
     return true;
 
   if (Type.isTriviallyCopyableType(S.Context))
@@ -11315,11 +11317,9 @@ void Sema::actOnDelayedExceptionSpecification(Decl *MethodD,
   if (!Method)
     return;
   
-  // Dig out the prototype. This should never fail.
+  // Dig out the prototype, looking through only parens. This should never fail.
   const FunctionProtoType *Proto
-    = dyn_cast<FunctionProtoType>(Method->getType());
-  if (!Proto)
-    return;
+    = cast<FunctionProtoType>(Method->getType().IgnoreParens());
   
   // Check the exception specification.
   llvm::SmallVector<QualType, 4> Exceptions;
@@ -11332,6 +11332,12 @@ void Sema::actOnDelayedExceptionSpecification(Decl *MethodD,
                                        Proto->arg_type_begin(),
                                        Proto->getNumArgs(),
                                        EPI);
+
+  // Rebuild any parens around the function type.
+  for (const ParenType *PT = dyn_cast<ParenType>(Method->getType()); PT;
+       PT = dyn_cast<ParenType>(PT->getInnerType()))
+    T = Context.getParenType(T);
+
   if (TypeSourceInfo *TSInfo = Method->getTypeSourceInfo()) {
     // FIXME: When we get proper type location information for exceptions,
     // we'll also have to rebuild the TypeSourceInfo. For now, we just patch

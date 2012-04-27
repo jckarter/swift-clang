@@ -102,14 +102,16 @@ CodeGenModule::CodeGenModule(ASTContext &C, const CodeGenOptions &CGO,
   if (LangOpts.CUDA)
     createCUDARuntime();
 
-  // Enable TBAA unless it's suppressed.
-  if (!CodeGenOpts.RelaxedAliasing && CodeGenOpts.OptimizationLevel > 0)
-    TBAA = new CodeGenTBAA(Context, VMContext, getLangOpts(),
+  // Enable TBAA unless it's suppressed. ThreadSanitizer needs TBAA even at O0.
+  if (LangOpts.ThreadSanitizer ||
+      (!CodeGenOpts.RelaxedAliasing && CodeGenOpts.OptimizationLevel > 0))
+    TBAA = new CodeGenTBAA(Context, VMContext, CodeGenOpts, getLangOpts(),
                            ABI.getMangleContext());
 
   // If debug info or coverage generation is enabled, create the CGDebugInfo
   // object.
-  if (CodeGenOpts.DebugInfo || CodeGenOpts.EmitGcovArcs ||
+  if (CodeGenOpts.DebugInfo != CodeGenOptions::NoDebugInfo ||
+      CodeGenOpts.EmitGcovArcs ||
       CodeGenOpts.EmitGcovNotes)
     DebugInfo = new CGDebugInfo(*this);
 
