@@ -2079,6 +2079,7 @@ void CXXNameMangler::mangleNeonVectorType(const VectorType *T) {
     case BuiltinType::LongLong:  EltName = "int64_t"; break;
     case BuiltinType::ULongLong: EltName = "uint64_t"; break;
     case BuiltinType::Float:     EltName = "float32_t"; break;
+    case BuiltinType::Double:    EltName = "float64_t"; break;
     default: llvm_unreachable("unexpected Neon vector element type");
     }
   }

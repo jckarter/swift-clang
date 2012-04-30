@@ -1,6 +1,7 @@
 // RUN: %clang_cc1 %s -emit-llvm -o - | FileCheck %s
 
 typedef float float32_t;
+typedef double float64_t;
 typedef signed char poly8_t;
 typedef short poly16_t;
 typedef unsigned long long uint64_t;
@@ -11,6 +12,7 @@ typedef __attribute__((neon_vector_type(1))) uint64_t uint64x1_t;
 typedef __attribute__((neon_vector_type(2))) uint64_t uint64x2_t;
 typedef __attribute__((neon_vector_type(2))) float32_t float32x2_t;
 typedef __attribute__((neon_vector_type(4))) float32_t float32x4_t;
+typedef __attribute__((neon_vector_type(2))) float64_t float64x2_t;
 typedef __attribute__((neon_polyvector_type(16))) poly8_t  poly8x16_t;
 typedef __attribute__((neon_polyvector_type(8)))  poly16_t poly16x8_t;
 
@@ -30,3 +32,5 @@ void f6(float32x4_t v) { }
 void f7(poly8x16_t v) { }
 // CHECK: 18__simd128_poly16_t
 void f8(poly16x8_t v) { }
+// CHECK: 19__simd128_float64_t
+void f9(float64x2_t v) { }
