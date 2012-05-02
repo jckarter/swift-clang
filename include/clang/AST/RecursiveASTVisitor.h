@@ -462,8 +462,10 @@ bool RecursiveASTVisitor<Derived>::dataTraverseNode(Stmt *S,
 
   // Dispatch to the corresponding WalkUpFrom* function only if the derived
   // class didn't override Traverse* (and thus the traversal is trivial).
+  // The cast here is necessary to work around a bug in old versions of g++.
 #define DISPATCH_WALK(NAME, CLASS, VAR) \
-  if (&RecursiveASTVisitor::Traverse##NAME == &Derived::Traverse##NAME) \
+  if (&RecursiveASTVisitor::Traverse##NAME == \
+      (bool (RecursiveASTVisitor::*)(CLASS*))&Derived::Traverse##NAME) \
     return getDerived().WalkUpFrom##NAME(static_cast<CLASS*>(VAR)); \
   EnqueueChildren = false; \
   return getDerived().Traverse##NAME(static_cast<CLASS*>(VAR));

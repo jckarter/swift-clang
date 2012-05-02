@@ -172,7 +172,8 @@ public:
   // bypassing the call of this function.
   bool TraverseCXXOperatorCallExpr(CXXOperatorCallExpr *CE) {
     Match(getOperatorSpelling(CE->getOperator()), CE->getExprLoc());
-    return ExpectedLocationVisitor::TraverseCXXOperatorCallExpr(CE);
+    return ExpectedLocationVisitor<CXXOperatorCallExprTraverser>::
+        TraverseCXXOperatorCallExpr(CE);
   }
 };
 
