@@ -5825,9 +5825,6 @@ public:
                                 const IdentifierInfo *Name);
   void ComparePropertiesInBaseAndSuper(ObjCInterfaceDecl *IDecl);
 
-  void CompareMethodParamsInBaseAndSuper(Decl *IDecl,
-                                         ObjCMethodDecl *MethodDecl,
-                                         bool IsInstance);
 
   void CompareProperties(Decl *CDecl, Decl *MergeProtocols);
 
