@@ -339,7 +339,11 @@ public:
     return ToolChain::IsStrictAliasingDefault();
 #endif
   }
-  
+
+  virtual bool IsMathErrnoDefault() const {
+    return false;
+  }
+
   virtual bool IsObjCDefaultSynthPropertiesDefault() const {
     return true;
   }
@@ -465,6 +469,7 @@ class LLVM_LIBRARY_VISIBILITY OpenBSD : public Generic_ELF {
 public:
   OpenBSD(const Driver &D, const llvm::Triple& Triple, const ArgList &Args);
 
+  virtual bool IsMathErrnoDefault() const { return false; }
   virtual bool IsObjCNonFragileABIDefault() const { return true; }
   virtual bool IsObjCLegacyDispatchDefault() const {
     llvm::Triple::ArchType Arch = getTriple().getArch();
@@ -483,6 +488,7 @@ class LLVM_LIBRARY_VISIBILITY FreeBSD : public Generic_ELF {
 public:
   FreeBSD(const Driver &D, const llvm::Triple& Triple, const ArgList &Args);
 
+  virtual bool IsMathErrnoDefault() const { return false; }
   virtual bool IsObjCNonFragileABIDefault() const { return true; }
   virtual bool IsObjCLegacyDispatchDefault() const {
     llvm::Triple::ArchType Arch = getTriple().getArch();
@@ -501,6 +507,7 @@ class LLVM_LIBRARY_VISIBILITY NetBSD : public Generic_ELF {
 public:
   NetBSD(const Driver &D, const llvm::Triple& Triple, const ArgList &Args);
 
+  virtual bool IsMathErrnoDefault() const { return false; }
   virtual bool IsObjCNonFragileABIDefault() const { return true; }
   virtual bool IsObjCLegacyDispatchDefault() const {
     llvm::Triple::ArchType Arch = getTriple().getArch();
@@ -526,6 +533,8 @@ public:
 class LLVM_LIBRARY_VISIBILITY DragonFly : public Generic_ELF {
 public:
   DragonFly(const Driver &D, const llvm::Triple& Triple, const ArgList &Args);
+
+  virtual bool IsMathErrnoDefault() const { return false; }
 
   virtual Tool &SelectTool(const Compilation &C, const JobAction &JA,
                            const ActionList &Inputs) const;
