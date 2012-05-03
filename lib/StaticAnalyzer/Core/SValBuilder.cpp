@@ -61,7 +61,6 @@ NonLoc SValBuilder::makeNonLoc(const llvm::APSInt& lhs,
 NonLoc SValBuilder::makeNonLoc(const SymExpr *lhs, BinaryOperator::Opcode op,
                                const SymExpr *rhs, QualType type) {
   assert(lhs && rhs);
-  assert(haveSameType(lhs->getType(Context), rhs->getType(Context)) == true);
   assert(!Loc::isLocType(type));
   return nonloc::SymbolVal(SymMgr.getSymSymExpr(lhs, op, rhs, type));
 }
@@ -199,17 +198,24 @@ SVal SValBuilder::makeSymExprValNN(ProgramStateRef State,
                                    BinaryOperator::Opcode Op,
                                    NonLoc LHS, NonLoc RHS,
                                    QualType ResultTy) {
+  if (!State->isTainted(RHS) && !State->isTainted(LHS))
+    return UnknownVal();
+    
   const SymExpr *symLHS = LHS.getAsSymExpr();
   const SymExpr *symRHS = RHS.getAsSymExpr();
+  // TODO: When the Max Complexity is reached, we should conjure a symbol
+  // instead of generating an Unknown value and propagate the taint info to it.
+  const unsigned MaxComp = 10000; // 100000 28X
 
-  if (symLHS && symRHS)
+  if (symLHS && symRHS &&
+      (symLHS->computeComplexity() + symRHS->computeComplexity()) <  MaxComp)
     return makeNonLoc(symLHS, Op, symRHS, ResultTy);
 
-  if (symLHS)
+  if (symLHS && symLHS->computeComplexity() < MaxComp)
     if (const nonloc::ConcreteInt *rInt = dyn_cast<nonloc::ConcreteInt>(&RHS))
       return makeNonLoc(symLHS, Op, rInt->getValue(), ResultTy);
 
-  if (symRHS)
+  if (symRHS && symRHS->computeComplexity() < MaxComp)
     if (const nonloc::ConcreteInt *lInt = dyn_cast<nonloc::ConcreteInt>(&LHS))
       return makeNonLoc(lInt->getValue(), Op, symRHS, ResultTy);
 
