@@ -2392,7 +2392,8 @@ CheckPrintfHandler::HandlePrintfSpecifier(const analyze_printf::PrintfSpecifier
     // or 'short' to an 'int'.  This is done because printf is a varargs
     // function.
     if (const ImplicitCastExpr *ICE = dyn_cast<ImplicitCastExpr>(Ex))
-      if (ICE->getType() == S.Context.IntTy) {
+      if (ICE->getType() == S.Context.IntTy ||
+          ICE->getType() == S.Context.UnsignedIntTy) {
         // All further checking is done on the subexpression.
         Ex = ICE->getSubExpr();
         if (ATR.matchesType(S.Context, Ex->getType()))
@@ -4487,7 +4488,7 @@ bool Sema::CheckParmsForFunctionDef(ParmVarDecl **P, ParmVarDecl **PEnd,
     // This is also C++ [dcl.fct]p6.
     if (!Param->isInvalidDecl() &&
         RequireCompleteType(Param->getLocation(), Param->getType(),
-                               diag::err_typecheck_decl_incomplete_type)) {
+                            diag::err_typecheck_decl_incomplete_type)) {
       Param->setInvalidDecl();
       HasInvalidParm = true;
     }
@@ -4586,11 +4587,15 @@ static bool IsTailPaddedMemberArray(Sema &S, llvm::APInt Size,
 
   // Don't consider sizes resulting from macro expansions or template argument
   // substitution to form C89 tail-padded arrays.
-  ConstantArrayTypeLoc TL =
-    cast<ConstantArrayTypeLoc>(FD->getTypeSourceInfo()->getTypeLoc());
-  const Expr *SizeExpr = dyn_cast<IntegerLiteral>(TL.getSizeExpr());
-  if (!SizeExpr || SizeExpr->getExprLoc().isMacroID())
-    return false;
+
+  TypeSourceInfo *TInfo = FD->getTypeSourceInfo();
+  if (TInfo) {
+    ConstantArrayTypeLoc TL =
+      cast<ConstantArrayTypeLoc>(TInfo->getTypeLoc());
+    const Expr *SizeExpr = dyn_cast<IntegerLiteral>(TL.getSizeExpr());
+    if (!SizeExpr || SizeExpr->getExprLoc().isMacroID())
+      return false;
+  }
 
   const RecordDecl *RD = dyn_cast<RecordDecl>(FD->getDeclContext());
   if (!RD) return false;
