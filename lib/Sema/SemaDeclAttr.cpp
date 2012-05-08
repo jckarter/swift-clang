@@ -300,8 +300,8 @@ static const RecordType *getRecordType(QualType QT) {
 }
 
 
-bool checkBaseClassIsLockableCallback(const CXXBaseSpecifier *Specifier,
-                                      CXXBasePath &Path, void *UserData) {
+static bool checkBaseClassIsLockableCallback(const CXXBaseSpecifier *Specifier,
+                                             CXXBasePath &Path, void *Unused) {
   const RecordType *RT = Specifier->getType()->getAs<RecordType>();
   if (RT->getDecl()->getAttr<LockableAttr>())
     return true;
@@ -1690,11 +1690,11 @@ static void handleObjCRequiresPropertyDefsAttr(Sema &S, Decl *D,
                                  Attr.getRange(), S.Context));
 }
 
-bool checkAvailabilityAttr(Sema &S, SourceRange Range,
-                           IdentifierInfo *Platform,
-                           VersionTuple Introduced,
-                           VersionTuple Deprecated,
-                           VersionTuple Obsoleted) {
+static bool checkAvailabilityAttr(Sema &S, SourceRange Range,
+                                  IdentifierInfo *Platform,
+                                  VersionTuple Introduced,
+                                  VersionTuple Deprecated,
+                                  VersionTuple Obsoleted) {
   StringRef PlatformName
     = AvailabilityAttr::getPrettyPlatformName(Platform->getName());
   if (PlatformName.empty())
@@ -1868,7 +1868,7 @@ static void handleVisibilityAttr(Sema &S, Decl *D, const AttributeList &Attr) {
   }
 
   // Find the last Decl that has an attribute.
-  VisibilityAttr *PrevAttr;
+  VisibilityAttr *PrevAttr = 0;
   assert(D->redecls_begin() == D);
   for (Decl::redecl_iterator I = D->redecls_begin(), E = D->redecls_end();
        I != E; ++I) {
@@ -1880,7 +1880,7 @@ static void handleVisibilityAttr(Sema &S, Decl *D, const AttributeList &Attr) {
   if (PrevAttr) {
     VisibilityAttr::VisibilityType PrevVisibility = PrevAttr->getVisibility();
     if (PrevVisibility != type) {
-      S.Diag(Attr.getLoc(), diag::err_mismatched_visibilit);
+      S.Diag(Attr.getLoc(), diag::err_mismatched_visibility);
       S.Diag(PrevAttr->getLocation(), diag::note_previous_attribute);
       return;
     }
@@ -3986,8 +3986,12 @@ static void ProcessDeclAttribute(Sema &S, Scope *scope, Decl *D,
 void Sema::ProcessDeclAttributeList(Scope *S, Decl *D,
                                     const AttributeList *AttrList,
                                     bool NonInheritable, bool Inheritable) {
+  SmallVector<const AttributeList*, 4> attrs;
   for (const AttributeList* l = AttrList; l; l = l->getNext()) {
-    ProcessDeclAttribute(*this, S, D, *l, NonInheritable, Inheritable);
+    attrs.push_back(l);
+  }
+  for (int i = attrs.size() - 1; i >= 0; --i) {
+    ProcessDeclAttribute(*this, S, D, *attrs[i], NonInheritable, Inheritable);
   }
 
   // GCC accepts
@@ -4198,57 +4202,29 @@ static void handleDelayedForbiddenType(Sema &S, DelayedDiagnostic &diag,
   diag.Triggered = true;
 }
 
-// This duplicates a vector push_back but hides the need to know the
-// size of the type.
-void Sema::DelayedDiagnostics::add(const DelayedDiagnostic &diag) {
-  assert(StackSize <= StackCapacity);
+void Sema::PopParsingDeclaration(ParsingDeclState state, Decl *decl) {
+  assert(DelayedDiagnostics.getCurrentPool());
+  DelayedDiagnosticPool &poppedPool = *DelayedDiagnostics.getCurrentPool();
+  DelayedDiagnostics.popWithoutEmitting(state);
 
-  // Grow the stack if necessary.
-  if (StackSize == StackCapacity) {
-    unsigned newCapacity = 2 * StackCapacity + 2;
-    char *newBuffer = new char[newCapacity * sizeof(DelayedDiagnostic)];
-    const char *oldBuffer = (const char*) Stack;
+  // When delaying diagnostics to run in the context of a parsed
+  // declaration, we only want to actually emit anything if parsing
+  // succeeds.
+  if (!decl) return;
 
-    if (StackCapacity)
-      memcpy(newBuffer, oldBuffer, StackCapacity * sizeof(DelayedDiagnostic));
-    
-    delete[] oldBuffer;
-    Stack = reinterpret_cast<sema::DelayedDiagnostic*>(newBuffer);
-    StackCapacity = newCapacity;
-  }
-
-  assert(StackSize < StackCapacity);
-  new (&Stack[StackSize++]) DelayedDiagnostic(diag);
-}
-
-void Sema::DelayedDiagnostics::popParsingDecl(Sema &S, ParsingDeclState state,
-                                              Decl *decl) {
-  DelayedDiagnostics &DD = S.DelayedDiagnostics;
-
-  // Check the invariants.
-  assert(DD.StackSize >= state.SavedStackSize);
-  assert(state.SavedStackSize >= DD.ActiveStackBase);
-  assert(DD.ParsingDepth > 0);
-
-  // Drop the parsing depth.
-  DD.ParsingDepth--;
-
-  // If there are no active diagnostics, we're done.
-  if (DD.StackSize == DD.ActiveStackBase)
-    return;
-
-  // We only want to actually emit delayed diagnostics when we
-  // successfully parsed a decl.
-  if (decl) {
-    // We emit all the active diagnostics, not just those starting
-    // from the saved state.  The idea is this:  we get one push for a
-    // decl spec and another for each declarator;  in a decl group like:
-    //   deprecated_typedef foo, *bar, baz();
-    // only the declarator pops will be passed decls.  This is correct;
-    // we really do need to consider delayed diagnostics from the decl spec
-    // for each of the different declarations.
-    for (unsigned i = DD.ActiveStackBase, e = DD.StackSize; i != e; ++i) {
-      DelayedDiagnostic &diag = DD.Stack[i];
+  // We emit all the active diagnostics in this pool or any of its
+  // parents.  In general, we'll get one pool for the decl spec
+  // and a child pool for each declarator; in a decl group like:
+  //   deprecated_typedef foo, *bar, baz();
+  // only the declarator pops will be passed decls.  This is correct;
+  // we really do need to consider delayed diagnostics from the decl spec
+  // for each of the different declarations.
+  const DelayedDiagnosticPool *pool = &poppedPool;
+  do {
+    for (DelayedDiagnosticPool::pool_iterator
+           i = pool->pool_begin(), e = pool->pool_end(); i != e; ++i) {
+      // This const_cast is a bit lame.  Really, Triggered should be mutable.
+      DelayedDiagnostic &diag = const_cast<DelayedDiagnostic&>(*i);
       if (diag.Triggered)
         continue;
 
@@ -4256,25 +4232,28 @@ void Sema::DelayedDiagnostics::popParsingDecl(Sema &S, ParsingDeclState state,
       case DelayedDiagnostic::Deprecation:
         // Don't bother giving deprecation diagnostics if the decl is invalid.
         if (!decl->isInvalidDecl())
-          S.HandleDelayedDeprecationCheck(diag, decl);
+          HandleDelayedDeprecationCheck(diag, decl);
         break;
 
       case DelayedDiagnostic::Access:
-        S.HandleDelayedAccessCheck(diag, decl);
+        HandleDelayedAccessCheck(diag, decl);
         break;
 
       case DelayedDiagnostic::ForbiddenType:
-        handleDelayedForbiddenType(S, diag, decl);
+        handleDelayedForbiddenType(*this, diag, decl);
         break;
       }
     }
-  }
+  } while ((pool = pool->getParent()));
+}
 
-  // Destroy all the delayed diagnostics we're about to pop off.
-  for (unsigned i = state.SavedStackSize, e = DD.StackSize; i != e; ++i)
-    DD.Stack[i].Destroy();
-
-  DD.StackSize = state.SavedStackSize;
+/// Given a set of delayed diagnostics, re-emit them as if they had
+/// been delayed in the current context instead of in the given pool.
+/// Essentially, this just moves them to the current pool.
+void Sema::redelayDiagnostics(DelayedDiagnosticPool &pool) {
+  DelayedDiagnosticPool *curPool = DelayedDiagnostics.getCurrentPool();
+  assert(curPool && "re-emitting in undelayed context not supported");
+  curPool->steal(pool);
 }
 
 static bool isDeclDeprecated(Decl *D) {
