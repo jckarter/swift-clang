@@ -23,6 +23,7 @@
 
 enum OpKind {
   OpNone,
+  OpUnavailable,
   OpAdd,
   OpAddl,
   OpAddw,
@@ -137,6 +138,7 @@ namespace llvm {
     NeonEmitter(RecordKeeper &R, bool isARM64 = false) :
       Records(R), IsARM64(isARM64) {
       OpMap["OP_NONE"]  = OpNone;
+      OpMap["OP_UNAVAILABLE"] = OpUnavailable;
       OpMap["OP_ADD"]   = OpAdd;
       OpMap["OP_ADDL"]  = OpAddl;
       OpMap["OP_ADDW"]  = OpAddw;
