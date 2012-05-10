@@ -316,14 +316,32 @@ def VMOVL_HIGH   : SInst<"vmovl_high",  "nd", "RcRsRiRUcRUsRUi">;
 
 ////////////////////////////////////////////////////////////////////////////////
 // Table lookup, Extended table lookup
-def VTBL1 : WInst<"vtbl1", "ddk",  "UccPcQUcQcQPc">;
-def VTBL2 : WInst<"vtbl2", "ddkk",  "UccPcQUcQcQPc">;
-def VTBL3 : WInst<"vtbl3", "ddkkk",  "UccPcQUcQcQPc">;
-def VTBL4 : WInst<"vtbl4", "ddkkkk",  "UccPcQUcQcQPc">;
-def VTBX1 : WInst<"vtbx1", "dddk", "UccPcQUcQcQPc">;
-def VTBX2 : WInst<"vtbx2", "dddkk", "UccPcQUcQcQPc">;
-def VTBX3 : WInst<"vtbx3", "dddkkk", "UccPcQUcQcQPc">;
-def VTBX4 : WInst<"vtbx4", "dddkkkk", "UccPcQUcQcQPc">;
+def VTBL1  : Inst<"vtbl1", "ddd",  "UccPc", OP_UNAVAILABLE>;
+def VTBL2  : Inst<"vtbl2", "d2d",  "UccPc", OP_UNAVAILABLE>;
+def VTBL3  : Inst<"vtbl3", "d3d",  "UccPc", OP_UNAVAILABLE>;
+def VTBL4  : Inst<"vtbl4", "d4d",  "UccPc", OP_UNAVAILABLE>;
+def VTBL1Q : WInst<"vtbl1", "gdg",  "QUcQcQPc">;
+def VTBL2Q : WInst<"vtbl2", "g2g",  "QUcQcQPc">;
+def VTBL3Q : WInst<"vtbl3", "g3g",  "QUcQcQPc">;
+def VTBL4Q : WInst<"vtbl4", "g4g",  "QUcQcQPc">;
+def VQTBL1 : WInst<"vqtbl1", "ddd", "QUcQcQPc">;
+def VQTBL2 : WInst<"vqtbl2", "d2d", "QUcQcQPc">;
+def VQTBL3 : WInst<"vqtbl3", "d3d", "QUcQcQPc">;
+def VQTBL4 : WInst<"vqtbl4", "d4d", "QUcQcQPc">;
+
+def VTBX1  : Inst<"vtbx1", "dd1d",  "UccPc", OP_UNAVAILABLE>;
+def VTBX2  : Inst<"vtbx2", "dd2d",  "UccPc", OP_UNAVAILABLE>;
+def VTBX3  : Inst<"vtbx3", "dd3d",  "UccPc", OP_UNAVAILABLE>;
+def VTBX4  : Inst<"vtbx4", "dd4d",  "UccPc", OP_UNAVAILABLE>;
+
+def VTBX1Q  : WInst<"vtbx1",  "gg1g", "QUcQcQPc">;
+def VTBX2Q  : WInst<"vtbx2",  "gg2g", "QUcQcQPc">;
+def VTBX3Q  : WInst<"vtbx3",  "gg3g", "QUcQcQPc">;
+def VTBX4Q  : WInst<"vtbx4",  "gg4g", "QUcQcQPc">;
+def VQTBX1Q : WInst<"vqtbx1", "dddd", "QUcQcQPc">;
+def VQTBX2Q : WInst<"vqtbx2", "dd2d", "QUcQcQPc">;
+def VQTBX3Q : WInst<"vqtbx3", "dd3d", "QUcQcQPc">;
+def VQTBX4Q : WInst<"vqtbx4", "dd4d", "QUcQcQPc">;
 
 ////////////////////////////////////////////////////////////////////////////////
 // Vector Shuffles
