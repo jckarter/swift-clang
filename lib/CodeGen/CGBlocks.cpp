@@ -1040,7 +1040,11 @@ CodeGenFunction::GenerateBlockFunction(GlobalDecl GD,
     CGM.getTypes().arrangeFunctionDeclaration(fnType->getResultType(), args,
                                               fnType->getExtInfo(),
                                               fnType->isVariadic());
-  if (CGM.ReturnTypeUsesSRet(fnInfo))
+  if (CGM.ReturnTypeUsesSRet(fnInfo) &&
+      // On ARM64, struct-return calls do not shift the parameters relative to
+      // non-struct calls (i.e., `self' and `_cmd' are always in the same
+      // register). <rdar://problem/9757126>
+      Target.getTriple().getArch() != llvm::Triple::arm64)
     blockInfo.UsesStret = true;
 
   llvm::FunctionType *fnLLVMType = CGM.getTypes().GetFunctionType(fnInfo);
