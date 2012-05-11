@@ -559,7 +559,6 @@ def fno_objc_infer_related_result_type : Flag<
     "do not infer Objective-C related result type based on method family">,
   Flags<[CC1Option]>;
 def fobjc_link_runtime: Flag<"-fobjc-link-runtime">, Group<f_Group>;
-def fobjc_no_direct_access_isa: Flag<"-fobjc-no-direct-access-isa">, Group<f_Group>;
 
 // Objective-C ABI options.
 def fobjc_abi_version_EQ : Joined<"-fobjc-abi-version=">, Group<f_Group>;

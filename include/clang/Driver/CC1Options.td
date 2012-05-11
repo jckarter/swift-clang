@@ -390,8 +390,6 @@ def fobjc_runtime_has_weak : Flag<"-fobjc-runtime-has-weak">,
   HelpText<"The target Objective-C runtime supports ARC weak operations">;
 def fobjc_runtime_has_terminate : Flag<"-fobjc-runtime-has-terminate">,
   HelpText<"The target Objective-C runtime provides an objc_terminate entrypoint">;
-def fobjc_no_direct_access_isa : Flag<"-fobjc-no-direct-access-isa">,
-  HelpText<"Cannot access isa directly">;
 def fobjc_dispatch_method_EQ : Joined<"-fobjc-dispatch-method=">,
   HelpText<"Objective-C dispatch method to use">;
 def fobjc_default_synthesize_properties : Flag<"-fobjc-default-synthesize-properties">,

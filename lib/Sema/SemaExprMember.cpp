@@ -1139,10 +1139,7 @@ Sema::LookupMemberExpr(LookupResult &R, ExprResult &BaseExpr,
       // But we only actually find it this way on objects of type 'id',
       // apparently.ghjg
       if (OTy->isObjCId() && Member->isStr("isa")) {
-        if (getLangOpts().ObjCNoDirectAccessIsa)
-          Diag(MemberLoc, diag::err_objc_isa_use);
-        else
-          Diag(MemberLoc, diag::warn_objc_isa_use);
+        Diag(MemberLoc, diag::warn_objc_isa_use);
         return Owned(new (Context) ObjCIsaExpr(BaseExpr.take(), IsArrow, MemberLoc,
                                                Context.getObjCClassType()));
       }
