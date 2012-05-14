@@ -107,6 +107,9 @@ void clang::ProcessWarningOptions(DiagnosticsEngine &Diags,
           Diags.setSuppressSystemWarnings(!isPositive);
         continue;
       }
+
+      if (Opt == "deprecated-objc-isa-usage")
+        Diags.setWarnOnDeprecatedIsaSeen(true);
       
       // -Weverything is a special case as well.  It implicitly enables all
       // warnings, including ones not explicitly in a warning group.

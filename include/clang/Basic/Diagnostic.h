@@ -175,6 +175,7 @@ private:
   bool ErrorsAsFatal;            // Treat errors like fatal errors.
   bool SuppressSystemWarnings;   // Suppress warnings in system headers.
   bool SuppressAllDiagnostics;   // Suppress all diagnostics.
+  bool WarnOnDeprecatedIsaSeen;  // -Wdeprecated-objc-isa-usage is seen
   OverloadsShown ShowOverloads;  // Which overload candidates to show.
   unsigned ErrorLimit;           // Cap of # errors emitted, 0 -> no limit.
   unsigned TemplateBacktraceLimit; // Cap on depth of template backtrace stack,
@@ -438,6 +439,9 @@ public:
     SuppressAllDiagnostics = Val; 
   }
   bool getSuppressAllDiagnostics() const { return SuppressAllDiagnostics; }
+
+  void setWarnOnDeprecatedIsaSeen(bool Val) { WarnOnDeprecatedIsaSeen = Val; }
+  bool getWarnOnDeprecatedIsaSeen() const { return WarnOnDeprecatedIsaSeen; }
   
   /// \brief Specify which overload candidates to show when overload resolution
   /// fails.  By default, we show all candidates.

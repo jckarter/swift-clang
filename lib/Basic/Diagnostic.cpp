@@ -48,6 +48,7 @@ DiagnosticsEngine::DiagnosticsEngine(
   ErrorsAsFatal = false;
   SuppressSystemWarnings = false;
   SuppressAllDiagnostics = false;
+  WarnOnDeprecatedIsaSeen = false;
   ShowOverloads = Ovl_All;
   ExtBehavior = Ext_Ignore;
 

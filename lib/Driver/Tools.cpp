@@ -1366,6 +1366,13 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
   std::string TripleStr = getToolChain().ComputeEffectiveClangTriple(Args);
   CmdArgs.push_back(Args.MakeArgString(TripleStr));
 
+  if (!getToolChain().getDriver().getDiags().getWarnOnDeprecatedIsaSeen()) {
+    StringRef TripleStrRef = TripleStr;
+    if (TripleStrRef.startswith("arm64-apple-ios") ||
+        TripleStrRef.startswith("x86_64-apple-ios"))
+      CmdArgs.push_back(Args.MakeArgString("-Werror-deprecated-objc-isa-usage"));
+  }
+
   // Select the appropriate action.
   bool IsRewriter = false;
   bool IsModernRewriter = false;
