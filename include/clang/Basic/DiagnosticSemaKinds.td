@@ -1540,6 +1540,8 @@ def err_undeclared_nsstring : Error<
   "cannot box a string value because NSString has not been declared">;
 def err_objc_illegal_boxed_expression_type : Error<
   "illegal type %0 used in a boxed expression">;
+def err_objc_incomplete_boxed_expression_type : Error<
+  "incomplete type %0 used in a boxed expression">;
 def err_undeclared_nsarray : Error<
   "NSArray must be available to use Objective-C array literals">;
 def err_undeclared_nsdictionary : Error<
@@ -1781,8 +1783,7 @@ def warn_impcast_bitfield_precision_constant : Warning<
   "implicit truncation from %2 to bitfield changes value from %0 to %1">,
   InGroup<ConstantConversion>;
 def warn_impcast_literal_float_to_integer : Warning<
-  "implicit conversion turns literal floating-point number into integer: "
-  "%0 to %1">,
+  "implicit conversion from %0 to %1 changes value from %2 to %3">,
   InGroup<LiteralConversion>;
 def warn_impcast_string_literal_to_bool : Warning<
   "implicit conversion turns string literal into bool: %0 to %1">,
@@ -2046,9 +2047,9 @@ def note_ovl_candidate_arity_one : Note<"candidate "
     "constructor (the implicit move constructor)|"
     "function (the implicit copy assignment operator)|"
     "function (the implicit move assignment operator)|"
-    "constructor (inherited)}0 %select{|template }1"
-    "not viable: requires%select{ at least| at most|}2 argument %3, but "
-    "%plural{0:none|:%4}4 were provided">;
+    "constructor (inherited)}0 %select{|template }1not viable: "
+    "%select{requires at least|allows at most single|requires single}2 "
+    "argument %3, but %plural{0:no|:%4}4 arguments were provided">;
 
 def note_ovl_candidate_deleted : Note<
     "candidate %select{function|function|constructor|"
@@ -3024,6 +3025,9 @@ def err_redefinition_of_enumerator : Error<"redefinition of enumerator %0">;
 def err_duplicate_member : Error<"duplicate member %0">;
 def err_misplaced_ivar : Error<
   "ivars may not be placed in %select{categories|class extension}0">;
+def warn_ivars_in_interface : Warning<
+  "declaration of ivars in the interface is deprecated">,
+  InGroup<DiagGroup<"interface-ivars">>, DefaultIgnore;
 def ext_enum_value_not_int : Extension<
   "ISO C restricts enumerator values to range of 'int' (%0 is too "
   "%select{small|large}1)">;
@@ -4572,7 +4576,7 @@ def err_typecheck_call_too_few_args : Error<
 def err_typecheck_call_too_few_args_one : Error<
   "too few %select{|||execution configuration }0arguments to "
   "%select{function|block|method|kernel function}0 call, "
-  "argument %1 was not specified">;
+  "single argument %1 was not specified">;
 def err_typecheck_call_too_few_args_at_least : Error<
   "too few %select{|||execution configuration }0arguments to "
   "%select{function|block|method|kernel function}0 call, "
@@ -4585,10 +4589,18 @@ def err_typecheck_call_too_many_args : Error<
   "too many %select{|||execution configuration }0arguments to "
   "%select{function|block|method|kernel function}0 call, "
   "expected %1, have %2">;
+def err_typecheck_call_too_many_args_one : Error<
+  "too many %select{|||execution configuration }0arguments to "
+  "%select{function|block|method|kernel function}0 call, "
+  "expected single argument %1, have %2 arguments">;
 def err_typecheck_call_too_many_args_at_most : Error<
   "too many %select{|||execution configuration }0arguments to "
   "%select{function|block|method|kernel function}0 call, "
   "expected at most %1, have %2">;
+def err_typecheck_call_too_many_args_at_most_one : Error<
+  "too many %select{|||execution configuration }0arguments to "
+  "%select{function|block|method|kernel function}0 call, "
+  "expected at most single argument %1, have %2 arguments">;
 def note_callee_decl : Note<
   "%0 declared here">;
 def note_defined_here : Note<"%0 defined here">;
