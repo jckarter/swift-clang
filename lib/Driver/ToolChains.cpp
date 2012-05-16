@@ -1163,7 +1163,8 @@ Generic_GCC::GCCInstallationDetector::GCCInstallationDetector(
     "i586-redhat-linux",
     "i386-redhat-linux",
     "i586-suse-linux",
-    "i486-slackware-linux"
+    "i486-slackware-linux",
+    "i686-montavista-linux"
   };
 
   static const char *const MIPSLibDirs[] = { "/lib" };
@@ -1180,7 +1181,8 @@ Generic_GCC::GCCInstallationDetector::GCCInstallationDetector(
   static const char *const PPCTriples[] = {
     "powerpc-linux-gnu",
     "powerpc-unknown-linux-gnu",
-    "powerpc-suse-linux"
+    "powerpc-suse-linux",
+    "powerpc-montavista-linuxspe"
   };
   static const char *const PPC64LibDirs[] = { "/lib64", "/lib" };
   static const char *const PPC64Triples[] = {
