@@ -2504,7 +2504,7 @@ public:
     return 31;
   }
 
-  virtual bool doesReturnSlotInferfereWithArgs() const {
+  virtual bool doesReturnSlotInterfereWithArgs() const {
     return false;
   }
 };

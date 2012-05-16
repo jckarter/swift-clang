@@ -116,9 +116,9 @@ namespace clang {
       return Ty;
     }
 
-    /// doesReturnSlotInferfereWithArgs - Return true if the target uses an
+    /// doesReturnSlotInterfereWithArgs - Return true if the target uses an
     /// argument slot for an 'sret' type.
-    virtual bool doesReturnSlotInferfereWithArgs() const {
+    virtual bool doesReturnSlotInterfereWithArgs() const {
       return true;
     }
 

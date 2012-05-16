@@ -1731,7 +1731,7 @@ CGObjCCommonMac::EmitMessageSend(CodeGen::CodeGenFunction &CGF,
   NullReturnState nullReturn;
 
   llvm::Constant *Fn = NULL;
-  if (CGM.ReturnTypeUsesSRet(MSI.CallInfo)) {
+  if (CGM.ReturnSlotInterferesWithArgs(MSI.CallInfo)) {
     if (!IsSuper) nullReturn.init(CGF, Arg0);
     Fn = (ObjCABI == 2) ?  ObjCTypes.getSendStretFn2(IsSuper)
       : ObjCTypes.getSendStretFn(IsSuper);
@@ -5847,7 +5847,7 @@ CGObjCNonFragileABIMac::EmitVTableMessageSend(CodeGenFunction &CGF,
   // FIXME: don't use this for that.
   llvm::Constant *fn = 0;
   std::string messageRefName("\01l_");
-  if (CGM.ReturnTypeUsesSRet(MSI.CallInfo)) {
+  if (CGM.ReturnSlotInterferesWithArgs(MSI.CallInfo)) {
     if (isSuper) {
       fn = ObjCTypes.getMessageSendSuper2StretFixupFn();
       messageRefName += "objc_msgSendSuper2_stret_fixup";

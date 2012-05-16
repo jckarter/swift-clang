@@ -741,9 +741,9 @@ bool CodeGenModule::ReturnTypeUsesSRet(const CGFunctionInfo &FI) {
   return FI.getReturnInfo().isIndirect();
 }
 
-bool CodeGenModule::ReturnSlotInferferesWithArgs(const CGFunctionInfo &FI) {
+bool CodeGenModule::ReturnSlotInterferesWithArgs(const CGFunctionInfo &FI) {
   return ReturnTypeUsesSRet(FI) &&
-    getTargetCodeGenInfo().doesReturnSlotInferfereWithArgs();
+    getTargetCodeGenInfo().doesReturnSlotInterfereWithArgs();
 }
 
 bool CodeGenModule::ReturnTypeUsesFPRet(QualType ResultType) {

@@ -1040,7 +1040,7 @@ CodeGenFunction::GenerateBlockFunction(GlobalDecl GD,
     CGM.getTypes().arrangeFunctionDeclaration(fnType->getResultType(), args,
                                               fnType->getExtInfo(),
                                               fnType->isVariadic());
-  if (CGM.ReturnSlotInferferesWithArgs(fnInfo))
+  if (CGM.ReturnSlotInterferesWithArgs(fnInfo))
     blockInfo.UsesStret = true;
 
   llvm::FunctionType *fnLLVMType = CGM.getTypes().GetFunctionType(fnInfo);
