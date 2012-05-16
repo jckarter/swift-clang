@@ -2503,6 +2503,10 @@ public:
   int getDwarfEHStackPointer(CodeGen::CodeGenModule &M) const {
     return 31;
   }
+
+  virtual bool doesReturnSlotInferfereWithArgs() const {
+    return false;
+  }
 };
 
 }
