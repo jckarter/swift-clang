@@ -760,7 +760,6 @@ def mno_constant_cfstrings : Flag<"-mno-constant-cfstrings">, Group<m_Group>;
 def mno_global_merge : Flag<"-mno-global-merge">, Group<m_Group>, Flags<[CC1Option]>,
   HelpText<"Disable merging of globals">;
 def mno_mmx : Flag<"-mno-mmx">, Group<m_x86_Features_Group>;
-def mno_implicit_float : Flag<"-mno-implicit-float">, Group<m_Group>;
 def mno_pascal_strings : Flag<"-mno-pascal-strings">, Group<m_Group>;
 def mno_red_zone : Flag<"-mno-red-zone">, Group<m_Group>;
 def mno_relax_all : Flag<"-mno-relax-all">, Group<m_Group>;
