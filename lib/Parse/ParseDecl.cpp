@@ -1050,6 +1050,7 @@ Parser::DeclGroupPtrTy Parser::ParseSimpleDeclaration(StmtVector &Stmts,
   // C99 6.7.2.3p6: Handle "struct-or-union identifier;", "enum { X };"
   // declaration-specifiers init-declarator-list[opt] ';'
   if (Tok.is(tok::semi)) {
+    DeclEnd = Tok.getLocation();
     if (RequireSemi) ConsumeToken();
     Decl *TheDecl = Actions.ParsedFreeStandingDeclSpec(getCurScope(), AS_none,
                                                        DS);
@@ -2701,10 +2702,8 @@ void Parser::ParseStructUnionBody(SourceLocation RecordLoc,
 
     // Check for extraneous top-level semicolon.
     if (Tok.is(tok::semi)) {
-      Diag(Tok, diag::ext_extra_struct_semi)
-        << DeclSpec::getSpecifierName((DeclSpec::TST)TagType)
-        << FixItHint::CreateRemoval(Tok.getLocation());
-      ConsumeToken();
+      ConsumeExtraSemi(InsideStruct,
+                       DeclSpec::getSpecifierName((DeclSpec::TST)TagType));
       continue;
     }
 
