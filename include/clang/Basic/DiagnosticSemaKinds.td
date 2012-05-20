@@ -711,6 +711,12 @@ def warn_undeclared_selector : Warning<
   "undeclared selector %0">, InGroup<UndeclaredSelector>, DefaultIgnore;
 def warn_implicit_atomic_property : Warning<
   "property is assumed atomic by default">, InGroup<ImplicitAtomic>, DefaultIgnore;
+def note_auto_readonly_iboutlet_fixup_suggest : Note<
+  "readonly IBOutlet property should be changed to be readwrite">;
+def warn_auto_readonly_iboutlet_property : Warning<
+  "readonly IBOutlet property when auto-synthesized may "
+  "not work correctly with 'nib' loader">,
+  InGroup<DiagGroup<"readonly-iboutlet-property">>;
 def warn_auto_implicit_atomic_property : Warning<
   "property is assumed atomic when auto-synthesizing the property">, 
   InGroup<ImplicitAtomic>, DefaultIgnore;
@@ -4385,6 +4391,9 @@ def err_invalid_declarator_in_function : Error<
   "definition or redeclaration of %0 not allowed inside a function">;
 def err_not_tag_in_scope : Error<
   "no %select{struct|union|class|enum}0 named %1 in %2">;
+
+def err_no_typeid_with_fno_rtti : Error<
+  "cannot use typeid with -fno-rtti">;
 
 def err_cannot_form_pointer_to_member_of_reference_type : Error<
   "cannot form a pointer-to-member to member %0 of reference type %1">;
