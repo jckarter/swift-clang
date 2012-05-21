@@ -3878,6 +3878,8 @@ const TargetCodeGenInfo &CodeGenModule::getTargetCodeGenInfo() {
 
   case llvm::Triple::ptx32:
   case llvm::Triple::ptx64:
+  case llvm::Triple::nvptx:
+  case llvm::Triple::nvptx64:
     return *(TheTargetCodeGenInfo = new PTXTargetCodeGenInfo(Types));
 
   case llvm::Triple::mblaze:
