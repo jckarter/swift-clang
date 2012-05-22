@@ -789,3 +789,32 @@ namespace test39 {
   // GCC produces a default for this one. Why?
   // CHECK-HIDDEN: define weak_odr hidden void @_ZN6test391AINS_8hidden_tEE1BIS1_E4tempIS1_EEvv
 }
+
+namespace test42 {
+  struct HIDDEN foo {
+  };
+  template <class P>
+  struct bar {
+  };
+  template <>
+  struct HIDDEN bar<foo> {
+    DEFAULT static void zed();
+  };
+  void bar<foo>::zed() {
+  }
+  // CHECK: define hidden void @_ZN6test423barINS_3fooEE3zedEv
+  // CHECK-HIDDEN: define hidden void @_ZN6test423barINS_3fooEE3zedEv
+}
+
+namespace test43 {
+  struct HIDDEN foo {
+  };
+  template <class P>
+  void bar() {
+  }
+  template <>
+  DEFAULT void bar<foo>() {
+  }
+  // CHECK: define hidden void @_ZN6test433barINS_3fooEEEvv
+  // CHECK-HIDDEN: define hidden void @_ZN6test433barINS_3fooEEEvv
+}
