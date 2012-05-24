@@ -2546,7 +2546,7 @@ ABIArgInfo ARM64ABIInfo::classifyArgumentType(QualType Ty) const {
     return ABIArgInfo::getDirect(llvm::IntegerType::get(getVMContext(), Size));
   }
 
-  return ABIArgInfo::getIndirect(0);
+  return ABIArgInfo::getIndirect(0, /*ByVal=*/false);
 }
 
 ABIArgInfo ARM64ABIInfo::classifyReturnType(QualType RetTy) const {
