@@ -85,11 +85,11 @@ def VADDD : Inst<"vaddd", "sss", "lUl", OP_ADD>;
 
 ////////////////////////////////////////////////////////////////////////////////
 // Comparison
-def VCEQ  : Inst<"vceq", "udd", "csifUcUsUiPcQcQsQiQfQUcQUsQUiQPc", OP_EQ>;
-def VCGE  : Inst<"vcge", "udd", "csifUcUsUiQcQsQiQfQUcQUsQUi", OP_GE>;
-def VCLE  : Inst<"vcle", "udd", "csifUcUsUiQcQsQiQfQUcQUsQUi", OP_LE>;
-def VCGT  : Inst<"vcgt", "udd", "csifUcUsUiQcQsQiQfQUcQUsQUi", OP_GT>;
-def VCLT  : Inst<"vclt", "udd", "csifUcUsUiQcQsQiQfQUcQUsQUi", OP_LT>;
+def VCEQ  : Inst<"vceq", "udd", "csifUcUsUiPcQcQsQiQfQdQUcQUsQUiQPc", OP_EQ>;
+def VCGE  : Inst<"vcge", "udd", "csifUcUsUiQcQsQiQfQdQUcQUsQUi", OP_GE>;
+def VCLE  : Inst<"vcle", "udd", "csifUcUsUiQcQsQiQfQdQUcQUsQUi", OP_LE>;
+def VCGT  : Inst<"vcgt", "udd", "csifUcUsUiQcQsQiQfQdQUcQUsQUi", OP_GT>;
+def VCLT  : Inst<"vclt", "udd", "csifUcUsUiQcQsQiQfQdQUcQUsQUi", OP_LT>;
 def VCAGE : IInst<"vcage", "udd", "fQf">;
 def VCALE : IInst<"vcale", "udd", "fQf">;
 def VCAGT : IInst<"vcagt", "udd", "fQf">;
