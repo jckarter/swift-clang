@@ -53,6 +53,11 @@ enum TargetCXXABI {
   ///                    /help/topic/com.arm.doc.ihi0041c/IHI0041C_cppabi.pdf
   CXXABI_ARM,
 
+  /// The C++ ABI for 64-bit ARM, similar to ARM C++ ABI with some differences.
+  ///    http://infocenter.arm.com
+  ///                    /help/topic/com.arm.doc.ihi0059a/IHI0059A_cppabi64.pdf
+  CXXABI_ARM64,
+
   /// The Visual Studio ABI.  Only scattered official documentation exists.
   CXXABI_Microsoft
 };

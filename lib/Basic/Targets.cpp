@@ -3074,7 +3074,7 @@ public:
     NoAsmVariants = true;
 
     // ARM64 targets default to using the ARM C++ ABI.
-    CXXABI = CXXABI_ARM;
+    CXXABI = CXXABI_ARM64;
   }
 
   virtual void getTargetDefines(const LangOptions &Opts,

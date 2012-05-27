@@ -283,6 +283,7 @@ public:
 
 /// Creates an instance of a C++ ABI class.
 CGCXXABI *CreateARMCXXABI(CodeGenModule &CGM);
+CGCXXABI *CreateARM64CXXABI(CodeGenModule &CGM);
 CGCXXABI *CreateItaniumCXXABI(CodeGenModule &CGM);
 CGCXXABI *CreateMicrosoftCXXABI(CodeGenModule &CGM);
 

@@ -53,6 +53,7 @@ static const char AnnotationSection[] = "llvm.metadata";
 static CGCXXABI &createCXXABI(CodeGenModule &CGM) {
   switch (CGM.getContext().getTargetInfo().getCXXABI()) {
   case CXXABI_ARM: return *CreateARMCXXABI(CGM);
+  case CXXABI_ARM64: return *CreateARM64CXXABI(CGM);
   case CXXABI_Itanium: return *CreateItaniumCXXABI(CGM);
   case CXXABI_Microsoft: return *CreateMicrosoftCXXABI(CGM);
   }
