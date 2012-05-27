@@ -189,6 +189,7 @@ CXXABI *ASTContext::createCXXABI(const TargetInfo &T) {
 
   switch (T.getCXXABI()) {
   case CXXABI_ARM:
+  case CXXABI_ARM64:
     return CreateARMCXXABI(*this);
   case CXXABI_Itanium:
     return CreateItaniumCXXABI(*this);
@@ -6727,6 +6728,7 @@ bool ASTContext::isNearlyEmpty(const CXXRecordDecl *RD) const {
 MangleContext *ASTContext::createMangleContext() {
   switch (Target->getCXXABI()) {
   case CXXABI_ARM:
+  case CXXABI_ARM64:
   case CXXABI_Itanium:
     return createItaniumMangleContext(*this, getDiagnostics());
   case CXXABI_Microsoft:
