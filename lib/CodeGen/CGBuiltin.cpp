@@ -2579,10 +2579,12 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     return Builder.CreateAdd(tmp, addend);
   }
   case ARM64::BI__builtin_arm64_vpmin_v:
+  case ARM64::BI__builtin_arm64_vpminq_v:
     Int = usgn ? Intrinsic::arm64_neon_uminp : Intrinsic::arm64_neon_sminp;
     if (Ty->isFPOrFPVectorTy()) Int = Intrinsic::arm64_neon_fminp;
     return EmitNeonCall(CGM.getIntrinsic(Int, Ty), Ops, "vpmin");
   case ARM64::BI__builtin_arm64_vpmax_v:
+  case ARM64::BI__builtin_arm64_vpmaxq_v:
     Int = usgn ? Intrinsic::arm64_neon_umaxp : Intrinsic::arm64_neon_smaxp;
     if (Ty->isFPOrFPVectorTy()) Int = Intrinsic::arm64_neon_fmaxp;
     return EmitNeonCall(CGM.getIntrinsic(Int, Ty), Ops, "vpmax");
