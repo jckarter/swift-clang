@@ -113,6 +113,11 @@ def VMAX : SInst<"vmax", "ddd", "csiUcUsUifQcQsQiQUcQUsQUiQf">;
 def VMIN : SInst<"vmin", "ddd", "csiUcUsUifQcQsQiQUcQUsQUiQf">;
 
 ////////////////////////////////////////////////////////////////////////////////
+// Max/Min Number
+def VMAXNM : SInst<"vmaxnm", "ddd", "fQfQd">;
+def VMINNM : SInst<"vminnm", "ddd", "fQfQd">;
+
+////////////////////////////////////////////////////////////////////////////////
 // Pairwise Addition
 def VPADD  : IInst<"vpadd", "ddd", "csiUcUsUif">;
 def VPADDL : SInst<"vpaddl", "nd",  "csiUcUsUiQcQsQiQUcQUsQUi">;
