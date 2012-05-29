@@ -95,6 +95,17 @@ def VCALE : IInst<"vcale", "udd", "fQf">;
 def VCAGT : IInst<"vcagt", "udd", "fQf">;
 def VCALT : IInst<"vcalt", "udd", "fQf">;
 def VTST  : WInst<"vtst", "udd", "csiUcUsUiPcQcQsQiQUcQUsQUiQPc">;
+// Scalar
+def VCEQD : Inst<"vceqd", "sss", "lUl", OP_EQ>;
+def VCLED : Inst<"vcled", "sss", "lUl", OP_LE>;
+def VCGTD : Inst<"vcgtd", "sss", "lUl", OP_GT>;
+def VTSTD : SInst<"vtstd", "sss", "lUl">;
+// Scalar Compare to Zero.
+def VCEQZD : SInst<"vceqzd", "ss", "lUl">;
+def VCGEZD : SInst<"vcgezd", "ss", "lUl">;
+def VCLEZD : SInst<"vclezd", "ss", "lUl">;
+def VCGTZD : SInst<"vcgtzd", "ss", "l">;
+def VCLTZD : SInst<"vcltzd", "ss", "l">;
 
 ////////////////////////////////////////////////////////////////////////////////
 // Absolute Difference

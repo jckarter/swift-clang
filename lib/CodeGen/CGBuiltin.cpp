@@ -2249,6 +2249,43 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
   // Handle non-overloaded intrinsics first.
   switch (BuiltinID) {
   default: break;
+  case ARM64::BI__builtin_arm64_vceqzd_s64:
+  case ARM64::BI__builtin_arm64_vceqzd_u64:
+  case ARM64::BI__builtin_arm64_vcgtzd_s64:
+  case ARM64::BI__builtin_arm64_vcltzd_s64:
+  case ARM64::BI__builtin_arm64_vcgezd_u64:
+  case ARM64::BI__builtin_arm64_vcgezd_s64:
+  case ARM64::BI__builtin_arm64_vclezd_u64:
+  case ARM64::BI__builtin_arm64_vclezd_s64: {
+    llvm::CmpInst::Predicate P;
+    switch (BuiltinID) {
+    default: llvm_unreachable("missing builtin ID in switch!");
+    case ARM64::BI__builtin_arm64_vceqzd_s64:
+    case ARM64::BI__builtin_arm64_vceqzd_u64:P = llvm::ICmpInst::ICMP_EQ;break;
+    case ARM64::BI__builtin_arm64_vcgtzd_s64:P = llvm::ICmpInst::ICMP_SGT;break;
+    case ARM64::BI__builtin_arm64_vcltzd_s64:P = llvm::ICmpInst::ICMP_SLT;break;
+    case ARM64::BI__builtin_arm64_vcgezd_u64:P = llvm::ICmpInst::ICMP_UGE;break;
+    case ARM64::BI__builtin_arm64_vcgezd_s64:P = llvm::ICmpInst::ICMP_SGE;break;
+    case ARM64::BI__builtin_arm64_vclezd_u64:P = llvm::ICmpInst::ICMP_ULE;break;
+    case ARM64::BI__builtin_arm64_vclezd_s64:P = llvm::ICmpInst::ICMP_SLE;break;
+    }
+    llvm::Type *Ty = llvm::Type::getInt64Ty(getLLVMContext());
+    Ops.push_back(EmitScalarExpr(E->getArg(0)));
+    Ops[0] = Builder.CreateBitCast(Ops[0], Ty);
+    Ops[0] = Builder.CreateICmp(P, Ops[0], llvm::Constant::getNullValue(Ty));
+    return Builder.CreateZExt(Ops[0], Ty, "vceqzd");
+  }
+  case ARM64::BI__builtin_arm64_vtstd_s64:
+  case ARM64::BI__builtin_arm64_vtstd_u64: {
+    llvm::Type *Ty = llvm::Type::getInt64Ty(getLLVMContext());
+    Ops.push_back(EmitScalarExpr(E->getArg(1)));
+    Ops[0] = Builder.CreateBitCast(Ops[0], Ty);
+    Ops[1] = Builder.CreateBitCast(Ops[1], Ty);
+    Ops[0] = Builder.CreateAnd(Ops[0], Ops[1]);
+    Ops[0] = Builder.CreateICmp(ICmpInst::ICMP_NE, Ops[0],
+                                llvm::Constant::getNullValue(Ty));
+    return Builder.CreateSExt(Ops[0], Ty, "vtstd");
+  }
   case ARM64::BI__builtin_arm64_vset_lane_i8:
   case ARM64::BI__builtin_arm64_vset_lane_i16:
   case ARM64::BI__builtin_arm64_vset_lane_i32:
