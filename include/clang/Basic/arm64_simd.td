@@ -363,10 +363,10 @@ def VQTBX4Q : WInst<"vqtbx4", "dd4d", "QUcQcQPc">;
 // Vector Shuffles
 def VTRN1 : WInst<"vtrn1", "ddd", "csiUcUsUiQcQsQiQlQUcQUsQUiQUl">;
 def VTRN2 : WInst<"vtrn2", "ddd", "csiUcUsUiQcQsQiQlQUcQUsQUiQUl">;
-def VZIP1 : WInst<"vzip1", "ddd", "cUc">;
-def VZIP2 : WInst<"vzip2", "ddd", "cUc">;
-def VUZP1 : WInst<"vuzp1", "ddd", "cUc">;
-def VUZP2 : WInst<"vuzp2", "ddd", "cUc">;
+def VZIP1 : WInst<"vzip1", "ddd", "csiUcUsUifQcQsQiQlQUcQUsQUiQUlQfQd">;
+def VZIP2 : WInst<"vzip2", "ddd", "csiUcUsUifQcQsQiQlQUcQUsQUiQUlQfQd">;
+def VUZP1 : WInst<"vuzp1", "ddd", "csiUcUsUifQcQsQiQlQUcQUsQUiQUlQfQd">;
+def VUZP2 : WInst<"vuzp2", "ddd", "csiUcUsUifQcQsQiQlQUcQUsQUiQUlQfQd">;
 
 ////////////////////////////////////////////////////////////////////////////////
 // Operations with a scalar value

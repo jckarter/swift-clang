@@ -4050,21 +4050,30 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     Ops.push_back(llvm::ConstantVector::get(Indices));
     return Builder.CreateShuffleVector(Ops[0], Ops[1], Ops[2], "vtrn2");
   }
-  case ARM64::BI__builtin_arm64_vuzp1_v: {
+  case ARM64::BI__builtin_arm64_vuzp1_v:
+  case ARM64::BI__builtin_arm64_vuzp1q_v: {
+    Ops[0] = Builder.CreateBitCast(Ops[0], Ty);
+    Ops[1] = Builder.CreateBitCast(Ops[1], Ty);
     SmallVector<Constant*, 16> Indices;
     for (unsigned i = 0, e = VTy->getNumElements(); i != e; ++i)
       Indices.push_back(ConstantInt::get(Int32Ty, 2*i));
     Ops.push_back(llvm::ConstantVector::get(Indices));
     return Builder.CreateShuffleVector(Ops[0], Ops[1], Ops[2], "vuzp1");
   }
-  case ARM64::BI__builtin_arm64_vuzp2_v: {
+  case ARM64::BI__builtin_arm64_vuzp2_v:
+  case ARM64::BI__builtin_arm64_vuzp2q_v: {
+    Ops[0] = Builder.CreateBitCast(Ops[0], Ty);
+    Ops[1] = Builder.CreateBitCast(Ops[1], Ty);
     SmallVector<Constant*, 16> Indices;
     for (unsigned i = 0, e = VTy->getNumElements(); i != e; ++i)
       Indices.push_back(ConstantInt::get(Int32Ty, 2*i+1));
     Ops.push_back(llvm::ConstantVector::get(Indices));
     return Builder.CreateShuffleVector(Ops[0], Ops[1], Ops[2], "vuzp2");
   }
-  case ARM64::BI__builtin_arm64_vzip1_v: {
+  case ARM64::BI__builtin_arm64_vzip1_v:
+  case ARM64::BI__builtin_arm64_vzip1q_v: {
+    Ops[0] = Builder.CreateBitCast(Ops[0], Ty);
+    Ops[1] = Builder.CreateBitCast(Ops[1], Ty);
     SmallVector<Constant*, 16> Indices;
     for (unsigned i = 0, e = VTy->getNumElements(); i != e; i += 2) {
       Indices.push_back(ConstantInt::get(Int32Ty, i >> 1));
@@ -4073,7 +4082,10 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     Ops.push_back(llvm::ConstantVector::get(Indices));
     return Builder.CreateShuffleVector(Ops[0], Ops[1], Ops[2], "vzip1");
   }
-  case ARM64::BI__builtin_arm64_vzip2_v: {
+  case ARM64::BI__builtin_arm64_vzip2_v:
+  case ARM64::BI__builtin_arm64_vzip2q_v: {
+    Ops[0] = Builder.CreateBitCast(Ops[0], Ty);
+    Ops[1] = Builder.CreateBitCast(Ops[1], Ty);
     SmallVector<Constant*, 16> Indices;
     for (unsigned i = 0, e = VTy->getNumElements(); i != e; i += 2) {
       Indices.push_back(ConstantInt::get(Int32Ty, (i+e) >> 1));
