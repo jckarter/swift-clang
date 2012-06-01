@@ -16,7 +16,7 @@ include "clang/Basic/arm_neon_common.td"
 
 ////////////////////////////////////////////////////////////////////////////////
 // Addition
-def VADD : Inst<"vadd", "ddd", "csilfUcUsUiUlQcQsQiQlQfQUcQUsQUiQUl", OP_ADD>;
+def VADD : Inst<"vadd", "ddd", "csilfUcUsUiUlQcQsQiQlQfQdQUcQUsQUiQUl", OP_ADD>;
 def VADDL   : Inst<"vaddl", "wdd", "csiUcUsUi", OP_ADDL>;
 def VADDW   : Inst<"vaddw", "wwd", "csiUcUsUi", OP_ADDW>;
 def VHADD   : SInst<"vhadd", "ddd", "csiUcUsUiQcQsQiQUcQUsQUi">;
@@ -32,13 +32,13 @@ def VRADDHN_HIGH : SInst<"vraddhn_high", "hbdd", "RsRiRlRUsRUiRUl">;
 
 ////////////////////////////////////////////////////////////////////////////////
 // Multiplication
-def VMUL     : Inst<"vmul", "ddd", "csifUcUsUiQcQsQiQfQUcQUsQUi", OP_MUL>;
+def VMUL     : Inst<"vmul", "ddd", "csifUcUsUiQcQsQiQfQdQUcQUsQUi", OP_MUL>;
 def VMULP    : SInst<"vmul", "ddd", "PcQPc">;
-def VMLA     : Inst<"vmla", "dddd", "csifUcUsUiQcQsQiQfQUcQUsQUi", OP_MLA>;
-def VFMA     : IInst<"vfma", "dddd", "fQf">;
+def VMLA     : Inst<"vmla", "dddd", "csifUcUsUiQcQsQiQfQdQUcQUsQUi", OP_MLA>;
+def VFMA     : IInst<"vfma", "dddd", "fQfQd">;
 def VMLAL    : Inst<"vmlal", "wwdd", "csiUcUsUi", OP_MLAL>;
-def VMLS     : Inst<"vmls", "dddd", "csifUcUsUiQcQsQiQfQUcQUsQUi", OP_MLS>;
-def VFMS     : IInst<"vfms", "dddd", "fQf">;
+def VMLS     : Inst<"vmls", "dddd", "csifUcUsUiQcQsQiQfQdQUcQUsQUi", OP_MLS>;
+def VFMS     : IInst<"vfms", "dddd", "fQfQd">;
 def VMLSL    : Inst<"vmlsl", "wwdd", "csiUcUsUi", OP_MLSL>;
 def VQDMULH  : SInst<"vqdmulh", "ddd", "siQsQi">;
 def VQRDMULH : SInst<"vqrdmulh", "ddd", "siQsQi">;
@@ -69,7 +69,7 @@ def VSQRT : SInst<"vsqrt", "dd", "fQfQd">;
 
 ////////////////////////////////////////////////////////////////////////////////
 // Subtraction
-def VSUB : Inst<"vsub", "ddd", "csilfUcUsUiUlQcQsQiQlQfQUcQUsQUiQUl", OP_SUB>;
+def VSUB : Inst<"vsub", "ddd", "csilfUcUsUiUlQcQsQiQlQfQdQUcQUsQUiQUl", OP_SUB>;
 def VSUBL   : Inst<"vsubl", "wdd", "csiUcUsUi", OP_SUBL>;
 def VSUBW   : Inst<"vsubw", "wwd", "csiUcUsUi", OP_SUBW>;
 def VQSUB   : SInst<"vqsub", "ddd", "csilUcUsUiUlQcQsQiQlQUcQUsQUiQUl">;
@@ -109,7 +109,7 @@ def VCLTZD : SInst<"vcltzd", "ss", "l">;
 
 ////////////////////////////////////////////////////////////////////////////////
 // Absolute Difference
-def VABD  : SInst<"vabd", "ddd",  "csiUcUsUifQcQsQiQUcQUsQUiQf">;
+def VABD  : SInst<"vabd", "ddd",  "csiUcUsUifQcQsQiQUcQUsQUiQfQd">;
 def VABDL : IInst<"vabdl", "wdd",  "csiUcUsUi">;
 def VABA  : Inst<"vaba", "dddd", "csiUcUsUiQcQsQiQUcQUsQUi", OP_ABA>;
 def VABAL : SInst<"vabal", "wwdd", "csiUcUsUi">;
@@ -120,8 +120,8 @@ def VABDD : SInst<"vabdd", "sss", "d">;
 
 ////////////////////////////////////////////////////////////////////////////////
 // Max/Min
-def VMAX : SInst<"vmax", "ddd", "csiUcUsUifQcQsQiQUcQUsQUiQf">;
-def VMIN : SInst<"vmin", "ddd", "csiUcUsUifQcQsQiQUcQUsQUiQf">;
+def VMAX : SInst<"vmax", "ddd", "csiUcUsUifQcQsQiQUcQUsQUiQfQd">;
+def VMIN : SInst<"vmin", "ddd", "csiUcUsUifQcQsQiQUcQUsQUiQfQd">;
 
 ////////////////////////////////////////////////////////////////////////////////
 // Max/Min Number
