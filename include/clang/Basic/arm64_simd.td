@@ -307,7 +307,7 @@ def VDUP_N : Inst<"vdup_n", "ds",
 def VMOV_N : Inst<"vmov_n", "ds",
                   "UcUsUicsiPcPsfQUcQUsQUiQcQsQiQPcQPsQflUlQlQUl", OP_DUP>;
 def VDUP_LANE : Inst<"vdup_lane", "dgi",
-                     "UcUsUicsiPcPsfQUcQUsQUiQcQsQiQPcQPsQflUlQlQUl",OP_DUP_LN>;
+                     "UcUsUicsiPcPsfQUcQUsQUiQcQsQiQPcQPsQfQlQUl",OP_DUP_LN>;
 
 ////////////////////////////////////////////////////////////////////////////////
 // Combining vectors
