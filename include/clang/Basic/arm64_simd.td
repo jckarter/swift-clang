@@ -168,8 +168,8 @@ def VQSHRN_N   : SInst<"vqshrn_n", "hki", "silUsUiUl">;
 def VRSHRN_N   : IInst<"vrshrn_n", "hki", "silUsUiUl">;
 def VQRSHRN_N  : SInst<"vqrshrn_n", "hki", "silUsUiUl">;
 def VSHLL_N    : SInst<"vshll_n", "wdi", "csiUcUsUi">;
-def VRSHRN_HIGH : SInst<"vrshrn_high", "hhki", "RsRiRlRUsRUiRUl">;
-def VSHRN_HIGH  : SInst<"vshrn_high",  "hhki", "RsRiRlRUsRUiRUl">;
+def VRSHRN_HIGH : SInst<"vrshrn_high_n", "hhki", "RsRiRlRUsRUiRUl">;
+def VSHRN_HIGH  : SInst<"vshrn_high_n",  "hhki", "RsRiRlRUsRUiRUl">;
 
 ////////////////////////////////////////////////////////////////////////////////
 // Shifts with insert
