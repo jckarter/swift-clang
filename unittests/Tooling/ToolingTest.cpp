@@ -15,6 +15,7 @@
 #include "clang/Tooling/CompilationDatabase.h"
 #include "clang/Tooling/Tooling.h"
 #include "gtest/gtest.h"
+#include <string>
 
 namespace clang {
 namespace tooling {
@@ -108,6 +109,24 @@ TEST(newFrontendActionFactory, CreatesFrontendActionFactoryFromFactoryType) {
   llvm::OwningPtr<FrontendAction> Action(Factory->create());
   EXPECT_TRUE(Action.get() != NULL);
 }
+
+#ifndef LLVM_ON_WIN32
+// This test breaks on Windows.
+
+TEST(ToolInvocation, TestMapVirtualFile) {
+  clang::FileManager Files((clang::FileSystemOptions()));
+  std::vector<std::string> Args;
+  Args.push_back("tool-executable");
+  Args.push_back("-Idef");
+  Args.push_back("-fsyntax-only");
+  Args.push_back("test.cpp");
+  clang::tooling::ToolInvocation Invocation(Args, new SyntaxOnlyAction, &Files);
+  Invocation.mapVirtualFile("test.cpp", "#include <abc>\n");
+  Invocation.mapVirtualFile("def/abc", "\n");
+  EXPECT_TRUE(Invocation.run());
+}
+
+#endif
 
 } // end namespace tooling
 } // end namespace clang
