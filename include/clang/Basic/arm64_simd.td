@@ -63,6 +63,8 @@ def VQDMULL2_LANE  : SInst<"vqdmull2_lane", "nddi",  "RsRi">;
 // Miscellaneous FP
 def VDIV  : SInst<"vdiv",  "ddd", "fQfQd">;
 def VMULX : SInst<"vmulx", "ddd", "fQfQd">;
+def VMULXS : SInst<"vmulxs", "sss", "f">;
+def VMULXD : SInst<"vmulxd", "sss", "d">;
 def VMAXNMP : SInst<"vpmaxnm", "ddd", "fQfQd">;
 def VMINNMP : SInst<"vpminnm", "ddd", "fQfQd">;
 def VSQRT : SInst<"vsqrt", "dd", "fQfQd">;

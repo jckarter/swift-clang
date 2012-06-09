@@ -2378,6 +2378,16 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     return EmitNeonCall(CGM.getIntrinsic(Intrinsic::arm64_sisd_fabd,
                                      llvm::Type::getDoubleTy(getLLVMContext())),
                         Ops, "vabd");
+  case ARM64::BI__builtin_arm64_vmulxs_f32:
+    Ops.push_back(EmitScalarExpr(E->getArg(1)));
+    return EmitNeonCall(CGM.getIntrinsic(Intrinsic::arm64_sisd_fmulx,
+                                     llvm::Type::getFloatTy(getLLVMContext())),
+                        Ops, "vmulx");
+  case ARM64::BI__builtin_arm64_vmulxd_f64:
+    Ops.push_back(EmitScalarExpr(E->getArg(1)));
+    return EmitNeonCall(CGM.getIntrinsic(Intrinsic::arm64_sisd_fmulx,
+                                     llvm::Type::getDoubleTy(getLLVMContext())),
+                        Ops, "vmulx");
   }
 
   llvm::VectorType *VTy = GetNeonType(this, Type);
