@@ -1273,6 +1273,7 @@ class X86TargetInfo : public TargetInfo {
   bool HasSSE4a;
   bool HasFMA4;
   bool HasFMA;
+  bool HasXOP;
 
   /// \brief Enumeration of all of the X86 CPUs supported by Clang.
   ///
@@ -1419,7 +1420,7 @@ public:
     : TargetInfo(triple), SSELevel(NoSSE), MMX3DNowLevel(NoMMX3DNow),
       HasAES(false), HasPCLMUL(false), HasLZCNT(false), HasBMI(false),
       HasBMI2(false), HasPOPCNT(false), HasSSE4a(false), HasFMA4(false),
-      HasFMA(false), CPU(CK_Generic) {
+      HasFMA(false), HasXOP(false), CPU(CK_Generic) {
     BigEndian = false;
     LongDoubleFormat = &llvm::APFloat::x87DoubleExtended;
   }
@@ -1610,6 +1611,7 @@ void X86TargetInfo::getDefaultFeatures(llvm::StringMap<bool> &Features) const {
   Features["popcnt"] = false;
   Features["fma4"] = false;
   Features["fma"] = false;
+  Features["xop"] = false;
 
   // FIXME: This *really* should not be here.
 
@@ -1727,7 +1729,7 @@ void X86TargetInfo::getDefaultFeatures(llvm::StringMap<bool> &Features) const {
   case CK_BDVER1:
   case CK_BDVER2:
     setFeatureEnabled(Features, "avx", true);
-    setFeatureEnabled(Features, "sse4a", true);
+    setFeatureEnabled(Features, "xop", true);
     setFeatureEnabled(Features, "aes", true);
     setFeatureEnabled(Features, "pclmul", true);
     break;
@@ -1794,6 +1796,11 @@ bool X86TargetInfo::setFeatureEnabled(llvm::StringMap<bool> &Features,
         Features["ssse3"] = Features["sse41"] = Features["sse42"] =
         Features["popcnt"] = Features["avx"] = Features["sse4a"] =
         Features["fma4"] = true;
+    else if (Name == "xop")
+        Features["mmx"] = Features["sse"] = Features["sse2"] = Features["sse3"] =
+        Features["ssse3"] = Features["sse41"] = Features["sse42"] =
+        Features["popcnt"] = Features["avx"] = Features["sse4a"] =
+        Features["fma4"] = Features["xop"] = true;
     else if (Name == "sse4a")
       Features["mmx"] = Features["sse"] = Features["sse2"] = Features["sse3"] =
         Features["sse4a"] = true;
@@ -1813,16 +1820,18 @@ bool X86TargetInfo::setFeatureEnabled(llvm::StringMap<bool> &Features,
         Features["ssse3"] = Features["sse41"] = Features["sse42"] =
         Features["sse4a"] = Features["avx"] = Features["avx2"] =
         Features["fma"] = Features["fma4"] = Features["aes"] =
-        Features["pclmul"] = false;
+        Features["pclmul"] = Features["xop"] = false;
     else if (Name == "sse2")
       Features["sse2"] = Features["sse3"] = Features["ssse3"] =
         Features["sse41"] = Features["sse42"] = Features["sse4a"] =
         Features["avx"] = Features["avx2"] = Features["fma"] =
-        Features["fma4"] = Features["aes"] = Features["pclmul"] = false;
+        Features["fma4"] = Features["aes"] = Features["pclmul"] =
+        Features["xop"] = false;
     else if (Name == "sse3")
       Features["sse3"] = Features["ssse3"] = Features["sse41"] =
         Features["sse42"] = Features["sse4a"] = Features["avx"] =
-        Features["avx2"] = Features["fma"] = Features["fma4"] = false;
+        Features["avx2"] = Features["fma"] = Features["fma4"] =
+        Features["xop"] = false;
     else if (Name == "ssse3")
       Features["ssse3"] = Features["sse41"] = Features["sse42"] =
         Features["avx"] = Features["avx2"] = Features["fma"] = false;
@@ -1842,13 +1851,13 @@ bool X86TargetInfo::setFeatureEnabled(llvm::StringMap<bool> &Features,
       Features["pclmul"] = false;
     else if (Name == "avx")
       Features["avx"] = Features["avx2"] = Features["fma"] =
-        Features["fma4"] = false;
+        Features["fma4"] = Features["xop"] = false;
     else if (Name == "avx2")
       Features["avx2"] = false;
     else if (Name == "fma")
       Features["fma"] = false;
     else if (Name == "sse4a")
-      Features["sse4a"] = Features["fma4"] = false;
+      Features["sse4a"] = Features["fma4"] = Features["xop"] = false;
     else if (Name == "lzcnt")
       Features["lzcnt"] = false;
     else if (Name == "bmi")
@@ -1858,7 +1867,9 @@ bool X86TargetInfo::setFeatureEnabled(llvm::StringMap<bool> &Features,
     else if (Name == "popcnt")
       Features["popcnt"] = false;
     else if (Name == "fma4")
-      Features["fma4"] = false;
+      Features["fma4"] = Features["xop"] = false;
+    else if (Name == "xop")
+      Features["xop"] = false;
   }
 
   return true;
@@ -1917,6 +1928,11 @@ void X86TargetInfo::HandleTargetFeatures(std::vector<std::string> &Features) {
 
     if (Feature == "fma") {
       HasFMA = true;
+      continue;
+    }
+
+    if (Feature == "xop") {
+      HasXOP = true;
       continue;
     }
 
@@ -2126,6 +2142,9 @@ void X86TargetInfo::getTargetDefines(const LangOptions &Opts,
   if (HasFMA)
     Builder.defineMacro("__FMA__");
 
+  if (HasXOP)
+    Builder.defineMacro("__XOP__");
+
   // Each case falls through to the previous one here.
   switch (SSELevel) {
   case AVX2:
@@ -2207,6 +2226,7 @@ bool X86TargetInfo::hasFeature(StringRef Feature) const {
       .Case("x86", true)
       .Case("x86_32", PointerWidth == 32)
       .Case("x86_64", PointerWidth == 64)
+      .Case("xop", HasXOP)
       .Default(false);
 }
 
