@@ -3814,7 +3814,7 @@ QualType ASTContext::getCFConstantStringType() const {
                                            FieldTypes[i], /*TInfo=*/0,
                                            /*BitWidth=*/0,
                                            /*Mutable=*/false,
-                                           /*HasInit=*/false);
+                                           ICIS_NoInit);
       Field->setAccess(AS_public);
       CFConstantStringTypeDecl->addDecl(Field);
     }
@@ -3858,7 +3858,7 @@ QualType ASTContext::getBlockDescriptorType() const {
                                          FieldTypes[i], /*TInfo=*/0,
                                          /*BitWidth=*/0,
                                          /*Mutable=*/false,
-                                         /*HasInit=*/false);
+                                         ICIS_NoInit);
     Field->setAccess(AS_public);
     T->addDecl(Field);
   }
@@ -3901,7 +3901,7 @@ QualType ASTContext::getBlockDescriptorExtendedType() const {
                                          FieldTypes[i], /*TInfo=*/0,
                                          /*BitWidth=*/0,
                                          /*Mutable=*/false,
-                                         /*HasInit=*/false);
+                                         ICIS_NoInit);
     Field->setAccess(AS_public);
     T->addDecl(Field);
   }
@@ -3977,7 +3977,7 @@ ASTContext::BuildByRefType(StringRef DeclName, QualType Ty) const {
                                          &Idents.get(FieldNames[i]),
                                          FieldTypes[i], /*TInfo=*/0,
                                          /*BitWidth=*/0, /*Mutable=*/false,
-                                         /*HasInit=*/false);
+                                         ICIS_NoInit);
     Field->setAccess(AS_public);
     T->addDecl(Field);
   }

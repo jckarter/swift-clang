@@ -2128,7 +2128,7 @@ CodeGenModule::GetAddrOfConstantString(const StringLiteral *Literal) {
                                            FieldTypes[i], /*TInfo=*/0,
                                            /*BitWidth=*/0,
                                            /*Mutable=*/false,
-                                           /*HasInit=*/false);
+                                           ICIS_NoInit);
       Field->setAccess(AS_public);
       D->addDecl(Field);
     }
@@ -2203,7 +2203,7 @@ QualType CodeGenModule::getObjCFastEnumerationStateType() {
                                            FieldTypes[i], /*TInfo=*/0,
                                            /*BitWidth=*/0,
                                            /*Mutable=*/false,
-                                           /*HasInit=*/false);
+                                           ICIS_NoInit);
       Field->setAccess(AS_public);
       D->addDecl(Field);
     }
