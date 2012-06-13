@@ -183,13 +183,13 @@ public:
       EmitNeonTest(Records, OS);
       break;
     case GenArm64SIMD:
-      NeonEmitter(Records, true).run(OS);
+      EmitNeon(Records, OS, true);
       break;
     case GenArm64SIMDSema:
-      NeonEmitter(Records, true).runHeader(OS);
+      EmitNeonSema(Records, OS, true);
       break;
     case GenArm64SIMDTest:
-      NeonEmitter(Records, true).runTests(OS);
+      EmitNeonTest(Records, OS, true);
       break;
     }
 

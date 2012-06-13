@@ -150,7 +150,7 @@ class NeonEmitter {
   bool IsARM64;
 
 public:
-  NeonEmitter(RecordKeeper &R, bool isARM64 = false) :
+  NeonEmitter(RecordKeeper &R, bool isARM64) :
     Records(R), IsARM64(isARM64) {
     OpMap["OP_NONE"]  = OpNone;
     OpMap["OP_UNAVAILABLE"] = OpUnavailable;
@@ -1889,13 +1889,13 @@ void NeonEmitter::runTests(raw_ostream &OS) {
 }
 
 namespace clang {
-void EmitNeon(RecordKeeper &Records, raw_ostream &OS) {
-  NeonEmitter(Records).run(OS);
+void EmitNeon(RecordKeeper &Records, raw_ostream &OS, bool IsARM64) {
+  NeonEmitter(Records, IsARM64).run(OS);
 }
-void EmitNeonSema(RecordKeeper &Records, raw_ostream &OS) {
-  NeonEmitter(Records).runHeader(OS);
+void EmitNeonSema(RecordKeeper &Records, raw_ostream &OS, bool IsARM64) {
+  NeonEmitter(Records, IsARM64).runHeader(OS);
 }
-void EmitNeonTest(RecordKeeper &Records, raw_ostream &OS) {
-  NeonEmitter(Records).runTests(OS);
+void EmitNeonTest(RecordKeeper &Records, raw_ostream &OS, bool IsARM64) {
+  NeonEmitter(Records, IsARM64).runTests(OS);
 }
 } // End namespace clang
