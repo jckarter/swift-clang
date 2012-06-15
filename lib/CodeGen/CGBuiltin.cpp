@@ -2721,9 +2721,16 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
   case ARM64::BI__builtin_arm64_vqrshrn_n_v:
     Int = usgn ? Intrinsic::arm64_neon_uqrshrn : Intrinsic::arm64_neon_sqrshrn;
     return EmitNeonCall(CGM.getIntrinsic(Int, Ty), Ops, "vqrshrn_n");
-  case ARM64::BI__builtin_arm64_vshll_n_v:
-    Int = usgn ? Intrinsic::arm64_neon_ushll : Intrinsic::arm64_neon_sshll;
+  case ARM64::BI__builtin_arm64_vshll_n_v: {
+    unsigned BitWidth = cast<IntegerType>(VTy->getElementType())->getBitWidth();
+    unsigned ShiftVal = cast<llvm::ConstantInt>(Ops[1])->getZExtValue();
+    if (ShiftVal * 2 == BitWidth) {
+      Int = Intrinsic::arm64_neon_shll;
+      Ops.pop_back();
+    } else
+      Int = usgn ? Intrinsic::arm64_neon_ushll : Intrinsic::arm64_neon_sshll;
     return EmitNeonCall(CGM.getIntrinsic(Int, Ty), Ops, "vshll_n");
+  }
   case ARM64::BI__builtin_arm64_vrnda_v:
   case ARM64::BI__builtin_arm64_vrndqa_v: {
     Int = Intrinsic::arm64_neon_frinta;
@@ -3985,6 +3992,21 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     llvm::Type *ArgTy = llvm::VectorType::get(DInt, NumElts/2);
     llvm::Type *Tys[2] = { VTy, ArgTy };
     return EmitNeonCall(CGM.getIntrinsic(Int, Tys), Ops, "vshrn_high_n");
+  }
+  case ARM64::BI__builtin_arm64_vshll_high_n_v: {
+    unsigned NumElts = VTy->getNumElements();
+    unsigned BitWidth = cast<IntegerType>(VTy->getElementType())->getBitWidth();
+    unsigned ShiftVal = cast<llvm::ConstantInt>(Ops[1])->getZExtValue();
+    if (ShiftVal * 2 == BitWidth) {
+      Int = Intrinsic::arm64_neon_shll2;
+      Ops.pop_back();
+    } else
+      Int = usgn ? Intrinsic::arm64_neon_ushll2 : Intrinsic::arm64_neon_sshll2;
+    llvm::Type *DInt =
+      llvm::IntegerType::get(getLLVMContext(), BitWidth/2);
+    llvm::Type *ArgTy = llvm::VectorType::get(DInt, NumElts*2);
+    llvm::Type *Tys[2] = { VTy, ArgTy };
+    return EmitNeonCall(CGM.getIntrinsic(Int, Tys), Ops, "vshll_high_n");
   }
   case ARM64::BI__builtin_arm64_vrsubhn_high_v: {
     Int = Intrinsic::arm64_neon_rsubhn2;

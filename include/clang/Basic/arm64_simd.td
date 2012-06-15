@@ -172,6 +172,7 @@ def VQRSHRN_N  : SInst<"vqrshrn_n", "hki", "silUsUiUl">;
 def VSHLL_N    : SInst<"vshll_n", "wdi", "csiUcUsUi">;
 def VRSHRN_HIGH : SInst<"vrshrn_high_n", "hhki", "RsRiRlRUsRUiRUl">;
 def VSHRN_HIGH  : SInst<"vshrn_high_n",  "hhki", "RsRiRlRUsRUiRUl">;
+def VSHLL_HIGH_N : SInst<"vshll_high_n", "ndi", "RcRsRiRUcRUsRUi">;
 
 ////////////////////////////////////////////////////////////////////////////////
 // Shifts with insert
