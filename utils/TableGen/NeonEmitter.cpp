@@ -1389,9 +1389,17 @@ void NeonEmitter::run(raw_ostream &OS) {
   if (IsARM64) {
     OS << "#ifndef __AARCH64_SIMD_H\n";
     OS << "#define __AARCH64_SIMD_H\n\n";
+
+    OS << "#ifndef __AARCH64_SIMD__\n";
+    OS << "#error \"AdvSIMD support not enabled\"\n";
+    OS << "#endif\n\n";
   } else {
     OS << "#ifndef __ARM_NEON_H\n";
     OS << "#define __ARM_NEON_H\n\n";
+
+    OS << "#ifdef __arm64\n";
+    OS << "#include \"aarch64_simd.h\"\n";
+    OS << "#else\n\n";
 
     OS << "#ifndef __ARM_NEON__\n";
     OS << "#error \"NEON support not enabled\"\n";
@@ -1477,8 +1485,10 @@ void NeonEmitter::run(raw_ostream &OS) {
   OS << "#undef __ai\n\n";
   if (IsARM64)
     OS << "#endif /* __AARCH64_SIMD_H */\n";
-  else
+  else {
+    OS << "#endif /* not __arm64 */\n\n";
     OS << "#endif /* __ARM_NEON_H */\n";
+  }
 }
 
 /// emitIntrinsic - Write out the arm_neon.h header file definitions for the
