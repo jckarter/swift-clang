@@ -3222,6 +3222,10 @@ public:
     return "typedef char* __builtin_va_list;";
   }
 
+  virtual BuiltinVaListKind getBuiltinVaListKind() const {
+    return TargetInfo::CharPtrBuiltinVaList;
+  }
+
   virtual void getGCCRegNames(const char * const *&Names,
                               unsigned &NumNames) const;
   virtual void getGCCRegAliases(const GCCRegAlias *&Aliases,
