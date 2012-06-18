@@ -377,11 +377,19 @@ def VMLA_LANE    : Inst<"vmla_lane", "dddgi", "siUsUiQsQiQUsQUi", OP_MLA_LN>;
 def VMLA_LANEQ   : Inst<"vmla_laneq", "dddki", "siUsUiQsQiQUsQUi", OP_MLA_LN>;
 def VFMA_LANE    : IInst<"vfma_lane", "ddddi", "fQfQd">;
 def VMLAL_LANE   : Inst<"vmlal_lane", "wwddi", "siUsUi", OP_MLAL_LN>;
+def VMLAL_HIGH_LANE  : Inst<"vmlal_high_lane", "wwdgi", "RsRiRUsRUi", OP_MLAL_HIGH_LN>;
+def VMLAL_HIGH_LANEQ : Inst<"vmlal_high_laneq", "wwddi", "RsRiRUsRUi", OP_MLAL_HIGH_LN>;
 def VQDMLAL_LANE : Inst<"vqdmlal_lane", "wwddi", "si", OP_QDMLAL_LN>;
+def VQDMLAL_HIGH_LANE  : Inst<"vqdmlal_high_lane", "wwdgi", "RsRi", OP_QDMLAL_HIGH_LN>;
+def VQDMLAL_HIGH_LANEQ : Inst<"vqdmlal_high_laneq", "wwddi", "RsRi", OP_QDMLAL_HIGH_LN>;
 def VMLS_LANE    : Inst<"vmls_lane", "ddddi", "siUsUiQsQiQUsQUi", OP_MLS_LN>;
+def VMLSL_HIGH_LANE  : Inst<"vmlsl_high_lane", "wwdgi", "RsRiRUsRUi", OP_MLSL_HIGH_LN>;
+def VMLSL_HIGH_LANEQ : Inst<"vmlsl_high_laneq", "wwddi", "RsRiRUsRUi", OP_MLSL_HIGH_LN>;
 def VFMS_LANE    : IInst<"vfms_lane", "ddddi", "fQf">;
 def VMLSL_LANE   : Inst<"vmlsl_lane", "wwddi", "siUsUi", OP_MLSL_LN>;
 def VQDMLSL_LANE : Inst<"vqdmlsl_lane", "wwddi", "si", OP_QDMLSL_LN>;
+def VQDMLSL_HIGH_LANE  : Inst<"vqdmlsl_high_lane", "wwdgi", "RsRi", OP_QDMLSL_HIGH_LN>;
+def VQDMLSL_HIGH_LANEQ : Inst<"vqdmlsl_high_laneq", "wwddi", "RsRi", OP_QDMLSL_HIGH_LN>;
 def VMUL_N       : Inst<"vmul_n", "dds", "sifUsUiQsQiQfQUsQUi", OP_MUL_N>;
 def VMUL_LANE    : Inst<"vmul_lane", "dddi", "sifUsUiQsQiQfQdQUsQUi", OP_MUL_LN>;
 def VMULL_N      : SInst<"vmull_n", "wda", "siUsUi">;
@@ -400,6 +408,7 @@ def VMLS_N       : Inst<"vmls_n", "ddds", "siUsUiQsQiQUsQUi", OP_MLS_N>;
 def VMLSL_N      : Inst<"vmlsl_n", "wwda", "siUsUi", OP_MLSL_N>;
 def VQDMLSL_N    : Inst<"vqdmlsl_n", "wwda", "si",OP_QDMLSL_N>;
 def VMULX_LANE   : SInst<"vmulx_lane", "dddi", "fQfQd">;
+
 
 ////////////////////////////////////////////////////////////////////////////////
 // Cross Lane
