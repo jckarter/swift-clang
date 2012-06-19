@@ -2770,7 +2770,12 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
   case ARM64::BI__builtin_arm64_vcvtq_f32_v:
     Ops[0] = Builder.CreateBitCast(Ops[0], Ty);
     Ty = GetNeonType(this, NeonTypeFlags(NeonTypeFlags::Float32, false, quad));
-    return usgn ? Builder.CreateUIToFP(Ops[0], Ty, "vcvt") 
+    return usgn ? Builder.CreateUIToFP(Ops[0], Ty, "vcvt")
+                : Builder.CreateSIToFP(Ops[0], Ty, "vcvt");
+  case ARM64::BI__builtin_arm64_vcvtq_f64_v:
+    Ops[0] = Builder.CreateBitCast(Ops[0], Ty);
+    Ty = GetNeonType(this, NeonTypeFlags(NeonTypeFlags::Float64, false, true));
+    return usgn ? Builder.CreateUIToFP(Ops[0], Ty, "vcvt")
                 : Builder.CreateSIToFP(Ops[0], Ty, "vcvt");
   case ARM64::BI__builtin_arm64_vcvt_f32_f16: {
     assert(Type.getEltType() == NeonTypeFlags::Float16 && !quad &&
@@ -2829,6 +2834,8 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
   case ARM64::BI__builtin_arm64_vcvt_u32_v:
   case ARM64::BI__builtin_arm64_vcvtq_s32_v:
   case ARM64::BI__builtin_arm64_vcvtq_u32_v:
+  case ARM64::BI__builtin_arm64_vcvtq_s64_v:
+  case ARM64::BI__builtin_arm64_vcvtq_u64_v:
   case ARM64::BI__builtin_arm64_vcvtz_s32_v:
   case ARM64::BI__builtin_arm64_vcvtzq_s32_v:
   case ARM64::BI__builtin_arm64_vcvtz_u32_v:

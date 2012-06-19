@@ -190,6 +190,11 @@ def VCVT_S32     : SInst<"vcvt_s32", "xd",  "fQf">;
 def VCVT_U32     : SInst<"vcvt_u32", "ud",  "fQf">;
 // Integer->F32
 def VCVT_F32     : SInst<"vcvt_f32", "fd", "iUiQiQUi">;
+// F64->Integer
+def VCVT_S64     : SInst<"vcvt_s64", "xd",  "Qd">;
+def VCVT_U64     : SInst<"vcvt_u64", "ud",  "Qd">;
+// Integer->F64
+def VCVT_F64     : SInst<"vcvtq_f64", "fd", "RlRUl">;
 // F16->F32
 def VCVT_F32_F16 : SInst<"vcvt_f32_f16", "fd", "h">;
 // F32->F16
