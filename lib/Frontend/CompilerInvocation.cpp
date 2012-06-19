@@ -1229,6 +1229,7 @@ static bool ParseCodeGenArgs(CodeGenOptions &Opts, ArgList &Args, InputKind IK,
   Opts.TrapFuncName = Args.getLastArgValue(OPT_ftrap_function_EQ);
   Opts.BoundsChecking = Args.getLastArgIntValue(OPT_fbounds_checking_EQ, 0,
                                                 Diags);
+  Opts.UseInitArray = Args.hasArg(OPT_fuse_init_array);
 
   Opts.FunctionSections = Args.hasArg(OPT_ffunction_sections);
   Opts.DataSections = Args.hasArg(OPT_fdata_sections);
@@ -1760,9 +1761,22 @@ void CompilerInvocation::setLangDefaults(LangOptions &Opts, InputKind IK,
   Opts.HexFloats = Std.hasHexFloats();
   Opts.ImplicitInt = Std.hasImplicitInt();
 
-  // OpenCL has some additional defaults.
+  // Set OpenCL Version.
   if (LangStd == LangStandard::lang_opencl) {
     Opts.OpenCL = 1;
+    Opts.OpenCLVersion = 100;
+  }
+  else if (LangStd == LangStandard::lang_opencl11) {
+      Opts.OpenCL = 1;
+      Opts.OpenCLVersion = 110;
+  }
+  else if (LangStd == LangStandard::lang_opencl12) {
+    Opts.OpenCL = 1;
+    Opts.OpenCLVersion = 120;
+  }
+  
+  // OpenCL has some additional defaults.
+  if (Opts.OpenCL) {
     Opts.AltiVec = 0;
     Opts.CXXOperatorNames = 1;
     Opts.LaxVectorConversions = 0;
