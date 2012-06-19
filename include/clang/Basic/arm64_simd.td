@@ -98,7 +98,8 @@ def VCAGT : IInst<"vcagt", "udd", "fQf">;
 def VCALT : IInst<"vcalt", "udd", "fQf">;
 def VTST  : WInst<"vtst", "udd", "csiUcUsUiPcQcQsQiQUcQUsQUiQPc">;
 // Scalar
-def VCEQD : Inst<"vceqd", "sss", "lUl", OP_EQ>;
+def VCEQS : Inst<"vceqs", "sss", "f", OP_EQ>;
+def VCEQD : Inst<"vceqd", "sss", "lUld", OP_EQ>;
 def VCLED : Inst<"vcled", "sss", "lUl", OP_LE>;
 def VCGTD : Inst<"vcgtd", "sss", "lUl", OP_GT>;
 def VTSTD : SInst<"vtstd", "sss", "lUl">;
