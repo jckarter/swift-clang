@@ -1509,8 +1509,6 @@ def err_attribute_argument_outof_range : Error<
 def err_init_priority_object_attr : Error<
   "can only use 'init_priority' attribute on file-scope definitions "
   "of objects of class type">;
-def err_attribute_argument_duplicate: Error<
-  "'%0' attribute parameter %1 is duplicated">;
 def err_attribute_argument_n_not_int : Error<
   "'%0' attribute requires parameter %1 to be an integer constant">;
 def err_attribute_argument_n_not_string : Error<
@@ -2165,6 +2163,17 @@ def note_ovl_candidate_bad_arc_conv : Note<"candidate "
     "constructor (inherited)}0%1"
     " not viable: cannot implicitly convert argument of type %2 to %3 for "
     "%select{%ordinal5 argument|object argument}4 under ARC">;
+def note_ovl_candidate_bad_lvalue : Note<"candidate "
+    "%select{function|function|constructor|"
+    "function |function |constructor |"
+    "constructor (the implicit default constructor)|"
+    "constructor (the implicit copy constructor)|"
+    "constructor (the implicit move constructor)|"
+    "function (the implicit copy assignment operator)|"
+    "function (the implicit move assignment operator)|"
+    "constructor (inherited)}0%1"
+    " not viable: expects an l-value for "
+    "%select{%ordinal3 argument|object argument}2">;
 def note_ovl_candidate_bad_addrspace : Note<"candidate "
     "%select{function|function|constructor|"
     "function |function |constructor |"
@@ -3000,12 +3009,21 @@ def note_used_here : Note<"used here">;
 
 def warn_internal_in_extern_inline : ExtWarn<
   "%select{function|variable}0 %1 has internal linkage but is used in an "
-  "inline %select{function|method}2 with external linkage">,
+  "inline function with external linkage">,
   InGroup<DiagGroup<"internal-linkage-in-inline"> >;
-def note_internal_decl_declared_here : Note<
-  "%0 declared here">;
+def ext_internal_in_extern_inline : Extension<
+  "%select{function|variable}0 %1 has internal linkage but is used in an "
+  "inline function with external linkage">,
+  InGroup<DiagGroup<"internal-linkage-in-inline"> >;
+def warn_internal_in_extern_inline_cxx : Warning<
+  "%select{function|variable}0 %1 %select{has internal linkage|is in an anonymous"
+  " namespace}2 but is used in an inline %select{function|method}3 with"
+  " external linkage">,
+  InGroup<DiagGroup<"internal-linkage-in-inline"> >;
 def note_convert_inline_to_static : Note<
   "use 'static' to give inline function %0 internal linkage">;
+def note_internal_decl_declared_here : Note<
+  "%0 declared here">;
 
 def warn_redefinition_of_typedef : ExtWarn<
   "redefinition of typedef %0 is a C11 feature">,
