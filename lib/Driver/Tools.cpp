@@ -1830,6 +1830,8 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
                    AsynchronousUnwindTables))
     CmdArgs.push_back("-munwind-tables");
 
+  getToolChain().addClangTargetOptions(CmdArgs);
+
   if (Arg *A = Args.getLastArg(options::OPT_flimited_precision_EQ)) {
     CmdArgs.push_back("-mlimit-float-precision");
     CmdArgs.push_back(A->getValue(Args));
@@ -5760,7 +5762,14 @@ void visualstudio::Link::ConstructJob(Compilation &C, const JobAction &JA,
 
   CmdArgs.push_back("-nologo");
 
-  AddLinkerInputs(getToolChain(), Inputs, Args, CmdArgs);
+  Args.AddAllArgValues(CmdArgs, options::OPT_l);
+
+  // Add filenames immediately.
+  for (InputInfoList::const_iterator
+       it = Inputs.begin(), ie = Inputs.end(); it != ie; ++it) {
+    if (it->isFilename())
+      CmdArgs.push_back(it->getFilename());
+  }
 
   const char *Exec =
     Args.MakeArgString(getToolChain().GetProgramPath("link.exe"));
