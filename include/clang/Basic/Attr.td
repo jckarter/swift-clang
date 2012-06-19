@@ -320,8 +320,9 @@ def ExtVectorType : Attr {
 }
 
 def FallThrough : Attr {
-  let Spellings = ["clang___fallthrough"];
-  let Subjects = [CaseStmt, DefaultStmt];
+  let Namespaces = ["clang"];
+  let Spellings = ["fallthrough"];
+  let Subjects = [NullStmt];
 }
 
 def FastCall : InheritableAttr {
@@ -822,6 +823,10 @@ def DLLExport : InheritableAttr {
 
 def DLLImport : InheritableAttr {
   let Spellings = ["dllimport"];
+}
+
+def ForceInline : InheritableAttr {
+  let Spellings = ["__forceinline"];
 }
 
 def Win64 : InheritableAttr {

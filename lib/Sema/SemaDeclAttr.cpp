@@ -923,6 +923,12 @@ static void possibleTransparentUnionPointerType(QualType &T) {
 }
 
 static void handleAllocSizeAttr(Sema &S, Decl *D, const AttributeList &Attr) {
+  if (!isFunctionOrMethod(D)) {
+    S.Diag(Attr.getLoc(), diag::warn_attribute_wrong_decl_type)
+    << "alloc_size" << ExpectedFunctionOrMethod;
+    return;
+  }
+
   if (!checkAttributeAtLeastNumArgs(S, Attr, 1))
     return;
 
@@ -972,15 +978,6 @@ static void handleAllocSizeAttr(Sema &S, Decl *D, const AttributeList &Attr) {
       return;
     }
 
-    // check if the argument is a duplicate
-    SmallVectorImpl<unsigned>::iterator Pos;
-    Pos = std::find(SizeArgs.begin(), SizeArgs.end(), x);
-    if (Pos != SizeArgs.end()) {
-      S.Diag(Attr.getLoc(), diag::err_attribute_argument_duplicate)
-      << "alloc_size" << I.getArgNum() << Ex->getSourceRange();
-      return;
-    }
-
     SizeArgs.push_back(x);
   }
 
@@ -990,11 +987,8 @@ static void handleAllocSizeAttr(Sema &S, Decl *D, const AttributeList &Attr) {
     << "alloc_size" << 0 /*function*/<< 1 /*pointer*/ << D->getSourceRange();
   }
 
-  unsigned size = SizeArgs.size();
-  unsigned* start = &SizeArgs[0];
-  llvm::array_pod_sort(start, start + size);
-  D->addAttr(::new (S.Context) AllocSizeAttr(Attr.getRange(), S.Context, start,
-                                             size));
+  D->addAttr(::new (S.Context) AllocSizeAttr(Attr.getRange(), S.Context,
+                                             SizeArgs.data(), SizeArgs.size()));
 }
 
 static void handleNonNullAttr(Sema &S, Decl *D, const AttributeList &Attr) {
@@ -3888,6 +3882,13 @@ static void handlePortabilityAttr(Sema &S, Decl *D, const AttributeList &Attr) {
     S.Diag(Attr.getLoc(), diag::warn_attribute_ignored) << Attr.getName();
 }
 
+static void handleForceInlineAttr(Sema &S, Decl *D, const AttributeList &Attr) {
+  if (S.LangOpts.MicrosoftExt)
+    D->addAttr(::new (S.Context) ForceInlineAttr(Attr.getRange(), S.Context));
+  else
+    S.Diag(Attr.getLoc(), diag::warn_attribute_ignored) << Attr.getName();
+}
+
 //===----------------------------------------------------------------------===//
 // Top Level Sema Entry Points
 //===----------------------------------------------------------------------===//
@@ -4081,6 +4082,9 @@ static void ProcessInheritableDeclAttr(Sema &S, Scope *scope, Decl *D,
   case AttributeList::AT_ptr32:
   case AttributeList::AT_ptr64:
     handlePortabilityAttr(S, D, Attr);
+    break;
+  case AttributeList::AT_forceinline:
+    handleForceInlineAttr(S, D, Attr);
     break;
 
   // Thread safety attributes:
