@@ -383,6 +383,7 @@ def VMLA_LANE    : Inst<"vmla_lane", "dddgi", "siUsUiQsQiQUsQUi", OP_MLA_LN>;
 def VMLA_LANEQ   : Inst<"vmla_laneq", "dddki", "siUsUiQsQiQUsQUi", OP_MLA_LN>;
 def VFMA_LANE    : IInst<"vfma_lane", "ddddi", "fQfQd">;
 def VMLAL_LANE   : Inst<"vmlal_lane", "wwddi", "siUsUi", OP_MLAL_LN>;
+def VMLAL_LANEQ  : Inst<"vmlal_laneq", "wwdki", "siUsUi", OP_MLAL_LN>;
 def VMLAL_HIGH_LANE  : Inst<"vmlal_high_lane", "wwdgi", "RsRiRUsRUi", OP_MLAL_HIGH_LN>;
 def VMLAL_HIGH_LANEQ : Inst<"vmlal_high_laneq", "wwddi", "RsRiRUsRUi", OP_MLAL_HIGH_LN>;
 def VQDMLAL_LANE : Inst<"vqdmlal_lane", "wwddi", "si", OP_QDMLAL_LN>;
@@ -394,6 +395,7 @@ def VMLSL_HIGH_LANE  : Inst<"vmlsl_high_lane", "wwdgi", "RsRiRUsRUi", OP_MLSL_HI
 def VMLSL_HIGH_LANEQ : Inst<"vmlsl_high_laneq", "wwddi", "RsRiRUsRUi", OP_MLSL_HIGH_LN>;
 def VFMS_LANE    : IInst<"vfms_lane", "ddddi", "fQf">;
 def VMLSL_LANE   : Inst<"vmlsl_lane", "wwddi", "siUsUi", OP_MLSL_LN>;
+def VMLSL_LANEQ  : Inst<"vmlsl_laneq", "wwdki", "siUsUi", OP_MLSL_LN>;
 def VQDMLSL_LANE : Inst<"vqdmlsl_lane", "wwddi", "si", OP_QDMLSL_LN>;
 def VQDMLSL_HIGH_LANE  : Inst<"vqdmlsl_high_lane", "wwdgi", "RsRi", OP_QDMLSL_HIGH_LN>;
 def VQDMLSL_HIGH_LANEQ : Inst<"vqdmlsl_high_laneq", "wwddi", "RsRi", OP_QDMLSL_HIGH_LN>;
