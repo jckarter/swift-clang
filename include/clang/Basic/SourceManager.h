@@ -591,9 +591,6 @@ class SourceManager : public RefCountedBase<SourceManager> {
   /// \brief The file ID for the precompiled preamble there is one.
   FileID PreambleFileID;
 
-  /// \brief The file ID for the preprocessor's predefines.
-  FileID PredefinesFileID;
-
   // Statistics for -print-stats.
   mutable unsigned NumLinearScans, NumBinaryProbes;
 
@@ -638,14 +635,6 @@ public:
     MainFileID = createFileIDForMemBuffer(Buffer);
     return MainFileID;
   }
-  
-  /// \brief Create the FileID for a memory buffer that contains the
-  /// preprocessor's predefines.
-  FileID createPredefinesFileIDForMemBuffer(const llvm::MemoryBuffer *Buffer) {
-    assert(PredefinesFileID.isInvalid() && "PredefinesFileID already set!");
-    PredefinesFileID = createFileIDForMemBuffer(Buffer);
-    return PredefinesFileID;
-  }
 
   //===--------------------------------------------------------------------===//
   // MainFileID creation and querying methods.
@@ -653,9 +642,6 @@ public:
 
   /// getMainFileID - Returns the FileID of the main source file.
   FileID getMainFileID() const { return MainFileID; }
-
-  /// \brief Returns the FileID of the preprocessor predefines buffer.
-  FileID getPredefinesFileID() const { return PredefinesFileID; }
 
   /// createMainFileID - Create the FileID for the main source file.
   FileID createMainFileID(const FileEntry *SourceFile, 
@@ -1138,12 +1124,6 @@ public:
     return getFileID(Loc) == getMainFileID();
   }
 
-  /// isFromPredefines - Returns true if the provided SourceLocation is
-  ///   within the processor's predefines buffer.
-  bool isFromPredefines(SourceLocation Loc) const {
-    return getFileID(Loc) == getPredefinesFileID();
-  }
-
   /// isInSystemHeader - Returns if a SourceLocation is in a system header.
   bool isInSystemHeader(SourceLocation Loc) const {
     return getFileCharacteristic(Loc) != SrcMgr::C_User;
@@ -1263,19 +1243,6 @@ public:
   ///
   /// \returns true if LHS source location comes before RHS, false otherwise.
   bool isBeforeInTranslationUnit(SourceLocation LHS, SourceLocation RHS) const;
-
-  /// \brief Comparison function class.
-  class LocBeforeThanCompare : public std::binary_function<SourceLocation,
-                                                         SourceLocation, bool> {
-    SourceManager &SM;
-
-  public:
-    explicit LocBeforeThanCompare(SourceManager &SM) : SM(SM) { }
-
-    bool operator()(SourceLocation LHS, SourceLocation RHS) const {
-      return SM.isBeforeInTranslationUnit(LHS, RHS);
-    }
-  };
 
   /// \brief Determines the order of 2 source locations in the "source location
   /// address space".
@@ -1520,6 +1487,35 @@ private:
   friend class ASTWriter;
 };
 
+/// \brief Comparison function object.
+template<typename T>
+class BeforeThanCompare;
+
+/// \brief Compare two source locations.
+template<>
+class BeforeThanCompare<SourceLocation> {
+  SourceManager &SM;
+
+public:
+  explicit BeforeThanCompare(SourceManager &SM) : SM(SM) { }
+
+  bool operator()(SourceLocation LHS, SourceLocation RHS) const {
+    return SM.isBeforeInTranslationUnit(LHS, RHS);
+  }
+};
+
+/// \brief Compare two non-overlapping source ranges.
+template<>
+class BeforeThanCompare<SourceRange> {
+  SourceManager &SM;
+
+public:
+  explicit BeforeThanCompare(SourceManager &SM) : SM(SM) { }
+
+  bool operator()(SourceRange LHS, SourceRange RHS) {
+    return SM.isBeforeInTranslationUnit(LHS.getBegin(), RHS.getBegin());
+  }
+};
 
 }  // end namespace clang
 
