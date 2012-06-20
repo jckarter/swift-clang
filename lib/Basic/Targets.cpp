@@ -3199,7 +3199,6 @@ public:
     Builder.defineMacro("__aarch64__");
     Builder.defineMacro("__ARM_ARCH_8__");
     Builder.defineMacro("__AARCH64_SIMD__");
-    Builder.defineMacro("__ARM_NEON__");
 
     // Target properties.
     Builder.defineMacro("_LP64");
