@@ -171,8 +171,12 @@ def VQSHRN_N   : SInst<"vqshrn_n", "hki", "silUsUiUl">;
 def VRSHRN_N   : IInst<"vrshrn_n", "hki", "silUsUiUl">;
 def VQRSHRN_N  : SInst<"vqrshrn_n", "hki", "silUsUiUl">;
 def VSHLL_N    : SInst<"vshll_n", "wdi", "csiUcUsUi">;
-def VRSHRN_HIGH : SInst<"vrshrn_high_n", "hhki", "RsRiRlRUsRUiRUl">;
-def VSHRN_HIGH  : SInst<"vshrn_high_n",  "hhki", "RsRiRlRUsRUiRUl">;
+def VRSHRN_HIGH_N   : SInst<"vrshrn_high_n", "hhki", "RsRiRlRUsRUiRUl">;
+def VSHRN_HIGH_N    : SInst<"vshrn_high_n", "hhki", "RsRiRlRUsRUiRUl">;
+def VQSHRUN_HIGH_N  : SInst<"vqshrun_high_n", "hhki", "RsRiRl">;
+def VQRSHRUN_HIGH_N : SInst<"vqrshrun_high_n", "hhki", "RsRiRl">;
+def VQSHRN_HIGH_N   : SInst<"vqshrn_high_n", "hhki", "RsRiRlRUsRUiRUl">;
+def VQRSHRN_HIGH_N  : SInst<"vqrshrn_high_n", "hhki", "RsRiRlRUsRUiRUl">;
 def VSHLL_HIGH_N : SInst<"vshll_high_n", "ndi", "RcRsRiRUcRUsRUi">;
 
 ////////////////////////////////////////////////////////////////////////////////
