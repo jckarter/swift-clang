@@ -899,6 +899,7 @@ DerivedArgList *Darwin::TranslateArgs(const DerivedArgList &Args,
     // may have installed private copies of libc++.
     } else if (isMacosxVersionLT(10, 7)) {
       where = "OS X 10.7";
+    }
 
     if (where != StringRef()) {
       getDriver().Diag(clang::diag::err_drv_invalid_libcxx_deployment)
