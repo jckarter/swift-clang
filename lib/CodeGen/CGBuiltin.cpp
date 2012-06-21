@@ -3980,25 +3980,50 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     llvm::Type *Tys[2] = { VTy, ArgTy };
     return EmitNeonCall(CGM.getIntrinsic(Int, Tys), Ops, "vsubw_high");
   }
-  case ARM64::BI__builtin_arm64_vrshrn_high_n_v: {
-    Int = Intrinsic::arm64_neon_rshrn2;
+  case ARM64::BI__builtin_arm64_vrshrn_high_n_v:
+  case ARM64::BI__builtin_arm64_vshrn_high_n_v:
+  case ARM64::BI__builtin_arm64_vqshrun_high_n_v:
+  case ARM64::BI__builtin_arm64_vqrshrun_high_n_v:
+  case ARM64::BI__builtin_arm64_vqshrn_high_n_v:
+  case ARM64::BI__builtin_arm64_vqrshrn_high_n_v: {
+    const char *Name;
+    switch (BuiltinID) {
+    default:
+      assert(0 && "Unexpected BuiltinID!");
+    case ARM64::BI__builtin_arm64_vrshrn_high_n_v:
+      Int = Intrinsic::arm64_neon_rshrn2;
+      Name = "vrshrn_high_n";
+      break;
+    case ARM64::BI__builtin_arm64_vshrn_high_n_v:
+      Int = Intrinsic::arm64_neon_shrn2;
+      Name = "vshrn_high_n";
+      break;
+    case ARM64::BI__builtin_arm64_vqshrun_high_n_v:
+      Int = Intrinsic::arm64_neon_sqshrun2;
+      Name = "vqshrun_high_n";
+      break;
+    case ARM64::BI__builtin_arm64_vqrshrun_high_n_v:
+      Int = Intrinsic::arm64_neon_sqrshrun2;
+      Name = "vqrshrun_high_n";
+      break;
+    case ARM64::BI__builtin_arm64_vqshrn_high_n_v:
+      Int = usgn ? Intrinsic::arm64_neon_uqshrn2 :
+        Intrinsic::arm64_neon_sqshrn2;
+      Name = "vqshrun_high_n";
+      break;
+    case ARM64::BI__builtin_arm64_vqrshrn_high_n_v:
+      Int = usgn ? Intrinsic::arm64_neon_uqrshrn2 :
+        Intrinsic::arm64_neon_sqrshrn2;
+      Name = "vqshrun_high_n";
+      break;
+    }
     unsigned NumElts = VTy->getNumElements();
-    unsigned BitWidth =cast<IntegerType>(VTy->getElementType())->getBitWidth();
+    unsigned BitWidth = cast<IntegerType>(VTy->getElementType())->getBitWidth();
     llvm::Type *DInt =
       llvm::IntegerType::get(getLLVMContext(), BitWidth*2);
     llvm::Type *ArgTy = llvm::VectorType::get(DInt, NumElts/2);
     llvm::Type *Tys[2] = { VTy, ArgTy };
-    return EmitNeonCall(CGM.getIntrinsic(Int, Tys), Ops, "vrshrn_high_n");
-  }
-  case ARM64::BI__builtin_arm64_vshrn_high_n_v: {
-    Int = Intrinsic::arm64_neon_shrn2;
-    unsigned NumElts = VTy->getNumElements();
-    unsigned BitWidth =cast<IntegerType>(VTy->getElementType())->getBitWidth();
-    llvm::Type *DInt =
-      llvm::IntegerType::get(getLLVMContext(), BitWidth*2);
-    llvm::Type *ArgTy = llvm::VectorType::get(DInt, NumElts/2);
-    llvm::Type *Tys[2] = { VTy, ArgTy };
-    return EmitNeonCall(CGM.getIntrinsic(Int, Tys), Ops, "vshrn_high_n");
+    return EmitNeonCall(CGM.getIntrinsic(Int, Tys), Ops, Name);
   }
   case ARM64::BI__builtin_arm64_vshll_high_n_v: {
     unsigned NumElts = VTy->getNumElements();
