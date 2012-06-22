@@ -10,6 +10,7 @@ add_clang_library(clangBasic
   IdentifierTable.cpp
   LangOptions.cpp
   Module.cpp
+  ObjCRuntime.cpp
   SourceLocation.cpp
   SourceManager.cpp
   TargetInfo.cpp
@@ -31,19 +32,19 @@ if (Subversion_FOUND AND EXISTS "${CLANG_SOURCE_DIR}/.svn")
     PROPERTIES COMPILE_DEFINITIONS "SVN_REVISION=\"${CLANG_WC_REVISION}\"")
 endif()
 
-add_dependencies(clangBasic 
-                 ClangARMNeon
-                 ClangARM64SIMD
-                 ClangAttrList
-                 ClangDiagnosticAnalysis
-                 ClangDiagnosticAST
-                 ClangDiagnosticCommon
-                 ClangDiagnosticDriver
-                 ClangDiagnosticFrontend
-                 ClangDiagnosticGroups
-                 ClangDiagnosticLex
-                 ClangDiagnosticParse
-                 ClangDiagnosticSema
-                 ClangDiagnosticSerialization
-                 ClangDiagnosticIndexName)
-                 
+add_dependencies(clangBasic
+  ClangARMNeon
+  ClangARM64SIMD
+  ClangAttrList
+  ClangDiagnosticAnalysis
+  ClangDiagnosticAST
+  ClangDiagnosticCommon
+  ClangDiagnosticDriver
+  ClangDiagnosticFrontend
+  ClangDiagnosticGroups
+  ClangDiagnosticLex
+  ClangDiagnosticParse
+  ClangDiagnosticSema
+  ClangDiagnosticSerialization
+  ClangDiagnosticIndexName
+  )

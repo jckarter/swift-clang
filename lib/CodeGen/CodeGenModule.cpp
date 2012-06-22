@@ -136,10 +136,21 @@ CodeGenModule::~CodeGenModule() {
 }
 
 void CodeGenModule::createObjCRuntime() {
-  if (!LangOpts.NeXTRuntime)
+  // This is just isGNUFamily(), but we want to force implementors of
+  // new ABIs to decide how best to do this.
+  switch (LangOpts.ObjCRuntime.getKind()) {
+  case ObjCRuntime::GNU:
+  case ObjCRuntime::FragileGNU:
     ObjCRuntime = CreateGNUObjCRuntime(*this);
-  else
+    return;
+
+  case ObjCRuntime::FragileMacOSX:
+  case ObjCRuntime::MacOSX:
+  case ObjCRuntime::iOS:
     ObjCRuntime = CreateMacObjCRuntime(*this);
+    return;
+  }
+  llvm_unreachable("bad runtime kind");
 }
 
 void CodeGenModule::createOpenCLRuntime() {
@@ -495,7 +506,7 @@ static bool hasUnwindExceptions(const LangOptions &LangOpts) {
 
   // If ObjC exceptions are enabled, this depends on the ABI.
   if (LangOpts.ObjCExceptions) {
-    if (!LangOpts.ObjCNonFragileABI) return false;
+    if (LangOpts.ObjCRuntime.isFragile()) return false;
   }
 
   return true;
@@ -2083,7 +2094,7 @@ CodeGenModule::GetAddrOfConstantString(const StringLiteral *Literal) {
     std::string StringClass(getLangOpts().ObjCConstantStringClass);
     llvm::Type *Ty = getTypes().ConvertType(getContext().IntTy);
     llvm::Constant *GV;
-    if (LangOpts.ObjCNonFragileABI) {
+    if (LangOpts.ObjCRuntime.isNonFragile()) {
       std::string str = 
         StringClass.empty() ? "OBJC_CLASS_$_NSConstantString" 
                             : "OBJC_CLASS_$_" + StringClass;
@@ -2171,7 +2182,7 @@ CodeGenModule::GetAddrOfConstantString(const StringLiteral *Literal) {
                                 "_unnamed_nsstring_");
   // FIXME. Fix section.
   if (const char *Sect = 
-        LangOpts.ObjCNonFragileABI 
+        LangOpts.ObjCRuntime.isNonFragile() 
           ? getContext().getTargetInfo().getNSStringNonFragileABISection() 
           : getContext().getTargetInfo().getNSStringSection())
     GV->setSection(Sect);
@@ -2554,7 +2565,7 @@ void CodeGenModule::EmitTopLevelDecl(Decl *D) {
 
   case Decl::ObjCImplementation: {
     ObjCImplementationDecl *OMD = cast<ObjCImplementationDecl>(D);
-    if (LangOpts.ObjCNonFragileABI2 && OMD->hasSynthBitfield())
+    if (LangOpts.ObjCRuntime.isNonFragile() && OMD->hasSynthBitfield())
       Context.ResetObjCLayout(OMD->getClassInterface());
     EmitObjCPropertyImplementations(OMD);
     EmitObjCIvarInitializations(OMD);

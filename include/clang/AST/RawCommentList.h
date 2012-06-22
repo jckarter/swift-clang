@@ -15,7 +15,6 @@
 
 namespace clang {
 
-class ASTContext;
 class ASTReader;
 
 class RawComment {
@@ -130,9 +129,9 @@ class BeforeThanCompare<RawComment> {
 public:
   explicit BeforeThanCompare(const SourceManager &SM) : SM(SM) { }
 
-  bool operator()(const RawComment &LHS, const SourceRange &RHS) {
+  bool operator()(const RawComment &LHS, const RawComment &RHS) {
     return SM.isBeforeInTranslationUnit(LHS.getSourceRange().getBegin(),
-                                        RHS.getBegin());
+                                        RHS.getSourceRange().getBegin());
   }
 };
 
@@ -143,7 +142,7 @@ public:
   RawCommentList(SourceManager &SourceMgr) :
     SourceMgr(SourceMgr), OnlyWhitespaceSeen(true) { }
 
-  void addComment(const RawComment &RC, ASTContext &Context);
+  void addComment(const RawComment &RC);
 
   ArrayRef<RawComment> getComments() const {
     return Comments;

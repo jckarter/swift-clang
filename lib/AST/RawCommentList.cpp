@@ -7,8 +7,7 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "clang/Comments/RawCommentList.h"
-#include "clang/AST/ASTContext.h"
+#include "clang/AST/RawCommentList.h"
 #include "llvm/ADT/STLExtras.h"
 
 using namespace clang;
@@ -61,7 +60,7 @@ RawComment::RawComment(const SourceManager &SourceMgr, SourceRange SR,
     Range(SR), RawTextValid(false), IsAlmostTrailingComment(false),
     BeginLineValid(false), EndLineValid(false) {
   // Extract raw comment text, if possible.
-  if (getRawText(SourceMgr).empty()) {
+  if (SR.getBegin() == SR.getEnd() || getRawText(SourceMgr).empty()) {
     Kind = CK_Invalid;
     return;
   }
@@ -155,15 +154,19 @@ bool onlyWhitespaceBetweenComments(SourceManager &SM,
 }
 } // unnamed namespace
 
-void RawCommentList::addComment(const RawComment &RC, ASTContext &Context) {
+void RawCommentList::addComment(const RawComment &RC) {
   if (RC.isInvalid())
     return;
 
-  assert((Comments.empty() ||
-          SourceMgr.isBeforeInTranslationUnit(
-              Comments[0].getSourceRange().getEnd(),
-              RC.getSourceRange().getBegin())) &&
-         "comments are not coming in source order");
+  // Check if the comments are not in source order.
+  while (!Comments.empty() &&
+         !SourceMgr.isBeforeInTranslationUnit(
+              Comments.back().getSourceRange().getBegin(),
+              RC.getSourceRange().getBegin())) {
+    // If they are, just pop a few last comments that don't fit.
+    // This happens if an \#include directive contains comments.
+    Comments.pop_back();
+  }
 
   if (OnlyWhitespaceSeen) {
     if (!onlyWhitespaceBetweenComments(SourceMgr, LastComment, RC))

@@ -631,7 +631,8 @@ def warn_auto_synthesizing_protocol_property :Warning<
   " declared in a protocol">,
   InGroup<DiagGroup<"objc-protocol-property-synthesis">>;
 def warn_autosynthesis_property_ivar_match :Warning<
-  "auto autosynthesized property has same name as an existing ivar">,
+  "autosynthesized property '%0' will use %select{|synthesized}1 instance variable "
+  "'%2', not existing instance variable '%3'">,
   InGroup<DiagGroup<"objc-autosynthesis-property-ivar-name-match">>;
 def warn_missing_explicit_synthesis : Warning <
   "auto property synthesis is synthesizing property not explicitly synthesized">,
@@ -3021,18 +3022,11 @@ def warn_undefined_internal : Warning<
 def note_used_here : Note<"used here">;
 
 def warn_internal_in_extern_inline : ExtWarn<
-  "%select{function|variable}0 %1 has internal linkage but is used in an "
-  "inline function with external linkage">,
-  InGroup<DiagGroup<"internal-linkage-in-inline"> >;
+  "static %select{function|variable}0 %1 is used in an inline function with "
+  "external linkage">, InGroup<DiagGroup<"static-in-inline"> >;
 def ext_internal_in_extern_inline : Extension<
-  "%select{function|variable}0 %1 has internal linkage but is used in an "
-  "inline function with external linkage">,
-  InGroup<DiagGroup<"internal-linkage-in-inline"> >;
-def warn_internal_in_extern_inline_cxx : Warning<
-  "%select{function|variable}0 %1 %select{has internal linkage|is in an anonymous"
-  " namespace}2 but is used in an inline %select{function|method}3 with"
-  " external linkage">,
-  InGroup<DiagGroup<"internal-linkage-in-inline"> >;
+  "static %select{function|variable}0 %1 is used in an inline function with "
+  "external linkage">, InGroup<DiagGroup<"static-in-inline"> >;
 def note_convert_inline_to_static : Note<
   "use 'static' to give inline function %0 internal linkage">;
 def note_internal_decl_declared_here : Note<
@@ -4843,6 +4837,9 @@ let CategoryName = "Inline Assembly Issue" in {
     "invalid use of a cast in a inline asm context requiring an l-value: "
     "accepted due to -fheinous-gnu-extensions, but clang may remove support "
     "for this in the future">;
+
+  def warn_unsupported_msasm : ExtWarn<
+    "MS-style inline assembly is not supported">, InGroup<Microsoft>;
 }
 
 let CategoryName = "Semantic Issue" in {
