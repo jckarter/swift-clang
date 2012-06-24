@@ -669,7 +669,7 @@ void CodeGenModule::EmitDeferred() {
     if (!DeferredVTables.empty()) {
       const CXXRecordDecl *RD = DeferredVTables.back();
       DeferredVTables.pop_back();
-      getVTables().GenerateClassData(getVTableLinkage(RD), RD);
+      getCXXABI().EmitVTables(RD);
       continue;
     }
 
@@ -1188,7 +1188,7 @@ CodeGenModule::GetOrCreateLLVMGlobal(StringRef MangledName,
     new llvm::GlobalVariable(getModule(), Ty->getElementType(), false,
                              llvm::GlobalValue::ExternalLinkage,
                              0, MangledName, 0,
-                             false, AddrSpace);
+                             llvm::GlobalVariable::NotThreadLocal, AddrSpace);
 
   // Handle things which are present even on external declarations.
   if (D) {
@@ -1212,6 +1212,12 @@ CodeGenModule::GetOrCreateLLVMGlobal(StringRef MangledName,
     }
 
     GV->setThreadLocal(D->isThreadSpecified());
+
+    // Set the TLS model if it it's explicitly specified.
+    if (D->hasAttr<TLSModelAttr>()) {
+      const TLSModelAttr *Attr = D->getAttr<TLSModelAttr>();
+      GV->setThreadLocalMode(GetLLVMTLSModel(Attr->getModel()));
+    }
   }
 
   if (AddrSpace != Ty->getAddressSpace())
@@ -1307,7 +1313,7 @@ void CodeGenModule::EmitTentativeDefinition(const VarDecl *D) {
 
 void CodeGenModule::EmitVTable(CXXRecordDecl *Class, bool DefinitionRequired) {
   if (DefinitionRequired)
-    getVTables().GenerateClassData(getVTableLinkage(Class), Class);
+    getCXXABI().EmitVTables(Class);
 }
 
 llvm::GlobalVariable::LinkageTypes 
