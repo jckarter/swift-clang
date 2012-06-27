@@ -348,7 +348,8 @@ StringRef CodeGenModule::getMangledName(GlobalDecl GD) {
   else if (const CXXDestructorDecl *D = dyn_cast<CXXDestructorDecl>(ND))
     getCXXABI().getMangleContext().mangleCXXDtor(D, GD.getDtorType(), Out);
   else if (const BlockDecl *BD = dyn_cast<BlockDecl>(ND))
-    getCXXABI().getMangleContext().mangleBlock(BD, Out);
+    getCXXABI().getMangleContext().mangleBlock(BD, Out,
+      dyn_cast_or_null<VarDecl>(initializedGlobalDecl.getDecl()));
   else
     getCXXABI().getMangleContext().mangleName(ND, Out);
 
@@ -369,7 +370,8 @@ void CodeGenModule::getBlockMangledName(GlobalDecl GD, MangleBuffer &Buffer,
   const Decl *D = GD.getDecl();
   llvm::raw_svector_ostream Out(Buffer.getBuffer());
   if (D == 0)
-    MangleCtx.mangleGlobalBlock(BD, Out);
+    MangleCtx.mangleGlobalBlock(BD, 
+      dyn_cast_or_null<VarDecl>(initializedGlobalDecl.getDecl()), Out);
   else if (const CXXConstructorDecl *CD = dyn_cast<CXXConstructorDecl>(D))
     MangleCtx.mangleCtorBlock(CD, GD.getCtorType(), BD, Out);
   else if (const CXXDestructorDecl *DD = dyn_cast<CXXDestructorDecl>(D))
@@ -1552,8 +1554,10 @@ void CodeGenModule::EmitGlobalVarDefinition(const VarDecl *D) {
     // FIXME: It does so in a global constructor, which is *not* what we
     // want.
 
-    if (!Init)
+    if (!Init) {
+      initializedGlobalDecl = GlobalDecl(D);
       Init = EmitConstantInit(*InitDecl);
+    }
     if (!Init) {
       QualType T = InitExpr->getType();
       if (D->getType()->isReferenceType())
