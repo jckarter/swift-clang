@@ -133,7 +133,7 @@ def VMINNM : SInst<"vminnm", "ddd", "fQfQd">;
 
 ////////////////////////////////////////////////////////////////////////////////
 // Pairwise Addition
-def VPADD  : IInst<"vpadd", "ddd", "csiUcUsUif">;
+def VPADD  : IInst<"vpadd", "ddd", "csiUcUsUifQcQsQiQlQfQd">;
 def VPADDL : SInst<"vpaddl", "nd",  "csiUcUsUiQcQsQiQUcQUsQUi">;
 def VPADAL : SInst<"vpadal", "nnd", "csiUcUsUiQcQsQiQUcQUsQUi">;
 
