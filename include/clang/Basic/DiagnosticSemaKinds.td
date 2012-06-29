@@ -23,6 +23,9 @@ def warn_variables_not_in_loop_body : Warning<
 def warn_identical_enum_values : Warning<
   "all elements of %0 are initialized with literals to value %1">,
   InGroup<DiagGroup<"unique-enum">>;
+def note_identical_enum_values : Note<
+  "initialize the last element with the previous element to silence "
+  "this warning">;
 
 // Constant expressions
 def err_expr_not_ice : Error<
@@ -635,8 +638,8 @@ def warn_auto_synthesizing_protocol_property :Warning<
   " declared in a protocol">,
   InGroup<DiagGroup<"objc-protocol-property-synthesis">>;
 def warn_autosynthesis_property_ivar_match :Warning<
-  "autosynthesized property '%0' will use %select{|synthesized}1 instance variable "
-  "'%2', not existing instance variable '%3'">,
+  "autosynthesized property %0 will use %select{|synthesized}1 instance variable "
+  "%2, not existing instance variable %3">,
   InGroup<DiagGroup<"objc-autosynthesis-property-ivar-name-match">>;
 def warn_missing_explicit_synthesis : Warning <
   "auto property synthesis is synthesizing property not explicitly synthesized">,
