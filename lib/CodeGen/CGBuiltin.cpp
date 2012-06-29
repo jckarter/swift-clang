@@ -2594,6 +2594,7 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     return Builder.CreateAdd(addend, tmp);
   }
   case ARM64::BI__builtin_arm64_vpadd_v:
+  case ARM64::BI__builtin_arm64_vpaddq_v:
     Int = Intrinsic::arm64_neon_addp;
     if (Ty->isFPOrFPVectorTy()) Int = Intrinsic::arm64_neon_faddp;
     return EmitNeonCall(CGM.getIntrinsic(Int, Ty), Ops, "vpadd");
