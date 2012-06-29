@@ -3592,6 +3592,7 @@ namespace {
 
 namespace {
 class MipsTargetInfoBase : public TargetInfo {
+  static const Builtin::Info BuiltinInfo[];
   std::string CPU;
   bool SoftFloat;
   bool SingleFloat;
@@ -3641,7 +3642,8 @@ public:
                                 MacroBuilder &Builder) const = 0;
   virtual void getTargetBuiltins(const Builtin::Info *&Records,
                                  unsigned &NumRecords) const {
-    // FIXME: Implement!
+    Records = BuiltinInfo;
+    NumRecords = clang::Mips::LastTSBuiltin - Builtin::FirstTSBuiltin;
   }
   virtual bool hasFeature(StringRef Feature) const {
     return Feature == "mips";
@@ -3728,6 +3730,13 @@ public:
       }
     }
   }
+};
+
+const Builtin::Info MipsTargetInfoBase::BuiltinInfo[] = {
+#define BUILTIN(ID, TYPE, ATTRS) { #ID, TYPE, ATTRS, 0, ALL_LANGUAGES },
+#define LIBBUILTIN(ID, TYPE, ATTRS, HEADER) { #ID, TYPE, ATTRS, HEADER,\
+                                              ALL_LANGUAGES },
+#include "clang/Basic/BuiltinsMips.def"
 };
 
 class Mips32TargetInfoBase : public MipsTargetInfoBase {
