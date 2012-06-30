@@ -393,6 +393,7 @@ void Driver::generateCompilationDiagnostics(Compilation &C,
   // Suppress driver output and emit preprocessor output to temp file.
   CCCIsCPP = true;
   CCGenDiagnostics = true;
+  C.getArgs().AddFlagArg(0, Opts->getOption(options::OPT_frewrite_includes));
 
   // Save the original job command(s).
   std::string Cmd;
@@ -1182,7 +1183,10 @@ Action *Driver::ConstructPhaseAction(const ArgList &Args, phases::ID Phase,
     if (Args.hasArg(options::OPT_M, options::OPT_MM)) {
       OutputTy = types::TY_Dependencies;
     } else {
-      OutputTy = types::getPreprocessedType(Input->getType());
+      OutputTy = Input->getType();
+      if (!Args.hasFlag(options::OPT_frewrite_includes,
+                        options::OPT_fno_rewrite_includes, false))
+        OutputTy = types::getPreprocessedType(OutputTy);
       assert(OutputTy != types::TY_INVALID &&
              "Cannot preprocess this input type!");
     }

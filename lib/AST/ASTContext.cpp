@@ -4150,6 +4150,8 @@ std::string ASTContext::getObjCEncodingForBlock(const BlockExpr *Expr) const {
        E = Decl->param_end(); PI != E; ++PI) {
     QualType PType = (*PI)->getType();
     CharUnits sz = getObjCEncodingTypeSize(PType);
+    if (sz.isZero())
+      continue;
     assert (sz.isPositive() && "BlockExpr - Incomplete param type");
     ParmOffset += sz;
   }
@@ -4191,8 +4193,8 @@ bool ASTContext::getObjCEncodingForFunctionDecl(const FunctionDecl *Decl,
     QualType PType = (*PI)->getType();
     CharUnits sz = getObjCEncodingTypeSize(PType);
     if (sz.isZero())
-      return true;
-    
+      continue;
+ 
     assert (sz.isPositive() && 
         "getObjCEncodingForFunctionDecl - Incomplete param type");
     ParmOffset += sz;
@@ -4260,8 +4262,8 @@ bool ASTContext::getObjCEncodingForMethodDecl(const ObjCMethodDecl *Decl,
     QualType PType = (*PI)->getType();
     CharUnits sz = getObjCEncodingTypeSize(PType);
     if (sz.isZero())
-      return true;
-    
+      continue;
+ 
     assert (sz.isPositive() && 
         "getObjCEncodingForMethodDecl - Incomplete param type");
     ParmOffset += sz;
