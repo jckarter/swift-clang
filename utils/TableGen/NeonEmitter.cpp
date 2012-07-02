@@ -415,6 +415,10 @@ static char ModType(const char mod, char type, bool &quad, bool &poly,
     case 'a':
       scal = true;
       break;
+    case 'q':
+      scal = true;
+      type = Narrow(type);
+      break;
     case 'z':
       scal = true;
       type = Widen(type);
@@ -1181,7 +1185,9 @@ static std::string GenBuiltin(const std::string &name,
   // Check if the prototype has a scalar operand with the type of the vector
   // elements.  If not, bitcasting the args will take care of arg checking.
   // The actual signedness etc. will be taken care of with special enums.
-  if ((proto.find('s') == std::string::npos) && (proto.find('z') == std::string::npos))
+  if (proto.find('s') == std::string::npos &&
+      proto.find('q') == std::string::npos &&
+      proto.find('z') == std::string::npos)
     ck = ClassB;
 
   if (proto[0] != 'v') {
@@ -1295,6 +1301,7 @@ static std::string GenBuiltinDef(const std::string &name,
   // of arg checking.  The actual signedness etc. will be taken care of with
   // special enums.
   if (proto.find('s') == std::string::npos &&
+      proto.find('q') == std::string::npos &&
       proto.find('z') == std::string::npos)
     ck = ClassB;
 
@@ -1648,6 +1655,7 @@ void NeonEmitter::runHeader(raw_ostream &OS) {
     // Functions which have a scalar argument cannot be overloaded, no need to
     // check them if we are emitting the type checking code.
     if (Proto.find('s') != std::string::npos ||
+        Proto.find('q') != std::string::npos ||
         Proto.find('z') != std::string::npos)
       continue;
 
@@ -1767,6 +1775,7 @@ void NeonEmitter::runHeader(raw_ostream &OS) {
         ck = ClassB;
         rangestr = "l = 1; u = 31"; // upper bound = l + u
       } else if (Proto.find('s') == std::string::npos &&
+                 Proto.find('q') == std::string::npos &&
                  Proto.find('z') == std::string::npos) {
         // Builtins which are overloaded by type will need to have their upper
         // bound computed at Sema time based on the type constant.

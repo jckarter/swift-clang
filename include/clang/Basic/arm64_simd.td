@@ -241,6 +241,9 @@ def VCVTZ_U32 : SInst<"vcvtz_u32", "ud", "fQf">;
 def VCVTZ_S64 : SInst<"vcvtz_s64", "xd", "Qd">;
 def VCVTZ_U64 : SInst<"vcvtz_u64", "ud", "Qd">;
 
+// Narrowing inexact
+def VCVTXD : SInst<"vcvtxd_f32", "qs", "d">;
+
 def VRND_A : SInst<"vrnda", "dd", "f">;
 def VRND_I : SInst<"vrndi", "dd", "f">;
 def VRND_M : SInst<"vrndm", "dd", "f">;

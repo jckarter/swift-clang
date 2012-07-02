@@ -2247,6 +2247,11 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
   // Handle non-overloaded intrinsics first.
   switch (BuiltinID) {
   default: break;
+  case ARM64::BI__builtin_arm64_vcvtxd_f32_f64: {
+    Ops.push_back(EmitScalarExpr(E->getArg(0)));
+    return EmitNeonCall(CGM.getIntrinsic(Intrinsic::arm64_sisd_fcvtxn), Ops,
+                        "vcvtxd");
+  }
   case ARM64::BI__builtin_arm64_vpaddd_s64: {
     llvm::Type *Ty =
       llvm::VectorType::get(llvm::Type::getInt64Ty(getLLVMContext()), 2);
