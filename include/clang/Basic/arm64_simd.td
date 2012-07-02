@@ -325,7 +325,7 @@ def VDUP_LANE : Inst<"vdup_lane", "dgi",
 
 ////////////////////////////////////////////////////////////////////////////////
 // Combining vectors
-def VCOMBINE : Inst<"vcombine", "kdd", "csilhfUcUsUiUlPcPs", OP_CONC>;
+def VCOMBINE : Inst<"vcombine", "kdd", "csilhfdUcUsUiUlPcPs", OP_CONC>;
 
 ////////////////////////////////////////////////////////////////////////////////
 // Splitting vectors
