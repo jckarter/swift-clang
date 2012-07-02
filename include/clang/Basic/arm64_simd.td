@@ -240,14 +240,6 @@ def VCVTZ_S32 : SInst<"vcvtz_s32", "xd", "fQf">;
 def VCVTZ_U32 : SInst<"vcvtz_u32", "ud", "fQf">;
 def VCVTZ_S64 : SInst<"vcvtz_s64", "xd", "Qd">;
 def VCVTZ_U64 : SInst<"vcvtz_u64", "ud", "Qd">;
-//let isShift = 1 in {
-//def VCVTI_M : SInst<"vcvti_m", "fdi", "iUiQiQUiQlQUl">;
-//def VCVTI_N : SInst<"vcvti_n", "fdi", "iUiQiQUiQlQUl">;
-//def VCVTI_P : SInst<"vcvti_p", "fdi", "iUiQiQUiQlQUl">;
-//def VCVTI_Z : SInst<"vcvti_z", "fdi", "iUiQiQUiQlQUl">;
-//}
-//def VCVT  : SInst<"vcvt_f32",  "bd", "Rd">;
-//def VCVT2 : SInst<"vcvt2_f32", "hhd", "Rd">;
 
 def VRND_A : SInst<"vrnda", "dd", "f">;
 def VRND_I : SInst<"vrndi", "dd", "f">;
