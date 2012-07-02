@@ -244,6 +244,14 @@ def VCVTZ_U64 : SInst<"vcvtz_u64", "ud", "Qd">;
 // Narrowing inexact
 def VCVTXD : SInst<"vcvtxd_f32", "qs", "d">;
 
+// Scalar int<-->float conversions.
+def VCVTS_F32 : SInst<"vcvts_f32", "ms", "iUi">;
+def VCVTD_F64 : SInst<"vcvtd_f64", "ms", "lUl">;
+def VCVTS_S32 : SInst<"vcvts_s32", "os", "f">;
+def VCVTS_U32 : SInst<"vcvts_u32", "rs", "f">;
+def VCVTD_S64 : SInst<"vcvtd_s64", "os", "d">;
+def VCVTD_U64 : SInst<"vcvtd_u64", "rs", "d">;
+
 def VRND_A : SInst<"vrnda", "dd", "f">;
 def VRND_I : SInst<"vrndi", "dd", "f">;
 def VRND_M : SInst<"vrndm", "dd", "f">;

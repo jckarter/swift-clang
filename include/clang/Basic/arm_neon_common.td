@@ -111,6 +111,9 @@ class WInst<string n, string p, string t> : Inst<n, p, t, OP_NONE> {}
 // l: constant uint64
 // s: scalar of element type
 // a: scalar of element type (splat to vector type)
+// m: scalar of float type (same size as int arg elements)
+// o: scalar of signed int type (same size as float arg elements)
+// r: scalar of unsigned int type (same size as float arg elements)
 // q: scalar of half element type width
 // z: scalar of double element type width
 // k: default elt width, double num elts

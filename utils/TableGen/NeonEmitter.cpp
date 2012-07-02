@@ -392,6 +392,29 @@ static char ModType(const char mod, char type, bool &quad, bool &poly,
       type = ToFloat(type);
       usgn = false;
       break;
+    case 'm':
+      scal = true;
+      type = ToFloat(type);
+      usgn = false;
+      break;
+    case 'o':
+      scal = true;
+      usgn = false;
+      poly = false;
+      if (type == 'f')
+        type = 'i';
+      else if (type == 'd')
+        type = 'l';
+      break;
+    case 'r':
+      scal = true;
+      usgn = true;
+      poly = false;
+      if (type == 'f')
+        type = 'i';
+      else if (type == 'd')
+        type = 'l';
+      break;
     case 'g':
       quad = false;
       break;
@@ -1187,6 +1210,9 @@ static std::string GenBuiltin(const std::string &name,
   // The actual signedness etc. will be taken care of with special enums.
   if (proto.find('s') == std::string::npos &&
       proto.find('q') == std::string::npos &&
+      proto.find('m') == std::string::npos &&
+      proto.find('o') == std::string::npos &&
+      proto.find('r') == std::string::npos &&
       proto.find('z') == std::string::npos)
     ck = ClassB;
 
@@ -1302,6 +1328,9 @@ static std::string GenBuiltinDef(const std::string &name,
   // special enums.
   if (proto.find('s') == std::string::npos &&
       proto.find('q') == std::string::npos &&
+      proto.find('m') == std::string::npos &&
+      proto.find('o') == std::string::npos &&
+      proto.find('r') == std::string::npos &&
       proto.find('z') == std::string::npos)
     ck = ClassB;
 
@@ -1656,6 +1685,9 @@ void NeonEmitter::runHeader(raw_ostream &OS) {
     // check them if we are emitting the type checking code.
     if (Proto.find('s') != std::string::npos ||
         Proto.find('q') != std::string::npos ||
+        Proto.find('m') != std::string::npos ||
+        Proto.find('o') != std::string::npos ||
+        Proto.find('r') != std::string::npos ||
         Proto.find('z') != std::string::npos)
       continue;
 
@@ -1776,6 +1808,9 @@ void NeonEmitter::runHeader(raw_ostream &OS) {
         rangestr = "l = 1; u = 31"; // upper bound = l + u
       } else if (Proto.find('s') == std::string::npos &&
                  Proto.find('q') == std::string::npos &&
+                 Proto.find('m') == std::string::npos &&
+                 Proto.find('o') == std::string::npos &&
+                 Proto.find('r') == std::string::npos &&
                  Proto.find('z') == std::string::npos) {
         // Builtins which are overloaded by type will need to have their upper
         // bound computed at Sema time based on the type constant.
