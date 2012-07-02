@@ -608,6 +608,9 @@ void ASTContext::InitBuiltinTypes(const TargetInfo &Target) {
 
   // half type (OpenCL 6.1.1.1) / ARM NEON __fp16
   InitBuiltinType(HalfTy, BuiltinType::Half);
+
+  // Builtin type used to help define __builtin_va_list.
+  VaListTagTy = QualType();
 }
 
 DiagnosticsEngine &ASTContext::getDiagnostics() const {
@@ -5116,6 +5119,7 @@ static TypedefDecl *CreatePowerABIBuiltinVaListDecl(const ASTContext *Context) {
   }
   VaListTagDecl->completeDefinition();
   QualType VaListTagType = Context->getRecordType(VaListTagDecl);
+  Context->VaListTagTy = VaListTagType;
 
   // } __va_list_tag;
   TypedefDecl *VaListTagTypedefDecl
@@ -5189,6 +5193,7 @@ CreateX86_64ABIBuiltinVaListDecl(const ASTContext *Context) {
   }
   VaListTagDecl->completeDefinition();
   QualType VaListTagType = Context->getRecordType(VaListTagDecl);
+  Context->VaListTagTy = VaListTagType;
 
   // } __va_list_tag;
   TypedefDecl *VaListTagTypedefDecl
@@ -5256,6 +5261,15 @@ TypedefDecl *ASTContext::getBuiltinVaListDecl() const {
     BuiltinVaListDecl = CreateVaListDecl(this, Target->getBuiltinVaListKind());
 
   return BuiltinVaListDecl;
+}
+
+QualType ASTContext::getVaListTagType() const {
+  // Force the creation of VaListTagTy by building the __builtin_va_list
+  // declaration.
+  if (VaListTagTy.isNull())
+    (void) getBuiltinVaListDecl();
+
+  return VaListTagTy;
 }
 
 void ASTContext::setObjCConstantStringInterface(ObjCInterfaceDecl *Decl) {
