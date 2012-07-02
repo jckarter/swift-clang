@@ -425,6 +425,10 @@ public:
     return EntireRange;
   }
 
+  const ObjCPropertyRefExpr *getPropertyExpr() const {
+    return PropE;
+  }
+
   static bool classof(const CallEvent *CA) {
     return CA->getKind() == CE_ObjCPropertyAccess;
   }
