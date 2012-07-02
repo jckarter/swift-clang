@@ -1443,7 +1443,7 @@ void NeonEmitter::run(raw_ostream &OS) {
   // Emit Neon vector typedefs.
   std::string TypedefTypes;
   if (IsARM64)
-    TypedefTypes = "cQcsQsiQilQlUcQUcUsQUsUiQUiUlQUlhQhfQfQdPcQPcPsQPs";
+    TypedefTypes = "cQcsQsiQilQlUcQUcUsQUsUiQUiUlQUlhQhfQfdQdPcQPcPsQPs";
   else
     TypedefTypes = "cQcsQsiQilQlUcQUcUsQUsUiQUiUlQUlhQhfQfPcQPcPsQPs";
   SmallVector<StringRef, 24> TDTypeVec;
