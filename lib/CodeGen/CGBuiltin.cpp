@@ -2247,6 +2247,19 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
   // Handle non-overloaded intrinsics first.
   switch (BuiltinID) {
   default: break;
+  case ARM64::BI__builtin_arm64_vpaddd_s64: {
+    llvm::Type *Ty =
+      llvm::VectorType::get(llvm::Type::getInt64Ty(getLLVMContext()), 2);
+    Value *Vec = EmitScalarExpr(E->getArg(0));
+    // The vector is v2f64, so make sure it's bitcast to that.
+    Vec = Builder.CreateBitCast(Vec, Ty, "v2i64");
+    llvm::Value *Idx0 = llvm::ConstantInt::get(Int32Ty, 0);
+    llvm::Value *Idx1 = llvm::ConstantInt::get(Int32Ty, 1);
+    Value *Op0 = Builder.CreateExtractElement(Vec, Idx0, "lane0");
+    Value *Op1 = Builder.CreateExtractElement(Vec, Idx1, "lane1");
+    // Pairwise addition of a v2f64 into a scalar f64.
+    return Builder.CreateAdd(Op0, Op1, "vpaddd");
+  }
   case ARM64::BI__builtin_arm64_vpaddd_f64: {
     llvm::Type *Ty =
       llvm::VectorType::get(llvm::Type::getDoubleTy(getLLVMContext()), 2);
