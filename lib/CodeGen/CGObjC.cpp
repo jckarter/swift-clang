@@ -1031,6 +1031,9 @@ static bool UseOptimizedSetter(CodeGenModule &CGM) {
     return false;
   const TargetInfo &Target = CGM.getContext().getTargetInfo();
 
+  if (Target.getPlatformName() == "ios")
+    return Target.getPlatformMinVersion() >= VersionTuple(6);
+    
   if (Target.getPlatformName() != "macosx")
     return false;
 
@@ -1094,7 +1097,7 @@ CodeGenFunction::generateObjCSetterBody(const ObjCImplementationDecl *classImpl,
     llvm::Value *setOptimizedPropertyFn = 0;
     llvm::Value *setPropertyFn = 0;
     if (UseOptimizedSetter(CGM)) {
-      // 10.8 code and GC is off
+      // 10.8 and iOS 6.0 code and GC is off
       setOptimizedPropertyFn = 
         CGM.getObjCRuntime()
            .GetOptimizedPropertySetFunction(strategy.isAtomic(),

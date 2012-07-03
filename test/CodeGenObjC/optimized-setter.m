@@ -1,4 +1,5 @@
 // RUN: %clang_cc1 %s -emit-llvm -triple x86_64-apple-macosx10.8.0 -o - | FileCheck %s
+// RUN: %clang_cc1 %s -emit-llvm -triple x86_64-apple-ios6.0.0 -o - | FileCheck %s
 // rdar://10179974
 
 @interface I

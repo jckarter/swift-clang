@@ -135,7 +135,7 @@ public:
     switch (getKind()) {
     case FragileMacOSX: return false;
     case MacOSX: return getVersion() >= VersionTuple(10, 8);
-    case iOS: return false;
+    case iOS: return getVersion() >= VersionTuple(6);
 
     // This is really a lie, because some implementations and versions
     // of the runtime do not support ARC.  Probably -fgnu-runtime
