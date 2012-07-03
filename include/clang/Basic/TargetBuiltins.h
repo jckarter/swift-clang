@@ -6,6 +6,12 @@
 // License. See LICENSE.TXT for details.
 //
 //===----------------------------------------------------------------------===//
+///
+/// \file
+/// \brief Enumerates target-specific builtins in their own namespaces within
+/// namespace ::clang.
+///
+//===----------------------------------------------------------------------===//
 
 #ifndef LLVM_CLANG_BASIC_TARGET_BUILTINS_H
 #define LLVM_CLANG_BASIC_TARGET_BUILTINS_H
@@ -15,7 +21,7 @@
 
 namespace clang {
 
-  /// ARM builtins
+  /// \brief ARM builtins
   namespace ARM {
     enum {
         LastTIBuiltin = clang::Builtin::FirstTSBuiltin-1,
@@ -25,7 +31,7 @@ namespace clang {
     };
   }
 
-  /// ARM64 builtins
+  /// \brief ARM64 builtins
   namespace ARM64 {
     enum {
         LastTIBuiltin = clang::Builtin::FirstTSBuiltin-1,
@@ -35,7 +41,7 @@ namespace clang {
     };
   }
 
-  /// PPC builtins
+  /// \brief PPC builtins
   namespace PPC {
     enum {
         LastTIBuiltin = clang::Builtin::FirstTSBuiltin-1,
@@ -45,7 +51,7 @@ namespace clang {
     };
   }
 
-  /// NVPTX builtins
+  /// \brief NVPTX builtins
   namespace NVPTX {
     enum {
         LastTIBuiltin = clang::Builtin::FirstTSBuiltin-1,
@@ -56,7 +62,7 @@ namespace clang {
   }
 
 
-  /// X86 builtins
+  /// \brief X86 builtins
   namespace X86 {
     enum {
         LastTIBuiltin = clang::Builtin::FirstTSBuiltin-1,
@@ -66,9 +72,9 @@ namespace clang {
     };
   }
 
-  /// NeonTypeFlags - Flags to identify the types for overloaded Neon
-  /// builtins.  These must be kept in sync with the flags in
-  /// utils/TableGen/NeonEmitter.h.
+  /// \brief Flags to identify the types for overloaded Neon builtins.
+  ///
+  /// These must be kept in sync with the flags in utils/TableGen/NeonEmitter.h.
   class NeonTypeFlags {
     enum {
       EltTypeMask = 0xf,
@@ -107,7 +113,7 @@ namespace clang {
     bool isQuad() const { return (Flags & QuadFlag) != 0; }
   };
 
-  /// Hexagon builtins
+  /// \brief Hexagon builtins
   namespace Hexagon {
     enum {
         LastTIBuiltin = clang::Builtin::FirstTSBuiltin-1,
@@ -117,7 +123,7 @@ namespace clang {
     };
   }
 
-  /// Mips builtins
+  /// \brief MIPS builtins
   namespace Mips {
     enum {
         LastTIBuiltin = clang::Builtin::FirstTSBuiltin-1,
