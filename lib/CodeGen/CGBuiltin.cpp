@@ -1632,7 +1632,10 @@ Value *CodeGenFunction::EmitARMBuiltinExpr(unsigned BuiltinID,
   }
   case ARM::BI__builtin_neon_vclz_v:
   case ARM::BI__builtin_neon_vclzq_v: {
-    Function *F = CGM.getIntrinsic(Intrinsic::arm_neon_vclz, Ty);
+    // generate target-independent intrinsic; also need to add second argument
+    // for whether or not clz of zero is undefined; on ARM it isn't.
+    Function *F = CGM.getIntrinsic(Intrinsic::ctlz, Ty);
+    Ops.push_back(Builder.getInt1(Target.isCLZForZeroUndef()));
     return EmitNeonCall(F, Ops, "vclz");
   }
   case ARM::BI__builtin_neon_vcnt_v:
@@ -3661,7 +3664,10 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
                         Ops, "vqneg");
   case ARM64::BI__builtin_arm64_vclz_v:
   case ARM64::BI__builtin_arm64_vclzq_v: {
+    // generate target-independent intrinsic; also need to add second argument
+    // for whether or not clz of zero is undefined; on ARM64 it isn't.
     Function *F = CGM.getIntrinsic(Intrinsic::ctlz, Ty);
+    Ops.push_back(Builder.getInt1(Target.isCLZForZeroUndef()));
     return EmitNeonCall(F, Ops, "vclz");
   }
   case ARM64::BI__builtin_arm64_vcls_v:
