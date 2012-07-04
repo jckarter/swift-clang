@@ -2971,7 +2971,7 @@ ObjCRuntime Clang::AddObjCRuntimeArgs(const ArgList &args,
   // -fgnu-runtime
   } else {
     assert(runtimeArg->getOption().matches(options::OPT_fgnu_runtime));
-    runtime = ObjCRuntime(ObjCRuntime::GNU, VersionTuple());
+    runtime = ObjCRuntime(ObjCRuntime::GCC, VersionTuple());
   }
 
   cmdArgs.push_back(args.MakeArgString(
@@ -4385,6 +4385,14 @@ void darwin::Link::ConstructJob(Compilation &C, const JobAction &JA,
 
             // darwin_crt2 spec is empty.
           }
+          // By default on OS X 10.8 and later, we don't link with a crt1.o
+          // file and the linker knows to use _main as the entry point.  But,
+          // when compiling with -pg, we need to link with the gcrt1.o file,
+          // so pass the -no_new_main option to tell the linker to use the
+          // "start" symbol as the entry point.
+          if (getDarwinToolChain().isTargetMacOS() &&
+              !getDarwinToolChain().isMacosxVersionLT(10, 8))
+            CmdArgs.push_back("-no_new_main");
         } else {
           if (Args.hasArg(options::OPT_static) ||
               Args.hasArg(options::OPT_object) ||
