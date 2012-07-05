@@ -2504,7 +2504,8 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
   if (objcRuntime.isNonFragile()) {
     if (!Args.hasFlag(options::OPT_fobjc_legacy_dispatch,
                       options::OPT_fno_objc_legacy_dispatch,
-                      getToolChain().IsObjCLegacyDispatchDefault())) {
+                      objcRuntime.isLegacyDispatchDefaultForArch(
+                        getToolChain().getTriple().getArch()))) {
       if (getToolChain().UseObjCMixedDispatch())
         CmdArgs.push_back("-fobjc-dispatch-method=mixed");
       else
@@ -2971,7 +2972,12 @@ ObjCRuntime Clang::AddObjCRuntimeArgs(const ArgList &args,
   // -fgnu-runtime
   } else {
     assert(runtimeArg->getOption().matches(options::OPT_fgnu_runtime));
-    runtime = ObjCRuntime(ObjCRuntime::GCC, VersionTuple());
+    // Legacy behaviour is to target the gnustep runtime if we are i
+    // non-fragile mode or the GCC runtime in fragile mode.
+    if (isNonFragile)
+      runtime = ObjCRuntime(ObjCRuntime::GNUstep, VersionTuple());
+    else
+      runtime = ObjCRuntime(ObjCRuntime::GCC, VersionTuple());
   }
 
   cmdArgs.push_back(args.MakeArgString(

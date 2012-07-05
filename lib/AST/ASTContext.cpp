@@ -4856,7 +4856,7 @@ void ASTContext::getObjCEncodingForStructureImpl(RecordDecl *RDecl,
         CXXRecordDecl *base = BI->getType()->getAsCXXRecordDecl();
         if (base->isEmpty())
           continue;
-        uint64_t offs = layout.getBaseClassOffsetInBits(base);
+        uint64_t offs = toBits(layout.getBaseClassOffset(base));
         FieldOrBaseOffsets.insert(FieldOrBaseOffsets.upper_bound(offs),
                                   std::make_pair(offs, base));
       }
@@ -4879,7 +4879,7 @@ void ASTContext::getObjCEncodingForStructureImpl(RecordDecl *RDecl,
       CXXRecordDecl *base = BI->getType()->getAsCXXRecordDecl();
       if (base->isEmpty())
         continue;
-      uint64_t offs = layout.getVBaseClassOffsetInBits(base);
+      uint64_t offs = toBits(layout.getVBaseClassOffset(base));
       if (FieldOrBaseOffsets.find(offs) == FieldOrBaseOffsets.end())
         FieldOrBaseOffsets.insert(FieldOrBaseOffsets.end(),
                                   std::make_pair(offs, base));
