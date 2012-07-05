@@ -2231,6 +2231,45 @@ Value *CodeGenFunction::EmitARMBuiltinExpr(unsigned BuiltinID,
   }
 }
 
+static unsigned getARM64IntrinsicFCVT(unsigned Builtin) {
+  switch (Builtin) {
+  default: assert(0 && "Unexpected builtin!"); break;
+  case ARM64::BI__builtin_arm64_vcvtas_u32_f32:
+    return Intrinsic::arm64_neon_fcvtas;
+  case ARM64::BI__builtin_arm64_vcvtad_u64_f64:
+    return Intrinsic::arm64_neon_fcvtau;
+  case ARM64::BI__builtin_arm64_vcvtns_u32_f32:
+    return Intrinsic::arm64_neon_fcvtns;
+  case ARM64::BI__builtin_arm64_vcvtnd_u64_f64:
+    return Intrinsic::arm64_neon_fcvtns;
+  case ARM64::BI__builtin_arm64_vcvtms_u32_f32:
+    return Intrinsic::arm64_neon_fcvtms;
+  case ARM64::BI__builtin_arm64_vcvtmd_u64_f64:
+    return Intrinsic::arm64_neon_fcvtms;
+  case ARM64::BI__builtin_arm64_vcvtps_u32_f32:
+    return Intrinsic::arm64_neon_fcvtps;
+  case ARM64::BI__builtin_arm64_vcvtpd_u64_f64:
+    return Intrinsic::arm64_neon_fcvtas;
+  case ARM64::BI__builtin_arm64_vcvtas_s32_f32:
+    return Intrinsic::arm64_neon_fcvtas;
+  case ARM64::BI__builtin_arm64_vcvtad_s64_f64:
+    return Intrinsic::arm64_neon_fcvtns;
+  case ARM64::BI__builtin_arm64_vcvtns_s32_f32:
+    return Intrinsic::arm64_neon_fcvtns;
+  case ARM64::BI__builtin_arm64_vcvtnd_s64_f64:
+    return Intrinsic::arm64_neon_fcvtms;
+  case ARM64::BI__builtin_arm64_vcvtms_s32_f32:
+    return Intrinsic::arm64_neon_fcvtms;
+  case ARM64::BI__builtin_arm64_vcvtmd_s64_f64:
+    return Intrinsic::arm64_neon_fcvtms;
+  case ARM64::BI__builtin_arm64_vcvtps_s32_f32:
+    return Intrinsic::arm64_neon_fcvtps;
+  case ARM64::BI__builtin_arm64_vcvtpd_s64_f64:
+    return Intrinsic::arm64_neon_fcvtps;
+  }
+  return 0;
+}
+
 Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
                                              const CallExpr *E) {
   llvm::SmallVector<Value*, 4> Ops;
@@ -2250,10 +2289,40 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
   // Handle non-overloaded intrinsics first.
   switch (BuiltinID) {
   default: break;
+  case ARM64::BI__builtin_arm64_vcvtas_u32_f32:
+  case ARM64::BI__builtin_arm64_vcvtad_u64_f64:
+  case ARM64::BI__builtin_arm64_vcvtns_u32_f32:
+  case ARM64::BI__builtin_arm64_vcvtnd_u64_f64:
+  case ARM64::BI__builtin_arm64_vcvtms_u32_f32:
+  case ARM64::BI__builtin_arm64_vcvtmd_u64_f64:
+  case ARM64::BI__builtin_arm64_vcvtps_u32_f32:
+  case ARM64::BI__builtin_arm64_vcvtpd_u64_f64:
+  case ARM64::BI__builtin_arm64_vcvtas_s32_f32:
+  case ARM64::BI__builtin_arm64_vcvtad_s64_f64:
+  case ARM64::BI__builtin_arm64_vcvtns_s32_f32:
+  case ARM64::BI__builtin_arm64_vcvtnd_s64_f64:
+  case ARM64::BI__builtin_arm64_vcvtms_s32_f32:
+  case ARM64::BI__builtin_arm64_vcvtmd_s64_f64:
+  case ARM64::BI__builtin_arm64_vcvtps_s32_f32:
+  case ARM64::BI__builtin_arm64_vcvtpd_s64_f64: {
+    Ops.push_back(EmitScalarExpr(E->getArg(0)));
+    bool Is64 = Ops[0]->getType()->getPrimitiveSizeInBits() == 64;
+    llvm::Type *InTy = Is64 ? Int64Ty : Int32Ty;
+    llvm::Type *FTy = Is64 ? DoubleTy : FloatTy;
+    Ops[0] = Builder.CreateBitCast(Ops[0], FTy);
+    llvm::Type *Tys[2] = { InTy, FTy };
+    unsigned Int = getARM64IntrinsicFCVT(BuiltinID);
+    return EmitNeonCall(CGM.getIntrinsic(Int, Tys), Ops, "fcvtr");
+  }
+
+  case ARM64::BI__builtin_arm64_vcvtzs_u32_f32:
+  case ARM64::BI__builtin_arm64_vcvtzd_u64_f64:
   case ARM64::BI__builtin_arm64_vcvts_u32_f32:
   case ARM64::BI__builtin_arm64_vcvtd_u64_f64:
     usgn = true;
     // FALL THROUGH
+  case ARM64::BI__builtin_arm64_vcvtzs_s32_f32:
+  case ARM64::BI__builtin_arm64_vcvtzd_s64_f64:
   case ARM64::BI__builtin_arm64_vcvts_s32_f32:
   case ARM64::BI__builtin_arm64_vcvtd_s64_f64: {
     Ops.push_back(EmitScalarExpr(E->getArg(0)));

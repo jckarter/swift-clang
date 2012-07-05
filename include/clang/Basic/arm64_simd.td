@@ -252,6 +252,29 @@ def VCVTS_U32 : SInst<"vcvts_u32", "rs", "f">;
 def VCVTD_S64 : SInst<"vcvtd_s64", "os", "d">;
 def VCVTD_U64 : SInst<"vcvtd_u64", "rs", "d">;
 
+// Scalar f32/f64 -> integer w/ rounding mode.
+def VCVTAS_S32 : SInst<"vcvtas_s32", "os", "f">;
+def VCVTAS_U32 : SInst<"vcvtas_u32", "rs", "f">;
+def VCVTAD_S64 : SInst<"vcvtad_s64", "os", "d">;
+def VCVTAD_U64 : SInst<"vcvtad_u64", "rs", "d">;
+def VCVTMS_S32 : SInst<"vcvtms_s32", "os", "f">;
+def VCVTMS_U32 : SInst<"vcvtms_u32", "rs", "f">;
+def VCVTMD_S64 : SInst<"vcvtmd_s64", "os", "d">;
+def VCVTMD_U64 : SInst<"vcvtmd_u64", "rs", "d">;
+def VCVTNS_S32 : SInst<"vcvtns_s32", "os", "f">;
+def VCVTNS_U32 : SInst<"vcvtns_u32", "rs", "f">;
+def VCVTND_S64 : SInst<"vcvtnd_s64", "os", "d">;
+def VCVTND_U64 : SInst<"vcvtnd_u64", "rs", "d">;
+def VCVTPS_S32 : SInst<"vcvtps_s32", "os", "f">;
+def VCVTPS_U32 : SInst<"vcvtps_u32", "rs", "f">;
+def VCVTPD_S64 : SInst<"vcvtpd_s64", "os", "d">;
+def VCVTPD_U64 : SInst<"vcvtpd_u64", "rs", "d">;
+def VCVTZS_S32 : SInst<"vcvtzs_s32", "os", "f">;
+def VCVTZS_U32 : SInst<"vcvtzs_u32", "rs", "f">;
+def VCVTZD_S64 : SInst<"vcvtzd_s64", "os", "d">;
+def VCVTZD_U64 : SInst<"vcvtzd_u64", "rs", "d">;
+
+
 def VRND_A : SInst<"vrnda", "dd", "f">;
 def VRND_I : SInst<"vrndi", "dd", "f">;
 def VRND_M : SInst<"vrndm", "dd", "f">;
