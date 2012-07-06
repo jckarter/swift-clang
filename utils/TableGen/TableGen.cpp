@@ -38,6 +38,7 @@ enum ActionType {
   GenClangDiagsDefs,
   GenClangDiagGroups,
   GenClangDiagsIndexName,
+  GenClangCommentNodes,
   GenClangDeclNodes,
   GenClangStmtNodes,
   GenClangSACheckers,
@@ -89,6 +90,8 @@ namespace {
                     clEnumValN(GenClangDiagsIndexName,
                                "gen-clang-diags-index-name",
                                "Generate Clang diagnostic name index"),
+                    clEnumValN(GenClangCommentNodes, "gen-clang-comment-nodes",
+                               "Generate Clang AST comment nodes"),
                     clEnumValN(GenClangDeclNodes, "gen-clang-decl-nodes",
                                "Generate Clang AST declaration nodes"),
                     clEnumValN(GenClangStmtNodes, "gen-clang-stmt-nodes",
@@ -156,6 +159,9 @@ public:
       break;
     case GenClangDiagsIndexName:
       EmitClangDiagsIndexName(Records, OS);
+      break;
+    case GenClangCommentNodes:
+      EmitClangASTNodes(Records, OS, "Comment", "");
       break;
     case GenClangDeclNodes:
       EmitClangASTNodes(Records, OS, "Decl", "Decl");
