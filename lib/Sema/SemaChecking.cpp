@@ -5328,7 +5328,7 @@ bool Sema::checkUnsafeAssigns(SourceLocation Loc,
   while (ImplicitCastExpr *cast = dyn_cast<ImplicitCastExpr>(RHS)) {
     if (cast->getCastKind() == CK_ARCConsumeObject) {
       Diag(Loc, diag::warn_arc_retained_assign)
-        << (LT == Qualifiers::OCL_ExplicitNone) 
+        << (LT == Qualifiers::OCL_ExplicitNone) << 1
         << RHS->getSourceRange();
       return true;
     }
@@ -5380,6 +5380,16 @@ void Sema::checkUnsafeExprAssigns(SourceLocation Loc,
         if (cast->getCastKind() == CK_ARCConsumeObject) {
           Diag(Loc, diag::warn_arc_retained_property_assign)
           << RHS->getSourceRange();
+          return;
+        }
+        RHS = cast->getSubExpr();
+      }
+    }
+    else if (Attributes & ObjCPropertyDecl::OBJC_PR_weak) {
+      while (ImplicitCastExpr *cast = dyn_cast<ImplicitCastExpr>(RHS)) {
+        if (cast->getCastKind() == CK_ARCConsumeObject) {
+          Diag(Loc, diag::warn_arc_retained_assign)
+          << 0 << 0<< RHS->getSourceRange();
           return;
         }
         RHS = cast->getSubExpr();
