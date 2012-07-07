@@ -3671,7 +3671,6 @@ public:
   virtual void getArchDefines(const LangOptions &Opts,
                               MacroBuilder &Builder) const {
     switch (FloatABI) {
-    default:
     case HardFloat:
       Builder.defineMacro("__mips_hard_float", Twine(1));
       break;
