@@ -47,7 +47,8 @@ BlockCommandComment *Parser::parseBlockCommandArgs(
     TextTokenRetokenizer &Retokenizer,
     unsigned NumArgs) {
   typedef BlockCommandComment::Argument Argument;
-  Argument *Args = new (Allocator) Argument[NumArgs];
+  Argument *Args =
+      new (Allocator.Allocate<Argument>(NumArgs)) Argument[NumArgs];
   unsigned ParsedArgs = 0;
   Token Arg;
   while (ParsedArgs < NumArgs && Retokenizer.lexWord(Arg)) {
@@ -389,6 +390,7 @@ BlockContentComment *Parser::parseBlockContent() {
   case tok::html_greater:
     llvm_unreachable("should not see this token");
   }
+  llvm_unreachable("bogus token kind");
 }
 
 FullComment *Parser::parseFullComment() {
@@ -409,5 +411,3 @@ FullComment *Parser::parseFullComment() {
 
 } // end namespace comments
 } // end namespace clang
-
-
