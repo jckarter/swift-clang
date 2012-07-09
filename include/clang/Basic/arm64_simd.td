@@ -136,6 +136,7 @@ def VMINNM : SInst<"vminnm", "ddd", "fQfQd">;
 def VPADD  : IInst<"vpadd", "ddd", "csiUcUsUifQcQsQiQlQfQd">;
 def VPADDL : SInst<"vpaddl", "nd",  "csiUcUsUiQcQsQiQUcQUsQUi">;
 def VPADAL : SInst<"vpadal", "nnd", "csiUcUsUiQcQsQiQUcQUsQUi">;
+def VPADDS : SInst<"vpadds", "sd", "f">;
 def VPADDD : SInst<"vpaddd", "sd", "RlRd">;
 
 ////////////////////////////////////////////////////////////////////////////////

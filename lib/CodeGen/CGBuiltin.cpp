@@ -2377,6 +2377,19 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     // Pairwise addition of a v2f64 into a scalar f64.
     return Builder.CreateFAdd(Op0, Op1, "vpaddd");
   }
+  case ARM64::BI__builtin_arm64_vpadds_f32: {
+    llvm::Type *Ty =
+      llvm::VectorType::get(llvm::Type::getFloatTy(getLLVMContext()), 2);
+    Value *Vec = EmitScalarExpr(E->getArg(0));
+    // The vector is v2f32, so make sure it's bitcast to that.
+    Vec = Builder.CreateBitCast(Vec, Ty, "v2f32");
+    llvm::Value *Idx0 = llvm::ConstantInt::get(Int32Ty, 0);
+    llvm::Value *Idx1 = llvm::ConstantInt::get(Int32Ty, 1);
+    Value *Op0 = Builder.CreateExtractElement(Vec, Idx0, "lane0");
+    Value *Op1 = Builder.CreateExtractElement(Vec, Idx1, "lane1");
+    // Pairwise addition of a v2f32 into a scalar f32.
+    return Builder.CreateFAdd(Op0, Op1, "vpaddd");
+  }
   case ARM64::BI__builtin_arm64_vceqzd_s64:
   case ARM64::BI__builtin_arm64_vceqzd_u64:
   case ARM64::BI__builtin_arm64_vcgtzd_s64:
