@@ -2439,6 +2439,12 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
   case ARM64::BI__builtin_arm64_vsetq_lane_f32:
     Ops.push_back(EmitScalarExpr(E->getArg(2)));
     return Builder.CreateInsertElement(Ops[1], Ops[0], Ops[2], "vset_lane");
+  case ARM64::BI__builtin_arm64_vsetq_lane_f64:
+    // The vector type needs a cast for the v2f64 variant.
+    Ops[1] = Builder.CreateBitCast(Ops[1],
+        llvm::VectorType::get(llvm::Type::getDoubleTy(getLLVMContext()), 2));
+    Ops.push_back(EmitScalarExpr(E->getArg(2)));
+    return Builder.CreateInsertElement(Ops[1], Ops[0], Ops[2], "vset_lane");
   case ARM64::BI__builtin_arm64_vget_lane_u8:
   case ARM64::BI__builtin_arm64_vget_lane_s8:
   case ARM64::BI__builtin_arm64_vget_lane_p8:
@@ -2507,6 +2513,11 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
   case ARM64::BI__builtin_arm64_vgetq_lane_f32:
     Ops[0] = Builder.CreateBitCast(Ops[0],
         llvm::VectorType::get(llvm::Type::getFloatTy(getLLVMContext()), 4));
+    return Builder.CreateExtractElement(Ops[0], EmitScalarExpr(E->getArg(1)),
+                                        "vgetq_lane");
+  case ARM64::BI__builtin_arm64_vgetq_lane_f64:
+    Ops[0] = Builder.CreateBitCast(Ops[0],
+        llvm::VectorType::get(llvm::Type::getDoubleTy(getLLVMContext()), 2));
     return Builder.CreateExtractElement(Ops[0], EmitScalarExpr(E->getArg(1)),
                                         "vgetq_lane");
   case ARM64::BI__builtin_arm64_vabds_f32:

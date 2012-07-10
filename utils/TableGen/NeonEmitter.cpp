@@ -602,7 +602,8 @@ static std::string BuiltinTypeString(const char mod, StringRef typestr,
     type = 's';
     usgn = true;
   }
-  usgn = usgn | poly | ((ck == ClassI || ck == ClassW) && scal && type != 'f');
+  usgn = usgn | poly | ((ck == ClassI || ck == ClassW) && scal &&
+                        type != 'f' && type != 'd');
 
   if (scal) {
     SmallString<128> s;

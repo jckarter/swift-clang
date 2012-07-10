@@ -325,7 +325,7 @@ def VST4_LANE : WInst<"vst4_lane", "vp4i", "QUsQUiQsQiQhQfQdQPsUcUsUicsihfdPcPs"
 ////////////////////////////////////////////////////////////////////////////////
 // Extract lanes from a vector
 def VGET_LANE : SInst<"vget_lane", "sdi",
-                      "csilUcUsUiUlfPcPsQcQsQiQlQUcQUsQUiQUlQfQPcQPs">;
+                      "csilUcUsUiUlfPcPsQcQsQiQlQUcQUsQUiQUlQfQdQPcQPs">;
 // vdup<bhsd>_lane* is a synonym for vget_lane.
 def VDUPB_LANE : SInst<"vdupb_lane", "sdi", "RcRUc">;
 def VDUPH_LANE : SInst<"vduph_lane", "sdi", "RsRUs">;
@@ -335,7 +335,7 @@ def VDUPD_LANE : SInst<"vdupd_lane", "sdi", "RlRUl">;
 ////////////////////////////////////////////////////////////////////////////////
 // Set lanes within a vector
 def VSET_LANE : IInst<"vset_lane", "dsdi",
-                      "UcUsUicsiPcPsfQUcQUsQUiQcQsQiQPcQPsQflUlQlQUl">;
+                      "UcUsUicsiPcPsfQUcQUsQUiQcQsQiQPcQPsQfQdlUlQlQUl">;
 
 ////////////////////////////////////////////////////////////////////////////////
 // Initialize a vector from bit pattern
@@ -356,8 +356,8 @@ def VCOMBINE : Inst<"vcombine", "kdd", "csilhfdUcUsUiUlPcPs", OP_CONC>;
 
 ////////////////////////////////////////////////////////////////////////////////
 // Splitting vectors
-def VGET_HIGH : Inst<"vget_high", "dk", "csilhfUcUsUiUlPcPs", OP_HI>;
-def VGET_LOW  : Inst<"vget_low", "dk", "csilhfUcUsUiUlPcPs", OP_LO>;
+def VGET_HIGH : Inst<"vget_high", "dk", "csilhfdUcUsUiUlPcPs", OP_HI>;
+def VGET_LOW  : Inst<"vget_low", "dk", "csilhfdUcUsUiUlPcPs", OP_LO>;
 
 ////////////////////////////////////////////////////////////////////////////////
 // Converting vectors
