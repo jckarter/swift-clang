@@ -822,6 +822,7 @@ FormatDiagnostic(const char *DiagStr, const char *DiagEnd,
       TDT.ToType = getRawArg(ArgNo2);
       TDT.ElideType = getDiags()->ElideType;
       TDT.ShowColors = getDiags()->ShowColors;
+      TDT.TemplateDiffUsed = false;
       intptr_t val = reinterpret_cast<intptr_t>(&TDT);
 
       const char *ArgumentEnd = Argument + ArgumentLen;
@@ -860,6 +861,10 @@ FormatDiagnostic(const char *DiagStr, const char *DiagEnd,
                                      Argument, ArgumentLen,
                                      FormattedArgs.data(), FormattedArgs.size(),
                                      OutStr, QualTypeVals);
+      if (!TDT.TemplateDiffUsed)
+        FormattedArgs.push_back(std::make_pair(DiagnosticsEngine::ak_qualtype,
+                                               TDT.FromType));
+
       // Append middle text
       FormatDiagnostic(FirstDollar + 1, SecondDollar, OutStr);
 
@@ -870,6 +875,10 @@ FormatDiagnostic(const char *DiagStr, const char *DiagEnd,
                                      Argument, ArgumentLen,
                                      FormattedArgs.data(), FormattedArgs.size(),
                                      OutStr, QualTypeVals);
+      if (!TDT.TemplateDiffUsed)
+        FormattedArgs.push_back(std::make_pair(DiagnosticsEngine::ak_qualtype,
+                                               TDT.ToType));
+
       // Append end text
       FormatDiagnostic(SecondDollar + 1, Pipe, OutStr);
       break;
