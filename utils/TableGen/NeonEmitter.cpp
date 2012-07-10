@@ -1804,9 +1804,11 @@ void NeonEmitter::runHeader(raw_ostream &OS) {
 
       if (R->getValueAsBit("isVCVT_N")) {
         // VCVT between floating- and fixed-point values takes an immediate
-        // in the range 1 to 32.
+        // in the range 1 to size-in-bits(float-type)-1. We can use RFT for
+        // this, similar to the below bits for the general overloaded
+        // builtins.
         ck = ClassB;
-        rangestr = "l = 1; u = 31"; // upper bound = l + u
+        rangestr = "l = 1; u = RFT(TV, true)"; // upper bound = l + u
       } else if (Proto.find('s') == std::string::npos &&
                  Proto.find('q') == std::string::npos &&
                  Proto.find('m') == std::string::npos &&
