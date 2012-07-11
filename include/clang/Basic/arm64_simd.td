@@ -220,6 +220,17 @@ def VCVT_N_U64   : SInst<"vcvt_n_u64", "udi", "Qd">;
 // fixed point -> f64
 def VCVT_N_F64   : SInst<"vcvtq_n_f64", "fdi", "RlRUl">;
 }
+// Scalar int<-->float conversions.
+// NOTE: These are not marked isVCVT_N, as that forces overloaded types for
+// the intrinsic, which we don't want here as it becomes very difficult to
+// then distinguish between the signed an unsigned variants.
+def VCVTS_N_F32  : SInst<"vcvts_n_f32", "msi", "iUi">;
+def VCVTD_N_F64  : SInst<"vcvtd_n_f64", "msi", "lUl">;
+def VCVTS_N_S32  : SInst<"vcvts_n_s32", "osi", "f">;
+def VCVTS_N_U32  : SInst<"vcvts_n_u32", "rsi", "f">;
+def VCVTD_N_S64  : SInst<"vcvtd_n_s64", "osi", "d">;
+def VCVTD_N_U64  : SInst<"vcvtd_n_u64", "rsi", "d">;
+
 // f32/f64 -> integer w/ rounding mode.
 def VCVTA_S32 : SInst<"vcvta_s32", "xd", "fQf">;
 def VCVTA_U32 : SInst<"vcvta_u32", "ud", "fQf">;

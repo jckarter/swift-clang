@@ -2286,6 +2286,34 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
   // Handle non-overloaded intrinsics first.
   switch (BuiltinID) {
   default: break;
+  case ARM64::BI__builtin_arm64_vcvtd_n_f64_u64:
+  case ARM64::BI__builtin_arm64_vcvts_n_f32_u32:
+    usgn = true;
+  case ARM64::BI__builtin_arm64_vcvtd_n_f64_s64:
+  case ARM64::BI__builtin_arm64_vcvts_n_f32_s32: {
+    Ops.push_back(EmitScalarExpr(E->getArg(1)));
+    bool Is64 = Ops[0]->getType()->getPrimitiveSizeInBits() == 64;
+    llvm::Type *InTy = Is64 ? Int64Ty : Int32Ty;
+    llvm::Type *FTy = Is64 ? DoubleTy : FloatTy;
+    llvm::Type *Tys[2] = { FTy, InTy };
+    unsigned Int = usgn ? Intrinsic::arm64_neon_vcvtfxu2fp
+                        : Intrinsic::arm64_neon_vcvtfxs2fp;
+    return EmitNeonCall(CGM.getIntrinsic(Int, Tys), Ops, "fcvt_n");
+  }
+  case ARM64::BI__builtin_arm64_vcvts_n_u32_f32:
+  case ARM64::BI__builtin_arm64_vcvtd_n_u64_f64:
+    usgn = true;
+  case ARM64::BI__builtin_arm64_vcvts_n_s32_f32:
+  case ARM64::BI__builtin_arm64_vcvtd_n_s64_f64: {
+    Ops.push_back(EmitScalarExpr(E->getArg(1)));
+    bool Is64 = Ops[0]->getType()->getPrimitiveSizeInBits() == 64;
+    llvm::Type *InTy = Is64 ? Int64Ty : Int32Ty;
+    llvm::Type *FTy = Is64 ? DoubleTy : FloatTy;
+    llvm::Type *Tys[2] = { InTy, FTy };
+    unsigned Int = usgn ? Intrinsic::arm64_neon_vcvtfp2fxu
+                        : Intrinsic::arm64_neon_vcvtfp2fxs;
+    return EmitNeonCall(CGM.getIntrinsic(Int, Tys), Ops, "fcvt_n");
+  }
   case ARM64::BI__builtin_arm64_vcvtas_u32_f32:
   case ARM64::BI__builtin_arm64_vcvtad_u64_f64:
   case ARM64::BI__builtin_arm64_vcvtns_u32_f32:

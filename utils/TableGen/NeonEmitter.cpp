@@ -602,8 +602,8 @@ static std::string BuiltinTypeString(const char mod, StringRef typestr,
     type = 's';
     usgn = true;
   }
-  usgn = usgn | poly | ((ck == ClassI || ck == ClassW) && scal &&
-                        type != 'f' && type != 'd');
+  usgn = (usgn | poly | ((ck == ClassI || ck == ClassW) && scal &&
+                         type != 'f' && type != 'd')) && ck != ClassB;
 
   if (scal) {
     SmallString<128> s;
@@ -1808,7 +1808,10 @@ void NeonEmitter::runHeader(raw_ostream &OS) {
         // this, similar to the below bits for the general overloaded
         // builtins.
         ck = ClassB;
-        rangestr = "l = 1; u = RFT(TV, true)"; // upper bound = l + u
+        bool dummy;
+        char type = ClassifyType(TypeVec[ti], dummy, dummy, dummy, dummy);
+        rangestr = "l = 1; u = "; // upper bound = l + u
+        rangestr += (type == 'l' || type == 'd') ? "63" : "31";
       } else if (Proto.find('s') == std::string::npos &&
                  Proto.find('q') == std::string::npos &&
                  Proto.find('m') == std::string::npos &&
@@ -1826,6 +1829,14 @@ void NeonEmitter::runHeader(raw_ostream &OS) {
             rangestr = "l = 1; ";
         }
         rangestr += "u = RFT(TV" + shiftstr + ")";
+      } else if (StringRef(name).startswith("vcvts_n") ||
+                 StringRef(name).startswith("vcvtd_n")) {
+        // Scalar vcvt[sd]_n_* intrinsics are not marked isVCVT_N due to them
+        // not playing nicely as ClassB, so handle them explicitly here.
+        bool dummy;
+        char type = ClassifyType(TypeVec[ti], dummy, dummy, dummy, dummy);
+        rangestr = "l = 1; u = "; // upper bound = l + u
+        rangestr += (type == 'l' || type == 'd') ? "63" : "31";
       } else {
         // The immediate generally refers to a lane in the preceding argument.
         assert(immPos > 0 && "unexpected immediate operand");
