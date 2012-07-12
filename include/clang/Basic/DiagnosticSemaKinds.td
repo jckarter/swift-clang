@@ -1637,6 +1637,9 @@ def err_attribute_aligned_greater_than_8192 : Error<
 def warn_redeclaration_without_attribute_prev_attribute_ignored : Warning<
   "'%0' redeclared without %1 attribute: previous %1 ignored">;
 def warn_attribute_ignored : Warning<"%0 attribute ignored">;
+def warn_attribute_after_definition_ignored : Warning<
+  "attribute %0 after definition is ignored">,
+   InGroup<IgnoredAttributes>;
 def warn_unknown_attribute_ignored : Warning<
   "unknown attribute %0 ignored">, InGroup<UnknownAttributes>;
 def warn_unhandled_ms_attribute_ignored : Warning<
@@ -5704,7 +5707,7 @@ def err_module_private_definition : Error<
 
 let CategoryName = "Documentation Issue" in {
 def warn_not_a_doxygen_trailing_member_comment : Warning<
-  "not a Doxygen trailing comment">, InGroup<Doxygen>, DefaultIgnore;
+  "not a Doxygen trailing comment">, InGroup<Documentation>, DefaultIgnore;
 } // end of documentation issue category
 
 } // end of sema component.
