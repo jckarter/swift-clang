@@ -413,8 +413,8 @@ def VQTBX4Q : WInst<"vqtbx4", "dd4d", "QUcQcQPc">;
 
 ////////////////////////////////////////////////////////////////////////////////
 // Vector Shuffles
-def VTRN1 : WInst<"vtrn1", "ddd", "csiUcUsUiQcQsQiQlQUcQUsQUiQUl">;
-def VTRN2 : WInst<"vtrn2", "ddd", "csiUcUsUiQcQsQiQlQUcQUsQUiQUl">;
+def VTRN1 : WInst<"vtrn1", "ddd", "csiUcUsUifQcQsQiQlQUcQUsQUiQUlQfQd">;
+def VTRN2 : WInst<"vtrn2", "ddd", "csiUcUsUifQcQsQiQlQUcQUsQUiQUlQfQd">;
 def VZIP1 : WInst<"vzip1", "ddd", "csiUcUsUifQcQsQiQlQUcQUsQUiQUlQfQd">;
 def VZIP2 : WInst<"vzip2", "ddd", "csiUcUsUifQcQsQiQlQUcQUsQUiQUlQfQd">;
 def VUZP1 : WInst<"vuzp1", "ddd", "csiUcUsUifQcQsQiQlQUcQUsQUiQUlQfQd">;
