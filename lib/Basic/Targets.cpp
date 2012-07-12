@@ -1076,6 +1076,7 @@ namespace {
       AddrSpaceMap = &NVPTXAddrSpaceMap;
       // Define available target features
       // These must be defined in sorted order!
+      NoAsmVariants = true;
     }
     virtual void getTargetDefines(const LangOptions &Opts,
                                   MacroBuilder &Builder) const {
