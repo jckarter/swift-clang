@@ -47,6 +47,7 @@ add_dependencies(clangSema
   ClangARM64SIMD 
   ClangAttrClasses
   ClangAttrList
+  ClangDiagnosticComment
   ClangDiagnosticSema
   ClangCommentNodes
   ClangDeclNodes

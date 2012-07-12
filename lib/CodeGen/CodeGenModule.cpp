@@ -141,6 +141,7 @@ void CodeGenModule::createObjCRuntime() {
   switch (LangOpts.ObjCRuntime.getKind()) {
   case ObjCRuntime::GNUstep:
   case ObjCRuntime::GCC:
+  case ObjCRuntime::ObjFW:
     ObjCRuntime = CreateGNUObjCRuntime(*this);
     return;
 

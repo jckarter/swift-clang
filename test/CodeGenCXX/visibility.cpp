@@ -980,10 +980,41 @@ namespace test53 {
     static void       _M_fill_insert();
   };
 #pragma GCC visibility push(hidden)
+  // GCC doesn't seem to use the visibility of enums at all, we do.
+  enum zed {v1};
+
+  // GCC fails to mark this specialization hidden, we mark it.
+  template<>
+  struct vector<int> {
+    static void       _M_fill_insert();
+  };
   void foo() {
     vector<unsigned>::_M_fill_insert();
+    vector<int>::_M_fill_insert();
+    vector<zed>::_M_fill_insert();
   }
 #pragma GCC visibility pop
   // CHECK: declare void @_ZN6test536vectorIjE14_M_fill_insertEv
   // CHECK-HIDDEN: declare void @_ZN6test536vectorIjE14_M_fill_insertEv
+  // CHECK: declare hidden void @_ZN6test536vectorIiE14_M_fill_insertEv
+  // CHECK-HIDDEN: declare hidden void @_ZN6test536vectorIiE14_M_fill_insertEv
+  // CHECK: declare hidden void @_ZN6test536vectorINS_3zedEE14_M_fill_insertEv
+  // CHECK-HIDDEN: declare hidden void @_ZN6test536vectorINS_3zedEE14_M_fill_insertEv
+}
+
+namespace test54 {
+  template <class T>
+  struct foo {
+    static void bar();
+  };
+#pragma GCC visibility push(hidden)
+  class zed {
+    zed(const zed &);
+  };
+  void bah() {
+    foo<zed>::bar();
+  }
+#pragma GCC visibility pop
+  // CHECK: declare hidden void @_ZN6test543fooINS_3zedEE3barEv
+  // CHECK-HIDDEN: declare hidden void @_ZN6test543fooINS_3zedEE3barEv
 }

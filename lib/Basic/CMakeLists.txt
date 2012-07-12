@@ -39,6 +39,7 @@ add_dependencies(clangBasic
   ClangAttrList
   ClangDiagnosticAnalysis
   ClangDiagnosticAST
+  ClangDiagnosticComment
   ClangDiagnosticCommon
   ClangDiagnosticDriver
   ClangDiagnosticFrontend
