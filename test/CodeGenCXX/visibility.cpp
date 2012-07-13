@@ -1018,3 +1018,29 @@ namespace test54 {
   // CHECK: declare hidden void @_ZN6test543fooINS_3zedEE3barEv
   // CHECK-HIDDEN: declare hidden void @_ZN6test543fooINS_3zedEE3barEv
 }
+
+namespace test55 {
+  template <class T>
+  struct __attribute__((visibility("hidden"))) foo {
+    static void bar();
+  };
+  template <class T> struct foo;
+  void foobar() {
+    foo<int>::bar();
+  }
+  // CHECK: declare hidden void @_ZN6test553fooIiE3barEv
+  // CHECK-HIDDEN: declare hidden void @_ZN6test553fooIiE3barEv
+}
+
+namespace test56 {
+  template <class T> struct foo;
+  template <class T>
+  struct __attribute__((visibility("hidden"))) foo {
+    static void bar();
+  };
+  void foobar() {
+    foo<int>::bar();
+  }
+  // CHECK: declare hidden void @_ZN6test563fooIiE3barEv
+  // CHECK-HIDDEN: declare hidden void @_ZN6test563fooIiE3barEv
+}
