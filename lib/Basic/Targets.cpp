@@ -2475,6 +2475,7 @@ public:
     LongDoubleWidth = 128;
     LongDoubleAlign = 128;
     SuitableAlign = 128;
+    MaxVectorAlign = 256;
     SizeType = UnsignedLong;
     IntPtrType = SignedLong;
     DescriptionString = "e-p:32:32:32-i1:8:8-i8:8:8-i16:16:16-i32:32:32-"
@@ -2782,6 +2783,7 @@ public:
   DarwinX86_64TargetInfo(const std::string& triple)
       : DarwinTargetInfo<X86_64TargetInfo>(triple) {
     Int64Type = SignedLongLong;
+    MaxVectorAlign = 256;
   }
 };
 } // end anonymous namespace
