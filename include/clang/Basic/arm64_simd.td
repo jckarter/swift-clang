@@ -340,8 +340,9 @@ def VGET_LANE : SInst<"vget_lane", "sdi",
 // vdup<bhsd>_lane* is a synonym for vget_lane.
 def VDUPB_LANE : SInst<"vdupb_lane", "sdi", "RcRUc">;
 def VDUPH_LANE : SInst<"vduph_lane", "sdi", "RsRUs">;
-def VDUPS_LANE : SInst<"vdups_lane", "sdi", "RiRUi">;
-def VDUPD_LANE : SInst<"vdupd_lane", "sdi", "RlRUl">;
+def VDUPS_LANE : SInst<"vdups_lane", "sdi", "RiRUiRf">;
+def VDUPD_LANE : SInst<"vdupd_lane", "sdi", "RlRUlRd">;
+def VDUP_LANE_F64 : SInst<"vdup_lane", "sdi", "Rd">;
 
 ////////////////////////////////////////////////////////////////////////////////
 // Set lanes within a vector
@@ -359,7 +360,7 @@ def VDUP_N : Inst<"vdup_n", "ds",
 def VMOV_N : Inst<"vmov_n", "ds",
                   "UcUsUicsiPcPsfQUcQUsQUiQcQsQiQPcQPsQflUlQlQUl", OP_DUP>;
 def VDUP_LANE : Inst<"vdup_lane", "dgi",
-                     "UcUsUicsiPcPsfQUcQUsQUiQcQsQiQPcQPsQfQlQUl",OP_DUP_LN>;
+                     "UcUsUicsiPcPsfQUcQUsQUiQcQsQiQPcQPsQfQdQlQUl",OP_DUP_LN>;
 
 ////////////////////////////////////////////////////////////////////////////////
 // Combining vectors

@@ -2515,6 +2515,11 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
         llvm::VectorType::get(llvm::IntegerType::get(getLLVMContext(), 32), 2));
     return Builder.CreateExtractElement(Ops[0], EmitScalarExpr(E->getArg(1)),
                                         "vget_lane");
+  case ARM64::BI__builtin_arm64_vdups_lane_f32:
+    Ops[0] = Builder.CreateBitCast(Ops[0],
+        llvm::VectorType::get(llvm::Type::getFloatTy(getLLVMContext()), 4));
+    return Builder.CreateExtractElement(Ops[0], EmitScalarExpr(E->getArg(1)),
+                                        "vdups_lane");
   case ARM64::BI__builtin_arm64_vgetq_lane_u32:
   case ARM64::BI__builtin_arm64_vgetq_lane_s32:
   case ARM64::BI__builtin_arm64_vdups_lane_s32:
@@ -2529,6 +2534,12 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
         llvm::VectorType::get(llvm::IntegerType::get(getLLVMContext(), 64), 1));
     return Builder.CreateExtractElement(Ops[0], EmitScalarExpr(E->getArg(1)),
                                         "vget_lane");
+  case ARM64::BI__builtin_arm64_vdup_lane_f64:
+  case ARM64::BI__builtin_arm64_vdupd_lane_f64:
+    Ops[0] = Builder.CreateBitCast(Ops[0],
+        llvm::VectorType::get(llvm::Type::getDoubleTy(getLLVMContext()), 2));
+    return Builder.CreateExtractElement(Ops[0], EmitScalarExpr(E->getArg(1)),
+                                        "vdupd_lane");
   case ARM64::BI__builtin_arm64_vgetq_lane_u64:
   case ARM64::BI__builtin_arm64_vgetq_lane_s64:
   case ARM64::BI__builtin_arm64_vdupd_lane_s64:
