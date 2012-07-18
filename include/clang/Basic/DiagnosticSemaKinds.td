@@ -1611,17 +1611,22 @@ def err_box_literal_collection : Error<
   "%select{string|character|boolean|numeric}0 literal must be prefixed by '@' "
   "in a collection">;
 def warn_objc_literal_comparison : Warning<
-  "direct comparison of %select{a string literal|an array literal|"
-  "a dictionary literal|a numeric literal|a boxed expression|}0 has "
-  "undefined behavior%select{|; use -isEqual: instead}1">,
-  InGroup<DiagGroup<"objc-literal-compare">>;
-def err_attr_tlsmodel_arg : Error<"tls_model must be \"global-dynamic\", "
-  "\"local-dynamic\", \"initial-exec\" or \"local-exec\"">;
+  "direct comparison of %select{an array literal|a dictionary literal|"
+  "a numeric literal|a boxed expression|}0 has undefined behavior">,
+  InGroup<ObjCLiteralComparison>;
+def warn_objc_string_literal_comparison : Warning<
+  "direct comparison of a string literal has undefined behavior">, 
+  InGroup<ObjCStringComparison>;
+def note_objc_literal_comparison_isequal : Note<
+  "use 'isEqual:' instead">;
 
 let CategoryName = "Cocoa API Issue" in {
 def warn_objc_redundant_literal_use : Warning<
   "using %0 with a literal is redundant">, InGroup<ObjCRedundantLiteralUse>;
 }
+
+def err_attr_tlsmodel_arg : Error<"tls_model must be \"global-dynamic\", "
+  "\"local-dynamic\", \"initial-exec\" or \"local-exec\"">;
 
 def err_only_annotate_after_access_spec : Error<
   "access specifier can only have annotation attributes">;
@@ -5552,6 +5557,8 @@ def warn_unreachable_default : Warning<
   InGroup<CoveredSwitchDefault>, DefaultIgnore;
 def warn_not_in_enum : Warning<"case value not in enumerated type %0">,
   InGroup<Switch>;
+def warn_not_in_enum_assignement : Warning<"integer constant not in range "
+  "of enumerated type %0">, InGroup<DiagGroup<"assign-enum">>, DefaultIgnore;
 def err_typecheck_statement_requires_scalar : Error<
   "statement requires expression of scalar type (%0 invalid)">;
 def err_typecheck_statement_requires_integer : Error<
