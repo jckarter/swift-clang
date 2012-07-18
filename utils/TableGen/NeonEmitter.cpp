@@ -60,8 +60,10 @@ enum OpKind {
   OpMlsLane,
   OpMlalLane,
   OpMlalHighLane,
+  OpMlalHighN,
   OpMlslLane,
   OpMlslHighLane,
+  OpMlslHighN,
   OpQDMullLane,
   OpQDMlalLane,
   OpQDMlalHighLane,
@@ -180,8 +182,10 @@ public:
     OpMap["OP_MLS_LN"]= OpMlsLane;
     OpMap["OP_MLAL_LN"] = OpMlalLane;
     OpMap["OP_MLAL_HIGH_LN"] = OpMlalHighLane;
+    OpMap["OP_MLAL_HIGH_N"] = OpMlalHighN;
     OpMap["OP_MLSL_LN"] = OpMlslLane;
     OpMap["OP_MLSL_HIGH_LN"] = OpMlslHighLane;
+    OpMap["OP_MLSL_HIGH_N"] = OpMlslHighN;
     OpMap["OP_QDMULL_LN"] = OpQDMullLane;
     OpMap["OP_QDMLAL_LN"] = OpQDMlalLane;
     OpMap["OP_QDMLAL_HIGH_LN"] = OpQDMlalHighLane;
@@ -949,6 +953,10 @@ static std::string GenOpString(OpKind op, const std::string &proto,
     s += "__a + " + MangleName("vmull_high", typestr, ClassS) + "(__b, " +
       SplatLane(nElts, "__c", "__d") + ");";
     break;
+  case OpMlalHighN:
+    s += "__a + " + MangleName("vmull_high", typestr, ClassS) + "(__b, " +
+      Duplicate(nElts, typestr, "__c") + ");";
+    break;
   case OpMlal:
     s += "__a + " + MangleName("vmull", typestr, ClassS) + "(__b, __c);";
     break;
@@ -986,6 +994,10 @@ static std::string GenOpString(OpKind op, const std::string &proto,
   case OpMlslHighLane:
     s += "__a - " + MangleName("vmull_high", typestr, ClassS) + "(__b, " +
       SplatLane(nElts, "__c", "__d") + ");";
+    break;
+  case OpMlslHighN:
+    s += "__a - " + MangleName("vmull_high", typestr, ClassS) + "(__b, " +
+      Duplicate(nElts, typestr, "__c") + ");";
     break;
   case OpMlsl:
     s += "__a - " + MangleName("vmull", typestr, ClassS) + "(__b, __c);";
@@ -1529,6 +1541,7 @@ void NeonEmitter::run(raw_ostream &OS) {
   // variants come after the intrinsics they use.)
   emitIntrinsic(OS, Records.getDef("VMOVL"));
   emitIntrinsic(OS, Records.getDef("VMULL"));
+  emitIntrinsic(OS, Records.getDef("VMULL_HIGH"));
   emitIntrinsic(OS, Records.getDef("VABD"));
   emitIntrinsic(OS, Records.getDef("VQDMULL"));
 
@@ -1537,6 +1550,7 @@ void NeonEmitter::run(raw_ostream &OS) {
     Record *R = RV[i];
     if (R->getName() == "VMOVL" ||
         R->getName() == "VMULL" ||
+        R->getName() == "VMULL_HIGH" ||
         R->getName() == "VABD"  ||
         R->getName() == "VQDMULL")
       continue;
@@ -1555,6 +1569,9 @@ void NeonEmitter::run(raw_ostream &OS) {
 /// emitIntrinsic - Write out the arm_neon.h header file definitions for the
 /// intrinsics specified by record R.
 void NeonEmitter::emitIntrinsic(raw_ostream &OS, Record *R) {
+  // Just exit if we're being asked to emit an intrinsic that doesn't exist.
+  if (!R) return;
+
   std::string name = R->getValueAsString("Name");
   std::string Proto = R->getValueAsString("Prototype");
   std::string Types = R->getValueAsString("Types");
