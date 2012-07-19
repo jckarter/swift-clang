@@ -48,7 +48,7 @@ def VMULL    : SInst<"vmull", "wdd", "csiUcUsUiPc">;
 def VQDMULL  : SInst<"vqdmull", "wdd", "si">;
 def VMLAL_HIGH : SInst<"vmlal_high", "nndd", "RcRsRiRUcRUsRUi">;
 def VMLSL_HIGH : SInst<"vmlsl_high", "nndd", "RcRsRiRUcRUsRUi">;
-def VMULL_HIGH : SInst<"vmull_high", "ndd",  "RcRsRiRUcRUsRUi">;
+def VMULL_HIGH : Inst<"vmull_high", "ndd",  "RcRsRiRUcRUsRUi", OP_MULL_HIGH>;
 def VQDMLAL_HIGH : SInst<"vqdmlal_high", "nndd", "RsRi">;
 def VQDMLSL_HIGH : SInst<"vqdmlsl_high", "nndd", "RsRi">;
 def VQDMULL_HIGH : SInst<"vqdmull_high", "ndd",  "RsRi">;

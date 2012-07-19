@@ -4095,16 +4095,6 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     llvm::Type *Tys[2] = { VTy, ArgTy };
     return EmitNeonCall(CGM.getIntrinsic(Int, Tys), Ops, "vxtl_high");
   }
-  case ARM64::BI__builtin_arm64_vmull_high_v: {
-    Int = usgn ? Intrinsic::arm64_neon_umull2 : Intrinsic::arm64_neon_smull2;
-    unsigned NumElts = VTy->getNumElements();
-    unsigned BitWidth =cast<IntegerType>(VTy->getElementType())->getBitWidth();
-    llvm::Type *DInt =
-      llvm::IntegerType::get(getLLVMContext(), BitWidth/2);
-    llvm::Type *ArgTy = llvm::VectorType::get(DInt, 2*NumElts);
-    llvm::Type *Tys[2] = { VTy, ArgTy };
-    return EmitNeonCall(CGM.getIntrinsic(Int, Tys), Ops, "vmull_high");
-  }
   case ARM64::BI__builtin_arm64_vqdmull_high_v: {
     Int = Intrinsic::arm64_neon_sqdmull2;
     unsigned NumElts = VTy->getNumElements();

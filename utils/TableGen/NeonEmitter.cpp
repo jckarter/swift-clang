@@ -56,6 +56,7 @@ enum OpKind {
   OpMlslN,
   OpMulLane,
   OpMullLane,
+  OpMullHigh,
   OpMlaLane,
   OpMlsLane,
   OpMlalLane,
@@ -178,6 +179,7 @@ public:
     OpMap["OP_MLSL_N"] = OpMlslN;
     OpMap["OP_MUL_LN"]= OpMulLane;
     OpMap["OP_MULL_LN"] = OpMullLane;
+    OpMap["OP_MULL_HIGH"] = OpMullHigh;
     OpMap["OP_MLA_LN"]= OpMlaLane;
     OpMap["OP_MLS_LN"]= OpMlsLane;
     OpMap["OP_MLAL_LN"] = OpMlalLane;
@@ -932,6 +934,11 @@ static std::string GenOpString(OpKind op, const std::string &proto,
     s += MangleName("vmull", typestr, ClassS) + "(__a, " +
       SplatLane(nElts, "__b", "__c") + ");";
     break;
+  case OpMullHigh:
+    s += MangleName("vmull", typestr, ClassS) + "(" +
+         MangleName("vget_high", typestr, ClassS) + "(__a), " +
+         MangleName("vget_high", typestr, ClassS) + "(__b));";
+    break;
   case OpMlaN:
     s += "__a + (__b * " + Duplicate(nElts, typestr, "__c") + ");";
     break;
@@ -1539,6 +1546,7 @@ void NeonEmitter::run(raw_ostream &OS) {
   // are also used to implement the corresponding "_lane" variants,
   // but tablegen sorts the records into alphabetical order so that the "_lane"
   // variants come after the intrinsics they use.)
+  emitIntrinsic(OS, Records.getDef("VGET_HIGH"));
   emitIntrinsic(OS, Records.getDef("VMOVL"));
   emitIntrinsic(OS, Records.getDef("VMULL"));
   emitIntrinsic(OS, Records.getDef("VMULL_HIGH"));
@@ -1548,7 +1556,8 @@ void NeonEmitter::run(raw_ostream &OS) {
 
   for (unsigned i = 0, e = RV.size(); i != e; ++i) {
     Record *R = RV[i];
-    if (R->getName() == "VMOVL" ||
+    if (R->getName() == "VGET_HIGH" ||
+        R->getName() == "VMOVL" ||
         R->getName() == "VMULL" ||
         R->getName() == "VMULL_HIGH" ||
         R->getName() == "VABD"  ||
