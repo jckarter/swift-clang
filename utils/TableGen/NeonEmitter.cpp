@@ -62,9 +62,11 @@ enum OpKind {
   OpMlalLane,
   OpMlalHighLane,
   OpMlalHighN,
+  OpMlalHigh,
   OpMlslLane,
   OpMlslHighLane,
   OpMlslHighN,
+  OpMlslHigh,
   OpQDMullLane,
   OpQDMlalLane,
   OpQDMlalHighLane,
@@ -185,9 +187,11 @@ public:
     OpMap["OP_MLAL_LN"] = OpMlalLane;
     OpMap["OP_MLAL_HIGH_LN"] = OpMlalHighLane;
     OpMap["OP_MLAL_HIGH_N"] = OpMlalHighN;
+    OpMap["OP_MLAL_HIGH"] = OpMlalHigh;
     OpMap["OP_MLSL_LN"] = OpMlslLane;
     OpMap["OP_MLSL_HIGH_LN"] = OpMlslHighLane;
     OpMap["OP_MLSL_HIGH_N"] = OpMlslHighN;
+    OpMap["OP_MLSL_HIGH"] = OpMlslHigh;
     OpMap["OP_QDMULL_LN"] = OpQDMullLane;
     OpMap["OP_QDMLAL_LN"] = OpQDMlalLane;
     OpMap["OP_QDMLAL_HIGH_LN"] = OpQDMlalHighLane;
@@ -956,6 +960,9 @@ static std::string GenOpString(OpKind op, const std::string &proto,
     s += "__a + " + MangleName("vmull", typestr, ClassS) + "(__b, " +
       SplatLane(nElts, "__c", "__d") + ");";
     break;
+  case OpMlalHigh:
+    s += "__a + " + MangleName("vmull_high", typestr, ClassS) + "(__b, __c);";
+    break;
   case OpMlalHighLane:
     s += "__a + " + MangleName("vmull_high", typestr, ClassS) + "(__b, " +
       SplatLane(nElts, "__c", "__d") + ");";
@@ -1005,6 +1012,9 @@ static std::string GenOpString(OpKind op, const std::string &proto,
   case OpMlslHighN:
     s += "__a - " + MangleName("vmull_high", typestr, ClassS) + "(__b, " +
       Duplicate(nElts, typestr, "__c") + ");";
+    break;
+  case OpMlslHigh:
+    s += "__a - " + MangleName("vmull_high", typestr, ClassS) + "(__b, __c);";
     break;
   case OpMlsl:
     s += "__a - " + MangleName("vmull", typestr, ClassS) + "(__b, __c);";

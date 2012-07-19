@@ -3966,18 +3966,6 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     llvm::Type *Tys[2] = { VTy, ArgTy };
     return EmitNeonCall(CGM.getIntrinsic(Int, Tys), Ops, "vaddw_high");
   }
-  case ARM64::BI__builtin_arm64_vmlal_high_v: {
-    Int = usgn ? Intrinsic::arm64_neon_umull2 : Intrinsic::arm64_neon_smull2;
-    unsigned NumElts = VTy->getNumElements();
-    unsigned BitWidth =cast<IntegerType>(VTy->getElementType())->getBitWidth();
-    llvm::Type *DInt =
-      llvm::IntegerType::get(getLLVMContext(), BitWidth/2);
-    llvm::Type *ArgTy = llvm::VectorType::get(DInt, 2*NumElts);
-    llvm::Type *Tys[2] = { VTy, ArgTy };
-    SmallVector<llvm::Value*, 2> TmpOps(Ops.begin()+1, Ops.end());
-    Ops[1] = EmitNeonCall(CGM.getIntrinsic(Int, Tys), TmpOps, "vmull_high");
-    return Builder.CreateAdd(Builder.CreateBitCast(Ops[0], Ty), Ops[1]);
-  }
   case ARM64::BI__builtin_arm64_vmlal2_lane_v: {
     unsigned NumElts = VTy->getNumElements();
     unsigned BitWidth =cast<IntegerType>(VTy->getElementType())->getBitWidth();
@@ -4071,18 +4059,6 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     Ops[1] = EmitNeonSplat(Ops[1], cst);
     Ops.pop_back();
     return EmitNeonCall(CGM.getIntrinsic(Int, Tys), Ops, "vqdmull_high");
-  }
-  case ARM64::BI__builtin_arm64_vmlsl_high_v: {
-    Int = usgn ? Intrinsic::arm64_neon_umull2 : Intrinsic::arm64_neon_smull2;
-    unsigned NumElts = VTy->getNumElements();
-    unsigned BitWidth =cast<IntegerType>(VTy->getElementType())->getBitWidth();
-    llvm::Type *DInt =
-      llvm::IntegerType::get(getLLVMContext(), BitWidth/2);
-    llvm::Type *ArgTy = llvm::VectorType::get(DInt, 2*NumElts);
-    llvm::Type *Tys[2] = { VTy, ArgTy };
-    SmallVector<llvm::Value*, 2> TmpOps(Ops.begin()+1, Ops.end());
-    Ops[1] = EmitNeonCall(CGM.getIntrinsic(Int, Tys), TmpOps, "vabdl_high");
-    return Builder.CreateSub(Builder.CreateBitCast(Ops[0], Ty), Ops[1]);
   }
   case ARM64::BI__builtin_arm64_vxtl_high_v:
   case ARM64::BI__builtin_arm64_vmovl_high_v: {
