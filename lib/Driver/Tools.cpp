@@ -680,7 +680,9 @@ void Clang::AddARMTargetArgs(const ArgList &Args,
                              ArgStringList &CmdArgs,
                              bool KernelOrKext) const {
   const Driver &D = getToolChain().getDriver();
-  llvm::Triple Triple = getToolChain().getTriple();
+  // Get the effective triple, which takes into account the deployment target.
+  std::string TripleStr = getToolChain().ComputeEffectiveClangTriple(Args);
+  llvm::Triple Triple(TripleStr);
 
   // Select the ABI to use.
   //
