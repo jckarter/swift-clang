@@ -57,6 +57,7 @@ enum OpKind {
   OpMulLane,
   OpMullLane,
   OpMullHigh,
+  OpMullHighLane,
   OpMlaLane,
   OpMlsLane,
   OpMlalLane,
@@ -182,6 +183,7 @@ public:
     OpMap["OP_MUL_LN"]= OpMulLane;
     OpMap["OP_MULL_LN"] = OpMullLane;
     OpMap["OP_MULL_HIGH"] = OpMullHigh;
+    OpMap["OP_MULL_HIGH_LN"] = OpMullHighLane;
     OpMap["OP_MLA_LN"]= OpMlaLane;
     OpMap["OP_MLS_LN"]= OpMlsLane;
     OpMap["OP_MLAL_LN"] = OpMlalLane;
@@ -942,6 +944,11 @@ static std::string GenOpString(OpKind op, const std::string &proto,
     s += MangleName("vmull", typestr, ClassS) + "(" +
          MangleName("vget_high", typestr, ClassS) + "(__a), " +
          MangleName("vget_high", typestr, ClassS) + "(__b));";
+    break;
+  case OpMullHighLane:
+    s += MangleName("vmull", typestr, ClassS) + "(" +
+         MangleName("vget_high", typestr, ClassS) + "(__a), " +
+         SplatLane(nElts/2, "__b", "__c") + ");";
     break;
   case OpMlaN:
     s += "__a + (__b * " + Duplicate(nElts, typestr, "__c") + ");";
