@@ -497,22 +497,6 @@ bool Sema::CheckARM64BuiltinFunctionCall(unsigned BuiltinID,
 #undef GET_NEON_IMMEDIATE_CHECK
   };
 
-  // Override the range checking for certain intrinsics whose immediate ranges
-  // are not derived from the return type, but instead from the width of
-  // a vector operand that does not match it.
-  switch (BuiltinID) {
-    case ARM64::BI__builtin_arm64_vmlal2_lane_v:
-    case ARM64::BI__builtin_arm64_vmlsl2_lane_v:
-    case ARM64::BI__builtin_arm64_vmull2_lane_v:
-    case ARM64::BI__builtin_arm64_vqdmlal2_lane_v:
-    case ARM64::BI__builtin_arm64_vqdmlsl2_lane_v:
-    case ARM64::BI__builtin_arm64_vqdmull2_lane_v:
-      u <<= 1;
-      u |= 1;
-    default:
-      break;
-  }
-
   // Check that the immediate argument is actually a constant.
   if (SemaBuiltinConstantArg(TheCall, i, Result))
     return true;

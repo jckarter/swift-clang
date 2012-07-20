@@ -52,12 +52,6 @@ def VMULL_HIGH : Inst<"vmull_high", "ndd",  "RcRsRiRUcRUsRUi", OP_MULL_HIGH>;
 def VQDMLAL_HIGH : SInst<"vqdmlal_high", "nndd", "RsRi">;
 def VQDMLSL_HIGH : SInst<"vqdmlsl_high", "nndd", "RsRi">;
 def VQDMULL_HIGH : SInst<"vqdmull_high", "ndd",  "RsRi">;
-def VMLAL2_LANE  : SInst<"vmlal2_lane", "nnddi",  "RsRiRUsRUi">;
-def VMLSL2_LANE  : SInst<"vmlsl2_lane", "nnddi",  "RsRiRUsRUi">;
-def VMULL2_LANE  : SInst<"vmull2_lane", "nddi",  "RsRiRUsRUi">;
-def VQDMLAL2_LANE  : SInst<"vqdmlal2_lane", "nnddi",  "RsRi">;
-def VQDMLSL2_LANE  : SInst<"vqdmlsl2_lane", "nnddi",  "RsRi">;
-def VQDMULL2_LANE  : SInst<"vqdmull2_lane", "nddi",  "RsRi">;
 
 ////////////////////////////////////////////////////////////////////////////////
 // Miscellaneous FP
