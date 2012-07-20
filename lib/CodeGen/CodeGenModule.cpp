@@ -2587,14 +2587,8 @@ void CodeGenModule::EmitTopLevelDecl(Decl *D) {
 
   // Forward declarations, no (immediate) code generation.
   case Decl::ObjCInterface:
+  case Decl::ObjCCategory:
     break;
-  
-  case Decl::ObjCCategory: {
-    ObjCCategoryDecl *CD = cast<ObjCCategoryDecl>(D);
-    if (CD->IsClassExtension() && CD->hasSynthBitfield())
-      Context.ResetObjCLayout(CD->getClassInterface());
-    break;
-  }
 
   case Decl::ObjCProtocol: {
     ObjCProtocolDecl *Proto = cast<ObjCProtocolDecl>(D);
@@ -2611,8 +2605,6 @@ void CodeGenModule::EmitTopLevelDecl(Decl *D) {
 
   case Decl::ObjCImplementation: {
     ObjCImplementationDecl *OMD = cast<ObjCImplementationDecl>(D);
-    if (LangOpts.ObjCRuntime.isNonFragile() && OMD->hasSynthBitfield())
-      Context.ResetObjCLayout(OMD->getClassInterface());
     EmitObjCPropertyImplementations(OMD);
     EmitObjCIvarInitializations(OMD);
     ObjCRuntime->GenerateClass(OMD);
