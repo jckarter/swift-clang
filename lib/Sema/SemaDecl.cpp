@@ -9802,6 +9802,23 @@ void Sema::ActOnFields(Scope* S,
   if (EnclosingDecl->isInvalidDecl())
     return;
 
+  // If this is an Objective-C @implementation or category and we have
+  // new fields here we should reset the layout of the interface since
+  // it will now change.
+  if (!Fields.empty() && isa<ObjCContainerDecl>(EnclosingDecl)) {
+    ObjCContainerDecl *DC = cast<ObjCContainerDecl>(EnclosingDecl);
+    switch (DC->getKind()) {
+    default: break;
+    case Decl::ObjCCategory:
+      Context.ResetObjCLayout(cast<ObjCCategoryDecl>(DC)->getClassInterface());
+      break;
+    case Decl::ObjCImplementation:
+      Context.
+        ResetObjCLayout(cast<ObjCImplementationDecl>(DC)->getClassInterface());
+      break;
+    }
+  }
+  
   RecordDecl *Record = dyn_cast<RecordDecl>(EnclosingDecl);
 
   // Start counting up the number of named members; make sure to include
@@ -10411,11 +10428,6 @@ Decl *Sema::ActOnEnumConstant(Scope *S, Decl *theEnumDecl, Decl *lastEnumConst,
   // different from T:
   // - every enumerator of every member of class T that is an unscoped 
   // enumerated type
-  //
-  // C++ [dcl.enum]p10:
-  // Each enum-name and each unscoped enumerator is declared in the scope that 
-  // immediately contains the enum-specifier. Each scoped enumerator is declared 
-  // in the scope of the enumeration.
   if (CXXRecordDecl *Record
                       = dyn_cast<CXXRecordDecl>(
                              TheEnumDecl->getDeclContext()->getRedeclContext()))
