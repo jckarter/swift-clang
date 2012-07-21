@@ -72,6 +72,7 @@ protected:
     /// spelling in comment (plain <br> would not set this flag).
     unsigned IsSelfClosing : 1;
   };
+  enum { NumHTMLStartTagCommentBits = NumInlineContentCommentBits + 1 };
 
   class ParagraphCommentBitfields {
     friend class ParagraphComment;
@@ -611,6 +612,10 @@ public:
 
   ParagraphComment *getParagraph() const LLVM_READONLY {
     return Paragraph;
+  }
+
+  bool hasNonWhitespaceParagraph() const {
+    return Paragraph && !Paragraph->isWhitespace();
   }
 
   void setParagraph(ParagraphComment *PC) {
