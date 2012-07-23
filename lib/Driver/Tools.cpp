@@ -4487,7 +4487,7 @@ void darwin::Link::ConstructJob(Compilation &C, const JobAction &JA,
             } else if (getDarwinToolChain().isTargetIPhoneOS()) {
               if (getDarwinToolChain().isIPhoneOSVersionLT(3, 1))
                 CmdArgs.push_back("-lcrt1.o");
-              else // FIXME: if (getDarwinToolChain().isIPhoneOSVersionLT(6, 0))
+              else if (getDarwinToolChain().isIPhoneOSVersionLT(6, 0))
                 CmdArgs.push_back("-lcrt1.3.1.o");
             } else {
               if (getDarwinToolChain().isMacosxVersionLT(10, 5))

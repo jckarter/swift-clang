@@ -123,7 +123,7 @@
 // LINK_NO_CRT1-NOT: crt
 
 // RUN: %clang -target armv7-apple-ios6.0 -miphoneos-version-min=6.0 -### %t.o 2> %t.log
-// DISABLED: FileCheck -check-prefix=LINK_NO_IOS_CRT1 %s < %t.log
+// RUN: FileCheck -check-prefix=LINK_NO_IOS_CRT1 %s < %t.log
 // LINK_NO_IOS_CRT1-NOT: crt
 
 // RUN: %clang -target i386-apple-darwin12 -pg -### %t.o 2> %t.log
