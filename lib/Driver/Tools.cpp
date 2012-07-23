@@ -795,12 +795,34 @@ void Clang::AddARMTargetArgs(const ArgList &Args,
     CmdArgs.push_back("-no-implicit-float");
 }
 
+/// getARM64TargetCPU - Get the (LLVM) name of the ARM64 cpu we are targeting.
+static std::string getARM64TargetCPU(const ArgList &Args) {
+  // If we have -mcpu=, use that.
+  if (Arg *A = Args.getLastArg(options::OPT_mcpu_EQ)) {
+    StringRef MCPU = A->getValue(Args);
+    // Handle -mcpu=native.
+    if (MCPU == "native")
+      return llvm::sys::getHostCPUName();
+    else
+      return MCPU;
+  }
+
+  // At some point, we may need to check -march here, but for now we only
+  // one arm64 architecture.
+
+  // Default to "cyclone" CPU.
+  return "cyclone";
+}
+
 void Clang::AddARM64TargetArgs(const ArgList &Args,
                                ArgStringList &CmdArgs) const {
   if (!Args.hasFlag(options::OPT_mimplicit_float,
                     options::OPT_mno_implicit_float,
                     true))
     CmdArgs.push_back("-no-implicit-float");
+
+  CmdArgs.push_back("-target-cpu");
+  CmdArgs.push_back(Args.MakeArgString(getARM64TargetCPU(Args)));
 }
 
 // Get default architecture.

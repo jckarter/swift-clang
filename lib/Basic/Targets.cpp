@@ -3257,6 +3257,14 @@ public:
     CXXABI = CXXABI_ARM64;
   }
 
+  virtual bool setCPU(const std::string &Name) {
+    bool CPUKnown = llvm::StringSwitch<bool>(Name)
+      .Case("arm64-generic", true)
+      .Case("cyclone", true)
+      .Default(false);
+    return CPUKnown;
+  }
+
   virtual void getTargetDefines(const LangOptions &Opts,
                                 MacroBuilder &Builder) const {
     // Target identification.
