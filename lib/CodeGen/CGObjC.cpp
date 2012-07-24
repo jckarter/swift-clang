@@ -1032,8 +1032,7 @@ static bool hasTrivialSetExpr(const ObjCPropertyImplDecl *PID) {
 static bool UseOptimizedSetter(CodeGenModule &CGM) {
   if (CGM.getLangOpts().getGC() != LangOptions::NonGC)
     return false;
-  return CGM.getLangOpts().ObjCRuntime.hasOptimizedSetter(
-           CGM.getContext().getTargetInfo().getTriple().getArch());
+  return CGM.getLangOpts().ObjCRuntime.hasOptimizedSetter();
 }
 
 void
