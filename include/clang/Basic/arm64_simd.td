@@ -299,11 +299,11 @@ def VRNDQ_Z : SInst<"vrndqz", "dd", "RfRd">;
 ////////////////////////////////////////////////////////////////////////////////
 // Loads and stores of a single vector
 def VLD1      : WInst<"vld1", "dc",
-                      "QUcQUsQUiQUlQcQsQiQlQhQfQdQPcQPsUcUsUiUlcsilhfPcPs">;
+                      "QUcQUsQUiQUlQcQsQiQlQhQfQdQPcQPsUcUsUiUlcsilhfdPcPs">;
 def VLD1_LANE : WInst<"vld1_lane", "dcdi",
-                      "QUcQUsQUiQUlQcQsQiQlQhQfQdQPcQPsUcUsUiUlcsilhfPcPs">;
+                      "QUcQUsQUiQUlQcQsQiQlQhQfQdQPcQPsUcUsUiUlcsilhfdPcPs">;
 def VLD1_DUP  : WInst<"vld1_dup", "dc",
-                      "QUcQUsQUiQUlQcQsQiQlQhQfQPcQPsUcUsUiUlcsilhfPcPs">;
+                      "QUcQUsQUiQUlQcQsQiQlQhQfQdQPcQPsUcUsUiUlcsilhfdPcPs">;
 def VST1      : WInst<"vst1", "vpd",
                       "QUcQUsQUiQUlQcQsQiQlQhQfQdQPcQPsUcUsUiUlcsilhfPcPs">;
 def VST1_LANE : WInst<"vst1_lane", "vpdi",
