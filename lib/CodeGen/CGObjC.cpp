@@ -580,7 +580,7 @@ namespace {
   };
 }
 
-/// Pick an implementation strategy for the the given property synthesis.
+/// Pick an implementation strategy for the given property synthesis.
 PropertyImplStrategy::PropertyImplStrategy(CodeGenModule &CGM,
                                      const ObjCPropertyImplDecl *propImpl) {
   const ObjCPropertyDecl *prop = propImpl->getPropertyDecl();
@@ -1032,15 +1032,8 @@ static bool hasTrivialSetExpr(const ObjCPropertyImplDecl *PID) {
 static bool UseOptimizedSetter(CodeGenModule &CGM) {
   if (CGM.getLangOpts().getGC() != LangOptions::NonGC)
     return false;
-  const TargetInfo &Target = CGM.getContext().getTargetInfo();
-
-  if (Target.getPlatformName() == "ios")
-    return Target.getPlatformMinVersion() >= VersionTuple(6);
-    
-  if (Target.getPlatformName() != "macosx")
-    return false;
-
-  return Target.getPlatformMinVersion() >= VersionTuple(10, 8);
+  return CGM.getLangOpts().ObjCRuntime.hasOptimizedSetter(
+           CGM.getContext().getTargetInfo().getTriple().getArch());
 }
 
 void

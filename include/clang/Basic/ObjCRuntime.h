@@ -144,6 +144,20 @@ public:
     llvm_unreachable("bad kind");
   }
 
+  /// \brief Does this runtime supports optimized setter entrypoints?
+  bool hasOptimizedSetter(llvm::Triple::ArchType Arch) const {
+    switch (getKind()) {
+      case MacOSX:
+        return getVersion() >= VersionTuple(10, 8);
+      case iOS:
+        return (Arch == llvm::Triple::thumb) && 
+               (getVersion() >= VersionTuple(6));
+    
+      default:
+      return false;
+    }
+  }
+
   /// \brief Does this runtime natively provide ARC-compliant 'weak'
   /// entrypoints?
   bool hasWeak() const {
