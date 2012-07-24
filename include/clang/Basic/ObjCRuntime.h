@@ -150,7 +150,8 @@ public:
       case MacOSX:
         return getVersion() >= VersionTuple(10, 8);
       case iOS:
-        return (Arch == llvm::Triple::thumb) && 
+        return (Arch != llvm::Triple::x86) && 
+               (Arch != llvm::Triple::x86_64) &&
                (getVersion() >= VersionTuple(6));
     
       default:
