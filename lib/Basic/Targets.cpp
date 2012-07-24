@@ -3308,7 +3308,7 @@ public:
                                      TargetInfo::ConstraintInfo &Info) const {
     switch (*Name) {
     default: return false;
-    case 'w': // Floating point and SIMD registers (d0-d31, q0-q31)
+    case 'w': // Floating point and SIMD registers (V0-V31)
       Info.setAllowsRegister();
       return true;
     case 'Q': // A memory address that is a single base register.
