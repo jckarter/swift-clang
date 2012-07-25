@@ -1,6 +1,5 @@
 // RUN: %clang_cc1 %s -emit-llvm -fobjc-runtime=macosx-10.6.0 -triple x86_64-apple-macosx10.6.0 -o - | FileCheck %s
 // rdar://11858187
-// Test for -D__IPHONE_OS_VERSION_MIN_REQUIRED 
 
 @interface I
 // void objc_setProperty_nonatomic(id self, SEL _cmd, id newValue, ptrdiff_t offset);
