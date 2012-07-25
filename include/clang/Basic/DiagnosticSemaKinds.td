@@ -192,6 +192,9 @@ def warn_return_value_size: Warning<
 def warn_return_value_udt: Warning<
   "%0 has C-linkage specified, but returns user-defined type %1 which is "
   "incompatible with C">, InGroup<ReturnTypeCLinkage>;
+def warn_return_value_udt_incomplete: Warning<
+  "%0 has C-linkage specified, but returns incomplete type %1 which could be "
+  "incompatible with C">, InGroup<ReturnTypeCLinkage>;
 def warn_implicit_function_decl : Warning<
   "implicit declaration of function %0">,
   InGroup<ImplicitFunctionDeclare>, DefaultIgnore;
@@ -1715,6 +1718,9 @@ def warn_pointer_attribute_wrong_type : Warning<
   InGroup<IgnoredAttributes>;
 def warn_objc_object_attribute_wrong_type : Warning<
   "'%0' only applies to Objective-C object or block pointer types; type here is %1">,
+  InGroup<IgnoredAttributes>;
+def warn_attribute_requires_functions_or_static_globals : Warning<
+  "%0 only applies to variables with static storage duration and functions">,
   InGroup<IgnoredAttributes>;
 def warn_gnu_inline_attribute_requires_inline : Warning<
   "'gnu_inline' attribute requires function to be marked 'inline',"
