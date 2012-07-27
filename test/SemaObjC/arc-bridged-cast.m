@@ -43,17 +43,22 @@ CFTypeRef fixits() {
   // CHECK: fix-it:"{{.*}}":{40:36-40:36}:")"
 
   CFTypeRef cf1 = (CFTypeRef)CreateSomething(); // expected-error{{cast of Objective-C pointer type 'id' to C pointer type 'CFTypeRef' (aka 'const void *') requires a bridged cast}} \
+  // expected-note{{use __bridge to convert directly (no change in ownership)}} \
   // expected-note{{use CFBridgingRetain call to make an ARC object available as a +1 'CFTypeRef' (aka 'const void *')}}
   // CHECK: fix-it:"{{.*}}":{45:30-45:30}:"CFBridgingRetain("
   // CHECK: fix-it:"{{.*}}":{45:47-45:47}:")"
 
   return (obj1); // expected-error{{implicit conversion of Objective-C pointer type 'id' to C pointer type 'CFTypeRef' (aka 'const void *') requires a bridged cast}} \
+  // expected-note{{use __bridge to convert directly (no change in ownership)}} \
   // expected-note{{use CFBridgingRetain call to make an ARC object available as a +1 'CFTypeRef' (aka 'const void *')}}
-  // CHECK: fix-it:"{{.*}}":{50:10-50:10}:"CFBridgingRetain"
+  // CHECK: fix-it:"{{.*}}":{51:10-51:10}:"(__bridge CFTypeRef)"
+  // CHECK: fix-it:"{{.*}}":{51:10-51:10}:"CFBridgingRetain"
 }
 
 CFTypeRef fixitsWithSpace(id obj) {
   return(obj); // expected-error{{implicit conversion of Objective-C pointer type 'id' to C pointer type 'CFTypeRef' (aka 'const void *') requires a bridged cast}} \
+  // expected-note{{use __bridge to convert directly (no change in ownership)}} \
   // expected-note{{use CFBridgingRetain call to make an ARC object available as a +1 'CFTypeRef' (aka 'const void *')}}
-  // CHECK: fix-it:"{{.*}}":{56:9-56:9}:" CFBridgingRetain"
+  // CHECK: fix-it:"{{.*}}":{59:9-59:9}:"(__bridge CFTypeRef)"
+  // CHECK: fix-it:"{{.*}}":{59:9-59:9}:" CFBridgingRetain"
 }
