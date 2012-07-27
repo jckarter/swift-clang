@@ -18,13 +18,12 @@
 #include "clang/StaticAnalyzer/Core/CheckerManager.h"
 #include "clang/StaticAnalyzer/Core/BugReporter/BugType.h"
 #include "clang/StaticAnalyzer/Core/PathSensitive/AnalysisManager.h"
-#include "clang/StaticAnalyzer/Core/PathSensitive/Calls.h"
+#include "clang/StaticAnalyzer/Core/PathSensitive/CallEvent.h"
 #include "clang/StaticAnalyzer/Core/PathSensitive/ExprEngine.h"
 #include "clang/AST/CharUnits.h"
 #include "clang/AST/ParentMap.h"
 #include "clang/AST/StmtObjC.h"
 #include "clang/AST/StmtCXX.h"
-#include "clang/AST/DeclCXX.h"
 #include "clang/Basic/Builtins.h"
 #include "clang/Basic/SourceManager.h"
 #include "clang/Basic/PrettyStackTrace.h"
@@ -357,6 +356,9 @@ void ExprEngine::ProcessStmt(const CFGStmt S,
 void ExprEngine::ProcessInitializer(const CFGInitializer Init,
                                     ExplodedNode *Pred) {
   ExplodedNodeSet Dst;
+  NodeBuilder Bldr(Pred, Dst, *currentBuilderContext);
+
+  ProgramStateRef State = Pred->getState();
 
   // We don't set EntryNode and currentStmt. And we don't clean up state.
   const CXXCtorInitializer *BMI = Init.getInitializer();
@@ -364,41 +366,33 @@ void ExprEngine::ProcessInitializer(const CFGInitializer Init,
                            cast<StackFrameContext>(Pred->getLocationContext());
   const CXXConstructorDecl *decl =
                            cast<CXXConstructorDecl>(stackFrame->getDecl());
-  SVal thisVal = Pred->getState()->getSVal(svalBuilder.getCXXThis(decl,
-                                                                  stackFrame));
+  SVal thisVal = State->getSVal(svalBuilder.getCXXThis(decl, stackFrame));
 
+  // Evaluate the initializer, if necessary
   if (BMI->isAnyMemberInitializer()) {
-    // Evaluate the initializer.
+    // Constructors build the object directly in the field,
+    // but non-objects must be copied in from the initializer.
+    if (!isa<CXXConstructExpr>(BMI->getInit())) {
+      SVal FieldLoc;
+      if (BMI->isIndirectMemberInitializer())
+        FieldLoc = State->getLValue(BMI->getIndirectMember(), thisVal);
+      else
+        FieldLoc = State->getLValue(BMI->getMember(), thisVal);
 
-    StmtNodeBuilder Bldr(Pred, Dst, *currentBuilderContext);
-    ProgramStateRef state = Pred->getState();
-
-    const FieldDecl *FD = BMI->getAnyMember();
-
-    // FIXME: This does not work for initializers that call constructors.
-    SVal FieldLoc = state->getLValue(FD, thisVal);
-    SVal InitVal = state->getSVal(BMI->getInit(), Pred->getLocationContext());
-    state = state->bindLoc(FieldLoc, InitVal);
-
-    // Use a custom node building process.
-    PostInitializer PP(BMI, stackFrame);
-    // Builder automatically add the generated node to the deferred set,
-    // which are processed in the builder's dtor.
-    Bldr.generateNode(PP, Pred, state);
+      SVal InitVal = State->getSVal(BMI->getInit(), stackFrame);
+      State = State->bindLoc(FieldLoc, InitVal);
+    }
   } else {
     assert(BMI->isBaseInitializer());
-
-    // Get the base class declaration.
-    const CXXConstructExpr *ctorExpr = cast<CXXConstructExpr>(BMI->getInit());
-
-    // Create the base object region.
-    SVal baseVal =
-        getStoreManager().evalDerivedToBase(thisVal, ctorExpr->getType());
-    const MemRegion *baseReg = baseVal.getAsRegion();
-    assert(baseReg);
-
-    VisitCXXConstructExpr(ctorExpr, baseReg, Pred, Dst);
+    // We already did all the work when visiting the CXXConstructExpr.
   }
+
+  // Construct a PostInitializer node whether the state changed or not,
+  // so that the diagnostics don't get confused.
+  PostInitializer PP(BMI, stackFrame);
+  // Builder automatically add the generated node to the deferred set,
+  // which are processed in the builder's dtor.
+  Bldr.generateNode(PP, State, Pred);
 
   // Enqueue the new nodes onto the work list.
   Engine.enqueue(Dst, currentBuilderContext->getBlock(), currentStmtIdx);
@@ -439,45 +433,49 @@ void ExprEngine::ProcessAutomaticObjDtor(const CFGAutomaticObjDtor Dtor,
   if (const ReferenceType *refType = varType->getAs<ReferenceType>())
     varType = refType->getPointeeType();
 
-  const CXXRecordDecl *recordDecl = varType->getAsCXXRecordDecl();
-  assert(recordDecl && "get CXXRecordDecl fail");
-  const CXXDestructorDecl *dtorDecl = recordDecl->getDestructor();
-
   Loc dest = state->getLValue(varDecl, Pred->getLocationContext());
 
-  VisitCXXDestructor(dtorDecl, cast<loc::MemRegionVal>(dest).getRegion(),
+  VisitCXXDestructor(varType, cast<loc::MemRegionVal>(dest).getRegion(),
                      Dtor.getTriggerStmt(), Pred, Dst);
 }
 
 void ExprEngine::ProcessBaseDtor(const CFGBaseDtor D,
-                                 ExplodedNode *Pred, ExplodedNodeSet &Dst) {}
+                                 ExplodedNode *Pred, ExplodedNodeSet &Dst) {
+  const LocationContext *LCtx = Pred->getLocationContext();
+  ProgramStateRef State = Pred->getState();
+
+  const CXXDestructorDecl *CurDtor = cast<CXXDestructorDecl>(LCtx->getDecl());
+  Loc ThisPtr = getSValBuilder().getCXXThis(CurDtor,
+                                            LCtx->getCurrentStackFrame());
+  SVal ThisVal = Pred->getState()->getSVal(ThisPtr);
+
+  // Create the base object region.
+  QualType BaseTy = D.getBaseSpecifier()->getType();
+  SVal BaseVal = getStoreManager().evalDerivedToBase(ThisVal, BaseTy);
+
+  VisitCXXDestructor(BaseTy, cast<loc::MemRegionVal>(BaseVal).getRegion(),
+                     CurDtor->getBody(), Pred, Dst);
+}
 
 void ExprEngine::ProcessMemberDtor(const CFGMemberDtor D,
-                                   ExplodedNode *Pred, ExplodedNodeSet &Dst) {}
+                                   ExplodedNode *Pred, ExplodedNodeSet &Dst) {
+  const FieldDecl *Member = D.getFieldDecl();
+  ProgramStateRef State = Pred->getState();
+  const LocationContext *LCtx = Pred->getLocationContext();
+
+  const CXXDestructorDecl *CurDtor = cast<CXXDestructorDecl>(LCtx->getDecl());
+  Loc ThisVal = getSValBuilder().getCXXThis(CurDtor,
+                                            LCtx->getCurrentStackFrame());
+  SVal FieldVal = State->getLValue(Member, cast<Loc>(State->getSVal(ThisVal)));
+
+  VisitCXXDestructor(Member->getType(),
+                     cast<loc::MemRegionVal>(FieldVal).getRegion(),
+                     CurDtor->getBody(), Pred, Dst);
+}
 
 void ExprEngine::ProcessTemporaryDtor(const CFGTemporaryDtor D,
                                       ExplodedNode *Pred,
                                       ExplodedNodeSet &Dst) {}
-
-static const VarDecl *findDirectConstruction(const DeclStmt *DS,
-                                             const Expr *Init) {
-  for (DeclStmt::const_decl_iterator I = DS->decl_begin(), E = DS->decl_end();
-       I != E; ++I) {
-    const VarDecl *Var = dyn_cast<VarDecl>(*I);
-    if (!Var)
-      continue;
-    if (Var->getInit() != Init)
-      continue;
-    // FIXME: We need to decide how copy-elision should work here.
-    if (!Var->isDirectInit())
-      break;
-    if (Var->getType()->isReferenceType())
-      break;
-    return Var;
-  }
-
-  return 0;
-}
 
 void ExprEngine::Visit(const Stmt *S, ExplodedNode *Pred,
                        ExplodedNodeSet &DstTop) {
@@ -530,7 +528,6 @@ void ExprEngine::Visit(const Stmt *S, ExplodedNode *Pred,
     
     // We don't handle default arguments either yet, but we can fake it
     // for now by just skipping them.
-    case Stmt::SubstNonTypeTemplateParmExprClass:
     case Stmt::CXXDefaultArgExprClass:
       break;
 
@@ -624,6 +621,7 @@ void ExprEngine::Visit(const Stmt *S, ExplodedNode *Pred,
     case Stmt::StringLiteralClass:
     case Stmt::ObjCStringLiteralClass:
     case Stmt::CXXBindTemporaryExprClass:
+    case Stmt::SubstNonTypeTemplateParmExprClass:
     case Stmt::CXXNullPtrLiteralExprClass: {
       Bldr.takeNodes(Pred);
       ExplodedNodeSet preVisit;
@@ -739,20 +737,9 @@ void ExprEngine::Visit(const Stmt *S, ExplodedNode *Pred,
     }
 
     case Stmt::CXXTemporaryObjectExprClass:
-    case Stmt::CXXConstructExprClass: {
-      const CXXConstructExpr *C = cast<CXXConstructExpr>(S);
-      const MemRegion *Target = 0;
-
-      const LocationContext *LCtx = Pred->getLocationContext();
-      const ParentMap &PM = LCtx->getParentMap();
-      if (const DeclStmt *DS = dyn_cast_or_null<DeclStmt>(PM.getParent(C)))
-        if (const VarDecl *Var = findDirectConstruction(DS, C))
-          Target = Pred->getState()->getLValue(Var, LCtx).getAsRegion();
-      // If we don't have a destination region, VisitCXXConstructExpr() will
-      // create one.
-      
+    case Stmt::CXXConstructExprClass: {      
       Bldr.takeNodes(Pred);
-      VisitCXXConstructExpr(C, Target, Pred, Dst);
+      VisitCXXConstructExpr(cast<CXXConstructExpr>(S), Pred, Dst);
       Bldr.addNodes(Dst);
       break;
     }
@@ -890,10 +877,10 @@ void ExprEngine::Visit(const Stmt *S, ExplodedNode *Pred,
 
     case Stmt::ObjCMessageExprClass: {
       Bldr.takeNodes(Pred);
-      VisitObjCMessage(ObjCMethodCall(cast<ObjCMessageExpr>(S),
-                                      Pred->getState(),
-                                      Pred->getLocationContext()),
-                       Pred, Dst);
+      ObjCMethodCall Call(cast<ObjCMessageExpr>(S),
+                          Pred->getState(),
+                          Pred->getLocationContext());
+      VisitObjCMessage(Call, Pred, Dst);
       Bldr.addNodes(Dst);
       break;
     }
