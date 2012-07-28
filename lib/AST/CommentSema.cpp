@@ -169,6 +169,10 @@ ParamCommandComment *Sema::actOnParamCommandParamNameArg(
   Diag(ArgLocBegin, diag::warn_doc_param_not_found)
     << Arg << ArgRange;
 
+  // No parameters -- can't suggest a correction.
+  if (ParamVars.size() == 0)
+    return Command;
+
   unsigned CorrectedParamIndex = ParamCommandComment::InvalidParamIndex;
   if (ParamVars.size() == 1) {
     // If function has only one parameter then only that parameter
@@ -447,7 +451,7 @@ unsigned Sema::correctTypoInParmVarReference(
   if (BestEditDistance <= MaxEditDistance)
     return BestPVDIndex;
   else
-    return ParamCommandComment::InvalidParamIndex;;
+    return ParamCommandComment::InvalidParamIndex;
 }
 
 // TODO: tablegen
