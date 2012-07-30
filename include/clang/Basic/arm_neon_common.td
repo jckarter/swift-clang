@@ -34,6 +34,7 @@ def OP_MLSL_N : Op;
 def OP_MUL_LN: Op;
 def OP_MULL_LN : Op;
 def OP_MULL_HIGH : Op;
+def OP_MULL_HIGH_N : Op;
 def OP_MULL_HIGH_LN : Op;
 def OP_MLA_LN: Op;
 def OP_MLS_LN: Op;

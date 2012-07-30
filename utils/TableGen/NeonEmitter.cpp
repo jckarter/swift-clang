@@ -57,6 +57,7 @@ enum OpKind {
   OpMulLane,
   OpMullLane,
   OpMullHigh,
+  OpMullHighN,
   OpMullHighLane,
   OpMlaLane,
   OpMlsLane,
@@ -183,6 +184,7 @@ public:
     OpMap["OP_MUL_LN"]= OpMulLane;
     OpMap["OP_MULL_LN"] = OpMullLane;
     OpMap["OP_MULL_HIGH"] = OpMullHigh;
+    OpMap["OP_MULL_HIGH_N"] = OpMullHighN;
     OpMap["OP_MULL_HIGH_LN"] = OpMullHighLane;
     OpMap["OP_MLA_LN"]= OpMlaLane;
     OpMap["OP_MLS_LN"]= OpMlsLane;
@@ -457,6 +459,9 @@ static char ModType(const char mod, char type, bool &quad, bool &poly,
     case 'z':
       scal = true;
       type = Widen(type);
+      break;
+    case 'j':
+      quad = false;
       break;
     case 'k':
       quad = true;
@@ -852,10 +857,11 @@ static std::string Extend(StringRef typestr, const std::string &a) {
 }
 
 static std::string Duplicate(unsigned nElts, StringRef typestr,
-                             const std::string &a) {
+                             const std::string &a, bool Shorten = false) {
   std::string s;
+  char mod = Shorten ? 'j' : 'd';
 
-  s = "(" + TypeString('d', typestr) + "){ ";
+  s = "(" + TypeString(mod, typestr) + "){ ";
   for (unsigned i = 0; i != nElts; ++i) {
     s += a;
     if ((i + 1) < nElts)
@@ -944,6 +950,11 @@ static std::string GenOpString(OpKind op, const std::string &proto,
     s += MangleName("vmull", typestr, ClassS) + "(" +
          MangleName("vget_high", typestr, ClassS) + "(__a), " +
          MangleName("vget_high", typestr, ClassS) + "(__b));";
+    break;
+  case OpMullHighN:
+    s += MangleName("vmull", typestr, ClassS) + "(" +
+         MangleName("vget_high", typestr, ClassS) + "(__a), " +
+         Duplicate(nElts/2, typestr, "__b", true) + ");";
     break;
   case OpMullHighLane:
     s += MangleName("vmull", typestr, ClassS) + "(" +

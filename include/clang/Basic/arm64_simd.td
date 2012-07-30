@@ -447,6 +447,7 @@ def VMUL_LANEQ   : Inst<"vmul_laneq", "ddki", "sifUsUiQsQiQfQdQUsQUi", OP_MUL_LN
 def VMULL_N      : SInst<"vmull_n", "wda", "siUsUi">;
 def VMULL_LANE   : Inst<"vmull_lane", "wddi", "siUsUi", OP_MULL_LN>;
 def VMULL_LANEQ  : Inst<"vmull_laneq", "wdki", "siUsUi", OP_MULL_LN>;
+def VMULL_HIGH_N : Inst<"vmull_high_n", "wda", "RsRiRUsRUi", OP_MULL_HIGH_N>;
 def VMULL_HIGH_LANE  : Inst<"vmull_high_lane", "wdgi", "RsRiRUsRUi", OP_MULL_HIGH_LN>;
 def VMULL_HIGH_LANEQ : Inst<"vmull_high_laneq", "wddi", "RsRiRUsRUi", OP_MULL_HIGH_LN>;
 def VQDMULL_N    : SInst<"vqdmull_n", "wda", "si">;
