@@ -48,6 +48,7 @@ def OP_MLSL_HIGH_LN : Op;
 def OP_MLSL_HIGH_N : Op;
 def OP_QDMULL_LN : Op;
 def OP_QDMULL_HIGH_N : Op;
+def OP_QDMULL_HIGH_LN : Op;
 def OP_QDMLAL_LN : Op;
 def OP_QDMLAL_HIGH_LN : Op;
 def OP_QDMLAL_HIGH_N : Op;
