@@ -73,8 +73,10 @@ enum OpKind {
   OpQDMullHighN,
   OpQDMlalLane,
   OpQDMlalHighLane,
+  OpQDMlalHighN,
   OpQDMlslLane,
   OpQDMlslHighLane,
+  OpQDMlslHighN,
   OpQDMulhLane,
   OpQRDMulhLane,
   OpEq,
@@ -201,8 +203,10 @@ public:
     OpMap["OP_QDMULL_HIGH_N"] = OpQDMullHighN;
     OpMap["OP_QDMLAL_LN"] = OpQDMlalLane;
     OpMap["OP_QDMLAL_HIGH_LN"] = OpQDMlalHighLane;
+    OpMap["OP_QDMLAL_HIGH_N"] = OpQDMlalHighN;
     OpMap["OP_QDMLSL_LN"] = OpQDMlslLane;
     OpMap["OP_QDMLSL_HIGH_LN"] = OpQDMlslHighLane;
+    OpMap["OP_QDMLSL_HIGH_N"] = OpQDMlslHighN;
     OpMap["OP_QDMULH_LN"] = OpQDMulhLane;
     OpMap["OP_QRDMULH_LN"] = OpQRDMulhLane;
     OpMap["OP_EQ"]    = OpEq;
@@ -1056,6 +1060,11 @@ static std::string GenOpString(OpKind op, const std::string &proto,
     s += MangleName("vqdmlal_high", typestr, ClassS) + "(__a, __b, " +
       SplatLane(nElts, "__c", "__d") + ");";
     break;
+  case OpQDMlalHighN:
+    s += MangleName("vqdmlal", typestr, ClassS) + "(__a, " +
+         MangleName("vget_high", typestr, ClassS) + "(__b), " +
+         Duplicate(nElts/2, typestr, "__c", true) + ");";
+    break;
   case OpQDMlslLane:
     s += MangleName("vqdmlsl", typestr, ClassS) + "(__a, __b, " +
       SplatLane(nElts, "__c", "__d") + ");";
@@ -1063,6 +1072,11 @@ static std::string GenOpString(OpKind op, const std::string &proto,
   case OpQDMlslHighLane:
     s += MangleName("vqdmlsl_high", typestr, ClassS) + "(__a, __b, " +
       SplatLane(nElts, "__c", "__d") + ");";
+    break;
+  case OpQDMlslHighN:
+    s += MangleName("vqdmlsl", typestr, ClassS) + "(__a, " +
+         MangleName("vget_high", typestr, ClassS) + "(__b), " +
+         Duplicate(nElts/2, typestr, "__c", true) + ");";
     break;
   case OpQDMulhLane:
     s += MangleName("vqdmulh", typestr, ClassS) + "(__a, " +
