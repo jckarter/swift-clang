@@ -590,33 +590,117 @@ ObjCMessageKind ObjCMethodCall::getMessageKind() const {
   return static_cast<ObjCMessageKind>(Info.getInt());
 }
 
-// TODO: This implementation is copied from SemaExprObjC.cpp, needs to be
-// factored into the ObjCInterfaceDecl.
-ObjCMethodDecl *ObjCMethodCall::LookupClassMethodDefinition(Selector Sel,
-                                           ObjCInterfaceDecl *ClassDecl) const {
-  ObjCMethodDecl *Method = 0;
-  // Lookup in class and all superclasses.
-  while (ClassDecl && !Method) {
-    if (ObjCImplementationDecl *ImpDecl = ClassDecl->getImplementation())
-      Method = ImpDecl->getClassMethod(Sel);
+const Decl *ObjCMethodCall::getRuntimeDefinition() const {
+  const ObjCMessageExpr *E = getOriginExpr();
+  assert(E);
+  Selector Sel = E->getSelector();
 
-    // Look through local category implementations associated with the class.
-    if (!Method)
-      Method = ClassDecl->getCategoryClassMethod(Sel);
+  if (E->isInstanceMessage()) {
 
-    // Before we give up, check if the selector is an instance method.
-    // But only in the root. This matches gcc's behavior and what the
-    // runtime expects.
-    if (!Method && !ClassDecl->getSuperClass()) {
-      Method = ClassDecl->lookupInstanceMethod(Sel);
-      // Look through local category implementations associated
-      // with the root class.
-      //if (!Method)
-      //  Method = LookupPrivateInstanceMethod(Sel, ClassDecl);
+    // Find the the receiver type.
+    const ObjCObjectPointerType *ReceiverT = 0;
+    QualType SupersType = E->getSuperType();
+    if (!SupersType.isNull()) {
+      ReceiverT = cast<ObjCObjectPointerType>(SupersType.getTypePtr());
+    } else {
+      const MemRegion *Receiver = getReceiverSVal().getAsRegion();
+      DynamicTypeInfo TI = getState()->getDynamicTypeInfo(Receiver);
+      ReceiverT = dyn_cast<ObjCObjectPointerType>(TI.getType().getTypePtr());
     }
 
-    ClassDecl = ClassDecl->getSuperClass();
+    // Lookup the method implementation.
+    if (ReceiverT)
+      if (ObjCInterfaceDecl *IDecl = ReceiverT->getInterfaceDecl())
+        return IDecl->lookupPrivateMethod(Sel);
+
+  } else {
+    // This is a class method.
+    // If we have type info for the receiver class, we are calling via
+    // class name.
+    if (ObjCInterfaceDecl *IDecl = E->getReceiverInterface()) {
+      // Find/Return the method implementation.
+      return IDecl->lookupPrivateClassMethod(Sel);
+    }
   }
-  return Method;
+
+  return 0;
+}
+
+
+CallEventRef<SimpleCall>
+CallEventManager::getSimpleCall(const CallExpr *CE, ProgramStateRef State,
+                                const LocationContext *LCtx) {
+  if (const CXXMemberCallExpr *MCE = dyn_cast<CXXMemberCallExpr>(CE))
+    return create<CXXMemberCall>(MCE, State, LCtx);
+
+  if (const CXXOperatorCallExpr *OpCE = dyn_cast<CXXOperatorCallExpr>(CE)) {
+    const FunctionDecl *DirectCallee = OpCE->getDirectCallee();
+    if (const CXXMethodDecl *MD = dyn_cast<CXXMethodDecl>(DirectCallee))
+      if (MD->isInstance())
+        return create<CXXMemberOperatorCall>(OpCE, State, LCtx);
+
+  } else if (CE->getCallee()->getType()->isBlockPointerType()) {
+    return create<BlockCall>(CE, State, LCtx);
+  }
+
+  // Otherwise, it's a normal function call, static member function call, or
+  // something we can't reason about.
+  return create<FunctionCall>(CE, State, LCtx);
+}
+
+
+CallEventRef<>
+CallEventManager::getCaller(const StackFrameContext *CalleeCtx,
+                            ProgramStateRef State) {
+  const LocationContext *ParentCtx = CalleeCtx->getParent();
+  const LocationContext *CallerCtx = ParentCtx->getCurrentStackFrame();
+  assert(CallerCtx && "This should not be used for top-level stack frames");
+
+  const Stmt *CallSite = CalleeCtx->getCallSite();
+
+  if (CallSite) {
+    if (const CallExpr *CE = dyn_cast<CallExpr>(CallSite))
+      return getSimpleCall(CE, State, CallerCtx);
+
+    switch (CallSite->getStmtClass()) {
+    case Stmt::CXXConstructExprClass: {
+      SValBuilder &SVB = State->getStateManager().getSValBuilder();
+      const CXXMethodDecl *Ctor = cast<CXXMethodDecl>(CalleeCtx->getDecl());
+      Loc ThisPtr = SVB.getCXXThis(Ctor, CalleeCtx);
+      SVal ThisVal = State->getSVal(ThisPtr);
+
+      return getCXXConstructorCall(cast<CXXConstructExpr>(CallSite),
+                                   ThisVal.getAsRegion(), State, CallerCtx);
+    }
+    case Stmt::CXXNewExprClass:
+      return getCXXAllocatorCall(cast<CXXNewExpr>(CallSite), State, CallerCtx);
+    case Stmt::ObjCMessageExprClass:
+      return getObjCMethodCall(cast<ObjCMessageExpr>(CallSite),
+                               State, CallerCtx);
+    default:
+      llvm_unreachable("This is not an inlineable statement.");
+    }
+  }
+
+  // Fall back to the CFG. The only thing we haven't handled yet is
+  // destructors, though this could change in the future.
+  const CFGBlock *B = CalleeCtx->getCallSiteBlock();
+  CFGElement E = (*B)[CalleeCtx->getIndex()];
+  assert(isa<CFGImplicitDtor>(E) && "All other CFG elements should have exprs");
+  assert(!isa<CFGTemporaryDtor>(E) && "We don't handle temporaries yet");
+
+  SValBuilder &SVB = State->getStateManager().getSValBuilder();
+  const CXXDestructorDecl *Dtor = cast<CXXDestructorDecl>(CalleeCtx->getDecl());
+  Loc ThisPtr = SVB.getCXXThis(Dtor, CalleeCtx);
+  SVal ThisVal = State->getSVal(ThisPtr);
+
+  const Stmt *Trigger;
+  if (const CFGAutomaticObjDtor *AutoDtor = dyn_cast<CFGAutomaticObjDtor>(&E))
+    Trigger = AutoDtor->getTriggerStmt();
+  else
+    Trigger = Dtor->getBody();
+
+  return getCXXDestructorCall(Dtor, Trigger, ThisVal.getAsRegion(),
+                              State, CallerCtx);
 }
 
