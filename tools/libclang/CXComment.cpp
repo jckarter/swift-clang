@@ -20,6 +20,8 @@
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/raw_ostream.h"
 
+#include <climits>
+
 using namespace clang;
 using namespace clang::cxstring;
 using namespace clang::comments;
@@ -256,7 +258,7 @@ unsigned clang_ParamCommandComment_isParamIndexValid(CXComment CXC) {
 
 unsigned clang_ParamCommandComment_getParamIndex(CXComment CXC) {
   const ParamCommandComment *PCC = getASTNodeAs<ParamCommandComment>(CXC);
-  if (!PCC)
+  if (!PCC || !PCC->isParamIndexValid())
     return ParamCommandComment::InvalidParamIndex;
 
   return PCC->getParamIndex();
@@ -314,13 +316,20 @@ CXString clang_VerbatimLineComment_getText(CXComment CXC) {
 
 namespace {
 
+/// This comparison will sort parameters with valid index by index and
+/// invalid (unresolved) parameters last.
 class ParamCommandCommentCompareIndex {
 public:
   bool operator()(const ParamCommandComment *LHS,
                   const ParamCommandComment *RHS) const {
-    // To sort invalid (unresolved) parameters last, this comparison relies on
-    // invalid indices to be UINT_MAX.
-    return LHS->getParamIndex() < RHS->getParamIndex();
+    unsigned LHSIndex = UINT_MAX;
+    unsigned RHSIndex = UINT_MAX;
+    if (LHS->isParamIndexValid())
+      LHSIndex = LHS->getParamIndex();
+    if (RHS->isParamIndexValid())
+      RHSIndex = RHS->getParamIndex();
+
+    return LHSIndex < RHSIndex;
   }
 };
 
