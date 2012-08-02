@@ -3312,6 +3312,9 @@ public:
     case 'w': // Floating point and SIMD registers (V0-V31)
       Info.setAllowsRegister();
       return true;
+    case 'x': // Floating point and SIMD registers (V0-V15)
+      Info.setAllowsRegister();
+      return true;
     case 'Q': // A memory address that is a single base register.
       Info.setAllowsMemory();
       return true;
