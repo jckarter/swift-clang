@@ -396,234 +396,21 @@ public:
   }
 };
 
-class CommentASTToHTMLConverter :
-    public ConstCommentVisitor<CommentASTToHTMLConverter> {
-public:
-  /// \param Str accumulator for HTML.
-  CommentASTToHTMLConverter(SmallVectorImpl<char> &Str) : Result(Str) { }
+/// Separate parts of a FullComment.
+struct FullCommentParts {
+  /// Take a full comment apart and initialize members accordingly.
+  FullCommentParts(const FullComment *C);
 
-  // Inline content.
-  void visitTextComment(const TextComment *C);
-  void visitInlineCommandComment(const InlineCommandComment *C);
-  void visitHTMLStartTagComment(const HTMLStartTagComment *C);
-  void visitHTMLEndTagComment(const HTMLEndTagComment *C);
-
-  // Block content.
-  void visitParagraphComment(const ParagraphComment *C);
-  void visitBlockCommandComment(const BlockCommandComment *C);
-  void visitParamCommandComment(const ParamCommandComment *C);
-  void visitTParamCommandComment(const TParamCommandComment *C);
-  void visitVerbatimBlockComment(const VerbatimBlockComment *C);
-  void visitVerbatimBlockLineComment(const VerbatimBlockLineComment *C);
-  void visitVerbatimLineComment(const VerbatimLineComment *C);
-
-  void visitFullComment(const FullComment *C);
-
-  // Helpers.
-
-  /// Convert a paragraph that is not a block by itself (an argument to some
-  /// command).
-  void visitNonStandaloneParagraphComment(const ParagraphComment *C);
-
-  void appendToResultWithHTMLEscaping(StringRef S);
-
-private:
-  /// Output stream for HTML.
-  llvm::raw_svector_ostream Result;
-};
-} // end unnamed namespace
-
-void CommentASTToHTMLConverter::visitTextComment(const TextComment *C) {
-  appendToResultWithHTMLEscaping(C->getText());
-}
-
-void CommentASTToHTMLConverter::visitInlineCommandComment(
-                                  const InlineCommandComment *C) {
-  // Nothing to render if no arguments supplied.
-  if (C->getNumArgs() == 0)
-    return;
-
-  // Nothing to render if argument is empty.
-  StringRef Arg0 = C->getArgText(0);
-  if (Arg0.empty())
-    return;
-
-  switch (C->getRenderKind()) {
-  case InlineCommandComment::RenderNormal:
-    for (unsigned i = 0, e = C->getNumArgs(); i != e; ++i) {
-      appendToResultWithHTMLEscaping(C->getArgText(i));
-      Result << " ";
-    }
-    return;
-
-  case InlineCommandComment::RenderBold:
-    assert(C->getNumArgs() == 1);
-    Result << "<b>";
-    appendToResultWithHTMLEscaping(Arg0);
-    Result << "</b>";
-    return;
-  case InlineCommandComment::RenderMonospaced:
-    assert(C->getNumArgs() == 1);
-    Result << "<tt>";
-    appendToResultWithHTMLEscaping(Arg0);
-    Result<< "</tt>";
-    return;
-  case InlineCommandComment::RenderEmphasized:
-    assert(C->getNumArgs() == 1);
-    Result << "<em>";
-    appendToResultWithHTMLEscaping(Arg0);
-    Result << "</em>";
-    return;
-  }
-}
-
-void CommentASTToHTMLConverter::visitHTMLStartTagComment(
-                                  const HTMLStartTagComment *C) {
-  Result << "<" << C->getTagName();
-
-  if (C->getNumAttrs() != 0) {
-    for (unsigned i = 0, e = C->getNumAttrs(); i != e; i++) {
-      Result << " ";
-      const HTMLStartTagComment::Attribute &Attr = C->getAttr(i);
-      Result << Attr.Name;
-      if (!Attr.Value.empty())
-        Result << "=\"" << Attr.Value << "\"";
-    }
-  }
-
-  if (!C->isSelfClosing())
-    Result << ">";
-  else
-    Result << "/>";
-}
-
-void CommentASTToHTMLConverter::visitHTMLEndTagComment(
-                                  const HTMLEndTagComment *C) {
-  Result << "</" << C->getTagName() << ">";
-}
-
-void CommentASTToHTMLConverter::visitParagraphComment(
-                                  const ParagraphComment *C) {
-  if (C->isWhitespace())
-    return;
-
-  Result << "<p>";
-  for (Comment::child_iterator I = C->child_begin(), E = C->child_end();
-       I != E; ++I) {
-    visit(*I);
-  }
-  Result << "</p>";
-}
-
-void CommentASTToHTMLConverter::visitBlockCommandComment(
-                                  const BlockCommandComment *C) {
-  StringRef CommandName = C->getCommandName();
-  if (CommandName == "brief" || CommandName == "short") {
-    Result << "<p class=\"para-brief\">";
-    visitNonStandaloneParagraphComment(C->getParagraph());
-    Result << "</p>";
-    return;
-  }
-  if (CommandName == "returns" || CommandName == "return" ||
-      CommandName == "result") {
-    Result << "<p class=\"para-returns\">"
-              "<span class=\"word-returns\">Returns</span> ";
-    visitNonStandaloneParagraphComment(C->getParagraph());
-    Result << "</p>";
-    return;
-  }
-  // We don't know anything about this command.  Just render the paragraph.
-  visit(C->getParagraph());
-}
-
-void CommentASTToHTMLConverter::visitParamCommandComment(
-                                  const ParamCommandComment *C) {
-  if (C->isParamIndexValid()) {
-    Result << "<dt class=\"param-name-index-"
-           << C->getParamIndex()
-           << "\">";
-  } else
-    Result << "<dt class=\"param-name-index-invalid\">";
-
-  appendToResultWithHTMLEscaping(C->getParamName());
-  Result << "</dt>";
-
-  if (C->isParamIndexValid()) {
-    Result << "<dd class=\"param-descr-index-"
-           << C->getParamIndex()
-           << "\">";
-  } else
-    Result << "<dd class=\"param-descr-index-invalid\">";
-
-  visitNonStandaloneParagraphComment(C->getParagraph());
-  Result << "</dd>";
-}
-
-void CommentASTToHTMLConverter::visitTParamCommandComment(
-                                  const TParamCommandComment *C) {
-  if (C->isPositionValid()) {
-    if (C->getDepth() == 1)
-      Result << "<dt class=\"taram-name-index-"
-             << C->getIndex(0)
-             << "\">";
-    else
-      Result << "<dt class=\"taram-name-index-other\">";
-  } else
-    Result << "<dt class=\"tparam-name-index-invalid\">";
-
-  appendToResultWithHTMLEscaping(C->getParamName());
-  Result << "</dt>";
-
-  if (C->isPositionValid()) {
-    if (C->getDepth() == 1)
-      Result << "<dd class=\"tparam-descr-index-"
-             << C->getIndex(0)
-             << "\">";
-    else
-      Result << "<dd class=\"tparam-descr-index-other\">";
-  } else
-    Result << "<dd class=\"tparam-descr-index-invalid\">";
-
-  visitNonStandaloneParagraphComment(C->getParagraph());
-  Result << "</dd>";
-}
-
-void CommentASTToHTMLConverter::visitVerbatimBlockComment(
-                                  const VerbatimBlockComment *C) {
-  unsigned NumLines = C->getNumLines();
-  if (NumLines == 0)
-    return;
-
-  Result << "<pre>";
-  for (unsigned i = 0; i != NumLines; ++i) {
-    appendToResultWithHTMLEscaping(C->getText(i));
-    if (i + 1 != NumLines)
-      Result << '\n';
-  }
-  Result << "</pre>";
-}
-
-void CommentASTToHTMLConverter::visitVerbatimBlockLineComment(
-                                  const VerbatimBlockLineComment *C) {
-  llvm_unreachable("should not see this AST node");
-}
-
-void CommentASTToHTMLConverter::visitVerbatimLineComment(
-                                  const VerbatimLineComment *C) {
-  Result << "<pre>";
-  appendToResultWithHTMLEscaping(C->getText());
-  Result << "</pre>";
-}
-
-void CommentASTToHTMLConverter::visitFullComment(const FullComment *C) {
-  const BlockContentComment *Brief = NULL;
-  const ParagraphComment *FirstParagraph = NULL;
-  const BlockCommandComment *Returns = NULL;
+  const BlockContentComment *Brief;
+  const ParagraphComment *FirstParagraph;
+  const BlockCommandComment *Returns;
   SmallVector<const ParamCommandComment *, 8> Params;
   SmallVector<const TParamCommandComment *, 4> TParams;
   SmallVector<const BlockContentComment *, 8> MiscBlocks;
+};
 
-  // Extract various blocks into separate variables and vectors above.
+FullCommentParts::FullCommentParts(const FullComment *C) :
+    Brief(NULL), FirstParagraph(NULL), Returns(NULL) {
   for (Comment::child_iterator I = C->child_begin(), E = C->child_end();
        I != E; ++I) {
     const Comment *Child = *I;
@@ -707,40 +494,268 @@ void CommentASTToHTMLConverter::visitFullComment(const FullComment *C) {
 
   std::stable_sort(TParams.begin(), TParams.end(),
                    TParamCommandCommentComparePosition());
+}
+
+void PrintHTMLStartTagComment(const HTMLStartTagComment *C,
+                              llvm::raw_svector_ostream &Result) {
+  Result << "<" << C->getTagName();
+
+  if (C->getNumAttrs() != 0) {
+    for (unsigned i = 0, e = C->getNumAttrs(); i != e; i++) {
+      Result << " ";
+      const HTMLStartTagComment::Attribute &Attr = C->getAttr(i);
+      Result << Attr.Name;
+      if (!Attr.Value.empty())
+        Result << "=\"" << Attr.Value << "\"";
+    }
+  }
+
+  if (!C->isSelfClosing())
+    Result << ">";
+  else
+    Result << "/>";
+}
+
+class CommentASTToHTMLConverter :
+    public ConstCommentVisitor<CommentASTToHTMLConverter> {
+public:
+  /// \param Str accumulator for HTML.
+  CommentASTToHTMLConverter(SmallVectorImpl<char> &Str) : Result(Str) { }
+
+  // Inline content.
+  void visitTextComment(const TextComment *C);
+  void visitInlineCommandComment(const InlineCommandComment *C);
+  void visitHTMLStartTagComment(const HTMLStartTagComment *C);
+  void visitHTMLEndTagComment(const HTMLEndTagComment *C);
+
+  // Block content.
+  void visitParagraphComment(const ParagraphComment *C);
+  void visitBlockCommandComment(const BlockCommandComment *C);
+  void visitParamCommandComment(const ParamCommandComment *C);
+  void visitTParamCommandComment(const TParamCommandComment *C);
+  void visitVerbatimBlockComment(const VerbatimBlockComment *C);
+  void visitVerbatimBlockLineComment(const VerbatimBlockLineComment *C);
+  void visitVerbatimLineComment(const VerbatimLineComment *C);
+
+  void visitFullComment(const FullComment *C);
+
+  // Helpers.
+
+  /// Convert a paragraph that is not a block by itself (an argument to some
+  /// command).
+  void visitNonStandaloneParagraphComment(const ParagraphComment *C);
+
+  void appendToResultWithHTMLEscaping(StringRef S);
+
+private:
+  /// Output stream for HTML.
+  llvm::raw_svector_ostream Result;
+};
+} // end unnamed namespace
+
+void CommentASTToHTMLConverter::visitTextComment(const TextComment *C) {
+  appendToResultWithHTMLEscaping(C->getText());
+}
+
+void CommentASTToHTMLConverter::visitInlineCommandComment(
+                                  const InlineCommandComment *C) {
+  // Nothing to render if no arguments supplied.
+  if (C->getNumArgs() == 0)
+    return;
+
+  // Nothing to render if argument is empty.
+  StringRef Arg0 = C->getArgText(0);
+  if (Arg0.empty())
+    return;
+
+  switch (C->getRenderKind()) {
+  case InlineCommandComment::RenderNormal:
+    for (unsigned i = 0, e = C->getNumArgs(); i != e; ++i) {
+      appendToResultWithHTMLEscaping(C->getArgText(i));
+      Result << " ";
+    }
+    return;
+
+  case InlineCommandComment::RenderBold:
+    assert(C->getNumArgs() == 1);
+    Result << "<b>";
+    appendToResultWithHTMLEscaping(Arg0);
+    Result << "</b>";
+    return;
+  case InlineCommandComment::RenderMonospaced:
+    assert(C->getNumArgs() == 1);
+    Result << "<tt>";
+    appendToResultWithHTMLEscaping(Arg0);
+    Result<< "</tt>";
+    return;
+  case InlineCommandComment::RenderEmphasized:
+    assert(C->getNumArgs() == 1);
+    Result << "<em>";
+    appendToResultWithHTMLEscaping(Arg0);
+    Result << "</em>";
+    return;
+  }
+}
+
+void CommentASTToHTMLConverter::visitHTMLStartTagComment(
+                                  const HTMLStartTagComment *C) {
+  PrintHTMLStartTagComment(C, Result);
+}
+
+void CommentASTToHTMLConverter::visitHTMLEndTagComment(
+                                  const HTMLEndTagComment *C) {
+  Result << "</" << C->getTagName() << ">";
+}
+
+void CommentASTToHTMLConverter::visitParagraphComment(
+                                  const ParagraphComment *C) {
+  if (C->isWhitespace())
+    return;
+
+  Result << "<p>";
+  for (Comment::child_iterator I = C->child_begin(), E = C->child_end();
+       I != E; ++I) {
+    visit(*I);
+  }
+  Result << "</p>";
+}
+
+void CommentASTToHTMLConverter::visitBlockCommandComment(
+                                  const BlockCommandComment *C) {
+  StringRef CommandName = C->getCommandName();
+  if (CommandName == "brief" || CommandName == "short") {
+    Result << "<p class=\"para-brief\">";
+    visitNonStandaloneParagraphComment(C->getParagraph());
+    Result << "</p>";
+    return;
+  }
+  if (CommandName == "returns" || CommandName == "return" ||
+      CommandName == "result") {
+    Result << "<p class=\"para-returns\">"
+              "<span class=\"word-returns\">Returns</span> ";
+    visitNonStandaloneParagraphComment(C->getParagraph());
+    Result << "</p>";
+    return;
+  }
+  // We don't know anything about this command.  Just render the paragraph.
+  visit(C->getParagraph());
+}
+
+void CommentASTToHTMLConverter::visitParamCommandComment(
+                                  const ParamCommandComment *C) {
+  if (C->isParamIndexValid()) {
+    Result << "<dt class=\"param-name-index-"
+           << C->getParamIndex()
+           << "\">";
+  } else
+    Result << "<dt class=\"param-name-index-invalid\">";
+
+  appendToResultWithHTMLEscaping(C->getParamName());
+  Result << "</dt>";
+
+  if (C->isParamIndexValid()) {
+    Result << "<dd class=\"param-descr-index-"
+           << C->getParamIndex()
+           << "\">";
+  } else
+    Result << "<dd class=\"param-descr-index-invalid\">";
+
+  visitNonStandaloneParagraphComment(C->getParagraph());
+  Result << "</dd>";
+}
+
+void CommentASTToHTMLConverter::visitTParamCommandComment(
+                                  const TParamCommandComment *C) {
+  if (C->isPositionValid()) {
+    if (C->getDepth() == 1)
+      Result << "<dt class=\"tparam-name-index-"
+             << C->getIndex(0)
+             << "\">";
+    else
+      Result << "<dt class=\"tparam-name-index-other\">";
+  } else
+    Result << "<dt class=\"tparam-name-index-invalid\">";
+
+  appendToResultWithHTMLEscaping(C->getParamName());
+  Result << "</dt>";
+
+  if (C->isPositionValid()) {
+    if (C->getDepth() == 1)
+      Result << "<dd class=\"tparam-descr-index-"
+             << C->getIndex(0)
+             << "\">";
+    else
+      Result << "<dd class=\"tparam-descr-index-other\">";
+  } else
+    Result << "<dd class=\"tparam-descr-index-invalid\">";
+
+  visitNonStandaloneParagraphComment(C->getParagraph());
+  Result << "</dd>";
+}
+
+void CommentASTToHTMLConverter::visitVerbatimBlockComment(
+                                  const VerbatimBlockComment *C) {
+  unsigned NumLines = C->getNumLines();
+  if (NumLines == 0)
+    return;
+
+  Result << "<pre>";
+  for (unsigned i = 0; i != NumLines; ++i) {
+    appendToResultWithHTMLEscaping(C->getText(i));
+    if (i + 1 != NumLines)
+      Result << '\n';
+  }
+  Result << "</pre>";
+}
+
+void CommentASTToHTMLConverter::visitVerbatimBlockLineComment(
+                                  const VerbatimBlockLineComment *C) {
+  llvm_unreachable("should not see this AST node");
+}
+
+void CommentASTToHTMLConverter::visitVerbatimLineComment(
+                                  const VerbatimLineComment *C) {
+  Result << "<pre>";
+  appendToResultWithHTMLEscaping(C->getText());
+  Result << "</pre>";
+}
+
+void CommentASTToHTMLConverter::visitFullComment(const FullComment *C) {
+  FullCommentParts Parts(C);
 
   bool FirstParagraphIsBrief = false;
-  if (Brief)
-    visit(Brief);
-  else if (FirstParagraph) {
+  if (Parts.Brief)
+    visit(Parts.Brief);
+  else if (Parts.FirstParagraph) {
     Result << "<p class=\"para-brief\">";
-    visitNonStandaloneParagraphComment(FirstParagraph);
+    visitNonStandaloneParagraphComment(Parts.FirstParagraph);
     Result << "</p>";
     FirstParagraphIsBrief = true;
   }
 
-  for (unsigned i = 0, e = MiscBlocks.size(); i != e; ++i) {
-    const Comment *C = MiscBlocks[i];
-    if (FirstParagraphIsBrief && C == FirstParagraph)
+  for (unsigned i = 0, e = Parts.MiscBlocks.size(); i != e; ++i) {
+    const Comment *C = Parts.MiscBlocks[i];
+    if (FirstParagraphIsBrief && C == Parts.FirstParagraph)
       continue;
     visit(C);
   }
 
-  if (TParams.size() != 0) {
+  if (Parts.TParams.size() != 0) {
     Result << "<dl>";
-    for (unsigned i = 0, e = TParams.size(); i != e; ++i)
-      visit(TParams[i]);
+    for (unsigned i = 0, e = Parts.TParams.size(); i != e; ++i)
+      visit(Parts.TParams[i]);
     Result << "</dl>";
   }
 
-  if (Params.size() != 0) {
+  if (Parts.Params.size() != 0) {
     Result << "<dl>";
-    for (unsigned i = 0, e = Params.size(); i != e; ++i)
-      visit(Params[i]);
+    for (unsigned i = 0, e = Parts.Params.size(); i != e; ++i)
+      visit(Parts.Params[i]);
     Result << "</dl>";
   }
 
-  if (Returns)
-    visit(Returns);
+  if (Parts.Returns)
+    visit(Parts.Returns);
 
   Result.flush();
 }
