@@ -512,6 +512,11 @@ def VCNT    : WInst<"vcnt", "dd", "UccPcQUcQcQPc">;
 def VRECPE  : SInst<"vrecpe", "dd",  "fUiQfQdQUi">;
 def VRSQRTE : SInst<"vrsqrte", "dd", "fUiQfQdQUi">;
 def VRBIT   : SInst<"vrbit", "dd", "cUcQcQUc">;
+// Scalar operand versions
+def VQABSS : SInst<"vqabss", "ss", "i">;
+def VQABSD : SInst<"vqabsd", "ss", "l">;
+def VQNEGS : SInst<"vqnegs", "ss", "i">;
+def VQNEGD : SInst<"vqnegd", "ss", "l">;
 
 ////////////////////////////////////////////////////////////////////////////////
 // Logical operations
