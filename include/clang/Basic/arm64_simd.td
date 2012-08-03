@@ -76,8 +76,13 @@ def VSUBL_HIGH   : SInst<"vsubl_high",   "ndd", "RcRsRiRUcRUsRUi">;
 def VSUBW_HIGH   : SInst<"vsubw_high",   "ndd", "RcRsRiRUcRUsRUi">;
 def VRSUBHN_HIGH : SInst<"vrsubhn_high", "hbdd", "RsRiRlRUsRUiRUl">;
 def VSUBHN_HIGH  : SInst<"vsubhn_high",   "hbdd", "RsRiRlRUsRUiRUl">;
+// Scalar operands.
 def VSUBD : Inst<"vsubd", "sss", "lUl", OP_SUB>;
 def VADDD : Inst<"vaddd", "sss", "lUl", OP_ADD>;
+def VQSUBB : SInst<"vqsubb", "sss", "cUc">;
+def VQSUBH : SInst<"vqsubh", "sss", "sUs">;
+def VQSUBS : SInst<"vqsubs", "sss", "iUi">;
+def VQSUBD : SInst<"vqsubd", "sss", "lUl">;
 
 ////////////////////////////////////////////////////////////////////////////////
 // Comparison

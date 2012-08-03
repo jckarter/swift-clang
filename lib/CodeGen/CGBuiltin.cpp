@@ -2290,9 +2290,26 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
   // Handle non-overloaded intrinsics first.
   switch (BuiltinID) {
   default: break;
+  case ARM64::BI__builtin_arm64_vqsubb_u8:
+  case ARM64::BI__builtin_arm64_vqsubh_u16:
+  case ARM64::BI__builtin_arm64_vqsubs_u32:
+  case ARM64::BI__builtin_arm64_vqsubd_u64:
+    usgn = true;
+    // FALLTHROUGH
+  case ARM64::BI__builtin_arm64_vqsubb_s8:
+  case ARM64::BI__builtin_arm64_vqsubh_s16:
+  case ARM64::BI__builtin_arm64_vqsubs_s32:
+  case ARM64::BI__builtin_arm64_vqsubd_s64: {
+    unsigned Int = usgn ? Intrinsic::arm64_neon_uqsub :
+                          Intrinsic::arm64_neon_sqsub;
+    Ops.push_back(EmitScalarExpr(E->getArg(1)));
+    llvm::Type *Ty = Ops[0]->getType();
+    return EmitNeonCall(CGM.getIntrinsic(Int, Ty), Ops, "vqsub");
+  }
   case ARM64::BI__builtin_arm64_vcvtd_n_f64_u64:
   case ARM64::BI__builtin_arm64_vcvts_n_f32_u32:
     usgn = true;
+    // FALLTHROUGH
   case ARM64::BI__builtin_arm64_vcvtd_n_f64_s64:
   case ARM64::BI__builtin_arm64_vcvts_n_f32_s32: {
     Ops.push_back(EmitScalarExpr(E->getArg(1)));
