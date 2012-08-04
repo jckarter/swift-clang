@@ -381,6 +381,9 @@ def VQXTN_HIGH   : SInst<"vqxtn_high",  "hhd", "RsRiRlRUsRUiRUl">;
 def VQXTUN_HIGH  : SInst<"vqxtun_high", "hhd", "RsRiRl">;
 def VMOVN_HIGH   : SInst<"vmovn_high",  "hhd", "RsRiRlRUsRUiRUl">;
 def VMOVL_HIGH   : SInst<"vmovl_high",  "nd", "RcRsRiRUcRUsRUi">;
+// Scalar operands.
+def VQMOVUND : SInst<"vqmovund", "qs", "l">;
+def VQMOVND  : SInst<"vqmovnd",  "qs", "lUl">;
 
 ////////////////////////////////////////////////////////////////////////////////
 // Table lookup, Extended table lookup

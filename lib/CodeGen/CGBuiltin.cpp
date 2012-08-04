@@ -2306,6 +2306,22 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     llvm::Type *Ty = Ops[0]->getType();
     return EmitNeonCall(CGM.getIntrinsic(Int, Ty), Ops, "vqsub");
   }
+  case ARM64::BI__builtin_arm64_vqmovnd_u64:
+    usgn = true;
+    // FALLTHROUGH
+  case ARM64::BI__builtin_arm64_vqmovnd_s64: {
+    unsigned Int = usgn ? Intrinsic::arm64_neon_scalar_uqxtn :
+                          Intrinsic::arm64_neon_scalar_sqxtn;
+    Ops.push_back(EmitScalarExpr(E->getArg(0)));
+    llvm::Type *Tys[2] = { Int32Ty, Int64Ty };
+    return EmitNeonCall(CGM.getIntrinsic(Int, Tys), Ops, "vqmovn");
+  }
+  case ARM64::BI__builtin_arm64_vqmovund_s64: {
+    unsigned Int = Intrinsic::arm64_neon_scalar_sqxtun;
+    Ops.push_back(EmitScalarExpr(E->getArg(0)));
+    llvm::Type *Tys[2] = { Int32Ty, Int64Ty };
+    return EmitNeonCall(CGM.getIntrinsic(Int, Tys), Ops, "vqmovun");
+  }
   case ARM64::BI__builtin_arm64_vqabss_s32:
   case ARM64::BI__builtin_arm64_vqabsd_s64: {
     unsigned Int = Intrinsic::arm64_neon_sqabs;
