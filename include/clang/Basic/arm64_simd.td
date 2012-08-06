@@ -389,6 +389,8 @@ def VMOVL_HIGH   : SInst<"vmovl_high",  "nd", "RcRsRiRUcRUsRUi">;
 def VQMOVUNH : SInst<"vqmovunh", "qs", "s">;
 def VQMOVUNS : SInst<"vqmovuns", "qs", "i">;
 def VQMOVUND : SInst<"vqmovund", "qs", "l">;
+def VQMOVNH  : SInst<"vqmovnh",  "qs", "sUs">;
+def VQMOVNS  : SInst<"vqmovns",  "qs", "iUi">;
 def VQMOVND  : SInst<"vqmovnd",  "qs", "lUl">;
 
 ////////////////////////////////////////////////////////////////////////////////
