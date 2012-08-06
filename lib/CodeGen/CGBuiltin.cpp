@@ -2296,12 +2296,37 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
   default: break;
   case ARM64::BI__builtin_arm64_vqsubb_u8:
   case ARM64::BI__builtin_arm64_vqsubh_u16:
+    usgn = true;
+    // FALLTHROUGH
+  case ARM64::BI__builtin_arm64_vqsubb_s8:
+  case ARM64::BI__builtin_arm64_vqsubh_s16: {
+    unsigned Int = usgn ? Intrinsic::arm64_neon_uqsub :
+                          Intrinsic::arm64_neon_sqsub;
+    // i8 and i16 are not legal types for ARM64, so we can't just use
+    // a normal overloaed intrinsic call for these scalar types. Instead
+    // we'll build 64-bit vectors w/ lane zero being our input values and
+    // perform the operation on that. The back end can pattern match directly
+    // to the scalar instruction.
+    Ops.push_back(EmitScalarExpr(E->getArg(1)));
+    unsigned BitWidth = BuiltinID == ARM64::BI__builtin_arm64_vqsubb_s8 ? 8:16;
+    unsigned NumElts = 64 / BitWidth;
+    llvm::Type *Ty = BitWidth == 8 ? Int8Ty : Int16Ty;
+    llvm::Type *VTy = llvm::VectorType::get(Ty, NumElts);
+    Ops[0] = Builder.CreateBitCast(Ops[0], Ty);
+    Ops[1] = Builder.CreateBitCast(Ops[1], Ty);
+    Value *V = UndefValue::get(VTy);
+    llvm::Constant *CI = ConstantInt::get(Int32Ty, 0);
+    Ops[0] = Builder.CreateInsertElement(V, Ops[0], CI);
+    V = UndefValue::get(VTy);
+    Ops[1] = Builder.CreateInsertElement(V, Ops[1], CI);
+    V = EmitNeonCall(CGM.getIntrinsic(Int, VTy), Ops, "vqsub");
+    return Builder.CreateExtractElement(V, CI, "lane0");
+  }
+
   case ARM64::BI__builtin_arm64_vqsubs_u32:
   case ARM64::BI__builtin_arm64_vqsubd_u64:
     usgn = true;
     // FALLTHROUGH
-  case ARM64::BI__builtin_arm64_vqsubb_s8:
-  case ARM64::BI__builtin_arm64_vqsubh_s16:
   case ARM64::BI__builtin_arm64_vqsubs_s32:
   case ARM64::BI__builtin_arm64_vqsubd_s64: {
     unsigned Int = usgn ? Intrinsic::arm64_neon_uqsub :
