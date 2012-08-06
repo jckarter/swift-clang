@@ -386,6 +386,8 @@ def VQXTUN_HIGH  : SInst<"vqxtun_high", "hhd", "RsRiRl">;
 def VMOVN_HIGH   : SInst<"vmovn_high",  "hhd", "RsRiRlRUsRUiRUl">;
 def VMOVL_HIGH   : SInst<"vmovl_high",  "nd", "RcRsRiRUcRUsRUi">;
 // Scalar operands.
+def VQMOVUNH : SInst<"vqmovunh", "qs", "s">;
+def VQMOVUNS : SInst<"vqmovuns", "qs", "i">;
 def VQMOVUND : SInst<"vqmovund", "qs", "l">;
 def VQMOVND  : SInst<"vqmovnd",  "qs", "lUl">;
 
