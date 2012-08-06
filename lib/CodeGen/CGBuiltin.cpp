@@ -2447,12 +2447,52 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     llvm::Type *Tys[2] = { Int32Ty, Int64Ty };
     return EmitNeonCall(CGM.getIntrinsic(Int, Tys), Ops, "vqmovun");
   }
+  case ARM64::BI__builtin_arm64_vqabsh_s16:
+  case ARM64::BI__builtin_arm64_vqabsb_s8: {
+    unsigned Int = Intrinsic::arm64_neon_sqabs;
+    // i8 and i16 are not legal types for ARM64, so we can't just use
+    // a normal overloaed intrinsic call for these scalar types. Instead
+    // we'll build 64-bit vectors w/ lane zero being our input values and
+    // perform the operation on that. The back end can pattern match directly
+    // to the scalar instruction.
+    Ops.push_back(EmitScalarExpr(E->getArg(0)));
+    unsigned BitWidth = BuiltinID == ARM64::BI__builtin_arm64_vqabsb_s8 ? 8:16;
+    unsigned NumElts = 64 / BitWidth;
+    llvm::Type *EltTy = BitWidth == 8 ? Int8Ty : Int16Ty;
+    llvm::Type *VTy = llvm::VectorType::get(EltTy, NumElts);
+    Ops[0] = Builder.CreateBitCast(Ops[0], EltTy);
+    Value *V = UndefValue::get(VTy);
+    llvm::Constant *CI = ConstantInt::get(Int32Ty, 0);
+    Ops[0] = Builder.CreateInsertElement(V, Ops[0], CI);
+    V = EmitNeonCall(CGM.getIntrinsic(Int, VTy), Ops, "vqabs");
+    return Builder.CreateExtractElement(V, CI, "lane0");
+  }
   case ARM64::BI__builtin_arm64_vqabss_s32:
   case ARM64::BI__builtin_arm64_vqabsd_s64: {
     unsigned Int = Intrinsic::arm64_neon_sqabs;
     Ops.push_back(EmitScalarExpr(E->getArg(0)));
     llvm::Type *Ty = Ops[0]->getType();
     return EmitNeonCall(CGM.getIntrinsic(Int, Ty), Ops, "vqabs");
+  }
+  case ARM64::BI__builtin_arm64_vqnegh_s16:
+  case ARM64::BI__builtin_arm64_vqnegb_s8: {
+    unsigned Int = Intrinsic::arm64_neon_sqneg;
+    // i8 and i16 are not legal types for ARM64, so we can't just use
+    // a normal overloaed intrinsic call for these scalar types. Instead
+    // we'll build 64-bit vectors w/ lane zero being our input values and
+    // perform the operation on that. The back end can pattern match directly
+    // to the scalar instruction.
+    Ops.push_back(EmitScalarExpr(E->getArg(0)));
+    unsigned BitWidth = BuiltinID == ARM64::BI__builtin_arm64_vqnegb_s8 ? 8:16;
+    unsigned NumElts = 64 / BitWidth;
+    llvm::Type *EltTy = BitWidth == 8 ? Int8Ty : Int16Ty;
+    llvm::Type *VTy = llvm::VectorType::get(EltTy, NumElts);
+    Ops[0] = Builder.CreateBitCast(Ops[0], EltTy);
+    Value *V = UndefValue::get(VTy);
+    llvm::Constant *CI = ConstantInt::get(Int32Ty, 0);
+    Ops[0] = Builder.CreateInsertElement(V, Ops[0], CI);
+    V = EmitNeonCall(CGM.getIntrinsic(Int, VTy), Ops, "vqneg");
+    return Builder.CreateExtractElement(V, CI, "lane0");
   }
   case ARM64::BI__builtin_arm64_vqnegs_s32:
   case ARM64::BI__builtin_arm64_vqnegd_s64: {

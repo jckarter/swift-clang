@@ -524,8 +524,12 @@ def VRECPE  : SInst<"vrecpe", "dd",  "fUiQfQdQUi">;
 def VRSQRTE : SInst<"vrsqrte", "dd", "fUiQfQdQUi">;
 def VRBIT   : SInst<"vrbit", "dd", "cUcQcQUc">;
 // Scalar operand versions
+def VQABSB : SInst<"vqabsb", "ss", "c">;
+def VQABSH : SInst<"vqabsh", "ss", "s">;
 def VQABSS : SInst<"vqabss", "ss", "i">;
 def VQABSD : SInst<"vqabsd", "ss", "l">;
+def VQNEGB : SInst<"vqnegb", "ss", "c">;
+def VQNEGH : SInst<"vqnegh", "ss", "s">;
 def VQNEGS : SInst<"vqnegs", "ss", "i">;
 def VQNEGD : SInst<"vqnegd", "ss", "l">;
 
