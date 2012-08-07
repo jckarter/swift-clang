@@ -2271,7 +2271,7 @@ public:
                          const analyze_printf::OptionalFlag &ignoredFlag,
                          const analyze_printf::OptionalFlag &flag,
                          const char *startSpecifier, unsigned specifierLen);
-  bool checkForCStrMembers(const analyze_printf::ArgTypeResult &ATR,
+  bool checkForCStrMembers(const analyze_printf::ArgType &AT,
                            const Expr *E, const CharSourceRange &CSR);
 
 };  
@@ -2320,12 +2320,12 @@ bool CheckPrintfHandler::HandleAmount(
 
       QualType T = Arg->getType();
 
-      const analyze_printf::ArgTypeResult &ATR = Amt.getArgType(S.Context);
-      assert(ATR.isValid());
+      const analyze_printf::ArgType &AT = Amt.getArgType(S.Context);
+      assert(AT.isValid());
 
-      if (!ATR.matchesType(S.Context, T)) {
+      if (!AT.matchesType(S.Context, T)) {
         EmitFormatDiagnostic(S.PDiag(diag::warn_printf_asterisk_wrong_type)
-                               << k << ATR.getRepresentativeTypeName(S.Context)
+                               << k << AT.getRepresentativeTypeName(S.Context)
                                << T << Arg->getSourceRange(),
                              getLocationOfByte(Amt.getStart()),
                              /*IsStringLocation*/true,
@@ -2424,10 +2424,10 @@ CXXRecordMembersNamed(StringRef Name, Sema &S, QualType Ty) {
 }
 
 // Check if a (w)string was passed when a (w)char* was needed, and offer a
-// better diagnostic if so. ATR is assumed to be valid.
+// better diagnostic if so. AT is assumed to be valid.
 // Returns true when a c_str() conversion method is found.
 bool CheckPrintfHandler::checkForCStrMembers(
-    const analyze_printf::ArgTypeResult &ATR, const Expr *E,
+    const analyze_printf::ArgType &AT, const Expr *E,
     const CharSourceRange &CSR) {
   typedef llvm::SmallPtrSet<CXXMethodDecl*, 1> MethodSet;
 
@@ -2438,7 +2438,7 @@ bool CheckPrintfHandler::checkForCStrMembers(
        MI != ME; ++MI) {
     const CXXMethodDecl *Method = *MI;
     if (Method->getNumParams() == 0 &&
-          ATR.matchesType(S.Context, Method->getResultType())) {
+          AT.matchesType(S.Context, Method->getResultType())) {
       // FIXME: Suggest parens if the expression needs them.
       SourceLocation EndLoc =
           S.getPreprocessor().getLocForEndOfToken(E->getLocEnd());
@@ -2561,17 +2561,6 @@ CheckPrintfHandler::HandlePrintfSpecifier(const analyze_printf::PrintfSpecifier
     HandleNonStandardConversionSpecification(LM, CS, startSpecifier,
                                              specifierLen);
 
-  // Are we using '%n'?
-  if (CS.getKind() == ConversionSpecifier::nArg) {
-    // Issue a warning about this being a possible security issue.
-    EmitFormatDiagnostic(S.PDiag(diag::warn_printf_write_back),
-                         getLocationOfByte(CS.getStart()),
-                         /*IsStringLocation*/true,
-                         getSpecifierRange(startSpecifier, specifierLen));
-    // Continue checking the other format specifiers.
-    return true;
-  }
-
   // The remaining checks depend on the data arguments.
   if (HasVAListArg)
     return true;
@@ -2595,9 +2584,9 @@ CheckPrintfHandler::checkFormatExpr(const analyze_printf::PrintfSpecifier &FS,
   using namespace analyze_printf;
   // Now type check the data expression that matches the
   // format specifier.
-  const analyze_printf::ArgTypeResult &ATR = FS.getArgType(S.Context,
-                                                           ObjCContext);
-  if (ATR.isValid() && !ATR.matchesType(S.Context, E->getType())) {
+  const analyze_printf::ArgType &AT = FS.getArgType(S.Context,
+                                                    ObjCContext);
+  if (AT.isValid() && !AT.matchesType(S.Context, E->getType())) {
     // Look through argument promotions for our error message's reported type.
     // This includes the integral and floating promotions, but excludes array
     // and function pointer decay; seeing that an argument intended to be a
@@ -2613,7 +2602,7 @@ CheckPrintfHandler::checkFormatExpr(const analyze_printf::PrintfSpecifier &FS,
         if (ICE->getType() == S.Context.IntTy ||
             ICE->getType() == S.Context.UnsignedIntTy) {
           // All further checking is done on the subexpression.
-          if (ATR.matchesType(S.Context, E->getType()))
+          if (AT.matchesType(S.Context, E->getType()))
             return true;
         }
       }
@@ -2632,7 +2621,7 @@ CheckPrintfHandler::checkFormatExpr(const analyze_printf::PrintfSpecifier &FS,
 
       EmitFormatDiagnostic(
         S.PDiag(diag::warn_printf_conversion_argument_type_mismatch)
-          << ATR.getRepresentativeTypeName(S.Context) << E->getType()
+          << AT.getRepresentativeTypeName(S.Context) << E->getType()
           << E->getSourceRange(),
         E->getLocStart(),
         /*IsStringLocation*/false,
@@ -2658,16 +2647,16 @@ CheckPrintfHandler::checkFormatExpr(const analyze_printf::PrintfSpecifier &FS,
             << S.getLangOpts().CPlusPlus0x
             << E->getType()
             << CallType
-            << ATR.getRepresentativeTypeName(S.Context)
+            << AT.getRepresentativeTypeName(S.Context)
             << CSR
             << E->getSourceRange(),
           E->getLocStart(), /*IsStringLocation*/false, CSR);
 
-        checkForCStrMembers(ATR, E, CSR);
+        checkForCStrMembers(AT, E, CSR);
       } else
         EmitFormatDiagnostic(
           S.PDiag(diag::warn_printf_conversion_argument_type_mismatch)
-            << ATR.getRepresentativeTypeName(S.Context) << E->getType()
+            << AT.getRepresentativeTypeName(S.Context) << E->getType()
             << CSR
             << E->getSourceRange(),
           E->getLocStart(), /*IsStringLocation*/false, CSR);
@@ -2811,8 +2800,8 @@ bool CheckScanfHandler::HandleScanfSpecifier(
   if (!Ex)
     return true;
 
-  const analyze_scanf::ScanfArgTypeResult &ATR = FS.getArgType(S.Context);
-  if (ATR.isValid() && !ATR.matchesType(S.Context, Ex->getType())) {
+  const analyze_format_string::ArgType &AT = FS.getArgType(S.Context);
+  if (AT.isValid() && !AT.matchesType(S.Context, Ex->getType())) {
     ScanfSpecifier fixedFS = FS;
     bool success = fixedFS.fixType(Ex->getType(), S.getLangOpts(),
                                    S.Context);
@@ -2825,7 +2814,7 @@ bool CheckScanfHandler::HandleScanfSpecifier(
 
       EmitFormatDiagnostic(
         S.PDiag(diag::warn_printf_conversion_argument_type_mismatch)
-          << ATR.getRepresentativeTypeName(S.Context) << Ex->getType()
+          << AT.getRepresentativeTypeName(S.Context) << Ex->getType()
           << Ex->getSourceRange(),
         Ex->getLocStart(),
         /*IsStringLocation*/false,
@@ -2836,7 +2825,7 @@ bool CheckScanfHandler::HandleScanfSpecifier(
     } else {
       EmitFormatDiagnostic(
         S.PDiag(diag::warn_printf_conversion_argument_type_mismatch)
-          << ATR.getRepresentativeTypeName(S.Context) << Ex->getType()
+          << AT.getRepresentativeTypeName(S.Context) << Ex->getType()
           << Ex->getSourceRange(),
         Ex->getLocStart(),
         /*IsStringLocation*/false,
@@ -4259,7 +4248,7 @@ static bool AnalyzeBitFieldAssignment(Sema &S, FieldDecl *Bitfield, Expr *Init,
 
   // Check whether the stored value is equal to the original value.
   TruncatedValue = TruncatedValue.extend(OriginalWidth);
-  if (Value == TruncatedValue)
+  if (llvm::APSInt::isSameValue(Value, TruncatedValue))
     return false;
 
   // Special-case bitfields of width 1: booleans are naturally 0/1, and
@@ -4721,7 +4710,7 @@ void AnalyzeImplicitConversions(Sema &S, Expr *OrigE, SourceLocation CC) {
 ///   conversion
 void Sema::CheckImplicitConversions(Expr *E, SourceLocation CC) {
   // Don't diagnose in unevaluated contexts.
-  if (ExprEvalContexts.back().Context == Sema::Unevaluated)
+  if (isUnevaluatedContext())
     return;
 
   // Don't diagnose for value- or type-dependent expressions.
@@ -4782,7 +4771,7 @@ bool Sema::CheckParmsForFunctionDef(ParmVarDecl **P, ParmVarDecl **PEnd,
     QualType PType = Param->getOriginalType();
     if (const ArrayType *AT = Context.getAsArrayType(PType)) {
       if (AT->getSizeModifier() == ArrayType::Star) {
-        // FIXME: This diagnosic should point the the '[*]' if source-location
+        // FIXME: This diagnosic should point the '[*]' if source-location
         // information is added for it.
         Diag(Param->getLocation(), diag::err_array_star_in_function_definition);
       }

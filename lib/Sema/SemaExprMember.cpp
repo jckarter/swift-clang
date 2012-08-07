@@ -1260,7 +1260,18 @@ Sema::LookupMemberExpr(LookupResult &R, ExprResult &BaseExpr,
         if (DE->getType().getObjCLifetime() == Qualifiers::OCL_Weak)
           Diag(DE->getLocation(), diag::error_arc_weak_ivar_access);
     }
-
+    if (IV->getType()->isObjCObjectPointerType() &&
+        getLangOpts().getGC() == LangOptions::NonGC &&
+        !getLangOpts().ObjCAutoRefCount) {
+      bool warn = true;
+      if (ObjCMethodDecl *MD = getCurMethodDecl()) {
+        ObjCMethodFamily MF = MD->getMethodFamily();
+        warn = (MF != OMF_init && MF != OMF_dealloc && 
+                MF != OMF_finalize);
+      }
+      if (warn)
+        Diag(MemberLoc, diag::warn_direct_ivar_access) << IV->getDeclName();
+    }
     return Owned(new (Context) ObjCIvarRefExpr(IV, IV->getType(),
                                                MemberLoc, BaseExpr.take(),
                                                IsArrow));
@@ -1366,9 +1377,6 @@ Sema::LookupMemberExpr(LookupResult &R, ExprResult &BaseExpr,
         // methods.
         Setter = IFace->lookupPrivateMethod(SetterSel, false);
       }
-      // Look through local category implementations associated with the class.
-      if (!Setter)
-        Setter = IFace->getCategoryClassMethod(SetterSel);
 
       if (Setter && DiagnoseUseOfDecl(Setter, MemberLoc))
         return ExprError();

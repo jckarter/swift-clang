@@ -571,6 +571,9 @@ public:
   StmtResult TransformCompoundStmt(CompoundStmt *S, bool IsStmtExpr);
   ExprResult TransformCXXNamedCastExpr(CXXNamedCastExpr *E);
 
+  /// \brief Transform the captures and body of a lambda expression.
+  ExprResult TransformLambdaScope(LambdaExpr *E, CXXMethodDecl *CallOperator);
+
 #define STMT(Node, Parent)                        \
   StmtResult Transform##Node(Node *S);
 #define EXPR(Node, Parent)                        \
@@ -1182,9 +1185,10 @@ public:
   /// By default, performs semantic analysis to build the new statement.
   /// Subclasses may override this routine to provide different behavior.
   StmtResult RebuildMSAsmStmt(SourceLocation AsmLoc,
+                              ArrayRef<Token> AsmToks,
                               std::string &AsmString,
                               SourceLocation EndLoc) {
-    return getSema().ActOnMSAsmStmt(AsmLoc, AsmString, EndLoc);
+    return getSema().ActOnMSAsmStmt(AsmLoc, AsmToks, AsmString, EndLoc);
   }
 
   /// \brief Build a new Objective-C \@try statement.
@@ -5606,8 +5610,11 @@ TreeTransform<Derived>::TransformAsmStmt(AsmStmt *S) {
 template<typename Derived>
 StmtResult
 TreeTransform<Derived>::TransformMSAsmStmt(MSAsmStmt *S) {
+  ArrayRef<Token> AsmToks =
+    llvm::makeArrayRef(S->getAsmToks(), S->getNumAsmToks());
   // No need to transform the asm string literal.
   return getDerived().RebuildMSAsmStmt(S->getAsmLoc(),
+                                       AsmToks,
                                        *S->getAsmString(),
                                        S->getEndLoc());
 }
@@ -7894,31 +7901,29 @@ TreeTransform<Derived>::TransformLambdaExpr(LambdaExpr *E) {
     return ExprError();
 
   // Transform lambda parameters.
-  bool Invalid = false;
   llvm::SmallVector<QualType, 4> ParamTypes;
   llvm::SmallVector<ParmVarDecl *, 4> Params;
   if (getDerived().TransformFunctionTypeParams(E->getLocStart(),
         E->getCallOperator()->param_begin(),
         E->getCallOperator()->param_size(),
         0, ParamTypes, &Params))
-    Invalid = true;  
+    return ExprError();
 
   // Build the call operator.
-  // Note: Once a lambda mangling number and context declaration have been
-  // assigned, they never change.
-  unsigned ManglingNumber = E->getLambdaClass()->getLambdaManglingNumber();
-  Decl *ContextDecl = E->getLambdaClass()->getLambdaContextDecl();  
   CXXMethodDecl *CallOperator
     = getSema().startLambdaDefinition(Class, E->getIntroducerRange(),
-                                      MethodTy, 
+                                      MethodTy,
                                       E->getCallOperator()->getLocEnd(),
-                                      Params, ManglingNumber, ContextDecl);
+                                      Params);
   getDerived().transformAttrs(E->getCallOperator(), CallOperator);
-  
-  // FIXME: Instantiation-specific.
-  CallOperator->setInstantiationOfMemberFunction(E->getCallOperator(), 
-                                                 TSK_ImplicitInstantiation);
 
+  return getDerived().TransformLambdaScope(E, CallOperator);
+}
+
+template<typename Derived>
+ExprResult
+TreeTransform<Derived>::TransformLambdaScope(LambdaExpr *E,
+                                             CXXMethodDecl *CallOperator) {
   // Introduce the context of the call operator.
   Sema::ContextRAII SavedContext(getSema(), CallOperator);
 
@@ -7931,6 +7936,7 @@ TreeTransform<Derived>::TransformLambdaExpr(LambdaExpr *E) {
                                  E->isMutable());
   
   // Transform captures.
+  bool Invalid = false;
   bool FinishedExplicitCaptures = false;
   for (LambdaExpr::capture_iterator C = E->capture_begin(), 
                                  CEnd = E->capture_end();

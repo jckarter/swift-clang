@@ -158,6 +158,11 @@ def warn_redefinition_in_param_list : Warning<
 def warn_empty_parens_are_function_decl : Warning<
   "empty parentheses interpreted as a function declaration">,
   InGroup<VexingParse>;
+def warn_parens_disambiguated_as_function_declaration : Warning<
+  "parentheses were disambiguated as a function declaration">,
+  InGroup<VexingParse>;
+def note_additional_parens_for_variable_declaration : Note<
+  "add a pair of parentheses to declare a variable">;
 def note_empty_parens_function_call : Note<
   "change this ',' to a ';' to call %0">;
 def note_empty_parens_default_ctor : Note<
@@ -191,6 +196,9 @@ def warn_return_value_size: Warning<
   "pass it by reference instead ?">, InGroup<LargeByValueCopy>;
 def warn_return_value_udt: Warning<
   "%0 has C-linkage specified, but returns user-defined type %1 which is "
+  "incompatible with C">, InGroup<ReturnTypeCLinkage>;
+def warn_return_value_udt_incomplete: Warning<
+  "%0 has C-linkage specified, but returns incomplete type %1 which could be "
   "incompatible with C">, InGroup<ReturnTypeCLinkage>;
 def warn_implicit_function_decl : Warning<
   "implicit declaration of function %0">,
@@ -365,9 +373,9 @@ def note_strlcpycat_wrong_size : Note<
   
 def warn_strncat_large_size : Warning<
   "the value of the size argument in 'strncat' is too large, might lead to a " 
-  "buffer overflow">, InGroup<StrncatSize>, DefaultIgnore;
+  "buffer overflow">, InGroup<StrncatSize>, DefaultWarnNoWerror;
 def warn_strncat_src_size : Warning<"size argument in 'strncat' call appears " 
-  "to be size of the source">, InGroup<StrncatSize>, DefaultIgnore;
+  "to be size of the source">, InGroup<StrncatSize>, DefaultWarnNoWerror;
 def note_strncat_wrong_size : Note<
   "change the argument to be the free space in the destination buffer minus " 
   "the terminating null byte">;
@@ -477,7 +485,7 @@ def err_objc_root_class_subclass : Error<
   "objc_root_class attribute may only be specified on a root class declaration">;
 def warn_objc_root_class_missing : Warning<
 	"class %0 defined without specifying a base class">,
-  InGroup<ObjCRootClass>, DefaultIgnore;
+  InGroup<ObjCRootClass>;
 def note_objc_needs_superclass : Note<
   "add a super class to fix this problem">;
 def warn_dup_category_def : Warning<
@@ -728,6 +736,9 @@ def warn_objc_property_attr_mutually_exclusive : Warning<
 def warn_objc_missing_super_dealloc : Warning<
   "method possibly missing a [super dealloc] call">,
   InGroup<ObjCMissingSuperCalls>;
+def error_dealloc_bad_result_type : Error<
+  "dealloc return type must be correctly specified as 'void' under ARC, "
+  "instead of %0">;
 def warn_objc_missing_super_finalize : Warning<
   "method possibly missing a [super finalize] call">,
   InGroup<ObjCMissingSuperCalls>;
@@ -867,8 +878,6 @@ def warn_missing_exception_specification : Warning<
   "%0 is missing exception specification '%1'">;
 def err_noexcept_needs_constant_expression : Error<
   "argument to noexcept specifier must be a constant expression">;
-def err_exception_spec_unknown : Error<
-  "exception specification is not available until end of class definition">;
 
 // C++ access checking
 def err_class_redeclared_with_different_access : Error<
@@ -1715,6 +1724,9 @@ def warn_pointer_attribute_wrong_type : Warning<
   InGroup<IgnoredAttributes>;
 def warn_objc_object_attribute_wrong_type : Warning<
   "'%0' only applies to Objective-C object or block pointer types; type here is %1">,
+  InGroup<IgnoredAttributes>;
+def warn_attribute_requires_functions_or_static_globals : Warning<
+  "%0 only applies to variables with static storage duration and functions">,
   InGroup<IgnoredAttributes>;
 def warn_gnu_inline_attribute_requires_inline : Warning<
   "'gnu_inline' attribute requires function to be marked 'inline',"
@@ -3555,8 +3567,7 @@ def err_arc_autoreleasing_capture : Error<
 def err_arc_thread_ownership : Error<
   "thread-local variable has non-trivial ownership: type is %0">;
 def err_arc_indirect_no_ownership : Error<
-  "%select{pointer|reference}1 to non-const type %0 with no explicit ownership">,
-  InGroup<AutomaticReferenceCounting>;
+  "%select{pointer|reference}1 to non-const type %0 with no explicit ownership">;
 def err_arc_array_param_no_ownership : Error<
   "must explicitly describe intended ownership of an object array parameter">;
 def err_arc_pseudo_dtor_inconstant_quals : Error<
@@ -5082,6 +5093,9 @@ def err_in_class_initializer_literal_type : Error<
   "'constexpr' specifier">;
 def err_in_class_initializer_non_constant : Error<
   "in-class initializer for static data member is not a constant expression">;
+def err_in_class_initializer_references_def_ctor : Error<
+  "defaulted default constructor of %0 cannot be used by non-static data "
+  "member initializer which appears before end of class definition">;
 
 def ext_in_class_initializer_non_constant : Extension<
   "in-class initializer for static data member is not a constant expression; "
@@ -5320,9 +5334,6 @@ def warn_array_index_exceeds_bounds : Warning<
 def note_array_index_out_of_bounds : Note<
   "array %0 declared here">;
 
-def warn_printf_write_back : Warning<
-  "use of '%%n' in format string discouraged (potentially insecure)">,
-  InGroup<FormatSecurity>;
 def warn_printf_insufficient_data_args : Warning<
   "more '%%' conversions than data arguments">, InGroup<Format>;
 def warn_printf_data_arg_not_used : Warning<
@@ -5479,8 +5490,7 @@ def err_builtin_annotation_second_arg : Error<
 
 // CFString checking
 def err_cfstring_literal_not_string_constant : Error<
-  "CFString literal is not a string constant">,
-  InGroup<DiagGroup<"CFString-literal">>;
+  "CFString literal is not a string constant">;
 def warn_cfstring_truncated : Warning<
   "input conversion stopped due to an input byte that does not "
   "belong to the input codeset UTF-8">,
@@ -5542,12 +5552,10 @@ def note_insert_fallthrough_fixit : Note<
 def note_insert_break_fixit : Note<
   "insert 'break;' to avoid fall-through">;
 def err_fallthrough_attr_wrong_target : Error<
-  "clang::fallthrough attribute is only allowed on empty statements">,
-  InGroup<IgnoredAttributes>;
+  "clang::fallthrough attribute is only allowed on empty statements">;
 def note_fallthrough_insert_semi_fixit : Note<"did you forget ';'?">;
 def err_fallthrough_attr_outside_switch : Error<
-  "fallthrough annotation is outside switch statement">,
-  InGroup<IgnoredAttributes>;
+  "fallthrough annotation is outside switch statement">;
 def warn_fallthrough_attr_invalid_placement : Warning<
   "fallthrough annotation does not directly precede switch label">,
   InGroup<ImplicitFallthrough>;
@@ -5747,6 +5755,8 @@ def ext_typecheck_base_super : Warning<
 def warn_missing_method_return_type : Warning<
   "method has no return type specified; defaults to 'id'">,
   InGroup<MissingMethodReturnType>, DefaultIgnore;
+def warn_direct_ivar_access : Warning<"instance variable %0 is being "
+  "directly accessed">, InGroup<DiagGroup<"direct-ivar-access">>, DefaultIgnore;
 
 // Spell-checking diagnostics
 def err_unknown_type_or_class_name_suggest : Error<

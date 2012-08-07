@@ -23,7 +23,7 @@
 #include "clang/StaticAnalyzer/Core/CheckerManager.h"
 #include "clang/StaticAnalyzer/Core/BugReporter/BugType.h"
 #include "clang/StaticAnalyzer/Core/BugReporter/PathDiagnostic.h"
-#include "clang/StaticAnalyzer/Core/PathSensitive/Calls.h"
+#include "clang/StaticAnalyzer/Core/PathSensitive/CallEvent.h"
 #include "clang/StaticAnalyzer/Core/PathSensitive/CheckerContext.h"
 #include "clang/StaticAnalyzer/Core/PathSensitive/ProgramStateTrait.h"
 #include "clang/StaticAnalyzer/Core/PathSensitive/SymbolManager.h"
@@ -981,6 +981,7 @@ RetainSummaryManager::getFunctionSummary(const FunctionDecl *FD) {
 
   // No summary?  Generate one.
   const RetainSummary *S = 0;
+  bool AllowAnnotations = true;
 
   do {
     // We generate "stop" summaries for implicitly defined functions.
@@ -1018,6 +1019,9 @@ RetainSummaryManager::getFunctionSummary(const FunctionDecl *FD) {
       S = (RetTy->isObjCIdType())
           ? getUnarySummary(FT, cfmakecollectable)
           : getPersistentStopSummary();
+      // The headers on OS X 10.8 use cf_consumed/ns_returns_retained,
+      // but we can fully model NSMakeCollectable ourselves.
+      AllowAnnotations = false;
     } else if (FName == "IOBSDNameMatching" ||
                FName == "IOServiceMatching" ||
                FName == "IOServiceNameMatching" ||
@@ -1178,7 +1182,8 @@ RetainSummaryManager::getFunctionSummary(const FunctionDecl *FD) {
     S = getDefaultSummary();
 
   // Annotations override defaults.
-  updateSummaryFromAnnotations(S, FD);
+  if (AllowAnnotations)
+    updateSummaryFromAnnotations(S, FD);
 
   FuncSummaries[FD] = S;
   return S;
@@ -1975,8 +1980,11 @@ PathDiagnosticPiece *CFRefReportVisitor::VisitNode(const ExplodedNode *N,
       }
       else {
         assert(isa<ObjCMessageExpr>(S));
-        ObjCMethodCall Call(cast<ObjCMessageExpr>(S), CurrSt, LCtx);
-        switch (Call.getMessageKind()) {
+        CallEventManager &Mgr = CurrSt->getStateManager().getCallEventManager();
+        CallEventRef<ObjCMethodCall> Call
+          = Mgr.getObjCMethodCall(cast<ObjCMessageExpr>(S), CurrSt, LCtx);
+
+        switch (Call->getMessageKind()) {
         case OCM_Message:
           os << "Method";
           break;
@@ -2756,7 +2764,7 @@ void RetainCountChecker::checkPostCall(const CallEvent &Call,
 
 /// GetReturnType - Used to get the return type of a message expression or
 ///  function call with the intention of affixing that type to a tracked symbol.
-///  While the the return type can be queried directly from RetEx, when
+///  While the return type can be queried directly from RetEx, when
 ///  invoking class methods we augment to the return type to be that of
 ///  a pointer to the class (as opposed it just being id).
 // FIXME: We may be able to do this with related result types instead.

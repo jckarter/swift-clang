@@ -4655,11 +4655,6 @@ static bool FindOverriddenMethod(const CXXBaseSpecifier *Specifier,
   return false;
 }
 
-static bool hasDelayedExceptionSpec(CXXMethodDecl *Method) {
-  const FunctionProtoType *Proto =Method->getType()->getAs<FunctionProtoType>();
-  return Proto && Proto->getExceptionSpecType() == EST_Delayed;
-}
-
 /// AddOverriddenMethods - See if a method overrides any in the base classes,
 /// and if so, check that it's a valid override and remember it.
 bool Sema::AddOverriddenMethods(CXXRecordDecl *DC, CXXMethodDecl *MD) {
@@ -4675,8 +4670,7 @@ bool Sema::AddOverriddenMethods(CXXRecordDecl *DC, CXXMethodDecl *MD) {
       if (CXXMethodDecl *OldMD = dyn_cast<CXXMethodDecl>(*I)) {
         MD->addOverriddenMethod(OldMD->getCanonicalDecl());
         if (!CheckOverridingFunctionReturnType(MD, OldMD) &&
-            (hasDelayedExceptionSpec(MD) ||
-             !CheckOverridingFunctionExceptionSpec(MD, OldMD)) &&
+            !CheckOverridingFunctionExceptionSpec(MD, OldMD) &&
             !CheckIfOverriddenFunctionIsMarkedFinal(MD, OldMD)) {
           AddedAny = true;
         }
@@ -5249,58 +5243,6 @@ Sema::ActOnFunctionDeclarator(Scope *S, Declarator &D, DeclContext *DC,
       NewFD->setInvalidDecl();
       if (FunctionTemplate)
         FunctionTemplate->setInvalidDecl();
-    }
-
-    // If we see "T var();" at block scope, where T is a class type, it is
-    // probably an attempt to initialize a variable, not a function declaration.
-    // We don't catch this case earlier, since there is no ambiguity here.
-    if (!FunctionTemplate && D.getFunctionDefinitionKind() == FDK_Declaration &&
-        CurContext->isFunctionOrMethod() &&
-        D.getNumTypeObjects() == 1 && D.isFunctionDeclarator() &&
-        D.getDeclSpec().getStorageClassSpecAsWritten()
-          == DeclSpec::SCS_unspecified) {
-      QualType T = R->getAs<FunctionType>()->getResultType();
-      DeclaratorChunk &C = D.getTypeObject(0);
-      if (!T->isVoidType() && C.Fun.NumArgs == 0 && !C.Fun.isVariadic &&
-          !C.Fun.hasTrailingReturnType() &&
-          C.Fun.getExceptionSpecType() == EST_None) {
-        SourceRange ParenRange(C.Loc, C.EndLoc);
-        Diag(C.Loc, diag::warn_empty_parens_are_function_decl) << ParenRange;
-
-        // If the declaration looks like:
-        //   T var1,
-        //   f();
-        // and name lookup finds a function named 'f', then the ',' was
-        // probably intended to be a ';'.
-        if (!D.isFirstDeclarator() && D.getIdentifier()) {
-          FullSourceLoc Comma(D.getCommaLoc(), SourceMgr);
-          FullSourceLoc Name(D.getIdentifierLoc(), SourceMgr);
-          if (Comma.getFileID() != Name.getFileID() ||
-              Comma.getSpellingLineNumber() != Name.getSpellingLineNumber()) {
-            LookupResult Result(*this, D.getIdentifier(), SourceLocation(),
-                                LookupOrdinaryName);
-            if (LookupName(Result, S))
-              Diag(D.getCommaLoc(), diag::note_empty_parens_function_call)
-                << FixItHint::CreateReplacement(D.getCommaLoc(), ";") << NewFD;
-          }
-        }
-        const CXXRecordDecl *RD = T->getAsCXXRecordDecl();
-        // Empty parens mean value-initialization, and no parens mean default
-        // initialization. These are equivalent if the default constructor is
-        // user-provided, or if zero-initialization is a no-op.
-        if (RD && RD->hasDefinition() &&
-            (RD->isEmpty() || RD->hasUserProvidedDefaultConstructor()))
-          Diag(C.Loc, diag::note_empty_parens_default_ctor)
-            << FixItHint::CreateRemoval(ParenRange);
-        else {
-          std::string Init = getFixItZeroInitializerForType(T);
-          if (Init.empty() && LangOpts.CPlusPlus0x)
-            Init = "{}";
-          if (!Init.empty())
-            Diag(C.Loc, diag::note_empty_parens_zero_initialize)
-              << FixItHint::CreateReplacement(ParenRange, Init);
-        }
-      }
     }
 
     // C++ [dcl.fct.spec]p5:
@@ -6086,10 +6028,12 @@ bool Sema::CheckFunctionDeclaration(Scope *S, FunctionDecl *NewFD,
     // compatible, and if it does, warn the user.
     if (NewFD->isExternC()) {
       QualType R = NewFD->getResultType();
-      if (!R.isPODType(Context) && 
-          !R->isVoidType())
-        Diag( NewFD->getLocation(), diag::warn_return_value_udt ) 
-          << NewFD << R;
+      if (R->isIncompleteType() && !R->isVoidType())
+        Diag(NewFD->getLocation(), diag::warn_return_value_udt_incomplete)
+            << NewFD << R;
+      else if (!R.isPODType(Context) && !R->isVoidType() &&
+               !R->isObjCObjectPointerType())
+        Diag(NewFD->getLocation(), diag::warn_return_value_udt) << NewFD << R;
     }
   }
   return Redeclaration;
@@ -6367,7 +6311,10 @@ void Sema::AddInitializerToDecl(Decl *RealDecl, Expr *Init,
   // Check for self-references within variable initializers.
   // Variables declared within a function/method body are handled
   // by a dataflow analysis.
-  if (!VDecl->hasLocalStorage() && !VDecl->isStaticLocal())
+  // Record types initialized by initializer list are handled here.
+  // Initialization by constructors are handled in TryConstructorInitialization.
+  if (!VDecl->hasLocalStorage() && !VDecl->isStaticLocal() &&
+      (isa<InitListExpr>(Init) || !VDecl->getType()->isRecordType()))
     CheckSelfReference(RealDecl, Init);
 
   ParenListExpr *CXXDirectInit = dyn_cast<ParenListExpr>(Init);
@@ -7508,6 +7455,10 @@ static bool ShouldWarnAboutMissingPrototype(const FunctionDecl *FD) {
   if (FD->isFunctionTemplateSpecialization())
     return false;
 
+  // Don't warn for OpenCL kernels.
+  if (FD->hasAttr<OpenCLKernelAttr>())
+    return false;
+  
   bool MissingPrototype = true;
   for (const FunctionDecl *Prev = FD->getPreviousDecl();
        Prev; Prev = Prev->getPreviousDecl()) {
@@ -7536,6 +7487,7 @@ void Sema::CheckForFunctionRedefinition(FunctionDecl *FD) {
     else
       Diag(FD->getLocation(), diag::err_redefinition) << FD->getDeclName();
     Diag(Definition->getLocation(), diag::note_previous_definition);
+    FD->setInvalidDecl();
   }
 }
 
@@ -7671,6 +7623,7 @@ Decl *Sema::ActOnStartOfFunctionDef(Scope *FnBodyScope, Decl *D) {
         << FD->getName() << "dllimport";
     }
   }
+  ActOnDocumentableDecl(FD);
   return FD;
 }
 
@@ -7767,22 +7720,24 @@ Decl *Sema::ActOnFinishFunctionBody(Decl *dcl, Stmt *Body,
       if (Body)
         computeNRVO(Body, getCurFunction());
     }
-    if (ObjCShouldCallSuperDealloc) {
+    if (getCurFunction()->ObjCShouldCallSuperDealloc) {
       Diag(MD->getLocEnd(), diag::warn_objc_missing_super_dealloc);
-      ObjCShouldCallSuperDealloc = false;
+      getCurFunction()->ObjCShouldCallSuperDealloc = false;
     }
-    if (ObjCShouldCallSuperFinalize) {
+    if (getCurFunction()->ObjCShouldCallSuperFinalize) {
       Diag(MD->getLocEnd(), diag::warn_objc_missing_super_finalize);
-      ObjCShouldCallSuperFinalize = false;
+      getCurFunction()->ObjCShouldCallSuperFinalize = false;
     }
   } else {
     return 0;
   }
 
-  assert(!ObjCShouldCallSuperDealloc && "This should only be set for "
-         "ObjC methods, which should have been handled in the block above.");
-  assert(!ObjCShouldCallSuperFinalize && "This should only be set for "
-         "ObjC methods, which should have been handled in the block above.");
+  assert(!getCurFunction()->ObjCShouldCallSuperDealloc &&
+         "This should only be set for ObjC methods, which should have been "
+         "handled in the block above.");
+  assert(!getCurFunction()->ObjCShouldCallSuperFinalize &&
+         "This should only be set for ObjC methods, which should have been "
+         "handled in the block above.");
 
   // Verify and clean out per-function state.
   if (Body) {
@@ -7916,10 +7871,10 @@ NamedDecl *Sema::ImplicitlyDefineFunction(SourceLocation Loc,
   (void)Error; // Silence warning.
   assert(!Error && "Error setting up implicit decl!");
   Declarator D(DS, Declarator::BlockContext);
-  D.AddTypeInfo(DeclaratorChunk::getFunction(false, false, SourceLocation(), 0,
-                                             0, 0, true, SourceLocation(),
+  D.AddTypeInfo(DeclaratorChunk::getFunction(false, false, false,
+                                             SourceLocation(), 0, 0, 0, true, 
                                              SourceLocation(), SourceLocation(),
-                                             SourceLocation(),
+                                             SourceLocation(), SourceLocation(),
                                              EST_None, SourceLocation(),
                                              0, 0, 0, 0, Loc, Loc, D),
                 DS.getAttributes(),
@@ -9514,10 +9469,9 @@ void Sema::DiagnoseNontrivial(const RecordType* T, CXXSpecialMember member) {
 
   case CXXCopyAssignment:
     if (RD->hasUserDeclaredCopyAssignment()) {
-      // FIXME: this should use the location of the copy
-      // assignment, not the type.
-      SourceLocation TyLoc = RD->getLocStart();
-      Diag(TyLoc, diag::note_nontrivial_user_defined) << QT << member;
+      SourceLocation AssignLoc =
+        RD->getCopyAssignmentOperator(0)->getLocation();
+      Diag(AssignLoc, diag::note_nontrivial_user_defined) << QT << member;
       return;
     }
     break;
@@ -10026,7 +9980,7 @@ void Sema::ActOnFields(Scope* S,
           // However, here we check whether this particular class is only 
           // non-POD because of the presence of an Objective-C pointer member. 
           // If so, objects of this type cannot be shared between code compiled 
-          // with instant objects and code compiled with manual retain/release.
+          // with ARC and code compiled with manual retain/release.
           if (getLangOpts().ObjCAutoRefCount &&
               CXXRecord->hasObjectMember() && 
               CXXRecord->getLinkage() == ExternalLinkage) {

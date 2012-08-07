@@ -542,13 +542,6 @@ public:
   /// have been declared.
   bool GlobalNewDeleteDeclared;
 
-  /// A flag that is set when parsing a -dealloc method and no [super dealloc]
-  /// call was found yet.
-  bool ObjCShouldCallSuperDealloc;
-  /// A flag that is set when parsing a -finalize method and no [super finalize]
-  /// call was found yet.
-  bool ObjCShouldCallSuperFinalize;
-
   /// \brief Describes how the expressions currently being parsed are
   /// evaluated at run-time, if at all.
   enum ExpressionEvaluationContext {
@@ -2550,6 +2543,7 @@ public:
                           bool MSAsm = false);
 
   StmtResult ActOnMSAsmStmt(SourceLocation AsmLoc,
+                            ArrayRef<Token> AsmToks,
                             std::string &AsmString,
                             SourceLocation EndLoc);
 
@@ -3247,7 +3241,7 @@ public:
                               TypeResult Type);
 
   /// InitializeVarWithConstructor - Creates an CXXConstructExpr
-  /// and sets it as the initializer for the the passed in VarDecl.
+  /// and sets it as the initializer for the passed in VarDecl.
   bool InitializeVarWithConstructor(VarDecl *VD,
                                     CXXConstructorDecl *Constructor,
                                     MultiExprArg Exprs,
@@ -3335,17 +3329,6 @@ public:
     /// \brief Integrate an invoked expression into the collected data.
     void CalledExpr(Expr *E);
 
-    /// \brief Specify that the exception specification can't be detemined yet.
-    void SetDelayed() {
-      ClearExceptions();
-      ComputedEST = EST_Delayed;
-    }
-
-    /// \brief Have we been unable to compute this exception specification?
-    bool isDelayed() {
-      return ComputedEST == EST_Delayed;
-    }
-
     /// \brief Overwrite an EPI's exception specification with this
     /// computed exception specification.
     void getEPI(FunctionProtoType::ExtProtoInfo &EPI) const {
@@ -3363,34 +3346,39 @@ public:
   /// \brief Determine what sort of exception specification a defaulted
   /// copy constructor of a class will have.
   ImplicitExceptionSpecification
-  ComputeDefaultedDefaultCtorExceptionSpec(CXXRecordDecl *ClassDecl);
+  ComputeDefaultedDefaultCtorExceptionSpec(SourceLocation Loc,
+                                           CXXMethodDecl *MD);
 
   /// \brief Determine what sort of exception specification a defaulted
   /// default constructor of a class will have, and whether the parameter
   /// will be const.
-  std::pair<ImplicitExceptionSpecification, bool>
-  ComputeDefaultedCopyCtorExceptionSpecAndConst(CXXRecordDecl *ClassDecl);
+  ImplicitExceptionSpecification
+  ComputeDefaultedCopyCtorExceptionSpec(CXXMethodDecl *MD);
 
   /// \brief Determine what sort of exception specification a defautled
   /// copy assignment operator of a class will have, and whether the
   /// parameter will be const.
-  std::pair<ImplicitExceptionSpecification, bool>
-  ComputeDefaultedCopyAssignmentExceptionSpecAndConst(CXXRecordDecl *ClassDecl);
+  ImplicitExceptionSpecification
+  ComputeDefaultedCopyAssignmentExceptionSpec(CXXMethodDecl *MD);
 
   /// \brief Determine what sort of exception specification a defaulted move
   /// constructor of a class will have.
   ImplicitExceptionSpecification
-  ComputeDefaultedMoveCtorExceptionSpec(CXXRecordDecl *ClassDecl);
+  ComputeDefaultedMoveCtorExceptionSpec(CXXMethodDecl *MD);
 
   /// \brief Determine what sort of exception specification a defaulted move
   /// assignment operator of a class will have.
   ImplicitExceptionSpecification
-  ComputeDefaultedMoveAssignmentExceptionSpec(CXXRecordDecl *ClassDecl);
+  ComputeDefaultedMoveAssignmentExceptionSpec(CXXMethodDecl *MD);
 
   /// \brief Determine what sort of exception specification a defaulted
   /// destructor of a class will have.
   ImplicitExceptionSpecification
-  ComputeDefaultedDtorExceptionSpec(CXXRecordDecl *ClassDecl);
+  ComputeDefaultedDtorExceptionSpec(CXXMethodDecl *MD);
+
+  /// \brief Evaluate the implicit exception specification for a defaulted
+  /// special member function.
+  void EvaluateImplicitExceptionSpec(SourceLocation Loc, CXXMethodDecl *MD);
 
   /// \brief Check the given exception-specification and update the
   /// extended prototype information with the results.
@@ -3438,8 +3426,7 @@ public:
   /// C++11 says that user-defined destructors with no exception spec get one
   /// that looks as if the destructor was implicitly declared.
   void AdjustDestructorExceptionSpec(CXXRecordDecl *ClassDecl,
-                                     CXXDestructorDecl *Destructor,
-                                     bool WasDelayed = false);
+                                     CXXDestructorDecl *Destructor);
 
   /// \brief Declare all inherited constructors for the given class.
   ///
@@ -4014,10 +4001,7 @@ public:
                                        SourceRange IntroducerRange,
                                        TypeSourceInfo *MethodType,
                                        SourceLocation EndLoc,
-                                       llvm::ArrayRef<ParmVarDecl *> Params,
-                                       llvm::Optional<unsigned> ManglingNumber 
-                                         = llvm::Optional<unsigned>(),
-                                       Decl *ContextDecl = 0);
+                                       llvm::ArrayRef<ParmVarDecl *> Params);
   
   /// \brief Introduce the scope for a lambda expression.
   sema::LambdaScopeInfo *enterLambdaScope(CXXMethodDecl *CallOperator,
@@ -4265,6 +4249,11 @@ public:
   void MarkVTableUsed(SourceLocation Loc, CXXRecordDecl *Class,
                       bool DefinitionRequired = false);
 
+  /// \brief Mark the exception specifications of all virtual member functions
+  /// in the given class as needed.
+  void MarkVirtualMemberExceptionSpecsNeeded(SourceLocation Loc,
+                                             const CXXRecordDecl *RD);
+
   /// MarkVirtualMembersReferenced - Will mark all members of the given
   /// CXXRecordDecl referenced.
   void MarkVirtualMembersReferenced(SourceLocation Loc,
@@ -4391,12 +4380,12 @@ public:
 
   bool CheckPureMethod(CXXMethodDecl *Method, SourceRange InitRange);
 
-  /// CheckOverrideControl - Check C++0x override control semantics.
-  void CheckOverrideControl(const Decl *D);
+  /// CheckOverrideControl - Check C++11 override control semantics.
+  void CheckOverrideControl(Decl *D);
 
   /// CheckForFunctionMarkedFinal - Checks whether a virtual member function
   /// overrides a virtual member function marked 'final', according to
-  /// C++0x [class.virtual]p3.
+  /// C++11 [class.virtual]p4.
   bool CheckIfOverriddenFunctionIsMarkedFinal(const CXXMethodDecl *New,
                                               const CXXMethodDecl *Old);
 
@@ -5006,7 +4995,9 @@ public:
   /// parameter packs.
   ///
   /// \param Unexpanded the set of unexpanded parameter packs.
-  void DiagnoseUnexpandedParameterPacks(SourceLocation Loc,
+  ///
+  /// \returns true if an error occurred, false otherwise.
+  bool DiagnoseUnexpandedParameterPacks(SourceLocation Loc,
                                         UnexpandedParameterPackContext UPPC,
                                   ArrayRef<UnexpandedParameterPack> Unexpanded);
 
@@ -5712,6 +5703,14 @@ public:
   /// diagnostics that will be suppressed.
   llvm::Optional<sema::TemplateDeductionInfo *> isSFINAEContext() const;
 
+  /// \brief Determines whether we are currently in a context that
+  /// is not evaluated as per C++ [expr] p5.
+  bool isUnevaluatedContext() const {
+    assert(!ExprEvalContexts.empty() &&
+           "Must be in an expression evaluation context");
+    return ExprEvalContexts.back().Context == Sema::Unevaluated;
+  }
+
   /// \brief RAII class used to determine whether SFINAE has
   /// trapped any errors that occur during template argument
   /// deduction.`
@@ -6110,14 +6109,6 @@ public:
     AttributeList *AttrList, tok::ObjCKeywordKind MethodImplKind,
     bool isVariadic, bool MethodDefinition);
 
-  // Helper method for ActOnClassMethod/ActOnInstanceMethod.
-  // Will search "local" class/category implementations for a method decl.
-  // Will also search in class's root looking for instance method.
-  // Returns 0 if no method is found.
-  ObjCMethodDecl *LookupPrivateClassMethod(Selector Sel,
-                                           ObjCInterfaceDecl *CDecl);
-  ObjCMethodDecl *LookupPrivateInstanceMethod(Selector Sel,
-                                              ObjCInterfaceDecl *ClassDecl);
   ObjCMethodDecl *LookupMethodInQualifiedType(Selector Sel,
                                               const ObjCObjectPointerType *OPT,
                                               bool IsInstance);

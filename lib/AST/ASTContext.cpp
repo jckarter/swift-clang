@@ -13,6 +13,7 @@
 
 #include "clang/AST/ASTContext.h"
 #include "clang/AST/CharUnits.h"
+#include "clang/AST/Comment.h"
 #include "clang/AST/CommentLexer.h"
 #include "clang/AST/CommentSema.h"
 #include "clang/AST/CommentParser.h"
@@ -72,6 +73,13 @@ RawComment *ASTContext::getRawCommentForDeclNoCache(const Decl *D) const {
   if (isa<ParmVarDecl>(D))
     return NULL;
 
+  // TODO: we could look up template parameter documentation in the template
+  // documentation.
+  if (isa<TemplateTypeParmDecl>(D) ||
+      isa<NonTypeTemplateParmDecl>(D) ||
+      isa<TemplateTemplateParmDecl>(D))
+    return NULL;
+
   ArrayRef<RawComment *> RawComments = Comments.getComments();
 
   // If there are no comments anywhere, we won't find anything.
@@ -86,7 +94,9 @@ RawComment *ASTContext::getRawCommentForDeclNoCache(const Decl *D) const {
   // so we use the location of the identifier as the "declaration location".
   SourceLocation DeclLoc;
   if (isa<ObjCMethodDecl>(D) || isa<ObjCContainerDecl>(D) ||
-      isa<ObjCPropertyDecl>(D))
+      isa<ObjCPropertyDecl>(D) ||
+      isa<RedeclarableTemplateDecl>(D) ||
+      isa<ClassTemplateSpecializationDecl>(D))
     DeclLoc = D->getLocStart();
   else
     DeclLoc = D->getLocation();
@@ -216,7 +226,8 @@ comments::FullComment *ASTContext::getCommentForDecl(const Decl *D) const {
     return NULL;
 
   const StringRef RawText = RC->getRawText(SourceMgr);
-  comments::Lexer L(RC->getSourceRange().getBegin(), comments::CommentOptions(),
+  comments::Lexer L(getAllocator(),
+                    RC->getSourceRange().getBegin(), comments::CommentOptions(),
                     RawText.begin(), RawText.end());
 
   comments::Sema S(getAllocator(), getSourceManager(), getDiagnostics());
@@ -2367,15 +2378,18 @@ ASTContext::getFunctionType(QualType ResultTy,
   //  - exception types
   //  - consumed-arguments flags
   // Instead of the exception types, there could be a noexcept
-  // expression.
+  // expression, or information used to resolve the exception
+  // specification.
   size_t Size = sizeof(FunctionProtoType) +
                 NumArgs * sizeof(QualType);
-  if (EPI.ExceptionSpecType == EST_Dynamic)
+  if (EPI.ExceptionSpecType == EST_Dynamic) {
     Size += EPI.NumExceptions * sizeof(QualType);
-  else if (EPI.ExceptionSpecType == EST_ComputedNoexcept) {
+  } else if (EPI.ExceptionSpecType == EST_ComputedNoexcept) {
     Size += sizeof(Expr*);
   } else if (EPI.ExceptionSpecType == EST_Uninstantiated) {
     Size += 2 * sizeof(FunctionDecl*);
+  } else if (EPI.ExceptionSpecType == EST_Unevaluated) {
+    Size += sizeof(FunctionDecl*);
   }
   if (EPI.ConsumedArguments)
     Size += NumArgs * sizeof(bool);

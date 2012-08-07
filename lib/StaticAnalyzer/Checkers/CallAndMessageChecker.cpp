@@ -15,7 +15,7 @@
 #include "ClangSACheckers.h"
 #include "clang/StaticAnalyzer/Core/Checker.h"
 #include "clang/StaticAnalyzer/Core/CheckerManager.h"
-#include "clang/StaticAnalyzer/Core/PathSensitive/Calls.h"
+#include "clang/StaticAnalyzer/Core/PathSensitive/CallEvent.h"
 #include "clang/StaticAnalyzer/Core/PathSensitive/CheckerContext.h"
 #include "clang/StaticAnalyzer/Core/BugReporter/BugType.h"
 #include "clang/AST/ParentMap.h"
@@ -31,6 +31,8 @@ class CallAndMessageChecker
                     check::PreCall > {
   mutable OwningPtr<BugType> BT_call_null;
   mutable OwningPtr<BugType> BT_call_undef;
+  mutable OwningPtr<BugType> BT_cxx_call_null;
+  mutable OwningPtr<BugType> BT_cxx_call_undef;
   mutable OwningPtr<BugType> BT_call_arg;
   mutable OwningPtr<BugType> BT_msg_undef;
   mutable OwningPtr<BugType> BT_objc_prop_undef;
@@ -49,7 +51,7 @@ private:
                                  bool IsFirstArgument, bool checkUninitFields,
                                  const CallEvent &Call, OwningPtr<BugType> &BT);
 
-  static void EmitBadCall(BugType *BT, CheckerContext &C, const CallExpr *CE);
+  static void emitBadCall(BugType *BT, CheckerContext &C, const Expr *BadE);
   void emitNilReceiverBug(CheckerContext &C, const ObjCMethodCall &msg,
                           ExplodedNode *N) const;
 
@@ -64,15 +66,17 @@ private:
 };
 } // end anonymous namespace
 
-void CallAndMessageChecker::EmitBadCall(BugType *BT, CheckerContext &C,
-                                        const CallExpr *CE) {
+void CallAndMessageChecker::emitBadCall(BugType *BT, CheckerContext &C,
+                                        const Expr *BadE) {
   ExplodedNode *N = C.generateSink();
   if (!N)
     return;
 
   BugReport *R = new BugReport(*BT, BT->getName(), N);
-  R->addVisitor(bugreporter::getTrackNullOrUndefValueVisitor(N,
-                               bugreporter::GetCalleeExpr(N), R));
+  if (BadE) {
+    R->addRange(BadE->getSourceRange());
+    bugreporter::addTrackNullOrUndefValueVisitor(N, BadE, R);
+  }
   C.EmitReport(R);
 }
 
@@ -118,8 +122,7 @@ bool CallAndMessageChecker::PreVisitProcessArg(CheckerContext &C,
       BugReport *R = new BugReport(*BT, Desc, N);
       R->addRange(argRange);
       if (argEx)
-        R->addVisitor(bugreporter::getTrackNullOrUndefValueVisitor(N, argEx,
-                                                                   R));
+        bugreporter::addTrackNullOrUndefValueVisitor(N, argEx, R);
       C.EmitReport(R);
     }
     return true;
@@ -225,28 +228,57 @@ void CallAndMessageChecker::checkPreStmt(const CallExpr *CE,
     if (!BT_call_undef)
       BT_call_undef.reset(new BuiltinBug("Called function pointer is an "
                                          "uninitalized pointer value"));
-    EmitBadCall(BT_call_undef.get(), C, CE);
+    emitBadCall(BT_call_undef.get(), C, Callee);
     return;
   }
 
-  if (L.isZeroConstant()) {
+  ProgramStateRef StNonNull, StNull;
+  llvm::tie(StNonNull, StNull) = State->assume(cast<DefinedOrUnknownSVal>(L));
+
+  // FIXME: Do we want to record the non-null assumption here?
+  if (StNull && !StNonNull) {
     if (!BT_call_null)
       BT_call_null.reset(
         new BuiltinBug("Called function pointer is null (null dereference)"));
-    EmitBadCall(BT_call_null.get(), C, CE);
+    emitBadCall(BT_call_null.get(), C, Callee);
   }
 }
 
 void CallAndMessageChecker::checkPreCall(const CallEvent &Call,
                                          CheckerContext &C) const {
+  // If this is a call to a C++ method, check if the callee is null or
+  // undefined.
+  if (const CXXInstanceCall *CC = dyn_cast<CXXInstanceCall>(&Call)) {
+    SVal V = CC->getCXXThisVal();
+    if (V.isUndef()) {
+      if (!BT_cxx_call_undef)
+        BT_cxx_call_undef.reset(new BuiltinBug("Called C++ object pointer is "
+                                               "uninitialized"));
+      emitBadCall(BT_cxx_call_undef.get(), C, CC->getCXXThisExpr());
+      return;
+    }
+
+    ProgramStateRef State = C.getState();
+    ProgramStateRef StNonNull, StNull;
+    llvm::tie(StNonNull, StNull) = State->assume(cast<DefinedOrUnknownSVal>(V));
+
+    // FIXME: Do we want to record the non-null assumption here?
+    if (StNull && !StNonNull) {
+      if (!BT_cxx_call_null)
+        BT_cxx_call_null.reset(new BuiltinBug("Called C++ object pointer "
+                                              "is null"));
+      emitBadCall(BT_cxx_call_null.get(), C, CC->getCXXThisExpr());
+      return;
+    }
+  }
+
   // Don't check for uninitialized field values in arguments if the
   // caller has a body that is available and we have the chance to inline it.
   // This is a hack, but is a reasonable compromise betweens sometimes warning
   // and sometimes not depending on if we decide to inline a function.
   const Decl *D = Call.getDecl();
   const bool checkUninitFields =
-    !(C.getAnalysisManager().shouldInlineCall() &&
-      (D && D->getBody()));
+    !(C.getAnalysisManager().shouldInlineCall() && (D && D->getBody()));
 
   OwningPtr<BugType> *BT;
   if (isa<ObjCMethodCall>(Call))
@@ -297,9 +329,7 @@ void CallAndMessageChecker::checkPreObjCMessage(const ObjCMethodCall &msg,
 
       // FIXME: getTrackNullOrUndefValueVisitor can't handle "super" yet.
       if (const Expr *ReceiverE = ME->getInstanceReceiver())
-        R->addVisitor(bugreporter::getTrackNullOrUndefValueVisitor(N,
-                                                                   ReceiverE,
-                                                                   R));
+        bugreporter::addTrackNullOrUndefValueVisitor(N, ReceiverE, R);
       C.EmitReport(R);
     }
     return;
@@ -341,9 +371,7 @@ void CallAndMessageChecker::emitNilReceiverBug(CheckerContext &C,
   report->addRange(ME->getReceiverRange());
   // FIXME: This won't track "self" in messages to super.
   if (const Expr *receiver = ME->getInstanceReceiver()) {
-    report->addVisitor(bugreporter::getTrackNullOrUndefValueVisitor(N,
-                                                                    receiver,
-                                                                    report));
+    bugreporter::addTrackNullOrUndefValueVisitor(N, receiver, report);
   }
   C.EmitReport(report);
 }

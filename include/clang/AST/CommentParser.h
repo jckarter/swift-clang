@@ -27,6 +27,11 @@ namespace comments {
 
 /// Doxygen comment parser.
 class Parser {
+  Parser(const Parser&);         // DO NOT IMPLEMENT
+  void operator=(const Parser&); // DO NOT IMPLEMENT
+
+  friend class TextTokenRetokenizer;
+
   Lexer &L;
 
   Sema &S;
@@ -36,17 +41,6 @@ class Parser {
 
   /// Source manager for the comment being parsed.
   const SourceManager &SourceMgr;
-
-  template<typename T>
-  ArrayRef<T> copyArray(ArrayRef<T> Source) {
-    size_t Size = Source.size();
-    if (Size != 0) {
-      T *Mem = Allocator.Allocate<T>(Size);
-      std::uninitialized_copy(Source.begin(), Source.end(), Mem);
-      return llvm::makeArrayRef(Mem, Size);
-    } else
-      return llvm::makeArrayRef(static_cast<T *>(NULL), 0);
-  }
 
   DiagnosticsEngine &Diags;
 
@@ -61,15 +55,13 @@ class Parser {
   /// A stack of additional lookahead tokens.
   SmallVector<Token, 8> MoreLATokens;
 
-  SourceLocation consumeToken() {
-    SourceLocation Loc = Tok.getLocation();
+  void consumeToken() {
     if (MoreLATokens.empty())
       L.lex(Tok);
     else {
       Tok = MoreLATokens.back();
       MoreLATokens.pop_back();
     }
-    return Loc;
   }
 
   void putBack(const Token &OldTok) {
@@ -83,7 +75,7 @@ class Parser {
 
     MoreLATokens.push_back(Tok);
     for (const Token *I = &Toks.back(),
-         *B = &Toks.front() + 1;
+         *B = &Toks.front();
          I != B; --I) {
       MoreLATokens.push_back(*I);
     }
@@ -96,14 +88,16 @@ public:
          const SourceManager &SourceMgr, DiagnosticsEngine &Diags);
 
   /// Parse arguments for \\param command.
-  ParamCommandComment *parseParamCommandArgs(
-                                    ParamCommandComment *PC,
-                                    TextTokenRetokenizer &Retokenizer);
+  void parseParamCommandArgs(ParamCommandComment *PC,
+                             TextTokenRetokenizer &Retokenizer);
 
-  BlockCommandComment *parseBlockCommandArgs(
-                                    BlockCommandComment *BC,
-                                    TextTokenRetokenizer &Retokenizer,
-                                    unsigned NumArgs);
+  /// Parse arguments for \\tparam command.
+  void parseTParamCommandArgs(TParamCommandComment *TPC,
+                              TextTokenRetokenizer &Retokenizer);
+
+  void parseBlockCommandArgs(BlockCommandComment *BC,
+                             TextTokenRetokenizer &Retokenizer,
+                             unsigned NumArgs);
 
   BlockCommandComment *parseBlockCommand();
   InlineCommandComment *parseInlineCommand();
