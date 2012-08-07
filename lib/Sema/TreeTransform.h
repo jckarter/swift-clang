@@ -1185,9 +1185,10 @@ public:
   /// By default, performs semantic analysis to build the new statement.
   /// Subclasses may override this routine to provide different behavior.
   StmtResult RebuildMSAsmStmt(SourceLocation AsmLoc,
+                              ArrayRef<Token> AsmToks,
                               std::string &AsmString,
                               SourceLocation EndLoc) {
-    return getSema().ActOnMSAsmStmt(AsmLoc, AsmString, EndLoc);
+    return getSema().ActOnMSAsmStmt(AsmLoc, AsmToks, AsmString, EndLoc);
   }
 
   /// \brief Build a new Objective-C \@try statement.
@@ -5609,8 +5610,11 @@ TreeTransform<Derived>::TransformAsmStmt(AsmStmt *S) {
 template<typename Derived>
 StmtResult
 TreeTransform<Derived>::TransformMSAsmStmt(MSAsmStmt *S) {
+  ArrayRef<Token> AsmToks =
+    llvm::makeArrayRef(S->getAsmToks(), S->getNumAsmToks());
   // No need to transform the asm string literal.
   return getDerived().RebuildMSAsmStmt(S->getAsmLoc(),
+                                       AsmToks,
                                        *S->getAsmString(),
                                        S->getEndLoc());
 }

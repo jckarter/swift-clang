@@ -583,10 +583,15 @@ AsmStmt::AsmStmt(ASTContext &C, SourceLocation asmloc, bool issimple,
   std::copy(clobbers, clobbers + NumClobbers, Clobbers);
 }
 
-MSAsmStmt::MSAsmStmt(ASTContext &C, SourceLocation asmloc, std::string &asmstr,
-                     SourceLocation endloc)
-  : Stmt(MSAsmStmtClass), AsmLoc(asmloc), EndLoc(endloc), AsmStr(asmstr),
-    IsSimple(true), IsVolatile(true) {
+MSAsmStmt::MSAsmStmt(ASTContext &C, SourceLocation asmloc,
+                     ArrayRef<Token> asmtoks,
+                     std::string &asmstr, SourceLocation endloc)
+  : Stmt(MSAsmStmtClass), AsmLoc(asmloc), EndLoc(endloc),
+    AsmStr(asmstr), IsSimple(true), IsVolatile(true), NumAsmToks(asmtoks.size()) {
+
+  AsmToks = new (C) Token[NumAsmToks];
+  for (unsigned i = 0, e = NumAsmToks; i != e; ++i)
+    AsmToks[i] = asmtoks[i];
 }
 
 ObjCForCollectionStmt::ObjCForCollectionStmt(Stmt *Elem, Expr *Collect,

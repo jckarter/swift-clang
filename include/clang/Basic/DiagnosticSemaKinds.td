@@ -3567,8 +3567,7 @@ def err_arc_autoreleasing_capture : Error<
 def err_arc_thread_ownership : Error<
   "thread-local variable has non-trivial ownership: type is %0">;
 def err_arc_indirect_no_ownership : Error<
-  "%select{pointer|reference}1 to non-const type %0 with no explicit ownership">,
-  InGroup<AutomaticReferenceCounting>;
+  "%select{pointer|reference}1 to non-const type %0 with no explicit ownership">;
 def err_arc_array_param_no_ownership : Error<
   "must explicitly describe intended ownership of an object array parameter">;
 def err_arc_pseudo_dtor_inconstant_quals : Error<
@@ -5491,8 +5490,7 @@ def err_builtin_annotation_second_arg : Error<
 
 // CFString checking
 def err_cfstring_literal_not_string_constant : Error<
-  "CFString literal is not a string constant">,
-  InGroup<DiagGroup<"CFString-literal">>;
+  "CFString literal is not a string constant">;
 def warn_cfstring_truncated : Warning<
   "input conversion stopped due to an input byte that does not "
   "belong to the input codeset UTF-8">,
@@ -5554,12 +5552,10 @@ def note_insert_fallthrough_fixit : Note<
 def note_insert_break_fixit : Note<
   "insert 'break;' to avoid fall-through">;
 def err_fallthrough_attr_wrong_target : Error<
-  "clang::fallthrough attribute is only allowed on empty statements">,
-  InGroup<IgnoredAttributes>;
+  "clang::fallthrough attribute is only allowed on empty statements">;
 def note_fallthrough_insert_semi_fixit : Note<"did you forget ';'?">;
 def err_fallthrough_attr_outside_switch : Error<
-  "fallthrough annotation is outside switch statement">,
-  InGroup<IgnoredAttributes>;
+  "fallthrough annotation is outside switch statement">;
 def warn_fallthrough_attr_invalid_placement : Warning<
   "fallthrough annotation does not directly precede switch label">,
   InGroup<ImplicitFallthrough>;
@@ -5759,6 +5755,8 @@ def ext_typecheck_base_super : Warning<
 def warn_missing_method_return_type : Warning<
   "method has no return type specified; defaults to 'id'">,
   InGroup<MissingMethodReturnType>, DefaultIgnore;
+def warn_direct_ivar_access : Warning<"instance variable %0 is being "
+  "directly accessed">, InGroup<DiagGroup<"direct-ivar-access">>, DefaultIgnore;
 
 // Spell-checking diagnostics
 def err_unknown_type_or_class_name_suggest : Error<
