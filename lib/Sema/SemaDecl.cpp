@@ -6031,7 +6031,8 @@ bool Sema::CheckFunctionDeclaration(Scope *S, FunctionDecl *NewFD,
       if (R->isIncompleteType() && !R->isVoidType())
         Diag(NewFD->getLocation(), diag::warn_return_value_udt_incomplete)
             << NewFD << R;
-      else if (!R.isPODType(Context) && !R->isVoidType())
+      else if (!R.isPODType(Context) && !R->isVoidType() &&
+               !R->isObjCObjectPointerType())
         Diag(NewFD->getLocation(), diag::warn_return_value_udt) << NewFD << R;
     }
   }
@@ -9749,11 +9750,6 @@ void Sema::ActOnFields(Scope* S,
                        SourceLocation LBrac, SourceLocation RBrac,
                        AttributeList *Attr) {
   assert(EnclosingDecl && "missing record or interface decl");
-
-  // If the decl this is being inserted into is invalid, then it may be a
-  // redeclaration or some other bogus case.  Don't try to add fields to it.
-  if (EnclosingDecl->isInvalidDecl())
-    return;
 
   // If this is an Objective-C @implementation or category and we have
   // new fields here we should reset the layout of the interface since
