@@ -232,6 +232,7 @@ void DeclInfo::fill() {
     break;
   case Decl::Var:
   case Decl::Field:
+  case Decl::EnumConstant:
   case Decl::ObjCIvar:
   case Decl::ObjCAtDefsField:
     Kind = VariableKind;
@@ -250,6 +251,9 @@ void DeclInfo::fill() {
     TemplateParameters = TAT->getTemplateParameters();
     break;
   }
+  case Decl::Enum:
+    Kind = EnumKind;
+    break;
   }
 
   IsFilled = true;
