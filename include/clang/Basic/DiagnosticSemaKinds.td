@@ -373,9 +373,11 @@ def note_strlcpycat_wrong_size : Note<
   
 def warn_strncat_large_size : Warning<
   "the value of the size argument in 'strncat' is too large, might lead to a " 
-  "buffer overflow">, InGroup<StrncatSize>, DefaultWarnNoWerror;
+  "buffer overflow">, InGroup<StrncatSize>;
 def warn_strncat_src_size : Warning<"size argument in 'strncat' call appears " 
-  "to be size of the source">, InGroup<StrncatSize>, DefaultWarnNoWerror;
+  "to be size of the source">, InGroup<StrncatSize>;
+def warn_strncat_wrong_size : Warning<
+  "the value of the size argument to 'strncat' is wrong">, InGroup<StrncatSize>;
 def note_strncat_wrong_size : Note<
   "change the argument to be the free space in the destination buffer minus " 
   "the terminating null byte">;
@@ -1896,6 +1898,9 @@ def warn_impcast_different_enum_types : Warning<
 def warn_impcast_bool_to_null_pointer : Warning<
     "initialization of pointer of type %0 to null from a constant boolean "
     "expression">, InGroup<BoolConversion>;
+def warn_non_literal_null_pointer : Warning<
+    "expression which evaluates to zero treated as a null pointer constant of "
+    "type %0">, InGroup<NonLiteralNullConversion>;
 def warn_impcast_null_pointer_to_integer : Warning<
     "implicit conversion of NULL constant to %0">,
     InGroup<NullConversion>;
