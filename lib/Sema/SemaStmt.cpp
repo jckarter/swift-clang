@@ -2747,15 +2747,149 @@ StmtResult Sema::ActOnAsmStmt(SourceLocation AsmLoc, bool IsSimple,
   return Owned(NS);
 }
 
+// needSpaceAsmToken - This function handles whitespace around asm punctuation.
+// Returns true if a space should be emitted.
+static inline bool needSpaceAsmToken(Token currTok) {
+  static Token prevTok;
+
+  // No need for space after prevToken.
+  switch(prevTok.getKind()) {
+  default:
+    break;
+  case tok::l_square:
+  case tok::r_square:
+  case tok::l_brace:
+  case tok::r_brace:
+  case tok::colon:
+    prevTok = currTok;
+    return false;
+  }
+
+  // No need for a space before currToken.
+  switch(currTok.getKind()) {
+  default:
+    break;
+  case tok::l_square:
+  case tok::r_square:
+  case tok::l_brace:
+  case tok::r_brace:
+  case tok::comma:
+  case tok::colon:
+    prevTok = currTok;
+    return false;
+  }
+  prevTok = currTok;
+  return true;
+}
+
+static std::string PatchMSAsmString(Sema &SemaRef, bool &IsSimple,
+                                    SourceLocation AsmLoc,
+                                    ArrayRef<Token> AsmToks,
+                                    const TargetInfo &TI) {
+  // Assume simple asm stmt until we parse a non-register identifer.
+  IsSimple = true;
+
+  if (AsmToks.empty())
+    return "";
+
+  std::string Res;
+  IdentifierInfo *II = AsmToks[0].getIdentifierInfo();
+  Res = II->getName().str();
+
+  // Check the operands.
+  for (unsigned i = 1, e = AsmToks.size(); i != e; ++i) {
+    if (needSpaceAsmToken(AsmToks[i]))
+        Res += " ";
+
+    switch (AsmToks[i].getKind()) {
+    default:
+      //llvm_unreachable("Unknown token.");
+      break;
+    case tok::comma: Res += ","; break;
+    case tok::colon: Res += ":"; break;
+    case tok::l_square: Res += "["; break;
+    case tok::r_square: Res += "]"; break;
+    case tok::l_brace: Res += "{"; break;
+    case tok::r_brace: Res += "}"; break;
+    case tok::numeric_constant: {
+      SmallString<32> TokenBuf;
+      TokenBuf.resize(32);
+      bool StringInvalid = false;
+      const char *ThisTokBuf = &TokenBuf[0];
+      unsigned ThisTokLen =
+        Lexer::getSpelling(AsmToks[i], ThisTokBuf, SemaRef.getSourceManager(),
+                           SemaRef.getLangOpts(), &StringInvalid);
+      Res += StringRef(ThisTokBuf, ThisTokLen);
+      break;
+    }
+    case tok::identifier: {
+      II = AsmToks[i].getIdentifierInfo();
+      StringRef Name = II->getName();
+
+      // Valid registers don't need modification.
+      if (TI.isValidGCCRegisterName(Name)) {
+        Res += Name;
+        break;
+      }
+
+      // TODO: Lookup the identifier.
+      IsSimple = false;
+    }
+    } // AsmToks[i].getKind()
+  }
+  return Res;
+}
+
+// Build the unmodified MSAsmString.
+static std::string buildMSAsmString(Sema &SemaRef,
+                                    ArrayRef<Token> AsmToks,
+                                    ArrayRef<unsigned> LineEnds) {
+  if (AsmToks.empty())
+    return "";
+
+  SmallString<512> Asm;
+  SmallString<512> TokenBuf;
+  TokenBuf.resize(512);
+  unsigned AsmLineNum = 0;
+  for (unsigned i = 0, e = AsmToks.size(); i < e; ++i) {
+    const char *ThisTokBuf = &TokenBuf[0];
+    bool StringInvalid = false;
+    unsigned ThisTokLen =
+      Lexer::getSpelling(AsmToks[i], ThisTokBuf, SemaRef.getSourceManager(),
+                         SemaRef.getLangOpts(), &StringInvalid);
+    if (i && (!AsmLineNum || i != LineEnds[AsmLineNum-1]) &&
+        needSpaceAsmToken(AsmToks[i]))
+      Asm += ' ';
+    Asm += StringRef(ThisTokBuf, ThisTokLen);
+    if (i + 1 == LineEnds[AsmLineNum] && i + 1 != AsmToks.size()) {
+      Asm += '\n';
+      ++AsmLineNum;
+    }
+  }
+  return Asm.c_str();
+}
+
 StmtResult Sema::ActOnMSAsmStmt(SourceLocation AsmLoc,
                                 ArrayRef<Token> AsmToks,
-                                std::string &AsmString,
+                                ArrayRef<unsigned> LineEnds,
                                 SourceLocation EndLoc) {
   // MS-style inline assembly is not fully supported, so emit a warning.
   Diag(AsmLoc, diag::warn_unsupported_msasm);
 
+  std::string AsmString = buildMSAsmString(*this, AsmToks, LineEnds);
+
+  bool IsSimple;
+  // Rewrite operands to appease the AsmParser.
+  std::string PatchedAsmString =
+    PatchMSAsmString(*this, IsSimple, AsmLoc, AsmToks, Context.getTargetInfo());
+
+  // Silence compiler warnings.  Eventually, the PatchedAsmString will be
+  // passed to the AsmParser.
+  (void)PatchedAsmString;
+
   MSAsmStmt *NS =
-    new (Context) MSAsmStmt(Context, AsmLoc, AsmToks, AsmString, EndLoc);
+    new (Context) MSAsmStmt(Context, AsmLoc, IsSimple, /* IsVolatile */ true,
+                            AsmToks, LineEnds, AsmString, EndLoc);
 
   return Owned(NS);
 }
