@@ -1977,7 +1977,8 @@ Value *CodeGenFunction::EmitARMBuiltinExpr(unsigned BuiltinID,
     Int = usgn ? Intrinsic::arm_neon_vqrshiftu : Intrinsic::arm_neon_vqrshifts;
     return EmitNeonCall(CGM.getIntrinsic(Int, Ty), Ops, "vqrshl");
   case ARM::BI__builtin_neon_vqrshrn_n_v:
-    Int = usgn ? Intrinsic::arm_neon_vqrshiftnu : Intrinsic::arm_neon_vqrshiftns;
+    Int = usgn ? Intrinsic::arm_neon_vqrshiftnu : 
+                 Intrinsic::arm_neon_vqrshiftns;
     return EmitNeonCall(CGM.getIntrinsic(Int, Ty), Ops, "vqrshrn_n",
                         1, true);
   case ARM::BI__builtin_neon_vqrshrun_n_v:
@@ -2060,9 +2061,11 @@ Value *CodeGenFunction::EmitARMBuiltinExpr(unsigned BuiltinID,
     Int = usgn ? Intrinsic::arm_neon_vshiftlu : Intrinsic::arm_neon_vshiftls;
     return EmitNeonCall(CGM.getIntrinsic(Int, Ty), Ops, "vshll", 1);
   case ARM::BI__builtin_neon_vshl_n_v:
-  case ARM::BI__builtin_neon_vshlq_n_v:
+  case ARM::BI__builtin_neon_vshlq_n_v: {
     Ops[1] = EmitNeonShiftVector(Ops[1], Ty, false);
-    return Builder.CreateShl(Builder.CreateBitCast(Ops[0],Ty), Ops[1], "vshl_n");
+    Value *bc = Builder.CreateBitCast(Ops[0],Ty);
+    return Builder.CreateShl(bc, Ops[1], "vshl_n");
+  }
   case ARM::BI__builtin_neon_vshrn_n_v:
     return EmitNeonCall(CGM.getIntrinsic(Intrinsic::arm_neon_vshiftn, Ty),
                         Ops, "vshrn_n", 1, true);
@@ -3029,7 +3032,8 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     Int = usgn ? Intrinsic::arm64_neon_uaddlp : Intrinsic::arm64_neon_saddlp;
     SmallVector<llvm::Value*, 1> TmpOps;
     TmpOps.push_back(Ops[1]);
-    llvm::Value *tmp = EmitNeonCall(CGM.getIntrinsic(Int, Tys), TmpOps, "vpadal");
+    Function *F = CGM.getIntrinsic(Int, Tys);
+    llvm::Value *tmp = EmitNeonCall(F, TmpOps, "vpadal");
     llvm::Value *addend = Builder.CreateBitCast(Ops[0], tmp->getType());
     return Builder.CreateAdd(tmp, addend);
   }
@@ -3098,7 +3102,8 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
   case ARM64::BI__builtin_arm64_vshl_n_v:
   case ARM64::BI__builtin_arm64_vshlq_n_v:
     Ops[1] = EmitNeonShiftVector(Ops[1], Ty, false);
-    return Builder.CreateShl(Builder.CreateBitCast(Ops[0],Ty), Ops[1], "vshl_n");
+    return Builder.CreateShl(Builder.CreateBitCast(Ops[0],Ty), Ops[1], 
+                                                  "vshl_n");
   case ARM64::BI__builtin_arm64_vrshr_n_v:
   case ARM64::BI__builtin_arm64_vrshrq_n_v:
     Int = usgn ? Intrinsic::arm64_neon_urshr : Intrinsic::arm64_neon_srshr;
@@ -3782,7 +3787,8 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     SmallVector<llvm::Value*,2> TmpOps;
     TmpOps.push_back(Ops[1]);
     TmpOps.push_back(Ops[2]);
-    llvm::Value *tmp = EmitNeonCall(CGM.getIntrinsic(Int, Ty), TmpOps, "vrshr_n");
+    Function* F = CGM.getIntrinsic(Int, Ty);
+    llvm::Value *tmp = EmitNeonCall(F, TmpOps, "vrshr_n");
     Ops[0] = Builder.CreateBitCast(Ops[0], VTy);
     return Builder.CreateAdd(Ops[0], tmp);
   }
