@@ -308,16 +308,16 @@ public:
     MethodImplKind(MethodImplKind) {
   }
 
-  Decl *invoke(FieldDeclarator &FD) {
+  void invoke(ParsingFieldDeclarator &FD) {
     if (FD.D.getIdentifier() == 0) {
       P.Diag(AtLoc, diag::err_objc_property_requires_field_name)
         << FD.D.getSourceRange();
-      return 0;
+      return;
     }
     if (FD.BitfieldSize) {
       P.Diag(AtLoc, diag::err_objc_property_bitfield)
         << FD.D.getSourceRange();
-      return 0;
+      return;
     }
 
     // Install the property declarator into interfaceDecl.
@@ -344,7 +344,7 @@ public:
     if (!isOverridingProperty)
       Props.push_back(Property);
 
-    return Property;
+    FD.complete(Property);
   }
 };
 
@@ -493,7 +493,7 @@ void Parser::ParseObjCInterfaceDeclList(tok::ObjCKeywordKind contextKey,
                                     OCDS, AtLoc, LParenLoc, MethodImplKind);
 
       // Parse all the comma separated declarators.
-      DeclSpec DS(AttrFactory);
+      ParsingDeclSpec DS(*this);
       ParseStructDeclaration(DS, Callback);
 
       ExpectAndConsume(tok::semi, diag::err_expected_semi_decl_list);
@@ -1306,7 +1306,7 @@ void Parser::ParseObjCClassInstanceVariables(Decl *interfaceDecl,
         P(P), IDecl(IDecl), visibility(V), AllIvarDecls(AllIvarDecls) {
       }
 
-      Decl *invoke(FieldDeclarator &FD) {
+      void invoke(ParsingFieldDeclarator &FD) {
         P.Actions.ActOnObjCContainerStartDefinition(IDecl);
         // Install the declarator into the interface decl.
         Decl *Field
@@ -1316,12 +1316,12 @@ void Parser::ParseObjCClassInstanceVariables(Decl *interfaceDecl,
         P.Actions.ActOnObjCContainerFinishDefinition();
         if (Field)
           AllIvarDecls.push_back(Field);
-        return Field;
+        FD.complete(Field);
       }
     } Callback(*this, interfaceDecl, visibility, AllIvarDecls);
     
     // Parse all the comma separated declarators.
-    DeclSpec DS(AttrFactory);
+    ParsingDeclSpec DS(*this);
     ParseStructDeclaration(DS, Callback);
 
     if (Tok.is(tok::semi)) {
@@ -1616,8 +1616,8 @@ Decl *Parser::ParseObjCAtAliasDeclaration(SourceLocation atLoc) {
   SourceLocation classLoc = ConsumeToken(); // consume class-name;
   ExpectAndConsume(tok::semi, diag::err_expected_semi_after, 
                    "@compatibility_alias");
-  return Actions.ActOnCompatiblityAlias(atLoc, aliasId, aliasLoc,
-                                        classId, classLoc);
+  return Actions.ActOnCompatibilityAlias(atLoc, aliasId, aliasLoc,
+                                         classId, classLoc);
 }
 
 ///   property-synthesis:
@@ -2878,7 +2878,10 @@ void Parser::ParseLexedObjCMethodDefs(LexedMethod &LM, bool parseMethod) {
     
   // Tell the actions module that we have entered a method or c-function definition 
   // with the specified Declarator for the method/function.
-  Actions.ActOnStartOfObjCMethodOrCFunctionDef(getCurScope(), MCDecl, parseMethod);
+  if (parseMethod)
+    Actions.ActOnStartOfObjCMethodDef(getCurScope(), MCDecl);
+  else
+    Actions.ActOnStartOfFunctionDef(getCurScope(), MCDecl);
     
   if (SkipFunctionBodies && trySkippingFunctionBody()) {
     BodyScope.Exit();
