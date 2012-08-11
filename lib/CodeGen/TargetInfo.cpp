@@ -2757,9 +2757,9 @@ ABIArgInfo ARMABIInfo::classifyArgumentType(QualType Ty) const {
     }
   }
 
-  // FIXME: byval for AAPCS is not yet supported; we need it for performance
-  // and to support large alignment.
-  if (getABIKind() == ARMABIInfo::APCS) {
+  // Turn on byval for APCS and AAPCS.
+  // FIXME: turn on byval for AAPCS_VFP for performance.
+  if (getABIKind() == ARMABIInfo::APCS || getABIKind() == ARMABIInfo::AAPCS) {
     if (getContext().getTypeSizeInChars(Ty) > CharUnits::fromQuantity(64) ||
         getContext().getTypeAlign(Ty) > 64) {
       return ABIArgInfo::getIndirect(0, /*ByVal=*/true);
