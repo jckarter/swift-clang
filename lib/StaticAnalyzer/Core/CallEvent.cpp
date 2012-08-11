@@ -15,6 +15,7 @@
 
 #include "clang/StaticAnalyzer/Core/PathSensitive/CallEvent.h"
 #include "clang/Analysis/ProgramPoint.h"
+#include "clang/AST/CXXInheritance.h"
 #include "clang/AST/ParentMap.h"
 #include "llvm/ADT/SmallSet.h"
 #include "llvm/ADT/StringExtras.h"
@@ -383,13 +384,13 @@ static const CXXMethodDecl *devirtualize(const CXXMethodDecl *MD, SVal ThisVal){
 
 
 RuntimeDefinition CXXInstanceCall::getRuntimeDefinition() const {
-  const Decl *D = SimpleCall::getRuntimeDefinition().getDecl();
+  const Decl *D = getDecl();
   if (!D)
     return RuntimeDefinition();
 
   const CXXMethodDecl *MD = cast<CXXMethodDecl>(D);
   if (!MD->isVirtual())
-    return RuntimeDefinition(MD);
+    return SimpleCall::getRuntimeDefinition();
 
   // If the method is virtual, see if we can find the actual implementation
   // based on context-sensitivity.
@@ -408,11 +409,34 @@ void CXXInstanceCall::getInitialStackFrameContents(
                                             BindingsTy &Bindings) const {
   AnyFunctionCall::getInitialStackFrameContents(CalleeCtx, Bindings);
 
+  // Handle the binding of 'this' in the new stack frame.
+  // We need to make sure we have the proper layering of CXXBaseObjectRegions.
   SVal ThisVal = getCXXThisVal();
   if (!ThisVal.isUnknown()) {
-    SValBuilder &SVB = getState()->getStateManager().getSValBuilder();
+    ProgramStateManager &StateMgr = getState()->getStateManager();
+    SValBuilder &SVB = StateMgr.getSValBuilder();
+    
     const CXXMethodDecl *MD = cast<CXXMethodDecl>(CalleeCtx->getDecl());
     Loc ThisLoc = SVB.getCXXThis(MD, CalleeCtx);
+
+    if (const MemRegion *ThisReg = ThisVal.getAsRegion()) {
+      const CXXRecordDecl *Class = MD->getParent();
+
+      // We may be downcasting to call a devirtualized virtual method.
+      // Search through the base casts we already have to see if we can just
+      // strip them off.
+      const CXXBaseObjectRegion *BaseReg;
+      while ((BaseReg = dyn_cast<CXXBaseObjectRegion>(ThisReg))) {
+        if (BaseReg->getDecl() == Class)
+          break;
+        ThisReg = BaseReg->getSuperRegion();
+      }
+
+      // Either we found the right base class, or we stripped all the casts to
+      // the most derived type. Either one is good.
+      ThisVal = loc::MemRegionVal(ThisReg);
+    }
+
     Bindings.push_back(std::make_pair(ThisLoc, ThisVal));
   }
 }
@@ -659,6 +683,59 @@ ObjCMessageKind ObjCMethodCall::getMessageKind() const {
   return static_cast<ObjCMessageKind>(Info.getInt());
 }
 
+
+bool ObjCMethodCall::canBeOverridenInSubclass(ObjCInterfaceDecl *IDecl,
+                                             Selector Sel) const {
+  assert(IDecl);
+  const SourceManager &SM =
+    getState()->getStateManager().getContext().getSourceManager();
+
+  // If the class interface is declared inside the main file, assume it is not
+  // subcassed. 
+  // TODO: It could actually be subclassed if the subclass is private as well.
+  // This is probably very rare.
+  SourceLocation InterfLoc = IDecl->getEndOfDefinitionLoc();
+  if (InterfLoc.isValid() && SM.isFromMainFile(InterfLoc))
+    return false;
+
+
+  // We assume that if the method is public (declared outside of main file) or
+  // has a parent which publicly declares the method, the method could be
+  // overridden in a subclass.
+
+  // Find the first declaration in the class hierarchy that declares
+  // the selector.
+  ObjCMethodDecl *D = 0;
+  while (true) {
+    D = IDecl->lookupMethod(Sel, true);
+
+    // Cannot find a public definition.
+    if (!D)
+      return false;
+
+    // If outside the main file,
+    if (D->getLocation().isValid() && !SM.isFromMainFile(D->getLocation()))
+      return true;
+
+    if (D->isOverriding()) {
+      // Search in the superclass on the next iteration.
+      IDecl = D->getClassInterface();
+      if (!IDecl)
+        return false;
+
+      IDecl = IDecl->getSuperClass();
+      if (!IDecl)
+        return false;
+
+      continue;
+    }
+
+    return false;
+  };
+
+  llvm_unreachable("The while loop should always terminate.");
+}
+
 RuntimeDefinition ObjCMethodCall::getRuntimeDefinition() const {
   const ObjCMessageExpr *E = getOriginExpr();
   assert(E);
@@ -668,6 +745,7 @@ RuntimeDefinition ObjCMethodCall::getRuntimeDefinition() const {
 
     // Find the the receiver type.
     const ObjCObjectPointerType *ReceiverT = 0;
+    bool CanBeSubClassed = false;
     QualType SupersType = E->getSuperType();
     const MemRegion *Receiver = 0;
 
@@ -680,14 +758,26 @@ RuntimeDefinition ObjCMethodCall::getRuntimeDefinition() const {
       if (!Receiver)
         return RuntimeDefinition();
 
-      QualType DynType = getState()->getDynamicTypeInfo(Receiver).getType();
+      DynamicTypeInfo DTI = getState()->getDynamicTypeInfo(Receiver);
+      QualType DynType = DTI.getType();
+      CanBeSubClassed = DTI.canBeASubClass();
       ReceiverT = dyn_cast<ObjCObjectPointerType>(DynType);
+
+      if (ReceiverT && CanBeSubClassed)
+        if (ObjCInterfaceDecl *IDecl = ReceiverT->getInterfaceDecl())
+          if (!canBeOverridenInSubclass(IDecl, Sel))
+            CanBeSubClassed = false;
     }
 
     // Lookup the method implementation.
     if (ReceiverT)
-      if (ObjCInterfaceDecl *IDecl = ReceiverT->getInterfaceDecl())
-        return RuntimeDefinition(IDecl->lookupPrivateMethod(Sel), Receiver);
+      if (ObjCInterfaceDecl *IDecl = ReceiverT->getInterfaceDecl()) {
+        const ObjCMethodDecl *MD = IDecl->lookupPrivateMethod(Sel);
+        if (CanBeSubClassed)
+          return RuntimeDefinition(MD, Receiver);
+        else
+          return RuntimeDefinition(MD, 0);
+      }
 
   } else {
     // This is a class method.
