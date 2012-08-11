@@ -320,18 +320,18 @@ def VST1_LANE : WInst<"vst1_lane", "vpdi",
 
 ////////////////////////////////////////////////////////////////////////////////
 // Loads and stores of an N-element structure
-def VLD2 : WInst<"vld2", "2c", "QUcQUsQUiQcQsQiQhQfQdQPcQPsUcUsUiUlcsilhfdPcPs">;
-def VLD3 : WInst<"vld3", "3c", "QUcQUsQUiQcQsQiQhQfQdQPcQPsUcUsUiUlcsilhfdPcPs">;
-def VLD4 : WInst<"vld4", "4c", "QUcQUsQUiQcQsQiQhQfQdQPcQPsUcUsUiUlcsilhfdPcPs">;
+def VLD2 : WInst<"vld2", "2c", "QUcQUsQUiQUlQcQsQiQlQhQfQdQPcQPsUcUsUiUlcsilhfdPcPs">;
+def VLD3 : WInst<"vld3", "3c", "QUcQUsQUiQUlQcQsQiQlQhQfQdQPcQPsUcUsUiUlcsilhfdPcPs">;
+def VLD4 : WInst<"vld4", "4c", "QUcQUsQUiQUlQcQsQiQlQhQfQdQPcQPsUcUsUiUlcsilhfdPcPs">;
 def VLD2_DUP  : WInst<"vld2_dup", "2c", "UcUsUiUlcsilhfdPcPs">;
 def VLD3_DUP  : WInst<"vld3_dup", "3c", "UcUsUiUlcsilhfdPcPs">;
 def VLD4_DUP  : WInst<"vld4_dup", "4c", "UcUsUiUlcsilhfdPcPs">;
 def VLD2_LANE : WInst<"vld2_lane", "2c2i", "QUsQUiQsQiQhQfQdQPsUcUsUicsihfdPcPs">;
 def VLD3_LANE : WInst<"vld3_lane", "3c3i", "QUsQUiQsQiQhQfQdQPsUcUsUicsihfdPcPs">;
 def VLD4_LANE : WInst<"vld4_lane", "4c4i", "QUsQUiQsQiQhQfQdQPsUcUsUicsihfdPcPs">;
-def VST2 : WInst<"vst2", "vp2", "QUcQUsQUiQcQsQiQhQfQdQPcQPsUcUsUiUlcsilhfdPcPs">;
-def VST3 : WInst<"vst3", "vp3", "QUcQUsQUiQcQsQiQhQfQdQPcQPsUcUsUiUlcsilhfdPcPs">;
-def VST4 : WInst<"vst4", "vp4", "QUcQUsQUiQcQsQiQhQfQdQPcQPsUcUsUiUlcsilhfdPcPs">;
+def VST2 : WInst<"vst2", "vp2", "QUcQUsQUiQUlQcQsQiQlQhQfQdQPcQPsUcUsUiUlcsilhfdPcPs">;
+def VST3 : WInst<"vst3", "vp3", "QUcQUsQUiQUlQcQsQiQlQhQfQdQPcQPsUcUsUiUlcsilhfdPcPs">;
+def VST4 : WInst<"vst4", "vp4", "QUcQUsQUiQUlQcQsQiQlQhQfQdQPcQPsUcUsUiUlcsilhfdPcPs">;
 def VST2_LANE : WInst<"vst2_lane", "vp2i", "QUsQUiQsQiQhQfQdQPsUcUsUicsihfdPcPs">;
 def VST3_LANE : WInst<"vst3_lane", "vp3i", "QUsQUiQsQiQhQfQdQPsUcUsUicsihfdPcPs">;
 def VST4_LANE : WInst<"vst4_lane", "vp4i", "QUsQUiQsQiQhQfQdQPsUcUsUicsihfdPcPs">;
