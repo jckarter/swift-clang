@@ -190,6 +190,17 @@ RawComment *ASTContext::getRawCommentForDeclNoCache(const Decl *D) const {
 }
 
 const RawComment *ASTContext::getRawCommentForAnyRedecl(const Decl *D) const {
+  // If we have a 'templated' declaration for a template, adjust 'D' to
+  // refer to the actual template.
+  if (const FunctionDecl *FD = dyn_cast<FunctionDecl>(D)) {
+    if (const FunctionTemplateDecl *FTD = FD->getDescribedFunctionTemplate())
+      D = FTD;
+  } else if (const CXXRecordDecl *RD = dyn_cast<CXXRecordDecl>(D)) {
+    if (const ClassTemplateDecl *CTD = RD->getDescribedClassTemplate())
+      D = CTD;
+  }
+  // FIXME: Alias templates?
+
   // Check whether we have cached a comment for this declaration already.
   {
     llvm::DenseMap<const Decl *, RawCommentAndCacheFlags>::iterator Pos =
@@ -3167,7 +3178,7 @@ QualType ASTContext::getDecltypeType(Expr *e, QualType UnderlyingType) const {
     if (Canon) {
       // We already have a "canonical" version of an equivalent, dependent
       // decltype type. Use that as our canonical type.
-      dt = new (*this, TypeAlignment) DecltypeType(e, DependentTy,
+      dt = new (*this, TypeAlignment) DecltypeType(e, UnderlyingType,
                                        QualType((DecltypeType*)Canon, 0));
     } else {
       // Build a new, canonical typeof(expr) type.
