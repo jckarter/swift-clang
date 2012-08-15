@@ -444,7 +444,7 @@ bool Sema::CheckARM64BuiltinFunctionCall(unsigned BuiltinID,
                                          CallExpr *TheCall) {
   llvm::APSInt Result;
 
-  unsigned mask = 0;
+  uint64_t mask = 0;
   unsigned TV = 0;
   int PtrArgNum = -1;
   bool HasConstPtr = false;
@@ -462,7 +462,7 @@ bool Sema::CheckARM64BuiltinFunctionCall(unsigned BuiltinID,
       return true;
 
     TV = Result.getLimitedValue(64);
-    if ((TV > 63) || (mask & (1 << TV)) == 0)
+    if ((TV > 63) || (mask & (1ULL << TV)) == 0)
       return Diag(TheCall->getLocStart(), diag::err_invalid_neon_type_code)
         << TheCall->getArg(ImmArg)->getSourceRange();
   }
