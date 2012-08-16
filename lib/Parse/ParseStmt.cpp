@@ -1686,11 +1686,6 @@ StmtResult Parser::ParseMicrosoftAsmStatement(SourceLocation AsmLoc) {
     if (Tok.is(tok::eof))
       break;
 
-    // The asm keyword is a statement separator, so multiple asm statements
-    // are allowed on a single line.
-    if (!InAsmComment && Tok.is(tok::kw_asm))
-      break;
-
     if (!InAsmComment && Tok.is(tok::semi)) {
       // A semicolon in an asm is the start of a comment.
       InAsmComment = true;
@@ -1752,7 +1747,8 @@ StmtResult Parser::ParseMicrosoftAsmStatement(SourceLocation AsmLoc) {
   }
 
   // FIXME: We should be passing source locations for better diagnostics.
-  return Actions.ActOnMSAsmStmt(AsmLoc, llvm::makeArrayRef(AsmToks), EndLoc);                               
+  return Actions.ActOnMSAsmStmt(AsmLoc, LBraceLoc,
+                                llvm::makeArrayRef(AsmToks), EndLoc);
 }
 
 /// ParseAsmStatement - Parse a GNU extended asm statement.
