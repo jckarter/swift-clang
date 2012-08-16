@@ -2358,6 +2358,57 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
   // Handle non-overloaded intrinsics first.
   switch (BuiltinID) {
   default: break;
+  case ARM64::BI__builtin_arm64_vqdmullh_lane_s16: {
+    unsigned Int = Intrinsic::arm64_neon_sqdmull;
+    // i16 is not a legal types for ARM64, so we can't just use
+    // a normal overloaed intrinsic call for these scalar types. Instead
+    // we'll build 64-bit vectors w/ lane zero being our input values and
+    // perform the operation on that. The back end can pattern match directly
+    // to the scalar instruction.
+    llvm::Type *VTy = llvm::VectorType::get(Int16Ty, 4);
+    llvm::Type *WideVTy = llvm::VectorType::get(Int32Ty, 4);
+    Ops[0] = Builder.CreateBitCast(Ops[0], Int16Ty);
+    Value *V = UndefValue::get(VTy);
+    llvm::Constant *CI = ConstantInt::get(Int32Ty, 0);
+    Ops[0] = Builder.CreateInsertElement(V, Ops[0], CI);
+    V = UndefValue::get(VTy);
+    Value *Idx = EmitScalarExpr(E->getArg(2));
+    Ops[1] = Builder.CreateExtractElement(Ops[1], Idx);
+    Ops[1] = Builder.CreateInsertElement(V, Ops[1], CI);
+    V = EmitNeonCall(CGM.getIntrinsic(Int, WideVTy), Ops, "vqdmullh");
+    return Builder.CreateExtractElement(V, CI, "lane0");
+  }
+  case ARM64::BI__builtin_arm64_vqdmulls_lane_s32: {
+    unsigned Int = Intrinsic::arm64_neon_sqdmulls_scalar;
+    Value *Idx = EmitScalarExpr(E->getArg(2));
+    Ops[1] = Builder.CreateExtractElement(Ops[1], Idx, "lane");
+    return EmitNeonCall(CGM.getIntrinsic(Int), Ops, "vqdmulls");
+  }
+  case ARM64::BI__builtin_arm64_vqdmulls_s32: {
+    unsigned Int = Intrinsic::arm64_neon_sqdmulls_scalar;
+    Ops.push_back(EmitScalarExpr(E->getArg(1)));
+    return EmitNeonCall(CGM.getIntrinsic(Int), Ops, "vqdmulls");
+  }
+  case ARM64::BI__builtin_arm64_vqdmullh_s16: {
+    unsigned Int = Intrinsic::arm64_neon_sqdmull;
+    // i16 is not a legal types for ARM64, so we can't just use
+    // a normal overloaed intrinsic call for these scalar types. Instead
+    // we'll build 64-bit vectors w/ lane zero being our input values and
+    // perform the operation on that. The back end can pattern match directly
+    // to the scalar instruction.
+    Ops.push_back(EmitScalarExpr(E->getArg(1)));
+    llvm::Type *VTy = llvm::VectorType::get(Int16Ty, 4);
+    llvm::Type *WideVTy = llvm::VectorType::get(Int32Ty, 4);
+    Ops[0] = Builder.CreateBitCast(Ops[0], Int16Ty);
+    Ops[1] = Builder.CreateBitCast(Ops[1], Int16Ty);
+    Value *V = UndefValue::get(VTy);
+    llvm::Constant *CI = ConstantInt::get(Int32Ty, 0);
+    Ops[0] = Builder.CreateInsertElement(V, Ops[0], CI);
+    V = UndefValue::get(VTy);
+    Ops[1] = Builder.CreateInsertElement(V, Ops[1], CI);
+    V = EmitNeonCall(CGM.getIntrinsic(Int, WideVTy), Ops, "vqdmullh");
+    return Builder.CreateExtractElement(V, CI, "lane0");
+  }
   case ARM64::BI__builtin_arm64_vqaddb_u8:
   case ARM64::BI__builtin_arm64_vqaddh_u16:
     usgn = true;

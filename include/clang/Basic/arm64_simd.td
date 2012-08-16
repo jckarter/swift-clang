@@ -52,6 +52,11 @@ def VMULL_HIGH : Inst<"vmull_high", "ndd",  "RcRsRiRUcRUsRUi", OP_MULL_HIGH>;
 def VQDMLAL_HIGH : SInst<"vqdmlal_high", "nndd", "RsRi">;
 def VQDMLSL_HIGH : SInst<"vqdmlsl_high", "nndd", "RsRi">;
 def VQDMULL_HIGH : SInst<"vqdmull_high", "ndd",  "RsRi">;
+// scalars.
+def VQDMULLH : SInst<"vqdmullh", "zss", "s">;
+def VQDMULLS : SInst<"vqdmulls", "zss", "i">;
+def VQDMULLH_LANE : SInst<"vqdmullh_lane", "zski", "s">;
+def VQDMULLS_LANE : SInst<"vqdmulls_lane", "zski", "i">;
 
 ////////////////////////////////////////////////////////////////////////////////
 // Miscellaneous FP
