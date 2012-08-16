@@ -2777,15 +2777,21 @@ static void patchMSAsmStrings(Sema &SemaRef, bool &IsSimple,
   unsigned NumAsmStrings = 0;
   for (unsigned i = 0, e = AsmToks.size(); i != e; ++i) {
 
-    // Emit the previous asm string.
-    if (i != 0 && AsmToks[i].isAtStartOfLine())
-      AsmStrings[NumAsmStrings++] = Asm.c_str();
+    // Determine if this should be considered a new asm.
+    bool isNewAsm = i == 0 || AsmToks[i].isAtStartOfLine() ||
+      AsmToks[i].is(tok::kw_asm);
 
-    if (i && AsmToks[i].isAtStartOfLine())
-      Asm += '\n';
+    // Emit the previous asm string.
+    if (i && isNewAsm) {
+      AsmStrings[NumAsmStrings++] = Asm.c_str();
+      if (AsmToks[i].is(tok::kw_asm)) {
+        ++i; // Skip __asm
+        assert (i != e && "Expected another token.");
+      }
+    }
 
     // Start a new asm string with the opcode.
-    if (i == 0 || AsmToks[i].isAtStartOfLine()) {
+    if (isNewAsm) {
       Asm = AsmToks[i].getIdentifierInfo()->getName().str();
       continue;
     }
@@ -2834,17 +2840,32 @@ static void patchMSAsmStrings(Sema &SemaRef, bool &IsSimple,
 
 // Build the unmodified MSAsmString.
 static std::string buildMSAsmString(Sema &SemaRef,
-                                    ArrayRef<Token> AsmToks) {
+                                    ArrayRef<Token> AsmToks,
+                                    unsigned &NumAsmStrings) {
   assert (!AsmToks.empty() && "Didn't expect an empty AsmToks!");
   SmallString<512> Asm;
   SmallString<512> TokenBuf;
   TokenBuf.resize(512);
+
+  NumAsmStrings = 0;
   for (unsigned i = 0, e = AsmToks.size(); i < e; ++i) {
-    bool StringInvalid = false;
-    if (i && AsmToks[i].isAtStartOfLine())
-      Asm += '\n';
-    else if (i && AsmToks[i].hasLeadingSpace())
+    bool isNewAsm = i == 0 || AsmToks[i].isAtStartOfLine() ||
+      AsmToks[i].is(tok::kw_asm);
+
+    if (isNewAsm) {
+      ++NumAsmStrings;
+      if (i)
+        Asm += '\n';
+      if (AsmToks[i].is(tok::kw_asm)) {
+        i++; // Skip __asm
+        assert (i != e && "Expected another token");
+      }
+    }
+
+    if (i && AsmToks[i].hasLeadingSpace() && !isNewAsm)
       Asm += ' ';
+
+    bool StringInvalid = false;
     Asm += SemaRef.PP.getSpelling(AsmToks[i], TokenBuf, &StringInvalid);
     assert (!StringInvalid && "Expected valid string!");
   }
@@ -2852,34 +2873,32 @@ static std::string buildMSAsmString(Sema &SemaRef,
 }
 
 StmtResult Sema::ActOnMSAsmStmt(SourceLocation AsmLoc,
+                                SourceLocation LBraceLoc,
                                 ArrayRef<Token> AsmToks,
                                 SourceLocation EndLoc) {
   // MS-style inline assembly is not fully supported, so emit a warning.
   Diag(AsmLoc, diag::warn_unsupported_msasm);
   SmallVector<StringRef,4> Clobbers;
+  std::set<std::string> ClobberRegs;
+  SmallVector<IdentifierInfo*, 4> Inputs;
+  SmallVector<IdentifierInfo*, 4> Outputs;
 
   // Empty asm statements don't need to instantiate the AsmParser, etc.
   if (AsmToks.empty()) {
     StringRef AsmString;
     MSAsmStmt *NS =
-      new (Context) MSAsmStmt(Context, AsmLoc, /* IsSimple */ true,
-                              /* IsVolatile */ true, AsmToks, AsmString,
-                              Clobbers, EndLoc);
+      new (Context) MSAsmStmt(Context, AsmLoc, LBraceLoc, /*IsSimple*/ true,
+                              /*IsVolatile*/ true, AsmToks, Inputs, Outputs,
+                              AsmString, Clobbers, EndLoc);
     return Owned(NS);
   }
 
-  std::string AsmString = buildMSAsmString(*this, AsmToks);
+  unsigned NumAsmStrings;
+  std::string AsmString = buildMSAsmString(*this, AsmToks, NumAsmStrings);
 
   bool IsSimple;
   std::vector<std::string> PatchedAsmStrings;
-
-  // FIXME: Count this while parsing.
-  unsigned NumAsmStrings = 0;
-  for (unsigned i = 0, e = AsmToks.size(); i != e; ++i)
-    if (AsmToks[i].isAtStartOfLine())
-      ++NumAsmStrings;
-
-  PatchedAsmStrings.resize(NumAsmStrings ? NumAsmStrings : 1);
+  PatchedAsmStrings.resize(NumAsmStrings);
 
   // Rewrite operands to appease the AsmParser.
   patchMSAsmStrings(*this, IsSimple, AsmLoc, AsmToks, Context.getTargetInfo(),
@@ -2888,9 +2907,9 @@ StmtResult Sema::ActOnMSAsmStmt(SourceLocation AsmLoc,
   // patchMSAsmStrings doesn't correctly patch non-simple asm statements.
   if (!IsSimple) {
     MSAsmStmt *NS =
-      new (Context) MSAsmStmt(Context, AsmLoc, /* IsSimple */ true,
-                              /* IsVolatile */ true, AsmToks, AsmString,
-                              Clobbers, EndLoc);
+      new (Context) MSAsmStmt(Context, AsmLoc, LBraceLoc, /*IsSimple*/ true,
+                              /*IsVolatile*/ true, AsmToks, Inputs, Outputs,
+                              AsmString, Clobbers, EndLoc);
     return Owned(NS);
   }
 
@@ -2974,15 +2993,17 @@ StmtResult Sema::ActOnMSAsmStmt(SourceLocation AsmLoc,
       if (!Context.getTargetInfo().isValidClobber(Clobber))
         return StmtError(Diag(AsmLoc, diag::err_asm_unknown_register_name) <<
                          Clobber);
-      // FIXME: Asm blocks may result in redundant clobbers.
-      Clobbers.push_back(Reg);
+      ClobberRegs.insert(Reg);
     }
   }
+  for (std::set<std::string>::iterator I = ClobberRegs.begin(),
+         E = ClobberRegs.end(); I != E; ++I)
+    Clobbers.push_back(*I);
 
   MSAsmStmt *NS =
-    new (Context) MSAsmStmt(Context, AsmLoc, IsSimple, /* IsVolatile */ true,
-                            AsmToks, AsmString, Clobbers, EndLoc);
-
+    new (Context) MSAsmStmt(Context, AsmLoc, LBraceLoc, IsSimple,
+                            /*IsVolatile*/ true, AsmToks, Inputs, Outputs,
+                            AsmString, Clobbers, EndLoc);
   return Owned(NS);
 }
 
