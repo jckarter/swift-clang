@@ -3118,9 +3118,8 @@ public:
                                 unsigned &NumAliases) const;
   virtual bool validateAsmConstraint(const char *&Name,
                                      TargetInfo::ConstraintInfo &Info) const {
-    // FIXME: Check if this is complete
     switch (*Name) {
-    default:
+    default: break;
     case 'l': // r0-r7
     case 'h': // r8-r15
     case 'w': // VFP Floating point register single precision
