@@ -168,6 +168,7 @@ public:
       default:
       return false;
     }
+  }
 
   /// Does this runtime allow the use of __weak?
   bool allowsWeak() const {
