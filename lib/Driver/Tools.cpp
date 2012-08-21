@@ -2557,8 +2557,7 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
   // NOTE: This logic is duplicated in ToolChains.cpp.
   bool ARC = isObjCAutoRefCount(Args);
   if (ARC) {
-    if (!getToolChain().SupportsObjCARC())
-      D.Diag(diag::err_arc_unsupported);
+    getToolChain().CheckObjCARC();
 
     CmdArgs.push_back("-fobjc-arc");
 
@@ -4502,7 +4501,7 @@ void darwin::Link::ConstructJob(Compilation &C, const JobAction &JA,
       ObjCRuntime runtime =
         getDarwinToolChain().getDefaultObjCRuntime(/*nonfragile*/ true);
       // We use arclite library for both ARC and subscripting support.
-      if ((!runtime.hasARC() && isObjCAutoRefCount(Args)) ||
+      if ((!runtime.hasNativeARC() && isObjCAutoRefCount(Args)) ||
           !runtime.hasSubscripting())
         getDarwinToolChain().AddLinkARCArgs(Args, CmdArgs);
     }
