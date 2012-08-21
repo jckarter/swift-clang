@@ -421,12 +421,6 @@ static void patchMSAsmStrings(Sema &SemaRef, bool &IsSimple,
         break;
       }
 
-      // FIXME: Why are we missing this segment register?
-      if (Name == "fs") {
-        Asm += Name;
-        break;
-      }
-
       // Lookup the identifier.
       // TODO: Someone with more experience with clang should verify this the
       // proper way of doing a symbol lookup.
@@ -452,6 +446,7 @@ static void patchMSAsmStrings(Sema &SemaRef, bool &IsSimple,
         // TODO: Patch identifier with valid operand.  One potential idea is to
         // probe the backend with type information to guess the possible
         // operand.
+        Asm += getSpelling(SemaRef, AsmToks[i]);
         break;
       }
       }
@@ -594,8 +589,11 @@ StmtResult Sema::ActOnMSAsmStmt(SourceLocation AsmLoc,
     assert (!HadError && "Unexpected error parsing instruction");
 
     // Match the MCInstr.
+    unsigned ErrorInfo;
     SmallVector<llvm::MCInst, 2> Instrs;
-    HadError = TargetParser->MatchInstruction(IDLoc, Operands, Instrs);
+    HadError = TargetParser->MatchInstruction(IDLoc, Operands, Instrs,
+                                              ErrorInfo,
+                                              /*matchingInlineAsm*/ true);
     assert (!HadError && "Unexpected error matching instruction");
     assert ((Instrs.size() == 1) && "Expected only a single instruction.");
 
