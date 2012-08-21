@@ -57,6 +57,14 @@ def VQDMULLH : SInst<"vqdmullh", "zss", "s">;
 def VQDMULLS : SInst<"vqdmulls", "zss", "i">;
 def VQDMULLH_LANE : SInst<"vqdmullh_lane", "zski", "s">;
 def VQDMULLS_LANE : SInst<"vqdmulls_lane", "zski", "i">;
+def VQDMLALH : Inst<"vqdmlalh", "zzss", "s", OP_QDMLAL>;
+def VQDMLALS : Inst<"vqdmlals", "zzss", "i", OP_QDMLAL>;
+def VQDMLSLH : Inst<"vqdmlslh", "zzss", "s", OP_QDMLSL>;
+def VQDMLSLS : Inst<"vqdmlsls", "zzss", "i", OP_QDMLSL>;
+def VQDMLALH_LANE : Inst<"vqdmlalh_lane", "zzski", "s", OP_QDMLAL_LN>;
+def VQDMLALS_LANE : Inst<"vqdmlals_lane", "zzski", "i", OP_QDMLAL_LN>;
+def VQDMLSLH_LANE : Inst<"vqdmlslh_lane", "zzski", "s", OP_QDMLSL_LN>;
+def VQDMLSLS_LANE : Inst<"vqdmlsls_lane", "zzski", "i", OP_QDMLSL_LN>;
 
 ////////////////////////////////////////////////////////////////////////////////
 // Miscellaneous FP
