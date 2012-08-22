@@ -147,7 +147,7 @@ static void AnalyzerOptsToArgs(const AnalyzerOptions &Opts, ToArgsList &Res) {
                   getAnalysisPurgeModeName(Opts.AnalysisPurgeOpt));
   if (!Opts.AnalyzeSpecificFunction.empty())
     Res.push_back("-analyze-function", Opts.AnalyzeSpecificFunction);
-  if (Opts.IPAMode != Inlining)
+  if (Opts.IPAMode != BasicInlining)
     Res.push_back("-analyzer-ipa", getAnalysisIPAModeName(Opts.IPAMode));
   if (Opts.InliningMode != NoRedundancy)
     Res.push_back("-analyzer-inlining-mode",
@@ -1267,6 +1267,8 @@ static bool ParseCodeGenArgs(CodeGenOptions &Opts, ArgList &Args, InputKind IK,
   Opts.CoverageFile = Args.getLastArgValue(OPT_coverage_file);
   Opts.DebugCompilationDir = Args.getLastArgValue(OPT_fdebug_compilation_dir);
   Opts.LinkBitcodeFile = Args.getLastArgValue(OPT_mlink_bitcode_file);
+  Opts.SSPBufferSize =
+    Args.getLastArgIntValue(OPT_stack_protector_buffer_size, 8, Diags);
   Opts.StackRealignment = Args.hasArg(OPT_mstackrealign);
   if (Arg *A = Args.getLastArg(OPT_mstack_alignment)) {
     StringRef Val = A->getValue(Args);
