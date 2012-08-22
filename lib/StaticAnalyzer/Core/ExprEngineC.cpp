@@ -211,8 +211,7 @@ void ExprEngine::VisitBlockExpr(const BlockExpr *BE, ExplodedNode *Pred,
   StmtNodeBuilder Bldr(Pred, Tmp, *currentBuilderContext);
   Bldr.generateNode(BE, Pred,
                     State->BindExpr(BE, Pred->getLocationContext(), V),
-                    false, 0,
-                    ProgramPoint::PostLValueKind);
+                    0, ProgramPoint::PostLValueKind);
   
   // FIXME: Move all post/pre visits to ::Visit().
   getCheckerManager().runCheckersForPostStmt(Dst, Tmp, BE, *this);
@@ -347,7 +346,7 @@ void ExprEngine::VisitCast(const CastExpr *CastE, const Expr *Ex,
           if (T->isReferenceType()) {
             // A bad_cast exception is thrown if input value is a reference.
             // Currently, we model this, by generating a sink.
-            Bldr.generateNode(CastE, Pred, state, true);
+            Bldr.generateSink(CastE, Pred, state);
             continue;
           } else {
             // If the cast fails on a pointer, bind to 0.
@@ -531,10 +530,28 @@ void ExprEngine::VisitLogicalExpr(const BinaryOperator* B, ExplodedNode *Pred,
   else {
     // If there is no terminator, by construction the last statement
     // in SrcBlock is the value of the enclosing expression.
+    // However, we still need to constrain that value to be 0 or 1.
     assert(!SrcBlock->empty());
     CFGStmt Elem = cast<CFGStmt>(*SrcBlock->rbegin());
-    const Stmt *S = Elem.getStmt();
-    X = N->getState()->getSVal(S, Pred->getLocationContext());
+    const Expr *RHS = cast<Expr>(Elem.getStmt());
+    SVal RHSVal = N->getState()->getSVal(RHS, Pred->getLocationContext());
+
+    DefinedOrUnknownSVal DefinedRHS = cast<DefinedOrUnknownSVal>(RHSVal);
+    ProgramStateRef StTrue, StFalse;
+    llvm::tie(StTrue, StFalse) = N->getState()->assume(DefinedRHS);
+    if (StTrue) {
+      if (StFalse) {
+        // We can't constrain the value to 0 or 1; the best we can do is a cast.
+        X = getSValBuilder().evalCast(RHSVal, B->getType(), RHS->getType());
+      } else {
+        // The value is known to be true.
+        X = getSValBuilder().makeIntVal(1, B->getType());
+      }
+    } else {
+      // The value is known to be false.
+      assert(StFalse && "Infeasible path!");
+      X = getSValBuilder().makeIntVal(0, B->getType());
+    }
   }
 
   Bldr.generateNode(B, Pred, state->BindExpr(B, Pred->getLocationContext(), X));
