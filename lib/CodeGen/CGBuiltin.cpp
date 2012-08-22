@@ -2358,6 +2358,17 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
   // Handle non-overloaded intrinsics first.
   switch (BuiltinID) {
   default: break;
+  case ARM64::BI__builtin_arm64_vshl_u64:
+  case ARM64::BI__builtin_arm64_vshld_u64:
+    usgn = true;
+    // FALLTHROUGH
+  case ARM64::BI__builtin_arm64_vshl_s64:
+  case ARM64::BI__builtin_arm64_vshld_s64: {
+    unsigned Int = usgn ? Intrinsic::arm64_neon_ushl :
+      Intrinsic::arm64_neon_sshl;
+    Ops.push_back(EmitScalarExpr(E->getArg(1)));
+    return EmitNeonCall(CGM.getIntrinsic(Int, Int64Ty), Ops, "vshl");
+  }
   case ARM64::BI__builtin_arm64_vqdmullh_lane_s16: {
     unsigned Int = Intrinsic::arm64_neon_sqdmull;
     // i16 is not a legal types for ARM64, so we can't just use

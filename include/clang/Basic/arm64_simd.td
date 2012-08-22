@@ -167,10 +167,13 @@ def VRSQRTS : IInst<"vrsqrts", "ddd", "fQfQd">;
 
 ////////////////////////////////////////////////////////////////////////////////
 // Shifts by signed variable
-def VSHL   : SInst<"vshl", "ddx", "csilUcUsUiUlQcQsQiQlQUcQUsQUiQUl">;
-def VQSHL  : SInst<"vqshl", "ddx", "csilUcUsUiUlQcQsQiQlQUcQUsQUiQUl">;
-def VRSHL  : SInst<"vrshl", "ddx", "csilUcUsUiUlQcQsQiQlQUcQUsQUiQUl">;
-def VQRSHL : SInst<"vqrshl", "ddx", "csilUcUsUiUlQcQsQiQlQUcQUsQUiQUl">;
+def VSHL   : SInst<"vshl", "ddx", "csiUcUsUiQcQsQiQlQUcQUsQUiQUl">;
+def VQSHL  : SInst<"vqshl", "ddx", "csiUcUsUiQcQsQiQlQUcQUsQUiQUl">;
+def VRSHL  : SInst<"vrshl", "ddx", "csiUcUsUiQcQsQiQlQUcQUsQUiQUl">;
+def VQRSHL : SInst<"vqrshl", "ddx", "csiUcUsUiQcQsQiQlQUcQUsQUiQUl">;
+
+def VSHL_  : SInst<"vshl", "sss", "RlRUl">;
+def VSHLD  : SInst<"vshld", "sss", "RlRUl">;
 
 ////////////////////////////////////////////////////////////////////////////////
 // Shifts by constant

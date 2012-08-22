@@ -87,6 +87,8 @@ def OP_QDMLAL : Op;
 def OP_QDMLSL : Op;
 def OP_QDMLSL_N : Op;
 def OP_QDMLAL_N : Op;
+def OP_SHL : Op;
+def OP_SHR : Op;
 
 class Inst <string n, string p, string t, Op o> {
   string Name = n;
