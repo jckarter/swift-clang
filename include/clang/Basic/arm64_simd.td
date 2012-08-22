@@ -172,8 +172,15 @@ def VQSHL  : SInst<"vqshl", "ddx", "csiUcUsUiQcQsQiQlQUcQUsQUiQUl">;
 def VRSHL  : SInst<"vrshl", "ddx", "csiUcUsUiQcQsQiQlQUcQUsQUiQUl">;
 def VQRSHL : SInst<"vqrshl", "ddx", "csiUcUsUiQcQsQiQlQUcQUsQUiQUl">;
 
-def VSHL_  : SInst<"vshl", "sss", "RlRUl">;
+// Scalar versions.
 def VSHLD  : SInst<"vshld", "sss", "RlRUl">;
+def VQSHLB : SInst<"vqshlb", "sss", "RcRUc">;
+def VQSHLH : SInst<"vqshlh", "sss", "RsRUs">;
+def VQSHLS : SInst<"vqshls", "sss", "RiRUi">;
+def VQSHLD : SInst<"vqshld", "sss", "RlRUl">;
+// Aliases w/o the size suffix.
+def VSHL_  : SInst<"vshl", "sss", "RlRUl">;
+def VQSHL_ : SInst<"vqshl", "sss", "RlRUl">;
 
 ////////////////////////////////////////////////////////////////////////////////
 // Shifts by constant
