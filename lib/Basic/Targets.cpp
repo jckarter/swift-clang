@@ -3314,6 +3314,7 @@ public:
     Builder.defineMacro("__arm64__");
     Builder.defineMacro("__aarch64__");
     Builder.defineMacro("__ARM_ARCH_8__");
+    Builder.defineMacro("__ARM64_ARCH_8__");
     Builder.defineMacro("__AARCH64_SIMD__");
 
     // Target properties.
