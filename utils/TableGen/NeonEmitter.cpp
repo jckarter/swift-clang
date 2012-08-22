@@ -689,11 +689,31 @@ static std::string BuiltinTypeString(const char mod, StringRef typestr,
   return quad ? "V16Sc" : "V8Sc";
 }
 
+static bool isScalarMod(unsigned char mod) {
+  switch (mod) {
+  default: break;
+  case 's': case 'a': case 'm': case 'o':
+  case 'r': case 'q': case 'z':
+    return true;
+  }
+  return false;
+}
+
+static char getScalarSuffix(char type) {
+  switch (type) {
+  default: llvm_unreachable("Invalid type!");
+  case 'c': return 'b';
+  case 'h': case 's': return 'h';
+  case 'f': case 'i': return 's';
+  case 'd': case 'l': return 'd';
+  }
+}
+
 /// MangleName - Append a type or width suffix to a base neon function name,
 /// and insert a 'q' in the appropriate location if the operation works on
 /// 128b rather than 64b.   E.g. turn "vst2_lane" into "vst2q_lane_f32", etc.
 static std::string MangleName(const std::string &name, StringRef typestr,
-                              ClassKind ck) {
+                              ClassKind ck, bool scal = false) {
   if (name == "vcvt_f32_f16")
     return name;
 
@@ -773,6 +793,11 @@ static std::string MangleName(const std::string &name, StringRef typestr,
   if (qsuffix) {
     size_t pos = s.find('_');
     s = s.insert(pos, "q");
+  }
+  // similarly for scalar suffices.
+  else if (scal) {
+    size_t pos = s.find('_');
+    s.insert(s.begin() + pos, getScalarSuffix(type));
   }
   return s;
 }
@@ -915,6 +940,7 @@ static std::string GenOpString(OpKind op, const std::string &proto,
   bool quad;
   unsigned nElts = GetNumElements(typestr, quad);
   bool define = UseMacro(proto);
+  bool scal = isScalarMod(proto[0]);
 
   std::string ts = TypeString(proto[0], typestr);
   std::string s;
@@ -1001,18 +1027,24 @@ static std::string GenOpString(OpKind op, const std::string &proto,
     s += "__a + " + MangleName("vmull", typestr, ClassS) + "(__b, __c);";
     break;
   case OpQdmlal:
-    s += "__a + " + MangleName("vqdmull", typestr, ClassS) + "(__b, __c);";
+    s += "__a + " + MangleName("vqdmull", typestr, ClassS, scal) + "(__b, __c);";
     break;
   case OpQdmlsl:
-    s += "__a - " + MangleName("vqdmull", typestr, ClassS) + "(__b, __c);";
+    s += "__a - " + MangleName("vqdmull", typestr, ClassS, scal) + "(__b, __c);";
     break;
   case OpQdmlalN:
-    s += "__a + " + MangleName("vqdmull", typestr, ClassS) + "(__b, " +
-                    Duplicate(nElts, typestr, "__c") + ");";
+    s += "__a + " + MangleName("vqdmull", typestr, ClassS, scal) + "(__b, ";
+    if (scal)
+      s += "__c);";
+    else
+      s += Duplicate(nElts, typestr, "__c") + ");";
     break;
   case OpQdmlslN:
-    s += "__a - " + MangleName("vqdmull", typestr, ClassS) + "(__b, " +
-                    Duplicate(nElts, typestr, "__c") + ");";
+    s += "__a - " + MangleName("vqdmull", typestr, ClassS, scal) + "(__b, ";
+    if (scal)
+      s += "__c);";
+    else
+      s += Duplicate(nElts, typestr, "__c") + ");";
     break;
   case OpMlsN:
     s += "__a - (__b * " + Duplicate(nElts, typestr, "__c") + ");";
@@ -1608,6 +1640,8 @@ void NeonEmitter::run(raw_ostream &OS) {
   emitIntrinsic(OS, Records.getDef("VMULL_HIGH"));
   emitIntrinsic(OS, Records.getDef("VABD"));
   emitIntrinsic(OS, Records.getDef("VQDMULL"));
+  emitIntrinsic(OS, Records.getDef("VQDMULLH"));
+  emitIntrinsic(OS, Records.getDef("VQDMULLS"));
 
 
   for (unsigned i = 0, e = RV.size(); i != e; ++i) {
@@ -1617,7 +1651,9 @@ void NeonEmitter::run(raw_ostream &OS) {
         R->getName() == "VMULL" ||
         R->getName() == "VMULL_HIGH" ||
         R->getName() == "VABD"  ||
-        R->getName() == "VQDMULL")
+        R->getName() == "VQDMULL" ||
+        R->getName() == "VQDMULLH" ||
+        R->getName() == "VQDMULLS")
       continue;
     emitIntrinsic(OS, R);
   }
