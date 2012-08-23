@@ -56,9 +56,10 @@ template <typename T> struct ProgramStateTrait {
   }
 };
 
-/// \class Stores the dynamic type information.
-/// Information about type of an object at runtime. This is used by dynamic
-/// dispatch implementation.
+/// \class DynamicTypeInfo
+///
+/// \brief Stores the currently inferred strictest bound on the runtime type
+/// of a region in a given state along the analysis path.
 class DynamicTypeInfo {
   QualType T;
   bool CanBeASubClass;
@@ -68,9 +69,14 @@ public:
   DynamicTypeInfo(QualType WithType, bool CanBeSub = true)
     : T(WithType), CanBeASubClass(CanBeSub) {}
 
+  /// \brief Return true if no dynamic type info is available.
   bool isValid() const { return !T.isNull(); }
 
+  /// \brief Returns the currently inferred upper bound on the runtime type.
   QualType getType() const { return T; }
+
+  /// \brief Returns false if the type T is the only type in the lattice
+  /// (the type information is precise), true otherwise.
   bool canBeASubClass() const { return CanBeASubClass; }
   
   void Profile(llvm::FoldingSetNodeID &ID) const {
@@ -210,11 +216,13 @@ public:
   // Binding and retrieving values to/from the environment and symbolic store.
   //==---------------------------------------------------------------------==//
 
-  /// BindCompoundLiteral - Return the state that has the bindings currently
-  ///  in this state plus the bindings for the CompoundLiteral.
+  /// \brief Create a new state with the specified CompoundLiteral binding.
+  /// \param CL the compound literal expression (the binding key)
+  /// \param LC the LocationContext of the binding
+  /// \param V the value to bind.
   ProgramStateRef bindCompoundLiteral(const CompoundLiteralExpr *CL,
-                                     const LocationContext *LC,
-                                     SVal V) const;
+                                      const LocationContext *LC,
+                                      SVal V) const;
 
   /// Create a new state by binding the value 'V' to the statement 'S' in the
   /// state's environment.
@@ -226,18 +234,16 @@ public:
   ProgramStateRef bindExprAndLocation(const Stmt *S,
                                           const LocationContext *LCtx,
                                           SVal location, SVal V) const;
-  
-  ProgramStateRef bindDecl(const VarRegion *VR, SVal V) const;
 
-  ProgramStateRef bindDeclWithNoInit(const VarRegion *VR) const;
-
-  ProgramStateRef bindLoc(Loc location, SVal V) const;
+  ProgramStateRef bindLoc(Loc location,
+                          SVal V,
+                          bool notifyChanges = true) const;
 
   ProgramStateRef bindLoc(SVal location, SVal V) const;
 
   ProgramStateRef bindDefault(SVal loc, SVal V) const;
 
-  ProgramStateRef unbindLoc(Loc LV) const;
+  ProgramStateRef killBinding(Loc LV) const;
 
   /// invalidateRegions - Returns the state with bindings for the given regions
   ///  cleared from the store. The regions are provided as a continuous array
