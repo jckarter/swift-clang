@@ -2487,6 +2487,54 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
   // Handle non-overloaded intrinsics first.
   switch (BuiltinID) {
   default: break;
+  case ARM64::BI__builtin_arm64_vrshl_u64:
+  case ARM64::BI__builtin_arm64_vrshld_u64:
+    usgn = true;
+    // FALLTHROUGH
+  case ARM64::BI__builtin_arm64_vrshl_s64:
+  case ARM64::BI__builtin_arm64_vrshld_s64: {
+    unsigned Int = usgn ? Intrinsic::arm64_neon_urshl :
+      Intrinsic::arm64_neon_srshl;
+    Ops.push_back(EmitScalarExpr(E->getArg(1)));
+    return EmitNeonCall(CGM.getIntrinsic(Int, Int64Ty), Ops, "vrshld");
+  }
+  case ARM64::BI__builtin_arm64_vqrshlb_u8:
+    Ops.push_back(EmitScalarExpr(E->getArg(1)));
+    return emitVectorWrappedScalar8Intrinsic(Intrinsic::arm64_neon_uqrshl,
+                                             Ops, "vqrshlb");
+  case ARM64::BI__builtin_arm64_vqrshlb_s8:
+    Ops.push_back(EmitScalarExpr(E->getArg(1)));
+    return emitVectorWrappedScalar8Intrinsic(Intrinsic::arm64_neon_sqrshl,
+                                             Ops, "vqrshlb");
+  case ARM64::BI__builtin_arm64_vqrshlh_u16:
+    Ops.push_back(EmitScalarExpr(E->getArg(1)));
+    return emitVectorWrappedScalar16Intrinsic(Intrinsic::arm64_neon_uqrshl,
+                                              Ops, "vqrshlh");
+  case ARM64::BI__builtin_arm64_vqrshlh_s16:
+    Ops.push_back(EmitScalarExpr(E->getArg(1)));
+    return emitVectorWrappedScalar16Intrinsic(Intrinsic::arm64_neon_sqrshl,
+                                              Ops, "vqrshlh");
+  case ARM64::BI__builtin_arm64_vqrshls_u32:
+    usgn = true;
+    // FALLTHROUGH
+  case ARM64::BI__builtin_arm64_vqrshls_s32: {
+    unsigned Int = usgn ? Intrinsic::arm64_neon_uqrshl :
+      Intrinsic::arm64_neon_sqrshl;
+    Ops.push_back(EmitScalarExpr(E->getArg(1)));
+    return EmitNeonCall(CGM.getIntrinsic(Int, Int32Ty), Ops, "vqrshls");
+  }
+  case ARM64::BI__builtin_arm64_vqrshl_u64:
+  case ARM64::BI__builtin_arm64_vqrshld_u64:
+    usgn = true;
+    // FALLTHROUGH
+  case ARM64::BI__builtin_arm64_vqrshl_s64:
+  case ARM64::BI__builtin_arm64_vqrshld_s64: {
+    unsigned Int = usgn ? Intrinsic::arm64_neon_uqrshl :
+      Intrinsic::arm64_neon_sqrshl;
+    Ops.push_back(EmitScalarExpr(E->getArg(1)));
+    return EmitNeonCall(CGM.getIntrinsic(Int, Int64Ty), Ops, "vqrshld");
+  }
+
   case ARM64::BI__builtin_arm64_vqshlb_u8:
     Ops.push_back(EmitScalarExpr(E->getArg(1)));
     return emitVectorWrappedScalar8Intrinsic(Intrinsic::arm64_neon_uqshl,
