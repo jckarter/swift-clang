@@ -266,11 +266,11 @@ Sema::CheckBuiltinFunctionCall(unsigned BuiltinID, CallExpr *TheCall) {
   case Builtin::BI__sync_swap_4:
   case Builtin::BI__sync_swap_8:
   case Builtin::BI__sync_swap_16:
-    return SemaBuiltinAtomicOverloaded(move(TheCallResult));
+    return SemaBuiltinAtomicOverloaded(TheCallResult);
 #define BUILTIN(ID, TYPE, ATTRS)
 #define ATOMIC_BUILTIN(ID, TYPE, ATTRS) \
   case Builtin::BI##ID: \
-    return SemaAtomicOpsOverloaded(move(TheCallResult), AtomicExpr::AO##ID);
+    return SemaAtomicOpsOverloaded(TheCallResult, AtomicExpr::AO##ID);
 #include "clang/Basic/Builtins.def"
   case Builtin::BI__builtin_annotation:
     if (SemaBuiltinAnnotation(*this, TheCall))
@@ -299,7 +299,7 @@ Sema::CheckBuiltinFunctionCall(unsigned BuiltinID, CallExpr *TheCall) {
     }
   }
 
-  return move(TheCallResult);
+  return TheCallResult;
 }
 
 // Get the valid immediate range for the specified NEON type code.
@@ -1243,7 +1243,7 @@ Sema::SemaBuiltinAtomicOverloaded(ExprResult TheCallResult) {
   // gracefully.
   TheCall->setType(ResultType);
 
-  return move(TheCallResult);
+  return TheCallResult;
 }
 
 /// CheckObjCString - Checks that the argument to the builtin
@@ -2190,7 +2190,7 @@ void CheckFormatHandler::EmitFormatDiagnostic(PartialDiagnostic PDiag,
 /// \brief If the format string is not within the funcion call, emit a note
 /// so that the function call and string are in diagnostic messages.
 ///
-/// \param inFunctionCall if true, the format string is within the function
+/// \param InFunctionCall if true, the format string is within the function
 /// call and only one diagnostic message will be produced.  Otherwise, an
 /// extra note will be emitted pointing to location of the format string.
 ///
@@ -2213,7 +2213,7 @@ void CheckFormatHandler::EmitFormatDiagnostic(PartialDiagnostic PDiag,
 /// \param StringRange some or all of the string to highlight.  This is
 /// templated so it can accept either a CharSourceRange or a SourceRange.
 ///
-/// \param Fixit optional fix it hint for the format string.
+/// \param FixIt optional fix it hint for the format string.
 template<typename Range>
 void CheckFormatHandler::EmitFormatDiagnostic(Sema &S, bool InFunctionCall,
                                               const Expr *ArgumentExpr,
