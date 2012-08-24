@@ -2487,6 +2487,18 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
   // Handle non-overloaded intrinsics first.
   switch (BuiltinID) {
   default: break;
+  case ARM64::BI__builtin_arm64_vrsqrtss_f32:
+    Ops.push_back(EmitScalarExpr(E->getArg(1)));
+    return EmitNeonCall(CGM.getIntrinsic(Intrinsic::arm64_neon_frsqrts,
+                                         FloatTy),
+                        Ops, "vrsqrtss");
+
+  case ARM64::BI__builtin_arm64_vrsqrtsd_f64:
+    Ops.push_back(EmitScalarExpr(E->getArg(1)));
+    return EmitNeonCall(CGM.getIntrinsic(Intrinsic::arm64_neon_frsqrts,
+                                         DoubleTy),
+                        Ops, "vrsqrtsd");
+
   case ARM64::BI__builtin_arm64_vrshl_u64:
   case ARM64::BI__builtin_arm64_vrshld_u64:
     usgn = true;

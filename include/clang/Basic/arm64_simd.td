@@ -166,6 +166,9 @@ def VPMIN : SInst<"vpmin", "ddd", "csiUcUsUifQcQsQiQUcQUsQUiQfQd">;
 // Reciprocal/Sqrt
 def VRECPS  : IInst<"vrecps", "ddd", "fQfQd">;
 def VRSQRTS : IInst<"vrsqrts", "ddd", "fQfQd">;
+// Scalar.
+def VRSQRTSS : SInst<"vrsqrtss", "sss", "f">;
+def VRSQRTSD : SInst<"vrsqrtsd", "sss", "d">;
 
 ////////////////////////////////////////////////////////////////////////////////
 // Shifts by signed variable
