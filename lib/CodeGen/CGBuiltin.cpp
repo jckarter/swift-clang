@@ -2487,15 +2487,22 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
   // Handle non-overloaded intrinsics first.
   switch (BuiltinID) {
   default: break;
-  case ARM64::BI__builtin_arm64_vqshlh_u16:
-    usgn = true;
-    // FALLTHROUGH
-  case ARM64::BI__builtin_arm64_vqshlh_s16: {
-    unsigned Int = usgn ? Intrinsic::arm64_neon_uqshl :
-      Intrinsic::arm64_neon_sqshl;
+  case ARM64::BI__builtin_arm64_vqshlb_u8:
     Ops.push_back(EmitScalarExpr(E->getArg(1)));
-    return emitVectorWrappedScalar16Intrinsic(Int, Ops, "vqshlh");
-  }
+    return emitVectorWrappedScalar8Intrinsic(Intrinsic::arm64_neon_uqshl,
+                                             Ops, "vqshlb");
+  case ARM64::BI__builtin_arm64_vqshlb_s8:
+    Ops.push_back(EmitScalarExpr(E->getArg(1)));
+    return emitVectorWrappedScalar8Intrinsic(Intrinsic::arm64_neon_sqshl,
+                                             Ops, "vqshlb");
+  case ARM64::BI__builtin_arm64_vqshlh_u16:
+    Ops.push_back(EmitScalarExpr(E->getArg(1)));
+    return emitVectorWrappedScalar16Intrinsic(Intrinsic::arm64_neon_uqshl,
+                                              Ops, "vqshlh");
+  case ARM64::BI__builtin_arm64_vqshlh_s16:
+    Ops.push_back(EmitScalarExpr(E->getArg(1)));
+    return emitVectorWrappedScalar16Intrinsic(Intrinsic::arm64_neon_sqshl,
+                                              Ops, "vqshlh");
   case ARM64::BI__builtin_arm64_vqshls_u32:
     usgn = true;
     // FALLTHROUGH
