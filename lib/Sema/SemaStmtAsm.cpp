@@ -99,10 +99,10 @@ StmtResult Sema::ActOnAsmStmt(SourceLocation AsmLoc, bool IsSimple,
                               SourceLocation RParenLoc) {
   unsigned NumClobbers = clobbers.size();
   StringLiteral **Constraints =
-    reinterpret_cast<StringLiteral**>(constraints.get());
-  Expr **Exprs = exprs.get();
+    reinterpret_cast<StringLiteral**>(constraints.data());
+  Expr **Exprs = exprs.data();
   StringLiteral *AsmString = cast<StringLiteral>(asmString);
-  StringLiteral **Clobbers = reinterpret_cast<StringLiteral**>(clobbers.get());
+  StringLiteral **Clobbers = reinterpret_cast<StringLiteral**>(clobbers.data());
 
   SmallVector<TargetInfo::ConstraintInfo, 4> OutputConstraintInfos;
 
@@ -458,7 +458,8 @@ static std::string buildMSAsmString(Sema &SemaRef, ArrayRef<Token> AsmToks,
   MSAsmStmt *NS =                                                          \
     new (Context) MSAsmStmt(Context, AsmLoc, LBraceLoc, /*IsSimple*/ true, \
                             /*IsVolatile*/ true, AsmToks, Inputs, Outputs, \
-                            AsmString, Clobbers, EndLoc);
+                            InputExprs, OutputExprs, AsmString, Clobbers,  \
+                            EndLoc);
 
 StmtResult Sema::ActOnMSAsmStmt(SourceLocation AsmLoc,
                                 SourceLocation LBraceLoc,
@@ -470,6 +471,8 @@ StmtResult Sema::ActOnMSAsmStmt(SourceLocation AsmLoc,
   std::set<std::string> ClobberRegs;
   SmallVector<IdentifierInfo*, 4> Inputs;
   SmallVector<IdentifierInfo*, 4> Outputs;
+  SmallVector<Expr*, 4> InputExprs;
+  SmallVector<Expr*, 4> OutputExprs;
 
   // Empty asm statements don't need to instantiate the AsmParser, etc.
   if (AsmToks.empty()) {
@@ -506,11 +509,11 @@ StmtResult Sema::ActOnMSAsmStmt(SourceLocation AsmLoc,
   OwningPtr<llvm::MCSubtargetInfo>
     STI(TheTarget->createMCSubtargetInfo(TT, "", ""));
 
-  for (unsigned i = 0, e = AsmStrings.size(); i != e; ++i) {
+  for (unsigned StrIdx = 0, e = AsmStrings.size(); StrIdx != e; ++StrIdx) {
     llvm::SourceMgr SrcMgr;
     llvm::MCContext Ctx(*MAI, *MRI, MOFI.get(), &SrcMgr);
     llvm::MemoryBuffer *Buffer =
-      llvm::MemoryBuffer::getMemBuffer(AsmStrings[i], "<inline asm>");
+      llvm::MemoryBuffer::getMemBuffer(AsmStrings[StrIdx], "<inline asm>");
 
     // Tell SrcMgr about this buffer, which is what the parser will pick up.
     SrcMgr.AddNewSourceBuffer(Buffer, llvm::SMLoc());
@@ -562,14 +565,14 @@ StmtResult Sema::ActOnMSAsmStmt(SourceLocation AsmLoc,
 
     // Build the list of clobbers, outputs and inputs.
     unsigned NumDefs = Desc.getNumDefs();
-    for (unsigned j = 0, e = Inst.getNumOperands(); j != e; ++j) {
-      const llvm::MCOperand &Op = Inst.getOperand(j);
+    for (unsigned i = 0, e = Inst.getNumOperands(); i != e; ++i) {
+      const llvm::MCOperand &Op = Inst.getOperand(i);
 
       // Immediate.
       if (Op.isImm() || Op.isFPImm())
         continue;
 
-      bool isDef = NumDefs && (j < NumDefs);
+      bool isDef = NumDefs && (i < NumDefs);
 
       // Register/Clobber.
       if (Op.isReg() && isDef) {
@@ -591,10 +594,18 @@ StmtResult Sema::ActOnMSAsmStmt(SourceLocation AsmLoc,
         if ((SymRef = dyn_cast<llvm::MCSymbolRefExpr>(Expr))) {
           StringRef Name = SymRef->getSymbol().getName();
           IdentifierInfo *II = getIdentifierInfo(Name, AsmToks,
-                                                 AsmTokRanges[i].first,
-                                                 AsmTokRanges[i].second);
-          if (II)
-            isDef ? Outputs.push_back(II) : Inputs.push_back(II);
+                                                 AsmTokRanges[StrIdx].first,
+                                                 AsmTokRanges[StrIdx].second);
+          if (II) {
+            // FIXME: Compute the InputExpr/OutputExpr using ActOnIdExpression().
+            if (isDef) {
+              Outputs.push_back(II);
+              OutputExprs.push_back(0);
+            } else {
+              Inputs.push_back(II);
+              InputExprs.push_back(0);
+            }
+          }
         }
       }
     }
@@ -606,6 +617,7 @@ StmtResult Sema::ActOnMSAsmStmt(SourceLocation AsmLoc,
   MSAsmStmt *NS =
     new (Context) MSAsmStmt(Context, AsmLoc, LBraceLoc, IsSimple,
                             /*IsVolatile*/ true, AsmToks, Inputs, Outputs,
-                            AsmString, Clobbers, EndLoc);
+                            InputExprs, OutputExprs, AsmString, Clobbers,
+                            EndLoc);
   return Owned(NS);
 }
