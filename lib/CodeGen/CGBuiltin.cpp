@@ -3296,9 +3296,24 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     Int = Intrinsic::arm64_neon_fmaxnm;
     return EmitNeonCall(CGM.getIntrinsic(Int, Ty), Ops, "vmaxnm");
   case ARM64::BI__builtin_arm64_vrecps_v:
-  case ARM64::BI__builtin_arm64_vrecpsq_v:
+  case ARM64::BI__builtin_arm64_vrecpsq_v: {
+    llvm::Type *Ty = (BuiltinID == ARM64::BI__builtin_arm64_vrecpss_f32) ? 
+                     FloatTy : DoubleTy;
     Int = Intrinsic::arm64_neon_frecps;
     return EmitNeonCall(CGM.getIntrinsic(Int, Ty), Ops, "vrecps");
+  }
+  case ARM64::BI__builtin_arm64_vrecpss_f32: {
+    llvm::Type *f32Type = llvm::Type::getFloatTy(getLLVMContext());
+    Ops.push_back(EmitScalarExpr(E->getArg(1)));
+    return EmitNeonCall(CGM.getIntrinsic(Intrinsic::arm64_sisd_recp, f32Type),
+                        Ops, "vrecps");
+  }
+  case ARM64::BI__builtin_arm64_vrecpsd_f64: {
+    llvm::Type *f64Type = llvm::Type::getDoubleTy(getLLVMContext());
+    Ops.push_back(EmitScalarExpr(E->getArg(1)));
+    return EmitNeonCall(CGM.getIntrinsic(Intrinsic::arm64_sisd_recp, f64Type),
+                        Ops, "vrecps");
+  }
   case ARM64::BI__builtin_arm64_vrsqrts_v:
   case ARM64::BI__builtin_arm64_vrsqrtsq_v:
     Int = Intrinsic::arm64_neon_frsqrts;

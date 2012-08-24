@@ -74,6 +74,8 @@ def VMULXS : SInst<"vmulxs", "sss", "f">;
 def VMULXD : SInst<"vmulxd", "sss", "d">;
 def VMAXNMP : SInst<"vpmaxnm", "ddd", "fQfQd">;
 def VMINNMP : SInst<"vpminnm", "ddd", "fQfQd">;
+def VRECPSS : SInst<"vrecpss", "sss", "f">;
+def VRECPSD : SInst<"vrecpsd", "sss", "d">;
 def VSQRT : SInst<"vsqrt", "dd", "fQfQd">;
 
 ////////////////////////////////////////////////////////////////////////////////
