@@ -22,6 +22,7 @@
 #include "clang/AST/ASTContext.h"
 #include "clang/ASTMatchers/ASTMatchFinder.h"
 #include "clang/Tooling/Tooling.h"
+#include "llvm/ADT/SmallString.h"
 #include "gtest/gtest.h"
 
 using namespace clang;
@@ -509,6 +510,7 @@ TEST(DeclPrinter, TestCXXConstructorDecl10) {
     // WRONG; Should be: "A(const A &a);"
 }
 
+#if !defined(_MSC_VER)
 TEST(DeclPrinter, TestCXXConstructorDecl11) {
   ASSERT_TRUE(PrintedDeclCXX11Matches(
     "template<typename... T>"
@@ -519,7 +521,7 @@ TEST(DeclPrinter, TestCXXConstructorDecl11) {
     "A<T...>(T &&ts...) : T(ts)"));
     // WRONG; Should be: "A(T&&... ts) : T(ts)..."
 }
-
+#endif
 
 TEST(DeclPrinter, TestCXXDestructorDecl1) {
   ASSERT_TRUE(PrintedDeclMatches(
@@ -1237,4 +1239,3 @@ TEST(DeclPrinter, TestTemplateArgumentList15) {
     "Z<sizeof...(T)> A"));
     // Should be: with semicolon, without extra space in "> >"
 }
-
