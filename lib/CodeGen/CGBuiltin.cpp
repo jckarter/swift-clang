@@ -3368,10 +3368,8 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     return EmitNeonCall(CGM.getIntrinsic(Int, Ty), Ops, "vmaxnm");
   case ARM64::BI__builtin_arm64_vrecps_v:
   case ARM64::BI__builtin_arm64_vrecpsq_v: {
-    llvm::Type *Ty = (BuiltinID == ARM64::BI__builtin_arm64_vrecpss_f32) ? 
-                     FloatTy : DoubleTy;
-    Int = Intrinsic::arm64_neon_frecps;
-    return EmitNeonCall(CGM.getIntrinsic(Int, Ty), Ops, "vrecps");
+    return EmitNeonCall(CGM.getIntrinsic(Intrinsic::arm64_neon_frecps, Ty),
+                        Ops, "vrecps");
   }
   case ARM64::BI__builtin_arm64_vrecpss_f32: {
     llvm::Type *f32Type = llvm::Type::getFloatTy(getLLVMContext());
