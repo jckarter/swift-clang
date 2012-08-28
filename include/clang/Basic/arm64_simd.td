@@ -397,9 +397,9 @@ def VCREATE: Inst<"vcreate", "dl", "csihfUcUsUiUlPcPsl", OP_CAST>;
 ////////////////////////////////////////////////////////////////////////////////
 // Set all lanes to same value
 def VDUP_N : Inst<"vdup_n", "ds",
-                  "UcUsUicsiPcPsfQUcQUsQUiQcQsQiQPcQPsQflUlQlQUl", OP_DUP>;
+                  "UcUsUicsiPcPsfQUcQUsQUiQcQsQiQPcQPsQfQdlUlQlQUl", OP_DUP>;
 def VMOV_N : Inst<"vmov_n", "ds",
-                  "UcUsUicsiPcPsfQUcQUsQUiQcQsQiQPcQPsQflUlQlQUl", OP_DUP>;
+                  "UcUsUicsiPcPsfQUcQUsQUiQcQsQiQPcQPsQfQdlUlQlQUl", OP_DUP>;
 def VDUP_LANE : Inst<"vdup_lane", "dgi",
                      "UcUsUicsiPcPsfQUcQUsQUiQcQsQiQPcQPsQfQdQlQUl",OP_DUP_LN>;
 
