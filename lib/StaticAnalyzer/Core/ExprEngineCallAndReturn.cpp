@@ -18,6 +18,7 @@
 #include "clang/StaticAnalyzer/Core/PathSensitive/ExprEngine.h"
 #include "clang/StaticAnalyzer/Core/PathSensitive/CallEvent.h"
 #include "clang/AST/DeclCXX.h"
+#include "clang/AST/ParentMap.h"
 #include "llvm/ADT/SmallSet.h"
 #include "llvm/ADT/Statistic.h"
 #include "llvm/Support/SaveAndRestore.h"
@@ -27,6 +28,9 @@ using namespace ento;
 
 STATISTIC(NumOfDynamicDispatchPathSplits,
   "The # of times we split the path due to imprecise dynamic dispatch info");
+
+STATISTIC(NumInlinedCalls,
+  "The # of times we inlined a call");
 
 void ExprEngine::processCallEnter(CallEnter CE, ExplodedNode *Pred) {
   // Get the entry block in the CFG of the callee.
@@ -340,13 +344,6 @@ bool ExprEngine::inlineCall(const CallEvent &Call, const Decl *D,
     if (!shouldInlineCXX(getAnalysisManager()))
       return false;
 
-    // Only inline constructors and destructors if we built the CFGs for them
-    // properly.
-    const AnalysisDeclContext *ADC = CallerSFC->getAnalysisDeclContext();
-    if (!ADC->getCFGBuildOptions().AddImplicitDtors ||
-        !ADC->getCFGBuildOptions().AddInitializers)
-      return false;
-
     const CXXConstructorCall &Ctor = cast<CXXConstructorCall>(Call);
 
     // FIXME: We don't handle constructors or destructors for arrays properly.
@@ -354,9 +351,28 @@ bool ExprEngine::inlineCall(const CallEvent &Call, const Decl *D,
     if (Target && isa<ElementRegion>(Target))
       return false;
 
+    // FIXME: This is a hack. We don't use the correct region for a new
+    // expression, so if we inline the constructor its result will just be
+    // thrown away. This short-term hack is tracked in <rdar://problem/12180598>
+    // and the longer-term possible fix is discussed in PR12014.
+    const CXXConstructExpr *CtorExpr = Ctor.getOriginExpr();
+    if (const Stmt *Parent = CurLC->getParentMap().getParent(CtorExpr))
+      if (isa<CXXNewExpr>(Parent))
+        return false;
+
+    // If the destructor is trivial, it's always safe to inline the constructor.
+    if (Ctor.getDecl()->getParent()->hasTrivialDestructor())
+      break;
+    
+    // For other types, only inline constructors if we built the CFGs for the
+    // destructor properly.
+    const AnalysisDeclContext *ADC = CallerSFC->getAnalysisDeclContext();
+    assert(ADC->getCFGBuildOptions().AddInitializers && "No CFG initializers");
+    if (!ADC->getCFGBuildOptions().AddImplicitDtors)
+      return false;
+
     // FIXME: This is a hack. We don't handle temporary destructors
     // right now, so we shouldn't inline their constructors.
-    const CXXConstructExpr *CtorExpr = Ctor.getOriginExpr();
     if (CtorExpr->getConstructionKind() == CXXConstructExpr::CK_Complete)
       if (!Target || !isa<DeclRegion>(Target))
         return false;
@@ -370,8 +386,7 @@ bool ExprEngine::inlineCall(const CallEvent &Call, const Decl *D,
     // Only inline constructors and destructors if we built the CFGs for them
     // properly.
     const AnalysisDeclContext *ADC = CallerSFC->getAnalysisDeclContext();
-    if (!ADC->getCFGBuildOptions().AddImplicitDtors ||
-        !ADC->getCFGBuildOptions().AddInitializers)
+    if (!ADC->getCFGBuildOptions().AddImplicitDtors)
       return false;
 
     const CXXDestructorCall &Dtor = cast<CXXDestructorCall>(Call);
@@ -438,6 +453,8 @@ bool ExprEngine::inlineCall(const CallEvent &Call, const Decl *D,
   // If we decided to inline the call, the successor has been manually
   // added onto the work list so remove it from the node builder.
   Bldr.takeNodes(Pred);
+
+  NumInlinedCalls++;
 
   return true;
 }
