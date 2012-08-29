@@ -4571,7 +4571,7 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     llvm::Type *Tys[2] = { VTy, ArgTy };
     return EmitNeonCall(CGM.getIntrinsic(Int, Tys), Ops, "vsubw_high");
   }
-  case ARM64::BI__builtin_arm64_vqxtn_high_v: {
+  case ARM64::BI__builtin_arm64_vqmovn_high_v: {
     Int = usgn ? Intrinsic::arm64_neon_uqxtn2 : Intrinsic::arm64_neon_sqxtn2;
     unsigned NumElts = VTy->getNumElements();
     unsigned BitWidth =cast<IntegerType>(VTy->getElementType())->getBitWidth();
@@ -4581,7 +4581,7 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     llvm::Type *Tys[2] = { VTy, ArgTy };
     return EmitNeonCall(CGM.getIntrinsic(Int, Tys), Ops, "vsubw_high");
   }
-  case ARM64::BI__builtin_arm64_vqxtun_high_v: {
+  case ARM64::BI__builtin_arm64_vqmovun_high_v: {
     Int = Intrinsic::arm64_neon_sqxtun2;
     unsigned NumElts = VTy->getNumElements();
     unsigned BitWidth =cast<IntegerType>(VTy->getElementType())->getBitWidth();
