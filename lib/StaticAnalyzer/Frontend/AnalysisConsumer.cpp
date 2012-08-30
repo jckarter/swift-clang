@@ -34,7 +34,7 @@
 
 #include "clang/Basic/FileManager.h"
 #include "clang/Basic/SourceManager.h"
-#include "clang/Frontend/AnalyzerOptions.h"
+#include "clang/StaticAnalyzer/AnalyzerOptions.h"
 #include "clang/Lex/Preprocessor.h"
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Support/Path.h"
@@ -189,7 +189,7 @@ public:
       default:
 #define ANALYSIS_DIAGNOSTICS(NAME, CMDFLAG, DESC, CREATEFN, AUTOCREATE) \
         case PD_##NAME: CREATEFN(PathConsumers, OutDir, PP); break;
-#include "clang/Frontend/Analyses.def"
+#include "clang/StaticAnalyzer/Analyses.def"
       }
     } else if (Opts.AnalysisDiagOpt == PD_TEXT) {
       // Create the text client even without a specified output file since
@@ -203,7 +203,7 @@ public:
       llvm_unreachable("Unknown store manager.");
 #define ANALYSIS_STORE(NAME, CMDFLAG, DESC, CREATEFN)           \
       case NAME##Model: CreateStoreMgr = CREATEFN; break;
-#include "clang/Frontend/Analyses.def"
+#include "clang/StaticAnalyzer/Analyses.def"
     }
 
     switch (Opts.AnalysisConstraintsOpt) {
@@ -211,7 +211,7 @@ public:
       llvm_unreachable("Unknown store manager.");
 #define ANALYSIS_CONSTRAINTS(NAME, CMDFLAG, DESC, CREATEFN)     \
       case NAME##Model: CreateConstraintMgr = CREATEFN; break;
-#include "clang/Frontend/Analyses.def"
+#include "clang/StaticAnalyzer/Analyses.def"
     }
   }
 
@@ -255,22 +255,7 @@ public:
                                   CreateStoreMgr,
                                   CreateConstraintMgr,
                                   checkerMgr.get(),
-                                  Opts.Config,
-                                  Opts.MaxNodes,
-                                  Opts.MaxLoop,
-                                  Opts.VisualizeEGDot,
-                                  Opts.VisualizeEGUbi,
-                                  Opts.AnalysisPurgeOpt,
-                                  Opts.EagerlyAssume,
-                                  Opts.TrimGraph,
-                                  Opts.UnoptimizedCFG,
-                                  Opts.CFGAddImplicitDtors,
-                                  Opts.EagerlyTrimEGraph,
-                                  Opts.IPAMode,
-                                  Opts.InlineMaxStackDepth,
-                                  Opts.InlineMaxFunctionSize,
-                                  Opts.InliningMode,
-                                  Opts.NoRetryExhausted));
+                                  Opts));
   }
 
   /// \brief Store the top level decls in the set to be processed later on.
@@ -426,7 +411,7 @@ void AnalysisConsumer::HandleDeclsGallGraph(const unsigned LocalTUDeclsSize) {
     Decl *D = N->getDecl();
     assert(D);
     HandleCode(D, ANALYSIS_PATH,
-               (Mgr->InliningMode == All ? 0 : &VisitedCallees));
+               (Mgr->options.InliningMode == All ? 0 : &VisitedCallees));
 
     // Add the visited callees to the global visited set.
     for (SetOfConstDecls::iterator I = VisitedCallees.begin(),
@@ -588,22 +573,22 @@ void AnalysisConsumer::ActionExprEngine(Decl *D, bool ObjCGCEnabled,
 
   // Set the graph auditor.
   OwningPtr<ExplodedNode::Auditor> Auditor;
-  if (Mgr->shouldVisualizeUbigraph()) {
+  if (Mgr->options.visualizeExplodedGraphWithUbiGraph) {
     Auditor.reset(CreateUbiViz());
     ExplodedNode::SetAuditor(Auditor.get());
   }
 
   // Execute the worklist algorithm.
   Eng.ExecuteWorkList(Mgr->getAnalysisDeclContextManager().getStackFrame(D),
-                      Mgr->getMaxNodes());
+                      Mgr->options.MaxNodes);
 
   // Release the auditor (if any) so that it doesn't monitor the graph
   // created BugReporter.
   ExplodedNode::SetAuditor(0);
 
   // Visualize the exploded graph.
-  if (Mgr->shouldVisualizeGraphviz())
-    Eng.ViewGraph(Mgr->shouldTrimGraph());
+  if (Mgr->options.visualizeExplodedGraphWithGraphViz)
+    Eng.ViewGraph(Mgr->options.TrimGraph);
 
   // Display warnings.
   Eng.getBugReporter().FlushReports();
