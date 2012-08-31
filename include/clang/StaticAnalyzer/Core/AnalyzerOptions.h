@@ -18,6 +18,7 @@
 #include <string>
 #include <vector>
 #include "llvm/ADT/StringMap.h"
+#include "llvm/ADT/IntrusiveRefCntPtr.h"
 
 namespace clang {
 class ASTConsumer;
@@ -28,21 +29,21 @@ class LangOptions;
 /// Analysis - Set of available source code analyses.
 enum Analyses {
 #define ANALYSIS(NAME, CMDFLAG, DESC, SCOPE) NAME,
-#include "clang/StaticAnalyzer/Analyses.def"
+#include "clang/StaticAnalyzer/Core/Analyses.def"
 NumAnalyses
 };
 
 /// AnalysisStores - Set of available analysis store models.
 enum AnalysisStores {
 #define ANALYSIS_STORE(NAME, CMDFLAG, DESC, CREATFN) NAME##Model,
-#include "clang/StaticAnalyzer/Analyses.def"
+#include "clang/StaticAnalyzer/Core/Analyses.def"
 NumStores
 };
 
 /// AnalysisConstraints - Set of available constraint models.
 enum AnalysisConstraints {
 #define ANALYSIS_CONSTRAINTS(NAME, CMDFLAG, DESC, CREATFN) NAME##Model,
-#include "clang/StaticAnalyzer/Analyses.def"
+#include "clang/StaticAnalyzer/Core/Analyses.def"
 NumConstraints
 };
 
@@ -50,32 +51,32 @@ NumConstraints
 ///  analysis results.
 enum AnalysisDiagClients {
 #define ANALYSIS_DIAGNOSTICS(NAME, CMDFLAG, DESC, CREATFN, AUTOCREAT) PD_##NAME,
-#include "clang/StaticAnalyzer/Analyses.def"
+#include "clang/StaticAnalyzer/Core/Analyses.def"
 NUM_ANALYSIS_DIAG_CLIENTS
 };
 
 /// AnalysisPurgeModes - Set of available strategies for dead symbol removal.
 enum AnalysisPurgeMode {
 #define ANALYSIS_PURGE(NAME, CMDFLAG, DESC) NAME,
-#include "clang/StaticAnalyzer/Analyses.def"
+#include "clang/StaticAnalyzer/Core/Analyses.def"
 NumPurgeModes
 };
 
 /// AnalysisIPAMode - Set of inter-procedural modes.
 enum AnalysisIPAMode {
 #define ANALYSIS_IPA(NAME, CMDFLAG, DESC) NAME,
-#include "clang/StaticAnalyzer/Analyses.def"
+#include "clang/StaticAnalyzer/Core/Analyses.def"
 NumIPAModes
 };
 
 /// AnalysisInlineFunctionSelection - Set of inlining function selection heuristics.
 enum AnalysisInliningMode {
 #define ANALYSIS_INLINING_MODE(NAME, CMDFLAG, DESC) NAME,
-#include "clang/StaticAnalyzer/Analyses.def"
+#include "clang/StaticAnalyzer/Core/Analyses.def"
 NumInliningModes
 };
 
-class AnalyzerOptions {
+class AnalyzerOptions : public llvm::RefCountedBase<AnalyzerOptions> {
 public:
   typedef llvm::StringMap<std::string> ConfigTable;
 
@@ -144,7 +145,7 @@ public:
     AnalysisConstraintsOpt = RangeConstraintsModel;
     AnalysisDiagOpt = PD_HTML;
     AnalysisPurgeOpt = PurgeStmt;
-    IPAMode = BasicInlining;
+    IPAMode = DynamicDispatchBifurcate;
     ShowCheckerHelp = 0;
     AnalyzeAll = 0;
     AnalyzerDisplayProgress = 0;
@@ -164,7 +165,9 @@ public:
     InliningMode = NoRedundancy;
   }
 };
-
+  
+typedef llvm::IntrusiveRefCntPtr<AnalyzerOptions> AnalyzerOptionsRef;
+  
 }
 
 #endif

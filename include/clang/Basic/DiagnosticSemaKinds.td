@@ -3549,6 +3549,9 @@ def err_arc_illegal_selector : Error<
   "ARC forbids use of %0 in a @selector">;
 def err_arc_illegal_method_def : Error<
   "ARC forbids implementation of %0">;
+def warn_arc_strong_pointer_objc_pointer : Warning<
+  "method parameter of type %0 with no explicit ownership">,
+  InGroup<DiagGroup<"explicit-ownership-type">>, DefaultIgnore;
   
 } // end "ARC Restrictions" category
   
@@ -4906,6 +4909,8 @@ def err_typecheck_call_too_many_args_at_most_one : Error<
 def note_callee_decl : Note<
   "%0 declared here">;
 def note_defined_here : Note<"%0 defined here">;
+
+def err_builtin_fn_use : Error<"builtin functions must be directly called">;
 
 def warn_call_wrong_number_of_arguments : Warning<
   "too %select{few|many}0 arguments in call to %1">;
