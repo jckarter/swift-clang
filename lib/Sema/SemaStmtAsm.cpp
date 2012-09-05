@@ -570,8 +570,8 @@ StmtResult Sema::ActOnMSAsmStmt(SourceLocation AsmLoc,
     unsigned NumDefs = Desc.getNumDefs();
     for (unsigned i = 1, e = Operands.size(); i != e; ++i) {
       unsigned NumMCOperands;
-      unsigned MCIdx = TargetParser->GetMCInstOperandNum(Kind, Inst, Operands, i,
-                                                         NumMCOperands);
+      unsigned MCIdx = TargetParser->getMCInstOperandNum(Kind, Inst, Operands,
+                                                         i, NumMCOperands);
       assert (NumMCOperands && "Expected at least 1 MCOperand!");
       // If we have a one-to-many mapping, then search for the MCExpr.
       if (NumMCOperands > 1) {
@@ -624,7 +624,8 @@ StmtResult Sema::ActOnMSAsmStmt(SourceLocation AsmLoc,
             ExprResult Result = ActOnIdExpression(getCurScope(), SS, Loc, Id,
                                                   false, false);
             if (!Result.isInvalid()) {
-              if (isDef) {
+              bool isMemDef = (i == 1) && Desc.mayStore();
+              if (isDef || isMemDef) {
                 Outputs.push_back(II);
                 OutputExprs.push_back(Result.take());
                 OutputConstraints.push_back("=r");
