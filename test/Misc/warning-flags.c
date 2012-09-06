@@ -18,7 +18,7 @@ This test serves two purposes:
 
 The list of warnings below should NEVER grow.  It should gradually shrink to 0.
 
-CHECK: Warnings without flags (159):
+CHECK: Warnings without flags (160):
 CHECK-NEXT:   ext_delete_void_ptr_operand
 CHECK-NEXT:   ext_enum_friend
 CHECK-NEXT:   ext_expected_semi_decl_list
@@ -104,6 +104,7 @@ CHECK-NEXT:   warn_maynot_respond
 CHECK-NEXT:   warn_member_extra_qualification
 CHECK-NEXT:   warn_method_param_redefinition
 CHECK-NEXT:   warn_mismatched_exception_spec
+CHECK-NEXT:   warn_mismatched_size_modifier
 CHECK-NEXT:   warn_missing_case_for_condition
 CHECK-NEXT:   warn_missing_dependent_template_keyword
 CHECK-NEXT:   warn_missing_exception_specification

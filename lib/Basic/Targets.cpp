@@ -3364,6 +3364,34 @@ public:
     return false;
   }
 
+  virtual bool validateConstraintModifier(StringRef Constraint,
+                                          const char Modifier,
+                                          unsigned Size) const {
+    // Strip off constraint modifiers.
+    while (Constraint[0] == '=' ||
+           Constraint[0] == '+' ||
+           Constraint[0] == '&')
+      Constraint = Constraint.substr(1);
+
+    switch (Constraint[0]) {
+    default: return true;
+    case 'r': {
+      switch (Modifier) {
+      case 'x':
+      case 'w':
+        // For now assume that the person knows what they're
+        // doing with the modifier.
+        return true;
+      default:
+        // By default an 'r' constraint will be in the 'x'
+        // registers.
+        return (Size == 64);
+      }
+    }
+      
+    }
+  }
+  
   virtual const char *getClobbers() const {
     return "";
   }
