@@ -789,72 +789,54 @@ void Clang::AddARMTargetArgs(const ArgList &Args,
     CmdArgs.push_back("-no-implicit-float");
 }
 
-// Get default architecture.
-static const char* getMipsArchFromCPU(StringRef CPUName) {
-  if (CPUName == "mips32" || CPUName == "mips32r2")
-    return "mips";
-
-  assert((CPUName == "mips64" || CPUName == "mips64r2") &&
-         "Unexpected cpu name.");
-
-  return "mips64";
-}
-
-// Check that ArchName is a known Mips architecture name.
-static bool checkMipsArchName(StringRef ArchName) {
-  return ArchName == "mips" ||
-         ArchName == "mipsel" ||
-         ArchName == "mips64" ||
-         ArchName == "mips64el";
-}
-
-// Get default target cpu.
-static const char* getMipsCPUFromArch(StringRef ArchName) {
-  if (ArchName == "mips" || ArchName == "mipsel")
-    return "mips32";
-
-  assert((ArchName == "mips64" || ArchName == "mips64el") &&
-         "Unexpected arch name.");
-
-  return "mips64";
-}
-
-// Get default ABI.
-static const char* getMipsABIFromArch(StringRef ArchName) {
-    if (ArchName == "mips" || ArchName == "mipsel")
-      return "o32";
-    
-    assert((ArchName == "mips64" || ArchName == "mips64el") &&
-           "Unexpected arch name.");
-    return "n64";
-}
-
 // Get CPU and ABI names. They are not independent
 // so we have to calculate them together.
 static void getMipsCPUAndABI(const ArgList &Args,
                              const ToolChain &TC,
                              StringRef &CPUName,
                              StringRef &ABIName) {
-  StringRef ArchName;
+  const char *DefMips32CPU = "mips32";
+  const char *DefMips64CPU = "mips64";
 
-  // Select target cpu and architecture.
-  if (Arg *A = Args.getLastArg(options::OPT_mcpu_EQ)) {
+  if (Arg *A = Args.getLastArg(options::OPT_march_EQ,
+                               options::OPT_mcpu_EQ))
     CPUName = A->getValue(Args);
-    ArchName = getMipsArchFromCPU(CPUName);
-  }
-  else {
-    ArchName = Args.MakeArgString(TC.getArchName());
-    if (!checkMipsArchName(ArchName))
-      TC.getDriver().Diag(diag::err_drv_invalid_arch_name) << ArchName;
-    else
-      CPUName = getMipsCPUFromArch(ArchName);
-  }
- 
-  // Select the ABI to use.
+
   if (Arg *A = Args.getLastArg(options::OPT_mabi_EQ))
     ABIName = A->getValue(Args);
-  else 
-    ABIName = getMipsABIFromArch(ArchName);
+
+  // Setup default CPU and ABI names.
+  if (CPUName.empty() && ABIName.empty()) {
+    switch (TC.getTriple().getArch()) {
+    default:
+      llvm_unreachable("Unexpected triple arch name");
+    case llvm::Triple::mips:
+    case llvm::Triple::mipsel:
+      CPUName = DefMips32CPU;
+      break;
+    case llvm::Triple::mips64:
+    case llvm::Triple::mips64el:
+      CPUName = DefMips64CPU;
+      break;
+    }
+  }
+
+  if (!ABIName.empty()) {
+    // Deduce CPU name from ABI name.
+    CPUName = llvm::StringSwitch<const char *>(ABIName)
+      .Cases("o32", "eabi", DefMips32CPU)
+      .Cases("n32", "n64", DefMips64CPU)
+      .Default("");
+  }
+  else if (!CPUName.empty()) {
+    // Deduce ABI name from CPU name.
+    ABIName = llvm::StringSwitch<const char *>(CPUName)
+      .Cases("mips32", "mips32r2", "o32")
+      .Cases("mips64", "mips64r2", "n64")
+      .Default("");
+  }
+
+  // FIXME: Warn on inconsistent cpu and abi usage.
 }
 
 // Select the MIPS float ABI as determined by -msoft-float, -mhard-float,
@@ -5780,8 +5762,10 @@ void linuxtools::Link::ConstructJob(Compilation &C, const JobAction &JA,
     const char *crtbegin;
     if (Args.hasArg(options::OPT_static))
       crtbegin = isAndroid ? "crtbegin_static.o" : "crtbeginT.o";
-    else if (Args.hasArg(options::OPT_shared) || Args.hasArg(options::OPT_pie))
+    else if (Args.hasArg(options::OPT_shared))
       crtbegin = isAndroid ? "crtbegin_so.o" : "crtbeginS.o";
+    else if (Args.hasArg(options::OPT_pie))
+      crtbegin = isAndroid ? "crtbegin_dynamic.o" : "crtbeginS.o";
     else
       crtbegin = isAndroid ? "crtbegin_dynamic.o" : "crtbegin.o";
     CmdArgs.push_back(Args.MakeArgString(ToolChain.GetFilePath(crtbegin)));
@@ -5847,8 +5831,10 @@ void linuxtools::Link::ConstructJob(Compilation &C, const JobAction &JA,
 
     if (!Args.hasArg(options::OPT_nostartfiles)) {
       const char *crtend;
-      if (Args.hasArg(options::OPT_shared) || Args.hasArg(options::OPT_pie))
+      if (Args.hasArg(options::OPT_shared))
         crtend = isAndroid ? "crtend_so.o" : "crtendS.o";
+      else if (Args.hasArg(options::OPT_pie))
+        crtend = isAndroid ? "crtend_android.o" : "crtendS.o";
       else
         crtend = isAndroid ? "crtend_android.o" : "crtend.o";
 
