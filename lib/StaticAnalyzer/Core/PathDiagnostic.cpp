@@ -263,13 +263,15 @@ static llvm::Optional<bool> comparePiece(const PathDiagnosticPiece &X,
   if (X.getRanges().size() != Y.getRanges().size())
     return X.getRanges().size() < Y.getRanges().size();
 
+  const SourceManager &SM = XL.getManager();
+  
   for (unsigned i = 0, n = X.getRanges().size(); i < n; ++i) {
     SourceRange XR = X.getRanges()[i];
     SourceRange YR = Y.getRanges()[i];
     if (XR != YR) {
       if (XR.getBegin() != YR.getBegin())
-        return XR.getBegin() < YR.getBegin();
-      return XR.getEnd() < YR.getEnd();
+        return SM.isBeforeInTranslationUnit(XR.getBegin(), YR.getBegin());
+      return SM.isBeforeInTranslationUnit(XR.getEnd(), YR.getEnd());
     }
   }
   
@@ -323,8 +325,10 @@ static bool compare(const PathDiagnostic &X, const PathDiagnostic &Y) {
       return false;
     SourceLocation XDL = XD->getLocation();
     SourceLocation YDL = YD->getLocation();
-    if (XDL != YDL)
-      return XDL < YDL;
+    if (XDL != YDL) {
+      const SourceManager &SM = XL.getManager();
+      return SM.isBeforeInTranslationUnit(XDL, YDL);
+    }
   }
   PathDiagnostic::meta_iterator XI = X.meta_begin(), XE = X.meta_end();
   PathDiagnostic::meta_iterator YI = Y.meta_begin(), YE = Y.meta_end();

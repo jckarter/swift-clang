@@ -413,7 +413,7 @@ Sema::ActOnCXXTypeid(SourceLocation OpLoc, SourceLocation LParenLoc,
 /// Retrieve the UuidAttr associated with QT.
 static UuidAttr *GetUuidAttrOfType(QualType QT) {
   // Optionally remove one level of pointer, reference or array indirection.
-  const Type *Ty = QT.getTypePtr();;
+  const Type *Ty = QT.getTypePtr();
   if (QT->isPointerType() || QT->isReferenceType())
     Ty = QT->getPointeeType().getTypePtr();
   else if (QT->isArrayType())
@@ -4149,6 +4149,9 @@ QualType Sema::CXXCheckConditionalOperands(ExprResult &Cond, ExprResult &LHS,
     ExprResult &NonVoid = LVoid ? RHS : LHS;
     if (NonVoid.get()->getType()->isRecordType() &&
         NonVoid.get()->isGLValue()) {
+      if (RequireNonAbstractType(QuestionLoc, NonVoid.get()->getType(),
+                             diag::err_allocation_of_abstract_type))
+        return QualType();
       InitializedEntity Entity =
           InitializedEntity::InitializeTemporary(NonVoid.get()->getType());
       NonVoid = PerformCopyInitialization(Entity, SourceLocation(), NonVoid);
@@ -4291,7 +4294,11 @@ QualType Sema::CXXCheckConditionalOperands(ExprResult &Cond, ExprResult &LHS,
   if (Context.getCanonicalType(LTy) == Context.getCanonicalType(RTy)) {
     if (LTy->isRecordType()) {
       // The operands have class type. Make a temporary copy.
+      if (RequireNonAbstractType(QuestionLoc, LTy,
+                                 diag::err_allocation_of_abstract_type))
+        return QualType();
       InitializedEntity Entity = InitializedEntity::InitializeTemporary(LTy);
+
       ExprResult LHSCopy = PerformCopyInitialization(Entity,
                                                      SourceLocation(),
                                                      LHS);
