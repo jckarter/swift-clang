@@ -50,9 +50,16 @@ void EmitClangSACheckers(RecordKeeper &Records, raw_ostream &OS);
 void EmitClangCommentHTMLTags(RecordKeeper &Records, raw_ostream &OS);
 void EmitClangCommentHTMLTagsProperties(RecordKeeper &Records, raw_ostream &OS);
 
+void EmitClangCommentCommandInfo(RecordKeeper &Records, raw_ostream &OS);
+
 void EmitNeon(RecordKeeper &Records, raw_ostream &OS, bool IsARM64 = false);
 void EmitNeonSema(RecordKeeper &Records, raw_ostream &OS, bool IsARM64 = false);
 void EmitNeonTest(RecordKeeper &Records, raw_ostream &OS, bool IsARM64 = false);
+
+void EmitNeon(RecordKeeper &Records, raw_ostream &OS);
+void EmitNeonSema(RecordKeeper &Records, raw_ostream &OS);
+void EmitNeonTest(RecordKeeper &Records, raw_ostream &OS);
+>>>>>>> Swift
 
 void EmitOptParser(RecordKeeper &Records, raw_ostream &OS, bool GenDefs);
 
