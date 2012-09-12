@@ -433,14 +433,21 @@ RuntimeDefinition CXXInstanceCall::getRuntimeDefinition() const {
   if (!RD || !RD->hasDefinition())
     return RuntimeDefinition();
 
-  // Find the decl for this method in that class.
-  const CXXMethodDecl *Result = MD->getCorrespondingMethodInClass(RD, true);
+  const CXXMethodDecl *Result;
+  if (MD->getParent()->isDerivedFrom(RD)) {
+    // If our static type info is better than our dynamic type info, don't
+    // bother doing a search. Just use the static method.
+    Result = MD;
+  } else {
+    // Otherwise, find the decl for the method in the dynamic class.
+    Result = MD->getCorrespondingMethodInClass(RD, true);
+  }
+
   if (!Result) {
     // We might not even get the original statically-resolved method due to
     // some particularly nasty casting (e.g. casts to sister classes).
     // However, we should at least be able to search up and down our own class
     // hierarchy, and some real bugs have been caught by checking this.
-    assert(!MD->getParent()->isDerivedFrom(RD) && "Bad DynamicTypeInfo");
     assert(!RD->isDerivedFrom(MD->getParent()) && "Couldn't find known method");
     return RuntimeDefinition();
   }
@@ -494,6 +501,18 @@ void CXXInstanceCall::getInitialStackFrameContents(
 
 const Expr *CXXMemberCall::getCXXThisExpr() const {
   return getOriginExpr()->getImplicitObjectArgument();
+}
+
+RuntimeDefinition CXXMemberCall::getRuntimeDefinition() const {
+  // C++11 [expr.call]p1: ...If the selected function is non-virtual, or if the
+  // id-expression in the class member access expression is a qualified-id,
+  // that function is called. Otherwise, its final overrider in the dynamic type
+  // of the object expression is called.
+  if (const MemberExpr *ME = dyn_cast<MemberExpr>(getOriginExpr()->getCallee()))
+    if (ME->hasQualifier())
+      return AnyFunctionCall::getRuntimeDefinition();
+  
+  return CXXInstanceCall::getRuntimeDefinition();
 }
 
 

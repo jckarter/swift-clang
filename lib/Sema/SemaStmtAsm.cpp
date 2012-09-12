@@ -36,6 +36,7 @@
 #include "llvm/MC/MCTargetAsmParser.h"
 #include "llvm/MC/MCParser/MCAsmLexer.h"
 #include "llvm/MC/MCParser/MCAsmParser.h"
+#include "llvm/MC/MCParser/MCParsedAsmOperand.h"
 #include "llvm/Support/SourceMgr.h"
 #include "llvm/Support/TargetRegistry.h"
 #include "llvm/Support/TargetSelect.h"
@@ -413,9 +414,9 @@ static void buildMSAsmPieces(std::vector<std::string> &AsmStrings,
     buildMSAsmPieces(AsmStrings[i], Pieces[i]);
 }
 
-// Build the unmodified AsmString used by the IR.  Also build the individual
-// asm instruction(s) and place them in the AsmStrings vector; these are fed
-// to the AsmParser.
+// Build the AsmString used by the IR.  Also build the individual asm
+// instruction(s) and place them in the AsmStrings vector; these are fed to the
+// AsmParser.
 static std::string buildMSAsmString(Sema &SemaRef, ArrayRef<Token> AsmToks,
                                     std::vector<std::string> &AsmStrings,
                      std::vector<std::pair<unsigned,unsigned> > &AsmTokRanges) {
@@ -433,9 +434,8 @@ static std::string buildMSAsmString(Sema &SemaRef, ArrayRef<Token> AsmToks,
         AsmStrings.push_back(Asm.str());
         AsmTokRanges.push_back(std::make_pair(startTok, i-1));
         startTok = i;
-        Res += Asm;
         Asm.clear();
-        Res += '\n';
+        Res += "\n\t";
       }
       if (AsmToks[i].is(tok::kw_asm)) {
         i++; // Skip __asm
@@ -443,14 +443,20 @@ static std::string buildMSAsmString(Sema &SemaRef, ArrayRef<Token> AsmToks,
       }
     }
 
-    if (i && AsmToks[i].hasLeadingSpace() && !isNewAsm)
+    if (i && AsmToks[i].hasLeadingSpace() && !isNewAsm) {
       Asm += ' ';
+      Res += ' ';
+    }
 
-    Asm += getSpelling(SemaRef, AsmToks[i]);
+    if (AsmToks[i].is(tok::numeric_constant))
+      Res += "$$";
+
+    StringRef Spelling = getSpelling(SemaRef, AsmToks[i]);
+    Asm += Spelling;
+    Res += Spelling;
   }
   AsmStrings.push_back(Asm.str());
   AsmTokRanges.push_back(std::make_pair(startTok, AsmToks.size()-1));
-  Res += Asm;
   return Res.str();
 }
 
@@ -568,6 +574,9 @@ StmtResult Sema::ActOnMSAsmStmt(SourceLocation AsmLoc,
     // Build the list of clobbers, outputs and inputs.
     unsigned NumDefs = Desc.getNumDefs();
     for (unsigned i = 1, e = Operands.size(); i != e; ++i) {
+      if (Operands[i]->isToken() || Operands[i]->isImm())
+        continue;
+
       unsigned NumMCOperands;
       unsigned MCIdx = TargetParser->getMCInstOperandNum(Kind, Inst, Operands,
                                                          i, NumMCOperands);
@@ -587,14 +596,8 @@ StmtResult Sema::ActOnMSAsmStmt(SourceLocation AsmLoc,
 
       const llvm::MCOperand &Op = Inst.getOperand(MCIdx);
 
-      // Immediate.
-      if (Op.isImm() || Op.isFPImm())
-        continue;
-
-      bool isDef = NumDefs && (MCIdx < NumDefs);
-
       // Register/Clobber.
-      if (Op.isReg() && isDef) {
+      if (Op.isReg() && NumDefs && (MCIdx < NumDefs)) {
         std::string Reg;
         llvm::raw_string_ostream OS(Reg);
         IP->printRegName(OS, Op.getReg());
@@ -624,7 +627,7 @@ StmtResult Sema::ActOnMSAsmStmt(SourceLocation AsmLoc,
                                                   false, false);
             if (!Result.isInvalid()) {
               bool isMemDef = (i == 1) && Desc.mayStore();
-              if (isDef || isMemDef) {
+              if (isMemDef) {
                 Outputs.push_back(II);
                 OutputExprs.push_back(Result.take());
                 OutputExprNames.push_back(Name.str());
