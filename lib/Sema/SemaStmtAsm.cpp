@@ -36,6 +36,7 @@
 #include "llvm/MC/MCTargetAsmParser.h"
 #include "llvm/MC/MCParser/MCAsmLexer.h"
 #include "llvm/MC/MCParser/MCAsmParser.h"
+#include "llvm/MC/MCParser/MCParsedAsmOperand.h"
 #include "llvm/Support/SourceMgr.h"
 #include "llvm/Support/TargetRegistry.h"
 #include "llvm/Support/TargetSelect.h"
@@ -573,6 +574,9 @@ StmtResult Sema::ActOnMSAsmStmt(SourceLocation AsmLoc,
     // Build the list of clobbers, outputs and inputs.
     unsigned NumDefs = Desc.getNumDefs();
     for (unsigned i = 1, e = Operands.size(); i != e; ++i) {
+      if (Operands[i]->isToken() || Operands[i]->isImm())
+        continue;
+
       unsigned NumMCOperands;
       unsigned MCIdx = TargetParser->getMCInstOperandNum(Kind, Inst, Operands,
                                                          i, NumMCOperands);
@@ -592,14 +596,8 @@ StmtResult Sema::ActOnMSAsmStmt(SourceLocation AsmLoc,
 
       const llvm::MCOperand &Op = Inst.getOperand(MCIdx);
 
-      // Immediate.
-      if (Op.isImm() || Op.isFPImm())
-        continue;
-
-      bool isDef = NumDefs && (MCIdx < NumDefs);
-
       // Register/Clobber.
-      if (Op.isReg() && isDef) {
+      if (Op.isReg() && NumDefs && (MCIdx < NumDefs)) {
         std::string Reg;
         llvm::raw_string_ostream OS(Reg);
         IP->printRegName(OS, Op.getReg());
@@ -629,7 +627,7 @@ StmtResult Sema::ActOnMSAsmStmt(SourceLocation AsmLoc,
                                                   false, false);
             if (!Result.isInvalid()) {
               bool isMemDef = (i == 1) && Desc.mayStore();
-              if (isDef || isMemDef) {
+              if (isMemDef) {
                 Outputs.push_back(II);
                 OutputExprs.push_back(Result.take());
                 OutputExprNames.push_back(Name.str());
