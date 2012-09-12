@@ -542,7 +542,8 @@ void Darwin::AddDeploymentTarget(DerivedArgList &Args) const {
     // go ahead as assume we're targeting iOS.
     if (OSXTarget.empty() && iOSTarget.empty() &&
         (getDarwinArchName(Args) == "armv7" ||
-         getDarwinArchName(Args) == "armv7s"))
+         getDarwinArchName(Args) == "armv7s" ||
+         getDarwinArchName(Args) == "arm64"))
         iOSTarget = iOSVersionMin;
 
     // Handle conflicting deployment targets
