@@ -28,6 +28,6 @@ namespace ReinterpretDisruptsDynamicTypeInfo {
   void test(Parent *a) {
     Child *b = reinterpret_cast<Child *>(a);
     if (!b) return;
-    clang_analyzer_eval(b->foo() == 42); // expected-warning{{TRUE}} expected-warning{{UNKNOWN}}
+    clang_analyzer_eval(b->foo() == 42); // expected-warning{{UNKNOWN}}
   }
 }
