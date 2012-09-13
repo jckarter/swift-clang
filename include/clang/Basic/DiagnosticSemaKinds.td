@@ -5074,7 +5074,7 @@ def warn_unused_volatile : Warning<
 def warn_unused_volatile_hack : Warning<
   "expression result would be unused in standard C++98; please switch to "
   "C++11 mode or assign into a variable to force a volatile load">,
-  InGroup<DiagGroup<"unused-volatile-lvalue-hack">>, DefaultError;
+  InGroup<DiagGroup<"unused-volatile-lvalue-hack">>;
 
 def warn_unused_comparison : Warning<
   "%select{equality|inequality}0 comparison result unused">,
