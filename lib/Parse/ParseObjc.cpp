@@ -1031,8 +1031,7 @@ Decl *Parser::ParseObjCMethodDecl(SourceLocation mLoc,
                             Scope::FunctionPrototypeScope|Scope::DeclScope);
 
   AttributePool allParamAttrs(AttrFactory);
-  bool warnSelectorName = false;
-  bool warnHasNoName = true;
+  
   while (1) {
     ParsedAttributes paramAttrs(AttrFactory);
     Sema::ObjCArgInfo ArgInfo;
@@ -1101,17 +1100,8 @@ Decl *Parser::ParseObjCMethodDecl(SourceLocation mLoc,
     
     // Check for another keyword selector.
     SelIdent = ParseObjCSelectorPiece(selLoc);
-    if (!SelIdent) {
-      if (Tok.isNot(tok::colon))
-        break;
-      // parameter name was not followed with selector name; as in:
-      // - (void) Meth: (id) Name:(id)Arg2; Issue a warning as user
-      // might have meant: - (void) Meth: (id)Arg1 Name:(id)Arg2;
-      Diag(Tok, diag::warn_missing_argument_name); // missing argument name.
-      warnSelectorName = true;
-    }
-    else
-      warnHasNoName = false;
+    if (!SelIdent && Tok.isNot(tok::colon))
+      break;
     // We have a selector or a colon, continue parsing.
   }
 
@@ -1152,12 +1142,6 @@ Decl *Parser::ParseObjCMethodDecl(SourceLocation mLoc,
   
   Selector Sel = PP.getSelectorTable().getSelector(KeyIdents.size(),
                                                    &KeyIdents[0]);
-  if (warnSelectorName) {
-    if (warnHasNoName)
-      Diag(mLoc, diag::warn_selector_with_bare_colon);
-    Diag(mLoc, diag::note_missing_argument_name) << Sel.getAsString();
-  }
-  
   Decl *Result
        = Actions.ActOnMethodDeclaration(getCurScope(), mLoc, Tok.getLocation(),
                                         mType, DSRet, ReturnType, 
@@ -2150,7 +2134,7 @@ ExprResult Parser::ParseObjCAtExpression(SourceLocation AtLoc) {
   }
 }
 
-/// \brirg Parse the receiver of an Objective-C++ message send.
+/// \brief Parse the receiver of an Objective-C++ message send.
 ///
 /// This routine parses the receiver of a message send in
 /// Objective-C++ either as a type or as an expression. Note that this
@@ -2759,7 +2743,7 @@ ExprResult Parser::ParseObjCDictionaryLiteral(SourceLocation AtLoc) {
 }
 
 ///    objc-encode-expression:
-///      @encode ( type-name )
+///      \@encode ( type-name )
 ExprResult
 Parser::ParseObjCEncodeExpression(SourceLocation AtLoc) {
   assert(Tok.isObjCAtKeyword(tok::objc_encode) && "Not an @encode expression!");
