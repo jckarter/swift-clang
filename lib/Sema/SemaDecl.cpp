@@ -1264,7 +1264,7 @@ static bool ShouldDiagnoseUnusedDecl(const NamedDecl *D) {
     QualType Ty = VD->getType();
 
     // Only look at the outermost level of typedef.
-    if (const TypedefType *TT = dyn_cast<TypedefType>(Ty)) {
+    if (const TypedefType *TT = Ty->getAs<TypedefType>()) {
       if (TT->getDecl()->hasAttr<UnusedAttr>())
         return false;
     }
@@ -3523,7 +3523,8 @@ bool Sema::diagnoseQualifiedDeclaration(CXXScopeSpec &SS, DeclContext *DC,
   //   void X::f();
   // };
   if (Cur->Equals(DC)) {
-    Diag(Loc, diag::warn_member_extra_qualification)
+    Diag(Loc, LangOpts.MicrosoftExt? diag::warn_member_extra_qualification
+                                   : diag::err_member_extra_qualification)
       << Name << FixItHint::CreateRemoval(SS.getRange());
     SS.clear();
     return false;
