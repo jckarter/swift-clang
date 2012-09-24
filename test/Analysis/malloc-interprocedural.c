@@ -2,7 +2,6 @@
 
 #include "Inputs/system-header-simulator.h"
 
-typedef __typeof(sizeof(int)) size_t;
 void *malloc(size_t);
 void *valloc(size_t);
 void free(void *);
