@@ -155,7 +155,6 @@ public:
   virtual Tool &SelectTool(const Compilation &C, const JobAction &JA,
                            const ActionList &Inputs) const;
 
-  virtual bool IsUnwindTablesDefault() const;
   virtual const char *GetDefaultRelocationModel() const;
   virtual const char *GetForcedPicModel() const;
 };
@@ -354,7 +353,7 @@ public:
 
   virtual bool SupportsObjCGC() const;
 
-  virtual bool SupportsObjCARC() const;
+  virtual void CheckObjCARC() const;
 
   virtual bool UseDwarfDebugFlags() const;
 
@@ -445,6 +444,26 @@ public:
                            const ActionList &Inputs) const;
 };
 
+class LLVM_LIBRARY_VISIBILITY Bitrig : public Generic_ELF {
+public:
+  Bitrig(const Driver &D, const llvm::Triple& Triple, const ArgList &Args);
+
+  virtual bool IsMathErrnoDefault() const { return false; }
+  virtual bool IsObjCNonFragileABIDefault() const { return true; }
+  virtual bool IsObjCLegacyDispatchDefault() const { return false; }
+
+  virtual Tool &SelectTool(const Compilation &C, const JobAction &JA,
+                           const ActionList &Inputs) const;
+
+  virtual void AddClangCXXStdlibIncludeArgs(const ArgList &DriverArgs,
+                                            ArgStringList &CC1Args) const;
+  virtual void AddCXXStdlibLibArgs(const ArgList &Args,
+                                   ArgStringList &CmdArgs) const;
+  virtual unsigned GetDefaultStackProtectorLevel(bool KernelOrKext) const {
+     return 1;
+  }
+};
+
 class LLVM_LIBRARY_VISIBILITY FreeBSD : public Generic_ELF {
 public:
   FreeBSD(const Driver &D, const llvm::Triple& Triple, const ArgList &Args);
@@ -520,7 +539,6 @@ public:
   virtual Tool &SelectTool(const Compilation &C, const JobAction &JA,
                            const ActionList &Inputs) const;
   bool IsMathErrnoDefault() const;
-  bool IsUnwindTablesDefault() const;
   const char* GetDefaultRelocationModel() const;
   const char* GetForcedPicModel() const;
 

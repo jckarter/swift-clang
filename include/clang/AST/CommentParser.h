@@ -24,11 +24,12 @@ namespace clang {
 class SourceManager;
 
 namespace comments {
+class CommandTraits;
 
 /// Doxygen comment parser.
 class Parser {
-  Parser(const Parser&);         // DO NOT IMPLEMENT
-  void operator=(const Parser&); // DO NOT IMPLEMENT
+  Parser(const Parser &) LLVM_DELETED_FUNCTION;
+  void operator=(const Parser &) LLVM_DELETED_FUNCTION;
 
   friend class TextTokenRetokenizer;
 
@@ -47,6 +48,8 @@ class Parser {
   DiagnosticBuilder Diag(SourceLocation Loc, unsigned DiagID) {
     return Diags.Report(Loc, DiagID);
   }
+
+  const CommandTraits &Traits;
 
   /// Current lookahead token.  We can safely assume that all tokens are from
   /// a single source file.
@@ -85,7 +88,8 @@ class Parser {
 
 public:
   Parser(Lexer &L, Sema &S, llvm::BumpPtrAllocator &Allocator,
-         const SourceManager &SourceMgr, DiagnosticsEngine &Diags);
+         const SourceManager &SourceMgr, DiagnosticsEngine &Diags,
+         const CommandTraits &Traits);
 
   /// Parse arguments for \\param command.
   void parseParamCommandArgs(ParamCommandComment *PC,

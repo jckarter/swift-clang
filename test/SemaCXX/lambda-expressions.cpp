@@ -117,16 +117,16 @@ namespace NullPtr {
 
     const int m = 0;
     [=] {
-      int &k = f(m); // a null pointer constant
+      int &k = f(m); // expected-warning{{expression which evaluates to zero treated as a null pointer constant of type 'int *'}}
     } ();
 
     [=] () -> bool {
-      int &k = f(m); // a null pointer constant
+      int &k = f(m); // expected-warning{{expression which evaluates to zero treated as a null pointer constant of type 'int *'}}
       return &m == 0;
     } ();
 
     [m] {
-      int &k = f(m); // a null pointer constant
+      int &k = f(m); // expected-warning{{expression which evaluates to zero treated as a null pointer constant of type 'int *'}}
     } ();
   }
 }
@@ -220,4 +220,16 @@ namespace VariadicPackExpansion {
   }
   template void nested2(int); // ok
   template void nested2(int, int); // expected-note {{in instantiation of}}
+}
+
+namespace PR13860 {
+  void foo() {
+    auto x = PR13860UndeclaredIdentifier(); // expected-error {{use of undeclared identifier 'PR13860UndeclaredIdentifier'}}
+    auto y = [x]() { };
+    static_assert(sizeof(y), "");
+  }
+}
+
+namespace PR13854 {
+  auto l = [](void){};
 }

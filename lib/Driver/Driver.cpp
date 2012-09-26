@@ -52,7 +52,7 @@ Driver::Driver(StringRef ClangExecutable,
     ClangExecutable(ClangExecutable), SysRoot(DEFAULT_SYSROOT),
     UseStdLib(true), DefaultTargetTriple(DefaultTargetTriple),
     DefaultImageName(DefaultImageName),
-    DriverTitle("clang \"gcc-compatible\" driver"),
+    DriverTitle("clang LLVM compiler"),
     CCPrintOptionsFilename(0), CCPrintHeadersFilename(0),
     CCLogDiagnosticsFilename(0), CCCIsCXX(false),
     CCCIsCPP(false),CCCEcho(false), CCCPrintBindings(false),
@@ -981,7 +981,7 @@ void Driver::BuildInputs(const ToolChain &TC, const DerivedArgList &Args,
        it != ie; ++it) {
     Arg *A = *it;
 
-    if (isa<InputOption>(A->getOption())) {
+    if (A->getOption().getKind() == Option::InputClass) {
       const char *Value = A->getValue(Args);
       types::ID Ty = types::TY_INVALID;
 
@@ -1337,7 +1337,7 @@ void Driver::BuildJobs(Compilation &C) const {
       // Suppress the warning automatically if this is just a flag, and it is an
       // instance of an argument we already claimed.
       const Option &Opt = A->getOption();
-      if (isa<FlagOption>(Opt)) {
+      if (Opt.getKind() == Option::FlagClass) {
         bool DuplicateClaimed = false;
 
         for (arg_iterator it = C.getArgs().filtered_begin(&Opt),
@@ -1775,6 +1775,9 @@ const ToolChain &Driver::getToolChain(const ArgList &Args,
       break;
     case llvm::Triple::OpenBSD:
       TC = new toolchains::OpenBSD(*this, Target, Args);
+      break;
+    case llvm::Triple::Bitrig:
+      TC = new toolchains::Bitrig(*this, Target, Args);
       break;
     case llvm::Triple::NetBSD:
       TC = new toolchains::NetBSD(*this, Target, Args);

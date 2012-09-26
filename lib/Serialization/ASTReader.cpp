@@ -527,6 +527,7 @@ IdentifierInfo *ASTIdentifierLookupTrait::ReadData(const internal_key_type& k,
     return II;
   }
 
+  unsigned ObjCOrBuiltinID = ReadUnalignedLE16(d);
   unsigned Bits = ReadUnalignedLE16(d);
   bool CPlusPlusOperatorKeyword = Bits & 0x01;
   Bits >>= 1;
@@ -536,13 +537,13 @@ IdentifierInfo *ASTIdentifierLookupTrait::ReadData(const internal_key_type& k,
   Bits >>= 1;
   bool ExtensionToken = Bits & 0x01;
   Bits >>= 1;
+  bool hadMacroDefinition = Bits & 0x01;
+  Bits >>= 1;
   bool hasMacroDefinition = Bits & 0x01;
   Bits >>= 1;
-  unsigned ObjCOrBuiltinID = Bits & 0x7FF;
-  Bits >>= 11;
 
   assert(Bits == 0 && "Extra bits in the identifier?");
-  DataLen -= 6;
+  DataLen -= 8;
 
   // Build the IdentifierInfo itself and link the identifier ID with
   // the new IdentifierInfo.
@@ -570,7 +571,7 @@ IdentifierInfo *ASTIdentifierLookupTrait::ReadData(const internal_key_type& k,
 
   // If this identifier is a macro, deserialize the macro
   // definition.
-  if (hasMacroDefinition) {
+  if (hadMacroDefinition) {
     // FIXME: Check for conflicts?
     uint32_t Offset = ReadUnalignedLE32(d);
     unsigned LocalSubmoduleID = ReadUnalignedLE32(d);
@@ -590,10 +591,10 @@ IdentifierInfo *ASTIdentifierLookupTrait::ReadData(const internal_key_type& k,
           // module is not yet visible.
           Reader.HiddenNamesMap[Owner].push_back(II);
         }
-      } 
+      }
     }
-    
-    Reader.setIdentifierIsMacro(II, F, Offset, Visible);
+
+    Reader.setIdentifierIsMacro(II, F, Offset, Visible && hasMacroDefinition);
     DataLen -= 8;
   }
 
@@ -1312,18 +1313,21 @@ void ASTReader::ReadMacroRecord(ModuleFile &F, uint64_t Offset) {
         Error("macro must have a name in AST file");
         return;
       }
-      
-      SourceLocation Loc = ReadSourceLocation(F, Record[1]);
-      bool isUsed = Record[2];
 
+      unsigned NextIndex = 1;
+      SourceLocation Loc = ReadSourceLocation(F, Record, NextIndex);
       MacroInfo *MI = PP.AllocateMacroInfo(Loc);
-      MI->setIsUsed(isUsed);
+
+      SourceLocation UndefLoc = ReadSourceLocation(F, Record, NextIndex);
+      if (UndefLoc.isValid())
+        MI->setUndefLoc(UndefLoc);
+
+      MI->setIsUsed(Record[NextIndex++]);
       MI->setIsFromAST();
 
-      bool IsPublic = Record[3];
-      unsigned NextIndex = 4;
+      bool IsPublic = Record[NextIndex++];
       MI->setVisibility(IsPublic, ReadSourceLocation(F, Record, NextIndex));
-      
+
       if (RecType == PP_MACRO_FUNCTION_LIKE) {
         // Decode function-like macro info.
         bool isC99VarArgs = Record[NextIndex++];
@@ -1660,6 +1664,10 @@ ASTReader::ReadASTBlock(ModuleFile &F) {
         Error("error at end of module block in AST file");
         return Failure;
       }
+
+      DeclContext *DC = Context.getTranslationUnitDecl();
+      if (!DC->hasExternalVisibleStorage() && DC->hasExternalLexicalStorage())
+        DC->setMustBuildLookupTable();
 
       return Success;
     }
@@ -2547,10 +2555,17 @@ void ASTReader::makeNamesVisible(const HiddenNames &Names) {
       D->Hidden = false;
     else {
       IdentifierInfo *II = Names[I].get<IdentifierInfo *>();
+      // FIXME: Check if this works correctly with macro history.
       if (!II->hasMacroDefinition()) {
-        II->setHasMacroDefinition(true);
-        if (DeserializationListener)
-          DeserializationListener->MacroVisible(II);
+        // Make sure that this macro hasn't been #undef'd in the mean-time.
+        llvm::DenseMap<IdentifierInfo*, MacroInfo*>::iterator Known
+          = PP.Macros.find(II);
+        if (Known == PP.Macros.end() ||
+            Known->second->getUndefLoc().isInvalid()) {
+          II->setHasMacroDefinition(true);
+          if (DeserializationListener)
+            DeserializationListener->MacroVisible(II);
+        }
       }
     }
   }
@@ -2631,7 +2646,7 @@ void ASTReader::makeModuleVisible(Module *Mod,
     
     for (unsigned I = 0, N = Mod->Imports.size(); I != N; ++I) {
       Module *Imported = Mod->Imports[I];
-      if (Visited.count(Imported))
+      if (!Visited.insert(Imported))
         continue;
       
       bool Acceptable = UnrestrictedWildcard;
@@ -2649,7 +2664,6 @@ void ASTReader::makeModuleVisible(Module *Mod,
       if (!Acceptable)
         continue;
       
-      Visited.insert(Imported);
       Stack.push_back(Imported);
     }
   }
@@ -4259,7 +4273,6 @@ void TypeLocReader::VisitExtVectorTypeLoc(ExtVectorTypeLoc TL) {
 void TypeLocReader::VisitFunctionTypeLoc(FunctionTypeLoc TL) {
   TL.setLocalRangeBegin(ReadSourceLocation(Record, Idx));
   TL.setLocalRangeEnd(ReadSourceLocation(Record, Idx));
-  TL.setTrailingReturn(Record[Idx++]);
   for (unsigned i = 0, e = TL.getNumArgs(); i != e; ++i) {
     TL.setArg(i, ReadDeclAs<ParmVarDecl>(Record, Idx));
   }
@@ -4468,6 +4481,10 @@ QualType ASTReader::GetType(TypeID ID) {
     case PREDEF_TYPE_VA_LIST_TAG:
       T = Context.getVaListTagType();
       break;
+
+    case PREDEF_TYPE_BUILTIN_FN:
+      T = Context.BuiltinFnTy;
+      break;
     }
 
     assert(!T.isNull() && "Unknown predefined type");
@@ -4538,7 +4555,9 @@ ASTReader::GetTemplateArgumentLocInfo(ModuleFile &F,
   case TemplateArgument::Null:
   case TemplateArgument::Integral:
   case TemplateArgument::Declaration:
+  case TemplateArgument::NullPtr:
   case TemplateArgument::Pack:
+    // FIXME: Is this right?
     return TemplateArgumentLocInfo();
   }
   llvm_unreachable("unexpected template argument loc");
@@ -5927,8 +5946,13 @@ ASTReader::ReadTemplateArgument(ModuleFile &F,
     return TemplateArgument();
   case TemplateArgument::Type:
     return TemplateArgument(readType(F, Record, Idx));
-  case TemplateArgument::Declaration:
-    return TemplateArgument(ReadDecl(F, Record, Idx));
+  case TemplateArgument::Declaration: {
+    ValueDecl *D = ReadDeclAs<ValueDecl>(F, Record, Idx);
+    bool ForReferenceParam = Record[Idx++];
+    return TemplateArgument(D, ForReferenceParam);
+  }
+  case TemplateArgument::NullPtr:
+    return TemplateArgument(readType(F, Record, Idx), /*isNullPtr*/true);
   case TemplateArgument::Integral: {
     llvm::APSInt Value = ReadAPSInt(Record, Idx);
     QualType T = readType(F, Record, Idx);

@@ -923,7 +923,9 @@ class TemplateDiff {
     bool isVariadic = DefaultTTPD->isParameterPack();
 
     TemplateArgument TA = DefaultTTPD->getDefaultArgument().getArgument();
-    TemplateDecl *DefaultTD = TA.getAsTemplate().getAsTemplateDecl();
+    TemplateDecl *DefaultTD = 0;
+    if (TA.getKind() != TemplateArgument::Null)
+      DefaultTD = TA.getAsTemplate().getAsTemplateDecl();
 
     if (!Iter.isEnd())
       ArgDecl = Iter->getAsTemplate().getAsTemplateDecl();
@@ -1149,7 +1151,7 @@ class TemplateDiff {
     if (!E)
       OS << "(no argument)";
     else
-      E->printPretty(OS, Context, 0, Policy); return;
+      E->printPretty(OS, 0, Policy); return;
   }
 
   /// PrintTemplateTemplate - Handles printing of template template arguments,

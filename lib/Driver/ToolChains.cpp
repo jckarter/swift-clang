@@ -122,7 +122,8 @@ static const char *GetArmArchForMCpu(StringRef Value) {
     .Case("xscale", "xscale")
     .Cases("arm1136j-s", "arm1136jf-s", "arm1176jz-s",
            "arm1176jzf-s", "cortex-m0", "armv6")
-    .Cases("cortex-a8", "cortex-r4", "cortex-m3", "cortex-a9", "armv7")
+    .Cases("cortex-a8", "cortex-r4", "cortex-m3", "cortex-a9", "cortex-a15",
+           "armv7")
     .Default(0);
 }
 
@@ -441,6 +442,20 @@ static bool GetVersionFromSimulatorDefine(StringRef define,
 
 void Darwin::AddDeploymentTarget(DerivedArgList &Args) const {
   const OptTable &Opts = getDriver().getOpts();
+
+  // Support allowing the SDKROOT environment variable used by xcrun and other
+  // Xcode tools to define the default sysroot, by making it the default for
+  // isysroot.
+  if (!Args.hasArg(options::OPT_isysroot)) {
+    if (char *env = ::getenv("SDKROOT")) {
+      // We only use this value as the default if it is an absolute path and
+      // exists.
+      if (llvm::sys::path::is_absolute(env) && llvm::sys::fs::exists(env)) {
+        Args.append(Args.MakeSeparateArg(
+                      0, Opts.getOption(options::OPT_isysroot), env));
+      }
+    }
+  }
 
   Arg *OSXVersion = Args.getLastArg(options::OPT_mmacosx_version_min_EQ);
   Arg *iOSVersion = Args.getLastArg(options::OPT_miphoneos_version_min_EQ);
@@ -937,8 +952,10 @@ bool Darwin::SupportsObjCGC() const {
   return !isTargetIPhoneOS();
 }
 
-bool Darwin::SupportsObjCARC() const {
-  return isTargetIPhoneOS() || !isMacosxVersionLT(10, 6);
+void Darwin::CheckObjCARC() const {
+  if (isTargetIPhoneOS() || !isMacosxVersionLT(10, 6))
+    return;
+  getDriver().Diag(diag::err_arc_unsupported_on_toolchain);
 }
 
 std::string
@@ -1274,6 +1291,10 @@ void Generic_GCC::GCCInstallationDetector::ScanLibDirForGCCTriple(
     "/gcc/" + CandidateTriple.str(),
     "/" + CandidateTriple.str() + "/gcc/" + CandidateTriple.str(),
 
+    // The Freescale PPC SDK has the gcc libraries in
+    // <sysroot>/usr/lib/<triple>/x.y.z so have a look there as well.
+    "/" + CandidateTriple.str(),
+
     // Ubuntu has a strange mis-matched pair of triples that this happens to
     // match.
     // FIXME: It may be worthwhile to generalize this and look for a second
@@ -1283,6 +1304,7 @@ void Generic_GCC::GCCInstallationDetector::ScanLibDirForGCCTriple(
   const std::string InstallSuffixes[] = {
     "/../../..",
     "/../../../..",
+    "/../..",
     "/../../../.."
   };
   // Only look at the final, weird Ubuntu suffix for i386-linux-gnu.
@@ -1394,7 +1416,7 @@ Tool &Generic_GCC::SelectTool(const Compilation &C,
 bool Generic_GCC::IsUnwindTablesDefault() const {
   // FIXME: Gross; we should probably have some separate target
   // definition, possibly even reusing the one in clang.
-  return getArchName() == "x86_64";
+  return getArch() == llvm::Triple::x86_64;
 }
 
 const char *Generic_GCC::GetDefaultRelocationModel() const {
@@ -1457,12 +1479,6 @@ Tool &Hexagon_TC::SelectTool(const Compilation &C,
   return *T;
 }
 
-bool Hexagon_TC::IsUnwindTablesDefault() const {
-  // FIXME: Gross; we should probably have some separate target
-  // definition, possibly even reusing the one in clang.
-  return getArchName() == "x86_64";
-}
-
 const char *Hexagon_TC::GetDefaultRelocationModel() const {
   return "static";
 }
@@ -1493,10 +1509,6 @@ TCEToolChain::~TCEToolChain() {
 
 bool TCEToolChain::IsMathErrnoDefault() const {
   return true;
-}
-
-bool TCEToolChain::IsUnwindTablesDefault() const {
-  return false;
 }
 
 const char *TCEToolChain::GetDefaultRelocationModel() const {
@@ -1565,6 +1577,67 @@ Tool &OpenBSD::SelectTool(const Compilation &C, const JobAction &JA,
   }
 
   return *T;
+}
+
+/// Bitrig - Bitrig tool chain which can call as(1) and ld(1) directly.
+
+Bitrig::Bitrig(const Driver &D, const llvm::Triple& Triple, const ArgList &Args)
+  : Generic_ELF(D, Triple, Args) {
+  getFilePaths().push_back(getDriver().Dir + "/../lib");
+  getFilePaths().push_back("/usr/lib");
+}
+
+Tool &Bitrig::SelectTool(const Compilation &C, const JobAction &JA,
+                         const ActionList &Inputs) const {
+  Action::ActionClass Key;
+  if (getDriver().ShouldUseClangCompiler(C, JA, getTriple()))
+    Key = Action::AnalyzeJobClass;
+  else
+    Key = JA.getKind();
+
+  bool UseIntegratedAs = C.getArgs().hasFlag(options::OPT_integrated_as,
+                                             options::OPT_no_integrated_as,
+                                             IsIntegratedAssemblerDefault());
+
+  Tool *&T = Tools[Key];
+  if (!T) {
+    switch (Key) {
+    case Action::AssembleJobClass: {
+      if (UseIntegratedAs)
+        T = new tools::ClangAs(*this);
+      else
+        T = new tools::bitrig::Assemble(*this);
+      break;
+    }
+    case Action::LinkJobClass:
+      T = new tools::bitrig::Link(*this); break;
+    default:
+      T = &Generic_GCC::SelectTool(C, JA, Inputs);
+    }
+  }
+
+  return *T;
+}
+
+void Bitrig::AddClangCXXStdlibIncludeArgs(const ArgList &DriverArgs,
+                                          ArgStringList &CC1Args) const {
+  if (DriverArgs.hasArg(options::OPT_nostdlibinc) ||
+      DriverArgs.hasArg(options::OPT_nostdincxx))
+    return;
+
+  std::string Triple = getTriple().str();
+  if (Triple.substr(0, 5) == "amd64")
+    Triple.replace(0, 5, "x86_64");
+
+  addSystemInclude(DriverArgs, CC1Args, "/usr/include/c++/4.6.2");
+  addSystemInclude(DriverArgs, CC1Args, "/usr/include/c++/4.6.2/backward");
+  addSystemInclude(DriverArgs, CC1Args, "/usr/include/c++/4.6.2/" + Triple);
+
+}
+
+void Bitrig::AddCXXStdlibLibArgs(const ArgList &Args,
+                                 ArgStringList &CmdArgs) const {
+  CmdArgs.push_back("-lstdc++");
 }
 
 /// FreeBSD - FreeBSD tool chain which can call as(1) and ld(1) directly.
@@ -1959,6 +2032,28 @@ static void addPathIfExists(Twine Path, ToolChain::path_list &Paths) {
   if (llvm::sys::fs::exists(Path)) Paths.push_back(Path.str());
 }
 
+static bool isMipsArch(llvm::Triple::ArchType Arch) {
+  return Arch == llvm::Triple::mips ||
+         Arch == llvm::Triple::mipsel ||
+         Arch == llvm::Triple::mips64 ||
+         Arch == llvm::Triple::mips64el;
+}
+
+static StringRef getMultilibDir(const llvm::Triple &Triple,
+                                const ArgList &Args) {
+  if (!isMipsArch(Triple.getArch()))
+    return Triple.isArch32Bit() ? "lib32" : "lib64";
+
+  // lib32 directory has a special meaning on MIPS targets.
+  // It contains N32 ABI binaries. Use this folder if produce
+  // code for N32 ABI only.
+  Arg *A = Args.getLastArg(options::OPT_mabi_EQ);
+  if (A && (A->getValue(Args) == StringRef("n32")))
+    return "lib32";
+
+  return Triple.isArch32Bit() ? "lib" : "lib64";
+}
+
 Linux::Linux(const Driver &D, const llvm::Triple &Triple, const ArgList &Args)
   : Generic_ELF(D, Triple, Args) {
   llvm::Triple::ArchType Arch = Triple.getArch();
@@ -1982,19 +2077,14 @@ Linux::Linux(const Driver &D, const llvm::Triple &Triple, const ArgList &Args)
   if (Arch == llvm::Triple::arm || Arch == llvm::Triple::thumb)
     ExtraOpts.push_back("-X");
 
-  const bool IsMips = Arch == llvm::Triple::mips ||
-                      Arch == llvm::Triple::mipsel ||
-                      Arch == llvm::Triple::mips64 ||
-                      Arch == llvm::Triple::mips64el;
-
-  const bool IsAndroid = Triple.getEnvironment() == llvm::Triple::ANDROIDEABI;
+  const bool IsAndroid = Triple.getEnvironment() == llvm::Triple::Android;
 
   // Do not use 'gnu' hash style for Mips targets because .gnu.hash
   // and the MIPS ABI require .dynsym to be sorted in different ways.
   // .gnu.hash needs symbols to be grouped by hash code whereas the MIPS
   // ABI requires a mapping between the GOT and the symbol table.
   // Android loader does not support .gnu.hash.
-  if (!IsMips && !IsAndroid) {
+  if (!isMipsArch(Arch) && !IsAndroid) {
     if (IsRedhat(Distro) || IsOpenSuse(Distro) ||
         (IsUbuntu(Distro) && Distro >= UbuntuMaverick))
       ExtraOpts.push_back("--hash-style=gnu");
@@ -2023,7 +2113,7 @@ Linux::Linux(const Driver &D, const llvm::Triple &Triple, const ArgList &Args)
   // to the link paths.
   path_list &Paths = getFilePaths();
 
-  const std::string Multilib = Triple.isArch32Bit() ? "lib32" : "lib64";
+  const std::string Multilib = getMultilibDir(Triple, Args);
   const std::string MultiarchTriple = getMultiarchTriple(Triple, SysRoot);
 
   // Add the multilib suffixed paths where they are available.
@@ -2046,6 +2136,11 @@ Linux::Linux(const Driver &D, const llvm::Triple &Triple, const ArgList &Args)
                       Paths);
       addPathIfExists(LibPath + "/" + MultiarchTriple, Paths);
       addPathIfExists(LibPath + "/../" + Multilib, Paths);
+    }
+    // On Android, libraries in the parent prefix of the GCC installation are
+    // preferred to the ones under sysroot.
+    if (IsAndroid) {
+      addPathIfExists(LibPath + "/../" + GCCTriple.str() + "/lib", Paths);
     }
   }
   addPathIfExists(SysRoot + "/lib/" + MultiarchTriple, Paths);
@@ -2265,16 +2360,25 @@ void Linux::AddClangCXXStdlibIncludeArgs(const ArgList &DriverArgs,
   StringRef LibDir = GCCInstallation.getParentLibPath();
   StringRef InstallDir = GCCInstallation.getInstallPath();
   StringRef Version = GCCInstallation.getVersion().Text;
-  if (!addLibStdCXXIncludePaths(LibDir + "/../include/c++/" + Version,
-                                (GCCInstallation.getTriple().str() +
-                                 GCCInstallation.getMultiarchSuffix()),
-                                DriverArgs, CC1Args)) {
+  StringRef TripleStr = GCCInstallation.getTriple().str();
+
+  const std::string IncludePathCandidates[] = {
+    LibDir.str() + "/../include/c++/" + Version.str(),
     // Gentoo is weird and places its headers inside the GCC install, so if the
     // first attempt to find the headers fails, try this pattern.
-    addLibStdCXXIncludePaths(InstallDir + "/include/g++-v4",
-                             (GCCInstallation.getTriple().str() +
-                              GCCInstallation.getMultiarchSuffix()),
-                             DriverArgs, CC1Args);
+    InstallDir.str() + "/include/g++-v4",
+    // Android standalone toolchain has C++ headers in yet another place.
+    LibDir.str() + "/../" + TripleStr.str() + "/include/c++/" + Version.str(),
+    // Freescale SDK C++ headers are directly in <sysroot>/usr/include/c++,
+    // without a subdirectory corresponding to the gcc version.
+    LibDir.str() + "/../include/c++",
+  };
+
+  for (unsigned i = 0; i < llvm::array_lengthof(IncludePathCandidates); ++i) {
+    if (addLibStdCXXIncludePaths(IncludePathCandidates[i], (TripleStr +
+                GCCInstallation.getMultiarchSuffix()),
+            DriverArgs, CC1Args))
+      break;
   }
 }
 
