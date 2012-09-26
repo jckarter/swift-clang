@@ -98,6 +98,8 @@ class Preprocessor : public RefCountedBase<Preprocessor> {
   IdentifierInfo *Ident__has_include;              // __has_include
   IdentifierInfo *Ident__has_include_next;         // __has_include_next
   IdentifierInfo *Ident__has_warning;              // __has_warning
+  IdentifierInfo *Ident__building_module;          // __building_module
+  IdentifierInfo *Ident__MODULE__;                 // __MODULE__
 
   SourceLocation DATELoc, TIMELoc;
   unsigned CounterValue;  // Next __COUNTER__ value.
@@ -364,8 +366,6 @@ private:  // Cached tokens state.
   /// allocation.
   MacroInfoChain *MICache;
 
-  MacroInfo *getInfoForMacro(IdentifierInfo *II) const;
-
 public:
   Preprocessor(DiagnosticsEngine &diags, LangOptions &opts,
                const TargetInfo *target,
@@ -465,8 +465,16 @@ public:
     if (!II->hasMacroDefinition())
       return 0;
 
-    return getInfoForMacro(II);
+    MacroInfo *MI = getMacroInfoHistory(II);
+    assert(MI->getUndefLoc().isInvalid() && "Macro is undefined!");
+    return MI;
   }
+
+  /// \brief Given an identifier, return the (probably #undef'd) MacroInfo
+  /// representing the most recent macro definition. One can iterate over all
+  /// previous macro definitions from it. This method should only be called for
+  /// identifiers that hadMacroDefinition().
+  MacroInfo *getMacroInfoHistory(IdentifierInfo *II) const;
 
   /// \brief Specify a macro for this identifier.
   void setMacroInfo(IdentifierInfo *II, MacroInfo *MI,

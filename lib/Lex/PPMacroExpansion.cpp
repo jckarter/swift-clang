@@ -32,8 +32,8 @@
 #include <ctime>
 using namespace clang;
 
-MacroInfo *Preprocessor::getInfoForMacro(IdentifierInfo *II) const {
-  assert(II->hasMacroDefinition() && "Identifier is not a macro!");
+MacroInfo *Preprocessor::getMacroInfoHistory(IdentifierInfo *II) const {
+  assert(II->hadMacroDefinition() && "Identifier has not been not a macro!");
 
   macro_iterator Pos = Macros.find(II);
   if (Pos == Macros.end()) {
@@ -42,7 +42,6 @@ MacroInfo *Preprocessor::getInfoForMacro(IdentifierInfo *II) const {
     Pos = Macros.find(II);
   }
   assert(Pos != Macros.end() && "Identifier macro info is missing!");
-  assert(Pos->second->getUndefLoc().isInvalid() && "Macro is undefined!");
   return Pos->second;
 }
 
@@ -51,9 +50,11 @@ MacroInfo *Preprocessor::getInfoForMacro(IdentifierInfo *II) const {
 void Preprocessor::setMacroInfo(IdentifierInfo *II, MacroInfo *MI,
                                 bool LoadedFromAST) {
   assert(MI && "MacroInfo should be non-zero!");
+  assert((LoadedFromAST || MI->getUndefLoc().isInvalid()) &&
+         "Undefined macros can only be registered when just LoadedFromAST");
   MI->setPreviousDefinition(Macros[II]);
   Macros[II] = MI;
-  II->setHasMacroDefinition(true);
+  II->setHasMacroDefinition(MI->getUndefLoc().isInvalid());
   if (II->isFromAST() && !LoadedFromAST)
     II->setChangedSinceDeserialization();
 }
@@ -105,6 +106,20 @@ void Preprocessor::RegisterBuiltinMacros() {
   Ident__has_include_next = RegisterBuiltinMacro(*this, "__has_include_next");
   Ident__has_warning      = RegisterBuiltinMacro(*this, "__has_warning");
 
+  // Modules.
+  if (LangOpts.Modules) {
+    Ident__building_module  = RegisterBuiltinMacro(*this, "__building_module");
+
+    // __MODULE__
+    if (!LangOpts.CurrentModule.empty())
+      Ident__MODULE__ = RegisterBuiltinMacro(*this, "__MODULE__");
+    else
+      Ident__MODULE__ = 0;
+  } else {
+    Ident__building_module = 0;
+    Ident__MODULE__ = 0;
+  }
+  
   // Microsoft Extensions.
   if (LangOpts.MicrosoftExt) 
     Ident__pragma = RegisterBuiltinMacro(*this, "__pragma");
@@ -907,6 +922,47 @@ static bool EvaluateHasIncludeNext(Token &Tok,
   return EvaluateHasIncludeCommon(Tok, II, PP, Lookup);
 }
 
+/// \brief Process __building_module(identifier) expression.
+/// \returns true if we are building the named module, false otherwise.
+static bool EvaluateBuildingModule(Token &Tok,
+                                   IdentifierInfo *II, Preprocessor &PP) {
+  // Get '('.
+  PP.LexNonComment(Tok);
+
+  // Ensure we have a '('.
+  if (Tok.isNot(tok::l_paren)) {
+    PP.Diag(Tok.getLocation(), diag::err_pp_missing_lparen) << II->getName();
+    return false;
+  }
+
+  // Save '(' location for possible missing ')' message.
+  SourceLocation LParenLoc = Tok.getLocation();
+
+  // Get the module name.
+  PP.LexNonComment(Tok);
+
+  // Ensure that we have an identifier.
+  if (Tok.isNot(tok::identifier)) {
+    PP.Diag(Tok.getLocation(), diag::err_expected_id_building_module);
+    return false;
+  }
+
+  bool Result
+    = Tok.getIdentifierInfo()->getName() == PP.getLangOpts().CurrentModule;
+
+  // Get ')'.
+  PP.LexNonComment(Tok);
+
+  // Ensure we have a trailing ).
+  if (Tok.isNot(tok::r_paren)) {
+    PP.Diag(Tok.getLocation(), diag::err_pp_missing_rparen) << II->getName();
+    PP.Diag(LParenLoc, diag::note_matching) << "(";
+    return false;
+  }
+
+  return Result;
+}
+
 /// ExpandBuiltinMacro - If an identifier token is read that is to be expanded
 /// as a builtin macro, handle it and return the next token as 'Tok'.
 void Preprocessor::ExpandBuiltinMacro(Token &Tok) {
@@ -1162,6 +1218,18 @@ void Preprocessor::ExpandBuiltinMacro(Token &Tok) {
 
     OS << (int)Value;
     Tok.setKind(tok::numeric_constant);
+  } else if (II == Ident__building_module) {
+    // The argument to this builtin should be an identifier. The
+    // builtin evaluates to 1 when that identifier names the module we are
+    // currently building.
+    OS << (int)EvaluateBuildingModule(Tok, II, *this);
+    Tok.setKind(tok::numeric_constant);
+  } else if (II == Ident__MODULE__) {
+    // The current module as an identifier.
+    OS << getLangOpts().CurrentModule;
+    IdentifierInfo *ModuleII = getIdentifierInfo(getLangOpts().CurrentModule);
+    Tok.setIdentifierInfo(ModuleII);
+    Tok.setKind(ModuleII->getTokenID());
   } else {
     llvm_unreachable("Unknown identifier!");
   }
