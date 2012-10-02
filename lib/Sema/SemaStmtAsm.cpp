@@ -331,6 +331,28 @@ static bool isMSAsmKeyword(StringRef Name) {
   return Ret;
 }
 
+// Check to see if the expression is a substring of the asm operand.
+static StringRef getMSInlineAsmExprName(StringRef Name) {
+  // Strip off the size directives.
+  // E.g., DWORD PTR [V] -> V
+  if (Name.startswith("BYTE") || Name.startswith("byte") ||
+      Name.startswith("WORD") || Name.startswith("word") ||
+      Name.startswith("DWORD") || Name.startswith("dword") ||
+      Name.startswith("QWORD") || Name.startswith("qword") ||
+      Name.startswith("XWORD") || Name.startswith("xword") ||
+      Name.startswith("XMMWORD") || Name.startswith("xmmword") ||
+      Name.startswith("YMMWORD") || Name.startswith("ymmword")) {
+    std::pair< StringRef, StringRef > SplitName = Name.split(' ');
+    assert((SplitName.second.startswith("PTR") ||
+            SplitName.second.startswith("ptr")) &&
+           "Expected PTR/ptr!");
+    SplitName = SplitName.second.split('[');
+    SplitName = SplitName.second.split(']');
+    return SplitName.first;
+  }
+  return Name;
+}
+
 // getIdentifierInfo - Given a Name and a range of tokens, find the associated
 // IdentifierInfo*.
 static IdentifierInfo *getIdentifierInfo(StringRef Name,
@@ -377,9 +399,11 @@ static bool isSimpleMSAsm(std::vector<StringRef> &Pieces,
   if (isMSAsmKeyword(Pieces[0]))
       return false;
 
-  for (unsigned i = 1, e = Pieces.size(); i != e; ++i)
-    if (!TI.isValidGCCRegisterName(Pieces[i]))
+  for (unsigned i = 1, e = Pieces.size(); i != e; ++i) {
+    StringRef Op = getMSInlineAsmExprName(Pieces[i]);
+    if (!TI.isValidGCCRegisterName(Op))
       return false;
+  }
   return true;
 }
 
@@ -456,28 +480,6 @@ static bool buildMSAsmStrings(Sema &SemaRef,
   AsmTokRanges.push_back(std::make_pair(startTok, AsmToks.size()-1));
 
   return false;
-}
-
-// Check to see if the expression is a substring of the asm operand.
-static StringRef getMSInlineAsmExprName(StringRef Name) {
-  // Strip off the size directives.
-  // E.g., DWORD PTR [V] -> V
-  if (Name.startswith("BYTE") || Name.startswith("byte") ||
-      Name.startswith("WORD") || Name.startswith("word") ||
-      Name.startswith("DWORD") || Name.startswith("dword") ||
-      Name.startswith("QWORD") || Name.startswith("qword") ||
-      Name.startswith("XWORD") || Name.startswith("xword") ||
-      Name.startswith("XMMWORD") || Name.startswith("xmmword") ||
-      Name.startswith("YMMWORD") || Name.startswith("ymmword")) {
-    std::pair< StringRef, StringRef > SplitName = Name.split(' ');
-    assert((SplitName.second.startswith("PTR") ||
-            SplitName.second.startswith("ptr")) &&
-           "Expected PTR/ptr!");
-    SplitName = SplitName.second.split('[');
-    SplitName = SplitName.second.split(']');
-    return SplitName.first;
-  }
-  return Name;
 }
 
 #define DEF_SIMPLE_MSASM(STR)                                                \
@@ -573,6 +575,43 @@ StmtResult Sema::ActOnMSAsmStmt(SourceLocation AsmLoc, SourceLocation LBraceLoc,
     // If we had an error parsing the operands, fail gracefully.
     if (HadError) { DEF_SIMPLE_MSASM(EmptyAsmStr); return Owned(NS); }
 
+    // Rewrite the symbol references as wildcard MCParsedAsmOperands.
+    for (unsigned i = 1, e = Operands.size(); i != e; ++i)
+      if (Operands[i]->isMem()) {
+        StringRef Name = getMSInlineAsmExprName(Pieces[StrIdx][i]);
+
+        // The expr may be a register.  E.g., DWORD PTR [eax]
+        if (Context.getTargetInfo().isValidGCCRegisterName(Name))
+          continue;
+
+        IdentifierInfo *II = getIdentifierInfo(Name, AsmToks,
+                                               AsmTokRanges[StrIdx].first,
+                                               AsmTokRanges[StrIdx].second);
+        // Lookup the identifier.
+        // TODO: Someone with more experience with clang should verify this the
+        // proper way of doing a symbol lookup.
+        DeclarationName DeclName(II);
+        Scope *CurScope = getCurScope();
+        LookupResult R(*this, DeclName, AsmLoc, Sema::LookupOrdinaryName);
+        if (!this->LookupName(R, CurScope, false/*AllowBuiltinCreation*/))
+          assert(0 && "Sema::LookupName failed!");
+        assert (R.isSingleResult() && "Expected a single result?!");
+        NamedDecl *Decl = R.getFoundDecl();
+        switch (Decl->getKind()) {
+        default:
+          assert(0 && "Unknown decl kind.");
+          break;
+        case Decl::Var: {
+        case Decl::ParmVar:
+          VarDecl *Var = cast<VarDecl>(Decl);
+          QualType Ty = Var->getType();
+          // Set the expected operand size.
+          Operands[i]->setMSAsmWildcard(Context.getTypeInfo(Ty).first);
+          break;
+        }
+        }
+      }
+
     // Match the MCInstr.
     unsigned Kind;
     unsigned Opcode;
@@ -617,8 +656,7 @@ StmtResult Sema::ActOnMSAsmStmt(SourceLocation AsmLoc, SourceLocation LBraceLoc,
       // Expr/Input or Output.
       StringRef Name = getMSInlineAsmExprName(Pieces[StrIdx][i]);
 
-      // The expr may be a register.
-      // E.g., DWORD PTR [eax]
+      // The expr may be a register.  E.g., DWORD PTR [eax]
       if (Context.getTargetInfo().isValidGCCRegisterName(Name))
         continue;
 
