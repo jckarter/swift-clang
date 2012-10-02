@@ -90,8 +90,6 @@ class IvarInvalidationChecker :
   /// Statement visitor, which walks the method body and flags the ivars
   /// referenced in it (either directly or via property).
   class MethodCrawler : public ConstStmtVisitor<MethodCrawler> {
-    const ObjCMethodDecl *EnclosingMethod;
-
     /// The set of Ivars which need to be invalidated.
     IvarSet &IVars;
 
@@ -111,7 +109,9 @@ class IvarInvalidationChecker :
     /// The invalidation method being currently processed.
     const ObjCMethodDecl *InvalidationMethod;
 
-    /// Peel off parents, casts, OpaqueValueExpr, and PseudoObjectExpr.
+    ASTContext &Ctx;
+
+    /// Peel off parens, casts, OpaqueValueExpr, and PseudoObjectExpr.
     const Expr *peel(const Expr *E) const;
 
     /// Does this expression represent zero: '0'?
@@ -136,19 +136,19 @@ class IvarInvalidationChecker :
     void check(const Expr *E);
 
   public:
-    MethodCrawler(const ObjCMethodDecl *InMeth,
-                  IvarSet &InIVars,
+    MethodCrawler(IvarSet &InIVars,
                   bool &InCalledAnotherInvalidationMethod,
                   const MethToIvarMapTy &InPropertySetterToIvarMap,
                   const MethToIvarMapTy &InPropertyGetterToIvarMap,
-                  const PropToIvarMapTy &InPropertyToIvarMap)
-    : EnclosingMethod(InMeth),
-      IVars(InIVars),
+                  const PropToIvarMapTy &InPropertyToIvarMap,
+                  ASTContext &InCtx)
+    : IVars(InIVars),
       CalledAnotherInvalidationMethod(InCalledAnotherInvalidationMethod),
       PropertySetterToIvarMap(InPropertySetterToIvarMap),
       PropertyGetterToIvarMap(InPropertyGetterToIvarMap),
       PropertyToIvarMap(InPropertyToIvarMap),
-      InvalidationMethod(0) {}
+      InvalidationMethod(0),
+      Ctx(InCtx) {}
 
     void VisitStmt(const Stmt *S) { VisitChildren(S); }
 
@@ -359,11 +359,12 @@ void IvarInvalidationChecker::checkASTDecl(const ObjCMethodDecl *D,
 
   // Check which ivars have been invalidated in the method body.
   bool CalledAnotherInvalidationMethod = false;
-  MethodCrawler(D, Ivars,
+  MethodCrawler(Ivars,
                 CalledAnotherInvalidationMethod,
                 PropSetterToIvarMap,
                 PropGetterToIvarMap,
-                PropertyToIvarMap).VisitStmt(D->getBody());
+                PropertyToIvarMap,
+                BR.getContext()).VisitStmt(D->getBody());
 
   if (CalledAnotherInvalidationMethod)
     return;
@@ -467,20 +468,13 @@ void IvarInvalidationChecker::MethodCrawler::checkObjCPropertyRefExpr(
 
 bool IvarInvalidationChecker::MethodCrawler::isZero(const Expr *E) const {
   E = peel(E);
-  if (const IntegerLiteral *IL = dyn_cast<IntegerLiteral>(E))
-    return IL->getValue() == 0;
 
-  if (const CastExpr *ICE = dyn_cast<CastExpr>(E))
-    return ICE->getCastKind() == CK_NullToPointer;
-
-  return false;
+  return (E->isNullPointerConstant(Ctx, Expr::NPC_ValueDependentIsNotNull)
+           != Expr::NPCK_NotNull);
 }
 
 void IvarInvalidationChecker::MethodCrawler::check(const Expr *E) {
   E = peel(E);
-
-  if (const OpaqueValueExpr *OVE = dyn_cast<OpaqueValueExpr>(E))
-    E = OVE->getSourceExpr();
 
   if (const ObjCIvarRefExpr *IvarRef = dyn_cast<ObjCIvarRefExpr>(E)) {
     checkObjCIvarRefExpr(IvarRef);
@@ -500,7 +494,9 @@ void IvarInvalidationChecker::MethodCrawler::check(const Expr *E) {
 
 void IvarInvalidationChecker::MethodCrawler::VisitBinaryOperator(
     const BinaryOperator *BO) {
-  if (!BO->isAssignmentOp())
+  VisitStmt(BO);
+
+  if (BO->getOpcode() != BO_Assign)
     return;
 
   // Do we assign zero?
@@ -509,8 +505,6 @@ void IvarInvalidationChecker::MethodCrawler::VisitBinaryOperator(
 
   // Check the variable we are assigning to.
   check(BO->getLHS());
-
-  VisitStmt(BO);
 }
 
 void IvarInvalidationChecker::MethodCrawler::VisitObjCMessageExpr(
@@ -520,12 +514,9 @@ void IvarInvalidationChecker::MethodCrawler::VisitObjCMessageExpr(
 
   // Stop if we are calling '[self invalidate]'.
   if (Receiver && isInvalidationMethod(MD))
-    if (const DeclRefExpr *RD =
-          dyn_cast<DeclRefExpr>(Receiver->IgnoreParenCasts())) {
-      if (RD->getDecl() == EnclosingMethod->getSelfDecl()) {
-        CalledAnotherInvalidationMethod = true;
-        return;
-      }
+    if (Receiver->isObjCSelfExpr()) {
+      CalledAnotherInvalidationMethod = true;
+      return;
     }
 
   // Check if we call a setter and set the property to 'nil'.
