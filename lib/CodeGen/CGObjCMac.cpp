@@ -1742,6 +1742,10 @@ CGObjCCommonMac::EmitMessageSend(CodeGen::CodeGenFunction &CGF,
     Fn = (ObjCABI == 2) ? ObjCTypes.getSendFp2RetFn2(IsSuper)
       : ObjCTypes.getSendFp2retFn(IsSuper);
   } else {
+    // arm64 uses objc_msgSend for stret methods and yet null reciver check 
+    // must be made for it.
+    if (!IsSuper && CGM.ReturnTypeUsesSRet(MSI.CallInfo))
+      nullReturn.init(CGF, Arg0);
     Fn = (ObjCABI == 2) ? ObjCTypes.getSendFn2(IsSuper)
       : ObjCTypes.getSendFn(IsSuper);
   }
