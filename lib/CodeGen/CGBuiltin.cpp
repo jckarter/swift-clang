@@ -3525,6 +3525,18 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     Function *F = CGM.getIntrinsic(Intrinsic::arm64_neon_vcvthf2fp);
     return EmitNeonCall(F, Ops, "vcvt");
   }
+  case ARM64::BI__builtin_arm64_vcvt_f64_f32: {
+    assert(Type.getEltType() == NeonTypeFlags::Float64 && quad &&
+           "unexpected vcvt_f64_f32 builtin");
+     Function *F = CGM.getIntrinsic(Intrinsic::arm64_neon_vcvtfp2df);
+     return EmitNeonCall(F, Ops, "vcvt");
+  }
+  case ARM64::BI__builtin_arm64_vcvt_high_f64_f32: {
+    assert(Type.getEltType() == NeonTypeFlags::Float64 && quad &&
+           "unexpected vcvt_high_f64_f32 builtin");
+     Function *F = CGM.getIntrinsic(Intrinsic::arm64_neon_vcvthighfp2df);
+     return EmitNeonCall(F, Ops, "vcvt");
+  }
   case ARM64::BI__builtin_arm64_vcvt_f16_v: {
     assert(Type.getEltType() == NeonTypeFlags::Float16 && !quad &&
            "unexpected vcvt_f16_v builtin");

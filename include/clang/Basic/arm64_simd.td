@@ -241,10 +241,21 @@ def VCVT_S64     : SInst<"vcvt_s64", "xd",  "Qd">;
 def VCVT_U64     : SInst<"vcvt_u64", "ud",  "Qd">;
 // Integer->F64
 def VCVT_F64     : SInst<"vcvtq_f64", "fd", "RlRUl">;
+
+
+////////////////////////////////////////////////////////////////////////////////
+// Vector FP->FP Conversions
 // F16->F32
 def VCVT_F32_F16 : SInst<"vcvt_f32_f16", "fd", "h">;
 // F32->F16
 def VCVT_F16     : SInst<"vcvt_f16", "hk",  "f">;
+// F32->F64
+def VCVT_F64_F32 : SInst<"vcvt_f64_f32", "wd", "f">;
+// F32 high ->F64
+def VCVT_HIGH_F64_F32 : SInst<"vcvt_high_f64_f32", "wk", "f">;
+
+////////////////////////////////////////////////////////////////////////////////
+// Vector FP->Fixed Point Conversions
 let isVCVT_N = 1 in {
 // f32 -> signed-fixed-point
 def VCVT_N_S32   : SInst<"vcvt_n_s32", "xdi", "fQf">;

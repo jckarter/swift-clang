@@ -714,7 +714,9 @@ static char getScalarSuffix(char type) {
 /// 128b rather than 64b.   E.g. turn "vst2_lane" into "vst2q_lane_f32", etc.
 static std::string MangleName(const std::string &name, StringRef typestr,
                               ClassKind ck, bool scal = false) {
-  if (name == "vcvt_f32_f16")
+  if (name == "vcvt_f32_f16" ||
+      name == "vcvt_f64_f32" ||
+      name == "vcvt_high_f64_f32")
     return name;
 
   bool quad = false;
