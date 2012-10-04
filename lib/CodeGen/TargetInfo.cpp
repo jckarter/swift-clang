@@ -2745,6 +2745,7 @@ public:
 private:
   ABIArgInfo classifyReturnType(QualType RetTy) const;
   ABIArgInfo classifyArgumentType(QualType RetTy) const;
+  bool isIllegalVectorType(QualType Ty) const;
 
   virtual void computeInfo(CGFunctionInfo &FI) const {
     FI.getReturnInfo() = classifyReturnType(FI.getReturnType());
@@ -2778,13 +2779,34 @@ static bool isHomogeneousAggregate(QualType Ty, const Type *&Base,
                                    bool FPOnly, uint64_t *HAMembers = 0);
 
 ABIArgInfo ARM64ABIInfo::classifyArgumentType(QualType Ty) const {
-  if (!isAggregateTypeForABI(Ty)) {
+  if (!isAggregateTypeForABI(Ty) && !isIllegalVectorType(Ty)) {
     // Treat an enum type as its underlying type.
     if (const EnumType *EnumTy = Ty->getAs<EnumType>())
       Ty = EnumTy->getDecl()->getIntegerType();
 
     return (Ty->isPromotableIntegerType() ?
             ABIArgInfo::getExtend() : ABIArgInfo::getDirect());
+  }
+
+  // Handle illegal vector types here.
+  if (isIllegalVectorType(Ty)) {
+    uint64_t Size = getContext().getTypeSize(Ty);
+    if (Size == 32) {
+      llvm::Type *ResType =
+          llvm::Type::getInt32Ty(getVMContext());
+      return ABIArgInfo::getDirect(ResType);
+    }
+    if (Size == 64) {
+      llvm::Type *ResType = llvm::VectorType::get(
+          llvm::Type::getInt32Ty(getVMContext()), 2);
+      return ABIArgInfo::getDirect(ResType);
+    }
+    if (Size == 128) {
+      llvm::Type *ResType = llvm::VectorType::get(
+          llvm::Type::getInt32Ty(getVMContext()), 4);
+      return ABIArgInfo::getDirect(ResType);
+    }
+    return ABIArgInfo::getIndirect(0, /*ByVal=*/false);
   }
 
   // Ignore empty records.
@@ -2851,15 +2873,32 @@ ABIArgInfo ARM64ABIInfo::classifyReturnType(QualType RetTy) const {
   return ABIArgInfo::getIndirect(0);
 }
 
+/// isLegalVector - check whether the vector type is legal for ARM64.
+bool ARM64ABIInfo::isIllegalVectorType(QualType Ty) const {
+  if (const VectorType *VT = Ty->getAs<VectorType>()) {
+    // Check whether VT is legal.
+    unsigned NumElements = VT->getNumElements();
+    uint64_t Size = getContext().getTypeSize(VT);
+    // NumElements should be power of 2.
+    if ((NumElements & (NumElements - 1)) != 0)
+      return true;
+    return Size > 128;
+  }
+  return false;
+}
+
 llvm::Value *ARM64ABIInfo::EmitVAArg(llvm::Value *VAListAddr, QualType Ty,
                                      CodeGenFunction &CGF) const {
-  // Use the LLVM va_arg instruction except for aggregates.
-  if (!isAggregateTypeForABI(Ty))
+  // We do not support va_arg for aggregates or illegal vector types.
+  // Lower VAArg here for these cases and use the LLVM va_arg instruction for
+  // other cases.
+  if (!isAggregateTypeForABI(Ty) && !isIllegalVectorType(Ty))
     return 0;
 
   uint64_t Size = CGF.getContext().getTypeSize(Ty) / 8;
   uint64_t Align = CGF.getContext().getTypeAlign(Ty) / 8;
   bool isIndirect = false;
+  // Use indirect if size of the illegal vector is bigger than 128.
   if (Size > 16) {
     isIndirect = true;
     Size = 8;
