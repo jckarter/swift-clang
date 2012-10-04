@@ -75,8 +75,9 @@ ifeq ($(OS),Darwin)
 RuntimeDirs += darwin
 RuntimeLibrary.darwin.Configs := \
 	eprintf.a 10.4.a osx.a ios.a cc_kext.a cc_kext_ios5.a \
-	asan_osx.a asan_osx_dynamic.dylib \
 	profile_osx.a profile_ios.a
+#	Apple Internal: Disable building asan libraries. <rdar://12423266>
+#	asan_osx.a asan_osx_dynamic.dylib
 endif
 
 # On Linux, include a library which has all the runtime functions.
