@@ -860,6 +860,11 @@ DerivedArgList *Darwin::TranslateArgs(const DerivedArgList &Args,
     }
   }
 
+  // Default to use libc++ on OS X 10.9 and later.
+  if (isTargetMacOS() && !isMacosxVersionLT(10, 9) &&
+      !Args.getLastArg(options::OPT_stdlib_EQ))
+    DAL->AddJoinedArg(0, Opts.getOption(options::OPT_stdlib_EQ), "libc++");
+
   // Validate the C++ standard library choice.
   CXXStdlibType Type = GetCXXStdlibType(*DAL);
   if (Type == ToolChain::CST_Libcxx) {
