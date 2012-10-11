@@ -2895,7 +2895,7 @@ ABIArgInfo ARM64ABIInfo::classifyArgumentType(QualType Ty) const {
 
   // Homogeneous Floating-point Aggregates (HFAs) need to be expanded.
   const Type *Base = 0;
-  if (isHomogeneousAggregate(Ty, Base, getContext(), true))
+  if (isHomogeneousAggregate(Ty, Base, getContext(), false))
     return ABIArgInfo::getExpand();
 
   // Aggregates <= 16 bytes are passed directly in registers or on the stack.
@@ -2934,7 +2934,7 @@ ABIArgInfo ARM64ABIInfo::classifyReturnType(QualType RetTy) const {
     return ABIArgInfo::getIgnore();
 
   const Type *Base = 0;
-  if (isHomogeneousAggregate(RetTy, Base, getContext(), true))
+  if (isHomogeneousAggregate(RetTy, Base, getContext(), false))
     // Homogeneous Floating-point Aggregates (HFAs) are returned directly.
     return ABIArgInfo::getDirect();
 
@@ -3180,6 +3180,9 @@ static bool isHomogeneousAggregate(QualType Ty, const Type *&Base,
     const Type *TyPtr = Ty.getTypePtr();
     if (!Base)
       Base = TyPtr;
+    // If Base is a short vector, we only care about its size, the type of the
+    // elements in the short vector does not form part of the test for
+    // homogeneity.
     if (Base != TyPtr &&
         (!Base->isVectorType() || !TyPtr->isVectorType() ||
          Context.getTypeSize(Base) != Context.getTypeSize(TyPtr)))

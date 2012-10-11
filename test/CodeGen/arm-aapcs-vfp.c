@@ -92,7 +92,7 @@ void test_hetero(struct heterogeneous_struct arg) {
 
 // Neon multi-vector types are homogeneous aggregates.
 // CHECK: define arm_aapcs_vfpcc <16 x i8> @f0(<16 x i8> %{{.*}}, <16 x i8> %{{.*}}, <16 x i8> %{{.*}}, <16 x i8> %{{.*}})
-// CHECK64: define <16 x i8> @f0(%struct.int8x16x4_t* %{{.*}})
+// CHECK64: define <16 x i8> @f0(<16 x i8> %{{.*}}, <16 x i8> %{{.*}}, <16 x i8> %{{.*}}, <16 x i8> %{{.*}})
 int8x16_t f0(int8x16x4_t v4) {
   return vaddq_s8(v4.val[0], v4.val[3]);
 }
@@ -106,7 +106,7 @@ struct neon_struct {
   int16x4_t v4;
 };
 // CHECK: define arm_aapcs_vfpcc void @test_neon(<8 x i8> %{{.*}}, <8 x i8> %{{.*}}, <2 x i32> %{{.*}}, <4 x i16> %{{.*}})
-// CHECK64: define void @test_neon(%struct.neon_struct* %{{.*}})
+// CHECK64: define void @test_neon(<8 x i8> %{{.*}}, <8 x i8> %{{.*}}, <2 x i32> %{{.*}}, <4 x i16> %{{.*}})
 extern void neon_callee(struct neon_struct);
 void test_neon(struct neon_struct arg) {
   neon_callee(arg);
