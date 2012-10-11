@@ -123,8 +123,8 @@ private:
   unsigned IsInstance : 1;
   unsigned IsVariadic : 1;
 
-  // Synthesized declaration method for a property setter/getter
-  unsigned IsSynthesized : 1;
+  /// True if this method is the getter or setter for an explicit property.
+  unsigned IsPropertyAccessor : 1;
 
   // Method has a definition.
   unsigned IsDefined : 1;
@@ -226,7 +226,7 @@ private:
                  DeclContext *contextDecl,
                  bool isInstance = true,
                  bool isVariadic = false,
-                 bool isSynthesized = false,
+                 bool isPropertyAccessor = false,
                  bool isImplicitlyDeclared = false,
                  bool isDefined = false,
                  ImplementationControl impControl = None,
@@ -234,7 +234,7 @@ private:
   : NamedDecl(ObjCMethod, contextDecl, beginLoc, SelInfo),
     DeclContext(ObjCMethod), Family(InvalidObjCMethodFamily),
     IsInstance(isInstance), IsVariadic(isVariadic),
-    IsSynthesized(isSynthesized),
+    IsPropertyAccessor(isPropertyAccessor),
     IsDefined(isDefined), IsRedeclaration(0), HasRedeclaration(0),
     DeclImplementation(impControl), objcDeclQualifier(OBJC_TQ_None),
     RelatedResultType(HasRelatedResultType),
@@ -260,7 +260,7 @@ public:
                                 DeclContext *contextDecl,
                                 bool isInstance = true,
                                 bool isVariadic = false,
-                                bool isSynthesized = false,
+                                bool isPropertyAccessor = false,
                                 bool isImplicitlyDeclared = false,
                                 bool isDefined = false,
                                 ImplementationControl impControl = None,
@@ -402,8 +402,8 @@ public:
 
   bool isClassMethod() const { return !IsInstance; }
 
-  bool isSynthesized() const { return IsSynthesized; }
-  void setSynthesized(bool isSynth) { IsSynthesized = isSynth; }
+  bool isPropertyAccessor() const { return IsPropertyAccessor; }
+  void setPropertyAccessor(bool isAccessor) { IsPropertyAccessor = isAccessor; }
 
   bool isDefined() const { return IsDefined; }
   void setDefined(bool isDefined) { IsDefined = isDefined; }
@@ -421,13 +421,21 @@ public:
   /// \brief Return overridden methods for the given \p Method.
   ///
   /// An ObjC method is considered to override any method in the class's
-  /// base classes, its protocols, or its categories' protocols, that has
+  /// base classes (and base's categories), its protocols, or its categories'
+  /// protocols, that has
   /// the same selector and is of the same kind (class or instance).
   /// A method in an implementation is not considered as overriding the same
   /// method in the interface or its categories.
   void getOverriddenMethods(
                      SmallVectorImpl<const ObjCMethodDecl *> &Overridden) const;
-  
+
+  /// \brief Returns the property associated with this method's selector.
+  ///
+  /// Note that even if this particular method is not marked as a property
+  /// accessor, it is still possible for it to match a property declared in a
+  /// superclass. Pass \c false if you only want to check the current class.
+  const ObjCPropertyDecl *findPropertyDecl(bool CheckOverrides = true) const;
+
   // Related to protocols declared in  \@protocol
   void setDeclImplementation(ImplementationControl ic) {
     DeclImplementation = ic;
