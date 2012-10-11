@@ -24,6 +24,7 @@
 #include "clang/AST/ASTMutationListener.h"
 #include "clang/AST/RecordLayout.h"
 #include "clang/AST/Mangle.h"
+#include "clang/AST/Comment.h"
 #include "clang/Basic/Builtins.h"
 #include "clang/Basic/SourceManager.h"
 #include "clang/Basic/TargetInfo.h"
@@ -355,21 +356,72 @@ const RawComment *ASTContext::getRawCommentForAnyRedecl(
   return RC;
 }
 
+static void addRedeclaredMethods(const ObjCMethodDecl *ObjCMethod,
+                   SmallVectorImpl<const NamedDecl *> &Redeclared) {
+  const DeclContext *DC = ObjCMethod->getDeclContext();
+  if (const ObjCImplDecl *IMD = dyn_cast<ObjCImplDecl>(DC)) {
+    const ObjCInterfaceDecl *ID = IMD->getClassInterface();
+    if (!ID)
+      return;
+    // Add redeclared method here.
+    for (const ObjCCategoryDecl *ClsExtDecl = ID->getFirstClassExtension();
+         ClsExtDecl; ClsExtDecl = ClsExtDecl->getNextClassExtension()) {
+      if (ObjCMethodDecl *RedeclaredMethod =
+            ClsExtDecl->getMethod(ObjCMethod->getSelector(),
+                                  ObjCMethod->isInstanceMethod()))
+        Redeclared.push_back(RedeclaredMethod);
+    }
+  }
+}
+
 comments::FullComment *ASTContext::getCommentForDecl(
                                               const Decl *D,
                                               const Preprocessor *PP) const {
   D = adjustDeclToTemplate(D);
+  
   const Decl *Canonical = D->getCanonicalDecl();
   llvm::DenseMap<const Decl *, comments::FullComment *>::iterator Pos =
       ParsedComments.find(Canonical);
-  if (Pos != ParsedComments.end())
+  
+  if (Pos != ParsedComments.end()) {
+    if (Canonical != D &&
+        (isa<ObjCMethodDecl>(D) || isa<FunctionDecl>(D))) {
+      // case of method being redeclaration of the canonical, not
+      // overriding it; i.e. method in implementation, canonical in
+      // interface. Or, out-of-line cxx-method definition. 
+      comments::FullComment *FC = Pos->second;
+      comments::FullComment *CFC =
+        new (*this) comments::FullComment(FC->getBlocks(),
+                                          FC->getThisDeclInfo(),
+                                          const_cast<Decl *>(D));
+      return CFC;
+    }
     return Pos->second;
-
+  }
+  
   const Decl *OriginalDecl;
+  
   const RawComment *RC = getRawCommentForAnyRedecl(D, &OriginalDecl);
-  if (!RC)
+  if (!RC) {
+    if (isa<ObjCMethodDecl>(D) || isa<FunctionDecl>(D)) {
+      SmallVector<const NamedDecl*, 8> overridden;
+      if (const ObjCMethodDecl *OMD = dyn_cast<ObjCMethodDecl>(D))
+        addRedeclaredMethods(OMD, overridden);
+      const_cast<ASTContext *>(this)->getOverriddenMethods(dyn_cast<NamedDecl>(D),
+                                                           overridden);
+      for (unsigned i = 0, e = overridden.size(); i < e; i++) {
+        if (comments::FullComment *FC = getCommentForDecl(overridden[i], PP)) {
+          comments::FullComment *CFC =
+            new (*this) comments::FullComment(FC->getBlocks(),
+                                              FC->getThisDeclInfo(),
+                                              const_cast<Decl *>(D));
+          return CFC;
+        }
+      }
+    }
     return NULL;
-
+  }
+  
   // If the RawComment was attached to other redeclaration of this Decl, we
   // should parse the comment in context of that other Decl.  This is important
   // because comments can contain references to parameter names which can be
@@ -5522,6 +5574,65 @@ static TypedefDecl *CreatePNaClABIBuiltinVaListDecl(const ASTContext *Context) {
   return VaListTypedefDecl;
 }
 
+static TypedefDecl *
+CreateAAPCSABIBuiltinVaListDecl(const ASTContext *Context) {
+  RecordDecl *VaListDecl;
+  if (Context->getLangOpts().CPlusPlus) {
+    // namespace std { struct __va_list {
+    NamespaceDecl *NS;
+    NS = NamespaceDecl::Create(const_cast<ASTContext &>(*Context),
+                               Context->getTranslationUnitDecl(),
+                               /*Inline*/false, SourceLocation(),
+                               SourceLocation(), &Context->Idents.get("std"),
+                               /*PrevDecl*/0);
+
+    VaListDecl = CXXRecordDecl::Create(*Context, TTK_Struct,
+                                       Context->getTranslationUnitDecl(),
+                                       SourceLocation(), SourceLocation(),
+                                       &Context->Idents.get("__va_list"));
+
+    VaListDecl->setDeclContext(NS);
+
+  } else {
+    // struct __va_list {
+    VaListDecl = CreateRecordDecl(*Context, TTK_Struct,
+                                  Context->getTranslationUnitDecl(),
+                                  &Context->Idents.get("__va_list"));
+  }
+
+  VaListDecl->startDefinition();
+
+  // void * __ap;
+  FieldDecl *Field = FieldDecl::Create(const_cast<ASTContext &>(*Context),
+                                       VaListDecl,
+                                       SourceLocation(),
+                                       SourceLocation(),
+                                       &Context->Idents.get("__ap"),
+                                       Context->getPointerType(Context->VoidTy),
+                                       /*TInfo=*/0,
+                                       /*BitWidth=*/0,
+                                       /*Mutable=*/false,
+                                       ICIS_NoInit);
+  Field->setAccess(AS_public);
+  VaListDecl->addDecl(Field);
+
+  // };
+  VaListDecl->completeDefinition();
+
+  // typedef struct __va_list __builtin_va_list;
+  TypeSourceInfo *TInfo
+    = Context->getTrivialTypeSourceInfo(Context->getRecordType(VaListDecl));
+
+  TypedefDecl *VaListTypeDecl
+    = TypedefDecl::Create(const_cast<ASTContext &>(*Context),
+                          Context->getTranslationUnitDecl(),
+                          SourceLocation(), SourceLocation(),
+                          &Context->Idents.get("__builtin_va_list"),
+                          TInfo);
+
+  return VaListTypeDecl;
+}
+
 static TypedefDecl *CreateVaListDecl(const ASTContext *Context,
                                      TargetInfo::BuiltinVaListKind Kind) {
   switch (Kind) {
@@ -5535,6 +5646,8 @@ static TypedefDecl *CreateVaListDecl(const ASTContext *Context,
     return CreateX86_64ABIBuiltinVaListDecl(Context);
   case TargetInfo::PNaClABIBuiltinVaList:
     return CreatePNaClABIBuiltinVaListDecl(Context);
+  case TargetInfo::AAPCSABIBuiltinVaList:
+    return CreateAAPCSABIBuiltinVaListDecl(Context);
   }
 
   llvm_unreachable("Unhandled __builtin_va_list type kind");

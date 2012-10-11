@@ -2449,7 +2449,7 @@ void CodeGenModule::EmitObjCPropertyImplementations(const
       ObjCPropertyDecl *PD = PID->getPropertyDecl();
 
       // Determine which methods need to be implemented, some may have
-      // been overridden. Note that ::isSynthesized is not the method
+      // been overridden. Note that ::isPropertyAccessor is not the method
       // we want, that just indicates if the decl came from a
       // property. What we want to know is if the method is defined in
       // this implementation.
@@ -2485,7 +2485,7 @@ void CodeGenModule::EmitObjCIvarInitializations(ObjCImplementationDecl *D) {
       ObjCMethodDecl::Create(getContext(), D->getLocation(), D->getLocation(),
                              cxxSelector, getContext().VoidTy, 0, D,
                              /*isInstance=*/true, /*isVariadic=*/false,
-                          /*isSynthesized=*/true, /*isImplicitlyDeclared=*/true,
+                          /*isPropertyAccessor=*/true, /*isImplicitlyDeclared=*/true,
                              /*isDefined=*/false, ObjCMethodDecl::Required);
     D->addInstanceMethod(DTORMethod);
     CodeGenFunction(*this).GenerateObjCCtorDtorMethod(D, DTORMethod, false);
@@ -2507,7 +2507,7 @@ void CodeGenModule::EmitObjCIvarInitializations(ObjCImplementationDecl *D) {
                                                 getContext().getObjCIdType(), 0, 
                                                 D, /*isInstance=*/true,
                                                 /*isVariadic=*/false,
-                                                /*isSynthesized=*/true,
+                                                /*isPropertyAccessor=*/true,
                                                 /*isImplicitlyDeclared=*/true,
                                                 /*isDefined=*/false,
                                                 ObjCMethodDecl::Required);
