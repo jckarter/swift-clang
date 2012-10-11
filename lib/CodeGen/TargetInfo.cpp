@@ -2794,15 +2794,6 @@ static bool isHomogeneousAggregate(QualType Ty, const Type *&Base,
                                    bool FPOnly, uint64_t *HAMembers = 0);
 
 ABIArgInfo ARM64ABIInfo::classifyArgumentType(QualType Ty) const {
-  if (!isAggregateTypeForABI(Ty) && !isIllegalVectorType(Ty)) {
-    // Treat an enum type as its underlying type.
-    if (const EnumType *EnumTy = Ty->getAs<EnumType>())
-      Ty = EnumTy->getDecl()->getIntegerType();
-
-    return (Ty->isPromotableIntegerType() ?
-            ABIArgInfo::getExtend() : ABIArgInfo::getDirect());
-  }
-
   // Handle illegal vector types here.
   if (isIllegalVectorType(Ty)) {
     uint64_t Size = getContext().getTypeSize(Ty);
@@ -2822,6 +2813,15 @@ ABIArgInfo ARM64ABIInfo::classifyArgumentType(QualType Ty) const {
       return ABIArgInfo::getDirect(ResType);
     }
     return ABIArgInfo::getIndirect(0, /*ByVal=*/false);
+  }
+
+  if (!isAggregateTypeForABI(Ty)) {
+    // Treat an enum type as its underlying type.
+    if (const EnumType *EnumTy = Ty->getAs<EnumType>())
+      Ty = EnumTy->getDecl()->getIntegerType();
+
+    return (Ty->isPromotableIntegerType() ?
+            ABIArgInfo::getExtend() : ABIArgInfo::getDirect());
   }
 
   // Ignore empty records.
@@ -2888,16 +2888,16 @@ ABIArgInfo ARM64ABIInfo::classifyReturnType(QualType RetTy) const {
   return ABIArgInfo::getIndirect(0);
 }
 
-/// isLegalVector - check whether the vector type is legal for ARM64.
+/// isIllegalVectorType - check whether the vector type is legal for ARM64.
 bool ARM64ABIInfo::isIllegalVectorType(QualType Ty) const {
   if (const VectorType *VT = Ty->getAs<VectorType>()) {
     // Check whether VT is legal.
     unsigned NumElements = VT->getNumElements();
     uint64_t Size = getContext().getTypeSize(VT);
-    // NumElements should be power of 2.
-    if ((NumElements & (NumElements - 1)) != 0)
+    // NumElements should be power of 2 between 1 and 16.
+    if ((NumElements & (NumElements - 1)) != 0 || NumElements > 16)
       return true;
-    return Size > 128;
+    return Size != 64 && (Size != 128 || NumElements == 1);
   }
   return false;
 }
@@ -2913,7 +2913,7 @@ llvm::Value *ARM64ABIInfo::EmitVAArg(llvm::Value *VAListAddr, QualType Ty,
   uint64_t Size = CGF.getContext().getTypeSize(Ty) / 8;
   uint64_t Align = CGF.getContext().getTypeAlign(Ty) / 8;
   bool isIndirect = false;
-  // Use indirect if size of the illegal vector is bigger than 128.
+  // Arguments bigger than 16 bytes should be passed indirectly.
   if (Size > 16) {
     isIndirect = true;
     Size = 8;

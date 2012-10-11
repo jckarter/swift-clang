@@ -3,6 +3,7 @@
 #include <stdarg.h>
 
 typedef __attribute__(( ext_vector_type(3) ))  char __char3;
+typedef __attribute__(( ext_vector_type(4) ))  char __char4;
 typedef __attribute__(( ext_vector_type(5) ))  char __char5;
 typedef __attribute__(( ext_vector_type(9) ))  char __char9;
 typedef __attribute__(( ext_vector_type(19) )) char __char19;
@@ -29,6 +30,25 @@ double test_3c(__char3 *in) {
 // CHECK: test_3c
 // CHECK: call double (i32, ...)* @varargs_vec_3c(i32 3, i32 %2)
   return varargs_vec_3c(3, *in);
+}
+
+double varargs_vec_4c(int fixed, ...) {
+// CHECK: varargs_vec_4c
+// CHECK: %ap.next = getelementptr i8* %ap.cur, i32 8
+// CHECK: bitcast i8* %ap.cur to <4 x i8>*
+  va_list ap;
+  double sum = fixed;
+  va_start(ap, fixed);
+  __char4 c4 = va_arg(ap, __char4);
+  sum = sum + c4.x + c4.y;
+  va_end(ap);
+  return sum;
+}
+
+double test_4c(__char4 *in) {
+// CHECK: test_4c
+// CHECK: call double (i32, ...)* @varargs_vec_4c(i32 4, i32 %3)
+  return varargs_vec_4c(4, *in);
 }
 
 double varargs_vec_5c(int fixed, ...) {
