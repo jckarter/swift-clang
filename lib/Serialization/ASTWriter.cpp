@@ -3423,8 +3423,8 @@ void ASTWriter::WriteASTCore(Sema &SemaRef, MemorizeStatCalls *StatCalls,
   // Write the remaining AST contents.
   RecordData Record;
   Stream.EnterSubblock(AST_BLOCK_ID, 5);
-  WriteMetadata(Context, isysroot, OutputFile);
   WriteLanguageOptions(Context.getLangOpts());
+  WriteMetadata(Context, isysroot, OutputFile);
   if (StatCalls && isysroot.empty())
     WriteStatCache(*StatCalls);
 
@@ -3686,6 +3686,7 @@ void ASTWriter::WriteMacroUpdates() {
        I != E; ++I) {
     addMacroRef(I->first, Record);
     AddSourceLocation(I->second.UndefLoc, Record);
+    Record.push_back(inferSubmoduleIDFromLocation(I->second.UndefLoc));
   }
   Stream.EmitRecord(MACRO_UPDATES, Record);
 }
