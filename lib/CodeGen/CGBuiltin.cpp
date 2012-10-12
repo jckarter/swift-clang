@@ -3276,7 +3276,7 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
       Ty = llvm::VectorType::get(llvm::Type::getFloatTy(getLLVMContext()),
                                  2+2*quad);
     else
-      Ty = llvm::VectorType::get(llvm::Type::getFloatTy(getLLVMContext()), 2);
+      Ty = llvm::VectorType::get(llvm::Type::getDoubleTy(getLLVMContext()), 2);
     Int = Intrinsic::arm64_neon_facge;
     return EmitNeonCall(CGM.getIntrinsic(Int, Ty), Ops, "facge");
   }

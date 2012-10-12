@@ -110,10 +110,10 @@ def VCGE  : Inst<"vcge", "udd", "csifUcUsUiQcQsQiQfQdQUcQUsQUi", OP_GE>;
 def VCLE  : Inst<"vcle", "udd", "csifUcUsUiQcQsQiQfQdQUcQUsQUi", OP_LE>;
 def VCGT  : Inst<"vcgt", "udd", "csifUcUsUiQcQsQiQfQdQUcQUsQUi", OP_GT>;
 def VCLT  : Inst<"vclt", "udd", "csifUcUsUiQcQsQiQfQdQUcQUsQUi", OP_LT>;
-def VCAGE : IInst<"vcage", "udd", "fQf">;
-def VCALE : IInst<"vcale", "udd", "fQf">;
-def VCAGT : IInst<"vcagt", "udd", "fQf">;
-def VCALT : IInst<"vcalt", "udd", "fQf">;
+def VCAGE : IInst<"vcage", "udd", "fQfQd">;
+def VCALE : IInst<"vcale", "udd", "fQfQd">;
+def VCAGT : IInst<"vcagt", "udd", "fQfQd">;
+def VCALT : IInst<"vcalt", "udd", "fQfQd">;
 def VTST  : WInst<"vtst", "udd", "csiUcUsUiPcQcQsQiQUcQUsQUiQPc">;
 // Scalar
 def VCEQS : Inst<"vceqs", "sss", "f", OP_EQ>;
