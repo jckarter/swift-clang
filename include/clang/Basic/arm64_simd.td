@@ -530,7 +530,7 @@ def VQRDMULH_N   : SInst<"vqrdmulh_n", "dda", "siQsQi">;
 def VQRDMULH_LANE : Inst<"vqrdmulh_lane", "ddgi", "siQsQi", OP_QRDMULH_LN>;
 def VQRDMULH_LANEQ : Inst<"vqrdmulh_laneq", "ddki", "siQsQi", OP_QRDMULH_LN>;
 def VMLA_N       : Inst<"vmla_n", "ddda", "sifUsUiQsQiQUsQUiQfQd", OP_MLA_N>;
-def VFMA_N       : IInst<"vfma_n", "ddda", "fQf">;
+def VFMA_N       : IInst<"vfma_n", "ddda", "fQfQd">;
 def VMLAL_N      : Inst<"vmlal_n", "wwda", "siUsUi", OP_MLAL_N>;
 def VQDMLAL_N    : Inst<"vqdmlal_n", "wwda", "si", OP_QDMLAL_N>;
 def VMLS_N       : Inst<"vmls_n", "ddds", "sifUsUiQsQiQUsQUiQfQd", OP_MLS_N>;
