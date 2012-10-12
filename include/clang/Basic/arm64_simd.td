@@ -105,11 +105,11 @@ def VQSUBD : SInst<"vqsubd", "sss", "lUl">;
 
 ////////////////////////////////////////////////////////////////////////////////
 // Comparison
-def VCEQ  : Inst<"vceq", "udd", "csifUcUsUiPcQcQsQiQfQdQUcQUsQUiQPc", OP_EQ>;
-def VCGE  : Inst<"vcge", "udd", "csifUcUsUiQcQsQiQfQdQUcQUsQUi", OP_GE>;
-def VCLE  : Inst<"vcle", "udd", "csifUcUsUiQcQsQiQfQdQUcQUsQUi", OP_LE>;
-def VCGT  : Inst<"vcgt", "udd", "csifUcUsUiQcQsQiQfQdQUcQUsQUi", OP_GT>;
-def VCLT  : Inst<"vclt", "udd", "csifUcUsUiQcQsQiQfQdQUcQUsQUi", OP_LT>;
+def VCEQ  : Inst<"vceq", "udd", "csifUcUsUiPcQcQsQiQlQfQdQUcQUsQUiQPc", OP_EQ>;
+def VCGE  : Inst<"vcge", "udd", "csifUcUsUiQcQsQiQlQfQdQUcQUsQUi", OP_GE>;
+def VCLE  : Inst<"vcle", "udd", "csifUcUsUiQcQsQiQlQfQdQUcQUsQUi", OP_LE>;
+def VCGT  : Inst<"vcgt", "udd", "csifUcUsUiQcQsQiQlQfQdQUcQUsQUi", OP_GT>;
+def VCLT  : Inst<"vclt", "udd", "csifUcUsUiQcQsQiQlQfQdQUcQUsQUi", OP_LT>;
 def VCAGE : IInst<"vcage", "udd", "fQfQd">;
 def VCALE : IInst<"vcale", "udd", "fQfQd">;
 def VCAGT : IInst<"vcagt", "udd", "fQfQd">;
@@ -562,8 +562,8 @@ def VREV16 : Inst<"vrev16", "dd", "cUcPcQcQUcQPc", OP_REV16>;
 
 ////////////////////////////////////////////////////////////////////////////////
 // Other single operand arithmetic
-def VABS    : SInst<"vabs", "dd", "csifQcQsQiQfQd">;
-def VQABS   : SInst<"vqabs", "dd", "csiQcQsQi">;
+def VABS    : SInst<"vabs", "dd", "csifQcQsQiQlQfQd">;
+def VQABS   : SInst<"vqabs", "dd", "csiQcQsQiQl">;
 def VNEG    : Inst<"vneg", "dd", "csifQcQsQiQfQd", OP_NEG>;
 def VQNEG   : SInst<"vqneg", "dd", "csiQcQsQi">;
 def VCLS    : SInst<"vcls", "dd", "csiQcQsQi">;
