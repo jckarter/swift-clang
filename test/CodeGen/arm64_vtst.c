@@ -10,3 +10,9 @@ uint64x2_t test_vtstq_s64(int64x2_t a1, int64x2_t a2) {
   // CHECK-NEXT: ret
 }
 
+uint64x2_t test_vtstq_u64(uint64x2_t a1, uint64x2_t a2) {
+  // CHECK: test_vtstq_u64
+  return vtstq_u64(a1, a2);
+  // CHECK: llvm.arm64.neon.cmtst.v2i64
+  // CHECK-NEXT: ret
+}

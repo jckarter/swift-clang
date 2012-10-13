@@ -105,19 +105,19 @@ def VQSUBD : SInst<"vqsubd", "sss", "lUl">;
 
 ////////////////////////////////////////////////////////////////////////////////
 // Comparison
-def VCEQ  : Inst<"vceq", "udd", "csifUcUsUiPcQcQsQiQlQfQdQUcQUsQUiQPc", OP_EQ>;
-def VCGE  : Inst<"vcge", "udd", "csifUcUsUiQcQsQiQlQfQdQUcQUsQUi", OP_GE>;
-def VCLE  : Inst<"vcle", "udd", "csifUcUsUiQcQsQiQlQfQdQUcQUsQUi", OP_LE>;
-def VCGT  : Inst<"vcgt", "udd", "csifUcUsUiQcQsQiQlQfQdQUcQUsQUi", OP_GT>;
-def VCLT  : Inst<"vclt", "udd", "csifUcUsUiQcQsQiQlQfQdQUcQUsQUi", OP_LT>;
+def VCEQ  : Inst<"vceq", "udd", "csifUcUsUiPcQcQsQiQlQfQdQUcQUsQUiQUlQPc", OP_EQ>;
+def VCGE  : Inst<"vcge", "udd", "csifUcUsUiQcQsQiQlQfQdQUcQUsQUiQUl", OP_GE>;
+def VCLE  : Inst<"vcle", "udd", "csifUcUsUiQcQsQiQlQfQdQUcQUsQUiQUl", OP_LE>;
+def VCGT  : Inst<"vcgt", "udd", "csifUcUsUiQcQsQiQlQfQdQUcQUsQUiQUl", OP_GT>;
+def VCLT  : Inst<"vclt", "udd", "csifUcUsUiQcQsQiQlQfQdQUcQUsQUiQUl", OP_LT>;
 def VCAGE : IInst<"vcage", "udd", "fQfQd">;
 def VCALE : IInst<"vcale", "udd", "fQfQd">;
 def VCAGT : IInst<"vcagt", "udd", "fQfQd">;
 def VCALT : IInst<"vcalt", "udd", "fQfQd">;
-def VTST  : WInst<"vtst", "udd", "csiUcUsUiPcQcQsQiQUcQUsQUiQlQPc">;
+def VTST  : WInst<"vtst", "udd", "csiUcUsUiPcQcQsQiQlQUcQUsQUiQUlQPc">;
 // Scalar
 def VCEQS : Inst<"vceqs", "sss", "f", OP_EQ>;
-def VCEQD : Inst<"vceqd", "sss", "lUld", OP_EQ>;
+def VCEQD : Inst<"vceqd", "sss", "lUlQUld", OP_EQ>;
 def VCLED : Inst<"vcled", "sss", "lUl", OP_LE>;
 def VCGTD : Inst<"vcgtd", "sss", "lUl", OP_GT>;
 def VTSTD : SInst<"vtstd", "sss", "lUl">;
@@ -375,15 +375,15 @@ def VLD4 : WInst<"vld4", "4c", "QUcQUsQUiQUlQcQsQiQlQhQfQdQPcQPsUcUsUiUlcsilhfdP
 def VLD2_DUP  : WInst<"vld2_dup", "2c", "UcUsUiUlcsilhfdPcPs">;
 def VLD3_DUP  : WInst<"vld3_dup", "3c", "UcUsUiUlcsilhfdPcPs">;
 def VLD4_DUP  : WInst<"vld4_dup", "4c", "UcUsUiUlcsilhfdPcPs">;
-def VLD2_LANE : WInst<"vld2_lane", "2c2i", "QUsQUiQsQiQlQhQfQdQPsUcUsUicsilhfdPcPs">;
-def VLD3_LANE : WInst<"vld3_lane", "3c3i", "QUsQUiQsQiQlQhQfQdQPsUcUsUicsilhfdPcPs">;
-def VLD4_LANE : WInst<"vld4_lane", "4c4i", "QUsQUiQsQiQlQhQfQdQPsUcUsUicsilhfdPcPs">;
+def VLD2_LANE : WInst<"vld2_lane", "2c2i", "QUsQUiQUlQsQiQlQhQfQdQPsUcUsUiUlcsilhfdPcPs">;
+def VLD3_LANE : WInst<"vld3_lane", "3c3i", "QUsQUiQUlQsQiQlQhQfQdQPsUcUsUiUlcsilhfdPcPs">;
+def VLD4_LANE : WInst<"vld4_lane", "4c4i", "QUsQUiQUlQsQiQlQhQfQdQPsUcUsUiUlcsilhfdPcPs">;
 def VST2 : WInst<"vst2", "vp2", "QUcQUsQUiQUlQcQsQiQlQhQfQdQPcQPsUcUsUiUlcsilhfdPcPs">;
 def VST3 : WInst<"vst3", "vp3", "QUcQUsQUiQUlQcQsQiQlQhQfQdQPcQPsUcUsUiUlcsilhfdPcPs">;
 def VST4 : WInst<"vst4", "vp4", "QUcQUsQUiQUlQcQsQiQlQhQfQdQPcQPsUcUsUiUlcsilhfdPcPs">;
 def VST2_LANE : WInst<"vst2_lane", "vp2i", "QUsQUiQsQiQhQfQdQPsUcUsUicsihfdPcPs">;
 def VST3_LANE : WInst<"vst3_lane", "vp3i", "QUsQUiQsQiQhQfQdQPsUcUsUicsihfdPcPs">;
-def VST4_LANE : WInst<"vst4_lane", "vp4i", "QUsQUiQsQiQhQfQdQPsUcUsUicsihfdPcPs">;
+def VST4_LANE : WInst<"vst4_lane", "vp4i", "QUsQUiQsQiQlQhQfQdQPsUcUsUicsihfdPcPs">;
 
 ////////////////////////////////////////////////////////////////////////////////
 // Extract lanes from a vector
@@ -412,7 +412,7 @@ def VDUP_N : Inst<"vdup_n", "ds",
 def VMOV_N : Inst<"vmov_n", "ds",
                   "UcUsUicsiPcPsfQUcQUsQUiQcQsQiQPcQPsQfQdlUlQlQUl", OP_DUP>;
 def VDUP_LANE : Inst<"vdup_lane", "dgi",
-                     "UcUsUicsilPcPsfQUcQUsQUiQcQsQiQPcQPsQfQdQlQUl",OP_DUP_LN>;
+                  "UcUsUiUlcsilPcPsfQUcQUsQUiQcQsQiQPcQPsQfQdQlQUl",OP_DUP_LN>;
 
 ////////////////////////////////////////////////////////////////////////////////
 // Combining vectors
