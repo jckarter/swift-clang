@@ -114,7 +114,7 @@ def VCAGE : IInst<"vcage", "udd", "fQfQd">;
 def VCALE : IInst<"vcale", "udd", "fQfQd">;
 def VCAGT : IInst<"vcagt", "udd", "fQfQd">;
 def VCALT : IInst<"vcalt", "udd", "fQfQd">;
-def VTST  : WInst<"vtst", "udd", "csiUcUsUiPcQcQsQiQUcQUsQUiQPc">;
+def VTST  : WInst<"vtst", "udd", "csiUcUsUiPcQcQsQiQUcQUsQUiQlQPc">;
 // Scalar
 def VCEQS : Inst<"vceqs", "sss", "f", OP_EQ>;
 def VCEQD : Inst<"vceqd", "sss", "lUld", OP_EQ>;
@@ -375,9 +375,9 @@ def VLD4 : WInst<"vld4", "4c", "QUcQUsQUiQUlQcQsQiQlQhQfQdQPcQPsUcUsUiUlcsilhfdP
 def VLD2_DUP  : WInst<"vld2_dup", "2c", "UcUsUiUlcsilhfdPcPs">;
 def VLD3_DUP  : WInst<"vld3_dup", "3c", "UcUsUiUlcsilhfdPcPs">;
 def VLD4_DUP  : WInst<"vld4_dup", "4c", "UcUsUiUlcsilhfdPcPs">;
-def VLD2_LANE : WInst<"vld2_lane", "2c2i", "QUsQUiQsQiQhQfQdQPsUcUsUicsihfdPcPs">;
-def VLD3_LANE : WInst<"vld3_lane", "3c3i", "QUsQUiQsQiQhQfQdQPsUcUsUicsihfdPcPs">;
-def VLD4_LANE : WInst<"vld4_lane", "4c4i", "QUsQUiQsQiQhQfQdQPsUcUsUicsihfdPcPs">;
+def VLD2_LANE : WInst<"vld2_lane", "2c2i", "QUsQUiQsQiQlQhQfQdQPsUcUsUicsilhfdPcPs">;
+def VLD3_LANE : WInst<"vld3_lane", "3c3i", "QUsQUiQsQiQlQhQfQdQPsUcUsUicsilhfdPcPs">;
+def VLD4_LANE : WInst<"vld4_lane", "4c4i", "QUsQUiQsQiQlQhQfQdQPsUcUsUicsilhfdPcPs">;
 def VST2 : WInst<"vst2", "vp2", "QUcQUsQUiQUlQcQsQiQlQhQfQdQPcQPsUcUsUiUlcsilhfdPcPs">;
 def VST3 : WInst<"vst3", "vp3", "QUcQUsQUiQUlQcQsQiQlQhQfQdQPcQPsUcUsUiUlcsilhfdPcPs">;
 def VST4 : WInst<"vst4", "vp4", "QUcQUsQUiQUlQcQsQiQlQhQfQdQPcQPsUcUsUiUlcsilhfdPcPs">;
@@ -412,7 +412,7 @@ def VDUP_N : Inst<"vdup_n", "ds",
 def VMOV_N : Inst<"vmov_n", "ds",
                   "UcUsUicsiPcPsfQUcQUsQUiQcQsQiQPcQPsQfQdlUlQlQUl", OP_DUP>;
 def VDUP_LANE : Inst<"vdup_lane", "dgi",
-                     "UcUsUicsiPcPsfQUcQUsQUiQcQsQiQPcQPsQfQdQlQUl",OP_DUP_LN>;
+                     "UcUsUicsilPcPsfQUcQUsQUiQcQsQiQPcQPsQfQdQlQUl",OP_DUP_LN>;
 
 ////////////////////////////////////////////////////////////////////////////////
 // Combining vectors
@@ -564,8 +564,8 @@ def VREV16 : Inst<"vrev16", "dd", "cUcPcQcQUcQPc", OP_REV16>;
 // Other single operand arithmetic
 def VABS    : SInst<"vabs", "dd", "csifQcQsQiQlQfQd">;
 def VQABS   : SInst<"vqabs", "dd", "csiQcQsQiQl">;
-def VNEG    : Inst<"vneg", "dd", "csifQcQsQiQfQd", OP_NEG>;
-def VQNEG   : SInst<"vqneg", "dd", "csiQcQsQi">;
+def VNEG    : Inst<"vneg", "dd", "csifQcQsQiQlQfQd", OP_NEG>;
+def VQNEG   : SInst<"vqneg", "dd", "csiQcQsQiQl">;
 def VCLS    : SInst<"vcls", "dd", "csiQcQsQi">;
 def VCLZ    : IInst<"vclz", "dd", "csiUcUsUiQcQsQiQUcQUsQUi">;
 def VCNT    : WInst<"vcnt", "dd", "UccPcQUcQcQPc">;
