@@ -320,17 +320,6 @@ StmtResult Sema::ActOnGCCAsmStmt(SourceLocation AsmLoc, bool IsSimple,
   return Owned(NS);
 }
 
-// isMSAsmKeyword - Return true if this is an MS-style inline asm keyword. These
-// require special handling.
-static bool isMSAsmKeyword(StringRef Name) {
-  bool Ret = llvm::StringSwitch<bool>(Name)
-    .Cases("EVEN", "ALIGN", true) // Alignment directives.
-    .Cases("LENGTH", "SIZE", "TYPE", true) // Type and variable sizes.
-    .Case("_emit", true) // _emit Pseudoinstruction.
-    .Default(false);
-  return Ret;
-}
-
 // getSpelling - Get the spelling of the AsmTok token.
 static StringRef getSpelling(Sema &SemaRef, Token AsmTok) {
   StringRef Asm;
@@ -340,44 +329,6 @@ static StringRef getSpelling(Sema &SemaRef, Token AsmTok) {
   Asm = SemaRef.PP.getSpelling(AsmTok, TokenBuf, &StringInvalid);
   assert (!StringInvalid && "Expected valid string!");
   return Asm;
-}
-
-// Determine if we should bail on this MSAsm instruction.
-static bool bailOnMSAsm(std::vector<StringRef> Piece) {
-  for (unsigned i = 0, e = Piece.size(); i != e; ++i)
-    if (isMSAsmKeyword(Piece[i]))
-      return true;
-  return false;
-}
-
-// Determine if we should bail on this MSAsm block.
-static bool bailOnMSAsm(std::vector<std::vector<StringRef> > Pieces) {
-  for (unsigned i = 0, e = Pieces.size(); i != e; ++i)
-    if (bailOnMSAsm(Pieces[i]))
-      return true;
-  return false;
-}
-
-// Determine if this is a simple MSAsm instruction.
-static bool isSimpleMSAsm(std::vector<StringRef> &Pieces,
-                          const TargetInfo &TI) {
-  if (isMSAsmKeyword(Pieces[0]))
-      return false;
-
-  for (unsigned i = 1, e = Pieces.size(); i != e; ++i) {
-    if (!TI.isValidGCCRegisterName(Pieces[i]))
-      return false;
-  }
-  return true;
-}
-
-// Determine if this is a simple MSAsm block.
-static bool isSimpleMSAsm(std::vector<std::vector<StringRef> > Pieces,
-                          const TargetInfo &TI) {
-  for (unsigned i = 0, e = Pieces.size(); i != e; ++i)
-    if (!isSimpleMSAsm(Pieces[i], TI))
-      return false;
-  return true;
 }
 
 // Break the AsmString into pieces (i.e., mnemonic and operands).
@@ -411,7 +362,6 @@ static bool buildMSAsmStrings(Sema &SemaRef,
   assert (!AsmToks.empty() && "Didn't expect an empty AsmToks!");
 
   SmallString<512> Asm;
-  unsigned startTok = 0;
   for (unsigned i = 0, e = AsmToks.size(); i < e; ++i) {
     bool isNewAsm = ((i == 0) ||
                      AsmToks[i].isAtStartOfLine() ||
@@ -420,7 +370,6 @@ static bool buildMSAsmStrings(Sema &SemaRef,
     if (isNewAsm) {
       if (i) {
         AsmStrings.push_back(Asm.str());
-        startTok = i;
         Asm.clear();
       }
       if (AsmToks[i].is(tok::kw_asm)) {
@@ -479,11 +428,6 @@ StmtResult Sema::ActOnMSAsmStmt(SourceLocation AsmLoc, SourceLocation LBraceLoc,
   std::vector<std::vector<StringRef> > Pieces(AsmStrings.size());
   buildMSAsmPieces(AsmStrings, Pieces);
 
-  bool IsSimple = isSimpleMSAsm(Pieces, Context.getTargetInfo());
-
-  // AsmParser doesn't fully support these asm statements.
-  if (bailOnMSAsm(Pieces)) { DEF_SIMPLE_MSASM(EmptyAsmStr); return Owned(NS); }
-
   // Get the target specific parser.
   std::string Error;
   const std::string &TT = Context.getTargetInfo().getTriple().getTriple();
@@ -512,6 +456,7 @@ StmtResult Sema::ActOnMSAsmStmt(SourceLocation AsmLoc, SourceLocation LBraceLoc,
     // Change to the Intel dialect.
     Parser->setAssemblerDialect(1);
     Parser->setTargetParser(*TargetParser.get());
+    Parser->setParsingInlineAsm(true);
 
     // Prime the lexer.
     Parser->Lex();
@@ -536,14 +481,11 @@ StmtResult Sema::ActOnMSAsmStmt(SourceLocation AsmLoc, SourceLocation LBraceLoc,
     if (HadError) { DEF_SIMPLE_MSASM(EmptyAsmStr); return Owned(NS); }
 
     // Match the MCInstr.
-    unsigned Kind;
     unsigned Opcode;
     unsigned ErrorInfo;
-    SmallVector<std::pair< unsigned, std::string >, 4> MapAndConstraints;
-    HadError = TargetParser->MatchInstruction(IDLoc, Operands, *Str.get(), Kind,
-                                              Opcode, MapAndConstraints,
-                                              ErrorInfo,
-                                              /*matchingInlineAsm*/ true);
+    HadError = TargetParser->MatchAndEmitInstruction(IDLoc, Opcode, Operands,
+                                                     *Str.get(), ErrorInfo,
+                                                     /*MatchingInlineAsm*/ true);
     // If we had an error parsing the operands, fail gracefully.
     if (HadError) { DEF_SIMPLE_MSASM(EmptyAsmStr); return Owned(NS); }
 
@@ -563,7 +505,7 @@ StmtResult Sema::ActOnMSAsmStmt(SourceLocation AsmLoc, SourceLocation LBraceLoc,
       // Register.
       if (Operands[i]->isReg()) {
         // Clobber.
-        if (NumDefs && (MapAndConstraints[i-1].first < NumDefs)) {
+        if (NumDefs && (Operands[i]->getMCOperandNum() < NumDefs)) {
           std::string Reg;
           llvm::raw_string_ostream OS(Reg);
           IP->printRegName(OS, Operands[i]->getReg());
@@ -586,7 +528,6 @@ StmtResult Sema::ActOnMSAsmStmt(SourceLocation AsmLoc, SourceLocation LBraceLoc,
         ExprResult Result = ActOnIdExpression(getCurScope(), SS, Loc, Id,
                                               false, false);
         if (!Result.isInvalid()) {
-          // FIXME: Determine the proper constraints.
           bool isMemDef = (i == 1) && Desc.mayStore();
           if (isMemDef) {
             Outputs.push_back(II);
@@ -594,14 +535,14 @@ StmtResult Sema::ActOnMSAsmStmt(SourceLocation AsmLoc, SourceLocation LBraceLoc,
             OutputExprNames.push_back(Name.str());
             OutputExprStrIdx.push_back(StrIdx);
 
-            std::string Constraint = "=" + MapAndConstraints[i-1].second;
+            std::string Constraint = "=" + Operands[i]->getConstraint().str();
             OutputConstraints.push_back(Constraint);
           } else {
             Inputs.push_back(II);
             InputExprs.push_back(Result.take());
             InputExprNames.push_back(Name.str());
             InputExprStrIdx.push_back(StrIdx);
-            InputConstraints.push_back(MapAndConstraints[i-1].second);
+            InputConstraints.push_back(Operands[i]->getConstraint());
           }
         }
       }
@@ -679,6 +620,7 @@ StmtResult Sema::ActOnMSAsmStmt(SourceLocation AsmLoc, SourceLocation LBraceLoc,
     }
   }
 
+  bool IsSimple = Inputs.size() != 0 || Outputs.size() != 0; 
   MSAsmStmt *NS =
     new (Context) MSAsmStmt(Context, AsmLoc, LBraceLoc, IsSimple,
                             /*IsVolatile*/ true, AsmToks, Inputs, Outputs,
