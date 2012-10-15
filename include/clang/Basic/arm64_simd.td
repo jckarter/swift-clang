@@ -388,7 +388,7 @@ def VST4_LANE : WInst<"vst4_lane", "vp4i", "QUsQUiQsQiQlQhQfQdQPsUcUsUicsihfdPcP
 ////////////////////////////////////////////////////////////////////////////////
 // Extract lanes from a vector
 def VGET_LANE : SInst<"vget_lane", "sdi",
-                      "csilUcUsUiUlfPcPsQcQsQiQlQUcQUsQUiQUlQfQdQPcQPs">;
+                      "csilUcUsUiUlfdPcPsQcQsQiQlQUcQUsQUiQUlQfQdQPcQPs">;
 // vdup<bhsd>_lane* is a synonym for vget_lane.
 def VDUPB_LANE : SInst<"vdupb_lane", "sdi", "RcRUc">;
 def VDUPH_LANE : SInst<"vduph_lane", "sdi", "RsRUs">;
@@ -408,9 +408,9 @@ def VCREATE: Inst<"vcreate", "dl", "csihfUcUsUiUlPcPsl", OP_CAST>;
 ////////////////////////////////////////////////////////////////////////////////
 // Set all lanes to same value
 def VDUP_N : Inst<"vdup_n", "ds",
-                  "UcUsUicsiPcPsfQUcQUsQUiQcQsQiQPcQPsQfQdlUlQlQUl", OP_DUP>;
+                  "UcUsUicsidPcPshfQUcQUsQUiQcQsQiQPcQPsQhQfQdlUlQlQUl", OP_DUP>;
 def VMOV_N : Inst<"vmov_n", "ds",
-                  "UcUsUicsiPcPsfQUcQUsQUiQcQsQiQPcQPsQfQdlUlQlQUl", OP_DUP>;
+                  "UcUsUicsiPcPshfQUcQUsQUiQcQsQiQhQPcQPsQfQdlUlQlQUl", OP_DUP>;
 def VDUP_LANE : Inst<"vdup_lane", "dgi",
                   "UcUsUiUlcsilPcPsfQUcQUsQUiQcQsQiQPcQPsQfQdQlQUl",OP_DUP_LN>;
 
@@ -541,8 +541,8 @@ def VMULX_LANE   : SInst<"vmulx_lane", "dddi", "fQfQd">;
 
 ////////////////////////////////////////////////////////////////////////////////
 // Cross Lane
-def ADDV  : SInst<"vaddv",  "sd", "csUcUsQcQsQiQUcQUsQUi">;
-def ADDLV : SInst<"vaddlv", "zd", "csUcUsQcQsQiQUcQUsQUi">;
+def ADDV  : SInst<"vaddv",  "sd", "csiUcUsUiQcQsQiQUcQUsQUi">;
+def ADDLV : SInst<"vaddlv", "zd", "csiUcUsUiQcQsQiQUcQUsQUi">;
 def MAXV  : SInst<"vmaxv",  "sd", "csUcUsQcQsQiQUcQUsQUiQf">;
 def MINV  : SInst<"vminv",  "sd", "csUcUsQcQsQiQUcQUsQUiQf">;
 def MAXNMV : SInst<"vmaxnmv", "sd", "Qf">;
@@ -551,7 +551,7 @@ def MINMV  : SInst<"vminnmv", "sd", "Qf">;
 ////////////////////////////////////////////////////////////////////////////////
 // Vector Extract
 def VEXT : WInst<"vext", "dddi",
-                 "cUcPcsUsPsiUilUlfQcQUcQPcQsQUsQPsQiQUiQlQUlQf">;
+                 "cUcPcsUsPsiUilUlfQcQUcQPcQsQUsQPsQiQUiQlQUlQfQd">;
 
 ////////////////////////////////////////////////////////////////////////////////
 // Reverse vector elements

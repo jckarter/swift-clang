@@ -1,5 +1,8 @@
 // RUN: %clang -O3 -arch arm64 -c -S -o - %s | FileCheck %s
+// RUN: %clang -O3 -arch arm64 -c -S -o - -emit-llvm %s | \
+// RUN:   FileCheck -check-prefix=CHECK-IR %s
 // REQUIRES: arm64-registered-target
+
 /// Test vdupq_n_f64 and vmovq_nf64 ARM64 intrinsics
 // <rdar://problem/11778405> ARM64: vdupq_n_f64 and vdupq_lane_f64 intrinsics 
 // missing
@@ -47,3 +50,39 @@ float64x2_t test_vmovq_n_f64(float64_t w)
   // CHECK: dup.2d v0, v0[0]
   // CHECK-NEXT: ret
 }
+
+float16x4_t test_vmov_n_f16(float16_t a1)
+{
+  // CHECK-IR: test_vmov_n_f16
+  return vmov_n_f16(a1);
+  // CHECK-IR: insertelement {{.*}} i32 0{{ *$}}
+  // CHECK-IR: insertelement {{.*}} i32 1{{ *$}}
+  // CHECK-IR: insertelement {{.*}} i32 2{{ *$}}
+  // CHECK-IR: insertelement {{.*}} i32 3{{ *$}}
+}
+
+// Disable until scalar problem in backend is fixed. Change CHECK-IR@ to
+// CHECK-IR<colon>
+/*
+float64x1_t test_vmov_n_f64(float64_t a1)
+{
+  // CHECK-IR@ test_vmov_n_f64
+  return vmov_n_f64(a1);
+  // CHECK-IR@ insertelement {{.*}} i32 0{{ *$}}
+}
+*/
+
+float16x8_t test_vmovq_n_f16(float16_t a1)
+{
+  // CHECK-IR: test_vmovq_n_f16
+  return vmovq_n_f16(a1);
+  // CHECK-IR: insertelement {{.*}} i32 0{{ *$}}
+  // CHECK-IR: insertelement {{.*}} i32 1{{ *$}}
+  // CHECK-IR: insertelement {{.*}} i32 2{{ *$}}
+  // CHECK-IR: insertelement {{.*}} i32 3{{ *$}}
+  // CHECK-IR: insertelement {{.*}} i32 4{{ *$}}
+  // CHECK-IR: insertelement {{.*}} i32 5{{ *$}}
+  // CHECK-IR: insertelement {{.*}} i32 6{{ *$}}
+  // CHECK-IR: insertelement {{.*}} i32 7{{ *$}}
+}
+
