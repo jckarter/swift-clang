@@ -1011,7 +1011,7 @@ void CodeGenModule::ConstructAttributeList(const CGFunctionInfo &FI,
 
   if (RetAttrs.hasAttributes())
     PAL.push_back(llvm::
-                  AttributeWithIndex::get(0,
+                  AttributeWithIndex::get(llvm::AttrListPtr::ReturnIndex,
                                          llvm::Attributes::get(getLLVMContext(),
                                                                RetAttrs)));
 
@@ -1085,7 +1085,8 @@ void CodeGenModule::ConstructAttributeList(const CGFunctionInfo &FI,
     ++Index;
   }
   if (FuncAttrs.hasAttributes())
-    PAL.push_back(llvm::AttributeWithIndex::get(~0,
+    PAL.push_back(llvm::
+                  AttributeWithIndex::get(llvm::AttrListPtr::FunctionIndex,
                                          llvm::Attributes::get(getLLVMContext(),
                                                                FuncAttrs)));
 }
