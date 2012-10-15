@@ -995,7 +995,8 @@ void CodeGenModule::ConstructAttributeList(const CGFunctionInfo &FI,
       SRETAttrs.addAttribute(llvm::Attributes::InReg);
     PAL.push_back(llvm::
                   AttributeWithIndex::get(Index,
-                                          llvm::Attributes::get(SRETAttrs)));
+                                         llvm::Attributes::get(getLLVMContext(),
+                                                               SRETAttrs)));
 
     ++Index;
     // sret disables readnone and readonly
@@ -1011,7 +1012,8 @@ void CodeGenModule::ConstructAttributeList(const CGFunctionInfo &FI,
   if (RetAttrs.hasAttributes())
     PAL.push_back(llvm::
                   AttributeWithIndex::get(0,
-                                          llvm::Attributes::get(RetAttrs)));
+                                         llvm::Attributes::get(getLLVMContext(),
+                                                               RetAttrs)));
 
   for (CGFunctionInfo::const_arg_iterator it = FI.arg_begin(),
          ie = FI.arg_end(); it != ie; ++it) {
@@ -1044,7 +1046,8 @@ void CodeGenModule::ConstructAttributeList(const CGFunctionInfo &FI,
         if (Attrs.hasAttributes())
           for (unsigned I = 0; I < Extra; ++I)
             PAL.push_back(llvm::AttributeWithIndex::get(Index + I,
-                                                 llvm::Attributes::get(Attrs)));
+                                         llvm::Attributes::get(getLLVMContext(),
+                                                               Attrs)));
         Index += Extra;
       }
       break;
@@ -1077,12 +1080,14 @@ void CodeGenModule::ConstructAttributeList(const CGFunctionInfo &FI,
 
     if (Attrs.hasAttributes())
       PAL.push_back(llvm::AttributeWithIndex::get(Index,
-                                                 llvm::Attributes::get(Attrs)));
+                                         llvm::Attributes::get(getLLVMContext(),
+                                                               Attrs)));
     ++Index;
   }
   if (FuncAttrs.hasAttributes())
     PAL.push_back(llvm::AttributeWithIndex::get(~0,
-                                             llvm::Attributes::get(FuncAttrs)));
+                                         llvm::Attributes::get(getLLVMContext(),
+                                                               FuncAttrs)));
 }
 
 /// An argument came in as a promoted argument; demote it back to its
@@ -1132,7 +1137,7 @@ void CodeGenFunction::EmitFunctionProlog(const CGFunctionInfo &FI,
     AI->setName("agg.result");
     llvm::Attributes::Builder B;
     B.addAttribute(llvm::Attributes::NoAlias);
-    AI->addAttr(llvm::Attributes::get(B));
+    AI->addAttr(llvm::Attributes::get(getLLVMContext(), B));
     ++AI;
   }
 
@@ -1204,7 +1209,7 @@ void CodeGenFunction::EmitFunctionProlog(const CGFunctionInfo &FI,
         if (Arg->getType().isRestrictQualified()) {
           llvm::Attributes::Builder B;
           B.addAttribute(llvm::Attributes::NoAlias);
-          AI->addAttr(llvm::Attributes::get(B));
+          AI->addAttr(llvm::Attributes::get(getLLVMContext(), B));
         }
 
         // Ensure the argument is the correct type.

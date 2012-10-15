@@ -647,7 +647,8 @@ void CodeGenModule::SetFunctionAttributes(GlobalDecl GD,
   if (unsigned IID = F->getIntrinsicID()) {
     // If this is an intrinsic function, set the function's attributes
     // to the intrinsic's attributes.
-    F->setAttributes(llvm::Intrinsic::getAttributes((llvm::Intrinsic::ID)IID));
+    F->setAttributes(llvm::Intrinsic::getAttributes(getLLVMContext(),
+                                                    (llvm::Intrinsic::ID)IID));
     return;
   }
 
@@ -1821,7 +1822,7 @@ static void ReplaceUsesOfNonProtoTypeWithRealFunction(llvm::GlobalValue *Old,
     llvm::Attributes RAttrs = AttrList.getRetAttributes();
 
     // Add the return attributes.
-    if (RAttrs)
+    if (RAttrs.hasAttributes())
       AttrVec.push_back(llvm::AttributeWithIndex::get(0, RAttrs));
 
     // If the function was passed too few arguments, don't transform.  If extra
@@ -1838,13 +1839,15 @@ static void ReplaceUsesOfNonProtoTypeWithRealFunction(llvm::GlobalValue *Old,
       }
 
       // Add any parameter attributes.
-      if (llvm::Attributes PAttrs = AttrList.getParamAttributes(ArgNo + 1))
+      llvm::Attributes PAttrs = AttrList.getParamAttributes(ArgNo + 1);
+      if (PAttrs.hasAttributes())
         AttrVec.push_back(llvm::AttributeWithIndex::get(ArgNo + 1, PAttrs));
     }
     if (DontTransform)
       continue;
 
-    if (llvm::Attributes FnAttrs =  AttrList.getFnAttributes())
+    llvm::Attributes FnAttrs =  AttrList.getFnAttributes();
+    if (FnAttrs.hasAttributes())
       AttrVec.push_back(llvm::AttributeWithIndex::get(~0, FnAttrs));
 
     // Okay, we can transform this.  Create the new call instruction and copy
