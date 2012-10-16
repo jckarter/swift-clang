@@ -2817,7 +2817,7 @@ ABIArgInfo ARM64ABIInfo::classifyArgumentType(QualType Ty) const {
   // Handle illegal vector types here.
   if (isIllegalVectorType(Ty)) {
     uint64_t Size = getContext().getTypeSize(Ty);
-    if (Size == 32) {
+    if (Size <= 32) {
       llvm::Type *ResType =
           llvm::Type::getInt32Ty(getVMContext());
       return ABIArgInfo::getDirect(ResType);
