@@ -2831,6 +2831,10 @@ public:
   ARM64TargetCodeGenInfo(CodeGenTypes &CGT)
     : TargetCodeGenInfo(new ARM64ABIInfo(CGT)) {}
 
+  StringRef getARCRetainAutoreleasedReturnValueMarker() const {
+    return "mov\tr7, r7\t\t@ marker for objc_retainAutoreleaseReturnValue";
+  }
+
   int getDwarfEHStackPointer(CodeGen::CodeGenModule &M) const {
     return 31;
   }
