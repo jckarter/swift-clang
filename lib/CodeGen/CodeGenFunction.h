@@ -1212,6 +1212,14 @@ public:
 
   CodeGenTypes &getTypes() const { return CGM.getTypes(); }
   ASTContext &getContext() const { return CGM.getContext(); }
+  /// Returns true if DebugInfo is actually initialized.
+  bool maybeInitializeDebugInfo() {
+    if (CGM.getModuleDebugInfo()) {
+      DebugInfo = CGM.getModuleDebugInfo();
+      return true;
+    }
+    return false;
+  }
   CGDebugInfo *getDebugInfo() { 
     if (DisableDebugInfo) 
       return NULL;
@@ -2358,6 +2366,7 @@ public:
   llvm::Value *EmitARCRetain(QualType type, llvm::Value *value);
   llvm::Value *EmitARCRetainNonBlock(llvm::Value *value);
   llvm::Value *EmitARCRetainBlock(llvm::Value *value, bool mandatory);
+  void EmitARCDestroyStrong(llvm::Value *addr, bool precise);
   void EmitARCRelease(llvm::Value *value, bool precise);
   llvm::Value *EmitARCAutorelease(llvm::Value *value);
   llvm::Value *EmitARCAutoreleaseReturnValue(llvm::Value *value);
