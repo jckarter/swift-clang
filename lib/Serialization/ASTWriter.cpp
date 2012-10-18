@@ -767,14 +767,19 @@ void ASTWriter::WriteBlockInfoBlock() {
 #define BLOCK(X) EmitBlockID(X ## _ID, #X, Stream, Record)
 #define RECORD(X) EmitRecordID(X, #X, Stream, Record)
 
+  // Control Block.
+  BLOCK(CONTROL_BLOCK);
+  RECORD(METADATA);
+  RECORD(IMPORTS);
+  RECORD(LANGUAGE_OPTIONS);
+  RECORD(TARGET_OPTIONS);
+  RECORD(ORIGINAL_FILE);
+  RECORD(ORIGINAL_PCH_DIR);
+
   // AST Top-Level Block.
   BLOCK(AST_BLOCK);
-  RECORD(ORIGINAL_FILE_NAME);
-  RECORD(ORIGINAL_FILE_ID);
   RECORD(TYPE_OFFSET);
   RECORD(DECL_OFFSET);
-  RECORD(LANGUAGE_OPTIONS);
-  RECORD(METADATA);
   RECORD(IDENTIFIER_OFFSET);
   RECORD(IDENTIFIER_TABLE);
   RECORD(EXTERNAL_DEFINITIONS);
@@ -790,9 +795,7 @@ void ASTWriter::WriteBlockInfoBlock() {
   RECORD(SOURCE_LOCATION_PRELOADS);
   RECORD(STAT_CACHE);
   RECORD(EXT_VECTOR_DECLS);
-  RECORD(VERSION_CONTROL_BRANCH_REVISION);
   RECORD(PPD_ENTITIES_OFFSETS);
-  RECORD(IMPORTS);
   RECORD(REFERENCED_SELECTOR_POOL);
   RECORD(TU_UPDATE_LEXICAL);
   RECORD(LOCAL_REDECLARATIONS_MAP);
@@ -807,7 +810,6 @@ void ASTWriter::WriteBlockInfoBlock() {
   RECORD(DIAG_PRAGMA_MAPPINGS);
   RECORD(CUDA_SPECIAL_DECL_REFS);
   RECORD(HEADER_SEARCH_TABLE);
-  RECORD(ORIGINAL_PCH_DIR);
   RECORD(FP_PRAGMA_OPTIONS);
   RECORD(OPENCL_EXTENSIONS);
   RECORD(DELEGATING_CTORS);
@@ -982,32 +984,29 @@ adjustFilenameForRelocatablePCH(const char *Filename, StringRef isysroot) {
 void ASTWriter::WriteControlBlock(ASTContext &Context, StringRef isysroot,
                                   const std::string &OutputFile) {
   using namespace llvm;
-  Stream.EnterSubblock(CONTROL_BLOCK_ID, 4);
+  Stream.EnterSubblock(CONTROL_BLOCK_ID, 5);
+  RecordData Record;
   
   // Metadata
-  const TargetInfo &Target = Context.getTargetInfo();
-  const TargetOptions &TargetOpts = Target.getTargetOpts();
-  RecordData Record;
+  BitCodeAbbrev *MetadataAbbrev = new BitCodeAbbrev();
+  MetadataAbbrev->Add(BitCodeAbbrevOp(METADATA));
+  MetadataAbbrev->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::Fixed, 16)); // Major
+  MetadataAbbrev->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::Fixed, 16)); // Minor
+  MetadataAbbrev->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::Fixed, 16)); // Clang maj.
+  MetadataAbbrev->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::Fixed, 16)); // Clang min.
+  MetadataAbbrev->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::Fixed, 1)); // Relocatable
+  MetadataAbbrev->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::Fixed, 1)); // Errors
+  MetadataAbbrev->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::Blob)); // SVN branch/tag
+  unsigned MetadataAbbrevCode = Stream.EmitAbbrev(MetadataAbbrev);
+  Record.push_back(METADATA);
   Record.push_back(VERSION_MAJOR);
   Record.push_back(VERSION_MINOR);
   Record.push_back(CLANG_VERSION_MAJOR);
   Record.push_back(CLANG_VERSION_MINOR);
   Record.push_back(!isysroot.empty());
   Record.push_back(ASTHasCompilerErrors);
-  AddString(TargetOpts.Triple, Record);
-  AddString(TargetOpts.CPU, Record);
-  AddString(TargetOpts.ABI, Record);
-  AddString(TargetOpts.CXXABI, Record);
-  AddString(TargetOpts.LinkerVersion, Record);
-  Record.push_back(TargetOpts.FeaturesAsWritten.size());
-  for (unsigned I = 0, N = TargetOpts.FeaturesAsWritten.size(); I != N; ++I) {
-    AddString(TargetOpts.FeaturesAsWritten[I], Record);
-  }
-  Record.push_back(TargetOpts.Features.size());
-  for (unsigned I = 0, N = TargetOpts.Features.size(); I != N; ++I) {
-    AddString(TargetOpts.Features[I], Record);
-  }
-  Stream.EmitRecord(METADATA, Record);
+  Stream.EmitRecordWithBlob(MetadataAbbrevCode, Record,
+                            getClangFullRepositoryVersion());
 
   // Imports
   if (Chain) {
@@ -1047,11 +1046,31 @@ void ASTWriter::WriteControlBlock(ASTContext &Context, StringRef isysroot,
   Record.append(LangOpts.CurrentModule.begin(), LangOpts.CurrentModule.end());
   Stream.EmitRecord(LANGUAGE_OPTIONS, Record);
 
+  // Target options.
+  Record.clear();
+  const TargetInfo &Target = Context.getTargetInfo();
+  const TargetOptions &TargetOpts = Target.getTargetOpts();
+  AddString(TargetOpts.Triple, Record);
+  AddString(TargetOpts.CPU, Record);
+  AddString(TargetOpts.ABI, Record);
+  AddString(TargetOpts.CXXABI, Record);
+  AddString(TargetOpts.LinkerVersion, Record);
+  Record.push_back(TargetOpts.FeaturesAsWritten.size());
+  for (unsigned I = 0, N = TargetOpts.FeaturesAsWritten.size(); I != N; ++I) {
+    AddString(TargetOpts.FeaturesAsWritten[I], Record);
+  }
+  Record.push_back(TargetOpts.Features.size());
+  for (unsigned I = 0, N = TargetOpts.Features.size(); I != N; ++I) {
+    AddString(TargetOpts.Features[I], Record);
+  }
+  Stream.EmitRecord(TARGET_OPTIONS, Record);
+
   // Original file name and file ID
   SourceManager &SM = Context.getSourceManager();
   if (const FileEntry *MainFile = SM.getFileEntryForID(SM.getMainFileID())) {
     BitCodeAbbrev *FileAbbrev = new BitCodeAbbrev();
-    FileAbbrev->Add(BitCodeAbbrevOp(ORIGINAL_FILE_NAME));
+    FileAbbrev->Add(BitCodeAbbrevOp(ORIGINAL_FILE));
+    FileAbbrev->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::VBR, 6)); // File ID
     FileAbbrev->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::Blob)); // File name
     unsigned FileAbbrevCode = Stream.EmitAbbrev(FileAbbrev);
 
@@ -1063,12 +1082,10 @@ void ASTWriter::WriteControlBlock(ASTContext &Context, StringRef isysroot,
     MainFileNameStr = adjustFilenameForRelocatablePCH(MainFileNameStr,
                                                       isysroot);
     RecordData Record;
-    Record.push_back(ORIGINAL_FILE_NAME);
-    Stream.EmitRecordWithBlob(FileAbbrevCode, Record, MainFileNameStr);
-    
-    Record.clear();
+    Record.push_back(ORIGINAL_FILE);
     Record.push_back(SM.getMainFileID().getOpaqueValue());
-    Stream.EmitRecord(ORIGINAL_FILE_ID, Record);
+    Stream.EmitRecordWithBlob(FileAbbrevCode, Record, MainFileNameStr);
+    Record.clear();
   }
 
   // Original PCH directory
@@ -1087,16 +1104,6 @@ void ASTWriter::WriteControlBlock(ASTContext &Context, StringRef isysroot,
     Record.push_back(ORIGINAL_PCH_DIR);
     Stream.EmitRecordWithBlob(AbbrevCode, Record, origDir);
   }
-
-  // Repository branch/version information.
-  BitCodeAbbrev *RepoAbbrev = new BitCodeAbbrev();
-  RepoAbbrev->Add(BitCodeAbbrevOp(VERSION_CONTROL_BRANCH_REVISION));
-  RepoAbbrev->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::Blob)); // SVN branch/tag
-  unsigned RepoAbbrevCode = Stream.EmitAbbrev(RepoAbbrev);
-  Record.clear();
-  Record.push_back(VERSION_CONTROL_BRANCH_REVISION);
-  Stream.EmitRecordWithBlob(RepoAbbrevCode, Record,
-                            getClangFullRepositoryVersion());
 
   Stream.ExitBlock();
 }

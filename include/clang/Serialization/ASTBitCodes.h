@@ -227,7 +227,7 @@ namespace clang {
     /// \brief Record types that occur within the control block.
     enum ControlRecordTypes {
       /// \brief AST file metadata, including the AST file version number
-      /// and the target triple used to build the AST file.
+      /// and information about the compiler used to build this AST file.
       METADATA = 1,
 
       /// \brief Record code for the list of other AST files imported by
@@ -242,20 +242,16 @@ namespace clang {
       /// actually important to check.
       LANGUAGE_OPTIONS = 3,
 
-      /// \brief Record code for the original file that was used to
-      /// generate the AST file.
-      ORIGINAL_FILE_NAME = 4,
+      /// \brief Record code for the target options table.
+      TARGET_OPTIONS = 4,
 
-      /// \brief Record code for the file ID of the original file used to 
-      /// generate the AST file.
-      ORIGINAL_FILE_ID = 5,
+      /// \brief Record code for the original file that was used to
+      /// generate the AST file, including both its file ID and its
+      /// name.
+      ORIGINAL_FILE = 5,
       
       /// \brief The directory that the PCH was originally created in.
-      ORIGINAL_PCH_DIR = 6,
-
-      /// \brief Record code for the version control branch and revision
-      /// information of the compiler used to build this AST file.
-      VERSION_CONTROL_BRANCH_REVISION = 7
+      ORIGINAL_PCH_DIR = 6
     };
 
     /// \brief Record types that occur within the AST block itself.
