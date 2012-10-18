@@ -1800,23 +1800,12 @@ ASTReader::ASTReadResult ASTReader::ReadControlBlock(ModuleFile &F,
       }
 
       RelocatablePCH = Record[4];
-      if (Listener && &F == *ModuleMgr.begin()) {
-        unsigned Idx = 6;
-        TargetOptions TargetOpts;
-        TargetOpts.Triple = ReadString(Record, Idx);
-        TargetOpts.CPU = ReadString(Record, Idx);
-        TargetOpts.ABI = ReadString(Record, Idx);
-        TargetOpts.CXXABI = ReadString(Record, Idx);
-        TargetOpts.LinkerVersion = ReadString(Record, Idx);
-        for (unsigned N = Record[Idx++]; N; --N) {
-          TargetOpts.FeaturesAsWritten.push_back(ReadString(Record, Idx));
-        }
-        for (unsigned N = Record[Idx++]; N; --N) {
-          TargetOpts.Features.push_back(ReadString(Record, Idx));
-        }
 
-        if (Listener->ReadTargetOptions(F, TargetOpts))
-          return IgnorePCH;
+      const std::string &CurBranch = getClangFullRepositoryVersion();
+      StringRef ASTBranch(BlobStart, BlobLen);
+      if (StringRef(CurBranch) != ASTBranch && !DisableValidation) {
+        Diag(diag::warn_pch_different_branch) << ASTBranch << CurBranch;
+        return IgnorePCH;
       }
       break;
     }
@@ -1849,40 +1838,45 @@ ASTReader::ASTReadResult ASTReader::ReadControlBlock(ModuleFile &F,
         return IgnorePCH;
       break;
 
-    case ORIGINAL_FILE_NAME:
+    case TARGET_OPTIONS: {
+      if (Listener && &F == *ModuleMgr.begin()) {
+        unsigned Idx = 0;
+        TargetOptions TargetOpts;
+        TargetOpts.Triple = ReadString(Record, Idx);
+        TargetOpts.CPU = ReadString(Record, Idx);
+        TargetOpts.ABI = ReadString(Record, Idx);
+        TargetOpts.CXXABI = ReadString(Record, Idx);
+        TargetOpts.LinkerVersion = ReadString(Record, Idx);
+        for (unsigned N = Record[Idx++]; N; --N) {
+          TargetOpts.FeaturesAsWritten.push_back(ReadString(Record, Idx));
+        }
+        for (unsigned N = Record[Idx++]; N; --N) {
+          TargetOpts.Features.push_back(ReadString(Record, Idx));
+        }
+
+        if (Listener->ReadTargetOptions(F, TargetOpts))
+          return IgnorePCH;
+      }
+      break;
+    }
+
+    case ORIGINAL_FILE:
       // Only record from the primary AST file.
       if (&F == *ModuleMgr.begin()) {
-        // The primary AST will be the last to get here, so it will be the one
-        // that's used.
+        OriginalFileID = FileID::get(Record[0]);
+
         ActualOriginalFileName.assign(BlobStart, BlobLen);
         OriginalFileName = ActualOriginalFileName;
         MaybeAddSystemRootToFilename(OriginalFileName);
       }
       break;
 
-    case ORIGINAL_FILE_ID:
-      // Only record from the primary AST file.
-      if (&F == *ModuleMgr.begin()) {
-        OriginalFileID = FileID::get(Record[0]);
-      }
-      break;
-        
     case ORIGINAL_PCH_DIR:
       // Only record from the primary AST file.
       if (&F == *ModuleMgr.begin()) {
         OriginalDir.assign(BlobStart, BlobLen);
       }
       break;
-
-    case VERSION_CONTROL_BRANCH_REVISION: {
-      const std::string &CurBranch = getClangFullRepositoryVersion();
-      StringRef ASTBranch(BlobStart, BlobLen);
-      if (StringRef(CurBranch) != ASTBranch && !DisableValidation) {
-        Diag(diag::warn_pch_different_branch) << ASTBranch << CurBranch;
-        return IgnorePCH;
-      }
-      break;
-    }
     }
   }
 
@@ -3065,7 +3059,7 @@ ASTReader::ASTReadResult ASTReader::ReadASTCore(StringRef FileName,
 
     unsigned BlockID = Stream.ReadSubBlockID();
 
-    // We only know the AST subblock ID.
+    // We only know the control subblock ID.
     switch (BlockID) {
     case llvm::bitc::BLOCKINFO_BLOCK_ID:
       if (Stream.ReadBlockInfoBlock()) {
@@ -3322,8 +3316,7 @@ std::string ASTReader::getOriginalSourceFile(const std::string &ASTFileName,
     Record.clear();
     const char *BlobStart = 0;
     unsigned BlobLen = 0;
-    if (Stream.ReadRecord(Code, Record, &BlobStart, &BlobLen)
-          == ORIGINAL_FILE_NAME)
+    if (Stream.ReadRecord(Code, Record, &BlobStart, &BlobLen) == ORIGINAL_FILE)
       return std::string(BlobStart, BlobLen);
   }
 
@@ -5571,7 +5564,7 @@ void ASTReader::getMemoryBufferSizes(MemoryBufferSizes &sizes) const {
 
 void ASTReader::InitializeSema(Sema &S) {
   SemaObj = &S;
-  S.ExternalSource = this;
+  S.addExternalSource(this);
 
   // Makes sure any declarations that were deserialized "too early"
   // still get added to the identifier's declaration chains.
