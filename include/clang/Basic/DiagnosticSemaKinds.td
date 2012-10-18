@@ -5151,7 +5151,7 @@ let CategoryName = "Inline Assembly Issue" in {
     "for this in the future">;
   def warn_mismatched_size_modifier : Warning<
       "the size being stored may not be size intended, "
-      "use a modifier to specify">;
+      "use a modifier to specify">, InGroup<AsmConstraints>;
 }
 
 let CategoryName = "Semantic Issue" in {

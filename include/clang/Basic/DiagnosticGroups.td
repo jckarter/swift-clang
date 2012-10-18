@@ -112,6 +112,7 @@ def CXX11Compat : DiagGroup<"c++11-compat",
 def : DiagGroup<"c++0x-compat", [CXX11Compat]>;
 
 def : DiagGroup<"effc++">;
+def AsmConstraints : DiagGroup<"asm-constraints">;
 def DivZero : DiagGroup<"division-by-zero">;
 def ExitTimeDestructors : DiagGroup<"exit-time-destructors">;
 def FlexibleArrayExtensions : DiagGroup<"flexible-array-extensions">;
