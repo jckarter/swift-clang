@@ -3739,7 +3739,7 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
   case ARM64::BI__builtin_arm64_vaddv_s32:
   case ARM64::BI__builtin_arm64_vaddv_u32: {
     Int = Intrinsic::arm64_neon_addv;
-    Ty = llvm::IntegerType::get(getLLVMContext(), 64);
+    Ty = llvm::IntegerType::get(getLLVMContext(), 32);
     VTy =
       llvm::VectorType::get(llvm::IntegerType::get(getLLVMContext(), 32), 2);
     llvm::Type *Tys[2] = { Ty, VTy };
