@@ -182,7 +182,7 @@ double test_3i(__int3 *in) {
 
 double varargs_vec_5i(int fixed, ...) {
 // CHECK: varargs_vec_5i
-// CHECK: alloca <5 x i32>, align 32
+// CHECK: alloca <5 x i32>, align 16
 // CHECK: [[AP_NEXT:%.*]] = getelementptr i8* [[AP_CUR:%.*]], i32 8
 // CHECK: [[VAR:%.*]] = bitcast i8* [[AP_CUR]] to i8**
 // CHECK: [[VAR2:%.*]] = load i8** [[VAR]]
@@ -204,7 +204,7 @@ double test_5i(__int5 *in) {
 
 double varargs_vec_3d(int fixed, ...) {
 // CHECK: varargs_vec_3d
-// CHECK: alloca <3 x double>, align 32
+// CHECK: alloca <3 x double>, align 16
 // CHECK: [[AP_NEXT:%.*]] = getelementptr i8* [[AP_CUR:%.*]], i32 8
 // CHECK: [[VAR:%.*]] = bitcast i8* [[AP_CUR]] to i8**
 // CHECK: [[VAR2:%.*]] = load i8** [[VAR]]
@@ -339,7 +339,7 @@ double fixed_9c(__char9 *in) {
 
 __attribute__((noinline)) double args_vec_19c(int fixed, __char19 c19) {
 // CHECK: args_vec_19c
-// CHECK: [[C19:%.*]] = load <19 x i8>* {{.*}}, align 32
+// CHECK: [[C19:%.*]] = load <19 x i8>* {{.*}}, align 16
   double sum = fixed;
   sum = sum + c19.x + c19.y;
   return sum;
@@ -401,7 +401,7 @@ double fixed_3i(__int3 *in) {
 
 __attribute__((noinline)) double args_vec_5i(int fixed, __int5 c5) {
 // CHECK: args_vec_5i
-// CHECK: [[C5:%.*]] = load <5 x i32>* {{%.*}}, align 32
+// CHECK: [[C5:%.*]] = load <5 x i32>* {{%.*}}, align 16
   double sum = fixed;
   sum = sum + c5.x + c5.y;
   return sum;
