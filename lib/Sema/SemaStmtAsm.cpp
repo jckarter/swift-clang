@@ -460,6 +460,10 @@ StmtResult Sema::ActOnMSAsmStmt(SourceLocation AsmLoc, SourceLocation LBraceLoc,
   Parser->setAssemblerDialect(1);
   Parser->setTargetParser(*TargetParser.get());
   Parser->setParsingInlineAsm(true);
+  TargetParser->setParsingInlineAsm(true);
+
+  MCAsmParserSemaCallbackImpl MCAPSI(this);
+  TargetParser->setSemaCallback(&MCAPSI);
 
   unsigned NumOutputs;
   unsigned NumInputs;
@@ -467,7 +471,6 @@ StmtResult Sema::ActOnMSAsmStmt(SourceLocation AsmLoc, SourceLocation LBraceLoc,
   SmallVector<void *, 4> OpDecls;
   SmallVector<std::string, 4> Constraints;
   SmallVector<std::string, 4> Clobbers;
-  MCAsmParserSemaCallbackImpl MCAPSI(this);
   if (Parser->ParseMSInlineAsm(AsmLoc.getPtrEncoding(), AsmStringIR,
                                NumOutputs, NumInputs, OpDecls, Constraints,
                                Clobbers, MII, IP, MCAPSI))
