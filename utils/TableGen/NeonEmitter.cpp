@@ -716,8 +716,7 @@ static std::string MangleName(const std::string &name, StringRef typestr,
                               ClassKind ck, bool scal = false) {
   if (name == "vcvt_f32_f16" ||
       name == "vcvt_f64_f32" ||
-      name == "vcvt_high_f64_f32" ||
-      name == "vminvq_f64")
+      name == "vcvt_high_f64_f32")
     return name;
 
   bool quad = false;
