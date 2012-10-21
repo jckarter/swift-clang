@@ -1895,7 +1895,8 @@ ExprResult Sema::ActOnIdExpression(Scope *S,
 /// this path.
 ExprResult
 Sema::BuildQualifiedDeclarationNameExpr(CXXScopeSpec &SS,
-                                        const DeclarationNameInfo &NameInfo) {
+                                        const DeclarationNameInfo &NameInfo,
+                                        bool IsAddressOfOperand) {
   DeclContext *DC;
   if (!(DC = computeDeclContext(SS, false)) || DC->isDependentContext())
     return BuildDependentDeclRefExpr(SS, /*TemplateKWLoc=*/SourceLocation(),
@@ -1916,7 +1917,16 @@ Sema::BuildQualifiedDeclarationNameExpr(CXXScopeSpec &SS,
     return ExprError();
   }
 
-  return BuildDeclarationNameExpr(SS, R, /*ADL*/ false);
+  // Defend against this resolving to an implicit member access. We usually
+  // won't get here if this might be a legitimate a class member (we end up in
+  // BuildMemberReferenceExpr instead), but this can be valid if we're forming
+  // a pointer-to-member or in an unevaluated context in C++11.
+  if (!R.empty() && (*R.begin())->isCXXClassMember() && !IsAddressOfOperand)
+    return BuildPossibleImplicitMemberExpr(SS,
+                                           /*TemplateKWLoc=*/SourceLocation(),
+                                           R, /*TemplateArgs=*/0);
+
+  return BuildDeclarationNameExpr(SS, R, /* ADL */ false);
 }
 
 /// LookupInObjCMethod - The parser has read a name in, and Sema has
@@ -9643,6 +9653,16 @@ ExprResult Sema::BuildVAArgExpr(SourceLocation BuiltinLoc,
     if (Result.isInvalid())
       return ExprError();
     E = Result.take();
+  } else if (VaListType->isRecordType() && getLangOpts().CPlusPlus) {
+    // If va_list is a record type and we are compiling in C++ mode,
+    // check the argument using reference binding.
+    InitializedEntity Entity
+      = InitializedEntity::InitializeParameter(Context,
+          Context.getLValueReferenceType(VaListType), false);
+    ExprResult Init = PerformCopyInitialization(Entity, SourceLocation(), E);
+    if (Init.isInvalid())
+      return ExprError();
+    E = Init.takeAs<Expr>();
   } else {
     // Otherwise, the va_list argument must be an l-value because
     // it is modified by va_arg.
