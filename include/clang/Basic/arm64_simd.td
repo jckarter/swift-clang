@@ -482,7 +482,7 @@ def VUZP2 : WInst<"vuzp2", "ddd", "csiUcUsUifQcQsQiQlQUcQUsQUiQUlQfQd">;
 
 ////////////////////////////////////////////////////////////////////////////////
 // Operations with a scalar value
-def VMLA_LANE    : Inst<"vmla_lane", "dddgi", "siUsUiQsQiQUsQUi", OP_MLA_LN>;
+def VMLA_LANE    : Inst<"vmla_lane", "dddgi", "sifUsUiQsQiQfQUsQUi", OP_MLA_LN>;
 def VMLA_LANEQ   : Inst<"vmla_laneq", "dddki", "siUsUiQsQiQUsQUi", OP_MLA_LN>;
 def VFMA_LANE    : IInst<"vfma_lane", "ddddi", "fQfQd">;
 def VMLAL_LANE   : Inst<"vmlal_lane", "wwddi", "siUsUi", OP_MLAL_LN>;
@@ -495,7 +495,7 @@ def VQDMLAL_LANEQ : Inst<"vqdmlal_laneq", "wwdki", "si", OP_QDMLAL_LN>;
 def VQDMLAL_HIGH_LANE  : Inst<"vqdmlal_high_lane", "wwdgi", "RsRi", OP_QDMLAL_HIGH_LN>;
 def VQDMLAL_HIGH_LANEQ : Inst<"vqdmlal_high_laneq", "wwddi", "RsRi", OP_QDMLAL_HIGH_LN>;
 def VQDMLAL_HIGH_N     : Inst<"vqdmlal_high_n", "wwds", "RsRi", OP_QDMLAL_HIGH_N>;
-def VMLS_LANE    : Inst<"vmls_lane", "ddddi", "siUsUiQsQiQUsQUi", OP_MLS_LN>;
+def VMLS_LANE    : Inst<"vmls_lane", "ddddi", "sifUsUiQsQiQfQUsQUi", OP_MLS_LN>;
 def VMLS_LANEQ   : Inst<"vmls_laneq", "dddki", "siUsUiQsQiQUsQUi", OP_MLS_LN>;
 def VMLSL_HIGH_LANE  : Inst<"vmlsl_high_lane", "wwdgi", "RsRiRUsRUi", OP_MLSL_HIGH_LN>;
 def VMLSL_HIGH_LANEQ : Inst<"vmlsl_high_laneq", "wwddi", "RsRiRUsRUi", OP_MLSL_HIGH_LN>;
