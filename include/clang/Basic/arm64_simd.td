@@ -399,7 +399,7 @@ def VDUP_LANE_F64 : SInst<"vdup_lane", "sdi", "Rd">;
 ////////////////////////////////////////////////////////////////////////////////
 // Set lanes within a vector
 def VSET_LANE : IInst<"vset_lane", "dsdi",
-                      "UcUsUicsiPcPsfQUcQUsQUiQcQsQiQPcQPsQfQdlUlQlQUl">;
+                      "UcUsUicsiPcPshfdQUcQUsQUiQcQsQiQPcQPsQhQfQdlUlQlQUl">;
 
 ////////////////////////////////////////////////////////////////////////////////
 // Initialize a vector from bit pattern
