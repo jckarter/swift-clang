@@ -135,5 +135,13 @@ void t14() {
     .endif
   }
 // CHECK: t14
-// CHECK: call void asm sideeffect inteldialect ".if 1\0A\09mov eax, dword ptr $0\0A\09.else\0A\09.endif", "*m,~{eax},~{dirflag},~{fpsr},~{flags}"(i32* %{{.*}}) nounwind
+// CHECK: call void asm sideeffect inteldialect ".if 1\0A\09mov eax, dword ptr $0\0A\09.else\0A\09mov ebx, j\0A\09.endif", "*m,~{eax},~{dirflag},~{fpsr},~{flags}"(i32* %{{.*}}) nounwind
+}
+
+void t15() {
+  int var = 10;
+  __asm mov eax, var        ; eax = 10
+  __asm mov eax, offset var ; eax = address of myvar
+// CHECK: t15
+// CHECK: call void asm sideeffect inteldialect "mov eax, dword ptr $0", "*m,~{eax},~{dirflag},~{fpsr},~{flags}"(i32* %{{.*}}) nounwind
 }
