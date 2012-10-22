@@ -363,7 +363,7 @@ def VLD1_LANE : WInst<"vld1_lane", "dcdi",
 def VLD1_DUP  : WInst<"vld1_dup", "dc",
                       "QUcQUsQUiQUlQcQsQiQlQhQfQdQPcQPsUcUsUiUlcsilhfdPcPs">;
 def VST1      : WInst<"vst1", "vpd",
-                      "QUcQUsQUiQUlQcQsQiQlQhQfQdQPcQPsUcUsUiUlcsilhfPcPs">;
+                      "QUcQUsQUiQUlQcQsQiQlQhQfQdQPcQPsUcUsUiUlcsilhdfPcPs">;
 def VST1_LANE : WInst<"vst1_lane", "vpdi",
                       "QUcQUsQUiQUlQcQsQiQlQhQfQdQPcQPsUcUsUiUlcsilhfPcPs">;
 
@@ -381,9 +381,9 @@ def VLD4_LANE : WInst<"vld4_lane", "4c4i", "QUcQUsQUiQUlQcQsQiQlQhQfQdQPcQPsUcUs
 def VST2 : WInst<"vst2", "vp2", "QUcQUsQUiQUlQcQsQiQlQhQfQdQPcQPsUcUsUiUlcsilhfdPcPs">;
 def VST3 : WInst<"vst3", "vp3", "QUcQUsQUiQUlQcQsQiQlQhQfQdQPcQPsUcUsUiUlcsilhfdPcPs">;
 def VST4 : WInst<"vst4", "vp4", "QUcQUsQUiQUlQcQsQiQlQhQfQdQPcQPsUcUsUiUlcsilhfdPcPs">;
-def VST2_LANE : WInst<"vst2_lane", "vp2i", "QUsQUiQsQiQhQfQdQPsUcUsUicsihfdPcPs">;
-def VST3_LANE : WInst<"vst3_lane", "vp3i", "QUsQUiQsQiQhQfQdQPsUcUsUicsihfdPcPs">;
-def VST4_LANE : WInst<"vst4_lane", "vp4i", "QUsQUiQsQiQlQhQfQdQPsUcUsUicsihfdPcPs">;
+def VST2_LANE : WInst<"vst2_lane", "vp2i", "QUcQUsQUiQUlQcQsQiQlQhQfQdQPcQPsUcUsUicsihfdPcPs">;
+def VST3_LANE : WInst<"vst3_lane", "vp3i", "QUcQUsQUiQUlQcQsQiQlQhQfQdQPcQPsUcUsUicsihfdPcPs">;
+def VST4_LANE : WInst<"vst4_lane", "vp4i", "QUcQUsQUiQUlQcQsQiQlQhQfQdQPcQPsUcUsUicsihfdPcPs">;
 
 ////////////////////////////////////////////////////////////////////////////////
 // Extract lanes from a vector
