@@ -1333,6 +1333,13 @@ TEST(Matcher, ConstructorArgumentCount) {
                  Constructor1Arg));
 }
 
+TEST(Matcher,ThisExpr) {
+  EXPECT_TRUE(
+      matches("struct X { int a; int f () { return a; } };", thisExpr()));
+  EXPECT_TRUE(
+      notMatches("struct X { int f () { int a; return a; } };", thisExpr()));
+}
+
 TEST(Matcher, BindTemporaryExpression) {
   StatementMatcher TempExpression = bindTemporaryExpr();
 
@@ -2130,6 +2137,15 @@ TEST(Member, MatchesInMemberFunctionCall) {
                       "  s.first();"
                       "};",
                       memberExpr(member(hasName("first")))));
+}
+
+TEST(Member, MatchesMember) {
+  EXPECT_TRUE(matches(
+      "struct A { int i; }; void f() { A a; a.i = 2; }",
+      memberExpr(hasDeclaration(fieldDecl(hasType(isInteger()))))));
+  EXPECT_TRUE(notMatches(
+      "struct A { float f; }; void f() { A a; a.f = 2.0f; }",
+      memberExpr(hasDeclaration(fieldDecl(hasType(isInteger()))))));
 }
 
 TEST(Member, MatchesMemberAllocationFunction) {
