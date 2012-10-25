@@ -217,38 +217,44 @@ StmtResult Sema::ActOnGCCAsmStmt(SourceLocation AsmLoc, bool IsSimple,
     // Look for the correct constraint index.
     unsigned Idx = 0;
     unsigned ConstraintIdx = 0;
-    for (unsigned i = 0, e = NS->getNumOutputs(); i != e; i++, ConstraintIdx++) {
+    for (unsigned i = 0, e = NS->getNumOutputs(); i != e; ++i, ++ConstraintIdx) {
       TargetInfo::ConstraintInfo &Info = OutputConstraintInfos[i];
-      if (Idx == Piece.getOperandNo()) break;
-      else Idx++;
+      if (Idx == Piece.getOperandNo())
+        break;
+      ++Idx;
 
       if (Info.isReadWrite()) {
-        if (Idx == Piece.getOperandNo()) break;
-        else Idx++;
+        if (Idx == Piece.getOperandNo())
+          break;
+        ++Idx;
       }
     }
 
-    for (unsigned i = 0, e = NS->getNumInputs(); i != e; ++i, ConstraintIdx++) {
+    for (unsigned i = 0, e = NS->getNumInputs(); i != e; ++i, ++ConstraintIdx) {
       TargetInfo::ConstraintInfo &Info = InputConstraintInfos[i];
-      if (Idx == Piece.getOperandNo()) break;
-      else Idx++;
+      if (Idx == Piece.getOperandNo())
+        break;
+      ++Idx;
 
       if (Info.isReadWrite()) {
-        if (Idx == Piece.getOperandNo()) break;
-        else Idx++;
+        if (Idx == Piece.getOperandNo())
+          break;
+        ++Idx;
       }
     }
-    
+
     // Now that we have the right indexes go ahead and check.
     StringLiteral *Literal = Constraints[ConstraintIdx];
     const Type *Ty = Exprs[ConstraintIdx]->getType().getTypePtr();
-    if (Ty->isDependentType() || Ty->isIncompleteType()) continue;
+    if (Ty->isDependentType() || Ty->isIncompleteType())
+      continue;
+
     unsigned Size = Context.getTypeSize(Ty);
     if (!Context.getTargetInfo()
-        .validateConstraintModifier(Literal->getString(),
-                                    Piece.getModifier(), Size))
+          .validateConstraintModifier(Literal->getString(), Piece.getModifier(),
+                                      Size))
       Diag(Exprs[ConstraintIdx]->getLocStart(),
-           diag::warn_mismatched_size_modifier);
+           diag::warn_asm_mismatched_size_modifier);
   }
 
   // Validate tied input operands for type mismatches.
