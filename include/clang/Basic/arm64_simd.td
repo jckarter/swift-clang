@@ -415,6 +415,10 @@ def VDUP_LANE : Inst<"vdup_lane", "dgi",
                   "UcUsUiUlcsilPcPsfQUcQUsQUiQcQsQiQPcQPsQfQdQlQUl",OP_DUP_LN>;
 
 ////////////////////////////////////////////////////////////////////////////////
+// Copy one element of one vector to an element of another
+def VCOPY_LANE : SInst<"vcopy_lane", "ddldl", "QcQsQiQlQfQdQUcQUsQUiQUl">;
+
+////////////////////////////////////////////////////////////////////////////////
 // Combining vectors
 def VCOMBINE : Inst<"vcombine", "kdd", "csilhfdUcUsUiUlPcPs", OP_CONC>;
 

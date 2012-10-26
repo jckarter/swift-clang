@@ -3021,6 +3021,17 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
         llvm::VectorType::get(llvm::Type::getDoubleTy(getLLVMContext()), 2));
     Ops.push_back(EmitScalarExpr(E->getArg(2)));
     return Builder.CreateInsertElement(Ops[1], Ops[0], Ops[2], "vset_lane");
+
+  case ARM64::BI__builtin_arm64_vcopyq_lane_v: {
+    llvm::VectorType *origVTy = GetNeonType(this, Type);
+    int elemSize = origVTy->getElementType()->getPrimitiveSizeInBits();
+    int numElems = 128/elemSize; // all variants are "q", => V128
+    llvm::Type *elemType = llvm::IntegerType::get(getLLVMContext(), elemSize);
+    llvm::Type *VTy = llvm::VectorType::get(elemType, numElems);
+    llvm::Type *Tys[] = {VTy, VTy};
+    Value *intrin = CGM.getIntrinsic(Intrinsic::arm64_neon_vcopy_lane, Tys);
+    return EmitNeonCall((Function*) intrin, Ops, "");
+  }
   case ARM64::BI__builtin_arm64_vget_lane_u8:
   case ARM64::BI__builtin_arm64_vget_lane_s8:
   case ARM64::BI__builtin_arm64_vget_lane_p8:
