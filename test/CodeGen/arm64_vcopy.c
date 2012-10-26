@@ -4,25 +4,6 @@
 // Test ARM64 SIMD copy vector element to vector element: vcopyq_lane*
 
 #include <aarch64_simd.h>
-//_test_vcopyq_lane_s8:                   ; @test_vcopyq_lane_s8
-//	ins.b	v0[3], v1[13]
-//_test_vcopyq_lane_u8:                   ; @test_vcopyq_lane_u8
-//	ins.b	v0[3], v1[13]
-//_test_vcopyq_lane_s16:                  ; @test_vcopyq_lane_s16
-//	ins.h	v0[3], v1[7]
-//_test_vcopyq_lane_u16:                  ; @test_vcopyq_lane_u16
-//	ins.h	v0[3], v1[7]
-//_test_vcopyq_lane_s32:                  ; @test_vcopyq_lane_s32
-//	ins.s	v0[3], v1[3]
-//_test_vcopyq_lane_u32:                  ; @test_vcopyq_lane_u32
-//	ins.s	v0[3], v1[3]
-//_test_vcopyq_lane_s64:                  ; @test_vcopyq_lane_s64
-//	ins.d	v0[0], v1[1]
-//_test_vcopyq_lane_u64:                  ; @test_vcopyq_lane_u64
-//	ins.d	v0[0], v1[1]
-//_test_vcopyq_lane_f32:                  ; @test_vcopyq_lane_f32
-//	ins.s	v0[0], v1[3]
-
 
 int8x16_t test_vcopyq_lane_s8(int8x16_t a1, int8x16_t a2) {
   // CHECK: test_vcopyq_lane_s8
@@ -85,5 +66,12 @@ float32x4_t test_vcopyq_lane_f32(float32x4_t a1, float32x4_t a2) {
   return vcopyq_lane_f32(a1, 0, a2, 3);
   // CHECK: llvm.arm64.neon.vcopy.lane.v4i32.v4i32
   // CHECK_CODEGEN: ins.s	v0[0], v1[3]
+}
+
+float64x2_t test_vcopyq_lane_f64(float64x2_t a1, float64x2_t a2) {
+  // CHECK: test_vcopyq_lane_f64
+  return vcopyq_lane_f64(a1, 0, a2, 1);
+  // CHECK: llvm.arm64.neon.vcopy.lane.v2i64.v2i64
+  // CHECK_CODEGEN: ins.d	v0[0], v1[1]
 }
 
