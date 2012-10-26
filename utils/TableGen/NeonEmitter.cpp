@@ -346,7 +346,8 @@ static char ToFloat(const char t) {
       return 'f';
     case 'l':
       return 'd';
-    default: throw "unhandled type in tofloat!";
+    default: 
+      PrintFatalError("unhandled type in tofloat!");
   }
   return '\0';
 }
