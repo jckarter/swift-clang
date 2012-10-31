@@ -203,6 +203,8 @@ namespace hexagon {
 
 
 namespace darwin {
+  llvm::Triple::ArchType getArchTypeForDarwinArchName(StringRef Str);
+
   class LLVM_LIBRARY_VISIBILITY DarwinTool : public Tool {
     virtual void anchor();
   protected:
