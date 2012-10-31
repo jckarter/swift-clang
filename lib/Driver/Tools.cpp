@@ -3600,6 +3600,7 @@ llvm::Triple::ArchType darwin::getArchTypeForDarwinArchName(StringRef Str) {
     // This is derived from the driver driver.
     .Cases("arm", "armv4t", "armv5", "armv6", llvm::Triple::arm)
     .Cases("armv7", "armv7f", "armv7k", "armv7s", "xscale", llvm::Triple::arm)
+    .Case("arm64", arm64)
     .Case("r600", llvm::Triple::r600)
     .Case("nvptx", llvm::Triple::nvptx)
     .Case("nvptx64", llvm::Triple::nvptx64)
