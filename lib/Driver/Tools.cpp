@@ -3560,6 +3560,12 @@ llvm::Triple::ArchType darwin::getArchTypeForDarwinArchName(StringRef Str) {
     .Case("r600", llvm::Triple::r600)
     .Case("nvptx", llvm::Triple::nvptx)
     .Case("nvptx64", llvm::Triple::nvptx64)
+#ifndef __OPEN_SOURCE__
+    .Case("igil32", Triple::igil32)
+    .Case("igil64", Triple::igil64)
+#endif // !__OPEN_SOURCE__
+    .Case("gpu_32", Triple::gpu_32)
+    .Case("gpu_64", Triple::gpu_64)
     .Case("amdil", llvm::Triple::amdil)
     .Case("spir", llvm::Triple::spir)
     .Default(llvm::Triple::UnknownArch);
