@@ -2844,14 +2844,34 @@ public:
 
 private:
   ABIArgInfo classifyReturnType(QualType RetTy) const;
-  ABIArgInfo classifyArgumentType(QualType RetTy) const;
+  ABIArgInfo classifyArgumentType(QualType RetTy, unsigned &AllocatedVFP,
+                                  bool &IsHA) const;
   bool isIllegalVectorType(QualType Ty) const;
 
   virtual void computeInfo(CGFunctionInfo &FI) const {
+    // To correctly handle Homogeneous Aggregate, we need to keep track of the
+    // number of SIMD and Floating-point registers allocated so far.
+    // If the argument is an HFA or an HVA and there are sufficient unallocated
+    // SIMD and Floating-point registers, then the argument is allocated to SIMD
+    // and Floating-point Registers (with one register per member of the HFA or
+    // HVA). Otherwise, the NSRN is set to 8.
+    unsigned AllocatedVFP = 0;
     FI.getReturnInfo() = classifyReturnType(FI.getReturnType());
     for (CGFunctionInfo::arg_iterator it = FI.arg_begin(), ie = FI.arg_end();
-         it != ie; ++it)
-      it->info = classifyArgumentType(it->type);
+         it != ie; ++it) {
+      unsigned PreAllocation = AllocatedVFP;
+      bool IsHA = false;
+      const unsigned NumVFPs = 8;
+      it->info = classifyArgumentType(it->type, AllocatedVFP, IsHA);
+      // If we do not have enough VFP registers for the HA, any VFP registers
+      // that are unallocated are marked as unavailable. To achieve this, we add
+      // padding of (NumVFPs - PreAllocation) floats.
+      if (IsHA && AllocatedVFP > NumVFPs && PreAllocation < NumVFPs) {
+        llvm::Type *PaddingTy = llvm::ArrayType::get(
+            llvm::Type::getFloatTy(getVMContext()), NumVFPs - PreAllocation);
+        it->info = ABIArgInfo::getExpandWithPadding(false, PaddingTy);
+      }
+    }
   }
 
   virtual llvm::Value *EmitVAArg(llvm::Value *VAListAddr, QualType Ty,
@@ -2882,7 +2902,9 @@ static bool isHomogeneousAggregate(QualType Ty, const Type *&Base,
                                    ASTContext &Context,
                                    bool FPOnly, uint64_t *HAMembers = 0);
 
-ABIArgInfo ARM64ABIInfo::classifyArgumentType(QualType Ty) const {
+ABIArgInfo ARM64ABIInfo::classifyArgumentType(QualType Ty,
+                                              unsigned &AllocatedVFP,
+                                              bool &IsHA) const {
   // Handle illegal vector types here.
   if (isIllegalVectorType(Ty)) {
     uint64_t Size = getContext().getTypeSize(Ty);
@@ -2894,14 +2916,26 @@ ABIArgInfo ARM64ABIInfo::classifyArgumentType(QualType Ty) const {
     if (Size == 64) {
       llvm::Type *ResType = llvm::VectorType::get(
           llvm::Type::getInt32Ty(getVMContext()), 2);
+      AllocatedVFP++;
       return ABIArgInfo::getDirect(ResType);
     }
     if (Size == 128) {
       llvm::Type *ResType = llvm::VectorType::get(
           llvm::Type::getInt32Ty(getVMContext()), 4);
+      AllocatedVFP++;
       return ABIArgInfo::getDirect(ResType);
     }
     return ABIArgInfo::getIndirect(0, /*ByVal=*/false);
+  }
+  if (Ty->isVectorType())
+    // Size of a legal vector should be either 64 or 128.
+    AllocatedVFP++;
+  if (const BuiltinType *BT = Ty->getAs<BuiltinType>()) {
+    if (BT->getKind() == BuiltinType::Half ||
+        BT->getKind() == BuiltinType::Float ||
+        BT->getKind() == BuiltinType::Double ||
+        BT->getKind() == BuiltinType::LongDouble)
+      AllocatedVFP++;
   }
 
   if (!isAggregateTypeForABI(Ty)) {
@@ -2924,8 +2958,12 @@ ABIArgInfo ARM64ABIInfo::classifyArgumentType(QualType Ty) const {
 
   // Homogeneous Floating-point Aggregates (HFAs) need to be expanded.
   const Type *Base = 0;
-  if (isHomogeneousAggregate(Ty, Base, getContext(), false))
+  uint64_t Members = 0;
+  if (isHomogeneousAggregate(Ty, Base, getContext(), false, &Members)) {
+    AllocatedVFP += Members;
+    IsHA = true;
     return ABIArgInfo::getExpand();
+  }
 
   // Aggregates <= 16 bytes are passed directly in registers or on the stack.
   uint64_t Size = getContext().getTypeSize(Ty);
