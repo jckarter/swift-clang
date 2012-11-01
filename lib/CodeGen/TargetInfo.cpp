@@ -2900,7 +2900,7 @@ public:
 
 static bool isHomogeneousAggregate(QualType Ty, const Type *&Base,
                                    ASTContext &Context,
-                                   bool FPOnly, uint64_t *HAMembers = 0);
+                                   uint64_t *HAMembers = 0);
 
 ABIArgInfo ARM64ABIInfo::classifyArgumentType(QualType Ty,
                                               unsigned &AllocatedVFP,
@@ -2959,7 +2959,7 @@ ABIArgInfo ARM64ABIInfo::classifyArgumentType(QualType Ty,
   // Homogeneous Floating-point Aggregates (HFAs) need to be expanded.
   const Type *Base = 0;
   uint64_t Members = 0;
-  if (isHomogeneousAggregate(Ty, Base, getContext(), false, &Members)) {
+  if (isHomogeneousAggregate(Ty, Base, getContext(), &Members)) {
     AllocatedVFP += Members;
     IsHA = true;
     return ABIArgInfo::getExpand();
@@ -3001,7 +3001,7 @@ ABIArgInfo ARM64ABIInfo::classifyReturnType(QualType RetTy) const {
     return ABIArgInfo::getIgnore();
 
   const Type *Base = 0;
-  if (isHomogeneousAggregate(RetTy, Base, getContext(), false))
+  if (isHomogeneousAggregate(RetTy, Base, getContext()))
     // Homogeneous Floating-point Aggregates (HFAs) are returned directly.
     return ABIArgInfo::getDirect();
 
@@ -3221,10 +3221,10 @@ void ARMABIInfo::computeInfo(CGFunctionInfo &FI) const {
 /// recursive calls that check aggregate component types.
 static bool isHomogeneousAggregate(QualType Ty, const Type *&Base,
                                    ASTContext &Context,
-                                   bool FPOnly, uint64_t *HAMembers) {
+                                   uint64_t *HAMembers) {
   uint64_t Members = 0;
   if (const ConstantArrayType *AT = Context.getAsConstantArrayType(Ty)) {
-    if (!isHomogeneousAggregate(AT->getElementType(), Base, Context, FPOnly,
+    if (!isHomogeneousAggregate(AT->getElementType(), Base, Context,
                                 &Members))
       return false;
     Members *= AT->getSize().getZExtValue();
@@ -3238,7 +3238,7 @@ static bool isHomogeneousAggregate(QualType Ty, const Type *&Base,
          i != e; ++i) {
       const FieldDecl *FD = *i;
       uint64_t FldMembers;
-      if (!isHomogeneousAggregate(FD->getType(), Base, Context, FPOnly,
+      if (!isHomogeneousAggregate(FD->getType(), Base, Context,
                                   &FldMembers))
         return false;
 
@@ -3259,8 +3259,6 @@ static bool isHomogeneousAggregate(QualType Ty, const Type *&Base,
           BT->getKind() != BuiltinType::Double &&
           BT->getKind() != BuiltinType::LongDouble)
         return false;
-    } else if (FPOnly) {
-      return false;
     } else if (const VectorType *VT = Ty->getAs<VectorType>()) {
       unsigned VecSize = Context.getTypeSize(VT);
       if (VecSize != 64 && VecSize != 128)
@@ -3395,7 +3393,7 @@ ABIArgInfo ARMABIInfo::classifyArgumentType(QualType Ty, int *VFPRegs,
     // into VFP registers.
     const Type *Base = 0;
     uint64_t Members = 0;
-    if (isHomogeneousAggregate(Ty, Base, getContext(), false, &Members)) {
+    if (isHomogeneousAggregate(Ty, Base, getContext(), &Members)) {
       assert(Base && "Base class should be set for homogeneous aggregate");
       // Base can be a floating-point or a vector.
       if (Base->isVectorType()) {
@@ -3581,7 +3579,7 @@ ABIArgInfo ARMABIInfo::classifyReturnType(QualType RetTy) const {
   // Check for homogeneous aggregates with AAPCS-VFP.
   if (getABIKind() == AAPCS_VFP) {
     const Type *Base = 0;
-    if (isHomogeneousAggregate(RetTy, Base, getContext(), false)) {
+    if (isHomogeneousAggregate(RetTy, Base, getContext())) {
       assert(Base && "Base class should be set for homogeneous aggregate");
       // Homogeneous Aggregates are returned directly.
       return ABIArgInfo::getDirect();
