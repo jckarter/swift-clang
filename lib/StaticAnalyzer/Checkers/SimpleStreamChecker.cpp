@@ -46,14 +46,14 @@ public:
   }
 };
 
-class SimpleStreamChecker: public Checker<check::PostStmt<CallExpr>,
-                                          check::PreStmt<CallExpr>,
-                                          check::DeadSymbols > {
+class SimpleStreamChecker : public Checker<check::PostStmt<CallExpr>,
+                                           check::PreStmt<CallExpr>,
+                                           check::DeadSymbols > {
 
   mutable IdentifierInfo *IIfopen, *IIfclose;
 
-  mutable OwningPtr<BugType> DoubleCloseBugType;
-  mutable OwningPtr<BugType> LeakBugType;
+  OwningPtr<BugType> DoubleCloseBugType;
+  OwningPtr<BugType> LeakBugType;
 
   void initIdentifierInfo(ASTContext &Ctx) const;
 
@@ -61,9 +61,9 @@ class SimpleStreamChecker: public Checker<check::PostStmt<CallExpr>,
                          const CallExpr *Call,
                          CheckerContext &C) const;
 
-   void reportLeaks(SymbolVector LeakedStreams,
-                    CheckerContext &C,
-                    ExplodedNode *ErrNode) const;
+  void reportLeaks(SymbolVector LeakedStreams,
+                   CheckerContext &C,
+                   ExplodedNode *ErrNode) const;
 
 public:
   SimpleStreamChecker();
@@ -126,8 +126,10 @@ void SimpleStreamChecker::checkPreStmt(const CallExpr *Call,
   // Check if the stream has already been closed.
   ProgramStateRef State = C.getState();
   const StreamState *SS = State->get<StreamMap>(FileDesc);
-  if (SS && SS->isClosed())
+  if (SS && SS->isClosed()) {
     reportDoubleClose(FileDesc, Call, C);
+    return;
+  }
 
   // Generate the next transition, in which the stream is closed.
   State = State->set<StreamMap>(FileDesc, StreamState::getClosed());
@@ -138,16 +140,19 @@ void SimpleStreamChecker::checkDeadSymbols(SymbolReaper &SymReaper,
                                            CheckerContext &C) const {
   ProgramStateRef State = C.getState();
   StreamMapTy TrackedStreams = State->get<StreamMap>();
+
   SymbolVector LeakedStreams;
   for (StreamMapTy::iterator I = TrackedStreams.begin(),
-                           E = TrackedStreams.end(); I != E; ++I) {
+                             E = TrackedStreams.end(); I != E; ++I) {
     SymbolRef Sym = I->first;
     if (SymReaper.isDead(Sym)) {
       const StreamState &SS = I->second;
       if (SS.isOpened()) {
-        // If a symbolic region is NULL, assume that allocation failed on
-        // this path and do not report a leak.
-        if (!State->getConstraintManager().isNull(State, Sym).isTrue())
+        // If a symbol is NULL, assume that fopen failed on this path
+        // and do not report a leak.
+        ConstraintManager &CMgr = State->getConstraintManager();
+        ConditionTruthVal OpenFailed = CMgr.isNull(State, Sym);
+        if (!OpenFailed.isConstrainedTrue())
           LeakedStreams.push_back(Sym);
       }
 
