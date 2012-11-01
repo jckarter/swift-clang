@@ -835,7 +835,7 @@ void Clang::AddARMTargetArgs(const ArgList &Args,
 static std::string getARM64TargetCPU(const ArgList &Args) {
   // If we have -mcpu=, use that.
   if (Arg *A = Args.getLastArg(options::OPT_mcpu_EQ)) {
-    StringRef MCPU = A->getValue(Args);
+    StringRef MCPU = A->getValue();
     // Handle -mcpu=native.
     if (MCPU == "native")
       return llvm::sys::getHostCPUName();
