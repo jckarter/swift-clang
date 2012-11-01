@@ -4250,11 +4250,9 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
   }
   case ARM64::BI__builtin_arm64_vsri_n_v:
   case ARM64::BI__builtin_arm64_vsriq_n_v: {
-    Ops[0] = Builder.CreateBitCast(Ops[0], Ty);
-    Ops[1] = Builder.CreateBitCast(Ops[1], Ty);
-    Ops[2] = EmitNeonShiftVector(Ops[2], Ty, false);
-    llvm::Value *tmp = Builder.CreateLShr(Ops[1], Ops[2], "vshr_n");
-    return Builder.CreateOr(Ops[0], tmp);
+    Int = Intrinsic::arm64_neon_vsri;
+    llvm::Function *Intrin = CGM.getIntrinsic(Int, Ty); 
+    return EmitNeonCall(Intrin, Ops, "vsri_n");
   }
   case ARM64::BI__builtin_arm64_vsli_n_v:
   case ARM64::BI__builtin_arm64_vsliq_n_v: {
