@@ -18,6 +18,7 @@
 #include "ClangSACheckers.h"
 #include "clang/StaticAnalyzer/Core/Checker.h"
 #include "clang/StaticAnalyzer/Core/BugReporter/BugType.h"
+#include "clang/StaticAnalyzer/Core/PathSensitive/CallEvent.h"
 #include "clang/StaticAnalyzer/Core/PathSensitive/CheckerContext.h"
 
 using namespace clang;
@@ -46,8 +47,8 @@ public:
   }
 };
 
-class SimpleStreamChecker : public Checker<check::PostStmt<CallExpr>,
-                                           check::PreStmt<CallExpr>,
+class SimpleStreamChecker : public Checker<check::PostCall,
+                                           check::PreCall,
                                            check::DeadSymbols > {
 
   mutable IdentifierInfo *IIfopen, *IIfclose;
@@ -58,7 +59,7 @@ class SimpleStreamChecker : public Checker<check::PostStmt<CallExpr>,
   void initIdentifierInfo(ASTContext &Ctx) const;
 
   void reportDoubleClose(SymbolRef FileDescSym,
-                         const CallExpr *Call,
+                         const CallEvent &Call,
                          CheckerContext &C) const;
 
   void reportLeaks(SymbolVector LeakedStreams,
@@ -69,9 +70,9 @@ public:
   SimpleStreamChecker();
 
   /// Process fopen.
-  void checkPostStmt(const CallExpr *Call, CheckerContext &C) const;
+  void checkPostCall(const CallEvent &Call, CheckerContext &C) const;
   /// Process fclose.
-  void checkPreStmt(const CallExpr *Call, CheckerContext &C) const;
+  void checkPreCall(const CallEvent &Call, CheckerContext &C) const;
 
   void checkDeadSymbols(SymbolReaper &SymReaper, CheckerContext &C) const;
 };
@@ -93,15 +94,18 @@ SimpleStreamChecker::SimpleStreamChecker() : IIfopen(0), IIfclose(0) {
   LeakBugType->setSuppressOnSink(true);
 }
 
-void SimpleStreamChecker::checkPostStmt(const CallExpr *Call,
+void SimpleStreamChecker::checkPostCall(const CallEvent &Call,
                                         CheckerContext &C) const {
   initIdentifierInfo(C.getASTContext());
 
-  if (C.getCalleeIdentifier(Call) != IIfopen)
+  if (!Call.isGlobalCFunction())
+    return;
+
+  if (Call.getCalleeIdentifier() != IIfopen)
     return;
 
   // Get the symbolic value corresponding to the file handle.
-  SymbolRef FileDesc = C.getSVal(Call).getAsSymbol();
+  SymbolRef FileDesc = Call.getReturnValue().getAsSymbol();
   if (!FileDesc)
     return;
 
@@ -111,15 +115,21 @@ void SimpleStreamChecker::checkPostStmt(const CallExpr *Call,
   C.addTransition(State);
 }
 
-void SimpleStreamChecker::checkPreStmt(const CallExpr *Call,
+void SimpleStreamChecker::checkPreCall(const CallEvent &Call,
                                        CheckerContext &C) const {
   initIdentifierInfo(C.getASTContext());
 
-  if (C.getCalleeIdentifier(Call) != IIfclose || Call->getNumArgs() != 1)
+  if (!Call.isGlobalCFunction())
+    return;
+
+  if (Call.getCalleeIdentifier() != IIfclose)
+    return;
+
+  if (Call.getNumArgs() != 1)
     return;
 
   // Get the symbolic value corresponding to the file handle.
-  SymbolRef FileDesc = C.getSVal(Call->getArg(0)).getAsSymbol();
+  SymbolRef FileDesc = Call.getArgSVal(0).getAsSymbol();
   if (!FileDesc)
     return;
 
@@ -136,29 +146,35 @@ void SimpleStreamChecker::checkPreStmt(const CallExpr *Call,
   C.addTransition(State);
 }
 
+static bool isLeaked(SymbolRef Sym, const StreamState &SS,
+                     bool IsSymDead, ProgramStateRef State) {
+  if (IsSymDead && SS.isOpened()) {
+    // If a symbol is NULL, assume that fopen failed on this path.
+    // A symbol should only be considered leaked if it is non-null.
+    ConstraintManager &CMgr = State->getConstraintManager();
+    ConditionTruthVal OpenFailed = CMgr.isNull(State, Sym);
+    return !OpenFailed.isConstrainedTrue();
+  }
+  return false;
+}
+
 void SimpleStreamChecker::checkDeadSymbols(SymbolReaper &SymReaper,
                                            CheckerContext &C) const {
   ProgramStateRef State = C.getState();
-  StreamMapTy TrackedStreams = State->get<StreamMap>();
-
   SymbolVector LeakedStreams;
+  StreamMapTy TrackedStreams = State->get<StreamMap>();
   for (StreamMapTy::iterator I = TrackedStreams.begin(),
                              E = TrackedStreams.end(); I != E; ++I) {
     SymbolRef Sym = I->first;
-    if (SymReaper.isDead(Sym)) {
-      const StreamState &SS = I->second;
-      if (SS.isOpened()) {
-        // If a symbol is NULL, assume that fopen failed on this path
-        // and do not report a leak.
-        ConstraintManager &CMgr = State->getConstraintManager();
-        ConditionTruthVal OpenFailed = CMgr.isNull(State, Sym);
-        if (!OpenFailed.isConstrainedTrue())
-          LeakedStreams.push_back(Sym);
-      }
+    bool IsSymDead = SymReaper.isDead(Sym);
 
-      // Remove the dead symbol from the streams map.
+    // Collect leaked symbols.
+    if (isLeaked(Sym, I->second, IsSymDead, State))
+      LeakedStreams.push_back(Sym);
+
+    // Remove the dead symbol from the streams map.
+    if (IsSymDead)
       State = State->remove<StreamMap>(Sym);
-    }
   }
 
   ExplodedNode *N = C.addTransition(State);
@@ -166,7 +182,7 @@ void SimpleStreamChecker::checkDeadSymbols(SymbolReaper &SymReaper,
 }
 
 void SimpleStreamChecker::reportDoubleClose(SymbolRef FileDescSym,
-                                            const CallExpr *CallExpr,
+                                            const CallEvent &Call,
                                             CheckerContext &C) const {
   // We reached a bug, stop exploring the path here by generating a sink.
   ExplodedNode *ErrNode = C.generateSink();
@@ -177,7 +193,7 @@ void SimpleStreamChecker::reportDoubleClose(SymbolRef FileDescSym,
   // Generate the report.
   BugReport *R = new BugReport(*DoubleCloseBugType,
       "Closing a previously closed file stream", ErrNode);
-  R->addRange(CallExpr->getSourceRange());
+  R->addRange(Call.getSourceRange());
   R->markInteresting(FileDescSym);
   C.emitReport(R);
 }
