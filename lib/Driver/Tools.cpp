@@ -1148,6 +1148,8 @@ void Clang::AddSparcTargetArgs(const ArgList &Args,
 
 void Clang::AddX86TargetArgs(const ArgList &Args,
                              ArgStringList &CmdArgs) const {
+  const bool isAndroid =
+    getToolChain().getTriple().getEnvironment() == llvm::Triple::Android;
   if (!Args.hasFlag(options::OPT_mred_zone,
                     options::OPT_mno_red_zone,
                     true) ||
@@ -1212,7 +1214,9 @@ void Clang::AddX86TargetArgs(const ArgList &Args,
       if (getToolChain().getArch() == llvm::Triple::x86_64)
         CPUName = "x86-64";
       else if (getToolChain().getArch() == llvm::Triple::x86)
-        CPUName = "pentium4";
+        // All x86 devices running Android have core2 as their common
+        // denominator. This makes a better choice than pentium4.
+        CPUName = isAndroid ? "core2" : "pentium4";
     }
   }
 
@@ -1555,6 +1559,7 @@ static void addUbsanRTLinux(const ToolChain &TC, const ArgList &Args,
                             (Twine("libclang_rt.ubsan-") +
                              TC.getArchName() + ".a"));
     CmdArgs.push_back(Args.MakeArgString(LibUbsan));
+    CmdArgs.push_back("-lpthread");
   }
 }
 
@@ -5860,8 +5865,8 @@ void linuxtools::Link::ConstructJob(Compilation &C, const JobAction &JA,
   const toolchains::Linux& ToolChain =
     static_cast<const toolchains::Linux&>(getToolChain());
   const Driver &D = ToolChain.getDriver();
-  const bool isAndroid = ToolChain.getTriple().getEnvironment() ==
-    llvm::Triple::Android;
+  const bool isAndroid =
+    ToolChain.getTriple().getEnvironment() == llvm::Triple::Android;
 
   ArgStringList CmdArgs;
 
@@ -5931,8 +5936,7 @@ void linuxtools::Link::ConstructJob(Compilation &C, const JobAction &JA,
       CmdArgs.push_back("-static");
   } else if (Args.hasArg(options::OPT_shared)) {
     CmdArgs.push_back("-shared");
-    if ((ToolChain.getArch() == llvm::Triple::arm
-         || ToolChain.getArch() == llvm::Triple::thumb) && isAndroid) {
+    if (isAndroid) {
       CmdArgs.push_back("-Bsymbolic");
     }
   }

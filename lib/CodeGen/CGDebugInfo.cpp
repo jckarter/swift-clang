@@ -518,21 +518,17 @@ llvm::DIType CGDebugInfo::createRecordFwdDecl(const RecordDecl *RD,
                                               llvm::DIDescriptor Ctx) {
   llvm::DIFile DefUnit = getOrCreateFile(RD->getLocation());
   unsigned Line = getLineNumber(RD->getLocation());
-  StringRef RDName = RD->getName();
+  StringRef RDName = getClassName(RD);
 
-  // Get the tag.
-  const CXXRecordDecl *CXXDecl = dyn_cast<CXXRecordDecl>(RD);
   unsigned Tag = 0;
-  if (CXXDecl) {
-    RDName = getClassName(RD);
-    Tag = llvm::dwarf::DW_TAG_class_type;
-  }
-  else if (RD->isStruct() || RD->isInterface())
+  if (RD->isStruct() || RD->isInterface())
     Tag = llvm::dwarf::DW_TAG_structure_type;
   else if (RD->isUnion())
     Tag = llvm::dwarf::DW_TAG_union_type;
-  else
-    llvm_unreachable("Unknown RecordDecl type!");
+  else {
+    assert(RD->isClass());
+    Tag = llvm::dwarf::DW_TAG_class_type;
+  }
 
   // Create the type.
   return DBuilder.createForwardDecl(Tag, RDName, Ctx, DefUnit, Line);
@@ -1879,7 +1875,7 @@ llvm::DIType CGDebugInfo::CreateLimitedType(const RecordType *Ty) {
   // Get overall information about the record type for the debug info.
   llvm::DIFile DefUnit = getOrCreateFile(RD->getLocation());
   unsigned Line = getLineNumber(RD->getLocation());
-  StringRef RDName = RD->getName();
+  StringRef RDName = getClassName(RD);
 
   llvm::DIDescriptor RDContext;
   if (CGM.getCodeGenOpts().getDebugInfo() == CodeGenOptions::LimitedDebugInfo)
@@ -1900,9 +1896,7 @@ llvm::DIType CGDebugInfo::CreateLimitedType(const RecordType *Ty) {
   if (RD->isUnion())
     RealDecl = DBuilder.createUnionType(RDContext, RDName, DefUnit, Line,
 					Size, Align, 0, llvm::DIArray());
-  else if (CXXDecl) {
-    RDName = getClassName(RD);
-    
+  else if (RD->isClass()) {
     // FIXME: This could be a struct type giving a default visibility different
     // than C++ class type, but needs llvm metadata changes first.
     RealDecl = DBuilder.createClassType(RDContext, RDName, DefUnit, Line,

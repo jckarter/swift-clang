@@ -100,6 +100,9 @@ public:
     return Pred->getStackFrame();
   }
 
+  /// Return true if the current LocationContext has no caller context.
+  bool inTopFrame() const { return getLocationContext()->inTopFrame();  }
+
   /// Returns true if the predecessor is within an inlined function/method.
   bool isWithinInlined() {
     return (getStackFrame()->getParent() != 0);
@@ -212,11 +215,18 @@ public:
     return getCalleeName(FunDecl);
   }
 
-  /// Given a function declaration and a name checks if this is a C lib
-  /// function with the given name.
-  bool isCLibraryFunction(const FunctionDecl *FD, StringRef Name);
-  static bool isCLibraryFunction(const FunctionDecl *FD, StringRef Name,
-                                 ASTContext &Context);
+  /// \brief Returns true if the callee is an externally-visible function in the
+  /// top-level namespace, such as \c malloc.
+  ///
+  /// If a name is provided, the function must additionally match the given
+  /// name.
+  ///
+  /// Note that this deliberately excludes C++ library functions in the \c std
+  /// namespace, but will include C library functions accessed through the
+  /// \c std namespace. This also does not check if the function is declared
+  /// as 'extern "C"', or if it uses C++ name mangling.
+  static bool isCLibraryFunction(const FunctionDecl *FD,
+                                 StringRef Name = StringRef());
 
   /// \brief Depending on wither the location corresponds to a macro, return 
   /// either the macro name or the token spelling.
