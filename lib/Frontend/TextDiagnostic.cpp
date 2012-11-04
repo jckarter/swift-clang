@@ -298,7 +298,7 @@ struct SourceColumnMap {
   /// \brief Map from a byte index to the previous byte which starts a column.
   int startOfPreviousColumn(int N) const {
     assert(0 < N && N < static_cast<int>(m_columnToByte.size()));
-    while (byteToColumn(N--) == -1) {}
+    while (byteToColumn(--N) == -1) {}
     return N;
   }
 
@@ -418,7 +418,7 @@ static void selectInterestingSourceRegion(std::string &SourceLine,
     bool ExpandedRegion = false;
 
     if (SourceStart>0) {
-      unsigned NewStart = SourceStart-1;
+      unsigned NewStart = map.startOfPreviousColumn(SourceStart);
 
       // Skip over any whitespace we see here; we're looking for
       // another bit of interesting text.
@@ -445,7 +445,7 @@ static void selectInterestingSourceRegion(std::string &SourceLine,
     }
 
     if (SourceEnd<SourceLine.size()) {
-      unsigned NewEnd = SourceEnd+1;
+      unsigned NewEnd = map.startOfNextColumn(SourceEnd);
 
       // Skip over any whitespace we see here; we're looking for
       // another bit of interesting text.
@@ -494,7 +494,7 @@ static void selectInterestingSourceRegion(std::string &SourceLine,
 
   // The line needs some trunctiona, and we'd prefer to keep the front
   //  if possible, so remove the back
-  if (BackColumnsRemoved)
+  if (BackColumnsRemoved > strlen(back_ellipse))
     SourceLine.replace(SourceEnd, std::string::npos, back_ellipse);
 
   // If that's enough then we're done
@@ -502,7 +502,7 @@ static void selectInterestingSourceRegion(std::string &SourceLine,
     return;
 
   // Otherwise remove the front as well
-  if (FrontColumnsRemoved) {
+  if (FrontColumnsRemoved > strlen(front_ellipse)) {
     SourceLine.replace(0, SourceStart, front_ellipse);
     CaretLine.replace(0, CaretStart, front_space);
     if (!FixItInsertionLine.empty())

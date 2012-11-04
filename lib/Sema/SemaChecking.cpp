@@ -6268,7 +6268,8 @@ void Sema::CheckArgumentWithTypeTag(const ArgumentWithTypeTagAttr *Attr,
   if (IsPointerAttr) {
     // Skip implicit cast of pointer to `void *' (as a function argument).
     if (const ImplicitCastExpr *ICE = dyn_cast<ImplicitCastExpr>(ArgumentExpr))
-      if (ICE->getType()->isVoidPointerType())
+      if (ICE->getType()->isVoidPointerType() &&
+          ICE->getCastKind() == CK_BitCast)
         ArgumentExpr = ICE->getSubExpr();
   }
   QualType ArgumentType = ArgumentExpr->getType();
