@@ -942,7 +942,7 @@ protected:
                            unsigned int BytePos, bool ForStrongLayout,
                            bool &HasUnion);
   
-  Qualifiers::ObjCLifetime GetObjCLifeTime(QualType QT);
+  Qualifiers::ObjCLifetime getBlockCaptureLifetime(QualType QT);
   
   void UpdateRunSkipBlockVars(bool IsByref,
                               Qualifiers::ObjCLifetime LifeTime,
@@ -1968,21 +1968,16 @@ llvm::Constant *CGObjCCommonMac::BuildGCBlockLayout(CodeGenModule &CGM,
   return C;
 }
 
-Qualifiers::ObjCLifetime CGObjCCommonMac::GetObjCLifeTime(QualType FQT) {
+/// getBlockCaptureLifetime - This routine returns life time of the captured
+/// block variable for the purpose of block layout meta-data generation. FQT is
+/// the type of the variable captured in the block.
+Qualifiers::ObjCLifetime CGObjCCommonMac::getBlockCaptureLifetime(QualType FQT) {
   if (CGM.getLangOpts().ObjCAutoRefCount)
     return FQT.getObjCLifetime();
   
-  // MRR, is more ad hoc.
-  if (FQT.isObjCGCStrong())
-    return Qualifiers::OCL_Strong;
-  if (FQT.isObjCGCWeak())
-    return Qualifiers::OCL_Weak;
-  
+  // MRR.
   if (FQT->isObjCObjectPointerType() || FQT->isBlockPointerType())
-    return Qualifiers::OCL_Strong;
-  
-  if (const PointerType *PT = FQT->getAs<PointerType>())
-    return (GetObjCLifeTime(PT->getPointeeType()));
+    return Qualifiers::OCL_ExplicitNone;
   
   return Qualifiers::OCL_None;
 }
@@ -2099,7 +2094,7 @@ void CGObjCCommonMac::BuildRCRecordLayout(const llvm::StructLayout *RecLayout,
       }
     } else {
       UpdateRunSkipBlockVars(false,
-                             GetObjCLifeTime(FQT),
+                             getBlockCaptureLifetime(FQT),
                              BytePos + FieldOffset,
                              FieldSize);
     }
@@ -2114,7 +2109,7 @@ void CGObjCCommonMac::BuildRCRecordLayout(const llvm::StructLayout *RecLayout,
                         ((BitFieldSize % ByteSizeInBits) != 0);
       Size += LastBitfieldOrUnnamedOffset;
       UpdateRunSkipBlockVars(false,
-                             GetObjCLifeTime(LastFieldBitfieldOrUnnamed->getType()),
+                             getBlockCaptureLifetime(LastFieldBitfieldOrUnnamed->getType()),
                              BytePos + LastBitfieldOrUnnamedOffset,
                              Size*ByteSizeInBits);
     } else {
@@ -2123,7 +2118,7 @@ void CGObjCCommonMac::BuildRCRecordLayout(const llvm::StructLayout *RecLayout,
       unsigned FieldSize
         = CGM.getContext().getTypeSize(LastFieldBitfieldOrUnnamed->getType());
       UpdateRunSkipBlockVars(false,
-                             GetObjCLifeTime(LastFieldBitfieldOrUnnamed->getType()),
+                             getBlockCaptureLifetime(LastFieldBitfieldOrUnnamed->getType()),
                              BytePos + LastBitfieldOrUnnamedOffset,
                              FieldSize);
     }
@@ -2131,7 +2126,7 @@ void CGObjCCommonMac::BuildRCRecordLayout(const llvm::StructLayout *RecLayout,
   
   if (MaxField)
     UpdateRunSkipBlockVars(false,
-                           GetObjCLifeTime(MaxField->getType()),
+                           getBlockCaptureLifetime(MaxField->getType()),
                            BytePos + MaxFieldOffset,
                            MaxUnionSize);
 }
@@ -2299,7 +2294,7 @@ llvm::Constant *CGObjCCommonMac::BuildRCBlockLayout(CodeGenModule &CGM,
     }
     unsigned fieldSize = ci->isByRef() ? WordSizeInBits
                                        : CGM.getContext().getTypeSize(type);
-    UpdateRunSkipBlockVars(ci->isByRef(), GetObjCLifeTime(type),
+    UpdateRunSkipBlockVars(ci->isByRef(), getBlockCaptureLifetime(type),
                            fieldOffset, fieldSize);
   }
   
