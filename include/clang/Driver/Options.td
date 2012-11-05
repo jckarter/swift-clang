@@ -298,7 +298,7 @@ def faddress_sanitizer : Flag<["-"], "faddress-sanitizer">, Group<f_Group>, Flag
 def fno_address_sanitizer : Flag<["-"], "fno-address-sanitizer">, Group<f_Group>, Flags<[Unsupported]>;
 def fthread_sanitizer : Flag<["-"], "fthread-sanitizer">, Group<f_Group>, Flags<[Unsupported]>,
   HelpText<"Enable ThreadSanitizer instrumentation (race detection)">;
-def fno_thread_sanitizer : Flag<["-"], "fno-thread-sanitizer">, Group<f_Group>, Flags<[Unsupported]>,
+def fno_thread_sanitizer : Flag<["-"], "fno-thread-sanitizer">, Group<f_Group>, Flags<[Unsupported]>;
 def fasm : Flag<["-"], "fasm">, Group<f_Group>;
 
 def fasm_blocks : Flag<["-"], "fasm-blocks">, Group<f_Group>;
