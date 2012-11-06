@@ -1,4 +1,4 @@
-/*===---- cpuid.h - X86 cpu model detection --------------------------------===
+/*===---- __wmmintrin_pclmul.h - AES intrinsics ----------------------------===
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -20,14 +20,15 @@
  *
  *===-----------------------------------------------------------------------===
  */
+#ifndef _WMMINTRIN_PCLMUL_H
+#define _WMMINTRIN_PCLMUL_H
 
-#if !(__x86_64__ || __i386__)
-#error this header is for x86 only
+#if !defined (__PCLMUL__)
+# error "PCLMUL instruction is not enabled"
+#else
+#define _mm_clmulepi64_si128(__X, __Y, __I) \
+  ((__m128i)__builtin_ia32_pclmulqdq128((__v2di)(__m128i)(__X), \
+                                        (__v2di)(__m128i)(__Y), (char)(__I)))
 #endif
 
-static inline int __get_cpuid (unsigned int level, unsigned int *eax,
-                               unsigned int *ebx, unsigned int *ecx,
-                               unsigned int *edx) {
-    __asm("cpuid" : "=a"(*eax), "=b" (*ebx), "=c"(*ecx), "=d"(*edx) : "0"(level));
-    return 1;
-}
+#endif /* _WMMINTRIN_PCLMUL_H */
