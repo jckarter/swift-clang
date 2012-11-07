@@ -512,7 +512,8 @@ def warn_conflicting_overriding_ret_types : Warning<
 
 def warn_conflicting_ret_types : Warning<
   "conflicting return type in "
-  "implementation of %0%diff{: $ vs $|}1,2">;
+  "implementation of %0%diff{: $ vs $|}1,2">,
+  InGroup<MismatchedReturnTypes>;
 
 def warn_conflicting_overriding_ret_type_modifiers : Warning<
   "conflicting distributed object modifiers on return type "
@@ -541,7 +542,9 @@ def warn_conflicting_overriding_param_types : Warning<
 
 def warn_conflicting_param_types : Warning<
   "conflicting parameter types in "
-  "implementation of %0%diff{: $ vs $|}1,2">;
+  "implementation of %0%diff{: $ vs $|}1,2">,
+  InGroup<MismatchedParameterTypes>;
+
 def warn_conflicting_param_modifiers : Warning<
   "conflicting distributed object modifiers on parameter type "
   "in implementation of %0">,
