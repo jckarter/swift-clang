@@ -76,12 +76,12 @@ protected:
   ///
   /// The latter overload is suitable for computing the offset of a
   /// sythesized ivar.
-  CharUnits ComputeIvarBaseOffset(CodeGen::CodeGenModule &CGM,
-                                  const ObjCInterfaceDecl *OID,
-                                  const ObjCIvarDecl *Ivar);
-  CharUnits ComputeIvarBaseOffset(CodeGen::CodeGenModule &CGM,
-                                  const ObjCImplementationDecl *OID,
-                                  const ObjCIvarDecl *Ivar);
+  uint64_t ComputeIvarBaseOffset(CodeGen::CodeGenModule &CGM,
+                                 const ObjCInterfaceDecl *OID,
+                                 const ObjCIvarDecl *Ivar);
+  uint64_t ComputeIvarBaseOffset(CodeGen::CodeGenModule &CGM,
+                                 const ObjCImplementationDecl *OID,
+                                 const ObjCIvarDecl *Ivar);
 
   LValue EmitValueForIvarAtOffset(CodeGen::CodeGenFunction &CGF,
                                   const ObjCInterfaceDecl *OID,
@@ -277,6 +277,12 @@ public:
   MessageSendInfo getMessageSendInfo(const ObjCMethodDecl *method,
                                      QualType resultType,
                                      CallArgList &callArgs);
+
+  // FIXME: This probably shouldn't be here, but the code to compute
+  // it is here.
+  unsigned ComputeBitfieldBitOffset(CodeGen::CodeGenModule &CGM,
+                                    const ObjCInterfaceDecl *ID,
+                                    const ObjCIvarDecl *Ivar);
 };
 
 /// Creates an instance of an Objective-C runtime class.
