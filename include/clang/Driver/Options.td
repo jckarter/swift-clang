@@ -642,7 +642,7 @@ def ftemplate_backtrace_limit_EQ : Joined<["-"], "ftemplate-backtrace-limit=">,
 def ftest_coverage : Flag<["-"], "ftest-coverage">, Group<f_Group>;
 def Wlarge_by_value_copy_def : Flag<["-"], "Wlarge-by-value-copy">,
   HelpText<"Warn if a function definition returns or accepts an object larger "
-           "in bytes that a given value">;
+           "in bytes that a given value">, Flags<[HelpHidden]>;
 def Wlarge_by_value_copy_EQ : Joined<["-"], "Wlarge-by-value-copy=">, Flags<[CC1Option]>;
 
 // Just silence warnings about -Wlarger-than,  -Wframe-larger-than for now.
@@ -874,13 +874,13 @@ def mno_dsp : Flag<["-"], "mno-dsp">, Group<m_Group>;
 def mdspr2 : Flag<["-"], "mdspr2">, Group<m_Group>;
 def mno_dspr2 : Flag<["-"], "mno-dspr2">, Group<m_Group>;
 def mips32 : Flag<["-"], "mips32">, Group<mips_CPUs_Group>,
-  HelpText<"Equivalent to -march=mips32">;
+  HelpText<"Equivalent to -march=mips32">, Flags<[HelpHidden]>;
 def mips32r2 : Flag<["-"], "mips32r2">, Group<mips_CPUs_Group>,
-  HelpText<"Equivalent to -march=mips32r2">;
+  HelpText<"Equivalent to -march=mips32r2">, Flags<[HelpHidden]>;
 def mips64 : Flag<["-"], "mips64">, Group<mips_CPUs_Group>,
-  HelpText<"Equivalent to -march=mips64">;
+  HelpText<"Equivalent to -march=mips64">, Flags<[HelpHidden]>;
 def mips64r2 : Flag<["-"], "mips64r2">, Group<mips_CPUs_Group>,
-  HelpText<"Equivalent to -march=mips64r2">;
+  HelpText<"Equivalent to -march=mips64r2">, Flags<[HelpHidden]>;
 def mthumb : Flag<["-"], "mthumb">, Group<m_Group>;
 def mtune_EQ : Joined<["-"], "mtune=">, Group<m_Group>;
 def multi__module : Flag<["-"], "multi_module">;
