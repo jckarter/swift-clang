@@ -2773,6 +2773,7 @@ public:
     IntPtrType = SignedLong;
     PtrDiffType = SignedLong;
     this->UserLabelPrefix = "";
+    this->TLSSupported = false;
   }
   virtual void getTargetDefines(const LangOptions &Opts,
                                 MacroBuilder &Builder) const {
