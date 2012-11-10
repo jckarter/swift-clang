@@ -826,13 +826,14 @@ def mno_fma4 : Flag<["-"], "mno-fma4">, Group<m_x86_Features_Group>;
 def mno_fma : Flag<["-"], "mno-fma">, Group<m_x86_Features_Group>;
 def mno_xop : Flag<["-"], "mno-xop">, Group<m_x86_Features_Group>;
 def mno_f16c : Flag<["-"], "mno-f16c">, Group<m_x86_Features_Group>;
+def mno_rtm : Flag<["-"], "mno-rtm">, Group<m_x86_Features_Group>;
 
 def mno_thumb : Flag<["-"], "mno-thumb">, Group<m_Group>;
 def marm : Flag<["-"], "marm">, Alias<mno_thumb>;
 
 def mno_warn_nonportable_cfstrings : Flag<["-"], "mno-warn-nonportable-cfstrings">, Group<m_Group>;
-def mno_omit_leaf_frame_pointer : Flag<["-"], "mno-omit-leaf-frame-pointer">, Group<f_Group>;
-def momit_leaf_frame_pointer : Flag<["-"], "momit-leaf-frame-pointer">, Group<f_Group>,
+def mno_omit_leaf_frame_pointer : Flag<["-"], "mno-omit-leaf-frame-pointer">, Group<m_Group>;
+def momit_leaf_frame_pointer : Flag<["-"], "momit-leaf-frame-pointer">, Group<m_Group>,
   HelpText<"Omit frame pointer setup for leaf functions">, Flags<[CC1Option]>;
 def mimplicit_float : Flag<["-"], "mimplicit-float">, Group<m_Group>;
 def mpascal_strings : Flag<["-"], "mpascal-strings">, Group<m_Group>;
@@ -868,6 +869,7 @@ def mfma4 : Flag<["-"], "mfma4">, Group<m_x86_Features_Group>;
 def mfma : Flag<["-"], "mfma">, Group<m_x86_Features_Group>;
 def mxop : Flag<["-"], "mxop">, Group<m_x86_Features_Group>;
 def mf16c : Flag<["-"], "mf16c">, Group<m_x86_Features_Group>;
+def mrtm : Flag<["-"], "mrtm">, Group<m_x86_Features_Group>;
 def mips16 : Flag<["-"], "mips16">, Group<m_Group>;
 def mno_mips16 : Flag<["-"], "mno-mips16">, Group<m_Group>;
 def mdsp : Flag<["-"], "mdsp">, Group<m_Group>;
