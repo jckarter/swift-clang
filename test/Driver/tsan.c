@@ -5,5 +5,8 @@
 // RUN: %clang     -target i386-unknown-unknown -fsanitize=thread  %s -S -emit-llvm -o - | FileCheck %s
 // Verify that -fsanitize=thread invokes tsan instrumentation.
 
+// XFAIL: *
+// We don't support the sanatizer on internal branches, so fail this test.
+
 int foo(int *a) { return *a; }
 // CHECK: __tsan_init
