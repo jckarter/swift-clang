@@ -3519,6 +3519,7 @@ class ARM64TargetInfo : public TargetInfo {
 
 public:
   ARM64TargetInfo(const std::string &TripleStr) : TargetInfo(TripleStr) {
+    BigEndian = false;
     LongWidth = LongAlign = PointerWidth = PointerAlign = 64;
     IntMaxType = SignedLong;
     UIntMaxType = UnsignedLong;
