@@ -163,7 +163,7 @@ double t2(int i, ...) {
     return ll;
 }
 
-#include <arm_neon.h>
+#include <aarch64_simd.h>
 
 // Homogeneous Vector Aggregate as return type and argument type.
 // CHECK: define %struct.int8x16x2_t @f0_0(<16 x i8> %{{.*}}, <16 x i8> %{{.*}})
@@ -186,3 +186,74 @@ T_float32x4 f1_1(T_float32x4 a0) { return a0; }
 T_float32x8 f1_2(T_float32x8 a0) { return a0; }
 // CHECK: define void @f1_3(<16 x float>* noalias sret %{{.*}}, <16 x float>*)
 T_float32x16 f1_3(T_float32x16 a0) { return a0; }
+
+// Testing alignment with aggregates: HFA, aggregates with size <= 16 bytes and
+// aggregates with size > 16 bytes.
+struct s35
+{
+   float v[4]; //Testing HFA.
+} __attribute__((aligned(16)));
+typedef struct s35 s35_with_align;
+
+typedef __attribute__((neon_vector_type(4))) float float32x4_t;
+float32x4_t f35(int i, s35_with_align s1, s35_with_align s2) {
+// CHECK: define <4 x float> @f35(i32 %i, float %s1.0, float %s1.1, float %s1.2, float %s1.3, float %s2.0, float %s2.1, float %s2.2, float %s2.3)
+// CHECK: %s1 = alloca %struct.s35, align 16
+// CHECK: %s2 = alloca %struct.s35, align 16
+// CHECK: %[[a:.*]] = bitcast %struct.s35* %s1 to <4 x float>*
+// CHECK: load <4 x float>* %[[a]], align 16
+// CHECK: %[[b:.*]] = bitcast %struct.s35* %s2 to <4 x float>*
+// CHECK: load <4 x float>* %[[b]], align 16
+  float32x4_t v = vaddq_f32(*(float32x4_t *)&s1,
+                            *(float32x4_t *)&s2);
+  return v;
+}
+
+struct s36
+{
+   int v[4]; //Testing 16-byte aggregate.
+} __attribute__((aligned(16)));
+typedef struct s36 s36_with_align;
+
+typedef __attribute__((neon_vector_type(4))) int int32x4_t;
+int32x4_t f36(int i, s36_with_align s1, s36_with_align s2) {
+// CHECK: define <4 x i32> @f36(i32 %i, i128 %s1.coerce, i128 %s2.coerce)
+// CHECK: %s1 = alloca %struct.s36, align 16
+// CHECK: %s2 = alloca %struct.s36, align 16
+// CHECK: store i128 %s1.coerce, i128* %{{.*}}, align 1
+// CHECK: store i128 %s2.coerce, i128* %{{.*}}, align 1
+// CHECK: %[[a:.*]] = bitcast %struct.s36* %s1 to <4 x i32>*
+// CHECK: load <4 x i32>* %[[a]], align 16
+// CHECK: %[[b:.*]] = bitcast %struct.s36* %s2 to <4 x i32>*
+// CHECK: load <4 x i32>* %[[b]], align 16
+  int32x4_t v = vaddq_s32(*(int32x4_t *)&s1,
+                          *(int32x4_t *)&s2);
+  return v;
+}
+
+struct s37
+{
+   int v[18]; //Testing large aggregate.
+} __attribute__((aligned(16)));
+typedef struct s37 s37_with_align;
+
+int32x4_t f37(int i, s37_with_align s1, s37_with_align s2) {
+// CHECK: define <4 x i32> @f37(i32 %i, %struct.s37* %s1, %struct.s37* %s2)
+// CHECK: %[[a:.*]] = bitcast %struct.s37* %s1 to <4 x i32>*
+// CHECK: load <4 x i32>* %[[a]], align 16
+// CHECK: %[[b:.*]] = bitcast %struct.s37* %s2 to <4 x i32>*
+// CHECK: load <4 x i32>* %[[b]], align 16
+  int32x4_t v = vaddq_s32(*(int32x4_t *)&s1,
+                          *(int32x4_t *)&s2);
+  return v;
+}
+s37_with_align g37;
+int32x4_t caller37() {
+// CHECK: caller37
+// CHECK: %[[a:.*]] = alloca %struct.s37, align 16
+// CHECK: %[[b:.*]] = alloca %struct.s37, align 16
+// CHECK: call void @llvm.memcpy
+// CHECK: call void @llvm.memcpy
+// CHECK: call <4 x i32> @f37(i32 3, %struct.s37* %[[a]], %struct.s37* %[[b]])
+  return f37(3, g37, g37);
+}
