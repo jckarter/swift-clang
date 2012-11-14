@@ -872,13 +872,13 @@ DerivedArgList *Darwin::TranslateArgs(const DerivedArgList &Args,
     StringRef where;
 
     // Complain about targetting iOS < 5.0 in any way.
-    if (isTargetIPhoneOS() && isIPhoneOSVersionLT(5, 0)) {
+    if (isTargetIPhoneOS()) {
+      if (isIPhoneOSVersionLT(5, 0))
         where = "iOS 5.0";
-
-    // Complain about targetting anything short of Lion.
-    // This check is Apple-internal only; open source users
-    // may have installed private copies of libc++.
     } else if (isMacosxVersionLT(10, 7)) {
+      // Complain about targetting anything short of Lion.
+      // This check is Apple-internal only; open source users
+      // may have installed private copies of libc++.
       where = "OS X 10.7";
     }
 
