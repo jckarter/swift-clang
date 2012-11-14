@@ -2655,6 +2655,7 @@ Decl *Sema::ParsedFreeStandingDeclSpec(Scope *S, AccessSpecifier AS,
   }
 
   if (Tag) {
+    getASTContext().addUnnamedTag(Tag);
     Tag->setFreeStanding();
     if (Tag->isInvalidDecl())
       return Tag;
@@ -5696,7 +5697,11 @@ Sema::ActOnFunctionDeclarator(Scope *S, Declarator &D, DeclContext *DC,
       RetType->getAsCXXRecordDecl() : RetType->getPointeeCXXRecordDecl();
   if (!NewFD->isInvalidDecl() && !NewFD->hasAttr<WarnUnusedResultAttr>() &&
       Ret && Ret->hasAttr<WarnUnusedResultAttr>()) {
-    NewFD->addAttr(new (Context) WarnUnusedResultAttr(SourceRange(), Context));
+    const CXXMethodDecl *MD = dyn_cast<CXXMethodDecl>(NewFD);
+    if (!(MD && MD->getCorrespondingMethodInClass(Ret, true))) {
+      NewFD->addAttr(new (Context) WarnUnusedResultAttr(SourceRange(),
+                                                        Context));
+    }
   }
 
   if (!getLangOpts().CPlusPlus) {
@@ -7350,6 +7355,10 @@ Sema::FinalizeDeclaratorGroup(Scope *S, const DeclSpec &DS,
   for (unsigned i = 0; i != NumDecls; ++i)
     if (Decl *D = Group[i])
       Decls.push_back(D);
+
+  if (DeclSpec::isDeclRep(DS.getTypeSpecType()))
+    if (const TagDecl *Tag = dyn_cast_or_null<TagDecl>(DS.getRepAsDecl()))
+      getASTContext().addUnnamedTag(Tag);
 
   return BuildDeclaratorGroup(Decls.data(), Decls.size(),
                               DS.getTypeSpecType() == DeclSpec::TST_auto);
