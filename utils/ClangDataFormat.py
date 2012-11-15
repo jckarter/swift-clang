@@ -16,16 +16,20 @@ After that, instead of getting this:
 you'll get:
 
 (lldb) p Tok.Loc
-(clang::SourceLocation) $4 = "/usr/include/i386/_types.h:37:1" (offset: 123582, file)
+(clang::SourceLocation) $4 = "/usr/include/i386/_types.h:37:1" (offset: 123582, file, local)
 """
 
 import lldb
 
 def __lldb_init_module(debugger, internal_dict):
 	debugger.HandleCommand("type summary add -F ClangDataFormat.SourceLocation_summary clang::SourceLocation")
+	debugger.HandleCommand("type summary add -F ClangDataFormat.StringRef_summary llvm::StringRef")
 
 def SourceLocation_summary(srcloc, internal_dict):
 	return SourceLocation(srcloc).summary()
+
+def StringRef_summary(strref, internal_dict):
+	return StringRef(strref).summary()
 
 class SourceLocation(object):
 	def __init__(self, srcloc):
@@ -37,6 +41,9 @@ class SourceLocation(object):
 	def isMacro(self):
 		return getValueFromExpression(self.srcloc, ".isMacroID()").GetValueAsUnsigned()
 
+	def isLocal(self, srcmgr_path):
+		return lldb.frame.EvaluateExpression("(%s).isLocalSourceLocation(%s)" % (srcmgr_path, getExpressionPath(self.srcloc))).GetValueAsUnsigned()
+
 	def getPrint(self, srcmgr_path):
 		print_str = getValueFromExpression(self.srcloc, ".printToString(%s)" % srcmgr_path)
 		return print_str.GetSummary()
@@ -45,8 +52,25 @@ class SourceLocation(object):
 		desc = "(offset: %d, %s)" % (self.offset(), "macro" if self.isMacro() else "file")
 		srcmgr_path = findObjectExpressionPath("clang::SourceManager", lldb.frame)
 		if srcmgr_path:
-			desc = self.getPrint(srcmgr_path) + " " + desc
+			desc = "%s (offset: %d, %s, %s)" % (self.getPrint(srcmgr_path), self.offset(), "macro" if self.isMacro() else "file", "local" if self.isLocal(srcmgr_path) else "loaded")
 		return desc
+
+class StringRef(object):
+	def __init__(self, strref):
+		self.strref = strref
+		self.Data_value = strref.GetChildAtIndex(0)
+		self.Length = strref.GetChildAtIndex(1).GetValueAsUnsigned()
+
+	def summary(self):
+		if self.Length == 0:
+			return '""'
+		data = self.Data_value.GetPointeeData(0, self.Length)
+		error = lldb.SBError()
+		string = data.ReadRawData(error, 0, data.GetByteSize())
+		if error.Fail():
+			return None
+		return '"%s"' % string
+
 
 # Key is a (function address, type name) tuple, value is the expression path for
 # an object with such a type name from inside that function.

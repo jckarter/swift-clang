@@ -4153,8 +4153,8 @@ QualType ASTContext::getPromotedIntegerType(QualType Promotable) const {
   // At this point, we should have a signed or unsigned integer type.
   if (Promotable->isSignedIntegerType())
     return IntTy;
-  uint64_t PromotableSize = getTypeSize(Promotable);
-  uint64_t IntSize = getTypeSize(IntTy);
+  uint64_t PromotableSize = getIntWidth(Promotable);
+  uint64_t IntSize = getIntWidth(IntTy);
   assert(Promotable->isUnsignedIntegerType() && PromotableSize <= IntSize);
   return (PromotableSize != IntSize) ? IntTy : UnsignedIntTy;
 }
@@ -4368,6 +4368,29 @@ bool ASTContext::BlockRequiresCopying(QualType Ty) const {
   return false;
 }
 
+bool ASTContext::getByrefLifetime(QualType Ty,
+                              Qualifiers::ObjCLifetime &LifeTime,
+                              bool &HasByrefExtendedLayout) const {
+  
+  if (!getLangOpts().ObjC1 ||
+      getLangOpts().getGC() != LangOptions::NonGC)
+    return false;
+  
+  HasByrefExtendedLayout = false;
+  if (Ty->isAggregateType()) {
+    HasByrefExtendedLayout = true;
+    LifeTime = Qualifiers::OCL_None;
+  }
+  else if (getLangOpts().ObjCAutoRefCount)
+    LifeTime = Ty.getObjCLifetime();
+  // MRR.
+  else if (Ty->isObjCObjectPointerType() || Ty->isBlockPointerType())
+    LifeTime = Qualifiers::OCL_ExplicitNone;
+  else
+    LifeTime = Qualifiers::OCL_None;
+  return true;
+}
+
 QualType
 ASTContext::BuildByRefType(StringRef DeclName, QualType Ty) const {
   //  type = struct __Block_byref_1_X {
@@ -4377,10 +4400,13 @@ ASTContext::BuildByRefType(StringRef DeclName, QualType Ty) const {
   //    unsigned int __size;
   //    void *__copy_helper;            // as needed
   //    void *__destroy_help            // as needed
+  //    void *__byref_variable_layout;    // Extended layout info. for byref variable as needed
   //    int X;
   //  } *
 
   bool HasCopyAndDispose = BlockRequiresCopying(Ty);
+  bool HasByrefExtendedLayout;
+  Qualifiers::ObjCLifetime Lifetime;
 
   // FIXME: Move up
   SmallString<36> Name;
@@ -4398,6 +4424,7 @@ ASTContext::BuildByRefType(StringRef DeclName, QualType Ty) const {
     Int32Ty,
     getPointerType(VoidPtrTy),
     getPointerType(VoidPtrTy),
+    getPointerType(VoidPtrTy),
     Ty
   };
 
@@ -4408,11 +4435,14 @@ ASTContext::BuildByRefType(StringRef DeclName, QualType Ty) const {
     "__size",
     "__copy_helper",
     "__destroy_helper",
+    "__byref_variable_layout",
     DeclName,
   };
-
-  for (size_t i = 0; i < 7; ++i) {
+  bool ByrefKnownLifetime = getByrefLifetime(Ty, Lifetime, HasByrefExtendedLayout);
+  for (size_t i = 0; i < 8; ++i) {
     if (!HasCopyAndDispose && i >=4 && i <= 5)
+      continue;
+    if ((!ByrefKnownLifetime || !HasByrefExtendedLayout) && i == 6)
       continue;
     FieldDecl *Field = FieldDecl::Create(*this, T, SourceLocation(),
                                          SourceLocation(),
@@ -4481,7 +4511,13 @@ std::string ASTContext::getObjCEncodingForBlock(const BlockExpr *Expr) const {
   QualType BlockTy =
       Expr->getType()->getAs<BlockPointerType>()->getPointeeType();
   // Encode result type.
-  getObjCEncodingForType(BlockTy->getAs<FunctionType>()->getResultType(), S);
+  if (getLangOpts().ObjCExtendedBlockEncode)
+    getObjCEncodingForMethodParameter(Decl::OBJC_TQ_None,
+                            BlockTy->getAs<FunctionType>()->getResultType(),
+                            S, true /*Extended*/);
+  else
+    getObjCEncodingForType(BlockTy->getAs<FunctionType>()->getResultType(),
+                           S);
   // Compute size of all parameters.
   // Start with computing size of a pointer in number of bytes.
   // FIXME: There might(should) be a better way of doing this computation!
@@ -4516,7 +4552,11 @@ std::string ASTContext::getObjCEncodingForBlock(const BlockExpr *Expr) const {
         PType = PVDecl->getType();
     } else if (PType->isFunctionType())
       PType = PVDecl->getType();
-    getObjCEncodingForType(PType, S);
+    if (getLangOpts().ObjCExtendedBlockEncode)
+      getObjCEncodingForMethodParameter(Decl::OBJC_TQ_None, PType,
+                                      S, true /*Extended*/);
+    else
+      getObjCEncodingForType(PType, S);
     S += charUnitsToString(ParmOffset);
     ParmOffset += getObjCEncodingTypeSize(PType);
   }
