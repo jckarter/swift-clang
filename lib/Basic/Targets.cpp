@@ -1865,7 +1865,7 @@ void X86TargetInfo::getDefaultFeatures(llvm::StringMap<bool> &Features) const {
 
   // X86_64 always has SSE2.
   if (getTriple().getArch() == llvm::Triple::x86_64)
-    Features["sse2"] = Features["sse"] = Features["mmx"] = true;
+    setFeatureEnabled(Features, "sse2", true);
 
   switch (CPU) {
   case CK_Generic:
@@ -1882,58 +1882,50 @@ void X86TargetInfo::getDefaultFeatures(llvm::StringMap<bool> &Features) const {
     break;
   case CK_Pentium3:
   case CK_Pentium3M:
-    setFeatureEnabled(Features, "mmx", true);
     setFeatureEnabled(Features, "sse", true);
     break;
   case CK_PentiumM:
   case CK_Pentium4:
   case CK_Pentium4M:
   case CK_x86_64:
-    setFeatureEnabled(Features, "mmx", true);
     setFeatureEnabled(Features, "sse2", true);
     break;
   case CK_Yonah:
   case CK_Prescott:
   case CK_Nocona:
-    setFeatureEnabled(Features, "mmx", true);
     setFeatureEnabled(Features, "sse3", true);
     break;
   case CK_Core2:
-    setFeatureEnabled(Features, "mmx", true);
     setFeatureEnabled(Features, "ssse3", true);
     break;
   case CK_Penryn:
-    setFeatureEnabled(Features, "mmx", true);
     setFeatureEnabled(Features, "sse4.1", true);
     break;
   case CK_Atom:
-    setFeatureEnabled(Features, "mmx", true);
     setFeatureEnabled(Features, "ssse3", true);
     break;
   case CK_Corei7:
-    setFeatureEnabled(Features, "mmx", true);
     setFeatureEnabled(Features, "sse4", true);
     break;
   case CK_Corei7AVX:
-    setFeatureEnabled(Features, "mmx", true);
     setFeatureEnabled(Features, "avx", true);
     setFeatureEnabled(Features, "aes", true);
     setFeatureEnabled(Features, "pclmul", true);
     break;
   case CK_CoreAVXi:
-    setFeatureEnabled(Features, "mmx", true);
     setFeatureEnabled(Features, "avx", true);
     setFeatureEnabled(Features, "aes", true);
     setFeatureEnabled(Features, "pclmul", true);
     setFeatureEnabled(Features, "rdrnd", true);
+    setFeatureEnabled(Features, "f16c", true);
     break;
   case CK_CoreAVX2:
-    setFeatureEnabled(Features, "mmx", true);
     setFeatureEnabled(Features, "avx2", true);
     setFeatureEnabled(Features, "aes", true);
     setFeatureEnabled(Features, "pclmul", true);
     setFeatureEnabled(Features, "lzcnt", true);
     setFeatureEnabled(Features, "rdrnd", true);
+    setFeatureEnabled(Features, "f16c", true);
     setFeatureEnabled(Features, "bmi", true);
     setFeatureEnabled(Features, "bmi2", true);
     setFeatureEnabled(Features, "rtm", true);
@@ -1977,20 +1969,30 @@ void X86TargetInfo::getDefaultFeatures(llvm::StringMap<bool> &Features) const {
     setFeatureEnabled(Features, "sse3", true);
     setFeatureEnabled(Features, "sse4a", true);
     setFeatureEnabled(Features, "3dnowa", true);
+    setFeatureEnabled(Features, "lzcnt", true);
+    setFeatureEnabled(Features, "popcnt", true);
     break;
   case CK_BTVER1:
     setFeatureEnabled(Features, "ssse3", true);
     setFeatureEnabled(Features, "sse4a", true);
+    setFeatureEnabled(Features, "lzcnt", true);
+    setFeatureEnabled(Features, "popcnt", true);
     break;
   case CK_BDVER1:
-  case CK_BDVER2:
-    setFeatureEnabled(Features, "avx", true);
     setFeatureEnabled(Features, "xop", true);
+    setFeatureEnabled(Features, "lzcnt", true);
     setFeatureEnabled(Features, "aes", true);
     setFeatureEnabled(Features, "pclmul", true);
+  case CK_BDVER2:
+    setFeatureEnabled(Features, "xop", true);
+    setFeatureEnabled(Features, "lzcnt", true);
+    setFeatureEnabled(Features, "aes", true);
+    setFeatureEnabled(Features, "pclmul", true);
+    setFeatureEnabled(Features, "bmi", true);
+    setFeatureEnabled(Features, "fma", true);
+    setFeatureEnabled(Features, "f16c", true);
     break;
   case CK_C3_2:
-    setFeatureEnabled(Features, "mmx", true);
     setFeatureEnabled(Features, "sse", true);
     break;
   }
@@ -2049,12 +2051,12 @@ bool X86TargetInfo::setFeatureEnabled(llvm::StringMap<bool> &Features,
         Features["ssse3"] = Features["sse41"] = Features["sse42"] =
         Features["popcnt"] = Features["avx"] = Features["fma"] = true;
     else if (Name == "fma4")
-        Features["mmx"] = Features["sse"] = Features["sse2"] = Features["sse3"] =
+      Features["mmx"] = Features["sse"] = Features["sse2"] = Features["sse3"] =
         Features["ssse3"] = Features["sse41"] = Features["sse42"] =
         Features["popcnt"] = Features["avx"] = Features["sse4a"] =
         Features["fma4"] = true;
     else if (Name == "xop")
-        Features["mmx"] = Features["sse"] = Features["sse2"] = Features["sse3"] =
+      Features["mmx"] = Features["sse"] = Features["sse2"] = Features["sse3"] =
         Features["ssse3"] = Features["sse41"] = Features["sse42"] =
         Features["popcnt"] = Features["avx"] = Features["sse4a"] =
         Features["fma4"] = Features["xop"] = true;
