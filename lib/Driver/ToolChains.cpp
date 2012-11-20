@@ -932,15 +932,13 @@ bool Darwin::UseSjLjExceptions() const {
           getTriple().getArch() == llvm::Triple::thumb);
 }
 
-const char *Darwin::GetDefaultRelocationModel() const {
-  return "pic";
+bool Darwin::isPICDefault() const {
+  return true;
 }
 
-const char *Darwin::GetForcedPicModel() const {
-  if (getArch() == llvm::Triple::x86_64 ||
-      getArch() == llvm::Triple::arm64)
-    return "pic";
-  return 0;
+bool Darwin::isPICDefaultForced() const {
+  return (getArch() == llvm::Triple::x86_64 ||
+          getArch() == llvm::Triple::arm64);
 }
 
 bool Darwin::SupportsProfiling() const {
@@ -1442,13 +1440,14 @@ bool Generic_GCC::IsUnwindTablesDefault() const {
   return getArch() == llvm::Triple::x86_64;
 }
 
-const char *Generic_GCC::GetDefaultRelocationModel() const {
-  return "static";
+bool Generic_GCC::isPICDefault() const {
+  return false;
 }
 
-const char *Generic_GCC::GetForcedPicModel() const {
-  return 0;
+bool Generic_GCC::isPICDefaultForced() const {
+  return false;
 }
+
 /// Hexagon Toolchain
 
 Hexagon_TC::Hexagon_TC(const Driver &D, const llvm::Triple& Triple)
@@ -1502,14 +1501,13 @@ Tool &Hexagon_TC::SelectTool(const Compilation &C,
   return *T;
 }
 
-const char *Hexagon_TC::GetDefaultRelocationModel() const {
-  return "static";
+bool Hexagon_TC::isPICDefault() const {
+  return false;
 }
 
-const char *Hexagon_TC::GetForcedPicModel() const {
-  return 0;
-} // End Hexagon
-
+bool Hexagon_TC::isPICDefaultForced() const {
+  return false;
+}
 
 /// TCEToolChain - A tool chain using the llvm bitcode tools to perform
 /// all subcommands. See http://tce.cs.tut.fi for our peculiar target.
@@ -1534,12 +1532,12 @@ bool TCEToolChain::IsMathErrnoDefault() const {
   return true;
 }
 
-const char *TCEToolChain::GetDefaultRelocationModel() const {
-  return "static";
+bool TCEToolChain::isPICDefault() const {
+  return false;
 }
 
-const char *TCEToolChain::GetForcedPicModel() const {
-  return 0;
+bool TCEToolChain::isPICDefaultForced() const {
+  return false;
 }
 
 Tool &TCEToolChain::SelectTool(const Compilation &C,
@@ -2279,7 +2277,8 @@ Tool &Linux::SelectTool(const Compilation &C, const JobAction &JA,
 
 void Linux::addClangTargetOptions(ArgStringList &CC1Args) const {
   const Generic_GCC::GCCVersion &V = GCCInstallation.getVersion();
-  if (V >= Generic_GCC::GCCVersion::Parse("4.7.0"))
+  if (V >= Generic_GCC::GCCVersion::Parse("4.7.0") ||
+      getTriple().getEnvironment() == llvm::Triple::Android)
     CC1Args.push_back("-fuse-init-array");
 }
 
