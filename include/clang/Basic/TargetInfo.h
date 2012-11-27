@@ -177,7 +177,8 @@ public:
 
 protected:
   IntType SizeType, IntMaxType, UIntMaxType, PtrDiffType, IntPtrType, WCharType,
-          WIntType, Char16Type, Char32Type, Int64Type, SigAtomicType;
+          WIntType, Char16Type, Char32Type, Int64Type, SigAtomicType,
+          ProcessIDType;
 
   /// \brief Whether Objective-C's built-in boolean type should be signed char.
   ///
@@ -218,7 +219,7 @@ public:
   IntType getChar32Type() const { return Char32Type; }
   IntType getInt64Type() const { return Int64Type; }
   IntType getSigAtomicType() const { return SigAtomicType; }
-
+  IntType getProcessIDType() const { return ProcessIDType; }
 
   /// \brief Return the width (in bits) of the specified integer type enum.
   ///
