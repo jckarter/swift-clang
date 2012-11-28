@@ -1745,7 +1745,12 @@ static void emitWritebackArg(CodeGenFunction &CGF, CallArgList &args,
   // Create the temporary.
   llvm::Value *temp = CGF.CreateTempAlloca(destType->getElementType(),
                                            "icr.temp");
-
+  // Loading an l-value can introduce a cleanup if the l-value is __weak,
+  // and that cleanup will be conditional if we can't prove that the l-value
+  // isn't null, so we need to register a dominating point so that the cleanups
+  // system will make valid IR.
+  CodeGenFunction::ConditionalEvaluation condEval(CGF);
+  
   // Zero-initialize it if we're not doing a copy-initialization.
   bool shouldCopy = CRE->shouldCopy();
   if (!shouldCopy) {
@@ -1754,7 +1759,7 @@ static void emitWritebackArg(CodeGenFunction &CGF, CallArgList &args,
         cast<llvm::PointerType>(destType->getElementType()));
     CGF.Builder.CreateStore(null, temp);
   }
-
+  
   llvm::BasicBlock *contBB = 0;
 
   // If the address is *not* known to be non-null, we need to switch.
@@ -1777,6 +1782,7 @@ static void emitWritebackArg(CodeGenFunction &CGF, CallArgList &args,
       llvm::BasicBlock *copyBB = CGF.createBasicBlock("icr.copy");
       CGF.Builder.CreateCondBr(isNull, contBB, copyBB);
       CGF.EmitBlock(copyBB);
+      condEval.begin(CGF);
     }
   }
 
@@ -1793,10 +1799,12 @@ static void emitWritebackArg(CodeGenFunction &CGF, CallArgList &args,
     // Use an ordinary store, not a store-to-lvalue.
     CGF.Builder.CreateStore(src, temp);
   }
-
+  
   // Finish the control flow if we needed it.
-  if (shouldCopy && !provablyNonNull)
+  if (shouldCopy && !provablyNonNull) {
     CGF.EmitBlock(contBB);
+    condEval.end(CGF);
+  }
 
   args.addWriteback(srcAddr, srcAddrType, temp);
   args.add(RValue::get(finalArgument), CRE->getType());
