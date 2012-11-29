@@ -3245,7 +3245,7 @@ public:
       .Cases("arm1176jz-s", "arm1176jzf-s", "6ZK")
       .Cases("arm1136jf-s", "mpcorenovfp", "mpcore", "6K")
       .Cases("arm1156t2-s", "arm1156t2f-s", "6T2")
-      .Cases("cortex-a8", "cortex-a9", "cortex-a15", "cortex-a7", "7A")
+      .Cases("cortex-a5", "cortex-a7", "cortex-a8", "cortex-a9", "cortex-a15", "7A")
       .Case("cortex-a9-mp", "7F")
 #ifndef __OPEN_SOURCE__
       .Case("pj4b", "7K")
