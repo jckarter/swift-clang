@@ -5481,9 +5481,13 @@ void linuxtools::Link::ConstructJob(Compilation &C, const JobAction &JA,
 
   SanitizerArgs Sanitize(D, Args);
 
-  // Call this before we add the C++ ABI library.
+  // Call these before we add the C++ ABI library.
   if (Sanitize.needsUbsanRt())
     addUbsanRTLinux(getToolChain(), Args, CmdArgs);
+  if (Sanitize.needsAsanRt())
+    addAsanRTLinux(getToolChain(), Args, CmdArgs);
+  if (Sanitize.needsTsanRt())
+    addTsanRTLinux(getToolChain(), Args, CmdArgs);
 
   if (D.CCCIsCXX &&
       !Args.hasArg(options::OPT_nostdlib) &&
@@ -5497,12 +5501,6 @@ void linuxtools::Link::ConstructJob(Compilation &C, const JobAction &JA,
       CmdArgs.push_back("-Bdynamic");
     CmdArgs.push_back("-lm");
   }
-
-  // Call this before we add the C run-time.
-  if (Sanitize.needsAsanRt())
-    addAsanRTLinux(getToolChain(), Args, CmdArgs);
-  if (Sanitize.needsTsanRt())
-    addTsanRTLinux(getToolChain(), Args, CmdArgs);
 
   if (!Args.hasArg(options::OPT_nostdlib)) {
     if (!Args.hasArg(options::OPT_nodefaultlibs)) {
