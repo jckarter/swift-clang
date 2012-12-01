@@ -3399,6 +3399,9 @@ public:
   virtual bool validateConstraintModifier(StringRef Constraint,
                                           const char Modifier,
                                           unsigned Size) const {
+    bool isOutput = (Constraint[0] == '=');
+    bool isInOut = (Constraint[0] == '+');
+
     // Strip off constraint modifiers.
     while (Constraint[0] == '=' ||
            Constraint[0] == '+' ||
@@ -3410,7 +3413,8 @@ public:
     case 'r': {
       switch (Modifier) {
       default:
-        return Size == 32;
+        return isInOut || (isOutput && Size >= 32) ||
+          (!isOutput && !isInOut && Size <= 32);
       case 'q':
         // A register of size 32 cannot fit a vector type.
         return false;
