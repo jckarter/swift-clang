@@ -5157,7 +5157,8 @@ let CategoryName = "Inline Assembly Issue" in {
     "for this in the future">;
 
   def warn_asm_mismatched_size_modifier : Warning<
-    "the size being stored is truncated, use a modifier to specify the size">,
+    "the value is truncated when put into register, "
+    "use a modifier to specify the size">,
     InGroup<ASMOperandWidths>;
 }
 
