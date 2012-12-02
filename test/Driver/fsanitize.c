@@ -26,11 +26,12 @@
 // RUN: %clang -target x86_64-linux-gnu -fsanitize=init-order %s -c -o /dev/null 2>&1 | FileCheck %s --check-prefix=CHECK-ONLY-EXTRA-ASAN
 // CHECK-ONLY-EXTRA-ASAN: argument '-fsanitize=init-order' only allowed with '-fsanitize=address'
 
-// RUN: %clang -target x86_64-linux-gnu -fsanitize=address -fsanitize=alignment -fsanitize=vptr -fno-sanitize=vptr %s -c -o /dev/null 2>&1
-// OK
+// RUN: %clang -target x86_64-linux-gnu -fsanitize=address -fsanitize=alignment -fsanitize=vptr -fno-sanitize=vptr %s -c -o /dev/null 2>&1 | FileCheck %s --che
+ck-prefix=CHECK-UBSAN-ASAN
+// XFAIL: *
 
 // RUN: %clang -target x86_64-linux-gnu -fsanitize=vptr -fno-sanitize=vptr -fsanitize=undefined,address %s -c -o /dev/null 2>&1
-// OK
+// XFAIL: *
 
 // RUN: %clang -target x86_64-linux-gnu -fcatch-undefined-behavior -fthread-sanitizer -fno-thread-sanitizer -faddress-sanitizer -fno-address-sanitizer -fbounds-checking -c -o /dev/null %s 2>&1 | FileCheck %s --check-prefix=CHECK-DEPRECATED
 // CHECK-DEPRECATED: argument '-fcatch-undefined-behavior' is deprecated, use '-fsanitize=undefined' instead
