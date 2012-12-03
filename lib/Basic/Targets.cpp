@@ -102,7 +102,7 @@ static void getDarwinDefines(MacroBuilder &Builder, const LangOptions &Opts,
   //
   // <rdar://problem/10895774> Xcode/clang: provide a way to distinguish minor
   // builds of clang at compile time
-  const StringRef TagPrefix = "tags/Apple/clang-";
+  const StringRef TagPrefix = "clang-";
   std::string RepositoryPath = getClangRepositoryPath();
   if (StringRef(RepositoryPath).startswith(TagPrefix)) {
     StringRef BuildNumber = StringRef(RepositoryPath).substr(TagPrefix.size());
