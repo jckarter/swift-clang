@@ -294,10 +294,10 @@ def fapple_kext : Flag<["-"], "fapple-kext">, Group<f_Group>, Flags<[CC1Option]>
   HelpText<"Use Apple's kernel extensions ABI">;
 def fapple_pragma_pack : Flag<["-"], "fapple-pragma-pack">, Group<f_Group>, Flags<[CC1Option]>,
   HelpText<"Enable Apple gcc-compatible #pragma pack handling">;
-def faddress_sanitizer : Flag<["-"], "faddress-sanitizer">, Group<f_Group>, Flags<[Unsupported]>;
-def fno_address_sanitizer : Flag<["-"], "fno-address-sanitizer">, Group<f_Group>, Flags<[Unsupported]>;
-def fthread_sanitizer : Flag<["-"], "fthread-sanitizer">, Group<f_Group>, Flags<[Unsupported]>;
-def fno_thread_sanitizer : Flag<["-"], "fno-thread-sanitizer">, Group<f_Group>, Flags<[Unsupported]>;
+def faddress_sanitizer : Flag<["-"], "faddress-sanitizer">, Group<f_Group>;
+def fno_address_sanitizer : Flag<["-"], "fno-address-sanitizer">, Group<f_Group>;
+def fthread_sanitizer : Flag<["-"], "fthread-sanitizer">, Group<f_Group>;
+def fno_thread_sanitizer : Flag<["-"], "fno-thread-sanitizer">, Group<f_Group>;
 def fasm : Flag<["-"], "fasm">, Group<f_Group>;
 
 def fasm_blocks : Flag<["-"], "fasm-blocks">, Group<f_Group>;
@@ -386,7 +386,7 @@ def fno_math_errno : Flag<["-"], "fno-math-errno">, Group<f_Group>;
 def fsignaling_math : Flag<["-"], "fsignaling-math">, Group<f_Group>;
 def fno_signaling_math : Flag<["-"], "fno-signaling-math">, Group<f_Group>;
 def fsanitize_EQ : CommaJoined<["-"], "fsanitize=">, Group<f_clang_Group>,
-                   Flags<[CC1Option, Unsupported]>, MetaVarName<"<check>">,
+                   Flags<[CC1Option]>, MetaVarName<"<check>">,
                    HelpText<"Enable runtime instrumentation for bug detection: "
                             "address (memory errors) | thread (race detection) | "
                             "undefined (miscellaneous undefined behavior)">;
