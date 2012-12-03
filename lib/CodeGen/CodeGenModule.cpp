@@ -2692,9 +2692,9 @@ void CodeGenModule::EmitTopLevelDecl(Decl *D) {
     ObjCRuntime->GenerateClass(OMD);
     // Emit global variable debug information.
     if (CGDebugInfo *DI = getModuleDebugInfo())
-      DI->getOrCreateInterfaceType(getContext().getObjCInterfaceType(OMD->getClassInterface()),
-				   OMD->getLocation());
-    
+      if (getCodeGenOpts().getDebugInfo() >= CodeGenOptions::LimitedDebugInfo)
+        DI->getOrCreateInterfaceType(getContext().getObjCInterfaceType(
+            OMD->getClassInterface()), OMD->getLocation());
     break;
   }
   case Decl::ObjCMethod: {

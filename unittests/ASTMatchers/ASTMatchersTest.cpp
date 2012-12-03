@@ -8,6 +8,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "ASTMatchersTest.h"
+#include "clang/AST/PrettyPrinter.h"
 #include "clang/ASTMatchers/ASTMatchers.h"
 #include "clang/ASTMatchers/ASTMatchFinder.h"
 #include "clang/Tooling/Tooling.h"
@@ -776,6 +777,12 @@ TEST(Matcher, BindsIDForMemoizedResults) {
           recordDecl(hasName("A"), hasDescendant(ClassX)),
           recordDecl(hasName("B"), hasDescendant(ClassX)))),
       new VerifyIdIsBoundTo<Decl>("x", 2)));
+}
+
+TEST(HasDeclaration, HasDeclarationOfEnumType) {
+  EXPECT_TRUE(matches("enum X {}; void y(X *x) { x; }",
+                      expr(hasType(pointsTo(
+                          qualType(hasDeclaration(enumDecl(hasName("X")))))))));
 }
 
 TEST(HasType, TakesQualTypeMatcherAndMatchesExpr) {
