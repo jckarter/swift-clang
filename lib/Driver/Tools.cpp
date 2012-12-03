@@ -997,6 +997,13 @@ void Clang::AddMIPSTargetArgs(const ArgList &Args,
                    options::OPT_mdspr2, options::OPT_mno_dspr2,
                    "dspr2");
 
+  if (Arg *A = Args.getLastArg(options::OPT_mxgot, options::OPT_mno_xgot)) {
+    if (A->getOption().matches(options::OPT_mxgot)) {
+      CmdArgs.push_back("-mllvm");
+      CmdArgs.push_back("-mxgot");
+    }
+  }
+
   if (Arg *A = Args.getLastArg(options::OPT_G)) {
     StringRef v = A->getValue();
     CmdArgs.push_back("-mllvm");
@@ -1486,6 +1493,19 @@ SanitizerArgs::SanitizerArgs(const Driver &D, const ArgList &Args) {
     D.Diag(diag::err_drv_argument_only_allowed_with)
       << lastArgumentForKind(D, Args, NeedsAsanRt)
       << "-fsanitize=address";
+
+  // Parse -f(no-)sanitize-blacklist options.
+  if (Arg *BLArg = Args.getLastArg(options::OPT_fsanitize_blacklist,
+                                   options::OPT_fno_sanitize_blacklist)) {
+    if (BLArg->getOption().matches(options::OPT_fsanitize_blacklist)) {
+      std::string BLPath = BLArg->getValue();
+      bool BLExists = false;
+      if (!llvm::sys::fs::exists(BLPath, BLExists) && BLExists)
+        BlacklistFile = BLPath;
+      else
+        D.Diag(diag::err_drv_no_such_file) << BLPath;
+    }
+  }
 }
 
 /// If AddressSanitizer is enabled, add appropriate linker flags (Linux).
@@ -1524,6 +1544,9 @@ static void addAsanRTLinux(const ToolChain &TC, const ArgList &Args,
 static void addTsanRTLinux(const ToolChain &TC, const ArgList &Args,
                            ArgStringList &CmdArgs) {
   if (!Args.hasArg(options::OPT_shared)) {
+    if (!Args.hasArg(options::OPT_pie))
+      TC.getDriver().Diag(diag::err_drv_sanitizer_requires_pie) <<
+        /* Thread */ 0;
     // LibTsan is "libclang_rt.tsan-<ArchName>.a" in the Linux library
     // resource directory.
     SmallString<128> LibTsan(TC.getDriver().ResourceDir);
@@ -1531,6 +1554,27 @@ static void addTsanRTLinux(const ToolChain &TC, const ArgList &Args,
                             (Twine("libclang_rt.tsan-") +
                              TC.getArchName() + ".a"));
     CmdArgs.push_back(Args.MakeArgString(LibTsan));
+    CmdArgs.push_back("-lpthread");
+    CmdArgs.push_back("-ldl");
+    CmdArgs.push_back("-export-dynamic");
+  }
+}
+
+/// If MemorySanitizer is enabled, add appropriate linker flags (Linux).
+/// This needs to be called before we add the C run-time (malloc, etc).
+static void addMsanRTLinux(const ToolChain &TC, const ArgList &Args,
+                           ArgStringList &CmdArgs) {
+  if (!Args.hasArg(options::OPT_shared)) {
+    if (!Args.hasArg(options::OPT_pie))
+      TC.getDriver().Diag(diag::err_drv_sanitizer_requires_pie) <<
+        /* Memory */ 1;
+    // LibMsan is "libclang_rt.msan-<ArchName>.a" in the Linux library
+    // resource directory.
+    SmallString<128> LibMsan(TC.getDriver().ResourceDir);
+    llvm::sys::path::append(LibMsan, "lib", "linux",
+                            (Twine("libclang_rt.msan-") +
+                             TC.getArchName() + ".a"));
+    CmdArgs.push_back(Args.MakeArgString(LibMsan));
     CmdArgs.push_back("-lpthread");
     CmdArgs.push_back("-ldl");
     CmdArgs.push_back("-export-dynamic");
@@ -5449,6 +5493,8 @@ void linuxtools::Link::ConstructJob(Compilation &C, const JobAction &JA,
     addAsanRTLinux(getToolChain(), Args, CmdArgs);
   if (Sanitize.needsTsanRt())
     addTsanRTLinux(getToolChain(), Args, CmdArgs);
+  if (Sanitize.needsMsanRt())
+    addMsanRTLinux(getToolChain(), Args, CmdArgs);
 
   if (D.CCCIsCXX &&
       !Args.hasArg(options::OPT_nostdlib) &&

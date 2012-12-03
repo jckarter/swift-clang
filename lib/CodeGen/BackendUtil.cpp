@@ -139,10 +139,13 @@ public:
 // we add to the PassManagerBuilder.
 class PassManagerBuilderWrapper : public PassManagerBuilder {
 public:
-  PassManagerBuilderWrapper(const LangOptions &LangOpts)
-      : PassManagerBuilder(), LangOpts(LangOpts) {}
+  PassManagerBuilderWrapper(const CodeGenOptions &CGOpts,
+                            const LangOptions &LangOpts)
+      : PassManagerBuilder(), CGOpts(CGOpts), LangOpts(LangOpts) {}
+  const CodeGenOptions &getCGOpts() const { return CGOpts; }
   const LangOptions &getLangOpts() const { return LangOpts; }
 private:
+  const CodeGenOptions &CGOpts;
   const LangOptions &LangOpts;
 };
 
@@ -172,11 +175,19 @@ static void addAddressSanitizerPasses(const PassManagerBuilder &Builder,
                                       PassManagerBase &PM) {
   const PassManagerBuilderWrapper &BuilderWrapper =
       static_cast<const PassManagerBuilderWrapper&>(Builder);
+  const CodeGenOptions &CGOpts = BuilderWrapper.getCGOpts();
   const LangOptions &LangOpts = BuilderWrapper.getLangOpts();
   PM.add(createAddressSanitizerFunctionPass(LangOpts.SanitizeInitOrder,
                                             LangOpts.SanitizeUseAfterReturn,
-                                            LangOpts.SanitizeUseAfterScope));
-  PM.add(createAddressSanitizerModulePass(LangOpts.SanitizeInitOrder));
+                                            LangOpts.SanitizeUseAfterScope,
+                                            CGOpts.SanitizerBlacklistFile));
+  PM.add(createAddressSanitizerModulePass(LangOpts.SanitizeInitOrder,
+                                          CGOpts.SanitizerBlacklistFile));
+}
+
+static void addMemorySanitizerPass(const PassManagerBuilder &Builder,
+                                   PassManagerBase &PM) {
+  PM.add(createMemorySanitizerPass());
 }
 
 static void addThreadSanitizerPass(const PassManagerBuilder &Builder,
@@ -195,7 +206,7 @@ void EmitAssemblyHelper::CreatePasses(TargetMachine *TM) {
     Inlining = CodeGenOpts.NoInlining;
   }
 
-  PassManagerBuilderWrapper PMBuilder(LangOpts);
+  PassManagerBuilderWrapper PMBuilder(CodeGenOpts, LangOpts);
   PMBuilder.OptLevel = OptLevel;
   PMBuilder.SizeLevel = CodeGenOpts.OptimizeSize;
 
@@ -225,6 +236,13 @@ void EmitAssemblyHelper::CreatePasses(TargetMachine *TM) {
                            addAddressSanitizerPasses);
     PMBuilder.addExtension(PassManagerBuilder::EP_EnabledOnOptLevel0,
                            addAddressSanitizerPasses);
+  }
+
+  if (LangOpts.SanitizeMemory) {
+    PMBuilder.addExtension(PassManagerBuilder::EP_OptimizerLast,
+                           addMemorySanitizerPass);
+    PMBuilder.addExtension(PassManagerBuilder::EP_EnabledOnOptLevel0,
+                           addMemorySanitizerPass);
   }
 
   if (LangOpts.SanitizeThread) {
