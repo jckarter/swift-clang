@@ -1,4 +1,4 @@
-//===--- UnwrappedLineParser.cpp - Format C++ code ------------------------===//
+//===--- UnwrappedLineParser.h - Format C++ code ----------------*- C++ -*-===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -19,8 +19,8 @@
 #ifndef LLVM_CLANG_FORMAT_UNWRAPPED_LINE_PARSER_H
 #define LLVM_CLANG_FORMAT_UNWRAPPED_LINE_PARSER_H
 
-#include "clang/Basic/SourceManager.h"
 #include "clang/Basic/IdentifierTable.h"
+#include "clang/Basic/SourceManager.h"
 #include "clang/Lex/Lexer.h"
 
 namespace clang {
@@ -71,6 +71,8 @@ struct UnwrappedLine {
 
 class UnwrappedLineConsumer {
 public:
+  virtual ~UnwrappedLineConsumer() {
+  }
   virtual void formatUnwrappedLine(const UnwrappedLine &Line) = 0;
 };
 
@@ -79,11 +81,12 @@ public:
   UnwrappedLineParser(Lexer &Lex, SourceManager &SourceMgr,
                       UnwrappedLineConsumer &Callback);
 
-  void parse();
+  /// Returns true in case of a structural error.
+  bool parse();
 
 private:
-  void parseLevel();
-  void parseBlock();
+  bool parseLevel();
+  bool parseBlock();
   void parsePPDirective();
   void parseComment();
   void parseStatement();
