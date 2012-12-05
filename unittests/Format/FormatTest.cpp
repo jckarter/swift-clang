@@ -7,9 +7,9 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "clang/Format/Format.h"
 #include "../Tooling/RewriterTestContext.h"
 #include "clang/Lex/Lexer.h"
-#include "clang/Format/Format.h"
 #include "gtest/gtest.h"
 
 namespace clang {
@@ -244,6 +244,21 @@ TEST_F(FormatTest, DoWhile) {
                "while (something());");
 }
 
+TEST_F(FormatTest, Enum) {
+  verifyFormat("enum {\n"
+               "  Zero,\n"
+               "  One = 1,\n"
+               "  Two = One + 1,\n"
+               "  Three = (One + Two),\n"
+               "  Four = (Zero && (One ^ Two)) | (One << Two),\n"
+               "  Five = (One, Two, Three, Four, 5)\n"
+               "};");
+  verifyFormat("enum Enum {\n"
+               "};");
+  verifyFormat("enum {\n"
+               "};");
+}
+
 TEST_F(FormatTest, BreaksDesireably) {
   verifyFormat("if (aaaaaaaaaaaaaaaaaaa(aaaaaaaaaaaaaaa) ||\n"
                "    aaaaaaaaaaaaaaaaaaa(aaaaaaaaaaaaaaa) ||\n"
@@ -256,6 +271,12 @@ TEST_F(FormatTest, BreaksDesireably) {
   verifyFormat("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa(\n"
                "    aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa(\n"
                "        aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa));");
+
+  verifyFormat(
+      "aaaaaaaa(aaaaaaaaaaaaa, aaaaaaaaaaaaaaa(aaaaaaaaaaaaaaaaaaaaaaaaaaaaa(\n"
+      "                            aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa)),\n"
+      "         aaaaaaaa(aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa(\n"
+      "             aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa)));");
 }
 
 TEST_F(FormatTest, AlignsStringLiterals) {
@@ -309,6 +330,9 @@ TEST_F(FormatTest, UnderstandsTemplateParameters) {
 
 TEST_F(FormatTest, UndestandsUnaryOperators) {
   verifyFormat("int a = -2;");
+  verifyFormat("f(-1, -2, -3);");
+  verifyFormat("a[-1] = 5;");
+  verifyFormat("int a = 5 + -2;");
 }
 
 TEST_F(FormatTest, UndestandsOverloadedOperators) {
@@ -327,10 +351,53 @@ TEST_F(FormatTest, UnderstandsUsesOfStar) {
   // verifyFormat("int a = b * *c;");
 }
 
+TEST_F(FormatTest, HandlesIncludeDirectives) {
+  EXPECT_EQ("#include <string>\n", format("#include <string>\n"));
+  EXPECT_EQ("#include \"a/b/string\"\n", format("#include \"a/b/string\"\n"));
+  EXPECT_EQ("#include \"string.h\"\n", format("#include \"string.h\"\n"));
+  EXPECT_EQ("#include \"string.h\"\n", format("#include \"string.h\"\n"));
+}
+
 //TEST_F(FormatTest, IncorrectDerivedClass) {
 //  verifyFormat("public B {\n"
 //               "};");
 //}
+
+TEST_F(FormatTest, IncorrectCodeUnbalancedBraces) {
+  verifyFormat("{");
+}
+
+TEST_F(FormatTest, IncorrectCodeDoNoWhile) {
+  verifyFormat("do {\n"
+               "};");
+  verifyFormat("do {\n"
+               "};\n"
+               "f();");
+  verifyFormat("do {\n"
+               "}\n"
+               "wheeee(fun);");
+  verifyFormat("do {\n"
+               "  f();\n"
+               "};");
+}
+
+TEST_F(FormatTest, IncorrectCodeErrorDetection) {
+  EXPECT_EQ("{\n{\n}\n", format("{\n{\n}\n"));
+  EXPECT_EQ("{\n  {\n}\n", format("{\n  {\n}\n"));
+  EXPECT_EQ("{\n  {\n  }\n", format("{\n  {\n  }\n"));
+
+  FormatStyle Style = getLLVMStyle();
+  Style.ColumnLimit = 10;
+  EXPECT_EQ("{\n"
+            "    {\n"
+            " breakme(\n"
+            "     qwe);\n"
+            "}\n", format("{\n"
+                          "    {\n"
+                          " breakme(qwe);\n"
+                          "}\n", Style));
+
+}
 
 }  // end namespace tooling
 }  // end namespace clang
