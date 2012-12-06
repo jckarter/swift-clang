@@ -81,11 +81,26 @@ TEST_F(FormatTest, FormatsNestedBlockStatements) {
 TEST_F(FormatTest, FormatsForLoop) {
   verifyFormat(
       "for (int VeryVeryLongLoopVariable = 0; VeryVeryLongLoopVariable < 10;\n"
-      "     ++VeryVeryLongLoopVariable);");
+      "     ++VeryVeryLongLoopVariable)\n"
+      "  ;");
+  verifyFormat("for (;;)\n"
+               "  f();");
+  verifyFormat("for (;;) {\n"
+               "}");
+  verifyFormat("for (;;) {\n"
+               "  f();\n"
+               "}");
 }
 
 TEST_F(FormatTest, FormatsWhileLoop) {
   verifyFormat("while (true) {\n}");
+  verifyFormat("while (true)\n"
+               "  f();");
+  verifyFormat("while () {\n"
+               "}");
+  verifyFormat("while () {\n"
+               "  f();\n"
+               "}");
 }
 
 TEST_F(FormatTest, FormatsNestedCall) {
@@ -110,6 +125,7 @@ TEST_F(FormatTest, FormatIfWithoutCompountStatement) {
   verifyFormat("if (true)\n  f();\ng();");
   verifyFormat("if (a)\n  if (b)\n    if (c)\n      g();\nh();");
   verifyFormat("if (a)\n  if (b) {\n    f();\n  }\ng();");
+  EXPECT_EQ("if (a)\n  // comment\n  f();", format("if(a)\n// comment\nf();"));
 }
 
 TEST_F(FormatTest, ParseIfThenElse) {
@@ -277,6 +293,17 @@ TEST_F(FormatTest, BreaksDesireably) {
       "                            aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa)),\n"
       "         aaaaaaaa(aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa(\n"
       "             aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa)));");
+
+  verifyFormat("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa ||\n"
+               "    (aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa);");
+
+  // This test case breaks on an incorrect memoization, i.e. an optimization not
+  // taking into account the StopAt value.
+  verifyFormat(
+      "return aaaaaaaaaaaaaaaaaaaaaaaa || aaaaaaaaaaaaaaaaaaaaaaa ||\n"
+      "    aaaaaaaaaaa(aaaaaaaaa) || aaaaaaaaaaaaaaaaaaaaaaa ||\n"
+      "    aaaaaaaaaaaaaaaaaaaaaaaaa || aaaaaaaaaaaaaaaaaaaaaaa ||\n"
+      "    (aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa);");
 }
 
 TEST_F(FormatTest, AlignsStringLiterals) {
@@ -333,6 +360,10 @@ TEST_F(FormatTest, UndestandsUnaryOperators) {
   verifyFormat("f(-1, -2, -3);");
   verifyFormat("a[-1] = 5;");
   verifyFormat("int a = 5 + -2;");
+  verifyFormat("if (i == -1) {\n}");
+  verifyFormat("if (i != -1) {\n}");
+  verifyFormat("if (i > -1) {\n}");
+  verifyFormat("if (i < -1) {\n}");
 }
 
 TEST_F(FormatTest, UndestandsOverloadedOperators) {
@@ -345,10 +376,14 @@ TEST_F(FormatTest, UnderstandsUsesOfStar) {
   verifyFormat("f(*a);");
   verifyFormat("int a = b * 10;");
   verifyFormat("int a = 10 * b;");
-  // verifyFormat("int a = b * c;");
+  verifyFormat("int a = b * c;");
+  verifyFormat("int a += b * c;");
+  verifyFormat("int a -= b * c;");
+  verifyFormat("int a *= b * c;");
+  verifyFormat("int a /= b * c;");
   verifyFormat("int a = *b;");
-  // verifyFormat("int a = *b * c;");
-  // verifyFormat("int a = b * *c;");
+  verifyFormat("int a = *b * c;");
+  verifyFormat("int a = b * *c;");
 }
 
 TEST_F(FormatTest, HandlesIncludeDirectives) {
