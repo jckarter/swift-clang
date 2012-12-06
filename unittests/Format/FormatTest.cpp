@@ -364,6 +364,9 @@ TEST_F(FormatTest, UndestandsUnaryOperators) {
   verifyFormat("if (i != -1) {\n}");
   verifyFormat("if (i > -1) {\n}");
   verifyFormat("if (i < -1) {\n}");
+  verifyFormat("++(a->f());");
+  verifyFormat("--(a->f());");
+  verifyFormat("if (!(a->f())) {\n}");
 }
 
 TEST_F(FormatTest, UndestandsOverloadedOperators) {
@@ -384,6 +387,11 @@ TEST_F(FormatTest, UnderstandsUsesOfStar) {
   verifyFormat("int a = *b;");
   verifyFormat("int a = *b * c;");
   verifyFormat("int a = b * *c;");
+}
+
+TEST_F(FormatTest, LineStartsWithSpecialCharacter) {
+  verifyFormat("(a)->b();");
+  verifyFormat("--a;");
 }
 
 TEST_F(FormatTest, HandlesIncludeDirectives) {
@@ -432,6 +440,27 @@ TEST_F(FormatTest, IncorrectCodeErrorDetection) {
                           " breakme(qwe);\n"
                           "}\n", Style));
 
+}
+
+TEST_F(FormatTest, AlignsPipes) {
+  verifyFormat(
+      "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n"
+      "    << aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n"
+      "    << aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa;");
+  verifyFormat(
+      "aaaaaaaaaaaaaaaaaaaa << aaaaaaaaaaaaaaaaaaaa << aaaaaaaaaaaaaaaaaaaa\n"
+      "                     << aaaaaaaaaaaaaaaaaaaa;");
+  verifyFormat(
+      "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa << aaaaaaaaaaaaaaaaaaaaaaaaaaaa\n"
+      "                                 << aaaaaaaaaaaaaaaaaaaaaaaaaaaa;");
+  verifyFormat(
+      "llvm::outs() << \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"\n"
+      "                \"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"\n"
+      "             << \"ccccccccccccccccccccccccccccccccccccccccccccccccc\";");
+  verifyFormat(
+      "aaaaaaaa << (aaaaaaaaaaaaaaaaaaa << aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n"
+      "                                 << aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa)\n"
+      "         << aaaaaaaaaaaaaaaaaaaaaaaaaaaaa;");
 }
 
 }  // end namespace tooling
