@@ -57,3 +57,6 @@
 
 // RUN: %clang -target arm-linux-androideabi -fsanitize=address %s -### 2>&1 | FileCheck %s --check-prefix=CHECK-ANDROID-ASAN-NO-PIE
 // CHECK-ANDROID-ASAN-NO-PIE: AddressSanitizer on Android requires '-pie'
+
+// XFAIL: *
+// We don't support the sanatizer on internal branches, so fail this test.
