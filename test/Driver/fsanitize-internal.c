@@ -68,11 +68,11 @@
 // CHECK-FLOAT-CAST-OVERFLOW: "-fsanitize={{((float-cast-overflow),?){1}"}}
 
 // RUN: %clang -target x86_64-linux-gnu -fsanitize=float-divide-by-zero %s -### 2>&1 | FileCheck %s --check-prefix=CHECK-FLOAT-DIVIDE-BY-ZERO
-// CHECK-XXX-NOT: unsupported argument 'xxx' to option 'fsanitize='
+// CHECK-FLOAT-DIVIDE-BY-ZERO-NOT: unsupported argument 'float-divide-by-zero' to option 'fsanitize='
 // CHECK-FLOAT-DIVIDE-BY-ZERO: "-fsanitize={{((float-divide-by-zero),?){1}"}}
 
 // RUN: %clang -target x86_64-linux-gnu -fsanitize=integer-divide-by-zero %s -### 2>&1 | FileCheck %s --check-prefix=CHECK-INTEGER-DIVIDE-BY-ZERO
-// CHECK-XXX-NOT: unsupported argument 'xxx' to option 'fsanitize='
+// CHECK-INTEGER-DIVIDE-BY-ZERO-NOT: unsupported argument 'integer-divide-by-zero' to option 'fsanitize='
 // CHECK-INTEGER-DIVIDE-BY-ZERO: "-fsanitize={{((integer-divide-by-zero),?){1}"}}
 
 // RUN: %clang -target x86_64-linux-gnu -fsanitize=null %s -### 2>&1 | FileCheck %s --check-prefix=CHECK-NULL
@@ -109,6 +109,3 @@
 
 // RUN: %clang -target x86_64-linux-gnu -fcatch-undefined-behavior -### %s 2>&1 | FileCheck %s --check-prefix=CHECK-DEPRECATED
 // CHECK-DEPRECATED: argument '-fcatch-undefined-behavior' is deprecated, use '-fsanitize=undefined' instead
-
-
-
