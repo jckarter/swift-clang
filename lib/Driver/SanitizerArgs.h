@@ -82,6 +82,17 @@ class SanitizerArgs {
       .Default(SanitizeKind());
   }
 
+  static bool allowedOpt(const char *Value) {
+    // We support the UndefinedBehaviorSanitizers.
+    return llvm::StringSwitch<bool>(Value)
+      .Cases("alignment", "bounds", "float-cast-overflow", true)
+      .Cases("float-divide-by-zero", "integer-divide-by-zero", true)
+      .Cases("null", "object-size", "return", "shift", true)
+      .Cases("signed-integer-overflow", "unreachable", "vla-bound", true)
+      .Cases("vptr", "undefined", true)
+      .Default(false);
+  }
+
   /// Parse a -fsanitize= or -fno-sanitize= argument's values, diagnosing any
   /// invalid components.
   static unsigned parse(const Driver &D, const Arg *A, bool DiagnoseErrors) {
@@ -90,6 +101,9 @@ class SanitizerArgs {
       if (unsigned K = parse(A->getValue(I)))
         Kind |= K;
       else if (DiagnoseErrors)
+        D.Diag(diag::err_drv_unsupported_option_argument)
+          << A->getOption().getName() << A->getValue(I);
+      if (!allowedOpt(A->getValue(I)))
         D.Diag(diag::err_drv_unsupported_option_argument)
           << A->getOption().getName() << A->getValue(I);
     }
@@ -106,23 +120,23 @@ class SanitizerArgs {
     const char *DeprecatedReplacement = 0;
     if (A->getOption().matches(options::OPT_faddress_sanitizer)) {
       Add = Address;
-      DeprecatedReplacement = "-fsanitize=address";
+      D.Diag(diag::err_drv_unsupported_opt) << A->getOption().getName();
     } else if (A->getOption().matches(options::OPT_fno_address_sanitizer)) {
       Remove = Address;
-      DeprecatedReplacement = "-fno-sanitize=address";
+      D.Diag(diag::err_drv_unsupported_opt) << A->getOption().getName();
     } else if (A->getOption().matches(options::OPT_fthread_sanitizer)) {
       Add = Thread;
-      DeprecatedReplacement = "-fsanitize=thread";
+      D.Diag(diag::err_drv_unsupported_opt) << A->getOption().getName();
     } else if (A->getOption().matches(options::OPT_fno_thread_sanitizer)) {
       Remove = Thread;
-      DeprecatedReplacement = "-fno-sanitize=thread";
+      D.Diag(diag::err_drv_unsupported_opt) << A->getOption().getName();
     } else if (A->getOption().matches(options::OPT_fcatch_undefined_behavior)) {
       Add = Undefined;
       DeprecatedReplacement = "-fsanitize=undefined";
     } else if (A->getOption().matches(options::OPT_fbounds_checking) ||
                A->getOption().matches(options::OPT_fbounds_checking_EQ)) {
       Add = Bounds;
-      DeprecatedReplacement = "-fsanitize=bounds";
+      D.Diag(diag::err_drv_unsupported_opt) << A->getOption().getName();
     } else if (A->getOption().matches(options::OPT_fsanitize_EQ)) {
       Add = parse(D, A, DiagnoseErrors);
     } else if (A->getOption().matches(options::OPT_fno_sanitize_EQ)) {
