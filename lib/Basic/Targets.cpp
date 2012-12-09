@@ -4257,6 +4257,10 @@ public:
     PointerWidth = PointerAlign = 64;
     LongDoubleWidth = LongDoubleAlign = 128;
     LongDoubleFormat = &llvm::APFloat::IEEEquad;
+    if (getTriple().getOS() == llvm::Triple::FreeBSD) {
+      LongDoubleWidth = LongDoubleAlign = 64;
+      LongDoubleFormat = &llvm::APFloat::IEEEdouble;
+    }
     SuitableAlign = 128;
   }
   virtual bool setABI(const std::string &Name) {
