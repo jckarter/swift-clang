@@ -1,4 +1,4 @@
-// RUN: %clang -arch arm64 -c -S -o - -emit-llvm %s | FileCheck %s
+// RUN: %clang -arch arm64 -ffreestanding -S -o - -emit-llvm %s | FileCheck %s
 
 // Test ARM64 extract intrinsics
 // can use as back end test by adding a run line with 
