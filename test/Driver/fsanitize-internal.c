@@ -47,12 +47,12 @@
 // CHECK-UNSUPPORTED-ARG-INTEGER: unsupported argument 'integer' to option 'fsanitize='
 
 //
-// We do support the undefined behavior sanatizer options on the internal branches.
+// We do support the undefined behavior sanitizer options on the internal branches.
 //
 
 // RUN: %clang -target x86_64-linux-gnu -fcatch-undefined-behavior %s -### 2>&1 | FileCheck %s --check-prefix=CHECK-UNDEFINED
 // RUN: %clang -target x86_64-linux-gnu -fsanitize=undefined %s -### 2>&1 | FileCheck %s --check-prefix=CHECK-UNDEFINED
-// CHECK-UNDEFINED: "-fsanitize={{((signed-integer-overflow|integer-divide-by-zero|float-divide-by-zero|shift|unreachable|return|vla-bound|alignment|null|vptr|object-size|float-cast-overflow|bounds),?){13}"}}
+// CHECK-UNDEFINED: "-fsanitize={{((signed-integer-overflow|integer-divide-by-zero|float-divide-by-zero|shift|unreachable|return|vla-bound|alignment|null|vptr|object-size|float-cast-overflow|bounds|enum|bool),?){15}"}}
 
 // RUN: %clang -target x86_64-linux-gnu -fsanitize=alignment %s -### 2>&1 | FileCheck %s --check-prefix=CHECK-ALIGNMENT
 // CHECK-ALIGNMENT-NOT: unsupported argument 'alignment' to option 'fsanitize='

@@ -57,4 +57,4 @@
 // CHECK-ANDROID-ASAN-NO-PIE: AddressSanitizer on Android requires '-pie'
 
 // XFAIL: *
-// We don't support the sanatizer on internal branches, so fail this test.
+// We don't support the sanitizer on internal branches, so fail this test.

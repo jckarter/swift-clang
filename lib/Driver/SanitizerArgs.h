@@ -89,7 +89,7 @@ class SanitizerArgs {
       .Cases("float-divide-by-zero", "integer-divide-by-zero", true)
       .Cases("null", "object-size", "return", "shift", true)
       .Cases("signed-integer-overflow", "unreachable", "vla-bound", true)
-      .Cases("vptr", "undefined", true)
+      .Cases("vptr", "bool", "enum", "undefined", true)
       .Default(false);
   }
 
