@@ -669,6 +669,11 @@ static StringRef getARMFloatABI(const Driver &D,
       break;
     }
 
+    case llvm::Triple::FreeBSD:
+      // FreeBSD defaults to soft float
+      FloatABI = "soft";
+      break;
+
     default:
       switch(Triple.getEnvironment()) {
       case llvm::Triple::GNUEABIHF:
@@ -2287,6 +2292,10 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
     else
       A->render(Args, CmdArgs);
   }
+
+  // Don't warn about unused -flto.  This can happen when we're preprocessing or
+  // precompiling.
+  Args.ClaimAllArgs(options::OPT_flto);
 
   Args.AddAllArgs(CmdArgs, options::OPT_W_Group);
   if (Args.hasFlag(options::OPT_pedantic, options::OPT_no_pedantic, false))
@@ -4952,6 +4961,17 @@ void freebsd::Assemble::ConstructJob(Compilation &C, const JobAction &JA,
          LastPICArg->getOption().matches(options::OPT_fPIE) ||
          LastPICArg->getOption().matches(options::OPT_fpie))) {
       CmdArgs.push_back("-KPIC");
+    }
+  } else if (getToolChain().getArch() == llvm::Triple::arm ||
+             getToolChain().getArch() == llvm::Triple::thumb) {
+    CmdArgs.push_back("-mfpu=softvfp");
+    switch(getToolChain().getTriple().getEnvironment()) {
+    case llvm::Triple::GNUEABI:
+    case llvm::Triple::EABI:
+      break;
+
+    default:
+      CmdArgs.push_back("-matpcs");
     }
   }
 
