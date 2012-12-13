@@ -809,22 +809,23 @@ are listed below.
    default. If a check fails, a diagnostic message is produced at
    runtime explaining the problem. The main checks are:
 
-   .. _opt_fsanitize_address:
+   -  .. _opt_fsanitize_address:
 
-   -  ``-fsanitize=address``:
+      ``-fsanitize=address``:
       :doc:`AddressSanitizer`, a memory error
       detector.
    -  ``-fsanitize=address-full``: AddressSanitizer with all the
       experimental features listed below.
    -  ``-fsanitize=integer``: Enables checks for undefined or
       suspicious integer behavior.
-   -  ``-fsanitize=thread``: :doc:`ThreadSanitizer`,
+   -  .. _opt_fsanitize_thread:
+
+      ``-fsanitize=thread``: :doc:`ThreadSanitizer`,
       an *experimental* data race detector. Not ready for widespread
       use.
+   -  .. _opt_fsanitize_undefined:
 
-   .. _opt_fsanitize_undefined:
-
-   -  ``-fsanitize=undefined``: Fast and compatible undefined behavior
+      ``-fsanitize=undefined``: Fast and compatible undefined behavior
       checker. Enables the undefined behavior checks that have small
       runtime cost and no impact on address space layout or ABI. This
       includes all of the checks listed below other than
@@ -834,8 +835,13 @@ are listed below.
 
    -  ``-fsanitize=alignment``: Use of a misaligned pointer or creation
       of a misaligned reference.
+   -  ``-fsanitize=bool``: Load of a ``bool`` value which is neither
+      ``true`` nor ``false``.
    -  ``-fsanitize=bounds``: Out of bounds array indexing, in cases
       where the array bound can be statically determined.
+   -  ``-fsanitize=enum``: Load of a value of an enumerated type which
+      is not in the range of representable values for that enumerated
+      type.
    -  ``-fsanitize=float-cast-overflow``: Conversion to, from, or
       between floating-point types which would overflow the
       destination.
@@ -888,7 +894,7 @@ are listed below.
    <opt_fsanitize_address>`.
 **-f[no-]thread-sanitizer**
    Deprecated synonym for :ref:`-f[no-]sanitize=thread
-   <opt_fsanitize_address>`.
+   <opt_fsanitize_thread>`.
 **-fcatch-undefined-behavior**
    Deprecated synonym for :ref:`-fsanitize=undefined
    <opt_fsanitize_undefined>`.
