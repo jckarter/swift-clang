@@ -2084,6 +2084,8 @@ enum LinuxDistro {
   UbuntuNatty,
   UbuntuOneiric,
   UbuntuPrecise,
+  UbuntuQuantal,
+  UbuntuRaring,
   UnknownDistro
 };
 
@@ -2101,7 +2103,7 @@ static bool IsDebian(enum LinuxDistro Distro) {
 }
 
 static bool IsUbuntu(enum LinuxDistro Distro) {
-  return Distro >= UbuntuHardy && Distro <= UbuntuPrecise;
+  return Distro >= UbuntuHardy && Distro <= UbuntuRaring;
 }
 
 static LinuxDistro DetectLinuxDistro(llvm::Triple::ArchType Arch) {
@@ -2123,6 +2125,8 @@ static LinuxDistro DetectLinuxDistro(llvm::Triple::ArchType Arch) {
           .Case("natty", UbuntuNatty)
           .Case("oneiric", UbuntuOneiric)
           .Case("precise", UbuntuPrecise)
+          .Case("quantal", UbuntuQuantal)
+          .Case("raring", UbuntuRaring)
           .Default(UnknownDistro);
     return Version;
   }
