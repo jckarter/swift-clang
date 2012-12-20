@@ -1,5 +1,5 @@
-// RUN: %clang -O1 -arch arm64 -S -o - -emit-llvm %s | FileCheck %s
-// RUN: %clang -O1 -arch arm64 -S -o - %s | \
+// RUN: %clang -O1 -arch arm64 -ffreestanding -S -o - -emit-llvm %s | FileCheck %s
+// RUN: %clang -O1 -arch arm64 -ffreestanding -S -o - %s | \
 // RUN:   FileCheck -check-prefix=CHECK_CODEGEN %s
 // Test ARM64 SIMD copy vector element to vector element: vcopyq_lane*
 
