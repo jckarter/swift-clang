@@ -19,6 +19,7 @@
 #include "clang/Format/Format.h"
 #include "UnwrappedLineParser.h"
 #include "clang/Basic/SourceManager.h"
+#include "clang/Basic/OperatorPrecedence.h"
 #include "clang/Lex/Lexer.h"
 
 #include <string>
@@ -34,6 +35,7 @@ struct TokenAnnotation {
     TT_TemplateCloser,
     TT_BinaryOperator,
     TT_UnaryOperator,
+    TT_TrailingUnaryOperator,
     TT_OverloadedOperator,
     TT_PointerOrReference,
     TT_ConditionalExpr,
@@ -101,6 +103,8 @@ public:
     State.Indent.push_back(Indent + 4);
     State.LastSpace.push_back(Indent);
     State.FirstLessLess.push_back(0);
+    State.ForLoopVariablePos = 0;
+    State.LineContainsContinuedForLoopSection = false;
 
     // The first token has already been indented and thus consumed.
     moveStateToNextToken(State);
@@ -163,6 +167,14 @@ private:
     /// on a level.
     std::vector<unsigned> FirstLessLess;
 
+    /// \brief The column of the first variable in a for-loop declaration.
+    ///
+    /// Used to align the second variable if necessary.
+    unsigned ForLoopVariablePos;
+
+    /// \brief \c true if this line contains a continued for-loop section.
+    bool LineContainsContinuedForLoopSection;
+
     /// \brief Comparison operator to be able to used \c IndentState in \c map.
     bool operator<(const IndentState &Other) const {
       if (Other.ConsumedTokens != ConsumedTokens)
@@ -187,6 +199,11 @@ private:
         if (Other.FirstLessLess[i] != FirstLessLess[i])
           return Other.FirstLessLess[i] > FirstLessLess[i];
       }
+      if (Other.ForLoopVariablePos != ForLoopVariablePos)
+        return Other.ForLoopVariablePos < ForLoopVariablePos;
+      if (Other.LineContainsContinuedForLoopSection !=
+          LineContainsContinuedForLoopSection)
+        return LineContainsContinuedForLoopSection;
       return false;
     }
   };
@@ -207,19 +224,27 @@ private:
 
     if (Newline) {
       if (Current.Tok.is(tok::string_literal) &&
-          Previous.Tok.is(tok::string_literal))
+          Previous.Tok.is(tok::string_literal)) {
         State.Column = State.Column - Previous.Tok.getLength();
-      else if (Current.Tok.is(tok::lessless) &&
-               State.FirstLessLess[ParenLevel] != 0)
+      } else if (Current.Tok.is(tok::lessless) &&
+                 State.FirstLessLess[ParenLevel] != 0) {
         State.Column = State.FirstLessLess[ParenLevel];
-      else if (ParenLevel != 0 &&
-               (Previous.Tok.is(tok::equal) || Current.Tok.is(tok::arrow) ||
-                Current.Tok.is(tok::period)))
+      } else if (ParenLevel != 0 &&
+                 (Previous.Tok.is(tok::equal) || Current.Tok.is(tok::arrow) ||
+                  Current.Tok.is(tok::period))) {
         // Indent and extra 4 spaces after '=' as it continues an expression.
         // Don't do that on the top level, as we already indent 4 there.
         State.Column = State.Indent[ParenLevel] + 4;
-      else
+      } else if (Line.Tokens[0].Tok.is(tok::kw_for) &&
+                 Previous.Tok.is(tok::comma)) {
+        State.Column = State.ForLoopVariablePos;
+      } else {
         State.Column = State.Indent[ParenLevel];
+      }
+
+      if (Line.Tokens[0].Tok.is(tok::kw_for))
+        State.LineContainsContinuedForLoopSection =
+            Previous.Tok.isNot(tok::semi);
 
       if (!DryRun)
         replaceWhitespace(Current, 1, State.Column);
@@ -230,6 +255,9 @@ private:
           Annotations[0].Type != TokenAnnotation::TT_ObjCMethodSpecifier)
         State.Indent[ParenLevel] += 2;
     } else {
+      if (Current.Tok.is(tok::equal) && Line.Tokens[0].Tok.is(tok::kw_for))
+        State.ForLoopVariablePos = State.Column - Previous.Tok.getLength();
+
       unsigned Spaces = Annotations[Index].SpaceRequiredBefore ? 1 : 0;
       if (Annotations[Index].Type == TokenAnnotation::TT_LineComment)
         Spaces = 2;
@@ -288,6 +316,12 @@ private:
            "Tried to calculate penalty for splitting after the last token");
     const FormatToken &Left = Line.Tokens[Index];
     const FormatToken &Right = Line.Tokens[Index + 1];
+
+    // In for-loops, prefer breaking at ',' and ';'.
+    if (Line.Tokens[0].Tok.is(tok::kw_for) &&
+        (Left.Tok.isNot(tok::comma) && Left.Tok.isNot(tok::semi)))
+      return 20;
+
     if (Left.Tok.is(tok::semi) || Left.Tok.is(tok::comma))
       return 0;
     if (Left.Tok.is(tok::equal) || Left.Tok.is(tok::l_paren) ||
@@ -318,6 +352,9 @@ private:
     if (!NewLine && Annotations[State.ConsumedTokens].MustBreakBefore)
       return UINT_MAX;
     if (NewLine && !Annotations[State.ConsumedTokens].CanBreakBefore)
+      return UINT_MAX;
+    if (!NewLine && Line.Tokens[State.ConsumedTokens - 1].Tok.is(tok::semi) &&
+        State.LineContainsContinuedForLoopSection)
       return UINT_MAX;
 
     unsigned CurrentPenalty = 0;
@@ -550,8 +587,8 @@ public:
 
     determineTokenTypes();
     bool IsObjCMethodDecl =
-      (Line.Tokens.size() > 0 &&
-        (Annotations[0].Type == TokenAnnotation::TT_ObjCMethodSpecifier));
+        (Line.Tokens.size() > 0 &&
+         (Annotations[0].Type == TokenAnnotation::TT_ObjCMethodSpecifier));
     for (int i = 1, e = Line.Tokens.size(); i != e; ++i) {
       TokenAnnotation &Annotation = Annotations[i];
 
@@ -561,37 +598,34 @@ public:
       if (Annotation.Type == TokenAnnotation::TT_CtorInitializerColon) {
         Annotation.MustBreakBefore = true;
         Annotation.SpaceRequiredBefore = true;
-      } else if (IsObjCMethodDecl &&
-                 Line.Tokens[i].Tok.is(tok::identifier) &&
-                 (i != e-1) && Line.Tokens[i+1].Tok.is(tok::colon) &&
-                 Line.Tokens[i-1].Tok.is(tok::identifier)) {
+      } else if (IsObjCMethodDecl && Line.Tokens[i].Tok.is(tok::identifier) &&
+                 (i != e - 1) && Line.Tokens[i + 1].Tok.is(tok::colon) &&
+                 Line.Tokens[i - 1].Tok.is(tok::identifier)) {
         Annotation.CanBreakBefore = true;
         Annotation.SpaceRequiredBefore = true;
-      } else if (IsObjCMethodDecl &&
-                 Line.Tokens[i].Tok.is(tok::identifier) &&
-                 Line.Tokens[i-1].Tok.is(tok::l_paren) &&
-                 Line.Tokens[i-2].Tok.is(tok::colon)) {
+      } else if (IsObjCMethodDecl && Line.Tokens[i].Tok.is(tok::identifier) &&
+                 Line.Tokens[i - 1].Tok.is(tok::l_paren) &&
+                 Line.Tokens[i - 2].Tok.is(tok::colon)) {
         // Don't break this identifier as ':' or identifier
         // before it will break.
         Annotation.CanBreakBefore = false;
       } else if (Line.Tokens[i].Tok.is(tok::at) &&
-                 Line.Tokens[i-2].Tok.is(tok::at)) {
+                 Line.Tokens[i - 2].Tok.is(tok::at)) {
         // Don't put two objc's '@' on the same line. This could happen,
-        // as in, @optinal @property ...
+        // as in, @optional @property ...
         Annotation.MustBreakBefore = true;
       } else if (Line.Tokens[i].Tok.is(tok::colon)) {
         Annotation.SpaceRequiredBefore =
           Line.Tokens[0].Tok.isNot(tok::kw_case) && !IsObjCMethodDecl &&
           (i != e - 1);
         // Don't break at ':' if identifier before it can beak.
-        if (IsObjCMethodDecl &&
-            Line.Tokens[i-1].Tok.is(tok::identifier) &&
-            Annotations[i-1].CanBreakBefore)
+        if (IsObjCMethodDecl && Line.Tokens[i - 1].Tok.is(tok::identifier) &&
+            Annotations[i - 1].CanBreakBefore)
           Annotation.CanBreakBefore = false;
-      } else if (Annotations[i - 1].Type ==
-                 TokenAnnotation::TT_ObjCMethodSpecifier)
+      } else if (
+          Annotations[i - 1].Type == TokenAnnotation::TT_ObjCMethodSpecifier) {
         Annotation.SpaceRequiredBefore = true;
-      else if (Annotations[i - 1].Type == TokenAnnotation::TT_UnaryOperator) {
+      } else if (Annotations[i - 1].Type == TokenAnnotation::TT_UnaryOperator) {
         Annotation.SpaceRequiredBefore = false;
       } else if (Annotation.Type == TokenAnnotation::TT_UnaryOperator) {
         Annotation.SpaceRequiredBefore =
@@ -615,17 +649,17 @@ public:
       } else if (Line.Tokens[i].Tok.is(tok::less) &&
                  Line.Tokens[0].Tok.is(tok::hash)) {
         Annotation.SpaceRequiredBefore = true;
-      } else if (IsObjCMethodDecl &&
-                 Line.Tokens[i - 1].Tok.is(tok::r_paren) &&
-                 Line.Tokens[i].Tok.is(tok::identifier))
+      } else if (IsObjCMethodDecl && Line.Tokens[i - 1].Tok.is(tok::r_paren) &&
+                 Line.Tokens[i].Tok.is(tok::identifier)) {
         // Don't space between ')' and <id>
         Annotation.SpaceRequiredBefore = false;
-      else if (IsObjCMethodDecl &&
-               Line.Tokens[i - 1].Tok.is(tok::colon) &&
-               Line.Tokens[i].Tok.is(tok::l_paren))
+      } else if (IsObjCMethodDecl && Line.Tokens[i - 1].Tok.is(tok::colon) &&
+                 Line.Tokens[i].Tok.is(tok::l_paren)) {
         // Don't space between ':' and '('
         Annotation.SpaceRequiredBefore = false;
-      else {
+      } else if (Annotation.Type == TokenAnnotation::TT_TrailingUnaryOperator) {
+        Annotation.SpaceRequiredBefore = false;
+      } else {
         Annotation.SpaceRequiredBefore =
             spaceRequiredBetween(Line.Tokens[i - 1].Tok, Line.Tokens[i].Tok);
       }
@@ -652,21 +686,23 @@ private:
       TokenAnnotation &Annotation = Annotations[i];
       const FormatToken &Tok = Line.Tokens[i];
 
-      if (Tok.Tok.is(tok::equal) || Tok.Tok.is(tok::plusequal) ||
-          Tok.Tok.is(tok::minusequal) || Tok.Tok.is(tok::starequal) ||
-          Tok.Tok.is(tok::slashequal))
+      if (getBinOpPrecedence(Tok.Tok.getKind(), true, true) == prec::Assignment)
         AssignmentEncountered = true;
 
-      if (Tok.Tok.is(tok::star) || Tok.Tok.is(tok::amp))
+      if (Annotation.Type != TokenAnnotation::TT_Unknown)
+        continue;
+
+      if (Tok.Tok.is(tok::star) || Tok.Tok.is(tok::amp)) {
         Annotation.Type = determineStarAmpUsage(i, AssignmentEncountered);
-      else if ((Tok.Tok.is(tok::minus) || Tok.Tok.is(tok::plus)) &&
-               Tok.Tok.isAtStartOfLine())
-        Annotation.Type = TokenAnnotation::TT_ObjCMethodSpecifier;
-      else if (isUnaryOperator(i))
+      } else if (Tok.Tok.is(tok::minus) || Tok.Tok.is(tok::plus)) {
+        Annotation.Type = determinePlusMinusUsage(i);
+      } else if (Tok.Tok.is(tok::minusminus) || Tok.Tok.is(tok::plusplus)) {
+        Annotation.Type = determineIncrementUsage(i);
+      } else if (Tok.Tok.is(tok::exclaim)) {
         Annotation.Type = TokenAnnotation::TT_UnaryOperator;
-      else if (isBinaryOperator(Line.Tokens[i]))
+      } else if (isBinaryOperator(Line.Tokens[i])) {
         Annotation.Type = TokenAnnotation::TT_BinaryOperator;
-      else if (Tok.Tok.is(tok::comment)) {
+      } else if (Tok.Tok.is(tok::comment)) {
         StringRef Data(SourceMgr.getCharacterData(Tok.Tok.getLocation()),
                        Tok.Tok.getLength());
         if (Data.startswith("//"))
@@ -677,47 +713,9 @@ private:
     }
   }
 
-  bool isUnaryOperator(unsigned Index) {
-    const Token &Tok = Line.Tokens[Index].Tok;
-
-    // '++', '--' and '!' are always unary operators.
-    if (Tok.is(tok::minusminus) || Tok.is(tok::plusplus) ||
-        Tok.is(tok::exclaim))
-      return true;
-
-    // The other possible unary operators are '+' and '-' as we
-    // determine the usage of '*' and '&' in determineStarAmpUsage().
-    if (Tok.isNot(tok::minus) && Tok.isNot(tok::plus))
-      return false;
-
-    // Use heuristics to recognize unary operators.
-    const Token &PreviousTok = Line.Tokens[Index - 1].Tok;
-    if (PreviousTok.is(tok::equal) || PreviousTok.is(tok::l_paren) ||
-        PreviousTok.is(tok::comma) || PreviousTok.is(tok::l_square))
-      return true;
-
-    // Fall back to marking the token as binary operator.
-    return Annotations[Index - 1].Type == TokenAnnotation::TT_BinaryOperator;
-  }
-
   bool isBinaryOperator(const FormatToken &Tok) {
-    switch (Tok.Tok.getKind()) {
-    case tok::equal:
-    case tok::equalequal:
-    case tok::exclaimequal:
-    case tok::star:
-      //case tok::amp:
-    case tok::plus:
-    case tok::slash:
-    case tok::minus:
-    case tok::ampamp:
-    case tok::pipe:
-    case tok::pipepipe:
-    case tok::percent:
-      return true;
-    default:
-      return false;
-    }
+    // Comma is a binary operator, but does not behave a such wrt. formatting.
+    return getBinOpPrecedence(Tok.Tok.getKind(), true, true) > prec::Comma;
   }
 
   TokenAnnotation::TokenType determineStarAmpUsage(unsigned Index,
@@ -731,7 +729,8 @@ private:
       return TokenAnnotation::TT_UnaryOperator;
 
     if (Line.Tokens[Index - 1].Tok.isLiteral() ||
-        Line.Tokens[Index + 1].Tok.isLiteral())
+        Line.Tokens[Index + 1].Tok.isLiteral() ||
+        Line.Tokens[Index + 1].Tok.is(tok::kw_sizeof))
       return TokenAnnotation::TT_BinaryOperator;
 
     // It is very unlikely that we are going to find a pointer or reference type
@@ -742,8 +741,32 @@ private:
     return TokenAnnotation::TT_PointerOrReference;
   }
 
-  bool isIfForOrWhile(Token Tok) {
-    return Tok.is(tok::kw_if) || Tok.is(tok::kw_for) || Tok.is(tok::kw_while);
+  TokenAnnotation::TokenType determinePlusMinusUsage(unsigned Index) {
+    // At the start of the line, +/- specific ObjectiveC method declarations.
+    if (Index == 0)
+      return TokenAnnotation::TT_ObjCMethodSpecifier;
+
+    // Use heuristics to recognize unary operators.
+    const Token &PreviousTok = Line.Tokens[Index - 1].Tok;
+    if (PreviousTok.is(tok::equal) || PreviousTok.is(tok::l_paren) ||
+        PreviousTok.is(tok::comma) || PreviousTok.is(tok::l_square) ||
+        PreviousTok.is(tok::question) || PreviousTok.is(tok::colon))
+      return TokenAnnotation::TT_UnaryOperator;
+
+    // There can't be to consecutive binary operators.
+    if (Annotations[Index - 1].Type == TokenAnnotation::TT_BinaryOperator)
+      return TokenAnnotation::TT_UnaryOperator;
+
+    // Fall back to marking the token as binary operator.
+    return TokenAnnotation::TT_BinaryOperator;
+  }
+
+  /// \brief Determine whether ++/-- are pre- or post-increments/-decrements.
+  TokenAnnotation::TokenType determineIncrementUsage(unsigned Index) {
+    if (Index != 0 && Line.Tokens[Index - 1].Tok.is(tok::identifier))
+      return TokenAnnotation::TT_TrailingUnaryOperator;
+
+    return TokenAnnotation::TT_UnaryOperator;
   }
 
   bool spaceRequiredBetween(Token Left, Token Right) {
@@ -778,17 +801,15 @@ private:
       return false;
     if (Left.is(tok::colon) || Right.is(tok::colon))
       return true;
-    if ((Left.is(tok::plusplus) && Right.isAnyIdentifier()) ||
-        (Left.isAnyIdentifier() && Right.is(tok::plusplus)) ||
-        (Left.is(tok::minusminus) && Right.isAnyIdentifier()) ||
-        (Left.isAnyIdentifier() && Right.is(tok::minusminus)))
-      return false;
     if (Left.is(tok::l_paren))
       return false;
     if (Left.is(tok::hash))
       return false;
     if (Right.is(tok::l_paren)) {
-      return !Left.isAnyIdentifier() || isIfForOrWhile(Left);
+      return Left.is(tok::kw_if) || Left.is(tok::kw_for) ||
+          Left.is(tok::kw_while) || Left.is(tok::kw_switch) ||
+          (Left.isNot(tok::identifier) && Left.isNot(tok::kw_sizeof) &&
+           Left.isNot(tok::kw_typeof));
     }
     return true;
   }
@@ -797,12 +818,11 @@ private:
     if (Right.Tok.is(tok::r_paren) || Right.Tok.is(tok::l_brace) ||
         Right.Tok.is(tok::comment) || Right.Tok.is(tok::greater))
       return false;
-    if (isBinaryOperator(Left) || Right.Tok.is(tok::lessless) ||
-        Right.Tok.is(tok::arrow) || Right.Tok.is(tok::period))
-      return true;
-    return Right.Tok.is(tok::colon) || Left.Tok.is(tok::comma) || Left.Tok.is(
-        tok::semi) || Left.Tok.is(tok::equal) || Left.Tok.is(tok::ampamp) ||
-        Left.Tok.is(tok::pipepipe) || Left.Tok.is(tok::l_brace) ||
+    return (isBinaryOperator(Left) && Left.Tok.isNot(tok::lessless)) ||
+        Left.Tok.is(tok::comma) || Right.Tok.is(tok::lessless) ||
+        Right.Tok.is(tok::arrow) || Right.Tok.is(tok::period) ||
+        Right.Tok.is(tok::colon) || Left.Tok.is(tok::semi) ||
+        Left.Tok.is(tok::l_brace) ||
         (Left.Tok.is(tok::l_paren) && !Right.Tok.is(tok::r_paren));
   }
 
