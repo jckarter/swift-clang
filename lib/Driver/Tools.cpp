@@ -1,4 +1,4 @@
-g//===--- Tools.cpp - Tools Implementations --------------------------------===//
+//===--- Tools.cpp - Tools Implementations --------------------------------===//
 //
 //                     The LLVM Compiler Infrastructure
 //
