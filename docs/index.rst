@@ -30,6 +30,9 @@ progress. This page will get filled out with docs soon...
    UsersManual
    AutomaticReferenceCounting
    InternalsManual
+   DriverInternals
+   BlockLanguageSpec
+   ObjectiveCLiterals
 
 Indices and tables
 ==================
