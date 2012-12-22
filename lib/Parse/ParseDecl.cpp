@@ -458,8 +458,7 @@ void Parser::ParseMicrosoftTypeAttributes(ParsedAttributes &attrs) {
   while (Tok.is(tok::kw___fastcall) || Tok.is(tok::kw___stdcall) ||
          Tok.is(tok::kw___thiscall) || Tok.is(tok::kw___cdecl)   ||
          Tok.is(tok::kw___ptr64) || Tok.is(tok::kw___w64) ||
-         Tok.is(tok::kw___ptr32) ||
-         Tok.is(tok::kw___unaligned)) {
+         Tok.is(tok::kw___ptr32) || Tok.is(tok::kw___unaligned)) {
     IdentifierInfo *AttrName = Tok.getIdentifierInfo();
     SourceLocation AttrNameLoc = ConsumeToken();
     attrs.addNew(AttrName, AttrNameLoc, 0, AttrNameLoc, 0,
@@ -2529,7 +2528,7 @@ void Parser::ParseDeclarationSpecifiers(DeclSpec &DS,
 
     // Microsoft single token adornments.
     case tok::kw___forceinline: {
-      isInvalid = DS.SetFunctionSpecInline(Loc, PrevSpec, DiagID);
+      isInvalid = DS.setFunctionSpecInline(Loc);
       IdentifierInfo *AttrName = Tok.getIdentifierInfo();
       SourceLocation AttrNameLoc = Tok.getLocation();
       // FIXME: This does not work correctly if it is set to be a declspec
@@ -2610,13 +2609,13 @@ void Parser::ParseDeclarationSpecifiers(DeclSpec &DS,
 
     // function-specifier
     case tok::kw_inline:
-      isInvalid = DS.SetFunctionSpecInline(Loc, PrevSpec, DiagID);
+      isInvalid = DS.setFunctionSpecInline(Loc);
       break;
     case tok::kw_virtual:
-      isInvalid = DS.SetFunctionSpecVirtual(Loc, PrevSpec, DiagID);
+      isInvalid = DS.setFunctionSpecVirtual(Loc);
       break;
     case tok::kw_explicit:
-      isInvalid = DS.SetFunctionSpecExplicit(Loc, PrevSpec, DiagID);
+      isInvalid = DS.setFunctionSpecExplicit(Loc);
       break;
 
     // alignment-specifier
@@ -4566,13 +4565,10 @@ void Parser::ParseParenDeclarator(Declarator &D) {
     // present even if the attribute list was empty.
     RequiresArg = true;
   }
+
   // Eat any Microsoft extensions.
-  if  (Tok.is(tok::kw___cdecl) || Tok.is(tok::kw___stdcall) ||
-       Tok.is(tok::kw___thiscall) || Tok.is(tok::kw___fastcall) ||
-       Tok.is(tok::kw___w64) || Tok.is(tok::kw___ptr64) ||
-       Tok.is(tok::kw___ptr32) || Tok.is(tok::kw___unaligned)) {
-    ParseMicrosoftTypeAttributes(attrs);
-  }
+  ParseMicrosoftTypeAttributes(attrs);
+
   // Eat any Borland extensions.
   if  (Tok.is(tok::kw___pascal))
     ParseBorlandTypeAttributes(attrs);
