@@ -379,8 +379,9 @@ TEST_F(FormatTest, FormatsFunctionDefinition) {
 
 TEST_F(FormatTest, FormatsAwesomeMethodCall) {
   verifyFormat(
-      "SomeLongMethodName(SomeReallyLongMethod(CallOtherReallyLongMethod(\n"
-      "    parameter, parameter, parameter)), SecondLongCall(parameter));");
+      "SomeLongMethodName(SomeReallyLongMethod(\n"
+      "    CallOtherReallyLongMethod(parameter, parameter, parameter)),\n"
+      "                   SecondLongCall(parameter));");
 }
 
 TEST_F(FormatTest, ConstructorInitializers) {
@@ -451,9 +452,16 @@ TEST_F(FormatTest, BreaksDesireably) {
   // taking into account the StopAt value.
   verifyFormat(
       "return aaaaaaaaaaaaaaaaaaaaaaaa || aaaaaaaaaaaaaaaaaaaaaaa ||\n"
-      "    aaaaaaaaaaa(aaaaaaaaa) || aaaaaaaaaaaaaaaaaaaaaaa ||\n"
-      "    aaaaaaaaaaaaaaaaaaaaaaaaa || aaaaaaaaaaaaaaaaaaaaaaa ||\n"
-      "    (aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa);");
+      "       aaaaaaaaaaa(aaaaaaaaa) || aaaaaaaaaaaaaaaaaaaaaaa ||\n"
+      "       aaaaaaaaaaaaaaaaaaaaaaaaa || aaaaaaaaaaaaaaaaaaaaaaa ||\n"
+      "       (aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa);");
+
+  verifyFormat(
+      "{\n  {\n    {\n"
+      "      Annotation.SpaceRequiredBefore =\n"
+      "          Line.Tokens[i - 1].Tok.isNot(tok::l_paren) &&\n"
+      "          Line.Tokens[i - 1].Tok.isNot(tok::l_square);\n"
+      "    }\n  }\n}");
 }
 
 TEST_F(FormatTest, BreaksAccordingToOperatorPrecedence) {
@@ -469,6 +477,34 @@ TEST_F(FormatTest, BreaksAccordingToOperatorPrecedence) {
   verifyFormat(
       "if ((aaaaaaaaaaaaaaaaaaaaaaaaa || bbbbbbbbbbbbbbbbbbbbbbbbb) &&\n"
       "    ccccccccccccccccccccccccc) {\n}");
+}
+
+TEST_F(FormatTest, AlignsAfterAssignments) {
+  verifyFormat(
+      "int Result = aaaaaaaaaaaaaaaaaaaaaaaaa + aaaaaaaaaaaaaaaaaaaaaaaaa +\n"
+      "             aaaaaaaaaaaaaaaaaaaaaaaaa;"); 
+  verifyFormat(
+      "Result += aaaaaaaaaaaaaaaaaaaaaaaaa + aaaaaaaaaaaaaaaaaaaaaaaaa +\n"
+      "          aaaaaaaaaaaaaaaaaaaaaaaaa;"); 
+  verifyFormat(
+      "Result >>= aaaaaaaaaaaaaaaaaaaaaaaaa + aaaaaaaaaaaaaaaaaaaaaaaaa +\n"
+      "           aaaaaaaaaaaaaaaaaaaaaaaaa;"); 
+  verifyFormat(
+      "int Result = (aaaaaaaaaaaaaaaaaaaaaaaaa + aaaaaaaaaaaaaaaaaaaaaaaaa +\n"
+      "              aaaaaaaaaaaaaaaaaaaaaaaaa);"); 
+  verifyFormat(
+      "double LooooooooooooooooooooooooongResult =\n"
+      "    aaaaaaaaaaaaaaaaaaaaaaaaa + aaaaaaaaaaaaaaaaaaaaaaaaa +\n"
+      "    aaaaaaaaaaaaaaaaaaaaaaaaa;"); 
+}
+
+TEST_F(FormatTest, AlignsAfterReturn) {
+  verifyFormat(
+      "return aaaaaaaaaaaaaaaaaaaaaaaaa + aaaaaaaaaaaaaaaaaaaaaaaaa +\n"
+      "       aaaaaaaaaaaaaaaaaaaaaaaaa;");
+  verifyFormat(
+      "return (aaaaaaaaaaaaaaaaaaaaaaaaa + aaaaaaaaaaaaaaaaaaaaaaaaa +\n"
+      "        aaaaaaaaaaaaaaaaaaaaaaaaa);");
 }
 
 TEST_F(FormatTest, AlignsStringLiterals) {
@@ -589,7 +625,22 @@ TEST_F(FormatTest, UnderstandsUnaryOperators) {
 }
 
 TEST_F(FormatTest, UndestandsOverloadedOperators) {
-  verifyFormat("bool operator<() {\n}");
+  verifyFormat("bool operator<();");
+  verifyFormat("bool operator>();");
+  verifyFormat("bool operator=();");
+  verifyFormat("bool operator==();");
+  verifyFormat("bool operator!=();");
+  verifyFormat("int operator+();");
+  verifyFormat("int operator++();");
+  verifyFormat("bool operator();");
+  verifyFormat("bool operator()();");
+  verifyFormat("bool operator[]();");
+  verifyFormat("operator bool();");
+  verifyFormat("operator SomeType<int>();");
+  verifyFormat("void *operator new(std::size_t size);");
+  verifyFormat("void *operator new[](std::size_t size);");
+  verifyFormat("void operator delete(void *ptr);");
+  verifyFormat("void operator delete[](void *ptr);");
 }
 
 TEST_F(FormatTest, UnderstandsUsesOfStar) {
