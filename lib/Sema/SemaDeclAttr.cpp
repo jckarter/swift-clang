@@ -2147,8 +2147,11 @@ static void handleAvailabilityAttr(Sema &S, Decl *D,
                                                       Deprecated.Version,
                                                       Obsoleted.Version,
                                                       IsUnavailable, Str);
-  if (NewAttr)
+  if (NewAttr) {
     D->addAttr(NewAttr);
+    NamedDecl *ND = cast<NamedDecl>(D);
+    ND->ClearLVCache();
+  }
 }
 
 VisibilityAttr *Sema::mergeVisibilityAttr(Decl *D, SourceRange Range,
@@ -2165,6 +2168,8 @@ VisibilityAttr *Sema::mergeVisibilityAttr(Decl *D, SourceRange Range,
     Diag(ExistingAttr->getLocation(), diag::err_mismatched_visibility);
     Diag(Range.getBegin(), diag::note_previous_attribute);
     D->dropAttr<VisibilityAttr>();
+    NamedDecl *ND = cast<NamedDecl>(D);
+    ND->ClearLVCache();
   }
   return ::new (Context) VisibilityAttr(Range, Context, Vis);
 }
@@ -2208,8 +2213,11 @@ static void handleVisibilityAttr(Sema &S, Decl *D, const AttributeList &Attr) {
   }
 
   VisibilityAttr *NewAttr = S.mergeVisibilityAttr(D, Attr.getRange(), type);
-  if (NewAttr)
+  if (NewAttr) {
     D->addAttr(NewAttr);
+    NamedDecl *ND = cast<NamedDecl>(D);
+    ND->ClearLVCache();
+  }
 }
 
 static void handleObjCMethodFamilyAttr(Sema &S, Decl *decl,
@@ -3605,6 +3613,9 @@ static void handleCallConvAttr(Sema &S, Decl *D, const AttributeList &Attr) {
   case AttributeList::AT_PnaclCall:
     D->addAttr(::new (S.Context) PnaclCallAttr(Attr.getRange(), S.Context));
     return;
+  case AttributeList::AT_IntelOclBicc:
+    D->addAttr(::new (S.Context) IntelOclBiccAttr(Attr.getRange(), S.Context));
+    return;
 
   default:
     llvm_unreachable("unexpected attribute kind");
@@ -3660,6 +3671,7 @@ bool Sema::CheckCallingConvAttr(const AttributeList &attr, CallingConv &CC,
     return true;
   }
   case AttributeList::AT_PnaclCall: CC = CC_PnaclCall; break;
+  case AttributeList::AT_IntelOclBicc: CC = CC_IntelOclBicc; break;
   default: llvm_unreachable("unexpected attribute kind");
   }
 
@@ -4432,6 +4444,7 @@ static void ProcessInheritableDeclAttr(Sema &S, Scope *scope, Decl *D,
   case AttributeList::AT_Pascal:
   case AttributeList::AT_Pcs:
   case AttributeList::AT_PnaclCall:
+  case AttributeList::AT_IntelOclBicc:
     handleCallConvAttr(S, D, Attr);
     break;
   case AttributeList::AT_OpenCLKernel:
