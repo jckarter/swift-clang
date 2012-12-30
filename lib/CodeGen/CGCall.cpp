@@ -2243,7 +2243,8 @@ RValue CodeGenFunction::EmitCall(const CGFunctionInfo &CallInfo,
                                                    AttributeList);
 
   llvm::BasicBlock *InvokeDest = 0;
-  if (!Attrs.getFnAttributes().hasAttribute(llvm::Attribute::NoUnwind))
+  if (!Attrs.hasAttribute(llvm::AttributeSet::FunctionIndex,
+                          llvm::Attribute::NoUnwind))
     InvokeDest = getInvokeDest();
 
   llvm::CallSite CS;
