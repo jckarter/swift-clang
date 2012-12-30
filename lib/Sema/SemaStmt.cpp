@@ -321,7 +321,9 @@ Sema::ActOnCompoundStmt(SourceLocation L, SourceLocation R,
       DiagnoseEmptyLoopBody(Elts[i], Elts[i + 1]);
   }
 
-  return Owned(new (Context) CompoundStmt(Context, Elts, NumElts, L, R));
+  return Owned(new (Context) CompoundStmt(Context,
+                                          llvm::makeArrayRef(Elts, NumElts),
+                                          L, R));
 }
 
 StmtResult
@@ -1960,8 +1962,7 @@ Sema::BuildCXXForRangeStmt(SourceLocation ForLoc, SourceLocation ColonLoc,
         Expr *Range = BEFFailure ? EndRangeRef.get() : BeginRangeRef.get();
         Diag(Range->getLocStart(), diag::err_for_range_invalid)
             << RangeLoc << Range->getType() << BEFFailure;
-        CandidateSet.NoteCandidates(*this, OCD_AllCandidates,
-                                    llvm::makeArrayRef(&Range, /*NumArgs=*/1));
+        CandidateSet.NoteCandidates(*this, OCD_AllCandidates, Range);
       }
       // Return an error if no fix was discovered.
       if (RangeStatus != FRS_Success)
@@ -2779,7 +2780,7 @@ Sema::ActOnCXXTryBlock(SourceLocation TryLoc, Stmt *TryBlock,
   // and warns.
 
   return Owned(CXXTryStmt::Create(Context, TryLoc, TryBlock,
-                                  Handlers, NumHandlers));
+                                  llvm::makeArrayRef(Handlers, NumHandlers)));
 }
 
 StmtResult
