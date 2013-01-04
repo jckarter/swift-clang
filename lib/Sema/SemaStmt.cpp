@@ -166,7 +166,7 @@ void Sema::DiagnoseUnusedExprResult(const Stmt *S) {
         CE = dyn_cast<CastExpr>(CE->getSubExpr()->IgnoreParens());
       if (CE) {
         const Expr *SubExpr = CE->getSubExpr();
-        if (getLangOpts().CPlusPlus && !getLangOpts().CPlusPlus0x &&
+        if (getLangOpts().CPlusPlus && !getLangOpts().CPlusPlus11 &&
             CE->getCastKind() == CK_LValueToRValue &&
             SubExpr->isGLValue() &&
             SubExpr->getType().isVolatileQualified() &&
