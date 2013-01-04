@@ -80,13 +80,25 @@ bool UnwrappedLineParser::parseBlock(unsigned AddLevels) {
 }
 
 void UnwrappedLineParser::parsePPDirective() {
-  while (!eof()) {
-    nextToken();
-    if (FormatTok.NewlinesBefore > 0) {
-      addUnwrappedLine();
-      return;
-    }
+  assert(FormatTok.Tok.is(tok::hash) && "'#' expected");
+  nextToken();
+
+  Line.InPPDirective = true;
+  if (FormatTok.Tok.getIdentifierInfo() == NULL) {
+    addUnwrappedLine();
+    Line.InPPDirective = false;
+    return;
   }
+
+  do {
+    if (FormatTok.NewlinesBefore > 0 &&
+        FormatTok.HasUnescapedNewline) {
+      break;
+    }
+    nextToken();
+  } while (!eof());
+  addUnwrappedLine();
+  Line.InPPDirective = false;
 }
 
 void UnwrappedLineParser::parseComments() {
@@ -100,10 +112,19 @@ void UnwrappedLineParser::parseComments() {
 void UnwrappedLineParser::parseStatement() {
   parseComments();
 
+  int TokenNumber = 0;
   switch (FormatTok.Tok.getKind()) {
   case tok::kw_namespace:
     parseNamespace();
     return;
+  case tok::kw_inline:
+    nextToken();
+    TokenNumber++;
+    if (FormatTok.Tok.is(tok::kw_namespace)) {
+      parseNamespace();
+      return;
+    }
+    break;
   case tok::kw_public:
   case tok::kw_protected:
   case tok::kw_private:
@@ -132,7 +153,6 @@ void UnwrappedLineParser::parseStatement() {
   default:
     break;
   }
-  int TokenNumber = 0;
   do {
     ++TokenNumber;
     switch (FormatTok.Tok.getKind()) {

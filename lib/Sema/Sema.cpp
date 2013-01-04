@@ -363,6 +363,9 @@ static bool ShouldRemoveFromUnused(Sema *SemaRef, const DeclaratorDecl *D) {
       return !SemaRef->ShouldWarnIfUnusedFileScopedDecl(DeclToCheck);
   }
 
+  if (D->getLinkage() == ExternalLinkage)
+    return true;
+
   return false;
 }
 
@@ -680,7 +683,7 @@ void Sema::ActOnEndOfTranslationUnit() {
 
   }
 
-  if (LangOpts.CPlusPlus0x &&
+  if (LangOpts.CPlusPlus11 &&
       Diags.getDiagnosticLevel(diag::warn_delegating_ctor_cycle,
                                SourceLocation())
         != DiagnosticsEngine::Ignored)
@@ -845,7 +848,7 @@ void Sema::EmitCurrentDiagnostic(unsigned DiagID) {
       // Additionally, the AccessCheckingSFINAE flag can be used to temporarily
       // make access control a part of SFINAE for the purposes of checking
       // type traits.
-      if (!AccessCheckingSFINAE && !getLangOpts().CPlusPlus0x)
+      if (!AccessCheckingSFINAE && !getLangOpts().CPlusPlus11)
         break;
 
       SourceLocation Loc = Diags.getCurrentDiagLoc();
