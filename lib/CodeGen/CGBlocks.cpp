@@ -18,8 +18,8 @@
 #include "CodeGenModule.h"
 #include "clang/AST/DeclObjC.h"
 #include "llvm/ADT/SmallSet.h"
-#include "llvm/DataLayout.h"
-#include "llvm/Module.h"
+#include "llvm/IR/DataLayout.h"
+#include "llvm/IR/Module.h"
 #include <algorithm>
 #include <cstdio>
 
@@ -1176,6 +1176,9 @@ CodeGenFunction::GenerateBlockFunction(GlobalDecl GD,
                                               Builder, blockInfo);
       }
     }
+    // Recover location if it was changed in the above loop.
+    DI->EmitLocation(Builder,
+        cast<CompoundStmt>(blockDecl->getBody())->getRBracLoc());
   }
 
   // And resume where we left off.
