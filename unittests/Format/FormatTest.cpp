@@ -458,9 +458,24 @@ TEST_F(FormatTest, MacroDefinitionInsideStatement) {
   EXPECT_EQ("int x,\n#define A\ny;", format("int x,\n#define A\ny;"));
 }
 
+TEST_F(FormatTest, HashInMacroDefinition) {
+  verifyFormat("#define A \\\n  b #c;", getLLVMStyleWithColumns(11));
+  verifyFormat("#define A \\\n"
+               "  {       \\\n"
+               "    f(#c);\\\n"
+               "  }", getLLVMStyleWithColumns(11));
+}
+
+TEST_F(FormatTest, IndentPreprocessorDirectivesAtZero) {
+  EXPECT_EQ("{\n  {\n#define A\n  }\n}", format("{{\n#define A\n}}"));
+}
+
+TEST_F(FormatTest, FormatHashIfNotAtStartOfLine) {
+  verifyFormat("{\n  {\n    a #c;\n  }\n}");
+}
+
 // FIXME: write test for unbalanced braces in macros...
-// FIXME: test { { #include "a.h" } }
-// FIXME: test # in the middle of a statement without \n before it
+// FIXME: test # inside a normal statement (like {#define A b})
 
 TEST_F(FormatTest, MixingPreprocessorDirectivesAndNormalCode) {
   EXPECT_EQ(
