@@ -2110,6 +2110,7 @@ enum LinuxDistro {
   DebianLenny,
   DebianSqueeze,
   DebianWheezy,
+  DebianJessie,
   Exherbo,
   RHEL4,
   RHEL5,
@@ -2147,7 +2148,7 @@ static bool IsOpenSuse(enum LinuxDistro Distro) {
 }
 
 static bool IsDebian(enum LinuxDistro Distro) {
-  return Distro >= DebianLenny && Distro <= DebianWheezy;
+  return Distro >= DebianLenny && Distro <= DebianJessie;
 }
 
 static bool IsUbuntu(enum LinuxDistro Distro) {
@@ -2214,6 +2215,8 @@ static LinuxDistro DetectLinuxDistro(llvm::Triple::ArchType Arch) {
       return DebianSqueeze;
     else if (Data.startswith("wheezy/sid")  || Data[0] == '7')
       return DebianWheezy;
+    else if (Data.startswith("jessie/sid")  || Data[0] == '8')
+      return DebianJessie;
     return UnknownDistro;
   }
 
@@ -2378,7 +2381,7 @@ Linux::Linux(const Driver &D, const llvm::Triple &Triple, const ArgList &Args)
     ExtraOpts.push_back("--no-add-needed");
 
   if (Distro == DebianSqueeze || Distro == DebianWheezy ||
-      IsOpenSuse(Distro) ||
+      Distro == DebianJessie || IsOpenSuse(Distro) ||
       (IsRedhat(Distro) && Distro != RHEL4 && Distro != RHEL5) ||
       (IsUbuntu(Distro) && Distro >= UbuntuKarmic))
     ExtraOpts.push_back("--build-id");
