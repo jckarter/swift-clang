@@ -65,6 +65,7 @@ add_dependencies(clangAST
   ClangAttrClasses
   ClangAttrList
   ClangAttrImpl
+  ClangAttrDump
   ClangCommentCommandInfo
   ClangCommentNodes
   ClangCommentHTMLTags

@@ -904,13 +904,18 @@ CollectRecordFields(const RecordDecl *record, llvm::DIFile tunit,
 llvm::DIType
 CGDebugInfo::getOrCreateMethodType(const CXXMethodDecl *Method,
                                    llvm::DIFile Unit) {
-  llvm::DIType FnTy
-    = getOrCreateType(QualType(Method->getType()->getAs<FunctionProtoType>(),
-                               0),
-                      Unit);
+  const FunctionProtoType *Func = Method->getType()->getAs<FunctionProtoType>();
+  if (Method->isStatic())
+    return getOrCreateType(QualType(Func, 0), Unit);
+  return getOrCreateInstanceMethodType(Method->getThisType(CGM.getContext()),
+                                       Func, Unit);
+}
 
+llvm::DIType CGDebugInfo::getOrCreateInstanceMethodType(
+    QualType ThisPtr, const FunctionProtoType *Func, llvm::DIFile Unit) {
   // Add "this" pointer.
-  llvm::DIArray Args = llvm::DICompositeType(FnTy).getTypeArray();
+  llvm::DIArray Args = llvm::DICompositeType(
+      getOrCreateType(QualType(Func, 0), Unit)).getTypeArray();
   assert (Args.getNumElements() && "Invalid number of arguments!");
 
   SmallVector<llvm::Value *, 16> Elts;
@@ -918,32 +923,28 @@ CGDebugInfo::getOrCreateMethodType(const CXXMethodDecl *Method,
   // First element is always return type. For 'void' functions it is NULL.
   Elts.push_back(Args.getElement(0));
 
-  if (!Method->isStatic()) {
-    // "this" pointer is always first argument.
-    QualType ThisPtr = Method->getThisType(CGM.getContext());
-
-    const CXXRecordDecl *RD = Method->getParent();
-    if (isa<ClassTemplateSpecializationDecl>(RD)) {
-      // Create pointer type directly in this case.
-      const PointerType *ThisPtrTy = cast<PointerType>(ThisPtr);
-      QualType PointeeTy = ThisPtrTy->getPointeeType();
-      unsigned AS = CGM.getContext().getTargetAddressSpace(PointeeTy);
-      uint64_t Size = CGM.getContext().getTargetInfo().getPointerWidth(AS);
-      uint64_t Align = CGM.getContext().getTypeAlign(ThisPtrTy);
-      llvm::DIType PointeeType = getOrCreateType(PointeeTy, Unit);
-      llvm::DIType ThisPtrType = DBuilder.createPointerType(PointeeType, Size, Align);
-      TypeCache[ThisPtr.getAsOpaquePtr()] = ThisPtrType;
-      // TODO: This and the artificial type below are misleading, the
-      // types aren't artificial the argument is, but the current
-      // metadata doesn't represent that.
-      ThisPtrType = DBuilder.createObjectPointerType(ThisPtrType);
-      Elts.push_back(ThisPtrType);
-    } else {
-      llvm::DIType ThisPtrType = getOrCreateType(ThisPtr, Unit);
-      TypeCache[ThisPtr.getAsOpaquePtr()] = ThisPtrType;
-      ThisPtrType = DBuilder.createObjectPointerType(ThisPtrType);
-      Elts.push_back(ThisPtrType);
-    }
+  // "this" pointer is always first argument.
+  const CXXRecordDecl *RD = ThisPtr->getPointeeCXXRecordDecl();
+  if (isa<ClassTemplateSpecializationDecl>(RD)) {
+    // Create pointer type directly in this case.
+    const PointerType *ThisPtrTy = cast<PointerType>(ThisPtr);
+    QualType PointeeTy = ThisPtrTy->getPointeeType();
+    unsigned AS = CGM.getContext().getTargetAddressSpace(PointeeTy);
+    uint64_t Size = CGM.getContext().getTargetInfo().getPointerWidth(AS);
+    uint64_t Align = CGM.getContext().getTypeAlign(ThisPtrTy);
+    llvm::DIType PointeeType = getOrCreateType(PointeeTy, Unit);
+    llvm::DIType ThisPtrType = DBuilder.createPointerType(PointeeType, Size, Align);
+    TypeCache[ThisPtr.getAsOpaquePtr()] = ThisPtrType;
+    // TODO: This and the artificial type below are misleading, the
+    // types aren't artificial the argument is, but the current
+    // metadata doesn't represent that.
+    ThisPtrType = DBuilder.createObjectPointerType(ThisPtrType);
+    Elts.push_back(ThisPtrType);
+  } else {
+    llvm::DIType ThisPtrType = getOrCreateType(ThisPtr, Unit);
+    TypeCache[ThisPtr.getAsOpaquePtr()] = ThisPtrType;
+    ThisPtrType = DBuilder.createObjectPointerType(ThisPtrType);
+    Elts.push_back(ThisPtrType);
   }
 
   // Copy rest of the arguments.
