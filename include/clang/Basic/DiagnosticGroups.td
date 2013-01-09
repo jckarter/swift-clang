@@ -378,7 +378,6 @@ def Most : DiagGroup<"most", [
     DeleteNonVirtualDtor,
     Format,
     Implicit,
-    IntToPointerCast,
     MismatchedTags,
     MissingBraces,
     MultiChar,
