@@ -227,15 +227,23 @@ void IvarInvalidationChecker::containsInvalidationMethod(
   }
 
   // If interface, check all parent protocols and super.
-  // TODO: Visit all categories in case the invalidation method is declared in
-  // a category.
-  if (const ObjCInterfaceDecl *InterfaceD = dyn_cast<ObjCInterfaceDecl>(D)) {
+  if (const ObjCInterfaceDecl *InterfD = dyn_cast<ObjCInterfaceDecl>(D)) {
+
+    // Visit all protocols.
     for (ObjCInterfaceDecl::protocol_iterator
-        I = InterfaceD->protocol_begin(),
-        E = InterfaceD->protocol_end(); I != E; ++I) {
-      containsInvalidationMethod(*I, OutInfo);
+        I = InterfD->protocol_begin(),
+        E = InterfD->protocol_end(); I != E; ++I) {
+      containsInvalidationMethod((*I)->getDefinition(), OutInfo);
     }
-    containsInvalidationMethod(InterfaceD->getSuperClass(), OutInfo);
+
+    // Visit all categories in case the invalidation method is declared in
+    // a category.
+    for (const ObjCCategoryDecl *I = InterfD->getFirstClassExtension(); I;
+        I = I->getNextClassExtension()) {
+      containsInvalidationMethod(I, OutInfo);
+    }
+
+    containsInvalidationMethod(InterfD->getSuperClass(), OutInfo);
     return;
   }
 
@@ -244,12 +252,12 @@ void IvarInvalidationChecker::containsInvalidationMethod(
     for (ObjCInterfaceDecl::protocol_iterator
         I = ProtD->protocol_begin(),
         E = ProtD->protocol_end(); I != E; ++I) {
-      containsInvalidationMethod(*I, OutInfo);
+      containsInvalidationMethod((*I)->getDefinition(), OutInfo);
     }
     return;
   }
 
-  llvm_unreachable("One of the casts above should have succeeded.");
+  return;
 }
 
 bool IvarInvalidationChecker::trackIvar(const ObjCIvarDecl *Iv,
@@ -400,11 +408,10 @@ void IvarInvalidationChecker::checkASTDecl(const ObjCImplementationDecl *ImplD,
   if (!Info.needsInvalidation()) {
     SmallString<128> sbuf;
     llvm::raw_svector_ostream os(sbuf);
-    os << "No invalidation method declared in the @interface for "
-       << InterfaceD->getName() << "; ";
     assert(FirstIvarDecl);
     printIvar(os, FirstIvarDecl, IvarToPopertyMap);
-    os << "needs to be invalidated";
+    os << "needs to be invalidated; ";
+    os << "No invalidation method is declared for " << InterfaceD->getName();
 
     PathDiagnosticLocation IvarDecLocation =
       PathDiagnosticLocation::createBegin(FirstIvarDecl, BR.getSourceManager());
@@ -465,11 +472,11 @@ void IvarInvalidationChecker::checkASTDecl(const ObjCImplementationDecl *ImplD,
   if (!AtImplementationContainsAtLeastOneInvalidationMethod) {
     SmallString<128> sbuf;
     llvm::raw_svector_ostream os(sbuf);
-    os << "No invalidation method defined in the @implementation for "
-       << InterfaceD->getName() << "; ";
     assert(FirstIvarDecl);
     printIvar(os, FirstIvarDecl, IvarToPopertyMap);
-    os << "needs to be invalidated";
+    os << "needs to be invalidated; ";
+    os << "No invalidation method is defined in the @implementation for "
+       << InterfaceD->getName();
 
     PathDiagnosticLocation IvarDecLocation =
         PathDiagnosticLocation::createBegin(FirstIvarDecl,
