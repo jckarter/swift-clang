@@ -5,5 +5,5 @@
 // to an error.
 
 void radar_10894044() {
-  radar_10894044_not_declared();
+  radar_10894044_not_declared(); // expected-error {{implicit declaration of function 'radar_10894044_not_declared' is invalid in C99}}
 }
