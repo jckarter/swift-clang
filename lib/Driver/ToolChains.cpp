@@ -243,6 +243,13 @@ DarwinClang::DarwinClang(const Driver &D, const llvm::Triple& Triple)
     getProgramPaths().push_back(getDriver().Dir);
 }
 
+void DarwinClang::addClangWarningOptions(ArgStringList &CC1Args) const {
+  // For iOS, 64-bit, promote certain warnings to errors.
+  if (!isTargetMacOS() && getTriple().isArch64Bit()) {
+    CC1Args.push_back("-Werror=implicit-function-declaration");
+  }
+}
+
 void DarwinClang::AddLinkARCArgs(const ArgList &Args,
                                  ArgStringList &CmdArgs) const {
 

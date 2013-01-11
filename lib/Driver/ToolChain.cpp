@@ -206,6 +206,8 @@ void ToolChain::addClangTargetOptions(const ArgList &DriverArgs,
                                       ArgStringList &CC1Args) const {
 }
 
+void ToolChain::addClangWarningOptions(ArgStringList &CC1Args) const {}
+
 ToolChain::RuntimeLibType ToolChain::GetRuntimeLibType(
   const ArgList &Args) const
 {

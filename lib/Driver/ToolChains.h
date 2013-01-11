@@ -363,6 +363,8 @@ public:
   virtual void AddCCKextLibArgs(const ArgList &Args,
                                 ArgStringList &CmdArgs) const;
 
+  virtual void addClangWarningOptions(ArgStringList &CC1Args) const;
+
   virtual void AddLinkARCArgs(const ArgList &Args,
                               ArgStringList &CmdArgs) const;
   /// }

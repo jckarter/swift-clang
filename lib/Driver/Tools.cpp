@@ -3141,6 +3141,11 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
     CmdArgs.push_back(Args.MakeArgString(Flags.str()));
   }
 
+  // Finally, push all default warning arguments that are specific to
+  // the given target.  These are processed last, to override any user
+  // defined mappings.
+  getToolChain().addClangWarningOptions(CmdArgs);
+
   C.addCommand(new Command(JA, *this, Exec, CmdArgs));
 
   if (Arg *A = Args.getLastArg(options::OPT_pg))
