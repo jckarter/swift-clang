@@ -1824,18 +1824,14 @@ DeclHasAttr(const Decl *D, const Attr *A) {
 
 bool Sema::mergeDeclAttribute(NamedDecl *D, InheritableAttr *Attr) {
   InheritableAttr *NewAttr = NULL;
-  if (AvailabilityAttr *AA = dyn_cast<AvailabilityAttr>(Attr)) {
+  if (AvailabilityAttr *AA = dyn_cast<AvailabilityAttr>(Attr))
     NewAttr = mergeAvailabilityAttr(D, AA->getRange(), AA->getPlatform(),
                                     AA->getIntroduced(), AA->getDeprecated(),
                                     AA->getObsoleted(), AA->getUnavailable(),
                                     AA->getMessage());
-    if (NewAttr)
-      D->ClearLVCache();
-  } else if (VisibilityAttr *VA = dyn_cast<VisibilityAttr>(Attr)) {
+  else if (VisibilityAttr *VA = dyn_cast<VisibilityAttr>(Attr))
     NewAttr = mergeVisibilityAttr(D, VA->getRange(), VA->getVisibility());
-    if (NewAttr)
-      D->ClearLVCache();
-  } else if (DLLImportAttr *ImportA = dyn_cast<DLLImportAttr>(Attr))
+  else if (DLLImportAttr *ImportA = dyn_cast<DLLImportAttr>(Attr))
     NewAttr = mergeDLLImportAttr(D, ImportA->getRange());
   else if (DLLExportAttr *ExportA = dyn_cast<DLLExportAttr>(Attr))
     NewAttr = mergeDLLExportAttr(D, ExportA->getRange());
@@ -4691,6 +4687,14 @@ void Sema::CheckShadow(Scope *S, VarDecl *D) {
   CheckShadow(S, D, R);
 }
 
+template<typename T>
+static bool mayConflictWithNonVisibleExternC(const T *ND) {
+  VarDecl::StorageClass SC = ND->getStorageClass();
+  if (ND->hasCLanguageLinkage() && (SC == SC_Extern || SC == SC_PrivateExtern))
+    return true;
+  return ND->getDeclContext()->isTranslationUnit();
+}
+
 /// \brief Perform semantic checking on a newly-created variable
 /// declaration.
 ///
@@ -4793,10 +4797,9 @@ bool Sema::CheckVariableDeclaration(VarDecl *NewVD,
     NewVD->setTypeSourceInfo(FixedTInfo);
   }
 
-  if (Previous.empty() && NewVD->isExternC()) {
-    // Since we did not find anything by this name and we're declaring
-    // an extern "C" variable, look for a non-visible extern "C"
-    // declaration with the same name.
+  if (Previous.empty() && mayConflictWithNonVisibleExternC(NewVD)) {
+    // Since we did not find anything by this name, look for a non-visible
+    // extern "C" declaration with the same name.
     llvm::DenseMap<DeclarationName, NamedDecl *>::iterator Pos
       = findLocallyScopedExternCDecl(NewVD->getDeclName());
     if (Pos != LocallyScopedExternCDecls.end())
@@ -6146,10 +6149,9 @@ bool Sema::CheckFunctionDeclaration(Scope *S, FunctionDecl *NewFD,
          && "Variably modified return types are not handled here");
 
   // Check for a previous declaration of this name.
-  if (Previous.empty() && NewFD->isExternC()) {
-    // Since we did not find anything by this name and we're declaring
-    // an extern "C" function, look for a non-visible extern "C"
-    // declaration with the same name.
+  if (Previous.empty() && mayConflictWithNonVisibleExternC(NewFD)) {
+    // Since we did not find anything by this name, look for a non-visible
+    // extern "C" declaration with the same name.
     llvm::DenseMap<DeclarationName, NamedDecl *>::iterator Pos
       = findLocallyScopedExternCDecl(NewFD->getDeclName());
     if (Pos != LocallyScopedExternCDecls.end())
@@ -6689,7 +6691,7 @@ void Sema::AddInitializerToDecl(Decl *RealDecl, Expr *Init,
     }
     VDecl->setTypeSourceInfo(DeducedType);
     VDecl->setType(DeducedType->getType());
-    VDecl->ClearLVCache();
+    VDecl->ClearLinkageCache();
     
     // In ARC, infer lifetime.
     if (getLangOpts().ObjCAutoRefCount && inferObjCARCLifetime(VDecl))
@@ -11165,6 +11167,18 @@ DeclResult Sema::ActOnModuleImport(SourceLocation AtLoc,
                                           Mod, IdentifierLocs);
   Context.getTranslationUnitDecl()->addDecl(Import);
   return Import;
+}
+
+void Sema::createImplicitModuleImport(SourceLocation Loc, Module *Mod) {
+  // Create the implicit import declaration.
+  TranslationUnitDecl *TU = getASTContext().getTranslationUnitDecl();
+  ImportDecl *ImportD = ImportDecl::CreateImplicit(getASTContext(), TU,
+                                                   Loc, Mod, Loc);
+  TU->addDecl(ImportD);
+  Consumer.HandleImplicitImportDecl(ImportD);
+
+  // Make the module visible.
+  PP.getModuleLoader().makeModuleVisible(Mod, Module::AllVisible);
 }
 
 void Sema::ActOnPragmaRedefineExtname(IdentifierInfo* Name,
