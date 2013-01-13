@@ -170,7 +170,7 @@ static void replacePPWhitespace(
 
 /// \brief Checks whether the (remaining) \c UnwrappedLine starting with
 /// \p RootToken fits into \p Limit columns.
-bool fitsIntoLimit(const AnnotatedToken &RootToken, unsigned Limit) {
+static bool fitsIntoLimit(const AnnotatedToken &RootToken, unsigned Limit) {
   unsigned Columns = RootToken.FormatTok.TokenLength;
   bool FitsOnALine = true;
   const AnnotatedToken *Tok = &RootToken;
@@ -188,17 +188,24 @@ bool fitsIntoLimit(const AnnotatedToken &RootToken, unsigned Limit) {
   return FitsOnALine;
 }
 
+/// \brief Returns if a token is an Objective-C selector name.
+///
+/// For example, "bar" is a selector name in [foo bar:(4 + 5)].
+static bool isObjCSelectorName(const AnnotatedToken &Tok) {
+  return Tok.is(tok::identifier) && !Tok.Children.empty() &&
+         Tok.Children[0].is(tok::colon) &&
+         Tok.Children[0].Type == TT_ObjCMethodExpr;
+}
+
 class UnwrappedLineFormatter {
 public:
   UnwrappedLineFormatter(const FormatStyle &Style, SourceManager &SourceMgr,
                          const UnwrappedLine &Line, unsigned FirstIndent,
-                         bool FitsOnALine, LineType CurrentLineType,
-                         const AnnotatedToken &RootToken,
+                         bool FitsOnALine, const AnnotatedToken &RootToken,
                          tooling::Replacements &Replaces, bool StructuralError)
       : Style(Style), SourceMgr(SourceMgr), Line(Line),
         FirstIndent(FirstIndent), FitsOnALine(FitsOnALine),
-        CurrentLineType(CurrentLineType), RootToken(RootToken),
-        Replaces(Replaces) {
+        RootToken(RootToken), Replaces(Replaces) {
     Parameters.PenaltyIndentLevel = 15;
     Parameters.PenaltyLevelDecrease = 30;
     Parameters.PenaltyExcessCharacter = 1000000;
@@ -282,7 +289,9 @@ private:
         return FirstLessLess < Other.FirstLessLess;
       if (BreakBeforeClosingBrace != Other.BreakBeforeClosingBrace)
         return BreakBeforeClosingBrace;
-      return BreakAfterComma;
+      if (BreakAfterComma != Other.BreakAfterComma)
+        return BreakAfterComma;
+      return false;
     }
   };
 
@@ -386,8 +395,7 @@ private:
       }
 
       State.Stack[ParenLevel].LastSpace = State.Column;
-      if (Current.is(tok::colon) && CurrentLineType != LT_ObjCMethodDecl &&
-          State.NextToken->Type != TT_ConditionalExpr)
+      if (Current.is(tok::colon) && State.NextToken->Type != TT_ConditionalExpr)
         State.Stack[ParenLevel].Indent += 2;
     } else {
       if (Current.is(tok::equal) && RootToken.is(tok::kw_for))
@@ -480,6 +488,14 @@ private:
     if (Left.is(tok::semi) || Left.is(tok::comma) ||
         Left.ClosesTemplateDeclaration)
       return 0;
+
+    // In Objective-C method expressions, prefer breaking before "param:" over
+    // breaking after it.
+    if (isObjCSelectorName(Right))
+      return 0;
+    if (Right.is(tok::colon) && Right.Type == TT_ObjCMethodExpr)
+      return 20;
+
     if (Left.is(tok::l_paren))
       return 20;
 
@@ -586,7 +602,6 @@ private:
   const UnwrappedLine &Line;
   const unsigned FirstIndent;
   const bool FitsOnALine;
-  const LineType CurrentLineType;
   const AnnotatedToken &RootToken;
   tooling::Replacements &Replaces;
 
@@ -1150,8 +1165,9 @@ private:
       return false;
     if (Tok.Type == TT_UnaryOperator)
       return Tok.Parent->isNot(tok::l_paren) &&
-             Tok.Parent->isNot(tok::l_square) &&
-             Tok.Parent->isNot(tok::at);
+             Tok.Parent->isNot(tok::l_square) && Tok.Parent->isNot(tok::at) &&
+             (Tok.Parent->isNot(tok::colon) ||
+              Tok.Parent->Type != TT_ObjCMethodExpr);
     if (Tok.Parent->is(tok::greater) && Tok.is(tok::greater)) {
       return Tok.Type == TT_TemplateCloser && Tok.Parent->Type ==
              TT_TemplateCloser && Style.SplitTemplateClosingGreater;
@@ -1176,8 +1192,8 @@ private:
       if (Right.is(tok::identifier) && !Right.Children.empty() &&
           Right.Children[0].is(tok::colon) && Left.is(tok::identifier))
         return true;
-      if (CurrentLineType == LT_ObjCMethodDecl && Right.is(tok::identifier) &&
-          Left.is(tok::l_paren) && Left.Parent->is(tok::colon))
+      if (Right.is(tok::identifier) && Left.is(tok::l_paren) &&
+          Left.Parent->is(tok::colon))
         // Don't break this identifier as ':' or identifier
         // before it will break.
         return false;
@@ -1189,6 +1205,8 @@ private:
     if (Right.is(tok::colon) && Right.Type == TT_ObjCMethodExpr)
       return false;
     if (Left.is(tok::colon) && Left.Type == TT_ObjCMethodExpr)
+      return true;
+    if (isObjCSelectorName(Right))
       return true;
     if (Left.ClosesTemplateDeclaration)
       return true;
@@ -1323,7 +1341,7 @@ public:
          I != E; ++I) {
       const UnwrappedLine &TheLine = *I;
       if (touchesRanges(TheLine)) {
-        llvm::OwningPtr<TokenAnnotator> AnnotatedLine(
+        OwningPtr<TokenAnnotator> AnnotatedLine(
             new TokenAnnotator(TheLine, Style, SourceMgr, Lex));
         if (!AnnotatedLine->annotate())
           break;
@@ -1336,8 +1354,7 @@ public:
                                                     I, E);
         UnwrappedLineFormatter Formatter(
             Style, SourceMgr, Line, Indent, FitsOnALine,
-            AnnotatedLine->getLineType(), AnnotatedLine->getRootToken(),
-            Replaces, StructuralError);
+            AnnotatedLine->getRootToken(), Replaces, StructuralError);
         PreviousEndOfLineColumn = Formatter.format();
       } else {
         // If we did not reformat this unwrapped line, the column at the end of
@@ -1362,7 +1379,7 @@ private:
   ///
   /// Returns whether the resulting \c Line can fit in a single line.
   bool tryFitMultipleLinesInOne(unsigned Indent, UnwrappedLine &Line,
-                                llvm::OwningPtr<TokenAnnotator> &AnnotatedLine,
+                                OwningPtr<TokenAnnotator> &AnnotatedLine,
                                 std::vector<UnwrappedLine>::iterator &I,
                                 std::vector<UnwrappedLine>::iterator E) {
     unsigned Limit = Style.ColumnLimit - (I->InPPDirective ? 1 : 0) - Indent;
@@ -1413,7 +1430,7 @@ private:
       return FitsOnALine;
     Last->Children.push_back(*Next);
 
-    llvm::OwningPtr<TokenAnnotator> CombinedAnnotator(
+    OwningPtr<TokenAnnotator> CombinedAnnotator(
         new TokenAnnotator(Combined, Style, SourceMgr, Lex));
     if (CombinedAnnotator->annotate() &&
         fitsIntoLimit(CombinedAnnotator->getRootToken(), Limit)) {
@@ -1509,7 +1526,7 @@ tooling::Replacements reformat(const FormatStyle &Style, Lexer &Lex,
   TextDiagnosticPrinter DiagnosticPrinter(llvm::errs(), &*DiagOpts);
   DiagnosticPrinter.BeginSourceFile(Lex.getLangOpts(), Lex.getPP());
   DiagnosticsEngine Diagnostics(
-      llvm::IntrusiveRefCntPtr<DiagnosticIDs>(new DiagnosticIDs()), &*DiagOpts,
+      IntrusiveRefCntPtr<DiagnosticIDs>(new DiagnosticIDs()), &*DiagOpts,
       &DiagnosticPrinter, false);
   Diagnostics.setSourceManager(&SourceMgr);
   Formatter formatter(Diagnostics, Style, Lex, SourceMgr, Ranges);

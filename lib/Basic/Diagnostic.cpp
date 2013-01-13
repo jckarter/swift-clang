@@ -235,7 +235,7 @@ bool DiagnosticsEngine::setDiagnosticGroupMapping(
   StringRef Group, diag::Mapping Map, SourceLocation Loc)
 {
   // Get the diagnostics in this group.
-  llvm::SmallVector<diag::kind, 8> GroupDiags;
+  SmallVector<diag::kind, 8> GroupDiags;
   if (Diags->getDiagnosticsInGroup(Group, GroupDiags))
     return true;
 
@@ -275,7 +275,7 @@ bool DiagnosticsEngine::setDiagnosticGroupWarningAsError(StringRef Group,
   // potentially downgrade anything already mapped to be a warning.
 
   // Get the diagnostics in this group.
-  llvm::SmallVector<diag::kind, 8> GroupDiags;
+  SmallVector<diag::kind, 8> GroupDiags;
   if (Diags->getDiagnosticsInGroup(Group, GroupDiags))
     return true;
 
@@ -322,7 +322,7 @@ bool DiagnosticsEngine::setDiagnosticGroupErrorAsFatal(StringRef Group,
   // potentially downgrade anything already mapped to be an error.
 
   // Get the diagnostics in this group.
-  llvm::SmallVector<diag::kind, 8> GroupDiags;
+  SmallVector<diag::kind, 8> GroupDiags;
   if (Diags->getDiagnosticsInGroup(Group, GroupDiags))
     return true;
 
@@ -343,7 +343,7 @@ bool DiagnosticsEngine::setDiagnosticGroupErrorAsFatal(StringRef Group,
 void DiagnosticsEngine::setMappingToAllDiagnostics(diag::Mapping Map,
                                                    SourceLocation Loc) {
   // Get all the diagnostics.
-  llvm::SmallVector<diag::kind, 64> AllDiags;
+  SmallVector<diag::kind, 64> AllDiags;
   Diags->getAllDiagnostics(AllDiags);
 
   // Set the mapping.
