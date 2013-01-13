@@ -1150,7 +1150,7 @@ namespace {
   class NVPTXTargetInfo : public TargetInfo {
     static const char * const GCCRegNames[];
     static const Builtin::Info BuiltinInfo[];
-    std::vector<llvm::StringRef> AvailableFeatures;
+    std::vector<StringRef> AvailableFeatures;
   public:
     NVPTXTargetInfo(const std::string& triple) : TargetInfo(triple) {
       BigEndian = false;
@@ -4478,7 +4478,7 @@ namespace {
   class SPIRTargetInfo : public TargetInfo {
     static const char * const GCCRegNames[];
     static const Builtin::Info BuiltinInfo[];
-    std::vector<llvm::StringRef> AvailableFeatures;
+    std::vector<StringRef> AvailableFeatures;
   public:
     SPIRTargetInfo(const std::string& triple) : TargetInfo(triple) {
       assert(getTriple().getOS() == llvm::Triple::UnknownOS &&
