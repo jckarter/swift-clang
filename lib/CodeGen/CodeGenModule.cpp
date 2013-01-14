@@ -32,6 +32,7 @@
 #include "clang/Basic/Builtins.h"
 #include "clang/Basic/ConvertUTF.h"
 #include "clang/Basic/Diagnostic.h"
+#include "clang/Basic/Module.h"
 #include "clang/Basic/SourceManager.h"
 #include "clang/Basic/TargetInfo.h"
 #include "clang/Frontend/CodeGenOptions.h"
@@ -2681,7 +2682,6 @@ void CodeGenModule::EmitTopLevelDecl(Decl *D) {
   case Decl::TypeAliasTemplate:
   case Decl::NamespaceAlias:
   case Decl::Block:
-  case Decl::Import:
     break;
   case Decl::CXXConstructor:
     // Skip function templates
@@ -2761,6 +2761,86 @@ void CodeGenModule::EmitTopLevelDecl(Decl *D) {
       getModule().setModuleInlineAsm(S + '\n' + AsmString.str());
     break;
   }
+
+  case Decl::Import: {
+    ImportDecl *Import = cast<ImportDecl>(D);
+
+    // Ignore import declarations that come from imported modules.
+    if (clang::Module *Owner = Import->getOwningModule()) {
+      if (getLangOpts().CurrentModule.empty() ||
+          Owner->getTopLevelModule()->Name == getLangOpts().CurrentModule)
+        break;
+    }
+
+    // Walk from this module up to its top-level module; we'll import all of
+    // these modules and their non-explicit child modules.
+    llvm::SmallVector<clang::Module *, 2> Stack;
+    for (clang::Module *Mod = Import->getImportedModule(); Mod;
+         Mod = Mod->Parent) {
+      if (!ImportedModules.insert(Mod))
+        break;
+      
+      Stack.push_back(Mod);
+    }
+
+    if (Stack.empty())
+      break;
+
+    // Get/create metadata for the link options.
+    llvm::NamedMDNode *Metadata
+      = getModule().getOrInsertNamedMetadata("llvm.module.linkoptions");
+
+    // Find all of the non-explicit submodules of the modules we've imported and
+    // import them.
+    while (!Stack.empty()) {
+      clang::Module *Mod = Stack.back();
+      Stack.pop_back();
+
+      // Add linker options to link against the libraries/frameworks
+      // described by this module.
+      for (unsigned I = 0, N = Mod->LinkLibraries.size(); I != N; ++I) {
+        // FIXME: -lfoo is Unix-centric and -framework Foo is Darwin-centric.
+        // We need to know more about the linker to know how to encode these
+        // options propertly.
+
+        // Link against a framework.
+        if (Mod->LinkLibraries[I].IsFramework) {
+          llvm::Value *Args[2] = {
+            llvm::MDString::get(getLLVMContext(), "-framework"),
+            llvm::MDString::get(getLLVMContext(),
+                                Mod->LinkLibraries[I].Library)
+          };
+          
+          Metadata->addOperand(llvm::MDNode::get(getLLVMContext(), Args));
+          continue;
+        }
+
+        // Link against a library.
+        llvm::Value *OptString
+          = llvm::MDString::get(getLLVMContext(),
+                                "-l" + Mod->LinkLibraries[I].Library);
+        Metadata->addOperand(llvm::MDNode::get(getLLVMContext(), OptString));
+      }
+
+      // Import this module's (non-explicit) submodules.
+      for (clang::Module::submodule_iterator Sub = Mod->submodule_begin(),
+                                          SubEnd = Mod->submodule_end();
+           Sub != SubEnd; ++Sub) {
+        if ((*Sub)->IsExplicit)
+          continue;
+
+        if (ImportedModules.insert(*Sub))
+          Stack.push_back(*Sub);
+      }
+
+      // Import this module's dependencies.
+      for (unsigned I = 0, N = Mod->Imports.size(); I != N; ++I) {
+        if (ImportedModules.insert(Mod->Imports[I]))
+          Stack.push_back(Mod->Imports[I]);
+      }
+    }
+    break;
+ }
 
   default:
     // Make sure we handled everything we should, every other kind is a
