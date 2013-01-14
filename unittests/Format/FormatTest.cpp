@@ -121,6 +121,7 @@ TEST_F(FormatTest, FormatsNestedBlockStatements) {
 TEST_F(FormatTest, FormatsNestedCall) {
   verifyFormat("Method(f1, f2(f3));");
   verifyFormat("Method(f1(f2, f3()));");
+  verifyFormat("Method(f1(f2, (f3())));");
 }
 
 //===----------------------------------------------------------------------===//
@@ -284,6 +285,14 @@ TEST_F(FormatTest, UnderstandsSingleLineComments) {
   verifyFormat("void f() {\n"
                "  // Doesn't do anything\n"
                "}");
+  verifyFormat("void f(int i, // some comment (probably for i)\n"
+               "       int j, // some comment (probably for j)\n"
+               "       int k); // some comment (probably for k)");
+  verifyFormat("void f(int i,\n"
+               "       // some comment (probably for j)\n"
+               "       int j,\n"
+               "       // some comment (probably for k)\n"
+               "       int k);");
 
   verifyFormat("int i // This is a fancy variable\n"
                "    = 5;");
@@ -342,6 +351,7 @@ TEST_F(FormatTest, FormatsDerivedClass) {
 TEST_F(FormatTest, FormatsVariableDeclarationsAfterStructOrClass) {
   verifyFormat("class A {} a, b;");
   verifyFormat("struct A {} a, b;");
+  verifyFormat("union A {} a;");
 }
 
 TEST_F(FormatTest, FormatsEnum) {
@@ -356,6 +366,13 @@ TEST_F(FormatTest, FormatsEnum) {
   verifyFormat("enum Enum {\n"
                "};");
   verifyFormat("enum {\n"
+               "};");
+}
+
+TEST_F(FormatTest, FormatsBitfields) {
+  verifyFormat("struct Bitfields {\n"
+               "  unsigned sClass : 8;\n"
+               "  unsigned ValueKind : 2;\n"
                "};");
 }
 
@@ -1045,9 +1062,6 @@ TEST_F(FormatTest, UnderstandsUsesOfStarAndAmp) {
   verifyFormat("A<int **> a;");
   verifyFormat("A<int *, int *> a;");
   verifyFormat("A<int **, int **> a;");
-  verifyFormat("Type *A = static_cast<Type *>(P);");
-  verifyFormat("Type *A = (Type *)P;");
-  verifyFormat("Type *A = (vector<Type *, int *>)P;");
 
   verifyFormat(
       "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa(\n"
@@ -1060,6 +1074,25 @@ TEST_F(FormatTest, UnderstandsUsesOfStarAndAmp) {
   verifyGoogleFormat("A<int**, int**> a;");
   verifyGoogleFormat("f(b ? *c : *d);");
   verifyGoogleFormat("int a = b ? *c : *d;");
+}
+
+TEST_F(FormatTest, FormatsCasts) {
+  verifyFormat("Type *A = static_cast<Type *>(P);");
+  verifyFormat("Type *A = (Type *)P;");
+  verifyFormat("Type *A = (vector<Type *, int *>)P;");
+  verifyFormat("int a = (int)(2.0f);");
+
+  // FIXME: These also need to be identified.
+  verifyFormat("int a = (int) 2.0f;");
+  verifyFormat("int a = (int) * b;");
+
+  // These are not casts.
+  verifyFormat("void f(int *) {}");
+  verifyFormat("void f(int *);");
+  verifyFormat("void f(int *) = 0;");
+  verifyFormat("void f(SmallVector<int>) {}");
+  verifyFormat("void f(SmallVector<int>);");
+  verifyFormat("void f(SmallVector<int>) = 0;");
 }
 
 TEST_F(FormatTest, FormatsFunctionTypes) {
@@ -1086,17 +1119,18 @@ TEST_F(FormatTest, LineStartsWithSpecialCharacter) {
 }
 
 TEST_F(FormatTest, HandlesIncludeDirectives) {
-  EXPECT_EQ("#include <string>\n", format("#include <string>\n"));
-  EXPECT_EQ("#include <a/b/c.h>\n", format("#include <a/b/c.h>\n"));
-  EXPECT_EQ("#include \"a/b/string\"\n", format("#include \"a/b/string\"\n"));
-  EXPECT_EQ("#include \"string.h\"\n", format("#include \"string.h\"\n"));
-  EXPECT_EQ("#include \"string.h\"\n", format("#include \"string.h\"\n"));
+  verifyFormat("#include <string>");
+  verifyFormat("#include <a/b/c.h>");
+  verifyFormat("#include \"a/b/string\"");
+  verifyFormat("#include \"string.h\"");
+  verifyFormat("#include \"string.h\"");
+  verifyFormat("#include <a-a>");
 
-  EXPECT_EQ("#import <string>\n", format("#import <string>\n"));
-  EXPECT_EQ("#import <a/b/c.h>\n", format("#import <a/b/c.h>\n"));
-  EXPECT_EQ("#import \"a/b/string\"\n", format("#import \"a/b/string\"\n"));
-  EXPECT_EQ("#import \"string.h\"\n", format("#import \"string.h\"\n"));
-  EXPECT_EQ("#import \"string.h\"\n", format("#import \"string.h\"\n"));
+  verifyFormat("#import <string>");
+  verifyFormat("#import <a/b/c.h>");
+  verifyFormat("#import \"a/b/string\"");
+  verifyFormat("#import \"string.h\"");
+  verifyFormat("#import \"string.h\"");
 }
 
 //===----------------------------------------------------------------------===//

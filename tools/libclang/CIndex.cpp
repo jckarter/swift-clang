@@ -4462,7 +4462,7 @@ CXCursor clang_getCursorDefinition(CXCursor C) {
   case Decl::CXXConversion: {
     const FunctionDecl *Def = 0;
     if (cast<FunctionDecl>(D)->getBody(Def))
-      return MakeCXCursor(const_cast<FunctionDecl *>(Def), TU);
+      return MakeCXCursor(Def, TU);
     return clang_getNullCursor();
   }
 
@@ -6233,7 +6233,7 @@ MacroInfo *cxindex::getMacroInfo(const IdentifierInfo &II,
 
   ASTUnit *Unit = static_cast<ASTUnit *>(TU->TUData);
   Preprocessor &PP = Unit->getPreprocessor();
-  MacroInfo *MI = PP.getMacroInfoHistory(const_cast<IdentifierInfo*>(&II));
+  MacroInfo *MI = PP.getMacroInfoHistory(&II);
   while (MI) {
     if (MacroDefLoc == MI->getDefinitionLoc())
       return MI;
