@@ -29,7 +29,8 @@ protected:
     Lexer Lex(ID, Context.Sources.getBuffer(ID), Context.Sources,
               getFormattingLangOpts());
     tooling::Replacements Replace = reformat(Style, Lex, Context.Sources,
-                                             Ranges);
+                                             Ranges,
+                                             new IgnoringDiagConsumer());
     EXPECT_TRUE(applyAllReplacements(Replace, Context.Rewrite));
     return Context.getRewrittenText(ID);
   }
@@ -49,8 +50,8 @@ protected:
         if (JustReplacedNewline)
           MessedUp[i - 1] = '\n';
         InComment = true;
-      } else if (MessedUp[i] == '#' && JustReplacedNewline) {
-        MessedUp[i - 1] = '\n';
+      } else if (MessedUp[i] == '#' && (JustReplacedNewline || i == 0)) {
+        if (i != 0) MessedUp[i - 1] = '\n';
         InPreprocessorDirective = true;
       } else if (MessedUp[i] == '\\' && MessedUp[i + 1] == '\n') {
         MessedUp[i] = ' ';
@@ -73,6 +74,12 @@ protected:
 
   FormatStyle getLLVMStyleWithColumns(unsigned ColumnLimit) {
     FormatStyle Style = getLLVMStyle();
+    Style.ColumnLimit = ColumnLimit;
+    return Style;
+  }
+
+  FormatStyle getGoogleStyleWithColumns(unsigned ColumnLimit) {
+    FormatStyle Style = getGoogleStyle();
     Style.ColumnLimit = ColumnLimit;
     return Style;
   }
@@ -132,9 +139,13 @@ TEST_F(FormatTest, FormatIfWithoutCompountStatement) {
   verifyFormat("if (true)\n  f();\ng();");
   verifyFormat("if (a)\n  if (b)\n    if (c)\n      g();\nh();");
   verifyFormat("if (a)\n  if (b) {\n    f();\n  }\ng();");
-  verifyFormat("if (a)\n"
-               "  // comment\n"
-               "  f();");
+  verifyGoogleFormat("if (a)\n"
+                     "  // comment\n"
+                     "  f();");
+  verifyFormat("if (a) return;", getGoogleStyleWithColumns(14));
+  verifyFormat("if (a)\n  return;", getGoogleStyleWithColumns(13));
+  verifyFormat("if (aaaaaaaaa)\n"
+                     "  return;", getGoogleStyleWithColumns(14));
 }
 
 TEST_F(FormatTest, ParseIfElse) {
@@ -448,6 +459,32 @@ TEST_F(FormatTest, StaticInitializers) {
       "                     looooooooooooooooooooooooooooooong };");
 }
 
+TEST_F(FormatTest, NestedStaticInitializers) {
+  verifyFormat("static A x = { { {} } };\n");
+  verifyFormat(
+      "static A x = {\n"
+      "  { { init1, init2, init3, init4 }, { init1, init2, init3, init4 } }\n"
+      "};\n");
+  verifyFormat(
+      "somes Status::global_reps[3] = {\n"
+      "  { kGlobalRef, OK_CODE, NULL, NULL, NULL },\n"
+      "  { kGlobalRef, CANCELLED_CODE, NULL, NULL, NULL },\n"
+      "  { kGlobalRef, UNKNOWN_CODE, NULL, NULL, NULL }\n"
+      "};");
+  verifyFormat(
+      "CGRect cg_rect = { { rect.fLeft, rect.fTop },\n"
+      "                   { rect.fRight - rect.fLeft, rect.fBottom - rect.fTop"
+      " } };");
+
+  // FIXME: We might at some point want to handle this similar to parameters
+  // lists, where we have an option to put each on a single line.
+  verifyFormat("struct {\n"
+               "  unsigned bit;\n"
+               "  const char *const name;\n"
+               "} kBitsToOs[] = { { kOsMac, \"Mac\" }, { kOsWin, \"Windows\" },\n"
+               "                  { kOsLinux, \"Linux\" }, { kOsCrOS, \"Chrome OS\" } };");
+}
+
 TEST_F(FormatTest, FormatsSmallMacroDefinitionsInSingleLine) {
   verifyFormat("#define ALooooooooooooooooooooooooooooooooooooooongMacro("
                "                      \\\n"
@@ -467,7 +504,7 @@ TEST_F(FormatTest, BreaksOnHashWhenDirectiveIsInvalid) {
 TEST_F(FormatTest, UnescapedEndOfLineEndsPPDirective) {
   EXPECT_EQ("#line 42 \"test\"\n",
             format("#  \\\n  line  \\\n  42  \\\n  \"test\"\n"));
-  EXPECT_EQ("#define A  \\\n  B\n",
+  EXPECT_EQ("#define A B\n",
             format("#  \\\n define  \\\n    A  \\\n       B\n",
                    getLLVMStyleWithColumns(12)));
 }
@@ -475,9 +512,8 @@ TEST_F(FormatTest, UnescapedEndOfLineEndsPPDirective) {
 TEST_F(FormatTest, EndOfFileEndsPPDirective) {
   EXPECT_EQ("#line 42 \"test\"",
             format("#  \\\n  line  \\\n  42  \\\n  \"test\""));
-  EXPECT_EQ("#define A  \\\n  B",
-            format("#  \\\n define  \\\n    A  \\\n       B",
-                   getLLVMStyleWithColumns(12)));
+  EXPECT_EQ("#define A B",
+            format("#  \\\n define  \\\n    A  \\\n       B"));
 }
 
 TEST_F(FormatTest, IndentsPPDirectiveInReducedSpace) {
@@ -489,6 +525,13 @@ TEST_F(FormatTest, IndentsPPDirectiveInReducedSpace) {
   verifyFormat("#define A( \\\n    B)", getLLVMStyleWithColumns(12));
   verifyFormat("#define AA(\\\n    B)", getLLVMStyleWithColumns(12));
   verifyFormat("#define A( \\\n    A, B)", getLLVMStyleWithColumns(12));
+
+  verifyFormat("#define A A\n#define A A");
+  verifyFormat("#define A(X) A\n#define A A");
+
+  verifyFormat("#define Something Other", getLLVMStyleWithColumns(24));
+  verifyFormat("#define Something     \\\n"
+               "  Other", getLLVMStyleWithColumns(23));
 }
 
 TEST_F(FormatTest, HandlePreprocessorDirectiveContext) {
@@ -546,8 +589,7 @@ TEST_F(FormatTest, HashInMacroDefinition) {
   verifyFormat("#define A(a, b, c)   \\\n"
                "  void a##b##c()", getLLVMStyleWithColumns(22));
 
-  verifyFormat("#define A            \\\n"
-               "  void # ## #", getLLVMStyleWithColumns(22));
+  verifyFormat("#define A void # ## #", getLLVMStyleWithColumns(22));
 }
 
 TEST_F(FormatTest, IndentPreprocessorDirectivesAtZero) {
@@ -603,8 +645,7 @@ TEST_F(FormatTest, LayoutStatementsAroundPreprocessorDirectives) {
       "functionCallTo(someOtherFunction(\n"
       "    withSomeParameters, whichInSequence,\n"
       "    areLongerThanALine(andAnotherCall,\n"
-      "#define A                                                           \\\n"
-      "  B\n"
+      "#define A B\n"
       "                       withMoreParamters,\n"
       "                       whichStronglyInfluenceTheLayout),\n"
       "    andMoreParameters),\n"
@@ -977,6 +1018,8 @@ TEST_F(FormatTest, UnderstandsUnaryOperators) {
   verifyFormat("if (i < -1) {}");
   verifyFormat("++(a->f());");
   verifyFormat("--(a->f());");
+  verifyFormat("(a->f())++;");
+  verifyFormat("a[42]++;");
   verifyFormat("if (!(a->f())) {}");
 
   verifyFormat("a-- > b;");
@@ -1074,6 +1117,12 @@ TEST_F(FormatTest, UnderstandsUsesOfStarAndAmp) {
   verifyGoogleFormat("A<int**, int**> a;");
   verifyGoogleFormat("f(b ? *c : *d);");
   verifyGoogleFormat("int a = b ? *c : *d;");
+
+  verifyFormat("a = *(x + y);");
+  verifyFormat("a = &(x + y);");
+  verifyFormat("*(x + y).call();");
+  verifyFormat("&(x + y)->call();");
+  verifyFormat("&(*I).first");
 }
 
 TEST_F(FormatTest, FormatsCasts) {
@@ -1119,12 +1168,12 @@ TEST_F(FormatTest, LineStartsWithSpecialCharacter) {
 }
 
 TEST_F(FormatTest, HandlesIncludeDirectives) {
-  verifyFormat("#include <string>");
-  verifyFormat("#include <a/b/c.h>");
-  verifyFormat("#include \"a/b/string\"");
-  verifyFormat("#include \"string.h\"");
-  verifyFormat("#include \"string.h\"");
-  verifyFormat("#include <a-a>");
+  verifyFormat("#include <string>\n"
+               "#include <a/b/c.h>\n"
+               "#include \"a/b/string\"\n"
+               "#include \"string.h\"\n"
+               "#include \"string.h\"\n"
+               "#include <a-a>");
 
   verifyFormat("#import <string>");
   verifyFormat("#import <a/b/c.h>");
@@ -1200,8 +1249,6 @@ TEST_F(FormatTest, IncorrectCodeErrorDetection) {
   EXPECT_EQ("{\n  {}\n", format("{\n  {\n  }\n"));
   EXPECT_EQ("{\n  {}\n  }\n}\n", format("{\n  {\n    }\n  }\n}\n"));
 
-  FormatStyle Style = getLLVMStyle();
-  Style.ColumnLimit = 10;
   EXPECT_EQ("{\n"
             "    {\n"
             " breakme(\n"
@@ -1209,8 +1256,7 @@ TEST_F(FormatTest, IncorrectCodeErrorDetection) {
             "}\n", format("{\n"
                           "    {\n"
                           " breakme(qwe);\n"
-                          "}\n", Style));
-
+                          "}\n", getLLVMStyleWithColumns(10)));
 }
 
 TEST_F(FormatTest, LayoutCallsInsideBraceInitializers) {
