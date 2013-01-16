@@ -52,7 +52,6 @@ DiagnosticsEngine::DiagnosticsEngine(
   ErrorsAsFatal = false;
   SuppressSystemWarnings = false;
   SuppressAllDiagnostics = false;
-  WarnOnDeprecatedIsaSeen = false;
   ElideType = true;
   PrintTemplateTree = false;
   ShowColors = false;

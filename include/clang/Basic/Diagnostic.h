@@ -173,7 +173,6 @@ private:
   bool ErrorsAsFatal;            // Treat errors like fatal errors.
   bool SuppressSystemWarnings;   // Suppress warnings in system headers.
   bool SuppressAllDiagnostics;   // Suppress all diagnostics.
-  bool WarnOnDeprecatedIsaSeen;  // -Wdeprecated-objc-isa-usage is seen
   bool ElideType;                // Elide common types of templates.
   bool PrintTemplateTree;        // Print a tree when comparing templates.
   bool ShowColors;               // Color printing is enabled.
@@ -458,9 +457,6 @@ public:
   }
   bool getSuppressAllDiagnostics() const { return SuppressAllDiagnostics; }
 
-  void setWarnOnDeprecatedIsaSeen(bool Val) { WarnOnDeprecatedIsaSeen = Val; }
-  bool getWarnOnDeprecatedIsaSeen() const { return WarnOnDeprecatedIsaSeen; }
-  
   /// \brief Set type eliding, to skip outputting same types occurring in
   /// template types.
   void setElideType(bool Val = true) { ElideType = Val; }

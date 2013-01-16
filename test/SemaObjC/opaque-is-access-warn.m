@@ -1,4 +1,5 @@
 // RUN: %clang -arch arm64 -mios-version-min=7 -fsyntax-only -Wdeprecated-objc-isa-usage %s -Xclang -verify
+// RUN: %clang -arch arm64 -mios-version-min=7 -fsyntax-only %s -Xclang -verify
 // RUN: %clang -arch x86_64 -mios-simulator-version-min=7 -fsyntax-only -Wdeprecated-objc-isa-usage %s -Xclang -verify
 // rdar://10709102
 
@@ -18,6 +19,6 @@ static void func() {
  
   id x;
 
-  [(*x).isa self]; // expected-warning {{direct access to Objective-C's isa is deprecated in favor of object_setClass() and object_getClass()}}
-  [x->isa self];   // expected-warning {{direct access to Objective-C's isa is deprecated in favor of object_setClass() and object_getClass()}}
+  [(*x).isa self]; // expected-error {{direct access to Objective-C's isa is deprecated in favor of object_setClass() and object_getClass()}}
+  [x->isa self];   // expected-error {{direct access to Objective-C's isa is deprecated in favor of object_setClass() and object_getClass()}}
 }
