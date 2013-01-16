@@ -1697,7 +1697,12 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
         TripleStrRef.startswith("x86_64-apple-ios"))
       CmdArgs.push_back(Args.MakeArgString("-Werror-deprecated-objc-isa-usage"));
   }
-
+  
+  // Push all default warning arguments that are specific to
+  // the given target.  These come before user provided warning options
+  // are provided.
+  getToolChain().addClangWarningOptions(CmdArgs);
+  
   // Select the appropriate action.
   RewriteKind rewriteKind = RK_None;
   
@@ -3138,11 +3143,6 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
     CmdArgs.push_back("-dwarf-debug-flags");
     CmdArgs.push_back(Args.MakeArgString(Flags.str()));
   }
-
-  // Finally, push all default warning arguments that are specific to
-  // the given target.  These are processed last, to override any user
-  // defined mappings.
-  getToolChain().addClangWarningOptions(CmdArgs);
 
   C.addCommand(new Command(JA, *this, Exec, CmdArgs));
 
