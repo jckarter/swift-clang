@@ -173,7 +173,10 @@ void CodeGenModule::Release() {
   EmitCtorList(GlobalDtors, "llvm.global_dtors");
   EmitGlobalAnnotations();
   EmitLLVMUsed();
-  EmitModuleLinkOptions();
+
+  if (CodeGenOpts.ModulesAutolink) {
+    EmitModuleLinkOptions();
+  }
 
   SimplifyPersonality();
 
@@ -2280,7 +2283,8 @@ CodeGenModule::GetAddrOfConstantCFString(const StringLiteral *Literal) {
   llvm::Constant *C = 0;
   if (isUTF16) {
     ArrayRef<uint16_t> Arr =
-      llvm::makeArrayRef<uint16_t>((uint16_t*)Entry.getKey().data(),
+      llvm::makeArrayRef<uint16_t>(reinterpret_cast<uint16_t*>(
+                                     const_cast<char *>(Entry.getKey().data())),
                                    Entry.getKey().size() / 2);
     C = llvm::ConstantDataArray::get(VMContext, Arr);
   } else {
