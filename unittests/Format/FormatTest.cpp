@@ -359,6 +359,44 @@ TEST_F(FormatTest, UnderstandsSingleLineComments) {
 
 TEST_F(FormatTest, UnderstandsMultiLineComments) {
   verifyFormat("f(/*test=*/ true);");
+  EXPECT_EQ(
+      "f(aaaaaaaaaaaaaaaaaaaaaaaaa, /* Trailing comment for aa... */\n"
+      "  bbbbbbbbbbbbbbbbbbbbbbbbb);",
+      format("f(aaaaaaaaaaaaaaaaaaaaaaaaa ,  /* Trailing comment for aa... */\n"
+             "  bbbbbbbbbbbbbbbbbbbbbbbbb);"));
+  EXPECT_EQ(
+      "f(aaaaaaaaaaaaaaaaaaaaaaaaa,\n"
+      "  /* Leading comment for bb... */ bbbbbbbbbbbbbbbbbbbbbbbbb);",
+      format("f(aaaaaaaaaaaaaaaaaaaaaaaaa    ,   \n"
+             "/* Leading comment for bb... */   bbbbbbbbbbbbbbbbbbbbbbbbb);"));
+}
+
+TEST_F(FormatTest, CommentsInStaticInitializers) {
+  EXPECT_EQ(
+      "static SomeType type = { aaaaaaaaaaaaaaaaaaaa, /* comment */\n"
+      "                         aaaaaaaaaaaaaaaaaaaa /* comment */,\n"
+      "                         /* comment */ aaaaaaaaaaaaaaaaaaaa,\n"
+      "                         aaaaaaaaaaaaaaaaaaaa, // comment\n"
+      "                         aaaaaaaaaaaaaaaaaaaa };",
+      format("static SomeType type = { aaaaaaaaaaaaaaaaaaaa  ,  /* comment */\n"
+             "                   aaaaaaaaaaaaaaaaaaaa   /* comment */ ,\n"
+             "                     /* comment */   aaaaaaaaaaaaaaaaaaaa ,\n"
+             "              aaaaaaaaaaaaaaaaaaaa ,   // comment\n"
+             "                  aaaaaaaaaaaaaaaaaaaa };"));
+  verifyFormat("static SomeType type = { aaaaaaaaaaa, // comment for aa...\n"
+               "                         bbbbbbbbbbb, ccccccccccc };");
+  verifyFormat("static SomeType type = { aaaaaaaaaaa,\n"
+               "                         // comment for bb....\n"
+               "                         bbbbbbbbbbb, ccccccccccc };");
+  verifyGoogleFormat(
+      "static SomeType type = { aaaaaaaaaaa,  // comment for aa...\n"
+      "                         bbbbbbbbbbb,\n"
+      "                         ccccccccccc };");
+  verifyGoogleFormat("static SomeType type = { aaaaaaaaaaa,\n"
+                     "                         // comment for bb....\n"
+                     "                         bbbbbbbbbbb,\n"
+                     "                         ccccccccccc };");
+
 }
 
 //===----------------------------------------------------------------------===//
@@ -861,6 +899,10 @@ TEST_F(FormatTest, FormatsOneParameterPerLineIfNecessary) {
 TEST_F(FormatTest, DoesNotBreakTrailingAnnotation) {
   verifyFormat("void aaaaaaaaaaaa(int aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa)\n"
                "    GUARDED_BY(aaaaaaaaaaaaa);");
+  verifyFormat("void aaaaaaaaaaaa(int aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa) const\n"
+               "    GUARDED_BY(aaaaaaaaaaaaa);");
+  verifyFormat("void aaaaaaaaaaaa(int aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa) const\n"
+               "    GUARDED_BY(aaaaaaaaaaaaa) {}");
 }
 
 TEST_F(FormatTest, BreaksAccordingToOperatorPrecedence) {
