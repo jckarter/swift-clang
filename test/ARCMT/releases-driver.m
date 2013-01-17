@@ -3,7 +3,6 @@
 // RUN: %clang_cc1 -arcmt-modify -triple x86_64-apple-macosx10.6 -x objective-c %t
 // RUN: diff %t %s.result
 // RUN: rm %t
-// XFAIL: lto_on_osx
 
 typedef int BOOL;
 

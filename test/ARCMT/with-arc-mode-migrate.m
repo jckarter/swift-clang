@@ -3,7 +3,6 @@
 // RUN: %clang_cc1 -arcmt-migrate -mt-migrate-directory %t -fsyntax-only -fobjc-arc %s
 // RUN: c-arcmt-test -mt-migrate-directory %t | arcmt-test -verify-transformed-files %s.result
 // RUN: rm -rf %t
-// XFAIL: lto_on_osx
 
 @protocol NSObject
 - (oneway void)release;
