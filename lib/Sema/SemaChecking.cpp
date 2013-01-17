@@ -5360,6 +5360,9 @@ class SequenceChecker : public EvaluatedExprVisitor<SequenceChecker> {
   /// Filled in with declarations which were modified as a side-effect
   /// (that is, post-increment operations).
   llvm::SmallVectorImpl<std::pair<Object, Usage> > *ModAsSideEffect;
+  /// Expressions to check later. We defer checking these to reduce
+  /// stack usage.
+  llvm::SmallVectorImpl<Expr*> &WorkList;
 
   /// RAII object wrapping the visitation of a sequenced subexpression of an
   /// expression. At the end of this process, the side-effects of the evaluation
@@ -5464,9 +5467,10 @@ class SequenceChecker : public EvaluatedExprVisitor<SequenceChecker> {
   }
 
 public:
-  SequenceChecker(Sema &S, Expr *E)
+  SequenceChecker(Sema &S, Expr *E,
+                  llvm::SmallVectorImpl<Expr*> &WorkList)
     : EvaluatedExprVisitor<SequenceChecker>(S.Context), SemaRef(S),
-      Region(Tree.root()), ModAsSideEffect(0) {
+      Region(Tree.root()), ModAsSideEffect(0), WorkList(WorkList) {
     Visit(E);
   }
 
@@ -5586,9 +5590,18 @@ public:
 
     bool Result;
     if (!BO->getLHS()->isValueDependent() &&
-        BO->getLHS()->EvaluateAsBooleanCondition(Result, SemaRef.Context) &&
-        !Result)
-      Visit(BO->getRHS());
+        BO->getLHS()->EvaluateAsBooleanCondition(Result, SemaRef.Context)) {
+      if (!Result)
+        Visit(BO->getRHS());
+    } else {
+      // Check for unsequenced operations in the RHS, treating it as an
+      // entirely separate evaluation.
+      //
+      // FIXME: If there are operations in the RHS which are unsequenced
+      // with respect to operations outside the RHS, and those operations
+      // are unconditionally evaluated, diagnose them.
+      WorkList.push_back(BO->getRHS());
+    }
   }
   void VisitBinLAnd(BinaryOperator *BO) {
     {
@@ -5598,9 +5611,12 @@ public:
 
     bool Result;
     if (!BO->getLHS()->isValueDependent() &&
-        BO->getLHS()->EvaluateAsBooleanCondition(Result, SemaRef.Context) &&
-        Result)
-      Visit(BO->getRHS());
+        BO->getLHS()->EvaluateAsBooleanCondition(Result, SemaRef.Context)) {
+      if (Result)
+        Visit(BO->getRHS());
+    } else {
+      WorkList.push_back(BO->getRHS());
+    }
   }
 
   // Only visit the condition, unless we can be sure which subexpression will
@@ -5613,6 +5629,10 @@ public:
     if (!CO->getCond()->isValueDependent() &&
         CO->getCond()->EvaluateAsBooleanCondition(Result, SemaRef.Context))
       Visit(Result ? CO->getTrueExpr() : CO->getFalseExpr());
+    else {
+      WorkList.push_back(CO->getTrueExpr());
+      WorkList.push_back(CO->getFalseExpr());
+    }
   }
 
   void VisitCXXConstructExpr(CXXConstructExpr *CCE) {
@@ -5660,7 +5680,13 @@ public:
 }
 
 void Sema::CheckUnsequencedOperations(Expr *E) {
-  SequenceChecker(*this, E);
+  llvm::SmallVector<Expr*, 8> WorkList;
+  WorkList.push_back(E);
+  while (!WorkList.empty()) {
+    Expr *Item = WorkList.back();
+    WorkList.pop_back();
+    SequenceChecker(*this, Item, WorkList);
+  }
 }
 
 void Sema::CheckCompletedExpr(Expr *E, SourceLocation CheckLoc) {

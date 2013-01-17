@@ -214,6 +214,8 @@ def warn_use_out_of_scope_declaration : Warning<
   "use of out-of-scope declaration of %0">;
 def err_inline_non_function : Error<
   "'inline' can only appear on functions">;
+def err_noreturn_non_function : Error<
+  "'_Noreturn' can only appear on functions">;
 def warn_qual_return_type : Warning< 
   "'%0' type qualifier%s1 on return type %plural{1:has|:have}1 no effect">,
   InGroup<IgnoredQualifiers>, DefaultIgnore;
@@ -381,11 +383,13 @@ def note_strncat_wrong_size : Note<
   "the terminating null byte">;
 
 /// main()
-// static/inline main() are not errors in C, just in C++.
+// static main() is not an error in C, just in C++.
 def warn_static_main : Warning<"'main' should not be declared static">,
     InGroup<Main>;
 def err_static_main : Error<"'main' is not allowed to be declared static">;
 def err_inline_main : Error<"'main' is not allowed to be declared inline">;
+def ext_noreturn_main : ExtWarn<
+  "'main' is not allowed to be declared _Noreturn">, InGroup<Main>;
 def err_constexpr_main : Error<
   "'main' is not allowed to be declared constexpr">;
 def err_main_template_decl : Error<"'main' cannot be a template">;
@@ -3759,6 +3763,10 @@ def err_arc_collection_forward : Error<
 def err_arc_multiple_method_decl : Error< 
   "multiple methods named %0 found with mismatched result, "
   "parameter type or attributes">;
+def warn_arc_lifetime_result_type : Warning<
+  "ARC %select{unused|__unsafe_unretained|__strong|__weak|__autoreleasing}0 "
+  "lifetime qualifier on return type is ignored">,
+  InGroup<IgnoredQualifiers>;
 
 let CategoryName = "ARC Retain Cycle" in {
 
@@ -6071,6 +6079,10 @@ def err_static_kernel : Error<
   "kernel functions cannot be declared static">;
 def err_static_function_scope : Error<
   "variables in function scope cannot be declared static">;
+def err_opencl_bitfields : Error<
+  "bitfields are not supported in OpenCL">;
+def err_opencl_vla : Error<
+  "variable length arrays are not supported in OpenCL">;
 
 } // end of sema category
 
