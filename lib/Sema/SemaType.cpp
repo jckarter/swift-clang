@@ -1460,6 +1460,12 @@ QualType Sema::BuildArrayType(QualType T, ArrayType::ArraySizeModifier ASM,
 
     T = Context.getConstantArrayType(T, ConstVal, ASM, Quals);
   }
+
+  // OpenCL v1.2 s6.9.d: variable length arrays are not supported.
+  if (getLangOpts().OpenCL && T->isVariableArrayType()) {
+    Diag(Loc, diag::err_opencl_vla);
+    return QualType();
+  }
   // If this is not C99, extwarn about VLA's and C99 array size modifiers.
   if (!getLangOpts().C99) {
     if (T->isVariableArrayType()) {
@@ -2463,6 +2469,44 @@ static TypeSourceInfo *GetFullTypeForDeclarator(TypeProcessingState &state,
                                   D.getDeclSpec().getVolatileSpecLoc(),
                                   D.getDeclSpec().getRestrictSpecLoc(),
                                   S);
+      }
+
+      // Objective-C ARC ownership qualifiers are ignored on the function
+      // return type (by type canonicalization). Complain if this attribute
+      // was written here.
+      if (T.getQualifiers().hasObjCLifetime()) {
+        SourceLocation AttrLoc;
+        if (chunkIndex + 1 < D.getNumTypeObjects()) {
+          DeclaratorChunk ReturnTypeChunk = D.getTypeObject(chunkIndex + 1);
+          for (const AttributeList *Attr = ReturnTypeChunk.getAttrs();
+               Attr; Attr = Attr->getNext()) {
+            if (Attr->getKind() == AttributeList::AT_ObjCOwnership) {
+              AttrLoc = Attr->getLoc();
+              break;
+            }
+          }
+        }
+        if (AttrLoc.isInvalid()) {
+          for (const AttributeList *Attr
+                 = D.getDeclSpec().getAttributes().getList();
+               Attr; Attr = Attr->getNext()) {
+            if (Attr->getKind() == AttributeList::AT_ObjCOwnership) {
+              AttrLoc = Attr->getLoc();
+              break;
+            }
+          }
+        }
+
+        if (AttrLoc.isValid()) {
+          // The ownership attributes are almost always written via
+          // the predefined
+          // __strong/__weak/__autoreleasing/__unsafe_unretained.
+          if (AttrLoc.isMacroID())
+            AttrLoc = S.SourceMgr.getImmediateExpansionRange(AttrLoc).first;
+
+          S.Diag(AttrLoc, diag::warn_arc_lifetime_result_type)
+            << T.getQualifiers().getObjCLifetime();
+        }
       }
 
       if (LangOpts.CPlusPlus && D.getDeclSpec().isTypeSpecOwned()) {
