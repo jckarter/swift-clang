@@ -1,6 +1,7 @@
 // RUN: %clang_cc1 -fblocks -fsyntax-only -fobjc-arc -x objective-c %s.result
 // RUN: arcmt-test --args -triple x86_64-apple-darwin10 -fblocks -fsyntax-only -x objective-c %s > %t
 // RUN: diff %t %s.result
+// XFAIL: lto_on_osx
 
 #include "Common.h"
 
