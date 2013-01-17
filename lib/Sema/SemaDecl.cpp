@@ -2276,6 +2276,18 @@ bool Sema::MergeFunctionDecl(FunctionDecl *New, Decl *OldD, Scope *S) {
       }
     }
 
+    // C++11 [dcl.attr.noreturn]p1:
+    //   The first declaration of a function shall specify the noreturn
+    //   attribute if any declaration of that function specifies the noreturn
+    //   attribute.
+    if (New->hasAttr<CXX11NoReturnAttr>() &&
+        !Old->hasAttr<CXX11NoReturnAttr>()) {
+      Diag(New->getAttr<CXX11NoReturnAttr>()->getLocation(),
+           diag::err_noreturn_missing_on_first_decl);
+      Diag(Old->getFirstDeclaration()->getLocation(),
+           diag::note_noreturn_missing_first_decl);
+    }
+
     // (C++98 8.3.5p3):
     //   All declarations for a function shall agree exactly in both the
     //   return type and the parameter-type-list.
@@ -4312,6 +4324,22 @@ bool Sema::inferObjCARCLifetime(ValueDecl *decl) {
   return false;
 }
 
+static void checkAttributesAfterMerging(Sema &S, NamedDecl &ND) {
+  // 'weak' only applies to declarations with external linkage.
+  if (WeakAttr *Attr = ND.getAttr<WeakAttr>()) {
+    if (ND.getLinkage() != ExternalLinkage) {
+      S.Diag(Attr->getLocation(), diag::err_attribute_weak_static);
+      ND.dropAttr<WeakAttr>();
+    }
+  }
+  if (WeakRefAttr *Attr = ND.getAttr<WeakRefAttr>()) {
+    if (ND.getLinkage() == ExternalLinkage) {
+      S.Diag(Attr->getLocation(), diag::err_attribute_weakref_not_static);
+      ND.dropAttr<WeakRefAttr>();
+    }
+  }
+}
+
 NamedDecl*
 Sema::ActOnVariableDeclarator(Scope *S, Declarator &D, DeclContext *DC,
                               TypeSourceInfo *TInfo, LookupResult &Previous,
@@ -4589,6 +4617,8 @@ Sema::ActOnVariableDeclarator(Scope *S, Declarator &D, DeclContext *DC,
         CheckMemberSpecialization(NewVD, Previous))
       NewVD->setInvalidDecl();
   }
+
+  checkAttributesAfterMerging(*this, *NewVD);
 
   // If this is a locally-scoped extern C variable, update the map of
   // such variables.
@@ -6056,6 +6086,8 @@ Sema::ActOnFunctionDeclarator(Scope *S, Declarator &D, DeclContext *DC,
     }
   }
 
+  checkAttributesAfterMerging(*this, *NewFD);
+
   AddKnownFunctionAttributes(NewFD);
 
   if (NewFD->hasAttr<OverloadableAttr>() && 
@@ -6377,6 +6409,23 @@ bool Sema::CheckFunctionDeclaration(Scope *S, FunctionDecl *NewFD,
   return Redeclaration;
 }
 
+static SourceRange getResultSourceRange(const FunctionDecl *FD) {
+  const TypeSourceInfo *TSI = FD->getTypeSourceInfo();
+  if (!TSI)
+    return SourceRange();
+
+  TypeLoc TL = TSI->getTypeLoc();
+  FunctionTypeLoc *FunctionTL = dyn_cast<FunctionTypeLoc>(&TL);
+  if (!FunctionTL)
+    return SourceRange();
+
+  TypeLoc ResultTL = FunctionTL->getResultLoc();
+  if (isa<BuiltinTypeLoc>(ResultTL.getUnqualifiedLoc()))
+    return ResultTL.getSourceRange();
+
+  return SourceRange();
+}
+
 void Sema::CheckMain(FunctionDecl* FD, const DeclSpec& DS) {
   // C++11 [basic.start.main]p3:  A program that declares main to be inline,
   //   static or constexpr is ill-formed.
@@ -6413,9 +6462,20 @@ void Sema::CheckMain(FunctionDecl* FD, const DeclSpec& DS) {
   } else if (getLangOpts().GNUMode && !getLangOpts().CPlusPlus) {
     Diag(FD->getTypeSpecStartLoc(), diag::ext_main_returns_nonint);
 
+    SourceRange ResultRange = getResultSourceRange(FD);
+    if (ResultRange.isValid())
+      Diag(ResultRange.getBegin(), diag::note_main_change_return_type)
+          << FixItHint::CreateReplacement(ResultRange, "int");
+
   // Otherwise, this is just a flat-out error.
   } else {
-    Diag(FD->getTypeSpecStartLoc(), diag::err_main_returns_nonint);
+    SourceRange ResultRange = getResultSourceRange(FD);
+    if (ResultRange.isValid())
+      Diag(FD->getTypeSpecStartLoc(), diag::err_main_returns_nonint)
+          << FixItHint::CreateReplacement(ResultRange, "int");
+    else
+      Diag(FD->getTypeSpecStartLoc(), diag::err_main_returns_nonint);
+
     FD->setInvalidDecl(true);
   }
 
@@ -10472,11 +10532,12 @@ void Sema::ActOnFields(Scope* S,
             Diag(ClsIvar->getLocation(), diag::note_previous_definition);
             continue;
           }
-          for (const ObjCCategoryDecl *ClsExtDecl = 
-                IDecl->getFirstClassExtension();
-               ClsExtDecl; ClsExtDecl = ClsExtDecl->getNextClassExtension()) {
-            if (const ObjCIvarDecl *ClsExtIvar = 
-                ClsExtDecl->getIvarDecl(ClsFields[i]->getIdentifier())) {
+          for (ObjCInterfaceDecl::known_extensions_iterator
+                 Ext = IDecl->known_extensions_begin(),
+                 ExtEnd = IDecl->known_extensions_end();
+               Ext != ExtEnd; ++Ext) {
+            if (const ObjCIvarDecl *ClsExtIvar
+                  = Ext->getIvarDecl(ClsFields[i]->getIdentifier())) {
               Diag(ClsFields[i]->getLocation(), 
                    diag::err_duplicate_ivar_declaration); 
               Diag(ClsExtIvar->getLocation(), diag::note_previous_definition);

@@ -2675,8 +2675,7 @@ void Parser::ParseConstructorInitializer(Decl *ConstructorDecl) {
     }
   } while (true);
 
-  Actions.ActOnMemInitializers(ConstructorDecl, ColonLoc,
-                               MemInitializers.data(), MemInitializers.size(),
+  Actions.ActOnMemInitializers(ConstructorDecl, ColonLoc, MemInitializers,
                                AnyErrors);
 }
 
@@ -3032,7 +3031,7 @@ static bool IsBuiltInOrStandardCXX11Attribute(IdentifierInfo *AttrName,
                                  AttributeList::AS_CXX11)) {
   case AttributeList::AT_CarriesDependency:
   case AttributeList::AT_FallThrough:
-  case AttributeList::AT_NoReturn: {
+  case AttributeList::AT_CXX11NoReturn: {
     return true;
   }
 
@@ -3095,6 +3094,8 @@ void Parser::ParseCXX11AttributeSpecifier(ParsedAttributes &attrs,
   ConsumeBracket();
   ConsumeBracket();
 
+  llvm::SmallDenseMap<IdentifierInfo*, SourceLocation, 4> SeenAttrs;
+
   while (Tok.isNot(tok::r_square)) {
     // attribute not present
     if (Tok.is(tok::comma)) {
@@ -3127,6 +3128,11 @@ void Parser::ParseCXX11AttributeSpecifier(ParsedAttributes &attrs,
 
     bool StandardAttr = IsBuiltInOrStandardCXX11Attribute(AttrName,ScopeName);
     bool AttrParsed = false;
+
+    if (StandardAttr &&
+        !SeenAttrs.insert(std::make_pair(AttrName, AttrLoc)).second)
+      Diag(AttrLoc, diag::err_cxx11_attribute_repeated)
+        << AttrName << SourceRange(SeenAttrs[AttrName]);
 
     // Parse attribute arguments
     if (Tok.is(tok::l_paren)) {

@@ -296,6 +296,11 @@ def CUDAShared : InheritableAttr {
   let Spellings = [GNU<"shared">];
 }
 
+def CXX11NoReturn : InheritableAttr {
+  let Spellings = [CXX11<"","noreturn">, CXX11<"std","noreturn">];
+  let Subjects = [Function];
+}
+
 def OpenCLKernel : Attr {
   let Spellings = [GNU<"opencl_kernel_function">];
 }
@@ -404,6 +409,11 @@ def MBlazeSaveVolatiles : InheritableAttr {
   let SemaHandler = 0;
 }
 
+def Mips16 : InheritableAttr {
+  let Spellings = [GNU<"mips16">, CXX11<"gnu", "mips16">];
+  let Subjects = [Function];
+}
+
 def Mode : Attr {
   let Spellings = [GNU<"mode">, CXX11<"gnu", "mode">];
   let Args = [IdentifierArgument<"Mode">];
@@ -442,6 +452,11 @@ def NoInline : InheritableAttr {
   let Spellings = [GNU<"noinline">, CXX11<"gnu", "noinline">];
 }
 
+def NoMips16 : InheritableAttr {
+  let Spellings = [GNU<"nomips16">, CXX11<"gnu", "nomips16">];
+  let Subjects = [Function];
+}
+
 def NonNull : InheritableAttr {
   let Spellings = [GNU<"nonnull">, CXX11<"gnu", "nonnull">];
   let Args = [VariadicUnsignedArgument<"Args">];
@@ -456,8 +471,7 @@ def NonNull : InheritableAttr {
 }
 
 def NoReturn : InheritableAttr {
-  let Spellings = [GNU<"noreturn">, CXX11<"gnu", "noreturn">,
-                   CXX11<"", "noreturn">, CXX11<"std", "noreturn">];
+  let Spellings = [GNU<"noreturn">, CXX11<"gnu", "noreturn">];
   // FIXME: Does GCC allow this on the function instead?
   let Subjects = [Function];
 }
