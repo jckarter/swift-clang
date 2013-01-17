@@ -55,11 +55,9 @@ void Preprocessor::setMacroInfo(IdentifierInfo *II, MacroInfo *MI) {
     II->setChangedSinceDeserialization();
 }
 
-void Preprocessor::addLoadedMacroInfo(IdentifierInfo *II, MacroInfo *MI,
-                                      MacroInfo *Hint) {
+void Preprocessor::addLoadedMacroInfo(IdentifierInfo *II, MacroInfo *MI) {
   assert(MI && "Missing macro?");
   assert(MI->isFromAST() && "Macro is not from an AST?");
-  assert(!MI->getPreviousDefinition() && "Macro already in chain?");
   
   MacroInfo *&StoredMI = Macros[II];
 
@@ -79,7 +77,7 @@ void Preprocessor::addLoadedMacroInfo(IdentifierInfo *II, MacroInfo *MI,
     // Simple case: if this is the first actual definition, just put it at
     // th beginning.
     if (!StoredMI->isDefined()) {
-      MI->setPreviousDefinition(StoredMI);
+      MI->getFirstDefinition()->setPreviousDefinition(StoredMI);
       StoredMI = MI;
 
       II->setHasMacroDefinition(true);
@@ -112,16 +110,14 @@ void Preprocessor::addLoadedMacroInfo(IdentifierInfo *II, MacroInfo *MI,
       MI->setAmbiguous(true);
 
     // Wire this macro information into the chain.
-    MI->setPreviousDefinition(Prev->getPreviousDefinition());
+    MI->getFirstDefinition()->setPreviousDefinition(
+                                                 Prev->getPreviousDefinition());
     Prev->setPreviousDefinition(MI);
     return;
   }
 
   // The macro is not a definition; put it at the end of the list.
-  MacroInfo *Prev = Hint? Hint : StoredMI;
-  while (Prev->getPreviousDefinition())
-    Prev = Prev->getPreviousDefinition();
-  Prev->setPreviousDefinition(MI);
+  StoredMI->getFirstDefinition()->setPreviousDefinition(MI);
 }
 
 void Preprocessor::makeLoadedMacroInfoVisible(IdentifierInfo *II,
@@ -967,6 +963,12 @@ static bool EvaluateHasIncludeCommon(Token &Tok,
   // Save the location of the current token.  If a '(' is later found, use
   // that location.  If not, use the end of this location instead.
   SourceLocation LParenLoc = Tok.getLocation();
+
+  // These expressions are only allowed within a preprocessor directive.
+  if (!PP.isParsingIfOrElifDirective()) {
+    PP.Diag(LParenLoc, diag::err_pp_directive_required) << II->getName();
+    return false;
+  }
 
   // Get '('.
   PP.LexNonComment(Tok);

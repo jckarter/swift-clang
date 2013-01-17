@@ -16,14 +16,14 @@
 ///
 //===----------------------------------------------------------------------===//
 
-#include "UnwrappedLineParser.h"
-#include "clang/Basic/Diagnostic.h"
-#include "llvm/Support/raw_ostream.h"
+#define DEBUG_TYPE "format-parser"
 
-// Uncomment to get debug output from the UnwrappedLineParser.
-// Use in combination with --gtest_filter=*TestName* to limit the output to a
-// single test.
-// #define UNWRAPPED_LINE_PARSER_DEBUG_OUTPUT
+#include "clang/Basic/Diagnostic.h"
+#include "llvm/Support/Debug.h"
+#include "UnwrappedLineParser.h"
+
+// Uncomment to get debug output from tests:
+// #define DEBUG_WITH_TYPE(T, X) do { X; } while(0)
 
 namespace clang {
 namespace format {
@@ -81,25 +81,17 @@ class ScopedLineState {
 public:
   ScopedLineState(UnwrappedLineParser &Parser) : Parser(Parser) {
     PreBlockLine = Parser.Line.take();
-    Parser.Line.reset(new UnwrappedLine(*PreBlockLine));
-    assert(Parser.LastInCurrentLine == NULL ||
-           Parser.LastInCurrentLine->Children.empty());
-    PreBlockLastToken = Parser.LastInCurrentLine;
-    PreBlockRootTokenInitialized = Parser.RootTokenInitialized;
-    Parser.RootTokenInitialized = false;
-    Parser.LastInCurrentLine = NULL;
+    Parser.Line.reset(new UnwrappedLine());
+    Parser.Line->Level = PreBlockLine->Level;
+    Parser.Line->InPPDirective = PreBlockLine->InPPDirective;
   }
 
   ~ScopedLineState() {
-    if (Parser.RootTokenInitialized) {
+    if (!Parser.Line->Tokens.empty()) {
       Parser.addUnwrappedLine();
     }
-    assert(!Parser.RootTokenInitialized);
+    assert(Parser.Line->Tokens.empty());
     Parser.Line.reset(PreBlockLine);
-    Parser.RootTokenInitialized = PreBlockRootTokenInitialized;
-    Parser.LastInCurrentLine = PreBlockLastToken;
-    assert(Parser.LastInCurrentLine == NULL ||
-           Parser.LastInCurrentLine->Children.empty());
     Parser.MustBreakBeforeNextToken = true;
   }
 
@@ -107,22 +99,17 @@ private:
   UnwrappedLineParser &Parser;
 
   UnwrappedLine *PreBlockLine;
-  FormatToken* PreBlockLastToken;
-  bool PreBlockRootTokenInitialized;
 };
 
 UnwrappedLineParser::UnwrappedLineParser(
     clang::DiagnosticsEngine &Diag, const FormatStyle &Style,
     FormatTokenSource &Tokens, UnwrappedLineConsumer &Callback)
-    : Line(new UnwrappedLine), RootTokenInitialized(false),
-      LastInCurrentLine(NULL), MustBreakBeforeNextToken(false), Diag(Diag),
+    : Line(new UnwrappedLine), MustBreakBeforeNextToken(false), Diag(Diag),
       Style(Style), Tokens(&Tokens), Callback(Callback) {
 }
 
 bool UnwrappedLineParser::parse() {
-#ifdef UNWRAPPED_LINE_PARSER_DEBUG_OUTPUT
-  llvm::errs() << "----\n";
-#endif
+  DEBUG(llvm::dbgs() << "----\n");
   readToken();
   return parseFile();
 }
@@ -317,8 +304,8 @@ void UnwrappedLineParser::parseStructuralElement() {
     case tok::kw_enum:
       parseEnum();
       return;
-    case tok::kw_struct: // fallthrough
-    case tok::kw_union:  // fallthrough
+    case tok::kw_struct:
+    case tok::kw_union:
     case tok::kw_class:
       parseRecord();
       // A record declaration or definition is always the start of a structural
@@ -326,6 +313,9 @@ void UnwrappedLineParser::parseStructuralElement() {
       break;
     case tok::semi:
       nextToken();
+      addUnwrappedLine();
+      return;
+    case tok::r_brace:
       addUnwrappedLine();
       return;
     case tok::l_paren:
@@ -659,25 +649,25 @@ void UnwrappedLineParser::parseObjCProtocol() {
 }
 
 void UnwrappedLineParser::addUnwrappedLine() {
-  if (!RootTokenInitialized)
+  if (Line->Tokens.empty())
     return;
   // Consume trailing comments.
   while (!eof() && FormatTok.NewlinesBefore == 0 &&
          FormatTok.Tok.is(tok::comment)) {
     nextToken();
   }
-#ifdef UNWRAPPED_LINE_PARSER_DEBUG_OUTPUT
-  FormatToken* NextToken = &Line->RootToken;
-  llvm::errs() << "Line: ";
-  while (NextToken) {
-    llvm::errs() << NextToken->Tok.getName() << " ";
-    NextToken = NextToken->Children.empty() ? NULL : &NextToken->Children[0];
-  }
-  llvm::errs() << "\n";
-#endif
+  DEBUG({
+    llvm::dbgs() << "Line: ";
+    for (std::list<FormatToken>::iterator I = Line->Tokens.begin(),
+                                          E = Line->Tokens.end();
+         I != E; ++I) {
+      llvm::dbgs() << I->Tok.getName() << " ";
+
+    }
+    llvm::dbgs() << "\n";
+  });
   Callback.consumeUnwrappedLine(*Line);
-  RootTokenInitialized = false;
-  LastInCurrentLine = NULL;
+  Line->Tokens.clear();
 }
 
 bool UnwrappedLineParser::eof() const {
@@ -687,17 +677,9 @@ bool UnwrappedLineParser::eof() const {
 void UnwrappedLineParser::nextToken() {
   if (eof())
     return;
-  if (RootTokenInitialized) {
-    assert(LastInCurrentLine->Children.empty());
-    LastInCurrentLine->Children.push_back(FormatTok);
-    LastInCurrentLine = &LastInCurrentLine->Children.back();
-  } else {
-    Line->RootToken = FormatTok;
-    RootTokenInitialized = true;
-    LastInCurrentLine = &Line->RootToken;
-  }
+  Line->Tokens.push_back(FormatTok);
   if (MustBreakBeforeNextToken) {
-    LastInCurrentLine->MustBreakBefore = true;
+    Line->Tokens.back().MustBreakBefore = true;
     MustBreakBeforeNextToken = false;
   }
   readToken();

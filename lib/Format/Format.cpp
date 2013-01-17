@@ -16,14 +16,20 @@
 ///
 //===----------------------------------------------------------------------===//
 
-#include "clang/Format/Format.h"
+#define DEBUG_TYPE "format-formatter"
+
 #include "UnwrappedLineParser.h"
 #include "clang/Basic/Diagnostic.h"
 #include "clang/Basic/OperatorPrecedence.h"
 #include "clang/Basic/SourceManager.h"
+#include "clang/Format/Format.h"
 #include "clang/Frontend/TextDiagnosticPrinter.h"
 #include "clang/Lex/Lexer.h"
+#include "llvm/Support/Debug.h"
 #include <string>
+
+// Uncomment to get debug output from tests:
+// #define DEBUG_WITH_TYPE(T, X) do { X; } while(0)
 
 namespace clang {
 namespace format {
@@ -40,7 +46,6 @@ enum TokenType {
   TT_ObjCDecl,
   TT_ObjCMethodSpecifier,
   TT_ObjCMethodExpr,
-  TT_ObjCSelectorStart,
   TT_ObjCProperty,
   TT_OverloadedOperator,
   TT_PointerOrReference,
@@ -67,7 +72,7 @@ public:
   AnnotatedToken(const FormatToken &FormatTok)
       : FormatTok(FormatTok), Type(TT_Unknown), SpaceRequiredBefore(false),
         CanBreakBefore(false), MustBreakBefore(false),
-        ClosesTemplateDeclaration(false), Parent(NULL) {}
+        ClosesTemplateDeclaration(false), MatchingParen(NULL), Parent(NULL) {}
 
   bool is(tok::TokenKind Kind) const { return FormatTok.Tok.is(Kind); }
   bool isNot(tok::TokenKind Kind) const { return FormatTok.Tok.isNot(Kind); }
@@ -86,15 +91,48 @@ public:
 
   bool ClosesTemplateDeclaration;
 
+  AnnotatedToken *MatchingParen;
+
+  /// \brief The total length of the line up to and including this token.
+  unsigned TotalLength;
+
   std::vector<AnnotatedToken> Children;
   AnnotatedToken *Parent;
+
+  const AnnotatedToken *getPreviousNoneComment() const {
+    AnnotatedToken *Tok = Parent;
+    while (Tok != NULL && Tok->is(tok::comment))
+      Tok = Tok->Parent;
+    return Tok;
+  }
 };
 
 class AnnotatedLine {
 public:
-  AnnotatedLine(const FormatToken &FormatTok, unsigned Level,
-                bool InPPDirective)
-      : First(FormatTok), Level(Level), InPPDirective(InPPDirective) {}
+  AnnotatedLine(const UnwrappedLine &Line)
+      : First(Line.Tokens.front()), Level(Line.Level),
+        InPPDirective(Line.InPPDirective) {
+    assert(!Line.Tokens.empty());
+    AnnotatedToken *Current = &First;
+    for (std::list<FormatToken>::const_iterator I = ++Line.Tokens.begin(),
+                                                E = Line.Tokens.end();
+         I != E; ++I) {
+      Current->Children.push_back(*I);
+      Current->Children[0].Parent = Current;
+      Current = &Current->Children[0];
+    }
+    Last = Current;
+  }
+  AnnotatedLine(const AnnotatedLine &Other)
+      : First(Other.First), Type(Other.Type), Level(Other.Level),
+        InPPDirective(Other.InPPDirective) {
+    Last = &First;
+    while (!Last->Children.empty()) {
+      Last->Children[0].Parent = Last;
+      Last = &Last->Children[0];
+    }
+  }
+
   AnnotatedToken First;
   AnnotatedToken *Last;
 
@@ -116,10 +154,10 @@ FormatStyle getLLVMStyle() {
   LLVMStyle.SplitTemplateClosingGreater = true;
   LLVMStyle.IndentCaseLabels = false;
   LLVMStyle.SpacesBeforeTrailingComments = 1;
+  LLVMStyle.BinPackParameters = true;
   LLVMStyle.ConstructorInitializerAllOnOneLineOrOnePerLine = false;
   LLVMStyle.AllowShortIfStatementsOnASingleLine = false;
   LLVMStyle.ObjCSpaceBeforeProtocolList = true;
-  LLVMStyle.ObjCSpaceBeforeReturnType = true;
   return LLVMStyle;
 }
 
@@ -132,10 +170,10 @@ FormatStyle getGoogleStyle() {
   GoogleStyle.SplitTemplateClosingGreater = false;
   GoogleStyle.IndentCaseLabels = true;
   GoogleStyle.SpacesBeforeTrailingComments = 2;
+  GoogleStyle.BinPackParameters = false;
   GoogleStyle.ConstructorInitializerAllOnOneLineOrOnePerLine = true;
-  GoogleStyle.AllowShortIfStatementsOnASingleLine = true;
+  GoogleStyle.AllowShortIfStatementsOnASingleLine = false;
   GoogleStyle.ObjCSpaceBeforeProtocolList = false;
-  GoogleStyle.ObjCSpaceBeforeReturnType = false;
   return GoogleStyle;
 }
 
@@ -186,31 +224,6 @@ static void replacePPWhitespace(
                                        NewLineText + std::string(Spaces, ' ')));
 }
 
-/// \brief Calculates whether the (remaining) \c AnnotatedLine starting with
-/// \p RootToken fits into \p Limit columns on a single line.
-///
-/// If true, sets \p Length to the required length.
-static bool fitsIntoLimit(const AnnotatedToken &RootToken, unsigned Limit,
-                          unsigned *Length = 0) {
-  unsigned Columns = RootToken.FormatTok.TokenLength;
-  if (Columns > Limit) return false;
-  const AnnotatedToken *Tok = &RootToken;
-  while (!Tok->Children.empty()) {
-    Tok = &Tok->Children[0];
-    Columns += (Tok->SpaceRequiredBefore ? 1 : 0) + Tok->FormatTok.TokenLength;
-    // A special case for the colon of a constructor initializer as this only
-    // needs to be put on a new line if the line needs to be split.
-    if (Columns > Limit ||
-        (Tok->MustBreakBefore && Tok->Type != TT_CtorInitializerColon)) {
-      // FIXME: Remove this hack.
-      return false;
-    }
-  }
-  if (Length != 0)
-    *Length = Columns;
-  return true;
-}
-
 /// \brief Returns if a token is an Objective-C selector name.
 ///
 /// For example, "bar" is a selector name in [foo bar:(4 + 5)].
@@ -224,11 +237,10 @@ class UnwrappedLineFormatter {
 public:
   UnwrappedLineFormatter(const FormatStyle &Style, SourceManager &SourceMgr,
                          const AnnotatedLine &Line, unsigned FirstIndent,
-                         bool FitsOnALine, const AnnotatedToken &RootToken,
+                         const AnnotatedToken &RootToken,
                          tooling::Replacements &Replaces, bool StructuralError)
       : Style(Style), SourceMgr(SourceMgr), Line(Line),
-        FirstIndent(FirstIndent), FitsOnALine(FitsOnALine),
-        RootToken(RootToken), Replaces(Replaces) {
+        FirstIndent(FirstIndent), RootToken(RootToken), Replaces(Replaces) {
     Parameters.PenaltyIndentLevel = 15;
     Parameters.PenaltyLevelDecrease = 30;
     Parameters.PenaltyExcessCharacter = 1000000;
@@ -248,6 +260,10 @@ public:
     State.LineContainsContinuedForLoopSection = false;
     State.StartOfLineLevel = 1;
 
+    DEBUG({
+      DebugTokenState(*State.NextToken);
+    });
+
     // The first token has already been indented and thus consumed.
     moveStateToNextToken(State);
 
@@ -259,29 +275,59 @@ public:
         // cannot continue an top-level implicit string literal on the next
         // line.
         return 0;
-      if (FitsOnALine) {
+      if (Line.Last->TotalLength <= getColumnLimit() - FirstIndent) {
         addTokenToState(false, false, State);
       } else {
         unsigned NoBreak = calcPenalty(State, false, UINT_MAX);
         unsigned Break = calcPenalty(State, true, NoBreak);
+        DEBUG({
+          if (Break < NoBreak)
+            llvm::errs() << "\n";
+          else
+            llvm::errs() << " ";
+          llvm::errs() << "<";
+          DebugPenalty(Break, Break < NoBreak);
+          llvm::errs() << "/";
+          DebugPenalty(NoBreak, !(Break < NoBreak));
+          llvm::errs() << "> ";
+          DebugTokenState(*State.NextToken);
+        });
         addTokenToState(Break < NoBreak, false, State);
         if (State.NextToken != NULL &&
             State.NextToken->Parent->Type == TT_CtorInitializerColon) {
           if (Style.ConstructorInitializerAllOnOneLineOrOnePerLine &&
-              !fitsIntoLimit(*State.NextToken,
-                             getColumnLimit() - State.Column - 1))
+              Line.Last->TotalLength > getColumnLimit() - State.Column - 1)
             State.Stack.back().BreakAfterComma = true;
         }
       }
     }
+    DEBUG(llvm::errs() << "\n");
     return State.Column;
   }
 
 private:
+  void DebugTokenState(const AnnotatedToken &AnnotatedTok) {
+    const Token &Tok = AnnotatedTok.FormatTok.Tok;
+    llvm::errs()
+        << StringRef(SourceMgr.getCharacterData(Tok.getLocation()),
+                     Tok.getLength());
+    llvm::errs();
+  }
+
+  void DebugPenalty(unsigned Penalty, bool Winner) {
+    llvm::errs().changeColor(Winner ? raw_ostream::GREEN : raw_ostream::RED);
+    if (Penalty == UINT_MAX)
+      llvm::errs() << "MAX";
+    else
+      llvm::errs() << Penalty;
+    llvm::errs().resetColor();
+  }
+
   struct ParenState {
     ParenState(unsigned Indent, unsigned LastSpace)
         : Indent(Indent), LastSpace(LastSpace), FirstLessLess(0),
-          BreakBeforeClosingBrace(false), BreakAfterComma(false) {}
+          BreakBeforeClosingBrace(false), BreakAfterComma(false),
+          HasMultiParameterLine(false) {}
 
     /// \brief The position to which a specific parenthesis level needs to be
     /// indented.
@@ -308,6 +354,7 @@ private:
     bool BreakBeforeClosingBrace;
 
     bool BreakAfterComma;
+    bool HasMultiParameterLine;
 
     bool operator<(const ParenState &Other) const {
       if (Indent != Other.Indent)
@@ -320,6 +367,8 @@ private:
         return BreakBeforeClosingBrace;
       if (BreakAfterComma != Other.BreakAfterComma)
         return BreakAfterComma;
+      if (HasMultiParameterLine != Other.HasMultiParameterLine)
+        return HasMultiParameterLine;
       return false;
     }
   };
@@ -447,6 +496,10 @@ private:
       if (Previous.is(tok::l_paren) || Previous.is(tok::l_brace) ||
           State.NextToken->Parent->Type == TT_TemplateOpener)
         State.Stack[ParenLevel].Indent = State.Column + Spaces;
+      if (Current.getPreviousNoneComment()->is(tok::comma) &&
+          Current.isNot(tok::comment))
+        State.Stack[ParenLevel].HasMultiParameterLine = true;
+
 
       // Top-level spaces that are not part of assignments are exempt as that
       // mostly leads to better results.
@@ -455,9 +508,18 @@ private:
           (ParenLevel != 0 || getPrecedence(Previous) == prec::Assignment))
         State.Stack[ParenLevel].LastSpace = State.Column;
     }
-    if (Newline && Previous.is(tok::l_brace)) {
+
+    // If we break after an {, we should also break before the corresponding }.
+    if (Newline && Previous.is(tok::l_brace))
       State.Stack.back().BreakBeforeClosingBrace = true;
-    }
+
+    // If we are breaking after '(', '{', '<' or ',', we need to break after
+    // future commas as well to avoid bin packing.
+    if (!Style.BinPackParameters && Newline &&
+        (Previous.is(tok::comma) || Previous.is(tok::l_paren) ||
+         Previous.is(tok::l_brace) || Previous.Type == TT_TemplateOpener))
+      State.Stack.back().BreakAfterComma = true;
+
     moveStateToNextToken(State);
   }
 
@@ -486,6 +548,17 @@ private:
       }
       State.Stack.push_back(
           ParenState(NewIndent, State.Stack.back().LastSpace));
+
+      // If the entire set of parameters will not fit on the current line, we
+      // will need to break after commas on this level to avoid bin-packing.
+      if (!Style.BinPackParameters && Current.MatchingParen != NULL &&
+          !Current.Children.empty()) {
+        if (getColumnLimit() < State.Column + Current.FormatTok.TokenLength +
+            Current.MatchingParen->TotalLength -
+            Current.Children[0].TotalLength) {
+          State.Stack.back().BreakAfterComma = true;
+        }
+      }
     }
 
     // If we encounter a closing ), ], } or >, we can remove a level from our
@@ -583,8 +656,15 @@ private:
         State.LineContainsContinuedForLoopSection)
       return UINT_MAX;
     if (!NewLine && State.NextToken->Parent->is(tok::comma) &&
-        State.NextToken->Type != TT_LineComment &&
+        State.NextToken->isNot(tok::comment) &&
         State.Stack.back().BreakAfterComma)
+      return UINT_MAX;
+    // Trying to insert a parameter on a new line if there are already more than
+    // one parameter on the current line is bin packing.
+    if (NewLine && State.NextToken->Parent->is(tok::comma) &&
+        State.Stack.back().HasMultiParameterLine && !Style.BinPackParameters)
+      return UINT_MAX;
+    if (!NewLine && State.NextToken->Type == TT_CtorInitializerColon)
       return UINT_MAX;
 
     unsigned CurrentPenalty = 0;
@@ -592,7 +672,8 @@ private:
       CurrentPenalty += Parameters.PenaltyIndentLevel * State.Stack.size() +
                         splitPenalty(*State.NextToken->Parent);
     } else {
-      if (State.Stack.size() < State.StartOfLineLevel)
+      if (State.Stack.size() < State.StartOfLineLevel &&
+          State.NextToken->is(tok::identifier))
         CurrentPenalty += Parameters.PenaltyLevelDecrease *
                           (State.StartOfLineLevel - State.Stack.size());
     }
@@ -637,7 +718,6 @@ private:
   SourceManager &SourceMgr;
   const AnnotatedLine &Line;
   const unsigned FirstIndent;
-  const bool FitsOnALine;
   const AnnotatedToken &RootToken;
   tooling::Replacements &Replaces;
 
@@ -668,8 +748,13 @@ public:
           ColonIsObjCMethodExpr(false) {}
 
     bool parseAngle() {
+      if (CurrentToken == NULL)
+        return false;
+      AnnotatedToken *Left = CurrentToken->Parent;
       while (CurrentToken != NULL) {
         if (CurrentToken->is(tok::greater)) {
+          Left->MatchingParen = CurrentToken;
+          CurrentToken->MatchingParen = Left;
           CurrentToken->Type = TT_TemplateCloser;
           next();
           return true;
@@ -687,10 +772,15 @@ public:
     }
 
     bool parseParens() {
-      if (CurrentToken != NULL && CurrentToken->is(tok::caret))
-        CurrentToken->Parent->Type = TT_ObjCBlockLParen;
+      if (CurrentToken == NULL)
+        return false;
+      AnnotatedToken *Left = CurrentToken->Parent;
+      if (CurrentToken->is(tok::caret))
+        Left->Type = TT_ObjCBlockLParen;
       while (CurrentToken != NULL) {
         if (CurrentToken->is(tok::r_paren)) {
+          Left->MatchingParen = CurrentToken;
+          CurrentToken->MatchingParen = Left;
           next();
           return true;
         }
@@ -743,8 +833,14 @@ public:
     }
 
     bool parseBrace() {
+      // Lines are fine to end with '{'.
+      if (CurrentToken == NULL)
+        return true;
+      AnnotatedToken *Left = CurrentToken->Parent;
       while (CurrentToken != NULL) {
         if (CurrentToken->is(tok::r_brace)) {
+          Left->MatchingParen = CurrentToken;
+          CurrentToken->MatchingParen = Left;
           next();
           return true;
         }
@@ -753,7 +849,6 @@ public:
         if (!consumeToken())
           return false;
       }
-      // Lines can currently end with '{'.
       return true;
     }
 
@@ -796,21 +891,14 @@ public:
         break;
       case tok::colon:
         // Colons from ?: are handled in parseConditional().
+        if (Tok->Parent->is(tok::r_paren))
+          Tok->Type = TT_CtorInitializerColon;
         if (ColonIsObjCMethodExpr)
           Tok->Type = TT_ObjCMethodExpr;
         break;
       case tok::l_paren: {
-        bool ParensWereObjCReturnType = Tok->Parent && Tok->Parent->Type ==
-                                        TT_ObjCMethodSpecifier;
         if (!parseParens())
           return false;
-        if (CurrentToken != NULL && CurrentToken->is(tok::colon)) {
-          CurrentToken->Type = TT_CtorInitializerColon;
-          next();
-        } else if (CurrentToken != NULL && ParensWereObjCReturnType) {
-          CurrentToken->Type = TT_ObjCSelectorStart;
-          next();
-        }
       } break;
       case tok::l_square:
         if (!parseSquare())
@@ -945,16 +1033,6 @@ public:
     bool ColonIsObjCMethodExpr;
   };
 
-  void createAnnotatedTokens(AnnotatedToken &Current) {
-    if (Current.FormatTok.Children.empty()) {
-      Line.Last = &Current;
-    } else {
-      Current.Children.push_back(AnnotatedToken(Current.FormatTok.Children[0]));
-      Current.Children.back().Parent = &Current;
-      createAnnotatedTokens(Current.Children.back());
-    }
-  }
-
   void calculateExtraInformation(AnnotatedToken &Current) {
     Current.SpaceRequiredBefore = spaceRequiredBefore(Current);
 
@@ -963,8 +1041,8 @@ public:
     } else {
       if (Current.Type == TT_LineComment) {
         Current.MustBreakBefore = Current.FormatTok.NewlinesBefore > 0;
-      } else if (Current.Type == TT_CtorInitializerColon ||
-                 Current.Parent->Type == TT_LineComment ||
+      } else if ((Current.Parent->is(tok::comment) &&
+                  Current.FormatTok.NewlinesBefore > 0) ||
                  (Current.is(tok::string_literal) &&
                   Current.Parent->is(tok::string_literal))) {
         Current.MustBreakBefore = true;
@@ -973,14 +1051,17 @@ public:
       }
     }
     Current.CanBreakBefore = Current.MustBreakBefore || canBreakBefore(Current);
+    if (Current.MustBreakBefore)
+      Current.TotalLength = Current.Parent->TotalLength + Style.ColumnLimit;
+    else
+      Current.TotalLength = Current.Parent->TotalLength +
+                            Current.FormatTok.TokenLength +
+                            (Current.SpaceRequiredBefore ? 1 : 0);
     if (!Current.Children.empty())
       calculateExtraInformation(Current.Children[0]);
   }
 
   void annotate() {
-    Line.Last = &Line.First;
-    createAnnotatedTokens(Line.First);
-
     AnnotatingParser Parser(Line.First);
     Line.Type = Parser.parseLine();
     if (Line.Type == LT_Invalid)
@@ -999,6 +1080,7 @@ public:
     Line.First.MustBreakBefore = Line.First.FormatTok.MustBreakBefore;
     Line.First.CanBreakBefore = Line.First.MustBreakBefore;
 
+    Line.First.TotalLength = Line.First.FormatTok.TokenLength;
     if (!Line.First.Children.empty())
       calculateExtraInformation(Line.First.Children[0]);
   }
@@ -1097,7 +1179,7 @@ private:
         PrevToken->is(tok::l_brace) || PrevToken->is(tok::comma) ||
         PrevToken->is(tok::kw_return) || PrevToken->is(tok::colon) ||
         PrevToken->Type == TT_BinaryOperator ||
-        PrevToken->Type == TT_CastRParen)
+        PrevToken->Type == TT_UnaryOperator || PrevToken->Type == TT_CastRParen)
       return TT_UnaryOperator;
 
     if (PrevToken->FormatTok.Tok.isLiteral() || PrevToken->is(tok::r_paren) ||
@@ -1176,6 +1258,10 @@ private:
          Right.is(tok::l_paren) || Right.is(tok::l_brace) ||
          Right.is(tok::kw_true) || Right.is(tok::kw_false)))
       return false;
+    if (Left.is(tok::coloncolon))
+      return false;
+    if (Right.is(tok::coloncolon))
+      return Left.isNot(tok::identifier) && Left.isNot(tok::greater);
     if (Left.is(tok::less) || Right.is(tok::greater) || Right.is(tok::less))
       return false;
     if (Right.is(tok::amp) || Right.is(tok::star))
@@ -1190,10 +1276,6 @@ private:
     if (Left.is(tok::l_square) || Right.is(tok::r_square))
       return false;
     if (Right.is(tok::l_square) && Right.Type != TT_ObjCMethodExpr)
-      return false;
-    if (Left.is(tok::coloncolon) ||
-        (Right.is(tok::coloncolon) &&
-         (Left.is(tok::identifier) || Left.is(tok::greater))))
       return false;
     if (Left.is(tok::period) || Right.is(tok::period))
       return false;
@@ -1226,9 +1308,7 @@ private:
       if (Tok.is(tok::colon))
         return false;
       if (Tok.Parent->Type == TT_ObjCMethodSpecifier)
-        return Style.ObjCSpaceBeforeReturnType || Tok.isNot(tok::l_paren);
-      if (Tok.Type == TT_ObjCSelectorStart)
-        return !Style.ObjCSpaceBeforeReturnType;
+        return true;
       if (Tok.Parent->is(tok::r_paren) && Tok.is(tok::identifier))
         // Don't space between ')' and <id>
         return false;
@@ -1305,10 +1385,17 @@ private:
     if (Left.is(tok::equal) && Line.Type == LT_VirtualFunctionDecl)
       return false;
 
-    if (Right.is(tok::comment))
+    if (Right.Type == TT_LineComment)
       // We rely on MustBreakBefore being set correctly here as we should not
       // change the "binding" behavior of a comment.
       return false;
+
+    // Allow breaking after a trailing 'const', e.g. after a method declaration,
+    // unless it is follow by ';', '{' or '='.
+    if (Left.is(tok::kw_const) && Left.Parent != NULL &&
+        Left.Parent->is(tok::r_paren))
+      return Right.isNot(tok::l_brace) && Right.isNot(tok::semi) &&
+             Right.isNot(tok::equal);
 
     // We only break before r_brace if there was a corresponding break before
     // the l_brace, which is tracked by BreakBeforeClosingBrace.
@@ -1442,9 +1529,9 @@ public:
         unsigned Indent = formatFirstToken(TheLine.First, TheLine.Level,
                                            TheLine.InPPDirective,
                                            PreviousEndOfLineColumn);
-        bool FitsOnALine = tryFitMultipleLinesInOne(Indent, I, E);
+        tryFitMultipleLinesInOne(Indent, I, E);
         UnwrappedLineFormatter Formatter(Style, SourceMgr, TheLine, Indent,
-                                         FitsOnALine, TheLine.First, Replaces,
+                                         TheLine.First, Replaces,
                                          StructuralError);
         PreviousEndOfLineColumn = Formatter.format();
       } else {
@@ -1469,22 +1556,24 @@ private:
   /// if possible; note that \c I will be incremented when lines are merged.
   ///
   /// Returns whether the resulting \c Line can fit in a single line.
-  bool tryFitMultipleLinesInOne(unsigned Indent,
+  void tryFitMultipleLinesInOne(unsigned Indent,
                                 std::vector<AnnotatedLine>::iterator &I,
                                 std::vector<AnnotatedLine>::iterator E) {
     unsigned Limit = Style.ColumnLimit - (I->InPPDirective ? 1 : 0) - Indent;
 
+    // We can never merge stuff if there are trailing line comments.
+    if (I->Last->Type == TT_LineComment)
+      return;
+
     // Check whether the UnwrappedLine can be put onto a single line. If
     // so, this is bound to be the optimal solution (by definition) and we
     // don't need to analyze the entire solution space.
-    unsigned Length = 0;
-    if (!fitsIntoLimit(I->First, Limit, &Length))
-      return false;
-    if (Limit == Length)
-      return true; // Couldn't fit a space.
-    Limit -= Length + 1; // One space.
+    if (I->Last->TotalLength >= Limit)
+      return;
+    Limit -= I->Last->TotalLength + 1; // One space.
+
     if (I + 1 == E)
-      return true;
+      return;
 
     if (I->Last->is(tok::l_brace)) {
       tryMergeSimpleBlock(I, E, Limit);
@@ -1494,7 +1583,7 @@ private:
                                     I->First.FormatTok.IsFirst)) {
       tryMergeSimplePPDirective(I, E, Limit);
     }
-    return true;
+    return;
   }
 
   void tryMergeSimplePPDirective(std::vector<AnnotatedLine>::iterator &I,
@@ -1506,7 +1595,8 @@ private:
     if (I + 2 != E && (I + 2)->InPPDirective &&
         !(I + 2)->First.FormatTok.HasUnescapedNewline)
       return;
-    if (!fitsIntoLimit((I + 1)->First, Limit)) return;
+    if ((I + 1)->Last->TotalLength > Limit)
+      return;
     join(Line, *(++I));
   }
 
@@ -1516,7 +1606,9 @@ private:
     if (!Style.AllowShortIfStatementsOnASingleLine)
       return;
     AnnotatedLine &Line = *I;
-    if (!fitsIntoLimit((I + 1)->First, Limit))
+    if (Line.Last->isNot(tok::r_paren))
+      return;
+    if ((I + 1)->Last->TotalLength > Limit)
       return;
     if ((I + 1)->First.is(tok::kw_if) || (I + 1)->First.Type == TT_LineComment)
       return;
@@ -1579,12 +1671,7 @@ private:
 
   bool nextTwoLinesFitInto(std::vector<AnnotatedLine>::iterator I,
                            unsigned Limit) {
-    unsigned LengthLine1 = 0;
-    unsigned LengthLine2 = 0;
-    if (!fitsIntoLimit((I + 1)->First, Limit, &LengthLine1) ||
-        !fitsIntoLimit((I + 2)->First, Limit, &LengthLine2))
-      return false;
-    return LengthLine1 + LengthLine2 + 1 <= Limit; // One space.
+    return (I + 1)->Last->TotalLength + 1 + (I + 2)->Last->TotalLength <= Limit;
   }
 
   void join(AnnotatedLine &A, const AnnotatedLine &B) {
@@ -1612,8 +1699,7 @@ private:
   }
 
   virtual void consumeUnwrappedLine(const UnwrappedLine &TheLine) {
-    AnnotatedLines.push_back(
-        AnnotatedLine(TheLine.RootToken, TheLine.Level, TheLine.InPPDirective));
+    AnnotatedLines.push_back(AnnotatedLine(TheLine));
   }
 
   /// \brief Add a new line and the required indent before the first Token

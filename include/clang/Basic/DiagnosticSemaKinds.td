@@ -392,6 +392,7 @@ def err_main_template_decl : Error<"'main' cannot be a template">;
 def err_main_returns_nonint : Error<"'main' must return 'int'">;
 def ext_main_returns_nonint : ExtWarn<"return type of 'main' is not 'int'">,
     InGroup<MainReturnType>;
+def note_main_change_return_type : Note<"change return type to 'int'">;
 def err_main_surplus_args : Error<"too many parameters (%0) for 'main': "
     "must be 0, 2, or 3">;
 def warn_main_one_arg : Warning<"only one parameter on 'main' declaration">,
@@ -1322,6 +1323,11 @@ def note_uninit_fixit_remove_cond : Note<
   "is always %select{false|true}2">;
 def err_init_incomplete_type : Error<"initialization of incomplete type %0">;
 
+def warn_unsequenced_mod_mod : Warning<
+  "multiple unsequenced modifications to %0">, InGroup<Unsequenced>;
+def warn_unsequenced_mod_use : Warning<
+  "unsequenced modification and access to %0">, InGroup<Unsequenced>;
+
 def err_temp_copy_no_viable : Error<
   "no viable constructor %select{copying variable|copying parameter|"
   "returning object|throwing object|copying member subobject|copying array "
@@ -1824,6 +1830,8 @@ def err_attribute_wrong_decl_type : Error<
   "functions, methods, and parameters|classes|variables|methods|"
   "variables, functions and labels|fields and global variables|structs|"
   "variables, functions and tag types|thread-local variables}1">;
+def err_attribute_not_type_attr : Error<
+  "'%0' attribute cannot be applied to types">;
 def warn_function_attribute_wrong_type : Warning<
   "'%0' only applies to function types; type here is %1">,
   InGroup<IgnoredAttributes>;
@@ -5860,6 +5868,10 @@ def warn_falloff_noreturn_function : Warning<
   InGroup<InvalidNoreturn>;
 def err_noreturn_block_has_return_expr : Error<
   "block declared 'noreturn' should not return">;
+def err_noreturn_missing_on_first_decl : Error<
+  "function declared '[[noreturn]]' after its first declaration">;
+def note_noreturn_missing_first_decl : Note<
+  "declaration missing '[[noreturn]]' attribute is here">;
 def err_block_on_nonlocal : Error<
   "__block attribute not allowed, only allowed on local variables">;
 def err_block_on_vm : Error<

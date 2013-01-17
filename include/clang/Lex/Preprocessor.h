@@ -160,6 +160,9 @@ class Preprocessor : public RefCountedBase<Preprocessor> {
   /// \brief True if pragmas are enabled.
   bool PragmasEnabled : 1;
 
+  /// \brief True if we are currently preprocessing a #if or #elif directive
+  bool ParsingIfOrElifDirective;
+
   /// \brief True if we are pre-expanding macro arguments.
   bool InMacroArgPreExpansion;
 
@@ -446,6 +449,11 @@ public:
   /// \brief Retrieve the module loader associated with this preprocessor.
   ModuleLoader &getModuleLoader() const { return TheModuleLoader; }
 
+  /// \brief True if we are currently preprocessing a #if or #elif directive
+  bool isParsingIfOrElifDirective() const { 
+    return ParsingIfOrElifDirective;
+  }
+
   /// SetCommentRetentionState - Control whether or not the preprocessor retains
   /// comments in output.
   void SetCommentRetentionState(bool KeepComments, bool KeepMacroComments) {
@@ -525,8 +533,7 @@ public:
   /// \brief Specify a macro for this identifier.
   void setMacroInfo(IdentifierInfo *II, MacroInfo *MI);
   /// \brief Add a MacroInfo that was loaded from an AST file.
-  void addLoadedMacroInfo(IdentifierInfo *II, MacroInfo *MI,
-                          MacroInfo *Hint = 0);
+  void addLoadedMacroInfo(IdentifierInfo *II, MacroInfo *MI);
   /// \brief Make the given MacroInfo, that was loaded from an AST file and
   /// previously hidden, visible.
   void makeLoadedMacroInfoVisible(IdentifierInfo *II, MacroInfo *MI);

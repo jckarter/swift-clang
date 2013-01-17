@@ -2323,9 +2323,12 @@ public:
 
   // Decl attributes - this routine is the top level dispatcher.
   void ProcessDeclAttributes(Scope *S, Decl *D, const Declarator &PD,
-                           bool NonInheritable = true, bool Inheritable = true);
+                             bool NonInheritable = true,
+                             bool Inheritable = true);
   void ProcessDeclAttributeList(Scope *S, Decl *D, const AttributeList *AL,
-                           bool NonInheritable = true, bool Inheritable = true);
+                                bool NonInheritable = true,
+                                bool Inheritable = true,
+                                bool IncludeCXX11Attributes = true);
   bool ProcessAccessDeclAttributeList(AccessSpecDecl *ASDecl,
                                       const AttributeList *AttrList);
 
@@ -4367,9 +4370,9 @@ public:
   bool SetDelegatingInitializer(CXXConstructorDecl *Constructor,
                                 CXXCtorInitializer *Initializer);
 
-  bool SetCtorInitializers(CXXConstructorDecl *Constructor,
-                           CXXCtorInitializer **Initializers,
-                           unsigned NumInitializers, bool AnyErrors);
+  bool SetCtorInitializers(CXXConstructorDecl *Constructor, bool AnyErrors,
+                           ArrayRef<CXXCtorInitializer *> Initializers =
+                               ArrayRef<CXXCtorInitializer *>());
 
   void SetIvarInitializers(ObjCImplementationDecl *ObjCImplementation);
 
@@ -4432,8 +4435,7 @@ public:
 
   void ActOnMemInitializers(Decl *ConstructorDecl,
                             SourceLocation ColonLoc,
-                            CXXCtorInitializer **MemInits,
-                            unsigned NumMemInits,
+                            ArrayRef<CXXCtorInitializer*> MemInits,
                             bool AnyErrors);
 
   void CheckCompletedCXXClass(CXXRecordDecl *Record);
@@ -7320,6 +7322,11 @@ private:
                             SourceLocation ReturnLoc);
   void CheckFloatComparison(SourceLocation Loc, Expr* LHS, Expr* RHS);
   void CheckImplicitConversions(Expr *E, SourceLocation CC = SourceLocation());
+  void CheckUnsequencedOperations(Expr *E);
+
+  /// \brief Perform semantic checks on a completed expression. This will either
+  /// be a full-expression or a default argument expression.
+  void CheckCompletedExpr(Expr *E, SourceLocation CheckLoc = SourceLocation());
 
   void CheckBitFieldInitialization(SourceLocation InitLoc, FieldDecl *Field,
                                    Expr *Init);
