@@ -96,7 +96,7 @@ static void getDarwinDefines(MacroBuilder &Builder, const LangOptions &Opts,
   Builder.defineMacro("OBJC_NEW_PROPERTIES");
   // AddressSanitizer doesn't play well with source fortification, which is on
   // by default on Darwin.
-  if (Opts.SanitizeAddress) Builder.defineMacro("_FORTIFY_SOURCE", "0");
+  if (Opts.Sanitize.Address) Builder.defineMacro("_FORTIFY_SOURCE", "0");
 
   // If this is an Apple Clang tag, then include a define for the build number.
   //
@@ -4165,6 +4165,7 @@ public:
     MipsTargetInfoBase(triple, "o32", "mips32") {
     SizeType = UnsignedInt;
     PtrDiffType = SignedInt;
+    MaxAtomicPromoteWidth = MaxAtomicInlineWidth = 32;
   }
   virtual bool setABI(const std::string &Name) {
     if ((Name == "o32") || (Name == "eabi")) {
@@ -4270,6 +4271,7 @@ public:
       LongDoubleFormat = &llvm::APFloat::IEEEdouble;
     }
     SuitableAlign = 128;
+    MaxAtomicPromoteWidth = MaxAtomicInlineWidth = 64;
   }
   virtual bool setABI(const std::string &Name) {
     SetDescriptionString(Name);

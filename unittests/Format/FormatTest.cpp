@@ -352,8 +352,8 @@ TEST_F(FormatTest, UnderstandsSingleLineComments) {
   verifyFormat("void f() {\n"
                "  // Doesn't do anything\n"
                "}");
-  verifyFormat("void f(int i, // some comment (probably for i)\n"
-               "       int j, // some comment (probably for j)\n"
+  verifyFormat("void f(int i,  // some comment (probably for i)\n"
+               "       int j,  // some comment (probably for j)\n"
                "       int k); // some comment (probably for k)");
   verifyFormat("void f(int i,\n"
                "       // some comment (probably for j)\n"
@@ -361,8 +361,35 @@ TEST_F(FormatTest, UnderstandsSingleLineComments) {
                "       // some comment (probably for k)\n"
                "       int k);");
 
-  verifyFormat("int i // This is a fancy variable\n"
-               "    = 5;");
+  verifyFormat("int i    // This is a fancy variable\n"
+               "    = 5; // with nicely aligned comment.");
+
+  verifyFormat("// Leading comment.\n"
+               "int a; // Trailing comment.");
+  verifyFormat("int a; // Trailing comment\n"
+               "       // on 2\n"
+               "       // or 3 lines.\n"
+               "int b;");
+  verifyFormat("int a; // Trailing comment\n"
+               "\n"
+               "// Leading comment.\n"
+               "int b;");
+  verifyFormat("int a;    // Comment.\n"
+               "          // More details.\n"
+               "int bbbb; // Another comment.");
+  verifyFormat(
+      "int aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa; // comment\n"
+      "int bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb;   // comment\n"
+      "int cccccccccccccccccccccccccccccc;       // comment\n"
+      "int ddd;                     // looooooooooooooooooooooooong comment\n"
+      "int aaaaaaaaaaaaaaaaaaaaaaa; // comment\n"
+      "int bbbbbbbbbbbbbbbbbbbbb;   // comment\n"
+      "int ccccccccccccccccccc;     // comment");
+
+  verifyFormat("#include \"a\"     // comment\n"
+               "#include \"a/b/c\" // comment");
+  verifyFormat("#include <a>     // comment\n"
+               "#include <a/b/c> // comment");
 
   verifyFormat("enum E {\n"
                "  // comment\n"
@@ -835,7 +862,7 @@ TEST_F(FormatTest, ConstructorInitializers) {
                "      aaaaaaaaaaaaaaaaaaaaat(aaaaaaaaaaaaaaaaaaaaaaaaaaaa) {}");
 
   verifyGoogleFormat("MyClass::MyClass(int var)\n"
-                     "    : some_var_(var),  // 4 space indent\n"
+                     "    : some_var_(var),             // 4 space indent\n"
                      "      some_other_var_(var + 1) {  // lined up\n"
                      "}");
 
@@ -905,9 +932,8 @@ TEST_F(FormatTest, FormatsOneParameterPerLineIfNecessary) {
       "         aaaaaaaa(aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa(\n"
       "             aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa)));");
   verifyGoogleFormat(
-      "aaaaaaaaaaaaaaa(aaaaaaaaa,\n"
-      "                aaaaaaaaa,\n"
-      "                aaaaaaaaaaaaaaaaaaaaaaa).aaaaaaaaaaaaaaaaaa();");
+      "aaaaaaaaaaaaaaa(aaaaaaaaa, aaaaaaaaa, aaaaaaaaaaaaaaaaaaaaaaa)\n"
+      "    .aaaaaaaaaaaaaaaaaa();");
   verifyGoogleFormat(
       "somefunction(someotherFunction(ddddddddddddddddddddddddddddddddddd,\n"
       "                               ddddddddddddddddddddddddddddd),\n"
@@ -920,6 +946,15 @@ TEST_F(FormatTest, FormatsOneParameterPerLineIfNecessary) {
   verifyGoogleFormat("a(\"a\"\n"
                      "  \"a\",\n"
                      "  a);");
+}
+
+TEST_F(FormatTest, FormatsBuilderPattern) {
+  verifyFormat(
+      "return llvm::StringSwitch<Reference::Kind>(name)\n"
+      "       .StartsWith(\".eh_frame_hdr\", ORDER_EH_FRAMEHDR)\n"
+      "       .StartsWith(\".eh_frame\", ORDER_EH_FRAME).StartsWith(\".init\", ORDER_INIT)\n"
+      "       .StartsWith(\".fini\", ORDER_FINI).StartsWith(\".hash\", ORDER_HASH)\n"
+      "       .Default(ORDER_TEXT);\n");
 }
 
 TEST_F(FormatTest, DoesNotBreakTrailingAnnotation) {
@@ -1087,8 +1122,9 @@ TEST_F(FormatTest, WrapsTemplateDeclarations) {
   verifyFormat("template <typename T>\n"
                "virtual void loooooooooooongFunction(int Param1, int Param2);");
   verifyFormat(
-      "template <typename T> void f(int Paaaaaaaaaaaaaaaaaaaaaaaaaaaaaaram1,\n"
-      "                             int Paaaaaaaaaaaaaaaaaaaaaaaaaaaaaaram2);");
+      "template <typename T>\n"
+      "void f(int Paaaaaaaaaaaaaaaaaaaaaaaaaaaaaaram1,\n"
+      "       int Paaaaaaaaaaaaaaaaaaaaaaaaaaaaaaram2);");
   verifyFormat(
       "template <typename T>\n"
       "void looooooooooooooooooooongFunction(int Paaaaaaaaaaaaaaaaaaaaram1,\n"
@@ -1501,14 +1537,27 @@ TEST_F(FormatTest, DoNotInterfereWithErrorAndWarning) {
   EXPECT_EQ("#warning 1", format("  #  warning 1"));
 }
 
-// FIXME: This breaks the order of the unwrapped lines:
-// TEST_F(FormatTest, OrderUnwrappedLines) {
-//   verifyFormat("{\n"
-//                "  bool a; //\n"
-//                "#error {\n"
-//                "  int a;\n"
-//                "}");
-// }
+TEST_F(FormatTest, MergeHandlingInTheFaceOfPreprocessorDirectives) {
+  FormatStyle AllowsMergedIf = getGoogleStyle();
+  AllowsMergedIf.AllowShortIfStatementsOnASingleLine = true;
+  verifyFormat("void f() { f(); }\n#error E", AllowsMergedIf);
+  verifyFormat("if (true) return 42;\n#error E", AllowsMergedIf);
+  verifyFormat("if (true)\n#error E\n  return 42;", AllowsMergedIf);
+  EXPECT_EQ("if (true) return 42;",
+            format("if (true)\nreturn 42;", AllowsMergedIf));
+  FormatStyle ShortMergedIf = AllowsMergedIf;
+  ShortMergedIf.ColumnLimit = 25;
+  verifyFormat("#define A               \\\n"
+               "  if (true) return 42;", ShortMergedIf);
+  verifyFormat("#define A               \\\n"
+               "  f();                  \\\n"
+               "  if (true)\n"
+               "#define B", ShortMergedIf);
+  verifyFormat("#define A               \\\n"
+               "  f();                  \\\n"
+               "  if (true)\n"
+               "g();", ShortMergedIf);
+}
 
 //===----------------------------------------------------------------------===//
 // Objective-C tests.

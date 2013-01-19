@@ -159,6 +159,20 @@ private:
   FormatToken FormatTok;
   bool MustBreakBeforeNextToken;
 
+  // The parsed lines. Only added to through \c CurrentLines.
+  std::vector<UnwrappedLine> Lines;
+
+  // Preprocessor directives are parsed out-of-order from other unwrapped lines.
+  // Thus, we need to keep a list of preprocessor directives to be reported
+  // after an unwarpped line that has been started was finished.
+  std::vector<UnwrappedLine> PreprocessorDirectives;
+
+  // New unwrapped lines are added via CurrentLines.
+  // Usually points to \c &Lines. While parsing a preprocessor directive when
+  // there is an unfinished previous unwrapped line, will point to
+  // \c &PreprocessorDirectives.
+  std::vector<UnwrappedLine> *CurrentLines;
+
   clang::DiagnosticsEngine &Diag;
   const FormatStyle &Style;
   FormatTokenSource *Tokens;
