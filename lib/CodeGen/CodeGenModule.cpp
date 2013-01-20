@@ -78,8 +78,11 @@ CodeGenModule::CodeGenModule(ASTContext &C, const CodeGenOptions &CGO,
     VMContext(M.getContext()),
     NSConcreteGlobalBlock(0), NSConcreteStackBlock(0),
     BlockObjectAssign(0), BlockObjectDispose(0),
-    BlockDescriptorType(0), GenericBlockLiteralType(0) {
-      
+    BlockDescriptorType(0), GenericBlockLiteralType(0),
+    SanitizerBlacklist(CGO.SanitizerBlacklistFile),
+    SanOpts(SanitizerBlacklist.isIn(M) ?
+            SanitizerOptions::Disabled : LangOpts.Sanitize) {
+
   // Initialize the type cache.
   llvm::LLVMContext &LLVMContext = M.getContext();
   VoidTy = llvm::Type::getVoidTy(LLVMContext);
@@ -105,7 +108,7 @@ CodeGenModule::CodeGenModule(ASTContext &C, const CodeGenOptions &CGO,
     createCUDARuntime();
 
   // Enable TBAA unless it's suppressed. ThreadSanitizer needs TBAA even at O0.
-  if (LangOpts.SanitizeThread ||
+  if (SanOpts.Thread ||
       (!CodeGenOpts.RelaxedAliasing && CodeGenOpts.OptimizationLevel > 0))
     TBAA = new CodeGenTBAA(Context, VMContext, CodeGenOpts, getLangOpts(),
                            ABI.getMangleContext());
@@ -604,8 +607,8 @@ void CodeGenModule::SetLLVMFunctionAttributesForDefinition(const Decl *D,
     F->addFnAttr(llvm::Attribute::StackProtect);
   else if (LangOpts.getStackProtector() == LangOptions::SSPReq)
     F->addFnAttr(llvm::Attribute::StackProtectReq);
-  
-  if (LangOpts.SanitizeAddress) {
+
+  if (SanOpts.Address) {
     // When AddressSanitizer is enabled, set AddressSafety attribute
     // unless __attribute__((no_address_safety_analysis)) is used.
     if (!D->hasAttr<NoAddressSafetyAnalysisAttr>())
@@ -1852,7 +1855,7 @@ void CodeGenModule::EmitGlobalVarDefinition(const VarDecl *D) {
 
   // If we are compiling with ASan, add metadata indicating dynamically
   // initialized globals.
-  if (LangOpts.SanitizeAddress && NeedsGlobalCtor) {
+  if (SanOpts.Address && NeedsGlobalCtor) {
     llvm::Module &M = getModule();
 
     llvm::NamedMDNode *DynamicInitializers =
@@ -1965,7 +1968,7 @@ static void replaceUsesOfNonProtoConstant(llvm::Constant *old,
       continue;
 
     llvm::Attribute fnAttrs = oldAttrs.getFnAttributes();
-    if (fnAttrs.hasAttributes())
+    if (oldAttrs.hasAttributes(llvm::AttributeSet::FunctionIndex))
       newAttrs.push_back(llvm::
                        AttributeWithIndex::get(llvm::AttributeSet::FunctionIndex,
                                                fnAttrs));

@@ -14,6 +14,7 @@
 
 #include "CIndexer.h"
 #include "CIndexDiagnostic.h"
+#include "CLog.h"
 #include "CXComment.h"
 #include "CXCursor.h"
 #include "CXSourceLocation.h"
@@ -21,7 +22,6 @@
 #include "CXTranslationUnit.h"
 #include "CXType.h"
 #include "CursorVisitor.h"
-#include "CLog.h"
 #include "SimpleFormatContext.h"
 #include "clang/AST/StmtVisitor.h"
 #include "clang/Basic/Diagnostic.h"
@@ -36,8 +36,10 @@
 #include "llvm/ADT/Optional.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/StringSwitch.h"
+#include "llvm/Config/config.h"
 #include "llvm/Support/Compiler.h"
 #include "llvm/Support/CrashRecoveryContext.h"
+#include "llvm/Support/Format.h"
 #include "llvm/Support/MemoryBuffer.h"
 #include "llvm/Support/Mutex.h"
 #include "llvm/Support/PrettyStackTrace.h"
@@ -47,8 +49,6 @@
 #include "llvm/Support/Threading.h"
 #include "llvm/Support/Timer.h"
 #include "llvm/Support/raw_ostream.h"
-#include "llvm/Support/Format.h"
-#include "llvm/Config/config.h"
 
 #if HAVE_PTHREAD_H
 #include <pthread.h>
@@ -2587,9 +2587,7 @@ static void clang_parseTranslationUnit_Impl(void *UserData) {
 
   // Configure the diagnostics.
   IntrusiveRefCntPtr<DiagnosticsEngine>
-    Diags(CompilerInstance::createDiagnostics(new DiagnosticOptions,
-                                              num_command_line_args,
-                                              command_line_args));
+    Diags(CompilerInstance::createDiagnostics(new DiagnosticOptions));
 
   // Recover resources if we crash before exiting this function.
   llvm::CrashRecoveryContextCleanupRegistrar<DiagnosticsEngine,
