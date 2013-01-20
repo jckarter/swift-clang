@@ -842,11 +842,15 @@ CollectRecordStaticField(const VarDecl *Var,
 
   unsigned LineNumber = getLineNumber(Var->getLocation());
   StringRef VName = Var->getName();
-  llvm::ConstantInt *CI = NULL;
+  llvm::Constant *C = NULL;
   if (Var->getInit()) {
     const APValue *Value = Var->evaluateValue();
-    if (Value && Value->isInt())
-      CI = llvm::ConstantInt::get(CGM.getLLVMContext(), Value->getInt());
+    if (Value) {
+      if (Value->isInt())
+        C = llvm::ConstantInt::get(CGM.getLLVMContext(), Value->getInt());
+      if (Value->isFloat())
+        C = llvm::ConstantFP::get(CGM.getLLVMContext(), Value->getFloat());
+    }
   }
 
   unsigned Flags = 0;
@@ -857,7 +861,7 @@ CollectRecordStaticField(const VarDecl *Var,
     Flags |= llvm::DIDescriptor::FlagProtected;
 
   llvm::DIType GV = DBuilder.createStaticMemberType(RecordTy, VName, VUnit,
-                                                    LineNumber, VTy, Flags, CI);
+                                                    LineNumber, VTy, Flags, C);
   elements.push_back(GV);
   StaticDataMemberCache[Var->getCanonicalDecl()] = llvm::WeakVH(GV);
 }
@@ -1623,8 +1627,15 @@ llvm::DIType CGDebugInfo::CreateType(const RValueReferenceType *Ty,
 
 llvm::DIType CGDebugInfo::CreateType(const MemberPointerType *Ty, 
                                      llvm::DIFile U) {
-  return DBuilder.createMemberPointerType(CreatePointeeType(Ty->getPointeeType(), U),
-                                    getOrCreateType(QualType(Ty->getClass(), 0), U));
+  llvm::DIType ClassType = getOrCreateType(QualType(Ty->getClass(), 0), U);
+  if (!Ty->getPointeeType()->isFunctionType())
+    return DBuilder.createMemberPointerType(
+        CreatePointeeType(Ty->getPointeeType(), U), ClassType);
+  return DBuilder.createMemberPointerType(getOrCreateInstanceMethodType(
+      CGM.getContext().getPointerType(
+          QualType(Ty->getClass(), Ty->getPointeeType().getCVRQualifiers())),
+      Ty->getPointeeType()->getAs<FunctionProtoType>(), U),
+                                          ClassType);
 }
 
 llvm::DIType CGDebugInfo::CreateType(const AtomicType *Ty, 
