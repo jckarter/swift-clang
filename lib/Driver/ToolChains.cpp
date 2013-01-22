@@ -251,6 +251,8 @@ void DarwinClang::addClangWarningOptions(ArgStringList &CC1Args) const {
     CC1Args.push_back("-Wdeprecated-objc-isa-usage");
     CC1Args.push_back("-Werror=deprecated-objc-isa-usage");
 
+    // Also error about implicit function declarations, as that
+    // can impact calling conventions.
     CC1Args.push_back("-Werror=implicit-function-declaration");
   }
 }
