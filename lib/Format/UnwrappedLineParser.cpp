@@ -170,17 +170,15 @@ bool UnwrappedLineParser::parseBlock(unsigned AddLevels) {
   assert(FormatTok.Tok.is(tok::l_brace) && "'{' expected");
   nextToken();
 
-  if (!FormatTok.Tok.is(tok::r_brace)) {
-    addUnwrappedLine();
+  addUnwrappedLine();
 
-    Line->Level += AddLevels;
-    parseLevel(/*HasOpeningBrace=*/true);
-    Line->Level -= AddLevels;
+  Line->Level += AddLevels;
+  parseLevel(/*HasOpeningBrace=*/true);
+  Line->Level -= AddLevels;
 
-    if (!FormatTok.Tok.is(tok::r_brace))
-      return true;
+  if (!FormatTok.Tok.is(tok::r_brace))
+    return true;
 
-  }
   nextToken();  // Munch the closing brace.
   return false;
 }
@@ -308,6 +306,21 @@ void UnwrappedLineParser::parseStructuralElement() {
   case tok::kw_case:
     parseCaseLabel();
     return;
+  case tok::kw_return:
+    parseReturn();
+    return;
+  case tok::kw_extern:
+    nextToken();
+    if (FormatTok.Tok.is(tok::string_literal)) {
+      nextToken();
+      if (FormatTok.Tok.is(tok::l_brace)) {
+        parseBlock(0);
+        addUnwrappedLine();
+        return;
+      }
+    }
+    // In all other cases, parse the declaration.
+    break;
   default:
     break;
   }
@@ -316,7 +329,7 @@ void UnwrappedLineParser::parseStructuralElement() {
     switch (FormatTok.Tok.getKind()) {
     case tok::kw_enum:
       parseEnum();
-      return;
+      break;
     case tok::kw_struct:
     case tok::kw_union:
     case tok::kw_class:
@@ -372,6 +385,32 @@ void UnwrappedLineParser::parseBracedList() {
       break;
     case tok::r_brace:
       nextToken();
+      return;
+    default:
+      nextToken();
+      break;
+    }
+  } while (!eof());
+}
+
+void UnwrappedLineParser::parseReturn() {
+  nextToken();
+
+  do {
+    switch (FormatTok.Tok.getKind()) {
+    case tok::l_brace:
+      parseBracedList();
+      break;
+    case tok::l_paren:
+      parseParens();
+      break;
+    case tok::r_brace:
+      // Assume missing ';'.
+      addUnwrappedLine();
+      return;
+    case tok::semi:
+      nextToken();
+      addUnwrappedLine();
       return;
     default:
       nextToken();
@@ -541,39 +580,50 @@ void UnwrappedLineParser::parseAccessSpecifier() {
 }
 
 void UnwrappedLineParser::parseEnum() {
-  bool HasContents = false;
-  do {
-    switch (FormatTok.Tok.getKind()) {
-    case tok::l_brace:
-      nextToken();
-      addUnwrappedLine();
-      ++Line->Level;
-      parseComments();
-      break;
-    case tok::l_paren:
+  nextToken();
+  if (FormatTok.Tok.is(tok::identifier) ||
+      FormatTok.Tok.is(tok::kw___attribute) ||
+      FormatTok.Tok.is(tok::kw___declspec)) {
+    nextToken();
+    // We can have macros or attributes in between 'enum' and the enum name.
+    if (FormatTok.Tok.is(tok::l_paren)) {
       parseParens();
-      break;
-    case tok::comma:
-      nextToken();
-      addUnwrappedLine();
-      parseComments();
-      break;
-    case tok::r_brace:
-      if (HasContents)
-        addUnwrappedLine();
-      --Line->Level;
-      nextToken();
-      break;
-    case tok::semi:
-      nextToken();
-      addUnwrappedLine();
-      return;
-    default:
-      HasContents = true;
-      nextToken();
-      break;
     }
-  } while (!eof());
+    if (FormatTok.Tok.is(tok::identifier))
+      nextToken();
+  }
+  if (FormatTok.Tok.is(tok::l_brace)) {
+    nextToken();
+    addUnwrappedLine();
+    ++Line->Level;
+    do {
+      switch (FormatTok.Tok.getKind()) {
+      case tok::comment:
+        // FIXME: Handle comments centrally, instead of special casing
+        // them everywhere.
+        parseComments();
+        break;
+      case tok::l_paren:
+        parseParens();
+        break;
+      case tok::r_brace:
+        addUnwrappedLine();
+        nextToken();
+        --Line->Level;
+        return;
+      case tok::comma:
+        nextToken();
+        addUnwrappedLine();
+        break;
+      default:
+        nextToken();
+        break;
+      }
+    } while (!eof());
+  }
+  // We fall through to parsing a structural element afterwards, so that in
+  // enum A {} n, m;
+  // "} n, m;" will end up in one unwrapped line.
 }
 
 void UnwrappedLineParser::parseRecord() {
@@ -586,10 +636,22 @@ void UnwrappedLineParser::parseRecord() {
     if (FormatTok.Tok.is(tok::l_paren)) {
       parseParens();
     }
-    if (FormatTok.Tok.is(tok::identifier))
+    // The actual identifier can be a nested name specifier.
+    while (FormatTok.Tok.is(tok::identifier) ||
+           FormatTok.Tok.is(tok::coloncolon))
       nextToken();
 
-    if (FormatTok.Tok.is(tok::colon)) {
+    // Note that parsing away template declarations here leads to incorrectly
+    // accepting function declarations as record declarations.
+    // In general, we cannot solve this problem. Consider:
+    // class A<int> B() {}
+    // which can be a function definition or a class definition when B() is a
+    // macro. If we find enough real-world cases where this is a problem, we
+    // can parse for the 'template' keyword in the beginning of the statement,
+    // and thus rule out the record production in case there is no template
+    // (this would still leave us with an ambiguity between template function
+    // and class declarations).
+    if (FormatTok.Tok.is(tok::colon) || FormatTok.Tok.is(tok::less)) {
       while (FormatTok.Tok.isNot(tok::l_brace)) {
         if (FormatTok.Tok.is(tok::semi))
           return;
@@ -599,6 +661,9 @@ void UnwrappedLineParser::parseRecord() {
   }
   if (FormatTok.Tok.is(tok::l_brace))
     parseBlock();
+  // We fall through to parsing a structural element afterwards, so
+  // class A {} n, m;
+  // will end up in one unwrapped line.
 }
 
 void UnwrappedLineParser::parseObjCProtocolList() {
