@@ -202,7 +202,13 @@ public:
   void replaceWhitespace(const AnnotatedToken &Tok, unsigned NewLines,
                          unsigned Spaces, unsigned WhitespaceStartColumn,
                          const FormatStyle &Style) {
-    if (Tok.Type == TT_LineComment && NewLines < 2 &&
+    // 2+ newlines mean an empty line separating logic scopes.
+    if (NewLines >= 2)
+      alignComments();
+
+    // Align line comments if they are trailing or if they continue other
+    // trailing comments.
+    if (Tok.Type == TT_LineComment &&
         (Tok.Parent != NULL || !Comments.empty())) {
       if (Style.ColumnLimit >=
           Spaces + WhitespaceStartColumn + Tok.FormatTok.TokenLength) {
@@ -215,10 +221,11 @@ public:
                                     Spaces - Tok.FormatTok.TokenLength;
         return;
       }
-    } else if (NewLines == 0 && Tok.Children.empty() &&
-               Tok.Type != TT_LineComment) {
-      alignComments();
     }
+
+    // If this line does not have a trailing comment, align the stored comments.
+    if (Tok.Children.empty() && Tok.Type != TT_LineComment)
+      alignComments();
     storeReplacement(Tok.FormatTok,
                      std::string(NewLines, '\n') + std::string(Spaces, ' '));
   }
@@ -937,24 +944,24 @@ public:
       // A '[' could be an index subscript (after an indentifier or after
       // ')' or ']'), or it could be the start of an Objective-C method
       // expression.
-      AnnotatedToken *LSquare = CurrentToken->Parent;
+      AnnotatedToken *Left = CurrentToken->Parent;
       bool StartsObjCMethodExpr =
-          !LSquare->Parent || LSquare->Parent->is(tok::colon) ||
-          LSquare->Parent->is(tok::l_square) ||
-          LSquare->Parent->is(tok::l_paren) ||
-          LSquare->Parent->is(tok::kw_return) ||
-          LSquare->Parent->is(tok::kw_throw) ||
-          getBinOpPrecedence(LSquare->Parent->FormatTok.Tok.getKind(),
+          !Left->Parent || Left->Parent->is(tok::colon) ||
+          Left->Parent->is(tok::l_square) || Left->Parent->is(tok::l_paren) ||
+          Left->Parent->is(tok::kw_return) || Left->Parent->is(tok::kw_throw) ||
+          getBinOpPrecedence(Left->Parent->FormatTok.Tok.getKind(),
                              true, true) > prec::Unknown;
 
       ObjCSelectorRAII objCSelector(*this);
       if (StartsObjCMethodExpr)
-        objCSelector.markStart(*LSquare);
+        objCSelector.markStart(*Left);
 
       while (CurrentToken != NULL) {
         if (CurrentToken->is(tok::r_square)) {
           if (StartsObjCMethodExpr)
             objCSelector.markEnd(*CurrentToken);
+          Left->MatchingParen = CurrentToken;
+          CurrentToken->MatchingParen = Left;
           next();
           return true;
         }
@@ -1006,7 +1013,6 @@ public:
         if (!parseAngle())
           return false;
         CurrentToken->Parent->ClosesTemplateDeclaration = true;
-        parseLine();
         return true;
       }
       return false;
@@ -1712,11 +1718,11 @@ private:
     // Check whether the UnwrappedLine can be put onto a single line. If
     // so, this is bound to be the optimal solution (by definition) and we
     // don't need to analyze the entire solution space.
-    if (I->Last->TotalLength >= Limit)
+    if (I->Last->TotalLength > Limit)
       return;
-    Limit -= I->Last->TotalLength + 1; // One space.
+    Limit -= I->Last->TotalLength;
 
-    if (I + 1 == E)
+    if (I + 1 == E || (I + 1)->Type == LT_Invalid)
       return;
 
     if (I->Last->is(tok::l_brace)) {
@@ -1739,7 +1745,7 @@ private:
     if (I + 2 != E && (I + 2)->InPPDirective &&
         !(I + 2)->First.FormatTok.HasUnescapedNewline)
       return;
-    if ((I + 1)->Last->TotalLength > Limit)
+    if (1 + (I + 1)->Last->TotalLength > Limit)
       return;
     join(Line, *(++I));
   }
@@ -1756,7 +1762,7 @@ private:
     AnnotatedLine &Line = *I;
     if (Line.Last->isNot(tok::r_paren))
       return;
-    if ((I + 1)->Last->TotalLength > Limit)
+    if (1 + (I + 1)->Last->TotalLength > Limit)
       return;
     if ((I + 1)->First.is(tok::kw_if) || (I + 1)->First.Type == TT_LineComment)
       return;
@@ -1769,10 +1775,6 @@ private:
   void tryMergeSimpleBlock(std::vector<AnnotatedLine>::iterator &I,
                         std::vector<AnnotatedLine>::iterator E,
                         unsigned Limit){
-    // Check that we still have three lines and they fit into the limit.
-    if (I + 2 == E || !nextTwoLinesFitInto(I, Limit))
-      return;
-
     // First, check that the current line allows merging. This is the case if
     // we're not in a control flow statement and the last token is an opening
     // brace.
@@ -1788,38 +1790,44 @@ private:
     if (!AllowedTokens)
       return;
 
-    // Second, check that the next line does not contain any braces - if it
-    // does, readability declines when putting it into a single line.
-    const AnnotatedToken *Tok = &(I + 1)->First;
-    if ((I + 1)->Last->Type == TT_LineComment || Tok->MustBreakBefore)
-      return;
-    do {
-      if (Tok->is(tok::l_brace) || Tok->is(tok::r_brace))
+    AnnotatedToken *Tok = &(I + 1)->First;
+    if (Tok->Children.empty() && Tok->is(tok::r_brace) &&
+        !Tok->MustBreakBefore && Tok->TotalLength <= Limit) {
+      Tok->SpaceRequiredBefore = false;
+      join(Line, *(I + 1));
+      I += 1;
+    } else {
+      // Check that we still have three lines and they fit into the limit.
+      if (I + 2 == E || (I + 2)->Type == LT_Invalid ||
+          !nextTwoLinesFitInto(I, Limit))
         return;
-      Tok = Tok->Children.empty() ? NULL : &Tok->Children.back();
-    } while (Tok != NULL);
 
-    // Last, check that the third line contains a single closing brace.
-    Tok = &(I + 2)->First;
-    if (!Tok->Children.empty() || Tok->isNot(tok::r_brace) ||
-        Tok->MustBreakBefore)
-      return;
+      // Second, check that the next line does not contain any braces - if it
+      // does, readability declines when putting it into a single line.
+      if ((I + 1)->Last->Type == TT_LineComment || Tok->MustBreakBefore)
+        return;
+      do {
+        if (Tok->is(tok::l_brace) || Tok->is(tok::r_brace))
+          return;
+        Tok = Tok->Children.empty() ? NULL : &Tok->Children.back();
+      } while (Tok != NULL);
 
-    // If the merged line fits, we use that instead and skip the next two lines.
-    Line.Last->Children.push_back((I + 1)->First);
-    while (!Line.Last->Children.empty()) {
-      Line.Last->Children[0].Parent = Line.Last;
-      Line.Last = &Line.Last->Children[0];
+      // Last, check that the third line contains a single closing brace.
+      Tok = &(I + 2)->First;
+      if (!Tok->Children.empty() || Tok->isNot(tok::r_brace) ||
+          Tok->MustBreakBefore)
+        return;
+
+      join(Line, *(I + 1));
+      join(Line, *(I + 2));
+      I += 2;
     }
-
-    join(Line, *(I + 1));
-    join(Line, *(I + 2));
-    I += 2;
   }
 
   bool nextTwoLinesFitInto(std::vector<AnnotatedLine>::iterator I,
                            unsigned Limit) {
-    return (I + 1)->Last->TotalLength + 1 + (I + 2)->Last->TotalLength <= Limit;
+    return 1 + (I + 1)->Last->TotalLength + 1 + (I + 2)->Last->TotalLength <=
+           Limit;
   }
 
   void join(AnnotatedLine &A, const AnnotatedLine &B) {
