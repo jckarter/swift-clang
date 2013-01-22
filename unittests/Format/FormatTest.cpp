@@ -964,8 +964,9 @@ TEST_F(FormatTest, FormatsOneParameterPerLineIfNecessary) {
       "         aaaaaaaa(aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa(\n"
       "             aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa)));");
   verifyGoogleFormat(
-      "aaaaaaaaaaaaaaa(aaaaaaaaa, aaaaaaaaa, aaaaaaaaaaaaaaaaaaaaaaa)\n"
-      "    .aaaaaaaaaaaaaaaaaa();");
+      "aaaaaaaaaaaaaaa(aaaaaaaaa,\n"
+      "                aaaaaaaaa,\n"
+      "                aaaaaaaaaaaaaaaaaaaaaaa).aaaaaaaaaaaaaaaaaa();");
   verifyGoogleFormat(
       "somefunction(someotherFunction(ddddddddddddddddddddddddddddddddddd,\n"
       "                               ddddddddddddddddddddddddddddd),\n"
@@ -1338,6 +1339,9 @@ TEST_F(FormatTest, UnderstandsUsesOfStarAndAmp) {
   verifyFormat("if (*b[i])");
   verifyFormat("if (int *a = (&b))");
   verifyFormat("while (int *a = &b)");
+
+  verifyFormat("A = new SomeType *[Length]();");
+  verifyGoogleFormat("A = new SomeType* [Length]();");
 }
 
 TEST_F(FormatTest, FormatsCasts) {
@@ -1621,6 +1625,47 @@ TEST_F(FormatTest, MergeHandlingInTheFaceOfPreprocessorDirectives) {
                "  if (true) continue;", ShortMergedIf);
 }
 
+TEST_F(FormatTest, BlockCommentsInControlLoops) {
+  verifyFormat("if (0) /* a comment in a strange place */ {\n"
+               "  f();\n"
+               "}");
+  verifyFormat("if (0) /* a comment in a strange place */ {\n"
+               "  f();\n"
+               "} /* another comment */ else /* comment #3 */ {\n"
+               "  g();\n"
+               "}");
+  verifyFormat("while (0) /* a comment in a strange place */ {\n"
+               "  f();\n"
+               "}");
+  verifyFormat("for (;;) /* a comment in a strange place */ {\n"
+               "  f();\n"
+               "}");
+  verifyFormat("do /* a comment in a strange place */ {\n"
+               "  f();\n"
+               "} /* another comment */ while (0);");
+}
+
+TEST_F(FormatTest, BlockComments) {
+  EXPECT_EQ("/* */ /* */ /* */\n/* */ /* */ /* */",
+            format("/* *//* */  /* */\n/* *//* */  /* */"));
+  EXPECT_EQ("/* */ a /* */ b;",
+            format("  /* */  a/* */  b;"));
+  EXPECT_EQ("#define A /*   */\\\n"
+            "  b\n"
+            "/* */\n"
+            "someCall(\n"
+            "    parameter);",
+            format("#define A /*   */ b\n"
+                   "/* */\n"
+                   "someCall(parameter);", getLLVMStyleWithColumns(15)));
+
+  EXPECT_EQ("#define A\n"
+            "/* */ someCall(\n"
+            "    parameter);",
+            format("#define A\n"
+                   "/* */someCall(parameter);", getLLVMStyleWithColumns(15)));
+}
+
 //===----------------------------------------------------------------------===//
 // Objective-C tests.
 //===----------------------------------------------------------------------===//
@@ -1680,7 +1725,6 @@ TEST_F(FormatTest, FormatObjCBlocks) {
 }
 
 TEST_F(FormatTest, FormatObjCInterface) {
-  // FIXME: Handle comments like in "@interface /* wait for it */ Foo", PR14875
   verifyFormat("@interface Foo : NSObject <NSSomeDelegate> {\n"
                "@public\n"
                "  int field1;\n"
@@ -1707,7 +1751,7 @@ TEST_F(FormatTest, FormatObjCInterface) {
                      "+ (id)init;\n"
                      "@end");
 
-  verifyFormat("@interface Foo\n"
+  verifyFormat("@interface /* wait for it */ Foo\n"
                "+ (id)init;\n"
                "// Look, a comment!\n"
                "- (int)answerWith:(int)i;\n"
@@ -1722,7 +1766,7 @@ TEST_F(FormatTest, FormatObjCInterface) {
                "+ (id)init;\n"
                "@end");
 
-  verifyFormat("@interface Foo : Bar <Baz, Quux>\n"
+  verifyFormat("@interface Foo : /**/ Bar /**/ <Baz, /**/ Quux>\n"
                "+ (id)init;\n"
                "@end");
 
