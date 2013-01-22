@@ -60,6 +60,7 @@ enum TokenType {
 enum LineType {
   LT_Invalid,
   LT_Other,
+  LT_BuilderTypeCall,
   LT_PreprocessorDirective,
   LT_VirtualFunctionDecl,
   LT_ObjCDecl, // An @interface, @implementation, or @protocol line.
@@ -585,7 +586,8 @@ private:
       if (Previous.is(tok::l_paren) || Previous.is(tok::l_brace) ||
           State.NextToken->Parent->Type == TT_TemplateOpener)
         State.Stack[ParenLevel].Indent = State.Column + Spaces;
-      if (Current.getPreviousNoneComment()->is(tok::comma) &&
+      if (Current.getPreviousNoneComment() != NULL &&
+          Current.getPreviousNoneComment()->is(tok::comma) &&
           Current.isNot(tok::comment))
         State.Stack[ParenLevel].HasMultiParameterLine = true;
 
@@ -707,7 +709,7 @@ private:
       return Level;
 
     if (Right.is(tok::arrow) || Right.is(tok::period)) {
-      if (Left.is(tok::r_paren))
+      if (Left.is(tok::r_paren) && Line.Type == LT_BuilderTypeCall)
         return 15; // Should be smaller than breaking at a nested comma.
       return 150;
     }
@@ -958,6 +960,13 @@ public:
 
       while (CurrentToken != NULL) {
         if (CurrentToken->is(tok::r_square)) {
+          if (!CurrentToken->Children.empty() &&
+              CurrentToken->Children[0].is(tok::l_paren)) {
+            // An ObjC method call can't be followed by an open parenthesis.
+            // FIXME: Do we incorrectly label ":" with this?
+            StartsObjCMethodExpr = false;
+            Left->Type = TT_Unknown;
+	  }
           if (StartsObjCMethodExpr)
             objCSelector.markEnd(*CurrentToken);
           Left->MatchingParen = CurrentToken;
@@ -1155,18 +1164,27 @@ public:
     }
 
     LineType parseLine() {
+      int PeriodsAndArrows = 0;
       if (CurrentToken->is(tok::hash)) {
         parsePreprocessorDirective();
         return LT_PreprocessorDirective;
       }
       while (CurrentToken != NULL) {
+        
         if (CurrentToken->is(tok::kw_virtual))
           KeywordVirtualFound = true;
+        if (CurrentToken->is(tok::period) || CurrentToken->is(tok::arrow))
+          ++PeriodsAndArrows;
         if (!consumeToken())
           return LT_Invalid;
       }
       if (KeywordVirtualFound)
         return LT_VirtualFunctionDecl;
+
+      // Assume a builder-type call if there are 2 or more "." and "->".
+      if (PeriodsAndArrows >= 2)
+        return LT_BuilderTypeCall;
+
       return LT_Other;
     }
 
@@ -1324,6 +1342,9 @@ private:
     const AnnotatedToken *NextToken = getNextToken(Tok);
     if (NextToken == NULL)
       return TT_Unknown;
+
+    if (NextToken->is(tok::l_square) && NextToken->Type != TT_ObjCMethodExpr)
+      return TT_PointerOrReference;
 
     if (PrevToken->is(tok::l_paren) || PrevToken->is(tok::l_square) ||
         PrevToken->is(tok::l_brace) || PrevToken->is(tok::comma) ||
@@ -1619,6 +1640,7 @@ public:
     // FIXME: Add a more explicit test.
     unsigned i = 0;
     while (i + 1 < Text.size() && Text[i] == '\\' && Text[i + 1] == '\n') {
+      // FIXME: ++FormatTok.NewlinesBefore is missing...
       FormatTok.WhiteSpaceLength += 2;
       FormatTok.TokenLength -= 2;
       i += 2;
