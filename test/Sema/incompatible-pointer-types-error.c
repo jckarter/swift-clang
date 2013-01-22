@@ -1,10 +1,12 @@
 // RUN: %clang -fsyntax-only %s -Xclang -verify -Werror=incompatible-pointer-types -Wno-error=incompatible-pointer-types-discards-qualifiers
-
+// RUN: %clang -fsyntax-only %s -arch arm64 -Xclang -verify
+    
 // This test ensures that the subgroup of -Wincompatible-pointer-types warnings that
 // concern discarding qualifers can be promoted (or not promoted) to an error *separately* from
 // the other -Wincompatible-pointer-type warnings.
 //
 // <rdar://problem/13062738>
+// <rdar://problem/12907612>
 //
 
 void foo(char *s); // expected-note {{passing argument to parameter 's' here}}
