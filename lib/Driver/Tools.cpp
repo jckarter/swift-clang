@@ -2988,9 +2988,9 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
                    false))
     CmdArgs.push_back("-fasm-blocks");
 
-  // -fvectorize is default.
+  // -fno-vectorize is default.
   if (Args.hasFlag(options::OPT_fvectorize,
-                   options::OPT_fno_vectorize, true)) {
+                   options::OPT_fno_vectorize, false)) {
     CmdArgs.push_back("-backend-option");
     CmdArgs.push_back("-vectorize-loops");
   }
