@@ -575,6 +575,9 @@ public:
   /// \brief id<NSCopying> type.
   QualType QIDNSCopying;
 
+  /// \brief will hold 'respondsToSelector:'
+  Selector RespondsToSelectorSel;
+  
   /// A flag to remember whether the implicit forms of operator new and delete
   /// have been declared.
   bool GlobalNewDeleteDeclared;
@@ -4280,8 +4283,7 @@ public:
                                          SourceLocation AtLoc,
                                          SourceLocation SelLoc,
                                          SourceLocation LParenLoc,
-                                         SourceLocation RParenLoc,
-                                         bool WarnSelector);
+                                         SourceLocation RParenLoc);
 
   /// ParseObjCProtocolExpression - Build protocol expression for \@protocol
   ExprResult ParseObjCProtocolExpression(IdentifierInfo * ProtocolName,
@@ -6392,7 +6394,7 @@ public:
                                   ParsedType Type,
                                   SourceLocation RParenLoc,
                                   Expr *SubExpr);
-
+  
   bool checkInitMethod(ObjCMethodDecl *method, QualType receiverTypeIfCall);
 
   /// \brief Check whether the given new method is a valid override of the

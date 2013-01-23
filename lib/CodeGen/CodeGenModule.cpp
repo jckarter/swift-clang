@@ -1257,8 +1257,13 @@ CodeGenModule::GetOrCreateLLVMFunction(StringRef MangledName,
   assert(F->getName() == MangledName && "name was uniqued!");
   if (D.getDecl())
     SetFunctionAttributes(D, F, IsIncompleteFunction);
-  if (ExtraAttrs.hasAttributes())
-    F->addAttribute(llvm::AttributeSet::FunctionIndex, ExtraAttrs);
+  if (ExtraAttrs.hasAttributes()) {
+    llvm::AttrBuilder B(ExtraAttrs);
+    F->addAttributes(llvm::AttributeSet::FunctionIndex,
+                     llvm::AttributeSet::get(VMContext,
+                                             llvm::AttributeSet::FunctionIndex,
+                                             B));
+  }
 
   // This is the first use or definition of a mangled name.  If there is a
   // deferred decl with this name, remember that we need to emit it at the end
@@ -1960,9 +1965,12 @@ static void replaceUsesOfNonProtoConstant(llvm::Constant *old,
       }
 
       // Add any parameter attributes.
-      llvm::Attribute pAttrs = oldAttrs.getParamAttributes(argNo + 1);
-      if (pAttrs.hasAttributes())
-        newAttrs.push_back(llvm::AttributeWithIndex::get(argNo + 1, pAttrs));
+      if (oldAttrs.hasAttributes(argNo + 1))
+        newAttrs.
+          push_back(llvm::AttributeWithIndex::
+                    get(newFn->getContext(),
+                        argNo + 1,
+                        oldAttrs.getParamAttributes(argNo + 1)));
     }
     if (dontTransform)
       continue;
