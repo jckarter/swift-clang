@@ -705,7 +705,8 @@ static InputKind ParseFrontendArgs(FrontendOptions &Opts, ArgList &Args,
   Opts.FixAndRecompile = Args.hasArg(OPT_fixit_recompile);
   Opts.FixToTemporaries = Args.hasArg(OPT_fixit_to_temp);
   Opts.ASTDumpFilter = Args.getLastArgValue(OPT_ast_dump_filter);
-
+  Opts.GenerateModuleIndex = Args.hasArg(OPT_generate_module_index);
+  
   Opts.CodeCompleteOpts.IncludeMacros
     = Args.hasArg(OPT_code_completion_macros);
   Opts.CodeCompleteOpts.IncludeCodePatterns
@@ -989,6 +990,7 @@ void CompilerInvocation::setLangDefaults(LangOptions &Opts, InputKind IK,
     Opts.CXXOperatorNames = 1;
     Opts.LaxVectorConversions = 0;
     Opts.DefaultFPContract = 1;
+    Opts.NativeHalfType = 1;
   }
 
   if (LangStd == LangStandard::lang_cuda)
