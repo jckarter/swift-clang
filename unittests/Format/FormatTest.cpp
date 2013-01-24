@@ -100,6 +100,11 @@ protected:
   void verifyGoogleFormat(llvm::StringRef Code) {
     verifyFormat(Code, getGoogleStyle());
   }
+
+  void verifyIndependentOfContext(llvm::StringRef text) {
+    verifyFormat(text);
+    verifyFormat(llvm::Twine("void f() { " + text + " }").str());
+  }
 };
 
 TEST_F(FormatTest, MessUp) {
@@ -737,6 +742,10 @@ TEST_F(FormatTest, HashInMacroDefinition) {
   verifyFormat("#define A void # ## #", getLLVMStyleWithColumns(22));
 }
 
+TEST_F(FormatTest, RespectWhitespaceInMacroDefinitions) {
+  verifyFormat("#define A (1)");
+}
+
 TEST_F(FormatTest, IndentPreprocessorDirectivesAtZero) {
   EXPECT_EQ("{\n  {\n#define A\n  }\n}", format("{{\n#define A\n}}"));
 }
@@ -919,6 +928,9 @@ TEST_F(FormatTest, BreaksDesireably) {
   verifyFormat("if (aaaaaaaaaaaaaaaaaaa(aaaaaaaaaaaaaaa) ||\n"
                "    aaaaaaaaaaaaaaaaaaa(aaaaaaaaaaaaaaa) ||\n"
                "    aaaaaaaaaaaaaaaaaaa(aaaaaaaaaaaaaaa)) {\n}");
+  verifyFormat("if (aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa(\n"
+               "        aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa)) {\n"
+               "}");
 
   verifyFormat(
       "aaaaaaaaaaaaaaaaaaaaa(aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa,\n"
@@ -964,9 +976,15 @@ TEST_F(FormatTest, FormatsOneParameterPerLineIfNecessary) {
       "         aaaaaaaa(aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa(\n"
       "             aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa)));");
   verifyGoogleFormat(
-      "aaaaaaaaaaaaaaa(aaaaaaaaa,\n"
-      "                aaaaaaaaa,\n"
-      "                aaaaaaaaaaaaaaaaaaaaaaa).aaaaaaaaaaaaaaaaaa();");
+      "aaaaaaaaaaaaaaa(\n"
+      "    aaaaaaaaa, aaaaaaaaa, aaaaaaaaaaaaaaaaaaaaa).aaaaaaaaaaaaaaaaaa();");
+  verifyGoogleFormat("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa(\n"
+                     "    aaaaaaaaaa, aaaaaaaaaa, aaaaaaaaaa, aaaaaaaaaaa);");
+  
+  verifyGoogleFormat(
+      "aaaaaaaaaaaa(aaaaaaaaaaaaaaaaaaaaaaaaaaaa + aaaaaaaaaaaaaaaaaaaaaaaaa,\n"
+      "             aaaaaaaaaaaa,\n"
+      "             aaaaaaaaaaaa);");
   verifyGoogleFormat(
       "somefunction(someotherFunction(ddddddddddddddddddddddddddddddddddd,\n"
       "                               ddddddddddddddddddddddddddddd),\n"
@@ -979,15 +997,22 @@ TEST_F(FormatTest, FormatsOneParameterPerLineIfNecessary) {
   verifyGoogleFormat("a(\"a\"\n"
                      "  \"a\",\n"
                      "  a);");
+
+  FormatStyle Style = getGoogleStyle();
+  Style.AllowAllParametersOnNextLine = false;
+  verifyFormat("aaaaaaaaaaaaaaa(aaaaaaaaa,\n"
+               "                aaaaaaaaa,\n"
+               "                aaaaaaaaaaaaaaaaaaaaa).aaaaaaaaaaaaaaaaaa();",
+               Style);
 }
 
 TEST_F(FormatTest, FormatsBuilderPattern) {
   verifyFormat(
       "return llvm::StringSwitch<Reference::Kind>(name)\n"
-      "       .StartsWith(\".eh_frame_hdr\", ORDER_EH_FRAMEHDR)\n"
-      "       .StartsWith(\".eh_frame\", ORDER_EH_FRAME).StartsWith(\".init\", ORDER_INIT)\n"
-      "       .StartsWith(\".fini\", ORDER_FINI).StartsWith(\".hash\", ORDER_HASH)\n"
-      "       .Default(ORDER_TEXT);\n");
+      "    .StartsWith(\".eh_frame_hdr\", ORDER_EH_FRAMEHDR)\n"
+      "    .StartsWith(\".eh_frame\", ORDER_EH_FRAME).StartsWith(\".init\", ORDER_INIT)\n"
+      "    .StartsWith(\".fini\", ORDER_FINI).StartsWith(\".hash\", ORDER_HASH)\n"
+      "    .Default(ORDER_TEXT);\n");
 }
 
 TEST_F(FormatTest, DoesNotBreakTrailingAnnotation) {
@@ -1012,15 +1037,18 @@ TEST_F(FormatTest, BreaksAccordingToOperatorPrecedence) {
       "    ccccccccccccccccccccccccc) {\n}");
 }
 
-TEST_F(FormatTest, PrefersNotToBreakAfterAssignments) {
+TEST_F(FormatTest, BreaksAfterAssignments) {
   verifyFormat(
-      "unsigned Cost = TTI.getMemoryOpCost(I->getOpcode(), VectorTy,\n"
-      "                                    SI->getAlignment(),\n"
-      "                                    SI->getPointerAddressSpaceee());\n");
+      "unsigned Cost =\n"
+      "    TTI.getMemoryOpCost(I->getOpcode(), VectorTy, SI->getAlignment(),\n"
+      "                        SI->getPointerAddressSpaceee());\n");
   verifyFormat(
       "CharSourceRange LineRange = CharSourceRange::getTokenRange(\n"
-      "                                Line.Tokens.front().Tok.getLocation(),\n"
-      "                                Line.Tokens.back().Tok.getLocation());");
+      "    Line.Tokens.front().Tok.getLo(), Line.Tokens.back().Tok.getLoc());");
+
+  verifyFormat(
+      "aaaaaaaaaaaaaaaaaaaaaaaaaa aaaa = aaaaaaaaaaaaaa(0).aaaa()\n"
+      "    .aaaaaaaaaaaa(aaaaaaaaaaaaaaaaaaa::aaaaaaaaaaaaaaaaaaaaa);");
 }
 
 TEST_F(FormatTest, AlignsAfterAssignments) {
@@ -1037,9 +1065,9 @@ TEST_F(FormatTest, AlignsAfterAssignments) {
       "int Result = (aaaaaaaaaaaaaaaaaaaaaaaaa + aaaaaaaaaaaaaaaaaaaaaaaaa +\n"
       "              aaaaaaaaaaaaaaaaaaaaaaaaa);");
   verifyFormat(
-      "double LooooooooooooooooooooooooongResult = aaaaaaaaaaaaaaaaaaaaaaaa +\n"
-      "                                            aaaaaaaaaaaaaaaaaaaaaaaa +\n"
-      "                                            aaaaaaaaaaaaaaaaaaaaaaaa;");
+      "double LooooooooooooooooooooooooongResult =\n"
+      "    aaaaaaaaaaaaaaaaaaaaaaaa + aaaaaaaaaaaaaaaaaaaaaaaa +\n"
+      "    aaaaaaaaaaaaaaaaaaaaaaaa;");
 }
 
 TEST_F(FormatTest, AlignsAfterReturn) {
@@ -1115,9 +1143,8 @@ TEST_F(FormatTest, UnderstandsEquals) {
       "}");
 
   verifyFormat(
-      // FIXME: Does an expression like this ever make sense? If yes, fix.
-      "if (int aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa = 100000000 +\n"
-      "    10000000) {\n}");
+      "if (int aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa =\n"
+      "        100000000 + 10000000) {\n}");
 }
 
 TEST_F(FormatTest, WrapsAtFunctionCallsIfNecessary) {
@@ -1263,44 +1290,44 @@ TEST_F(FormatTest, UnderstandsNewAndDelete) {
 
 TEST_F(FormatTest, UnderstandsUsesOfStarAndAmp) {
   verifyFormat("int *f(int *a) {}");
-  verifyFormat("f(a, *a);");
-  verifyFormat("f(*a);");
-  verifyFormat("int a = b * 10;");
-  verifyFormat("int a = 10 * b;");
-  verifyFormat("int a = b * c;");
-  verifyFormat("int a += b * c;");
-  verifyFormat("int a -= b * c;");
-  verifyFormat("int a *= b * c;");
-  verifyFormat("int a /= b * c;");
-  verifyFormat("int a = *b;");
-  verifyFormat("int a = *b * c;");
-  verifyFormat("int a = b * *c;");
   verifyFormat("int main(int argc, char **argv) {}");
-  verifyFormat("return 10 * b;");
-  verifyFormat("return *b * *c;");
-  verifyFormat("return a & ~b;");
-  verifyFormat("f(b ? *c : *d);");
-  verifyFormat("int a = b ? *c : *d;");
-  verifyFormat("*b = a;");
-  verifyFormat("a * ~b;");
-  verifyFormat("a * !b;");
-  verifyFormat("a * +b;");
-  verifyFormat("a * -b;");
-  verifyFormat("a * ++b;");
-  verifyFormat("a * --b;");
-  verifyFormat("a[4] * b;");
-  verifyFormat("f() * b;");
-  verifyFormat("a * [self dostuff];");
-  verifyFormat("a * (a + b);");
-  verifyFormat("(a *)(a + b);");
-  verifyFormat("int *pa = (int *)&a;");
+  verifyIndependentOfContext("f(a, *a);");
+  verifyIndependentOfContext("f(*a);");
+  verifyIndependentOfContext("int a = b * 10;");
+  verifyIndependentOfContext("int a = 10 * b;");
+  verifyIndependentOfContext("int a = b * c;");
+  verifyIndependentOfContext("int a += b * c;");
+  verifyIndependentOfContext("int a -= b * c;");
+  verifyIndependentOfContext("int a *= b * c;");
+  verifyIndependentOfContext("int a /= b * c;");
+  verifyIndependentOfContext("int a = *b;");
+  verifyIndependentOfContext("int a = *b * c;");
+  verifyIndependentOfContext("int a = b * *c;");
+  verifyIndependentOfContext("return 10 * b;");
+  verifyIndependentOfContext("return *b * *c;");
+  verifyIndependentOfContext("return a & ~b;");
+  verifyIndependentOfContext("f(b ? *c : *d);");
+  verifyIndependentOfContext("int a = b ? *c : *d;");
+  verifyIndependentOfContext("*b = a;");
+  verifyIndependentOfContext("a * ~b;");
+  verifyIndependentOfContext("a * !b;");
+  verifyIndependentOfContext("a * +b;");
+  verifyIndependentOfContext("a * -b;");
+  verifyIndependentOfContext("a * ++b;");
+  verifyIndependentOfContext("a * --b;");
+  verifyIndependentOfContext("a[4] * b;");
+  verifyIndependentOfContext("f() * b;");
+  verifyIndependentOfContext("a * [self dostuff];");
+  verifyIndependentOfContext("a * (a + b);");
+  verifyIndependentOfContext("(a *)(a + b);");
+  verifyIndependentOfContext("int *pa = (int *)&a;");
 
-  verifyFormat("InvalidRegions[*R] = 0;");
+  verifyIndependentOfContext("InvalidRegions[*R] = 0;");
 
-  verifyFormat("A<int *> a;");
-  verifyFormat("A<int **> a;");
-  verifyFormat("A<int *, int *> a;");
-  verifyFormat("A<int **, int **> a;");
+  verifyIndependentOfContext("A<int *> a;");
+  verifyIndependentOfContext("A<int **> a;");
+  verifyIndependentOfContext("A<int *, int *> a;");
+  verifyIndependentOfContext("A<int **, int **> a;");
 
   verifyFormat(
       "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa(\n"
@@ -1319,29 +1346,40 @@ TEST_F(FormatTest, UnderstandsUsesOfStarAndAmp) {
   verifyGoogleFormat("Type* t = const_cast<T*>(&*x);");
   verifyGoogleFormat("Type* t = x++ * y;");
 
-  verifyFormat("a = *(x + y);");
-  verifyFormat("a = &(x + y);");
-  verifyFormat("*(x + y).call();");
-  verifyFormat("&(x + y)->call();");
-  verifyFormat("&(*I).first");
+  verifyIndependentOfContext("a = *(x + y);");
+  verifyIndependentOfContext("a = &(x + y);");
+  verifyIndependentOfContext("*(x + y).call();");
+  verifyIndependentOfContext("&(x + y)->call();");
+  verifyIndependentOfContext("&(*I).first");
 
-  verifyFormat("f(b * /* confusing comment */ ++c);");
+  verifyIndependentOfContext("f(b * /* confusing comment */ ++c);");
   verifyFormat(
       "int *MyValues = {\n"
       "  *A, // Operator detection might be confused by the '{'\n"
       "  *BB // Operator detection might be confused by previous comment\n"
       "};");
 
-  verifyFormat("if (int *a = &b)");
-  verifyFormat("if (int &a = *b)");
-  verifyFormat("if (a & b[i])");
-  verifyFormat("if (a::b::c::d & b[i])");
-  verifyFormat("if (*b[i])");
-  verifyFormat("if (int *a = (&b))");
-  verifyFormat("while (int *a = &b)");
+  verifyIndependentOfContext("if (int *a = &b)");
+  verifyIndependentOfContext("if (int &a = *b)");
+  verifyIndependentOfContext("if (a & b[i])");
+  verifyIndependentOfContext("if (a::b::c::d & b[i])");
+  verifyIndependentOfContext("if (*b[i])");
+  verifyIndependentOfContext("if (int *a = (&b))");
+  verifyIndependentOfContext("while (int *a = &b)");
+  verifyFormat("void f() {\n"
+               "  for (const int &v : Values) {\n"
+               "  }\n"
+               "}");
 
-  verifyFormat("A = new SomeType *[Length]();");
+  verifyIndependentOfContext("A = new SomeType *[Length]();");
   verifyGoogleFormat("A = new SomeType* [Length]();");
+}
+
+TEST_F(FormatTest, FormatsBinaryOperatorsPrecedingEquals) {
+  verifyFormat("void f() {\n"
+               "  x[aaaaaaaaa -\n"
+               "      b] = 23;\n"
+               "}", getLLVMStyleWithColumns(15));
 }
 
 TEST_F(FormatTest, FormatsCasts) {
@@ -1664,6 +1702,26 @@ TEST_F(FormatTest, BlockComments) {
             "    parameter);",
             format("#define A\n"
                    "/* */someCall(parameter);", getLLVMStyleWithColumns(15)));
+}
+
+TEST_F(FormatTest, FormatStarDependingOnContext) {
+  verifyFormat("void f(int *a);");
+  verifyFormat("void f() { f(fint * b); }");
+  verifyFormat("class A {\n  void f(int *a);\n};");
+  verifyFormat("class A {\n  int *a;\n};");
+  verifyFormat("namespace a {\n"
+               "namespace b {\n"
+               "class A {\n"
+               "  void f() {}\n"
+               "  int *a;\n"
+               "};\n"
+               "}\n"
+               "}");
+}
+
+TEST_F(FormatTest, SpecialTokensAtEndOfLine) {
+  verifyFormat("while");
+  verifyFormat("operator");
 }
 
 //===----------------------------------------------------------------------===//

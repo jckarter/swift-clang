@@ -112,7 +112,8 @@ class AnnotatedLine {
 public:
   AnnotatedLine(const UnwrappedLine &Line)
       : First(Line.Tokens.front()), Level(Line.Level),
-        InPPDirective(Line.InPPDirective) {
+        InPPDirective(Line.InPPDirective),
+        MustBeDeclaration(Line.MustBeDeclaration) {
     assert(!Line.Tokens.empty());
     AnnotatedToken *Current = &First;
     for (std::list<FormatToken>::const_iterator I = ++Line.Tokens.begin(),
@@ -126,7 +127,8 @@ public:
   }
   AnnotatedLine(const AnnotatedLine &Other)
       : First(Other.First), Type(Other.Type), Level(Other.Level),
-        InPPDirective(Other.InPPDirective) {
+        InPPDirective(Other.InPPDirective),
+        MustBeDeclaration(Other.MustBeDeclaration) {
     Last = &First;
     while (!Last->Children.empty()) {
       Last->Children[0].Parent = Last;
@@ -140,6 +142,7 @@ public:
   LineType Type;
   unsigned Level;
   bool InPPDirective;
+  bool MustBeDeclaration;
 };
 
 static prec::Level getPrecedence(const AnnotatedToken &Tok) {
@@ -156,6 +159,7 @@ FormatStyle getLLVMStyle() {
   LLVMStyle.IndentCaseLabels = false;
   LLVMStyle.SpacesBeforeTrailingComments = 1;
   LLVMStyle.BinPackParameters = true;
+  LLVMStyle.AllowAllParametersOnNextLine = true;
   LLVMStyle.ConstructorInitializerAllOnOneLineOrOnePerLine = false;
   LLVMStyle.AllowShortIfStatementsOnASingleLine = false;
   LLVMStyle.ObjCSpaceBeforeProtocolList = true;
@@ -172,6 +176,7 @@ FormatStyle getGoogleStyle() {
   GoogleStyle.IndentCaseLabels = true;
   GoogleStyle.SpacesBeforeTrailingComments = 2;
   GoogleStyle.BinPackParameters = false;
+  GoogleStyle.AllowAllParametersOnNextLine = true;
   GoogleStyle.ConstructorInitializerAllOnOneLineOrOnePerLine = true;
   GoogleStyle.AllowShortIfStatementsOnASingleLine = false;
   GoogleStyle.ObjCSpaceBeforeProtocolList = false;
@@ -180,7 +185,7 @@ FormatStyle getGoogleStyle() {
 
 FormatStyle getChromiumStyle() {
   FormatStyle ChromiumStyle = getGoogleStyle();
-  ChromiumStyle.AllowShortIfStatementsOnASingleLine = false;
+  ChromiumStyle.AllowAllParametersOnNextLine = false;
   return ChromiumStyle;
 }
 
@@ -416,9 +421,9 @@ private:
 
   struct ParenState {
     ParenState(unsigned Indent, unsigned LastSpace)
-        : Indent(Indent), LastSpace(LastSpace), FirstLessLess(0),
-          BreakBeforeClosingBrace(false), BreakAfterComma(false),
-          HasMultiParameterLine(false) {}
+        : Indent(Indent), LastSpace(LastSpace), AssignmentColumn(0),
+          FirstLessLess(0), BreakBeforeClosingBrace(false),
+          BreakAfterComma(false), HasMultiParameterLine(false) {}
 
     /// \brief The position to which a specific parenthesis level needs to be
     /// indented.
@@ -430,6 +435,9 @@ private:
     /// functionCall(Parameter, otherCall(
     ///                             OtherParameter));
     unsigned LastSpace;
+
+    /// \brief This is the column of the first token after an assignment.
+    unsigned AssignmentColumn;
 
     /// \brief The position the first "<<" operator encountered on each level.
     ///
@@ -452,6 +460,8 @@ private:
         return Indent < Other.Indent;
       if (LastSpace != Other.LastSpace)
         return LastSpace < Other.LastSpace;
+      if (AssignmentColumn != Other.AssignmentColumn)
+        return AssignmentColumn < Other.AssignmentColumn;
       if (FirstLessLess != Other.FirstLessLess)
         return FirstLessLess < Other.FirstLessLess;
       if (BreakBeforeClosingBrace != Other.BreakBeforeClosingBrace)
@@ -542,6 +552,9 @@ private:
         State.Column = State.ForLoopVariablePos;
       } else if (State.NextToken->Parent->ClosesTemplateDeclaration) {
         State.Column = State.Stack[ParenLevel].Indent - 4;
+      } else if (Previous.Type == TT_BinaryOperator &&
+                 State.Stack.back().AssignmentColumn != 0) {
+        State.Column = State.Stack.back().AssignmentColumn;
       } else {
         State.Column = State.Stack[ParenLevel].Indent;
       }
@@ -582,7 +595,7 @@ private:
       if (RootToken.isNot(tok::kw_for) && ParenLevel == 0 &&
           (getPrecedence(Previous) == prec::Assignment ||
            Previous.is(tok::kw_return)))
-        State.Stack[ParenLevel].Indent = State.Column + Spaces;
+        State.Stack.back().AssignmentColumn = State.Column + Spaces;
       if (Previous.is(tok::l_paren) || Previous.is(tok::l_brace) ||
           State.NextToken->Parent->Type == TT_TemplateOpener)
         State.Stack[ParenLevel].Indent = State.Column + Spaces;
@@ -591,25 +604,34 @@ private:
           Current.isNot(tok::comment))
         State.Stack[ParenLevel].HasMultiParameterLine = true;
 
-
-      // Top-level spaces that are not part of assignments are exempt as that
-      // mostly leads to better results.
       State.Column += Spaces;
-      if (Spaces > 0 &&
-          (ParenLevel != 0 || getPrecedence(Previous) == prec::Assignment))
-        State.Stack[ParenLevel].LastSpace = State.Column;
+      if (Current.is(tok::l_paren) && Previous.is(tok::kw_if))
+        // Treat the condition inside an if as if it was a second function
+        // parameter, i.e. let nested calls have an indent of 4.
+        State.Stack.back().LastSpace = State.Column + 1; // 1 is length of "(".
+      else if (Spaces > 0 && ParenLevel != 0)
+        // Top-level spaces are exempt as that mostly leads to better results.
+        State.Stack.back().LastSpace = State.Column;
     }
 
     // If we break after an {, we should also break before the corresponding }.
     if (Newline && Previous.is(tok::l_brace))
       State.Stack.back().BreakBeforeClosingBrace = true;
 
-    // If we are breaking after '(', '{', '<' or ',', we need to break after
-    // future commas as well to avoid bin packing.
-    if (!Style.BinPackParameters && Newline &&
-        (Previous.is(tok::comma) || Previous.is(tok::l_paren) ||
-         Previous.is(tok::l_brace) || Previous.Type == TT_TemplateOpener))
-      State.Stack.back().BreakAfterComma = true;
+    if (!Style.BinPackParameters && Newline) {
+      // If we are breaking after '(', '{', '<', this is not bin packing unless
+      // AllowAllParametersOnNextLine is false.
+      if ((Previous.isNot(tok::l_paren) && Previous.isNot(tok::l_brace) &&
+           Previous.Type != TT_TemplateOpener) ||
+          !Style.AllowAllParametersOnNextLine)
+        State.Stack.back().BreakAfterComma = true;
+      
+      // Any break on this level means that the parent level has been broken
+      // and we need to avoid bin packing there.
+      for (unsigned i = 0, e = State.Stack.size() - 1; i != e; ++i) {
+        State.Stack[i].BreakAfterComma = true;
+      }
+    }
 
     moveStateToNextToken(State);
   }
@@ -639,17 +661,6 @@ private:
       }
       State.Stack.push_back(
           ParenState(NewIndent, State.Stack.back().LastSpace));
-
-      // If the entire set of parameters will not fit on the current line, we
-      // will need to break after commas on this level to avoid bin-packing.
-      if (!Style.BinPackParameters && Current.MatchingParen != NULL &&
-          !Current.Children.empty()) {
-        if (getColumnLimit() < State.Column + Current.FormatTok.TokenLength +
-            Current.MatchingParen->TotalLength -
-            Current.Children[0].TotalLength) {
-          State.Stack.back().BreakAfterComma = true;
-        }
-      }
     }
 
     // If we encounter a closing ), ], } or >, we can remove a level from our
@@ -699,11 +710,6 @@ private:
     if (Left.is(tok::question) || Left.Type == TT_ConditionalExpr)
       return prec::Assignment;
     prec::Level Level = getPrecedence(Left);
-
-    // Breaking after an assignment leads to a bad result as the two sides of
-    // the assignment are visually very close together.
-    if (Level == prec::Assignment)
-      return 50;
 
     if (Level != prec::Unknown)
       return Level;
@@ -1047,7 +1053,7 @@ public:
         break;
       case tok::kw_if:
       case tok::kw_while:
-        if (CurrentToken->is(tok::l_paren)) {
+        if (CurrentToken != NULL && CurrentToken->is(tok::l_paren)) {
           next();
           if (!parseParens(/*LookForDecls=*/true))
             return false;
@@ -1086,7 +1092,7 @@ public:
         Tok->Type = TT_BinaryOperator;
         break;
       case tok::kw_operator:
-        if (CurrentToken->is(tok::l_paren)) {
+        if (CurrentToken != NULL && CurrentToken->is(tok::l_paren)) {
           CurrentToken->Type = TT_OverloadedOperator;
           next();
           if (CurrentToken != NULL && CurrentToken->is(tok::r_paren)) {
@@ -1235,7 +1241,7 @@ public:
     if (Line.Type == LT_Invalid)
       return;
 
-    determineTokenTypes(Line.First, /*IsRHS=*/false);
+    determineTokenTypes(Line.First, /*IsExpression=*/ false);
 
     if (Line.First.Type == TT_ObjCMethodSpecifier)
       Line.Type = LT_ObjCMethodDecl;
@@ -1254,14 +1260,26 @@ public:
   }
 
 private:
-  void determineTokenTypes(AnnotatedToken &Current, bool IsRHS) {
-    if (getPrecedence(Current) == prec::Assignment ||
-        Current.is(tok::kw_return) || Current.is(tok::kw_throw))
-      IsRHS = true;
+  void determineTokenTypes(AnnotatedToken &Current, bool IsExpression) {
+    if (getPrecedence(Current) == prec::Assignment) {
+      IsExpression = true;
+      AnnotatedToken *Previous = Current.Parent;
+      while (Previous != NULL) {
+        if (Previous->Type == TT_BinaryOperator &&
+            (Previous->is(tok::star) || Previous->is(tok::amp))) {
+          Previous->Type = TT_PointerOrReference;
+        }
+        Previous = Previous->Parent;
+      }
+    }
+    if (Current.is(tok::kw_return) || Current.is(tok::kw_throw) ||
+        (Current.is(tok::l_paren) && !Line.MustBeDeclaration &&
+         (Current.Parent == NULL || Current.Parent->isNot(tok::kw_for))))
+      IsExpression = true;
 
     if (Current.Type == TT_Unknown) {
       if (Current.is(tok::star) || Current.is(tok::amp)) {
-        Current.Type = determineStarAmpUsage(Current, IsRHS);
+        Current.Type = determineStarAmpUsage(Current, IsExpression);
       } else if (Current.is(tok::minus) || Current.is(tok::plus) ||
                  Current.is(tok::caret)) {
         Current.Type = determinePlusMinusCaretUsage(Current);
@@ -1304,7 +1322,7 @@ private:
     }
 
     if (!Current.Children.empty())
-      determineTokenTypes(Current.Children[0], IsRHS);
+      determineTokenTypes(Current.Children[0], IsExpression);
   }
 
   bool isBinaryOperator(const AnnotatedToken &Tok) {
@@ -1334,7 +1352,8 @@ private:
   }
 
   /// \brief Return the type of the given token assuming it is * or &.
-  TokenType determineStarAmpUsage(const AnnotatedToken &Tok, bool IsRHS) {
+  TokenType determineStarAmpUsage(const AnnotatedToken &Tok,
+                                  bool IsExpression) {
     const AnnotatedToken *PrevToken = getPreviousToken(Tok);
     if (PrevToken == NULL)
       return TT_UnaryOperator;
@@ -1368,7 +1387,7 @@ private:
 
     // It is very unlikely that we are going to find a pointer or reference type
     // definition on the RHS of an assignment.
-    if (IsRHS)
+    if (IsExpression)
       return TT_BinaryOperator;
 
     return TT_PointerOrReference;

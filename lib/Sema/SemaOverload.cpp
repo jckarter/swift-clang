@@ -1,4 +1,4 @@
-//===--- SemaOverload.cpp - C++ Overloading ---------------------*- C++ -*-===//
+//===--- SemaOverload.cpp - C++ Overloading -------------------------------===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -1840,7 +1840,8 @@ bool Sema::IsFloatingPointPromotion(QualType FromType, QualType ToType) {
         return true;
 
       // Half can be promoted to float.
-      if (FromBuiltin->getKind() == BuiltinType::Half &&
+      if (!getLangOpts().NativeHalfType &&
+           FromBuiltin->getKind() == BuiltinType::Half &&
           ToBuiltin->getKind() == BuiltinType::Float)
         return true;
     }
@@ -10334,6 +10335,13 @@ Sema::CreateOverloadedBinOp(SourceLocation OpLoc,
         if (CheckCallReturnType(FnDecl->getResultType(), OpLoc, TheCall,
                                 FnDecl))
           return ExprError();
+
+        ArrayRef<const Expr *> ArgsArray(Args, 2);
+        // Cut off the implicit 'this'.
+        if (isa<CXXMethodDecl>(FnDecl))
+          ArgsArray = ArgsArray.slice(1);
+        checkCall(FnDecl, ArgsArray, 0, isa<CXXMethodDecl>(FnDecl), OpLoc, 
+                  TheCall->getSourceRange(), VariadicDoesNotApply);
 
         return MaybeBindToTemporary(TheCall);
       } else {

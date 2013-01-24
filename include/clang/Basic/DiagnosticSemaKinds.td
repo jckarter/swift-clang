@@ -75,7 +75,9 @@ def warn_double_const_requires_fp64 : Warning<
 
 // C99 variable-length arrays
 def ext_vla : Extension<"variable length arrays are a C99 feature">,
-  InGroup<VLA>;
+  InGroup<VLAExtension>;
+def warn_vla_used : Warning<"variable length array used">,
+  InGroup<VLA>, DefaultIgnore;
 def err_vla_non_pod : Error<"variable length array of non-POD element type %0">;
 def err_vla_in_sfinae : Error<
   "variable length array cannot be formed during template argument deduction">;
@@ -338,7 +340,8 @@ def warn_implicit_decl_requires_ucontext : Warning<
   "<ucontext.h>">,
   InGroup<BuiltinRequiresHeader>;
 def warn_redecl_library_builtin : Warning<
-  "incompatible redeclaration of library function %0">;
+  "incompatible redeclaration of library function %0">,
+  InGroup<DiagGroup<"incompatible-library-redeclaration">>;
 def err_builtin_definition : Error<"definition of builtin function %0">;
 def err_types_compatible_p_in_cplusplus : Error<
   "__builtin_types_compatible_p is not valid in C++">;
@@ -417,6 +420,18 @@ def err_object_cannot_be_passed_returned_by_value : Error<
   "; did you forget * in %1?">;
 def err_parameters_retval_cannot_have_fp16_type : Error<
   "%select{parameters|function return value}0 cannot have __fp16 type; did you forget * ?">;
+def err_opencl_half_dereferencing : Error<
+  "dereferencing pointer of type %0 is not allowed">;
+def err_opencl_half_subscript : Error<
+  "subscript to array of type %0 is not allowed">;
+def err_opencl_cast_to_half : Error<"casting to type %0 is not allowed">;
+def err_opencl_cast_from_half : Error<"casting from type %0 is not allowed">;
+def err_opencl_half_declaration : Error<
+  "declaring variable of type %0 is not allowed">;
+def err_opencl_half_argument : Error<
+  "declaring function argument of type %0 is not allowed; did you forget * ?">;
+def err_opencl_half_return : Error<
+  "declaring function return value of type %0 is not allowed; did you forget * ?">;
 def warn_enum_value_overflow : Warning<"overflow in enumeration value">;
 def warn_pragma_options_align_reset_failed : Warning<
   "#pragma options align=reset failed: %0">;
