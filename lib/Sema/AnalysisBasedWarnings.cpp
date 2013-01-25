@@ -722,6 +722,10 @@ namespace {
         if (SW && SW->getSubStmt() == B.getLabel() && P->begin() == P->end())
           continue; // Previous case label has no statements, good.
 
+        const LabelStmt *L = dyn_cast_or_null<LabelStmt>(P->getLabel());
+        if (L && L->getSubStmt() == B.getLabel() && P->begin() == P->end())
+          continue; // Case label is preceded with a normal label, good.
+
         if (P->pred_begin() == P->pred_end()) {  // The block is unreachable.
           // This only catches trivially unreachable blocks.
           for (CFGBlock::const_iterator ElIt = P->begin(), ElEnd = P->end();
@@ -846,13 +850,13 @@ static void DiagnoseSwitchLabelsFallthrough(Sema &S, AnalysisDeclContext &AC,
   int AnnotatedCnt;
 
   for (CFG::reverse_iterator I = Cfg->rbegin(), E = Cfg->rend(); I != E; ++I) {
-    const CFGBlock &B = **I;
-    const Stmt *Label = B.getLabel();
+    const CFGBlock *B = *I;
+    const Stmt *Label = B->getLabel();
 
     if (!Label || !isa<SwitchCase>(Label))
       continue;
 
-    if (!FM.checkFallThroughIntoBlock(B, AnnotatedCnt))
+    if (!FM.checkFallThroughIntoBlock(*B, AnnotatedCnt))
       continue;
 
     S.Diag(Label->getLocStart(),
@@ -864,8 +868,13 @@ static void DiagnoseSwitchLabelsFallthrough(Sema &S, AnalysisDeclContext &AC,
       if (L.isMacroID())
         continue;
       if (S.getLangOpts().CPlusPlus11) {
-        const Stmt *Term = B.getTerminator();
-        if (!(B.empty() && Term && isa<BreakStmt>(Term))) {
+        const Stmt *Term = B->getTerminator();
+        // Skip empty cases.
+        while (B->empty() && !Term && B->succ_size() == 1) {
+          B = *B->succ_begin();
+          Term = B->getTerminator();
+        }
+        if (!(B->empty() && Term && isa<BreakStmt>(Term))) {
           Preprocessor &PP = S.getPreprocessor();
           TokenValue Tokens[] = {
             tok::l_square, tok::l_square, PP.getIdentifierInfo("clang"),
