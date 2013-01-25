@@ -68,6 +68,7 @@ class NestedNameSpecifier;
 class CXXBaseSpecifier;
 class CXXConstructorDecl;
 class CXXCtorInitializer;
+class GlobalModuleIndex;
 class GotoStmt;
 class MacroDefinition;
 class NamedDecl;
@@ -291,6 +292,9 @@ private:
 
   /// \brief The module manager which manages modules and their dependencies
   ModuleManager ModuleMgr;
+
+  /// \brief The global module index, if loaded.
+  llvm::OwningPtr<GlobalModuleIndex> GlobalIndex;
 
   /// \brief A map of global bit offsets to the module that stores entities
   /// at those bit offsets.
@@ -692,6 +696,12 @@ private:
   /// \brief Whether to accept an AST file with compiler errors.
   bool AllowASTWithCompilerErrors;
 
+  /// \brief Whether we are allowed to use the global module index.
+  bool UseGlobalIndex;
+
+  /// \brief Whether we have tried loading the global module index yet.
+  bool TriedLoadingGlobalIndex;
+
   /// \brief The current "generation" of the module file import stack, which 
   /// indicates how many separate module file load operations have occurred.
   unsigned CurrentGeneration;
@@ -725,6 +735,12 @@ private:
 
   /// \brief The total number of macros stored in the chain.
   unsigned TotalNumMacros;
+
+  /// \brief The number of lookups into identifier tables.
+  unsigned NumIdentifierLookups;
+
+  /// \brief The number of lookups into identifier tables that succeed.
+  unsigned NumIdentifierLookupHits;
 
   /// \brief The number of selectors that have been read.
   unsigned NumSelectorsRead;
@@ -1075,9 +1091,13 @@ public:
   /// \param AllowASTWithCompilerErrors If true, the AST reader will accept an
   /// AST file the was created out of an AST with compiler errors,
   /// otherwise it will reject it.
+  ///
+  /// \param UseGlobalIndex If true, the AST reader will try to load and use
+  /// the global module index.
   ASTReader(Preprocessor &PP, ASTContext &Context, StringRef isysroot = "",
             bool DisableValidation = false,
-            bool AllowASTWithCompilerErrors = false);
+            bool AllowASTWithCompilerErrors = false,
+            bool UseGlobalIndex = true);
 
   ~ASTReader();
 
@@ -1141,6 +1161,18 @@ public:
   /// \brief Set the AST deserialization listener.
   void setDeserializationListener(ASTDeserializationListener *Listener);
 
+  /// \brief Determine whether this AST reader has a global index.
+  bool hasGlobalIndex() const { return GlobalIndex; }
+
+  /// \brief Attempts to load the global index.
+  ///
+  /// \returns true if loading the global index has failed for any reason.
+  bool loadGlobalIndex();
+
+  /// \brief Determine whether we tried to load the global index, but failed,
+  /// e.g., because it is out-of-date or does not exist.
+  bool isGlobalIndexUnavailable() const;
+  
   /// \brief Initializes the ASTContext
   void InitializeContext();
 

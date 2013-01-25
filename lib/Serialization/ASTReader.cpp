@@ -40,6 +40,7 @@
 #include "clang/Sema/Scope.h"
 #include "clang/Sema/Sema.h"
 #include "clang/Serialization/ASTDeserializationListener.h"
+#include "clang/Serialization/GlobalModuleIndex.h"
 #include "clang/Serialization/ModuleManager.h"
 #include "clang/Serialization/SerializationDiagnostic.h"
 #include "llvm/ADT/StringExtras.h"
@@ -1377,10 +1378,22 @@ namespace {
   class IdentifierLookupVisitor {
     StringRef Name;
     unsigned PriorGeneration;
+    GlobalModuleIndex::SkipSet &SkipSet;
+    unsigned &NumIdentifierLookups;
+    unsigned &NumIdentifierLookupHits;
     IdentifierInfo *Found;
+
   public:
-    IdentifierLookupVisitor(StringRef Name, unsigned PriorGeneration) 
-      : Name(Name), PriorGeneration(PriorGeneration), Found() { }
+    IdentifierLookupVisitor(StringRef Name, unsigned PriorGeneration,
+                            GlobalModuleIndex::SkipSet &SkipSet,
+                            unsigned &NumIdentifierLookups,
+                            unsigned &NumIdentifierLookupHits)
+      : Name(Name), PriorGeneration(PriorGeneration), SkipSet(SkipSet),
+        NumIdentifierLookups(NumIdentifierLookups),
+        NumIdentifierLookupHits(NumIdentifierLookupHits),
+        Found()
+    {
+    }
     
     static bool visit(ModuleFile &M, void *UserData) {
       IdentifierLookupVisitor *This
@@ -1389,7 +1402,11 @@ namespace {
       // If we've already searched this module file, skip it now.
       if (M.Generation <= This->PriorGeneration)
         return true;
-      
+
+      // If this module file is in the skip set, don't bother looking in it.
+      if (This->SkipSet.count(M.File))
+        return false;
+
       ASTIdentifierLookupTable *IdTable
         = (ASTIdentifierLookupTable *)M.IdentifierLookupTable;
       if (!IdTable)
@@ -1397,14 +1414,15 @@ namespace {
       
       ASTIdentifierLookupTrait Trait(IdTable->getInfoObj().getReader(),
                                      M, This->Found);
-                                     
-      ASTIdentifierLookupTable::iterator Pos = IdTable->find(This->Name, &Trait);
+      ++This->NumIdentifierLookups;
+      ASTIdentifierLookupTable::iterator Pos = IdTable->find(This->Name,&Trait);
       if (Pos == IdTable->end())
         return false;
       
       // Dereferencing the iterator has the effect of building the
       // IdentifierInfo node and populating it with the various
       // declarations it needs.
+      ++This->NumIdentifierLookupHits;
       This->Found = *Pos;
       return true;
     }
@@ -1422,8 +1440,20 @@ void ASTReader::updateOutOfDateIdentifier(IdentifierInfo &II) {
   unsigned PriorGeneration = 0;
   if (getContext().getLangOpts().Modules)
     PriorGeneration = IdentifierGeneration[&II];
-  
-  IdentifierLookupVisitor Visitor(II.getName(), PriorGeneration);
+
+  // If there is a global index, look there first to determine which modules
+  // provably do not have any results for this identifier.
+  GlobalModuleIndex::SkipSet SkipSet;
+  if (!loadGlobalIndex()) {
+    SmallVector<const FileEntry *, 4> ModuleFiles;
+    if (GlobalIndex->lookupIdentifier(II.getName(), ModuleFiles)) {
+      SkipSet = GlobalIndex->computeSkipSet(ModuleFiles);
+    }
+  }
+
+  IdentifierLookupVisitor Visitor(II.getName(), PriorGeneration, SkipSet,
+                                  NumIdentifierLookups,
+                                  NumIdentifierLookupHits);
   ModuleMgr.visit(IdentifierLookupVisitor::visit, &Visitor);
   markIdentifierUpToDate(&II);
 }
@@ -2647,6 +2677,32 @@ void ASTReader::makeModuleVisible(Module *Mod,
   }
 }
 
+bool ASTReader::loadGlobalIndex() {
+  if (GlobalIndex)
+    return false;
+
+  if (TriedLoadingGlobalIndex || !UseGlobalIndex ||
+      !Context.getLangOpts().Modules)
+    return true;
+  
+  // Try to load the global index.
+  TriedLoadingGlobalIndex = true;
+  StringRef ModuleCachePath
+    = getPreprocessor().getHeaderSearchInfo().getModuleCachePath();
+  std::pair<GlobalModuleIndex *, GlobalModuleIndex::ErrorCode> Result
+    = GlobalModuleIndex::readIndex(FileMgr, ModuleCachePath);
+  if (!Result.first)
+    return true;
+
+  GlobalIndex.reset(Result.first);
+  return false;
+}
+
+bool ASTReader::isGlobalIndexUnavailable() const {
+  return Context.getLangOpts().Modules && UseGlobalIndex &&
+         !hasGlobalIndex() && TriedLoadingGlobalIndex;
+}
+
 ASTReader::ASTReadResult ASTReader::ReadAST(const std::string &FileName,
                                             ModuleKind Type,
                                             SourceLocation ImportLoc,
@@ -2665,6 +2721,10 @@ ASTReader::ASTReadResult ASTReader::ReadAST(const std::string &FileName,
   case ConfigurationMismatch:
   case HadErrors:
     ModuleMgr.removeModules(ModuleMgr.begin() + NumModules, ModuleMgr.end());
+
+    // If we find that any modules are unusable, the global index is going
+    // to be out-of-date. Just remove it.
+    GlobalIndex.reset();
     return ReadResult;
 
   case Success:
@@ -2766,7 +2826,7 @@ ASTReader::ASTReadResult ASTReader::ReadAST(const std::string &FileName,
                        ObjCClassesLoaded[I],
                        PreviousGeneration);
   }
-  
+
   return Success;
 }
 
@@ -3616,14 +3676,13 @@ bool ASTReader::ParseHeaderSearchOptions(const RecordData &Record,
     std::string Path = ReadString(Record, Idx);
     frontend::IncludeDirGroup Group
       = static_cast<frontend::IncludeDirGroup>(Record[Idx++]);
-    bool IsUserSupplied = Record[Idx++];
     bool IsFramework = Record[Idx++];
     bool IgnoreSysRoot = Record[Idx++];
     bool IsInternal = Record[Idx++];
     bool ImplicitExternC = Record[Idx++];
     HSOpts.UserEntries.push_back(
-      HeaderSearchOptions::Entry(Path, Group, IsUserSupplied, IsFramework,
-                                 IgnoreSysRoot, IsInternal, ImplicitExternC));
+      HeaderSearchOptions::Entry(Path, Group, IsFramework, IgnoreSysRoot,
+                                 IsInternal, ImplicitExternC));
   }
 
   // System header prefixes.
@@ -5585,6 +5644,18 @@ void ASTReader::PrintStats() {
                   * 100));
     std::fprintf(stderr, "  %u method pool misses\n", NumMethodPoolMisses);
   }
+  if (NumIdentifierLookupHits) {
+    std::fprintf(stderr,
+                 "  %u / %u identifier table lookups succeeded (%f%%)\n",
+                 NumIdentifierLookupHits, NumIdentifierLookups,
+                 (double)NumIdentifierLookupHits*100.0/NumIdentifierLookups);
+  }
+
+  if (GlobalIndex) {
+    std::fprintf(stderr, "\n");
+    GlobalIndex->printStats();
+  }
+  
   std::fprintf(stderr, "\n");
   dump();
   std::fprintf(stderr, "\n");
@@ -5685,9 +5756,20 @@ void ASTReader::InitializeSema(Sema &S) {
 IdentifierInfo* ASTReader::get(const char *NameStart, const char *NameEnd) {
   // Note that we are loading an identifier.
   Deserializing AnIdentifier(this);
-  
-  IdentifierLookupVisitor Visitor(StringRef(NameStart, NameEnd - NameStart),
-                                  /*PriorGeneration=*/0);
+  StringRef Name(NameStart, NameEnd - NameStart);
+
+  // If there is a global index, look there first to determine which modules
+  // provably do not have any results for this identifier.
+  GlobalModuleIndex::SkipSet SkipSet;
+  if (!loadGlobalIndex()) {
+    SmallVector<const FileEntry *, 4> ModuleFiles;
+    if (GlobalIndex->lookupIdentifier(Name, ModuleFiles)) {
+      SkipSet = GlobalIndex->computeSkipSet(ModuleFiles);
+    }
+  }
+  IdentifierLookupVisitor Visitor(Name, /*PriorGeneration=*/0, SkipSet,
+                                  NumIdentifierLookups,
+                                  NumIdentifierLookupHits);
   ModuleMgr.visit(IdentifierLookupVisitor::visit, &Visitor);
   IdentifierInfo *II = Visitor.getIdentifierInfo();
   markIdentifierUpToDate(II);
@@ -6919,17 +7001,19 @@ void ASTReader::FinishedDeserializing() {
 
 ASTReader::ASTReader(Preprocessor &PP, ASTContext &Context,
                      StringRef isysroot, bool DisableValidation,
-                     bool AllowASTWithCompilerErrors)
+                     bool AllowASTWithCompilerErrors, bool UseGlobalIndex)
   : Listener(new PCHValidator(PP, *this)), DeserializationListener(0),
     SourceMgr(PP.getSourceManager()), FileMgr(PP.getFileManager()),
     Diags(PP.getDiagnostics()), SemaObj(0), PP(PP), Context(Context),
     Consumer(0), ModuleMgr(PP.getFileManager()),
     isysroot(isysroot), DisableValidation(DisableValidation),
-    AllowASTWithCompilerErrors(AllowASTWithCompilerErrors), 
+    AllowASTWithCompilerErrors(AllowASTWithCompilerErrors),
+    UseGlobalIndex(UseGlobalIndex), TriedLoadingGlobalIndex(false),
     CurrentGeneration(0), CurrSwitchCaseStmts(&SwitchCaseStmts),
     NumSLocEntriesRead(0), TotalNumSLocEntries(0), 
-    NumStatementsRead(0), TotalNumStatements(0), NumMacrosRead(0), 
-    TotalNumMacros(0), NumSelectorsRead(0), NumMethodPoolEntriesRead(0), 
+    NumStatementsRead(0), TotalNumStatements(0), NumMacrosRead(0),
+    TotalNumMacros(0), NumIdentifierLookups(0), NumIdentifierLookupHits(0),
+    NumSelectorsRead(0), NumMethodPoolEntriesRead(0),
     NumMethodPoolMisses(0), TotalNumMethodPoolEntries(0), 
     NumLexicalDeclContextsRead(0), TotalLexicalDeclContexts(0), 
     NumVisibleDeclContextsRead(0), TotalVisibleDeclContexts(0),
