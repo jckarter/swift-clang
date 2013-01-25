@@ -5245,6 +5245,8 @@ let CategoryName = "Inline Assembly Issue" in {
     "invalid use of a cast in a inline asm context requiring an l-value: "
     "remove the cast or build with -fheinous-gnu-extensions">;
   def err_inline_ms_asm_parsing : Error<"%0">;
+  def err_msasm_unsupported_arch : Error<
+    "Unsupported architecture '%0' for MS-style inline assembly">;
 
   def warn_asm_label_on_auto_decl : Warning<
     "ignored asm label '%0' on automatic variable">;
@@ -5307,9 +5309,10 @@ def err_in_class_initializer_bad_type : Error<
   "static data member of type %0 must be initialized out of line">;
 def ext_in_class_initializer_float_type : ExtWarn<
   "in-class initializer for static data member of type %0 is a GNU extension">,
-  InGroup<GNU>;
-def note_in_class_initializer_float_type_constexpr : Note<
-  "use 'constexpr' specifier to silence this warning">;
+  InGroup<GNUStaticFloatInit>;
+def ext_in_class_initializer_float_type_cxx11 : ExtWarn<
+  "in-class initializer for static data member of type %0 requires "
+  "'constexpr' specifier">, InGroup<StaticFloatInit>, DefaultError;
 def err_in_class_initializer_literal_type : Error<
   "in-class initializer for static data member of type %0 requires "
   "'constexpr' specifier">;
@@ -5758,9 +5761,6 @@ def warn_bool_switch_condition : Warning<
   "switch condition has boolean value">;
 def warn_case_value_overflow : Warning<
   "overflow converting case value to switch condition type (%0 to %1)">,
-  InGroup<Switch>;
-def warn_case_constant_overflow : Warning<
-  "overflow in case constant expression results in value %0">,
   InGroup<Switch>;
 def err_duplicate_case : Error<"duplicate case value '%0'">;
 def err_duplicate_case_differing_expr : Error<

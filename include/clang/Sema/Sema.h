@@ -1681,14 +1681,20 @@ public:
                                           VersionTuple Obsoleted,
                                           bool IsUnavailable,
                                           StringRef Message,
-                                          bool Override);
+                                          bool Override,
+                                          unsigned AttrSpellingListIndex);
   VisibilityAttr *mergeVisibilityAttr(Decl *D, SourceRange Range,
-                                      VisibilityAttr::VisibilityType Vis);
-  DLLImportAttr *mergeDLLImportAttr(Decl *D, SourceRange Range);
-  DLLExportAttr *mergeDLLExportAttr(Decl *D, SourceRange Range);
+                                      VisibilityAttr::VisibilityType Vis,
+                                      unsigned AttrSpellingListIndex);
+  DLLImportAttr *mergeDLLImportAttr(Decl *D, SourceRange Range,
+                                    unsigned AttrSpellingListIndex);
+  DLLExportAttr *mergeDLLExportAttr(Decl *D, SourceRange Range,
+                                    unsigned AttrSpellingListIndex);
   FormatAttr *mergeFormatAttr(Decl *D, SourceRange Range, StringRef Format,
-                              int FormatIdx, int FirstArg);
-  SectionAttr *mergeSectionAttr(Decl *D, SourceRange Range, StringRef Name);
+                              int FormatIdx, int FirstArg,
+                              unsigned AttrSpellingListIndex);
+  SectionAttr *mergeSectionAttr(Decl *D, SourceRange Range, StringRef Name,
+                                unsigned AttrSpellingListIndex);
   bool mergeDeclAttribute(NamedDecl *New, InheritableAttr *Attr,
                           bool Override);
 
@@ -3987,7 +3993,8 @@ public:
                                           : SourceLocation());
   }
   ExprResult ActOnFinishFullExpr(Expr *Expr, SourceLocation CC,
-                                 bool DiscardedValue = false);
+                                 bool DiscardedValue = false,
+                                 bool IsConstexpr = false);
   StmtResult ActOnFinishFullStmt(Stmt *Stmt);
 
   // Marks SS invalid if it represents an incomplete type.
@@ -6520,7 +6527,7 @@ public:
 
   /// AddAlignedAttr - Adds an aligned attribute to a particular declaration.
   void AddAlignedAttr(SourceRange AttrRange, Decl *D, Expr *E,
-                      bool isDeclSpec);
+                      bool isDeclSpec, unsigned SpellingListIndex = 0);
   void AddAlignedAttr(SourceRange AttrRange, Decl *D, TypeSourceInfo *T,
                       bool isDeclSpec);
 
@@ -7323,11 +7330,13 @@ private:
                             SourceLocation ReturnLoc);
   void CheckFloatComparison(SourceLocation Loc, Expr* LHS, Expr* RHS);
   void CheckImplicitConversions(Expr *E, SourceLocation CC = SourceLocation());
+  void CheckForIntOverflow(Expr *E);
   void CheckUnsequencedOperations(Expr *E);
 
   /// \brief Perform semantic checks on a completed expression. This will either
   /// be a full-expression or a default argument expression.
-  void CheckCompletedExpr(Expr *E, SourceLocation CheckLoc = SourceLocation());
+  void CheckCompletedExpr(Expr *E, SourceLocation CheckLoc = SourceLocation(),
+                          bool IsConstexpr = false);
 
   void CheckBitFieldInitialization(SourceLocation InitLoc, FieldDecl *Field,
                                    Expr *Init);

@@ -1825,22 +1825,29 @@ DeclHasAttr(const Decl *D, const Attr *A) {
 bool Sema::mergeDeclAttribute(NamedDecl *D, InheritableAttr *Attr,
                               bool Override) {
   InheritableAttr *NewAttr = NULL;
+  unsigned AttrSpellingListIndex = Attr->getSpellingListIndex();
   if (AvailabilityAttr *AA = dyn_cast<AvailabilityAttr>(Attr))
     NewAttr = mergeAvailabilityAttr(D, AA->getRange(), AA->getPlatform(),
                                     AA->getIntroduced(), AA->getDeprecated(),
                                     AA->getObsoleted(), AA->getUnavailable(),
-                                    AA->getMessage(), Override);
+                                    AA->getMessage(), Override,
+                                    AttrSpellingListIndex);
   else if (VisibilityAttr *VA = dyn_cast<VisibilityAttr>(Attr))
-    NewAttr = mergeVisibilityAttr(D, VA->getRange(), VA->getVisibility());
+    NewAttr = mergeVisibilityAttr(D, VA->getRange(), VA->getVisibility(),
+                                  AttrSpellingListIndex);
   else if (DLLImportAttr *ImportA = dyn_cast<DLLImportAttr>(Attr))
-    NewAttr = mergeDLLImportAttr(D, ImportA->getRange());
+    NewAttr = mergeDLLImportAttr(D, ImportA->getRange(),
+                                 AttrSpellingListIndex);
   else if (DLLExportAttr *ExportA = dyn_cast<DLLExportAttr>(Attr))
-    NewAttr = mergeDLLExportAttr(D, ExportA->getRange());
+    NewAttr = mergeDLLExportAttr(D, ExportA->getRange(),
+                                 AttrSpellingListIndex);
   else if (FormatAttr *FA = dyn_cast<FormatAttr>(Attr))
     NewAttr = mergeFormatAttr(D, FA->getRange(), FA->getType(),
-                              FA->getFormatIdx(), FA->getFirstArg());
+                              FA->getFormatIdx(), FA->getFirstArg(),
+                              AttrSpellingListIndex);
   else if (SectionAttr *SA = dyn_cast<SectionAttr>(Attr))
-    NewAttr = mergeSectionAttr(D, SA->getRange(), SA->getName());
+    NewAttr = mergeSectionAttr(D, SA->getRange(), SA->getName(),
+                               AttrSpellingListIndex);
   else if (!DeclHasAttr(D, Attr))
     NewAttr = cast<InheritableAttr>(Attr->clone(Context));
 
@@ -7038,7 +7045,9 @@ void Sema::AddInitializerToDecl(Decl *RealDecl, Expr *Init,
   //   struct T { S a, b; } t = { Temp(), Temp() }
   //
   // we should destroy the first Temp before constructing the second.
-  ExprResult Result = ActOnFinishFullExpr(Init, VDecl->getLocation());
+  ExprResult Result = ActOnFinishFullExpr(Init, VDecl->getLocation(),
+                                          false,
+                                          VDecl->isConstexpr());
   if (Result.isInvalid()) {
     VDecl->setInvalidDecl();
     return;
@@ -7119,17 +7128,23 @@ void Sema::AddInitializerToDecl(Decl *RealDecl, Expr *Init,
 
     // We allow foldable floating-point constants as an extension.
     } else if (DclT->isFloatingType()) { // also permits complex, which is ok
-      Diag(VDecl->getLocation(), diag::ext_in_class_initializer_float_type)
-        << DclT << Init->getSourceRange();
-      if (getLangOpts().CPlusPlus11)
+      // In C++98, this is a GNU extension. In C++11, it is not, but we support
+      // it anyway and provide a fixit to add the 'constexpr'.
+      if (getLangOpts().CPlusPlus11) {
         Diag(VDecl->getLocation(),
-             diag::note_in_class_initializer_float_type_constexpr)
+             diag::ext_in_class_initializer_float_type_cxx11)
+          << DclT << Init->getSourceRange()
           << FixItHint::CreateInsertion(VDecl->getLocStart(), "constexpr ");
+        VDecl->setConstexpr(true);
+      } else {
+        Diag(VDecl->getLocation(), diag::ext_in_class_initializer_float_type)
+          << DclT << Init->getSourceRange();
 
-      if (!Init->isValueDependent() && !Init->isEvaluatable(Context)) {
-        Diag(Init->getExprLoc(), diag::err_in_class_initializer_non_constant)
-          << Init->getSourceRange();
-        VDecl->setInvalidDecl();
+        if (!Init->isValueDependent() && !Init->isEvaluatable(Context)) {
+          Diag(Init->getExprLoc(), diag::err_in_class_initializer_non_constant)
+            << Init->getSourceRange();
+          VDecl->setInvalidDecl();
+        }
       }
 
     // Suggest adding 'constexpr' in C++11 for literal types.

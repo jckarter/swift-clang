@@ -5470,7 +5470,8 @@ ExprResult Sema::IgnoredValueConversions(Expr *E) {
 }
 
 ExprResult Sema::ActOnFinishFullExpr(Expr *FE, SourceLocation CC,
-                                     bool DiscardedValue) {
+                                     bool DiscardedValue,
+                                     bool IsConstexpr) {
   ExprResult FullExpr = Owned(FE);
 
   if (!FullExpr.get())
@@ -5498,7 +5499,7 @@ ExprResult Sema::ActOnFinishFullExpr(Expr *FE, SourceLocation CC,
       return ExprError();
   }
 
-  CheckCompletedExpr(FullExpr.get(), CC);
+  CheckCompletedExpr(FullExpr.get(), CC, IsConstexpr);
   return MaybeCreateExprWithCleanups(FullExpr);
 }
 

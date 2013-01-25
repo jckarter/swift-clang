@@ -93,26 +93,46 @@ def ext_multichar_character_literal : ExtWarn<
   "multi-character character constant">, InGroup<MultiChar>;
 def ext_four_char_character_literal : Extension<
   "multi-character character constant">, InGroup<FourByteMultiChar>;
-  
 
-// Literal
-def ext_nonstandard_escape : Extension<
-  "use of non-standard escape character '\\%0'">;
-def ext_unknown_escape : ExtWarn<"unknown escape sequence '\\%0'">;
-def err_hex_escape_no_digits : Error<"\\x used with no following hex digits">;
-def err_ucn_escape_no_digits : Error<"\\u used with no following hex digits">;
-def err_ucn_escape_invalid : Error<"invalid universal character">;
-def err_ucn_escape_incomplete : Error<"incomplete universal character name">;
+
+// Unicode and UCNs
+def err_invalid_utf8 : Error<
+  "source file is not valid UTF-8">;
+def err_non_ascii : Error<
+  "non-ASCII characters are not allowed outside of literals and identifiers">;
+def ext_unicode_whitespace : ExtWarn<
+  "treating Unicode character as whitespace">,
+  InGroup<DiagGroup<"unicode-whitespace">>;
+
+def err_hex_escape_no_digits : Error<
+  "\\%0 used with no following hex digits">;
+def warn_ucn_escape_no_digits : Warning<
+  "\\%0 used with no following hex digits; "
+  "treating as '\\' followed by identifier">, InGroup<Unicode>;
+def err_ucn_escape_incomplete : Error<
+  "incomplete universal character name">;
+def warn_ucn_escape_incomplete : Warning<
+  "incomplete universal character name; "
+  "treating as '\\' followed by identifier">, InGroup<Unicode>;
+def note_ucn_four_not_eight : Note<"did you mean to use '\\u'?">;
+
 def err_ucn_escape_basic_scs : Error<
   "character '%0' cannot be specified by a universal character name">;
 def err_ucn_control_character : Error<
   "universal character name refers to a control character">;
+def err_ucn_escape_invalid : Error<"invalid universal character">;
 def warn_cxx98_compat_literal_ucn_escape_basic_scs : Warning<
   "specifying character '%0' with a universal character name "
   "is incompatible with C++98">, InGroup<CXX98Compat>, DefaultIgnore;
 def warn_cxx98_compat_literal_ucn_control_character : Warning<
   "universal character name referring to a control character "
   "is incompatible with C++98">, InGroup<CXX98Compat>, DefaultIgnore;
+
+
+// Literal
+def ext_nonstandard_escape : Extension<
+  "use of non-standard escape character '\\%0'">;
+def ext_unknown_escape : ExtWarn<"unknown escape sequence '\\%0'">;
 def err_invalid_decimal_digit : Error<"invalid digit '%0' in decimal constant">;
 def err_invalid_binary_digit : Error<"invalid digit '%0' in binary constant">;
 def err_invalid_octal_digit : Error<"invalid digit '%0' in octal constant">;
