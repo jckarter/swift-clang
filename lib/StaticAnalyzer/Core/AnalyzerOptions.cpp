@@ -140,8 +140,8 @@ bool AnalyzerOptions::mayInlineObjCMethod() {
                           /* Default = */ true);
 }
 
-bool AnalyzerOptions::shouldPruneNullReturnPaths() {
-  return getBooleanOption(PruneNullReturnPaths,
+bool AnalyzerOptions::shouldSuppressNullReturnPaths() {
+  return getBooleanOption(SuppressNullReturnPaths,
                           "suppress-null-return-paths",
                           /* Default = */ true);
 }
@@ -185,4 +185,8 @@ unsigned AnalyzerOptions::getMaxTimesInlineLarge() {
 
 bool AnalyzerOptions::shouldSynthesizeBodies() {
   return getBooleanOption("faux-bodies", true);
+}
+
+bool AnalyzerOptions::shouldPrunePaths() {
+  return getBooleanOption("prune-paths", true);
 }
