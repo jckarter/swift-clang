@@ -416,23 +416,25 @@ comments::FullComment *ASTContext::getCommentForDecl(
     if (isa<ObjCMethodDecl>(D) || isa<FunctionDecl>(D)) {
       SmallVector<const NamedDecl*, 8> Overridden;
       const ObjCMethodDecl *OMD = dyn_cast<ObjCMethodDecl>(D);
-      if (OMD && OMD->isPropertyAccessor()) {
-        if (const ObjCPropertyDecl *PDecl = OMD->findPropertyDecl()) {
-          if (comments::FullComment *FC = getCommentForDecl(PDecl, PP)) {
-            comments::FullComment *CFC = cloneFullComment(FC, D);
-            return CFC;
-          }
-        }
-      }
+      if (OMD && OMD->isPropertyAccessor())
+        if (const ObjCPropertyDecl *PDecl = OMD->findPropertyDecl())
+          if (comments::FullComment *FC = getCommentForDecl(PDecl, PP))
+            return cloneFullComment(FC, D);
       if (OMD)
         addRedeclaredMethods(OMD, Overridden);
       getOverriddenMethods(dyn_cast<NamedDecl>(D), Overridden);
-      for (unsigned i = 0, e = Overridden.size(); i < e; i++) {
-        if (comments::FullComment *FC = getCommentForDecl(Overridden[i], PP)) {
-          comments::FullComment *CFC = cloneFullComment(FC, D);
-          return CFC;
-        }
-      }
+      for (unsigned i = 0, e = Overridden.size(); i < e; i++)
+        if (comments::FullComment *FC = getCommentForDecl(Overridden[i], PP))
+          return cloneFullComment(FC, D);
+    }
+    else if (const TypedefDecl *TD = dyn_cast<TypedefDecl>(D)) {
+      // Attach enum's documentation to its typedef if latter
+      // does not have one of its own.
+      QualType QT = TD->getUnderlyingType();
+      if (const EnumType *ET = QT->getAs<EnumType>())
+        if (const EnumDecl *ED = ET->getDecl())
+          if (comments::FullComment *FC = getCommentForDecl(ED, PP))
+            return cloneFullComment(FC, D);
     }
     return NULL;
   }
@@ -583,13 +585,14 @@ ASTContext::getCanonicalTemplateTemplateParmDecl(
 CXXABI *ASTContext::createCXXABI(const TargetInfo &T) {
   if (!LangOpts.CPlusPlus) return 0;
 
-  switch (T.getCXXABI()) {
-  case CXXABI_ARM:
-  case CXXABI_ARM64:
+  switch (T.getCXXABI().getKind()) {
+  case TargetCXXABI::GenericARM:
+  case TargetCXXABI::iOS:
+  case TargetCXXABI::iOS64:
     return CreateARMCXXABI(*this);
-  case CXXABI_Itanium:
+  case TargetCXXABI::GenericItanium:
     return CreateItaniumCXXABI(*this);
-  case CXXABI_Microsoft:
+  case TargetCXXABI::Microsoft:
     return CreateMicrosoftCXXABI(*this);
   }
   llvm_unreachable("Invalid CXXABI type!");
@@ -7559,13 +7562,16 @@ bool ASTContext::DeclMustBeEmitted(const Decl *D) {
     if (FD->hasAttr<ConstructorAttr>() || FD->hasAttr<DestructorAttr>())
       return true;
     
-    // The key function for a class is required.
-    if (const CXXMethodDecl *MD = dyn_cast<CXXMethodDecl>(FD)) {
-      const CXXRecordDecl *RD = MD->getParent();
-      if (MD->isOutOfLine() && RD->isDynamicClass()) {
-        const CXXMethodDecl *KeyFunc = getKeyFunction(RD);
-        if (KeyFunc && KeyFunc->getCanonicalDecl() == MD->getCanonicalDecl())
-          return true;
+    // The key function for a class is required.  This rule only comes
+    // into play when inline functions can be key functions, though.
+    if (getTargetInfo().getCXXABI().canKeyFunctionBeInline()) {
+      if (const CXXMethodDecl *MD = dyn_cast<CXXMethodDecl>(FD)) {
+        const CXXRecordDecl *RD = MD->getParent();
+        if (MD->isOutOfLine() && RD->isDynamicClass()) {
+          const CXXMethodDecl *KeyFunc = getCurrentKeyFunction(RD);
+          if (KeyFunc && KeyFunc->getCanonicalDecl() == MD->getCanonicalDecl())
+            return true;
+        }
       }
     }
 
@@ -7608,7 +7614,8 @@ CallingConv ASTContext::getDefaultCXXMethodCallConv(bool isVariadic) {
 }
 
 CallingConv ASTContext::getCanonicalCallConv(CallingConv CC) const {
-  if (CC == CC_C && !LangOpts.MRTD && getTargetInfo().getCXXABI() != CXXABI_Microsoft)
+  if (CC == CC_C && !LangOpts.MRTD &&
+      getTargetInfo().getCXXABI().isMemberFunctionCCDefault())
     return CC_Default;
   return CC;
 }
@@ -7619,12 +7626,13 @@ bool ASTContext::isNearlyEmpty(const CXXRecordDecl *RD) const {
 }
 
 MangleContext *ASTContext::createMangleContext() {
-  switch (Target->getCXXABI()) {
-  case CXXABI_ARM:
-  case CXXABI_ARM64:
-  case CXXABI_Itanium:
+  switch (Target->getCXXABI().getKind()) {
+  case TargetCXXABI::GenericItanium:
+  case TargetCXXABI::GenericARM:
+  case TargetCXXABI::iOS:
+  case TargetCXXABI::iOS64:
     return createItaniumMangleContext(*this, getDiagnostics());
-  case CXXABI_Microsoft:
+  case TargetCXXABI::Microsoft:
     return createMicrosoftMangleContext(*this, getDiagnostics());
   }
   llvm_unreachable("Unsupported ABI");

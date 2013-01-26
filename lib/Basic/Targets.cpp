@@ -3114,7 +3114,7 @@ public:
     }
 
     // ARM targets default to using the ARM C++ ABI.
-    CXXABI = CXXABI_ARM;
+    TheCXXABI.set(TargetCXXABI::GenericARM);
 
     // ARM has atomics up to 8 bytes
     // FIXME: Set MaxAtomicInlineWidth if we have the feature v6e
@@ -3531,6 +3531,9 @@ public:
     // iOS always has 64-bit atomic instructions.
     // FIXME: This should be based off of the target features in ARMTargetInfo.
     MaxAtomicInlineWidth = 64;
+
+    // Darwin on iOS uses a variant of the ARM C++ ABI.
+    TheCXXABI.set(TargetCXXABI::iOS);
   }
 };
 } // end anonymous namespace.
