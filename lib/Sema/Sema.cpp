@@ -373,10 +373,6 @@ namespace {
     UndefinedInternal(NamedDecl *decl, FullSourceLoc useLoc)
       : decl(decl), useLoc(useLoc) {}
   };
-
-  bool operator<(const UndefinedInternal &l, const UndefinedInternal &r) {
-    return l.useLoc.isBeforeInTranslationUnitThan(r.useLoc);
-  }
 }
 
 /// checkUndefinedInternals - Check for undefined objects with internal linkage.
@@ -385,7 +381,7 @@ static void checkUndefinedInternals(Sema &S) {
 
   // Collect all the still-undefined entities with internal linkage.
   SmallVector<UndefinedInternal, 16> undefined;
-  for (llvm::DenseMap<NamedDecl*,SourceLocation>::iterator
+  for (llvm::MapVector<NamedDecl*,SourceLocation>::iterator
          i = S.UndefinedInternals.begin(), e = S.UndefinedInternals.end();
        i != e; ++i) {
     NamedDecl *decl = i->first;
@@ -407,23 +403,9 @@ static void checkUndefinedInternals(Sema &S) {
         continue;
     }
 
-    // We build a FullSourceLoc so that we can sort with array_pod_sort.
-    FullSourceLoc loc(i->second, S.Context.getSourceManager());
-    undefined.push_back(UndefinedInternal(decl, loc));
-  }
-
-  if (undefined.empty()) return;
-
-  // Sort (in order of use site) so that we're not (as) dependent on
-  // the iteration order through an llvm::DenseMap.
-  llvm::array_pod_sort(undefined.begin(), undefined.end());
-
-  for (SmallVectorImpl<UndefinedInternal>::iterator
-         i = undefined.begin(), e = undefined.end(); i != e; ++i) {
-    NamedDecl *decl = i->decl;
     S.Diag(decl->getLocation(), diag::warn_undefined_internal)
       << isa<VarDecl>(decl) << decl;
-    S.Diag(i->useLoc, diag::note_used_here);
+    S.Diag(i->second, diag::note_used_here);
   }
 }
 
@@ -543,7 +525,7 @@ void Sema::ActOnEndOfTranslationUnit() {
          I != E; ++I) {
       assert(!(*I)->isDependentType() &&
              "Should not see dependent types here!");
-      if (const CXXMethodDecl *KeyFunction = Context.getKeyFunction(*I)) {
+      if (const CXXMethodDecl *KeyFunction = Context.getCurrentKeyFunction(*I)) {
         const FunctionDecl *Definition = 0;
         if (KeyFunction->hasBody(Definition))
           MarkVTableUsed(Definition->getLocation(), *I, true);
@@ -736,6 +718,8 @@ void Sema::ActOnEndOfTranslationUnit() {
       }
     }
 
+    if (ExternalSource)
+      ExternalSource->ReadUndefinedInternals(UndefinedInternals);
     checkUndefinedInternals(*this);
   }
 
@@ -1078,6 +1062,10 @@ void ExternalSemaSource::ReadMethodPool(Selector Sel) { }
 
 void ExternalSemaSource::ReadKnownNamespaces(
                            SmallVectorImpl<NamespaceDecl *> &Namespaces) {
+}
+
+void ExternalSemaSource::ReadUndefinedInternals(
+                      llvm::MapVector<NamedDecl *, SourceLocation> &Undefined) {
 }
 
 void PrettyDeclStackTraceEntry::print(raw_ostream &OS) const {

@@ -609,7 +609,7 @@ private:
         // Treat the condition inside an if as if it was a second function
         // parameter, i.e. let nested calls have an indent of 4.
         State.Stack.back().LastSpace = State.Column + 1; // 1 is length of "(".
-      else if (Spaces > 0 && ParenLevel != 0)
+      else if (Previous.is(tok::comma) && ParenLevel != 0)
         // Top-level spaces are exempt as that mostly leads to better results.
         State.Stack.back().LastSpace = State.Column;
     }
@@ -688,6 +688,8 @@ private:
       return 50;
     if (Left.is(tok::equal) && Right.is(tok::l_brace))
       return 150;
+    if (Left.is(tok::coloncolon))
+      return 500;
 
     // In for-loops, prefer breaking at ',' and ';'.
     if (RootToken.is(tok::kw_for) &&
@@ -704,7 +706,7 @@ private:
     if (Right.is(tok::colon) && Right.Type == TT_ObjCMethodExpr)
       return 20;
 
-    if (Left.is(tok::l_paren))
+    if (Left.is(tok::l_paren) || Left.Type == TT_TemplateOpener)
       return 20;
 
     if (Left.is(tok::question) || Left.Type == TT_ConditionalExpr)
@@ -1597,10 +1599,11 @@ private:
     return (isBinaryOperator(Left) && Left.isNot(tok::lessless)) ||
            Left.is(tok::comma) || Right.is(tok::lessless) ||
            Right.is(tok::arrow) || Right.is(tok::period) ||
-           Right.is(tok::colon) || Left.is(tok::semi) ||
-           Left.is(tok::l_brace) || Left.is(tok::question) || Left.Type ==
-           TT_ConditionalExpr || (Left.is(tok::r_paren) && Left.Type !=
-                                  TT_CastRParen && Right.is(tok::identifier)) ||
+           Right.is(tok::colon) || Left.is(tok::coloncolon) ||
+           Left.is(tok::semi) || Left.is(tok::l_brace) ||
+           Left.is(tok::question) || Left.Type == TT_ConditionalExpr ||
+           (Left.is(tok::r_paren) && Left.Type != TT_CastRParen &&
+            Right.is(tok::identifier)) ||
            (Left.is(tok::l_paren) && !Right.is(tok::r_paren));
   }
 

@@ -211,12 +211,12 @@ private:
   // \sa getAlwaysInlineSize
   llvm::Optional<unsigned> AlwaysInlineSize;
 
-  /// \sa shouldPruneNullReturnPaths
-  llvm::Optional<bool> PruneNullReturnPaths;
+  /// \sa shouldSuppressNullReturnPaths
+  llvm::Optional<bool> SuppressNullReturnPaths;
 
   /// \sa shouldAvoidSuppressingNullArgumentPaths
   llvm::Optional<bool> AvoidSuppressingNullArgumentPaths;
-  
+
   /// \sa getGraphTrimInterval
   llvm::Optional<unsigned> GraphTrimInterval;
 
@@ -284,18 +284,25 @@ public:
   ///
   /// This is controlled by the 'suppress-null-return-paths' config option,
   /// which accepts the values "true" and "false".
-  bool shouldPruneNullReturnPaths();
+  bool shouldSuppressNullReturnPaths();
 
   /// Returns whether a bug report should \em not be suppressed if its path
   /// includes a call with a null argument, even if that call has a null return.
   ///
-  /// This option has no effect when #shouldPruneNullReturnPaths() is false.
+  /// This option has no effect when #shouldSuppressNullReturnPaths() is false.
   ///
   /// This is a counter-heuristic to avoid false negatives.
   ///
   /// This is controlled by the 'avoid-suppressing-null-argument-paths' config
   /// option, which accepts the values "true" and "false".
   bool shouldAvoidSuppressingNullArgumentPaths();
+
+  /// Returns whether irrelevant parts of a bug report path should be pruned
+  /// out of the final output.
+  ///
+  /// This is controlled by the 'prune-paths' config option, which accepts the
+  /// values "true" and "false".
+  bool shouldPrunePaths();
 
   // Returns the size of the functions (in basic blocks), which should be
   // considered to be small enough to always inline.
