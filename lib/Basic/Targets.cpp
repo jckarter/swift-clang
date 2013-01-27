@@ -3565,7 +3565,7 @@ public:
     NoAsmVariants = true;
 
     // ARM64 targets default to using the ARM C++ ABI.
-    CXXABI = CXXABI_ARM64;
+    TheCXXABI.set(TargetCXXABI::iOS64);
   }
 
   virtual bool setCPU(const std::string &Name) {
