@@ -428,12 +428,12 @@ comments::FullComment *ASTContext::getCommentForDecl(
           return cloneFullComment(FC, D);
     }
     else if (const TypedefDecl *TD = dyn_cast<TypedefDecl>(D)) {
-      // Attach enum's documentation to its typedef if latter
+      // Attach any tag type's documentation to its typedef if latter
       // does not have one of its own.
       QualType QT = TD->getUnderlyingType();
-      if (const EnumType *ET = QT->getAs<EnumType>())
-        if (const EnumDecl *ED = ET->getDecl())
-          if (comments::FullComment *FC = getCommentForDecl(ED, PP))
+      if (const TagType *TT = QT->getAs<TagType>())
+        if (const Decl *TD = TT->getDecl())
+          if (comments::FullComment *FC = getCommentForDecl(TD, PP))
             return cloneFullComment(FC, D);
     }
     return NULL;
@@ -3588,6 +3588,14 @@ QualType ASTContext::getSignedWCharType() const {
 QualType ASTContext::getUnsignedWCharType() const {
   // FIXME: derive from "Target" ?
   return UnsignedIntTy;
+}
+
+QualType ASTContext::getIntPtrType() const {
+  return getFromTargetType(Target->getIntPtrType());
+}
+
+QualType ASTContext::getUIntPtrType() const {
+  return getCorrespondingUnsignedType(getIntPtrType());
 }
 
 /// getPointerDiffType - Return the unique type for "ptrdiff_t" (C99 7.17)
