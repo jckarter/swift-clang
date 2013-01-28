@@ -85,6 +85,14 @@ RawComment *ASTContext::getRawCommentForDeclNoCache(const Decl *D) const {
       return NULL;
   }
 
+  if (const ClassTemplateSpecializationDecl *CTSD =
+          dyn_cast<ClassTemplateSpecializationDecl>(D)) {
+    TemplateSpecializationKind TSK = CTSD->getSpecializationKind();
+    if (TSK == TSK_ImplicitInstantiation ||
+        TSK == TSK_Undeclared)
+      return NULL;
+  }
+
   if (const EnumDecl *ED = dyn_cast<EnumDecl>(D)) {
     if (ED->getTemplateSpecializationKind() == TSK_ImplicitInstantiation)
       return NULL;
