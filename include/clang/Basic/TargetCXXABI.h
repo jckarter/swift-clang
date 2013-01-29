@@ -235,6 +235,11 @@ public:
     case iOS:
       return UseTailPaddingUnlessPOD03;
 
+    // iOS on ARM64 uses the C++11 POD rules.  It does not honor the
+    // Itanium exception about classes with over-large bitfields.
+    case iOS64:
+      return UseTailPaddingUnlessPOD11;
+
     // MSVC always allocates fields in the tail-padding of a base class
     // subobject, even if they're POD.
     case Microsoft:
