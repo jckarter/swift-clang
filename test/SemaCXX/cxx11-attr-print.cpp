@@ -1,11 +1,12 @@
-// RUN: %clang_cc1 -std=c++11 -ast-print %s | FileCheck %s
+// RUN: %clang_cc1 -std=c++11 -ast-print -fms-extensions %s | FileCheck %s
 // FIXME: align attribute print
 
 // CHECK: int x __attribute__((aligned(4, 0)));
 int x __attribute__((aligned(4)));
 
-// CHECK: int y __attribute__((align(4, 0)));
-int y __attribute__((align(4)));
+// FIXME: Print this at a valid location for a __declspec attr.
+// CHECK: int y __declspec(align(4, 1));
+__declspec(align(4)) int y;
 
 // CHECK: gnu::aligned(4, 0)]];
 int z [[gnu::aligned(4)]];
@@ -15,6 +16,12 @@ int a __attribute__((deprecated("warning")));
 
 // CHECK: gnu::deprecated("warning")]];
 int b [[gnu::deprecated("warning")]];
+
+// CHECK: int cxx11_alignas alignas(4, 0);
+alignas(4) int cxx11_alignas;
+
+// CHECK: int c11_alignas _Alignas(alignof(int), 0);
+_Alignas(int) int c11_alignas;
 
 // CHECK: void foo() __attribute__((const));
 void foo() __attribute__((const));
