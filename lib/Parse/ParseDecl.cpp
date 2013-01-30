@@ -1151,7 +1151,7 @@ void Parser::ProhibitCXX11Attributes(ParsedAttributesWithRange &attrs) {
   AttributeList *AttrList = attrs.getList();
   while (AttrList) {
     if (AttrList->isCXX11Attribute()) {
-      Diag(AttrList->getLoc(), diag::warn_attribute_no_decl) 
+      Diag(AttrList->getLoc(), diag::err_attribute_not_type_attr) 
         << AttrList->getName();
       AttrList->setInvalid();
     }
@@ -3889,6 +3889,9 @@ bool Parser::isDeclarationSpecifier(bool DisambiguatingWithExpression) {
   case tok::kw_virtual:
   case tok::kw_explicit:
   case tok::kw__Noreturn:
+
+    // alignment-specifier
+  case tok::kw__Alignas:
 
     // friend keyword.
   case tok::kw_friend:

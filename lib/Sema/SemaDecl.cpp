@@ -1900,6 +1900,11 @@ static void checkNewAttributesAfterDef(Sema &S, Decl *New, const Decl *Old) {
       ++I;
       continue; // regular attr merging will take care of validating this.
     }
+    // C's _Noreturn is allowed to be added to a function after it is defined.
+    if (isa<C11NoReturnAttr>(NewAttribute)) {
+      ++I;
+      continue;
+    }
     S.Diag(NewAttribute->getLocation(),
            diag::warn_attribute_precede_definition);
     S.Diag(Def->getLocation(), diag::note_previous_definition);
@@ -5889,6 +5894,11 @@ Sema::ActOnFunctionDeclarator(Scope *S, Declarator &D, DeclContext *DC,
   NewFD->setDeclsInPrototypeScope(DeclsInPrototypeScope);
   DeclsInPrototypeScope.clear();
 
+  if (D.getDeclSpec().isNoreturnSpecified())
+    NewFD->addAttr(
+        ::new(Context) C11NoReturnAttr(D.getDeclSpec().getNoreturnSpecLoc(),
+                                       Context));
+
   // Process the non-inheritable attributes on this declaration.
   ProcessDeclAttributes(S, NewFD, D,
                         /*NonInheritable=*/true, /*Inheritable=*/false);
@@ -6211,7 +6221,6 @@ Sema::ActOnFunctionDeclarator(Scope *S, Declarator &D, DeclContext *DC,
   }
 
   if (NewFD->hasAttr<OpenCLKernelAttr>()) {
-
     // OpenCL v1.2 s6.8 static is invalid for kernel functions.
     if ((getLangOpts().OpenCLVersion >= 120)
         && (SC == SC_Static)) {
@@ -6219,17 +6228,27 @@ Sema::ActOnFunctionDeclarator(Scope *S, Declarator &D, DeclContext *DC,
       D.setInvalidType();
     }
 
-    // OpenCL v1.2 s6.8 n:
-    // Arguments to kernel functions in a program cannot be declared to be of
-    // type event_t.
     for (FunctionDecl::param_iterator PI = NewFD->param_begin(),
          PE = NewFD->param_end(); PI != PE; ++PI) {
-      if ((*PI)->getType()->isEventT()) {
-        Diag((*PI)->getLocation(), diag::err_event_t_kernel_arg);
+      ParmVarDecl *Param = *PI;
+      QualType PT = Param->getType();
+
+      // OpenCL v1.2 s6.9.a:
+      // A kernel function argument cannot be declared as a
+      // pointer to a pointer type.
+      if (PT->isPointerType() && PT->getPointeeType()->isPointerType()) {
+        Diag(Param->getLocation(), diag::err_opencl_ptrptr_kernel_arg);
+        D.setInvalidType();
+      }
+
+      // OpenCL v1.2 s6.8 n:
+      // A kernel function argument cannot be declared
+      // of event_t type.
+      if (PT->isEventT()) {
+        Diag(Param->getLocation(), diag::err_event_t_kernel_arg);
         D.setInvalidType();
       }
     }
-    
   }
 
   MarkUnusedFileScopedDecl(NewFD);
@@ -7196,9 +7215,10 @@ void Sema::AddInitializerToDecl(Decl *RealDecl, Expr *Init,
       if (getLangOpts().CPlusPlus11) {
         Diag(VDecl->getLocation(),
              diag::ext_in_class_initializer_float_type_cxx11)
-          << DclT << Init->getSourceRange()
-          << FixItHint::CreateInsertion(VDecl->getLocStart(), "constexpr ");
-        VDecl->setConstexpr(true);
+            << DclT << Init->getSourceRange();
+        Diag(VDecl->getLocStart(),
+             diag::note_in_class_initializer_float_type_cxx11)
+            << FixItHint::CreateInsertion(VDecl->getLocStart(), "constexpr ");
       } else {
         Diag(VDecl->getLocation(), diag::ext_in_class_initializer_float_type)
           << DclT << Init->getSourceRange();
@@ -9752,7 +9772,11 @@ void Sema::ActOnTagFinishDefinition(Scope *S, Decl *TagD,
 
   // Exit this scope of this tag's definition.
   PopDeclContext();
-                                          
+
+  if (getCurLexicalContext()->isObjCContainer() &&
+      Tag->getDeclContext()->isFileContext())
+    Tag->setTopLevelDeclInObjCContainer();
+
   // Notify the consumer that we've defined a tag.
   Consumer.HandleTagDeclDefinition(Tag);
 }
@@ -9913,9 +9937,6 @@ FieldDecl *Sema::HandleField(Scope *S, RecordDecl *Record,
 
   if (D.getDeclSpec().isThreadSpecified())
     Diag(D.getDeclSpec().getThreadSpecLoc(), diag::err_invalid_thread);
-  if (D.getDeclSpec().isConstexprSpecified())
-    Diag(D.getDeclSpec().getConstexprSpecLoc(), diag::err_invalid_constexpr)
-      << 2;
   
   // Check to see if this name was declared as a member previously
   NamedDecl *PrevDecl = 0;

@@ -447,6 +447,9 @@ TEST_F(FormatTest, UnderstandsSingleLineComments) {
             format("int i;\\\n// single line trailing comment"));
 
   verifyGoogleFormat("int a;  // Trailing comment.");
+
+  verifyFormat("someFunction(anotherFunction( // Force break.\n"
+               "    parameter));");
 }
 
 TEST_F(FormatTest, UnderstandsMultiLineComments) {
@@ -461,6 +464,11 @@ TEST_F(FormatTest, UnderstandsMultiLineComments) {
       "  /* Leading comment for bb... */ bbbbbbbbbbbbbbbbbbbbbbbbb);",
       format("f(aaaaaaaaaaaaaaaaaaaaaaaaa    ,   \n"
              "/* Leading comment for bb... */   bbbbbbbbbbbbbbbbbbbbbbbbb);"));
+
+  verifyGoogleFormat("aaaaaaaa(/* parameter 1 */ aaaaaa,\n"
+                     "         /* parameter 2 */ aaaaaa,\n"
+                     "         /* parameter 3 */ aaaaaa,\n"
+                     "         /* parameter 4 */ aaaaaa);");
 }
 
 TEST_F(FormatTest, CommentsInStaticInitializers) {
@@ -1051,10 +1059,15 @@ TEST_F(FormatTest, FormatsOneParameterPerLineIfNecessary) {
                      "  a);");
 
   FormatStyle Style = getGoogleStyle();
-  Style.AllowAllParametersOnNextLine = false;
-  verifyFormat("aaaaaaaaaaaaaaa(aaaaaaaaa,\n"
+  Style.AllowAllParametersOfDeclarationOnNextLine = false;
+  verifyFormat("void aaaaaaaaaa(aaaaaaaaa,\n"
                "                aaaaaaaaa,\n"
-               "                aaaaaaaaaaaaaaaaaaaaa).aaaaaaaaaaaaaaaaaa();",
+               "                aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa);",
+               Style);
+  verifyFormat("void f() {\n"
+               "  aaaaaaaaaaaaaaaaaaaaaaaa(\n"
+               "      aaaaaaaaa, aaaaaaaaa, aaaaaaaaaaaaaaaaaaaaa).aaaaaaa();\n"
+               "}",
                Style);
 }
 
@@ -1159,6 +1172,24 @@ TEST_F(FormatTest, BreaksConditionalExpressions) {
                "           : aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa(\n"
                "                 aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa),\n"
                "       aaaaaaaaaaaaaaaaaaaaaaaaaaa);");
+}
+
+TEST_F(FormatTest, DeclarationsOfMultipleVariables) {
+  verifyFormat("bool aaaaaaaaaaaaaaaaa = aaaaaa->aaaaaaaaaaaaaaaaa(),\n"
+               "     aaaaaaaaaaa = aaaaaa->aaaaaaaaaaa();");
+  verifyFormat("bool a = true, b = false;");
+
+  // FIXME: Indentation looks weird.
+  verifyFormat("bool aaaaaaaaaaaaaaaaaaaaaaaaa =\n"
+               "    aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa(aaaaaaaaaaaaaaaa),\n"
+               "     bbbbbbbbbbbbbbbbbbbbbbbbb =\n"
+               "    bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb(bbbbbbbbbbbbbbbb);");
+
+  // FIXME: This is bad as we hide "d".
+  verifyFormat(
+      "bool aaaaaaaaaaaaaaaaaaaaa = bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb &&\n"
+      "                             cccccccccccccccccccccccccccc, d = e && f;");
+
 }
 
 TEST_F(FormatTest, ConditionalExpressionsInBrackets) {
