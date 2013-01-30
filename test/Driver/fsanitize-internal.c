@@ -34,66 +34,83 @@
 // RUN: %clang -target x86_64-linux-gnu -fsanitize=integer %s -### 2>&1 | FileCheck %s --check-prefix=CHECK-UNSUPPORTED-ARG-INTEGER
 // CHECK-UNSUPPORTED-ARG-INTEGER: unsupported argument 'integer' to option 'fsanitize='
 
+// RUN: %clang -target x86_64-linux-gnu -fsanitize=undefined %s -### 2>&1 | FileCheck %s --check-prefix=CHECK-UNSUPPORTED-ARG-UNDEFINED
+// CHECK-UNSUPPORTED-ARG-UNDEFINED:  unsupported argument 'undefined' to option 'fsanitize='
+
+// RUN: %clang -target x86_64-linux-gnu -fsanitize=vptr %s -### 2>&1 | FileCheck %s --check-prefix=CHECK-UNSUPPORTED-ARG-VPTR
+// CHECK-UNSUPPORTED-ARG-VPTR: unsupported argument 'vptr' to option 'fsanitize='
+
 //
-// We do support the undefined behavior sanitizer options on the internal branches.
+// We do support the undefined behavior sanatizer options that don't require runtime support.
 //
 
 // RUN: %clang -target x86_64-linux-gnu -fsanitize=undefined-trap -fsanitize-undefined-trap-on-error %s -### 2>&1 | FileCheck %s --check-prefix=CHECK-UNDEFINED-TRAP
 // RUN: %clang -target x86_64-linux-gnu -fsanitize-undefined-trap-on-error -fsanitize=undefined-trap %s -### 2>&1 | FileCheck %s --check-prefix=CHECK-UNDEFINED-TRAP
-// CHECK-UNDEFINED-TRAP: "-fsanitize={{((signed-integer-overflow|integer-divide-by-zero|float-divide-by-zero|shift|unreachable|return|vla-bound|alignment|null|object-size|float-cast-overflow|array-bounds|enum|bool),?){14}"}}
+// CHECK-UNDEFINED-TRAP: "-fsanitize={{((alignment|array-bounds|bool|enum|float-cast-overflow|float-divide-by-zero|integer-divide-by-zero|null|object-size|return|shift|signed-integer-overflow|unreachable|vla-bound),?){14}"}}
+// CHECK-UNDEFINED-TRAP: "-fsanitize-undefined-trap-on-error"
 
-// RUN: %clang -target x86_64-linux-gnu -fsanitize=undefined %s -### 2>&1 | FileCheck %s --check-prefix=CHECK-UNDEFINED
-// CHECK-UNDEFINED: "-fsanitize={{((signed-integer-overflow|integer-divide-by-zero|float-divide-by-zero|shift|unreachable|return|vla-bound|alignment|null|vptr|object-size|float-cast-overflow|array-bounds|enum|bool|function),?){16}"}}
+// RUN: %clang -target x86_64-linux-gnu -fsanitize=undefined-trap %s -### 2>&1 | FileCheck %s --check-prefix=CHECK-UNDEFINED-TRAP-REQUIRES-UNDEF-TRAP-ON-ERROR
+// CHECK-UNDEFINED-TRAP-REQUIRES-UNDEF-TRAP-ON-ERROR: '-fsanitize-undefined-trap-on-error' required with '-fsanitize=undefined-trap' option
 
-// RUN: %clang -target x86_64-linux-gnu -fsanitize=alignment %s -### 2>&1 | FileCheck %s --check-prefix=CHECK-ALIGNMENT
+// RUN: %clang -target x86_64-linux-gnu -fsanitize=alignment %s -### 2>&1 | FileCheck %s --check-prefix=CHECK-ALIGNMENT-REQUIRES-UNDEF-TRAP-ON-ERROR
+// CHECK-ALIGNMENT-REQUIRES-UNDEF-TRAP-ON-ERROR: '-fsanitize-undefined-trap-on-error' required with '-fsanitize=alignment' option
+// RUN: %clang -target x86_64-linux-gnu -fsanitize=alignment -fsanitize-undefined-trap-on-error %s -### 2>&1 | FileCheck %s --check-prefix=CHECK-ALIGNMENT
 // CHECK-ALIGNMENT-NOT: unsupported argument 'alignment' to option 'fsanitize='
+// CHECK-ALIGNMENT-NOT: '-fsanitize-undefined-trap-on-error' required with '-fsanitize=alignment' option
 // CHECK-ALIGNMENT: "-fsanitize={{((alignment),?){1}"}}
 
-
-// RUN: %clang -target x86_64-linux-gnu -fsanitize=bounds %s -### 2>&1 | FileCheck %s --check-prefix=CHECK-BOUNDS
-// CHECK-BOUNDS-NOT: unsupported argument 'bounds' to option 'fsanitize='
-// CHECK-BOUNDS: "-fsanitize={{((array-bounds|local-bounds),?){2}"}}
-
-// RUN: %clang -target x86_64-linux-gnu -fsanitize=float-cast-overflow %s -### 2>&1 | FileCheck %s --check-prefix=CHECK-FLOAT-CAST-OVERFLOW
+// RUN: %clang -target x86_64-linux-gnu -fsanitize=float-cast-overflow %s -### 2>&1 | FileCheck %s --check-prefix=CHECK-FLOAT-CAST-OVERFLOW-REQUIRES-UNDEF-TRAP-ON-ERROR
+// CHECK-FLOAT-CAST-OVERFLOW-REQUIRES-UNDEF-TRAP-ON-ERROR: '-fsanitize-undefined-trap-on-error' required with '-fsanitize=float-cast-overflow' option
+// RUN: %clang -target x86_64-linux-gnu -fsanitize=float-cast-overflow -fsanitize-undefined-trap-on-error %s -### 2>&1 | FileCheck %s --check-prefix=CHECK-FLOAT-CAST-OVERFLOW
 // CHECK-FLOAT-CAST-OVERFLOW-NOT: unsupported argument 'float-cast-overflow' to option 'fsanitize='
+// CHECK-FLOAT-CAST-OVERFLOW-NOT: '-fsanitize-undefined-trap-on-error' required with '-fsanitize=float-cast-overflow' option
 // CHECK-FLOAT-CAST-OVERFLOW: "-fsanitize={{((float-cast-overflow),?){1}"}}
 
-// RUN: %clang -target x86_64-linux-gnu -fsanitize=float-divide-by-zero %s -### 2>&1 | FileCheck %s --check-prefix=CHECK-FLOAT-DIVIDE-BY-ZERO
-// CHECK-FLOAT-DIVIDE-BY-ZERO-NOT: unsupported argument 'float-divide-by-zero' to option 'fsanitize='
-// CHECK-FLOAT-DIVIDE-BY-ZERO: "-fsanitize={{((float-divide-by-zero),?){1}"}}
-
-// RUN: %clang -target x86_64-linux-gnu -fsanitize=integer-divide-by-zero %s -### 2>&1 | FileCheck %s --check-prefix=CHECK-INTEGER-DIVIDE-BY-ZERO
-// CHECK-INTEGER-DIVIDE-BY-ZERO-NOT: unsupported argument 'integer-divide-by-zero' to option 'fsanitize='
-// CHECK-INTEGER-DIVIDE-BY-ZERO: "-fsanitize={{((integer-divide-by-zero),?){1}"}}
-
-// RUN: %clang -target x86_64-linux-gnu -fsanitize=null %s -### 2>&1 | FileCheck %s --check-prefix=CHECK-NULL
+// RUN: %clang -target x86_64-linux-gnu -fsanitize=null %s -### 2>&1 | FileCheck %s --check-prefix=CHECK-NULL-REQUIRES-UNDEF-TRAP-ON-ERROR
+// CHECK-NULL-REQUIRES-UNDEF-TRAP-ON-ERROR: '-fsanitize-undefined-trap-on-error' required with '-fsanitize=null' option
+// RUN: %clang -target x86_64-linux-gnu -fsanitize=null -fsanitize-undefined-trap-on-error %s -### 2>&1 | FileCheck %s --check-prefix=CHECK-NULL
 // CHECK-NULL-NOT: unsupported argument 'null' to option 'fsanitize='
+// CHECK-NULL-REQUIRES-UNDEF-TRAP-ON-ERRORt: '-fsanitize-undefined-trap-on-error' required with '-fsanitize=null' option
 // CHECK-NULL: "-fsanitize={{((null),?){1}"}}
 
-// RUN: %clang -target x86_64-linux-gnu -fsanitize=object-size %s -### 2>&1 | FileCheck %s --check-prefix=CHECK-OBJECT-SIZE
+// RUN: %clang -target x86_64-linux-gnu -fsanitize=object-size %s -### 2>&1 | FileCheck %s --check-prefix=CHECK-OBJECT-SIZE-REQUIRES-UNDEF-TRAP-ON-ERROR
+// CHECK-OBJECT-SIZE-REQUIRES-UNDEF-TRAP-ON-ERROR: '-fsanitize-undefined-trap-on-error' required with '-fsanitize=object-size' option
+// RUN: %clang -target x86_64-linux-gnu -fsanitize=object-size -fsanitize-undefined-trap-on-error %s -### 2>&1 | FileCheck %s --check-prefix=CHECK-OBJECT-SIZE
 // CHECK-OBJECT-SIZE-NOT: unsupported argument 'object-size' to option 'fsanitize='
+// CHECK-OBJECT-SIZE-NOT: '-fsanitize-undefined-trap-on-error' required with '-fsanitize=object-size' option
 // CHECK-OBJECT-SIZE: "-fsanitize={{((object-size),?){1}"}}
 
-// RUN: %clang -target x86_64-linux-gnu -fsanitize=return %s -### 2>&1 | FileCheck %s --check-prefix=CHECK-RETURN
+// RUN: %clang -target x86_64-linux-gnu -fsanitize=return %s -### 2>&1 | FileCheck %s --check-prefix=CHECK-RETURN-REQUIRES-UNDEF-TRAP-ON-ERROR
+// CHECK-RETURN-REQUIRES-UNDEF-TRAP-ON-ERROR: '-fsanitize-undefined-trap-on-error' required with '-fsanitize=return' option
+// RUN: %clang -target x86_64-linux-gnu -fsanitize=return -fsanitize-undefined-trap-on-error %s -### 2>&1 | FileCheck %s --check-prefix=CHECK-RETURN
 // CHECK-RETURN-NOT: unsupported argument 'return' to option 'fsanitize='
+// CHECK-RETURN-NOT: '-fsanitize-undefined-trap-on-error' required with '-fsanitize=return' option
 // CHECK-RETURN: "-fsanitize={{((return),?){1}"}}
 
-// RUN: %clang -target x86_64-linux-gnu -fsanitize=shift %s -### 2>&1 | FileCheck %s --check-prefix=CHECK-SHIFT
+// RUN: %clang -target x86_64-linux-gnu -fsanitize=shift %s -### 2>&1 | FileCheck %s --check-prefix=CHECK-SHIFT-REQUIRES-UNDEF-TRAP-ON-ERROR
+// CHECK-SHIFT-REQUIRES-UNDEF-TRAP-ON-ERROR: '-fsanitize-undefined-trap-on-error' required with '-fsanitize=shift' option
+// RUN: %clang -target x86_64-linux-gnu -fsanitize=shift -fsanitize-undefined-trap-on-error %s -### 2>&1 | FileCheck %s --check-prefix=CHECK-SHIFT
 // CHECK-SHIFT-NOT: unsupported argument 'shift' to option 'fsanitize='
+// CHECK-SHIFT-NOT: '-fsanitize-undefined-trap-on-error' required with '-fsanitize=shift' option
 // CHECK-SHIFT: "-fsanitize={{((shift),?){1}"}}
 
-// RUN: %clang -target x86_64-linux-gnu -fsanitize=signed-integer-overflow %s -### 2>&1 | FileCheck %s --check-prefix=CHECK-SIGNED-INTEGER-OVERFLOW
+// RUN: %clang -target x86_64-linux-gnu -fsanitize=signed-integer-overflow %s -### 2>&1 | FileCheck %s --check-prefix=CHECK-SIGNED-INTEGER-OVERFLOW-REQUIRES-UNDEF-TRAP-ON-ERROR
+// CHECK-SIGNED-INTEGER-OVERFLOW-REQUIRES-UNDEF-TRAP-ON-ERROR: '-fsanitize-undefined-trap-on-error' required with '-fsanitize=signed-integer-overflow' option
+// RUN: %clang -target x86_64-linux-gnu -fsanitize=signed-integer-overflow -fsanitize-undefined-trap-on-error %s -### 2>&1 | FileCheck %s --check-prefix=CHECK-SIGNED-INTEGER-OVERFLOW
 // CHECK-SIGNED-INTEGER-OVERFLOW-NOT: unsupported argument 'signed-integer-overflow' to option 'fsanitize='
+// CHECK-SIGNED-INTEGER-OVERFLOW-NOT: '-fsanitize-undefined-trap-on-error' required with '-fsanitize=signed-integer-overflow' option
 // CHECK-SIGNED-INTEGER-OVERFLOW: "-fsanitize={{((signed-integer-overflow),?){1}"}}
 
-// RUN: %clang -target x86_64-linux-gnu -fsanitize=unreachable %s -### 2>&1 | FileCheck %s --check-prefix=CHECK-UNREACHABLE
+// RUN: %clang -target x86_64-linux-gnu -fsanitize=unreachable %s -### 2>&1 | FileCheck %s --check-prefix=CHECK-UNREACHABLE-REQUIRES-UNDEF-TRAP-ON-ERROR
+// CHECK-UNREACHABLE-REQUIRES-UNDEF-TRAP-ON-ERROR: '-fsanitize-undefined-trap-on-error' required with '-fsanitize=unreachable' option
+// RUN: %clang -target x86_64-linux-gnu -fsanitize=unreachable -fsanitize-undefined-trap-on-error %s -### 2>&1 | FileCheck %s --check-prefix=CHECK-UNREACHABLE
 // CHECK-UNREACHABLE-NOT: unsupported argument 'unreachable' to option 'fsanitize='
+// CHECK-UNREACHABLE-NOT: '-fsanitize-undefined-trap-on-error' required with '-fsanitize=unreachable' option
 // CHECK-UNREACHABLE: "-fsanitize={{((unreachable),?){1}"}}
 
-// RUN: %clang -target x86_64-linux-gnu -fsanitize=vla-bound %s -### 2>&1 | FileCheck %s --check-prefix=CHECK-VLA-BOUND
+// RUN: %clang -target x86_64-linux-gnu -fsanitize=vla-bound %s -### 2>&1 | FileCheck %s --check-prefix=CHECK-VLA-BOUND-REQUIRES-UNDEF-TRAP-ON-ERROR
+// CHECK-VLA-BOUND-REQUIRES-UNDEF-TRAP-ON-ERROR: '-fsanitize-undefined-trap-on-error' required with '-fsanitize=vla-bound' option
+// RUN: %clang -target x86_64-linux-gnu -fsanitize=vla-bound -fsanitize-undefined-trap-on-error %s -### 2>&1 | FileCheck %s --check-prefix=CHECK-VLA-BOUND
 // CHECK-VLA-BOUND-NOT: unsupported argument 'vla-bound' to option 'fsanitize='
+// CHECK-VLA-BOUND-NOT: '-fsanitize-undefined-trap-on-error' required with '-fsanitize=vla-bound' option
 // CHECK-VLA-BOUND: "-fsanitize={{((vla-bound),?){1}"}}
-
-// RUN: %clang -target x86_64-linux-gnu -fsanitize=vptr %s -### 2>&1 | FileCheck %s --check-prefix=CHECK-VPTR
-// CHECK-VPTR-NOT: unsupported argument 'vptr' to option 'fsanitize='
-// CHECK-VPTR: "-fsanitize={{((vptr),?){1}"}}

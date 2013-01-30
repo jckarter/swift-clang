@@ -89,7 +89,8 @@ class SanitizerArgs {
   /// Parse a -fsanitize= or -fno-sanitize= argument's values, diagnosing any
   /// invalid components.
   static unsigned parse(const Driver &D, const llvm::opt::Arg *A,
-                        bool DiagnoseErrors);
+                        bool DiagnoseErrors,
+                        bool HasSanitizeUndefinedTrapOnError);
 
   /// Parse a single flag of the form -f[no]sanitize=, or
   /// -f*-sanitizer. Sets the masks defining required change of Kind value.
