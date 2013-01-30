@@ -4769,10 +4769,15 @@ static void AddObjCMethods(ObjCContainerDecl *Container,
                            bool InOriginalClass = true) {
   typedef CodeCompletionResult Result;
   Container = getContainerDef(Container);
+  ObjCInterfaceDecl *IFace = dyn_cast<ObjCInterfaceDecl>(Container);
+  bool isRootClass = IFace && !IFace->getSuperClass();
   for (ObjCContainerDecl::method_iterator M = Container->meth_begin(),
                                        MEnd = Container->meth_end();
        M != MEnd; ++M) {
-    if (M->isInstanceMethod() == WantInstanceMethods) {
+    // The instance methods on the root class can be messaged via the
+    // metaclass.
+    if (M->isInstanceMethod() == WantInstanceMethods ||
+        (isRootClass && !WantInstanceMethods)) {
       // Check whether the selector identifiers we've been given are a 
       // subset of the identifiers for this particular method.
       if (!isAcceptableObjCMethod(*M, WantKind, SelIdents, NumSelIdents,
@@ -4805,7 +4810,6 @@ static void AddObjCMethods(ObjCContainerDecl *Container,
     }
   }
   
-  ObjCInterfaceDecl *IFace = dyn_cast<ObjCInterfaceDecl>(Container);
   if (!IFace || !IFace->hasDefinition())
     return;
   
@@ -4961,6 +4965,11 @@ void Sema::CodeCompleteObjCPassingType(Scope *S, ObjCDeclSpec &DS,
     Builder.AddChunk(CodeCompletionString::CK_RightParen);
     Builder.AddTextChunk("sender");
     Results.AddResult(CodeCompletionResult(Builder.TakeString()));
+  }
+
+  // If we're completing the return type, provide 'instancetype'.
+  if (!IsParameter) {
+    Results.AddResult(CodeCompletionResult("instancetype"));
   }
   
   // Add various builtin type names and specifiers.
