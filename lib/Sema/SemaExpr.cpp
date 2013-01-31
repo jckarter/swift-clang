@@ -581,8 +581,9 @@ ExprResult Sema::UsualUnaryConversions(Expr *E) {
 }
 
 /// DefaultArgumentPromotion (C99 6.5.2.2p6). Used for function calls that
-/// do not have a prototype. Arguments that have type float are promoted to
-/// double. All other argument types are converted by UsualUnaryConversions().
+/// do not have a prototype. Arguments that have type float or __fp16
+/// are promoted to double. All other argument types are converted by
+/// UsualUnaryConversions().
 ExprResult Sema::DefaultArgumentPromotion(Expr *E) {
   QualType Ty = E->getType();
   assert(!Ty.isNull() && "DefaultArgumentPromotion - missing type");
@@ -592,8 +593,11 @@ ExprResult Sema::DefaultArgumentPromotion(Expr *E) {
     return Owned(E);
   E = Res.take();
 
-  // If this is a 'float' (CVR qualified or typedef) promote to double.
-  if (Ty->isSpecificBuiltinType(BuiltinType::Float))
+  // If this is a 'float' or '__fp16' (CVR qualified or typedef) promote to
+  // double.
+  const BuiltinType *BTy = Ty->getAs<BuiltinType>();
+  if (BTy && (BTy->getKind() == BuiltinType::Half ||
+              BTy->getKind() == BuiltinType::Float))
     E = ImpCastExprToType(E, Context.DoubleTy, CK_FloatingCast).take();
 
   // C++ performs lvalue-to-rvalue conversion as a default argument
@@ -6708,10 +6712,10 @@ static bool IsWithinTemplateSpecialization(Decl *D) {
 }
 
 /// If two different enums are compared, raise a warning.
-static void checkEnumComparison(Sema &S, SourceLocation Loc, ExprResult &LHS,
-                                ExprResult &RHS) {
-  QualType LHSStrippedType = LHS.get()->IgnoreParenImpCasts()->getType();
-  QualType RHSStrippedType = RHS.get()->IgnoreParenImpCasts()->getType();
+static void checkEnumComparison(Sema &S, SourceLocation Loc, Expr *LHS,
+                                Expr *RHS) {
+  QualType LHSStrippedType = LHS->IgnoreParenImpCasts()->getType();
+  QualType RHSStrippedType = RHS->IgnoreParenImpCasts()->getType();
 
   const EnumType *LHSEnumType = LHSStrippedType->getAs<EnumType>();
   if (!LHSEnumType)
@@ -6731,7 +6735,7 @@ static void checkEnumComparison(Sema &S, SourceLocation Loc, ExprResult &LHS,
 
   S.Diag(Loc, diag::warn_comparison_of_mixed_enum_types)
       << LHSStrippedType << RHSStrippedType
-      << LHS.get()->getSourceRange() << RHS.get()->getSourceRange();
+      << LHS->getSourceRange() << RHS->getSourceRange();
 }
 
 /// \brief Diagnose bad pointer comparisons.
@@ -6974,7 +6978,7 @@ QualType Sema::CheckCompareOperands(ExprResult &LHS, ExprResult &RHS,
   Expr *LHSStripped = LHS.get()->IgnoreParenImpCasts();
   Expr *RHSStripped = RHS.get()->IgnoreParenImpCasts();
 
-  checkEnumComparison(*this, Loc, LHS, RHS);
+  checkEnumComparison(*this, Loc, LHS.get(), RHS.get());
 
   if (!LHSType->hasFloatingRepresentation() &&
       !(LHSType->isBlockPointerType() && IsRelational) &&
