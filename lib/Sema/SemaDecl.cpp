@@ -3242,7 +3242,8 @@ Decl *Sema::BuildAnonymousStructOrUnion(Scope *S, DeclSpec &DS,
           // This is a popular extension, provided by Plan9, MSVC and GCC, but
           // not part of standard C++.
           Diag(MemRecord->getLocation(),
-               diag::ext_anonymous_record_with_anonymous_type);
+               diag::ext_anonymous_record_with_anonymous_type)
+            << (int)Record->isUnion();
         }
       } else if (isa<AccessSpecDecl>(*Mem)) {
         // Any access specifier is fine.
@@ -8426,6 +8427,13 @@ Decl *Sema::ActOnFinishFunctionBody(Decl *dcl, Stmt *Body,
 
   if (FD) {
     FD->setBody(Body);
+
+    // The only way to be included in UndefinedInternals is if there is an
+    // ODR-use before the definition. Avoid the expensive map lookup if this
+    // is the first declaration.
+    if (FD->getPreviousDecl() != 0 && FD->getPreviousDecl()->isUsed() &&
+        FD->getLinkage() != ExternalLinkage)
+      UndefinedInternals.erase(FD);
 
     // If the function implicitly returns zero (like 'main') or is naked,
     // don't complain about missing return statements.
