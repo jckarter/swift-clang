@@ -71,6 +71,14 @@ public:
     ///                  /help/topic/com.arm.doc.ihi0059a/IHI0059A_cppabi64.pdf
     iOS64,
 
+    /// The generic AArch64 ABI is also a modified version of the Itanium ABI,
+    /// but it has fewer divergences than the 32-bit ARM ABI.
+    ///
+    /// The relevant changes from the generic ABI in this case are:
+    ///   - representation of member function pointers adjusted as in ARM.
+    ///   - guard variables  are smaller.
+    GenericAArch64,
+
     /// The Microsoft ABI is the ABI used by Microsoft Visual Studio (and
     /// compatible compilers).
     ///
@@ -101,6 +109,7 @@ public:
   /// \brief Does this ABI generally fall into the Itanium family of ABIs?
   bool isItaniumFamily() const {
     switch (getKind()) {
+    case GenericAArch64:
     case GenericItanium:
     case GenericARM:
     case iOS:
@@ -116,6 +125,7 @@ public:
   /// \brief Is this ABI an MSVC-compatible ABI?
   bool isMicrosoft() const {
     switch (getKind()) {
+    case GenericAArch64:
     case GenericItanium:
     case GenericARM:
     case iOS:
@@ -186,6 +196,7 @@ public:
     case iOS64:
       return false;
 
+    case GenericAArch64:
     case GenericItanium:
     case iOS:   // old iOS compilers did not follow this rule
     case Microsoft:
@@ -231,6 +242,7 @@ public:
     // permanently locked the definition of POD to the rules of C++ TR1,
     // and that trickles down to all the derived ABIs.
     case GenericItanium:
+    case GenericAArch64:
     case GenericARM:
     case iOS:
       return UseTailPaddingUnlessPOD03;
