@@ -689,7 +689,9 @@ public:
     ArchDefine603   = 1 << 4,
     ArchDefine604   = 1 << 5,
     ArchDefinePwr4  = 1 << 6,
-    ArchDefinePwr6  = 1 << 7
+    ArchDefinePwr6  = 1 << 7,
+    ArchDefineA2    = 1 << 8,
+    ArchDefineA2q   = 1 << 9
   } ArchDefineTypes;
 
   virtual bool setCPU(const std::string &Name) {
@@ -714,6 +716,7 @@ public:
       .Case("970", true)
       .Case("g5", true)
       .Case("a2", true)
+      .Case("a2q", true)
       .Case("e500mc", true)
       .Case("e5500", true)
       .Case("pwr6", true)
@@ -738,6 +741,12 @@ public:
 
   virtual void getTargetDefines(const LangOptions &Opts,
                                 MacroBuilder &Builder) const;
+
+  virtual void getDefaultFeatures(llvm::StringMap<bool> &Features) const;
+
+  virtual bool setFeatureEnabled(llvm::StringMap<bool> &Features,
+                                 StringRef Name,
+                                 bool Enabled) const;
 
   virtual bool hasFeature(StringRef Feature) const;
   
@@ -916,6 +925,8 @@ void PPCTargetInfo::getTargetDefines(const LangOptions &Opts,
     .Case("pwr6",  ArchDefinePwr6 | ArchDefinePpcgr | ArchDefinePpcsq)
     .Case("pwr7",  ArchDefineName | ArchDefinePwr6 | ArchDefinePpcgr
                      | ArchDefinePpcsq)
+    .Case("a2",    ArchDefineA2)
+    .Case("a2q",   ArchDefineName | ArchDefineA2 | ArchDefineA2q)
     .Default(ArchDefineNone);
 
   if (defs & ArchDefineName)
@@ -936,6 +947,44 @@ void PPCTargetInfo::getTargetDefines(const LangOptions &Opts,
     Builder.defineMacro("_ARCH_PWR5");
     Builder.defineMacro("_ARCH_PWR6");
   }
+  if (defs & ArchDefineA2)
+    Builder.defineMacro("_ARCH_A2");
+  if (defs & ArchDefineA2q) {
+    Builder.defineMacro("_ARCH_A2Q");
+    Builder.defineMacro("_ARCH_QP");
+  }
+
+  if (getTriple().getVendor() == llvm::Triple::BGQ) {
+    Builder.defineMacro("__bg__");
+    Builder.defineMacro("__THW_BLUEGENE__");
+    Builder.defineMacro("__bgq__");
+    Builder.defineMacro("__TOS_BGQ__");
+  }
+}
+
+void PPCTargetInfo::getDefaultFeatures(llvm::StringMap<bool> &Features) const {
+  Features["altivec"] = llvm::StringSwitch<bool>(CPU)
+    .Case("7400", true)
+    .Case("g4", true)
+    .Case("7450", true)
+    .Case("g4+", true)
+    .Case("970", true)
+    .Case("g5", true)
+    .Case("pwr6", true)
+    .Case("pwr7", true)
+    .Case("ppc64", true)
+    .Default(false);
+}
+
+bool PPCTargetInfo::setFeatureEnabled(llvm::StringMap<bool> &Features,
+                                         StringRef Name,
+                                         bool Enabled) const {
+  if (Name == "altivec") {
+    Features[Name] = Enabled;
+    return true;
+  }
+
+  return false;
 }
 
 bool PPCTargetInfo::hasFeature(StringRef Feature) const {
