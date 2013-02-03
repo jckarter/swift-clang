@@ -1657,6 +1657,8 @@ def err_alignas_attribute_wrong_decl_type : Error<
   "%0 attribute cannot be applied to a %select{"
   "function parameter|variable with 'register' storage class|"
   "'catch' variable|bit-field}1">;
+def err_alignas_underaligned : Error<
+  "requested alignment is less than minimum alignment of %1 for type %0">;
 def err_attribute_first_argument_not_int_or_bool : Error<
   "%0 attribute first argument must be of int or bool type">;
 def err_attribute_argument_outof_range : Error<
@@ -1850,7 +1852,8 @@ def warn_attribute_wrong_decl_type : Warning<
   "functions, methods and blocks|functions, methods, and classes|"
   "functions, methods, and parameters|classes|variables|methods|"
   "variables, functions and labels|fields and global variables|structs|"
-  "variables, functions and tag types|thread-local variables}1">,
+  "variables, functions and tag types|thread-local variables|"
+  "variables and fields|variables, data members and tag types}1">,
   InGroup<IgnoredAttributes>;
 def err_attribute_wrong_decl_type : Error<
   "%0 attribute only applies to %select{functions|unions|"
@@ -1858,7 +1861,8 @@ def err_attribute_wrong_decl_type : Error<
   "functions, methods and blocks|functions, methods, and classes|"
   "functions, methods, and parameters|classes|variables|methods|"
   "variables, functions and labels|fields and global variables|structs|"
-  "variables, functions and tag types|thread-local variables}1">;
+  "variables, functions and tag types|thread-local variables|"
+  "variables and fields|variables, data members and tag types}1">;
 def warn_function_attribute_wrong_type : Warning<
   "'%0' only applies to function types; type here is %1">,
   InGroup<IgnoredAttributes>;
@@ -3282,10 +3286,12 @@ def note_deleted_assign_field : Note<
   "%select{copy|move}0 assignment operator of %1 is implicitly deleted "
   "because field %2 is of %select{reference|const-qualified}4 type %3">;
 
-// This should eventually be an error.
+// These should be errors.
 def warn_undefined_internal : Warning<
   "%select{function|variable}0 %q1 has internal linkage but is not defined">,
   InGroup<DiagGroup<"undefined-internal">>;
+def warn_undefined_inline : Warning<"inline function %q0 is not defined">,
+  InGroup<DiagGroup<"undefined-inline">>;
 def note_used_here : Note<"used here">;
 
 def warn_internal_in_extern_inline : ExtWarn<
@@ -4154,12 +4160,14 @@ def err_invalid_form_pointer_member_function : Error<
   "cannot create a non-constant pointer to member function">;
 def err_parens_pointer_member_function : Error<
   "cannot parenthesize the name of a method when forming a member pointer">;
+def err_typecheck_invalid_lvalue_addrof_addrof_function : Error<
+  "extra '&' taking address of overloaded function">;
 def err_typecheck_invalid_lvalue_addrof : Error<
-  "address expression must be an lvalue or a function designator">;
-def ext_typecheck_addrof_class_temporary : ExtWarn<
+  "cannot take the address of an rvalue of type %0">;
+def ext_typecheck_addrof_temporary : ExtWarn<
   "taking the address of a temporary object of type %0">, 
   InGroup<DiagGroup<"address-of-temporary">>, DefaultError;
-def err_typecheck_addrof_class_temporary : Error<
+def err_typecheck_addrof_temporary : Error<
   "taking the address of a temporary object of type %0">;
 def err_typecheck_unary_expr : Error<
   "invalid argument type %0 to unary expression">;

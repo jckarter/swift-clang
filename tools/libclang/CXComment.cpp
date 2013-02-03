@@ -124,18 +124,18 @@ unsigned clang_InlineContentComment_hasTrailingNewline(CXComment CXC) {
 CXString clang_TextComment_getText(CXComment CXC) {
   const TextComment *TC = getASTNodeAs<TextComment>(CXC);
   if (!TC)
-    return createCXString((const char *) 0);
+    return cxstring::createNull();
 
-  return createCXString(TC->getText(), /*DupString=*/ false);
+  return cxstring::createRef(TC->getText());
 }
 
 CXString clang_InlineCommandComment_getCommandName(CXComment CXC) {
   const InlineCommandComment *ICC = getASTNodeAs<InlineCommandComment>(CXC);
   if (!ICC)
-    return createCXString((const char *) 0);
+    return cxstring::createNull();
 
   const CommandTraits &Traits = getCommandTraits(CXC);
-  return createCXString(ICC->getCommandName(Traits), /*DupString=*/ false);
+  return cxstring::createRef(ICC->getCommandName(Traits));
 }
 
 enum CXCommentInlineCommandRenderKind
@@ -172,17 +172,17 @@ CXString clang_InlineCommandComment_getArgText(CXComment CXC,
                                                unsigned ArgIdx) {
   const InlineCommandComment *ICC = getASTNodeAs<InlineCommandComment>(CXC);
   if (!ICC || ArgIdx >= ICC->getNumArgs())
-    return createCXString((const char *) 0);
+    return cxstring::createNull();
 
-  return createCXString(ICC->getArgText(ArgIdx), /*DupString=*/ false);
+  return cxstring::createRef(ICC->getArgText(ArgIdx));
 }
 
 CXString clang_HTMLTagComment_getTagName(CXComment CXC) {
   const HTMLTagComment *HTC = getASTNodeAs<HTMLTagComment>(CXC);
   if (!HTC)
-    return createCXString((const char *) 0);
+    return cxstring::createNull();
 
-  return createCXString(HTC->getTagName(), /*DupString=*/ false);
+  return cxstring::createRef(HTC->getTagName());
 }
 
 unsigned clang_HTMLStartTagComment_isSelfClosing(CXComment CXC) {
@@ -204,26 +204,26 @@ unsigned clang_HTMLStartTag_getNumAttrs(CXComment CXC) {
 CXString clang_HTMLStartTag_getAttrName(CXComment CXC, unsigned AttrIdx) {
   const HTMLStartTagComment *HST = getASTNodeAs<HTMLStartTagComment>(CXC);
   if (!HST || AttrIdx >= HST->getNumAttrs())
-    return createCXString((const char *) 0);
+    return cxstring::createNull();
 
-  return createCXString(HST->getAttr(AttrIdx).Name, /*DupString=*/ false);
+  return cxstring::createRef(HST->getAttr(AttrIdx).Name);
 }
 
 CXString clang_HTMLStartTag_getAttrValue(CXComment CXC, unsigned AttrIdx) {
   const HTMLStartTagComment *HST = getASTNodeAs<HTMLStartTagComment>(CXC);
   if (!HST || AttrIdx >= HST->getNumAttrs())
-    return createCXString((const char *) 0);
+    return cxstring::createNull();
 
-  return createCXString(HST->getAttr(AttrIdx).Value, /*DupString=*/ false);
+  return cxstring::createRef(HST->getAttr(AttrIdx).Value);
 }
 
 CXString clang_BlockCommandComment_getCommandName(CXComment CXC) {
   const BlockCommandComment *BCC = getASTNodeAs<BlockCommandComment>(CXC);
   if (!BCC)
-    return createCXString((const char *) 0);
+    return cxstring::createNull();
 
   const CommandTraits &Traits = getCommandTraits(CXC);
-  return createCXString(BCC->getCommandName(Traits), /*DupString=*/ false);
+  return cxstring::createRef(BCC->getCommandName(Traits));
 }
 
 unsigned clang_BlockCommandComment_getNumArgs(CXComment CXC) {
@@ -238,9 +238,9 @@ CXString clang_BlockCommandComment_getArgText(CXComment CXC,
                                               unsigned ArgIdx) {
   const BlockCommandComment *BCC = getASTNodeAs<BlockCommandComment>(CXC);
   if (!BCC || ArgIdx >= BCC->getNumArgs())
-    return createCXString((const char *) 0);
+    return cxstring::createNull();
 
-  return createCXString(BCC->getArgText(ArgIdx), /*DupString=*/ false);
+  return cxstring::createRef(BCC->getArgText(ArgIdx));
 }
 
 CXComment clang_BlockCommandComment_getParagraph(CXComment CXC) {
@@ -254,9 +254,9 @@ CXComment clang_BlockCommandComment_getParagraph(CXComment CXC) {
 CXString clang_ParamCommandComment_getParamName(CXComment CXC) {
   const ParamCommandComment *PCC = getASTNodeAs<ParamCommandComment>(CXC);
   if (!PCC || !PCC->hasParamName())
-    return createCXString((const char *) 0);
+    return cxstring::createNull();
 
-  return createCXString(PCC->getParamNameAsWritten(), /*DupString=*/ false);
+  return cxstring::createRef(PCC->getParamNameAsWritten());
 }
 
 unsigned clang_ParamCommandComment_isParamIndexValid(CXComment CXC) {
@@ -305,9 +305,9 @@ enum CXCommentParamPassDirection clang_ParamCommandComment_getDirection(
 CXString clang_TParamCommandComment_getParamName(CXComment CXC) {
   const TParamCommandComment *TPCC = getASTNodeAs<TParamCommandComment>(CXC);
   if (!TPCC || !TPCC->hasParamName())
-    return createCXString((const char *) 0);
+    return cxstring::createNull();
 
-  return createCXString(TPCC->getParamNameAsWritten(), /*DupString=*/ false);
+  return cxstring::createRef(TPCC->getParamNameAsWritten());
 }
 
 unsigned clang_TParamCommandComment_isParamPositionValid(CXComment CXC) {
@@ -338,17 +338,17 @@ CXString clang_VerbatimBlockLineComment_getText(CXComment CXC) {
   const VerbatimBlockLineComment *VBL =
       getASTNodeAs<VerbatimBlockLineComment>(CXC);
   if (!VBL)
-    return createCXString((const char *) 0);
+    return cxstring::createNull();
 
-  return createCXString(VBL->getText(), /*DupString=*/ false);
+  return cxstring::createRef(VBL->getText());
 }
 
 CXString clang_VerbatimLineComment_getText(CXComment CXC) {
   const VerbatimLineComment *VLC = getASTNodeAs<VerbatimLineComment>(CXC);
   if (!VLC)
-    return createCXString((const char *) 0);
+    return cxstring::createNull();
 
-  return createCXString(VLC->getText(), /*DupString=*/ false);
+  return cxstring::createRef(VLC->getText());
 }
 
 } // end extern "C"
@@ -838,23 +838,23 @@ extern "C" {
 CXString clang_HTMLTagComment_getAsString(CXComment CXC) {
   const HTMLTagComment *HTC = getASTNodeAs<HTMLTagComment>(CXC);
   if (!HTC)
-    return createCXString((const char *) 0);
+    return cxstring::createNull();
 
   SmallString<128> HTML;
   CommentASTToHTMLConverter Converter(0, HTML, getCommandTraits(CXC));
   Converter.visit(HTC);
-  return createCXString(HTML.str(), /* DupString = */ true);
+  return cxstring::createDup(HTML.str());
 }
 
 CXString clang_FullComment_getAsHTML(CXComment CXC) {
   const FullComment *FC = getASTNodeAs<FullComment>(CXC);
   if (!FC)
-    return createCXString((const char *) 0);
+    return cxstring::createNull();
 
   SmallString<1024> HTML;
   CommentASTToHTMLConverter Converter(FC, HTML, getCommandTraits(CXC));
   Converter.visit(FC);
-  return createCXString(HTML.str(), /* DupString = */ true);
+  return cxstring::createDup(HTML.str());
 }
 
 } // end extern "C"
@@ -882,6 +882,10 @@ public:
 
   // Block content.
   void visitParagraphComment(const ParagraphComment *C);
+
+  void appendParagraphCommentWithKind(const ParagraphComment *C,
+                                      StringRef Kind);
+
   void visitBlockCommandComment(const BlockCommandComment *C);
   void visitParamCommandComment(const ParamCommandComment *C);
   void visitTParamCommandComment(const TParamCommandComment *C);
@@ -893,7 +897,7 @@ public:
 
   // Helpers.
   void appendToResultWithXMLEscaping(StringRef S);
-      
+
   void formatTextOfDeclaration(const DeclInfo *DI,
                                SmallString<128> &Declaration);
 
@@ -1006,10 +1010,20 @@ void CommentASTToXMLConverter::visitHTMLEndTagComment(const HTMLEndTagComment *C
 }
 
 void CommentASTToXMLConverter::visitParagraphComment(const ParagraphComment *C) {
+  appendParagraphCommentWithKind(C, StringRef());
+}
+
+void CommentASTToXMLConverter::appendParagraphCommentWithKind(
+                                  const ParagraphComment *C,
+                                  StringRef ParagraphKind) {
   if (C->isWhitespace())
     return;
 
-  Result << "<Para>";
+  if (ParagraphKind.empty())
+    Result << "<Para>";
+  else
+    Result << "<Para kind=\"" << ParagraphKind << "\">";
+
   for (Comment::child_iterator I = C->child_begin(), E = C->child_end();
        I != E; ++I) {
     visit(*I);
@@ -1018,7 +1032,32 @@ void CommentASTToXMLConverter::visitParagraphComment(const ParagraphComment *C) 
 }
 
 void CommentASTToXMLConverter::visitBlockCommandComment(const BlockCommandComment *C) {
-  visit(C->getParagraph());
+  StringRef ParagraphKind;
+
+  switch (C->getCommandID()) {
+  case CommandTraits::KCI_author:
+  case CommandTraits::KCI_authors:
+  case CommandTraits::KCI_bug:
+  case CommandTraits::KCI_copyright:
+  case CommandTraits::KCI_date:
+  case CommandTraits::KCI_invariant:
+  case CommandTraits::KCI_note:
+  case CommandTraits::KCI_post:
+  case CommandTraits::KCI_pre:
+  case CommandTraits::KCI_remark:
+  case CommandTraits::KCI_remarks:
+  case CommandTraits::KCI_sa:
+  case CommandTraits::KCI_see:
+  case CommandTraits::KCI_since:
+  case CommandTraits::KCI_todo:
+  case CommandTraits::KCI_version:
+  case CommandTraits::KCI_warning:
+    ParagraphKind = C->getCommandName(Traits);
+  default:
+    break;
+  }
+
+  appendParagraphCommentWithKind(C->getParagraph(), ParagraphKind);
 }
 
 void CommentASTToXMLConverter::visitParamCommandComment(const ParamCommandComment *C) {
@@ -1377,7 +1416,7 @@ extern "C" {
 CXString clang_FullComment_getAsXML(CXComment CXC) {
   const FullComment *FC = getASTNodeAs<FullComment>(CXC);
   if (!FC)
-    return createCXString((const char *) 0);
+    return cxstring::createNull();
   ASTContext &Context = FC->getDeclInfo()->CurrentDecl->getASTContext();
   CXTranslationUnit TU = CXC.TranslationUnit;
   SourceManager &SM = cxtu::getASTUnit(TU)->getSourceManager();
@@ -1396,7 +1435,7 @@ CXString clang_FullComment_getAsXML(CXComment CXC) {
                                      *TU->FormatContext,
                                      TU->FormatInMemoryUniqueId++);
   Converter.visit(FC);
-  return createCXString(XML.str(), /* DupString = */ true);
+  return cxstring::createDup(XML.str());
 }
 
 } // end extern "C"

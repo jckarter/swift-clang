@@ -1089,6 +1089,7 @@ static std::string getPPCTargetCPU(const ArgList &Args) {
       .Case("604", "604")
       .Case("604e", "604e")
       .Case("620", "620")
+      .Case("630", "pwr3")
       .Case("G3", "g3")
       .Case("7400", "7400")
       .Case("G4", "g4")
@@ -1101,8 +1102,20 @@ static std::string getPPCTargetCPU(const ArgList &Args) {
       .Case("a2q", "a2q")
       .Case("e500mc", "e500mc")
       .Case("e5500", "e5500")
+      .Case("power3", "pwr3")
+      .Case("power4", "pwr4")
+      .Case("power5", "pwr5")
+      .Case("power5x", "pwr5x")
       .Case("power6", "pwr6")
+      .Case("power6x", "pwr6x")
       .Case("power7", "pwr7")
+      .Case("pwr3", "pwr3")
+      .Case("pwr4", "pwr4")
+      .Case("pwr5", "pwr5")
+      .Case("pwr5x", "pwr5x")
+      .Case("pwr6", "pwr6")
+      .Case("pwr6x", "pwr6x")
+      .Case("pwr7", "pwr7")
       .Case("powerpc", "ppc")
       .Case("powerpc64", "ppc64")
       .Default("");
@@ -1135,6 +1148,11 @@ void Clang::AddPPCTargetArgs(const ArgList &Args,
   if (Args.hasFlag(options::OPT_fno_altivec, options::OPT_faltivec, false)) {
     CmdArgs.push_back("-target-feature");
     CmdArgs.push_back("-altivec");
+  }
+
+  if (Args.hasFlag(options::OPT_mno_qpx, options::OPT_mqpx, false)) {
+    CmdArgs.push_back("-target-feature");
+    CmdArgs.push_back("-qpx");
   }
 }
 

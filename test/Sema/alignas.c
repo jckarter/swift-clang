@@ -3,7 +3,7 @@
 
 _Alignas(3) int align_illegal; //expected-error {{requested alignment is not a power of 2}}
 _Alignas(int) char align_big;
-_Alignas(1) int align_small; // FIXME: this should be rejected
+_Alignas(1) int align_small; // expected-error {{requested alignment is less than minimum}}
 _Alignas(1) unsigned _Alignas(8) int _Alignas(1) align_multiple;
 
 struct align_member {
@@ -11,7 +11,7 @@ struct align_member {
   _Alignas(1) char bitfield : 1; // expected-error {{'_Alignas' attribute cannot be applied to a bit-field}}
 };
 
-typedef _Alignas(8) char align_typedef; // expected-error {{'_Alignas' attribute only applies to variables, functions and tag types}}
+typedef _Alignas(8) char align_typedef; // expected-error {{'_Alignas' attribute only applies to variables and fields}}
 
 void f(_Alignas(1) char c) { // expected-error {{'_Alignas' attribute cannot be applied to a function parameter}}
   _Alignas(1) register char k; // expected-error {{'_Alignas' attribute cannot be applied to a variable with 'register' storage class}}

@@ -2,7 +2,7 @@
 
 int align_illegal alignas(3); //expected-error {{requested alignment is not a power of 2}}
 char align_big alignas(int);
-int align_small alignas(1); // FIXME: this should be rejected
+int align_small alignas(1); // expected-error {{requested alignment is less than minimum}}
 int align_multiple alignas(1) alignas(8) alignas(1);
 alignas(4) int align_before;
 
@@ -25,7 +25,7 @@ template <unsigned A> struct alignas(A) align_class_template {};
 template <typename... T> alignas(T...) struct align_class_temp_pack_type {}; // expected-error{{pack expansions in alignment specifiers are not supported yet}}
 template <unsigned... A> alignas(A...) struct align_class_temp_pack_expr {}; // expected-error{{pack expansions in alignment specifiers are not supported yet}}
 
-typedef char align_typedef alignas(8); // expected-error {{'alignas' attribute only applies to variables, functions and tag types}}
+typedef char align_typedef alignas(8); // expected-error {{'alignas' attribute only applies to variables, data members and tag types}}
 template<typename T> using align_alias_template = align_typedef alignas(8); // expected-error {{'alignas' attribute cannot be applied to types}}
 
 static_assert(alignof(align_big) == alignof(int), "k's alignment is wrong"); // expected-warning{{'alignof' applied to an expression is a GNU extension}}

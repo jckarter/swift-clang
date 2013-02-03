@@ -2053,8 +2053,24 @@ bool ASTReader::ReadASTBlock(ModuleFile &F) {
       break;
 
     case SPECIAL_TYPES:
-      for (unsigned I = 0, N = Record.size(); I != N; ++I)
-        SpecialTypes.push_back(getGlobalTypeID(F, Record[I]));
+      if (SpecialTypes.empty()) {
+        for (unsigned I = 0, N = Record.size(); I != N; ++I)
+          SpecialTypes.push_back(getGlobalTypeID(F, Record[I]));
+        break;
+      }
+
+      if (SpecialTypes.size() != Record.size()) {
+        Error("invalid special-types record");
+        return true;
+      }
+
+      for (unsigned I = 0, N = Record.size(); I != N; ++I) {
+        serialization::TypeID ID = getGlobalTypeID(F, Record[I]);
+        if (!SpecialTypes[I])
+          SpecialTypes[I] = ID;
+        // FIXME: If ID && SpecialTypes[I] != ID, do we need a separate
+        // merge step?
+      }
       break;
 
     case STATISTICS:
@@ -2462,19 +2478,19 @@ bool ASTReader::ReadASTBlock(ModuleFile &F) {
         KnownNamespaces.push_back(getGlobalDeclID(F, Record[I]));
       break;
 
-    case UNDEFINED_INTERNALS:
-      if (UndefinedInternals.size() % 2 != 0) {
-        Error("Invalid existing UndefinedInternals");
+    case UNDEFINED_BUT_USED:
+      if (UndefinedButUsed.size() % 2 != 0) {
+        Error("Invalid existing UndefinedButUsed");
         return true;
       }
 
       if (Record.size() % 2 != 0) {
-        Error("invalid undefined internals record");
+        Error("invalid undefined-but-used record");
         return true;
       }
       for (unsigned I = 0, N = Record.size(); I != N; /* in loop */) {
-        UndefinedInternals.push_back(getGlobalDeclID(F, Record[I++]));
-        UndefinedInternals.push_back(
+        UndefinedButUsed.push_back(getGlobalDeclID(F, Record[I++]));
+        UndefinedButUsed.push_back(
             ReadSourceLocation(F, Record, I).getRawEncoding());
       }
       break;
@@ -2591,7 +2607,8 @@ void ASTReader::makeNamesVisible(const HiddenNames &Names) {
 }
 
 void ASTReader::makeModuleVisible(Module *Mod, 
-                                  Module::NameVisibilityKind NameVisibility) {
+                                  Module::NameVisibilityKind NameVisibility,
+                                  SourceLocation ImportLoc) {
   llvm::SmallPtrSet<Module *, 4> Visited;
   SmallVector<Module *, 4> Stack;
   Stack.push_back(Mod);  
@@ -2778,6 +2795,7 @@ ASTReader::ASTReadResult ASTReader::ReadAST(const std::string &FileName,
                                               MEnd = Loaded.end();
        M != MEnd; ++M) {
     ModuleFile &F = *M->Mod;
+    F.DirectImportLoc = ImportLoc;
     if (!M->ImportedBy)
       F.ImportLoc = M->ImportLoc;
     else
@@ -3082,7 +3100,8 @@ void ASTReader::InitializeContext() {
   // Re-export any modules that were imported by a non-module AST file.
   for (unsigned I = 0, N = ImportedModules.size(); I != N; ++I) {
     if (Module *Imported = getSubmodule(ImportedModules[I]))
-      makeModuleVisible(Imported, Module::AllVisible);
+      makeModuleVisible(Imported, Module::AllVisible,
+                        /*ImportLoc=*/SourceLocation());
   }
   ImportedModules.clear();
 }
@@ -5962,16 +5981,15 @@ void ASTReader::ReadKnownNamespaces(
   }
 }
 
-void ASTReader::ReadUndefinedInternals(
+void ASTReader::ReadUndefinedButUsed(
                         llvm::DenseMap<NamedDecl*, SourceLocation> &Undefined) {
-  for (unsigned Idx = 0, N = UndefinedInternals.size(); Idx != N;) {
-    NamedDecl *D = cast<NamedDecl>(GetDecl(UndefinedInternals[Idx++]));
+  for (unsigned Idx = 0, N = UndefinedButUsed.size(); Idx != N;) {
+    NamedDecl *D = cast<NamedDecl>(GetDecl(UndefinedButUsed[Idx++]));
     SourceLocation Loc =
-        SourceLocation::getFromRawEncoding(UndefinedInternals[Idx++]);
+        SourceLocation::getFromRawEncoding(UndefinedButUsed[Idx++]);
     Undefined.insert(std::make_pair(D, Loc));
   }
 }
-    
 
 void ASTReader::ReadTentativeDefinitions(
                   SmallVectorImpl<VarDecl *> &TentativeDefs) {

@@ -187,7 +187,7 @@ static void createNullLocation(CXFile *file, unsigned *line,
 static void createNullLocation(CXString *filename, unsigned *line,
                                unsigned *column, unsigned *offset = 0) {
   if (filename)
-    *filename = createCXString("");
+    *filename = cxstring::createEmpty();
   if (line)
     *line = 0;
   if (column)
@@ -263,7 +263,7 @@ void clang_getPresumedLocation(CXSourceLocation location,
     PresumedLoc PreLoc = SM.getPresumedLoc(Loc);
     
     if (filename)
-      *filename = createCXString(PreLoc.getFilename());
+      *filename = cxstring::createRef(PreLoc.getFilename());
     if (line)
       *line = PreLoc.getLine();
     if (column)

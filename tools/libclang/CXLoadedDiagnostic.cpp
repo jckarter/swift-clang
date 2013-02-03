@@ -97,17 +97,17 @@ CXSourceLocation CXLoadedDiagnostic::getLocation() const {
 }
 
 CXString CXLoadedDiagnostic::getSpelling() const {
-  return cxstring::createCXString(Spelling, false);
+  return cxstring::createRef(Spelling);
 }
 
 CXString CXLoadedDiagnostic::getDiagnosticOption(CXString *Disable) const {
   if (DiagOption.empty())
-    return createCXString("");
+    return cxstring::createEmpty();
 
   // FIXME: possibly refactor with logic in CXStoredDiagnostic.
   if (Disable)
-    *Disable = createCXString((Twine("-Wno-") + DiagOption).str());
-  return createCXString((Twine("-W") + DiagOption).str());
+    *Disable = cxstring::createDup((Twine("-Wno-") + DiagOption).str());
+  return cxstring::createDup((Twine("-W") + DiagOption).str());
 }
 
 unsigned CXLoadedDiagnostic::getCategory() const {
@@ -115,7 +115,7 @@ unsigned CXLoadedDiagnostic::getCategory() const {
 }
 
 CXString CXLoadedDiagnostic::getCategoryText() const {
-  return cxstring::createCXString(CategoryText);
+  return cxstring::createDup(CategoryText);
 }
 
 unsigned CXLoadedDiagnostic::getNumRanges() const {
@@ -195,7 +195,7 @@ class DiagLoader {
     if (error)
       *error = code;
     if (errorString)
-      *errorString = createCXString(err);
+      *errorString = cxstring::createDup(err);
   }
   
   void reportInvalidFile(llvm::StringRef err) {
@@ -241,7 +241,7 @@ public:
       if (error)
         *error = CXLoadDiag_None;
       if (errorString)
-        *errorString = createCXString("");
+        *errorString = cxstring::createEmpty();
     }
 
   CXDiagnosticSet load(const char *file);
@@ -627,7 +627,7 @@ LoadResult DiagLoader::readDiagnosticBlock(llvm::BitstreamCursor &Stream,
         if (readString(TopDiags, RetStr, "FIXIT", Record, Blob,
                        /* allowEmptyString */ true))
           return Failure;
-        D->FixIts.push_back(std::make_pair(SR, createCXString(RetStr, false)));
+        D->FixIts.push_back(std::make_pair(SR, cxstring::createRef(RetStr)));
         continue;
       }
         
