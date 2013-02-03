@@ -23,36 +23,79 @@
 using namespace clang;
 using namespace clang::cxstring;
 
-enum CXStringFlag { CXS_Unmanaged, CXS_Malloc, CXS_StringBuf };
+/// Describes the kind of underlying data in CXString.
+enum CXStringFlag {
+  /// CXString contains a 'const char *' that it doesn't own.
+  CXS_Unmanaged,
+
+  /// CXString contains a 'const char *' that it allocated with malloc().
+  CXS_Malloc,
+
+  /// CXString contains a CXStringBuf that needs to be returned to the
+  /// CXStringPool.
+  CXS_StringBuf
+};
 
 //===----------------------------------------------------------------------===//
 // Basic generation of CXStrings.
 //===----------------------------------------------------------------------===//
 
-CXString cxstring::createCXString(const char *String, bool DupString){
+CXString cxstring::createEmpty() {
   CXString Str;
-  if (DupString) {
-    Str.data = strdup(String);
-    Str.private_flags = (unsigned) CXS_Malloc;
-  } else {
-    Str.data = String;
-    Str.private_flags = (unsigned) CXS_Unmanaged;
-  }
+  Str.data = "";
+  Str.private_flags = CXS_Unmanaged;
   return Str;
 }
 
-CXString cxstring::createCXString(StringRef String, bool DupString) {
+CXString cxstring::createNull() {
+  CXString Str;
+  Str.data = 0;
+  Str.private_flags = CXS_Unmanaged;
+  return Str;
+}
+
+CXString cxstring::createRef(const char *String) {
+  if (String && String[0] == '\0')
+    return cxstring::createEmpty();
+
+  CXString Str;
+  Str.data = String;
+  Str.private_flags = CXS_Unmanaged;
+  return Str;
+}
+
+CXString cxstring::createDup(const char *String) {
+  if (!String)
+    return cxstring::createNull();
+
+  if (String[0] == '\0')
+    return cxstring::createEmpty();
+
+  CXString Str;
+  Str.data = strdup(String);
+  Str.private_flags = CXS_Malloc;
+  return Str;
+}
+
+CXString cxstring::createRef(StringRef String) {
+  // If the string is not nul-terminated, we have to make a copy.
+  // This is doing a one past end read, and should be removed!
+  if (!String.empty() && String.data()[String.size()] != 0)
+    return cxstring::createDup(String);
+
   CXString Result;
-  if (DupString || (!String.empty() && String.data()[String.size()] != 0)) {
-    char *Spelling = static_cast<char *>(malloc(String.size() + 1));
-    memmove(Spelling, String.data(), String.size());
-    Spelling[String.size()] = 0;
-    Result.data = Spelling;
-    Result.private_flags = (unsigned) CXS_Malloc;
-  } else {
-    Result.data = String.data();
-    Result.private_flags = (unsigned) CXS_Unmanaged;
-  }
+  Result.data = String.data();
+  Result.private_flags = (unsigned) CXS_Unmanaged;
+  return Result;
+}
+
+CXString cxstring::createDup(StringRef String) {
+  CXString Result;
+  char *Spelling = static_cast<char *>(malloc(String.size() + 1));
+  memmove(Spelling, String.data(), String.size());
+  Spelling[String.size()] = 0;
+  Result.data = Spelling;
+  Result.private_flags = (unsigned) CXS_Malloc;
   return Result;
 }
 
