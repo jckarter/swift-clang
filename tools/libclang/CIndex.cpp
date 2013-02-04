@@ -56,7 +56,6 @@
 
 using namespace clang;
 using namespace clang::cxcursor;
-using namespace clang::cxstring;
 using namespace clang::cxtu;
 using namespace clang::cxindex;
 
@@ -66,7 +65,7 @@ CXTranslationUnit cxtu::MakeCXTranslationUnit(CIndexer *CIdx, ASTUnit *AU) {
   CXTranslationUnit D = new CXTranslationUnitImpl();
   D->CIdx = CIdx;
   D->TheASTUnit = AU;
-  D->StringPool = new CXStringPool();
+  D->StringPool = new cxstring::CXStringPool();
   D->Diagnostics = 0;
   D->OverridenCursorsPool = createOverridenCXCursorsPool();
   D->FormatContext = 0;
@@ -1681,7 +1680,7 @@ class DeclVisit : public VisitorJob {
 public:
   DeclVisit(const Decl *D, CXCursor parent, bool isFirst) :
     VisitorJob(parent, VisitorJob::DeclVisitKind,
-               const_cast<Decl *>(D), isFirst ? (void*) 1 : (void*) 0) {}
+               D, isFirst ? (void*) 1 : (void*) 0) {}
   static bool classof(const VisitorJob *VJ) {
     return VJ->getKind() == DeclVisitKind;
   }
@@ -1742,8 +1741,7 @@ public:
 class DeclarationNameInfoVisit : public VisitorJob {
 public:
   DeclarationNameInfoVisit(const Stmt *S, CXCursor parent)
-    : VisitorJob(parent, VisitorJob::DeclarationNameInfoVisitKind,
-                 const_cast<Stmt *>(S)) {}
+    : VisitorJob(parent, VisitorJob::DeclarationNameInfoVisitKind, S) {}
   static bool classof(const VisitorJob *VJ) {
     return VJ->getKind() == VisitorJob::DeclarationNameInfoVisitKind;
   }

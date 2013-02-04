@@ -29,7 +29,6 @@
 #include <climits>
 
 using namespace clang;
-using namespace clang::cxstring;
 using namespace clang::comments;
 using namespace clang::cxcomment;
 
@@ -1108,9 +1107,14 @@ void CommentASTToXMLConverter::visitVerbatimBlockComment(
   if (NumLines == 0)
     return;
 
-  Result << llvm::StringSwitch<const char *>(C->getCommandName(Traits))
-      .Case("code", "<Verbatim xml:space=\"preserve\" kind=\"code\">")
-      .Default("<Verbatim xml:space=\"preserve\" kind=\"verbatim\">");
+  switch (C->getCommandID()) {
+  case CommandTraits::KCI_code:
+    Result << "<Verbatim xml:space=\"preserve\" kind=\"code\">";
+    break;
+  default:
+    Result << "<Verbatim xml:space=\"preserve\" kind=\"verbatim\">";
+    break;
+  }
   for (unsigned i = 0; i != NumLines; ++i) {
     appendToResultWithXMLEscaping(C->getText(i));
     if (i + 1 != NumLines)
