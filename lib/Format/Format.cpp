@@ -47,6 +47,7 @@ FormatStyle getLLVMStyle() {
   LLVMStyle.ConstructorInitializerAllOnOneLineOrOnePerLine = false;
   LLVMStyle.AllowShortIfStatementsOnASingleLine = false;
   LLVMStyle.ObjCSpaceBeforeProtocolList = true;
+  LLVMStyle.PenaltyExcessCharacter = 1000000;
   return LLVMStyle;
 }
 
@@ -65,6 +66,7 @@ FormatStyle getGoogleStyle() {
   GoogleStyle.ConstructorInitializerAllOnOneLineOrOnePerLine = true;
   GoogleStyle.AllowShortIfStatementsOnASingleLine = false;
   GoogleStyle.ObjCSpaceBeforeProtocolList = false;
+  GoogleStyle.PenaltyExcessCharacter = 1000000;
   return GoogleStyle;
 }
 
@@ -74,11 +76,6 @@ FormatStyle getChromiumStyle() {
   ChromiumStyle.SplitTemplateClosingGreater = true;
   return ChromiumStyle;
 }
-
-struct OptimizationParameters {
-  unsigned PenaltyIndentLevel;
-  unsigned PenaltyExcessCharacter;
-};
 
 /// \brief Manages the whitespaces around tokens and their replacements.
 ///
@@ -207,6 +204,11 @@ private:
   tooling::Replacements Replaces;
 };
 
+static bool isTrailingComment(const AnnotatedToken &Tok) {
+  return Tok.is(tok::comment) &&
+         (Tok.Children.empty() || Tok.Children[0].MustBreakBefore);
+}
+
 class UnwrappedLineFormatter {
 public:
   UnwrappedLineFormatter(const FormatStyle &Style, SourceManager &SourceMgr,
@@ -216,8 +218,6 @@ public:
       : Style(Style), SourceMgr(SourceMgr), Line(Line),
         FirstIndent(FirstIndent), RootToken(RootToken),
         Whitespaces(Whitespaces) {
-    Parameters.PenaltyIndentLevel = 20;
-    Parameters.PenaltyExcessCharacter = 1000000;
   }
 
   /// \brief Formats an \c UnwrappedLine.
@@ -469,7 +469,7 @@ private:
           (Previous.is(tok::l_paren) || Previous.is(tok::l_brace) ||
            State.NextToken->Parent->Type == TT_TemplateOpener))
         State.Stack[ParenLevel].Indent = State.Column + Spaces;
-      if (Previous.is(tok::comma) && Current.Type != TT_LineComment)
+      if (Previous.is(tok::comma) && !isTrailingComment(Current))
         State.Stack[ParenLevel].HasMultiParameterLine = true;
 
       State.Column += Spaces;
@@ -498,7 +498,8 @@ private:
     if (Newline && Previous.is(tok::l_brace))
       State.Stack.back().BreakBeforeClosingBrace = true;
 
-    if (State.Stack.back().AvoidBinPacking && Newline) {
+    if (State.Stack.back().AvoidBinPacking && Newline &&
+        (Line.First.isNot(tok::kw_for) || ParenLevel != 1)) {
       // If we are breaking after '(', '{', '<', this is not bin packing unless
       // AllowAllParametersOfDeclarationOnNextLine is false.
       if ((Previous.isNot(tok::l_paren) && Previous.isNot(tok::l_brace) &&
@@ -510,7 +511,8 @@ private:
       // Any break on this level means that the parent level has been broken
       // and we need to avoid bin packing there.
       for (unsigned i = 0, e = State.Stack.size() - 1; i != e; ++i) {
-        State.Stack[i].BreakAfterComma = true;
+        if (Line.First.isNot(tok::kw_for) || i != 1)
+          State.Stack[i].BreakAfterComma = true;
       }
     }
 
@@ -594,15 +596,17 @@ private:
     // Insert start element into queue.
     std::multimap<unsigned, QueueItem> Queue;
     Queue.insert(std::pair<unsigned, QueueItem>(
-        0, QueueItem(InitialState, Edge(false, (const LineState *) 0))));
+        0, QueueItem(InitialState, Edge(false, (const LineState *)0))));
     std::map<LineState, Edge> Seen;
 
     // While not empty, take first element and follow edges.
     while (!Queue.empty()) {
       unsigned Penalty = Queue.begin()->first;
       QueueItem Item = Queue.begin()->second;
-      if (Item.first.NextToken == NULL)
+      if (Item.first.NextToken == NULL) {
+        DEBUG(llvm::errs() << "\n---\nPenalty for line: " << Penalty << "\n");
         break;
+      }
       Queue.erase(Queue.begin());
 
       if (Seen.find(Item.first) != Seen.end())
@@ -626,9 +630,16 @@ private:
     Edge *CurrentEdge = &Queue.begin()->second.second;
     while (CurrentEdge->second != NULL) {
       LineState CurrentState = *CurrentEdge->second;
+      if (CurrentEdge->first) {
+        DEBUG(llvm::errs() << "Penalty for splitting before "
+                           << CurrentState.NextToken->FormatTok.Tok.getName()
+                           << ": " << CurrentState.NextToken->SplitPenalty
+                           << "\n");
+      }
       addTokenToState(CurrentEdge->first, false, CurrentState);
       CurrentEdge = &Seen[*CurrentEdge->second];
     }
+    DEBUG(llvm::errs() << "---\n");
 
     // Return the column after the last token of the solution.
     return Queue.begin()->second.first.Column;
@@ -647,12 +658,11 @@ private:
       return;
     LineState State(OldState);
     if (NewLine)
-      Penalty += Parameters.PenaltyIndentLevel * State.Stack.size() +
-                 State.NextToken->SplitPenalty;
+      Penalty += State.NextToken->SplitPenalty;
     addTokenToState(NewLine, true, State);
     if (State.Column > getColumnLimit()) {
       unsigned ExcessCharacters = State.Column - getColumnLimit();
-      Penalty += Parameters.PenaltyExcessCharacter * ExcessCharacters;
+      Penalty += Style.PenaltyExcessCharacter * ExcessCharacters;
     }
     Queue.insert(std::pair<unsigned, QueueItem>(
         Penalty, QueueItem(State, Edge(NewLine, &OldState))));
@@ -673,7 +683,6 @@ private:
     return true;
   }
 
-
   /// \brief Returns \c true, if a line break after \p State is mandatory.
   bool mustBreak(const LineState &State) {
     if (State.NextToken->MustBreakBefore)
@@ -686,7 +695,7 @@ private:
       return true;
     if (State.NextToken->Parent->is(tok::comma) &&
         State.Stack.back().BreakAfterComma &&
-        State.NextToken->Type != TT_LineComment)
+        !isTrailingComment(*State.NextToken))
       return true;
     if ((State.NextToken->Type == TT_CtorInitializerColon ||
          (State.NextToken->Parent->ClosesTemplateDeclaration &&
@@ -701,8 +710,6 @@ private:
   const unsigned FirstIndent;
   const AnnotatedToken &RootToken;
   WhitespaceManager &Whitespaces;
-
-  OptimizationParameters Parameters;
 };
 
 class LexerBasedFormatTokenSource : public FormatTokenSource {

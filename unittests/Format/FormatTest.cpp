@@ -267,6 +267,19 @@ TEST_F(FormatTest, FormatsForLoop) {
       "     aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa(\n"
       "         aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa);\n"
       "     ++aaaaaaaaaaa) {\n}");
+
+  verifyGoogleFormat(
+      "for (int aaaaaaaaaaa = 1; aaaaaaaaaaa <= bbbbbbbbbbbbbbb;\n"
+      "     aaaaaaaaaaa++, bbbbbbbbbbbbbbbbb++) {\n"
+      "}");
+  verifyGoogleFormat(
+      "for (int aaaaaaaaaaa = 1;\n"
+      "     aaaaaaaaaaa <= aaaaaaaaaaaaaaaaaaaaaa(aaaaaaaaaaaaaaaa,\n"
+      "                                           aaaaaaaaaaaaaaaa,\n"
+      "                                           aaaaaaaaaaaaaaaa,\n"
+      "                                           aaaaaaaaaaaaaaaa);\n"
+      "     aaaaaaaaaaa++, bbbbbbbbbbbbbbbbb++) {\n"
+      "}");
 }
 
 TEST_F(FormatTest, RangeBasedForLoops) {
@@ -1276,6 +1289,13 @@ TEST_F(FormatTest, AlignsPipes) {
       "aaaaaaaa << (aaaaaaaaaaaaaaaaaaa << aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n"
       "                                 << aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa)\n"
       "         << aaaaaaaaaaaaaaaaaaaaaaaaaaaaa;");
+
+  verifyFormat("return out << \"somepacket = {\\n\"\n"
+               "           << \"  aaaaaa = \" << pkt.aaaaaa << \"\\n\"\n"
+               "           << \"  bbbb = \" << pkt.bbbb << \"\\n\"\n"
+               "           << \"  cccccc = \" << pkt.cccccc << \"\\n\"\n"
+               "           << \"  ddd = [\" << pkt.ddd << \"]\\n\"\n"
+               "           << \"}\";");
 }
 
 TEST_F(FormatTest, UnderstandsEquals) {
@@ -1355,6 +1375,10 @@ TEST_F(FormatTest, WrapsTemplateDeclarations) {
   verifyFormat(
       "aaaaaaaaaaaaaaaaaaaaaaaa<aaaaaaaaaaaaaaaaa, aaaaaaaaaaaaaaaaa>(\n"
       "    aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa);");
+
+  verifyFormat(
+      "a<aaaaaaaaaaaaaaaaaaaaa, aaaaaaaaaaaaaaaaaaa>(\n"
+      "    a(aaaaaaaaaaaaaaaaaa, aaaaaaaaaaaaaaaa));");
 }
 
 TEST_F(FormatTest, WrapsAtNestedNameSpecifiers) {
@@ -1891,6 +1915,16 @@ TEST_F(FormatTest, BlockComments) {
             "    parameter);",
             format("#define A\n"
                    "/* */someCall(parameter);", getLLVMStyleWithColumns(15)));
+
+  EXPECT_EQ("someFunction(1, /* comment 1 */\n"
+            "             2, /* comment 2 */\n"
+            "             3, /* comment 3 */\n"
+            "             aaaa,\n"
+            "             bbbb);",
+            format("someFunction (1,   /* comment 1 */\n"
+                   "                2, /* comment 2 */  \n"
+                   "               3,   /* comment 3 */\n"
+                   "aaaa, bbbb );", getGoogleStyle()));
 }
 
 TEST_F(FormatTest, FormatStarDependingOnContext) {

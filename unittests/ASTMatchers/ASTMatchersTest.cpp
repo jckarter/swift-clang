@@ -2854,6 +2854,58 @@ TEST(ForEachDescendant, BindsCorrectNodes) {
       new VerifyIdIsBoundTo<FunctionDecl>("decl", 1)));
 }
 
+TEST(FindAll, BindsNodeOnMatch) {
+  EXPECT_TRUE(matchAndVerifyResultTrue(
+      "class A {};",
+      recordDecl(hasName("::A"), findAll(recordDecl(hasName("::A")).bind("v"))),
+      new VerifyIdIsBoundTo<CXXRecordDecl>("v", 1)));
+}
+
+TEST(FindAll, BindsDescendantNodeOnMatch) {
+  EXPECT_TRUE(matchAndVerifyResultTrue(
+      "class A { int a; int b; };",
+      recordDecl(hasName("::A"), findAll(fieldDecl().bind("v"))),
+      new VerifyIdIsBoundTo<FieldDecl>("v", 2)));
+}
+
+TEST(FindAll, BindsNodeAndDescendantNodesOnOneMatch) {
+  EXPECT_TRUE(matchAndVerifyResultTrue(
+      "class A { int a; int b; };",
+      recordDecl(hasName("::A"),
+                 findAll(decl(anyOf(recordDecl(hasName("::A")).bind("v"),
+                                    fieldDecl().bind("v"))))),
+      new VerifyIdIsBoundTo<Decl>("v", 3)));
+
+  EXPECT_TRUE(matchAndVerifyResultTrue(
+      "class A { class B {}; class C {}; };",
+      recordDecl(hasName("::A"), findAll(recordDecl(isDefinition()).bind("v"))),
+      new VerifyIdIsBoundTo<CXXRecordDecl>("v", 3)));
+}
+
+TEST(EachOf, TriggersForEachMatch) {
+  EXPECT_TRUE(matchAndVerifyResultTrue(
+      "class A { int a; int b; };",
+      recordDecl(eachOf(has(fieldDecl(hasName("a")).bind("v")),
+                        has(fieldDecl(hasName("b")).bind("v")))),
+      new VerifyIdIsBoundTo<FieldDecl>("v", 2)));
+}
+
+TEST(EachOf, BehavesLikeAnyOfUnlessBothMatch) {
+  EXPECT_TRUE(matchAndVerifyResultTrue(
+      "class A { int a; int c; };",
+      recordDecl(eachOf(has(fieldDecl(hasName("a")).bind("v")),
+                        has(fieldDecl(hasName("b")).bind("v")))),
+      new VerifyIdIsBoundTo<FieldDecl>("v", 1)));
+  EXPECT_TRUE(matchAndVerifyResultTrue(
+      "class A { int c; int b; };",
+      recordDecl(eachOf(has(fieldDecl(hasName("a")).bind("v")),
+                        has(fieldDecl(hasName("b")).bind("v")))),
+      new VerifyIdIsBoundTo<FieldDecl>("v", 1)));
+  EXPECT_TRUE(notMatches(
+      "class A { int c; int d; };",
+      recordDecl(eachOf(has(fieldDecl(hasName("a")).bind("v")),
+                        has(fieldDecl(hasName("b")).bind("v"))))));
+}
 
 TEST(IsTemplateInstantiation, MatchesImplicitClassTemplateInstantiation) {
   // Make sure that we can both match the class by name (::X) and by the type
