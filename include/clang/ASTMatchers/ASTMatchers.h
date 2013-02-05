@@ -1095,6 +1095,32 @@ const internal::VariadicDynCastAllOfMatcher<Type, Type> type;
 /// \brief Matches \c TypeLocs in the clang AST.
 const internal::VariadicDynCastAllOfMatcher<TypeLoc, TypeLoc> typeLoc;
 
+/// \brief Matches if any of the given matchers matches.
+///
+/// Unlike \c anyOf, \c eachOf will generate a match result for each
+/// matching submatcher.
+///
+/// For example, in:
+/// \code
+///   class A { int a; int b; };
+/// \endcode
+/// The matcher:
+/// \code
+///   recordDecl(eachOf(has(fieldDecl(hasName("a")).bind("v")),
+///                     has(fieldDecl(hasName("b")).bind("v"))))
+/// \endcode
+/// will generate two results binding "v", the first of which binds
+/// the field declaration of \c a, the second the field declaration of
+/// \c b.
+///
+/// Usable as: Any Matcher
+template <typename M1, typename M2>
+internal::PolymorphicMatcherWithParam2<internal::EachOfMatcher, M1, M2>
+eachOf(const M1 &P1, const M2 &P2) {
+  return internal::PolymorphicMatcherWithParam2<internal::EachOfMatcher, M1,
+                                                M2>(P1, P2);
+}
+
 /// \brief Various overloads for the anyOf matcher.
 /// @{
 
@@ -1422,6 +1448,29 @@ forEachDescendant(
   return internal::ArgumentAdaptingMatcher<
     internal::ForEachDescendantMatcher,
     DescendantT>(DescendantMatcher);
+}
+
+/// \brief Matches if the node or any descendant matches.
+///
+/// Generates results for each match.
+///
+/// For example, in:
+/// \code
+///   class A { class B {}; class C {}; };
+/// \endcode
+/// The matcher:
+/// \code
+///   recordDecl(hasName("::A"), findAll(recordDecl(isDefinition()).bind("m")))
+/// \endcode
+/// will generate results for \c A, \c B and \c C.
+///
+/// Usable as: Any Matcher
+template <typename T>
+internal::PolymorphicMatcherWithParam2<
+    internal::EachOfMatcher, internal::Matcher<T>,
+    internal::ArgumentAdaptingMatcher<internal::ForEachDescendantMatcher, T> >
+findAll(const internal::Matcher<T> &Matcher) {
+  return eachOf(Matcher, forEachDescendant(Matcher));
 }
 
 /// \brief Matches AST nodes that have a parent that matches the provided
