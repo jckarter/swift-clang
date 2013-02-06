@@ -255,14 +255,6 @@ void DarwinClang::addClangWarningOptions(ArgStringList &CC1Args) const {
     // Also error about implicit function declarations, as that
     // can impact calling conventions.
     CC1Args.push_back("-Werror=implicit-function-declaration");
-
-    // For similar reasons, also emit an error for incompatible
-    // pointer types, but relax that error promotion to not
-    // include cases that are a mismatch because of discarded
-    // qualifiers.
-    CC1Args.push_back("-Werror=incompatible-pointer-types");
-    CC1Args.push_back("-Wno-error="
-                      "incompatible-pointer-types-discards-qualifiers");
   }
 }
 
