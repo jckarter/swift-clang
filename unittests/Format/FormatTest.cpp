@@ -479,6 +479,8 @@ TEST_F(FormatTest, UnderstandsSingleLineComments) {
 
   verifyFormat("someFunction(anotherFunction( // Force break.\n"
                "    parameter));");
+
+  verifyGoogleFormat("#endif  // HEADER_GUARD");
 }
 
 TEST_F(FormatTest, UnderstandsMultiLineComments) {
@@ -1091,6 +1093,13 @@ TEST_F(FormatTest, BreaksDesireably) {
 }
 
 TEST_F(FormatTest, FormatsOneParameterPerLineIfNecessary) {
+  verifyGoogleFormat("f(aaaaaaaaaaaaaaaaaaaa,\n"
+                     "  aaaaaaaaaaaaaaaaaaaa,\n"
+                     "  aaaaaaaaaaaaaaaaaaaa + aaaaaaaaaaaaaaaaaaaa);");
+  verifyGoogleFormat(
+      "aaaaaaa(aaaaaaaaaaaaa,\n"
+      "        aaaaaaaaaaaaa,\n"
+      "        aaaaaaaaaaaaa(aaaaaaaaaaaaaaaaa, aaaaaaaaaaaaaaaa));");
   verifyGoogleFormat(
       "aaaaaaaa(aaaaaaaaaaaaa,\n"
       "         aaaaaaaaaaaaaaa(aaaaaaaaaaaaaaaaaaaaaaaaaaaaa(\n"
@@ -1970,20 +1979,18 @@ TEST_F(FormatTest, FormatForObjectiveCMethodDecls) {
       format("- (void)sendAction:(SEL)aSelector to:(id)anObject forAllCells:(BOOL)flag;"));
 
   // Very long objectiveC method declaration.
-  EXPECT_EQ(
-      "- (NSUInteger)indexOfObject:(id)anObject inRange:(NSRange)range\n    "
-      "outRange:(NSRange)out_range outRange1:(NSRange)out_range1\n    "
-      "outRange2:(NSRange)out_range2 outRange3:(NSRange)out_range3\n    "
-      "outRange4:(NSRange)out_range4 outRange5:(NSRange)out_range5\n    "
-      "outRange6:(NSRange)out_range6 outRange7:(NSRange)out_range7\n    "
-      "outRange8:(NSRange)out_range8 outRange9:(NSRange)out_range9;",
-      format(
-          "- (NSUInteger)indexOfObject:(id)anObject inRange:(NSRange)range "
-          "outRange:(NSRange) out_range outRange1:(NSRange) out_range1 "
-          "outRange2:(NSRange) out_range2  outRange3:(NSRange) out_range3  "
-          "outRange4:(NSRange) out_range4  outRange5:(NSRange) out_range5 "
-          "outRange6:(NSRange) out_range6  outRange7:(NSRange) out_range7  "
-          "outRange8:(NSRange) out_range8  outRange9:(NSRange) out_range9;"));
+  verifyFormat("- (NSUInteger)indexOfObject:(id)anObject\n"
+               "                    inRange:(NSRange)range\n"
+               "                   outRange:(NSRange)out_range\n"
+               "                  outRange1:(NSRange)out_range1\n"
+               "                  outRange2:(NSRange)out_range2\n"
+               "                  outRange3:(NSRange)out_range3\n"
+               "                  outRange4:(NSRange)out_range4\n"
+               "                  outRange5:(NSRange)out_range5\n"
+               "                  outRange6:(NSRange)out_range6\n"
+               "                  outRange7:(NSRange)out_range7\n"
+               "                  outRange8:(NSRange)out_range8\n"
+               "                  outRange9:(NSRange)out_range9;");
 
   verifyFormat("- (int)sum:(vector<int>)numbers;");
   verifyGoogleFormat("- (void)setDelegate:(id<Protocol>)delegate;");
@@ -2209,6 +2216,18 @@ TEST_F(FormatTest, FormatObjCProtocol) {
                "@end\n");
 }
 
+TEST_F(FormatTest, FormatObjCMethodDeclarations) {
+  verifyFormat("- (void)doSomethingWith:(GTMFoo *)theFoo\n"
+               "                   rect:(NSRect)theRect\n"
+               "               interval:(float)theInterval {\n"
+               "}");
+  verifyFormat("- (void)shortf:(GTMFoo *)theFoo\n"
+               "          longKeyword:(NSRect)theRect\n"
+               "    evenLongerKeyword:(float)theInterval\n"
+               "                error:(NSError **)theError {\n"
+               "}");
+}
+
 TEST_F(FormatTest, FormatObjCMethodExpr) {
   verifyFormat("[foo bar:baz];");
   verifyFormat("return [foo bar:baz];");
@@ -2217,6 +2236,21 @@ TEST_F(FormatTest, FormatObjCMethodExpr) {
   verifyFormat("f(2, a ? b : c);");
   verifyFormat("[[self initWithInt:4] bar:[baz quux:arrrr]];");
 
+  // Unary operators.
+  verifyFormat("int a = +[foo bar:baz];");
+  verifyFormat("int a = -[foo bar:baz];");
+  verifyFormat("int a = ![foo bar:baz];");
+  verifyFormat("int a = ~[foo bar:baz];");
+  verifyFormat("int a = ++[foo bar:baz];");
+  verifyFormat("int a = --[foo bar:baz];");
+  verifyFormat("int a = sizeof [foo bar:baz];");
+  verifyFormat("int a = alignof [foo bar:baz];");
+  verifyFormat("int a = &[foo bar:baz];");
+  verifyFormat("int a = *[foo bar:baz];");
+  // FIXME: Make casts work, without breaking f()[4].
+  //verifyFormat("int a = (int) [foo bar:baz];");
+
+  // Binary operators.
   verifyFormat("[foo bar:baz], [foo bar:baz];");
   verifyFormat("[foo bar:baz] = [foo bar:baz];");
   verifyFormat("[foo bar:baz] *= [foo bar:baz];");
@@ -2257,7 +2291,7 @@ TEST_F(FormatTest, FormatObjCMethodExpr) {
   verifyFormat("[cond ? obj1 : obj2 methodWithParam:param]");
   verifyFormat("[button setAction:@selector(zoomOut:)];");
   verifyFormat("[color getRed:&r green:&g blue:&b alpha:&a];");
-  
+
   verifyFormat("arr[[self indexForFoo:a]];");
   verifyFormat("throw [self errorFor:a];");
   verifyFormat("@throw [self errorFor:a];");
@@ -2266,12 +2300,27 @@ TEST_F(FormatTest, FormatObjCMethodExpr) {
   // which would be at 80 columns.
   verifyFormat(
       "void f() {\n"
-      "  if ((self = [super initWithContentRect:contentRect styleMask:styleMask\n"
-      "          backing:NSBackingStoreBuffered defer:YES]))");
-  
+      "  if ((self = [super initWithContentRect:contentRect\n"
+      "                               styleMask:styleMask\n"
+      "                                 backing:NSBackingStoreBuffered\n"
+      "                                   defer:YES]))");
+
   verifyFormat("[foo checkThatBreakingAfterColonWorksOk:\n"
-               "    [bar ifItDoes:reduceOverallLineLengthLikeInThisCase]];");
-  
+               "        [bar ifItDoes:reduceOverallLineLengthLikeInThisCase]];");
+
+  verifyFormat("[myObj short:arg1 // Force line break\n"
+               "          longKeyword:arg2\n"
+               "    evenLongerKeyword:arg3\n"
+               "                error:arg4];");
+  verifyFormat(
+      "void f() {\n"
+      "  popup_window_.reset([[RenderWidgetPopupWindow alloc]\n"
+      "      initWithContentRect:NSMakeRect(origin_global.x, origin_global.y,\n"
+      "                                     pos.width(), pos.height())\n"
+      "                styleMask:NSBorderlessWindowMask\n"
+      "                  backing:NSBackingStoreBuffered\n"
+      "                    defer:NO]);\n"
+      "}");
 }
 
 TEST_F(FormatTest, ObjCAt) {

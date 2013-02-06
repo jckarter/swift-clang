@@ -20,13 +20,20 @@
 namespace clang {
 namespace format {
 
-/// \brief Returns if a token is an Objective-C selector name.
-///
-/// For example, "bar" is a selector name in [foo bar:(4 + 5)].
-static bool isObjCSelectorName(const AnnotatedToken &Tok) {
-  return Tok.is(tok::identifier) && !Tok.Children.empty() &&
-         Tok.Children[0].is(tok::colon) &&
-         Tok.Children[0].Type == TT_ObjCMethodExpr;
+static bool isUnaryOperator(const AnnotatedToken &Tok) {
+  switch (Tok.FormatTok.Tok.getKind()) {
+  case tok::plus:
+  case tok::plusplus:
+  case tok::minus:
+  case tok::minusminus:
+  case tok::exclaim:
+  case tok::tilde:
+  case tok::kw_sizeof:
+  case tok::kw_alignof:
+    return true;
+  default:
+    return false;
+  }
 }
 
 static bool isBinaryOperator(const AnnotatedToken &Tok) {
@@ -65,6 +72,7 @@ public:
   AnnotatingParser(SourceManager &SourceMgr, Lexer &Lex, AnnotatedLine &Line)
       : SourceMgr(SourceMgr), Lex(Lex), Line(Line), CurrentToken(&Line.First),
         KeywordVirtualFound(false), ColonIsObjCMethodExpr(false),
+        LongestObjCSelectorName(0), FirstObjCSelectorName(NULL),
         ColonIsForRangeExpr(false), IsExpression(false),
         LookForFunctionName(Line.MustBeDeclaration), BindingStrength(1) {
   }
@@ -82,6 +90,8 @@ public:
 
     void markStart(AnnotatedToken &Left) {
       P.ColonIsObjCMethodExpr = true;
+      P.LongestObjCSelectorName = 0;
+      P.FirstObjCSelectorName = NULL;
       Left.Type = TT_ObjCMethodExpr;
     }
 
@@ -168,8 +178,13 @@ public:
         Left->MatchingParen = CurrentToken;
         CurrentToken->MatchingParen = Left;
 
-        if (StartsObjCMethodExpr)
+        if (StartsObjCMethodExpr) {
           objCSelector.markEnd(*CurrentToken);
+          if (FirstObjCSelectorName != NULL) {
+            FirstObjCSelectorName->LongestObjCSelectorName =
+                LongestObjCSelectorName;
+          }
+        }
 
         next();
         return true;
@@ -197,6 +212,7 @@ public:
         !Left->Parent || Left->Parent->is(tok::colon) ||
         Left->Parent->is(tok::l_square) || Left->Parent->is(tok::l_paren) ||
         Left->Parent->is(tok::kw_return) || Left->Parent->is(tok::kw_throw) ||
+        isUnaryOperator(*Left->Parent) ||
         getBinOpPrecedence(Left->Parent->FormatTok.Tok.getKind(), true, true) >
         prec::Unknown;
 
@@ -208,19 +224,26 @@ public:
       if (CurrentToken->is(tok::r_square)) {
         if (!CurrentToken->Children.empty() &&
             CurrentToken->Children[0].is(tok::l_paren)) {
-          // An ObjC method call can't be followed by an open parenthesis.
+          // An ObjC method call is rarely followed by an open parenthesis.
           // FIXME: Do we incorrectly label ":" with this?
           StartsObjCMethodExpr = false;
           Left->Type = TT_Unknown;
         }
         if (StartsObjCMethodExpr) {
           objCSelector.markEnd(*CurrentToken);
+          // determineStarAmpUsage() thinks that '*' '[' is allocating an
+          // array of pointers, but if '[' starts a selector then '*' is a
+          // binary operator.
           if (Left->Parent != NULL &&
-              (Left->Parent->is(tok::star) || Left->Parent->is(tok::amp)))
+              (Left->Parent->is(tok::star) || Left->Parent->is(tok::amp)) &&
+              Left->Parent->Type == TT_PointerOrReference)
             Left->Parent->Type = TT_BinaryOperator;
         }
         Left->MatchingParen = CurrentToken;
         CurrentToken->MatchingParen = Left;
+        if (FirstObjCSelectorName != NULL)
+          FirstObjCSelectorName->LongestObjCSelectorName =
+              LongestObjCSelectorName;
         next();
         return true;
       }
@@ -295,12 +318,19 @@ public:
       break;
     case tok::colon:
       // Colons from ?: are handled in parseConditional().
-      if (Tok->Parent->is(tok::r_paren))
+      if (Tok->Parent->is(tok::r_paren)) {
         Tok->Type = TT_CtorInitializerColon;
-      else if (ColonIsObjCMethodExpr)
+      } else if (ColonIsObjCMethodExpr ||
+                 Line.First.Type == TT_ObjCMethodSpecifier) {
         Tok->Type = TT_ObjCMethodExpr;
-      else if (ColonIsForRangeExpr)
+        Tok->Parent->Type = TT_ObjCSelectorName;
+        if (Tok->Parent->FormatTok.TokenLength > LongestObjCSelectorName)
+          LongestObjCSelectorName = Tok->Parent->FormatTok.TokenLength;
+        if (FirstObjCSelectorName == NULL)
+          FirstObjCSelectorName = Tok->Parent;
+      } else if (ColonIsForRangeExpr) {
         Tok->Type = TT_RangeBasedForLoopColon;
+      }
       break;
     case tok::kw_if:
     case tok::kw_while:
@@ -423,6 +453,8 @@ public:
     default:
       break;
     }
+    while (CurrentToken != NULL)
+      next();
   }
 
   LineType parseLine() {
@@ -450,6 +482,13 @@ public:
     if (PeriodsAndArrows >= 2 && CanBeBuilderTypeStmt)
       return LT_BuilderTypeCall;
 
+    if (Line.First.Type == TT_ObjCMethodSpecifier) {
+      if (FirstObjCSelectorName != NULL)
+        FirstObjCSelectorName->LongestObjCSelectorName =
+            LongestObjCSelectorName;
+      return LT_ObjCMethodDecl;
+    }
+
     return LT_Other;
   }
 
@@ -472,6 +511,8 @@ private:
   AnnotatedToken *CurrentToken;
   bool KeywordVirtualFound;
   bool ColonIsObjCMethodExpr;
+  unsigned LongestObjCSelectorName;
+  AnnotatedToken *FirstObjCSelectorName;
   bool ColonIsForRangeExpr;
   bool IsExpression;
   bool LookForFunctionName;
@@ -570,23 +611,20 @@ private:
     if (NextToken == NULL)
       return TT_Unknown;
 
-    if (NextToken->is(tok::l_square))
-      return TT_PointerOrReference;
-
     if (PrevToken->is(tok::l_paren) || PrevToken->is(tok::l_square) ||
         PrevToken->is(tok::l_brace) || PrevToken->is(tok::comma) ||
         PrevToken->is(tok::kw_return) || PrevToken->is(tok::colon) ||
-        PrevToken->Type == TT_BinaryOperator ||
+        PrevToken->is(tok::equal) || PrevToken->Type == TT_BinaryOperator ||
         PrevToken->Type == TT_UnaryOperator || PrevToken->Type == TT_CastRParen)
       return TT_UnaryOperator;
 
+    if (NextToken->is(tok::l_square))
+      return TT_PointerOrReference;
+
     if (PrevToken->FormatTok.Tok.isLiteral() || PrevToken->is(tok::r_paren) ||
         PrevToken->is(tok::r_square) || NextToken->FormatTok.Tok.isLiteral() ||
-        NextToken->is(tok::plus) || NextToken->is(tok::minus) ||
-        NextToken->is(tok::plusplus) || NextToken->is(tok::minusminus) ||
-        NextToken->is(tok::tilde) || NextToken->is(tok::exclaim) ||
-        NextToken->is(tok::l_paren) || NextToken->is(tok::l_square) ||
-        NextToken->is(tok::kw_alignof) || NextToken->is(tok::kw_sizeof))
+        isUnaryOperator(*NextToken) || NextToken->is(tok::l_paren) ||
+        NextToken->is(tok::l_square))
       return TT_BinaryOperator;
 
     if (NextToken->is(tok::comma) || NextToken->is(tok::r_paren) ||
@@ -614,7 +652,7 @@ private:
         PrevToken->is(tok::at) || PrevToken->is(tok::l_brace))
       return TT_UnaryOperator;
 
-    // There can't be to consecutive binary operators.
+    // There can't be two consecutive binary operators.
     if (PrevToken->Type == TT_BinaryOperator)
       return TT_UnaryOperator;
 
@@ -723,9 +761,9 @@ unsigned TokenAnnotator::splitPenalty(const AnnotatedToken &Tok) {
 
   // In Objective-C method expressions, prefer breaking before "param:" over
   // breaking after it.
-  if (isObjCSelectorName(Right))
+  if (Right.Type == TT_ObjCSelectorName)
     return 0;
-  if (Right.is(tok::colon) && Right.Type == TT_ObjCMethodExpr)
+  if (Left.is(tok::colon) && Left.Type == TT_ObjCMethodExpr)
     return 20;
 
   if (Left.is(tok::l_paren) || Left.is(tok::l_square) ||
@@ -883,7 +921,7 @@ bool TokenAnnotator::canBreakBefore(const AnnotatedToken &Right) {
     return false;
   if (Left.is(tok::colon) && Left.Type == TT_ObjCMethodExpr)
     return true;
-  if (isObjCSelectorName(Right))
+  if (Right.Type == TT_ObjCSelectorName)
     return true;
   if (Left.ClosesTemplateDeclaration)
     return true;
