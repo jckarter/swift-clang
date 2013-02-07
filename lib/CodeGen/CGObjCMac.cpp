@@ -173,6 +173,7 @@ protected:
 public:
   llvm::Type *ShortTy, *IntTy, *LongTy, *LongLongTy;
   llvm::Type *Int8PtrTy, *Int8PtrPtrTy;
+  llvm::Type *IvarOffsetVarTy;
 
   /// ObjectPtrTy - LLVM type for object handles (typeof(id))
   llvm::Type *ObjectPtrTy;
@@ -5010,6 +5011,17 @@ ObjCCommonTypesHelper::ObjCCommonTypesHelper(CodeGen::CodeGenModule &cgm)
   LongLongTy = Types.ConvertType(Ctx.LongLongTy);
   Int8PtrTy = CGM.Int8PtrTy;
   Int8PtrPtrTy = CGM.Int8PtrPtrTy;
+  
+  // 64bit (arm64) device and 64bit simulator both use 32bit ivar offset
+  // variables. All others, preserve their existing behavior.
+  // This include, OS X x86_64  and  Windows x86_64.
+  const llvm::Triple &Triple = CGM.getTarget().getTriple();
+  if (Triple.getArch() == llvm::Triple::arm64 ||
+      (Triple.getOS() == llvm::Triple::IOS &&
+       Triple.getArch() == llvm::Triple::x86_64))
+    IvarOffsetVarTy = IntTy;
+  else
+    IvarOffsetVarTy = LongTy;
 
   ObjectPtrTy = Types.ConvertType(Ctx.getObjCIdType());
   PtrObjectPtrTy = llvm::PointerType::getUnqual(ObjectPtrTy);
@@ -5314,7 +5326,7 @@ ObjCNonFragileABITypesHelper::ObjCNonFragileABITypesHelper(CodeGen::CodeGenModul
   ProtocolListnfABIPtrTy = llvm::PointerType::getUnqual(ProtocolListnfABITy);
 
   // struct _ivar_t {
-  //   unsigned long int *offset;  // pointer to ivar offset location
+  //   unsigned [long] int *offset;  // pointer to ivar offset location
   //   char *name;
   //   char *type;
   //   uint32_t alignment;
@@ -5322,7 +5334,7 @@ ObjCNonFragileABITypesHelper::ObjCNonFragileABITypesHelper(CodeGen::CodeGenModul
   // }
   IvarnfABITy =
     llvm::StructType::create("struct._ivar_t",
-                             llvm::PointerType::getUnqual(LongTy),
+                             llvm::PointerType::getUnqual(IvarOffsetVarTy),
                              Int8PtrTy, Int8PtrTy, IntTy, IntTy, NULL);
 
   // struct _ivar_list_t {
@@ -6073,7 +6085,7 @@ CGObjCNonFragileABIMac::ObjCIvarOffsetVariable(const ObjCInterfaceDecl *ID,
     CGM.getModule().getGlobalVariable(Name);
   if (!IvarOffsetGV)
     IvarOffsetGV =
-      new llvm::GlobalVariable(CGM.getModule(), ObjCTypes.LongTy,
+      new llvm::GlobalVariable(CGM.getModule(), ObjCTypes.IvarOffsetVarTy,
                                false,
                                llvm::GlobalValue::ExternalLinkage,
                                0,
@@ -6086,10 +6098,10 @@ CGObjCNonFragileABIMac::EmitIvarOffsetVar(const ObjCInterfaceDecl *ID,
                                           const ObjCIvarDecl *Ivar,
                                           unsigned long int Offset) {
   llvm::GlobalVariable *IvarOffsetGV = ObjCIvarOffsetVariable(ID, Ivar);
-  IvarOffsetGV->setInitializer(llvm::ConstantInt::get(ObjCTypes.LongTy,
+  IvarOffsetGV->setInitializer(llvm::ConstantInt::get(ObjCTypes.IvarOffsetVarTy,
                                                       Offset));
   IvarOffsetGV->setAlignment(
-    CGM.getDataLayout().getABITypeAlignment(ObjCTypes.LongTy));
+    CGM.getDataLayout().getABITypeAlignment(ObjCTypes.IvarOffsetVarTy));
 
   // FIXME: This matches gcc, but shouldn't the visibility be set on the use as
   // well (i.e., in ObjCIvarOffsetVariable).
@@ -6107,7 +6119,7 @@ CGObjCNonFragileABIMac::EmitIvarOffsetVar(const ObjCInterfaceDecl *ID,
 /// implementation. The return value has type
 /// IvarListnfABIPtrTy.
 ///  struct _ivar_t {
-///   unsigned long int *offset;  // pointer to ivar offset location
+///   unsigned [long] int *offset;  // pointer to ivar offset location
 ///   char *name;
 ///   char *type;
 ///   uint32_t alignment;
@@ -6438,7 +6450,16 @@ llvm::Value *CGObjCNonFragileABIMac::EmitIvarOffset(
   CodeGen::CodeGenFunction &CGF,
   const ObjCInterfaceDecl *Interface,
   const ObjCIvarDecl *Ivar) {
-  return CGF.Builder.CreateLoad(ObjCIvarOffsetVariable(Interface, Ivar),"ivar");
+  llvm::Value *IvarOffsetValue =
+    CGF.Builder.CreateLoad(ObjCIvarOffsetVariable(Interface, Ivar),"ivar");
+  // This could be 32bit int or 64bit integer depending on the architecture.
+  // Cast it to 64bit integer value, if it is a 32bit integer ivar offset value
+  //  as this is what caller always expectes.
+  if (ObjCTypes.IvarOffsetVarTy == ObjCTypes.IntTy)
+    IvarOffsetValue =
+      CGF.Builder.CreateIntCast(IvarOffsetValue, ObjCTypes.LongTy, 
+                                true, "ivar.conv");
+  return IvarOffsetValue;
 }
 
 static void appendSelectorForMessageRefTable(std::string &buffer,
