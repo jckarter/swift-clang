@@ -557,6 +557,26 @@ maybeUpdateRTTILinkage(CodeGenModule &CGM, llvm::GlobalVariable *GV,
   TypeNameGV->setLinkage(Linkage);
 }
 
+/// Should we use the iOS64 demoted-visibility / string-equality rules
+/// for a certain type's RTTI?
+static bool shouldUseDemotedVisibility(CodeGenModule &CGM,
+                                       QualType canTy,
+                                 llvm::GlobalValue::LinkageTypes linkage) {
+  // Only on iOS64.
+  // FIXME: abstract this into CGCXXABI after this code moves to trunk.
+  if (CGM.getTarget().getCXXABI().getKind() != TargetCXXABI::iOS64)
+    return false;
+
+  // Only for linkonce_odr linkage.  Note that we do *not* want to use
+  // this for symbols with weak_odr linkage, which might include
+  // explicit template instantiations.
+  if (linkage != llvm::GlobalValue::LinkOnceODRLinkage)
+    return false;
+
+  // Only with default visibility.
+  return canTy->getVisibility() == DefaultVisibility;
+}
+
 llvm::Constant *RTTIBuilder::BuildTypeInfo(QualType Ty, bool Force) {
   // We want to operate on the canonical type.
   Ty = CGM.getContext().getCanonicalType(Ty);
@@ -592,8 +612,24 @@ llvm::Constant *RTTIBuilder::BuildTypeInfo(QualType Ty, bool Force) {
   
   // And the name.
   llvm::GlobalVariable *TypeName = GetAddrOfTypeName(Ty, Linkage);
+  llvm::Constant *typeNameField;
 
-  Fields.push_back(llvm::ConstantExpr::getBitCast(TypeName, CGM.Int8PtrTy));
+  // If we're supposed to demote the visibility, be sure to set a flag
+  // to use a string comparison for type_info comparisons.
+  bool useDemotedVisibility
+    = shouldUseDemotedVisibility(CGM, Ty, Linkage);
+  if (useDemotedVisibility) {
+    // The flag is the sign bit, which on ARM64 is defined to be clear
+    // for global pointers.  This is very ARM64-specific.
+    typeNameField = llvm::ConstantExpr::getPtrToInt(TypeName, CGM.Int64Ty);
+    llvm::Constant *flag =
+      llvm::ConstantInt::get(CGM.Int64Ty, ((uint64_t)1) << 63);
+    typeNameField = llvm::ConstantExpr::getAdd(typeNameField, flag);
+    typeNameField = llvm::ConstantExpr::getIntToPtr(typeNameField, CGM.Int8PtrTy);
+  } else {
+    typeNameField = llvm::ConstantExpr::getBitCast(TypeName, CGM.Int8PtrTy);
+  }
+  Fields.push_back(typeNameField);
 
   switch (Ty->getTypeClass()) {
 #define TYPE(Class, Base)
@@ -711,6 +747,12 @@ llvm::Constant *RTTIBuilder::BuildTypeInfo(QualType Ty, bool Force) {
   
     TypeInfoVisibility = minVisibility(TypeInfoVisibility, Ty->getVisibility());
     GV->setVisibility(CodeGenModule::GetLLVMVisibility(TypeInfoVisibility));
+  }
+
+  // FIXME: integrate this better into the above when we move to trunk
+  if (useDemotedVisibility) {
+    TypeName->setVisibility(llvm::GlobalValue::HiddenVisibility);
+    GV->setVisibility(llvm::GlobalValue::HiddenVisibility);
   }
 
   GV->setUnnamedAddr(true);
