@@ -80,7 +80,7 @@ namespace test2 {
   };
   template class E<int>;
   // CHECK-GLOBALS: @_ZTSN5test21EIiEE = weak_odr constant [14 x i8]
-  // CHECK-GLOBALS: @_ZTIN5test21EIiEE = weak_odr unnamed_addr constant { {{.*}}, i8* getelementptr inbounds ([14 x i8]* @_ZTSN5test21EIiEE, i32 0, i32 0) }  
+  // CHECK-GLOBALS: @_ZTIN5test21EIiEE = weak_odr unnamed_addr constant { {{.*}}, i8* inttoptr (i64 add (i64 ptrtoint ([14 x i8]* @_ZTSN5test21EIiEE to i64), i64 -9223372036854775808) to i8*) }
 
   // CHECK-GLOBALS: @_ZTSN5test21AE = constant [11 x i8]
   // CHECK-GLOBALS: @_ZTIN5test21AE = unnamed_addr constant { {{.*}}, i8* getelementptr inbounds ([11 x i8]* @_ZTSN5test21AE, i32 0, i32 0) }

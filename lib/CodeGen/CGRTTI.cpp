@@ -557,24 +557,49 @@ maybeUpdateRTTILinkage(CodeGenModule &CGM, llvm::GlobalVariable *GV,
   TypeNameGV->setLinkage(Linkage);
 }
 
-/// Should we use the iOS64 demoted-visibility / string-equality rules
-/// for a certain type's RTTI?
-static bool shouldUseDemotedVisibility(CodeGenModule &CGM,
-                                       QualType canTy,
-                                 llvm::GlobalValue::LinkageTypes linkage) {
-  // Only on iOS64.
+/// What sort of unique-RTTI behavior should we use?
+enum UniqueRTTIKind {
+  /// We are guaranteeing, or need to guarantee, that the RTTI string
+  /// is unique.
+  UniqueRTTI,
+
+  /// We are not guaranteeing uniqueness for the RTTI string, so we
+  /// can demote to hidden visibility and use string comparisons.
+  NonUniqueHiddenRTTI,
+
+  /// We are not guaranteeing uniqueness for the RTTI string, so we
+  /// have to use string comparisons, but we also have to emit it with
+  /// non-hidden visibility.
+  NonUniqueVisibleRTTI
+};
+
+/// What sort of uniqueness rules should we use for the RTTI for the
+/// given type?
+static UniqueRTTIKind classifyUniqueRTTI(CodeGenModule &CGM, QualType canTy,
+                                   llvm::GlobalValue::LinkageTypes linkage) {
+  // We only support non-unique RTTI on iOS64.
   // FIXME: abstract this into CGCXXABI after this code moves to trunk.
   if (CGM.getTarget().getCXXABI().getKind() != TargetCXXABI::iOS64)
-    return false;
+    return UniqueRTTI;
 
-  // Only for linkonce_odr linkage.  Note that we do *not* want to use
-  // this for symbols with weak_odr linkage, which might include
-  // explicit template instantiations.
-  if (linkage != llvm::GlobalValue::LinkOnceODRLinkage)
-    return false;
+  // It's only necessary for linkonce_odr or weak_odr linkage.
+  if (linkage != llvm::GlobalValue::LinkOnceODRLinkage &&
+      linkage != llvm::GlobalValue::WeakODRLinkage)
+    return UniqueRTTI;
 
-  // Only with default visibility.
-  return canTy->getVisibility() == DefaultVisibility;
+  // It's only necessary with default visibility.
+  if (canTy->getVisibility() != DefaultVisibility)
+    return UniqueRTTI;
+
+  // If we're not required to publish this symbol, hide it.
+  if (linkage == llvm::GlobalValue::LinkOnceODRLinkage)
+    return NonUniqueHiddenRTTI;
+
+  // If we're required to publish this symbol, as we might be under an
+  // explicit instantiation, leave it with default visibility but
+  // enable string-comparisons.
+  assert(linkage == llvm::GlobalValue::WeakODRLinkage);
+  return NonUniqueVisibleRTTI;
 }
 
 llvm::Constant *RTTIBuilder::BuildTypeInfo(QualType Ty, bool Force) {
@@ -616,9 +641,8 @@ llvm::Constant *RTTIBuilder::BuildTypeInfo(QualType Ty, bool Force) {
 
   // If we're supposed to demote the visibility, be sure to set a flag
   // to use a string comparison for type_info comparisons.
-  bool useDemotedVisibility
-    = shouldUseDemotedVisibility(CGM, Ty, Linkage);
-  if (useDemotedVisibility) {
+  UniqueRTTIKind uniqueRTTI = classifyUniqueRTTI(CGM, Ty, Linkage);
+  if (uniqueRTTI != UniqueRTTI) {
     // The flag is the sign bit, which on ARM64 is defined to be clear
     // for global pointers.  This is very ARM64-specific.
     typeNameField = llvm::ConstantExpr::getPtrToInt(TypeName, CGM.Int64Ty);
@@ -750,7 +774,7 @@ llvm::Constant *RTTIBuilder::BuildTypeInfo(QualType Ty, bool Force) {
   }
 
   // FIXME: integrate this better into the above when we move to trunk
-  if (useDemotedVisibility) {
+  if (uniqueRTTI == NonUniqueHiddenRTTI) {
     TypeName->setVisibility(llvm::GlobalValue::HiddenVisibility);
     GV->setVisibility(llvm::GlobalValue::HiddenVisibility);
   }
