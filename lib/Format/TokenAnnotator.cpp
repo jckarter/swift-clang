@@ -42,11 +42,14 @@ static bool isBinaryOperator(const AnnotatedToken &Tok) {
 }
 
 // Returns the previous token ignoring comments.
-static const AnnotatedToken *getPreviousToken(const AnnotatedToken &Tok) {
-  const AnnotatedToken *PrevToken = Tok.Parent;
+static AnnotatedToken *getPreviousToken(AnnotatedToken &Tok) {
+  AnnotatedToken *PrevToken = Tok.Parent;
   while (PrevToken != NULL && PrevToken->is(tok::comment))
     PrevToken = PrevToken->Parent;
   return PrevToken;
+}
+static const AnnotatedToken *getPreviousToken(const AnnotatedToken &Tok) {
+  return getPreviousToken(const_cast<AnnotatedToken &>(Tok));
 }
 
 // Returns the next token ignoring comments.
@@ -71,50 +74,17 @@ class AnnotatingParser {
 public:
   AnnotatingParser(SourceManager &SourceMgr, Lexer &Lex, AnnotatedLine &Line)
       : SourceMgr(SourceMgr), Lex(Lex), Line(Line), CurrentToken(&Line.First),
-        KeywordVirtualFound(false), ColonIsObjCMethodExpr(false),
-        LongestObjCSelectorName(0), FirstObjCSelectorName(NULL),
-        ColonIsForRangeExpr(false), IsExpression(false),
-        LookForFunctionName(Line.MustBeDeclaration), BindingStrength(1) {
+        KeywordVirtualFound(false) {
+    Contexts.push_back(Context(1, /*IsExpression=*/ false));
+    Contexts.back().LookForFunctionName = Line.MustBeDeclaration;
   }
-
-  /// \brief A helper class to manage AnnotatingParser::ColonIsObjCMethodExpr.
-  struct ObjCSelectorRAII {
-    AnnotatingParser &P;
-    bool ColonWasObjCMethodExpr;
-
-    ObjCSelectorRAII(AnnotatingParser &P)
-        : P(P), ColonWasObjCMethodExpr(P.ColonIsObjCMethodExpr) {
-    }
-
-    ~ObjCSelectorRAII() { P.ColonIsObjCMethodExpr = ColonWasObjCMethodExpr; }
-
-    void markStart(AnnotatedToken &Left) {
-      P.ColonIsObjCMethodExpr = true;
-      P.LongestObjCSelectorName = 0;
-      P.FirstObjCSelectorName = NULL;
-      Left.Type = TT_ObjCMethodExpr;
-    }
-
-    void markEnd(AnnotatedToken &Right) { Right.Type = TT_ObjCMethodExpr; }
-  };
-
-  struct ScopedBindingStrengthIncrease {
-    AnnotatingParser &P;
-    unsigned Increase;
-
-    ScopedBindingStrengthIncrease(AnnotatingParser &P, unsigned Increase)
-        : P(P), Increase(Increase) {
-      P.BindingStrength += Increase;
-    }
-
-    ~ScopedBindingStrengthIncrease() { P.BindingStrength -= Increase; }
-  };
 
   bool parseAngle() {
     if (CurrentToken == NULL)
       return false;
-    ScopedBindingStrengthIncrease Increase(*this, 10);
+    ScopedContextCreator ContextCreator(*this, 10);
     AnnotatedToken *Left = CurrentToken->Parent;
+    Contexts.back().IsExpression = false;
     while (CurrentToken != NULL) {
       if (CurrentToken->is(tok::greater)) {
         Left->MatchingParen = CurrentToken;
@@ -140,7 +110,12 @@ public:
   bool parseParens(bool LookForDecls = false) {
     if (CurrentToken == NULL)
       return false;
-    ScopedBindingStrengthIncrease Increase(*this, 1);
+    ScopedContextCreator ContextCreator(*this, 1);
+
+    // FIXME: This is a bit of a hack. Do better.
+    Contexts.back().ColonIsForRangeExpr =
+        Contexts.size() == 2 && Contexts[0].ColonIsForRangeExpr;
+
     bool StartsObjCMethodExpr = false;
     AnnotatedToken *Left = CurrentToken->Parent;
     if (CurrentToken->is(tok::caret)) {
@@ -154,9 +129,10 @@ public:
       }
     }
 
-    ObjCSelectorRAII objCSelector(*this);
-    if (StartsObjCMethodExpr)
-      objCSelector.markStart(*Left);
+    if (StartsObjCMethodExpr) {
+      Contexts.back().ColonIsObjCMethodExpr = true;
+      Left->Type = TT_ObjCMethodExpr;
+    }
 
     while (CurrentToken != NULL) {
       // LookForDecls is set when "if (" has been seen. Check for
@@ -179,10 +155,10 @@ public:
         CurrentToken->MatchingParen = Left;
 
         if (StartsObjCMethodExpr) {
-          objCSelector.markEnd(*CurrentToken);
-          if (FirstObjCSelectorName != NULL) {
-            FirstObjCSelectorName->LongestObjCSelectorName =
-                LongestObjCSelectorName;
+          CurrentToken->Type = TT_ObjCMethodExpr;
+          if (Contexts.back().FirstObjCSelectorName != NULL) {
+            Contexts.back().FirstObjCSelectorName->LongestObjCSelectorName =
+                Contexts.back().LongestObjCSelectorName;
           }
         }
 
@@ -202,23 +178,24 @@ public:
   bool parseSquare() {
     if (!CurrentToken)
       return false;
-    ScopedBindingStrengthIncrease Increase(*this, 10);
+    ScopedContextCreator ContextCreator(*this, 10);
 
     // A '[' could be an index subscript (after an indentifier or after
     // ')' or ']'), or it could be the start of an Objective-C method
     // expression.
     AnnotatedToken *Left = CurrentToken->Parent;
+    AnnotatedToken *Parent = getPreviousToken(*Left);
     bool StartsObjCMethodExpr =
-        !Left->Parent || Left->Parent->is(tok::colon) ||
-        Left->Parent->is(tok::l_square) || Left->Parent->is(tok::l_paren) ||
-        Left->Parent->is(tok::kw_return) || Left->Parent->is(tok::kw_throw) ||
-        isUnaryOperator(*Left->Parent) ||
-        getBinOpPrecedence(Left->Parent->FormatTok.Tok.getKind(), true, true) >
+        !Parent || Parent->is(tok::colon) || Parent->is(tok::l_square) ||
+        Parent->is(tok::l_paren) || Parent->is(tok::kw_return) ||
+        Parent->is(tok::kw_throw) || isUnaryOperator(*Parent) ||
+        getBinOpPrecedence(Parent->FormatTok.Tok.getKind(), true, true) >
         prec::Unknown;
 
-    ObjCSelectorRAII objCSelector(*this);
-    if (StartsObjCMethodExpr)
-      objCSelector.markStart(*Left);
+    if (StartsObjCMethodExpr) {
+      Contexts.back().ColonIsObjCMethodExpr = true;
+      Left->Type = TT_ObjCMethodExpr;
+    }
 
     while (CurrentToken != NULL) {
       if (CurrentToken->is(tok::r_square)) {
@@ -230,20 +207,20 @@ public:
           Left->Type = TT_Unknown;
         }
         if (StartsObjCMethodExpr) {
-          objCSelector.markEnd(*CurrentToken);
+          CurrentToken->Type = TT_ObjCMethodExpr;
           // determineStarAmpUsage() thinks that '*' '[' is allocating an
           // array of pointers, but if '[' starts a selector then '*' is a
           // binary operator.
-          if (Left->Parent != NULL &&
-              (Left->Parent->is(tok::star) || Left->Parent->is(tok::amp)) &&
-              Left->Parent->Type == TT_PointerOrReference)
-            Left->Parent->Type = TT_BinaryOperator;
+          if (Parent != NULL &&
+              (Parent->is(tok::star) || Parent->is(tok::amp)) &&
+              Parent->Type == TT_PointerOrReference)
+            Parent->Type = TT_BinaryOperator;
         }
         Left->MatchingParen = CurrentToken;
         CurrentToken->MatchingParen = Left;
-        if (FirstObjCSelectorName != NULL)
-          FirstObjCSelectorName->LongestObjCSelectorName =
-              LongestObjCSelectorName;
+        if (Contexts.back().FirstObjCSelectorName != NULL)
+          Contexts.back().FirstObjCSelectorName->LongestObjCSelectorName =
+              Contexts.back().LongestObjCSelectorName;
         next();
         return true;
       }
@@ -261,7 +238,7 @@ public:
     // Lines are fine to end with '{'.
     if (CurrentToken == NULL)
       return true;
-    ScopedBindingStrengthIncrease Increase(*this, 1);
+    ScopedContextCreator ContextCreator(*this, 1);
     AnnotatedToken *Left = CurrentToken->Parent;
     while (CurrentToken != NULL) {
       if (CurrentToken->is(tok::r_brace)) {
@@ -320,15 +297,17 @@ public:
       // Colons from ?: are handled in parseConditional().
       if (Tok->Parent->is(tok::r_paren)) {
         Tok->Type = TT_CtorInitializerColon;
-      } else if (ColonIsObjCMethodExpr ||
+      } else if (Contexts.back().ColonIsObjCMethodExpr ||
                  Line.First.Type == TT_ObjCMethodSpecifier) {
         Tok->Type = TT_ObjCMethodExpr;
         Tok->Parent->Type = TT_ObjCSelectorName;
-        if (Tok->Parent->FormatTok.TokenLength > LongestObjCSelectorName)
-          LongestObjCSelectorName = Tok->Parent->FormatTok.TokenLength;
-        if (FirstObjCSelectorName == NULL)
-          FirstObjCSelectorName = Tok->Parent;
-      } else if (ColonIsForRangeExpr) {
+        if (Tok->Parent->FormatTok.TokenLength >
+            Contexts.back().LongestObjCSelectorName)
+          Contexts.back().LongestObjCSelectorName =
+              Tok->Parent->FormatTok.TokenLength;
+        if (Contexts.back().FirstObjCSelectorName == NULL)
+          Contexts.back().FirstObjCSelectorName = Tok->Parent;
+      } else if (Contexts.back().ColonIsForRangeExpr) {
         Tok->Type = TT_RangeBasedForLoopColon;
       }
       break;
@@ -341,7 +320,7 @@ public:
       }
       break;
     case tok::kw_for:
-      ColonIsForRangeExpr = true;
+      Contexts.back().ColonIsForRangeExpr = true;
       next();
       if (!parseParens())
         return false;
@@ -483,9 +462,9 @@ public:
       return LT_BuilderTypeCall;
 
     if (Line.First.Type == TT_ObjCMethodSpecifier) {
-      if (FirstObjCSelectorName != NULL)
-        FirstObjCSelectorName->LongestObjCSelectorName =
-            LongestObjCSelectorName;
+      if (Contexts.back().FirstObjCSelectorName != NULL)
+        Contexts.back().FirstObjCSelectorName->LongestObjCSelectorName =
+            Contexts.back().LongestObjCSelectorName;
       return LT_ObjCMethodDecl;
     }
 
@@ -495,7 +474,7 @@ public:
   void next() {
     if (CurrentToken != NULL) {
       determineTokenType(*CurrentToken);
-      CurrentToken->BindingStrength = BindingStrength;
+      CurrentToken->BindingStrength = Contexts.back().BindingStrength;
     }
 
     if (CurrentToken != NULL && !CurrentToken->Children.empty())
@@ -505,25 +484,45 @@ public:
   }
 
 private:
-  SourceManager &SourceMgr;
-  Lexer &Lex;
-  AnnotatedLine &Line;
-  AnnotatedToken *CurrentToken;
-  bool KeywordVirtualFound;
-  bool ColonIsObjCMethodExpr;
-  unsigned LongestObjCSelectorName;
-  AnnotatedToken *FirstObjCSelectorName;
-  bool ColonIsForRangeExpr;
-  bool IsExpression;
-  bool LookForFunctionName;
+  /// \brief A struct to hold information valid in a specific context, e.g.
+  /// a pair of parenthesis.
+  struct Context {
+    Context(unsigned BindingStrength, bool IsExpression)
+        : BindingStrength(BindingStrength), LongestObjCSelectorName(0),
+          ColonIsForRangeExpr(false), ColonIsObjCMethodExpr(false),
+          FirstObjCSelectorName(NULL), IsExpression(IsExpression),
+          LookForFunctionName(false) {
+    }
 
-  unsigned BindingStrength;
+    unsigned BindingStrength;
+    unsigned LongestObjCSelectorName;
+    bool ColonIsForRangeExpr;
+    bool ColonIsObjCMethodExpr;
+    AnnotatedToken *FirstObjCSelectorName;
+    bool IsExpression;
+    bool LookForFunctionName;
+  };
+
+  /// \brief Puts a new \c Context onto the stack \c Contexts for the lifetime
+  /// of each instance.
+  struct ScopedContextCreator {
+    AnnotatingParser &P;
+
+    ScopedContextCreator(AnnotatingParser &P, unsigned Increase)
+        : P(P) {
+      P.Contexts.push_back(Context(
+          P.Contexts.back().BindingStrength + Increase,
+          P.Contexts.back().IsExpression));
+    }
+
+    ~ScopedContextCreator() { P.Contexts.pop_back(); }
+  };
 
   void determineTokenType(AnnotatedToken &Current) {
     if (getPrecedence(Current) == prec::Assignment) {
-      IsExpression = true;
+      Contexts.back().IsExpression = true;
       AnnotatedToken *Previous = Current.Parent;
-      while (Previous != NULL) {
+      while (Previous != NULL && Previous->isNot(tok::comma)) {
         if (Previous->Type == TT_BinaryOperator &&
             (Previous->is(tok::star) || Previous->is(tok::amp))) {
           Previous->Type = TT_PointerOrReference;
@@ -534,14 +533,15 @@ private:
     if (Current.is(tok::kw_return) || Current.is(tok::kw_throw) ||
         (Current.is(tok::l_paren) && !Line.MustBeDeclaration &&
          (Current.Parent == NULL || Current.Parent->isNot(tok::kw_for))))
-      IsExpression = true;
+      Contexts.back().IsExpression = true;
 
     if (Current.Type == TT_Unknown) {
-      if (LookForFunctionName && Current.is(tok::l_paren)) {
+      if (Contexts.back().LookForFunctionName && Current.is(tok::l_paren)) {
         findFunctionName(&Current);
-        LookForFunctionName = false;
+        Contexts.back().LookForFunctionName = false;
       } else if (Current.is(tok::star) || Current.is(tok::amp)) {
-        Current.Type = determineStarAmpUsage(Current, IsExpression);
+        Current.Type =
+            determineStarAmpUsage(Current, Contexts.back().IsExpression);
       } else if (Current.is(tok::minus) || Current.is(tok::plus) ||
                  Current.is(tok::caret)) {
         Current.Type = determinePlusMinusCaretUsage(Current);
@@ -671,9 +671,17 @@ private:
 
     return TT_UnaryOperator;
   }
+
+  SmallVector<Context, 8> Contexts;
+
+  SourceManager &SourceMgr;
+  Lexer &Lex;
+  AnnotatedLine &Line;
+  AnnotatedToken *CurrentToken;
+  bool KeywordVirtualFound;
 };
 
-void TokenAnnotator::annotate() {
+void TokenAnnotator::annotate(AnnotatedLine &Line) {
   AnnotatingParser Parser(SourceMgr, Lex, Line);
   Line.Type = Parser.parseLine();
   if (Line.Type == LT_Invalid)
@@ -691,45 +699,51 @@ void TokenAnnotator::annotate() {
   Line.First.CanBreakBefore = Line.First.MustBreakBefore;
 
   Line.First.TotalLength = Line.First.FormatTok.TokenLength;
-  if (!Line.First.Children.empty())
-    calculateFormattingInformation(Line.First.Children[0]);
 }
 
-void TokenAnnotator::calculateFormattingInformation(AnnotatedToken &Current) {
-  Current.SpaceRequiredBefore = spaceRequiredBefore(Current);
+void TokenAnnotator::calculateFormattingInformation(AnnotatedLine &Line) {
+  if (Line.First.Children.empty())
+    return;
+  AnnotatedToken *Current = &Line.First.Children[0];
+  while (Current != NULL) {
+    Current->SpaceRequiredBefore = spaceRequiredBefore(Line, *Current);
 
-  if (Current.FormatTok.MustBreakBefore) {
-    Current.MustBreakBefore = true;
-  } else if (Current.Type == TT_LineComment) {
-    Current.MustBreakBefore = Current.FormatTok.NewlinesBefore > 0;
-  } else if ((Current.Parent->is(tok::comment) &&
-              Current.FormatTok.NewlinesBefore > 0) ||
-             (Current.is(tok::string_literal) &&
-              Current.Parent->is(tok::string_literal))) {
-    Current.MustBreakBefore = true;
-  } else if (Current.is(tok::lessless) && !Current.Children.empty() &&
-             Current.Parent->is(tok::string_literal) &&
-             Current.Children[0].is(tok::string_literal)) {
-    Current.MustBreakBefore = true;
-  } else {
-    Current.MustBreakBefore = false;
+    if (Current->FormatTok.MustBreakBefore) {
+      Current->MustBreakBefore = true;
+    } else if (Current->Type == TT_LineComment) {
+      Current->MustBreakBefore = Current->FormatTok.NewlinesBefore > 0;
+    } else if ((Current->Parent->is(tok::comment) &&
+                Current->FormatTok.NewlinesBefore > 0) ||
+               (Current->is(tok::string_literal) &&
+                Current->Parent->is(tok::string_literal))) {
+      Current->MustBreakBefore = true;
+    } else if (Current->is(tok::lessless) && !Current->Children.empty() &&
+               Current->Parent->is(tok::string_literal) &&
+               Current->Children[0].is(tok::string_literal)) {
+      Current->MustBreakBefore = true;
+    } else {
+      Current->MustBreakBefore = false;
+    }
+    Current->CanBreakBefore =
+        Current->MustBreakBefore || canBreakBefore(Line, *Current);
+    if (Current->MustBreakBefore)
+      Current->TotalLength = Current->Parent->TotalLength + Style.ColumnLimit;
+    else
+      Current->TotalLength =
+          Current->Parent->TotalLength + Current->FormatTok.TokenLength +
+          (Current->SpaceRequiredBefore ? 1 : 0);
+    // FIXME: Only calculate this if CanBreakBefore is true once static
+    // initializers etc. are sorted out.
+    // FIXME: Move magic numbers to a better place.
+    Current->SplitPenalty =
+        20 * Current->BindingStrength + splitPenalty(Line, *Current);
+
+    Current = Current->Children.empty() ? NULL : &Current->Children[0];
   }
-  Current.CanBreakBefore = Current.MustBreakBefore || canBreakBefore(Current);
-  if (Current.MustBreakBefore)
-    Current.TotalLength = Current.Parent->TotalLength + Style.ColumnLimit;
-  else
-    Current.TotalLength =
-        Current.Parent->TotalLength + Current.FormatTok.TokenLength +
-        (Current.SpaceRequiredBefore ? 1 : 0);
-  // FIXME: Only calculate this if CanBreakBefore is true once static
-  // initializers etc. are sorted out.
-  // FIXME: Move magic numbers to a better place.
-  Current.SplitPenalty = 20 * Current.BindingStrength + splitPenalty(Current);
-  if (!Current.Children.empty())
-    calculateFormattingInformation(Current.Children[0]);
 }
 
-unsigned TokenAnnotator::splitPenalty(const AnnotatedToken &Tok) {
+unsigned TokenAnnotator::splitPenalty(const AnnotatedLine &Line,
+                                      const AnnotatedToken &Tok) {
   const AnnotatedToken &Left = *Tok.Parent;
   const AnnotatedToken &Right = Tok;
 
@@ -770,8 +784,16 @@ unsigned TokenAnnotator::splitPenalty(const AnnotatedToken &Tok) {
       Left.Type == TT_TemplateOpener)
     return 20;
 
-  if (Right.is(tok::lessless))
+  if (Right.is(tok::lessless)) {
+    if (Left.is(tok::string_literal)) {
+      char LastChar =
+          StringRef(Left.FormatTok.Tok.getLiteralData(),
+                    Left.FormatTok.TokenLength).drop_back(1).rtrim().back();
+      if (LastChar == ':' || LastChar == '=')
+        return 100;
+    }
     return prec::Shift;
+  }
   if (Left.Type == TT_ConditionalExpr)
     return prec::Assignment;
   prec::Level Level = getPrecedence(Left);
@@ -782,7 +804,8 @@ unsigned TokenAnnotator::splitPenalty(const AnnotatedToken &Tok) {
   return 3;
 }
 
-bool TokenAnnotator::spaceRequiredBetween(const AnnotatedToken &Left,
+bool TokenAnnotator::spaceRequiredBetween(const AnnotatedLine &Line,
+                                          const AnnotatedToken &Left,
                                           const AnnotatedToken &Right) {
   if (Right.is(tok::hashhash))
     return Left.is(tok::hash);
@@ -813,10 +836,10 @@ bool TokenAnnotator::spaceRequiredBetween(const AnnotatedToken &Left,
   if (Right.is(tok::amp) || Right.is(tok::star))
     return Left.FormatTok.Tok.isLiteral() ||
            (Left.isNot(tok::star) && Left.isNot(tok::amp) &&
-            !Style.PointerAndReferenceBindToType);
+            !Style.PointerBindsToType);
   if (Left.is(tok::amp) || Left.is(tok::star))
     return Right.FormatTok.Tok.isLiteral() ||
-           Style.PointerAndReferenceBindToType;
+           Style.PointerBindsToType;
   if (Right.is(tok::star) && Left.is(tok::l_paren))
     return false;
   if (Left.is(tok::l_square) || Right.is(tok::r_square))
@@ -846,7 +869,8 @@ bool TokenAnnotator::spaceRequiredBetween(const AnnotatedToken &Left,
   return true;
 }
 
-bool TokenAnnotator::spaceRequiredBefore(const AnnotatedToken &Tok) {
+bool TokenAnnotator::spaceRequiredBefore(const AnnotatedLine &Line,
+                                         const AnnotatedToken &Tok) {
   if (Line.Type == LT_ObjCMethodDecl) {
     if (Tok.is(tok::identifier) && !Tok.Children.empty() &&
         Tok.Children[0].is(tok::colon) && Tok.Parent->is(tok::identifier))
@@ -887,7 +911,7 @@ bool TokenAnnotator::spaceRequiredBefore(const AnnotatedToken &Tok) {
             Tok.Parent->Type != TT_ObjCMethodExpr);
   if (Tok.Parent->is(tok::greater) && Tok.is(tok::greater)) {
     return Tok.Type == TT_TemplateCloser && Tok.Parent->Type ==
-           TT_TemplateCloser && Style.SplitTemplateClosingGreater;
+           TT_TemplateCloser && Style.Standard != FormatStyle::LS_Cpp11;
   }
   if (Tok.Type == TT_BinaryOperator || Tok.Parent->Type == TT_BinaryOperator)
     return true;
@@ -897,10 +921,11 @@ bool TokenAnnotator::spaceRequiredBefore(const AnnotatedToken &Tok) {
     return true;
   if (Tok.Type == TT_TrailingUnaryOperator)
     return false;
-  return spaceRequiredBetween(*Tok.Parent, Tok);
+  return spaceRequiredBetween(Line, *Tok.Parent, Tok);
 }
 
-bool TokenAnnotator::canBreakBefore(const AnnotatedToken &Right) {
+bool TokenAnnotator::canBreakBefore(const AnnotatedLine &Line,
+                                    const AnnotatedToken &Right) {
   const AnnotatedToken &Left = *Right.Parent;
   if (Line.Type == LT_ObjCMethodDecl) {
     if (Right.is(tok::identifier) && !Right.Children.empty() &&
