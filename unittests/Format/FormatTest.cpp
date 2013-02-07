@@ -456,6 +456,10 @@ TEST_F(FormatTest, UnderstandsSingleLineComments) {
   verifyFormat("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa =\n"
                "    // Comment inside a statement.\n"
                "    bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb;");
+  verifyFormat(
+      "bool aaaaaaaaaaaaa = // comment\n"
+      "    aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa || aaaaaaaaaaaaaaaaaaaaaaaaaaaa ||\n"
+      "    aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa || aaaaaaaaaaaaaaaaaaaaaaaaaaaaa;");
 
   EXPECT_EQ("void f() { // This does something ..\n"
             "}\n"
@@ -481,6 +485,13 @@ TEST_F(FormatTest, UnderstandsSingleLineComments) {
                "    parameter));");
 
   verifyGoogleFormat("#endif  // HEADER_GUARD");
+
+  verifyFormat("const char *test[] = {\n"
+               "  // A\n"
+               "  \"aaaa\",\n"
+               "  // B\n"
+               "  \"aaaaa\",\n"
+               "};");
 }
 
 TEST_F(FormatTest, UnderstandsMultiLineComments) {
@@ -613,6 +624,15 @@ TEST_F(FormatTest, FormatsNamespaces) {
   verifyFormat("using namespace some_namespace;\n"
                "class A {\n};\n"
                "void f() { f(); }");
+
+  // This code is more common than we thought; if we
+  // layout this correctly the semicolon will go into
+  // its own line, which is undesireable.
+  verifyFormat("namespace {\n};");
+  verifyFormat("namespace {\n"
+               "class A {\n"
+               "};\n"
+               "};");
 }
 
 TEST_F(FormatTest, FormatsExternC) {
@@ -1305,6 +1325,13 @@ TEST_F(FormatTest, AlignsPipes) {
                "           << \"  cccccc = \" << pkt.cccccc << \"\\n\"\n"
                "           << \"  ddd = [\" << pkt.ddd << \"]\\n\"\n"
                "           << \"}\";");
+
+  verifyFormat(
+      "llvm::outs() << \"aaaaaaaaaaaaaaaaa = \" << aaaaaaaaaaaaaaaaa\n"
+      "             << \"bbbbbbbbbbbbbbbbb = \" << bbbbbbbbbbbbbbbbb\n"
+      "             << \"ccccccccccccccccc = \" << ccccccccccccccccc\n"
+      "             << \"ddddddddddddddddd = \" << ddddddddddddddddd\n"
+      "             << \"eeeeeeeeeeeeeeeee = \" << eeeeeeeeeeeeeeeee;");
 }
 
 TEST_F(FormatTest, UnderstandsEquals) {
@@ -1437,6 +1464,11 @@ TEST_F(FormatTest, UnderstandsTemplateParameters) {
   verifyGoogleFormat("A<A<int>> a;");
   verifyGoogleFormat("A<A<A<int>>> a;");
   verifyGoogleFormat("A<A<A<A<int>>>> a;");
+  verifyGoogleFormat("A<A<int> > a;");
+  verifyGoogleFormat("A<A<A<int> > > a;");
+  verifyGoogleFormat("A<A<A<A<int> > > > a;");
+  EXPECT_EQ("A<A<A<A>>> a;", format("A<A<A<A> >> a;", getGoogleStyle()));
+  EXPECT_EQ("A<A<A<A>>> a;", format("A<A<A<A>> > a;", getGoogleStyle()));
 
   verifyFormat("test >> a >> b;");
   verifyFormat("test << a >> b;");
@@ -1546,7 +1578,10 @@ TEST_F(FormatTest, UnderstandsUsesOfStarAndAmp) {
   verifyIndependentOfContext("A<int *> a;");
   verifyIndependentOfContext("A<int **> a;");
   verifyIndependentOfContext("A<int *, int *> a;");
+  verifyIndependentOfContext(
+      "const char *const p = reinterpret_cast<const char *const>(q);");
   verifyIndependentOfContext("A<int **, int **> a;");
+  verifyIndependentOfContext("void f(int *a = d * e, int *b = c * d);");
 
   verifyFormat(
       "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa(\n"
@@ -1564,6 +1599,8 @@ TEST_F(FormatTest, UnderstandsUsesOfStarAndAmp) {
   verifyGoogleFormat("*++*x;");
   verifyGoogleFormat("Type* t = const_cast<T*>(&*x);");
   verifyGoogleFormat("Type* t = x++ * y;");
+  verifyGoogleFormat(
+      "const char* const p = reinterpret_cast<const char* const>(q);");
 
   verifyIndependentOfContext("a = *(x + y);");
   verifyIndependentOfContext("a = &(x + y);");
@@ -1592,6 +1629,22 @@ TEST_F(FormatTest, UnderstandsUsesOfStarAndAmp) {
 
   verifyIndependentOfContext("A = new SomeType *[Length]();");
   verifyGoogleFormat("A = new SomeType* [Length]();");
+
+  EXPECT_EQ("int *a;\n"
+            "int *a;\n"
+            "int *a;", format("int *a;\n"
+                              "int* a;\n"
+                              "int *a;", getGoogleStyle()));
+  EXPECT_EQ("int* a;\n"
+            "int* a;\n"
+            "int* a;", format("int* a;\n"
+                              "int* a;\n"
+                              "int *a;", getGoogleStyle()));
+  EXPECT_EQ("int *a;\n"
+            "int *a;\n"
+            "int *a;", format("int *a;\n"
+                              "int * a;\n"
+                              "int *  a;", getGoogleStyle()));
 }
 
 TEST_F(FormatTest, FormatsBinaryOperatorsPrecedingEquals) {
@@ -1829,6 +1882,7 @@ TEST_F(FormatTest, UnderstandContextOfRecordTypeKeywords) {
   verifyFormat("class MACRO(X) Z {\n} n;");
   verifyFormat("class __attribute__(X) Z {\n} n;");
   verifyFormat("class __declspec(X) Z {\n} n;");
+  verifyFormat("class A##B##C {\n} n;");
 
   // Redefinition from nested context:
   verifyFormat("class A::B::C {\n} n;");
@@ -1934,6 +1988,50 @@ TEST_F(FormatTest, BlockComments) {
                    "                2, /* comment 2 */  \n"
                    "               3,   /* comment 3 */\n"
                    "aaaa, bbbb );", getGoogleStyle()));
+  verifyFormat(
+      "bool aaaaaaaaaaaaa = /* comment: */ aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa ||\n"
+      "                     aaaaaaaaaaaaaaaaaaaaaaaaaaaa;");
+  EXPECT_EQ(
+      "bool aaaaaaaaaaaaa = /* trailing comment */\n"
+      "    aaaaaaaaaaaaaaaaaaaaaaaaaaa || aaaaaaaaaaaaaaaaaaaaaaaaa ||\n"
+      "    aaaaaaaaaaaaaaaaaaaaaaaaaaaa || aaaaaaaaaaaaaaaaaaaaaaaaaa;",
+      format(
+          "bool       aaaaaaaaaaaaa =       /* trailing comment */\n"
+          "    aaaaaaaaaaaaaaaaaaaaaaaaaaa||aaaaaaaaaaaaaaaaaaaaaaaaa    ||\n"
+          "    aaaaaaaaaaaaaaaaaaaaaaaaaaaa   || aaaaaaaaaaaaaaaaaaaaaaaaaa;"));
+  EXPECT_EQ(
+      "int aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa; /* comment */\n"
+      "int bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb;   /* comment */\n"
+      "int cccccccccccccccccccccccccccccc;       /* comment */\n",
+      format("int aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa; /* comment */\n"
+             "int      bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb; /* comment */\n"
+             "int    cccccccccccccccccccccccccccccc;  /* comment */\n"));
+}
+
+TEST_F(FormatTest, BlockCommentsInMacros) {
+  EXPECT_EQ("#define A          \\\n"
+            "  {                \\\n"
+            "    /* one line */ \\\n"
+            "    someCall();",
+            format("#define A {        \\\n"
+                   "  /* one line */   \\\n"
+                   "  someCall();", getLLVMStyleWithColumns(20)));
+  EXPECT_EQ("#define A          \\\n"
+            "  {                \\\n"
+            "    /* previous */ \\\n"
+            "    /* one line */ \\\n"
+            "    someCall();",
+            format("#define A {        \\\n"
+                   "  /* previous */   \\\n"
+                   "  /* one line */   \\\n"
+                   "  someCall();", getLLVMStyleWithColumns(20)));
+}
+
+TEST_F(FormatTest, IndentLineCommentsInStartOfBlockAtEndOfFile) {
+  // FIXME: This is not what we want...
+  verifyFormat("{\n"
+               "// a"
+               "// b");
 }
 
 TEST_F(FormatTest, FormatStarDependingOnContext) {
@@ -2305,8 +2403,9 @@ TEST_F(FormatTest, FormatObjCMethodExpr) {
       "                                 backing:NSBackingStoreBuffered\n"
       "                                   defer:YES]))");
 
-  verifyFormat("[foo checkThatBreakingAfterColonWorksOk:\n"
-               "        [bar ifItDoes:reduceOverallLineLengthLikeInThisCase]];");
+  verifyFormat(
+      "[foo checkThatBreakingAfterColonWorksOk:\n"
+      "        [bar ifItDoes:reduceOverallLineLengthLikeInThisCase]];");
 
   verifyFormat("[myObj short:arg1 // Force line break\n"
                "          longKeyword:arg2\n"
@@ -2321,6 +2420,35 @@ TEST_F(FormatTest, FormatObjCMethodExpr) {
       "                  backing:NSBackingStoreBuffered\n"
       "                    defer:NO]);\n"
       "}");
+  verifyFormat("[contentsContainer replaceSubview:[subviews objectAtIndex:0]\n"
+               "                             with:contentsNativeView];");
+
+  verifyFormat(
+      "[pboard addTypes:[NSArray arrayWithObject:kBookmarkButtonDragType]\n"
+      "           owner:nillllll];");
+
+  // FIXME: No line break necessary for the first nested call.
+  verifyFormat(
+      "[pboard setData:[NSData dataWithBytes:&button\n"
+      "                               length:sizeof(button)]\n"
+      "        forType:kBookmarkButtonDragType];");
+
+  verifyFormat("[defaultCenter addObserver:self\n"
+               "                  selector:@selector(willEnterFullscreen)\n"
+               "                      name:kWillEnterFullscreenNotification\n"
+               "                    object:nil];");
+  verifyFormat("[image_rep drawInRect:drawRect\n"
+               "             fromRect:NSZeroRect\n"
+               "            operation:NSCompositeCopy\n"
+               "             fraction:1.0\n"
+               "       respectFlipped:NO\n"
+               "                hints:nil];");
+
+  verifyFormat(
+      "scoped_nsobject<NSTextField> message(\n"
+      "    // The frame will be fixed up when |-setMessageText:| is called.\n"
+      "    [[NSTextField alloc] initWithFrame:NSMakeRect(0, 0, 0, 0)]);");
+  
 }
 
 TEST_F(FormatTest, ObjCAt) {
@@ -2349,19 +2477,6 @@ TEST_F(FormatTest, ObjCAt) {
   verifyFormat("@synthesize");
   verifyFormat("@throw");
   verifyFormat("@try");
-
-  verifyFormat("@\"String\"");
-  verifyFormat("@1");
-  verifyFormat("@+4.8");
-  verifyFormat("@-4");
-  verifyFormat("@1LL");
-  verifyFormat("@.5");
-  verifyFormat("@'c'");
-  verifyFormat("@true");
-  verifyFormat("NSNumber *smallestInt = @(-INT_MAX - 1);");
-  // FIXME: Array and dictionary literals need more work.
-  verifyFormat("@[");
-  verifyFormat("@{");
 
   EXPECT_EQ("@interface", format("@ interface"));
 
@@ -2393,6 +2508,27 @@ TEST_F(FormatTest, ObjCSnippets) {
   verifyFormat("@property(assign, nonatomic) CGFloat hoverAlpha;");
   verifyFormat("@property(assign, getter=isEditable) BOOL editable;");
   verifyGoogleFormat("@property(assign, getter=isEditable) BOOL editable;");
+}
+
+TEST_F(FormatTest, ObjCLiterals) {
+  verifyFormat("@\"String\"");
+  verifyFormat("@1");
+  verifyFormat("@+4.8");
+  verifyFormat("@-4");
+  verifyFormat("@1LL");
+  verifyFormat("@.5");
+  verifyFormat("@'c'");
+  verifyFormat("@true");
+
+  verifyFormat("NSNumber *smallestInt = @(-INT_MAX - 1);");
+  verifyFormat("NSNumber *piOverTwo = @(M_PI / 2);");
+  verifyFormat("NSNumber *favoriteColor = @(Green);");
+  verifyFormat("NSString *path = @(getenv(\"PATH\"));");
+
+  // FIXME: Array and dictionary literals need more work.
+  verifyFormat("@[");
+  verifyFormat("@{");
+
 }
 
 } // end namespace tooling
