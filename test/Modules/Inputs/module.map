@@ -116,6 +116,10 @@ module templates_right {
 module MethodPoolA {
   header "MethodPoolA.h"
 
+  explicit module Sub2 {
+    header "MethodPoolASub2.h"
+  }
+
   explicit module Sub {
     header "MethodPoolASub.h"
   }
@@ -162,4 +166,8 @@ module weird_objc {
 
 module ignored_macros {
   header "ignored_macros.h"
+}
+
+module cxx_many_overloads {
+  header "cxx-many-overloads.h"
 }
