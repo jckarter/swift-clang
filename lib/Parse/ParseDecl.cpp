@@ -1023,6 +1023,7 @@ void Parser::ParseThreadSafetyAttribute(IdentifierInfo &AttrName,
 
   // now parse the list of expressions
   while (Tok.isNot(tok::r_paren)) {
+    EnterExpressionEvaluationContext Unevaluated(Actions, Sema::Unevaluated);
     ExprResult ArgExpr(ParseAssignmentExpression());
     if (ArgExpr.isInvalid()) {
       ArgExprsOk = false;
@@ -2781,6 +2782,10 @@ void Parser::ParseDeclarationSpecifiers(DeclSpec &DS,
       isInvalid = DS.SetTypeSpecType(DeclSpec::TST_image3d_t, Loc,
                                      PrevSpec, DiagID);
       break;
+    case tok::kw_sampler_t:
+      isInvalid = DS.SetTypeSpecType(DeclSpec::TST_sampler_t, Loc,
+                                     PrevSpec, DiagID);
+      break;
     case tok::kw_event_t:
       isInvalid = DS.SetTypeSpecType(DeclSpec::TST_event_t, Loc,
                                      PrevSpec, DiagID);
@@ -3635,6 +3640,7 @@ bool Parser::isKnownToBeTypeSpecifier(const Token &Tok) const {
   case tok::kw_image2d_t:
   case tok::kw_image2d_array_t:
   case tok::kw_image3d_t:
+  case tok::kw_sampler_t:
   case tok::kw_event_t:
 
     // struct-or-union-specifier (C99) or class-specifier (C++)
@@ -3716,6 +3722,7 @@ bool Parser::isTypeSpecifierQualifier() {
   case tok::kw_image2d_t:
   case tok::kw_image2d_array_t:
   case tok::kw_image3d_t:
+  case tok::kw_sampler_t:
   case tok::kw_event_t:
 
     // struct-or-union-specifier (C99) or class-specifier (C++)
@@ -3869,6 +3876,7 @@ bool Parser::isDeclarationSpecifier(bool DisambiguatingWithExpression) {
   case tok::kw_image2d_t:
   case tok::kw_image2d_array_t:
   case tok::kw_image3d_t:
+  case tok::kw_sampler_t:
   case tok::kw_event_t:
 
     // struct-or-union-specifier (C99) or class-specifier (C++)
