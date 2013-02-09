@@ -16,6 +16,7 @@
 #include "clang/AST/ASTConsumer.h"
 #include "clang/AST/Attr.h"
 #include "clang/AST/ParentMap.h"
+#include "clang/Basic/CharInfo.h"
 #include "clang/Basic/Diagnostic.h"
 #include "clang/Basic/IdentifierTable.h"
 #include "clang/Basic/SourceManager.h"
@@ -1043,7 +1044,7 @@ void RewriteModernObjC::RewritePropertyImplDecl(ObjCPropertyImplDecl *PID,
 
 static void RewriteOneForwardClassDecl(ObjCInterfaceDecl *ForwardDecl,
                                        std::string &typedefString) {
-  typedefString += "#ifndef _REWRITER_typedef_";
+  typedefString += "\n#ifndef _REWRITER_typedef_";
   typedefString += ForwardDecl->getNameAsString();
   typedefString += "\n";
   typedefString += "#define _REWRITER_typedef_";
@@ -1076,7 +1077,7 @@ void RewriteModernObjC::RewriteForwardClassDecl(DeclGroupRef D) {
       // as a comment.
       typedefString += "// @class ";
       typedefString += ForwardDecl->getNameAsString();
-      typedefString += ";\n";
+      typedefString += ";";
     }
     RewriteOneForwardClassDecl(ForwardDecl, typedefString);
   }
@@ -1092,7 +1093,7 @@ void RewriteModernObjC::RewriteForwardClassDecl(
     if (i == 0) {
       typedefString += "// @class ";
       typedefString += ForwardDecl->getNameAsString();
-      typedefString += ";\n";
+      typedefString += ";";
     }
     RewriteOneForwardClassDecl(ForwardDecl, typedefString);
   }
@@ -2608,7 +2609,7 @@ Stmt *RewriteModernObjC::RewriteObjCStringLiteral(ObjCStringLiteral *Exp) {
   for (i=0; i < tmpName.length(); i++) {
     char c = tmpName.at(i);
     // replace any non alphanumeric characters with '_'.
-    if (!isalpha(c) && (c < '0' || c > '9'))
+    if (!isAlphanumeric(c))
       tmpName[i] = '_';
   }
   S += tmpName;
@@ -5660,6 +5661,8 @@ Stmt *RewriteModernObjC::RewriteFunctionBodyOrGlobalInitializer(Stmt *S) {
   } else if (ObjCIvarRefExpr *IvarRefExpr = dyn_cast<ObjCIvarRefExpr>(S)) {
     return RewriteObjCIvarRefExpr(IvarRefExpr);
   }
+  else if (isa<OpaqueValueExpr>(S))
+    S = cast<OpaqueValueExpr>(S)->getSourceExpr();
 
   SourceRange OrigStmtRange = S->getSourceRange();
 
