@@ -1192,6 +1192,13 @@ TEST_F(FormatTest, BreaksAccordingToOperatorPrecedence) {
   verifyFormat(
       "if ((aaaaaaaaaaaaaaaaaaaaaaaaa || bbbbbbbbbbbbbbbbbbbbbbbbb) &&\n"
       "    ccccccccccccccccccccccccc) {\n}");
+  verifyFormat("return aaaa & AAAAAAAAAAAAAAAAAAAAAAAAAAAAA ||\n"
+               "       bbbb & BBBBBBBBBBBBBBBBBBBBBBBBBBBBB ||\n"
+               "       cccc & CCCCCCCCCCCCCCCCCCCCCCCCCC ||\n"
+               "       dddd & DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD;");
+  verifyFormat("if ((aaaaaaaaaa != aaaaaaaaaaaaaaa ||\n"
+               "     aaaaaaaaaaaaaaaaaaaaaaaa() >= aaaaaaaaaaaaaaaaaaaa) &&\n"
+               "    aaaaaaaaaaaaaaa != aa) {\n}");
 }
 
 TEST_F(FormatTest, BreaksAfterAssignments) {
@@ -1264,6 +1271,11 @@ TEST_F(FormatTest, BreaksConditionalExpressions) {
                "           : aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa(\n"
                "                 aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa),\n"
                "       aaaaaaaaaaaaaaaaaaaaaaaaaaa);");
+  verifyFormat(
+      "unsigned Indent = formatFirstToken(\n"
+      "    TheLine.First, IndentForLevel[TheLine.Level] >= 0\n"
+      "                       ? IndentForLevel[TheLine.Level] : TheLine * 2,\n"
+      "    TheLine.InPPDirective, PreviousEndOfLineColumn);");
 }
 
 TEST_F(FormatTest, DeclarationsOfMultipleVariables) {
@@ -1275,7 +1287,7 @@ TEST_F(FormatTest, DeclarationsOfMultipleVariables) {
   verifyFormat("bool aaaaaaaaaaaaaaaaaaaaaaaaa =\n"
                "    aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa(aaaaaaaaaaaaaaaa),\n"
                "     bbbbbbbbbbbbbbbbbbbbbbbbb =\n"
-               "    bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb(bbbbbbbbbbbbbbbb);");
+               "     bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb(bbbbbbbbbbbbbbbb);");
 
   // FIXME: This is bad as we hide "d".
   verifyFormat(
@@ -1389,6 +1401,9 @@ TEST_F(FormatTest, WrapsAtFunctionCallsIfNecessary) {
 TEST_F(FormatTest, WrapsTemplateDeclarations) {
   verifyFormat("template <typename T>\n"
                "virtual void loooooooooooongFunction(int Param1, int Param2);");
+  verifyFormat(
+      "template <typename T>\n"
+      "using comment_to_xml_conversion = comment_to_xml_conversion<T, int>;");
   verifyFormat(
       "template <typename T>\n"
       "void f(int Paaaaaaaaaaaaaaaaaaaaaaaaaaaaaaram1,\n"
@@ -2428,10 +2443,8 @@ TEST_F(FormatTest, FormatObjCMethodExpr) {
       "[pboard addTypes:[NSArray arrayWithObject:kBookmarkButtonDragType]\n"
       "           owner:nillllll];");
 
-  // FIXME: No line break necessary for the first nested call.
   verifyFormat(
-      "[pboard setData:[NSData dataWithBytes:&button\n"
-      "                               length:sizeof(button)]\n"
+      "[pboard setData:[NSData dataWithBytes:&button length:sizeof(button)]\n"
       "        forType:kBookmarkButtonDragType];");
 
   verifyFormat("[defaultCenter addObserver:self\n"
@@ -2449,7 +2462,6 @@ TEST_F(FormatTest, FormatObjCMethodExpr) {
       "scoped_nsobject<NSTextField> message(\n"
       "    // The frame will be fixed up when |-setMessageText:| is called.\n"
       "    [[NSTextField alloc] initWithFrame:NSMakeRect(0, 0, 0, 0)]);");
-  
 }
 
 TEST_F(FormatTest, ObjCAt) {
@@ -2530,6 +2542,62 @@ TEST_F(FormatTest, ObjCLiterals) {
   verifyFormat("@[");
   verifyFormat("@{");
 
+}
+
+TEST_F(FormatTest, ReformatRegionAdjustsIndent) {
+  EXPECT_EQ("{\n"
+            "{\n"
+            "a;\n"
+            "b;\n"
+            "}\n"
+            "}", format("{\n"
+                        "{\n"
+                        "a;\n"
+                        "     b;\n"
+                        "}\n"
+                        "}", 13, 2, getLLVMStyle()));
+  EXPECT_EQ("{\n"
+            "{\n"
+            "  a;\n"
+            "b;\n"
+            "}\n"
+            "}", format("{\n"
+                        "{\n"
+                        "     a;\n"
+                        "b;\n"
+                        "}\n"
+                        "}", 9, 2, getLLVMStyle()));
+  EXPECT_EQ("{\n"
+            "{\n"
+            "public:\n"
+            "  b;\n"
+            "}\n"
+            "}", format("{\n"
+                        "{\n"
+                        "public:\n"
+                        "     b;\n"
+                        "}\n"
+                        "}", 17, 2, getLLVMStyle()));
+  EXPECT_EQ("{\n"
+            "{\n"
+            "a;\n"
+            "}\n"
+            "{\n"
+            "  b;\n"
+            "}\n"
+            "}", format("{\n"
+                        "{\n"
+                        "a;\n"
+                        "}\n"
+                        "{\n"
+                        "           b;\n"
+                        "}\n"
+                        "}", 22, 2, getLLVMStyle()));
+  EXPECT_EQ("  {\n"
+            "    a;\n"
+            "  }", format("  {\n"
+                          "a;\n"
+                          "  }", 4, 2, getLLVMStyle()));
 }
 
 } // end namespace tooling
