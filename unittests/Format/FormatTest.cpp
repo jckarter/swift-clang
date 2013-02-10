@@ -1687,6 +1687,8 @@ TEST_F(FormatTest, FormatsCasts) {
   verifyFormat("void f(SmallVector<int>) {}");
   verifyFormat("void f(SmallVector<int>);");
   verifyFormat("void f(SmallVector<int>) = 0;");
+  verifyFormat("void f(int i = (kValue) * kMask) {}");
+  verifyFormat("void f(int i = (kA * kB) & kMask) {}");
 }
 
 TEST_F(FormatTest, FormatsFunctionTypes) {
@@ -2538,8 +2540,13 @@ TEST_F(FormatTest, ObjCLiterals) {
   verifyFormat("NSNumber *favoriteColor = @(Green);");
   verifyFormat("NSString *path = @(getenv(\"PATH\"));");
 
-  // FIXME: Array and dictionary literals need more work.
   verifyFormat("@[");
+  verifyFormat("@[]");
+  verifyFormat(
+      "NSArray *array = @[ @\" Hey \", NSApp, [NSNumber numberWithInt:42] ];");
+  verifyFormat("return @[ @3, @[], @[ @4, @5 ] ];");
+
+  // FIXME: Array and dictionary literals need more work.
   verifyFormat("@{");
 
 }

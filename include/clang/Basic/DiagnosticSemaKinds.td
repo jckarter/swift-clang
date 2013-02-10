@@ -482,7 +482,7 @@ def warn_readonly_property : Warning<
   "'readwrite' of property inherited from %1">;
 
 def warn_property_attribute : Warning<
-  "property %0 '%1' attribute does not match the property inherited from %2">;
+  "'%1' attribute on property %0 does not match the property inherited from %2">;
 def warn_property_types_are_incompatible : Warning<
   "property type %0 is incompatible with type %1 inherited from %2">;
 def err_undef_interface : Error<"cannot find interface declaration for %0">;
@@ -790,9 +790,9 @@ def warn_undeclared_selector : Warning<
 def warn_implicit_atomic_property : Warning<
   "property is assumed atomic by default">, InGroup<ImplicitAtomic>, DefaultIgnore;
 def note_auto_readonly_iboutlet_fixup_suggest : Note<
-  "readonly IBOutlet property should be changed to be readwrite">;
+  "property should be changed to be readwrite">;
 def warn_auto_readonly_iboutlet_property : Warning<
-  "readonly IBOutlet property when auto-synthesized may "
+  "readonly IBOutlet property '%0' when auto-synthesized may "
   "not work correctly with 'nib' loader">,
   InGroup<DiagGroup<"readonly-iboutlet-property">>;
 def warn_auto_implicit_atomic_property : Warning<
