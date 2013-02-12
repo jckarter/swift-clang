@@ -78,9 +78,10 @@ static const AnnotatedToken *getNextToken(const AnnotatedToken &Tok) {
 /// into template parameter lists.
 class AnnotatingParser {
 public:
-  AnnotatingParser(SourceManager &SourceMgr, Lexer &Lex, AnnotatedLine &Line)
+  AnnotatingParser(SourceManager &SourceMgr, Lexer &Lex, AnnotatedLine &Line,
+                   IdentifierInfo &Ident_in)
       : SourceMgr(SourceMgr), Lex(Lex), Line(Line), CurrentToken(&Line.First),
-        KeywordVirtualFound(false) {
+        KeywordVirtualFound(false), Ident_in(Ident_in) {
     Contexts.push_back(Context(1, /*IsExpression=*/ false));
     Contexts.back().LookForFunctionName = Line.MustBeDeclaration;
   }
@@ -195,6 +196,7 @@ public:
         !Parent || Parent->is(tok::colon) || Parent->is(tok::l_square) ||
         Parent->is(tok::l_paren) || Parent->is(tok::kw_return) ||
         Parent->is(tok::kw_throw) || isUnaryOperator(*Parent) ||
+        Parent->Type == TT_ObjCForIn ||
         getBinOpPrecedence(Parent->FormatTok.Tok.getKind(), true, true) >
         prec::Unknown;
     bool StartsObjCArrayLiteral = Parent && Parent->is(tok::at);
@@ -369,25 +371,24 @@ public:
       Tok->Type = TT_BinaryOperator;
       break;
     case tok::kw_operator:
-      if (CurrentToken != NULL && CurrentToken->is(tok::l_paren)) {
-        CurrentToken->Type = TT_OverloadedOperator;
-        next();
-        if (CurrentToken != NULL && CurrentToken->is(tok::r_paren)) {
-          CurrentToken->Type = TT_OverloadedOperator;
-          next();
-        }
-      } else {
-        while (CurrentToken != NULL && CurrentToken->isNot(tok::l_paren)) {
-          CurrentToken->Type = TT_OverloadedOperator;
-          next();
-        }
+      while (CurrentToken && CurrentToken->isNot(tok::l_paren)) {
+        if (CurrentToken->is(tok::star) || CurrentToken->is(tok::amp))
+          CurrentToken->Type = TT_PointerOrReference;
+        consumeToken();
       }
+      if (CurrentToken)
+        CurrentToken->Type = TT_OverloadedOperatorLParen;
       break;
     case tok::question:
       parseConditional();
       break;
     case tok::kw_template:
       parseTemplateDeclaration();
+      break;
+    case tok::identifier:
+      if (Line.First.is(tok::kw_for) &&
+          Tok->FormatTok.Tok.getIdentifierInfo() == &Ident_in)
+        Tok->Type = TT_ObjCForIn;
       break;
     default:
       break;
@@ -690,6 +691,7 @@ private:
   AnnotatedLine &Line;
   AnnotatedToken *CurrentToken;
   bool KeywordVirtualFound;
+  IdentifierInfo &Ident_in;
 };
 
 /// \brief Parses binary expressions by inserting fake parenthesis based on
@@ -769,7 +771,7 @@ private:
 };
 
 void TokenAnnotator::annotate(AnnotatedLine &Line) {
-  AnnotatingParser Parser(SourceMgr, Lex, Line);
+  AnnotatingParser Parser(SourceMgr, Lex, Line, Ident_in);
   Line.Type = Parser.parseLine();
   if (Line.Type == LT_Invalid)
     return;
@@ -784,7 +786,7 @@ void TokenAnnotator::annotate(AnnotatedLine &Line) {
   else if (Line.First.Type == TT_ObjCProperty)
     Line.Type = LT_ObjCProperty;
 
-  Line.First.SpaceRequiredBefore = true;
+  Line.First.SpacesRequiredBefore = 1;
   Line.First.MustBreakBefore = Line.First.FormatTok.MustBreakBefore;
   Line.First.CanBreakBefore = Line.First.MustBreakBefore;
 
@@ -796,7 +798,11 @@ void TokenAnnotator::calculateFormattingInformation(AnnotatedLine &Line) {
     return;
   AnnotatedToken *Current = &Line.First.Children[0];
   while (Current != NULL) {
-    Current->SpaceRequiredBefore = spaceRequiredBefore(Line, *Current);
+    if (Current->Type == TT_LineComment)
+      Current->SpacesRequiredBefore = Style.SpacesBeforeTrailingComments;
+    else
+      Current->SpacesRequiredBefore =
+          spaceRequiredBefore(Line, *Current) ? 1 : 0;
 
     if (Current->FormatTok.MustBreakBefore) {
       Current->MustBreakBefore = true;
@@ -820,7 +826,7 @@ void TokenAnnotator::calculateFormattingInformation(AnnotatedLine &Line) {
     else
       Current->TotalLength =
           Current->Parent->TotalLength + Current->FormatTok.TokenLength +
-          (Current->SpaceRequiredBefore ? 1 : 0);
+          Current->SpacesRequiredBefore;
     // FIXME: Only calculate this if CanBreakBefore is true once static
     // initializers etc. are sorted out.
     // FIXME: Move magic numbers to a better place.
@@ -962,6 +968,9 @@ bool TokenAnnotator::spaceRequiredBetween(const AnnotatedLine &Line,
 
 bool TokenAnnotator::spaceRequiredBefore(const AnnotatedLine &Line,
                                          const AnnotatedToken &Tok) {
+  if (Tok.FormatTok.Tok.getIdentifierInfo() &&
+      Tok.Parent->FormatTok.Tok.getIdentifierInfo())
+    return true; // Never ever merge two identifiers.
   if (Line.Type == LT_ObjCMethodDecl) {
     if (Tok.Parent->Type == TT_ObjCMethodSpecifier)
       return true;
@@ -977,10 +986,9 @@ bool TokenAnnotator::spaceRequiredBefore(const AnnotatedLine &Line,
     return true;
   if (Tok.Type == TT_CtorInitializerColon || Tok.Type == TT_ObjCBlockLParen)
     return true;
-  if (Tok.Type == TT_OverloadedOperator)
-    return Tok.is(tok::identifier) || Tok.is(tok::kw_new) ||
-           Tok.is(tok::kw_delete) || Tok.is(tok::kw_bool);
-  if (Tok.Parent->Type == TT_OverloadedOperator)
+  if (Tok.Parent->FormatTok.Tok.is(tok::kw_operator))
+    return false;
+  if (Tok.Type == TT_OverloadedOperatorLParen)
     return false;
   if (Tok.is(tok::colon))
     return Line.First.isNot(tok::kw_case) && !Tok.Children.empty() &&

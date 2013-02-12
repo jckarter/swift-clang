@@ -15,9 +15,6 @@
 #include "llvm/Support/Debug.h"
 #include "gtest/gtest.h"
 
-// Uncomment to get debug output from tests:
-// #define DEBUG_WITH_TYPE(T, X) do { X; } while(0)
-
 namespace clang {
 namespace format {
 
@@ -493,6 +490,9 @@ TEST_F(FormatTest, UnderstandsSingleLineComments) {
                "  // B\n"
                "  \"aaaaa\",\n"
                "};");
+  verifyGoogleFormat(
+      "aaaaaaaaaaaaaaaaaaaaaaaaaa(\n"
+      "    aaaaaaaaaaaaaaaaaaaaaa);  // 81 cols with this comment");
 }
 
 TEST_F(FormatTest, UnderstandsMultiLineComments) {
@@ -856,6 +856,26 @@ TEST_F(FormatTest, HashInMacroDefinition) {
 
 TEST_F(FormatTest, RespectWhitespaceInMacroDefinitions) {
   verifyFormat("#define A (1)");
+}
+
+TEST_F(FormatTest, EmptyLinesInMacroDefinitions) {
+  EXPECT_EQ("#define A b;", format("#define A \\\n"
+                                   "          \\\n"
+                                   "  b;", getLLVMStyleWithColumns(25)));
+  EXPECT_EQ("#define A \\\n"
+            "          \\\n"
+            "  a;      \\\n"
+            "  b;", format("#define A \\\n"
+                           "          \\\n"
+                           "  a;      \\\n"
+                           "  b;", getLLVMStyleWithColumns(11)));
+  EXPECT_EQ("#define A \\\n"
+            "  a;      \\\n"
+            "          \\\n"
+            "  b;", format("#define A \\\n"
+                           "  a;      \\\n"
+                           "          \\\n"
+                           "  b;", getLLVMStyleWithColumns(11)));
 }
 
 TEST_F(FormatTest, IndentPreprocessorDirectivesAtZero) {
@@ -1541,11 +1561,18 @@ TEST_F(FormatTest, UndestandsOverloadedOperators) {
   verifyFormat("bool operator()();");
   verifyFormat("bool operator[]();");
   verifyFormat("operator bool();");
+  verifyFormat("operator int();");
+  verifyFormat("operator void *();");
   verifyFormat("operator SomeType<int>();");
+  verifyFormat("operator SomeType<int, int>();");
+  verifyFormat("operator SomeType<SomeType<int> >();");
   verifyFormat("void *operator new(std::size_t size);");
   verifyFormat("void *operator new[](std::size_t size);");
   verifyFormat("void operator delete(void *ptr);");
   verifyFormat("void operator delete[](void *ptr);");
+
+  verifyGoogleFormat("operator void*();");
+  verifyGoogleFormat("operator SomeType<SomeType<int>>();");
 }
 
 TEST_F(FormatTest, UnderstandsNewAndDelete) {
@@ -2399,6 +2426,10 @@ TEST_F(FormatTest, FormatObjCMethodExpr) {
   verifyFormat("[foo bar:baz] / [foo bar:baz];");
   verifyFormat("[foo bar:baz] % [foo bar:baz];");
   // Whew!
+
+  verifyFormat("return in[42];");
+  verifyFormat("for (id foo in [self getStuffFor:bla]) {\n"
+               "}");
 
   verifyFormat("[self stuffWithInt:(4 + 2) float:4.5];");
   verifyFormat("[self stuffWithInt:a ? b : c float:4.5];");
