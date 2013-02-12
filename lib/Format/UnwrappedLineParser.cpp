@@ -19,9 +19,6 @@
 #include "clang/Basic/Diagnostic.h"
 #include "llvm/Support/Debug.h"
 
-// Uncomment to get debug output from tests:
-// #define DEBUG_WITH_TYPE(T, X) do { X; } while(0)
-
 namespace clang {
 namespace format {
 
@@ -766,7 +763,8 @@ void UnwrappedLineParser::addUnwrappedLine() {
   if (Line->Tokens.empty())
     return;
   DEBUG({
-    llvm::dbgs() << "Line(" << Line->Level << "): ";
+    llvm::dbgs() << "Line(" << Line->Level << ")"
+                 << (Line->InPPDirective ? " MACRO" : "") << ": ";
     for (std::list<FormatToken>::iterator I = Line->Tokens.begin(),
                                           E = Line->Tokens.end();
          I != E; ++I) {
