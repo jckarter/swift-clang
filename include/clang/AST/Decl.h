@@ -894,15 +894,14 @@ public:
   ///  as static variables declared within a function.
   bool hasGlobalStorage() const { return !hasLocalStorage(); }
 
+  /// Compute the language linkage.
+  LanguageLinkage getLanguageLinkage() const;
+
   /// \brief Determines whether this variable is a variable with
   /// external, C linkage.
-  bool isExternC() const;
-
-  /// Checks if this variable has C language linkage. Note that this is not the
-  /// same as isExternC since decls with non external linkage can have C
-  /// language linkage. They can also have C language linkage when they are not
-  /// declared in an extern C context, but a previous decl is.
-  bool hasCLanguageLinkage() const;
+  bool isExternC() const {
+    return getLanguageLinkage() == CLanguageLinkage;
+  }
 
   /// isLocalVarDecl - Returns true for local variable declarations
   /// other than parameters.  Note that this includes static variables
@@ -1786,15 +1785,14 @@ public:
   /// This function must be an allocation or deallocation function.
   bool isReservedGlobalPlacementOperator() const;
 
+  /// Compute the language linkage.
+  LanguageLinkage getLanguageLinkage() const;
+
   /// \brief Determines whether this function is a function with
   /// external, C linkage.
-  bool isExternC() const;
-
-  /// Checks if this function has C language linkage. Note that this is not the
-  /// same as isExternC since decls with non external linkage can have C
-  /// language linkage. They can also have C language linkage when they are not
-  /// declared in an extern C context, but a previous decl is.
-  bool hasCLanguageLinkage() const;
+  bool isExternC() const {
+    return getLanguageLinkage() == CLanguageLinkage;
+  }
 
   /// \brief Determines whether this is a global function.
   bool isGlobal() const;
