@@ -524,6 +524,8 @@ private:
                 Previous.Type == TT_CtorInitializerColon) &&
                getPrecedence(Previous) != prec::Assignment)
         State.Stack.back().LastSpace = State.Column;
+      else if (Previous.Type == TT_InheritanceColon)
+        State.Stack.back().Indent = State.Column;
       else if (Previous.ParameterCount > 1 &&
                (Previous.is(tok::l_paren) || Previous.is(tok::l_square) ||
                 Previous.is(tok::l_brace) ||
@@ -564,6 +566,8 @@ private:
     const AnnotatedToken &Current = *State.NextToken;
     assert(State.Stack.size());
 
+    if (Current.Type == TT_InheritanceColon)
+      State.Stack.back().AvoidBinPacking = true;
     if (Current.is(tok::lessless) && State.Stack.back().FirstLessLess == 0)
       State.Stack.back().FirstLessLess = State.Column;
     if (Current.is(tok::question))
@@ -671,7 +675,7 @@ private:
     std::set<LineState> Seen;
 
     // Insert start element into queue.
-    StateNode *Node=
+    StateNode *Node =
         new (Allocator.Allocate()) StateNode(InitialState, false, NULL);
     Queue.push(QueueItem(OrderedPenalty(0, Count), Node));
     ++Count;
@@ -679,7 +683,7 @@ private:
     // While not empty, take first element and follow edges.
     while (!Queue.empty()) {
       unsigned Penalty = Queue.top().first.first;
-      StateNode *Node= Queue.top().second;
+      StateNode *Node = Queue.top().second;
       if (Node->State.NextToken == NULL) {
         DEBUG(llvm::errs() << "\n---\nPenalty for line: " << Penalty << "\n");
         break;
@@ -777,7 +781,8 @@ private:
       return true;
     if (State.NextToken->Parent->is(tok::comma) &&
         State.Stack.back().BreakBeforeParameter &&
-        !isTrailingComment(*State.NextToken))
+        !isTrailingComment(*State.NextToken) &&
+        State.NextToken->isNot(tok::r_paren))
       return true;
     // FIXME: Comparing LongestObjCSelectorName to 0 is a hacky way of finding
     // out whether it is the first parameter. Clean this up.
@@ -955,16 +960,17 @@ public:
       Annotator.calculateFormattingInformation(AnnotatedLines[i]);
     }
     std::vector<int> IndentForLevel;
+    bool PreviousLineWasTouched = false;
     for (std::vector<AnnotatedLine>::iterator I = AnnotatedLines.begin(),
                                               E = AnnotatedLines.end();
          I != E; ++I) {
       const AnnotatedLine &TheLine = *I;
-      int Offset = GetIndentOffset(TheLine.First);
+      int Offset = getIndentOffset(TheLine.First);
       while (IndentForLevel.size() <= TheLine.Level)
         IndentForLevel.push_back(-1);
       IndentForLevel.resize(TheLine.Level + 1);
       if (touchesRanges(TheLine) && TheLine.Type != LT_Invalid) {
-        unsigned LevelIndent = GetIndent(IndentForLevel, TheLine.Level);
+        unsigned LevelIndent = getIndent(IndentForLevel, TheLine.Level);
         unsigned Indent = LevelIndent;
         if (static_cast<int>(Indent) + Offset >= 0)
           Indent += Offset;
@@ -982,15 +988,8 @@ public:
                                          StructuralError);
         PreviousEndOfLineColumn = Formatter.format();
         IndentForLevel[TheLine.Level] = LevelIndent;
+        PreviousLineWasTouched = true;
       } else {
-        // If we did not reformat this unwrapped line, the column at the end of
-        // the last token is unchanged - thus, we can calculate the end of the
-        // last token.
-        PreviousEndOfLineColumn =
-            SourceMgr.getSpellingColumnNumber(
-                TheLine.Last->FormatTok.Tok.getLocation()) +
-            Lex.MeasureTokenLength(TheLine.Last->FormatTok.Tok.getLocation(),
-                                   SourceMgr, Lex.getLangOpts()) - 1;
         if (TheLine.First.FormatTok.NewlinesBefore > 0 ||
             TheLine.First.FormatTok.IsFirst) {
           unsigned Indent = SourceMgr.getSpellingColumnNumber(
@@ -999,7 +998,21 @@ public:
           if (static_cast<int>(LevelIndent) - Offset >= 0)
             LevelIndent -= Offset;
           IndentForLevel[TheLine.Level] = LevelIndent;
+
+          // Remove trailing whitespace of the previous line if it was touched.
+          if (PreviousLineWasTouched)
+            formatFirstToken(TheLine.First, Indent, TheLine.InPPDirective,
+                             PreviousEndOfLineColumn);
         }
+        // If we did not reformat this unwrapped line, the column at the end of
+        // the last token is unchanged - thus, we can calculate the end of the
+        // last token.
+        PreviousEndOfLineColumn =
+            SourceMgr.getSpellingColumnNumber(
+                TheLine.Last->FormatTok.Tok.getLocation()) +
+            Lex.MeasureTokenLength(TheLine.Last->FormatTok.Tok.getLocation(),
+                                   SourceMgr, Lex.getLangOpts()) - 1;
+        PreviousLineWasTouched = false;
       }
     }
     return Whitespaces.generateReplacements();
@@ -1011,20 +1024,19 @@ private:
   /// \p IndentForLevel must contain the indent for the level \c l
   /// at \p IndentForLevel[l], or a value < 0 if the indent for
   /// that level is unknown.
-  unsigned GetIndent(const std::vector<int> IndentForLevel,
-                     unsigned Level) {
+  unsigned getIndent(const std::vector<int> IndentForLevel, unsigned Level) {
     if (IndentForLevel[Level] != -1)
       return IndentForLevel[Level];
     if (Level == 0)
       return 0;
-    return GetIndent(IndentForLevel, Level - 1) + 2;
+    return getIndent(IndentForLevel, Level - 1) + 2;
   }
 
   /// \brief Get the offset of the line relatively to the level.
   ///
   /// For example, 'public:' labels in classes are offset by 1 or 2
   /// characters to the left from their level.
-  int GetIndentOffset(const AnnotatedToken &RootToken) {
+  int getIndentOffset(const AnnotatedToken &RootToken) {
     bool IsAccessModifier = false;
     if (RootToken.is(tok::kw_public) || RootToken.is(tok::kw_protected) ||
         RootToken.is(tok::kw_private))

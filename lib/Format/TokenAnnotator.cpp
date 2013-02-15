@@ -107,8 +107,7 @@ private:
       if (CurrentToken->is(tok::pipepipe) || CurrentToken->is(tok::ampamp) ||
           CurrentToken->is(tok::question) || CurrentToken->is(tok::colon))
         return false;
-      if (CurrentToken->is(tok::comma))
-        ++Left->ParameterCount;
+      updateParameterCount(Left, CurrentToken);
       if (!consumeToken())
         return false;
     }
@@ -175,8 +174,7 @@ private:
       }
       if (CurrentToken->is(tok::r_square) || CurrentToken->is(tok::r_brace))
         return false;
-      if (CurrentToken->is(tok::comma))
-        ++Left->ParameterCount;
+      updateParameterCount(Left, CurrentToken);
       if (!consumeToken())
         return false;
     }
@@ -240,8 +238,7 @@ private:
       }
       if (CurrentToken->is(tok::r_paren) || CurrentToken->is(tok::r_brace))
         return false;
-      if (CurrentToken->is(tok::comma))
-        ++Left->ParameterCount;
+      updateParameterCount(Left, CurrentToken);
       if (!consumeToken())
         return false;
     }
@@ -263,12 +260,18 @@ private:
       }
       if (CurrentToken->is(tok::r_paren) || CurrentToken->is(tok::r_square))
         return false;
-      if (CurrentToken->is(tok::comma))
-        ++Left->ParameterCount;
+      updateParameterCount(Left, CurrentToken);
       if (!consumeToken())
         return false;
     }
     return true;
+  }
+  
+  void updateParameterCount(AnnotatedToken *Left, AnnotatedToken *Current) {
+    if (Current->is(tok::comma))
+      ++Left->ParameterCount;
+    else if (Left->ParameterCount == 0 && Current->isNot(tok::comment))
+      Left->ParameterCount = 1;
   }
 
   bool parseConditional() {
@@ -323,6 +326,8 @@ private:
           Contexts.back().FirstObjCSelectorName = Tok->Parent;
       } else if (Contexts.back().ColonIsForRangeExpr) {
         Tok->Type = TT_RangeBasedForLoopColon;
+      } else if (Contexts.size() == 1) {
+        Tok->Type = TT_InheritanceColon;
       }
       break;
     case tok::kw_if:
@@ -522,11 +527,9 @@ private:
   struct ScopedContextCreator {
     AnnotatingParser &P;
 
-    ScopedContextCreator(AnnotatingParser &P, unsigned Increase)
-        : P(P) {
-      P.Contexts.push_back(Context(
-          P.Contexts.back().BindingStrength + Increase,
-          P.Contexts.back().IsExpression));
+    ScopedContextCreator(AnnotatingParser &P, unsigned Increase) : P(P) {
+      P.Contexts.push_back(Context(P.Contexts.back().BindingStrength + Increase,
+                                   P.Contexts.back().IsExpression));
     }
 
     ~ScopedContextCreator() { P.Contexts.pop_back(); }
@@ -856,12 +859,16 @@ unsigned TokenAnnotator::splitPenalty(const AnnotatedLine &Line,
   if (Left.is(tok::coloncolon))
     return 500;
 
-  if (Left.Type == TT_RangeBasedForLoopColon)
+  if (Left.Type == TT_RangeBasedForLoopColon ||
+      Left.Type == TT_InheritanceColon)
     return 5;
 
   if (Right.is(tok::arrow) || Right.is(tok::period)) {
     if (Left.is(tok::r_paren) && Line.Type == LT_BuilderTypeCall)
       return 5; // Should be smaller than breaking at a nested comma.
+    if ((Left.is(tok::r_paren) || Left.is(tok::r_square)) &&
+        Left.MatchingParen && Left.MatchingParen->ParameterCount > 0)
+      return 10;
     return 150;
   }
 
@@ -1040,7 +1047,11 @@ bool TokenAnnotator::canBreakBefore(const AnnotatedLine &Line,
     return true;
   if (Right.Type == TT_ConditionalExpr || Right.is(tok::question))
     return true;
-  if (Left.Type == TT_RangeBasedForLoopColon)
+  if (Right.Type == TT_RangeBasedForLoopColon ||
+      Right.Type == TT_InheritanceColon)
+    return false;
+  if (Left.Type == TT_RangeBasedForLoopColon ||
+      Left.Type == TT_InheritanceColon)
     return true;
   if (Left.Type == TT_PointerOrReference || Left.Type == TT_TemplateCloser ||
       Left.Type == TT_UnaryOperator || Left.Type == TT_ConditionalExpr ||

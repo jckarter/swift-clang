@@ -162,6 +162,10 @@ TEST_F(FormatTest, OnlyGeneratesNecessaryReplacements) {
   EXPECT_EQ(0, ReplacementCount);
 }
 
+TEST_F(FormatTest, RemovesTrailingWhitespaceOfFormattedLine) {
+  EXPECT_EQ("int a;\nint b;", format("int a; \nint b;", 0, 0, getLLVMStyle()));
+}
+
 //===----------------------------------------------------------------------===//
 // Tests for control statements.
 //===----------------------------------------------------------------------===//
@@ -584,6 +588,25 @@ TEST_F(FormatTest, UnderstandsAccessSpecifiers) {
 TEST_F(FormatTest, FormatsDerivedClass) {
   verifyFormat("class A : public B {\n};");
   verifyFormat("class A : public ::B {\n};");
+
+  verifyFormat(
+      "class AAAAAAAAAAAAAAAAAAAA : public BBBBBBBBBBBBBBBBBBBBBBBBBBBBBB,\n"
+      "                             public CCCCCCCCCCCCCCCCCCCCCCCCCCCCCC {\n"
+      "};\n");
+  verifyFormat("class AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA :\n"
+               "    public BBBBBBBBBBBBBBBBBBBBBBBBBBBBBB,\n"
+               "    public CCCCCCCCCCCCCCCCCCCCCCCCCCCCCC {\n"
+               "};\n");
+  verifyFormat(
+      "class A : public B, public C, public D, public E, public F, public G {\n"
+      "};");
+  verifyFormat("class AAAAAAAAAAAA : public B,\n"
+               "                     public C,\n"
+               "                     public D,\n"
+               "                     public E,\n"
+               "                     public F,\n"
+               "                     public G {\n"
+               "};");
 }
 
 TEST_F(FormatTest, FormatsVariableDeclarationsAfterStructOrClass) {
@@ -1157,8 +1180,8 @@ TEST_F(FormatTest, FormatsOneParameterPerLineIfNecessary) {
       "         aaaaaaaa(aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa(\n"
       "             aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa)));");
   verifyGoogleFormat(
-      "aaaaaaaaaaaaaaa(\n"
-      "    aaaaaaaaa, aaaaaaaaa, aaaaaaaaaaaaaaaaaaaaa).aaaaaaaaaaaaaaaaaa();");
+      "aaaaaaaaaaaaaaa(aaaaaaaaa, aaaaaaaaa, aaaaaaaaaaaaaaaaaaaaa)\n"
+      "    .aaaaaaaaaaaaaaaaaa();");
   verifyGoogleFormat("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa(\n"
                      "    aaaaaaaaaa, aaaaaaaaaa, aaaaaaaaaa, aaaaaaaaaaa);");
   
@@ -1185,11 +1208,11 @@ TEST_F(FormatTest, FormatsOneParameterPerLineIfNecessary) {
                "                aaaaaaaaa,\n"
                "                aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa);",
                Style);
-  verifyFormat("void f() {\n"
-               "  aaaaaaaaaaaaaaaaaaaaaaaa(\n"
-               "      aaaaaaaaa, aaaaaaaaa, aaaaaaaaaaaaaaaaaaaaa).aaaaaaa();\n"
-               "}",
-               Style);
+  verifyFormat(
+      "void f() {\n"
+      "  aaaaaaaaaaaaaaaaaaaaaaa(aaaaaaaaa, aaaaaaaaa, aaaaaaaaaaaaaaaaaaaaa)\n"
+      "      .aaaaaaa();\n"
+      "}", Style);
 }
 
 TEST_F(FormatTest, FormatsBuilderPattern) {
@@ -1418,6 +1441,11 @@ TEST_F(FormatTest, WrapsAtFunctionCallsIfNecessary) {
       "function(LoooooooooooooooooooooooooooooooooooongObject\n"
       "             ->loooooooooooooooooooooooooooooooooooooooongFunction());");
 
+  verifyFormat("EXPECT_CALL(SomeObject, SomeFunction(Parameter))\n"
+               "    .WillRepeatedly(Return(SomeValue));");
+  verifyFormat("SomeMap[std::pair(aaaaaaaaaaaa, bbbbbbbbbbbbbbb)]\n"
+               "    .insert(ccccccccccccccccccccccc);");
+
   // Here, it is not necessary to wrap at "." or "->".
   verifyFormat("if (aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa(aaaaaaaaaaaa) ||\n"
                "    aaaa.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa) {\n}");
@@ -1425,6 +1453,10 @@ TEST_F(FormatTest, WrapsAtFunctionCallsIfNecessary) {
       "aaaaaaaaaaa->aaaaaaaaa(\n"
       "    aaaaaaaaaaaaaaaaaaaaaaaaa,\n"
       "    aaaaaaaaaaaaaaaaaa->aaaaaaaaa(aaaaaaaaaaaaaaaaaaaaaaaaa));\n");
+
+  verifyFormat(
+      "aaaaaaaaaaaaaaaaaaaaaaaaa(\n"
+      "    aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa().aaaaaaaaaaaaaaaaa());");
 }
 
 TEST_F(FormatTest, WrapsTemplateDeclarations) {
@@ -1797,6 +1829,17 @@ TEST_F(FormatTest, HandlesIncludeDirectives) {
 //===----------------------------------------------------------------------===//
 // Error recovery tests.
 //===----------------------------------------------------------------------===//
+
+TEST_F(FormatTest, IncompleteParameterLists) {
+  verifyGoogleFormat("void aaaaaaaaaaaaaaaaaa(int level,\n"
+                     "                        double *min_x,\n"
+                     "                        double *max_x,\n"
+                     "                        double *min_y,\n"
+                     "                        double *max_y,\n"
+                     "                        double *min_z,\n"
+                     "                        double *max_z, ) {\n"
+                     "}");
+}
 
 TEST_F(FormatTest, IncorrectCodeTrailingStuff) {
   verifyFormat("void f() { return; }\n42");
