@@ -467,11 +467,13 @@ public:
         KeywordVirtualFound = true;
       if (CurrentToken->is(tok::period) || CurrentToken->is(tok::arrow))
         ++PeriodsAndArrows;
-      if (getPrecedence(*CurrentToken) > prec::Assignment &&
-          CurrentToken->isNot(tok::less) && CurrentToken->isNot(tok::greater))
-        CanBeBuilderTypeStmt = false;
+      AnnotatedToken *TheToken = CurrentToken;
       if (!consumeToken())
         return LT_Invalid;
+      if (getPrecedence(*TheToken) > prec::Assignment &&
+          TheToken->Type != TT_TemplateOpener &&
+          TheToken->Type != TT_TemplateCloser)
+        CanBeBuilderTypeStmt = false;
     }
     if (KeywordVirtualFound)
       return LT_VirtualFunctionDecl;
@@ -1055,7 +1057,7 @@ bool TokenAnnotator::canBreakBefore(const AnnotatedLine &Line,
     return true;
   if (Left.Type == TT_PointerOrReference || Left.Type == TT_TemplateCloser ||
       Left.Type == TT_UnaryOperator || Left.Type == TT_ConditionalExpr ||
-      Left.is(tok::question))
+      Left.is(tok::question) || Left.is(tok::kw_operator))
     return false;
   if (Left.is(tok::equal) && Line.Type == LT_VirtualFunctionDecl)
     return false;

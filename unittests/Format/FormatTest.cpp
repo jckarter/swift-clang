@@ -1059,17 +1059,6 @@ TEST_F(FormatTest, ConstructorInitializers) {
       "SomeClass::Constructor()\n"
       "    : aaaaaaaaaaaaa(aaaaaaaaaaaaaa), aaaaaaaaaaaaa(aaaaaaaaaaaaaa),\n"
       "      aaaaaaaaaaaaa(aaaaaaaaaaaaaa) {\n}");
-  verifyGoogleFormat(
-      "SomeClass::Constructor()\n"
-      "    : aaaaaaaaaaaaa(aaaaaaaaaaaaaa),\n"
-      "      aaaaaaaaaaaaa(aaaaaaaaaaaaaa),\n"
-      "      aaaaaaaaaaaaa(aaaaaaaaaaaaaa) {\n}");
-  verifyGoogleFormat(
-      "SomeClass::Constructor()\n"
-      "    : aaaaaaaaaaaaa(aaaaaaaaaaaaaa),  // Some comment\n"
-      "      aaaaaaaaaaaaa(aaaaaaaaaaaaaa),\n"
-      "      aaaaaaaaaaaaa(aaaaaaaaaaaaaa) {\n}");
-
   verifyFormat(
       "SomeClass::Constructor()\n"
       "    : aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa(aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa),\n"
@@ -1093,10 +1082,20 @@ TEST_F(FormatTest, ConstructorInitializers) {
       "      aaaaaaaaaaa(aaaaaaaaaaa),\n"
       "      aaaaaaaaaaaaaaaaaaaaat(aaaaaaaaaaaaaaaaaaaaaaaaaaaa) {\n}");
 
-  verifyGoogleFormat("MyClass::MyClass(int var)\n"
-                     "    : some_var_(var),             // 4 space indent\n"
-                     "      some_other_var_(var + 1) {  // lined up\n"
-                     "}");
+  FormatStyle OnePerLine = getLLVMStyle();
+  OnePerLine.ConstructorInitializerAllOnOneLineOrOnePerLine = true;
+  verifyFormat("SomeClass::Constructor()\n"
+               "    : aaaaaaaaaaaaa(aaaaaaaaaaaaaa),\n"
+               "      aaaaaaaaaaaaa(aaaaaaaaaaaaaa),\n"
+               "      aaaaaaaaaaaaa(aaaaaaaaaaaaaa) {\n}", OnePerLine);
+  verifyFormat("SomeClass::Constructor()\n"
+               "    : aaaaaaaaaaaaa(aaaaaaaaaaaaaa), // Some comment\n"
+               "      aaaaaaaaaaaaa(aaaaaaaaaaaaaa),\n"
+               "      aaaaaaaaaaaaa(aaaaaaaaaaaaaa) {\n}", OnePerLine);
+  verifyFormat("MyClass::MyClass(int var)\n"
+               "    : some_var_(var),            // 4 space indent\n"
+               "      some_other_var_(var + 1) { // lined up\n"
+               "}", OnePerLine);
 
   // This test takes VERY long when memoization is broken.
   std::string input = "Constructor()\n"
@@ -1222,6 +1221,9 @@ TEST_F(FormatTest, FormatsBuilderPattern) {
       "    .StartsWith(\".eh_frame\", ORDER_EH_FRAME).StartsWith(\".init\", ORDER_INIT)\n"
       "    .StartsWith(\".fini\", ORDER_FINI).StartsWith(\".hash\", ORDER_HASH)\n"
       "    .Default(ORDER_TEXT);\n");
+
+  verifyFormat("return aaaaaaaaaaaaaaaaa->aaaaa().aaaaaaaaaaaaa().aaaaaa() <\n"
+               "       aaaaaaaaaaaaaaaaaaa->aaaaa().aaaaaaaaaaaaa().aaaaaa();");
 }
 
 TEST_F(FormatTest, DoesNotBreakTrailingAnnotation) {
@@ -1323,11 +1325,20 @@ TEST_F(FormatTest, BreaksConditionalExpressions) {
                "           : aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa(\n"
                "                 aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa),\n"
                "       aaaaaaaaaaaaaaaaaaaaaaaaaaa);");
+
+  verifyFormat("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n"
+               "    ? aaaaaaaaaaaaaaaaaaaaaaaaaaa\n"
+               "    : aaaaaaaaaaaaaaaaaaaaaaaaaaa;");
+
+  // FIXME: The trailing third parameter here is kind of hidden. Prefer putting
+  // it on the next line.
   verifyFormat(
-      "unsigned Indent = formatFirstToken(\n"
-      "    TheLine.First, IndentForLevel[TheLine.Level] >= 0\n"
-      "                       ? IndentForLevel[TheLine.Level] : TheLine * 2,\n"
-      "    TheLine.InPPDirective, PreviousEndOfLineColumn);");
+      "unsigned Indent =\n"
+      "    format(TheLine.First, IndentForLevel[TheLine.Level] >= 0\n"
+      "                              ? IndentForLevel[TheLine.Level]\n"
+      "                              : TheLine * 2, TheLine.InPPDirective,\n"
+      "           PreviousEndOfLineColumn);", getLLVMStyleWithColumns(70));
+
 }
 
 TEST_F(FormatTest, DeclarationsOfMultipleVariables) {
@@ -1611,6 +1622,10 @@ TEST_F(FormatTest, UndestandsOverloadedOperators) {
   verifyFormat("void *operator new[](std::size_t size);");
   verifyFormat("void operator delete(void *ptr);");
   verifyFormat("void operator delete[](void *ptr);");
+
+  verifyFormat(
+      "ostream &operator<<(ostream &OutputStream,\n"
+      "                    SomeReallyLongType WithSomeReallyLongValue);");
 
   verifyGoogleFormat("operator void*();");
   verifyGoogleFormat("operator SomeType<SomeType<int>>();");
