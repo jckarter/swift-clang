@@ -859,6 +859,11 @@ void Clang::AddARM64TargetArgs(const ArgList &Args,
 
   CmdArgs.push_back("-target-cpu");
   CmdArgs.push_back(Args.MakeArgString(getARM64TargetCPU(Args)));
+
+  if (Args.hasArg(options::OPT_mstrict_align)) {
+    CmdArgs.push_back("-backend-option");
+    CmdArgs.push_back("-arm64-strict-align");
+  }
 }
 
 // Translate MIPS CPU name alias option to CPU name.
