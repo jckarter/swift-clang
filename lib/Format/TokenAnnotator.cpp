@@ -471,8 +471,7 @@ public:
       if (!consumeToken())
         return LT_Invalid;
       if (getPrecedence(*TheToken) > prec::Assignment &&
-          TheToken->Type != TT_TemplateOpener &&
-          TheToken->Type != TT_TemplateCloser)
+          TheToken->Type == TT_BinaryOperator)
         CanBeBuilderTypeStmt = false;
     }
     if (KeywordVirtualFound)
@@ -503,6 +502,11 @@ private:
       CurrentToken = &CurrentToken->Children[0];
     else
       CurrentToken = NULL;
+
+    // Reset token type in case we have already looked at it and then recovered
+    // from an error (e.g. failure to find the matching >).
+    if (CurrentToken != NULL)
+      CurrentToken->Type = TT_Unknown;
   }
 
   /// \brief A struct to hold information valid in a specific context, e.g.
@@ -558,6 +562,9 @@ private:
            Previous && (Previous->is(tok::star) || Previous->is(tok::amp));
            Previous = Previous->Parent)
         Previous->Type = TT_PointerOrReference;
+    } else if (Current.Parent &&
+               Current.Parent->Type == TT_CtorInitializerColon) {
+      Contexts.back().IsExpression = true;
     }
 
     if (Current.Type == TT_Unknown) {
@@ -866,7 +873,7 @@ unsigned TokenAnnotator::splitPenalty(const AnnotatedLine &Line,
     return 5;
 
   if (Right.is(tok::arrow) || Right.is(tok::period)) {
-    if (Left.is(tok::r_paren) && Line.Type == LT_BuilderTypeCall)
+    if (Line.Type == LT_BuilderTypeCall)
       return 5; // Should be smaller than breaking at a nested comma.
     if ((Left.is(tok::r_paren) || Left.is(tok::r_square)) &&
         Left.MatchingParen && Left.MatchingParen->ParameterCount > 0)
