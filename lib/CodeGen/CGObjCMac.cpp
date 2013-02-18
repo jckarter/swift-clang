@@ -6484,12 +6484,6 @@ LValue CGObjCNonFragileABIMac::EmitObjCValueForIvar(
                                                unsigned CVRQualifiers) {
   ObjCInterfaceDecl *ID = ObjectTy->getAs<ObjCObjectType>()->getInterface();
   llvm::Value *Offset = EmitIvarOffset(CGF, ID, Ivar);
-
-  if (IsIvarOffsetKnownIdempotent(CGF, ID, Ivar))
-    if (llvm::LoadInst *LI = cast<llvm::LoadInst>(Offset))
-      LI->setMetadata(CGM.getModule().getMDKindID("invariant.load"),
-                      llvm::MDNode::get(VMContext, ArrayRef<llvm::Value*>()));
-
   return EmitValueForIvarAtOffset(CGF, ID, BaseValue, Ivar, CVRQualifiers,
                                   Offset);
 }
@@ -6500,6 +6494,12 @@ llvm::Value *CGObjCNonFragileABIMac::EmitIvarOffset(
   const ObjCIvarDecl *Ivar) {
   llvm::Value *IvarOffsetValue =
     CGF.Builder.CreateLoad(ObjCIvarOffsetVariable(Interface, Ivar),"ivar");
+  if (IsIvarOffsetKnownIdempotent(CGF, Interface, Ivar))
+    cast<llvm::LoadInst>(IvarOffsetValue)
+      ->setMetadata(CGM.getModule().getMDKindID("invariant.load"),
+                    llvm::MDNode::get(VMContext, ArrayRef<llvm::Value*>()));
+
+
   // This could be 32bit int or 64bit integer depending on the architecture.
   // Cast it to 64bit integer value, if it is a 32bit integer ivar offset value
   //  as this is what caller always expectes.
