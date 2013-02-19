@@ -340,19 +340,13 @@ def VCVTZD_U64 : SInst<"vcvtzd_u64", "rs", "d">;
 // vrndz and vrndqz aren't in the official ARM docs, but Numerics has
 // requested we keep them for orthogonality. rdar://12057336
 // vrnd_* and vrndq_* are aliases for vrndz_* and vrndqz_*.
-def VRND_A : SInst<"vrnda", "dd", "f">;
-def VRND_M : SInst<"vrndm", "dd", "f">;
-def VRND_N : SInst<"vrndn", "dd", "f">;
-def VRND_P : SInst<"vrndp", "dd", "f">;
-def VRND_X : SInst<"vrndx", "dd", "f">;
-def VRND_Z : SInst<"vrndz", "dd", "f">;
+def VRND_A : SInst<"vrnda", "dd", "fQfQd">;
+def VRND_M : SInst<"vrndm", "dd", "fQfQd">;
+def VRND_N : SInst<"vrndn", "dd", "fQfQd">;
+def VRND_P : SInst<"vrndp", "dd", "fQfQd">;
+def VRND_X : SInst<"vrndx", "dd", "fQfQd">;
+def VRND_Z : SInst<"vrndz", "dd", "fQfQd">;
 def VRND   : SInst<"vrnd", "dd", "fQfQd">;
-def VRNDQ_A : SInst<"vrndqa", "dd", "RfRd">;
-def VRNDQ_M : SInst<"vrndqm", "dd", "RfRd">;
-def VRNDQ_N : SInst<"vrndqn", "dd", "RfRd">;
-def VRNDQ_P : SInst<"vrndqp", "dd", "RfRd">;
-def VRNDQ_X : SInst<"vrndqx", "dd", "RfRd">;
-def VRNDQ_Z : SInst<"vrndqz", "dd", "RfRd">;
 
 ////////////////////////////////////////////////////////////////////////////////
 // Loads and stores of a single vector

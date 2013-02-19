@@ -3600,33 +3600,33 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     return EmitNeonCall(CGM.getIntrinsic(Int, Ty), Ops, "vshll_n");
   }
   case ARM64::BI__builtin_arm64_vrnda_v:
-  case ARM64::BI__builtin_arm64_vrndqa_v: {
+  case ARM64::BI__builtin_arm64_vrndaq_v: {
     Int = Intrinsic::arm64_neon_frinta;
     return EmitNeonCall(CGM.getIntrinsic(Int, Ty), Ops, "vrnda");
   }
   case ARM64::BI__builtin_arm64_vrndm_v:
-  case ARM64::BI__builtin_arm64_vrndqm_v: {
+  case ARM64::BI__builtin_arm64_vrndmq_v: {
     Int = Intrinsic::arm64_neon_frintm;
     return EmitNeonCall(CGM.getIntrinsic(Int, Ty), Ops, "vrndm");
   }
   case ARM64::BI__builtin_arm64_vrndn_v:
-  case ARM64::BI__builtin_arm64_vrndqn_v: {
+  case ARM64::BI__builtin_arm64_vrndnq_v: {
     Int = Intrinsic::arm64_neon_frintn;
     return EmitNeonCall(CGM.getIntrinsic(Int, Ty), Ops, "vrndn");
   }
   case ARM64::BI__builtin_arm64_vrndp_v:
-  case ARM64::BI__builtin_arm64_vrndqp_v: {
+  case ARM64::BI__builtin_arm64_vrndpq_v: {
     Int = Intrinsic::arm64_neon_frintp;
     return EmitNeonCall(CGM.getIntrinsic(Int, Ty), Ops, "vrndp");
   }
   case ARM64::BI__builtin_arm64_vrndx_v:
-  case ARM64::BI__builtin_arm64_vrndqx_v: {
+  case ARM64::BI__builtin_arm64_vrndxq_v: {
     Int = Intrinsic::arm64_neon_frintx;
     return EmitNeonCall(CGM.getIntrinsic(Int, Ty), Ops, "vrndx");
   }
   case ARM64::BI__builtin_arm64_vrndz_v:
   case ARM64::BI__builtin_arm64_vrnd_v:
-  case ARM64::BI__builtin_arm64_vrndqz_v:
+  case ARM64::BI__builtin_arm64_vrndzq_v:
   case ARM64::BI__builtin_arm64_vrndq_v: {
     Int = Intrinsic::arm64_neon_frintz;
     return EmitNeonCall(CGM.getIntrinsic(Int, Ty), Ops, "vrndz");
