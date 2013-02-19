@@ -251,6 +251,7 @@ public:
     State.VariablePos = 0;
     State.LineContainsContinuedForLoopSection = false;
     State.ParenLevel = 0;
+    State.StartOfLineLevel = State.ParenLevel;
 
     DEBUG({
       DebugTokenState(*State.NextToken);
@@ -384,6 +385,9 @@ private:
     /// \brief The level of nesting inside (), [], <> and {}.
     unsigned ParenLevel;
 
+    /// \brief The \c ParenLevel at the start of this line.
+    unsigned StartOfLineLevel;
+
     /// \brief A stack keeping track of properties applying to parenthesis
     /// levels.
     std::vector<ParenState> Stack;
@@ -401,6 +405,8 @@ private:
         return LineContainsContinuedForLoopSection;
       if (Other.ParenLevel != ParenLevel)
         return Other.ParenLevel < ParenLevel;
+      if (Other.StartOfLineLevel < StartOfLineLevel)
+        return Other.StartOfLineLevel < StartOfLineLevel;
       return Other.Stack < Stack;
     }
   };
@@ -435,6 +441,7 @@ private:
       } else if (Current.is(tok::string_literal) &&
                  Previous.is(tok::string_literal)) {
         State.Column = State.Column - Previous.FormatTok.TokenLength;
+        State.Stack.back().BreakBeforeParameter = true;
       } else if (Current.is(tok::lessless) &&
                  State.Stack.back().FirstLessLess != 0) {
         State.Column = State.Stack.back().FirstLessLess;
@@ -489,6 +496,7 @@ private:
       }
 
       State.Stack.back().LastSpace = State.Column;
+      State.StartOfLineLevel = State.ParenLevel;
       if (Current.is(tok::colon) && Current.Type != TT_ConditionalExpr)
         State.Stack.back().Indent += 2;
     } else {
@@ -540,6 +548,9 @@ private:
                 Previous.Type == TT_TemplateOpener))
         // If this function has multiple parameters, indent nested calls from
         // the start of the first parameter.
+        State.Stack.back().LastSpace = State.Column;
+      else if ((Current.is(tok::period) || Current.is(tok::arrow)) &&
+               Line.Type == LT_BuilderTypeCall && State.ParenLevel == 0)
         State.Stack.back().LastSpace = State.Column;
     }
 
@@ -772,6 +783,14 @@ private:
         !(State.NextToken->is(tok::r_brace) &&
           State.Stack.back().BreakBeforeClosingBrace))
       return false;
+    // This prevents breaks like:
+    //   ...
+    //   SomeParameter, OtherParameter).DoSomething(
+    //   ...
+    // As they hide "DoSomething" and generally bad for readability.
+    if (State.NextToken->Parent->is(tok::l_paren) &&
+        State.ParenLevel <= State.StartOfLineLevel)
+      return false;
     // Trying to insert a parameter on a new line if there are already more than
     // one parameter on the current line is bin packing.
     if (State.Stack.back().HasMultiParameterLine &&
@@ -983,7 +1002,9 @@ public:
       while (IndentForLevel.size() <= TheLine.Level)
         IndentForLevel.push_back(-1);
       IndentForLevel.resize(TheLine.Level + 1);
-      if (touchesRanges(TheLine) && TheLine.Type != LT_Invalid) {
+      bool WasMoved =
+          PreviousLineWasTouched && TheLine.First.FormatTok.NewlinesBefore == 0;
+      if (TheLine.Type != LT_Invalid && (WasMoved || touchesRanges(TheLine))) {
         unsigned LevelIndent = getIndent(IndentForLevel, TheLine.Level);
         unsigned Indent = LevelIndent;
         if (static_cast<int>(Indent) + Offset >= 0)
