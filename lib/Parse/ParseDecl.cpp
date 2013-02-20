@@ -38,13 +38,16 @@ using namespace clang;
 TypeResult Parser::ParseTypeName(SourceRange *Range,
                                  Declarator::TheContext Context,
                                  AccessSpecifier AS,
-                                 Decl **OwnedType) {
+                                 Decl **OwnedType,
+                                 ParsedAttributes *Attrs) {
   DeclSpecContext DSC = getDeclSpecContextFromDeclaratorContext(Context);
   if (DSC == DSC_normal)
     DSC = DSC_type_specifier;
 
   // Parse the common declaration-specifiers piece.
   DeclSpec DS(AttrFactory);
+  if (Attrs)
+    DS.addAttributes(Attrs->getList());
   ParseSpecifierQualifierList(DS, AS, DSC);
   if (OwnedType)
     *OwnedType = DS.isTypeSpecOwned() ? DS.getRepAsDecl() : 0;
@@ -4436,6 +4439,7 @@ void Parser::ParseDirectDeclarator(Declarator &D) {
         !((D.getContext() == Declarator::PrototypeContext ||
            D.getContext() == Declarator::BlockLiteralContext) &&
           NextToken().is(tok::r_paren) &&
+          !D.hasGroupingParens() &&
           !Actions.containsUnexpandedParameterPacks(D))) {
       SourceLocation EllipsisLoc = ConsumeToken();
       if (isPtrOperatorToken(Tok.getKind(), getLangOpts())) {
@@ -4518,6 +4522,12 @@ void Parser::ParseDirectDeclarator(Declarator &D) {
     // This could be something simple like "int" (in which case the declarator
     // portion is empty), if an abstract-declarator is allowed.
     D.SetIdentifier(0, Tok.getLocation());
+
+    // The grammar for abstract-pack-declarator does not allow grouping parens.
+    // FIXME: Revisit this once core issue 1488 is resolved.
+    if (D.hasEllipsis() && D.hasGroupingParens())
+      Diag(PP.getLocForEndOfToken(D.getEllipsisLoc()),
+           diag::ext_abstract_pack_declarator_parens);
   } else {
     if (Tok.getKind() == tok::annot_pragma_parser_crash)
       LLVM_BUILTIN_TRAP;

@@ -576,6 +576,20 @@ TEST_F(FormatTest, CommentsInStaticInitializers) {
                "          d, e, f },\n"
                "        { // Group #3\n"
                "          g, h, i } };");
+
+  EXPECT_EQ("S s = {\n"
+            "  // Some comment\n"
+            "  a\n"
+            "\n"
+            "  // Comment after empty line\n"
+            "  b\n"
+            "}", format("S s =    {\n"
+                        "      // Some comment\n"
+                        "  a\n"
+                        "  \n"
+                        "     // Comment after empty line\n"
+                        "      b\n"
+                        "}"));
 }
 
 //===----------------------------------------------------------------------===//
@@ -1425,6 +1439,22 @@ TEST_F(FormatTest, AlignsStringLiterals) {
   verifyFormat("someFunction(\"Always break between multi-line\"\n"
                "             \" string literals\",\n"
                "             and, other, parameters);");
+  EXPECT_EQ("fun + \"1243\" /* comment */\n"
+            "      \"5678\";",
+            format("fun + \"1243\" /* comment */\n"
+                   "      \"5678\";",
+                   getLLVMStyleWithColumns(28)));
+  EXPECT_EQ(
+      "aaaaaa = \"aaaaaaaaaaaaaaaaaaaaaaaaaa aaaaaaaaaaaaaaaaaaaaaaaaaaaa \"\n"
+      "         \"aaaaaaaaaaaaaaaaaaaaa\"\n"
+      "         \"aaaaaaaaaaaaaaaa\";",
+      format("aaaaaa ="
+             "\"aaaaaaaaaaaaaaaaaaaaaaaaaa aaaaaaaaaaaaaaaaaaaaaaaaaaaa "
+             "aaaaaaaaaaaaaaaaaaaaa\" "
+             "\"aaaaaaaaaaaaaaaa\";"));
+  verifyFormat("a = a + \"a\"\n"
+               "        \"a\"\n"
+               "        \"a\";");
 }
 
 TEST_F(FormatTest, AlignsPipes) {
@@ -2841,6 +2871,66 @@ TEST_F(FormatTest, ReformatRegionAdjustsIndent) {
             format("void f() {}\n"
                    "void g() {}",
                    13, 0, getLLVMStyle()));
+}
+
+TEST_F(FormatTest, BreakStringLiterals) {
+  EXPECT_EQ("\"some text \"\n"
+            "\"other\";",
+            format("\"some text other\";", getLLVMStyleWithColumns(12)));
+  EXPECT_EQ(
+      "#define A  \\\n"
+      "  \"some \"  \\\n"
+      "  \"text \"  \\\n"
+      "  \"other\";",
+      format("#define A \"some text other\";", getLLVMStyleWithColumns(12)));
+  EXPECT_EQ(
+      "#define A  \\\n"
+      "  \"so \"    \\\n"
+      "  \"text \"  \\\n"
+      "  \"other\";",
+      format("#define A \"so text other\";", getLLVMStyleWithColumns(12)));
+
+  EXPECT_EQ("\"some text\"",
+            format("\"some text\"", getLLVMStyleWithColumns(1)));
+  EXPECT_EQ("\"some text\"",
+            format("\"some text\"", getLLVMStyleWithColumns(11)));
+  EXPECT_EQ("\"some \"\n"
+            "\"text\"",
+            format("\"some text\"", getLLVMStyleWithColumns(10)));
+  EXPECT_EQ("\"some \"\n"
+            "\"text\"",
+            format("\"some text\"", getLLVMStyleWithColumns(7)));
+  EXPECT_EQ("\"some text\"",
+            format("\"some text\"", getLLVMStyleWithColumns(6)));
+
+  EXPECT_EQ("variable =\n"
+            "    \"long string \"\n"
+            "    \"literal\";",
+            format("variable = \"long string literal\";",
+                   getLLVMStyleWithColumns(20)));
+
+  EXPECT_EQ("variable = f(\n"
+            "    \"long string \"\n"
+            "    \"literal\", short,\n"
+            "    loooooooooooooooooooong);",
+            format("variable = f(\"long string literal\", short, "
+                   "loooooooooooooooooooong);",
+                   getLLVMStyleWithColumns(20)));
+  EXPECT_EQ(
+      "f(\"one two\".split(\n"
+      "    variable));",
+      format("f(\"one two\".split(variable));", getLLVMStyleWithColumns(20)));
+  EXPECT_EQ("f(\"one two three four five six \"\n"
+            "  \"seven\".split(\n"
+            "      really_looooong_variable));",
+            format("f(\"one two three four five six seven\"."
+                   "split(really_looooong_variable));",
+                   getLLVMStyleWithColumns(33)));
+
+  EXPECT_EQ("f(\"some \"\n"
+            "  \"text\",\n"
+            "  other);",
+            format("f(\"some text\", other);", getLLVMStyleWithColumns(10)));
 }
 
 } // end namespace tooling

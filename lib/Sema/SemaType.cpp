@@ -2889,7 +2889,7 @@ static TypeSourceInfo *GetFullTypeForDeclarator(TypeProcessingState &state,
           << T <<  D.getSourceRange();
         D.setEllipsisLoc(SourceLocation());
       } else {
-        T = Context.getPackExpansionType(T, llvm::Optional<unsigned>());
+        T = Context.getPackExpansionType(T, Optional<unsigned>());
       }
       break;
 
@@ -2903,7 +2903,7 @@ static TypeSourceInfo *GetFullTypeForDeclarator(TypeProcessingState &state,
       // parameter packs in the type of the non-type template parameter, then
       // it expands those parameter packs.
       if (T->containsUnexpandedParameterPack())
-        T = Context.getPackExpansionType(T, llvm::Optional<unsigned>());
+        T = Context.getPackExpansionType(T, Optional<unsigned>());
       else
         S.Diag(D.getEllipsisLoc(),
                LangOpts.CPlusPlus11
@@ -3497,7 +3497,11 @@ TypeResult Sema::ActOnTypeName(Scope *S, Declarator &D) {
   // Make sure there are no unused decl attributes on the declarator.
   // We don't want to do this for ObjC parameters because we're going
   // to apply them to the actual parameter declaration.
-  if (D.getContext() != Declarator::ObjCParameterContext)
+  // Likewise, we don't want to do this for alias declarations, because
+  // we are actually going to build a declaration from this eventually.
+  if (D.getContext() != Declarator::ObjCParameterContext &&
+      D.getContext() != Declarator::AliasDeclContext &&
+      D.getContext() != Declarator::AliasTemplateContext)
     checkUnusedDeclAttributes(D);
 
   if (getLangOpts().CPlusPlus) {
