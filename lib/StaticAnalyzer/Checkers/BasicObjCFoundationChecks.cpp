@@ -196,28 +196,6 @@ enum CFNumberType {
   kCFNumberCGFloatType = 16
 };
 
-namespace {
-  template<typename T>
-  class Optional {
-    bool IsKnown;
-    T Val;
-  public:
-    Optional() : IsKnown(false), Val(0) {}
-    Optional(const T& val) : IsKnown(true), Val(val) {}
-
-    bool isKnown() const { return IsKnown; }
-
-    const T& getValue() const {
-      assert (isKnown());
-      return Val;
-    }
-
-    operator const T&() const {
-      return getValue();
-    }
-  };
-}
-
 static Optional<uint64_t> GetCFNumberSize(ASTContext &Ctx, uint64_t i) {
   static const unsigned char FixedSize[] = { 8, 16, 32, 64, 32, 64 };
 
@@ -290,17 +268,18 @@ void CFNumberCreateChecker::checkPreStmt(const CallExpr *CE,
 
   // FIXME: We really should allow ranges of valid theType values, and
   //   bifurcate the state appropriately.
-  llvm::Optional<nonloc::ConcreteInt> V =
-      TheTypeVal.getAs<nonloc::ConcreteInt>();
+  Optional<nonloc::ConcreteInt> V = TheTypeVal.getAs<nonloc::ConcreteInt>();
   if (!V)
     return;
 
   uint64_t NumberKind = V->getValue().getLimitedValue();
-  Optional<uint64_t> TargetSize = GetCFNumberSize(Ctx, NumberKind);
+  Optional<uint64_t> OptTargetSize = GetCFNumberSize(Ctx, NumberKind);
 
   // FIXME: In some cases we can emit an error.
-  if (!TargetSize.isKnown())
+  if (!OptTargetSize)
     return;
+
+  uint64_t TargetSize = *OptTargetSize;
 
   // Look at the value of the integer being passed by reference.  Essentially
   // we want to catch cases where the value passed in is not equal to the
@@ -309,8 +288,7 @@ void CFNumberCreateChecker::checkPreStmt(const CallExpr *CE,
 
   // FIXME: Eventually we should handle arbitrary locations.  We can do this
   //  by having an enhanced memory model that does low-level typing.
-  llvm::Optional<loc::MemRegionVal> LV =
-      TheValueExpr.getAs<loc::MemRegionVal>();
+  Optional<loc::MemRegionVal> LV = TheValueExpr.getAs<loc::MemRegionVal>();
   if (!LV)
     return;
 
@@ -411,7 +389,7 @@ void CFRetainReleaseChecker::checkPreStmt(const CallExpr *CE,
   // Get the argument's value.
   const Expr *Arg = CE->getArg(0);
   SVal ArgVal = state->getSVal(Arg, C.getLocationContext());
-  llvm::Optional<DefinedSVal> DefArgVal = ArgVal.getAs<DefinedSVal>();
+  Optional<DefinedSVal> DefArgVal = ArgVal.getAs<DefinedSVal>();
   if (!DefArgVal)
     return;
 
@@ -609,7 +587,7 @@ void VariadicMethodTypeChecker::checkPreObjCMessage(const ObjCMethodCall &msg,
     return;
 
   // Verify that all arguments have Objective-C types.
-  llvm::Optional<ExplodedNode*> errorNode;
+  Optional<ExplodedNode*> errorNode;
   ProgramStateRef state = C.getState();
   
   for (unsigned I = variadicArgsBegin; I != variadicArgsEnd; ++I) {
@@ -748,8 +726,7 @@ static ProgramStateRef assumeExprIsNonNull(const Expr *NonNullExpr,
                                            ProgramStateRef State,
                                            CheckerContext &C) {
   SVal Val = State->getSVal(NonNullExpr, C.getLocationContext());
-  if (llvm::Optional<DefinedOrUnknownSVal> DV =
-          Val.getAs<DefinedOrUnknownSVal>())
+  if (Optional<DefinedOrUnknownSVal> DV = Val.getAs<DefinedOrUnknownSVal>())
     return State->assume(*DV, true);
   return State;
 }
