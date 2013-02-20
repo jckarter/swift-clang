@@ -4051,6 +4051,8 @@ class DarwinARM64TargetInfo : public DarwinTargetInfo<ARM64TargetInfo> {
 public:
   DarwinARM64TargetInfo(const std::string& triple)
       : DarwinTargetInfo<ARM64TargetInfo>(triple) {
+    IntMaxType = SignedLongLong;
+    UIntMaxType = UnsignedLongLong;
     Int64Type = SignedLongLong;
     UseSignedCharForObjCBool = false;
   }
