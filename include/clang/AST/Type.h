@@ -4133,7 +4133,7 @@ class PackExpansionType : public Type, public llvm::FoldingSetNode {
   unsigned NumExpansions;
 
   PackExpansionType(QualType Pattern, QualType Canon,
-                    llvm::Optional<unsigned> NumExpansions)
+                    Optional<unsigned> NumExpansions)
     : Type(PackExpansion, Canon, /*Dependent=*/Pattern->isDependentType(),
            /*InstantiationDependent=*/true,
            /*VariableModified=*/Pattern->isVariablyModifiedType(),
@@ -4151,11 +4151,11 @@ public:
 
   /// \brief Retrieve the number of expansions that this pack expansion will
   /// generate, if known.
-  llvm::Optional<unsigned> getNumExpansions() const {
+  Optional<unsigned> getNumExpansions() const {
     if (NumExpansions)
       return NumExpansions - 1;
 
-    return llvm::Optional<unsigned>();
+    return None;
   }
 
   bool isSugared() const { return false; }
@@ -4166,9 +4166,9 @@ public:
   }
 
   static void Profile(llvm::FoldingSetNodeID &ID, QualType Pattern,
-                      llvm::Optional<unsigned> NumExpansions) {
+                      Optional<unsigned> NumExpansions) {
     ID.AddPointer(Pattern.getAsOpaquePtr());
-    ID.AddBoolean(NumExpansions);
+    ID.AddBoolean(NumExpansions.hasValue());
     if (NumExpansions)
       ID.AddInteger(*NumExpansions);
   }

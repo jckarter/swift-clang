@@ -69,19 +69,23 @@ protected:
 public:
   explicit SVal() : Data(0), Kind(0) {}
 
+  /// \brief Convert to the specified SVal type, asserting that this SVal is of
+  /// the desired type.
   template<typename T>
   T castAs() const {
-    assert(T::isType(*this));
+    assert(T::isKind(*this));
     T t;
     SVal& sv = t;
     sv = *this;
     return t;
   }
 
+  /// \brief Convert to the specified SVal type, returning None if this SVal is
+  /// not of the desired type.
   template<typename T>
-  llvm::Optional<T> getAs() const {
-    if (!T::isType(*this))
-      return llvm::Optional<T>();
+  Optional<T> getAs() const {
+    if (!T::isKind(*this))
+      return None;
     T t;
     SVal& sv = t;
     sv = *this;
@@ -182,7 +186,7 @@ public:
 
 private:
   friend class SVal;
-  static bool isType(const SVal& V) {
+  static bool isKind(const SVal& V) {
     return V.getBaseKind() == UndefinedKind;
   }
 };
@@ -204,7 +208,7 @@ protected:
   
 private:
   friend class SVal;
-  static bool isType(const SVal& V) {
+  static bool isKind(const SVal& V) {
     return !V.isUndef();
   }
 };
@@ -215,7 +219,7 @@ public:
   
 private:
   friend class SVal;
-  static bool isType(const SVal& V) {
+  static bool isKind(const SVal& V) {
     return V.getBaseKind() == UnknownKind;
   }
 };
@@ -233,7 +237,7 @@ protected:
     : DefinedOrUnknownSVal(d, isLoc, ValKind) {}
 private:
   friend class SVal;
-  static bool isType(const SVal& V) {
+  static bool isKind(const SVal& V) {
     return !V.isUnknownOrUndef();
   }
 };
@@ -249,7 +253,7 @@ public:
 
 private:
   friend class SVal;
-  static bool isType(const SVal& V) {
+  static bool isKind(const SVal& V) {
     return V.getBaseKind() == NonLocKind;
   }
 };
@@ -270,7 +274,7 @@ public:
 
 private:
   friend class SVal;
-  static bool isType(const SVal& V) {
+  static bool isKind(const SVal& V) {
     return V.getBaseKind() == LocKind;
   }
 };
@@ -300,12 +304,12 @@ public:
 private:
   friend class SVal;
   SymbolVal() {}
-  static bool isType(const SVal& V) {
+  static bool isKind(const SVal& V) {
     return V.getBaseKind() == NonLocKind &&
            V.getSubKind() == SymbolValKind;
   }
 
-  static bool isType(const NonLoc& V) {
+  static bool isKind(const NonLoc& V) {
     return V.getSubKind() == SymbolValKind;
   }
 };
@@ -330,12 +334,12 @@ public:
 private:
   friend class SVal;
   ConcreteInt() {}
-  static bool isType(const SVal& V) {
+  static bool isKind(const SVal& V) {
     return V.getBaseKind() == NonLocKind &&
            V.getSubKind() == ConcreteIntKind;
   }
 
-  static bool isType(const NonLoc& V) {
+  static bool isKind(const NonLoc& V) {
     return V.getSubKind() == ConcreteIntKind;
   }
 };
@@ -372,12 +376,12 @@ public:
 private:
   friend class SVal;
   LocAsInteger() {}
-  static bool isType(const SVal& V) {
+  static bool isKind(const SVal& V) {
     return V.getBaseKind() == NonLocKind &&
            V.getSubKind() == LocAsIntegerKind;
   }
 
-  static bool isType(const NonLoc& V) {
+  static bool isKind(const NonLoc& V) {
     return V.getSubKind() == LocAsIntegerKind;
   }
 };
@@ -399,11 +403,11 @@ public:
 private:
   friend class SVal;
   CompoundVal() {}
-  static bool isType(const SVal& V) {
+  static bool isKind(const SVal& V) {
     return V.getBaseKind() == NonLocKind && V.getSubKind() == CompoundValKind;
   }
 
-  static bool isType(const NonLoc& V) {
+  static bool isKind(const NonLoc& V) {
     return V.getSubKind() == CompoundValKind;
   }
 };
@@ -423,11 +427,11 @@ public:
 private:
   friend class SVal;
   LazyCompoundVal() {}
-  static bool isType(const SVal& V) {
+  static bool isKind(const SVal& V) {
     return V.getBaseKind() == NonLocKind &&
            V.getSubKind() == LazyCompoundValKind;
   }
-  static bool isType(const NonLoc& V) {
+  static bool isKind(const NonLoc& V) {
     return V.getSubKind() == LazyCompoundValKind;
   }
 };
@@ -453,11 +457,11 @@ public:
 private:
   friend class SVal;
   GotoLabel() {}
-  static bool isType(const SVal& V) {
+  static bool isKind(const SVal& V) {
     return V.getBaseKind() == LocKind && V.getSubKind() == GotoLabelKind;
   }
 
-  static bool isType(const Loc& V) {
+  static bool isKind(const Loc& V) {
     return V.getSubKind() == GotoLabelKind;
   }
 };
@@ -491,12 +495,12 @@ public:
 private:
   friend class SVal;
   MemRegionVal() {}
-  static bool isType(const SVal& V) {
+  static bool isKind(const SVal& V) {
     return V.getBaseKind() == LocKind &&
            V.getSubKind() == MemRegionKind;
   }
 
-  static bool isType(const Loc& V) {
+  static bool isKind(const Loc& V) {
     return V.getSubKind() == MemRegionKind;
   }
 };
@@ -516,12 +520,12 @@ public:
 private:
   friend class SVal;
   ConcreteInt() {}
-  static bool isType(const SVal& V) {
+  static bool isKind(const SVal& V) {
     return V.getBaseKind() == LocKind &&
            V.getSubKind() == ConcreteIntKind;
   }
 
-  static bool isType(const Loc& V) {
+  static bool isKind(const Loc& V) {
     return V.getSubKind() == ConcreteIntKind;
   }
 };

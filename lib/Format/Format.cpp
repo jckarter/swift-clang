@@ -135,8 +135,7 @@ public:
     // If this line does not have a trailing comment, align the stored comments.
     if (Tok.Children.empty() && !isTrailingComment(Tok))
       alignComments();
-    storeReplacement(Tok.FormatTok,
-                     std::string(NewLines, '\n') + std::string(Spaces, ' '));
+    storeReplacement(Tok.FormatTok, getNewLineText(NewLines, Spaces));
   }
 
   /// \brief Like \c replaceWhitespace, but additionally adds right-aligned
@@ -147,6 +146,47 @@ public:
   void replacePPWhitespace(const AnnotatedToken &Tok, unsigned NewLines,
                            unsigned Spaces, unsigned WhitespaceStartColumn,
                            const FormatStyle &Style) {
+    storeReplacement(
+        Tok.FormatTok,
+        getNewLineText(NewLines, Spaces, WhitespaceStartColumn, Style));
+  }
+
+  /// \brief Inserts a line break into the middle of a token.
+  ///
+  /// Will break at \p Offset inside \p Tok, putting \p Prefix before the line
+  /// break and \p Postfix before the rest of the token starts in the next line.
+  ///
+  /// \p InPPDirective, \p Spaces, \p WhitespaceStartColumn and \p Style are
+  /// used to generate the correct line break.
+  void breakToken(const AnnotatedToken &Tok, unsigned Offset, StringRef Prefix,
+                  StringRef Postfix, bool InPPDirective, unsigned Spaces,
+                  unsigned WhitespaceStartColumn, const FormatStyle &Style) {
+    std::string NewLineText;
+    if (!InPPDirective)
+      NewLineText = getNewLineText(1, Spaces);
+    else
+      NewLineText = getNewLineText(1, Spaces, WhitespaceStartColumn, Style);
+    std::string ReplacementText = (Prefix + NewLineText + Postfix).str();
+    SourceLocation InsertAt = Tok.FormatTok.WhiteSpaceStart
+        .getLocWithOffset(Tok.FormatTok.WhiteSpaceLength + Offset);
+    Replaces.insert(
+        tooling::Replacement(SourceMgr, InsertAt, 0, ReplacementText));
+  }
+
+  /// \brief Returns all the \c Replacements created during formatting.
+  const tooling::Replacements &generateReplacements() {
+    alignComments();
+    return Replaces;
+  }
+
+private:
+  std::string getNewLineText(unsigned NewLines, unsigned Spaces) {
+    return std::string(NewLines, '\n') + std::string(Spaces, ' ');
+  }
+
+  std::string
+  getNewLineText(unsigned NewLines, unsigned Spaces,
+                 unsigned WhitespaceStartColumn, const FormatStyle &Style) {
     std::string NewLineText;
     if (NewLines > 0) {
       unsigned Offset =
@@ -157,16 +197,9 @@ public:
         Offset = 0;
       }
     }
-    storeReplacement(Tok.FormatTok, NewLineText + std::string(Spaces, ' '));
+    return NewLineText + std::string(Spaces, ' ');
   }
 
-  /// \brief Returns all the \c Replacements created during formatting.
-  const tooling::Replacements &generateReplacements() {
-    alignComments();
-    return Replaces;
-  }
-
-private:
   /// \brief Structure to store a comment for later layout and alignment.
   struct StoredComment {
     FormatToken Tok;
@@ -245,12 +278,13 @@ public:
     LineState State;
     State.Column = FirstIndent;
     State.NextToken = &RootToken;
-    State.Stack.push_back(
-        ParenState(FirstIndent + 4, FirstIndent, !Style.BinPackParameters,
-                   /*HasMultiParameterLine=*/ false));
+    State.Stack.push_back(ParenState(FirstIndent + 4, FirstIndent,
+                                     !Style.BinPackParameters,
+                                     /*HasMultiParameterLine=*/ false));
     State.VariablePos = 0;
     State.LineContainsContinuedForLoopSection = false;
     State.ParenLevel = 0;
+    State.StartOfStringLiteral = 0;
     State.StartOfLineLevel = State.ParenLevel;
 
     DEBUG({
@@ -258,7 +292,7 @@ public:
     });
 
     // The first token has already been indented and thus consumed.
-    moveStateToNextToken(State);
+    moveStateToNextToken(State, /*DryRun=*/ false);
 
     // If everything fits on a single line, just put it there.
     if (Line.Last->TotalLength <= getColumnLimit() - FirstIndent) {
@@ -335,7 +369,7 @@ private:
 
     /// \brief The position of the colon in an ObjC method declaration/call.
     unsigned ColonPos;
-    
+
     /// \brief Break before third operand in ternary expression.
     bool BreakBeforeThirdOperand;
 
@@ -388,6 +422,10 @@ private:
     /// \brief The \c ParenLevel at the start of this line.
     unsigned StartOfLineLevel;
 
+    /// \brief The start column of the string literal, if we're in a string
+    /// literal sequence, 0 otherwise.
+    unsigned StartOfStringLiteral;
+
     /// \brief A stack keeping track of properties applying to parenthesis
     /// levels.
     std::vector<ParenState> Stack;
@@ -407,6 +445,8 @@ private:
         return ParenLevel < Other.ParenLevel;
       if (StartOfLineLevel != Other.StartOfLineLevel)
         return StartOfLineLevel < Other.StartOfLineLevel;
+      if (StartOfStringLiteral != Other.StartOfStringLiteral)
+        return StartOfStringLiteral < Other.StartOfStringLiteral;
       return Stack < Other.Stack;
     }
   };
@@ -419,7 +459,7 @@ private:
   ///
   /// If \p DryRun is \c false, also creates and stores the required
   /// \c Replacement.
-  void addTokenToState(bool Newline, bool DryRun, LineState &State) {
+  unsigned addTokenToState(bool Newline, bool DryRun, LineState &State) {
     const AnnotatedToken &Current = *State.NextToken;
     const AnnotatedToken &Previous = *State.NextToken->Parent;
     assert(State.Stack.size());
@@ -431,7 +471,7 @@ private:
         State.NextToken = NULL;
       else
         State.NextToken = &State.NextToken->Children[0];
-      return;
+      return 0;
     }
 
     if (Newline) {
@@ -439,8 +479,8 @@ private:
       if (Current.is(tok::r_brace)) {
         State.Column = Line.Level * 2;
       } else if (Current.is(tok::string_literal) &&
-                 Previous.is(tok::string_literal)) {
-        State.Column = State.Column - Previous.FormatTok.TokenLength;
+                 State.StartOfStringLiteral != 0) {
+        State.Column = State.StartOfStringLiteral;
         State.Stack.back().BreakBeforeParameter = true;
       } else if (Current.is(tok::lessless) &&
                  State.Stack.back().FirstLessLess != 0) {
@@ -487,11 +527,14 @@ private:
         State.LineContainsContinuedForLoopSection = Previous.isNot(tok::semi);
 
       if (!DryRun) {
+        unsigned NewLines =
+            std::max(1u, std::min(Current.FormatTok.NewlinesBefore,
+                                  Style.MaxEmptyLinesToKeep + 1));
         if (!Line.InPPDirective)
-          Whitespaces.replaceWhitespace(Current, 1, State.Column,
+          Whitespaces.replaceWhitespace(Current, NewLines, State.Column,
                                         WhitespaceStartColumn, Style);
         else
-          Whitespaces.replacePPWhitespace(Current, 1, State.Column,
+          Whitespaces.replacePPWhitespace(Current, NewLines, State.Column,
                                           WhitespaceStartColumn, Style);
       }
 
@@ -576,12 +619,12 @@ private:
       }
     }
 
-    moveStateToNextToken(State);
+    return moveStateToNextToken(State, DryRun);
   }
 
   /// \brief Mark the next token as consumed in \p State and modify its stacks
   /// accordingly.
-  void moveStateToNextToken(LineState &State) {
+  unsigned moveStateToNextToken(LineState &State, bool DryRun) {
     const AnnotatedToken &Current = *State.NextToken;
     assert(State.Stack.size());
 
@@ -649,12 +692,65 @@ private:
       State.Stack.pop_back();
     }
 
+    if (Current.is(tok::string_literal)) {
+      State.StartOfStringLiteral = State.Column;
+    } else if (Current.isNot(tok::comment)) {
+      State.StartOfStringLiteral = 0;
+    }
+
+    State.Column += Current.FormatTok.TokenLength;
+
     if (State.NextToken->Children.empty())
       State.NextToken = NULL;
     else
       State.NextToken = &State.NextToken->Children[0];
 
-    State.Column += Current.FormatTok.TokenLength;
+    return breakProtrudingToken(Current, State, DryRun);
+  }
+
+  /// \brief If the current token sticks out over the end of the line, break
+  /// it if possible.
+  unsigned breakProtrudingToken(const AnnotatedToken &Current, LineState &State,
+                                bool DryRun) {
+    if (Current.isNot(tok::string_literal))
+      return 0;
+
+    unsigned Penalty = 0;
+    unsigned TailOffset = 0;
+    unsigned TailLength = Current.FormatTok.TokenLength;
+    unsigned StartColumn = State.Column - Current.FormatTok.TokenLength;
+    unsigned OffsetFromStart = 0;
+    while (StartColumn + TailLength > getColumnLimit()) {
+      StringRef Text = StringRef(Current.FormatTok.Tok.getLiteralData() +
+                                 TailOffset, TailLength);
+      StringRef::size_type SplitPoint =
+          getSplitPoint(Text, getColumnLimit() - StartColumn - 1);
+      if (SplitPoint == StringRef::npos)
+        break;
+      assert(SplitPoint != 0);
+      // +2, because 'Text' starts after the opening quotes, and does not
+      // include the closing quote we need to insert.
+      unsigned WhitespaceStartColumn =
+          StartColumn + OffsetFromStart + SplitPoint + 2;
+      State.Stack.back().LastSpace = StartColumn;
+      if (!DryRun) {
+        Whitespaces.breakToken(Current, TailOffset + SplitPoint + 1, "\"", "\"",
+                               Line.InPPDirective, StartColumn,
+                               WhitespaceStartColumn, Style);
+      }
+      TailOffset += SplitPoint + 1;
+      TailLength -= SplitPoint + 1;
+      OffsetFromStart = 1;
+      Penalty += 100;
+    }
+    State.Column = StartColumn + TailLength;
+    return Penalty;
+  }
+
+  StringRef::size_type
+  getSplitPoint(StringRef Text, StringRef::size_type Offset) {
+    // FIXME: Implement more sophisticated splitting mechanism, and a fallback.
+    return Text.rfind(' ', Offset);
   }
 
   unsigned getColumnLimit() {
@@ -767,7 +863,7 @@ private:
 
     StateNode *Node = new (Allocator.Allocate())
         StateNode(PreviousNode->State, NewLine, PreviousNode);
-    addTokenToState(NewLine, true, Node->State);
+    Penalty += addTokenToState(NewLine, true, Node->State);
     if (Node->State.Column > getColumnLimit()) {
       unsigned ExcessCharacters = Node->State.Column - getColumnLimit();
       Penalty += Style.PenaltyExcessCharacter * ExcessCharacters;
