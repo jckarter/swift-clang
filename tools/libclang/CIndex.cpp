@@ -3422,10 +3422,10 @@ CXString clang_getCursorDisplayName(CXCursor C) {
     if (TypeSourceInfo *TSInfo = ClassSpec->getTypeAsWritten())
       return cxstring::createDup(TSInfo->getType().getAsString(Policy));
     
-    SmallString<64> Str;
+    SmallString<128> Str;
     llvm::raw_svector_ostream OS(Str);
     OS << *ClassSpec;
-    OS << TemplateSpecializationType::PrintTemplateArgumentList(
+    TemplateSpecializationType::PrintTemplateArgumentList(OS,
                                       ClassSpec->getTemplateArgs().data(),
                                       ClassSpec->getTemplateArgs().size(),
                                                                 Policy);
@@ -4457,6 +4457,7 @@ CXCursor clang_getCursorDefinition(CXCursor C) {
 
   // Declaration kinds that don't make any sense here, but are
   // nonetheless harmless.
+  case Decl::Empty:
   case Decl::TranslationUnit:
     break;
 

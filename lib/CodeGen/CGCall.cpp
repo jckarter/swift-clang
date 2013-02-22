@@ -37,6 +37,7 @@ using namespace CodeGen;
 static unsigned ClangCallConvToLLVMCallConv(CallingConv CC) {
   switch (CC) {
   default: return llvm::CallingConv::C;
+  case CC_Cold: return llvm::CallingConv::Cold;
   case CC_X86StdCall: return llvm::CallingConv::X86_StdCall;
   case CC_X86FastCall: return llvm::CallingConv::X86_FastCall;
   case CC_X86ThisCall: return llvm::CallingConv::X86_ThisCall;
@@ -135,6 +136,9 @@ CodeGenTypes::arrangeFreeFunctionType(CanQual<FunctionProtoType> FTP) {
 
 static CallingConv getCallingConventionForDecl(const Decl *D) {
   // Set the appropriate calling convention for the Function.
+  if (D->hasAttr<ColdCCAttr>())
+    return CC_Cold;
+
   if (D->hasAttr<StdCallAttr>())
     return CC_X86StdCall;
 
@@ -1017,20 +1021,24 @@ void CodeGenModule::ConstructAttributeList(const CGFunctionInfo &FI,
   if (CodeGenOpts.NoImplicitFloat)
     FuncAttrs.addAttribute(llvm::Attribute::NoImplicitFloat);
 
-  if (!TargetOpts.CPU.empty())
-    FuncAttrs.addAttribute("target-cpu", TargetOpts.CPU);
+  if (AttrOnCallSite) {
+    // Attributes that should go on the call site only.
+    if (!CodeGenOpts.SimplifyLibCalls)
+      FuncAttrs.addAttribute(llvm::Attribute::NoBuiltin);
+  } else {
+    // Attributes that should go on the function, but not the call site.
+    if (!TargetOpts.CPU.empty())
+      FuncAttrs.addAttribute("target-cpu", TargetOpts.CPU);
 
-  if (TargetOpts.Features.size()) {
-    llvm::SubtargetFeatures Features;
-    for (std::vector<std::string>::const_iterator
-           it = TargetOpts.Features.begin(),
-           ie = TargetOpts.Features.end(); it != ie; ++it)
-      Features.AddFeature(*it);
-    FuncAttrs.addAttribute("target-features", Features.getString());
+    if (TargetOpts.Features.size()) {
+      llvm::SubtargetFeatures Features;
+      for (std::vector<std::string>::const_iterator
+             it = TargetOpts.Features.begin(),
+             ie = TargetOpts.Features.end(); it != ie; ++it)
+        Features.AddFeature(*it);
+      FuncAttrs.addAttribute("target-features", Features.getString());
+    }
   }
-
-  if (AttrOnCallSite && !CodeGenOpts.SimplifyLibCalls)
-    FuncAttrs.addAttribute(llvm::Attribute::NoBuiltin);
 
   QualType RetTy = FI.getReturnType();
   unsigned Index = 1;
