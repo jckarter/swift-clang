@@ -523,16 +523,16 @@ void ExprEngine::VisitLogicalExpr(const BinaryOperator* B, ExplodedNode *Pred,
   ProgramStateRef state = Pred->getState();
 
   ExplodedNode *N = Pred;
-  while (!isa<BlockEntrance>(N->getLocation())) {
+  while (!N->getLocation().getAs<BlockEntrance>()) {
     ProgramPoint P = N->getLocation();
-    assert(isa<PreStmt>(P)|| isa<PreStmtPurgeDeadSymbols>(P));
+    assert(P.getAs<PreStmt>()|| P.getAs<PreStmtPurgeDeadSymbols>());
     (void) P;
     assert(N->pred_size() == 1);
     N = *N->pred_begin();
   }
   assert(N->pred_size() == 1);
   N = *N->pred_begin();
-  BlockEdge BE = cast<BlockEdge>(N->getLocation());
+  BlockEdge BE = N->getLocation().castAs<BlockEdge>();
   SVal X;
 
   // Determine the value of the expression by introspecting how we
@@ -554,7 +554,7 @@ void ExprEngine::VisitLogicalExpr(const BinaryOperator* B, ExplodedNode *Pred,
     // in SrcBlock is the value of the enclosing expression.
     // However, we still need to constrain that value to be 0 or 1.
     assert(!SrcBlock->empty());
-    CFGStmt Elem = cast<CFGStmt>(*SrcBlock->rbegin());
+    CFGStmt Elem = SrcBlock->rbegin()->castAs<CFGStmt>();
     const Expr *RHS = cast<Expr>(Elem.getStmt());
     SVal RHSVal = N->getState()->getSVal(RHS, Pred->getLocationContext());
 
@@ -643,11 +643,11 @@ void ExprEngine::VisitGuardedExpr(const Expr *Ex,
 
   for (const ExplodedNode *N = Pred ; N ; N = *N->pred_begin()) {
     ProgramPoint PP = N->getLocation();
-    if (isa<PreStmtPurgeDeadSymbols>(PP) || isa<BlockEntrance>(PP)) {
+    if (PP.getAs<PreStmtPurgeDeadSymbols>() || PP.getAs<BlockEntrance>()) {
       assert(N->pred_size() == 1);
       continue;
     }
-    SrcBlock = cast<BlockEdge>(&PP)->getSrc();
+    SrcBlock = PP.castAs<BlockEdge>().getSrc();
     break;
   }
 
@@ -659,8 +659,8 @@ void ExprEngine::VisitGuardedExpr(const Expr *Ex,
   for (CFGBlock::const_reverse_iterator I = SrcBlock->rbegin(),
                                         E = SrcBlock->rend(); I != E; ++I) {
     CFGElement CE = *I;
-    if (CFGStmt *CS = dyn_cast<CFGStmt>(&CE)) {
-      const Expr *ValEx = cast<Expr>(CS->getStmt());
+    if (CFGStmt CS = CE.getAs<CFGStmt>()) {
+      const Expr *ValEx = cast<Expr>(CS.getStmt());
       hasValue = true;
       V = state->getSVal(ValEx, LCtx);
       break;

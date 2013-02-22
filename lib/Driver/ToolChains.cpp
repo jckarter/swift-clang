@@ -199,7 +199,6 @@ Tool &Darwin::SelectTool(const Compilation &C, const JobAction &JA,
   Tool *&T = Tools[Key];
   if (!T) {
     switch (Key) {
-    case Action::SplitDebugJobClass:
     case Action::InputClass:
     case Action::BindArchClass:
       llvm_unreachable("Invalid tool kind.");
@@ -1411,7 +1410,6 @@ Tool &Generic_GCC::SelectTool(const Compilation &C,
   Tool *&T = Tools[Key];
   if (!T) {
     switch (Key) {
-    case Action::SplitDebugJobClass:
     case Action::InputClass:
     case Action::BindArchClass:
       llvm_unreachable("Invalid tool kind.");
@@ -2474,8 +2472,6 @@ Tool &Linux::SelectTool(const Compilation &C, const JobAction &JA,
       break;
     case Action::LinkJobClass:
       T = new tools::linuxtools::Link(*this); break;
-    case Action::SplitDebugJobClass:
-      T = new tools::linuxtools::SplitDebug(*this); break;
     default:
       T = &Generic_GCC::SelectTool(C, JA, Inputs);
     }
