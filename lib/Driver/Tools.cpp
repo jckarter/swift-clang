@@ -3276,7 +3276,7 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
   // can propagate it to the backend.
   bool SplitDwarf = Args.hasArg(options::OPT_gsplit_dwarf) &&
     (getToolChain().getTriple().getOS() == llvm::Triple::Linux) &&
-    isa<AssembleJobAction>(JA);
+    (isa<AssembleJobAction>(JA) || isa<CompileJobAction>(JA));
   const char *SplitDwarfOut;
   if (SplitDwarf) {
     CmdArgs.push_back("-split-dwarf-file");
@@ -3287,9 +3287,10 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
   // Finally add the compile command to the compilation.
   C.addCommand(new Command(JA, *this, Exec, CmdArgs));
 
-  // Handle the debug info splitting at object creation time.
+  // Handle the debug info splitting at object creation time if we're
+  // creating an object.
   // TODO: Currently only works on linux with newer objcopy.
-  if (SplitDwarf)
+  if (SplitDwarf && !isa<CompileJobAction>(JA))
     SplitDebugInfo(getToolChain(), C, *this, JA, Args, Output, SplitDwarfOut);
 
   if (Arg *A = Args.getLastArg(options::OPT_pg))
@@ -3330,6 +3331,15 @@ void ClangAs::AddARMTargetArgs(const ArgList &Args,
   // Honor -mfpmath=.
   if (const Arg *A = Args.getLastArg(options::OPT_mfpmath_EQ))
     addFPMathArgs(D, A, Args, CmdArgs, getARMTargetCPU(Args, Triple));
+}
+
+void ClangAs::AddX86TargetArgs(const ArgList &Args,
+                               ArgStringList &CmdArgs) const {
+  // Set the CPU based on -march=.
+  if (const char *CPUName = getX86TargetCPU(Args, getToolChain().getTriple())) {
+    CmdArgs.push_back("-target-cpu");
+    CmdArgs.push_back(CPUName);
+  }
 }
 
 /// Add options related to the Objective-C runtime/ABI.
@@ -3506,6 +3516,11 @@ void ClangAs::ConstructJob(Compilation &C, const JobAction &JA,
   case llvm::Triple::arm:
   case llvm::Triple::thumb:
     AddARMTargetArgs(Args, CmdArgs);
+    break;
+
+  case llvm::Triple::x86:
+  case llvm::Triple::x86_64:
+    AddX86TargetArgs(Args, CmdArgs);
     break;
   }
 
