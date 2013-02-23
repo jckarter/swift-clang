@@ -1447,8 +1447,10 @@ public:
                               SourceLocation AsmLoc,
                               SourceLocation RParenLoc);
 
-  /// \brief Handle a C++11 attribute-declaration.
-  void ActOnAttributeDeclaration(AttributeList *AttrList);
+  /// \brief Handle a C++11 empty-declaration and attribute-declaration.
+  Decl *ActOnEmptyDeclaration(Scope *S,
+                              AttributeList *AttrList,
+                              SourceLocation SemiLoc);
 
   /// \brief The parser has processed a module import declaration.
   ///
@@ -6545,9 +6547,9 @@ public:
 
   /// AddAlignedAttr - Adds an aligned attribute to a particular declaration.
   void AddAlignedAttr(SourceRange AttrRange, Decl *D, Expr *E,
-                      unsigned SpellingListIndex);
+                      unsigned SpellingListIndex, bool IsPackExpansion);
   void AddAlignedAttr(SourceRange AttrRange, Decl *D, TypeSourceInfo *T,
-                      unsigned SpellingListIndex);
+                      unsigned SpellingListIndex, bool IsPackExpansion);
 
   /// \brief The kind of conversion being performed.
   enum CheckedConversionKind {

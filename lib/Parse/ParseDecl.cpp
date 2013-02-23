@@ -1268,11 +1268,10 @@ Parser::DeclGroupPtrTy Parser::ParseDeclaration(StmtVector &Stmts,
 Parser::DeclGroupPtrTy
 Parser::ParseSimpleDeclaration(StmtVector &Stmts, unsigned Context,
                                SourceLocation &DeclEnd,
-                               ParsedAttributesWithRange &attrs,
+                               ParsedAttributesWithRange &Attrs,
                                bool RequireSemi, ForRangeInit *FRI) {
   // Parse the common declaration-specifiers piece.
   ParsingDeclSpec DS(*this);
-  DS.takeAttributesFrom(attrs);
 
   ParseDeclarationSpecifiers(DS, ParsedTemplateInfo(), AS_none,
                              getDeclSpecContextFromDeclaratorContext(Context));
@@ -1280,6 +1279,7 @@ Parser::ParseSimpleDeclaration(StmtVector &Stmts, unsigned Context,
   // C99 6.7.2.3p6: Handle "struct-or-union identifier;", "enum { X };"
   // declaration-specifiers init-declarator-list[opt] ';'
   if (Tok.is(tok::semi)) {
+    ProhibitAttributes(Attrs);
     DeclEnd = Tok.getLocation();
     if (RequireSemi) ConsumeToken();
     Decl *TheDecl = Actions.ParsedFreeStandingDeclSpec(getCurScope(), AS_none,
@@ -1288,6 +1288,7 @@ Parser::ParseSimpleDeclaration(StmtVector &Stmts, unsigned Context,
     return Actions.ConvertDeclToDeclGroup(TheDecl);
   }
 
+  DS.takeAttributesFrom(Attrs);
   return ParseDeclGroup(DS, Context, /*FunctionDefs=*/ false, &DeclEnd, FRI);
 }
 
@@ -2101,7 +2102,7 @@ ExprResult Parser::ParseAlignArgument(SourceLocation Start,
 /// [C++11] 'alignas' '(' type-id ...[opt] ')'
 /// [C++11] 'alignas' '(' assignment-expression ...[opt] ')'
 void Parser::ParseAlignmentSpecifier(ParsedAttributes &Attrs,
-                                     SourceLocation *endLoc) {
+                                     SourceLocation *EndLoc) {
   assert((Tok.is(tok::kw_alignas) || Tok.is(tok::kw__Alignas)) &&
          "Not an alignment-specifier!");
 
@@ -2120,19 +2121,13 @@ void Parser::ParseAlignmentSpecifier(ParsedAttributes &Attrs,
   }
 
   T.consumeClose();
-  if (endLoc)
-    *endLoc = T.getCloseLocation();
-
-  // FIXME: Handle pack-expansions here.
-  if (EllipsisLoc.isValid()) {
-    Diag(EllipsisLoc, diag::err_alignas_pack_exp_unsupported);
-    return;
-  }
+  if (EndLoc)
+    *EndLoc = T.getCloseLocation();
 
   ExprVector ArgExprs;
   ArgExprs.push_back(ArgExpr.release());
   Attrs.addNew(KWName, KWLoc, 0, KWLoc, 0, T.getOpenLocation(),
-               ArgExprs.data(), 1, AttributeList::AS_Keyword);
+               ArgExprs.data(), 1, AttributeList::AS_Keyword, EllipsisLoc);
 }
 
 /// ParseDeclarationSpecifiers
@@ -2202,7 +2197,7 @@ void Parser::ParseDeclarationSpecifiers(DeclSpec &DS,
 
     case tok::l_square:
     case tok::kw_alignas:
-      if (!isCXX11AttributeSpecifier())
+      if (!getLangOpts().CPlusPlus11 || !isCXX11AttributeSpecifier())
         goto DoneWithDeclSpec;
 
       ProhibitAttributes(attrs);

@@ -3760,6 +3760,12 @@ public:
   virtual CallingConvCheckResult checkCallingConvention(CallingConv CC) const {
     return (CC == CC_AAPCS || CC == CC_AAPCS_VFP) ? CCCR_OK : CCCR_Warning;
   }
+
+  virtual int getEHDataRegisterNumber(unsigned RegNo) const {
+    if (RegNo == 0) return 0;
+    if (RegNo == 1) return 1;
+    return -1;
+  }
 };
 
 const char * const ARMTargetInfo::GCCRegNames[] = {
@@ -4679,6 +4685,12 @@ public:
       std::find(Features.begin(), Features.end(), "+soft-float");
     if (it != Features.end())
       Features.erase(it);
+  }
+
+  virtual int getEHDataRegisterNumber(unsigned RegNo) const {
+    if (RegNo == 0) return 4;
+    if (RegNo == 1) return 5;
+    return -1;
   }
 };
 

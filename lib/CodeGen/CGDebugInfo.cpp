@@ -126,7 +126,9 @@ StringRef CGDebugInfo::getFunctionName(const FunctionDecl *FD) {
     return FII->getName();
 
   // Otherwise construct human readable name for debug info.
-  std::string NS = FD->getNameAsString();
+  SmallString<128> NS;
+  llvm::raw_svector_ostream OS(NS);
+  FD->printName(OS);
 
   // Add any template specialization args.
   if (Info) {
@@ -134,15 +136,15 @@ StringRef CGDebugInfo::getFunctionName(const FunctionDecl *FD) {
     const TemplateArgument *Args = TArgs->data();
     unsigned NumArgs = TArgs->size();
     PrintingPolicy Policy(CGM.getLangOpts());
-    NS += TemplateSpecializationType::PrintTemplateArgumentList(Args,
-                                                                NumArgs,
-                                                                Policy);
+    TemplateSpecializationType::PrintTemplateArgumentList(OS, Args, NumArgs,
+                                                          Policy);
   }
 
   // Copy this name on the side and use its reference.
-  char *StrPtr = DebugInfoNames.Allocate<char>(NS.length());
-  memcpy(StrPtr, NS.data(), NS.length());
-  return StringRef(StrPtr, NS.length());
+  OS.flush();
+  char *StrPtr = DebugInfoNames.Allocate<char>(NS.size());
+  memcpy(StrPtr, NS.data(), NS.size());
+  return StringRef(StrPtr, NS.size());
 }
 
 StringRef CGDebugInfo::getObjCMethodName(const ObjCMethodDecl *OMD) {
@@ -199,8 +201,12 @@ CGDebugInfo::getClassName(const RecordDecl *RD) {
   }
   StringRef Name = RD->getIdentifier()->getName();
   PrintingPolicy Policy(CGM.getLangOpts());
-  std::string TemplateArgList =
-    TemplateSpecializationType::PrintTemplateArgumentList(Args, NumArgs, Policy);
+  SmallString<128> TemplateArgList;
+  {
+    llvm::raw_svector_ostream OS(TemplateArgList);
+    TemplateSpecializationType::PrintTemplateArgumentList(OS, Args, NumArgs,
+                                                          Policy);
+  }
 
   // Copy this name on the side and use its reference.
   size_t Length = Name.size() + TemplateArgList.size();
@@ -306,6 +312,12 @@ void CGDebugInfo::CreateCompileUnit() {
   char *FilenamePtr = DebugInfoNames.Allocate<char>(MainFileName.length());
   memcpy(FilenamePtr, MainFileName.c_str(), MainFileName.length());
   StringRef Filename(FilenamePtr, MainFileName.length());
+
+  // Save split dwarf file string.
+  std::string SplitDwarfFile = CGM.getCodeGenOpts().SplitDwarfFile;
+  char *SplitDwarfPtr = DebugInfoNames.Allocate<char>(SplitDwarfFile.length());
+  memcpy(SplitDwarfPtr, SplitDwarfFile.c_str(), SplitDwarfFile.length());
+  StringRef SplitDwarfFilename(SplitDwarfPtr, SplitDwarfFile.length());
   
   unsigned LangTag;
   const LangOptions &LO = CGM.getLangOpts();
@@ -332,7 +344,8 @@ void CGDebugInfo::CreateCompileUnit() {
   // Create new compile unit.
   DBuilder.createCompileUnit(LangTag, Filename, getCurrentDirname(),
                              Producer, LO.Optimize,
-                             CGM.getCodeGenOpts().DwarfDebugFlags, RuntimeVers);
+                             CGM.getCodeGenOpts().DwarfDebugFlags,
+                             RuntimeVers, SplitDwarfFilename);
   // FIXME - Eliminate TheCU.
   TheCU = llvm::DICompileUnit(DBuilder.getCU());
 }
