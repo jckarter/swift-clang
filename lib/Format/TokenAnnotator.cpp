@@ -415,6 +415,10 @@ private:
       }
     } else {
       while (CurrentToken != NULL) {
+        if (CurrentToken->is(tok::string_literal))
+          // Mark these string literals as "implicit" literals, too, so that
+          // they are not split or line-wrapped.
+          CurrentToken->Type = TT_ImplicitStringLiteral;
         next();
       }
     }
@@ -598,7 +602,8 @@ private:
             !Current.Children.empty() && (Current.Children[0].is(tok::equal) ||
                                           Current.Children[0].is(tok::semi) ||
                                           Current.Children[0].is(tok::l_brace));
-        if (ParensNotExpr && !ParensCouldEndDecl)
+        if (ParensNotExpr && !ParensCouldEndDecl &&
+            Contexts.back().IsExpression)
           // FIXME: We need to get smarter and understand more cases of casts.
           Current.Type = TT_CastRParen;
       } else if (Current.is(tok::at) && Current.Children.size()) {
@@ -719,7 +724,7 @@ public:
   ExpressionParser(AnnotatedLine &Line) : Current(&Line.First) {}
 
   /// \brief Parse expressions with the given operatore precedence.
-  void parse(prec::Level Precedence = prec::Unknown) {
+  void parse(int Precedence = 0) {
     if (Precedence > prec::PointerToMember || Current == NULL)
       return;
 
@@ -735,18 +740,27 @@ public:
     AnnotatedToken *Start = Current;
     bool OperatorFound = false;
 
-    while (Current != NULL) {
+    while (Current) {
       // Consume operators with higher precedence.
       parse(prec::Level(Precedence + 1));
 
+      int CurrentPrecedence = 0;
+      if (Current) {
+        if (Current->Type == TT_ConditionalExpr)
+          CurrentPrecedence = 1 + (int) prec::Conditional;
+        else if (Current->is(tok::semi))
+          CurrentPrecedence = 1;
+        else if (Current->Type == TT_BinaryOperator || Current->is(tok::comma))
+          CurrentPrecedence = 1 + (int) getPrecedence(*Current);
+      }
+
       // At the end of the line or when an operator with higher precedence is
       // found, insert fake parenthesis and return.
-      if (Current == NULL || Current->is(tok::semi) || closesScope(*Current) ||
-          ((Current->Type == TT_BinaryOperator || Current->is(tok::comma)) &&
-           getPrecedence(*Current) < Precedence)) {
+      if (Current == NULL || closesScope(*Current) ||
+          (CurrentPrecedence != 0 && CurrentPrecedence < Precedence)) {
         if (OperatorFound) {
           ++Start->FakeLParens;
-          if (Current != NULL)
+          if (Current)
             ++Current->Parent->FakeRParens;
         }
         return;
@@ -754,14 +768,21 @@ public:
 
       // Consume scopes: (), [], <> and {}
       if (opensScope(*Current)) {
-        while (Current != NULL && !closesScope(*Current)) {
+        AnnotatedToken *Left = Current;
+        while (Current && !closesScope(*Current)) {
           next();
           parse();
+        }
+        // Remove fake parens that just duplicate the real parens.
+        if (Current && Left->Children[0].FakeLParens > 0 &&
+            Current->Parent->FakeRParens > 0) {
+          --Left->Children[0].FakeLParens;
+          --Current->Parent->FakeRParens;
         }
         next();
       } else {
         // Operator found.
-        if (getPrecedence(*Current) == Precedence)
+        if (CurrentPrecedence == Precedence)
           OperatorFound = true;
 
         next();
@@ -1098,6 +1119,8 @@ bool TokenAnnotator::canBreakBefore(const AnnotatedLine &Line,
 
   if (Right.is(tok::r_paren) || Right.is(tok::greater))
     return false;
+  if (Left.is(tok::identifier) && Right.is(tok::string_literal))
+    return true;
   return (isBinaryOperator(Left) && Left.isNot(tok::lessless)) ||
          Left.is(tok::comma) || Right.is(tok::lessless) ||
          Right.is(tok::arrow) || Right.is(tok::period) ||
