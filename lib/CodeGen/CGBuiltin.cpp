@@ -2921,10 +2921,10 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
   }
   case ARM64::BI__builtin_arm64_vcvtd_n_f64_u64:
   case ARM64::BI__builtin_arm64_vcvts_n_f32_u32:
-    usgn = true;
-    // FALLTHROUGH
   case ARM64::BI__builtin_arm64_vcvtd_n_f64_s64:
   case ARM64::BI__builtin_arm64_vcvts_n_f32_s32: {
+    usgn = (BuiltinID == ARM64::BI__builtin_arm64_vcvtd_n_f64_u64 ||
+            BuiltinID == ARM64::BI__builtin_arm64_vcvts_n_f32_u32);
     Ops.push_back(EmitScalarExpr(E->getArg(1)));
     bool Is64 = Ops[0]->getType()->getPrimitiveSizeInBits() == 64;
     llvm::Type *InTy = Is64 ? Int64Ty : Int32Ty;
@@ -2936,9 +2936,10 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
   }
   case ARM64::BI__builtin_arm64_vcvts_n_u32_f32:
   case ARM64::BI__builtin_arm64_vcvtd_n_u64_f64:
-    usgn = true;
   case ARM64::BI__builtin_arm64_vcvts_n_s32_f32:
   case ARM64::BI__builtin_arm64_vcvtd_n_s64_f64: {
+    usgn = (BuiltinID == ARM64::BI__builtin_arm64_vcvts_n_u32_f32 ||
+            BuiltinID == ARM64::BI__builtin_arm64_vcvtd_n_u64_f64);
     Ops.push_back(EmitScalarExpr(E->getArg(1)));
     bool Is64 = Ops[0]->getType()->getPrimitiveSizeInBits() == 64;
     llvm::Type *InTy = Is64 ? Int64Ty : Int32Ty;
