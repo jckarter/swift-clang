@@ -276,9 +276,9 @@ void CodeGenModule::setGlobalVisibility(llvm::GlobalValue *GV,
   }
 
   // Set visibility for definitions.
-  NamedDecl::LinkageInfo LV = D->getLinkageAndVisibility();
-  if (LV.visibilityExplicit() || !GV->hasAvailableExternallyLinkage())
-    GV->setVisibility(GetLLVMVisibility(LV.visibility()));
+  LinkageInfo LV = D->getLinkageAndVisibility();
+  if (LV.isVisibilityExplicit() || !GV->hasAvailableExternallyLinkage())
+    GV->setVisibility(GetLLVMVisibility(LV.getVisibility()));
 }
 
 static llvm::GlobalVariable::ThreadLocalMode GetLLVMTLSModel(StringRef S) {
@@ -693,9 +693,9 @@ void CodeGenModule::SetFunctionAttributes(GlobalDecl GD,
   } else {
     F->setLinkage(llvm::Function::ExternalLinkage);
 
-    NamedDecl::LinkageInfo LV = FD->getLinkageAndVisibility();
-    if (LV.linkage() == ExternalLinkage && LV.visibilityExplicit()) {
-      F->setVisibility(GetLLVMVisibility(LV.visibility()));
+    LinkageInfo LV = FD->getLinkageAndVisibility();
+    if (LV.getLinkage() == ExternalLinkage && LV.isVisibilityExplicit()) {
+      F->setVisibility(GetLLVMVisibility(LV.getVisibility()));
     }
   }
 
@@ -1433,8 +1433,8 @@ CodeGenModule::GetOrCreateLLVMGlobal(StringRef MangledName,
     GV->setConstant(isTypeConstant(D->getType(), false));
 
     // Set linkage and visibility in case we never see a definition.
-    NamedDecl::LinkageInfo LV = D->getLinkageAndVisibility();
-    if (LV.linkage() != ExternalLinkage) {
+    LinkageInfo LV = D->getLinkageAndVisibility();
+    if (LV.getLinkage() != ExternalLinkage) {
       // Don't set internal linkage on declarations.
     } else {
       if (D->hasAttr<DLLImportAttr>())
@@ -1443,8 +1443,8 @@ CodeGenModule::GetOrCreateLLVMGlobal(StringRef MangledName,
         GV->setLinkage(llvm::GlobalValue::ExternalWeakLinkage);
 
       // Set visibility on a declaration only if it's explicit.
-      if (LV.visibilityExplicit())
-        GV->setVisibility(GetLLVMVisibility(LV.visibility()));
+      if (LV.isVisibilityExplicit())
+        GV->setVisibility(GetLLVMVisibility(LV.getVisibility()));
     }
 
     if (D->isThreadSpecified())
