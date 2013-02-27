@@ -318,6 +318,8 @@ TEST_F(FormatTest, RangeBasedForLoops) {
                "     aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa) {\n}");
   verifyFormat("for (auto aaaaaaaaaaaaaaaaaaaaa :\n"
                "     aaaaaaaaaaaaaaaaa(aaaaaaaaaaaaaaaa, aaaaaaaaaaaaa)) {\n}");
+  verifyFormat("for (const aaaaaaaaaaaaaaaaaaaaa &aaaaaaaaa :\n"
+               "     aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa) {\n}");
 }
 
 TEST_F(FormatTest, FormatsWhileLoop) {
@@ -588,17 +590,23 @@ TEST_F(FormatTest, CommentsInStaticInitializers) {
 
   EXPECT_EQ("S s = {\n"
             "  // Some comment\n"
-            "  a\n"
+            "  a,\n"
             "\n"
             "  // Comment after empty line\n"
             "  b\n"
-            "}", format("S s =    {\n"
-                        "      // Some comment\n"
-                        "  a\n"
-                        "  \n"
-                        "     // Comment after empty line\n"
-                        "      b\n"
-                        "}"));
+            "}",
+            format("S s =    {\n"
+                   "      // Some comment\n"
+                   "  a,\n"
+                   "  \n"
+                   "     // Comment after empty line\n"
+                   "      b\n"
+                   "}"));
+  EXPECT_EQ("S s = { a, b };", format("S s = {\n"
+                                      "  a,\n"
+                                      "\n"
+                                      "  b\n"
+                                      "};"));
 }
 
 //===----------------------------------------------------------------------===//
@@ -1177,6 +1185,8 @@ TEST_F(FormatTest, BreaksAsHighAsPossible) {
       "if ((aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa && aaaaaaaaaaaaaaaaaaaaaaaaaa) ||\n"
       "    (bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb && bbbbbbbbbbbbbbbbbbbbbbbbbb))\n"
       "  f();");
+  verifyFormat("if (Intervals[i].getRange().getFirst() <\n"
+               "    Intervals[i - 1].getRange().getLast()) {\n}");
 }
 
 TEST_F(FormatTest, BreaksDesireably) {
@@ -2984,6 +2994,12 @@ TEST_F(FormatTest, BreakStringLiterals) {
             "  \"text\",\n"
             "  other);",
             format("f(\"some text\", other);", getLLVMStyleWithColumns(10)));
+
+  // Only break as a last resort.
+  verifyFormat(
+      "aaaaaaaaaaaaaaaaaaaa(\n"
+      "    aaaaaaaaaaaaaaaaaaaa,\n"
+      "    aaaaaa(\"aaa aaaaa aaa aaa aaaaa aaa aaaaa aaa aaa aaaaaa\"));");
 }
 
 } // end namespace tooling
