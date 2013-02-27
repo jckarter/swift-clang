@@ -1961,7 +1961,8 @@ public:
     // We accept all non-ARM calling conventions
     return (CC == CC_X86ThisCall ||
             CC == CC_X86FastCall ||
-            CC == CC_X86StdCall ||
+            CC == CC_X86StdCall || 
+            CC == CC_C || 
             CC == CC_X86Pascal ||
             CC == CC_IntelOclBicc) ? CCCR_OK : CCCR_Warning;
   }
@@ -3054,7 +3055,9 @@ public:
   }
 
   virtual CallingConvCheckResult checkCallingConvention(CallingConv CC) const {
-    return CC == CC_IntelOclBicc ? CCCR_OK : CCCR_Warning;
+    return (CC == CC_Default ||
+            CC == CC_C || 
+            CC == CC_IntelOclBicc) ? CCCR_OK : CCCR_Warning;
   }
 
   virtual CallingConv getDefaultCallingConv(CallingConvMethodType MT) const {
@@ -3752,6 +3755,12 @@ public:
 
   virtual CallingConvCheckResult checkCallingConvention(CallingConv CC) const {
     return (CC == CC_AAPCS || CC == CC_AAPCS_VFP) ? CCCR_OK : CCCR_Warning;
+  }
+
+  virtual int getEHDataRegisterNumber(unsigned RegNo) const {
+    if (RegNo == 0) return 0;
+    if (RegNo == 1) return 1;
+    return -1;
   }
 };
 
@@ -4465,6 +4474,12 @@ public:
       std::find(Features.begin(), Features.end(), "+soft-float");
     if (it != Features.end())
       Features.erase(it);
+  }
+
+  virtual int getEHDataRegisterNumber(unsigned RegNo) const {
+    if (RegNo == 0) return 4;
+    if (RegNo == 1) return 5;
+    return -1;
   }
 };
 
