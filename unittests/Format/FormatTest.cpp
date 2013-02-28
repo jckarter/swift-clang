@@ -612,6 +612,11 @@ TEST_F(FormatTest, CommentsInStaticInitializers) {
                                       "\n"
                                       "  b\n"
                                       "};"));
+  verifyFormat("const uint8_t aaaaaaaaaaaaaaaaaaaaaa[0] = {\n"
+               "  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // comment\n"
+               "  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // comment\n"
+               "  0x00, 0x00, 0x00, 0x00              // comment\n"
+               "};");
 }
 
 //===----------------------------------------------------------------------===//
@@ -857,29 +862,24 @@ TEST_F(FormatTest, EndOfFileEndsPPDirective) {
 }
 
 TEST_F(FormatTest, IndentsPPDirectiveInReducedSpace) {
-  // If the macro fits in one line, we still do not get the full
-  // line, as only the next line decides whether we need an escaped newline and
-  // thus use the last column.
-  verifyFormat("#define A(B)", getLLVMStyleWithColumns(13));
-
-  verifyFormat("#define A( \\\n    B)", getLLVMStyleWithColumns(12));
-  verifyFormat("#define AA(\\\n    B)", getLLVMStyleWithColumns(12));
+  verifyFormat("#define A(BB)", getLLVMStyleWithColumns(13));
+  verifyFormat("#define A( \\\n    BB)", getLLVMStyleWithColumns(12));
   verifyFormat("#define A( \\\n    A, B)", getLLVMStyleWithColumns(12));
+  // FIXME: We never break before the macro name.
+  verifyFormat("#define AA(\\\n    B)", getLLVMStyleWithColumns(12));
 
   verifyFormat("#define A A\n#define A A");
   verifyFormat("#define A(X) A\n#define A A");
 
-  verifyFormat("#define Something Other", getLLVMStyleWithColumns(24));
-  verifyFormat("#define Something     \\\n"
-               "  Other",
-               getLLVMStyleWithColumns(23));
+  verifyFormat("#define Something Other", getLLVMStyleWithColumns(23));
+  verifyFormat("#define Something    \\\n  Other", getLLVMStyleWithColumns(22));
 }
 
 TEST_F(FormatTest, HandlePreprocessorDirectiveContext) {
   EXPECT_EQ("// some comment\n"
             "#include \"a.h\"\n"
-            "#define A(A,\\\n"
-            "          B)\n"
+            "#define A(  \\\n"
+            "    A, B)\n"
             "#include \"b.h\"\n"
             "// some comment\n",
             format("  // some comment\n"
@@ -1173,6 +1173,13 @@ TEST_F(FormatTest, ConstructorInitializers) {
                "      some_other_var_(var + 1) { // lined up\n"
                "}",
                OnePerLine);
+  verifyFormat("Constructor()\n"
+               "    : aaaaa(aaaaaa),\n"
+               "      aaaaa(aaaaaa),\n"
+               "      aaaaa(aaaaaa),\n"
+               "      aaaaa(aaaaaa),\n"
+               "      aaaaa(aaaaaa) {}",
+               OnePerLine);
 
   // This test takes VERY long when memoization is broken.
   OnePerLine.BinPackParameters = false;
@@ -1332,6 +1339,10 @@ TEST_F(FormatTest, DoesNotBreakTrailingAnnotation) {
                "    GUARDED_BY(aaaaaaaaaaaaa);");
   verifyFormat("void aaaaaaaaaaaa(int aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa) const\n"
                "    GUARDED_BY(aaaaaaaaaaaaa) {}");
+  verifyFormat(
+      "void aaaaaaaaaaaaaaaaaa()\n"
+      "    __attribute__((aaaaaaaaaaaaaaaaaaaaaaaaa, aaaaaaaaaaaaaaaaaaaaaaa,\n"
+      "                   aaaaaaaaaaaaaaaaaaaaaaaaa));");
 }
 
 TEST_F(FormatTest, BreaksAccordingToOperatorPrecedence) {
@@ -1709,6 +1720,11 @@ TEST_F(FormatTest, UnderstandsTemplateParameters) {
   verifyFormat("template <typename T> void f() {}");
 }
 
+TEST_F(FormatTest, UnderstandsBinaryOperators) {
+  verifyFormat("COMPARE(a, ==, b);");
+  verifyFormat("(a->*f)()");
+}
+
 TEST_F(FormatTest, UnderstandsUnaryOperators) {
   verifyFormat("int a = -2;");
   verifyFormat("f(-1, -2, -3);");
@@ -1991,6 +2007,8 @@ TEST_F(FormatTest, BreaksLongDeclarations) {
   verifyGoogleFormat("template <typename T>\n"
                      "aaaaaaaa::aaaaa::aaaaaa<T, aaaaaaaaaaaaaaaaaaaaaaaaa>\n"
                      "aaaaaaaaaaaaaaaaaaaaaaaa<T>::aaaaaaa() {}");
+  verifyGoogleFormat("A<A<A>> aaaaaaaaaa(int aaaaaaaaaaaaaaaaaaaaaaaaaaa,\n"
+                     "                   int aaaaaaaaaaaaaaaaaaaaaaa);");
 }
 
 TEST_F(FormatTest, LineStartsWithSpecialCharacter) {

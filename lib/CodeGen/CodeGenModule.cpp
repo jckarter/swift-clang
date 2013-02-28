@@ -108,6 +108,8 @@ CodeGenModule::CodeGenModule(ASTContext &C, const CodeGenOptions &CGO,
   Int8PtrTy = Int8Ty->getPointerTo(0);
   Int8PtrPtrTy = Int8PtrTy->getPointerTo(0);
 
+  RuntimeCC = getTargetCodeGenInfo().getABIInfo().getRuntimeCC();
+
   if (LangOpts.ObjC1)
     createObjCRuntime();
   if (LangOpts.OpenCL)
@@ -1355,8 +1357,13 @@ llvm::Constant *
 CodeGenModule::CreateRuntimeFunction(llvm::FunctionType *FTy,
                                      StringRef Name,
                                      llvm::AttributeSet ExtraAttrs) {
-  return GetOrCreateLLVMFunction(Name, FTy, GlobalDecl(), /*ForVTable=*/false,
-                                 ExtraAttrs);
+  llvm::Constant *C
+    = GetOrCreateLLVMFunction(Name, FTy, GlobalDecl(), /*ForVTable=*/false,
+                              ExtraAttrs);
+  if (llvm::Function *F = dyn_cast<llvm::Function>(C))
+    if (F->empty())
+      F->setCallingConv(getRuntimeCC());
+  return C;
 }
 
 /// isTypeConstant - Determine whether an object of this type can be emitted
