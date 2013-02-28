@@ -7,7 +7,7 @@ unsigned bar();
 // Branch if any lane of V0 is zero; 64 bit => !min
 unsigned anyZero64(uint16x4_t a) {
 // CHECK: _anyZero64:
-// CHECK: uminv.8b b[[REGNO1:[0-9]+]], v[[REGNO1]]
+// CHECK: uminv.8b b[[REGNO1:[0-9]+]], v0
 // CHECK-NEXT: fmov w[[REGNO2:[0-9]+]], s[[REGNO1]]
 // CHECK-NEXT: cbz w[[REGNO2]], [[LABEL:[A-Z_0-9]+]]
 // CHECK: [[LABEL]]:
@@ -20,7 +20,7 @@ unsigned anyZero64(uint16x4_t a) {
 // Branch if any lane of V0 is zero; 128 bit => !min
 unsigned anyZero128(uint16x8_t a) {
 // CHECK: _anyZero128:
-// CHECK: uminv.16b b[[REGNO1:[0-9]+]], v[[REGNO1]]
+// CHECK: uminv.16b b[[REGNO1:[0-9]+]], v0
 // CHECK-NEXT: fmov w[[REGNO2:[0-9]+]], s[[REGNO1]]
 // CHECK-NEXT: cbz w[[REGNO2]], [[LABEL:[A-Z_0-9]+]]
 // CHECK: [[LABEL]]:
@@ -33,7 +33,7 @@ unsigned anyZero128(uint16x8_t a) {
 // Branch if any lane of V0 is non-zero; 64 bit => max
 unsigned anyNonZero64(uint16x4_t a) {
 // CHECK: _anyNonZero64:
-// CHECK: umaxv.8b b[[REGNO1:[0-9]+]], v[[REGNO1]]
+// CHECK: umaxv.8b b[[REGNO1:[0-9]+]], v0
 // CHECK-NEXT: fmov w[[REGNO2:[0-9]+]], s[[REGNO1]]
 // CHECK-NEXT: cbz w[[REGNO2]], [[LABEL:[A-Z_0-9]+]]
 // CHECK: [[LABEL]]:
@@ -46,7 +46,7 @@ unsigned anyNonZero64(uint16x4_t a) {
 // Branch if any lane of V0 is non-zero; 128 bit => max
 unsigned anyNonZero128(uint16x8_t a) {
 // CHECK: _anyNonZero128:
-// CHECK: umaxv.16b b[[REGNO1:[0-9]+]], v[[REGNO1]]
+// CHECK: umaxv.16b b[[REGNO1:[0-9]+]], v0
 // CHECK-NEXT: fmov w[[REGNO2:[0-9]+]], s[[REGNO1]]
 // CHECK-NEXT: cbz w[[REGNO2]], [[LABEL:[A-Z_0-9]+]]
 // CHECK: [[LABEL]]:
@@ -59,7 +59,7 @@ unsigned anyNonZero128(uint16x8_t a) {
 // Branch if all lanes of V0 are zero; 64 bit => !max
 unsigned allZero64(uint16x4_t a) {
 // CHECK: _allZero64:
-// CHECK: umaxv.8b b[[REGNO1:[0-9]+]], v[[REGNO1]]
+// CHECK: umaxv.8b b[[REGNO1:[0-9]+]], v0
 // CHECK-NEXT: fmov w[[REGNO2:[0-9]+]], s[[REGNO1]]
 // CHECK-NEXT: cbz w[[REGNO2]], [[LABEL:[A-Z_0-9]+]]
 // CHECK: [[LABEL]]:
@@ -72,7 +72,7 @@ unsigned allZero64(uint16x4_t a) {
 // Branch if all lanes of V0 are zero; 128 bit => !max
 unsigned allZero128(uint16x8_t a) {
 // CHECK: _allZero128:
-// CHECK: umaxv.16b b[[REGNO1:[0-9]+]], v[[REGNO1]]
+// CHECK: umaxv.16b b[[REGNO1:[0-9]+]], v0
 // CHECK-NEXT: fmov w[[REGNO2:[0-9]+]], s[[REGNO1]]
 // CHECK-NEXT: cbz w[[REGNO2]], [[LABEL:[A-Z_0-9]+]]
 // CHECK: [[LABEL]]:
@@ -85,7 +85,7 @@ unsigned allZero128(uint16x8_t a) {
 // Branch if all lanes of V0 are non-zero; 64 bit => min
 unsigned allNonZero64(uint16x4_t a) {
 // CHECK: _allNonZero64:
-// CHECK: uminv.8b b[[REGNO1:[0-9]+]], v[[REGNO1]]
+// CHECK: uminv.8b b[[REGNO1:[0-9]+]], v0
 // CHECK-NEXT: fmov w[[REGNO2:[0-9]+]], s[[REGNO1]]
 // CHECK-NEXT: cbz w[[REGNO2]], [[LABEL:[A-Z_0-9]+]]
 // CHECK: [[LABEL]]:
@@ -98,7 +98,7 @@ unsigned allNonZero64(uint16x4_t a) {
 // Branch if all lanes of V0 are non-zero; 128 bit => min
 unsigned allNonZero128(uint16x8_t a) {
 // CHECK: _allNonZero128:
-// CHECK: uminv.16b b[[REGNO1:[0-9]+]], v[[REGNO1]]
+// CHECK: uminv.16b b[[REGNO1:[0-9]+]], v0
 // CHECK-NEXT: fmov w[[REGNO2:[0-9]+]], s[[REGNO1]]
 // CHECK-NEXT: cbz w[[REGNO2]], [[LABEL:[A-Z_0-9]+]]
 // CHECK: [[LABEL]]:
