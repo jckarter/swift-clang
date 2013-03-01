@@ -880,8 +880,6 @@ unsigned TokenAnnotator::splitPenalty(const AnnotatedLine &Line,
     else
       return 100;
   }
-  if (Left.is(tok::l_brace) && Right.isNot(tok::l_brace))
-    return 50;
   if (Left.is(tok::equal) && Right.is(tok::l_brace))
     return 150;
   if (Left.is(tok::coloncolon))
@@ -917,7 +915,7 @@ unsigned TokenAnnotator::splitPenalty(const AnnotatedLine &Line,
     return 20;
 
   if (Left.is(tok::l_paren) || Left.is(tok::l_square) ||
-      Left.Type == TT_TemplateOpener)
+      Left.is(tok::l_brace) || Left.Type == TT_TemplateOpener)
     return 20;
 
   if (Right.is(tok::lessless)) {
@@ -1027,6 +1025,8 @@ bool TokenAnnotator::spaceRequiredBefore(const AnnotatedLine &Line,
 
   if (Tok.Parent->is(tok::comma))
     return true;
+  if (Tok.is(tok::comma))
+    return false;
   if (Tok.Type == TT_CtorInitializerColon || Tok.Type == TT_ObjCBlockLParen)
     return true;
   if (Tok.Parent->FormatTok.Tok.is(tok::kw_operator))
@@ -1048,6 +1048,8 @@ bool TokenAnnotator::spaceRequiredBefore(const AnnotatedLine &Line,
            Tok.Parent->Type == TT_TemplateCloser &&
            Style.Standard != FormatStyle::LS_Cpp11;
   }
+  if (Tok.is(tok::arrowstar) || Tok.Parent->is(tok::arrowstar))
+    return false;
   if (Tok.Type == TT_BinaryOperator || Tok.Parent->Type == TT_BinaryOperator)
     return true;
   if (Tok.Parent->Type == TT_TemplateCloser && Tok.is(tok::l_paren))
@@ -1088,6 +1090,9 @@ bool TokenAnnotator::canBreakBefore(const AnnotatedLine &Line,
     return false;
   if (Left.is(tok::equal) && Line.Type == LT_VirtualFunctionDecl)
     return false;
+  if (Left.is(tok::l_paren) && Right.is(tok::l_paren) && Left.Parent &&
+      Left.Parent->is(tok::kw___attribute))
+    return false;
 
   if (Right.Type == TT_LineComment)
     // We rely on MustBreakBefore being set correctly here as we should not
@@ -1116,7 +1121,7 @@ bool TokenAnnotator::canBreakBefore(const AnnotatedLine &Line,
          Right.is(tok::colon) || Left.is(tok::coloncolon) ||
          Left.is(tok::semi) || Left.is(tok::l_brace) ||
          (Left.is(tok::r_paren) && Left.Type != TT_CastRParen &&
-          Right.is(tok::identifier)) ||
+          (Right.is(tok::identifier) || Right.is(tok::kw___attribute))) ||
          (Left.is(tok::l_paren) && !Right.is(tok::r_paren)) ||
          (Left.is(tok::l_square) && !Right.is(tok::r_square));
 }
