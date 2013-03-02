@@ -166,6 +166,10 @@ TEST_F(FormatTest, OnlyGeneratesNecessaryReplacements) {
 
 TEST_F(FormatTest, RemovesTrailingWhitespaceOfFormattedLine) {
   EXPECT_EQ("int a;\nint b;", format("int a; \nint b;", 0, 0, getLLVMStyle()));
+  EXPECT_EQ("int a;", format("int a;         "));
+  EXPECT_EQ("int a;\n", format("int a;  \n   \n   \n "));
+  EXPECT_EQ("int a;\nint b;    ",
+            format("int a;  \nint b;    ", 0, 0, getLLVMStyle()));
 }
 
 TEST_F(FormatTest, ReformatsMovedLines) {
@@ -535,6 +539,13 @@ TEST_F(FormatTest, UnderstandsSingleLineComments) {
   verifyGoogleFormat(
       "aaaaaaaaaaaaaaaaaaaaaaaaaa(\n"
       "    aaaaaaaaaaaaaaaaaaaaaa);  // 81 cols with this comment");
+}
+
+TEST_F(FormatTest, RemovesTrailingWhitespaceOfComments) {
+  EXPECT_EQ("// comment", format("// comment  "));
+  EXPECT_EQ("int aaaaaaa, bbbbbbb; // comment",
+            format("int aaaaaaa, bbbbbbb; // comment                   ",
+                   getLLVMStyleWithColumns(33)));
 }
 
 TEST_F(FormatTest, UnderstandsMultiLineComments) {
@@ -1324,7 +1335,7 @@ TEST_F(FormatTest, FormatsBuilderPattern) {
       "    ->aaaaaaaa(aaaaaaaaaaaaaaa);");
   verifyFormat(
       "aaaaaaaaaaaaaaaaaaa()->aaaaaa(bbbbb)->aaaaaaaaaaaaaaaaaaa( // break\n"
-      "                                        aaaaaaaaaaaaaa);");
+      "    aaaaaaaaaaaaaa);");
   verifyFormat(
       "aaaaaaaaaaaaaaaaaaaaaaa *aaaaaaaaa = aaaaaa->aaaaaaaaaaaa()\n"
       "    ->aaaaaaaaaaaaaaaa(\n"
@@ -1805,7 +1816,7 @@ TEST_F(FormatTest, UnderstandsUsesOfStarAndAmp) {
   verifyFormat("int main(int argc, char **argv) {}");
   verifyFormat("Test::Test(int b) : a(b * b) {}");
   verifyIndependentOfContext("f(a, *a);");
-  verifyIndependentOfContext("f(*a);");
+  verifyFormat("void g() { f(*a); }");
   verifyIndependentOfContext("int a = b * 10;");
   verifyIndependentOfContext("int a = 10 * b;");
   verifyIndependentOfContext("int a = b * c;");
@@ -1838,6 +1849,7 @@ TEST_F(FormatTest, UnderstandsUsesOfStarAndAmp) {
   verifyIndependentOfContext("return sizeof(int **);");
   verifyIndependentOfContext("return sizeof(int ******);");
   verifyIndependentOfContext("return (int **&)a;");
+  verifyFormat("void f(Type (*parameter)[10]) {}");
   verifyGoogleFormat("return sizeof(int**);");
   verifyIndependentOfContext("Type **A = static_cast<Type **>(P);");
   verifyGoogleFormat("Type** A = static_cast<Type**>(P);");
@@ -1877,7 +1889,7 @@ TEST_F(FormatTest, UnderstandsUsesOfStarAndAmp) {
   verifyIndependentOfContext("a = &(x + y);");
   verifyIndependentOfContext("*(x + y).call();");
   verifyIndependentOfContext("&(x + y)->call();");
-  verifyIndependentOfContext("&(*I).first");
+  verifyFormat("void f() { &(*I).first; }");
 
   verifyIndependentOfContext("f(b * /* confusing comment */ ++c);");
   verifyFormat(
@@ -1902,7 +1914,9 @@ TEST_F(FormatTest, UnderstandsUsesOfStarAndAmp) {
 
   verifyIndependentOfContext("A = new SomeType *[Length]();");
   verifyGoogleFormat("A = new SomeType* [Length]();");
+}
 
+TEST_F(FormatTest, AdaptivelyFormatsPointersAndReferences) {
   EXPECT_EQ("int *a;\n"
             "int *a;\n"
             "int *a;",
@@ -1970,12 +1984,13 @@ TEST_F(FormatTest, FormatsCasts) {
 }
 
 TEST_F(FormatTest, FormatsFunctionTypes) {
-  // FIXME: Determine the cases that need a space after the return type and fix.
   verifyFormat("A<bool()> a;");
   verifyFormat("A<SomeType()> a;");
   verifyFormat("A<void(*)(int, std::string)> a;");
 
-  verifyFormat("int(*func)(void *);");
+  // FIXME: Inconsistent.
+  verifyFormat("int (*func)(void *);");
+  verifyFormat("void f() { int(*func)(void *); }");
 }
 
 TEST_F(FormatTest, BreaksLongDeclarations) {
@@ -3003,7 +3018,8 @@ TEST_F(FormatTest, BreakStringLiterals) {
   EXPECT_EQ("\"some \"\n"
             "\"text\"",
             format("\"some text\"", getLLVMStyleWithColumns(7)));
-  EXPECT_EQ("\"some text\"",
+  EXPECT_EQ("\"some\"\n"
+            "\" text\"",
             format("\"some text\"", getLLVMStyleWithColumns(6)));
 
   EXPECT_EQ("variable =\n"
@@ -3041,6 +3057,18 @@ TEST_F(FormatTest, BreakStringLiterals) {
       "aaaaaaaaaaaaaaaaaaaa(\n"
       "    aaaaaaaaaaaaaaaaaaaa,\n"
       "    aaaaaa(\"aaa aaaaa aaa aaa aaaaa aaa aaaaa aaa aaa aaaaaa\"));");
+
+  EXPECT_EQ(
+      "\"splitmea\"\n"
+      "\"trandomp\"\n"
+      "\"oint\"",
+      format("\"splitmeatrandompoint\"", getLLVMStyleWithColumns(10)));
+
+  EXPECT_EQ(
+      "\"split/\"\n"
+      "\"pathat/\"\n"
+      "\"slashes\"",
+      format("\"split/pathat/slashes\"", getLLVMStyleWithColumns(10)));
 }
 
 } // end namespace tooling
