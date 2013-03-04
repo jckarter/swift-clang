@@ -78,6 +78,7 @@ ParamCommandComment *Sema::actOnParamCommandStart(SourceLocation LocBegin,
   if (!isFunctionDecl())
     Diag(Command->getLocation(),
          diag::warn_doc_param_not_attached_to_a_function_decl)
+      << AtCommand
       << Command->getCommandNameRange(Traits);
 
   return Command;
@@ -172,6 +173,7 @@ TParamCommandComment *Sema::actOnTParamCommandStart(SourceLocation LocBegin,
   if (!isTemplateOrSpecialization())
     Diag(Command->getLocation(),
          diag::warn_doc_tparam_not_attached_to_a_template_decl)
+      << AtCommand
       << Command->getCommandNameRange(Traits);
 
   return Command;

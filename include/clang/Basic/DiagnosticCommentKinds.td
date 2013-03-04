@@ -69,7 +69,7 @@ def warn_doc_param_spaces_in_direction : Warning<
   InGroup<DocumentationPedantic>, DefaultIgnore;
 
 def warn_doc_param_not_attached_to_a_function_decl : Warning<
-  "'\\param' command used in a comment that is not attached to "
+  "'%select{\\|@}0param' command used in a comment that is not attached to "
   "a function declaration">,
   InGroup<Documentation>, DefaultIgnore;
 
@@ -87,10 +87,10 @@ def warn_doc_param_not_found : Warning<
 def note_doc_param_name_suggestion : Note<
   "did you mean '%0'?">;
 
-// \tparam command
+// tparam command
 
 def warn_doc_tparam_not_attached_to_a_template_decl : Warning<
-  "'\\tparam' command used in a comment that is not attached to "
+  "'%select{\\|@}0tparam' command used in a comment that is not attached to "
   "a template declaration">,
   InGroup<Documentation>, DefaultIgnore;
 
