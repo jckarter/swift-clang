@@ -90,10 +90,20 @@ ParamCommandComment *Sema::actOnParamCommandStart(
 
 void Sema::checkFunctionDeclVerbatimLine(const BlockCommandComment *Comment) {
   const CommandInfo *Info = Traits.getCommandInfo(Comment->getCommandID());
-  if (Info->IsFunctionDeclarationCommand &&
-      !isFunctionDecl())
-    Diag(Comment->getLocation(),
-         diag::warn_doc_function_not_attached_to_a_function_decl)
+  if (!Info->IsFunctionDeclarationCommand)
+    return;
+  StringRef Name = Info->Name;
+  unsigned DiagKind = llvm::StringSwitch<unsigned>(Name)
+  .Case("function", !isAnyFunctionDecl() ?
+                    diag::warn_doc_function_not_attached_to_a_function_decl : 0)
+  .Case("method", !isObjCMethodDecl() ?
+                  diag::warn_doc_method_not_attached_to_a_objc_method_decl : 0)
+  .Case("callback", !isFunctionPointerVarDecl() ?
+        diag::warn_doc_callback_not_attached_to_a_function_ptr_decl : 0)
+  .Default(0);
+  
+  if (DiagKind)
+    Diag(Comment->getLocation(), DiagKind) << Comment->getCommandMarker()
     << Comment->getSourceRange();
 }
 
@@ -346,12 +356,14 @@ VerbatimLineComment *Sema::actOnVerbatimLine(SourceLocation LocBegin,
                                              unsigned CommandID,
                                              SourceLocation TextBegin,
                                              StringRef Text) {
-  return new (Allocator) VerbatimLineComment(
+  VerbatimLineComment *VL = new (Allocator) VerbatimLineComment(
                               LocBegin,
                               TextBegin.getLocWithOffset(Text.size()),
                               CommandID,
                               TextBegin,
                               Text);
+  checkFunctionDeclVerbatimLine(VL);
+  return VL;
 }
 
 HTMLStartTagComment *Sema::actOnHTMLStartTagStart(SourceLocation LocBegin,
@@ -680,6 +692,32 @@ bool Sema::isFunctionDecl() {
   if (!ThisDeclInfo->IsFilled)
     inspectThisDecl();
   return ThisDeclInfo->getKind() == DeclInfo::FunctionKind;
+}
+
+bool Sema::isAnyFunctionDecl() {
+  return isFunctionDecl() && ThisDeclInfo->CurrentDecl &&
+         isa<FunctionDecl>(ThisDeclInfo->CurrentDecl);
+}
+  
+bool Sema::isObjCMethodDecl() {
+  return isFunctionDecl() && ThisDeclInfo->CurrentDecl &&
+         isa<ObjCMethodDecl>(ThisDeclInfo->CurrentDecl);
+}
+  
+/// isFunctionPointerVarDecl - returns 'true' if declaration is a pointer to
+/// function decl.
+bool Sema::isFunctionPointerVarDecl() {
+  if (!ThisDeclInfo)
+    return false;
+  if (!ThisDeclInfo->IsFilled)
+    inspectThisDecl();
+  if (ThisDeclInfo->getKind() == DeclInfo::VariableKind) {
+    if (const VarDecl *VD = dyn_cast_or_null<VarDecl>(ThisDeclInfo->CurrentDecl)) {
+      QualType QT = VD->getType();
+      return QT->isFunctionPointerType();
+    }
+  }
+  return false;
 }
   
 bool Sema::isObjCPropertyDecl() {
