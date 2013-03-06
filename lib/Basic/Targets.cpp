@@ -4522,7 +4522,7 @@ public:
     case 'x': // hilo register pair
       Info.setAllowsRegister();
       return true;
-    case 'R': // An address tha can be used in a non-macro load or store
+    case 'R': // An address that can be used in a non-macro load or store
       Info.setAllowsMemory();
       return true;
     }
