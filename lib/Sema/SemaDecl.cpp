@@ -1223,7 +1223,7 @@ bool Sema::ShouldWarnIfUnusedFileScopedDecl(const DeclaratorDecl *D) const {
   }
 
   // Only warn for unused decls internal to the translation unit.
-  if (D->getLinkage() == ExternalLinkage)
+  if (D->hasExternalLinkage())
     return false;
 
   return true;
@@ -1584,7 +1584,7 @@ static void filterNonConflictingPreviousDecls(ASTContext &context,
     return;
 
   // If this declaration has external
-  bool hasExternalLinkage = (decl->getLinkage() == ExternalLinkage);
+  bool hasExternalLinkage = decl->hasExternalLinkage();
 
   LookupResult::Filter filter = previous.makeFilter();
   while (filter.hasNext()) {
@@ -4117,6 +4117,11 @@ NamedDecl *Sema::HandleDeclarator(Scope *S, Declarator &D,
       D.getDeclSpec().getStorageClassSpec() != DeclSpec::SCS_typedef)
     Previous.clear();
 
+  // Check that there are no default arguments other than in the parameters
+  // of a function declaration (C++ only).
+  if (getLangOpts().CPlusPlus)
+    CheckExtraCXXDefaultArguments(D);
+
   NamedDecl *New;
 
   bool AddToScope = true;
@@ -4356,11 +4361,6 @@ Sema::ActOnTypedefDeclarator(Scope* S, Declarator& D, DeclContext* DC,
     Previous.clear();
   }
 
-  if (getLangOpts().CPlusPlus) {
-    // Check that there are no default arguments (C++ only).
-    CheckExtraCXXDefaultArguments(D);
-  }
-
   DiagnoseFunctionSpecifiers(D);
 
   if (D.getDeclSpec().isThreadSpecified())
@@ -4577,7 +4577,7 @@ static void checkAttributesAfterMerging(Sema &S, NamedDecl &ND) {
     }
   }
   if (WeakRefAttr *Attr = ND.getAttr<WeakRefAttr>()) {
-    if (ND.getLinkage() == ExternalLinkage) {
+    if (ND.hasExternalLinkage()) {
       S.Diag(Attr->getLocation(), diag::err_attribute_weakref_not_static);
       ND.dropAttr<WeakRefAttr>();
     }
@@ -4590,10 +4590,6 @@ Sema::ActOnVariableDeclarator(Scope *S, Declarator &D, DeclContext *DC,
                               MultiTemplateParamsArg TemplateParamLists) {
   QualType R = TInfo->getType();
   DeclarationName Name = GetNameForDeclarator(D).getName();
-
-  // Check that there are no default arguments (C++ only).
-  if (getLangOpts().CPlusPlus)
-    CheckExtraCXXDefaultArguments(D);
 
   DeclSpec::SCS SCSpec = D.getDeclSpec().getStorageClassSpec();
   assert(SCSpec != DeclSpec::SCS_typedef &&
@@ -6392,7 +6388,7 @@ Sema::ActOnFunctionDeclarator(Scope *S, Declarator &D, DeclContext *DC,
 
   // If there's a #pragma GCC visibility in scope, and this isn't a class
   // member, set the visibility of this function.
-  if (NewFD->getLinkage() == ExternalLinkage && !DC->isRecord())
+  if (NewFD->hasExternalLinkage() && !DC->isRecord())
     AddPushedVisibilityAttribute(NewFD);
 
   // If there's a #pragma clang arc_cf_code_audited in scope, consider
@@ -7786,7 +7782,7 @@ void Sema::CheckCompleteVariableDeclaration(VarDecl *var) {
   }
 
   if (var->isThisDeclarationADefinition() &&
-      var->getLinkage() == ExternalLinkage &&
+      var->hasExternalLinkage() &&
       getDiagnostics().getDiagnosticLevel(
                        diag::warn_missing_variable_declarations,
                        var->getLocation())) {
@@ -7884,7 +7880,7 @@ Sema::FinalizeDeclaration(Decl *ThisDecl) {
   const DeclContext *DC = VD->getDeclContext();
   // If there's a #pragma GCC visibility in scope, and this isn't a class
   // member, set the visibility of this variable.
-  if (VD->getLinkage() == ExternalLinkage && !DC->isRecord())
+  if (VD->hasExternalLinkage() && !DC->isRecord())
     AddPushedVisibilityAttribute(VD);
 
   if (VD->isFileVarDecl())
@@ -8859,7 +8855,7 @@ NamedDecl *Sema::ImplicitlyDefineFunction(SourceLocation Loc,
   DeclContext *PrevDC = CurContext;
   CurContext = Context.getTranslationUnitDecl();
 
-  FunctionDecl *FD = dyn_cast<FunctionDecl>(ActOnDeclarator(TUScope, D));
+  FunctionDecl *FD = cast<FunctionDecl>(ActOnDeclarator(TUScope, D));
   FD->setImplicit();
 
   CurContext = PrevDC;

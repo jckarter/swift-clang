@@ -214,6 +214,11 @@ public:
   /// \brief Determine what kind of linkage this entity has.
   Linkage getLinkage() const;
 
+  /// \brief True if this decl has external linkage.
+  bool hasExternalLinkage() const {
+    return getLinkage() == ExternalLinkage;
+  }
+
   /// \brief Determines the visibility of this entity.
   Visibility getVisibility() const {
     return getLinkageAndVisibility().getVisibility();
@@ -793,11 +798,18 @@ public:
     return getStorageClass() == SC_Static && !isFileVarDecl();
   }
 
-  /// hasExternStorage - Returns true if a variable has extern or
-  /// __private_extern__ storage.
+  /// \brief Returns true if a variable has extern or __private_extern__
+  /// storage.
   bool hasExternalStorage() const {
     return getStorageClass() == SC_Extern ||
            getStorageClass() == SC_PrivateExtern;
+  }
+
+  /// \brief Returns true if a variable was written with extern or
+  /// __private_extern__ storage.
+  bool hasExternalStorageAsWritten() const {
+    return getStorageClassAsWritten() == SC_Extern ||
+           getStorageClassAsWritten() == SC_PrivateExtern;
   }
 
   /// hasGlobalStorage - Returns true for all variables that do not

@@ -47,11 +47,13 @@ ParagraphComment *Sema::actOnParagraphComment(
   return new (Allocator) ParagraphComment(Content);
 }
 
-BlockCommandComment *Sema::actOnBlockCommandStart(SourceLocation LocBegin,
-                                                  SourceLocation LocEnd,
-                                                  unsigned CommandID,
-                                                  bool AtCommand) {
-  return new (Allocator) BlockCommandComment(LocBegin, LocEnd, CommandID, AtCommand);
+BlockCommandComment *Sema::actOnBlockCommandStart(
+                                      SourceLocation LocBegin,
+                                      SourceLocation LocEnd,
+                                      unsigned CommandID,
+                                      CommandMarkerKind CommandMarker) {
+  return new (Allocator) BlockCommandComment(LocBegin, LocEnd, CommandID,
+                                             CommandMarker);
 }
 
 void Sema::actOnBlockCommandArgs(BlockCommandComment *Command,
@@ -68,19 +70,40 @@ void Sema::actOnBlockCommandFinish(BlockCommandComment *Command,
   checkDeprecatedCommand(Command);
 }
 
-ParamCommandComment *Sema::actOnParamCommandStart(SourceLocation LocBegin,
-                                                  SourceLocation LocEnd,
-                                                  unsigned CommandID,
-                                                  bool AtCommand) {
+ParamCommandComment *Sema::actOnParamCommandStart(
+                                      SourceLocation LocBegin,
+                                      SourceLocation LocEnd,
+                                      unsigned CommandID,
+                                      CommandMarkerKind CommandMarker) {
   ParamCommandComment *Command =
-      new (Allocator) ParamCommandComment(LocBegin, LocEnd, CommandID, AtCommand);
+      new (Allocator) ParamCommandComment(LocBegin, LocEnd, CommandID,
+                                          CommandMarker);
 
   if (!isFunctionDecl())
     Diag(Command->getLocation(),
          diag::warn_doc_param_not_attached_to_a_function_decl)
+      << CommandMarker
       << Command->getCommandNameRange(Traits);
 
   return Command;
+}
+
+void Sema::checkFunctionDeclVerbatimLine(const BlockCommandComment *Comment) {
+  const CommandInfo *Info = Traits.getCommandInfo(Comment->getCommandID());
+  if (!Info->IsFunctionDeclarationCommand)
+    return;
+  StringRef Name = Info->Name;
+  unsigned DiagSelect = llvm::StringSwitch<unsigned>(Name)
+  .Case("function", !isAnyFunctionDecl() ? 1 : 0)
+  .Case("method", !isObjCMethodDecl() ? 2 : 0)
+  .Case("callback", !isFunctionPointerVarDecl() ? 3 : 0)
+  .Default(0);
+  
+  if (DiagSelect)
+    Diag(Comment->getLocation(), diag::warn_doc_function_method_decl_mismatch)
+    << Comment->getCommandMarker()
+    << (DiagSelect-1) << (DiagSelect-1)
+    << Comment->getSourceRange();
 }
 
 void Sema::actOnParamCommandDirectionArg(ParamCommandComment *Command,
@@ -162,16 +185,19 @@ void Sema::actOnParamCommandFinish(ParamCommandComment *Command,
   checkBlockCommandEmptyParagraph(Command);
 }
 
-TParamCommandComment *Sema::actOnTParamCommandStart(SourceLocation LocBegin,
-                                                    SourceLocation LocEnd,
-                                                    unsigned CommandID,
-                                                    bool AtCommand) {
+TParamCommandComment *Sema::actOnTParamCommandStart(
+                                      SourceLocation LocBegin,
+                                      SourceLocation LocEnd,
+                                      unsigned CommandID,
+                                      CommandMarkerKind CommandMarker) {
   TParamCommandComment *Command =
-      new (Allocator) TParamCommandComment(LocBegin, LocEnd, CommandID, AtCommand);
+      new (Allocator) TParamCommandComment(LocBegin, LocEnd, CommandID,
+                                           CommandMarker);
 
   if (!isTemplateOrSpecialization())
     Diag(Command->getLocation(),
          diag::warn_doc_tparam_not_attached_to_a_template_decl)
+      << CommandMarker
       << Command->getCommandNameRange(Traits);
 
   return Command;
@@ -329,12 +355,14 @@ VerbatimLineComment *Sema::actOnVerbatimLine(SourceLocation LocBegin,
                                              unsigned CommandID,
                                              SourceLocation TextBegin,
                                              StringRef Text) {
-  return new (Allocator) VerbatimLineComment(
+  VerbatimLineComment *VL = new (Allocator) VerbatimLineComment(
                               LocBegin,
                               TextBegin.getLocWithOffset(Text.size()),
                               CommandID,
                               TextBegin,
                               Text);
+  checkFunctionDeclVerbatimLine(VL);
+  return VL;
 }
 
 HTMLStartTagComment *Sema::actOnHTMLStartTagStart(SourceLocation LocBegin,
@@ -435,7 +463,7 @@ void Sema::checkBlockCommandEmptyParagraph(BlockCommandComment *Command) {
     if (!DiagLoc.isValid())
       DiagLoc = Command->getCommandNameRange(Traits).getEnd();
     Diag(DiagLoc, diag::warn_doc_block_command_empty_paragraph)
-      << Command->getAtCommand()
+      << Command->getCommandMarker()
       << Command->getCommandName(Traits)
       << Command->getSourceRange();
   }
@@ -463,7 +491,7 @@ void Sema::checkReturnsCommand(const BlockCommandComment *Command) {
       }
       Diag(Command->getLocation(),
            diag::warn_doc_returns_attached_to_a_void_function)
-        << Command->getAtCommand()
+        << Command->getCommandMarker()
         << Command->getCommandName(Traits)
         << DiagKind
         << Command->getSourceRange();
@@ -475,7 +503,7 @@ void Sema::checkReturnsCommand(const BlockCommandComment *Command) {
   
   Diag(Command->getLocation(),
        diag::warn_doc_returns_not_attached_to_a_function_decl)
-    << Command->getAtCommand()
+    << Command->getCommandMarker()
     << Command->getCommandName(Traits)
     << Command->getSourceRange();
 }
@@ -508,18 +536,18 @@ void Sema::checkBlockCommandDuplicate(const BlockCommandComment *Command) {
   StringRef CommandName = Command->getCommandName(Traits);
   StringRef PrevCommandName = PrevCommand->getCommandName(Traits);
   Diag(Command->getLocation(), diag::warn_doc_block_command_duplicate)
-      << Command->getAtCommand()
+      << Command->getCommandMarker()
       << CommandName
       << Command->getSourceRange();
   if (CommandName == PrevCommandName)
     Diag(PrevCommand->getLocation(), diag::note_doc_block_command_previous)
-        << PrevCommand->getAtCommand()
+        << PrevCommand->getCommandMarker()
         << PrevCommandName
         << PrevCommand->getSourceRange();
   else
     Diag(PrevCommand->getLocation(),
          diag::note_doc_block_command_previous_alias)
-        << PrevCommand->getAtCommand()
+        << PrevCommand->getCommandMarker()
         << PrevCommandName
         << CommandName;
 }
@@ -663,6 +691,32 @@ bool Sema::isFunctionDecl() {
   if (!ThisDeclInfo->IsFilled)
     inspectThisDecl();
   return ThisDeclInfo->getKind() == DeclInfo::FunctionKind;
+}
+
+bool Sema::isAnyFunctionDecl() {
+  return isFunctionDecl() && ThisDeclInfo->CurrentDecl &&
+         isa<FunctionDecl>(ThisDeclInfo->CurrentDecl);
+}
+  
+bool Sema::isObjCMethodDecl() {
+  return isFunctionDecl() && ThisDeclInfo->CurrentDecl &&
+         isa<ObjCMethodDecl>(ThisDeclInfo->CurrentDecl);
+}
+  
+/// isFunctionPointerVarDecl - returns 'true' if declaration is a pointer to
+/// function decl.
+bool Sema::isFunctionPointerVarDecl() {
+  if (!ThisDeclInfo)
+    return false;
+  if (!ThisDeclInfo->IsFilled)
+    inspectThisDecl();
+  if (ThisDeclInfo->getKind() == DeclInfo::VariableKind) {
+    if (const VarDecl *VD = dyn_cast_or_null<VarDecl>(ThisDeclInfo->CurrentDecl)) {
+      QualType QT = VD->getType();
+      return QT->isFunctionPointerType();
+    }
+  }
+  return false;
 }
   
 bool Sema::isObjCPropertyDecl() {
