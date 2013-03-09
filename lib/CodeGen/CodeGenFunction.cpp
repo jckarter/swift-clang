@@ -323,6 +323,23 @@ void CodeGenFunction::EmitOpenCLKernelMetadata(const FunctionDecl *FD,
   if (CGM.getCodeGenOpts().EmitOpenCLArgMetadata)
     GenOpenCLArgMetadata(FD, Fn, CGM, Context, kernelMDArgs);
 
+  if (FD->hasAttr<VecTypeHintAttr>()) {
+    VecTypeHintAttr *attr = FD->getAttr<VecTypeHintAttr>();
+    QualType hintQTy = attr->getTypeHint();
+    const ExtVectorType *hintEltQTy = hintQTy->getAs<ExtVectorType>();
+    bool isSignedInteger =
+        hintQTy->isSignedIntegerType() ||
+        (hintEltQTy && hintEltQTy->getElementType()->isSignedIntegerType());
+    llvm::Value *attrMDArgs[] = {
+      llvm::MDString::get(Context, "vec_type_hint"),
+      llvm::UndefValue::get(CGM.getTypes().ConvertType(attr->getTypeHint())),
+      llvm::ConstantInt::get(
+          llvm::IntegerType::get(Context, 32),
+          llvm::APInt(32, (uint64_t)(isSignedInteger ? 1 : 0)))
+    };
+    kernelMDArgs.push_back(llvm::MDNode::get(Context, attrMDArgs));
+  }
+
   if (FD->hasAttr<WorkGroupSizeHintAttr>()) {
     WorkGroupSizeHintAttr *attr = FD->getAttr<WorkGroupSizeHintAttr>();
     llvm::Value *attrMDArgs[] = {
@@ -403,18 +420,15 @@ void CodeGenFunction::StartFunction(GlobalDecl GD, QualType RetTy,
 
   // Emit subprogram debug descriptor.
   if (CGDebugInfo *DI = getDebugInfo()) {
-    unsigned NumArgs = 0;
-    QualType *ArgsArray = new QualType[Args.size()];
+    SmallVector<QualType, 16> ArgTypes;
     for (FunctionArgList::const_iterator i = Args.begin(), e = Args.end();
 	 i != e; ++i) {
-      ArgsArray[NumArgs++] = (*i)->getType();
+      ArgTypes.push_back((*i)->getType());
     }
 
     QualType FnType =
-      getContext().getFunctionType(RetTy, ArgsArray, NumArgs,
+      getContext().getFunctionType(RetTy, ArgTypes,
                                    FunctionProtoType::ExtProtoInfo());
-
-    delete[] ArgsArray;
 
     DI->setLocation(StartLoc);
     DI->EmitFunctionStart(GD, FnType, CurFn, Builder);

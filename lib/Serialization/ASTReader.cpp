@@ -1602,7 +1602,7 @@ InputFile ASTReader::getInputFile(ModuleFile &F, unsigned ID, bool Complain) {
 #endif
          )) {
       if (Complain)
-        Error(diag::err_fe_pch_file_modified, Filename);
+        Error(diag::err_fe_pch_file_modified, Filename, F.FileName);
       IsOutOfDate = true;
     }
 
@@ -4395,8 +4395,7 @@ QualType ASTReader::readTypeRecord(unsigned Index) {
     } else if (EST == EST_Unevaluated) {
       EPI.ExceptionSpecDecl = ReadDeclAs<FunctionDecl>(*Loc.F, Record, Idx);
     }
-    return Context.getFunctionType(ResultType, ParamTypes.data(), NumParams,
-                                    EPI);
+    return Context.getFunctionType(ResultType, ParamTypes, EPI);
   }
 
   case TYPE_UNRESOLVED_USING: {
