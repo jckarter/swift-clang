@@ -1478,12 +1478,18 @@ static bool ShouldDisableCFI(const ArgList &Args,
                        Default);
 }
 
-static bool ShouldDisableDwarfDirectory(const ArgList &Args,
-                                        const ToolChain &TC) {
+static bool ShouldUseIntegratedAssembler(const ArgList &Args,
+                                         const ToolChain &TC) {
   bool IsIADefault = TC.IsIntegratedAssemblerDefault();
   bool UseIntegratedAs = Args.hasFlag(options::OPT_integrated_as,
                                       options::OPT_no_integrated_as,
                                       IsIADefault);
+  return UseIntegratedAs;
+}
+
+static bool ShouldDisableDwarfDirectory(const ArgList &Args,
+                                        const ToolChain &TC) {
+  bool UseIntegratedAs = ShouldUseIntegratedAssembler(Args, TC);
   bool UseDwarfDirectory = Args.hasFlag(options::OPT_fdwarf_directory_asm,
                                         options::OPT_fno_dwarf_directory_asm,
                                         UseIntegratedAs);
@@ -2836,6 +2842,12 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
     if (AllowedInCXX || !types::isCXX(InputType)) {
       CmdArgs.push_back("-fmodules");
       HaveModules = true;
+    }
+
+    if (HaveModules && !ShouldUseIntegratedAssembler(Args, getToolChain())) {
+      D.Diag(diag::err_drv_modules_integrated_as);
+      D.Diag(diag::note_drv_modules_integrated_as);
+      return;
     }
   }
 
@@ -4460,11 +4472,9 @@ void darwin::Link::ConstructJob(Compilation &C, const JobAction &JA,
     // Derived from startfile spec.
     if (Args.hasArg(options::OPT_dynamiclib)) {
       // Derived from darwin_dylib1 spec.
-      if (getDarwinToolChain().isTargetIOSSimulator()) {
-        // The simulator doesn't have a versioned crt1 file.
-        CmdArgs.push_back("-ldylib1.o");
-      } else if (getDarwinToolChain().isTargetIPhoneOS()) {
-        if (getDarwinToolChain().isIPhoneOSVersionLT(3, 1))
+      if (getDarwinToolChain().isTargetIPhoneOS()) {
+        if (!getDarwinToolChain().isTargetIOSSimulator() &&
+            getDarwinToolChain().isIPhoneOSVersionLT(3, 1))
           CmdArgs.push_back("-ldylib1.o");
       } else {
         if (getDarwinToolChain().isMacosxVersionLT(10, 5))
@@ -4476,11 +4486,9 @@ void darwin::Link::ConstructJob(Compilation &C, const JobAction &JA,
       if (Args.hasArg(options::OPT_bundle)) {
         if (!Args.hasArg(options::OPT_static)) {
           // Derived from darwin_bundle1 spec.
-          if (getDarwinToolChain().isTargetIOSSimulator()) {
-            // The simulator doesn't have a versioned crt1 file.
-            CmdArgs.push_back("-lbundle1.o");
-          } else if (getDarwinToolChain().isTargetIPhoneOS()) {
-            if (getDarwinToolChain().isIPhoneOSVersionLT(3, 1))
+          if (getDarwinToolChain().isTargetIPhoneOS()) {
+            if (!getDarwinToolChain().isTargetIOSSimulator() &&
+                getDarwinToolChain().isIPhoneOSVersionLT(3, 1))
               CmdArgs.push_back("-lbundle1.o");
           } else {
             if (getDarwinToolChain().isMacosxVersionLT(10, 6))
@@ -4514,11 +4522,10 @@ void darwin::Link::ConstructJob(Compilation &C, const JobAction &JA,
             CmdArgs.push_back("-lcrt0.o");
           } else {
             // Derived from darwin_crt1 spec.
-            if (getDarwinToolChain().isTargetIOSSimulator()) {
-              // The simulator doesn't have a versioned crt1 file.
-              CmdArgs.push_back("-lcrt1.o");
-            } else if (getDarwinToolChain().isTargetIPhoneOS()) {
-              if (getDarwinToolChain().isIPhoneOSVersionLT(3, 1))
+            if (getDarwinToolChain().isTargetIPhoneOS()) {
+              if (getDarwinToolChain().isTargetIOSSimulator())
+                ; // Simulator does not need crt1 when running on OS X 10.8+.
+              else if (getDarwinToolChain().isIPhoneOSVersionLT(3, 1))
                 CmdArgs.push_back("-lcrt1.o");
               else if (getDarwinToolChain().isIPhoneOSVersionLT(6, 0))
                 CmdArgs.push_back("-lcrt1.3.1.o");
