@@ -4358,6 +4358,15 @@ void darwin::Link::AddLinkArgs(Compilation &C,
     CmdArgs.push_back(A->getValue());
   }
 
+  // If we are using an implicit sysroot, then have the linker look in the
+  // standard extra library paths outside the sysroot.
+  if (Args.hasArg(options::OPT_isysroot_implicit)) {
+    CmdArgs.push_back("-L");
+    CmdArgs.push_back("/usr/local/lib");
+    CmdArgs.push_back("-F");
+    CmdArgs.push_back("/Library/Frameworks");
+  }
+
   Args.AddLastArg(CmdArgs, options::OPT_twolevel__namespace);
   Args.AddLastArg(CmdArgs, options::OPT_twolevel__namespace__hints);
   Args.AddAllArgs(CmdArgs, options::OPT_umbrella);

@@ -117,6 +117,10 @@ public:
   /// of computing the module hash.
   llvm::SetVector<std::string> ModulesIgnoreMacros;
 
+  /// Indicate whether the sysroot is implicit, and the header search should be
+  /// adjusted accordingly.
+  unsigned SysrootIsImplicit : 1;
+
   /// Include the compiler builtin includes.
   unsigned UseBuiltinIncludes : 1;
 
@@ -137,6 +141,7 @@ public:
     : Sysroot(_Sysroot), DisableModuleHash(0),
       ModuleCachePruneInterval(7*24*60*60),
       ModuleCachePruneAfter(31*24*60*60),
+      SysrootIsImplicit(false),
       UseBuiltinIncludes(true),
       UseStandardSystemIncludes(true), UseStandardCXXIncludes(true),
       UseLibcxx(false), Verbose(false) {}
