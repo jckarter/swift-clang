@@ -1618,7 +1618,7 @@ struct NullReturnState {
           RValue RV = I->RV;
           assert(RV.isScalar() && 
                  "NullReturnState::complete - arg not on object");
-          CGF.EmitARCRelease(RV.getScalarVal(), true);
+          CGF.EmitARCRelease(RV.getScalarVal(), ARCImpreciseLifetime);
         }
       }
     }
