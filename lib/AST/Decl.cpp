@@ -620,8 +620,7 @@ static LinkageInfo getLVForNamespaceScopeDecl(const NamedDecl *D,
     //
     // Note that we don't want to make the variable non-external
     // because of this, but unique-external linkage suits us.
-    if (Context.getLangOpts().CPlusPlus &&
-        !Var->getDeclContext()->isExternCContext()) {
+    if (Context.getLangOpts().CPlusPlus && !isInExternCContext(Var)) {
       LinkageInfo TypeLV = Var->getType()->getLinkageAndVisibility();
       if (TypeLV.getLinkage() != ExternalLinkage)
         return LinkageInfo::uniqueExternal();
@@ -1517,7 +1516,7 @@ void VarDecl::setStorageClass(StorageClass SC) {
   assert(isLegalForVariable(SC));
   if (getStorageClass() != SC)
     ClearLinkageCache();
-  
+
   VarDeclBits.SClass = SC;
 }
 
@@ -2131,7 +2130,7 @@ void FunctionDecl::setStorageClass(StorageClass SC) {
   assert(isLegalForFunction(SC));
   if (getStorageClass() != SC)
     ClearLinkageCache();
-  
+
   SClass = SC;
 }
 
@@ -2865,8 +2864,8 @@ TagDecl* TagDecl::getCanonicalDecl() {
   return getFirstDeclaration();
 }
 
-void TagDecl::setTypedefNameForAnonDecl(TypedefNameDecl *TDD) { 
-  TypedefNameDeclOrQualifier = TDD; 
+void TagDecl::setTypedefNameForAnonDecl(TypedefNameDecl *TDD) {
+  TypedefNameDeclOrQualifier = TDD;
   if (TypeForDecl)
     const_cast<Type*>(TypeForDecl)->ClearLinkageCache();
   ClearLinkageCache();
