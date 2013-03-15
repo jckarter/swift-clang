@@ -2150,6 +2150,8 @@ def warn_attribute_protected_visibility :
   Warning<"target does not support 'protected' visibility; using 'default'">,
   InGroup<DiagGroup<"unsupported-visibility">>;
 def err_mismatched_visibility: Error<"visibility does not match previous declaration">;
+def warn_attribute_unknown_endian : Warning<"unknown endian '%0'">,
+  InGroup<IgnoredAttributes>;
 def note_previous_attribute : Note<"previous attribute is here">;
 def err_unknown_machine_mode : Error<"unknown machine mode %0">;
 def err_unsupported_machine_mode : Error<"unsupported machine mode %0">;
@@ -6072,6 +6074,8 @@ def warn_direct_ivar_access : Warning<"instance variable %0 is being "
   "directly accessed">, InGroup<DiagGroup<"direct-ivar-access">>, DefaultIgnore;
 
 // Spell-checking diagnostics
+def warn_spellcheck_initiated : Warning<"spell-checking initiated for %0">,
+  InGroup<DiagGroup<"spellcheck">>, DefaultIgnore;
 def err_unknown_type_or_class_name_suggest : Error<
   "unknown %select{type|class}2 name %0; did you mean %1?">;
 def err_unknown_typename_suggest : Error<
