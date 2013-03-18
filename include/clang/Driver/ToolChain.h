@@ -47,6 +47,7 @@ public:
 private:
   const Driver &D;
   const llvm::Triple Triple;
+  const ArgList &Args;
 
   /// The list of toolchain specific path prefixes to search for
   /// files.
@@ -57,7 +58,7 @@ private:
   path_list ProgramPaths;
 
 protected:
-  ToolChain(const Driver &D, const llvm::Triple &T);
+  ToolChain(const Driver &D, const llvm::Triple &T, const ArgList &Args);
 
   /// \name Utilities for implementing subclasses.
   ///@{
@@ -113,8 +114,7 @@ public:
 
   /// SelectTool - Choose a tool to use to handle the action \p JA with the
   /// given \p Inputs.
-  virtual Tool &SelectTool(const Compilation &C, const JobAction &JA,
-                           const ActionList &Inputs) const = 0;
+  virtual Tool &SelectTool(const JobAction &JA) const = 0;
 
   // Helper methods
 
@@ -137,6 +137,9 @@ public:
   /// IsIntegratedAssemblerDefault - Does this tool chain enable -integrated-as
   /// by default.
   virtual bool IsIntegratedAssemblerDefault() const { return false; }
+
+  /// \brief Check if the toolchain should use the integrated assembler.
+  bool useIntegratedAs() const;
 
   /// IsStrictAliasingDefault - Does this tool chain use -fstrict-aliasing by
   /// default.
