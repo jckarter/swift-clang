@@ -7,6 +7,7 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "Tools.h"
 #include "clang/Driver/ToolChain.h"
 #include "clang/Basic/ObjCRuntime.h"
 #include "clang/Driver/Action.h"
@@ -27,6 +28,10 @@ ToolChain::ToolChain(const Driver &D, const llvm::Triple &T,
 }
 
 ToolChain::~ToolChain() {
+  // Free tool implementations.
+  for (llvm::DenseMap<unsigned, Tool*>::iterator
+       it = Tools.begin(), ie = Tools.end(); it != ie; ++it)
+    delete it->second;
 }
 
 const Driver &ToolChain::getDriver() const {
@@ -56,6 +61,47 @@ std::string ToolChain::getDefaultUniversalArchName() const {
 
 bool ToolChain::IsUnwindTablesDefault() const {
   return false;
+}
+
+Tool *ToolChain::constructTool(Action::ActionClass AC) const {
+  switch (AC) {
+  case Action::InputClass:
+  case Action::BindArchClass:
+  case Action::AssembleJobClass:
+  case Action::LinkJobClass:
+  case Action::LipoJobClass:
+  case Action::DsymutilJobClass:
+  case Action::VerifyJobClass:
+    llvm_unreachable("Invalid tool kind.");
+
+  case Action::CompileJobClass:
+  case Action::PrecompileJobClass:
+  case Action::PreprocessJobClass:
+  case Action::AnalyzeJobClass:
+  case Action::MigrateJobClass:
+    return new tools::Clang(*this);
+  }
+}
+
+Tool &ToolChain::SelectTool(const JobAction &JA) const {
+  Action::ActionClass Key;
+  if (getDriver().ShouldUseClangCompiler(JA))
+    Key = Action::AnalyzeJobClass;
+  else
+    Key = JA.getKind();
+
+  Tool *&T = Tools[Key];
+  if (T)
+    return *T;
+
+  if (getDriver().ShouldUseClangCompiler(JA))
+    T = new tools::Clang(*this);
+  else if (Key == Action::AssembleJobClass && useIntegratedAs())
+    T = new tools::ClangAs(*this);
+  else
+    T = constructTool(Key);
+
+  return *T;
 }
 
 std::string ToolChain::GetFilePath(const char *Name) const {
