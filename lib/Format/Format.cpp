@@ -85,6 +85,12 @@ static bool isTrailingComment(const AnnotatedToken &Tok) {
          (Tok.Children.empty() || Tok.Children[0].MustBreakBefore);
 }
 
+static bool isComparison(const AnnotatedToken &Tok) {
+  prec::Level Precedence = getPrecedence(Tok);
+  return Tok.Type == TT_BinaryOperator &&
+         (Precedence == prec::Equality || Precedence == prec::Relational);
+}
+
 // Returns the length of everything up to the first possible line break after
 // the ), ], } or > matching \c Tok.
 static unsigned getLengthToMatchingParen(const AnnotatedToken &Tok) {
@@ -127,7 +133,7 @@ public:
       // Align comment with other comments.
       if (Tok.Parent != NULL || !Comments.empty()) {
         if (Style.ColumnLimit >=
-            Spaces + WhitespaceStartColumn + Tok.FormatTok.TokenLength) {
+                Spaces + WhitespaceStartColumn + Tok.FormatTok.TokenLength) {
           StoredComment Comment;
           Comment.Tok = Tok.FormatTok;
           Comment.Spaces = Spaces;
@@ -229,8 +235,7 @@ private:
     const char *TokenStart = SourceMgr.getCharacterData(Tok.Tok.getLocation());
     while (Line.rtrim().size() > ColumnLimit) {
       // Try to break at the last whitespace before the column limit.
-      size_t SpacePos =
-          Line.find_last_of(WhiteSpaceChars, ColumnLimit + 1);
+      size_t SpacePos = Line.find_last_of(WhiteSpaceChars, ColumnLimit + 1);
       if (SpacePos == StringRef::npos) {
         // Try to find any whitespace in the line.
         SpacePos = Line.find_first_of(WhiteSpaceChars);
@@ -367,8 +372,8 @@ private:
   void alignComments(comment_iterator I, comment_iterator E, unsigned Column) {
     while (I != E) {
       unsigned Spaces = I->Spaces + Column - I->MinColumn;
-      storeReplacement(I->Tok, std::string(I->NewLines, '\n') +
-                               std::string(Spaces, ' '));
+      storeReplacement(
+          I->Tok, std::string(I->NewLines, '\n') + std::string(Spaces, ' '));
       ++I;
     }
   }
@@ -573,7 +578,7 @@ private:
       if (VariablePos != Other.VariablePos)
         return VariablePos < Other.VariablePos;
       if (LineContainsContinuedForLoopSection !=
-          Other.LineContainsContinuedForLoopSection)
+              Other.LineContainsContinuedForLoopSection)
         return LineContainsContinuedForLoopSection;
       if (ParenLevel != Other.ParenLevel)
         return ParenLevel < Other.ParenLevel;
@@ -596,9 +601,8 @@ private:
   unsigned addTokenToState(bool Newline, bool DryRun, LineState &State) {
     const AnnotatedToken &Current = *State.NextToken;
     const AnnotatedToken &Previous = *State.NextToken->Parent;
-    assert(State.Stack.size());
 
-    if (Current.Type == TT_ImplicitStringLiteral) {
+    if (State.Stack.size() == 0 || Current.Type == TT_ImplicitStringLiteral) {
       State.Column += State.NextToken->FormatTok.WhiteSpaceLength +
                       State.NextToken->FormatTok.TokenLength;
       if (State.NextToken->Children.empty())
@@ -621,7 +625,8 @@ private:
         State.Column = State.Stack.back().FirstLessLess;
       } else if (State.ParenLevel != 0 &&
                  (Previous.isOneOf(tok::equal, tok::coloncolon) ||
-                  Current.isOneOf(tok::period, tok::arrow, tok::question))) {
+                  Current.isOneOf(tok::period, tok::arrow, tok::question) ||
+                  isComparison(Previous))) {
         // Indent and extra 4 spaces after if we know the current expression is
         // continued.  Don't do that on the top level, as we already indent 4
         // there.
@@ -709,7 +714,7 @@ private:
       if (Current.Type == TT_ObjCSelectorName &&
           State.Stack.back().ColonPos == 0) {
         if (State.Stack.back().Indent + Current.LongestObjCSelectorName >
-            State.Column + Spaces + Current.FormatTok.TokenLength)
+                State.Column + Spaces + Current.FormatTok.TokenLength)
           State.Stack.back().ColonPos =
               State.Stack.back().Indent + Current.LongestObjCSelectorName;
         else
@@ -729,7 +734,7 @@ private:
         // Treat the condition inside an if as if it was a second function
         // parameter, i.e. let nested calls have an indent of 4.
         State.Stack.back().LastSpace = State.Column + 1; // 1 is length of "(".
-      else if (Previous.is(tok::comma) && State.ParenLevel != 0)
+      else if (Previous.is(tok::comma))
         // Top-level spaces are exempt as that mostly leads to better results.
         State.Stack.back().LastSpace = State.Column;
       else if ((Previous.Type == TT_BinaryOperator ||
@@ -1283,8 +1288,7 @@ public:
       while (IndentForLevel.size() <= TheLine.Level)
         IndentForLevel.push_back(-1);
       IndentForLevel.resize(TheLine.Level + 1);
-      bool WasMoved =
-          PreviousLineWasTouched && FirstTok.NewlinesBefore == 0;
+      bool WasMoved = PreviousLineWasTouched && FirstTok.NewlinesBefore == 0;
       if (TheLine.First.is(tok::eof)) {
         if (PreviousLineWasTouched) {
           unsigned NewLines = std::min(FirstTok.NewlinesBefore, 1u);
@@ -1298,8 +1302,8 @@ public:
         if (static_cast<int>(Indent) + Offset >= 0)
           Indent += Offset;
         if (!FirstTok.WhiteSpaceStart.isValid() || StructuralError) {
-          Indent = LevelIndent = SourceMgr.getSpellingColumnNumber(
-              FirstTok.Tok.getLocation()) - 1;
+          Indent = LevelIndent =
+              SourceMgr.getSpellingColumnNumber(FirstTok.Tok.getLocation()) - 1;
         } else {
           formatFirstToken(TheLine.First, Indent, TheLine.InPPDirective,
                            PreviousEndOfLineColumn);
@@ -1319,7 +1323,8 @@ public:
           unsigned LevelIndent = Indent;
           if (static_cast<int>(LevelIndent) - Offset >= 0)
             LevelIndent -= Offset;
-          IndentForLevel[TheLine.Level] = LevelIndent;
+          if (TheLine.First.isNot(tok::comment))
+            IndentForLevel[TheLine.Level] = LevelIndent;
 
           // Remove trailing whitespace of the previous line if it was touched.
           if (PreviousLineWasTouched || touchesEmptyLineBefore(TheLine))

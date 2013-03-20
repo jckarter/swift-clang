@@ -204,7 +204,7 @@ private:
          isUnaryOperator(*Parent) || Parent->Type == TT_ObjCForIn ||
          Parent->Type == TT_CastRParen ||
          getBinOpPrecedence(Parent->FormatTok.Tok.getKind(), true, true) >
-         prec::Unknown);
+             prec::Unknown);
     ScopedContextCreator ContextCreator(*this, tok::l_square, 10);
     Contexts.back().IsExpression = true;
     bool StartsObjCArrayLiteral = Parent && Parent->is(tok::at);
@@ -329,7 +329,7 @@ private:
         Tok->Type = TT_ObjCMethodExpr;
         Tok->Parent->Type = TT_ObjCSelectorName;
         if (Tok->Parent->FormatTok.TokenLength >
-            Contexts.back().LongestObjCSelectorName)
+                Contexts.back().LongestObjCSelectorName)
           Contexts.back().LongestObjCSelectorName =
               Tok->Parent->FormatTok.TokenLength;
         if (Contexts.back().FirstObjCSelectorName == NULL)
@@ -681,9 +681,14 @@ private:
 
     if (PrevToken->FormatTok.Tok.isLiteral() ||
         PrevToken->isOneOf(tok::r_paren, tok::r_square) ||
-        NextToken->FormatTok.Tok.isLiteral() || isUnaryOperator(*NextToken) ||
-        NextToken->isOneOf(tok::l_paren, tok::l_square))
+        NextToken->FormatTok.Tok.isLiteral() || isUnaryOperator(*NextToken))
       return TT_BinaryOperator;
+
+    // "*(" is probably part of a function type if within template parameters.
+    // Otherwise, it is probably a binary operator.
+    if (NextToken->is(tok::l_paren))
+      return Contexts.back().ContextKind == tok::less ? TT_PointerOrReference
+                                                      : TT_BinaryOperator;
 
     // It is very unlikely that we are going to find a pointer or reference type
     // definition on the RHS of an assignment.
@@ -932,7 +937,7 @@ unsigned TokenAnnotator::splitPenalty(const AnnotatedLine &Line,
     return 20;
 
   if (opensScope(Left))
-    return 20;
+    return Left.ParameterCount > 1 ? prec::Comma : 20;
 
   if (Right.is(tok::lessless)) {
     if (Left.is(tok::string_literal)) {
@@ -989,7 +994,8 @@ bool TokenAnnotator::spaceRequiredBetween(const AnnotatedLine &Line,
             !Style.PointerBindsToType);
   if (Left.Type == TT_PointerOrReference)
     return Right.FormatTok.Tok.isLiteral() ||
-           ((Right.Type != TT_PointerOrReference) && Style.PointerBindsToType);
+           ((Right.Type != TT_PointerOrReference) &&
+            Right.isNot(tok::l_paren) && Style.PointerBindsToType);
   if (Right.is(tok::star) && Left.is(tok::l_paren))
     return false;
   if (Left.is(tok::l_square))
