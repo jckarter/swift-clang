@@ -1910,7 +1910,8 @@ TrimmedGraph::TrimmedGraph(const ExplodedGraph *OriginalGraph,
                            ArrayRef<const ExplodedNode *> Nodes) {
   // The trimmed graph is created in the body of the constructor to ensure
   // that the DenseMaps have been initialized already.
-  G.reset(OriginalGraph->trim(Nodes, &ForwardMap, &InverseMap));
+  G.reset(OriginalGraph->trim(Nodes, /*BreakCycles=*/true,
+                              &ForwardMap, &InverseMap));
 
   // Find the (first) error node in the trimmed graph.  We just need to consult
   // the node map which maps from nodes in the original graph to nodes
@@ -1937,16 +1938,20 @@ TrimmedGraph::TrimmedGraph(const ExplodedGraph *OriginalGraph,
     llvm::tie(Node, Priority) = WS.front();
     WS.pop();
 
-    PriorityMapTy::iterator I = PriorityMap.find(Node);
-    if (I != PriorityMap.end()) {
-      assert(I->second <= Priority);
+    PriorityMapTy::iterator PriorityEntry;
+    bool IsNew;
+    llvm::tie(PriorityEntry, IsNew) =
+      PriorityMap.insert(std::make_pair(Node, Priority));
+
+    if (!IsNew) {
+      assert(PriorityEntry->second <= Priority);
       continue;
     }
 
-    PriorityMap[Node] = Priority;
-
-    if (Node->pred_empty())
+    if (Node->pred_empty()) {
+      assert(!Root && "more than one root");
       Root = Node;
+    }
 
     for (ExplodedNode::const_pred_iterator I = Node->pred_begin(),
                                            E = Node->pred_end();
@@ -2016,7 +2021,7 @@ void TrimmedGraph::createBestReportGraph(ArrayRef<const ExplodedNode *> Nodes,
     }
 
     // Find the next successor node.  We choose the node that is marked
-    // with the lowest DFS number.
+    // with the lowest BFS number.
     unsigned MinVal = -1U;
     for (ExplodedNode::const_succ_iterator SI = N->succ_begin(),
                                            SE = N->succ_end();
@@ -2048,7 +2053,7 @@ void TrimmedGraph::removeErrorNode(const ExplodedNode *ErrorNode) {
   for (ExplodedNode::const_pred_iterator PI = ErrorNode->pred_begin(),
                                          PE = ErrorNode->pred_end();
        PI != PE; ++PI) {
-    assert(PriorityMap.find(*PI) != PriorityMap.end());
+    assert(PriorityMap.find(*PI) != PriorityMap.end() && "predecessor removed");
     WS.push(*PI);
   }
 
@@ -2056,6 +2061,12 @@ void TrimmedGraph::removeErrorNode(const ExplodedNode *ErrorNode) {
   while (!WS.empty()) {
     const ExplodedNode *N = WS.front();
     WS.pop();
+
+    PriorityEntry = PriorityMap.find(N);
+
+    // Did we process this node already and find it unreachable?
+    if (PriorityEntry == PriorityMap.end())
+      continue;
 
     unsigned MinPriority = -1U;
     for (ExplodedNode::const_succ_iterator SI = N->succ_begin(),
@@ -2077,7 +2088,7 @@ void TrimmedGraph::removeErrorNode(const ExplodedNode *ErrorNode) {
     for (ExplodedNode::const_pred_iterator PI = N->pred_begin(),
                                            PE = N->pred_end();
          PI != PE; ++PI) {
-      assert(PriorityMap.find(*PI) != PriorityMap.end());
+      assert(PriorityMap.find(*PI) != PriorityMap.end() && "premature removal");
       WS.push(*PI);
     }
   }
