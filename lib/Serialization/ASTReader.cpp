@@ -3475,7 +3475,7 @@ bool ASTReader::ReadSubmoduleBlock(ModuleFile &F) {
         return true;
       }
 
-      if (Record.size() < 7) {
+      if (Record.size() < 8) {
         Error("malformed module definition");
         return true;
       }
@@ -3489,7 +3489,8 @@ bool ASTReader::ReadSubmoduleBlock(ModuleFile &F) {
       bool InferSubmodules = Record[5];
       bool InferExplicitSubmodules = Record[6];
       bool InferExportWildcard = Record[7];
-      
+      bool ConfigMacrosExhaustive = Record[8];
+
       Module *ParentModule = 0;
       if (Parent)
         ParentModule = getSubmodule(Parent);
@@ -3527,13 +3528,15 @@ bool ASTReader::ReadSubmoduleBlock(ModuleFile &F) {
       CurrentModule->InferSubmodules = InferSubmodules;
       CurrentModule->InferExplicitSubmodules = InferExplicitSubmodules;
       CurrentModule->InferExportWildcard = InferExportWildcard;
+      CurrentModule->ConfigMacrosExhaustive = ConfigMacrosExhaustive;
       if (DeserializationListener)
         DeserializationListener->ModuleRead(GlobalID, CurrentModule);
       
       SubmodulesLoaded[GlobalIndex] = CurrentModule;
 
-      // Clear out link libraries; the module file has them.
+      // Clear out link libraries and config macros; the module file has them.
       CurrentModule->LinkLibraries.clear();
+      CurrentModule->ConfigMacros.clear();
       break;
     }
         
@@ -3717,6 +3720,18 @@ bool ASTReader::ReadSubmoduleBlock(ModuleFile &F) {
 
       CurrentModule->LinkLibraries.push_back(
                                          Module::LinkLibrary(Blob, Record[0]));
+      break;
+
+    case SUBMODULE_CONFIG_MACRO:
+      if (First) {
+        Error("missing submodule metadata record at beginning of block");
+        return true;
+      }
+
+      if (!CurrentModule)
+        break;
+
+      CurrentModule->ConfigMacros.push_back(Blob.str());
       break;
     }
   }
