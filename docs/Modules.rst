@@ -5,6 +5,10 @@ Modules
 .. contents::
    :local:
 
+.. warning::
+   The functionality described on this page is still experimental! Please
+   try it out and send us bug reports!
+
 Introduction
 ============
 Most software is built using a number of software libraries, including libraries supplied by the platform, internal libraries built as part of the software itself to provide structure, and third-party libraries. For each library, one needs to access both its interface (API) and its implementation. In the C family of languages, the interface to a library is accessed by including the appropriate header files(s):
@@ -96,7 +100,7 @@ Many programming languages have a module or package system, and because of the v
 
 * **Namespaces**: Unlike in some languages, modules do not imply any notion of namespaces. Thus, a struct declared in one module will still conflict with a struct of the same name declared in a different module, just as they would if declared in two different headers. This aspect is important for backward compatibility, because (for example) the mangled names of entities in software libraries must not change when introducing modules.
 
-* **Binary distribution of modules**: Headers (particularly C++ headers) expose the full complexity of the language. Maintaining a stable binary module format across archectures, compiler versions, and compiler vendors is technically infeasible.
+* **Binary distribution of modules**: Headers (particularly C++ headers) expose the full complexity of the language. Maintaining a stable binary module format across architectures, compiler versions, and compiler vendors is technically infeasible.
 
 Using Modules
 =============
@@ -110,7 +114,7 @@ The primary user-level feature of modules is the import operation, which provide
 
   #include <stdio.h>
 
-will be automatically mapped to an import of the module ``std.io``. Even with specific ``import`` syntax in the language, this particular feature is important for both adoption and backward compatibility: automatic translation of ``#include`` to ``import`` allows an application to get the benefits of modules (for any modules-enabled libraries) without any changes to the application itself. Thus, users can easily use modules with one compiler while falling back to the preprocessor-inclusion mechanism with other compilers.
+will be automatically mapped to an import of the module ``std.io``. Even with specific ``import`` syntax in the language, this particular feature is important for both adoption and backward compatibility: automatic translation of ``#include`` to ``import`` allows an application to get the benefits of modules (for all modules-enabled libraries) without any changes to the application itself. Thus, users can easily use modules with one compiler while falling back to the preprocessor-inclusion mechanism with other compilers.
 
 Module Maps
 -----------
@@ -147,6 +151,10 @@ Module Map Language
 ===================
 TBD
 
+In the meantime, you can look at ``clang/lib/Headers/module.map``, and all
+the ``module.map`` files in ``clang/test/``.
+In particular, ``clang/test/Modules/`` contains tests specifically related
+to the modules functionality.
 
 .. [#] Automatic linking against the libraries of modules requires specific linker support, which is not widely available.
 

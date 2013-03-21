@@ -113,7 +113,7 @@ public:
 
   void EmitInstanceFunctionProlog(CodeGenFunction &CGF);
 
-  void EmitConstructorCall(CodeGenFunction &CGF,
+  llvm::Value *EmitConstructorCall(CodeGenFunction &CGF,
                            const CXXConstructorDecl *D,
                            CXXCtorType Type, bool ForVirtualBase,
                            bool Delegating,
@@ -178,11 +178,11 @@ public:
   llvm::Value *readArrayCookieImpl(CodeGenFunction &CGF, llvm::Value *allocPtr,
                                    CharUnits cookieSize);
 
-private:
   /// \brief Returns true if the given instance method is one of the
   /// kinds that the ARM ABI says returns 'this'.
-  static bool HasThisReturn(GlobalDecl GD) {
-    const CXXMethodDecl *MD = cast<CXXMethodDecl>(GD.getDecl());
+  bool HasThisReturn(GlobalDecl GD) const {
+    const CXXMethodDecl *MD = dyn_cast_or_null<CXXMethodDecl>(GD.getDecl());
+    if (!MD) return false;
     return ((isa<CXXDestructorDecl>(MD) && GD.getDtorType() != Dtor_Deleting) ||
             (isa<CXXConstructorDecl>(MD)));
   }
@@ -843,7 +843,7 @@ void ARMCXXABI::EmitInstanceFunctionProlog(CodeGenFunction &CGF) {
     CGF.Builder.CreateStore(getThisValue(CGF), CGF.ReturnValue);
 }
 
-void ItaniumCXXABI::EmitConstructorCall(CodeGenFunction &CGF,
+llvm::Value *ItaniumCXXABI::EmitConstructorCall(CodeGenFunction &CGF,
                                         const CXXConstructorDecl *D,
                                         CXXCtorType Type, bool ForVirtualBase,
                                         bool Delegating,
@@ -858,6 +858,7 @@ void ItaniumCXXABI::EmitConstructorCall(CodeGenFunction &CGF,
   // FIXME: Provide a source location here.
   CGF.EmitCXXMemberCall(D, SourceLocation(), Callee, ReturnValueSlot(), This,
                         VTT, VTTTy, ArgBeg, ArgEnd);
+  return Callee;
 }
 
 RValue ItaniumCXXABI::EmitVirtualDestructorCall(CodeGenFunction &CGF,
