@@ -13,4 +13,5 @@ S::S() {
 
 // CHECK: [[IFEND:%.*]]
 // CHECK: [[ONE:%.*]] = load %struct.S** [[RETVAL:%.*]]
-// CHECK: ret %struct.S* [[ONE]]
+// CHECK: [[THIS:%.*]] = call %struct.S* @_ZN1SC2Ev(%struct.S* [[ONE]]) 
+// CHECK: ret %struct.S* [[THIS]]
