@@ -4404,9 +4404,11 @@ void darwin::Link::ConstructJob(Compilation &C, const JobAction &JA,
     // Derived from startfile spec.
     if (Args.hasArg(options::OPT_dynamiclib)) {
       // Derived from darwin_dylib1 spec.
-      if (getDarwinToolChain().isTargetIPhoneOS()) {
-        if (!getDarwinToolChain().isTargetIOSSimulator() &&
-            getDarwinToolChain().isIPhoneOSVersionLT(3, 1))
+      if (getDarwinToolChain().isTargetIOSSimulator()) {
+        // The simulator doesn't have a versioned crt1 file.
+        CmdArgs.push_back("-ldylib1.o");
+      } else if (getDarwinToolChain().isTargetIPhoneOS()) {
+        if (getDarwinToolChain().isIPhoneOSVersionLT(3, 1))
           CmdArgs.push_back("-ldylib1.o");
       } else {
         if (getDarwinToolChain().isMacosxVersionLT(10, 5))
@@ -4418,9 +4420,11 @@ void darwin::Link::ConstructJob(Compilation &C, const JobAction &JA,
       if (Args.hasArg(options::OPT_bundle)) {
         if (!Args.hasArg(options::OPT_static)) {
           // Derived from darwin_bundle1 spec.
-          if (getDarwinToolChain().isTargetIPhoneOS()) {
-            if (!getDarwinToolChain().isTargetIOSSimulator() &&
-                getDarwinToolChain().isIPhoneOSVersionLT(3, 1))
+          if (getDarwinToolChain().isTargetIOSSimulator()) {
+            // The simulator doesn't have a versioned crt1 file.
+            CmdArgs.push_back("-lbundle1.o");
+          } else if (getDarwinToolChain().isTargetIPhoneOS()) {
+            if (getDarwinToolChain().isIPhoneOSVersionLT(3, 1))
               CmdArgs.push_back("-lbundle1.o");
           } else {
             if (getDarwinToolChain().isMacosxVersionLT(10, 6))
@@ -4454,10 +4458,11 @@ void darwin::Link::ConstructJob(Compilation &C, const JobAction &JA,
             CmdArgs.push_back("-lcrt0.o");
           } else {
             // Derived from darwin_crt1 spec.
-            if (getDarwinToolChain().isTargetIPhoneOS()) {
-              if (getDarwinToolChain().isTargetIOSSimulator())
-                ; // Simulator does not need crt1 when running on OS X 10.8+.
-              else if (getDarwinToolChain().isIPhoneOSVersionLT(3, 1))
+            if (getDarwinToolChain().isTargetIOSSimulator()) {
+              // The simulator doesn't have a versioned crt1 file.
+              CmdArgs.push_back("-lcrt1.o");
+            } else if (getDarwinToolChain().isTargetIPhoneOS()) {
+              if (getDarwinToolChain().isIPhoneOSVersionLT(3, 1))
                 CmdArgs.push_back("-lcrt1.o");
               else if (getDarwinToolChain().isIPhoneOSVersionLT(6, 0))
                 CmdArgs.push_back("-lcrt1.3.1.o");
