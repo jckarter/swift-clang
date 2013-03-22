@@ -518,3 +518,6 @@ def ASMOperandWidths : DiagGroup<"asm-operand-widths">;
 def ASM : DiagGroup<"asm", [
     ASMOperandWidths
   ]>;
+
+// OpenMP warnings.
+def SourceUsesOpenMP : DiagGroup<"source-uses-openmp">;
