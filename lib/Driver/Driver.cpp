@@ -291,6 +291,9 @@ Compilation *Driver::BuildCompilation(ArrayRef<const char *> ArgList) {
   if (Args->hasArg(options::OPT_nostdlib))
     UseStdLib = false;
 
+  if (const Arg *A = Args->getLastArg(options::OPT_resource_dir))
+    ResourceDir = A->getValue();
+
   // Perform the default argument translations.
   DerivedArgList *TranslatedArgs = TranslateInputArgs(*Args);
 

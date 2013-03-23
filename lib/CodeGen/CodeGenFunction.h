@@ -2491,6 +2491,8 @@ public:
   llvm::Value *EmitARCRetainScalarExpr(const Expr *expr);
   llvm::Value *EmitARCRetainAutoreleaseScalarExpr(const Expr *expr);
 
+  void EmitARCIntrinsicUse(llvm::ArrayRef<llvm::Value*> values);
+
   static Destroyer destroyARCStrongImprecise;
   static Destroyer destroyARCStrongPrecise;
   static Destroyer destroyARCWeak;
