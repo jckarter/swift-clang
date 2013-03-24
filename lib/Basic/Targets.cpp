@@ -185,7 +185,7 @@ static void getDarwinDefines(MacroBuilder &Builder, const LangOptions &Opts,
     assert(Triple.getEnvironmentName().empty() && "Invalid environment!");
     assert(Maj < 100 && Min < 100 && Rev < 100 && "Invalid version!");
     char Str[7];
-    if (Maj < 10 || Maj == 10 && Min < 10) {
+    if (Maj < 10 || (Maj == 10 && Min < 10)) {
         Str[0] = '0' + (Maj / 10);
         Str[1] = '0' + (Maj % 10);
         Str[2] = '0' + std::min(Min, 9U);
