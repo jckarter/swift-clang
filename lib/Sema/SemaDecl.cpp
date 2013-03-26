@@ -7097,6 +7097,14 @@ namespace {
       Visit(Base);
     }
 
+    void VisitCXXOperatorCallExpr(CXXOperatorCallExpr *E) {
+      if (E->getNumArgs() > 0)
+        if (DeclRefExpr *DRE = dyn_cast<DeclRefExpr>(E->getArg(0)))
+          HandleDeclRefExpr(DRE);
+
+      Inherited::VisitCXXOperatorCallExpr(E);
+    }
+
     void VisitUnaryOperator(UnaryOperator *E) {
       // For POD record types, addresses of its own members are well-defined.
       if (E->getOpcode() == UO_AddrOf && isRecordType &&
@@ -9858,7 +9866,8 @@ CreateNewDecl:
     // If this is an undefined enum, warn.
     if (TUK != TUK_Definition && !Invalid) {
       TagDecl *Def;
-      if (getLangOpts().CPlusPlus11 && cast<EnumDecl>(New)->isFixed()) {
+      if ((getLangOpts().CPlusPlus11 || getLangOpts().ObjC2) &&
+          cast<EnumDecl>(New)->isFixed()) {
         // C++0x: 7.2p2: opaque-enum-declaration.
         // Conflicts are diagnosed above. Do nothing.
       }
