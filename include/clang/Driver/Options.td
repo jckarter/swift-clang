@@ -806,6 +806,8 @@ def iquote : JoinedOrSeparate<["-"], "iquote">, Group<clang_i_Group>, Flags<[CC1
   HelpText<"Add directory to QUOTE include search path">, MetaVarName<"<directory>">;
 def isysroot : JoinedOrSeparate<["-"], "isysroot">, Group<clang_i_Group>, Flags<[CC1Option]>,
   HelpText<"Set the system root directory (usually /)">, MetaVarName<"<dir>">;
+def isysroot_implicit : Flag<["-"], "isysroot-implicit">, Group<clang_i_Group>, Flags<[CC1Option]>,
+  HelpText<"Search both the system root and actual root include entries">, MetaVarName<"<dir>">;
 def isystem : JoinedOrSeparate<["-"], "isystem">, Group<clang_i_Group>, Flags<[CC1Option]>,
   HelpText<"Add directory to SYSTEM include search path">, MetaVarName<"<directory>">;
 def iwithprefixbefore : JoinedOrSeparate<["-"], "iwithprefixbefore">, Group<clang_i_Group>,
@@ -895,6 +897,7 @@ def mno_fma : Flag<["-"], "mno-fma">, Group<m_x86_Features_Group>;
 def mno_xop : Flag<["-"], "mno-xop">, Group<m_x86_Features_Group>;
 def mno_f16c : Flag<["-"], "mno-f16c">, Group<m_x86_Features_Group>;
 def mno_rtm : Flag<["-"], "mno-rtm">, Group<m_x86_Features_Group>;
+def mno_prfchw : Flag<["-"], "mno-prfchw">, Group<m_x86_Features_Group>;
 
 def mno_thumb : Flag<["-"], "mno-thumb">, Group<m_Group>;
 def marm : Flag<["-"], "marm">, Alias<mno_thumb>;
@@ -939,6 +942,7 @@ def mfma : Flag<["-"], "mfma">, Group<m_x86_Features_Group>;
 def mxop : Flag<["-"], "mxop">, Group<m_x86_Features_Group>;
 def mf16c : Flag<["-"], "mf16c">, Group<m_x86_Features_Group>;
 def mrtm : Flag<["-"], "mrtm">, Group<m_x86_Features_Group>;
+def mprfchw : Flag<["-"], "mprfchw">, Group<m_x86_Features_Group>;
 def mips16 : Flag<["-"], "mips16">, Group<m_Group>;
 def mno_mips16 : Flag<["-"], "mno-mips16">, Group<m_Group>;
 def mxgot : Flag<["-"], "mxgot">, Group<m_Group>;

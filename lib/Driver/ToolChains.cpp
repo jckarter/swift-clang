@@ -398,6 +398,7 @@ void Darwin::AddDeploymentTarget(DerivedArgList &Args) const {
   // Support allowing the SDKROOT environment variable used by xcrun and other
   // Xcode tools to define the default sysroot, by making it the default for
   // isysroot.
+  bool SysrootWasImplicit = false;
   if (const Arg *A = Args.getLastArg(options::OPT_isysroot)) {
     // Warn if the path does not exist.
     bool Exists;
@@ -409,8 +410,8 @@ void Darwin::AddDeploymentTarget(DerivedArgList &Args) const {
       // exists, and it is not the root path.
       if (llvm::sys::path::is_absolute(env) && llvm::sys::fs::exists(env) &&
           StringRef(env) != "/") {
-        Args.append(Args.MakeSeparateArg(
-                      0, Opts.getOption(options::OPT_isysroot), env));
+        Args.AddSeparateArg(0, Opts.getOption(options::OPT_isysroot), env);
+        SysrootWasImplicit = true;
       }
     }
   }
@@ -544,6 +545,12 @@ void Darwin::AddDeploymentTarget(DerivedArgList &Args) const {
   if (iOSVersion && (getTriple().getArch() == llvm::Triple::x86 ||
                      getTriple().getArch() == llvm::Triple::x86_64))
     IsIOSSim = true;
+
+  // If the sysroot was implicit and the target is OS X, then enable the
+  // "implicit sysroot" header search behavior in the frontend.
+  if (SysrootWasImplicit && OSXVersion) {
+    Args.AddFlagArg(0, Opts.getOption(options::OPT_isysroot_implicit));
+  }
 
   setTarget(/*IsIPhoneOS=*/ !OSXVersion, Major, Minor, Micro, IsIOSSim);
 }

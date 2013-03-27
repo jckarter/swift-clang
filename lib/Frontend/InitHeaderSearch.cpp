@@ -43,13 +43,22 @@ class InitHeaderSearch {
   HeaderSearch &Headers;
   bool Verbose;
   std::string IncludeSysroot;
-  bool HasSysroot;
+  bool SysrootIsImplicit;
 
 public:
+  bool HasSysroot;
 
-  InitHeaderSearch(HeaderSearch &HS, bool verbose, StringRef sysroot)
-    : Headers(HS), Verbose(verbose), IncludeSysroot(sysroot),
-      HasSysroot(!(sysroot.empty() || sysroot == "/")) {
+private:
+  /// AddPathInternal - Add the specified path to the specified group list,
+  /// without performing any additional processing.
+  void AddPathInternal(const Twine &Path, IncludeDirGroup Group,
+                       bool isFramework, bool WasImplicit);
+
+public:
+  InitHeaderSearch(HeaderSearch &HS, const HeaderSearchOptions &HSOpts)
+    : Headers(HS), Verbose(HSOpts.Verbose), IncludeSysroot(HSOpts.Sysroot),
+      SysrootIsImplicit(HSOpts.SysrootIsImplicit),
+      HasSysroot(!(IncludeSysroot.empty() || IncludeSysroot == "/")) {
   }
 
   /// AddPath - Add the specified path to the specified group list, prefixing
@@ -124,16 +133,37 @@ void InitHeaderSearch::AddPath(const Twine &Path, IncludeDirGroup Group,
     SmallString<256> MappedPathStorage;
     StringRef MappedPathStr = Path.toStringRef(MappedPathStorage);
     if (CanPrefixSysroot(MappedPathStr)) {
-      AddUnmappedPath(IncludeSysroot + Path, Group, isFramework);
+      AddPathInternal(IncludeSysroot + Path, Group, isFramework, false);
+
+      // If implicit sysroot behavior is enabled, also add the unmapped path.
+      if (SysrootIsImplicit)
+        AddPathInternal(Path, Group, isFramework, true);
       return;
     }
   }
 
-  AddUnmappedPath(Path, Group, isFramework);
+  AddPathInternal(Path, Group, isFramework, false);
 }
 
 void InitHeaderSearch::AddUnmappedPath(const Twine &Path, IncludeDirGroup Group,
                                        bool isFramework) {
+  // Add the unmapped path.
+  AddPathInternal(Path, Group, isFramework, false);
+
+  // If implicit sysroot behavior is enabled, also add the path implicitly
+  // mapped into the sysroot.
+  if (HasSysroot && SysrootIsImplicit) {
+    SmallString<256> MappedPathStorage;
+    StringRef MappedPathStr = Path.toStringRef(MappedPathStorage);
+    if (CanPrefixSysroot(MappedPathStr)) {
+      AddPathInternal(IncludeSysroot + Path, Group, isFramework, true);
+      return;
+    }
+  }
+}
+
+void InitHeaderSearch::AddPathInternal(const Twine &Path, IncludeDirGroup Group,
+                                       bool isFramework, bool WasImplicit) {
   assert(!Path.isTriviallyEmpty() && "can't handle empty path here");
 
   FileManager &FM = Headers.getFileMgr();
@@ -171,7 +201,7 @@ void InitHeaderSearch::AddUnmappedPath(const Twine &Path, IncludeDirGroup Group,
     }
   }
 
-  if (Verbose)
+  if (Verbose && !WasImplicit)
     llvm::errs() << "ignoring nonexistent directory \""
                  << MappedPathStr << "\"\n";
 }
@@ -670,7 +700,7 @@ void clang::ApplyHeaderSearchOptions(HeaderSearch &HS,
                                      const HeaderSearchOptions &HSOpts,
                                      const LangOptions &Lang,
                                      const llvm::Triple &Triple) {
-  InitHeaderSearch Init(HS, HSOpts.Verbose, HSOpts.Sysroot);
+  InitHeaderSearch Init(HS, HSOpts);
 
   // Add the user defined entries.
   for (unsigned i = 0, e = HSOpts.UserEntries.size(); i != e; ++i) {
