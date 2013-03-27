@@ -223,9 +223,9 @@ static bool visitPreprocessedEntitiesInRange(SourceRange R,
                                            PPRec, FID);
 }
 
-void CursorVisitor::visitFileRegion() {
+bool CursorVisitor::visitFileRegion() {
   if (RegionOfInterest.isInvalid())
-    return;
+    return false;
 
   ASTUnit *Unit = cxtu::getASTUnit(TU);
   SourceManager &SM = Unit->getSourceManager();
@@ -243,7 +243,7 @@ void CursorVisitor::visitFileRegion() {
 
   assert(Begin.first == End.first);
   if (Begin.second > End.second)
-    return;
+    return false;
   
   FileID File = Begin.first;
   unsigned Offset = Begin.second;
@@ -251,12 +251,15 @@ void CursorVisitor::visitFileRegion() {
 
   if (!VisitDeclsOnly && !VisitPreprocessorLast)
     if (visitPreprocessedEntitiesInRegion())
-      return; // visitation break.
+      return true; // visitation break.
 
-  visitDeclsFromFileRegion(File, Offset, Length);
+  if (visitDeclsFromFileRegion(File, Offset, Length))
+    return true; // visitation break.
 
   if (!VisitDeclsOnly && VisitPreprocessorLast)
-    visitPreprocessedEntitiesInRegion();
+    return visitPreprocessedEntitiesInRegion();
+
+  return false;
 }
 
 static bool isInLexicalContext(Decl *D, DeclContext *DC) {
@@ -271,7 +274,7 @@ static bool isInLexicalContext(Decl *D, DeclContext *DC) {
   return false;
 }
 
-void CursorVisitor::visitDeclsFromFileRegion(FileID File,
+bool CursorVisitor::visitDeclsFromFileRegion(FileID File,
                                              unsigned Offset, unsigned Length) {
   ASTUnit *Unit = cxtu::getASTUnit(TU);
   SourceManager &SM = Unit->getSourceManager();
@@ -286,7 +289,7 @@ void CursorVisitor::visitDeclsFromFileRegion(FileID File,
     bool Invalid = false;
     const SrcMgr::SLocEntry &SLEntry = SM.getSLocEntry(File, &Invalid);
     if (Invalid)
-      return;
+      return false;
 
     SourceLocation Outer;
     if (SLEntry.isFile())
@@ -294,7 +297,7 @@ void CursorVisitor::visitDeclsFromFileRegion(FileID File,
     else
       Outer = SLEntry.getExpansion().getExpansionLocStart();
     if (Outer.isInvalid())
-      return;
+      return false;
 
     llvm::tie(File, Offset) = SM.getDecomposedExpansionLoc(Outer);
     Length = 0;
@@ -337,11 +340,11 @@ void CursorVisitor::visitDeclsFromFileRegion(FileID File,
     }
 
     if (Visit(MakeCXCursor(D, TU, Range), /*CheckedRegionOfInterest=*/true))
-      break;
+      return true; // visitation break.
   }
 
   if (VisitedAtLeastOnce)
-    return;
+    return false;
 
   // No Decls overlapped with the range. Move up the lexical context until there
   // is a context that contains the range or we reach the translation unit
@@ -356,12 +359,14 @@ void CursorVisitor::visitDeclsFromFileRegion(FileID File,
       break;
 
     if (RangeCompare(SM, CurDeclRange, Range) == RangeOverlap) {
-      Visit(MakeCXCursor(D, TU, Range), /*CheckedRegionOfInterest=*/true);
-      break;
+      if (Visit(MakeCXCursor(D, TU, Range), /*CheckedRegionOfInterest=*/true))
+        return true; // visitation break.
     }
 
     DC = D->getLexicalDeclContext();
   }
+
+  return false;
 }
 
 bool CursorVisitor::visitPreprocessedEntitiesInRegion() {
@@ -4453,6 +4458,7 @@ CXCursor clang_getCursorDefinition(CXCursor C) {
   case Decl::Label:  // FIXME: Is this right??
   case Decl::ClassScopeFunctionSpecialization:
   case Decl::Import:
+  case Decl::OMPThreadPrivate:
     return C;
 
   // Declaration kinds that don't make any sense here, but are
@@ -5979,20 +5985,26 @@ CXString clang_Module_getFullName(CXModule CXMod) {
   return cxstring::createDup(Mod->getFullModuleName());
 }
 
-unsigned clang_Module_getNumTopLevelHeaders(CXModule CXMod) {
-  if (!CXMod)
+unsigned clang_Module_getNumTopLevelHeaders(CXTranslationUnit TU,
+                                            CXModule CXMod) {
+  if (!TU || !CXMod)
     return 0;
   Module *Mod = static_cast<Module*>(CXMod);
-  return Mod->TopHeaders.size();
+  FileManager &FileMgr = cxtu::getASTUnit(TU)->getFileManager();
+  ArrayRef<const FileEntry *> TopHeaders = Mod->getTopHeaders(FileMgr);
+  return TopHeaders.size();
 }
 
-CXFile clang_Module_getTopLevelHeader(CXModule CXMod, unsigned Index) {
-  if (!CXMod)
+CXFile clang_Module_getTopLevelHeader(CXTranslationUnit TU,
+                                      CXModule CXMod, unsigned Index) {
+  if (!TU || !CXMod)
     return 0;
   Module *Mod = static_cast<Module*>(CXMod);
+  FileManager &FileMgr = cxtu::getASTUnit(TU)->getFileManager();
 
-  if (Index < Mod->TopHeaders.size())
-    return const_cast<FileEntry *>(Mod->TopHeaders[Index]);
+  ArrayRef<const FileEntry *> TopHeaders = Mod->getTopHeaders(FileMgr);
+  if (Index < TopHeaders.size())
+    return const_cast<FileEntry *>(TopHeaders[Index]);
 
   return 0;
 }
@@ -6293,10 +6305,12 @@ MacroInfo *cxindex::getMacroInfo(const IdentifierInfo &II,
   ASTUnit *Unit = cxtu::getASTUnit(TU);
   Preprocessor &PP = Unit->getPreprocessor();
   MacroDirective *MD = PP.getMacroDirectiveHistory(&II);
-  while (MD) {
-    if (MacroDefLoc == MD->getInfo()->getDefinitionLoc())
-      return MD->getInfo();
-    MD = MD->getPrevious();
+  if (MD) {
+    for (MacroDirective::DefInfo
+           Def = MD->getDefinition(); Def; Def = Def.getPreviousDefinition()) {
+      if (MacroDefLoc == Def.getMacroInfo()->getDefinitionLoc())
+        return Def.getMacroInfo();
+    }
   }
 
   return 0;
@@ -6352,7 +6366,7 @@ MacroDefinition *cxindex::checkForMacroInMacroDefinition(const MacroInfo *MI,
   if (!InnerMD)
     return 0;
 
-  return PPRec->findMacroDefinition(InnerMD->getInfo());
+  return PPRec->findMacroDefinition(InnerMD->getMacroInfo());
 }
 
 MacroDefinition *cxindex::checkForMacroInMacroDefinition(const MacroInfo *MI,
@@ -6394,6 +6408,18 @@ Logger &cxindex::Logger::operator<<(CXTranslationUnit TU) {
   }
 
   LogOS << "<NULL TU>";
+  return *this;
+}
+
+Logger &cxindex::Logger::operator<<(const FileEntry *FE) {
+  *this << FE->getName();
+  return *this;
+}
+
+Logger &cxindex::Logger::operator<<(CXCursor cursor) {
+  CXString cursorName = clang_getCursorDisplayName(cursor);
+  *this << cursorName << "@" << clang_getCursorLocation(cursor);
+  clang_disposeString(cursorName);
   return *this;
 }
 

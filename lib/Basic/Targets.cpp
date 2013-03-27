@@ -184,12 +184,22 @@ static void getDarwinDefines(MacroBuilder &Builder, const LangOptions &Opts,
     // version.
     assert(Triple.getEnvironmentName().empty() && "Invalid environment!");
     assert(Maj < 100 && Min < 100 && Rev < 100 && "Invalid version!");
-    char Str[5];
-    Str[0] = '0' + (Maj / 10);
-    Str[1] = '0' + (Maj % 10);
-    Str[2] = '0' + std::min(Min, 9U);
-    Str[3] = '0' + std::min(Rev, 9U);
-    Str[4] = '\0';
+    char Str[7];
+    if (Maj < 10 || (Maj == 10 && Min < 10)) {
+        Str[0] = '0' + (Maj / 10);
+        Str[1] = '0' + (Maj % 10);
+        Str[2] = '0' + std::min(Min, 9U);
+        Str[3] = '0' + std::min(Rev, 9U);
+        Str[4] = '\0';
+    } else {
+        Str[0] = '0' + (Maj / 10);
+        Str[1] = '0' + (Maj % 10);
+        Str[2] = '0' + (Min / 10);
+        Str[3] = '0' + (Min % 10);
+        Str[4] = '0' + (Rev / 10);
+        Str[5] = '0' + (Rev % 10);
+        Str[6] = '\0';
+    }
     Builder.defineMacro("__ENVIRONMENT_MAC_OS_X_VERSION_MIN_REQUIRED__", Str);
   }
 
@@ -1729,6 +1739,7 @@ class X86TargetInfo : public TargetInfo {
   bool HasBMI2;
   bool HasPOPCNT;
   bool HasRTM;
+  bool HasPRFCHW;
   bool HasSSE4a;
   bool HasFMA4;
   bool HasFMA;
@@ -1880,8 +1891,8 @@ public:
     : TargetInfo(triple), SSELevel(NoSSE), MMX3DNowLevel(NoMMX3DNow),
       HasAES(false), HasPCLMUL(false), HasLZCNT(false), HasRDRND(false),
       HasBMI(false), HasBMI2(false), HasPOPCNT(false), HasRTM(false),
-      HasSSE4a(false), HasFMA4(false), HasFMA(false), HasXOP(false),
-      HasF16C(false), CPU(CK_Generic) {
+      HasPRFCHW(false), HasSSE4a(false), HasFMA4(false),
+      HasFMA(false), HasXOP(false), HasF16C(false), CPU(CK_Generic) {
     BigEndian = false;
     LongDoubleFormat = &llvm::APFloat::x87DoubleExtended;
   }
@@ -2087,6 +2098,7 @@ void X86TargetInfo::getDefaultFeatures(llvm::StringMap<bool> &Features) const {
   Features["bmi2"] = false;
   Features["popcnt"] = false;
   Features["rtm"] = false;
+  Features["prfchw"] = false;
   Features["fma4"] = false;
   Features["fma"] = false;
   Features["xop"] = false;
@@ -2309,6 +2321,8 @@ bool X86TargetInfo::setFeatureEnabled(llvm::StringMap<bool> &Features,
       Features["f16c"] = true;
     else if (Name == "rtm")
       Features["rtm"] = true;
+    else if (Name == "prfchw")
+      Features["prfchw"] = true;
   } else {
     if (Name == "mmx")
       Features["mmx"] = Features["3dnow"] = Features["3dnowa"] = false;
@@ -2373,6 +2387,8 @@ bool X86TargetInfo::setFeatureEnabled(llvm::StringMap<bool> &Features,
       Features["f16c"] = false;
     else if (Name == "rtm")
       Features["rtm"] = false;
+    else if (Name == "prfchw")
+      Features["prfchw"] = false;
   }
 
   return true;
@@ -2426,6 +2442,11 @@ void X86TargetInfo::HandleTargetFeatures(std::vector<std::string> &Features) {
 
     if (Feature == "rtm") {
       HasRTM = true;
+      continue;
+    }
+
+    if (Feature == "prfchw") {
+      HasPRFCHW = true;
       continue;
     }
 
@@ -2653,6 +2674,9 @@ void X86TargetInfo::getTargetDefines(const LangOptions &Opts,
   if (HasRTM)
     Builder.defineMacro("__RTM__");
 
+  if (HasPRFCHW)
+    Builder.defineMacro("__PRFCHW__");
+
   if (HasSSE4a)
     Builder.defineMacro("__SSE4A__");
 
@@ -2741,6 +2765,7 @@ bool X86TargetInfo::hasFeature(StringRef Feature) const {
       .Case("pclmul", HasPCLMUL)
       .Case("popcnt", HasPOPCNT)
       .Case("rtm", HasRTM)
+      .Case("prfchw", HasPRFCHW)
       .Case("sse", SSELevel >= SSE1)
       .Case("sse2", SSELevel >= SSE2)
       .Case("sse3", SSELevel >= SSE3)
@@ -3995,8 +4020,6 @@ public:
 
   static const char *getHexagonCPUSuffix(StringRef Name) {
     return llvm::StringSwitch<const char*>(Name)
-      .Case("hexagonv2", "2")
-      .Case("hexagonv3", "3")
       .Case("hexagonv4", "4")
       .Case("hexagonv5", "5")
       .Default(0);
@@ -4967,11 +4990,15 @@ namespace {
       SizeType     = TargetInfo::UnsignedInt;
       PtrDiffType = IntPtrType = TargetInfo::SignedInt;
       DescriptionString
-        = "p:32:32:32-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-"
+        = "e-p:32:32:32-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-"
           "f32:32:32-f64:64:64-v16:16:16-v24:32:32-v32:32:32-v48:64:64-"
           "v64:64:64-v96:128:128-v128:128:128-v192:256:256-v256:256:256-"
           "v512:512:512-v1024:1024:1024";
-  }
+    }
+    virtual void getTargetDefines(const LangOptions &Opts,
+                                  MacroBuilder &Builder) const {
+      DefineStd(Builder, "SPIR32", Opts);
+    }
   };
 
   class SPIR64TargetInfo : public SPIRTargetInfo {
@@ -4981,11 +5008,15 @@ namespace {
       SizeType     = TargetInfo::UnsignedLong;
       PtrDiffType = IntPtrType = TargetInfo::SignedLong;
       DescriptionString
-        = "p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-"
+        = "e-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-"
           "f32:32:32-f64:64:64-v16:16:16-v24:32:32-v32:32:32-v48:64:64-"
           "v64:64:64-v96:128:128-v128:128:128-v192:256:256-v256:256:256-"
           "v512:512:512-v1024:1024:1024";
-  }
+    }
+    virtual void getTargetDefines(const LangOptions &Opts,
+                                  MacroBuilder &Builder) const {
+      DefineStd(Builder, "SPIR64", Opts);
+    }
   };
 }
 

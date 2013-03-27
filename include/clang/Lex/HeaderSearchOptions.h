@@ -95,9 +95,31 @@ public:
   /// Note: Only used for testing!
   unsigned DisableModuleHash : 1;
 
+  /// \brief The interval (in seconds) between pruning operations.
+  ///
+  /// This operation is expensive, because it requires Clang to walk through
+  /// the directory structure of the module cache, stat()'ing and removing
+  /// files.
+  ///
+  /// The default value is large, e.g., the operation runs once a week.
+  unsigned ModuleCachePruneInterval;
+
+  /// \brief The time (in seconds) after which an unused module file will be
+  /// considered unused and will, therefore, be pruned.
+  ///
+  /// When the module cache is pruned, any module file that has not been
+  /// accessed in this many seconds will be removed. The default value is
+  /// large, e.g., a month, to avoid forcing infrequently-used modules to be
+  /// regenerated often.
+  unsigned ModuleCachePruneAfter;
+
   /// \brief The set of macro names that should be ignored for the purposes
   /// of computing the module hash.
   llvm::SetVector<std::string> ModulesIgnoreMacros;
+
+  /// Indicate whether the sysroot is implicit, and the header search should be
+  /// adjusted accordingly.
+  unsigned SysrootIsImplicit : 1;
 
   /// Include the compiler builtin includes.
   unsigned UseBuiltinIncludes : 1;
@@ -116,7 +138,11 @@ public:
 
 public:
   HeaderSearchOptions(StringRef _Sysroot = "/")
-    : Sysroot(_Sysroot), DisableModuleHash(0), UseBuiltinIncludes(true),
+    : Sysroot(_Sysroot), DisableModuleHash(0),
+      ModuleCachePruneInterval(7*24*60*60),
+      ModuleCachePruneAfter(31*24*60*60),
+      SysrootIsImplicit(false),
+      UseBuiltinIncludes(true),
       UseStandardSystemIncludes(true), UseStandardCXXIncludes(true),
       UseLibcxx(false), Verbose(false) {}
 

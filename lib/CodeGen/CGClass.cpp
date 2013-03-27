@@ -451,12 +451,14 @@ static void EmitAggMemberInitializer(CodeGenFunction &CGF,
         LV.setAlignment(std::min(Align, LV.getAlignment()));
       }
 
-      if (!CGF.hasAggregateLLVMType(T)) {
+      switch (CGF.getEvaluationKind(T)) {
+      case TEK_Scalar:
         CGF.EmitScalarInit(Init, /*decl*/ 0, LV, false);
-      } else if (T->isAnyComplexType()) {
-        CGF.EmitComplexExprIntoAddr(Init, LV.getAddress(),
-                                    LV.isVolatileQualified());
-      } else {
+        break;
+      case TEK_Complex:
+        CGF.EmitComplexExprIntoLValue(Init, LV, /*isInit*/ true);
+        break;
+      case TEK_Aggregate: {
         AggValueSlot Slot =
           AggValueSlot::forLValue(LV,
                                   AggValueSlot::IsDestructed,
@@ -464,6 +466,8 @@ static void EmitAggMemberInitializer(CodeGenFunction &CGF,
                                   AggValueSlot::IsNotAliased);
 
         CGF.EmitAggExpr(Init, Slot);
+        break;
+      }
       }
     }
 
@@ -600,16 +604,19 @@ void CodeGenFunction::EmitInitializerForField(FieldDecl *Field,
                                               LValue LHS, Expr *Init,
                                              ArrayRef<VarDecl *> ArrayIndexes) {
   QualType FieldType = Field->getType();
-  if (!hasAggregateLLVMType(FieldType)) {
+  switch (getEvaluationKind(FieldType)) {
+  case TEK_Scalar:
     if (LHS.isSimple()) {
       EmitExprAsInit(Init, Field, LHS, false);
     } else {
       RValue RHS = RValue::get(EmitScalarExpr(Init));
       EmitStoreThroughLValue(RHS, LHS);
     }
-  } else if (FieldType->isAnyComplexType()) {
-    EmitComplexExprIntoAddr(Init, LHS.getAddress(), LHS.isVolatileQualified());
-  } else {
+    break;
+  case TEK_Complex:
+    EmitComplexExprIntoLValue(Init, LHS, /*isInit*/ true);
+    break;
+  case TEK_Aggregate: {
     llvm::Value *ArrayIndexVar = 0;
     if (ArrayIndexes.size()) {
       llvm::Type *SizeTy = ConvertType(getContext().getSizeType());
@@ -637,6 +644,7 @@ void CodeGenFunction::EmitInitializerForField(FieldDecl *Field,
     
     EmitAggMemberInitializer(*this, LHS, Init, ArrayIndexVar, FieldType,
                              ArrayIndexes, 0);
+  }
   }
 
   // Ensure that we destroy this object if an exception is thrown
@@ -1658,8 +1666,11 @@ CodeGenFunction::EmitCXXConstructorCall(const CXXConstructorDecl *D,
   }
 
   // Non-trivial constructors are handled in an ABI-specific manner.
-  CGM.getCXXABI().EmitConstructorCall(*this, D, Type, ForVirtualBase,
-                                      Delegating, This, ArgBeg, ArgEnd);
+  llvm::Value *Callee = CGM.getCXXABI().EmitConstructorCall(*this, D, Type,
+                            ForVirtualBase, Delegating, This, ArgBeg, ArgEnd);
+  if (CGM.getCXXABI().HasThisReturn(CurGD) &&
+      CGM.getCXXABI().HasThisReturn(GlobalDecl(D, Type)))
+     CalleeWithThisReturn = Callee;
 }
 
 void
@@ -1748,9 +1759,12 @@ CodeGenFunction::EmitDelegateCXXConstructorCall(const CXXConstructorDecl *Ctor,
     EmitDelegateCallArg(DelegateArgs, param);
   }
 
+  llvm::Value *Callee = CGM.GetAddrOfCXXConstructor(Ctor, CtorType);
   EmitCall(CGM.getTypes().arrangeCXXConstructorDeclaration(Ctor, CtorType),
-           CGM.GetAddrOfCXXConstructor(Ctor, CtorType), 
-           ReturnValueSlot(), DelegateArgs, Ctor);
+           Callee, ReturnValueSlot(), DelegateArgs, Ctor);
+  if (CGM.getCXXABI().HasThisReturn(CurGD) &&
+      CGM.getCXXABI().HasThisReturn(GlobalDecl(Ctor, CtorType)))
+     CalleeWithThisReturn = Callee;
 }
 
 namespace {
@@ -1817,6 +1831,9 @@ void CodeGenFunction::EmitCXXDestructorCall(const CXXDestructorDecl *DD,
   EmitCXXMemberCall(DD, SourceLocation(), Callee, ReturnValueSlot(), This,
                     VTT, getContext().getPointerType(getContext().VoidPtrTy),
                     0, 0);
+  if (CGM.getCXXABI().HasThisReturn(CurGD) &&
+      CGM.getCXXABI().HasThisReturn(GlobalDecl(DD, Type)))
+     CalleeWithThisReturn = Callee;
 }
 
 namespace {
@@ -2173,7 +2190,7 @@ void CodeGenFunction::EmitForwardingCallToLambda(const CXXRecordDecl *lambda,
   ReturnValueSlot returnSlot;
   if (!resultType->isVoidType() &&
       calleeFnInfo.getReturnInfo().getKind() == ABIArgInfo::Indirect &&
-      hasAggregateLLVMType(calleeFnInfo.getReturnType()))
+      !hasScalarEvaluationKind(calleeFnInfo.getReturnType()))
     returnSlot = ReturnValueSlot(ReturnValue, resultType.isVolatileQualified());
 
   // We don't need to separately arrange the call arguments because

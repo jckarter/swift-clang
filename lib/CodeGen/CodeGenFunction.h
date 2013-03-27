@@ -78,6 +78,17 @@ namespace CodeGen {
   class BlockFlags;
   class BlockFieldFlags;
 
+/// The kind of evaluation to perform on values of a particular
+/// type.  Basically, is the code in CGExprScalar, CGExprComplex, or
+/// CGExprAgg?
+///
+/// TODO: should vectors maybe be split out into their own thing?
+enum TypeEvaluationKind {
+  TEK_Scalar,
+  TEK_Complex,
+  TEK_Aggregate
+};
+
 /// A branch fixup.  These are required when emitting a goto to a
 /// label which hasn't been emitted yet.  The goto is optimistically
 /// emitted as a branch to the basic block for the label, and (if it
@@ -551,6 +562,11 @@ public:
     EHScopeStack::stable_iterator getScopeDepth() const { return ScopeDepth; }
     unsigned getDestIndex() const { return Index; }
 
+    // This should be used cautiously.
+    void setScopeDepth(EHScopeStack::stable_iterator depth) {
+      ScopeDepth = depth;
+    }
+
   private:
     llvm::BasicBlock *Block;
     EHScopeStack::stable_iterator ScopeDepth;
@@ -842,6 +858,8 @@ public:
 
   class LexicalScope: protected RunCleanupsScope {
     SourceRange Range;
+    SmallVector<const LabelDecl*, 4> Labels;
+    LexicalScope *ParentScope;
 
     LexicalScope(const LexicalScope &) LLVM_DELETED_FUNCTION;
     void operator=(const LexicalScope &) LLVM_DELETED_FUNCTION;
@@ -849,15 +867,23 @@ public:
   public:
     /// \brief Enter a new cleanup scope.
     explicit LexicalScope(CodeGenFunction &CGF, SourceRange Range)
-      : RunCleanupsScope(CGF), Range(Range) {
+      : RunCleanupsScope(CGF), Range(Range), ParentScope(CGF.CurLexicalScope) {
+      CGF.CurLexicalScope = this;
       if (CGDebugInfo *DI = CGF.getDebugInfo())
         DI->EmitLexicalBlockStart(CGF.Builder, Range.getBegin());
+    }
+
+    void addLabel(const LabelDecl *label) {
+      assert(PerformCleanup && "adding label to dead scope?");
+      Labels.push_back(label);
     }
 
     /// \brief Exit this cleanup scope, emitting any accumulated
     /// cleanups.
     ~LexicalScope() {
-      if (PerformCleanup) endLexicalScope();
+      // If we should perform a cleanup, force them now.  Note that
+      // this ends the cleanup scope before rescoping any labels.
+      if (PerformCleanup) ForceCleanup();
     }
 
     /// \brief Force the emission of cleanups now, instead of waiting
@@ -869,9 +895,14 @@ public:
 
   private:
     void endLexicalScope() {
+      CGF.CurLexicalScope = ParentScope;
       if (CGDebugInfo *DI = CGF.getDebugInfo())
         DI->EmitLexicalBlockEnd(CGF.Builder, Range.getEnd());
+      if (!Labels.empty())
+        rescopeLabels();
     }
+
+    void rescopeLabels();
   };
 
 
@@ -1120,6 +1151,10 @@ private:
   CGDebugInfo *DebugInfo;
   bool DisableDebugInfo;
 
+  /// If the current function returns 'this', use the field to keep track of
+  /// the callee that returns 'this'.
+  llvm::Value *CalleeWithThisReturn;
+
   /// DidCallStackSave - Whether llvm.stacksave has been called. Used to avoid
   /// calling llvm.stacksave for multiple VLAs in the same scope.
   bool DidCallStackSave;
@@ -1190,6 +1225,8 @@ private:
   /// temporary should be destroyed conditionally.
   ConditionalEvaluation *OutermostConditional;
 
+  /// The current lexical scope.
+  LexicalScope *CurLexicalScope;
 
   /// ByrefValueInfoMap - For each __block variable, contains a pair of the LLVM
   /// type as well as the field number that contains the actual data.
@@ -1203,6 +1240,9 @@ private:
   /// Add a kernel metadata node to the named metadata node 'opencl.kernels'.
   /// In the kernel metadata node, reference the kernel function and metadata 
   /// nodes for its optional attribute qualifiers (OpenCL 1.1 6.7.2):
+  /// - A node for the vec_type_hint(<type>) qualifier contains string
+  ///   "vec_type_hint", an undefined value of the <type> data type,
+  ///   and a Boolean that is true if the <type> is integer and signed.
   /// - A node for the work_group_size_hint(X,Y,Z) qualifier contains string 
   ///   "work_group_size_hint", and three 32-bit integers X, Y and Z.
   /// - A node for the reqd_work_group_size(X,Y,Z) qualifier contains string 
@@ -1515,7 +1555,15 @@ public:
 
   /// hasAggregateLLVMType - Return true if the specified AST type will map into
   /// an aggregate LLVM type or is void.
-  static bool hasAggregateLLVMType(QualType T);
+  static TypeEvaluationKind getEvaluationKind(QualType T);
+
+  static bool hasScalarEvaluationKind(QualType T) {
+    return getEvaluationKind(T) == TEK_Scalar;
+  }
+
+  static bool hasAggregateEvaluationKind(QualType T) {
+    return getEvaluationKind(T) == TEK_Aggregate;
+  }
 
   /// createBasicBlock - Create an LLVM basic block.
   llvm::BasicBlock *createBasicBlock(const Twine &name = "",
@@ -1975,17 +2023,33 @@ public:
     /// initializer.
     bool IsConstantAggregate;
 
+    /// Non-null if we should use lifetime annotations.
+    llvm::Value *SizeForLifetimeMarkers;
+
     struct Invalid {};
     AutoVarEmission(Invalid) : Variable(0) {}
 
     AutoVarEmission(const VarDecl &variable)
       : Variable(&variable), Address(0), NRVOFlag(0),
-        IsByRef(false), IsConstantAggregate(false) {}
+        IsByRef(false), IsConstantAggregate(false),
+        SizeForLifetimeMarkers(0) {}
 
     bool wasEmittedAsGlobal() const { return Address == 0; }
 
   public:
     static AutoVarEmission invalid() { return AutoVarEmission(Invalid()); }
+
+    bool useLifetimeMarkers() const { return SizeForLifetimeMarkers != 0; }
+    llvm::Value *getSizeForLifetimeMarkers() const {
+      assert(useLifetimeMarkers());
+      return SizeForLifetimeMarkers;
+    }
+
+    /// Returns the raw, allocated address, which is not necessarily
+    /// the address of the object itself.
+    llvm::Value *getAllocatedAddress() const {
+      return Address;
+    }
 
     /// Returns the address of the object within this declaration.
     /// Note that this does not chase the forwarding pointer for
@@ -2127,6 +2191,15 @@ public:
   /// guard against undefined behavior.  This is only suitable when we know
   /// that the address will be used to access the object.
   LValue EmitCheckedLValue(const Expr *E, TypeCheckKind TCK);
+
+  RValue convertTempToRValue(llvm::Value *addr, QualType type);
+
+  void EmitAtomicInit(Expr *E, LValue lvalue);
+
+  RValue EmitAtomicLoad(LValue lvalue,
+                        AggValueSlot slot = AggValueSlot::ignored());
+
+  void EmitAtomicStore(RValue rvalue, LValue lvalue, bool isInit);
 
   /// EmitToMemory - Change a scalar value from its value
   /// representation to its in-memory representation.
@@ -2415,14 +2488,14 @@ public:
   llvm::Value *EmitARCRetainAutorelease(QualType type, llvm::Value *value);
   llvm::Value *EmitARCRetainAutoreleaseNonBlock(llvm::Value *value);
   llvm::Value *EmitARCStoreStrong(LValue lvalue, llvm::Value *value,
-                                  bool ignored);
+                                  bool resultIgnored);
   llvm::Value *EmitARCStoreStrongCall(llvm::Value *addr, llvm::Value *value,
-                                      bool ignored);
+                                      bool resultIgnored);
   llvm::Value *EmitARCRetain(QualType type, llvm::Value *value);
   llvm::Value *EmitARCRetainNonBlock(llvm::Value *value);
   llvm::Value *EmitARCRetainBlock(llvm::Value *value, bool mandatory);
-  void EmitARCDestroyStrong(llvm::Value *addr, bool precise);
-  void EmitARCRelease(llvm::Value *value, bool precise);
+  void EmitARCDestroyStrong(llvm::Value *addr, ARCPreciseLifetime_t precise);
+  void EmitARCRelease(llvm::Value *value, ARCPreciseLifetime_t precise);
   llvm::Value *EmitARCAutorelease(llvm::Value *value);
   llvm::Value *EmitARCAutoreleaseReturnValue(llvm::Value *value);
   llvm::Value *EmitARCRetainAutoreleaseReturnValue(llvm::Value *value);
@@ -2442,6 +2515,8 @@ public:
   llvm::Value *EmitARCExtendBlockObject(const Expr *expr);
   llvm::Value *EmitARCRetainScalarExpr(const Expr *expr);
   llvm::Value *EmitARCRetainAutoreleaseScalarExpr(const Expr *expr);
+
+  void EmitARCIntrinsicUse(llvm::ArrayRef<llvm::Value*> values);
 
   static Destroyer destroyARCStrongImprecise;
   static Destroyer destroyARCStrongPrecise;
@@ -2504,16 +2579,15 @@ public:
                                 bool IgnoreReal = false,
                                 bool IgnoreImag = false);
 
-  /// EmitComplexExprIntoAddr - Emit the computation of the specified expression
-  /// of complex type, storing into the specified Value*.
-  void EmitComplexExprIntoAddr(const Expr *E, llvm::Value *DestAddr,
-                               bool DestIsVolatile);
+  /// EmitComplexExprIntoLValue - Emit the given expression of complex
+  /// type and place its result into the specified l-value.
+  void EmitComplexExprIntoLValue(const Expr *E, LValue dest, bool isInit);
 
-  /// StoreComplexToAddr - Store a complex number into the specified address.
-  void StoreComplexToAddr(ComplexPairTy V, llvm::Value *DestAddr,
-                          bool DestIsVolatile);
-  /// LoadComplexFromAddr - Load a complex number from the specified address.
-  ComplexPairTy LoadComplexFromAddr(llvm::Value *SrcAddr, bool SrcIsVolatile);
+  /// EmitStoreOfComplex - Store a complex number into the specified l-value.
+  void EmitStoreOfComplex(ComplexPairTy V, LValue dest, bool isInit);
+
+  /// EmitLoadOfComplex - Load a complex number from the specified l-value.
+  ComplexPairTy EmitLoadOfComplex(LValue src);
 
   /// CreateStaticVarDecl - Create a zero-initialized LLVM global for
   /// a static local variable.

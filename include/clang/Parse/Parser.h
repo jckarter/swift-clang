@@ -14,6 +14,7 @@
 #ifndef LLVM_CLANG_PARSE_PARSER_H
 #define LLVM_CLANG_PARSE_PARSER_H
 
+#include "clang/Basic/OpenMPKinds.h"
 #include "clang/Basic/OperatorPrecedence.h"
 #include "clang/Basic/Specifiers.h"
 #include "clang/Lex/CodeCompletionHandler.h"
@@ -147,6 +148,7 @@ class Parser : public CodeCompletionHandler {
   OwningPtr<PragmaHandler> FPContractHandler;
   OwningPtr<PragmaHandler> OpenCLExtensionHandler;
   OwningPtr<CommentHandler> CommentSemaHandler;
+  OwningPtr<PragmaHandler> OpenMPHandler;
 
   /// Whether the '>' token acts as an operator or not. This will be
   /// true except when we are parsing an expression within a C++
@@ -279,11 +281,7 @@ private:
   /// isTokenStringLiteral - True if this token is a string-literal.
   ///
   bool isTokenStringLiteral() const {
-    return Tok.getKind() == tok::string_literal ||
-           Tok.getKind() == tok::wide_string_literal ||
-           Tok.getKind() == tok::utf8_string_literal ||
-           Tok.getKind() == tok::utf16_string_literal ||
-           Tok.getKind() == tok::utf32_string_literal;
+    return tok::isStringLiteral(Tok.getKind());
   }
 
   /// \brief Returns true if the current token is '=' or is a type of '='.
@@ -1119,6 +1117,10 @@ private:
   DeclGroupPtrTy ParseObjCAtClassDeclaration(SourceLocation atLoc);
   Decl *ParseObjCAtInterfaceDeclaration(SourceLocation AtLoc,
                                         ParsedAttributes &prefixAttrs);
+  void HelperActionsForIvarDeclarations(Decl *interfaceDecl, SourceLocation atLoc,
+                                        BalancedDelimiterTracker &T,
+                                        SmallVectorImpl<Decl *> &AllIvarDecls,
+                                        bool RBraceMissing);
   void ParseObjCClassInstanceVariables(Decl *interfaceDecl,
                                        tok::ObjCKeywordKind visibility,
                                        SourceLocation atLoc);
@@ -1288,7 +1290,8 @@ private:
                                       ParsedType ObjectType,
                                       bool EnteringContext,
                                       bool *MayBePseudoDestructor = 0,
-                                      bool IsTypename = false);
+                                      bool IsTypename = false,
+                                      IdentifierInfo **LastII = 0);
 
   void CheckForLParenAfterColonColon();
 
@@ -2104,6 +2107,11 @@ private:
                                   ParsedType ObjectType,
                                   UnqualifiedId &Result);
 
+  //===--------------------------------------------------------------------===//
+  // OpenMP: Directives and clauses.
+  DeclGroupPtrTy ParseOpenMPDeclarativeDirective();
+  bool ParseOpenMPSimpleVarList(OpenMPDirectiveKind Kind,
+                                SmallVectorImpl<DeclarationNameInfo> &IdList);
 public:
   bool ParseUnqualifiedId(CXXScopeSpec &SS, bool EnteringContext,
                           bool AllowDestructorName,

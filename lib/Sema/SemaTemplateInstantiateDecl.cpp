@@ -229,9 +229,9 @@ Decl *TemplateDeclInstantiator::InstantiateTypedefNameDecl(TypedefNameDecl *D,
   // tag decl, re-establish that relationship for the new typedef.
   if (const TagType *oldTagType = D->getUnderlyingType()->getAs<TagType>()) {
     TagDecl *oldTag = oldTagType->getDecl();
-    if (oldTag->getTypedefNameForAnonDecl() == D) {
+    if (oldTag->getTypedefNameForAnonDecl() == D && !Invalid) {
       TagDecl *newTag = DI->getType()->castAs<TagType>()->getDecl();
-      assert(!newTag->getIdentifier() && !newTag->getTypedefNameForAnonDecl());
+      assert(!newTag->hasNameForLinkage());
       newTag->setTypedefNameForAnonDecl(Typedef);
     }
   }
@@ -1090,8 +1090,8 @@ static QualType adjustFunctionTypeForInstantiation(ASTContext &Context,
   FunctionProtoType::ExtProtoInfo NewEPI = NewFunc->getExtProtoInfo();
   NewEPI.ExtInfo = OrigFunc->getExtInfo();
   return Context.getFunctionType(NewFunc->getResultType(),
-                                 NewFunc->arg_type_begin(),
-                                 NewFunc->getNumArgs(),
+                                 ArrayRef<QualType>(NewFunc->arg_type_begin(),
+                                                    NewFunc->getNumArgs()),
                                  NewEPI);
 }
 
@@ -2183,6 +2183,23 @@ Decl *TemplateDeclInstantiator::VisitClassScopeFunctionSpecializationDecl(
   return NewFD;
 }
 
+Decl *TemplateDeclInstantiator::VisitOMPThreadPrivateDecl(
+                                     OMPThreadPrivateDecl *D) {
+  SmallVector<DeclRefExpr *, 5> Vars;
+  for (ArrayRef<DeclRefExpr *>::iterator I = D->varlist_begin(),
+                                         E = D->varlist_end();
+       I != E; ++I) {
+    Expr *Var = SemaRef.SubstExpr(*I, TemplateArgs).take();
+    assert(isa<DeclRefExpr>(Var) && "threadprivate arg is not a DeclRefExpr");
+    Vars.push_back(cast<DeclRefExpr>(Var));
+  }
+
+  OMPThreadPrivateDecl *TD =
+    SemaRef.CheckOMPThreadPrivateDecl(D->getLocation(), Vars);
+
+  return TD;
+}
+
 Decl *Sema::SubstDecl(Decl *D, DeclContext *Owner,
                       const MultiLevelTemplateArgumentList &TemplateArgs) {
   TemplateDeclInstantiator Instantiator(*this, Owner, TemplateArgs);
@@ -2585,8 +2602,8 @@ static void InstantiateExceptionSpec(Sema &SemaRef, FunctionDecl *New,
   EPI.NoexceptExpr = NoexceptExpr;
 
   New->setType(SemaRef.Context.getFunctionType(NewProto->getResultType(),
-                                               NewProto->arg_type_begin(),
-                                               NewProto->getNumArgs(),
+                                  ArrayRef<QualType>(NewProto->arg_type_begin(),
+                                                     NewProto->getNumArgs()),
                                                EPI));
 }
 
@@ -2604,8 +2621,8 @@ void Sema::InstantiateExceptionSpec(SourceLocation PointOfInstantiation,
     FunctionProtoType::ExtProtoInfo EPI = Proto->getExtProtoInfo();
     EPI.ExceptionSpecType = EST_None;
     Decl->setType(Context.getFunctionType(Proto->getResultType(),
-                                          Proto->arg_type_begin(),
-                                          Proto->getNumArgs(),
+                                    ArrayRef<QualType>(Proto->arg_type_begin(),
+                                                       Proto->getNumArgs()),
                                           EPI));
     return;
   }
@@ -2685,8 +2702,8 @@ TemplateDeclInstantiator::InitFunctionInstantiation(FunctionDecl *New,
       EPI.ExceptionSpecDecl = New;
       EPI.ExceptionSpecTemplate = ExceptionSpecTemplate;
       New->setType(SemaRef.Context.getFunctionType(NewProto->getResultType(),
-                                                   NewProto->arg_type_begin(),
-                                                   NewProto->getNumArgs(),
+                                  ArrayRef<QualType>(NewProto->arg_type_begin(),
+                                                     NewProto->getNumArgs()),
                                                    EPI));
     } else {
       ::InstantiateExceptionSpec(SemaRef, New, Proto, TemplateArgs);

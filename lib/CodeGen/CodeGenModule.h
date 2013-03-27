@@ -47,6 +47,7 @@ namespace llvm {
 namespace clang {
   class TargetCodeGenInfo;
   class ASTContext;
+  class AtomicType;
   class FunctionDecl;
   class IdentifierInfo;
   class ObjCMethodDecl;
@@ -216,6 +217,9 @@ struct ARCEntrypoints {
   /// A void(void) inline asm to use to mark that the return value of
   /// a call will be immediately retain.
   llvm::InlineAsm *retainAutoreleasedReturnValueMarker;
+
+  /// void clang.arc.use(...);
+  llvm::Constant *clang_arc_use;
 };
 
 /// CodeGenModule - This class organizes the cross-function state that is used
@@ -377,6 +381,12 @@ class CodeGenModule : public CodeGenTypeCache {
     int GlobalUniqueCount;
   } Block;
 
+  /// void @llvm.lifetime.start(i64 %size, i8* nocapture <ptr>)
+  llvm::Constant *LifetimeStartFn;
+
+  /// void @llvm.lifetime.end(i64 %size, i8* nocapture <ptr>)
+  llvm::Constant *LifetimeEndFn;
+
   GlobalDecl initializedGlobalDecl;
 
   llvm::BlackList SanitizerBlacklist;
@@ -493,6 +503,9 @@ public:
   llvm::MDNode *getTBAAStructInfo(QualType QTy);
 
   bool isTypeConstant(QualType QTy, bool ExcludeCtorDtor);
+
+  bool isPaddedAtomicType(QualType type);
+  bool isPaddedAtomicType(const AtomicType *type);
 
   static void DecorateInstruction(llvm::Instruction *Inst,
                                   llvm::MDNode *TBAAInfo);
@@ -749,6 +762,9 @@ public:
   llvm::Constant *getBlockObjectDispose();
 
   ///@}
+
+  llvm::Constant *getLLVMLifetimeStartFn();
+  llvm::Constant *getLLVMLifetimeEndFn();
 
   // UpdateCompleteType - Make sure that this type is translated.
   void UpdateCompletedType(const TagDecl *TD);

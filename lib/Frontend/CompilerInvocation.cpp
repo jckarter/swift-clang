@@ -380,12 +380,29 @@ static bool ParseCodeGenArgs(CodeGenOptions &Opts, ArgList &Args, InputKind IK,
   Opts.VerifyModule = !Args.hasArg(OPT_disable_llvm_verifier);
   Opts.SanitizeRecover = !Args.hasArg(OPT_fno_sanitize_recover);
 
-  Opts.InstrumentFunctions = Args.hasArg(OPT_finstrument_functions);
-  Opts.InstrumentForProfiling = Args.hasArg(OPT_pg);
+  Opts.DisableGCov = Args.hasArg(OPT_test_coverage);
   Opts.EmitGcovArcs = Args.hasArg(OPT_femit_coverage_data);
   Opts.EmitGcovNotes = Args.hasArg(OPT_femit_coverage_notes);
-  Opts.EmitOpenCLArgMetadata = Args.hasArg(OPT_cl_kernel_arg_info);
+  if (Opts.EmitGcovArcs || Opts.EmitGcovNotes) {
   Opts.CoverageFile = Args.getLastArgValue(OPT_coverage_file);
+    Opts.CoverageExtraChecksum = Args.hasArg(OPT_coverage_cfg_checksum);
+    Opts.CoverageNoFunctionNamesInData =
+        Args.hasArg(OPT_coverage_no_function_names_in_data);
+    if (Args.hasArg(OPT_coverage_version_EQ)) {
+      StringRef CoverageVersion = Args.getLastArgValue(OPT_coverage_version_EQ);
+      if (CoverageVersion.size() != 4) {
+        Diags.Report(diag::err_drv_invalid_value)
+            << Args.getLastArg(OPT_coverage_version_EQ)->getAsString(Args)
+            << CoverageVersion;
+      } else {
+        memcpy(Opts.CoverageVersion, CoverageVersion.data(), 4);
+      }
+    }
+  }
+
+  Opts.InstrumentFunctions = Args.hasArg(OPT_finstrument_functions);
+  Opts.InstrumentForProfiling = Args.hasArg(OPT_pg);
+  Opts.EmitOpenCLArgMetadata = Args.hasArg(OPT_cl_kernel_arg_info);
   Opts.DebugCompilationDir = Args.getLastArgValue(OPT_fdebug_compilation_dir);
   Opts.LinkBitcodeFile = Args.getLastArgValue(OPT_mlink_bitcode_file);
   Opts.SanitizerBlacklistFile = Args.getLastArgValue(OPT_fsanitize_blacklist);
@@ -545,6 +562,7 @@ bool clang::ParseDiagnosticArgs(DiagnosticOptions &Opts, ArgList &Args,
   Opts.VerifyDiagnostics = Args.hasArg(OPT_verify);
   Opts.ElideType = !Args.hasArg(OPT_fno_elide_type);
   Opts.ShowTemplateTree = Args.hasArg(OPT_fdiagnostics_show_template_tree);
+  Opts.WarnOnSpellCheck = Args.hasArg(OPT_fwarn_on_spellcheck);
   Opts.ErrorLimit = Args.getLastArgIntValue(OPT_ferror_limit, 0, Diags);
   Opts.MacroBacktraceLimit
     = Args.getLastArgIntValue(OPT_fmacro_backtrace_limit,
@@ -810,6 +828,7 @@ static void ParseHeaderSearchArgs(HeaderSearchOptions &Opts, ArgList &Args) {
   using namespace options;
   Opts.Sysroot = Args.getLastArgValue(OPT_isysroot, "/");
   Opts.Verbose = Args.hasArg(OPT_v);
+  Opts.SysrootIsImplicit = Args.hasArg(OPT_isysroot_implicit);
   Opts.UseBuiltinIncludes = !Args.hasArg(OPT_nobuiltininc);
   Opts.UseStandardSystemIncludes = !Args.hasArg(OPT_nostdsysteminc);
   Opts.UseStandardCXXIncludes = !Args.hasArg(OPT_nostdincxx);
@@ -818,7 +837,10 @@ static void ParseHeaderSearchArgs(HeaderSearchOptions &Opts, ArgList &Args) {
   Opts.ResourceDir = Args.getLastArgValue(OPT_resource_dir);
   Opts.ModuleCachePath = Args.getLastArgValue(OPT_fmodules_cache_path);
   Opts.DisableModuleHash = Args.hasArg(OPT_fdisable_module_hash);
-
+  Opts.ModuleCachePruneInterval
+    = Args.getLastArgIntValue(OPT_fmodules_prune_interval, 7*24*60*60);
+  Opts.ModuleCachePruneAfter
+    = Args.getLastArgIntValue(OPT_fmodules_prune_after, 31*24*60*60);
   for (arg_iterator it = Args.filtered_begin(OPT_fmodules_ignore_macro),
        ie = Args.filtered_end(); it != ie; ++it) {
     StringRef MacroDef = (*it)->getValue();

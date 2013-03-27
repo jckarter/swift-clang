@@ -76,16 +76,35 @@ bool QualType::isConstant(QualType T, ASTContext &Ctx) {
 unsigned ConstantArrayType::getNumAddressingBits(ASTContext &Context,
                                                  QualType ElementType,
                                                const llvm::APInt &NumElements) {
+  uint64_t ElementSize = Context.getTypeSizeInChars(ElementType).getQuantity();
+
+  // Fast path the common cases so we can avoid the conservative computation
+  // below, which in common cases allocates "large" APSInt values, which are
+  // slow.
+
+  // If the element size is a power of 2, we can directly compute the additional
+  // number of addressing bits beyond those required for the element count.
+  if (llvm::isPowerOf2_64(ElementSize)) {
+    return NumElements.getActiveBits() + llvm::Log2_64(ElementSize);
+  }
+
+  // If both the element count and element size fit in 32-bits, we can do the
+  // computation directly in 64-bits.
+  if ((ElementSize >> 32) == 0 && NumElements.getBitWidth() <= 64 &&
+      (NumElements.getZExtValue() >> 32) == 0) {
+    uint64_t TotalSize = NumElements.getZExtValue() * ElementSize;
+    return 64 - llvm::CountLeadingZeros_64(TotalSize);
+  }
+
+  // Otherwise, use APSInt to handle arbitrary sized values.
   llvm::APSInt SizeExtended(NumElements, true);
   unsigned SizeTypeBits = Context.getTypeSize(Context.getSizeType());
   SizeExtended = SizeExtended.extend(std::max(SizeTypeBits,
                                               SizeExtended.getBitWidth()) * 2);
 
-  uint64_t ElementSize
-    = Context.getTypeSizeInChars(ElementType).getQuantity();
   llvm::APSInt TotalSize(llvm::APInt(SizeExtended.getBitWidth(), ElementSize));
   TotalSize *= SizeExtended;  
-  
+
   return TotalSize.getActiveBits();
 }
 
@@ -1560,8 +1579,8 @@ StringRef FunctionType::getNameForCallConv(CallingConv CC) {
   llvm_unreachable("Invalid calling convention.");
 }
 
-FunctionProtoType::FunctionProtoType(QualType result, const QualType *args,
-                                     unsigned numArgs, QualType canonical,
+FunctionProtoType::FunctionProtoType(QualType result, ArrayRef<QualType> args,
+                                     QualType canonical,
                                      const ExtProtoInfo &epi)
   : FunctionType(FunctionProto, result, epi.TypeQuals,
                  canonical,
@@ -1570,17 +1589,17 @@ FunctionProtoType::FunctionProtoType(QualType result, const QualType *args,
                  result->isVariablyModifiedType(),
                  result->containsUnexpandedParameterPack(),
                  epi.ExtInfo),
-    NumArgs(numArgs), NumExceptions(epi.NumExceptions),
+    NumArgs(args.size()), NumExceptions(epi.NumExceptions),
     ExceptionSpecType(epi.ExceptionSpecType),
     HasAnyConsumedArgs(epi.ConsumedArguments != 0),
     Variadic(epi.Variadic), HasTrailingReturn(epi.HasTrailingReturn),
     RefQualifier(epi.RefQualifier)
 {
-  assert(NumArgs == numArgs && "function has too many parameters");
+  assert(NumArgs == args.size() && "function has too many parameters");
 
   // Fill in the trailing argument array.
   QualType *argSlot = reinterpret_cast<QualType*>(this+1);
-  for (unsigned i = 0; i != numArgs; ++i) {
+  for (unsigned i = 0; i != NumArgs; ++i) {
     if (args[i]->isDependentType())
       setDependent();
     else if (args[i]->isInstantiationDependentType())
@@ -1594,7 +1613,7 @@ FunctionProtoType::FunctionProtoType(QualType result, const QualType *args,
 
   if (getExceptionSpecType() == EST_Dynamic) {
     // Fill in the exception array.
-    QualType *exnSlot = argSlot + numArgs;
+    QualType *exnSlot = argSlot + NumArgs;
     for (unsigned i = 0, e = epi.NumExceptions; i != e; ++i) {
       if (epi.Exceptions[i]->isDependentType())
         setDependent();
@@ -1608,7 +1627,7 @@ FunctionProtoType::FunctionProtoType(QualType result, const QualType *args,
     }
   } else if (getExceptionSpecType() == EST_ComputedNoexcept) {
     // Store the noexcept expression and context.
-    Expr **noexSlot = reinterpret_cast<Expr**>(argSlot + numArgs);
+    Expr **noexSlot = reinterpret_cast<Expr**>(argSlot + NumArgs);
     *noexSlot = epi.NoexceptExpr;
     
     if (epi.NoexceptExpr) {
@@ -1621,7 +1640,7 @@ FunctionProtoType::FunctionProtoType(QualType result, const QualType *args,
   } else if (getExceptionSpecType() == EST_Uninstantiated) {
     // Store the function decl from which we will resolve our
     // exception specification.
-    FunctionDecl **slot = reinterpret_cast<FunctionDecl**>(argSlot + numArgs);
+    FunctionDecl **slot = reinterpret_cast<FunctionDecl**>(argSlot + NumArgs);
     slot[0] = epi.ExceptionSpecDecl;
     slot[1] = epi.ExceptionSpecTemplate;
     // This exception specification doesn't make the type dependent, because
@@ -1629,13 +1648,13 @@ FunctionProtoType::FunctionProtoType(QualType result, const QualType *args,
   } else if (getExceptionSpecType() == EST_Unevaluated) {
     // Store the function decl from which we will resolve our
     // exception specification.
-    FunctionDecl **slot = reinterpret_cast<FunctionDecl**>(argSlot + numArgs);
+    FunctionDecl **slot = reinterpret_cast<FunctionDecl**>(argSlot + NumArgs);
     slot[0] = epi.ExceptionSpecDecl;
   }
 
   if (epi.ConsumedArguments) {
     bool *consumedArgs = const_cast<bool*>(getConsumedArgsBuffer());
-    for (unsigned i = 0; i != numArgs; ++i)
+    for (unsigned i = 0; i != NumArgs; ++i)
       consumedArgs[i] = epi.ConsumedArguments[i];
   }
 }
@@ -2099,7 +2118,7 @@ static CachedProperties computeCachedProperties(const Type *T) {
     Linkage L = Tag->getLinkage();
     bool IsLocalOrUnnamed =
       Tag->getDeclContext()->isFunctionOrMethod() ||
-      (!Tag->getIdentifier() && !Tag->getTypedefNameForAnonDecl());
+      !Tag->hasNameForLinkage();
     return CachedProperties(L, IsLocalOrUnnamed);
   }
 
@@ -2236,6 +2255,14 @@ static LinkageInfo computeLinkageInfo(QualType T) {
   return computeLinkageInfo(T.getTypePtr());
 }
 
+bool Type::isLinkageValid() const {
+  if (!TypeBits.isCacheValid())
+    return true;
+
+  return computeLinkageInfo(getCanonicalTypeInternal()).getLinkage() ==
+    TypeBits.getLinkage();
+}
+
 LinkageInfo Type::getLinkageAndVisibility() const {
   if (!isCanonicalUnqualified())
     return computeLinkageInfo(getCanonicalTypeInternal());
@@ -2243,12 +2270,6 @@ LinkageInfo Type::getLinkageAndVisibility() const {
   LinkageInfo LV = computeLinkageInfo(this);
   assert(LV.getLinkage() == getLinkage());
   return LV;
-}
-
-void Type::ClearLinkageCache() {
-  TypeBits.CacheValid = false;
-  if (QualType(this, 0) != CanonicalType)
-    CanonicalType->TypeBits.CacheValid = false;
 }
 
 Qualifiers::ObjCLifetime Type::getObjCARCImplicitLifetime() const {
