@@ -5055,15 +5055,12 @@ ObjCCommonTypesHelper::ObjCCommonTypesHelper(CodeGen::CodeGenModule &cgm)
   Int8PtrTy = CGM.Int8PtrTy;
   Int8PtrPtrTy = CGM.Int8PtrPtrTy;
   
-#if 0
   // arm64 targets use "int" ivar offset variables. All others,
   // including OS X x86_64 and Windows x86_64, use "long" ivar offsets.
   if (CGM.getTarget().getTriple().getArch() == llvm::Triple::arm64)
     IvarOffsetVarTy = IntTy;
   else
     IvarOffsetVarTy = LongTy;
-#endif
-  IvarOffsetVarTy = LongTy;
 
   ObjectPtrTy = Types.ConvertType(Ctx.getObjCIdType());
   PtrObjectPtrTy = llvm::PointerType::getUnqual(ObjectPtrTy);
@@ -6489,11 +6486,6 @@ llvm::Value *CGObjCNonFragileABIMac::EmitIvarOffset(
   const ObjCInterfaceDecl *Interface,
   const ObjCIvarDecl *Ivar) {
   llvm::Value *IvarOffsetValue = ObjCIvarOffsetVariable(Interface, Ivar);
-  // For arm64, load only the low 32 bits of the ivar offset.
-  if (CGM.getTarget().getTriple().getArch() == llvm::Triple::arm64) {
-    IvarOffsetValue = CGF.Builder.CreateBitCast(IvarOffsetValue, 
-                                                CGM.Int32Ty->getPointerTo());
-  }
   IvarOffsetValue = CGF.Builder.CreateLoad(IvarOffsetValue, "ivar");
   if (IsIvarOffsetKnownIdempotent(CGF, Interface, Ivar))
     cast<llvm::LoadInst>(IvarOffsetValue)
@@ -6503,8 +6495,7 @@ llvm::Value *CGObjCNonFragileABIMac::EmitIvarOffset(
   // This could be 32bit int or 64bit integer depending on the architecture.
   // Cast it to 64bit integer value, if it is a 32bit integer ivar offset value
   //  as this is what caller always expectes.
-  if (CGM.getTarget().getTriple().getArch() == llvm::Triple::arm64)
-  // if (ObjCTypes.IvarOffsetVarTy == ObjCTypes.IntTy)
+  if (ObjCTypes.IvarOffsetVarTy == ObjCTypes.IntTy)
     IvarOffsetValue =
       CGF.Builder.CreateIntCast(IvarOffsetValue, ObjCTypes.LongTy, 
                                 true, "ivar.conv");
