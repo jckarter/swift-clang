@@ -1,6 +1,8 @@
 // RUN: %clang -O1 -arch arm64 -ffreestanding -S -o - -emit-llvm %s | FileCheck %s
 // RUN: %clang -O1 -arch arm64 -ffreestanding -S -o - %s | \
 // RUN:   FileCheck -check-prefix=CHECK_CODEGEN %s
+// RUN: %clang -O0 -arch arm64 -ffreestanding -S -o - %s | \
+// RUN:   FileCheck -check-prefix=CHECK_CODEGEN_O0 %s
 // Test ARM64 SIMD copy vector element to vector element: vcopyq_lane*
 
 #include <aarch64_simd.h>
@@ -10,6 +12,10 @@ int8x16_t test_vcopyq_lane_s8(int8x16_t a1, int8x16_t a2) {
   return vcopyq_lane_s8(a1, (int64_t) 3, a2, (int64_t) 13);
   // CHECK: llvm.arm64.neon.vcopy.lane.v16i8.v16i8
   // CHECK_CODEGEN: ins.b	v0[3], v1[13]
+  // Do not reproduce the whole stack access for O0 as it may
+  // change easily.
+  // CHECK_CODEGEN_O0: test_vcopyq_lane_s8
+  // CHECK_CODEGEN_O0: ins.b v{{[0-9]+}}[3], v{{[0-9]+}}[13]
 }
 
 uint8x16_t test_vcopyq_lane_u8(uint8x16_t a1, uint8x16_t a2) {

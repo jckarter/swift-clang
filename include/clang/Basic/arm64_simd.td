@@ -410,7 +410,7 @@ def VDUP_LANE : Inst<"vdup_lane", "dgi",
 
 ////////////////////////////////////////////////////////////////////////////////
 // Copy one element of one vector to an element of another
-def VCOPY_LANE : SInst<"vcopy_lane", "ddldl", "QcQsQiQlQfQdQUcQUsQUiQUl">;
+def VCOPY_LANE : SInst<"vcopy_lane", "ddidi", "QcQsQiQlQfQdQUcQUsQUiQUl">;
 
 ////////////////////////////////////////////////////////////////////////////////
 // Combining vectors

@@ -3126,6 +3126,10 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     llvm::Type *VTy = llvm::VectorType::get(elemType, numElems);
     llvm::Type *Tys[] = {VTy, VTy};
     Value *intrin = CGM.getIntrinsic(Intrinsic::arm64_neon_vcopy_lane, Tys);
+    Ops[1] = ConstantInt::get(Int64Ty,
+                              cast<ConstantInt>(Ops[1])->getSExtValue());
+    Ops[3] = ConstantInt::get(Int64Ty,
+                              cast<ConstantInt>(Ops[3])->getSExtValue());
     return EmitNeonCall((Function*) intrin, Ops, "");
   }
   case ARM64::BI__builtin_arm64_vget_lane_u8:
