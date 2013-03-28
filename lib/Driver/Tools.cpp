@@ -1914,6 +1914,8 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
       CmdArgs.push_back("-S");
     } else if (JA.getType() == types::TY_AST) {
       CmdArgs.push_back("-emit-pch");
+    } else if (JA.getType() == types::TY_ModuleFile) {
+      CmdArgs.push_back("-module-file-info");
     } else if (JA.getType() == types::TY_RewrittenObjC) {
       CmdArgs.push_back("-rewrite-objc");
       rewriteKind = RK_NonFragile;
@@ -3755,6 +3757,9 @@ void gcc::Common::ConstructJob(Compilation &C, const JobAction &JA,
     else if (II.getType() == types::TY_AST)
       D.Diag(diag::err_drv_no_ast_support)
         << getToolChain().getTripleString();
+    else if (II.getType() == types::TY_ModuleFile)
+      D.Diag(diag::err_drv_no_module_support)
+        << getToolChain().getTripleString();
 
     if (types::canTypeBeUserSpecified(II.getType())) {
       CmdArgs.push_back("-x");
@@ -3885,6 +3890,9 @@ void hexagon::Assemble::ConstructJob(Compilation &C, const JobAction &JA,
     else if (II.getType() == types::TY_AST)
       D.Diag(clang::diag::err_drv_no_ast_support)
         << getToolChain().getTripleString();
+    else if (II.getType() == types::TY_ModuleFile)
+      D.Diag(diag::err_drv_no_module_support)
+      << getToolChain().getTripleString();
 
     if (II.isFilename())
       CmdArgs.push_back(II.getFilename());
@@ -4413,15 +4421,6 @@ void darwin::Link::AddLinkArgs(Compilation &C,
     CmdArgs.push_back(A->getValue());
   }
 
-  // If we are using an implicit sysroot, then have the linker look in the
-  // standard extra library paths outside the sysroot.
-  if (Args.hasArg(options::OPT_isysroot_implicit)) {
-    CmdArgs.push_back("-L");
-    CmdArgs.push_back("/usr/local/lib");
-    CmdArgs.push_back("-F");
-    CmdArgs.push_back("/Library/Frameworks");
-  }
-
   Args.AddLastArg(CmdArgs, options::OPT_twolevel__namespace);
   Args.AddLastArg(CmdArgs, options::OPT_twolevel__namespace__hints);
   Args.AddAllArgs(CmdArgs, options::OPT_umbrella);
@@ -4655,6 +4654,17 @@ void darwin::Link::ConstructJob(Compilation &C, const JobAction &JA,
 
   Args.AddAllArgs(CmdArgs, options::OPT_T_Group);
   Args.AddAllArgs(CmdArgs, options::OPT_F);
+
+  // If we are using an implicit sysroot, then have the linker look in the
+  // standard extra library paths outside the sysroot. We do this last to ensure
+  // that libraries will only be found in these locations as a last resort.
+  if (!Args.hasArg(options::OPT_nostdlib) &&
+      Args.hasArg(options::OPT_isysroot_implicit)) {
+    CmdArgs.push_back("-L");
+    CmdArgs.push_back("/usr/local/lib");
+    CmdArgs.push_back("-F");
+    CmdArgs.push_back("/Library/Frameworks");
+  }
 
   const char *Exec =
     Args.MakeArgString(getToolChain().GetProgramPath("ld"));
