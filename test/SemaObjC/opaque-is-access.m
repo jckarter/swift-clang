@@ -18,6 +18,6 @@ static void func() {
  
   id x;
 
-  [(*x).isa self]; // expected-error {{direct access to Objective-C's isa is deprecated in favor of object_setClass() and object_getClass()}}
-  [x->isa self];   // expected-error {{direct access to Objective-C's isa is deprecated in favor of object_setClass() and object_getClass()}}
+  [(*x).isa self]; // expected-error {{direct access to Objective-C's isa is deprecated in favor of object_getClass()}}
+  [x->isa self];   // expected-error {{direct access to Objective-C's isa is deprecated in favor of object_getClass()}}
 }
