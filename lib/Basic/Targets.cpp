@@ -1067,7 +1067,8 @@ void PPCTargetInfo::getDefaultFeatures(llvm::StringMap<bool> &Features) const {
 bool PPCTargetInfo::setFeatureEnabled(llvm::StringMap<bool> &Features,
                                          StringRef Name,
                                          bool Enabled) const {
-  if (Name == "altivec" || Name == "qpx") {
+  if (Name == "altivec" || Name == "mfocrf" || Name == "popcntd" ||
+      Name == "qpx") {
     Features[Name] = Enabled;
     return true;
   }
@@ -1740,6 +1741,7 @@ class X86TargetInfo : public TargetInfo {
   bool HasPOPCNT;
   bool HasRTM;
   bool HasPRFCHW;
+  bool HasRDSEED;
   bool HasSSE4a;
   bool HasFMA4;
   bool HasFMA;
@@ -1891,7 +1893,7 @@ public:
     : TargetInfo(triple), SSELevel(NoSSE), MMX3DNowLevel(NoMMX3DNow),
       HasAES(false), HasPCLMUL(false), HasLZCNT(false), HasRDRND(false),
       HasBMI(false), HasBMI2(false), HasPOPCNT(false), HasRTM(false),
-      HasPRFCHW(false), HasSSE4a(false), HasFMA4(false),
+      HasPRFCHW(false), HasRDSEED(false), HasSSE4a(false), HasFMA4(false),
       HasFMA(false), HasXOP(false), HasF16C(false), CPU(CK_Generic) {
     BigEndian = false;
     LongDoubleFormat = &llvm::APFloat::x87DoubleExtended;
@@ -2099,6 +2101,7 @@ void X86TargetInfo::getDefaultFeatures(llvm::StringMap<bool> &Features) const {
   Features["popcnt"] = false;
   Features["rtm"] = false;
   Features["prfchw"] = false;
+  Features["rdseed"] = false;
   Features["fma4"] = false;
   Features["fma"] = false;
   Features["xop"] = false;
@@ -2323,6 +2326,8 @@ bool X86TargetInfo::setFeatureEnabled(llvm::StringMap<bool> &Features,
       Features["rtm"] = true;
     else if (Name == "prfchw")
       Features["prfchw"] = true;
+    else if (Name == "rdseed")
+      Features["rdseed"] = true;
   } else {
     if (Name == "mmx")
       Features["mmx"] = Features["3dnow"] = Features["3dnowa"] = false;
@@ -2389,6 +2394,8 @@ bool X86TargetInfo::setFeatureEnabled(llvm::StringMap<bool> &Features,
       Features["rtm"] = false;
     else if (Name == "prfchw")
       Features["prfchw"] = false;
+    else if (Name == "rdseed")
+      Features["rdseed"] = false;
   }
 
   return true;
@@ -2447,6 +2454,11 @@ void X86TargetInfo::HandleTargetFeatures(std::vector<std::string> &Features) {
 
     if (Feature == "prfchw") {
       HasPRFCHW = true;
+      continue;
+    }
+
+    if (Feature == "rdseed") {
+      HasRDSEED = true;
       continue;
     }
 
@@ -2677,6 +2689,9 @@ void X86TargetInfo::getTargetDefines(const LangOptions &Opts,
   if (HasPRFCHW)
     Builder.defineMacro("__PRFCHW__");
 
+  if (HasRDSEED)
+    Builder.defineMacro("__RDSEED__");
+
   if (HasSSE4a)
     Builder.defineMacro("__SSE4A__");
 
@@ -2766,6 +2781,7 @@ bool X86TargetInfo::hasFeature(StringRef Feature) const {
       .Case("popcnt", HasPOPCNT)
       .Case("rtm", HasRTM)
       .Case("prfchw", HasPRFCHW)
+      .Case("rdseed", HasRDSEED)
       .Case("sse", SSELevel >= SSE1)
       .Case("sse2", SSELevel >= SSE2)
       .Case("sse3", SSELevel >= SSE3)
