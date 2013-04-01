@@ -397,7 +397,12 @@ void Darwin::AddDeploymentTarget(DerivedArgList &Args) const {
       if (llvm::sys::path::is_absolute(env) && llvm::sys::fs::exists(env) &&
           StringRef(env) != "/") {
         Args.AddSeparateArg(0, Opts.getOption(options::OPT_isysroot), env);
-        SysrootWasImplicit = true;
+
+        // If we are defaulting the sysroot, and we were invoked by an OS shim,
+        // then enable the implicit sysroot header search behavior
+        // automatically.
+        if (::getenv("XCRUN_INVOKED_VIA_SHIM"))
+          SysrootWasImplicit = true;
       }
     }
   }
