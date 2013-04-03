@@ -3524,6 +3524,9 @@ namespace {
       if (isa<ObjCAtTryStmt>(S)) {
         if (const ObjCAtFinallyStmt* FinallyStmt =
               cast<ObjCAtTryStmt>(S).getFinallyStmt()) {
+          // Don't try to do the @finally if this is an EH cleanup.
+          if (flags.isForEHCleanup()) return;
+
           // Save the current cleanup destination in case there's
           // control flow inside the finally statement.
           llvm::Value *CurCleanupDest =
@@ -3865,7 +3868,7 @@ void CGObjCMac::EmitTryOrSynchronizedStmt(CodeGen::CodeGenFunction &CGF,
   llvm::Value *PropagatingExnVar = 0;
 
   // Push a normal cleanup to leave the try scope.
-  CGF.EHStack.pushCleanup<PerformFragileFinally>(NormalCleanup, &S,
+  CGF.EHStack.pushCleanup<PerformFragileFinally>(NormalAndEHCleanup, &S,
                                                  SyncArgSlot,
                                                  CallTryExitVar,
                                                  ExceptionData,
