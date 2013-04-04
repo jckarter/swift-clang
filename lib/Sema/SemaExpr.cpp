@@ -162,7 +162,7 @@ static bool hasAnyExplicitStorageClass(const FunctionDecl *D) {
   for (FunctionDecl::redecl_iterator I = D->redecls_begin(),
                                      E = D->redecls_end();
        I != E; ++I) {
-    if (I->getStorageClassAsWritten() != SC_None)
+    if (I->getStorageClass() != SC_None)
       return true;
   }
   return false;
@@ -4915,7 +4915,7 @@ static bool checkCondition(Sema &S, Expr *Cond) {
   // C99 6.5.15p2
   if (CondTy->isScalarType()) return false;
 
-  // OpenCL: Sec 6.3.i says the condition is allowed to be a vector or scalar.
+  // OpenCL v1.1 s6.3.i says the condition is allowed to be a vector or scalar.
   if (S.getLangOpts().OpenCL && CondTy->isVectorType())
     return false;
 
@@ -5176,9 +5176,9 @@ QualType Sema::CheckConditionalOperands(ExprResult &Cond, ExprResult &LHS,
   if (LHSTy->isVectorType() || RHSTy->isVectorType())
     return CheckVectorOperands(LHS, RHS, QuestionLoc, /*isCompAssign*/false);
 
-  // OpenCL: If the condition is a vector, and both operands are scalar,
+  // If the condition is a vector, and both operands are scalar,
   // attempt to implicity convert them to the vector type to act like the
-  // built in select.
+  // built in select. (OpenCL v1.1 s6.3.i)
   if (getLangOpts().OpenCL && CondTy->isVectorType())
     if (checkConditionalConvertScalarsToVectors(*this, LHS, RHS, CondTy))
       return QualType();
@@ -10854,7 +10854,7 @@ static ExprResult captureInLambda(Sema &S, LambdaScopeInfo *LSI,
       = VarDecl::Create(S.Context, S.CurContext, Loc, Loc,
                         IterationVarName, SizeType,
                         S.Context.getTrivialTypeSourceInfo(SizeType, Loc),
-                        SC_None, SC_None);
+                        SC_None);
     IndexVariables.push_back(IterationVar);
     LSI->ArrayIndexVars.push_back(IterationVar);
     

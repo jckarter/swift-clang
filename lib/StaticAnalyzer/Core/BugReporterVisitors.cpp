@@ -789,28 +789,37 @@ static const MemRegion *getLocationRegionIfReference(const Expr *E,
   return 0;
 }
 
-static const Expr *peelOffOuterExpr(const Stmt *S,
+static const Expr *peelOffOuterExpr(const Expr *Ex,
                                     const ExplodedNode *N) {
-  if (const Expr *Ex = dyn_cast<Expr>(S)) {
-    Ex = Ex->IgnoreParenCasts();
-    if (const ExprWithCleanups *EWC = dyn_cast<ExprWithCleanups>(Ex))
-      return EWC->getSubExpr();
-    if (const OpaqueValueExpr *OVE = dyn_cast<OpaqueValueExpr>(Ex))
-      return OVE->getSourceExpr();
+  Ex = Ex->IgnoreParenCasts();
+  if (const ExprWithCleanups *EWC = dyn_cast<ExprWithCleanups>(Ex))
+    return peelOffOuterExpr(EWC->getSubExpr(), N);
+  if (const OpaqueValueExpr *OVE = dyn_cast<OpaqueValueExpr>(Ex))
+    return peelOffOuterExpr(OVE->getSourceExpr(), N);
 
-    // Peel off the ternary operator.
-    if (const ConditionalOperator *CO = dyn_cast<ConditionalOperator>(Ex)) {
-      ProgramStateRef State = N->getState();
-      SVal CondVal = State->getSVal(CO->getCond(), N->getLocationContext());
-      if (State->isNull(CondVal).isConstrainedTrue()) {
-        return CO->getTrueExpr();
-      } else {
-        assert(State->isNull(CondVal).isConstrainedFalse());
-        return CO->getFalseExpr();
+  // Peel off the ternary operator.
+  if (const ConditionalOperator *CO = dyn_cast<ConditionalOperator>(Ex)) {
+    // Find a node where the branching occured and find out which branch
+    // we took (true/false) by looking at the ExplodedGraph.
+    const ExplodedNode *NI = N;
+    do {
+      ProgramPoint ProgPoint = NI->getLocation();
+      if (Optional<BlockEdge> BE = ProgPoint.getAs<BlockEdge>()) {
+        const CFGBlock *srcBlk = BE->getSrc();
+        if (const Stmt *term = srcBlk->getTerminator()) {
+          if (term == CO) {
+            bool TookTrueBranch = (*(srcBlk->succ_begin()) == BE->getDst());
+            if (TookTrueBranch)
+              return peelOffOuterExpr(CO->getTrueExpr(), N);
+            else
+              return peelOffOuterExpr(CO->getFalseExpr(), N);
+          }
+        }
       }
-    }
+      NI = NI->getFirstPred();
+    } while (NI);
   }
-  return 0;
+  return Ex;
 }
 
 bool bugreporter::trackNullOrUndefValue(const ExplodedNode *N,
@@ -820,8 +829,11 @@ bool bugreporter::trackNullOrUndefValue(const ExplodedNode *N,
   if (!S || !N)
     return false;
 
-  if (const Expr *Ex = peelOffOuterExpr(S, N)) {
-    S = Ex;
+  if (const Expr *Ex = dyn_cast<Expr>(S)) {
+    Ex = Ex->IgnoreParenCasts();
+    const Expr *PeeledEx = peelOffOuterExpr(Ex, N);
+    if (Ex != PeeledEx)
+      S = PeeledEx;
   }
 
   const Expr *Inner = 0;
