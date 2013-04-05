@@ -2111,6 +2111,8 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
                     options::OPT_fno_strict_aliasing,
                     getToolChain().IsStrictAliasingDefault()))
     CmdArgs.push_back("-relaxed-aliasing");
+  if (Args.hasArg(options::OPT_fstruct_path_tbaa))
+    CmdArgs.push_back("-struct-path-tbaa");
   if (Args.hasFlag(options::OPT_fstrict_enums, options::OPT_fno_strict_enums,
                    false))
     CmdArgs.push_back("-fstrict-enums");
@@ -2118,6 +2120,10 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
                     options::OPT_fno_optimize_sibling_calls))
     CmdArgs.push_back("-mdisable-tail-calls");
 
+  // Handle segmented stacks.
+  if (Args.hasArg(options::OPT_fsplit_stack))
+    CmdArgs.push_back("-split-stacks");
+  
   // Handle various floating point optimization flags, mapping them to the
   // appropriate LLVM code generation flags. The pattern for all of these is to
   // default off the codegen optimizations, and if any flag enables them and no
