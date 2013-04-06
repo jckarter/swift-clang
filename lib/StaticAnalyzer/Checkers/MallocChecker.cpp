@@ -164,6 +164,7 @@ public:
     DefaultBool CMallocPessimistic;
     DefaultBool CMallocOptimistic;
     DefaultBool CNewDeleteChecker;
+    DefaultBool CNewDeleteLeaksChecker;
     DefaultBool CMismatchedDeallocatorChecker;
   };
 
@@ -283,7 +284,7 @@ private:
                                   bool(*CheckRefState)(const RefState*)) const;
 
   // Used to suppress warnings if they are not related to the tracked family
-  // (derived from AllocDeallocStmt).
+  // (derived from Sym or AllocDeallocStmt).
   bool isTrackedFamily(AllocationFamily Family) const;
   bool isTrackedFamily(CheckerContext &C, const Stmt *AllocDeallocStmt) const;
   bool isTrackedFamily(CheckerContext &C, SymbolRef Sym) const;
@@ -293,8 +294,8 @@ private:
   void ReportBadFree(CheckerContext &C, SVal ArgVal, SourceRange Range, 
                      const Expr *DeallocExpr) const;
   void ReportMismatchedDealloc(CheckerContext &C, SourceRange Range,
-                               const Expr *DeallocExpr, 
-                               const RefState *RS) const;
+                               const Expr *DeallocExpr, const RefState *RS,
+                               SymbolRef Sym) const;
   void ReportOffsetFree(CheckerContext &C, SVal ArgVal, SourceRange Range, 
                         const Expr *DeallocExpr, 
                         const Expr *AllocExpr = 0) const;
@@ -1013,7 +1014,8 @@ ProgramStateRef MallocChecker::FreeMemAux(CheckerContext &C,
 
     // Check if an expected deallocation function matches the real one.
     if (!DeallocMatchesAlloc && RsBase->isAllocated()) {
-      ReportMismatchedDealloc(C, ArgExpr->getSourceRange(), ParentExpr, RsBase);
+      ReportMismatchedDealloc(C, ArgExpr->getSourceRange(), ParentExpr, RsBase,
+                              SymBase);
       return 0;
     }
 
@@ -1056,7 +1058,8 @@ ProgramStateRef MallocChecker::FreeMemAux(CheckerContext &C,
     }
   }
 
-  AllocationFamily Family = RsBase ? RsBase->getAllocationFamily() : AF_None;
+  AllocationFamily Family = RsBase ? RsBase->getAllocationFamily()
+                                   : getAllocationFamily(C, ParentExpr);
   // Normal free.
   if (Hold)
     return State->set<RegionState>(SymBase,
@@ -1081,7 +1084,7 @@ bool MallocChecker::isTrackedFamily(AllocationFamily Family) const {
     return true;
   }
   case AF_None: {
-    return true;
+    llvm_unreachable("no family");
   }
   }
   llvm_unreachable("unhandled family");
@@ -1093,10 +1096,10 @@ bool MallocChecker::isTrackedFamily(CheckerContext &C,
 }
 
 bool MallocChecker::isTrackedFamily(CheckerContext &C, SymbolRef Sym) const {
-  const RefState *RS = C.getState()->get<RegionState>(Sym);
 
-  return RS ? isTrackedFamily(RS->getAllocationFamily()) 
-            : isTrackedFamily(AF_None);
+  const RefState *RS = C.getState()->get<RegionState>(Sym);
+  assert(RS);
+  return isTrackedFamily(RS->getAllocationFamily());
 }
 
 bool MallocChecker::SummarizeValue(raw_ostream &os, SVal V) {
@@ -1236,7 +1239,8 @@ void MallocChecker::ReportBadFree(CheckerContext &C, SVal ArgVal,
 void MallocChecker::ReportMismatchedDealloc(CheckerContext &C, 
                                             SourceRange Range,
                                             const Expr *DeallocExpr, 
-                                            const RefState *RS) const {
+                                            const RefState *RS,
+                                            SymbolRef Sym) const {
 
   if (!Filter.CMismatchedDeallocatorChecker)
     return;
@@ -1266,7 +1270,9 @@ void MallocChecker::ReportMismatchedDealloc(CheckerContext &C,
       os << ", not " << DeallocOs.str();
 
     BugReport *R = new BugReport(*BT_MismatchedDealloc, os.str(), N);
+    R->markInteresting(Sym);
     R->addRange(Range);
+    R->addVisitor(new MallocBugVisitor(Sym));
     C.emitReport(R);
   }
 }
@@ -1532,11 +1538,20 @@ void MallocChecker::reportLeak(SymbolRef Sym, ExplodedNode *N,
                                CheckerContext &C) const {
 
   if (!Filter.CMallocOptimistic && !Filter.CMallocPessimistic && 
-      !Filter.CNewDeleteChecker)
+      !Filter.CNewDeleteLeaksChecker)
     return;
 
-  if (!isTrackedFamily(C, Sym))
+  const RefState *RS = C.getState()->get<RegionState>(Sym);
+  assert(RS && "cannot leak an untracked symbol");
+  AllocationFamily Family = RS->getAllocationFamily();
+  if (!isTrackedFamily(Family))
     return;
+
+  // Special case for new and new[]; these are controlled by a separate checker
+  // flag so that they can be selectively disabled.
+  if (Family == AF_CXXNew || Family == AF_CXXNewArray)
+    if (!Filter.CNewDeleteLeaksChecker)
+      return;
 
   assert(N);
   if (!BT_Leak) {
@@ -1570,11 +1585,12 @@ void MallocChecker::reportLeak(SymbolRef Sym, ExplodedNode *N,
 
   SmallString<200> buf;
   llvm::raw_svector_ostream os(buf);
-  os << "Memory is never released; potential leak";
   if (Region && Region->canPrintPretty()) {
-    os << " of memory pointed to by '";
+    os << "Potential leak of memory pointed to by '";
     Region->printPretty(os);
     os << '\'';
+  } else {
+    os << "Potential memory leak";
   }
 
   BugReport *R = new BugReport(*BT_Leak, os.str(), N, 
@@ -2111,4 +2127,5 @@ void ento::register##name(CheckerManager &mgr) {\
 REGISTER_CHECKER(MallocPessimistic)
 REGISTER_CHECKER(MallocOptimistic)
 REGISTER_CHECKER(NewDeleteChecker)
+REGISTER_CHECKER(NewDeleteLeaksChecker)
 REGISTER_CHECKER(MismatchedDeallocatorChecker)
