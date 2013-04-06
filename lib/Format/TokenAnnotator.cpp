@@ -939,6 +939,8 @@ unsigned TokenAnnotator::splitPenalty(const AnnotatedLine &Line,
     return 150;
   if (Left.is(tok::coloncolon))
     return 500;
+  if (Left.isOneOf(tok::kw_class, tok::kw_struct))
+    return 5000;
 
   if (Left.Type == TT_RangeBasedForLoopColon ||
       Left.Type == TT_InheritanceColon)
@@ -1137,7 +1139,8 @@ bool TokenAnnotator::canBreakBefore(const AnnotatedLine &Line,
   if (Right.Type == TT_ConditionalExpr || Right.is(tok::question))
     return true;
   if (Right.Type == TT_RangeBasedForLoopColon ||
-      Right.Type == TT_InheritanceColon)
+      Right.Type == TT_InheritanceColon ||
+      Right.Type == TT_OverloadedOperatorLParen)
     return false;
   if (Left.Type == TT_RangeBasedForLoopColon ||
       Left.Type == TT_InheritanceColon)
@@ -1175,7 +1178,8 @@ bool TokenAnnotator::canBreakBefore(const AnnotatedLine &Line,
   if (Left.is(tok::identifier) && Right.is(tok::string_literal))
     return true;
   return (isBinaryOperator(Left) && Left.isNot(tok::lessless)) ||
-         Left.isOneOf(tok::comma, tok::coloncolon, tok::semi, tok::l_brace) ||
+         Left.isOneOf(tok::comma, tok::coloncolon, tok::semi, tok::l_brace,
+                      tok::kw_class, tok::kw_struct) ||
          Right.isOneOf(tok::lessless, tok::arrow, tok::period, tok::colon) ||
          (Left.is(tok::r_paren) && Left.Type != TT_CastRParen &&
           Right.isOneOf(tok::identifier, tok::kw___attribute)) ||
