@@ -1339,6 +1339,22 @@ TEST_F(FormatTest, MacroDefinitionsWithIncompleteCode) {
                "f(STR(this_is_a_string_literal{));");
 }
 
+TEST_F(FormatTest, MacroCallsWithoutTrailingSemicolon) {
+  EXPECT_EQ("INITIALIZE_PASS_BEGIN(ScopDetection, \"polly-detect\")\n"
+            "INITIALIZE_AG_DEPENDENCY(AliasAnalysis)\n"
+            "INITIALIZE_PASS_DEPENDENCY(DominatorTree)\n"
+            "class X {\n"
+            "};\n"
+            "INITIALIZE_PASS_END(ScopDetection, \"polly-detect\")\n"
+            "int *createScopDetectionPass() { return 0; }",
+            format("  INITIALIZE_PASS_BEGIN(ScopDetection, \"polly-detect\")\n"
+                   "  INITIALIZE_AG_DEPENDENCY(AliasAnalysis)\n"
+                   "  INITIALIZE_PASS_DEPENDENCY(DominatorTree)\n"
+                   "  class X {};\n"
+                   "  INITIALIZE_PASS_END(ScopDetection, \"polly-detect\")\n"
+                   "  int *createScopDetectionPass() { return 0; }"));
+}
+
 TEST_F(FormatTest, IndentPreprocessorDirectivesAtZero) {
   EXPECT_EQ("{\n  {\n#define A\n  }\n}", format("{{\n#define A\n}}"));
 }
@@ -1473,6 +1489,30 @@ TEST_F(FormatTest, PreventConfusingIndents) {
                "                           ddd);");
 }
 
+TEST_F(FormatTest, ExpressionIndentation) {
+  verifyFormat("bool value = aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa +\n"
+               "                     aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa +\n"
+               "                     aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa ==\n"
+               "                 aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa *\n"
+               "                         bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb +\n"
+               "                     bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb &&\n"
+               "             aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa *\n"
+               "                     aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa >\n"
+               "                 ccccccccccccccccccccccccccccccccccccccccc;");
+  verifyFormat("if (aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa *\n"
+               "            aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa +\n"
+               "        aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa ==\n"
+               "    bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb) {\n}");
+  verifyFormat("if (aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa +\n"
+               "        aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa *\n"
+               "            aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa ==\n"
+               "    bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb) {\n}");
+  verifyFormat("if (aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa ==\n"
+               "    aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa *\n"
+               "            aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa +\n"
+               "        bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb) {\n}");
+}
+
 TEST_F(FormatTest, ConstructorInitializers) {
   verifyFormat("Constructor() : Initializer(FitsOnTheLine) {}");
   verifyFormat("Constructor() : Inttializer(FitsOnTheLine) {}",
@@ -1562,7 +1602,7 @@ TEST_F(FormatTest, BreaksAsHighAsPossible) {
       "    f();\n"
       "}");
   verifyFormat("if (Intervals[i].getRange().getFirst() <\n"
-               "        Intervals[i - 1].getRange().getLast()) {\n}");
+               "    Intervals[i - 1].getRange().getLast()) {\n}");
 }
 
 TEST_F(FormatTest, BreaksDesireably) {
@@ -1685,9 +1725,9 @@ TEST_F(FormatTest, FormatsBuilderPattern) {
       "    .StartsWith(\".eh_frame\", ORDER_EH_FRAME).StartsWith(\".init\", ORDER_INIT)\n"
       "    .StartsWith(\".fini\", ORDER_FINI).StartsWith(\".hash\", ORDER_HASH)\n"
       "    .Default(ORDER_TEXT);\n");
-
+      
   verifyFormat("return aaaaaaaaaaaaaaaaa->aaaaa().aaaaaaaaaaaaa().aaaaaa() <\n"
-               "           aaaaaaaaaaaaaaa->aaaaa().aaaaaaaaaaaaa().aaaaaa();");
+               "       aaaaaaaaaaaaaaa->aaaaa().aaaaaaaaaaaaa().aaaaaa();");
   verifyFormat(
       "aaaaaaa->aaaaaaa\n"
       "    ->aaaaaaaaaaaaaaaa(aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa)\n"
@@ -1784,10 +1824,15 @@ TEST_F(FormatTest, AlignsAfterReturn) {
       "        aaaaaaaaaaaaaaaaaaaaaaaaa);");
   verifyFormat(
       "return aaaaaaaaaaaaaaaaaaaaaa + aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa >=\n"
-      "           aaaaaaaaaaaaaaaaaaaaaa();");
+      "       aaaaaaaaaaaaaaaaaaaaaa();");
   verifyFormat(
       "return (aaaaaaaaaaaaaaaaaaaaaa + aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa >=\n"
-      "            aaaaaaaaaaaaaaaaaaaaaa());");
+      "        aaaaaaaaaaaaaaaaaaaaaa());");
+  verifyFormat("return aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa(\n"
+               "    aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa);");
+  verifyFormat("return aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa(\n"
+               "           aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa) &&\n"
+               "       aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa;");
 }
 
 TEST_F(FormatTest, BreaksConditionalExpressions) {
@@ -1831,7 +1876,7 @@ TEST_F(FormatTest, BreaksConditionalExpressions) {
       "    ? aaaaaaaaaaaaaaa\n"
       "    : aaaaaaaaaaaaaaa;");
   verifyFormat("f(aaaaaaaaaaaaaaaa == // force break\n"
-               "  aaaaaaaaa\n"
+               "          aaaaaaaaa\n"
                "      ? b\n"
                "      : c);");
   verifyFormat(
@@ -2398,7 +2443,7 @@ TEST_F(FormatTest, UnderstandsRvalueReferences) {
 TEST_F(FormatTest, FormatsBinaryOperatorsPrecedingEquals) {
   verifyFormat("void f() {\n"
                "  x[aaaaaaaaa -\n"
-               "      b] = 23;\n"
+               "    b] = 23;\n"
                "}",
                getLLVMStyleWithColumns(15));
 }
