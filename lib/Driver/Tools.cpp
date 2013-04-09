@@ -1654,12 +1654,20 @@ SanitizerArgs::SanitizerArgs(const ToolChain &TC, const ArgList &Args)
                    /* Default */false);
 
   // Parse -f(no-)sanitize-address-zero-base-shadow options.
-  if (NeedsAsan)
+  if (NeedsAsan) {
+    bool IsAndroid = (TC.getTriple().getEnvironment() == llvm::Triple::Android);
+    bool ZeroBaseShadowDefault = IsAndroid;
     AsanZeroBaseShadow =
-      TC.getTriple().getEnvironment() == llvm::Triple::Android ||
-      Args.hasFlag(options::OPT_fsanitize_address_zero_base_shadow,
-                   options::OPT_fno_sanitize_address_zero_base_shadow,
-                   /* Default */false);
+        Args.hasFlag(options::OPT_fsanitize_address_zero_base_shadow,
+                     options::OPT_fno_sanitize_address_zero_base_shadow,
+                     ZeroBaseShadowDefault);
+    // Zero-base shadow is a requirement on Android.
+    if (IsAndroid && !AsanZeroBaseShadow) {
+      D.Diag(diag::err_drv_argument_not_allowed_with)
+          << "-fno-sanitize-address-zero-base-shadow"
+          << lastArgumentForKind(D, Args, Address);
+    }
+  }
 }
 
 static void addSanitizerRTLinkFlagsLinux(
@@ -2042,22 +2050,23 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
   bool PIC = PIE || getToolChain().isPICDefault();
   bool IsPICLevelTwo = PIC;
 
+  // For the PIC and PIE flag options, this logic is different from the
+  // legacy logic in very old versions of GCC, as that logic was just
+  // a bug no one had ever fixed. This logic is both more rational and
+  // consistent with GCC's new logic now that the bugs are fixed. The last
+  // argument relating to either PIC or PIE wins, and no other argument is
+  // used. If the last argument is any flavor of the '-fno-...' arguments,
+  // both PIC and PIE are disabled. Any PIE option implicitly enables PIC
+  // at the same level.
+  Arg *LastPICArg =Args.getLastArg(options::OPT_fPIC, options::OPT_fno_PIC,
+                                 options::OPT_fpic, options::OPT_fno_pic,
+                                 options::OPT_fPIE, options::OPT_fno_PIE,
+                                 options::OPT_fpie, options::OPT_fno_pie);
   // Check whether the tool chain trumps the PIC-ness decision. If the PIC-ness
   // is forced, then neither PIC nor PIE flags will have no effect.
   if (!getToolChain().isPICDefaultForced()) {
-    // For the PIC and PIE flag options, this logic is different from the
-    // legacy logic in very old versions of GCC, as that logic was just
-    // a bug no one had ever fixed. This logic is both more rational and
-    // consistent with GCC's new logic now that the bugs are fixed. The last
-    // argument relating to either PIC or PIE wins, and no other argument is
-    // used. If the last argument is any flavor of the '-fno-...' arguments,
-    // both PIC and PIE are disabled. Any PIE option implicitly enables PIC
-    // at the same level.
-    if (Arg *A = Args.getLastArg(options::OPT_fPIC, options::OPT_fno_PIC,
-                                 options::OPT_fpic, options::OPT_fno_pic,
-                                 options::OPT_fPIE, options::OPT_fno_PIE,
-                                 options::OPT_fpie, options::OPT_fno_pie)) {
-      Option O = A->getOption();
+    if (LastPICArg) {
+      Option O = LastPICArg->getOption();
       if (O.matches(options::OPT_fPIC) || O.matches(options::OPT_fpic) ||
           O.matches(options::OPT_fPIE) || O.matches(options::OPT_fpie)) {
         PIE = O.matches(options::OPT_fPIE) || O.matches(options::OPT_fpie);
