@@ -304,7 +304,7 @@ void DarwinClang::AddLinkRuntimeLibArgs(const ArgList &Args,
     }
   }
 
-  SanitizerArgs Sanitize(getDriver(), Args);
+  SanitizerArgs Sanitize(*this, Args);
 
   // Add Ubsan runtime library, if required.
   if (Sanitize.needsUbsanRt()) {
@@ -912,6 +912,10 @@ bool Darwin::isPICDefault() const {
   return true;
 }
 
+bool Darwin::isPIEDefault() const {
+  return false;
+}
+
 bool Darwin::isPICDefaultForced() const {
   return getArch() == llvm::Triple::x86_64;
 }
@@ -1430,6 +1434,10 @@ bool Generic_GCC::isPICDefault() const {
   return false;
 }
 
+bool Generic_GCC::isPIEDefault() const {
+  return false;
+}
+
 bool Generic_GCC::isPICDefaultForced() const {
   return false;
 }
@@ -1661,6 +1669,10 @@ bool TCEToolChain::IsMathErrnoDefault() const {
 }
 
 bool TCEToolChain::isPICDefault() const {
+  return false;
+}
+
+bool TCEToolChain::isPIEDefault() const {
   return false;
 }
 
@@ -2231,6 +2243,8 @@ Linux::Linux(const Driver &D, const llvm::Triple &Triple, const ArgList &Args)
   }
   addPathIfExists(SysRoot + "/lib", Paths);
   addPathIfExists(SysRoot + "/usr/lib", Paths);
+
+  IsPIEDefault = SanitizerArgs(*this, Args).hasZeroBaseShadow();
 }
 
 bool Linux::HasNativeLLVMSupport() const {
@@ -2454,6 +2468,10 @@ void Linux::AddClangCXXStdlibIncludeArgs(const ArgList &DriverArgs,
             DriverArgs, CC1Args))
       break;
   }
+}
+
+bool Linux::isPIEDefault() const {
+  return IsPIEDefault;
 }
 
 /// DragonFly - DragonFly tool chain which can call as(1) and ld(1) directly.
