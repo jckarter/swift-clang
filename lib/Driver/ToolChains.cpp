@@ -871,26 +871,6 @@ DerivedArgList *Darwin::TranslateArgs(const DerivedArgList &Args,
     else if (Name == "armv8")
       DAL->AddJoinedArg(0, MArch, "arm64");
 
-    else if (Name == "arm64")
-      DAL->AddJoinedArg(0, MArch, "arm64");
-    else if (Name == "armv8")
-      DAL->AddJoinedArg(0, MArch, "arm64");
-
-    else if (Name == "arm64")
-      DAL->AddJoinedArg(0, MArch, "arm64");
-    else if (Name == "armv8")
-      DAL->AddJoinedArg(0, MArch, "arm64");
-
-    else if (Name == "arm64")
-      DAL->AddJoinedArg(0, MArch, "arm64");
-    else if (Name == "armv8")
-      DAL->AddJoinedArg(0, MArch, "arm64");
-
-    else if (Name == "arm64")
-      DAL->AddJoinedArg(0, MArch, "arm64");
-    else if (Name == "armv8")
-      DAL->AddJoinedArg(0, MArch, "arm64");
-
     else
       llvm_unreachable("invalid Darwin arch");
   }
