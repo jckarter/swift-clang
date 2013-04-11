@@ -3330,8 +3330,7 @@ static bool isHomogeneousAggregate(QualType Ty, const Type *&Base,
                                    uint64_t *HAMembers) {
   uint64_t Members = 0;
   if (const ConstantArrayType *AT = Context.getAsConstantArrayType(Ty)) {
-    if (!isHomogeneousAggregate(AT->getElementType(), Base, Context,
-                                &Members))
+    if (!isHomogeneousAggregate(AT->getElementType(), Base, Context, &Members))
       return false;
     Members *= AT->getSize().getZExtValue();
   } else if (const RecordType *RT = Ty->getAs<RecordType>()) {
@@ -3344,8 +3343,7 @@ static bool isHomogeneousAggregate(QualType Ty, const Type *&Base,
          i != e; ++i) {
       const FieldDecl *FD = *i;
       uint64_t FldMembers;
-      if (!isHomogeneousAggregate(FD->getType(), Base, Context,
-                                  &FldMembers))
+      if (!isHomogeneousAggregate(FD->getType(), Base, Context, &FldMembers))
         return false;
 
       Members = (RD->isUnion() ?
