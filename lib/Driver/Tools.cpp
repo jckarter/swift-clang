@@ -822,7 +822,9 @@ void Clang::AddARMTargetArgs(const ArgList &Args,
       CmdArgs.push_back("-mno-global-merge");
   }
 
-  if (Args.hasArg(options::OPT_mno_implicit_float))
+  if (!Args.hasFlag(options::OPT_mimplicit_float,
+                    options::OPT_mno_implicit_float,
+                    true))
     CmdArgs.push_back("-no-implicit-float");
 }
 
@@ -1304,6 +1306,7 @@ void Clang::AddX86TargetArgs(const ArgList &Args,
                           Args.hasArg(options::OPT_fapple_kext));
   if (Arg *A = Args.getLastArg(options::OPT_msoft_float,
                                options::OPT_mno_soft_float,
+                               options::OPT_mimplicit_float,
                                options::OPT_mno_implicit_float)) {
     const Option &O = A->getOption();
     NoImplicitFloat = (O.matches(options::OPT_mno_implicit_float) ||
@@ -3932,7 +3935,6 @@ void hexagon::Assemble::ConstructJob(Compilation &C, const JobAction &JA,
     CmdArgs.push_back(
       Args.MakeArgString(std::string("-G") + SmallDataThreshold));
 
-  Args.AddAllArgs(CmdArgs, options::OPT_g_Group);
   Args.AddAllArgValues(CmdArgs, options::OPT_Wa_COMMA,
                        options::OPT_Xassembler);
 
