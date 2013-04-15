@@ -960,7 +960,7 @@ static StringRef getMipsFloatABI(const Driver &D, const ArgList &Args) {
       FloatABI = "hard";
     else {
       FloatABI = A->getValue();
-      if (FloatABI != "soft" && FloatABI != "single" && FloatABI != "hard") {
+      if (FloatABI != "soft" && FloatABI != "hard") {
         D.Diag(diag::err_drv_invalid_mfloat_abi) << A->getAsString(Args);
         FloatABI = "hard";
       }
@@ -993,7 +993,7 @@ static void AddTargetFeature(const ArgList &Args,
 }
 
 void Clang::AddMIPSTargetArgs(const ArgList &Args,
-                             ArgStringList &CmdArgs) const {
+                              ArgStringList &CmdArgs) const {
   const Driver &D = getToolChain().getDriver();
   StringRef CPUName;
   StringRef ABIName;
@@ -1026,12 +1026,6 @@ void Clang::AddMIPSTargetArgs(const ArgList &Args,
       CmdArgs.push_back("-mips16-hard-float");
     }
   }
-  else if (FloatABI == "single") {
-    // Restrict the use of hardware floating-point
-    // instructions to 32-bit operations.
-    CmdArgs.push_back("-target-feature");
-    CmdArgs.push_back("+single-float");
-  }
   else {
     // Floating point operations and argument passing are hard.
     assert(FloatABI == "hard" && "Invalid float abi!");
@@ -1040,8 +1034,14 @@ void Clang::AddMIPSTargetArgs(const ArgList &Args,
   }
 
   AddTargetFeature(Args, CmdArgs,
+                   options::OPT_msingle_float, options::OPT_mdouble_float,
+                   "single-float");
+  AddTargetFeature(Args, CmdArgs,
                    options::OPT_mips16, options::OPT_mno_mips16,
                    "mips16");
+  AddTargetFeature(Args, CmdArgs,
+                   options::OPT_mmicromips, options::OPT_mno_micromips,
+                   "micromips");
   AddTargetFeature(Args, CmdArgs,
                    options::OPT_mdsp, options::OPT_mno_dsp,
                    "dsp");
@@ -3289,7 +3289,14 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
   if (Args.hasFlag(options::OPT_fslp_vectorize,
                    options::OPT_fno_slp_vectorize, false)) {
     CmdArgs.push_back("-backend-option");
-    CmdArgs.push_back("-vectorize");
+    CmdArgs.push_back("-vectorize-slp");
+  }
+
+  // -fno-slp-vectorize-aggressive is default.
+  if (Args.hasFlag(options::OPT_fslp_vectorize_aggressive,
+                   options::OPT_fno_slp_vectorize_aggressive, false)) {
+    CmdArgs.push_back("-backend-option");
+    CmdArgs.push_back("-vectorize-slp-aggressive");
   }
 
   if (Arg *A = Args.getLastArg(options::OPT_fshow_overloads_EQ))

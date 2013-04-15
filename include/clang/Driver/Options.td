@@ -701,6 +701,9 @@ def fno_tree_vectorize : Flag<["-"], "fno-tree-vectorize">, Alias<fno_vectorize>
 def fslp_vectorize : Flag<["-"], "fslp-vectorize">, Group<f_Group>,
   HelpText<"Enable the superword-level parallelism vectorization passes">;
 def fno_slp_vectorize : Flag<["-"], "fno-slp-vectorize">, Group<f_Group>;
+def fslp_vectorize_aggressive : Flag<["-"], "fslp-vectorize-aggressive">, Group<f_Group>,
+  HelpText<"Enable the BB vectorization passes">;
+def fno_slp_vectorize_aggressive : Flag<["-"], "fno-slp-vectorize-aggressive">, Group<f_Group>;
 def ftree_slp_vectorize : Flag<["-"], "ftree-slp-vectorize">, Alias<fslp_vectorize>;
 def fno_tree_slp_vectorize : Flag<["-"], "fno-tree-slp-vectorize">, Alias<fno_slp_vectorize>;
 def Wlarge_by_value_copy_def : Flag<["-"], "Wlarge-by-value-copy">,
@@ -959,12 +962,16 @@ def mprfchw : Flag<["-"], "mprfchw">, Group<m_x86_Features_Group>;
 def mrdseed : Flag<["-"], "mrdseed">, Group<m_x86_Features_Group>;
 def mips16 : Flag<["-"], "mips16">, Group<m_Group>;
 def mno_mips16 : Flag<["-"], "mno-mips16">, Group<m_Group>;
+def mmicromips : Flag<["-"], "mmicromips">, Group<m_Group>;
+def mno_micromips : Flag<["-"], "mno-micromips">, Group<m_Group>;
 def mxgot : Flag<["-"], "mxgot">, Group<m_Group>;
 def mno_xgot : Flag<["-"], "mno-xgot">, Group<m_Group>;
 def mdsp : Flag<["-"], "mdsp">, Group<m_Group>;
 def mno_dsp : Flag<["-"], "mno-dsp">, Group<m_Group>;
 def mdspr2 : Flag<["-"], "mdspr2">, Group<m_Group>;
 def mno_dspr2 : Flag<["-"], "mno-dspr2">, Group<m_Group>;
+def msingle_float : Flag<["-"], "msingle-float">, Group<m_Group>;
+def mdouble_float : Flag<["-"], "mdouble-float">, Group<m_Group>;
 def mips32 : Flag<["-"], "mips32">, Group<mips_CPUs_Group>,
   HelpText<"Equivalent to -march=mips32">, Flags<[HelpHidden]>;
 def mips32r2 : Flag<["-"], "mips32r2">, Group<mips_CPUs_Group>,
