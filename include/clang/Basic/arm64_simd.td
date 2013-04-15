@@ -541,9 +541,8 @@ def VMULX_LANE   : SInst<"vmulx_lane", "dddi", "fQfQd">;
 // Cross Lane
 def ADDV  : SInst<"vaddv",  "sd", "csiUcUsUiQcQsQiQUcQUsQUi">;
 def ADDLV : SInst<"vaddlv", "zd", "csiUcUsUiQcQsQiQUcQUsQUi">;
-// Don't handle vmaxvq_f64 and vminvq_f64 for now
-def MAXV  : SInst<"vmaxv",  "sd", "csifUcUsUiQcQsQiQUcQUsQUiQf">;
-def MINV  : SInst<"vminv",  "sd", "csifUcUsUiQcQsQiQUcQUsQUiQf">;
+def MAXV  : SInst<"vmaxv",  "sd", "csifUcUsUiQcQsQiQUcQUsQUiQfQd">;
+def MINV  : SInst<"vminv",  "sd", "csifUcUsUiQcQsQiQUcQUsQUiQfQd">;
 def MAXNMV : SInst<"vmaxnmv", "sd", "fQf">;
 def MINMV  : SInst<"vminnmv", "sd", "fQf">;
 

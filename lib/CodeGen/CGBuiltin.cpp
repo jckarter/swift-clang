@@ -4052,15 +4052,14 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     Ops.push_back(EmitScalarExpr(E->getArg(0)));
     return EmitNeonCall(CGM.getIntrinsic(Int, Tys), Ops, "vmaxv");
   }
-  // Don't handle this yet.
-  // case ARM64::BI__builtin_arm64_vmaxvq_f64: {
-  //   Int = Intrinsic::arm64_neon_fmaxv;  // convert to fmaxp later
-  //   Ty = llvm::Type::getDoubleTy(getLLVMContext());
-  //   VTy = llvm::VectorType::get(Ty, 2);
-  //   llvm::Type *Tys[2] = { Ty, VTy };
-  //   Ops.push_back(EmitScalarExpr(E->getArg(0)));
-  //   return EmitNeonCall(CGM.getIntrinsic(Int, Tys), Ops, "vmaxv");
-  // }
+  case ARM64::BI__builtin_arm64_vmaxvq_f64: {
+    Int = Intrinsic::arm64_neon_fmaxv;  // convert to fmaxp later
+    Ty = llvm::Type::getDoubleTy(getLLVMContext());
+    VTy = llvm::VectorType::get(Ty, 2);
+    llvm::Type *Tys[2] = { Ty, VTy };
+    Ops.push_back(EmitScalarExpr(E->getArg(0)));
+    return EmitNeonCall(CGM.getIntrinsic(Int, Tys), Ops, "vmaxv");
+  }
   case ARM64::BI__builtin_arm64_vminv_u8: {
     Int = Intrinsic::arm64_neon_uminv;
     Ty = llvm::IntegerType::get(getLLVMContext(), 32);
@@ -4204,17 +4203,15 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     Ops.push_back(EmitScalarExpr(E->getArg(0)));
     return EmitNeonCall(CGM.getIntrinsic(Int, Tys), Ops, "vminv");
   }
-  // Don't handle this yet
-  // case ARM64::BI__builtin_arm64_vminvq_f64: {
-  //   Int = Intrinsic::arm64_neon_fminv;  // convert to fminp later
-  //   Ty = llvm::Type::getDoubleTy(getLLVMContext());
-  //   VTy = llvm::VectorType::get(Ty, 2);
-  //   llvm::Type *Tys[2] = { Ty, VTy };
-  //   Ops.push_back(EmitScalarExpr(E->getArg(0)));
-  //   llvm::Function *intrin = CGM.getIntrinsic(Int, Tys);
-  //   dbgs() << "intrin->dump(): "; intrin->dump();
-  //   return EmitNeonCall(intrin, Ops, "vminv");
-  // }
+  case ARM64::BI__builtin_arm64_vminvq_f64: {
+    Int = Intrinsic::arm64_neon_fminv;  // convert to fminp later
+    Ty = llvm::Type::getDoubleTy(getLLVMContext());
+    VTy = llvm::VectorType::get(Ty, 2);
+    llvm::Type *Tys[2] = { Ty, VTy };
+    Ops.push_back(EmitScalarExpr(E->getArg(0)));
+    llvm::Function *intrin = CGM.getIntrinsic(Int, Tys);
+    return EmitNeonCall(intrin, Ops, "vminv");
+  }
   case ARM64::BI__builtin_arm64_vaddlv_u8: {
     Int = Intrinsic::arm64_neon_uaddlv;
     Ty = llvm::IntegerType::get(getLLVMContext(), 32);
