@@ -728,84 +728,102 @@ static char getScalarSuffix(char type) {
   }
 }
 
-/// MangleName - Append a type or width suffix to a base neon function name,
-/// and insert a 'q' in the appropriate location if the operation works on
-/// 128b rather than 64b.   E.g. turn "vst2_lane" into "vst2q_lane_f32", etc.
-static std::string MangleName(const std::string &name, StringRef typestr,
-                              ClassKind ck, bool scal = false) {
-  if (name == "vcvt_f32_f16" ||
-      name == "vcvt_f64_f32" ||
-      name == "vcvt_high_f64_f32")
-    return name;
-
-  bool quad = false;
+/// InstructionTypeCode - Computes the ARM argument character code and
+/// quad status for a specific type string and ClassKind.
+static char InstructionTypeCode(const StringRef &typeStr,
+                                const ClassKind ck,
+                                bool &quad,
+                                bool &qsuffix,
+                                std::string &typeCode) {
   bool poly = false;
-  bool usgn = false;
-  bool qsuffix = false;
-  char type = ClassifyType(typestr, quad, qsuffix, poly, usgn);
-
-  std::string s = name;
-
+  bool usgn = false;  
+  char type = ClassifyType(typeStr, quad, qsuffix, poly, usgn);
+  
   switch (type) {
   case 'c':
     switch (ck) {
-    case ClassS: s += poly ? "_p8" : usgn ? "_u8" : "_s8"; break;
-    case ClassI: s += "_i8"; break;
-    case ClassW: s += "_8"; break;
+    case ClassS: typeCode = poly ? "p8" : usgn ? "u8" : "s8"; break;
+    case ClassI: typeCode = "i8"; break;
+    case ClassW: typeCode = "8"; break;
     default: break;
     }
     break;
   case 's':
     switch (ck) {
-    case ClassS: s += poly ? "_p16" : usgn ? "_u16" : "_s16"; break;
-    case ClassI: s += "_i16"; break;
-    case ClassW: s += "_16"; break;
+    case ClassS: typeCode = poly ? "p16" : usgn ? "u16" : "s16"; break;
+    case ClassI: typeCode = "i16"; break;
+    case ClassW: typeCode = "16"; break;
     default: break;
     }
     break;
   case 'i':
     switch (ck) {
-    case ClassS: s += usgn ? "_u32" : "_s32"; break;
-    case ClassI: s += "_i32"; break;
-    case ClassW: s += "_32"; break;
+    case ClassS: typeCode = usgn ? "u32" : "s32"; break;
+    case ClassI: typeCode = "i32"; break;
+    case ClassW: typeCode = "32"; break;
     default: break;
     }
     break;
   case 'l':
     switch (ck) {
-    case ClassS: s += usgn ? "_u64" : "_s64"; break;
-    case ClassI: s += "_i64"; break;
-    case ClassW: s += "_64"; break;
+    case ClassS: typeCode = usgn ? "u64" : "s64"; break;
+    case ClassI: typeCode = "i64"; break;
+    case ClassW: typeCode = "64"; break;
     default: break;
     }
     break;
   case 'h':
     switch (ck) {
     case ClassS:
-    case ClassI: s += "_f16"; break;
-    case ClassW: s += "_16"; break;
+    case ClassI: typeCode = "f16"; break;
+    case ClassW: typeCode = "16"; break;
     default: break;
     }
     break;
   case 'f':
     switch (ck) {
     case ClassS:
-    case ClassI: s += "_f32"; break;
-    case ClassW: s += "_32"; break;
+    case ClassI: typeCode = "f32"; break;
+    case ClassW: typeCode = "32"; break;
     default: break;
     }
     break;
   case 'd':
     switch (ck) {
     case ClassS:
-    case ClassI: s += "_f64"; break;
-    case ClassW: s += "_64"; break;
+    case ClassI: typeCode = "f64"; break;
+    case ClassW: typeCode = "64"; break;
     default: break;
     }
     break;
   default:
     PrintFatalError("unhandled type!");
   }
+  return type;
+}
+
+/// MangleName - Append a type or width suffix to a base neon function name,
+/// and insert a 'q' in the appropriate location if the operation works on
+/// 128b rather than 64b.   E.g. turn "vst2_lane" into "vst2q_lane_f32", etc.
+static std::string MangleName(const std::string &name, StringRef typestr,
+                              ClassKind ck, bool scal=false) {
+  if (name == "vcvt_f32_f16" ||
+      name == "vcvt_f64_f32" ||
+      name == "vcvt_high_f64_f32")
+    return name;
+
+  bool quad = false;
+  bool qsuffix = false;
+  std::string typeCode = "";
+
+  char type = InstructionTypeCode(typestr, ck, quad, qsuffix, typeCode);
+
+  std::string s = name;
+
+  if (typeCode.size() > 0) {
+    s += "_" + typeCode;
+  }
+
   if (ck == ClassB)
     s += "_v";
 
