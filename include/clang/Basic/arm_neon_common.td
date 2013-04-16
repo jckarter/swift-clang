@@ -97,15 +97,45 @@ class Inst <string n, string p, string t, Op o> {
   Op Operand = o;
   bit isShift = 0;
   bit isVCVT_N = 0;
+
+  // Certain intrinsics have different names than their representative
+  // instructions. This field allows us to handle this correctly when we
+  // are generating tests.
+  string InstName = "";
+
+  // Certain intrinsics even though they are not a WOpInst or LOpInst,
+  // generate a WOpInst/LOpInst instruction (see below for definition
+  // of a WOpInst/LOpInst). For testing purposes we need to know
+  // this. Ex: vset_lane which outputs vmov instructions.
+  bit isHiddenWInst = 0;
+  bit isHiddenLInst = 0;
 }
 
-// Used to generate Builtins.def:
+// The following instruction classes are implemented via builtins.
+// These declarations are used to generate Builtins.def:
+//
 // SInst: Instruction with signed/unsigned suffix (e.g., "s8", "u8", "p8")
 // IInst: Instruction with generic integer suffix (e.g., "i8")
 // WInst: Instruction with only bit size suffix (e.g., "8")
 class SInst<string n, string p, string t> : Inst<n, p, t, OP_NONE> {}
 class IInst<string n, string p, string t> : Inst<n, p, t, OP_NONE> {}
 class WInst<string n, string p, string t> : Inst<n, p, t, OP_NONE> {}
+
+// The following instruction classes are implemented via operators
+// instead of builtins. As such these declarations are only used for
+// the purpose of generating tests.
+//
+// SOpInst:       Instruction with signed/unsigned suffix (e.g., "s8",
+//                "u8", "p8").
+// IOpInst:       Instruction with generic integer suffix (e.g., "i8").
+// WOpInst:       Instruction with bit size only suffix (e.g., "8").
+// LOpInst:       Logical instruction with no bit size suffix.
+// NoTestOpInst:  Intrinsic that has no corresponding instruction.
+class SOpInst<string n, string p, string t, Op o> : Inst<n, p, t, o> {}
+class IOpInst<string n, string p, string t, Op o> : Inst<n, p, t, o> {}
+class WOpInst<string n, string p, string t, Op o> : Inst<n, p, t, o> {}
+class LOpInst<string n, string p, string t, Op o> : Inst<n, p, t, o> {}
+class NoTestOpInst<string n, string p, string t, Op o> : Inst<n, p, t, o> {}
 
 // prototype: return (arg, arg, ...)
 // v: void

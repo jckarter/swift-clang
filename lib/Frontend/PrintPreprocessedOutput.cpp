@@ -137,9 +137,11 @@ public:
                                   StringRef RelativePath,
                                   const Module *Imported);
   virtual void Ident(SourceLocation Loc, const std::string &str);
+  virtual void PragmaCaptured(SourceLocation Loc, StringRef Str);
   virtual void PragmaComment(SourceLocation Loc, const IdentifierInfo *Kind,
                              const std::string &Str);
   virtual void PragmaMessage(SourceLocation Loc, StringRef Str);
+  virtual void PragmaDebug(SourceLocation Loc, StringRef DebugType);
   virtual void PragmaDiagnosticPush(SourceLocation Loc,
                                     StringRef Namespace);
   virtual void PragmaDiagnosticPop(SourceLocation Loc,
@@ -344,6 +346,15 @@ void PrintPPOutputPPCallbacks::Ident(SourceLocation Loc, const std::string &S) {
   EmittedTokensOnThisLine = true;
 }
 
+void PrintPPOutputPPCallbacks::PragmaCaptured(SourceLocation Loc,
+                                              StringRef Str) {
+  startNewLineIfNeeded();
+  MoveToLine(Loc);
+  OS << "#pragma captured";
+
+  setEmittedDirectiveOnThisLine();
+}
+
 /// MacroDefined - This hook is called whenever a macro definition is seen.
 void PrintPPOutputPPCallbacks::MacroDefined(const Token &MacroNameTok,
                                             const MacroDirective *MD) {
@@ -416,6 +427,17 @@ void PrintPPOutputPPCallbacks::PragmaMessage(SourceLocation Loc,
   OS << '"';
 
   OS << ')';
+  setEmittedDirectiveOnThisLine();
+}
+
+void PrintPPOutputPPCallbacks::PragmaDebug(SourceLocation Loc,
+                                           StringRef DebugType) {
+  startNewLineIfNeeded();
+  MoveToLine(Loc);
+
+  OS << "#pragma clang __debug ";
+  OS << DebugType;
+
   setEmittedDirectiveOnThisLine();
 }
 
