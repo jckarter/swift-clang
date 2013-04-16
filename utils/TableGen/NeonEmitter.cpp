@@ -1700,7 +1700,8 @@ void NeonEmitter::runHeader(raw_ostream &OS) {
 static std::string GenTest(const std::string &name,
                            const std::string &proto,
                            StringRef outTypeStr, StringRef inTypeStr,
-                           bool isShift) {
+                           bool isShift, bool isHiddenLOp,
+                           ClassKind ck, const std::string &InstName) {
   assert(!proto.empty() && "");
   std::string s;
 
@@ -1760,7 +1761,8 @@ static std::string GenTest(const std::string &name,
 void NeonEmitter::runTests(raw_ostream &OS) {
   OS <<
     "// RUN: %clang_cc1 -triple thumbv7-apple-darwin \\\n"
-    "// RUN:  -target-cpu cortex-a9 -ffreestanding -S -o - %s | FileCheck %s\n"
+    "// RUN:  -target-cpu swift -ffreestanding -Os -S -o - %s\\\n"
+    "// RUN:  | FileCheck %s\n"
     "\n"
     "#include <arm_neon.h>\n"
     "\n";
@@ -1772,10 +1774,13 @@ void NeonEmitter::runTests(raw_ostream &OS) {
     std::string Proto = R->getValueAsString("Prototype");
     std::string Types = R->getValueAsString("Types");
     bool isShift = R->getValueAsBit("isShift");
+    std::string InstName = R->getValueAsString("InstName");
+    bool isHiddenLOp = R->getValueAsBit("isHiddenLInst");
 
     SmallVector<StringRef, 16> TypeVec;
     ParseTypes(R, Types, TypeVec);
 
+    ClassKind ck = ClassMap[R->getSuperClasses()[1]];
     OpKind kind = OpMap[R->getValueAsDef("Operand")->getName()];
     if (kind == OpUnavailable)
       continue;
@@ -1790,10 +1795,12 @@ void NeonEmitter::runTests(raw_ostream &OS) {
           (void)ClassifyType(TypeVec[srcti], inQuad, dummy, dummy);
           if (srcti == ti || inQuad != outQuad)
             continue;
-          OS << GenTest(name, Proto, TypeVec[ti], TypeVec[srcti], isShift);
+          OS << GenTest(name, Proto, TypeVec[ti], TypeVec[srcti],
+                        isShift, isHiddenLOp, ck, InstName);
         }
       } else {
-        OS << GenTest(name, Proto, TypeVec[ti], TypeVec[ti], isShift);
+        OS << GenTest(name, Proto, TypeVec[ti], TypeVec[ti],
+                      isShift, isHiddenLOp, ck, InstName);
       }
     }
     OS << "\n";
