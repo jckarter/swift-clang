@@ -496,6 +496,11 @@ bool Sema::CheckARM64BuiltinFunctionCall(unsigned BuiltinID,
 #undef GET_NEON_IMMEDIATE_CHECK
   };
 
+  // We can't check the value of a dependent argument.
+  if (TheCall->getArg(i)->isTypeDependent() ||
+      TheCall->getArg(i)->isValueDependent())
+    return false;
+
   // Check that the immediate argument is actually a constant.
   if (SemaBuiltinConstantArg(TheCall, i, Result))
     return true;
