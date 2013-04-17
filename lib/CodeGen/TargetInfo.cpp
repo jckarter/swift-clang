@@ -3054,7 +3054,7 @@ ABIArgInfo ARM64ABIInfo::classifyArgumentType(QualType Ty,
 
   // Structures with either a non-trivial destructor or a non-trivial
   // copy constructor are always indirect.
-  if (isRecordWithNonTrivialDestructorOrCopyConstructor(Ty))
+  if (isRecordReturnIndirect(Ty, CGT))
     return ABIArgInfo::getIndirect(0, /*ByVal=*/false);
 
   // Homogeneous Floating-point Aggregates (HFAs) need to be expanded.
@@ -3095,7 +3095,7 @@ ABIArgInfo ARM64ABIInfo::classifyReturnType(QualType RetTy) const {
 
   // Structures with either a non-trivial destructor or a non-trivial
   // copy constructor are always indirect.
-  if (isRecordWithNonTrivialDestructorOrCopyConstructor(RetTy))
+  if (isRecordReturnIndirect(RetTy, CGT))
     return ABIArgInfo::getIndirect(0, /*ByVal=*/false);
 
   if (isEmptyRecord(getContext(), RetTy, true))
