@@ -381,11 +381,11 @@ typedef struct s40 s40_no_align;
 // passing structs in registers
 __attribute__ ((noinline))
 int f40(int i, s40_no_align s1, s40_no_align s2) {
-// CHECK: define i32 @f40(i32 %i, i128 %s1.coerce, i128 %s2.coerce)
+// CHECK: define i32 @f40(i32 %i, [2 x i64] %s1.coerce, [2 x i64] %s2.coerce)
 // CHECK: %s1 = alloca %struct.s40, align 8
 // CHECK: %s2 = alloca %struct.s40, align 8
-// CHECK: store i128 %s1.coerce, i128* %{{.*}}, align 1
-// CHECK: store i128 %s2.coerce, i128* %{{.*}}, align 1
+// CHECK: store [2 x i64] %s1.coerce, [2 x i64]* %{{.*}}, align 1
+// CHECK: store [2 x i64] %s2.coerce, [2 x i64]* %{{.*}}, align 1
 // CHECK: getelementptr inbounds %struct.s40* %s1, i32 0, i32 0
 // CHECK: getelementptr inbounds %struct.s40* %s2, i32 0, i32 0
 // CHECK: getelementptr inbounds %struct.s40* %s1, i32 0, i32 1
@@ -396,20 +396,20 @@ s40_no_align g40;
 s40_no_align g40_2;
 int caller40() {
 // CHECK: define i32 @caller40()
-// CHECK: %[[a:.*]] = load i128* bitcast (%struct.s40* @g40 to i128*), align 1
-// CHECK: %[[b:.*]] = load i128* bitcast (%struct.s40* @g40_2 to i128*), align 1
-// CHECK: call i32 @f40(i32 3, i128 %[[a]], i128 %[[b]])
+// CHECK: %[[a:.*]] = load [2 x i64]* bitcast (%struct.s40* @g40 to [2 x i64]*), align 1
+// CHECK: %[[b:.*]] = load [2 x i64]* bitcast (%struct.s40* @g40_2 to [2 x i64]*), align 1
+// CHECK: call i32 @f40(i32 3, [2 x i64] %[[a]], [2 x i64] %[[b]])
   return f40(3, g40, g40_2);
 }
 // passing structs on stack
 __attribute__ ((noinline))
 int f40_stack(int i, int i2, int i3, int i4, int i5, int i6, int i7, int i8,
               int i9, s40_no_align s1, s40_no_align s2) {
-// CHECK: define i32 @f40_stack(i32 %i, i32 %i2, i32 %i3, i32 %i4, i32 %i5, i32 %i6, i32 %i7, i32 %i8, i32 %i9, i128 %s1.coerce, i128 %s2.coerce)
+// CHECK: define i32 @f40_stack(i32 %i, i32 %i2, i32 %i3, i32 %i4, i32 %i5, i32 %i6, i32 %i7, i32 %i8, i32 %i9, [2 x i64] %s1.coerce, [2 x i64] %s2.coerce)
 // CHECK: %s1 = alloca %struct.s40, align 8
 // CHECK: %s2 = alloca %struct.s40, align 8
-// CHECK: store i128 %s1.coerce, i128* %{{.*}}, align 1
-// CHECK: store i128 %s2.coerce, i128* %{{.*}}, align 1
+// CHECK: store [2 x i64] %s1.coerce, [2 x i64]* %{{.*}}, align 1
+// CHECK: store [2 x i64] %s2.coerce, [2 x i64]* %{{.*}}, align 1
 // CHECK: getelementptr inbounds %struct.s40* %s1, i32 0, i32 0
 // CHECK: getelementptr inbounds %struct.s40* %s2, i32 0, i32 0
 // CHECK: getelementptr inbounds %struct.s40* %s1, i32 0, i32 1
@@ -418,9 +418,9 @@ int f40_stack(int i, int i2, int i3, int i4, int i5, int i6, int i7, int i8,
 }
 int caller40_stack() {
 // CHECK: define i32 @caller40_stack()
-// CHECK: %[[a:.*]] = load i128* bitcast (%struct.s40* @g40 to i128*), align 1
-// CHECK: %[[b:.*]] = load i128* bitcast (%struct.s40* @g40_2 to i128*), align 1
-// CHECK: call i32 @f40_stack(i32 1, i32 2, i32 3, i32 4, i32 5, i32 6, i32 7, i32 8, i32 9, i128 %[[a]], i128 %[[b]])
+// CHECK: %[[a:.*]] = load [2 x i64]* bitcast (%struct.s40* @g40 to [2 x i64]*), align 1
+// CHECK: %[[b:.*]] = load [2 x i64]* bitcast (%struct.s40* @g40_2 to [2 x i64]*), align 1
+// CHECK: call i32 @f40_stack(i32 1, i32 2, i32 3, i32 4, i32 5, i32 6, i32 7, i32 8, i32 9, [2 x i64] %[[a]], [2 x i64] %[[b]])
   return f40_stack(1, 2, 3, 4, 5, 6, 7, 8, 9, g40, g40_2);
 }
 
