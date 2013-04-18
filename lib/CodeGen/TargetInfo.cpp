@@ -2946,7 +2946,8 @@ public:
 private:
   ABIArgInfo classifyReturnType(QualType RetTy) const;
   ABIArgInfo classifyArgumentType(QualType RetTy, unsigned &AllocatedVFP,
-                                  bool &IsHA) const;
+                                  bool &IsHA, unsigned &AllocatedGPR,
+                                  bool &IsSmallAggr) const;
   bool isIllegalVectorType(QualType Ty) const;
 
   virtual void computeInfo(CGFunctionInfo &FI) const {
@@ -2957,13 +2958,20 @@ private:
     // and Floating-point Registers (with one register per member of the HFA or
     // HVA). Otherwise, the NSRN is set to 8.
     unsigned AllocatedVFP = 0;
+    // To correctly handle small aggregates, we need to keep track of the number
+    // of GPRs allocated so far. If the small aggregate can't all fit into
+    // registers, it will be on stack. We don't allow the aggregate to be
+    // partially in registers.
+    unsigned AllocatedGPR = 0;
     FI.getReturnInfo() = classifyReturnType(FI.getReturnType());
     for (CGFunctionInfo::arg_iterator it = FI.arg_begin(), ie = FI.arg_end();
          it != ie; ++it) {
-      unsigned PreAllocation = AllocatedVFP;
-      bool IsHA = false;
+      unsigned PreAllocation = AllocatedVFP, PreGPR = AllocatedGPR;
+      bool IsHA = false, IsSmallAggr = false;
       const unsigned NumVFPs = 8;
-      it->info = classifyArgumentType(it->type, AllocatedVFP, IsHA);
+      const unsigned NumGPRs = 8;
+      it->info = classifyArgumentType(it->type, AllocatedVFP, IsHA,
+                                      AllocatedGPR, IsSmallAggr);
       // If we do not have enough VFP registers for the HA, any VFP registers
       // that are unallocated are marked as unavailable. To achieve this, we add
       // padding of (NumVFPs - PreAllocation) floats.
@@ -2971,6 +2979,14 @@ private:
         llvm::Type *PaddingTy = llvm::ArrayType::get(
             llvm::Type::getFloatTy(getVMContext()), NumVFPs - PreAllocation);
         it->info = ABIArgInfo::getExpandWithPadding(false, PaddingTy);
+      }
+      // If we do not have enough GPRs for the small aggregate, any GPR regs
+      // that are unallocated are marked as unavailable.
+      if (IsSmallAggr && AllocatedGPR > NumGPRs && PreGPR < NumGPRs) {
+        llvm::Type *PaddingTy = llvm::ArrayType::get(
+            llvm::Type::getInt32Ty(getVMContext()), NumGPRs - PreGPR);
+        it->info = ABIArgInfo::getDirect(it->info.getCoerceToType(), 0,
+                                         PaddingTy);
       }
     }
   }
@@ -3005,13 +3021,16 @@ static bool isHomogeneousAggregate(QualType Ty, const Type *&Base,
 
 ABIArgInfo ARM64ABIInfo::classifyArgumentType(QualType Ty,
                                               unsigned &AllocatedVFP,
-                                              bool &IsHA) const {
+                                              bool &IsHA,
+                                              unsigned &AllocatedGPR,
+                                              bool &IsSmallAggr) const {
   // Handle illegal vector types here.
   if (isIllegalVectorType(Ty)) {
     uint64_t Size = getContext().getTypeSize(Ty);
     if (Size <= 32) {
       llvm::Type *ResType =
           llvm::Type::getInt32Ty(getVMContext());
+      AllocatedGPR++;
       return ABIArgInfo::getDirect(ResType);
     }
     if (Size == 64) {
@@ -3026,6 +3045,7 @@ ABIArgInfo ARM64ABIInfo::classifyArgumentType(QualType Ty,
       AllocatedVFP++;
       return ABIArgInfo::getDirect(ResType);
     }
+    AllocatedGPR++;
     return ABIArgInfo::getIndirect(0, /*ByVal=*/false);
   }
   if (Ty->isVectorType())
@@ -3044,6 +3064,10 @@ ABIArgInfo ARM64ABIInfo::classifyArgumentType(QualType Ty,
     if (const EnumType *EnumTy = Ty->getAs<EnumType>())
       Ty = EnumTy->getDecl()->getIntegerType();
 
+    if (!Ty->isFloatingType() && !Ty->isVectorType()) {
+      int RegsNeeded = getContext().getTypeSize(Ty) > 64 ? 2 : 1;
+      AllocatedGPR += RegsNeeded;
+    }
     return (Ty->isPromotableIntegerType() ?
             ABIArgInfo::getExtend() : ABIArgInfo::getDirect());
   }
@@ -3054,8 +3078,10 @@ ABIArgInfo ARM64ABIInfo::classifyArgumentType(QualType Ty,
 
   // Structures with either a non-trivial destructor or a non-trivial
   // copy constructor are always indirect.
-  if (isRecordReturnIndirect(Ty, CGT))
+  if (isRecordReturnIndirect(Ty, CGT)) {
+    AllocatedGPR++;
     return ABIArgInfo::getIndirect(0, /*ByVal=*/false);
+  }
 
   // Homogeneous Floating-point Aggregates (HFAs) need to be expanded.
   const Type *Base = 0;
@@ -3070,6 +3096,8 @@ ABIArgInfo ARM64ABIInfo::classifyArgumentType(QualType Ty,
   uint64_t Size = getContext().getTypeSize(Ty);
   if (Size <= 128) {
     Size = 64 * ((Size + 63) / 64); // round up to multiple of 8 bytes
+    AllocatedGPR += Size / 64;
+    IsSmallAggr = true;
     // We use a pair of i64 for 16-byte aggregate with 8-byte alignment.
     // For aggregates with 16-byte alignment, we use i128.
     if (getContext().getTypeAlign(Ty) < 128 && Size == 128) {
@@ -3079,6 +3107,7 @@ ABIArgInfo ARM64ABIInfo::classifyArgumentType(QualType Ty,
     return ABIArgInfo::getDirect(llvm::IntegerType::get(getVMContext(), Size));
   }
 
+  AllocatedGPR++;
   return ABIArgInfo::getIndirect(0, /*ByVal=*/false);
 }
 
