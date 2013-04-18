@@ -3664,6 +3664,36 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
      Function *F = CGM.getIntrinsic(Intrinsic::arm64_neon_vcvthighfp2df);
      return EmitNeonCall(F, Ops, "vcvt");
   }
+  case ARM64::BI__builtin_arm64_vcvt_f32_f64: {
+    assert(Type.getEltType() == NeonTypeFlags::Float32 &&
+           "unexpected vcvt_f32_f64 builtin");
+    Function *F = CGM.getIntrinsic(Intrinsic::arm64_neon_vcvtdf2fp);
+    return EmitNeonCall(F, Ops, "vcvt");
+  }
+  case ARM64::BI__builtin_arm64_vcvt_high_f32_f64: {
+    assert(Type.getEltType() == NeonTypeFlags::Float32 && quad &&
+           "unexpected vcvt_high_f32_f64 builtin");
+    Function *F = CGM.getIntrinsic(Intrinsic::arm64_neon_vcvthighdf2fp);
+    return EmitNeonCall(F, Ops, "vcvt");
+  }
+  case ARM64::BI__builtin_arm64_vcvtx_f32_f64: {
+    assert(Type.getEltType() == NeonTypeFlags::Float32 &&
+           "unexpected vcvtx_f32_f64 builtin");
+    llvm::Type *DblTy =
+      GetNeonType(this, NeonTypeFlags(NeonTypeFlags::Float64, false, true));
+    llvm::Type *Tys[2] = { Ty, DblTy };
+    Function *F = CGM.getIntrinsic(Intrinsic::arm64_neon_fcvtxn, Tys);
+    return EmitNeonCall(F, Ops, "vcvtx");
+  }
+  case ARM64::BI__builtin_arm64_vcvtx_high_f32_f64: {
+    assert(Type.getEltType() == NeonTypeFlags::Float32 && quad &&
+           "unexpected vcvtx_high_f32_f64 builtin");
+    llvm::Type *DblTy =
+      GetNeonType(this, NeonTypeFlags(NeonTypeFlags::Float64, false, true));
+    llvm::Type *Tys[2] = { Ty, DblTy };
+    Function *F = CGM.getIntrinsic(Intrinsic::arm64_neon_fcvtxn2, Tys);
+    return EmitNeonCall(F, Ops, "vcvtx");
+  }
   case ARM64::BI__builtin_arm64_vcvt_f16_v: {
     assert(Type.getEltType() == NeonTypeFlags::Float16 && !quad &&
            "unexpected vcvt_f16_v builtin");

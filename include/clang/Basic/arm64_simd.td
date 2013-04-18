@@ -253,6 +253,17 @@ def VCVT_F16     : SInst<"vcvt_f16", "hk",  "f">;
 def VCVT_F64_F32 : SInst<"vcvt_f64_f32", "wd", "f">;
 // F32 high ->F64
 def VCVT_HIGH_F64_F32 : SInst<"vcvt_high_f64_f32", "wk", "f">;
+// F64->F32
+def VCVT_F32_F64 : SInst<"vcvt_f32_f64", "bd", "Qd">;
+// F64-> high F32
+def VCVT_HIGH_F32_F64 : SInst<"vcvt_high_f32_f64", "hbd", "Qd">;
+
+////////////////////////////////////////////////////////////////////////////////
+// Vector FP->FP Inexact Narrowing Conversions
+// F64->F32 inexact
+def VCVTX_F32_F64 : SInst<"vcvtx_f32_f64", "bd", "Qd">;
+// F64-> high F32 inexact
+def VCVTX_HIGH_F32_F64 : SInst<"vcvtx_high_f32_f64", "hbd", "Qd">;
 
 ////////////////////////////////////////////////////////////////////////////////
 // Vector FP->Fixed Point Conversions
