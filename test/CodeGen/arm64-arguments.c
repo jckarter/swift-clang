@@ -603,7 +603,7 @@ int f40_split(int i, int i2, int i3, int i4, int i5, int i6, int i7,
 }
 int caller40_split() {
 // CHECK: define i32 @caller40_split()
-// CHECK: call i32 @f40_split(i32 1, i32 2, i32 3, i32 4, i32 5, i32 6, i32 7, [1 x i32] undef, [2 x i64] %0, [2 x i64] %1)
+// CHECK: call i32 @f40_split(i32 1, i32 2, i32 3, i32 4, i32 5, i32 6, i32 7, [1 x i32] undef, [2 x i64] %{{.*}} [2 x i64] %{{.*}})
   return f40_split(1, 2, 3, 4, 5, 6, 7, g40, g40_2);
 }
 
@@ -615,6 +615,6 @@ int f41_split(int i, int i2, int i3, int i4, int i5, int i6, int i7,
 }
 int caller41_split() {
 // CHECK: define i32 @caller41_split()
-// CHECK: call i32 @f41_split(i32 1, i32 2, i32 3, i32 4, i32 5, i32 6, i32 7, [1 x i32] undef, i128 %0, i128 %1)
+// CHECK: call i32 @f41_split(i32 1, i32 2, i32 3, i32 4, i32 5, i32 6, i32 7, [1 x i32] undef, i128 %{{.*}}, i128 %{{.*}})
   return f41_split(1, 2, 3, 4, 5, 6, 7, g41, g41_2);
 }
