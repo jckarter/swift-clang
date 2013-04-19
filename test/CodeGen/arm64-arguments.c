@@ -597,24 +597,24 @@ int caller43_stack() {
 // We should not split argument s1 between registers and stack.
 __attribute__ ((noinline))
 int f40_split(int i, int i2, int i3, int i4, int i5, int i6, int i7,
-              s40_with_align s1, s40_with_align s2) {
-// CHECK: define i32 @f40_stack(i32 %i, i32 %i2, i32 %i3, i32 %i4, i32 %i5, i32 %i6, i32 %i7, [1 x i32], [2 x i64] %s1.coerce, [2 x i64] %s2.coerce)
+              s40_no_align s1, s40_no_align s2) {
+// CHECK: define i32 @f40_split(i32 %i, i32 %i2, i32 %i3, i32 %i4, i32 %i5, i32 %i6, i32 %i7, [1 x i32], [2 x i64] %s1.coerce, [2 x i64] %s2.coerce)
   return s1.i + s2.i + i + i2 + i3 + i4 + i5 + i6 + i7 + s1.s + s2.s;
 }
 int caller40_split() {
-// CHECK: define i32 @caller40_stack()
-// CHECK: call i32 @f40_stack(i32 1, i32 2, i32 3, i32 4, i32 5, i32 6, i32 7, [1 x i32] undef, [2 x i64] %0, [2 x i64] %1)
+// CHECK: define i32 @caller40_split()
+// CHECK: call i32 @f40_split(i32 1, i32 2, i32 3, i32 4, i32 5, i32 6, i32 7, [1 x i32] undef, [2 x i64] %0, [2 x i64] %1)
   return f40_split(1, 2, 3, 4, 5, 6, 7, g40, g40_2);
 }
 
 __attribute__ ((noinline))
 int f41_split(int i, int i2, int i3, int i4, int i5, int i6, int i7,
               s41_with_align s1, s41_with_align s2) {
-// CHECK: define i32 @f41_stack(i32 %i, i32 %i2, i32 %i3, i32 %i4, i32 %i5, i32 %i6, i32 %i7, [1 x i32], i128 %s1.coerce, i128 %s2.coerce)
+// CHECK: define i32 @f41_split(i32 %i, i32 %i2, i32 %i3, i32 %i4, i32 %i5, i32 %i6, i32 %i7, [1 x i32], i128 %s1.coerce, i128 %s2.coerce)
   return s1.i + s2.i + i + i2 + i3 + i4 + i5 + i6 + i7 + s1.s + s2.s;
 }
 int caller41_split() {
-// CHECK: define i32 @caller41_stack()
-// CHECK: call i32 @f41_stack(i32 1, i32 2, i32 3, i32 4, i32 5, i32 6, i32 7, [1 x i32] undef, i128 %0, i128 %1)
+// CHECK: define i32 @caller41_split()
+// CHECK: call i32 @f41_split(i32 1, i32 2, i32 3, i32 4, i32 5, i32 6, i32 7, [1 x i32] undef, i128 %0, i128 %1)
   return f41_split(1, 2, 3, 4, 5, 6, 7, g41, g41_2);
 }
