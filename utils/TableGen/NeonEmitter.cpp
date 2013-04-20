@@ -40,10 +40,12 @@ enum OpKind {
   OpUnavailable,
   OpAdd,
   OpAddl,
+  OpAddlHigh,
   OpAddw,
   OpSub,
   OpSubl,
   OpSubw,
+  OpMovlHigh,
   OpMul,
   OpMla,
   OpMlal,
@@ -176,10 +178,12 @@ public:
     OpMap["OP_UNAVAILABLE"] = OpUnavailable;
     OpMap["OP_ADD"]   = OpAdd;
     OpMap["OP_ADDL"]  = OpAddl;
+    OpMap["OP_ADDL_HIGH"]  = OpAddlHigh;
     OpMap["OP_ADDW"]  = OpAddw;
     OpMap["OP_SUB"]   = OpSub;
     OpMap["OP_SUBL"]  = OpSubl;
     OpMap["OP_SUBW"]  = OpSubw;
+    OpMap["OP_MOVL_HIGH"] = OpMovlHigh;
     OpMap["OP_MUL"]   = OpMul;
     OpMap["OP_MLA"]   = OpMla;
     OpMap["OP_MLAL"]  = OpMlal;
@@ -1381,6 +1385,14 @@ static std::string Extend(StringRef typestr, const std::string &a) {
   return s;
 }
 
+// Use the vmovl_high builtin to sign-extend or zero-extend a vector.
+static std::string ExtendHigh(StringRef typestr, const std::string &a) {
+  std::string s;
+  s = MangleName("vmovl_high", typestr, ClassS);
+  s += "(" + a + ")";
+  return s;
+}
+
 static std::string Duplicate(unsigned nElts, StringRef typestr,
                              const std::string &a, bool Shorten = false) {
   std::string s;
@@ -1444,8 +1456,15 @@ static std::string GenOpString(OpKind op, const std::string &proto,
   case OpAdd:
     s += "__a + __b;";
     break;
+  case OpMovlHigh:
+    s += Extend(typestr, MangleName("vget_high", typestr, ClassS) + "(__a)");
+    s += ";";
+    break;
   case OpAddl:
     s += Extend(typestr, "__a") + " + " + Extend(typestr, "__b") + ";";
+    break;
+  case OpAddlHigh:
+    s += ExtendHigh(typestr, "__a") + " + " + ExtendHigh(typestr, "__b") + ";";
     break;
   case OpAddw:
     s += "__a + " + Extend(typestr, "__b") + ";";
@@ -2128,6 +2147,7 @@ void NeonEmitter::run(raw_ostream &OS) {
   // variants come after the intrinsics they use.)
   emitIntrinsic(OS, Records.getDef("VGET_HIGH"));
   emitIntrinsic(OS, Records.getDef("VMOVL"));
+  emitIntrinsic(OS, Records.getDef("VMOVL_HIGH"));
   emitIntrinsic(OS, Records.getDef("VMULL"));
   emitIntrinsic(OS, Records.getDef("VMULL_HIGH"));
   emitIntrinsic(OS, Records.getDef("VABD"));
@@ -2140,6 +2160,7 @@ void NeonEmitter::run(raw_ostream &OS) {
     Record *R = RV[i];
     if (R->getName() == "VGET_HIGH" ||
         R->getName() == "VMOVL" ||
+        R->getName() == "VMOVL_HIGH" ||
         R->getName() == "VMULL" ||
         R->getName() == "VMULL_HIGH" ||
         R->getName() == "VABD"  ||
