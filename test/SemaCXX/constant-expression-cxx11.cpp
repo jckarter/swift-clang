@@ -1312,6 +1312,13 @@ namespace InvalidClasses {
   }
 }
 
+namespace NamespaceAlias {
+  constexpr int f() {
+    namespace NS = NamespaceAlias; // expected-warning {{use of this statement in a constexpr function is a C++1y extension}}
+    return &NS::f != nullptr;
+  }
+}
+
 // Constructors can be implicitly constexpr, even for a non-literal type.
 namespace ImplicitConstexpr {
   struct Q { Q() = default; Q(const Q&) = default; Q(Q&&) = default; ~Q(); }; // expected-note 3{{here}}
@@ -1454,4 +1461,22 @@ namespace PR14203 {
   // this would be a constant expression. For now, we generate a move
   // constructor here.
   int n = sizeof(short{duration(duration())});
+}
+
+namespace ArrayEltInit {
+  struct A {
+    constexpr A() : p(&p) {}
+    void *p;
+  };
+  constexpr A a[10];
+  static_assert(a[0].p == &a[0].p, "");
+  static_assert(a[9].p == &a[9].p, "");
+  static_assert(a[0].p != &a[9].p, "");
+  static_assert(a[9].p != &a[0].p, "");
+
+  constexpr A b[10] = {};
+  static_assert(b[0].p == &b[0].p, "");
+  static_assert(b[9].p == &b[9].p, "");
+  static_assert(b[0].p != &b[9].p, "");
+  static_assert(b[9].p != &b[0].p, "");
 }
