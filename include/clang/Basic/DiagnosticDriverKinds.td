@@ -97,8 +97,6 @@ def err_drv_conflicting_deployment_targets : Error<
   "conflicting deployment targets, both '%0' and '%1' are present in environment">;
 def err_drv_invalid_arch_for_deployment_target : Error<
   "invalid architecture '%0' for deployment target '%1'">;
-def err_drv_invalid_deployment_target_for_arch : Error<
-  "invalid deployment target '%0' for architecture '%1' (requires '%2' or later)">;
 def err_drv_objc_gc_arr : Error<
   "cannot specify both '-fobjc-arc' and '%0'">;
 def err_arc_unsupported_on_runtime : Error<
