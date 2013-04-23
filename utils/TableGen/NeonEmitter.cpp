@@ -1676,8 +1676,10 @@ static std::string GenOpString(OpKind op, const std::string &proto,
     s += "(" + ts + ")__a;";
     break;
   case OpConcat:
-    s += "(" + ts + ")__builtin_shufflevector((int64x1_t)__a";
-    s += ", (int64x1_t)__b, 0, 1);";
+    s += "__builtin_shufflevector(__a, __b";
+    for (unsigned i = 0; i != nElts * 2; ++i)
+      s += ", " + utostr(i);
+    s += ");";
     break;
   case OpHi:
     s += "(" + ts +
