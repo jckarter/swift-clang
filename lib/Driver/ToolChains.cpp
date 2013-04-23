@@ -432,17 +432,10 @@ void Darwin::AddDeploymentTarget(DerivedArgList &Args) const {
       getDriver().Diag(diag::err_drv_invalid_deployment_target_for_arch)
         << iOSVersion->getAsString(Args) << "arm64" << "7.0.0";
   }
+
   Arg *iOSSimVersion = Args.getLastArg(
     options::OPT_mios_simulator_version_min_EQ);
-  // Reject iOSSim version below 7.0 for x86_64.
-  if (iOSSimVersion && getTriple().getArch() == llvm::Triple::x86_64) {
-    bool HadExtra = false;
-    unsigned Major, Minor, Micro;
-    if (Driver::GetReleaseVersion(iOSSimVersion->getValue(), Major, Minor,
-                                  Micro, HadExtra) && !HadExtra && Major < 7)
-      getDriver().Diag(diag::err_drv_invalid_deployment_target_for_arch)
-        << iOSSimVersion->getAsString(Args) << "x86_64" << "7.0.0";
-  }
+
   if (OSXVersion && (iOSVersion || iOSSimVersion)) {
     getDriver().Diag(diag::err_drv_argument_not_allowed_with)
           << OSXVersion->getAsString(Args)
