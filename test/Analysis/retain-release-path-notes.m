@@ -401,7 +401,7 @@ void CFAutoreleaseUnownedMixed() {
 // CHECK-NEXT:    <key>type</key><string>Leak</string>
 // CHECK-NEXT:   <key>issue_context_kind</key><string>function</string>
 // CHECK-NEXT:   <key>issue_context</key><string>creationViaAlloc</string>
-// CHECK-NEXT:   <key>issue_hash</key><string>2</string>
+// CHECK-NEXT:   <key>issue_hash</key><string>1</string>
 // CHECK-NEXT:   <key>location</key>
 // CHECK-NEXT:   <dict>
 // CHECK-NEXT:    <key>line</key><integer>48</integer>
@@ -544,7 +544,7 @@ void CFAutoreleaseUnownedMixed() {
 // CHECK-NEXT:    <key>type</key><string>Leak</string>
 // CHECK-NEXT:   <key>issue_context_kind</key><string>function</string>
 // CHECK-NEXT:   <key>issue_context</key><string>creationViaCFCreate</string>
-// CHECK-NEXT:   <key>issue_hash</key><string>2</string>
+// CHECK-NEXT:   <key>issue_hash</key><string>1</string>
 // CHECK-NEXT:   <key>location</key>
 // CHECK-NEXT:   <dict>
 // CHECK-NEXT:    <key>line</key><integer>53</integer>
@@ -912,7 +912,7 @@ void CFAutoreleaseUnownedMixed() {
 // CHECK-NEXT:    <key>type</key><string>Leak</string>
 // CHECK-NEXT:   <key>issue_context_kind</key><string>function</string>
 // CHECK-NEXT:   <key>issue_context</key><string>acquisitionViaMethod</string>
-// CHECK-NEXT:   <key>issue_hash</key><string>5</string>
+// CHECK-NEXT:   <key>issue_hash</key><string>1</string>
 // CHECK-NEXT:   <key>location</key>
 // CHECK-NEXT:   <dict>
 // CHECK-NEXT:    <key>line</key><integer>61</integer>
@@ -1130,7 +1130,7 @@ void CFAutoreleaseUnownedMixed() {
 // CHECK-NEXT:    <key>type</key><string>Leak</string>
 // CHECK-NEXT:   <key>issue_context_kind</key><string>function</string>
 // CHECK-NEXT:   <key>issue_context</key><string>acquisitionViaProperty</string>
-// CHECK-NEXT:   <key>issue_hash</key><string>3</string>
+// CHECK-NEXT:   <key>issue_hash</key><string>1</string>
 // CHECK-NEXT:   <key>location</key>
 // CHECK-NEXT:   <dict>
 // CHECK-NEXT:    <key>line</key><integer>67</integer>
@@ -1348,7 +1348,7 @@ void CFAutoreleaseUnownedMixed() {
 // CHECK-NEXT:    <key>type</key><string>Leak</string>
 // CHECK-NEXT:   <key>issue_context_kind</key><string>function</string>
 // CHECK-NEXT:   <key>issue_context</key><string>acquisitionViaCFFunction</string>
-// CHECK-NEXT:   <key>issue_hash</key><string>3</string>
+// CHECK-NEXT:   <key>issue_hash</key><string>1</string>
 // CHECK-NEXT:   <key>location</key>
 // CHECK-NEXT:   <dict>
 // CHECK-NEXT:    <key>line</key><integer>73</integer>
@@ -2588,7 +2588,7 @@ void CFAutoreleaseUnownedMixed() {
 // CHECK-NEXT:    <key>type</key><string>Leak</string>
 // CHECK-NEXT:   <key>issue_context_kind</key><string>function</string>
 // CHECK-NEXT:   <key>issue_context</key><string>makeCollectableIgnored</string>
-// CHECK-NEXT:   <key>issue_hash</key><string>4</string>
+// CHECK-NEXT:   <key>issue_hash</key><string>1</string>
 // CHECK-NEXT:   <key>location</key>
 // CHECK-NEXT:   <dict>
 // CHECK-NEXT:    <key>line</key><integer>105</integer>
@@ -2956,7 +2956,7 @@ void CFAutoreleaseUnownedMixed() {
 // CHECK-NEXT:    <key>type</key><string>Leak of returned object</string>
 // CHECK-NEXT:   <key>issue_context_kind</key><string>function</string>
 // CHECK-NEXT:   <key>issue_context</key><string>CFGetRuleViolation</string>
-// CHECK-NEXT:   <key>issue_hash</key><string>2</string>
+// CHECK-NEXT:   <key>issue_hash</key><string>1</string>
 // CHECK-NEXT:   <key>location</key>
 // CHECK-NEXT:   <dict>
 // CHECK-NEXT:    <key>line</key><integer>115</integer>
@@ -3692,7 +3692,7 @@ void CFAutoreleaseUnownedMixed() {
 // CHECK-NEXT:    <key>type</key><string>Leak of returned object</string>
 // CHECK-NEXT:   <key>issue_context_kind</key><string>Objective-C method</string>
 // CHECK-NEXT:   <key>issue_context</key><string>getViolation</string>
-// CHECK-NEXT:   <key>issue_hash</key><string>2</string>
+// CHECK-NEXT:   <key>issue_hash</key><string>1</string>
 // CHECK-NEXT:   <key>location</key>
 // CHECK-NEXT:   <dict>
 // CHECK-NEXT:    <key>line</key><integer>136</integer>
@@ -5356,7 +5356,7 @@ void CFAutoreleaseUnownedMixed() {
 // CHECK-NEXT:    <key>type</key><string>Leak</string>
 // CHECK-NEXT:   <key>issue_context_kind</key><string>Objective-C method</string>
 // CHECK-NEXT:   <key>issue_context</key><string>test</string>
-// CHECK-NEXT:   <key>issue_hash</key><string>13</string>
+// CHECK-NEXT:   <key>issue_hash</key><string>8</string>
 // CHECK-NEXT:   <key>location</key>
 // CHECK-NEXT:   <dict>
 // CHECK-NEXT:    <key>line</key><integer>237</integer>
