@@ -15,7 +15,6 @@
 // CHECK-OFAST: -vectorize-loops
 
 // CHECK-OFAST-O2: -cc1
-// CHECK-OFAST-O2-NOT: -relaxed-aliasing
 // CHECK-OFAST-O2-NOT: -ffast-math
 // CHECK-OFAST-O2-NOT: -Ofast
 // CHECK-OFAST-O2: -vectorize-loops
