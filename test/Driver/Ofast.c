@@ -18,7 +18,7 @@
 // CHECK-OFAST-O2-NOT: -relaxed-aliasing
 // CHECK-OFAST-O2-NOT: -ffast-math
 // CHECK-OFAST-O2-NOT: -Ofast
-// CHECK-OFAST-O2: -vectorize-loops
+// DISABLED-FOR-APPLE: -vectorize-loops
 
 // CHECK-OFAST-NO-FAST-MATH: -cc1
 // CHECK-OFAST-NO-FAST-MATH-NOT: -relaxed-aliasing
