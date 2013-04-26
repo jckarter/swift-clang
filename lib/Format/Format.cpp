@@ -51,6 +51,7 @@ FormatStyle getLLVMStyle() {
   LLVMStyle.ObjCSpaceBeforeProtocolList = true;
   LLVMStyle.PenaltyExcessCharacter = 1000000;
   LLVMStyle.PenaltyReturnTypeOnItsOwnLine = 75;
+  LLVMStyle.AlignEscapedNewlinesLeft = false;
   return LLVMStyle;
 }
 
@@ -71,6 +72,7 @@ FormatStyle getGoogleStyle() {
   GoogleStyle.ObjCSpaceBeforeProtocolList = false;
   GoogleStyle.PenaltyExcessCharacter = 1000000;
   GoogleStyle.PenaltyReturnTypeOnItsOwnLine = 200;
+  GoogleStyle.AlignEscapedNewlinesLeft = true;
   return GoogleStyle;
 }
 
@@ -567,6 +569,15 @@ private:
       State.Stack.push_back(
           ParenState(NewIndent, State.Stack.back().LastSpace, AvoidBinPacking,
                      State.Stack.back().NoLineBreak));
+
+      if (Current.NoMoreTokensOnLevel && Current.FakeLParens.empty()) {
+        // This parenthesis was the last token possibly making use of Indent and
+        // LastSpace of the next higher ParenLevel. Thus, erase them to acieve
+        // better memoization results.
+        State.Stack[State.Stack.size() - 2].Indent = 0;
+        State.Stack[State.Stack.size() - 2].LastSpace = 0;
+      }
+
       ++State.ParenLevel;
     }
 

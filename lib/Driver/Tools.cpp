@@ -3348,9 +3348,9 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
   OptSpecifier VectorizeAliasOption = OFastEnabled ? options::OPT_Ofast :
     options::OPT_fvectorize;
 
-  // -fvectorize is default.
+  // -fno-vectorize is default.
   if (Args.hasFlag(options::OPT_fvectorize, VectorizeAliasOption,
-                   options::OPT_fno_vectorize, true)) {
+                   options::OPT_fno_vectorize, false)) {
     CmdArgs.push_back("-backend-option");
     CmdArgs.push_back("-vectorize-loops");
   }
