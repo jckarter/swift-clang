@@ -390,7 +390,7 @@ Sema::ActOnCaseStmt(SourceLocation CaseLoc, Expr *LHSVal,
       // Recover from an error by just forgetting about it.
     }
   }
-  
+
   LHSVal = ActOnFinishFullExpr(LHSVal, LHSVal->getExprLoc(), false,
                                getLangOpts().CPlusPlus11).take();
   if (RHSVal)
@@ -2992,7 +2992,7 @@ static void buildCapturedStmtCaptureList(
 }
 
 void Sema::ActOnCapturedRegionStart(SourceLocation Loc, Scope *CurScope,
-                                    CapturedRegionScopeInfo::CapturedRegionKind Kind) {
+                                    CapturedRegionKind Kind) {
   CapturedDecl *CD = 0;
   RecordDecl *RD = CreateCapturedStmtRecordDecl(CD, Loc);
 
