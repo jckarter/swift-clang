@@ -2552,6 +2552,9 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
     }
   }
 
+  if (Args.hasArg(options::OPT__migrate_xct))
+    CmdArgs.push_back("-migration-for-xct");
+
   // Add preprocessing options like -I, -D, etc. if we are using the
   // preprocessor.
   //

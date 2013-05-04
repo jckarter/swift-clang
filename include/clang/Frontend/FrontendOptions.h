@@ -161,6 +161,9 @@ public:
   };
   unsigned ObjCMTAction;
 
+  /// \brief Enable migration to Xcode Test framework.
+  bool XCTMigrate;
+
   std::string MTMigrateDir;
   std::string ARCMTMigrateReportOut;
 
@@ -216,7 +219,7 @@ public:
     FixToTemporaries(false), ARCMTMigrateEmitARCErrors(false),
     SkipFunctionBodies(false), UseGlobalModuleIndex(true),
     GenerateGlobalModuleIndex(true),
-    ARCMTAction(ARCMT_None), ObjCMTAction(ObjCMT_None),
+    ARCMTAction(ARCMT_None), ObjCMTAction(ObjCMT_None), XCTMigrate(false),
     ProgramAction(frontend::ParseSyntaxOnly)
   {}
 
