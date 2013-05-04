@@ -4716,7 +4716,9 @@ void darwin::Link::ConstructJob(Compilation &C, const JobAction &JA,
               // The simulator doesn't have a versioned crt1 file.
               CmdArgs.push_back("-lcrt1.o");
             } else if (getDarwinToolChain().isTargetIPhoneOS()) {
-              if (getDarwinToolChain().isIPhoneOSVersionLT(3, 1))
+              if (getDarwinToolChain().getArch() == llvm::Triple::arm64)
+                ; // iOS does not need any crt1 files for arm64
+              else if (getDarwinToolChain().isIPhoneOSVersionLT(3, 1))
                 CmdArgs.push_back("-lcrt1.o");
               else if (getDarwinToolChain().isIPhoneOSVersionLT(6, 0))
                 CmdArgs.push_back("-lcrt1.3.1.o");
