@@ -1873,6 +1873,7 @@ class X86TargetInfo : public TargetInfo {
     /// Bobcat architecture processors.
     //@{
     CK_BTVER1,
+    CK_BTVER2,
     //@}
 
     /// \name Bulldozer
@@ -1997,6 +1998,7 @@ public:
       .Case("opteron-sse3", CK_OpteronSSE3)
       .Case("amdfam10", CK_AMDFAM10)
       .Case("btver1", CK_BTVER1)
+      .Case("btver2", CK_BTVER2)
       .Case("bdver1", CK_BDVER1)
       .Case("bdver2", CK_BDVER2)
       .Case("x86-64", CK_x86_64)
@@ -2062,6 +2064,7 @@ public:
     case CK_OpteronSSE3:
     case CK_AMDFAM10:
     case CK_BTVER1:
+    case CK_BTVER2:
     case CK_BDVER1:
     case CK_BDVER2:
     case CK_x86_64:
@@ -2230,6 +2233,15 @@ void X86TargetInfo::getDefaultFeatures(llvm::StringMap<bool> &Features) const {
     setFeatureEnabled(Features, "sse4a", true);
     setFeatureEnabled(Features, "lzcnt", true);
     setFeatureEnabled(Features, "popcnt", true);
+    break;
+  case CK_BTVER2:
+    setFeatureEnabled(Features, "avx", true);
+    setFeatureEnabled(Features, "sse4a", true);
+    setFeatureEnabled(Features, "lzcnt", true);
+    setFeatureEnabled(Features, "aes", true);
+    setFeatureEnabled(Features, "pclmul", true);
+    setFeatureEnabled(Features, "bmi", true);
+    setFeatureEnabled(Features, "f16c", true);
     break;
   case CK_BDVER1:
     setFeatureEnabled(Features, "xop", true);
@@ -2648,6 +2660,9 @@ void X86TargetInfo::getTargetDefines(const LangOptions &Opts,
     break;
   case CK_BTVER1:
     defineCPUMacros(Builder, "btver1");
+    break;
+  case CK_BTVER2:
+    defineCPUMacros(Builder, "btver2");
     break;
   case CK_BDVER1:
     defineCPUMacros(Builder, "bdver1");

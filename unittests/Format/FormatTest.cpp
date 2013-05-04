@@ -302,6 +302,7 @@ TEST_F(FormatTest, FormatsForLoop) {
   verifyFormat("for (;;) {\n"
                "  f();\n"
                "}");
+  verifyFormat("for (int i = 0; (i < 10); ++i) {\n}");
 
   verifyFormat(
       "for (std::vector<UnwrappedLine>::iterator I = UnwrappedLines.begin(),\n"
@@ -2547,6 +2548,7 @@ TEST_F(FormatTest, UnderstandsUsesOfStarAndAmp) {
   verifyIndependentOfContext("A<int **, int **> a;");
   verifyIndependentOfContext("void f(int *a = d * e, int *b = c * d);");
   verifyFormat("for (char **a = b; *a; ++a) {\n}");
+  verifyFormat("for (; a && b;) {\n}");
 
   verifyFormat(
       "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa(\n"
