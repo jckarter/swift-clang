@@ -596,6 +596,9 @@ private:
       Contexts.back().IsExpression = true;
     } else if (Current.is(tok::kw_new)) {
       Contexts.back().CanBeExpression = false;
+    } else if (Current.is(tok::semi)) {
+      // This should be the condition or increment in a for-loop.
+      Contexts.back().IsExpression = true;
     }
 
     if (Current.Type == TT_Unknown) {
@@ -1045,7 +1048,7 @@ bool TokenAnnotator::spaceRequiredBetween(const AnnotatedLine &Line,
     return Line.Type == LT_ObjCDecl ||
            Left.isOneOf(tok::kw_if, tok::kw_for, tok::kw_while, tok::kw_switch,
                         tok::kw_return, tok::kw_catch, tok::kw_new,
-                        tok::kw_delete);
+                        tok::kw_delete, tok::semi);
   }
   if (Left.is(tok::at) &&
       Right.FormatTok.Tok.getObjCKeywordID() != tok::objc_not_keyword)

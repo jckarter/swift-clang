@@ -343,7 +343,7 @@ static ExprResult CheckObjCCollectionLiteralElement(Sema &S, Expr *Element,
     InitializationKind Kind
       = InitializationKind::CreateCopy(Element->getLocStart(),
                                        SourceLocation());
-    InitializationSequence Seq(S, Entity, Kind, &Element, 1);
+    InitializationSequence Seq(S, Entity, Kind, Element);
     if (!Seq.Failed())
       return Seq.Perform(S, Entity, Kind, Element);
   }
@@ -1334,7 +1334,7 @@ bool Sema::CheckMessageArgumentTypes(QualType ReceiverType,
 bool Sema::isSelfExpr(Expr *receiver) {
   // 'self' is objc 'self' in an objc method only.
   ObjCMethodDecl *method =
-    dyn_cast<ObjCMethodDecl>(CurContext->getNonClosureAncestor());
+    dyn_cast_or_null<ObjCMethodDecl>(CurContext->getNonClosureAncestor());
   if (!method) return false;
 
   receiver = receiver->IgnoreParenLValueCasts();

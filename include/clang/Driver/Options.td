@@ -132,6 +132,9 @@ def objcmt_migrate_literals : Flag<["-"], "objcmt-migrate-literals">, Flags<[CC1
   HelpText<"Enable migration to modern ObjC literals">;
 def objcmt_migrate_subscripting : Flag<["-"], "objcmt-migrate-subscripting">, Flags<[CC1Option]>,
   HelpText<"Enable migration to modern ObjC subscripting">;
+def _migrate_xct : Flag<["--"], "migrate-xct">, Flags<[DriverOption]>,
+  HelpText<"Apply modifications and produces temporary files to migrate to "
+   "Xcode Testing framework">;
 
 // Make sure all other -ccc- options are rejected.
 def ccc_ : Joined<["-"], "ccc-">, Group<ccc_Group>, Flags<[Unsupported]>;

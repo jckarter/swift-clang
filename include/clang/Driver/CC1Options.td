@@ -245,9 +245,6 @@ def fmessage_length : Separate<["-"], "fmessage-length">, MetaVarName<"<N>">,
 def Wno_rewrite_macros : Flag<["-"], "Wno-rewrite-macros">,
   HelpText<"Silence ObjC rewriting warnings">;
 
-def fwarn_on_spellcheck : Flag<["-"], "fwarn-on-spellcheck">,
-  HelpText<"Emit warning if spell-check is initiated, for testing">;
-
 //===----------------------------------------------------------------------===//
 // Frontend Options
 //===----------------------------------------------------------------------===//
@@ -359,6 +356,9 @@ def arcmt_modify : Flag<["-"], "arcmt-modify">,
   HelpText<"Apply modifications to files to conform to ARC">;
 def arcmt_migrate : Flag<["-"], "arcmt-migrate">,
   HelpText<"Apply modifications and produces temporary files that conform to ARC">;
+def migration_for_xct : Flag<["-"], "migration-for-xct">,
+  HelpText<"Apply modifications and produces temporary files to migrate to "
+   "Xcode Testing framework">;
 
 def relocatable_pch : Flag<["-", "--"], "relocatable-pch">,
   HelpText<"Whether to build a relocatable precompiled header">;

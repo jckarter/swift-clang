@@ -75,7 +75,7 @@ StmtResult Sema::ActOnDeclStmt(DeclGroupPtrTy dg, SourceLocation StartLoc,
 
 void Sema::ActOnForEachDeclStmt(DeclGroupPtrTy dg) {
   DeclGroupRef DG = dg.getAsVal<DeclGroupRef>();
-  
+
   // If we don't have a declaration, or we have an invalid declaration,
   // just return.
   if (DG.isNull() || !DG.isSingleDecl())
@@ -2331,7 +2331,7 @@ Sema::PerformMoveOrCopyInitialization(const InitializedEntity &Entity,
     InitializationKind Kind
       = InitializationKind::CreateCopy(Value->getLocStart(),
                                        Value->getLocStart());
-    InitializationSequence Seq(*this, Entity, Kind, &InitExpr, 1);
+    InitializationSequence Seq(*this, Entity, Kind, InitExpr);
 
     //   [...] If overload resolution fails, or if the type of the first
     //   parameter of the selected constructor is not an rvalue reference
@@ -2364,7 +2364,7 @@ Sema::PerformMoveOrCopyInitialization(const InitializedEntity &Entity,
 
         // Complete type-checking the initialization of the return type
         // using the constructor we found.
-        Res = Seq.Perform(*this, Entity, Kind, MultiExprArg(&Value, 1));
+        Res = Seq.Perform(*this, Entity, Kind, Value);
       }
     }
   }
@@ -2944,8 +2944,8 @@ StmtResult Sema::ActOnMSDependentExistsStmt(SourceLocation KeywordLoc,
 }
 
 RecordDecl*
-Sema::CreateCapturedStmtRecordDecl(CapturedDecl *&CD, SourceLocation Loc)
-{
+Sema::CreateCapturedStmtRecordDecl(CapturedDecl *&CD, SourceLocation Loc,
+                                   unsigned NumParams) {
   DeclContext *DC = CurContext;
   while (!(DC->isFunctionOrMethod() || DC->isRecord() || DC->isFileContext()))
     DC = DC->getParent();
@@ -2960,8 +2960,19 @@ Sema::CreateCapturedStmtRecordDecl(CapturedDecl *&CD, SourceLocation Loc)
   RD->setImplicit();
   RD->startDefinition();
 
-  CD = CapturedDecl::Create(Context, CurContext);
+  CD = CapturedDecl::Create(Context, CurContext, NumParams);
   DC->addDecl(CD);
+
+  // Build the context parameter
+  assert(NumParams > 0 && "CapturedStmt requires context parameter");
+  DC = CapturedDecl::castToDeclContext(CD);
+  IdentifierInfo *VarName = &Context.Idents.get("__context");
+  QualType ParamType = Context.getPointerType(Context.getTagDeclType(RD));
+  ImplicitParamDecl *Param
+    = ImplicitParamDecl::Create(Context, DC, Loc, VarName, ParamType);
+  DC->addDecl(Param);
+
+  CD->setContextParam(Param);
 
   return RD;
 }
@@ -2992,9 +3003,10 @@ static void buildCapturedStmtCaptureList(
 }
 
 void Sema::ActOnCapturedRegionStart(SourceLocation Loc, Scope *CurScope,
-                                    CapturedRegionKind Kind) {
+                                    CapturedRegionKind Kind,
+                                    unsigned NumParams) {
   CapturedDecl *CD = 0;
-  RecordDecl *RD = CreateCapturedStmtRecordDecl(CD, Loc);
+  RecordDecl *RD = CreateCapturedStmtRecordDecl(CD, Loc, NumParams);
 
   // Enter the capturing scope for this captured region.
   PushCapturedRegionScope(CurScope, CD, RD, Kind);
@@ -3007,12 +3019,9 @@ void Sema::ActOnCapturedRegionStart(SourceLocation Loc, Scope *CurScope,
   PushExpressionEvaluationContext(PotentiallyEvaluated);
 }
 
-void Sema::ActOnCapturedRegionError(bool IsInstantiation) {
+void Sema::ActOnCapturedRegionError() {
   DiscardCleanupsInEvaluationContext();
   PopExpressionEvaluationContext();
-
-  if (!IsInstantiation)
-    PopDeclContext();
 
   CapturedRegionScopeInfo *RSI = getCurCapturedRegion();
   RecordDecl *Record = RSI->TheRecordDecl;
@@ -3025,6 +3034,7 @@ void Sema::ActOnCapturedRegionError(bool IsInstantiation) {
   ActOnFields(/*Scope=*/0, Record->getLocation(), Record, Fields,
               SourceLocation(), SourceLocation(), /*AttributeList=*/0);
 
+  PopDeclContext();
   PopFunctionScopeInfo();
 }
 
@@ -3038,11 +3048,15 @@ StmtResult Sema::ActOnCapturedRegionEnd(Stmt *S) {
   CapturedDecl *CD = RSI->TheCapturedDecl;
   RecordDecl *RD = RSI->TheRecordDecl;
 
-  CapturedStmt *Res = CapturedStmt::Create(getASTContext(), S, Captures,
+  CapturedStmt *Res = CapturedStmt::Create(getASTContext(), S,
+                                           RSI->CapRegionKind, Captures,
                                            CaptureInits, CD, RD);
 
   CD->setBody(Res->getCapturedStmt());
   RD->completeDefinition();
+
+  DiscardCleanupsInEvaluationContext();
+  PopExpressionEvaluationContext();
 
   PopDeclContext();
   PopFunctionScopeInfo();
