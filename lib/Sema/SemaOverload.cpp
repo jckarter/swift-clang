@@ -42,13 +42,15 @@ CreateFunctionRefExpr(Sema &S, FunctionDecl *Fn, NamedDecl *FoundDecl,
                       bool HadMultipleCandidates,
                       SourceLocation Loc = SourceLocation(), 
                       const DeclarationNameLoc &LocInfo = DeclarationNameLoc()){
+  if (S.DiagnoseUseOfDecl(FoundDecl, Loc))
+    return ExprError();
+
   DeclRefExpr *DRE = new (S.Context) DeclRefExpr(Fn, false, Fn->getType(),
                                                  VK_LValue, Loc, LocInfo);
   if (HadMultipleCandidates)
     DRE->setHadMultipleCandidates(true);
 
   S.MarkDeclRefReferenced(DRE);
-  S.DiagnoseUseOfDecl(FoundDecl, Loc);
 
   ExprResult E = S.Owned(DRE);
   E = S.DefaultFunctionArrayConversion(E.take());
@@ -5724,6 +5726,14 @@ Sema::AddConversionCandidate(CXXConversionDecl *Conversion,
   if (!CandidateSet.isNewCandidate(Conversion))
     return;
 
+  // If the conversion function has an undeduced return type, trigger its
+  // deduction now.
+  if (getLangOpts().CPlusPlus1y && ConvType->isUndeducedType()) {
+    if (DeduceReturnType(Conversion, From->getExprLoc()))
+      return;
+    ConvType = Conversion->getConversionType().getNonReferenceType();
+  }
+
   // Overload resolution is always an unevaluated context.
   EnterExpressionEvaluationContext Unevaluated(*this, Sema::Unevaluated);
 
@@ -9171,6 +9181,13 @@ private:
           if (S.CheckCUDATarget(Caller, FunDecl))
             return false;
 
+      // If any candidate has a placeholder return type, trigger its deduction
+      // now.
+      if (S.getLangOpts().CPlusPlus1y &&
+          FunDecl->getResultType()->isUndeducedType() &&
+          S.DeduceReturnType(FunDecl, SourceExpr->getLocStart(), Complain))
+        return false;
+
       QualType ResultTy;
       if (Context.hasSameUnqualifiedType(TargetFunctionType, 
                                          FunDecl->getType()) ||
@@ -9436,6 +9453,11 @@ Sema::ResolveSingleFunctionTemplateSpecialization(OverloadExpr *ovl,
     Matched = Specialization;
     if (FoundResult) *FoundResult = I.getPair();    
   }
+
+  if (Matched && getLangOpts().CPlusPlus1y &&
+      Matched->getResultType()->isUndeducedType() &&
+      DeduceReturnType(Matched, ovl->getExprLoc(), Complain))
+    return 0;
 
   return Matched;
 }
@@ -9963,7 +9985,8 @@ static ExprResult FinishOverloadedCallExpr(Sema &SemaRef, Scope *S, Expr *Fn,
   case OR_Success: {
     FunctionDecl *FDecl = (*Best)->Function;
     SemaRef.CheckUnresolvedLookupAccess(ULE, (*Best)->FoundDecl);
-    SemaRef.DiagnoseUseOfDecl(FDecl, ULE->getNameLoc());
+    if (SemaRef.DiagnoseUseOfDecl(FDecl, ULE->getNameLoc()))
+      return ExprError();
     Fn = SemaRef.FixOverloadedFunctionReference(Fn, (*Best)->FoundDecl, FDecl);
     return SemaRef.BuildResolvedCallExpr(Fn, FDecl, LParenLoc, Args, NumArgs,
                                          RParenLoc, ExecConfig);
@@ -10846,7 +10869,8 @@ Sema::BuildCallToMemberFunction(Scope *S, Expr *MemExprE,
       Method = cast<CXXMethodDecl>(Best->Function);
       FoundDecl = Best->FoundDecl;
       CheckUnresolvedMemberAccess(UnresExpr, Best->FoundDecl);
-      DiagnoseUseOfDecl(Best->FoundDecl, UnresExpr->getNameLoc());
+      if (DiagnoseUseOfDecl(Best->FoundDecl, UnresExpr->getNameLoc()))
+        return ExprError();
       break;
 
     case OR_No_Viable_Function:
@@ -11098,7 +11122,8 @@ Sema::BuildCallToObjectOfClassType(Scope *S, Expr *Obj,
                          Best->Conversions[0].UserDefined.ConversionFunction);
 
     CheckMemberOperatorAccess(LParenLoc, Object.get(), 0, Best->FoundDecl);
-    DiagnoseUseOfDecl(Best->FoundDecl, LParenLoc);
+    if (DiagnoseUseOfDecl(Best->FoundDecl, LParenLoc))
+      return ExprError();
 
     // We selected one of the surrogate functions that converts the
     // object parameter to a function pointer. Perform the conversion
@@ -11280,8 +11305,7 @@ Sema::BuildOverloadedArrowExpr(Scope *S, Expr *Base, SourceLocation OpLoc) {
   for (LookupResult::iterator Oper = R.begin(), OperEnd = R.end();
        Oper != OperEnd; ++Oper) {
     AddMethodCandidate(Oper.getPair(), Base->getType(), Base->Classify(Context),
-                       ArrayRef<Expr *>(), CandidateSet, 
-                       /*SuppressUserConversions=*/false);
+                       None, CandidateSet, /*SuppressUserConversions=*/false);
   }
 
   bool HadMultipleCandidates = (CandidateSet.size() > 1);
