@@ -4127,7 +4127,7 @@ static bool FindConditionalOverload(Sema &Self, ExprResult &LHS, ExprResult &RHS
                                     SourceLocation QuestionLoc) {
   Expr *Args[2] = { LHS.get(), RHS.get() };
   OverloadCandidateSet CandidateSet(QuestionLoc);
-  Self.AddBuiltinOperatorCandidates(OO_Conditional, QuestionLoc, Args, 2,
+  Self.AddBuiltinOperatorCandidates(OO_Conditional, QuestionLoc, Args,
                                     CandidateSet);
 
   OverloadCandidateSet::iterator Best;
@@ -5099,7 +5099,7 @@ ExprResult Sema::DiagnoseDtorReference(SourceLocation NameLoc,
   return ActOnCallExpr(/*Scope*/ 0,
                        MemExpr,
                        /*LPLoc*/ ExpectedLParenLoc,
-                       MultiExprArg(),
+                       None,
                        /*RPLoc*/ ExpectedLParenLoc);
 }
 
@@ -5447,7 +5447,7 @@ ExprResult Sema::BuildCXXMemberCallExpr(Expr *E, NamedDecl *FoundDecl,
   ResultType = ResultType.getNonLValueExprType(Context);
 
   CXXMemberCallExpr *CE =
-    new (Context) CXXMemberCallExpr(Context, ME, MultiExprArg(), ResultType, VK,
+    new (Context) CXXMemberCallExpr(Context, ME, None, ResultType, VK,
                                     Exp.get()->getLocEnd());
   return CE;
 }

@@ -2246,11 +2246,9 @@ static bool haveIncompatibleLanguageLinkages(const T *Old, const T *New) {
     return false;
 
   LanguageLinkage OldLinkage = Old->getLanguageLinkage();
-  if (OldLinkage == CXXLanguageLinkage &&
-      New->getDeclContext()->isExternCContext())
+  if (OldLinkage == CXXLanguageLinkage && New->isInExternCContext())
     return true;
-  if (OldLinkage == CLanguageLinkage &&
-      New->getDeclContext()->isExternCXXContext())
+  if (OldLinkage == CLanguageLinkage && New->isInExternCXXContext())
     return true;
   return false;
 }
@@ -5153,7 +5151,7 @@ static bool mayConflictWithNonVisibleExternC(const T *ND) {
   // This code runs before the init of foo is set, and therefore before
   // the type of foo is known. Not knowing the type we cannot know its linkage
   // unless it is in an extern C block.
-  if (!DC->isExternCContext()) {
+  if (!ND->isInExternCContext()) {
     const ASTContext &Context = ND->getASTContext();
     if (Context.getLangOpts().CPlusPlus)
       return false;
@@ -7954,9 +7952,9 @@ void Sema::ActOnUninitializedDecl(Decl *RealDecl,
     InitializedEntity Entity = InitializedEntity::InitializeVariable(Var);
     InitializationKind Kind
       = InitializationKind::CreateDefault(Var->getLocation());
-    
-    InitializationSequence InitSeq(*this, Entity, Kind, MultiExprArg());
-    ExprResult Init = InitSeq.Perform(*this, Entity, Kind, MultiExprArg());
+
+    InitializationSequence InitSeq(*this, Entity, Kind, None);
+    ExprResult Init = InitSeq.Perform(*this, Entity, Kind, None);
     if (Init.isInvalid())
       Var->setInvalidDecl();
     else if (Init.get()) {

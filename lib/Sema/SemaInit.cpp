@@ -82,6 +82,24 @@ static Expr *IsStringInit(Expr *init, QualType declType, ASTContext &Context) {
   return IsStringInit(init, arrayType, Context);
 }
 
+/// Update the type of a string literal, including any surrounding parentheses,
+/// to match the type of the object which it is initializing.
+static void updateStringLiteralType(Expr *E, QualType Ty) {
+  while (true) {
+    E->setType(Ty);
+    if (isa<StringLiteral>(E) || isa<ObjCEncodeExpr>(E))
+      break;
+    else if (ParenExpr *PE = dyn_cast<ParenExpr>(E))
+      E = PE->getSubExpr();
+    else if (UnaryOperator *UO = dyn_cast<UnaryOperator>(E))
+      E = UO->getSubExpr();
+    else if (GenericSelectionExpr *GSE = dyn_cast<GenericSelectionExpr>(E))
+      E = GSE->getResultExpr();
+    else
+      llvm_unreachable("unexpected expr in string literal init");
+  }
+}
+
 static void CheckStringInit(Expr *Str, QualType &DeclT, const ArrayType *AT,
                             Sema &S) {
   // Get the length of the string as parsed.
@@ -97,7 +115,7 @@ static void CheckStringInit(Expr *Str, QualType &DeclT, const ArrayType *AT,
     DeclT = S.Context.getConstantArrayType(IAT->getElementType(),
                                            ConstVal,
                                            ArrayType::Normal, 0);
-    Str->setType(DeclT);
+    updateStringLiteralType(Str, DeclT);
     return;
   }
 
@@ -107,7 +125,7 @@ static void CheckStringInit(Expr *Str, QualType &DeclT, const ArrayType *AT,
   // the size may be smaller or larger than the string we are initializing.
   // FIXME: Avoid truncation for 64-bit length strings.
   if (S.getLangOpts().CPlusPlus) {
-    if (StringLiteral *SL = dyn_cast<StringLiteral>(Str)) {
+    if (StringLiteral *SL = dyn_cast<StringLiteral>(Str->IgnoreParens())) {
       // For Pascal strings it's OK to strip off the terminating null character,
       // so the example below is valid:
       //
@@ -133,7 +151,7 @@ static void CheckStringInit(Expr *Str, QualType &DeclT, const ArrayType *AT,
   // something like:
   //   char x[1] = "foo";
   // then this will set the string literal's type to char[1].
-  Str->setType(DeclT);
+  updateStringLiteralType(Str, DeclT);
 }
 
 //===----------------------------------------------------------------------===//
@@ -280,7 +298,7 @@ void InitListChecker::CheckValueInitializable(const InitializedEntity &Entity) {
   SourceLocation Loc;
   InitializationKind Kind = InitializationKind::CreateValue(Loc, Loc, Loc,
                                                             true);
-  InitializationSequence InitSeq(SemaRef, Entity, Kind, MultiExprArg());
+  InitializationSequence InitSeq(SemaRef, Entity, Kind, None);
   if (InitSeq.Failed())
     hadError = true;
 }
@@ -328,7 +346,7 @@ void InitListChecker::FillInValueInitForField(unsigned Init, FieldDecl *Field,
 
     InitializationKind Kind = InitializationKind::CreateValue(Loc, Loc, Loc,
                                                               true);
-    InitializationSequence InitSeq(SemaRef, MemberEntity, Kind, MultiExprArg());
+    InitializationSequence InitSeq(SemaRef, MemberEntity, Kind, None);
     if (!InitSeq) {
       InitSeq.Diagnose(SemaRef, MemberEntity, Kind, None);
       hadError = true;
@@ -336,7 +354,7 @@ void InitListChecker::FillInValueInitForField(unsigned Init, FieldDecl *Field,
     }
 
     ExprResult MemberInit
-      = InitSeq.Perform(SemaRef, MemberEntity, Kind, MultiExprArg());
+      = InitSeq.Perform(SemaRef, MemberEntity, Kind, None);
     if (MemberInit.isInvalid()) {
       hadError = true;
       return;
@@ -446,7 +464,7 @@ InitListChecker::FillInValueInitializations(const InitializedEntity &Entity,
     if (!InitExpr && !ILE->hasArrayFiller()) {
       InitializationKind Kind = InitializationKind::CreateValue(Loc, Loc, Loc,
                                                                 true);
-      InitializationSequence InitSeq(SemaRef, ElementEntity, Kind, MultiExprArg());
+      InitializationSequence InitSeq(SemaRef, ElementEntity, Kind, None);
       if (!InitSeq) {
         InitSeq.Diagnose(SemaRef, ElementEntity, Kind, None);
         hadError = true;
@@ -454,7 +472,7 @@ InitListChecker::FillInValueInitializations(const InitializedEntity &Entity,
       }
 
       ExprResult ElementInit
-        = InitSeq.Perform(SemaRef, ElementEntity, Kind, MultiExprArg());
+        = InitSeq.Perform(SemaRef, ElementEntity, Kind, None);
       if (ElementInit.isInvalid()) {
         hadError = true;
         return;
@@ -2113,7 +2131,7 @@ InitListChecker::getStructuredSubobjectInit(InitListExpr *IList, unsigned Index,
 
   InitListExpr *Result
     = new (SemaRef.Context) InitListExpr(SemaRef.Context,
-                                         InitRange.getBegin(), MultiExprArg(),
+                                         InitRange.getBegin(), None,
                                          InitRange.getEnd());
 
   QualType ResultType = CurrentObjectType;
@@ -3794,7 +3812,7 @@ static void TryDefaultInitialization(Sema &S,
   //       constructor for T is called (and the initialization is ill-formed if
   //       T has no accessible default constructor);
   if (DestType->isRecordType() && S.getLangOpts().CPlusPlus) {
-    TryConstructorInitialization(S, Entity, Kind, MultiExprArg(), DestType, Sequence);
+    TryConstructorInitialization(S, Entity, Kind, None, DestType, Sequence);
     return;
   }
 
