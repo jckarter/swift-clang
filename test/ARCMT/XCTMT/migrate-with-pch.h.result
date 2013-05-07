@@ -1,0 +1,4 @@
+#import <XCTest/XCTest.h>
+
+@interface test_kitTests : XCTestCase
+@end

@@ -13,9 +13,12 @@
 #include "clang/Basic/SourceManager.h"
 #include "clang/Edit/Commit.h"
 #include "clang/Edit/EditedSource.h"
+#include "clang/Frontend/CompilerInstance.h"
 #include "clang/Lex/MacroArgs.h"
 #include "clang/Lex/MacroInfo.h"
 #include "clang/Lex/Token.h"
+#include "clang/Serialization/ASTReader.h"
+#include "llvm/ADT/StringSet.h"
 #include "llvm/Support/Path.h"
 
 namespace {
@@ -282,6 +285,61 @@ bool XCTMigrator::isSTComposeStringFunction(const FunctionDecl *FD) {
     return false;
   return FD->getDeclName() == STComposeStringName &&
          isFromSenTestInclude(FD->getLocation());
+}
+
+namespace {
+/// brief Checks if the PCH file includes any of the SenTesting headers.
+class XCTSenTestingPCHCheck : public ASTReaderListener {
+public:
+  llvm::StringSet<> IncludesSet;
+  bool ContainsSenHeader;
+
+  XCTSenTestingPCHCheck() {
+    ContainsSenHeader = false;
+    for (unsigned i = 0, e = sizeof(TKIncludes)/sizeof(TKPair); i != e; ++i)
+      IncludesSet.insert(TKIncludes[i].SenTestStr);
+  }
+
+  virtual bool needsInputFileVisitation() { return true; }
+  virtual bool visitInputFile(StringRef Filename, bool isSystem) {
+    if (isSystem)
+      return false;
+    StringRef Name = llvm::sys::path::filename(Filename);
+    if (IncludesSet.count(Name)) {
+      ContainsSenHeader = true;
+      return false;
+    }
+
+    return true;
+  }
+};
+}
+
+void XCTMigrator::handleInvocation(CompilerInstance &CI) {
+  PreprocessorOptions &PPOpts = CI.getPreprocessorOpts();
+  if (PPOpts.ImplicitPCHInclude.empty())
+    return;
+
+  // Check if the PCH file includes any of the SenTesting headers, in which case
+  // modify the invocation and have it include the prefix header directly, so
+  // we can migrate it.
+  // Including a SenTesting header in the PCH is uncommon, this allows to use a
+  // simpler logic during migration (ignoring the PCH file), while enabling
+  // migration when the PCH does include such a header.
+  if (!CI.hasFileManager())
+    CI.createFileManager();
+  XCTSenTestingPCHCheck PCHCheck;
+  ASTReader::readASTFileControlBlock(PPOpts.ImplicitPCHInclude,
+                                     CI.getFileManager(), PCHCheck);
+  if (PCHCheck.ContainsSenHeader) {
+    std::string PrefixHeader =
+        ASTReader::getOriginalSourceFile(PPOpts.ImplicitPCHInclude,
+                                         CI.getFileManager(),
+                                         CI.getDiagnostics());
+    if (!PrefixHeader.empty())
+      PPOpts.Includes.insert(PPOpts.Includes.begin(), PrefixHeader);
+    PPOpts.ImplicitPCHInclude.clear();
+  }
 }
 
 bool XCTMigrator::isFromSenTestInclude(SourceLocation Loc) {

@@ -347,6 +347,8 @@ void XCTMigrateASTConsumer::HandleTranslationUnit(ASTContext &Ctx) {
 //===----------------------------------------------------------------------===//
 
 bool MigrateSourceAction::BeginInvocation(CompilerInstance &CI) {
+  if (CI.getFrontendOpts().XCTMigrate)
+    XCTMigrator::handleInvocation(CI);
   CI.getDiagnostics().setIgnoreAllWarnings(true);
   return true;
 }

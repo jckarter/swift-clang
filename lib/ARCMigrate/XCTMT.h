@@ -29,6 +29,7 @@ namespace clang {
   class IdentifierInfo;
   class MacroArgs;
   class MacroDirective;
+  class CompilerInstance;
 
 namespace edit {
   class EditedSource;
@@ -68,6 +69,8 @@ public:
 
   ASTContext &getASTContext() { return Ctx; }
   bool isSTComposeStringFunction(const FunctionDecl *FD);
+
+  static void handleInvocation(CompilerInstance &CI);
 
 private:
   bool isFromSenTestInclude(SourceLocation Loc);
