@@ -1261,23 +1261,32 @@ static void reversePropagateInterestingSymbols(BugReport &R,
 // Functions for determining if a loop was executed 0 times.
 //===----------------------------------------------------------------------===//
 
-/// Return true if the terminator is a loop and the destination is the
-/// false branch.
-static bool isLoopJumpPastBody(const Stmt *Term, const BlockEdge *BE) {
+static bool isLoop(const Stmt *Term) {
   switch (Term->getStmtClass()) {
     case Stmt::ForStmtClass:
     case Stmt::WhileStmtClass:
     case Stmt::ObjCForCollectionStmtClass:
-      break;
+      return true;
     default:
       // Note that we intentionally do not include do..while here.
       return false;
   }
+}
 
-  // Did we take the false branch?
+static bool isJumpToFalseBranch(const BlockEdge *BE) {
   const CFGBlock *Src = BE->getSrc();
   assert(Src->succ_size() == 2);
   return (*(Src->succ_begin()+1) == BE->getDst());
+}
+
+/// Return true if the terminator is a loop and the destination is the
+/// false branch.
+static bool isLoopJumpPastBody(const Stmt *Term, const BlockEdge *BE) {
+  if (!isLoop(Term))
+    return false;
+
+  // Did we take the false branch?
+  return isJumpToFalseBranch(BE);
 }
 
 static bool isContainedByStmt(ParentMap &PM, const Stmt *S, const Stmt *SubS) {
@@ -1557,6 +1566,45 @@ static void addEdgeToPath(PathPieces &path,
   PrevLoc = NewLoc;
 }
 
+enum EventCategorization { EC_None, EC_EnterLoop, EC_LoopingBack };
+
+typedef llvm::DenseMap<const PathDiagnosticEventPiece *,
+                       enum EventCategorization>
+        EventCategoryMap;
+
+
+static void pruneLoopEvents(PathPieces &path, EventCategoryMap &ECM) {
+  for (PathPieces::iterator I = path.begin(), E = path.end(); I != E; ++I) {
+    if (PathDiagnosticCallPiece *call = dyn_cast<PathDiagnosticCallPiece>(*I)) {
+      pruneLoopEvents(call->path, ECM);
+      continue;
+    }
+
+    PathDiagnosticEventPiece *I_event = dyn_cast<PathDiagnosticEventPiece>(*I);
+    if (!I_event || ECM[I_event] != EC_LoopingBack)
+      continue;
+
+    PathPieces::iterator Next = I; ++Next;
+    PathDiagnosticEventPiece *Next_event = 0;
+    for ( ; Next != E ; ++Next) {
+      Next_event = dyn_cast<PathDiagnosticEventPiece>(*Next);
+      if (Next_event)
+        break;
+    }
+
+    if (Next_event) {
+      EventCategorization E = ECM[Next_event];
+      if (E == EC_EnterLoop) {
+        PathDiagnosticLocation L = I_event->getLocation();
+        PathDiagnosticLocation L_next = Next_event->getLocation();
+        if (L == L_next) {
+          path.erase(Next);
+        }
+      }
+    }
+  }
+}
+
 static bool
 GenerateAlternateExtensivePathDiagnostic(PathDiagnostic& PD,
                                          PathDiagnosticBuilder &PDB,
@@ -1572,6 +1620,8 @@ GenerateAlternateExtensivePathDiagnostic(PathDiagnostic& PD,
   // Record the last location for a given visited stack frame.
   llvm::DenseMap<const StackFrameContext *, PathDiagnosticLocation>
     PrevLocMap;
+
+  EventCategoryMap EventCategory;
 
   const ExplodedNode *NextNode = N->getFirstPred();
   while (NextNode) {
@@ -1687,33 +1737,48 @@ GenerateAlternateExtensivePathDiagnostic(PathDiagnostic& PD,
 
           addEdgeToPath(PD.getActivePath(), PrevLoc, p->getLocation(), LC);
           PD.getActivePath().push_front(p);
+          EventCategory[p] = EC_LoopingBack;
 
           if (CS) {
             addEdgeToPath(PD.getActivePath(), PrevLoc,
                           PathDiagnosticLocation::createEndBrace(CS, SM), LC);
           }
         }
-        
+
         const CFGBlock *BSrc = BE->getSrc();
         ParentMap &PM = PDB.getParentMap();
 
         if (const Stmt *Term = BSrc->getTerminator()) {
           // Are we jumping past the loop body without ever executing the
           // loop (because the condition was false)?
-          if (isLoopJumpPastBody(Term, &*BE) &&
-              !isInLoopBody(PM,
-                            getStmtBeforeCond(PM,
-                                              BSrc->getTerminatorCondition(),
-                                              N),
-                            Term))
-          {
-            PathDiagnosticLocation L(Term, SM, PDB.LC);
-            PathDiagnosticEventPiece *PE =
-              new PathDiagnosticEventPiece(L, "Loop body executed 0 times");
-            PE->setPrunable(true);
-            addEdgeToPath(PD.getActivePath(), PrevLoc,
-                          PE->getLocation(), LC);
-            PD.getActivePath().push_front(PE);
+          if (isLoop(Term)) {
+            const Stmt *TermCond = BSrc->getTerminatorCondition();
+            bool IsInLoopBody =
+              isInLoopBody(PM, getStmtBeforeCond(PM, TermCond, N), Term);
+
+            const char *str = 0;
+            enum EventCategorization EC = EC_None;
+
+            if (isJumpToFalseBranch(&*BE)) {
+              if (!IsInLoopBody) {
+                str = "Loop body executed 0 times";
+              }
+            }
+            else {
+              str = "Entering loop body";
+              EC = EC_EnterLoop;
+            }
+
+            if (str) {
+              PathDiagnosticLocation L(Term, SM, PDB.LC);
+              PathDiagnosticEventPiece *PE =
+                new PathDiagnosticEventPiece(L, str);
+              EventCategory[PE] = EC;
+              PE->setPrunable(true);
+              addEdgeToPath(PD.getActivePath(), PrevLoc,
+                            PE->getLocation(), LC);
+              PD.getActivePath().push_front(PE);
+            }
           }
         }
         break;
@@ -1733,6 +1798,11 @@ GenerateAlternateExtensivePathDiagnostic(PathDiagnostic& PD,
         updateStackPiecesWithMessage(p, CallStack);
       }
     }
+  }
+
+  if (report->isValid()) {
+    // Prune redundant loop diagnostics.
+    pruneLoopEvents(PD.getMutablePieces(), EventCategory);
   }
 
   return report->isValid();
@@ -1798,16 +1868,19 @@ static bool optimizeEdges(PathPieces &path, SourceManager &SM,
   assert(LC);
   bool isFirst = true;
 
-  for (PathPieces::iterator I = path.begin(), E = path.end(); I != E; ++I) {
+  for (PathPieces::iterator I = path.begin(), E = path.end(); I != E; ) {
     bool wasFirst = isFirst;
     isFirst = false;
 
     // Optimize subpaths.
     if (PathDiagnosticCallPiece *CallI = dyn_cast<PathDiagnosticCallPiece>(*I)){
+      // Record the fact that a call has been optimized so we only do the
+      // effort once.
       if (!OCS.count(CallI)) {
         while (optimizeEdges(CallI->path, SM, CFBS, OCS, LCM)) {}
         OCS.insert(CallI);
       }
+      ++I;
       continue;
     }
 
@@ -1815,8 +1888,10 @@ static bool optimizeEdges(PathPieces &path, SourceManager &SM,
     PathDiagnosticControlFlowPiece *PieceI =
       dyn_cast<PathDiagnosticControlFlowPiece>(*I);
 
-    if (!PieceI)
+    if (!PieceI) {
+      ++I;
       continue;
+    }
 
     ParentMap &PM = LC->getParentMap();
     const Stmt *s1Start = getLocStmt(PieceI->getStartLocation());
@@ -1852,8 +1927,10 @@ static bool optimizeEdges(PathPieces &path, SourceManager &SM,
     PathDiagnosticControlFlowPiece *PieceNextI =
       dyn_cast<PathDiagnosticControlFlowPiece>(*NextI);
 
-    if (!PieceNextI)
+    if (!PieceNextI) {
+      ++I;
       continue;
+    }
 
     const Stmt *s2Start = getLocStmt(PieceNextI->getStartLocation());
     const Stmt *s2End   = getLocStmt(PieceNextI->getEndLocation());
@@ -1863,18 +1940,19 @@ static bool optimizeEdges(PathPieces &path, SourceManager &SM,
     // Rule I.
     //
     // If we have two consecutive control edges whose end/begin locations
-    // are at the same level (i.e., parents), merge them.
+    // are at the same level (e.g. statements or top-level expressions within
+    // a compound statement, or siblings share a single ancestor expression),
+    // then merge them if they have no interesting intermediate event.
     //
     // For example:
     //
     // (1.1 -> 1.2) -> (1.2 -> 1.3) becomes (1.1 -> 1.3) because the common
-    // parent is '1'.  Here '1.1' represents the hierarchy of statements.
+    // parent is '1'.  Here 'x.y.z' represents the hierarchy of statements.
     //
     // NOTE: this will be limited later in cases where we add barriers
     // to prevent this optimization.
     //
-    if (!isBarrier(CFBS, PieceNextI) &&
-        level1 && level1 == level2 && level1 == level3 && level1 == level4) {
+    if (level1 && level1 == level2 && level1 == level3 && level1 == level4) {
       PieceI->setEndLocation(PieceNextI->getEndLocation());
       path.erase(NextI);
       hasChanges = true;
@@ -1892,8 +1970,7 @@ static bool optimizeEdges(PathPieces &path, SourceManager &SM,
     // For example:
     //
     // (1.1 -> 1.1.1) -> (1.1.1 -> 1.2) becomes (1.1 -> 1.2).
-    if (!isBarrier(CFBS, PieceNextI) &&
-        level1 && level2 &&
+    if (level1 && level2 &&
         level1 == level4 &&
         level2 == level3 && PM.getParentIgnoreParens(level2) == level1) {
       PieceI->setEndLocation(PieceNextI->getEndLocation());
@@ -1914,8 +1991,7 @@ static bool optimizeEdges(PathPieces &path, SourceManager &SM,
     //
     // (1.1 -> 1.1.1) -> (1.1.1 -> X) becomes (1.1 -> X).
     //
-    if (!isBarrier(CFBS, PieceNextI) &&
-        level1 && level2 && level1 == PM.getParentIgnoreParens(level2)) {
+    if (level1 && level2 && level1 == PM.getParentIgnoreParens(level2)) {
       PieceI->setEndLocation(PieceNextI->getEndLocation());
       path.erase(NextI);
       hasChanges = true;
@@ -1935,8 +2011,7 @@ static bool optimizeEdges(PathPieces &path, SourceManager &SM,
     // (X -> 1.1.1) -> (1.1.1 -> 1.1) becomes (X -> 1.1).
     // [first edge] (1.1.1 -> 1.1) -> eliminate
     //
-    if (!isBarrier(CFBS, PieceNextI) &&
-        level2 && level4 && level2 == level3 && level4 == PM.getParent(level2)){
+    if (level2 && level4 && level2 == level3 && level4 == PM.getParent(level2)){
       PieceI->setEndLocation(PieceNextI->getEndLocation());
       path.erase(NextI);
       hasChanges = true;
@@ -1965,8 +2040,12 @@ static bool optimizeEdges(PathPieces &path, SourceManager &SM,
         hasChanges = true;
         continue;
       }
+
     }
 #endif
+
+    // No changes at this index?  Move to the next one.
+    ++I;
   }
 
   // No changes.
