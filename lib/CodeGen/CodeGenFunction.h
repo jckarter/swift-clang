@@ -2721,7 +2721,7 @@ public:
   }
   void enterNonTrivialFullExpression(const ExprWithCleanups *E);
 
-  void EmitCXXThrowExpr(const CXXThrowExpr *E);
+  void EmitCXXThrowExpr(const CXXThrowExpr *E, bool KeepInsertionPoint = true);
 
   void EmitLambdaExpr(const LambdaExpr *E, AggValueSlot Dest);
 
