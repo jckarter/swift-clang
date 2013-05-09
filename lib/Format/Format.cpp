@@ -338,10 +338,6 @@ private:
         return ColonPos < Other.ColonPos;
       if (StartOfFunctionCall != Other.StartOfFunctionCall)
         return StartOfFunctionCall < Other.StartOfFunctionCall;
-      if (NestedNameSpecifierContinuation !=
-          Other.NestedNameSpecifierContinuation)
-        return NestedNameSpecifierContinuation <
-               Other.NestedNameSpecifierContinuation;
       if (CallContinuation != Other.CallContinuation)
         return CallContinuation < Other.CallContinuation;
       if (VariablePos != Other.VariablePos)
@@ -432,13 +428,6 @@ private:
       } else if (Current.is(tok::lessless) &&
                  State.Stack.back().FirstLessLess != 0) {
         State.Column = State.Stack.back().FirstLessLess;
-      } else if (Previous.is(tok::coloncolon)) {
-        if (State.Stack.back().NestedNameSpecifierContinuation == 0) {
-          State.Column = ContinuationIndent;
-          State.Stack.back().NestedNameSpecifierContinuation = State.Column;
-        } else {
-          State.Column = State.Stack.back().NestedNameSpecifierContinuation;
-        }
       } else if (Current.isOneOf(tok::period, tok::arrow)) {
         if (State.Stack.back().CallContinuation == 0) {
           State.Column = ContinuationIndent;
@@ -464,7 +453,8 @@ private:
           State.Stack.back().ColonPos =
               State.Column + Current.FormatTok.TokenLength;
         }
-      } else if (Current.Type == TT_StartOfName || Previous.is(tok::equal) ||
+      } else if (Current.Type == TT_StartOfName ||
+                 Previous.isOneOf(tok::coloncolon, tok::equal) ||
                  Previous.Type == TT_ObjCMethodExpr) {
         State.Column = ContinuationIndent;
       } else {
@@ -477,8 +467,9 @@ private:
 
       if (Current.is(tok::question))
         State.Stack.back().BreakBeforeParameter = true;
-      if (Previous.isOneOf(tok::comma, tok::semi) &&
-          !State.Stack.back().AvoidBinPacking)
+      if ((Previous.isOneOf(tok::comma, tok::semi) &&
+           !State.Stack.back().AvoidBinPacking) ||
+          Previous.Type == TT_BinaryOperator)
         State.Stack.back().BreakBeforeParameter = false;
 
       if (!DryRun) {
@@ -505,7 +496,7 @@ private:
       }
       const AnnotatedToken *TokenBefore = Current.getPreviousNoneComment();
       if (TokenBefore && !TokenBefore->isOneOf(tok::comma, tok::semi) &&
-          !TokenBefore->opensScope())
+          TokenBefore->Type != TT_BinaryOperator && !TokenBefore->opensScope())
         State.Stack.back().BreakBeforeParameter = true;
 
       // If we break after {, we should also break before the corresponding }.
@@ -575,9 +566,9 @@ private:
         State.Stack.back().LastSpace = State.Column;
       else if (Previous.Type == TT_InheritanceColon)
         State.Stack.back().Indent = State.Column;
-      else if (Previous.opensScope() && Previous.ParameterCount > 1)
-        // If this function has multiple parameters, indent nested calls from
-        // the start of the first parameter.
+      else if (Previous.opensScope() && !Current.FakeLParens.empty())
+        // If this function has multiple parameters or a binary expression
+        // parameter, indent nested calls from the start of the first parameter.
         State.Stack.back().LastSpace = State.Column;
     }
 
@@ -854,6 +845,7 @@ private:
 
     // Reconstruct the solution.
     reconstructPath(InitialState, Queue.top().second);
+    DEBUG(llvm::errs() << "Total number of analyzed states: " << Count << "\n");
     DEBUG(llvm::errs() << "---\n");
 
     // Return the column after the last token of the solution.
@@ -915,40 +907,45 @@ private:
 
   /// \brief Returns \c true, if a line break after \p State is mandatory.
   bool mustBreak(const LineState &State) {
-    if (State.NextToken->MustBreakBefore)
+    const AnnotatedToken &Current = *State.NextToken;
+    const AnnotatedToken &Previous = *Current.Parent;
+    if (Current.MustBreakBefore || Current.Type == TT_InlineASMColon)
       return true;
-    if (State.NextToken->is(tok::r_brace) &&
-        State.Stack.back().BreakBeforeClosingBrace)
+    if (Current.is(tok::r_brace) && State.Stack.back().BreakBeforeClosingBrace)
       return true;
-    if (State.NextToken->Parent->is(tok::semi) &&
-        State.LineContainsContinuedForLoopSection)
+    if (Previous.is(tok::semi) && State.LineContainsContinuedForLoopSection)
       return true;
-    if ((State.NextToken->Parent->isOneOf(tok::comma, tok::semi) ||
-         State.NextToken->is(tok::question) ||
-         State.NextToken->Type == TT_ConditionalExpr) &&
+    if ((Previous.isOneOf(tok::comma, tok::semi) || Current.is(tok::question) ||
+         Current.Type == TT_ConditionalExpr) &&
         State.Stack.back().BreakBeforeParameter &&
-        !State.NextToken->isTrailingComment() &&
-        State.NextToken->isNot(tok::r_paren) &&
-        State.NextToken->isNot(tok::r_brace))
+        !Current.isTrailingComment() &&
+        !Current.isOneOf(tok::r_paren, tok::r_brace))
       return true;
-    // FIXME: Comparing LongestObjCSelectorName to 0 is a hacky way of finding
-    // out whether it is the first parameter. Clean this up.
-    if (State.NextToken->Type == TT_ObjCSelectorName &&
-        State.NextToken->LongestObjCSelectorName == 0 &&
+
+    // If we need to break somewhere inside the LHS of a binary expression, we
+    // should also break after the operator.
+    if (Previous.Type == TT_BinaryOperator &&
+        !Previous.isOneOf(tok::lessless, tok::question) &&
+        getPrecedence(Previous) != prec::Assignment &&
         State.Stack.back().BreakBeforeParameter)
       return true;
-    if ((State.NextToken->Type == TT_CtorInitializerColon ||
-         (State.NextToken->Parent->ClosesTemplateDeclaration &&
-          State.ParenLevel == 0)))
+
+    // FIXME: Comparing LongestObjCSelectorName to 0 is a hacky way of finding
+    // out whether it is the first parameter. Clean this up.
+    if (Current.Type == TT_ObjCSelectorName &&
+        Current.LongestObjCSelectorName == 0 &&
+        State.Stack.back().BreakBeforeParameter)
       return true;
-    if (State.NextToken->Type == TT_InlineASMColon)
+    if ((Current.Type == TT_CtorInitializerColon ||
+         (Previous.ClosesTemplateDeclaration && State.ParenLevel == 0)))
       return true;
+
     // This prevents breaks like:
     //   ...
     //   SomeParameter, OtherParameter).DoSomething(
     //   ...
     // As they hide "DoSomething" and generally bad for readability.
-    if (State.NextToken->isOneOf(tok::period, tok::arrow) &&
+    if (Current.isOneOf(tok::period, tok::arrow) &&
         getRemainingLength(State) + State.Column > getColumnLimit() &&
         State.ParenLevel < State.StartOfLineLevel)
       return true;
@@ -1175,8 +1172,10 @@ public:
             Lex.MeasureTokenLength(LastLoc, SourceMgr, Lex.getLangOpts()) - 1;
         PreviousLineWasTouched = false;
         if (TheLine.Last->is(tok::comment))
-          Whitespaces.addUntouchableComment(SourceMgr.getSpellingColumnNumber(
-              TheLine.Last->FormatTok.Tok.getLocation()) - 1);
+          Whitespaces.addUntouchableComment(
+              SourceMgr.getSpellingColumnNumber(
+                  TheLine.Last->FormatTok.Tok.getLocation()) -
+              1);
         else
           Whitespaces.alignComments();
       }
