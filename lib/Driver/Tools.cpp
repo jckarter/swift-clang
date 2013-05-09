@@ -4773,10 +4773,14 @@ void darwin::Link::ConstructJob(Compilation &C, const JobAction &JA,
   // that libraries will only be found in these locations as a last resort.
   if (!Args.hasArg(options::OPT_nostdlib) &&
       Args.hasArg(options::OPT_isysroot_implicit)) {
-    CmdArgs.push_back("-L");
-    CmdArgs.push_back("/usr/local/lib");
-    CmdArgs.push_back("-F");
-    CmdArgs.push_back("/Library/Frameworks");
+    if (llvm::sys::fs::exists("/usr/local/lib")) {
+      CmdArgs.push_back("-L");
+      CmdArgs.push_back("/usr/local/lib");
+    }
+    if (llvm::sys::fs::exists("/Library/Frameworks")) {
+      CmdArgs.push_back("-F");
+      CmdArgs.push_back("/Library/Frameworks");
+    }
   }
 
   const char *Exec =
