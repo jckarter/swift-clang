@@ -1230,25 +1230,23 @@ Sema::ActOnGenericSelectionExpr(SourceLocation KeyLoc,
                                 SourceLocation DefaultLoc,
                                 SourceLocation RParenLoc,
                                 Expr *ControllingExpr,
-                                MultiTypeArg ArgTypes,
-                                MultiExprArg ArgExprs) {
+                                ArrayRef<ParsedType> ArgTypes,
+                                ArrayRef<Expr *> ArgExprs) {
   unsigned NumAssocs = ArgTypes.size();
   assert(NumAssocs == ArgExprs.size());
 
-  ParsedType *ParsedTypes = ArgTypes.data();
-  Expr **Exprs = ArgExprs.data();
-
   TypeSourceInfo **Types = new TypeSourceInfo*[NumAssocs];
   for (unsigned i = 0; i < NumAssocs; ++i) {
-    if (ParsedTypes[i])
-      (void) GetTypeFromParser(ParsedTypes[i], &Types[i]);
+    if (ArgTypes[i])
+      (void) GetTypeFromParser(ArgTypes[i], &Types[i]);
     else
       Types[i] = 0;
   }
 
   ExprResult ER = CreateGenericSelectionExpr(KeyLoc, DefaultLoc, RParenLoc,
-                                             ControllingExpr, Types, Exprs,
-                                             NumAssocs);
+                                             ControllingExpr,
+                                             llvm::makeArrayRef(Types, NumAssocs),
+                                             ArgExprs);
   delete [] Types;
   return ER;
 }
@@ -1258,9 +1256,10 @@ Sema::CreateGenericSelectionExpr(SourceLocation KeyLoc,
                                  SourceLocation DefaultLoc,
                                  SourceLocation RParenLoc,
                                  Expr *ControllingExpr,
-                                 TypeSourceInfo **Types,
-                                 Expr **Exprs,
-                                 unsigned NumAssocs) {
+                                 ArrayRef<TypeSourceInfo *> Types,
+                                 ArrayRef<Expr *> Exprs) {
+  unsigned NumAssocs = Types.size();
+  assert(NumAssocs == Exprs.size());
   if (ControllingExpr->getType()->isPlaceholderType()) {
     ExprResult result = CheckPlaceholderExpr(ControllingExpr);
     if (result.isInvalid()) return ExprError();
@@ -1328,8 +1327,7 @@ Sema::CreateGenericSelectionExpr(SourceLocation KeyLoc,
   if (IsResultDependent)
     return Owned(new (Context) GenericSelectionExpr(
                    Context, KeyLoc, ControllingExpr,
-                   llvm::makeArrayRef(Types, NumAssocs),
-                   llvm::makeArrayRef(Exprs, NumAssocs),
+                   Types, Exprs,
                    DefaultLoc, RParenLoc, ContainsUnexpandedParameterPack));
 
   SmallVector<unsigned, 1> CompatIndices;
@@ -1384,8 +1382,7 @@ Sema::CreateGenericSelectionExpr(SourceLocation KeyLoc,
 
   return Owned(new (Context) GenericSelectionExpr(
                  Context, KeyLoc, ControllingExpr,
-                 llvm::makeArrayRef(Types, NumAssocs),
-                 llvm::makeArrayRef(Exprs, NumAssocs),
+                 Types, Exprs,
                  DefaultLoc, RParenLoc, ContainsUnexpandedParameterPack,
                  ResultIndex));
 }
@@ -1448,7 +1445,7 @@ Sema::ActOnStringLiteral(const Token *StringToks, unsigned NumStringToks,
 
   QualType StrTy = Context.CharTy;
   if (Literal.isWide())
-    StrTy = Context.getWCharType();
+    StrTy = Context.getWideCharType();
   else if (Literal.isUTF16())
     StrTy = Context.Char16Ty;
   else if (Literal.isUTF32())
@@ -2720,7 +2717,7 @@ ExprResult Sema::ActOnPredefinedExpr(SourceLocation Loc, tok::TokenKind Kind) {
 
     llvm::APInt LengthI(32, Length + 1);
     if (IT == PredefinedExpr::LFunction)
-      ResTy = Context.WCharTy.withConst();
+      ResTy = Context.WideCharTy.withConst();
     else
       ResTy = Context.CharTy.withConst();
     ResTy = Context.getConstantArrayType(ResTy, LengthI, ArrayType::Normal, 0);
@@ -2742,7 +2739,7 @@ ExprResult Sema::ActOnCharacterConstant(const Token &Tok, Scope *UDLScope) {
 
   QualType Ty;
   if (Literal.isWide())
-    Ty = Context.WCharTy; // L'x' -> wchar_t in C and C++.
+    Ty = Context.WideCharTy; // L'x' -> wchar_t in C and C++.
   else if (Literal.isUTF16())
     Ty = Context.Char16Ty; // u'x' -> char16_t in C11 and C++11.
   else if (Literal.isUTF32())
