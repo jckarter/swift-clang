@@ -383,9 +383,9 @@ void InitHeaderSearch::AddDefaultCIncludePaths(const llvm::Triple &triple,
     // directory follows the convention "../usr/lib/clang/<version>" so
     // "<resource_dir>/../../../include" is the toolchain include directory.
     llvm::sys::Path P(HSOpts.ResourceDir);
-    P.popComponent();
-    P.popComponent();
-    P.popComponent();
+    P.eraseComponent();
+    P.eraseComponent();
+    P.eraseComponent();
     P.appendComponent("include");
     AddPathInternal(P.str(), ExternCSystem, false, false);
 
