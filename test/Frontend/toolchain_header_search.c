@@ -12,7 +12,7 @@
 // RUN: mkdir -p %t.dir/toolchain/usr/lib/clang/someversion/
 //
 // RUN: echo "#define A OK" > %t.dir/toolchain/usr/include/FlexLexer.h
-// RUN: %clang -fsyntax-only -v -Xclang -verify -resource-dir %t.dir/toolchain/usr/lib/clang/someversion %s
+// RUN: %clang_cc1 -fsyntax-only -v -verify -resource-dir %t.dir/toolchain/usr/lib/clang/someversion %s
 
 // expected-no-diagnostics
 
