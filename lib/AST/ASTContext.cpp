@@ -409,6 +409,8 @@ comments::FullComment *ASTContext::cloneFullComment(comments::FullComment *FC,
 comments::FullComment *ASTContext::getCommentForDecl(
                                               const Decl *D,
                                               const Preprocessor *PP) const {
+  if (D->isInvalidDecl())
+    return NULL;
   D = adjustDeclToTemplate(D);
   
   const Decl *Canonical = D->getCanonicalDecl();
@@ -7839,6 +7841,8 @@ GVALinkage ASTContext::GetGVALinkageForVariable(const VarDecl *VD) {
   case TSK_ImplicitInstantiation:
     return GVA_TemplateInstantiation;
   }
+
+  llvm_unreachable("Invalid Linkage!");
 }
 
 bool ASTContext::DeclMustBeEmitted(const Decl *D) {

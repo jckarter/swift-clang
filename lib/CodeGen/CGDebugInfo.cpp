@@ -1220,9 +1220,11 @@ CollectTemplateParams(const TemplateParameterList *TPList,
         V = CGM.GetAddrOfGlobalVar(VD);
       // Member function pointers have special support for building them, though
       // this is currently unsupported in LLVM CodeGen.
-      if (InstanceMember)
+      if (InstanceMember) {
         if (const CXXMethodDecl *method = dyn_cast<CXXMethodDecl>(D))
           V = CGM.getCXXABI().EmitMemberPointer(method);
+      } else if (const FunctionDecl *FD = dyn_cast<FunctionDecl>(D))
+        V = CGM.GetAddrOfFunction(FD);
       // Member data pointers have special handling too to compute the fixed
       // offset within the object.
       if (isa<FieldDecl>(D)) {
@@ -2176,8 +2178,10 @@ llvm::DIDescriptor CGDebugInfo::getDeclarationOrDefinition(const Decl *D) {
   // we would otherwise do to get a type for a pointee. (forward declarations in
   // limited debug info, full definitions (if the type definition is available)
   // in unlimited debug info)
-  if (const TypeDecl *RD = dyn_cast<TypeDecl>(D))
-    return CreatePointeeType(QualType(RD->getTypeForDecl(), 0), llvm::DIFile());
+  if (const TypeDecl *TD = dyn_cast<TypeDecl>(D)) {
+    llvm::DIFile DefUnit = getOrCreateFile(TD->getLocation());
+    return CreatePointeeType(CGM.getContext().getTypeDeclType(TD), DefUnit);
+  }
   // Otherwise fall back to a fairly rudimentary cache of existing declarations.
   // This doesn't handle providing declarations (for functions or variables) for
   // entities without definitions in this TU, nor when the definition proceeds

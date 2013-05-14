@@ -94,6 +94,27 @@ struct FormatStyle {
   /// Otherwise puts them into the right-most column.
   bool AlignEscapedNewlinesLeft;
 
+  /// \brief The number of characters to use for indentation.
+  unsigned IndentWidth;
+
+  /// \brief If true, \c IndentWidth consecutive spaces will be replaced with
+  /// tab characters.
+  bool UseTab;
+
+  /// \brief Different ways to attach braces to their surrounding context.
+  enum BraceBreakingStyle {
+    /// Always attach braces to surrounding context.
+    BS_Attach,
+    /// Like \c Attach, but break before braces on function, namespace and
+    /// class definitions.
+    BS_Linux,
+    /// Like \c Attach, but break before function definitions.
+    BS_Stroustrup
+  };
+
+  /// \brief The brace breaking style to use.
+  BraceBreakingStyle BreakBeforeBraces;
+
   bool operator==(const FormatStyle &R) const {
     return AccessModifierOffset == R.AccessModifierOffset &&
            AlignEscapedNewlinesLeft == R.AlignEscapedNewlinesLeft &&
@@ -113,7 +134,10 @@ struct FormatStyle {
            PenaltyReturnTypeOnItsOwnLine == R.PenaltyReturnTypeOnItsOwnLine &&
            PointerBindsToType == R.PointerBindsToType &&
            SpacesBeforeTrailingComments == R.SpacesBeforeTrailingComments &&
-           Standard == R.Standard;
+           Standard == R.Standard &&
+           IndentWidth == R.IndentWidth &&
+           UseTab == R.UseTab &&
+           BreakBeforeBraces == R.BreakBeforeBraces;
   }
 
 };
