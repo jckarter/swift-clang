@@ -1080,8 +1080,7 @@ static bool CheckLiteralType(EvalInfo &Info, const Expr *E,
   // constexpr constructors for o and its subobjects even if those objects
   // are of non-literal class types.
   if (Info.getLangOpts().CPlusPlus1y && This &&
-      Info.EvaluatingDecl.getOpaqueValue() ==
-          This->getLValueBase().getOpaqueValue())
+      Info.EvaluatingDecl == This->getLValueBase())
     return true;
 
   // Prvalue constant expressions must be of literal types.
@@ -1809,7 +1808,7 @@ struct CompleteObject {
     assert(Value && "missing value for complete object");
   }
 
-  operator bool() const { return Value; }
+  LLVM_EXPLICIT operator bool() const { return Value; }
 };
 
 /// Find the designated sub-object of an rvalue.
