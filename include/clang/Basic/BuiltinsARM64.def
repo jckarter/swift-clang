@@ -14,6 +14,9 @@
 
 // The format of this database matches clang/Basic/Builtins.def.
 
+// In libgcc
+BUILTIN(__clear_cache, "vv*v*", "")
+
 // SIMD
 #define GET_NEON_BUILTINS
 #include "clang/Basic/arm64_simd.inc"

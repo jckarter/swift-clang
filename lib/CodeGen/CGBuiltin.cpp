@@ -2593,6 +2593,18 @@ emitVectorWrappedScalar16Intrinsic(unsigned Int, SmallVectorImpl<Value*> &Ops,
 
 Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
                                              const CallExpr *E) {
+  if (BuiltinID == ARM64::BI__clear_cache) {
+    assert(E->getNumArgs() == 2 && "__clear_cache takes 2 arguments");
+    const FunctionDecl *FD = E->getDirectCallee();
+    SmallVector<Value*, 2> Ops;
+    for (unsigned i = 0; i < 2; i++)
+      Ops.push_back(EmitScalarExpr(E->getArg(i)));
+    llvm::Type *Ty = CGM.getTypes().ConvertType(FD->getType());
+    llvm::FunctionType *FTy = cast<llvm::FunctionType>(Ty);
+    StringRef Name = FD->getName();
+    return EmitNounwindRuntimeCall(CGM.CreateRuntimeFunction(FTy, Name), Ops);
+  }
+
   llvm::SmallVector<Value*, 4> Ops;
   for (unsigned i = 0, e = E->getNumArgs() - 1; i != e; i++)
     Ops.push_back(EmitScalarExpr(E->getArg(i)));
