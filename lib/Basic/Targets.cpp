@@ -4124,6 +4124,13 @@ public:
     NumRecords = clang::ARM64::LastTSBuiltin-Builtin::FirstTSBuiltin;
   }
 
+  virtual bool hasFeature(StringRef Feature) const {
+    return llvm::StringSwitch<bool>(Feature)
+      .Case("arm64", true)
+      .Case("neon", true)
+      .Default(false);
+  }
+
   virtual bool isCLZForZeroUndef() const { return false; }
 
   virtual const char *getVAListDeclaration() const {
