@@ -360,6 +360,10 @@ static QualType getNeonEltType(NeonTypeFlags Flags, ASTContext &Context) {
   llvm_unreachable("Invalid NeonTypeFlag!");
 }
 
+#define GET_NEON_IMMEDIATE_CHECK
+#include "clang/Basic/arm_neon.inc"
+#undef GET_NEON_IMMEDIATE_CHECK
+
 bool Sema::CheckARMBuiltinFunctionCall(unsigned BuiltinID, CallExpr *TheCall) {
   llvm::APSInt Result;
 
@@ -410,14 +414,14 @@ bool Sema::CheckARMBuiltinFunctionCall(unsigned BuiltinID, CallExpr *TheCall) {
   // instruction, range check them here.
   unsigned i = 0, l = 0, u = 0;
   switch (BuiltinID) {
-  default: return false;
+  default:
+    if (!ARMGetNEONImmediateCheckValues(BuiltinID, TV, 0, i, l, u))
+      return false;
+    break;
   case ARM::BI__builtin_arm_ssat: i = 1; l = 1; u = 31; break;
   case ARM::BI__builtin_arm_usat: i = 1; u = 31; break;
   case ARM::BI__builtin_arm_vcvtr_f:
   case ARM::BI__builtin_arm_vcvtr_d: i = 1; u = 1; break;
-#define GET_NEON_IMMEDIATE_CHECK
-#include "clang/Basic/arm_neon.inc"
-#undef GET_NEON_IMMEDIATE_CHECK
   };
 
   // We can't check the value of a dependent argument.
@@ -435,9 +439,16 @@ bool Sema::CheckARMBuiltinFunctionCall(unsigned BuiltinID, CallExpr *TheCall) {
     return Diag(TheCall->getLocStart(), diag::err_argument_invalid_range)
       << l << u+l << TheCall->getArg(i)->getSourceRange();
 
+  assert (!ARMGetNEONImmediateCheckValues(BuiltinID, TV, 1, i, l, u) &&
+          "More check must be done.");
+
   // FIXME: VFP Intrinsics should error if VFP not present.
   return false;
 }
+
+#define GET_NEON_IMMEDIATE_CHECK
+#include "clang/Basic/arm64_simd.inc"
+#undef GET_NEON_IMMEDIATE_CHECK
 
 bool Sema::CheckARM64BuiltinFunctionCall(unsigned BuiltinID,
                                          CallExpr *TheCall) {
@@ -489,27 +500,23 @@ bool Sema::CheckARM64BuiltinFunctionCall(unsigned BuiltinID,
   // For SIMD intrinsics which take an immediate value as part of the
   // instruction, range check them here.
   unsigned i = 0, l = 0, u = 0;
-  switch (BuiltinID) {
-  default: return false;
-#define GET_NEON_IMMEDIATE_CHECK
-#include "clang/Basic/arm64_simd.inc"
-#undef GET_NEON_IMMEDIATE_CHECK
-  };
+  for (unsigned Idx = 0;
+       ARM64GetNEONImmediateCheckValues(BuiltinID, TV, Idx, i, l, u); ++Idx) {
+    // We can't check the value of a dependent argument.
+    if (TheCall->getArg(i)->isTypeDependent() ||
+        TheCall->getArg(i)->isValueDependent())
+      continue;
 
-  // We can't check the value of a dependent argument.
-  if (TheCall->getArg(i)->isTypeDependent() ||
-      TheCall->getArg(i)->isValueDependent())
-    return false;
+    // Check that the immediate argument is actually a constant.
+    if (SemaBuiltinConstantArg(TheCall, i, Result))
+      return true;
 
-  // Check that the immediate argument is actually a constant.
-  if (SemaBuiltinConstantArg(TheCall, i, Result))
-    return true;
-
-  // Range check against the upper/lower values for this isntruction.
-  unsigned Val = Result.getZExtValue();
-  if (Val < l || Val > (u + l))
-    return Diag(TheCall->getLocStart(), diag::err_argument_invalid_range)
-      << l << u+l << TheCall->getArg(i)->getSourceRange();
+    // Range check against the upper/lower values for this isntruction.
+    unsigned Val = Result.getZExtValue();
+    if (Val < l || Val > (u + l))
+      return Diag(TheCall->getLocStart(), diag::err_argument_invalid_range)
+        << l << u+l << TheCall->getArg(i)->getSourceRange();
+  }
 
   return false;
 }

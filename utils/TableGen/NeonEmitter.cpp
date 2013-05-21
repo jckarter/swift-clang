@@ -282,6 +282,8 @@ public:
 
 private:
   void emitIntrinsic(raw_ostream &OS, Record *R);
+  void emitImmediateCheck(raw_ostream &OS, const std::vector<Record*> &RV,
+                          const std::string &prefix);
   std::string builtinNamespace() { return IsARM64 ? "ARM64" : "ARM"; }
   std::string builtinPrefix() { return IsARM64 ? "arm64_" : "neon_"; }
 };
@@ -2254,6 +2256,159 @@ static unsigned RangeFromType(const char mod, StringRef typestr) {
   }
 }
 
+/// Emit the indexes and value range that must be interger constant.
+/// \return true if there exists a Idx + 1 immediate constraint for at least one
+/// Record
+void NeonEmitter::emitImmediateCheck(raw_ostream &OS,
+                                     const std::vector<Record*> &RV,
+                                     const std::string &prefix) {
+  OS << "#ifdef GET_NEON_IMMEDIATE_CHECK\n";
+
+  OS << "static inline bool\n"
+    // Put the builtin namespace to have one function per target.
+     << builtinNamespace()
+     << "GetNEONImmediateCheckValues(unsigned BuiltinID, unsigned TV,\n"
+     << "                            unsigned Idx, unsigned &i, unsigned &l,\n"
+     << "                            unsigned &u) {\n"
+     << "  switch (BuiltinID) {\n"
+     << "  default: return false;\n";
+
+  StringMap<OpKind> EmittedMap;
+
+  for (unsigned i = 0, e = RV.size(); i != e; ++i) {
+    Record *R = RV[i];
+
+    OpKind k = OpMap[R->getValueAsDef("Operand")->getName()];
+    if (k != OpNone)
+      continue;
+
+    std::string name = R->getValueAsString("Name");
+    std::string Proto = R->getValueAsString("Prototype");
+    std::string Types = R->getValueAsString("Types");
+
+    // Functions with 'a' (the splat code) in the type prototype should not get
+    // their own builtin as they use the non-splat variant.
+    if (Proto.find('a') != std::string::npos)
+      continue;
+
+    // Functions which do not have an immediate do not need to have range
+    // checking code emitted.
+    size_t immPos = Proto.find('i');
+    if (immPos == std::string::npos)
+      continue;
+
+    SmallVector<StringRef, 16> TypeVec;
+    ParseTypes(R, Types, TypeVec);
+
+    if (R->getSuperClasses().size() < 2)
+      PrintFatalError(R->getLoc(), "Builtin has no class kind");
+
+    ClassKind ck = ClassMap[R->getSuperClasses()[1]];
+
+    for (unsigned ti = 0, te = TypeVec.size(); ti != te; ++ti) {
+      std::string namestr, shiftstr, rangestr;
+      bool RangeDependsOnIteration = false;
+
+      if (R->getValueAsBit("isVCVT_N")) {
+        // VCVT between floating- and fixed-point values takes an immediate
+        // in the range 1 to size-in-bits(float-type)-1. We can use RFT for
+        // this, similar to the below bits for the general overloaded
+        // builtins.
+        ck = ClassB;
+        bool dummy;
+        char type = ClassifyType(TypeVec[ti], dummy, dummy, dummy, dummy);
+        rangestr = "l = 1; u = "; // upper bound = l + u
+        rangestr += (type == 'l' || type == 'd') ? "63" : "31";
+      } else if (Proto.find('s') == std::string::npos &&
+                 Proto.find('q') == std::string::npos &&
+                 Proto.find('m') == std::string::npos &&
+                 Proto.find('o') == std::string::npos &&
+                 Proto.find('r') == std::string::npos &&
+                 Proto.find('z') == std::string::npos) {
+        // Builtins which are overloaded by type will need to have their upper
+        // bound computed at Sema time based on the type constant.
+        ck = ClassB;
+        if (R->getValueAsBit("isShift")) {
+          shiftstr = ", true";
+
+          // Right shifts have an 'r' in the name, left shifts do not.
+          if (name.find('r') != std::string::npos)
+            rangestr = "l = 1; ";
+        }
+        rangestr += "u = RFT(TV" + shiftstr + ")";
+      } else if (StringRef(name).startswith("vcvts_n") ||
+                 StringRef(name).startswith("vcvtd_n")) {
+        // Scalar vcvt[sd]_n_* intrinsics are not marked isVCVT_N due to them
+        // not playing nicely as ClassB, so handle them explicitly here.
+        bool dummy;
+        char type = ClassifyType(TypeVec[ti], dummy, dummy, dummy, dummy);
+        rangestr = "l = 1; u = "; // upper bound = l + u
+        rangestr += (type == 'l' || type == 'd') ? "63" : "31";
+      } else {
+        RangeDependsOnIteration = true;
+      }
+      // Make sure cases appear only once by uniquing them in a string map.
+      namestr = MangleName(name, TypeVec[ti], ck);
+      if (EmittedMap.count(namestr))
+        continue;
+      EmittedMap[namestr] = OpNone;
+      OS << "  case " << builtinNamespace() << "::BI__builtin_" << prefix
+         << MangleName(name, TypeVec[ti], ck) << ":\n"
+         << "    switch (Idx) {\n"
+         << "    default: return false;\n";
+
+      // Calculate the index of the immediate that should be range checked.
+      unsigned immidx = 0;
+
+      // Builtins that return a struct of multiple vectors have an extra
+      // leading arg for the struct return.
+      if (Proto[0] >= '2' && Proto[0] <= '4')
+        ++immidx;
+
+      unsigned ii = 1;
+      unsigned Idx = 0;
+      // Use a temporary immPos, as we will iterate on that value.
+      size_t TmpImmPos = immPos;
+      do {
+        if (RangeDependsOnIteration) {
+          // The immediate generally refers to a lane in the preceding argument.
+          assert(TmpImmPos > 0 && "unexpected immediate operand");
+          rangestr = "u = " + utostr(RangeFromType(Proto[TmpImmPos-1], TypeVec[ti]));
+        }
+        // Add one to the index for each argument until we reach the immediate
+        // to be checked.  Structs of vectors are passed as multiple arguments.
+        unsigned ie = Proto.size();
+        for (; ii != ie; ++ii) {
+          switch (Proto[ii]) {
+          default:  immidx += 1; break;
+          case '2': immidx += 2; break;
+          case '3': immidx += 3; break;
+          case '4': immidx += 4; break;
+            // break the outer loop.
+          case 'i': ie = ii + 1; break;
+          }
+        }
+
+        // Emit the constraints for this index.
+        OS << "    case " << Idx++ << ": i = " << immidx << "; "
+           << rangestr << ";\n"
+           << "    return true;\n";
+
+        // Update the immidx for the next iteration.
+        // I.e., do as if we did not stop on the 'i' character.
+        ++immidx;
+        // Check if this record has more immediate constraints
+      } while ((TmpImmPos = Proto.find('i', TmpImmPos + 1)) !=
+               std::string::npos);
+      OS << "    } // End switch immediate idx\n";
+    }
+  }
+  OS << "  } // End switch\n"
+     << "  llvm_unreachable(\"Builtin not handled in switch!\");\n"
+     << "}\n"
+     << "#endif // GET_NEON_IMMEDIATE_CHECK\n\n";
+}
+
 /// runHeader - Emit a file with sections defining:
 /// 1. the NEON section of BuiltinsARM.def.
 /// 2. the SemaChecking code for the type overload checking.
@@ -2406,111 +2561,7 @@ void NeonEmitter::runHeader(raw_ostream &OS) {
   OS << "#endif\n\n";
 
   // Generate the intrinsic range checking code for shift/lane immediates.
-  OS << "#ifdef GET_NEON_IMMEDIATE_CHECK\n";
-  for (unsigned i = 0, e = RV.size(); i != e; ++i) {
-    Record *R = RV[i];
-
-    OpKind k = OpMap[R->getValueAsDef("Operand")->getName()];
-    if (k != OpNone)
-      continue;
-
-    std::string name = R->getValueAsString("Name");
-    std::string Proto = R->getValueAsString("Prototype");
-    std::string Types = R->getValueAsString("Types");
-
-    // Functions with 'a' (the splat code) in the type prototype should not get
-    // their own builtin as they use the non-splat variant.
-    if (Proto.find('a') != std::string::npos)
-      continue;
-
-    // Functions which do not have an immediate do not need to have range
-    // checking code emitted.
-    size_t immPos = Proto.find('i');
-    if (immPos == std::string::npos)
-      continue;
-
-    SmallVector<StringRef, 16> TypeVec;
-    ParseTypes(R, Types, TypeVec);
-
-    if (R->getSuperClasses().size() < 2)
-      PrintFatalError(R->getLoc(), "Builtin has no class kind");
-
-    ClassKind ck = ClassMap[R->getSuperClasses()[1]];
-
-    for (unsigned ti = 0, te = TypeVec.size(); ti != te; ++ti) {
-      std::string namestr, shiftstr, rangestr;
-
-      if (R->getValueAsBit("isVCVT_N")) {
-        // VCVT between floating- and fixed-point values takes an immediate
-        // in the range 1 to size-in-bits(float-type)-1. We can use RFT for
-        // this, similar to the below bits for the general overloaded
-        // builtins.
-        ck = ClassB;
-        bool dummy;
-        char type = ClassifyType(TypeVec[ti], dummy, dummy, dummy, dummy);
-        rangestr = "l = 1; u = "; // upper bound = l + u
-        rangestr += (type == 'l' || type == 'd') ? "63" : "31";
-      } else if (Proto.find('s') == std::string::npos &&
-                 Proto.find('q') == std::string::npos &&
-                 Proto.find('m') == std::string::npos &&
-                 Proto.find('o') == std::string::npos &&
-                 Proto.find('r') == std::string::npos &&
-                 Proto.find('z') == std::string::npos) {
-        // Builtins which are overloaded by type will need to have their upper
-        // bound computed at Sema time based on the type constant.
-        ck = ClassB;
-        if (R->getValueAsBit("isShift")) {
-          shiftstr = ", true";
-
-          // Right shifts have an 'r' in the name, left shifts do not.
-          if (name.find('r') != std::string::npos)
-            rangestr = "l = 1; ";
-        }
-        rangestr += "u = RFT(TV" + shiftstr + ")";
-      } else if (StringRef(name).startswith("vcvts_n") ||
-                 StringRef(name).startswith("vcvtd_n")) {
-        // Scalar vcvt[sd]_n_* intrinsics are not marked isVCVT_N due to them
-        // not playing nicely as ClassB, so handle them explicitly here.
-        bool dummy;
-        char type = ClassifyType(TypeVec[ti], dummy, dummy, dummy, dummy);
-        rangestr = "l = 1; u = "; // upper bound = l + u
-        rangestr += (type == 'l' || type == 'd') ? "63" : "31";
-      } else {
-        // The immediate generally refers to a lane in the preceding argument.
-        assert(immPos > 0 && "unexpected immediate operand");
-        rangestr = "u = " + utostr(RangeFromType(Proto[immPos-1], TypeVec[ti]));
-      }
-      // Make sure cases appear only once by uniquing them in a string map.
-      namestr = MangleName(name, TypeVec[ti], ck);
-      if (EmittedMap.count(namestr))
-        continue;
-      EmittedMap[namestr] = OpNone;
-
-      // Calculate the index of the immediate that should be range checked.
-      unsigned immidx = 0;
-
-      // Builtins that return a struct of multiple vectors have an extra
-      // leading arg for the struct return.
-      if (Proto[0] >= '2' && Proto[0] <= '4')
-        ++immidx;
-
-      // Add one to the index for each argument until we reach the immediate
-      // to be checked.  Structs of vectors are passed as multiple arguments.
-      for (unsigned ii = 1, ie = Proto.size(); ii != ie; ++ii) {
-        switch (Proto[ii]) {
-          default:  immidx += 1; break;
-          case '2': immidx += 2; break;
-          case '3': immidx += 3; break;
-          case '4': immidx += 4; break;
-          case 'i': ie = ii + 1; break;
-        }
-      }
-      OS << "case " << builtinNamespace() << "::BI__builtin_" << prefix
-         << MangleName(name, TypeVec[ti], ck)
-         << ": i = " << immidx << "; " << rangestr << "; break;\n";
-    }
-  }
-  OS << "#endif\n\n";
+  emitImmediateCheck(OS, RV, prefix);
 }
 
 /// GenTest - Write out a test for the intrinsic specified by the name and
