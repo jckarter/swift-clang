@@ -1528,6 +1528,13 @@ TEST_F(FormatTest, MacroCallsWithoutTrailingSemicolon) {
                    "};"));
 }
 
+TEST_F(FormatTest, LayoutMacroDefinitionsStatementsSpanningBlocks) {
+  verifyFormat("#define A \\\n"
+               "  f({     \\\n"
+               "    g();  \\\n"
+               "  });", getLLVMStyleWithColumns(11));
+}
+
 TEST_F(FormatTest, IndentPreprocessorDirectivesAtZero) {
   EXPECT_EQ("{\n  {\n#define A\n  }\n}", format("{{\n#define A\n}}"));
 }
@@ -1929,9 +1936,23 @@ TEST_F(FormatTest, BreaksFunctionDeclarations) {
 }
 
 TEST_F(FormatTest, BreaksFunctionDeclarationsWithTrailingTokens) {
-  verifyFormat("void someLongFunction(int someLongParameter)\n"
-               "    const;",
-               getLLVMStyleWithColumns(45));
+  verifyFormat("void someLongFunction(\n"
+               "    int someLongParameter) const {}",
+               getLLVMStyleWithColumns(46));
+  FormatStyle Style = getGoogleStyle();
+  Style.ColumnLimit = 47;
+  verifyFormat("void\n"
+               "someLongFunction(int someLongParameter) const {\n}",
+               getLLVMStyleWithColumns(47));
+  verifyFormat("void someLongFunction(\n"
+               "    int someLongParameter) const {}",
+               Style);
+  verifyFormat("LoooooongReturnType\n"
+               "someLoooooooongFunction() const {}",
+               getLLVMStyleWithColumns(47));
+  verifyFormat("LoooooongReturnType someLoooooooongFunction()\n"
+               "    const {}",
+               Style);
 
   verifyFormat("void aaaaaaaaaaaa(int aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa)\n"
                "    LOCKS_EXCLUDED(aaaaaaaaaaaaa);");
@@ -2062,6 +2083,10 @@ TEST_F(FormatTest, FormatsOneParameterPerLineIfNecessary) {
       "  aaaaaaaaaaaaaaaaaaaaaaa(aaaaaaaaa, aaaaaaaaa, aaaaaaaaaaaaaaaaaaaaa)\n"
       "      .aaaaaaa();\n"
       "}",
+      NoBinPacking);
+  verifyFormat(
+      "template <class SomeType, class SomeOtherType>\n"
+      "SomeType SomeFunction(SomeType Type, SomeOtherType OtherType) {}",
       NoBinPacking);
 }
 
@@ -2342,6 +2367,8 @@ TEST_F(FormatTest, AlignsPipes) {
       "             << \"eeeeeeeeeeeeeeeee = \" << eeeeeeeeeeeeeeeee;");
   verifyFormat("llvm::outs() << aaaaaaaaaaaaaaaaaaaaaaaa << \"=\"\n"
                "             << bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb;");
+  verifyFormat("llvm::outs() << \"aaaaaaaaaaaaaaaaaaaaaaaa: \"\n"
+               "             << aaaaaaaaaaaaa(aaaaaaaaaaaaaaaaaaaaaaaaaaaa);");
 
   verifyFormat(
       "llvm::errs() << aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n"
