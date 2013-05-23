@@ -1089,6 +1089,14 @@ bool TokenAnnotator::spaceRequiredBetween(const AnnotatedLine &Line,
       Right.FormatTok.Tok.getObjCKeywordID() != tok::objc_not_keyword)
     return false;
   if (Left.is(tok::l_brace) && Right.is(tok::r_brace))
+    return false; // No spaces in "{}".
+  if (Left.is(tok::l_brace) || Right.is(tok::r_brace))
+    return Style.SpacesInBracedLists;
+  if (Right.Type == TT_UnaryOperator)
+    return !Left.isOneOf(tok::l_paren, tok::l_square, tok::at) &&
+           (Left.isNot(tok::colon) || Left.Type != TT_ObjCMethodExpr);
+  if (Left.is(tok::identifier) && Right.is(tok::l_brace) &&
+      Right.getNextNoneComment())
     return false;
   if (Right.is(tok::ellipsis))
     return false;
@@ -1126,10 +1134,6 @@ bool TokenAnnotator::spaceRequiredBefore(const AnnotatedLine &Line,
            Tok.getNextNoneComment() != NULL && Tok.Type != TT_ObjCMethodExpr;
   if (Tok.Parent->Type == TT_UnaryOperator || Tok.Parent->Type == TT_CastRParen)
     return false;
-  if (Tok.Type == TT_UnaryOperator)
-    return !Tok.Parent->isOneOf(tok::l_paren, tok::l_square, tok::at) &&
-           (Tok.Parent->isNot(tok::colon) ||
-            Tok.Parent->Type != TT_ObjCMethodExpr);
   if (Tok.Parent->is(tok::greater) && Tok.is(tok::greater)) {
     return Tok.Type == TT_TemplateCloser &&
            Tok.Parent->Type == TT_TemplateCloser &&
