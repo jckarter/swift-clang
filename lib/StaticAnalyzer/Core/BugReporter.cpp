@@ -1962,12 +1962,100 @@ static bool lexicalContains(ParentMap &PM,
   return false;
 }
 
+// Remove short edges on the same line less than 3 columns in difference.
+static void removePunyEdges(PathPieces &path,
+                            SourceManager &SM,
+                            ParentMap &PM) {
+
+  bool erased = false;
+
+  for (PathPieces::iterator I = path.begin(), E = path.end(); I != E;
+       erased ? I : ++I) {
+
+    erased = false;
+
+    PathDiagnosticControlFlowPiece *PieceI =
+      dyn_cast<PathDiagnosticControlFlowPiece>(*I);
+
+    if (!PieceI)
+      continue;
+
+    const Stmt *start = getLocStmt(PieceI->getStartLocation());
+    const Stmt *end   = getLocStmt(PieceI->getEndLocation());
+
+    if (!start || !end)
+      continue;
+
+    const Stmt *endParent = PM.getParent(end);
+    if (!endParent)
+      continue;
+
+    if (isConditionForTerminator(end, endParent))
+      continue;
+
+    bool Invalid = false;
+    FullSourceLoc StartL(start->getLocStart(), SM);
+    FullSourceLoc EndL(end->getLocStart(), SM);
+
+    unsigned startLine = StartL.getSpellingLineNumber(&Invalid);
+    if (Invalid)
+      continue;
+
+    unsigned endLine = EndL.getSpellingLineNumber(&Invalid);
+    if (Invalid)
+      continue;
+
+    if (startLine != endLine)
+      continue;
+
+    unsigned startCol = StartL.getSpellingColumnNumber(&Invalid);
+    if (Invalid)
+      continue;
+
+    unsigned endCol = EndL.getSpellingColumnNumber(&Invalid);
+    if (Invalid)
+      continue;
+
+    if (abs((int)startCol - (int)endCol) <= 2) {
+      I = path.erase(I);
+      erased = true;
+      continue;
+    }
+  }
+}
+
+static void removeIdenticalEvents(PathPieces &path) {
+  for (PathPieces::iterator I = path.begin(), E = path.end(); I != E; ++I) {
+    PathDiagnosticEventPiece *PieceI =
+      dyn_cast<PathDiagnosticEventPiece>(*I);
+
+    if (!PieceI)
+      continue;
+
+    PathPieces::iterator NextI = I; ++NextI;
+    if (NextI == E)
+      return;
+
+    PathDiagnosticEventPiece *PieceNextI =
+      dyn_cast<PathDiagnosticEventPiece>(*I);
+
+    if (!PieceNextI)
+      continue;
+
+    // Erase the second piece if it has the same exact message text.
+    if (PieceI->getString() == PieceNextI->getString()) {
+      path.erase(NextI);
+    }
+  }
+}
+
 static bool optimizeEdges(PathPieces &path, SourceManager &SM,
                           OptimizedCallsSet &OCS,
                           LocationContextMap &LCM) {
   bool hasChanges = false;
   const LocationContext *LC = LCM[&path];
   assert(LC);
+  ParentMap &PM = LC->getParentMap();
   bool isFirst = true;
 
   for (PathPieces::iterator I = path.begin(), E = path.end(); I != E; ) {
@@ -1995,15 +2083,12 @@ static bool optimizeEdges(PathPieces &path, SourceManager &SM,
       continue;
     }
 
-    ParentMap &PM = LC->getParentMap();
     const Stmt *s1Start = getLocStmt(PieceI->getStartLocation());
     const Stmt *s1End   = getLocStmt(PieceI->getEndLocation());
     const Stmt *level1 = getStmtParent(s1Start, PM);
     const Stmt *level2 = getStmtParent(s1End, PM);
 
     if (wasFirst) {
-      wasFirst = false;
-
       // If the first edge (in isolation) is just a transition from
       // an expression to a parent expression then eliminate that edge.
       if (level1 && level2 && level2 == PM.getParent(level1)) {
@@ -2134,7 +2219,13 @@ static bool optimizeEdges(PathPieces &path, SourceManager &SM,
     ++I;
   }
 
-  // No changes.
+  if (!hasChanges) {
+    // Remove any puny edges left over after primary optimization pass.
+    removePunyEdges(path, SM, PM);
+    // Remove identical events.
+    removeIdenticalEvents(path);
+  }
+
   return hasChanges;
 }
 
