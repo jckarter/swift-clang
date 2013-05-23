@@ -445,7 +445,7 @@ void StmtPrinter::VisitMSAsmStmt(MSAsmStmt *Node) {
   Indent() << "__asm ";
   if (Node->hasBraces())
     OS << "{\n";
-  OS << *(Node->getAsmString()) << "\n";
+  OS << Node->getAsmString() << "\n";
   if (Node->hasBraces())
     Indent() << "}\n";
 }
@@ -1386,6 +1386,13 @@ void StmtPrinter::VisitLambdaExpr(LambdaExpr *Node) {
       if (Node->getCaptureDefault() != LCD_ByCopy)
         OS << '=';
       OS << C->getCapturedVar()->getName();
+      break;
+
+    case LCK_Init:
+      if (C->getInitCaptureField()->getType()->isReferenceType())
+        OS << '&';
+      OS << C->getInitCaptureField()->getName();
+      PrintExpr(Node->getInitCaptureInit(C));
       break;
     }
   }

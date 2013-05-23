@@ -149,6 +149,7 @@ class Parser : public CodeCompletionHandler {
   OwningPtr<PragmaHandler> OpenCLExtensionHandler;
   OwningPtr<CommentHandler> CommentSemaHandler;
   OwningPtr<PragmaHandler> OpenMPHandler;
+  OwningPtr<PragmaHandler> MSCommentHandler;
 
   /// Whether the '>' token acts as an operator or not. This will be
   /// true except when we are parsing an expression within a C++
@@ -416,6 +417,10 @@ private:
   /// \brief Handle the annotation token produced for
   /// #pragma ms_struct...
   void HandlePragmaMSStruct();
+
+  /// \brief Handle the annotation token produced for
+  /// #pragma comment...
+  void HandlePragmaMSComment();
 
   /// \brief Handle the annotation token produced for
   /// #pragma align...
@@ -1221,6 +1226,11 @@ public:
   // Expr that doesn't include commas.
   ExprResult ParseAssignmentExpression(TypeCastState isTypeCast = NotTypeCast);
 
+  ExprResult ParseMSAsmIdentifier(llvm::SmallVectorImpl<Token> &LineToks,
+                                  unsigned &NumLineToksConsumed,
+                                  void *Info,
+                                  bool IsUnevaluated);
+
 private:
   ExprResult ParseExpressionWithLeadingAt(SourceLocation AtLoc);
 
@@ -1319,7 +1329,8 @@ private:
   // [...] () -> type {...}
   ExprResult ParseLambdaExpression();
   ExprResult TryParseLambdaExpression();
-  Optional<unsigned> ParseLambdaIntroducer(LambdaIntroducer &Intro);
+  Optional<unsigned> ParseLambdaIntroducer(LambdaIntroducer &Intro,
+                                           bool *SkippedInits = 0);
   bool TryParseLambdaIntroducer(LambdaIntroducer &Intro);
   ExprResult ParseLambdaExpressionAfterIntroducer(
                LambdaIntroducer &Intro);
@@ -2128,9 +2139,18 @@ private:
 
   //===--------------------------------------------------------------------===//
   // OpenMP: Directives and clauses.
+  /// \brief Parses declarative OpenMP directives.
   DeclGroupPtrTy ParseOpenMPDeclarativeDirective();
+  /// \brief Parses simple list of variables.
+  ///
+  /// \param Kind Kind of the directive.
+  /// \param [out] VarList List of referenced variables.
+  /// \param AllowScopeSpecifier true, if the variables can have fully
+  /// qualified names.
+  ///
   bool ParseOpenMPSimpleVarList(OpenMPDirectiveKind Kind,
-                                SmallVectorImpl<DeclarationNameInfo> &IdList);
+                                SmallVectorImpl<Expr *> &VarList,
+                                bool AllowScopeSpecifier);
 public:
   bool ParseUnqualifiedId(CXXScopeSpec &SS, bool EnteringContext,
                           bool AllowDestructorName,

@@ -363,8 +363,34 @@ void InitHeaderSearch::AddDefaultCIncludePaths(const llvm::Triple &triple,
     break;
   }
 
-  if ( os != llvm::Triple::RTEMS )
+  if ( os != llvm::Triple::RTEMS ) {
+    // APPLE LOCAL: On Darwin, include the toolchain include directory in the
+    // default include search list. Since we have a split between the toolchains
+    // and the SDK, we need a place for tools to be able to drop headers
+    // (resources) that can be used with any SDK, for example in generated
+    // files.
+    //
+    // This functionality is currently only used to support flex's FlexLexer.h
+    // file. See:
+    //
+    //   <rdar://problem/13135439> Include toolchain include directory in
+    //   default header paths (for FlexLexer.h)
+    //
+    // for more information.
+    //
+    // We compute the toolchain include directory relative to the resource
+    // directory, so that it works with -ccc-install-dir properly. The resource
+    // directory follows the convention "../usr/lib/clang/<version>" so
+    // "<resource_dir>/../../../include" is the toolchain include directory.
+    llvm::sys::Path P(HSOpts.ResourceDir);
+    P.eraseComponent();
+    P.eraseComponent();
+    P.eraseComponent();
+    P.appendComponent("include");
+    AddPathInternal(P.str(), ExternCSystem, false, false);
+
     AddPath("/usr/include", ExternCSystem, false);
+  }
 }
 
 void InitHeaderSearch::

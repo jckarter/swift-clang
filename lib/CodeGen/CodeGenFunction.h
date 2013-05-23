@@ -23,6 +23,7 @@
 #include "clang/AST/ExprObjC.h"
 #include "clang/AST/Type.h"
 #include "clang/Basic/ABI.h"
+#include "clang/Basic/CapturedStmt.h"
 #include "clang/Basic/TargetInfo.h"
 #include "clang/Frontend/CodeGenOptions.h"
 #include "llvm/ADT/ArrayRef.h"
@@ -579,8 +580,8 @@ public:
   typedef std::pair<llvm::Value *, llvm::Value *> ComplexPairTy;
   CGBuilderTy Builder;
 
-  /// CurFuncDecl - Holds the Decl for the current function or ObjC method.
-  /// This excludes BlockDecls.
+  /// CurFuncDecl - Holds the Decl for the current outermost
+  /// non-closure context.
   const Decl *CurFuncDecl;
   /// CurCodeDecl - This is the inner-most code context, which includes blocks.
   const Decl *CurCodeDecl;
@@ -605,6 +606,65 @@ public:
   /// AllocaInsertPoint - This is an instruction in the entry block before which
   /// we prefer to insert allocas.
   llvm::AssertingVH<llvm::Instruction> AllocaInsertPt;
+
+  /// \brief API for captured statement code generation.
+  class CGCapturedStmtInfo {
+  public:
+    explicit CGCapturedStmtInfo(const CapturedStmt &S,
+                                CapturedRegionKind K = CR_Default)
+      : Kind(K), ThisValue(0), CXXThisFieldDecl(0) {
+
+      RecordDecl::field_iterator Field =
+        S.getCapturedRecordDecl()->field_begin();
+      for (CapturedStmt::const_capture_iterator I = S.capture_begin(),
+                                                E = S.capture_end();
+           I != E; ++I, ++Field) {
+        if (I->capturesThis())
+          CXXThisFieldDecl = *Field;
+        else
+          CaptureFields[I->getCapturedVar()] = *Field;
+      }
+    }
+
+    virtual ~CGCapturedStmtInfo();
+
+    CapturedRegionKind getKind() const { return Kind; }
+
+    void setContextValue(llvm::Value *V) { ThisValue = V; }
+    // \brief Retrieve the value of the context parameter.
+    llvm::Value *getContextValue() const { return ThisValue; }
+
+    /// \brief Lookup the captured field decl for a variable.
+    const FieldDecl *lookup(const VarDecl *VD) const {
+      return CaptureFields.lookup(VD);
+    }
+
+    bool isCXXThisExprCaptured() const { return CXXThisFieldDecl != 0; }
+    FieldDecl *getThisFieldDecl() const { return CXXThisFieldDecl; }
+
+    /// \brief Emit the captured statement body.
+    virtual void EmitBody(CodeGenFunction &CGF, Stmt *S) {
+      CGF.EmitStmt(S);
+    }
+
+    /// \brief Get the name of the capture helper.
+    virtual StringRef getHelperName() const { return "__captured_stmt"; }
+
+  private:
+    /// \brief The kind of captured statement being generated.
+    CapturedRegionKind Kind;
+
+    /// \brief Keep the map between VarDecl and FieldDecl.
+    llvm::SmallDenseMap<const VarDecl *, FieldDecl *> CaptureFields;
+
+    /// \brief The base address of the captured record, passed in as the first
+    /// argument of the parallel region function.
+    llvm::Value *ThisValue;
+
+    /// \brief Captured 'this' type.
+    FieldDecl *CXXThisFieldDecl;
+  };
+  CGCapturedStmtInfo *CapturedStmtInfo;
 
   /// BoundsChecking - Emit run-time bounds checks. Higher values mean
   /// potentially higher performance penalties.
@@ -1206,14 +1266,14 @@ private:
   /// lazily by getUnreachableBlock().
   llvm::BasicBlock *UnreachableBlock;
 
-  /// Counts of the number of distinct breakpoint locations in this function.
-  unsigned NumStopPoints;
+  /// Counts of the number return expressions in the function.
+  unsigned NumReturnExprs;
 
   /// Count the number of simple (constant) return expressions in the function.
   unsigned NumSimpleReturnExprs;
 
-  /// The first debug location (breakpoint) in the function.
-  SourceLocation FirstStopPoint;
+  /// The last regular (non-return) debug location (breakpoint) in the function.
+  SourceLocation LastStopPoint;
 
 public:
   /// A scope within which we are constructing the fields of an object which
@@ -1274,6 +1334,10 @@ private:
 
   /// The current lexical scope.
   LexicalScope *CurLexicalScope;
+
+  /// The current source location that should be used for exception
+  /// handling code.
+  SourceLocation CurEHLocation;
 
   /// ByrefValueInfoMap - For each __block variable, contains a pair of the LLVM
   /// type as well as the field number that contains the actual data.
@@ -1451,7 +1515,6 @@ public:
 
   llvm::Function *GenerateBlockFunction(GlobalDecl GD,
                                         const CGBlockInfo &Info,
-                                        const Decl *OuterFuncDecl,
                                         const DeclMapTy &ldm,
                                         bool IsLambdaConversionToBlock);
 
@@ -1482,7 +1545,8 @@ public:
 
   void GenerateCode(GlobalDecl GD, llvm::Function *Fn,
                     const CGFunctionInfo &FnInfo);
-  void StartFunction(GlobalDecl GD, QualType RetTy,
+  void StartFunction(GlobalDecl GD,
+                     QualType RetTy,
                      llvm::Function *Fn,
                      const CGFunctionInfo &FnInfo,
                      const FunctionArgList &Args,
@@ -2184,7 +2248,6 @@ public:
   void EmitCaseStmt(const CaseStmt &S);
   void EmitCaseStmtRange(const CaseStmt &S);
   void EmitAsmStmt(const AsmStmt &S);
-  void EmitCapturedStmt(const CapturedStmt &S);
 
   void EmitObjCForCollectionStmt(const ObjCForCollectionStmt &S);
   void EmitObjCAtTryStmt(const ObjCAtTryStmt &S);
@@ -2199,6 +2262,10 @@ public:
 
   void EmitCXXTryStmt(const CXXTryStmt &S);
   void EmitCXXForRangeStmt(const CXXForRangeStmt &S);
+
+  llvm::Function *EmitCapturedStmt(const CapturedStmt &S, CapturedRegionKind K);
+  llvm::Function *GenerateCapturedStmtFunction(const CapturedDecl *CD,
+                                               const RecordDecl *RD);
 
   //===--------------------------------------------------------------------===//
   //                         LValue Expression Emission
@@ -2355,7 +2422,7 @@ public:
       return ConstantEmission(C, false);
     }
 
-    operator bool() const { return ValueAndIsReference.getOpaqueValue() != 0; }
+    LLVM_EXPLICIT operator bool() const { return ValueAndIsReference.getOpaqueValue() != 0; }
 
     bool isReference() const { return ValueAndIsReference.getInt(); }
     LValue getReferenceLValue(CodeGenFunction &CGF, Expr *refExpr) const {
@@ -2379,6 +2446,7 @@ public:
   llvm::Value *EmitIvarOffset(const ObjCInterfaceDecl *Interface,
                               const ObjCIvarDecl *Ivar);
   LValue EmitLValueForField(LValue Base, const FieldDecl* Field);
+  LValue EmitLValueForLambdaField(const FieldDecl *Field);
 
   /// EmitLValueForFieldInitialization - Like EmitLValueForField, except that
   /// if the Field is a reference, this will return the address of the reference
@@ -2498,6 +2566,7 @@ public:
   /// is unhandled by the current target.
   llvm::Value *EmitTargetBuiltinExpr(unsigned BuiltinID, const CallExpr *E);
 
+  llvm::Value *EmitAArch64BuiltinExpr(unsigned BuiltinID, const CallExpr *E);
   llvm::Value *EmitARMBuiltinExpr(unsigned BuiltinID, const CallExpr *E);
   llvm::Value *EmitNeonCall(llvm::Function *F,
                             SmallVectorImpl<llvm::Value*> &O,
@@ -2702,7 +2771,7 @@ public:
   }
   void enterNonTrivialFullExpression(const ExprWithCleanups *E);
 
-  void EmitCXXThrowExpr(const CXXThrowExpr *E);
+  void EmitCXXThrowExpr(const CXXThrowExpr *E, bool KeepInsertionPoint = true);
 
   void EmitLambdaExpr(const LambdaExpr *E, AggValueSlot Dest);
 
