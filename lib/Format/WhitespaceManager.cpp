@@ -172,7 +172,9 @@ void WhitespaceManager::alignTrailingComments() {
       }
       BreakBeforeNext =
           (i == 0) || (Changes[i].NewlinesBefore > 1) ||
-          (Changes[i].NewlinesBefore == 1 && !Changes[i - 1].IsTrailingComment);
+          // Never start a sequence with a comment at the beginning of
+          // the line.
+          (Changes[i].NewlinesBefore == 1 && StartOfSequence == i);
       Newlines = 0;
     }
   }

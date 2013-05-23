@@ -650,6 +650,33 @@ TEST_F(FormatTest, UnderstandsSingleLineComments) {
             format("lineWith();   // comment\n"
                    " // at start\n"
                    "otherLine();"));
+
+  EXPECT_EQ("lineWith(); // comment\n"
+            "// at start\n"
+            "otherLine(); // comment",
+            format("lineWith();   // comment\n"
+                   "// at start\n"
+                   "otherLine();   // comment"));
+  EXPECT_EQ("lineWith();\n"
+            "// at start\n"
+            "otherLine(); // comment",
+            format("lineWith();\n"
+                   " // at start\n"
+                   "otherLine();   // comment"));
+  EXPECT_EQ("// first\n"
+            "// at start\n"
+            "otherLine(); // comment",
+            format("// first\n"
+                   " // at start\n"
+                   "otherLine();   // comment"));
+  EXPECT_EQ("f();\n"
+            "// first\n"
+            "// at start\n"
+            "otherLine(); // comment",
+            format("f();\n"
+                   "// first\n"
+                   " // at start\n"
+                   "otherLine();   // comment"));
 }
 
 TEST_F(FormatTest, CanFormatCommentsLocally) {
@@ -3132,6 +3159,8 @@ TEST_F(FormatTest, LayoutCxx11ConstructorBraceInitializers) {
     verifyFormat("auto v = Foo{ 1 };");
     verifyFormat("f({ 1, 2 }, { { 2, 3 }, { 4, 5 } }, c, { d });");
     verifyFormat("Class::Class : member{ 1, 2, 3 } {}");
+    verifyFormat("new vector<int>{ 1, 2, 3 };");
+    verifyFormat("new int[3]{ 1, 2, 3 };");
     verifyFormat("return { arg1, arg2 };");
     verifyFormat("new T{ arg1, arg2 };");
     verifyFormat("class Class {\n"
@@ -3146,6 +3175,8 @@ TEST_F(FormatTest, LayoutCxx11ConstructorBraceInitializers) {
     verifyFormat("auto v = Foo{-1};", NoSpaces);
     verifyFormat("f({1, 2}, {{2, 3}, {4, 5}}, c, {d});", NoSpaces);
     verifyFormat("Class::Class : member{1, 2, 3} {}", NoSpaces);
+    verifyFormat("new vector<int>{1, 2, 3};", NoSpaces);
+    verifyFormat("new int[3]{1, 2, 3};", NoSpaces);
     verifyFormat("return {arg1, arg2};", NoSpaces);
     verifyFormat("new T{arg1, arg2};", NoSpaces);
     verifyFormat("class Class {\n"
