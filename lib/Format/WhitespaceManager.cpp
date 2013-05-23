@@ -43,9 +43,7 @@ void WhitespaceManager::replaceWhitespace(const AnnotatedToken &Tok,
                                           unsigned StartOfTokenColumn,
                                           bool InPPDirective) {
   Changes.push_back(Change(
-      true, SourceRange(Tok.FormatTok.WhiteSpaceStart,
-                        Tok.FormatTok.WhiteSpaceStart.getLocWithOffset(
-                            Tok.FormatTok.WhiteSpaceLength)),
+      true, Tok.FormatTok.WhitespaceRange,
       Spaces, StartOfTokenColumn, Newlines, "", "", Tok.FormatTok.Tok.getKind(),
       InPPDirective && !Tok.FormatTok.IsFirst));
 
@@ -65,14 +63,11 @@ void WhitespaceManager::replaceWhitespace(const AnnotatedToken &Tok,
 
 void WhitespaceManager::addUntouchableToken(const FormatToken &Tok,
                                             bool InPPDirective) {
-  Changes.push_back(Change(
-      false,
-      SourceRange(Tok.WhiteSpaceStart,
-                  Tok.WhiteSpaceStart.getLocWithOffset(Tok.WhiteSpaceLength)),
-      Tok.WhiteSpaceLength - Tok.NewlinesBefore,
-      SourceMgr.getSpellingColumnNumber(Tok.Tok.getLocation()) - 1,
-      Tok.NewlinesBefore, "", "", Tok.Tok.getKind(),
-      InPPDirective && !Tok.IsFirst));
+  Changes.push_back(
+      Change(false, Tok.WhitespaceRange, /*Spaces=*/0,
+             SourceMgr.getSpellingColumnNumber(Tok.Tok.getLocation()) - 1,
+             Tok.NewlinesBefore, "", "", Tok.Tok.getKind(),
+             InPPDirective && !Tok.IsFirst));
 }
 
 void WhitespaceManager::breakToken(const FormatToken &Tok, unsigned Offset,
@@ -147,12 +142,26 @@ void WhitespaceManager::alignTrailingComments() {
     unsigned ChangeMaxColumn = Style.ColumnLimit - Changes[i].TokenLength;
     Newlines += Changes[i].NewlinesBefore;
     if (Changes[i].IsTrailingComment) {
+      bool WasAlignedWithStartOfNextLine =
+          // A comment on its own line.
+          Changes[i].NewlinesBefore == 1 &&
+          // Not the last line.
+          i + 1 != e &&
+          // The start of the next token was previously aligned with
+          // the start of this comment.
+          (SourceMgr.getSpellingColumnNumber(
+               Changes[i].OriginalWhitespaceRange.getEnd()) ==
+           SourceMgr.getSpellingColumnNumber(
+               Changes[i + 1].OriginalWhitespaceRange.getEnd())) &&
+          // Which is not a comment itself.
+          Changes[i + 1].Kind != tok::comment;
       if (BreakBeforeNext || Newlines > 1 ||
           (ChangeMinColumn > MaxColumn || ChangeMaxColumn < MinColumn) ||
           // Break the comment sequence if the previous line did not end
           // in a trailing comment.
           (Changes[i].NewlinesBefore == 1 && i > 0 &&
-           !Changes[i - 1].IsTrailingComment)) {
+           !Changes[i - 1].IsTrailingComment) ||
+          WasAlignedWithStartOfNextLine) {
         alignTrailingComments(StartOfSequence, i, MinColumn);
         MinColumn = ChangeMinColumn;
         MaxColumn = ChangeMaxColumn;
