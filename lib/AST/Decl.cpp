@@ -495,10 +495,6 @@ static bool isSingleLineExternC(const Decl &D) {
   return false;
 }
 
-static bool isExternalLinkage(Linkage L) {
-  return L == UniqueExternalLinkage || L == ExternalLinkage;
-}
-
 static LinkageInfo getLVForNamespaceScopeDecl(const NamedDecl *D,
                                               LVComputationKind computation) {
   assert(D->getDeclContext()->getRedeclContext()->isFileContext() &&
@@ -722,7 +718,7 @@ static LinkageInfo getLVForNamespaceScopeDecl(const NamedDecl *D,
   } else if (isa<EnumConstantDecl>(D)) {
     LinkageInfo EnumLV = getLVForDecl(cast<NamedDecl>(D->getDeclContext()),
                                       computation);
-    if (!isExternalLinkage(EnumLV.getLinkage()))
+    if (!isExternalFormalLinkage(EnumLV.getLinkage()))
       return LinkageInfo::none();
     LV.merge(EnumLV);
 
@@ -793,12 +789,13 @@ static LinkageInfo getLVForClassMember(const NamedDecl *D,
 
   LinkageInfo classLV =
     getLVForDecl(cast<RecordDecl>(D->getDeclContext()), classComputation);
-  if (!isExternalLinkage(classLV.getLinkage()))
-    return LinkageInfo::none();
-
   // If the class already has unique-external linkage, we can't improve.
   if (classLV.getLinkage() == UniqueExternalLinkage)
     return LinkageInfo::uniqueExternal();
+
+  if (!isExternallyVisible(classLV.getLinkage()))
+    return LinkageInfo::none();
+
 
   // Otherwise, don't merge in classLV yet, because in certain cases
   // we need to completely ignore the visibility from it.
@@ -1073,8 +1070,8 @@ static LinkageInfo getLVForLocalDecl(const NamedDecl *D,
   const FunctionDecl *FD = getOutermostFunctionContext(D);
   if (!FD || !FD->isInlined())
     return LinkageInfo::none();
-  LinkageInfo LV = FD->getLinkageAndVisibility();
-  if (LV.getLinkage() != ExternalLinkage)
+  LinkageInfo LV = getLVForDecl(FD, computation);
+  if (!isExternallyVisible(LV.getLinkage()))
     return LinkageInfo::none();
   return LinkageInfo(VisibleNoLinkage, LV.getVisibility(),
                      LV.isVisibilityExplicit());

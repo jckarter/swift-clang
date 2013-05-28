@@ -143,3 +143,30 @@ namespace test11 {
   }
   void *h() { return g(); }
 }
+
+namespace test12 {
+  // CHECK-DAG: define linkonce_odr void @_ZN6test123fooIZNS_3barIZNS_3zedEvE2S2EEPvvE2S1EEvv
+  template <typename T> void foo() {}
+  template <typename T> inline void *bar() {
+    enum S1 {
+    };
+    return reinterpret_cast<void *>(foo<S1>);
+  }
+  inline void *zed() {
+    enum S2 {
+    };
+    return reinterpret_cast<void *>(bar<S2>);
+  }
+  void *h() { return zed(); }
+}
+
+namespace test13 {
+  // CHECK-DAG: define linkonce_odr void @_ZZN6test133fooEvEN1S3barEv(
+  inline void *foo() {
+    struct S {
+      static void bar() {}
+    };
+    return (void *)S::bar;
+  }
+  void *zed() { return foo(); }
+}
