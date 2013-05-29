@@ -820,10 +820,10 @@ def warn_auto_readonly_iboutlet_property : Warning<
   "not work correctly with 'nib' loader">,
   InGroup<DiagGroup<"readonly-iboutlet-property">>;
 def warn_auto_implicit_atomic_property : Warning<
-  "property is assumed atomic when auto-synthesizing the property">, 
+  "property is assumed atomic when auto-synthesizing the property">,
   InGroup<ImplicitAtomic>, DefaultIgnore;
 def warn_unimplemented_selector:  Warning<
-  "unimplemented selector %0">, InGroup<Selector>, DefaultIgnore;
+  "creating selector for nonexistent method %0">, InGroup<Selector>, DefaultIgnore;
 def warn_unimplemented_protocol_method : Warning<
   "method %0 in protocol not implemented">, InGroup<Protocol>;
 
@@ -5322,6 +5322,10 @@ def err_atomic_op_needs_atomic_int_or_ptr : Error<
 def err_atomic_op_bitwise_needs_atomic_int : Error<
   "first argument to bitwise atomic operation must be a pointer to "
   "%select{|atomic }0integer (%1 invalid)">;
+  
+def err_atomic_load_store_uses_lib : Error<
+  "atomic %select{load|store}0 requires runtime support that is not "
+  "available for this target">;
 
 def err_deleted_function_use : Error<"attempt to use a deleted function">;
 
