@@ -256,15 +256,6 @@ void BreakableBlockComment::adjustWhitespace(const FormatStyle &Style,
   size_t StartOfLine = Lines[LineIndex].find_first_not_of(" \t");
   if (StartOfLine == StringRef::npos)
     StartOfLine = Lines[LineIndex].size();
-  // FIXME: Tabs are not always 8 characters. Make configurable in the style.
-  unsigned Column = 0;
-  StringRef OriginalIndentText = Lines[LineIndex].substr(0, StartOfLine);
-  for (int i = 0, e = OriginalIndentText.size(); i != e; ++i) {
-    if (Lines[LineIndex][i] == '\t')
-      Column += 8 - (Column % 8);
-    else
-      ++Column;
-  }
 
   // Adjust Lines to only contain relevant text.
   Lines[LineIndex - 1] = Lines[LineIndex - 1].substr(0, EndOfPreviousLine);
@@ -273,8 +264,15 @@ void BreakableBlockComment::adjustWhitespace(const FormatStyle &Style,
   // to the current line.
   LeadingWhitespace[LineIndex] =
       Lines[LineIndex].begin() - Lines[LineIndex - 1].end();
+
+  // FIXME: We currently count tabs as 1 character. To solve this, we need to
+  // get the correct indentation width of the start of the comment, which
+  // requires correct counting of the tab expansions before the comment, and
+  // a configurable tab width. Since the current implementation only breaks
+  // if leading tabs are intermixed with spaces, that is not a high priority.
+
   // Adjust the start column uniformly accross all lines.
-  StartOfLineColumn[LineIndex] = std::max<int>(0, Column + IndentDelta);
+  StartOfLineColumn[LineIndex] = std::max<int>(0, StartOfLine + IndentDelta);
 }
 
 unsigned BreakableBlockComment::getLineCount() const { return Lines.size(); }
@@ -321,8 +319,17 @@ BreakableBlockComment::replaceWhitespaceBefore(unsigned LineIndex,
   if (LineIndex == 0)
     return;
   StringRef Prefix = Decoration;
-  if (LineIndex + 1 == Lines.size() && Lines[LineIndex].empty())
-    Prefix = "";
+  if (Lines[LineIndex].empty()) {
+    if (LineIndex + 1 == Lines.size()) {
+      // If the last line is empty, we don't need a prefix, as the */ will line
+      // up with the decoration (if it exists).
+      Prefix = "";
+    } else if (!Decoration.empty()) {
+      // For other empty lines, if we do have a decoration, adapt it to not
+      // contain a trailing whitespace.
+      Prefix = Prefix.substr(0, 1);
+    }
+  }
 
   unsigned WhitespaceOffsetInToken =
       Lines[LineIndex].data() - Tok.TokenText.data() -
