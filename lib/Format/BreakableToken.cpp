@@ -243,6 +243,7 @@ BreakableBlockComment::BreakableBlockComment(const FormatStyle &Style,
     }
     IndentAtLineBreak = std::min<int>(IndentAtLineBreak, StartOfLineColumn[i]);
   }
+  IndentAtLineBreak = std::max<unsigned>(IndentAtLineBreak, Decoration.size());
   DEBUG({
     for (size_t i = 0; i < Lines.size(); ++i) {
       llvm::dbgs() << i << " |" << Lines[i] << "| " << LeadingWhitespace[i]
@@ -316,6 +317,7 @@ void BreakableBlockComment::insertBreak(unsigned LineIndex, unsigned TailOffset,
   unsigned BreakOffsetInToken =
       Text.data() - Tok.TokenText.data() + Split.first;
   unsigned CharsToRemove = Split.second;
+  assert(IndentAtLineBreak >= Decoration.size());
   Whitespaces.breakToken(Tok, BreakOffsetInToken, CharsToRemove, "", Prefix,
                          InPPDirective, IndentAtLineBreak - Decoration.size());
 }
@@ -337,11 +339,17 @@ BreakableBlockComment::replaceWhitespaceBefore(unsigned LineIndex,
       // contain a trailing whitespace.
       Prefix = Prefix.substr(0, 1);
     }
+  } else {
+    if (StartOfLineColumn[LineIndex] == 1) {
+      // This lines starts immediately after the decorating *.
+      Prefix = Prefix.substr(0, 1);
+    }
   }
 
   unsigned WhitespaceOffsetInToken =
       Lines[LineIndex].data() - Tok.TokenText.data() -
       LeadingWhitespace[LineIndex];
+  assert(StartOfLineColumn[LineIndex] >= Prefix.size());
   Whitespaces.breakToken(
       Tok, WhitespaceOffsetInToken, LeadingWhitespace[LineIndex], "", Prefix,
       InPPDirective, StartOfLineColumn[LineIndex] - Prefix.size());
