@@ -192,6 +192,53 @@ TEST_F(FormatTest, RemovesWhitespaceWhenTriggeredOnEmptyLine) {
             format("int  a;\n  \n\n int b;", 9, 0, getLLVMStyle()));
 }
 
+TEST_F(FormatTest, RemovesEmptyLines) {
+  EXPECT_EQ("class C {\n"
+            "  int i;\n"
+            "};",
+            format("class C {\n"
+                   " int i;\n"
+                   "\n"
+                   "};"));
+
+  // Don't remove empty lines in more complex control statements.
+  EXPECT_EQ("void f() {\n"
+            "  if (a) {\n"
+            "    f();\n"
+            "\n"
+            "  } else if (b) {\n"
+            "    f();\n"
+            "  }\n"
+            "}",
+            format("void f() {\n"
+                   "  if (a) {\n"
+                   "    f();\n"
+                   "\n"
+                   "  } else if (b) {\n"
+                   "    f();\n"
+                   "\n"
+                   "  }\n"
+                   "\n"
+                   "}"));
+
+  // FIXME: This is slightly inconsistent.
+  EXPECT_EQ("namespace {\n"
+            "int i;\n"
+            "}",
+            format("namespace {\n"
+                   "int i;\n"
+                   "\n"
+                   "}"));
+  EXPECT_EQ("namespace {\n"
+            "int i;\n"
+            "\n"
+            "} // namespace",
+            format("namespace {\n"
+                   "int i;\n"
+                   "\n"
+                   "}  // namespace"));
+}
+
 TEST_F(FormatTest, ReformatsMovedLines) {
   EXPECT_EQ(
       "template <typename T> T *getFETokenInfo() const {\n"
@@ -1991,6 +2038,10 @@ TEST_F(FormatTest, LineBreakingInBinaryExpressions) {
                "        TheLine.Last->FormatTok.Tok.getLocation()) -\n"
                "    1);");
 
+  verifyFormat("if ((aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa ||\n"
+               "     bbbbbbbbbbbbbbbbbb) && // aaaaaaaaaaaaaaaa\n"
+               "    cccccc) {\n}");
+
   FormatStyle OnePerLine = getLLVMStyle();
   OnePerLine.BinPackParameters = false;
   verifyFormat(
@@ -2831,6 +2882,9 @@ TEST_F(FormatTest, WrapsTemplateDeclarations) {
   verifyFormat("template <typename T>\nclass C {};", AlwaysBreak);
   verifyFormat("template <typename T>\nvoid f();", AlwaysBreak);
   verifyFormat("template <typename T>\nvoid f() {}", AlwaysBreak);
+  verifyFormat("void aaaaaaaaaaaaaaaaaaa<aaaaaaaaaaaaaaaaaaaaaaaaaaaaa,\n"
+               "                         bbbbbbbbbbbbbbbbbbbbbbbbbbbb>(\n"
+               "    ccccccccccccccccccccccccccccccccccccccccccccccc);");
 }
 
 TEST_F(FormatTest, WrapsAtNestedNameSpecifiers) {
