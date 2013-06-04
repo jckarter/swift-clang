@@ -3,6 +3,6 @@
 unsigned t, r, *p;
 
 int foo (void) {
-  __asm__ __volatile__( "stxr   %w[_t], %[_r], [%[_p]]" : [_t] "=&r" (t) : [_p] "p" (p), [_r] "r" (r) : "memory"); // // expected-warning {{the value is truncated when put into register, use a modifier to specify the size}}
+  __asm__ __volatile__( "stxr   %w[_t], %[_r], [%[_p]]" : [_t] "=&r" (t) : [_p] "p" (p), [_r] "r" (r) : "memory"); // expected-warning {{value size does not match register size specified by the constraint and modifier}}
   return 1;
 }
