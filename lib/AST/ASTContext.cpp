@@ -5242,12 +5242,9 @@ void ASTContext::getObjCEncodingForTypeImpl(QualType T, std::string& S,
     } else {
       S += '[';
 
-      if (const ConstantArrayType *CAT = dyn_cast<ConstantArrayType>(AT)) {
-        if (getTypeSize(CAT->getElementType()) == 0)
-          S += '0';
-        else
-          S += llvm::utostr(CAT->getSize().getZExtValue());
-      } else {
+      if (const ConstantArrayType *CAT = dyn_cast<ConstantArrayType>(AT))
+        S += llvm::utostr(CAT->getSize().getZExtValue());
+      else {
         //Variable length arrays are encoded as a regular array with 0 elements.
         assert((isa<VariableArrayType>(AT) || isa<IncompleteArrayType>(AT)) &&
                "Unknown array type!");
@@ -8030,6 +8027,19 @@ unsigned ASTContext::getParameterIndex(const ParmVarDecl *D) const {
   assert(I != ParamIndices.end() && 
          "ParmIndices lacks entry set by ParmVarDecl");
   return I->second;
+}
+
+APValue *
+ASTContext::getMaterializedTemporaryValue(const MaterializeTemporaryExpr *E,
+                                          bool MayCreate) {
+  assert(E && E->getStorageDuration() == SD_Static &&
+         "don't need to cache the computed value for this temporary");
+  if (MayCreate)
+    return &MaterializedTemporaryValues[E];
+
+  llvm::DenseMap<const MaterializeTemporaryExpr *, APValue>::iterator I =
+      MaterializedTemporaryValues.find(E);
+  return I == MaterializedTemporaryValues.end() ? 0 : &I->second;
 }
 
 bool ASTContext::AtomicUsesUnsupportedLibcall(const AtomicExpr *E) const {
