@@ -1543,9 +1543,9 @@ static void addEdgeToPath(PathPieces &path,
     return;
   }
 
-  // FIXME: ignore intra-macro edges for now.
-  if (NewLoc.asLocation().getExpansionLoc() ==
-      PrevLoc.asLocation().getExpansionLoc())
+  // Ignore self-edges, which occur when there are multiple nodes at the same
+  // statement.
+  if (NewLoc.asStmt() && NewLoc.asStmt() == PrevLoc.asStmt())
     return;
 
   path.push_front(new PathDiagnosticControlFlowPiece(NewLoc,
@@ -1885,60 +1885,6 @@ static bool isIncrementOrInitInForLoop(const Stmt *S, const Stmt *FL) {
 
 typedef llvm::DenseSet<const PathDiagnosticCallPiece *>
         OptimizedCallsSet;
-
-void PathPieces::dump() const {
-  unsigned index = 0;
-  for (PathPieces::const_iterator I = begin(), E = end(); I != E; ++I ) {
-    llvm::errs() << "[" << index++ << "]";
-
-    switch ((*I)->getKind()) {
-    case PathDiagnosticPiece::Call:
-      llvm::errs() << "  CALL\n--------------\n";
-
-      if (const Stmt *SLoc = getLocStmt((*I)->getLocation())) {
-        SLoc->dump();
-      } else {
-        const PathDiagnosticCallPiece *Call = cast<PathDiagnosticCallPiece>(*I);
-        if (const NamedDecl *ND = dyn_cast<NamedDecl>(Call->getCallee()))
-          llvm::errs() << *ND << "\n";
-      }
-      break;
-    case PathDiagnosticPiece::Event:
-      llvm::errs() << "  EVENT\n--------------\n";
-      llvm::errs() << (*I)->getString() << "\n";
-      if (const Stmt *SLoc = getLocStmt((*I)->getLocation())) {
-        llvm::errs() << " ---- at ----\n";
-        SLoc->dump();
-      }
-      break;
-    case PathDiagnosticPiece::Macro:
-      llvm::errs() << "  MACRO\n--------------\n";
-      // FIXME: print which macro is being invoked.
-      break;
-    case PathDiagnosticPiece::ControlFlow: {
-      const PathDiagnosticControlFlowPiece *CP =
-        cast<PathDiagnosticControlFlowPiece>(*I);
-      llvm::errs() << "  CONTROL\n--------------\n";
-
-      if (const Stmt *s1Start = getLocStmt(CP->getStartLocation()))
-        s1Start->dump();
-      else
-        llvm::errs() << "NULL\n";
-
-      llvm::errs() << " ---- to ----\n";
-
-      if (const Stmt *s1End = getLocStmt(CP->getEndLocation()))
-        s1End->dump();
-      else
-        llvm::errs() << "NULL\n";
-
-      break;
-    }
-    }
-
-    llvm::errs() << "\n";
-  }
-}
 
 /// Adds synthetic edges from top-level statements to their subexpressions.
 ///
@@ -2480,17 +2426,23 @@ static bool optimizeEdges(PathPieces &path, SourceManager &SM,
 }
 
 /// Drop the very first edge in a path, which should be a function entry edge.
+///
+/// If the first edge is not a function entry edge (say, because the first
+/// statement had an invalid source location), this function does nothing.
+// FIXME: We should just generate invalid edges anyway and have the optimizer
+// deal with them.
 static void dropFunctionEntryEdge(PathPieces &Path,
                                   LocationContextMap &LCM,
                                   SourceManager &SM) {
-#ifndef NDEBUG
-  const Decl *D = LCM[&Path]->getDecl();
-  PathDiagnosticLocation EntryLoc =
-    PathDiagnosticLocation::createBegin(D, SM);
   const PathDiagnosticControlFlowPiece *FirstEdge =
-    cast<PathDiagnosticControlFlowPiece>(Path.front());
-  assert(FirstEdge->getStartLocation() == EntryLoc && "not an entry edge");
-#endif
+    dyn_cast<PathDiagnosticControlFlowPiece>(Path.front());
+  if (!FirstEdge)
+    return;
+
+  const Decl *D = LCM[&Path]->getDecl();
+  PathDiagnosticLocation EntryLoc = PathDiagnosticLocation::createBegin(D, SM);
+  if (FirstEdge->getStartLocation() != EntryLoc)
+    return;
 
   Path.pop_front();
 }
@@ -3168,9 +3120,6 @@ bool GRBugReporter::generatePathDiagnostic(PathDiagnostic& PD,
 
     // Finally, prune the diagnostic path of uninteresting stuff.
     if (!PD.path.empty()) {
-      // Remove messages that are basically the same.
-      removeRedundantMsgs(PD.getMutablePieces());
-
       if (R->shouldPrunePath() && getAnalyzerOptions().shouldPrunePaths()) {
         bool stillHasNotes = removeUnneededCalls(PD.getMutablePieces(), R, LCM);
         assert(stillHasNotes);
@@ -3192,6 +3141,10 @@ bool GRBugReporter::generatePathDiagnostic(PathDiagnostic& PD,
         // for top-level functions.
         dropFunctionEntryEdge(PD.getMutablePieces(), LCM, SM);
       }
+
+      // Remove messages that are basically the same.
+      // We have to do this after edge optimization in the Extensive mode.
+      removeRedundantMsgs(PD.getMutablePieces());
     }
 
     // We found a report and didn't suppress it.
@@ -3440,4 +3393,79 @@ BugType *BugReporter::getBugTypeForName(StringRef name,
     entry.setValue(BT);
   }
   return BT;
+}
+
+
+void PathPieces::dump() const {
+  unsigned index = 0;
+  for (PathPieces::const_iterator I = begin(), E = end(); I != E; ++I) {
+    llvm::errs() << "[" << index++ << "]  ";
+    (*I)->dump();
+    llvm::errs() << "\n";
+  }
+}
+
+void PathDiagnosticCallPiece::dump() const {
+  llvm::errs() << "CALL\n--------------\n";
+
+  if (const Stmt *SLoc = getLocStmt(getLocation()))
+    SLoc->dump();
+  else if (const NamedDecl *ND = dyn_cast<NamedDecl>(getCallee()))
+    llvm::errs() << *ND << "\n";
+  else
+    getLocation().dump();
+}
+
+void PathDiagnosticEventPiece::dump() const {
+  llvm::errs() << "EVENT\n--------------\n";
+  llvm::errs() << getString() << "\n";
+  llvm::errs() << " ---- at ----\n";
+  getLocation().dump();
+}
+
+void PathDiagnosticControlFlowPiece::dump() const {
+  llvm::errs() << "CONTROL\n--------------\n";
+  getStartLocation().dump();
+  llvm::errs() << " ---- to ----\n";
+  getEndLocation().dump();
+}
+
+void PathDiagnosticMacroPiece::dump() const {
+  llvm::errs() << "MACRO\n--------------\n";
+  // FIXME: Print which macro is being invoked.
+}
+
+void PathDiagnosticLocation::dump() const {
+  if (!isValid()) {
+    llvm::errs() << "<INVALID>\n";
+    return;
+  }
+
+  switch (K) {
+  case RangeK:
+    // FIXME: actually print the range.
+    llvm::errs() << "<range>\n";
+    break;
+  case SingleLocK:
+    asLocation().dump();
+    llvm::errs() << "\n";
+    break;
+  case StmtK:
+    if (S)
+      S->dump();
+    else
+      llvm::errs() << "<NULL STMT>\n";
+    break;
+  case DeclK:
+    if (const NamedDecl *ND = dyn_cast_or_null<NamedDecl>(D))
+      llvm::errs() << *ND << "\n";
+    else if (isa<BlockDecl>(D))
+      // FIXME: Make this nicer.
+      llvm::errs() << "<block>\n";
+    else if (D)
+      llvm::errs() << "<unknown decl>\n";
+    else
+      llvm::errs() << "<NULL DECL>\n";
+    break;
+  }
 }
