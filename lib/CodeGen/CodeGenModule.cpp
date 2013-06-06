@@ -510,7 +510,8 @@ void CodeGenModule::EmitCtorList(const CtorList &Fns, const char *GlobalName) {
 }
 
 llvm::GlobalValue::LinkageTypes
-CodeGenModule::getFunctionLinkage(const FunctionDecl *D) {
+CodeGenModule::getFunctionLinkage(GlobalDecl GD) {
+  const FunctionDecl *D = cast<FunctionDecl>(GD.getDecl());
   GVALinkage Linkage = getContext().GetGVALinkageForFunction(D);
 
   if (Linkage == GVA_Internal)
@@ -1231,9 +1232,10 @@ CodeGenModule::isTriviallyRecursive(const FunctionDecl *FD) {
 }
 
 bool
-CodeGenModule::shouldEmitFunction(const FunctionDecl *F) {
-  if (getFunctionLinkage(F) != llvm::Function::AvailableExternallyLinkage)
+CodeGenModule::shouldEmitFunction(GlobalDecl GD) {
+  if (getFunctionLinkage(GD) != llvm::Function::AvailableExternallyLinkage)
     return true;
+  const FunctionDecl *F = cast<FunctionDecl>(GD.getDecl());
   if (CodeGenOpts.OptimizationLevel == 0 &&
       !F->hasAttr<AlwaysInlineAttr>() && !F->hasAttr<ForceInlineAttr>())
     return false;
@@ -1269,10 +1271,10 @@ void CodeGenModule::EmitGlobalDefinition(GlobalDecl GD) {
                                  Context.getSourceManager(),
                                  "Generating code for declaration");
   
-  if (const FunctionDecl *Function = dyn_cast<FunctionDecl>(D)) {
+  if (isa<FunctionDecl>(D)) {
     // At -O0, don't generate IR for functions with available_externally 
     // linkage.
-    if (!shouldEmitFunction(Function))
+    if (!shouldEmitFunction(GD))
       return;
 
     if (const CXXMethodDecl *Method = dyn_cast<CXXMethodDecl>(D)) {
@@ -2178,7 +2180,7 @@ void CodeGenModule::EmitGlobalFunctionDefinition(GlobalDecl GD) {
   // want to propagate this information down (e.g. to local static
   // declarations).
   llvm::Function *Fn = cast<llvm::Function>(Entry);
-  setFunctionLinkage(D, Fn);
+  setFunctionLinkage(GD, Fn);
 
   // FIXME: this is redundant with part of SetFunctionDefinitionAttributes
   setGlobalVisibility(Fn, D);
