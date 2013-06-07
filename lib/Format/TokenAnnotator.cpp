@@ -626,12 +626,15 @@ private:
             Contexts.back().IsExpression)
           IsCast = true;
         if (Current.Next &&
+            Current.Next->isNot(tok::string_literal) &&
             (Current.Next->Tok.isLiteral() ||
              Current.Next->isOneOf(tok::kw_sizeof, tok::kw_alignof)))
           IsCast = true;
         // If there is an identifier after the (), it is likely a cast, unless
         // there is also an identifier before the ().
-        if (LeftOfParens && LeftOfParens->Tok.getIdentifierInfo() == NULL &&
+        if (LeftOfParens && (LeftOfParens->Tok.getIdentifierInfo() == NULL ||
+                             LeftOfParens->is(tok::kw_return)) &&
+            LeftOfParens->Type != TT_TemplateCloser &&
             LeftOfParens->Type != TT_ObjCMethodExpr && Current.Next &&
             (Current.Next->is(tok::identifier)))
           IsCast = true;
@@ -770,7 +773,11 @@ private:
 /// operator precedence.
 class ExpressionParser {
 public:
-  ExpressionParser(AnnotatedLine &Line) : Current(Line.First) {}
+  ExpressionParser(AnnotatedLine &Line) : Current(Line.First) {
+    // Skip leading "}", e.g. in "} else if (...) {".
+    if (Current->is(tok::r_brace))
+      next();
+  }
 
   /// \brief Parse expressions with the given operatore precedence.
   void parse(int Precedence = 0) {
@@ -1191,7 +1198,7 @@ bool TokenAnnotator::canBreakBefore(const AnnotatedLine &Line,
       Left.Previous->is(tok::kw___attribute))
     return false;
 
-  if (Right.Type == TT_LineComment)
+  if (Right.isTrailingComment())
     // We rely on MustBreakBefore being set correctly here as we should not
     // change the "binding" behavior of a comment.
     return false;
