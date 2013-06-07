@@ -1451,6 +1451,36 @@ llvm::DIType CGDebugInfo::CreateType(const ObjCObjectType *Ty,
   return getOrCreateType(Ty->getBaseType(), Unit);
 }
 
+
+/// \return true if Getter has the default name for the property PD.
+static bool hasDefaultGetterName(const ObjCPropertyDecl *PD,
+                                 const ObjCMethodDecl *Getter) {
+  assert(PD);
+  if (!Getter)
+    return true;
+
+  assert(Getter->getDeclName().isObjCZeroArgSelector());
+  return PD->getName() ==
+    Getter->getDeclName().getObjCSelector().getNameForSlot(0);
+}
+
+/// \return true if Setter has the default name for the property PD.
+static bool hasDefaultSetterName(const ObjCPropertyDecl *PD,
+                                 const ObjCMethodDecl *Setter) {
+  assert(PD);
+  if (!Setter)
+    return true;
+
+  assert(Setter->getDeclName().isObjCOneArgSelector());
+  // Construct a setter name like SelectorTable::constructSetterName()
+  // does, but without entering it into the table.
+  SmallString<100> DefaultName("set");
+  DefaultName += PD->getName();
+  DefaultName[3] = toUppercase(DefaultName[3]);
+  return DefaultName ==
+    Setter->getDeclName().getObjCSelector().getNameForSlot(0);
+}
+
 /// CreateType - get objective-c interface type.
 llvm::DIType CGDebugInfo::CreateType(const ObjCInterfaceType *Ty,
                                      llvm::DIFile Unit) {
@@ -1524,9 +1554,9 @@ llvm::DIType CGDebugInfo::CreateType(const ObjCInterfaceType *Ty,
     llvm::MDNode *PropertyNode =
       DBuilder.createObjCProperty(PD->getName(),
                                   PUnit, PLine,
-                                  (Getter && Getter->isImplicit()) ? "" :
+                                  hasDefaultGetterName(PD, Getter) ? "" :
                                   getSelectorName(PD->getGetterName()),
-                                  (Setter && Setter->isImplicit()) ? "" :
+                                  hasDefaultSetterName(PD, Setter) ? "" :
                                   getSelectorName(PD->getSetterName()),
                                   PD->getPropertyAttributes(),
                                   getOrCreateType(PD->getType(), PUnit));
@@ -1598,9 +1628,9 @@ llvm::DIType CGDebugInfo::CreateType(const ObjCInterfaceType *Ty,
           PropertyNode =
             DBuilder.createObjCProperty(PD->getName(),
                                         PUnit, PLine,
-                                        (Getter && Getter->isImplicit()) ? "" :
+                                        hasDefaultGetterName(PD, Getter) ? "" :
                                         getSelectorName(PD->getGetterName()),
-                                        (Setter && Setter->isImplicit()) ? "" :
+                                        hasDefaultSetterName(PD, Setter) ? "" :
                                         getSelectorName(PD->getSetterName()),
                                         PD->getPropertyAttributes(),
                                         getOrCreateType(PD->getType(), PUnit));
@@ -1947,13 +1977,19 @@ llvm::DIType CGDebugInfo::getOrCreateType(QualType Ty, llvm::DIFile Unit, bool D
   return Res;
 }
 
-/// Currently the checksum merely consists of the number of ivars.
+/// Currently the checksum of an interface includes the number of
+/// ivars and property accessors.
 unsigned CGDebugInfo::Checksum(const ObjCInterfaceDecl
-                               *InterfaceDecl) {
-  unsigned IvarNo = 0;
-  for (const ObjCIvarDecl *Ivar = InterfaceDecl->all_declared_ivar_begin();
-       Ivar != 0; Ivar = Ivar->getNextIvar()) ++IvarNo;
-  return IvarNo;
+                               *ID) {
+  // The assumption is that the number of ivars can only increase
+  // monotonically, so it is safe to just use their current number as
+  // a checksum.
+  unsigned Sum = 0;
+  for (const ObjCIvarDecl *Ivar = ID->all_declared_ivar_begin();
+       Ivar != 0; Ivar = Ivar->getNextIvar())
+    ++Sum;
+
+  return Sum;
 }
 
 ObjCInterfaceDecl *CGDebugInfo::getObjCInterfaceDecl(QualType Ty) {
