@@ -315,7 +315,8 @@ class ConcreteTypeLoc : public Base {
 
   friend class TypeLoc;
   static bool isKind(const TypeLoc &TL) {
-    return Derived::classofType(TL.getTypePtr());
+    return !TL.getType().hasLocalQualifiers() &&
+           Derived::classofType(TL.getTypePtr());
   }
 
   static bool classofType(const Type *Ty) {
@@ -425,7 +426,8 @@ class InheritingConcreteTypeLoc : public Base {
   }
 
   static bool isKind(const TypeLoc &TL) {
-    return Derived::classofType(TL.getTypePtr());
+    return !TL.getType().hasLocalQualifiers() &&
+           Derived::classofType(TL.getTypePtr());
   }
   static bool isKind(const UnqualTypeLoc &TL) {
     return Derived::classofType(TL.getTypePtr());
