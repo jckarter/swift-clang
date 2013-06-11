@@ -1879,6 +1879,8 @@ def warn_objc_literal_comparison : Warning<
   "direct comparison of %select{an array literal|a dictionary literal|"
   "a numeric literal|a boxed expression|}0 has undefined behavior">,
   InGroup<ObjCLiteralComparison>;
+def warn_missing_atsign_prefix : Warning<
+  "string literal must be prefixed by '@' ">, InGroup<ObjCLiteralMissingAtSign>;
 def warn_objc_string_literal_comparison : Warning<
   "direct comparison of a string literal has undefined behavior">, 
   InGroup<ObjCStringComparison>;
@@ -4239,6 +4241,8 @@ def note_enum_specialized_here : Note<
   "enum %0 was explicitly specialized here">;
 
 def err_member_redeclared : Error<"class member cannot be redeclared">;
+def ext_member_redeclared : ExtWarn<"class member cannot be redeclared">,
+  InGroup<GNU>;
 def err_member_redeclared_in_instantiation : Error<
   "multiple overloads of %0 instantiate to the same signature %1">;
 def err_member_name_of_class : Error<"member %0 has the same name as its class">;
