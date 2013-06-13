@@ -2018,8 +2018,7 @@ void CodeGenFunction::EmitCallArg(CallArgList &args, const Expr *E,
 
   if (E->isGLValue()) {
     assert(E->getObjectKind() == OK_Ordinary);
-    return args.add(EmitReferenceBindingToExpr(E, /*InitializedDecl=*/0),
-                    type);
+    return args.add(EmitReferenceBindingToExpr(E), type);
   }
 
   if (hasAggregateEvaluationKind(type) &&
