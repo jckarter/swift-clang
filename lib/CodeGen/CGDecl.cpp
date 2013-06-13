@@ -1160,7 +1160,7 @@ void CodeGenFunction::EmitExprAsInit(const Expr *init,
   QualType type = D->getType();
 
   if (type->isReferenceType()) {
-    RValue rvalue = EmitReferenceBindingToExpr(init, D);
+    RValue rvalue = EmitReferenceBindingToExpr(init);
     if (capturedByInit)
       drillIntoBlockVariable(*this, lvalue, cast<VarDecl>(D));
     EmitStoreThroughLValue(rvalue, lvalue, true);
@@ -1187,7 +1187,6 @@ void CodeGenFunction::EmitExprAsInit(const Expr *init,
                                          AggValueSlot::DoesNotNeedGCBarriers,
                                               AggValueSlot::IsNotAliased));
     }
-    MaybeEmitStdInitializerListCleanup(lvalue.getAddress(), init);
     return;
   }
   llvm_unreachable("bad evaluation kind");
@@ -1338,6 +1337,26 @@ void CodeGenFunction::pushDestroy(CleanupKind cleanupKind, llvm::Value *addr,
                                   bool useEHCleanupForArray) {
   pushFullExprCleanup<DestroyObject>(cleanupKind, addr, type,
                                      destroyer, useEHCleanupForArray);
+}
+
+void CodeGenFunction::pushLifetimeExtendedDestroy(
+    CleanupKind cleanupKind, llvm::Value *addr, QualType type,
+    Destroyer *destroyer, bool useEHCleanupForArray) {
+  assert(!isInConditionalBranch() &&
+         "performing lifetime extension from within conditional");
+
+  // Push an EH-only cleanup for the object now.
+  // FIXME: When popping normal cleanups, we need to keep this EH cleanup
+  // around in case a temporary's destructor throws an exception.
+  if (cleanupKind & EHCleanup)
+    EHStack.pushCleanup<DestroyObject>(
+        static_cast<CleanupKind>(cleanupKind & ~NormalCleanup), addr, type,
+        destroyer, useEHCleanupForArray);
+
+  // Remember that we need to push a full cleanup for the object at the
+  // end of the full-expression.
+  pushCleanupAfterFullExpr<DestroyObject>(
+      cleanupKind, addr, type, destroyer, useEHCleanupForArray);
 }
 
 /// emitDestroy - Immediately perform the destruction of the given

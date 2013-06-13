@@ -287,6 +287,18 @@ def note_using_decl : Note<"%select{|previous }0using declaration">;
 def warn_access_decl_deprecated : Warning<
   "access declarations are deprecated; use using declarations instead">,
   InGroup<Deprecated>;
+def err_access_decl : Error<
+  "ISO C++11 does not allow access declarations; "
+  "use using declarations instead">;
+def warn_exception_spec_deprecated : Warning<
+  "dynamic exception specifications are deprecated">,
+  InGroup<Deprecated>, DefaultIgnore;
+def note_exception_spec_deprecated : Note<"use '%0' instead">;
+def warn_deprecated_copy_operation : Warning<
+  "definition of implicit copy %select{constructor|assignment operator}1 "
+  "for %0 is deprecated because it has a user-declared "
+  "%select{copy %select{assignment operator|constructor}1|destructor}2">,
+  InGroup<Deprecated>, DefaultIgnore;
 
 def warn_global_constructor : Warning<
   "declaration requires a global constructor">,
@@ -1126,7 +1138,7 @@ def note_bitfield_decl : Note<"bit-field is declared here">;
 def note_previous_decl : Note<"%0 declared here">;
 def note_implicit_param_decl : Note<"%0 is an implicit parameter">;
 def note_member_synthesized_at : Note<
-  "implicit default %select{constructor|copy constructor|move constructor|copy "
+  "implicit %select{default constructor|copy constructor|move constructor|copy "
   "assignment operator|move assignment operator|destructor}0 for %1 first "
   "required here">;
 def note_inhctor_synthesized_at : Note<
@@ -2395,8 +2407,8 @@ def err_param_default_argument_member_template_redecl : Error<
   "of a %select{class template|class template partial specialization|nested "
   "class in a template}0">;
 def err_uninitialized_member_for_assign : Error<
-  "cannot define the implicit default assignment operator for %0, because "
-  "non-static %select{reference|const}1 member %2 can't use default "
+  "cannot define the implicit copy assignment operator for %0, because "
+  "non-static %select{reference|const}1 member %2 can't use copy "
   "assignment operator">;
 def err_uninitialized_member_in_ctor : Error<
   "%select{|implicit default |inheriting }0constructor for %1 must explicitly "
@@ -5947,10 +5959,12 @@ def warn_init_ptr_member_to_parameter_addr : Warning<
   "initializing pointer member %0 with the stack address of parameter %1">,
   InGroup<DanglingField>;
 def warn_bind_ref_member_to_temporary : Warning<
-  "binding reference member %0 to a temporary value">,
+  "binding reference %select{|subobject of }1member %0 to a temporary value">,
   InGroup<DanglingField>;
 def note_ref_or_ptr_member_declared_here : Note<
   "%select{reference|pointer}0 member declared here">;
+def note_ref_subobject_of_member_declared_here : Note<
+  "member with reference subobject declared here">;
 
 // For non-floating point, expressions of the form x == x or x != x
 // should result in a warning, since these always evaluate to a constant.
