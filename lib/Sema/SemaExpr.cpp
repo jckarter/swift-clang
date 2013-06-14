@@ -6496,11 +6496,12 @@ QualType Sema::CheckMultiplyDivideOperands(ExprResult &LHS, ExprResult &RHS,
     return InvalidOperands(Loc, LHS, RHS);
 
   // Check for division by zero.
-  if (IsDiv &&
-      RHS.get()->isNullPointerConstant(Context,
-                                       Expr::NPC_ValueDependentIsNotNull))
-    DiagRuntimeBehavior(Loc, RHS.get(), PDiag(diag::warn_division_by_zero)
-                                          << RHS.get()->getSourceRange());
+  llvm::APSInt RHSValue;
+  if (IsDiv && !RHS.get()->isValueDependent() &&
+      RHS.get()->EvaluateAsInt(RHSValue, Context) && RHSValue == 0)
+    DiagRuntimeBehavior(Loc, RHS.get(),
+                        PDiag(diag::warn_division_by_zero)
+                          << RHS.get()->getSourceRange());
 
   return compType;
 }
@@ -6525,10 +6526,12 @@ QualType Sema::CheckRemainderOperands(
     return InvalidOperands(Loc, LHS, RHS);
 
   // Check for remainder by zero.
-  if (RHS.get()->isNullPointerConstant(Context,
-                                       Expr::NPC_ValueDependentIsNotNull))
-    DiagRuntimeBehavior(Loc, RHS.get(), PDiag(diag::warn_remainder_by_zero)
-                                 << RHS.get()->getSourceRange());
+  llvm::APSInt RHSValue;
+  if (!RHS.get()->isValueDependent() &&
+      RHS.get()->EvaluateAsInt(RHSValue, Context) && RHSValue == 0)
+    DiagRuntimeBehavior(Loc, RHS.get(),
+                        PDiag(diag::warn_remainder_by_zero)
+                          << RHS.get()->getSourceRange());
 
   return compType;
 }
@@ -9883,13 +9886,6 @@ void Sema::ActOnBlockArguments(SourceLocation CaretLoc, Declarator &ParamInfo,
     (isa<FunctionProtoType>(Fn) && cast<FunctionProtoType>(Fn)->isVariadic());
 
   CurBlock->TheDecl->setIsVariadic(isVariadic);
-
-  // Don't allow returning a objc interface by value.
-  if (RetTy->isObjCObjectType()) {
-    Diag(ParamInfo.getLocStart(),
-         diag::err_object_cannot_be_passed_returned_by_value) << 0 << RetTy;
-    return;
-  }
 
   // Context.DependentTy is used as a placeholder for a missing block
   // return type.  TODO:  what should we do with declarators like:
