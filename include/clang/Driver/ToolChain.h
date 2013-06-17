@@ -175,7 +175,7 @@ public:
   /// IsObjCDefaultSynthPropertiesDefault - Does this tool chain enable
   /// -fobjc-default-synthesize-properties by default.
   virtual bool IsObjCDefaultSynthPropertiesDefault() const { return true; }
-  
+
   /// IsEncodeExtendedBlockSignatureDefault - Does this tool chain enable
   /// -fencode-extended-block-signature by default.
   virtual bool IsEncodeExtendedBlockSignatureDefault() const { return false; }
@@ -272,7 +272,7 @@ public:
                                      llvm::opt::ArgStringList &CC1Args) const;
 
   /// \brief Add warning options that need to be passed to cc1 for this target.
-  virtual void addClangWarningOptions(ArgStringList &CC1Args) const;
+  virtual void addClangWarningOptions(llvm::opt::ArgStringList &CC1Args) const;
 
   // GetRuntimeLibType - Determine the runtime library type to use with the
   // given compilation arguments.
