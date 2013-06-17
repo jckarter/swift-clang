@@ -5,6 +5,9 @@
 
 @interface test_kitTests : XCTestCase
 
+@property (assign) BOOL isValid;
+@property (assign) int amount;
+
 @end
 
 @implementation test_kitTests
@@ -29,6 +32,10 @@ void foo(XCTestCase *tc);
   id x = XCTestCaseDidStartNotification;
   XCTFail(@"fail");
   XCTFail();
+
+  test_kitTests *cr;
+  XCTAssertFalse (cr.isValid);
+  XCTAssertThrows ((void) cr.amount);
 }
 
 @end

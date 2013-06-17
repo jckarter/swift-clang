@@ -201,7 +201,7 @@ void XCTMigrator::keepMacroArgInfo(const MacroArgs *Args,
                                       Args->getUnexpArgument(1)->getLocation());
   } else {
     const Token *PrevAT = Args->getUnexpArgument(LastNonVariadicIdx-1);
-    unsigned PrevLen = Args->getArgLength(AT);
+    unsigned PrevLen = Args->getArgLength(PrevAT);
     SourceLocation PrevEOFLoc = PrevAT[PrevLen].getLocation();
     RemoveRange = CharSourceRange::getCharRange(PrevEOFLoc, EOFLoc);
   }

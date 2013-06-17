@@ -32,6 +32,8 @@
 /*"An abstract Test class. The SenTest, SenTestCase and SenTestSuite classes implement a Composite pattern."*/
 
 #define BOOL char
+#define YES __objc_yes
+#define NO __objc_no
 #define nil ((void*) 0)
 #define NSUInteger unsigned
 
