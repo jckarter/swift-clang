@@ -3287,6 +3287,12 @@ llvm::Value *ARM64ABIInfo::EmitVAArg(llvm::Value *VAListAddr, QualType Ty,
   llvm::Value *VAListAddrAsBPP = Builder.CreateBitCast(VAListAddr, BPP, "ap");
   llvm::Value *Addr = Builder.CreateLoad(VAListAddrAsBPP, "ap.cur");
 
+  if (isEmptyRecord(getContext(), Ty, true)) {
+    // These are ignored for parameter passing purposes.
+    llvm::Type *PTy = llvm::PointerType::getUnqual(CGF.ConvertType(Ty));
+    return Builder.CreateBitCast(Addr, PTy);
+  }
+
   const uint64_t MinABIAlign = 8;
   if (Align > MinABIAlign) {
     llvm::Value *Offset = llvm::ConstantInt::get(CGF.Int32Ty, Align-1);
