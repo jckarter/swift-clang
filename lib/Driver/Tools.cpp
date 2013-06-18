@@ -2220,6 +2220,18 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
     CmdArgs.push_back(A->getValue());
   }
 
+  if (Arg *A = Args.getLastArg(options::OPT_fpcc_struct_return, options::OPT_freg_struct_return)) {
+    if (getToolChain().getTriple().getArch() != llvm::Triple::x86) {
+      D.Diag(diag::err_drv_unsupported_opt_for_target)
+        << A->getSpelling() << getToolChain().getTriple().str();
+    } else if (A->getOption().matches(options::OPT_fpcc_struct_return)) {
+      CmdArgs.push_back("-fpcc-struct-return");
+    } else {
+      assert(A->getOption().matches(options::OPT_freg_struct_return));
+      CmdArgs.push_back("-freg-struct-return");
+    }
+  }
+
   if (Args.hasFlag(options::OPT_mrtd, options::OPT_mno_rtd, false))
     CmdArgs.push_back("-mrtd");
 
@@ -2555,6 +2567,9 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
     CmdArgs.push_back("-backend-option");
     CmdArgs.push_back("-split-dwarf=Enable");
   }
+
+
+  Args.AddAllArgs(CmdArgs, options::OPT_fdebug_types_section);
 
   Args.AddAllArgs(CmdArgs, options::OPT_ffunction_sections);
   Args.AddAllArgs(CmdArgs, options::OPT_fdata_sections);

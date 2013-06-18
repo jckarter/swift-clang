@@ -689,6 +689,8 @@ def fpack_struct_EQ : Joined<["-"], "fpack-struct=">, Group<f_Group>, Flags<[CC1
   HelpText<"Specify the default maximum struct packing alignment">;
 def fpascal_strings : Flag<["-"], "fpascal-strings">, Group<f_Group>, Flags<[CC1Option]>,
   HelpText<"Recognize and construct Pascal-style string literals">;
+def fpcc_struct_return : Flag<["-"], "fpcc-struct-return">, Group<f_Group>, Flags<[CC1Option]>,
+  HelpText<"Override the default ABI to return all structs on the stack">;
 def fpch_preprocess : Flag<["-"], "fpch-preprocess">, Group<f_Group>;
 def fpic : Flag<["-"], "fpic">, Group<f_Group>;
 def fno_pic : Flag<["-"], "fno-pic">, Group<f_Group>;
@@ -698,6 +700,8 @@ def fprofile_arcs : Flag<["-"], "fprofile-arcs">, Group<f_Group>;
 def fprofile_generate : Flag<["-"], "fprofile-generate">, Group<f_Group>;
 def framework : Separate<["-"], "framework">, Flags<[LinkerInput]>;
 def frandom_seed_EQ : Joined<["-"], "frandom-seed=">, Group<clang_ignored_f_Group>;
+def freg_struct_return : Flag<["-"], "freg-struct-return">, Group<f_Group>, Flags<[CC1Option]>,
+  HelpText<"Override the default ABI to return small structs in registers">;
 def frtti : Flag<["-"], "frtti">, Group<f_Group>;
 def fsched_interblock : Flag<["-"], "fsched-interblock">, Group<clang_ignored_f_Group>;
 def fshort_enums : Flag<["-"], "fshort-enums">, Group<f_Group>, Flags<[CC1Option]>,
@@ -792,6 +796,8 @@ def ffunction_sections: Flag <["-"], "ffunction-sections">, Group<f_Group>,
   Flags<[CC1Option]>, HelpText<"Place each function in its own section (ELF Only)">;
 def fdata_sections : Flag <["-"], "fdata-sections">, Group<f_Group>, Flags<[CC1Option]>,
   HelpText<"Place each data in its own section (ELF Only)">;
+def fdebug_types_section: Flag <["-"], "fdebug-types-section">, Group<f_Group>,
+  Flags<[CC1Option]>, HelpText<"Place debug types in their own section (ELF Only)">;
 def f : Joined<["-"], "f">, Group<f_Group>;
 def g_Flag : Flag<["-"], "g">, Group<g_Group>,
   HelpText<"Generate source level debug information">, Flags<[CC1Option]>;
