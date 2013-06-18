@@ -36,6 +36,9 @@ void foo(SenTestCase *tc);
   test_kitTests *cr;
   STAssertFalse (cr.isValid, nil);
   STAssertThrows ((void) cr.amount, nil);
+
+  STAssertTrueNoThrow(cr.isValid, @"blah");
+  STAssertFalseNoThrow(cr.isValid, nil);
 }
 
 @end

@@ -63,8 +63,8 @@ static TKPair TKMacros[] = {
   {"STAssertNoThrowSpecific",     "XCTAssertNoThrowSpecific"},
   {"STAssertNoThrowSpecificNamed","XCTAssertNoThrowSpecificNamed"},
   {"STFail",                      "XCTFail"},
-  {"STAssertTrueNoThrow",         "XCTAssertTrueNoThrow"},
-  {"STAssertFalseNoThrow",        "XCTAssertFalseNoThrow"},
+  {"STAssertTrueNoThrow",         "XCTAssertTrue"},
+  {"STAssertFalseNoThrow",        "XCTAssertFalse"},
 
   {"should",                      "STAssertTrue"},
   {"should1",                     "STAssertTrue"},

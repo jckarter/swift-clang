@@ -36,6 +36,9 @@ void foo(XCTestCase *tc);
   test_kitTests *cr;
   XCTAssertFalse (cr.isValid);
   XCTAssertThrows ((void) cr.amount);
+
+  XCTAssertTrue(cr.isValid, @"blah");
+  XCTAssertFalse(cr.isValid);
 }
 
 @end
