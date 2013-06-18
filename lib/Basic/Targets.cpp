@@ -4083,6 +4083,9 @@ public:
     MaxAtomicInlineWidth = 64; // FIXME: workaround
     MaxAtomicPromoteWidth = 128;
 
+    LongDoubleWidth = LongDoubleAlign = 128;
+    LongDoubleFormat = &llvm::APFloat::IEEEquad;
+
     DescriptionString = "e-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-"
                         "i64:64:64-f32:32:32-f64:64:64-v64:64:64-v128:128:128-"
                         "a0:0:64-n32:64-S128";
@@ -4092,7 +4095,7 @@ public:
     NoAsmVariants = true;
 
     // ARM64 targets default to using the ARM C++ ABI.
-    TheCXXABI.set(TargetCXXABI::iOS64);
+    TheCXXABI.set(TargetCXXABI::GenericAArch64);
   }
 
   virtual bool setCPU(const std::string &Name) {
@@ -4274,6 +4277,11 @@ public:
       : DarwinTargetInfo<ARM64TargetInfo>(triple) {
     Int64Type = SignedLongLong;
     UseSignedCharForObjCBool = false;
+
+    LongDoubleWidth = LongDoubleAlign = 64;
+    LongDoubleFormat = &llvm::APFloat::IEEEdouble;
+
+    TheCXXABI.set(TargetCXXABI::iOS64);
   }
 };
 } // end anonymous namespace
@@ -5499,9 +5507,15 @@ static TargetInfo *AllocateTarget(const std::string &T) {
     return NULL;
 
   case llvm::Triple::arm64:
-    assert(Triple.isOSDarwin() && "arm64 only supported on Darwin");
-    return new DarwinARM64TargetInfo(T);
+    if (Triple.isOSDarwin())
+      return new DarwinARM64TargetInfo(T);
 
+    switch(os) {
+    case llvm::Triple::Linux:
+      return new LinuxTargetInfo<ARM64TargetInfo>(T);
+    default:
+      return new ARM64TargetInfo(T);
+    }
   case llvm::Triple::hexagon:
     return new HexagonTargetInfo(T);
 

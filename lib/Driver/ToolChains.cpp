@@ -1218,6 +1218,7 @@ Generic_GCC::GCCInstallationDetector::GCCInstallationDetector(
   };
 
   switch (TargetTriple.getArch()) {
+  case llvm::Triple::arm64:
   case llvm::Triple::aarch64:
     LibDirs.append(AArch64LibDirs, AArch64LibDirs
                    + llvm::array_lengthof(AArch64LibDirs));
@@ -2212,6 +2213,7 @@ static std::string getMultiarchTriple(const llvm::Triple TargetTriple,
     if (llvm::sys::fs::exists(SysRoot + "/lib/x86_64-linux-gnu"))
       return "x86_64-linux-gnu";
     return TargetTriple.str();
+  case llvm::Triple::arm64:
   case llvm::Triple::aarch64:
     if (llvm::sys::fs::exists(SysRoot + "/lib/aarch64-linux-gnu"))
       return "aarch64-linux-gnu";
@@ -2430,6 +2432,7 @@ void Linux::addClangTargetOptions(const ArgList &DriverArgs,
   bool UseInitArrayDefault
     = V >= Generic_GCC::GCCVersion::Parse("4.7.0") ||
       getTriple().getArch() == llvm::Triple::aarch64 ||
+      getTriple().getArch() == llvm::Triple::arm64 ||
       getTriple().getEnvironment() == llvm::Triple::Android;
   if (DriverArgs.hasFlag(options::OPT_fuse_init_array,
                          options::OPT_fno_use_init_array,
@@ -2548,7 +2551,8 @@ void Linux::AddClangSystemIncludeArgs(const ArgList &DriverArgs,
     MultiarchIncludeDirs = X86_64MultiarchIncludeDirs;
   } else if (getTriple().getArch() == llvm::Triple::x86) {
     MultiarchIncludeDirs = X86MultiarchIncludeDirs;
-  } else if (getTriple().getArch() == llvm::Triple::aarch64) {
+  } else if (getTriple().getArch() == llvm::Triple::aarch64 ||
+             getTriple().getArch() == llvm::Triple::arm64) {
     MultiarchIncludeDirs = AArch64MultiarchIncludeDirs;
   } else if (getTriple().getArch() == llvm::Triple::arm) {
     if (getTriple().getEnvironment() == llvm::Triple::GNUEABIHF)
