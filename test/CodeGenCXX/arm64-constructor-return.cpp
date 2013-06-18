@@ -11,7 +11,8 @@ S::S() {
     return -1;
 };
 
-// CHECK: [[IFEND:%.*]]
+// CHECK: %struct.S* @_ZN1SC1Ev(%struct.S* returned %this)
 // CHECK: [[ONE:%.*]] = load %struct.S** [[RETVAL:%.*]]
-// CHECK: [[THIS:%.*]] = call %struct.S* @_ZN1SC2Ev(%struct.S* [[ONE]]) 
-// CHECK: ret %struct.S* [[THIS]]
+// CHECK: ret %struct.S* [[ONE]]
+
+// CHECK: %struct.S* @_ZN1SC2Ev(%struct.S* returned %this)
