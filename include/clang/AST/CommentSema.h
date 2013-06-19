@@ -220,7 +220,8 @@ public:
   bool isUnionDecl();
   bool isObjCInterfaceDecl();
   bool isObjCProtocolDecl();
-  bool isFunctionOrMethodVariadic();
+  bool isClassTemplateDecl();
+  bool isFunctionTemplateDecl();
 
   ArrayRef<const ParmVarDecl *> getParamVars();
 
