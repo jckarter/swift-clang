@@ -3038,9 +3038,20 @@ namespace {
 
 class ARM64ABIInfo : public ABIInfo {
 public:
-  ARM64ABIInfo(CodeGenTypes &CGT) : ABIInfo(CGT) {}
+  enum ABIKind {
+    AAPCS = 0,
+    DarwinPCS
+  };
+private:
+  ABIKind Kind;
+
+public:
+  ARM64ABIInfo(CodeGenTypes &CGT, ABIKind Kind) : ABIInfo(CGT), Kind(Kind) {}
 
 private:
+  ABIKind getABIKind() const { return Kind; }
+  bool isDarwinPCS() const { return Kind == DarwinPCS; }
+
   ABIArgInfo classifyReturnType(QualType RetTy) const;
   ABIArgInfo classifyArgumentType(QualType RetTy, unsigned &AllocatedVFP,
                                   bool &IsHA, unsigned &AllocatedGPR,
@@ -3075,7 +3086,20 @@ private:
       if (IsHA && AllocatedVFP > NumVFPs && PreAllocation < NumVFPs) {
         llvm::Type *PaddingTy = llvm::ArrayType::get(
             llvm::Type::getFloatTy(getVMContext()), NumVFPs - PreAllocation);
-        it->info = ABIArgInfo::getExpandWithPadding(false, PaddingTy);
+        if (isDarwinPCS())
+          it->info = ABIArgInfo::getExpandWithPadding(false, PaddingTy);
+        else {
+          // Under AAPCS the 64-bit stack slot alignment means we can't pass HAs
+          // as sequences of floats since they'll get "holes" inserted as
+          // padding by the back end.
+          uint32_t NumStackSlots = getContext().getTypeSize(it->type);
+          NumStackSlots = llvm::RoundUpToAlignment(NumStackSlots, 64) / 64;
+
+          llvm::Type *CoerceTy
+              = llvm::ArrayType::get(llvm::Type::getDoubleTy(getVMContext()),
+                                     NumStackSlots);
+          it->info = ABIArgInfo::getDirect(CoerceTy, 0, PaddingTy);
+        }
       }
       // If we do not have enough GPRs for the small aggregate, any GPR regs
       // that are unallocated are marked as unavailable.
@@ -3094,8 +3118,8 @@ private:
 
 class ARM64TargetCodeGenInfo : public TargetCodeGenInfo {
 public:
-  ARM64TargetCodeGenInfo(CodeGenTypes &CGT)
-    : TargetCodeGenInfo(new ARM64ABIInfo(CGT)) {}
+  ARM64TargetCodeGenInfo(CodeGenTypes &CGT, ARM64ABIInfo::ABIKind Kind)
+    : TargetCodeGenInfo(new ARM64ABIInfo(CGT, Kind)) {}
 
   StringRef getARCRetainAutoreleasedReturnValueMarker() const {
     return "mov\tfp, fp\t\t; marker for objc_retainAutoreleaseReturnValue";
@@ -3165,13 +3189,19 @@ ABIArgInfo ARM64ABIInfo::classifyArgumentType(QualType Ty,
       int RegsNeeded = getContext().getTypeSize(Ty) > 64 ? 2 : 1;
       AllocatedGPR += RegsNeeded;
     }
-    return (Ty->isPromotableIntegerType() ?
+    return (Ty->isPromotableIntegerType() && isDarwinPCS() ?
             ABIArgInfo::getExtend() : ABIArgInfo::getDirect());
   }
 
-  // Ignore empty records.
-  if (isEmptyRecord(getContext(), Ty, true))
-    return ABIArgInfo::getIgnore();
+  // Empty records are always ignored on Darwin, but actually passed in C++ mode
+  // elsewhere for GNU compatibility.
+  if (isEmptyRecord(getContext(), Ty, true)) {
+    if (!getContext().getLangOpts().CPlusPlus || isDarwinPCS())
+      return ABIArgInfo::getIgnore();
+
+    ++AllocatedGPR;
+    return ABIArgInfo::getDirect(llvm::Type::getInt8Ty(getVMContext()));
+  }
 
   // Structures with either a non-trivial destructor or a non-trivial
   // copy constructor are always indirect.
@@ -5781,9 +5811,13 @@ const TargetCodeGenInfo &CodeGenModule::getTargetCodeGenInfo() {
   case llvm::Triple::mips64el:
     return *(TheTargetCodeGenInfo = new MIPSTargetCodeGenInfo(Types, false));
 
-  case llvm::Triple::arm64:
-    return *(TheTargetCodeGenInfo = new ARM64TargetCodeGenInfo(Types));
+  case llvm::Triple::arm64: {
+    ARM64ABIInfo::ABIKind Kind = ARM64ABIInfo::AAPCS;
+    if (strcmp(getTarget().getABI(), "darwinpcs") == 0)
+      Kind = ARM64ABIInfo::DarwinPCS;
 
+    return *(TheTargetCodeGenInfo = new ARM64TargetCodeGenInfo(Types, Kind));
+  }
   case llvm::Triple::aarch64:
     return *(TheTargetCodeGenInfo = new AArch64TargetCodeGenInfo(Types));
 

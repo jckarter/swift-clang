@@ -4071,8 +4071,10 @@ class ARM64TargetInfo : public TargetInfo {
 
   static const Builtin::Info BuiltinInfo[];
 
+  std::string ABI;
 public:
-  ARM64TargetInfo(const std::string &TripleStr) : TargetInfo(TripleStr) {
+  ARM64TargetInfo(const std::string &TripleStr) : TargetInfo(TripleStr),
+                                                  ABI("aapcs") {
     BigEndian = false;
     LongWidth = LongAlign = PointerWidth = PointerAlign = 64;
     IntMaxType = SignedLong;
@@ -4096,6 +4098,15 @@ public:
 
     // ARM64 targets default to using the ARM C++ ABI.
     TheCXXABI.set(TargetCXXABI::GenericAArch64);
+  }
+
+  virtual const char *getABI() const { return ABI.c_str(); }
+  virtual bool setABI(const std::string &Name) {
+    if (Name != "aapcs" && Name != "darwinpcs")
+      return false;
+
+    ABI = Name;
+    return true;
   }
 
   virtual bool setCPU(const std::string &Name) {

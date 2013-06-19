@@ -858,6 +858,9 @@ static std::string getARM64TargetCPU(const ArgList &Args) {
 
 void Clang::AddARM64TargetArgs(const ArgList &Args,
                                ArgStringList &CmdArgs) const {
+  std::string TripleStr = getToolChain().ComputeEffectiveClangTriple(Args);
+  llvm::Triple Triple(TripleStr);
+
   if (!Args.hasFlag(options::OPT_mred_zone,
                     options::OPT_mno_red_zone,
                     true) ||
@@ -869,6 +872,17 @@ void Clang::AddARM64TargetArgs(const ArgList &Args,
                     options::OPT_mno_implicit_float,
                     true))
     CmdArgs.push_back("-no-implicit-float");
+
+  const char *ABIName = 0;
+  if (Arg *A = Args.getLastArg(options::OPT_mabi_EQ))
+    ABIName = A->getValue();
+  else if (Triple.isOSDarwin())
+    ABIName = "darwinpcs";
+  else
+    ABIName = "aapcs";
+
+  CmdArgs.push_back("-target-abi");
+  CmdArgs.push_back(ABIName);
 
   CmdArgs.push_back("-target-cpu");
   CmdArgs.push_back(Args.MakeArgString(getARM64TargetCPU(Args)));
