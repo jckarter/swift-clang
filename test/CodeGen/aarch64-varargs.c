@@ -1,4 +1,5 @@
 // RUN: %clang_cc1 -triple aarch64 -emit-llvm -o - %s | FileCheck %s
+// RUN: %clang_cc1 -triple arm64-linux-gnu -emit-llvm -o - %s | FileCheck %s
 #include <stdarg.h>
 
 // Obviously there's more than one way to implement va_arg. This test should at

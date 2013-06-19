@@ -4151,12 +4151,8 @@ public:
 
   virtual bool isCLZForZeroUndef() const { return false; }
 
-  virtual const char *getVAListDeclaration() const {
-    return "typedef char* __builtin_va_list;";
-  }
-
   virtual BuiltinVaListKind getBuiltinVaListKind() const {
-    return TargetInfo::CharPtrBuiltinVaList;
+    return TargetInfo::AArch64ABIBuiltinVaList;
   }
 
   virtual void getGCCRegNames(const char * const *&Names,
@@ -4293,6 +4289,10 @@ public:
     LongDoubleFormat = &llvm::APFloat::IEEEdouble;
 
     TheCXXABI.set(TargetCXXABI::iOS64);
+  }
+
+  virtual BuiltinVaListKind getBuiltinVaListKind() const {
+    return TargetInfo::CharPtrBuiltinVaList;
   }
 };
 } // end anonymous namespace

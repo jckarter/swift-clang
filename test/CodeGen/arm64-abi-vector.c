@@ -1,4 +1,4 @@
-// RUN: %clang_cc1 -triple arm64-apple-ios -emit-llvm -o - %s | FileCheck %s
+// RUN: %clang_cc1 -triple arm64-apple-ios -target-abi darwinpcs -emit-llvm -o - %s | FileCheck %s
 
 #include <stdarg.h>
 
