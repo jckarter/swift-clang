@@ -755,7 +755,7 @@ TEST_F(FormatTest, RemovesTrailingWhitespaceOfComments) {
                    getLLVMStyleWithColumns(33)));
 }
 
-TEST_F(FormatTest, UnderstandsMultiLineComments) {
+TEST_F(FormatTest, UnderstandsBlockComments) {
   verifyFormat("f(/*test=*/ true);");
   EXPECT_EQ(
       "f(aaaaaaaaaaaaaaaaaaaaaaaaa, /* Trailing comment for aa... */\n"
@@ -786,7 +786,7 @@ TEST_F(FormatTest, UnderstandsMultiLineComments) {
                NoBinPacking);
 }
 
-TEST_F(FormatTest, AlignsMultiLineComments) {
+TEST_F(FormatTest, AlignsBlockComments) {
   EXPECT_EQ("/*\n"
             " * Really multi-line\n"
             " * comment.\n"
@@ -834,6 +834,13 @@ TEST_F(FormatTest, AlignsMultiLineComments) {
             format("int i; /* Comment with empty...\n"
                    "        *\n"
                    "        * line. */"));
+}
+
+TEST_F(FormatTest, CorrectlyHandlesLengthOfBlockComments) {
+  EXPECT_EQ("double *x; /* aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n"
+            "              aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa */",
+            format("double *x; /* aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n"
+                   "              aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa */"));
 }
 
 TEST_F(FormatTest, SplitsLongCxxComments) {
@@ -919,24 +926,19 @@ TEST_F(FormatTest, PriorityOfCommentBreaking) {
 }
 
 TEST_F(FormatTest, MultiLineCommentsInDefines) {
-  // FIXME: The line breaks are still suboptimal (current guess
-  // is that this is due to the token length being misused), but
-  // the comment handling is correct.
-  EXPECT_EQ("#define A(      \\\n"
-            "    x) /*       \\\n"
-            "a comment       \\\n"
-            "inside */       \\\n"
+  EXPECT_EQ("#define A(x) /* \\\n"
+            "  a comment     \\\n"
+            "  inside */     \\\n"
             "  f();",
             format("#define A(x) /* \\\n"
                    "  a comment     \\\n"
                    "  inside */     \\\n"
                    "  f();",
                    getLLVMStyleWithColumns(17)));
-  EXPECT_EQ("#define A(x) /* \\\n"
-            "        a       \\\n"
-            "        comment \\\n"
-            "        inside  \\\n"
-            "        */      \\\n"
+  EXPECT_EQ("#define A(      \\\n"
+            "    x) /*       \\\n"
+            "  a comment     \\\n"
+            "  inside */     \\\n"
             "  f();",
             format("#define A(      \\\n"
                    "    x) /*       \\\n"
@@ -4635,6 +4637,26 @@ TEST_F(FormatTest, BreakStringLiterals) {
       "\"pathat/\"\n"
       "\"slashes\"",
       format("\"split/pathat/slashes\"", getLLVMStyleWithColumns(10)));
+
+  EXPECT_EQ(
+      "\"split/\"\n"
+      "\"pathat/\"\n"
+      "\"slashes\"",
+      format("\"split/pathat/slashes\"", getLLVMStyleWithColumns(10)));
+  EXPECT_EQ("\"split at \"\n"
+            "\"spaces/at/\"\n"
+            "\"slashes.at.any$\"\n"
+            "\"non-alphanumeric%\"\n"
+            "\"1111111111characte\"\n"
+            "\"rs\"",
+            format("\"split at "
+                   "spaces/at/"
+                   "slashes.at."
+                   "any$non-"
+                   "alphanumeric%"
+                   "1111111111characte"
+                   "rs\"",
+                   getLLVMStyleWithColumns(20)));
 
   FormatStyle AlignLeft = getLLVMStyleWithColumns(12);
   AlignLeft.AlignEscapedNewlinesLeft = true;

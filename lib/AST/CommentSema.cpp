@@ -99,10 +99,10 @@ void Sema::checkFunctionDeclVerbatimLine(const BlockCommandComment *Comment) {
   unsigned DiagSelect;
   switch (Comment->getCommandID()) {
     case CommandTraits::KCI_function:
-      DiagSelect = !isAnyFunctionDecl() ? 1 : 0;
+      DiagSelect = (!isAnyFunctionDecl() && !isFunctionTemplateDecl())? 1 : 0;
       break;
     case CommandTraits::KCI_functiongroup:
-      DiagSelect = !isAnyFunctionDecl() ? 2 : 0;
+      DiagSelect = (!isAnyFunctionDecl() && !isFunctionTemplateDecl())? 2 : 0;
       break;
     case CommandTraits::KCI_method:
       DiagSelect = !isObjCMethodDecl() ? 3 : 0;
@@ -131,7 +131,7 @@ void Sema::checkContainerDeclVerbatimLine(const BlockCommandComment *Comment) {
   unsigned DiagSelect;
   switch (Comment->getCommandID()) {
     case CommandTraits::KCI_class:
-      DiagSelect = !isClassOrStructDecl() ? 1 : 0;
+      DiagSelect = (!isClassOrStructDecl() && !isClassTemplateDecl()) ? 1 : 0;
       // Allow @class command on @interface declarations.
       // FIXME. Currently, \class and @class are indistinguishable. So,
       // \class is also allowed on an @interface declaration
@@ -720,7 +720,7 @@ void Sema::resolveParamCommandIndexes(const FullComment *FC) {
   SmallVector<ParamCommandComment *, 8> ParamVarDocs;
 
   ArrayRef<const ParmVarDecl *> ParamVars = getParamVars();
-  ParamVarDocs.resize(ParamVars.size() + isFunctionOrMethodVariadic(), NULL);
+  ParamVarDocs.resize(ParamVars.size(), NULL);
 
   // First pass over all \\param commands: resolve all parameter names.
   for (Comment::child_iterator I = FC->child_begin(), E = FC->child_end();
@@ -808,18 +808,6 @@ bool Sema::isObjCMethodDecl() {
   return isFunctionDecl() && ThisDeclInfo->CurrentDecl &&
          isa<ObjCMethodDecl>(ThisDeclInfo->CurrentDecl);
 }
-
-bool Sema::isFunctionOrMethodVariadic() {
-  if (!isAnyFunctionDecl() && !isObjCMethodDecl())
-    return false;
-  if (const FunctionDecl *FD = 
-        dyn_cast<FunctionDecl>(ThisDeclInfo->CurrentDecl))
-    return FD->isVariadic();
-  if (const ObjCMethodDecl *MD = 
-        dyn_cast<ObjCMethodDecl>(ThisDeclInfo->CurrentDecl))
-    return MD->isVariadic();
-  return false;
-}
   
 /// isFunctionPointerVarDecl - returns 'true' if declaration is a pointer to
 /// function decl.
@@ -882,6 +870,24 @@ bool Sema::isClassOrStructDecl() {
          isa<RecordDecl>(ThisDeclInfo->CurrentDecl) &&
          !isUnionDecl();
 }
+  
+bool Sema::isClassTemplateDecl() {
+  if (!ThisDeclInfo)
+    return false;
+  if (!ThisDeclInfo->IsFilled)
+    inspectThisDecl();
+  return ThisDeclInfo->CurrentDecl &&
+          (isa<ClassTemplateDecl>(ThisDeclInfo->CurrentDecl));
+}
+
+bool Sema::isFunctionTemplateDecl() {
+  if (!ThisDeclInfo)
+    return false;
+  if (!ThisDeclInfo->IsFilled)
+    inspectThisDecl();
+  return ThisDeclInfo->CurrentDecl &&
+  (isa<FunctionTemplateDecl>(ThisDeclInfo->CurrentDecl));
+}
 
 bool Sema::isObjCInterfaceDecl() {
   if (!ThisDeclInfo)
@@ -918,8 +924,6 @@ unsigned Sema::resolveParmVarReference(StringRef Name,
     if (II && II->getName() == Name)
       return i;
   }
-  if (Name == "..." && isFunctionOrMethodVariadic())
-    return ParamVars.size();
   return ParamCommandComment::InvalidParamIndex;
 }
 
