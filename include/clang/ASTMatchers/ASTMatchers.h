@@ -204,6 +204,28 @@ const internal::VariadicDynCastAllOfMatcher<
   Decl,
   ClassTemplateSpecializationDecl> classTemplateSpecializationDecl;
 
+/// \brief Matches declarator declarations (field, variable, function
+/// and non-type template parameter declarations).
+///
+/// Given
+/// \code
+///   class X { int y; };
+/// \endcode
+/// declaratorDecl()
+///   matches \c int y.
+const internal::VariadicDynCastAllOfMatcher<Decl, DeclaratorDecl>
+    declaratorDecl;
+
+/// \brief Matches parameter variable declarations.
+///
+/// Given
+/// \code
+///   void f(int x);
+/// \endcode
+/// parmVarDecl()
+///   matches \c int x.
+const internal::VariadicDynCastAllOfMatcher<Decl, ParmVarDecl> parmVarDecl;
+
 /// \brief Matches C++ access specifier declarations.
 ///
 /// Given
@@ -1794,6 +1816,22 @@ hasType(const internal::Matcher<Decl> &InnerMatcher) {
   return hasType(qualType(hasDeclaration(InnerMatcher)));
 }
 
+/// \brief Matches if the type location of the declarator decl's type matches
+/// the inner matcher.
+///
+/// Given
+/// \code
+///   int x;
+/// \endcode
+/// declaratorDecl(hasTypeLoc(loc(asString("int"))))
+///   matches int x
+AST_MATCHER_P(DeclaratorDecl, hasTypeLoc, internal::Matcher<TypeLoc>, Inner) {
+  if (!Node.getTypeSourceInfo())
+    // This happens for example for implicit destructors.
+    return false;
+  return Inner.matches(Node.getTypeSourceInfo()->getTypeLoc(), Finder, Builder);
+}
+
 /// \brief Matches if the matched type is represented by the given string.
 ///
 /// Given
@@ -2254,6 +2292,55 @@ AST_POLYMORPHIC_MATCHER_P(hasCondition, internal::Matcher<Expr>,
   const Expr *const Condition = Node.getCond();
   return (Condition != NULL &&
           InnerMatcher.matches(*Condition, Finder, Builder));
+}
+
+namespace internal {
+struct NotEqualsBoundNodePredicate {
+  bool operator()(const internal::BoundNodesMap &Nodes) const {
+    return Nodes.getNode(ID) != Node;
+  }
+  std::string ID;
+  ast_type_traits::DynTypedNode Node;
+};
+} // namespace internal
+
+/// \brief Matches if a node equals a previously bound node.
+///
+/// Matches a node if it equals the node previously bound to \p ID.
+///
+/// Given
+/// \code
+///   class X { int a; int b; };
+/// \endcode
+/// recordDecl(
+///     has(fieldDecl(hasName("a"), hasType(type().bind("t")))),
+///     has(fieldDecl(hasName("b"), hasType(type(equalsBoundNode("t"))))))
+///   matches the class \c X, as \c a and \c b have the same type.
+///
+/// Note that when multiple matches are involved via \c forEach* matchers,
+/// \c equalsBoundNodes acts as a filter.
+/// For example:
+/// compoundStmt(
+///     forEachDescendant(varDecl().bind("d")),
+///     forEachDescendant(declRefExpr(to(decl(equalsBoundNode("d"))))))
+/// will trigger a match for each combination of variable declaration
+/// and reference to that variable declaration within a compound statement.
+AST_POLYMORPHIC_MATCHER_P(equalsBoundNode, std::string, ID) {
+  // FIXME: Figure out whether it makes sense to allow this
+  // on any other node types.
+  // For *Loc it probably does not make sense, as those seem
+  // unique. For NestedNameSepcifier it might make sense, as
+  // those also have pointer identity, but I'm not sure whether
+  // they're ever reused.
+  TOOLING_COMPILE_ASSERT((llvm::is_base_of<Stmt, NodeType>::value ||
+                          llvm::is_base_of<Decl, NodeType>::value ||
+                          llvm::is_base_of<Type, NodeType>::value ||
+                          llvm::is_base_of<QualType, NodeType>::value),
+                         equals_bound_node_requires_non_unique_node_class);
+  internal::NotEqualsBoundNodePredicate Predicate;
+  Predicate.ID = ID;
+  Predicate.Node = ast_type_traits::DynTypedNode::create(Node);
+  return Builder->removeBindings(Predicate);
 }
 
 /// \brief Matches the condition variable statement in an if statement.
