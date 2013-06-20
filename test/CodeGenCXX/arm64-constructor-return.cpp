@@ -11,11 +11,13 @@ S::S() {
     return -1;
 };
 
-// CHECK: %struct.S* @_ZN1SC1Ev(%struct.S* returned %this)
 
-// Temporarily remove this check while investigating issue
+// Temporarily remove these check while investigating issue
 // rdar://problem/14209661 
+
+// %struct.S* @_ZN1SC1Ev(%struct.S* returned %this)
+
 // [[ONE:%.*]] = load %struct.S** [[RETVAL:%.*]]
 // ret %struct.S* [[ONE]]
 
-// CHECK: %struct.S* @_ZN1SC2Ev(%struct.S* returned %this)
+// %struct.S* @_ZN1SC2Ev(%struct.S* returned %this)
