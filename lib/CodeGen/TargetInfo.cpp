@@ -3202,6 +3202,13 @@ ABIArgInfo ARM64ABIInfo::classifyArgumentType(QualType Ty,
             ABIArgInfo::getExtend() : ABIArgInfo::getDirect());
   }
 
+  // Structures with either a non-trivial destructor or a non-trivial
+  // copy constructor are always indirect.
+  if (isRecordReturnIndirect(Ty, CGT)) {
+    AllocatedGPR++;
+    return ABIArgInfo::getIndirect(0, /*ByVal=*/false);
+  }
+
   // Empty records are always ignored on Darwin, but actually passed in C++ mode
   // elsewhere for GNU compatibility.
   if (isEmptyRecord(getContext(), Ty, true)) {
@@ -3210,13 +3217,6 @@ ABIArgInfo ARM64ABIInfo::classifyArgumentType(QualType Ty,
 
     ++AllocatedGPR;
     return ABIArgInfo::getDirect(llvm::Type::getInt8Ty(getVMContext()));
-  }
-
-  // Structures with either a non-trivial destructor or a non-trivial
-  // copy constructor are always indirect.
-  if (isRecordReturnIndirect(Ty, CGT)) {
-    AllocatedGPR++;
-    return ABIArgInfo::getIndirect(0, /*ByVal=*/false);
   }
 
   // Homogeneous Floating-point Aggregates (HFAs) need to be expanded.
