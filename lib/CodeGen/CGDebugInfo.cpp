@@ -1910,6 +1910,19 @@ llvm::DIType CGDebugInfo::getCompletedTypeOrNull(QualType Ty) {
   return llvm::DIType();
 }
 
+void CGDebugInfo::completeFwdDecl(const RecordDecl &RD) {
+  // In limited debug info we only want to do this if the complete type was
+  // required.
+  if (DebugKind <= CodeGenOptions::LimitedDebugInfo)
+    return;
+
+  QualType QTy = CGM.getContext().getRecordType(&RD);
+  llvm::DIType T = getTypeOrNull(QTy);
+
+  if (T.Verify() && T.isForwardDecl())
+    getOrCreateType(QTy, getOrCreateFile(RD.getLocation()));
+}
+
 /// getCachedInterfaceTypeOrNull - Get the type from the interface
 /// cache, unless it needs to regenerated. Otherwise return null.
 llvm::Value *CGDebugInfo::getCachedInterfaceTypeOrNull(QualType Ty) {
