@@ -161,7 +161,7 @@ public:
   };
   unsigned ObjCMTAction;
 
-  /// \brief Enable migration to Xcode Test framework.
+  /// \brief Enable migration to XCTest framework.
   bool XCTMigrate;
 
   std::string MTMigrateDir;

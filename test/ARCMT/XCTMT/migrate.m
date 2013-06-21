@@ -5,6 +5,9 @@
 
 @interface test_kitTests : SenTestCase
 
+@property (assign) BOOL isValid;
+@property (assign) int amount;
+
 @end
 
 @implementation test_kitTests
@@ -29,6 +32,13 @@ void foo(SenTestCase *tc);
   id x = SenTestCaseDidStartNotification;
   STFail(@"fail");
   STFail(nil);
+
+  test_kitTests *cr;
+  STAssertFalse (cr.isValid, nil);
+  STAssertThrows ((void) cr.amount, nil);
+
+  STAssertTrueNoThrow(cr.isValid, @"blah");
+  STAssertFalseNoThrow(cr.isValid, nil);
 }
 
 @end

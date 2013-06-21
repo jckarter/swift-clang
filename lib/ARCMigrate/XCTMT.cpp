@@ -1,4 +1,4 @@
-//===--- XCTMT.cpp - Xcode Test Migrate Tool ------------------------------===//
+//===--- XCTMT.cpp - XCTest Migrate Tool ----------------------------------===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -63,8 +63,8 @@ static TKPair TKMacros[] = {
   {"STAssertNoThrowSpecific",     "XCTAssertNoThrowSpecific"},
   {"STAssertNoThrowSpecificNamed","XCTAssertNoThrowSpecificNamed"},
   {"STFail",                      "XCTFail"},
-  {"STAssertTrueNoThrow",         "XCTAssertTrueNoThrow"},
-  {"STAssertFalseNoThrow",        "XCTAssertFalseNoThrow"},
+  {"STAssertTrueNoThrow",         "XCTAssertTrue"},
+  {"STAssertFalseNoThrow",        "XCTAssertFalse"},
 
   {"should",                      "STAssertTrue"},
   {"should1",                     "STAssertTrue"},
@@ -201,7 +201,7 @@ void XCTMigrator::keepMacroArgInfo(const MacroArgs *Args,
                                       Args->getUnexpArgument(1)->getLocation());
   } else {
     const Token *PrevAT = Args->getUnexpArgument(LastNonVariadicIdx-1);
-    unsigned PrevLen = Args->getArgLength(AT);
+    unsigned PrevLen = Args->getArgLength(PrevAT);
     SourceLocation PrevEOFLoc = PrevAT[PrevLen].getLocation();
     RemoveRange = CharSourceRange::getCharRange(PrevEOFLoc, EOFLoc);
   }
