@@ -388,12 +388,23 @@ void InitHeaderSearch::AddDefaultCIncludePaths(const llvm::Triple &triple,
     // directory, so that it works with -ccc-install-dir properly. The resource
     // directory follows the convention "../usr/lib/clang/<version>" so
     // "<resource_dir>/../../../include" is the toolchain include directory.
-    llvm::sys::Path P(HSOpts.ResourceDir);
-    P.eraseComponent();
-    P.eraseComponent();
-    P.eraseComponent();
-    P.appendComponent("include");
-    AddPathInternal(P.str(), ExternCSystem, false, false);
+    StringRef P = HSOpts.ResourceDir;
+    P = llvm::sys::path::parent_path(P);
+    P = llvm::sys::path::parent_path(P);
+    P = llvm::sys::path::parent_path(P);
+
+    // If the last component is a '..' remove it, this is important because the
+    // driver sometimes forms the resource path with a '..' in it.
+    if (llvm::sys::path::filename(P) == "..") {
+      P = llvm::sys::path::parent_path(P);
+      P = llvm::sys::path::parent_path(P);
+    }
+
+    // Only add this directory if the compiler is actually installed in a
+    // toolchain or the command line tools directory.
+    if (P.endswith(".xctoolchain/usr") || P.endswith("/CommandLineTools/usr")) {
+      AddPathInternal(P + "/include", ExternCSystem, false, false);
+    }
 
     AddPath("/usr/include", ExternCSystem, false);
   }

@@ -603,10 +603,7 @@ Decl *Sema::ActOnCompatibilityAlias(SourceLocation AtLoc,
   NamedDecl *ADecl = LookupSingleName(TUScope, AliasName, AliasLocation,
                                       LookupOrdinaryName, ForRedeclaration);
   if (ADecl) {
-    if (isa<ObjCCompatibleAliasDecl>(ADecl))
-      Diag(AliasLocation, diag::warn_previous_alias_decl);
-    else
-      Diag(AliasLocation, diag::err_conflicting_aliasing_type) << AliasName;
+    Diag(AliasLocation, diag::err_conflicting_aliasing_type) << AliasName;
     Diag(ADecl->getLocation(), diag::note_previous_declaration);
     return 0;
   }
@@ -1920,13 +1917,6 @@ Sema::ActOnForwardClassDeclaration(SourceLocation AtClassLoc,
     NamedDecl *PrevDecl
       = LookupSingleName(TUScope, IdentList[i], IdentLocs[i], 
                          LookupOrdinaryName, ForRedeclaration);
-    if (PrevDecl && PrevDecl->isTemplateParameter()) {
-      // Maybe we will complain about the shadowed template parameter.
-      DiagnoseTemplateParameterShadow(AtClassLoc, PrevDecl);
-      // Just pretend that we didn't see the previous declaration.
-      PrevDecl = 0;
-    }
-
     if (PrevDecl && !isa<ObjCInterfaceDecl>(PrevDecl)) {
       // GCC apparently allows the following idiom:
       //
@@ -2130,6 +2120,10 @@ void Sema::addMethodToGlobalList(ObjCMethodList *List, ObjCMethodDecl *Method) {
   // signature.
   ObjCMethodList *Previous = List;
   for (; List; Previous = List, List = List->getNext()) {
+    // If we are building a module, keep all of the methods.
+    if (getLangOpts().Modules && !getLangOpts().CurrentModule.empty())
+      continue;
+
     if (!MatchTwoMethodDeclarations(Method, List->Method))
       continue;
     
