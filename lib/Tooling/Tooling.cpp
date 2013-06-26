@@ -95,6 +95,7 @@ static clang::CompilerInvocation *newInvocation(
       *Invocation, CC1Args.data() + 1, CC1Args.data() + CC1Args.size(),
       *Diagnostics);
   Invocation->getFrontendOpts().DisableFree = false;
+  Invocation->getCodeGenOpts().DisableFree = false;
   return Invocation;
 }
 
@@ -291,7 +292,7 @@ int ClangTool::run(FrontendActionFactory *ActionFactory) {
   // first argument, thus allowing ClangTool and runToolOnCode to just
   // pass in made-up names here. Make sure this works on other platforms.
   std::string MainExecutable =
-    llvm::sys::Path::GetMainExecutable("clang_tool", &StaticSymbol).str();
+      llvm::sys::fs::getMainExecutable("clang_tool", &StaticSymbol);
 
   bool ProcessingFailed = false;
   for (unsigned I = 0; I < CompileCommands.size(); ++I) {
