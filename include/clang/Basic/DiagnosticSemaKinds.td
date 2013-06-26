@@ -2345,8 +2345,11 @@ def err_iboutletcollection_type : Error<
   "invalid type %0 as argument of iboutletcollection attribute">;
 def warn_iboutlet_object_type : Warning<
   "%select{instance variable|property}2 with %0 attribute must "
-  "be an object type (invalid %1)">,
-  InGroup<DiagGroup<"invalid-iboutlet">>;
+  "be an object type (invalid %1)">, InGroup<ObjCInvalidIBOutletProperty>;
+def warn_iboutletcollection_property_assign : Warning<
+  "IBOutletCollection properties should be copy/strong and not assign">,
+  InGroup<ObjCInvalidIBOutletProperty>;
+  
 def err_attribute_overloadable_not_function : Error<
   "'overloadable' attribute can only be applied to a function">;
 def err_attribute_overloadable_missing : Error<
@@ -4267,6 +4270,10 @@ def err_member_def_undefined_record : Error<
   "out-of-line definition of %0 from class %1 without definition">;
 def err_member_def_does_not_match : Error<
   "out-of-line definition of %0 does not match any declaration in %1">;
+def err_friend_decl_with_def_arg_must_be_def : Error<
+  "friend declaration specifying a default argument must be a definition">;
+def err_friend_decl_with_def_arg_redeclared : Error<
+  "friend declaration specifying a default argument must be the only declaration">;
 def err_friend_decl_does_not_match : Error<
   "friend declaration of %0 does not match any declaration in %1">;
 def err_member_def_does_not_match_suggest : Error<

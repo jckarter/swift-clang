@@ -30,7 +30,7 @@ public:
   AnnotatingParser(AnnotatedLine &Line, IdentifierInfo &Ident_in)
       : Line(Line), CurrentToken(Line.First), KeywordVirtualFound(false),
         NameFound(false), Ident_in(Ident_in) {
-    Contexts.push_back(Context(tok::unknown, 1, /*IsExpression=*/ false));
+    Contexts.push_back(Context(tok::unknown, 1, /*IsExpression=*/false));
   }
 
 private:
@@ -315,7 +315,7 @@ private:
     case tok::kw_while:
       if (CurrentToken != NULL && CurrentToken->is(tok::l_paren)) {
         next();
-        if (!parseParens(/*LookForDecls=*/ true))
+        if (!parseParens(/*LookForDecls=*/true))
           return false;
       }
       break;
@@ -1109,6 +1109,8 @@ bool TokenAnnotator::spaceRequiredBetween(const AnnotatedLine &Line,
   if (Right.is(tok::ellipsis))
     return false;
   if (Left.is(tok::period) || Right.is(tok::period))
+    return false;
+  if (Left.Type == TT_BlockComment && Left.TokenText.endswith("=*/"))
     return false;
   return true;
 }
