@@ -337,6 +337,7 @@ private:
   void mangleBareFunctionType(const FunctionType *T,
                               bool MangleReturnType);
   void mangleNeonVectorType(const VectorType *T);
+  void mangleAArch64NeonVectorType(const VectorType *T);
 
   void mangleIntegerLiteral(QualType T, const llvm::APSInt &Value);
   void mangleMemberExpr(const Expr *base, bool isArrow,
@@ -2129,6 +2130,43 @@ void CXXNameMangler::mangleNeonVectorType(const VectorType *T) {
   Out << BaseName << EltName;
 }
 
+// ARM's 64-bit ABI for Neon vector types still specifies that they
+// should be mangled as if they are structs, but different ones!
+// (Probably to match ARM's initial implementation).
+void CXXNameMangler::mangleAArch64NeonVectorType(const VectorType *T) {
+  QualType EltType = T->getElementType();
+  assert(EltType->isBuiltinType() && "Neon vector element not a BuiltinType");
+  const char *EltName = 0;
+  if (T->getVectorKind() == VectorType::NeonPolyVector) {
+    switch (cast<BuiltinType>(EltType)->getKind()) {
+    case BuiltinType::SChar:     EltName = "Poly8"; break;
+    case BuiltinType::Short:     EltName = "Poly16"; break;
+    default: llvm_unreachable("unexpected Neon polynomial vector element type");
+    }
+  } else {
+    switch (cast<BuiltinType>(EltType)->getKind()) {
+    case BuiltinType::SChar:     EltName = "Int8"; break;
+    case BuiltinType::UChar:     EltName = "Uint8"; break;
+    case BuiltinType::Short:     EltName = "Int16"; break;
+    case BuiltinType::UShort:    EltName = "Uint16"; break;
+    case BuiltinType::Int:       EltName = "Int32"; break;
+    case BuiltinType::UInt:      EltName = "Uint32"; break;
+    case BuiltinType::Long:      EltName = "Int64"; break;
+    case BuiltinType::ULong:     EltName = "Uint64"; break;
+    case BuiltinType::Float:     EltName = "Float32"; break;
+    case BuiltinType::Double:    EltName = "Float64"; break;
+    default: llvm_unreachable("unexpected Neon vector element type");
+    }
+  }
+
+  // Longest NEON vector name is 13, for floating-point names like
+  // "__Float32x2_t".
+  char InternalName[14];
+  snprintf(InternalName, 14, "__%sx%d_t", EltName, T->getNumElements());
+
+  Out << strlen(InternalName) << InternalName;
+}
+
 // GNU extension: vector types
 // <type>                  ::= <vector-type>
 // <vector-type>           ::= Dv <positive dimension number> _
@@ -2140,7 +2178,11 @@ void CXXNameMangler::mangleNeonVectorType(const VectorType *T) {
 void CXXNameMangler::mangleType(const VectorType *T) {
   if ((T->getVectorKind() == VectorType::NeonVector ||
        T->getVectorKind() == VectorType::NeonPolyVector)) {
-    mangleNeonVectorType(T);
+    llvm::Triple Target = getASTContext().getTargetInfo().getTriple();
+    if (Target.getArch() == llvm::Triple::arm64 && !Target.isOSDarwin())
+      mangleAArch64NeonVectorType(T);
+    else
+      mangleNeonVectorType(T);
     return;
   }
   Out << "Dv" << T->getNumElements() << '_';
