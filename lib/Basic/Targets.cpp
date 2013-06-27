@@ -4090,6 +4090,7 @@ public:
     IntMaxType = SignedLong;
     UIntMaxType = UnsignedLong;
     Int64Type = SignedLong;
+    WCharType = UnsignedInt;
     MaxVectorAlign = 128;
     RegParmMax = 8;
     MaxAtomicInlineWidth = 64; // FIXME: workaround
@@ -4293,6 +4294,7 @@ public:
   DarwinARM64TargetInfo(const std::string& triple)
       : DarwinTargetInfo<ARM64TargetInfo>(triple) {
     Int64Type = SignedLongLong;
+    WCharType = SignedInt;
     UseSignedCharForObjCBool = false;
 
     LongDoubleWidth = LongDoubleAlign = 64;
