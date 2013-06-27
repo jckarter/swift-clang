@@ -4578,25 +4578,46 @@ static void HandleNeonVectorTypeAttr(QualType& CurType,
     return;
   }
   // Only certain element types are supported for Neon vectors.
-  const BuiltinType* BTy = CurType->getAs<BuiltinType>();
-  if (!BTy ||
-      (VecKind == VectorType::NeonPolyVector &&
-       BTy->getKind() != BuiltinType::SChar &&
-       BTy->getKind() != BuiltinType::Short) ||
-      (BTy->getKind() != BuiltinType::SChar &&
-       BTy->getKind() != BuiltinType::UChar &&
-       BTy->getKind() != BuiltinType::Short &&
-       BTy->getKind() != BuiltinType::UShort &&
-       BTy->getKind() != BuiltinType::Int &&
-       BTy->getKind() != BuiltinType::UInt &&
-       BTy->getKind() != BuiltinType::LongLong &&
-       BTy->getKind() != BuiltinType::ULongLong &&
-       BTy->getKind() != BuiltinType::Float &&
-       BTy->getKind() != BuiltinType::Double)) {
+  const BuiltinType *BTy = CurType->getAs<BuiltinType>();
+  bool TypeIsAllowed = true;
+  if (!BTy)
+    TypeIsAllowed = false;
+  else if (VecKind == VectorType::NeonPolyVector) {
+    TypeIsAllowed = BTy->getKind() == BuiltinType::SChar ||
+                    BTy->getKind() == BuiltinType::Short;
+  } else {
+    BuiltinType::Kind Int64Kind, UInt64Kind;
+    if (S.Context.getTargetInfo().getInt64Type() == TargetInfo::SignedLong) {
+      Int64Kind = BuiltinType::Long;
+      UInt64Kind = BuiltinType::ULong;
+    } else {
+      assert(S.Context.getTargetInfo().getInt64Type() ==
+             TargetInfo::SignedLongLong);
+      Int64Kind = BuiltinType::LongLong;
+      UInt64Kind = BuiltinType::ULongLong;
+    }
+
+    llvm::Triple Target = S.Context.getTargetInfo().getTriple();
+
+    TypeIsAllowed = (BTy->getKind() == BuiltinType::SChar ||
+                     BTy->getKind() == BuiltinType::UChar ||
+                     BTy->getKind() == BuiltinType::Short ||
+                     BTy->getKind() == BuiltinType::UShort ||
+                     BTy->getKind() == BuiltinType::Int ||
+                     BTy->getKind() == BuiltinType::UInt ||
+                     BTy->getKind() == Int64Kind ||
+                     BTy->getKind() == UInt64Kind ||
+                     BTy->getKind() == BuiltinType::Float ||
+                     (Target.getArch() == llvm::Triple::arm64 &&
+                      BTy->getKind() == BuiltinType::Double));
+  }
+
+  if (!TypeIsAllowed) {
     S.Diag(Attr.getLoc(), diag::err_attribute_invalid_vector_type) <<CurType;
     Attr.setInvalid();
     return;
   }
+
   // The total size of the vector must be 64 or 128 bits.
   unsigned typeSize = static_cast<unsigned>(S.Context.getTypeSize(CurType));
   unsigned numElts = static_cast<unsigned>(numEltsInt.getZExtValue());

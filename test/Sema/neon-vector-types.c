@@ -3,7 +3,7 @@
 typedef float float32_t;
 typedef signed char poly8_t;
 typedef short poly16_t;
-typedef unsigned long long uint64_t;
+typedef unsigned __INT64_TYPE__ uint64_t;
 
 // Define some valid Neon types.
 typedef __attribute__((neon_vector_type(2))) int int32x2_t;
