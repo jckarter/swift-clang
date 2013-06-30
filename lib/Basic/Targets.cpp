@@ -3300,7 +3300,7 @@ public:
     Int64Type = SignedLongLong;
     MaxVectorAlign = 256;
     // The 64-bit iOS simulator uses the builtin bool type for Objective-C.
-    llvm::Triple T = llvm::Triple(triple);
+    llvm::Triple T = llvm::Triple(Triple);
     if (T.getOS() == llvm::Triple::IOS)
       UseSignedCharForObjCBool = false;
   }
@@ -4059,8 +4059,8 @@ class ARM64TargetInfo : public TargetInfo {
 
   std::string ABI;
 public:
-  ARM64TargetInfo(const std::string &TripleStr) : TargetInfo(TripleStr),
-                                                  ABI("aapcs") {
+  ARM64TargetInfo(const llvm::Triple &Triple) : TargetInfo(Triple),
+                                                ABI("aapcs") {
     BigEndian = false;
     LongWidth = LongAlign = PointerWidth = PointerAlign = 64;
     IntMaxType = SignedLong;
@@ -4267,8 +4267,8 @@ const Builtin::Info ARM64TargetInfo::BuiltinInfo[] = {
 namespace {
 class DarwinARM64TargetInfo : public DarwinTargetInfo<ARM64TargetInfo> {
 public:
-  DarwinARM64TargetInfo(const std::string& triple)
-      : DarwinTargetInfo<ARM64TargetInfo>(triple) {
+  DarwinARM64TargetInfo(const llvm::Triple &Triple)
+      : DarwinTargetInfo<ARM64TargetInfo>(Triple) {
     Int64Type = SignedLongLong;
     WCharType = SignedInt;
     UseSignedCharForObjCBool = false;
@@ -5502,13 +5502,13 @@ static TargetInfo *AllocateTarget(const llvm::Triple &Triple) {
 
   case llvm::Triple::arm64:
     if (Triple.isOSDarwin())
-      return new DarwinARM64TargetInfo(T);
+      return new DarwinARM64TargetInfo(Triple);
 
     switch(os) {
     case llvm::Triple::Linux:
-      return new LinuxTargetInfo<ARM64TargetInfo>(T);
+      return new LinuxTargetInfo<ARM64TargetInfo>(Triple);
     default:
-      return new ARM64TargetInfo(T);
+      return new ARM64TargetInfo(Triple);
     }
   case llvm::Triple::hexagon:
     return new HexagonTargetInfo(Triple);
