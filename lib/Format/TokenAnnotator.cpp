@@ -1065,6 +1065,8 @@ bool TokenAnnotator::spaceRequiredBetween(const AnnotatedLine &Line,
     return !Left.isOneOf(tok::identifier, tok::greater, tok::l_paren);
   if (Left.is(tok::less) || Right.isOneOf(tok::greater, tok::less))
     return false;
+  if (Right.is(tok::ellipsis))
+    return false;
   if (Right.Type == TT_PointerOrReference)
     return Left.Tok.isLiteral() ||
            ((Left.Type != TT_PointerOrReference) && Left.isNot(tok::l_paren) &&
@@ -1073,7 +1075,7 @@ bool TokenAnnotator::spaceRequiredBetween(const AnnotatedLine &Line,
       (Left.Type != TT_PointerOrReference || Style.PointerBindsToType))
     return true;
   if (Left.Type == TT_PointerOrReference)
-    return Right.Tok.isLiteral() ||
+    return Right.Tok.isLiteral() || Right.Type == TT_BlockComment ||
            ((Right.Type != TT_PointerOrReference) &&
             Right.isNot(tok::l_paren) && Style.PointerBindsToType &&
             Left.Previous &&
@@ -1109,8 +1111,6 @@ bool TokenAnnotator::spaceRequiredBetween(const AnnotatedLine &Line,
            (Left.isNot(tok::colon) || Left.Type != TT_ObjCMethodExpr);
   if (Left.isOneOf(tok::identifier, tok::greater, tok::r_square) &&
       Right.is(tok::l_brace) && Right.getNextNoneComment())
-    return false;
-  if (Right.is(tok::ellipsis))
     return false;
   if (Left.is(tok::period) || Right.is(tok::period))
     return false;
