@@ -4738,9 +4738,9 @@ namespace {
       PointerWidth = 16; PointerAlign = 16;
       SuitableAlign = 16;
       SizeType = UnsignedInt;
-      IntMaxType = SignedLong;
-      UIntMaxType = UnsignedLong;
-      IntPtrType = SignedShort;
+      IntMaxType = SignedLongLong;
+      UIntMaxType = UnsignedLongLong;
+      IntPtrType = SignedInt;
       PtrDiffType = SignedInt;
       SigAtomicType = SignedLong;
       DescriptionString = "e-p:16:16:16-i8:8:8-i16:16:16-i32:16:32-n8:16";

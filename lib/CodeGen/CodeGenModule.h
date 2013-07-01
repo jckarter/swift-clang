@@ -946,8 +946,7 @@ public:
   /// GetLLVMLinkageVarDefinition - Returns LLVM linkage for a global 
   /// variable.
   llvm::GlobalValue::LinkageTypes 
-  GetLLVMLinkageVarDefinition(const VarDecl *D,
-                              llvm::GlobalVariable *GV);
+  GetLLVMLinkageVarDefinition(const VarDecl *D, bool isConstant);
   
   /// Emit all the global annotations.
   void EmitGlobalAnnotations();
