@@ -2223,10 +2223,10 @@ void CXXNameMangler::mangleAArch64NeonVectorType(const VectorType *T) {
 
   // Longest NEON vector name is 13, for floating-point names like
   // "__Float32x2_t".
-  char InternalName[14];
-  snprintf(InternalName, 14, "__%sx%d_t", EltName, T->getNumElements());
-
-  Out << strlen(InternalName) << InternalName;
+  std::string InternalName =
+      (Twine("__") + EltName + "x" + Twine(T->getNumElements()) + "_t").str();
+  
+  Out << InternalName.size() << InternalName;
 }
 
 // GNU extension: vector types
