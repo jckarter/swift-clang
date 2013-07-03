@@ -1,4 +1,4 @@
-// RUN: %clang -O3 -arch arm64 -S -ffreestanding %s -o - | FileCheck %s
+// RUN: %clang -O3 -target arm64 -S -ffreestanding %s -o - | FileCheck %s
 // test code generation for <rdar://problem/11487757>
 #include <aarch64_simd.h>
 

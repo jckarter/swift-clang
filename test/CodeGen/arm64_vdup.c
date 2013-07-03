@@ -1,4 +1,4 @@
-// RUN: %clang -arch arm64 -ffreestanding -S -o - -emit-llvm %s | FileCheck %s
+// RUN: %clang -target arm64 -ffreestanding -S -o - -emit-llvm %s | FileCheck %s
 // Test ARM64 SIMD duplicate lane and n intrinsics
 
 #include <aarch64_simd.h>

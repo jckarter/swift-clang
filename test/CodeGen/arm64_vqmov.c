@@ -1,4 +1,4 @@
-// RUN: %clang -O3 -arch arm64 -ffreestanding -S -o - %s | FileCheck %s
+// RUN: %clang -O3 -target arm64 -ffreestanding -S -o - %s | FileCheck %s
 // REQUIRES: arm64-registered-target
 /// Test vqmov[u]n_high_<su>{16,32,64) ARM64 intrinsics
 

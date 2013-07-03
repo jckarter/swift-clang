@@ -1,4 +1,4 @@
-// RUN: %clang -O1 -arch arm64 -ffreestanding -S -o - -emit-llvm %s | FileCheck %s
+// RUN: %clang -O1 -target arm64 -ffreestanding -S -o - -emit-llvm %s | FileCheck %s
 // Test ARM64 SIMD set lane intrinsics INCOMPLETE
 
 #include <aarch64_simd.h>
