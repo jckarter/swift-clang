@@ -87,6 +87,8 @@ template <> struct MappingTraits<clang::format::FormatStyle> {
                    Style.AllowShortLoopsOnASingleLine);
     IO.mapOptional("AlwaysBreakTemplateDeclarations",
                    Style.AlwaysBreakTemplateDeclarations);
+    IO.mapOptional("AlwaysBreakBeforeMultilineStrings",
+                   Style.AlwaysBreakBeforeMultilineStrings);
     IO.mapOptional("BinPackParameters", Style.BinPackParameters);
     IO.mapOptional("ColumnLimit", Style.ColumnLimit);
     IO.mapOptional("ConstructorInitializerAllOnOneLineOrOnePerLine",
@@ -127,6 +129,7 @@ FormatStyle getLLVMStyle() {
   LLVMStyle.AllowShortIfStatementsOnASingleLine = false;
   LLVMStyle.AllowShortLoopsOnASingleLine = false;
   LLVMStyle.AlwaysBreakTemplateDeclarations = false;
+  LLVMStyle.AlwaysBreakBeforeMultilineStrings = false;
   LLVMStyle.BinPackParameters = true;
   LLVMStyle.ColumnLimit = 80;
   LLVMStyle.ConstructorInitializerAllOnOneLineOrOnePerLine = false;
@@ -157,6 +160,7 @@ FormatStyle getGoogleStyle() {
   GoogleStyle.AllowShortIfStatementsOnASingleLine = true;
   GoogleStyle.AllowShortLoopsOnASingleLine = true;
   GoogleStyle.AlwaysBreakTemplateDeclarations = true;
+  GoogleStyle.AlwaysBreakBeforeMultilineStrings = true;
   GoogleStyle.BinPackParameters = true;
   GoogleStyle.ColumnLimit = 80;
   GoogleStyle.ConstructorInitializerAllOnOneLineOrOnePerLine = true;
@@ -583,7 +587,7 @@ private:
       for (unsigned i = 0, e = State.Stack.size() - 1; i != e; ++i) {
         State.Stack[i].BreakBeforeParameter = true;
       }
-      const FormatToken *TokenBefore = Current.getPreviousNoneComment();
+      const FormatToken *TokenBefore = Current.getPreviousNonComment();
       if (TokenBefore && !TokenBefore->isOneOf(tok::comma, tok::semi) &&
           TokenBefore->Type != TT_TemplateCloser &&
           TokenBefore->Type != TT_BinaryOperator && !TokenBefore->opensScope())
@@ -710,7 +714,7 @@ private:
       State.Stack.back().Indent += 4;
 
     // Insert scopes created by fake parenthesis.
-    const FormatToken *Previous = Current.getPreviousNoneComment();
+    const FormatToken *Previous = Current.getPreviousNonComment();
     // Don't add extra indentation for the first fake parenthesis after
     // 'return', assignements or opening <({[. The indentation for these cases
     // is special cased.
@@ -749,7 +753,7 @@ private:
       bool AvoidBinPacking;
       if (Current.is(tok::l_brace)) {
         NewIndent = Style.IndentWidth + LastSpace;
-        const FormatToken *NextNoComment = Current.getNextNoneComment();
+        const FormatToken *NextNoComment = Current.getNextNonComment();
         AvoidBinPacking = NextNoComment &&
                           NextNoComment->Type == TT_DesignatedInitializerPeriod;
       } else {
@@ -1271,13 +1275,13 @@ public:
 
     // Adapt level to the next line if this is a comment.
     // FIXME: Can/should this be done in the UnwrappedLineParser?
-    const AnnotatedLine *NextNoneCommentLine = NULL;
+    const AnnotatedLine *NextNonCommentLine = NULL;
     for (unsigned i = AnnotatedLines.size() - 1; i > 0; --i) {
-      if (NextNoneCommentLine && AnnotatedLines[i].First->is(tok::comment) &&
+      if (NextNonCommentLine && AnnotatedLines[i].First->is(tok::comment) &&
           !AnnotatedLines[i].First->Next)
-        AnnotatedLines[i].Level = NextNoneCommentLine->Level;
+        AnnotatedLines[i].Level = NextNonCommentLine->Level;
       else
-        NextNoneCommentLine =
+        NextNonCommentLine =
             AnnotatedLines[i].First->isNot(tok::r_brace) ? &AnnotatedLines[i]
                                                          : NULL;
     }
@@ -1527,8 +1531,8 @@ private:
 
     FormatToken *Tok = (I + 1)->First;
     if (Tok->is(tok::r_brace) && !Tok->MustBreakBefore &&
-        (Tok->getNextNoneComment() == NULL ||
-         Tok->getNextNoneComment()->is(tok::semi))) {
+        (Tok->getNextNonComment() == NULL ||
+         Tok->getNextNonComment()->is(tok::semi))) {
       // We merge empty blocks even if the line exceeds the column limit.
       Tok->SpacesRequiredBefore = 0;
       Tok->CanBreakBefore = true;
@@ -1552,7 +1556,7 @@ private:
 
       // Last, check that the third line contains a single closing brace.
       Tok = (I + 2)->First;
-      if (Tok->getNextNoneComment() != NULL || Tok->isNot(tok::r_brace) ||
+      if (Tok->getNextNonComment() != NULL || Tok->isNot(tok::r_brace) ||
           Tok->MustBreakBefore)
         return;
 
