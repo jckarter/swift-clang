@@ -72,11 +72,11 @@ static bool isLocalContainerContext(const DeclContext *DC) {
   return isa<FunctionDecl>(DC) || isa<ObjCMethodDecl>(DC) || isa<BlockDecl>(DC);
 }
 
-static const CXXRecordDecl *GetLocalClassDecl(const Decl *D) {
+static const RecordDecl *GetLocalClassDecl(const Decl *D) {
   const DeclContext *DC = getEffectiveDeclContext(D);
   while (!DC->isNamespace() && !DC->isTranslationUnit()) {
     if (isLocalContainerContext(DC))
-      return dyn_cast<CXXRecordDecl>(D);
+      return dyn_cast<RecordDecl>(D);
     D = cast<Decl>(DC);
     DC = getEffectiveDeclContext(D);
   }
@@ -326,7 +326,7 @@ private:
   void manglePrefix(NestedNameSpecifier *qualifier);
   void manglePrefix(const DeclContext *DC, bool NoFunction=false);
   void manglePrefix(QualType type);
-  void mangleTemplatePrefix(const TemplateDecl *ND);
+  void mangleTemplatePrefix(const TemplateDecl *ND, bool NoFunction=false);
   void mangleTemplatePrefix(TemplateName Template);
   void mangleOperatorName(OverloadedOperatorKind OO, unsigned Arity);
   void mangleQualifiers(Qualifiers Quals);
@@ -1251,7 +1251,7 @@ void CXXNameMangler::mangleNestedName(const NamedDecl *ND,
   // Check if we have a template.
   const TemplateArgumentList *TemplateArgs = 0;
   if (const TemplateDecl *TD = isTemplate(ND, TemplateArgs)) {
-    mangleTemplatePrefix(TD);
+    mangleTemplatePrefix(TD, NoFunction);
     mangleTemplateArgs(*TemplateArgs);
   }
   else {
@@ -1281,7 +1281,7 @@ void CXXNameMangler::mangleLocalName(const Decl *D) {
   //                 _ <entity name>
   // <discriminator> := _ <non-negative number>
   assert(isa<NamedDecl>(D) || isa<BlockDecl>(D));
-  const CXXRecordDecl *RD = GetLocalClassDecl(D);
+  const RecordDecl *RD = GetLocalClassDecl(D);
   const DeclContext *DC = getEffectiveDeclContext(RD ? RD : D);
 
   Out << 'Z';
@@ -1302,9 +1302,10 @@ void CXXNameMangler::mangleLocalName(const Decl *D) {
     // numbering will be local to the particular argument in which it appears
     // -- other default arguments do not affect its encoding.
     bool SkipDiscriminator = false;
-    if (RD->isLambda()) {
+    const CXXRecordDecl *CXXRD = dyn_cast<CXXRecordDecl>(RD);
+    if (CXXRD->isLambda()) {
       if (const ParmVarDecl *Parm
-                 = dyn_cast_or_null<ParmVarDecl>(RD->getLambdaContextDecl())) {
+              = dyn_cast_or_null<ParmVarDecl>(CXXRD->getLambdaContextDecl())) {
         if (const FunctionDecl *Func
               = dyn_cast<FunctionDecl>(Parm->getDeclContext())) {
           Out << 'd';
@@ -1514,7 +1515,8 @@ void CXXNameMangler::mangleTemplatePrefix(TemplateName Template) {
   mangleUnscopedTemplateName(Template);
 }
 
-void CXXNameMangler::mangleTemplatePrefix(const TemplateDecl *ND) {
+void CXXNameMangler::mangleTemplatePrefix(const TemplateDecl *ND,
+                                          bool NoFunction) {
   // <template-prefix> ::= <prefix> <template unqualified-name>
   //                   ::= <template-param>
   //                   ::= <substitution>
@@ -1531,7 +1533,7 @@ void CXXNameMangler::mangleTemplatePrefix(const TemplateDecl *ND) {
     return;
   }
 
-  manglePrefix(getEffectiveDeclContext(ND));
+  manglePrefix(getEffectiveDeclContext(ND), NoFunction);
   mangleUnqualifiedName(ND->getTemplatedDecl());
   addSubstitution(ND);
 }

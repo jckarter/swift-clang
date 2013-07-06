@@ -14,9 +14,9 @@
 
 - (void)setUp
 {
-  XCTAssertEquals(0, 0);
-  XCTAssertEquals(0, 0, 0, 1);
-  XCTAssertEquals(0, 0);
+  XCTAssertEqual(0, 0);
+  XCTAssertEqual(0, 0, 0, 1);
+  XCTAssertEqual(0, 0);
 }
 
 typedef XCTestCase TC;
@@ -39,6 +39,8 @@ void foo(XCTestCase *tc);
 
   XCTAssertTrue(cr.isValid, @"blah");
   XCTAssertFalse(cr.isValid);
+
+  XCTAssertEqualWithAccuracy(cr.isValid, 0, 1);
 }
 
 @end

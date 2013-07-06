@@ -39,6 +39,8 @@ void foo(SenTestCase *tc);
 
   STAssertTrueNoThrow(cr.isValid, @"blah");
   STAssertFalseNoThrow(cr.isValid, nil);
+
+  STAssertEqualsWithAccuracy(cr.isValid, 0, 1, nil);
 }
 
 @end
