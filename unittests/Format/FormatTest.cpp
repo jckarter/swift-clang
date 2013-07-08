@@ -773,11 +773,11 @@ TEST_F(FormatTest, UnderstandsBlockComments) {
   EXPECT_EQ(
       "void aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa(\n"
       "    aaaaaaaaaaaaaaaaaa,\n"
-      "    aaaaaaaaaaaaaaaaaa) { /* aaaaaaaaaaaaaaaaaaaaaaaaaaaaa */\n"
+      "    aaaaaaaaaaaaaaaaaa) { /*aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa*/\n"
       "}",
       format("void      aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa(\n"
              "                      aaaaaaaaaaaaaaaaaa  ,\n"
-             "    aaaaaaaaaaaaaaaaaa) {   /* aaaaaaaaaaaaaaaaaaaaaaaaaaaaa */\n"
+             "    aaaaaaaaaaaaaaaaaa) {   /*aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa*/\n"
              "}"));
 
   FormatStyle NoBinPacking = getLLVMStyle();
@@ -2558,6 +2558,12 @@ TEST_F(FormatTest, BreaksDesireably) {
             "  x, y);",
             format("f(g(h(a, // comment\n"
                    "    b, c), d, e), x, y);"));
+
+  // Prefer breaking similar line breaks.
+  verifyFormat(
+      "const int kTrackingOptions = NSTrackingMouseMoved |\n"
+      "                             NSTrackingMouseEnteredAndExited |\n"
+      "                             NSTrackingActiveAlways;");
 }
 
 TEST_F(FormatTest, FormatsOneParameterPerLineIfNecessary) {
@@ -2696,9 +2702,10 @@ TEST_F(FormatTest, AlignsAfterAssignments) {
   verifyFormat(
       "int Result = (aaaaaaaaaaaaaaaaaaaaaaaaa + aaaaaaaaaaaaaaaaaaaaaaaaa +\n"
       "              aaaaaaaaaaaaaaaaaaaaaaaaa);");
-  verifyFormat("double LooooooooooooooooooooooooongResult =\n"
-               "    aaaaaaaaaaaaaaaaaaaaaaaa + aaaaaaaaaaaaaaaaaaaaaaaa +\n"
-               "    aaaaaaaaaaaaaaaaaaaaaaaa;");
+  verifyFormat(
+      "double LooooooooooooooooooooooooongResult = aaaaaaaaaaaaaaaaaaaaaaaa +\n"
+      "                                            aaaaaaaaaaaaaaaaaaaaaaaa +\n"
+      "                                            aaaaaaaaaaaaaaaaaaaaaaaa;");
 }
 
 TEST_F(FormatTest, AlignsAfterReturn) {
@@ -2723,9 +2730,9 @@ TEST_F(FormatTest, AlignsAfterReturn) {
 
 TEST_F(FormatTest, BreaksConditionalExpressions) {
   verifyFormat(
-      "aaaa(aaaaaaaaaaaaaaaaaaaa,\n"
-      "     aaaaaaaaaaaaaaaaaaaaaaaaaa ? aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n"
-      "                                : aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa);");
+      "aaaa(aaaaaaaaaaaaaaaaaaaa, aaaaaaaaaaaaaaaaaaaaaaaaaa\n"
+      "                               ? aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n"
+      "                               : aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa);");
   verifyFormat(
       "aaaa(aaaaaaaaaaaaaaaaaaaa, aaaaaaa ? aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n"
       "                                   : aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa);");
@@ -3000,9 +3007,9 @@ TEST_F(FormatTest, WrapsAtFunctionCallsIfNecessary) {
   verifyFormat(
       "aaaaa(aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa,\n"
       "      aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa)\n"
-      "    .aaaaaaaaaaaaaaa(\n"
-      "         aa(aaaaaaaaaaaaaaaaaaaaaaaaaaa, aaaaaaaaaaaaaaaaaaaaaaaaaaa,\n"
-      "            aaaaaaaaaaaaaaaaaaaaaaaaaaa));");
+      "    .aaaaaaaaaaaaaaa(aa(aaaaaaaaaaaaaaaaaaaaaaaaaaa,\n"
+      "                        aaaaaaaaaaaaaaaaaaaaaaaaaaa,\n"
+      "                        aaaaaaaaaaaaaaaaaaaaaaaaaaa));");
   verifyFormat("if (aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n"
                "        .aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n"
                "        .aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n"
@@ -3491,6 +3498,7 @@ TEST_F(FormatTest, FormatsCasts) {
   verifyFormat("int a = alignof(int) * b;", getGoogleStyle());
   verifyFormat("template <> void f<int>(int i) SOME_ANNOTATION;");
   verifyFormat("f(\"%\" SOME_MACRO(ll) \"d\");");
+  verifyFormat("aaaaa &operator=(const aaaaa &) LLVM_DELETED_FUNCTION;");
 
   // These are not casts, but at some point were confused with casts.
   verifyFormat("virtual void foo(int *) override;");
@@ -3967,7 +3975,7 @@ TEST_F(FormatTest, BlockComments) {
   EXPECT_EQ("/*\n"
             "*\n"
             " * aaaaaa\n"
-            "* aaaaaa\n"
+            "*aaaaaa\n"
             "*/",
             format("/*\n"
                    "*\n"
@@ -3977,7 +3985,7 @@ TEST_F(FormatTest, BlockComments) {
   EXPECT_EQ("/*\n"
             "**\n"
             "* aaaaaa\n"
-            "* aaaaaa\n"
+            "*aaaaaa\n"
             "*/",
             format("/*\n"
                    "**\n"
@@ -4017,6 +4025,33 @@ TEST_F(FormatTest, BlockComments) {
              "int    cccccccccccccccccccccccccccccc;  /* comment */\n"));
 
   verifyFormat("void f(int * /* unused */) {}");
+
+  EXPECT_EQ("/*\n"
+            " **\n"
+            " */",
+            format("/*\n"
+                   " **\n"
+                   " */"));
+  EXPECT_EQ("/*\n"
+            " *q\n"
+            " */",
+            format("/*\n"
+                   " *q\n"
+                   " */"));
+  EXPECT_EQ("/*\n"
+            " * q\n"
+            " */",
+            format("/*\n"
+                   " * q\n"
+                   " */"));
+  EXPECT_EQ("/*\n"
+            " **/",
+            format("/*\n"
+                   " **/"));
+  EXPECT_EQ("/*\n"
+            " ***/",
+            format("/*\n"
+                   " ***/"));
 }
 
 TEST_F(FormatTest, BlockCommentsInMacros) {
