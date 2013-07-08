@@ -214,12 +214,14 @@ TEST(CXXFunctionalCastExpr, SourceRange) {
 TEST(CXXUnresolvedConstructExpr, SourceRange) {
   RangeVerifier<CXXUnresolvedConstructExpr> Verifier;
   Verifier.expectRange(3, 10, 3, 12);
+  std::vector<std::string> Args;
+  Args.push_back("-fno-delayed-template-parsing");
   EXPECT_TRUE(Verifier.match(
       "template <typename U>\n"
       "U foo() {\n"
       "  return U{};\n"
       "}",
-      unresolvedConstructExpr(), Lang_CXX11));
+      unresolvedConstructExpr(), Args, Lang_CXX11));
 }
 
 } // end namespace ast_matchers
