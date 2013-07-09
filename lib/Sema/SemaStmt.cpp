@@ -1787,7 +1787,8 @@ Sema::ActOnCXXForRangeStmt(SourceLocation ForLoc,
 
   // Claim the type doesn't contain auto: we've already done the checking.
   DeclGroupPtrTy RangeGroup =
-    BuildDeclaratorGroup((Decl**)&RangeVar, 1, /*TypeMayContainAuto=*/false);
+      BuildDeclaratorGroup(llvm::MutableArrayRef<Decl *>((Decl **)&RangeVar, 1),
+                           /*TypeMayContainAuto=*/ false);
   StmtResult RangeDecl = ActOnDeclStmt(RangeGroup, RangeLoc, RangeLoc);
   if (RangeDecl.isInvalid())
     return StmtError();
@@ -2067,7 +2068,8 @@ Sema::BuildCXXForRangeStmt(SourceLocation ForLoc, SourceLocation ColonLoc,
     Decl *BeginEndDecls[] = { BeginVar, EndVar };
     // Claim the type doesn't contain auto: we've already done the checking.
     DeclGroupPtrTy BeginEndGroup =
-      BuildDeclaratorGroup(BeginEndDecls, 2, /*TypeMayContainAuto=*/false);
+        BuildDeclaratorGroup(llvm::MutableArrayRef<Decl *>(BeginEndDecls, 2),
+                             /*TypeMayContainAuto=*/ false);
     BeginEndDecl = ActOnDeclStmt(BeginEndGroup, ColonLoc, ColonLoc);
 
     const QualType BeginRefNonRefType = BeginType.getNonReferenceType();
