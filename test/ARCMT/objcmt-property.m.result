@@ -14,7 +14,36 @@
 
 @property(strong) NSString * StrongProp;
 
+
+- (NSString *) UnavailProp  __attribute__((unavailable));
+- (void) setUnavailProp  : (NSString *)Val;
+
+- (NSString *) UnavailProp1  __attribute__((unavailable));
+- (void) setUnavailProp1  : (NSString *)Val  __attribute__((unavailable));
+
+- (NSString *) UnavailProp2;
+- (void) setUnavailProp2  : (NSString *)Val  __attribute__((unavailable));
+
 @end
 
 @implementation I
+@end
+
+@class NSArray;
+
+@interface MyClass2  {
+@private
+    NSArray *_names1;
+    NSArray *_names2;
+    NSArray *_names3;
+    NSArray *_names4;
+}
+
+
+
+
+@property(strong) NSArray * names2;
+@property(strong) NSArray * names3;
+@property(strong) NSArray *__strong names4;
+@property(strong) NSArray * names1;
 @end
