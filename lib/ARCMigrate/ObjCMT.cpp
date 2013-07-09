@@ -39,6 +39,7 @@ public:
   std::string MigrateDir;
   bool MigrateLiterals;
   bool MigrateSubscripting;
+  bool MigrateProperty;
   OwningPtr<NSAPI> NSAPIObj;
   OwningPtr<edit::EditedSource> Editor;
   FileRemapper &Remapper;
@@ -50,6 +51,7 @@ public:
   ObjCMigrateASTConsumer(StringRef migrateDir,
                          bool migrateLiterals,
                          bool migrateSubscripting,
+                         bool migrateProperty,
                          FileRemapper &remapper,
                          FileManager &fileMgr,
                          const PPConditionalDirectiveRecord *PPRec,
@@ -58,6 +60,7 @@ public:
   : MigrateDir(migrateDir),
     MigrateLiterals(migrateLiterals),
     MigrateSubscripting(migrateSubscripting),
+    MigrateProperty(migrateProperty),
     Remapper(remapper), FileMgr(fileMgr), PPRec(PPRec), PP(PP),
     IsOutputFile(isOutputFile) { }
 
@@ -89,9 +92,11 @@ protected:
 ObjCMigrateAction::ObjCMigrateAction(FrontendAction *WrappedAction,
                              StringRef migrateDir,
                              bool migrateLiterals,
-                             bool migrateSubscripting)
+                             bool migrateSubscripting,
+                             bool migrateProperty)
   : WrapperFrontendAction(WrappedAction), MigrateDir(migrateDir),
     MigrateLiterals(migrateLiterals), MigrateSubscripting(migrateSubscripting),
+    MigrateProperty(migrateProperty),
     CompInst(0) {
   if (MigrateDir.empty())
     MigrateDir = "."; // user current directory if none is given.
@@ -107,6 +112,7 @@ ASTConsumer *ObjCMigrateAction::CreateASTConsumer(CompilerInstance &CI,
   ASTConsumer *MTConsumer = new ObjCMigrateASTConsumer(MigrateDir,
                                                        MigrateLiterals,
                                                        MigrateSubscripting,
+                                                       MigrateProperty,
                                                        Remapper,
                                                     CompInst->getFileManager(),
                                                        PPRec,
@@ -248,11 +254,12 @@ public:
 void ObjCMigrateASTConsumer::HandleTranslationUnit(ASTContext &Ctx) {
   
   TranslationUnitDecl *TU = Ctx.getTranslationUnitDecl();
-  for (DeclContext::decl_iterator D = TU->decls_begin(), DEnd = TU->decls_end();
-       D != DEnd; ++D) {
-    if (ObjCInterfaceDecl *CDecl = dyn_cast<ObjCInterfaceDecl>(*D))
-      migrateObjCInterfaceDecl(Ctx, CDecl);
-  }
+  if (MigrateProperty)
+    for (DeclContext::decl_iterator D = TU->decls_begin(), DEnd = TU->decls_end();
+         D != DEnd; ++D) {
+      if (ObjCInterfaceDecl *CDecl = dyn_cast<ObjCInterfaceDecl>(*D))
+        migrateObjCInterfaceDecl(Ctx, CDecl);
+    }
   
   Rewriter rewriter(Ctx.getSourceManager(), Ctx.getLangOpts());
   RewritesReceiver Rec(rewriter);
@@ -419,6 +426,7 @@ ASTConsumer *MigrateSourceAction::CreateASTConsumer(CompilerInstance &CI,
   return new ObjCMigrateASTConsumer(CI.getFrontendOpts().OutputFile,
                                     /*MigrateLiterals=*/true,
                                     /*MigrateSubscripting=*/true,
+                                    /*MigrateProperty*/true,
                                     Remapper,
                                     CI.getFileManager(),
                                     PPRec,
