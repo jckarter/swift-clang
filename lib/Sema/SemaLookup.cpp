@@ -2758,7 +2758,7 @@ void Sema::ArgumentDependentLookup(DeclarationName Name, bool Operator,
       // it only if it was declared in an associated classes.
       if (D->getIdentifierNamespace() == Decl::IDNS_OrdinaryFriend) {
         bool DeclaredInAssociatedClass = false;
-        for (Decl *DI = D; DI; DI = D->getPreviousDecl()) {
+        for (Decl *DI = D; DI; DI = DI->getPreviousDecl()) {
           DeclContext *LexDC = DI->getLexicalDeclContext();
           if (AssociatedClasses.count(cast<CXXRecordDecl>(LexDC))) {
             DeclaredInAssociatedClass = true;
