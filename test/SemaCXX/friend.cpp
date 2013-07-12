@@ -175,3 +175,15 @@ namespace test10 {
     f10(); // expected-error {{undeclared identifier}}
   }
 }
+
+namespace PR16597 {
+  struct A {
+    friend void f_16597();
+  };
+  struct B {
+    friend void f_16597();
+  };
+  struct C {
+  };
+  void g(C a) { f_16597(a); } // expected-error {{undeclared identifier}}
+}
