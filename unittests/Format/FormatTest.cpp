@@ -2121,10 +2121,10 @@ TEST_F(FormatTest, PreventConfusingIndents) {
       "        aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa),\n"
       "    aaaaaaaaaaaaaaaaaaaaaaaa);");
   verifyFormat(
-      "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa[\n"
-      "    aaaaaaaaaaaaaaaaaaaaaaaa[\n"
-      "        aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa],\n"
-      "    aaaaaaaaaaaaaaaaaaaaaaaa];");
+      "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n"
+      "    [aaaaaaaaaaaaaaaaaaaaaaaa\n"
+      "         [aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa]\n"
+      "         [aaaaaaaaaaaaaaaaaaaaaaaa]];");
   verifyFormat(
       "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa<\n"
       "    aaaaaaaaaaaaaaaaaaaaaaaa<\n"
@@ -3026,6 +3026,11 @@ TEST_F(FormatTest, AlignsPipes) {
                "             << aaaaaaaaaaaaaaaaaaaaaaaaaaaa;",
                getLLVMStyleWithColumns(70));
 
+  // But sometimes, breaking before the first "<<" is necessary.
+  verifyFormat("Diag(aaaaaaaaaaaaaaaaaaaaaaaaaaaaa, bbbbbbbbb)\n"
+               "    << aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n"
+               "    << aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa;");
+
   verifyFormat(
       "llvm::errs() << aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n"
       "                    .aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa();");
@@ -3593,11 +3598,11 @@ TEST_F(FormatTest, FormatsCasts) {
 
   verifyFormat("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa *foo = (aaaaaaaaaaaaaaaaa *)\n"
                "    bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb;");
+  // FIXME: The indentation here is not ideal.
   verifyFormat(
-      "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa[\n"
-      "    bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb] =\n"
-      "    (*cccccccccccccccc)[\n"
-      "        dddddddddddddddddddddddddddddddddddddddddddddddddddddddd];");
+      "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n"
+      "    [bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb] = (*cccccccccccccccc)\n"
+      "        [dddddddddddddddddddddddddddddddddddddddddddddddddddddddd];");
 }
 
 TEST_F(FormatTest, FormatsFunctionTypes) {
@@ -3675,6 +3680,22 @@ TEST_F(FormatTest, BreaksLongDeclarations) {
                      "aaaaaaaaaaaaaaaaaaaaaaaa<T>::aaaaaaa() {}");
   verifyGoogleFormat("A<A<A>> aaaaaaaaaa(int aaaaaaaaaaaaaaaaaaaaaaaaaaa,\n"
                      "                   int aaaaaaaaaaaaaaaaaaaaaaa);");
+}
+
+TEST_F(FormatTest, FormatsArrays) {
+  verifyFormat("aaaaaaaaaaaaaaaaaaaaaaaaa[aaaaaaaaaaaaaaaaaaaaaaaaa]\n"
+               "                         [bbbbbbbbbbbbbbbbbbbbbbbbb] = c;");
+  verifyFormat("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n"
+               "    [bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb] = ccccccccccc;");
+  verifyFormat("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n"
+               "    [a][bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb] = cccccccc;");
+  verifyFormat("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n"
+               "    [aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa]\n"
+               "    [bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb] = ccccccccccc;");
+  verifyFormat(
+      "llvm::outs() << \"aaaaaaaaaaaa: \"\n"
+      "             << (*aaaaaaaiaaaaaaa)[aaaaaaaaaaaaaaaaaaaaaaaaa]\n"
+      "                                  [aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa];");
 }
 
 TEST_F(FormatTest, LineStartsWithSpecialCharacter) {
@@ -4941,6 +4962,16 @@ TEST_F(FormatTest, BreakStringLiterals) {
                    "1111111111characte"
                    "rs\"",
                    getLLVMStyleWithColumns(20)));
+
+  // Verify that splitting the strings understands
+  // Style::AlwaysBreakBeforeMultilineStrings.
+  EXPECT_EQ("aaaaaaaaaaaa(aaaaaaaaaaaaa,\n"
+            "             \"aaaaaaaaaaaaaaaaaaaaaa aaaaaaaaaaaaaaaaaaaaaa \"\n"
+            "             \"aaaaaaaaaaaaaaaaaaaaaa aaaaaaaaaaaaaaaaaaaaaa\");",
+            format("aaaaaaaaaaaa(aaaaaaaaaaaaa, \"aaaaaaaaaaaaaaaaaaaaaa "
+                   "aaaaaaaaaaaaaaaaaaaaaa aaaaaaaaaaaaaaaaaaaaaa "
+                   "aaaaaaaaaaaaaaaaaaaaaa\");",
+                   getGoogleStyle()));
 
   FormatStyle AlignLeft = getLLVMStyleWithColumns(12);
   AlignLeft.AlignEscapedNewlinesLeft = true;

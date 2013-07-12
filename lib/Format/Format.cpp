@@ -297,7 +297,7 @@ public:
     State.IgnoreStackForComparison = false;
 
     // The first token has already been indented and thus consumed.
-    moveStateToNextToken(State, /*DryRun=*/false);
+    moveStateToNextToken(State, /*DryRun=*/false, /*Newline=*/false);
 
     // If everything fits on a single line, just put it there.
     unsigned ColumnLimit = Style.ColumnLimit;
@@ -334,8 +334,8 @@ private:
           BreakBeforeClosingBrace(false), QuestionColumn(0),
           AvoidBinPacking(AvoidBinPacking), BreakBeforeParameter(false),
           NoLineBreak(NoLineBreak), ColonPos(0), StartOfFunctionCall(0),
-          NestedNameSpecifierContinuation(0), CallContinuation(0),
-          VariablePos(0), ContainsLineBreak(false) {}
+          StartOfArraySubscripts(0), NestedNameSpecifierContinuation(0),
+          CallContinuation(0), VariablePos(0), ContainsLineBreak(false) {}
 
     /// \brief The position to which a specific parenthesis level needs to be
     /// indented.
@@ -381,6 +381,10 @@ private:
     /// \brief The start of the most recent function in a builder-type call.
     unsigned StartOfFunctionCall;
 
+    /// \brief Contains the start of array subscript expressions, so that they
+    /// can be aligned.
+    unsigned StartOfArraySubscripts;
+
     /// \brief If a nested name specifier was broken over multiple lines, this
     /// contains the start column of the second line. Otherwise 0.
     unsigned NestedNameSpecifierContinuation;
@@ -422,6 +426,8 @@ private:
         return ColonPos < Other.ColonPos;
       if (StartOfFunctionCall != Other.StartOfFunctionCall)
         return StartOfFunctionCall < Other.StartOfFunctionCall;
+      if (StartOfArraySubscripts != Other.StartOfArraySubscripts)
+        return StartOfArraySubscripts < Other.StartOfArraySubscripts;
       if (CallContinuation != Other.CallContinuation)
         return CallContinuation < Other.CallContinuation;
       if (VariablePos != Other.VariablePos)
@@ -571,6 +577,12 @@ private:
           State.Column = State.Stack.back().Indent;
           State.Stack.back().ColonPos = State.Column + Current.CodePointCount;
         }
+      } else if (Current.is(tok::l_square) &&
+                 Current.Type != TT_ObjCMethodExpr) {
+        if (State.Stack.back().StartOfArraySubscripts != 0)
+          State.Column = State.Stack.back().StartOfArraySubscripts;
+        else
+          State.Column = ContinuationIndent;
       } else if (Current.Type == TT_StartOfName ||
                  Previous.isOneOf(tok::coloncolon, tok::equal) ||
                  Previous.Type == TT_ObjCMethodExpr) {
@@ -717,12 +729,12 @@ private:
       }
     }
 
-    return moveStateToNextToken(State, DryRun) + ExtraPenalty;
+    return moveStateToNextToken(State, DryRun, Newline) + ExtraPenalty;
   }
 
   /// \brief Mark the next token as consumed in \p State and modify its stacks
   /// accordingly.
-  unsigned moveStateToNextToken(LineState &State, bool DryRun) {
+  unsigned moveStateToNextToken(LineState &State, bool DryRun, bool Newline) {
     const FormatToken &Current = *State.NextToken;
     assert(State.Stack.size());
 
@@ -730,6 +742,9 @@ private:
       State.Stack.back().AvoidBinPacking = true;
     if (Current.is(tok::lessless) && State.Stack.back().FirstLessLess == 0)
       State.Stack.back().FirstLessLess = State.Column;
+    if (Current.is(tok::l_square) &&
+        State.Stack.back().StartOfArraySubscripts == 0)
+      State.Stack.back().StartOfArraySubscripts = State.Column;
     if (Current.is(tok::question))
       State.Stack.back().QuestionColumn = State.Column;
     if (!Current.opensScope() && !Current.closesScope())
@@ -835,6 +850,12 @@ private:
       State.Stack.pop_back();
       --State.ParenLevel;
     }
+    if (Current.is(tok::r_square)) {
+      // If this ends the array subscript expr, reset the corresponding value.
+      const FormatToken *NextNonComment = Current.getNextNonComment();
+      if (NextNonComment && NextNonComment->isNot(tok::l_square))
+          State.Stack.back().StartOfArraySubscripts = 0;
+    }
 
     // Remove scopes created by fake parenthesis.
     for (unsigned i = 0, e = Current.FakeRParens; i != e; ++i) {
@@ -853,6 +874,10 @@ private:
     State.Column += Current.CodePointCount;
 
     State.NextToken = State.NextToken->Next;
+
+    if (!Newline && Style.AlwaysBreakBeforeMultilineStrings &&
+        Current.is(tok::string_literal))
+      return 0;
 
     return breakProtrudingToken(Current, State, DryRun);
   }
@@ -1147,6 +1172,11 @@ private:
         !Previous.isOneOf(tok::lessless, tok::question) &&
         Previous.getPrecedence() != prec::Assignment &&
         State.Stack.back().BreakBeforeParameter)
+      return true;
+
+    // Same as above, but for the first "<<" operator.
+    if (Current.is(tok::lessless) && State.Stack.back().BreakBeforeParameter &&
+        State.Stack.back().FirstLessLess == 0)
       return true;
 
     // FIXME: Comparing LongestObjCSelectorName to 0 is a hacky way of finding
