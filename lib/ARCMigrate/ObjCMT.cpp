@@ -237,7 +237,7 @@ void ObjCMigrateASTConsumer::migrateObjCInterfaceDecl(ASTContext &Ctx,
 }
 
 static bool 
-ClassImplementsAllMethodsAndProprties(ASTContext &Ctx,
+ClassImplementsAllMethodsAndProperties(ASTContext &Ctx,
                                       const ObjCImplementationDecl *ImpDecl,
                                       ObjCProtocolDecl *Protocol) {
   return false;
@@ -268,7 +268,7 @@ void ObjCMigrateASTConsumer::migrateProtocolConformance(ASTContext &Ctx,
   // methods and properties, then this class conforms to this protocol.
   llvm::SmallVector<ObjCProtocolDecl*, 8> ConformingProtocols;
   for (unsigned i = 0, e = PotentialImplicitProtocols.size(); i != e; i++)
-    if (ClassImplementsAllMethodsAndProprties(Ctx, ImpDecl, 
+    if (ClassImplementsAllMethodsAndProperties(Ctx, ImpDecl, 
                                               PotentialImplicitProtocols[i]))
       ConformingProtocols.push_back(PotentialImplicitProtocols[i]);
 }
