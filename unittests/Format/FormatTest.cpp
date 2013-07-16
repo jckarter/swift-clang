@@ -921,6 +921,32 @@ TEST_F(FormatTest, SplitsLongCxxComments) {
                    getLLVMStyleWithColumns(20)));
 }
 
+TEST_F(FormatTest, DontSplitLineCommentsWithEscapedNewlines) {
+  EXPECT_EQ("// aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\\\n"
+            "// aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\\\n"
+            "// aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            format("// aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\\\n"
+                   "// aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\\\n"
+                   "// aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"));
+  EXPECT_EQ("int a; // AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\\\n"
+            "       // AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\\\n"
+            "       // AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+            format("int a; // AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\\\n"
+                   "       // AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\\\n"
+                   "       // AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                   getLLVMStyleWithColumns(50)));
+  // FIXME: One day we might want to implement adjustment of leading whitespace
+  // of the consecutive lines in this kind of comment:
+  EXPECT_EQ("int\n"
+            "a; // AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\\\n"
+            "       // AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\\\n"
+            "       // AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+            format("int a; // AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\\\n"
+                   "       // AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\\\n"
+                   "       // AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                   getLLVMStyleWithColumns(49)));
+}
+
 TEST_F(FormatTest, PriorityOfCommentBreaking) {
   EXPECT_EQ("if (xxx == yyy && // aaaaaaaaaaaa\n"
             "                  // bbbbbbbbb\n"
@@ -1637,10 +1663,9 @@ TEST_F(FormatTest, NestedStaticInitializers) {
                "  { kGlobalRef, UNKNOWN_CODE, NULL, NULL, NULL }\n"
                "};");
   verifyGoogleFormat("SomeType Status::global_reps[3] = {\n"
-                     "  {kGlobalRef, OK_CODE, NULL, NULL, NULL},\n"
-                     "  {kGlobalRef, CANCELLED_CODE, NULL, NULL, NULL},\n"
-                     "  {kGlobalRef, UNKNOWN_CODE, NULL, NULL, NULL}\n"
-                     "};");
+                     "    {kGlobalRef, OK_CODE, NULL, NULL, NULL},\n"
+                     "    {kGlobalRef, CANCELLED_CODE, NULL, NULL, NULL},\n"
+                     "    {kGlobalRef, UNKNOWN_CODE, NULL, NULL, NULL}};");
   verifyFormat(
       "CGRect cg_rect = { { rect.fLeft, rect.fTop },\n"
       "                   { rect.fRight - rect.fLeft, rect.fBottom - rect.fTop"
@@ -1659,11 +1684,11 @@ TEST_F(FormatTest, NestedStaticInitializers) {
       "                              333333333333333333333333333333 } },\n"
       "                          { { 1, 2, 3 } }, { { 1, 2, 3 } } };");
   verifyGoogleFormat(
-      "SomeArrayOfSomeType a = {{{1, 2, 3}}, {{1, 2, 3}},\n"
-      "                         {{111111111111111111111111111111,\n"
-      "                           222222222222222222222222222222,\n"
-      "                           333333333333333333333333333333}},\n"
-      "                         {{1, 2, 3}}, {{1, 2, 3}}};");
+      "SomeArrayOfSomeType a = {\n"
+      "    {{1, 2, 3}}, {{1, 2, 3}},\n"
+      "    {{111111111111111111111111111111, 222222222222222222222222222222,\n"
+      "      333333333333333333333333333333}},\n"
+      "    {{1, 2, 3}}, {{1, 2, 3}}};");
 
   // FIXME: We might at some point want to handle this similar to parameter
   // lists, where we have an option to put each on a single line.
@@ -2970,6 +2995,21 @@ TEST_F(FormatTest, AlwaysBreakBeforeMultilineStrings) {
             "     \"bbbb\"\n"
             "     \"cccc\");",
             format("aaaa(qqq, \"bbbb\" \"cccc\");", Break));
+  EXPECT_EQ("x = \"a\\\n"
+            "b\\\n"
+            "c\";",
+            format("x = \"a\\\n"
+                   "b\\\n"
+                   "c\";",
+                   NoBreak));
+  EXPECT_EQ("x =\n"
+            "    \"a\\\n"
+            "b\\\n"
+            "c\";",
+            format("x = \"a\\\n"
+                   "b\\\n"
+                   "c\";",
+                   Break));
 }
 
 TEST_F(FormatTest, AlignsPipes) {
@@ -3628,6 +3668,8 @@ TEST_F(FormatTest, FormatsFunctionTypes) {
   // Other constructs can look somewhat like function types:
   verifyFormat("A<sizeof(*x)> a;");
   verifyFormat("#define DEREF_AND_CALL_F(x) f(*x)");
+  verifyFormat("some_var = function(*some_pointer_var)[0];");
+  verifyFormat("void f() { function(*some_pointer_var)[0] = 10; }");
 }
 
 TEST_F(FormatTest, BreaksLongDeclarations) {
@@ -3900,7 +3942,7 @@ TEST_F(FormatTest, LayoutCxx11ConstructorBraceInitializers) {
         "                         });");
 
     FormatStyle NoSpaces = getLLVMStyle();
-    NoSpaces.SpacesInBracedLists = false;
+    NoSpaces.Cpp11BracedListStyle = true;
     verifyFormat("vector<int> x{1, 2, 3, 4};", NoSpaces);
     verifyFormat("vector<T> x{{}, {}, {}, {}};", NoSpaces);
     verifyFormat("f({1, 2});", NoSpaces);
@@ -4991,6 +5033,16 @@ TEST_F(FormatTest, BreakStringLiterals) {
       format("#define A \"some text other\";", AlignLeft));
 }
 
+TEST_F(FormatTest, DontSplitStringLiteralsWithEscapedNewlines) {
+  EXPECT_EQ("aaaaaaaaaaa =\n"
+            "    \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\\\n"
+            "  aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\\\n"
+            "  aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\";",
+            format("aaaaaaaaaaa = \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\\\n"
+                   "  aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\\\n"
+                   "  aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\";"));
+}
+
 TEST_F(FormatTest, SkipsUnknownStringLiterals) {
   EXPECT_EQ(
       "u8\"unsupported literal\";",
@@ -5003,6 +5055,11 @@ TEST_F(FormatTest, SkipsUnknownStringLiterals) {
             format("L\"unsupported literal\";", getGoogleStyleWithColumns(15)));
   EXPECT_EQ("R\"x(raw literal)x\";",
             format("R\"x(raw literal)x\";", getGoogleStyleWithColumns(15)));
+  verifyFormat("string a = \"unterminated;");
+  EXPECT_EQ("function(\"unterminated,\n"
+            "         OtherParameter);",
+            format("function(  \"unterminated,\n"
+                   "    OtherParameter);"));
 }
 
 TEST_F(FormatTest, DoesNotTryToParseUDLiteralsInPreCpp11Code) {
@@ -5305,7 +5362,7 @@ TEST_F(FormatTest, ParsesConfiguration) {
   CHECK_PARSE_BOOL(IndentCaseLabels);
   CHECK_PARSE_BOOL(ObjCSpaceBeforeProtocolList);
   CHECK_PARSE_BOOL(PointerBindsToType);
-  CHECK_PARSE_BOOL(SpacesInBracedLists);
+  CHECK_PARSE_BOOL(Cpp11BracedListStyle);
   CHECK_PARSE_BOOL(UseTab);
   CHECK_PARSE_BOOL(IndentFunctionDeclarationAfterType);
 
