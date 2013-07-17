@@ -2738,6 +2738,88 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     return EmitNounwindRuntimeCall(CGM.CreateRuntimeFunction(FTy, Name), Ops);
   }
 
+  if (BuiltinID == ARM64::BI__builtin_arm_ldrex &&
+      getContext().getTypeSize(E->getType()) == 128) {
+    Function *F = CGM.getIntrinsic(Intrinsic::arm64_ldxp);
+
+    Value *LdPtr = EmitScalarExpr(E->getArg(0));
+    Value *Val = Builder.CreateCall(F, Builder.CreateBitCast(LdPtr, Int8PtrTy),
+                                    "ldxp");
+
+    Value *Val0 = Builder.CreateExtractValue(Val, 1);
+    Value *Val1 = Builder.CreateExtractValue(Val, 0);
+    llvm::Type *Int128Ty = llvm::IntegerType::get(getLLVMContext(), 128);
+    Val0 = Builder.CreateZExt(Val0, Int128Ty);
+    Val1 = Builder.CreateZExt(Val1, Int128Ty);
+
+    Value *ShiftCst = llvm::ConstantInt::get(Int128Ty, 64);
+    Val = Builder.CreateShl(Val0, ShiftCst, "shl", true /* nuw */);
+    Val = Builder.CreateOr(Val, Val1);
+    return Builder.CreateBitCast(Val, ConvertType(E->getType()));
+  } else if (BuiltinID == ARM64::BI__builtin_arm_ldrex) {
+    Value *LoadAddr = EmitScalarExpr(E->getArg(0));
+
+    QualType Ty = E->getType();
+    llvm::Type *RealResTy = ConvertType(Ty);
+    llvm::Type *IntResTy = llvm::IntegerType::get(getLLVMContext(),
+                                                  getContext().getTypeSize(Ty));
+    LoadAddr = Builder.CreateBitCast(LoadAddr, IntResTy->getPointerTo());
+
+    Function *F = CGM.getIntrinsic(Intrinsic::arm64_ldxr, LoadAddr->getType());
+    Value *Val = Builder.CreateCall(F, LoadAddr, "ldxr");
+
+    if (RealResTy->isPointerTy())
+      return Builder.CreateIntToPtr(Val, RealResTy);
+
+    Val = Builder.CreateTruncOrBitCast(Val, IntResTy);
+    return Builder.CreateBitCast(Val, RealResTy);
+  }
+
+  if (BuiltinID == ARM64::BI__builtin_arm_strex &&
+      getContext().getTypeSize(E->getArg(0)->getType()) == 128) {
+    Function *F = CGM.getIntrinsic(Intrinsic::arm64_stxp);
+    llvm::Type *STy = llvm::StructType::get(Int64Ty, Int64Ty, NULL);
+
+    Value *One = llvm::ConstantInt::get(Int32Ty, 1);
+    Value *Tmp = Builder.CreateAlloca(ConvertType(E->getArg(0)->getType()),
+                                      One);
+    Value *Val = EmitScalarExpr(E->getArg(0));
+    Builder.CreateStore(Val, Tmp);
+
+    Value *LdPtr = Builder.CreateBitCast(Tmp,llvm::PointerType::getUnqual(STy));
+    Val = Builder.CreateLoad(LdPtr);
+
+    Value *Arg0 = Builder.CreateExtractValue(Val, 0);
+    Value *Arg1 = Builder.CreateExtractValue(Val, 1);
+    Value *StPtr = Builder.CreateBitCast(EmitScalarExpr(E->getArg(1)),
+                                         Int8PtrTy);
+    return Builder.CreateCall3(F, Arg0, Arg1, StPtr, "stxp");
+  } else if (BuiltinID == ARM64::BI__builtin_arm_strex) {
+    Value *StoreVal = EmitScalarExpr(E->getArg(0));
+    Value *StoreAddr = EmitScalarExpr(E->getArg(1));
+
+    QualType Ty = E->getArg(0)->getType();
+    llvm::Type *StoreTy = llvm::IntegerType::get(getLLVMContext(),
+                                                 getContext().getTypeSize(Ty));
+    StoreAddr = Builder.CreateBitCast(StoreAddr, StoreTy->getPointerTo());
+
+    if (StoreVal->getType()->isPointerTy())
+      StoreVal = Builder.CreatePtrToInt(StoreVal, Int64Ty);
+    else {
+      StoreVal = Builder.CreateBitCast(StoreVal, StoreTy);
+      StoreVal = Builder.CreateZExtOrBitCast(StoreVal, Int64Ty);
+    }
+
+    Function *F = CGM.getIntrinsic(Intrinsic::arm64_stxr, StoreAddr->getType());
+    return Builder.CreateCall2(F, StoreVal, StoreAddr, "stxr");
+  }
+
+  if (BuiltinID == ARM64::BI__builtin_arm_clrex) {
+    Function *F = CGM.getIntrinsic(Intrinsic::arm64_clrex);
+    return Builder.CreateCall(F);
+  }
+
+
   llvm::SmallVector<Value*, 4> Ops;
   for (unsigned i = 0, e = E->getNumArgs() - 1; i != e; i++)
     Ops.push_back(EmitScalarExpr(E->getArg(i)));

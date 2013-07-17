@@ -325,11 +325,15 @@ Sema::CheckBuiltinFunctionCall(unsigned BuiltinID, CallExpr *TheCall) {
   return TheCallResult;
 }
 
-bool Sema::CheckARMBuiltinExclusiveCall(unsigned BuiltinID, CallExpr *TheCall) {
+bool Sema::CheckARMBuiltinExclusiveCall(unsigned BuiltinID, CallExpr *TheCall,
+                                        unsigned MaxWidth) {
   assert((BuiltinID == ARM::BI__builtin_arm_ldrex ||
-          BuiltinID == ARM::BI__builtin_arm_strex) &&
+          BuiltinID == ARM::BI__builtin_arm_strex ||
+          BuiltinID == ARM64::BI__builtin_arm_ldrex ||
+          BuiltinID == ARM64::BI__builtin_arm_strex) &&
          "unexpected ARM builtin");
-  bool IsLdrex = BuiltinID == ARM::BI__builtin_arm_ldrex;
+  bool IsLdrex = BuiltinID == ARM::BI__builtin_arm_ldrex ||
+                 BuiltinID == ARM64::BI__builtin_arm_ldrex;
 
   DeclRefExpr *DRE =cast<DeclRefExpr>(TheCall->getCallee()->IgnoreParenCasts());
 
@@ -390,7 +394,8 @@ bool Sema::CheckARMBuiltinExclusiveCall(unsigned BuiltinID, CallExpr *TheCall) {
   }
 
   // But ARM doesn't have instructions to deal with 128-bit versions.
-  if (Context.getTypeSize(ValType) > 64) {
+  if (Context.getTypeSize(ValType) > MaxWidth) {
+    assert(MaxWidth == 64 && "Diagnostic unexpectedly inaccurate");
     Diag(DRE->getLocStart(), diag::err_atomic_exclusive_builtin_pointer_size)
       << PointerArg->getType() << PointerArg->getSourceRange();
     return true;
@@ -492,7 +497,7 @@ bool Sema::CheckARMBuiltinFunctionCall(unsigned BuiltinID, CallExpr *TheCall) {
 
   if (BuiltinID == ARM::BI__builtin_arm_ldrex ||
       BuiltinID == ARM::BI__builtin_arm_strex) {
-    return CheckARMBuiltinExclusiveCall(BuiltinID, TheCall);
+    return CheckARMBuiltinExclusiveCall(BuiltinID, TheCall, 64);
   }
 
   uint64_t mask = 0;
@@ -581,6 +586,11 @@ bool Sema::CheckARMBuiltinFunctionCall(unsigned BuiltinID, CallExpr *TheCall) {
 bool Sema::CheckARM64BuiltinFunctionCall(unsigned BuiltinID,
                                          CallExpr *TheCall) {
   llvm::APSInt Result;
+
+  if (BuiltinID == ARM64::BI__builtin_arm_ldrex ||
+      BuiltinID == ARM64::BI__builtin_arm_strex) {
+    return CheckARMBuiltinExclusiveCall(BuiltinID, TheCall, 128);
+  }
 
   uint64_t mask = 0;
   unsigned TV = 0;

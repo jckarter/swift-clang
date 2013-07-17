@@ -7499,7 +7499,8 @@ private:
 
   ExprResult CheckBuiltinFunctionCall(unsigned BuiltinID, CallExpr *TheCall);
 
-  bool CheckARMBuiltinExclusiveCall(unsigned BuiltinID, CallExpr *TheCall);
+  bool CheckARMBuiltinExclusiveCall(unsigned BuiltinID, CallExpr *TheCall,
+                                    unsigned MaxWidth);
   bool CheckARMBuiltinFunctionCall(unsigned BuiltinID, CallExpr *TheCall);
 
   bool CheckARM64BuiltinFunctionCall(unsigned BuiltinID, CallExpr *TheCall);
