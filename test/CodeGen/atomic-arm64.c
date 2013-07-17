@@ -50,14 +50,13 @@ void test2() {
   __c11_atomic_store(&a_pointer, &a_bool, memory_order_seq_cst);
 }
 
-// FIXME: rdar://13506216
-// CHCK:    define void @test3(
-// CHCK:      [[PAIR:%.*]] = alloca [[PAIR_T:%.*]], align 8
-// CHCK-NEXT: [[TEMP:%.*]] = alloca [[PAIR_T]], align 8
-// CHCK:      llvm.memcpy
-// CHCK-NEXT: [[T0:%.*]] = bitcast [[PAIR_T]]* [[TEMP]] to i128*
-// CHCK-NEXT: [[T1:%.*]] = load i128* [[T0]], align 16
-// CHCK-NEXT: store atomic i128 [[T1]], i128* bitcast ([[PAIR_T]]* @a_pointer_pair to i128*) seq_cst, align 16
+// CHECK:    define void @test3(
+// CHECK:      [[PAIR:%.*]] = alloca [[PAIR_T:%.*]], align 8
+// CHECK-NEXT: [[TEMP:%.*]] = alloca [[PAIR_T]], align 8
+// CHECK:      llvm.memcpy
+// CHECK-NEXT: [[T0:%.*]] = bitcast [[PAIR_T]]* [[TEMP]] to i128*
+// CHECK-NEXT: [[T1:%.*]] = load i128* [[T0]], align 16
+// CHECK-NEXT: store atomic i128 [[T1]], i128* bitcast ([[PAIR_T]]* @a_pointer_pair to i128*) seq_cst, align 16
 void test3(pointer_pair_t pair) {
   __c11_atomic_store(&a_pointer_pair, pair, memory_order_seq_cst);
 }

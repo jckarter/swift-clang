@@ -4070,7 +4070,7 @@ public:
     WCharType = UnsignedInt;
     MaxVectorAlign = 128;
     RegParmMax = 8;
-    MaxAtomicInlineWidth = 64; // FIXME: workaround
+    MaxAtomicInlineWidth = 128;
     MaxAtomicPromoteWidth = 128;
 
     LongDoubleWidth = LongDoubleAlign = 128;
