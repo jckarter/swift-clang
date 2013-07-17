@@ -157,6 +157,20 @@ TEST_F(RegistryTest, PolymorphicMatchers) {
 #endif
 }
 
+TEST_F(RegistryTest, TemplateArgument) {
+  Matcher<Decl> HasTemplateArgument = constructMatcher(
+      "classTemplateSpecializationDecl",
+      constructMatcher(
+          "hasAnyTemplateArgument",
+          constructMatcher("refersToType",
+                           constructMatcher("asString", std::string("int")))))
+      .getTypedMatcher<Decl>();
+  EXPECT_TRUE(matches("template<typename T> class A {}; A<int> a;",
+                      HasTemplateArgument));
+  EXPECT_FALSE(matches("template<typename T> class A {}; A<char> a;",
+                       HasTemplateArgument));
+}
+
 TEST_F(RegistryTest, TypeTraversal) {
   Matcher<Type> M = constructMatcher(
       "pointerType",
@@ -171,6 +185,17 @@ TEST_F(RegistryTest, TypeTraversal) {
       .getTypedMatcher<Type>();
   EXPECT_FALSE(matches("struct A{}; A a[7];;", M));
   EXPECT_TRUE(matches("int b[7];", M));
+}
+
+TEST_F(RegistryTest, CXXCtorInitializer) {
+  Matcher<Decl> CtorDecl = constructMatcher(
+      "constructorDecl",
+      constructMatcher("hasAnyConstructorInitializer",
+                       constructMatcher("forField", hasName("foo"))))
+      .getTypedMatcher<Decl>();
+  EXPECT_TRUE(matches("struct Foo { Foo() : foo(1) {} int foo; };", CtorDecl));
+  EXPECT_FALSE(matches("struct Foo { Foo() {} int foo; };", CtorDecl));
+  EXPECT_FALSE(matches("struct Foo { Foo() : bar(1) {} int bar; };", CtorDecl));
 }
 
 TEST_F(RegistryTest, Errors) {
