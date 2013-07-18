@@ -406,8 +406,9 @@ public:
       : Generic_GCC(D, Triple, Args) {}
 
   virtual bool IsIntegratedAssemblerDefault() const {
-    // Default integrated assembler to on for x86.
+    // Default integrated assembler to on for x86 and AArch64 (both versions).
     return (getTriple().getArch() == llvm::Triple::aarch64 ||
+            getTriple().getArch() == llvm::Triple::arm64 ||
             getTriple().getArch() == llvm::Triple::x86 ||
             getTriple().getArch() == llvm::Triple::x86_64);
   }
