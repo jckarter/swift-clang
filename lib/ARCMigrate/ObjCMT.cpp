@@ -8,6 +8,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "XCTMT.h"
+#include "Transforms.h"
 #include "clang/ARCMigrate/ARCMTActions.h"
 #include "clang/AST/ASTConsumer.h"
 #include "clang/AST/ASTContext.h"
@@ -200,6 +201,53 @@ void ObjCMigrateASTConsumer::migrateDecl(Decl *D) {
   BodyMigrator(*this).TraverseDecl(D);
 }
 
+static bool rewriteToObjCProperty(const ObjCMethodDecl *Getter,
+                                  const ObjCMethodDecl *Setter,
+                                  const NSAPI &NS, edit::Commit &commit) {
+  ASTContext &Context = NS.getASTContext();
+  std::string PropertyString = "@property";
+  const ParmVarDecl *argDecl = *Setter->param_begin();
+  QualType ArgType = Context.getCanonicalType(argDecl->getType());
+  Qualifiers::ObjCLifetime propertyLifetime = ArgType.getObjCLifetime();
+  
+  if (ArgType->isObjCRetainableType() &&
+      propertyLifetime == Qualifiers::OCL_Strong) {
+    if (const ObjCObjectPointerType *ObjPtrTy =
+        ArgType->getAs<ObjCObjectPointerType>()) {
+      ObjCInterfaceDecl *IDecl = ObjPtrTy->getObjectType()->getInterface();
+      if (IDecl &&
+          IDecl->lookupNestedProtocol(&Context.Idents.get("NSCopying")))
+        PropertyString += "(copy)";
+    }
+  }
+  else if (propertyLifetime == Qualifiers::OCL_Weak)
+    // TODO. More precise determination of 'weak' attribute requires
+    // looking into setter's implementation for backing weak ivar.
+    PropertyString += "(weak)";
+  else
+    PropertyString += "(unsafe_unretained)";
+  
+  // strip off any ARC lifetime qualifier.
+  QualType CanResultTy = Context.getCanonicalType(Getter->getResultType());
+  if (CanResultTy.getQualifiers().hasObjCLifetime()) {
+    Qualifiers Qs = CanResultTy.getQualifiers();
+    Qs.removeObjCLifetime();
+    CanResultTy = Context.getQualifiedType(CanResultTy.getUnqualifiedType(), Qs);
+  }
+  PropertyString += " ";
+  PropertyString += CanResultTy.getAsString(Context.getPrintingPolicy());
+  PropertyString += " ";
+  PropertyString += Getter->getNameAsString();
+  commit.replace(CharSourceRange::getCharRange(Getter->getLocStart(),
+                                               Getter->getDeclaratorEndLoc()),
+                 PropertyString);
+  SourceLocation EndLoc = Setter->getDeclaratorEndLoc();
+  // Get location past ';'
+  EndLoc = EndLoc.getLocWithOffset(1);
+  commit.remove(CharSourceRange::getCharRange(Setter->getLocStart(), EndLoc));
+  return true;
+}
+
 void ObjCMigrateASTConsumer::migrateObjCInterfaceDecl(ASTContext &Ctx,
                                                       ObjCInterfaceDecl *D) {
   for (ObjCContainerDecl::method_iterator M = D->meth_begin(), MEnd = D->meth_end();
@@ -232,7 +280,7 @@ void ObjCMigrateASTConsumer::migrateObjCInterfaceDecl(ASTContext &Ctx,
           SetterMethod->hasAttrs())
           continue;
         edit::Commit commit(*Editor);
-        edit::rewriteToObjCProperty(Method, SetterMethod, *NSAPIObj, commit);
+        rewriteToObjCProperty(Method, SetterMethod, *NSAPIObj, commit);
         Editor->commit(commit);
       }
   }
@@ -301,6 +349,57 @@ ClassImplementsAllMethodsAndProperties(ASTContext &Ctx,
   return true;
 }
 
+static bool rewriteToObjCInterfaceDecl(const ObjCInterfaceDecl *IDecl,
+                    llvm::SmallVectorImpl<ObjCProtocolDecl*> &ConformingProtocols,
+                    const NSAPI &NS, edit::Commit &commit) {
+  const ObjCList<ObjCProtocolDecl> &Protocols = IDecl->getReferencedProtocols();
+  std::string ClassString;
+  SourceLocation EndLoc =
+  IDecl->getSuperClass() ? IDecl->getSuperClassLoc() : IDecl->getLocation();
+  
+  if (Protocols.empty()) {
+    ClassString = '<';
+    for (unsigned i = 0, e = ConformingProtocols.size(); i != e; i++) {
+      ClassString += ConformingProtocols[i]->getNameAsString();
+      if (i != (e-1))
+        ClassString += ", ";
+    }
+    ClassString += "> ";
+  }
+  else {
+    ClassString = ", ";
+    for (unsigned i = 0, e = ConformingProtocols.size(); i != e; i++) {
+      ClassString += ConformingProtocols[i]->getNameAsString();
+      if (i != (e-1))
+        ClassString += ", ";
+    }
+    ObjCInterfaceDecl::protocol_loc_iterator PL = IDecl->protocol_loc_end() - 1;
+    EndLoc = *PL;
+  }
+  
+  commit.insertAfterToken(EndLoc, ClassString);
+  return true;
+}
+
+static bool rewriteToNSEnumDecl(const EnumDecl *EnumDcl,
+                                const TypedefDecl *TypedefDcl,
+                                const NSAPI &NS, edit::Commit &commit,
+                                bool IsNSIntegerType) {
+  std::string ClassString = 
+    IsNSIntegerType ? "typedef NS_ENUM(NSInteger, " : "typedef NS_OPTIONS(NSUInteger, ";
+  ClassString += TypedefDcl->getIdentifier()->getName();
+  ClassString += ')';
+  SourceRange R(EnumDcl->getLocStart(), EnumDcl->getLocStart());
+  commit.replace(R, ClassString);
+  SourceLocation EndOfTypedefLoc = TypedefDcl->getLocEnd();
+  EndOfTypedefLoc = trans::findLocationAfterSemi(EndOfTypedefLoc, NS.getASTContext());
+  if (!EndOfTypedefLoc.isInvalid()) {
+    commit.remove(SourceRange(TypedefDcl->getLocStart(), EndOfTypedefLoc));
+    return true;
+  }
+  return false;
+}
+
 void ObjCMigrateASTConsumer::migrateProtocolConformance(ASTContext &Ctx,
                                             const ObjCImplementationDecl *ImpDecl) {
   const ObjCInterfaceDecl *IDecl = ImpDecl->getClassInterface();
@@ -353,8 +452,8 @@ void ObjCMigrateASTConsumer::migrateProtocolConformance(ASTContext &Ctx,
       MinimalConformingProtocols.push_back(TargetPDecl);
   }
   edit::Commit commit(*Editor);
-  edit::rewriteToObjCInterfaceDecl(IDecl, MinimalConformingProtocols,
-                                   *NSAPIObj, commit);
+  rewriteToObjCInterfaceDecl(IDecl, MinimalConformingProtocols,
+                             *NSAPIObj, commit);
   Editor->commit(commit);
 }
 
@@ -366,14 +465,19 @@ void ObjCMigrateASTConsumer::migrateNSEnumDecl(ASTContext &Ctx,
     return;
   
   QualType qt = TypedefDcl->getTypeSourceInfo()->getType();
-  if (!NSAPIObj->isObjCNSIntegerType(qt))
+  bool IsNSIntegerType = NSAPIObj->isObjCNSIntegerType(qt);
+  bool IsNSUIntegerType = !IsNSIntegerType && NSAPIObj->isObjCNSUIntegerType(qt);
+  if (!IsNSIntegerType && !IsNSUIntegerType)
     return;
   
   // NS_ENUM must be available.
-  if (!Ctx.Idents.get("NS_ENUM").hasMacroDefinition())
+  if (IsNSIntegerType && !Ctx.Idents.get("NS_ENUM").hasMacroDefinition())
+    return;
+  // NS_OPTIONS must be available.
+  if (IsNSUIntegerType && !Ctx.Idents.get("NS_OPTIONS").hasMacroDefinition())
     return;
   edit::Commit commit(*Editor);
-  edit::rewriteToNSEnumDecl(EnumDcl, TypedefDcl, *NSAPIObj, commit);
+  rewriteToNSEnumDecl(EnumDcl, TypedefDcl, *NSAPIObj, commit, IsNSIntegerType);
   Editor->commit(commit);
 }
 
