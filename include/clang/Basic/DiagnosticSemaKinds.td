@@ -3398,6 +3398,10 @@ def note_unavailable_here : Note<
   "%select{unavailable|deleted|deprecated}1 here">;
 def note_implicitly_deleted : Note<
   "explicitly defaulted function was implicitly deleted here">;
+def note_inherited_deleted_here : Note<
+  "deleted constructor was inherited here">;
+def note_cannot_inherit : Note<
+  "constructor cannot be inherited">;
 def warn_not_enough_argument : Warning<
   "not enough variable arguments in %0 declaration to fit a sentinel">,
   InGroup<Sentinel>;
@@ -3418,7 +3422,7 @@ def err_redefinition : Error<"redefinition of %0">;
 def err_definition_of_implicitly_declared_member : Error<
   "definition of implicitly declared %select{default constructor|copy "
   "constructor|move constructor|copy assignment operator|move assignment "
-  "operator|destructor}1">;
+  "operator|destructor|function}1">;
 def err_definition_of_explicitly_defaulted_member : Error<
   "definition of explicitly defaulted %select{default constructor|copy "
   "constructor|move constructor|copy assignment operator|move assignment "
@@ -6481,13 +6485,25 @@ def err_omp_expected_var_arg_suggest : Error<
 def err_omp_global_var_arg : Error<
   "arguments of '#pragma omp %0' must have %select{global storage|static storage duration}1">;
 def err_omp_ref_type_arg : Error<
-  "arguments of '#pragma omp %0' cannot be of reference type">;
+  "arguments of '#pragma omp %0' cannot be of reference type %1">;
 def err_omp_var_scope : Error<
   "'#pragma omp %0' must appear in the scope of the %q1 variable declaration">;
 def err_omp_var_used : Error<
   "'#pragma omp %0' must precede all references to variable %q1">;
 def err_omp_var_thread_local : Error<
   "variable %0 cannot be threadprivate because it is thread-local">;
+def err_omp_private_incomplete_type : Error<
+  "a private variable with incomplete type %0">;
+def err_omp_directive_nonblock : Error<
+  "directive '#pragma omp %0' bound to nonblock statement">;
+def err_omp_unexpected_clause_value : Error <
+  "expected %0 in OpenMP clause '%1'">;
+def err_omp_expected_var_name : Error <
+  "expected variable name">;
+def err_omp_required_method : Error <
+  "%0 variable must have an accessible, unambiguous %select{default constructor|copy constructor|copy assignment operator|'%2'|destructor}1">;
+def err_omp_clause_ref_type_arg : Error<
+  "arguments of OpenMP clause '%0' cannot be of reference type %1">;
 def err_omp_threadprivate_incomplete_type : Error<
   "threadprivate variable with incomplete type %0">;
 } // end of OpenMP category
