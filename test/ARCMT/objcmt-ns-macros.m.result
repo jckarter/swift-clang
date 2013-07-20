@@ -27,3 +27,16 @@ typedef NS_OPTIONS(NSUInteger, UITableViewCellStyle) {
 
 
 
+typedef NS_ENUM(NSInteger, UIViewAnimationTransition) {
+    UIViewAnimationTransitionNone,
+    UIViewAnimationTransitionFlipFromLeft,
+    UIViewAnimationTransitionFlipFromRight,
+    UIViewAnimationTransitionCurlUp,
+    UIViewAnimationTransitionCurlDown,
+} ;
+
+enum {
+  UNOne,
+  UNTwo
+};
+
