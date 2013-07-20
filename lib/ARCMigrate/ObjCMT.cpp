@@ -385,7 +385,7 @@ static bool rewriteToNSEnumDecl(const EnumDecl *EnumDcl,
                                 const TypedefDecl *TypedefDcl,
                                 const NSAPI &NS, edit::Commit &commit,
                                 bool IsNSIntegerType) {
-  std::string ClassString = 
+  std::string ClassString =
     IsNSIntegerType ? "typedef NS_ENUM(NSInteger, " : "typedef NS_OPTIONS(NSUInteger, ";
   ClassString += TypedefDcl->getIdentifier()->getName();
   ClassString += ')';
@@ -400,7 +400,20 @@ static bool rewriteToNSEnumDecl(const EnumDecl *EnumDcl,
   return false;
 }
 
-void ObjCMigrateASTConsumer::migrateProtocolConformance(ASTContext &Ctx,
+static bool rewriteToNSEnumDecl(const EnumDecl *EnumDcl,
+                                const TypedefDecl *TypedefDcl,
+                                const NSAPI &NS, edit::Commit &commit) {
+  std::string ClassString = "NS_ENUM(NSInteger, ";
+  ClassString += TypedefDcl->getIdentifier()->getName();
+  ClassString += ')';
+  SourceRange R(EnumDcl->getLocStart(), EnumDcl->getLocStart());
+  commit.replace(R, ClassString);
+  SourceLocation TypedefLoc = TypedefDcl->getLocEnd();
+  commit.remove(SourceRange(TypedefLoc, TypedefLoc));
+  return true;
+}
+
+void ObjCMigrateASTConsumer::migrateProtocolConformance(ASTContext &Ctx,   
                                             const ObjCImplementationDecl *ImpDecl) {
   const ObjCInterfaceDecl *IDecl = ImpDecl->getClassInterface();
   if (!IDecl || ObjCProtocolDecls.empty())
@@ -467,8 +480,24 @@ void ObjCMigrateASTConsumer::migrateNSEnumDecl(ASTContext &Ctx,
   QualType qt = TypedefDcl->getTypeSourceInfo()->getType();
   bool IsNSIntegerType = NSAPIObj->isObjCNSIntegerType(qt);
   bool IsNSUIntegerType = !IsNSIntegerType && NSAPIObj->isObjCNSUIntegerType(qt);
-  if (!IsNSIntegerType && !IsNSUIntegerType)
-    return;
+  if (!IsNSIntegerType && !IsNSUIntegerType) {
+    // Also check for typedef enum {...} TD;
+    if (const EnumType *EnumTy = qt->getAs<EnumType>()) {
+      if (EnumTy->getDecl() == EnumDcl) {
+        // NS_ENUM must be available.
+        if (!Ctx.Idents.get("NS_ENUM").hasMacroDefinition())
+          return;
+        edit::Commit commit(*Editor);
+        rewriteToNSEnumDecl(EnumDcl, TypedefDcl, *NSAPIObj, commit);
+        Editor->commit(commit);
+        return;
+      }
+      else
+        return;
+    }
+    else
+      return;
+  }
   
   // NS_ENUM must be available.
   if (IsNSIntegerType && !Ctx.Idents.get("NS_ENUM").hasMacroDefinition())
@@ -515,8 +544,9 @@ void ObjCMigrateASTConsumer::HandleTranslationUnit(ASTContext &Ctx) {
       else if (const EnumDecl *ED = dyn_cast<EnumDecl>(*D)) {
         DeclContext::decl_iterator N = D;
         ++N;
-        if (const TypedefDecl *TD = dyn_cast<TypedefDecl>(*N))
-          migrateNSEnumDecl(Ctx, ED, TD);
+        if (N != DEnd)
+          if (const TypedefDecl *TD = dyn_cast<TypedefDecl>(*N))
+            migrateNSEnumDecl(Ctx, ED, TD);
       }
     }
   
