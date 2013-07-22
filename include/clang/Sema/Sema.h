@@ -23,7 +23,6 @@
 #include "clang/AST/MangleNumberingContext.h"
 #include "clang/AST/NSAPI.h"
 #include "clang/AST/PrettyPrinter.h"
-#include "clang/AST/StmtOpenMP.h"
 #include "clang/AST/TypeLoc.h"
 #include "clang/Basic/ExpressionTraits.h"
 #include "clang/Basic/LangOptions.h"
@@ -139,6 +138,7 @@ namespace clang {
   class ObjCPropertyDecl;
   class ObjCProtocolDecl;
   class OMPThreadPrivateDecl;
+  class OMPClause;
   class OverloadCandidateSet;
   class OverloadExpr;
   class ParenListExpr;
@@ -3565,7 +3565,7 @@ public:
                                         NamedDecl *Target);
 
   bool CheckUsingDeclRedeclaration(SourceLocation UsingLoc,
-                                   bool isTypeName,
+                                   bool HasTypenameKeyword,
                                    const CXXScopeSpec &SS,
                                    SourceLocation NameLoc,
                                    const LookupResult &Previous);
@@ -3579,7 +3579,7 @@ public:
                                    const DeclarationNameInfo &NameInfo,
                                    AttributeList *AttrList,
                                    bool IsInstantiation,
-                                   bool IsTypeName,
+                                   bool HasTypenameKeyword,
                                    SourceLocation TypenameLoc);
 
   bool CheckInheritingConstructorUsingDecl(UsingDecl *UD);
@@ -3591,7 +3591,7 @@ public:
                               CXXScopeSpec &SS,
                               UnqualifiedId &Name,
                               AttributeList *AttrList,
-                              bool IsTypeName,
+                              bool HasTypenameKeyword,
                               SourceLocation TypenameLoc);
   Decl *ActOnAliasDeclaration(Scope *CurScope,
                               AccessSpecifier AS,
