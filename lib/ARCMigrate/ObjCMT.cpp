@@ -557,11 +557,16 @@ void ObjCMigrateASTConsumer::migrateMethodInstanceType(ASTContext &Ctx,
     Selector::getInstTypeMethodFamily(OM->getSelector());
   if (OIT_Family == OIT_None)
     return;
-  // TODO. Many more to come
+  std::string ClassName;
   switch (OIT_Family) {
     case OIT_Array:
+      ClassName = "NSArray";
       break;
     case OIT_Dictionary:
+      ClassName = "NSDictionary";
+      break;
+    case OIT_MemManage:
+      ClassName = "NSObject";
       break;
     default:
       return;
@@ -576,21 +581,23 @@ void ObjCMigrateASTConsumer::migrateMethodInstanceType(ASTContext &Ctx,
     else if (ObjCImplDecl *ImpDecl = dyn_cast<ObjCImplDecl>(CDecl))
       IDecl = ImpDecl->getClassInterface();
   }
-  if (!IDecl)
+  if (!IDecl ||
+      !IDecl->lookupInheritedClass(&Ctx.Idents.get(ClassName)))
     return;
   
-  if (OIT_Family ==  OIT_Array &&
-      !IDecl->lookupInheritedClass(&Ctx.Idents.get("NSArray")))
-    return;
-  else if (OIT_Family == OIT_Dictionary &&
-           !IDecl->lookupInheritedClass(&Ctx.Idents.get("NSDictionary")))
-    return;
-  
-  TypeSourceInfo *TSInfo =  OM->getResultTypeSourceInfo();
-  TypeLoc TL = TSInfo->getTypeLoc();
-  SourceRange R = SourceRange(TL.getBeginLoc(), TL.getEndLoc());
+  SourceRange R;
+  std::string ClassString;
+  if (TypeSourceInfo *TSInfo =  OM->getResultTypeSourceInfo()) {
+    TypeLoc TL = TSInfo->getTypeLoc();
+    R = SourceRange(TL.getBeginLoc(), TL.getEndLoc());
+    ClassString = "instancetype";
+  }
+  else {
+    R = SourceRange(OM->getLocStart(), OM->getLocStart());
+    ClassString = OM->isInstanceMethod() ? '-' : '+';
+    ClassString += " (instancetype)";
+  }
   edit::Commit commit(*Editor);
-  std::string ClassString = "instancetype";
   commit.replace(R, ClassString);
   Editor->commit(commit);
 }
