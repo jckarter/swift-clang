@@ -1,4 +1,5 @@
-// RUN: not --crash %clang --analyze -Xanalyzer -analyzer-checker=debug.ExprInspection %s 2>&1 | FileCheck %s
+// RUN: not --crash %clang_cc1 -analyze -analyzer-checker=debug.ExprInspection %s 2>&1 | FileCheck %s
+// REQUIRES: crash-recovery
 
 void clang_analyzer_crash(void);
 
@@ -15,4 +16,4 @@ void test() {
 // CHECK-NEXT: 2. While analyzing stack: 
 // CHECK-NEXT:  #0 void inlined()
 // CHECK-NEXT:  #1 void test()
-// CHECK-NEXT: 3.	{{.*}}crash-trace.c:6:3: Error evaluating statement
+// CHECK-NEXT: 3.	{{.*}}crash-trace.c:{{[0-9]+}}:3: Error evaluating statement
