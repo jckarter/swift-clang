@@ -137,12 +137,13 @@ class SanitizerArgs {
                         bool DiagnoseErrors) {
     unsigned Kind = 0;
     for (unsigned I = 0, N = A->getNumValues(); I != N; ++I) {
-      if (unsigned K = parse(A->getValue(I)))
+      if (unsigned K = parse(A->getValue(I))) {
         Kind |= K;
+        if (DiagnoseErrors && !allowedOpt(A->getValue(I)))
+          D.Diag(diag::err_drv_unsupported_option_argument)
+            << A->getOption().getName() << A->getValue(I);
+      }
       else if (DiagnoseErrors)
-        D.Diag(diag::err_drv_unsupported_option_argument)
-          << A->getOption().getName() << A->getValue(I);
-      if (!allowedOpt(A->getValue(I)))
         D.Diag(diag::err_drv_unsupported_option_argument)
           << A->getOption().getName() << A->getValue(I);
     }
@@ -160,16 +161,16 @@ class SanitizerArgs {
     const char *DeprecatedReplacement = 0;
     if (A->getOption().matches(options::OPT_faddress_sanitizer)) {
       Add = Address;
-      D.Diag(diag::err_drv_unsupported_opt) << A->getOption().getName();
+      DeprecatedReplacement = "-fsanitize=address";
     } else if (A->getOption().matches(options::OPT_fno_address_sanitizer)) {
       Remove = Address;
-      D.Diag(diag::err_drv_unsupported_opt) << A->getOption().getName();
+      DeprecatedReplacement = "-fno-sanitize=address";
     } else if (A->getOption().matches(options::OPT_fthread_sanitizer)) {
       Add = Thread;
-      D.Diag(diag::err_drv_unsupported_opt) << A->getOption().getName();
+      DeprecatedReplacement = "-fsanitize=thread";
     } else if (A->getOption().matches(options::OPT_fno_thread_sanitizer)) {
       Remove = Thread;
-      D.Diag(diag::err_drv_unsupported_opt) << A->getOption().getName();
+      DeprecatedReplacement = "-fno-sanitize=thread";
     } else if (A->getOption().matches(options::OPT_fcatch_undefined_behavior)) {
       Add = UndefinedTrap;
       DeprecatedReplacement = 
@@ -177,7 +178,7 @@ class SanitizerArgs {
     } else if (A->getOption().matches(options::OPT_fbounds_checking) ||
                A->getOption().matches(options::OPT_fbounds_checking_EQ)) {
       Add = Bounds;
-      D.Diag(diag::err_drv_unsupported_opt) << A->getOption().getName();
+      DeprecatedReplacement = "-fsanitize=bounds";
     } else if (A->getOption().matches(options::OPT_fsanitize_EQ)) {
       Add = parse(D, A, DiagnoseErrors);
     } else if (A->getOption().matches(options::OPT_fno_sanitize_EQ)) {
