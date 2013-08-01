@@ -3687,6 +3687,11 @@ TEST_F(FormatTest, UnderstandsRvalueReferences) {
   verifyIndependentOfContext("A<int &&, int &&> a;");
   verifyGoogleFormat("A<int&&> a;");
   verifyGoogleFormat("A<int&&, int&&> a;");
+
+  // Not rvalue references:
+  verifyFormat("template <bool B, bool C> class A {\n"
+               "  static_assert(B && C, \"Something is wrong\");\n"
+               "};");
 }
 
 TEST_F(FormatTest, FormatsBinaryOperatorsPrecedingEquals) {
@@ -4663,6 +4668,11 @@ TEST_F(FormatTest, FormatObjCProtocol) {
                "@optional\n"
                "@property(assign) int madProp;\n"
                "@end\n");
+
+  verifyFormat("@property(nonatomic, assign, readonly)\n"
+               "    int *looooooooooooooooooooooooooooongNumber;\n"
+               "@property(nonatomic, assign, readonly)\n"
+               "    NSString *looooooooooooooooooooooooooooongName;");
 }
 
 TEST_F(FormatTest, FormatObjCMethodDeclarations) {

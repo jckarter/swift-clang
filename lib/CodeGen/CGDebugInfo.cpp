@@ -1473,20 +1473,16 @@ llvm::DIType CGDebugInfo::CreateType(const RecordType *Ty, bool Declaration) {
 
   // Collect data fields (including static variables and any initializers).
   CollectRecordFields(RD, DefUnit, EltTys, FwdDecl);
-  llvm::DIArray TParamsArray;
   if (CXXDecl) {
     CollectCXXMemberFunctions(CXXDecl, DefUnit, EltTys, FwdDecl);
     CollectCXXFriends(CXXDecl, DefUnit, EltTys, FwdDecl);
-    if (const ClassTemplateSpecializationDecl *TSpecial
-        = dyn_cast<ClassTemplateSpecializationDecl>(RD))
-      TParamsArray = CollectCXXTemplateParams(TSpecial, DefUnit);
   }
 
   LexicalBlockStack.pop_back();
   RegionMap.erase(Ty->getDecl());
 
   llvm::DIArray Elements = DBuilder.getOrCreateArray(EltTys);
-  FwdDecl.setTypeArray(Elements, TParamsArray);
+  FwdDecl.setTypeArray(Elements);
 
   RegionMap[Ty->getDecl()] = llvm::WeakVH(FwdDecl);
   return FwdDecl;
@@ -2207,7 +2203,6 @@ llvm::DIType CGDebugInfo::CreateLimitedType(const RecordType *Ty) {
 
   uint64_t Size = CGM.getContext().getTypeSize(Ty);
   uint64_t Align = CGM.getContext().getTypeAlign(Ty);
-  const CXXRecordDecl *CXXDecl = dyn_cast<CXXRecordDecl>(RD);
   llvm::DICompositeType RealDecl;
 
   if (RD->isUnion())
@@ -2228,7 +2223,7 @@ llvm::DIType CGDebugInfo::CreateLimitedType(const RecordType *Ty) {
   RegionMap[Ty->getDecl()] = llvm::WeakVH(RealDecl);
   TypeCache[QualType(Ty, 0).getAsOpaquePtr()] = RealDecl;
 
-  if (CXXDecl) {
+  if (const CXXRecordDecl *CXXDecl = dyn_cast<CXXRecordDecl>(RD)) {
     // A class's primary base or the class itself contains the vtable.
     llvm::DICompositeType ContainingType;
     const ASTRecordLayout &RL = CGM.getContext().getASTRecordLayout(RD);
@@ -2248,6 +2243,10 @@ llvm::DIType CGDebugInfo::CreateLimitedType(const RecordType *Ty) {
       ContainingType = RealDecl;
 
     RealDecl.setContainingType(ContainingType);
+    if (const ClassTemplateSpecializationDecl *TSpecial =
+            dyn_cast<ClassTemplateSpecializationDecl>(CXXDecl))
+      RealDecl.setTypeArray(llvm::DIArray(),
+                            CollectCXXTemplateParams(TSpecial, DefUnit));
   }
   return llvm::DIType(RealDecl);
 }

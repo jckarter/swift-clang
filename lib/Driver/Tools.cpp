@@ -2781,14 +2781,10 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
   // preprocessed inputs and configure concludes that -fPIC is not supported.
   Args.ClaimAllArgs(options::OPT_D);
 
-  // Manually translate -O to -O2 and -O4 to -O3; let clang reject
-  // others.
+  // Manually translate -O4 to -O3; let clang reject others.
   if (Arg *A = Args.getLastArg(options::OPT_O_Group)) {
     if (A->getOption().matches(options::OPT_O4))
       CmdArgs.push_back("-O3");
-    else if (A->getOption().matches(options::OPT_O) &&
-             A->getValue()[0] == '\0')
-      CmdArgs.push_back("-O2");
     else
       A->render(Args, CmdArgs);
   }
@@ -3532,9 +3528,9 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
                    options::OPT_fno_vectorize, false))
     CmdArgs.push_back("-vectorize-loops");
 
-  // -fno-slp-vectorize is default.
+  // -fslp-vectorize is default.
   if (Args.hasFlag(options::OPT_fslp_vectorize,
-                   options::OPT_fno_slp_vectorize, false))
+                   options::OPT_fno_slp_vectorize, true))
     CmdArgs.push_back("-vectorize-slp");
 
   // -fno-slp-vectorize-aggressive is default.
