@@ -4603,6 +4603,62 @@ static void HandleExtVectorTypeAttr(QualType &CurType,
     CurType = T;
 }
 
+static bool isPermittedNeonBaseType(QualType &Ty,
+                                    VectorType::VectorKind VecKind,
+                                    Sema &S) {
+  const BuiltinType *BTy = Ty->getAs<BuiltinType>();
+  if (!BTy)
+    return false;
+
+  llvm::Triple Triple = S.Context.getTargetInfo().getTriple();
+
+  // Signed poly is mathematically wrong, but has been baked into some ABIs by
+  // now.
+  bool IsPolyUnsigned = Triple.getArch() == llvm::Triple::aarch64 ||
+    (Triple.getArch() == llvm::Triple::arm64 && !Triple.isOSDarwin());
+  if (VecKind == VectorType::NeonPolyVector) {
+    if (IsPolyUnsigned) {
+      // AArch64 polynomial vectors are unsigned
+      return BTy->getKind() == BuiltinType::UChar ||
+             BTy->getKind() == BuiltinType::UShort;
+    } else {
+      // AArch32 polynomial vector are signed.
+      return BTy->getKind() == BuiltinType::SChar ||
+             BTy->getKind() == BuiltinType::Short;
+    }
+  }
+
+  // Non-polynomial vector types: the usual suspects are allowed, as well as
+  // float64_t on AArch64.
+  bool Is64Bit = Triple.getArch() == llvm::Triple::aarch64 ||
+                 Triple.getArch() == llvm::Triple::arm64;
+
+  if (Is64Bit && BTy->getKind() == BuiltinType::Double)
+    return true;
+
+  BuiltinType::Kind Int64Kind, UInt64Kind;
+  if (S.Context.getTargetInfo().getInt64Type() == TargetInfo::SignedLong) {
+    Int64Kind = BuiltinType::Long;
+    UInt64Kind = BuiltinType::ULong;
+  } else {
+    assert(S.Context.getTargetInfo().getInt64Type() ==
+           TargetInfo::SignedLongLong);
+    Int64Kind = BuiltinType::LongLong;
+    UInt64Kind = BuiltinType::ULongLong;
+  }
+
+  return BTy->getKind() == BuiltinType::SChar ||
+         BTy->getKind() == BuiltinType::UChar ||
+         BTy->getKind() == BuiltinType::Short ||
+         BTy->getKind() == BuiltinType::UShort ||
+         BTy->getKind() == BuiltinType::Int ||
+         BTy->getKind() == BuiltinType::UInt ||
+         BTy->getKind() == Int64Kind ||
+         BTy->getKind() == UInt64Kind ||
+         BTy->getKind() == BuiltinType::Float ||
+         BTy->getKind() == BuiltinType::Half;
+}
+
 /// HandleNeonVectorTypeAttr - The "neon_vector_type" and
 /// "neon_polyvector_type" attributes are used to create vector types that
 /// are mangled according to ARM's ABI.  Otherwise, these types are identical
@@ -4632,42 +4688,8 @@ static void HandleNeonVectorTypeAttr(QualType& CurType,
     return;
   }
   // Only certain element types are supported for Neon vectors.
-  const BuiltinType *BTy = CurType->getAs<BuiltinType>();
-  bool TypeIsAllowed = true;
-  if (!BTy)
-    TypeIsAllowed = false;
-  else if (VecKind == VectorType::NeonPolyVector) {
-    TypeIsAllowed = BTy->getKind() == BuiltinType::SChar ||
-                    BTy->getKind() == BuiltinType::Short;
-  } else {
-    BuiltinType::Kind Int64Kind, UInt64Kind;
-    if (S.Context.getTargetInfo().getInt64Type() == TargetInfo::SignedLong) {
-      Int64Kind = BuiltinType::Long;
-      UInt64Kind = BuiltinType::ULong;
-    } else {
-      assert(S.Context.getTargetInfo().getInt64Type() ==
-             TargetInfo::SignedLongLong);
-      Int64Kind = BuiltinType::LongLong;
-      UInt64Kind = BuiltinType::ULongLong;
-    }
-
-    llvm::Triple Target = S.Context.getTargetInfo().getTriple();
-
-    TypeIsAllowed = (BTy->getKind() == BuiltinType::SChar ||
-                     BTy->getKind() == BuiltinType::UChar ||
-                     BTy->getKind() == BuiltinType::Short ||
-                     BTy->getKind() == BuiltinType::UShort ||
-                     BTy->getKind() == BuiltinType::Int ||
-                     BTy->getKind() == BuiltinType::UInt ||
-                     BTy->getKind() == Int64Kind ||
-                     BTy->getKind() == UInt64Kind ||
-                     BTy->getKind() == BuiltinType::Float ||
-                     (Target.getArch() == llvm::Triple::arm64 &&
-                      BTy->getKind() == BuiltinType::Double));
-  }
-
-  if (!TypeIsAllowed) {
-    S.Diag(Attr.getLoc(), diag::err_attribute_invalid_vector_type) <<CurType;
+  if (!isPermittedNeonBaseType(CurType, VecKind, S)) {
+    S.Diag(Attr.getLoc(), diag::err_attribute_invalid_vector_type) << CurType;
     Attr.setInvalid();
     return;
   }

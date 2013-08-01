@@ -91,6 +91,7 @@ def OP_QDMLSL_N : Op;
 def OP_QDMLAL_N : Op;
 def OP_SHL : Op;
 def OP_SHR : Op;
+def OP_DIV : Op;
 
 class Inst <string n, string p, string t, Op o> {
   string Name = n;
@@ -99,6 +100,7 @@ class Inst <string n, string p, string t, Op o> {
   Op Operand = o;
   bit isShift = 0;
   bit isVCVT_N = 0;
+  bit isA64 = 0;
 
   // Certain intrinsics have different names than their representative
   // instructions. This field allows us to handle this correctly when we

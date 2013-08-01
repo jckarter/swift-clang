@@ -57,8 +57,15 @@ void EmitClangCommentHTMLNamedCharacterReferences(RecordKeeper &Records, raw_ost
 void EmitClangCommentCommandInfo(RecordKeeper &Records, raw_ostream &OS);
 void EmitClangCommentCommandList(RecordKeeper &Records, raw_ostream &OS);
 
-void EmitNeon(RecordKeeper &Records, raw_ostream &OS, bool IsARM64 = false);
-void EmitNeonSema(RecordKeeper &Records, raw_ostream &OS, bool IsARM64 = false);
-void EmitNeonTest(RecordKeeper &Records, raw_ostream &OS, bool IsARM64 = false);
+void EmitNeon(RecordKeeper &Records, raw_ostream &OS);
+void EmitNeonSema(RecordKeeper &Records, raw_ostream &OS);
+void EmitNeonTest(RecordKeeper &Records, raw_ostream &OS);
+
+void EmitARM64Neon(RecordKeeper &Records, raw_ostream &OS,
+                   bool IsARM64 = false);
+void EmitARM64NeonSema(RecordKeeper &Records, raw_ostream &OS,
+                       bool IsARM64 = false);
+void EmitARM64NeonTest(RecordKeeper &Records, raw_ostream &OS,
+                       bool IsARM64 = false);
 
 } // end namespace clang

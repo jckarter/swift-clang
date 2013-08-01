@@ -235,13 +235,13 @@ bool ClangTableGenMain(raw_ostream &OS, RecordKeeper &Records) {
     EmitNeonTest(Records, OS);
     break;
   case GenArm64SIMD:
-    EmitNeon(Records, OS, true);
+    EmitARM64Neon(Records, OS, true);
     break;
   case GenArm64SIMDSema:
-    EmitNeonSema(Records, OS, true);
+    EmitARM64NeonSema(Records, OS, true);
     break;
   case GenArm64SIMDTest:
-    EmitNeonTest(Records, OS, true);
+    EmitARM64NeonTest(Records, OS, true);
     break;
   }
 

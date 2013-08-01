@@ -310,6 +310,10 @@ Sema::CheckBuiltinFunctionCall(unsigned BuiltinID, CallExpr *TheCall) {
         if (CheckARM64BuiltinFunctionCall(BuiltinID, TheCall))
           return ExprError();
         break;
+      case llvm::Triple::aarch64:
+        if (CheckAArch64BuiltinFunctionCall(BuiltinID, TheCall))
+          return ExprError();
+        break;
       case llvm::Triple::mips:
       case llvm::Triple::mipsel:
       case llvm::Triple::mips64:
@@ -323,6 +327,139 @@ Sema::CheckBuiltinFunctionCall(unsigned BuiltinID, CallExpr *TheCall) {
   }
 
   return TheCallResult;
+}
+
+// Get the valid immediate range for the specified NEON type code.
+static unsigned RFT(unsigned t, bool shift = false) {
+  NeonTypeFlags Type(t);
+  int IsQuad = Type.isQuad();
+  switch (Type.getEltType()) {
+  case NeonTypeFlags::Int8:
+  case NeonTypeFlags::Poly8:
+    return shift ? 7 : (8 << IsQuad) - 1;
+  case NeonTypeFlags::Int16:
+  case NeonTypeFlags::Poly16:
+    return shift ? 15 : (4 << IsQuad) - 1;
+  case NeonTypeFlags::Int32:
+    return shift ? 31 : (2 << IsQuad) - 1;
+  case NeonTypeFlags::Int64:
+    return shift ? 63 : (1 << IsQuad) - 1;
+  case NeonTypeFlags::Float16:
+    assert(!shift && "cannot shift float types!");
+    return (4 << IsQuad) - 1;
+  case NeonTypeFlags::Float32:
+    assert(!shift && "cannot shift float types!");
+    return (2 << IsQuad) - 1;
+  case NeonTypeFlags::Float64:
+    assert(!shift && "cannot shift float types!");
+    return (1 << IsQuad) - 1;
+  }
+  llvm_unreachable("Invalid NeonTypeFlag!");
+}
+
+/// getNeonEltType - Return the QualType corresponding to the elements of
+/// the vector type specified by the NeonTypeFlags.  This is used to check
+/// the pointer arguments for Neon load/store intrinsics.
+static QualType getNeonEltType(NeonTypeFlags Flags, ASTContext &Context) {
+  switch (Flags.getEltType()) {
+  case NeonTypeFlags::Int8:
+    return Flags.isUnsigned() ? Context.UnsignedCharTy : Context.SignedCharTy;
+  case NeonTypeFlags::Int16:
+    return Flags.isUnsigned() ? Context.UnsignedShortTy : Context.ShortTy;
+  case NeonTypeFlags::Int32:
+    return Flags.isUnsigned() ? Context.UnsignedIntTy : Context.IntTy;
+  case NeonTypeFlags::Int64:
+    return Flags.isUnsigned() ? Context.UnsignedLongLongTy : Context.LongLongTy;
+  case NeonTypeFlags::Poly8:
+    return Context.SignedCharTy;
+  case NeonTypeFlags::Poly16:
+    return Context.ShortTy;
+  case NeonTypeFlags::Float16:
+    return Context.UnsignedShortTy;
+  case NeonTypeFlags::Float32:
+    return Context.FloatTy;
+  case NeonTypeFlags::Float64:
+    return Context.DoubleTy;
+  }
+  llvm_unreachable("Invalid NeonTypeFlag!");
+}
+
+bool Sema::CheckAArch64BuiltinFunctionCall(unsigned BuiltinID,
+                                           CallExpr *TheCall) {
+
+  llvm::APSInt Result;
+
+  uint64_t mask = 0;
+  unsigned TV = 0;
+  int PtrArgNum = -1;
+  bool HasConstPtr = false;
+  switch (BuiltinID) {
+#define GET_NEON_AARCH64_OVERLOAD_CHECK
+#include "clang/Basic/arm_neon.inc"
+#undef GET_NEON_AARCH64_OVERLOAD_CHECK
+  }
+
+  // For NEON intrinsics which are overloaded on vector element type, validate
+  // the immediate which specifies which variant to emit.
+  unsigned ImmArg = TheCall->getNumArgs() - 1;
+  if (mask) {
+    if (SemaBuiltinConstantArg(TheCall, ImmArg, Result))
+      return true;
+
+    TV = Result.getLimitedValue(64);
+    if ((TV > 63) || (mask & (1ULL << TV)) == 0)
+      return Diag(TheCall->getLocStart(), diag::err_invalid_neon_type_code)
+             << TheCall->getArg(ImmArg)->getSourceRange();
+  }
+
+  if (PtrArgNum >= 0) {
+    // Check that pointer arguments have the specified type.
+    Expr *Arg = TheCall->getArg(PtrArgNum);
+    if (ImplicitCastExpr *ICE = dyn_cast<ImplicitCastExpr>(Arg))
+      Arg = ICE->getSubExpr();
+    ExprResult RHS = DefaultFunctionArrayLvalueConversion(Arg);
+    QualType RHSTy = RHS.get()->getType();
+    QualType EltTy = getNeonEltType(NeonTypeFlags(TV), Context);
+    if (HasConstPtr)
+      EltTy = EltTy.withConst();
+    QualType LHSTy = Context.getPointerType(EltTy);
+    AssignConvertType ConvTy;
+    ConvTy = CheckSingleAssignmentConstraints(LHSTy, RHS);
+    if (RHS.isInvalid())
+      return true;
+    if (DiagnoseAssignmentResult(ConvTy, Arg->getLocStart(), LHSTy, RHSTy,
+                                 RHS.get(), AA_Assigning))
+      return true;
+  }
+
+  // For NEON intrinsics which take an immediate value as part of the
+  // instruction, range check them here.
+  unsigned i = 0, l = 0, u = 0;
+  switch (BuiltinID) {
+  default:
+    return false;
+#define GET_NEON_AARCH64_IMMEDIATE_CHECK
+#include "clang/Basic/arm_neon.inc"
+#undef GET_NEON_AARCH64_IMMEDIATE_CHECK
+  }
+  ;
+
+  // We can't check the value of a dependent argument.
+  if (TheCall->getArg(i)->isTypeDependent() ||
+      TheCall->getArg(i)->isValueDependent())
+    return false;
+
+  // Check that the immediate argument is actually a constant.
+  if (SemaBuiltinConstantArg(TheCall, i, Result))
+    return true;
+
+  // Range check against the upper/lower values for this isntruction.
+  unsigned Val = Result.getZExtValue();
+  if (Val < l || Val > (u + l))
+    return Diag(TheCall->getLocStart(), diag::err_argument_invalid_range)
+           << l << u + l << TheCall->getArg(i)->getSourceRange();
+
+  return false;
 }
 
 bool Sema::CheckARMBuiltinExclusiveCall(unsigned BuiltinID, CallExpr *TheCall,
@@ -433,65 +570,6 @@ bool Sema::CheckARMBuiltinExclusiveCall(unsigned BuiltinID, CallExpr *TheCall,
   return false;
 }
 
-// Get the valid immediate range for the specified NEON type code.
-static unsigned RFT(unsigned t, bool shift = false) {
-  NeonTypeFlags Type(t);
-  int IsQuad = Type.isQuad();
-  switch (Type.getEltType()) {
-  case NeonTypeFlags::Int8:
-  case NeonTypeFlags::Poly8:
-    return shift ? 7 : (8 << IsQuad) - 1;
-  case NeonTypeFlags::Int16:
-  case NeonTypeFlags::Poly16:
-    return shift ? 15 : (4 << IsQuad) - 1;
-  case NeonTypeFlags::Int32:
-    return shift ? 31 : (2 << IsQuad) - 1;
-  case NeonTypeFlags::Int64:
-    return shift ? 63 : (1 << IsQuad) - 1;
-  case NeonTypeFlags::Float16:
-    assert(!shift && "cannot shift float types!");
-    return (4 << IsQuad) - 1;
-  case NeonTypeFlags::Float32:
-    assert(!shift && "cannot shift float types!");
-    return (2 << IsQuad) - 1;
-  case NeonTypeFlags::Float64:
-    assert(!shift && "cannot shift float types!");
-    return (1 << IsQuad) - 1;
-  }
-  llvm_unreachable("Invalid NeonTypeFlag!");
-}
-
-/// getNeonEltType - Return the QualType corresponding to the elements of
-/// the vector type specified by the NeonTypeFlags.  This is used to check
-/// the pointer arguments for Neon load/store intrinsics.
-static QualType getNeonEltType(NeonTypeFlags Flags, ASTContext &Context) {
-  switch (Flags.getEltType()) {
-  case NeonTypeFlags::Int8:
-    return Flags.isUnsigned() ? Context.UnsignedCharTy : Context.SignedCharTy;
-  case NeonTypeFlags::Int16:
-    return Flags.isUnsigned() ? Context.UnsignedShortTy : Context.ShortTy;
-  case NeonTypeFlags::Int32:
-    return Flags.isUnsigned() ? Context.UnsignedIntTy : Context.IntTy;
-  case NeonTypeFlags::Int64:
-    return Flags.isUnsigned() ? Context.UnsignedLongLongTy : Context.LongLongTy;
-  case NeonTypeFlags::Poly8:
-    return Context.SignedCharTy;
-  case NeonTypeFlags::Poly16:
-    return Context.ShortTy;
-  case NeonTypeFlags::Float16:
-    return Context.UnsignedShortTy;
-  case NeonTypeFlags::Float32:
-    return Context.FloatTy;
-  case NeonTypeFlags::Float64:
-    return Context.DoubleTy;
-  }
-  llvm_unreachable("Invalid NeonTypeFlag!");
-}
-
-#define GET_NEON_IMMEDIATE_CHECK
-#include "clang/Basic/arm_neon.inc"
-#undef GET_NEON_IMMEDIATE_CHECK
-
 bool Sema::CheckARMBuiltinFunctionCall(unsigned BuiltinID, CallExpr *TheCall) {
   llvm::APSInt Result;
 
@@ -542,20 +620,21 @@ bool Sema::CheckARMBuiltinFunctionCall(unsigned BuiltinID, CallExpr *TheCall) {
                                  RHS.get(), AA_Assigning))
       return true;
   }
-  
-  // For NEON intrinsics which take an immediate value as part of the 
+
+  // For NEON intrinsics which take an immediate value as part of the
   // instruction, range check them here.
   unsigned i = 0, l = 0, u = 0;
   switch (BuiltinID) {
   default:
-    if (!ARMGetNEONImmediateCheckValues(BuiltinID, TV, 0, i, l, u))
-      return false;
-    break;
+    return false;
+#define GET_NEON_IMMEDIATE_CHECK
+#include "clang/Basic/arm_neon.inc"
+#undef GET_NEON_IMMEDIATE_CHECK
   case ARM::BI__builtin_arm_ssat: i = 1; l = 1; u = 31; break;
   case ARM::BI__builtin_arm_usat: i = 1; u = 31; break;
   case ARM::BI__builtin_arm_vcvtr_f:
   case ARM::BI__builtin_arm_vcvtr_d: i = 1; u = 1; break;
-  };
+  }
 
   // We can't check the value of a dependent argument.
   if (TheCall->getArg(i)->isTypeDependent() ||
@@ -571,9 +650,6 @@ bool Sema::CheckARMBuiltinFunctionCall(unsigned BuiltinID, CallExpr *TheCall) {
   if (Val < l || Val > (u + l))
     return Diag(TheCall->getLocStart(), diag::err_argument_invalid_range)
       << l << u+l << TheCall->getArg(i)->getSourceRange();
-
-  assert (!ARMGetNEONImmediateCheckValues(BuiltinID, TV, 1, i, l, u) &&
-          "More check must be done.");
 
   // FIXME: VFP Intrinsics should error if VFP not present.
   return false;
