@@ -4061,15 +4061,25 @@ bool Sema::GatherArgumentsForCall(SourceLocation CallLoc,
         Param = FDecl->getParamDecl(i);
 
       // Strip the unbridged-cast placeholder expression off, if applicable.
+      bool CFAudited = false;
       if (Arg->getType() == Context.ARCUnbridgedCastTy &&
           FDecl && FDecl->hasAttr<CFAuditedTransferAttr>() &&
           (!Param || !Param->hasAttr<CFConsumedAttr>()))
         Arg = stripARCUnbridgedCast(Arg);
+      else if (getLangOpts().ObjCAutoRefCount &&
+               FDecl && FDecl->hasAttr<CFAuditedTransferAttr>() &&
+               (!Param || !Param->hasAttr<CFConsumedAttr>()))
+        CFAudited = true;
 
       InitializedEntity Entity = Param ?
           InitializedEntity::InitializeParameter(Context, Param, ProtoArgType)
         : InitializedEntity::InitializeParameter(Context, ProtoArgType,
                                                  Proto->isArgConsumed(i));
+      
+      // Remember that parameter belongs to a CF audited API.
+      if (CFAudited)
+        Entity.setParameterCFAudited();
+      
       ExprResult ArgE = PerformCopyInitialization(Entity,
                                                   SourceLocation(),
                                                   Owned(Arg),
@@ -6370,7 +6380,8 @@ Sema::CheckTransparentUnionArgumentConstraints(QualType ArgType,
 
 Sema::AssignConvertType
 Sema::CheckSingleAssignmentConstraints(QualType LHSType, ExprResult &RHS,
-                                       bool Diagnose) {
+                                       bool Diagnose,
+                                       bool DiagnoseCFAudited) {
   if (getLangOpts().CPlusPlus) {
     if (!LHSType->isRecordType() && !LHSType->isAtomicType()) {
       // C++ 5.17p3: If the left operand is not of class type, the
@@ -6443,9 +6454,14 @@ Sema::CheckSingleAssignmentConstraints(QualType LHSType, ExprResult &RHS,
   // so that we can use references in built-in functions even in C.
   // The getNonReferenceType() call makes sure that the resulting expression
   // does not have reference type.
-  if (result != Incompatible && RHS.get()->getType() != LHSType)
-    RHS = ImpCastExprToType(RHS.take(),
-                            LHSType.getNonLValueExprType(Context), Kind);
+  if (result != Incompatible && RHS.get()->getType() != LHSType) {
+    QualType Ty = LHSType.getNonLValueExprType(Context);
+    Expr *E = RHS.take();
+    if (getLangOpts().ObjCAutoRefCount)
+      CheckObjCARCConversion(SourceRange(), Ty, E, CCK_ImplicitConversion,
+                             DiagnoseCFAudited);
+    RHS = ImpCastExprToType(E, Ty, Kind);
+  }
   return result;
 }
 
@@ -7698,12 +7714,20 @@ QualType Sema::CheckCompareOperands(ExprResult &LHS, ExprResult &RHS,
         diagnoseDistinctPointerComparison(*this, Loc, LHS, RHS,
                                           /*isError*/false);
       }
-      if (LHSIsNull && !RHSIsNull)
-        LHS = ImpCastExprToType(LHS.take(), RHSType,
+      if (LHSIsNull && !RHSIsNull) {
+        Expr *E = LHS.take();
+        if (getLangOpts().ObjCAutoRefCount)
+          CheckObjCARCConversion(SourceRange(), RHSType, E, CCK_ImplicitConversion);
+        LHS = ImpCastExprToType(E, RHSType,
                                 RPT ? CK_BitCast :CK_CPointerToObjCPointerCast);
-      else
-        RHS = ImpCastExprToType(RHS.take(), LHSType,
+      }
+      else {
+        Expr *E = RHS.take();
+        if (getLangOpts().ObjCAutoRefCount)
+          CheckObjCARCConversion(SourceRange(), LHSType, E, CCK_ImplicitConversion);
+        RHS = ImpCastExprToType(E, LHSType,
                                 LPT ? CK_BitCast :CK_CPointerToObjCPointerCast);
+      }
       return ResultTy;
     }
     if (LHSType->isObjCObjectPointerType() &&
@@ -10368,7 +10392,10 @@ bool Sema::DiagnoseAssignmentResult(AssignConvertType ConvTy,
     break;
   case IncompatiblePointer:
     MakeObjCStringLiteralFixItHint(*this, DstType, SrcExpr, Hint, IsNSString);
-    DiagKind = diag::ext_typecheck_convert_incompatible_pointer;
+      DiagKind =
+        (Action == AA_Passing_CFAudited ?
+          diag::err_arc_typecheck_convert_incompatible_pointer :
+          diag::ext_typecheck_convert_incompatible_pointer);
     CheckInferredResultType = DstType->isObjCObjectPointerType() &&
       SrcType->isObjCObjectPointerType();
     if (Hint.isNull() && !CheckInferredResultType) {
@@ -10462,6 +10489,7 @@ bool Sema::DiagnoseAssignmentResult(AssignConvertType ConvTy,
 
   case AA_Returning:
   case AA_Passing:
+  case AA_Passing_CFAudited:
   case AA_Converting:
   case AA_Sending:
   case AA_Casting:
@@ -10472,7 +10500,10 @@ bool Sema::DiagnoseAssignmentResult(AssignConvertType ConvTy,
   }
 
   PartialDiagnostic FDiag = PDiag(DiagKind);
-  FDiag << FirstType << SecondType << Action << SrcExpr->getSourceRange();
+  if (Action == AA_Passing_CFAudited)
+    FDiag << FirstType << SecondType << SrcExpr->getSourceRange();
+  else
+    FDiag << FirstType << SecondType << Action << SrcExpr->getSourceRange();
 
   // If we can fix the conversion, suggest the FixIts.
   assert(ConvHints.isNull() || Hint.isNull());
