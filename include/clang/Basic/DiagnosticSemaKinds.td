@@ -4233,6 +4233,8 @@ def err_typecheck_member_reference_suggestion : Error<
   "member reference type %0 is %select{a|not a}1 pointer; maybe you meant to use '%select{->|.}1'?">;
 def note_typecheck_member_reference_suggestion : Note<
   "did you mean to use '.' instead?">;
+def note_member_reference_arrow_from_operator_arrow : Note<
+  "'->' applied to return value of the operator->() declared here">;
 def err_typecheck_member_reference_type : Error<
   "cannot refer to type member %0 in %1 with '%select{.|->}2'">;
 def err_typecheck_member_reference_unknown : Error<
@@ -5365,6 +5367,11 @@ def err_typecheck_call_too_many_args_at_most_suggest : Error<
   "too many %select{|||execution configuration }0arguments to "
   "%select{function|block|method|kernel function}0 call, "
   "expected at most %1, have %2; did you mean %3?">;
+  
+def err_arc_typecheck_convert_incompatible_pointer : Error<
+  "incompatible pointer types passing retainable parameter of type %0"
+  "to a CF function expecting %1 type">;
+  
 def note_callee_decl : Note<
   "%0 declared here">;
 def note_defined_here : Note<"%0 defined here">;
