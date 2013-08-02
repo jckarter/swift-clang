@@ -3649,6 +3649,13 @@ void RetainCountChecker::checkEndFunction(CheckerContext &Ctx) const {
   RefBindingsTy B = state->get<RefBindings>();
   ExplodedNode *Pred = Ctx.getPredecessor();
 
+  // Don't process anything within synthesized bodies.
+  const LocationContext *LCtx = Pred->getLocationContext();
+  if (LCtx->getAnalysisDeclContext()->isBodyAutosynthesized()) {
+    assert(LCtx->getParent());
+    return;
+  }
+
   for (RefBindingsTy::iterator I = B.begin(), E = B.end(); I != E; ++I) {
     state = handleAutoreleaseCounts(state, Pred, /*Tag=*/0, Ctx,
                                     I->first, I->second);
@@ -3660,7 +3667,7 @@ void RetainCountChecker::checkEndFunction(CheckerContext &Ctx) const {
   // We will do that later.
   // FIXME: we should instead check for imbalances of the retain/releases,
   // and suggest annotations.
-  if (Ctx.getLocationContext()->getParent())
+  if (LCtx->getParent())
     return;
   
   B = state->get<RefBindings>();
