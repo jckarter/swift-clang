@@ -143,3 +143,17 @@
 // RUN: %clang -target arm64-apple-ios4.0 -miphoneos-version-min=4.0 -### %t.o 2> %t.log
 // RUN: FileCheck -check-prefix=LINK_NO_IOS_ARM64_LIBGCC_S %s < %t.log
 // LINK_NO_IOS_ARM64_LIBGCC_S-NOT: lgcc_s.1
+
+// RUN: %clang -target x86_64-apple-darwin12 -rdynamic -### %t.o \
+// RUN:   -mlinker-version=100 2> %t.log
+// RUN: FileCheck -check-prefix=LINK_NO_EXPORT_DYNAMIC %s < %t.log
+// LINK_NO_EXPORT_DYNAMIC: {{ld(.exe)?"}}
+// LINK_NO_EXPORT_DYNAMIC-NOT: "-export_dynamic"
+
+// RUN: %clang -target x86_64-apple-darwin12 -rdynamic -### %t.o \
+// RUN:   -mlinker-version=137 2> %t.log
+// RUN: FileCheck -check-prefix=LINK_EXPORT_DYNAMIC %s < %t.log
+// LINK_EXPORT_DYNAMIC: {{ld(.exe)?"}}
+// LINK_EXPORT_DYNAMIC: "-export_dynamic"
+
+
