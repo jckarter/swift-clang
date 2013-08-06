@@ -5,7 +5,7 @@
 typedef float float32_t;
 typedef double float64_t;
 typedef __fp16 float16_t;
-#if defined(__aarch64__) && !defined(__APPLE__)
+#if defined(__aarch64__)
 typedef unsigned char poly8_t;
 typedef unsigned short poly16_t;
 #else
@@ -72,5 +72,3 @@ void f10(poly16x8_t v) {}
 // CHECK-AARCH64: 13__Float64x2_t
 void f11(float64x2_t v) { }
 #endif
-
-

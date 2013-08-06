@@ -2168,8 +2168,14 @@ void CXXNameMangler::mangleNeonVectorType(const VectorType *T) {
   const char *EltName = 0;
   if (T->getVectorKind() == VectorType::NeonPolyVector) {
     switch (cast<BuiltinType>(EltType)->getKind()) {
-    case BuiltinType::SChar:     EltName = "poly8_t"; break;
-    case BuiltinType::Short:     EltName = "poly16_t"; break;
+    case BuiltinType::SChar:
+    case BuiltinType::UChar:
+      EltName = "poly8_t";
+      break;
+    case BuiltinType::Short:
+    case BuiltinType::UShort:
+      EltName = "poly16_t";
+      break;
     default: llvm_unreachable("unexpected Neon polynomial vector element type");
     }
   } else {
