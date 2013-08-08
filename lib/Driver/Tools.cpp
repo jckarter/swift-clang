@@ -1923,6 +1923,12 @@ static void addUbsanRTLinux(const ToolChain &TC, const ArgList &Args,
     addSanitizerRTLinkFlagsLinux(TC, Args, CmdArgs, "ubsan_cxx", false);
 }
 
+static void addDfsanRTLinux(const ToolChain &TC, const ArgList &Args,
+                            ArgStringList &CmdArgs) {
+  if (!Args.hasArg(options::OPT_shared))
+    addSanitizerRTLinkFlagsLinux(TC, Args, CmdArgs, "dfsan", true);
+}
+
 static bool shouldUseFramePointer(const ArgList &Args,
                                   const llvm::Triple &Triple) {
   if (Arg *A = Args.getLastArg(options::OPT_fno_omit_frame_pointer,
@@ -2582,6 +2588,10 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
     AddAArch64TargetArgs(Args, CmdArgs);
     break;
   }
+
+  // Add clang-cl arguments.
+  if (getToolChain().getDriver().IsCLMode())
+    AddClangCLArgs(Args, CmdArgs);
 
   // Pass the linker version in use.
   if (Arg *A = Args.getLastArg(options::OPT_mlinker_version_EQ)) {
@@ -3871,6 +3881,47 @@ ObjCRuntime Clang::AddObjCRuntimeArgs(const ArgList &args,
   cmdArgs.push_back(args.MakeArgString(
                                  "-fobjc-runtime=" + runtime.getAsString()));
   return runtime;
+}
+
+void Clang::AddClangCLArgs(const ArgList &Args, ArgStringList &CmdArgs) const {
+  unsigned RTOptionID = options::OPT__SLASH_MT;
+
+  if (Arg *A = Args.getLastArg(options::OPT__SLASH_MD,
+                               options::OPT__SLASH_MDd,
+                               options::OPT__SLASH_MT,
+                               options::OPT__SLASH_MTd)) {
+    RTOptionID = A->getOption().getID();
+  }
+
+  switch(RTOptionID) {
+    case options::OPT__SLASH_MD:
+      CmdArgs.push_back("-D_MT");
+      CmdArgs.push_back("-D_DLL");
+      CmdArgs.push_back("--dependent-lib=msvcrt");
+      break;
+    case options::OPT__SLASH_MDd:
+      CmdArgs.push_back("-D_DEBUG");
+      CmdArgs.push_back("-D_MT");
+      CmdArgs.push_back("-D_DLL");
+      CmdArgs.push_back("--dependent-lib=msvcrtd");
+      break;
+    case options::OPT__SLASH_MT:
+      CmdArgs.push_back("-D_MT");
+      CmdArgs.push_back("--dependent-lib=libcmt");
+      break;
+    case options::OPT__SLASH_MTd:
+      CmdArgs.push_back("-D_DEBUG");
+      CmdArgs.push_back("-D_MT");
+      CmdArgs.push_back("--dependent-lib=libcmtd");
+      break;
+    default:
+      llvm_unreachable("Unexpected option ID.");
+  }
+
+  // This provides POSIX compatibility (maps 'open' to '_open'), which most users
+  // want.  MSVC has a switch to turn off this autolinking, but it's not
+  // implemented in clang yet.
+  CmdArgs.push_back("--dependent-lib=oldnames");
 }
 
 void ClangAs::ConstructJob(Compilation &C, const JobAction &JA,
@@ -6378,6 +6429,8 @@ void gnutools::Link::ConstructJob(Compilation &C, const JobAction &JA,
     addMsanRTLinux(getToolChain(), Args, CmdArgs);
   if (Sanitize.needsLsanRt())
     addLsanRTLinux(getToolChain(), Args, CmdArgs);
+  if (Sanitize.needsDfsanRt())
+    addDfsanRTLinux(getToolChain(), Args, CmdArgs);
 
   // The profile runtime also needs access to system libraries.
   addProfileRTLinux(getToolChain(), Args, CmdArgs);
