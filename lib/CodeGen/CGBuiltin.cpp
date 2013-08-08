@@ -1651,6 +1651,19 @@ Value *CodeGenFunction::EmitNeonShiftVector(Value *V, llvm::Type *Ty,
   return llvm::ConstantVector::getSplat(VTy->getNumElements(), C);
 }
 
+Value *CodeGenFunction::EmitConcatVectors(Value *Lo, Value *Hi,
+                                          llvm::Type *ArgTy) {
+  unsigned NumElts = ArgTy->getVectorNumElements();
+  SmallVector<Constant *, 16> Indices;
+  for (unsigned i = 0; i < 2 * NumElts; ++i)
+    Indices.push_back(ConstantInt::get(Int32Ty, i));
+
+  Constant *Mask = ConstantVector::get(Indices);
+  Value *LoCast = Builder.CreateBitCast(Lo, ArgTy);
+  Value *HiCast = Builder.CreateBitCast(Hi, ArgTy);
+  return Builder.CreateShuffleVector(LoCast, HiCast, Mask, "concat");
+}
+
 /// GetPointeeAlignment - Given an expression with a pointer type, find the
 /// alignment of the type referenced by the pointer.  Skip over implicit
 /// casts.
@@ -5326,39 +5339,40 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     default:
       assert(0 && "Unexpected BuiltinID!");
     case ARM64::BI__builtin_arm64_vrshrn_high_n_v:
-      Int = Intrinsic::arm64_neon_rshrn2;
+      Int = Intrinsic::arm64_neon_rshrn;
       Name = "vrshrn_high_n";
       break;
     case ARM64::BI__builtin_arm64_vshrn_high_n_v:
-      Int = Intrinsic::arm64_neon_shrn2;
+      Int = Intrinsic::arm64_neon_shrn;
       Name = "vshrn_high_n";
       break;
     case ARM64::BI__builtin_arm64_vqshrun_high_n_v:
-      Int = Intrinsic::arm64_neon_sqshrun2;
+      Int = Intrinsic::arm64_neon_sqshrun;
       Name = "vqshrun_high_n";
       break;
     case ARM64::BI__builtin_arm64_vqrshrun_high_n_v:
-      Int = Intrinsic::arm64_neon_sqrshrun2;
+      Int = Intrinsic::arm64_neon_sqrshrun;
       Name = "vqrshrun_high_n";
       break;
     case ARM64::BI__builtin_arm64_vqshrn_high_n_v:
-      Int = usgn ? Intrinsic::arm64_neon_uqshrn2 :
-        Intrinsic::arm64_neon_sqshrn2;
+      Int = usgn ? Intrinsic::arm64_neon_uqshrn :
+        Intrinsic::arm64_neon_sqshrn;
       Name = "vqshrun_high_n";
       break;
     case ARM64::BI__builtin_arm64_vqrshrn_high_n_v:
-      Int = usgn ? Intrinsic::arm64_neon_uqrshrn2 :
-        Intrinsic::arm64_neon_sqrshrn2;
+      Int = usgn ? Intrinsic::arm64_neon_uqrshrn :
+        Intrinsic::arm64_neon_sqrshrn;
       Name = "vqshrun_high_n";
       break;
     }
     unsigned NumElts = VTy->getNumElements();
-    unsigned BitWidth = cast<IntegerType>(VTy->getElementType())->getBitWidth();
-    llvm::Type *DInt =
-      llvm::IntegerType::get(getLLVMContext(), BitWidth*2);
-    llvm::Type *ArgTy = llvm::VectorType::get(DInt, NumElts/2);
-    llvm::Type *Tys[2] = { VTy, ArgTy };
-    return EmitNeonCall(CGM.getIntrinsic(Int, Tys), Ops, Name);
+    llvm::Type *ArgTy = llvm::VectorType::get(VTy->getElementType(), NumElts/2);
+    SmallVector<Value *, 2> CallOps;
+    CallOps.push_back(Ops[1]);
+    CallOps.push_back(Ops[2]);
+    Value *Shifted = EmitNeonCall(CGM.getIntrinsic(Int, ArgTy), CallOps, Name);
+
+    return EmitConcatVectors(Ops[0], Shifted, ArgTy);
   }
   case ARM64::BI__builtin_arm64_vshll_high_n_v: {
     unsigned NumElts = VTy->getNumElements();
