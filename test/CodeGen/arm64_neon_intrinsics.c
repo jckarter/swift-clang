@@ -212,3 +212,83 @@ uint32x4_t test_vraddhn_high_u64(uint32x2_t lowpart, uint64x2_t lhs, uint64x2_t 
   // CHECK: raddhn2.4s v0, v1, v2
   return vraddhn_high_s64(lowpart, lhs, rhs);
 }
+
+int8x16_t test_vmovn_high_s16(int8x8_t lowpart, int16x8_t wide) {
+  // CHECK: xtn2.16b v0, v1
+  return vmovn_high_s16(lowpart, wide);
+}
+
+int16x8_t test_vmovn_high_s32(int16x4_t lowpart, int32x4_t wide) {
+  // CHECK: xtn2.8h v0, v1
+  return vmovn_high_s32(lowpart, wide);
+}
+
+int32x4_t test_vmovn_high_s64(int32x2_t lowpart, int64x2_t wide) {
+  // CHECK: xtn2.4s v0, v1
+  return vmovn_high_s64(lowpart, wide);
+}
+
+uint8x16_t test_vmovn_high_u16(uint8x8_t lowpart, uint16x8_t wide) {
+  // CHECK: xtn2.16b v0, v1
+  return vmovn_high_u16(lowpart, wide);
+}
+
+uint16x8_t test_vmovn_high_u32(uint16x4_t lowpart, uint32x4_t wide) {
+  // CHECK: xtn2.8h v0, v1
+  return vmovn_high_u32(lowpart, wide);
+}
+
+uint32x4_t test_vmovn_high_u64(uint32x2_t lowpart, uint64x2_t wide) {
+  // CHECK: xtn2.4s v0, v1
+  return vmovn_high_u64(lowpart, wide);
+}
+
+int8x16_t test_vqmovn_high_s16(int8x8_t lowpart, int16x8_t wide) {
+  // CHECK: sqxtn2.16b v0, v1
+  return vqmovn_high_s16(lowpart, wide);
+}
+
+int16x8_t test_vqmovn_high_s32(int16x4_t lowpart, int32x4_t wide) {
+  // CHECK: sqxtn2.8h v0, v1
+  return vqmovn_high_s32(lowpart, wide);
+}
+
+int32x4_t test_vqmovn_high_s64(int32x2_t lowpart, int64x2_t wide) {
+  // CHECK: sqxtn2.4s v0, v1
+  return vqmovn_high_s64(lowpart, wide);
+}
+
+uint8x16_t test_vqmovn_high_u16(uint8x8_t lowpart, int16x8_t wide) {
+  // CHECK: uqxtn2.16b v0, v1
+  return vqmovn_high_u16(lowpart, wide);
+}
+
+uint16x8_t test_vqmovn_high_u32(uint16x4_t lowpart, int32x4_t wide) {
+  // CHECK: uqxtn2.8h v0, v1
+  return vqmovn_high_u32(lowpart, wide);
+}
+
+uint32x4_t test_vqmovn_high_u64(uint32x2_t lowpart, int64x2_t wide) {
+  // CHECK: uqxtn2.4s v0, v1
+  return vqmovn_high_u64(lowpart, wide);
+}
+
+uint8x16_t test_vqmovun_high_s16(uint8x8_t lowpart, int16x8_t wide) {
+  // CHECK: sqxtun2.16b v0, v1
+  return vqmovun_high_s16(lowpart, wide);
+}
+
+uint16x8_t test_vqmovun_high_s32(uint16x4_t lowpart, int32x4_t wide) {
+  // CHECK: sqxtun2.8h v0, v1
+  return vqmovun_high_s32(lowpart, wide);
+}
+
+uint32x4_t test_vqmovun_high_s64(uint32x2_t lowpart, int64x2_t wide) {
+  // CHECK: sqxtun2.4s v0, v1
+  return vqmovun_high_s64(lowpart, wide);
+}
+
+float32x4_t test_vcvtx_high_f32_f64(float32x2_t lowpart, float64x2_t wide) {
+  // CHECK: fcvtxn2 v0.4s, v1.2d
+  return vcvtx_high_f32_f64(lowpart, wide);
+}
