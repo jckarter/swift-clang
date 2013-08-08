@@ -3,30 +3,32 @@
 #include <aarch64_simd.h>
 
 float64x2_t test_vcvt_f64_f32(float32x2_t x) {
-  // CHECK: test_vcvt_f64_f32
+  // CHECK-LABEL: test_vcvt_f64_f32
   return vcvt_f64_f32(x);
-  // CHECK: llvm.arm64.neon.vcvtfp2df
+  // CHECK: fpext <2 x float> {{%.*}} to <2 x double>
   // CHECK-NEXT: ret
 }
 
 float64x2_t test_vcvt_high_f64_f32(float32x4_t x) {
-  // CHECK: test_vcvt_high_f64_f32
+  // CHECK-LABEL: test_vcvt_high_f64_f32
   return vcvt_high_f64_f32(x);
-  // CHECK: llvm.arm64.neon.vcvthighfp2df
+  // CHECK: [[HIGH:%.*]] = shufflevector <4 x float> {{%.*}}, <4 x float> undef, <2 x i32> <i32 2, i32 3>
+  // CHECK-NEXT: fpext <2 x float> [[HIGH]] to <2 x double>
   // CHECK-NEXT: ret
 }
 
 float32x2_t test_vcvt_f32_f64(float64x2_t v) {
   // CHECK: test_vcvt_f32_f64
   return vcvt_f32_f64(v);
-  // CHECK: llvm.arm64.neon.vcvtdf2fp
+  // CHECK: fptrunc <2 x double> {{%.*}} to <2 x float>
   // CHECK-NEXT: ret
 }
 
 float32x4_t test_vcvt_high_f32_f64(float32x2_t x, float64x2_t v) {
   // CHECK: test_vcvt_high_f32_f64
   return vcvt_high_f32_f64(x, v);
-  // CHECK: llvm.arm64.neon.vcvthighdf2fp
+  // CHECK: [[TRUNC:%.*]] = fptrunc <2 x double> {{.*}} to <2 x float>
+  // CHECK-NEXT: shufflevector <2 x float> {{.*}}, <2 x float> [[TRUNC]], <4 x i32> <i32 0, i32 1, i32 2, i32 3>
   // CHECK-NEXT: ret
 }
 

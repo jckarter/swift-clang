@@ -292,3 +292,28 @@ float32x4_t test_vcvtx_high_f32_f64(float32x2_t lowpart, float64x2_t wide) {
   // CHECK: fcvtxn2 v0.4s, v1.2d
   return vcvtx_high_f32_f64(lowpart, wide);
 }
+
+float64x2_t test_vcvt_f64_f32(float32x2_t x) {
+  // CHECK: fcvtl v0.2d, v0.2s
+  return vcvt_f64_f32(x);
+}
+
+float64x2_t test_vcvt_high_f64_f32(float32x4_t x) {
+  // CHECK: fcvtl2 v0.2d, v0.4s
+  return vcvt_high_f64_f32(x);
+}
+
+float32x2_t test_vcvt_f32_f64(float64x2_t v) {
+  // CHECK: fcvtn v0.2s, v0.2d
+  return vcvt_f32_f64(v);
+}
+
+float32x4_t test_vcvt_high_f32_f64(float32x2_t x, float64x2_t v) {
+  // CHECK: fcvtn2 v0.4s, v1.2d
+  return vcvt_high_f32_f64(x, v);
+}
+
+float32x2_t test_vcvtx_f32_f64(float64x2_t v) {
+  // CHECK: fcvtxn v0.2s, v0.2d
+  return vcvtx_f32_f64(v);
+}

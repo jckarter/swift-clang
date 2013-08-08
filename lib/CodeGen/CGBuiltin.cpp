@@ -4106,26 +4106,44 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
   case ARM64::BI__builtin_arm64_vcvt_f64_f32: {
     assert(Type.getEltType() == NeonTypeFlags::Float64 && quad &&
            "unexpected vcvt_f64_f32 builtin");
-     Function *F = CGM.getIntrinsic(Intrinsic::arm64_neon_vcvtfp2df);
-     return EmitNeonCall(F, Ops, "vcvt");
+    NeonTypeFlags SrcFlag = NeonTypeFlags(NeonTypeFlags::Float32, false, false);
+    Ops[0] = Builder.CreateBitCast(Ops[0], GetNeonType(this, SrcFlag));
+
+    return Builder.CreateFPExt(Ops[0], Ty, "vcvt");
   }
   case ARM64::BI__builtin_arm64_vcvt_high_f64_f32: {
     assert(Type.getEltType() == NeonTypeFlags::Float64 && quad &&
            "unexpected vcvt_high_f64_f32 builtin");
-     Function *F = CGM.getIntrinsic(Intrinsic::arm64_neon_vcvthighfp2df);
-     return EmitNeonCall(F, Ops, "vcvt");
+    NeonTypeFlags SrcFlag = NeonTypeFlags(NeonTypeFlags::Float32, false, true);
+    Ops[0] = Builder.CreateBitCast(Ops[0], GetNeonType(this, SrcFlag));
+
+    SmallVector<Constant*, 2> Indices;
+    for (unsigned i = 2; i < 4; ++i)
+      Indices.push_back(ConstantInt::get(Int32Ty, i));
+    Constant *Mask = ConstantVector::get(Indices);
+    Value *HighVec = Builder.CreateShuffleVector(Ops[0], Ops[0], Mask);
+
+    return Builder.CreateFPExt(HighVec, Ty, "vcvt");
   }
   case ARM64::BI__builtin_arm64_vcvt_f32_f64: {
     assert(Type.getEltType() == NeonTypeFlags::Float32 &&
            "unexpected vcvt_f32_f64 builtin");
-    Function *F = CGM.getIntrinsic(Intrinsic::arm64_neon_vcvtdf2fp);
-    return EmitNeonCall(F, Ops, "vcvt");
+    NeonTypeFlags SrcFlag = NeonTypeFlags(NeonTypeFlags::Float64, false, true);
+    Ops[0] = Builder.CreateBitCast(Ops[0], GetNeonType(this, SrcFlag));
+
+    return Builder.CreateFPTrunc(Ops[0], Ty, "vcvt");
   }
   case ARM64::BI__builtin_arm64_vcvt_high_f32_f64: {
     assert(Type.getEltType() == NeonTypeFlags::Float32 && quad &&
            "unexpected vcvt_high_f32_f64 builtin");
-    Function *F = CGM.getIntrinsic(Intrinsic::arm64_neon_vcvthighdf2fp);
-    return EmitNeonCall(F, Ops, "vcvt");
+    NeonTypeFlags SrcFlag = NeonTypeFlags(NeonTypeFlags::Float64, false, true);
+    Ops[1] = Builder.CreateBitCast(Ops[1], GetNeonType(this, SrcFlag));
+
+    llvm::Type *TruncTy =
+        GetNeonType(this, NeonTypeFlags(NeonTypeFlags::Float32, false, false));
+    Value *Trunc = Builder.CreateFPTrunc(Ops[1], TruncTy, "vcvt");
+
+    return EmitConcatVectors(Ops[0], Trunc, TruncTy);
   }
   case ARM64::BI__builtin_arm64_vcvtx_f32_f64: {
     assert(Type.getEltType() == NeonTypeFlags::Float32 &&
