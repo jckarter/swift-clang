@@ -3728,10 +3728,17 @@ void Clang::AddClangCLArgs(const ArgList &Args, ArgStringList &CmdArgs) const {
       llvm_unreachable("Unexpected option ID.");
   }
 
-  // This provides POSIX compatibility (maps 'open' to '_open'), which most users
-  // want.  MSVC has a switch to turn off this autolinking, but it's not
-  // implemented in clang yet.
+  // This provides POSIX compatibility (maps 'open' to '_open'), which most
+  // users want.  The /Za flag to cl.exe turns this off, but it's not
+  // implemented in clang.
   CmdArgs.push_back("--dependent-lib=oldnames");
+
+  // FIXME: Make this default for the win32 triple.
+  CmdArgs.push_back("-cxx-abi");
+  CmdArgs.push_back("microsoft");
+
+  if (Arg *A = Args.getLastArg(options::OPT_show_includes))
+    A->render(Args, CmdArgs);
 }
 
 void ClangAs::ConstructJob(Compilation &C, const JobAction &JA,
