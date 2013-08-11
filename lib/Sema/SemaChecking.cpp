@@ -5627,7 +5627,7 @@ void Sema::CheckImplicitConversions(Expr *E, SourceLocation CC) {
 /// results in integer overflow
 void Sema::CheckForIntOverflow (Expr *E) {
   if (isa<BinaryOperator>(E->IgnoreParens())) {
-    llvm::SmallVector<PartialDiagnosticAt, 4> Diags;
+    SmallVector<PartialDiagnosticAt, 4> Diags;
     E->EvaluateForOverflow(Context, &Diags);
   }
 }
@@ -5649,7 +5649,7 @@ class SequenceChecker : public EvaluatedExprVisitor<SequenceChecker> {
       unsigned Parent : 31;
       bool Merged : 1;
     };
-    llvm::SmallVector<Value, 8> Values;
+    SmallVector<Value, 8> Values;
 
   public:
     /// \brief A region within an expression which may be sequenced with respect
@@ -5743,10 +5743,10 @@ class SequenceChecker : public EvaluatedExprVisitor<SequenceChecker> {
   SequenceTree::Seq Region;
   /// Filled in with declarations which were modified as a side-effect
   /// (that is, post-increment operations).
-  llvm::SmallVectorImpl<std::pair<Object, Usage> > *ModAsSideEffect;
+  SmallVectorImpl<std::pair<Object, Usage> > *ModAsSideEffect;
   /// Expressions to check later. We defer checking these to reduce
   /// stack usage.
-  llvm::SmallVectorImpl<Expr*> &WorkList;
+  SmallVectorImpl<Expr *> &WorkList;
 
   /// RAII object wrapping the visitation of a sequenced subexpression of an
   /// expression. At the end of this process, the side-effects of the evaluation
@@ -5769,8 +5769,8 @@ class SequenceChecker : public EvaluatedExprVisitor<SequenceChecker> {
     }
 
     SequenceChecker &Self;
-    llvm::SmallVector<std::pair<Object, Usage>, 4> ModAsSideEffect;
-    llvm::SmallVectorImpl<std::pair<Object, Usage> > *OldModAsSideEffect;
+    SmallVector<std::pair<Object, Usage>, 4> ModAsSideEffect;
+    SmallVectorImpl<std::pair<Object, Usage> > *OldModAsSideEffect;
   };
 
   /// RAII object wrapping the visitation of a subexpression which we might
@@ -5880,10 +5880,9 @@ class SequenceChecker : public EvaluatedExprVisitor<SequenceChecker> {
   }
 
 public:
-  SequenceChecker(Sema &S, Expr *E,
-                  llvm::SmallVectorImpl<Expr*> &WorkList)
-    : Base(S.Context), SemaRef(S), Region(Tree.root()),
-      ModAsSideEffect(0), WorkList(WorkList), EvalTracker(0) {
+  SequenceChecker(Sema &S, Expr *E, SmallVectorImpl<Expr *> &WorkList)
+      : Base(S.Context), SemaRef(S), Region(Tree.root()), ModAsSideEffect(0),
+        WorkList(WorkList), EvalTracker(0) {
     Visit(E);
   }
 
@@ -6079,7 +6078,7 @@ public:
       return VisitExpr(CCE);
 
     // In C++11, list initializations are sequenced.
-    llvm::SmallVector<SequenceTree::Seq, 32> Elts;
+    SmallVector<SequenceTree::Seq, 32> Elts;
     SequenceTree::Seq Parent = Region;
     for (CXXConstructExpr::arg_iterator I = CCE->arg_begin(),
                                         E = CCE->arg_end();
@@ -6100,7 +6099,7 @@ public:
       return VisitExpr(ILE);
 
     // In C++11, list initializations are sequenced.
-    llvm::SmallVector<SequenceTree::Seq, 32> Elts;
+    SmallVector<SequenceTree::Seq, 32> Elts;
     SequenceTree::Seq Parent = Region;
     for (unsigned I = 0; I < ILE->getNumInits(); ++I) {
       Expr *E = ILE->getInit(I);
@@ -6119,7 +6118,7 @@ public:
 }
 
 void Sema::CheckUnsequencedOperations(Expr *E) {
-  llvm::SmallVector<Expr*, 8> WorkList;
+  SmallVector<Expr *, 8> WorkList;
   WorkList.push_back(E);
   while (!WorkList.empty()) {
     Expr *Item = WorkList.back();
