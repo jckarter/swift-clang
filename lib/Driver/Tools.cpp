@@ -559,7 +559,18 @@ static bool isSignedCharDefault(const llvm::Triple &Triple) {
 
   case llvm::Triple::ppc64le:
   case llvm::Triple::systemz:
+  case llvm::Triple::xcore:
     return false;
+  }
+}
+
+static bool isNoCommonDefault(const llvm::Triple &Triple) {
+  switch (Triple.getArch()) {
+  default:
+    return false;
+
+  case llvm::Triple::xcore:
+    return true;
   }
 }
 
@@ -1824,6 +1835,9 @@ static bool shouldUseFramePointer(const ArgList &Args,
         return false;
   }
 
+  if (Triple.getArch() == llvm::Triple::xcore)
+    return false;
+
   return true;
 }
 
@@ -1842,6 +1856,9 @@ static bool shouldUseLeafFramePointer(const ArgList &Args,
       if (!A->getOption().matches(options::OPT_O0))
         return false;
   }
+
+  if (Triple.getArch() == llvm::Triple::xcore)
+    return false;
 
   return true;
 }
@@ -3276,7 +3293,7 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
     CmdArgs.push_back("-fpack-struct=1");
   }
 
-  if (KernelOrKext) {
+  if (KernelOrKext || isNoCommonDefault(getToolChain().getTriple())) {
     if (!Args.hasArg(options::OPT_fcommon))
       CmdArgs.push_back("-fno-common");
     Args.ClaimAllArgs(options::OPT_fno_common);
