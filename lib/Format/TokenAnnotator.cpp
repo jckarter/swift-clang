@@ -93,7 +93,8 @@ private:
       }
     }
 
-    if (Left->Previous && Left->Previous->is(tok::kw_static_assert))
+    if (Left->Previous && Left->Previous->isOneOf(tok::kw_static_assert,
+                                                  tok::kw_if, tok::kw_while))
       Contexts.back().IsExpression = true;
 
     if (StartsObjCMethodExpr) {
@@ -1087,7 +1088,7 @@ unsigned TokenAnnotator::splitPenalty(const AnnotatedLine &Line,
   if (Left.is(tok::l_paren) && Line.MightBeFunctionDecl)
     return 100;
   if (Left.opensScope())
-    return Left.ParameterCount > 1 ? prec::Comma : 20;
+    return Left.ParameterCount > 1 ? prec::Comma : 19;
 
   if (Right.is(tok::lessless)) {
     if (Left.is(tok::string_literal)) {
