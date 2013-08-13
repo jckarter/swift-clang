@@ -3,6 +3,66 @@
 
 #include <arm_neon.h>
 
+int16x8_t test_vaddw_high_s8(int16x8_t lhs, int8x16_t rhs) {
+  // CHECK: saddw2.8h
+  return vaddw_high_s8(lhs, rhs);
+}
+
+int32x4_t test_vaddw_high_s16(int32x4_t lhs, int16x8_t rhs) {
+  // CHECK: saddw2.4s
+  return vaddw_high_s16(lhs, rhs);
+}
+
+int64x2_t test_vaddw_high_s32(int64x2_t lhs, int32x4_t rhs) {
+  // CHECK: saddw2.2d
+  return vaddw_high_s32(lhs, rhs);
+}
+
+uint16x8_t test_vaddw_high_u8(uint16x8_t lhs, uint8x16_t rhs) {
+  // CHECK: uaddw2.8h
+  return vaddw_high_u8(lhs, rhs);
+}
+
+uint32x4_t test_vaddw_high_u16(uint32x4_t lhs, uint16x8_t rhs) {
+  // CHECK: uaddw2.4s
+  return vaddw_high_u16(lhs, rhs);
+}
+
+uint64x2_t test_vaddw_high_u32(uint64x2_t lhs, uint32x4_t rhs) {
+  // CHECK: uaddw2.2d
+  return vaddw_high_u32(lhs, rhs);
+}
+
+int16x8_t test_vsubw_high_s8(int16x8_t lhs, int8x16_t rhs) {
+  // CHECK: ssubw2.8h
+  return vsubw_high_s8(lhs, rhs);
+}
+
+int32x4_t test_vsubw_high_s16(int32x4_t lhs, int16x8_t rhs) {
+  // CHECK: ssubw2.4s
+  return vsubw_high_s16(lhs, rhs);
+}
+
+int64x2_t test_vsubw_high_s32(int64x2_t lhs, int32x4_t rhs) {
+  // CHECK: ssubw2.2d
+  return vsubw_high_s32(lhs, rhs);
+}
+
+uint16x8_t test_vsubw_high_u8(uint16x8_t lhs, uint8x16_t rhs) {
+  // CHECK: usubw2.8h
+  return vsubw_high_u8(lhs, rhs);
+}
+
+uint32x4_t test_vsubw_high_u16(uint32x4_t lhs, uint16x8_t rhs) {
+  // CHECK: usubw2.4s
+  return vsubw_high_u16(lhs, rhs);
+}
+
+uint64x2_t test_vsubw_high_u32(uint64x2_t lhs, uint32x4_t rhs) {
+  // CHECK: usubw2.2d
+  return vsubw_high_u32(lhs, rhs);
+}
+
 int16x8_t test_vabdl_high_s8(int8x16_t lhs, int8x16_t rhs) {
   // CHECK: sabdl2.8h
   return vabdl_high_s8(lhs, rhs);

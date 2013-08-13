@@ -5290,14 +5290,15 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     return Builder.CreateAdd(Builder.CreateBitCast(Ops[0], Ty), Ops[1]);
   }
   case ARM64::BI__builtin_arm64_vaddw_high_v: {
-    Int = usgn ? Intrinsic::arm64_neon_uaddw2 : Intrinsic::arm64_neon_saddw2;
     unsigned NumElts = VTy->getNumElements();
     unsigned BitWidth =cast<IntegerType>(VTy->getElementType())->getBitWidth();
     llvm::Type *DInt =
       llvm::IntegerType::get(getLLVMContext(), BitWidth/2);
-    llvm::Type *ArgTy = llvm::VectorType::get(DInt, 2*NumElts);
-    llvm::Type *Tys[2] = { VTy, ArgTy };
-    return EmitNeonCall(CGM.getIntrinsic(Int, Tys), Ops, "vaddw_high");
+    llvm::Type *ArgTy = llvm::VectorType::get(DInt, NumElts);
+    Ops[1] = EmitExtractHigh(Ops[1], ArgTy);
+    Ops[1] = usgn ? Builder.CreateZExt(Ops[1], VTy) :
+                    Builder.CreateSExt(Ops[1], VTy);
+    return Builder.CreateAdd(Builder.CreateBitCast(Ops[0], VTy), Ops[1]);
   }
   case ARM64::BI__builtin_arm64_vqdmull_high_v: {
     Int = Intrinsic::arm64_neon_sqdmull;
@@ -5354,14 +5355,15 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     return Builder.CreateSub(Ops[0], Ops[1]);
   }
   case ARM64::BI__builtin_arm64_vsubw_high_v: {
-    Int = usgn ? Intrinsic::arm64_neon_usubw2 : Intrinsic::arm64_neon_ssubw2;
     unsigned NumElts = VTy->getNumElements();
     unsigned BitWidth =cast<IntegerType>(VTy->getElementType())->getBitWidth();
     llvm::Type *DInt =
       llvm::IntegerType::get(getLLVMContext(), BitWidth/2);
-    llvm::Type *ArgTy = llvm::VectorType::get(DInt, 2*NumElts);
-    llvm::Type *Tys[2] = { VTy, ArgTy };
-    return EmitNeonCall(CGM.getIntrinsic(Int, Tys), Ops, "vsubw_high");
+    llvm::Type *ArgTy = llvm::VectorType::get(DInt, NumElts);
+    Ops[1] = EmitExtractHigh(Ops[1], ArgTy);
+    Ops[1] = usgn ? Builder.CreateZExt(Ops[1], VTy) :
+                   Builder.CreateSExt(Ops[1], VTy);
+    return Builder.CreateSub(Builder.CreateBitCast(Ops[0], VTy), Ops[1]);
   }
   case ARM64::BI__builtin_arm64_vqmovn_high_v:
   case ARM64::BI__builtin_arm64_vqmovun_high_v: {
