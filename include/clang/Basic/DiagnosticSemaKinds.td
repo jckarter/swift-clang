@@ -1898,6 +1898,9 @@ def warn_missing_atsign_prefix : Warning<
 def warn_objc_string_literal_comparison : Warning<
   "direct comparison of a string literal has undefined behavior">, 
   InGroup<ObjCStringComparison>;
+def warn_concatenated_nsarray_literal : Warning<
+  "concatenated nsstring literal for an nsarray expression">,
+  InGroup<ObjCStringConcatenation>;
 def note_objc_literal_comparison_isequal : Note<
   "use 'isEqual:' instead">;
 
@@ -4153,6 +4156,9 @@ def ext_sizeof_alignof_void_type : Extension<
 def err_sizeof_alignof_incomplete_type : Error<
   "invalid application of '%select{sizeof|alignof|vec_step}0' to an "
   "incomplete type %1">;
+def err_sizeof_alignof_function_type : Error<
+  "invalid application of '%select{sizeof|alignof|vec_step}0' to a "
+  "function type">;
 def err_sizeof_alignof_bitfield : Error<
   "invalid application of '%select{sizeof|alignof}0' to bit-field">;
 def err_alignof_member_of_incomplete_type : Error<
