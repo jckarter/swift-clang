@@ -2158,6 +2158,7 @@ public:
                                    bool negateForRightShift);
   llvm::Value *EmitConcatVectors(llvm::Value *Lo, llvm::Value *Hi,
                                  llvm::Type *ArgTy);
+  llvm::Value *EmitExtractHigh(llvm::Value *In, llvm::Type *ResTy);
   // Helper functions for EmitARM64BuiltinExpr.
   llvm::Value *vectorWrapScalar8(llvm::Value *Op);
   llvm::Value *vectorWrapScalar16(llvm::Value *Op);
