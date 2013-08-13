@@ -1463,9 +1463,6 @@ public:
   /// \param MethodName -- The name of the method that was incorrectly
   /// invoked.
   /// 
-  /// \param VariableName -- The name of the variable that holds the unique
-  /// value.
-  ///
   /// \param Loc -- The SourceLocation of the method invocation.
   void warnUseOfTempWhileConsumed(StringRef MethodName, SourceLocation Loc) {
                                                     
@@ -1478,9 +1475,6 @@ public:
   /// Warn about use-in-unknown-state errors.
   /// \param MethodName -- The name of the method that was incorrectly
   /// invoked.
-  ///
-  /// \param VariableName -- The name of the variable that holds the unique
-  /// value.
   ///
   /// \param Loc -- The SourceLocation of the method invocation.
   void warnUseOfTempInUnknownState(StringRef MethodName, SourceLocation Loc) {
@@ -1557,8 +1551,10 @@ clang::sema::AnalysisBasedWarnings::AnalysisBasedWarnings(Sema &s)
   DefaultPolicy.enableThreadSafetyAnalysis = (unsigned)
     (D.getDiagnosticLevel(diag::warn_double_lock, SourceLocation()) !=
      DiagnosticsEngine::Ignored);
-  DefaultPolicy.enableConsumedAnalysis = consumed::checkEnabled(D);
-
+  DefaultPolicy.enableConsumedAnalysis =
+      (unsigned)(D.getDiagnosticLevel(diag::warn_use_while_consumed,
+                                      SourceLocation()) !=
+                 DiagnosticsEngine::Ignored);
 }
 
 static void flushDiagnostics(Sema &S, sema::FunctionScopeInfo *fscope) {
@@ -1727,7 +1723,7 @@ AnalysisBasedWarnings::IssueWarnings(sema::AnalysisBasedWarnings::Policy P,
   // Check for violations of consumed properties.
   if (P.enableConsumedAnalysis) {
     consumed::ConsumedWarningsHandler WarningHandler(S);
-    consumed::ConsumedAnalyzer Analyzer(S, WarningHandler);
+    consumed::ConsumedAnalyzer Analyzer(WarningHandler);
     Analyzer.run(AC);
   }
 
