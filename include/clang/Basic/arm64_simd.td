@@ -613,3 +613,23 @@ def VUZP : WInst<"vuzp", "2dd", "csiUcUsUifPcPsQcQsQiQUcQUsQUiQfQPcQPs">;
 def VREINTERPRET
   : Inst<"vreinterpret", "dd",
          "csilUcUsUiUlhfPcPsQcQsQiQlQUcQUsQUiQUlQhQfQPcQPs", OP_REINT>;
+
+////////////////////////////////////////////////////////////////////////////////
+// Crypto operations
+
+def VAESE   : SInst<"vaese",   "ddd", "QUc">;
+def VAESD   : SInst<"vaesd",   "ddd", "QUc">;
+def VAESMC  : SInst<"vaesmc",  "dd",  "QUc">;
+def VAESIMC : SInst<"vaesimc", "dd",  "QUc">;
+
+def VSHA1C   : SInst<"vsha1c",   "ddsd", "QUi">;
+def VSHA1P   : SInst<"vsha1p",   "ddsd", "QUi">;
+def VSHA1M   : SInst<"vsha1m",   "ddsd", "QUi">;
+def VSHA1H   : SInst<"vsha1h",   "ss",   "Ui">;
+def VSHA1SU0 : SInst<"vsha1su0", "dddd", "QUi">;
+def VSHA1SU1 : SInst<"vsha1su1", "ddd",  "QUi">;
+
+def VSHA256H   : SInst<"vsha256h",   "dddd", "QUi">;
+def VSHA256H2  : SInst<"vsha256h2",  "dddd", "QUi">;
+def VSHA256SU0 : SInst<"vsha256su0", "ddd",  "QUi">;
+def VSHA256SU1 : SInst<"vsha256su1", "dddd", "QUi">;

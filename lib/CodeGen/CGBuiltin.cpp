@@ -3712,6 +3712,35 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     return EmitNeonCall(CGM.getIntrinsic(Intrinsic::arm64_sisd_fmulx,
                                      llvm::Type::getDoubleTy(getLLVMContext())),
                         Ops, "vmulx");
+  case ARM64::BI__builtin_arm64_vsha1cq_u32: {
+    llvm::Type *Int32x4Ty = llvm::VectorType::get(Int32Ty, 4);
+    Ops.push_back(EmitScalarExpr(E->getArg(2)));
+    Ops[0] = Builder.CreateBitCast(Ops[0], Int32x4Ty);
+    Ops[2] = Builder.CreateBitCast(Ops[2], Int32x4Ty);
+    return EmitNeonCall(CGM.getIntrinsic(Intrinsic::arm64_crypto_sha1c),
+                        Ops, "vsha1c");
+  }
+  case ARM64::BI__builtin_arm64_vsha1pq_u32: {
+    llvm::Type *Int32x4Ty = llvm::VectorType::get(Int32Ty, 4);
+    Ops.push_back(EmitScalarExpr(E->getArg(2)));
+    Ops[0] = Builder.CreateBitCast(Ops[0], Int32x4Ty);
+    Ops[2] = Builder.CreateBitCast(Ops[2], Int32x4Ty);
+    return EmitNeonCall(CGM.getIntrinsic(Intrinsic::arm64_crypto_sha1p),
+                        Ops, "vsha1p");
+  }
+  case ARM64::BI__builtin_arm64_vsha1mq_u32: {
+    llvm::Type *Int32x4Ty = llvm::VectorType::get(Int32Ty, 4);
+    Ops.push_back(EmitScalarExpr(E->getArg(2)));
+    Ops[0] = Builder.CreateBitCast(Ops[0], Int32x4Ty);
+    Ops[2] = Builder.CreateBitCast(Ops[2], Int32x4Ty);
+    return EmitNeonCall(CGM.getIntrinsic(Intrinsic::arm64_crypto_sha1m),
+                        Ops, "vsha1m");
+  }
+  case ARM64::BI__builtin_arm64_vsha1h_u32:
+    Ops.push_back(EmitScalarExpr(E->getArg(0)));
+    Ops[0] = Builder.CreateBitCast(Ops[0], Int32Ty);
+    return EmitNeonCall(CGM.getIntrinsic(Intrinsic::arm64_crypto_sha1h),
+                        Ops, "vsha1m");
   }
 
   llvm::VectorType *VTy = GetNeonType(this, Type);
@@ -3722,6 +3751,64 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
   unsigned Int;
   switch (BuiltinID) {
   default: return 0;
+  case ARM64::BI__builtin_arm64_vaeseq_v:
+    Ops[0] = Builder.CreateBitCast(Ops[0], Ty);
+    Ops[1] = Builder.CreateBitCast(Ops[1], Ty);
+    return EmitNeonCall(CGM.getIntrinsic(Intrinsic::arm64_crypto_aese),
+                        Ops, "vaese");
+  case ARM64::BI__builtin_arm64_vaesdq_v:
+    Ops[0] = Builder.CreateBitCast(Ops[0], Ty);
+    Ops[1] = Builder.CreateBitCast(Ops[1], Ty);
+    return EmitNeonCall(CGM.getIntrinsic(Intrinsic::arm64_crypto_aesd),
+                        Ops, "vaesd");
+  case ARM64::BI__builtin_arm64_vaesimcq_v:
+    Ops[0] = Builder.CreateBitCast(Ops[0], Ty);
+    return EmitNeonCall(CGM.getIntrinsic(Intrinsic::arm64_crypto_aesimc),
+                        Ops, "vaesimc");
+  case ARM64::BI__builtin_arm64_vaesmcq_v:
+    Ops[0] = Builder.CreateBitCast(Ops[0], Ty);
+    return EmitNeonCall(CGM.getIntrinsic(Intrinsic::arm64_crypto_aesmc),
+                        Ops, "vaesmc");
+  case ARM64::BI__builtin_arm64_vsha1su0q_v: {
+    Ops[0] = Builder.CreateBitCast(Ops[0], VTy);
+    Ops[1] = Builder.CreateBitCast(Ops[1], VTy);
+    Ops[2] = Builder.CreateBitCast(Ops[2], VTy);
+    return EmitNeonCall(CGM.getIntrinsic(Intrinsic::arm64_crypto_sha1su0),
+                        Ops, "vsha1su0");
+  }
+  case ARM64::BI__builtin_arm64_vsha1su1q_v: {
+    Ops[0] = Builder.CreateBitCast(Ops[0], VTy);
+    Ops[1] = Builder.CreateBitCast(Ops[1], VTy);
+    return EmitNeonCall(CGM.getIntrinsic(Intrinsic::arm64_crypto_sha1su1),
+                        Ops, "vsha1su1");
+  }
+  case ARM64::BI__builtin_arm64_vsha256hq_v: {
+    Ops[0] = Builder.CreateBitCast(Ops[0], VTy);
+    Ops[1] = Builder.CreateBitCast(Ops[1], VTy);
+    Ops[2] = Builder.CreateBitCast(Ops[2], VTy);
+    return EmitNeonCall(CGM.getIntrinsic(Intrinsic::arm64_crypto_sha256h),
+                        Ops, "vsha256h");
+  }
+  case ARM64::BI__builtin_arm64_vsha256h2q_v: {
+    Ops[0] = Builder.CreateBitCast(Ops[0], VTy);
+    Ops[1] = Builder.CreateBitCast(Ops[1], VTy);
+    Ops[2] = Builder.CreateBitCast(Ops[2], VTy);
+    return EmitNeonCall(CGM.getIntrinsic(Intrinsic::arm64_crypto_sha256h2),
+                        Ops, "vsha256h2");
+  }
+  case ARM64::BI__builtin_arm64_vsha256su0q_v: {
+    Ops[0] = Builder.CreateBitCast(Ops[0], VTy);
+    Ops[1] = Builder.CreateBitCast(Ops[1], VTy);
+    return EmitNeonCall(CGM.getIntrinsic(Intrinsic::arm64_crypto_sha256su0),
+                        Ops, "vsha256su0");
+  }
+  case ARM64::BI__builtin_arm64_vsha256su1q_v: {
+    Ops[0] = Builder.CreateBitCast(Ops[0], VTy);
+    Ops[1] = Builder.CreateBitCast(Ops[1], VTy);
+    Ops[2] = Builder.CreateBitCast(Ops[2], VTy);
+    return EmitNeonCall(CGM.getIntrinsic(Intrinsic::arm64_crypto_sha256su1),
+                        Ops, "vsha256su1");
+  }
   case ARM64::BI__builtin_arm64_vmovl_v: {
     llvm::Type *DTy = llvm::VectorType::getTruncatedElementVectorType(VTy);
     Ops[0] = Builder.CreateBitCast(Ops[0], DTy);
