@@ -514,6 +514,14 @@ public:
   virtual void
   AddClangCXXStdlibIncludeArgs(const llvm::opt::ArgList &DriverArgs,
                                llvm::opt::ArgStringList &CC1Args) const;
+  virtual bool IsUnwindTablesDefault() const {
+    return true;
+  }
+  virtual bool IsIntegratedAssemblerDefault() const {
+    if (getTriple().getArch() == llvm::Triple::ppc)
+      return true;
+    return Generic_ELF::IsIntegratedAssemblerDefault();
+  }
 
 protected:
   virtual Tool *buildAssembler() const;
