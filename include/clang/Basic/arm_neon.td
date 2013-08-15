@@ -412,6 +412,18 @@ def FMINNMP : SInst<"vpminnm", "ddd", "fQfQd">;
 def ADDP  : IInst<"vpadd", "ddd", "csiUcUsUifQcQsQiQUcQUsQUiQfQd">;
 
 ////////////////////////////////////////////////////////////////////////////////
+// Shifts by constant
+let isShift = 1 in {
+// Left shift long high
+def SHLL_HIGH_N    : SInst<"vshll_high_n", "ndi", "HcHsHiHUcHUsHUi">;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// Converting vectors
+def VMOVL_HIGH   : SInst<"vmovl_high", "nd", "HcHsHiHUcHUsHUi">;
+
+
+////////////////////////////////////////////////////////////////////////////////
 // Scalar Arithmetic
 
 // Scalar Addition
