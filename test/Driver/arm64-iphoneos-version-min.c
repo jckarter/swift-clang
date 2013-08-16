@@ -1,6 +1,6 @@
-// RUN: %clang -arch arm64 -miphoneos-version-min=6.0.0bar %s -### 2>&1 | FileCheck -check-prefix=ARM64-INV %s
-// RUN: %clang -arch arm64 -miphoneos-version-min=5.0.0 %s -### 2>&1 | FileCheck -check-prefix=ARM64-BAD %s
-// RUN: %clang -arch arm64 -miphoneos-version-min=6.0.0 %s -### 2>&1| FileCheck -check-prefix=ARM64-GOOD %s
+// RUN: %clang -target arm64-apple-ios -miphoneos-version-min=6.0.0bar %s -### 2>&1 | FileCheck -check-prefix=ARM64-INV %s
+// RUN: %clang -target arm64-apple-ios -miphoneos-version-min=5.0.0 %s -### 2>&1 | FileCheck -check-prefix=ARM64-BAD %s
+// RUN: %clang -target arm64-apple-ios -miphoneos-version-min=6.0.0 %s -### 2>&1| FileCheck -check-prefix=ARM64-GOOD %s
 
 // ARM64-INV: error: invalid version number in '-miphoneos-version-min=6.0.0bar'
 // ARM64-INV-NOT: invalid deployment target
