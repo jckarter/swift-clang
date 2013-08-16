@@ -184,9 +184,8 @@ class CGDebugInfo {
   void CollectRecordLambdaFields(const CXXRecordDecl *CXXDecl,
                                  SmallVectorImpl<llvm::Value *> &E,
                                  llvm::DIType RecordTy);
-  void CollectRecordStaticField(const VarDecl *Var,
-                                SmallVectorImpl<llvm::Value *> &E,
-                                llvm::DIType RecordTy);
+  llvm::DIDerivedType CreateRecordStaticField(const VarDecl *Var,
+                                              llvm::DIType RecordTy);
   void CollectRecordNormalField(const FieldDecl *Field, uint64_t OffsetInBits,
                                 llvm::DIFile F,
                                 SmallVectorImpl<llvm::Value *> &E,
@@ -357,7 +356,8 @@ private:
   /// getStaticDataMemberDeclaration - Return debug info descriptor to
   /// describe in-class static data member declaration for the given
   /// out-of-class definition.
-  llvm::DIDerivedType getStaticDataMemberDeclaration(const Decl *D);
+  llvm::DIDerivedType getStaticDataMemberDeclarationOrNull(const VarDecl *D);
+  llvm::DIDerivedType getStaticDataMemberDeclaration(const VarDecl *D);
 
   /// getFunctionName - Get function name for the given FunctionDecl. If the
   /// name is constructred on demand (e.g. C++ destructor) then the name
