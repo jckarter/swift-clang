@@ -299,8 +299,8 @@ static void ParseTypes(Record *r, std::string &s,
   int len = 0;
 
   for (unsigned i = 0, e = s.size(); i != e; ++i, ++len) {
-    if (data[len] == 'P' || data[len] == 'Q' ||
-        data[len] == 'U' || data[len] == 'R')
+    if (data[len] == 'P' || data[len] == 'Q' || data[len] == 'U'
+                         || data[len] == 'H')
       continue;
 
     switch (data[len]) {
@@ -376,17 +376,12 @@ static char ToFloat(const char t) {
 
 /// For a particular StringRef, return the base type code, and whether it has
 /// the quad-vector, polynomial, or unsigned modifiers set.
-static char ClassifyType(StringRef ty, bool &quad, bool &qsuffix, bool &poly, bool &usgn) {
+static char ClassifyType(StringRef ty, bool &quad, bool &poly, bool &usgn) {
   unsigned off = 0;
 
   // remember quad.
-  if (ty[off] == 'Q') {
+  if (ty[off] == 'Q' || ty[off] == 'H') {
     quad = true;
-    qsuffix = true;
-    ++off;
-  } else if (ty[off] == 'R') {
-    quad = true;
-    qsuffix = false;
     ++off;
   }
 
@@ -533,7 +528,6 @@ static std::string TypeString(const char mod, StringRef typestr) {
   bool scal = false;
   bool cnst = false;
   bool pntr = false;
-  bool qsuffix = false;
 
   if (mod == 'v')
     return "void";
@@ -541,7 +535,7 @@ static std::string TypeString(const char mod, StringRef typestr) {
     return "int";
 
   // base type to get the type string for.
-  char type = ClassifyType(typestr, quad, qsuffix, poly, usgn);
+  char type = ClassifyType(typestr, quad, poly, usgn);
 
   // Based on the modifying character, change the type and width if necessary.
   type = ModType(mod, type, quad, poly, usgn, scal, cnst, pntr);
@@ -628,7 +622,6 @@ static std::string BuiltinTypeString(const char mod, StringRef typestr,
   bool scal = false;
   bool cnst = false;
   bool pntr = false;
-  bool qsuffix = false;
 
   if (mod == 'v')
     return "v"; // void
@@ -636,7 +629,7 @@ static std::string BuiltinTypeString(const char mod, StringRef typestr,
     return "i"; // int
 
   // base type to get the type string for.
-  char type = ClassifyType(typestr, quad, qsuffix, poly, usgn);
+  char type = ClassifyType(typestr, quad, poly, usgn);
 
   // Based on the modifying character, change the type and width if necessary.
   type = ModType(mod, type, quad, poly, usgn, scal, cnst, pntr);
@@ -739,11 +732,10 @@ static char getScalarSuffix(char type) {
 static char InstructionTypeCode(const StringRef &typeStr,
                                 const ClassKind ck,
                                 bool &quad,
-                                bool &qsuffix,
                                 std::string &typeCode) {
   bool poly = false;
   bool usgn = false;  
-  char type = ClassifyType(typeStr, quad, qsuffix, poly, usgn);
+  char type = ClassifyType(typeStr, quad, poly, usgn);
   
   switch (type) {
   case 'c':
@@ -823,10 +815,9 @@ static std::string MangleName(const std::string &name, StringRef typestr,
     return name;
 
   bool quad = false;
-  bool qsuffix = false;
   std::string typeCode = "";
 
-  char type = InstructionTypeCode(typestr, ck, quad, qsuffix, typeCode);
+  char type = InstructionTypeCode(typestr, ck, quad, typeCode);
 
   std::string s = name;
 
@@ -839,7 +830,7 @@ static std::string MangleName(const std::string &name, StringRef typestr,
 
   // Insert a 'q' before the first '_' character so that it ends up before
   // _lane or _n on vector-scalar operations.
-  if (qsuffix) {
+  if (typestr.startswith("Q")) {
     size_t pos = s.find('_');
     s = s.insert(pos, "q");
   }
@@ -1182,8 +1173,6 @@ static void GenerateChecksForIntrinsic(const std::string &Name,
   bool HasDupPostfix  = false;
   // Our instruction is a vcvt instruction which requires special handling.
   bool IsSpecialVCvt = false;
-  // Our instruction has a qsuffix.
-  bool HasQSuffix = false;
   // If we have a vtbxN or vtblN instruction, this is set to N.
   size_t TBNumber = -1;
   // Register Suffix
@@ -1193,7 +1182,7 @@ static void GenerateChecksForIntrinsic(const std::string &Name,
                         HasNPostfix, HasLanePostfix, HasDupPostfix,
                         IsSpecialVCvt, TBNumber);
 
-  InstructionTypeCode(OutTypeStr, Ck, IsQuad, HasQSuffix, OutTypeCode);
+  InstructionTypeCode(OutTypeStr, Ck, IsQuad, OutTypeCode);
   GenerateRegisterCheckPattern(Name, Proto, OutTypeCode, HasNPostfix, IsQuad,
                                HasLanePostfix, HasDupPostfix, TBNumber,
                                RegisterSuffix);
@@ -1421,7 +1410,7 @@ static std::string SplatLane(unsigned nElts, const std::string &vec,
 static unsigned GetNumElements(StringRef typestr, bool &quad) {
   quad = false;
   bool dummy = false;
-  char type = ClassifyType(typestr, quad, dummy, dummy, dummy);
+  char type = ClassifyType(typestr, quad, dummy, dummy);
   unsigned nElts = 0;
   switch (type) {
   case 'c': nElts = 8; break;
@@ -1780,10 +1769,9 @@ static unsigned GetNeonEnum(const std::string &proto, StringRef typestr) {
   bool scal = false;
   bool cnst = false;
   bool pntr = false;
-  bool qsuffix = false;
 
   // Base type to get the type string for.
-  char type = ClassifyType(typestr, quad, qsuffix, poly, usgn);
+  char type = ClassifyType(typestr, quad, poly, usgn);
 
   // Based on the modifying character, change the type and width if necessary.
   type = ModType(mod, type, quad, poly, usgn, scal, cnst, pntr);
@@ -1886,7 +1874,7 @@ static std::string GenBuiltin(const std::string &name,
     bool argUsgn = false;
     bool argScalar = false;
     bool dummy = false;
-    char argType = ClassifyType(typestr, argQuad, dummy, argPoly, argUsgn);
+    char argType = ClassifyType(typestr, argQuad, argPoly, argUsgn);
     argType = ModType(proto[i], argType, argQuad, argPoly, argUsgn, argScalar,
                       dummy, dummy);
 
@@ -2119,7 +2107,7 @@ void NeonEmitter::run(raw_ostream &OS) {
   // Emit vector typedefs.
   for (unsigned i = 0, e = TDTypeVec.size(); i != e; ++i) {
     bool dummy, quad = false, poly = false;
-    (void) ClassifyType(TDTypeVec[i], quad, dummy, poly, dummy);
+    (void) ClassifyType(TDTypeVec[i], quad, poly, dummy);
     if (poly)
       OS << "typedef __attribute__((neon_polyvector_type(";
     else
@@ -2218,11 +2206,11 @@ void NeonEmitter::emitIntrinsic(raw_ostream &OS, Record *R) {
     if (kind == OpReinterpret) {
       bool outQuad = false;
       bool dummy = false;
-      (void)ClassifyType(TypeVec[ti], outQuad, dummy, dummy, dummy);
+      (void)ClassifyType(TypeVec[ti], outQuad, dummy, dummy);
       for (unsigned srcti = 0, srcte = TypeVec.size();
            srcti != srcte; ++srcti) {
         bool inQuad = false;
-        (void)ClassifyType(TypeVec[srcti], inQuad, dummy, dummy, dummy);
+        (void)ClassifyType(TypeVec[srcti], inQuad, dummy, dummy);
         if (srcti == ti || inQuad != outQuad)
           continue;
         OS << GenIntrinsic(name, builtinPrefix(), Proto,
@@ -2240,7 +2228,7 @@ void NeonEmitter::emitIntrinsic(raw_ostream &OS, Record *R) {
 static unsigned RangeFromType(const char mod, StringRef typestr) {
   // base type to get the type string for.
   bool quad = false, dummy = false;
-  char type = ClassifyType(typestr, quad, dummy, dummy, dummy);
+  char type = ClassifyType(typestr, quad, dummy, dummy);
   type = ModType(mod, type, quad, dummy, dummy, dummy, dummy, dummy);
 
   switch (type) {
@@ -2320,7 +2308,7 @@ void NeonEmitter::emitImmediateCheck(raw_ostream &OS,
         // builtins.
         ck = ClassB;
         bool dummy;
-        char type = ClassifyType(TypeVec[ti], dummy, dummy, dummy, dummy);
+        char type = ClassifyType(TypeVec[ti], dummy, dummy, dummy);
         rangestr = "l = 1; u = "; // upper bound = l + u
         rangestr += (type == 'l' || type == 'd') ? "63" : "31";
       } else if (Proto.find('s') == std::string::npos &&
@@ -2345,7 +2333,7 @@ void NeonEmitter::emitImmediateCheck(raw_ostream &OS,
         // Scalar vcvt[sd]_n_* intrinsics are not marked isVCVT_N due to them
         // not playing nicely as ClassB, so handle them explicitly here.
         bool dummy;
-        char type = ClassifyType(TypeVec[ti], dummy, dummy, dummy, dummy);
+        char type = ClassifyType(TypeVec[ti], dummy, dummy, dummy);
         rangestr = "l = 1; u = "; // upper bound = l + u
         rangestr += (type == 'l' || type == 'd') ? "63" : "31";
       } else {
@@ -2499,8 +2487,8 @@ void NeonEmitter::runHeader(raw_ostream &OS) {
     uint64_t mask = 0, qmask = 0;
     for (unsigned ti = 0, te = TypeVec.size(); ti != te; ++ti) {
       // Generate the switch case(s) for this builtin for the type validation.
-      bool quad = false, poly = false, usgn = false, qsuffix = false;
-      (void) ClassifyType(TypeVec[ti], quad, qsuffix, poly, usgn);
+      bool quad = false, poly = false, usgn = false;
+      (void) ClassifyType(TypeVec[ti], quad, poly, usgn);
 
       if (quad) {
         qi = ti;
@@ -2676,11 +2664,11 @@ void NeonEmitter::runTests(raw_ostream &OS) {
       if (kind == OpReinterpret) {
         bool outQuad = false;
         bool dummy = false;
-        (void)ClassifyType(TypeVec[ti], outQuad, dummy, dummy, dummy);
+        (void)ClassifyType(TypeVec[ti], outQuad, dummy, dummy);
         for (unsigned srcti = 0, srcte = TypeVec.size();
              srcti != srcte; ++srcti) {
           bool inQuad = false;
-          (void)ClassifyType(TypeVec[srcti], inQuad, dummy, dummy, dummy);
+          (void)ClassifyType(TypeVec[srcti], inQuad, dummy, dummy);
           if (srcti == ti || inQuad != outQuad)
             continue;
           OS << GenTest(name, Proto, TypeVec[ti], TypeVec[srcti],

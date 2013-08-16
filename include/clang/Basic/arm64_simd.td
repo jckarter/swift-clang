@@ -25,10 +25,10 @@ def VQADD   : SInst<"vqadd", "ddd", "csilUcUsUiUlQcQsQiQlQUcQUsQUiQUl">;
 def VUSQADD : IInst<"vusqadd", "ddd", "csilUcUsUiUlQcQsQiQlQUcQUsQUiQUl">;
 def VADDHN  : IInst<"vaddhn", "hkk", "silUsUiUl">;
 def VRADDHN : IInst<"vraddhn", "hkk", "silUsUiUl">;
-def VADDL_HIGH : Inst<"vaddl_high", "ndd", "RcRsRiRUcRUsRUi", OP_ADDL_HIGH>;
-def VADDW_HIGH : SInst<"vaddw_high", "ndd", "RcRsRiRUcRUsRUi">;
-def VADDHN_HIGH  : SInst<"vaddhn_high",  "hbdd", "RsRiRlRUsRUiRUl">;
-def VRADDHN_HIGH : SInst<"vraddhn_high", "hbdd", "RsRiRlRUsRUiRUl">;
+def VADDL_HIGH : Inst<"vaddl_high", "ndd", "HcHsHiHUcHUsHUi", OP_ADDL_HIGH>;
+def VADDW_HIGH : SInst<"vaddw_high", "ndd", "HcHsHiHUcHUsHUi">;
+def VADDHN_HIGH  : SInst<"vaddhn_high",  "hbdd", "HsHiHlHUsHUiHUl">;
+def VRADDHN_HIGH : SInst<"vraddhn_high", "hbdd", "HsHiHlHUsHUiHUl">;
 
 ////////////////////////////////////////////////////////////////////////////////
 // Multiplication
@@ -46,12 +46,12 @@ def VQDMLAL  : Inst<"vqdmlal", "wwdd", "si", OP_QDMLAL>;
 def VQDMLSL  : Inst<"vqdmlsl", "wwdd", "si", OP_QDMLSL>;
 def VMULL    : SInst<"vmull", "wdd", "csiUcUsUiPc">;
 def VQDMULL  : SInst<"vqdmull", "wdd", "si">;
-def VMLAL_HIGH : Inst<"vmlal_high", "nndd", "RcRsRiRUcRUsRUi", OP_MLAL_HIGH>;
-def VMLSL_HIGH : Inst<"vmlsl_high", "nndd", "RcRsRiRUcRUsRUi", OP_MLSL_HIGH>;
-def VMULL_HIGH : Inst<"vmull_high", "ndd",  "RcRsRiRUcRUsRUi", OP_MULL_HIGH>;
-def VQDMLAL_HIGH : SInst<"vqdmlal_high", "nndd", "RsRi">;
-def VQDMLSL_HIGH : SInst<"vqdmlsl_high", "nndd", "RsRi">;
-def VQDMULL_HIGH : SInst<"vqdmull_high", "ndd",  "RsRi">;
+def VMLAL_HIGH : Inst<"vmlal_high", "nndd", "HcHsHiHUcHUsHUi", OP_MLAL_HIGH>;
+def VMLSL_HIGH : Inst<"vmlsl_high", "nndd", "HcHsHiHUcHUsHUi", OP_MLSL_HIGH>;
+def VMULL_HIGH : Inst<"vmull_high", "ndd",  "HcHsHiHUcHUsHUi", OP_MULL_HIGH>;
+def VQDMLAL_HIGH : SInst<"vqdmlal_high", "nndd", "HsHi">;
+def VQDMLSL_HIGH : SInst<"vqdmlsl_high", "nndd", "HsHi">;
+def VQDMULL_HIGH : SInst<"vqdmull_high", "ndd",  "HsHi">;
 // scalars.
 def VQDMULLH : SInst<"vqdmullh", "zss", "s">;
 def VQDMULLS : SInst<"vqdmulls", "zss", "i">;
@@ -87,10 +87,10 @@ def VQSUB   : SInst<"vqsub", "ddd", "csilUcUsUiUlQcQsQiQlQUcQUsQUiQUl">;
 def VHSUB   : SInst<"vhsub", "ddd", "csiUcUsUiQcQsQiQUcQUsQUi">;
 def VSUBHN  : IInst<"vsubhn", "hkk", "silUsUiUl">;
 def VRSUBHN : IInst<"vrsubhn", "hkk", "silUsUiUl">;
-def VSUBL_HIGH   : SInst<"vsubl_high",   "ndd", "RcRsRiRUcRUsRUi">;
-def VSUBW_HIGH   : SInst<"vsubw_high",   "ndd", "RcRsRiRUcRUsRUi">;
-def VRSUBHN_HIGH : SInst<"vrsubhn_high", "hbdd", "RsRiRlRUsRUiRUl">;
-def VSUBHN_HIGH  : SInst<"vsubhn_high",   "hbdd", "RsRiRlRUsRUiRUl">;
+def VSUBL_HIGH   : SInst<"vsubl_high",   "ndd", "HcHsHiHUcHUsHUi">;
+def VSUBW_HIGH   : SInst<"vsubw_high",   "ndd", "HcHsHiHUcHUsHUi">;
+def VRSUBHN_HIGH : SInst<"vrsubhn_high", "hbdd", "HsHiHlHUsHUiHUl">;
+def VSUBHN_HIGH  : SInst<"vsubhn_high",   "hbdd", "HsHiHlHUsHUiHUl">;
 // Scalar operands.
 def VSUBD : Inst<"vsubd", "sss", "lUl", OP_SUB>;
 def VADDD : Inst<"vaddd", "sss", "lUl", OP_ADD>;
@@ -134,8 +134,8 @@ def VABD  : SInst<"vabd", "ddd",  "csiUcUsUifQcQsQiQUcQUsQUiQfQd">;
 def VABDL : IInst<"vabdl", "wdd",  "csiUcUsUi">;
 def VABA  : Inst<"vaba", "dddd", "csiUcUsUiQcQsQiQUcQUsQUi", OP_ABA>;
 def VABAL : SInst<"vabal", "wwdd", "csiUcUsUi">;
-def VABAL_HIGH : SInst<"vabal_high", "nndd", "RcRsRiRUcRUsRUi">;
-def VABDL_HIGH : SInst<"vabdl_high", "ndd",  "RcRsRiRUcRUsRUi">;
+def VABAL_HIGH : SInst<"vabal_high", "nndd", "HcHsHiHUcHUsHUi">;
+def VABDL_HIGH : SInst<"vabdl_high", "ndd",  "HcHsHiHUcHUsHUi">;
 def VABDS : SInst<"vabds", "sss", "f">;
 def VABDD : SInst<"vabdd", "sss", "d">;
 
@@ -155,7 +155,7 @@ def VPADD  : IInst<"vpadd", "ddd", "csiUcUsUifQcQsQiQUcQUsQUiQlQUlQfQd">;
 def VPADDL : SInst<"vpaddl", "nd",  "csiUcUsUiQcQsQiQUcQUsQUi">;
 def VPADAL : SInst<"vpadal", "nnd", "csiUcUsUiQcQsQiQUcQUsQUi">;
 def VPADDS : SInst<"vpadds", "sd", "f">;
-def VPADDD : SInst<"vpaddd", "sd", "RlRd">;
+def VPADDD : SInst<"vpaddd", "sd", "HlHd">;
 
 ////////////////////////////////////////////////////////////////////////////////
 // Folding Max/Min
@@ -178,22 +178,22 @@ def VRSHL  : SInst<"vrshl", "ddx", "csiUcUsUiQcQsQiQlQUcQUsQUiQUl">;
 def VQRSHL : SInst<"vqrshl", "ddx", "csiUcUsUiQcQsQiQlQUcQUsQUiQUl">;
 
 // Scalar versions.
-def VSHLD  : SInst<"vshld", "sss", "RlRUl">;
-def VQSHLB : SInst<"vqshlb", "sss", "RcRUc">;
-def VQSHLH : SInst<"vqshlh", "sss", "RsRUs">;
-def VQSHLS : SInst<"vqshls", "sss", "RiRUi">;
-def VQSHLD : SInst<"vqshld", "sss", "RlRUl">;
+def VSHLD  : SInst<"vshld", "sss", "HlHUl">;
+def VQSHLB : SInst<"vqshlb", "sss", "HcHUc">;
+def VQSHLH : SInst<"vqshlh", "sss", "HsHUs">;
+def VQSHLS : SInst<"vqshls", "sss", "HiHUi">;
+def VQSHLD : SInst<"vqshld", "sss", "HlHUl">;
 
-def VRSHLD :  SInst<"vrshld", "sss", "RlRUl">;
-def VQRSHLB : SInst<"vqrshlb", "sss", "RcRUc">;
-def VQRSHLH : SInst<"vqrshlh", "sss", "RsRUs">;
-def VQRSHLS : SInst<"vqrshls", "sss", "RiRUi">;
-def VQRSHLD : SInst<"vqrshld", "sss", "RlRUl">;
+def VRSHLD :  SInst<"vrshld", "sss", "HlHUl">;
+def VQRSHLB : SInst<"vqrshlb", "sss", "HcHUc">;
+def VQRSHLH : SInst<"vqrshlh", "sss", "HsHUs">;
+def VQRSHLS : SInst<"vqrshls", "sss", "HiHUi">;
+def VQRSHLD : SInst<"vqrshld", "sss", "HlHUl">;
 // Aliases w/o the size suffix.
-def VSHL_   : SInst<"vshl", "sss", "RlRUl">;
-def VRSHL_  : SInst<"vrshl", "sss", "RlRUl">;
-def VQSHL_  : SInst<"vqshl", "sss", "RlRUl">;
-def VQRSHL_ : SInst<"vqrshl", "sss", "RlRUl">;
+def VSHL_   : SInst<"vshl", "sss", "HlHUl">;
+def VRSHL_  : SInst<"vrshl", "sss", "HlHUl">;
+def VQSHL_  : SInst<"vqshl", "sss", "HlHUl">;
+def VQRSHL_ : SInst<"vqrshl", "sss", "HlHUl">;
 
 ////////////////////////////////////////////////////////////////////////////////
 // Shifts by constant
@@ -212,13 +212,13 @@ def VQSHRN_N   : SInst<"vqshrn_n", "hki", "silUsUiUl">;
 def VRSHRN_N   : IInst<"vrshrn_n", "hki", "silUsUiUl">;
 def VQRSHRN_N  : SInst<"vqrshrn_n", "hki", "silUsUiUl">;
 def VSHLL_N    : SInst<"vshll_n", "wdi", "csiUcUsUi">;
-def VRSHRN_HIGH_N   : SInst<"vrshrn_high_n", "hbki", "RsRiRlRUsRUiRUl">;
-def VSHRN_HIGH_N    : SInst<"vshrn_high_n", "hbki", "RsRiRlRUsRUiRUl">;
-def VQSHRUN_HIGH_N  : SInst<"vqshrun_high_n", "hbki", "RsRiRl">;
-def VQRSHRUN_HIGH_N : SInst<"vqrshrun_high_n", "hbki", "RsRiRl">;
-def VQSHRN_HIGH_N   : SInst<"vqshrn_high_n", "hbki", "RsRiRlRUsRUiRUl">;
-def VQRSHRN_HIGH_N  : SInst<"vqrshrn_high_n", "hbki", "RsRiRlRUsRUiRUl">;
-def VSHLL_HIGH_N : SInst<"vshll_high_n", "ndi", "RcRsRiRUcRUsRUi">;
+def VRSHRN_HIGH_N   : SInst<"vrshrn_high_n", "hbki", "HsHiHlHUsHUiHUl">;
+def VSHRN_HIGH_N    : SInst<"vshrn_high_n", "hbki", "HsHiHlHUsHUiHUl">;
+def VQSHRUN_HIGH_N  : SInst<"vqshrun_high_n", "hbki", "HsHiHl">;
+def VQRSHRUN_HIGH_N : SInst<"vqrshrun_high_n", "hbki", "HsHiHl">;
+def VQSHRN_HIGH_N   : SInst<"vqshrn_high_n", "hbki", "HsHiHlHUsHUiHUl">;
+def VQRSHRN_HIGH_N  : SInst<"vqrshrn_high_n", "hbki", "HsHiHlHUsHUiHUl">;
+def VSHLL_HIGH_N : SInst<"vshll_high_n", "ndi", "HcHsHiHUcHUsHUi">;
 
 ////////////////////////////////////////////////////////////////////////////////
 // Shifts with insert
@@ -240,7 +240,7 @@ def VCVT_F32     : SInst<"vcvt_f32", "fd", "iUiQiQUi">;
 def VCVT_S64     : SInst<"vcvt_s64", "xd",  "Qd">;
 def VCVT_U64     : SInst<"vcvt_u64", "ud",  "Qd">;
 // Integer->F64
-def VCVT_F64     : SInst<"vcvtq_f64", "fd", "RlRUl">;
+def VCVT_F64     : SInst<"vcvtq_f64", "fd", "HlHUl">;
 
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -279,7 +279,7 @@ def VCVT_N_S64   : SInst<"vcvt_n_s64", "xdi", "Qd">;
 // f64 -> unsigned-fixed-point
 def VCVT_N_U64   : SInst<"vcvt_n_u64", "udi", "Qd">;
 // fixed point -> f64
-def VCVT_N_F64   : SInst<"vcvtq_n_f64", "fdi", "RlRUl">;
+def VCVT_N_F64   : SInst<"vcvtq_n_f64", "fdi", "HlHUl">;
 }
 // Scalar int<-->float conversions.
 // NOTE: These are not marked isVCVT_N, as that forces overloaded types for
@@ -395,11 +395,11 @@ def VST4_LANE : WInst<"vst4_lane", "vp4i", "QUcQUsQUiQUlQcQsQiQlQhQfQdQPcQPsUcUs
 def VGET_LANE : SInst<"vget_lane", "sdi",
                       "csilUcUsUiUlfdPcPsQcQsQiQlQUcQUsQUiQUlQfQdQPcQPs">;
 // vdup<bhsd>_lane* is a synonym for vget_lane.
-def VDUPB_LANE : SInst<"vdupb_lane", "sdi", "RcRUc">;
-def VDUPH_LANE : SInst<"vduph_lane", "sdi", "RsRUs">;
-def VDUPS_LANE : SInst<"vdups_lane", "sdi", "RiRUiRf">;
-def VDUPD_LANE : SInst<"vdupd_lane", "sdi", "RlRUlRd">;
-def VDUP_LANE_F64 : SInst<"vdup_lane", "sdi", "Rd">;
+def VDUPB_LANE : SInst<"vdupb_lane", "sdi", "HcHUc">;
+def VDUPH_LANE : SInst<"vduph_lane", "sdi", "HsHUs">;
+def VDUPS_LANE : SInst<"vdups_lane", "sdi", "HiHUiHf">;
+def VDUPD_LANE : SInst<"vdupd_lane", "sdi", "HlHUlHd">;
+def VDUP_LANE_F64 : SInst<"vdup_lane", "sdi", "Hd">;
 
 ////////////////////////////////////////////////////////////////////////////////
 // Set lanes within a vector
@@ -438,11 +438,11 @@ def VMOVN        : IInst<"vmovn", "hk",  "silUsUiUl">;
 def VMOVL        : SInst<"vmovl", "wd",  "csiUcUsUi">;
 def VQMOVN       : SInst<"vqmovn", "hk",  "silUsUiUl">;
 def VQMOVUN      : SInst<"vqmovun", "ek",  "sil">;
-def VQMOVN_HIGH   : SInst<"vqmovn_high",  "hbd", "RsRiRlRUsRUiRUl">;
-def VQMOVUN_HIGH  : SInst<"vqmovun_high", "hbd", "RsRiRl">;
-def VMOVN_HIGH   : SInst<"vmovn_high",  "hbd", "RsRiRlRUsRUiRUl">;
-def VMOVL_HIGH   : Inst<"vmovl_high",  "nd", "RcRsRiRUcRUsRUi", OP_MOVL_HIGH>;
-def VXTL_HIGH    : Inst<"vxtl_high",   "nd", "RcRsRiRUcRUsRUi", OP_MOVL_HIGH>;
+def VQMOVN_HIGH   : SInst<"vqmovn_high",  "hbd", "HsHiHlHUsHUiHUl">;
+def VQMOVUN_HIGH  : SInst<"vqmovun_high", "hbd", "HsHiHl">;
+def VMOVN_HIGH   : SInst<"vmovn_high",  "hbd", "HsHiHlHUsHUiHUl">;
+def VMOVL_HIGH   : Inst<"vmovl_high",  "nd", "HcHsHiHUcHUsHUi", OP_MOVL_HIGH>;
+def VXTL_HIGH    : Inst<"vxtl_high",   "nd", "HcHsHiHUcHUsHUi", OP_MOVL_HIGH>;
 // Scalar operands.
 def VQMOVUNH : SInst<"vqmovunh", "qs", "s">;
 def VQMOVUNS : SInst<"vqmovuns", "qs", "i">;
@@ -496,40 +496,40 @@ def VMLA_LANEQ   : Inst<"vmla_laneq", "dddki", "siUsUiQsQiQUsQUi", OP_MLA_LN>;
 def VFMA_LANE    : IInst<"vfma_lane", "ddddi", "fQfQd">;
 def VMLAL_LANE   : Inst<"vmlal_lane", "wwddi", "siUsUi", OP_MLAL_LN>;
 def VMLAL_LANEQ  : Inst<"vmlal_laneq", "wwdki", "siUsUi", OP_MLAL_LN>;
-def VMLAL_HIGH_LANE  : Inst<"vmlal_high_lane", "wwdgi", "RsRiRUsRUi", OP_MLAL_HIGH_LN>;
-def VMLAL_HIGH_LANEQ : Inst<"vmlal_high_laneq", "wwddi", "RsRiRUsRUi", OP_MLAL_HIGH_LN>;
-def VMLAL_HIGH_N  : Inst<"vmlal_high_n", "wwds", "RsRiRUsRUi", OP_MLAL_HIGH_N>;
+def VMLAL_HIGH_LANE  : Inst<"vmlal_high_lane", "wwdgi", "HsHiHUsHUi", OP_MLAL_HIGH_LN>;
+def VMLAL_HIGH_LANEQ : Inst<"vmlal_high_laneq", "wwddi", "HsHiHUsHUi", OP_MLAL_HIGH_LN>;
+def VMLAL_HIGH_N  : Inst<"vmlal_high_n", "wwds", "HsHiHUsHUi", OP_MLAL_HIGH_N>;
 def VQDMLAL_LANE : Inst<"vqdmlal_lane", "wwddi", "si", OP_QDMLAL_LN>;
 def VQDMLAL_LANEQ : Inst<"vqdmlal_laneq", "wwdki", "si", OP_QDMLAL_LN>;
-def VQDMLAL_HIGH_LANE  : Inst<"vqdmlal_high_lane", "wwdgi", "RsRi", OP_QDMLAL_HIGH_LN>;
-def VQDMLAL_HIGH_LANEQ : Inst<"vqdmlal_high_laneq", "wwddi", "RsRi", OP_QDMLAL_HIGH_LN>;
-def VQDMLAL_HIGH_N     : Inst<"vqdmlal_high_n", "wwds", "RsRi", OP_QDMLAL_HIGH_N>;
+def VQDMLAL_HIGH_LANE  : Inst<"vqdmlal_high_lane", "wwdgi", "HsHi", OP_QDMLAL_HIGH_LN>;
+def VQDMLAL_HIGH_LANEQ : Inst<"vqdmlal_high_laneq", "wwddi", "HsHi", OP_QDMLAL_HIGH_LN>;
+def VQDMLAL_HIGH_N     : Inst<"vqdmlal_high_n", "wwds", "HsHi", OP_QDMLAL_HIGH_N>;
 def VMLS_LANE    : Inst<"vmls_lane", "ddddi", "sifUsUiQsQiQfQUsQUi", OP_MLS_LN>;
 def VMLS_LANEQ   : Inst<"vmls_laneq", "dddki", "siUsUiQsQiQUsQUi", OP_MLS_LN>;
-def VMLSL_HIGH_LANE  : Inst<"vmlsl_high_lane", "wwdgi", "RsRiRUsRUi", OP_MLSL_HIGH_LN>;
-def VMLSL_HIGH_LANEQ : Inst<"vmlsl_high_laneq", "wwddi", "RsRiRUsRUi", OP_MLSL_HIGH_LN>;
-def VMLSL_HIGH_N  : Inst<"vmlsl_high_n", "wwds", "RsRiRUsRUi", OP_MLSL_HIGH_N>;
+def VMLSL_HIGH_LANE  : Inst<"vmlsl_high_lane", "wwdgi", "HsHiHUsHUi", OP_MLSL_HIGH_LN>;
+def VMLSL_HIGH_LANEQ : Inst<"vmlsl_high_laneq", "wwddi", "HsHiHUsHUi", OP_MLSL_HIGH_LN>;
+def VMLSL_HIGH_N  : Inst<"vmlsl_high_n", "wwds", "HsHiHUsHUi", OP_MLSL_HIGH_N>;
 def VFMS_LANE    : IInst<"vfms_lane", "ddddi", "fQf">;
 def VMLSL_LANE   : Inst<"vmlsl_lane", "wwddi", "siUsUi", OP_MLSL_LN>;
 def VMLSL_LANEQ  : Inst<"vmlsl_laneq", "wwdki", "siUsUi", OP_MLSL_LN>;
 def VQDMLSL_LANE : Inst<"vqdmlsl_lane", "wwddi", "si", OP_QDMLSL_LN>;
 def VQDMLSL_LANEQ : Inst<"vqdmlsl_laneq", "wwdki", "si", OP_QDMLSL_LN>;
-def VQDMLSL_HIGH_LANE  : Inst<"vqdmlsl_high_lane", "wwdgi", "RsRi", OP_QDMLSL_HIGH_LN>;
-def VQDMLSL_HIGH_LANEQ : Inst<"vqdmlsl_high_laneq", "wwddi", "RsRi", OP_QDMLSL_HIGH_LN>;
-def VQDMLSL_HIGH_N     : Inst<"vqdmlsl_high_n", "wwds", "RsRi", OP_QDMLSL_HIGH_N>;
+def VQDMLSL_HIGH_LANE  : Inst<"vqdmlsl_high_lane", "wwdgi", "HsHi", OP_QDMLSL_HIGH_LN>;
+def VQDMLSL_HIGH_LANEQ : Inst<"vqdmlsl_high_laneq", "wwddi", "HsHi", OP_QDMLSL_HIGH_LN>;
+def VQDMLSL_HIGH_N     : Inst<"vqdmlsl_high_n", "wwds", "HsHi", OP_QDMLSL_HIGH_N>;
 def VMUL_N       : Inst<"vmul_n", "dds", "sifUsUiQsQiQfQdQUsQUi", OP_MUL_N>;
 def VMUL_LANE    : Inst<"vmul_lane", "ddgi", "sifUsUiQsQiQfQdQUsQUi", OP_MUL_LN>;
 def VMUL_LANEQ   : Inst<"vmul_laneq", "ddki", "sifUsUiQsQiQfQdQUsQUi", OP_MUL_LN>;
 def VMULL_N      : SInst<"vmull_n", "wda", "siUsUi">;
 def VMULL_LANE   : Inst<"vmull_lane", "wddi", "siUsUi", OP_MULL_LN>;
 def VMULL_LANEQ  : Inst<"vmull_laneq", "wdki", "siUsUi", OP_MULL_LN>;
-def VMULL_HIGH_N : Inst<"vmull_high_n", "wda", "RsRiRUsRUi", OP_MULL_HIGH_N>;
-def VMULL_HIGH_LANE  : Inst<"vmull_high_lane", "wdgi", "RsRiRUsRUi", OP_MULL_HIGH_LN>;
-def VMULL_HIGH_LANEQ : Inst<"vmull_high_laneq", "wddi", "RsRiRUsRUi", OP_MULL_HIGH_LN>;
+def VMULL_HIGH_N : Inst<"vmull_high_n", "wda", "HsHiHUsHUi", OP_MULL_HIGH_N>;
+def VMULL_HIGH_LANE  : Inst<"vmull_high_lane", "wdgi", "HsHiHUsHUi", OP_MULL_HIGH_LN>;
+def VMULL_HIGH_LANEQ : Inst<"vmull_high_laneq", "wddi", "HsHiHUsHUi", OP_MULL_HIGH_LN>;
 def VQDMULL_N    : SInst<"vqdmull_n", "wda", "si">;
-def VQDMULL_HIGH_N : Inst<"vqdmull_high_n", "wda", "RsRi", OP_QDMULL_HIGH_N>;
-def VQDMULL_HIGH_LANE  : Inst<"vqdmull_high_lane", "wdgi", "RsRi", OP_QDMULL_HIGH_LN>;
-def VQDMULL_HIGH_LANEQ : Inst<"vqdmull_high_laneq", "wddi", "RsRi", OP_QDMULL_HIGH_LN>;
+def VQDMULL_HIGH_N : Inst<"vqdmull_high_n", "wda", "HsHi", OP_QDMULL_HIGH_N>;
+def VQDMULL_HIGH_LANE  : Inst<"vqdmull_high_lane", "wdgi", "HsHi", OP_QDMULL_HIGH_LN>;
+def VQDMULL_HIGH_LANEQ : Inst<"vqdmull_high_laneq", "wddi", "HsHi", OP_QDMULL_HIGH_LN>;
 def VQDMULL_LANE : Inst<"vqdmull_lane", "wddi", "si", OP_QDMULL_LN>;
 def VQDMULL_LANEQ : Inst<"vqdmull_laneq", "wdki", "si", OP_QDMULL_LN>;
 def VQDMULH_N    : SInst<"vqdmulh_n", "dda", "siQsQi">;

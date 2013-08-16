@@ -181,6 +181,5 @@ class NoTestOpInst<string n, string p, string t, Op o> : Inst<n, p, t, o> {}
 // size modifiers:
 // U: unsigned
 // Q: 128b
-// R: 128b without 'q' suffix
 // H: 128b without mangling 'q'
 // P: polynomial
