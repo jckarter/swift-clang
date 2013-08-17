@@ -932,10 +932,10 @@ CollectRecordNormalField(const FieldDecl *field, uint64_t OffsetInBits,
 
 /// CollectRecordFields - A helper function to collect debug info for
 /// record fields. This is used while creating debug info entry for a Record.
-void CGDebugInfo::
-CollectRecordFields(const RecordDecl *record, llvm::DIFile tunit,
-                    SmallVectorImpl<llvm::Value *> &elements,
-                    llvm::DIType RecordTy) {
+void CGDebugInfo::CollectRecordFields(const RecordDecl *record,
+                                      llvm::DIFile tunit,
+                                      SmallVectorImpl<llvm::Value *> &elements,
+                                      llvm::DICompositeType RecordTy) {
   const CXXRecordDecl *CXXDecl = dyn_cast<CXXRecordDecl>(record);
 
   if (CXXDecl && CXXDecl->isLambda())
@@ -2997,25 +2997,19 @@ void CGDebugInfo::EmitDeclareOfBlockLiteralArgVariable(const CGBlockInfo &block,
   DbgDecl->setDebugLoc(llvm::DebugLoc::get(line, column, scope));
 }
 
-/// If D is an out-of-class definition of a static data member of a class, find
-/// its corresponding in-class declaration.
-llvm::DIDerivedType
-CGDebugInfo::getStaticDataMemberDeclarationOrNull(const VarDecl *D) {
-  if (!D->isStaticDataMember())
-    return llvm::DIDerivedType();
-  return getStaticDataMemberDeclaration(D);
-}
-
-llvm::DIDerivedType
-CGDebugInfo::getStaticDataMemberDeclaration(const VarDecl *D) {
-  llvm::DenseMap<const Decl *, llvm::WeakVH>::iterator
-    MI = StaticDataMemberCache.find(D->getCanonicalDecl());
-  if (MI != StaticDataMemberCache.end())
-    // Verify the info still exists.
-    if (llvm::Value *V = MI->second)
-      return llvm::DIDerivedType(cast<llvm::MDNode>(V));
-  llvm_unreachable(
-      "A static data member declaration should be available at this point");
+/// getStaticDataMemberDeclaration - If D is an out-of-class definition of
+/// a static data member of a class, find its corresponding in-class
+/// declaration.
+llvm::DIDerivedType CGDebugInfo::getStaticDataMemberDeclaration(const VarDecl *D) {
+  if (D->isStaticDataMember()) {
+    llvm::DenseMap<const Decl *, llvm::WeakVH>::iterator
+      MI = StaticDataMemberCache.find(D->getCanonicalDecl());
+    if (MI != StaticDataMemberCache.end())
+      // Verify the info still exists.
+      if (llvm::Value *V = MI->second)
+        return llvm::DIDerivedType(cast<llvm::MDNode>(V));
+  }
+  return llvm::DIDerivedType();
 }
 
 /// EmitGlobalVariable - Emit information about a global variable.
@@ -3047,9 +3041,11 @@ void CGDebugInfo::EmitGlobalVariable(llvm::GlobalVariable *Var,
     LinkageName = StringRef();
   llvm::DIDescriptor DContext =
     getContextDescriptor(dyn_cast<Decl>(D->getDeclContext()));
-  llvm::DIGlobalVariable GV = DBuilder.createStaticVariable(
-      DContext, DeclName, LinkageName, Unit, LineNo, getOrCreateType(T, Unit),
-      Var->hasInternalLinkage(), Var, getStaticDataMemberDeclarationOrNull(D));
+  llvm::DIGlobalVariable GV =
+      DBuilder.createStaticVariable(DContext, DeclName, LinkageName, Unit,
+                                    LineNo, getOrCreateType(T, Unit),
+                                    Var->hasInternalLinkage(), Var,
+                                    getStaticDataMemberDeclaration(D));
   DeclCache.insert(std::make_pair(D->getCanonicalDecl(), llvm::WeakVH(GV)));
 }
 
@@ -3097,7 +3093,7 @@ void CGDebugInfo::EmitGlobalVariable(const ValueDecl *VD,
     return;
   llvm::DIGlobalVariable GV = DBuilder.createStaticVariable(
       Unit, Name, Name, Unit, getLineNumber(VD->getLocation()), Ty, true, Init,
-      getStaticDataMemberDeclarationOrNull(cast<VarDecl>(VD)));
+      getStaticDataMemberDeclaration(cast<VarDecl>(VD)));
   DeclCache.insert(std::make_pair(VD->getCanonicalDecl(), llvm::WeakVH(GV)));
 }
 
@@ -3159,6 +3155,7 @@ CGDebugInfo::EmitNamespaceAlias(const NamespaceAliasDecl &NA) {
 /// namespace decl.
 llvm::DINameSpace
 CGDebugInfo::getOrCreateNameSpace(const NamespaceDecl *NSDecl) {
+  NSDecl = NSDecl->getCanonicalDecl();
   llvm::DenseMap<const NamespaceDecl *, llvm::WeakVH>::iterator I =
     NameSpaceCache.find(NSDecl);
   if (I != NameSpaceCache.end())
