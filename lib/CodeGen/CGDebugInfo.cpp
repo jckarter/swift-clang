@@ -874,9 +874,6 @@ CGDebugInfo::CreateRecordStaticField(const VarDecl *Var,
   llvm::DIFile VUnit = getOrCreateFile(Var->getLocation());
   llvm::DIType VTy = getOrCreateType(Var->getType(), VUnit);
 
-  assert(VTy.getTag() != llvm::dwarf::DW_TAG_enumeration_type &&
-         "Do not describe enums as static members");
-
   unsigned LineNumber = getLineNumber(Var->getLocation());
   StringRef VName = Var->getName();
   llvm::Constant *C = NULL;
@@ -1139,9 +1136,8 @@ CollectCXXFriends(const CXXRecordDecl *RD, llvm::DIFile Unit,
     if ((*BI)->isUnsupportedFriend())
       continue;
     if (TypeSourceInfo *TInfo = (*BI)->getFriendType())
-      EltTys.push_back(DBuilder.createFriend(RecordTy,
-                                             getOrCreateType(TInfo->getType(),
-                                                             Unit)));
+      EltTys.push_back(DBuilder.createFriend(
+          RecordTy, getOrCreateType(TInfo->getType(), Unit, true)));
   }
 }
 
