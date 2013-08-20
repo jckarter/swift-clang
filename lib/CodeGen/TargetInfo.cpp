@@ -5753,7 +5753,6 @@ llvm::Value *XCoreABIInfo::EmitVAArg(llvm::Value *VAListAddr, QualType Ty,
   // handle the argument
   llvm::Type *ArgPtrTy = llvm::PointerType::getUnqual(ArgTy);
   switch (AI.getKind()) {
-  default:
   case ABIArgInfo::Expand:
     llvm_unreachable("Unsupported ABI kind for va_arg");
   case ABIArgInfo::Ignore:
@@ -5767,6 +5766,7 @@ llvm::Value *XCoreABIInfo::EmitVAArg(llvm::Value *VAListAddr, QualType Ty,
     ArgAddr = Builder.CreateLoad(ArgAddr);
     return Builder.CreatePointerCast(ArgAddr, ArgPtrTy);
   }
+  llvm_unreachable("Unknown ABI kind");
 }
 
 //===----------------------------------------------------------------------===//

@@ -1441,6 +1441,8 @@ void CGDebugInfo::completeRequiredType(const RecordDecl *RD) {
 }
 
 void CGDebugInfo::completeClassData(const RecordDecl *RD) {
+  if (DebugKind <= CodeGenOptions::DebugLineTablesOnly)
+    return;
   QualType Ty = CGM.getContext().getRecordType(RD);
   void* TyPtr = Ty.getAsOpaquePtr();
   if (CompletedTypeCache.count(TyPtr))

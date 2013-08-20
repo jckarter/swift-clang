@@ -265,10 +265,7 @@ void CodeGenModule::Error(SourceLocation loc, StringRef error) {
 
 /// ErrorUnsupported - Print out an error that codegen doesn't support the
 /// specified stmt yet.
-void CodeGenModule::ErrorUnsupported(const Stmt *S, const char *Type,
-                                     bool OmitOnError) {
-  if (OmitOnError && getDiags().hasErrorOccurred())
-    return;
+void CodeGenModule::ErrorUnsupported(const Stmt *S, const char *Type) {
   unsigned DiagID = getDiags().getCustomDiagID(DiagnosticsEngine::Error,
                                                "cannot compile this %0 yet");
   std::string Msg = Type;
@@ -278,10 +275,7 @@ void CodeGenModule::ErrorUnsupported(const Stmt *S, const char *Type,
 
 /// ErrorUnsupported - Print out an error that codegen doesn't support the
 /// specified decl yet.
-void CodeGenModule::ErrorUnsupported(const Decl *D, const char *Type,
-                                     bool OmitOnError) {
-  if (OmitOnError && getDiags().hasErrorOccurred())
-    return;
+void CodeGenModule::ErrorUnsupported(const Decl *D, const char *Type) {
   unsigned DiagID = getDiags().getCustomDiagID(DiagnosticsEngine::Error,
                                                "cannot compile this %0 yet");
   std::string Msg = Type;
@@ -2797,12 +2791,6 @@ void CodeGenModule::EmitLinkageSpec(const LinkageSpecDecl *LSD) {
 
 /// EmitTopLevelDecl - Emit code for a single top level declaration.
 void CodeGenModule::EmitTopLevelDecl(Decl *D) {
-  // If an error has occurred, stop code generation, but continue
-  // parsing and semantic analysis (to ensure all warnings and errors
-  // are emitted).
-  if (Diags.hasErrorOccurred())
-    return;
-
   // Ignore dependent declarations.
   if (D->getDeclContext() && D->getDeclContext()->isDependentContext())
     return;

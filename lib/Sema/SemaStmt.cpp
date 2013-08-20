@@ -313,11 +313,10 @@ sema::CompoundScopeInfo &Sema::getCurCompoundScope() const {
   return getCurFunction()->CompoundScopes.back();
 }
 
-StmtResult
-Sema::ActOnCompoundStmt(SourceLocation L, SourceLocation R,
-                        MultiStmtArg elts, bool isStmtExpr) {
-  unsigned NumElts = elts.size();
-  Stmt **Elts = elts.data();
+StmtResult Sema::ActOnCompoundStmt(SourceLocation L, SourceLocation R,
+                                   ArrayRef<Stmt *> Elts, bool isStmtExpr) {
+  const unsigned NumElts = Elts.size();
+
   // If we're in C89 mode, check that we don't have any decls after stmts.  If
   // so, emit an extension diagnostic.
   if (!getLangOpts().C99 && !getLangOpts().CPlusPlus) {
@@ -354,9 +353,7 @@ Sema::ActOnCompoundStmt(SourceLocation L, SourceLocation R,
       DiagnoseEmptyLoopBody(Elts[i], Elts[i + 1]);
   }
 
-  return Owned(new (Context) CompoundStmt(Context,
-                                          llvm::makeArrayRef(Elts, NumElts),
-                                          L, R));
+  return Owned(new (Context) CompoundStmt(Context, Elts, L, R));
 }
 
 StmtResult
