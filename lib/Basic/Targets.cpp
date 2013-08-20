@@ -90,7 +90,7 @@ static void getDarwinDefines(MacroBuilder &Builder, const LangOptions &Opts,
                              const llvm::Triple &Triple,
                              StringRef &PlatformName,
                              VersionTuple &PlatformMinVersion) {
-  Builder.defineMacro("__APPLE_CC__", "5621");
+  Builder.defineMacro("__APPLE_CC__", "6000");
   Builder.defineMacro("__APPLE__");
   Builder.defineMacro("__MACH__");
   Builder.defineMacro("OBJC_NEW_PROPERTIES");
@@ -1608,7 +1608,7 @@ const TargetInfo::AddlRegName AddlRegNames[] = {
 // most of the implementation can be shared.
 class X86TargetInfo : public TargetInfo {
   enum X86SSEEnum {
-    NoSSE, SSE1, SSE2, SSE3, SSSE3, SSE41, SSE42, AVX, AVX2
+    NoSSE, SSE1, SSE2, SSE3, SSSE3, SSE41, SSE42, AVX, AVX2, AVX512
   } SSELevel;
   enum MMX3DNowEnum {
     NoMMX3DNow, MMX, AMD3DNow, AMD3DNowAthlon
@@ -1712,6 +1712,10 @@ class X86TargetInfo : public TargetInfo {
     CK_CoreAVXi,
     CK_CoreAVX2,
     //@}
+
+    /// \name Knights Landing
+    /// Knights Landing processor.
+    CK_KNL,
 
     /// \name K6
     /// K6 architecture processors.
@@ -1856,6 +1860,7 @@ public:
       .Case("corei7-avx", CK_Corei7AVX)
       .Case("core-avx-i", CK_CoreAVXi)
       .Case("core-avx2", CK_CoreAVX2)
+      .Case("knl", CK_KNL)
       .Case("k6", CK_K6)
       .Case("k6-2", CK_K6_2)
       .Case("k6-3", CK_K6_3)
@@ -1930,6 +1935,7 @@ public:
     case CK_Corei7AVX:
     case CK_CoreAVXi:
     case CK_CoreAVX2:
+    case CK_KNL:
     case CK_Athlon64:
     case CK_Athlon64SSE3:
     case CK_AthlonFX:
@@ -1979,6 +1985,7 @@ void X86TargetInfo::getDefaultFeatures(llvm::StringMap<bool> &Features) const {
   Features["pclmul"] = false;
   Features["avx"] = false;
   Features["avx2"] = false;
+  Features["avx-512"] = false;
   Features["lzcnt"] = false;
   Features["rdrand"] = false;
   Features["bmi"] = false;
@@ -2052,6 +2059,18 @@ void X86TargetInfo::getDefaultFeatures(llvm::StringMap<bool> &Features) const {
     break;
   case CK_CoreAVX2:
     setFeatureEnabled(Features, "avx2", true);
+    setFeatureEnabled(Features, "aes", true);
+    setFeatureEnabled(Features, "pclmul", true);
+    setFeatureEnabled(Features, "lzcnt", true);
+    setFeatureEnabled(Features, "rdrnd", true);
+    setFeatureEnabled(Features, "f16c", true);
+    setFeatureEnabled(Features, "bmi", true);
+    setFeatureEnabled(Features, "bmi2", true);
+    setFeatureEnabled(Features, "rtm", true);
+    setFeatureEnabled(Features, "fma", true);
+    break;
+  case CK_KNL:
+    setFeatureEnabled(Features, "avx-512", true);
     setFeatureEnabled(Features, "aes", true);
     setFeatureEnabled(Features, "pclmul", true);
     setFeatureEnabled(Features, "lzcnt", true);
@@ -2187,6 +2206,11 @@ bool X86TargetInfo::setFeatureEnabled(llvm::StringMap<bool> &Features,
       Features["mmx"] = Features["sse"] = Features["sse2"] = Features["sse3"] =
         Features["ssse3"] = Features["sse41"] = Features["sse42"] =
         Features["popcnt"] = Features["avx"] = Features["avx2"] = true;
+    else if (Name == "avx-512")
+      Features["mmx"] = Features["sse"] = Features["sse2"] = Features["sse3"] =
+        Features["ssse3"] = Features["sse41"] = Features["sse42"] =
+        Features["popcnt"] = Features["avx"] = Features["avx2"] =
+        Features["avx-512"] = true;
     else if (Name == "fma")
       Features["mmx"] = Features["sse"] = Features["sse2"] = Features["sse3"] =
         Features["ssse3"] = Features["sse41"] = Features["sse42"] =
@@ -2229,28 +2253,29 @@ bool X86TargetInfo::setFeatureEnabled(llvm::StringMap<bool> &Features,
       Features["sse"] = Features["sse2"] = Features["sse3"] =
         Features["ssse3"] = Features["sse41"] = Features["sse42"] =
         Features["sse4a"] = Features["avx"] = Features["avx2"] =
-        Features["fma"] = Features["fma4"] = Features["aes"] =
-        Features["pclmul"] = Features["xop"] = false;
+        Features["avx-512"] = Features["fma"] = Features["fma4"] =
+        Features["aes"] = Features["pclmul"] = Features["xop"] = false;
     else if (Name == "sse2")
       Features["sse2"] = Features["sse3"] = Features["ssse3"] =
         Features["sse41"] = Features["sse42"] = Features["sse4a"] =
-        Features["avx"] = Features["avx2"] = Features["fma"] =
-        Features["fma4"] = Features["aes"] = Features["pclmul"] =
-        Features["xop"] = false;
+        Features["avx"] = Features["avx2"] = Features["avx-512"] =
+        Features["fma"] = Features["fma4"] = Features["aes"] =
+        Features["pclmul"] = Features["xop"] = false;
     else if (Name == "sse3")
       Features["sse3"] = Features["ssse3"] = Features["sse41"] =
         Features["sse42"] = Features["sse4a"] = Features["avx"] =
-        Features["avx2"] = Features["fma"] = Features["fma4"] =
-        Features["xop"] = false;
+        Features["avx2"] = Features["avx-512"] = Features["fma"] =
+        Features["fma4"] = Features["xop"] = false;
     else if (Name == "ssse3")
       Features["ssse3"] = Features["sse41"] = Features["sse42"] =
-        Features["avx"] = Features["avx2"] = Features["fma"] = false;
+        Features["avx"] = Features["avx2"] = Features["avx-512"] =
+        Features["fma"] = false;
     else if (Name == "sse4" || Name == "sse4.1")
       Features["sse41"] = Features["sse42"] = Features["avx"] =
-        Features["avx2"] = Features["fma"] = false;
+        Features["avx2"] = Features["avx-512"] = Features["fma"] = false;
     else if (Name == "sse4.2")
       Features["sse42"] = Features["avx"] = Features["avx2"] =
-        Features["fma"] = false;
+        Features["avx-512"] = Features["fma"] = false;
     else if (Name == "3dnow")
       Features["3dnow"] = Features["3dnowa"] = false;
     else if (Name == "3dnowa")
@@ -2260,10 +2285,12 @@ bool X86TargetInfo::setFeatureEnabled(llvm::StringMap<bool> &Features,
     else if (Name == "pclmul")
       Features["pclmul"] = false;
     else if (Name == "avx")
-      Features["avx"] = Features["avx2"] = Features["fma"] =
-        Features["fma4"] = Features["xop"] = false;
+      Features["avx"] = Features["avx2"] = Features["avx-512"] =
+        Features["fma"] = Features["fma4"] = Features["xop"] = false;
     else if (Name == "avx2")
-      Features["avx2"] = false;
+      Features["avx2"] = Features["avx-512"] = false;
+    else if (Name == "avx-512")
+      Features["avx-512"] = false;
     else if (Name == "fma")
       Features["fma"] = false;
     else if (Name == "sse4a")
@@ -2383,6 +2410,7 @@ void X86TargetInfo::HandleTargetFeatures(std::vector<std::string> &Features) {
 
     assert(Features[i][0] == '+' && "Invalid target feature!");
     X86SSEEnum Level = llvm::StringSwitch<X86SSEEnum>(Feature)
+      .Case("avx-512", AVX512)
       .Case("avx2", AVX2)
       .Case("avx", AVX)
       .Case("sse42", SSE42)
@@ -2492,6 +2520,9 @@ void X86TargetInfo::getTargetDefines(const LangOptions &Opts,
   case CK_CoreAVXi:
   case CK_CoreAVX2:
     defineCPUMacros(Builder, "corei7");
+    break;
+  case CK_KNL:
+    defineCPUMacros(Builder, "knl");
     break;
   case CK_K6_2:
     Builder.defineMacro("__k6_2__");
@@ -2606,6 +2637,8 @@ void X86TargetInfo::getTargetDefines(const LangOptions &Opts,
 
   // Each case falls through to the previous one here.
   switch (SSELevel) {
+  case AVX512:
+    Builder.defineMacro("__AVX512F__");
   case AVX2:
     Builder.defineMacro("__AVX2__");
   case AVX:
@@ -2630,6 +2663,7 @@ void X86TargetInfo::getTargetDefines(const LangOptions &Opts,
 
   if (Opts.MicrosoftExt && getTriple().getArch() == llvm::Triple::x86) {
     switch (SSELevel) {
+    case AVX512:
     case AVX2:
     case AVX:
     case SSE42:
@@ -2673,6 +2707,7 @@ bool X86TargetInfo::hasFeature(StringRef Feature) const {
       .Case("aes", HasAES)
       .Case("avx", SSELevel >= AVX)
       .Case("avx2", SSELevel >= AVX2)
+      .Case("avx512", SSELevel >= AVX512)
       .Case("bmi", HasBMI)
       .Case("bmi2", HasBMI2)
       .Case("fma", HasFMA)
