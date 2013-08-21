@@ -3614,6 +3614,9 @@ public:
     else if (CPU == "swift" || CPU == "cortex-a7") {
       Features["vfp4"] = true;
       Features["neon"] = true;
+    } else if (CPU == "cyclone") {
+      Features["v8fp"] = true;
+      Features["neon"] = true;
     }
   }
 
@@ -3679,6 +3682,7 @@ public:
       .Case("pj4b", "7K")
 #endif // !__OPEN_SOURCE__
       .Case("swift", "7S")
+      .Case("cyclone", "8A")
       .Cases("cortex-m3", "cortex-m4", "7M")
       .Case("cortex-m0", "6M")
       .Case("cortex-a53", "8A")

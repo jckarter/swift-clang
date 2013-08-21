@@ -132,6 +132,7 @@ static const char *GetArmArchForMCpu(StringRef Value) {
     .Case("cortex-m3", "armv7m")
     .Case("cortex-m4", "armv7em")
     .Case("swift", "armv7s")
+    .Case("cyclone", "armv8")
     .Default(0);
 }
 
