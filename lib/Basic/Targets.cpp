@@ -1747,6 +1747,12 @@ class X86TargetInfo : public TargetInfo {
     //@}
   } CPU;
 
+  enum FPMathKind {
+    FP_Default,
+    FP_SSE,
+    FP_387
+  } FPMath;
+
 public:
   X86TargetInfo(const llvm::Triple &Triple)
       : TargetInfo(Triple), SSELevel(NoSSE), MMX3DNowLevel(NoMMX3DNow),
@@ -1754,7 +1760,7 @@ public:
         HasRDRND(false), HasBMI(false), HasBMI2(false), HasPOPCNT(false),
         HasRTM(false), HasPRFCHW(false), HasRDSEED(false), HasFMA(false),
         HasF16C(false), HasAVX512CD(false), HasAVX512ER(false),
-        HasAVX512PF(false), CPU(CK_Generic) {
+        HasAVX512PF(false), CPU(CK_Generic), FPMath(FP_Default) {
     BigEndian = false;
     LongDoubleFormat = &llvm::APFloat::x87DoubleExtended;
   }
@@ -1801,7 +1807,8 @@ public:
                                  bool Enabled) const;
   virtual void getDefaultFeatures(llvm::StringMap<bool> &Features) const;
   virtual bool hasFeature(StringRef Feature) const;
-  virtual void HandleTargetFeatures(std::vector<std::string> &Features);
+  virtual bool HandleTargetFeatures(std::vector<std::string> &Features,
+                                    DiagnosticsEngine &Diags);
   virtual const char* getABI() const {
     if (getTriple().getArch() == llvm::Triple::x86_64 && SSELevel >= AVX)
       return "avx";
@@ -1933,6 +1940,8 @@ public:
     llvm_unreachable("Unhandled CPU kind");
   }
 
+  virtual bool setFPMath(StringRef Name);
+
   virtual CallingConvCheckResult checkCallingConvention(CallingConv CC) const {
     // We accept all non-ARM calling conventions
     return (CC == CC_X86ThisCall ||
@@ -1947,6 +1956,18 @@ public:
     return MT == CCMT_Member ? CC_X86ThisCall : CC_C;
   }
 };
+
+bool X86TargetInfo::setFPMath(StringRef Name) {
+  if (Name == "387") {
+    FPMath = FP_387;
+    return true;
+  }
+  if (Name == "sse") {
+    FPMath = FP_SSE;
+    return true;
+  }
+  return false;
+}
 
 void X86TargetInfo::getDefaultFeatures(llvm::StringMap<bool> &Features) const {
   // FIXME: This *really* should not be here.
@@ -2158,7 +2179,7 @@ void X86TargetInfo::setSSELevel(llvm::StringMap<bool> &Features,
     Features["popcnt"] = Features["sse42"] = false;
   case AVX:
     Features["fma"] = Features["avx"] = false;
-    setXOPLevel(Features, SSE4A, false);
+    setXOPLevel(Features, FMA4, false);
   case AVX2:
     Features["avx2"] = false;
   case AVX512F:
@@ -2284,7 +2305,8 @@ void X86TargetInfo::setFeatureEnabled(llvm::StringMap<bool> &Features,
 
 /// HandleTargetOptions - Perform initialization based on the user
 /// configured set of features.
-void X86TargetInfo::HandleTargetFeatures(std::vector<std::string> &Features) {
+bool X86TargetInfo::HandleTargetFeatures(std::vector<std::string> &Features,
+                                         DiagnosticsEngine &Diags) {
   // Remember the maximum enabled sselevel.
   for (unsigned i = 0, e = Features.size(); i !=e; ++i) {
     // Ignore disabled features.
@@ -2398,12 +2420,23 @@ void X86TargetInfo::HandleTargetFeatures(std::vector<std::string> &Features) {
     XOPLevel = std::max(XOPLevel, XLevel);
   }
 
+  // LLVM doesn't have a separate switch for fpmath, so only accept it if it
+  // matches the selected sse level.
+  if (FPMath == FP_SSE && SSELevel < SSE1) {
+    Diags.Report(diag::err_target_unsupported_fpmath) << "sse";
+    return false;
+  } else if (FPMath == FP_387 && SSELevel >= SSE1) {
+    Diags.Report(diag::err_target_unsupported_fpmath) << "387";
+    return false;
+  }
+
   // Don't tell the backend if we're turning off mmx; it will end up disabling
   // SSE, which we don't want.
   std::vector<std::string>::iterator it;
   it = std::find(Features.begin(), Features.end(), "-mmx");
   if (it != Features.end())
     Features.erase(it);
+  return true;
 }
 
 /// X86TargetInfo::getTargetDefines - Return the set of the X86-specific macro
@@ -3318,12 +3351,14 @@ public:
     return Feature == "aarch64" || (Feature == "neon" && FPU == NeonMode);
   }
 
-  virtual void HandleTargetFeatures(std::vector<std::string> &Features) {
+  virtual bool HandleTargetFeatures(std::vector<std::string> &Features,
+                                    DiagnosticsEngine &Diags) {
     FPU = FPUMode;
     for (unsigned i = 0, e = Features.size(); i != e; ++i) {
       if (Features[i] == "+neon")
         FPU = NeonMode;
     }
+    return true;
   }
 
   virtual void getGCCRegNames(const char *const *&Names,
@@ -3459,6 +3494,12 @@ class ARMTargetInfo : public TargetInfo {
 
   std::string ABI, CPU;
 
+  enum {
+    FP_Default,
+    FP_VFP,
+    FP_Neon
+  } FPMath;
+
   unsigned FPU : 4;
 
   unsigned IsAAPCS : 1;
@@ -3503,7 +3544,7 @@ class ARMTargetInfo : public TargetInfo {
 public:
   ARMTargetInfo(const llvm::Triple &Triple)
       : TargetInfo(Triple), ABI("aapcs-linux"), CPU("arm1136j-s"),
-        IsAAPCS(true) {
+        FPMath(FP_Default), IsAAPCS(true) {
     BigEndian = false;
     SizeType = UnsignedInt;
     PtrDiffType = SignedInt;
@@ -3613,7 +3654,8 @@ public:
     }
   }
 
-  virtual void HandleTargetFeatures(std::vector<std::string> &Features) {
+  virtual bool HandleTargetFeatures(std::vector<std::string> &Features,
+                                    DiagnosticsEngine &Diags) {
     FPU = 0;
     SoftFloat = SoftFloatABI = false;
     for (unsigned i = 0, e = Features.size(); i != e; ++i) {
@@ -3631,6 +3673,16 @@ public:
         FPU |= NeonFPU;
     }
 
+    if (!(FPU & NeonFPU) && FPMath == FP_Neon) {
+      Diags.Report(diag::err_target_unsupported_fpmath) << "neon";
+      return false;
+    }
+
+    if (FPMath == FP_Neon)
+      Features.push_back("+neonfp");
+    else if (FPMath == FP_VFP)
+      Features.push_back("-neonfp");
+
     // Remove front-end specific options which the backend handles differently.
     std::vector<std::string>::iterator it;
     it = std::find(Features.begin(), Features.end(), "+soft-float");
@@ -3639,6 +3691,7 @@ public:
     it = std::find(Features.begin(), Features.end(), "+soft-float-abi");
     if (it != Features.end())
       Features.erase(it);
+    return true;
   }
 
   virtual bool hasFeature(StringRef Feature) const {
@@ -3694,6 +3747,7 @@ public:
     CPU = Name;
     return true;
   }
+  virtual bool setFPMath(StringRef Name);
   virtual void getTargetDefines(const LangOptions &Opts,
                                 MacroBuilder &Builder) const {
     // Target identification.
@@ -3864,6 +3918,18 @@ public:
     return -1;
   }
 };
+
+bool ARMTargetInfo::setFPMath(StringRef Name) {
+  if (Name == "neon") {
+    FPMath = FP_Neon;
+    return true;
+  } else if (Name == "vfp" || Name == "vfp2" || Name == "vfp3" ||
+             Name == "vfp4") {
+    FPMath = FP_VFP;
+    return true;
+  }
+  return false;
+}
 
 const char * const ARMTargetInfo::GCCRegNames[] = {
   // Integer registers
@@ -4115,11 +4181,13 @@ class SparcTargetInfo : public TargetInfo {
 public:
   SparcTargetInfo(const llvm::Triple &Triple) : TargetInfo(Triple) {}
 
-  virtual void HandleTargetFeatures(std::vector<std::string> &Features) {
+  virtual bool HandleTargetFeatures(std::vector<std::string> &Features,
+                                    DiagnosticsEngine &Diags) {
     SoftFloat = false;
     for (unsigned i = 0, e = Features.size(); i != e; ++i)
       if (Features[i] == "+soft-float")
         SoftFloat = true;
+    return true;
   }
   virtual void getTargetDefines(const LangOptions &Opts,
                                 MacroBuilder &Builder) const {
@@ -4687,17 +4755,8 @@ public:
     return "";
   }
 
-  virtual void setFeatureEnabled(llvm::StringMap<bool> &Features,
-                                 StringRef Name,
-                                 bool Enabled) const {
-    if (Name == "32")
-      Name = "o32";
-    else if (Name == "64")
-      Name = "n64";
-    Features[Name] = Enabled;
-  }
-
-  virtual void HandleTargetFeatures(std::vector<std::string> &Features) {
+  virtual bool HandleTargetFeatures(std::vector<std::string> &Features,
+                                    DiagnosticsEngine &Diags) {
     IsMips16 = false;
     IsMicromips = false;
     IsSingleFloat = false;
@@ -4727,6 +4786,8 @@ public:
       std::find(Features.begin(), Features.end(), "+soft-float");
     if (it != Features.end())
       Features.erase(it);
+
+    return true;
   }
 
   virtual int getEHDataRegisterNumber(unsigned RegNo) const {
@@ -5543,31 +5604,21 @@ TargetInfo *TargetInfo::CreateTargetInfo(DiagnosticsEngine &Diags,
     return 0;
   }
 
+  // Set the fp math unit.
+  if (!Opts->FPMath.empty() && !Target->setFPMath(Opts->FPMath)) {
+    Diags.Report(diag::err_target_unknown_fpmath) << Opts->FPMath;
+    return 0;
+  }
+
   // Compute the default target features, we need the target to handle this
   // because features may have dependencies on one another.
   llvm::StringMap<bool> Features;
   Target->getDefaultFeatures(Features);
 
-  // Fist the last of each option;
-  llvm::StringMap<unsigned> LastOpt;
-  for (unsigned I = 0, N = Opts->FeaturesAsWritten.size();
-       I < N; ++I) {
-    const char *Name = Opts->FeaturesAsWritten[I].c_str() + 1;
-    LastOpt[Name] = I;
-  }
-
   // Apply the user specified deltas.
   for (unsigned I = 0, N = Opts->FeaturesAsWritten.size();
        I < N; ++I) {
     const char *Name = Opts->FeaturesAsWritten[I].c_str();
-
-    // If this option was overridden, ignore it.
-    llvm::StringMap<unsigned>::iterator LastI = LastOpt.find(Name + 1);
-    assert(LastI != LastOpt.end());
-    unsigned Last = LastI->second;
-    if (Last != I)
-      continue;
-
     // Apply the feature via the target.
     bool Enabled = Name[0] == '+';
     Target->setFeatureEnabled(Features, Name + 1, Enabled);
@@ -5581,7 +5632,8 @@ TargetInfo *TargetInfo::CreateTargetInfo(DiagnosticsEngine &Diags,
   for (llvm::StringMap<bool>::const_iterator it = Features.begin(),
          ie = Features.end(); it != ie; ++it)
     Opts->Features.push_back((it->second ? "+" : "-") + it->first().str());
-  Target->HandleTargetFeatures(Opts->Features);
+  if (!Target->HandleTargetFeatures(Opts->Features, Diags))
+    return 0;
 
   return Target.take();
 }
