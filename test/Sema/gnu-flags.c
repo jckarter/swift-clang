@@ -25,7 +25,7 @@
 #endif
 
 char align;
-_Static_assert(_Alignof(align) == 1, "align's alignment is wrong");
+_Static_assert(_Alignof(align) > 0, "align's alignment is wrong");
 
 
 #if ALL || CASERANGE
