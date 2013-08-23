@@ -1201,7 +1201,6 @@ void ASTDeclReader::ReadCXXDefinitionData(
       = (Capture*)Reader.Context.Allocate(sizeof(Capture)*Lambda.NumCaptures);
     Capture *ToCapture = Lambda.Captures;
     Lambda.MethodTyInfo = GetTypeSourceInfo(Record, Idx);
-    Lambda.TheLambdaExpr = cast<LambdaExpr>(Reader.ReadExpr(F));
     for (unsigned I = 0, N = Lambda.NumCaptures; I != N; ++I) {
       SourceLocation Loc = ReadSourceLocation(Record, Idx);
       bool IsImplicit = Record[Idx++];
@@ -1523,8 +1522,6 @@ ASTDeclReader::VisitClassTemplateSpecializationDeclImpl(
     if (D->isCanonicalDecl()) { // It's kept in the folding set.
       if (ClassTemplatePartialSpecializationDecl *Partial =
               dyn_cast<ClassTemplatePartialSpecializationDecl>(D)) {
-        Partial->SequenceNumber =
-            CanonPattern->getNextPartialSpecSequenceNumber();
         CanonPattern->getCommonPtr()->PartialSpecializations
             .GetOrInsertNode(Partial);
       } else {
@@ -1624,8 +1621,6 @@ ASTDeclReader::VisitVarTemplateSpecializationDeclImpl(
     if (D->isCanonicalDecl()) { // It's kept in the folding set.
       if (VarTemplatePartialSpecializationDecl *Partial =
               dyn_cast<VarTemplatePartialSpecializationDecl>(D)) {
-        Partial->SequenceNumber =
-            CanonPattern->getNextPartialSpecSequenceNumber();
         CanonPattern->getCommonPtr()->PartialSpecializations
             .GetOrInsertNode(Partial);
       } else {
