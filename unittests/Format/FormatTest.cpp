@@ -3524,6 +3524,10 @@ TEST_F(FormatTest, IndentsRelativeToUnaryOperators) {
                "}");
   verifyFormat("aaaaaaaaaa(!aaaaaaaaaa( // break\n"
                "                aaaaa));");
+
+  // Only indent relative to unary operators if the expression is nested.
+  verifyFormat("*aaa = aaaaaaa( // break\n"
+               "    bbbbbb);");
 }
 
 TEST_F(FormatTest, UndestandsOverloadedOperators) {
@@ -5265,6 +5269,12 @@ TEST_F(FormatTest, BreakStringLiterals) {
             format("llvm::outs() << "
                    "\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa aaaaaaaaaaaaaaaaaa"
                    "aaaaaaaaaaaaaaaaaaa\";"));
+  EXPECT_EQ("ffff(\n"
+            "    {\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa \"\n"
+            "     \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"});",
+            format("ffff({\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa "
+                   "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"});",
+                   getGoogleStyle()));
 
   FormatStyle AlignLeft = getLLVMStyleWithColumns(12);
   AlignLeft.AlignEscapedNewlinesLeft = true;
