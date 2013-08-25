@@ -803,6 +803,14 @@ void Clang::AddARMTargetArgs(const ArgList &Args,
                     options::OPT_mno_implicit_float,
                     true))
     CmdArgs.push_back("-no-implicit-float");
+
+    // llvm does not support reserving registers in general. There is support
+    // for reserving r9 on ARM though (defined as a platform-specific register
+    // in ARM EABI).
+    if (Args.hasArg(options::OPT_ffixed_r9)) {
+      CmdArgs.push_back("-backend-option");
+      CmdArgs.push_back("-arm-reserve-r9");
+    }
 }
 
 /// getARM64TargetCPU - Get the (LLVM) name of the ARM64 cpu we are targeting.
@@ -3010,9 +3018,14 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
     CmdArgs.push_back(Args.MakeArgString("-mstack-alignment=" + alignment));
   }
   // -mkernel implies -mstrict-align; don't add the redundant option.
-  if (Args.hasArg(options::OPT_mstrict_align) && !KernelOrKext) {
-    CmdArgs.push_back("-backend-option");
-    CmdArgs.push_back("-arm-strict-align");
+  if (!KernelOrKext) {
+    if (Args.hasArg(options::OPT_mno_unaligned_access)) {
+      CmdArgs.push_back("-backend-option");
+      CmdArgs.push_back("-arm-strict-align");
+    } else if (Args.hasArg(options::OPT_munaligned_access)) {
+      CmdArgs.push_back("-backend-option");
+      CmdArgs.push_back("-arm-no-strict-align");
+    }
   }
 
   // Forward -f options with positive and negative forms; we translate
