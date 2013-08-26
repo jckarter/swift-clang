@@ -1526,26 +1526,46 @@ static std::string GenOpString(OpKind op, const std::string &proto,
   case OpMlal:
     s += "__a + " + MangleName("vmull", typestr, ClassS) + "(__b, __c);";
     break;
-  case OpQdmlal:
-    s += "__a + " + MangleName("vqdmull", typestr, ClassS, scal) + "(__b, __c);";
+  case OpQdmlal: {
+    assert((typestr == "s" || typestr == "i") && "unexpected qdmla op");
+    std::string QAddType = scal ? "" : "Q";
+    QAddType += typestr == "s" ? "i" : "l";
+    s += MangleName("vqadd", QAddType, ClassS, scal) + "(__a, ";
+    s += MangleName("vqdmull", typestr, ClassS, scal) + "(__b, __c));";
     break;
-  case OpQdmlsl:
-    s += "__a - " + MangleName("vqdmull", typestr, ClassS, scal) + "(__b, __c);";
+  }
+  case OpQdmlsl: {
+    assert((typestr == "s" || typestr == "i") && "unexpected qdmla op");
+    std::string QSubType = scal ? "" : "Q";
+    QSubType += typestr == "s" ? "i" : "l";
+    s += MangleName("vqsub", QSubType, ClassS, scal) + "(__a, ";
+    s += MangleName("vqdmull", typestr, ClassS, scal) + "(__b, __c));";
     break;
-  case OpQdmlalN:
-    s += "__a + " + MangleName("vqdmull", typestr, ClassS, scal) + "(__b, ";
+  }
+  case OpQdmlalN: {
+    assert((typestr == "s" || typestr == "i") && "unexpected qdmla op");
+    std::string QAddType = scal ? "" : "Q";
+    QAddType += typestr == "s" ? "i" : "l";
+    s += MangleName("vqadd", QAddType, ClassS, scal) + "(__a, ";
+    s += MangleName("vqdmull", typestr, ClassS, scal) + "(__b, ";
     if (scal)
-      s += "__c);";
+      s += "__c));";
     else
-      s += Duplicate(nElts, typestr, "__c") + ");";
+      s += Duplicate(nElts, typestr, "__c") + "));";
     break;
-  case OpQdmlslN:
-    s += "__a - " + MangleName("vqdmull", typestr, ClassS, scal) + "(__b, ";
+  }
+  case OpQdmlslN: {
+    assert((typestr == "s" || typestr == "i") && "unexpected qdmla op");
+    std::string QSubType = scal ? "" : "Q";
+    QSubType += typestr == "s" ? "i" : "l";
+    s += MangleName("vqsub", QSubType, ClassS, scal) + "(__a, ";
+    s += MangleName("vqdmull", typestr, ClassS, scal) + "(__b, ";
     if (scal)
-      s += "__c);";
+      s += "__c));";
     else
-      s += Duplicate(nElts, typestr, "__c") + ");";
+      s += Duplicate(nElts, typestr, "__c") + "));";
     break;
+  }
   case OpMlsN:
     s += "__a - (__b * " + Duplicate(nElts, typestr, "__c") + ");";
     break;
@@ -2154,7 +2174,11 @@ void NeonEmitter::run(raw_ostream &OS) {
   emitIntrinsic(OS, Records.getDef("VQDMULL"));
   emitIntrinsic(OS, Records.getDef("VQDMULLH"));
   emitIntrinsic(OS, Records.getDef("VQDMULLS"));
-
+  // Used by vqdmls intrinsics (VQADD and friends already taken care
+  // of by alphabetical order).
+  emitIntrinsic(OS, Records.getDef("VQSUB"));
+  emitIntrinsic(OS, Records.getDef("VQSUBS"));
+  emitIntrinsic(OS, Records.getDef("VQSUBD"));
 
   for (unsigned i = 0, e = RV.size(); i != e; ++i) {
     Record *R = RV[i];
@@ -2166,7 +2190,10 @@ void NeonEmitter::run(raw_ostream &OS) {
         R->getName() == "VABD"  ||
         R->getName() == "VQDMULL" ||
         R->getName() == "VQDMULLH" ||
-        R->getName() == "VQDMULLS")
+        R->getName() == "VQDMULLS" ||
+        R->getName() == "VQSUB" ||
+        R->getName() == "VQSUBS" ||
+        R->getName() == "VQSUBD")
       continue;
     emitIntrinsic(OS, R);
   }

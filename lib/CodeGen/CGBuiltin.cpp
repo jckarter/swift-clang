@@ -5497,11 +5497,17 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     llvm::Type *DInt =
       llvm::IntegerType::get(getLLVMContext(), BitWidth/2);
     llvm::Type *ArgTy = llvm::VectorType::get(DInt, NumElts);
+    // Now we're ready to generate code: extract the elements...
     Ops[1] = EmitExtractHigh(Ops[1], ArgTy);
     Ops[2] = EmitExtractHigh(Ops[2], ArgTy);
+    // ... perform an saturating doubling multiply ...
     SmallVector<llvm::Value*, 2> TmpOps(Ops.begin()+1, Ops.end());
     Ops[1] = EmitNeonCall(CGM.getIntrinsic(Int, VTy), TmpOps, "vqdmull_high");
-    return Builder.CreateAdd(Builder.CreateBitCast(Ops[0], Ty), Ops[1]);
+    // ... and a saturating accumulate op.
+    Ops[0] = Builder.CreateBitCast(Ops[0], Ty);
+    Ops.pop_back();
+    return EmitNeonCall(CGM.getIntrinsic(Intrinsic::arm64_neon_sqadd, VTy),
+                        Ops, "vqadd");
   }
   case ARM64::BI__builtin_arm64_vqdmlsl_high_v: {
     Int = Intrinsic::arm64_neon_sqdmull;
@@ -5510,11 +5516,17 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     llvm::Type *DInt =
       llvm::IntegerType::get(getLLVMContext(), BitWidth/2);
     llvm::Type *ArgTy = llvm::VectorType::get(DInt, NumElts);
+    // Now we're ready to generate code: extract the elements...
     Ops[1] = EmitExtractHigh(Ops[1], ArgTy);
     Ops[2] = EmitExtractHigh(Ops[2], ArgTy);
+    // ... perform an saturating doubling multiply ...
     SmallVector<llvm::Value*, 2> TmpOps(Ops.begin()+1, Ops.end());
     Ops[1] = EmitNeonCall(CGM.getIntrinsic(Int, VTy), TmpOps, "vqdmull_high");
-    return Builder.CreateSub(Builder.CreateBitCast(Ops[0], Ty), Ops[1]);
+    // ... and a saturating accumulate op.
+    Ops[0] = Builder.CreateBitCast(Ops[0], Ty);
+    Ops.pop_back();
+    return EmitNeonCall(CGM.getIntrinsic(Intrinsic::arm64_neon_sqsub, VTy),
+                        Ops, "vqsub");
   }
   case ARM64::BI__builtin_arm64_vsubl_high_v: {
     unsigned NumElts = VTy->getNumElements();
