@@ -1325,7 +1325,7 @@ void ItaniumCXXABI::registerGlobalDtor(CodeGenFunction &CGF,
     return CGM.AddCXXDtorEntry(dtor, addr);
   }
 
-  CGF.registerGlobalDtorWithAtExit(dtor, addr);
+  CGF.registerGlobalDtorWithAtExit(D, dtor, addr);
 }
 
 /// Get the appropriate linkage for the wrapper function. This is essentially
