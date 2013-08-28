@@ -1869,7 +1869,8 @@ static bool isOptimizationLevelFast(const ArgList &Args) {
 /// \brief Vectorize at all optimization levels greater than 1 except for -Oz.
 static bool shouldEnableVectorizerAtOLevel(const ArgList &Args) {
   if (Arg *A = Args.getLastArg(options::OPT_O_Group)) {
-    if (A->getOption().matches(options::OPT_Ofast))
+    if (A->getOption().matches(options::OPT_O4) ||
+        A->getOption().matches(options::OPT_Ofast))
       return true;
 
     if (A->getOption().matches(options::OPT_O0))
@@ -2631,8 +2632,15 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
   // preprocessed inputs and configure concludes that -fPIC is not supported.
   Args.ClaimAllArgs(options::OPT_D);
 
-  if (Arg *A = Args.getLastArg(options::OPT_O_Group))
-    A->render(Args, CmdArgs);
+  // Manually translate -O4 to -O3; let clang reject others.
+  if (Arg *A = Args.getLastArg(options::OPT_O_Group)) {
+    if (A->getOption().matches(options::OPT_O4)) {
+      CmdArgs.push_back("-O3");
+      D.Diag(diag::warn_O4_is_O3);
+    } else {
+      A->render(Args, CmdArgs);
+    }
+  }
 
   // Don't warn about unused -flto.  This can happen when we're preprocessing or
   // precompiling.
@@ -6589,6 +6597,14 @@ void visualstudio::Link::ConstructJob(Compilation &C, const JobAction &JA,
   }
 
   CmdArgs.push_back("-nologo");
+
+  if (getToolChain().getDriver().getOrParseSanitizerArgs(Args).needsAsanRt()) {
+    SmallString<128> LibSanitizer(getToolChain().getDriver().ResourceDir);
+    // FIXME: Handle 64-bit. Use asan_dll_thunk.dll when building a DLL.
+    llvm::sys::path::append(
+        LibSanitizer, "lib", "windows", "clang_rt.asan-i386.lib");
+    CmdArgs.push_back(Args.MakeArgString(LibSanitizer));
+  }
 
   Args.AddAllArgValues(CmdArgs, options::OPT_l);
   Args.AddAllArgValues(CmdArgs, options::OPT__SLASH_link);
