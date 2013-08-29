@@ -501,20 +501,23 @@ DiagnosticIDs::getDiagnosticLevel(unsigned DiagID, unsigned DiagClass,
   return Result;
 }
 
-struct clang::WarningOption {
-  const char *NameStr;
-  uint16_t NameLen;
-  uint16_t Members;
-  uint16_t SubGroups;
-
-  StringRef getName() const {
-    return StringRef(NameStr, NameLen);
-  }
-};
-
 #define GET_DIAG_ARRAYS
 #include "clang/Basic/DiagnosticGroups.inc"
 #undef GET_DIAG_ARRAYS
+
+namespace {
+  struct WarningOption {
+    uint16_t NameOffset;
+    uint16_t Members;
+    uint16_t SubGroups;
+
+    // String is stored with a pascal-style length byte.
+    StringRef getName() const {
+      return StringRef(DiagGroupNames + NameOffset + 1,
+                       DiagGroupNames[NameOffset]);
+    }
+  };
+}
 
 // Second the table of options, sorted by name for fast binary lookup.
 static const WarningOption OptionTable[] = {
@@ -524,9 +527,8 @@ static const WarningOption OptionTable[] = {
 };
 static const size_t OptionTableSize = llvm::array_lengthof(OptionTable);
 
-static bool WarningOptionCompare(const WarningOption &LHS,
-                                 const WarningOption &RHS) {
-  return LHS.getName() < RHS.getName();
+static bool WarningOptionCompare(const WarningOption &LHS, StringRef RHS) {
+  return LHS.getName() < RHS;
 }
 
 /// getWarningOptionForDiag - Return the lowest-level warning option that
@@ -538,9 +540,8 @@ StringRef DiagnosticIDs::getWarningOptionForDiag(unsigned DiagID) {
   return StringRef();
 }
 
-void DiagnosticIDs::getDiagnosticsInGroup(
-    const WarningOption *Group,
-    SmallVectorImpl<diag::kind> &Diags) const {
+static void getDiagnosticsInGroup(const WarningOption *Group,
+                                  SmallVectorImpl<diag::kind> &Diags) {
   // Add the members of the option diagnostic set.
   const int16_t *Member = DiagArrays + Group->Members;
   for (; *Member != -1; ++Member)
@@ -555,17 +556,14 @@ void DiagnosticIDs::getDiagnosticsInGroup(
 bool DiagnosticIDs::getDiagnosticsInGroup(
     StringRef Group,
     SmallVectorImpl<diag::kind> &Diags) const {
-  if (Group.size() > UINT16_MAX)
-    return true; // Option is too long to be one in the table.
-  WarningOption Key = { Group.data(), (uint16_t)Group.size(), 0, 0 };
   const WarningOption *Found =
-  std::lower_bound(OptionTable, OptionTable + OptionTableSize, Key,
+  std::lower_bound(OptionTable, OptionTable + OptionTableSize, Group,
                    WarningOptionCompare);
   if (Found == OptionTable + OptionTableSize ||
       Found->getName() != Group)
     return true; // Option not found.
 
-  getDiagnosticsInGroup(Found, Diags);
+  ::getDiagnosticsInGroup(Found, Diags);
   return false;
 }
 
