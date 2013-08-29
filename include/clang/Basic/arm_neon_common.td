@@ -179,6 +179,7 @@ class NoTestOpInst<string n, string p, string t, Op o> : Inst<n, p, t, o> {}
 // h: half-float
 
 // size modifiers:
+// S: scalar, only used for function mangling.
 // U: unsigned
 // Q: 128b
 // H: 128b without mangling 'q'
