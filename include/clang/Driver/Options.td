@@ -176,6 +176,8 @@ def _migrate_xct : Flag<["--"], "migrate-xct">, Flags<[DriverOption]>,
    "XCTest framework">;
 def objcmt_migrate_property : Flag<["-"], "objcmt-migrate-property">, Flags<[CC1Option]>,
   HelpText<"Enable migration to modern ObjC property">;
+def objcmt_migrate_readonly_property : Flag<["-"], "objcmt-migrate-readonly-property">, Flags<[CC1Option]>,
+  HelpText<"Enable migration to modern ObjC readonly property">;
 // Make sure all other -ccc- options are rejected.
 def ccc_ : Joined<["-"], "ccc-">, Group<internal_Group>, Flags<[Unsupported]>;
 
