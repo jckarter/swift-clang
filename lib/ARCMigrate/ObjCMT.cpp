@@ -49,9 +49,10 @@ class ObjCMigrateASTConsumer : public ASTConsumer {
                                   const ObjCImplementationDecl *ImpDecl);
   void migrateNSEnumDecl(ASTContext &Ctx, const EnumDecl *EnumDcl,
                      const TypedefDecl *TypedefDcl);
-  void migrateInstanceType(ASTContext &Ctx, ObjCContainerDecl *CDecl);
+  void migrateMethods(ASTContext &Ctx, ObjCContainerDecl *CDecl);
   void migrateMethodInstanceType(ASTContext &Ctx, ObjCContainerDecl *CDecl,
                                  ObjCMethodDecl *OM);
+  void migrateNsReturnsInnerPointer(ASTContext &Ctx, ObjCMethodDecl *OM);
   void migrateFactoryMethod(ASTContext &Ctx, ObjCContainerDecl *CDecl,
                             ObjCMethodDecl *OM,
                             ObjCInstanceTypeFamily OIT_Family = OIT_None);
@@ -738,7 +739,31 @@ void ObjCMigrateASTConsumer::migrateMethodInstanceType(ASTContext &Ctx,
   ReplaceWithInstancetype(*this, OM);
 }
 
-void ObjCMigrateASTConsumer::migrateInstanceType(ASTContext &Ctx,
+static bool TypeIsInnerPointer(QualType T) {
+  if (!T->isAnyPointerType())
+    return false;
+  if (T->isObjCObjectPointerType() || T->isObjCBuiltinType() ||
+      T->isBlockPointerType() || ento::coreFoundation::isCFObjectRef(T))
+    return false;
+  return true;
+}
+
+void ObjCMigrateASTConsumer::migrateNsReturnsInnerPointer(ASTContext &Ctx,
+                                                          ObjCMethodDecl *OM) {
+  if (OM->hasAttr<ObjCReturnsInnerPointerAttr>())
+    return;
+  
+  QualType RT = OM->getResultType();
+  if (!TypeIsInnerPointer(RT) ||
+      !Ctx.Idents.get("NS_RETURNS_INNER_POINTER").hasMacroDefinition())
+    return;
+  
+  edit::Commit commit(*Editor);
+  commit.insertBefore(OM->getLocEnd(), " NS_RETURNS_INNER_POINTER");
+  Editor->commit(commit);
+}
+
+void ObjCMigrateASTConsumer::migrateMethods(ASTContext &Ctx,
                                                  ObjCContainerDecl *CDecl) {
   // migrate methods which can have instancetype as their result type.
   for (ObjCContainerDecl::method_iterator M = CDecl->meth_begin(),
@@ -746,6 +771,7 @@ void ObjCMigrateASTConsumer::migrateInstanceType(ASTContext &Ctx,
        M != MEnd; ++M) {
     ObjCMethodDecl *Method = (*M);
     migrateMethodInstanceType(Ctx, CDecl, Method);
+    migrateNsReturnsInnerPointer(Ctx, Method);
   }
 }
 
@@ -1152,7 +1178,7 @@ void ObjCMigrateASTConsumer::HandleTranslationUnit(ASTContext &Ctx) {
       
       if (ObjCContainerDecl *CDecl = dyn_cast<ObjCContainerDecl>(*D)) {
         // migrate methods which can have instancetype as their result type.
-        migrateInstanceType(Ctx, CDecl);
+        migrateMethods(Ctx, CDecl);
         // annotate methods with CF annotations.
         migrateARCSafeAnnotation(Ctx, CDecl);
       }

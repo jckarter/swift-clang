@@ -1297,7 +1297,9 @@ def err_destructor_template : Error<
 def err_init_conversion_failed : Error<
   "cannot initialize %select{a variable|a parameter|return object|an "
   "exception object|a member subobject|an array element|a new value|a value|a "
-  "base class|a constructor delegation|a vector element}0 "
+  "base class|a constructor delegation|a vector element|a block element|a "
+  "complex element|a lambda capture|a compound literal initializer|a "
+  "related result|a parameter of CF audited function}0 "
   "%diff{of type $ with an %select{rvalue|lvalue}2 of type $|"
   "with an %select{rvalue|lvalue}2 of incompatible type}1,3"
   "%select{|: different classes%diff{ ($ vs $)|}5,6"
@@ -2189,6 +2191,9 @@ def warn_use_while_consumed : Warning<
 def warn_use_of_temp_while_consumed : Warning<
   "invocation of method '%0' on a temporary object while it is in the "
   "'consumed' state">, InGroup<Consumed>, DefaultIgnore;
+def warn_attr_on_unconsumable_class : Warning<
+  "consumed analysis attribute is attached to class '%0' which isn't marked "
+  "as consumable">, InGroup<Consumed>, DefaultIgnore;
 
 // ConsumedStrict warnings
 def warn_use_in_unknown_state : Warning<
