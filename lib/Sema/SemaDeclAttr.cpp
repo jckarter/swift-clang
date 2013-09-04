@@ -1069,6 +1069,64 @@ static void handleTestsUnconsumedAttr(Sema &S, Decl *D,
                                  Attr.getAttributeSpellingListIndex()));
 }
 
+static void handleReturnTypestateAttr(Sema &S, Decl *D,
+                                      const AttributeList &Attr) {
+  if (!checkAttributeNumArgs(S, Attr, 1)) return;
+  
+  ReturnTypestateAttr::ConsumedState ReturnState;
+  
+  if (Attr.isArgIdent(0)) {
+    StringRef Param = Attr.getArgAsIdent(0)->Ident->getName();
+    
+    if (Param == "unknown") {
+      ReturnState = ReturnTypestateAttr::Unknown;
+    } else if (Param == "consumed") {
+      ReturnState = ReturnTypestateAttr::Consumed;
+    } else if (Param == "unconsumed") {
+      ReturnState = ReturnTypestateAttr::Unconsumed;
+    } else {
+      S.Diag(Attr.getLoc(), diag::warn_unknown_consumed_state) << Param;
+      return;
+    }
+    
+  } else {
+    S.Diag(Attr.getLoc(), diag::err_attribute_argument_type) <<
+      Attr.getName() << AANT_ArgumentIdentifier;
+    return;
+  }
+  
+  if (!isa<FunctionDecl>(D)) {
+    S.Diag(Attr.getLoc(), diag::warn_attribute_wrong_decl_type) <<
+      Attr.getName() << ExpectedFunction;
+    return;
+  }
+  
+  // FIXME: This check is currently being done in the analysis.  It can be
+  //        enabled here only after the parser propagates attributes at
+  //        template specialization definition, not declaration.
+  //QualType ReturnType;
+  //
+  //if (const CXXConstructorDecl *Constructor = dyn_cast<CXXConstructorDecl>(D)) {
+  //  ReturnType = Constructor->getThisType(S.getASTContext())->getPointeeType();
+  //  
+  //} else {
+  //  
+  //  ReturnType = cast<FunctionDecl>(D)->getCallResultType();
+  //}
+  //
+  //const CXXRecordDecl *RD = ReturnType->getAsCXXRecordDecl();
+  //
+  //if (!RD || !RD->hasAttr<ConsumableAttr>()) {
+  //    S.Diag(Attr.getLoc(), diag::warn_return_state_for_unconsumable_type) <<
+  //      ReturnType.getAsString();
+  //    return;
+  //}
+  
+  D->addAttr(::new (S.Context)
+             ReturnTypestateAttr(Attr.getRange(), S.Context, ReturnState,
+                                 Attr.getAttributeSpellingListIndex()));
+}
+
 static void handleExtVectorTypeAttr(Sema &S, Scope *scope, Decl *D,
                                     const AttributeList &Attr) {
   TypedefNameDecl *TD = dyn_cast<TypedefNameDecl>(D);
@@ -3119,8 +3177,9 @@ static void handleInitPriorityAttr(Sema &S, Decl *D,
                               Attr.getAttributeSpellingListIndex()));
 }
 
-FormatAttr *Sema::mergeFormatAttr(Decl *D, SourceRange Range, StringRef Format,
-                                  int FormatIdx, int FirstArg,
+FormatAttr *Sema::mergeFormatAttr(Decl *D, SourceRange Range,
+                                  IdentifierInfo *Format, int FormatIdx,
+                                  int FirstArg,
                                   unsigned AttrSpellingListIndex) {
   // Check whether we already have an equivalent format attribute.
   for (specific_attr_iterator<FormatAttr>
@@ -3139,8 +3198,8 @@ FormatAttr *Sema::mergeFormatAttr(Decl *D, SourceRange Range, StringRef Format,
     }
   }
 
-  return ::new (Context) FormatAttr(Range, Context, Format, FormatIdx, FirstArg,
-                                    AttrSpellingListIndex);
+  return ::new (Context) FormatAttr(Range, Context, Format, FormatIdx,
+                                    FirstArg, AttrSpellingListIndex);
 }
 
 /// Handle __attribute__((format(type,idx,firstarg))) attributes based on
@@ -3171,8 +3230,11 @@ static void handleFormatAttr(Sema &S, Decl *D, const AttributeList &Attr) {
   StringRef Format = II->getName();
 
   // Normalize the argument, __foo__ becomes foo.
-  if (Format.startswith("__") && Format.endswith("__"))
+  if (Format.startswith("__") && Format.endswith("__")) {
     Format = Format.substr(2, Format.size() - 4);
+    // If we've modified the string name, we need a new identifier for it.
+    II = &S.Context.Idents.get(Format);
+  }
 
   // Check for supported formats.
   FormatAttrKind Kind = getFormatAttrKind(Format);
@@ -3278,7 +3340,7 @@ static void handleFormatAttr(Sema &S, Decl *D, const AttributeList &Attr) {
     return;
   }
 
-  FormatAttr *NewAttr = S.mergeFormatAttr(D, Attr.getRange(), Format,
+  FormatAttr *NewAttr = S.mergeFormatAttr(D, Attr.getRange(), II,
                                           Idx.getZExtValue(),
                                           FirstArg.getZExtValue(),
                                           Attr.getAttributeSpellingListIndex());
@@ -5023,6 +5085,9 @@ static void ProcessDeclAttribute(Sema &S, Scope *scope, Decl *D,
     break;
   case AttributeList::AT_TestsUnconsumed:
     handleTestsUnconsumedAttr(S, D, Attr);
+    break;
+  case AttributeList::AT_ReturnTypestate:
+    handleReturnTypestateAttr(S, D, Attr);
     break;
 
   // Type safety attributes.

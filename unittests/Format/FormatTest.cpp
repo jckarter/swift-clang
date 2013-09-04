@@ -6258,43 +6258,57 @@ TEST_F(FormatTest, FormatsProtocolBufferDefinitions) {
 }
 
 TEST_F(FormatTest, FormatsLambdas) {
+  verifyFormat(
+      "int c = [b]() mutable {\n"
+      "  return [&b] {\n"
+      "    return b++;\n"
+      "  }();\n"
+      "}();\n");
+  verifyFormat(
+      "int c = [&] {\n"
+      "  [=] {\n"
+      "    return b++;\n"
+      "  }();\n"
+      "}();\n");
+  verifyFormat(
+      "int c = [&, &a, a] {\n"
+      "  [=, c, &d] {\n"
+      "    return b++;\n"
+      "  }();\n"
+      "}();\n");
+  verifyFormat(
+      "int c = [&a, &a, a] {\n"
+      "  [=, a, b, &c] {\n"
+      "    return b++;\n"
+      "  }();\n"
+      "}();\n");
+  verifyFormat(
+      "auto c = {[&a, &a, a] {\n"
+      "  [=, a, b, &c] {\n"
+      "    return b++;\n"
+      "  }();\n"
+      "} }\n");
+  verifyFormat(
+      "auto c = {[&a, &a, a] {\n"
+      "  [=, a, b, &c] {\n"
+      "  }();\n"
+      "} }\n");
+  verifyFormat(
+      "void f() {\n"
+      "  other(x.begin(), x.end(), [&](int, int) {\n"
+      "    return 1;\n"
+      "  });\n"
+      "}\n");
   // FIXME: The formatting is incorrect; this test currently checks that
   // parsing of the unwrapped lines doesn't regress.
   verifyFormat(
-      "int c = [b]() mutable {\n"
-      "  return [&b]{\n"
-      "    return b++;\n"
-      "  }();\n"
-      "}();\n");
-  verifyFormat(
-      "int c = [&]{\n"
-      "  [ = ]{\n"
-      "    return b++;\n"
-      "  }();\n"
-      "}();\n");
-  verifyFormat(
-      "int c = [ &, &a, a]{\n"
-      "  [ =, c, &d]{\n"
-      "    return b++;\n"
-      "  }();\n"
-      "}();\n");
-  verifyFormat(
-      "int c = [&a, &a, a]{\n"
-      "  [ =, a, b, &c]{\n"
-      "    return b++;\n"
-      "  }();\n"
-      "}();\n");
-  verifyFormat(
-      "auto c = {[&a, &a, a]{\n"
-      "  [ =, a, b, &c]{\n"
-      "    return b++;\n"
-      "  }();\n"
-      "} }\n");
-  verifyFormat(
-      "auto c = {[&a, &a, a]{\n"
-      "  [ =, a, b, &c]{\n"
-      "  }();\n"
-      "} }\n");
+      "void f() {\n"
+      "  other(x.begin(), //\n"
+      "        x.end(),   //\n"
+      "                     [&](int, int) {\n"
+      "    return 1;\n"
+      "  });\n"
+      "}\n");
 }
 
 } // end namespace tooling
