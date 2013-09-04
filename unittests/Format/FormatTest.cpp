@@ -6001,6 +6001,8 @@ TEST_F(FormatTest, ParsesConfiguration) {
   CHECK_PARSE("IndentWidth: 32", IndentWidth, 32u);
 
   Style.Standard = FormatStyle::LS_Auto;
+  CHECK_PARSE("Standard: Cpp03", Standard, FormatStyle::LS_Cpp03);
+  CHECK_PARSE("Standard: Cpp11", Standard, FormatStyle::LS_Cpp11);
   CHECK_PARSE("Standard: C++03", Standard, FormatStyle::LS_Cpp03);
   CHECK_PARSE("Standard: C++11", Standard, FormatStyle::LS_Cpp11);
   CHECK_PARSE("Standard: Auto", Standard, FormatStyle::LS_Auto);
@@ -6309,6 +6311,17 @@ TEST_F(FormatTest, FormatsLambdas) {
       "    return 1;\n"
       "  });\n"
       "}\n");
+}
+
+TEST_F(FormatTest, FormatsBlocks) {
+  // FIXME: Make whitespace formatting consistent. Ask a ObjC dev how
+  // it would ideally look.
+  verifyFormat("[operation setCompletionBlock:^{\n"
+               "  [self onOperationDone];\n"
+               "}];\n");
+  verifyFormat("int i = {[operation setCompletionBlock : ^{\n"
+               "  [self onOperationDone];\n"
+               "}] };\n");
 }
 
 } // end namespace tooling
