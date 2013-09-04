@@ -382,7 +382,7 @@ def MinSize : InheritableAttr {
 
 def Format : InheritableAttr {
   let Spellings = [GNU<"format">, CXX11<"gnu", "format">];
-  let Args = [StringArgument<"Type">, IntArgument<"FormatIdx">,
+  let Args = [IdentifierArgument<"Type">, IntArgument<"FormatIdx">,
               IntArgument<"FirstArg">];
 }
 
@@ -951,6 +951,14 @@ def TestsConsumed : InheritableAttr {
 def Consumes : InheritableAttr {
   let Spellings = [GNU<"consumes">];
   let Subjects = [CXXMethod];
+}
+
+def ReturnTypestate : InheritableAttr {
+  let Spellings = [GNU<"return_typestate">];
+  let Subjects = [Function];
+  let Args = [EnumArgument<"State", "ConsumedState",
+                           ["unknown", "consumed", "unconsumed"],
+                           ["Unknown", "Consumed", "Unconsumed"]>];
 }
 
 // Type safety attributes for `void *' pointers and type tags.
