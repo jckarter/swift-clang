@@ -92,6 +92,9 @@ def OP_QDMLAL_N : Op;
 def OP_SHL : Op;
 def OP_SHR : Op;
 def OP_DIV : Op;
+def OP_LONG_HI : Op;
+def OP_NARROW_HI : Op;
+def OP_MOVL_HI : Op;
 
 class Inst <string n, string p, string t, Op o> {
   string Name = n;
@@ -158,7 +161,7 @@ class NoTestOpInst<string n, string p, string t, Op o> : Inst<n, p, t, o> {}
 // l: constant uint64
 // s: scalar of element type
 // a: scalar of element type (splat to vector type)
-// m: scalar of float type (same size as int arg elements)
+// m: half width elements, same num elts
 // o: scalar of signed int type (same size as float arg elements)
 // r: scalar of unsigned int type (same size as float arg elements)
 // q: scalar of half element type width
@@ -168,6 +171,9 @@ class NoTestOpInst<string n, string p, string t, Op o> : Inst<n, p, t, o> {}
 // #: array of default vectors
 // p: pointer type
 // c: const pointer type
+
+// FIXME: The ARM64 generator uses a different mapping for some parameter types:
+// m: scalar of float type (same size as int arg elements)
 
 // sizes:
 // c: char

@@ -415,13 +415,33 @@ def ADDP  : IInst<"vpadd", "ddd", "csiUcUsUifQcQsQiQUcQUsQUiQfQd">;
 // Shifts by constant
 let isShift = 1 in {
 // Left shift long high
-def SHLL_HIGH_N    : SInst<"vshll_high_n", "ndi", "HcHsHiHUcHUsHUi">;
+def SHLL_HIGH_N    : SOpInst<"vshll_high_n", "ndi", "HcHsHiHUcHUsHUi",
+                             OP_LONG_HI>;
+
+// Right shift narrow high
+def SHRN_HIGH_N    : IOpInst<"vshrn_high_n", "hmdi",
+                             "HsHiHlHUsHUiHUl", OP_NARROW_HI>;
+def QSHRUN_HIGH_N  : SOpInst<"vqshrun_high_n", "hmdi",
+                             "HsHiHl", OP_NARROW_HI>;
+def RSHRN_HIGH_N   : IOpInst<"vrshrn_high_n", "hmdi",
+                             "HsHiHlHUsHUiHUl", OP_NARROW_HI>;
+def QRSHRUN_HIGH_N : SOpInst<"vqrshrun_high_n", "hmdi",
+                             "HsHiHl", OP_NARROW_HI>;
+def QSHRN_HIGH_N   : SOpInst<"vqshrn_high_n", "hmdi", 
+                             "HsHiHlHUsHUiHUl", OP_NARROW_HI>;
+def QRSHRN_HIGH_N  : SOpInst<"vqrshrn_high_n", "hmdi", 
+                             "HsHiHlHUsHUiHUl", OP_NARROW_HI>;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
 // Converting vectors
-def VMOVL_HIGH   : SInst<"vmovl_high", "nd", "HcHsHiHUcHUsHUi">;
+def VMOVL_HIGH   : SOpInst<"vmovl_high", "nd", "HcHsHiHUcHUsHUi", OP_MOVL_HI>;
 
+let isVCVT_N = 1 in {
+def CVTF_N_F64   : SInst<"vcvt_n_f64", "fdi", "QlQUl">;
+def FCVTZS_N_S64 : SInst<"vcvt_n_s64", "xdi", "Qd">;
+def FCVTZS_N_U64 : SInst<"vcvt_n_u64", "udi", "Qd">;
+}
 
 ////////////////////////////////////////////////////////////////////////////////
 // Scalar Arithmetic
