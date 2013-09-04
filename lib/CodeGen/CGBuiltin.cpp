@@ -4314,14 +4314,14 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     Int = usgn ? Intrinsic::arm64_neon_uqrshrn : Intrinsic::arm64_neon_sqrshrn;
     return EmitNeonCall(CGM.getIntrinsic(Int, Ty), Ops, "vqrshrn_n");
   case ARM64::BI__builtin_arm64_vshll_n_v: {
-    unsigned BitWidth = cast<IntegerType>(VTy->getElementType())->getBitWidth();
-    unsigned ShiftVal = cast<llvm::ConstantInt>(Ops[1])->getZExtValue();
-    if (ShiftVal * 2 == BitWidth) {
-      Int = Intrinsic::arm64_neon_shll;
-      Ops.pop_back();
-    } else
-      Int = usgn ? Intrinsic::arm64_neon_ushll : Intrinsic::arm64_neon_sshll;
-    return EmitNeonCall(CGM.getIntrinsic(Int, Ty), Ops, "vshll_n");
+    llvm::Type *SrcTy = llvm::VectorType::getTruncatedElementVectorType(VTy);
+    Ops[0] = Builder.CreateBitCast(Ops[0], SrcTy);
+    if (usgn)
+      Ops[0] = Builder.CreateZExt(Ops[0], VTy);
+    else
+      Ops[0] = Builder.CreateSExt(Ops[0], VTy);
+    Ops[1] = EmitNeonShiftVector(Ops[1], VTy, false);
+    return Builder.CreateShl(Ops[0], Ops[1], "vshll_n");
   }
   case ARM64::BI__builtin_arm64_vrnda_v:
   case ARM64::BI__builtin_arm64_vrndaq_v: {
@@ -5694,19 +5694,15 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     return EmitConcatVectors(Ops[0], Shifted, ArgTy);
   }
   case ARM64::BI__builtin_arm64_vshll_high_n_v: {
-    unsigned NumElts = VTy->getNumElements();
-    unsigned BitWidth = cast<IntegerType>(VTy->getElementType())->getBitWidth();
-    unsigned ShiftVal = cast<llvm::ConstantInt>(Ops[1])->getZExtValue();
-    if (ShiftVal * 2 == BitWidth) {
-      Int = Intrinsic::arm64_neon_shll;
-      Ops.pop_back();
-    } else
-      Int = usgn ? Intrinsic::arm64_neon_ushll : Intrinsic::arm64_neon_sshll;
-    llvm::Type *DInt =
-      llvm::IntegerType::get(getLLVMContext(), BitWidth/2);
-    llvm::Type *ArgTy = llvm::VectorType::get(DInt, NumElts);
-    Ops[0] = EmitExtractHigh(Ops[0], ArgTy);
-    return EmitNeonCall(CGM.getIntrinsic(Int, VTy), Ops, "vshll_high_n");
+    llvm::Type *SrcTy = llvm::VectorType::getTruncatedElementVectorType(VTy);
+    Ops[0] = EmitExtractHigh(Ops[0], SrcTy);
+    Ops[0] = Builder.CreateBitCast(Ops[0], SrcTy);
+    if (usgn)
+      Ops[0] = Builder.CreateZExt(Ops[0], VTy);
+    else
+      Ops[0] = Builder.CreateSExt(Ops[0], VTy);
+    Ops[1] = EmitNeonShiftVector(Ops[1], VTy, false);
+    return Builder.CreateShl(Ops[0], Ops[1], "vshll_n");
   }
   case ARM64::BI__builtin_arm64_vrsubhn_high_v:
   case ARM64::BI__builtin_arm64_vsubhn_high_v:
