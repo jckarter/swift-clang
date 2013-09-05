@@ -674,6 +674,12 @@ void UnwrappedLineParser::parseStructuralElement() {
 }
 
 void UnwrappedLineParser::tryToParseLambda() {
+  // FIXME: This is a dirty way to access the previous token. Find a better
+  // solution.
+  if (!Line->Tokens.empty() && Line->Tokens.back().Tok->is(tok::identifier)) {
+    nextToken();
+    return;
+  }
   assert(FormatTok->is(tok::l_square));
   FormatToken &LSquare = *FormatTok;
   if (!tryToParseLambdaIntroducer())
@@ -1029,9 +1035,7 @@ void UnwrappedLineParser::parseEnum() {
   if (FormatTok->Tok.is(tok::kw_class) ||
       FormatTok->Tok.is(tok::kw_struct))
       nextToken();
-  if (FormatTok->Tok.is(tok::identifier) ||
-      FormatTok->Tok.is(tok::kw___attribute) ||
-      FormatTok->Tok.is(tok::kw___declspec)) {
+  while (FormatTok->Tok.getIdentifierInfo() || FormatTok->Tok.is(tok::colon)) {
     nextToken();
     // We can have macros or attributes in between 'enum' and the enum name.
     if (FormatTok->Tok.is(tok::l_paren)) {
@@ -1197,7 +1201,8 @@ void UnwrappedLineParser::parseObjCProtocol() {
   parseObjCUntilAtEnd();
 }
 
-static void printDebugInfo(const UnwrappedLine &Line, StringRef Prefix = "") {
+LLVM_ATTRIBUTE_UNUSED static void printDebugInfo(const UnwrappedLine &Line,
+                                                 StringRef Prefix = "") {
   llvm::dbgs() << Prefix << "Line(" << Line.Level << ")"
                << (Line.InPPDirective ? " MACRO" : "") << ": ";
   for (std::list<UnwrappedLineNode>::const_iterator I = Line.Tokens.begin(),
