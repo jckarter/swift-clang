@@ -928,8 +928,13 @@ private:
 
   void addFakeParenthesis(FormatToken *Start, prec::Level Precedence) {
     Start->FakeLParens.push_back(Precedence);
-    if (Current)
+    if (Precedence > prec::Unknown)
+      Start->StartsBinaryExpression = true;
+    if (Current) {
       ++Current->Previous->FakeRParens;
+      if (Precedence > prec::Unknown)
+        Current->Previous->EndsBinaryExpression = true;
+    }
   }
 
   /// \brief Parse unary operator expressions and surround them with fake
@@ -974,9 +979,26 @@ private:
 
 } // end anonymous namespace
 
+void
+TokenAnnotator::setCommentLineLevels(SmallVectorImpl<AnnotatedLine *> &Lines) {
+  if (Lines.empty())
+    return;
+
+  const AnnotatedLine *NextNonCommentLine = NULL;
+  for (unsigned i = Lines.size() - 1; i > 0; --i) {
+    if (NextNonCommentLine && Lines[i]->First->is(tok::comment) &&
+        !Lines[i]->First->Next)
+      Lines[i]->Level = NextNonCommentLine->Level;
+    else
+      NextNonCommentLine =
+          Lines[i]->First->isNot(tok::r_brace) ? Lines[i] : NULL;
+  }
+}
+
 void TokenAnnotator::annotate(AnnotatedLine &Line) {
-  for (std::vector<AnnotatedLine *>::iterator I = Line.Children.begin(),
-                                              E = Line.Children.end();
+  setCommentLineLevels(Line.Children);
+  for (SmallVectorImpl<AnnotatedLine *>::iterator I = Line.Children.begin(),
+                                                  E = Line.Children.end();
        I != E; ++I) {
     annotate(**I);
   }
@@ -1056,8 +1078,8 @@ void TokenAnnotator::calculateFormattingInformation(AnnotatedLine &Line) {
 
   DEBUG({ printDebugInfo(Line); });
 
-  for (std::vector<AnnotatedLine *>::iterator I = Line.Children.begin(),
-                                              E = Line.Children.end();
+  for (SmallVectorImpl<AnnotatedLine *>::iterator I = Line.Children.begin(),
+                                                  E = Line.Children.end();
        I != E; ++I) {
     calculateFormattingInformation(**I);
   }
@@ -1115,7 +1137,8 @@ unsigned TokenAnnotator::splitPenalty(const AnnotatedLine &Line,
     return 2;
 
   if (Right.isMemberAccess()) {
-    if (Left.isOneOf(tok::r_paren, tok::r_square))
+    if (Left.isOneOf(tok::r_paren, tok::r_square) && Left.MatchingParen &&
+        Left.MatchingParen->ParameterCount > 0)
       return 20; // Should be smaller than breaking at a nested comma.
     return 150;
   }
