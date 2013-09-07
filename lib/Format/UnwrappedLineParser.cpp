@@ -676,7 +676,8 @@ void UnwrappedLineParser::parseStructuralElement() {
 void UnwrappedLineParser::tryToParseLambda() {
   // FIXME: This is a dirty way to access the previous token. Find a better
   // solution.
-  if (!Line->Tokens.empty() && Line->Tokens.back().Tok->is(tok::identifier)) {
+  if (!Line->Tokens.empty() &&
+      Line->Tokens.back().Tok->isOneOf(tok::identifier, tok::kw_operator)) {
     nextToken();
     return;
   }
@@ -1035,7 +1036,8 @@ void UnwrappedLineParser::parseEnum() {
   if (FormatTok->Tok.is(tok::kw_class) ||
       FormatTok->Tok.is(tok::kw_struct))
       nextToken();
-  while (FormatTok->Tok.getIdentifierInfo() || FormatTok->Tok.is(tok::colon)) {
+  while (FormatTok->Tok.getIdentifierInfo() ||
+         FormatTok->isOneOf(tok::colon, tok::coloncolon)) {
     nextToken();
     // We can have macros or attributes in between 'enum' and the enum name.
     if (FormatTok->Tok.is(tok::l_paren)) {

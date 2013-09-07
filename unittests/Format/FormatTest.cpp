@@ -789,6 +789,8 @@ TEST_F(FormatTest, RemovesTrailingWhitespaceOfComments) {
   EXPECT_EQ("int aaaaaaa, bbbbbbb; // comment",
             format("int aaaaaaa, bbbbbbb; // comment                   ",
                    getLLVMStyleWithColumns(33)));
+  EXPECT_EQ("// comment\\\n", format("// comment\\\n  \t \v   \f   "));
+  EXPECT_EQ("// comment    \\\n", format("// comment    \\\n  \t \v   \f   "));
 }
 
 TEST_F(FormatTest, UnderstandsBlockComments) {
@@ -1586,6 +1588,10 @@ TEST_F(FormatTest, FormatsEnumClass) {
 
 TEST_F(FormatTest, FormatsEnumTypes) {
   verifyFormat("enum X : int {\n"
+               "  A,\n"
+               "  B\n"
+               "};");
+  verifyFormat("enum X : std::uint32_t {\n"
                "  A,\n"
                "  B\n"
                "};");
@@ -2489,6 +2495,10 @@ TEST_F(FormatTest, ConstructorInitializers) {
   verifyFormat("Constructor(int Parameter = 0)\n"
                "    : aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa(aaaaaaaaaaaaaaaaa),\n"
                "      aaaaaaaaaaaa(aaaaaaaaaaaaaaaaa) {}");
+  verifyFormat("Constructor()\n"
+               "    : aaaaaaaaaaaaaaaaaaaa(a), bbbbbbbbbbbbbbbbbbbbbbbb(b) {\n"
+               "}",
+               getLLVMStyleWithColumns(60));
 
   // Here a line could be saved by splitting the second initializer onto two
   // lines, but that is not desireable.
@@ -6397,6 +6407,8 @@ TEST_F(FormatTest, FormatsLambdas) {
 
   // Not lambdas.
   verifyFormat("constexpr char hello[]{ \"hello\" };");
+  verifyFormat("double &operator[](int i) { return 0; }\n"
+               "int i;");
 }
 
 TEST_F(FormatTest, FormatsBlocks) {
