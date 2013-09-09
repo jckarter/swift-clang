@@ -4216,6 +4216,9 @@ public:
     case 'w': // Floating point and SIMD registers (V0-V31)
       Info.setAllowsRegister();
       return true;
+    case 'z':  // Zero register, wzr or xzr
+      Info.setAllowsRegister();
+      return true;
     case 'x': // Floating point and SIMD registers (V0-V15)
       Info.setAllowsRegister();
       return true;
@@ -4237,6 +4240,7 @@ public:
 
     switch (Constraint[0]) {
     default: return true;
+    case 'z':
     case 'r': {
       switch (Modifier) {
       case 'x':
