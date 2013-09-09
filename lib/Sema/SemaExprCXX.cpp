@@ -5642,8 +5642,7 @@ ExprResult Sema::IgnoredValueConversions(Expr *E) {
     // normally, we don't need to do anything to handle it, but if it is a
     // volatile lvalue with a special form, we perform an lvalue-to-rvalue
     // conversion.
-    // Per <rdar://problem/11525766>, we do this in C++98 mode as well.
-    if (/*getLangOpts().CPlusPlus11 &&*/ E->isGLValue() &&
+    if (getLangOpts().CPlusPlus11 && E->isGLValue() &&
         E->getType().isVolatileQualified() &&
         IsSpecialDiscardedValue(E)) {
       ExprResult Res = DefaultLvalueConversion(E);

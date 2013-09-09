@@ -28,8 +28,8 @@ namespace PR4103 {
 
 namespace derefvolatile {
   void f(volatile char* x) {
-    *x; // expected-warning {{expression result would be unused in standard C++98}}
-    (void)*x; // expected-warning {{expression result would be unused in standard C++98}}
+    *x; // expected-warning {{expression result unused; assign into a variable to force a volatile load}}
+    (void)*x; // expected-warning {{expression result unused; assign into a variable to force a volatile load}}
     volatile char y = 10;
     (void)y; // don't warn here, because it's a common pattern.
   }

@@ -1,4 +1,4 @@
-// RUN: %clang_cc1 -Wno-unused-value -emit-llvm %s -o - -Wno-unused-volatile-lvalue-hack | FileCheck %s
+// RUN: %clang_cc1 -Wno-unused-value -emit-llvm %s -o - | FileCheck %s
 
 // CHECK: @i = global [[INT:i[0-9]+]] 0
 volatile int i, j, k;
@@ -22,13 +22,19 @@ void test() {
 
   asm("nop"); // CHECK: call void asm
 
-  // CHECK-NEXT: load volatile [[INT]]* @i
+  // should not load
   i;
 
   (float)(ci);
   // CHECK-NEXT: load volatile [[INT]]* getelementptr inbounds ([[CINT]]* @ci, i32 0, i32 0)
   // CHECK-NEXT: load volatile [[INT]]* getelementptr inbounds ([[CINT]]* @ci, i32 0, i32 1)
   // CHECK-NEXT: sitofp [[INT]]
+
+  // These are not uses in C++:
+  //   [expr.static.cast]p6:
+  //     The lvalue-to-rvalue . . . conversions are not applied to the expression.
+  (void)ci;
+  (void)a;
 
   (void)(ci=ci);
   // CHECK-NEXT: [[R:%.*]] = load volatile [[INT]]* getelementptr inbounds ([[CINT]]* @ci, i32 0, i32 0)
@@ -120,6 +126,8 @@ void test() {
   // CHECK-NEXT: load volatile
   // CHECK-NEXT: sitofp
 
+  (void)i;
+
   i=i;
   // CHECK-NEXT: load volatile
   // CHECK-NEXT: store volatile
@@ -149,13 +157,11 @@ void test() {
 
   (void)(i,(i=i));
   // CHECK-NEXT: load volatile
-  // CHECK-NEXT: load volatile
   // CHECK-NEXT: store volatile
 
   i=i,k;
   // CHECK-NEXT: load volatile [[INT]]* @i
   // CHECK-NEXT: store volatile {{.*}}, [[INT]]* @i
-  // CHECK-NEXT: load volatile [[INT]]* @k
 
   (i=j,k=j);
   // CHECK-NEXT: load volatile [[INT]]* @j
@@ -166,7 +172,8 @@ void test() {
   (i=j,k);
   // CHECK-NEXT: load volatile [[INT]]* @j
   // CHECK-NEXT: store volatile {{.*}}, [[INT]]* @i
-  // CHECK-NEXT: load volatile
+
+  (i,j);
 
   // Extra load in C++.
   i=c=k;
@@ -182,6 +189,8 @@ void test() {
   // CHECK-NEXT: load volatile
   // CHECK-NEXT: add nsw [[INT]]
   // CHECK-NEXT: store volatile
+
+  ci;
 
   asm("nop"); // CHECK-NEXT: call void asm
 
@@ -331,7 +340,6 @@ void test() {
 
   (i,j)=k;
   // CHECK-NEXT: load volatile [[INT]]* @k
-  // CHECK-NEXT: load volatile [[INT]]* @i
   // CHECK-NEXT: store volatile {{.*}}, [[INT]]* @j
 
   (j=k,i)=i;

@@ -184,30 +184,8 @@ void Sema::DiagnoseUnusedExprResult(const Stmt *S) {
   const Expr *WarnExpr;
   SourceLocation Loc;
   SourceRange R1, R2;
-  if (!E->isUnusedResultAWarning(WarnExpr, Loc, R1, R2, Context)) {
-    // This is an ugly hack to ease the transition from non-standard
-    // volatile semantics to standard semantics for C++98 Apple code.
-    if (const CastExpr *CE = dyn_cast<CastExpr>(E)) {
-      while (CE && CE->getCastKind() == CK_ToVoid)
-        CE = dyn_cast<CastExpr>(CE->getSubExpr()->IgnoreParens());
-      if (CE) {
-        const Expr *SubExpr = CE->getSubExpr();
-        if (getLangOpts().CPlusPlus && !getLangOpts().CPlusPlus11 &&
-            CE->getCastKind() == CK_LValueToRValue &&
-            SubExpr->isGLValue() &&
-            SubExpr->getType().isVolatileQualified() &&
-            SubExpr->isUnusedResultAWarning(WarnExpr, Loc, R1, R2, Context)) {
-          const DeclRefExpr *DRE =
-              dyn_cast<DeclRefExpr>(SubExpr->IgnoreParens());
-          if (!(DRE && isa<VarDecl>(DRE->getDecl()) &&
-              cast<VarDecl>(DRE->getDecl())->hasLocalStorage())) {
-            Diag(Loc, diag::warn_unused_volatile_hack) << R1 << R2;
-          }
-        }
-      }
-    }
+  if (!E->isUnusedResultAWarning(WarnExpr, Loc, R1, R2, Context))
     return;
-  }
 
   // If this is a GNU statement expression expanded from a macro, it is probably
   // unused because it is a function-like macro that can be used as either an
