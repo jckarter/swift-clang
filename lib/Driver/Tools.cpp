@@ -3834,6 +3834,11 @@ void Clang::AddClangCLArgs(const ArgList &Args, ArgStringList &CmdArgs) const {
 
   if (Arg *A = Args.getLastArg(options::OPT_show_includes))
     A->render(Args, CmdArgs);
+
+  if (!Args.hasArg(options::OPT_fdiagnostics_format_EQ)) {
+    CmdArgs.push_back("-fdiagnostics-format");
+    CmdArgs.push_back("msvc");
+  }
 }
 
 void ClangAs::ConstructJob(Compilation &C, const JobAction &JA,
