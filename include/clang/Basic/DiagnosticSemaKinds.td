@@ -155,6 +155,8 @@ def warn_unused_parameter : Warning<"unused parameter %0">,
   InGroup<UnusedParameter>, DefaultIgnore;
 def warn_unused_variable : Warning<"unused variable %0">,
   InGroup<UnusedVariable>, DefaultIgnore;
+def warn_unused_const_variable : Warning<"unused variable %0">,
+  InGroup<UnusedConstVariable>, DefaultIgnore;
 def warn_unused_exception_param : Warning<"unused exception parameter %0">,
   InGroup<UnusedExceptionParameter>, DefaultIgnore;
 def warn_decl_in_param_list : Warning<
@@ -2323,8 +2325,6 @@ def warn_attribute_protected_visibility :
   Warning<"target does not support 'protected' visibility; using 'default'">,
   InGroup<DiagGroup<"unsupported-visibility">>;
 def err_mismatched_visibility: Error<"visibility does not match previous declaration">;
-def warn_attribute_unknown_endian : Warning<"unknown endian '%0'">,
-  InGroup<IgnoredAttributes>;
 def note_previous_attribute : Note<"previous attribute is here">;
 def err_unknown_machine_mode : Error<"unknown machine mode %0">;
 def err_unsupported_machine_mode : Error<"unsupported machine mode %0">;
@@ -2350,10 +2350,12 @@ def err_attribute_sentinel_less_than_zero : Error<
   "'sentinel' parameter 1 less than zero">;
 def err_attribute_sentinel_not_zero_or_one : Error<
   "'sentinel' parameter 2 not 0 or 1">;
-def err_attribute_cleanup_arg_not_found : Error<
-  "'cleanup' argument %0 not found">;
+def warn_cleanup_ext : Warning<
+  "GCC does not allow the 'cleanup' attribute argument to be anything other "
+  "than a simple identifier">, 
+  InGroup<GccCompat>;
 def err_attribute_cleanup_arg_not_function : Error<
-  "'cleanup' argument %0 is not a function">;
+  "'cleanup' argument %select{|%1 }0is not a function">;
 def err_attribute_cleanup_func_must_take_one_arg : Error<
   "'cleanup' function %0 must take 1 parameter">;
 def err_attribute_cleanup_func_arg_incompatible_type : Error<
@@ -4191,6 +4193,9 @@ def warn_offsetof_non_pod_type : ExtWarn<"offset of on non-POD type %0">,
 def warn_offsetof_non_standardlayout_type : ExtWarn<
   "offset of on non-standard-layout type %0">, InGroup<InvalidOffsetof>;
 def err_offsetof_bitfield : Error<"cannot compute offset of bit-field %0">;
+def warn_sub_ptr_zero_size_types : Warning<
+  "subtraction of pointers to type %0 of zero size has undefined behavior">,
+  InGroup<PointerArith>;
 
 def warn_floatingpoint_eq : Warning<
   "comparing floating point with == or != is unsafe">,

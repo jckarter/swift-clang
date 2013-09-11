@@ -1220,14 +1220,6 @@ bool Sema::ShouldWarnIfUnusedFileScopedDecl(const DeclaratorDecl *D) const {
     if (!isMainFileLoc(*this, VD->getLocation()))
       return false;
 
-    // If a variable usable in constant expressions is referenced,
-    // don't warn if it isn't used: if the value of a variable is required
-    // for the computation of a constant expression, it doesn't make sense to
-    // warn even if the variable isn't odr-used.  (isReferenced doesn't
-    // precisely reflect that, but it's a decent approximation.)
-    if (VD->isReferenced() && VD->isUsableInConstantExpressions(Context))
-      return false;
-
     if (Context.DeclMustBeEmitted(VD))
       return false;
 
@@ -3083,6 +3075,9 @@ Decl *Sema::ParsedFreeStandingDeclSpec(Scope *S, AccessSpecifier AS,
 }
 
 static void HandleTagNumbering(Sema &S, const TagDecl *Tag) {
+  if (!S.Context.getLangOpts().CPlusPlus)
+    return;
+
   if (isa<CXXRecordDecl>(Tag->getParent())) {
     // If this tag is the direct child of a class, number it if
     // it is anonymous.
@@ -5356,7 +5351,7 @@ Sema::ActOnVariableDeclarator(Scope *S, Declarator &D, DeclContext *DC,
       isIncompleteDeclExternC(*this, NewVD))
     RegisterLocallyScopedExternCDecl(NewVD, S);
 
-  if (NewVD->isStaticLocal()) {
+  if (getLangOpts().CPlusPlus && NewVD->isStaticLocal()) {
     Decl *ManglingContextDecl;
     if (MangleNumberingContext *MCtx =
             getCurrentMangleNumberContext(NewVD->getDeclContext(),

@@ -92,6 +92,7 @@ public:
                   QualifierMangleMode QMM = QMM_Mangle);
   void mangleFunctionType(const FunctionType *T, const FunctionDecl *D,
                           bool IsStructor, bool IsInstMethod);
+  void manglePostfix(const DeclContext *DC, bool NoFunction = false);
 
 private:
   void disableBackReferences() { UseNameBackReferences = false; }
@@ -100,7 +101,6 @@ private:
   }
   void mangleUnqualifiedName(const NamedDecl *ND, DeclarationName Name);
   void mangleSourceName(const IdentifierInfo *II);
-  void manglePostfix(const DeclContext *DC, bool NoFunction=false);
   void mangleOperatorName(OverloadedOperatorKind OO, SourceLocation Loc);
   void mangleCXXDtorType(CXXDtorType T);
   void mangleQualifiers(Qualifiers Quals, bool IsMember);
@@ -125,7 +125,7 @@ private:
 #undef TYPE
   
   void mangleType(const TagDecl *TD);
-  void mangleDecayedArrayType(const ArrayType *T, bool IsGlobal);
+  void mangleDecayedArrayType(const ArrayType *T);
   void mangleArrayType(const ArrayType *T);
   void mangleFunctionClass(const FunctionDecl *FD);
   void mangleCallingConvention(const FunctionType *T, bool IsInstMethod = false);
@@ -168,8 +168,14 @@ public:
                              raw_ostream &);
   virtual void mangleCXXDtor(const CXXDestructorDecl *D, CXXDtorType Type,
                              raw_ostream &);
-  virtual void mangleReferenceTemporary(const clang::VarDecl *,
-                                        raw_ostream &);
+  virtual void mangleReferenceTemporary(const VarDecl *, raw_ostream &);
+  virtual void mangleStaticGuardVariable(const VarDecl *D, raw_ostream &Out);
+  virtual void mangleDynamicInitializer(const VarDecl *D, raw_ostream &Out);
+  virtual void mangleDynamicAtExitDestructor(const VarDecl *D,
+                                             raw_ostream &Out);
+
+private:
+  void mangleInitFiniStub(const VarDecl *D, raw_ostream &Out, char CharCode);
 };
 
 }
@@ -331,7 +337,7 @@ void MicrosoftCXXNameMangler::mangleVariableEncoding(const VarDecl *VD) {
       mangleQualifiers(Ty->getPointeeType().getQualifiers(), false);
   } else if (const ArrayType *AT = getASTContext().getAsArrayType(Ty)) {
     // Global arrays are funny, too.
-    mangleDecayedArrayType(AT, true);
+    mangleDecayedArrayType(AT);
     if (AT->getElementType()->isArrayType())
       Out << 'A';
     else
@@ -1051,25 +1057,30 @@ void MicrosoftCXXNameMangler::mangleArgumentType(QualType T,
                                                  SourceRange Range) {
   // MSVC will backreference two canonically equivalent types that have slightly
   // different manglings when mangled alone.
-  void *TypePtr = getASTContext().getCanonicalType(T).getAsOpaquePtr();
+
+  // Decayed types do not match up with non-decayed versions of the same type.
+  //
+  // e.g.
+  // void (*x)(void) will not form a backreference with void x(void)
+  void *TypePtr;
+  if (const DecayedType *DT = T->getAs<DecayedType>()) {
+    TypePtr = DT->getOriginalType().getCanonicalType().getAsOpaquePtr();
+    // If the original parameter was textually written as an array,
+    // instead treat the decayed parameter like it's const.
+    //
+    // e.g.
+    // int [] -> int * const
+    if (DT->getOriginalType()->isArrayType())
+      T = T.withConst();
+  } else
+    TypePtr = T.getCanonicalType().getAsOpaquePtr();
+
   ArgBackRefMap::iterator Found = TypeBackReferences.find(TypePtr);
 
   if (Found == TypeBackReferences.end()) {
     size_t OutSizeBefore = Out.GetNumBytesInBuffer();
 
-    if (const DecayedType *DT = T->getAs<DecayedType>()) {
-      QualType OT = DT->getOriginalType();
-      if (const ArrayType *AT = getASTContext().getAsArrayType(OT)) {
-        mangleDecayedArrayType(AT, false);
-      } else if (const FunctionType *FT = OT->getAs<FunctionType>()) {
-        Out << "P6";
-        mangleFunctionType(FT, 0, false, false);
-      } else {
-        llvm_unreachable("unexpected decayed type");
-      }
-    } else {
-      mangleType(T, Range, QMM_Drop);
-    }
+    mangleType(T, Range, QMM_Drop);
 
     // See if it's worth creating a back reference.
     // Only types longer than 1 character are considered
@@ -1461,22 +1472,13 @@ void MicrosoftCXXNameMangler::mangleType(const TagDecl *TD) {
 // <array-type> ::= <pointer-cvr-qualifiers> <cvr-qualifiers>
 //                  [Y <dimension-count> <dimension>+]
 //                  <element-type> # as global, E is never required
-//              ::= Q E? <cvr-qualifiers> [Y <dimension-count> <dimension>+]
-//                  <element-type> # as param, E is required for 64-bit
 // It's supposed to be the other way around, but for some strange reason, it
 // isn't. Today this behavior is retained for the sole purpose of backwards
 // compatibility.
-void MicrosoftCXXNameMangler::mangleDecayedArrayType(const ArrayType *T,
-                                                     bool IsGlobal) {
+void MicrosoftCXXNameMangler::mangleDecayedArrayType(const ArrayType *T) {
   // This isn't a recursive mangling, so now we have to do it all in this
   // one call.
-  if (IsGlobal) {
-    manglePointerQualifiers(T->getElementType().getQualifiers());
-  } else {
-    Out << 'Q';
-    if (PointersAre64Bit)
-      Out << 'E';
-  }
+  manglePointerQualifiers(T->getElementType().getQualifiers());
   mangleType(T->getElementType(), SourceRange());
 }
 void MicrosoftCXXNameMangler::mangleType(const ConstantArrayType *T,
@@ -1912,11 +1914,54 @@ void MicrosoftMangleContext::mangleCXXDtor(const CXXDestructorDecl *D,
   MicrosoftCXXNameMangler mangler(*this, Out, D, Type);
   mangler.mangle(D);
 }
-void MicrosoftMangleContext::mangleReferenceTemporary(const clang::VarDecl *VD,
+void MicrosoftMangleContext::mangleReferenceTemporary(const VarDecl *VD,
                                                       raw_ostream &) {
   unsigned DiagID = getDiags().getCustomDiagID(DiagnosticsEngine::Error,
     "cannot mangle this reference temporary yet");
   getDiags().Report(VD->getLocation(), DiagID);
+}
+
+void MicrosoftMangleContext::mangleStaticGuardVariable(const VarDecl *VD,
+                                                       raw_ostream &Out) {
+  // <guard-name> ::= ?_B <postfix> @51
+  //              ::= ?$S <guard-num> @ <postfix> @4IA
+
+  // The first mangling is what MSVC uses to guard static locals in inline
+  // functions.  It uses a different mangling in external functions to support
+  // guarding more than 32 variables.  MSVC rejects inline functions with more
+  // than 32 static locals.  We don't fully implement the second mangling
+  // because those guards are not externally visible, and instead use LLVM's
+  // default renaming when creating a new guard variable.
+  MicrosoftCXXNameMangler Mangler(*this, Out);
+
+  bool Visible = VD->isExternallyVisible();
+  // <operator-name> ::= ?_B # local static guard
+  Mangler.getStream() << (Visible ? "\01??_B" : "\01?$S1@");
+  Mangler.manglePostfix(VD->getDeclContext());
+  Mangler.getStream() << (Visible ? "@51" : "@4IA");
+}
+
+void MicrosoftMangleContext::mangleInitFiniStub(const VarDecl *D,
+                                                raw_ostream &Out,
+                                                char CharCode) {
+  MicrosoftCXXNameMangler Mangler(*this, Out);
+  Mangler.getStream() << "\01??__" << CharCode;
+  Mangler.mangleName(D);
+  // This is the function class mangling.  These stubs are global, non-variadic,
+  // cdecl functions that return void and take no args.
+  Mangler.getStream() << "YAXXZ";
+}
+
+void MicrosoftMangleContext::mangleDynamicInitializer(const VarDecl *D,
+                                                      raw_ostream &Out) {
+  // <initializer-name> ::= ?__E <name> YAXXZ
+  mangleInitFiniStub(D, Out, 'E');
+}
+
+void MicrosoftMangleContext::mangleDynamicAtExitDestructor(const VarDecl *D,
+                                                           raw_ostream &Out) {
+  // <destructor-name> ::= ?__F <name> YAXXZ
+  mangleInitFiniStub(D, Out, 'F');
 }
 
 MangleContext *clang::createMicrosoftMangleContext(ASTContext &Context,

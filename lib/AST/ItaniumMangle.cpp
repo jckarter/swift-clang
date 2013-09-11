@@ -152,7 +152,9 @@ public:
   void mangleCXXDtor(const CXXDestructorDecl *D, CXXDtorType Type,
                      raw_ostream &);
 
-  void mangleItaniumGuardVariable(const VarDecl *D, raw_ostream &);
+  void mangleStaticGuardVariable(const VarDecl *D, raw_ostream &);
+  void mangleDynamicInitializer(const VarDecl *D, raw_ostream &Out);
+  void mangleDynamicAtExitDestructor(const VarDecl *D, raw_ostream &Out);
   void mangleItaniumThreadLocalInit(const VarDecl *D, raw_ostream &);
   void mangleItaniumThreadLocalWrapper(const VarDecl *D, raw_ostream &);
 
@@ -3698,13 +3700,32 @@ ItaniumMangleContext::mangleCXXDtorThunk(const CXXDestructorDecl *DD,
 
 /// mangleGuardVariable - Returns the mangled name for a guard variable
 /// for the passed in VarDecl.
-void ItaniumMangleContext::mangleItaniumGuardVariable(const VarDecl *D,
-                                                      raw_ostream &Out) {
+void ItaniumMangleContext::mangleStaticGuardVariable(const VarDecl *D,
+                                                     raw_ostream &Out) {
   //  <special-name> ::= GV <object name>       # Guard variable for one-time
   //                                            # initialization
   CXXNameMangler Mangler(*this, Out);
   Mangler.getStream() << "_ZGV";
   Mangler.mangleName(D);
+}
+
+void ItaniumMangleContext::mangleDynamicInitializer(const VarDecl *MD,
+                                                    raw_ostream &Out) {
+  // These symbols are internal in the Itanium ABI, so the names don't matter.
+  // Clang has traditionally used this symbol and allowed LLVM to adjust it to
+  // avoid duplicate symbols.
+  Out << "__cxx_global_var_init";
+}
+
+void ItaniumMangleContext::mangleDynamicAtExitDestructor(const VarDecl *D,
+                                                         raw_ostream &Out) {
+  // Prefix the mangling of D with __dtor_.
+  CXXNameMangler Mangler(*this, Out);
+  Mangler.getStream() << "__dtor_";
+  if (shouldMangleDeclName(D))
+    Mangler.mangle(D);
+  else
+    Mangler.getStream() << D->getName();
 }
 
 void ItaniumMangleContext::mangleItaniumThreadLocalInit(const VarDecl *D,
