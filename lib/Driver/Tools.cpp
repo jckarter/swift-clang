@@ -3799,11 +3799,19 @@ void Clang::AddClangCLArgs(const ArgList &Args, ArgStringList &CmdArgs) const {
     // but defining _DEBUG is sticky.
     RTOptionID = options::OPT__SLASH_MTd;
 
-  if (Arg *A = Args.getLastArg(options::OPT__SLASH_MD,
-                               options::OPT__SLASH_MDd,
-                               options::OPT__SLASH_MT,
-                               options::OPT__SLASH_MTd)) {
+  if (Arg *A = Args.getLastArg(options::OPT__SLASH_M_Group)) {
     RTOptionID = A->getOption().getID();
+
+    // Diagnose overrides.
+    arg_iterator it = Args.filtered_begin(options::OPT__SLASH_M_Group);
+    Arg *Previous = *it++;
+    const arg_iterator ie = Args.filtered_end();
+    while (it != ie) {
+      const Driver &D = getToolChain().getDriver();
+      D.Diag(clang::diag::warn_drv_overriding_flag_option)
+        << Previous->getSpelling() << (*it)->getSpelling();
+      Previous = *it++;
+    }
   }
 
   switch(RTOptionID) {
@@ -6717,8 +6725,7 @@ void visualstudio::Link::ConstructJob(Compilation &C, const JobAction &JA,
     SmallString<128> LibSanitizer(getToolChain().getDriver().ResourceDir);
     llvm::sys::path::append(LibSanitizer, "lib", "windows");
     if (DLL) {
-      // FIXME: Not sure what the final name of the thunk lib is.
-      llvm::sys::path::append(LibSanitizer, "clang_rt.asan-i386-dll_thunk.lib");
+      llvm::sys::path::append(LibSanitizer, "clang_rt.asan_dll_thunk-i386.lib");
     } else {
       llvm::sys::path::append(LibSanitizer, "clang_rt.asan-i386.lib");
     }

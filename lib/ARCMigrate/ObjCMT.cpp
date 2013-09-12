@@ -250,12 +250,12 @@ static void append_attr(std::string &PropertyString, const char *attr) {
 static bool rewriteToObjCProperty(const ObjCMethodDecl *Getter,
                                   const ObjCMethodDecl *Setter,
                                   const NSAPI &NS, edit::Commit &commit,
-                                  bool GetterHasIsPrefix) {
+                                  unsigned LengthOfPrefix) {
   ASTContext &Context = NS.getASTContext();
   std::string PropertyString = "@property(nonatomic";
   std::string PropertyNameString = Getter->getNameAsString();
   StringRef PropertyName(PropertyNameString);
-  if (GetterHasIsPrefix) {
+  if (LengthOfPrefix > 0) {
     PropertyString += ", getter=";
     PropertyString += PropertyNameString;
   }
@@ -306,14 +306,18 @@ static bool rewriteToObjCProperty(const ObjCMethodDecl *Getter,
   PropertyString += " ";
   PropertyString += RT.getAsString(Context.getPrintingPolicy());
   PropertyString += " ";
-  if (GetterHasIsPrefix) {
+  if (LengthOfPrefix > 0) {
     // property name must strip off "is" and lower case the first character
     // after that; e.g. isContinuous will become continuous.
     StringRef PropertyNameStringRef(PropertyNameString);
-    PropertyNameStringRef = PropertyNameStringRef.drop_front(2);
+    PropertyNameStringRef = PropertyNameStringRef.drop_front(LengthOfPrefix);
     PropertyNameString = PropertyNameStringRef;
     std::string NewPropertyNameString = PropertyNameString;
-    NewPropertyNameString[0] = toLowercase(NewPropertyNameString[0]);
+    bool NoLowering = (isUppercase(NewPropertyNameString[0]) &&
+                       NewPropertyNameString.size() > 1 &&
+                       isUppercase(NewPropertyNameString[1]));
+    if (!NoLowering)
+      NewPropertyNameString[0] = toLowercase(NewPropertyNameString[0]);
     PropertyString += NewPropertyNameString;
   }
   else
@@ -733,13 +737,19 @@ bool ObjCMigrateASTConsumer::migrateProperty(ASTContext &Ctx,
                                          PP.getSelectorTable(),
                                          getterName);
   ObjCMethodDecl *SetterMethod = D->lookupMethod(SetterSelector, true);
-  bool GetterHasIsPrefix = false;
+  unsigned LengthOfPrefix = 0;
   if (!SetterMethod) {
     // try a different naming convention for getter: isXxxxx
     StringRef getterNameString = getterName->getName();
-    if (getterNameString.startswith("is") && !GRT->isObjCRetainableType()) {
-      GetterHasIsPrefix = true;
-      const char *CGetterName = getterNameString.data() + 2;
+    bool IsPrefix = getterNameString.startswith("is");
+    if ((IsPrefix && !GRT->isObjCRetainableType()) ||
+        getterNameString.startswith("get")) {
+      LengthOfPrefix = (IsPrefix ? 2 : 3);
+      const char *CGetterName = getterNameString.data() + LengthOfPrefix;
+      // Make sure that first character after "is" or "get" prefix can
+      // start an identifier.
+      if (!isIdentifierHead(CGetterName[0]))
+        return false;
       if (CGetterName[0] && isUppercase(CGetterName[0])) {
         getterName = &Ctx.Idents.get(CGetterName);
         SetterSelector =
@@ -762,7 +772,7 @@ bool ObjCMigrateASTConsumer::migrateProperty(ASTContext &Ctx,
       return false;
     edit::Commit commit(*Editor);
     rewriteToObjCProperty(Method, SetterMethod, *NSAPIObj, commit,
-                          GetterHasIsPrefix);
+                          LengthOfPrefix);
     Editor->commit(commit);
     return true;
   }
@@ -771,7 +781,7 @@ bool ObjCMigrateASTConsumer::migrateProperty(ASTContext &Ctx,
     // as a 'readonly' property.
     edit::Commit commit(*Editor);
     rewriteToObjCProperty(Method, 0 /*SetterMethod*/, *NSAPIObj, commit,
-                          GetterHasIsPrefix);
+                          LengthOfPrefix);
     Editor->commit(commit);
     return true;
   }
@@ -982,9 +992,6 @@ void ObjCMigrateASTConsumer::AddCFAnnotations(ASTContext &Ctx,
       if (Ret.isOwned() &&
           Ctx.Idents.get("NS_RETURNS_RETAINED").hasMacroDefinition())
         AnnotationString = " NS_RETURNS_RETAINED";
-      else if (Ret.notOwned() &&
-               Ctx.Idents.get("NS_RETURNS_NOT_RETAINED").hasMacroDefinition())
-        AnnotationString = " NS_RETURNS_NOT_RETAINED";
     }
     
     if (AnnotationString) {
@@ -1116,9 +1123,6 @@ void ObjCMigrateASTConsumer::AddCFAnnotations(ASTContext &Ctx,
           if (Ret.isOwned() &&
               Ctx.Idents.get("NS_RETURNS_RETAINED").hasMacroDefinition())
             AnnotationString = " NS_RETURNS_RETAINED";
-          else if (Ret.notOwned() &&
-                   Ctx.Idents.get("NS_RETURNS_NOT_RETAINED").hasMacroDefinition())
-            AnnotationString = " NS_RETURNS_NOT_RETAINED";
           break;
       }
     }

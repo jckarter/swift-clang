@@ -116,7 +116,7 @@ TEST_F(FormatTest, DoesNotChangeCorrectlyFormattedCode) {
 
 TEST_F(FormatTest, FormatsGlobalStatementsAt0) {
   EXPECT_EQ("int i;", format("  int i;"));
-  EXPECT_EQ("\nint i;", format(" \n\t \r  int i;"));
+  EXPECT_EQ("\nint i;", format(" \n\t \v \f  int i;"));
   EXPECT_EQ("int i;\nint j;", format("    int i; int j;"));
   EXPECT_EQ("int i;\nint j;", format("    int i;\n  int j;"));
 }
@@ -3825,6 +3825,7 @@ TEST_F(FormatTest, UnderstandsUsesOfStarAndAmp) {
                "}");
   verifyFormat("for (int i = a * a; i < 10; ++i) {\n}");
   verifyFormat("for (int i = 0; i < a * a; ++i) {\n}");
+  verifyGoogleFormat("for (int i = 0; i * 2 < z; i *= 2) {\n}");
 
   verifyFormat("#define MACRO     \\\n"
                "  int *i = a * b; \\\n"
@@ -6477,6 +6478,41 @@ TEST_F(FormatTest, FormatsBlocks) {
   verifyFormat("[operation setCompletionBlock:^{ [self onOperationDone]; }];");
   verifyFormat("int i = {[operation setCompletionBlock : ^{ [self "
                "onOperationDone]; }] };");
+}
+
+TEST_F(FormatTest, SupportsCRLF) {
+  EXPECT_EQ("int a;\r\n"
+            "int b;\r\n"
+            "int c;\r\n",
+            format("int a;\r\n"
+                   "  int b;\r\n"
+                   "    int c;\r\n",
+                   getLLVMStyle()));
+  EXPECT_EQ("int a;\r\n"
+            "int b;\r\n"
+            "int c;\r\n",
+            format("int a;\r\n"
+                   "  int b;\n"
+                   "    int c;\r\n",
+                   getLLVMStyle()));
+  EXPECT_EQ("int a;\n"
+            "int b;\n"
+            "int c;\n",
+            format("int a;\r\n"
+                   "  int b;\n"
+                   "    int c;\n",
+                   getLLVMStyle()));
+  EXPECT_EQ("\"aaaaaaa \"\r\n"
+            "\"bbbbbbb\";\r\n",
+            format("\"aaaaaaa bbbbbbb\";\r\n", getLLVMStyleWithColumns(10)));
+  EXPECT_EQ("#define A \\\r\n"
+            "  b;      \\\r\n"
+            "  c;      \\\r\n"
+            "  d;\r\n",
+            format("#define A \\\r\n"
+                   "  b; \\\r\n"
+                   "  c; d; \r\n",
+                   getGoogleStyle()));
 }
 
 } // end namespace tooling
