@@ -2267,16 +2267,9 @@ static void handleAvailabilityAttr(Sema &S, Decl *D,
   AvailabilityChange Obsoleted = Attr.getAvailabilityObsoleted();
   bool IsUnavailable = Attr.getUnavailableLoc().isValid();
   StringRef Str;
-  if (Attr.getMessageExpr()) {
-    const StringLiteral *SE = dyn_cast<StringLiteral>(Attr.getMessageExpr());
-    if (!SE || !SE->isAscii()) {
-      S.Diag(Attr.getMessageExpr()->getLocStart(),
-             diag::err_attribute_argument_type)
-        << Attr.getName() << AANT_ArgumentString;
-      return;
-    }
+  if (const StringLiteral *SE =
+          dyn_cast_or_null<StringLiteral>(Attr.getMessageExpr()))
     Str = SE->getString();
-  }
 
   AvailabilityAttr *NewAttr = S.mergeAvailabilityAttr(ND, Attr.getRange(), II,
                                                       Introduced.Version,
@@ -3876,18 +3869,11 @@ bool Sema::CheckCallingConvAttr(const AttributeList &attr, CallingConv &CC,
                                                              CC_C;
     break;
   case AttributeList::AT_Pcs: {
-    StringLiteral *Str = 0;
-    if (attr.isArgExpr(0))
-      Str = dyn_cast<StringLiteral>(attr.getArgAsExpr(0));
-    
-    if (!Str || !Str->isAscii()) {
-      Diag(attr.getLoc(), diag::err_attribute_argument_type) << attr.getName()
-        << AANT_ArgumentString;
+    StringRef StrRef;
+    if (!checkStringLiteralArgument(*this, StrRef, attr, 0)) {
       attr.setInvalid();
       return true;
     }
-
-    StringRef StrRef = Str->getString();
     if (StrRef == "aapcs") {
       CC = CC_AAPCS;
       break;
