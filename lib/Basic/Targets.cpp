@@ -3694,10 +3694,12 @@ public:
     else if (CPU == "pj4b")
       Features["vfp3"] = true;
 #endif // !__OPEN_SOURCE__
-    else if (CPU == "cortex-a8" || CPU == "cortex-a15" ||
-             CPU == "cortex-a9" || CPU == "cortex-a9-mp")
+    else if (CPU == "cortex-a8" || CPU == "cortex-a9" ||
+             CPU == "cortex-a9-mp") {
+      Features["vfp3"] = true;
       Features["neon"] = true;
-    else if (CPU == "swift" || CPU == "cortex-a7") {
+    } else if (CPU == "swift" || CPU == "cortex-a5" ||
+        CPU == "cortex-a7" || CPU == "cortex-a15") {
       Features["vfp4"] = true;
       Features["neon"] = true;
     } else if (CPU == "cyclone") {
@@ -3751,8 +3753,9 @@ public:
         .Case("arm", true)
         .Case("softfloat", SoftFloat)
         .Case("thumb", IsThumb)
-        .Case("neon", FPU == NeonFPU && !SoftFloat && 
-              StringRef(getCPUDefineSuffix(CPU)).startswith("7"))    
+        .Case("neon", (FPU & NeonFPU) && !SoftFloat &&
+              (StringRef(getCPUDefineSuffix(CPU)).startswith("7") ||
+               StringRef(getCPUDefineSuffix(CPU)).startswith("8")))
         .Default(false);
   }
   // FIXME: Should we actually have some table instead of these switches?
@@ -3773,8 +3776,8 @@ public:
       .Cases("arm1136jf-s", "mpcorenovfp", "mpcore", "6K")
       .Cases("arm1156t2-s", "arm1156t2f-s", "6T2")
       .Cases("cortex-a5", "cortex-a7", "cortex-a8", "7A")
-      .Cases("cortex-a9", "cortex-a15", "7A")
-      .Case("cortex-r5", "7R")
+      .Cases("cortex-a9", "cortex-a12", "cortex-a15", "7A")
+      .Cases("cortex-r4", "cortex-r5", "7R")
       .Case("cortex-a9-mp", "7F")
 #ifndef __OPEN_SOURCE__
       .Case("pj4b", "7K")
@@ -3788,9 +3791,10 @@ public:
   }
   static const char *getCPUProfile(StringRef Name) {
     return llvm::StringSwitch<const char*>(Name)
-      .Cases("cortex-a8", "cortex-a9", "A")
+      .Cases("cortex-a5", "cortex-a7", "cortex-a8", "A")
+      .Cases("cortex-a9", "cortex-a12", "cortex-a15", "A")
       .Cases("cortex-m3", "cortex-m4", "cortex-m0", "M")
-      .Case("cortex-r5", "R")
+      .Cases("cortex-r4", "cortex-r5", "R")
       .Default("");
   }
   virtual bool setCPU(const std::string &Name) {
