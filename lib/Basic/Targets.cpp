@@ -1304,6 +1304,7 @@ namespace {
       TLSSupported = false;
       LongWidth = LongAlign = 64;
       AddrSpaceMap = &NVPTXAddrSpaceMap;
+      UseAddrSpaceMapMangling = true;
       // Define available target features
       // These must be defined in sorted order!
       NoAsmVariants = true;
@@ -1462,6 +1463,7 @@ public:
       : TargetInfo(Triple), GPU(GK_R600) {
     DescriptionString = DescriptionStringR600;
     AddrSpaceMap = &R600AddrSpaceMap;
+    UseAddrSpaceMapMangling = true;
   }
 
   virtual const char * getClobbers() const {
@@ -4866,6 +4868,7 @@ namespace {
                           "f32:32:32-f64:32:32-v64:32:32-"
                           "v128:32:32-a0:0:32-n32";
       AddrSpaceMap = &TCEOpenCLAddrSpaceMap;
+      UseAddrSpaceMapMangling = true;
     }
 
     virtual void getTargetDefines(const LangOptions &Opts,
@@ -5428,6 +5431,7 @@ namespace {
       TLSSupported = false;
       LongWidth = LongAlign = 64;
       AddrSpaceMap = &SPIRAddrSpaceMap;
+      UseAddrSpaceMapMangling = true;
       // Define available target features
       // These must be defined in sorted order!
       NoAsmVariants = true;
