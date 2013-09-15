@@ -166,7 +166,7 @@ static void getDarwinDefines(MacroBuilder &Builder, const LangOptions &Opts,
   }
 
   // Set the appropriate OS version define.
-  if (Triple.getOS() == llvm::Triple::IOS) {
+  if (Triple.isiOS()) {
     assert(Maj < 10 && Min < 100 && Rev < 100 && "Invalid version!");
     char Str[6];
     Str[0] = '0' + Maj;
@@ -1700,7 +1700,7 @@ class X86TargetInfo : public TargetInfo {
     /// Atom processors
     //@{
     CK_Atom,
-    CK_SLM,
+    CK_Silvermont,
     //@}
 
     /// \name Nehalem
@@ -1869,7 +1869,7 @@ public:
       .Case("core2", CK_Core2)
       .Case("penryn", CK_Penryn)
       .Case("atom", CK_Atom)
-      .Case("slm", CK_SLM)
+      .Case("slm", CK_Silvermont)
       .Case("corei7", CK_Corei7)
       .Case("corei7-avx", CK_Corei7AVX)
       .Case("core-avx-i", CK_CoreAVXi)
@@ -1945,7 +1945,7 @@ public:
     case CK_Core2:
     case CK_Penryn:
     case CK_Atom:
-    case CK_SLM:
+    case CK_Silvermont:
     case CK_Corei7:
     case CK_Corei7AVX:
     case CK_CoreAVXi:
@@ -2042,8 +2042,12 @@ void X86TargetInfo::getDefaultFeatures(llvm::StringMap<bool> &Features) const {
   case CK_Atom:
     setFeatureEnabled(Features, "ssse3", true);
     break;
+  case CK_Silvermont:
+    setFeatureEnabled(Features, "sse4.2", true);
+    setFeatureEnabled(Features, "aes", true);
+    setFeatureEnabled(Features, "pclmul", true);
+    break;
   case CK_Corei7:
-  case CK_SLM:
     setFeatureEnabled(Features, "sse4.2", true);
     break;
   case CK_Corei7AVX:
@@ -2551,7 +2555,7 @@ void X86TargetInfo::getTargetDefines(const LangOptions &Opts,
   case CK_Atom:
     defineCPUMacros(Builder, "atom");
     break;
-  case CK_SLM:
+  case CK_Silvermont:
     defineCPUMacros(Builder, "slm");
     break;
   case CK_Corei7:
@@ -3566,7 +3570,7 @@ class ARMTargetInfo : public TargetInfo {
     // the kernel which on armv6 and newer uses ldrex and strex. The net result
     // is that if we assume the kernel is at least as recent as the hardware,
     // it is safe to use atomic instructions on armv6 and newer.
-    if (T.getOS() != llvm::Triple::Linux &&
+    if (!T.isOSLinux() &&
         T.getOS() != llvm::Triple::FreeBSD &&
         T.getOS() != llvm::Triple::Bitrig)
       return false;
