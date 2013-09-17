@@ -421,16 +421,6 @@ void Darwin::AddDeploymentTarget(DerivedArgList &Args) const {
 
   Arg *OSXVersion = Args.getLastArg(options::OPT_mmacosx_version_min_EQ);
   Arg *iOSVersion = Args.getLastArg(options::OPT_miphoneos_version_min_EQ);
-  // Reject iOS version below 6.0 for arm64.
-  if (iOSVersion && getTriple().getArch() == llvm::Triple::arm64) {
-    bool HadExtra = false;
-    unsigned Major, Minor, Micro;
-    if (Driver::GetReleaseVersion(iOSVersion->getValue(), Major, Minor,
-                                  Micro, HadExtra) && !HadExtra && Major < 6)
-      getDriver().Diag(diag::err_drv_invalid_deployment_target_for_arch)
-        << iOSVersion->getAsString(Args) << "arm64" << "6.0.0";
-  }
-
   Arg *iOSSimVersion = Args.getLastArg(
     options::OPT_mios_simulator_version_min_EQ);
 
