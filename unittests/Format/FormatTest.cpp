@@ -351,6 +351,11 @@ TEST_F(FormatTest, ParseIfElse) {
                "else {\n"
                "  i();\n"
                "}");
+  verifyFormat("void f() {\n"
+               "  if (a) {\n"
+               "  } else {\n"
+               "  }\n"
+               "}");
 }
 
 TEST_F(FormatTest, ElseIf) {
@@ -2064,6 +2069,8 @@ TEST_F(FormatTest, MacroCallsWithoutTrailingSemicolon) {
                    "    IPC_MESSAGE_HANDLER(xxx, qqq)\n"
                    "  IPC_END_MESSAGE_MAP()\n"
                    "}"));
+
+  // These must not be recognized as macros.
   EXPECT_EQ("int q() {\n"
             "  f(x);\n"
             "  f(x) {}\n"
@@ -2219,6 +2226,12 @@ TEST_F(FormatTest, LayoutStatementsAroundPreprocessorDirectives) {
                "        andMoreParameters),\n"
                "    trailing);",
                getLLVMStyleWithColumns(69));
+  verifyFormat("Foo::Foo()\n"
+               "#ifdef BAR\n"
+               "    : baz(0)\n"
+               "#endif\n"
+               "{\n"
+               "}");
 }
 
 TEST_F(FormatTest, LayoutBlockInsideParens) {
@@ -3612,6 +3625,10 @@ TEST_F(FormatTest, UnderstandsTemplateParameters) {
                "}");
   verifyFormat("template <typename... Types>\n"
                "typename enable_if<0 < sizeof...(Types)>::type Foo() {}");
+
+  verifyFormat("aaaaaaaaaaaaaaaaaaaaaaaaaaaa(\n"
+               "    aaaaaaaaaaaaaaaaaaaaaaaaaaaaa >> aaaaa);",
+               getLLVMStyleWithColumns(60));
 }
 
 TEST_F(FormatTest, UnderstandsBinaryOperators) {
