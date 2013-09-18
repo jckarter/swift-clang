@@ -6,6 +6,7 @@
 #define WEBKIT_OBJC_METHOD_ANNOTATION(ANNOTATION) ANNOTATION
 #define WEAK_IMPORT_ATTRIBUTE __attribute__((objc_arc_weak_reference_unavailable))
 #define AVAILABLE_WEBKIT_VERSION_3_0_AND_LATER
+#define DEPRECATED  __attribute__((deprecated)) 
 
 typedef char BOOL;
 @class NSString;
@@ -86,7 +87,7 @@ typedef char BOOL;
 @property(nonatomic, getter=isContinuous) BOOL continuous;
 
 
-@property(nonatomic, readonly) id isAnObject;
+- (id) isAnObject;
 - (void)setAnObject : (id) object;
 
 @property(nonatomic, getter=isinValid, readonly) BOOL inValid;
@@ -115,3 +116,63 @@ typedef char BOOL;
 @end
 
 
+@interface NSInvocation(CAT)
+@property(nonatomic, unsafe_unretained) id target;
+
+
+@property(nonatomic, unsafe_unretained) id dataSource;
+
+@property(nonatomic, unsafe_unretained) id xxxdelegateYYY;
+
+
+
+
+@property(nonatomic, retain) id MYtarget;
+
+
+@property(nonatomic, retain) id targetX;
+
+
+@property(nonatomic) int value;
+
+
+@property(nonatomic, getter=isContinuous) BOOL continuous;
+
+
+- (id) isAnObject;
+- (void)setAnObject : (id) object;
+
+@property(nonatomic, getter=isinValid, readonly) BOOL inValid;
+- (void) setInValid : (BOOL) arg;
+
+- (void) Nothing;
+@property(nonatomic, readonly) int Length;
+@property(nonatomic, readonly) id object;
++ (double) D;
+
+- (BOOL)is3bar; // watch out
+- (NSString *)get3foo; // watch out
+
+@property(nonatomic, getter=getM, readonly) BOOL m;
+@property(nonatomic, getter=getMA, readonly) BOOL MA;
+@property(nonatomic, getter=getALL, readonly) BOOL ALL;
+@property(nonatomic, getter=getMANY, readonly) BOOL MANY;
+@property(nonatomic, getter=getSome, readonly) BOOL some;
+@end
+
+DEPRECATED
+@interface I_DEP
+- (BOOL) isinValid;
+- (void) setInValid : (BOOL) arg;
+@end
+
+@interface AnotherOne
+- (BOOL) isinValid DEPRECATED;
+- (void) setInValid : (BOOL) arg;
+- (id)MYtarget;
+- (void)setMYtarget: (id)target DEPRECATED;
+- (BOOL) getM DEPRECATED;
+
+- (id)xxxdelegateYYY DEPRECATED;
+- (void)setXxxdelegateYYY:(id)delegate DEPRECATED;
+@end

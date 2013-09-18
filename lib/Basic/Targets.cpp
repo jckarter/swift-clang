@@ -3882,6 +3882,9 @@ public:
     // when Neon instructions are actually available.
     if ((FPU & NeonFPU) && !SoftFloat && IsARMv7)
       Builder.defineMacro("__ARM_NEON__");
+
+    if (CPUArch.startswith("8"))
+      Builder.defineMacro("__ARM_FEATURE_CRC32");
   }
   virtual void getTargetBuiltins(const Builtin::Info *&Records,
                                  unsigned &NumRecords) const {

@@ -6,6 +6,7 @@
 #define WEBKIT_OBJC_METHOD_ANNOTATION(ANNOTATION) ANNOTATION
 #define WEAK_IMPORT_ATTRIBUTE __attribute__((objc_arc_weak_reference_unavailable))
 #define AVAILABLE_WEBKIT_VERSION_3_0_AND_LATER
+#define DEPRECATED  __attribute__((deprecated)) 
 
 typedef char BOOL;
 @class NSString;
@@ -115,3 +116,63 @@ typedef char BOOL;
 @end
 
 
+@interface NSInvocation(CAT)
+- (id)target;
+- (void)setTarget:(id)target;
+
+- (id) dataSource;
+
+- (id)xxxdelegateYYY;
+- (void)setXxxdelegateYYY:(id)delegate;
+
+- (void)setDataSource:(id)source;
+
+- (id)MYtarget;
+- (void)setMYtarget: (id)target;
+
+- (id)targetX;
+- (void)setTargetX: (id)t;
+
+- (int)value;
+- (void)setValue: (int)val;
+
+-(BOOL) isContinuous;
+-(void) setContinuous:(BOOL)value;
+
+- (id) isAnObject;
+- (void)setAnObject : (id) object;
+
+- (BOOL) isinValid;
+- (void) setInValid : (BOOL) arg;
+
+- (void) Nothing;
+- (int) Length;
+- (id) object;
++ (double) D;
+
+- (BOOL)is3bar; // watch out
+- (NSString *)get3foo; // watch out
+
+- (BOOL) getM;
+- (BOOL) getMA;
+- (BOOL) getALL;
+- (BOOL) getMANY;
+- (BOOL) getSome;
+@end
+
+DEPRECATED
+@interface I_DEP
+- (BOOL) isinValid;
+- (void) setInValid : (BOOL) arg;
+@end
+
+@interface AnotherOne
+- (BOOL) isinValid DEPRECATED;
+- (void) setInValid : (BOOL) arg;
+- (id)MYtarget;
+- (void)setMYtarget: (id)target DEPRECATED;
+- (BOOL) getM DEPRECATED;
+
+- (id)xxxdelegateYYY DEPRECATED;
+- (void)setXxxdelegateYYY:(id)delegate DEPRECATED;
+@end
