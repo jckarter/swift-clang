@@ -658,11 +658,6 @@ static void ReplaceWithInstancetype(const ObjCMigrateASTConsumer &ASTC,
 void ObjCMigrateASTConsumer::migrateMethodInstanceType(ASTContext &Ctx,
                                                        ObjCContainerDecl *CDecl,
                                                        ObjCMethodDecl *OM) {
-  // bail out early and do not suggest 'instancetype' when the method already 
-  // has a related result type,
-  if (OM->hasRelatedResultType())
-    return;
-
   ObjCInstanceTypeFamily OIT_Family =
     Selector::getInstTypeMethodFamily(OM->getSelector());
   
@@ -679,6 +674,10 @@ void ObjCMigrateASTConsumer::migrateMethodInstanceType(ASTContext &Ctx,
       break;
     case OIT_Singleton:
       migrateFactoryMethod(Ctx, CDecl, OM, OIT_Singleton);
+      return;
+    case OIT_Init:
+      if (OM->getResultType()->isObjCIdType())
+        ReplaceWithInstancetype(*this, OM);
       return;
   }
   if (!OM->getResultType()->isObjCIdType())

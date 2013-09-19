@@ -2204,7 +2204,7 @@ void X86TargetInfo::setSSELevel(llvm::StringMap<bool> &Features,
   case SSE1:
     Features["sse"] = false;
   case SSE2:
-    Features["sse2"] = false;
+    Features["sse2"] = Features["pclmul"] = Features["aes"] = false;
   case SSE3:
     Features["sse3"] = false;
     setXOPLevel(Features, NoXOP, false);
@@ -2290,37 +2290,37 @@ void X86TargetInfo::setFeatureEnabledImpl(llvm::StringMap<bool> &Features,
 
   Features[Name] = Enabled;
 
-  if (Name == "mmx")
+  if (Name == "mmx") {
     setMMXLevel(Features, MMX, Enabled);
-  else if (Name == "sse")
+  } else if (Name == "sse") {
     setSSELevel(Features, SSE1, Enabled);
-  else if (Name == "sse2")
+  } else if (Name == "sse2") {
     setSSELevel(Features, SSE2, Enabled);
-  else if (Name == "sse3")
+  } else if (Name == "sse3") {
     setSSELevel(Features, SSE3, Enabled);
-  else if (Name == "ssse3")
+  } else if (Name == "ssse3") {
     setSSELevel(Features, SSSE3, Enabled);
-  else if (Name == "sse4.2")
+  } else if (Name == "sse4.2") {
     setSSELevel(Features, SSE42, Enabled);
-  else if (Name == "sse4.1")
+  } else if (Name == "sse4.1") {
     setSSELevel(Features, SSE41, Enabled);
-  else if (Name == "3dnow")
+  } else if (Name == "3dnow") {
     setMMXLevel(Features, AMD3DNow, Enabled);
-  else if (Name == "3dnowa")
+  } else if (Name == "3dnowa") {
     setMMXLevel(Features, AMD3DNowAthlon, Enabled);
-  else if (Name == "aes") {
+  } else if (Name == "aes") {
     if (Enabled)
       setSSELevel(Features, SSE2, Enabled);
   } else if (Name == "pclmul") {
     if (Enabled)
       setSSELevel(Features, SSE2, Enabled);
-  } else if (Name == "avx")
+  } else if (Name == "avx") {
     setSSELevel(Features, AVX, Enabled);
-  else if (Name == "avx2")
+  } else if (Name == "avx2") {
     setSSELevel(Features, AVX2, Enabled);
-  else if (Name == "avx512f")
+  } else if (Name == "avx512f") {
     setSSELevel(Features, AVX512F, Enabled);
-  else if (Name == "avx512cd" || Name == "avx512er" || Name == "avx512pf") {
+  } else if (Name == "avx512cd" || Name == "avx512er" || Name == "avx512pf") {
     if (Enabled)
       setSSELevel(Features, AVX512F, Enabled);
   } else if (Name == "fma") {
