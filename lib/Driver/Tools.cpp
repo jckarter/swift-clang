@@ -604,6 +604,9 @@ static void getFPUFeatures(const Driver &D, const Arg *A, const ArgList &Args,
   } else if (FPU == "neon-fp-armv8") {
     Features.push_back("+fp-armv8");
     Features.push_back("+neon");
+  } else if (FPU == "crypto-neon-fp-armv8") {
+    Features.push_back("+crypto");
+    Features.push_back("+fp-armv8");
   } else if (FPU == "neon") {
     Features.push_back("+neon");
   } else
@@ -3639,7 +3642,15 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
   }
 
   // Finally add the compile command to the compilation.
-  C.addCommand(new Command(JA, *this, Exec, CmdArgs));
+  if (Args.hasArg(options::OPT__SLASH_fallback)) {
+    tools::visualstudio::Compile CL(getToolChain());
+    Command *CLCommand = CL.GetCommand(C, JA, Output, Inputs, Args,
+                                       LinkingOutput);
+    C.addCommand(new FallbackCommand(JA, *this, Exec, CmdArgs, CLCommand));
+  } else {
+    C.addCommand(new Command(JA, *this, Exec, CmdArgs));
+  }
+
 
   // Handle the debug info splitting at object creation time if we're
   // creating an object.
@@ -4892,20 +4903,6 @@ void darwin::Link::ConstructJob(Compilation &C, const JobAction &JA,
   }
 
   Args.AddAllArgs(CmdArgs, options::OPT_L);
-
-  const SanitizerArgs &Sanitize =
-      getToolChain().getDriver().getOrParseSanitizerArgs(Args);
-  // If we're building a dynamic lib with -fsanitize=address,
-  // unresolved symbols may appear. Mark all
-  // of them as dynamic_lookup. Linking executables is handled in
-  // lib/Driver/ToolChains.cpp.
-  if (Sanitize.needsAsanRt()) {
-    if (Args.hasArg(options::OPT_dynamiclib) ||
-        Args.hasArg(options::OPT_bundle)) {
-      CmdArgs.push_back("-undefined");
-      CmdArgs.push_back("dynamic_lookup");
-    }
-  }
 
   if (Args.hasArg(options::OPT_fopenmp))
     // This is more complicated in gcc...
@@ -6738,4 +6735,71 @@ void visualstudio::Link::ConstructJob(Compilation &C, const JobAction &JA,
   const char *Exec =
     Args.MakeArgString(getToolChain().GetProgramPath("link.exe"));
   C.addCommand(new Command(JA, *this, Exec, CmdArgs));
+}
+
+void visualstudio::Compile::ConstructJob(Compilation &C, const JobAction &JA,
+                                         const InputInfo &Output,
+                                         const InputInfoList &Inputs,
+                                         const ArgList &Args,
+                                         const char *LinkingOutput) const {
+  C.addCommand(GetCommand(C, JA, Output, Inputs, Args, LinkingOutput));
+}
+
+Command *visualstudio::Compile::GetCommand(Compilation &C, const JobAction &JA,
+                                           const InputInfo &Output,
+                                           const InputInfoList &Inputs,
+                                           const ArgList &Args,
+                                           const char *LinkingOutput) const {
+  ArgStringList CmdArgs;
+  CmdArgs.push_back("/c"); // Compile only.
+  CmdArgs.push_back("/W0"); // No warnings.
+
+  // The goal is to be able to invoke this tool correctly based on
+  // any flag accepted by clang-cl.
+
+  // These are spelled the same way in clang and cl.exe,.
+  Args.AddAllArgs(CmdArgs, options::OPT_D, options::OPT_U);
+  Args.AddAllArgs(CmdArgs, options::OPT_I);
+  Args.AddLastArg(CmdArgs, options::OPT_O, options::OPT_O0);
+
+  // Flags for which clang-cl have an alias.
+  // FIXME: How can we ensure this stays in sync with relevant clang-cl options?
+
+  if (Arg *A = Args.getLastArg(options::OPT_frtti, options::OPT_fno_rtti))
+    CmdArgs.push_back(A->getOption().getID() == options::OPT_frtti ? "/GR"
+                                                                   : "/GR-");
+  if (Args.hasArg(options::OPT_fsyntax_only))
+    CmdArgs.push_back("/Zs");
+
+  // Flags that can simply be passed through.
+  Args.AddAllArgs(CmdArgs, options::OPT__SLASH_LD);
+  Args.AddAllArgs(CmdArgs, options::OPT__SLASH_LDd);
+
+  // The order of these flags is relevant, so pick the last one.
+  if (Arg *A = Args.getLastArg(options::OPT__SLASH_MD, options::OPT__SLASH_MDd,
+                               options::OPT__SLASH_MT, options::OPT__SLASH_MTd))
+    A->render(Args, CmdArgs);
+
+
+  // Input filename.
+  assert(Inputs.size() == 1);
+  const InputInfo &II = Inputs[0];
+  assert(II.getType() == types::TY_C || II.getType() == types::TY_CXX);
+  CmdArgs.push_back(II.getType() == types::TY_C ? "/Tc" : "/Tp");
+  if (II.isFilename())
+    CmdArgs.push_back(II.getFilename());
+  else
+    II.getInputArg().renderAsInput(Args, CmdArgs);
+
+  // Output filename.
+  assert(Output.getType() == types::TY_Object);
+  const char *Fo = Args.MakeArgString(std::string("/Fo") +
+                                      Output.getFilename());
+  CmdArgs.push_back(Fo);
+
+  // FIXME: If we've put clang-cl as cl.exe on the path, we have a problem.
+  const char *Exec =
+    Args.MakeArgString(getToolChain().GetProgramPath("cl.exe"));
+
+  return new Command(JA, *this, Exec, CmdArgs);
 }
