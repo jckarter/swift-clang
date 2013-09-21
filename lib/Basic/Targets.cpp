@@ -5676,6 +5676,8 @@ static TargetInfo *AllocateTarget(const llvm::Triple &Triple) {
       return new FreeBSDTargetInfo<Mips32ELTargetInfo>(Triple);
     case llvm::Triple::NetBSD:
       return new NetBSDTargetInfo<Mips32ELTargetInfo>(Triple);
+    case llvm::Triple::NaCl:
+      return new NaClTargetInfo<Mips32ELTargetInfo>(Triple);
     default:
       return new Mips32ELTargetInfo(Triple);
     }
