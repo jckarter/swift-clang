@@ -3527,9 +3527,14 @@ llvm::Value *ARM64ABIInfo::EmitDarwinVAArg(llvm::Value *VAListAddr, QualType Ty,
 
   uint64_t Size = CGF.getContext().getTypeSize(Ty) / 8;
   uint64_t Align = CGF.getContext().getTypeAlign(Ty) / 8;
+
+  const Type *Base = 0;
+  bool isHA = isHomogeneousAggregate(Ty, Base, getContext());
+
   bool isIndirect = false;
-  // Arguments bigger than 16 bytes should be passed indirectly.
-  if (Size > 16) {
+  // Arguments bigger than 16 bytes which aren't homogeneous aggregates should
+  // be passed indirectly.
+  if (Size > 16 && !isHA) {
     isIndirect = true;
     Size = 8;
     Align = 8;

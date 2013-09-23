@@ -618,3 +618,96 @@ int caller41_split() {
 // CHECK: call i32 @f41_split(i32 1, i32 2, i32 3, i32 4, i32 5, i32 6, i32 7, [1 x i32] undef, i128 %{{.*}}, i128 %{{.*}})
   return f41_split(1, 2, 3, 4, 5, 6, 7, g41, g41_2);
 }
+
+// Handle homogeneous aggregates properly in variadic functions.
+struct HFA {
+  float a, b, c, d;
+};
+
+float test_hfa(int n, ...) {
+// CHECK-LABEL: define float @test_hfa(i32 %n, ...)
+// CHECK: [[THELIST:%.*]] = alloca i8*
+// CHECK: [[CURLIST:%.*]] = load i8** [[THELIST]]
+
+  // HFA is not indirect, so occupies its full 16 bytes on the stack.
+// CHECK: [[NEXTLIST:%.*]] = getelementptr i8* [[CURLIST]], i32 16
+// CHECK: store i8* [[NEXTLIST]], i8** [[THELIST]]
+
+// CHECK: bitcast i8* [[CURLIST]] to %struct.HFA*
+  __builtin_va_list thelist;
+  __builtin_va_start(thelist, n);
+  struct HFA h = __builtin_va_arg(thelist, struct HFA);
+  return h.d;
+}
+
+struct TooBigHFA {
+  float a, b, c, d, e;
+};
+
+float test_toobig_hfa(int n, ...) {
+// CHECK-LABEL: define float @test_toobig_hfa(i32 %n, ...)
+// CHECK: [[THELIST:%.*]] = alloca i8*
+// CHECK: [[CURLIST:%.*]] = load i8** [[THELIST]]
+
+  // TooBigHFA is not actually an HFA, so gets passed indirectly. Only 8 bytes
+  // of stack consumed.
+// CHECK: [[NEXTLIST:%.*]] = getelementptr i8* [[CURLIST]], i32 8
+// CHECK: store i8* [[NEXTLIST]], i8** [[THELIST]]
+
+// CHECK: [[HFAPTRPTR:%.*]] = bitcast i8* [[CURLIST]] to i8**
+// CHECK: [[HFAPTR:%.*]] = load i8** [[HFAPTRPTR]]
+// CHECK: bitcast i8* [[HFAPTR]] to %struct.TooBigHFA*
+  __builtin_va_list thelist;
+  __builtin_va_start(thelist, n);
+  struct TooBigHFA h = __builtin_va_arg(thelist, struct TooBigHFA);
+  return h.d;
+}
+
+struct HVA {
+  int32x4_t a, b;
+};
+
+int32x4_t test_hva(int n, ...) {
+// CHECK-LABEL: define <4 x i32> @test_hva(i32 %n, ...)
+// CHECK: [[THELIST:%.*]] = alloca i8*
+// CHECK: [[CURLIST:%.*]] = load i8** [[THELIST]]
+
+  // HVA is not indirect, so occupies its full 16 bytes on the stack. but it
+  // must be properly aligned.
+// CHECK: [[ALIGN0:%.*]] = getelementptr i8* [[CURLIST]], i32 15
+// CHECK: [[ALIGN1:%.*]] = ptrtoint i8* [[ALIGN0]] to i64
+// CHECK: [[ALIGN2:%.*]] = and i64 [[ALIGN1]], -16
+// CHECK: [[ALIGNED_LIST:%.*]] = inttoptr i64 [[ALIGN2]] to i8*
+
+// CHECK: [[NEXTLIST:%.*]] = getelementptr i8* [[ALIGNED_LIST]], i32 32
+// CHECK: store i8* [[NEXTLIST]], i8** [[THELIST]]
+
+// CHECK: bitcast i8* [[ALIGNED_LIST]] to %struct.HVA*
+  __builtin_va_list thelist;
+  __builtin_va_start(thelist, n);
+  struct HVA h = __builtin_va_arg(thelist, struct HVA);
+  return h.b;
+}
+
+struct TooBigHVA {
+  int32x4_t a, b, c, d, e;
+};
+
+int32x4_t test_toobig_hva(int n, ...) {
+// CHECK-LABEL: define <4 x i32> @test_toobig_hva(i32 %n, ...)
+// CHECK: [[THELIST:%.*]] = alloca i8*
+// CHECK: [[CURLIST:%.*]] = load i8** [[THELIST]]
+
+  // TooBigHVA is not actually an HVA, so gets passed indirectly. Only 8 bytes
+  // of stack consumed.
+// CHECK: [[NEXTLIST:%.*]] = getelementptr i8* [[CURLIST]], i32 8
+// CHECK: store i8* [[NEXTLIST]], i8** [[THELIST]]
+
+// CHECK: [[HVAPTRPTR:%.*]] = bitcast i8* [[CURLIST]] to i8**
+// CHECK: [[HVAPTR:%.*]] = load i8** [[HVAPTRPTR]]
+// CHECK: bitcast i8* [[HVAPTR]] to %struct.TooBigHVA*
+  __builtin_va_list thelist;
+  __builtin_va_start(thelist, n);
+  struct TooBigHVA h = __builtin_va_arg(thelist, struct TooBigHVA);
+  return h.d;
+}
