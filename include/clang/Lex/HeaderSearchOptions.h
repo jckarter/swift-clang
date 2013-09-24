@@ -120,6 +120,9 @@ public:
   /// of computing the module hash.
   llvm::SetVector<std::string> ModulesIgnoreMacros;
 
+  /// \brief The set of user-provided module-map-files.
+  llvm::SetVector<std::string> ModuleMapFiles;
+
   /// Indicate whether the sysroot is implicit, and the header search should be
   /// adjusted accordingly.
   unsigned SysrootIsImplicit : 1;

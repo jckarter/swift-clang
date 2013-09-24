@@ -1012,6 +1012,11 @@ static void getMIPSTargetFeatures(const Driver &D, const ArgList &Args,
     Features.push_back("+soft-float");
   }
 
+  if (Arg *A = Args.getLastArg(options::OPT_mnan_EQ)) {
+    if (StringRef(A->getValue()) == "2008")
+      Features.push_back("+nan2008");
+  }
+
   AddTargetFeature(Args, Features, options::OPT_msingle_float,
                    options::OPT_mdouble_float, "single-float");
   AddTargetFeature(Args, Features, options::OPT_mips16, options::OPT_mno_mips16,
@@ -3106,6 +3111,13 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
     CmdArgs.push_back("-fmodule-maps");
   }
 
+  // -fmodule-decluse checks that modules used are declared so (off by default).
+  if (Args.hasFlag(options::OPT_fmodules_decluse,
+                   options::OPT_fno_modules_decluse,
+                   false)) {
+    CmdArgs.push_back("-fmodule-decluse");
+  }
+
   // If a module path was provided, pass it along. Otherwise, use a temporary
   // directory.
   if (Arg *A = Args.getLastArg(options::OPT_fmodules_cache_path)) {
@@ -3860,7 +3872,10 @@ void Clang::AddClangCLArgs(const ArgList &Args, ArgStringList &CmdArgs) const {
 
   if (!Args.hasArg(options::OPT_fdiagnostics_format_EQ)) {
     CmdArgs.push_back("-fdiagnostics-format");
-    CmdArgs.push_back("msvc");
+    if (Args.hasArg(options::OPT__SLASH_fallback))
+      CmdArgs.push_back("msvc-fallback");
+    else
+      CmdArgs.push_back("msvc");
   }
 }
 
@@ -4799,7 +4814,6 @@ void darwin::Link::ConstructJob(Compilation &C, const JobAction &JA,
   Args.AddAllArgs(CmdArgs, options::OPT_Z_Flag);
   Args.AddAllArgs(CmdArgs, options::OPT_u_Group);
   Args.AddLastArg(CmdArgs, options::OPT_e);
-  Args.AddAllArgs(CmdArgs, options::OPT_m_Separate);
   Args.AddAllArgs(CmdArgs, options::OPT_r);
 
   // Forward -ObjC when either -ObjC or -ObjC++ is used, to force loading
@@ -6041,6 +6055,11 @@ void gnutools::Assemble::ConstructJob(Compilation &C, const JobAction &JA,
       CmdArgs.push_back("-EB");
     else
       CmdArgs.push_back("-EL");
+
+    if (Arg *A = Args.getLastArg(options::OPT_mnan_EQ)) {
+      if (StringRef(A->getValue()) == "2008")
+        CmdArgs.push_back(Args.MakeArgString("-mnan=2008"));
+    }
 
     Args.AddLastArg(CmdArgs, options::OPT_mips16, options::OPT_mno_mips16);
     Args.AddLastArg(CmdArgs, options::OPT_mmicromips,
