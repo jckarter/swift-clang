@@ -6806,6 +6806,7 @@ Command *visualstudio::Compile::GetCommand(Compilation &C, const JobAction &JA,
                                            const ArgList &Args,
                                            const char *LinkingOutput) const {
   ArgStringList CmdArgs;
+  CmdArgs.push_back("/nologo");
   CmdArgs.push_back("/c"); // Compile only.
   CmdArgs.push_back("/W0"); // No warnings.
 
@@ -6815,7 +6816,19 @@ Command *visualstudio::Compile::GetCommand(Compilation &C, const JobAction &JA,
   // These are spelled the same way in clang and cl.exe,.
   Args.AddAllArgs(CmdArgs, options::OPT_D, options::OPT_U);
   Args.AddAllArgs(CmdArgs, options::OPT_I);
-  Args.AddLastArg(CmdArgs, options::OPT_O, options::OPT_O0);
+
+  // Optimization level.
+  if (Arg *A = Args.getLastArg(options::OPT_O, options::OPT_O0)) {
+    if (A->getOption().getID() == options::OPT_O0) {
+      CmdArgs.push_back("/Od");
+    } else {
+      StringRef OptLevel = A->getValue();
+      if (OptLevel == "1" || OptLevel == "2" || OptLevel == "s")
+        A->render(Args, CmdArgs);
+      else if (OptLevel == "3")
+        CmdArgs.push_back("/Ox");
+    }
+  }
 
   // Flags for which clang-cl have an alias.
   // FIXME: How can we ensure this stays in sync with relevant clang-cl options?
