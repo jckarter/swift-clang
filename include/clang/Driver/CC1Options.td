@@ -376,8 +376,6 @@ def migration_for_xct : Flag<["-"], "migration-for-xct">,
   HelpText<"Apply modifications and produces temporary files to migrate to "
    "XCTest framework">;
 
-def relocatable_pch : Flag<["-", "--"], "relocatable-pch">,
-  HelpText<"Whether to build a relocatable precompiled header">;
 def print_stats : Flag<["-"], "print-stats">,
   HelpText<"Print performance metrics and statistics">;
 def fdump_record_layouts : Flag<["-"], "fdump-record-layouts">,
