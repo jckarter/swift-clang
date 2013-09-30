@@ -406,6 +406,19 @@ void InitHeaderSearch::AddDefaultCIncludePaths(const llvm::Triple &triple,
     // toolchain or the command line tools directory.
     if (P.endswith(".xctoolchain/usr") || P.endswith("/CommandLineTools/usr")) {
       AddPathInternal(P + "/include", ExternCSystem, false, false);
+
+      // If this is a toolchain directory, but not the default one, also add the
+      // default. See:
+      //
+      //   <rdar://problem/14796042> FlexLexer.h is missing from command-line
+      //   tools and SDKs.
+      if (P.endswith(".xctoolchain/usr") &&
+          !P.endswith("/XcodeDefault.xctoolchain/usr")) {
+        P = llvm::sys::path::parent_path(P);
+        P = llvm::sys::path::parent_path(P);
+        AddPathInternal(P + "/XcodeDefault.xctoolchain/usr/include",
+                        ExternCSystem, false, false);
+      }
     }
 
     AddPath("/usr/include", ExternCSystem, false);

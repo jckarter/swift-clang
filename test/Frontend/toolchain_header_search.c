@@ -10,9 +10,17 @@
 // RUN: mkdir -p %t.dir/foo.xctoolchain/usr/bin
 // RUN: mkdir -p %t.dir/foo.xctoolchain/usr/include
 // RUN: mkdir -p %t.dir/foo.xctoolchain/usr/lib/clang/someversion/
+// RUN: mkdir -p %t.dir/XcodeDefault.xctoolchain/usr/bin
+// RUN: mkdir -p %t.dir/XcodeDefault.xctoolchain/usr/include
 //
-// RUN: echo "#define A OK" > %t.dir/foo.xctoolchain/usr/include/FlexLexer.h
-// RUN: %clang_cc1 -fsyntax-only -v -verify -resource-dir %t.dir/foo.xctoolchain/usr/lib/clang/someversion %s
+// RUN: echo "#define A OK" > %t.dir/XcodeDefault.xctoolchain/usr/include/FlexLexer.h
+// RUN: %clang_cc1 -fsyntax-only -v -verify -resource-dir %t.dir/foo.xctoolchain/usr/lib/clang/someversion %s 2> %t.err
+// RUN: FileCheck --check-prefix=CHECK-XCODE-TOOLCHAIN < %t.err %s
+//
+// CHECK-XCODE-TOOLCHAIN: #include <...> search starts here:
+// CHECK-XCODE-TOOLCHAIN: /usr/local/include
+// CHECK-XCODE-TOOLCHAIN: /foo.xctoolchain/usr/include
+// CHECK-XCODE-TOOLCHAIN: /XcodeDefault.xctoolchain/usr/include
 
 // Make a dummy command line tools resource layout.
 //
