@@ -1,4 +1,4 @@
-//===--- CGCall.cpp - Encapsulate calling convention details ----*- C++ -*-===//
+//===--- CGCall.cpp - Encapsulate calling convention details --------------===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -1296,7 +1296,8 @@ void CodeGenFunction::EmitFunctionProlog(const CGFunctionInfo &FI,
       } else {
         // Load scalar value from indirect argument.
         CharUnits Alignment = getContext().getTypeAlignInChars(Ty);
-        V = EmitLoadOfScalar(V, false, Alignment.getQuantity(), Ty);
+        V = EmitLoadOfScalar(V, false, Alignment.getQuantity(), Ty,
+                             Arg->getLocStart());
 
         if (isPromoted)
           V = emitArgumentDemotion(*this, Arg, V);
@@ -1327,9 +1328,11 @@ void CodeGenFunction::EmitFunctionProlog(const CGFunctionInfo &FI,
         if (isPromoted)
           V = emitArgumentDemotion(*this, Arg, V);
 
-        if (const CXXMethodDecl *MD = dyn_cast_or_null<CXXMethodDecl>(CurCodeDecl)) {
+        if (const CXXMethodDecl *MD =
+            dyn_cast_or_null<CXXMethodDecl>(CurCodeDecl)) {
           if (MD->isVirtual() && Arg == CXXABIThisDecl)
-            V = CGM.getCXXABI().adjustThisParameterInVirtualFunctionPrologue(*this, CurGD, V);
+            V = CGM.getCXXABI().
+                adjustThisParameterInVirtualFunctionPrologue(*this, CurGD, V);
         }
 
         // Because of merging of function types from multiple decls it is
@@ -1409,7 +1412,7 @@ void CodeGenFunction::EmitFunctionProlog(const CGFunctionInfo &FI,
 
       // Match to what EmitParmDecl is expecting for this type.
       if (CodeGenFunction::hasScalarEvaluationKind(Ty)) {
-        V = EmitLoadOfScalar(V, false, AlignmentToUse, Ty);
+        V = EmitLoadOfScalar(V, false, AlignmentToUse, Ty, Arg->getLocStart());
         if (isPromoted)
           V = emitArgumentDemotion(*this, Arg, V);
       }
@@ -1648,7 +1651,8 @@ static llvm::StoreInst *findDominatingStoreToReturnValue(CodeGenFunction &CGF) {
 }
 
 void CodeGenFunction::EmitFunctionEpilog(const CGFunctionInfo &FI,
-                                         bool EmitRetDbgLoc) {
+                                         bool EmitRetDbgLoc,
+                                         SourceLocation EndLoc) {
   // Functions with no result always return void.
   if (ReturnValue == 0) {
     Builder.CreateRetVoid();
@@ -1665,7 +1669,8 @@ void CodeGenFunction::EmitFunctionEpilog(const CGFunctionInfo &FI,
     switch (getEvaluationKind(RetTy)) {
     case TEK_Complex: {
       ComplexPairTy RT =
-        EmitLoadOfComplex(MakeNaturalAlignAddrLValue(ReturnValue, RetTy));
+        EmitLoadOfComplex(MakeNaturalAlignAddrLValue(ReturnValue, RetTy),
+                          EndLoc);
       EmitStoreOfComplex(RT,
                        MakeNaturalAlignAddrLValue(CurFn->arg_begin(), RetTy),
                          /*isInit*/ true);
@@ -1749,7 +1754,8 @@ void CodeGenFunction::EmitFunctionEpilog(const CGFunctionInfo &FI,
 }
 
 void CodeGenFunction::EmitDelegateCallArg(CallArgList &args,
-                                          const VarDecl *param) {
+                                          const VarDecl *param,
+                                          SourceLocation loc) {
   // StartFunction converted the ABI-lowered parameter(s) into a
   // local alloca.  We need to turn that into an r-value suitable
   // for EmitCall.
@@ -1770,7 +1776,7 @@ void CodeGenFunction::EmitDelegateCallArg(CallArgList &args,
     return args.add(RValue::get(Builder.CreateLoad(local)), type);
   }
 
-  args.add(convertTempToRValue(local, type), type);
+  args.add(convertTempToRValue(local, type, loc), type);
 }
 
 static bool isProvablyNull(llvm::Value *addr) {
@@ -1829,7 +1835,7 @@ static void emitWriteback(CodeGenFunction &CGF,
     CGF.EmitARCIntrinsicUse(writeback.ToUse);
 
     // Load the old value (primitively).
-    llvm::Value *oldValue = CGF.EmitLoadOfScalar(srcLV);
+    llvm::Value *oldValue = CGF.EmitLoadOfScalar(srcLV, SourceLocation());
 
     // Put the new value in place (primitively).
     CGF.EmitStoreOfScalar(value, srcLV, /*init*/ false);
@@ -1958,7 +1964,7 @@ static void emitWritebackArg(CodeGenFunction &CGF, CallArgList &args,
 
   // Perform a copy if necessary.
   if (shouldCopy) {
-    RValue srcRV = CGF.EmitLoadOfLValue(srcLV);
+    RValue srcRV = CGF.EmitLoadOfLValue(srcLV, SourceLocation());
     assert(srcRV.isScalar());
 
     llvm::Value *src = srcRV.getScalarVal();
@@ -2194,7 +2200,7 @@ void CodeGenFunction::ExpandTypeToArgs(QualType Ty, RValue RV,
     llvm::Value *Addr = RV.getAggregateAddr();
     for (unsigned Elt = 0; Elt < NumElts; ++Elt) {
       llvm::Value *EltAddr = Builder.CreateConstGEP2_32(Addr, 0, Elt);
-      RValue EltRV = convertTempToRValue(EltAddr, EltTy);
+      RValue EltRV = convertTempToRValue(EltAddr, EltTy, SourceLocation());
       ExpandTypeToArgs(EltTy, EltRV, Args, IRFuncTy);
     }
   } else if (const RecordType *RT = Ty->getAs<RecordType>()) {
@@ -2218,7 +2224,7 @@ void CodeGenFunction::ExpandTypeToArgs(QualType Ty, RValue RV,
         }
       }
       if (LargestFD) {
-        RValue FldRV = EmitRValueForField(LV, LargestFD);
+        RValue FldRV = EmitRValueForField(LV, LargestFD, SourceLocation());
         ExpandTypeToArgs(LargestFD->getType(), FldRV, Args, IRFuncTy);
       }
     } else {
@@ -2226,7 +2232,7 @@ void CodeGenFunction::ExpandTypeToArgs(QualType Ty, RValue RV,
            i != e; ++i) {
         FieldDecl *FD = *i;
 
-        RValue FldRV = EmitRValueForField(LV, FD);
+        RValue FldRV = EmitRValueForField(LV, FD, SourceLocation());
         ExpandTypeToArgs(FD->getType(), FldRV, Args, IRFuncTy);
       }
     }
@@ -2544,7 +2550,7 @@ RValue CodeGenFunction::EmitCall(const CGFunctionInfo &CallInfo,
 
   switch (RetAI.getKind()) {
   case ABIArgInfo::Indirect:
-    return convertTempToRValue(Args[0], RetTy);
+    return convertTempToRValue(Args[0], RetTy, SourceLocation());
 
   case ABIArgInfo::Ignore:
     // If we are ignoring an argument that had a result, make sure to
@@ -2602,7 +2608,7 @@ RValue CodeGenFunction::EmitCall(const CGFunctionInfo &CallInfo,
     }
     CreateCoercedStore(CI, StorePtr, DestIsVolatile, *this);
 
-    return convertTempToRValue(DestPtr, RetTy);
+    return convertTempToRValue(DestPtr, RetTy, SourceLocation());
   }
 
   case ABIArgInfo::Expand:
