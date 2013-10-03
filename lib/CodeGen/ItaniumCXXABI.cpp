@@ -41,6 +41,10 @@ protected:
   bool UseARMMethodPtrABI;
   bool UseARMGuardVarABI;
 
+  ItaniumMangleContext &getMangleContext() {
+    return cast<ItaniumMangleContext>(CodeGen::CGCXXABI::getMangleContext());
+  }
+
 public:
   ItaniumCXXABI(CodeGen::CodeGenModule &CGM,
                 bool UseARMMethodPtrABI = false,
@@ -1005,7 +1009,7 @@ llvm::GlobalVariable *ItaniumCXXABI::getAddrOfVTable(const CXXRecordDecl *RD,
 
   SmallString<256> OutName;
   llvm::raw_svector_ostream Out(OutName);
-  CGM.getCXXABI().getMangleContext().mangleCXXVTable(RD, Out);
+  getMangleContext().mangleCXXVTable(RD, Out);
   Out.flush();
   StringRef Name = OutName.str();
 
