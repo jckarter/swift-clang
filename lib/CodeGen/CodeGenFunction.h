@@ -2155,6 +2155,8 @@ public:
   llvm::Value *EmitNeonSplat(llvm::Value *V, llvm::Constant *Idx);
   llvm::Value *EmitNeonShiftVector(llvm::Value *V, llvm::Type *Ty,
                                    bool negateForRightShift);
+  llvm::Value *EmitNeonRShiftImm(llvm::Value *Vec, llvm::Value *Amt,
+                                 llvm::Type *Ty, bool usgn, const char *name);
   llvm::Value *EmitConcatVectors(llvm::Value *Lo, llvm::Value *Hi,
                                  llvm::Type *ArgTy);
   llvm::Value *EmitExtractHigh(llvm::Value *In, llvm::Type *ResTy);
