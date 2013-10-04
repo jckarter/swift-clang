@@ -44,7 +44,6 @@ class InitHeaderSearch {
   HeaderSearch &Headers;
   bool Verbose;
   std::string IncludeSysroot;
-  bool SysrootIsImplicit;
 
 public:
   bool HasSysroot;
@@ -58,7 +57,6 @@ private:
 public:
   InitHeaderSearch(HeaderSearch &HS, const HeaderSearchOptions &HSOpts)
     : Headers(HS), Verbose(HSOpts.Verbose), IncludeSysroot(HSOpts.Sysroot),
-      SysrootIsImplicit(HSOpts.SysrootIsImplicit),
       HasSysroot(!(IncludeSysroot.empty() || IncludeSysroot == "/")) {
   }
 
@@ -135,10 +133,6 @@ void InitHeaderSearch::AddPath(const Twine &Path, IncludeDirGroup Group,
     StringRef MappedPathStr = Path.toStringRef(MappedPathStorage);
     if (CanPrefixSysroot(MappedPathStr)) {
       AddPathInternal(IncludeSysroot + Path, Group, isFramework, false);
-
-      // If implicit sysroot behavior is enabled, also add the unmapped path.
-      if (SysrootIsImplicit)
-        AddPathInternal(Path, Group, isFramework, true);
       return;
     }
   }
@@ -148,20 +142,6 @@ void InitHeaderSearch::AddPath(const Twine &Path, IncludeDirGroup Group,
 
 void InitHeaderSearch::AddUnmappedPath(const Twine &Path, IncludeDirGroup Group,
                                        bool isFramework) {
-  // If implicit sysroot behavior is enabled, also add the path implicitly
-  // mapped into the sysroot. We make sure to put this ahead of the unmapped
-  // path, because we expect that when an explicitly mentioned path exists
-  // inside the SDK, it should take precedence. This is particularly important
-  // with frameworks, as the compiler only looks inside the first framework
-  // found for any specific framework name.
-  if (HasSysroot && SysrootIsImplicit) {
-    SmallString<256> MappedPathStorage;
-    StringRef MappedPathStr = Path.toStringRef(MappedPathStorage);
-    if (CanPrefixSysroot(MappedPathStr)) {
-      AddPathInternal(IncludeSysroot + Path, Group, isFramework, true);
-    }
-  }
-
   // Add the unmapped path.
   AddPathInternal(Path, Group, isFramework, false);
 }

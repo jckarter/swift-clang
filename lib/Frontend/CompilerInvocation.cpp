@@ -891,7 +891,6 @@ static void ParseHeaderSearchArgs(HeaderSearchOptions &Opts, ArgList &Args) {
   using namespace options;
   Opts.Sysroot = Args.getLastArgValue(OPT_isysroot, "/");
   Opts.Verbose = Args.hasArg(OPT_v);
-  Opts.SysrootIsImplicit = Args.hasArg(OPT_isysroot_implicit);
   Opts.UseBuiltinIncludes = !Args.hasArg(OPT_nobuiltininc);
   Opts.UseStandardSystemIncludes = !Args.hasArg(OPT_nostdsysteminc);
   Opts.UseStandardCXXIncludes = !Args.hasArg(OPT_nostdincxx);

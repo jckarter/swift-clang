@@ -900,8 +900,6 @@ def iquote : JoinedOrSeparate<["-"], "iquote">, Group<clang_i_Group>, Flags<[CC1
   HelpText<"Add directory to QUOTE include search path">, MetaVarName<"<directory>">;
 def isysroot : JoinedOrSeparate<["-"], "isysroot">, Group<clang_i_Group>, Flags<[CC1Option]>,
   HelpText<"Set the system root directory (usually /)">, MetaVarName<"<dir>">;
-def isysroot_implicit : Flag<["-"], "isysroot-implicit">, Group<clang_i_Group>, Flags<[CC1Option]>,
-  HelpText<"Search both the system root and actual root include entries">, MetaVarName<"<dir>">;
 def isystem : JoinedOrSeparate<["-"], "isystem">, Group<clang_i_Group>, Flags<[CC1Option]>,
   HelpText<"Add directory to SYSTEM include search path">, MetaVarName<"<directory>">;
 def iwithprefixbefore : JoinedOrSeparate<["-"], "iwithprefixbefore">, Group<clang_i_Group>,
