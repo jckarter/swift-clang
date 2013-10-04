@@ -773,7 +773,8 @@ void Clang::AddARMTargetArgs(const ArgList &Args,
   } else if (Triple.isOSDarwin()) {
     // The backend is hardwired to assume AAPCS for M-class processors, ensure
     // the frontend matches that.
-    if (StringRef(CPUName).startswith("cortex-m")) {
+    if (Triple.getEnvironment() == llvm::Triple::EABI ||
+        StringRef(CPUName).startswith("cortex-m")) {
       ABIName = "aapcs";
     } else {
       ABIName = "apcs-gnu";
@@ -2208,7 +2209,13 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
       (!Triple.isiOS() || Triple.isOSVersionLT(6) ||
        Triple.getArch() == llvm::Triple::arm64))
     PIC = PIE = false;
-  if (Args.hasArg(options::OPT_static))
+  // Usually '-static' implies no-PIC. But for MIPS '-fPIC -static' means
+  // to compile as -fPIC but link with -static.
+  if (Args.hasArg(options::OPT_static) &&
+      getToolChain().getArch() != llvm::Triple::mips &&
+      getToolChain().getArch() != llvm::Triple::mipsel &&
+      getToolChain().getArch() != llvm::Triple::mips64 &&
+      getToolChain().getArch() != llvm::Triple::mips64el)
     PIC = PIE = false;
 
   if (Arg *A = Args.getLastArg(options::OPT_mdynamic_no_pic)) {
