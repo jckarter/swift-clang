@@ -44,20 +44,12 @@ class InitHeaderSearch {
   HeaderSearch &Headers;
   bool Verbose;
   std::string IncludeSysroot;
-
-public:
   bool HasSysroot;
 
-private:
-  /// AddPathInternal - Add the specified path to the specified group list,
-  /// without performing any additional processing.
-  void AddPathInternal(const Twine &Path, IncludeDirGroup Group,
-                       bool isFramework, bool WasImplicit);
-
 public:
-  InitHeaderSearch(HeaderSearch &HS, const HeaderSearchOptions &HSOpts)
-    : Headers(HS), Verbose(HSOpts.Verbose), IncludeSysroot(HSOpts.Sysroot),
-      HasSysroot(!(IncludeSysroot.empty() || IncludeSysroot == "/")) {
+  InitHeaderSearch(HeaderSearch &HS, bool verbose, StringRef sysroot)
+    : Headers(HS), Verbose(verbose), IncludeSysroot(sysroot),
+      HasSysroot(!(sysroot.empty() || sysroot == "/")) {
   }
 
   /// AddPath - Add the specified path to the specified group list, prefixing
@@ -132,22 +124,16 @@ void InitHeaderSearch::AddPath(const Twine &Path, IncludeDirGroup Group,
     SmallString<256> MappedPathStorage;
     StringRef MappedPathStr = Path.toStringRef(MappedPathStorage);
     if (CanPrefixSysroot(MappedPathStr)) {
-      AddPathInternal(IncludeSysroot + Path, Group, isFramework, false);
+      AddUnmappedPath(IncludeSysroot + Path, Group, isFramework);
       return;
     }
   }
 
-  AddPathInternal(Path, Group, isFramework, false);
+  AddUnmappedPath(Path, Group, isFramework);
 }
 
 void InitHeaderSearch::AddUnmappedPath(const Twine &Path, IncludeDirGroup Group,
                                        bool isFramework) {
-  // Add the unmapped path.
-  AddPathInternal(Path, Group, isFramework, false);
-}
-
-void InitHeaderSearch::AddPathInternal(const Twine &Path, IncludeDirGroup Group,
-                                       bool isFramework, bool WasImplicit) {
   assert(!Path.isTriviallyEmpty() && "can't handle empty path here");
 
   FileManager &FM = Headers.getFileMgr();
@@ -185,7 +171,7 @@ void InitHeaderSearch::AddPathInternal(const Twine &Path, IncludeDirGroup Group,
     }
   }
 
-  if (Verbose && !WasImplicit)
+  if (Verbose)
     llvm::errs() << "ignoring nonexistent directory \""
                  << MappedPathStr << "\"\n";
 }
@@ -385,7 +371,7 @@ void InitHeaderSearch::AddDefaultCIncludePaths(const llvm::Triple &triple,
     // Only add this directory if the compiler is actually installed in a
     // toolchain or the command line tools directory.
     if (P.endswith(".xctoolchain/usr") || P.endswith("/CommandLineTools/usr")) {
-      AddPathInternal(P + "/include", ExternCSystem, false, false);
+      AddUnmappedPath(P + "/include", ExternCSystem, false);
 
       // If this is a toolchain directory, but not the default one, also add the
       // default. See:
@@ -396,8 +382,8 @@ void InitHeaderSearch::AddDefaultCIncludePaths(const llvm::Triple &triple,
           !P.endswith("/XcodeDefault.xctoolchain/usr")) {
         P = llvm::sys::path::parent_path(P);
         P = llvm::sys::path::parent_path(P);
-        AddPathInternal(P + "/XcodeDefault.xctoolchain/usr/include",
-                        ExternCSystem, false, false);
+        AddUnmappedPath(P + "/XcodeDefault.xctoolchain/usr/include",
+                        ExternCSystem, false);
       }
     }
 
@@ -740,7 +726,7 @@ void clang::ApplyHeaderSearchOptions(HeaderSearch &HS,
                                      const HeaderSearchOptions &HSOpts,
                                      const LangOptions &Lang,
                                      const llvm::Triple &Triple) {
-  InitHeaderSearch Init(HS, HSOpts);
+  InitHeaderSearch Init(HS, HSOpts.Verbose, HSOpts.Sysroot);
 
   // Add the user defined entries.
   for (unsigned i = 0, e = HSOpts.UserEntries.size(); i != e; ++i) {
