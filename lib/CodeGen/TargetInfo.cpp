@@ -3207,7 +3207,7 @@ ABIArgInfo ARM64ABIInfo::classifyArgumentType(QualType Ty,
 
   // Structures with either a non-trivial destructor or a non-trivial
   // copy constructor are always indirect.
-  if (isRecordReturnIndirect(Ty, CGT)) {
+  if (isRecordReturnIndirect(Ty, getCXXABI())) {
     AllocatedGPR++;
     return ABIArgInfo::getIndirect(0, /*ByVal=*/false);
   }
@@ -3269,7 +3269,7 @@ ABIArgInfo ARM64ABIInfo::classifyReturnType(QualType RetTy) const {
 
   // Structures with either a non-trivial destructor or a non-trivial
   // copy constructor are always indirect.
-  if (isRecordReturnIndirect(RetTy, CGT))
+  if (isRecordReturnIndirect(RetTy, getCXXABI()))
     return ABIArgInfo::getIndirect(0, /*ByVal=*/false);
 
   if (isEmptyRecord(getContext(), RetTy, true))
