@@ -1712,12 +1712,12 @@ void Sema::MergeTypedefNameDecl(TypedefNameDecl *New, LookupResult &OldDecls) {
   if (isIncompatibleTypedef(Old, New))
     return;
 
-  // The types match.  Link up the redeclaration chain if the old
-  // declaration was a typedef.
-  if (TypedefNameDecl *Typedef = dyn_cast<TypedefNameDecl>(Old))
+  // The types match.  Link up the redeclaration chain and merge attributes if
+  // the old declaration was a typedef.
+  if (TypedefNameDecl *Typedef = dyn_cast<TypedefNameDecl>(Old)) {
     New->setPreviousDeclaration(Typedef);
-
-  mergeDeclAttributes(New, Old);
+    mergeDeclAttributes(New, Old);
+  }
 
   if (getLangOpts().MicrosoftExt)
     return;
@@ -6494,10 +6494,8 @@ Sema::ActOnFunctionDeclarator(Scope *S, Declarator &D, DeclContext *DC,
          diag::err_invalid_thread)
       << DeclSpec::getSpecifierName(TSCS);
 
-  if (DC->isRecord() &&
-      D.getDeclSpec().getStorageClassSpec() != DeclSpec::SCS_static &&
-      !D.getDeclSpec().isFriendSpecified())
-    adjustMemberFunctionCC(R);
+  if (D.isFirstDeclarationOfMember())
+    adjustMemberFunctionCC(R, D.isStaticMember());
 
   bool isFriend = false;
   FunctionTemplateDecl *FunctionTemplate = 0;
