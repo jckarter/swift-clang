@@ -682,6 +682,7 @@ bool CompilerInstance::ExecuteAction(FrontendAction &Act) {
   // Disable support for building .o files with Objective-C garbage collection
   // support.  We still allow -fsyntax-only, --analyze, etc., to work.
   if (getFrontendOpts().ProgramAction == frontend::EmitObj &&
+      getFrontendOpts().ARCMTAction == FrontendOptions::ARCMT_None &&
       getLangOpts().getGC() != LangOptions::NonGC) {
     getDiagnostics().Report(diag::err_fe_objc_gc_not_supported);
     getDiagnostics().getClient()->finish();
