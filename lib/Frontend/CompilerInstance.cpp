@@ -676,6 +676,18 @@ bool CompilerInstance::ExecuteAction(FrontendAction &Act) {
   if (!hasTarget())
     return false;
 
+  // This check should not be done here, but it is important to check
+  // for GC usage here after serialized diagnostics have been created.
+  //
+  // Disable support for building .o files with Objective-C garbage collection
+  // support.  We still allow -fsyntax-only, --analyze, etc., to work.
+  if (getFrontendOpts().ProgramAction == frontend::EmitObj &&
+      getLangOpts().getGC() != LangOptions::NonGC) {
+    getDiagnostics().Report(diag::err_fe_objc_gc_not_supported);
+    getDiagnostics().getClient()->finish();
+    return false;
+  }
+
   // Inform the target of the language options.
   //
   // FIXME: We shouldn't need to do this, the target should be immutable once
