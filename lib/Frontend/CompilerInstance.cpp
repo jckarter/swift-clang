@@ -49,6 +49,8 @@
 
 using namespace clang;
 
+#define REJECT_OBJC_GC 1
+
 CompilerInstance::CompilerInstance()
   : Invocation(new CompilerInvocation()), ModuleManager(0),
     BuildGlobalModuleIndex(false), ModuleBuildFailed(false) {
@@ -676,6 +678,7 @@ bool CompilerInstance::ExecuteAction(FrontendAction &Act) {
   if (!hasTarget())
     return false;
 
+#if REJECT_OBJC_GC
   // This check should not be done here, but it is important to check
   // for GC usage here after serialized diagnostics have been created.
   //
@@ -685,9 +688,11 @@ bool CompilerInstance::ExecuteAction(FrontendAction &Act) {
       getFrontendOpts().ARCMTAction == FrontendOptions::ARCMT_None &&
       getLangOpts().getGC() != LangOptions::NonGC) {
     getDiagnostics().Report(diag::err_fe_objc_gc_not_supported);
+    getDiagnostics().Report(diag::note_fe_objc_gc_not_supported);
     getDiagnostics().getClient()->finish();
     return false;
   }
+#endif
 
   // Inform the target of the language options.
   //
