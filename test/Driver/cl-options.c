@@ -129,4 +129,8 @@
 // Xclang: "-cc1"
 // Xclang: "hellocc1"
 
+// We support -m32 and -m64.
+// RUN: %clang_cl /Zs /WX -m32 -m64 -- %s
+
+
 void f() { }
