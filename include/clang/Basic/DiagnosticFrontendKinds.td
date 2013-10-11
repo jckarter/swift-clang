@@ -63,8 +63,6 @@ def err_fe_action_not_available : Error<
 
 def err_fe_objc_gc_not_supported : Error<
   "garbage collection is no longer supported">;
-def note_fe_objc_gc_not_supported : Note<
-  "use 'Convert to Objective-C ARC' in Xcode to migrate to ARC">;
 
 def warn_fe_serialized_diag_failure : Warning<
     "unable to open file %0 for serializing diagnostics (%1)">,

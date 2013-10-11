@@ -688,7 +688,6 @@ bool CompilerInstance::ExecuteAction(FrontendAction &Act) {
       getFrontendOpts().ARCMTAction == FrontendOptions::ARCMT_None &&
       getLangOpts().getGC() != LangOptions::NonGC) {
     getDiagnostics().Report(diag::err_fe_objc_gc_not_supported);
-    getDiagnostics().Report(diag::note_fe_objc_gc_not_supported);
     getDiagnostics().getClient()->finish();
     return false;
   }
