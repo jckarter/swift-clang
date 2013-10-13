@@ -2317,6 +2317,8 @@ TEST_F(FormatTest, LayoutStatementsAroundPreprocessorDirectives) {
                "  x();\n"
                "}",
                getLLVMStyleWithColumns(28));
+  verifyFormat("#if 1\n"
+               "int i;");
 }
 
 TEST_F(FormatTest, LayoutBlockInsideParens) {
@@ -6850,6 +6852,13 @@ TEST_F(FormatTest, SupportsCRLF) {
                    "  b; \\\r\n"
                    "  c; d; \r\n",
                    getGoogleStyle()));
+}
+
+TEST_F(FormatTest, MunchSemicolonAfterBlocks) {
+  verifyFormat("MY_CLASS(C) {\n"
+               "  int i;\n"
+               "  int j;\n"
+               "};");
 }
 
 } // end namespace tooling

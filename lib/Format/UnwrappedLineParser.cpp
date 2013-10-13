@@ -225,7 +225,7 @@ bool UnwrappedLineParser::parse() {
     Callback.finishRun();
     Lines.clear();
     while (!PPLevelBranchIndex.empty() &&
-           PPLevelBranchIndex.back() + 1 == PPLevelBranchCount.back()) {
+           PPLevelBranchIndex.back() + 1 >= PPLevelBranchCount.back()) {
       PPLevelBranchIndex.resize(PPLevelBranchIndex.size() - 1);
       PPLevelBranchCount.resize(PPLevelBranchCount.size() - 1);
     }
@@ -360,7 +360,8 @@ void UnwrappedLineParser::calculateBraceTypes() {
   FormatTok = Tokens->setPosition(StoredPosition);
 }
 
-void UnwrappedLineParser::parseBlock(bool MustBeDeclaration, bool AddLevel) {
+void UnwrappedLineParser::parseBlock(bool MustBeDeclaration, bool AddLevel,
+                                     bool MunchSemi) {
   assert(FormatTok->Tok.is(tok::l_brace) && "'{' expected");
   unsigned InitialLevel = Line->Level;
   nextToken();
@@ -380,6 +381,8 @@ void UnwrappedLineParser::parseBlock(bool MustBeDeclaration, bool AddLevel) {
   }
 
   nextToken(); // Munch the closing brace.
+  if (MunchSemi && FormatTok->Tok.is(tok::semi))
+    nextToken();
   Line->Level = InitialLevel;
 }
 
@@ -1160,7 +1163,8 @@ void UnwrappedLineParser::parseRecord() {
         Style.BreakBeforeBraces == FormatStyle::BS_Allman)
       addUnwrappedLine();
 
-    parseBlock(/*MustBeDeclaration=*/true);
+    parseBlock(/*MustBeDeclaration=*/true, /*Addlevel=*/true,
+               /*MunchSemi=*/false);
   }
   // We fall through to parsing a structural element afterwards, so
   // class A {} n, m;
