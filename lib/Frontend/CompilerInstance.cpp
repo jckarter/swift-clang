@@ -687,9 +687,18 @@ bool CompilerInstance::ExecuteAction(FrontendAction &Act) {
   if (getFrontendOpts().ProgramAction == frontend::EmitObj &&
       getFrontendOpts().ARCMTAction == FrontendOptions::ARCMT_None &&
       getLangOpts().getGC() != LangOptions::NonGC) {
-    getDiagnostics().Report(diag::err_fe_objc_gc_not_supported);
-    getDiagnostics().getClient()->finish();
-    return false;
+
+    SmallString<1024> P(getHeaderSearchOpts().ResourceDir);
+    // Strip away version.  We should be in "lib/clang".
+    llvm::sys::path::remove_filename(P);
+    // Add magic gc file.
+    llvm::sys::path::append(P, "enable_objc_gc");
+
+    if (!llvm::sys::fs::exists(P.str())) {
+      getDiagnostics().Report(diag::err_fe_objc_gc_not_supported);
+      getDiagnostics().getClient()->finish();
+      return false;
+    }
   }
 #endif
 
