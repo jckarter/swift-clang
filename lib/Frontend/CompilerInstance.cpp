@@ -689,9 +689,13 @@ bool CompilerInstance::ExecuteAction(FrontendAction &Act) {
       getLangOpts().getGC() != LangOptions::NonGC) {
 
     SmallString<1024> P(getHeaderSearchOpts().ResourceDir);
-    // Strip away version.  We should be in "lib/clang".
-    llvm::sys::path::remove_filename(P);
-    // Add magic gc file.
+    // 1. Strip away version.
+    // 2. Strip away 'clang'.
+    // 3. Strip away 'lib'.
+    for (unsigned i = 0 ; i < 3 ; ++i) llvm::sys::path::remove_filename(P);
+    // 4. Add 'local'.
+    llvm::sys::path::append(P, "lib");
+    // 5. Add magic gc file.
     llvm::sys::path::append(P, "enable_objc_gc");
 
     if (!llvm::sys::fs::exists(P.str())) {
