@@ -133,8 +133,8 @@ bool ContinuationIndenter::mustBreak(const LineState &State) {
     return true;
   if (Style.AlwaysBreakBeforeMultilineStrings &&
       State.Column > State.Stack.back().Indent && // Breaking saves columns.
-      Previous.isNot(tok::lessless) && Previous.Type != TT_InlineASMColon &&
-      NextIsMultilineString(State))
+      !Previous.isOneOf(tok::kw_return, tok::lessless) &&
+      Previous.Type != TT_InlineASMColon && NextIsMultilineString(State))
     return true;
 
   if (!Style.BreakBeforeBinaryOperators) {
@@ -581,9 +581,12 @@ unsigned ContinuationIndenter::moveStateToNextToken(LineState &State,
                            Current.PackingKind == PPK_Inconclusive)));
     }
 
-    State.Stack.push_back(
-        ParenState(NewIndent, NewIndentLevel, State.Stack.back().LastSpace,
-                   AvoidBinPacking, State.Stack.back().NoLineBreak));
+    bool NoLineBreak = State.Stack.back().NoLineBreak ||
+                       (Current.Type == TT_TemplateOpener &&
+                        State.Stack.back().ContainsUnwrappedBuilder);
+    State.Stack.push_back(ParenState(NewIndent, NewIndentLevel,
+                                     State.Stack.back().LastSpace,
+                                     AvoidBinPacking, NoLineBreak));
     State.Stack.back().BreakBeforeParameter = Current.BlockKind == BK_Block;
     ++State.ParenLevel;
   }

@@ -2840,33 +2840,36 @@ TEST_F(FormatTest, TrailingReturnType) {
 }
 
 TEST_F(FormatTest, BreaksFunctionDeclarationsWithTrailingTokens) {
-  // Avoid breaking before trailing 'const'.
-  verifyFormat("void someLongFunction(\n"
-               "    int someLongParameter) const {}",
-               getLLVMStyleWithColumns(46));
+  // Avoid breaking before trailing 'const' or other trailing annotations, if
+  // they are not function-like.
   FormatStyle Style = getGoogleStyle();
   Style.ColumnLimit = 47;
   verifyFormat("void\n"
                "someLongFunction(int someLongParameter) const {\n}",
                getLLVMStyleWithColumns(47));
-  verifyFormat("void someLongFunction(\n"
-               "    int someLongParameter) const {}",
-               Style);
   verifyFormat("LoooooongReturnType\n"
                "someLoooooooongFunction() const {}",
                getLLVMStyleWithColumns(47));
   verifyFormat("LoooooongReturnType someLoooooooongFunction()\n"
                "    const {}",
                Style);
+  verifyFormat("void SomeFunction(aaaaa aaaaaaaaaaaaaaaaaaaa,\n"
+               "                  aaaaa aaaaaaaaaaaaaaaaaaaa) OVERRIDE;");
+  verifyFormat("void SomeFunction(aaaaa aaaaaaaaaaaaaaaaaaaa,\n"
+               "                  aaaaa aaaaaaaaaaaaaaaaaaaa) OVERRIDE FINAL;");
+  verifyFormat("void SomeFunction(aaaaa aaaaaaaaaaaaaaaaaaaa,\n"
+               "                  aaaaa aaaaaaaaaaaaaaaaaaaa) override final;");
 
-  // Avoid breaking before other trailing annotations, if they are not
-  // function-like.
-  verifyFormat("void SomeFunction(aaaaaaaaaaaaaaaaaaaaaaaaaa,\n"
-               "                  aaaaaaaaaaaaaaaaaaaaaaaaaa) OVERRIDE;");
-  verifyFormat("void SomeFunction(aaaaaaaaaaaaaaaaaaaaaaaaaa,\n"
-               "                  aaaaaaaaaaaaaaaaaaaaaaaaaa) OVERRIDE FINAL;");
-  verifyFormat("void SomeFunction(aaaaaaaaaaaaaaaaaaaaaaaaaa,\n"
-               "                  aaaaaaaaaaaaaaaaaaaaaaaaaa) override final;");
+  // Unless this would lead to the first parameter being broken.
+  verifyFormat("void someLongFunction(int someLongParameter)\n"
+               "    const {}",
+               getLLVMStyleWithColumns(46));
+  verifyFormat("void someLongFunction(int someLongParameter)\n"
+               "    const {}",
+               Style);
+  verifyFormat("void SomeFunction(aaaaaaaaaa aaaaaaaaaaaaaaa,\n"
+               "                  aaaaaaaaaa aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa)\n"
+               "    LONG_AND_UGLY_ANNOTATION;");
 
   // Breaking before function-like trailing annotations is fine to keep them
   // close to their arguments.
@@ -3109,6 +3112,13 @@ TEST_F(FormatTest, FormatsBuilderPattern) {
   verifyFormat("aaaaaaaaaaaaa->aaaaaaaaaaaaaaaaaaaaaaaa()\n"
                "    ->aaaaaaaaaaaaaae(0)\n"
                "    ->aaaaaaaaaaaaaaa();");
+
+  verifyFormat("aaaaaaaaaaaaaaaaaaaaaaaaaaa.aaaaaaaaaaaaa()\n"
+               "    .aaaaaaaaaaaaaaaaaaaaaaaaaa()\n"
+               "    .has<bbbbbbbbbbbbbbbbbbbbb>();");
+  verifyFormat("aaaaaaaaaaaaaaaaaaaaaaaaaaa.aaaaaaaaaaaaa()\n"
+               "    .aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa<\n"
+               "         aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa>();");
 
   // Prefer not to break after empty parentheses.
   verifyFormat("FirstToken->WhitespaceRange.getBegin().getLocWithOffset(\n"
@@ -4363,16 +4373,16 @@ TEST_F(FormatTest, DoesNotTouchUnwrappedLinesWithErrors) {
 }
 
 TEST_F(FormatTest, IncorrectCodeErrorDetection) {
-  EXPECT_EQ("{\n{}\n", format("{\n{\n}\n"));
+  EXPECT_EQ("{\n  {}\n", format("{\n{\n}\n"));
   EXPECT_EQ("{\n  {}\n", format("{\n  {\n}\n"));
   EXPECT_EQ("{\n  {}\n", format("{\n  {\n  }\n"));
-  EXPECT_EQ("{\n  {}\n  }\n}\n", format("{\n  {\n    }\n  }\n}\n"));
+  EXPECT_EQ("{\n  {}\n}\n}\n", format("{\n  {\n    }\n  }\n}\n"));
 
   EXPECT_EQ("{\n"
-            "    {\n"
-            " breakme(\n"
-            "     qwe);\n"
-            "}\n",
+            "  {\n"
+            "    breakme(\n"
+            "        qwe);\n"
+            "  }\n",
             format("{\n"
                    "    {\n"
                    " breakme(qwe);\n"
@@ -5579,6 +5589,12 @@ TEST_F(FormatTest, BreakStringLiterals) {
             format("aaaaaaaaaaaa(aaaaaaaaaaaaa, \"aaaaaaaaaaaaaaaaaaaaaa "
                    "aaaaaaaaaaaaaaaaaaaaaa aaaaaaaaaaaaaaaaaaaaaa "
                    "aaaaaaaaaaaaaaaaaaaaaa\");",
+                   getGoogleStyle()));
+  EXPECT_EQ("return \"aaaaaaaaaaaaaaaaaaaaaa aaaaaaaaaaaaaaaaaaaaaaaaaa \"\n"
+            "       \"aaaaaaaaaaaaaaaaaaaaaaaaaa aaaaaaaaaaaaaaaaaaaaaa\";",
+            format("return \"aaaaaaaaaaaaaaaaaaaaaa "
+                   "aaaaaaaaaaaaaaaaaaaaaaaaaa aaaaaaaaaaaaaaaaaaaaaaaaaa "
+                   "aaaaaaaaaaaaaaaaaaaaaa\";",
                    getGoogleStyle()));
   EXPECT_EQ("llvm::outs() << \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa \"\n"
             "                \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\";",
