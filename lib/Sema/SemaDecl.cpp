@@ -4487,7 +4487,7 @@ NamedDecl *Sema::findLocallyScopedExternCDecl(DeclarationName Name) {
   }
 
   NamedDecl *D = LocallyScopedExternCDecls.lookup(Name);
-  return D ? cast<NamedDecl>(D->getMostRecentDecl()) : 0;
+  return D ? D->getMostRecentDecl() : 0;
 }
 
 /// \brief Diagnose function specifiers on a declaration of an identifier that
@@ -6804,6 +6804,13 @@ Sema::ActOnFunctionDeclarator(Scope *S, Declarator &D, DeclContext *DC,
       NewFD->setType(Context.getFunctionType(FPT->getResultType(),
                                              FPT->getArgTypes(), EPI));
     }
+
+    // C++11 [replacement.functions]p3:
+    //  The program's definitions shall not be specified as inline.
+    if (isInline && NewFD->isReplaceableGlobalAllocationFunction())
+      Diag(D.getDeclSpec().getInlineSpecLoc(),
+           diag::err_operator_new_delete_declared_inline)
+        << NewFD->getDeclName();
   }
 
   // Filter out previous declarations that don't match the scope.
