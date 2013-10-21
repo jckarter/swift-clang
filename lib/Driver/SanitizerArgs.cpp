@@ -223,7 +223,7 @@ static bool allowedOpt(const char *Value) {
   // We support the UndefinedBehaviorSanitizers.
   return llvm::StringSwitch<bool>(Value)
     .Cases("alignment", "bounds", "float-cast-overflow", true)
-    .Cases("float-divide-by-zero", "integer-divide-by-zero", true)
+    .Cases("float-divide-by-zero", "function", "integer-divide-by-zero", true)
     .Cases("null", "object-size", "return", "shift", true)
     .Cases("signed-integer-overflow", "unreachable", "vla-bound", true)
     .Cases("vptr", "bool", "enum", "undefined", true)
