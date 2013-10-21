@@ -49,8 +49,6 @@
 
 using namespace clang;
 
-#define REJECT_OBJC_GC 1
-
 CompilerInstance::CompilerInstance()
   : Invocation(new CompilerInvocation()), ModuleManager(0),
     BuildGlobalModuleIndex(false), ModuleBuildFailed(false) {
@@ -678,7 +676,6 @@ bool CompilerInstance::ExecuteAction(FrontendAction &Act) {
   if (!hasTarget())
     return false;
 
-#if REJECT_OBJC_GC
   // This check should not be done here, but it is important to check
   // for GC usage here after serialized diagnostics have been created.
   //
@@ -695,6 +692,8 @@ bool CompilerInstance::ExecuteAction(FrontendAction &Act) {
     for (unsigned i = 0 ; i < 3 ; ++i) llvm::sys::path::remove_filename(P);
     // 4. Add 'local'.
     llvm::sys::path::append(P, "local");
+    llvm::sys::path::append(P, "lib");
+    llvm::sys::path::append(P, "clang");
     // 5. Add magic gc file.
     llvm::sys::path::append(P, "enable_objc_gc");
 
@@ -704,7 +703,6 @@ bool CompilerInstance::ExecuteAction(FrontendAction &Act) {
       return false;
     }
   }
-#endif
 
   // Inform the target of the language options.
   //
