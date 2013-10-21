@@ -604,6 +604,27 @@ static void getAArch64FPUFeatures(const Driver &D, const Arg *A,
     D.Diag(diag::err_drv_clang_unsupported) << A->getAsString(Args);
 }
 
+// Handle -mhwdiv=.
+static void getARMHWDivFeatures(const Driver &D, const Arg *A,
+                              const ArgList &Args,
+                              std::vector<const char *> &Features) {
+  StringRef HWDiv = A->getValue();
+  if (HWDiv == "arm") {
+    Features.push_back("+hwdiv-arm");
+    Features.push_back("-hwdiv");
+  } else if (HWDiv == "thumb") {
+    Features.push_back("-hwdiv-arm");
+    Features.push_back("+hwdiv");
+  } else if (HWDiv == "arm,thumb" || HWDiv == "thumb,arm") {
+    Features.push_back("+hwdiv-arm");
+    Features.push_back("+hwdiv");
+  } else if (HWDiv == "none") {
+    Features.push_back("-hwdiv-arm");
+    Features.push_back("-hwdiv");
+  } else
+    D.Diag(diag::err_drv_clang_unsupported) << A->getAsString(Args);
+}
+ 
 // Handle -mfpu=.
 //
 // FIXME: Centralize feature selection, defaulting shouldn't be also in the
@@ -748,6 +769,8 @@ static void getARMTargetFeatures(const Driver &D, const llvm::Triple &Triple,
   // Honor -mfpu=.
   if (const Arg *A = Args.getLastArg(options::OPT_mfpu_EQ))
     getARMFPUFeatures(D, A, Args, Features);
+  if (const Arg *A = Args.getLastArg(options::OPT_mhwdiv_EQ))
+    getARMHWDivFeatures(D, A, Args, Features);
 
   // Setting -msoft-float effectively disables NEON because of the GCC
   // implementation, although the same isn't true of VFP or VFP3.
@@ -1769,15 +1792,13 @@ static void addSanitizerRTLinkFlagsLinux(
   // Sanitizer runtime may need to come before -lstdc++ (or -lc++, libstdc++.a,
   // etc.) so that the linker picks custom versions of the global 'operator
   // new' and 'operator delete' symbols. We take the extreme (but simple)
-  // strategy of inserting it at the front of the link command. If we're
-  // responsible for exporting the symbols then it also needs to be forced to
-  // end up in the executable, so wrap it in whole-archive.
+  // strategy of inserting it at the front of the link command. It also
+  // needs to be forced to end up in the executable, so wrap it in
+  // whole-archive.
   SmallVector<const char *, 3> LibSanitizerArgs;
-  if (ExportSymbols)
-    LibSanitizerArgs.push_back("-whole-archive");
+  LibSanitizerArgs.push_back("-whole-archive");
   LibSanitizerArgs.push_back(Args.MakeArgString(LibSanitizer));
-  if (ExportSymbols)
-    LibSanitizerArgs.push_back("-no-whole-archive");
+  LibSanitizerArgs.push_back("-no-whole-archive");
 
   CmdArgs.insert(BeforeLibStdCXX ? CmdArgs.begin() : CmdArgs.end(),
                  LibSanitizerArgs.begin(), LibSanitizerArgs.end());
@@ -1843,17 +1864,17 @@ static void addLsanRTLinux(const ToolChain &TC, const ArgList &Args,
 static void addUbsanRTLinux(const ToolChain &TC, const ArgList &Args,
                             ArgStringList &CmdArgs, bool IsCXX,
                             bool HasOtherSanitizerRt) {
-  addSanitizerRTLinkFlagsLinux(TC, Args, CmdArgs, "ubsan", false, false);
+  // Need a copy of sanitizer_common. This could come from another sanitizer
+  // runtime; if we're not including one, include our own copy.
+  if (!HasOtherSanitizerRt)
+    addSanitizerRTLinkFlagsLinux(TC, Args, CmdArgs, "san", true, false);
+
+  addSanitizerRTLinkFlagsLinux(TC, Args, CmdArgs, "ubsan", false);
 
   // Only include the bits of the runtime which need a C++ ABI library if
   // we're linking in C++ mode.
   if (IsCXX)
-    addSanitizerRTLinkFlagsLinux(TC, Args, CmdArgs, "ubsan_cxx", false, false);
-
-  // Need a copy of sanitizer_common. This could come from another sanitizer
-  // runtime; if we're not including one, include our own copy.
-  if (!HasOtherSanitizerRt)
-    addSanitizerRTLinkFlagsLinux(TC, Args, CmdArgs, "san", false, false);
+    addSanitizerRTLinkFlagsLinux(TC, Args, CmdArgs, "ubsan_cxx", false);
 }
 
 static void addDfsanRTLinux(const ToolChain &TC, const ArgList &Args,
@@ -3139,11 +3160,26 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
     CmdArgs.push_back("-fmodule-maps");
   }
 
-  // -fmodules-decluse checks that modules used are declared so (off by default).
+  // -fmodules-decluse checks that modules used are declared so (off by
+  // default).
   if (Args.hasFlag(options::OPT_fmodules_decluse,
                    options::OPT_fno_modules_decluse,
                    false)) {
     CmdArgs.push_back("-fmodules-decluse");
+  }
+
+  // -fmodule-name specifies the module that is currently being built (or
+  // used for header checking by -fmodule-maps).
+  if (Arg *A = Args.getLastArg(options::OPT_fmodule_name)) {
+    A->claim();
+    A->render(Args, CmdArgs);
+  }
+
+  // -fmodule-map-file can be used to specify a file containing module
+  // definitions.
+  if (Arg *A = Args.getLastArg(options::OPT_fmodule_map_file)) {
+    A->claim();
+    A->render(Args, CmdArgs);
   }
 
   // If a module path was provided, pass it along. Otherwise, use a temporary

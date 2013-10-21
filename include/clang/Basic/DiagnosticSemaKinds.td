@@ -2365,7 +2365,7 @@ def warn_cleanup_ext : Warning<
   "than a simple identifier">, 
   InGroup<GccCompat>;
 def err_attribute_cleanup_arg_not_function : Error<
-  "'cleanup' argument %select{|%1 }0is not a function">;
+  "'cleanup' argument %select{|%1 |%1 }0is not a %select{||single }0function">;
 def err_attribute_cleanup_func_must_take_one_arg : Error<
   "'cleanup' function %0 must take 1 parameter">;
 def err_attribute_cleanup_func_arg_incompatible_type : Error<
@@ -5901,7 +5901,7 @@ def err_operator_new_delete_declared_in_namespace : Error<
 def err_operator_new_delete_declared_static : Error<
   "%0 cannot be declared static in global scope">;
 def err_operator_new_delete_declared_inline : Error<
-  "%0 cannot be declared 'inline'">;
+  "replacement function %0 cannot be declared 'inline'">;
 def err_operator_new_delete_invalid_result_type : Error<
   "%0 must return type %1">;
 def err_operator_new_delete_dependent_result_type : Error<
@@ -6225,9 +6225,9 @@ def warn_cfstring_truncated : Warning<
 
 // Statements.
 def err_continue_not_in_loop : Error<
-  "'continue' statement not in loop statement">;
+  "'continue' statement not in loop statement body">;
 def err_break_not_in_loop_or_switch : Error<
-  "'break' statement not in loop or switch statement">;
+  "'break' statement not in loop or switch statement body">;
 def err_default_not_in_switch : Error<
   "'default' statement not in switch statement">;
 def err_case_not_in_switch : Error<"'case' statement not in switch statement">;
