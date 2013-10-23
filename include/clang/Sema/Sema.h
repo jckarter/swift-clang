@@ -1539,7 +1539,9 @@ public:
 
   void ActOnFinishKNRParamDeclarations(Scope *S, Declarator &D,
                                        SourceLocation LocAfterDecls);
-  void CheckForFunctionRedefinition(FunctionDecl *FD);
+  void CheckForFunctionRedefinition(FunctionDecl *FD,
+                                    const FunctionDecl *EffectiveDefinition =
+                                        0);
   Decl *ActOnStartOfFunctionDef(Scope *S, Declarator &D);
   Decl *ActOnStartOfFunctionDef(Scope *S, Decl *D);
   void ActOnStartOfObjCMethodDef(Scope *S, Decl *D);
@@ -3638,9 +3640,11 @@ public:
 
   void HideUsingShadowDecl(Scope *S, UsingShadowDecl *Shadow);
   bool CheckUsingShadowDecl(UsingDecl *UD, NamedDecl *Target,
-                            const LookupResult &PreviousDecls);
+                            const LookupResult &PreviousDecls,
+                            UsingShadowDecl *&PrevShadow);
   UsingShadowDecl *BuildUsingShadowDecl(Scope *S, UsingDecl *UD,
-                                        NamedDecl *Target);
+                                        NamedDecl *Target,
+                                        UsingShadowDecl *PrevDecl);
 
   bool CheckUsingDeclRedeclaration(SourceLocation UsingLoc,
                                    bool HasTypenameKeyword,

@@ -2015,6 +2015,10 @@ def err_attribute_weakref_without_alias : Error<
   "weakref declaration of '%0' must also have an alias attribute">;
 def err_alias_not_supported_on_darwin : Error <
   "only weak aliases are supported on darwin">;
+def err_alias_to_undefined : Error<
+  "alias must point to a defined variable or function">;
+def err_cyclic_alias : Error<
+  "alias definition is part of a cycle">;
 def warn_attribute_wrong_decl_type : Warning<
   "%0 attribute only applies to %select{functions|unions|"
   "variables and functions|functions and methods|parameters|"
@@ -3496,6 +3500,10 @@ def warn_missing_variable_declarations : Warning<
   "no previous extern declaration for non-static variable %0">,
   InGroup<DiagGroup<"missing-variable-declarations">>, DefaultIgnore;
 def err_redefinition : Error<"redefinition of %0">;
+def err_alias_after_tentative :
+  Error<"alias definition of %0 after tentative definition">;
+def err_tentative_after_alias :
+  Error<"tentative definition of %0 after alias definition">;
 def err_definition_of_implicitly_declared_member : Error<
   "definition of implicitly declared %select{default constructor|copy "
   "constructor|move constructor|copy assignment operator|move assignment "
@@ -3573,6 +3581,9 @@ def err_static_non_static : Error<
   "static declaration of %0 follows non-static declaration">;
 def err_different_language_linkage : Error<
   "declaration of %0 has a different language linkage">;
+def ext_retained_language_linkage : Extension<
+  "friend function %0 retaining previous language linkage is an extension">,
+  InGroup<DiagGroup<"retained-language-linkage">>;
 def err_extern_c_global_conflict : Error<
   "declaration of %1 %select{with C language linkage|in global scope}0 "
   "conflicts with declaration %select{in global scope|with C language linkage}0">;
@@ -6227,9 +6238,9 @@ def warn_cfstring_truncated : Warning<
 
 // Statements.
 def err_continue_not_in_loop : Error<
-  "'continue' statement not in loop statement body">;
+  "'continue' statement not in loop statement">;
 def err_break_not_in_loop_or_switch : Error<
-  "'break' statement not in loop or switch statement body">;
+  "'break' statement not in loop or switch statement">;
 def err_default_not_in_switch : Error<
   "'default' statement not in switch statement">;
 def err_case_not_in_switch : Error<"'case' statement not in switch statement">;
