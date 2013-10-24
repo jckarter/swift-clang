@@ -1864,14 +1864,14 @@ TEST_F(FormatTest, NestedStaticInitializers) {
       "      333333333333333333333333333333}},\n"
       "    {{1, 2, 3}}, {{1, 2, 3}}};");
 
-  // FIXME: We might at some point want to handle this similar to parameter
-  // lists, where we have an option to put each on a single line.
   verifyFormat(
       "struct {\n"
       "  unsigned bit;\n"
       "  const char *const name;\n"
-      "} kBitsToOs[] = { { kOsMac, \"Mac\" },     { kOsWin, \"Windows\" },\n"
-      "                  { kOsLinux, \"Linux\" }, { kOsCrOS, \"Chrome OS\" } };");
+      "} kBitsToOs[] = { { kOsMac, \"Mac\" },\n"
+      "                  { kOsWin, \"Windows\" },\n"
+      "                  { kOsLinux, \"Linux\" },\n"
+      "                  { kOsCrOS, \"Chrome OS\" } };");
 }
 
 TEST_F(FormatTest, FormatsSmallMacroDefinitionsInSingleLine) {
@@ -2333,6 +2333,13 @@ TEST_F(FormatTest, LayoutStatementsAroundPreprocessorDirectives) {
       "#if 1\n"
       "#else\n"
       "#endif\n");
+  verifyFormat("DEBUG({\n"
+               "  return aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa +\n"
+               "         aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa;\n"
+               "});\n"
+               "#if a\n"
+               "#else\n"
+               "#endif");
 }
 
 TEST_F(FormatTest, FormatsJoinedLinesOnSubsequentRuns) {
@@ -4539,8 +4546,10 @@ TEST_F(FormatTest, FormatsBracedListsinColumnLayout) {
                "                  1, 1, 1, 1,\n"
                "                  /**/ /**/ };",
                getLLVMStyleWithColumns(39));
-  verifyFormat("return { { aaaaaaaaaaaaaaaaaaaaa }, { aaaaaaaaaaaaaaaaaaa },\n"
-               "         { aaaaaaaaaaaaaaaaaaaaa }, { aaaaaaaaaaaaaaaaa } };",
+  verifyFormat("return { { aaaaaaaaaaaaaaaaaaaaa },\n"
+               "         { aaaaaaaaaaaaaaaaaaa },\n"
+               "         { aaaaaaaaaaaaaaaaaaaaa },\n"
+               "         { aaaaaaaaaaaaaaaaa } };",
                getLLVMStyleWithColumns(60));
 }
 
