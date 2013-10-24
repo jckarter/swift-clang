@@ -252,7 +252,7 @@ static const char *getLLVMArchSuffixForARM(StringRef CPU) {
 #endif // !__OPEN_SOURCE__
     .Case("swift", "v7s")
     .Case("cyclone", "v8")
-    .Case("cortex-a53", "v8")
+    .Cases("cortex-a53", "cortex-a57", "v8")
     .Default("");
 }
 

@@ -472,6 +472,7 @@ static const char *getLLVMArchSuffixForARM(StringRef CPU) {
 #endif // !__OPEN_SOURCE__
     .Case("swift", "v7s")
     .Case("cyclone", "v8")
+    .Cases("cortex-a53", "cortex-a57", "v8")
     .Default("");
 }
 
@@ -652,12 +653,16 @@ static void getARMFPUFeatures(const Driver &D, const Arg *A,
     Features.push_back("-neon");
   } else if (FPU == "fp-armv8") {
     Features.push_back("+fp-armv8");
+    Features.push_back("-neon");
+    Features.push_back("-crypto");
   } else if (FPU == "neon-fp-armv8") {
     Features.push_back("+fp-armv8");
     Features.push_back("+neon");
+    Features.push_back("-crypto");
   } else if (FPU == "crypto-neon-fp-armv8") {
-    Features.push_back("+crypto");
     Features.push_back("+fp-armv8");
+    Features.push_back("+neon");
+    Features.push_back("+crypto");
   } else if (FPU == "neon") {
     Features.push_back("+neon");
   } else if (FPU == "none") {
@@ -6072,6 +6077,8 @@ void gnutools::Assemble::ConstructJob(Compilation &C, const JobAction &JA,
     StringRef MArch = getToolChain().getArchName();
     if (MArch == "armv7" || MArch == "armv7a" || MArch == "armv7-a")
       CmdArgs.push_back("-mfpu=neon");
+    if (MArch == "armv8" || MArch == "armv8a" || MArch == "armv8-a")
+      CmdArgs.push_back("-mfpu=crypto-neon-fp-armv8");
 
     StringRef ARMFloatABI = getARMFloatABI(getToolChain().getDriver(), Args,
                                            getToolChain().getTriple());
