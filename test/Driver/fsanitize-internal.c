@@ -53,10 +53,10 @@
 // RUN: %clang -target x86_64-linux-gnu -fcatch-undefined-behavior %s -### 2>&1 | FileCheck %s --check-prefix=CHECK-UNDEFINED-TRAP
 // RUN: %clang -target x86_64-linux-gnu -fsanitize=undefined-trap -fsanitize-undefined-trap-on-error %s -### 2>&1 | FileCheck %s --check-prefix=CHECK-UNDEFINED-TRAP
 // RUN: %clang -target x86_64-linux-gnu -fsanitize-undefined-trap-on-error -fsanitize=undefined-trap %s -### 2>&1 | FileCheck %s --check-prefix=CHECK-UNDEFINED-TRAP
-// CHECK-UNDEFINED-TRAP: "-fsanitize={{((signed-integer-overflow|integer-divide-by-zero|float-divide-by-zero|shift|unreachable|return|vla-bound|alignment|null|object-size|float-cast-overflow|bounds|enum|bool),?){14}"}}
+// CHECK-UNDEFINED-TRAP: "-fsanitize={{((signed-integer-overflow|integer-divide-by-zero|float-divide-by-zero|shift|unreachable|return|vla-bound|alignment|null|object-size|float-cast-overflow|array-bounds|enum|bool),?){14}"}}
 
 // RUN: %clang -target x86_64-linux-gnu -fsanitize=undefined %s -### 2>&1 | FileCheck %s --check-prefix=CHECK-UNDEFINED
-// CHECK-UNDEFINED: "-fsanitize={{((signed-integer-overflow|integer-divide-by-zero|float-divide-by-zero|shift|unreachable|return|vla-bound|alignment|null|vptr|object-size|float-cast-overflow|bounds|enum|bool|function),?){16}"}}
+// CHECK-UNDEFINED: "-fsanitize={{((signed-integer-overflow|integer-divide-by-zero|float-divide-by-zero|shift|unreachable|return|vla-bound|alignment|null|vptr|object-size|float-cast-overflow|array-bounds|enum|bool|function),?){16}"}}
 
 // RUN: %clang -target x86_64-linux-gnu -fsanitize=alignment %s -### 2>&1 | FileCheck %s --check-prefix=CHECK-ALIGNMENT
 // CHECK-ALIGNMENT-NOT: unsupported argument 'alignment' to option 'fsanitize='
@@ -65,7 +65,7 @@
 
 // RUN: %clang -target x86_64-linux-gnu -fsanitize=bounds %s -### 2>&1 | FileCheck %s --check-prefix=CHECK-BOUNDS
 // CHECK-BOUNDS-NOT: unsupported argument 'bounds' to option 'fsanitize='
-// CHECK-BOUNDS: "-fsanitize={{((bounds),?){1}"}}
+// CHECK-BOUNDS: "-fsanitize={{((array-bounds|local-bounds),?){2}"}}
 
 // RUN: %clang -target x86_64-linux-gnu -fsanitize=float-cast-overflow %s -### 2>&1 | FileCheck %s --check-prefix=CHECK-FLOAT-CAST-OVERFLOW
 // CHECK-FLOAT-CAST-OVERFLOW-NOT: unsupported argument 'float-cast-overflow' to option 'fsanitize='
