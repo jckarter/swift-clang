@@ -386,7 +386,7 @@ void ASTDeclReader::VisitDecl(Decl *D) {
     D->setAttrsImpl(Attrs, Reader.getContext());
   }
   D->setImplicit(Record[Idx++]);
-  D->setIsUsed(Record[Idx++]);
+  D->Used = Record[Idx++];
   D->setReferenced(Record[Idx++]);
   D->setTopLevelDeclInObjCContainer(Record[Idx++]);
   D->setAccess((AccessSpecifier)Record[Idx++]);
@@ -1226,6 +1226,8 @@ void ASTDeclReader::ReadCXXDefinitionData(
     CXXRecordDecl::LambdaDefinitionData &Lambda
       = static_cast<CXXRecordDecl::LambdaDefinitionData &>(Data);
     Lambda.Dependent = Record[Idx++];
+    Lambda.IsGenericLambda = Record[Idx++];
+    Lambda.CaptureDefault = Record[Idx++];
     Lambda.NumCaptures = Record[Idx++];
     Lambda.NumExplicitCaptures = Record[Idx++];
     Lambda.ManglingNumber = Record[Idx++];
@@ -1234,7 +1236,6 @@ void ASTDeclReader::ReadCXXDefinitionData(
       = (Capture*)Reader.Context.Allocate(sizeof(Capture)*Lambda.NumCaptures);
     Capture *ToCapture = Lambda.Captures;
     Lambda.MethodTyInfo = GetTypeSourceInfo(Record, Idx);
-    Lambda.TheLambdaExpr = cast<LambdaExpr>(Reader.ReadExpr(F));
     for (unsigned I = 0, N = Lambda.NumCaptures; I != N; ++I) {
       SourceLocation Loc = ReadSourceLocation(Record, Idx);
       bool IsImplicit = Record[Idx++];
@@ -1266,7 +1267,8 @@ ASTDeclReader::VisitCXXRecordDeclImpl(CXXRecordDecl *D) {
     bool IsLambda = Record[Idx++];
     if (IsLambda)
       D->DefinitionData = new (C) CXXRecordDecl::LambdaDefinitionData(D, 0,
-                                                                      false);
+                                                                      false,
+                                                                      false, LCD_None);
     else
       D->DefinitionData = new (C) struct CXXRecordDecl::DefinitionData(D);
 
@@ -2987,7 +2989,7 @@ void ASTDeclReader::UpdateDecl(Decl *D, ModuleFile &ModuleFile,
     case UPD_DECL_MARKED_USED: {
       // FIXME: This doesn't send the right notifications if there are
       // ASTMutationListeners other than an ASTWriter.
-      D->setIsUsed(true);
+      D->Used = true;
       break;
     }
     }
