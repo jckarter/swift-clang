@@ -5096,9 +5096,9 @@ class MipsTargetInfoBase : public TargetInfo {
     NoDSP, DSP1, DSP2
   } DspRev;
   bool HasMSA;
-  bool HasFP64;
 
 protected:
+  bool HasFP64;
   std::string ABI;
 
 public:
@@ -5181,7 +5181,10 @@ public:
     NumRecords = clang::Mips::LastTSBuiltin - Builtin::FirstTSBuiltin;
   }
   virtual bool hasFeature(StringRef Feature) const {
-    return Feature == "mips";
+    return llvm::StringSwitch<bool>(Feature)
+      .Case("mips", true)
+      .Case("fp64", HasFP64)
+      .Default(false);
   }
   virtual BuiltinVaListKind getBuiltinVaListKind() const {
     return TargetInfo::VoidPtrBuiltinVaList;
@@ -5288,6 +5291,8 @@ public:
     if (RegNo == 1) return 5;
     return -1;
   }
+
+  virtual unsigned getStackAlignment() const = 0;
 };
 
 const Builtin::Info MipsTargetInfoBase::BuiltinInfo[] = {
@@ -5367,12 +5372,20 @@ public:
     Aliases = GCCRegAliases;
     NumAliases = llvm::array_lengthof(GCCRegAliases);
   }
+
+  virtual unsigned getStackAlignment() const {
+    return HasFP64 ? 16 : 8;
+  }
 };
 
 class Mips32EBTargetInfo : public Mips32TargetInfoBase {
   virtual void setDescriptionString() {
-    DescriptionString = "E-p:32:32:32-i1:8:8-i8:8:32-i16:16:32-i32:32:32-"
-                        "i64:64:64-f32:32:32-f64:64:64-v64:64:64-n32-S64";
+    if (HasFP64)
+      DescriptionString = "E-p:32:32:32-i1:8:8-i8:8:32-i16:16:32-i32:32:32-"
+                          "i64:64:64-f32:32:32-f64:64:64-v64:64:64-n32-S128";
+    else
+      DescriptionString = "E-p:32:32:32-i1:8:8-i8:8:32-i16:16:32-i32:32:32-"
+                          "i64:64:64-f32:32:32-f64:64:64-v64:64:64-n32-S64";
   }
 
 public:
@@ -5389,8 +5402,12 @@ public:
 
 class Mips32ELTargetInfo : public Mips32TargetInfoBase {
   virtual void setDescriptionString() {
-    DescriptionString = "e-p:32:32:32-i1:8:8-i8:8:32-i16:16:32-i32:32:32-"
-                        "i64:64:64-f32:32:32-f64:64:64-v64:64:64-n32-S64";
+    if (HasFP64)
+      DescriptionString = "e-p:32:32:32-i1:8:8-i8:8:32-i16:16:32-i32:32:32-"
+                          "i64:64:64-f32:32:32-f64:64:64-v64:64:64-n32-S128";
+    else
+      DescriptionString = "e-p:32:32:32-i1:8:8-i8:8:32-i16:16:32-i32:32:32-"
+                          "i64:64:64-f32:32:32-f64:64:64-v64:64:64-n32-S64";
   }
 
 public:
@@ -5493,6 +5510,10 @@ public:
     };
     Aliases = GCCRegAliases;
     NumAliases = llvm::array_lengthof(GCCRegAliases);
+  }
+
+  virtual unsigned getStackAlignment() const {
+    return 16;
   }
 };
 
