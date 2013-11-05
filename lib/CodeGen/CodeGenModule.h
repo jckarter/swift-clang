@@ -1038,7 +1038,8 @@ private:
   
   // C++ related functions.
 
-  bool TryEmitDefinitionAsAlias(GlobalDecl Alias, GlobalDecl Target);
+  bool TryEmitDefinitionAsAlias(GlobalDecl Alias, GlobalDecl Target,
+                                bool InEveryTU);
   bool TryEmitBaseDestructorAsAlias(const CXXDestructorDecl *D);
 
   void EmitNamespace(const NamespaceDecl *D);
