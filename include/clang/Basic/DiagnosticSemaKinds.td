@@ -4778,6 +4778,7 @@ def warn_bad_receiver_type : Warning<
   "receiver type %0 is not 'id' or interface pointer, consider "
   "casting it to 'id'">,InGroup<ObjCReceiver>;
 def err_bad_receiver_type : Error<"bad receiver type %0">;
+def err_incomplete_receiver_type : Error<"incomplete receiver type %0">;
 def err_unknown_receiver_suggest : Error<
   "unknown receiver %0; did you mean %1?">;
 def error_objc_throw_expects_object : Error<
@@ -5132,10 +5133,6 @@ let CategoryName = "Lambda Issue" in {
     "cannot deduce type for lambda capture %0 from initializer list">;
 }
 
-// C++1y Generic Lambdas
-def err_glambda_not_fully_implemented : Error<
-  "unimplemented generic lambda feature: %0">;
-    
 def err_return_in_captured_stmt : Error<
   "cannot return from %0">;
 def err_capture_block_variable : Error<
