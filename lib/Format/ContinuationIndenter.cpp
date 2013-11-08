@@ -277,7 +277,7 @@ void ContinuationIndenter::addTokenOnCurrentLine(LineState &State, bool DryRun,
     // Treat the condition inside an if as if it was a second function
     // parameter, i.e. let nested calls have a continuation indent.
     State.Stack.back().LastSpace = State.Column + 1; // 1 is length of "(".
-  else if (Previous.is(tok::comma))
+  else if (Previous.is(tok::comma) || Previous.Type == TT_ObjCMethodExpr)
     State.Stack.back().LastSpace = State.Column;
   else if ((Previous.Type == TT_BinaryOperator ||
             Previous.Type == TT_ConditionalExpr ||
@@ -439,10 +439,12 @@ unsigned ContinuationIndenter::addTokenOnNewLine(LineState &State,
   for (unsigned i = 0, e = State.Stack.size() - 1; i != e; ++i) {
     State.Stack[i].BreakBeforeParameter = true;
   }
-  const FormatToken *TokenBefore = Current.getPreviousNonComment();
-  if (TokenBefore && !TokenBefore->isOneOf(tok::comma, tok::semi) &&
-      TokenBefore->Type != TT_TemplateCloser &&
-      TokenBefore->Type != TT_BinaryOperator && !TokenBefore->opensScope())
+  if (PreviousNonComment &&
+      !PreviousNonComment->isOneOf(tok::comma, tok::semi) &&
+      PreviousNonComment->Type != TT_TemplateCloser &&
+      PreviousNonComment->Type != TT_BinaryOperator &&
+      Current.Type != TT_BinaryOperator && 
+      !PreviousNonComment->opensScope())
     State.Stack.back().BreakBeforeParameter = true;
 
   // If we break after { or the [ of an array initializer, we should also break
