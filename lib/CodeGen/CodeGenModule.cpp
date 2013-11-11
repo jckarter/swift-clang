@@ -1023,9 +1023,9 @@ void CodeGenModule::EmitGlobalAnnotations() {
 }
 
 llvm::Constant *CodeGenModule::EmitAnnotationString(StringRef Str) {
-  llvm::StringMap<llvm::Constant*>::iterator i = AnnotationStrings.find(Str);
-  if (i != AnnotationStrings.end())
-    return i->second;
+  llvm::Constant *&AStr = AnnotationStrings[Str];
+  if (AStr)
+    return AStr;
 
   // Not found yet, create a new global.
   llvm::Constant *s = llvm::ConstantDataArray::getString(getLLVMContext(), Str);
@@ -1033,7 +1033,7 @@ llvm::Constant *CodeGenModule::EmitAnnotationString(StringRef Str) {
     true, llvm::GlobalValue::PrivateLinkage, s, ".str");
   gv->setSection(AnnotationSection);
   gv->setUnnamedAddr(true);
-  AnnotationStrings[Str] = gv;
+  AStr = gv;
   return gv;
 }
 
