@@ -3374,6 +3374,16 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
     }
   }
 
+  // When ObjectiveC legacy runtime is in effect on MacOSX,
+  // turn on the option to do Array/Dictionary subscripting
+  // by default.
+  if (getToolChain().getTriple().getArch() == llvm::Triple::x86 &&
+      getToolChain().getTriple().isMacOSX() &&
+      !getToolChain().getTriple().isMacOSXVersionLT(10, 7) &&
+      objcRuntime.getKind() == ObjCRuntime::FragileMacOSX &&
+      objcRuntime.isNeXTFamily())
+    CmdArgs.push_back("-fobjc-subscripting-legacy-runtime");
+  
   // -fencode-extended-block-signature=1 is default.
   if (getToolChain().IsEncodeExtendedBlockSignatureDefault()) {
     CmdArgs.push_back("-fencode-extended-block-signature");

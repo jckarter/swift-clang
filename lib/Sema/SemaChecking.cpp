@@ -628,16 +628,17 @@ bool Sema::CheckARMBuiltinFunctionCall(unsigned BuiltinID, CallExpr *TheCall) {
   // instruction, range check them here.
   unsigned i = 0, l = 0, u = 0;
   switch (BuiltinID) {
-  default:
-    return false;
-#define GET_NEON_IMMEDIATE_CHECK
-#include "clang/Basic/arm_neon.inc"
-#undef GET_NEON_IMMEDIATE_CHECK
+  default: return false;
   case ARM::BI__builtin_arm_ssat: i = 1; l = 1; u = 31; break;
   case ARM::BI__builtin_arm_usat: i = 1; u = 31; break;
   case ARM::BI__builtin_arm_vcvtr_f:
   case ARM::BI__builtin_arm_vcvtr_d: i = 1; u = 1; break;
-  }
+  case ARM::BI__builtin_arm_dmb:
+  case ARM::BI__builtin_arm_dsb: l = 0; u = 15; break;
+#define GET_NEON_IMMEDIATE_CHECK
+#include "clang/Basic/arm_neon.inc"
+#undef GET_NEON_IMMEDIATE_CHECK
+  };
 
   // We can't check the value of a dependent argument.
   if (TheCall->getArg(i)->isTypeDependent() ||
