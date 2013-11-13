@@ -279,11 +279,12 @@ static void rewriteToObjCProperty(const ObjCMethodDecl *Getter,
                                   const ObjCMethodDecl *Setter,
                                   const NSAPI &NS, edit::Commit &commit,
                                   unsigned LengthOfPrefix,
-                                  bool Atomic, bool AvailabilityArgsMatch) {
+                                  bool Atomic, bool UseNsIosOnlyMacro,
+                                  bool AvailabilityArgsMatch) {
   ASTContext &Context = NS.getASTContext();
   bool LParenAdded = false;
   std::string PropertyString = "@property ";
-  if (Context.Idents.get("NS_NONATOMIC_IOSONLY").hasMacroDefinition()) {
+  if (UseNsIosOnlyMacro && Context.Idents.get("NS_NONATOMIC_IOSONLY").hasMacroDefinition()) {
     PropertyString += "(NS_NONATOMIC_IOSONLY";
     LParenAdded = true;
   } else if (!Atomic) {
@@ -1079,6 +1080,8 @@ bool ObjCMigrateASTConsumer::migrateProperty(ASTContext &Ctx,
                           LengthOfPrefix,
                           (ASTMigrateActions &
                            FrontendOptions::ObjCMT_AtomicProperty) != 0,
+                          (ASTMigrateActions &
+                           FrontendOptions::ObjCMT_NsAtomicIOSOnlyProperty) != 0,
                           AvailabilityArgsMatch);
     Editor->commit(commit);
     return true;
@@ -1091,6 +1094,8 @@ bool ObjCMigrateASTConsumer::migrateProperty(ASTContext &Ctx,
                           LengthOfPrefix,
                           (ASTMigrateActions &
                            FrontendOptions::ObjCMT_AtomicProperty) != 0,
+                          (ASTMigrateActions &
+                           FrontendOptions::ObjCMT_NsAtomicIOSOnlyProperty) != 0,
                           /*AvailabilityArgsMatch*/false);
     Editor->commit(commit);
     return true;
