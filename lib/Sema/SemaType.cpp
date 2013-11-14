@@ -4772,9 +4772,10 @@ static bool isPermittedNeonBaseType(QualType &Ty,
                         Triple.getArch() == llvm::Triple::arm64;
   if (VecKind == VectorType::NeonPolyVector) {
     if (IsPolyUnsigned) {
-      // AArch64 polynomial vectors are unsigned
+      // AArch64 polynomial vectors are unsigned and support poly64.
       return BTy->getKind() == BuiltinType::UChar ||
-             BTy->getKind() == BuiltinType::UShort;
+             BTy->getKind() == BuiltinType::UShort ||
+             BTy->getKind() == BuiltinType::ULongLong;
     } else {
       // AArch32 polynomial vector are signed.
       return BTy->getKind() == BuiltinType::SChar ||

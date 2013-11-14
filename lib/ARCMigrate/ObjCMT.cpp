@@ -29,6 +29,7 @@
 #include "clang/StaticAnalyzer/Checkers/ObjCRetainCount.h"
 #include "clang/AST/Attr.h"
 #include "llvm/ADT/SmallString.h"
+#include "llvm/Support/Path.h"
 
 using namespace clang;
 using namespace arcmt;
@@ -91,6 +92,7 @@ public:
   bool IsOutputFile;
   llvm::SmallPtrSet<ObjCProtocolDecl *, 32> ObjCProtocolDecls;
   llvm::SmallVector<const Decl *, 8> CFFunctionIBCandidates;
+  llvm::StringMap<char> WhiteListFilenames;
   
   ObjCMigrateASTConsumer(StringRef migrateDir,
                          unsigned astMigrateActions,
@@ -98,12 +100,19 @@ public:
                          FileManager &fileMgr,
                          const PPConditionalDirectiveRecord *PPRec,
                          Preprocessor &PP,
-                         bool isOutputFile = false)
+                         bool isOutputFile,
+                         ArrayRef<std::string> WhiteList)
   : MigrateDir(migrateDir),
     ASTMigrateActions(astMigrateActions),
     NSIntegerTypedefed(0), NSUIntegerTypedefed(0),
     Remapper(remapper), FileMgr(fileMgr), PPRec(PPRec), PP(PP),
-    IsOutputFile(isOutputFile) { }
+    IsOutputFile(isOutputFile) {
+
+    for (ArrayRef<std::string>::iterator
+           I = WhiteList.begin(), E = WhiteList.end(); I != E; ++I) {
+      WhiteListFilenames.GetOrCreateValue(*I);
+    }
+  }
 
 protected:
   virtual void Initialize(ASTContext &Context) {
@@ -126,6 +135,13 @@ protected:
   }
 
   virtual void HandleTranslationUnit(ASTContext &Ctx);
+
+  bool canModifyFile(StringRef Path) {
+    if (WhiteListFilenames.empty())
+      return true;
+    return WhiteListFilenames.find(llvm::sys::path::filename(Path))
+        != WhiteListFilenames.end();
+  }
 };
 
 }
@@ -152,7 +168,9 @@ ASTConsumer *ObjCMigrateAction::CreateASTConsumer(CompilerInstance &CI,
                                                        Remapper,
                                                     CompInst->getFileManager(),
                                                        PPRec,
-                                                       CompInst->getPreprocessor());
+                                                       CompInst->getPreprocessor(),
+                                                       false,
+                                                       ArrayRef<std::string>());
   ASTConsumer *Consumers[] = { MTConsumer, WrappedConsumer };
   return new MultiplexConsumer(Consumers);
 }
@@ -1683,6 +1701,8 @@ void ObjCMigrateASTConsumer::HandleTranslationUnit(ASTContext &Ctx) {
     assert(file);
     if (IsReallyASystemHeader(Ctx, file, FID))
       continue;
+    if (!canModifyFile(file->getName()))
+      continue;
     SmallString<512> newText;
     llvm::raw_svector_ostream vecOS(newText);
     buf.write(vecOS);
@@ -1822,10 +1842,40 @@ bool MigrateSourceAction::BeginInvocation(CompilerInstance &CI) {
   return true;
 }
 
+static std::vector<std::string> getWhiteListFilenames(StringRef DirPath) {
+  using namespace llvm::sys::fs;
+  using namespace llvm::sys::path;
+
+  std::vector<std::string> Filenames;
+  if (DirPath.empty() || !is_directory(DirPath))
+    return Filenames;
+  
+  llvm::error_code EC;
+  directory_iterator DI = directory_iterator(DirPath, EC);
+  directory_iterator DE;
+  for (; !EC && DI != DE; DI = DI.increment(EC)) {
+    if (is_regular_file(DI->path()))
+      Filenames.push_back(filename(DI->path()));
+  }
+
+  return Filenames;
+}
+
 ASTConsumer *MigrateSourceAction::CreateASTConsumer(CompilerInstance &CI,
                                                   StringRef InFile) {
   PPConditionalDirectiveRecord *
     PPRec = new PPConditionalDirectiveRecord(CI.getSourceManager());
+  unsigned ObjCMTAction = CI.getFrontendOpts().ObjCMTAction;
+  unsigned ObjCMTOpts = ObjCMTAction;
+  // These are companion flags, they do not enable transformations.
+  ObjCMTOpts &= ~(FrontendOptions::ObjCMT_AtomicProperty |
+                  FrontendOptions::ObjCMT_NsAtomicIOSOnlyProperty);
+  if (ObjCMTOpts == FrontendOptions::ObjCMT_None) {
+    // If no specific option was given, enable literals+subscripting transforms
+    // by default.
+    ObjCMTAction |= FrontendOptions::ObjCMT_Literals |
+                    FrontendOptions::ObjCMT_Subscripting;
+  }
   CI.getPreprocessor().addPPCallbacks(PPRec);
   if (CI.getFrontendOpts().XCTMigrate) {
     XCMTPPCallbacks *XCTMTPP = new XCMTPPCallbacks();
@@ -1835,11 +1885,14 @@ ASTConsumer *MigrateSourceAction::CreateASTConsumer(CompilerInstance &CI,
                                      CI.getFileManager(),
                                      PPRec, *XCTMTPP);
   }
+  std::vector<std::string> WhiteList =
+    getWhiteListFilenames(CI.getFrontendOpts().ObjCMTWhiteListPath);
   return new ObjCMigrateASTConsumer(CI.getFrontendOpts().OutputFile,
-                                    FrontendOptions::ObjCMT_MigrateAll,
+                                    ObjCMTAction,
                                     Remapper,
                                     CI.getFileManager(),
                                     PPRec,
                                     CI.getPreprocessor(),
-                                    /*isOutputFile=*/true); 
+                                    /*isOutputFile=*/true,
+                                    WhiteList);
 }
