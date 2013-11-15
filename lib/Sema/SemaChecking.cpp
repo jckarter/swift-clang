@@ -706,7 +706,7 @@ bool Sema::CheckARM64BuiltinFunctionCall(unsigned BuiltinID,
       Arg = ICE->getSubExpr();
     ExprResult RHS = DefaultFunctionArrayLvalueConversion(Arg);
     QualType RHSTy = RHS.get()->getType();
-    QualType EltTy = getNeonEltType(NeonTypeFlags(TV), Context);
+    QualType EltTy = getNeonEltType(NeonTypeFlags(TV), Context, false);
     if (HasConstPtr)
       EltTy = EltTy.withConst();
     QualType LHSTy = Context.getPointerType(EltTy);
