@@ -2449,6 +2449,8 @@ def err_objc_bridge_not_pointert_to_struct : Error<
   "'objc_bridge' attribute must be applied to a pointer to struct type">;
 def err_objc_bridged_not_interface : Error<
   "CF object of type %0 is bridged to '%1', which is not an Objective-C class">;
+def warn_objc_invalid_bridge : Warning<
+  "%0 bridges to %1, not %2">, InGroup<ObjCBridge>;
 
 // Function Parameter Semantic Analysis.
 def err_param_with_void_type : Error<"argument may not have 'void' type">;
@@ -5961,8 +5963,9 @@ def err_operator_new_delete_declared_in_namespace : Error<
   "%0 cannot be declared inside a namespace">;
 def err_operator_new_delete_declared_static : Error<
   "%0 cannot be declared static in global scope">;
-def err_operator_new_delete_declared_inline : Error<
-  "replacement function %0 cannot be declared 'inline'">;
+def ext_operator_new_delete_declared_inline : ExtWarn<
+  "replacement function %0 cannot be declared 'inline'">,
+  InGroup<DiagGroup<"inline-new-delete">>;
 def err_operator_new_delete_invalid_result_type : Error<
   "%0 must return type %1">;
 def err_operator_new_delete_dependent_result_type : Error<
