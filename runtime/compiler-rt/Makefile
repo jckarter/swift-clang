@@ -100,7 +100,8 @@ COMPILERRT_MAKE_FLAGS := SDKROOT=$(ACTIVE_SDK_PATH)
 endif
 IOSSIM_SDK_PATH := $(shell xcrun --show-sdk-path -sdk iphonesimulator 2> /dev/null)
 ifneq ($(IOSSIM_SDK_PATH),)
-RuntimeLibrary.darwin.Configs += asan_iossim_dynamic.dylib
+#	Apple Internal: Disable building asan libraries. <rdar://12423266>
+# RuntimeLibrary.darwin.Configs += asan_iossim_dynamic.dylib
 endif
 
 endif
