@@ -78,12 +78,16 @@ ifeq ($(shell test -d $(COMPILERRT_SRC_ROOT) && echo OK),OK)
 # support.
 RuntimeDirs :=
 ifeq ($(OS),Darwin)
-RuntimeDirs += darwin
+RuntimeDirs += darwin darwin_embedded
 RuntimeLibrary.darwin.Configs := \
 	eprintf.a 10.4.a osx.a ios.a cc_kext.a cc_kext_ios5.a \
 	profile_osx.a profile_ios.a
 #	Apple Internal: Disable building asan libraries. <rdar://12423266>
 #	asan_osx_dynamic.dylib ubsan_osx.a
+	profile_osx.a profile_ios.a \
+#	ubsan_osx.a
+RuntimeLibrary.darwin_embedded.Configs := \
+	soft_static.a hard_static.a soft_pic.a hard_pic.a
 
 # Support building compiler-rt with relocatable SDKs.
 #
