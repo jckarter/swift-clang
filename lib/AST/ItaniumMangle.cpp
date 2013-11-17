@@ -2253,6 +2253,9 @@ void CXXNameMangler::mangleAArch64NeonVectorType(const VectorType *T) {
     case BuiltinType::UShort:
       EltName = "Poly16";
       break;
+    case BuiltinType::ULongLong:
+      EltName = "Poly64";
+      break;
     default:
       llvm_unreachable("unexpected Neon polynomial vector element type");
     }
