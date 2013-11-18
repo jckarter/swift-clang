@@ -2377,8 +2377,7 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
   OptSpecifier StrictAliasingAliasOption = OFastEnabled ? options::OPT_Ofast :
     options::OPT_fstrict_aliasing;
   if (!Args.hasFlag(options::OPT_fstrict_aliasing, StrictAliasingAliasOption,
-                    options::OPT_fno_strict_aliasing,
-                    getToolChain().IsStrictAliasingDefault()))
+                    options::OPT_fno_strict_aliasing, true))
     CmdArgs.push_back("-relaxed-aliasing");
   if (!Args.hasFlag(options::OPT_fstruct_path_tbaa,
                     options::OPT_fno_struct_path_tbaa))
@@ -3135,6 +3134,12 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
     if (A->getOption().matches(options::OPT_fno_strict_overflow))
       CmdArgs.push_back("-fwrapv");
   }
+
+  if (Arg *A = Args.getLastArg(options::OPT_freroll_loops,
+                               options::OPT_fno_reroll_loops))
+    if (A->getOption().matches(options::OPT_freroll_loops))
+      CmdArgs.push_back("-freroll-loops");
+
   Args.AddLastArg(CmdArgs, options::OPT_fwritable_strings);
   Args.AddLastArg(CmdArgs, options::OPT_funroll_loops,
                   options::OPT_fno_unroll_loops);
