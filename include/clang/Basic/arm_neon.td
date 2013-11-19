@@ -129,6 +129,7 @@ class Inst <string n, string p, string t, Op o> {
   bit isScalarShift = 0;
   bit isVCVT_N = 0;
   bit isA64 = 0;
+  bit isCrypto = 0;
 
   // Certain intrinsics have different names than their representative
   // instructions. This field allows us to handle this correctly when we
@@ -525,7 +526,7 @@ let isA64 = 1 in {
 
 ////////////////////////////////////////////////////////////////////////////////
 // Load/Store
-// With additional QUl, Ql, Qd, Pl, QPl type.
+// With additional QUl, Ql, d, Qd, Pl, QPl type.
 def LD1 : WInst<"vld1", "dc",
                 "QUcQUsQUiQUlQcQsQiQlQhQfQdQPcQPsUcUsUiUlcsilhfdPcPsPlQPl">;
 def LD2 : WInst<"vld2", "2c",
@@ -556,6 +557,33 @@ def ST1_X3 : WInst<"vst1_x3", "vp3",
                    "QUcQUsQUiQUlQcQsQiQlQhQfQdQPcQPsQPlUcUsUiUlcsilhfdPcPsPl">;
 def ST1_X4 : WInst<"vst1_x4", "vp4",
                    "QUcQUsQUiQUlQcQsQiQlQhQfQdQPcQPsQPlUcUsUiUlcsilhfdPcPsPl">;
+
+// With additional QUl, Ql, d, Qd, Pl, QPl type.
+def LD1_LANE : WInst<"vld1_lane", "dcdi",
+                    "QUcQUsQUiQUlQcQsQiQlQhQfQdQPcQPsQPlUcUsUiUlcsilhfdPcPsPl">;
+def LD2_LANE : WInst<"vld2_lane", "2c2i",
+                    "QUcQUsQUiQUlQcQsQiQlQhQfQdQPcQPsQPlUcUsUiUlcsilhfdPcPsPl">;
+def LD3_LANE : WInst<"vld3_lane", "3c3i",
+                    "QUcQUsQUiQUlQcQsQiQlQhQfQdQPcQPsQPlUcUsUiUlcsilhfdPcPsPl">;
+def LD4_LANE : WInst<"vld4_lane", "4c4i",
+                    "QUcQUsQUiQUlQcQsQiQlQhQfQdQPcQPsQPlUcUsUiUlcsilhfdPcPsPl">;
+def ST1_LANE : WInst<"vst1_lane", "vpdi",
+                    "QUcQUsQUiQUlQcQsQiQlQhQfQdQPcQPsQPlUcUsUiUlcsilhfdPcPsPl">;
+def ST2_LANE : WInst<"vst2_lane", "vp2i",
+                    "QUcQUsQUiQUlQcQsQiQlQhQfQdQPcQPsQPlUcUsUiUlcsilhfdPcPsPl">;
+def ST3_LANE : WInst<"vst3_lane", "vp3i",
+                    "QUcQUsQUiQUlQcQsQiQlQhQfQdQPcQPsQPlUcUsUiUlcsilhfdPcPsPl">;
+def ST4_LANE : WInst<"vst4_lane", "vp4i",
+                    "QUcQUsQUiQUlQcQsQiQlQhQfQdQPcQPsQPlUcUsUiUlcsilhfdPcPsPl">;
+
+def LD1_DUP  : WInst<"vld1_dup", "dc",
+                    "QUcQUsQUiQUlQcQsQiQlQhQfQdQPcQPsQPlUcUsUiUlcsilhfdPcPsPl">;
+def LD2_DUP  : WInst<"vld2_dup", "2c",
+                    "QUcQUsQUiQUlQcQsQiQlQhQfQdQPcQPsQPlUcUsUiUlcsilhfdPcPsPl">;
+def LD3_DUP  : WInst<"vld3_dup", "3c",
+                    "QUcQUsQUiQUlQcQsQiQlQhQfQdQPcQPsQPlUcUsUiUlcsilhfdPcPsPl">;
+def LD4_DUP  : WInst<"vld4_dup", "4c",
+                    "QUcQUsQUiQUlQcQsQiQlQhQfQdQPcQPsQPlUcUsUiUlcsilhfdPcPsPl">;
 
 ////////////////////////////////////////////////////////////////////////////////
 // Addition
@@ -907,6 +935,7 @@ def VEXT_A64 : WInst<"vext", "dddi",
 
 ////////////////////////////////////////////////////////////////////////////////
 // Crypto
+let isCrypto = 1 in {
 def AESE : SInst<"vaese", "ddd", "QUc">;
 def AESD : SInst<"vaesd", "ddd", "QUc">;
 def AESMC : SInst<"vaesmc", "dd", "QUc">;
@@ -923,6 +952,7 @@ def SHA1SU0 : SInst<"vsha1su0", "dddd", "QUi">;
 def SHA256H : SInst<"vsha256h", "dddd", "QUi">;
 def SHA256H2 : SInst<"vsha256h2", "dddd", "QUi">;
 def SHA256SU1 : SInst<"vsha256su1", "dddd", "QUi">;
+}
 
 ////////////////////////////////////////////////////////////////////////////////
 // Permutation
@@ -975,6 +1005,13 @@ def SCALAR_QADD   : SInst<"vqadd", "sss", "ScSsSiSlSUcSUsSUiSUl">;
 def SCALAR_SUB : SInst<"vsub", "sss",  "SlSUl">;
 // Scalar  Saturating Sub
 def SCALAR_QSUB   : SInst<"vqsub", "sss", "ScSsSiSlSUcSUsSUiSUl">;
+
+let InstName = "vmov" in {
+def VGET_HIGH_A64 : NoTestOpInst<"vget_high", "dk", "csilhfdUcUsUiUlPcPsPl",
+                                 OP_HI>;
+def VGET_LOW_A64  : NoTestOpInst<"vget_low", "dk", "csilhfdUcUsUiUlPcPsPl",
+                                 OP_LO>;
+}
 
 ////////////////////////////////////////////////////////////////////////////////
 // Scalar Shift

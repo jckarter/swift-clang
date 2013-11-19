@@ -3165,15 +3165,26 @@ diagnoseObjCARCConversion(Sema &S, SourceRange castRange,
     << castRange << castExpr->getSourceRange();
 }
 
+static inline ObjCBridgeAttr *getObjCBridgeAttr(const TypedefType *TD) {
+  TypedefNameDecl *TDNDecl = TD->getDecl();
+  QualType QT = TDNDecl->getUnderlyingType();
+  if (QT->isPointerType()) {
+    QT = QT->getPointeeType();
+    if (const RecordType *RT = QT->getAs<RecordType>())
+      if (RecordDecl *RD = RT->getDecl())
+        if (RD->hasAttr<ObjCBridgeAttr>())
+          return RD->getAttr<ObjCBridgeAttr>();
+  }
+  return 0;
+}
+
 static bool CheckObjCBridgeNSCast(Sema &S, QualType castType, Expr *castExpr) {
   QualType T = castExpr->getType();
   while (const TypedefType *TD = dyn_cast<TypedefType>(T.getTypePtr())) {
     TypedefNameDecl *TDNDecl = TD->getDecl();
-    if (TDNDecl->hasAttr<ObjCBridgeAttr>()) {
-      ObjCBridgeAttr *ObjCBAttr = TDNDecl->getAttr<ObjCBridgeAttr>();
-      IdentifierInfo *Parm = ObjCBAttr->getBridgedType();
-      NamedDecl *Target = 0;
-      if (Parm && S.getLangOpts().ObjC1) {
+    if (ObjCBridgeAttr *ObjCBAttr = getObjCBridgeAttr(TD)) {
+      if (IdentifierInfo *Parm = ObjCBAttr->getBridgedType()) {
+        NamedDecl *Target = 0;
         // Check for an existing type with this name.
         LookupResult R(S, DeclarationName(Parm), SourceLocation(),
                        Sema::LookupOrdinaryName);
@@ -3188,11 +3199,11 @@ static bool CheckObjCBridgeNSCast(Sema &S, QualType castType, Expr *castExpr) {
               if ((CastClass == ExprClass) || (CastClass && ExprClass->isSuperClassOf(CastClass)))
                 return true;
               S.Diag(castExpr->getLocStart(), diag::warn_objc_invalid_bridge)
-                << TDNDecl->getName() << Target->getName() << CastClass->getName();
+                << T << Target->getName() << castType->getPointeeType();
               return true;
             } else {
               S.Diag(castExpr->getLocStart(), diag::warn_objc_invalid_bridge)
-                << TDNDecl->getName() << Target->getName() << castType;
+                << T << Target->getName() << castType;
               return true;
            }
           }
@@ -3215,11 +3226,9 @@ static bool CheckObjCBridgeCFCast(Sema &S, QualType castType, Expr *castExpr) {
   QualType T = castType;
   while (const TypedefType *TD = dyn_cast<TypedefType>(T.getTypePtr())) {
     TypedefNameDecl *TDNDecl = TD->getDecl();
-    if (TDNDecl->hasAttr<ObjCBridgeAttr>()) {
-      ObjCBridgeAttr *ObjCBAttr = TDNDecl->getAttr<ObjCBridgeAttr>();
-      IdentifierInfo *Parm = ObjCBAttr->getBridgedType();
-      NamedDecl *Target = 0;
-      if (Parm && S.getLangOpts().ObjC1) {
+    if (ObjCBridgeAttr *ObjCBAttr = getObjCBridgeAttr(TD)) {
+      if (IdentifierInfo *Parm = ObjCBAttr->getBridgedType()) {
+        NamedDecl *Target = 0;
         // Check for an existing type with this name.
         LookupResult R(S, DeclarationName(Parm), SourceLocation(),
                        Sema::LookupOrdinaryName);
@@ -3234,7 +3243,7 @@ static bool CheckObjCBridgeCFCast(Sema &S, QualType castType, Expr *castExpr) {
               if ((CastClass == ExprClass) || (ExprClass && CastClass->isSuperClassOf(ExprClass)))
                 return true;
               S.Diag(castExpr->getLocStart(), diag::warn_objc_invalid_bridge_to_cf)
-                << ExprClass->getName() << TDNDecl->getName();
+                << castExpr->getType()->getPointeeType() << T;
               S.Diag(TDNDecl->getLocStart(), diag::note_declared_at);
               return true;
             } else {
