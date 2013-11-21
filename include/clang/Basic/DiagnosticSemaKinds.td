@@ -2433,8 +2433,8 @@ def err_ns_bridged_not_interface : Error<
   "parameter of 'ns_bridged' attribute does not name an Objective-C class">;
   
 // objc_bridge attribute diagnostics.
-def err_objc_bridge_not_id : Error<
-  "parameter of 'objc_bridge' attribute must be a single name of an Objective-C class">;
+def err_objc_attr_not_id : Error<
+  "parameter of %0 attribute must be a single name of an Objective-C %select{class|protocol}1">;
 def err_objc_cf_bridged_not_interface : Error<
   "CF object of type %0 is bridged to '%1', which is not an Objective-C class">;
 def err_objc_ns_bridged_invalid_cfobject : Error<
@@ -3520,6 +3520,8 @@ def note_declaration_not_a_prototype : Note<
 def warn_missing_variable_declarations : Warning<
   "no previous extern declaration for non-static variable %0">,
   InGroup<DiagGroup<"missing-variable-declarations">>, DefaultIgnore;
+def err_static_data_member_reinitialization :
+  Error<"static data member %0 already has an initializer">;
 def err_redefinition : Error<"redefinition of %0">;
 def err_alias_after_tentative :
   Error<"alias definition of %0 after tentative definition">;
