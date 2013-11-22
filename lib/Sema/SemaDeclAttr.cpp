@@ -4348,9 +4348,7 @@ static void handleObjCBridgeAttr(Sema &S, Scope *Sc, Decl *D,
     return;
   }
 
-  IdentifierLoc *Parm = 0;
-  if (Attr.getNumArgs() == 1)
-    Parm = Attr.isArgIdent(0) ? Attr.getArgAsIdent(0) : 0;
+  IdentifierLoc * Parm = Attr.isArgIdent(0) ? Attr.getArgAsIdent(0) : 0;
 
   if (!Parm) {
     S.Diag(D->getLocStart(), diag::err_objc_attr_not_id) << Attr.getName() << 0;
@@ -4360,6 +4358,28 @@ static void handleObjCBridgeAttr(Sema &S, Scope *Sc, Decl *D,
   D->addAttr(::new (S.Context)
              ObjCBridgeAttr(Attr.getRange(), S.Context, Parm->Ident,
                            Attr.getAttributeSpellingListIndex()));
+}
+
+static void handleObjCBridgeMutableAttr(Sema &S, Scope *Sc, Decl *D,
+                                        const AttributeList &Attr) {
+  if (!isa<RecordDecl>(D)) {
+    S.Diag(Attr.getLoc(), diag::err_attribute_wrong_decl_type)
+    << Attr.getName()
+    << (S.getLangOpts().CPlusPlus ? ExpectedStructOrUnionOrClass
+        : ExpectedStructOrUnion);
+    return;
+  }
+  
+  IdentifierLoc * Parm = Attr.isArgIdent(0) ? Attr.getArgAsIdent(0) : 0;
+  
+  if (!Parm) {
+    S.Diag(D->getLocStart(), diag::err_objc_attr_not_id) << Attr.getName() << 0;
+    return;
+  }
+  
+  D->addAttr(::new (S.Context)
+             ObjCBridgeMutableAttr(Attr.getRange(), S.Context, Parm->Ident,
+                            Attr.getAttributeSpellingListIndex()));
 }
 
 static void handleObjCOwnershipAttr(Sema &S, Decl *D,
@@ -4651,6 +4671,9 @@ static void ProcessDeclAttribute(Sema &S, Scope *scope, Decl *D,
       
   case AttributeList::AT_ObjCBridge:
     handleObjCBridgeAttr(S, scope, D, Attr); break;
+      
+  case AttributeList::AT_ObjCBridgeMutable:
+    handleObjCBridgeMutableAttr(S, scope, D, Attr); break;
 
   case AttributeList::AT_CFAuditedTransfer:
   case AttributeList::AT_CFUnknownTransfer:
