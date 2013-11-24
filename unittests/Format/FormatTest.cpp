@@ -842,6 +842,7 @@ TEST_F(FormatTest, RemovesTrailingWhitespaceOfComments) {
 
 TEST_F(FormatTest, UnderstandsBlockComments) {
   verifyFormat("f(/*noSpaceAfterParameterNamingComment=*/true);");
+  verifyFormat("void f() { g(/*aaa=*/x, /*bbb=*/!y); }");
   EXPECT_EQ(
       "f(aaaaaaaaaaaaaaaaaaaaaaaaa, /* Trailing comment for aa... */\n"
       "  bbbbbbbbbbbbbbbbbbbbbbbbb);",
@@ -1536,6 +1537,10 @@ TEST_F(FormatTest, UnderstandsAccessSpecifiers) {
                      " private:\n"
                      "  void f() {}\n"
                      "};");
+  verifyFormat("class A {\n"
+               "public slots:\n"
+               "  void f() {}\n"
+               "};");
 }
 
 TEST_F(FormatTest, SeparatesLogicalBlocks) {
@@ -2720,6 +2725,10 @@ TEST_F(FormatTest, ExpressionIndentationBreakingBeforeOperators) {
       "    + sizeof(int32_t) // Offset of CU in the .debug_info section\n"
       "    + sizeof(int8_t)  // Pointer Size (in bytes)\n"
       "    + sizeof(int8_t); // Segment Size (in bytes)");
+
+  verifyFormat("return boost::fusion::at_c<0>(iiii).second\n"
+               "       == boost::fusion::at_c<1>(iiii).second;",
+               Style);
 }
 
 TEST_F(FormatTest, ConstructorInitializers) {
@@ -5751,6 +5760,14 @@ TEST_F(FormatTest, ObjCArrayLiterals) {
                "  @\"aaaaaaaaaaaaaaaaa\",\n"
                "  @\"aaaaaaaaaaaaaaaaa\",\n"
                "];");
+  verifyFormat(
+      "- (NSAttributedString *)attributedStringForSegment:(NSUInteger)segment\n"
+      "                                             index:(NSUInteger)index\n"
+      "                                nonDigitAttributes:\n"
+      "                                    (NSDictionary *)noDigitAttributes;");
+  verifyFormat(
+      "[someFunction someLooooooooooooongParameter:\n"
+      "                  @[ NSBundle.mainBundle.infoDictionary[@\"a\"] ]];");
 }
 
 TEST_F(FormatTest, ReformatRegionAdjustsIndent) {

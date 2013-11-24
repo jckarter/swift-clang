@@ -1630,7 +1630,7 @@ Tool *Generic_GCC::getTool(Action::ActionClass AC) const {
 }
 
 Tool *Generic_GCC::buildAssembler() const {
-  return new tools::gcc::Assemble(*this);
+  return new tools::gnutools::Assemble(*this);
 }
 
 Tool *Generic_GCC::buildLinker() const {

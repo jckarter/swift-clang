@@ -786,18 +786,30 @@ static StringRef getARMFloatABI(const Driver &D,
 
 static void getARMTargetFeatures(const Driver &D, const llvm::Triple &Triple,
                                  const ArgList &Args,
-                                 std::vector<const char *> &Features) {
+                                 std::vector<const char *> &Features,
+                                 bool ForAS) {
   StringRef FloatABI = getARMFloatABI(D, Args, Triple);
-  // FIXME: Note, this is a hack, the LLVM backend doesn't actually use these
-  // yet (it uses the -mfloat-abi and -msoft-float options), and it is
-  // stripped out by the ARM target.
-  // Use software floating point operations?
-  if (FloatABI == "soft")
-    Features.push_back("+soft-float");
+  if (!ForAS) {
+    // FIXME: Note, this is a hack, the LLVM backend doesn't actually use these
+    // yet (it uses the -mfloat-abi and -msoft-float options), and it is
+    // stripped out by the ARM target. We should probably pass this a new
+    // -target-option, which is handled by the -cc1/-cc1as invocation.
+    //
+    // FIXME2:  For consistency, it would be ideal if we set up the target
+    // machine state the same when using the frontend or the assembler. We don't
+    // currently do that for the assembler, we pass the options directly to the
+    // backend and never even instantiate the frontend TargetInfo. If we did,
+    // and used its handleTargetFeatures hook, then we could ensure the
+    // assembler and the frontend behave the same.
 
-  // Use software floating point argument passing?
-  if (FloatABI != "hard")
-    Features.push_back("+soft-float-abi");
+    // Use software floating point operations?
+    if (FloatABI == "soft")
+      Features.push_back("+soft-float");
+
+    // Use software floating point argument passing?
+    if (FloatABI != "hard")
+      Features.push_back("+soft-float-abi");
+  }
 
   // Honor -mfpu=.
   if (const Arg *A = Args.getLastArg(options::OPT_mfpu_EQ))
@@ -1562,7 +1574,8 @@ static void getAArch64TargetFeatures(const Driver &D, const ArgList &Args,
 }
 
 static void getTargetFeatures(const Driver &D, const llvm::Triple &Triple,
-                              const ArgList &Args, ArgStringList &CmdArgs) {
+                              const ArgList &Args, ArgStringList &CmdArgs,
+                              bool ForAS) {
   std::vector<const char *> Features;
   switch (Triple.getArch()) {
   default:
@@ -1576,7 +1589,7 @@ static void getTargetFeatures(const Driver &D, const llvm::Triple &Triple,
 
   case llvm::Triple::arm:
   case llvm::Triple::thumb:
-    getARMTargetFeatures(D, Triple, Args, Features);
+    getARMTargetFeatures(D, Triple, Args, Features, ForAS);
     break;
 
   case llvm::Triple::ppc:
@@ -2600,7 +2613,7 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
   }
 
   // Add the target features
-  getTargetFeatures(D, ETriple, Args, CmdArgs);
+  getTargetFeatures(D, ETriple, Args, CmdArgs, false);
 
   // Add target specific flags.
   switch(getToolChain().getArch()) {
@@ -4117,7 +4130,7 @@ void ClangAs::ConstructJob(Compilation &C, const JobAction &JA,
 
   // Add the target features
   const Driver &D = getToolChain().getDriver();
-  getTargetFeatures(D, Triple, Args, CmdArgs);
+  getTargetFeatures(D, Triple, Args, CmdArgs, true);
 
   // Ignore explicit -force_cpusubtype_ALL option.
   (void) Args.hasArg(options::OPT_force__cpusubtype__ALL);
@@ -4347,11 +4360,6 @@ void gcc::Compile::RenderExtraToolArgs(const JobAction &JA,
 
     CmdArgs.push_back("-S");
   }
-}
-
-void gcc::Assemble::RenderExtraToolArgs(const JobAction &JA,
-                                        ArgStringList &CmdArgs) const {
-  CmdArgs.push_back("-c");
 }
 
 void gcc::Link::RenderExtraToolArgs(const JobAction &JA,
