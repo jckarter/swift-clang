@@ -61,6 +61,14 @@ enum AttributeDeclKind {
   ExpectedType
 };
 
+namespace AttributeLangSupport {
+  enum {
+    C,
+    Cpp,
+    ObjC
+  };
+}
+
 //===----------------------------------------------------------------------===//
 //  Helper functions
 //===----------------------------------------------------------------------===//
@@ -1846,7 +1854,8 @@ static void handleNoCommonAttr(Sema &S, Decl *D, const AttributeList &Attr) {
 
 static void handleCommonAttr(Sema &S, Decl *D, const AttributeList &Attr) {
   if (S.LangOpts.CPlusPlus) {
-    S.Diag(Attr.getLoc(), diag::err_common_not_supported_cplusplus);
+    S.Diag(Attr.getLoc(), diag::err_attribute_not_supported_in_lang)
+      << Attr.getName() << AttributeLangSupport::Cpp;
     return;
   }
 
@@ -2116,6 +2125,11 @@ static void handleAttrWithMessage(Sema &S, Decl *D,
 
 static void handleArcWeakrefUnavailableAttr(Sema &S, Decl *D, 
                                             const AttributeList &Attr) {
+  if (!isa<ObjCInterfaceDecl>(D)) {
+    S.Diag(Attr.getLoc(), diag::err_attribute_wrong_decl_type)
+      << Attr.getName() << ExpectedObjectiveCInterface;
+    return;
+  }
   D->addAttr(::new (S.Context)
              ArcWeakrefUnavailableAttr(Attr.getRange(), S.Context,
                                        Attr.getAttributeSpellingListIndex()));
@@ -2158,7 +2172,8 @@ static void handleObjCSuppresProtocolAttr(Sema &S, Decl *D,
 static void handleObjCRequiresPropertyDefsAttr(Sema &S, Decl *D,
                                                const AttributeList &Attr) {
   if (!isa<ObjCInterfaceDecl>(D)) {
-    S.Diag(Attr.getLoc(), diag::err_suppress_autosynthesis);
+    S.Diag(Attr.getLoc(), diag::err_attribute_wrong_decl_type)
+      << Attr.getName() << ExpectedObjectiveCInterface;
     return;
   }
   
@@ -4473,8 +4488,20 @@ static bool checkMicrosoftExt(Sema &S, const AttributeList &Attr,
 }
 
 static void handleUuidAttr(Sema &S, Decl *D, const AttributeList &Attr) {
+  if (!S.LangOpts.CPlusPlus) {
+    S.Diag(Attr.getLoc(), diag::err_attribute_not_supported_in_lang)
+      << Attr.getName() << AttributeLangSupport::C;
+    return;
+  }
+
   if (!checkMicrosoftExt(S, Attr, S.LangOpts.Borland))
     return;
+
+  if (!isa<CXXRecordDecl>(D)) {
+    S.Diag(Attr.getLoc(), diag::warn_attribute_wrong_decl_type)
+      << Attr.getName() << ExpectedClass;
+    return;
+  }
 
   StringRef StrRef;
   SourceLocation LiteralLoc;
