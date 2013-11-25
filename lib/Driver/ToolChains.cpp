@@ -956,12 +956,6 @@ void Darwin::CheckObjCARC() const {
   getDriver().Diag(diag::err_arc_unsupported_on_toolchain);
 }
 
-std::string
-Darwin_Generic_GCC::ComputeEffectiveClangTriple(const ArgList &Args,
-                                                types::ID InputType) const {
-  return ComputeLLVMTriple(Args, InputType);
-}
-
 /// Generic_GCC - A tool chain using the 'gcc' command to perform
 /// all subcommands; this relies on gcc translating the majority of
 /// command line options.
@@ -1616,10 +1610,6 @@ Tool *Generic_GCC::getTool(Action::ActionClass AC) const {
     if (!Preprocess)
       Preprocess.reset(new tools::gcc::Preprocess(*this));
     return Preprocess.get();
-  case Action::PrecompileJobClass:
-    if (!Precompile)
-      Precompile.reset(new tools::gcc::Precompile(*this));
-    return Precompile.get();
   case Action::CompileJobClass:
     if (!Compile)
       Compile.reset(new tools::gcc::Compile(*this));

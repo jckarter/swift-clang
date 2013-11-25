@@ -183,7 +183,6 @@ protected:
 
 private:
   mutable OwningPtr<tools::gcc::Preprocess> Preprocess;
-  mutable OwningPtr<tools::gcc::Precompile> Precompile;
   mutable OwningPtr<tools::gcc::Compile> Compile;
 };
 
@@ -407,19 +406,6 @@ public:
   virtual void AddLinkARCArgs(const llvm::opt::ArgList &Args,
                               llvm::opt::ArgStringList &CmdArgs) const;
   /// }
-};
-
-/// Darwin_Generic_GCC - Generic Darwin tool chain using gcc.
-class LLVM_LIBRARY_VISIBILITY Darwin_Generic_GCC : public Generic_GCC {
-public:
-  Darwin_Generic_GCC(const Driver &D, const llvm::Triple &Triple,
-                     const llvm::opt::ArgList &Args)
-      : Generic_GCC(D, Triple, Args) {}
-
-  std::string ComputeEffectiveClangTriple(const llvm::opt::ArgList &Args,
-                                          types::ID InputType) const;
-
-  virtual bool isPICDefault() const { return false; }
 };
 
 class LLVM_LIBRARY_VISIBILITY Generic_ELF : public Generic_GCC {
