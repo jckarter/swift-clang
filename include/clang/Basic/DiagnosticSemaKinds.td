@@ -2299,6 +2299,8 @@ def note_function_to_bool_call : Note<
 def warn_cast_align : Warning<
   "cast from %0 to %1 increases required alignment from %2 to %3">,
   InGroup<CastAlign>, DefaultIgnore;
+def warn_old_style_cast : Warning<
+  "use of old-style cast">, InGroup<OldStyleCast>, DefaultIgnore;
 
 // Separate between casts to void* and non-void* pointers.
 // Some APIs use (abuse) void* for something like a user context,
@@ -2405,8 +2407,6 @@ def warn_iboutletcollection_property_assign : Warning<
   "IBOutletCollection properties should be copy/strong and not assign">,
   InGroup<ObjCInvalidIBOutletProperty>;
   
-def err_attribute_overloadable_not_function : Error<
-  "'overloadable' attribute can only be applied to a function">;
 def err_attribute_overloadable_missing : Error<
   "%select{overloaded function|redeclaration of}0 %1 must have the "
   "'overloadable' attribute">;
