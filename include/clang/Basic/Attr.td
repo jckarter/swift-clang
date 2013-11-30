@@ -37,6 +37,15 @@ def NormalVar : SubsetSubject<Var,
 def NonBitField : SubsetSubject<Field,
                                 [{!S->isBitField()}]>;
 
+def ObjCInstanceMethod : SubsetSubject<ObjCMethod,
+                                       [{S->isInstanceMethod()}]>;
+
+def Struct : SubsetSubject<Record,
+                           [{!S->isUnion()}]>;
+
+def TLSVar : SubsetSubject<Var,
+                           [{S->getTLSKind() != 0}]>;
+
 // A single argument to an attribute
 class Argument<string name, bit optional> {
   string Name = name;
@@ -214,7 +223,7 @@ def AlwaysInline : InheritableAttr {
 
 def TLSModel : InheritableAttr {
   let Spellings = [GNU<"tls_model">, CXX11<"gnu", "tls_model">];
-  let Subjects = SubjectList<[Var], ErrorDiag, "ExpectedTLSVar">;
+  let Subjects = SubjectList<[TLSVar], ErrorDiag, "ExpectedTLSVar">;
   let Args = [StringArgument<"Model">];
 }
 
@@ -451,7 +460,8 @@ def Hot : InheritableAttr {
 
 def IBAction : InheritableAttr {
   let Spellings = [GNU<"ibaction">];
-//  let Subjects = [ObjCMethod];
+  let Subjects = SubjectList<[ObjCInstanceMethod], WarnDiag,
+                             "ExpectedObjCInstanceMethod">;
 }
 
 def IBOutlet : InheritableAttr {
@@ -570,7 +580,7 @@ def NoThrow : InheritableAttr {
 
 def NSBridged : InheritableAttr {
   let Spellings = [GNU<"ns_bridged">];
-//  let Subjects = SubjectList<[Record], ErrorDiag>;
+  let Subjects = SubjectList<[Struct], ErrorDiag, "ExpectedStruct">;
   let Args = [IdentifierArgument<"BridgedType", 1>];
 }
 

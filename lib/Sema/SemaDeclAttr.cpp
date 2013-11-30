@@ -1119,16 +1119,8 @@ static void handlePackedAttr(Sema &S, Decl *D, const AttributeList &Attr) {
 }
 
 static void handleIBAction(Sema &S, Decl *D, const AttributeList &Attr) {
-  // The IBAction attributes only apply to instance methods.
-  if (ObjCMethodDecl *MD = dyn_cast<ObjCMethodDecl>(D))
-    if (MD->isInstanceMethod()) {
-      D->addAttr(::new (S.Context)
-                 IBActionAttr(Attr.getRange(), S.Context,
-                              Attr.getAttributeSpellingListIndex()));
-      return;
-    }
-
-  S.Diag(Attr.getLoc(), diag::warn_attribute_ibaction) << Attr.getName();
+  D->addAttr(::new (S.Context) IBActionAttr(Attr.getRange(), S.Context,
+                                        Attr.getAttributeSpellingListIndex()));
 }
 
 static bool checkIBOutletCommon(Sema &S, Decl *D, const AttributeList &Attr) {
@@ -1552,12 +1544,6 @@ static void handleTLSModelAttr(Sema &S, Decl *D,
   // Check that it is a string.
   if (!S.checkStringLiteralArgumentAttr(Attr, 0, Model, &LiteralLoc))
     return;
-
-  if (!cast<VarDecl>(D)->getTLSKind()) {
-    S.Diag(Attr.getLoc(), diag::err_attribute_wrong_decl_type)
-      << Attr.getName() << ExpectedTLSVar;
-    return;
-  }
 
   // Check that the value.
   if (Model != "global-dynamic" && Model != "local-dynamic"
@@ -3831,12 +3817,6 @@ static void handleCFTransferAttr(Sema &S, Decl *D, const AttributeList &A) {
 
 static void handleNSBridgedAttr(Sema &S, Scope *Sc, Decl *D,
                                 const AttributeList &Attr) {
-  RecordDecl *RD = dyn_cast<RecordDecl>(D);
-  if (!RD || RD->isUnion()) {
-    S.Diag(D->getLocStart(), diag::err_attribute_wrong_decl_type)
-      << Attr.getRange() << Attr.getName() << ExpectedStruct;
-  }
-
   IdentifierLoc *Parm = Attr.isArgIdent(0) ? Attr.getArgAsIdent(0) : 0;
 
   // In Objective-C, verify that the type names an Objective-C type.
