@@ -46,6 +46,9 @@ def Struct : SubsetSubject<Record,
 def TLSVar : SubsetSubject<Var,
                            [{S->getTLSKind() != 0}]>;
 
+def SharedVar : SubsetSubject<Var,
+                              [{S->hasGlobalStorage() && !S->getTLSKind()}]>;
+
 // A single argument to an attribute
 class Argument<string name, bit optional> {
   string Name = name;
@@ -126,6 +129,13 @@ class SubjectList<list<AttrSubject> subjects, SubjectDiag diag = WarnDiag,
   string CustomDiag = customDiag;
 }
 
+class LangOpt<string name> {
+  string Name = name;
+}
+def MicrosoftExt : LangOpt<"MicrosoftExt">;
+def Borland : LangOpt<"Borland">;
+def CUDA : LangOpt<"CUDA">;
+
 class Attr {
   // The various ways in which an attribute can be spelled in source
   list<Spelling> Spellings;
@@ -152,6 +162,9 @@ class Attr {
   // content. Eg) It parses 3 args, but semantically takes 4 args.  Opts out of
   // common attribute error checking.
   bit HasCustomParsing = 0;
+  // Lists language options, one of which is required to be true for the
+  // attribute to be applicable. If empty, no language options are required.
+  list<LangOpt> LangOpts = [];
   // Any additional text that should be included verbatim in the class.
   code AdditionalMembers = [{}];
 }
@@ -349,31 +362,37 @@ def Constructor : InheritableAttr {
 def CUDAConstant : InheritableAttr {
   let Spellings = [GNU<"constant">];
   let Subjects = SubjectList<[Var]>;
+  let LangOpts = [CUDA];
 }
 
 def CUDADevice : InheritableAttr {
   let Spellings = [GNU<"device">];
   let Subjects = SubjectList<[Function, Var]>;
+  let LangOpts = [CUDA];
 }
 
 def CUDAGlobal : InheritableAttr {
   let Spellings = [GNU<"global">];
   let Subjects = SubjectList<[Function]>;
+  let LangOpts = [CUDA];
 }
 
 def CUDAHost : InheritableAttr {
   let Spellings = [GNU<"host">];
   let Subjects = SubjectList<[Function]>;
+  let LangOpts = [CUDA];
 }
 
 def CUDALaunchBounds : InheritableAttr {
   let Spellings = [GNU<"launch_bounds">];
   let Args = [IntArgument<"MaxThreads">, DefaultIntArgument<"MinBlocks", 0>];
+  let LangOpts = [CUDA];
 }
 
 def CUDAShared : InheritableAttr {
   let Spellings = [GNU<"shared">];
   let Subjects = SubjectList<[Var]>;
+  let LangOpts = [CUDA];
 }
 
 def C11NoReturn : InheritableAttr {
@@ -820,6 +839,7 @@ def Uuid : InheritableAttr {
   let Spellings = [GNU<"uuid">];
   let Args = [StringArgument<"Guid">];
 //  let Subjects = SubjectList<[CXXRecord]>;
+  let LangOpts = [MicrosoftExt, Borland];
 }
 
 def VectorSize : TypeAttr {
@@ -867,7 +887,7 @@ def WarnUnusedResult : InheritableAttr {
 
 def Weak : InheritableAttr {
   let Spellings = [GNU<"weak">, CXX11<"gnu", "weak">];
-//  let Subjects = SubjectList<[Var, Function, CXXRecord]>;
+  let Subjects = SubjectList<[Var, Function, CXXRecord]>;
 }
 
 def WeakImport : InheritableAttr {
@@ -910,12 +930,14 @@ def NoSanitizeMemory : InheritableAttr {
 
 def GuardedVar : InheritableAttr {
   let Spellings = [GNU<"guarded_var">];
-  let Subjects = SubjectList<[Field, Var]>;
+  let Subjects = SubjectList<[Field, SharedVar], WarnDiag,
+                             "ExpectedFieldOrGlobalVar">;
 }
 
 def PtGuardedVar : InheritableAttr {
   let Spellings = [GNU<"pt_guarded_var">];
-  let Subjects = SubjectList<[Field, Var]>;
+  let Subjects = SubjectList<[Field, SharedVar], WarnDiag,
+                             "ExpectedFieldOrGlobalVar">;
 }
 
 def Lockable : InheritableAttr {
@@ -938,7 +960,8 @@ def GuardedBy : InheritableAttr {
   let Args = [ExprArgument<"Arg">];
   let LateParsed = 1;
   let TemplateDependent = 1;
-  let Subjects = SubjectList<[Field, Var]>;
+  let Subjects = SubjectList<[Field, SharedVar], WarnDiag,
+                             "ExpectedFieldOrGlobalVar">;
 }
 
 def PtGuardedBy : InheritableAttr {
@@ -946,7 +969,8 @@ def PtGuardedBy : InheritableAttr {
   let Args = [ExprArgument<"Arg">];
   let LateParsed = 1;
   let TemplateDependent = 1;
-  let Subjects = SubjectList<[Field, Var]>;
+  let Subjects = SubjectList<[Field, SharedVar], WarnDiag,
+                             "ExpectedFieldOrGlobalVar">;
 }
 
 def AcquiredAfter : InheritableAttr {
@@ -954,7 +978,8 @@ def AcquiredAfter : InheritableAttr {
   let Args = [VariadicExprArgument<"Args">];
   let LateParsed = 1;
   let TemplateDependent = 1;
-  let Subjects = SubjectList<[Field, Var]>;
+  let Subjects = SubjectList<[Field, SharedVar], WarnDiag,
+                             "ExpectedFieldOrGlobalVar">;
 }
 
 def AcquiredBefore : InheritableAttr {
@@ -962,7 +987,8 @@ def AcquiredBefore : InheritableAttr {
   let Args = [VariadicExprArgument<"Args">];
   let LateParsed = 1;
   let TemplateDependent = 1;
-  let Subjects = SubjectList<[Field, Var]>;
+  let Subjects = SubjectList<[Field, SharedVar], WarnDiag,
+                             "ExpectedFieldOrGlobalVar">;
 }
 
 def ExclusiveLockFunction : InheritableAttr {
@@ -1150,14 +1176,17 @@ def DLLImport : InheritableAttr, TargetSpecificAttr {
 
 def ForceInline : InheritableAttr {
   let Spellings = [Keyword<"__forceinline">];
+  let LangOpts = [MicrosoftExt];
 }
 
 def SelectAny : InheritableAttr {
   let Spellings = [Declspec<"selectany">];
+  let LangOpts = [MicrosoftExt];
 }
 
 def Win64 : InheritableAttr {
   let Spellings = [Keyword<"__w64">];
+  let LangOpts = [MicrosoftExt];
 }
 
 def Ptr32 : TypeAttr {
@@ -1176,7 +1205,9 @@ def UPtr : TypeAttr {
   let Spellings = [Keyword<"__uptr">];
 }
 
-class MSInheritanceAttr : InheritableAttr;
+class MSInheritanceAttr : InheritableAttr {
+  let LangOpts = [MicrosoftExt];
+}
 
 def SingleInheritance : MSInheritanceAttr {
   let Spellings = [Keyword<"__single_inheritance">];
