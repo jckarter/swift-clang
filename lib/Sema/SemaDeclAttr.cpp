@@ -2277,6 +2277,7 @@ static void handleWeakImportAttr(Sema &S, Decl *D, const AttributeList &Attr) {
 }
 
 // Handles reqd_work_group_size and work_group_size_hint.
+template <typename WorkGroupAttr>
 static void handleWorkGroupSize(Sema &S, Decl *D,
                                 const AttributeList &Attr) {
   uint32_t WGSize[3];
@@ -2284,43 +2285,18 @@ static void handleWorkGroupSize(Sema &S, Decl *D,
     if (!checkUInt32Argument(S, Attr, Attr.getArgAsExpr(i), WGSize[i], i))
       return;
 
-  if (Attr.getKind() == AttributeList::AT_ReqdWorkGroupSize
-    && D->hasAttr<ReqdWorkGroupSizeAttr>()) {
-      ReqdWorkGroupSizeAttr *A = D->getAttr<ReqdWorkGroupSizeAttr>();
-      if (!(A->getXDim() == WGSize[0] &&
-            A->getYDim() == WGSize[1] &&
-            A->getZDim() == WGSize[2])) {
-        S.Diag(Attr.getLoc(), diag::warn_duplicate_attribute) <<
-          Attr.getName();
-      }
-  }
+  WorkGroupAttr *Existing = D->getAttr<WorkGroupAttr>();
+  if (Existing && !(Existing->getXDim() == WGSize[0] &&
+                    Existing->getYDim() == WGSize[1] &&
+                    Existing->getZDim() == WGSize[2]))
+    S.Diag(Attr.getLoc(), diag::warn_duplicate_attribute) << Attr.getName();
 
-  if (Attr.getKind() == AttributeList::AT_WorkGroupSizeHint
-    && D->hasAttr<WorkGroupSizeHintAttr>()) {
-      WorkGroupSizeHintAttr *A = D->getAttr<WorkGroupSizeHintAttr>();
-      if (!(A->getXDim() == WGSize[0] &&
-            A->getYDim() == WGSize[1] &&
-            A->getZDim() == WGSize[2])) {
-        S.Diag(Attr.getLoc(), diag::warn_duplicate_attribute) <<
-          Attr.getName();
-      }
-  }
-
-  if (Attr.getKind() == AttributeList::AT_ReqdWorkGroupSize)
-    D->addAttr(::new (S.Context)
-                 ReqdWorkGroupSizeAttr(Attr.getRange(), S.Context,
-                                       WGSize[0], WGSize[1], WGSize[2],
-                                       Attr.getAttributeSpellingListIndex()));
-  else
-    D->addAttr(::new (S.Context)
-                 WorkGroupSizeHintAttr(Attr.getRange(), S.Context,
-                                       WGSize[0], WGSize[1], WGSize[2],
+  D->addAttr(::new (S.Context) WorkGroupAttr(Attr.getRange(), S.Context,
+                                             WGSize[0], WGSize[1], WGSize[2],
                                        Attr.getAttributeSpellingListIndex()));
 }
 
 static void handleVecTypeHint(Sema &S, Decl *D, const AttributeList &Attr) {
-  assert(Attr.getKind() == AttributeList::AT_VecTypeHint);
-
   if (!Attr.hasParsedType()) {
     S.Diag(Attr.getLoc(), diag::err_attribute_wrong_number_arguments)
       << Attr.getName() << 1;
@@ -2339,9 +2315,7 @@ static void handleVecTypeHint(Sema &S, Decl *D, const AttributeList &Attr) {
     return;
   }
 
-  if (Attr.getKind() == AttributeList::AT_VecTypeHint &&
-      D->hasAttr<VecTypeHintAttr>()) {
-    VecTypeHintAttr *A = D->getAttr<VecTypeHintAttr>();
+  if (VecTypeHintAttr *A = D->getAttr<VecTypeHintAttr>()) {
     if (!S.Context.hasSameType(A->getTypeHint(), ParmType)) {
       S.Diag(Attr.getLoc(), diag::warn_duplicate_attribute) << Attr.getName();
       return;
@@ -4006,11 +3980,10 @@ static void ProcessDeclAttribute(Sema &S, Scope *scope, Decl *D,
   case AttributeList::AT_NSReturnsRetained:
   case AttributeList::AT_CFReturnsRetained:
     handleNSReturnsRetainedAttr(S, D, Attr); break;
-
   case AttributeList::AT_WorkGroupSizeHint:
+    handleWorkGroupSize<WorkGroupSizeHintAttr>(S, D, Attr); break;
   case AttributeList::AT_ReqdWorkGroupSize:
-    handleWorkGroupSize(S, D, Attr); break;
-
+    handleWorkGroupSize<ReqdWorkGroupSizeAttr>(S, D, Attr); break;
   case AttributeList::AT_VecTypeHint:
     handleVecTypeHint(S, D, Attr); break;
 
