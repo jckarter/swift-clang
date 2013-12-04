@@ -3713,6 +3713,30 @@ static void handleObjCBridgeMutableAttr(Sema &S, Scope *Sc, Decl *D,
                             Attr.getAttributeSpellingListIndex()));
 }
 
+static void handleObjCDesignatedInitializer(Sema &S, Decl *D,
+                                            const AttributeList &Attr) {
+  SourceLocation Loc = Attr.getLoc();
+  ObjCMethodDecl *Method = cast<ObjCMethodDecl>(D);
+
+  if (Method->getMethodFamily() != OMF_init) {
+    S.Diag(D->getLocStart(), diag::err_attr_objc_designated_not_init_family)
+    << SourceRange(Loc, Loc);
+    return;
+  }
+  ObjCInterfaceDecl *IFace =
+      dyn_cast<ObjCInterfaceDecl>(Method->getDeclContext());
+  if (!IFace) {
+    S.Diag(D->getLocStart(), diag::err_attr_objc_designated_not_interface)
+    << SourceRange(Loc, Loc);
+    return;
+  }
+
+  IFace->setHasDesignatedInitializers();
+  Method->addAttr(::new (S.Context)
+                  ObjCDesignatedInitializerAttr(Attr.getRange(), S.Context,
+                                         Attr.getAttributeSpellingListIndex()));
+}
+
 static void handleObjCOwnershipAttr(Sema &S, Decl *D,
                                     const AttributeList &Attr) {
   if (hasDeclarator(D)) return;
@@ -3962,6 +3986,9 @@ static void ProcessDeclAttribute(Sema &S, Scope *scope, Decl *D,
       
   case AttributeList::AT_ObjCBridgeMutable:
     handleObjCBridgeMutableAttr(S, scope, D, Attr); break;
+
+  case AttributeList::AT_ObjCDesignatedInitializer:
+    handleObjCDesignatedInitializer(S, D, Attr); break;
 
   case AttributeList::AT_CFAuditedTransfer:
     handleCFAuditedTransferAttr(S, D, Attr); break;
