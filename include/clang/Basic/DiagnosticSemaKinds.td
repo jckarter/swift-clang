@@ -3399,11 +3399,11 @@ def note_using_value_decl_missing_typename : Note<
   "add 'typename' to treat this using declaration as a type">;
 
 def err_template_kw_refers_to_non_template : Error<
-    "%0 following the 'template' keyword does not refer to a template">;
+  "%0 following the 'template' keyword does not refer to a template">;
 def err_template_kw_refers_to_class_template : Error<
-    "'%0%1' instantiated to a class template, not a function template">;
+  "'%0%1' instantiated to a class template, not a function template">;
 def note_referenced_class_template : Error<
-    "class template declared here">;
+  "class template declared here">;
 def err_template_kw_missing : Error<
   "missing 'template' keyword prior to dependent template name '%0%1'">;
 def ext_template_outside_of_template : ExtWarn<
@@ -4458,6 +4458,9 @@ def warn_member_extra_qualification : Warning<
   "extra qualification on member %0">, InGroup<Microsoft>;
 def err_member_extra_qualification : Error<
   "extra qualification on member %0">;
+def warn_namespace_member_extra_qualification : Warning<
+  "extra qualification on member %0">,
+  InGroup<DiagGroup<"extra-qualification">>;
 def err_member_qualification : Error<
   "non-friend class member %0 cannot have a qualified name">;  
 def note_member_def_close_match : Note<"member declaration nearly matches">;
@@ -5032,7 +5035,7 @@ def err_qualified_catch_declarator : Error<
   "exception declarator cannot be qualified">;
 def err_early_catch_all : Error<"catch-all handler must come last">;
 def err_bad_memptr_rhs : Error<
-  "right hand operand to %0 has non pointer-to-member type %1">;
+  "right hand operand to %0 has non-pointer-to-member type %1">;
 def err_bad_memptr_lhs : Error<
   "left hand operand to %0 must be a %select{|pointer to }1class "
   "compatible with the right hand operand, but is %2">;
@@ -6009,6 +6012,8 @@ def err_operator_delete_param_type : Error<
 // C++ literal operators
 def err_literal_operator_outside_namespace : Error<
   "literal operator %0 must be in a namespace or global scope">;
+def err_literal_operator_id_outside_namespace : Error<
+  "non-namespace scope '%0' cannot have a literal operator member">;
 def err_literal_operator_default_argument : Error<
   "literal operator cannot have a default argument">;
 // FIXME: This diagnostic sucks

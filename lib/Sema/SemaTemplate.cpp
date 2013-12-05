@@ -968,7 +968,8 @@ Sema::CheckClassTemplate(Scope *S, unsigned TagSpec, TagUseKind TUK,
           PrevDecl = (*Previous.begin())->getUnderlyingDecl();
       }
     }
-  } else if (PrevDecl && !isDeclInScope(PrevDecl, SemanticContext, S))
+  } else if (PrevDecl &&
+             !isDeclInScope(PrevDecl, SemanticContext, S, SS.isValid()))
     PrevDecl = PrevClassTemplate = 0;
 
   if (PrevClassTemplate) {
@@ -2914,8 +2915,7 @@ TemplateNameKind Sema::ActOnDependentTemplateName(Scope *S,
     return TNK_Function_template;
 
   case UnqualifiedId::IK_LiteralOperatorId:
-    llvm_unreachable(
-            "We don't support these; Parse shouldn't have allowed propagation");
+    llvm_unreachable("literal operator id cannot have a dependent scope");
 
   default:
     break;

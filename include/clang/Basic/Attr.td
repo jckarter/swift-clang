@@ -515,9 +515,13 @@ def MSABI : InheritableAttr {
 }
 
 def MSP430Interrupt : InheritableAttr, TargetSpecificAttr {
+  // FIXME: this attribute is spelled the same as the ARMInterrupt attribute,
+  // but two attributes cannot currently share the same name because of the
+  // getAttrKind function. However, in this case, the attributes are for
+  // different targets, so sharing the same name but different arguments is a
+  // reasonable design. For now, this attribute will remain having no spelling.
   let Spellings = [];
   let Args = [UnsignedArgument<"Number">];
-  let SemaHandler = 0;
 }
 
 def Mips16 : InheritableAttr, TargetSpecificAttr {
@@ -613,6 +617,15 @@ def ObjCBridgeMutable : InheritableAttr {
   let Spellings = [GNU<"objc_bridge_mutable">];
   let Subjects = SubjectList<[Record], ErrorDiag>;
   let Args = [IdentifierArgument<"BridgedType">];
+}
+
+def ObjCBridgeRelated : InheritableAttr {
+  let Spellings = [GNU<"objc_bridge_related">];
+  let Subjects = SubjectList<[Record], ErrorDiag>;
+  let Args = [IdentifierArgument<"RelatedClass">,
+          IdentifierArgument<"ClassMethod">,
+          IdentifierArgument<"InstanceMethod">];
+ let HasCustomParsing = 1;
 }
 
 def NSReturnsRetained : InheritableAttr {
@@ -907,7 +920,10 @@ def WeakRef : InheritableAttr {
 }
 
 def X86ForceAlignArgPointer : InheritableAttr, TargetSpecificAttr {
-  let Spellings = [];
+  let Spellings = [GNU<"force_align_arg_pointer">];
+  // Technically, this appertains to a FunctionDecl, but the target-specific
+  // code silently allows anything function-like (such as typedefs or function
+  // pointers), but does not apply the attribute to them.
 }
 
 // Attribute to disable AddressSanitizer (or equivalent) checks.
@@ -1173,10 +1189,13 @@ def MsStruct : InheritableAttr {
 
 def DLLExport : InheritableAttr, TargetSpecificAttr {
   let Spellings = [Declspec<"dllexport">];
+  let Subjects = SubjectList<[Function, Var]>;
 }
 
 def DLLImport : InheritableAttr, TargetSpecificAttr {
   let Spellings = [Declspec<"dllimport">];
+  // Technically, the subjects for DllImport are Function and Var, but there is
+  // custom semantic handling required when MicrosoftExt is true.
 }
 
 def ForceInline : InheritableAttr {
