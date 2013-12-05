@@ -1658,7 +1658,7 @@ shouldUseExceptionTablesForObjCExceptions(const ObjCRuntime &runtime,
   if (runtime.isNonFragile())
     return true;
 
-  if (!Triple.isOSDarwin())
+  if (!Triple.isMacOSX())
     return false;
 
   return (!Triple.isMacOSXVersionLT(10,5) &&
@@ -6062,6 +6062,13 @@ void netbsd::Assemble::ConstructJob(Compilation &C, const JobAction &JA,
   if (getToolChain().getArch() == llvm::Triple::x86)
     CmdArgs.push_back("--32");
 
+  // Pass the target CPU to GNU as for ARM, since the source code might
+  // not have the correct .cpu annotation.
+  if (getToolChain().getArch() == llvm::Triple::arm) {
+    std::string MArch(getARMTargetCPU(Args, getToolChain().getTriple()));
+    CmdArgs.push_back(Args.MakeArgString("-mcpu=" + MArch));
+  }
+
   // Set byte order explicitly
   if (getToolChain().getArch() == llvm::Triple::mips)
     CmdArgs.push_back("-EB");
@@ -6592,8 +6599,8 @@ void gnutools::Link::ConstructJob(Compilation &C, const JobAction &JA,
       if (OpenMP) {
         CmdArgs.push_back("-lgomp");
 
-        // FIXME: Exclude this for platforms whith libgomp that doesn't require
-        // librt. Most modern Linux platfroms require it, but some may not.
+        // FIXME: Exclude this for platforms with libgomp that don't require
+        // librt. Most modern Linux platforms require it, but some may not.
         CmdArgs.push_back("-lrt");
       }
 
