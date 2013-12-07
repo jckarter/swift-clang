@@ -3925,8 +3925,11 @@ ExprResult Sema::BuildBinaryTypeTrait(BinaryTypeTrait BTT,
                                       SourceLocation RParen) {
   QualType LhsT = LhsTSInfo->getType();
   QualType RhsT = RhsTSInfo->getType();
+  QualType ResultType = Context.BoolTy;
 
+  // __builtin_types_compatible_p is a GNU C extension, not a C++ type trait.
   if (BTT == BTT_TypeCompatible) {
+    ResultType = Context.IntTy;
     if (getLangOpts().CPlusPlus) {
       Diag(KWLoc, diag::err_types_compatible_p_in_cplusplus)
         << SourceRange(KWLoc, RParen);
@@ -3937,17 +3940,6 @@ ExprResult Sema::BuildBinaryTypeTrait(BinaryTypeTrait BTT,
   bool Value = false;
   if (!LhsT->isDependentType() && !RhsT->isDependentType())
     Value = EvaluateBinaryTypeTrait(*this, BTT, LhsT, RhsT, KWLoc);
-
-  // Select trait result type.
-  QualType ResultType;
-  switch (BTT) {
-  case BTT_IsBaseOf:       ResultType = Context.BoolTy; break;
-  case BTT_IsConvertible:  ResultType = Context.BoolTy; break;
-  case BTT_IsSame:         ResultType = Context.BoolTy; break;
-  case BTT_TypeCompatible: ResultType = Context.IntTy; break;
-  case BTT_IsConvertibleTo: ResultType = Context.BoolTy; break;
-  case BTT_IsTriviallyAssignable: ResultType = Context.BoolTy;
-  }
 
   return Owned(new (Context) BinaryTypeTraitExpr(KWLoc, BTT, LhsTSInfo,
                                                  RhsTSInfo, Value, RParen,
