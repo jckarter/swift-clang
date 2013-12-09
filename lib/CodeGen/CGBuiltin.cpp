@@ -2058,6 +2058,7 @@ static Value *EmitAArch64ScalarBuiltinExpr(CodeGenFunction &CGF,
   // The followings are intrinsics with scalar results generated AcrossVec vectors
   case AArch64::BI__builtin_neon_vaddlv_s8:
   case AArch64::BI__builtin_neon_vaddlv_s16:
+  case AArch64::BI__builtin_neon_vaddlv_s32:
   case AArch64::BI__builtin_neon_vaddlvq_s8:
   case AArch64::BI__builtin_neon_vaddlvq_s16:
   case AArch64::BI__builtin_neon_vaddlvq_s32:
@@ -2065,6 +2066,7 @@ static Value *EmitAArch64ScalarBuiltinExpr(CodeGenFunction &CGF,
     AcrossVec = true; ExtendEle = true; s = "saddlv"; break;
   case AArch64::BI__builtin_neon_vaddlv_u8:
   case AArch64::BI__builtin_neon_vaddlv_u16:
+  case AArch64::BI__builtin_neon_vaddlv_u32:
   case AArch64::BI__builtin_neon_vaddlvq_u8:
   case AArch64::BI__builtin_neon_vaddlvq_u16:
   case AArch64::BI__builtin_neon_vaddlvq_u32:
@@ -2072,6 +2074,7 @@ static Value *EmitAArch64ScalarBuiltinExpr(CodeGenFunction &CGF,
     AcrossVec = true; ExtendEle = true; s = "uaddlv"; break;
   case AArch64::BI__builtin_neon_vmaxv_s8:
   case AArch64::BI__builtin_neon_vmaxv_s16:
+  case AArch64::BI__builtin_neon_vmaxv_s32:
   case AArch64::BI__builtin_neon_vmaxvq_s8:
   case AArch64::BI__builtin_neon_vmaxvq_s16:
   case AArch64::BI__builtin_neon_vmaxvq_s32:
@@ -2079,6 +2082,7 @@ static Value *EmitAArch64ScalarBuiltinExpr(CodeGenFunction &CGF,
     AcrossVec = true; ExtendEle = false; s = "smaxv"; break;
   case AArch64::BI__builtin_neon_vmaxv_u8:
   case AArch64::BI__builtin_neon_vmaxv_u16:
+  case AArch64::BI__builtin_neon_vmaxv_u32:
   case AArch64::BI__builtin_neon_vmaxvq_u8:
   case AArch64::BI__builtin_neon_vmaxvq_u16:
   case AArch64::BI__builtin_neon_vmaxvq_u32:
@@ -2086,6 +2090,7 @@ static Value *EmitAArch64ScalarBuiltinExpr(CodeGenFunction &CGF,
     AcrossVec = true; ExtendEle = false; s = "umaxv"; break;
   case AArch64::BI__builtin_neon_vminv_s8:
   case AArch64::BI__builtin_neon_vminv_s16:
+  case AArch64::BI__builtin_neon_vminv_s32:
   case AArch64::BI__builtin_neon_vminvq_s8:
   case AArch64::BI__builtin_neon_vminvq_s16:
   case AArch64::BI__builtin_neon_vminvq_s32:
@@ -2093,6 +2098,7 @@ static Value *EmitAArch64ScalarBuiltinExpr(CodeGenFunction &CGF,
     AcrossVec = true; ExtendEle = false; s = "sminv"; break;
   case AArch64::BI__builtin_neon_vminv_u8:
   case AArch64::BI__builtin_neon_vminv_u16:
+  case AArch64::BI__builtin_neon_vminv_u32:
   case AArch64::BI__builtin_neon_vminvq_u8:
   case AArch64::BI__builtin_neon_vminvq_u16:
   case AArch64::BI__builtin_neon_vminvq_u32:
@@ -2100,12 +2106,14 @@ static Value *EmitAArch64ScalarBuiltinExpr(CodeGenFunction &CGF,
     AcrossVec = true; ExtendEle = false; s = "uminv"; break;
   case AArch64::BI__builtin_neon_vaddv_s8:
   case AArch64::BI__builtin_neon_vaddv_s16:
+  case AArch64::BI__builtin_neon_vaddv_s32:
   case AArch64::BI__builtin_neon_vaddvq_s8:
   case AArch64::BI__builtin_neon_vaddvq_s16:
   case AArch64::BI__builtin_neon_vaddvq_s32:
   case AArch64::BI__builtin_neon_vaddvq_s64:
   case AArch64::BI__builtin_neon_vaddv_u8:
   case AArch64::BI__builtin_neon_vaddv_u16:
+  case AArch64::BI__builtin_neon_vaddv_u32:
   case AArch64::BI__builtin_neon_vaddvq_u8:
   case AArch64::BI__builtin_neon_vaddvq_u16:
   case AArch64::BI__builtin_neon_vaddvq_u32:

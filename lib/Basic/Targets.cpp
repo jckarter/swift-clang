@@ -4154,7 +4154,7 @@ public:
     case 'r': {
       switch (Modifier) {
       default:
-        return (isInOut || isOutput || Size <= 32);
+        return (isInOut || isOutput || Size <= 64);
       case 'q':
         // A register of size 32 cannot fit a vector type.
         return false;

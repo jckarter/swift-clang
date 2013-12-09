@@ -172,21 +172,19 @@ Optional<unsigned> clang::getStackIndexOfNearestEnclosingCaptureCapableLambda(
     ArrayRef<const sema::FunctionScopeInfo *> FunctionScopes,
     VarDecl *VarToCapture, Sema &S) {
 
-  const Optional<unsigned> FailDistance;
+  const Optional<unsigned> NoLambdaIsCaptureCapable;
   
   const Optional<unsigned> OptionalStackIndex =
       getStackIndexOfNearestEnclosingCaptureReadyLambda(FunctionScopes,
                                                         VarToCapture);
   if (!OptionalStackIndex)
-    return FailDistance;
+    return NoLambdaIsCaptureCapable;
 
   const unsigned IndexOfCaptureReadyLambda = OptionalStackIndex.getValue();
-  assert(
-      ((IndexOfCaptureReadyLambda != (FunctionScopes.size() - 1)) ||
-       (S.getCurGenericLambda() && S.getCurGenericLambda()->ImpCaptureStyle !=
-                                       sema::LambdaScopeInfo::ImpCap_None)) &&
-      "The capture ready lambda for a potential capture can only be the "
-      "current lambda if it is a generic lambda with an implicit capture");
+  assert(((IndexOfCaptureReadyLambda != (FunctionScopes.size() - 1)) ||
+          S.getCurGenericLambda()) &&
+         "The capture ready lambda for a potential capture can only be the "
+         "current lambda if it is a generic lambda");
 
   const sema::LambdaScopeInfo *const CaptureReadyLambdaLSI =
       cast<sema::LambdaScopeInfo>(FunctionScopes[IndexOfCaptureReadyLambda]);
@@ -208,7 +206,7 @@ Optional<unsigned> clang::getStackIndexOfNearestEnclosingCaptureCapableLambda(
                               /*BuildAndDiagnose*/ false, CaptureType,
                               DeclRefType, &IndexOfCaptureReadyLambda);
     if (!CanCaptureVariable)
-      return FailDistance;
+      return NoLambdaIsCaptureCapable;
   } else {
     // Check if the capture-ready lambda can truly capture 'this' by checking
     // whether all enclosing lambdas of the capture-ready lambda can capture
@@ -219,7 +217,7 @@ Optional<unsigned> clang::getStackIndexOfNearestEnclosingCaptureCapableLambda(
              /*Explicit*/ false, /*BuildAndDiagnose*/ false,
              &IndexOfCaptureReadyLambda);
     if (!CanCaptureThis)
-      return FailDistance;
+      return NoLambdaIsCaptureCapable;
   } 
   return IndexOfCaptureReadyLambda;
 }
