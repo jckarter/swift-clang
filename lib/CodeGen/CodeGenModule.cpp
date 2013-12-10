@@ -234,6 +234,10 @@ void CodeGenModule::checkAliases() {
   }
 }
 
+void CodeGenModule::clear() {
+  DeferredDeclsToEmit.clear();
+}
+
 void CodeGenModule::Release() {
   EmitDeferred();
   applyReplacements();
@@ -1003,26 +1007,23 @@ void CodeGenModule::EmitDeferred() {
     // Stop if we're out of both deferred v-tables and deferred declarations.
     if (DeferredDeclsToEmit.empty()) break;
 
-    GlobalDecl D = DeferredDeclsToEmit.back();
+    DeferredGlobal &G = DeferredDeclsToEmit.back();
+    GlobalDecl D = G.GD;
+    llvm::GlobalValue *GV = G.GV;
     DeferredDeclsToEmit.pop_back();
 
+    assert(GV == GetGlobalValue(getMangledName(D)));
     // Check to see if we've already emitted this.  This is necessary
     // for a couple of reasons: first, decls can end up in the
     // deferred-decls queue multiple times, and second, decls can end
     // up with definitions in unusual ways (e.g. by an extern inline
     // function acquiring a strong function redefinition).  Just
     // ignore these cases.
-    //
-    // TODO: That said, looking this up multiple times is very wasteful.
-    StringRef Name = getMangledName(D);
-    llvm::GlobalValue *CGRef = GetGlobalValue(Name);
-    assert(CGRef && "Deferred decl wasn't referenced?");
-
-    if (!CGRef->isDeclaration())
+    if(!GV->isDeclaration())
       continue;
 
     // Otherwise, emit the definition and move on to the next one.
-    EmitGlobalDefinition(D);
+    EmitGlobalDefinition(D, GV);
   }
 }
 
@@ -1227,8 +1228,8 @@ void CodeGenModule::EmitGlobal(GlobalDecl GD) {
   // If the value has already been used, add it directly to the
   // DeferredDeclsToEmit list.
   StringRef MangledName = getMangledName(GD);
-  if (GetGlobalValue(MangledName))
-    DeferredDeclsToEmit.push_back(GD);
+  if (llvm::GlobalValue *GV = GetGlobalValue(MangledName))
+    addDeferredDeclToEmit(GV, GD);
   else {
     // Otherwise, remember that we saw a deferred decl with this name.  The
     // first use of the mangled name will cause it to move into
@@ -1325,7 +1326,7 @@ void CodeGenModule::CompleteDIClassType(const CXXMethodDecl* D) {
     }
 }
 
-void CodeGenModule::EmitGlobalDefinition(GlobalDecl GD) {
+void CodeGenModule::EmitGlobalDefinition(GlobalDecl GD, llvm::GlobalValue *GV) {
   const ValueDecl *D = cast<ValueDecl>(GD.getDecl());
 
   PrettyStackTraceDecl CrashInfo(const_cast<ValueDecl *>(D), D->getLocation(), 
@@ -1347,7 +1348,7 @@ void CodeGenModule::EmitGlobalDefinition(GlobalDecl GD) {
       else if (const CXXDestructorDecl *DD =dyn_cast<CXXDestructorDecl>(Method))
         EmitCXXDestructor(DD, GD.getDtorType());
       else
-        EmitGlobalFunctionDefinition(GD);
+        EmitGlobalFunctionDefinition(GD, GV);
 
       if (Method->isVirtual())
         getVTables().EmitThunks(GD);
@@ -1355,7 +1356,7 @@ void CodeGenModule::EmitGlobalDefinition(GlobalDecl GD) {
       return;
     }
 
-    return EmitGlobalFunctionDefinition(GD);
+    return EmitGlobalFunctionDefinition(GD, GV);
   }
   
   if (const VarDecl *VD = dyn_cast<VarDecl>(D))
@@ -1429,7 +1430,7 @@ CodeGenModule::GetOrCreateLLVMFunction(StringRef MangledName,
     if (D && isa<CXXDestructorDecl>(D) &&
         getCXXABI().useThunkForDtorVariant(cast<CXXDestructorDecl>(D),
                                            GD.getDtorType()))
-      DeferredDeclsToEmit.push_back(GD);
+      addDeferredDeclToEmit(F, GD);
 
     // This is the first use or definition of a mangled name.  If there is a
     // deferred decl with this name, remember that we need to emit it at the end
@@ -1439,7 +1440,7 @@ CodeGenModule::GetOrCreateLLVMFunction(StringRef MangledName,
       // Move the potentially referenced deferred decl to the
       // DeferredDeclsToEmit list, and remove it from DeferredDecls (since we
       // don't need it anymore).
-      DeferredDeclsToEmit.push_back(DDI->second);
+      addDeferredDeclToEmit(F, DDI->second);
       DeferredDecls.erase(DDI);
 
       // Otherwise, if this is a sized deallocation function, emit a weak
@@ -1447,7 +1448,7 @@ CodeGenModule::GetOrCreateLLVMFunction(StringRef MangledName,
       // for it at the end of the translation unit.
     } else if (D && cast<FunctionDecl>(D)
                         ->getCorrespondingUnsizedGlobalDeallocationFunction()) {
-      DeferredDeclsToEmit.push_back(GD);
+      addDeferredDeclToEmit(F, GD);
 
       // Otherwise, there are cases we have to worry about where we're
       // using a declaration for which we must emit a definition but where
@@ -1470,10 +1471,10 @@ CodeGenModule::GetOrCreateLLVMFunction(StringRef MangledName,
           if (FD->isImplicit() && !ForVTable) {
             assert(FD->isUsed() &&
                    "Sema didn't mark implicit function as used!");
-            DeferredDeclsToEmit.push_back(GD.getWithDecl(FD));
+            addDeferredDeclToEmit(F, GD.getWithDecl(FD));
             break;
           } else if (FD->doesThisDeclarationHaveABody()) {
-            DeferredDeclsToEmit.push_back(GD.getWithDecl(FD));
+            addDeferredDeclToEmit(F, GD.getWithDecl(FD));
             break;
           }
         }
@@ -1575,6 +1576,13 @@ CodeGenModule::GetOrCreateLLVMGlobal(StringRef MangledName,
     return llvm::ConstantExpr::getBitCast(Entry, Ty);
   }
 
+  unsigned AddrSpace = GetGlobalVarAddressSpace(D, Ty->getAddressSpace());
+  llvm::GlobalVariable *GV =
+    new llvm::GlobalVariable(getModule(), Ty->getElementType(), false,
+                             llvm::GlobalValue::ExternalLinkage,
+                             0, MangledName, 0,
+                             llvm::GlobalVariable::NotThreadLocal, AddrSpace);
+
   // This is the first use or definition of a mangled name.  If there is a
   // deferred decl with this name, remember that we need to emit it at the end
   // of the file.
@@ -1582,16 +1590,9 @@ CodeGenModule::GetOrCreateLLVMGlobal(StringRef MangledName,
   if (DDI != DeferredDecls.end()) {
     // Move the potentially referenced deferred decl to the DeferredDeclsToEmit
     // list, and remove it from DeferredDecls (since we don't need it anymore).
-    DeferredDeclsToEmit.push_back(DDI->second);
+    addDeferredDeclToEmit(GV, DDI->second);
     DeferredDecls.erase(DDI);
   }
-
-  unsigned AddrSpace = GetGlobalVarAddressSpace(D, Ty->getAddressSpace());
-  llvm::GlobalVariable *GV =
-    new llvm::GlobalVariable(getModule(), Ty->getElementType(), false,
-                             llvm::GlobalValue::ExternalLinkage,
-                             0, MangledName, 0,
-                             llvm::GlobalVariable::NotThreadLocal, AddrSpace);
 
   // Handle things which are present even on external declarations.
   if (D) {
@@ -2091,7 +2092,8 @@ void CodeGenModule::HandleCXXStaticMemberVarInstantiation(VarDecl *VD) {
   EmitTopLevelDecl(VD);
 }
 
-void CodeGenModule::EmitGlobalFunctionDefinition(GlobalDecl GD) {
+void CodeGenModule::EmitGlobalFunctionDefinition(GlobalDecl GD,
+                                                 llvm::GlobalValue *GV) {
   const FunctionDecl *D = cast<FunctionDecl>(GD.getDecl());
 
   // Compute the function info and LLVM type.
@@ -2100,7 +2102,8 @@ void CodeGenModule::EmitGlobalFunctionDefinition(GlobalDecl GD) {
 
   // Get or create the prototype for the function.
   llvm::Constant *Entry =
-      GetAddrOfFunction(GD, Ty, /*ForVTable=*/false, /*DontDefer*/ true);
+      GV ? GV
+         : GetAddrOfFunction(GD, Ty, /*ForVTable=*/false, /*DontDefer*/ true);
 
   // Strip off a bitcast if we got one back.
   if (llvm::ConstantExpr *CE = dyn_cast<llvm::ConstantExpr>(Entry)) {
