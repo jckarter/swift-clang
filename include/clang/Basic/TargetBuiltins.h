@@ -101,6 +101,7 @@ namespace clang {
       Poly8,
       Poly16,
       Poly64,
+      Poly128,
       Float16,
       Float32,
       Float64
