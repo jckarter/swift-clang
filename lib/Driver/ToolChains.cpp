@@ -1647,7 +1647,10 @@ bool Generic_GCC::isPICDefaultForced() const {
 
 bool Generic_GCC::IsIntegratedAssemblerDefault() const {
   return getTriple().getArch() == llvm::Triple::x86 ||
-    getTriple().getArch() == llvm::Triple::x86_64;
+         getTriple().getArch() == llvm::Triple::x86_64 ||
+         getTriple().getArch() == llvm::Triple::aarch64 ||
+         getTriple().getArch() == llvm::Triple::arm ||
+         getTriple().getArch() == llvm::Triple::thumb;
 }
 
 /// Hexagon Toolchain
