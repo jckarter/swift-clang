@@ -2878,7 +2878,7 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
     Args.AddLastArg(CmdArgs, options::OPT_objcmt_atomic_property);
     Args.AddLastArg(CmdArgs, options::OPT_objcmt_returns_innerpointer_property);
     Args.AddLastArg(CmdArgs, options::OPT_objcmt_ns_nonatomic_iosonly);
-    Args.AddLastArg(CmdArgs, options::OPT_objcmt_white_list_dir_path);
+    Args.AddLastArg(CmdArgs, options::OPT_objcmt_whitelist_dir_path);
   }
 
   if (Args.hasArg(options::OPT__migrate_xct))
@@ -4720,8 +4720,14 @@ void darwin::Assemble::ConstructJob(Compilation &C, const JobAction &JA,
 
   // If -no_integrated_as is used add -Q to the darwin assember driver to make
   // sure it runs its system assembler not clang's integrated assembler.
-  if (Args.hasArg(options::OPT_no_integrated_as))
-    CmdArgs.push_back("-Q");
+  // Applicable to darwin11+ and Xcode 4+.  darwin<10 lacked integrated-as.
+  // FIXME: at run-time detect assembler capabilities or rely on version
+  // information forwarded by -target-assembler-version (future)
+  if (Args.hasArg(options::OPT_no_integrated_as)) {
+    const llvm::Triple &T(getToolChain().getTriple());
+    if (!(T.isMacOSX() && T.isMacOSXVersionLT(10, 7)))
+      CmdArgs.push_back("-Q");
+  }
 
   // Forward -g, assuming we are dealing with an actual assembly file.
   if (SourceAction->getType() == types::TY_Asm ||

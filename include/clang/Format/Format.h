@@ -359,6 +359,10 @@ FormatStyle getMozillaStyle();
 /// http://www.webkit.org/coding/coding-style.html
 FormatStyle getWebKitStyle();
 
+/// \brief Returns a format style complying with GNU Coding Standards:
+/// http://www.gnu.org/prep/standards/standards.html
+FormatStyle getGNUStyle();
+
 /// \brief Gets a predefined style for the specified language by name.
 ///
 /// Currently supported names: LLVM, Google, Chromium, Mozilla. Names are

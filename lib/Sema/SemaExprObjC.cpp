@@ -3405,7 +3405,7 @@ bool Sema::checkObjCBridgeRelatedComponents(SourceLocation Loc,
     ClassMethod = RelatedClass->lookupMethod(Sel, false);
     if (!ClassMethod) {
       Diag(Loc, diag::err_objc_bridged_related_known_method)
-            << SrcType << DestType << Sel << 0;
+            << SrcType << DestType << Sel << false;
       Diag(TDNDecl->getLocStart(), diag::note_declared_at);
       return false;
     }
@@ -3417,7 +3417,7 @@ bool Sema::checkObjCBridgeRelatedComponents(SourceLocation Loc,
     InstanceMethod = RelatedClass->lookupMethod(Sel, true);
     if (!InstanceMethod) {
       Diag(Loc, diag::err_objc_bridged_related_known_method)
-            << SrcType << DestType << Sel << 1;
+            << SrcType << DestType << Sel << true;
       Diag(TDNDecl->getLocStart(), diag::note_declared_at);
       return false;
     }
@@ -3427,7 +3427,8 @@ bool Sema::checkObjCBridgeRelatedComponents(SourceLocation Loc,
 
 bool
 Sema::CheckObjCBridgeRelatedConversions(SourceLocation Loc,
-                                        QualType DestType, QualType SrcType) {
+                                        QualType DestType, QualType SrcType,
+                                        Expr *SrcExpr) {
   ARCConversionTypeClass rhsExprACTC = classifyTypeForARCConversion(SrcType);
   ARCConversionTypeClass lhsExprACTC = classifyTypeForARCConversion(DestType);
   bool CfToNs = (rhsExprACTC == ACTC_coreFoundation && lhsExprACTC == ACTC_retainable);
@@ -3445,23 +3446,53 @@ Sema::CheckObjCBridgeRelatedConversions(SourceLocation Loc,
   
   if (CfToNs) {
     // Implicit conversion from CF to ObjC object is needed.
-    if (ClassMethod)
+    if (ClassMethod) {
+      std::string ExpressionString = "[";
+      ExpressionString += RelatedClass->getNameAsString();
+      ExpressionString += " ";
+      ExpressionString += ClassMethod->getSelector().getAsString();
+      SourceLocation SrcExprEndLoc = PP.getLocForEndOfToken(SrcExpr->getLocEnd());
+      // Provide a fixit: [RelatedClass ClassMethod SrcExpr]
       Diag(Loc, diag::err_objc_bridged_related_known_method)
-        << SrcType << DestType << ClassMethod->getSelector() << 0;
+        << SrcType << DestType << ClassMethod->getSelector() << false
+        << FixItHint::CreateInsertion(SrcExpr->getLocStart(), ExpressionString)
+        << FixItHint::CreateInsertion(SrcExprEndLoc, "]");
+    }
     else
       Diag(Loc, diag::err_objc_bridged_related_unknown_method)
-        << SrcType << DestType << 0;
+        << SrcType << DestType;
     Diag(RelatedClass->getLocStart(), diag::note_declared_at);
     Diag(TDNDecl->getLocStart(), diag::note_declared_at);
   }
   else {
     // Implicit conversion from ObjC type to CF object is needed.
-    if (InstanceMethod)
-      Diag(Loc, diag::err_objc_bridged_related_known_method)
-      << SrcType << DestType << InstanceMethod->getSelector() << 1;
+    if (InstanceMethod) {
+      std::string ExpressionString;
+      SourceLocation SrcExprEndLoc = PP.getLocForEndOfToken(SrcExpr->getLocEnd());
+      if (InstanceMethod->isPropertyAccessor())
+        if (const ObjCPropertyDecl *PDecl = InstanceMethod->findPropertyDecl()) {
+          // fixit: ObjectExpr.propertyname when it is  aproperty accessor.
+          ExpressionString = ".";
+          ExpressionString += PDecl->getNameAsString();
+          Diag(Loc, diag::err_objc_bridged_related_known_method)
+          << SrcType << DestType << InstanceMethod->getSelector() << true
+          << FixItHint::CreateInsertion(SrcExprEndLoc, ExpressionString);
+        }
+      if (ExpressionString.empty()) {
+        // Provide a fixit: [ObjectExpr InstanceMethod]
+        ExpressionString = " ";
+        ExpressionString += InstanceMethod->getSelector().getAsString();
+        ExpressionString += "]";
+      
+        Diag(Loc, diag::err_objc_bridged_related_known_method)
+        << SrcType << DestType << InstanceMethod->getSelector() << true
+        << FixItHint::CreateInsertion(SrcExpr->getLocStart(), "[")
+        << FixItHint::CreateInsertion(SrcExprEndLoc, ExpressionString);
+      }
+    }
     else
       Diag(Loc, diag::err_objc_bridged_related_unknown_method)
-        << SrcType << DestType << 1;
+        << SrcType << DestType;
     Diag(RelatedClass->getLocStart(), diag::note_declared_at);
     Diag(TDNDecl->getLocStart(), diag::note_declared_at);
   }
