@@ -1970,28 +1970,17 @@ void XCTMigrateASTConsumer::migrateDecl(Decl *D) {
 }
 
 void XCTMigrateASTConsumer::HandleTranslationUnit(ASTContext &Ctx) {
-  Rewriter rewriter(Ctx.getSourceManager(), Ctx.getLangOpts());
-  RewritesReceiver Rec(rewriter);
-  Editor->applyRewrites(Rec);
-
-  for (Rewriter::buffer_iterator
-        I = rewriter.buffer_begin(), E = rewriter.buffer_end(); I != E; ++I) {
-    FileID FID = I->first;
-    RewriteBuffer &buf = I->second;
-    const FileEntry *file = Ctx.getSourceManager().getFileEntryForID(FID);
-    assert(file);
-    SmallString<512> newText;
-    llvm::raw_svector_ostream vecOS(newText);
-    buf.write(vecOS);
-    vecOS.flush();
-    llvm::MemoryBuffer *memBuf = llvm::MemoryBuffer::getMemBufferCopy(
-                   StringRef(newText.data(), newText.size()), file->getName());
-    SmallString<64> filePath(file->getName());
-    FileMgr.FixupRelativePath(filePath);
-    Remapper.remap(filePath.str(), memBuf);
+  std::string Error;
+  llvm::raw_fd_ostream OS(MigrateDir.c_str(), Error, llvm::sys::fs::F_Binary);
+  if (!Error.empty()) {
+    unsigned ID = Ctx.getDiagnostics().getDiagnosticIDs()->
+        getCustomDiagID(DiagnosticIDs::Error, Error);
+    Ctx.getDiagnostics().Report(ID);
+    return;
   }
 
-  Remapper.flushToFile(MigrateDir, Ctx.getDiagnostics());
+  JSONEditWriter Writer(Ctx.getSourceManager(), OS);
+  Editor->applyRewrites(Writer);
 }
 
 //===----------------------------------------------------------------------===//
