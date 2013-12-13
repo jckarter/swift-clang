@@ -4579,7 +4579,7 @@ const char *arm::getARMCPUForMArch(const ArgList &Args,
     .Cases("armv7f", "armv7-f", "cortex-a9-mp")
 #ifndef __OPEN_SOURCE__
     .Cases("armv7k", "armv7-k", "pj4b")
-    .Cases("thumbv7k", "pj4b")
+    .Case("thumbv7k", "pj4b")
 #endif // !__OPEN_SOURCE__
     .Cases("armv7s", "armv7-s", "swift")
     .Cases("armv7r", "armv7-r", "cortex-r4")
