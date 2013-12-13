@@ -701,8 +701,8 @@ def warn_owning_getter_rule : Warning<
   " convention for returning 'owned' objects">,
   InGroup<DiagGroup<"objc-property-matches-cocoa-ownership-rule">>;
 def warn_auto_synthesizing_protocol_property :Warning<
-  "auto property synthesis will not synthesize property"
-  " declared in a protocol">,
+  "auto property synthesis will not synthesize property %0"
+  " declared in protocol %1">,
   InGroup<DiagGroup<"objc-protocol-property-synthesis">>;
 def warn_no_autosynthesis_shared_ivar_property : Warning <
   "auto property synthesis will not synthesize property "
@@ -852,7 +852,7 @@ def warn_unimplemented_selector:  Warning<
 def warning_multiple_selectors: Warning<
   "multiple selectors named %0 found">, InGroup<SelectorTypeMismatch>, DefaultIgnore;
 def warn_unimplemented_protocol_method : Warning<
-  "method %0 in protocol not implemented">, InGroup<Protocol>;
+  "method %0 in protocol %1 not implemented">, InGroup<Protocol>;
 
 // C++ declarations
 def err_static_assert_expression_is_not_constant : Error<
@@ -5750,9 +5750,6 @@ def note_inequality_comparison_to_or_assign : Note<
 
 def err_incomplete_type_used_in_type_trait_expr : Error<
   "incomplete type %0 used in type trait expression">;
-def err_type_trait_arity : Error<
-  "type trait requires %0%select{| or more}1 argument%select{|s}2; have "
-  "%3 argument%s3">;
   
 def err_dimension_expr_not_constant_integer : Error<
   "dimension expression does not evaluate to a constant unsigned int">;
