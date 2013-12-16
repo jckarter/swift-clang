@@ -517,23 +517,6 @@ public:
   }
 };
 
-// FIXME: Need a real SPU target.
-// PS3 SPU Target
-template<typename Target>
-class PS3SPUTargetInfo : public OSTargetInfo<Target> {
-protected:
-  virtual void getOSDefines(const LangOptions &Opts, const llvm::Triple &Triple,
-                            MacroBuilder &Builder) const {
-    // PS3 PPU defines.
-    Builder.defineMacro("__SPU__");
-    Builder.defineMacro("__ELF__");
-  }
-public:
-  PS3SPUTargetInfo(const llvm::Triple &Triple) : OSTargetInfo<Target>(Triple) {
-    this->UserLabelPrefix = "";
-  }
-};
-
 // AuroraUX target
 template<typename Target>
 class AuroraUXTargetInfo : public OSTargetInfo<Target> {
@@ -2979,7 +2962,7 @@ public:
     SuitableAlign = 128;
     DescriptionString = "e-p:32:32:32-i1:8:8-i8:8:8-i16:16:16-i32:32:32-"
                         "i64:32:64-f32:32:32-f64:32:64-v64:64:64-v128:128:128-"
-                        "a0:0:64-f80:32:32-n8:16:32-S128";
+                        "a:0:64-f80:32:32-n8:16:32-S128";
     SizeType = UnsignedInt;
     PtrDiffType = SignedInt;
     IntPtrType = SignedInt;
@@ -3075,7 +3058,7 @@ public:
     IntPtrType = SignedLong;
     DescriptionString = "e-p:32:32:32-i1:8:8-i8:8:8-i16:16:16-i32:32:32-"
                         "i64:32:64-f32:32:32-f64:32:64-v64:64:64-v128:128:128-"
-                        "a0:0:64-f80:128:128-n8:16:32-S128";
+                        "a:0:64-f80:128:128-n8:16:32-S128";
     HasAlignMac68kSupport = true;
   }
 
@@ -3093,7 +3076,7 @@ public:
     DoubleAlign = LongLongAlign = 64;
     DescriptionString = "e-p:32:32:32-i1:8:8-i8:8:8-i16:16:16-i32:32:32-"
                         "i64:64:64-f32:32:32-f64:64:64-f80:128:128-v64:64:64-"
-                        "v128:128:128-a0:0:64-f80:32:32-n8:16:32-S32";
+                        "v128:128:128-a:0:64-f80:32:32-n8:16:32-S32";
   }
   virtual void getTargetDefines(const LangOptions &Opts,
                                 MacroBuilder &Builder) const {
@@ -3162,7 +3145,7 @@ public:
     DoubleAlign = LongLongAlign = 64;
     DescriptionString = "e-p:32:32:32-i1:8:8-i8:8:8-i16:16:16-i32:32:32-"
                         "i64:64:64-f32:32:32-f64:64:64-v64:64:64-v128:128:128-"
-                        "a0:0:64-f80:32:32-n8:16:32-S32";
+                        "a:0:64-f80:32:32-n8:16:32-S32";
   }
   virtual void getTargetDefines(const LangOptions &Opts,
                                 MacroBuilder &Builder) const {
@@ -3270,7 +3253,7 @@ public:
 
     DescriptionString = "e-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-"
                         "i64:64:64-f32:32:32-f64:64:64-v64:64:64-v128:128:128-"
-                        "a0:0:64-s0:64:64-f80:128:128-n8:16:32:64-S128";
+                        "a:0:64-s:64:64-f80:128:128-n8:16:32:64-S128";
 
     // Use fpret only for long double.
     RealTypeUsesObjCFPRet = (1 << TargetInfo::LongDouble);
@@ -3763,11 +3746,11 @@ public:
       // so set preferred for small types to 32.
       DescriptionString = ("e-p:32:32:32-i1:8:32-i8:8:32-i16:16:32-i32:32:32-"
                            "i64:64:64-f32:32:32-f64:64:64-"
-                           "v64:64:64-v128:64:128-a0:0:32-n32-S64");
+                           "v64:64:64-v128:64:128-a:0:32-n32-S64");
     } else {
       DescriptionString = ("e-p:32:32:32-i1:8:8-i8:8:8-i16:16:16-i32:32:32-"
                            "i64:64:64-f32:32:32-f64:64:64-"
-                           "v64:64:64-v128:64:128-a0:0:64-n32-S64");
+                           "v64:64:64-v128:64:128-a:0:64-n32-S64");
     }
 
     // ARM targets default to using the ARM C++ ABI.
@@ -3817,11 +3800,11 @@ public:
         // so set preferred for small types to 32.
         DescriptionString = ("e-p:32:32:32-i1:8:32-i8:8:32-i16:16:32-i32:32:32-"
                              "i64:32:64-f32:32:32-f64:32:64-"
-                             "v64:32:64-v128:32:128-a0:0:32-n32-S32");
+                             "v64:32:64-v128:32:128-a:0:32-n32-S32");
       } else {
         DescriptionString = ("e-p:32:32:32-i1:8:8-i8:8:8-i16:16:16-i32:32:32-"
                              "i64:32:64-f32:32:32-f64:32:64-"
-                             "v64:32:64-v128:32:128-a0:0:32-n32-S32");
+                             "v64:32:64-v128:32:128-a:0:32-n32-S32");
       }
 
       // FIXME: Override "preferred align" for double and long long.
@@ -4531,7 +4514,7 @@ public:
     BigEndian = false;
     DescriptionString = ("e-p:32:32:32-"
                          "i64:64:64-i32:32:32-i16:16:16-i1:32:32-"
-                         "f64:64:64-f32:32:32-a0:0-n32");
+                         "f64:64:64-f32:32:32-a:0-n32");
 
     // {} in inline assembly are packet specifiers, not assembly variant
     // specifiers.
@@ -4871,7 +4854,7 @@ namespace {
       LongDoubleFormat = &llvm::APFloat::IEEEquad;
       MinGlobalAlign = 16;
       DescriptionString = "E-p:64:64:64-i1:8:16-i8:8:16-i16:16-i32:32-i64:64"
-       "-f32:32-f64:64-f128:64-a0:8:16-n32:64";
+       "-f32:32-f64:64-f128:64-a:8:16-n32:64";
       MaxAtomicPromoteWidth = MaxAtomicInlineWidth = 64;
     }
     virtual void getTargetDefines(const LangOptions &Opts,
@@ -5078,7 +5061,7 @@ namespace {
       DescriptionString = "E-p:32:32:32-i1:8:8-i8:8:32-"
                           "i16:16:32-i32:32:32-i64:32:32-"
                           "f32:32:32-f64:32:32-v64:32:32-"
-                          "v128:32:32-a0:0:32-n32";
+                          "v128:32:32-a:0:32-n32";
       AddrSpaceMap = &TCEOpenCLAddrSpaceMap;
       UseAddrSpaceMapMangling = true;
     }
@@ -5610,8 +5593,6 @@ public:
     this->PtrDiffType = TargetInfo::SignedInt;
     this->IntPtrType = TargetInfo::SignedInt;
     this->RegParmMax = 0; // Disallow regparm
-    DescriptionString = "e-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-"
-                        "f32:32:32-f64:64:64-p:32:32:32-v128:32:32";
   }
 
   void getDefaultFeatures(llvm::StringMap<bool> &Features) const {
@@ -5767,7 +5748,7 @@ public:
     WCharType = UnsignedChar;
     WIntType = UnsignedInt;
     UseZeroLengthBitfieldAlignment = true;
-    DescriptionString = "e-p:32:32:32-a0:0:32-n32"
+    DescriptionString = "e-p:32:32:32-a:0:32-n32"
                         "-i1:8:32-i8:8:32-i16:16:32-i32:32:32-i64:32:32"
                         "-f16:16:32-f32:32:32-f64:32:32";
   }
