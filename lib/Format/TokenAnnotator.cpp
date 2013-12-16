@@ -605,12 +605,17 @@ private:
           Previous->Type = TT_PointerOrReference;
         }
       }
-    } else if (Current.isOneOf(tok::kw_return, tok::kw_throw) ||
-               (Current.is(tok::l_paren) && !Line.MustBeDeclaration &&
-                !Line.InPPDirective &&
-                (!Current.Previous ||
-                 !Current.Previous->isOneOf(tok::kw_for, tok::kw_catch)))) {
+    } else if (Current.isOneOf(tok::kw_return, tok::kw_throw)) {
       Contexts.back().IsExpression = true;
+    } else if (Current.is(tok::l_paren) && !Line.MustBeDeclaration &&
+               !Line.InPPDirective) {
+      bool ParametersOfFunctionType =
+          Current.Previous && Current.Previous->is(tok::r_paren) &&
+          Current.Previous->MatchingParen &&
+          Current.Previous->MatchingParen->Type == TT_FunctionTypeLParen;
+      bool IsForOrCatch = Current.Previous &&
+                          Current.Previous->isOneOf(tok::kw_for, tok::kw_catch);
+      Contexts.back().IsExpression = !ParametersOfFunctionType && !IsForOrCatch;
     } else if (Current.isOneOf(tok::r_paren, tok::greater, tok::comma)) {
       for (FormatToken *Previous = Current.Previous;
            Previous && Previous->isOneOf(tok::star, tok::amp);
@@ -1412,6 +1417,12 @@ bool TokenAnnotator::mustBreakBefore(const AnnotatedLine &Line,
   } else if (Right.is(tok::l_brace) && (Right.BlockKind == BK_Block)) {
     return Style.BreakBeforeBraces == FormatStyle::BS_Allman ||
            Style.BreakBeforeBraces == FormatStyle::BS_GNU;
+  } else if (Right.is(tok::string_literal) &&
+             Right.TokenText.startswith("R\"")) {
+    // Raw string literals are special wrt. line breaks. The author has made a
+    // deliberate choice and might have aligned the contents of the string
+    // literal accordingly. Thus, we try keep existing line breaks.
+    return Right.NewlinesBefore > 0;
   }
   return false;
 }
