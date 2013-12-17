@@ -34,6 +34,9 @@ if( CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR )
   get_filename_component(PATH_TO_LLVM_BUILD ${CLANG_PATH_TO_LLVM_BUILD}
     ABSOLUTE)
 
+  set(LLVM_RUNTIME_OUTPUT_INTDIR ${PATH_TO_LLVM_BUILD}/bin/${CMAKE_CFG_INTDIR})
+  set(LLVM_LIBRARY_OUTPUT_INTDIR ${PATH_TO_LLVM_BUILD}/lib/${CMAKE_CFG_INTDIR})
+
   option(LLVM_INSTALL_TOOLCHAIN_ONLY "Only include toolchain files in the 'install' target." OFF)
 
   include(AddLLVM)
@@ -46,12 +49,16 @@ if( CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR )
   set(LLVM_MAIN_INCLUDE_DIR "${LLVM_MAIN_SRC_DIR}/include")
   set(LLVM_BINARY_DIR ${CMAKE_BINARY_DIR})
 
+  if (NOT DEFINED LLVM_INCLUDE_TESTS)
+    set(LLVM_INCLUDE_TESTS ON)
+  endif()
+
   set(CMAKE_INCLUDE_CURRENT_DIR ON)
   include_directories("${PATH_TO_LLVM_BUILD}/include" "${LLVM_MAIN_INCLUDE_DIR}")
   link_directories("${PATH_TO_LLVM_BUILD}/lib")
 
-  exec_program("${PATH_TO_LLVM_CONFIG} --bindir" OUTPUT_VARIABLE LLVM_BINARY_DIR)
-  set(LLVM_TABLEGEN_EXE "${LLVM_BINARY_DIR}/llvm-tblgen${CMAKE_EXECUTABLE_SUFFIX}")
+  exec_program("${PATH_TO_LLVM_CONFIG} --bindir" OUTPUT_VARIABLE LLVM_TOOLS_BINARY_DIR)
+  set(LLVM_TABLEGEN_EXE "${LLVM_TOOLS_BINARY_DIR}/llvm-tblgen${CMAKE_EXECUTABLE_SUFFIX}")
 
   # Define the default arguments to use with 'lit', and an option for the user
   # to override.
@@ -60,6 +67,11 @@ if( CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR )
     set(LIT_ARGS_DEFAULT "${LIT_ARGS_DEFAULT} --no-progress-bar")
   endif()
   set(LLVM_LIT_ARGS "${LIT_ARGS_DEFAULT}" CACHE STRING "Default options for lit")
+
+  # On Win32 hosts, provide an option to specify the path to the GnuWin32 tools.
+  if( WIN32 AND NOT CYGWIN )
+    set(LLVM_LIT_TOOLS_DIR "" CACHE PATH "Path to GnuWin32 tools")
+  endif()
 
   set( CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin )
   set( CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib )
@@ -102,6 +114,9 @@ set(CLANG_VENDOR_UTI "org.llvm.clang" CACHE STRING
 
 set(CLANG_SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR})
 set(CLANG_BINARY_DIR ${CMAKE_CURRENT_BINARY_DIR})
+
+set(CLANG_RUNTIME_OUTPUT_INTDIR ${CMAKE_BINARY_DIR}/bin/${CMAKE_CFG_INTDIR})
+set(CLANG_LIBRARY_OUTPUT_INTDIR ${CMAKE_BINARY_DIR}/lib/${CMAKE_CFG_INTDIR})
 
 if( CMAKE_SOURCE_DIR STREQUAL CMAKE_BINARY_DIR AND NOT MSVC_IDE )
   message(FATAL_ERROR "In-source builds are not allowed. CMake would overwrite "
