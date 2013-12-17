@@ -6337,7 +6337,7 @@ static FunctionDecl* CreateNewFunctionDecl(Sema &SemaRef, Declarator &D,
       // any translation unit may need to emit a deleting destructor.
       if (SemaRef.Context.getTargetInfo().getCXXABI().isMicrosoft() &&
           !Record->isDependentType() && Record->getDefinition() &&
-          !Record->isBeingDefined()) {
+          !Record->isBeingDefined() && !NewDD->isDeleted()) {
         SemaRef.CheckDestructor(NewDD);
       }
 
@@ -12087,12 +12087,6 @@ void Sema::ActOnFields(Scope *S, SourceLocation RecLoc, Decl *EnclosingDecl,
             if (getLangOpts().CPlusPlus11)
               AdjustDestructorExceptionSpec(CXXRecord,
                                             CXXRecord->getDestructor());
-
-            // The Microsoft ABI requires that we perform the destructor body
-            // checks (i.e. operator delete() lookup) at every declaration, as
-            // any translation unit may need to emit a deleting destructor.
-            if (Context.getTargetInfo().getCXXABI().isMicrosoft())
-              CheckDestructor(CXXRecord->getDestructor());
           }
 
           // Add any implicitly-declared members to this class.
