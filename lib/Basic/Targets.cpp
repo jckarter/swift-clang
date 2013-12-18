@@ -651,8 +651,7 @@ public:
     this->IntPtrType = TargetInfo::SignedInt;
     // RegParmMax is inherited from the underlying architecture
     this->LongDoubleFormat = &llvm::APFloat::IEEEdouble;
-    this->DescriptionString = "e-i64:64"
-                              "-p:32:32-v128:32";
+    this->DescriptionString = "e-p:32:32-i64:64-v128:32";
   }
   virtual typename Target::CallingConvCheckResult checkCallingConvention(
       CallingConv CC) const {
@@ -3426,9 +3425,7 @@ public:
     LongDoubleWidth = LongDoubleAlign = 128;
     PointerWidth = PointerAlign = 64;
     SuitableAlign = 128;
-    DescriptionString = "e-"
-                        "i64:64-i128:128-"
-                        "n32:64-S128";
+    DescriptionString = "e-i64:64-i128:128-s:32-n32:64-S128";
 
     WCharType = UnsignedInt;
     LongDoubleFormat = &llvm::APFloat::IEEEquad;

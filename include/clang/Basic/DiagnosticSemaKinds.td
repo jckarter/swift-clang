@@ -776,6 +776,9 @@ def err_arc_perform_selector_retains : Error<
 def warn_arc_perform_selector_leaks : Warning<
   "performSelector may cause a leak because its selector is unknown">,
   InGroup<DiagGroup<"arc-performSelector-leaks">>;
+def warn_dealloc_in_category : Warning<
+"-dealloc in a category is being overridden">,
+InGroup<DeallocInCategory>;
 def err_gc_weak_property_strong_type : Error<
   "weak attribute declared on a __strong type property in GC mode">;
 def warn_receiver_is_weak : Warning <
@@ -1911,8 +1914,8 @@ def warn_objc_literal_comparison : Warning<
   "direct comparison of %select{an array literal|a dictionary literal|"
   "a numeric literal|a boxed expression|}0 has undefined behavior">,
   InGroup<ObjCLiteralComparison>;
-def warn_missing_atsign_prefix : Warning<
-  "string literal must be prefixed by '@' ">, InGroup<ObjCLiteralMissingAtSign>;
+def err_missing_atsign_prefix : Error<
+  "string literal must be prefixed by '@' ">;
 def warn_objc_string_literal_comparison : Warning<
   "direct comparison of a string literal has undefined behavior">, 
   InGroup<ObjCStringComparison>;

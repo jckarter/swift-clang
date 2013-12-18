@@ -59,10 +59,20 @@
 // PS3: target datalayout = "E-p:32:32-i64:64-n32:64"
 
 // RUN: %clang_cc1 -triple i686-nacl -o - -emit-llvm %s | \
-// RUN: FileCheck %s -check-prefix=NACL
+// RUN: FileCheck %s -check-prefix=I686-NACL
+// I686-NACL: target datalayout = "e-p:32:32-i64:64-v128:32"
+
+// RUN: %clang_cc1 -triple x86_64-nacl -o - -emit-llvm %s | \
+// RUN: FileCheck %s -check-prefix=X86_64-NACL
+// X86_64-NACL: target datalayout = "e-p:32:32-i64:64-v128:32"
+
+// RUN: %clang_cc1 -triple arm-nacl-gnueabi -o - -emit-llvm %s | \
+// RUN: FileCheck %s -check-prefix=ARM-NACL
+// ARM-NACL: target datalayout = "e-p:32:32-i64:64-v128:32"
+
 // RUN: %clang_cc1 -triple le32-nacl -o - -emit-llvm %s | \
-// RUN: FileCheck %s -check-prefix=NACL
-// NACL: target datalayout = "e-i64:64-p:32:32-v128:32"
+// RUN: FileCheck %s -check-prefix=LE32-NACL
+// LE32-NACL: target datalayout = "e-p:32:32-i64:64-v128:32"
 
 // RUN: %clang_cc1 -triple powerpc-unknown -o - -emit-llvm %s | \
 // RUN: FileCheck %s -check-prefix=PPC
@@ -106,13 +116,13 @@
 
 // RUN: %clang_cc1 -triple aarch64-unknown -o - -emit-llvm %s | \
 // RUN: FileCheck %s -check-prefix=AARCH64
-// AARCH64: target datalayout = "e-i64:64-i128:128-n32:64-S128"
+// AARCH64: target datalayout = "e-i64:64-i128:128-s:32-n32:64-S128"
 
-// RUN: %clang_cc1 -triple thumb-unknown -o - -emit-llvm %s | \
+// RUN: %clang_cc1 -triple thumb-unknown-gnueabi -o - -emit-llvm %s | \
 // RUN: FileCheck %s -check-prefix=THUMB
 // THUMB: target datalayout = "e-p:32:32-i1:8:32-i8:8:32-i16:16:32-i64:64-v128:64:128-a:0:32-n32-S64"
 
-// RUN: %clang_cc1 -triple arm-unknown -o - -emit-llvm %s | \
+// RUN: %clang_cc1 -triple arm-unknown-gnueabi -o - -emit-llvm %s | \
 // RUN: FileCheck %s -check-prefix=ARM
 // ARM: target datalayout = "e-p:32:32-i64:64-v128:64:128-n32-S64"
 
