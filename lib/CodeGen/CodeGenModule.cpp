@@ -410,8 +410,7 @@ void CodeGenModule::setTLSMode(llvm::GlobalVariable *GV,
   TLM = GetLLVMTLSModel(CodeGenOpts.getDefaultTLSModel());
 
   // Override the TLS model if it is explicitly specified.
-  if (D.hasAttr<TLSModelAttr>()) {
-    const TLSModelAttr *Attr = D.getAttr<TLSModelAttr>();
+  if (const TLSModelAttr *Attr = D.getAttr<TLSModelAttr>()) {
     TLM = GetLLVMTLSModel(Attr->getModel());
   }
 
@@ -1942,11 +1941,11 @@ CodeGenModule::GetLLVMLinkageVarDefinition(const VarDecl *D, bool isConstant) {
              Linkage == GVA_ExplicitTemplateInstantiation)
     return llvm::GlobalVariable::WeakODRLinkage;
   else if (!getLangOpts().CPlusPlus && 
-           ((!CodeGenOpts.NoCommon && !D->getAttr<NoCommonAttr>()) ||
-             D->getAttr<CommonAttr>()) &&
+           ((!CodeGenOpts.NoCommon && !D->hasAttr<NoCommonAttr>()) ||
+             D->hasAttr<CommonAttr>()) &&
            !D->hasExternalStorage() && !D->getInit() &&
-           !D->getAttr<SectionAttr>() && !D->getTLSKind() &&
-           !D->getAttr<WeakImportAttr>()) {
+           !D->hasAttr<SectionAttr>() && !D->getTLSKind() &&
+           !D->hasAttr<WeakImportAttr>()) {
     // Thread local vars aren't considered common linkage.
     return llvm::GlobalVariable::CommonLinkage;
   } else if (D->getTLSKind() == VarDecl::TLS_Dynamic &&

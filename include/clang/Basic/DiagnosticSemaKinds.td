@@ -777,7 +777,7 @@ def warn_arc_perform_selector_leaks : Warning<
   "performSelector may cause a leak because its selector is unknown">,
   InGroup<DiagGroup<"arc-performSelector-leaks">>;
 def warn_dealloc_in_category : Warning<
-"-dealloc in a category is being overridden">,
+"-dealloc is being overridden in a category">,
 InGroup<DeallocInCategory>;
 def err_gc_weak_property_strong_type : Error<
   "weak attribute declared on a __strong type property in GC mode">;
@@ -935,6 +935,8 @@ def err_throw_abstract_type : Error<
 def err_array_of_abstract_type : Error<"array of abstract class type %0">;
 def err_capture_of_abstract_type : Error<
   "by-copy capture of value of abstract type %0">;
+def err_capture_of_incomplete_type : Error<
+  "by-copy capture of variable %0 with incomplete type %1">;
 
 def err_multiple_final_overriders : Error<
   "virtual function %q0 has more than one final overrider in %1">; 
@@ -3525,8 +3527,8 @@ def err_unavailable : Error<"%0 is unavailable">;
 def err_unavailable_message : Error<"%0 is unavailable: %1">;
 def warn_unavailable_fwdclass_message : Warning<
     "%0 maybe unavailable because receiver type is unknown">;
-def note_unavailable_here : Note<
-  "%select{declaration|function}0 has been explicitly marked "
+def note_availability_specified_here : Note<
+  "%0 has been explicitly marked "
   "%select{unavailable|deleted|deprecated}1 here">;
 def note_implicitly_deleted : Note<
   "explicitly defaulted function was implicitly deleted here">;

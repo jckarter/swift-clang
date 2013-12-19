@@ -24,7 +24,7 @@
 
 // RUN: %clang_cc1 -triple sparc-sun-solaris -emit-llvm -o - %s | \
 // RUN:     FileCheck %s --check-prefix=SPARC-V8
-// SPARC-V8: target datalayout = "E-p:32:32-i64:64-n32-S64"
+// SPARC-V8: target datalayout = "E-p:32:32-i64:64-f128:64-n32-S64"
 
 // RUN: %clang_cc1 -triple sparcv9-sun-solaris -emit-llvm -o - %s | \
 // RUN: FileCheck %s --check-prefix=SPARC-V9
@@ -60,19 +60,23 @@
 
 // RUN: %clang_cc1 -triple i686-nacl -o - -emit-llvm %s | \
 // RUN: FileCheck %s -check-prefix=I686-NACL
-// I686-NACL: target datalayout = "e-p:32:32-i64:64-v128:32"
+// I686-NACL: target datalayout = "e-p:32:32-i64:64-n8:16:32-S128"
 
 // RUN: %clang_cc1 -triple x86_64-nacl -o - -emit-llvm %s | \
 // RUN: FileCheck %s -check-prefix=X86_64-NACL
-// X86_64-NACL: target datalayout = "e-p:32:32-i64:64-v128:32"
+// X86_64-NACL: target datalayout = "e-p:32:32-i64:64-s:64-n8:16:32:64-S128"
 
 // RUN: %clang_cc1 -triple arm-nacl-gnueabi -o - -emit-llvm %s | \
 // RUN: FileCheck %s -check-prefix=ARM-NACL
-// ARM-NACL: target datalayout = "e-p:32:32-i64:64-v128:32"
+// ARM-NACL: target datalayout = "e-p:32:32-i64:64-v128:64:128-n32-S128"
+
+// RUN: %clang_cc1 -triple mipsel-nacl -o - -emit-llvm %s | \
+// RUN: FileCheck %s -check-prefix=MIPS-NACL
+// MIPS-NACL: target datalayout = "e-p:32:32-i8:8:32-i16:16:32-i64:64-n32-S64"
 
 // RUN: %clang_cc1 -triple le32-nacl -o - -emit-llvm %s | \
 // RUN: FileCheck %s -check-prefix=LE32-NACL
-// LE32-NACL: target datalayout = "e-p:32:32-i64:64-v128:32"
+// LE32-NACL: target datalayout = "e-p:32:32-i64:64"
 
 // RUN: %clang_cc1 -triple powerpc-unknown -o - -emit-llvm %s | \
 // RUN: FileCheck %s -check-prefix=PPC
@@ -88,7 +92,7 @@
 
 // RUN: %clang_cc1 -triple powerpc-darwin -o - -emit-llvm %s | \
 // RUN: FileCheck %s -check-prefix=PPC32-DARWIN
-// PPC32-DARWIN: target datalayout = "E-p:32:32-n32"
+// PPC32-DARWIN: target datalayout = "E-p:32:32-f64:32:64-n32"
 
 // RUN: %clang_cc1 -triple powerpc64-darwin -o - -emit-llvm %s | \
 // RUN: FileCheck %s -check-prefix=PPC64-DARWIN
@@ -112,7 +116,7 @@
 
 // RUN: %clang_cc1 -triple r600-unknown -target-cpu hawaii -o - -emit-llvm %s \
 // RUN: | FileCheck %s -check-prefix=R600SI
-// R600SI: target datalayout = "e-p3:32:32-i64:64-v16:16-v24:32-v32:32-v48:64-v96:128-v192:256-v256:256-v512:512-v1024:1024-v2048:2048-n32:64"
+// R600SI: target datalayout = "e-p0:32:32-p1:64:64-p2:64:64-p3:32:32-p4:32:32-p5:64:64-i64:64-v16:16-v24:32-v32:32-v48:64-v96:128-v192:256-v256:256-v512:512-v1024:1024-v2048:2048-n32:64"
 
 // RUN: %clang_cc1 -triple aarch64-unknown -o - -emit-llvm %s | \
 // RUN: FileCheck %s -check-prefix=AARCH64

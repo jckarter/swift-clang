@@ -414,6 +414,9 @@ def CUDALaunchBounds : InheritableAttr {
   let Spellings = [GNU<"launch_bounds">];
   let Args = [IntArgument<"MaxThreads">, DefaultIntArgument<"MinBlocks", 0>];
   let LangOpts = [CUDA];
+  // An AST node is created for this attribute, but is not used by other parts
+  // of the compiler. However, this node needs to exist in the AST because
+  // non-LLVM backends may be relying on the attribute's presence.
 }
 
 def CUDAShared : InheritableAttr {
@@ -502,12 +505,17 @@ def GNUInline : InheritableAttr {
 def Hot : InheritableAttr {
   let Spellings = [GNU<"hot">, CXX11<"gnu", "hot">];
   let Subjects = SubjectList<[Function]>;
+  // An AST node is created for this attribute, but not actually used beyond
+  // semantic checking for mutual exclusion with the Cold attribute.
 }
 
 def IBAction : InheritableAttr {
   let Spellings = [GNU<"ibaction">];
   let Subjects = SubjectList<[ObjCInstanceMethod], WarnDiag,
                              "ExpectedObjCInstanceMethod">;
+  // An AST node is created for this attribute, but is not used by other parts
+  // of the compiler. However, this node needs to exist in the AST because
+  // external tools rely on it.
 }
 
 def IBOutlet : InheritableAttr {
@@ -813,8 +821,9 @@ def InitPriority : InheritableAttr {
 def Section : InheritableAttr {
   let Spellings = [GNU<"section">, CXX11<"gnu", "section">];
   let Args = [StringArgument<"Name">];
-  let Subjects = SubjectList<[Function, GlobalVar], ErrorDiag,
-                             "ExpectedFunctionOrGlobalVar">;
+  let Subjects = SubjectList<[Function, GlobalVar, 
+                              ObjCMethod, ObjCProperty], ErrorDiag,
+                             "ExpectedFunctionGlobalVarMethodOrProperty">;
 }
 
 def Sentinel : InheritableAttr {
@@ -1265,26 +1274,21 @@ def UPtr : TypeAttr {
   let ASTNode = 0;
 }
 
-class MSInheritanceAttr : InheritableAttr {
+def MSInheritance : InheritableAttr {
   let LangOpts = [MicrosoftExt];
-}
-
-def SingleInheritance : MSInheritanceAttr {
-  let Spellings = [Keyword<"__single_inheritance">];
-}
-
-def MultipleInheritance : MSInheritanceAttr {
-  let Spellings = [Keyword<"__multiple_inheritance">];
-}
-
-def VirtualInheritance : MSInheritanceAttr {
-  let Spellings = [Keyword<"__virtual_inheritance">];
-}
-
-// This attribute doesn't have any spellings, but we can apply it implicitly to
-// incomplete types that lack any of the other attributes.
-def UnspecifiedInheritance : MSInheritanceAttr {
-  let Spellings = [];
+  let Spellings = [Keyword<"__single_inheritance">,
+                   Keyword<"__multiple_inheritance">,
+                   Keyword<"__virtual_inheritance">,
+                   // We use an empty string to denote an unspecified
+                   // inheritance attribute.
+                   Keyword<"">];
+  let Accessors = [Accessor<"IsSingle", [Keyword<"__single_inheritance">]>,
+                   Accessor<"IsMultiple", [Keyword<"__multiple_inheritance">]>,
+                   Accessor<"IsVirtual", [Keyword<"__virtual_inheritance">]>,
+                   Accessor<"IsUnspecified", [Keyword<"">]>];
+  // This index is based off the Spellings list and corresponds to the empty
+  // keyword "spelling."
+  let AdditionalMembers = [{static const int UnspecifiedSpellingIndex = 3;}];
 }
 
 def Unaligned : IgnoredAttr {
