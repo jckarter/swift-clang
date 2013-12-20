@@ -3680,6 +3680,13 @@ TEST_F(FormatTest, AlignsStringLiterals) {
   verifyFormat("#define A \"def\"\n"
                "f(\"abc\" A \"ghi\"\n"
                "  \"jkl\");");
+
+  verifyFormat("f(L\"a\"\n"
+               "  L\"b\")");
+  verifyFormat("#define A(X)            \\\n"
+               "  L\"aaaaa\" #X L\"bbbbbb\" \\\n"
+               "  L\"ccccc\"",
+               getLLVMStyleWithColumns(25));
 }
 
 TEST_F(FormatTest, AlwaysBreakBeforeMultilineStrings) {
@@ -3707,6 +3714,10 @@ TEST_F(FormatTest, AlwaysBreakBeforeMultilineStrings) {
   verifyFormat("aaaa(qqq,\n"
                "     \"bbbb\"\n"
                "     \"cccc\");",
+               Break);
+  verifyFormat("aaaa(qqq,\n"
+               "     L\"bbbb\"\n"
+               "     L\"cccc\");",
                Break);
 
   // Don't break if there is no column gain.
@@ -4771,12 +4782,12 @@ TEST_F(FormatTest, LayoutCxx11ConstructorBraceInitializers) {
     verifyFormat("DoSomethingWithVector({} /* No data */);");
     verifyFormat("DoSomethingWithVector({ {} /* No data */ }, { { 1, 2 } });");
     verifyFormat(
-        "someFunction(OtherParam, BracedList{\n"
-        "                           // comment 1 (Forcing interesting break)\n"
-        "                           param1, param2,\n"
-        "                           // comment 2\n"
-        "                           param3, param4\n"
-        "                         });");
+        "someFunction(OtherParam,\n"
+        "             BracedList{ // comment 1 (Forcing interesting break)\n"
+        "                         param1, param2,\n"
+        "                         // comment 2\n"
+        "                         param3, param4 });",
+        getLLVMStyleWithColumns(75));
     verifyFormat(
         "std::this_thread::sleep_for(\n"
         "    std::chrono::nanoseconds{ std::chrono::seconds{ 1 } } / 5);");
@@ -4808,11 +4819,39 @@ TEST_F(FormatTest, LayoutCxx11ConstructorBraceInitializers) {
                  "  T member = {arg1, arg2};\n"
                  "};",
                  NoSpaces);
+
+    // FIXME: The alignment of these trailing comments might be bad. Then again,
+    // this might be utterly useless in real code.
     verifyFormat("Constructor::Constructor()\n"
-                 "    : some_value{ //\n"
-                 "          aaaaaaa //\n"
+                 "    : some_value{        //\n"
+                 "                 aaaaaaa //\n"
                  "      } {}",
                  NoSpaces);
+
+    // In braced lists, the first comment is always assumed to belong to the
+    // first element. Thus, it can be moved to the next or previous line as
+    // appropriate.
+    EXPECT_EQ("function({// First element:\n"
+              "          1,\n"
+              "          // Second element:\n"
+              "          2});",
+              format("function({\n"
+                     "    // First element:\n"
+                     "    1,\n"
+                     "    // Second element:\n"
+                     "    2});",
+                     NoSpaces));
+    NoSpaces.ColumnLimit = 30;
+    EXPECT_EQ(
+  "std::vector<int> MyNumbers{\n"
+  "    // First element:\n"
+  "    1,\n"
+  "    // Second element:\n"
+  "    2};",
+  format("std::vector<int> MyNumbers{// First element:\n"
+  "                           1,\n"
+  "                           // Second element:\n"
+  "                           2};", NoSpaces));
 }
 
 TEST_F(FormatTest, FormatsBracedListsInColumnLayout) {
