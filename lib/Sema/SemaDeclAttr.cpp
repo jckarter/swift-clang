@@ -1177,47 +1177,6 @@ static void possibleTransparentUnionPointerType(QualType &T) {
     }
 }
 
-static void handleAllocSizeAttr(Sema &S, Decl *D, const AttributeList &Attr) {
-  if (!isFunctionOrMethod(D)) {
-    S.Diag(Attr.getLoc(), diag::warn_attribute_wrong_decl_type)
-    << Attr.getName() << ExpectedFunctionOrMethod;
-    return;
-  }
-
-  if (!checkAttributeAtLeastNumArgs(S, Attr, 1))
-    return;
-
-  SmallVector<unsigned, 8> SizeArgs;
-  for (unsigned i = 0; i < Attr.getNumArgs(); ++i) {
-    Expr *Ex = Attr.getArgAsExpr(i);
-    uint64_t Idx;
-    if (!checkFunctionOrMethodArgumentIndex(S, D, Attr.getName()->getName(),
-                                            Attr.getLoc(), i + 1, Ex, Idx))
-      return;
-
-    // check if the function argument is of an integer type
-    QualType T = getFunctionOrMethodArgType(D, Idx).getNonReferenceType();
-    if (!T->isIntegerType()) {
-      S.Diag(Attr.getLoc(), diag::err_attribute_argument_type)
-        << Attr.getName() << AANT_ArgumentIntegerConstant
-        << Ex->getSourceRange();
-      return;
-    }
-    SizeArgs.push_back(Idx);
-  }
-
-  // check if the function returns a pointer
-  if (!getFunctionType(D)->getResultType()->isAnyPointerType()) {
-    S.Diag(Attr.getLoc(), diag::warn_ns_attribute_wrong_return_type)
-    << Attr.getName() << 0 /*function*/<< 1 /*pointer*/ << D->getSourceRange();
-  }
-
-  D->addAttr(::new (S.Context)
-             AllocSizeAttr(Attr.getRange(), S.Context,
-                           SizeArgs.data(), SizeArgs.size(),
-                           Attr.getAttributeSpellingListIndex()));
-}
-
 static void handleNonNullAttr(Sema &S, Decl *D, const AttributeList &Attr) {
   // GCC ignores the nonnull attribute on K&R style function prototypes, so we
   // ignore it as well
@@ -2353,28 +2312,6 @@ static void handleSectionAttr(Sema &S, Decl *D, const AttributeList &Attr) {
     D->addAttr(NewAttr);
 }
 
-
-static void handleNothrowAttr(Sema &S, Decl *D, const AttributeList &Attr) {
-  if (NoThrowAttr *Existing = D->getAttr<NoThrowAttr>()) {
-    if (Existing->getLocation().isInvalid())
-      Existing->setRange(Attr.getRange());
-  } else {
-    D->addAttr(::new (S.Context)
-               NoThrowAttr(Attr.getRange(), S.Context,
-                           Attr.getAttributeSpellingListIndex()));
-  }
-}
-
-static void handleConstAttr(Sema &S, Decl *D, const AttributeList &Attr) {
-  if (ConstAttr *Existing = D->getAttr<ConstAttr>()) {
-   if (Existing->getLocation().isInvalid())
-     Existing->setRange(Attr.getRange());
-  } else {
-    D->addAttr(::new (S.Context)
-               ConstAttr(Attr.getRange(), S.Context,
-                         Attr.getAttributeSpellingListIndex() ));
-  }
-}
 
 static void handleCleanupAttr(Sema &S, Decl *D, const AttributeList &Attr) {
   VarDecl *VD = cast<VarDecl>(D);
@@ -3876,7 +3813,6 @@ static void ProcessDeclAttribute(Sema &S, Scope *scope, Decl *D,
     break;
   case AttributeList::AT_Alias:       handleAliasAttr       (S, D, Attr); break;
   case AttributeList::AT_Aligned:     handleAlignedAttr     (S, D, Attr); break;
-  case AttributeList::AT_AllocSize:   handleAllocSizeAttr   (S, D, Attr); break;
   case AttributeList::AT_AlwaysInline:
     handleSimpleAttribute<AlwaysInlineAttr>(S, D, Attr); break;
   case AttributeList::AT_AnalyzerNoReturn:
@@ -3929,7 +3865,8 @@ static void ProcessDeclAttribute(Sema &S, Scope *scope, Decl *D,
   case AttributeList::AT_Naked:
     handleSimpleAttribute<NakedAttr>(S, D, Attr); break;
   case AttributeList::AT_NoReturn:    handleNoReturnAttr    (S, D, Attr); break;
-  case AttributeList::AT_NoThrow:     handleNothrowAttr     (S, D, Attr); break;
+  case AttributeList::AT_NoThrow:
+    handleSimpleAttribute<NoThrowAttr>(S, D, Attr); break;
   case AttributeList::AT_CUDAShared:
     handleSimpleAttribute<CUDASharedAttr>(S, D, Attr); break;
   case AttributeList::AT_VecReturn:   handleVecReturnAttr   (S, D, Attr); break;
@@ -4027,7 +3964,8 @@ static void ProcessDeclAttribute(Sema &S, Scope *scope, Decl *D,
   case AttributeList::AT_ObjCNSObject:handleObjCNSObject    (S, D, Attr); break;
   case AttributeList::AT_Blocks:      handleBlocksAttr      (S, D, Attr); break;
   case AttributeList::AT_Sentinel:    handleSentinelAttr    (S, D, Attr); break;
-  case AttributeList::AT_Const:       handleConstAttr       (S, D, Attr); break;
+  case AttributeList::AT_Const:
+    handleSimpleAttribute<ConstAttr>(S, D, Attr); break;
   case AttributeList::AT_Pure:
     handleSimpleAttribute<PureAttr>(S, D, Attr); break;
   case AttributeList::AT_Cleanup:     handleCleanupAttr     (S, D, Attr); break;
