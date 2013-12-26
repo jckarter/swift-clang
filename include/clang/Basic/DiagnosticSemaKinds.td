@@ -1835,17 +1835,18 @@ def err_init_priority_object_attr : Error<
 def err_attribute_argument_vec_type_hint : Error<
   "invalid attribute argument %0 - expecting a vector or vectorizable scalar type">;
 def err_attribute_argument_out_of_bounds : Error<
-  "'%0' attribute parameter %1 is out of bounds">;
+  "%0 attribute parameter %1 is out of bounds">;
 def err_attribute_uuid_malformed_guid : Error<
   "uuid attribute contains a malformed GUID">;
-def warn_nonnull_pointers_only : Warning<
-  "nonnull attribute only applies to pointer arguments">;
+def warn_attribute_pointers_only : Warning<
+  "%0 attribute only applies to pointer arguments">,
+  InGroup<IgnoredAttributes>;
 def err_attribute_pointers_only : Error<
   "%0 attribute only applies to pointer arguments">;
 def err_attribute_no_member_pointers : Error<
   "%0 attribute cannot be used with pointers to members">;
 def err_attribute_invalid_implicit_this_argument : Error<
-  "'%0' attribute is invalid for the implicit this argument">;
+  "%0 attribute is invalid for the implicit this argument">;
 def err_ownership_type : Error<
   "%0 attribute only applies to %select{pointer|integer}1 arguments">;
 def err_format_strftime_third_parameter : Error<
@@ -1950,14 +1951,10 @@ def err_anonymous_property: Error<
   "anonymous property is not supported">;
 def err_property_is_variably_modified: Error<
   "property '%0' has a variably modified type">;
-def err_no_getter_for_property : Error<
-  "no getter defined for property '%0'">;
-def err_no_setter_for_property : Error<
-  "no setter defined for property '%0'">;
-def error_cannot_find_suitable_getter : Error<
-  "cannot find suitable getter for property '%0'">;
-def error_cannot_find_suitable_setter : Error<
-  "cannot find suitable setter for property '%0'">;
+def err_no_accessor_for_property : Error<
+  "no %select{getter|setter}0 defined for property '%1'">;
+def error_cannot_find_suitable_accessor : Error<
+  "cannot find suitable %select{getter|setter}0 for property '%1'">;
 
 def err_attribute_aligned_not_power_of_two : Error<
   "requested alignment is not a power of 2">;
@@ -2137,7 +2134,7 @@ def warn_thread_attribute_decl_not_lockable : Warning<
   "with 'lockable' attribute">,
   InGroup<ThreadSafetyAttributes>, DefaultIgnore;
 def warn_thread_attribute_decl_not_pointer : Warning<
-  "'%0' only applies to pointer types; type here is %1">,
+  "%0 only applies to pointer types; type here is %1">,
   InGroup<ThreadSafetyAttributes>, DefaultIgnore;
 def err_attribute_argument_out_of_range : Error<
   "%0 attribute parameter %1 is out of bounds: "
@@ -6725,7 +6722,7 @@ def err_opencl_global_invalid_addr_space : Error<
   "global variables must have a constant address space qualifier">;
 def err_opencl_no_main : Error<"%select{function|kernel}0 cannot be called 'main'">;
 def err_opencl_kernel_attr :
-  Error<"attribute '%0' can only be applied to a kernel function">;
+  Error<"attribute %0 can only be applied to a kernel function">;
 } // end of sema category
 
 let CategoryName = "OpenMP Issue" in {

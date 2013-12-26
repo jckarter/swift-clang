@@ -261,8 +261,7 @@ static bool checkAttrMutualExclusion(Sema &S, Decl *D,
 ///
 /// \returns true if IdxExpr is a valid index.
 static bool checkFunctionOrMethodArgumentIndex(Sema &S, const Decl *D,
-                                               StringRef AttrName,
-                                               SourceLocation AttrLoc,
+                                               const AttributeList &Attr,
                                                unsigned AttrArgNum,
                                                const Expr *IdxExpr,
                                                uint64_t &Idx)
@@ -280,24 +279,24 @@ static bool checkFunctionOrMethodArgumentIndex(Sema &S, const Decl *D,
   llvm::APSInt IdxInt;
   if (IdxExpr->isTypeDependent() || IdxExpr->isValueDependent() ||
       !IdxExpr->isIntegerConstantExpr(IdxInt, S.Context)) {
-    std::string Name = std::string("'") + AttrName.str() + std::string("'");
-    S.Diag(AttrLoc, diag::err_attribute_argument_n_type) << Name.c_str()
-      << AttrArgNum << AANT_ArgumentIntegerConstant << IdxExpr->getSourceRange();
+    S.Diag(Attr.getLoc(), diag::err_attribute_argument_n_type)
+      << Attr.getName() << AttrArgNum << AANT_ArgumentIntegerConstant
+      << IdxExpr->getSourceRange();
     return false;
   }
 
   Idx = IdxInt.getLimitedValue();
   if (Idx < 1 || (!IV && Idx > NumArgs)) {
-    S.Diag(AttrLoc, diag::err_attribute_argument_out_of_bounds)
-      << AttrName << AttrArgNum << IdxExpr->getSourceRange();
+    S.Diag(Attr.getLoc(), diag::err_attribute_argument_out_of_bounds)
+      << Attr.getName() << AttrArgNum << IdxExpr->getSourceRange();
     return false;
   }
   Idx--; // Convert to zero-based.
   if (HasImplicitThisParam) {
     if (Idx == 0) {
-      S.Diag(AttrLoc,
+      S.Diag(Attr.getLoc(),
              diag::err_attribute_invalid_implicit_this_argument)
-        << AttrName << IdxExpr->getSourceRange();
+        << Attr.getName() << IdxExpr->getSourceRange();
       return false;
     }
     --Idx;
@@ -379,28 +378,24 @@ static bool threadSafetyCheckIsSmartPointer(Sema &S, const RecordType* RT) {
 /// \return true if the Decl is a pointer type; false otherwise
 static bool threadSafetyCheckIsPointer(Sema &S, const Decl *D,
                                        const AttributeList &Attr) {
-  if (const ValueDecl *vd = dyn_cast<ValueDecl>(D)) {
-    QualType QT = vd->getType();
-    if (QT->isAnyPointerType())
+  const ValueDecl *vd = cast<ValueDecl>(D);
+  QualType QT = vd->getType();
+  if (QT->isAnyPointerType())
+    return true;
+
+  if (const RecordType *RT = QT->getAs<RecordType>()) {
+    // If it's an incomplete type, it could be a smart pointer; skip it.
+    // (We don't want to force template instantiation if we can avoid it,
+    // since that would alter the order in which templates are instantiated.)
+    if (RT->isIncompleteType())
       return true;
 
-    if (const RecordType *RT = QT->getAs<RecordType>()) {
-      // If it's an incomplete type, it could be a smart pointer; skip it.
-      // (We don't want to force template instantiation if we can avoid it,
-      // since that would alter the order in which templates are instantiated.)
-      if (RT->isIncompleteType())
-        return true;
-
-      if (threadSafetyCheckIsSmartPointer(S, RT))
-        return true;
-    }
-
-    S.Diag(Attr.getLoc(), diag::warn_thread_attribute_decl_not_pointer)
-      << Attr.getName()->getName() << QT;
-  } else {
-    S.Diag(Attr.getLoc(), diag::err_attribute_can_be_applied_only_to_value_decl)
-      << Attr.getName();
+    if (threadSafetyCheckIsSmartPointer(S, RT))
+      return true;
   }
+
+  S.Diag(Attr.getLoc(), diag::warn_thread_attribute_decl_not_pointer)
+    << Attr.getName() << QT;
   return false;
 }
 
@@ -1190,8 +1185,7 @@ static void handleNonNullAttr(Sema &S, Decl *D, const AttributeList &Attr) {
   for (unsigned i = 0; i < Attr.getNumArgs(); ++i) {
     Expr *Ex = Attr.getArgAsExpr(i);
     uint64_t Idx;
-    if (!checkFunctionOrMethodArgumentIndex(S, D, Attr.getName()->getName(),
-                                            Attr.getLoc(), i + 1, Ex, Idx))
+    if (!checkFunctionOrMethodArgumentIndex(S, D, Attr, i + 1, Ex, Idx))
       return;
 
     // Is the function argument a pointer type?
@@ -1200,8 +1194,8 @@ static void handleNonNullAttr(Sema &S, Decl *D, const AttributeList &Attr) {
     
     if (!T->isAnyPointerType() && !T->isBlockPointerType()) {
       // FIXME: Should also highlight argument in decl.
-      S.Diag(Attr.getLoc(), diag::warn_nonnull_pointers_only)
-        << "nonnull" << Ex->getSourceRange();
+      S.Diag(Attr.getLoc(), diag::warn_attribute_pointers_only)
+        << Attr.getName() << Ex->getSourceRange();
       continue;
     }
 
@@ -1302,8 +1296,7 @@ static void handleOwnershipAttr(Sema &S, Decl *D, const AttributeList &AL) {
   for (unsigned i = 1; i < AL.getNumArgs(); ++i) {
     Expr *Ex = AL.getArgAsExpr(i);
     uint64_t Idx;
-    if (!checkFunctionOrMethodArgumentIndex(S, D, AL.getName()->getName(),
-                                            AL.getLoc(), i, Ex, Idx))
+    if (!checkFunctionOrMethodArgumentIndex(S, D, AL, i, Ex, Idx))
       return;
 
     // Is the function argument a pointer type?
@@ -1564,8 +1557,8 @@ static void handleVecReturnAttr(Sema &S, Decl *D, const AttributeList &Attr) {
     return result; // This will be returned in a register
   }
 */
-  if (D->hasAttr<VecReturnAttr>()) {
-    S.Diag(Attr.getLoc(), diag::err_repeat_attribute) << "vecreturn";
+  if (VecReturnAttr *A = D->getAttr<VecReturnAttr>()) {
+    S.Diag(Attr.getLoc(), diag::err_repeat_attribute) << A;
     return;
   }
 
@@ -1629,7 +1622,7 @@ static void handleUnusedAttr(Sema &S, Decl *D, const AttributeList &Attr) {
 static void handleUsedAttr(Sema &S, Decl *D, const AttributeList &Attr) {
   if (const VarDecl *VD = dyn_cast<VarDecl>(D)) {
     if (VD->hasLocalStorage()) {
-      S.Diag(Attr.getLoc(), diag::warn_attribute_ignored) << "used";
+      S.Diag(Attr.getLoc(), diag::warn_attribute_ignored) << Attr.getName();
       return;
     }
   } else if (!isFunctionOrMethod(D)) {
@@ -2387,8 +2380,7 @@ static void handleFormatArgAttr(Sema &S, Decl *D, const AttributeList &Attr) {
 
   Expr *IdxExpr = Attr.getArgAsExpr(0);
   uint64_t ArgIdx;
-  if (!checkFunctionOrMethodArgumentIndex(S, D, Attr.getName()->getName(),
-                                          Attr.getLoc(), 1, IdxExpr, ArgIdx))
+  if (!checkFunctionOrMethodArgumentIndex(S, D, Attr, 1, IdxExpr, ArgIdx))
     return;
 
   // make sure the format string is really a string
@@ -2559,7 +2551,7 @@ static void handleFormatAttr(Sema &S, Decl *D, const AttributeList &Attr) {
   
   if (Kind == InvalidFormat) {
     S.Diag(Attr.getLoc(), diag::warn_attribute_type_not_supported)
-      << "format" << II->getName();
+      << Attr.getName() << II->getName();
     return;
   }
 
@@ -2571,7 +2563,7 @@ static void handleFormatAttr(Sema &S, Decl *D, const AttributeList &Attr) {
 
   if (Idx < 1 || Idx > NumArgs) {
     S.Diag(Attr.getLoc(), diag::err_attribute_argument_out_of_bounds)
-      << "format" << 2 << IdxExpr->getSourceRange();
+      << Attr.getName() << 2 << IdxExpr->getSourceRange();
     return;
   }
 
@@ -2641,7 +2633,7 @@ static void handleFormatAttr(Sema &S, Decl *D, const AttributeList &Attr) {
   // if 0 it disables parameter checking (to use with e.g. va_list)
   } else if (FirstArg != 0 && FirstArg != NumArgs) {
     S.Diag(Attr.getLoc(), diag::err_attribute_argument_out_of_bounds)
-      << "format" << 3 << FirstArgExpr->getSourceRange();
+      << Attr.getName() << 3 << FirstArgExpr->getSourceRange();
     return;
   }
 
@@ -3327,7 +3319,6 @@ static void handleArgumentWithTypeTagAttr(Sema &S, Decl *D,
   if (!checkAttributeNumArgs(S, Attr, 3))
     return;
 
-  StringRef AttrName = Attr.getName()->getName();
   IdentifierInfo *ArgumentKind = Attr.getArgAsIdent(0)->Ident;
 
   if (!isFunctionOrMethod(D) || !hasFunctionProto(D)) {
@@ -3337,18 +3328,16 @@ static void handleArgumentWithTypeTagAttr(Sema &S, Decl *D,
   }
 
   uint64_t ArgumentIdx;
-  if (!checkFunctionOrMethodArgumentIndex(S, D, AttrName,
-                                          Attr.getLoc(), 2,
-                                          Attr.getArgAsExpr(1), ArgumentIdx))
+  if (!checkFunctionOrMethodArgumentIndex(S, D, Attr, 2, Attr.getArgAsExpr(1),
+                                          ArgumentIdx))
     return;
 
   uint64_t TypeTagIdx;
-  if (!checkFunctionOrMethodArgumentIndex(S, D, AttrName,
-                                          Attr.getLoc(), 3,
-                                          Attr.getArgAsExpr(2), TypeTagIdx))
+  if (!checkFunctionOrMethodArgumentIndex(S, D, Attr, 3, Attr.getArgAsExpr(2),
+                                          TypeTagIdx))
     return;
 
-  bool IsPointer = (AttrName == "pointer_with_type_tag");
+  bool IsPointer = (Attr.getName()->getName() == "pointer_with_type_tag");
   if (IsPointer) {
     // Ensure that buffer has a pointer type.
     QualType BufferTy = getFunctionOrMethodArgType(D, ArgumentIdx);
@@ -4138,18 +4127,16 @@ void Sema::ProcessDeclAttributeList(Scope *S, Decl *D,
 
   if (!D->hasAttr<OpenCLKernelAttr>()) {
     // These attributes cannot be applied to a non-kernel function.
-    if (D->hasAttr<ReqdWorkGroupSizeAttr>()) {
-      Diag(D->getLocation(), diag::err_opencl_kernel_attr)
-          << "reqd_work_group_size";
+    if (Attr *A = D->getAttr<ReqdWorkGroupSizeAttr>()) {
+      Diag(D->getLocation(), diag::err_opencl_kernel_attr) << A;
       D->setInvalidDecl();
     }
-    if (D->hasAttr<WorkGroupSizeHintAttr>()) {
-      Diag(D->getLocation(), diag::err_opencl_kernel_attr)
-          << "work_group_size_hint";
+    if (Attr *A = D->getAttr<WorkGroupSizeHintAttr>()) {
+      Diag(D->getLocation(), diag::err_opencl_kernel_attr) << A;
       D->setInvalidDecl();
     }
-    if (D->hasAttr<VecTypeHintAttr>()) {
-      Diag(D->getLocation(), diag::err_opencl_kernel_attr) << "vec_type_hint";
+    if (Attr *A = D->getAttr<VecTypeHintAttr>()) {
+      Diag(D->getLocation(), diag::err_opencl_kernel_attr) << A;
       D->setInvalidDecl();
     }
   }
