@@ -2084,8 +2084,6 @@ def warn_objc_precise_lifetime_meaningless : Error<
   "objc_precise_lifetime is not meaningful for "
   "%select{__unsafe_unretained|__autoreleasing}0 objects">;
 def err_invalid_pcs : Error<"invalid PCS type">;
-def err_attribute_can_be_applied_only_to_value_decl : Error<
-  "%0 attribute can only be applied to value declarations">;
 def warn_attribute_not_on_decl : Warning<
   "%0 attribute ignored when parsing type">, InGroup<IgnoredAttributes>;
 def err_base_specifier_attribute : Error<
@@ -4243,6 +4241,8 @@ def ext_sizeof_alignof_function_type : Extension<
 def ext_sizeof_alignof_void_type : Extension<
   "invalid application of '%select{sizeof|alignof|vec_step}0' to a void "
   "type">, InGroup<PointerArith>;
+def err_opencl_sizeof_alignof_type : Error<
+  "invalid application of '%select{sizeof|alignof|vec_step}0' to a void type">;
 def err_sizeof_alignof_incomplete_type : Error<
   "invalid application of '%select{sizeof|alignof|vec_step}0' to an "
   "incomplete type %1">;
