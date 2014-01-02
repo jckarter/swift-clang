@@ -55,7 +55,7 @@ clang_tablegen(arm_neon.h -gen-arm-neon
   SOURCE ${CLANG_SOURCE_DIR}/include/clang/Basic/arm_neon.td)
 
 # Generate aarch64_simd.h
-clang_tablegen(aarch64_simd.h.inc -gen-arm64-simd
+clang_tablegen(aarch64_simd.h -gen-arm64-simd
   -I ${CMAKE_CURRENT_SOURCE_DIR}/../../include
   SOURCE ${CLANG_SOURCE_DIR}/include/clang/Basic/arm64_simd.td)
 
@@ -77,8 +77,8 @@ add_custom_command(OUTPUT ${output_dir}/arm_neon.h
 list(APPEND out_files ${output_dir}/arm_neon.h)
 
 add_custom_command(OUTPUT ${output_dir}/aarch64_simd.h 
-  DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/aarch64_simd.h.inc
-  COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_CURRENT_BINARY_DIR}/aarch64_simd.h.inc ${output_dir}/aarch64_simd.h
+  DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/aarch64_simd.h
+  COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_CURRENT_BINARY_DIR}/aarch64_simd.h ${output_dir}/aarch64_simd.h
   COMMENT "Copying clang's aarch64_simd.h...")
 list(APPEND out_files ${output_dir}/aarch64_simd.h)
 
