@@ -425,7 +425,7 @@ def ext_noreturn_main : ExtWarn<
 def note_main_remove_noreturn : Note<"remove '_Noreturn'">;
 def err_constexpr_main : Error<
   "'main' is not allowed to be declared constexpr">;
-def err_mainlike_template_decl : Error<"'%0' cannot be a template">;
+def err_mainlike_template_decl : Error<"%0 cannot be a template">;
 def err_main_returns_nonint : Error<"'main' must return 'int'">;
 def ext_main_returns_nonint : ExtWarn<"return type of 'main' is not 'int'">,
     InGroup<MainReturnType>;
@@ -1579,7 +1579,7 @@ def warn_abstract_final_class : Warning<
   "abstract class is marked '%select{final|sealed}0'">, InGroup<AbstractFinalClass>;
 
 // C++11 attributes
-def err_repeat_attribute : Error<"'%0' attribute cannot be repeated">;
+def err_repeat_attribute : Error<"%0 attribute cannot be repeated">;
 
 // C++11 final
 def err_final_function_overridden : Error<
@@ -1795,7 +1795,7 @@ def warn_auto_var_is_id : Warning<
 
 // Attributes
 def err_nsobject_attribute : Error<
-  "__attribute ((NSObject)) is for pointer types only">;
+  "'NSObject' attribute is for pointer types only">;
 def err_attribute_can_be_applied_only_to_symbol_declaration : Error<
   "%0 attribute can be applied only to symbol declaration">;
 def err_attributes_are_not_compatible : Error<
@@ -1804,9 +1804,9 @@ def err_attribute_wrong_number_arguments : Error<
   "%0 attribute %plural{0:takes no arguments|1:takes one argument|"
   ":requires exactly %1 arguments}1">;
 def err_attribute_too_many_arguments : Error<
-  "attribute takes no more than %0 argument%s0">;
+  "%0 attribute takes no more than %1 argument%s1">;
 def err_attribute_too_few_arguments : Error<
-  "attribute takes at least %0 argument%s0">;
+  "%0 attribute takes at least %1 argument%s1">;
 def err_attribute_invalid_vector_type : Error<"invalid vector element type %0">;
 def err_attribute_bad_neon_vector_size : Error<
   "Neon vector size must be 64 or 128 bits">;
@@ -1815,14 +1815,11 @@ def err_attribute_unsupported : Error<
 def err_aligned_attribute_argument_not_int : Error<
   "'aligned' attribute requires integer constant">;
 def err_alignas_attribute_wrong_decl_type : Error<
-  "'%select{alignas|_Alignas}0' attribute cannot be applied to a %select{"
-  "function parameter|variable with 'register' storage class|"
-  "'catch' variable|bit-field}1">;
+  "%0 attribute cannot be applied to a %select{function parameter|"
+  "variable with 'register' storage class|'catch' variable|bit-field}1">;
 def err_alignas_missing_on_definition : Error<
-  "'%select{alignas|_Alignas}0' must be specified on definition if it is "
-  "specified on any declaration">;
-def note_alignas_on_declaration : Note<
-  "declared with '%select{alignas|_Alignas}0' attribute here">;
+  "%0 must be specified on definition if it is specified on any declaration">;
+def note_alignas_on_declaration : Note<"declared with %0 attribute here">;
 def err_alignas_mismatch : Error<
   "redeclaration has different alignment requirement (%1 vs %0)">;
 def err_alignas_underaligned : Error<
@@ -1955,19 +1952,19 @@ def warn_mismatched_section : Warning<
 
 def err_anonymous_property: Error<
   "anonymous property is not supported">;
-def err_property_is_variably_modified: Error<
-  "property '%0' has a variably modified type">;
+def err_property_is_variably_modified : Error<
+  "property %0 has a variably modified type">;
 def err_no_accessor_for_property : Error<
-  "no %select{getter|setter}0 defined for property '%1'">;
+  "no %select{getter|setter}0 defined for property %1">;
 def error_cannot_find_suitable_accessor : Error<
-  "cannot find suitable %select{getter|setter}0 for property '%1'">;
+  "cannot find suitable %select{getter|setter}0 for property %1">;
 
 def err_attribute_aligned_not_power_of_two : Error<
   "requested alignment is not a power of 2">;
 def err_attribute_aligned_greater_than_8192 : Error<
   "requested alignment must be 8192 bytes or smaller">;
 def warn_redeclaration_without_attribute_prev_attribute_ignored : Warning<
-  "'%0' redeclared without %1 attribute: previous %1 ignored">;
+  "%0 redeclared without %1 attribute: previous %1 ignored">;
 def warn_attribute_ignored : Warning<"%0 attribute ignored">,
   InGroup<IgnoredAttributes>;
 def warn_attribute_after_definition_ignored : Warning<
@@ -2001,8 +1998,8 @@ def warn_gc_attribute_weak_on_local : Warning<
   "Objective-C GC does not allow weak variables on the stack">,
   InGroup<IgnoredAttributes>;
 def warn_nsobject_attribute : Warning<
-  "__attribute ((NSObject)) may be put on a typedef only, "
-  "attribute is ignored">, InGroup<NSobjectAttribute>;
+  "'NSObject' attribute may be put on a typedef only; attribute is ignored">,
+  InGroup<NSobjectAttribute>;
 def warn_attribute_weak_on_local : Warning<
   "__weak attribute cannot be specified on an automatic variable when ARC "
   "is not enabled">,
@@ -2019,9 +2016,9 @@ def warn_attribute_invalid_on_definition : Warning<
 def err_attribute_weakref_not_static : Error<
   "weakref declaration must have internal linkage">;
 def err_attribute_weakref_not_global_context : Error<
-  "weakref declaration of '%0' must be in a global context">;
+  "weakref declaration of %0 must be in a global context">;
 def err_attribute_weakref_without_alias : Error<
-  "weakref declaration of '%0' must also have an alias attribute">;
+  "weakref declaration of %0 must also have an alias attribute">;
 def err_alias_not_supported_on_darwin : Error <
   "only weak aliases are supported on darwin">;
 def err_alias_to_undefined : Error<
@@ -2115,11 +2112,11 @@ def warn_thread_attribute_ignored : Warning<
   InGroup<ThreadSafetyAttributes>, DefaultIgnore;
 def warn_thread_attribute_argument_not_lockable : Warning<
   "%0 attribute requires arguments whose type is annotated "
-  "with 'lockable' attribute; type here is '%1'">,
+  "with 'lockable' attribute; type here is %1">,
   InGroup<ThreadSafetyAttributes>, DefaultIgnore;
 def warn_thread_attribute_argument_not_class : Warning<
   "%0 attribute requires arguments that are class type or point to"
-  " class type; type here is '%1'">,
+  " class type; type here is %1">,
   InGroup<ThreadSafetyAttributes>, DefaultIgnore;  
 def warn_thread_attribute_decl_not_lockable : Warning<
   "%0 attribute can only be applied in a context annotated "
@@ -2445,7 +2442,7 @@ def warn_objc_implementation_missing_designated_init_override : Warning<
 def err_objc_attr_not_id : Error<
   "parameter of %0 attribute must be a single name of an Objective-C %select{class|protocol}1">;
 def err_objc_cf_bridged_not_interface : Error<
-  "CF object of type %0 is bridged to '%1', which is not an Objective-C class">;
+  "CF object of type %0 is bridged to %1, which is not an Objective-C class">;
 def err_objc_ns_bridged_invalid_cfobject : Error<
   "ObjectiveC object of type %0 is bridged to %1, which is not valid CF object">;
 def warn_objc_invalid_bridge : Warning<
@@ -6272,7 +6269,7 @@ def warn_type_tag_for_datatype_wrong_kind : Warning<
   "this type tag was not designed to be used with this function">,
   InGroup<TypeSafety>;
 def warn_type_safety_type_mismatch : Warning<
-  "argument type %0 doesn't match specified '%1' type tag "
+  "argument type %0 doesn't match specified %1 type tag "
   "%select{that requires %3|}2">, InGroup<TypeSafety>;
 def warn_type_safety_null_pointer_required : Warning<
   "specified %0 type tag requires a null pointer">, InGroup<TypeSafety>;

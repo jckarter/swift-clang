@@ -656,7 +656,7 @@ public:
     } else if (Triple.getArch() == llvm::Triple::x86) {
       this->DescriptionString = "e-p:32:32-i64:64-n8:16:32-S128";
     } else if (Triple.getArch() == llvm::Triple::x86_64) {
-      this->DescriptionString = "e-p:32:32-i64:64-s:64-n8:16:32:64-S128";
+      this->DescriptionString = "e-p:32:32-i64:64-n8:16:32:64-S128";
     } else if (Triple.getArch() == llvm::Triple::mipsel) {
       // Handled on mips' setDescriptionString.
     } else {
@@ -3257,7 +3257,7 @@ public:
     Int64Type = SignedLong;
     RegParmMax = 6;
 
-    DescriptionString = "e-i64:64-f80:128-s:64-n8:16:32:64-S128";
+    DescriptionString = "e-i64:64-f80:128-n8:16:32:64-S128";
 
     // Use fpret only for long double.
     RealTypeUsesObjCFPRet = (1 << TargetInfo::LongDouble);
@@ -3433,7 +3433,7 @@ public:
     LongDoubleWidth = LongDoubleAlign = 128;
     PointerWidth = PointerAlign = 64;
     SuitableAlign = 128;
-    DescriptionString = "e-i64:64-i128:128-s:32-n32:64-S128";
+    DescriptionString = "e-i64:64-i128:128-n32:64-S128";
 
     WCharType = UnsignedInt;
     LongDoubleFormat = &llvm::APFloat::IEEEquad;
@@ -3845,6 +3845,11 @@ public:
   }
 
   void getDefaultFeatures(llvm::StringMap<bool> &Features) const {
+    if (IsAAPCS)
+      Features["aapcs"] = true;
+    else
+      Features["apcs"] = true;
+
     StringRef ArchName = getTriple().getArchName();
     if (CPU == "arm1136jf-s" || CPU == "arm1176jzf-s" || CPU == "mpcore")
       Features["vfp2"] = true;
