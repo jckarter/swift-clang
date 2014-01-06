@@ -22,19 +22,27 @@ static const char * const TokNames[] = {
   0
 };
 
-const char *tok::getTokenName(enum TokenKind Kind) {
+const char *tok::getTokenName(TokenKind Kind) {
   if (Kind < tok::NUM_TOKENS)
     return TokNames[Kind];
   llvm_unreachable("unknown TokenKind");
   return 0;
 }
 
-const char *tok::getTokenSimpleSpelling(enum TokenKind Kind) {
+const char *tok::getPunctuatorSpelling(TokenKind Kind) {
   switch (Kind) {
 #define PUNCTUATOR(X,Y) case X: return Y;
 #include "clang/Basic/TokenKinds.def"
   default: break;
   }
+  return 0;
+}
 
+const char *tok::getKeywordSpelling(TokenKind Kind) {
+  switch (Kind) {
+#define KEYWORD(X,Y) case kw_ ## X: return #X;
+#include "clang/Basic/TokenKinds.def"
+    default: break;
+  }
   return 0;
 }

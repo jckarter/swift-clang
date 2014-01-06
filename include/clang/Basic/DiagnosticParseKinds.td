@@ -627,8 +627,7 @@ def err_typename_refers_to_non_type_template : Error<
 def err_expected_type_name_after_typename : Error<
   "expected an identifier or template-id after '::'">;
 def err_explicit_spec_non_template : Error<
-  "explicit %select{specialization|instantiation}0 of non-template "
-  "%select{class|struct|union|interface}1 %2">;
+  "explicit %select{specialization|instantiation}0 of non-template %1 %2">;
   
 def err_default_template_template_parameter_not_template : Error<
   "default template argument for a template template parameter must be a class "
@@ -641,9 +640,7 @@ def err_ctor_init_missing_comma : Error<
 def err_friend_decl_defines_type : Error<
   "cannot define a type in a friend declaration">;
 def err_missing_whitespace_digraph : Error<
-  "found '<::' after a "
-  "%select{template name|const_cast|dynamic_cast|reinterpret_cast|static_cast}0"
-  " which forms the digraph '<:' (aka '[') and a ':', did you mean '< ::'?">;
+  "found '<::' after a %0 which forms the digraph '<:' (aka '[') and a ':', did you mean '< ::'?">;
 
 def ext_deleted_function : ExtWarn<
   "deleted function definitions are a C++11 extension">, InGroup<CXX11>;
