@@ -146,7 +146,7 @@ def ext_flexible_array_init : Extension<
 def err_bad_variable_name : Error<
   "%0 cannot be the name of a variable or data member">;
 def err_bad_parameter_name : Error<
-  "'%0' cannot be the name of a parameter">;
+  "%0 cannot be the name of a parameter">;
 def err_parameter_name_omitted : Error<"parameter name omitted">;
 def warn_unused_parameter : Warning<"unused parameter %0">,
   InGroup<UnusedParameter>, DefaultIgnore;
@@ -713,11 +713,11 @@ def warn_auto_synthesizing_protocol_property :Warning<
   InGroup<DiagGroup<"objc-protocol-property-synthesis">>;
 def warn_no_autosynthesis_shared_ivar_property : Warning <
   "auto property synthesis will not synthesize property "
-  "'%0' because it cannot share an ivar with another synthesized property">,
+  "%0 because it cannot share an ivar with another synthesized property">,
   InGroup<ObjCNoPropertyAutoSynthesis>;
 def warn_no_autosynthesis_property : Warning<
   "auto property synthesis will not synthesize property "
-  "'%0' because it is 'readwrite' but it will be synthesized 'readonly' "
+  "%0 because it is 'readwrite' but it will be synthesized 'readonly' "
   "via another property">,
   InGroup<ObjCNoPropertyAutoSynthesis>;
 def warn_autosynthesis_property_ivar_match :Warning<
@@ -731,7 +731,7 @@ def warn_property_getter_owning_mismatch : Warning<
   "property declared as returning non-retained objects"
   "; getter returning retained objects">;
 def error_property_setter_ambiguous_use : Error<
-  "synthesized properties '%0' and '%1' both claim setter %2 -"
+  "synthesized properties %0 and %1 both claim setter %2 -"
   " use of this setter will cause unexpected behavior">;
 def err_ownin_getter_rule : Error<
   "property's synthesized getter follows Cocoa naming"
@@ -848,7 +848,7 @@ def warn_implicit_atomic_property : Warning<
 def note_auto_readonly_iboutlet_fixup_suggest : Note<
   "property should be changed to be readwrite">;
 def warn_auto_readonly_iboutlet_property : Warning<
-  "readonly IBOutlet property '%0' when auto-synthesized may "
+  "readonly IBOutlet property %0 when auto-synthesized may "
   "not work correctly with 'nib' loader">,
   InGroup<DiagGroup<"readonly-iboutlet-property">>;
 def warn_auto_implicit_atomic_property : Warning<
@@ -3782,7 +3782,7 @@ def err_initializer_string_for_char_array_too_long : Error<
 def warn_initializer_string_for_char_array_too_long : ExtWarn<
   "initializer-string for char array is too long">;
 def warn_missing_field_initializers : Warning<
-  "missing field '%0' initializer">,
+  "missing field %0 initializer">,
   InGroup<MissingFieldInitializers>, DefaultIgnore;
 def warn_braces_around_scalar_init : Warning<
   "braces around scalar initializer">;
@@ -6714,6 +6714,8 @@ def err_opencl_global_invalid_addr_space : Error<
 def err_opencl_no_main : Error<"%select{function|kernel}0 cannot be called 'main'">;
 def err_opencl_kernel_attr :
   Error<"attribute %0 can only be applied to a kernel function">;
+def err_opencl_constant_no_init : Error<
+  "variable in constant address space must be initialized">;
 } // end of sema category
 
 let CategoryName = "OpenMP Issue" in {
