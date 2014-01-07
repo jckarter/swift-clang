@@ -11,11 +11,11 @@
 //
 //===----------------------------------------------------------------------===//
 #include "clang/AST/DeclTemplate.h"
-#include "clang/Parse/Parser.h"
 #include "RAIIObjectsForParser.h"
 #include "clang/Basic/PrettyStackTrace.h"
 #include "clang/Lex/LiteralSupport.h"
 #include "clang/Parse/ParseDiagnostic.h"
+#include "clang/Parse/Parser.h"
 #include "clang/Sema/DeclSpec.h"
 #include "clang/Sema/ParsedTemplate.h"
 #include "clang/Sema/Scope.h"
@@ -23,6 +23,20 @@
 
 
 using namespace clang;
+
+static int SelectDigraphErrorMessage(tok::TokenKind Kind) {
+  switch (Kind) {
+    // template name
+    case tok::unknown:             return 0;
+    // casts
+    case tok::kw_const_cast:       return 1;
+    case tok::kw_dynamic_cast:     return 2;
+    case tok::kw_reinterpret_cast: return 3;
+    case tok::kw_static_cast:      return 4;
+    default:
+      llvm_unreachable("Unknown type for digraph error message.");
+  }
+}
 
 // Are the two tokens adjacent in the same source file?
 bool Parser::areTokensAdjacent(const Token &First, const Token &Second) {
@@ -44,7 +58,8 @@ static void FixDigraph(Parser &P, Preprocessor &PP, Token &DigraphToken,
   Range.setBegin(DigraphToken.getLocation());
   Range.setEnd(ColonToken.getLocation());
   P.Diag(DigraphToken.getLocation(), diag::err_missing_whitespace_digraph)
-      << Kind << FixItHint::CreateReplacement(Range, "< ::");
+      << SelectDigraphErrorMessage(Kind)
+      << FixItHint::CreateReplacement(Range, "< ::");
 
   // Update token information to reflect their change in token type.
   ColonToken.setKind(tok::coloncolon);
@@ -80,8 +95,8 @@ void Parser::CheckForTemplateAndDigraph(Token &Next, ParsedType ObjectType,
                               Template, MemberOfUnknownSpecialization))
     return;
 
-  FixDigraph(*this, PP, Next, SecondToken, tok::annot_template_id,
-             /*AtDigraph*/ false);
+  FixDigraph(*this, PP, Next, SecondToken, tok::unknown,
+             /*AtDigraph*/false);
 }
 
 /// \brief Emits an error for a left parentheses after a double colon.

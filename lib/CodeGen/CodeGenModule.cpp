@@ -19,6 +19,7 @@
 #include "CGObjCRuntime.h"
 #include "CGOpenCLRuntime.h"
 #include "CodeGenFunction.h"
+#include "CodeGenPGO.h"
 #include "CodeGenTBAA.h"
 #include "TargetInfo.h"
 #include "clang/AST/ASTContext.h"
@@ -78,7 +79,8 @@ CodeGenModule::CodeGenModule(ASTContext &C, const CodeGenOptions &CGO,
       ABI(createCXXABI(*this)), VMContext(M.getContext()), TBAA(0),
       TheTargetCodeGenInfo(0), Types(*this), VTables(*this), ObjCRuntime(0),
       OpenCLRuntime(0), CUDARuntime(0), DebugInfo(0), ARCData(0),
-      NoObjCARCExceptionsMetadata(0), RRData(0), CFConstantStringClassRef(0),
+      NoObjCARCExceptionsMetadata(0), RRData(0), PGOData(0),
+      CFConstantStringClassRef(0),
       ConstantStringClassRef(0), NSConstantStringType(0),
       NSConcreteGlobalBlock(0), NSConcreteStackBlock(0), BlockObjectAssign(0),
       BlockObjectDispose(0), BlockDescriptorType(0), GenericBlockLiteralType(0),
@@ -132,6 +134,9 @@ CodeGenModule::CodeGenModule(ASTContext &C, const CodeGenOptions &CGO,
   if (C.getLangOpts().ObjCAutoRefCount)
     ARCData = new ARCEntrypoints();
   RRData = new RREntrypoints();
+
+  if (!CodeGenOpts.InstrProfileInput.empty())
+    PGOData = new PGOProfileData(*this, CodeGenOpts.InstrProfileInput);
 }
 
 CodeGenModule::~CodeGenModule() {
@@ -2182,6 +2187,10 @@ void CodeGenModule::EmitGlobalFunctionDefinition(GlobalDecl GD,
     AddGlobalDtor(Fn, DA->getPriority());
   if (D->hasAttr<AnnotateAttr>())
     AddGlobalAnnotations(D, Fn);
+
+  llvm::Function *PGOInit = CodeGenPGO::emitInitialization(*this);
+  if (PGOInit)
+    AddGlobalCtor(PGOInit, 0);
 }
 
 void CodeGenModule::EmitAliasDefinition(GlobalDecl GD) {

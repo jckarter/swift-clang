@@ -2189,6 +2189,7 @@ void CodeGenFunction::EmitNoreturnRuntimeCallOrInvoke(llvm::Value *callee,
     call->setCallingConv(getRuntimeCC());
     Builder.CreateUnreachable();
   }
+  PGO.setCurrentRegionCount(0);
 }
 
 /// Emits a call or invoke instruction to the given nullary runtime
