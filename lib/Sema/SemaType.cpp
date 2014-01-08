@@ -4770,25 +4770,16 @@ static bool isPermittedNeonBaseType(QualType &Ty,
   if (Is64Bit && BTy->getKind() == BuiltinType::Double)
     return true;
 
-  BuiltinType::Kind Int64Kind, UInt64Kind;
-  if (S.Context.getTargetInfo().getInt64Type() == TargetInfo::SignedLong) {
-    Int64Kind = BuiltinType::Long;
-    UInt64Kind = BuiltinType::ULong;
-  } else {
-    assert(S.Context.getTargetInfo().getInt64Type() ==
-           TargetInfo::SignedLongLong);
-    Int64Kind = BuiltinType::LongLong;
-    UInt64Kind = BuiltinType::ULongLong;
-  }
-
   return BTy->getKind() == BuiltinType::SChar ||
          BTy->getKind() == BuiltinType::UChar ||
          BTy->getKind() == BuiltinType::Short ||
          BTy->getKind() == BuiltinType::UShort ||
          BTy->getKind() == BuiltinType::Int ||
          BTy->getKind() == BuiltinType::UInt ||
-         BTy->getKind() == Int64Kind ||
-         BTy->getKind() == UInt64Kind ||
+         BTy->getKind() == BuiltinType::Long ||
+         BTy->getKind() == BuiltinType::ULong ||
+         BTy->getKind() == BuiltinType::LongLong ||
+         BTy->getKind() == BuiltinType::ULongLong ||
          BTy->getKind() == BuiltinType::Float ||
          BTy->getKind() == BuiltinType::Half;
 }
