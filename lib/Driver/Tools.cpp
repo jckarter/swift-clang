@@ -6377,6 +6377,10 @@ void gnutools::Assemble::ConstructJob(Compilation &C, const JobAction &JA,
     CmdArgs.push_back("-a64");
     CmdArgs.push_back("-mppc64le");
     CmdArgs.push_back("-many");
+  } else if (getToolChain().getArch() == llvm::Triple::sparc) {
+    CmdArgs.push_back("-32");
+  } else if (getToolChain().getArch() == llvm::Triple::sparcv9) {
+    CmdArgs.push_back("-64");
   } else if (getToolChain().getArch() == llvm::Triple::arm) {
     StringRef MArch = getToolChain().getArchName();
     if (MArch == "armv7" || MArch == "armv7a" || MArch == "armv7-a")
@@ -6524,7 +6528,8 @@ static StringRef getLinuxDynamicLinker(const ArgList &Args,
                                        const toolchains::Linux &ToolChain) {
   if (ToolChain.getTriple().getEnvironment() == llvm::Triple::Android)
     return "/system/bin/linker";
-  else if (ToolChain.getArch() == llvm::Triple::x86)
+  else if (ToolChain.getArch() == llvm::Triple::x86 ||
+           ToolChain.getArch() == llvm::Triple::sparc)
     return "/lib/ld-linux.so.2";
   else if (ToolChain.getArch() == llvm::Triple::aarch64 ||
            ToolChain.getArch() == llvm::Triple::arm64)
@@ -6550,6 +6555,8 @@ static StringRef getLinuxDynamicLinker(const ArgList &Args,
            ToolChain.getArch() == llvm::Triple::ppc64le ||
            ToolChain.getArch() == llvm::Triple::systemz)
     return "/lib64/ld64.so.1";
+  else if (ToolChain.getArch() == llvm::Triple::sparcv9)
+    return "/lib64/ld-linux.so.2";
   else
     return "/lib64/ld-linux-x86-64.so.2";
 }
@@ -6613,6 +6620,10 @@ void gnutools::Link::ConstructJob(Compilation &C, const JobAction &JA,
     CmdArgs.push_back("elf32ppclinux");
   else if (ToolChain.getArch() == llvm::Triple::ppc64)
     CmdArgs.push_back("elf64ppc");
+  else if (ToolChain.getArch() == llvm::Triple::sparc)
+    CmdArgs.push_back("elf32_sparc");
+  else if (ToolChain.getArch() == llvm::Triple::sparcv9)
+    CmdArgs.push_back("elf64_sparc");
   else if (ToolChain.getArch() == llvm::Triple::mips)
     CmdArgs.push_back("elf32btsmip");
   else if (ToolChain.getArch() == llvm::Triple::mipsel)

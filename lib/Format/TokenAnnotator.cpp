@@ -474,6 +474,18 @@ private:
     }
   }
 
+  void parsePragma() {
+    next(); // Consume "pragma".
+    if (CurrentToken && CurrentToken->TokenText == "mark") {
+      next(); // Consume "mark".
+      next(); // Consume first token (so we fix leading whitespace).
+      while (CurrentToken != NULL) {
+        CurrentToken->Type = TT_ImplicitStringLiteral;
+        next();
+      }
+    }
+  }
+
   void parsePreprocessorDirective() {
     next();
     if (CurrentToken == NULL)
@@ -494,6 +506,9 @@ private:
     case tok::pp_error:
     case tok::pp_warning:
       parseWarningOrError();
+      break;
+    case tok::pp_pragma:
+      parsePragma();
       break;
     case tok::pp_if:
     case tok::pp_elif:
@@ -702,6 +717,7 @@ private:
         if (LeftOfParens && (LeftOfParens->Tok.getIdentifierInfo() == NULL ||
                              LeftOfParens->is(tok::kw_return)) &&
             LeftOfParens->Type != TT_OverloadedOperator &&
+            LeftOfParens->isNot(tok::at) &&
             LeftOfParens->Type != TT_TemplateCloser && Current.Next &&
             Current.Next->is(tok::identifier))
           IsCast = true;
@@ -1187,7 +1203,7 @@ unsigned TokenAnnotator::splitPenalty(const AnnotatedLine &Line,
     return 2;
 
   if (Right.isMemberAccess()) {
-    if (Left.isOneOf(tok::r_paren, tok::r_square) && Left.MatchingParen &&
+    if (Left.is(tok::r_paren) && Left.MatchingParen &&
         Left.MatchingParen->ParameterCount > 0)
       return 20; // Should be smaller than breaking at a nested comma.
     return 150;

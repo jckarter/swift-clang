@@ -1913,23 +1913,29 @@ TEST_F(FormatTest, NestedStaticInitializers) {
       " } };");
 
   verifyFormat(
-      "SomeArrayOfSomeType a = { { { 1, 2, 3 }, { 1, 2, 3 },\n"
+      "SomeArrayOfSomeType a = { { { 1, 2, 3 },\n"
+      "                            { 1, 2, 3 },\n"
       "                            { 111111111111111111111111111111,\n"
       "                              222222222222222222222222222222,\n"
       "                              333333333333333333333333333333 },\n"
-      "                            { 1, 2, 3 }, { 1, 2, 3 } } };");
+      "                            { 1, 2, 3 },\n"
+      "                            { 1, 2, 3 } } };");
   verifyFormat(
-      "SomeArrayOfSomeType a = { { { 1, 2, 3 } }, { { 1, 2, 3 } },\n"
+      "SomeArrayOfSomeType a = { { { 1, 2, 3 } },\n"
+      "                          { { 1, 2, 3 } },\n"
       "                          { { 111111111111111111111111111111,\n"
       "                              222222222222222222222222222222,\n"
       "                              333333333333333333333333333333 } },\n"
-      "                          { { 1, 2, 3 } }, { { 1, 2, 3 } } };");
+      "                          { { 1, 2, 3 } },\n"
+      "                          { { 1, 2, 3 } } };");
   verifyGoogleFormat(
       "SomeArrayOfSomeType a = {\n"
-      "    {{1, 2, 3}}, {{1, 2, 3}},\n"
+      "    {{1, 2, 3}},\n"
+      "    {{1, 2, 3}},\n"
       "    {{111111111111111111111111111111, 222222222222222222222222222222,\n"
       "      333333333333333333333333333333}},\n"
-      "    {{1, 2, 3}}, {{1, 2, 3}}};");
+      "    {{1, 2, 3}},\n"
+      "    {{1, 2, 3}}};");
 
   verifyFormat(
       "struct {\n"
@@ -3904,8 +3910,8 @@ TEST_F(FormatTest, WrapsAtFunctionCallsIfNecessary) {
 
   verifyFormat("EXPECT_CALL(SomeObject, SomeFunction(Parameter))\n"
                "    .WillRepeatedly(Return(SomeValue));");
-  verifyFormat("SomeMap[std::pair(aaaaaaaaaaaa, bbbbbbbbbbbbbbb)]\n"
-               "    .insert(ccccccccccccccccccccccc);");
+  verifyFormat("SomeMap[std::pair(aaaaaaaaaaaa, bbbbbbbbbbbbbbb)].insert(\n"
+               "    ccccccccccccccccccccccc);");
   verifyFormat("aaaaa(aaaaa(aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa,\n"
                "            aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa).aaaaa(aaaaa),\n"
                "      aaaaaaaaaaaaaaaaaaaaa);");
@@ -4938,16 +4944,23 @@ TEST_F(FormatTest, FormatsBracedListsInColumnLayout) {
                "         { aaaaaaaaaaaaaaaaa } };",
                getLLVMStyleWithColumns(60));
 
-  // No column layout for nested lists.
+  // With nested lists, we should either format one item per line or all nested
+  // lists one one line.
   // FIXME: For some nested lists, we can do better.
   verifyFormat(
       "SomeStruct my_struct_array = {\n"
       "  { aaaaaa, aaaaaaaa, aaaaaaaaaa, aaaaaaaaa, aaaaaaaaa, aaaaaaaaaa,\n"
       "    aaaaaaaaaaaaa, aaaaaaa, aaa },\n"
+      "  { aaa, aaa },\n"
+      "  { aaa, aaa },\n"
       "  { aaaa, aaaa, aaaa, aaaa, aaaa, aaaa, aaaa, aaa },\n"
       "  { aaaaaaaaaaaaaaaaa, aaaaaaaaaaaaaaaaa, aaaaaaaaaaaaaaaaaaaaaaaa,\n"
       "    aaaaaaaaaaaa, a, aaaaaaaaaa, aaaaaaaaa, aaa },\n"
       "};");
+
+  // No column layout should be used here.
+  verifyFormat("aaaaaaaaaaaaaaa = { aaaaaaaaaaaaaaaaaaaaaaaaaaa, 0, 0,\n"
+               "                    bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb };");
 }
 
 TEST_F(FormatTest, PullTrivialFunctionDefinitionsIntoSingleLine) {
@@ -5866,6 +5879,8 @@ TEST_F(FormatTest, ObjCLiterals) {
   verifyFormat("NSNumber *piOverTwo = @(M_PI / 2);");
   verifyFormat("NSNumber *favoriteColor = @(Green);");
   verifyFormat("NSString *path = @(getenv(\"PATH\"));");
+
+  verifyFormat("[dictionary setObject:@(1) forKey:@\"number\"];");
 }
 
 TEST_F(FormatTest, ObjCDictLiterals) {
@@ -6226,7 +6241,7 @@ TEST_F(FormatTest, BreakStringLiterals) {
       format("#define A \"some text other\";", AlignLeft));
 }
 
-TEST_F(FormatTest, BreaksWideStringLiterals) {
+TEST_F(FormatTest, BreaksWideAndNSStringLiterals) {
   EXPECT_EQ(
       "u8\"utf8 string \"\n"
       "u8\"literal\";",
@@ -6242,6 +6257,9 @@ TEST_F(FormatTest, BreaksWideStringLiterals) {
   EXPECT_EQ("L\"wide string \"\n"
             "L\"literal\";",
             format("L\"wide string literal\";", getGoogleStyleWithColumns(16)));
+  EXPECT_EQ("@\"NSString \"\n"
+            "@\"literal\";",
+            format("@\"NSString literal\";", getGoogleStyleWithColumns(16)));
 }
 
 TEST_F(FormatTest, BreaksRawStringLiterals) {
@@ -7164,6 +7182,11 @@ TEST_F(FormatTest, CatchExceptionReferenceBinding) {
 TEST_F(FormatTest, UnderstandsPragmas) {
   verifyFormat("#pragma omp reduction(| : var)");
   verifyFormat("#pragma omp reduction(+ : var)");
+
+  EXPECT_EQ("#pragma mark Any non-hyphenated or hyphenated string "
+            "(including parentheses).",
+            format("#pragma    mark   Any non-hyphenated or hyphenated string "
+                   "(including parentheses)."));
 }
 
 #define EXPECT_ALL_STYLES_EQUAL(Styles)                                        \
