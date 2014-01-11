@@ -856,8 +856,6 @@ def warn_auto_implicit_atomic_property : Warning<
   InGroup<ImplicitAtomic>, DefaultIgnore;
 def warn_unimplemented_selector:  Warning<
   "creating selector for nonexistent method %0">, InGroup<Selector>, DefaultIgnore;
-def warning_multiple_selectors: Warning<
-  "multiple selectors named %0 found">, InGroup<SelectorTypeMismatch>, DefaultIgnore;
 def warn_unimplemented_protocol_method : Warning<
   "method %0 in protocol %1 not implemented">, InGroup<Protocol>;
 
@@ -1739,6 +1737,8 @@ def err_constexpr_local_var_no_init : Error<
 def ext_constexpr_function_never_constant_expr : ExtWarn<
   "constexpr %select{function|constructor}0 never produces a "
   "constant expression">, InGroup<DiagGroup<"invalid-constexpr">>, DefaultError;
+def err_enable_if_never_constant_expr : Error<
+  "'enable_if' attribute expression never produces a constant expression">;
 def err_constexpr_body_no_return : Error<
   "no return statement in constexpr function">;
 def warn_cxx11_compat_constexpr_body_no_return : Warning<
@@ -2588,6 +2588,8 @@ def note_ovl_candidate_substitution_failure : Note<
     "candidate template ignored: substitution failure%0%1">;
 def note_ovl_candidate_disabled_by_enable_if : Note<
     "candidate template ignored: disabled by %0%1">;
+def note_ovl_candidate_disabled_by_enable_if_attr : Note<
+    "candidate disabled: %0">;
 def note_ovl_candidate_failed_overload_resolution : Note<
     "candidate template ignored: couldn't resolve reference to overloaded "
     "function %0">;
@@ -3972,8 +3974,8 @@ def err_flexible_array_virtual_base : Error<
 def err_flexible_array_empty_aggregate : Error<
   "flexible array member %0 not allowed in otherwise empty "
   "%select{struct|interface|union|class|enum}1">;
-def err_flexible_array_has_nonpod_type : Error<
-  "flexible array member %0 of non-POD element type %1">;
+def err_flexible_array_has_nontrivial_dtor : Error<
+  "flexible array member %0 of type %1 with non-trivial destruction">;
 def ext_flexible_array_in_struct : Extension<
   "%0 may not be nested in a struct due to flexible array member">,
   InGroup<FlexibleArrayExtensions>;
