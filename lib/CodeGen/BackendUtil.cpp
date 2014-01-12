@@ -19,8 +19,8 @@
 #include "llvm/CodeGen/RegAllocRegistry.h"
 #include "llvm/CodeGen/SchedulerRegistry.h"
 #include "llvm/IR/DataLayout.h"
+#include "llvm/IR/IRPrintingPasses.h"
 #include "llvm/IR/Module.h"
-#include "llvm/IR/PrintModulePass.h"
 #include "llvm/MC/SubtargetFeature.h"
 #include "llvm/PassManager.h"
 #include "llvm/Support/CommandLine.h"
@@ -570,7 +570,7 @@ void EmitAssemblyHelper::EmitAssembly(BackendAction Action, raw_ostream *OS) {
 
   case Backend_EmitLL:
     FormattedOS.setStream(*OS, formatted_raw_ostream::PRESERVE_STREAM);
-    getPerModulePasses()->add(createPrintModulePass(&FormattedOS));
+    getPerModulePasses()->add(createPrintModulePass(FormattedOS));
     break;
 
   default:
