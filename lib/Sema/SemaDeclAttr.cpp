@@ -3180,16 +3180,6 @@ static void handleCallConvAttr(Sema &S, Decl *D, const AttributeList &Attr) {
   }
 }
 
-static void handleOpenCLImageAccessAttr(Sema &S, Decl *D,
-                                        const AttributeList &Attr) {
-  uint32_t ArgNum;
-  if (!checkUInt32Argument(S, Attr, Attr.getArgAsExpr(0), ArgNum))
-    return;
-
-  D->addAttr(::new (S.Context) OpenCLImageAccessAttr(Attr.getRange(),
-                                                     S.Context, ArgNum));
-}
-
 bool Sema::CheckCallingConvAttr(const AttributeList &attr, CallingConv &CC, 
                                 const FunctionDecl *FD) {
   if (attr.isInvalid())
@@ -4176,8 +4166,7 @@ static void ProcessDeclAttribute(Sema &S, Scope *scope, Decl *D,
   case AttributeList::AT_OpenCLKernel:
     handleSimpleAttribute<OpenCLKernelAttr>(S, D, Attr); break;
   case AttributeList::AT_OpenCLImageAccess:
-    handleOpenCLImageAccessAttr(S, D, Attr);
-    break;
+    handleSimpleAttribute<OpenCLImageAccessAttr>(S, D, Attr); break;
 
   // Microsoft attributes:
   case AttributeList::AT_MsStruct:
