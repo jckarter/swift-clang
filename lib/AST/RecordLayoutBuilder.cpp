@@ -2186,6 +2186,9 @@ MicrosoftRecordLayoutBuilder::getAdjustedElementInfo(
         Context.getTypeInfoInChars(FD->getType());
     if (FD->isBitField() && FD->getMaxAlignment() != 0)
       Info.Alignment = std::max(Info.Alignment, FieldRequiredAlignment);
+    // Respect pragma pack.
+    if (!MaxFieldAlignment.isZero())
+      Info.Alignment = std::min(Info.Alignment, MaxFieldAlignment);
   }
   // Respect packed field attribute.
   if (FD->hasAttr<PackedAttr>())
@@ -2197,12 +2200,12 @@ MicrosoftRecordLayoutBuilder::getAdjustedElementInfo(
     // Capture required alignment as a side-effect.
     RequiredAlignment = std::max(RequiredAlignment, FieldRequiredAlignment);
   }
-  // Respect pragma pack.
-  if (!MaxFieldAlignment.isZero())
-    Info.Alignment = std::min(Info.Alignment, MaxFieldAlignment);
   // TODO: Add a Sema warning that MS ignores bitfield alignment in unions.
-  if (!(FD->isBitField() && IsUnion))
+  if (!(FD->isBitField() && IsUnion)) {
     Alignment = std::max(Alignment, Info.Alignment);
+    if (!MaxFieldAlignment.isZero())
+      Alignment = std::min(Alignment, MaxFieldAlignment);
+  }
   return Info;
 }
 
@@ -2341,6 +2344,10 @@ MicrosoftRecordLayoutBuilder::layoutNonVirtualBases(const CXXRecordDecl *RD) {
   // Set our VBPtroffset if we know it at this point.
   if (!HasVBPtr)
     VBPtrOffset = CharUnits::fromQuantity(-1);
+  else if (SharedVBPtrBase) {
+    const ASTRecordLayout &Layout = Context.getASTRecordLayout(SharedVBPtrBase);
+    VBPtrOffset = Bases[SharedVBPtrBase] + Layout.getVBPtrOffset();
+  }
 }
 
 void MicrosoftRecordLayoutBuilder::layoutNonVirtualBase(
@@ -2444,13 +2451,8 @@ MicrosoftRecordLayoutBuilder::layoutZeroWidthBitField(const FieldDecl *FD) {
 }
 
 void MicrosoftRecordLayoutBuilder::injectVBPtr(const CXXRecordDecl *RD) {
-  if (!HasVBPtr)
+  if (!HasVBPtr || SharedVBPtrBase)
     return;
-  if (SharedVBPtrBase) {
-    const ASTRecordLayout &Layout = Context.getASTRecordLayout(SharedVBPtrBase);
-    VBPtrOffset = Bases[SharedVBPtrBase] + Layout.getVBPtrOffset();
-    return;
-  }
   // Inject the VBPointer at the injection site.
   CharUnits InjectionSite = VBPtrOffset;
   // But before we do, make sure it's properly aligned.

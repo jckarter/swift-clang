@@ -454,8 +454,31 @@ def OpenCLKernel : InheritableAttr {
 }
 
 def OpenCLImageAccess : Attr {
-  let Spellings = [GNU<"opencl_image_access">];
+  let Spellings = [GNU<"opencl_image_access">,
+                   Keyword<"__read_only">, Keyword<"read_only">,
+                   Keyword<"__write_only">, Keyword<"write_only">,
+                   Keyword<"__read_write">, Keyword<"read_write">];
+
+  // The access argument is used by the GNU syntax when parsing the attribute,
+  // but is used by the semantic attribute for all syntaxes (the keywords imply
+  // a specific access value).
   let Args = [IntArgument<"Access">];
+}
+
+def OpenCLPrivateAddressSpace : TypeAttr {
+  let Spellings = [Keyword<"__private">, Keyword<"private">];
+}
+
+def OpenCLGlobalAddressSpace : TypeAttr {
+  let Spellings = [Keyword<"__global">, Keyword<"global">];
+}
+
+def OpenCLLocalAddressSpace : TypeAttr {
+  let Spellings = [Keyword<"__local">, Keyword<"local">];
+}
+
+def OpenCLConstantAddressSpace : TypeAttr {
+  let Spellings = [Keyword<"__constant">, Keyword<"constant">];
 }
 
 def Deprecated : InheritableAttr {
@@ -1185,6 +1208,16 @@ def Consumable : InheritableAttr {
   let Args = [EnumArgument<"DefaultState", "ConsumedState",
                            ["unknown", "consumed", "unconsumed"],
                            ["Unknown", "Consumed", "Unconsumed"]>];
+}
+
+def ConsumableAutoCast : InheritableAttr {
+  let Spellings = [GNU<"consumable_auto_cast_state">];
+  let Subjects = SubjectList<[CXXRecord]>;
+}
+
+def ConsumableSetOnRead : InheritableAttr {
+  let Spellings = [GNU<"consumable_set_state_on_read">];
+  let Subjects = SubjectList<[CXXRecord]>;
 }
 
 def CallableWhen : InheritableAttr {
