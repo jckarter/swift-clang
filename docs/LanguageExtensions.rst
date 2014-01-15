@@ -873,7 +873,6 @@ C++1y variable templates
 Use ``__has_feature(cxx_variable_templates)`` or
 ``__has_extension(cxx_variable_templates)`` to determine if support for
 templated variable declarations is enabled.
-Clang does not yet support this feature.
 
 C11
 ---
@@ -1411,9 +1410,11 @@ available in C.
 
 .. code-block:: c++
 
-  int isdigit(int c) __attribute__((enable_if(c >= -1 && c <= 255, "'c' must have the value of an unsigned char or EOF")));
+  int isdigit(int c);
+  int isdigit(int c) __attribute__((enable_if(c <= -1 && c > 255, "chosen when 'c' is out of range"))) __attribute__((unavailable("'c' must have the value of an unsigned char or EOF")));
   
   void foo(char c) {
+    isdigit(c);
     isdigit(10);
     isdigit(-10);  // results in a compile-time error.
   }
@@ -1461,6 +1462,7 @@ remaining enable_if attributes. In this way, we pick the most specific
 overload out of a number of viable overloads using enable_if.
 
 .. code-block:: c++
+
   void f() __attribute__((enable_if(true, "")));  // #1
   void f() __attribute__((enable_if(true, ""))) __attribute__((enable_if(true, "")));  // #2
   
