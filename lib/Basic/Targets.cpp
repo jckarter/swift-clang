@@ -646,6 +646,8 @@ public:
     this->DoubleAlign = 64;
     this->LongDoubleWidth = 64;
     this->LongDoubleAlign = 64;
+    this->LongLongWidth = 64;
+    this->LongLongAlign = 64;
     this->SizeType = TargetInfo::UnsignedInt;
     this->PtrDiffType = TargetInfo::SignedInt;
     this->IntPtrType = TargetInfo::SignedInt;
@@ -3961,10 +3963,9 @@ public:
       .Cases("arm1176jz-s", "arm1176jzf-s", "6ZK")
       .Cases("arm1136jf-s", "mpcorenovfp", "mpcore", "6K")
       .Cases("arm1156t2-s", "arm1156t2f-s", "6T2")
-      .Cases("cortex-a5", "cortex-a7", "cortex-a8", "7A")
+      .Cases("cortex-a5", "cortex-a7", "cortex-a8", "cortex-a9-mp", "7A")
       .Cases("cortex-a9", "cortex-a12", "cortex-a15", "krait", "7A")
       .Cases("cortex-r4", "cortex-r5", "7R")
-      .Case("cortex-a9-mp", "7F")
 #ifndef __OPEN_SOURCE__
       .Case("pj4b", "7K")
 #endif // !__OPEN_SOURCE__
