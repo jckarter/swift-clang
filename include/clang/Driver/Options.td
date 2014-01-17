@@ -73,7 +73,6 @@ def m_x86_Features_Group  : OptionGroup<"<m x86 features group>">, Group<m_Group
 def m_hexagon_Features_Group  : OptionGroup<"<m hexagon features group>">, Group<m_Group>;
 def m_arm_Features_Group  : OptionGroup<"<m arm features group>">, Group<m_Group>;
 def m_ppc_Features_Group  : OptionGroup<"<m ppc features group>">, Group<m_Group>;
-def opencl_Group          : OptionGroup<"<opencl group>">;
 def u_Group               : OptionGroup<"<u group>">;
 
 def pedantic_Group        : OptionGroup<"<pedantic group>">,
@@ -311,8 +310,6 @@ def bind__at__load : Flag<["-"], "bind_at_load">;
 def bundle__loader : Separate<["-"], "bundle_loader">;
 def bundle : Flag<["-"], "bundle">;
 def b : JoinedOrSeparate<["-"], "b">, Flags<[Unsupported]>;
-def cl_kernel_arg_info : Flag<["-"], "cl-kernel-arg-info">, Flags<[CC1Option]>, Group<opencl_Group>,
-HelpText<"OpenCL only. This option allows the compiler to store information about the arguments of a kernel(s)"> ;
 def client__name : JoinedOrSeparate<["-"], "client_name">;
 def combine : Flag<["-", "--"], "combine">, Flags<[DriverOption, Unsupported]>;
 def compatibility__version : JoinedOrSeparate<["-"], "compatibility_version">;
@@ -1297,8 +1294,8 @@ def unexported__symbols__list : Separate<["-"], "unexported_symbols_list">;
 def u : JoinedOrSeparate<["-"], "u">, Group<u_Group>;
 def v : Flag<["-"], "v">, Flags<[CC1Option]>,
   HelpText<"Show commands to run and use verbose output">;
-def verify : Flag<["-"], "verify">, Flags<[DriverOption,CC1Option]>,
-  HelpText<"Verify output using a verifier">;
+def verify_debug_info : Flag<["--"], "verify-debug-info">, Flags<[DriverOption]>,
+  HelpText<"Verify the binary representation of debug output">;
 def weak_l : Joined<["-"], "weak-l">, Flags<[LinkerInput]>;
 def weak__framework : Separate<["-"], "weak_framework">, Flags<[LinkerInput]>;
 def weak__library : Separate<["-"], "weak_library">, Flags<[LinkerInput]>;
