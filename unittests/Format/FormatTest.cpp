@@ -5404,11 +5404,6 @@ TEST_F(FormatTest, FormatForObjectiveCMethodDecls) {
   verifyGoogleFormat("- foo:(int)foo;");
 }
 
-TEST_F(FormatTest, FormatObjCBlocks) {
-  verifyFormat("int (^Block)(int, int);");
-  verifyFormat("int (^Block1)(int, int) = ^(int i, int j)");
-}
-
 TEST_F(FormatTest, FormatObjCInterface) {
   verifyFormat("@interface Foo : NSObject <NSSomeDelegate> {\n"
                "@public\n"
@@ -7859,15 +7854,6 @@ TEST_F(FormatTest, FormatsWithWebKitStyle) {
                    Style));
 }
 
-TEST_F(FormatTest, FormatsProtocolBufferDefinitions) {
-  // It seems that clang-format can format protocol buffer definitions
-  // (see https://code.google.com/p/protobuf/).
-  verifyFormat("message SomeMessage {\n"
-               "  required int32 field1 = 1;\n"
-               "  optional string field2 = 2 [default = \"2\"]\n"
-               "}");
-}
-
 TEST_F(FormatTest, FormatsLambdas) {
   verifyFormat("int c = [b]() mutable {\n"
                "  return [&b] { return b++; }();\n"
@@ -7905,6 +7891,12 @@ TEST_F(FormatTest, FormatsLambdas) {
 }
 
 TEST_F(FormatTest, FormatsBlocks) {
+  verifyFormat("int (^Block)(int, int);");
+  verifyFormat("int (^Block1)(int, int) = ^(int i, int j)");
+
+  verifyFormat("foo(^{ bar(); });");
+  verifyFormat("foo(a, ^{ bar(); });");
+
   // FIXME: Make whitespace formatting consistent. Ask a ObjC dev how
   // it would ideally look.
   verifyFormat("[operation setCompletionBlock:^{ [self onOperationDone]; }];");
