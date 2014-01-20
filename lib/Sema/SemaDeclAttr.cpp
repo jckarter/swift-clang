@@ -1235,12 +1235,7 @@ static void handleNonNullAttr(Sema &S, Decl *D, const AttributeList &Attr) {
 
 static void handleReturnsNonNullAttr(Sema &S, Decl *D,
                                      const AttributeList &Attr) {
-  QualType ResultType;
-  if (const FunctionType *Ty = D->getFunctionType())
-    ResultType = Ty->getResultType();
-  else if (const ObjCMethodDecl *MD = dyn_cast<ObjCMethodDecl>(D))
-    ResultType = MD->getResultType();
-
+  QualType ResultType = getFunctionOrMethodResultType(D);
   if (!attrNonNullArgCheck(S, ResultType, Attr, Attr.getRange(),
                            /* isReturnValue */ true))
     return;
@@ -1248,15 +1243,6 @@ static void handleReturnsNonNullAttr(Sema &S, Decl *D,
   D->addAttr(::new (S.Context)
             ReturnsNonNullAttr(Attr.getRange(), S.Context,
                                Attr.getAttributeSpellingListIndex()));
-}
-
-static const char *ownershipKindToDiagName(OwnershipAttr::OwnershipKind K) {
-  switch (K) {
-    case OwnershipAttr::Holds:    return "'ownership_holds'";
-    case OwnershipAttr::Takes:    return "'ownership_takes'";
-    case OwnershipAttr::Returns:  return "'ownership_returns'";
-  }
-  llvm_unreachable("unknown ownership");
 }
 
 static void handleOwnershipAttr(Sema &S, Decl *D, const AttributeList &AL) {
@@ -1344,7 +1330,7 @@ static void handleOwnershipAttr(Sema &S, Decl *D, const AttributeList &AL) {
       if ((*i)->getOwnKind() != K && (*i)->args_end() !=
           std::find((*i)->args_begin(), (*i)->args_end(), Idx)) {
         S.Diag(AL.getLoc(), diag::err_attributes_are_not_compatible)
-          << AL.getName() << ownershipKindToDiagName((*i)->getOwnKind());
+          << AL.getName() << *i;
         return;
       }
     }
@@ -1665,7 +1651,7 @@ static void handleDestructorAttr(Sema &S, Decl *D, const AttributeList &Attr) {
     return;
   }
 
-  uint32_t priority = ConstructorAttr::DefaultPriority;
+  uint32_t priority = DestructorAttr::DefaultPriority;
   if (Attr.getNumArgs() > 0 &&
       !checkUInt32Argument(S, Attr, Attr.getArgAsExpr(0), priority))
     return;
@@ -3800,8 +3786,7 @@ DLLImportAttr *Sema::mergeDLLImportAttr(Decl *D, SourceRange Range,
     }
   }
 
-  return ::new (Context)DLLImportAttr(Range, Context,
-                                      AttrSpellingListIndex);
+  return ::new (Context) DLLImportAttr(Range, Context, AttrSpellingListIndex);
 }
 
 static void handleDLLImportAttr(Sema &S, Decl *D, const AttributeList &Attr) {
@@ -3813,7 +3798,7 @@ static void handleDLLImportAttr(Sema &S, Decl *D, const AttributeList &Attr) {
     // specified.
     if (!S.getLangOpts().MicrosoftExt)
       S.Diag(Attr.getLoc(), diag::warn_attribute_wrong_decl_type)
-      << Attr.getName() << 2 /*variable and function*/;
+        << Attr.getName() << ExpectedVariableOrFunction;
     return;
   }
 
@@ -3840,13 +3825,12 @@ DLLExportAttr *Sema::mergeDLLExportAttr(Decl *D, SourceRange Range,
   if (D->hasAttr<DLLExportAttr>())
     return NULL;
 
-  return ::new (Context)DLLExportAttr(Range, Context,
-                                      AttrSpellingListIndex);
+  return ::new (Context) DLLExportAttr(Range, Context, AttrSpellingListIndex);
 }
 
 static void handleDLLExportAttr(Sema &S, Decl *D, const AttributeList &Attr) {
   // Currently, the dllexport attribute is ignored for inlined functions, unless
-  // the -fkeep-inline-functions flag has been used. Warning is emitted;
+  // the -fkeep-inline-functions flag has been used. Warning is emitted.
   if (isa<FunctionDecl>(D) && cast<FunctionDecl>(D)->isInlineSpecified()) {
     // FIXME: ... unless the -fkeep-inline-functions flag has been used.
     S.Diag(Attr.getLoc(), diag::warn_attribute_ignored) << Attr.getName();
@@ -3997,9 +3981,8 @@ static void ProcessDeclAttribute(Sema &S, Scope *scope, Decl *D,
       else
         handleNonNullAttr(S, D, Attr);
       break;
-    case AttributeList::AT_ReturnsNonNull:
-      handleReturnsNonNullAttr(S, D, Attr);
-      break;
+  case AttributeList::AT_ReturnsNonNull:
+    handleReturnsNonNullAttr(S, D, Attr); break;
   case AttributeList::AT_Overloadable:
     handleSimpleAttribute<OverloadableAttr>(S, D, Attr); break;
   case AttributeList::AT_Ownership:   handleOwnershipAttr   (S, D, Attr); break;
