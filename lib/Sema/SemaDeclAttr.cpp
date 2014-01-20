@@ -1157,12 +1157,14 @@ static void possibleTransparentUnionPointerType(QualType &T) {
 }
 
 static bool attrNonNullArgCheck(Sema &S, QualType T, const AttributeList &Attr,
-                                SourceRange R) {
+                                SourceRange R, bool isReturnValue = false) {
   T = T.getNonReferenceType();
   possibleTransparentUnionPointerType(T);
 
   if (!T->isAnyPointerType() && !T->isBlockPointerType()) {
-    S.Diag(Attr.getLoc(), diag::warn_attribute_pointers_only)
+    S.Diag(Attr.getLoc(),
+           isReturnValue ? diag::warn_attribute_return_pointers_only
+                         : diag::warn_attribute_pointers_only)
       << Attr.getName() << R;
     return false;
   }
@@ -1229,6 +1231,23 @@ static void handleNonNullAttr(Sema &S, Decl *D, const AttributeList &Attr) {
   D->addAttr(::new (S.Context)
              NonNullAttr(Attr.getRange(), S.Context, start, size,
                          Attr.getAttributeSpellingListIndex()));
+}
+
+static void handleReturnsNonNullAttr(Sema &S, Decl *D,
+                                     const AttributeList &Attr) {
+  QualType ResultType;
+  if (const FunctionType *Ty = D->getFunctionType())
+    ResultType = Ty->getResultType();
+  else if (const ObjCMethodDecl *MD = dyn_cast<ObjCMethodDecl>(D))
+    ResultType = MD->getResultType();
+
+  if (!attrNonNullArgCheck(S, ResultType, Attr, Attr.getRange(),
+                           /* isReturnValue */ true))
+    return;
+
+  D->addAttr(::new (S.Context)
+            ReturnsNonNullAttr(Attr.getRange(), S.Context,
+                               Attr.getAttributeSpellingListIndex()));
 }
 
 static const char *ownershipKindToDiagName(OwnershipAttr::OwnershipKind K) {
@@ -3978,6 +3997,9 @@ static void ProcessDeclAttribute(Sema &S, Scope *scope, Decl *D,
       else
         handleNonNullAttr(S, D, Attr);
       break;
+    case AttributeList::AT_ReturnsNonNull:
+      handleReturnsNonNullAttr(S, D, Attr);
+      break;
   case AttributeList::AT_Overloadable:
     handleSimpleAttribute<OverloadableAttr>(S, D, Attr); break;
   case AttributeList::AT_Ownership:   handleOwnershipAttr   (S, D, Attr); break;
@@ -4020,7 +4042,6 @@ static void ProcessDeclAttribute(Sema &S, Scope *scope, Decl *D,
   case AttributeList::AT_CFUnknownTransfer:
     handleCFUnknownTransferAttr(S, D, Attr); break;
 
-  // Checker-specific.
   case AttributeList::AT_CFConsumed:
   case AttributeList::AT_NSConsumed:  handleNSConsumedAttr  (S, D, Attr); break;
   case AttributeList::AT_NSConsumesSelf:

@@ -12,4 +12,3 @@ add_tablegen(clang-tblgen CLANG
   NeonEmitter.cpp
   TableGen.cpp
   )
-set_output_directory(clang-tblgen ${CLANG_RUNTIME_OUTPUT_INTDIR} ${CLANG_LIBRARY_OUTPUT_INTDIR})
