@@ -5147,6 +5147,37 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     return Builder.CreateCall(F);
   }
 
+  // CRC32
+  Intrinsic::ID CRCIntrinsicID = Intrinsic::not_intrinsic;
+  switch (BuiltinID) {
+  case ARM64::BI__builtin_arm_crc32b:
+    CRCIntrinsicID = Intrinsic::arm64_crc32b; break;
+  case ARM64::BI__builtin_arm_crc32cb:
+    CRCIntrinsicID = Intrinsic::arm64_crc32cb; break;
+  case ARM64::BI__builtin_arm_crc32h:
+    CRCIntrinsicID = Intrinsic::arm64_crc32h; break;
+  case ARM64::BI__builtin_arm_crc32ch:
+    CRCIntrinsicID = Intrinsic::arm64_crc32ch; break;
+  case ARM64::BI__builtin_arm_crc32w:
+    CRCIntrinsicID = Intrinsic::arm64_crc32w; break;
+  case ARM64::BI__builtin_arm_crc32cw:
+    CRCIntrinsicID = Intrinsic::arm64_crc32cw; break;
+  case ARM64::BI__builtin_arm_crc32d:
+    CRCIntrinsicID = Intrinsic::arm64_crc32x; break;
+  case ARM64::BI__builtin_arm_crc32cd:
+    CRCIntrinsicID = Intrinsic::arm64_crc32cx; break;
+  }
+
+  if (CRCIntrinsicID != Intrinsic::not_intrinsic) {
+    Value *Arg0 = EmitScalarExpr(E->getArg(0));
+    Value *Arg1 = EmitScalarExpr(E->getArg(1));
+    Function *F = CGM.getIntrinsic(CRCIntrinsicID);
+
+    llvm::Type *DataTy = F->getFunctionType()->getParamType(1);
+    Arg1 = Builder.CreateZExtOrBitCast(Arg1, DataTy);
+
+    return Builder.CreateCall2(F, Arg0, Arg1);
+  }
 
   llvm::SmallVector<Value*, 4> Ops;
   for (unsigned i = 0, e = E->getNumArgs() - 1; i != e; i++)
