@@ -264,13 +264,18 @@ bool Sema::DiagnoseUseOfDecl(NamedDecl *D, SourceLocation Loc,
       SmallVectorImpl<PartialDiagnosticAt> &Suppressed = Pos->second;
       for (unsigned I = 0, N = Suppressed.size(); I != N; ++I)
         Diag(Suppressed[I].first, Suppressed[I].second);
-      
+
       // Clear out the list of suppressed diagnostics, so that we don't emit
       // them again for this specialization. However, we don't obsolete this
       // entry from the table, because we want to avoid ever emitting these
       // diagnostics again.
       Suppressed.clear();
     }
+
+    // C++ [basic.start.main]p3:
+    //   The function 'main' shall not be used within a program.
+    if (cast<FunctionDecl>(D)->isMain())
+      Diag(Loc, diag::ext_main_used);
   }
 
   // See if this is an auto-typed variable whose initializer we are parsing.
@@ -11660,15 +11665,6 @@ static ExprResult addAsFieldToClosureType(Sema &S,
                                   bool RefersToEnclosingLocal) {
   CXXRecordDecl *Lambda = LSI->Lambda;
 
-  // Make sure that by-copy captures are of a complete type.
-  if (!DeclRefType->isDependentType() &&
-      !DeclRefType->isReferenceType() &&
-      S.RequireCompleteType(Loc, DeclRefType,
-                            diag::err_capture_of_incomplete_type,
-                            Var->getDeclName())) {
-    return ExprError();
-  }
-
   // Build the non-static data member.
   FieldDecl *Field
     = FieldDecl::Create(S.Context, Lambda, Loc, Loc, 0, FieldType,
@@ -11844,9 +11840,18 @@ static bool captureInLambda(LambdaScopeInfo *LSI,
       return false;
     }
 
-    if (S.RequireNonAbstractType(Loc, CaptureType,
-                                 diag::err_capture_of_abstract_type))
-      return false;
+    // Make sure that by-copy captures are of a complete and non-abstract type.
+    if (BuildAndDiagnose) {
+      if (!CaptureType->isDependentType() &&
+          S.RequireCompleteType(Loc, CaptureType,
+                                diag::err_capture_of_incomplete_type,
+                                Var->getDeclName()))
+        return false;
+
+      if (S.RequireNonAbstractType(Loc, CaptureType,
+                                   diag::err_capture_of_abstract_type))
+        return false;
+    }
   }
 
   // Capture this variable in the lambda.
