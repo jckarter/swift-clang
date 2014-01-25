@@ -704,7 +704,7 @@ void CodeGenFunction::GenerateCode(GlobalDecl GD, llvm::Function *Fn,
     DebugInfo = NULL; // disable debug info indefinitely for this function
 
   FunctionArgList Args;
-  QualType ResTy = FD->getResultType();
+  QualType ResTy = FD->getReturnType();
 
   CurGD = GD;
   const CXXMethodDecl *MD = dyn_cast<CXXMethodDecl>(FD);
@@ -1431,7 +1431,7 @@ void CodeGenFunction::EmitVariablyModifiedType(QualType type) {
 
     case Type::FunctionProto:
     case Type::FunctionNoProto:
-      type = cast<FunctionType>(ty)->getResultType();
+      type = cast<FunctionType>(ty)->getReturnType();
       break;
 
     case Type::Paren:
