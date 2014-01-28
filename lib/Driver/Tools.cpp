@@ -895,8 +895,8 @@ static void getMipsCPUAndABI(const ArgList &Args,
                              const llvm::Triple &Triple,
                              StringRef &CPUName,
                              StringRef &ABIName) {
-  const char *DefMips32CPU = "mips32";
-  const char *DefMips64CPU = "mips64";
+  const char *DefMips32CPU = "mips32r2";
+  const char *DefMips64CPU = "mips64r2";
 
   if (Arg *A = Args.getLastArg(options::OPT_march_EQ,
                                options::OPT_mcpu_EQ))
@@ -2673,7 +2673,8 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
     CmdArgs.push_back("-generate-gnu-dwarf-pub-sections");
   }
 
-  if (Args.hasArg(options::OPT_fdebug_types_section)) {
+  if (Args.hasFlag(options::OPT_fdebug_types_section,
+                   options::OPT_fno_debug_types_section, false)) {
     CmdArgs.push_back("-backend-option");
     CmdArgs.push_back("-generate-type-units");
   }

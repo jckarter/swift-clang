@@ -5216,8 +5216,11 @@ public:
 
   virtual void getTargetDefines(const LangOptions &Opts,
                                 MacroBuilder &Builder) const {
-    DefineStd(Builder, "mips", Opts);
+    Builder.defineMacro("__mips__");
     Builder.defineMacro("_mips");
+    if (Opts.GNUMode)
+      Builder.defineMacro("mips");
+
     Builder.defineMacro("__REGISTER_PREFIX__", "");
 
     switch (FloatABI) {
@@ -5406,7 +5409,7 @@ const Builtin::Info MipsTargetInfoBase::BuiltinInfo[] = {
 class Mips32TargetInfoBase : public MipsTargetInfoBase {
 public:
   Mips32TargetInfoBase(const llvm::Triple &Triple)
-      : MipsTargetInfoBase(Triple, "o32", "mips32") {
+      : MipsTargetInfoBase(Triple, "o32", "mips32r2") {
     SizeType = UnsignedInt;
     PtrDiffType = SignedInt;
     MaxAtomicPromoteWidth = MaxAtomicInlineWidth = 32;
@@ -5424,6 +5427,8 @@ public:
   virtual void getTargetDefines(const LangOptions &Opts,
                                 MacroBuilder &Builder) const {
     MipsTargetInfoBase::getTargetDefines(Opts, Builder);
+
+    Builder.defineMacro("__mips", "32");
 
     if (ABI == "o32") {
       Builder.defineMacro("__mips_o32");
@@ -5513,7 +5518,7 @@ public:
 class Mips64TargetInfoBase : public MipsTargetInfoBase {
 public:
   Mips64TargetInfoBase(const llvm::Triple &Triple)
-      : MipsTargetInfoBase(Triple, "n64", "mips64") {
+      : MipsTargetInfoBase(Triple, "n64", "mips64r2") {
     LongWidth = LongAlign = 64;
     PointerWidth = PointerAlign = 64;
     LongDoubleWidth = LongDoubleAlign = 128;
@@ -5544,6 +5549,7 @@ public:
                                 MacroBuilder &Builder) const {
     MipsTargetInfoBase::getTargetDefines(Opts, Builder);
 
+    Builder.defineMacro("__mips", "64");
     Builder.defineMacro("__mips64");
     Builder.defineMacro("__mips64__");
 
@@ -5847,6 +5853,10 @@ public:
   virtual bool validateAsmConstraint(const char *&Name,
                                      TargetInfo::ConstraintInfo &Info) const {
     return false;
+  }
+  virtual int getEHDataRegisterNumber(unsigned RegNo) const {
+    // R0=ExceptionPointerRegister R1=ExceptionSelectorRegister
+    return (RegNo < 2)? RegNo : -1;
   }
 };
 
