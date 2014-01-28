@@ -32,6 +32,9 @@
 /* First include the standard intrinsics. */
 #include <x86intrin.h>
 
+/* For the definition of jmp_buf. */
+#include <setjmp.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -56,6 +59,7 @@ __int64 __emul(int, int);
 unsigned __int64 __emulu(unsigned int, unsigned int);
 void __cdecl __fastfail(unsigned int);
 unsigned int __getcallerseflags(void);
+static __inline__
 void __halt(void);
 unsigned char __inbyte(unsigned short);
 void __inbytestring(unsigned short, unsigned char *, unsigned long);
@@ -92,6 +96,7 @@ static __inline__
 unsigned int __popcnt(unsigned int);
 static __inline__
 unsigned short __popcnt16(unsigned short);
+static __inline__
 unsigned __int64 __rdtsc(void);
 unsigned __int64 __rdtscp(unsigned int *);
 unsigned long __readcr0(void);
@@ -277,10 +282,7 @@ unsigned __int64 __cdecl _rotr64(unsigned __int64 _Value, int _Shift);
 static __inline__
 unsigned char _rotr8(unsigned char _Value, unsigned char _Shift);
 int _sarx_i32(int, unsigned int);
-
-/* FIXME: Need definition for jmp_buf.
-   int __cdecl _setjmp(jmp_buf); */
-
+int __cdecl _setjmp(jmp_buf);
 unsigned int _shlx_u32(unsigned int, unsigned int);
 unsigned int _shrx_u32(unsigned int, unsigned int);
 void _Store_HLERelease(long volatile *, long);
@@ -888,6 +890,16 @@ _xgetbv(unsigned int __xcr_no) {
   unsigned int __eax, __edx;
   __asm__ ("xgetbv" : "=a" (__eax), "=d" (__edx) : "c" (__xcr_no));
   return ((unsigned __int64)__edx << 32) | __eax;
+}
+static __inline__ unsigned __int64 __attribute__((__always_inline__, __nodebug__))
+__rdtsc(void) {
+  unsigned int __eax, __edx;
+  __asm__ ("rdtsc" : "=a" (__eax), "=d" (__edx));
+  return ((unsigned __int64)__edx << 32) | __eax;
+}
+static __inline__ void __attribute__((__always_inline__, __nodebug__))
+__halt(void) {
+  __asm__ volatile ("hlt");
 }
 
 #ifdef __cplusplus
