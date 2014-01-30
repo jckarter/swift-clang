@@ -1962,6 +1962,9 @@ static bool mergeDeclAttribute(Sema &S, NamedDecl *D, InheritableAttr *Attr,
   else if (SectionAttr *SA = dyn_cast<SectionAttr>(Attr))
     NewAttr = S.mergeSectionAttr(D, SA->getRange(), SA->getName(),
                                  AttrSpellingListIndex);
+  else if (MSInheritanceAttr *IA = dyn_cast<MSInheritanceAttr>(Attr))
+    NewAttr = S.mergeMSInheritanceAttr(D, IA->getRange(), AttrSpellingListIndex,
+                                       IA->getSemanticSpelling());
   else if (isa<AlignedAttr>(Attr))
     // AlignedAttrs are handled separately, because we need to handle all
     // such attributes on a declaration at the same time.
@@ -10146,6 +10149,27 @@ TypedefDecl *Sema::ParseTypedefDecl(Scope *S, Declarator &D, QualType T,
     if (!Context.hasSameType(T, Context.getTagDeclType(tagFromDeclSpec)))
       break;
 
+    // If we've already computed linkage for the anonymous tag, then
+    // adding a typedef name for the anonymous decl can change that
+    // linkage, which might be a serious problem.  Diagnose this as
+    // unsupported and ignore the typedef name.  TODO: we should
+    // pursue this as a language defect and establish a formal rule
+    // for how to handle it.
+    if (tagFromDeclSpec->hasLinkageBeenComputed()) {
+      Diag(D.getIdentifierLoc(), diag::err_typedef_changes_linkage);
+
+      SourceLocation tagLoc = D.getDeclSpec().getTypeSpecTypeLoc();
+      tagLoc = Lexer::getLocForEndOfToken(tagLoc, 0, getSourceManager(),
+                                          getLangOpts());
+
+      llvm::SmallString<40> textToInsert;
+      textToInsert += ' ';
+      textToInsert += D.getIdentifier()->getName();
+      Diag(tagLoc, diag::note_typedef_changes_linkage)
+        << FixItHint::CreateInsertion(tagLoc, textToInsert);
+      break;
+    }
+
     // Otherwise, set this is the anon-decl typedef for the tag.
     tagFromDeclSpec->setTypedefNameForAnonDecl(NewTD);
     break;
@@ -12109,8 +12133,14 @@ void Sema::ActOnFields(Scope *S, SourceLocation RecLoc, Decl *EnclosingDecl,
     if (!Completed)
       Record->completeDefinition();
 
-    if (Record->hasAttrs())
+    if (Record->hasAttrs()) {
       CheckAlignasUnderalignment(Record);
+
+      if (MSInheritanceAttr *IA = Record->getAttr<MSInheritanceAttr>())
+        checkMSInheritanceAttrOnDefinition(cast<CXXRecordDecl>(Record),
+                                           IA->getRange(),
+                                           IA->getSemanticSpelling());
+    }
 
     // Check if the structure/union declaration is a type that can have zero
     // size in C. For C this is a language extension, for C++ it may cause
