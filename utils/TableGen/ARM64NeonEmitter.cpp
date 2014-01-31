@@ -286,8 +286,8 @@ private:
   void emitIntrinsic(raw_ostream &OS, Record *R);
   void emitImmediateCheck(raw_ostream &OS, const std::vector<Record*> &RV,
                           const std::string &prefix);
-  std::string builtinNamespace() { return IsARM64 ? "ARM64" : "ARM"; }
-  std::string builtinPrefix() { return IsARM64 ? "arm64_" : "neon_"; }
+  std::string namePrefix() { return IsARM64 ? "ARM64" : "ARM"; }
+  std::string builtinPrefix() { return "neon_"; }
 };
 } // end anonymous namespace
 
@@ -2297,7 +2297,7 @@ void NeonEmitter::emitImmediateCheck(raw_ostream &OS,
 
   OS << "static inline bool\n"
     // Put the builtin namespace to have one function per target.
-     << builtinNamespace()
+     << namePrefix()
      << "GetNEONImmediateCheckValues(unsigned BuiltinID, unsigned TV,\n"
      << "                            unsigned Idx, unsigned &i, unsigned &l,\n"
      << "                            unsigned &u) {\n"
@@ -2383,7 +2383,7 @@ void NeonEmitter::emitImmediateCheck(raw_ostream &OS,
       if (EmittedMap.count(namestr))
         continue;
       EmittedMap[namestr] = OpNone;
-      OS << "  case " << builtinNamespace() << "::BI__builtin_" << prefix
+      OS << "  case " << "NEON::BI__builtin_" << prefix
          << MangleName(name, TypeVec[ti], ck) << ":\n"
          << "    switch (Idx) {\n"
          << "    default: return false;\n";
@@ -2569,7 +2569,7 @@ void NeonEmitter::runHeader(raw_ostream &OS) {
     }
 
     if (mask) {
-      OS << "case " << builtinNamespace() << "::BI__builtin_" << prefix
+      OS << "case " << "NEON::BI__builtin_" << prefix
          << MangleName(name, TypeVec[si], ClassB)
          << ": mask = " << "0x" << utohexstr(mask) << "ULL";
       if (PtrArgNum >= 0)
@@ -2579,7 +2579,7 @@ void NeonEmitter::runHeader(raw_ostream &OS) {
       OS << "; break;\n";
     }
     if (qmask) {
-      OS << "case " << builtinNamespace() << "::BI__builtin_" << prefix
+      OS << "case " << "NEON::BI__builtin_" << prefix
          << MangleName(name, TypeVec[qi], ClassB)
          << ": mask = " << "0x" << utohexstr(qmask) << "ULL";
       if (PtrArgNum >= 0)

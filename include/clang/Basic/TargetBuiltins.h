@@ -25,9 +25,7 @@ namespace clang {
     enum {
       LastTIBuiltin = clang::Builtin::FirstTSBuiltin-1,
 #define BUILTIN(ID, TYPE, ATTRS) BI##ID,
-#define GET_NEON_BUILTINS
-#include "clang/Basic/arm_neon.inc"
-#undef GET_NEON_BUILTINS
+#include "clang/Basic/BuiltinsNEON.def"
       FirstTSBuiltin
     };
   }
@@ -56,10 +54,11 @@ namespace clang {
   /// \brief ARM64 builtins
   namespace ARM64 {
     enum {
-        LastTIBuiltin = clang::Builtin::FirstTSBuiltin-1,
+      LastTIBuiltin = clang::Builtin::FirstTSBuiltin-1,
+      LastNEONBuiltin = NEON::FirstTSBuiltin - 1,
 #define BUILTIN(ID, TYPE, ATTRS) BI##ID,
 #include "clang/Basic/BuiltinsARM64.def"
-        LastTSBuiltin
+      LastTSBuiltin
     };
   }
 
