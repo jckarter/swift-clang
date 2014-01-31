@@ -5826,14 +5826,22 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
   case ARM64::BI__builtin_arm64_vfmaq_lane_v: { // Only used for FP types
     // The ARM builtins (and instructions) have the addend as the first
     // operand, but the 'fma' intrinsics have it last. Swap it around here.
-    Value *Subtrahend = Ops[0];
-    Value *Multiplicand = Ops[2];
+    Value *Addend = Ops[0];
+    Value *Multiplicand = Ops[1];
+    Value *LaneSource = Ops[2];
     Ops[0] = Multiplicand;
-    Ops[2] = Subtrahend;
+    Ops[1] = LaneSource;
+    Ops[2] = Addend;
+
     // Now adjust things to handle the lane access.
+    llvm::Type *SourceTy = BuiltinID == ARM64::BI__builtin_arm64_vfmaq_lane_v ?
+      llvm::VectorType::get(VTy->getElementType(), VTy->getNumElements() / 2) :
+      VTy;
     llvm::Constant *cst = cast<Constant>(Ops[3]);
-    Ops[1] = Builder.CreateBitCast(Ops[1], VTy);
-    Ops[1] = EmitNeonSplat(Ops[1], cst);
+    Value *SV = llvm::ConstantVector::getSplat(VTy->getNumElements(), cst);
+    Ops[1] = Builder.CreateBitCast(Ops[1], SourceTy);
+    Ops[1] = Builder.CreateShuffleVector(Ops[1], Ops[1], SV, "lane");
+
     Ops.pop_back();
     Int = Intrinsic::fma;
     return EmitNeonCall(CGM.getIntrinsic(Int, Ty), Ops, "fmla");
@@ -5842,17 +5850,27 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
   case ARM64::BI__builtin_arm64_vfmsq_lane_v: { // Only used for FP types
     // The ARM builtins (and instructions) have the addend as the first
     // operand, but the 'fma' intrinsics have it last. Swap it around here.
-    Value *Subtrahend = Ops[0];
-    Value *Multiplicand = Ops[2];
+    Value *Minuend = Ops[0];
+    Value *Multiplicand = Ops[1];
+    Value *LaneSource = Ops[2];
     Ops[0] = Multiplicand;
-    Ops[2] = Subtrahend;
+    Ops[1] = LaneSource;
+    Ops[2] = Minuend;
     // Now adjust things to handle the lane access and the negation of
     // one multiplicand so we get a subtract.
-    llvm::Constant *cst = cast<Constant>(Ops[3]);
     Ops[0] = Builder.CreateBitCast(Ops[0], VTy);
     Ops[0] = Builder.CreateFNeg(Ops[0]);
+
+    llvm::Type *SourceTy = BuiltinID == ARM64::BI__builtin_arm64_vfmsq_lane_v ?
+      llvm::VectorType::get(VTy->getElementType(), VTy->getNumElements() / 2) :
+      VTy;
+    llvm::Constant *cst = cast<Constant>(Ops[3]);
+    Value *SV = llvm::ConstantVector::getSplat(VTy->getNumElements(), cst);
+    Ops[1] = Builder.CreateBitCast(Ops[1], SourceTy);
+    Ops[1] = Builder.CreateShuffleVector(Ops[1], Ops[1], SV, "lane");
     Ops[1] = Builder.CreateBitCast(Ops[1], VTy);
     Ops[1] = EmitNeonSplat(Ops[1], cst);
+
     Ops.pop_back();
     Int = Intrinsic::fma;
     return EmitNeonCall(CGM.getIntrinsic(Int, Ty), Ops, "fmls");
