@@ -679,6 +679,8 @@ static std::string BuiltinTypeString(const char mod, StringRef typestr,
       return "vv*"; // void result with void* first argument
     if (mod == 'f' || (ck != ClassB && type == 'f'))
       return quad ? "V4f" : "V2f";
+    if (mod == 'F' || (ck != ClassB && type == 'd'))
+      return quad ? "V2d" : "V1d";
     if (ck != ClassB && type == 's')
       return quad ? "V8s" : "V4s";
     if (ck != ClassB && type == 'i')
@@ -699,6 +701,8 @@ static std::string BuiltinTypeString(const char mod, StringRef typestr,
 
   if (mod == 'f' || (ck != ClassB && type == 'f'))
     return quad ? "V4f" : "V2f";
+  if (mod == 'F' || (ck != ClassB && type == 'd'))
+    return quad ? "V2d" : "V1d";
   if (ck != ClassB && type == 's')
     return quad ? "V8s" : "V4s";
   if (ck != ClassB && type == 'i')
