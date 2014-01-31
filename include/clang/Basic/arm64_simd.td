@@ -564,11 +564,11 @@ def VST4_LANE : WInst<"vst4_lane", "vp4i", "QUcQUsQUiQUlQcQsQiQlQhQfQdQPcQPsUcUs
 def VGET_LANE : SInst<"vget_lane", "sdi",
                       "csilUcUsUiUlfdPcPsQcQsQiQlQUcQUsQUiQUlQfQdQPcQPs">;
 // vdup<bhsd>_lane* is a synonym for vget_lane.
-def VDUPB_LANE : SInst<"vdupb_lane", "sdi", "HcHUc">;
-def VDUPH_LANE : SInst<"vduph_lane", "sdi", "HsHUs">;
-def VDUPS_LANE : SInst<"vdups_lane", "sdi", "HiHUiHf">;
-def VDUPD_LANE : SInst<"vdupd_lane", "sdi", "HlHUlHd">;
-def VDUP_LANE_F64 : SInst<"vdup_lane", "sdi", "Hd">;
+def VDUPB_LANE : SInst<"vdupb_lane", "sgi", "HcHUc">;
+def VDUPH_LANE : SInst<"vduph_lane", "sgi", "HsHUs">;
+def VDUPS_LANE : SInst<"vdups_lane", "sgi", "HiHUiHf">;
+def VDUPD_LANE : SInst<"vdupd_lane", "sgi", "HlHUlHd">;
+def VDUP_LANE_F64 : SInst<"vdup_lane", "sgi", "Hd">;
 
 ////////////////////////////////////////////////////////////////////////////////
 // Set lanes within a vector
