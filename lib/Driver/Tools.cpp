@@ -831,6 +831,15 @@ void Clang::AddARMTargetArgs(const ArgList &Args,
       CmdArgs.push_back("-backend-option");
       CmdArgs.push_back("-arm-reserve-r9");
     }
+
+    // Exception handling
+    if (Arg *A = Args.getLastArg(options::OPT_fexceptions,
+                                 options::OPT_fno_exceptions)) {
+      if (A->getOption().matches(options::OPT_fno_exceptions)) {
+        CmdArgs.push_back("-backend-option");
+        CmdArgs.push_back("-arm-disable-ehabi");
+      }
+    }
 }
 
 /// getARM64TargetCPU - Get the (LLVM) name of the ARM64 cpu we are targeting.
