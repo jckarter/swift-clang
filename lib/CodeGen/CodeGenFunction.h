@@ -2185,7 +2185,7 @@ public:
   llvm::Value *EmitARMBuiltinExpr(unsigned BuiltinID, const CallExpr *E);
 
   struct NeonIntrinsicMap {
-    unsigned BuiltinID, LLVMIntrinsic;
+    unsigned BuiltinID, LLVMIntrinsic, AltLLVMIntrinsic;
 
     // Comparison operator suitable for use in std::lower_bound with a BuiltinID
     bool operator<(unsigned RHSBuiltinID) const {
@@ -2195,6 +2195,7 @@ public:
 
   llvm::Value *EmitCommonNeonBuiltinExpr(unsigned BuiltinID,
                                          unsigned LLVMIntrinsic,
+                                         unsigned AltLLVMIntrinsic,
                                          const CallExpr *E,
                                          SmallVectorImpl<llvm::Value *> &Ops,
                                          llvm::Value *Align = 0);
