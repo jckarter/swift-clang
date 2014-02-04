@@ -5792,9 +5792,8 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
   }
 #endif
 
-  const NeonIntrinsicMap *Builtin = std::lower_bound(
-      IntrinsicMap.begin(), IntrinsicMap.end(), BuiltinID,
-      [](NeonIntrinsicMap LHS, unsigned RHS) { return LHS.BuiltinID < RHS; });
+  const NeonIntrinsicMap *Builtin =
+      std::lower_bound(IntrinsicMap.begin(), IntrinsicMap.end(), BuiltinID);
 
   // Not all intrinsics handled by the common case work for ARM64 yet, so only
   // defer to common code if it's been added to our special map.
