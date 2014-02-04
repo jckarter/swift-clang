@@ -3456,7 +3456,9 @@ static CodeGenFunction::NeonIntrinsicMap ARMNeonIntrinsicMap [] = {
   { NEON::BI__builtin_neon_vsha256hq_v, Intrinsic::arm_neon_sha256h },
   { NEON::BI__builtin_neon_vsha256h2q_v, Intrinsic::arm_neon_sha256h2 },
   { NEON::BI__builtin_neon_vsha256su0q_v, Intrinsic::arm_neon_sha256su0 },
-  { NEON::BI__builtin_neon_vsha256su1q_v, Intrinsic::arm_neon_sha256su1 }
+  { NEON::BI__builtin_neon_vsha256su1q_v, Intrinsic::arm_neon_sha256su1 },
+  { NEON::BI__builtin_neon_vmovl_v, 0 }, // Maps to IR
+  { NEON::BI__builtin_neon_vmovn_v, 0 } // Maps to IR
 };
 #ifndef NDEBUG
 static bool ARMIntrinsicsProvenSorted = false;
@@ -5778,7 +5780,9 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     { NEON::BI__builtin_neon_vsha256hq_v, Intrinsic::arm64_crypto_sha256h },
     { NEON::BI__builtin_neon_vsha256h2q_v, Intrinsic::arm64_crypto_sha256h2 },
     { NEON::BI__builtin_neon_vsha256su0q_v, Intrinsic::arm64_crypto_sha256su0 },
-    { NEON::BI__builtin_neon_vsha256su1q_v, Intrinsic::arm64_crypto_sha256su1 }
+    { NEON::BI__builtin_neon_vsha256su1q_v, Intrinsic::arm64_crypto_sha256su1 },
+    { NEON::BI__builtin_neon_vmovl_v, 0 }, // Maps to IR
+    { NEON::BI__builtin_neon_vmovn_v, 0 } // Maps to IR
   };
   llvm::ArrayRef<NeonIntrinsicMap> IntrinsicMap(ARM64NeonIntrinsicMap);
 
@@ -5805,18 +5809,6 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
   unsigned Int;
   switch (BuiltinID) {
   default: return 0;
-  case NEON::BI__builtin_neon_vmovl_v: {
-    llvm::Type *DTy = llvm::VectorType::getTruncatedElementVectorType(VTy);
-    Ops[0] = Builder.CreateBitCast(Ops[0], DTy);
-    if (usgn)
-      return Builder.CreateZExt(Ops[0], Ty, "vmovl");
-    return Builder.CreateSExt(Ops[0], Ty, "vmovl");
-  }
-  case NEON::BI__builtin_neon_vmovn_v: {
-    llvm::Type *QTy = llvm::VectorType::getExtendedElementVectorType(VTy);
-    Ops[0] = Builder.CreateBitCast(Ops[0], QTy);
-    return Builder.CreateTrunc(Ops[0], Ty, "vmovn");
-  }
   case NEON::BI__builtin_neon_vhadd_v:
   case NEON::BI__builtin_neon_vhaddq_v:
     Int = usgn ? Intrinsic::arm64_neon_uhadd : Intrinsic::arm64_neon_shadd;
