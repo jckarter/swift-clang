@@ -3479,6 +3479,8 @@ static CodeGenFunction::NeonIntrinsicMap ARMNeonIntrinsicMap [] = {
   NEONMAP1(__builtin_neon_vaeseq_v, arm_neon_aese),
   NEONMAP1(__builtin_neon_vaesimcq_v, arm_neon_aesimc),
   NEONMAP1(__builtin_neon_vaesmcq_v, arm_neon_aesmc),
+  NEONMAP0(__builtin_neon_vfma_v),
+  NEONMAP0(__builtin_neon_vfmaq_v),
   NEONMAP1(__builtin_neon_vsha1su0q_v, arm_neon_sha1su0),
   NEONMAP1(__builtin_neon_vsha1su1q_v, arm_neon_sha1su1),
   NEONMAP1(__builtin_neon_vsha256hq_v, arm_neon_sha256h),
@@ -3503,6 +3505,8 @@ static CodeGenFunction::NeonIntrinsicMap ARM64NeonIntrinsicMap[] = {
   NEONMAP1(__builtin_neon_vaeseq_v, arm64_crypto_aese),
   NEONMAP1(__builtin_neon_vaesimcq_v, arm64_crypto_aesimc),
   NEONMAP1(__builtin_neon_vaesmcq_v, arm64_crypto_aesmc),
+  NEONMAP0(__builtin_neon_vfma_v),
+  NEONMAP0(__builtin_neon_vfmaq_v),
   NEONMAP1(__builtin_neon_vsha1su0q_v, arm64_crypto_sha1su0),
   NEONMAP1(__builtin_neon_vsha1su1q_v, arm64_crypto_sha1su1),
   NEONMAP1(__builtin_neon_vsha256hq_v, arm64_crypto_sha256h),
@@ -5788,17 +5792,6 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
   case NEON::BI__builtin_neon_vusqaddq_v:
     Int = Intrinsic::arm64_neon_usqadd;
     return EmitNeonCall(CGM.getIntrinsic(Int, Ty), Ops, "vusqadd");
-  case NEON::BI__builtin_neon_vfma_v:
-  case NEON::BI__builtin_neon_vfmaq_v: { // Only used for FP types
-    Int = Intrinsic::fma;
-    // The ARM builtins (and instructions) have the addend as the first
-    // operand, but the 'fma' intrinsics have it last. Swap it around here.
-    Value *Addend = Ops[0];
-    Value *Multiplicand = Ops[2];
-    Ops[0] = Multiplicand;
-    Ops[2] = Addend;
-    return EmitNeonCall(CGM.getIntrinsic(Int, Ty), Ops, "fmla");
-  }
   case NEON::BI__builtin_neon_vmulx_lane_v:
   case NEON::BI__builtin_neon_vmulxq_lane_v: { // Only used for FP types
     llvm::Constant *cst = cast<Constant>(Ops[2]);
@@ -5873,8 +5866,7 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     Ops[1] = Builder.CreateFNeg(Ops[1]);
     Int = Intrinsic::fma;
     return EmitNeonCall(CGM.getIntrinsic(Int, Ty), Ops, "fmls");
-  }
-  case NEON::BI__builtin_neon_vmul_v:
+  }  case NEON::BI__builtin_neon_vmul_v:
   case NEON::BI__builtin_neon_vmulq_v: // Only used for PMUL.
     Int = Intrinsic::arm64_neon_pmul;
     return EmitNeonCall(CGM.getIntrinsic(Int, Ty), Ops, "vqdmulh");

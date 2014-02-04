@@ -6,21 +6,21 @@
 float32x2_t test_vfma_f32(float32x2_t a1, float32x2_t a2, float32x2_t a3) {
   // CHECK: test_vfma_f32
   return vfma_f32(a1, a2, a3);
-  // CHECK: llvm.fma.v2f32({{.*a3, .*a2, .*a1}})
+  // CHECK: llvm.fma.v2f32({{.*a2, .*a3, .*a1}})
   // CHECK-NEXT: ret
 }
 
 float32x4_t test_vfmaq_f32(float32x4_t a1, float32x4_t a2, float32x4_t a3) {
   // CHECK: test_vfmaq_f32
   return vfmaq_f32(a1, a2, a3);
-  // CHECK: llvm.fma.v4f32({{.*a3, .*a2, .*a1}})
+  // CHECK: llvm.fma.v4f32({{.*a2, .*a3, .*a1}})
   // CHECK-NEXT: ret
 }
 
 float64x2_t test_vfmaq_f64(float64x2_t a1, float64x2_t a2, float64x2_t a3) {
   // CHECK: test_vfmaq_f64
   return vfmaq_f64(a1, a2, a3);
-  // CHECK: llvm.fma.v2f64({{.*a3, .*a2, .*a1}})
+  // CHECK: llvm.fma.v2f64({{.*a2, .*a3, .*a1}})
   // CHECK-NEXT: ret
 }
 
