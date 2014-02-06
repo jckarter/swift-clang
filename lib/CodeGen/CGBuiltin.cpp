@@ -5848,10 +5848,13 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
   default: return 0;
   case NEON::BI__builtin_neon_vusqadd_v:
   case NEON::BI__builtin_neon_vusqaddq_v:
+    // FIXME: add these intrinsics to arm_neon.h
     Int = Intrinsic::arm64_neon_usqadd;
     return EmitNeonCall(CGM.getIntrinsic(Int, Ty), Ops, "vusqadd");
   case NEON::BI__builtin_neon_vmulx_lane_v:
   case NEON::BI__builtin_neon_vmulxq_lane_v: { // Only used for FP types
+    // FIXME: probably remove this when aarch64_simd.h is no longer supported
+    // (arm_neon.h delegates to vmulx without lane).
     llvm::Constant *cst = cast<Constant>(Ops[2]);
     Ops[1] = Builder.CreateBitCast(Ops[1], VTy);
     Ops[1] = EmitNeonSplat(Ops[1], cst);
@@ -5885,6 +5888,9 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
   }
   case NEON::BI__builtin_neon_vfms_lane_v:
   case NEON::BI__builtin_neon_vfmsq_lane_v: { // Only used for FP types
+    // FIXME: remove this when we no longer support aarch64_simd.h (arm_neon.h
+    // delegates to vfma).
+
     // The ARM builtins (and instructions) have the addend as the first
     // operand, but the 'fma' intrinsics have it last. Swap it around here.
     Value *Minuend = Ops[0];
@@ -5914,6 +5920,9 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
   }
   case NEON::BI__builtin_neon_vfms_v:
   case NEON::BI__builtin_neon_vfmsq_v: {  // Only used for FP types
+    // FIXME: probably remove when we no longer support aarch64_simd.h
+    // (arm_neon.h delegates to vfma).
+
     // The ARM builtins (and instructions) have the addend as the first
     // operand, but the 'fma' intrinsics have it last. Swap it around here.
     Value *Subtrahend = Ops[0];
@@ -5926,28 +5935,36 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     return EmitNeonCall(CGM.getIntrinsic(Int, Ty), Ops, "fmls");
   }
   case NEON::BI__builtin_neon_vmull_v:
+    // FIXME: improve sharing scheme to cope with 3 alternative LLVM intrinsics.
     Int = usgn ? Intrinsic::arm64_neon_umull : Intrinsic::arm64_neon_smull;
     Int = Type.isPoly() ? Intrinsic::arm64_neon_pmull : Int;
     return EmitNeonCall(CGM.getIntrinsic(Int, Ty), Ops, "vmull");
   case NEON::BI__builtin_neon_vmax_v:
   case NEON::BI__builtin_neon_vmaxq_v:
+    // FIXME: improve sharing scheme to cope with 3 alternative LLVM intrinsics.
     Int = usgn ? Intrinsic::arm64_neon_umax : Intrinsic::arm64_neon_smax;
     if (Ty->isFPOrFPVectorTy()) Int = Intrinsic::arm64_neon_fmax;
     return EmitNeonCall(CGM.getIntrinsic(Int, Ty), Ops, "vmax");
   case NEON::BI__builtin_neon_vmin_v:
   case NEON::BI__builtin_neon_vminq_v:
+    // FIXME: improve sharing scheme to cope with 3 alternative LLVM intrinsics.
     Int = usgn ? Intrinsic::arm64_neon_umin : Intrinsic::arm64_neon_smin;
     if (Ty->isFPOrFPVectorTy()) Int = Intrinsic::arm64_neon_fmin;
     return EmitNeonCall(CGM.getIntrinsic(Int, Ty), Ops, "vmin");
   case NEON::BI__builtin_neon_vabd_v:
   case NEON::BI__builtin_neon_vabdq_v:
+    // FIXME: improve sharing scheme to cope with 3 alternative LLVM intrinsics.
     Int = usgn ? Intrinsic::arm64_neon_uabd : Intrinsic::arm64_neon_sabd;
     if (Ty->isFPOrFPVectorTy()) Int = Intrinsic::arm64_neon_fabd;
     return EmitNeonCall(CGM.getIntrinsic(Int, Ty), Ops, "vabd");
   case NEON::BI__builtin_neon_vabdl_v:
+    // FIXME: probably remove when aarch64_simd.h is no longer supported
+    // (arm_neon.h uses vabd + vmovl).
     Int = usgn ? Intrinsic::arm64_neon_uabdl : Intrinsic::arm64_neon_sabdl;
     return EmitNeonCall(CGM.getIntrinsic(Int, Ty), Ops, "vabdl");
   case NEON::BI__builtin_neon_vabal_v: {
+    // FIXME: probably remove when aarch64_simd.h is no longer supported
+    // (arm_neon.h delegates to vabdl and addition).
     Int = usgn ? Intrinsic::arm64_neon_uabdl : Intrinsic::arm64_neon_sabdl;
     SmallVector<llvm::Value*, 2> TmpOps;
     TmpOps.push_back(Ops[1]);
@@ -5975,11 +5992,13 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
   }
   case NEON::BI__builtin_neon_vpmin_v:
   case NEON::BI__builtin_neon_vpminq_v:
+    // FIXME: improve sharing scheme to cope with 3 alternative LLVM intrinsics.
     Int = usgn ? Intrinsic::arm64_neon_uminp : Intrinsic::arm64_neon_sminp;
     if (Ty->isFPOrFPVectorTy()) Int = Intrinsic::arm64_neon_fminp;
     return EmitNeonCall(CGM.getIntrinsic(Int, Ty), Ops, "vpmin");
   case NEON::BI__builtin_neon_vpmax_v:
   case NEON::BI__builtin_neon_vpmaxq_v:
+    // FIXME: improve sharing scheme to cope with 3 alternative LLVM intrinsics.
     Int = usgn ? Intrinsic::arm64_neon_umaxp : Intrinsic::arm64_neon_smaxp;
     if (Ty->isFPOrFPVectorTy()) Int = Intrinsic::arm64_neon_fmaxp;
     return EmitNeonCall(CGM.getIntrinsic(Int, Ty), Ops, "vpmax");
