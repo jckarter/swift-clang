@@ -2064,8 +2064,7 @@ Value *CodeGenFunction::EmitCommonNeonBuiltinExpr(
   case NEON::BI__builtin_neon_vmul_v:
   case NEON::BI__builtin_neon_vmulq_v:
     assert(Type.isPoly() && "vmul builtin only supported for polynomial types");
-    return EmitNeonCall(CGM.getIntrinsic(Intrinsic::arm_neon_vmulp, Ty),
-                        Ops, "vmul");
+    return EmitNeonCall(CGM.getIntrinsic(LLVMIntrinsic, Ty), Ops, "vmul");
   case NEON::BI__builtin_neon_vmull_v:
     // FIXME: the integer vmull operations could be emitted in terms of pure
     // LLVM IR (2 exts followed by a mul). Unfortunately LLVM has a habit of
@@ -2153,11 +2152,9 @@ Value *CodeGenFunction::EmitCommonNeonBuiltinExpr(
   }
   case NEON::BI__builtin_neon_vqdmulh_v:
   case NEON::BI__builtin_neon_vqdmulhq_v:
-    return EmitNeonCall(CGM.getIntrinsic(Intrinsic::arm_neon_vqdmulh, Ty),
-                        Ops, "vqdmulh");
+    return EmitNeonCall(CGM.getIntrinsic(LLVMIntrinsic, Ty), Ops, "vqdmulh");
   case NEON::BI__builtin_neon_vqdmull_v:
-    return EmitNeonCall(CGM.getIntrinsic(Intrinsic::arm_neon_vqdmull, Ty),
-                        Ops, "vqdmull");
+    return EmitNeonCall(CGM.getIntrinsic(LLVMIntrinsic, Ty), Ops, "vqdmull");
   case NEON::BI__builtin_neon_vqshl_n_v:
   case NEON::BI__builtin_neon_vqshlq_n_v:
     Int = Usgn ? Intrinsic::arm_neon_vqshiftu : Intrinsic::arm_neon_vqshifts;
@@ -2165,8 +2162,7 @@ Value *CodeGenFunction::EmitCommonNeonBuiltinExpr(
                         1, false);
   case NEON::BI__builtin_neon_vqrdmulh_v:
   case NEON::BI__builtin_neon_vqrdmulhq_v:
-    return EmitNeonCall(CGM.getIntrinsic(Intrinsic::arm_neon_vqrdmulh, Ty),
-                        Ops, "vqrdmulh");
+    return EmitNeonCall(CGM.getIntrinsic(LLVMIntrinsic, Ty), Ops, "vqrdmulh");
   case NEON::BI__builtin_neon_vqrshl_v:
   case NEON::BI__builtin_neon_vqrshlq_v:
     Int = Usgn ? Intrinsic::arm_neon_vqrshiftu : Intrinsic::arm_neon_vqrshifts;
@@ -3492,8 +3488,15 @@ static CodeGenFunction::NeonIntrinsicMap ARMNeonIntrinsicMap [] = {
   NEONMAP2(__builtin_neon_vhaddq_v, arm_neon_vhaddu, arm_neon_vhadds),
   NEONMAP0(__builtin_neon_vmovl_v),
   NEONMAP0(__builtin_neon_vmovn_v),
+  NEONMAP1(__builtin_neon_vmul_v, arm_neon_vmulp),
+  NEONMAP1(__builtin_neon_vmulq_v, arm_neon_vmulp),
   NEONMAP2(__builtin_neon_vqadd_v, arm_neon_vqaddu, arm_neon_vqadds),
   NEONMAP2(__builtin_neon_vqaddq_v, arm_neon_vqaddu, arm_neon_vqadds),
+  NEONMAP1(__builtin_neon_vqdmulh_v, arm_neon_vqdmulh),
+  NEONMAP1(__builtin_neon_vqdmulhq_v, arm_neon_vqdmulh),
+  NEONMAP1(__builtin_neon_vqdmull_v, arm_neon_vqdmull),
+  NEONMAP1(__builtin_neon_vqrdmulh_v, arm_neon_vqrdmulh),
+  NEONMAP1(__builtin_neon_vqrdmulhq_v, arm_neon_vqrdmulh),
   NEONMAP1(__builtin_neon_vraddhn_v, arm_neon_vraddhn),
   NEONMAP2(__builtin_neon_vrhadd_v, arm_neon_vrhaddu, arm_neon_vrhadds),
   NEONMAP2(__builtin_neon_vrhaddq_v, arm_neon_vrhaddu, arm_neon_vrhadds)
@@ -3518,8 +3521,15 @@ static CodeGenFunction::NeonIntrinsicMap ARM64NeonIntrinsicMap[] = {
   NEONMAP2(__builtin_neon_vhaddq_v, arm64_neon_uhadd, arm64_neon_shadd),
   NEONMAP0(__builtin_neon_vmovl_v),
   NEONMAP0(__builtin_neon_vmovn_v),
+  NEONMAP1(__builtin_neon_vmul_v, arm64_neon_pmul),
+  NEONMAP1(__builtin_neon_vmulq_v, arm64_neon_pmul),
   NEONMAP2(__builtin_neon_vqadd_v, arm64_neon_uqadd, arm64_neon_sqadd),
   NEONMAP2(__builtin_neon_vqaddq_v, arm64_neon_uqadd, arm64_neon_sqadd),
+  NEONMAP1(__builtin_neon_vqdmulh_v, arm64_neon_sqdmulh),
+  NEONMAP1(__builtin_neon_vqdmulhq_v, arm64_neon_sqdmulh),
+  NEONMAP1(__builtin_neon_vqdmull_v, arm64_neon_sqdmull),
+  NEONMAP1(__builtin_neon_vqrdmulh_v, arm64_neon_sqrdmulh),
+  NEONMAP1(__builtin_neon_vqrdmulhq_v, arm64_neon_sqrdmulh),
   NEONMAP1(__builtin_neon_vraddhn_v, arm64_neon_raddhn),
   NEONMAP2(__builtin_neon_vrhadd_v, arm64_neon_urhadd, arm64_neon_srhadd),
   NEONMAP2(__builtin_neon_vrhaddq_v, arm64_neon_urhadd, arm64_neon_srhadd),
@@ -5866,25 +5876,11 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     Ops[1] = Builder.CreateFNeg(Ops[1]);
     Int = Intrinsic::fma;
     return EmitNeonCall(CGM.getIntrinsic(Int, Ty), Ops, "fmls");
-  }  case NEON::BI__builtin_neon_vmul_v:
-  case NEON::BI__builtin_neon_vmulq_v: // Only used for PMUL.
-    Int = Intrinsic::arm64_neon_pmul;
-    return EmitNeonCall(CGM.getIntrinsic(Int, Ty), Ops, "vqdmulh");
+  }
   case NEON::BI__builtin_neon_vmull_v:
     Int = usgn ? Intrinsic::arm64_neon_umull : Intrinsic::arm64_neon_smull;
     Int = Type.isPoly() ? Intrinsic::arm64_neon_pmull : Int;
     return EmitNeonCall(CGM.getIntrinsic(Int, Ty), Ops, "vmull");
-  case NEON::BI__builtin_neon_vqdmulh_v:
-  case NEON::BI__builtin_neon_vqdmulhq_v:
-    Int = Intrinsic::arm64_neon_sqdmulh;
-    return EmitNeonCall(CGM.getIntrinsic(Int, Ty), Ops, "vqdmulh");
-  case NEON::BI__builtin_neon_vqrdmulh_v:
-  case NEON::BI__builtin_neon_vqrdmulhq_v:
-    Int = Intrinsic::arm64_neon_sqrdmulh;
-    return EmitNeonCall(CGM.getIntrinsic(Int, Ty), Ops, "vqrdmulh");
-  case NEON::BI__builtin_neon_vqdmull_v:
-    Int = Intrinsic::arm64_neon_sqdmull;
-    return EmitNeonCall(CGM.getIntrinsic(Int, Ty), Ops, "vqdmull");
   case NEON::BI__builtin_neon_vqsub_v:
   case NEON::BI__builtin_neon_vqsubq_v:
     Int = usgn ? Intrinsic::arm64_neon_uqsub : Intrinsic::arm64_neon_sqsub;
