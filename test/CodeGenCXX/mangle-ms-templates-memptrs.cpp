@@ -5,6 +5,7 @@ static_assert(sizeof(void (U::*)()) == 2 * sizeof(void*) + 2 * sizeof(int), "");
 
 struct A { int a; };
 struct B { int b; };
+struct I { union { struct { int a, b; }; }; };
 
 struct S             { int a, b; void f(); virtual void g(); };
 struct M : A, B      { int a, b; void f(); virtual void g(); };
@@ -23,6 +24,7 @@ int ReadField(T &o) {
 
 void ReadFields() {
   A a;
+  I i;
   S s;
   M m;
   V v;
@@ -43,6 +45,10 @@ void ReadFields() {
   // Non-polymorphic null data memptr vs first field memptr.
   ReadField<A, &A::a>(a);
   ReadField<A, nullptr>(a);
+
+  // Indirect fields injected from anonymous unions and structs
+  ReadField<I, &I::a>(i);
+  ReadField<I, &I::b>(i);
 }
 
 // CHECK-LABEL: define {{.*}}ReadFields
@@ -66,6 +72,11 @@ void ReadFields() {
 // the same.
 // CHECK: call {{.*}} @"\01??$ReadField@UA@@$0A@@@YAHAAUA@@@Z"
 // CHECK: call {{.*}} @"\01??$ReadField@UA@@$0?0@@YAHAAUA@@@Z"
+
+// Indirect fields are handled as-if they were simply members of their enclosing
+// record.
+// CHECK: call {{.*}} @"\01??$ReadField@UI@@$0A@@@YAHAAUI@@@Z"
+// CHECK: call {{.*}} @"\01??$ReadField@UI@@$03@@YAHAAUI@@@Z"
 
 // Test member function pointers.
 template <typename T, void (T::*MFP)()>
