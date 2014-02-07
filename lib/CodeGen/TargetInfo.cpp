@@ -3964,9 +3964,6 @@ static bool isHomogeneousAggregate(QualType Ty, const Type *&Base,
     const Type *TyPtr = Ty.getTypePtr();
     if (!Base)
       Base = TyPtr;
-    // If Base is a short vector, we only care about its size, the type of the
-    // elements in the short vector does not form part of the test for
-    // homogeneity.
 
     if (Base != TyPtr) {
       // Homogeneous aggregates are defined as containing members with the
