@@ -3202,9 +3202,13 @@ def err_default_arg_in_partial_spec : Error<
 def err_dependent_non_type_arg_in_partial_spec : Error<
     "non-type template argument depends on a template parameter of the "
     "partial specialization">;
+def note_dependent_non_type_default_arg_in_partial_spec : Note<
+    "template parameter is used in default argument declared here">;
 def err_dependent_typed_non_type_arg_in_partial_spec : Error<
     "non-type template argument specializes a template parameter with "
     "dependent type %0">;
+def note_dependent_typed_non_type_default_arg_in_partial_spec : Note<
+    "template parameter is declared here">;
 def err_partial_spec_args_match_primary_template : Error<
     "%select{class|variable}0 template partial specialization does not "
     "specialize any template argument; to %select{declare|define}1 the "
@@ -5249,9 +5253,10 @@ def err_typecheck_deleted_function : Error<
   "conversion function %diff{from $ to $|between types}0,1 "
   "invokes a deleted function">;
   
-def err_expected_class_or_namespace : Error<"expected a class or namespace">;
-def err_expected_class : Error<"%0 is not a class%select{ or namespace|, "
-  "namespace, or scoped enumeration}1">;
+def err_expected_class_or_namespace : Error<"%0 is not a class"
+  "%select{ or namespace|, namespace, or scoped enumeration}1">;
+def note_expected_class_or_namespace_declared_here : Note<
+  "%0 declared here">;
 def err_invalid_declarator_scope : Error<"cannot define or redeclare %0 here "
   "because namespace %1 does not enclose namespace %2">;
 def err_invalid_declarator_global_scope : Error<
