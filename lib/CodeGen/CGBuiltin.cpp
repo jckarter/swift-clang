@@ -6082,12 +6082,12 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
   }
   case NEON::BI__builtin_neon_vrnda_v:
   case NEON::BI__builtin_neon_vrndaq_v: {
-    Int = Intrinsic::arm64_neon_frinta;
+    Int = Intrinsic::round;
     return EmitNeonCall(CGM.getIntrinsic(Int, Ty), Ops, "vrnda");
   }
   case NEON::BI__builtin_neon_vrndm_v:
   case NEON::BI__builtin_neon_vrndmq_v: {
-    Int = Intrinsic::arm64_neon_frintm;
+    Int = Intrinsic::floor;
     return EmitNeonCall(CGM.getIntrinsic(Int, Ty), Ops, "vrndm");
   }
   case NEON::BI__builtin_neon_vrndn_v:
@@ -6097,19 +6097,19 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
   }
   case NEON::BI__builtin_neon_vrndp_v:
   case NEON::BI__builtin_neon_vrndpq_v: {
-    Int = Intrinsic::arm64_neon_frintp;
+    Int = Intrinsic::ceil;
     return EmitNeonCall(CGM.getIntrinsic(Int, Ty), Ops, "vrndp");
   }
   case NEON::BI__builtin_neon_vrndx_v:
   case NEON::BI__builtin_neon_vrndxq_v: {
-    Int = Intrinsic::arm64_neon_frintx;
+    Int = Intrinsic::rint;
     return EmitNeonCall(CGM.getIntrinsic(Int, Ty), Ops, "vrndx");
   }
   case NEON::BI__builtin_neon_vrndz_v:
   case NEON::BI__builtin_neon_vrnd_v:
   case NEON::BI__builtin_neon_vrndzq_v:
   case NEON::BI__builtin_neon_vrndq_v: {
-    Int = Intrinsic::arm64_neon_frintz;
+    Int = Intrinsic::trunc;
     return EmitNeonCall(CGM.getIntrinsic(Int, Ty), Ops, "vrndz");
   }
   case NEON::BI__builtin_neon_vcvt_f32_v:
