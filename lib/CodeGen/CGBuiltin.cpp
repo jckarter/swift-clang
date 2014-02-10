@@ -3543,6 +3543,7 @@ static CodeGenFunction::NeonIntrinsicMap ARMNeonIntrinsicMap [] = {
   NEONMAP0(__builtin_neon_vshlq_n_v),
   NEONMAP2(__builtin_neon_vshlq_v, arm_neon_vshiftu, arm_neon_vshifts),
   NEONMAP0(__builtin_neon_vshr_n_v),
+  NEONMAP0(__builtin_neon_vshrn_n_v),
   NEONMAP0(__builtin_neon_vshrq_n_v),
   NEONMAP0(__builtin_neon_vsubhn_v),
   NEONMAP0(__builtin_neon_vtst_v),
@@ -3615,6 +3616,7 @@ static CodeGenFunction::NeonIntrinsicMap ARM64NeonIntrinsicMap[] = {
   NEONMAP0(__builtin_neon_vshlq_n_v),
   NEONMAP2(__builtin_neon_vshlq_v, arm64_neon_ushl, arm64_neon_sshl),
   NEONMAP0(__builtin_neon_vshr_n_v),
+  NEONMAP0(__builtin_neon_vshrn_n_v),
   NEONMAP0(__builtin_neon_vshrq_n_v),
   NEONMAP0(__builtin_neon_vsubhn_v),
   NEONMAP0(__builtin_neon_vtst_v),
@@ -6061,10 +6063,6 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     // the final merge.
     Int = Intrinsic::arm64_neon_sqshlu;
     return EmitNeonCall(CGM.getIntrinsic(Int, Ty), Ops, "vqshlu_n", 1, false);
-  case NEON::BI__builtin_neon_vshrn_n_v:
-    // FIXME: same as vqshlu
-    Int = Intrinsic::arm64_neon_shrn;
-    return EmitNeonCall(CGM.getIntrinsic(Int, Ty), Ops, "vshrn_n");
   case NEON::BI__builtin_neon_vqshrun_n_v:
     // FIXME: as above
     Int = Intrinsic::arm64_neon_sqshrun;
@@ -7429,13 +7427,23 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     switch (BuiltinID) {
     default:
       assert(0 && "Unexpected BuiltinID!");
+    case NEON::BI__builtin_neon_vshrn_high_n_v: {
+      unsigned NumElts = VTy->getNumElements();
+      llvm::VectorType *ConcatTy =
+          llvm::VectorType::get(VTy->getElementType(), NumElts / 2);
+      llvm::VectorType *ArgTy =
+          llvm::VectorType::getExtendedElementVectorType(ConcatTy);
+
+      Ops[1] = Builder.CreateBitCast(Ops[1], ArgTy);
+      Ops[2] = EmitNeonShiftVector(Ops[2], ArgTy, false);
+      llvm::Value *Shift = Builder.CreateLShr(Ops[1], Ops[2]);
+      llvm::Value *Trunc = Builder.CreateTrunc(Shift, ConcatTy);
+      return EmitConcatVectors(Ops[0], Trunc, ConcatTy);
+      break;
+    }
     case NEON::BI__builtin_neon_vrshrn_high_n_v:
       Int = Intrinsic::arm64_neon_rshrn;
       Name = "vrshrn_high_n";
-      break;
-    case NEON::BI__builtin_neon_vshrn_high_n_v:
-      Int = Intrinsic::arm64_neon_shrn;
-      Name = "vshrn_high_n";
       break;
     case NEON::BI__builtin_neon_vqshrun_high_n_v:
       Int = Intrinsic::arm64_neon_sqshrun;
