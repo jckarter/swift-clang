@@ -6050,16 +6050,16 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
                                                   "vshl_n");
   case NEON::BI__builtin_neon_vrshr_n_v:
   case NEON::BI__builtin_neon_vrshrq_n_v:
-    Int = usgn ? Intrinsic::arm64_neon_urshr : Intrinsic::arm64_neon_srshr;
-    return EmitNeonCall(CGM.getIntrinsic(Int, Ty), Ops, "vrshr_n");
+    Int = usgn ? Intrinsic::arm64_neon_urshl : Intrinsic::arm64_neon_srshl;
+    return EmitNeonCall(CGM.getIntrinsic(Int, Ty), Ops, "vrshr_n", 1, true);
   case NEON::BI__builtin_neon_vqshl_n_v:
   case NEON::BI__builtin_neon_vqshlq_n_v:
-    Int = usgn ? Intrinsic::arm64_neon_uqshli : Intrinsic::arm64_neon_sqshli;
-    return EmitNeonCall(CGM.getIntrinsic(Int, Ty), Ops, "vqshl_n");
+    Int = usgn ? Intrinsic::arm64_neon_uqshl : Intrinsic::arm64_neon_sqshl;
+    return EmitNeonCall(CGM.getIntrinsic(Int, Ty), Ops, "vqshl_n", 1, false);
   case NEON::BI__builtin_neon_vqshlu_n_v:
   case NEON::BI__builtin_neon_vqshluq_n_v:
     Int = Intrinsic::arm64_neon_sqshlu;
-    return EmitNeonCall(CGM.getIntrinsic(Int, Ty), Ops, "vqshlu_n");
+    return EmitNeonCall(CGM.getIntrinsic(Int, Ty), Ops, "vqshlu_n", 1, false);
   case NEON::BI__builtin_neon_vshrn_n_v:
     Int = Intrinsic::arm64_neon_shrn;
     return EmitNeonCall(CGM.getIntrinsic(Int, Ty), Ops, "vshrn_n");
@@ -6922,12 +6922,12 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     return Builder.CreateAdd(Ops[0], Ops[1]);
   case NEON::BI__builtin_neon_vrsra_n_v:
   case NEON::BI__builtin_neon_vrsraq_n_v: {
-    Int = usgn ? Intrinsic::arm64_neon_urshr : Intrinsic::arm64_neon_srshr;
+    Int = usgn ? Intrinsic::arm64_neon_urshl : Intrinsic::arm64_neon_srshl;
     SmallVector<llvm::Value*,2> TmpOps;
     TmpOps.push_back(Ops[1]);
     TmpOps.push_back(Ops[2]);
     Function* F = CGM.getIntrinsic(Int, Ty);
-    llvm::Value *tmp = EmitNeonCall(F, TmpOps, "vrshr_n");
+    llvm::Value *tmp = EmitNeonCall(F, TmpOps, "vrshr_n", 1, true);
     Ops[0] = Builder.CreateBitCast(Ops[0], VTy);
     return Builder.CreateAdd(Ops[0], tmp);
   }
