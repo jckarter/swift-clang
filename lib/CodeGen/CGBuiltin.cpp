@@ -3477,9 +3477,6 @@ static Value *EmitAArch64TblBuiltinExpr(CodeGenFunction &CGF,
 #define NEONMAP2(ClangBuiltin, LLVMInt, AltLLVMInt) \
   { NEON::BI ## ClangBuiltin, Intrinsic::LLVMInt, Intrinsic::AltLLVMInt }
 
-static CodeGenFunction::NeonIntrinsicMap AArch64NeonIntrinsicMap [] = {
-};
-
 static CodeGenFunction::NeonIntrinsicMap ARMNeonIntrinsicMap [] = {
   NEONMAP0(__builtin_neon_vaddhn_v),
   NEONMAP1(__builtin_neon_vaesdq_v, arm_neon_aesd),
@@ -3631,7 +3628,6 @@ static CodeGenFunction::NeonIntrinsicMap ARM64NeonIntrinsicMap[] = {
 #undef NEONMAP2
 
 #ifndef NDEBUG
-static bool AArch64IntrinsicsProvenSorted = false;
 static bool ARMIntrinsicsProvenSorted = false;
 static bool ARM64IntrinsicsProvenSorted = false;
 #endif
