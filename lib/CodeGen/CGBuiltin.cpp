@@ -3477,6 +3477,9 @@ static Value *EmitAArch64TblBuiltinExpr(CodeGenFunction &CGF,
 #define NEONMAP2(ClangBuiltin, LLVMInt, AltLLVMInt) \
   { NEON::BI ## ClangBuiltin, Intrinsic::LLVMInt, Intrinsic::AltLLVMInt }
 
+static CodeGenFunction::NeonIntrinsicMap AArch64NeonIntrinsicMap [] = {
+};
+
 static CodeGenFunction::NeonIntrinsicMap ARMNeonIntrinsicMap [] = {
   NEONMAP0(__builtin_neon_vaddhn_v),
   NEONMAP1(__builtin_neon_vaesdq_v, arm_neon_aesd),
@@ -3628,9 +3631,35 @@ static CodeGenFunction::NeonIntrinsicMap ARM64NeonIntrinsicMap[] = {
 #undef NEONMAP2
 
 #ifndef NDEBUG
+static bool AArch64IntrinsicsProvenSorted = false;
 static bool ARMIntrinsicsProvenSorted = false;
 static bool ARM64IntrinsicsProvenSorted = false;
 #endif
+
+static bool findNeonIntrinsic(
+    llvm::ArrayRef<CodeGenFunction::NeonIntrinsicMap> IntrinsicMap,
+    unsigned BuiltinID, bool &MapProvenSorted, unsigned &LLVMIntrinsic,
+    unsigned &AltLLVMIntrinsic) {
+#ifndef NDEBUG
+  if (!MapProvenSorted) {
+    // FIXME: use std::is_sorted once C++11 is allowed
+    for (unsigned i = 0; i < IntrinsicMap.size() - 1; ++i)
+      assert(IntrinsicMap[i].BuiltinID <= IntrinsicMap[i + 1].BuiltinID);
+    MapProvenSorted = true;
+  }
+#endif
+
+  const CodeGenFunction::NeonIntrinsicMap *Builtin =
+      std::lower_bound(IntrinsicMap.begin(), IntrinsicMap.end(), BuiltinID);
+
+  if (Builtin == IntrinsicMap.end() || Builtin->BuiltinID != BuiltinID)
+    return false;
+
+  LLVMIntrinsic = Builtin->LLVMIntrinsic;
+  AltLLVMIntrinsic = Builtin->AltLLVMIntrinsic;
+  return true;
+}
+
 
 Value *CodeGenFunction::EmitAArch64BuiltinExpr(unsigned BuiltinID,
                                                const CallExpr *E) {
@@ -3776,27 +3805,13 @@ Value *CodeGenFunction::EmitAArch64BuiltinExpr(unsigned BuiltinID,
   if (!Ty)
     return 0;
 
-  llvm::ArrayRef<NeonIntrinsicMap> IntrinsicMap(ARMNeonIntrinsicMap);
-#ifndef NDEBUG
-  if (!ARMIntrinsicsProvenSorted) {
-    // FIXME: use std::is_sorted once C++11 is allowed
-    for (unsigned i = 0; i < IntrinsicMap.size() - 1; ++i)
-      assert(IntrinsicMap[i].BuiltinID <= IntrinsicMap[i + 1].BuiltinID);
-    ARMIntrinsicsProvenSorted = true;
-  }
-#endif
-
-  const NeonIntrinsicMap *Builtin =
-      std::lower_bound(IntrinsicMap.begin(), IntrinsicMap.end(), BuiltinID);
-
-  unsigned LLVMIntrinsic = 0, AltLLVMIntrinsic = 0;
-  if (Builtin != IntrinsicMap.end() && Builtin->BuiltinID == BuiltinID) {
-    LLVMIntrinsic = Builtin->LLVMIntrinsic;
-    AltLLVMIntrinsic = Builtin->AltLLVMIntrinsic;
-  }
 
   // Many NEON builtins have identical semantics and uses in ARM and
   // AArch64. Emit these in a single function.
+  unsigned LLVMIntrinsic = 0, AltLLVMIntrinsic = 0;
+  findNeonIntrinsic(ARMNeonIntrinsicMap, BuiltinID, ARMIntrinsicsProvenSorted,
+                    LLVMIntrinsic, AltLLVMIntrinsic);
+
   if (Value *Result = EmitCommonNeonBuiltinExpr(
           BuiltinID, LLVMIntrinsic, AltLLVMIntrinsic, E, Ops, Align))
     return Result;
@@ -4704,27 +4719,13 @@ Value *CodeGenFunction::EmitARMBuiltinExpr(unsigned BuiltinID,
   if (!Ty)
     return 0;
 
-  llvm::ArrayRef<NeonIntrinsicMap> IntrinsicMap(ARMNeonIntrinsicMap);
-#ifndef NDEBUG
-  if (!ARMIntrinsicsProvenSorted) {
-    // FIXME: use std::is_sorted once C++11 is allowed
-    for (unsigned i = 0; i < IntrinsicMap.size() - 1; ++i)
-      assert(IntrinsicMap[i].BuiltinID <= IntrinsicMap[i + 1].BuiltinID);
-    ARMIntrinsicsProvenSorted = true;
-  }
-#endif
-
-  const NeonIntrinsicMap *Builtin =
-      std::lower_bound(IntrinsicMap.begin(), IntrinsicMap.end(), BuiltinID);
-
-  unsigned LLVMIntrinsic = 0, AltLLVMIntrinsic = 0;
-  if (Builtin != IntrinsicMap.end() && Builtin->BuiltinID == BuiltinID) {
-    LLVMIntrinsic = Builtin->LLVMIntrinsic;
-    AltLLVMIntrinsic = Builtin->AltLLVMIntrinsic;
-  }
 
   // Many NEON builtins have identical semantics and uses in ARM and
   // AArch64. Emit these in a single function.
+  unsigned LLVMIntrinsic = 0, AltLLVMIntrinsic = 0;
+  findNeonIntrinsic(ARMNeonIntrinsicMap, BuiltinID, ARMIntrinsicsProvenSorted,
+                    LLVMIntrinsic, AltLLVMIntrinsic);
+
   if (Value *Result = EmitCommonNeonBuiltinExpr(
           BuiltinID, LLVMIntrinsic, AltLLVMIntrinsic, E, Ops, Align))
     return Result;
@@ -5849,26 +5850,16 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
   if (!Ty)
     return 0;
 
-  llvm::ArrayRef<NeonIntrinsicMap> IntrinsicMap(ARM64NeonIntrinsicMap);
-
-#ifndef NDEBUG
-  if (!ARM64IntrinsicsProvenSorted) {
-    // FIXME: use std::is_sorted once C++11 is allowed
-    for (unsigned i = 0; i < IntrinsicMap.size() - 1; ++i)
-      assert(IntrinsicMap[i].BuiltinID <= IntrinsicMap[i + 1].BuiltinID);
-    ARM64IntrinsicsProvenSorted = true;
-  }
-#endif
-
-  const NeonIntrinsicMap *Builtin =
-      std::lower_bound(IntrinsicMap.begin(), IntrinsicMap.end(), BuiltinID);
-
   // Not all intrinsics handled by the common case work for ARM64 yet, so only
   // defer to common code if it's been added to our special map.
-  if (Builtin != IntrinsicMap.end() && Builtin->BuiltinID == BuiltinID) {
-    return EmitCommonNeonBuiltinExpr(BuiltinID, Builtin->LLVMIntrinsic,
-                                     Builtin->AltLLVMIntrinsic, E, Ops, 0);
-  }
+  unsigned LLVMIntrinsic = 0, AltLLVMIntrinsic = 0;
+  bool IsIntrinsicCommon = findNeonIntrinsic(ARM64NeonIntrinsicMap, BuiltinID,
+                                             ARM64IntrinsicsProvenSorted,
+                                             LLVMIntrinsic, AltLLVMIntrinsic);
+
+  if (IsIntrinsicCommon)
+    return EmitCommonNeonBuiltinExpr(BuiltinID, LLVMIntrinsic, AltLLVMIntrinsic,
+                                     E, Ops, 0);
 
   unsigned Int;
   switch (BuiltinID) {
