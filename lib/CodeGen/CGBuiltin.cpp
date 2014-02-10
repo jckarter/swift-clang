@@ -3815,8 +3815,14 @@ Value *CodeGenFunction::EmitAArch64BuiltinExpr(unsigned BuiltinID,
   // Many NEON builtins have identical semantics and uses in ARM and
   // AArch64. Emit these in a single function.
   unsigned LLVMIntrinsic = 0, AltLLVMIntrinsic = 0;
+#ifndef NDEBUG
   findNeonIntrinsic(ARMNeonIntrinsicMap, BuiltinID, ARMIntrinsicsProvenSorted,
                     LLVMIntrinsic, AltLLVMIntrinsic);
+#else
+  bool Dummy = false;
+  findNeonIntrinsic(ARMNeonIntrinsicMap, BuiltinID, Dummy,
+                    LLVMIntrinsic, AltLLVMIntrinsic);
+#endif
 
   if (Value *Result = EmitCommonNeonBuiltinExpr(
           BuiltinID, LLVMIntrinsic, AltLLVMIntrinsic, E, Ops, Align))
@@ -4715,12 +4721,17 @@ Value *CodeGenFunction::EmitARMBuiltinExpr(unsigned BuiltinID,
   if (!Ty)
     return 0;
 
-
   // Many NEON builtins have identical semantics and uses in ARM and
   // AArch64. Emit these in a single function.
   unsigned LLVMIntrinsic = 0, AltLLVMIntrinsic = 0;
+#ifndef NDEBUG
   findNeonIntrinsic(ARMNeonIntrinsicMap, BuiltinID, ARMIntrinsicsProvenSorted,
                     LLVMIntrinsic, AltLLVMIntrinsic);
+#else
+  bool Dummy = false;
+  findNeonIntrinsic(ARMNeonIntrinsicMap, BuiltinID, Dummy,
+                    LLVMIntrinsic, AltLLVMIntrinsic);
+#endif
 
   if (Value *Result = EmitCommonNeonBuiltinExpr(
           BuiltinID, LLVMIntrinsic, AltLLVMIntrinsic, E, Ops, Align))
@@ -5846,9 +5857,16 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
   // Not all intrinsics handled by the common case work for ARM64 yet, so only
   // defer to common code if it's been added to our special map.
   unsigned LLVMIntrinsic = 0, AltLLVMIntrinsic = 0;
+#ifndef NDEBUG
   bool IsIntrinsicCommon = findNeonIntrinsic(ARM64NeonIntrinsicMap, BuiltinID,
                                              ARM64IntrinsicsProvenSorted,
                                              LLVMIntrinsic, AltLLVMIntrinsic);
+#else
+  bool Dummy = false;
+  bool IsIntrinsicCommon = findNeonIntrinsic(ARM64NeonIntrinsicMap, BuiltinID,
+                                             Dummy,
+                                             LLVMIntrinsic, AltLLVMIntrinsic);
+#endif
 
   if (IsIntrinsicCommon)
     return EmitCommonNeonBuiltinExpr(BuiltinID, LLVMIntrinsic, AltLLVMIntrinsic,
