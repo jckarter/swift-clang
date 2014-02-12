@@ -927,6 +927,10 @@ static void ParseHeaderSearchArgs(HeaderSearchOptions &Opts, ArgList &Args) {
       getLastArgIntValue(Args, OPT_fmodules_prune_interval, 7 * 24 * 60 * 60);
   Opts.ModuleCachePruneAfter =
       getLastArgIntValue(Args, OPT_fmodules_prune_after, 31 * 24 * 60 * 60);
+  Opts.ModulesValidateOncePerBuildSession =
+      Args.hasArg(OPT_fmodules_validate_once_per_build_session);
+  Opts.BuildSessionTimestamp =
+      getLastArgUInt64Value(Args, OPT_fbuild_session_timestamp, 0);
   for (arg_iterator it = Args.filtered_begin(OPT_fmodules_ignore_macro),
                     ie = Args.filtered_end();
        it != ie; ++it) {
@@ -1405,6 +1409,24 @@ static void ParseLangArgs(LangOptions &Opts, ArgList &Args, InputKind IK,
     }
   }
 
+  if (Arg *A = Args.getLastArg(OPT_fms_memptr_rep_EQ)) {
+    LangOptions::PragmaMSPointersToMembersKind InheritanceModel =
+        llvm::StringSwitch<LangOptions::PragmaMSPointersToMembersKind>(
+            A->getValue())
+            .Case("single",
+                  LangOptions::PPTMK_FullGeneralitySingleInheritance)
+            .Case("multiple",
+                  LangOptions::PPTMK_FullGeneralityMultipleInheritance)
+            .Case("virtual",
+                  LangOptions::PPTMK_FullGeneralityVirtualInheritance)
+            .Default(LangOptions::PPTMK_BestCase);
+    if (InheritanceModel == LangOptions::PPTMK_BestCase)
+      Diags.Report(diag::err_drv_invalid_value)
+          << "-fms-memptr-rep=" << A->getValue();
+
+    Opts.setMSPointerToMemberRepresentationMethod(InheritanceModel);
+  }
+
   // Check if -fopenmp is specified.
   Opts.OpenMP = Args.hasArg(OPT_fopenmp);
 
@@ -1822,10 +1844,11 @@ std::string CompilerInvocation::getModuleHash() const {
 
 namespace clang {
 
-// Declared in clang/Frontend/Utils.h.
-int getLastArgIntValue(const ArgList &Args, OptSpecifier Id, int Default,
-                       DiagnosticsEngine *Diags) {
-  int Res = Default;
+template<typename IntTy>
+static IntTy getLastArgIntValueImpl(const ArgList &Args, OptSpecifier Id,
+                                    IntTy Default,
+                                    DiagnosticsEngine *Diags) {
+  IntTy Res = Default;
   if (Arg *A = Args.getLastArg(Id)) {
     if (StringRef(A->getValue()).getAsInteger(10, Res)) {
       if (Diags)
@@ -1834,6 +1857,19 @@ int getLastArgIntValue(const ArgList &Args, OptSpecifier Id, int Default,
     }
   }
   return Res;
+}
+
+
+// Declared in clang/Frontend/Utils.h.
+int getLastArgIntValue(const ArgList &Args, OptSpecifier Id, int Default,
+                       DiagnosticsEngine *Diags) {
+  return getLastArgIntValueImpl<int>(Args, Id, Default, Diags);
+}
+
+uint64_t getLastArgUInt64Value(const ArgList &Args, OptSpecifier Id,
+                               uint64_t Default,
+                               DiagnosticsEngine *Diags) {
+  return getLastArgIntValueImpl<uint64_t>(Args, Id, Default, Diags);
 }
 
 void BuryPointer(const void *Ptr) {
