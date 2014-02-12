@@ -3575,6 +3575,7 @@ static CodeGenFunction::NeonIntrinsicMap ARMNeonIntrinsicMap [] = {
   NEONMAP1(__builtin_neon_vsha256su1q_v, arm_neon_sha256su1),
   NEONMAP0(__builtin_neon_vshl_n_v),
   NEONMAP2(__builtin_neon_vshl_v, arm_neon_vshiftu, arm_neon_vshifts),
+  NEONMAP0(__builtin_neon_vshll_n_v),
   NEONMAP0(__builtin_neon_vshlq_n_v),
   NEONMAP2(__builtin_neon_vshlq_v, arm_neon_vshiftu, arm_neon_vshifts),
   NEONMAP0(__builtin_neon_vshr_n_v),
@@ -3664,6 +3665,7 @@ static CodeGenFunction::NeonIntrinsicMap ARM64NeonIntrinsicMap[] = {
   NEONMAP1(__builtin_neon_vsha256su1q_v, arm64_crypto_sha256su1),
   NEONMAP0(__builtin_neon_vshl_n_v),
   NEONMAP2(__builtin_neon_vshl_v, arm64_neon_ushl, arm64_neon_sshl),
+  NEONMAP0(__builtin_neon_vshll_n_v),
   NEONMAP0(__builtin_neon_vshlq_n_v),
   NEONMAP2(__builtin_neon_vshlq_v, arm64_neon_ushl, arm64_neon_sshl),
   NEONMAP0(__builtin_neon_vshr_n_v),
@@ -6093,16 +6095,6 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     // FIXME: another one
     Int = usgn ? Intrinsic::arm64_neon_uqrshrn : Intrinsic::arm64_neon_sqrshrn;
     return EmitNeonCall(CGM.getIntrinsic(Int, Ty), Ops, "vqrshrn_n");
-  case NEON::BI__builtin_neon_vshll_n_v: {
-    llvm::Type *SrcTy = llvm::VectorType::getTruncatedElementVectorType(VTy);
-    Ops[0] = Builder.CreateBitCast(Ops[0], SrcTy);
-    if (usgn)
-      Ops[0] = Builder.CreateZExt(Ops[0], VTy);
-    else
-      Ops[0] = Builder.CreateSExt(Ops[0], VTy);
-    Ops[1] = EmitNeonShiftVector(Ops[1], VTy, false);
-    return Builder.CreateShl(Ops[0], Ops[1], "vshll_n");
-  }
   case NEON::BI__builtin_neon_vrnda_v:
   case NEON::BI__builtin_neon_vrndaq_v: {
     Int = Intrinsic::round;
