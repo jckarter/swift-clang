@@ -3647,6 +3647,7 @@ static CodeGenFunction::NeonIntrinsicMap ARM64NeonIntrinsicMap[] = {
   NEONMAP2(__builtin_neon_vqshlq_n_v, arm64_neon_uqshl, arm64_neon_sqshl),
   NEONMAP2(__builtin_neon_vqshlq_v, arm64_neon_uqshl, arm64_neon_sqshl),
   NEONMAP2(__builtin_neon_vqsub_v, arm64_neon_uqsub, arm64_neon_sqsub),
+  NEONMAP2(__builtin_neon_vqsubq_v, arm64_neon_uqsub, arm64_neon_sqsub),
   NEONMAP1(__builtin_neon_vraddhn_v, arm64_neon_raddhn),
   NEONMAP1(__builtin_neon_vrecps_v, arm64_neon_frecps),
   NEONMAP1(__builtin_neon_vrecpsq_v, arm64_neon_frecps),
