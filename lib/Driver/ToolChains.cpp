@@ -892,9 +892,6 @@ DerivedArgList *MachO::TranslateArgs(const DerivedArgList &Args,
       DAL->AddJoinedArg(0, MArch, "arm64");
     else if (Name == "armv8")
       DAL->AddJoinedArg(0, MArch, "arm64");
-
-    else
-      llvm_unreachable("invalid Darwin arch");
   }
 
   return DAL;
