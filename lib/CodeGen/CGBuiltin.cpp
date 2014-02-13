@@ -1812,8 +1812,7 @@ Value *CodeGenFunction::EmitCommonNeonBuiltinExpr(
   case NEON::BI__builtin_neon_vabsq_v:
     if (VTy->getElementType()->isFloatingPointTy())
       return EmitNeonCall(CGM.getIntrinsic(Intrinsic::fabs, Ty), Ops, "vabs");
-    return EmitNeonCall(CGM.getIntrinsic(Intrinsic::arm_neon_vabs, Ty), Ops,
-                        "vabs");
+    return EmitNeonCall(CGM.getIntrinsic(LLVMIntrinsic, Ty), Ops, "vabs");
   case NEON::BI__builtin_neon_vaeseq_v:
     return EmitNeonCall(CGM.getIntrinsic(LLVMIntrinsic), Ops, "aese");
   case NEON::BI__builtin_neon_vaesdq_v:
@@ -1874,7 +1873,7 @@ Value *CodeGenFunction::EmitCommonNeonBuiltinExpr(
   }
   case NEON::BI__builtin_neon_vcls_v:
   case NEON::BI__builtin_neon_vclsq_v: {
-    Function *F = CGM.getIntrinsic(Intrinsic::arm_neon_vcls, Ty);
+    Function *F = CGM.getIntrinsic(LLVMIntrinsic, Ty);
     return EmitNeonCall(F, Ops, "vcls");
   }
   case NEON::BI__builtin_neon_vclz_v:
@@ -2122,22 +2121,20 @@ Value *CodeGenFunction::EmitCommonNeonBuiltinExpr(
     return EmitNeonCall(CGM.getIntrinsic(Int, Ty), Ops, "vpmin");
   case NEON::BI__builtin_neon_vqabs_v:
   case NEON::BI__builtin_neon_vqabsq_v:
-    return EmitNeonCall(CGM.getIntrinsic(Intrinsic::arm_neon_vqabs, Ty),
+    return EmitNeonCall(CGM.getIntrinsic(LLVMIntrinsic, Ty),
                         Ops, "vqabs");
   case NEON::BI__builtin_neon_vqadd_v:
   case NEON::BI__builtin_neon_vqaddq_v:
     Int = Usgn ? LLVMIntrinsic : AltLLVMIntrinsic;
     return EmitNeonCall(CGM.getIntrinsic(Int, Ty), Ops, "vqadd");
   case NEON::BI__builtin_neon_vqmovn_v:
-    Int = Usgn ? Intrinsic::arm_neon_vqmovnu : Intrinsic::arm_neon_vqmovns;
+    Int = Usgn ? LLVMIntrinsic : AltLLVMIntrinsic;
     return EmitNeonCall(CGM.getIntrinsic(Int, Ty), Ops, "vqmovn");
   case NEON::BI__builtin_neon_vqmovun_v:
-    return EmitNeonCall(CGM.getIntrinsic(Intrinsic::arm_neon_vqmovnsu, Ty),
-                        Ops, "vqdmull");
+    return EmitNeonCall(CGM.getIntrinsic(LLVMIntrinsic, Ty), Ops, "vqdmull");
   case NEON::BI__builtin_neon_vqneg_v:
   case NEON::BI__builtin_neon_vqnegq_v:
-    return EmitNeonCall(CGM.getIntrinsic(Intrinsic::arm_neon_vqneg, Ty),
-                        Ops, "vqneg");
+    return EmitNeonCall(CGM.getIntrinsic(LLVMIntrinsic, Ty), Ops, "vqneg");
   case NEON::BI__builtin_neon_vqsub_v:
   case NEON::BI__builtin_neon_vqsubq_v:
     Int = Usgn ? LLVMIntrinsic : AltLLVMIntrinsic;
@@ -2190,8 +2187,8 @@ Value *CodeGenFunction::EmitCommonNeonBuiltinExpr(
                         Ops, "vraddhn");
   case NEON::BI__builtin_neon_vrecpe_v:
   case NEON::BI__builtin_neon_vrecpeq_v:
-    return EmitNeonCall(CGM.getIntrinsic(Intrinsic::arm_neon_vrecpe, Ty),
-                        Ops, "vrecpe");
+    Int = Ty->isFPOrFPVectorTy() ? LLVMIntrinsic : AltLLVMIntrinsic;
+    return EmitNeonCall(CGM.getIntrinsic(Int, Ty), Ops, "vrecpe");
   case NEON::BI__builtin_neon_vrecps_v:
   case NEON::BI__builtin_neon_vrecpsq_v:
     return EmitNeonCall(CGM.getIntrinsic(LLVMIntrinsic, Ty), Ops, "vrecps");
@@ -2205,8 +2202,8 @@ Value *CodeGenFunction::EmitCommonNeonBuiltinExpr(
     return EmitNeonCall(CGM.getIntrinsic(Int, Ty), Ops, "vrshl");
   case NEON::BI__builtin_neon_vrsqrte_v:
   case NEON::BI__builtin_neon_vrsqrteq_v:
-    return EmitNeonCall(CGM.getIntrinsic(Intrinsic::arm_neon_vrsqrte, Ty),
-                        Ops, "vrsqrte");
+    Int = Ty->isFPOrFPVectorTy() ? LLVMIntrinsic : AltLLVMIntrinsic;
+    return EmitNeonCall(CGM.getIntrinsic(Int, Ty), Ops, "vrsqrte");
   case NEON::BI__builtin_neon_vrsqrts_v:
   case NEON::BI__builtin_neon_vrsqrtsq_v:
     return EmitNeonCall(CGM.getIntrinsic(Intrinsic::arm_neon_vrsqrts, Ty),
@@ -3503,6 +3500,8 @@ static Value *EmitAArch64TblBuiltinExpr(CodeGenFunction &CGF,
   { NEON::BI ## ClangBuiltin, Intrinsic::LLVMInt, Intrinsic::AltLLVMInt }
 
 static CodeGenFunction::NeonIntrinsicMap ARMNeonIntrinsicMap [] = {
+  NEONMAP1(__builtin_neon_vabs_v, arm_neon_vabs),
+  NEONMAP1(__builtin_neon_vabsq_v, arm_neon_vabs),
   NEONMAP0(__builtin_neon_vaddhn_v),
   NEONMAP1(__builtin_neon_vaesdq_v, arm_neon_aesd),
   NEONMAP1(__builtin_neon_vaeseq_v, arm_neon_aese),
@@ -3516,6 +3515,12 @@ static CodeGenFunction::NeonIntrinsicMap ARMNeonIntrinsicMap [] = {
   NEONMAP1(__builtin_neon_vcaleq_v, arm_neon_vacge),
   NEONMAP1(__builtin_neon_vcalt_v, arm_neon_vacgt),
   NEONMAP1(__builtin_neon_vcaltq_v, arm_neon_vacgt),
+  NEONMAP1(__builtin_neon_vcls_v, arm_neon_vcls),
+  NEONMAP1(__builtin_neon_vclsq_v, arm_neon_vcls),
+  NEONMAP0(__builtin_neon_vclz_v),
+  NEONMAP0(__builtin_neon_vclzq_v),
+  NEONMAP0(__builtin_neon_vcnt_v),
+  NEONMAP0(__builtin_neon_vcntq_v),
   NEONMAP1(__builtin_neon_vcvt_f16_v, arm_neon_vcvtfp2hf),
   NEONMAP1(__builtin_neon_vcvt_f32_f16, arm_neon_vcvthf2fp),
   NEONMAP0(__builtin_neon_vcvt_f32_v),
@@ -3548,11 +3553,17 @@ static CodeGenFunction::NeonIntrinsicMap ARMNeonIntrinsicMap [] = {
   NEONMAP2(__builtin_neon_vpaddl_v, arm_neon_vpaddlu, arm_neon_vpaddls),
   NEONMAP2(__builtin_neon_vpaddlq_v, arm_neon_vpaddlu, arm_neon_vpaddls),
   NEONMAP1(__builtin_neon_vpaddq_v, arm_neon_vpadd),
+  NEONMAP1(__builtin_neon_vqabs_v, arm_neon_vqabs),
+  NEONMAP1(__builtin_neon_vqabsq_v, arm_neon_vqabs),
   NEONMAP2(__builtin_neon_vqadd_v, arm_neon_vqaddu, arm_neon_vqadds),
   NEONMAP2(__builtin_neon_vqaddq_v, arm_neon_vqaddu, arm_neon_vqadds),
   NEONMAP1(__builtin_neon_vqdmulh_v, arm_neon_vqdmulh),
   NEONMAP1(__builtin_neon_vqdmulhq_v, arm_neon_vqdmulh),
   NEONMAP1(__builtin_neon_vqdmull_v, arm_neon_vqdmull),
+  NEONMAP2(__builtin_neon_vqmovn_v, arm_neon_vqmovnu, arm_neon_vqmovns),
+  NEONMAP1(__builtin_neon_vqmovun_v, arm_neon_vqmovnsu),
+  NEONMAP1(__builtin_neon_vqneg_v, arm_neon_vqneg),
+  NEONMAP1(__builtin_neon_vqnegq_v, arm_neon_vqneg),
   NEONMAP1(__builtin_neon_vqrdmulh_v, arm_neon_vqrdmulh),
   NEONMAP1(__builtin_neon_vqrdmulhq_v, arm_neon_vqrdmulh),
   NEONMAP2(__builtin_neon_vqrshl_v, arm_neon_vqrshiftu, arm_neon_vqrshifts),
@@ -3564,12 +3575,16 @@ static CodeGenFunction::NeonIntrinsicMap ARMNeonIntrinsicMap [] = {
   NEONMAP2(__builtin_neon_vqsub_v, arm_neon_vqsubu, arm_neon_vqsubs),
   NEONMAP2(__builtin_neon_vqsubq_v, arm_neon_vqsubu, arm_neon_vqsubs),
   NEONMAP1(__builtin_neon_vraddhn_v, arm_neon_vraddhn),
+  NEONMAP2(__builtin_neon_vrecpe_v, arm_neon_vrecpe, arm_neon_vrecpe),
+  NEONMAP2(__builtin_neon_vrecpeq_v, arm_neon_vrecpe, arm_neon_vrecpe),
   NEONMAP1(__builtin_neon_vrecps_v, arm_neon_vrecps),
   NEONMAP1(__builtin_neon_vrecpsq_v, arm_neon_vrecps),
   NEONMAP2(__builtin_neon_vrhadd_v, arm_neon_vrhaddu, arm_neon_vrhadds),
   NEONMAP2(__builtin_neon_vrhaddq_v, arm_neon_vrhaddu, arm_neon_vrhadds),
   NEONMAP2(__builtin_neon_vrshl_v, arm_neon_vrshiftu, arm_neon_vrshifts),
   NEONMAP2(__builtin_neon_vrshlq_v, arm_neon_vrshiftu, arm_neon_vrshifts),
+  NEONMAP2(__builtin_neon_vrsqrte_v, arm_neon_vrsqrte, arm_neon_vrsqrte),
+  NEONMAP2(__builtin_neon_vrsqrteq_v, arm_neon_vrsqrte, arm_neon_vrsqrte),
   NEONMAP1(__builtin_neon_vrsqrts_v, arm_neon_vrsqrts),
   NEONMAP1(__builtin_neon_vrsqrtsq_v, arm_neon_vrsqrts),
   NEONMAP1(__builtin_neon_vrsubhn_v, arm_neon_vrsubhn),
@@ -3593,6 +3608,8 @@ static CodeGenFunction::NeonIntrinsicMap ARMNeonIntrinsicMap [] = {
 };
 
 static CodeGenFunction::NeonIntrinsicMap ARM64NeonIntrinsicMap[] = {
+  NEONMAP1(__builtin_neon_vabs_v, arm64_neon_abs),
+  NEONMAP1(__builtin_neon_vabsq_v, arm64_neon_abs),
   NEONMAP0(__builtin_neon_vaddhn_v),
   NEONMAP1(__builtin_neon_vaesdq_v, arm64_crypto_aesd),
   NEONMAP1(__builtin_neon_vaesdq_v, arm64_crypto_aesd),
@@ -3607,6 +3624,12 @@ static CodeGenFunction::NeonIntrinsicMap ARM64NeonIntrinsicMap[] = {
   NEONMAP1(__builtin_neon_vcaleq_v, arm64_neon_facge),
   NEONMAP1(__builtin_neon_vcalt_v, arm64_neon_facgt),
   NEONMAP1(__builtin_neon_vcaltq_v, arm64_neon_facgt),
+  NEONMAP1(__builtin_neon_vcls_v, arm64_neon_cls),
+  NEONMAP1(__builtin_neon_vclsq_v, arm64_neon_cls),
+  NEONMAP0(__builtin_neon_vclz_v),
+  NEONMAP0(__builtin_neon_vclzq_v),
+  NEONMAP0(__builtin_neon_vcnt_v),
+  NEONMAP0(__builtin_neon_vcntq_v),
   NEONMAP1(__builtin_neon_vcvt_f16_v, arm64_neon_vcvtfp2hf),
   NEONMAP1(__builtin_neon_vcvt_f32_f16, arm64_neon_vcvthf2fp),
   NEONMAP0(__builtin_neon_vcvt_f32_v),
@@ -3639,11 +3662,17 @@ static CodeGenFunction::NeonIntrinsicMap ARM64NeonIntrinsicMap[] = {
   NEONMAP2(__builtin_neon_vpaddl_v, arm64_neon_uaddlp, arm64_neon_saddlp),
   NEONMAP2(__builtin_neon_vpaddlq_v, arm64_neon_uaddlp, arm64_neon_saddlp),
   NEONMAP1(__builtin_neon_vpaddq_v, arm64_neon_addp),
+  NEONMAP1(__builtin_neon_vqabs_v, arm64_neon_sqabs),
+  NEONMAP1(__builtin_neon_vqabsq_v, arm64_neon_sqabs),
   NEONMAP2(__builtin_neon_vqadd_v, arm64_neon_uqadd, arm64_neon_sqadd),
   NEONMAP2(__builtin_neon_vqaddq_v, arm64_neon_uqadd, arm64_neon_sqadd),
   NEONMAP1(__builtin_neon_vqdmulh_v, arm64_neon_sqdmulh),
   NEONMAP1(__builtin_neon_vqdmulhq_v, arm64_neon_sqdmulh),
   NEONMAP1(__builtin_neon_vqdmull_v, arm64_neon_sqdmull),
+  NEONMAP2(__builtin_neon_vqmovn_v, arm64_neon_uqxtn, arm64_neon_sqxtn),
+  NEONMAP1(__builtin_neon_vqmovun_v, arm64_neon_sqxtun),
+  NEONMAP1(__builtin_neon_vqneg_v, arm64_neon_sqneg),
+  NEONMAP1(__builtin_neon_vqnegq_v, arm64_neon_sqneg),
   NEONMAP1(__builtin_neon_vqrdmulh_v, arm64_neon_sqrdmulh),
   NEONMAP1(__builtin_neon_vqrdmulhq_v, arm64_neon_sqrdmulh),
   NEONMAP2(__builtin_neon_vqrshl_v, arm64_neon_uqrshl, arm64_neon_sqrshl),
@@ -3655,12 +3684,16 @@ static CodeGenFunction::NeonIntrinsicMap ARM64NeonIntrinsicMap[] = {
   NEONMAP2(__builtin_neon_vqsub_v, arm64_neon_uqsub, arm64_neon_sqsub),
   NEONMAP2(__builtin_neon_vqsubq_v, arm64_neon_uqsub, arm64_neon_sqsub),
   NEONMAP1(__builtin_neon_vraddhn_v, arm64_neon_raddhn),
+  NEONMAP2(__builtin_neon_vrecpe_v, arm64_neon_urecpe, arm64_neon_frecpe),
+  NEONMAP2(__builtin_neon_vrecpeq_v, arm64_neon_urecpe, arm64_neon_frecpe),
   NEONMAP1(__builtin_neon_vrecps_v, arm64_neon_frecps),
   NEONMAP1(__builtin_neon_vrecpsq_v, arm64_neon_frecps),
   NEONMAP2(__builtin_neon_vrhadd_v, arm64_neon_urhadd, arm64_neon_srhadd),
   NEONMAP2(__builtin_neon_vrhaddq_v, arm64_neon_urhadd, arm64_neon_srhadd),
   NEONMAP2(__builtin_neon_vrshl_v, arm64_neon_urshl, arm64_neon_srshl),
   NEONMAP2(__builtin_neon_vrshlq_v, arm64_neon_urshl, arm64_neon_srshl),
+  NEONMAP2(__builtin_neon_vrsqrte_v, arm64_neon_ursqrte, arm64_neon_frsqrte),
+  NEONMAP2(__builtin_neon_vrsqrteq_v, arm64_neon_ursqrte, arm64_neon_frsqrte),
   NEONMAP1(__builtin_neon_vrsqrts_v, arm64_neon_frsqrts),
   NEONMAP1(__builtin_neon_vrsqrtsq_v, arm64_neon_frsqrts),
   NEONMAP1(__builtin_neon_vrsubhn_v, arm64_neon_rsubhn),
@@ -6287,6 +6320,8 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
   }
   case NEON::BI__builtin_neon_vdiv_v:
   case NEON::BI__builtin_neon_vdivq_v:
+    // FIXME: arm_neon.h uses true LLVM division for this. It can go when we
+    // drop support for aarch64_simd.h.
     Ops[0] = Builder.CreateBitCast(Ops[0], Ty);
     Ops[1] = Builder.CreateBitCast(Ops[1], Ty);
     return Builder.CreateFDiv(Ops[0], Ops[1]);
@@ -6317,6 +6352,7 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     return EmitNeonCall(CGM.getIntrinsic(Int, Ty), Ops, "vrbit");
   }
   case NEON::BI__builtin_neon_vaddv_u8:
+    // FIXME: These are handled by the AArch64 scalar code.
     usgn = true;
     // FALLTHROUGH
   case NEON::BI__builtin_neon_vaddv_s8: {
@@ -6880,6 +6916,8 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
   }
   case NEON::BI__builtin_neon_vld1_v:
   case NEON::BI__builtin_neon_vld1q_v:
+    // FIXME: Sharing loads & stores with 32-bit is complicated by the absence
+    // of an Align parameter here.
     Ops[0] = Builder.CreateBitCast(Ops[0], llvm::PointerType::getUnqual(VTy));
     return Builder.CreateLoad(Ops[0]);
   case NEON::BI__builtin_neon_vst1_v:
@@ -7081,54 +7119,6 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     return EmitNeonCall(CGM.getIntrinsic(Intrinsic::arm64_neon_st4lane, Tys),
                         Ops, "");
   }
-  case NEON::BI__builtin_neon_vqmovn_v:
-    Int = usgn ? Intrinsic::arm64_neon_uqxtn : Intrinsic::arm64_neon_sqxtn;
-    return EmitNeonCall(CGM.getIntrinsic(Int, Ty), Ops, "vqmovn");
-  case NEON::BI__builtin_neon_vqmovun_v:
-    return EmitNeonCall(CGM.getIntrinsic(Intrinsic::arm64_neon_sqxtun, Ty),
-                        Ops, "vqmovun");
-  case NEON::BI__builtin_neon_vabs_v:
-  case NEON::BI__builtin_neon_vabsq_v:
-      return EmitNeonCall(CGM.getIntrinsic(Intrinsic::arm64_neon_abs, Ty),
-                          Ops, "vabs");
-  case NEON::BI__builtin_neon_vqabs_v:
-  case NEON::BI__builtin_neon_vqabsq_v:
-    return EmitNeonCall(CGM.getIntrinsic(Intrinsic::arm64_neon_sqabs, Ty),
-                        Ops, "vqabs");
-  case NEON::BI__builtin_neon_vqneg_v:
-  case NEON::BI__builtin_neon_vqnegq_v:
-    return EmitNeonCall(CGM.getIntrinsic(Intrinsic::arm64_neon_sqneg, Ty),
-                        Ops, "vqneg");
-  case NEON::BI__builtin_neon_vclz_v:
-  case NEON::BI__builtin_neon_vclzq_v: {
-    // generate target-independent intrinsic; also need to add second argument
-    // for whether or not clz of zero is undefined; on ARM64 it isn't.
-    Function *F = CGM.getIntrinsic(Intrinsic::ctlz, Ty);
-    Ops.push_back(Builder.getInt1(Target.isCLZForZeroUndef()));
-    return EmitNeonCall(F, Ops, "vclz");
-  }
-  case NEON::BI__builtin_neon_vcls_v:
-  case NEON::BI__builtin_neon_vclsq_v: {
-    Function *F = CGM.getIntrinsic(Intrinsic::arm64_neon_cls, Ty);
-    return EmitNeonCall(F, Ops, "vcls");
-  }
-  case NEON::BI__builtin_neon_vcnt_v:
-  case NEON::BI__builtin_neon_vcntq_v: {
-    Function *F = CGM.getIntrinsic(Intrinsic::ctpop, Ty);
-    return EmitNeonCall(F, Ops, "vcnt");
-  }
-  case NEON::BI__builtin_neon_vrecpe_v:
-  case NEON::BI__builtin_neon_vrecpeq_v:
-    Int = Intrinsic::arm64_neon_urecpe;
-    if (Ty->isFPOrFPVectorTy()) Int = Intrinsic::arm64_neon_frecpe;
-    return EmitNeonCall(CGM.getIntrinsic(Int, Ty),
-                        Ops, "vrecpe");
-  case NEON::BI__builtin_neon_vrsqrte_v:
-  case NEON::BI__builtin_neon_vrsqrteq_v:
-    Int = Intrinsic::arm64_neon_ursqrte;
-    if (Ty->isFPOrFPVectorTy()) Int = Intrinsic::arm64_neon_frsqrte;
-    return EmitNeonCall(CGM.getIntrinsic(Int, Ty),
-                                         Ops, "vrsqrte");
   case NEON::BI__builtin_neon_vtrn_v:
   case NEON::BI__builtin_neon_vtrnq_v: {
     Ops[0] = Builder.CreateBitCast(Ops[0], llvm::PointerType::getUnqual(Ty));
@@ -7470,6 +7460,8 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
   }
   case NEON::BI__builtin_neon_vtrn1_v:
   case NEON::BI__builtin_neon_vtrn1q_v: {
+    // arm_neon.h implements these as __builtin_shufflevector. This should be
+    // removed when we stop supporting aarch64_simd.h.
     Ops[0] = Builder.CreateBitCast(Ops[0], VTy);
     Ops[1] = Builder.CreateBitCast(Ops[1], VTy);
     SmallVector<Constant*, 16> Indices;
