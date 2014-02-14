@@ -2724,9 +2724,6 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
       // FIXME: we should support specifying dwarf version with
       // -gline-tables-only.
       CmdArgs.push_back("-gline-tables-only");
-      // Default is dwarf-2 for darwin.
-      if (getToolChain().getTriple().isOSDarwin())
-        CmdArgs.push_back("-gdwarf-2");
     } else if (A->getOption().matches(options::OPT_gdwarf_2))
       CmdArgs.push_back("-gdwarf-2");
     else if (A->getOption().matches(options::OPT_gdwarf_3))
@@ -2734,13 +2731,8 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
     else if (A->getOption().matches(options::OPT_gdwarf_4))
       CmdArgs.push_back("-gdwarf-4");
     else if (!A->getOption().matches(options::OPT_g0) &&
-             !A->getOption().matches(options::OPT_ggdb0)) {
-      // Default is dwarf-2 for darwin.
-      if (getToolChain().getTriple().isOSDarwin())
-        CmdArgs.push_back("-gdwarf-2");
-      else
-        CmdArgs.push_back("-g");
-    }
+             !A->getOption().matches(options::OPT_ggdb0))
+      CmdArgs.push_back("-g");
   }
 
   // We ignore flags -gstrict-dwarf and -grecord-gcc-switches for now.
@@ -2763,6 +2755,13 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
   if (Args.hasArg(options::OPT_ggnu_pubnames)) {
     CmdArgs.push_back("-backend-option");
     CmdArgs.push_back("-generate-gnu-dwarf-pub-sections");
+  }
+
+  // -gdwarf-aranges turns on the emission of the aranges section in the
+  // backend.
+  if (Args.hasArg(options::OPT_gdwarf_aranges)) {
+    CmdArgs.push_back("-backend-option");
+    CmdArgs.push_back("-generate-arange-section");
   }
 
   if (Args.hasFlag(options::OPT_fdebug_types_section,
