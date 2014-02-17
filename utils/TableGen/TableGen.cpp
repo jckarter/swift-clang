@@ -54,7 +54,8 @@ enum ActionType {
   GenArmNeonTest,
   GenArm64SIMD,
   GenArm64SIMDSema,
-  GenArm64SIMDTest
+  GenArm64SIMDTest,
+  GenAttrDocs
 };
 
 namespace {
@@ -138,6 +139,8 @@ cl::opt<ActionType> Action(
                    "Generate ARM64 SIMD sema support for clang"),
         clEnumValN(GenArm64SIMDTest, "gen-arm64-simd-test",
                    "Generate ARM64 SIMD tests for clang"),
+        clEnumValN(GenAttrDocs, "gen-attr-docs",
+                   "Generate attribute documentation"),
         clEnumValEnd));
 
 cl::opt<std::string>
@@ -243,6 +246,8 @@ bool ClangTableGenMain(raw_ostream &OS, RecordKeeper &Records) {
     break;
   case GenArm64SIMDTest:
     EmitARM64NeonTest(Records, OS, true);
+  case GenAttrDocs:
+    EmitClangAttrDocs(Records, OS);
     break;
   }
 
