@@ -1383,6 +1383,17 @@ void EmitClangAttrClass(RecordKeeper &Records, raw_ostream &OS) {
   for (std::vector<Record*>::iterator i = Attrs.begin(), e = Attrs.end();
        i != e; ++i) {
     Record &R = **i;
+
+    // FIXME: Currently, documentation is generated as-needed due to the fact
+    // that there is no way to allow a generated project "reach into" the docs
+    // directory (for instance, it may be an out-of-tree build). However, we want
+    // to ensure that every attribute has a Documentation field, and produce an
+    // error if it has been neglected. Otherwise, the on-demand generation which
+    // happens server-side will fail. This code is ensuring that functionality,
+    // even though this Emitter doesn't technically need the documentation.
+    // When attribute documentation can be generated as part of the build
+    // itself, this code can be removed.
+    (void)R.getValueAsListOfDefs("Documentation");
     
     if (!R.getValueAsBit("ASTNode"))
       continue;
@@ -2645,13 +2656,13 @@ public:
   };
 
   DocCategory Category;
-  const Record &Documentation;
-  const Record &Attribute;
+  const Record *Documentation;
+  const Record *Attribute;
 
   DocumentationData(DocCategory Category, const Record &Documentation,
                     const Record &Attribute)
-      : Category(Category), Documentation(Documentation), Attribute(Attribute) {
-  }
+      : Category(Category), Documentation(&Documentation),
+        Attribute(&Attribute) {}
 };
 
 static void WriteCategoryHeader(DocumentationData::DocCategory Category,
@@ -2677,16 +2688,23 @@ static void WriteCategoryHeader(DocumentationData::DocCategory Category,
   OS << "\n";
 }
 
+enum SpellingKind {
+  GNU = 1 << 0,
+  CXX11 = 1 << 1,
+  Declspec = 1 << 2,
+  Keyword = 1 << 3
+};
+
 static void WriteDocumentation(const DocumentationData &Doc,
                                raw_ostream &OS) {
   // FIXME: there is no way to have a per-spelling category for the attribute
   // documentation. This may not be a limiting factor since the spellings
   // should generally be consistently applied across the category.
 
-  std::vector<FlattenedSpelling> Spellings = GetFlattenedSpellings(Doc.Attribute);
+  std::vector<FlattenedSpelling> Spellings = GetFlattenedSpellings(*Doc.Attribute);
 
   // Determine the heading to be used for this attribute.
-  std::string Heading = Doc.Documentation.getValueAsString("Heading");
+  std::string Heading = Doc.Documentation->getValueAsString("Heading");
   if (Heading.empty()) {
     // If there's only one spelling, we can simply use that.
     if (Spellings.size() == 1)
@@ -2707,20 +2725,13 @@ static void WriteDocumentation(const DocumentationData &Doc,
 
   // If the heading is still empty, it is an error.
   if (Heading.empty())
-    PrintFatalError(Doc.Attribute.getLoc(),
+    PrintFatalError(Doc.Attribute->getLoc(),
                     "This attribute requires a heading to be specified");
 
   // Gather a list of unique spellings; this is not the same as the semantic
   // spelling for the attribute. Variations in underscores and other non-
   // semantic characters are still acceptable.
   std::vector<std::string> Names;
-
-  enum SpellingKind {
-    GNU = 1 << 0,
-    CXX11 = 1 << 1,
-    Declspec = 1 << 2,
-    Keyword = 1 << 3
-  };
 
   unsigned SupportedSpellings = 0;
   for (std::vector<FlattenedSpelling>::const_iterator I = Spellings.begin(),
@@ -2759,7 +2770,7 @@ static void WriteDocumentation(const DocumentationData &Doc,
   OS << Heading << "\n" << std::string(Heading.length(), '-') << "\n";
 
   if (!SupportedSpellings)
-    PrintFatalError(Doc.Attribute.getLoc(),
+    PrintFatalError(Doc.Attribute->getLoc(),
                     "Attribute has no supported spellings; cannot be "
                     "documented");
 
@@ -2778,10 +2789,10 @@ static void WriteDocumentation(const DocumentationData &Doc,
 
   // If the attribute is deprecated, print a message about it, and possibly
   // provide a replacement attribute.
-  if (!Doc.Documentation.isValueUnset("Deprecated")) {
+  if (!Doc.Documentation->isValueUnset("Deprecated")) {
     OS << "This attribute has been deprecated, and may be removed in a future "
        << "version of Clang.";
-    const Record &Deprecated = *Doc.Documentation.getValueAsDef("Deprecated");
+    const Record &Deprecated = *Doc.Documentation->getValueAsDef("Deprecated");
     std::string Replacement = Deprecated.getValueAsString("Replacement");
     if (!Replacement.empty())
       OS << "  This attribute has been superseded by ``"
@@ -2789,7 +2800,7 @@ static void WriteDocumentation(const DocumentationData &Doc,
     OS << "\n\n";
   }
 
-  std::string ContentStr = Doc.Documentation.getValueAsString("Content");
+  std::string ContentStr = Doc.Documentation->getValueAsString("Content");
   // Trim leading and trailing newlines and spaces.
   StringRef Content(ContentStr);
   while (Content.startswith("\r") || Content.startswith("\n") ||
@@ -2858,8 +2869,9 @@ void EmitClangAttrDocs(RecordKeeper &Records, raw_ostream &OS) {
 
     // Walk over each of the attributes in the category and write out their
     // documentation.
-    for (auto D : I->second)
-      WriteDocumentation(D, OS);
+    for (std::vector<DocumentationData>::const_iterator D = I->second.begin(),
+         DE = I->second.end(); D != DE; ++D)
+      WriteDocumentation(*D, OS);
   }
 }
 
