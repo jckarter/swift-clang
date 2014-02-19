@@ -56,6 +56,7 @@ Parser::DeclGroupPtrTy Parser::ParseObjCAtDirectives() {
   switch (Tok.getObjCKeywordID()) {
   case tok::objc_class:
     return ParseObjCAtClassDeclaration(AtLoc);
+  case tok::objc_partial_interface:
   case tok::objc_interface: {
     ParsedAttributes attrs(AttrFactory);
     SingleDecl = ParseObjCAtInterfaceDeclaration(AtLoc, attrs);
@@ -175,22 +176,35 @@ void Parser::CheckNestedObjCContexts(SourceLocation AtLoc)
 ///     __attribute__((unavailable))
 ///     __attribute__((objc_exception)) - used by NSException on 64-bit
 ///     __attribute__((objc_root_class))
+///     __attribute__((objc_complete_definition))
+///
+///   objc_partial_interface:
+///     objc-partial-interface
+///
+///   objc-partial-interface:
+///     '@' 'partial_interface' identifier objc-superclass[opt]
 ///
 Decl *Parser::ParseObjCAtInterfaceDeclaration(SourceLocation AtLoc,
                                               ParsedAttributes &attrs) {
-  assert(Tok.isObjCAtKeyword(tok::objc_interface) &&
-         "ParseObjCAtInterfaceDeclaration(): Expected @interface");
+  assert((Tok.isObjCAtKeyword(tok::objc_interface) ||
+          Tok.isObjCAtKeyword(tok::objc_partial_interface)) &&
+         "ParseObjCAtInterfaceDeclaration(): Expected "
+         "@interface or @partial_interface");
+  bool IsPartialInterfaceDecl =
+    Tok.isObjCAtKeyword(tok::objc_interface) ? false : true;
+  
   CheckNestedObjCContexts(AtLoc);
   ConsumeToken(); // the "interface" identifier
 
   // Code completion after '@interface'.
+  // FIXME Code completion after '@partial_interface'.
   if (Tok.is(tok::code_completion)) {
     Actions.CodeCompleteObjCInterfaceDecl(getCurScope());
     cutOffParsing();
     return 0;
   }
 
-  MaybeSkipAttributes(tok::objc_interface);
+  MaybeSkipAttributes(!IsPartialInterfaceDecl ? tok::objc_interface : tok::objc_partial_interface);
 
   if (Tok.isNot(tok::identifier)) {
     Diag(Tok, diag::err_expected)
@@ -201,7 +215,8 @@ Decl *Parser::ParseObjCAtInterfaceDeclaration(SourceLocation AtLoc,
   // We have a class or category name - consume it.
   IdentifierInfo *nameId = Tok.getIdentifierInfo();
   SourceLocation nameLoc = ConsumeToken();
-  if (Tok.is(tok::l_paren) && 
+  if (!IsPartialInterfaceDecl &&
+      Tok.is(tok::l_paren) &&
       !isKnownToBeTypeSpecifier(GetLookAheadToken(1))) { // we have a category.
     
     BalancedDelimiterTracker T(*this, tok::l_paren);
@@ -281,6 +296,19 @@ Decl *Parser::ParseObjCAtInterfaceDeclaration(SourceLocation AtLoc,
     superClassId = Tok.getIdentifierInfo();
     superClassLoc = ConsumeToken();
   }
+  if (IsPartialInterfaceDecl) {
+    if (Tok.isNot(tok::semi)) {
+      Diag(Tok, diag::err_expected)
+        << tok::semi; // missing semicolon
+      SkipUntil(tok::semi);
+      return 0;
+    }
+    ConsumeToken();
+    Decl *ClsType = Actions.ActOnPartialInterface(AtLoc, nameId, nameLoc,
+                                                  superClassId, superClassLoc);
+    return ClsType;
+  }
+  
   // Next, we need to check for any protocol references.
   SmallVector<Decl *, 8> ProtocolRefs;
   SmallVector<SourceLocation, 8> ProtocolLocs;

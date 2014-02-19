@@ -506,6 +506,12 @@ def note_surrounding_namespace_starts_here : Note<
 /// Objective-C parser diagnostics
 def err_duplicate_class_def : Error<
   "duplicate interface definition for class %0">;
+def err_partial_class_def : Error<
+  "attempting to define an ordinary class for partial class %0">;
+def err_duplicate_partial_class_decl : Error<
+  "duplicate partial class declaration for class %0">;
+def err_partial_interface_in_super : Error<
+  "attempting to use partial class %0 as base class in an implementation">;
 def err_undef_superclass : Error<
   "cannot find interface declaration for %0, superclass of %1">;
 def err_forward_superclass : Error<
@@ -514,6 +520,8 @@ def err_no_nsconstant_string_class : Error<
   "cannot find interface declaration for %0">;
 def err_recursive_superclass : Error<
   "trying to recursively use %0 as superclass of %1">;
+def err_partial_complete_class_super_mismatch : Error <
+  "partial class and its complete definition must have same super class">;
 def err_conflicting_aliasing_type : Error<"conflicting types for alias %0">;
 def warn_undef_interface : Warning<"cannot find interface declaration for %0">;
 def warn_duplicate_protocol_def : Warning<"duplicate protocol definition of %0 is ignored">;

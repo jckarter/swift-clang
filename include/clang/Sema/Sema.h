@@ -6649,6 +6649,12 @@ public:
                                  SourceLocation EndProtoLoc,
                                  AttributeList *AttrList);
   
+  Decl *ActOnPartialInterface(SourceLocation AtPartialInterfaceLoc,
+                              IdentifierInfo *ClassName,
+                              SourceLocation ClassLoc,
+                              IdentifierInfo *SuperName,
+                              SourceLocation SuperLoc);
+  
   void ActOnTypedefedProtocols(SmallVectorImpl<Decl *> &ProtocolRefs,
                                IdentifierInfo *SuperName,
                                SourceLocation SuperLoc);

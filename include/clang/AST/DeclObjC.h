@@ -643,6 +643,10 @@ class ObjCInterfaceDecl : public ObjCContainerDecl
     
     /// Class's super class.
     ObjCInterfaceDecl *SuperClass;
+    
+    /// Complete definition of the class - only when IsPartialInterface
+    /// is true.
+    ObjCInterfaceDecl *CompleteDefinition;
 
     /// Protocols referenced in the \@interface  declaration
     ObjCProtocolList ReferencedProtocols;
@@ -684,6 +688,9 @@ class ObjCInterfaceDecl : public ObjCContainerDecl
     };
     /// One of the \c InheritedDesignatedInitializersState enumeratos.
     mutable unsigned InheritedDesignatedInitializers : 2;
+    
+    /// \brief Indicates that this class is a partial interface.
+    mutable unsigned  IsPartialInterface : 1;
 
     /// \brief The location of the superclass, if any.
     SourceLocation SuperClassLoc;
@@ -693,11 +700,13 @@ class ObjCInterfaceDecl : public ObjCContainerDecl
     /// identifier, 
     SourceLocation EndLoc; 
 
-    DefinitionData() : Definition(), SuperClass(), CategoryList(), IvarList(), 
+    DefinitionData() : Definition(), SuperClass(), CompleteDefinition(),
+                       CategoryList(), IvarList(),
                        ExternallyCompleted(),
                        IvarListMissingImplementation(true),
                        HasDesignatedInitializers(),
-                       InheritedDesignatedInitializers(IDI_Unknown) { }
+                       InheritedDesignatedInitializers(IDI_Unknown),
+                       IsPartialInterface() { }
   };
 
   ObjCInterfaceDecl(DeclContext *DC, SourceLocation atLoc, IdentifierInfo *Id,
@@ -774,6 +783,29 @@ public:
       LoadExternalDefinition();
 
     return data().ReferencedProtocols;
+  }
+
+  ObjCInterfaceDecl *getCompleteDefinition() const {
+    assert(hasDefinition() &&
+           "Must have definition before looking at CompleteDefinition");
+    return data().CompleteDefinition;
+  }
+
+  void setCompleteDefinition(ObjCInterfaceDecl *IDecl) {
+    assert(hasDefinition() &&
+           "Must have definition before looking at CompleteDefinition");
+    data().CompleteDefinition = IDecl;
+  }
+
+  bool IsPartialInterface() const {
+    assert(hasDefinition() &&
+           "Must have definition before looking at IsPartialInterface");
+    return data().IsPartialInterface;
+  }
+  void SetIsPartialInterface() {
+    assert(hasDefinition() &&
+           "Must have definition before looking at IsPartialInterface");
+    data().IsPartialInterface = true;
   }
 
   ObjCImplementationDecl *getImplementation() const;
@@ -976,6 +1008,9 @@ public:
     if (data().ExternallyCompleted)
       LoadExternalDefinition();
 
+    if (ObjCInterfaceDecl *Super = data().SuperClass)
+      if (Super->IsPartialInterface() && Super->getCompleteDefinition())
+        return Super->getCompleteDefinition();
     return data().SuperClass;
   }
 
@@ -1976,8 +2011,18 @@ public:
     return getName();
   }
 
-  const ObjCInterfaceDecl *getSuperClass() const { return SuperClass; }
-  ObjCInterfaceDecl *getSuperClass() { return SuperClass; }
+  const ObjCInterfaceDecl *getSuperClass() const { 
+    if (SuperClass && SuperClass->IsPartialInterface() && 
+        SuperClass->getCompleteDefinition())
+      return SuperClass->getCompleteDefinition();
+    return SuperClass; 
+  }
+  ObjCInterfaceDecl *getSuperClass() { 
+    if (SuperClass && SuperClass->IsPartialInterface() && 
+        SuperClass->getCompleteDefinition())
+      return SuperClass->getCompleteDefinition();
+    return SuperClass; 
+  }
   SourceLocation getSuperClassLoc() const { return SuperLoc; }
 
   void setSuperClass(ObjCInterfaceDecl * superCls) { SuperClass = superCls; }
