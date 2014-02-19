@@ -15,6 +15,7 @@ class DocumentationCategory<string name> {
 def DocCatFunction : DocumentationCategory<"Functions">;
 def DocCatVariable : DocumentationCategory<"Variables">;
 def DocCatType : DocumentationCategory<"Types">;
+def DocCatStmt : DocumentationCategory<"Statements">;
 // Attributes listed under the Undocumented category do not generate any public
 // documentation. Ideally, this category should be used for internal-only
 // attributes which contain no spellings.
@@ -388,7 +389,7 @@ def ARMInterrupt : InheritableAttr, TargetSpecificAttr<TargetARM> {
                            1>];
   let ParseKind = "Interrupt";
   let HasCustomParsing = 1;
-  let Documentation = [Undocumented];
+  let Documentation = [ARMInterruptDocs];
 }
 
 def AsmLabel : InheritableAttr {
@@ -413,7 +414,7 @@ def Availability : InheritableAttr {
   let HasCustomParsing = 1;
   let DuplicatesAllowedWhileMerging = 1;
 //  let Subjects = SubjectList<[Named]>;
-  let Documentation = [Undocumented];
+  let Documentation = [AvailabilityDocs];
 }
 
 def Blocks : InheritableAttr {
@@ -627,7 +628,7 @@ def EnableIf : InheritableAttr {
   let Subjects = SubjectList<[Function]>;
   let Args = [ExprArgument<"Cond">, StringArgument<"Message">];
   let TemplateDependent = 1;
-  let Documentation = [Undocumented];
+  let Documentation = [EnableIfDocs];
 }
 
 def ExtVectorType : Attr {
@@ -641,7 +642,7 @@ def ExtVectorType : Attr {
 def FallThrough : Attr {
   let Spellings = [CXX11<"clang", "fallthrough">];
 //  let Subjects = [NullStmt];
-  let Documentation = [Undocumented];
+  let Documentation = [FallthroughDocs];
 }
 
 def FastCall : InheritableAttr {
@@ -920,7 +921,7 @@ def ObjCMethodFamily : InheritableAttr {
                ["none", "alloc", "copy", "init", "mutableCopy", "new"],
                ["OMF_None", "OMF_alloc", "OMF_copy", "OMF_init",
                 "OMF_mutableCopy", "OMF_new"]>];
-  let Documentation = [Undocumented];
+  let Documentation = [ObjCMethodFamilyDocs];
 }
 
 def ObjCNSObject : InheritableAttr {
@@ -943,7 +944,7 @@ def ObjCReturnsInnerPointer : InheritableAttr {
 def ObjCRequiresSuper : InheritableAttr {
   let Spellings = [GNU<"objc_requires_super">];
   let Subjects = SubjectList<[ObjCMethod], ErrorDiag>;
-  let Documentation = [Undocumented];
+  let Documentation = [ObjCRequiresSuperDocs];
 }
 
 def ObjCRootClass : InheritableAttr {
@@ -968,7 +969,7 @@ def ObjCDesignatedInitializer : Attr {
 def Overloadable : Attr {
   let Spellings = [GNU<"overloadable">];
   let Subjects = SubjectList<[Function], ErrorDiag>;
-  let Documentation = [Undocumented];
+  let Documentation = [OverloadableDocs];
 }
 
 def Override : InheritableAttr { 
