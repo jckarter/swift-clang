@@ -11,10 +11,12 @@
 // specific documentation that is collated within the larger document.
 class DocumentationCategory<string name> {
   string Name = name;
+  code Content = [{}];
 }
-def DocCatFunction : DocumentationCategory<"Functions">;
-def DocCatVariable : DocumentationCategory<"Variables">;
-def DocCatType : DocumentationCategory<"Types">;
+def DocCatFunction : DocumentationCategory<"Function Attributes">;
+def DocCatVariable : DocumentationCategory<"Variable Attributes">;
+def DocCatType : DocumentationCategory<"Type Attributes">;
+def DocCatStmt : DocumentationCategory<"Statement Attributes">;
 // Attributes listed under the Undocumented category do not generate any public
 // documentation. Ideally, this category should be used for internal-only
 // attributes which contain no spellings.
@@ -388,7 +390,7 @@ def ARMInterrupt : InheritableAttr, TargetSpecificAttr<TargetARM> {
                            1>];
   let ParseKind = "Interrupt";
   let HasCustomParsing = 1;
-  let Documentation = [Undocumented];
+  let Documentation = [ARMInterruptDocs];
 }
 
 def AsmLabel : InheritableAttr {
@@ -413,7 +415,7 @@ def Availability : InheritableAttr {
   let HasCustomParsing = 1;
   let DuplicatesAllowedWhileMerging = 1;
 //  let Subjects = SubjectList<[Named]>;
-  let Documentation = [Undocumented];
+  let Documentation = [AvailabilityDocs];
 }
 
 def Blocks : InheritableAttr {
@@ -627,7 +629,7 @@ def EnableIf : InheritableAttr {
   let Subjects = SubjectList<[Function]>;
   let Args = [ExprArgument<"Cond">, StringArgument<"Message">];
   let TemplateDependent = 1;
-  let Documentation = [Undocumented];
+  let Documentation = [EnableIfDocs];
 }
 
 def ExtVectorType : Attr {
@@ -641,7 +643,7 @@ def ExtVectorType : Attr {
 def FallThrough : Attr {
   let Spellings = [CXX11<"clang", "fallthrough">];
 //  let Subjects = [NullStmt];
-  let Documentation = [Undocumented];
+  let Documentation = [FallthroughDocs];
 }
 
 def FastCall : InheritableAttr {
@@ -920,7 +922,7 @@ def ObjCMethodFamily : InheritableAttr {
                ["none", "alloc", "copy", "init", "mutableCopy", "new"],
                ["OMF_None", "OMF_alloc", "OMF_copy", "OMF_init",
                 "OMF_mutableCopy", "OMF_new"]>];
-  let Documentation = [Undocumented];
+  let Documentation = [ObjCMethodFamilyDocs];
 }
 
 def ObjCNSObject : InheritableAttr {
@@ -943,7 +945,7 @@ def ObjCReturnsInnerPointer : InheritableAttr {
 def ObjCRequiresSuper : InheritableAttr {
   let Spellings = [GNU<"objc_requires_super">];
   let Subjects = SubjectList<[ObjCMethod], ErrorDiag>;
-  let Documentation = [Undocumented];
+  let Documentation = [ObjCRequiresSuperDocs];
 }
 
 def ObjCRootClass : InheritableAttr {
@@ -974,7 +976,7 @@ def ObjCDesignatedInitializer : Attr {
 def Overloadable : Attr {
   let Spellings = [GNU<"overloadable">];
   let Subjects = SubjectList<[Function], ErrorDiag>;
-  let Documentation = [Undocumented];
+  let Documentation = [OverloadableDocs];
 }
 
 def Override : InheritableAttr { 
@@ -1285,11 +1287,43 @@ def Lockable : InheritableAttr {
   let Spellings = [GNU<"lockable">];
   let Subjects = SubjectList<[Record]>;
   let Documentation = [Undocumented];
+  let ASTNode = 0;  // Replaced by Capability
 }
 
 def ScopedLockable : InheritableAttr {
   let Spellings = [GNU<"scoped_lockable">];
   let Subjects = SubjectList<[Record]>;
+  let Documentation = [Undocumented];
+}
+
+def Capability : InheritableAttr {
+  let Spellings = [GNU<"capability">, CXX11<"clang", "capability">,
+                   GNU<"shared_capability">,
+                   CXX11<"clang", "shared_capability">];
+  let Subjects = SubjectList<[Struct], ErrorDiag, "ExpectedStruct">;
+  let Args = [StringArgument<"Name">];
+  let Accessors = [Accessor<"isShared",
+                    [GNU<"shared_capability">,
+                     CXX11<"clang","shared_capability">]>];
+  let Documentation = [Undocumented];
+}
+
+def RequiresCapability : InheritableAttr {
+  let Spellings = [GNU<"requires_capability">,
+                   CXX11<"clang", "requires_capability">,
+                   GNU<"exclusive_locks_required">,
+                   GNU<"requires_shared_capability">,
+                   CXX11<"clang", "requires_shared_capability">,
+                   GNU<"shared_locks_required">];
+  let Args = [VariadicExprArgument<"Args">];
+  let LateParsed = 1;
+  let TemplateDependent = 1;
+  let ParseArgumentsAsUnevaluated = 1;
+  let DuplicatesAllowedWhileMerging = 1;
+  let Subjects = SubjectList<[Function, FunctionTemplate]>;
+  let Accessors = [Accessor<"isShared", [GNU<"requires_shared_capability">,
+                                         GNU<"shared_locks_required">,
+                                CXX11<"clang","requires_shared_capability">]>];
   let Documentation = [Undocumented];
 }
 
@@ -1449,28 +1483,6 @@ def LocksExcluded : InheritableAttr {
   let Documentation = [Undocumented];
 }
 
-def ExclusiveLocksRequired : InheritableAttr {
-  let Spellings = [GNU<"exclusive_locks_required">];
-  let Args = [VariadicExprArgument<"Args">];
-  let LateParsed = 1;
-  let TemplateDependent = 1;
-  let ParseArgumentsAsUnevaluated = 1;
-  let DuplicatesAllowedWhileMerging = 1;
-  let Subjects = SubjectList<[Function, FunctionTemplate]>;
-  let Documentation = [Undocumented];
-}
-
-def SharedLocksRequired : InheritableAttr {
-  let Spellings = [GNU<"shared_locks_required">];
-  let Args = [VariadicExprArgument<"Args">];
-  let LateParsed = 1;
-  let TemplateDependent = 1;
-  let ParseArgumentsAsUnevaluated = 1;
-  let DuplicatesAllowedWhileMerging = 1;
-  let Subjects = SubjectList<[Function, FunctionTemplate]>;
-  let Documentation = [Undocumented];
-}
-
 // C/C++ consumed attributes.
 
 def Consumable : InheritableAttr {
@@ -1479,7 +1491,7 @@ def Consumable : InheritableAttr {
   let Args = [EnumArgument<"DefaultState", "ConsumedState",
                            ["unknown", "consumed", "unconsumed"],
                            ["Unknown", "Consumed", "Unconsumed"]>];
-  let Documentation = [Undocumented];
+  let Documentation = [ConsumableDocs];
 }
 
 def ConsumableAutoCast : InheritableAttr {
@@ -1500,7 +1512,7 @@ def CallableWhen : InheritableAttr {
   let Args = [VariadicEnumArgument<"CallableState", "ConsumedState",
                                    ["unknown", "consumed", "unconsumed"],
                                    ["Unknown", "Consumed", "Unconsumed"]>];
-  let Documentation = [Undocumented];
+  let Documentation = [CallableWhenDocs];
 }
 
 def ParamTypestate : InheritableAttr {
@@ -1509,7 +1521,7 @@ def ParamTypestate : InheritableAttr {
   let Args = [EnumArgument<"ParamState", "ConsumedState",
                            ["unknown", "consumed", "unconsumed"],
                            ["Unknown", "Consumed", "Unconsumed"]>];
-  let Documentation = [Undocumented];
+  let Documentation = [ParamTypestateDocs];
 }
 
 def ReturnTypestate : InheritableAttr {
@@ -1518,7 +1530,7 @@ def ReturnTypestate : InheritableAttr {
   let Args = [EnumArgument<"State", "ConsumedState",
                            ["unknown", "consumed", "unconsumed"],
                            ["Unknown", "Consumed", "Unconsumed"]>];
-  let Documentation = [Undocumented];
+  let Documentation = [ReturnTypestateDocs];
 }
 
 def SetTypestate : InheritableAttr {
@@ -1527,7 +1539,7 @@ def SetTypestate : InheritableAttr {
   let Args = [EnumArgument<"NewState", "ConsumedState",
                            ["unknown", "consumed", "unconsumed"],
                            ["Unknown", "Consumed", "Unconsumed"]>];
-  let Documentation = [Undocumented];
+  let Documentation = [SetTypestateDocs];
 }
 
 def TestTypestate : InheritableAttr {
@@ -1536,7 +1548,7 @@ def TestTypestate : InheritableAttr {
   let Args = [EnumArgument<"TestState", "ConsumedState",
                            ["consumed", "unconsumed"],
                            ["Consumed", "Unconsumed"]>];
-  let Documentation = [Undocumented];
+  let Documentation = [TestTypestateDocs];
 }
 
 // Type safety attributes for `void *' pointers and type tags.

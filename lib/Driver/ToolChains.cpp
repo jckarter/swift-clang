@@ -1300,12 +1300,16 @@ void Generic_GCC::GCCInstallationDetector::print(raw_ostream &OS) const {
        I != E; ++I)
     OS << "Found candidate GCC installation: " << *I << "\n";
 
-  OS << "Selected GCC installation: " << GCCInstallPath << "\n";
+  if (!GCCInstallPath.empty())
+    OS << "Selected GCC installation: " << GCCInstallPath << "\n";
+
   for (MultilibSet::const_iterator I = Multilibs.begin(), E = Multilibs.end();
        I != E; ++I) {
     OS << "Candidate multiilb: " << *I << "\n";
   }
-  OS << "Selected multilib: " << SelectedMultilib << "\n";
+
+  if (Multilibs.size() != 0 || !SelectedMultilib.isDefault())
+    OS << "Selected multilib: " << SelectedMultilib << "\n";
 }
 
 bool Generic_GCC::GCCInstallationDetector::getBiarchSibling(Multilib &M) const {
@@ -2468,6 +2472,7 @@ Tool *FreeBSD::buildLinker() const {
 bool FreeBSD::UseSjLjExceptions() const {
   // FreeBSD uses SjLj exceptions on ARM oabi.
   switch (getTriple().getEnvironment()) {
+  case llvm::Triple::GNUEABIHF:
   case llvm::Triple::GNUEABI:
   case llvm::Triple::EABI:
     return false;

@@ -44,6 +44,21 @@ using namespace clang::driver::tools;
 using namespace clang;
 using namespace llvm::opt;
 
+static void addAssemblerKPIC(const ArgList &Args, ArgStringList &CmdArgs) {
+  Arg *LastPICArg = Args.getLastArg(options::OPT_fPIC, options::OPT_fno_PIC,
+                                    options::OPT_fpic, options::OPT_fno_pic,
+                                    options::OPT_fPIE, options::OPT_fno_PIE,
+                                    options::OPT_fpie, options::OPT_fno_pie);
+  if (!LastPICArg)
+    return;
+  if (LastPICArg->getOption().matches(options::OPT_fPIC) ||
+      LastPICArg->getOption().matches(options::OPT_fpic) ||
+      LastPICArg->getOption().matches(options::OPT_fPIE) ||
+      LastPICArg->getOption().matches(options::OPT_fpie)) {
+    CmdArgs.push_back("-KPIC");
+  }
+}
+
 /// CheckPreprocessingOptions - Perform some validation of preprocessing
 /// arguments that is shared with gcc.
 static void CheckPreprocessingOptions(const Driver &D, const ArgList &Args) {
@@ -640,8 +655,15 @@ StringRef tools::arm::getARMFloatABI(const Driver &D, const ArgList &Args,
     }
 
     case llvm::Triple::FreeBSD:
-      // FreeBSD defaults to soft float
-      FloatABI = "soft";
+      switch(Triple.getEnvironment()) {
+      case llvm::Triple::GNUEABIHF:
+        FloatABI = "hard";
+        break;
+      default:
+        // FreeBSD defaults to soft float
+        FloatABI = "soft";
+        break;
+      }
       break;
 
     default:
@@ -5650,17 +5672,7 @@ void openbsd::Assemble::ConstructJob(Compilation &C, const JobAction &JA,
     else
       CmdArgs.push_back("-EL");
 
-    Arg *LastPICArg = Args.getLastArg(options::OPT_fPIC, options::OPT_fno_PIC,
-                                      options::OPT_fpic, options::OPT_fno_pic,
-                                      options::OPT_fPIE, options::OPT_fno_PIE,
-                                      options::OPT_fpie, options::OPT_fno_pie);
-    if (LastPICArg &&
-        (LastPICArg->getOption().matches(options::OPT_fPIC) ||
-         LastPICArg->getOption().matches(options::OPT_fpic) ||
-         LastPICArg->getOption().matches(options::OPT_fPIE) ||
-         LastPICArg->getOption().matches(options::OPT_fpie))) {
-      CmdArgs.push_back("-KPIC");
-    }
+    addAssemblerKPIC(Args, CmdArgs);
   }
 
   Args.AddAllArgValues(CmdArgs, options::OPT_Wa_COMMA,
@@ -5985,21 +5997,21 @@ void freebsd::Assemble::ConstructJob(Compilation &C, const JobAction &JA,
     else
       CmdArgs.push_back("-EL");
 
-    Arg *LastPICArg = Args.getLastArg(options::OPT_fPIC, options::OPT_fno_PIC,
-                                      options::OPT_fpic, options::OPT_fno_pic,
-                                      options::OPT_fPIE, options::OPT_fno_PIE,
-                                      options::OPT_fpie, options::OPT_fno_pie);
-    if (LastPICArg &&
-        (LastPICArg->getOption().matches(options::OPT_fPIC) ||
-         LastPICArg->getOption().matches(options::OPT_fpic) ||
-         LastPICArg->getOption().matches(options::OPT_fPIE) ||
-         LastPICArg->getOption().matches(options::OPT_fpie))) {
-      CmdArgs.push_back("-KPIC");
-    }
+    addAssemblerKPIC(Args, CmdArgs);
   } else if (getToolChain().getArch() == llvm::Triple::arm ||
              getToolChain().getArch() == llvm::Triple::thumb) {
-    CmdArgs.push_back("-mfpu=softvfp");
+    const Driver &D = getToolChain().getDriver();
+    llvm::Triple Triple = getToolChain().getTriple();
+    StringRef FloatABI = arm::getARMFloatABI(D, Args, Triple);
+
+    if (FloatABI == "hard") {
+      CmdArgs.push_back("-mfpu=vfp");
+    } else {
+      CmdArgs.push_back("-mfpu=softvfp");
+    }
+
     switch(getToolChain().getTriple().getEnvironment()) {
+    case llvm::Triple::GNUEABIHF:
     case llvm::Triple::GNUEABI:
     case llvm::Triple::EABI:
       CmdArgs.push_back("-meabi=5");
@@ -6010,17 +6022,7 @@ void freebsd::Assemble::ConstructJob(Compilation &C, const JobAction &JA,
     }
   } else if (getToolChain().getArch() == llvm::Triple::sparc ||
              getToolChain().getArch() == llvm::Triple::sparcv9) {
-    Arg *LastPICArg = Args.getLastArg(options::OPT_fPIC, options::OPT_fno_PIC,
-                                      options::OPT_fpic, options::OPT_fno_pic,
-                                      options::OPT_fPIE, options::OPT_fno_PIE,
-                                      options::OPT_fpie, options::OPT_fno_pie);
-    if (LastPICArg &&
-        (LastPICArg->getOption().matches(options::OPT_fPIC) ||
-         LastPICArg->getOption().matches(options::OPT_fpic) ||
-         LastPICArg->getOption().matches(options::OPT_fPIE) ||
-         LastPICArg->getOption().matches(options::OPT_fpie))) {
-      CmdArgs.push_back("-KPIC");
-    }
+    addAssemblerKPIC(Args, CmdArgs);
   }
 
   Args.AddAllArgValues(CmdArgs, options::OPT_Wa_COMMA,
@@ -6226,23 +6228,23 @@ void netbsd::Assemble::ConstructJob(Compilation &C, const JobAction &JA,
                                      const char *LinkingOutput) const {
   ArgStringList CmdArgs;
 
-  // When building 32-bit code on NetBSD/amd64, we have to explicitly
-  // instruct as in the base system to assemble 32-bit code.
-  if (getToolChain().getArch() == llvm::Triple::x86)
+  // GNU as needs different flags for creating the correct output format
+  // on architectures with different ABIs or optional feature sets.
+  switch (getToolChain().getArch()) {
+  case llvm::Triple::x86:
     CmdArgs.push_back("--32");
-
-  // Pass the target CPU to GNU as for ARM, since the source code might
-  // not have the correct .cpu annotation.
-  if (getToolChain().getArch() == llvm::Triple::arm ||
-      getToolChain().getArch() == llvm::Triple::thumb) {
+    break;
+  case llvm::Triple::arm:
+  case llvm::Triple::thumb: {
     std::string MArch(arm::getARMTargetCPU(Args, getToolChain().getTriple()));
     CmdArgs.push_back(Args.MakeArgString("-mcpu=" + MArch));
+    break;
   }
 
-  if (getToolChain().getArch() == llvm::Triple::mips ||
-      getToolChain().getArch() == llvm::Triple::mipsel ||
-      getToolChain().getArch() == llvm::Triple::mips64 ||
-      getToolChain().getArch() == llvm::Triple::mips64el) {
+  case llvm::Triple::mips:
+  case llvm::Triple::mipsel:
+  case llvm::Triple::mips64:
+  case llvm::Triple::mips64el: {
     StringRef CPUName;
     StringRef ABIName;
     getMipsCPUAndABI(Args, getToolChain().getTriple(), CPUName, ABIName);
@@ -6259,17 +6261,23 @@ void netbsd::Assemble::ConstructJob(Compilation &C, const JobAction &JA,
     else
       CmdArgs.push_back("-EL");
 
-    Arg *LastPICArg = Args.getLastArg(options::OPT_fPIC, options::OPT_fno_PIC,
-                                      options::OPT_fpic, options::OPT_fno_pic,
-                                      options::OPT_fPIE, options::OPT_fno_PIE,
-                                      options::OPT_fpie, options::OPT_fno_pie);
-    if (LastPICArg &&
-        (LastPICArg->getOption().matches(options::OPT_fPIC) ||
-         LastPICArg->getOption().matches(options::OPT_fpic) ||
-         LastPICArg->getOption().matches(options::OPT_fPIE) ||
-         LastPICArg->getOption().matches(options::OPT_fpie))) {
-      CmdArgs.push_back("-KPIC");
-    }
+    addAssemblerKPIC(Args, CmdArgs);
+    break;
+  }
+
+  case llvm::Triple::sparc:
+    CmdArgs.push_back("-32");
+    addAssemblerKPIC(Args, CmdArgs);
+    break;
+
+  case llvm::Triple::sparcv9:
+    CmdArgs.push_back("-64");
+    CmdArgs.push_back("-Av9");
+    addAssemblerKPIC(Args, CmdArgs);
+    break;
+
+  default:
+    break;  
   }
 
   Args.AddAllArgValues(CmdArgs, options::OPT_Wa_COMMA,
@@ -6353,6 +6361,17 @@ void netbsd::Link::ConstructJob(Compilation &C, const JobAction &JA,
        CmdArgs.push_back("elf64ltsmip");
    }
    break;
+
+  case llvm::Triple::sparc:
+    CmdArgs.push_back("-m");
+    CmdArgs.push_back("elf32_sparc");
+    break;
+
+  case llvm::Triple::sparcv9:
+    CmdArgs.push_back("-m");
+    CmdArgs.push_back("elf64_sparc");
+    break;
+
   default:
     break;
   }
@@ -6554,19 +6573,8 @@ void gnutools::Assemble::ConstructJob(Compilation &C, const JobAction &JA,
     CmdArgs.push_back(Args.MakeArgString("-march=" + CPUName));
   }
 
-  if (NeedsKPIC) {
-    Arg *LastPICArg = Args.getLastArg(options::OPT_fPIC, options::OPT_fno_PIC,
-                                      options::OPT_fpic, options::OPT_fno_pic,
-                                      options::OPT_fPIE, options::OPT_fno_PIE,
-                                      options::OPT_fpie, options::OPT_fno_pie);
-    if (LastPICArg &&
-        (LastPICArg->getOption().matches(options::OPT_fPIC) ||
-         LastPICArg->getOption().matches(options::OPT_fpic) ||
-         LastPICArg->getOption().matches(options::OPT_fPIE) ||
-         LastPICArg->getOption().matches(options::OPT_fpie))) {
-      CmdArgs.push_back("-KPIC");
-    }
-  }
+  if (NeedsKPIC)
+    addAssemblerKPIC(Args, CmdArgs);
 
   Args.AddAllArgValues(CmdArgs, options::OPT_Wa_COMMA,
                        options::OPT_Xassembler);
@@ -7323,6 +7331,8 @@ Command *visualstudio::Compile::GetCommand(Compilation &C, const JobAction &JA,
                                                                    : "/GR-");
   if (Args.hasArg(options::OPT_fsyntax_only))
     CmdArgs.push_back("/Zs");
+  if (Args.hasArg(options::OPT_g_Flag, options::OPT_gline_tables_only))
+    CmdArgs.push_back("/Z7");
 
   std::vector<std::string> Includes = Args.getAllArgValues(options::OPT_include);
   for (size_t I = 0, E = Includes.size(); I != E; ++I)
