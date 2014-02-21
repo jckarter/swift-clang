@@ -2180,22 +2180,17 @@ public:
   llvm::Value *EmitAArch64BuiltinExpr(unsigned BuiltinID, const CallExpr *E);
   llvm::Value *EmitARMBuiltinExpr(unsigned BuiltinID, const CallExpr *E);
 
-  struct NeonIntrinsicMap {
-    unsigned BuiltinID, LLVMIntrinsic, AltLLVMIntrinsic;
-
-    // Comparison operator suitable for use in std::lower_bound with a BuiltinID
-    bool operator<(unsigned RHSBuiltinID) const {
-      return BuiltinID < RHSBuiltinID;
-    }
-  };
-
   llvm::Value *EmitCommonNeonBuiltinExpr(unsigned BuiltinID,
                                          unsigned LLVMIntrinsic,
                                          unsigned AltLLVMIntrinsic,
+                                         const char *NameHint,
+                                         unsigned Modifier,
                                          const CallExpr *E,
                                          SmallVectorImpl<llvm::Value *> &Ops,
                                          llvm::Value *Align = 0);
-
+  llvm::Function *LookupNeonLLVMIntrinsic(unsigned IntrinsicID,
+                                          unsigned Modifier, llvm::Type *ArgTy,
+                                          const CallExpr *E);
   llvm::Value *EmitNeonCall(llvm::Function *F,
                             SmallVectorImpl<llvm::Value*> &O,
                             const char *name,
