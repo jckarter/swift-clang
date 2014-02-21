@@ -2480,6 +2480,10 @@ static NeonIntrinsicInfo ARM64SIMDIntrinsicMap[] = {
 };
 
 static NeonIntrinsicInfo ARM64SISDIntrinsicMap[] = {
+  NEONMAP1(vrshl_s64, arm64_neon_srshl, AddRetType),
+  NEONMAP1(vrshl_u64, arm64_neon_urshl, AddRetType),
+  NEONMAP1(vrshld_s64, arm64_neon_srshl, AddRetType),
+  NEONMAP1(vrshld_u64, arm64_neon_urshl, AddRetType),
   NEONMAP1(vrsqrtsd_f64, arm64_neon_frsqrts, AddRetType),
   NEONMAP1(vrsqrtss_f32, arm64_neon_frsqrts, AddRetType),
 };
@@ -4789,17 +4793,6 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
   // Handle non-overloaded intrinsics first.
   switch (BuiltinID) {
   default: break;
-  case NEON::BI__builtin_neon_vrshl_u64:
-  case NEON::BI__builtin_neon_vrshld_u64:
-    usgn = true;
-    // FALLTHROUGH
-  case NEON::BI__builtin_neon_vrshl_s64:
-  case NEON::BI__builtin_neon_vrshld_s64: {
-    unsigned Int = usgn ? Intrinsic::arm64_neon_urshl :
-      Intrinsic::arm64_neon_srshl;
-    Ops.push_back(EmitScalarExpr(E->getArg(1)));
-    return EmitNeonCall(CGM.getIntrinsic(Int, Int64Ty), Ops, "vrshld");
-  }
   case NEON::BI__builtin_neon_vqrshlb_u8:
     Ops.push_back(EmitScalarExpr(E->getArg(1)));
     return emitVectorWrappedScalar8Intrinsic(Intrinsic::arm64_neon_uqrshl,
