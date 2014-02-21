@@ -2374,7 +2374,7 @@ static NeonIntrinsicInfo ARMSIMDIntrinsicMap [] = {
   NEONMAP0(vzipq_v),
 };
 
-static NeonIntrinsicInfo ARM64NeonIntrinsicMap[] = {
+static NeonIntrinsicInfo ARM64SIMDIntrinsicMap[] = {
   NEONMAP1(vabs_v, arm64_neon_abs, 0),
   NEONMAP1(vabsq_v, arm64_neon_abs, 0),
   NEONMAP0(vaddhn_v),
@@ -2479,13 +2479,20 @@ static NeonIntrinsicInfo ARM64NeonIntrinsicMap[] = {
   NEONMAP0(vtstq_v),
 };
 
+static NeonIntrinsicInfo ARM64SISDIntrinsicMap[] = {
+  NEONMAP1(vrsqrtsd_f64, arm64_neon_frsqrts, AddRetType),
+  NEONMAP1(vrsqrtss_f32, arm64_neon_frsqrts, AddRetType),
+};
+
 #undef NEONMAP0
 #undef NEONMAP1
 #undef NEONMAP2
 
 static bool NEONSIMDIntrinsicsProvenSorted = false;
 static bool AArch64SISDIntrinsicInfoProvenSorted = false;
-static bool ARM64IntrinsicsProvenSorted = false;
+
+static bool ARM64SIMDIntrinsicsProvenSorted = false;
+static bool ARM64SISDIntrinsicsProvenSorted = false;
 
 
 static const NeonIntrinsicInfo *
@@ -2540,13 +2547,38 @@ Function *CodeGenFunction::LookupNeonLLVMIntrinsic(unsigned IntrinsicID,
   return CGM.getIntrinsic(IntrinsicID, Tys);
 }
 
+static Value *EmitCommonNeonSISDBuiltinExpr(CodeGenFunction &CGF,
+                                            const NeonIntrinsicInfo &SISDInfo,
+                                            SmallVectorImpl<Value *> &Ops,
+                                            const CallExpr *E) {
+  unsigned BuiltinID = SISDInfo.BuiltinID;
+  unsigned int Int = SISDInfo.LLVMIntrinsic;
+  unsigned IntTypes = SISDInfo.TypeModifier;
+  const char *s = SISDInfo.NameHint;
+
+  switch (BuiltinID) {
+  default: break;
+  }
+
+  assert(Int && "Generic code assumes a valid intrinsic");
+
+  // Determine the type(s) of this overloaded AArch64 intrinsic.
+  const Expr *Arg = E->getArg(0);
+  llvm::Type *ArgTy = CGF.ConvertType(Arg->getType());
+  Function *F = CGF.LookupNeonLLVMIntrinsic(Int, IntTypes, ArgTy, E);
+
+  Value *Result = CGF.EmitNeonCall(F, Ops, s);
+  llvm::Type *ResultType = CGF.ConvertType(E->getType());
+  // AArch64 intrinsic one-element vector type cast to
+  // scalar type expected by the builtin
+  return CGF.Builder.CreateBitCast(Result, ResultType, s);
+}
 
 static Value *EmitAArch64ScalarBuiltinExpr(CodeGenFunction &CGF,
                                            const NeonIntrinsicInfo &SISDInfo,
                                            const CallExpr *E) {
   unsigned BuiltinID = SISDInfo.BuiltinID;
   unsigned int Int = SISDInfo.LLVMIntrinsic;
-  unsigned IntTypes = SISDInfo.TypeModifier;
   const char *s = SISDInfo.NameHint;
 
   SmallVector<Value *, 4> Ops;
@@ -2717,19 +2749,9 @@ static Value *EmitAArch64ScalarBuiltinExpr(CodeGenFunction &CGF,
     break;
   }
 
-
-  assert(Int && "Generic code assumes a valid intrinsic");
-
-  // Determine the type(s) of this overloaded AArch64 intrinsic.
-  const Expr *Arg = E->getArg(0);
-  llvm::Type *ArgTy = CGF.ConvertType(Arg->getType());
-  Function *F = CGF.LookupNeonLLVMIntrinsic(Int, IntTypes, ArgTy, E);
-
-  Value *Result = CGF.EmitNeonCall(F, Ops, s);
-  llvm::Type *ResultType = CGF.ConvertType(E->getType());
-  // AArch64 intrinsic one-element vector type cast to
-  // scalar type expected by the builtin
-  return CGF.Builder.CreateBitCast(Result, ResultType, s);
+  // It didn't need any handling specific to the AArch64 backend, so defer to
+  // common code.
+  return EmitCommonNeonSISDBuiltinExpr(CGF, SISDInfo, Ops, E);
 }
 
 Value *CodeGenFunction::EmitCommonNeonBuiltinExpr(
@@ -4743,6 +4765,17 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
   for (unsigned i = 0, e = E->getNumArgs() - 1; i != e; i++)
     Ops.push_back(EmitScalarExpr(E->getArg(i)));
 
+  llvm::ArrayRef<NeonIntrinsicInfo> SISDMap(ARM64SISDIntrinsicMap);
+  const NeonIntrinsicInfo *Builtin = findNeonIntrinsicInMap(
+      SISDMap, BuiltinID, ARM64SISDIntrinsicsProvenSorted);
+
+  if (Builtin) {
+    Ops.push_back(EmitScalarExpr(E->getArg(E->getNumArgs() - 1)));
+    Value *Result = EmitCommonNeonSISDBuiltinExpr(*this, *Builtin, Ops, E);
+    assert(Result && "SISD intrinsic should have been handled");
+    return Result;
+  }
+
   llvm::APSInt Result;
   const Expr *Arg = E->getArg(E->getNumArgs()-1);
   NeonTypeFlags Type(0);
@@ -4756,18 +4789,6 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
   // Handle non-overloaded intrinsics first.
   switch (BuiltinID) {
   default: break;
-  case NEON::BI__builtin_neon_vrsqrtss_f32:
-    Ops.push_back(EmitScalarExpr(E->getArg(1)));
-    return EmitNeonCall(CGM.getIntrinsic(Intrinsic::arm64_neon_frsqrts,
-                                         FloatTy),
-                        Ops, "vrsqrtss");
-
-  case NEON::BI__builtin_neon_vrsqrtsd_f64:
-    Ops.push_back(EmitScalarExpr(E->getArg(1)));
-    return EmitNeonCall(CGM.getIntrinsic(Intrinsic::arm64_neon_frsqrts,
-                                         DoubleTy),
-                        Ops, "vrsqrtsd");
-
   case NEON::BI__builtin_neon_vrshl_u64:
   case NEON::BI__builtin_neon_vrshld_u64:
     usgn = true;
@@ -5448,8 +5469,8 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
 
   // Not all intrinsics handled by the common case work for ARM64 yet, so only
   // defer to common code if it's been added to our special map.
-  const NeonIntrinsicInfo *Builtin = findNeonIntrinsicInMap(
-      ARM64NeonIntrinsicMap, BuiltinID, ARM64IntrinsicsProvenSorted);
+  Builtin = findNeonIntrinsicInMap(ARM64SIMDIntrinsicMap, BuiltinID,
+                                   ARM64SIMDIntrinsicsProvenSorted);
 
   if (Builtin)
     return EmitCommonNeonBuiltinExpr(
