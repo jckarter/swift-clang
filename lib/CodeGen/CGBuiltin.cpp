@@ -2490,17 +2490,31 @@ static NeonIntrinsicInfo ARM64SISDIntrinsicMap[] = {
   NEONMAP1(vqrshlh_u16, arm64_neon_uqrshl, Vectorize1ArgType | Use64BitVectors),
   NEONMAP1(vqrshls_s32, arm64_neon_sqrshl, Add1ArgType),
   NEONMAP1(vqrshls_u32, arm64_neon_uqrshl, Add1ArgType),
+  NEONMAP1(vqshlb_s8, arm64_neon_sqshl, Vectorize1ArgType | Use64BitVectors),
+  NEONMAP1(vqshlb_u8, arm64_neon_uqshl, Vectorize1ArgType | Use64BitVectors),
+  NEONMAP1(vqshld_s64, arm64_neon_sqshl, Add1ArgType),
+  NEONMAP1(vqshld_u64, arm64_neon_uqshl, Add1ArgType),
+  NEONMAP1(vqshlh_s16, arm64_neon_sqshl, Vectorize1ArgType | Use64BitVectors),
+  NEONMAP1(vqshlh_u16, arm64_neon_uqshl, Vectorize1ArgType | Use64BitVectors),
+  NEONMAP1(vqshls_s32, arm64_neon_sqshl, Add1ArgType),
+  NEONMAP1(vqshls_u32, arm64_neon_uqshl, Add1ArgType),
   NEONMAP1(vrshld_s64, arm64_neon_srshl, Add1ArgType),
   NEONMAP1(vrshld_u64, arm64_neon_urshl, Add1ArgType),
   NEONMAP1(vrsqrtsd_f64, arm64_neon_frsqrts, Add1ArgType),
   NEONMAP1(vrsqrtss_f32, arm64_neon_frsqrts, Add1ArgType),
+  NEONMAP1(vshld_s64, arm64_neon_sshl, Add1ArgType),
+  NEONMAP1(vshld_u64, arm64_neon_ushl, Add1ArgType),
 
   // Builtins below here are the transitionary ones, manually entered in
   // BuiltinsNEON.def. Not necessarily in alphabetical order.
   NEONMAP1(vqrshl_s64, arm64_neon_sqrshl, Add1ArgType),
   NEONMAP1(vqrshl_u64, arm64_neon_uqrshl, Add1ArgType),
+  NEONMAP1(vqshl_s64, arm64_neon_sqshl, Add1ArgType),
+  NEONMAP1(vqshl_u64, arm64_neon_uqshl, Add1ArgType),
   NEONMAP1(vrshl_s64, arm64_neon_srshl, Add1ArgType),
   NEONMAP1(vrshl_u64, arm64_neon_urshl, Add1ArgType),
+  NEONMAP1(vshl_s64, arm64_neon_sshl, Add1ArgType),
+  NEONMAP1(vshl_u64, arm64_neon_ushl, Add1ArgType),
 };
 
 #undef NEONMAP0
@@ -4830,53 +4844,6 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
   // Handle non-overloaded intrinsics first.
   switch (BuiltinID) {
   default: break;
-  case NEON::BI__builtin_neon_vqshlb_u8:
-    Ops.push_back(EmitScalarExpr(E->getArg(1)));
-    return emitVectorWrappedScalar8Intrinsic(Intrinsic::arm64_neon_uqshl,
-                                             Ops, "vqshlb");
-  case NEON::BI__builtin_neon_vqshlb_s8:
-    Ops.push_back(EmitScalarExpr(E->getArg(1)));
-    return emitVectorWrappedScalar8Intrinsic(Intrinsic::arm64_neon_sqshl,
-                                             Ops, "vqshlb");
-  case NEON::BI__builtin_neon_vqshlh_u16:
-    Ops.push_back(EmitScalarExpr(E->getArg(1)));
-    return emitVectorWrappedScalar16Intrinsic(Intrinsic::arm64_neon_uqshl,
-                                              Ops, "vqshlh");
-  case NEON::BI__builtin_neon_vqshlh_s16:
-    Ops.push_back(EmitScalarExpr(E->getArg(1)));
-    return emitVectorWrappedScalar16Intrinsic(Intrinsic::arm64_neon_sqshl,
-                                              Ops, "vqshlh");
-  case NEON::BI__builtin_neon_vqshls_u32:
-    usgn = true;
-    // FALLTHROUGH
-  case NEON::BI__builtin_neon_vqshls_s32: {
-    unsigned Int = usgn ? Intrinsic::arm64_neon_uqshl :
-      Intrinsic::arm64_neon_sqshl;
-    Ops.push_back(EmitScalarExpr(E->getArg(1)));
-    return EmitNeonCall(CGM.getIntrinsic(Int, Int32Ty), Ops, "vqshls");
-  }
-  case NEON::BI__builtin_neon_vqshl_u64:
-  case NEON::BI__builtin_neon_vqshld_u64:
-    usgn = true;
-    // FALLTHROUGH
-  case NEON::BI__builtin_neon_vqshl_s64:
-  case NEON::BI__builtin_neon_vqshld_s64: {
-    unsigned Int = usgn ? Intrinsic::arm64_neon_uqshl :
-      Intrinsic::arm64_neon_sqshl;
-    Ops.push_back(EmitScalarExpr(E->getArg(1)));
-    return EmitNeonCall(CGM.getIntrinsic(Int, Int64Ty), Ops, "vqshld");
-  }
-  case NEON::BI__builtin_neon_vshl_u64:
-  case NEON::BI__builtin_neon_vshld_u64:
-    usgn = true;
-    // FALLTHROUGH
-  case NEON::BI__builtin_neon_vshl_s64:
-  case NEON::BI__builtin_neon_vshld_s64: {
-    unsigned Int = usgn ? Intrinsic::arm64_neon_ushl :
-      Intrinsic::arm64_neon_sshl;
-    Ops.push_back(EmitScalarExpr(E->getArg(1)));
-    return EmitNeonCall(CGM.getIntrinsic(Int, Int64Ty), Ops, "vshl");
-  }
   case NEON::BI__builtin_neon_vqdmullh_lane_s16: {
     unsigned Int = Intrinsic::arm64_neon_sqdmull;
     // i16 is not a legal types for ARM64, so we can't just use
