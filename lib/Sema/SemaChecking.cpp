@@ -321,6 +321,11 @@ Sema::CheckBuiltinFunctionCall(unsigned BuiltinID, CallExpr *TheCall) {
         if (CheckMipsBuiltinFunctionCall(BuiltinID, TheCall))
           return ExprError();
         break;
+      case llvm::Triple::x86:
+      case llvm::Triple::x86_64:
+        if (CheckX86BuiltinFunctionCall(BuiltinID, TheCall))
+          return ExprError();
+        break;
       default:
         break;
     }
@@ -741,6 +746,15 @@ bool Sema::CheckMipsBuiltinFunctionCall(unsigned BuiltinID, CallExpr *TheCall) {
     return Diag(TheCall->getLocStart(), diag::err_argument_invalid_range)
       << l << u << TheCall->getArg(i)->getSourceRange();
 
+  return false;
+}
+
+bool Sema::CheckX86BuiltinFunctionCall(unsigned BuiltinID, CallExpr *TheCall) {
+  switch (BuiltinID) {
+  case X86::BI_mm_prefetch:
+    return SemaBuiltinMMPrefetch(TheCall);
+    break;
+  }
   return false;
 }
 
@@ -2006,6 +2020,26 @@ bool Sema::SemaBuiltinPrefetch(CallExpr *TheCall) {
             << "0" << "3" << Arg->getSourceRange();
     }
   }
+
+  return false;
+}
+
+/// SemaBuiltinMMPrefetch - Handle _mm_prefetch.
+// This is declared to take (const char*, int)
+bool Sema::SemaBuiltinMMPrefetch(CallExpr *TheCall) {
+  Expr *Arg = TheCall->getArg(1);
+
+  // We can't check the value of a dependent argument.
+  if (Arg->isTypeDependent() || Arg->isValueDependent())
+    return false;
+
+  llvm::APSInt Result;
+  if (SemaBuiltinConstantArg(TheCall, 1, Result))
+    return true;
+
+  if (Result.getLimitedValue() > 3)
+    return Diag(TheCall->getLocStart(), diag::err_argument_invalid_range)
+        << "0" << "3" << Arg->getSourceRange();
 
   return false;
 }

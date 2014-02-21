@@ -1619,27 +1619,83 @@ void Sema::DefaultSynthesizeProperties(Scope *S, Decl *D) {
       DefaultSynthesizeProperties(S, IC, IDecl);
 }
 
+static void DiagnoseUnimplementedAccessor(Sema &S,
+                                          ObjCInterfaceDecl *PrimaryClass,
+                                          Selector Method,
+                                          ObjCImplDecl* IMPDecl,
+                                          ObjCContainerDecl *CDecl,
+                                          ObjCCategoryDecl *C,
+                                          ObjCPropertyDecl *Prop,
+                                          Sema::SelectorSet &SMap) {
+  // When reporting on missing property setter/getter implementation in
+  // categories, do not report when they are declared in primary class,
+  // class's protocol, or one of it super classes. This is because,
+  // the class is going to implement them.
+  if (!SMap.count(Method) &&
+      (PrimaryClass == 0 ||
+       !PrimaryClass->lookupPropertyAccessor(Method, C))) {
+        S.Diag(IMPDecl->getLocation(),
+               isa<ObjCCategoryDecl>(CDecl) ?
+               diag::warn_setter_getter_impl_required_in_category :
+               diag::warn_setter_getter_impl_required)
+            << Prop->getDeclName() << Method;
+        S.Diag(Prop->getLocation(),
+             diag::note_property_declare);
+        if (S.LangOpts.ObjCDefaultSynthProperties &&
+            S.LangOpts.ObjCRuntime.isNonFragile())
+          if (ObjCInterfaceDecl *ID = dyn_cast<ObjCInterfaceDecl>(CDecl))
+            if (const ObjCInterfaceDecl *RID = ID->isObjCRequiresPropertyDefs())
+            S.Diag(RID->getLocation(), diag::note_suppressed_class_declare);
+      }
+}
+
 void Sema::DiagnoseUnimplementedProperties(Scope *S, ObjCImplDecl* IMPDecl,
-                                      ObjCContainerDecl *CDecl) {
-  ObjCContainerDecl::PropertyMap NoNeedToImplPropMap;
-  ObjCInterfaceDecl *IDecl;
-  // Gather properties which need not be implemented in this class
-  // or category.
-  if (!(IDecl = dyn_cast<ObjCInterfaceDecl>(CDecl)))
-    if (ObjCCategoryDecl *C = dyn_cast<ObjCCategoryDecl>(CDecl)) {
-      // For categories, no need to implement properties declared in
-      // its primary class (and its super classes) if property is
-      // declared in one of those containers.
-      if ((IDecl = C->getClassInterface())) {
-        ObjCInterfaceDecl::PropertyDeclOrder PO;
-        IDecl->collectPropertiesToImplement(NoNeedToImplPropMap, PO);
+                                           ObjCContainerDecl *CDecl,
+                                           bool SynthesizeProperties) {
+  ObjCContainerDecl::PropertyMap PropMap;
+  ObjCInterfaceDecl *IDecl = dyn_cast<ObjCInterfaceDecl>(CDecl);
+
+  if (!SynthesizeProperties) {
+    ObjCContainerDecl::PropertyMap NoNeedToImplPropMap;
+    // Gather properties which need not be implemented in this class
+    // or category.
+    if (!IDecl)
+      if (ObjCCategoryDecl *C = dyn_cast<ObjCCategoryDecl>(CDecl)) {
+        // For categories, no need to implement properties declared in
+        // its primary class (and its super classes) if property is
+        // declared in one of those containers.
+        if ((IDecl = C->getClassInterface())) {
+          ObjCInterfaceDecl::PropertyDeclOrder PO;
+          IDecl->collectPropertiesToImplement(NoNeedToImplPropMap, PO);
+        }
+      }
+    if (IDecl)
+      CollectSuperClassPropertyImplementations(IDecl, NoNeedToImplPropMap);
+    
+    CollectImmediateProperties(CDecl, PropMap, NoNeedToImplPropMap);
+  }
+
+  // Scan the @interface to see if any of the protocols it adopts
+  // require an explicit implementation, via attribute
+  // 'objc_protocol_requires_explicit_implementation'.
+  if (IDecl)
+    for (ObjCInterfaceDecl::all_protocol_iterator
+          PI = IDecl->all_referenced_protocol_begin(),
+          PE = IDecl->all_referenced_protocol_end();
+          PI != PE; ++PI) {
+      ObjCProtocolDecl *PDecl = *PI;
+      if (!PDecl->hasAttr<ObjCExplicitProtocolImplAttr>())
+        continue;
+      // Add the properties of 'PDecl' to the list of properties that
+      // need to be implemented.
+      for (ObjCProtocolDecl::prop_iterator
+           PRI = PDecl->prop_begin(), PRE = PDecl->prop_end();
+           PRI != PRE; ++PRI) {
+        ObjCPropertyDecl *PropDecl = *PRI;
+        PropMap[PRI->getIdentifier()] = PropDecl;
       }
     }
-  if (IDecl)
-    CollectSuperClassPropertyImplementations(IDecl, NoNeedToImplPropMap);
-  
-  ObjCContainerDecl::PropertyMap PropMap;
-  CollectImmediateProperties(CDecl, PropMap, NoNeedToImplPropMap);
+
   if (PropMap.empty())
     return;
 
@@ -1678,45 +1734,14 @@ void Sema::DiagnoseUnimplementedProperties(Scope *S, ObjCImplDecl* IMPDecl,
         PropImplMap.count(Prop) ||
         Prop->getAvailability() == AR_Unavailable)
       continue;
-    // When reporting on missing property getter implementation in
-    // categories, do not report when they are declared in primary class,
-    // class's protocol, or one of it super classes. This is because,
-    // the class is going to implement them.
-    if (!InsMap.count(Prop->getGetterName()) &&
-        (PrimaryClass == 0 ||
-         !PrimaryClass->lookupPropertyAccessor(Prop->getGetterName(), C))) {
-      Diag(IMPDecl->getLocation(),
-           isa<ObjCCategoryDecl>(CDecl) ?
-            diag::warn_setter_getter_impl_required_in_category :
-            diag::warn_setter_getter_impl_required)
-      << Prop->getDeclName() << Prop->getGetterName();
-      Diag(Prop->getLocation(),
-           diag::note_property_declare);
-      if (LangOpts.ObjCDefaultSynthProperties && LangOpts.ObjCRuntime.isNonFragile())
-        if (ObjCInterfaceDecl *ID = dyn_cast<ObjCInterfaceDecl>(CDecl))
-          if (const ObjCInterfaceDecl *RID = ID->isObjCRequiresPropertyDefs())
-            Diag(RID->getLocation(), diag::note_suppressed_class_declare);
-            
-    }
-    // When reporting on missing property setter implementation in
-    // categories, do not report when they are declared in primary class,
-    // class's protocol, or one of it super classes. This is because,
-    // the class is going to implement them.
-    if (!Prop->isReadOnly() && !InsMap.count(Prop->getSetterName()) &&
-        (PrimaryClass == 0 ||
-         !PrimaryClass->lookupPropertyAccessor(Prop->getSetterName(), C))) {
-      Diag(IMPDecl->getLocation(),
-           isa<ObjCCategoryDecl>(CDecl) ?
-           diag::warn_setter_getter_impl_required_in_category :
-           diag::warn_setter_getter_impl_required)
-      << Prop->getDeclName() << Prop->getSetterName();
-      Diag(Prop->getLocation(),
-           diag::note_property_declare);
-      if (LangOpts.ObjCDefaultSynthProperties && LangOpts.ObjCRuntime.isNonFragile())
-        if (ObjCInterfaceDecl *ID = dyn_cast<ObjCInterfaceDecl>(CDecl))
-          if (const ObjCInterfaceDecl *RID = ID->isObjCRequiresPropertyDefs())
-            Diag(RID->getLocation(), diag::note_suppressed_class_declare);
-    }
+
+    // Diagnose unimplemented getters and setters.
+    DiagnoseUnimplementedAccessor(*this,
+          PrimaryClass, Prop->getGetterName(), IMPDecl, CDecl, C, Prop, InsMap);
+    if (!Prop->isReadOnly())
+      DiagnoseUnimplementedAccessor(*this,
+                                    PrimaryClass, Prop->getSetterName(),
+                                    IMPDecl, CDecl, C, Prop, InsMap);
   }
 }
 
