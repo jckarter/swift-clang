@@ -672,7 +672,7 @@ def Format : InheritableAttr {
               IntArgument<"FirstArg">];
   let Subjects = SubjectList<[ObjCMethod, Block, HasFunctionProto], WarnDiag,
                              "ExpectedFunction">;
-  let Documentation = [Undocumented];
+  let Documentation = [FormatDocs];
 }
 
 def FormatArg : InheritableAttr {
@@ -1250,21 +1250,21 @@ def NoSanitizeAddress : InheritableAttr {
   let Spellings = [GCC<"no_address_safety_analysis">,
                    GCC<"no_sanitize_address">];
   let Subjects = SubjectList<[Function, FunctionTemplate], ErrorDiag>;
-  let Documentation = [Undocumented];
+  let Documentation = [NoSanitizeAddressDocs];
 }
 
 // Attribute to disable ThreadSanitizer checks.
 def NoSanitizeThread : InheritableAttr {
   let Spellings = [GNU<"no_sanitize_thread">];
   let Subjects = SubjectList<[Function, FunctionTemplate], ErrorDiag>;
-  let Documentation = [Undocumented];
+  let Documentation = [NoSanitizeThreadDocs];
 }
 
 // Attribute to disable MemorySanitizer checks.
 def NoSanitizeMemory : InheritableAttr {
   let Spellings = [GNU<"no_sanitize_memory">];
   let Subjects = SubjectList<[Function, FunctionTemplate], ErrorDiag>;
-  let Documentation = [Undocumented];
+  let Documentation = [NoSanitizeMemoryDocs];
 }
 
 // C/C++ Thread safety attributes (e.g. for deadlock, data race checking)
@@ -1306,6 +1306,82 @@ def Capability : InheritableAttr {
                     [GNU<"shared_capability">,
                      CXX11<"clang","shared_capability">]>];
   let Documentation = [Undocumented];
+}
+
+def AssertCapability : InheritableAttr {
+  let Spellings = [GNU<"assert_capability">,
+                   CXX11<"clang", "assert_capability">,
+                   GNU<"assert_shared_capability">,
+                   CXX11<"clang", "assert_shared_capability">];
+  let Subjects = SubjectList<[Function, FunctionTemplate]>;
+  let LateParsed = 1;
+  let TemplateDependent = 1;
+  let ParseArgumentsAsUnevaluated = 1;
+  let DuplicatesAllowedWhileMerging = 1;
+  let Args = [ExprArgument<"Expr">];
+  let Accessors = [Accessor<"isShared",
+                    [GNU<"assert_shared_capability">,
+                     CXX11<"clang", "assert_shared_capability">]>];
+  let Documentation = [AssertCapabilityDocs];
+}
+
+def AcquireCapability : InheritableAttr {
+  let Spellings = [GNU<"acquire_capability">,
+                   CXX11<"clang", "acquire_capability">,
+                   GNU<"acquire_shared_capability">,
+                   CXX11<"clang", "acquire_shared_capability">];
+  let Subjects = SubjectList<[Function, FunctionTemplate],
+                             ErrorDiag>;
+  let LateParsed = 1;
+  let TemplateDependent = 1;
+  let ParseArgumentsAsUnevaluated = 1;
+  let DuplicatesAllowedWhileMerging = 1;
+  let Args = [VariadicExprArgument<"Args">];
+  let Accessors = [Accessor<"isShared",
+                    [GNU<"acquire_shared_capability">,
+                     CXX11<"clang", "acquire_shared_capability">]>];
+  let Documentation = [AcquireCapabilityDocs];
+}
+
+def TryAcquireCapability : InheritableAttr {
+  let Spellings = [GNU<"try_acquire_capability">,
+                   CXX11<"clang", "try_acquire_capability">,
+                   GNU<"try_acquire_shared_capability">,
+                   CXX11<"clang", "try_acquire_shared_capability">];
+  let Subjects = SubjectList<[Function, FunctionTemplate],
+                             ErrorDiag>;
+  let LateParsed = 1;
+  let TemplateDependent = 1;
+  let ParseArgumentsAsUnevaluated = 1;
+  let DuplicatesAllowedWhileMerging = 1;
+  let Args = [ExprArgument<"SuccessValue">, VariadicExprArgument<"Args">];
+  let Accessors = [Accessor<"isShared",
+                    [GNU<"try_acquire_shared_capability">,
+                     CXX11<"clang", "try_acquire_shared_capability">]>];
+  let Documentation = [TryAcquireCapabilityDocs];
+}
+
+def ReleaseCapability : InheritableAttr {
+  let Spellings = [GNU<"release_capability">,
+                   CXX11<"clang", "release_capability">,
+                   GNU<"release_shared_capability">,
+                   CXX11<"clang", "release_shared_capability">,
+                   GNU<"release_generic_capability">,
+                   CXX11<"clang", "release_generic_capability">];
+  let Subjects = SubjectList<[Function, FunctionTemplate],
+                             ErrorDiag>;
+  let LateParsed = 1;
+  let TemplateDependent = 1;
+  let ParseArgumentsAsUnevaluated = 1;
+  let DuplicatesAllowedWhileMerging = 1;
+  let Args = [VariadicExprArgument<"Args">];
+  let Accessors = [Accessor<"isShared",
+                    [GNU<"release_shared_capability">,
+                     CXX11<"clang", "release_shared_capability">]>,
+                   Accessor<"isGeneric",
+                     [GNU<"release_generic_capability">,
+                      CXX11<"clang", "release_generic_capability">]>];
+  let Documentation = [ReleaseCapabilityDocs];
 }
 
 def RequiresCapability : InheritableAttr {
@@ -1561,7 +1637,7 @@ def ArgumentWithTypeTag : InheritableAttr {
               UnsignedArgument<"TypeTagIdx">,
               BoolArgument<"IsPointer">];
   let HasCustomParsing = 1;
-  let Documentation = [Undocumented];
+  let Documentation = [ArgumentWithTypeTagDocs, PointerWithTypeTagDocs];
 }
 
 def TypeTagForDatatype : InheritableAttr {
@@ -1572,7 +1648,7 @@ def TypeTagForDatatype : InheritableAttr {
               BoolArgument<"MustBeNull">];
 //  let Subjects = SubjectList<[Var], ErrorDiag>;
   let HasCustomParsing = 1;
-  let Documentation = [Undocumented];
+  let Documentation = [TypeTagForDatatypeDocs];
 }
 
 // Microsoft-related attributes

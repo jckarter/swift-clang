@@ -128,10 +128,10 @@ BUILTIN(__builtin_neon_vrndz_v, "V8ScV8Sci", "n")
 BUILTIN(__builtin_neon_vrndzq_v, "V16ScV16Sci", "n")
 
 // AArch64 uses __builtin_neon_vqshl_v
-BUILTIN(__builtin_neon_vqshl_s64, "LLiLLiLLi", "n")
-BUILTIN(__builtin_neon_vqshl_u64, "ULLiULLiULLi", "n")
 BUILTIN(__builtin_neon_vqrshl_s64, "LLiLLiLLi", "n")
 BUILTIN(__builtin_neon_vqrshl_u64, "ULLiULLiULLi", "n")
+BUILTIN(__builtin_neon_vqshl_s64, "LLiLLiLLi", "n")
+BUILTIN(__builtin_neon_vqshl_u64, "ULLiULLiULLi", "n")
 BUILTIN(__builtin_neon_vrshl_s64, "LLiLLiLLi", "n")
 BUILTIN(__builtin_neon_vrshl_u64, "ULLiULLiULLi", "n")
 BUILTIN(__builtin_neon_vshl_s64, "LLiLLiLLi", "n")
