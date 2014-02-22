@@ -946,10 +946,8 @@ static bool HasFeature(const Preprocessor &PP, const IdentifierInfo *II) {
            .Case("cxx_rvalue_references", LangOpts.CPlusPlus11)
            .Case("cxx_strong_enums", LangOpts.CPlusPlus11)
            .Case("cxx_static_assert", LangOpts.CPlusPlus11)
-           // C++11 thread_local is unsupported on Darwin
            .Case("cxx_thread_local",
-                 LangOpts.CPlusPlus11 && PP.getTargetInfo().isTLSSupported() &&
-                 !PP.getTargetInfo().getTriple().isOSDarwin())
+                 LangOpts.CPlusPlus11 && PP.getTargetInfo().isTLSSupported())
            .Case("cxx_trailing_return", LangOpts.CPlusPlus11)
            .Case("cxx_unicode_literals", LangOpts.CPlusPlus11)
            .Case("cxx_unrestricted_unions", LangOpts.CPlusPlus11)

@@ -47,6 +47,7 @@ class InitHeaderSearch {
   bool HasSysroot;
 
 public:
+
   InitHeaderSearch(HeaderSearch &HS, bool verbose, StringRef sysroot)
     : Headers(HS), Verbose(verbose), IncludeSysroot(sysroot),
       HasSysroot(!(sysroot.empty() || sysroot == "/")) {
@@ -337,58 +338,8 @@ void InitHeaderSearch::AddDefaultCIncludePaths(const llvm::Triple &triple,
     break;
   }
 
-  if ( os != llvm::Triple::RTEMS ) {
-    // APPLE LOCAL: On Darwin, include the toolchain include directory in the
-    // default include search list. Since we have a split between the toolchains
-    // and the SDK, we need a place for tools to be able to drop headers
-    // (resources) that can be used with any SDK, for example in generated
-    // files.
-    //
-    // This functionality is currently only used to support flex's FlexLexer.h
-    // file. See:
-    //
-    //   <rdar://problem/13135439> Include toolchain include directory in
-    //   default header paths (for FlexLexer.h)
-    //
-    // for more information.
-    //
-    // We compute the toolchain include directory relative to the resource
-    // directory, so that it works with -ccc-install-dir properly. The resource
-    // directory follows the convention "../usr/lib/clang/<version>" so
-    // "<resource_dir>/../../../include" is the toolchain include directory.
-    StringRef P = HSOpts.ResourceDir;
-    P = llvm::sys::path::parent_path(P);
-    P = llvm::sys::path::parent_path(P);
-    P = llvm::sys::path::parent_path(P);
-
-    // If the last component is a '..' remove it, this is important because the
-    // driver sometimes forms the resource path with a '..' in it.
-    if (llvm::sys::path::filename(P) == "..") {
-      P = llvm::sys::path::parent_path(P);
-      P = llvm::sys::path::parent_path(P);
-    }
-
-    // Only add this directory if the compiler is actually installed in a
-    // toolchain or the command line tools directory.
-    if (P.endswith(".xctoolchain/usr") || P.endswith("/CommandLineTools/usr")) {
-      AddUnmappedPath(P + "/include", ExternCSystem, false);
-
-      // If this is a toolchain directory, but not the default one, also add the
-      // default. See:
-      //
-      //   <rdar://problem/14796042> FlexLexer.h is missing from command-line
-      //   tools and SDKs.
-      if (P.endswith(".xctoolchain/usr") &&
-          !P.endswith("/XcodeDefault.xctoolchain/usr")) {
-        P = llvm::sys::path::parent_path(P);
-        P = llvm::sys::path::parent_path(P);
-        AddUnmappedPath(P + "/XcodeDefault.xctoolchain/usr/include",
-                        ExternCSystem, false);
-      }
-    }
-
+  if ( os != llvm::Triple::RTEMS )
     AddPath("/usr/include", ExternCSystem, false);
-  }
 }
 
 void InitHeaderSearch::
@@ -424,11 +375,6 @@ AddDefaultCPlusPlusIncludePaths(const llvm::Triple &triple, const HeaderSearchOp
                                   "arm-apple-darwin10", "v7", "", triple);
       AddGnuCPlusPlusIncludePaths("/usr/include/c++/4.2.1",
                                   "arm-apple-darwin10", "v6", "", triple);
-      break;
-
-    case llvm::Triple::arm64:
-      AddGnuCPlusPlusIncludePaths("/usr/include/c++/4.2.1",
-                                  "arm64-apple-darwin10", "", "", triple);
       break;
     }
     return;

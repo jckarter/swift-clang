@@ -7,7 +7,6 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "XCTMT.h"
 #include "Transforms.h"
 #include "clang/ARCMigrate/ARCMT.h"
 #include "clang/ARCMigrate/ARCMTActions.h"
@@ -1887,112 +1886,7 @@ void ObjCMigrateASTConsumer::HandleTranslationUnit(ASTContext &Ctx) {
   }
 }
 
-//===----------------------------------------------------------------------===//
-// XCTMigrate
-//===----------------------------------------------------------------------===//
-namespace {
-
-class XCMTPPCallbacks : public PPCallbacks {
-  XCTMigrator *XCTM;
-
-public:
-  XCMTPPCallbacks() : XCTM(0) {}
-  void setMigrator(XCTMigrator *Mig) { XCTM = Mig; }
-
-  virtual void MacroExpands(const Token &MacroNameTok, const MacroDirective *MD,
-                            SourceRange Range, const MacroArgs *Args) {
-    XCTM->migrateMacro(MacroNameTok.getIdentifierInfo(), Range,
-                       MD->getMacroInfo()->getDefinitionLoc(), Args, MD);
-  }
-  virtual void InclusionDirective(SourceLocation HashLoc,
-                                  const Token &IncludeTok,
-                                  StringRef FileName,
-                                  bool IsAngled,
-                                  CharSourceRange FilenameRange,
-                                  const FileEntry *File,
-                                  StringRef SearchPath,
-                                  StringRef RelativePath,
-                                  const Module *Imported) {
-    XCTM->migrateInclude(FileName, FilenameRange, HashLoc, IsAngled);
-  }
-
-};
-
-class XCTMigrateASTConsumer : public ASTConsumer {
-  void migrateDecl(Decl *D);
-
-public:
-  std::string MigrateDir;
-  OwningPtr<edit::EditedSource> Editor;
-  FileRemapper &Remapper;
-  FileManager &FileMgr;
-  const PPConditionalDirectiveRecord *PPRec;
-  XCMTPPCallbacks &XCTMTPP;
-  OwningPtr<XCTMigrator> XCTM;
-
-  XCTMigrateASTConsumer(StringRef migrateDir,
-                        FileRemapper &remapper,
-                        FileManager &fileMgr,
-                        const PPConditionalDirectiveRecord *PPRec,
-                        XCMTPPCallbacks &XCTMTPP)
-  : MigrateDir(migrateDir),
-    Remapper(remapper), FileMgr(fileMgr), PPRec(PPRec), XCTMTPP(XCTMTPP) { }
-
-protected:
-  virtual void Initialize(ASTContext &Context) {
-    Editor.reset(new edit::EditedSource(Context.getSourceManager(),
-                                        Context.getLangOpts(),
-                                        PPRec));
-    XCTM.reset(new XCTMigrator(*Editor, Context));
-    XCTMTPP.setMigrator(XCTM.get());
-  }
-
-  virtual bool HandleTopLevelDecl(DeclGroupRef DG) {
-    for (DeclGroupRef::iterator I = DG.begin(), E = DG.end(); I != E; ++I)
-      migrateDecl(*I);
-    return true;
-  }
-  virtual void HandleInterestingDecl(DeclGroupRef DG) {
-    // Ignore decls from the PCH.
-  }
-  virtual void HandleTopLevelDeclInObjCContainer(DeclGroupRef DG) {
-    XCTMigrateASTConsumer::HandleTopLevelDecl(DG);
-  }
-
-  virtual void HandleTranslationUnit(ASTContext &Ctx);
-};
-}
-
-void XCTMigrateASTConsumer::migrateDecl(Decl *D) {
-  if (!D)
-    return;
-  if (isa<ObjCMethodDecl>(D))
-    return; // Wait for the ObjC container declaration.
-
-  XCTM->visit(D);
-}
-
-void XCTMigrateASTConsumer::HandleTranslationUnit(ASTContext &Ctx) {
-  std::string Error;
-  llvm::raw_fd_ostream OS(MigrateDir.c_str(), Error, llvm::sys::fs::F_Binary);
-  if (!Error.empty()) {
-    unsigned ID = Ctx.getDiagnostics().getDiagnosticIDs()->
-        getCustomDiagID(DiagnosticIDs::Error, Error);
-    Ctx.getDiagnostics().Report(ID);
-    return;
-  }
-
-  JSONEditWriter Writer(Ctx.getSourceManager(), OS);
-  Editor->applyRewrites(Writer);
-}
-
-//===----------------------------------------------------------------------===//
-// MigrateSourceAction
-//===----------------------------------------------------------------------===//
-
 bool MigrateSourceAction::BeginInvocation(CompilerInstance &CI) {
-  if (CI.getFrontendOpts().XCTMigrate)
-    XCTMigrator::handleInvocation(CI);
   CI.getDiagnostics().setIgnoreAllWarnings(true);
   return true;
 }
@@ -2032,14 +1926,6 @@ ASTConsumer *MigrateSourceAction::CreateASTConsumer(CompilerInstance &CI,
                     FrontendOptions::ObjCMT_Subscripting;
   }
   CI.getPreprocessor().addPPCallbacks(PPRec);
-  if (CI.getFrontendOpts().XCTMigrate) {
-    XCMTPPCallbacks *XCTMTPP = new XCMTPPCallbacks();
-    CI.getPreprocessor().addPPCallbacks(XCTMTPP);
-    return new XCTMigrateASTConsumer(CI.getFrontendOpts().OutputFile,
-                                     Remapper,
-                                     CI.getFileManager(),
-                                     PPRec, *XCTMTPP);
-  }
   std::vector<std::string> WhiteList =
     getWhiteListFilenames(CI.getFrontendOpts().ObjCMTWhiteListPath);
   return new ObjCMigrateASTConsumer(CI.getFrontendOpts().OutputFile,

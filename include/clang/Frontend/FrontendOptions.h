@@ -192,9 +192,6 @@ public:
   unsigned ObjCMTAction;
   std::string ObjCMTWhiteListPath;
 
-  /// \brief Enable migration to XCTest framework.
-  bool XCTMigrate;
-
   std::string MTMigrateDir;
   std::string ARCMTMigrateReportOut;
 
@@ -250,7 +247,7 @@ public:
     FixToTemporaries(false), ARCMTMigrateEmitARCErrors(false),
     SkipFunctionBodies(false), UseGlobalModuleIndex(true),
     GenerateGlobalModuleIndex(true), ASTDumpLookups(false),
-    ARCMTAction(ARCMT_None), ObjCMTAction(ObjCMT_None), XCTMigrate(false),
+    ARCMTAction(ARCMT_None), ObjCMTAction(ObjCMT_None),
     ProgramAction(frontend::ParseSyntaxOnly)
   {}
 

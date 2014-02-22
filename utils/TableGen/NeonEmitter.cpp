@@ -2620,12 +2620,6 @@ void NeonEmitter::run(raw_ostream &OS) {
   OS << "#ifndef __ARM_NEON_H\n";
   OS << "#define __ARM_NEON_H\n\n";
 
-  // The ARM64 port's definitions are in aarch64_simd.h, the AArch64 definitions
-  // are here.
-  OS << "#if defined(__arm64)\n";
-  OS << "#include \"aarch64_simd.h\"\n";
-  OS << "#else\n\n";
-
   OS << "#if !defined(__ARM_NEON)\n";
   OS << "#error \"NEON support not enabled\"\n";
   OS << "#endif\n\n";
@@ -2771,7 +2765,6 @@ void NeonEmitter::run(raw_ostream &OS) {
     OS << "#endif\n\n";
 
   OS << "#undef __ai\n\n";
-  OS << "#endif /* not __arm64 */\n\n";
   OS << "#endif /* __ARM_NEON_H */\n";
 }
 
@@ -3213,8 +3206,7 @@ void NeonEmitter::genBuiltinsDef(raw_ostream &OS) {
     }
   }
 
-  // Generate BuiltinsNEON in alphabetical order now that we have the complete
-  // list.
+  // Generate BuiltinsNEON.
   OS << "#ifdef GET_NEON_BUILTINS\n";
 
   for (std::map<std::string, OpKind>::iterator I = EmittedMap.begin(),

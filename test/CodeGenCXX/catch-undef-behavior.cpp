@@ -142,6 +142,12 @@ int lsh_overflow(int a, int b) {
   return a << b;
 }
 
+// CHECK: @_Z9no_return
+int no_return() {
+  // CHECK:      call void @__ubsan_handle_missing_return(i8* bitcast ({{.*}}* @{{.*}} to i8*)) [[NR_NUW:#[0-9]+]]
+  // CHECK-NEXT: unreachable
+}
+
 // CHECK: @_Z9sour_bool
 bool sour_bool(bool *p) {
   // CHECK: %[[OK:.*]] = icmp ule i8 {{.*}}, 1
@@ -466,3 +472,5 @@ namespace CopyValueRepresentation {
     s52 = s51;
   }
 }
+
+// CHECK: attributes [[NR_NUW]] = { noreturn nounwind }

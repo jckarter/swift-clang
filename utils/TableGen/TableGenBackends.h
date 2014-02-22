@@ -62,13 +62,6 @@ void EmitNeon(RecordKeeper &Records, raw_ostream &OS);
 void EmitNeonSema(RecordKeeper &Records, raw_ostream &OS);
 void EmitNeonTest(RecordKeeper &Records, raw_ostream &OS);
 
-void EmitARM64Neon(RecordKeeper &Records, raw_ostream &OS,
-                   bool IsARM64 = false);
-void EmitARM64NeonSema(RecordKeeper &Records, raw_ostream &OS,
-                       bool IsARM64 = false);
-void EmitARM64NeonTest(RecordKeeper &Records, raw_ostream &OS,
-                       bool IsARM64 = false);
-
 void EmitClangAttrDocs(RecordKeeper &Records, raw_ostream &OS);
 
 } // end namespace clang

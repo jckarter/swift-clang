@@ -162,9 +162,6 @@ def objcmt_migrate_literals : Flag<["-"], "objcmt-migrate-literals">, Flags<[CC1
   HelpText<"Enable migration to modern ObjC literals">;
 def objcmt_migrate_subscripting : Flag<["-"], "objcmt-migrate-subscripting">, Flags<[CC1Option]>,
   HelpText<"Enable migration to modern ObjC subscripting">;
-def _migrate_xct : Flag<["--"], "migrate-xct">, Flags<[DriverOption]>,
-  HelpText<"Apply modifications and produces temporary files to migrate to "
-   "XCTest framework">;
 def objcmt_migrate_property : Flag<["-"], "objcmt-migrate-property">, Flags<[CC1Option]>,
   HelpText<"Enable migration to modern ObjC property">;
 def objcmt_migrate_all : Flag<["-"], "objcmt-migrate-all">, Flags<[CC1Option]>,
@@ -360,10 +357,10 @@ def fapple_kext : Flag<["-"], "fapple-kext">, Group<f_Group>, Flags<[CC1Option]>
   HelpText<"Use Apple's kernel extensions ABI">;
 def fapple_pragma_pack : Flag<["-"], "fapple-pragma-pack">, Group<f_Group>, Flags<[CC1Option]>,
   HelpText<"Enable Apple gcc-compatible #pragma pack handling">;
-def faddress_sanitizer : Flag<["-"], "faddress-sanitizer">, Group<f_Group>, Flags<[Unsupported]>;
-def fno_address_sanitizer : Flag<["-"], "fno-address-sanitizer">, Group<f_Group>, Flags<[Unsupported]>;
-def fthread_sanitizer : Flag<["-"], "fthread-sanitizer">, Group<f_Group>, Flags<[Unsupported]>;
-def fno_thread_sanitizer : Flag<["-"], "fno-thread-sanitizer">, Group<f_Group>, Flags<[Unsupported]>;
+def faddress_sanitizer : Flag<["-"], "faddress-sanitizer">, Group<f_Group>;
+def fno_address_sanitizer : Flag<["-"], "fno-address-sanitizer">, Group<f_Group>;
+def fthread_sanitizer : Flag<["-"], "fthread-sanitizer">, Group<f_Group>;
+def fno_thread_sanitizer : Flag<["-"], "fno-thread-sanitizer">, Group<f_Group>;
 def fasm : Flag<["-"], "fasm">, Group<f_Group>;
 
 def fasm_blocks : Flag<["-"], "fasm-blocks">, Group<f_Group>, Flags<[CC1Option]>;
@@ -484,6 +481,7 @@ def fno_signaling_math : Flag<["-"], "fno-signaling-math">, Group<f_Group>;
 def fsanitize_EQ : CommaJoined<["-"], "fsanitize=">, Group<f_clang_Group>,
                    Flags<[CC1Option, CoreOption]>, MetaVarName<"<check>">,
                    HelpText<"Enable runtime instrumentation for bug detection: "
+                            "address (memory errors) | thread (race detection) | "
                             "undefined (miscellaneous undefined behavior)">;
 def fno_sanitize_EQ : CommaJoined<["-"], "fno-sanitize=">, Group<f_clang_Group>;
 def fsanitize_blacklist : Joined<["-"], "fsanitize-blacklist=">,

@@ -468,7 +468,6 @@ static bool isSignedCharDefault(const llvm::Triple &Triple) {
 
   case llvm::Triple::aarch64:
   case llvm::Triple::arm:
-  case llvm::Triple::arm64:
   case llvm::Triple::ppc:
   case llvm::Triple::ppc64:
     if (Triple.isOSDarwin())
@@ -841,62 +840,6 @@ void Clang::AddARMTargetArgs(const ArgList &Args,
       CmdArgs.push_back("-backend-option");
       CmdArgs.push_back("-arm-reserve-r9");
     }
-}
-
-/// getARM64TargetCPU - Get the (LLVM) name of the ARM64 cpu we are targeting.
-static std::string getARM64TargetCPU(const ArgList &Args) {
-  // If we have -mcpu=, use that.
-  if (Arg *A = Args.getLastArg(options::OPT_mcpu_EQ)) {
-    StringRef MCPU = A->getValue();
-    // Handle -mcpu=native.
-    if (MCPU == "native")
-      return llvm::sys::getHostCPUName();
-    else
-      return MCPU;
-  }
-
-  // At some point, we may need to check -march here, but for now we only
-  // one arm64 architecture.
-
-  // Default to "cyclone" CPU.
-  return "cyclone";
-}
-
-void Clang::AddARM64TargetArgs(const ArgList &Args,
-                               ArgStringList &CmdArgs) const {
-  std::string TripleStr = getToolChain().ComputeEffectiveClangTriple(Args);
-  llvm::Triple Triple(TripleStr);
-
-  if (!Args.hasFlag(options::OPT_mred_zone,
-                    options::OPT_mno_red_zone,
-                    true) ||
-      Args.hasArg(options::OPT_mkernel) ||
-      Args.hasArg(options::OPT_fapple_kext))
-    CmdArgs.push_back("-disable-red-zone");
-
-  if (!Args.hasFlag(options::OPT_mimplicit_float,
-                    options::OPT_mno_implicit_float,
-                    true))
-    CmdArgs.push_back("-no-implicit-float");
-
-  const char *ABIName = 0;
-  if (Arg *A = Args.getLastArg(options::OPT_mabi_EQ))
-    ABIName = A->getValue();
-  else if (Triple.isOSDarwin())
-    ABIName = "darwinpcs";
-  else
-    ABIName = "aapcs";
-
-  CmdArgs.push_back("-target-abi");
-  CmdArgs.push_back(ABIName);
-
-  CmdArgs.push_back("-target-cpu");
-  CmdArgs.push_back(Args.MakeArgString(getARM64TargetCPU(Args)));
-
-  if (Args.hasArg(options::OPT_mstrict_align)) {
-    CmdArgs.push_back("-backend-option");
-    CmdArgs.push_back("-arm64-strict-align");
-  }
 }
 
 // Get CPU and ABI names. They are not independent
@@ -2136,11 +2079,6 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
   std::string TripleStr = getToolChain().ComputeEffectiveClangTriple(Args);
   CmdArgs.push_back(Args.MakeArgString(TripleStr));
 
-  // Push all default warning arguments that are specific to
-  // the given target.  These come before user provided warning options
-  // are provided.
-  getToolChain().addClangWarningOptions(CmdArgs);
-  
   // Select the appropriate action.
   RewriteKind rewriteKind = RK_None;
   
@@ -2344,8 +2282,7 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
   // PIC or PIE options above, if these show up, PIC is disabled.
   llvm::Triple Triple(TripleStr);
   if (KernelOrKext &&
-      (!Triple.isiOS() || Triple.isOSVersionLT(6) ||
-       Triple.getArch() == llvm::Triple::arm64))
+      (!Triple.isiOS() || Triple.isOSVersionLT(6)))
     PIC = PIE = false;
   if (Args.hasArg(options::OPT_static))
     PIC = PIE = false;
@@ -2661,10 +2598,6 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
     AddARMTargetArgs(Args, CmdArgs, KernelOrKext);
     break;
 
-  case llvm::Triple::arm64:
-    AddARM64TargetArgs(Args, CmdArgs);
-    break;
-
   case llvm::Triple::mips:
   case llvm::Triple::mipsel:
   case llvm::Triple::mips64:
@@ -2925,9 +2858,6 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
     Args.AddLastArg(CmdArgs, options::OPT_objcmt_migrate_designated_init);
     Args.AddLastArg(CmdArgs, options::OPT_objcmt_whitelist_dir_path);
   }
-
-  if (Args.hasArg(options::OPT__migrate_xct))
-    CmdArgs.push_back("-migration-for-xct");
 
   // Add preprocessing options like -I, -D, etc. if we are using the
   // preprocessor.
@@ -4784,10 +4714,6 @@ const char *arm::getARMCPUForMArch(const ArgList &Args,
     .Cases("armv7", "armv7a", "armv7-a", "cortex-a8")
     .Cases("thumbv7", "thumbv7a", "cortex-a8")
     .Cases("armv7l", "armv7-l", "cortex-a8")
-#ifndef __OPEN_SOURCE__
-    .Cases("armv7k", "armv7-k", "pj4b")
-    .Case("thumbv7k", "pj4b")
-#endif // !__OPEN_SOURCE__
     .Cases("armv7s", "armv7-s", "swift")
     .Cases("armv7r", "armv7-r", "cortex-r4")
     .Case("thumbv7r", "cortex-r4")
@@ -4871,11 +4797,7 @@ const char *arm::getLLVMArchSuffixForARM(StringRef CPU) {
     .Case("cortex-m0", "v6m")
     .Case("cortex-m3", "v7m")
     .Case("cortex-m4", "v7em")
-#ifndef __OPEN_SOURCE__
-    .Case("pj4b", "v7k")
-#endif // !__OPEN_SOURCE__
     .Case("swift", "v7s")
-    .Case("cyclone", "v8")
     .Cases("cortex-a53", "cortex-a57", "v8")
     .Default("");
 }
@@ -4910,16 +4832,9 @@ llvm::Triple::ArchType darwin::getArchTypeForMachOArchName(StringRef Str) {
     .Cases("arm", "armv4t", "armv5", "armv6", "armv6m", llvm::Triple::arm)
     .Cases("armv7", "armv7em", "armv7k", "armv7m", llvm::Triple::arm)
     .Cases("armv7s", "xscale", llvm::Triple::arm)
-    .Case("arm64", llvm::Triple::arm64)
     .Case("r600", llvm::Triple::r600)
     .Case("nvptx", llvm::Triple::nvptx)
     .Case("nvptx64", llvm::Triple::nvptx64)
-#ifndef __OPEN_SOURCE__
-    .Case("igil32", llvm::Triple::igil32)
-    .Case("igil64", llvm::Triple::igil64)
-#endif // !__OPEN_SOURCE__
-    .Case("gpu_32", llvm::Triple::gpu_32)
-    .Case("gpu_64", llvm::Triple::gpu_64)
     .Case("amdil", llvm::Triple::amdil)
     .Case("spir", llvm::Triple::spir)
     .Default(llvm::Triple::UnknownArch);
@@ -6649,8 +6564,7 @@ static StringRef getLinuxDynamicLinker(const ArgList &Args,
   } else if (ToolChain.getArch() == llvm::Triple::x86 ||
              ToolChain.getArch() == llvm::Triple::sparc)
     return "/lib/ld-linux.so.2";
-  else if (ToolChain.getArch() == llvm::Triple::aarch64 ||
-           ToolChain.getArch() == llvm::Triple::arm64)
+  else if (ToolChain.getArch() == llvm::Triple::aarch64)
     return "/lib/ld-linux-aarch64.so.1";
   else if (ToolChain.getArch() == llvm::Triple::arm ||
            ToolChain.getArch() == llvm::Triple::thumb) {
@@ -6743,8 +6657,7 @@ void gnutools::Link::ConstructJob(Compilation &C, const JobAction &JA,
   CmdArgs.push_back("-m");
   if (ToolChain.getArch() == llvm::Triple::x86)
     CmdArgs.push_back("elf_i386");
-  else if (ToolChain.getArch() == llvm::Triple::aarch64 ||
-           ToolChain.getArch() == llvm::Triple::arm64)
+  else if (ToolChain.getArch() == llvm::Triple::aarch64)
     CmdArgs.push_back("aarch64linux");
   else if (ToolChain.getArch() == llvm::Triple::arm
            ||  ToolChain.getArch() == llvm::Triple::thumb)

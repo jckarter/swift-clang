@@ -843,9 +843,6 @@ static InputKind ParseFrontendArgs(FrontendOptions &Opts, ArgList &Args,
       << "ARC migration" << "ObjC migration";
   }
 
-  if (Args.hasArg(OPT_migration_for_xct))
-    Opts.XCTMigrate = true;
-
   InputKind DashX = IK_None;
   if (const Arg *A = Args.getLastArg(OPT_x)) {
     DashX = llvm::StringSwitch<InputKind>(A->getValue())

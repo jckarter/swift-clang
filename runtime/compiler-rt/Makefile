@@ -81,9 +81,9 @@ ifeq ($(OS),Darwin)
 RuntimeDirs += darwin macho_embedded
 RuntimeLibrary.darwin.Configs := \
 	eprintf.a 10.4.a osx.a ios.a cc_kext.a cc_kext_ios5.a \
-	profile_osx.a profile_ios.a
-#	Apple Internal: Disable building asan libraries. <rdar://12423266>
-#	asan_osx_dynamic.dylib ubsan_osx.a
+	asan_osx_dynamic.dylib \
+	profile_osx.a profile_ios.a \
+	ubsan_osx.a
 
 RuntimeLibrary.macho_embedded.Configs := \
 	hard_static.a hard_pic.a
@@ -103,8 +103,7 @@ COMPILERRT_MAKE_FLAGS := SDKROOT=$(ACTIVE_SDK_PATH)
 endif
 IOSSIM_SDK_PATH := $(shell xcrun --show-sdk-path -sdk iphonesimulator 2> /dev/null)
 ifneq ($(IOSSIM_SDK_PATH),)
-#	Apple Internal: Disable building asan libraries. <rdar://12423266>
-# RuntimeLibrary.darwin.Configs += asan_iossim_dynamic.dylib
+RuntimeLibrary.darwin.Configs += asan_iossim_dynamic.dylib
 endif
 
 endif

@@ -218,6 +218,21 @@ int signed_overflow(int a, int b) {
   return a + b;
 }
 
+// CHECK: @no_return
+// CHECK-TRAP: @no_return
+int no_return() {
+  // Reaching the end of a noreturn function is fine in C.
+  // FIXME: If the user explicitly requests -fsanitize=return, we should catch
+  //        that here even though it's not undefined behavior.
+  // CHECK-NOT: call
+  // CHECK-NOT: unreachable
+  // CHECK: ret i32
+
+  // CHECK-TRAP-NOT: call
+  // CHECK-TRAP-NOT: unreachable
+  // CHECK-TRAP: ret i32
+}
+
 // CHECK: @vla_bound
 void vla_bound(int n) {
   // CHECK:      icmp sgt i32 %[[PARAM:.*]], 0

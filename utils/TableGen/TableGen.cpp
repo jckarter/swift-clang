@@ -52,9 +52,6 @@ enum ActionType {
   GenArmNeon,
   GenArmNeonSema,
   GenArmNeonTest,
-  GenArm64SIMD,
-  GenArm64SIMDSema,
-  GenArm64SIMDTest,
   GenAttrDocs
 };
 
@@ -133,12 +130,6 @@ cl::opt<ActionType> Action(
                    "Generate ARM NEON sema support for clang"),
         clEnumValN(GenArmNeonTest, "gen-arm-neon-test",
                    "Generate ARM NEON tests for clang"),
-        clEnumValN(GenArm64SIMD, "gen-arm64-simd",
-                   "Generate aarch64_simd.h for clang"),
-        clEnumValN(GenArm64SIMDSema, "gen-arm64-simd-sema",
-                   "Generate ARM64 SIMD sema support for clang"),
-        clEnumValN(GenArm64SIMDTest, "gen-arm64-simd-test",
-                   "Generate ARM64 SIMD tests for clang"),
         clEnumValN(GenAttrDocs, "gen-attr-docs",
                    "Generate attribute documentation"),
         clEnumValEnd));
@@ -238,14 +229,6 @@ bool ClangTableGenMain(raw_ostream &OS, RecordKeeper &Records) {
   case GenArmNeonTest:
     EmitNeonTest(Records, OS);
     break;
-  case GenArm64SIMD:
-    EmitARM64Neon(Records, OS, true);
-    break;
-  case GenArm64SIMDSema:
-    EmitARM64NeonSema(Records, OS, true);
-    break;
-  case GenArm64SIMDTest:
-    EmitARM64NeonTest(Records, OS, true);
   case GenAttrDocs:
     EmitClangAttrDocs(Records, OS);
     break;

@@ -306,10 +306,6 @@ Sema::CheckBuiltinFunctionCall(unsigned BuiltinID, CallExpr *TheCall) {
         if (CheckARMBuiltinFunctionCall(BuiltinID, TheCall))
           return ExprError();
         break;
-      case llvm::Triple::arm64:
-        if (CheckARM64BuiltinFunctionCall(BuiltinID, TheCall))
-          return ExprError();
-        break;
       case llvm::Triple::aarch64:
         if (CheckAArch64BuiltinFunctionCall(BuiltinID, TheCall))
           return ExprError();
@@ -483,15 +479,11 @@ bool Sema::CheckAArch64BuiltinFunctionCall(unsigned BuiltinID,
   return false;
 }
 
-bool Sema::CheckARMBuiltinExclusiveCall(unsigned BuiltinID, CallExpr *TheCall,
-                                        unsigned MaxWidth) {
+bool Sema::CheckARMBuiltinExclusiveCall(unsigned BuiltinID, CallExpr *TheCall) {
   assert((BuiltinID == ARM::BI__builtin_arm_ldrex ||
-          BuiltinID == ARM::BI__builtin_arm_strex ||
-          BuiltinID == ARM64::BI__builtin_arm_ldrex ||
-          BuiltinID == ARM64::BI__builtin_arm_strex) &&
+          BuiltinID == ARM::BI__builtin_arm_strex) &&
          "unexpected ARM builtin");
-  bool IsLdrex = BuiltinID == ARM::BI__builtin_arm_ldrex ||
-                 BuiltinID == ARM64::BI__builtin_arm_ldrex;
+  bool IsLdrex = BuiltinID == ARM::BI__builtin_arm_ldrex;
 
   DeclRefExpr *DRE =cast<DeclRefExpr>(TheCall->getCallee()->IgnoreParenCasts());
 
@@ -552,8 +544,7 @@ bool Sema::CheckARMBuiltinExclusiveCall(unsigned BuiltinID, CallExpr *TheCall,
   }
 
   // But ARM doesn't have instructions to deal with 128-bit versions.
-  if (Context.getTypeSize(ValType) > MaxWidth) {
-    assert(MaxWidth == 64 && "Diagnostic unexpectedly inaccurate");
+  if (Context.getTypeSize(ValType) > 64) {
     Diag(DRE->getLocStart(), diag::err_atomic_exclusive_builtin_pointer_size)
       << PointerArg->getType() << PointerArg->getSourceRange();
     return true;
@@ -599,13 +590,13 @@ bool Sema::CheckARMBuiltinFunctionCall(unsigned BuiltinID, CallExpr *TheCall) {
 
   if (BuiltinID == ARM::BI__builtin_arm_ldrex ||
       BuiltinID == ARM::BI__builtin_arm_strex) {
-    return CheckARMBuiltinExclusiveCall(BuiltinID, TheCall, 64);
+    return CheckARMBuiltinExclusiveCall(BuiltinID, TheCall);
   }
 
   if (CheckNeonBuiltinFunctionCall(BuiltinID, TheCall))
     return true;
 
-  // For NEON intrinsics which take an immediate value as part of the
+  // For NEON intrinsics which take an immediate value as part of the 
   // instruction, range check them here.
   unsigned i = 0, l = 0, u = 0;
   switch (BuiltinID) {
@@ -634,86 +625,6 @@ bool Sema::CheckARMBuiltinFunctionCall(unsigned BuiltinID, CallExpr *TheCall) {
       << l << u+l << TheCall->getArg(i)->getSourceRange();
 
   // FIXME: VFP Intrinsics should error if VFP not present.
-  return false;
-}
-
-#define GET_NEON_IMMEDIATE_CHECK
-#include "clang/Basic/arm64_simd.inc"
-#undef GET_NEON_IMMEDIATE_CHECK
-
-bool Sema::CheckARM64BuiltinFunctionCall(unsigned BuiltinID,
-                                         CallExpr *TheCall) {
-  llvm::APSInt Result;
-
-  if (BuiltinID == ARM64::BI__builtin_arm_ldrex ||
-      BuiltinID == ARM64::BI__builtin_arm_strex) {
-    return CheckARMBuiltinExclusiveCall(BuiltinID, TheCall, 128);
-  }
-
-  uint64_t mask = 0;
-  unsigned TV = 0;
-  int PtrArgNum = -1;
-  bool HasConstPtr = false;
-  switch (BuiltinID) {
-#define GET_NEON_OVERLOAD_CHECK
-#include "clang/Basic/arm64_simd.inc"
-#undef GET_NEON_OVERLOAD_CHECK
-  }
-
-  // For SIMD intrinsics which are overloaded on vector element type, validate
-  // the immediate which specifies which variant to emit.
-  unsigned ImmArg = TheCall->getNumArgs()-1;
-  if (mask) {
-    if (SemaBuiltinConstantArg(TheCall, ImmArg, Result))
-      return true;
-
-    TV = Result.getLimitedValue(64);
-    if ((TV > 63) || (mask & (1ULL << TV)) == 0)
-      return Diag(TheCall->getLocStart(), diag::err_invalid_neon_type_code)
-        << TheCall->getArg(ImmArg)->getSourceRange();
-  }
-
-  if (PtrArgNum >= 0) {
-    // Check that pointer arguments have the specified type.
-    Expr *Arg = TheCall->getArg(PtrArgNum);
-    if (ImplicitCastExpr *ICE = dyn_cast<ImplicitCastExpr>(Arg))
-      Arg = ICE->getSubExpr();
-    ExprResult RHS = DefaultFunctionArrayLvalueConversion(Arg);
-    QualType RHSTy = RHS.get()->getType();
-    QualType EltTy = getNeonEltType(NeonTypeFlags(TV), Context, false);
-    if (HasConstPtr)
-      EltTy = EltTy.withConst();
-    QualType LHSTy = Context.getPointerType(EltTy);
-    AssignConvertType ConvTy;
-    ConvTy = CheckSingleAssignmentConstraints(LHSTy, RHS);
-    if (RHS.isInvalid())
-      return true;
-    if (DiagnoseAssignmentResult(ConvTy, Arg->getLocStart(), LHSTy, RHSTy,
-                                 RHS.get(), AA_Assigning))
-      return true;
-  }
-  
-  // For SIMD intrinsics which take an immediate value as part of the
-  // instruction, range check them here.
-  unsigned i = 0, l = 0, u = 0;
-  for (unsigned Idx = 0;
-       ARM64GetNEONImmediateCheckValues(BuiltinID, TV, Idx, i, l, u); ++Idx) {
-    // We can't check the value of a dependent argument.
-    if (TheCall->getArg(i)->isTypeDependent() ||
-        TheCall->getArg(i)->isValueDependent())
-      continue;
-
-    // Check that the immediate argument is actually a constant.
-    if (SemaBuiltinConstantArg(TheCall, i, Result))
-      return true;
-
-    // Range check against the upper/lower values for this isntruction.
-    unsigned Val = Result.getZExtValue();
-    if (Val < l || Val > (u + l))
-      return Diag(TheCall->getLocStart(), diag::err_argument_invalid_range)
-        << l << u+l << TheCall->getArg(i)->getSourceRange();
-  }
-
   return false;
 }
 

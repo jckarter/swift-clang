@@ -4714,19 +4714,13 @@ static void HandleExtVectorTypeAttr(QualType &CurType,
 
 static bool isPermittedNeonBaseType(QualType &Ty,
                                     VectorType::VectorKind VecKind,
-                                    Sema &S) {
+                                    bool IsAArch64) {
   const BuiltinType *BTy = Ty->getAs<BuiltinType>();
   if (!BTy)
     return false;
 
-  llvm::Triple Triple = S.Context.getTargetInfo().getTriple();
-
-  // Signed poly is mathematically wrong, but has been baked into some ABIs by
-  // now.
-  bool IsPolyUnsigned = Triple.getArch() == llvm::Triple::aarch64 ||
-                        Triple.getArch() == llvm::Triple::arm64;
   if (VecKind == VectorType::NeonPolyVector) {
-    if (IsPolyUnsigned) {
+    if (IsAArch64) {
       // AArch64 polynomial vectors are unsigned and support poly64.
       return BTy->getKind() == BuiltinType::UChar ||
              BTy->getKind() == BuiltinType::UShort ||
@@ -4741,10 +4735,7 @@ static bool isPermittedNeonBaseType(QualType &Ty,
 
   // Non-polynomial vector types: the usual suspects are allowed, as well as
   // float64_t on AArch64.
-  bool Is64Bit = Triple.getArch() == llvm::Triple::aarch64 ||
-                 Triple.getArch() == llvm::Triple::arm64;
-
-  if (Is64Bit && BTy->getKind() == BuiltinType::Double)
+  if (IsAArch64 && BTy->getKind() == BuiltinType::Double)
     return true;
 
   return BTy->getKind() == BuiltinType::SChar ||
@@ -4796,7 +4787,10 @@ static void HandleNeonVectorTypeAttr(QualType& CurType,
     return;
   }
   // Only certain element types are supported for Neon vectors.
-  if (!isPermittedNeonBaseType(CurType, VecKind, S)) {
+  llvm::Triple::ArchType Arch =
+        S.Context.getTargetInfo().getTriple().getArch();
+  if (!isPermittedNeonBaseType(CurType, VecKind,
+                               Arch == llvm::Triple::aarch64)) {
     S.Diag(Attr.getLoc(), diag::err_attribute_invalid_vector_type) << CurType;
     Attr.setInvalid();
     return;

@@ -23,7 +23,6 @@ add_clang_library(clangARCMigrate
   TransZeroOutPropsInDealloc.cpp
   TransformActions.cpp
   Transforms.cpp
-  XCTMT.cpp
   )
 
 target_link_libraries(clangARCMigrate

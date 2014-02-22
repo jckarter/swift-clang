@@ -70,9 +70,6 @@ def err_fe_no_pch_in_dir : Error<
 def err_fe_action_not_available : Error<
     "action %0 not compiled in">;
 
-def err_fe_objc_gc_not_supported : Error<
-  "garbage collection is no longer supported">;
-
 def warn_fe_serialized_diag_failure : Warning<
     "unable to open file %0 for serializing diagnostics (%1)">,
     InGroup<DiagGroup<"serialized-diagnostics">>;

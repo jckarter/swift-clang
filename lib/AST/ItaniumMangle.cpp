@@ -2162,14 +2162,8 @@ void CXXNameMangler::mangleNeonVectorType(const VectorType *T) {
   const char *EltName = 0;
   if (T->getVectorKind() == VectorType::NeonPolyVector) {
     switch (cast<BuiltinType>(EltType)->getKind()) {
-    case BuiltinType::SChar:
-    case BuiltinType::UChar:
-      EltName = "poly8_t";
-      break;
-    case BuiltinType::Short:
-    case BuiltinType::UShort:
-      EltName = "poly16_t";
-      break;
+    case BuiltinType::SChar:     EltName = "poly8_t"; break;
+    case BuiltinType::Short:     EltName = "poly16_t"; break;
     default: llvm_unreachable("unexpected Neon polynomial vector element type");
     }
   } else {
@@ -2182,7 +2176,6 @@ void CXXNameMangler::mangleNeonVectorType(const VectorType *T) {
     case BuiltinType::UInt:      EltName = "uint32_t"; break;
     case BuiltinType::LongLong:  EltName = "int64_t"; break;
     case BuiltinType::ULongLong: EltName = "uint64_t"; break;
-    case BuiltinType::Double:    EltName = "float64_t"; break;
     case BuiltinType::Float:     EltName = "float32_t"; break;
     case BuiltinType::Half:      EltName = "float16_t";break;
     default:
@@ -2210,7 +2203,6 @@ static StringRef mangleAArch64VectorBase(const BuiltinType *EltType) {
     return "Int16";
   case BuiltinType::Int:
     return "Int32";
-  case BuiltinType::Long:
   case BuiltinType::LongLong:
     return "Int64";
   case BuiltinType::UChar:
@@ -2219,7 +2211,6 @@ static StringRef mangleAArch64VectorBase(const BuiltinType *EltType) {
     return "Uint16";
   case BuiltinType::UInt:
     return "Uint32";
-  case BuiltinType::ULong:
   case BuiltinType::ULongLong:
     return "Uint64";
   case BuiltinType::Half:
@@ -2280,9 +2271,8 @@ void CXXNameMangler::mangleAArch64NeonVectorType(const VectorType *T) {
 void CXXNameMangler::mangleType(const VectorType *T) {
   if ((T->getVectorKind() == VectorType::NeonVector ||
        T->getVectorKind() == VectorType::NeonPolyVector)) {
-    llvm::Triple Target = getASTContext().getTargetInfo().getTriple();
-    if (Target.getArch() == llvm::Triple::aarch64 ||
-        (Target.getArch() == llvm::Triple::arm64 && !Target.isOSDarwin()))
+    if (getASTContext().getTargetInfo().getTriple().getArch() ==
+        llvm::Triple::aarch64)
       mangleAArch64NeonVectorType(T);
     else
       mangleNeonVectorType(T);

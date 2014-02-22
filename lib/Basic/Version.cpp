@@ -116,8 +116,7 @@ std::string getClangFullRepositoryVersion() {
 }
 
 std::string getClangFullVersion() {
-  // Apple Internal: clang is the "Apple LLVM" compiler. rdar://12201399
-  return getClangToolFullVersion("LLVM");
+  return getClangToolFullVersion("clang");
 }
 
 std::string getClangToolFullVersion(StringRef ToolName) {
@@ -145,8 +144,7 @@ std::string getClangFullCPPVersion() {
 #ifdef CLANG_VENDOR
   OS << CLANG_VENDOR;
 #endif
-  // Apple Internal: clang is the "Apple LLVM" compiler. rdar://12201399
-  OS << "LLVM " CLANG_VERSION_STRING " " << getClangFullRepositoryVersion();
+  OS << "Clang " CLANG_VERSION_STRING " " << getClangFullRepositoryVersion();
   return OS.str();
 }
 
