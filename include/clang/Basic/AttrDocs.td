@@ -79,6 +79,7 @@ that appears to be capable of returning to its caller.
 
 def AssertCapabilityDocs : Documentation {
   let Category = DocCatFunction;
+  let Heading = "assert_capability (assert_shared_capability, clang::assert_capability, clang::assert_shared_capability)";
   let Content = [{
 Marks a function that dynamically tests whether a capability is held, and halts
 the program if it is not held.
@@ -87,6 +88,7 @@ the program if it is not held.
 
 def AcquireCapabilityDocs : Documentation {
   let Category = DocCatFunction;
+  let Heading = "acquire_capability (acquire_shared_capability, clang::acquire_capability, clang::acquire_shared_capability)";
   let Content = [{
 Marks a function as acquiring a capability.
   }];
@@ -94,6 +96,7 @@ Marks a function as acquiring a capability.
 
 def TryAcquireCapabilityDocs : Documentation {
   let Category = DocCatFunction;
+  let Heading = "try_acquire_capability (try_acquire_shared_capability, clang::try_acquire_capability, clang::try_acquire_shared_capability)";
   let Content = [{
 Marks a function that attemps to aquire a capability. This function may fail to
 actually acquire the capability; they accept a Boolean value determining
@@ -104,6 +107,7 @@ the capability means success (false).
 
 def ReleaseCapabilityDocs : Documentation {
   let Category = DocCatFunction;
+  let Heading = "release_capability (release_shared_capability, clang::release_capability, clang::release_shared_capability)";
   let Content = [{
 Marks a function as releasing a capability.
   }];
@@ -296,6 +300,49 @@ use the retaining behavior attributes (``ns_returns_retained``,
 ``ns_returns_not_retained``, etc).
 
 Query for this feature with ``__has_attribute(objc_method_family)``.
+  }];
+}
+
+def NoDuplicateDocs : Documentation {
+  let Category = DocCatFunction;
+  let Content = [{
+The ``noduplicate`` attribute can be placed on function declarations to control
+whether function calls to this function can be duplicated 
+or not as a result of optimizations. This is required for the implementation
+of functions with certain special requirements, like the OpenCL "barrier", 
+function that, depending on the hardware, might require to be run concurrently
+by all the threads that are currently executing in lockstep on the hardware.
+For example this attribute applied on the function "nodupfunc" 
+avoids that this code:
+
+.. code-block:: c
+
+  void nodupfunc() __attribute__((noduplicate));
+  // Setting it as a C++11 attribute is also valid
+  // void nodupfunc() [[clang::noduplicate]];
+  void foo();
+  void bar();
+
+  nodupfunc();
+  if (a > n) {
+    foo();
+  } else {
+    bar();
+  }
+
+gets possibly modified by some optimization into code similar to this:
+
+.. code-block:: c
+
+  if (a > n) {
+    nodupfunc();
+    foo();
+  } else {
+    nodupfunc();
+    bar();
+  }
+
+where the barrier call is duplicated and sunk into the two branches of the condition.
   }];
 }
 
