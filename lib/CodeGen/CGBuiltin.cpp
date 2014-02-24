@@ -1834,6 +1834,7 @@ enum {
   UnsignedAlts = (1 << 6),
 
   Use64BitVectors = (1 << 7),
+  Use128BitVectors = (1 << 8),
 
   Vectorize1ArgType = Add1ArgType | VectorizeArgTypes,
   VectorRet = AddRetType | VectorizeRetType,
@@ -2518,6 +2519,8 @@ static NeonIntrinsicInfo ARM64SIMDIntrinsicMap[] = {
 };
 
 static NeonIntrinsicInfo ARM64SISDIntrinsicMap[] = {
+  NEONMAP1(vqdmullh_s16, arm64_neon_sqdmull, VectorRet | Use128BitVectors),
+  NEONMAP1(vqdmulls_s32, arm64_neon_sqdmulls_scalar, 0),
   NEONMAP1(vqrshlb_s8, arm64_neon_sqrshl, Vectorize1ArgType | Use64BitVectors),
   NEONMAP1(vqrshlb_u8, arm64_neon_uqrshl, Vectorize1ArgType | Use64BitVectors),
   NEONMAP1(vqrshld_s64, arm64_neon_sqrshl, Add1ArgType),
@@ -2590,23 +2593,26 @@ Function *CodeGenFunction::LookupNeonLLVMIntrinsic(unsigned IntrinsicID,
                                                    unsigned Modifier,
                                                    llvm::Type *ArgType,
                                                    const CallExpr *E) {
+  int VectorSize = 0;
+  if (Modifier & Use64BitVectors)
+    VectorSize = 64;
+  else if (Modifier & Use128BitVectors)
+    VectorSize = 128;
+
   // Return type.
   SmallVector<llvm::Type *, 3> Tys;
   if (Modifier & AddRetType) {
     llvm::Type *Ty = ConvertType(E->getCallReturnType());
     if (Modifier & VectorizeRetType)
-      Ty = llvm::VectorType::get(Ty, (Modifier & Use64BitVectors)
-                                         ? 64 / Ty->getPrimitiveSizeInBits()
-                                         : 1);
+      Ty = llvm::VectorType::get(
+          Ty, VectorSize ? VectorSize / Ty->getPrimitiveSizeInBits() : 1);
 
     Tys.push_back(Ty);
   }
 
   // Arguments.
   if (Modifier & VectorizeArgTypes) {
-    int Elts = (Modifier & Use64BitVectors)
-                   ? 64 / ArgType->getPrimitiveSizeInBits()
-                   : 1;
+    int Elts = VectorSize ? VectorSize / ArgType->getPrimitiveSizeInBits() : 1;
     ArgType = llvm::VectorType::get(ArgType, Elts);
   }
 
@@ -4901,26 +4907,6 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     Value *Idx = EmitScalarExpr(E->getArg(2));
     Ops[1] = Builder.CreateExtractElement(Ops[1], Idx, "lane");
     return EmitNeonCall(CGM.getIntrinsic(Int), Ops, "vqdmulls");
-  }
-  case NEON::BI__builtin_neon_vqdmulls_s32: {
-    unsigned Int = Intrinsic::arm64_neon_sqdmulls_scalar;
-    Ops.push_back(EmitScalarExpr(E->getArg(1)));
-    return EmitNeonCall(CGM.getIntrinsic(Int), Ops, "vqdmulls");
-  }
-  case NEON::BI__builtin_neon_vqdmullh_s16: {
-    unsigned Int = Intrinsic::arm64_neon_sqdmull;
-    // i16 is not a legal types for ARM64, so we can't just use
-    // a normal overloaed intrinsic call for these scalar types. Instead
-    // we'll build 64-bit vectors w/ lane zero being our input values and
-    // perform the operation on that. The back end can pattern match directly
-    // to the scalar instruction.
-    Ops.push_back(EmitScalarExpr(E->getArg(1)));
-    Ops[0] = vectorWrapScalar16(Ops[0]);
-    Ops[1] = vectorWrapScalar16(Ops[1]);
-    llvm::Type *WideVTy = llvm::VectorType::get(Int32Ty, 4);
-    llvm::Constant *CI = ConstantInt::get(Int32Ty, 0);
-    Value *V = EmitNeonCall(CGM.getIntrinsic(Int, WideVTy), Ops, "vqdmullh");
-    return Builder.CreateExtractElement(V, CI, "lane0");
   }
   case NEON::BI__builtin_neon_vqaddb_u8:
     Ops.push_back(EmitScalarExpr(E->getArg(1)));

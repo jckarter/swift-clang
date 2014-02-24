@@ -149,3 +149,15 @@ int64_t test_vshld_s64(int64_t a, int64_t b) {
   return vshld_s64(a, b);
 // CHECK: sshl {{d[0-9]+}}, {{d[0-9]+}}, {{d[0-9]+}}
 }
+
+// CHECK: test_vqdmullh_s16
+int32_t test_vqdmullh_s16(int16_t a, int16_t b) {
+  return vqdmullh_s16(a, b);
+// CHECK: sqdmull.4s {{v[0-9]+}}, {{v[0-9]+}}, {{v[0-9]+}}
+}
+
+// CHECK: test_vqdmulls_s32
+int64_t test_vqdmulls_s32(int32_t a, int32_t b) {
+  return vqdmulls_s32(a, b);
+// CHECK: sqdmull {{d[0-9]+}}, {{s[0-9]+}}, {{s[0-9]+}}
+}
