@@ -509,3 +509,27 @@ float32_t test_vcvtxd_f32_f64(float64_t a) {
   return vcvtxd_f32_f64(a);
 // CHECK: fcvtxn {{s[0-9]+}}, {{d[0-9]+}}
 }
+
+// CHECK: test_vabds_f32
+float32_t test_vabds_f32(float32_t a, float32_t b) {
+  return vabds_f32(a, b);
+  // CHECK: fabd {{s[0-9]+}}, {{s[0-9]+}}
+}
+
+// CHECK: test_vabdd_f64
+float64_t test_vabdd_f64(float64_t a, float64_t b) {
+  return vabdd_f64(a, b);
+  // CHECK: fabd {{d[0-9]+}}, {{d[0-9]+}}
+}
+
+// CHECK: test_vmulxs_f32
+float32_t test_vmulxs_f32(float32_t a, float32_t b) {
+  return vmulxs_f32(a, b);
+  // CHECK: fmulx {{s[0-9]+}}, {{s[0-9]+}}
+}
+
+// CHECK: test_vmulxd_f64
+float64_t test_vmulxd_f64(float64_t a, float64_t b) {
+  return vmulxd_f64(a, b);
+  // CHECK: fmulx {{d[0-9]+}}, {{d[0-9]+}}
+}
