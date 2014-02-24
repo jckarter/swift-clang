@@ -1,10 +1,10 @@
 // RUN: %clang_cc1 -triple arm64-apple-darwin -fsyntax-only -ffreestanding -verify %s
 
-#include <aarch64_simd.h>
+#include <arm_neon.h>
 
 // rdar://13527900
 void vcopy_reject(float32x4_t vOut0, float32x4_t vAlpha, int t) {
-  vcopyq_lane_f32(vOut0, 1, vAlpha, t); // expected-error {{argument to '__builtin_neon_vcopyq_lane_v' must be a constant integer}}
+  vcopyq_laneq_f32(vOut0, 1, vAlpha, t); // expected-error {{argument to '__builtin_neon_vgetq_lane_f32' must be a constant integer}} expected-error {{initializing 'float32_t' (aka 'float') with an expression of incompatible type 'void'}}
 }
 
 // rdar://problem/15256199
