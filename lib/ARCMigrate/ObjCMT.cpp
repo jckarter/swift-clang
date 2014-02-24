@@ -1974,7 +1974,7 @@ void XCTMigrateASTConsumer::migrateDecl(Decl *D) {
 
 void XCTMigrateASTConsumer::HandleTranslationUnit(ASTContext &Ctx) {
   std::string Error;
-  llvm::raw_fd_ostream OS(MigrateDir.c_str(), Error, llvm::sys::fs::F_Binary);
+  llvm::raw_fd_ostream OS(MigrateDir.c_str(), Error, llvm::sys::fs::F_None);
   if (!Error.empty()) {
     unsigned ID = Ctx.getDiagnostics().getDiagnosticIDs()->
         getCustomDiagID(DiagnosticIDs::Error, Error);
