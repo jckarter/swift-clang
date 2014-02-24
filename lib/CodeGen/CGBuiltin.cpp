@@ -2446,6 +2446,7 @@ static NeonIntrinsicInfo ARM64SIMDIntrinsicMap[] = {
   NEONMAP2(vcvtq_n_f32_v, arm64_neon_vcvtfxu2fp, arm64_neon_vcvtfxs2fp, 0),
   NEONMAP2(vcvtq_n_f64_v, arm64_neon_vcvtfxu2fp, arm64_neon_vcvtfxs2fp, 0),
   NEONMAP1(vcvtq_n_s32_v, arm64_neon_vcvtfp2fxs, 0),
+  NEONMAP1(vcvtq_n_s64_v, arm64_neon_vcvtfp2fxs, 0),
   NEONMAP1(vcvtq_n_u32_v, arm64_neon_vcvtfp2fxu, 0),
   NEONMAP1(vcvtq_n_u64_v, arm64_neon_vcvtfp2fxu, 0),
   NEONMAP0(vext_v),
