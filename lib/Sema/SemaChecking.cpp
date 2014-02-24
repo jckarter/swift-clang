@@ -378,13 +378,17 @@ static QualType getNeonEltType(NeonTypeFlags Flags, ASTContext &Context,
   case NeonTypeFlags::Int32:
     return Flags.isUnsigned() ? Context.UnsignedIntTy : Context.IntTy;
   case NeonTypeFlags::Int64:
-    return Flags.isUnsigned() ? Context.UnsignedLongLongTy : Context.LongLongTy;
+    if (IsAArch64)
+      return Flags.isUnsigned() ? Context.UnsignedLongTy : Context.LongTy;
+    else
+      return Flags.isUnsigned() ? Context.UnsignedLongLongTy
+                                : Context.LongLongTy;
   case NeonTypeFlags::Poly8:
     return IsAArch64 ? Context.UnsignedCharTy : Context.SignedCharTy;
   case NeonTypeFlags::Poly16:
     return IsAArch64 ? Context.UnsignedShortTy : Context.ShortTy;
   case NeonTypeFlags::Poly64:
-    return Context.UnsignedLongLongTy;
+    return Context.UnsignedLongTy;
   case NeonTypeFlags::Poly128:
     break;
   case NeonTypeFlags::Float16:
@@ -4489,16 +4493,10 @@ Sema::CheckReturnValExpr(Expr *RetValExp, QualType lhsType,
   CheckReturnStackAddr(*this, RetValExp, lhsType, ReturnLoc);
 
   // Check if the return value is null but should not be.
-  if (Attrs)
-    for (specific_attr_iterator<ReturnsNonNullAttr>
-          I = specific_attr_iterator<ReturnsNonNullAttr>(Attrs->begin()),
-          E = specific_attr_iterator<ReturnsNonNullAttr>(Attrs->end());
-          I != E; ++I) {
-      if (CheckNonNullExpr(*this, RetValExp))
-        Diag(ReturnLoc, diag::warn_null_ret)
-          << (isObjCMethod ? 1 : 0) << RetValExp->getSourceRange();
-      break;
-    }
+  if (Attrs && hasSpecificAttr<ReturnsNonNullAttr>(*Attrs) &&
+      CheckNonNullExpr(*this, RetValExp))
+    Diag(ReturnLoc, diag::warn_null_ret)
+      << (isObjCMethod ? 1 : 0) << RetValExp->getSourceRange();
 
   // C++11 [basic.stc.dynamic.allocation]p4:
   //   If an allocation function declared with a non-throwing
@@ -7470,10 +7468,7 @@ bool GetMatchingCType(
     return false;
 
   if (VD) {
-    for (specific_attr_iterator<TypeTagForDatatypeAttr>
-             I = VD->specific_attr_begin<TypeTagForDatatypeAttr>(),
-             E = VD->specific_attr_end<TypeTagForDatatypeAttr>();
-         I != E; ++I) {
+    if (TypeTagForDatatypeAttr *I = VD->getAttr<TypeTagForDatatypeAttr>()) {
       if (I->getArgumentKind() != ArgumentKind) {
         FoundWrongKind = true;
         return false;
