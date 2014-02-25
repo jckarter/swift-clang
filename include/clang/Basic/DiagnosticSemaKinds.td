@@ -512,6 +512,8 @@ def err_duplicate_partial_class_decl : Error<
   "duplicate partial class declaration for class %0">;
 def err_partial_interface_in_super : Error<
   "attempting to use partial class %0 as base class in an implementation">;
+def err_partial_implementation : Error<
+  "attempting to implemenent %select{class|category}0 of partial class %1">;
 def err_undef_superclass : Error<
   "cannot find interface declaration for %0, superclass of %1">;
 def err_forward_superclass : Error<
@@ -546,7 +548,7 @@ def err_category_forward_interface : Error<
 def err_class_extension_after_impl : Error<
   "cannot declare class extension for %0 after class implementation">;
 def note_implementation_declared : Note<
-  "class implementation is declared here">;
+  "%select{class|category}0 implementation is declared here">;
 def note_while_in_implementation : Note<
   "detected while default synthesizing properties in class implementation">;
 def note_class_declared : Note<

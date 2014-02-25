@@ -1075,7 +1075,7 @@ ActOnStartCategoryInterface(SourceLocation AtInterfaceLoc,
   if (!CategoryName && IDecl->getImplementation()) {
     Diag(ClassLoc, diag::err_class_extension_after_impl) << ClassName;
     Diag(IDecl->getImplementation()->getLocation(), 
-          diag::note_implementation_declared);
+          diag::note_implementation_declared) << 0;
   }
 
   if (CategoryName) {
@@ -1107,6 +1107,28 @@ ActOnStartCategoryInterface(SourceLocation AtInterfaceLoc,
   return ActOnObjCContainerStartDefinition(CDecl);
 }
 
+static void
+DiagnosePartialClass(Sema &S, ObjCImplDecl *IC,
+                     ObjCInterfaceDecl *IDecl) {
+  if (!IDecl)
+    return;
+  if (IDecl->IsPartialInterface() && !IDecl->getCompleteDefinition()) {
+    S.Diag(IC->getLocation(), diag::err_partial_implementation)
+      << (isa<ObjCCategoryImplDecl>(IC)) << IDecl->getName();
+    S.Diag(IDecl->getLocation(), diag::note_class_declared);
+  }
+  ObjCInterfaceDecl *Super = IDecl->getSuperClass();
+  while (Super) {
+    if (Super->IsPartialInterface() && !Super->getCompleteDefinition()) {
+      S.Diag(Super->getLocation(), diag::err_partial_interface_in_super)
+      << Super->getDeclName();
+      S.Diag(IC->getLocation(), diag::note_implementation_declared)
+        << (isa<ObjCCategoryImplDecl>(IC));
+    }
+    Super = Super->getSuperClass();
+  }
+}
+
 /// ActOnStartCategoryImplementation - Perform semantic checks on the
 /// category implementation declaration and build an ObjCCategoryImplDecl
 /// object.
@@ -1127,7 +1149,6 @@ Decl *Sema::ActOnStartCategoryImplementation(
       CatIDecl->setImplicit();
     }
   }
-
   ObjCCategoryImplDecl *CDecl =
     ObjCCategoryImplDecl::Create(Context, CurContext, CatName, IDecl,
                                  ClassLoc, AtCatImplLoc, CatLoc);
@@ -1139,7 +1160,8 @@ Decl *Sema::ActOnStartCategoryImplementation(
                                  diag::err_undef_interface)) {
     CDecl->setInvalidDecl();
   }
-
+  DiagnosePartialClass(*this, CDecl, IDecl);
+  
   // FIXME: PushOnScopeChains?
   CurContext->addDecl(CDecl);
 
@@ -2689,20 +2711,6 @@ Sema::ObjCContainerKind Sema::getObjCContainerKind() const {
   }
 }
 
-static void
-DiagnosePartialClassInInheritance(Sema &S, ObjCImplementationDecl *IC,
-                                  ObjCInterfaceDecl *IDecl) {
-  ObjCInterfaceDecl *Super = IDecl->getSuperClass();
-  while (Super) {
-    if (Super->IsPartialInterface() && !Super->getCompleteDefinition()) {
-      S.Diag(Super->getLocation(), diag::err_partial_interface_in_super)
-        << Super->getDeclName();
-      S.Diag(IC->getLocation(), diag::note_implementation_declared);
-    }
-    Super = Super->getSuperClass();
-  }
-}
-
 // Note: For class/category implementations, allMethods is always null.
 Decl *Sema::ActOnAtEnd(Scope *S, SourceRange AtEnd, ArrayRef<Decl *> allMethods,
                        ArrayRef<DeclGroupPtrTy> allTUVars) {
@@ -2842,10 +2850,10 @@ Decl *Sema::ActOnAtEnd(Scope *S, SourceRange AtEnd, ArrayRef<Decl *> allMethods,
       DiagnoseUnusedBackingIvarInAccessor(S, IC);
       if (IDecl->hasDesignatedInitializers())
         DiagnoseMissingDesignatedInitOverrides(IC, IDecl);
-      DiagnosePartialClassInInheritance(*this, IC, IDecl);
+      DiagnosePartialClass(*this, IC, IDecl);
 
       bool HasRootClassAttr = IDecl->hasAttr<ObjCRootClassAttr>();
-      if (IDecl->getSuperClass() == NULL) {
+      if (IDecl->getSuperClass() == NULL && !IDecl->IsPartialInterface()) {
         // This class has no superclass, so check that it has been marked with
         // __attribute((objc_root_class)).
         if (!HasRootClassAttr && !IDecl->hasAttr<ObjCCompleteDefinitionAttr>()) {

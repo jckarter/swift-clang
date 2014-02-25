@@ -798,9 +798,7 @@ public:
   }
 
   bool IsPartialInterface() const {
-    assert(hasDefinition() &&
-           "Must have definition before looking at IsPartialInterface");
-    return data().IsPartialInterface;
+    return hasDefinition() && data().IsPartialInterface;
   }
   void SetIsPartialInterface() {
     assert(hasDefinition() &&
