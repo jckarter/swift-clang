@@ -410,9 +410,11 @@ def VCREATE : NoTestOpInst<"vcreate", "dl", "csihfUcUsUiUlPcPsl", OP_CAST>;
 // E.3.19 Set all lanes to same value
 let InstName = "vmov" in {
 def VDUP_N   : WOpInst<"vdup_n", "ds",
-                       "UcUsUicsiPcPsfQUcQUsQUiQcQsQiQPcQPsQflUlQlQUl", OP_DUP>;
+                       "UcUsUicsiPcPshfQUcQUsQUiQcQsQiQPcQPsQhQflUlQlQUl",
+                       OP_DUP>;
 def VMOV_N   : WOpInst<"vmov_n", "ds",
-                       "UcUsUicsiPcPsfQUcQUsQUiQcQsQiQPcQPsQflUlQlQUl", OP_DUP>;
+                       "UcUsUicsiPcPshfQUcQUsQUiQcQsQiQPcQPsQhQflUlQlQUl",
+                       OP_DUP>;
 }
 let InstName = "" in
 def VDUP_LANE: WOpInst<"vdup_lane", "dgi",
@@ -621,10 +623,14 @@ def FMLA : SInst<"vfma", "dddd", "dQd">;
 def FMLS : SInst<"vfms", "dddd", "fdQfQd">;
 
 ////////////////////////////////////////////////////////////////////////////////
-// MUL, FMA, FMS definitions with scalar argument
+// MUL, MLA, MLS, FMA, FMS definitions with scalar argument
 def VMUL_N_A64 : IOpInst<"vmul_n", "dds", "Qd", OP_MUL_N>;
-def FMLA_N : SOpInst<"vfma_n", "ddds", "fQf", OP_FMLA_N>;
-def FMLS_N : SOpInst<"vfms_n", "ddds", "fQf", OP_FMLS_N>;
+
+def FMLA_N : SOpInst<"vfma_n", "ddds", "fQfQd", OP_FMLA_N>;
+def FMLS_N : SOpInst<"vfms_n", "ddds", "fQfQd", OP_FMLS_N>;
+
+def MLA_N : SOpInst<"vmla_n", "ddds", "Qd", OP_MLA_N>;
+def MLS_N : SOpInst<"vmls_n", "ddds", "Qd", OP_MLS_N>;
 
 ////////////////////////////////////////////////////////////////////////////////
 // Logical operations
