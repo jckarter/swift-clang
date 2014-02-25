@@ -6159,6 +6159,7 @@ const TargetCodeGenInfo &CodeGenModule::getTargetCodeGenInfo() {
   }
 
   case llvm::Triple::aarch64:
+  case llvm::Triple::aarch64_be:
     return *(TheTargetCodeGenInfo = new AArch64TargetCodeGenInfo(Types));
 
   case llvm::Triple::arm:
