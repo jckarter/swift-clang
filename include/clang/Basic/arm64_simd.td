@@ -285,10 +285,10 @@ def VCAGT : IInst<"vcagt", "udd", "fQfQd">;
 def VCALT : IInst<"vcalt", "udd", "fQfQd">;
 def VTST  : WInst<"vtst", "udd", "csiUcUsUiPcQcQsQiQlQUcQUsQUiQUlQPc">;
 // Scalar
-def VCEQS : Inst<"vceqs", "sss", "f", OP_EQ>;
-def VCEQD : Inst<"vceqd", "sss", "lUlQUld", OP_EQ>;
-def VCLED : Inst<"vcled", "sss", "lUl", OP_LE>;
-def VCGTD : Inst<"vcgtd", "sss", "lUl", OP_GT>;
+def VCEQS : SInst<"vceqs", "sss", "f">;
+def VCEQD : SInst<"vceqd", "sss", "lUld">;
+def VCLED : SInst<"vcled", "sss", "lUl">;
+def VCGTD : SInst<"vcgtd", "sss", "lUl">;
 def VTSTD : SInst<"vtstd", "sss", "lUl">;
 // Scalar Compare to Zero.
 def VCEQZD : SInst<"vceqzd", "ss", "lUl">;
