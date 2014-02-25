@@ -76,7 +76,7 @@ __attribute((objc_complete_definition))
 
 @implementation ObjCClass @end
 
-@partial_interface PartialNoDefClass; // expected-error 3 {{attempting to use partial class 'PartialNoDefClass' as base class in an implementation}}
+@partial_interface PartialNoDefClass; // expected-error 3 {{attempting to implement class 'PartialNoDefClass' with an undefined superclass}}
 
 @interface dd : aa @end
 
@@ -108,7 +108,7 @@ __attribute((objc_complete_definition))
 @interface gg(CAT2)
 @end
 
-@implementation gg(CAT) // expected-error {{attempting to implemenent category of partial class gg}}
+@implementation gg(CAT) // expected-error {{attempting to implement category of partial class gg}}
 @end
 
 __attribute((objc_complete_definition))

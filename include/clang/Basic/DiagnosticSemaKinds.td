@@ -511,9 +511,9 @@ def err_partial_class_def : Error<
 def err_duplicate_partial_class_decl : Error<
   "duplicate partial class declaration for class %0">;
 def err_partial_interface_in_super : Error<
-  "attempting to use partial class %0 as base class in an implementation">;
+ "attempting to implement class %0 with an undefined superclass">;
 def err_partial_implementation : Error<
-  "attempting to implemenent %select{class|category}0 of partial class %1">;
+  "attempting to implement %select{|category of}0 partial class %1">;
 def err_undef_superclass : Error<
   "cannot find interface declaration for %0, superclass of %1">;
 def err_forward_superclass : Error<
