@@ -1356,7 +1356,8 @@ static std::string getCPUName(const ArgList &Args, const llvm::Triple &T) {
   }
 
   case llvm::Triple::sparc:
-    if (const Arg *A = Args.getLastArg(options::OPT_march_EQ))
+  case llvm::Triple::sparcv9:
+    if (const Arg *A = Args.getLastArg(options::OPT_mcpu_EQ))
       return A->getValue();
     return "";
 
@@ -4181,6 +4182,10 @@ void Clang::AddClangCLArgs(const ArgList &Args, ArgStringList &CmdArgs) const {
   if (Arg *A = Args.getLastArg(options::OPT_show_includes))
     A->render(Args, CmdArgs);
 
+  // RTTI is currently not supported, so disable it by default.
+  if (!Args.hasArg(options::OPT_frtti, options::OPT_fno_rtti))
+    CmdArgs.push_back("-fno-rtti");
+
   const Driver &D = getToolChain().getDriver();
   Arg *MostGeneralArg = Args.getLastArg(options::OPT__SLASH_vmg);
   Arg *BestCaseArg = Args.getLastArg(options::OPT__SLASH_vmb);
@@ -6052,6 +6057,11 @@ void freebsd::Assemble::ConstructJob(Compilation &C, const JobAction &JA,
     }
   } else if (getToolChain().getArch() == llvm::Triple::sparc ||
              getToolChain().getArch() == llvm::Triple::sparcv9) {
+    if (getToolChain().getArch() == llvm::Triple::sparc)
+      CmdArgs.push_back("-Av8plusa");
+    else
+      CmdArgs.push_back("-Av9a");
+
     addAssemblerKPIC(Args, CmdArgs);
   }
 
