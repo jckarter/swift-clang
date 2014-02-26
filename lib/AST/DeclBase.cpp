@@ -877,8 +877,11 @@ DeclContext *DeclContext::getPrimaryContext() {
     return this;
 
   case Decl::ObjCInterface:
-    if (ObjCInterfaceDecl *Def = cast<ObjCInterfaceDecl>(this)->getDefinition())
-      return Def;
+      if (ObjCInterfaceDecl *Def = cast<ObjCInterfaceDecl>(this)->getDefinition()) {
+        if (Def->IsPartialInterface() && Def->getCompleteDefinition())
+          return Def->getCompleteDefinition();
+        return Def;
+      }
       
     return this;
       
