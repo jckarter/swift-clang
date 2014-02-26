@@ -24,9 +24,8 @@ add_clang_library(clangARCMigrate
   TransformActions.cpp
   Transforms.cpp
   XCTMT.cpp
-  )
 
-target_link_libraries(clangARCMigrate
+  LINK_LIBS
   clangAST
   clangAnalysis
   clangBasic
