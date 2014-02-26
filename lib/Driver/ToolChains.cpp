@@ -1404,6 +1404,7 @@ bool Generic_GCC::GCCInstallationDetector::getBiarchSibling(Multilib &M) const {
   switch (TargetTriple.getArch()) {
   case llvm::Triple::arm64:
   case llvm::Triple::aarch64:
+  case llvm::Triple::aarch64_be:
     LibDirs.append(AArch64LibDirs,
                    AArch64LibDirs + llvm::array_lengthof(AArch64LibDirs));
     TripleAliases.append(AArch64Triples,
@@ -2070,6 +2071,7 @@ bool Generic_GCC::IsIntegratedAssemblerDefault() const {
   return getTriple().getArch() == llvm::Triple::x86 ||
          getTriple().getArch() == llvm::Triple::x86_64 ||
          getTriple().getArch() == llvm::Triple::aarch64 ||
+         getTriple().getArch() == llvm::Triple::aarch64_be ||
          getTriple().getArch() == llvm::Triple::arm64 ||
          getTriple().getArch() == llvm::Triple::arm ||
          getTriple().getArch() == llvm::Triple::thumb;
@@ -2080,6 +2082,7 @@ void Generic_ELF::addClangTargetOptions(const ArgList &DriverArgs,
   const Generic_GCC::GCCVersion &V = GCCInstallation.getVersion();
   bool UseInitArrayDefault = 
       getTriple().getArch() == llvm::Triple::aarch64 ||
+      getTriple().getArch() == llvm::Triple::aarch64_be ||
       getTriple().getArch() == llvm::Triple::arm64 ||
       (getTriple().getOS() == llvm::Triple::Linux && (
          !V.isOlderThan(4, 7, 0) ||
@@ -2486,6 +2489,14 @@ bool FreeBSD::UseSjLjExceptions() const {
   }
 }
 
+bool FreeBSD::HasNativeLLVMSupport() const {
+  return true;
+}
+
+bool FreeBSD::isPIEDefault() const {
+  return getSanitizerArgs().hasZeroBaseShadow();
+}
+
 /// NetBSD - NetBSD tool chain which can call as(1) and ld(1) directly.
 
 NetBSD::NetBSD(const Driver &D, const llvm::Triple& Triple, const ArgList &Args)
@@ -2803,6 +2814,7 @@ static std::string getMultiarchTriple(const llvm::Triple TargetTriple,
     return TargetTriple.str();
   case llvm::Triple::arm64:
   case llvm::Triple::aarch64:
+  case llvm::Triple::aarch64_be:
     if (llvm::sys::fs::exists(SysRoot + "/lib/aarch64-linux-gnu"))
       return "aarch64-linux-gnu";
     return TargetTriple.str();
@@ -3037,10 +3049,6 @@ Linux::Linux(const Driver &D, const llvm::Triple &Triple, const ArgList &Args)
   addPathIfExists(SysRoot + "/usr/lib", Paths);
 }
 
-bool FreeBSD::HasNativeLLVMSupport() const {
-  return true;
-}
-
 bool Linux::HasNativeLLVMSupport() const {
   return true;
 }
@@ -3179,6 +3187,7 @@ void Linux::AddClangSystemIncludeArgs(const ArgList &DriverArgs,
   } else if (getTriple().getArch() == llvm::Triple::x86) {
     MultiarchIncludeDirs = X86MultiarchIncludeDirs;
   } else if (getTriple().getArch() == llvm::Triple::aarch64 ||
+             getTriple().getArch() == llvm::Triple::aarch64_be ||
              getTriple().getArch() == llvm::Triple::arm64) {
     MultiarchIncludeDirs = AArch64MultiarchIncludeDirs;
   } else if (getTriple().getArch() == llvm::Triple::arm) {

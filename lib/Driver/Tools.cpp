@@ -467,6 +467,7 @@ static bool isSignedCharDefault(const llvm::Triple &Triple) {
     return true;
 
   case llvm::Triple::aarch64:
+  case llvm::Triple::aarch64_be:
   case llvm::Triple::arm:
   case llvm::Triple::arm64:
   case llvm::Triple::ppc:
@@ -1319,6 +1320,7 @@ static std::string getCPUName(const ArgList &Args, const llvm::Triple &T) {
     return "";
 
   case llvm::Triple::aarch64:
+  case llvm::Triple::aarch64_be:
     return getAArch64TargetCPU(Args, T);
 
   case llvm::Triple::arm:
@@ -1354,7 +1356,8 @@ static std::string getCPUName(const ArgList &Args, const llvm::Triple &T) {
   }
 
   case llvm::Triple::sparc:
-    if (const Arg *A = Args.getLastArg(options::OPT_march_EQ))
+  case llvm::Triple::sparcv9:
+    if (const Arg *A = Args.getLastArg(options::OPT_mcpu_EQ))
       return A->getValue();
     return "";
 
@@ -1543,6 +1546,7 @@ static void getTargetFeatures(const Driver &D, const llvm::Triple &Triple,
     getSparcTargetFeatures(Args, Features);
     break;
   case llvm::Triple::aarch64:
+  case llvm::Triple::aarch64_be:
     getAArch64TargetFeatures(D, Args, Features);
     break;
   case llvm::Triple::x86:
@@ -1821,8 +1825,11 @@ static StringRef getArchNameForCompilerRTLib(const ToolChain &TC) {
     return TC.getArchName();
 }
 
-static StringRef getOSNameForCompilerRTLib(const ToolChain &TC) {
-  return TC.getOS();
+static SmallString<128> getCompilerRTLibDir(const ToolChain &TC) {
+  // The runtimes are located in the OS-specific resource directory.
+  SmallString<128> Res(TC.getDriver().ResourceDir);
+  llvm::sys::path::append(Res, "lib", TC.getOS());
+  return Res;
 }
 
 // This adds the static libclang_rt.arch.a directly to the command line
@@ -1830,14 +1837,11 @@ static StringRef getOSNameForCompilerRTLib(const ToolChain &TC) {
 // and available, check for possible errors, etc.
 static void addClangRTLinux(
     const ToolChain &TC, const ArgList &Args, ArgStringList &CmdArgs) {
-  // The runtime is located in the Linux library directory and has name
-  // "libclang_rt.<ArchName>.a".
-  SmallString<128> LibProfile(TC.getDriver().ResourceDir);
-  llvm::sys::path::append(
-      LibProfile, "lib", "linux",
+  SmallString<128> LibClangRT = getCompilerRTLibDir(TC);
+  llvm::sys::path::append(LibClangRT,
       Twine("libclang_rt.") + getArchNameForCompilerRTLib(TC) + ".a");
 
-  CmdArgs.push_back(Args.MakeArgString(LibProfile));
+  CmdArgs.push_back(Args.MakeArgString(LibClangRT));
   CmdArgs.push_back("-lgcc_s");
   if (TC.getDriver().CCCIsCXX())
     CmdArgs.push_back("-lgcc_eh");
@@ -1852,27 +1856,22 @@ static void addProfileRT(
         Args.hasArg(options::OPT_coverage)))
     return;
 
-  // The profile runtime is located in the OS-specific resource directory and
-  // has name "libclang_rt.profile-<ArchName>.a".
-  SmallString<128> LibProfile(TC.getDriver().ResourceDir);
-  llvm::sys::path::append(
-      LibProfile, "lib", getOSNameForCompilerRTLib(TC),
+  SmallString<128> LibProfile = getCompilerRTLibDir(TC);
+  llvm::sys::path::append(LibProfile,
       Twine("libclang_rt.profile-") + getArchNameForCompilerRTLib(TC) + ".a");
 
   CmdArgs.push_back(Args.MakeArgString(LibProfile));
 }
 
-static void addSanitizerRTLinkFlagsLinux(
+static void addSanitizerRTLinkFlags(
     const ToolChain &TC, const ArgList &Args, ArgStringList &CmdArgs,
     const StringRef Sanitizer, bool BeforeLibStdCXX,
     bool ExportSymbols = true) {
-  // Sanitizer runtime is located in the Linux library directory and
-  // has name "libclang_rt.<Sanitizer>-<ArchName>.a".
-  SmallString<128> LibSanitizer(TC.getDriver().ResourceDir);
-  llvm::sys::path::append(
-      LibSanitizer, "lib", "linux",
-      (Twine("libclang_rt.") + Sanitizer + "-" +
-          getArchNameForCompilerRTLib(TC) + ".a"));
+  // Sanitizer runtime has name "libclang_rt.<Sanitizer>-<ArchName>.a".
+  SmallString<128> LibSanitizer = getCompilerRTLibDir(TC);
+  llvm::sys::path::append(LibSanitizer,
+                          (Twine("libclang_rt.") + Sanitizer + "-" +
+                           getArchNameForCompilerRTLib(TC) + ".a"));
 
   // Sanitizer runtime may need to come before -lstdc++ (or -lc++, libstdc++.a,
   // etc.) so that the linker picks custom versions of the global 'operator
@@ -1907,66 +1906,87 @@ static void addSanitizerRTLinkFlagsLinux(
 
 /// If AddressSanitizer is enabled, add appropriate linker flags (Linux).
 /// This needs to be called before we add the C run-time (malloc, etc).
-static void addAsanRTLinux(const ToolChain &TC, const ArgList &Args,
-                           ArgStringList &CmdArgs) {
+static void addAsanRT(const ToolChain &TC, const ArgList &Args,
+                      ArgStringList &CmdArgs) {
   if (TC.getTriple().getEnvironment() == llvm::Triple::Android) {
-    SmallString<128> LibAsan(TC.getDriver().ResourceDir);
-    llvm::sys::path::append(LibAsan, "lib", "linux",
-        (Twine("libclang_rt.asan-") +
-            getArchNameForCompilerRTLib(TC) + "-android.so"));
+    SmallString<128> LibAsan = getCompilerRTLibDir(TC);
+    llvm::sys::path::append(LibAsan,
+                            (Twine("libclang_rt.asan-") +
+                             getArchNameForCompilerRTLib(TC) + "-android.so"));
     CmdArgs.insert(CmdArgs.begin(), Args.MakeArgString(LibAsan));
   } else {
     if (!Args.hasArg(options::OPT_shared))
-      addSanitizerRTLinkFlagsLinux(TC, Args, CmdArgs, "asan", true);
+      addSanitizerRTLinkFlags(TC, Args, CmdArgs, "asan", true);
   }
 }
 
 /// If ThreadSanitizer is enabled, add appropriate linker flags (Linux).
 /// This needs to be called before we add the C run-time (malloc, etc).
-static void addTsanRTLinux(const ToolChain &TC, const ArgList &Args,
-                           ArgStringList &CmdArgs) {
+static void addTsanRT(const ToolChain &TC, const ArgList &Args,
+                      ArgStringList &CmdArgs) {
   if (!Args.hasArg(options::OPT_shared))
-    addSanitizerRTLinkFlagsLinux(TC, Args, CmdArgs, "tsan", true);
+    addSanitizerRTLinkFlags(TC, Args, CmdArgs, "tsan", true);
 }
 
 /// If MemorySanitizer is enabled, add appropriate linker flags (Linux).
 /// This needs to be called before we add the C run-time (malloc, etc).
-static void addMsanRTLinux(const ToolChain &TC, const ArgList &Args,
-                           ArgStringList &CmdArgs) {
+static void addMsanRT(const ToolChain &TC, const ArgList &Args,
+                      ArgStringList &CmdArgs) {
   if (!Args.hasArg(options::OPT_shared))
-    addSanitizerRTLinkFlagsLinux(TC, Args, CmdArgs, "msan", true);
+    addSanitizerRTLinkFlags(TC, Args, CmdArgs, "msan", true);
 }
 
 /// If LeakSanitizer is enabled, add appropriate linker flags (Linux).
 /// This needs to be called before we add the C run-time (malloc, etc).
-static void addLsanRTLinux(const ToolChain &TC, const ArgList &Args,
-                           ArgStringList &CmdArgs) {
+static void addLsanRT(const ToolChain &TC, const ArgList &Args,
+                      ArgStringList &CmdArgs) {
   if (!Args.hasArg(options::OPT_shared))
-    addSanitizerRTLinkFlagsLinux(TC, Args, CmdArgs, "lsan", true);
+    addSanitizerRTLinkFlags(TC, Args, CmdArgs, "lsan", true);
 }
 
 /// If UndefinedBehaviorSanitizer is enabled, add appropriate linker flags
 /// (Linux).
-static void addUbsanRTLinux(const ToolChain &TC, const ArgList &Args,
-                            ArgStringList &CmdArgs, bool IsCXX,
-                            bool HasOtherSanitizerRt) {
+static void addUbsanRT(const ToolChain &TC, const ArgList &Args,
+                       ArgStringList &CmdArgs, bool IsCXX,
+                       bool HasOtherSanitizerRt) {
   // Need a copy of sanitizer_common. This could come from another sanitizer
   // runtime; if we're not including one, include our own copy.
   if (!HasOtherSanitizerRt)
-    addSanitizerRTLinkFlagsLinux(TC, Args, CmdArgs, "san", true, false);
+    addSanitizerRTLinkFlags(TC, Args, CmdArgs, "san", true, false);
 
-  addSanitizerRTLinkFlagsLinux(TC, Args, CmdArgs, "ubsan", false);
+  addSanitizerRTLinkFlags(TC, Args, CmdArgs, "ubsan", false);
 
   // Only include the bits of the runtime which need a C++ ABI library if
   // we're linking in C++ mode.
   if (IsCXX)
-    addSanitizerRTLinkFlagsLinux(TC, Args, CmdArgs, "ubsan_cxx", false);
+    addSanitizerRTLinkFlags(TC, Args, CmdArgs, "ubsan_cxx", false);
 }
 
-static void addDfsanRTLinux(const ToolChain &TC, const ArgList &Args,
-                            ArgStringList &CmdArgs) {
+static void addDfsanRT(const ToolChain &TC, const ArgList &Args,
+                       ArgStringList &CmdArgs) {
   if (!Args.hasArg(options::OPT_shared))
-    addSanitizerRTLinkFlagsLinux(TC, Args, CmdArgs, "dfsan", true);
+    addSanitizerRTLinkFlags(TC, Args, CmdArgs, "dfsan", true);
+}
+
+// Should be called before we add C++ ABI library.
+static void addSanitizerRuntimes(const ToolChain &TC, const ArgList &Args,
+                                 ArgStringList &CmdArgs) {
+  const SanitizerArgs &Sanitize = TC.getSanitizerArgs();
+  const Driver &D = TC.getDriver();
+  if (Sanitize.needsUbsanRt())
+    addUbsanRT(TC, Args, CmdArgs, D.CCCIsCXX(),
+                    Sanitize.needsAsanRt() || Sanitize.needsTsanRt() ||
+                    Sanitize.needsMsanRt() || Sanitize.needsLsanRt());
+  if (Sanitize.needsAsanRt())
+    addAsanRT(TC, Args, CmdArgs);
+  if (Sanitize.needsTsanRt())
+    addTsanRT(TC, Args, CmdArgs);
+  if (Sanitize.needsMsanRt())
+    addMsanRT(TC, Args, CmdArgs);
+  if (Sanitize.needsLsanRt())
+    addLsanRT(TC, Args, CmdArgs);
+  if (Sanitize.needsDfsanRt())
+    addDfsanRT(TC, Args, CmdArgs);
 }
 
 static bool shouldUseFramePointerForTarget(const ArgList &Args,
@@ -4162,6 +4182,10 @@ void Clang::AddClangCLArgs(const ArgList &Args, ArgStringList &CmdArgs) const {
   if (Arg *A = Args.getLastArg(options::OPT_show_includes))
     A->render(Args, CmdArgs);
 
+  // RTTI is currently not supported, so disable it by default.
+  if (!Args.hasArg(options::OPT_frtti, options::OPT_fno_rtti))
+    CmdArgs.push_back("-fno-rtti");
+
   const Driver &D = getToolChain().getDriver();
   Arg *MostGeneralArg = Args.getLastArg(options::OPT__SLASH_vmg);
   Arg *BestCaseArg = Args.getLastArg(options::OPT__SLASH_vmb);
@@ -6033,6 +6057,11 @@ void freebsd::Assemble::ConstructJob(Compilation &C, const JobAction &JA,
     }
   } else if (getToolChain().getArch() == llvm::Triple::sparc ||
              getToolChain().getArch() == llvm::Triple::sparcv9) {
+    if (getToolChain().getArch() == llvm::Triple::sparc)
+      CmdArgs.push_back("-Av8plusa");
+    else
+      CmdArgs.push_back("-Av9a");
+
     addAssemblerKPIC(Args, CmdArgs);
   }
 
@@ -6061,6 +6090,9 @@ void freebsd::Link::ConstructJob(Compilation &C, const JobAction &JA,
   const toolchains::FreeBSD& ToolChain = 
     static_cast<const toolchains::FreeBSD&>(getToolChain());
   const Driver &D = ToolChain.getDriver();
+  const bool IsPIE =
+    !Args.hasArg(options::OPT_shared) &&
+    (Args.hasArg(options::OPT_pie) || ToolChain.isPIEDefault());
   ArgStringList CmdArgs;
 
   // Silence warning for "clang -g foo.o -o foo"
@@ -6074,7 +6106,7 @@ void freebsd::Link::ConstructJob(Compilation &C, const JobAction &JA,
   if (!D.SysRoot.empty())
     CmdArgs.push_back(Args.MakeArgString("--sysroot=" + D.SysRoot));
 
-  if (Args.hasArg(options::OPT_pie))
+  if (IsPIE)
     CmdArgs.push_back("-pie");
 
   if (Args.hasArg(options::OPT_static)) {
@@ -6124,7 +6156,7 @@ void freebsd::Link::ConstructJob(Compilation &C, const JobAction &JA,
     if (!Args.hasArg(options::OPT_shared)) {
       if (Args.hasArg(options::OPT_pg))
         crt1 = "gcrt1.o";
-      else if (Args.hasArg(options::OPT_pie))
+      else if (IsPIE)
         crt1 = "Scrt1.o";
       else
         crt1 = "crt1.o";
@@ -6137,7 +6169,7 @@ void freebsd::Link::ConstructJob(Compilation &C, const JobAction &JA,
     const char *crtbegin = NULL;
     if (Args.hasArg(options::OPT_static))
       crtbegin = "crtbeginT.o";
-    else if (Args.hasArg(options::OPT_shared) || Args.hasArg(options::OPT_pie))
+    else if (Args.hasArg(options::OPT_shared) || IsPIE)
       crtbegin = "crtbeginS.o";
     else
       crtbegin = "crtbegin.o";
@@ -6218,7 +6250,7 @@ void freebsd::Link::ConstructJob(Compilation &C, const JobAction &JA,
 
   if (!Args.hasArg(options::OPT_nostdlib) &&
       !Args.hasArg(options::OPT_nostartfiles)) {
-    if (Args.hasArg(options::OPT_shared) || Args.hasArg(options::OPT_pie))
+    if (Args.hasArg(options::OPT_shared) || IsPIE)
       CmdArgs.push_back(Args.MakeArgString(ToolChain.GetFilePath("crtendS.o")));
     else
       CmdArgs.push_back(Args.MakeArgString(ToolChain.GetFilePath("crtend.o")));
@@ -6710,10 +6742,9 @@ void gnutools::Link::ConstructJob(Compilation &C, const JobAction &JA,
   const Driver &D = ToolChain.getDriver();
   const bool isAndroid =
     ToolChain.getTriple().getEnvironment() == llvm::Triple::Android;
-  const SanitizerArgs &Sanitize = ToolChain.getSanitizerArgs();
   const bool IsPIE =
     !Args.hasArg(options::OPT_shared) &&
-    (Args.hasArg(options::OPT_pie) || Sanitize.hasZeroBaseShadow());
+    (Args.hasArg(options::OPT_pie) || ToolChain.isPIEDefault());
 
   ArgStringList CmdArgs;
 
@@ -6858,22 +6889,7 @@ void gnutools::Link::ConstructJob(Compilation &C, const JobAction &JA,
 
   AddLinkerInputs(ToolChain, Inputs, Args, CmdArgs);
 
-  // Call these before we add the C++ ABI library.
-  if (Sanitize.needsUbsanRt())
-    addUbsanRTLinux(getToolChain(), Args, CmdArgs, D.CCCIsCXX(),
-                    Sanitize.needsAsanRt() || Sanitize.needsTsanRt() ||
-                    Sanitize.needsMsanRt() || Sanitize.needsLsanRt());
-  if (Sanitize.needsAsanRt())
-    addAsanRTLinux(getToolChain(), Args, CmdArgs);
-  if (Sanitize.needsTsanRt())
-    addTsanRTLinux(getToolChain(), Args, CmdArgs);
-  if (Sanitize.needsMsanRt())
-    addMsanRTLinux(getToolChain(), Args, CmdArgs);
-  if (Sanitize.needsLsanRt())
-    addLsanRTLinux(getToolChain(), Args, CmdArgs);
-  if (Sanitize.needsDfsanRt())
-    addDfsanRTLinux(getToolChain(), Args, CmdArgs);
-
+  addSanitizerRuntimes(getToolChain(), Args, CmdArgs);
   // The profile runtime also needs access to system libraries.
   addProfileRT(getToolChain(), Args, CmdArgs);
 

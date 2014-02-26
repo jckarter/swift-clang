@@ -1627,6 +1627,7 @@ Value *CodeGenFunction::EmitTargetBuiltinExpr(unsigned BuiltinID,
                                               const CallExpr *E) {
   switch (getTarget().getTriple().getArch()) {
   case llvm::Triple::aarch64:
+  case llvm::Triple::aarch64_be:
     return EmitAArch64BuiltinExpr(BuiltinID, E);
   case llvm::Triple::arm:
   case llvm::Triple::thumb:
@@ -3408,11 +3409,10 @@ static Value *packTBLDVectorList(CodeGenFunction &CGF, ArrayRef<Value *> Ops,
 
   TblTy = llvm::VectorType::get(TblTy->getElementType(),
                                 2*TblTy->getNumElements());
-  llvm::Type *Tys[2] = { ResTy, TblTy };
 
   Function *TblF;
   TblOps.push_back(IndexOp);
-  TblF = CGF.CGM.getIntrinsic(IntID, Tys);
+  TblF = CGF.CGM.getIntrinsic(IntID, ResTy);
   
   return CGF.EmitNeonCall(TblF, TblOps, Name);
 }
@@ -3478,9 +3478,6 @@ static Value *EmitAArch64TblBuiltinExpr(CodeGenFunction &CGF,
   }
 
   Arg = E->getArg(TblPos);
-  llvm::Type *TblTy = CGF.ConvertType(Arg->getType());
-  llvm::VectorType *VTblTy = cast<llvm::VectorType>(TblTy);
-  llvm::Type *Tys[2] = { Ty, VTblTy };
   unsigned nElts = VTy->getNumElements();  
 
   // AArch64 scalar builtins are not overloaded, they do not have an extra
@@ -3594,7 +3591,7 @@ static Value *EmitAArch64TblBuiltinExpr(CodeGenFunction &CGF,
   if (!Int)
     return 0;
 
-  Function *F = CGF.CGM.getIntrinsic(Int, Tys);
+  Function *F = CGF.CGM.getIntrinsic(Int, Ty);
   return CGF.EmitNeonCall(F, Ops, s);
 }
 
@@ -4129,8 +4126,8 @@ Value *CodeGenFunction::EmitAArch64BuiltinExpr(unsigned BuiltinID,
     Int = Intrinsic::aarch64_neon_rbit;
     return EmitNeonCall(CGM.getIntrinsic(Int, Ty), Ops, "vrbit");
   case NEON::BI__builtin_neon_vcvt_f32_f64: {
-    Ops[0] = Builder.CreateBitCast(Ops[0], Ty);
-    Ty = GetNeonType(this, NeonTypeFlags(NeonTypeFlags::Float32, false, false));
+    NeonTypeFlags SrcFlag = NeonTypeFlags(NeonTypeFlags::Float64, false, true);
+    Ops[0] = Builder.CreateBitCast(Ops[0], GetNeonType(this, SrcFlag));
     return Builder.CreateFPTrunc(Ops[0], Ty, "vcvt");
   }
   case NEON::BI__builtin_neon_vcvtx_f32_v: {
@@ -5034,7 +5031,46 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     Ops.push_back(EmitScalarExpr(E->getArg(0)));
     Ops[0] = Builder.CreateBitCast(Ops[0], Ty);
     Ops[0] = Builder.CreateICmp(P, Ops[0], llvm::Constant::getNullValue(Ty));
-    return Builder.CreateZExt(Ops[0], Ty, "vceqzd");
+    return Builder.CreateSExt(Ops[0], Ty, "vceqzd");
+  }
+  case NEON::BI__builtin_neon_vceqd_f64: {
+    llvm::Type *Ty = llvm::Type::getInt64Ty(getLLVMContext());
+    Ops.push_back(EmitScalarExpr(E->getArg(1)));
+    Ops[0] = Builder.CreateBitCast(Ops[0], DoubleTy);
+    Ops[1] = Builder.CreateBitCast(Ops[1], DoubleTy);
+    Ops[0] = Builder.CreateFCmp(llvm::ICmpInst::FCMP_OEQ, Ops[0], Ops[1]);
+    return Builder.CreateSExt(Ops[0], Ty, "vceqd");
+  }
+  case NEON::BI__builtin_neon_vceqd_s64:
+  case NEON::BI__builtin_neon_vceqd_u64:
+  case NEON::BI__builtin_neon_vcgtd_s64:
+  case NEON::BI__builtin_neon_vcgtd_u64:
+  case NEON::BI__builtin_neon_vcltd_s64:
+  case NEON::BI__builtin_neon_vcltd_u64:
+  case NEON::BI__builtin_neon_vcged_u64:
+  case NEON::BI__builtin_neon_vcged_s64:
+  case NEON::BI__builtin_neon_vcled_u64:
+  case NEON::BI__builtin_neon_vcled_s64: {
+    llvm::CmpInst::Predicate P;
+    switch (BuiltinID) {
+    default: llvm_unreachable("missing builtin ID in switch!");
+    case NEON::BI__builtin_neon_vceqd_s64:
+    case NEON::BI__builtin_neon_vceqd_u64:P = llvm::ICmpInst::ICMP_EQ;break;
+    case NEON::BI__builtin_neon_vcgtd_s64:P = llvm::ICmpInst::ICMP_SGT;break;
+    case NEON::BI__builtin_neon_vcgtd_u64:P = llvm::ICmpInst::ICMP_UGT;break;
+    case NEON::BI__builtin_neon_vcltd_s64:P = llvm::ICmpInst::ICMP_SLT;break;
+    case NEON::BI__builtin_neon_vcltd_u64:P = llvm::ICmpInst::ICMP_ULT;break;
+    case NEON::BI__builtin_neon_vcged_u64:P = llvm::ICmpInst::ICMP_UGE;break;
+    case NEON::BI__builtin_neon_vcged_s64:P = llvm::ICmpInst::ICMP_SGE;break;
+    case NEON::BI__builtin_neon_vcled_u64:P = llvm::ICmpInst::ICMP_ULE;break;
+    case NEON::BI__builtin_neon_vcled_s64:P = llvm::ICmpInst::ICMP_SLE;break;
+    }
+    llvm::Type *Ty = llvm::Type::getInt64Ty(getLLVMContext());
+    Ops.push_back(EmitScalarExpr(E->getArg(1)));
+    Ops[0] = Builder.CreateBitCast(Ops[0], Ty);
+    Ops[1] = Builder.CreateBitCast(Ops[1], Ty);
+    Ops[0] = Builder.CreateICmp(P, Ops[0], Ops[1]);
+    return Builder.CreateSExt(Ops[0], Ty, "vceqd");
   }
   case NEON::BI__builtin_neon_vtstd_s64:
   case NEON::BI__builtin_neon_vtstd_u64: {

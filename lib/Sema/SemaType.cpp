@@ -4724,6 +4724,7 @@ static bool isPermittedNeonBaseType(QualType &Ty,
   // Signed poly is mathematically wrong, but has been baked into some ABIs by
   // now.
   bool IsPolyUnsigned = Triple.getArch() == llvm::Triple::aarch64 ||
+                        Triple.getArch() == llvm::Triple::aarch64_be ||
                         Triple.getArch() == llvm::Triple::arm64;
   if (VecKind == VectorType::NeonPolyVector) {
     if (IsPolyUnsigned) {
@@ -4742,6 +4743,7 @@ static bool isPermittedNeonBaseType(QualType &Ty,
   // Non-polynomial vector types: the usual suspects are allowed, as well as
   // float64_t on AArch64.
   bool Is64Bit = Triple.getArch() == llvm::Triple::aarch64 ||
+                 Triple.getArch() == llvm::Triple::aarch64_be ||
                  Triple.getArch() == llvm::Triple::arm64;
 
   if (Is64Bit && BTy->getKind() == BuiltinType::Double)

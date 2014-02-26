@@ -14,7 +14,36 @@ int64x2_t test_vabsq_s64(int64x2_t a1) {
 int64_t test_vceqd_s64(int64_t a1, int64_t a2) {
   // CHECK: test_vceqd_s64
   return vceqd_s64(a1, a2);
-  // CHECK: icmp eq i64 %a1, %a2
+  // CHECK: [[BIT:%[0-9a-zA-Z.]+]] = icmp eq i64 %a1, %a2
+  // CHECK: sext i1 [[BIT]] to i64
+}
+
+int64_t test_vceqd_f64(float64_t a1, float64_t a2) {
+  // CHECK: test_vceqd_f64
+  return vceqd_f64(a1, a2);
+  // CHECK: [[BIT:%[0-9a-zA-Z.]+]] = fcmp oeq double %a1, %a2
+  // CHECK: sext i1 [[BIT]] to i64
+}
+
+uint64_t test_vcgtd_u64(uint64_t a1, uint64_t a2) {
+  // CHECK: test_vcgtd_u64
+  return vcgtd_u64(a1, a2);
+  // CHECK: [[BIT:%[0-9a-zA-Z.]+]] = icmp ugt i64 %a1, %a2
+  // CHECK: sext i1 [[BIT]] to i64
+}
+
+uint64_t test_vcled_u64(uint64_t a1, uint64_t a2) {
+  // CHECK: test_vcled_u64
+  return vcled_u64(a1, a2);
+  // CHECK: [[BIT:%[0-9a-zA-Z.]+]] = icmp ule i64 %a1, %a2
+  // CHECK: sext i1 [[BIT]] to i64
+}
+
+int64_t test_vceqzd_s64(int64_t a1) {
+  // CHECK: test_vceqzd_s64
+  return vceqzd_s64(a1);
+  // CHECK: [[BIT:%[0-9a-zA-Z.]+]] = icmp eq i64 %a1, 0
+  // CHECK: sext i1 [[BIT]] to i64
 }
 
 uint64x2_t test_vceqq_u64(uint64x2_t a1, uint64x2_t a2) {

@@ -593,6 +593,7 @@ public:
   }
 
   virtual bool UseSjLjExceptions() const;
+  virtual bool isPIEDefault() const;
 protected:
   virtual Tool *buildAssembler() const;
   virtual Tool *buildLinker() const;
