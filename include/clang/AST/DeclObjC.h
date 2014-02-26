@@ -984,14 +984,20 @@ public:
   /// has been forward-declared (with \@class) but not yet defined (with 
   /// \@interface).
   ObjCInterfaceDecl *getDefinition() {
-    return hasDefinition()? Data.getPointer()->Definition : 0;
+    ObjCInterfaceDecl *Def = hasDefinition()? Data.getPointer()->Definition : 0;
+    if (Def && Def->IsPartialInterface() && Def->getCompleteDefinition())
+      return Def->getCompleteDefinition();
+    return Def;
   }
 
   /// \brief Retrieve the definition of this class, or NULL if this class 
   /// has been forward-declared (with \@class) but not yet defined (with 
   /// \@interface).
   const ObjCInterfaceDecl *getDefinition() const {
-    return hasDefinition()? Data.getPointer()->Definition : 0;
+    ObjCInterfaceDecl *Def = hasDefinition()? Data.getPointer()->Definition : 0;
+    if (Def && Def->IsPartialInterface() && Def->getCompleteDefinition())
+      return Def->getCompleteDefinition();
+    return Def;
   }
 
   /// \brief Starts the definition of this Objective-C class, taking it from

@@ -3625,7 +3625,7 @@ QualType ASTContext::getObjCInterfaceType(const ObjCInterfaceDecl *Decl,
   if (Decl->TypeForDecl)
     return QualType(Decl->TypeForDecl, 0);
 
-  if (PrevDecl) {
+  if (PrevDecl && !PrevDecl->IsPartialInterface()) {
     assert(PrevDecl->TypeForDecl && "previous decl has no TypeForDecl");
     Decl->TypeForDecl = PrevDecl->TypeForDecl;
     return QualType(PrevDecl->TypeForDecl, 0);
