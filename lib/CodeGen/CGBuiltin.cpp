@@ -5277,15 +5277,12 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
   case NEON::BI__builtin_neon_vsetq_lane_f32:
     Ops.push_back(EmitScalarExpr(E->getArg(2)));
     return Builder.CreateInsertElement(Ops[1], Ops[0], Ops[2], "vset_lane");
-  // The code below is a necessary, but not sufficient condition to have a
-  // working vset_lane_f64.  Punt for now.  Perhaps replacing Ops[1] with a
-  // bitcast from the source to Ops[1] to vif64 would work better?
-  // case NEON::BI__builtin_neon_vset_lane_f64:
-  //   // The vector type needs a cast for the v1f64 variant.
-  //   Ops[1] = Builder.CreateBitCast(Ops[1],
-  //       llvm::VectorType::get(llvm::Type::getDoubleTy(getLLVMContext()), 1));
-  //   Ops.push_back(EmitScalarExpr(E->getArg(2)));
-  //   return Builder.CreateInsertElement(Ops[1], Ops[0], Ops[2], "vset_lane");
+  case NEON::BI__builtin_neon_vset_lane_f64:
+    // The vector type needs a cast for the v1f64 variant.
+    Ops[1] = Builder.CreateBitCast(Ops[1],
+                                   llvm::VectorType::get(DoubleTy, 1));
+    Ops.push_back(EmitScalarExpr(E->getArg(2)));
+    return Builder.CreateInsertElement(Ops[1], Ops[0], Ops[2], "vset_lane");
   case NEON::BI__builtin_neon_vsetq_lane_f64:
     // The vector type needs a cast for the v2f64 variant.
     Ops[1] = Builder.CreateBitCast(Ops[1],
