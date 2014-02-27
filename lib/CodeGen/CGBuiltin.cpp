@@ -2548,8 +2548,8 @@ static NeonIntrinsicInfo ARM64SISDIntrinsicMap[] = {
   NEONMAP1(vcvts_n_s32_f32, arm64_neon_vcvtfp2fxs, AddRetType | Add1ArgType),
   NEONMAP1(vcvts_n_u32_f32, arm64_neon_vcvtfp2fxu, AddRetType | Add1ArgType),
   NEONMAP1(vcvtxd_f32_f64, arm64_sisd_fcvtxn, 0),
-  NEONMAP1(vmulxd_f64, arm64_sisd_fmulx, Add1ArgType),
-  NEONMAP1(vmulxs_f32, arm64_sisd_fmulx, Add1ArgType),
+  NEONMAP1(vmulxd_f64, arm64_neon_fmulx, Add1ArgType),
+  NEONMAP1(vmulxs_f32, arm64_neon_fmulx, Add1ArgType),
   NEONMAP1(vqabsb_s8, arm64_neon_sqabs, Vectorize1ArgType | Use64BitVectors),
   NEONMAP1(vqabsd_s64, arm64_neon_sqabs, Add1ArgType),
   NEONMAP1(vqabsh_s16, arm64_neon_sqabs, Vectorize1ArgType | Use64BitVectors),
@@ -5278,6 +5278,52 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     Int = Intrinsic::fma;
     return EmitNeonCall(CGM.getIntrinsic(Int, Ty), Ops, "fmla");
   }
+  case NEON::BI__builtin_neon_vfma_laneq_v: {
+    llvm::VectorType *VTy = cast<llvm::VectorType>(Ty);
+    // v1f64 fma should be mapped to Neon scalar f64 fma
+    if (VTy && VTy->getElementType() == DoubleTy) {
+      Ops[0] = Builder.CreateBitCast(Ops[0], DoubleTy);
+      Ops[1] = Builder.CreateBitCast(Ops[1], DoubleTy);
+      llvm::Type *VTy = GetNeonType(this,
+        NeonTypeFlags(NeonTypeFlags::Float64, false, true));
+      Ops[2] = Builder.CreateBitCast(Ops[2], VTy);
+      Ops[2] = Builder.CreateExtractElement(Ops[2], Ops[3], "extract");
+      Value *F = CGM.getIntrinsic(Intrinsic::fma, DoubleTy);
+      Value *Result = Builder.CreateCall3(F, Ops[1], Ops[2], Ops[0]);
+      return Builder.CreateBitCast(Result, Ty);
+    }
+    Value *F = CGM.getIntrinsic(Intrinsic::fma, Ty);
+    Ops[0] = Builder.CreateBitCast(Ops[0], Ty);
+    Ops[1] = Builder.CreateBitCast(Ops[1], Ty);
+
+    llvm::Type *STy = llvm::VectorType::get(VTy->getElementType(),
+                                            VTy->getNumElements() * 2);
+    Ops[2] = Builder.CreateBitCast(Ops[2], STy);
+    Value* SV = llvm::ConstantVector::getSplat(VTy->getNumElements(),
+                                               cast<ConstantInt>(Ops[3]));
+    Ops[2] = Builder.CreateShuffleVector(Ops[2], Ops[2], SV, "lane");
+
+    return Builder.CreateCall3(F, Ops[2], Ops[1], Ops[0]);
+  }
+  case NEON::BI__builtin_neon_vfmaq_laneq_v: {
+    Value *F = CGM.getIntrinsic(Intrinsic::fma, Ty);
+    Ops[0] = Builder.CreateBitCast(Ops[0], Ty);
+    Ops[1] = Builder.CreateBitCast(Ops[1], Ty);
+
+    Ops[2] = Builder.CreateBitCast(Ops[2], Ty);
+    Ops[2] = EmitNeonSplat(Ops[2], cast<ConstantInt>(Ops[3]));
+    return Builder.CreateCall3(F, Ops[2], Ops[1], Ops[0]);
+  }
+  case NEON::BI__builtin_neon_vfmas_lane_f32:
+  case NEON::BI__builtin_neon_vfmas_laneq_f32:
+  case NEON::BI__builtin_neon_vfmad_lane_f64:
+  case NEON::BI__builtin_neon_vfmad_laneq_f64: {
+    Ops.push_back(EmitScalarExpr(E->getArg(3)));
+    llvm::Type *Ty = ConvertType(E->getCallReturnType());
+    Value *F = CGM.getIntrinsic(Intrinsic::fma, Ty);
+    Ops[2] = Builder.CreateExtractElement(Ops[2], Ops[3], "extract");
+    return Builder.CreateCall3(F, Ops[1], Ops[2], Ops[0]);
+  }
   case NEON::BI__builtin_neon_vfms_lane_v:
   case NEON::BI__builtin_neon_vfmsq_lane_v: { // Only used for FP types
     // FIXME: remove this when we no longer support aarch64_simd.h (arm_neon.h
@@ -5659,6 +5705,20 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
   case NEON::BI__builtin_neon_vmulxq_v: {
     Int = Intrinsic::arm64_neon_fmulx;
     return EmitNeonCall(CGM.getIntrinsic(Int, Ty), Ops, "vmulx");
+  }
+  case NEON::BI__builtin_neon_vmul_lane_v:
+  case NEON::BI__builtin_neon_vmul_laneq_v: {
+    // v1f64 vmul_lane should be mapped to Neon scalar mul lane
+    bool Quad = false;
+    if (BuiltinID == NEON::BI__builtin_neon_vmul_laneq_v)
+      Quad = true;
+    Ops[0] = Builder.CreateBitCast(Ops[0], DoubleTy);
+    llvm::Type *VTy = GetNeonType(this,
+      NeonTypeFlags(NeonTypeFlags::Float64, false, Quad));
+    Ops[1] = Builder.CreateBitCast(Ops[1], VTy);
+    Ops[1] = Builder.CreateExtractElement(Ops[1], Ops[2], "extract");
+    Value *Result = Builder.CreateFMul(Ops[0], Ops[1]);
+    return Builder.CreateBitCast(Result, Ty);
   }
   case NEON::BI__builtin_neon_vpmaxnm_v:
   case NEON::BI__builtin_neon_vpmaxnmq_v: {
