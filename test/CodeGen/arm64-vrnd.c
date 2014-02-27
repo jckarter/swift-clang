@@ -4,15 +4,9 @@
 
 int32x2_t rnd1(float32x2_t a) { return vrnd_f32(a); }
 // CHECK: call <2 x float> @llvm.trunc.v2f32(<2 x float>
-int32x2_t rnd2(float32x2_t a) { return vrndz_f32(a); }
-// CHECK: call <2 x float> @llvm.trunc.v2f32(<2 x float>
 int32x4_t rnd3(float32x4_t a) { return vrndq_f32(a); }
 // CHECK: call <4 x float> @llvm.trunc.v4f32(<4 x float>
-int32x4_t rnd4(float32x4_t a) { return vrndzq_f32(a); }
-// CHECK: call <4 x float> @llvm.trunc.v4f32(<4 x float>
 int64x2_t rnd5(float64x2_t a) { return vrndq_f64(a); }
-// CHECK: call <2 x double> @llvm.trunc.v2f64(<2 x double>
-int64x2_t rnd6(float64x2_t a) { return vrndzq_f64(a); }
 // CHECK: call <2 x double> @llvm.trunc.v2f64(<2 x double>
 
 

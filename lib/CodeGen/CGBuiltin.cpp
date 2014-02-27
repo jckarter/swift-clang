@@ -5349,22 +5349,28 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     Int = usgn ? Intrinsic::arm64_neon_uabd : Intrinsic::arm64_neon_sabd;
     if (Ty->isFPOrFPVectorTy()) Int = Intrinsic::arm64_neon_fabd;
     return EmitNeonCall(CGM.getIntrinsic(Int, Ty), Ops, "vabd");
-  case NEON::BI__builtin_neon_vabdl_v:
+  case NEON::BI__builtin_neon_vabdl_v: {
     // FIXME: probably remove when aarch64_simd.h is no longer supported
     // (arm_neon.h uses vabd + vmovl).
-    Int = usgn ? Intrinsic::arm64_neon_uabdl : Intrinsic::arm64_neon_sabdl;
-    return EmitNeonCall(CGM.getIntrinsic(Int, Ty), Ops, "vabdl");
+    Int = usgn ? Intrinsic::arm64_neon_uabd : Intrinsic::arm64_neon_sabd;
+    llvm::Type *ShortTy = llvm::VectorType::getTruncatedElementVectorType(VTy);
+    Value *V = EmitNeonCall(CGM.getIntrinsic(Int, ShortTy), Ops, "vabdl");
+    return Builder.CreateZExt(V, Ty);
+  }
   case NEON::BI__builtin_neon_vabal_v: {
     // FIXME: probably remove when aarch64_simd.h is no longer supported
     // (arm_neon.h delegates to vabdl and addition).
-    Int = usgn ? Intrinsic::arm64_neon_uabdl : Intrinsic::arm64_neon_sabdl;
+    Int = usgn ? Intrinsic::arm64_neon_uabd : Intrinsic::arm64_neon_sabd;
     SmallVector<llvm::Value*, 2> TmpOps;
     TmpOps.push_back(Ops[1]);
     TmpOps.push_back(Ops[2]);
-    llvm::Value *tmp =
-        EmitNeonCall(CGM.getIntrinsic(Int, Ty), TmpOps, "vabdl");
-    llvm::Value *addend = Builder.CreateBitCast(Ops[0], Ty);
-    return Builder.CreateAdd(addend, tmp);
+
+    llvm::Type *ShortTy = llvm::VectorType::getTruncatedElementVectorType(VTy);
+    Value *V = EmitNeonCall(CGM.getIntrinsic(Int, ShortTy), TmpOps, "vabdl");
+    V = Builder.CreateZExt(V, Ty);
+
+    llvm::Value *Addend = Builder.CreateBitCast(Ops[0], Ty);
+    return Builder.CreateAdd(Addend, V);
   }
   case NEON::BI__builtin_neon_vpadal_v:
   case NEON::BI__builtin_neon_vpadalq_v: {
@@ -6543,7 +6549,7 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
                         Ops, "vtbx4");
   }
   case NEON::BI__builtin_neon_vabdl_high_v: {
-    Int = usgn ? Intrinsic::arm64_neon_uabdl : Intrinsic::arm64_neon_sabdl;
+    Int = usgn ? Intrinsic::arm64_neon_uabd : Intrinsic::arm64_neon_sabd;
     unsigned NumElts = VTy->getNumElements();
     unsigned BitWidth =cast<IntegerType>(VTy->getElementType())->getBitWidth();
     llvm::Type *DInt =
@@ -6551,10 +6557,12 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     llvm::Type *ArgTy = llvm::VectorType::get(DInt, NumElts);
     Ops[0] = EmitExtractHigh(Ops[0], ArgTy);
     Ops[1] = EmitExtractHigh(Ops[1], ArgTy);
-    return EmitNeonCall(CGM.getIntrinsic(Int, VTy), Ops, "vabdl_high");
+    llvm::Type *ShortTy = llvm::VectorType::getTruncatedElementVectorType(VTy);
+    Value *V = EmitNeonCall(CGM.getIntrinsic(Int, ShortTy), Ops, "vabdl_high");
+    return Builder.CreateZExt(V, Ty);
   }
   case NEON::BI__builtin_neon_vabal_high_v: {
-    Int = usgn ? Intrinsic::arm64_neon_uabdl : Intrinsic::arm64_neon_sabdl;
+    Int = usgn ? Intrinsic::arm64_neon_uabd : Intrinsic::arm64_neon_sabd;
     unsigned NumElts = VTy->getNumElements();
     unsigned BitWidth =cast<IntegerType>(VTy->getElementType())->getBitWidth();
     llvm::Type *DInt =
@@ -6564,7 +6572,9 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     Ops[2] = EmitExtractHigh(Ops[2], ArgTy);
 
     SmallVector<llvm::Value*, 2> TmpOps(Ops.begin()+1, Ops.end());
-    Ops[1] = EmitNeonCall(CGM.getIntrinsic(Int, VTy), TmpOps, "vabdl_high");
+    llvm::Type *ShortTy = llvm::VectorType::getTruncatedElementVectorType(VTy);
+    Ops[1] = EmitNeonCall(CGM.getIntrinsic(Int, ShortTy), TmpOps, "vabdl_high");
+    Ops[1] = Builder.CreateZExt(Ops[1], Ty);
     return Builder.CreateAdd(Builder.CreateBitCast(Ops[0], Ty), Ops[1]);
   }
   case NEON::BI__builtin_neon_vaddw_high_v: {
