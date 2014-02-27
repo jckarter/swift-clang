@@ -792,8 +792,8 @@ void ASTContext::AddDeallocation(void (*Callback)(void*), void *Data) {
 }
 
 void
-ASTContext::setExternalSource(OwningPtr<ExternalASTSource> &Source) {
-  ExternalSource.reset(Source.take());
+ASTContext::setExternalSource(IntrusiveRefCntPtr<ExternalASTSource> Source) {
+  ExternalSource = Source;
 }
 
 void ASTContext::PrintStats() const {
@@ -847,7 +847,7 @@ void ASTContext::PrintStats() const {
                << NumImplicitDestructors
                << " implicit destructors created\n";
 
-  if (ExternalSource.get()) {
+  if (ExternalSource) {
     llvm::errs() << "\n";
     ExternalSource->PrintStats();
   }
