@@ -37,7 +37,7 @@ float64x2_t test_vdupq_lane_f64(float64x1_t V)
 {
     return vdupq_lane_f64(V, 0);
   // CHECK-LABEL: test_vdupq_lane_f64:
-  // CHECK: ins.d v0[1], v0[0]
+  // CHECK: dup.2d v0, v0[0]
   // CHECK-NEXT: ret
 }
 
