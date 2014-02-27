@@ -6642,6 +6642,14 @@ public:
                               IdentifierInfo *SuperName,
                               SourceLocation SuperLoc);
   
+  void ActOnSuperClassOfClassInterface(SourceLocation AtInterfaceLoc,
+                                       ObjCInterfaceDecl *IDecl,
+                                       ObjCInterfaceDecl *PrevClassDef,
+                                       IdentifierInfo *ClassName,
+                                       SourceLocation ClassLoc,
+                                       IdentifierInfo *SuperName,
+                                       SourceLocation SuperLoc);
+  
   void ActOnTypedefedProtocols(SmallVectorImpl<Decl *> &ProtocolRefs,
                                IdentifierInfo *SuperName,
                                SourceLocation SuperLoc);

@@ -450,6 +450,102 @@ class ObjCInterfaceValidatorCCC : public CorrectionCandidateCallback {
 
 }
 
+void Sema::
+ActOnSuperClassOfClassInterface(SourceLocation AtInterfaceLoc,
+                                ObjCInterfaceDecl *IDecl,
+                                ObjCInterfaceDecl *PrevClassDef,
+                                IdentifierInfo *ClassName,
+                                SourceLocation ClassLoc,
+                                IdentifierInfo *SuperName,
+                                SourceLocation SuperLoc) {
+  // Check if a different kind of symbol declared in this scope.
+  NamedDecl *PrevDecl = LookupSingleName(TUScope, SuperName, SuperLoc,
+                                         LookupOrdinaryName);
+    
+  if (!PrevDecl) {
+    // Try to correct for a typo in the superclass name without correcting
+    // to the class we're defining.
+    ObjCInterfaceValidatorCCC Validator(IDecl);
+    if (TypoCorrection Corrected = CorrectTypo(
+                                               DeclarationNameInfo(SuperName, SuperLoc),
+                                               LookupOrdinaryName, TUScope,
+                                               NULL, Validator)) {
+      diagnoseTypo(Corrected, PDiag(diag::err_undef_superclass_suggest)
+                   << SuperName << ClassName);
+      PrevDecl = Corrected.getCorrectionDeclAs<ObjCInterfaceDecl>();
+    }
+  }
+    
+  if (declaresSameEntity(PrevDecl, IDecl)) {
+    Diag(SuperLoc, diag::err_recursive_superclass)
+      << SuperName << ClassName << SourceRange(AtInterfaceLoc, ClassLoc);
+    IDecl->setEndOfDefinitionLoc(ClassLoc);
+  } else {
+    ObjCInterfaceDecl *SuperClassDecl =
+    dyn_cast_or_null<ObjCInterfaceDecl>(PrevDecl);
+      
+    // Diagnose classes that inherit from deprecated classes.
+    if (SuperClassDecl)
+      (void)DiagnoseUseOfDecl(SuperClassDecl, SuperLoc);
+      
+    if (PrevDecl && SuperClassDecl == 0) {
+      // The previous declaration was not a class decl. Check if we have a
+      // typedef. If we do, get the underlying class type.
+      if (const TypedefNameDecl *TDecl =
+          dyn_cast_or_null<TypedefNameDecl>(PrevDecl)) {
+        QualType T = TDecl->getUnderlyingType();
+        if (T->isObjCObjectType()) {
+          if (NamedDecl *IDecl = T->getAs<ObjCObjectType>()->getInterface()) {
+            SuperClassDecl = dyn_cast<ObjCInterfaceDecl>(IDecl);
+            // This handles the following case:
+            // @interface NewI @end
+            // typedef NewI DeprI __attribute__((deprecated("blah")))
+            // @interface SI : DeprI /* warn here */ @end
+            (void)DiagnoseUseOfDecl(const_cast<TypedefNameDecl*>(TDecl), SuperLoc);
+          }
+        }
+      }
+        
+      // This handles the following case:
+      //
+      // typedef int SuperClass;
+      // @interface MyClass : SuperClass {} @end
+      //
+      if (!SuperClassDecl) {
+        Diag(SuperLoc, diag::err_redefinition_different_kind) << SuperName;
+        Diag(PrevDecl->getLocation(), diag::note_previous_definition);
+      }
+    }
+      
+    if (!dyn_cast_or_null<TypedefNameDecl>(PrevDecl)) {
+      if (!SuperClassDecl)
+        Diag(SuperLoc, diag::err_undef_superclass)
+          << SuperName << ClassName << SourceRange(AtInterfaceLoc, ClassLoc);
+      else if (RequireCompleteType(SuperLoc,
+                                   Context.getObjCInterfaceType(SuperClassDecl),
+                                   diag::err_forward_superclass,
+                                   SuperClassDecl->getDeclName(),
+                                   ClassName,
+                                   SourceRange(AtInterfaceLoc, ClassLoc))) {
+        SuperClassDecl = 0;
+      }
+    }
+    if (PrevClassDef) {
+      ObjCInterfaceDecl *completeSuper = PrevClassDef->getSuperClass();
+      if (!declaresSameEntity(completeSuper, SuperClassDecl)) {
+        Diag(IDecl->getLocation(),
+             diag::err_partial_complete_class_super_mismatch);
+        Diag(PrevClassDef->getLocation(), diag::note_previous_definition);
+              IDecl->setInvalidDecl();
+      }
+    }
+      
+    IDecl->setSuperClass(SuperClassDecl);
+    IDecl->setSuperClassLoc(SuperLoc);
+    IDecl->setEndOfDefinitionLoc(SuperLoc);
+  }
+}
+
 Decl *Sema::
 ActOnStartClassInterface(SourceLocation AtInterfaceLoc,
                          IdentifierInfo *ClassName, SourceLocation ClassLoc,
@@ -532,93 +628,10 @@ ActOnStartClassInterface(SourceLocation AtInterfaceLoc,
       cast<ObjCInterfaceType>(IDecl->getTypeForDecl())->setDecl(IDecl);
     }
   
-  if (SuperName) {
-    // Check if a different kind of symbol declared in this scope.
-    PrevDecl = LookupSingleName(TUScope, SuperName, SuperLoc,
-                                LookupOrdinaryName);
-
-    if (!PrevDecl) {
-      // Try to correct for a typo in the superclass name without correcting
-      // to the class we're defining.
-      ObjCInterfaceValidatorCCC Validator(IDecl);
-      if (TypoCorrection Corrected = CorrectTypo(
-          DeclarationNameInfo(SuperName, SuperLoc), LookupOrdinaryName, TUScope,
-          NULL, Validator)) {
-        diagnoseTypo(Corrected, PDiag(diag::err_undef_superclass_suggest)
-                                    << SuperName << ClassName);
-        PrevDecl = Corrected.getCorrectionDeclAs<ObjCInterfaceDecl>();
-      }
-    }
-
-    if (declaresSameEntity(PrevDecl, IDecl)) {
-      Diag(SuperLoc, diag::err_recursive_superclass)
-        << SuperName << ClassName << SourceRange(AtInterfaceLoc, ClassLoc);
-      IDecl->setEndOfDefinitionLoc(ClassLoc);
-    } else {
-      ObjCInterfaceDecl *SuperClassDecl =
-                                dyn_cast_or_null<ObjCInterfaceDecl>(PrevDecl);
-
-      // Diagnose classes that inherit from deprecated classes.
-      if (SuperClassDecl)
-        (void)DiagnoseUseOfDecl(SuperClassDecl, SuperLoc);
-
-      if (PrevDecl && SuperClassDecl == 0) {
-        // The previous declaration was not a class decl. Check if we have a
-        // typedef. If we do, get the underlying class type.
-        if (const TypedefNameDecl *TDecl =
-              dyn_cast_or_null<TypedefNameDecl>(PrevDecl)) {
-          QualType T = TDecl->getUnderlyingType();
-          if (T->isObjCObjectType()) {
-            if (NamedDecl *IDecl = T->getAs<ObjCObjectType>()->getInterface()) {
-              SuperClassDecl = dyn_cast<ObjCInterfaceDecl>(IDecl);
-              // This handles the following case:
-              // @interface NewI @end
-              // typedef NewI DeprI __attribute__((deprecated("blah")))
-              // @interface SI : DeprI /* warn here */ @end
-              (void)DiagnoseUseOfDecl(const_cast<TypedefNameDecl*>(TDecl), SuperLoc);
-            }
-          }
-        }
-
-        // This handles the following case:
-        //
-        // typedef int SuperClass;
-        // @interface MyClass : SuperClass {} @end
-        //
-        if (!SuperClassDecl) {
-          Diag(SuperLoc, diag::err_redefinition_different_kind) << SuperName;
-          Diag(PrevDecl->getLocation(), diag::note_previous_definition);
-        }
-      }
-
-      if (!dyn_cast_or_null<TypedefNameDecl>(PrevDecl)) {
-        if (!SuperClassDecl)
-          Diag(SuperLoc, diag::err_undef_superclass)
-            << SuperName << ClassName << SourceRange(AtInterfaceLoc, ClassLoc);
-        else if (RequireCompleteType(SuperLoc, 
-                                  Context.getObjCInterfaceType(SuperClassDecl),
-                                     diag::err_forward_superclass,
-                                     SuperClassDecl->getDeclName(),
-                                     ClassName,
-                                     SourceRange(AtInterfaceLoc, ClassLoc))) {
-          SuperClassDecl = 0;
-        }
-      }
-      if (PrevPartialClassDecl) {
-        ObjCInterfaceDecl *completeSuper = PrevPartialClassDecl->getSuperClass();
-        if (!declaresSameEntity(completeSuper, SuperClassDecl)) {
-          Diag(IDecl->getLocation(),
-               diag::err_partial_complete_class_super_mismatch);
-          Diag(PrevPartialClassDecl->getLocation(), diag::note_previous_definition);
-          IDecl->setInvalidDecl();
-        }
-      }
-
-      IDecl->setSuperClass(SuperClassDecl);
-      IDecl->setSuperClassLoc(SuperLoc);
-      IDecl->setEndOfDefinitionLoc(SuperLoc);
-    }
-  } else { // we have a root class.
+  if (SuperName)
+    ActOnSuperClassOfClassInterface(AtInterfaceLoc, IDecl, PrevPartialClassDecl,
+                                    ClassName, ClassLoc, SuperName, SuperLoc);
+  else { // we have a root class.
     if (PrevPartialClassDecl && PrevPartialClassDecl->getSuperClass()) {
       Diag(IDecl->getLocation(),
            diag::err_partial_complete_class_super_mismatch);
@@ -686,92 +699,10 @@ Decl *Sema::ActOnPartialInterface(SourceLocation AtPartialInterfaceLoc,
     IDecl->SetIsPartialInterface();
   }
   
-  if (SuperName) {
-    // Check if a different kind of symbol declared in this scope.
-    PrevDecl = LookupSingleName(TUScope, SuperName, SuperLoc,
-                                LookupOrdinaryName);
-    
-    if (!PrevDecl) {
-      // Try to correct for a typo in the superclass name without correcting
-      // to the class we're defining.
-      ObjCInterfaceValidatorCCC Validator(IDecl);
-      if (TypoCorrection Corrected = CorrectTypo(
-            DeclarationNameInfo(SuperName, SuperLoc), LookupOrdinaryName, TUScope,
-                                                 NULL, Validator)) {
-        diagnoseTypo(Corrected, PDiag(diag::err_undef_superclass_suggest)
-                     << SuperName << ClassName);
-        PrevDecl = Corrected.getCorrectionDeclAs<ObjCInterfaceDecl>();
-      }
-    }
-    
-    if (declaresSameEntity(PrevDecl, IDecl)) {
-      Diag(SuperLoc, diag::err_recursive_superclass)
-      << SuperName << ClassName << SourceRange(AtPartialInterfaceLoc, ClassLoc);
-      IDecl->setEndOfDefinitionLoc(ClassLoc);
-    } else {
-      ObjCInterfaceDecl *SuperClassDecl =
-      dyn_cast_or_null<ObjCInterfaceDecl>(PrevDecl);
-      
-      // Diagnose classes that inherit from deprecated classes.
-      if (SuperClassDecl)
-        (void)DiagnoseUseOfDecl(SuperClassDecl, SuperLoc);
-      
-      if (PrevDecl && SuperClassDecl == 0) {
-        // The previous declaration was not a class decl. Check if we have a
-        // typedef. If we do, get the underlying class type.
-        if (const TypedefNameDecl *TDecl =
-            dyn_cast_or_null<TypedefNameDecl>(PrevDecl)) {
-          QualType T = TDecl->getUnderlyingType();
-          if (T->isObjCObjectType()) {
-            if (NamedDecl *IDecl = T->getAs<ObjCObjectType>()->getInterface()) {
-              SuperClassDecl = dyn_cast<ObjCInterfaceDecl>(IDecl);
-              // This handles the following case:
-              // @interface NewI @end
-              // typedef NewI DeprI __attribute__((deprecated("blah")))
-              // @interface SI : DeprI /* warn here */ @end
-              (void)DiagnoseUseOfDecl(const_cast<TypedefNameDecl*>(TDecl), SuperLoc);
-            }
-          }
-        }
-        
-        // This handles the following case:
-        //
-        // typedef int SuperClass;
-        // @interface MyClass : SuperClass;
-        //
-        if (!SuperClassDecl) {
-          Diag(SuperLoc, diag::err_redefinition_different_kind) << SuperName;
-          Diag(PrevDecl->getLocation(), diag::note_previous_definition);
-        }
-      }
-      
-      if (!dyn_cast_or_null<TypedefNameDecl>(PrevDecl)) {
-        if (!SuperClassDecl)
-          Diag(SuperLoc, diag::err_undef_superclass)
-          << SuperName << ClassName << SourceRange(AtPartialInterfaceLoc, ClassLoc);
-        else if (RequireCompleteType(SuperLoc,
-                                     Context.getObjCInterfaceType(SuperClassDecl),
-                                     diag::err_forward_superclass,
-                                     SuperClassDecl->getDeclName(),
-                                     ClassName,
-                                     SourceRange(AtPartialInterfaceLoc, ClassLoc))) {
-          SuperClassDecl = 0;
-        }
-      }
-      if (PrevCompleteDef) {
-        ObjCInterfaceDecl *completeSuper = PrevCompleteDef->getSuperClass();
-          if (!declaresSameEntity(completeSuper, SuperClassDecl)) {
-            Diag(IDecl->getLocation(),
-                 diag::err_partial_complete_class_super_mismatch);
-            Diag(PrevCompleteDef->getLocation(), diag::note_previous_definition);
-            IDecl->setInvalidDecl();
-          }
-        }
-      IDecl->setSuperClass(SuperClassDecl);
-      IDecl->setSuperClassLoc(SuperLoc);
-      IDecl->setEndOfDefinitionLoc(SuperLoc);
-    }
-  } else { // we have a root class.
+  if (SuperName)
+    ActOnSuperClassOfClassInterface(AtPartialInterfaceLoc, IDecl, PrevCompleteDef,
+                                    ClassName, ClassLoc, SuperName, SuperLoc);
+  else { // we have a root class.
     if (PrevCompleteDef && PrevCompleteDef->getSuperClass()) {
       Diag(IDecl->getLocation(),
            diag::err_partial_complete_class_super_mismatch);
