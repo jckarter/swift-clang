@@ -60,3 +60,8 @@ typedef int BogusSuperClass; // expected-note {{previous definition is here}}
 __attribute((objc_complete_definition))
 @interface MyShinySubClass : MyShiny2ndClass
 @end
+
+@partial_interface foo; // expected-note {{class is declared here}}
+@class foo;
+@implementation foo // expected-error {{attempting to implement  partial class foo}}
+@end
