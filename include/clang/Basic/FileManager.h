@@ -27,6 +27,7 @@
 #include "llvm/Support/Allocator.h"
 // FIXME: Enhance libsystem to support inode and other fields in stat.
 #include <sys/types.h>
+#include <map>
 
 #ifdef _MSC_VER
 typedef unsigned short mode_t;
@@ -66,6 +67,7 @@ class FileEntry {
   llvm::sys::fs::UniqueID UniqueID;
   bool IsNamedPipe;
   bool InPCH;
+  bool IsValid;               // Is this \c FileEntry initialized and valid?
 
   /// \brief The open file, if it is owned by the \p FileEntry.
   mutable OwningPtr<vfs::File> File;
@@ -75,26 +77,23 @@ class FileEntry {
     File.reset(0); // rely on destructor to close File
   }
 
+  void operator=(const FileEntry &) LLVM_DELETED_FUNCTION;
+
 public:
-  FileEntry(llvm::sys::fs::UniqueID UniqueID, bool IsNamedPipe, bool InPCH)
-      : Name(0), UniqueID(UniqueID), IsNamedPipe(IsNamedPipe), InPCH(InPCH)
-  {}
-  // Add a default constructor for use with llvm::StringMap
   FileEntry()
-      : Name(0), UniqueID(0, 0), IsNamedPipe(false), InPCH(false)
+      : Name(0), UniqueID(0, 0), IsNamedPipe(false), InPCH(false),
+        IsValid(false)
   {}
 
+  // FIXME: this is here to allow putting FileEntry in std::map.  Once we have
+  // emplace, we shouldn't need a copy constructor anymore.
   FileEntry(const FileEntry &FE) {
     memcpy(this, &FE, sizeof(FE));
-    assert(!File && "Cannot copy a file-owning FileEntry");
-  }
-
-  void operator=(const FileEntry &FE) {
-    memcpy(this, &FE, sizeof(FE));
-    assert(!File && "Cannot assign a file-owning FileEntry");
+    assert(!isValid() && "Cannot copy an initialized FileEntry");
   }
 
   const char *getName() const { return Name; }
+  bool isValid() const { return IsValid; }
   off_t getSize() const { return Size; }
   unsigned getUID() const { return UID; }
   const llvm::sys::fs::UniqueID &getUniqueID() const { return UniqueID; }
@@ -124,14 +123,11 @@ class FileManager : public RefCountedBase<FileManager> {
   IntrusiveRefCntPtr<vfs::FileSystem> FS;
   FileSystemOptions FileSystemOpts;
 
-  class UniqueDirContainer;
-  class UniqueFileContainer;
-
   /// \brief Cache for existing real directories.
-  UniqueDirContainer &UniqueRealDirs;
+  std::map<llvm::sys::fs::UniqueID, DirectoryEntry> UniqueRealDirs;
 
   /// \brief Cache for existing real files.
-  UniqueFileContainer &UniqueRealFiles;
+  std::map<llvm::sys::fs::UniqueID, FileEntry> UniqueRealFiles;
 
   /// \brief The virtual directories that we have allocated.
   ///

@@ -653,6 +653,12 @@ enum CXDiagnosticSeverity {
   CXDiagnostic_Note    = 1,
 
   /**
+   * \brief This diagnostic is a remark that provides additional information
+   * for the user.
+   */
+  CXDiagnostic_Remark = 5,
+
+  /**
    * \brief This diagnostic indicates suspicious code that may not be
    * wrong.
    */
@@ -3079,6 +3085,24 @@ enum CXRefQualifierKind {
   /** \brief An rvalue ref-qualifier was provided (\c &&). */
   CXRefQualifier_RValue
 };
+
+/**
+ * \brief Returns the number of template arguments for given class template
+ * specialization, or -1 if type \c T is not a class template specialization.
+ *
+ * Variadic argument packs count as only one argument, and can not be inspected
+ * further.
+ */
+CINDEX_LINKAGE int clang_Type_getNumTemplateArguments(CXType T);
+
+/**
+ * \brief Returns the type template argument of a template class specialization
+ * at given index.
+ *
+ * This function only returns template type arguments and does not handle
+ * template template arguments or variadic packs.
+ */
+CINDEX_LINKAGE CXType clang_Type_getTemplateArgumentAsType(CXType T, unsigned i);
 
 /**
  * \brief Retrieve the ref-qualifier kind of a function or method.

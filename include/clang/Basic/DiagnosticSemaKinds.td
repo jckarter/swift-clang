@@ -500,8 +500,10 @@ def warn_pragma_pack_pop_identifer_and_alignment : Warning<
   "specifying both a name and alignment to 'pop' is undefined">;
 def warn_pragma_pop_failed : Warning<"#pragma %0(pop, ...) failed: %1">,
   InGroup<IgnoredPragmas>;
-def warn_pragma_ms_struct_failed : Warning<"#pramga ms_struct can not be used with dynamic classes or structures">,
-  InGroup<IgnoredPragmas>;
+def warn_cxx_ms_struct :
+  Warning<"ms_struct may not produce MSVC-compatible layouts for classes "
+          "with base classes or virtual functions">,
+  DefaultError, InGroup<IncompatibleMSStruct>;
 
 def warn_pragma_unused_undeclared_var : Warning<
   "undeclared variable %0 used as an argument for '#pragma unused'">,
@@ -5723,6 +5725,11 @@ def warn_cxx98_compat_pass_non_pod_arg_to_vararg : Warning<
   "passing object of trivial but non-POD type %0 through variadic"
   " %select{function|block|method|constructor}1 is incompatible with C++98">,
   InGroup<CXX98Compat>, DefaultIgnore;
+def warn_pass_class_arg_to_vararg : Warning<
+  "passing object of class type %0 through variadic "
+  "%select{function|block|method|constructor}1"
+  "%select{|; did you mean to call '%3'?}2">,
+  InGroup<ClassVarargs>, DefaultIgnore;
 def err_cannot_pass_to_vararg : Error<
   "cannot pass %select{expression of type %1|initializer list}0 to variadic "
   "%select{function|block|method|constructor}2">;

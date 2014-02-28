@@ -2854,7 +2854,7 @@ public:
                          const analyze_printf::OptionalFlag &flag,
                          const char *startSpecifier, unsigned specifierLen);
   bool checkForCStrMembers(const analyze_printf::ArgType &AT,
-                           const Expr *E, const CharSourceRange &CSR);
+                           const Expr *E);
 
 };  
 }
@@ -2988,11 +2988,12 @@ CXXRecordMembersNamed(StringRef Name, Sema &S, QualType Ty) {
   if (!RT)
     return Results;
   const CXXRecordDecl *RD = dyn_cast<CXXRecordDecl>(RT->getDecl());
-  if (!RD)
+  if (!RD || !RD->getDefinition())
     return Results;
 
   LookupResult R(S, &S.PP.getIdentifierTable().get(Name), SourceLocation(),
                  Sema::LookupMemberName);
+  R.suppressDiagnostics();
 
   // We just need to include all members of the right kind turned up by the
   // filter, at this point.
@@ -3005,12 +3006,26 @@ CXXRecordMembersNamed(StringRef Name, Sema &S, QualType Ty) {
   return Results;
 }
 
+/// Check if we could call '.c_str()' on an object.
+///
+/// FIXME: This returns the wrong results in some cases (if cv-qualifiers don't
+/// allow the call, or if it would be ambiguous).
+bool Sema::hasCStrMethod(const Expr *E) {
+  typedef llvm::SmallPtrSet<CXXMethodDecl*, 1> MethodSet;
+  MethodSet Results =
+      CXXRecordMembersNamed<CXXMethodDecl>("c_str", *this, E->getType());
+  for (MethodSet::iterator MI = Results.begin(), ME = Results.end();
+       MI != ME; ++MI)
+    if ((*MI)->getMinRequiredArguments() == 0)
+      return true;
+  return false;
+}
+
 // Check if a (w)string was passed when a (w)char* was needed, and offer a
 // better diagnostic if so. AT is assumed to be valid.
 // Returns true when a c_str() conversion method is found.
 bool CheckPrintfHandler::checkForCStrMembers(
-    const analyze_printf::ArgType &AT, const Expr *E,
-    const CharSourceRange &CSR) {
+    const analyze_printf::ArgType &AT, const Expr *E) {
   typedef llvm::SmallPtrSet<CXXMethodDecl*, 1> MethodSet;
 
   MethodSet Results =
@@ -3019,7 +3034,7 @@ bool CheckPrintfHandler::checkForCStrMembers(
   for (MethodSet::iterator MI = Results.begin(), ME = Results.end();
        MI != ME; ++MI) {
     const CXXMethodDecl *Method = *MI;
-    if (Method->getNumParams() == 0 &&
+    if (Method->getMinRequiredArguments() == 0 &&
         AT.matchesType(S.Context, Method->getReturnType())) {
       // FIXME: Suggest parens if the expression needs them.
       SourceLocation EndLoc =
@@ -3406,7 +3421,7 @@ CheckPrintfHandler::checkFormatExpr(const analyze_printf::PrintfSpecifier &FS,
           << CSR
           << E->getSourceRange(),
         E->getLocStart(), /*IsStringLocation*/false, CSR);
-      checkForCStrMembers(AT, E, CSR);
+      checkForCStrMembers(AT, E);
       break;
 
     case Sema::VAK_Invalid:
