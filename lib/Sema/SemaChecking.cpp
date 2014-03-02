@@ -3866,7 +3866,7 @@ static unsigned changeAbsFunction(unsigned AbsKind,
   llvm_unreachable("Unable to convert function");
 }
 
-unsigned getAbsoluteValueFunctionKind(const FunctionDecl *FDecl) {
+static unsigned getAbsoluteValueFunctionKind(const FunctionDecl *FDecl) {
   const IdentifierInfo *FnInfo = FDecl->getIdentifier();
   if (!FnInfo)
     return 0;
