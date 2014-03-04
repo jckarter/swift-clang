@@ -6502,7 +6502,7 @@ llvm::Value *CGObjCNonFragileABIMac::EmitIvarOffset(
   const ObjCIvarDecl *Ivar) {
   llvm::Value *IvarOffsetValue = ObjCIvarOffsetVariable(Interface, Ivar);
   IvarOffsetValue = CGF.Builder.CreateLoad(IvarOffsetValue, "ivar");
-  if (IsIvarOffsetKnownIdempotent(CGF, Interface, Ivar))
+  if (IsIvarOffsetKnownIdempotent(CGF, Ivar))
     cast<llvm::LoadInst>(IvarOffsetValue)
       ->setMetadata(CGM.getModule().getMDKindID("invariant.load"),
                     llvm::MDNode::get(VMContext, ArrayRef<llvm::Value*>()));
