@@ -6061,7 +6061,7 @@ SparcV9TargetCodeGenInfo::initDwarfEHRegSizeTable(CodeGen::CodeGenFunction &CGF,
 
 
 //===----------------------------------------------------------------------===//
-// Xcore ABI Implementation
+// XCore ABI Implementation
 //===----------------------------------------------------------------------===//
 namespace {
 class XCoreABIInfo : public DefaultABIInfo {
@@ -6071,9 +6071,9 @@ public:
                                  CodeGenFunction &CGF) const;
 };
 
-class XcoreTargetCodeGenInfo : public TargetCodeGenInfo {
+class XCoreTargetCodeGenInfo : public TargetCodeGenInfo {
 public:
-  XcoreTargetCodeGenInfo(CodeGenTypes &CGT)
+  XCoreTargetCodeGenInfo(CodeGenTypes &CGT)
     :TargetCodeGenInfo(new XCoreABIInfo(CGT)) {}
 };
 } // End anonymous namespace.
@@ -6249,7 +6249,7 @@ const TargetCodeGenInfo &CodeGenModule::getTargetCodeGenInfo() {
   case llvm::Triple::sparcv9:
     return *(TheTargetCodeGenInfo = new SparcV9TargetCodeGenInfo(Types));
   case llvm::Triple::xcore:
-    return *(TheTargetCodeGenInfo = new XcoreTargetCodeGenInfo(Types));
+    return *(TheTargetCodeGenInfo = new XCoreTargetCodeGenInfo(Types));
 
   }
 }
