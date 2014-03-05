@@ -1456,8 +1456,7 @@ private:
     // interface, we cannot perform this check.
     if (const ObjCMethodDecl *MD =
           dyn_cast_or_null<ObjCMethodDecl>(CGF.CurFuncDecl))
-      if (MD->isInstanceMethod() &&
-          !isa<ObjCProtocolDecl>(MD->getDeclContext()))
+      if (MD->isInstanceMethod())
         if (const ObjCInterfaceDecl *ID = MD->getClassInterface())
           return IV->getContainingInterface()->isSuperClassOf(ID);
     return false;
