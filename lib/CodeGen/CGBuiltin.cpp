@@ -5277,15 +5277,12 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
   case NEON::BI__builtin_neon_vsetq_lane_f32:
     Ops.push_back(EmitScalarExpr(E->getArg(2)));
     return Builder.CreateInsertElement(Ops[1], Ops[0], Ops[2], "vset_lane");
-  // The code below is a necessary, but not sufficient condition to have a
-  // working vset_lane_f64.  Punt for now.  Perhaps replacing Ops[1] with a
-  // bitcast from the source to Ops[1] to vif64 would work better?
-  // case NEON::BI__builtin_neon_vset_lane_f64:
-  //   // The vector type needs a cast for the v1f64 variant.
-  //   Ops[1] = Builder.CreateBitCast(Ops[1],
-  //       llvm::VectorType::get(llvm::Type::getDoubleTy(getLLVMContext()), 1));
-  //   Ops.push_back(EmitScalarExpr(E->getArg(2)));
-  //   return Builder.CreateInsertElement(Ops[1], Ops[0], Ops[2], "vset_lane");
+  case NEON::BI__builtin_neon_vset_lane_f64:
+    // The vector type needs a cast for the v1f64 variant.
+    Ops[1] = Builder.CreateBitCast(Ops[1],
+                                   llvm::VectorType::get(DoubleTy, 1));
+    Ops.push_back(EmitScalarExpr(E->getArg(2)));
+    return Builder.CreateInsertElement(Ops[1], Ops[0], Ops[2], "vset_lane");
   case NEON::BI__builtin_neon_vsetq_lane_f64:
     // The vector type needs a cast for the v2f64 variant.
     Ops[1] = Builder.CreateBitCast(Ops[1],
@@ -5748,6 +5745,11 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     Int = Intrinsic::round;
     return EmitNeonCall(CGM.getIntrinsic(Int, Ty), Ops, "vrnda");
   }
+  case NEON::BI__builtin_neon_vrndi_v:
+  case NEON::BI__builtin_neon_vrndiq_v: {
+    Int = Intrinsic::nearbyint;
+    return EmitNeonCall(CGM.getIntrinsic(Int, Ty), Ops, "vrndi");
+  }
   case NEON::BI__builtin_neon_vrndm_v:
   case NEON::BI__builtin_neon_vrndmq_v: {
     Int = Intrinsic::floor;
@@ -5775,6 +5777,26 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     Int = Intrinsic::trunc;
     return EmitNeonCall(CGM.getIntrinsic(Int, Ty), Ops, "vrndz");
   }
+  case NEON::BI__builtin_neon_vceqz_v:
+  case NEON::BI__builtin_neon_vceqzq_v:
+    return EmitAArch64CompareBuiltinExpr(Ops[0], Ty, ICmpInst::FCMP_OEQ,
+                                         ICmpInst::ICMP_EQ, "vceqz");
+  case NEON::BI__builtin_neon_vcgez_v:
+  case NEON::BI__builtin_neon_vcgezq_v:
+    return EmitAArch64CompareBuiltinExpr(Ops[0], Ty, ICmpInst::FCMP_OGE,
+                                         ICmpInst::ICMP_SGE, "vcgez");
+  case NEON::BI__builtin_neon_vclez_v:
+  case NEON::BI__builtin_neon_vclezq_v:
+    return EmitAArch64CompareBuiltinExpr(Ops[0], Ty, ICmpInst::FCMP_OLE,
+                                         ICmpInst::ICMP_SLE, "vclez");
+  case NEON::BI__builtin_neon_vcgtz_v:
+  case NEON::BI__builtin_neon_vcgtzq_v:
+    return EmitAArch64CompareBuiltinExpr(Ops[0], Ty, ICmpInst::FCMP_OGT,
+                                         ICmpInst::ICMP_SGT, "vcgtz");
+  case NEON::BI__builtin_neon_vcltz_v:
+  case NEON::BI__builtin_neon_vcltzq_v:
+    return EmitAArch64CompareBuiltinExpr(Ops[0], Ty, ICmpInst::FCMP_OLT,
+                                         ICmpInst::ICMP_SLT, "vcltz");
   case NEON::BI__builtin_neon_vcvtq_f64_v:
     Ops[0] = Builder.CreateBitCast(Ops[0], Ty);
     Ty = GetNeonType(this, NeonTypeFlags(NeonTypeFlags::Float64, false, true));
@@ -7120,6 +7142,11 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     }
     Ops.push_back(llvm::ConstantVector::get(Indices));
     return Builder.CreateShuffleVector(Ops[0], Ops[1], Ops[2], "vtrn2");
+  }
+  case NEON::BI__builtin_neon_vuqadd_v:
+  case NEON::BI__builtin_neon_vuqaddq_v: {
+    Int = Intrinsic::arm64_neon_suqadd;
+    return EmitNeonCall(CGM.getIntrinsic(Int, Ty), Ops, "vuqadd");
   }
   case NEON::BI__builtin_neon_vuzp1_v:
   case NEON::BI__builtin_neon_vuzp1q_v: {

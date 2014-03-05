@@ -213,8 +213,9 @@ public:
     this->TLSSupported =
         (Triple.isMacOSX() && !Triple.isMacOSXVersionLT(10, 7)) ||
         (Triple.getOS() == llvm::Triple::IOS &&
-         Triple.getArch() != llvm::Triple::arm &&
-         Triple.getArch() != llvm::Triple::thumb && !Triple.isOSVersionLT(8));
+         (Triple.getArch() == llvm::Triple::x86_64 ||
+          Triple.getArch() == llvm::Triple::arm64) &&
+         !Triple.isOSVersionLT(8));
     this->MCountName = "\01mcount";
   }
 
