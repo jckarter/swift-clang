@@ -251,7 +251,10 @@ static bool bodyEndsWithNoReturn(const CFGBlock *B) {
   for (CFGBlock::const_reverse_iterator I = B->rbegin(), E = B->rend();
        I != E; ++I) {
     if (Optional<CFGStmt> CS = I->getAs<CFGStmt>()) {
-      if (const CallExpr *CE = dyn_cast<CallExpr>(CS->getStmt())) {
+      const Stmt *S = CS->getStmt();
+      if (const ExprWithCleanups *EWC = dyn_cast<ExprWithCleanups>(S))
+        S = EWC->getSubExpr();
+      if (const CallExpr *CE = dyn_cast<CallExpr>(S)) {
         QualType CalleeType = CE->getCallee()->getType();
         if (getFunctionExtInfo(*CalleeType).getNoReturn())
           return true;
@@ -290,21 +293,76 @@ static bool isEnumConstant(const Expr *Ex) {
   return isa<EnumConstantDecl>(DR->getDecl());
 }
 
+static const Expr *stripStdStringCtor(const Expr *Ex) {
+  // Go crazy pattern matching an implicit construction of std::string("").
+  const ExprWithCleanups *EWC = dyn_cast<ExprWithCleanups>(Ex);
+  if (!EWC)
+    return 0;
+  const CXXConstructExpr *CCE = dyn_cast<CXXConstructExpr>(EWC->getSubExpr());
+  if (!CCE)
+    return 0;
+  QualType Ty = CCE->getType();
+  if (const ElaboratedType *ET = dyn_cast<ElaboratedType>(Ty))
+    Ty = ET->getNamedType();
+  const TypedefType *TT = dyn_cast<TypedefType>(Ty);
+  StringRef Name = TT->getDecl()->getName();
+  if (Name != "string")
+    return 0;
+  if (CCE->getNumArgs() != 1)
+    return 0;
+  const MaterializeTemporaryExpr *MTE =
+    dyn_cast<MaterializeTemporaryExpr>(CCE->getArg(0));
+  if (!MTE)
+    return 0;
+  CXXBindTemporaryExpr *CBT =
+    dyn_cast<CXXBindTemporaryExpr>(MTE->GetTemporaryExpr()->IgnoreParenCasts());
+  if (!CBT)
+    return 0;
+  Ex = CBT->getSubExpr()->IgnoreParenCasts();
+  CCE = dyn_cast<CXXConstructExpr>(Ex);
+  if (!CCE)
+    return 0;
+  if (CCE->getNumArgs() != 1)
+    return 0;
+  return dyn_cast<StringLiteral>(CCE->getArg(0)->IgnoreParenCasts());
+}
+
+/// Strip away "sugar" around trivial expressions that are for the
+/// purpose of this analysis considered uninteresting for dead code warnings.
+static const Expr *stripExprSugar(const Expr *Ex) {
+  Ex = Ex->IgnoreParenCasts();
+  // If 'Ex' is a constructor for a std::string, strip that
+  // away.  We can only get here if the trivial expression was
+  // something like a C string literal, with the std::string
+  // just wrapping that value.
+  if (const Expr *StdStringVal = stripStdStringCtor(Ex))
+    return StdStringVal;
+  return Ex;
+}
+
 static bool isTrivialExpression(const Expr *Ex) {
   Ex = Ex->IgnoreParenCasts();
   return isa<IntegerLiteral>(Ex) || isa<StringLiteral>(Ex) ||
          isEnumConstant(Ex);
 }
 
-static bool isTrivialReturn(const CFGBlock *B, const Stmt *S) {
-  if (B->pred_empty())
-    return false;
-
+static bool isTrivialReturnOrDoWhile(const CFGBlock *B, const Stmt *S) {
   const Expr *Ex = dyn_cast<Expr>(S);
   if (!Ex)
     return false;
 
   if (!isTrivialExpression(Ex))
+    return false;
+
+  // Check if the block ends with a do...while() and see if 'S' is the
+  // condition.
+  if (const Stmt *Term = B->getTerminator()) {
+    if (const DoStmt *DS = dyn_cast<DoStmt>(Term))
+      if (DS->getCond() == S)
+        return true;
+  }
+
+  if (B->pred_size() != 1)
     return false;
 
   // Look to see if the block ends with a 'return', and see if 'S'
@@ -316,13 +374,12 @@ static bool isTrivialReturn(const CFGBlock *B, const Stmt *S) {
     if (Optional<CFGStmt> CS = I->getAs<CFGStmt>()) {
       if (const ReturnStmt *RS = dyn_cast<ReturnStmt>(CS->getStmt())) {
         const Expr *RE = RS->getRetValue();
-        if (RE && RE->IgnoreParenCasts() == Ex)
-          return true;
+        if (RE && stripExprSugar(RE->IgnoreParenCasts()) == Ex)
+          return bodyEndsWithNoReturn(*B->pred_begin());
       }
       break;
     }
   }
-
   return false;
 }
 
@@ -336,7 +393,7 @@ void DeadCodeScan::reportDeadCode(const CFGBlock *B,
     return;
 
   // Suppress trivial 'return' statements that are dead.
-  if (isTrivialReturn(B, S))
+  if (isTrivialReturnOrDoWhile(B, S))
     return;
 
   SourceRange R1, R2;
@@ -400,6 +457,10 @@ static bool isConfigurationValue(const Stmt *S) {
 
 /// Returns true if we should always explore all successors of a block.
 static bool shouldTreatSuccessorsAsReachable(const CFGBlock *B) {
+  if (const Stmt *Term = B->getTerminator())
+    if (isa<SwitchStmt>(Term))
+      return true;
+
   return isConfigurationValue(B->getTerminatorCondition());
 }
 
@@ -443,24 +504,6 @@ unsigned ScanReachableFromBlock(const CFGBlock *Start,
           B = UB;
           break;
         }
-
-        // For switch statements, treat all cases as being reachable.
-        // There are many cases where a switch can contain values that
-        // are not in an enumeration but they are still reachable because
-        // other values are possible.
-        //
-        // Note that this is quite conservative.  If one saw:
-        //
-        //  switch (1) {
-        //    case 2: ...
-        //
-        // we should be able to say that 'case 2' is unreachable.  To do
-        // this we can either put more heuristics here, or possibly retain
-        // that information in the CFG itself.
-        //
-        const Stmt *Label = UB->getLabel();
-        if (Label && isa<SwitchCase>(Label))
-          B = UB;
       }
       while (false);
 
