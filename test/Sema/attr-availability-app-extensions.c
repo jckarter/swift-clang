@@ -7,7 +7,12 @@
 #endif
 void f0(int); // expected-note {{'f0' has been explicitly marked unavailable here}}
 
+__attribute__((availability(macosx,unavailable)))
+__attribute__((availability(ios,unavailable)))
+void f1(int); // expected-note {{'f1' has been explicitly marked unavailable here}}
+
 void test() {
   f0(1); // expected-error {{'f0' is unavailable: not available on}}
+  f1(1); // expected-error {{'f1' is unavailable}}
 }
 
