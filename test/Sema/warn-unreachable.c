@@ -161,6 +161,7 @@ int test_break_preceded_by_noreturn(int i) {
       break; // expected-warning {{will never be executed}}
     default:
       break;
+      break; // expected-warning {{will never be executed}}
   }
   return i;
 }
@@ -203,6 +204,27 @@ MyEnum trival_dead_return_enum() {
   return Value1; // no-warning
 }
 
+MyEnum trivial_dead_return_enum_2(int x) {
+  switch (x) {
+    case 1: return 1;
+    case 2: return 2;
+    case 3: return 3;
+  }
+
+  return 2; // no-warning
+}
+
+MyEnum nontrivial_dead_return_enum_2(int x) {
+  switch (x) {
+    case 1: return 1;
+    case 2: return 2;
+    case 3: return 3;
+    default: return 4;
+  }
+
+  return calledFun(); // expected-warning {{will never be executed}}
+}
+
 // Test unreachable code depending on configuration values
 #define CONFIG_CONSTANT 1
 int test_config_constant(int x) {
@@ -224,5 +246,31 @@ int test_config_constant(int x) {
     return 1 ?
       calledFun() :
       calledFun(); // expected-warning {{will never be executed}}
+}
+
+int sizeof_int() {
+  if (sizeof(long) == sizeof(int))
+    return 1; // no-warning
+  if (sizeof(long) != sizeof(int))
+    return 0; // no-warning
+  return 2; // no-warning
+}
+
+enum MyEnum2 {
+  ME_A = CONFIG_CONSTANT,
+  ME_B = 1
+};
+
+int test_MyEnum() {
+  if (!ME_A)
+    return 1; // no-warning
+  if (ME_A)
+    return 2; // no-warning
+  if (ME_B)
+    return 3;
+  // FIXME: we should only need one diagnostic here.
+  if (!ME_B) // expected-warning {{will never be executed}}
+    return 4;// expected-warning {{will never be executed}}
+  return 5;
 }
 

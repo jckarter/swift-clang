@@ -3168,7 +3168,8 @@ static void HandleTagNumbering(Sema &S, const TagDecl *Tag, Scope *TagScope) {
       return;
     MangleNumberingContext &MCtx =
         S.Context.getManglingNumberContext(Tag->getParent());
-    S.Context.setManglingNumber(Tag, MCtx.getManglingNumber(Tag, TagScope));
+    S.Context.setManglingNumber(
+        Tag, MCtx.getManglingNumber(Tag, TagScope->getMSLocalManglingNumber()));
     return;
   }
 
@@ -3177,7 +3178,9 @@ static void HandleTagNumbering(Sema &S, const TagDecl *Tag, Scope *TagScope) {
   if (MangleNumberingContext *MCtx =
           S.getCurrentMangleNumberContext(Tag->getDeclContext(),
                                           ManglingContextDecl)) {
-    S.Context.setManglingNumber(Tag, MCtx->getManglingNumber(Tag, TagScope));
+    S.Context.setManglingNumber(
+        Tag,
+        MCtx->getManglingNumber(Tag, TagScope->getMSLocalManglingNumber()));
   }
 }
 
@@ -3816,7 +3819,7 @@ Decl *Sema::BuildAnonymousStructOrUnion(Scope *S, DeclSpec &DS,
       if (MangleNumberingContext *MCtx =
               getCurrentMangleNumberContext(NewVD->getDeclContext(),
                                             ManglingContextDecl)) {
-        Context.setManglingNumber(NewVD, MCtx->getManglingNumber(NewVD, S));
+        Context.setManglingNumber(NewVD, MCtx->getManglingNumber(NewVD, S->getMSLocalManglingNumber()));
         Context.setStaticLocalNumber(NewVD, MCtx->getStaticLocalNumber(NewVD));
       }
     }
@@ -5487,7 +5490,8 @@ Sema::ActOnVariableDeclarator(Scope *S, Declarator &D, DeclContext *DC,
     if (MangleNumberingContext *MCtx =
             getCurrentMangleNumberContext(NewVD->getDeclContext(),
                                           ManglingContextDecl)) {
-      Context.setManglingNumber(NewVD, MCtx->getManglingNumber(NewVD, S));
+      Context.setManglingNumber(
+          NewVD, MCtx->getManglingNumber(NewVD, S->getMSLocalManglingNumber()));
       Context.setStaticLocalNumber(NewVD, MCtx->getStaticLocalNumber(NewVD));
     }
   }
@@ -12453,7 +12457,7 @@ EnumConstantDecl *Sema::CheckEnumConstant(EnumDecl *Enum,
               << EnumVal.toString(10)
               << EltTy;
           else
-            Diag(IdLoc, diag::warn_enumerator_too_large)
+            Diag(IdLoc, diag::ext_enumerator_increment_too_large)
               << EnumVal.toString(10);
         } else {
           EltTy = T;
@@ -12851,7 +12855,7 @@ void Sema::ActOnEnumBody(SourceLocation EnumLoc, SourceLocation LBraceLoc,
         BestWidth = Context.getTargetInfo().getLongLongWidth();
 
         if (NumNegativeBits > BestWidth || NumPositiveBits >= BestWidth)
-          Diag(Enum->getLocation(), diag::warn_enum_too_large);
+          Diag(Enum->getLocation(), diag::ext_enum_too_large);
         BestType = Context.LongLongTy;
       }
     }
