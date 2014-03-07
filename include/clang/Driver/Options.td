@@ -717,10 +717,10 @@ def fobjc_atdefs : Flag<["-"], "fobjc-atdefs">, Group<clang_ignored_f_Group>;
 def fobjc_call_cxx_cdtors : Flag<["-"], "fobjc-call-cxx-cdtors">, Group<clang_ignored_f_Group>;
 def fobjc_exceptions: Flag<["-"], "fobjc-exceptions">, Group<f_Group>,
   HelpText<"Enable Objective-C exceptions">, Flags<[CC1Option]>;
-def fapplication_extensions : Flag<["-"], "fapplication-extensions">,
+def fapplication_extensions : Flag<["-"], "fapplication-extension">,
   Group<f_Group>, Flags<[CC1Option]>,
-  HelpText<"Restrict code to those available under App Extensions">;
-def fno_application_extensions : Flag<["-"], "fno_application-extensions">,
+  HelpText<"Restrict code to those available for App Extensions">;
+def fno_application_extensions : Flag<["-"], "fno-application-extension">,
   Group<f_Group>;
 
 def fobjc_gc_only : Flag<["-"], "fobjc-gc-only">, Group<f_Group>, Flags<[CC1Option]>,
