@@ -313,7 +313,7 @@ bool Decl::isReferenced() const {
     return true;
 
   // Check redeclarations.
-  for (redecl_iterator I = redecls_begin(), E = redecls_end(); I != E; ++I)
+  for (auto I : redecls())
     if (I->Referenced)
       return true;
 
@@ -338,12 +338,12 @@ static AvailabilityResult CheckAvailability(ASTContext &Context,
   if (TargetMinVersion.empty())
     return AR_Available;
 
-  // Check if this is an App Extensions "platform", and if so chop off
+  // Check if this is an App Extension "platform", and if so chop off
   // the suffix for matching with the actual platform.
   StringRef ActualPlatform = A->getPlatform()->getName();
   StringRef RealizedPlatform = ActualPlatform;
   if (Context.getLangOpts().AppExt) {
-    size_t suffix = RealizedPlatform.rfind("_app_extensions");
+    size_t suffix = RealizedPlatform.rfind("_app_extension");
     if (suffix != StringRef::npos)
       RealizedPlatform = RealizedPlatform.slice(0, suffix);
   }

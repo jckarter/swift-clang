@@ -667,10 +667,6 @@ StringRef tools::arm::getARMFloatABI(const Driver &D, const ArgList &Args,
         // EABI is always AAPCS, and if it was not marked 'hard', it's softfp
         FloatABI = "softfp";
         break;
-      case llvm::Triple::MachO: {
-        FloatABI = "soft";
-        break;
-      }
       case llvm::Triple::Android: {
         std::string ArchName =
           arm::getLLVMArchSuffixForARM(arm::getARMTargetCPU(Args, Triple));
@@ -683,6 +679,10 @@ StringRef tools::arm::getARMFloatABI(const Driver &D, const ArgList &Args,
       default:
         // Assume "soft", but warn the user we are guessing.
         FloatABI = "soft";
+        // *-macho defaults to "soft"
+        if (Triple.getOS() == llvm::Triple::UnknownOS &&
+            Triple.getObjectFormat() == llvm::Triple::MachO)
+          break;
         D.Diag(diag::warn_drv_assuming_mfloat_abi_is) << "soft";
         break;
       }
@@ -762,7 +762,8 @@ void Clang::AddARMTargetArgs(const ArgList &Args,
     // The backend is hardwired to assume AAPCS for M-class processors, ensure
     // the frontend matches that.
     if (Triple.getEnvironment() == llvm::Triple::EABI ||
-        Triple.getEnvironment() == llvm::Triple::MachO ||
+        (Triple.getOS() == llvm::Triple::UnknownOS &&
+         Triple.getObjectFormat() == llvm::Triple::MachO) ||
         StringRef(CPUName).startswith("cortex-m")) {
       ABIName = "aapcs";
     } else {
@@ -3652,7 +3653,7 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
 
   if (Args.hasFlag(options::OPT_fapplication_extensions,
                    options::OPT_fno_application_extensions, false))
-    CmdArgs.push_back("-fapp-extensions");
+    CmdArgs.push_back("-fapp-extension");
 
   // Add exception args.
   addExceptionArgs(Args, InputType, getToolChain().getTriple(),
@@ -4974,7 +4975,7 @@ void darwin::setTripleTypeForMachOArchName(llvm::Triple &T, StringRef Str) {
     T.setArchName(Str);
   else if (Str == "armv6m" || Str == "armv7m" || Str == "armv7em") {
     T.setOS(llvm::Triple::UnknownOS);
-    T.setEnvironment(llvm::Triple::MachO);
+    T.setObjectFormat(llvm::Triple::MachO);
   }
 }
 
@@ -7001,7 +7002,7 @@ void gnutools::Link::ConstructJob(Compilation &C, const JobAction &JA,
       AddRunTimeLibs(ToolChain, D, CmdArgs, Args);
 
       if (Args.hasArg(options::OPT_pthread) ||
-          Args.hasArg(options::OPT_pthreads) || UsedOpenMPLib == LibGOMP)
+          Args.hasArg(options::OPT_pthreads) || UsedOpenMPLib != LibUnknown)
         CmdArgs.push_back("-lpthread");
 
       CmdArgs.push_back("-lc");
