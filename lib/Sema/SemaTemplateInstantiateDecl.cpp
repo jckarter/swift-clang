@@ -562,10 +562,8 @@ Decl *TemplateDeclInstantiator::VisitIndirectFieldDecl(IndirectFieldDecl *D) {
     new (SemaRef.Context)NamedDecl*[D->getChainingSize()];
 
   int i = 0;
-  for (IndirectFieldDecl::chain_iterator PI =
-       D->chain_begin(), PE = D->chain_end();
-       PI != PE; ++PI) {
-    NamedDecl *Next = SemaRef.FindInstantiatedDecl(D->getLocation(), *PI,
+  for (auto *PI : D->chain()) {
+    NamedDecl *Next = SemaRef.FindInstantiatedDecl(D->getLocation(), PI,
                                               TemplateArgs);
     if (!Next)
       return 0;
@@ -4674,10 +4672,7 @@ void Sema::PerformPendingInstantiations(bool LocalOnly) {
 
 void Sema::PerformDependentDiagnostics(const DeclContext *Pattern,
                        const MultiLevelTemplateArgumentList &TemplateArgs) {
-  for (DeclContext::ddiag_iterator I = Pattern->ddiag_begin(),
-         E = Pattern->ddiag_end(); I != E; ++I) {
-    DependentDiagnostic *DD = *I;
-
+  for (auto DD : Pattern->ddiags()) {
     switch (DD->getKind()) {
     case DependentDiagnostic::Access:
       HandleDependentAccessCheck(*DD, TemplateArgs);

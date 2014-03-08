@@ -132,10 +132,8 @@ static bool isTrivialExpression(const Expr *Ex) {
 
 static bool isTrivialReturnOrDoWhile(const CFGBlock *B, const Stmt *S) {
   const Expr *Ex = dyn_cast<Expr>(S);
-  if (!Ex)
-    return false;
 
-  if (!isTrivialExpression(Ex))
+  if (Ex && !isTrivialExpression(Ex))
     return false;
 
   // Check if the block ends with a do...while() and see if 'S' is the
@@ -152,13 +150,20 @@ static bool isTrivialReturnOrDoWhile(const CFGBlock *B, const Stmt *S) {
   // Look to see if the block ends with a 'return', and see if 'S'
   // is a substatement.  The 'return' may not be the last element in
   // the block because of destructors.
-  assert(!B->empty());
   for (CFGBlock::const_reverse_iterator I = B->rbegin(), E = B->rend();
        I != E; ++I) {
     if (Optional<CFGStmt> CS = I->getAs<CFGStmt>()) {
       if (const ReturnStmt *RS = dyn_cast<ReturnStmt>(CS->getStmt())) {
-        const Expr *RE = RS->getRetValue();
-        if (RE && stripExprSugar(RE->IgnoreParenCasts()) == Ex)
+        bool LookAtBody = false;
+        if (RS == S)
+          LookAtBody = true;
+        else {
+          const Expr *RE = RS->getRetValue();
+          if (RE && stripExprSugar(RE->IgnoreParenCasts()) == Ex)
+            LookAtBody = true;
+        }
+
+        if (LookAtBody)
           return bodyEndsWithNoReturn(*B->pred_begin());
       }
       break;
@@ -194,8 +199,20 @@ static bool isConfigurationValue(const Stmt *S) {
   switch (S->getStmtClass()) {
     case Stmt::DeclRefExprClass: {
       const DeclRefExpr *DR = cast<DeclRefExpr>(S);
-      const EnumConstantDecl *ED = dyn_cast<EnumConstantDecl>(DR->getDecl());
-      return ED ? isConfigurationValue(ED->getInitExpr()) : false;
+      const ValueDecl *D = DR->getDecl();
+      if (const EnumConstantDecl *ED = dyn_cast<EnumConstantDecl>(D))
+        return ED ? isConfigurationValue(ED->getInitExpr()) : false;
+      if (const VarDecl *VD = dyn_cast<VarDecl>(D)) {
+        // As a heuristic, treat globals as configuration values.  Note
+        // that we only will get here if Sema evaluated this
+        // condition to a constant expression, which means the global
+        // had to be declared in a way to be a truly constant value.
+        // We could generalize this to local variables, but it isn't
+        // clear if those truly represent configuration values that
+        // gate unreachable code.
+        return !VD->hasLocalStorage();
+      }
+      return false;
     }
     case Stmt::IntegerLiteralClass:
       return isExpandedFromConfigurationMacro(S);
@@ -380,9 +397,11 @@ const Stmt *DeadCodeScan::findDeadCode(const clang::CFGBlock *Block) {
     }
 
   if (CFGTerminator T = Block->getTerminator()) {
-    const Stmt *S = T.getStmt();
-    if (isValidDeadStmt(S))
-      return S;
+    if (!T.isTemporaryDtorsBranch()) {
+      const Stmt *S = T.getStmt();
+      if (isValidDeadStmt(S))
+        return S;
+    }
   }
 
   return 0;

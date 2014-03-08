@@ -155,3 +155,23 @@ bool testBool() {
   return true; // no-warning
 }
 
+static const bool ConditionVar = 1;
+int test_global_as_conditionVariable() {
+  if (ConditionVar)
+    return 1;
+  return 0; // no-warning
+}
+
+// Handle unreachable temporary destructors.
+class A {
+public:
+  A();
+  ~A();
+};
+
+__attribute__((noreturn))
+void raze(const A& x);
+
+void test_with_unreachable_tmp_dtors(int x) {
+  raze(x ? A() : A()); // no-warning
+}

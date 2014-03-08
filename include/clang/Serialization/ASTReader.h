@@ -322,7 +322,7 @@ public:
 
 private:
   /// \brief The receiver of some callbacks invoked by ASTReader.
-  OwningPtr<ASTReaderListener> Listener;
+  std::unique_ptr<ASTReaderListener> Listener;
 
   /// \brief The receiver of deserialization events.
   ASTDeserializationListener *DeserializationListener;
@@ -352,7 +352,7 @@ private:
   SourceLocation CurrentImportLoc;
 
   /// \brief The global module index, if loaded.
-  llvm::OwningPtr<GlobalModuleIndex> GlobalIndex;
+  std::unique_ptr<GlobalModuleIndex> GlobalIndex;
 
   /// \brief A map of global bit offsets to the module that stores entities
   /// at those bit offsets.
@@ -1325,7 +1325,7 @@ public:
   /// Takes ownership of \p L.
   void addListener(ASTReaderListener *L) {
     if (Listener)
-      L = new ChainedASTReaderListener(L, Listener.take());
+      L = new ChainedASTReaderListener(L, Listener.release());
     Listener.reset(L);
   }
 
@@ -1333,7 +1333,7 @@ public:
   void setDeserializationListener(ASTDeserializationListener *Listener);
 
   /// \brief Determine whether this AST reader has a global index.
-  bool hasGlobalIndex() const { return GlobalIndex.isValid(); }
+  bool hasGlobalIndex() const { return (bool)GlobalIndex; }
 
   /// \brief Attempts to load the global index.
   ///
