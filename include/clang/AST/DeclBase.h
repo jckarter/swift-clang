@@ -447,9 +447,12 @@ public:
   }
 
   typedef AttrVec::const_iterator attr_iterator;
+  typedef llvm::iterator_range<attr_iterator> attr_range;
 
-  // FIXME: Do not rely on iterators having comparable singular values.
-  //        Note that this should error out if they do not.
+  attr_range attrs() const {
+    return attr_range(attr_begin(), attr_end());
+  }
+
   attr_iterator attr_begin() const {
     return hasAttrs() ? getAttrs().begin() : 0;
   }
@@ -776,8 +779,7 @@ public:
   /// \brief Returns an iterator range for all the redeclarations of the same
   /// decl. It will iterate at least once (when this decl is the only one).
   redecl_range redecls() const {
-    return redecl_range(redecl_iterator(const_cast<Decl *>(this)),
-                        redecl_iterator());
+    return redecl_range(redecls_begin(), redecls_end());
   }
 
   redecl_iterator redecls_begin() const {
@@ -1312,7 +1314,7 @@ public:
 
   /// decls_begin/decls_end - Iterate over the declarations stored in
   /// this context.
-  decl_range decls() const;
+  decl_range decls() const { return decl_range(decls_begin(), decls_end()); }
   decl_iterator decls_begin() const;
   decl_iterator decls_end() const { return decl_iterator(); }
   bool decls_empty() const;
@@ -1320,8 +1322,10 @@ public:
   /// noload_decls_begin/end - Iterate over the declarations stored in this
   /// context that are currently loaded; don't attempt to retrieve anything
   /// from an external source.
-  decl_range noload_decls() const;
-  decl_iterator noload_decls_begin() const;
+  decl_range noload_decls() const {
+    return decl_range(noload_decls_begin(), noload_decls_end());
+  }
+  decl_iterator noload_decls_begin() const { return decl_iterator(FirstDecl); }
   decl_iterator noload_decls_end() const { return decl_iterator(); }
 
   /// specific_decl_iterator - Iterates over a subrange of
@@ -1394,6 +1398,10 @@ public:
       return x.Current != y.Current;
     }
   };
+
+  template <typename SpecificDecl>
+  using specific_decl_range =
+      llvm::iterator_range<specific_decl_iterator<SpecificDecl>>;
 
   /// \brief Iterates over a filtered subrange of declarations stored
   /// in a DeclContext.

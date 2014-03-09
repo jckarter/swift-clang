@@ -422,8 +422,8 @@ AvailabilityResult Decl::getAvailability(std::string *Message) const {
   AvailabilityResult Result = AR_Available;
   std::string ResultMessage;
 
-  for (attr_iterator A = attr_begin(), AEnd = attr_end(); A != AEnd; ++A) {
-    if (DeprecatedAttr *Deprecated = dyn_cast<DeprecatedAttr>(*A)) {
+  for (const auto *A : attrs()) {
+    if (const auto *Deprecated = dyn_cast<DeprecatedAttr>(A)) {
       if (Result >= AR_Deprecated)
         continue;
 
@@ -434,13 +434,13 @@ AvailabilityResult Decl::getAvailability(std::string *Message) const {
       continue;
     }
 
-    if (UnavailableAttr *Unavailable = dyn_cast<UnavailableAttr>(*A)) {
+    if (const auto *Unavailable = dyn_cast<UnavailableAttr>(A)) {
       if (Message)
         *Message = Unavailable->getMessage();
       return AR_Unavailable;
     }
 
-    if (AvailabilityAttr *Availability = dyn_cast<AvailabilityAttr>(*A)) {
+    if (const auto *Availability = dyn_cast<AvailabilityAttr>(A)) {
       AvailabilityResult AR = CheckAvailability(getASTContext(), Availability,
                                                 Message);
 
@@ -496,11 +496,11 @@ bool Decl::isWeakImported() const {
   if (!canBeWeakImported(IsDefinition))
     return false;
 
-  for (attr_iterator A = attr_begin(), AEnd = attr_end(); A != AEnd; ++A) {
-    if (isa<WeakImportAttr>(*A))
+  for (const auto *A : attrs()) {
+    if (isa<WeakImportAttr>(A))
       return true;
 
-    if (AvailabilityAttr *Availability = dyn_cast<AvailabilityAttr>(*A)) {
+    if (const auto *Availability = dyn_cast<AvailabilityAttr>(A)) {
       if (CheckAvailability(getASTContext(), Availability, 0) 
                                                          == AR_NotYetIntroduced)
         return true;
@@ -1088,20 +1088,6 @@ ExternalASTSource::SetExternalVisibleDeclsForName(const DeclContext *DC,
   }
 
   return List.getLookupResult();
-}
-
-DeclContext::decl_range DeclContext::noload_decls() const {
-  return decl_range(decl_iterator(FirstDecl), decl_iterator());
-}
-
-DeclContext::decl_iterator DeclContext::noload_decls_begin() const {
-  return decl_iterator(FirstDecl);
-}
-
-DeclContext::decl_range DeclContext::decls() const {
-  if (hasExternalLexicalStorage())
-    LoadLexicalDeclsFromExternalStorage();
-  return decl_range(decl_iterator(FirstDecl), decl_iterator());
 }
 
 DeclContext::decl_iterator DeclContext::decls_begin() const {

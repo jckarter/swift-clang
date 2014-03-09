@@ -5370,9 +5370,7 @@ void ASTContext::getObjCEncodingForTypeImpl(QualType T, std::string& S,
       if (!RDecl->isUnion()) {
         getObjCEncodingForStructureImpl(RDecl, S, FD);
       } else {
-        for (RecordDecl::field_iterator Field = RDecl->field_begin(),
-                                     FieldEnd = RDecl->field_end();
-             Field != FieldEnd; ++Field) {
+        for (const auto *Field : RDecl->fields()) {
           if (FD) {
             S += '"';
             S += Field->getNameAsString();
@@ -5382,7 +5380,7 @@ void ASTContext::getObjCEncodingForTypeImpl(QualType T, std::string& S,
           // Special case bit-fields.
           if (Field->isBitField()) {
             getObjCEncodingForTypeImpl(Field->getType(), S, false, true,
-                                       *Field);
+                                       Field);
           } else {
             QualType qt = Field->getType();
             getLegacyIntegralTypeEncoding(qt);
@@ -6846,9 +6844,8 @@ QualType ASTContext::mergeTransparentUnionType(QualType T, QualType SubType,
   if (const RecordType *UT = T->getAsUnionType()) {
     RecordDecl *UD = UT->getDecl();
     if (UD->hasAttr<TransparentUnionAttr>()) {
-      for (RecordDecl::field_iterator it = UD->field_begin(),
-           itend = UD->field_end(); it != itend; ++it) {
-        QualType ET = it->getType().getUnqualifiedType();
+      for (const auto *I : UD->fields()) {
+        QualType ET = I->getType().getUnqualifiedType();
         QualType MT = mergeTypes(ET, SubType, OfBlockPointer, Unqualified);
         if (!MT.isNull())
           return MT;
