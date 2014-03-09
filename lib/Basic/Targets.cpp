@@ -4571,10 +4571,10 @@ public:
         return (Size == 64);
       }
     }
-      
+
     }
   }
-  
+
   virtual const char *getClobbers() const {
     return "";
   }
