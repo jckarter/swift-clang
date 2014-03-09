@@ -1850,9 +1850,7 @@ public:
   param_iterator param_end() {
     return param_iterator(ParamInfo + param_size());
   }
-  param_range params() {
-    return param_range(ParamInfo, ParamInfo + param_size());
-  }
+  param_range params() { return param_range(param_begin(), param_end()); }
 
   param_const_iterator param_begin() const {
     return param_const_iterator(ParamInfo);
@@ -1861,7 +1859,7 @@ public:
     return param_const_iterator(ParamInfo + param_size());
   }
   param_const_range params() const {
-    return param_const_range(ParamInfo, ParamInfo + param_size());
+    return param_const_range(param_begin(), param_end());
   }
 
   /// getNumParams - Return the number of parameters this function must have
@@ -2339,11 +2337,11 @@ public:
   typedef NamedDecl * const *chain_iterator;
   typedef llvm::iterator_range<chain_iterator> chain_range;
 
-  chain_range chain() const {
-    return chain_range(Chaining, Chaining + ChainingSize);
+  chain_range chain() const { return chain_range(chain_begin(), chain_end()); }
+  chain_iterator chain_begin() const { return chain_iterator(Chaining); }
+  chain_iterator chain_end() const {
+    return chain_iterator(Chaining + ChainingSize);
   }
-  chain_iterator chain_begin() const { return chain().begin(); }
-  chain_iterator chain_end() const  { return chain().end(); }
 
   unsigned getChainingSize() const { return ChainingSize; }
 
@@ -2901,6 +2899,11 @@ public:
   // enumerator_iterator - Iterates through the enumerators of this
   // enumeration.
   typedef specific_decl_iterator<EnumConstantDecl> enumerator_iterator;
+  typedef specific_decl_range<EnumConstantDecl> enumerator_range;
+
+  enumerator_range enumerators() const {
+    return enumerator_range(enumerator_begin(), enumerator_end());
+  }
 
   enumerator_iterator enumerator_begin() const {
     const EnumDecl *E = getDefinition();
@@ -3147,7 +3150,9 @@ public:
   // the non-static data members of this class, ignoring any static
   // data members, functions, constructors, destructors, etc.
   typedef specific_decl_iterator<FieldDecl> field_iterator;
+  typedef specific_decl_range<FieldDecl> field_range;
 
+  field_range fields() const { return field_range(field_begin(), field_end()); }
   field_iterator field_begin() const;
 
   field_iterator field_end() const {
@@ -3312,17 +3317,21 @@ public:
   }
 
   bool param_empty() const { return NumParams == 0; }
-  param_range params() {
-    return param_range(ParamInfo, ParamInfo + param_size());
+  param_range params() { return param_range(param_begin(), param_end()); }
+  param_iterator param_begin() { return param_iterator(ParamInfo); }
+  param_iterator param_end() {
+    return param_iterator(ParamInfo + param_size());
   }
-  param_iterator param_begin() { return params().begin(); }
-  param_iterator param_end() { return params().end(); }
 
   param_const_range params() const {
-    return param_const_range(ParamInfo, ParamInfo + param_size());
+    return param_const_range(param_begin(), param_end());
   }
-  param_const_iterator param_begin() const { return params().begin(); }
-  param_const_iterator param_end() const { return params().end(); }
+  param_const_iterator param_begin() const {
+    return param_const_iterator(ParamInfo);
+  }
+  param_const_iterator param_end() const {
+    return param_const_iterator(ParamInfo + param_size());
+  }
 
   unsigned getNumParams() const { return NumParams; }
   const ParmVarDecl *getParamDecl(unsigned i) const {
@@ -3439,9 +3448,7 @@ public:
   param_iterator param_end() const { return getParams() + NumParams; }
 
   /// \brief Retrieve an iterator range for the parameter declarations.
-  param_range params() const {
-    return param_range(getParams(), getParams() + NumParams);
-  }
+  param_range params() const { return param_range(param_begin(), param_end()); }
 
   // Implement isa/cast/dyncast/etc.
   static bool classof(const Decl *D) { return classofKind(D->getKind()); }
