@@ -77,7 +77,7 @@ add_custom_command(OUTPUT ${output_dir}/arm_neon.h
   COMMENT "Copying clang's arm_neon.h...")
 list(APPEND out_files ${output_dir}/arm_neon.h)
 
-add_custom_command(OUTPUT ${output_dir}/aarch64_simd.h 
+add_custom_command(OUTPUT ${output_dir}/aarch64_simd.h
   DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/aarch64_simd.h
   COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_CURRENT_BINARY_DIR}/aarch64_simd.h ${output_dir}/aarch64_simd.h
   COMMENT "Copying clang's aarch64_simd.h...")

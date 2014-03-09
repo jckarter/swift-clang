@@ -6538,13 +6538,13 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
   case NEON::BI__builtin_neon_vsri_n_v:
   case NEON::BI__builtin_neon_vsriq_n_v: {
     Int = Intrinsic::arm64_neon_vsri;
-    llvm::Function *Intrin = CGM.getIntrinsic(Int, Ty); 
+    llvm::Function *Intrin = CGM.getIntrinsic(Int, Ty);
     return EmitNeonCall(Intrin, Ops, "vsri_n");
   }
   case NEON::BI__builtin_neon_vsli_n_v:
   case NEON::BI__builtin_neon_vsliq_n_v: {
     Int = Intrinsic::arm64_neon_vsli;
-    llvm::Function *Intrin = CGM.getIntrinsic(Int, Ty); 
+    llvm::Function *Intrin = CGM.getIntrinsic(Int, Ty);
     return EmitNeonCall(Intrin, Ops, "vsli_n");
   }
   case NEON::BI__builtin_neon_vsra_n_v:
@@ -6812,7 +6812,7 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
     }
     return SV;
   }
-  case NEON::BI__builtin_neon_vzip_v: 
+  case NEON::BI__builtin_neon_vzip_v:
   case NEON::BI__builtin_neon_vzipq_v: {
     Ops[0] = Builder.CreateBitCast(Ops[0], llvm::PointerType::getUnqual(Ty));
     Ops[1] = Builder.CreateBitCast(Ops[1], Ty);

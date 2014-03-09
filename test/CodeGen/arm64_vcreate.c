@@ -13,7 +13,7 @@ float32x2_t test_vcreate_f32(uint64_t a1) {
 
 // FIXME enable when scalar_to_vector in backend is fixed.  Also, change
 // CHECK@ to CHECK<colon> and CHECK-NEXT@ to CHECK-NEXT<colon>
-/* 
+/*
 float64x1_t test_vcreate_f64(uint64_t a1) {
   // CHECK@ test_vcreate_f64
   return vcreate_f64(a1);

@@ -370,7 +370,7 @@ static char ToFloat(const char t) {
       return 'f';
     case 'l':
       return 'd';
-    default: 
+    default:
       PrintFatalError("unhandled type in tofloat!");
   }
   return '\0';
@@ -740,9 +740,9 @@ static char InstructionTypeCode(const StringRef &typeStr,
                                 bool &quad,
                                 std::string &typeCode) {
   bool poly = false;
-  bool usgn = false;  
+  bool usgn = false;
   char type = ClassifyType(typeStr, quad, poly, usgn);
-  
+
   switch (type) {
   case 'c':
     switch (ck) {
@@ -2050,14 +2050,14 @@ static std::string GenIntrinsic(const std::string &name,
 /// is comprised of type definitions and function declarations.
 void NeonEmitter::run(raw_ostream &OS) {
   if (IsARM64)
-   OS << 
+   OS <<
     "/*===---- aarch64_simd.h - ARM64 SIMD intrinsics ------------------------"
     "---===\n";
   else
-   OS << 
+   OS <<
     "/*===---- arm_neon.h - ARM Neon intrinsics ------------------------------"
     "---===\n";
-  OS << 
+  OS <<
     " *\n"
     " * Permission is hereby granted, free of charge, to any person obtaining "
     "a copy\n"
