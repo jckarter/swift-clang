@@ -971,12 +971,10 @@ void PPCTargetInfo::getTargetDefines(const LangOptions &Opts,
   // Target properties.
   if (getTriple().getArch() == llvm::Triple::ppc64le) {
     Builder.defineMacro("_LITTLE_ENDIAN");
-    Builder.defineMacro("__LITTLE_ENDIAN__");
   } else {
     if (getTriple().getOS() != llvm::Triple::NetBSD &&
         getTriple().getOS() != llvm::Triple::OpenBSD)
       Builder.defineMacro("_BIG_ENDIAN");
-    Builder.defineMacro("__BIG_ENDIAN__");
   }
 
   // Subtarget options.
@@ -2714,7 +2712,6 @@ void X86TargetInfo::getTargetDefines(const LangOptions &Opts,
   }
 
   // Target properties.
-  Builder.defineMacro("__LITTLE_ENDIAN__");
   Builder.defineMacro("__REGISTER_PREFIX__", "");
 
   // Define __NO_MATH_INLINES on linux/x86 so that we don't get inline
@@ -3487,13 +3484,6 @@ public:
     if (BigEndian)
       Builder.defineMacro("__AARCH_BIG_ENDIAN");
 
-    if (getTriple().getOS() == llvm::Triple::NetBSD) {
-      if (BigEndian)
-        Builder.defineMacro("__BIG_ENDIAN__");
-      else
-        Builder.defineMacro("__LITTLE_ENDIAN__");
-    }
-
     if (FPU == NeonMode) {
       Builder.defineMacro("__ARM_NEON");
       // 64-bit NEON supports half, single and double precision operations.
@@ -4080,7 +4070,6 @@ public:
 
     // Target properties.
     Builder.defineMacro("__ARMEL__");
-    Builder.defineMacro("__LITTLE_ENDIAN__");
     Builder.defineMacro("__REGISTER_PREFIX__", "");
 
     StringRef CPUArch = getCPUDefineSuffix(CPU);
@@ -5794,7 +5783,6 @@ public:
   }
   virtual void getTargetDefines(const LangOptions &Opts,
                                 MacroBuilder &Builder) const {
-    Builder.defineMacro("__LITTLE_ENDIAN__");
     getArchDefines(Opts, Builder);
   }
   virtual bool hasFeature(StringRef Feature) const {
