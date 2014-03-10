@@ -1,7 +1,7 @@
 // RUN: %clang -target arm64-apple-ios7 -ffreestanding -S -o - -emit-llvm %s | FileCheck %s
 
 // Test ARM64 extract intrinsics
-// can use as back end test by adding a run line with 
+// can use as back end test by adding a run line with
 // -check-prefix=CHECK-CODEGEN on the FileCheck
 
 #include <aarch64_simd.h>

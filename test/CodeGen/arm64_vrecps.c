@@ -5,7 +5,7 @@
 #include <aarch64_simd.h>
 
 // vrecpss_f32 -> FRECPS Sd,Sa,Sb
-// 
+//
 float32_t test_vrecpss_f32(float32_t Vdlow, float32_t Vn)
 {
     return vrecpss_f32(Vdlow, Vn);
@@ -15,7 +15,7 @@ float32_t test_vrecpss_f32(float32_t Vdlow, float32_t Vn)
 }
 
 // vrecpsd_f64 -> FRECPS Dd,Da,Db
-// 
+//
 float64_t test_vrecpsd_f64(float64_t Vdlow, float64_t Vn)
 {
     return vrecpsd_f64(Vdlow, Vn);

@@ -375,7 +375,7 @@ struct s40
   int i;
   short s;
   int i2;
-  short s2; 
+  short s2;
 };
 typedef struct s40 s40_no_align;
 // passing structs in registers
@@ -430,7 +430,7 @@ struct s41
   int i;
   short s;
   int i2;
-  short s2; 
+  short s2;
 } __attribute__((aligned(16)));
 typedef struct s41 s41_with_align;
 // passing aligned structs in registers

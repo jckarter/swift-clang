@@ -4,14 +4,14 @@
 // REQUIRES: arm64-registered-target
 
 /// Test vdupq_n_f64 and vmovq_nf64 ARM64 intrinsics
-// <rdar://problem/11778405> ARM64: vdupq_n_f64 and vdupq_lane_f64 intrinsics 
+// <rdar://problem/11778405> ARM64: vdupq_n_f64 and vdupq_lane_f64 intrinsics
 // missing
 
 
 #include <aarch64_simd.h>
 
 // vdupq_n_f64 -> dup.2d v0, v0[0]
-// 
+//
 float64x2_t test_vdupq_n_f64(float64_t w)
 {
     return vdupq_n_f64(w);
@@ -31,7 +31,7 @@ float32x4_t test_vdupq_n_f32(float32_t w)
 }
 
 // vdupq_lane_f64 -> dup.2d v0, v0[0]
-// this was in <rdar://problem/11778405>, but had already been implemented, 
+// this was in <rdar://problem/11778405>, but had already been implemented,
 // test anyway
 float64x2_t test_vdupq_lane_f64(float64x1_t V)
 {

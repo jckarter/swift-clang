@@ -21,7 +21,6 @@
 #include "clang/Basic/TargetOptions.h"
 #include "clang/Basic/Version.h"
 #include "llvm/ADT/APFloat.h"
-#include "llvm/ADT/OwningPtr.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/ADT/StringRef.h"
@@ -31,6 +30,7 @@
 #include "llvm/MC/MCSectionMachO.h"
 #include "llvm/Support/ErrorHandling.h"
 #include <algorithm>
+#include <memory>
 using namespace clang;
 
 //===----------------------------------------------------------------------===//
@@ -4571,10 +4571,10 @@ public:
         return (Size == 64);
       }
     }
-      
+
     }
   }
-  
+
   virtual const char *getClobbers() const {
     return "";
   }

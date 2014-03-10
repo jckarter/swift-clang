@@ -1906,7 +1906,7 @@ CGObjCCommonMac::EmitMessageSend(CodeGen::CodeGenFunction &CGF,
     Fn = (ObjCABI == 2) ? ObjCTypes.getSendFp2RetFn2(IsSuper)
       : ObjCTypes.getSendFp2retFn(IsSuper);
   } else {
-    // arm64 uses objc_msgSend for stret methods and yet null receiver check 
+    // arm64 uses objc_msgSend for stret methods and yet null receiver check
     // must be made for it.
     if (!IsSuper && CGM.ReturnTypeUsesSRet(MSI.CallInfo))
       nullReturn.init(CGF, Arg0);
@@ -5059,7 +5059,7 @@ ObjCCommonTypesHelper::ObjCCommonTypesHelper(CodeGen::CodeGenModule &cgm)
   LongLongTy = Types.ConvertType(Ctx.LongLongTy);
   Int8PtrTy = CGM.Int8PtrTy;
   Int8PtrPtrTy = CGM.Int8PtrPtrTy;
-  
+
   // arm64 targets use "int" ivar offset variables. All others,
   // including OS X x86_64 and Windows x86_64, use "long" ivar offsets.
   if (CGM.getTarget().getTriple().getArch() == llvm::Triple::arm64)
@@ -6504,7 +6504,7 @@ llvm::Value *CGObjCNonFragileABIMac::EmitIvarOffset(
   //  as this is what caller always expectes.
   if (ObjCTypes.IvarOffsetVarTy == ObjCTypes.IntTy)
     IvarOffsetValue =
-      CGF.Builder.CreateIntCast(IvarOffsetValue, ObjCTypes.LongTy, 
+      CGF.Builder.CreateIntCast(IvarOffsetValue, ObjCTypes.LongTy,
                                 true, "ivar.conv");
   return IvarOffsetValue;
 }

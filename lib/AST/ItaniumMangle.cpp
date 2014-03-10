@@ -2445,7 +2445,7 @@ void CXXNameMangler::mangleType(const AutoType *T) {
 }
 
 void CXXNameMangler::mangleType(const AtomicType *T) {
-  // <type> ::= U <source-name> <type>	# vendor extended type qualifier
+  // <type> ::= U <source-name> <type>  # vendor extended type qualifier
   // (Until there's a standardized mangling...)
   Out << "U7_Atomic";
   mangleType(T->getValueType());

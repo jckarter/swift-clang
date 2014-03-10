@@ -2161,7 +2161,7 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
   // the given target.  These come before user provided warning options
   // are provided.
   getToolChain().addClangWarningOptions(CmdArgs);
-  
+
   // Select the appropriate action.
   RewriteKind rewriteKind = RK_None;
   

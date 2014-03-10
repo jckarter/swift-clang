@@ -15,7 +15,7 @@ typedef struct objc_object {
 @end
 
 static void func() {
- 
+
   id x;
 
   [(*x).isa self]; // expected-error {{direct access to Objective-C's isa is deprecated in favor of object_getClass()}}
