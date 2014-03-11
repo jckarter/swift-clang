@@ -7980,11 +7980,18 @@ TEST_F(FormatTest, FormatsLambdas) {
   verifyFormat("double &operator[](int i) { return 0; }\n"
                "int i;");
   verifyFormat("std::unique_ptr<int[]> foo() {}");
+  verifyFormat("int i = a[a][a]->f();");
+  verifyFormat("int i = (*b)[a]->f();");
 
   // Other corner cases.
   verifyFormat("void f() {\n"
                "  bar([]() {} // Did not respect SpacesBeforeTrailingComments\n"
                "      );\n"
+               "}");
+
+  // Lambdas created through weird macros.
+  verifyFormat("void f() {\n"
+               "  MACRO((const AA &a) { return 1; });\n"
                "}");
 }
 

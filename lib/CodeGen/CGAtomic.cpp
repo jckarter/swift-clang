@@ -24,16 +24,6 @@
 using namespace clang;
 using namespace CodeGen;
 
-// The ABI values for various atomic memory orderings.
-enum AtomicOrderingKind {
-  AO_ABI_memory_order_relaxed = 0,
-  AO_ABI_memory_order_consume = 1,
-  AO_ABI_memory_order_acquire = 2,
-  AO_ABI_memory_order_release = 3,
-  AO_ABI_memory_order_acq_rel = 4,
-  AO_ABI_memory_order_seq_cst = 5
-};
-
 namespace {
   class AtomicInfo {
     CodeGenFunction &CGF;
@@ -201,13 +191,14 @@ EmitAtomicOp(CodeGenFunction &CGF, AtomicExpr *E, llvm::Value *Dest,
   case AtomicExpr::AO__atomic_compare_exchange_n: {
     // Note that cmpxchg only supports specifying one ordering and
     // doesn't support weak cmpxchg, at least at the moment.
-
     llvm::LoadInst *Expected = CGF.Builder.CreateLoad(Val1);
     Expected->setAlignment(Align);
     llvm::LoadInst *Desired = CGF.Builder.CreateLoad(Val2);
     Desired->setAlignment(Align);
-    llvm::AtomicCmpXchgInst *Old =
-        CGF.Builder.CreateAtomicCmpXchg(Ptr, Expected, Desired, Order);
+    llvm::AtomicOrdering FailureOrder =
+        llvm::AtomicCmpXchgInst::getStrongestFailureOrdering(Order);
+    llvm::AtomicCmpXchgInst *Old = CGF.Builder.CreateAtomicCmpXchg(
+        Ptr, Expected, Desired, Order, FailureOrder);
     Old->setVolatile(E->isVolatile());
 
     // Cmp holds the result of the compare-exchange operation: true on success,
@@ -641,30 +632,30 @@ RValue CodeGenFunction::EmitAtomicExpr(AtomicExpr *E, llvm::Value *Dest) {
   if (isa<llvm::ConstantInt>(Order)) {
     int ord = cast<llvm::ConstantInt>(Order)->getZExtValue();
     switch (ord) {
-    case AO_ABI_memory_order_relaxed:
+    case AtomicExpr::AO_ABI_memory_order_relaxed:
       EmitAtomicOp(*this, E, Dest, Ptr, Val1, Val2, Size, Align,
                    llvm::Monotonic);
       break;
-    case AO_ABI_memory_order_consume:
-    case AO_ABI_memory_order_acquire:
+    case AtomicExpr::AO_ABI_memory_order_consume:
+    case AtomicExpr::AO_ABI_memory_order_acquire:
       if (IsStore)
         break; // Avoid crashing on code with undefined behavior
       EmitAtomicOp(*this, E, Dest, Ptr, Val1, Val2, Size, Align,
                    llvm::Acquire);
       break;
-    case AO_ABI_memory_order_release:
+    case AtomicExpr::AO_ABI_memory_order_release:
       if (IsLoad)
         break; // Avoid crashing on code with undefined behavior
       EmitAtomicOp(*this, E, Dest, Ptr, Val1, Val2, Size, Align,
                    llvm::Release);
       break;
-    case AO_ABI_memory_order_acq_rel:
+    case AtomicExpr::AO_ABI_memory_order_acq_rel:
       if (IsLoad || IsStore)
         break; // Avoid crashing on code with undefined behavior
       EmitAtomicOp(*this, E, Dest, Ptr, Val1, Val2, Size, Align,
                    llvm::AcquireRelease);
       break;
-    case AO_ABI_memory_order_seq_cst:
+    case AtomicExpr::AO_ABI_memory_order_seq_cst:
       EmitAtomicOp(*this, E, Dest, Ptr, Val1, Val2, Size, Align,
                    llvm::SequentiallyConsistent);
       break;
@@ -787,8 +778,8 @@ RValue CodeGenFunction::EmitAtomicLoad(LValue src, SourceLocation loc,
              getContext().VoidPtrTy);
     args.add(RValue::get(EmitCastToVoidPtr(tempAddr)),
              getContext().VoidPtrTy);
-    args.add(RValue::get(llvm::ConstantInt::get(IntTy,
-                                                AO_ABI_memory_order_seq_cst)),
+    args.add(RValue::get(llvm::ConstantInt::get(
+                 IntTy, AtomicExpr::AO_ABI_memory_order_seq_cst)),
              getContext().IntTy);
     emitAtomicLibcall(*this, "__atomic_load", getContext().VoidTy, args);
 
@@ -937,8 +928,8 @@ void CodeGenFunction::EmitAtomicStore(RValue rvalue, LValue dest, bool isInit) {
              getContext().VoidPtrTy);
     args.add(RValue::get(EmitCastToVoidPtr(srcAddr)),
              getContext().VoidPtrTy);
-    args.add(RValue::get(llvm::ConstantInt::get(IntTy,
-                                                AO_ABI_memory_order_seq_cst)),
+    args.add(RValue::get(llvm::ConstantInt::get(
+                 IntTy, AtomicExpr::AO_ABI_memory_order_seq_cst)),
              getContext().IntTy);
     emitAtomicLibcall(*this, "__atomic_store", getContext().VoidTy, args);
     return;
