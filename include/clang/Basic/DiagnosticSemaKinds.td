@@ -2485,6 +2485,8 @@ def warn_objc_requires_super_protocol : Warning<
   InGroup<DiagGroup<"requires-super-attribute">>;
 def note_protocol_decl : Note<
   "protocol is declared here">;
+def note_protocol_decl_undefined : Note<
+  "protocol %0 has no definition">;
 
 // objc_designated_initializer attribute diagnostics.
 def warn_objc_designated_init_missing_super_call : Warning<
@@ -5689,8 +5691,9 @@ def err_atomic_op_needs_atomic_int_or_ptr : Error<
 def err_atomic_op_bitwise_needs_atomic_int : Error<
   "address argument to bitwise atomic operation must be a pointer to "
   "%select{|atomic }0integer (%1 invalid)">;
-def err_atomic_op_has_invalid_memory_order : Error<
-  "memory order argument to atomic operation is invalid">;
+def warn_atomic_op_has_invalid_memory_order : Warning<
+  "memory order argument to atomic operation is invalid">,
+  InGroup<DiagGroup<"atomic-memory-ordering">>;
 
 def err_atomic_load_store_uses_lib : Error<
   "atomic %select{load|store}0 requires runtime support that is not "
