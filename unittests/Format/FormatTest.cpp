@@ -1026,6 +1026,21 @@ TEST_F(FormatTest, SplitsLongCxxComments) {
       format("#define XXX //q w e r t y u i", getLLVMStyleWithColumns(22)));
 }
 
+TEST_F(FormatTest, PreservesHangingIndentInCxxComments) {
+  EXPECT_EQ("//     A comment\n"
+            "//     that doesn't\n"
+            "//     fit on one\n"
+            "//     line",
+            format("//     A comment that doesn't fit on one line",
+                   getLLVMStyleWithColumns(20)));
+  EXPECT_EQ("///     A comment\n"
+            "///     that doesn't\n"
+            "///     fit on one\n"
+            "///     line",
+            format("///     A comment that doesn't fit on one line",
+                   getLLVMStyleWithColumns(20)));
+}
+
 TEST_F(FormatTest, DontSplitLineCommentsWithEscapedNewlines) {
   EXPECT_EQ("// aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\\\n"
             "// aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\\\n"
@@ -2009,6 +2024,10 @@ TEST_F(FormatTest, DoesntRemoveUnknownTokens) {
   verifyFormat("#define A ''qqq");
   verifyFormat("#define A `qqq");
   verifyFormat("f(\"aaaa, bbbb, \"\\\"ccccc\\\"\");");
+  EXPECT_EQ("const char *c = STRINGIFY(\n"
+            "\\na : b);",
+            format("const char * c = STRINGIFY(\n"
+                   "\\na : b);"));
 }
 
 TEST_F(FormatTest, IndentsPPDirectiveInReducedSpace) {
@@ -7959,12 +7978,29 @@ TEST_F(FormatTest, FormatsLambdas) {
   verifyFormat("int c = []() -> int { return 2; }();\n");
   verifyFormat("int c = []() -> vector<int> { return {2}; }();\n");
   verifyFormat("Foo([]() -> std::vector<int> { return {2}; }());");
+  verifyFormat("auto aaaaaaaa = [](int i, // break for some reason\n"
+               "                   int j) -> int {\n"
+               "  return fffffffffffffffffffffffffffffffffffffff(i * j);\n"
+               "};");
 
   // Not lambdas.
   verifyFormat("constexpr char hello[]{\"hello\"};");
   verifyFormat("double &operator[](int i) { return 0; }\n"
                "int i;");
   verifyFormat("std::unique_ptr<int[]> foo() {}");
+  verifyFormat("int i = a[a][a]->f();");
+  verifyFormat("int i = (*b)[a]->f();");
+
+  // Other corner cases.
+  verifyFormat("void f() {\n"
+               "  bar([]() {} // Did not respect SpacesBeforeTrailingComments\n"
+               "      );\n"
+               "}");
+
+  // Lambdas created through weird macros.
+  verifyFormat("void f() {\n"
+               "  MACRO((const AA &a) { return 1; });\n"
+               "}");
 }
 
 TEST_F(FormatTest, FormatsBlocks) {

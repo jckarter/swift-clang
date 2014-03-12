@@ -1253,9 +1253,9 @@ namespace {
   public:
     CodeCompletionDeclConsumer(ResultBuilder &Results, DeclContext *CurContext)
       : Results(Results), CurContext(CurContext) { }
-    
-    virtual void FoundDecl(NamedDecl *ND, NamedDecl *Hiding, DeclContext *Ctx,
-                           bool InBaseClass) {
+
+    void FoundDecl(NamedDecl *ND, NamedDecl *Hiding, DeclContext *Ctx,
+                   bool InBaseClass) override {
       bool Accessible = true;
       if (Ctx)
         Accessible = Results.getSema().IsSimplyAccessible(ND, Ctx);
@@ -2638,12 +2638,8 @@ CodeCompletionResult::CreateCodeCompletionString(ASTContext &Ctx,
     return Result.TakeString();
   }
 
-  for (specific_attr_iterator<AnnotateAttr>
-           i = ND->specific_attr_begin<AnnotateAttr>(),
-           e = ND->specific_attr_end<AnnotateAttr>();
-       i != e; ++i)
-    Result.AddAnnotation(
-        Result.getAllocator().CopyString((*i)->getAnnotation()));
+  for (const auto *I : ND->specific_attrs<AnnotateAttr>())
+    Result.AddAnnotation(Result.getAllocator().CopyString(I->getAnnotation()));
 
   AddResultTypeChunk(Ctx, Policy, ND, Result);
   

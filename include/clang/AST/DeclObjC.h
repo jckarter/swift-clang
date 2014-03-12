@@ -246,7 +246,7 @@ private:
   /// \brief A definition will return its interface declaration.
   /// An interface declaration will return its definition.
   /// Otherwise it will return itself.
-  virtual ObjCMethodDecl *getNextRedeclaration();
+  ObjCMethodDecl *getNextRedeclaration() override;
 
 public:
   static ObjCMethodDecl *
@@ -259,8 +259,8 @@ public:
          bool HasRelatedResultType = false);
 
   static ObjCMethodDecl *CreateDeserialized(ASTContext &C, unsigned ID);
-  
-  virtual ObjCMethodDecl *getCanonicalDecl();
+
+  ObjCMethodDecl *getCanonicalDecl() override;
   const ObjCMethodDecl *getCanonicalDecl() const {
     return const_cast<ObjCMethodDecl*>(this)->getCanonicalDecl();
   }
@@ -289,7 +289,7 @@ public:
   // Location information, modeled after the Stmt API.
   SourceLocation getLocStart() const LLVM_READONLY { return getLocation(); }
   SourceLocation getLocEnd() const LLVM_READONLY;
-  virtual SourceRange getSourceRange() const LLVM_READONLY {
+  SourceRange getSourceRange() const override LLVM_READONLY {
     return SourceRange(getLocation(), getLocEnd());
   }
 
@@ -473,10 +473,10 @@ public:
       const ObjCMethodDecl **InitMethod = 0) const;
 
   /// \brief Determine whether this method has a body.
-  virtual bool hasBody() const { return Body.isValid(); }
+  bool hasBody() const override { return Body.isValid(); }
 
   /// \brief Retrieve the body of this method, if it has one.
-  virtual Stmt *getBody() const;
+  Stmt *getBody() const override;
 
   void setLazyBody(uint64_t Offset) { Body = Offset; }
 
@@ -505,7 +505,7 @@ public:
 /// ObjCProtocolDecl, and ObjCImplDecl.
 ///
 class ObjCContainerDecl : public NamedDecl, public DeclContext {
-  virtual void anchor();
+  void anchor() override;
 
   SourceLocation AtStart;
 
@@ -596,7 +596,7 @@ public:
     AtEnd = atEnd;
   }
 
-  virtual SourceRange getSourceRange() const LLVM_READONLY {
+  SourceRange getSourceRange() const override LLVM_READONLY {
     return SourceRange(AtStart, getAtEndRange().getEnd());
   }
 
@@ -642,7 +642,7 @@ public:
 ///
 class ObjCInterfaceDecl : public ObjCContainerDecl
                         , public Redeclarable<ObjCInterfaceDecl> {
-  virtual void anchor();
+  void anchor() override;
 
   /// TypeForDecl - This indicates the Type object that represents this
   /// TypeDecl.  It is a cache maintained by ASTContext::getObjCInterfaceType
@@ -744,13 +744,13 @@ class ObjCInterfaceDecl : public ObjCContainerDecl
   void allocateDefinitionData();
   
   typedef Redeclarable<ObjCInterfaceDecl> redeclarable_base;
-  virtual ObjCInterfaceDecl *getNextRedeclaration() { 
+  ObjCInterfaceDecl *getNextRedeclaration() override {
     return RedeclLink.getNext();
   }
-  virtual ObjCInterfaceDecl *getPreviousDeclImpl() {
+  ObjCInterfaceDecl *getPreviousDeclImpl() override {
     return getPreviousDecl();
   }
-  virtual ObjCInterfaceDecl *getMostRecentDeclImpl() {
+  ObjCInterfaceDecl *getMostRecentDeclImpl() override {
     return getMostRecentDecl();
   }
 
@@ -764,7 +764,7 @@ public:
 
   static ObjCInterfaceDecl *CreateDeserialized(ASTContext &C, unsigned ID);
 
-  virtual SourceRange getSourceRange() const LLVM_READONLY {
+  SourceRange getSourceRange() const override LLVM_READONLY {
     if (isThisDeclarationADefinition())
       return ObjCContainerDecl::getSourceRange();
     
@@ -1216,8 +1216,8 @@ public:
   ObjCPropertyDecl
     *FindPropertyVisibleInPrimaryClass(IdentifierInfo *PropertyId) const;
 
-  virtual void collectPropertiesToImplement(PropertyMap &PM,
-                                            PropertyDeclOrder &PO) const;
+  void collectPropertiesToImplement(PropertyMap &PM,
+                                    PropertyDeclOrder &PO) const override;
 
   /// isSuperClassOf - Return true if this class is the specified class or is a
   /// super class of the specified interface class.
@@ -1323,7 +1323,7 @@ public:
   using redeclarable_base::isFirstDecl;
 
   /// Retrieves the canonical declaration of this Objective-C class.
-  ObjCInterfaceDecl *getCanonicalDecl() { return getFirstDecl(); }
+  ObjCInterfaceDecl *getCanonicalDecl() override { return getFirstDecl(); }
   const ObjCInterfaceDecl *getCanonicalDecl() const { return getFirstDecl(); }
 
   // Low-level accessor
@@ -1358,7 +1358,7 @@ private:
 ///   }
 ///
 class ObjCIvarDecl : public FieldDecl {
-  virtual void anchor();
+  void anchor() override;
 
 public:
   enum AccessControl {
@@ -1421,7 +1421,7 @@ private:
 
 /// \brief Represents a field declaration created by an \@defs(...).
 class ObjCAtDefsFieldDecl : public FieldDecl {
-  virtual void anchor();
+  void anchor() override;
   ObjCAtDefsFieldDecl(DeclContext *DC, SourceLocation StartLoc,
                       SourceLocation IdLoc, IdentifierInfo *Id,
                       QualType T, Expr *BW)
@@ -1474,7 +1474,7 @@ public:
 ///
 class ObjCProtocolDecl : public ObjCContainerDecl,
                          public Redeclarable<ObjCProtocolDecl> {
-  virtual void anchor();
+  void anchor() override;
 
   struct DefinitionData {
     // \brief The declaration that defines this protocol.
@@ -1503,13 +1503,13 @@ class ObjCProtocolDecl : public ObjCContainerDecl,
   void allocateDefinitionData();
 
   typedef Redeclarable<ObjCProtocolDecl> redeclarable_base;
-  virtual ObjCProtocolDecl *getNextRedeclaration() { 
+  ObjCProtocolDecl *getNextRedeclaration() override {
     return RedeclLink.getNext(); 
   }
-  virtual ObjCProtocolDecl *getPreviousDeclImpl() {
+  ObjCProtocolDecl *getPreviousDeclImpl() override {
     return getPreviousDecl();
   }
-  virtual ObjCProtocolDecl *getMostRecentDeclImpl() {
+  ObjCProtocolDecl *getMostRecentDeclImpl() override {
     return getMostRecentDecl();
   }
 
@@ -1615,7 +1615,7 @@ public:
   /// \brief Starts the definition of this Objective-C protocol.
   void startDefinition();
 
-  virtual SourceRange getSourceRange() const LLVM_READONLY {
+  SourceRange getSourceRange() const override LLVM_READONLY {
     if (isThisDeclarationADefinition())
       return ObjCContainerDecl::getSourceRange();
    
@@ -1632,14 +1632,14 @@ public:
   using redeclarable_base::isFirstDecl;
 
   /// Retrieves the canonical declaration of this Objective-C protocol.
-  ObjCProtocolDecl *getCanonicalDecl() { return getFirstDecl(); }
+  ObjCProtocolDecl *getCanonicalDecl() override { return getFirstDecl(); }
   const ObjCProtocolDecl *getCanonicalDecl() const { return getFirstDecl(); }
 
-  virtual void collectPropertiesToImplement(PropertyMap &PM,
-                                            PropertyDeclOrder &PO) const;
-                           
-void collectInheritedProtocolProperties(const ObjCPropertyDecl *Property,
-                                        ProtocolPropertyMap &PM) const;
+  void collectPropertiesToImplement(PropertyMap &PM,
+                                    PropertyDeclOrder &PO) const override;
+
+  void collectInheritedProtocolProperties(const ObjCPropertyDecl *Property,
+                                          ProtocolPropertyMap &PM) const;
 
   static bool classof(const Decl *D) { return classofKind(D->getKind()); }
   static bool classofKind(Kind K) { return K == ObjCProtocol; }
@@ -1667,7 +1667,7 @@ void collectInheritedProtocolProperties(const ObjCPropertyDecl *Property,
 /// don't support this level of dynamism, which is both powerful and dangerous.
 ///
 class ObjCCategoryDecl : public ObjCContainerDecl {
-  virtual void anchor();
+  void anchor() override;
 
   /// Interface belonging to this category
   ObjCInterfaceDecl *ClassInterface;
@@ -1778,7 +1778,7 @@ public:
 };
 
 class ObjCImplDecl : public ObjCContainerDecl {
-  virtual void anchor();
+  void anchor() override;
 
   /// Class interface for this class/category implementation
   ObjCInterfaceDecl *ClassInterface;
@@ -1842,7 +1842,7 @@ public:
 ///
 /// ObjCCategoryImplDecl
 class ObjCCategoryImplDecl : public ObjCImplDecl {
-  virtual void anchor();
+  void anchor() override;
 
   // Category name
   IdentifierInfo *Id;
@@ -1922,7 +1922,7 @@ raw_ostream &operator<<(raw_ostream &OS, const ObjCCategoryImplDecl &CID);
 /// specified, they need to be *identical* to the interface.
 ///
 class ObjCImplementationDecl : public ObjCImplDecl {
-  virtual void anchor();
+  void anchor() override;
   /// Implementation Class's super class.
   ObjCInterfaceDecl *SuperClass;
   SourceLocation SuperLoc;
@@ -2079,7 +2079,7 @@ raw_ostream &operator<<(raw_ostream &OS, const ObjCImplementationDecl &ID);
 /// ObjCCompatibleAliasDecl - Represents alias of a class. This alias is
 /// declared as \@compatibility_alias alias class.
 class ObjCCompatibleAliasDecl : public NamedDecl {
-  virtual void anchor();
+  void anchor() override;
   /// Class that this is an alias of.
   ObjCInterfaceDecl *AliasedClass;
 
@@ -2110,7 +2110,7 @@ public:
 /// \@property (assign, readwrite) int MyProperty;
 /// \endcode
 class ObjCPropertyDecl : public NamedDecl {
-  virtual void anchor();
+  void anchor() override;
 public:
   enum PropertyAttributeKind {
     OBJC_PR_noattr    = 0x00,
@@ -2269,7 +2269,7 @@ public:
     return PropertyIvarDecl;
   }
 
-  virtual SourceRange getSourceRange() const LLVM_READONLY {
+  SourceRange getSourceRange() const override LLVM_READONLY {
     return SourceRange(AtLoc, getLocation());
   }
   
@@ -2339,8 +2339,8 @@ public:
                                       SourceLocation ivarLoc);
 
   static ObjCPropertyImplDecl *CreateDeserialized(ASTContext &C, unsigned ID);
-  
-  virtual SourceRange getSourceRange() const LLVM_READONLY;
+
+  SourceRange getSourceRange() const override LLVM_READONLY;
 
   SourceLocation getLocStart() const LLVM_READONLY { return AtLoc; }
   void setAtLoc(SourceLocation Loc) { AtLoc = Loc; }
