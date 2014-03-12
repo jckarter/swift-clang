@@ -2760,7 +2760,8 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
   // are preserved, all other debug options are substituted with "-g".
   Args.ClaimAllArgs(options::OPT_g_Group);
   if (Arg *A = Args.getLastArg(options::OPT_g_Group)) {
-    if (A->getOption().matches(options::OPT_gline_tables_only)) {
+    if (A->getOption().matches(options::OPT_gline_tables_only) ||
+        A->getOption().matches(options::OPT_gmlt)) {
       // FIXME: we should support specifying dwarf version with
       // -gline-tables-only.
       CmdArgs.push_back("-gline-tables-only");
@@ -3458,6 +3459,8 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
     Args.AddLastArg(CmdArgs,
                     options::OPT_fmodules_validate_once_per_build_session);
   }
+
+  Args.AddLastArg(CmdArgs, options::OPT_fmodules_validate_system_headers);
 
   // -faccess-control is default.
   if (Args.hasFlag(options::OPT_fno_access_control,
