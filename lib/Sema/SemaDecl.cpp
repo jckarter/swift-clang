@@ -8062,6 +8062,11 @@ void Sema::AddInitializerToDecl(Decl *RealDecl, Expr *Init,
         return;
       } else {
         DeduceInit = CXXDirectInit->getExpr(0);
+        if (isa<InitListExpr>(DeduceInit))
+          Diag(CXXDirectInit->getLocStart(),
+               diag::err_auto_var_init_paren_braces)
+            << VDecl->getDeclName() << VDecl->getType()
+            << VDecl->getSourceRange();
       }
     }
 
@@ -9693,6 +9698,30 @@ void Sema::computeNRVO(Stmt *Body, FunctionScopeInfo *Scope) {
   
   if (NRVOCandidate)
     const_cast<VarDecl*>(NRVOCandidate)->setNRVOVariable(true);
+}
+
+bool Sema::canDelayFunctionBody(const Declarator &D) {
+  // We can't delay parsing the body of a constexpr function template (yet).
+  if (D.getDeclSpec().isConstexprSpecified())
+    return false;
+
+  // We can't delay parsing the body of a function template with a deduced
+  // return type (yet).
+  if (D.getDeclSpec().containsPlaceholderType()) {
+    // If the placeholder introduces a non-deduced trailing return type,
+    // we can still delay parsing it.
+    if (D.getNumTypeObjects()) {
+      const auto &Outer = D.getTypeObject(D.getNumTypeObjects() - 1);
+      if (Outer.Kind == DeclaratorChunk::Function &&
+          Outer.Fun.hasTrailingReturnType()) {
+        QualType Ty = GetTypeFromParser(Outer.Fun.getTrailingReturnType());
+        return Ty.isNull() || !Ty->isUndeducedType();
+      }
+    }
+    return false;
+  }
+
+  return true;
 }
 
 bool Sema::canSkipFunctionBody(Decl *D) {
