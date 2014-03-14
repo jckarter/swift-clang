@@ -634,9 +634,8 @@ llvm::Value *MicrosoftCXXABI::adjustThisArgumentForVirtualCall(
         AvoidVirtualOffset = true;
       } else {
         // Let's see if we try to call a destructor of a non-virtual base.
-        for (CXXRecordDecl::base_class_const_iterator I = CurRD->bases_begin(),
-             E = CurRD->bases_end(); I != E; ++I) {
-          if (I->getType()->getAsCXXRecordDecl() != MD->getParent())
+        for (const auto &I : CurRD->bases()) {
+          if (I.getType()->getAsCXXRecordDecl() != MD->getParent())
             continue;
           // If we call a base destructor for a non-virtual base, we statically
           // know where it expects the vfptr and "this" to be.
@@ -1119,10 +1118,8 @@ void MicrosoftCXXABI::emitVBTableDefinition(const VPtrInfo &VBT,
   Offsets[0] = llvm::ConstantInt::get(CGM.IntTy, -VBPtrOffset.getQuantity());
 
   MicrosoftVTableContext &Context = CGM.getMicrosoftVTableContext();
-  for (CXXRecordDecl::base_class_const_iterator I = ReusingBase->vbases_begin(),
-                                                E = ReusingBase->vbases_end();
-       I != E; ++I) {
-    const CXXRecordDecl *VBase = I->getType()->getAsCXXRecordDecl();
+  for (const auto &I : ReusingBase->vbases()) {
+    const CXXRecordDecl *VBase = I.getType()->getAsCXXRecordDecl();
     CharUnits Offset = DerivedLayout.getVBaseClassOffset(VBase);
     assert(!Offset.isNegative());
 

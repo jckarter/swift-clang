@@ -1200,14 +1200,12 @@ HasTrivialDestructorBody(ASTContext &Context,
       return false;
 
   // Check non-virtual bases.
-  for (CXXRecordDecl::base_class_const_iterator I = 
-       BaseClassDecl->bases_begin(), E = BaseClassDecl->bases_end();
-       I != E; ++I) {
-    if (I->isVirtual())
+  for (const auto &I : BaseClassDecl->bases()) {
+    if (I.isVirtual())
       continue;
 
     const CXXRecordDecl *NonVirtualBase =
-      cast<CXXRecordDecl>(I->getType()->castAs<RecordType>()->getDecl());
+      cast<CXXRecordDecl>(I.getType()->castAs<RecordType>()->getDecl());
     if (!HasTrivialDestructorBody(Context, NonVirtualBase,
                                   MostDerivedClassDecl))
       return false;
@@ -1215,11 +1213,9 @@ HasTrivialDestructorBody(ASTContext &Context,
 
   if (BaseClassDecl == MostDerivedClassDecl) {
     // Check virtual bases.
-    for (CXXRecordDecl::base_class_const_iterator I = 
-         BaseClassDecl->vbases_begin(), E = BaseClassDecl->vbases_end();
-         I != E; ++I) {
+    for (const auto &I : BaseClassDecl->vbases()) {
       const CXXRecordDecl *VirtualBase =
-        cast<CXXRecordDecl>(I->getType()->castAs<RecordType>()->getDecl());
+        cast<CXXRecordDecl>(I.getType()->castAs<RecordType>()->getDecl());
       if (!HasTrivialDestructorBody(Context, VirtualBase,
                                     MostDerivedClassDecl))
         return false;      
@@ -1462,10 +1458,7 @@ void CodeGenFunction::EnterDtorCleanups(const CXXDestructorDecl *DD,
 
     // We push them in the forward order so that they'll be popped in
     // the reverse order.
-    for (CXXRecordDecl::base_class_const_iterator I = 
-           ClassDecl->vbases_begin(), E = ClassDecl->vbases_end();
-              I != E; ++I) {
-      const CXXBaseSpecifier &Base = *I;
+    for (const auto &Base : ClassDecl->vbases()) {
       CXXRecordDecl *BaseClassDecl
         = cast<CXXRecordDecl>(Base.getType()->getAs<RecordType>()->getDecl());
     
@@ -1484,10 +1477,7 @@ void CodeGenFunction::EnterDtorCleanups(const CXXDestructorDecl *DD,
   assert(DtorType == Dtor_Base);
   
   // Destroy non-virtual bases.
-  for (CXXRecordDecl::base_class_const_iterator I = 
-        ClassDecl->bases_begin(), E = ClassDecl->bases_end(); I != E; ++I) {
-    const CXXBaseSpecifier &Base = *I;
-    
+  for (const auto &Base : ClassDecl->bases()) {
     // Ignore virtual bases.
     if (Base.isVirtual())
       continue;
@@ -1933,10 +1923,9 @@ CodeGenFunction::InitializeVTablePointers(BaseSubobject Base,
   const CXXRecordDecl *RD = Base.getBase();
 
   // Traverse bases.
-  for (CXXRecordDecl::base_class_const_iterator I = RD->bases_begin(), 
-       E = RD->bases_end(); I != E; ++I) {
+  for (const auto &I : RD->bases()) {
     CXXRecordDecl *BaseDecl
-      = cast<CXXRecordDecl>(I->getType()->getAs<RecordType>()->getDecl());
+      = cast<CXXRecordDecl>(I.getType()->getAs<RecordType>()->getDecl());
 
     // Ignore classes without a vtable.
     if (!BaseDecl->isDynamicClass())
@@ -1946,7 +1935,7 @@ CodeGenFunction::InitializeVTablePointers(BaseSubobject Base,
     CharUnits BaseOffsetFromNearestVBase;
     bool BaseDeclIsNonVirtualPrimaryBase;
 
-    if (I->isVirtual()) {
+    if (I.isVirtual()) {
       // Check if we've visited this virtual base before.
       if (!VBases.insert(BaseDecl))
         continue;
@@ -1967,7 +1956,7 @@ CodeGenFunction::InitializeVTablePointers(BaseSubobject Base,
     }
     
     InitializeVTablePointers(BaseSubobject(BaseDecl, BaseOffset), 
-                             I->isVirtual() ? BaseDecl : NearestVBase,
+                             I.isVirtual() ? BaseDecl : NearestVBase,
                              BaseOffsetFromNearestVBase,
                              BaseDeclIsNonVirtualPrimaryBase, 
                              VTableClass, VBases);

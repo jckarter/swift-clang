@@ -113,15 +113,12 @@ static void checkObjCDealloc(const CheckerBase *Checker,
 
   bool containsPointerIvar = false;
 
-  for (ObjCInterfaceDecl::ivar_iterator I=ID->ivar_begin(), E=ID->ivar_end();
-       I!=E; ++I) {
-
-    ObjCIvarDecl *ID = *I;
-    QualType T = ID->getType();
+  for (const auto *Ivar : ID->ivars()) {
+    QualType T = Ivar->getType();
 
     if (!T->isObjCObjectPointerType() ||
-        ID->hasAttr<IBOutletAttr>() || // Skip IBOutlets.
-        ID->hasAttr<IBOutletCollectionAttr>()) // Skip IBOutletCollections.
+        Ivar->hasAttr<IBOutletAttr>() || // Skip IBOutlets.
+        Ivar->hasAttr<IBOutletCollectionAttr>()) // Skip IBOutletCollections.
       continue;
 
     containsPointerIvar = true;
@@ -156,14 +153,12 @@ static void checkObjCDealloc(const CheckerBase *Checker,
   // Get the "dealloc" selector.
   IdentifierInfo* II = &Ctx.Idents.get("dealloc");
   Selector S = Ctx.Selectors.getSelector(0, &II);
-  ObjCMethodDecl *MD = 0;
+  const ObjCMethodDecl *MD = 0;
 
   // Scan the instance methods for "dealloc".
-  for (ObjCImplementationDecl::instmeth_iterator I = D->instmeth_begin(),
-       E = D->instmeth_end(); I!=E; ++I) {
-
-    if ((*I)->getSelector() == S) {
-      MD = *I;
+  for (const auto *I : D->instance_methods()) {
+    if (I->getSelector() == S) {
+      MD = I;
       break;
     }
   }

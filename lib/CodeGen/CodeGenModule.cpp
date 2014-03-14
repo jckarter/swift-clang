@@ -218,13 +218,13 @@ void CodeGenModule::checkAliases() {
     StringRef MangledName = getMangledName(GD);
     llvm::GlobalValue *Entry = GetGlobalValue(MangledName);
     llvm::GlobalAlias *Alias = cast<llvm::GlobalAlias>(Entry);
-    llvm::GlobalValue *GV = Alias->getAliasedGlobal();
-    if (GV->isDeclaration()) {
-      Error = true;
-      getDiags().Report(AA->getLocation(), diag::err_alias_to_undefined);
-    } else if (!Alias->resolveAliasedGlobal(/*stopOnWeak*/ false)) {
+    llvm::GlobalValue *GV = Alias->resolveAliasedGlobal(/*stopOnWeak*/ false);
+    if (!GV) {
       Error = true;
       getDiags().Report(AA->getLocation(), diag::err_cyclic_alias);
+    } else if (GV->isDeclaration()) {
+      Error = true;
+      getDiags().Report(AA->getLocation(), diag::err_alias_to_undefined);
     }
   }
   if (!Error)
@@ -2852,10 +2852,8 @@ void CodeGenModule::EmitLinkageSpec(const LinkageSpecDecl *LSD) {
     // Meta-data for ObjC class includes references to implemented methods.
     // Generate class's method definitions first.
     if (auto *OID = dyn_cast<ObjCImplDecl>(I)) {
-      for (ObjCContainerDecl::method_iterator M = OID->meth_begin(),
-           MEnd = OID->meth_end();
-           M != MEnd; ++M)
-        EmitTopLevelDecl(*M);
+      for (auto *M : OID->methods())
+        EmitTopLevelDecl(M);
     }
     EmitTopLevelDecl(I);
   }

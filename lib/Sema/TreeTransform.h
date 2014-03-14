@@ -952,9 +952,8 @@ public:
           break;
         }
         default:
-          // FIXME: Would be nice to highlight just the source range.
           SemaRef.Diag(IdLoc, diag::err_not_tag_in_scope)
-            << Kind << Id << DC;
+              << Kind << Id << DC << QualifierLoc.getSourceRange();
           break;
       }
       return QualType();
@@ -7856,9 +7855,8 @@ TreeTransform<Derived>::TransformUnresolvedLookupExpr(
     // Expand using declarations.
     if (isa<UsingDecl>(InstD)) {
       UsingDecl *UD = cast<UsingDecl>(InstD);
-      for (UsingDecl::shadow_iterator I = UD->shadow_begin(),
-             E = UD->shadow_end(); I != E; ++I)
-        R.addDecl(*I);
+      for (auto *I : UD->shadows())
+        R.addDecl(I);
       continue;
     }
 
@@ -8724,9 +8722,8 @@ TreeTransform<Derived>::TransformUnresolvedMemberExpr(UnresolvedMemberExpr *Old)
     // Expand using declarations.
     if (isa<UsingDecl>(InstD)) {
       UsingDecl *UD = cast<UsingDecl>(InstD);
-      for (UsingDecl::shadow_iterator I = UD->shadow_begin(),
-             E = UD->shadow_end(); I != E; ++I)
-        R.addDecl(*I);
+      for (auto *I : UD->shadows())
+        R.addDecl(I);
       continue;
     }
 

@@ -2069,10 +2069,8 @@ addAssociatedClassesAndNamespaces(AssociatedLookup &Result,
     Class = Bases.pop_back_val();
 
     // Visit the base classes.
-    for (CXXRecordDecl::base_class_iterator Base = Class->bases_begin(),
-                                         BaseEnd = Class->bases_end();
-         Base != BaseEnd; ++Base) {
-      const RecordType *BaseType = Base->getType()->getAs<RecordType>();
+    for (const auto &Base : Class->bases()) {
+      const RecordType *BaseType = Base.getType()->getAs<RecordType>();
       // In dependent contexts, we do ADL twice, and the first time around,
       // the base type might be a dependent TemplateSpecializationType, or a
       // TemplateTypeParmType. If that happens, simply ignore it.
@@ -3094,10 +3092,8 @@ static void LookupVisibleDecls(DeclContext *Ctx, LookupResult &Result,
     if (!Record->hasDefinition())
       return;
 
-    for (CXXRecordDecl::base_class_iterator B = Record->bases_begin(),
-                                         BEnd = Record->bases_end();
-         B != BEnd; ++B) {
-      QualType BaseType = B->getType();
+    for (const auto &B : Record->bases()) {
+      QualType BaseType = B.getType();
 
       // Don't look into dependent bases, because name lookup can't look
       // there anyway.
@@ -3137,21 +3133,16 @@ static void LookupVisibleDecls(DeclContext *Ctx, LookupResult &Result,
   // Traverse the contexts of Objective-C classes.
   if (ObjCInterfaceDecl *IFace = dyn_cast<ObjCInterfaceDecl>(Ctx)) {
     // Traverse categories.
-    for (ObjCInterfaceDecl::visible_categories_iterator
-           Cat = IFace->visible_categories_begin(),
-           CatEnd = IFace->visible_categories_end();
-         Cat != CatEnd; ++Cat) {
+    for (auto *Cat : IFace->visible_categories()) {
       ShadowContextRAII Shadow(Visited);
-      LookupVisibleDecls(*Cat, Result, QualifiedNameLookup, false,
+      LookupVisibleDecls(Cat, Result, QualifiedNameLookup, false,
                          Consumer, Visited);
     }
 
     // Traverse protocols.
-    for (ObjCInterfaceDecl::all_protocol_iterator
-         I = IFace->all_referenced_protocol_begin(),
-         E = IFace->all_referenced_protocol_end(); I != E; ++I) {
+    for (auto *I : IFace->all_referenced_protocols()) {
       ShadowContextRAII Shadow(Visited);
-      LookupVisibleDecls(*I, Result, QualifiedNameLookup, false, Consumer,
+      LookupVisibleDecls(I, Result, QualifiedNameLookup, false, Consumer,
                          Visited);
     }
 
@@ -3170,10 +3161,9 @@ static void LookupVisibleDecls(DeclContext *Ctx, LookupResult &Result,
                          QualifiedNameLookup, InBaseClass, Consumer, Visited);
     }
   } else if (ObjCProtocolDecl *Protocol = dyn_cast<ObjCProtocolDecl>(Ctx)) {
-    for (ObjCProtocolDecl::protocol_iterator I = Protocol->protocol_begin(),
-           E = Protocol->protocol_end(); I != E; ++I) {
+    for (auto *I : Protocol->protocols()) {
       ShadowContextRAII Shadow(Visited);
-      LookupVisibleDecls(*I, Result, QualifiedNameLookup, false, Consumer,
+      LookupVisibleDecls(I, Result, QualifiedNameLookup, false, Consumer,
                          Visited);
     }
   } else if (ObjCCategoryDecl *Category = dyn_cast<ObjCCategoryDecl>(Ctx)) {

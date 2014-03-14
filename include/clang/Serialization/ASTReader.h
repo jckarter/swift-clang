@@ -171,6 +171,9 @@ public:
   virtual void ReadCounter(const serialization::ModuleFile &M,
                            unsigned Value) {}
 
+  /// This is called for each AST file loaded.
+  virtual void visitModuleFile(StringRef Filename) {}
+
   /// \brief Returns true if this \c ASTReaderListener wants to receive the
   /// input files of the AST file via \c visitInputFile, false otherwise.
   virtual bool needsInputFileVisitation() { return false; }
@@ -183,7 +186,10 @@ public:
   /// system input files as well.
   ///
   /// \returns true to continue receiving the next input file, false to stop.
-  virtual bool visitInputFile(StringRef Filename, bool isSystem) { return true;}
+  virtual bool visitInputFile(StringRef Filename, bool isSystem,
+                              bool isOverridden) {
+    return true;
+  }
 };
 
 /// \brief Simple wrapper class for chaining listeners.
@@ -214,7 +220,9 @@ public:
   void ReadCounter(const serialization::ModuleFile &M, unsigned Value) override;
   bool needsInputFileVisitation() override;
   bool needsSystemInputFileVisitation() override;
-  bool visitInputFile(StringRef Filename, bool isSystem) override;
+  void visitModuleFile(StringRef Filename) override;
+  bool visitInputFile(StringRef Filename, bool isSystem,
+                      bool isOverridden) override;
 };
 
 /// \brief ASTReaderListener implementation to validate the information of
@@ -1022,10 +1030,15 @@ private:
   /// \brief Reads a statement from the specified cursor.
   Stmt *ReadStmtFromStream(ModuleFile &F);
 
+  struct InputFileInfo {
+    std::string Filename;
+    off_t StoredSize;
+    time_t StoredTime;
+    bool Overridden;
+  };
+
   /// \brief Reads the stored information about an input file.
-  void readInputFileInfo(ModuleFile &F, unsigned ID, std::string &Filename,
-                         off_t &StoredSize, time_t &StoredTime,
-                         bool &Overridden);
+  InputFileInfo readInputFileInfo(ModuleFile &F, unsigned ID);
   /// \brief A convenience method to read the filename from an input file.
   std::string getInputFileName(ModuleFile &F, unsigned ID);
 

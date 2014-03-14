@@ -386,9 +386,8 @@ bool Sema::isMicrosoftMissingTypename(const CXXScopeSpec *SS, Scope *S) {
     const Type *Ty = SS->getScopeRep()->getAsType();
 
     CXXRecordDecl *RD = cast<CXXRecordDecl>(CurContext);
-    for (CXXRecordDecl::base_class_const_iterator Base = RD->bases_begin(),
-          BaseEnd = RD->bases_end(); Base != BaseEnd; ++Base)
-      if (Context.hasSameUnqualifiedType(QualType(Ty, 1), Base->getType()))
+    for (const auto &Base : RD->bases())
+      if (Context.hasSameUnqualifiedType(QualType(Ty, 1), Base.getType()))
         return true;
     return S->isFunctionPrototypeScope();
   } 
@@ -9476,22 +9475,21 @@ static void RebuildLambdaScopeInfo(CXXMethodDecl *CallOperator,
 
   // Add the captures to the LSI so they can be noted as already
   // captured within tryCaptureVar. 
-  for (LambdaExpr::capture_iterator C = LambdaClass->captures_begin(),
-      CEnd = LambdaClass->captures_end(); C != CEnd; ++C) {
-    if (C->capturesVariable()) {
-      VarDecl *VD = C->getCapturedVar();
+  for (const auto &C : LambdaClass->captures()) {
+    if (C.capturesVariable()) {
+      VarDecl *VD = C.getCapturedVar();
       if (VD->isInitCapture())
         S.CurrentInstantiationScope->InstantiatedLocal(VD, VD);
       QualType CaptureType = VD->getType();
-      const bool ByRef = C->getCaptureKind() == LCK_ByRef;
+      const bool ByRef = C.getCaptureKind() == LCK_ByRef;
       LSI->addCapture(VD, /*IsBlock*/false, ByRef, 
-          /*RefersToEnclosingLocal*/true, C->getLocation(),
-          /*EllipsisLoc*/C->isPackExpansion() 
-                         ? C->getEllipsisLoc() : SourceLocation(),
+          /*RefersToEnclosingLocal*/true, C.getLocation(),
+          /*EllipsisLoc*/C.isPackExpansion() 
+                         ? C.getEllipsisLoc() : SourceLocation(),
           CaptureType, /*Expr*/ 0);
       
-    } else if (C->capturesThis()) {
-      LSI->addThisCapture(/*Nested*/ false, C->getLocation(), 
+    } else if (C.capturesThis()) {
+      LSI->addThisCapture(/*Nested*/ false, C.getLocation(), 
                               S.getCurrentThisType(), /*Expr*/ 0);
     }
   }
@@ -12256,10 +12254,7 @@ void Sema::ActOnFields(Scope *S, SourceLocation RecLoc, Decl *EnclosingDecl,
             Diag(ClsIvar->getLocation(), diag::note_previous_definition);
             continue;
           }
-          for (ObjCInterfaceDecl::known_extensions_iterator
-                 Ext = IDecl->known_extensions_begin(),
-                 ExtEnd = IDecl->known_extensions_end();
-               Ext != ExtEnd; ++Ext) {
+          for (const auto *Ext : IDecl->known_extensions()) {
             if (const ObjCIvarDecl *ClsExtIvar
                   = Ext->getIvarDecl(ClsFields[i]->getIdentifier())) {
               Diag(ClsFields[i]->getLocation(), 
