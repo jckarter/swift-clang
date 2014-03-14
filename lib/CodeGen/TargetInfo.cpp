@@ -3428,6 +3428,7 @@ static llvm::Value *EmitAArch64VAArg(llvm::Value *VAListAddr, QualType Ty,
   llvm::BasicBlock *InRegBlock = CGF.createBasicBlock("vaarg.in_reg");
   llvm::BasicBlock *OnStackBlock = CGF.createBasicBlock("vaarg.on_stack");
   llvm::BasicBlock *ContBlock = CGF.createBasicBlock("vaarg.end");
+  auto &Ctx = CGF.getContext();
 
   llvm::Value *reg_offs_p = 0, *reg_offs = 0;
   int reg_top_index;
@@ -3469,8 +3470,8 @@ static llvm::Value *EmitAArch64VAArg(llvm::Value *VAListAddr, QualType Ty,
   // Integer arguments may need to correct register alignment (for example a
   // "struct { __int128 a; };" gets passed in x_2N, x_{2N+1}). In this case we
   // align __gr_offs to calculate the potential address.
-  if (AllocatedGPR && !IsIndirect && CGF.getContext().getTypeAlign(Ty) > 64) {
-    int Align = CGF.getContext().getTypeAlign(Ty) / 8;
+  if (AllocatedGPR && !IsIndirect && Ctx.getTypeAlign(Ty) > 64) {
+    int Align = Ctx.getTypeAlign(Ty) / 8;
 
     reg_offs = CGF.Builder.CreateAdd(reg_offs,
                                  llvm::ConstantInt::get(CGF.Int32Ty, Align - 1),
@@ -3520,7 +3521,6 @@ static llvm::Value *EmitAArch64VAArg(llvm::Value *VAListAddr, QualType Ty,
 
   const Type *Base = 0;
   uint64_t NumMembers;
-  auto &Ctx = CGF.getContext();
   if (isHomogeneousAggregate(Ty, Base, Ctx, &NumMembers) && NumMembers > 1) {
     // Homogeneous aggregates passed in registers will have their elements split
     // and stored 16-bytes apart regardless of size (they're notionally in qN,
@@ -3579,8 +3579,8 @@ static llvm::Value *EmitAArch64VAArg(llvm::Value *VAListAddr, QualType Ty,
 
   // Again, stack arguments may need realigmnent. In this case both integer and
   // floating-point ones might be affected.
-  if (!IsIndirect && CGF.getContext().getTypeAlign(Ty) > 64) {
-    int Align = CGF.getContext().getTypeAlign(Ty) / 8;
+  if (!IsIndirect && Ctx.getTypeAlign(Ty) > 64) {
+    int Align = Ctx.getTypeAlign(Ty) / 8;
 
     OnStackAddr = CGF.Builder.CreatePtrToInt(OnStackAddr, CGF.Int64Ty);
 
@@ -3598,7 +3598,7 @@ static llvm::Value *EmitAArch64VAArg(llvm::Value *VAListAddr, QualType Ty,
   if (IsIndirect)
     StackSize = 8;
   else
-    StackSize = CGF.getContext().getTypeSize(Ty) / 8;
+    StackSize = Ctx.getTypeSize(Ty) / 8;
 
 
   // All stack slots are 8 bytes
