@@ -1936,10 +1936,8 @@ void OMPClauseEnqueue::VisitOMPDefaultClause(const OMPDefaultClause *C) { }
 
 template<typename T>
 void OMPClauseEnqueue::VisitOMPClauseList(T *Node) {
-  for (typename T::varlist_const_iterator I = Node->varlist_begin(),
-                                          E = Node->varlist_end();
-         I != E; ++I)
-    Visitor->AddStmt(*I);
+  for (const auto *I : Node->varlists())
+    Visitor->AddStmt(I);
 }
 
 void OMPClauseEnqueue::VisitOMPPrivateClause(const OMPPrivateClause *C) {
@@ -2074,9 +2072,8 @@ void EnqueueVisitor::VisitDependentScopeDeclRefExpr(
 void EnqueueVisitor::VisitDeclStmt(const DeclStmt *S) {
   unsigned size = WL.size();
   bool isFirst = true;
-  for (DeclStmt::const_decl_iterator D = S->decl_begin(), DEnd = S->decl_end();
-       D != DEnd; ++D) {
-    AddDecl(*D, isFirst);
+  for (const auto *D : S->decls()) {
+    AddDecl(D, isFirst);
     isFirst = false;
   }
   if (size == WL.size())

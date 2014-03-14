@@ -3067,10 +3067,7 @@ void CGObjCMac::GenerateClass(const ObjCImplementationDecl *ID) {
     // Class methods should always be defined.
     ClassMethods.push_back(GetMethodConstant(I));
 
-  for (ObjCImplementationDecl::propimpl_iterator
-         i = ID->propimpl_begin(), e = ID->propimpl_end(); i != e; ++i) {
-    ObjCPropertyImplDecl *PID = *i;
-
+  for (const auto *PID : ID->property_impls()) {
     if (PID->getPropertyImplementation() == ObjCPropertyImplDecl::Synthesize) {
       ObjCPropertyDecl *PD = PID->getPropertyDecl();
 
@@ -5662,10 +5659,7 @@ llvm::GlobalVariable * CGObjCNonFragileABIMac::BuildClassRoTInitializer(
       // Instance methods should always be defined.
       Methods.push_back(GetMethodConstant(I));
 
-    for (ObjCImplementationDecl::propimpl_iterator
-           i = ID->propimpl_begin(), e = ID->propimpl_end(); i != e; ++i) {
-      ObjCPropertyImplDecl *PID = *i;
-
+    for (const auto *PID : ID->property_impls()) {
       if (PID->getPropertyImplementation() == ObjCPropertyImplDecl::Synthesize){
         ObjCPropertyDecl *PD = PID->getPropertyDecl();
 

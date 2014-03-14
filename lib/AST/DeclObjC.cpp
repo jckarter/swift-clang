@@ -1239,19 +1239,17 @@ ObjCIvarDecl *ObjCInterfaceDecl::all_declared_ivar_begin() {
     data().IvarListMissingImplementation = false;
     if (!ImplDecl->ivar_empty()) {
       SmallVector<SynthesizeIvarChunk, 16> layout;
-      for (ObjCImplementationDecl::ivar_iterator I = ImplDecl->ivar_begin(),
-           E = ImplDecl->ivar_end(); I != E; ++I) {
-        ObjCIvarDecl *IV = *I;
+      for (auto *IV : ImplDecl->ivars()) {
         if (IV->getSynthesize() && !IV->isInvalidDecl()) {
           layout.push_back(SynthesizeIvarChunk(
                              IV->getASTContext().getTypeSize(IV->getType()), IV));
           continue;
         }
         if (!data().IvarList)
-          data().IvarList = *I;
+          data().IvarList = IV;
         else
-          curIvar->setNextIvar(*I);
-        curIvar = *I;
+          curIvar->setNextIvar(IV);
+        curIvar = IV;
       }
       
       if (!layout.empty()) {
@@ -1674,12 +1672,10 @@ void ObjCImplDecl::setClassInterface(ObjCInterfaceDecl *IFace) {
 ///
 ObjCPropertyImplDecl *ObjCImplDecl::
 FindPropertyImplIvarDecl(IdentifierInfo *ivarId) const {
-  for (propimpl_iterator i = propimpl_begin(), e = propimpl_end(); i != e; ++i){
-    ObjCPropertyImplDecl *PID = *i;
+  for (auto *PID : property_impls())
     if (PID->getPropertyIvarDecl() &&
         PID->getPropertyIvarDecl()->getIdentifier() == ivarId)
       return PID;
-  }
   return 0;
 }
 
@@ -1689,11 +1685,9 @@ FindPropertyImplIvarDecl(IdentifierInfo *ivarId) const {
 ///
 ObjCPropertyImplDecl *ObjCImplDecl::
 FindPropertyImplDecl(IdentifierInfo *Id) const {
-  for (propimpl_iterator i = propimpl_begin(), e = propimpl_end(); i != e; ++i){
-    ObjCPropertyImplDecl *PID = *i;
+  for (auto *PID : property_impls())
     if (PID->getPropertyDecl()->getIdentifier() == Id)
       return PID;
-  }
   return 0;
 }
 

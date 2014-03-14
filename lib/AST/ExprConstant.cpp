@@ -3318,13 +3318,12 @@ static EvalStmtResult EvaluateStmt(APValue &Result, EvalInfo &Info,
 
   case Stmt::DeclStmtClass: {
     const DeclStmt *DS = cast<DeclStmt>(S);
-    for (DeclStmt::const_decl_iterator DclIt = DS->decl_begin(),
-           DclEnd = DS->decl_end(); DclIt != DclEnd; ++DclIt) {
+    for (const auto *DclIt : DS->decls()) {
       // Each declaration initialization is its own full-expression.
       // FIXME: This isn't quite right; if we're performing aggregate
       // initialization, each braced subexpression is its own full-expression.
       FullExpressionRAII Scope(Info);
-      if (!EvaluateDecl(Info, *DclIt) && !Info.keepEvaluatingAfterFailure())
+      if (!EvaluateDecl(Info, DclIt) && !Info.keepEvaluatingAfterFailure())
         return ESR_Failed;
     }
     return ESR_Succeeded;
@@ -8035,6 +8034,9 @@ static bool EvaluateInPlace(APValue &Result, EvalInfo &Info, const LValue &This,
 /// EvaluateAsRValue - Try to evaluate this expression, performing an implicit
 /// lvalue-to-rvalue cast if it is an lvalue.
 static bool EvaluateAsRValue(EvalInfo &Info, const Expr *E, APValue &Result) {
+  if (E->getType().isNull())
+    return false;
+
   if (!CheckLiteralType(Info, E))
     return false;
 
@@ -8060,6 +8062,13 @@ static bool FastEvaluateAsRValue(const Expr *Exp, Expr::EvalResult &Result,
     Result.Val = APValue(APSInt(L->getValue(),
                                 L->getType()->isUnsignedIntegerType()));
     IsConst = true;
+    return true;
+  }
+
+  // This case should be rare, but we need to check it before we check on
+  // the type below.
+  if (Exp->getType().isNull()) {
+    IsConst = false;
     return true;
   }
   

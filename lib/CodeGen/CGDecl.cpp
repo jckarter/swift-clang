@@ -571,7 +571,10 @@ void CodeGenFunction::EmitScalarInit(const Expr *init,
     EmitStoreThroughLValue(RValue::get(value), lvalue, true);
     return;
   }
-
+  
+  if (const CXXDefaultInitExpr *DIE = dyn_cast<CXXDefaultInitExpr>(init))
+    init = DIE->getExpr();
+    
   // If we're emitting a value with lifetime, we have to do the
   // initialization *before* we leave the cleanup scopes.
   if (const ExprWithCleanups *ewc = dyn_cast<ExprWithCleanups>(init)) {
@@ -1010,10 +1013,9 @@ static bool isCapturedBy(const VarDecl &var, const Expr *e) {
       }
       else if (DeclStmt *DS = dyn_cast<DeclStmt>((*BI))) {
           // special case declarations
-          for (DeclStmt::decl_iterator I = DS->decl_begin(), E = DS->decl_end();
-               I != E; ++I) {
-              if (VarDecl *VD = dyn_cast<VarDecl>((*I))) {
-                Expr *Init = VD->getInit();
+          for (const auto *I : DS->decls()) {
+              if (const auto *VD = dyn_cast<VarDecl>((I))) {
+                const Expr *Init = VD->getInit();
                 if (Init && isCapturedBy(var, Init))
                   return true;
               }

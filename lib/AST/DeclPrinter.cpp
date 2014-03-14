@@ -885,10 +885,9 @@ void DeclPrinter::VisitTemplateDecl(const TemplateDecl *D) {
 void DeclPrinter::VisitFunctionTemplateDecl(FunctionTemplateDecl *D) {
   if (PrintInstantiation) {
     TemplateParameterList *Params = D->getTemplateParameters();
-    for (FunctionTemplateDecl::spec_iterator I = D->spec_begin(), E = D->spec_end();
-         I != E; ++I) {
-      PrintTemplateParameters(Params, (*I)->getTemplateSpecializationArgs());
-      Visit(*I);
+    for (auto *I : D->specializations()) {
+      PrintTemplateParameters(Params, I->getTemplateSpecializationArgs());
+      Visit(I);
     }
   }
 
@@ -898,10 +897,9 @@ void DeclPrinter::VisitFunctionTemplateDecl(FunctionTemplateDecl *D) {
 void DeclPrinter::VisitClassTemplateDecl(ClassTemplateDecl *D) {
   if (PrintInstantiation) {
     TemplateParameterList *Params = D->getTemplateParameters();
-    for (ClassTemplateDecl::spec_iterator I = D->spec_begin(), E = D->spec_end();
-         I != E; ++I) {
-      PrintTemplateParameters(Params, &(*I)->getTemplateArgs());
-      Visit(*I);
+    for (auto *I : D->specializations()) {
+      PrintTemplateParameters(Params, &I->getTemplateArgs());
+      Visit(I);
       Out << '\n';
     }
   }
@@ -961,10 +959,9 @@ void DeclPrinter::VisitObjCImplementationDecl(ObjCImplementationDecl *OID) {
   if (OID->ivar_size() > 0) {
     Out << "{\n";
     Indentation += Policy.Indentation;
-    for (ObjCImplementationDecl::ivar_iterator I = OID->ivar_begin(),
-         E = OID->ivar_end(); I != E; ++I) {
+    for (const auto *I : OID->ivars()) {
       Indent() << I->getASTContext().getUnqualifiedObjCPointerType(I->getType()).
-                    getAsString(Policy) << ' ' << **I << ";\n";
+                    getAsString(Policy) << ' ' << *I << ";\n";
     }
     Indentation -= Policy.Indentation;
     Out << "}\n";

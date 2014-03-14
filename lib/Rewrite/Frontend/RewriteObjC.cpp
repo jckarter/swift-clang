@@ -1197,12 +1197,8 @@ void RewriteObjC::RewriteImplementationDecl(Decl *OID) {
     const char *endBuf = SM->getCharacterData(LocEnd);
     ReplaceText(LocStart, endBuf-startBuf, ResultStr);
   }
-  for (ObjCCategoryImplDecl::propimpl_iterator
-       I = IMD ? IMD->propimpl_begin() : CID->propimpl_begin(),
-       E = IMD ? IMD->propimpl_end() : CID->propimpl_end();
-       I != E; ++I) {
-    RewritePropertyImplDecl(*I, IMD, CID);
-  }
+  for (auto *I : IMD ? IMD->property_impls() : CID->property_impls())
+    RewritePropertyImplDecl(I, IMD, CID);
 
   InsertText(IMD ? IMD->getLocEnd() : CID->getLocEnd(), "// ");
 }
@@ -4757,9 +4753,7 @@ Stmt *RewriteObjC::RewriteFunctionBodyOrGlobalInitializer(Stmt *S) {
       RewriteObjCQualifiedInterfaceTypes(*DS->decl_begin());
 
     // Blocks rewrite rules.
-    for (DeclStmt::decl_iterator DI = DS->decl_begin(), DE = DS->decl_end();
-         DI != DE; ++DI) {
-      Decl *SD = *DI;
+    for (auto *SD : DS->decls()) {
       if (ValueDecl *ND = dyn_cast<ValueDecl>(SD)) {
         if (isTopLevelBlockPointerType(ND->getType()))
           RewriteBlockPointerDecl(ND);
@@ -5388,10 +5382,8 @@ void RewriteObjCFragileABI::RewriteObjCClassMetaData(ObjCImplementationDecl *IDe
     ObjCInterfaceDecl::ivar_iterator IVI, IVE;
     SmallVector<ObjCIvarDecl *, 8> IVars;
     if (!IDecl->ivar_empty()) {
-      for (ObjCInterfaceDecl::ivar_iterator
-           IV = IDecl->ivar_begin(), IVEnd = IDecl->ivar_end();
-           IV != IVEnd; ++IV)
-        IVars.push_back(*IV);
+      for (auto *IV : IDecl->ivars())
+        IVars.push_back(IV);
       IVI = IDecl->ivar_begin();
       IVE = IDecl->ivar_end();
     } else {
@@ -5429,9 +5421,7 @@ void RewriteObjCFragileABI::RewriteObjCClassMetaData(ObjCImplementationDecl *IDe
   
   // If any of our property implementations have associated getters or
   // setters, produce metadata for them as well.
-  for (ObjCImplDecl::propimpl_iterator Prop = IDecl->propimpl_begin(),
-       PropEnd = IDecl->propimpl_end();
-       Prop != PropEnd; ++Prop) {
+  for (const auto *Prop : IDecl->property_impls()) {
     if (Prop->getPropertyImplementation() == ObjCPropertyImplDecl::Dynamic)
       continue;
     if (!Prop->getPropertyIvarDecl())
@@ -5710,9 +5700,7 @@ void RewriteObjCFragileABI::RewriteObjCCategoryImplDecl(ObjCCategoryImplDecl *ID
   
   // If any of our property implementations have associated getters or
   // setters, produce metadata for them as well.
-  for (ObjCImplDecl::propimpl_iterator Prop = IDecl->propimpl_begin(),
-       PropEnd = IDecl->propimpl_end();
-       Prop != PropEnd; ++Prop) {
+  for (const auto *Prop : IDecl->property_impls()) {
     if (Prop->getPropertyImplementation() == ObjCPropertyImplDecl::Dynamic)
       continue;
     if (!Prop->getPropertyIvarDecl())
