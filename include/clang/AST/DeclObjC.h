@@ -1571,6 +1571,11 @@ public:
     return data().ReferencedProtocols.end(); 
   }
   typedef ObjCProtocolList::loc_iterator protocol_loc_iterator;
+  typedef llvm::iterator_range<protocol_loc_iterator> protocol_loc_range;
+
+  protocol_loc_range protocol_locs() const {
+    return protocol_loc_range(protocol_loc_begin(), protocol_loc_end());
+  }
   protocol_loc_iterator protocol_loc_begin() const {
     if (!hasDefinition())
       return protocol_loc_iterator();
@@ -1758,10 +1763,22 @@ public:
   }
 
   typedef ObjCProtocolList::iterator protocol_iterator;
-  protocol_iterator protocol_begin() const {return ReferencedProtocols.begin();}
+  typedef llvm::iterator_range<protocol_iterator> protocol_range;
+
+  protocol_range protocols() const {
+    return protocol_range(protocol_begin(), protocol_end());
+  }
+  protocol_iterator protocol_begin() const {
+    return ReferencedProtocols.begin();
+  }
   protocol_iterator protocol_end() const { return ReferencedProtocols.end(); }
   unsigned protocol_size() const { return ReferencedProtocols.size(); }
   typedef ObjCProtocolList::loc_iterator protocol_loc_iterator;
+  typedef llvm::iterator_range<protocol_loc_iterator> protocol_loc_range;
+
+  protocol_loc_range protocol_locs() const {
+    return protocol_loc_range(protocol_loc_begin(), protocol_loc_end());
+  }
   protocol_loc_iterator protocol_loc_begin() const {
     return ReferencedProtocols.loc_begin();
   }
@@ -1780,6 +1797,9 @@ public:
   bool IsClassExtension() const { return getIdentifier() == 0; }
 
   typedef specific_decl_iterator<ObjCIvarDecl> ivar_iterator;
+  typedef llvm::iterator_range<specific_decl_iterator<ObjCIvarDecl>> ivar_range;
+
+  ivar_range ivars() const { return ivar_range(ivar_begin(), ivar_end()); }
   ivar_iterator ivar_begin() const {
     return ivar_iterator(decls_begin());
   }

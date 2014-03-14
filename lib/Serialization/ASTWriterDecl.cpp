@@ -547,10 +547,8 @@ void ASTDeclWriter::VisitObjCProtocolDecl(ObjCProtocolDecl *D) {
     Record.push_back(D->protocol_size());
     for (const auto *I : D->protocols())
       Writer.AddDeclRef(I, Record);
-    for (ObjCProtocolDecl::protocol_loc_iterator PL = D->protocol_loc_begin(),
-           PLEnd = D->protocol_loc_end();
-         PL != PLEnd; ++PL)
-      Writer.AddSourceLocation(*PL, Record);
+    for (const auto &PL : D->protocol_locs())
+      Writer.AddSourceLocation(PL, Record);
   }
   
   Code = serialization::DECL_OBJC_PROTOCOL;
@@ -568,13 +566,10 @@ void ASTDeclWriter::VisitObjCCategoryDecl(ObjCCategoryDecl *D) {
   Writer.AddSourceLocation(D->getIvarRBraceLoc(), Record);
   Writer.AddDeclRef(D->getClassInterface(), Record);
   Record.push_back(D->protocol_size());
-  for (ObjCCategoryDecl::protocol_iterator
-       I = D->protocol_begin(), IEnd = D->protocol_end(); I != IEnd; ++I)
-    Writer.AddDeclRef(*I, Record);
-  for (ObjCCategoryDecl::protocol_loc_iterator 
-         PL = D->protocol_loc_begin(), PLEnd = D->protocol_loc_end();
-       PL != PLEnd; ++PL)
-    Writer.AddSourceLocation(*PL, Record);
+  for (const auto *I : D->protocols())
+    Writer.AddDeclRef(I, Record);
+  for (const auto &PL : D->protocol_locs())
+    Writer.AddSourceLocation(PL, Record);
   Code = serialization::DECL_OBJC_CATEGORY;
 }
 

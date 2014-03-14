@@ -3424,9 +3424,6 @@ static llvm::Value *EmitAArch64VAArg(llvm::Value *VAListAddr, QualType Ty,
   //   int __vr_offs;
   // };
 
-  assert(!CGF.CGM.getDataLayout().isBigEndian()
-         && "va_arg not implemented for big-endian AArch64");
-
   llvm::BasicBlock *MaybeRegBlock = CGF.createBasicBlock("vaarg.maybe_reg");
   llvm::BasicBlock *InRegBlock = CGF.createBasicBlock("vaarg.in_reg");
   llvm::BasicBlock *OnStackBlock = CGF.createBasicBlock("vaarg.on_stack");
@@ -3533,9 +3530,14 @@ static llvm::Value *EmitAArch64VAArg(llvm::Value *VAListAddr, QualType Ty,
     llvm::Type *BaseTy = CGF.ConvertType(QualType(Base, 0));
     llvm::Type *HFATy = llvm::ArrayType::get(BaseTy, NumMembers);
     llvm::Value *Tmp = CGF.CreateTempAlloca(HFATy);
-
+    int Offset = 0;
+ 
+    if (CGF.CGM.getDataLayout().isBigEndian() &&
+        getContext().getTypeSize(Base) < 128)
+      Offset = 16 - getContext().getTypeSize(Base)/8;
     for (unsigned i = 0; i < NumMembers; ++i) {
-      llvm::Value *BaseOffset = llvm::ConstantInt::get(CGF.Int32Ty, 16 * i);
+      llvm::Value *BaseOffset = llvm::ConstantInt::get(CGF.Int32Ty,
+                                                       16 * i + Offset);
       llvm::Value *LoadAddr = CGF.Builder.CreateGEP(BaseAddr, BaseOffset);
       LoadAddr = CGF.Builder.CreateBitCast(LoadAddr,
                                           llvm::PointerType::getUnqual(BaseTy));
@@ -3548,6 +3550,20 @@ static llvm::Value *EmitAArch64VAArg(llvm::Value *VAListAddr, QualType Ty,
     RegAddr = CGF.Builder.CreateBitCast(Tmp, MemTy);
   } else {
     // Otherwise the object is contiguous in memory
+    unsigned BeAlign = reg_top_index == 2 ? 16 : 8;
+    if (CGF.CGM.getDataLayout().isBigEndian() && !isAggregateTypeForABI(Ty) &&
+        getContext().getTypeSize(Ty) < (BeAlign * 8)) {
+      int Offset = BeAlign - getContext().getTypeSize(Ty)/8;
+      BaseAddr = CGF.Builder.CreatePtrToInt(BaseAddr, CGF.Int64Ty);
+
+      BaseAddr = CGF.Builder.CreateAdd(BaseAddr,
+                                       llvm::ConstantInt::get(CGF.Int64Ty,
+                                                              Offset),
+                                       "align_be");
+
+      BaseAddr = CGF.Builder.CreateIntToPtr(BaseAddr, CGF.Int8PtrTy);
+    }
+
     RegAddr = CGF.Builder.CreateBitCast(BaseAddr, MemTy);
   }
 
@@ -3595,6 +3611,19 @@ static llvm::Value *EmitAArch64VAArg(llvm::Value *VAListAddr, QualType Ty,
 
   // Write the new value of __stack for the next call to va_arg
   CGF.Builder.CreateStore(NewStack, stack_p);
+
+  if (CGF.CGM.getDataLayout().isBigEndian() && !isAggregateTypeForABI(Ty) &&
+      getContext().getTypeSize(Ty) < 64 ) {
+    int Offset = 8 - getContext().getTypeSize(Ty)/8;
+    OnStackAddr = CGF.Builder.CreatePtrToInt(OnStackAddr, CGF.Int64Ty);
+
+    OnStackAddr = CGF.Builder.CreateAdd(OnStackAddr,
+                                        llvm::ConstantInt::get(CGF.Int64Ty,
+                                                               Offset),
+                                        "align_be");
+
+    OnStackAddr = CGF.Builder.CreateIntToPtr(OnStackAddr, CGF.Int8PtrTy);
+  }
 
   OnStackAddr = CGF.Builder.CreateBitCast(OnStackAddr, MemTy);
 
