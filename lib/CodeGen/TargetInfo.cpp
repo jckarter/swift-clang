@@ -3520,8 +3520,8 @@ static llvm::Value *EmitAArch64VAArg(llvm::Value *VAListAddr, QualType Ty,
 
   const Type *Base = 0;
   uint64_t NumMembers;
-  if (isHomogeneousAggregate(Ty, Base, CGF.getContext(), &NumMembers)
-      && NumMembers > 1) {
+  auto &Ctx = CGF.getContext();
+  if (isHomogeneousAggregate(Ty, Base, Ctx, &NumMembers) && NumMembers > 1) {
     // Homogeneous aggregates passed in registers will have their elements split
     // and stored 16-bytes apart regardless of size (they're notionally in qN,
     // qN+1, ...). We reload and store into a temporary local variable
@@ -3531,10 +3531,9 @@ static llvm::Value *EmitAArch64VAArg(llvm::Value *VAListAddr, QualType Ty,
     llvm::Type *HFATy = llvm::ArrayType::get(BaseTy, NumMembers);
     llvm::Value *Tmp = CGF.CreateTempAlloca(HFATy);
     int Offset = 0;
- 
-    if (CGF.CGM.getDataLayout().isBigEndian() &&
-        getContext().getTypeSize(Base) < 128)
-      Offset = 16 - getContext().getTypeSize(Base)/8;
+
+    if (CGF.CGM.getDataLayout().isBigEndian() && Ctx.getTypeSize(Base) < 128)
+      Offset = 16 - Ctx.getTypeSize(Base)/8;
     for (unsigned i = 0; i < NumMembers; ++i) {
       llvm::Value *BaseOffset = llvm::ConstantInt::get(CGF.Int32Ty,
                                                        16 * i + Offset);
@@ -3552,8 +3551,8 @@ static llvm::Value *EmitAArch64VAArg(llvm::Value *VAListAddr, QualType Ty,
     // Otherwise the object is contiguous in memory
     unsigned BeAlign = reg_top_index == 2 ? 16 : 8;
     if (CGF.CGM.getDataLayout().isBigEndian() && !isAggregateTypeForABI(Ty) &&
-        getContext().getTypeSize(Ty) < (BeAlign * 8)) {
-      int Offset = BeAlign - getContext().getTypeSize(Ty)/8;
+        Ctx.getTypeSize(Ty) < (BeAlign * 8)) {
+      int Offset = BeAlign - Ctx.getTypeSize(Ty)/8;
       BaseAddr = CGF.Builder.CreatePtrToInt(BaseAddr, CGF.Int64Ty);
 
       BaseAddr = CGF.Builder.CreateAdd(BaseAddr,
@@ -3613,8 +3612,8 @@ static llvm::Value *EmitAArch64VAArg(llvm::Value *VAListAddr, QualType Ty,
   CGF.Builder.CreateStore(NewStack, stack_p);
 
   if (CGF.CGM.getDataLayout().isBigEndian() && !isAggregateTypeForABI(Ty) &&
-      getContext().getTypeSize(Ty) < 64 ) {
-    int Offset = 8 - getContext().getTypeSize(Ty)/8;
+      Ctx.getTypeSize(Ty) < 64 ) {
+    int Offset = 8 - Ctx.getTypeSize(Ty)/8;
     OnStackAddr = CGF.Builder.CreatePtrToInt(OnStackAddr, CGF.Int64Ty);
 
     OnStackAddr = CGF.Builder.CreateAdd(OnStackAddr,
