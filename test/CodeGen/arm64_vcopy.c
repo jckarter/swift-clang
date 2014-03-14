@@ -3,6 +3,8 @@
 // RUN:   FileCheck -check-prefix=CHECK_CODEGEN %s
 // RUN: %clang -O0 -target arm64-apple-ios7 -ffreestanding -S -o - %s | \
 // RUN:   FileCheck -check-prefix=CHECK_CODEGEN_O0 %s
+// REQUIRES: arm64-registered-target
+
 // Test ARM64 SIMD copy vector element to vector element: vcopyq_lane*
 
 #include <aarch64_simd.h>

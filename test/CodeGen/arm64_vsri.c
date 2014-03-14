@@ -1,6 +1,8 @@
 // RUN: %clang -O1 -target arm64-apple-ios7 -ffreestanding -S -o - -emit-llvm %s | FileCheck %s
 // RUN: %clang -O1 -target arm64-apple-ios7 -ffreestanding -S -o - %s | \
 // RUN:   FileCheck -check-prefix=CHECK_CODEGEN %s
+// REQUIRES: arm64-registered-target
+
 // Test ARM64 SIMD vector shift right and insert: vsri[q]_n_*
 
 #include <aarch64_simd.h>

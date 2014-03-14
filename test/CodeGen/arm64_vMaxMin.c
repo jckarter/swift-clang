@@ -1,5 +1,6 @@
 // RUN: %clang -O1 -target arm64-apple-ios7 -ffreestanding -S -o - -emit-llvm %s | FileCheck %s
 // RUN: %clang -O1 -target arm64-apple-ios7 -ffreestanding -S -o - %s | FileCheck -check-prefix=CHECK-CODEGEN %s
+// REQUIRES: arm64-registered-target
 // Test ARM64 SIMD max/min intrinsics
 
 #include <aarch64_simd.h>
