@@ -5326,20 +5326,18 @@ bool Sema::RequireLiteralType(SourceLocation Loc, QualType T,
   if (RD->getNumVBases()) {
     Diag(RD->getLocation(), diag::note_non_literal_virtual_base)
       << getLiteralDiagFromTagKind(RD->getTagKind()) << RD->getNumVBases();
-    for (CXXRecordDecl::base_class_const_iterator I = RD->vbases_begin(),
-           E = RD->vbases_end(); I != E; ++I)
-      Diag(I->getLocStart(),
-           diag::note_constexpr_virtual_base_here) << I->getSourceRange();
+    for (const auto &I : RD->vbases())
+      Diag(I.getLocStart(), diag::note_constexpr_virtual_base_here)
+          << I.getSourceRange();
   } else if (!RD->isAggregate() && !RD->hasConstexprNonCopyMoveConstructor() &&
              !RD->hasTrivialDefaultConstructor()) {
     Diag(RD->getLocation(), diag::note_non_literal_no_constexpr_ctors) << RD;
   } else if (RD->hasNonLiteralTypeFieldsOrBases()) {
-    for (CXXRecordDecl::base_class_const_iterator I = RD->bases_begin(),
-         E = RD->bases_end(); I != E; ++I) {
-      if (!I->getType()->isLiteralType(Context)) {
-        Diag(I->getLocStart(),
+    for (const auto &I : RD->bases()) {
+      if (!I.getType()->isLiteralType(Context)) {
+        Diag(I.getLocStart(),
              diag::note_non_literal_base_class)
-          << RD << I->getType() << I->getSourceRange();
+          << RD << I.getType() << I.getSourceRange();
         return true;
       }
     }

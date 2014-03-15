@@ -301,7 +301,7 @@ public:
   }
 
   virtual bool needsInputFileVisitation() { return true; }
-  virtual bool visitInputFile(StringRef Filename, bool isSystem) {
+  bool visitInputFile(StringRef Filename, bool isSystem, bool isOverride) override {
     if (isSystem)
       return false;
     StringRef Name = llvm::sys::path::filename(Filename);

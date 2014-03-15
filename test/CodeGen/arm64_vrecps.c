@@ -1,4 +1,5 @@
 // RUN: %clang -O3 -target arm64-apple-ios7 -ffreestanding -c -S -o - %s | FileCheck %s
+// REQUIRES: arm64-registered-target
 /// Test vrecpss_f32, vrecpsd_f64 ARM64 intrinsics
 
 

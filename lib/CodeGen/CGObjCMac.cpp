@@ -1000,7 +1000,7 @@ protected:
     llvm::SmallPtrSet<const IdentifierInfo*, 16> &PropertySet,
     SmallVectorImpl<llvm::Constant*> &Properties,
     const Decl *Container,
-    const ObjCProtocolDecl *PROTO,
+    const ObjCProtocolDecl *Proto,
     const ObjCCommonTypesHelper &ObjCTypes);
 
   /// GetProtocolRef - Return a reference to the internal protocol
@@ -1966,9 +1966,8 @@ llvm::Constant *CGObjCCommonMac::BuildGCBlockLayout(CodeGenModule &CGM,
   // to be GC'ed.
 
   // Walk the captured variables.
-  for (BlockDecl::capture_const_iterator ci = blockDecl->capture_begin(),
-         ce = blockDecl->capture_end(); ci != ce; ++ci) {
-    const VarDecl *variable = ci->getVariable();
+  for (const auto &CI : blockDecl->captures()) {
+    const VarDecl *variable = CI.getVariable();
     QualType type = variable->getType();
 
     const CGBlockInfo::Capture &capture = blockInfo.getCapture(variable);
@@ -1979,7 +1978,7 @@ llvm::Constant *CGObjCCommonMac::BuildGCBlockLayout(CodeGenModule &CGM,
     uint64_t fieldOffset = layout->getElementOffset(capture.getIndex());
 
     // __block variables are passed by their descriptor address.
-    if (ci->isByRef()) {
+    if (CI.isByRef()) {
       IvarsInfo.push_back(GC_IVAR(fieldOffset, /*size in words*/ 1));
       continue;
     }
@@ -2479,9 +2478,8 @@ llvm::Constant *CGObjCCommonMac::BuildRCBlockLayout(CodeGenModule &CGM,
                            blockInfo.BlockHeaderForcedGapOffset,
                            blockInfo.BlockHeaderForcedGapSize);
   // Walk the captured variables.
-  for (BlockDecl::capture_const_iterator ci = blockDecl->capture_begin(),
-       ce = blockDecl->capture_end(); ci != ce; ++ci) {
-    const VarDecl *variable = ci->getVariable();
+  for (const auto &CI : blockDecl->captures()) {
+    const VarDecl *variable = CI.getVariable();
     QualType type = variable->getType();
     
     const CGBlockInfo::Capture &capture = blockInfo.getCapture(variable);
@@ -2493,17 +2491,17 @@ llvm::Constant *CGObjCCommonMac::BuildRCBlockLayout(CodeGenModule &CGM,
        CharUnits::fromQuantity(layout->getElementOffset(capture.getIndex()));
     
     assert(!type->isArrayType() && "array variable should not be caught");
-    if (!ci->isByRef())
+    if (!CI.isByRef())
       if (const RecordType *record = type->getAs<RecordType>()) {
         BuildRCBlockVarRecordLayout(record, fieldOffset, hasUnion);
         continue;
       }
     CharUnits fieldSize;
-    if (ci->isByRef())
+    if (CI.isByRef())
       fieldSize = CharUnits::fromQuantity(WordSizeInBytes);
     else
       fieldSize = CGM.getContext().getTypeSizeInChars(type);
-    UpdateRunSkipBlockVars(ci->isByRef(), getBlockCaptureLifetime(type, false),
+    UpdateRunSkipBlockVars(CI.isByRef(), getBlockCaptureLifetime(type, false),
                            fieldOffset, fieldSize);
   }
   return getBitmapBlockLayout(false);
@@ -2594,9 +2592,7 @@ llvm::Constant *CGObjCMac::GetOrEmitProtocol(const ObjCProtocolDecl *PD) {
   std::vector<llvm::Constant*> InstanceMethods, ClassMethods;
   std::vector<llvm::Constant*> OptInstanceMethods, OptClassMethods;
   std::vector<llvm::Constant*> MethodTypesExt, OptMethodTypesExt;
-  for (ObjCProtocolDecl::instmeth_iterator
-         i = PD->instmeth_begin(), e = PD->instmeth_end(); i != e; ++i) {
-    ObjCMethodDecl *MD = *i;
+  for (const auto *MD : PD->instance_methods()) {
     llvm::Constant *C = GetMethodDescriptionConstant(MD);
     if (!C)
       return GetOrEmitProtocolRef(PD);
@@ -2610,9 +2606,7 @@ llvm::Constant *CGObjCMac::GetOrEmitProtocol(const ObjCProtocolDecl *PD) {
     }
   }
 
-  for (ObjCProtocolDecl::classmeth_iterator
-         i = PD->classmeth_begin(), e = PD->classmeth_end(); i != e; ++i) {
-    ObjCMethodDecl *MD = *i;
+  for (const auto *MD : PD->class_methods()) {
     llvm::Constant *C = GetMethodDescriptionConstant(MD);
     if (!C)
       return GetOrEmitProtocolRef(PD);
@@ -2778,14 +2772,11 @@ void CGObjCCommonMac::
 PushProtocolProperties(llvm::SmallPtrSet<const IdentifierInfo*,16> &PropertySet,
                        SmallVectorImpl<llvm::Constant *> &Properties,
                        const Decl *Container,
-                       const ObjCProtocolDecl *PROTO,
+                       const ObjCProtocolDecl *Proto,
                        const ObjCCommonTypesHelper &ObjCTypes) {
-  for (ObjCProtocolDecl::protocol_iterator P = PROTO->protocol_begin(),
-         E = PROTO->protocol_end(); P != E; ++P) 
-    PushProtocolProperties(PropertySet, Properties, Container, (*P), ObjCTypes);
-  for (ObjCContainerDecl::prop_iterator I = PROTO->prop_begin(),
-       E = PROTO->prop_end(); I != E; ++I) {
-    const ObjCPropertyDecl *PD = *I;
+  for (const auto *P : Proto->protocols()) 
+    PushProtocolProperties(PropertySet, Properties, Container, P, ObjCTypes);
+  for (const auto *PD : Proto->properties()) {
     if (!PropertySet.insert(PD->getIdentifier()))
       continue;
     llvm::Constant *Prop[] = {
@@ -2814,9 +2805,7 @@ llvm::Constant *CGObjCCommonMac::EmitPropertyList(Twine Name,
                                        const ObjCCommonTypesHelper &ObjCTypes) {
   SmallVector<llvm::Constant *, 16> Properties;
   llvm::SmallPtrSet<const IdentifierInfo*, 16> PropertySet;
-  for (ObjCContainerDecl::prop_iterator I = OCD->prop_begin(),
-         E = OCD->prop_end(); I != E; ++I) {
-    const ObjCPropertyDecl *PD = *I;
+  for (const auto *PD : OCD->properties()) {
     PropertySet.insert(PD->getIdentifier());
     llvm::Constant *Prop[] = {
       GetPropertyName(PD->getIdentifier()),
@@ -2826,17 +2815,12 @@ llvm::Constant *CGObjCCommonMac::EmitPropertyList(Twine Name,
                                                    Prop));
   }
   if (const ObjCInterfaceDecl *OID = dyn_cast<ObjCInterfaceDecl>(OCD)) {
-    for (ObjCInterfaceDecl::all_protocol_iterator
-         P = OID->all_referenced_protocol_begin(),
-         E = OID->all_referenced_protocol_end(); P != E; ++P)
-      PushProtocolProperties(PropertySet, Properties, Container, (*P), 
-                             ObjCTypes);
+    for (const auto *P : OID->all_referenced_protocols())
+      PushProtocolProperties(PropertySet, Properties, Container, P, ObjCTypes);
   }
   else if (const ObjCCategoryDecl *CD = dyn_cast<ObjCCategoryDecl>(OCD)) {
-    for (ObjCCategoryDecl::protocol_iterator P = CD->protocol_begin(),
-         E = CD->protocol_end(); P != E; ++P)
-      PushProtocolProperties(PropertySet, Properties, Container, (*P), 
-                             ObjCTypes);
+    for (const auto *P : CD->protocols())
+      PushProtocolProperties(PropertySet, Properties, Container, P, ObjCTypes);
   }
 
   // Return null for empty list.
@@ -2948,16 +2932,13 @@ void CGObjCMac::GenerateCategory(const ObjCCategoryImplDecl *OCD) {
                                      << OCD->getName();
 
   SmallVector<llvm::Constant *, 16> InstanceMethods, ClassMethods;
-  for (ObjCCategoryImplDecl::instmeth_iterator
-         i = OCD->instmeth_begin(), e = OCD->instmeth_end(); i != e; ++i) {
+  for (const auto *I : OCD->instance_methods())
     // Instance methods should always be defined.
-    InstanceMethods.push_back(GetMethodConstant(*i));
-  }
-  for (ObjCCategoryImplDecl::classmeth_iterator
-         i = OCD->classmeth_begin(), e = OCD->classmeth_end(); i != e; ++i) {
+    InstanceMethods.push_back(GetMethodConstant(I));
+
+  for (const auto *I : OCD->class_methods())
     // Class methods should always be defined.
-    ClassMethods.push_back(GetMethodConstant(*i));
-  }
+    ClassMethods.push_back(GetMethodConstant(I));
 
   llvm::Constant *Values[7];
   Values[0] = GetClassName(OCD->getIdentifier());
@@ -3076,21 +3057,15 @@ void CGObjCMac::GenerateClass(const ObjCImplementationDecl *ID) {
     Flags |= FragileABI_Class_Hidden;
 
   SmallVector<llvm::Constant *, 16> InstanceMethods, ClassMethods;
-  for (ObjCImplementationDecl::instmeth_iterator
-         i = ID->instmeth_begin(), e = ID->instmeth_end(); i != e; ++i) {
+  for (const auto *I : ID->instance_methods())
     // Instance methods should always be defined.
-    InstanceMethods.push_back(GetMethodConstant(*i));
-  }
-  for (ObjCImplementationDecl::classmeth_iterator
-         i = ID->classmeth_begin(), e = ID->classmeth_end(); i != e; ++i) {
+    InstanceMethods.push_back(GetMethodConstant(I));
+
+  for (const auto *I : ID->class_methods())
     // Class methods should always be defined.
-    ClassMethods.push_back(GetMethodConstant(*i));
-  }
+    ClassMethods.push_back(GetMethodConstant(I));
 
-  for (ObjCImplementationDecl::propimpl_iterator
-         i = ID->propimpl_begin(), e = ID->propimpl_end(); i != e; ++i) {
-    ObjCPropertyImplDecl *PID = *i;
-
+  for (const auto *PID : ID->property_impls()) {
     if (PID->getPropertyImplementation() == ObjCPropertyImplDecl::Synthesize) {
       ObjCPropertyDecl *PD = PID->getPropertyDecl();
 
@@ -5673,22 +5648,16 @@ llvm::GlobalVariable * CGObjCNonFragileABIMac::BuildClassRoTInitializer(
   std::string MethodListName("\01l_OBJC_$_");
   if (flags & NonFragileABI_Class_Meta) {
     MethodListName += "CLASS_METHODS_" + ID->getNameAsString();
-    for (ObjCImplementationDecl::classmeth_iterator
-           i = ID->classmeth_begin(), e = ID->classmeth_end(); i != e; ++i) {
+    for (const auto *I : ID->class_methods())
       // Class methods should always be defined.
-      Methods.push_back(GetMethodConstant(*i));
-    }
+      Methods.push_back(GetMethodConstant(I));
   } else {
     MethodListName += "INSTANCE_METHODS_" + ID->getNameAsString();
-    for (ObjCImplementationDecl::instmeth_iterator
-           i = ID->instmeth_begin(), e = ID->instmeth_end(); i != e; ++i) {
+    for (const auto *I : ID->instance_methods())
       // Instance methods should always be defined.
-      Methods.push_back(GetMethodConstant(*i));
-    }
-    for (ObjCImplementationDecl::propimpl_iterator
-           i = ID->propimpl_begin(), e = ID->propimpl_end(); i != e; ++i) {
-      ObjCPropertyImplDecl *PID = *i;
+      Methods.push_back(GetMethodConstant(I));
 
+    for (const auto *PID : ID->property_impls()) {
       if (PID->getPropertyImplementation() == ObjCPropertyImplDecl::Synthesize){
         ObjCPropertyDecl *PD = PID->getPropertyDecl();
 
@@ -6007,11 +5976,9 @@ void CGObjCNonFragileABIMac::GenerateCategory(const ObjCCategoryImplDecl *OCD) {
   MethodListName += "INSTANCE_METHODS_" + Interface->getNameAsString() +
     "_$_" + OCD->getNameAsString();
 
-  for (ObjCCategoryImplDecl::instmeth_iterator
-         i = OCD->instmeth_begin(), e = OCD->instmeth_end(); i != e; ++i) {
+  for (const auto *I : OCD->instance_methods())
     // Instance methods should always be defined.
-    Methods.push_back(GetMethodConstant(*i));
-  }
+    Methods.push_back(GetMethodConstant(I));
 
   Values[2] = EmitMethodList(MethodListName,
                              "__DATA, __objc_const",
@@ -6021,11 +5988,9 @@ void CGObjCNonFragileABIMac::GenerateCategory(const ObjCCategoryImplDecl *OCD) {
   MethodListName += "CLASS_METHODS_" + Interface->getNameAsString() + "_$_" +
     OCD->getNameAsString();
   Methods.clear();
-  for (ObjCCategoryImplDecl::classmeth_iterator
-         i = OCD->classmeth_begin(), e = OCD->classmeth_end(); i != e; ++i) {
+  for (const auto *I : OCD->class_methods())
     // Class methods should always be defined.
-    Methods.push_back(GetMethodConstant(*i));
-  }
+    Methods.push_back(GetMethodConstant(I));
 
   Values[3] = EmitMethodList(MethodListName,
                              "__DATA, __objc_const",
@@ -6298,9 +6263,7 @@ llvm::Constant *CGObjCNonFragileABIMac::GetOrEmitProtocol(
   std::vector<llvm::Constant*> InstanceMethods, ClassMethods;
   std::vector<llvm::Constant*> OptInstanceMethods, OptClassMethods;
   std::vector<llvm::Constant*> MethodTypesExt, OptMethodTypesExt;
-  for (ObjCProtocolDecl::instmeth_iterator
-         i = PD->instmeth_begin(), e = PD->instmeth_end(); i != e; ++i) {
-    ObjCMethodDecl *MD = *i;
+  for (const auto *MD : PD->instance_methods()) {
     llvm::Constant *C = GetMethodDescriptionConstant(MD);
     if (!C)
       return GetOrEmitProtocolRef(PD);
@@ -6314,9 +6277,7 @@ llvm::Constant *CGObjCNonFragileABIMac::GetOrEmitProtocol(
     }
   }
 
-  for (ObjCProtocolDecl::classmeth_iterator
-         i = PD->classmeth_begin(), e = PD->classmeth_end(); i != e; ++i) {
-    ObjCMethodDecl *MD = *i;
+  for (const auto *MD : PD->class_methods()) {
     llvm::Constant *C = GetMethodDescriptionConstant(MD);
     if (!C)
       return GetOrEmitProtocolRef(PD);

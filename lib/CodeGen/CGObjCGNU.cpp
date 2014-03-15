@@ -1755,24 +1755,22 @@ void CGObjCGNU::GenerateProtocol(const ObjCProtocolDecl *PD) {
     PD = Def;
 
   SmallVector<std::string, 16> Protocols;
-  for (ObjCProtocolDecl::protocol_iterator PI = PD->protocol_begin(),
-       E = PD->protocol_end(); PI != E; ++PI)
-    Protocols.push_back((*PI)->getNameAsString());
+  for (const auto *PI : PD->protocols())
+    Protocols.push_back(PI->getNameAsString());
   SmallVector<llvm::Constant*, 16> InstanceMethodNames;
   SmallVector<llvm::Constant*, 16> InstanceMethodTypes;
   SmallVector<llvm::Constant*, 16> OptionalInstanceMethodNames;
   SmallVector<llvm::Constant*, 16> OptionalInstanceMethodTypes;
-  for (ObjCProtocolDecl::instmeth_iterator iter = PD->instmeth_begin(),
-       E = PD->instmeth_end(); iter != E; iter++) {
+  for (const auto *I : PD->instance_methods()) {
     std::string TypeStr;
-    Context.getObjCEncodingForMethodDecl(*iter, TypeStr);
-    if ((*iter)->getImplementationControl() == ObjCMethodDecl::Optional) {
+    Context.getObjCEncodingForMethodDecl(I, TypeStr);
+    if (I->getImplementationControl() == ObjCMethodDecl::Optional) {
       OptionalInstanceMethodNames.push_back(
-          MakeConstantString((*iter)->getSelector().getAsString()));
+          MakeConstantString(I->getSelector().getAsString()));
       OptionalInstanceMethodTypes.push_back(MakeConstantString(TypeStr));
     } else {
       InstanceMethodNames.push_back(
-          MakeConstantString((*iter)->getSelector().getAsString()));
+          MakeConstantString(I->getSelector().getAsString()));
       InstanceMethodTypes.push_back(MakeConstantString(TypeStr));
     }
   }
@@ -1781,18 +1779,16 @@ void CGObjCGNU::GenerateProtocol(const ObjCProtocolDecl *PD) {
   SmallVector<llvm::Constant*, 16> ClassMethodTypes;
   SmallVector<llvm::Constant*, 16> OptionalClassMethodNames;
   SmallVector<llvm::Constant*, 16> OptionalClassMethodTypes;
-  for (ObjCProtocolDecl::classmeth_iterator
-         iter = PD->classmeth_begin(), endIter = PD->classmeth_end();
-       iter != endIter ; iter++) {
+  for (const auto *I : PD->class_methods()) {
     std::string TypeStr;
-    Context.getObjCEncodingForMethodDecl((*iter),TypeStr);
-    if ((*iter)->getImplementationControl() == ObjCMethodDecl::Optional) {
+    Context.getObjCEncodingForMethodDecl(I,TypeStr);
+    if (I->getImplementationControl() == ObjCMethodDecl::Optional) {
       OptionalClassMethodNames.push_back(
-          MakeConstantString((*iter)->getSelector().getAsString()));
+          MakeConstantString(I->getSelector().getAsString()));
       OptionalClassMethodTypes.push_back(MakeConstantString(TypeStr));
     } else {
       ClassMethodNames.push_back(
-          MakeConstantString((*iter)->getSelector().getAsString()));
+          MakeConstantString(I->getSelector().getAsString()));
       ClassMethodTypes.push_back(MakeConstantString(TypeStr));
     }
   }
@@ -1822,11 +1818,8 @@ void CGObjCGNU::GenerateProtocol(const ObjCProtocolDecl *PD) {
 
   // Add all of the property methods need adding to the method list and to the
   // property metadata list.
-  for (ObjCContainerDecl::prop_iterator
-         iter = PD->prop_begin(), endIter = PD->prop_end();
-       iter != endIter ; iter++) {
+  for (auto *property : PD->properties()) {
     std::vector<llvm::Constant*> Fields;
-    ObjCPropertyDecl *property = *iter;
 
     Fields.push_back(MakePropertyEncodingString(property, 0));
     PushPropertyAttributes(Fields, property);
@@ -2007,24 +2000,20 @@ void CGObjCGNU::GenerateCategory(const ObjCCategoryImplDecl *OCD) {
   // Collect information about instance methods
   SmallVector<Selector, 16> InstanceMethodSels;
   SmallVector<llvm::Constant*, 16> InstanceMethodTypes;
-  for (ObjCCategoryImplDecl::instmeth_iterator
-         iter = OCD->instmeth_begin(), endIter = OCD->instmeth_end();
-       iter != endIter ; iter++) {
-    InstanceMethodSels.push_back((*iter)->getSelector());
+  for (const auto *I : OCD->instance_methods()) {
+    InstanceMethodSels.push_back(I->getSelector());
     std::string TypeStr;
-    CGM.getContext().getObjCEncodingForMethodDecl(*iter,TypeStr);
+    CGM.getContext().getObjCEncodingForMethodDecl(I,TypeStr);
     InstanceMethodTypes.push_back(MakeConstantString(TypeStr));
   }
 
   // Collect information about class methods
   SmallVector<Selector, 16> ClassMethodSels;
   SmallVector<llvm::Constant*, 16> ClassMethodTypes;
-  for (ObjCCategoryImplDecl::classmeth_iterator
-         iter = OCD->classmeth_begin(), endIter = OCD->classmeth_end();
-       iter != endIter ; iter++) {
-    ClassMethodSels.push_back((*iter)->getSelector());
+  for (const auto *I : OCD->class_methods()) {
+    ClassMethodSels.push_back(I->getSelector());
     std::string TypeStr;
-    CGM.getContext().getObjCEncodingForMethodDecl(*iter,TypeStr);
+    CGM.getContext().getObjCEncodingForMethodDecl(I,TypeStr);
     ClassMethodTypes.push_back(MakeConstantString(TypeStr));
   }
 
@@ -2068,12 +2057,9 @@ llvm::Constant *CGObjCGNU::GeneratePropertyList(const ObjCImplementationDecl *OI
 
   // Add all of the property methods need adding to the method list and to the
   // property metadata list.
-  for (ObjCImplDecl::propimpl_iterator
-         iter = OID->propimpl_begin(), endIter = OID->propimpl_end();
-       iter != endIter ; iter++) {
+  for (auto *propertyImpl : OID->property_impls()) {
     std::vector<llvm::Constant*> Fields;
-    ObjCPropertyDecl *property = iter->getPropertyDecl();
-    ObjCPropertyImplDecl *propertyImpl = *iter;
+    ObjCPropertyDecl *property = propertyImpl->getPropertyDecl();
     bool isSynthesized = (propertyImpl->getPropertyImplementation() == 
         ObjCPropertyImplDecl::Synthesize);
     bool isDynamic = (propertyImpl->getPropertyImplementation() == 
@@ -2240,12 +2226,10 @@ void CGObjCGNU::GenerateClass(const ObjCImplementationDecl *OID) {
   // Collect information about instance methods
   SmallVector<Selector, 16> InstanceMethodSels;
   SmallVector<llvm::Constant*, 16> InstanceMethodTypes;
-  for (ObjCImplementationDecl::instmeth_iterator
-         iter = OID->instmeth_begin(), endIter = OID->instmeth_end();
-       iter != endIter ; iter++) {
-    InstanceMethodSels.push_back((*iter)->getSelector());
+  for (const auto *I : OID->instance_methods()) {
+    InstanceMethodSels.push_back(I->getSelector());
     std::string TypeStr;
-    Context.getObjCEncodingForMethodDecl((*iter),TypeStr);
+    Context.getObjCEncodingForMethodDecl(I,TypeStr);
     InstanceMethodTypes.push_back(MakeConstantString(TypeStr));
   }
 
@@ -2256,22 +2240,16 @@ void CGObjCGNU::GenerateClass(const ObjCImplementationDecl *OID) {
   // Collect information about class methods
   SmallVector<Selector, 16> ClassMethodSels;
   SmallVector<llvm::Constant*, 16> ClassMethodTypes;
-  for (ObjCImplementationDecl::classmeth_iterator
-         iter = OID->classmeth_begin(), endIter = OID->classmeth_end();
-       iter != endIter ; iter++) {
-    ClassMethodSels.push_back((*iter)->getSelector());
+  for (const auto *I : OID->class_methods()) {
+    ClassMethodSels.push_back(I->getSelector());
     std::string TypeStr;
-    Context.getObjCEncodingForMethodDecl((*iter),TypeStr);
+    Context.getObjCEncodingForMethodDecl(I,TypeStr);
     ClassMethodTypes.push_back(MakeConstantString(TypeStr));
   }
   // Collect the names of referenced protocols
   SmallVector<std::string, 16> Protocols;
-  for (ObjCInterfaceDecl::protocol_iterator
-         I = ClassDecl->protocol_begin(),
-         E = ClassDecl->protocol_end(); I != E; ++I)
-    Protocols.push_back((*I)->getNameAsString());
-
-
+  for (const auto *I : ClassDecl->protocols())
+    Protocols.push_back(I->getNameAsString());
 
   // Get the superclass pointer.
   llvm::Constant *SuperClass;

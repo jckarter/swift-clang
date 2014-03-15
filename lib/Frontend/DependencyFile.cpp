@@ -40,6 +40,7 @@ class DFGImpl : public PPCallbacks {
   bool PhonyTarget;
   bool AddMissingHeaderDeps;
   bool SeenMissingHeader;
+  bool IncludeModuleFiles;
 private:
   bool FileMatchesDepCriteria(const char *Filename,
                               SrcMgr::CharacteristicKind FileType);
@@ -51,7 +52,8 @@ public:
       IncludeSystemHeaders(Opts.IncludeSystemHeaders),
       PhonyTarget(Opts.UsePhonyTargets),
       AddMissingHeaderDeps(Opts.AddMissingHeaderDeps),
-      SeenMissingHeader(false) {}
+      SeenMissingHeader(false),
+      IncludeModuleFiles(Opts.IncludeModuleFiles) {}
 
   void FileChanged(SourceLocation Loc, FileChangeReason Reason,
                    SrcMgr::CharacteristicKind FileType,
@@ -68,6 +70,7 @@ public:
 
   void AddFilename(StringRef Filename);
   bool includeSystemHeaders() const { return IncludeSystemHeaders; }
+  bool includeModuleFiles() const { return IncludeModuleFiles; }
 };
 
 class DFGASTReaderListener : public ASTReaderListener {
@@ -79,7 +82,9 @@ public:
   bool needsSystemInputFileVisitation() override {
     return Parent.includeSystemHeaders();
   }
-  bool visitInputFile(StringRef Filename, bool isSystem) override;
+  void visitModuleFile(StringRef Filename) override;
+  bool visitInputFile(StringRef Filename, bool isSystem,
+                      bool isOverridden) override;
 };
 }
 
@@ -258,9 +263,16 @@ void DFGImpl::OutputDependencyFile() {
 }
 
 bool DFGASTReaderListener::visitInputFile(llvm::StringRef Filename,
-                                          bool IsSystem) {
+                                          bool IsSystem, bool IsOverridden) {
   assert(!IsSystem || needsSystemInputFileVisitation());
+  if (IsOverridden)
+    return true;
+
   Parent.AddFilename(Filename);
   return true;
 }
 
+void DFGASTReaderListener::visitModuleFile(llvm::StringRef Filename) {
+  if (Parent.includeModuleFiles())
+    Parent.AddFilename(Filename);
+}
