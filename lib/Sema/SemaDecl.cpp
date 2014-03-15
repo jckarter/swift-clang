@@ -5946,9 +5946,8 @@ bool Sema::AddOverriddenMethods(CXXRecordDecl *DC, CXXMethodDecl *MD) {
   bool hasNonDeletedOverridenMethods = false;
   bool AddedAny = false;
   if (DC->lookupInBases(&FindOverriddenMethod, &Data, Paths)) {
-    for (CXXBasePaths::decl_iterator I = Paths.found_decls_begin(),
-         E = Paths.found_decls_end(); I != E; ++I) {
-      if (CXXMethodDecl *OldMD = dyn_cast<CXXMethodDecl>(*I)) {
+    for (auto *I : Paths.found_decls()) {
+      if (CXXMethodDecl *OldMD = dyn_cast<CXXMethodDecl>(I)) {
         MD->addOverriddenMethod(OldMD->getCanonicalDecl());
         if (!CheckOverridingFunctionReturnType(MD, OldMD) &&
             !CheckOverridingFunctionAttributes(MD, OldMD) &&
@@ -9837,14 +9836,19 @@ Decl *Sema::ActOnFinishFunctionBody(Decl *dcl, Stmt *Body,
           MD->isDesignatedInitializerForTheInterface(&InitMethod);
       assert(isDesignated && InitMethod);
       (void)isDesignated;
-      Diag(MD->getLocation(),
-           diag::warn_objc_designated_init_missing_super_call);
-      Diag(InitMethod->getLocation(),
-           diag::note_objc_designated_init_marked_here);
+      // Don't issue this warning for unavaialable inits.
+      if (!MD->isUnavailable()) {
+        Diag(MD->getLocation(),
+             diag::warn_objc_designated_init_missing_super_call);
+        Diag(InitMethod->getLocation(),
+             diag::note_objc_designated_init_marked_here);
+      }
       getCurFunction()->ObjCWarnForNoDesignatedInitChain = false;
     }
     if (getCurFunction()->ObjCWarnForNoInitDelegation) {
-      Diag(MD->getLocation(), diag::warn_objc_secondary_init_missing_init_call);
+      // Don't issue this warning for unavaialable inits.
+      if (!MD->isUnavailable())
+        Diag(MD->getLocation(), diag::warn_objc_secondary_init_missing_init_call);
       getCurFunction()->ObjCWarnForNoInitDelegation = false;
     }
   } else {

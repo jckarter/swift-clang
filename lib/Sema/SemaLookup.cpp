@@ -2027,6 +2027,10 @@ addAssociatedClassesAndNamespaces(AssociatedLookup &Result,
 
   // Add the class itself. If we've already seen this class, we don't
   // need to visit base classes.
+  //
+  // FIXME: That's not correct, we may have added this class only because it
+  // was the enclosing class of another class, and in that case we won't have
+  // added its base classes yet.
   if (!Result.Classes.insert(Class))
     return;
 
@@ -2053,12 +2057,8 @@ addAssociatedClassesAndNamespaces(AssociatedLookup &Result,
   }
 
   // Only recurse into base classes for complete types.
-  if (!Class->hasDefinition()) {
-    QualType type = Result.S.Context.getTypeDeclType(Class);
-    if (Result.S.RequireCompleteType(Result.InstantiationLoc, type,
-                                     /*no diagnostic*/ 0))
-      return;
-  }
+  if (!Class->hasDefinition())
+    return;
 
   // Add direct and indirect base classes along with their associated
   // namespaces.
@@ -2150,6 +2150,8 @@ addAssociatedClassesAndNamespaces(AssociatedLookup &Result, QualType Ty) {
     //        classes. Its associated namespaces are the namespaces in
     //        which its associated classes are defined.
     case Type::Record: {
+      Result.S.RequireCompleteType(Result.InstantiationLoc, QualType(T, 0),
+                                   /*no diagnostic*/ 0);
       CXXRecordDecl *Class
         = cast<CXXRecordDecl>(cast<RecordType>(T)->getDecl());
       addAssociatedClassesAndNamespaces(Result, Class);
@@ -4197,10 +4199,8 @@ TypoCorrection Sema::CorrectTypo(const DeclarationNameInfo &TypoName,
       if (const Type *T = NNS->getAsType())
         SSIsTemplate = T->getTypeClass() == Type::TemplateSpecialization;
     }
-    for (ASTContext::type_iterator TI = Context.types_begin(),
-                                   TIEnd = Context.types_end();
-         TI != TIEnd; ++TI) {
-      if (CXXRecordDecl *CD = (*TI)->getAsCXXRecordDecl()) {
+    for (const auto *TI : Context.types()) {
+      if (CXXRecordDecl *CD = TI->getAsCXXRecordDecl()) {
         CD = CD->getCanonicalDecl();
         if (!CD->isDependentType() && !CD->isAnonymousStructOrUnion() &&
             !CD->isUnion() && CD->getIdentifier() &&

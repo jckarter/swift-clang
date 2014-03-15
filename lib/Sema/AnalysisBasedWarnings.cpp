@@ -65,9 +65,22 @@ namespace {
   public:
     UnreachableCodeHandler(Sema &s) : S(s) {}
 
-    void HandleUnreachable(SourceLocation L, SourceRange R1,
+    void HandleUnreachable(reachable_code::UnreachableKind UK,
+                           SourceLocation L, SourceRange R1,
                            SourceRange R2) override {
-      S.Diag(L, diag::warn_unreachable) << R1 << R2;
+      unsigned diag = diag::warn_unreachable;
+      switch (UK) {
+        case reachable_code::UK_Break:
+          diag = diag::warn_unreachable_break;
+          break;
+        case reachable_code::UK_TrivialReturn:
+          diag = diag::warn_unreachable_return;
+          break;
+        case reachable_code::UK_Other:
+          break;
+      }
+
+      S.Diag(L, diag) << R1 << R2;
     }
   };
 }
@@ -1652,6 +1665,11 @@ clang::sema::AnalysisBasedWarnings::Policy::Policy() {
   enableConsumedAnalysis = 0;
 }
 
+static unsigned isEnabled(DiagnosticsEngine &D, unsigned diag) {
+  return (unsigned) D.getDiagnosticLevel(diag, SourceLocation()) !=
+                    DiagnosticsEngine::Ignored;
+}
+
 clang::sema::AnalysisBasedWarnings::AnalysisBasedWarnings(Sema &s)
   : S(s),
     NumFunctionsAnalyzed(0),
@@ -1663,16 +1681,20 @@ clang::sema::AnalysisBasedWarnings::AnalysisBasedWarnings(Sema &s)
     MaxUninitAnalysisVariablesPerFunction(0),
     NumUninitAnalysisBlockVisits(0),
     MaxUninitAnalysisBlockVisitsPerFunction(0) {
+
+  using namespace diag;
   DiagnosticsEngine &D = S.getDiagnostics();
-  DefaultPolicy.enableCheckUnreachable = (unsigned)
-    (D.getDiagnosticLevel(diag::warn_unreachable, SourceLocation()) !=
-        DiagnosticsEngine::Ignored);
-  DefaultPolicy.enableThreadSafetyAnalysis = (unsigned)
-    (D.getDiagnosticLevel(diag::warn_double_lock, SourceLocation()) !=
-     DiagnosticsEngine::Ignored);
-  DefaultPolicy.enableConsumedAnalysis = (unsigned)
-    (D.getDiagnosticLevel(diag::warn_use_in_invalid_state, SourceLocation()) !=
-     DiagnosticsEngine::Ignored);
+
+  DefaultPolicy.enableCheckUnreachable =
+    isEnabled(D, warn_unreachable) ||
+    isEnabled(D, warn_unreachable_break) ||
+    isEnabled(D, warn_unreachable_return);
+
+  DefaultPolicy.enableThreadSafetyAnalysis =
+    isEnabled(D, warn_double_lock);
+
+  DefaultPolicy.enableConsumedAnalysis =
+    isEnabled(D, warn_use_in_invalid_state);
 }
 
 static void flushDiagnostics(Sema &S, sema::FunctionScopeInfo *fscope) {

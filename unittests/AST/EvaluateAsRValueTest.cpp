@@ -89,24 +89,24 @@ TEST(EvaluateAsRValue, FailsGracefullyForUnknownTypes) {
   std::string ModesToTest[] = {"-std=c++03", "-std=c++11", "-std=c++1y"};
   for (std::string const &Mode : ModesToTest) {
     std::vector<std::string> Args(1, Mode);
+    Args.push_back("-fno-delayed-template-parsing");
     ASSERT_TRUE(runToolOnCodeWithArgs(
       new EvaluateConstantInitializersAction(),
-      R"(template <typename T>
-         struct vector {
-           explicit vector(int size);
-         };
-         template <typename R>
-         struct S {
-           vector<R> intervals() const {
-             vector<R> Dependent(2);
-             return Dependent;
-           }
-         };
-         void doSomething() {
-           int Constant = 2 + 2;
-           (void) Constant;
-         }
-      )",
+      "template <typename T>"
+      "struct vector {"
+      "  explicit vector(int size);"
+      "};"
+      "template <typename R>"
+      "struct S {"
+      "  vector<R> intervals() const {"
+      "    vector<R> Dependent(2);"
+      "    return Dependent;"
+      "  }"
+      "};"
+      "void doSomething() {"
+      "  int Constant = 2 + 2;"
+      "  (void) Constant;"
+      "}",
       Args));
   }
 }

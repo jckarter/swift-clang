@@ -185,7 +185,7 @@ namespace {
   public:
     llvm::DenseMap<ObjCMethodDecl*, std::string> MethodInternalNames;
     // Top Level Driver code.
-    virtual bool HandleTopLevelDecl(DeclGroupRef D) {
+    bool HandleTopLevelDecl(DeclGroupRef D) override {
       for (DeclGroupRef::iterator I = D.begin(), E = D.end(); I != E; ++I) {
         if (ObjCInterfaceDecl *Class = dyn_cast<ObjCInterfaceDecl>(*I)) {
           if (!Class->isThisDeclarationADefinition()) {
@@ -221,8 +221,8 @@ namespace {
       }
       return true;
     }
-    
-    virtual void HandleTopLevelDeclInObjCContainer(DeclGroupRef D) {
+
+    void HandleTopLevelDeclInObjCContainer(DeclGroupRef D) override {
       for (DeclGroupRef::iterator I = D.begin(), E = D.end(); I != E; ++I) {
         if (TypedefNameDecl *TD = dyn_cast<TypedefNameDecl>(*I)) {
           if (isTopLevelBlockPointerType(TD->getUnderlyingType()))
@@ -243,8 +243,8 @@ namespace {
                 bool silenceMacroWarn, bool LineInfo);
     
     ~RewriteModernObjC() {}
-    
-    virtual void HandleTranslationUnit(ASTContext &C);
+
+    void HandleTranslationUnit(ASTContext &C) override;
 
     void ReplaceStmt(Stmt *Old, Stmt *New) {
       Stmt *ReplacingStmt = ReplacedNodes[Old];
@@ -414,9 +414,9 @@ namespace {
     
     void RewriteIvarOffsetSymbols(ObjCInterfaceDecl *CDecl,
                                   std::string &Result);
-    
-    virtual void Initialize(ASTContext &context);
-    
+
+    void Initialize(ASTContext &context) override;
+
     // Misc. AST transformation routines. Sometimes they end up calling
     // rewriting routines on the new ASTs.
     CallExpr *SynthesizeCallToFunctionDecl(FunctionDecl *FD,
@@ -5509,11 +5509,10 @@ Stmt *RewriteModernObjC::SynthBlockInitExpr(BlockExpr *Exp,
                                       SourceLocation());
       bool isNestedCapturedVar = false;
       if (block)
-        for (BlockDecl::capture_const_iterator ci = block->capture_begin(),
-             ce = block->capture_end(); ci != ce; ++ci) {
-          const VarDecl *variable = ci->getVariable();
-          if (variable == ND && ci->isNested()) {
-            assert (ci->isByRef() && 
+        for (const auto &CI : block->captures()) {
+          const VarDecl *variable = CI.getVariable();
+          if (variable == ND && CI.isNested()) {
+            assert (CI.isByRef() && 
                     "SynthBlockInitExpr - captured block variable is not byref");
             isNestedCapturedVar = true;
             break;
