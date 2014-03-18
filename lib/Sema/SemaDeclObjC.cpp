@@ -372,6 +372,7 @@ void Sema::ActOnStartOfObjCMethodDef(Scope *FnBodyScope, Decl *D) {
       IC->lookupMethod(MDecl->getSelector(), MDecl->isInstanceMethod());
     
     if (IMD) {
+      ObjCCategoryDecl *CD = 0;
       ObjCImplDecl *ImplDeclOfMethodDef = 
         dyn_cast<ObjCImplDecl>(MDecl->getDeclContext());
       ObjCContainerDecl *ContDeclOfMethodDecl = 
@@ -379,11 +380,20 @@ void Sema::ActOnStartOfObjCMethodDef(Scope *FnBodyScope, Decl *D) {
       ObjCImplDecl *ImplDeclOfMethodDecl = 0;
       if (ObjCInterfaceDecl *OID = dyn_cast<ObjCInterfaceDecl>(ContDeclOfMethodDecl))
         ImplDeclOfMethodDecl = OID->getImplementation();
-      else if (ObjCCategoryDecl *CD = dyn_cast<ObjCCategoryDecl>(ContDeclOfMethodDecl))
+      else if ((CD = dyn_cast<ObjCCategoryDecl>(ContDeclOfMethodDecl))) {
         ImplDeclOfMethodDecl = CD->getImplementation();
+      }
+      bool warn;
+      // No need to issue deprecated warning if deprecated method in class
+      // extension is being implemented in primary class implementation
+      // (no overriding is involved).
+      if (ImplDeclOfMethodDef && CD && CD->IsClassExtension())
+        warn = false;
+      else
       // No need to issue deprecated warning if deprecated mehod in class/category
       // is being implemented in its own implementation (no overriding is involved).
-      if (!ImplDeclOfMethodDecl || ImplDeclOfMethodDecl != ImplDeclOfMethodDef)
+        warn = (!ImplDeclOfMethodDecl || ImplDeclOfMethodDecl != ImplDeclOfMethodDef);
+      if (warn)
         DiagnoseObjCImplementedDeprecations(*this, 
                                           dyn_cast<NamedDecl>(IMD), 
                                           MDecl->getLocation(), 0);
@@ -729,9 +739,8 @@ void Sema::ActOnTypedefedProtocols(SmallVectorImpl<Decl *> &ProtocolRefs,
     QualType T = TDecl->getUnderlyingType();
     if (T->isObjCObjectType())
       if (const ObjCObjectType *OPT = T->getAs<ObjCObjectType>())
-        for (ObjCObjectType::qual_iterator I = OPT->qual_begin(),
-             E = OPT->qual_end(); I != E; ++I)
-          ProtocolRefs.push_back(*I);
+        for (auto *I : OPT->quals())
+          ProtocolRefs.push_back(I);
   }
 }
 
@@ -952,7 +961,9 @@ void Sema::DiagnoseClassExtensionDupMethods(ObjCCategoryDecl *CAT,
     return;
   for (const auto *Method : CAT->methods()) {
     const ObjCMethodDecl *&PrevMethod = MethodMap[Method->getSelector()];
-    if (PrevMethod && !MatchTwoMethodDeclarations(Method, PrevMethod)) {
+    if (PrevMethod &&
+        (PrevMethod->isInstanceMethod() == Method->isInstanceMethod()) &&
+        !MatchTwoMethodDeclarations(Method, PrevMethod)) {
       Diag(Method->getLocation(), diag::err_duplicate_method_decl)
             << Method->getDeclName();
       Diag(PrevMethod->getLocation(), diag::note_previous_declaration);

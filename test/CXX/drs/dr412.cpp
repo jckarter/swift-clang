@@ -6,9 +6,10 @@
 // lwg404: yes
 // lwg2340: yes
 
-typedef __SIZE_TYPE__ size_t;
+// FIXME: __SIZE_TYPE__ expands to 'long long' on some targets.
+__extension__ typedef __SIZE_TYPE__ size_t;
 namespace std { struct bad_alloc {}; }
-int x;
+
 inline void* operator new(size_t) BAD_ALLOC; // expected-error {{cannot be declared 'inline'}}
 inline void* operator new[](size_t) BAD_ALLOC; // expected-error {{cannot be declared 'inline'}}
 inline void operator delete(void*) NOEXCEPT; // expected-error {{cannot be declared 'inline'}}
