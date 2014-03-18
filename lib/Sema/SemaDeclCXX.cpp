@@ -212,11 +212,9 @@ Sema::ImplicitExceptionSpecification::CalledDecl(SourceLocation CallLoc,
          "Shouldn't collect exceptions when throw-all is guaranteed.");
   ComputedEST = EST_Dynamic;
   // Record the exceptions in this function's exception specification.
-  for (FunctionProtoType::exception_iterator E = Proto->exception_begin(),
-                                          EEnd = Proto->exception_end();
-       E != EEnd; ++E)
-    if (ExceptionsSeen.insert(Self->Context.getCanonicalType(*E)))
-      Exceptions.push_back(*E);
+  for (const auto &E : Proto->exceptions())
+    if (ExceptionsSeen.insert(Self->Context.getCanonicalType(E)))
+      Exceptions.push_back(E);
 }
 
 void Sema::ImplicitExceptionSpecification::CalledExpr(Expr *E) {
@@ -997,9 +995,8 @@ CheckConstexprFunctionStmt(Sema &SemaRef, const FunctionDecl *Dcl, Stmt *S,
       Cxx1yLoc = S->getLocStart();
 
     CompoundStmt *CompStmt = cast<CompoundStmt>(S);
-    for (CompoundStmt::body_iterator BodyIt = CompStmt->body_begin(),
-           BodyEnd = CompStmt->body_end(); BodyIt != BodyEnd; ++BodyIt) {
-      if (!CheckConstexprFunctionStmt(SemaRef, Dcl, *BodyIt, ReturnStmts,
+    for (auto *BodyIt : CompStmt->body()) {
+      if (!CheckConstexprFunctionStmt(SemaRef, Dcl, BodyIt, ReturnStmts,
                                       Cxx1yLoc))
         return false;
     }
@@ -1101,9 +1098,8 @@ bool Sema::CheckConstexprFunctionBody(const FunctionDecl *Dcl, Stmt *Body) {
   //   [... list of cases ...]
   CompoundStmt *CompBody = cast<CompoundStmt>(Body);
   SourceLocation Cxx1yLoc;
-  for (CompoundStmt::body_iterator BodyIt = CompBody->body_begin(),
-         BodyEnd = CompBody->body_end(); BodyIt != BodyEnd; ++BodyIt) {
-    if (!CheckConstexprFunctionStmt(*this, Dcl, *BodyIt, ReturnStmts, Cxx1yLoc))
+  for (auto *BodyIt : CompBody->body()) {
+    if (!CheckConstexprFunctionStmt(*this, Dcl, BodyIt, ReturnStmts, Cxx1yLoc))
       return false;
   }
 
@@ -12575,10 +12571,8 @@ bool Sema::checkThisInStaticMemberFunctionExceptionSpec(CXXMethodDecl *Method) {
       return true;
     
   case EST_Dynamic:
-    for (FunctionProtoType::exception_iterator E = Proto->exception_begin(),
-         EEnd = Proto->exception_end();
-         E != EEnd; ++E) {
-      if (!Finder.TraverseType(*E))
+    for (const auto &E : Proto->exceptions()) {
+      if (!Finder.TraverseType(E))
         return true;
     }
     break;
