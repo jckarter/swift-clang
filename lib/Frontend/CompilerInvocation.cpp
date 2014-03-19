@@ -1119,6 +1119,9 @@ void CompilerInvocation::setLangDefaults(LangOptions &Opts, InputKind IK,
   // OpenCL and C++ both have bool, true, false keywords.
   Opts.Bool = Opts.OpenCL || Opts.CPlusPlus;
 
+  // OpenCL has half keyword
+  Opts.Half = Opts.OpenCL;
+
   // C++ has wchar_t keyword.
   Opts.WChar = Opts.CPlusPlus;
 
