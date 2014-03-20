@@ -182,6 +182,10 @@ static llvm::Function *getRegisterFunc(CodeGenModule &CGM) {
 }
 
 static llvm::BasicBlock *getOrInsertRegisterBB(CodeGenModule &CGM) {
+  // Don't do this for Darwin.  compiler-rt uses linker magic.
+  if (CGM.getTarget().getTriple().isOSDarwin())
+    return nullptr;
+
   // Only need to insert this once per module.
   if (llvm::Function *RegisterF = getRegisterFunc(CGM))
     return &RegisterF->getEntryBlock();
@@ -221,25 +225,20 @@ static llvm::Constant *getOrInsertRuntimeWriteAtExit(CodeGenModule &CGM) {
                                              WriteAtExitTy);
 }
 
+static bool isMachO(const CodeGenModule &CGM) {
+  return CGM.getTarget().getTriple().isOSBinFormatMachO();
+}
+
 static StringRef getCountersSection(const CodeGenModule &CGM) {
-  if (CGM.getTarget().getTriple().isOSBinFormatMachO())
-    return "__DATA,__llvm_pgo_cnts";
-  else
-    return "__llvm_pgo_cnts";
+  return isMachO(CGM) ? "__DATA,__llvm_pgo_cnts" : "__llvm_pgo_cnts";
 }
 
 static StringRef getNameSection(const CodeGenModule &CGM) {
-  if (CGM.getTarget().getTriple().isOSBinFormatMachO())
-    return "__DATA,__llvm_pgo_names";
-  else
-    return "__llvm_pgo_names";
+  return isMachO(CGM) ? "__DATA,__llvm_pgo_names" : "__llvm_pgo_names";
 }
 
 static StringRef getDataSection(const CodeGenModule &CGM) {
-  if (CGM.getTarget().getTriple().isOSBinFormatMachO())
-    return "__DATA,__llvm_pgo_data";
-  else
-    return "__llvm_pgo_data";
+  return isMachO(CGM) ? "__DATA,__llvm_pgo_data" : "__llvm_pgo_data";
 }
 
 llvm::GlobalVariable *CodeGenPGO::buildDataVar() {
@@ -291,9 +290,10 @@ void CodeGenPGO::emitInstrumentationData() {
   auto *Data = buildDataVar();
 
   // Register the data.
-  //
-  // TODO: only register when static initialization is required.
-  CGBuilderTy Builder(getOrInsertRegisterBB(CGM)->getTerminator());
+  auto *RegisterBB = getOrInsertRegisterBB(CGM);
+  if (!RegisterBB)
+    return;
+  CGBuilderTy Builder(RegisterBB->getTerminator());
   auto *VoidPtrTy = llvm::Type::getInt8PtrTy(CGM.getLLVMContext());
   Builder.CreateCall(getOrInsertRuntimeRegister(CGM),
                      Builder.CreateBitCast(Data, VoidPtrTy));
