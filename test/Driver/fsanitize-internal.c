@@ -3,18 +3,6 @@
 // rdar://12799898
 //
 
-// RUN: %clang -target x86_64-linux-gnu -fthread-sanitizer -### %s 2>&1 | FileCheck %s --check-prefix=CHECK-UNSUPPORTED-THREAD
-// CHECK-UNSUPPORTED-THREAD: unsupported option '-fthread-sanitizer'
-
-// RUN: %clang -target x86_64-linux-gnu -fno-thread-sanitizer -### %s 2>&1 | FileCheck %s --check-prefix=CHECK-UNSUPPORTED-NO-THREAD
-// CHECK-UNSUPPORTED-NO-THREAD: unsupported option '-fno-thread-sanitizer'
-
-// RUN: %clang -target x86_64-linux-gnu -faddress-sanitizer -### %s 2>&1 | FileCheck %s --check-prefix=CHECK-UNSUPPORTED-ADDR
-// CHECK-UNSUPPORTED-ADDR: unsupported option '-faddress-sanitizer'
-
-// RUN: %clang -target x86_64-linux-gnu -fno-address-sanitizer -### %s 2>&1 | FileCheck %s --check-prefix=CHECK-UNSUPPORTED-NO-ADDR
-// CHECK-UNSUPPORTED-NO-ADDR: unsupported option '-fno-address-sanitizer'
-
 // AddressSanitizer
 // RUN: %clang -target x86_64-linux-gnu -fsanitize=address %s -### 2>&1 | FileCheck %s --check-prefix=CHECK-UNSUPPORTED-ARG-ADDR
 // CHECK-UNSUPPORTED-ARG-ADDR: unsupported argument 'address' to option 'fsanitize='
@@ -50,7 +38,6 @@
 // We do support the undefined behavior sanitizer options on the internal branches.
 //
 
-// RUN: %clang -target x86_64-linux-gnu -fcatch-undefined-behavior %s -### 2>&1 | FileCheck %s --check-prefix=CHECK-UNDEFINED-TRAP
 // RUN: %clang -target x86_64-linux-gnu -fsanitize=undefined-trap -fsanitize-undefined-trap-on-error %s -### 2>&1 | FileCheck %s --check-prefix=CHECK-UNDEFINED-TRAP
 // RUN: %clang -target x86_64-linux-gnu -fsanitize-undefined-trap-on-error -fsanitize=undefined-trap %s -### 2>&1 | FileCheck %s --check-prefix=CHECK-UNDEFINED-TRAP
 // CHECK-UNDEFINED-TRAP: "-fsanitize={{((signed-integer-overflow|integer-divide-by-zero|float-divide-by-zero|shift|unreachable|return|vla-bound|alignment|null|object-size|float-cast-overflow|array-bounds|enum|bool),?){14}"}}
@@ -110,6 +97,3 @@
 // RUN: %clang -target x86_64-linux-gnu -fsanitize=vptr %s -### 2>&1 | FileCheck %s --check-prefix=CHECK-VPTR
 // CHECK-VPTR-NOT: unsupported argument 'vptr' to option 'fsanitize='
 // CHECK-VPTR: "-fsanitize={{((vptr),?){1}"}}
-
-// RUN: %clang -target x86_64-linux-gnu -fcatch-undefined-behavior -### %s 2>&1 | FileCheck %s --check-prefix=CHECK-DEPRECATED
-// CHECK-DEPRECATED: argument '-fcatch-undefined-behavior' is deprecated, use '-fsanitize=undefined-trap -fsanitize-undefined-trap-on-error' instead
