@@ -3,18 +3,6 @@
 // rdar://12799898
 //
 
-// RUN: %clang -target x86_64-linux-gnu -fthread-sanitizer -### %s 2>&1 | FileCheck %s --check-prefix=CHECK-UNSUPPORTED-THREAD
-// CHECK-UNSUPPORTED-THREAD: unsupported option '-fthread-sanitizer'
-
-// RUN: %clang -target x86_64-linux-gnu -fno-thread-sanitizer -### %s 2>&1 | FileCheck %s --check-prefix=CHECK-UNSUPPORTED-NO-THREAD
-// CHECK-UNSUPPORTED-NO-THREAD: unsupported option '-fno-thread-sanitizer'
-
-// RUN: %clang -target x86_64-linux-gnu -faddress-sanitizer -### %s 2>&1 | FileCheck %s --check-prefix=CHECK-UNSUPPORTED-ADDR
-// CHECK-UNSUPPORTED-ADDR: unsupported option '-faddress-sanitizer'
-
-// RUN: %clang -target x86_64-linux-gnu -fno-address-sanitizer -### %s 2>&1 | FileCheck %s --check-prefix=CHECK-UNSUPPORTED-NO-ADDR
-// CHECK-UNSUPPORTED-NO-ADDR: unsupported option '-fno-address-sanitizer'
-
 // AddressSanitizer
 // RUN: %clang -target x86_64-linux-gnu -fsanitize=address %s -### 2>&1 | FileCheck %s --check-prefix=CHECK-UNSUPPORTED-ARG-ADDR
 // CHECK-UNSUPPORTED-ARG-ADDR: unsupported argument 'address' to option 'fsanitize='
