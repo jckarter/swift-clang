@@ -178,7 +178,7 @@ void CodeGenPGO::setFuncName(llvm::Function *Fn) {
 }
 
 static llvm::Function *getRegisterFunc(CodeGenModule &CGM) {
-  return CGM.getModule().getFunction("__llvm_pgo_register_functions");
+  return CGM.getModule().getFunction("__llvm_profile_register_functions");
 }
 
 static llvm::BasicBlock *getOrInsertRegisterBB(CodeGenModule &CGM) {
@@ -195,10 +195,9 @@ static llvm::BasicBlock *getOrInsertRegisterBB(CodeGenModule &CGM) {
   auto *RegisterFTy = llvm::FunctionType::get(VoidTy, false);
   auto *RegisterF = llvm::Function::Create(RegisterFTy,
                                            llvm::GlobalValue::InternalLinkage,
-                                           "__llvm_pgo_register_functions",
+                                           "__llvm_profile_register_functions",
                                            &CGM.getModule());
   RegisterF->setUnnamedAddr(true);
-  RegisterF->addFnAttr(llvm::Attribute::NoInline);
   if (CGM.getCodeGenOpts().DisableRedZone)
     RegisterF->addFnAttr(llvm::Attribute::NoRedZone);
 
@@ -213,16 +212,8 @@ static llvm::Constant *getOrInsertRuntimeRegister(CodeGenModule &CGM) {
   auto *VoidTy = llvm::Type::getVoidTy(CGM.getLLVMContext());
   auto *VoidPtrTy = llvm::Type::getInt8PtrTy(CGM.getLLVMContext());
   auto *RuntimeRegisterTy = llvm::FunctionType::get(VoidTy, VoidPtrTy, false);
-  return CGM.getModule().getOrInsertFunction("__llvm_pgo_register_function",
+  return CGM.getModule().getOrInsertFunction("__llvm_profile_register_function",
                                              RuntimeRegisterTy);
-}
-
-static llvm::Constant *getOrInsertRuntimeWriteAtExit(CodeGenModule &CGM) {
-  // TODO: make this depend on a command-line option.
-  auto *VoidTy = llvm::Type::getVoidTy(CGM.getLLVMContext());
-  auto *WriteAtExitTy = llvm::FunctionType::get(VoidTy, false);
-  return CGM.getModule().getOrInsertFunction("__llvm_pgo_register_write_atexit",
-                                             WriteAtExitTy);
 }
 
 static bool isMachO(const CodeGenModule &CGM) {
@@ -230,15 +221,15 @@ static bool isMachO(const CodeGenModule &CGM) {
 }
 
 static StringRef getCountersSection(const CodeGenModule &CGM) {
-  return isMachO(CGM) ? "__DATA,__llvm_pgo_cnts" : "__llvm_pgo_cnts";
+  return isMachO(CGM) ? "__DATA,__llvm_prf_cnts" : "__llvm_prf_cnts";
 }
 
 static StringRef getNameSection(const CodeGenModule &CGM) {
-  return isMachO(CGM) ? "__DATA,__llvm_pgo_names" : "__llvm_pgo_names";
+  return isMachO(CGM) ? "__DATA,__llvm_prf_names" : "__llvm_prf_names";
 }
 
 static StringRef getDataSection(const CodeGenModule &CGM) {
-  return isMachO(CGM) ? "__DATA,__llvm_pgo_data" : "__llvm_pgo_data";
+  return isMachO(CGM) ? "__DATA,__llvm_prf_data" : "__llvm_prf_data";
 }
 
 llvm::GlobalVariable *CodeGenPGO::buildDataVar() {
@@ -247,7 +238,7 @@ llvm::GlobalVariable *CodeGenPGO::buildDataVar() {
   auto *VarName = llvm::ConstantDataArray::getString(Ctx, getFuncName(),
                                                      false);
   auto *Name = new llvm::GlobalVariable(CGM.getModule(), VarName->getType(),
-                                        true, FuncLinkage, VarName,
+                                        true, VarLinkage, VarName,
                                         getFuncVarName("name"));
   Name->setSection(getNameSection(CGM));
   Name->setAlignment(1);
@@ -269,7 +260,7 @@ llvm::GlobalVariable *CodeGenPGO::buildDataVar() {
     llvm::ConstantExpr::getBitCast(RegionCounters, Int64PtrTy)
   };
   auto *Data =
-    new llvm::GlobalVariable(CGM.getModule(), DataTy, true, FuncLinkage,
+    new llvm::GlobalVariable(CGM.getModule(), DataTy, true, VarLinkage,
                              llvm::ConstantStruct::get(DataTy, DataVals),
                              getFuncVarName("data"));
 
@@ -304,20 +295,19 @@ llvm::Function *CodeGenPGO::emitInitialization(CodeGenModule &CGM) {
     return nullptr;
 
   // Only need to create this once per module.
-  if (CGM.getModule().getFunction("__llvm_pgo_init"))
+  if (CGM.getModule().getFunction("__llvm_profile_init"))
     return nullptr;
 
-  // Get the functions to call at initialization.
+  // Get the function to call at initialization.
   llvm::Constant *RegisterF = getRegisterFunc(CGM);
-  llvm::Constant *WriteAtExitF = getOrInsertRuntimeWriteAtExit(CGM);
-  if (!RegisterF && !WriteAtExitF)
+  if (!RegisterF)
     return nullptr;
 
   // Create the initialization function.
   auto *VoidTy = llvm::Type::getVoidTy(CGM.getLLVMContext());
   auto *F = llvm::Function::Create(llvm::FunctionType::get(VoidTy, false),
                                    llvm::GlobalValue::InternalLinkage,
-                                   "__llvm_pgo_init", &CGM.getModule());
+                                   "__llvm_profile_init", &CGM.getModule());
   F->setUnnamedAddr(true);
   F->addFnAttr(llvm::Attribute::NoInline);
   if (CGM.getCodeGenOpts().DisableRedZone)
@@ -325,10 +315,7 @@ llvm::Function *CodeGenPGO::emitInitialization(CodeGenModule &CGM) {
 
   // Add the basic block and the necessary calls.
   CGBuilderTy Builder(llvm::BasicBlock::Create(CGM.getLLVMContext(), "", F));
-  if (RegisterF)
-    Builder.CreateCall(RegisterF);
-  if (WriteAtExitF)
-    Builder.CreateCall(WriteAtExitF);
+  Builder.CreateCall(RegisterF);
   Builder.CreateRetVoid();
 
   return F;
@@ -837,7 +824,22 @@ void CodeGenPGO::assignRegionCounters(const Decl *D, llvm::Function *Fn) {
   if (!D)
     return;
   setFuncName(Fn);
-  FuncLinkage = Fn->getLinkage();
+
+  // Set the linkage for variables based on the function linkage.  Usually, we
+  // want to match it, but available_externally and extern_weak both have the
+  // wrong semantics.
+  VarLinkage = Fn->getLinkage();
+  switch (VarLinkage) {
+  case llvm::GlobalValue::ExternalWeakLinkage:
+    VarLinkage = llvm::GlobalValue::LinkOnceAnyLinkage;
+    break;
+  case llvm::GlobalValue::AvailableExternallyLinkage:
+    VarLinkage = llvm::GlobalValue::LinkOnceODRLinkage;
+    break;
+  default:
+    break;
+  }
+
   mapRegionCounters(D);
   if (InstrumentRegions)
     emitCounterVariables();
@@ -895,7 +897,7 @@ void CodeGenPGO::emitCounterVariables() {
   llvm::ArrayType *CounterTy = llvm::ArrayType::get(llvm::Type::getInt64Ty(Ctx),
                                                     NumRegionCounters);
   RegionCounters =
-    new llvm::GlobalVariable(CGM.getModule(), CounterTy, false, FuncLinkage,
+    new llvm::GlobalVariable(CGM.getModule(), CounterTy, false, VarLinkage,
                              llvm::Constant::getNullValue(CounterTy),
                              getFuncVarName("counters"));
   RegionCounters->setAlignment(8);
