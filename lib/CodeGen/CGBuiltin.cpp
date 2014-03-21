@@ -2442,7 +2442,9 @@ static NeonIntrinsicInfo ARM64SIMDIntrinsicMap[] = {
   NEONMAP1(vcvt_f32_f16, arm64_neon_vcvthf2fp, 0),
   NEONMAP0(vcvt_f32_v),
   NEONMAP2(vcvt_n_f32_v, arm64_neon_vcvtfxu2fp, arm64_neon_vcvtfxs2fp, 0),
+  NEONMAP2(vcvt_n_f64_v, arm64_neon_vcvtfxu2fp, arm64_neon_vcvtfxs2fp, 0),
   NEONMAP1(vcvt_n_s32_v, arm64_neon_vcvtfp2fxs, 0),
+  NEONMAP1(vcvt_n_s64_v, arm64_neon_vcvtfp2fxs, 0),
   NEONMAP1(vcvt_n_u32_v, arm64_neon_vcvtfp2fxu, 0),
   NEONMAP1(vcvt_n_u64_v, arm64_neon_vcvtfp2fxu, 0),
   NEONMAP0(vcvtq_f32_v),
@@ -3041,6 +3043,7 @@ Value *CodeGenFunction::EmitCommonNeonBuiltinExpr(
     return Usgn ? Builder.CreateUIToFP(Ops[0], Ty, "vcvt")
                 : Builder.CreateSIToFP(Ops[0], Ty, "vcvt");
   case NEON::BI__builtin_neon_vcvt_n_f32_v:
+  case NEON::BI__builtin_neon_vcvt_n_f64_v:
   case NEON::BI__builtin_neon_vcvtq_n_f32_v:
   case NEON::BI__builtin_neon_vcvtq_n_f64_v: {
     bool Double =
@@ -5967,9 +5970,10 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
   case NEON::BI__builtin_neon_vcltzq_v:
     return EmitAArch64CompareBuiltinExpr(Ops[0], Ty, ICmpInst::FCMP_OLT,
                                          ICmpInst::ICMP_SLT, "vcltz");
+  case NEON::BI__builtin_neon_vcvt_f64_v:
   case NEON::BI__builtin_neon_vcvtq_f64_v:
     Ops[0] = Builder.CreateBitCast(Ops[0], Ty);
-    Ty = GetNeonType(this, NeonTypeFlags(NeonTypeFlags::Float64, false, true));
+    Ty = GetNeonType(this, NeonTypeFlags(NeonTypeFlags::Float64, false, quad));
     return usgn ? Builder.CreateUIToFP(Ops[0], Ty, "vcvt")
                 : Builder.CreateSIToFP(Ops[0], Ty, "vcvt");
   case NEON::BI__builtin_neon_vcvt_f64_f32: {
@@ -6044,6 +6048,8 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
   }
   case NEON::BI__builtin_neon_vcvt_s32_v:
   case NEON::BI__builtin_neon_vcvt_u32_v:
+  case NEON::BI__builtin_neon_vcvt_s64_v:
+  case NEON::BI__builtin_neon_vcvt_u64_v:
   case NEON::BI__builtin_neon_vcvtq_s32_v:
   case NEON::BI__builtin_neon_vcvtq_u32_v:
   case NEON::BI__builtin_neon_vcvtq_s64_v:
@@ -6069,7 +6075,9 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
   case NEON::BI__builtin_neon_vcvtaq_s32_v:
   case NEON::BI__builtin_neon_vcvta_u32_v:
   case NEON::BI__builtin_neon_vcvtaq_u32_v:
+  case NEON::BI__builtin_neon_vcvta_s64_v:
   case NEON::BI__builtin_neon_vcvtaq_s64_v:
+  case NEON::BI__builtin_neon_vcvta_u64_v:
   case NEON::BI__builtin_neon_vcvtaq_u64_v: {
     Int = usgn ? Intrinsic::arm64_neon_fcvtau : Intrinsic::arm64_neon_fcvtas;
     bool Double =
@@ -6085,7 +6093,9 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
   case NEON::BI__builtin_neon_vcvtmq_s32_v:
   case NEON::BI__builtin_neon_vcvtm_u32_v:
   case NEON::BI__builtin_neon_vcvtmq_u32_v:
+  case NEON::BI__builtin_neon_vcvtm_s64_v:
   case NEON::BI__builtin_neon_vcvtmq_s64_v:
+  case NEON::BI__builtin_neon_vcvtm_u64_v:
   case NEON::BI__builtin_neon_vcvtmq_u64_v: {
     Int = usgn ? Intrinsic::arm64_neon_fcvtmu : Intrinsic::arm64_neon_fcvtms;
     bool Double =
@@ -6101,7 +6111,9 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
   case NEON::BI__builtin_neon_vcvtnq_s32_v:
   case NEON::BI__builtin_neon_vcvtn_u32_v:
   case NEON::BI__builtin_neon_vcvtnq_u32_v:
+  case NEON::BI__builtin_neon_vcvtn_s64_v:
   case NEON::BI__builtin_neon_vcvtnq_s64_v:
+  case NEON::BI__builtin_neon_vcvtn_u64_v:
   case NEON::BI__builtin_neon_vcvtnq_u64_v: {
     Int = usgn ? Intrinsic::arm64_neon_fcvtnu : Intrinsic::arm64_neon_fcvtns;
     bool Double =
@@ -6117,7 +6129,9 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
   case NEON::BI__builtin_neon_vcvtpq_s32_v:
   case NEON::BI__builtin_neon_vcvtp_u32_v:
   case NEON::BI__builtin_neon_vcvtpq_u32_v:
+  case NEON::BI__builtin_neon_vcvtp_s64_v:
   case NEON::BI__builtin_neon_vcvtpq_s64_v:
+  case NEON::BI__builtin_neon_vcvtp_u64_v:
   case NEON::BI__builtin_neon_vcvtpq_u64_v: {
     Int = usgn ? Intrinsic::arm64_neon_fcvtpu : Intrinsic::arm64_neon_fcvtps;
     bool Double =
