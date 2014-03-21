@@ -1114,6 +1114,27 @@ void TokenAnnotator::calculateFormattingInformation(AnnotatedLine &Line) {
         Current->SpacesRequiredBefore = Style.Cpp11BracedListStyle ? 0 : 1;
       else
         Current->SpacesRequiredBefore = Style.SpacesBeforeTrailingComments;
+
+      // If we find a trailing comment, iterate backwards to determine whether
+      // it seems to relate to a specific parameter. If so, break before that
+      // parameter to avoid changing the comment's meaning. E.g. don't move 'b'
+      // to the previous line in:
+      //   SomeFunction(a,
+      //                b, // comment
+      //                c);
+      if (!Current->HasUnescapedNewline) {
+        for (FormatToken *Parameter = Current->Previous; Parameter;
+             Parameter = Parameter->Previous) {
+          if (Parameter->isOneOf(tok::comment, tok::r_brace))
+            break;
+          if (Parameter->Previous && Parameter->Previous->is(tok::comma)) {
+            if (Parameter->Previous->Type != TT_CtorInitializerComma &&
+                Parameter->HasUnescapedNewline)
+              Parameter->MustBreakBefore = true;
+            break;
+          }
+        }
+      }
     } else if (Current->SpacesRequiredBefore == 0 &&
              spaceRequiredBefore(Line, *Current)) {
       Current->SpacesRequiredBefore = 1;
@@ -1457,6 +1478,7 @@ bool TokenAnnotator::spaceRequiredBefore(const AnnotatedLine &Line,
 
 bool TokenAnnotator::mustBreakBefore(const AnnotatedLine &Line,
                                      const FormatToken &Right) {
+  const FormatToken &Left = *Right.Previous;
   if (Right.is(tok::comment)) {
     return Right.Previous->BlockKind != BK_BracedInit &&
            Right.Previous->Type != TT_CtorInitializerColon &&
@@ -1492,6 +1514,13 @@ bool TokenAnnotator::mustBreakBefore(const AnnotatedLine &Line,
   } else if (Right.Previous->is(tok::l_brace) && Right.NestingLevel == 1 &&
              Style.Language == FormatStyle::LK_Proto) {
     // Don't enums onto single lines in protocol buffers.
+    return true;
+  } else if ((Left.is(tok::l_brace) && Left.MatchingParen &&
+              Left.MatchingParen->Previous &&
+              Left.MatchingParen->Previous->is(tok::comma)) ||
+             (Right.is(tok::r_brace) && Left.is(tok::comma))) {
+    // If the last token before a '}' is a comma, the intention is to insert a
+    // line break after it in order to make shuffling around entries easier.
     return true;
   }
   return false;
