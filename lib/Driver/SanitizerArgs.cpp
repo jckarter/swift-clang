@@ -220,7 +220,7 @@ static bool allowedOpt(const char *Value) {
     .Cases("float-divide-by-zero", "integer-divide-by-zero", true)
     .Cases("null", "object-size", "return", "shift", true)
     .Cases("signed-integer-overflow", "unreachable", "vla-bound", true)
-    .Cases("vptr", "bool", "enum", "undefined", true)
+    .Cases("bool", "enum", "undefined-trap", true)
     .Default(false);
 }
 
@@ -273,14 +273,21 @@ unsigned SanitizerArgs::filterUnsupportedKinds(const ToolChain &TC,
 }
 
 unsigned SanitizerArgs::parse(const Driver &D, const llvm::opt::Arg *A,
-                              bool DiagnoseErrors) {
+                              bool DiagnoseErrors,
+                              bool HasSanitizeUndefinedTrapOnError) {
   unsigned Kind = 0;
   for (unsigned I = 0, N = A->getNumValues(); I != N; ++I) {
     if (unsigned K = parse(A->getValue(I))) {
       Kind |= K;
-        if (DiagnoseErrors && !allowedOpt(A->getValue(I)))
+      if (DiagnoseErrors) {
+        if (!allowedOpt(A->getValue(I)))
           D.Diag(diag::err_drv_unsupported_option_argument)
             << A->getOption().getName() << A->getValue(I);
+        else if (!HasSanitizeUndefinedTrapOnError)
+          D.Diag(diag::err_drv_required_option)
+            << "-fsanitize-undefined-trap-on-error"
+            << std::string("-fsanitize=") + A->getValue(I);
+      }
     } else if (DiagnoseErrors)
       D.Diag(diag::err_drv_unsupported_option_argument)
         << A->getOption().getName() << A->getValue(I);
@@ -293,24 +300,20 @@ bool SanitizerArgs::parse(const Driver &D, const llvm::opt::ArgList &Args,
                           unsigned &Remove, bool DiagnoseErrors) {
   Add = 0;
   Remove = 0;
-  const char *DeprecatedReplacement = 0;
-  if (A->getOption().matches(options::OPT_fbounds_checking) ||
-      A->getOption().matches(options::OPT_fbounds_checking_EQ)) {
-    Add = LocalBounds;
-    DeprecatedReplacement = "-fsanitize=local-bounds";
-  } else if (A->getOption().matches(options::OPT_fsanitize_EQ)) {
-    Add = parse(D, A, DiagnoseErrors);
+  if (A->getOption().matches(options::OPT_fsanitize_EQ)) {
+    bool HasSanitizeUndefinedTrapOnError =
+      Args.hasFlag(options::OPT_fsanitize_undefined_trap_on_error,
+                   options::OPT_fno_sanitize_undefined_trap_on_error, false);
+    Add = parse(D, A, DiagnoseErrors, HasSanitizeUndefinedTrapOnError);
   } else if (A->getOption().matches(options::OPT_fno_sanitize_EQ)) {
-    Remove = parse(D, A, DiagnoseErrors);
+    // If we're removing an option, then we don't require the
+    // -fsanitize-undefined-trap-on-error flag.
+    Remove = parse(D, A, DiagnoseErrors,
+                   /*HasSanitizeUndefinedTrapOnError=*/true);
   } else {
     // Flag is not relevant to sanitizers.
     return false;
   }
-  // If this is a deprecated synonym, produce a warning directing users
-  // towards the new spelling.
-  if (DeprecatedReplacement && DiagnoseErrors)
-    D.Diag(diag::warn_drv_deprecated_arg)
-      << A->getAsString(Args) << DeprecatedReplacement;
   return true;
 }
 

@@ -4659,15 +4659,6 @@ computeImplicitExceptionSpec(Sema &S, SourceLocation Loc, CXXMethodDecl *MD) {
   return S.ComputeInheritingCtorExceptionSpec(cast<CXXConstructorDecl>(MD));
 }
 
-static void
-updateExceptionSpec(Sema &S, FunctionDecl *FD, const FunctionProtoType *FPT,
-                    const Sema::ImplicitExceptionSpecification &ExceptSpec) {
-  FunctionProtoType::ExtProtoInfo EPI = FPT->getExtProtoInfo();
-  ExceptSpec.getEPI(EPI);
-  FD->setType(S.Context.getFunctionType(FPT->getReturnType(),
-                                        FPT->getParamTypes(), EPI));
-}
-
 static FunctionProtoType::ExtProtoInfo getImplicitMethodEPI(Sema &S,
                                                             CXXMethodDecl *MD) {
   FunctionProtoType::ExtProtoInfo EPI;
@@ -4692,8 +4683,11 @@ void Sema::EvaluateImplicitExceptionSpec(SourceLocation Loc, CXXMethodDecl *MD) 
   ImplicitExceptionSpecification ExceptSpec =
       computeImplicitExceptionSpec(*this, Loc, MD);
 
+  FunctionProtoType::ExtProtoInfo EPI;
+  ExceptSpec.getEPI(EPI);
+
   // Update the type of the special member to use it.
-  updateExceptionSpec(*this, MD, FPT, ExceptSpec);
+  UpdateExceptionSpec(MD, EPI);
 
   // A user-provided destructor can be defined outside the class. When that
   // happens, be sure to update the exception specification on both
@@ -4701,8 +4695,7 @@ void Sema::EvaluateImplicitExceptionSpec(SourceLocation Loc, CXXMethodDecl *MD) 
   const FunctionProtoType *CanonicalFPT =
     MD->getCanonicalDecl()->getType()->castAs<FunctionProtoType>();
   if (CanonicalFPT->getExceptionSpecType() == EST_Unevaluated)
-    updateExceptionSpec(*this, MD->getCanonicalDecl(),
-                        CanonicalFPT, ExceptSpec);
+    UpdateExceptionSpec(MD->getCanonicalDecl(), EPI);
 }
 
 void Sema::CheckExplicitlyDefaultedSpecialMember(CXXMethodDecl *MD) {
@@ -12597,19 +12590,13 @@ bool Sema::checkThisInStaticMemberFunctionAttributes(CXXMethodDecl *Method) {
       Args = ArrayRef<Expr *>(AA->args_begin(), AA->args_size());
     else if (const auto *AB = dyn_cast<AcquiredBeforeAttr>(A))
       Args = ArrayRef<Expr *>(AB->args_begin(), AB->args_size());
-    else if (const auto *ELF  = dyn_cast<ExclusiveLockFunctionAttr>(A))
-      Args = ArrayRef<Expr *>(ELF->args_begin(), ELF->args_size());
-    else if (const auto *SLF  = dyn_cast<SharedLockFunctionAttr>(A))
-      Args = ArrayRef<Expr *>(SLF->args_begin(), SLF->args_size());
     else if (const auto *ETLF = dyn_cast<ExclusiveTrylockFunctionAttr>(A)) {
       Arg = ETLF->getSuccessValue();
       Args = ArrayRef<Expr *>(ETLF->args_begin(), ETLF->args_size());
     } else if (const auto *STLF = dyn_cast<SharedTrylockFunctionAttr>(A)) {
       Arg = STLF->getSuccessValue();
       Args = ArrayRef<Expr *>(STLF->args_begin(), STLF->args_size());
-    } else if (const auto *UF = dyn_cast<UnlockFunctionAttr>(A))
-      Args = ArrayRef<Expr *>(UF->args_begin(), UF->args_size());
-    else if (const auto *LR = dyn_cast<LockReturnedAttr>(A))
+    } else if (const auto *LR = dyn_cast<LockReturnedAttr>(A))
       Arg = LR->getArg();
     else if (const auto *LE = dyn_cast<LocksExcludedAttr>(A))
       Args = ArrayRef<Expr *>(LE->args_begin(), LE->args_size());

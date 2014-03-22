@@ -218,6 +218,14 @@ int test_treat_non_const_bool_local_as_non_config_value() {
   return 0;
 }
 
+void test_do_while(int x) {
+  // Handle trivial expressions with
+  // implicit casts to bool.
+  do {
+    break;
+  } while (0); // no-warning
+}
+
 class Frobozz {
 public:
   Frobozz(int x);
@@ -272,5 +280,17 @@ void test_static_class_var(Frodo &F) {
     somethingToCall();
   else
     somethingToCall(); // no-warning
+}
+
+void test_unreachable_for_null_increment() {
+  for (unsigned i = 0; i < 10 ; ) // no-warning
+    break;
+}
+
+void test_unreachable_forrange_increment() {
+  int x[10] = { 0 };
+  for (auto i : x) { // expected-warning {{loop will run at most once (loop increment never executed)}}
+    break;
+  }
 }
 

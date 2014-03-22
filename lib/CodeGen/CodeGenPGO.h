@@ -55,7 +55,7 @@ private:
   CodeGenModule &CGM;
   std::string *PrefixedFuncName;
   StringRef RawFuncName;
-  llvm::GlobalValue::LinkageTypes FuncLinkage;
+  llvm::GlobalValue::LinkageTypes VarLinkage;
 
   unsigned NumRegionCounters;
   uint64_t FunctionHash;
@@ -83,7 +83,7 @@ public:
   /// For functions with local linkage, this includes the main file name.
   StringRef getFuncName() const { return StringRef(*PrefixedFuncName); }
   std::string getFuncVarName(StringRef VarName) const {
-    return ("__llvm_pgo_" + VarName + "_" + RawFuncName).str();
+    return ("__llvm_profile_" + VarName + "_" + RawFuncName).str();
   }
 
   /// Return the counter value of the current region.

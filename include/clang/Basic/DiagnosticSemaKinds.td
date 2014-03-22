@@ -370,6 +370,9 @@ def warn_unreachable_break : Warning<
 def warn_unreachable_return : Warning<
   "'return' will never be executed">,
   InGroup<UnreachableCodeReturn>, DefaultIgnore;
+def warn_unreachable_loop_increment : Warning<
+  "loop will run at most once (loop increment never executed)">,
+  InGroup<UnreachableCodeLoopIncrement>, DefaultIgnore;
 
 /// Built-in functions.
 def ext_implicit_lib_function_decl : ExtWarn<
@@ -2207,6 +2210,10 @@ def err_attribute_argument_out_of_range : Error<
 // Thread Safety Analysis   
 def warn_unlock_but_no_lock : Warning<
   "unlocking '%0' that was not locked">,
+  InGroup<ThreadSafetyAnalysis>, DefaultIgnore;
+def warn_unlock_kind_mismatch : Warning<
+  "unlocking '%0' using %select{shared|exclusive}1 access, expected "
+  "%select{shared|exclusive}2 access">,
   InGroup<ThreadSafetyAnalysis>, DefaultIgnore;
 def warn_double_lock : Warning<
   "locking '%0' that is already locked">,

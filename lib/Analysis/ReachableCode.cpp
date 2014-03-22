@@ -51,7 +51,7 @@ static bool isTrivialDoWhile(const CFGBlock *B, const Stmt *S) {
   // condition.
   if (const Stmt *Term = B->getTerminator()) {
     if (const DoStmt *DS = dyn_cast<DoStmt>(Term)) {
-      const Expr *Cond = DS->getCond();
+      const Expr *Cond = DS->getCond()->IgnoreParenCasts();
       return Cond == S && isTrivialExpression(Cond);
     }
   }
@@ -527,6 +527,26 @@ void DeadCodeScan::reportDeadCode(const CFGBlock *B,
   }
   else if (isDeadReturn(B, S)) {
     UK = reachable_code::UK_Return;
+  }
+
+  if (UK == reachable_code::UK_Other) {
+    // Check if the dead code is part of the "loop target" of
+    // a for/for-range loop.  This is the block that contains
+    // the increment code.
+    if (const Stmt *LoopTarget = B->getLoopTarget()) {
+      SourceLocation Loc = LoopTarget->getLocStart();
+      SourceRange R1(Loc, Loc), R2;
+
+      if (const ForStmt *FS = dyn_cast<ForStmt>(LoopTarget)) {
+        const Expr *Inc = FS->getInc();
+        Loc = Inc->getLocStart();
+        R2 = Inc->getSourceRange();
+      }
+
+      CB.HandleUnreachable(reachable_code::UK_Loop_Increment,
+                           Loc, SourceRange(Loc, Loc), R2);
+      return;
+    }
   }
 
   SourceRange R1, R2;
