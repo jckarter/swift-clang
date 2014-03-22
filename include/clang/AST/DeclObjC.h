@@ -723,7 +723,7 @@ class ObjCInterfaceDecl : public ObjCContainerDecl
     mutable unsigned InheritedDesignatedInitializers : 2;
     
     /// \brief Indicates that this class is a partial interface.
-    mutable unsigned  IsPartialInterface : 1;
+    unsigned  IsPartialInterface : 1;
 
     /// \brief The location of the superclass, if any.
     SourceLocation SuperClassLoc;
@@ -830,10 +830,10 @@ public:
     data().CompleteDefinition = IDecl;
   }
 
-  bool IsPartialInterface() const {
+  bool isPartialInterface() const {
     return hasDefinition() && data().IsPartialInterface;
   }
-  void SetIsPartialInterface() {
+  void setIsPartialInterface() {
     assert(hasDefinition() &&
            "Must have definition before looking at IsPartialInterface");
     data().IsPartialInterface = true;
@@ -1033,7 +1033,7 @@ public:
   /// \@interface).
   ObjCInterfaceDecl *getDefinition() {
     ObjCInterfaceDecl *Def = hasDefinition()? Data.getPointer()->Definition : 0;
-    if (Def && Def->IsPartialInterface() && Def->getCompleteDefinition())
+    if (Def && Def->isPartialInterface() && Def->getCompleteDefinition())
       return Def->getCompleteDefinition();
     return Def;
   }
@@ -1043,7 +1043,7 @@ public:
   /// \@interface).
   const ObjCInterfaceDecl *getDefinition() const {
     ObjCInterfaceDecl *Def = hasDefinition()? Data.getPointer()->Definition : 0;
-    if (Def && Def->IsPartialInterface() && Def->getCompleteDefinition())
+    if (Def && Def->isPartialInterface() && Def->getCompleteDefinition())
       return Def->getCompleteDefinition();
     return Def;
   }
@@ -1061,7 +1061,7 @@ public:
       LoadExternalDefinition();
 
     if (ObjCInterfaceDecl *Super = data().SuperClass)
-      if (Super->IsPartialInterface() && Super->getCompleteDefinition())
+      if (Super->isPartialInterface() && Super->getCompleteDefinition())
         return Super->getCompleteDefinition();
     return data().SuperClass;
   }
@@ -2137,13 +2137,13 @@ public:
   }
 
   const ObjCInterfaceDecl *getSuperClass() const { 
-    if (SuperClass && SuperClass->IsPartialInterface() && 
+    if (SuperClass && SuperClass->isPartialInterface() && 
         SuperClass->getCompleteDefinition())
       return SuperClass->getCompleteDefinition();
     return SuperClass; 
   }
   ObjCInterfaceDecl *getSuperClass() { 
-    if (SuperClass && SuperClass->IsPartialInterface() && 
+    if (SuperClass && SuperClass->isPartialInterface() && 
         SuperClass->getCompleteDefinition())
       return SuperClass->getCompleteDefinition();
     return SuperClass; 

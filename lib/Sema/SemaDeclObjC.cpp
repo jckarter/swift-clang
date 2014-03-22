@@ -596,7 +596,7 @@ ActOnStartClassInterface(SourceLocation AtInterfaceLoc,
   if (PrevIDecl) {
     // Class already seen. Was it a definition?
     if (ObjCInterfaceDecl *Def = PrevIDecl->getDefinition()) {
-      if (Def->IsPartialInterface()) {
+      if (Def->isPartialInterface()) {
         if (IDecl->hasAttr<ObjCCompleteDefinitionAttr>()) {
           Def->setCompleteDefinition(IDecl);
           PrevPartialClassDecl = Def;
@@ -687,7 +687,7 @@ Decl *Sema::ActOnPartialInterface(SourceLocation AtPartialInterfaceLoc,
       else {
         Diag(AtPartialInterfaceLoc, diag::err_duplicate_partial_class_decl)
           << PrevIDecl->getDeclName();
-        if (Def->IsPartialInterface())
+        if (Def->isPartialInterface())
           Diag(Def->getLocation(), diag::note_previous_declaration);
         else
           Diag(Def->getLocation(), diag::note_previous_definition);
@@ -699,7 +699,7 @@ Decl *Sema::ActOnPartialInterface(SourceLocation AtPartialInterfaceLoc,
   PushOnScopeChains(IDecl, TUScope);
   if(!IDecl->hasDefinition()) {
     IDecl->startDefinition();
-    IDecl->SetIsPartialInterface();
+    IDecl->setIsPartialInterface();
   }
   
   if (SuperName)
@@ -1068,14 +1068,14 @@ DiagnosePartialClass(Sema &S, ObjCImplDecl *IC,
                      ObjCInterfaceDecl *IDecl) {
   if (!IDecl)
     return;
-  if (IDecl->IsPartialInterface() && !IDecl->getCompleteDefinition()) {
+  if (IDecl->isPartialInterface() && !IDecl->getCompleteDefinition()) {
     S.Diag(IC->getLocation(), diag::err_partial_implementation)
       << (isa<ObjCCategoryImplDecl>(IC)) << IDecl->getName();
     S.Diag(IDecl->getLocation(), diag::note_class_declared);
   }
   ObjCInterfaceDecl *Super = IDecl->getSuperClass();
   while (Super) {
-    if (Super->IsPartialInterface() && !Super->getCompleteDefinition()) {
+    if (Super->isPartialInterface() && !Super->getCompleteDefinition()) {
       S.Diag(Super->getLocation(), diag::err_partial_interface_in_super)
       << Super->getDeclName();
       S.Diag(IC->getLocation(), diag::note_implementation_declared)
@@ -2807,7 +2807,7 @@ Decl *Sema::ActOnAtEnd(Scope *S, SourceRange AtEnd, ArrayRef<Decl *> allMethods,
       DiagnosePartialClass(*this, IC, IDecl);
 
       bool HasRootClassAttr = IDecl->hasAttr<ObjCRootClassAttr>();
-      if (IDecl->getSuperClass() == NULL && !IDecl->IsPartialInterface()) {
+      if (IDecl->getSuperClass() == NULL && !IDecl->isPartialInterface()) {
         // This class has no superclass, so check that it has been marked with
         // __attribute((objc_root_class)).
         if (!HasRootClassAttr && !IDecl->hasAttr<ObjCCompleteDefinitionAttr>()) {
