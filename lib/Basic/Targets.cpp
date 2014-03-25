@@ -982,6 +982,7 @@ void PPCTargetInfo::getTargetDefines(const LangOptions &Opts,
   // Target properties.
   if (getTriple().getArch() == llvm::Triple::ppc64le) {
     Builder.defineMacro("_LITTLE_ENDIAN");
+    Builder.defineMacro("_CALL_ELF","2");
   } else {
     if (getTriple().getOS() != llvm::Triple::NetBSD &&
         getTriple().getOS() != llvm::Triple::OpenBSD)
@@ -1288,8 +1289,13 @@ public:
       LongDoubleWidth = LongDoubleAlign = 64;
       LongDoubleFormat = &llvm::APFloat::IEEEdouble;
       DescriptionString = "E-m:e-i64:64-n32:64";
-    } else
-      DescriptionString = "E-m:e-i64:64-n32:64";
+    } else {
+      if ((Triple.getArch() == llvm::Triple::ppc64le)) {
+        DescriptionString = "e-m:e-i64:64-n32:64";
+      } else {
+        DescriptionString = "E-m:e-i64:64-n32:64";
+      }
+}
 
     // PPC64 supports atomics up to 8 bytes.
     MaxAtomicPromoteWidth = MaxAtomicInlineWidth = 64;
@@ -3492,9 +3498,6 @@ public:
     Builder.defineMacro("__ARM_SIZEOF_MINIMAL_ENUM",
                         Opts.ShortEnums ? "1" : "4");
 
-    if (BigEndian)
-      Builder.defineMacro("__AARCH_BIG_ENDIAN");
-
     if (FPU == NeonMode) {
       Builder.defineMacro("__ARM_NEON");
       // 64-bit NEON supports half, single and double precision operations.
@@ -3682,6 +3685,8 @@ public:
   void getTargetDefines(const LangOptions &Opts,
                         MacroBuilder &Builder) const override {
     Builder.defineMacro("__AARCH64EB__");
+    Builder.defineMacro("__AARCH_BIG_ENDIAN");
+    Builder.defineMacro("__ARM_BIG_ENDIAN");
     AArch64TargetInfo::getTargetDefines(Opts, Builder);
   }
 };

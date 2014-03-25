@@ -5,20 +5,21 @@
 // CHECK-NOT: define
 // CHECK: ret {{.*}}, !dbg ![[DBG:.*]]
 // CHECK: ![[HPP:.*]] = metadata !{metadata !"./template.hpp",
-// CHECK:![[BLOCK:.*]] = metadata !{{{.*}}, metadata ![[HPP]], {{.*}}} ; [ DW_TAG_lexical_block ]
-// CHECK: [[DBG]] = metadata !{i32 23, i32 0, metadata ![[BLOCK]], null}
+// CHECK: ![[DBG]] = metadata !{i32 23, i32 0, metadata ![[BLOCK:.*]], null}
+// CHECK: ![[BLOCK]] = metadata !{{{.*}}, metadata ![[HPP]], {{.*}}} ; [ DW_TAG_lexical_block ]
 # 1 "./template.h" 1
 template <typename T>
 class Foo {
 public:
- int bar();
+  int bar();
 };
 # 21 "./template.hpp"
 template <typename T>
 int Foo<T>::bar() {
+  return 23;
 }
 int main (int argc, const char * argv[])
 {
   Foo<int> f;
-  f.bar();
+  return f.bar();
 }
