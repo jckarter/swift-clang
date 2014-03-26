@@ -709,6 +709,9 @@ class ObjCInterfaceDecl : public ObjCContainerDecl
     /// Indicates that this interface decl contains at least one initializer
     /// marked with the 'objc_designated_initializer' attribute.
     bool HasDesignatedInitializers : 1;
+    
+    /// \brief Indicates that this class is a partial interface.
+    bool  IsPartialInterface : 1;
 
     enum InheritedDesignatedInitializersState {
       /// We didn't calculate whether the designated initializers should be
@@ -721,9 +724,6 @@ class ObjCInterfaceDecl : public ObjCContainerDecl
     };
     /// One of the \c InheritedDesignatedInitializersState enumeratos.
     mutable unsigned InheritedDesignatedInitializers : 2;
-    
-    /// \brief Indicates that this class is a partial interface.
-    unsigned  IsPartialInterface : 1;
 
     /// \brief The location of the superclass, if any.
     SourceLocation SuperClassLoc;
@@ -738,8 +738,8 @@ class ObjCInterfaceDecl : public ObjCContainerDecl
                        ExternallyCompleted(),
                        IvarListMissingImplementation(true),
                        HasDesignatedInitializers(),
-                       InheritedDesignatedInitializers(IDI_Unknown),
-                       IsPartialInterface() { }
+                       IsPartialInterface(),
+                       InheritedDesignatedInitializers(IDI_Unknown) { }
   };
 
   ObjCInterfaceDecl(DeclContext *DC, SourceLocation atLoc, IdentifierInfo *Id,
