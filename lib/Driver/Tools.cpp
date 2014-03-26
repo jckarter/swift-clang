@@ -2091,13 +2091,6 @@ static void SplitDebugInfo(const ToolChain &TC, Compilation &C,
   C.addCommand(new Command(JA, T, Exec, StripArgs));
 }
 
-static bool isOptimizationLevelFast(const ArgList &Args) {
-  if (Arg *A = Args.getLastArg(options::OPT_O_Group))
-    if (A->getOption().matches(options::OPT_Ofast))
-      return true;
-  return false;
-}
-
 /// \brief Vectorize at all optimization levels greater than 1 except for -Oz.
 static bool shouldEnableVectorizerAtOLevel(const ArgList &Args) {
   if (Arg *A = Args.getLastArg(options::OPT_O_Group)) {
@@ -2769,8 +2762,7 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
   // are preserved, all other debug options are substituted with "-g".
   Args.ClaimAllArgs(options::OPT_g_Group);
   if (Arg *A = Args.getLastArg(options::OPT_g_Group)) {
-    if (A->getOption().matches(options::OPT_gline_tables_only) ||
-        A->getOption().matches(options::OPT_gmlt)) {
+    if (A->getOption().matches(options::OPT_gline_tables_only)) {
       // FIXME: we should support specifying dwarf version with
       // -gline-tables-only.
       CmdArgs.push_back("-gline-tables-only");
@@ -3664,7 +3656,7 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
 
   if (Args.hasFlag(options::OPT_fapplication_extension,
                    options::OPT_fno_application_extension, false))
-    CmdArgs.push_back("-fapp-extension");
+    CmdArgs.push_back("-fapplication-extension");
 
   // Add exception args.
   addExceptionArgs(Args, InputType, getToolChain().getTriple(),
@@ -4208,6 +4200,12 @@ void Clang::AddClangCLArgs(const ArgList &Args, ArgStringList &CmdArgs) const {
   // RTTI is currently not supported, so disable it by default.
   if (!Args.hasArg(options::OPT_frtti, options::OPT_fno_rtti))
     CmdArgs.push_back("-fno-rtti");
+
+  // Let -ffunction-sections imply -fdata-sections.
+  if (Arg * A = Args.getLastArg(options::OPT_ffunction_sections,
+                                options::OPT_fno_function_sections))
+    if (A->getOption().matches(options::OPT_ffunction_sections))
+      CmdArgs.push_back("-fdata-sections");
 
   const Driver &D = getToolChain().getDriver();
   Arg *MostGeneralArg = Args.getLastArg(options::OPT__SLASH_vmg);
@@ -7461,6 +7459,11 @@ Command *visualstudio::Compile::GetCommand(Compilation &C, const JobAction &JA,
   if (Arg *A = Args.getLastArg(options::OPT_frtti, options::OPT_fno_rtti))
     CmdArgs.push_back(A->getOption().getID() == options::OPT_frtti ? "/GR"
                                                                    : "/GR-");
+  if (Arg *A = Args.getLastArg(options::OPT_ffunction_sections,
+                               options::OPT_fno_function_sections))
+    CmdArgs.push_back(A->getOption().getID() == options::OPT_ffunction_sections
+                          ? "/Gy"
+                          : "/Gy-");
   if (Args.hasArg(options::OPT_fsyntax_only))
     CmdArgs.push_back("/Zs");
   if (Args.hasArg(options::OPT_g_Flag, options::OPT_gline_tables_only))
