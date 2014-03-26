@@ -3657,7 +3657,7 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
 
   if (Args.hasFlag(options::OPT_fapplication_extension,
                    options::OPT_fno_application_extension, false))
-    CmdArgs.push_back("-fapp-extension");
+    CmdArgs.push_back("-fapplication-extension");
 
   // Add exception args.
   addExceptionArgs(Args, InputType, getToolChain().getTriple(),
