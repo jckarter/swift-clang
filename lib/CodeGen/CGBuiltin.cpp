@@ -215,8 +215,11 @@ RValue CodeGenFunction::EmitBuiltinExpr(const FunctionDecl *FD,
     return RValue::get(CGM.EmitConstantExpr(E, E->getType(), 0));
   case Builtin::BI__builtin_stdarg_start:
   case Builtin::BI__builtin_va_start:
+  case Builtin::BI__va_start:
   case Builtin::BI__builtin_va_end: {
-    Value *ArgValue = EmitVAListRef(E->getArg(0));
+    Value *ArgValue = (BuiltinID == Builtin::BI__va_start)
+                          ? EmitScalarExpr(E->getArg(0))
+                          : EmitVAListRef(E->getArg(0));
     llvm::Type *DestType = Int8PtrTy;
     if (ArgValue->getType() != DestType)
       ArgValue = Builder.CreateBitCast(ArgValue, DestType,
@@ -428,6 +431,12 @@ RValue CodeGenFunction::EmitBuiltinExpr(const FunctionDecl *FD,
   case Builtin::BI__builtin_readcyclecounter: {
     Value *F = CGM.getIntrinsic(Intrinsic::readcyclecounter);
     return RValue::get(Builder.CreateCall(F));
+  }
+  case Builtin::BI__builtin___clear_cache: {
+    Value *Begin = EmitScalarExpr(E->getArg(0));
+    Value *End = EmitScalarExpr(E->getArg(1));
+    Value *F = CGM.getIntrinsic(Intrinsic::clear_cache);
+    return RValue::get(Builder.CreateCall2(F, Begin, End));
   }
   case Builtin::BI__builtin_trap: {
     Value *F = CGM.getIntrinsic(Intrinsic::trap);

@@ -3212,8 +3212,7 @@ void NeonEmitter::genBuiltinsDef(raw_ostream &OS) {
     }
   }
 
-  // Generate BuiltinsNEON in alphabetical order now that we have the complete
-  // list.
+  // Generate BuiltinsNEON.
   OS << "#ifdef GET_NEON_BUILTINS\n";
 
   for (std::map<std::string, OpKind>::iterator I = EmittedMap.begin(),
