@@ -1641,7 +1641,9 @@ Value *CodeGenFunction::EmitTargetBuiltinExpr(unsigned BuiltinID,
   case llvm::Triple::aarch64_be:
     return EmitAArch64BuiltinExpr(BuiltinID, E);
   case llvm::Triple::arm:
+  case llvm::Triple::armeb:
   case llvm::Triple::thumb:
+  case llvm::Triple::thumbeb:
     return EmitARMBuiltinExpr(BuiltinID, E);
   case llvm::Triple::arm64:
     return EmitARM64BuiltinExpr(BuiltinID, E);
