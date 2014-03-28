@@ -6383,6 +6383,7 @@ enum OpenCLParamType {
   ValidKernelParam,
   PtrPtrKernelParam,
   PtrKernelParam,
+  PrivatePtrKernelParam,
   InvalidKernelParam,
   RecordKernelParam
 };
@@ -6390,7 +6391,10 @@ enum OpenCLParamType {
 static OpenCLParamType getOpenCLKernelParameterType(QualType PT) {
   if (PT->isPointerType()) {
     QualType PointeeType = PT->getPointeeType();
-    return PointeeType->isPointerType() ? PtrPtrKernelParam : PtrKernelParam;
+    if (PointeeType->isPointerType())
+      return PtrPtrKernelParam;
+    return PointeeType.getAddressSpace() == 0 ? PrivatePtrKernelParam
+                                              : PtrKernelParam;
   }
 
   // TODO: Forbid the other integer types (size_t, ptrdiff_t...) when they can
@@ -6432,6 +6436,14 @@ static void checkIsValidOpenCLKernelParameter(
     // A kernel function argument cannot be declared as a
     // pointer to a pointer type.
     S.Diag(Param->getLocation(), diag::err_opencl_ptrptr_kernel_param);
+    D.setInvalidType();
+    return;
+
+  case PrivatePtrKernelParam:
+    // OpenCL v1.2 s6.9.a:
+    // A kernel function argument cannot be declared as a
+    // pointer to the private address space.
+    S.Diag(Param->getLocation(), diag::err_opencl_private_ptr_kernel_param);
     D.setInvalidType();
     return;
 
@@ -6514,7 +6526,8 @@ static void checkIsValidOpenCLKernelParameter(
       // Arguments to kernel functions that are declared to be a struct or union
       // do not allow OpenCL objects to be passed as elements of the struct or
       // union.
-      if (ParamType == PtrKernelParam || ParamType == PtrPtrKernelParam) {
+      if (ParamType == PtrKernelParam || ParamType == PtrPtrKernelParam ||
+          ParamType == PrivatePtrKernelParam) {
         S.Diag(Param->getLocation(),
                diag::err_record_with_pointers_kernel_param)
           << PT->isUnionType()

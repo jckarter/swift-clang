@@ -905,8 +905,9 @@ def warn_unimplemented_selector:  Warning<
 def warn_unimplemented_protocol_method : Warning<
   "method %0 in protocol %1 not implemented">, InGroup<Protocol>;
 def warning_multiple_selectors: Warning<
-  "several methods with selector %0 of mismatched types are found for the @selector expression">,
-  InGroup<SelectorTypeMismatch>;
+  "several methods with selector %0 of mismatched types are found "
+  "for the @selector expression">,
+  InGroup<SelectorTypeMismatch>, DefaultIgnore;
 // C++ declarations
 def err_static_assert_expression_is_not_constant : Error<
   "static_assert expression is not an integral constant expression">;
@@ -2086,6 +2087,9 @@ def err_alias_not_supported_on_darwin : Error <
   "only weak aliases are supported on darwin">;
 def err_alias_to_undefined : Error<
   "alias must point to a defined variable or function">;
+def warn_alias_to_weak_alias : Warning<
+  "alias will always resolve to %0 even if weak definition of alias %1 is overridden">,
+  InGroup<IgnoredAttributes>;
 def err_duplicate_mangled_name : Error<
   "definition with same mangled name as another definition">;
 def err_cyclic_alias : Error<
@@ -6813,6 +6817,8 @@ def err_static_kernel : Error<
   "kernel functions cannot be declared static">;
 def err_opencl_ptrptr_kernel_param : Error<
   "kernel parameter cannot be declared as a pointer to a pointer">;
+def err_opencl_private_ptr_kernel_param : Error<
+  "kernel parameter cannot be declared as a pointer to the __private address space">;
 def err_static_function_scope : Error<
   "variables in function scope cannot be declared static">;
 def err_opencl_bitfields : Error<

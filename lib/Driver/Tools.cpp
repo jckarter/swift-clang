@@ -682,11 +682,9 @@ StringRef tools::arm::getARMFloatABI(const Driver &D, const ArgList &Args,
       default:
         // Assume "soft", but warn the user we are guessing.
         FloatABI = "soft";
-        // *-macho defaults to "soft"
-        if (Triple.getOS() == llvm::Triple::UnknownOS &&
-            Triple.getObjectFormat() == llvm::Triple::MachO)
-          break;
-        D.Diag(diag::warn_drv_assuming_mfloat_abi_is) << "soft";
+        if (Triple.getOS() != llvm::Triple::UnknownOS ||
+            !Triple.isOSBinFormatMachO())
+          D.Diag(diag::warn_drv_assuming_mfloat_abi_is) << "soft";
         break;
       }
     }
@@ -1781,6 +1779,7 @@ static void CollectArgsForIntegratedAssembler(Compilation &C,
 
     // When using an integrated assembler, translate -Wa, and -Xassembler
     // options.
+    bool CompressDebugSections = false;
     for (arg_iterator it = Args.filtered_begin(options::OPT_Wa_COMMA,
                                                options::OPT_Xassembler),
            ie = Args.filtered_end(); it != ie; ++it) {
@@ -1806,7 +1805,10 @@ static void CollectArgsForIntegratedAssembler(Compilation &C,
           CmdArgs.push_back("-mnoexecstack");
         } else if (Value == "-compress-debug-sections" ||
                    Value == "--compress-debug-sections") {
-          D.Diag(diag::warn_missing_debug_compression);
+          CompressDebugSections = true;
+        } else if (Value == "-nocompress-debug-sections" ||
+                   Value == "--nocompress-debug-sections") {
+          CompressDebugSections = false;
         } else if (Value.startswith("-I")) {
           CmdArgs.push_back(Value.data());
           // We need to consume the next argument if the current arg is a plain
@@ -1819,6 +1821,8 @@ static void CollectArgsForIntegratedAssembler(Compilation &C,
         }
       }
     }
+    if (CompressDebugSections)
+      CmdArgs.push_back("-compress-debug-sections");
 }
 
 // Until ARM libraries are build separately, we have them all in one library
@@ -1863,6 +1867,13 @@ static void addProfileRT(
         Args.hasArg(options::OPT_fcreate_profile) ||
         Args.hasArg(options::OPT_coverage)))
     return;
+
+  // Pull in runtime for -fprofile-inst-generate.  This is required since there
+  // are no calls to the runtime in the code.
+  if (Args.hasArg(options::OPT_fprofile_instr_generate)) {
+    CmdArgs.push_back("-u");
+    CmdArgs.push_back("___llvm_profile_runtime");
+  }
 
   SmallString<128> LibProfile = getCompilerRTLibDir(TC);
   llvm::sys::path::append(LibProfile,
@@ -2147,6 +2158,10 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
   const Driver &D = getToolChain().getDriver();
   ArgStringList CmdArgs;
 
+  bool IsWindowsGNU = getToolChain().getTriple().isWindowsGNUEnvironment();
+  bool IsWindowsCygnus = getToolChain().getTriple().isWindowsCygwinEnvironment();
+  bool IsWindowsMSVC = getToolChain().getTriple().isWindowsMSVCEnvironment();
+
   assert(Inputs.size() == 1 && "Unable to handle multiple inputs.");
 
   // Invoke ourselves in -cc1 mode.
@@ -2260,7 +2275,7 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
     if (!Args.hasArg(options::OPT__analyzer_no_default_checks)) {
       CmdArgs.push_back("-analyzer-checker=core");
 
-      if (getToolChain().getTriple().getOS() != llvm::Triple::Win32)
+      if (!IsWindowsMSVC)
         CmdArgs.push_back("-analyzer-checker=unix");
 
       if (getToolChain().getTriple().getVendor() == llvm::Triple::Apple)
@@ -3018,7 +3033,7 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
     if (!types::isCXX(InputType))
       Args.AddAllArgsTranslated(CmdArgs, options::OPT_std_default_EQ,
                                 "-std=", /*Joined=*/true);
-    else if (getToolChain().getTriple().getOS() == llvm::Triple::Win32)
+    else if (IsWindowsMSVC)
       CmdArgs.push_back("-std=c++11");
 
     Args.AddLastArg(CmdArgs, options::OPT_trigraphs);
@@ -3508,33 +3523,30 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
     CmdArgs.push_back("-fno-threadsafe-statics");
 
   // -fuse-cxa-atexit is default.
-  if (!Args.hasFlag(
-           options::OPT_fuse_cxa_atexit, options::OPT_fno_use_cxa_atexit,
-           getToolChain().getTriple().getOS() != llvm::Triple::Cygwin &&
-               getToolChain().getTriple().getOS() != llvm::Triple::MinGW32 &&
-               getToolChain().getArch() != llvm::Triple::hexagon &&
-               getToolChain().getArch() != llvm::Triple::xcore) ||
+  if (!Args.hasFlag(options::OPT_fuse_cxa_atexit,
+                    options::OPT_fno_use_cxa_atexit,
+                    !IsWindowsCygnus && !IsWindowsGNU &&
+                    getToolChain().getArch() != llvm::Triple::hexagon &&
+                    getToolChain().getArch() != llvm::Triple::xcore) ||
       KernelOrKext)
     CmdArgs.push_back("-fno-use-cxa-atexit");
 
   // -fms-extensions=0 is default.
   if (Args.hasFlag(options::OPT_fms_extensions, options::OPT_fno_ms_extensions,
-                   getToolChain().getTriple().getOS() == llvm::Triple::Win32))
+                   IsWindowsMSVC))
     CmdArgs.push_back("-fms-extensions");
 
   // -fms-compatibility=0 is default.
   if (Args.hasFlag(options::OPT_fms_compatibility, 
                    options::OPT_fno_ms_compatibility,
-                   (getToolChain().getTriple().getOS() == llvm::Triple::Win32 &&
-                    Args.hasFlag(options::OPT_fms_extensions, 
-                                 options::OPT_fno_ms_extensions,
-                                 true))))
+                   (IsWindowsMSVC && Args.hasFlag(options::OPT_fms_extensions,
+                                                  options::OPT_fno_ms_extensions,
+                                                  true))))
     CmdArgs.push_back("-fms-compatibility");
 
   // -fmsc-version=1700 is default.
   if (Args.hasFlag(options::OPT_fms_extensions, options::OPT_fno_ms_extensions,
-                   getToolChain().getTriple().getOS() == llvm::Triple::Win32) ||
-      Args.hasArg(options::OPT_fmsc_version)) {
+                   IsWindowsMSVC) || Args.hasArg(options::OPT_fmsc_version)) {
     StringRef msc_ver = Args.getLastArgValue(options::OPT_fmsc_version);
     if (msc_ver.empty())
       CmdArgs.push_back("-fmsc-version=1700");
@@ -3551,8 +3563,7 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
   // -fno-delayed-template-parsing is default, except for Windows where MSVC STL
   // needs it.
   if (Args.hasFlag(options::OPT_fdelayed_template_parsing,
-                   options::OPT_fno_delayed_template_parsing,
-                   getToolChain().getTriple().getOS() == llvm::Triple::Win32))
+                   options::OPT_fno_delayed_template_parsing, IsWindowsMSVC))
     CmdArgs.push_back("-fdelayed-template-parsing");
 
   // -fgnu-keywords default varies depending on language; only pass if
