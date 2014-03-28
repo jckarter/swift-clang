@@ -1878,12 +1878,7 @@ static void addProfileRT(
   llvm::sys::path::append(LibProfile,
       Twine("libclang_rt.profile-") + getArchNameForCompilerRTLib(TC) + ".a");
 
-  SmallVector<const char *, 3> LibProfileArgs;
-  LibProfileArgs.push_back("-whole-archive");
-  LibProfileArgs.push_back(Args.MakeArgString(LibProfile));
-  LibProfileArgs.push_back("-no-whole-archive");
-
-  CmdArgs.insert(CmdArgs.end(), LibProfileArgs.begin(), LibProfileArgs.end());
+  CmdArgs.push_back(Args.MakeArgString(LibProfile));
 }
 
 static void addSanitizerRTLinkFlags(
