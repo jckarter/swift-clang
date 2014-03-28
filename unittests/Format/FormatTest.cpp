@@ -4529,6 +4529,20 @@ TEST_F(FormatTest, UnderstandsUsesOfStarAndAmp) {
   verifyFormat("delete *x;", PointerLeft);
   verifyFormat("STATIC_ASSERT((a & b) == 0);");
   verifyFormat("STATIC_ASSERT(0 == (a & b));");
+  verifyFormat("template <bool a, bool b> "
+               "typename t::if<x && y>::type f() {};");
+  verifyFormat("template <int *y> f() {};");
+  verifyFormat("vector<int *> v;");
+  verifyFormat("vector<int *const> v;");
+  verifyFormat("vector<int *const **const *> v;");
+  verifyFormat("vector<int *volatile> v;");
+  verifyFormat("vector<a * b> v;");
+  verifyFormat("foo<b && false>();");
+  verifyFormat("foo<b & 1>();");
+
+  // FIXME: We cannot handle this case yet; we might be able to figure out that
+  // foo<x> d > v; doesn't make sense.
+  verifyFormat("foo<a < b && c> d > v;");
 }
 
 TEST_F(FormatTest, UnderstandsAttributes) {
@@ -6544,11 +6558,10 @@ TEST_F(FormatTest, CountsCharactersInMultilineRawStringLiterals) {
                    getGoogleStyleWithColumns(20)));
   EXPECT_EQ("fffffffffff(R\"x(\n"
             "multiline raw string literal xxxxxxxxxxxxxx\n"
-            ")x\" +\n"
-            "            bbbbbb);",
+            ")x\" + bbbbbb);",
             format("fffffffffff(R\"x(\n"
                    "multiline raw string literal xxxxxxxxxxxxxx\n"
-                   ")x\" + bbbbbb);",
+                   ")x\" +   bbbbbb);",
                    getGoogleStyleWithColumns(20)));
   EXPECT_EQ("fffffffffff(\n"
             "    R\"x(\n"
@@ -8112,6 +8125,10 @@ TEST_F(FormatTest, FormatsLambdas) {
 TEST_F(FormatTest, FormatsBlocks) {
   verifyFormat("int (^Block)(int, int);");
   verifyFormat("int (^Block1)(int, int) = ^(int i, int j)");
+  verifyFormat("void (^block)(int) = ^(id test) { int i; };");
+  verifyFormat("void (^block)(int) = ^(int test) { int i; };");
+  verifyFormat("void (^block)(int) = ^id(int test) { int i; };");
+  verifyFormat("void (^block)(int) = ^int(int test) { int i; };");
 
   verifyFormat("foo(^{ bar(); });");
   verifyFormat("foo(a, ^{ bar(); });");
