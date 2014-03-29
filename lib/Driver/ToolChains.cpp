@@ -342,13 +342,6 @@ void DarwinClang::AddLinkRuntimeLibArgs(const ArgList &Args,
       Args.hasArg(options::OPT_fprofile_instr_generate) ||
       Args.hasArg(options::OPT_fcreate_profile) ||
       Args.hasArg(options::OPT_coverage)) {
-    // Pull in runtime for -fprofile-inst-generate.  This is required since
-    // there are no calls to the runtime in the code.
-    if (Args.hasArg(options::OPT_fprofile_instr_generate)) {
-      CmdArgs.push_back("-u");
-      CmdArgs.push_back("___llvm_profile_runtime");
-    }
-
     // Select the appropriate runtime library for the target.
     if (isTargetIOSBased())
       AddLinkRuntimeLib(Args, CmdArgs, "libclang_rt.profile_ios.a");
@@ -1350,6 +1343,11 @@ bool Generic_GCC::GCCInstallationDetector::getBiarchSibling(Multilib &M) const {
                                             "arm-linux-androideabi" };
   static const char *const ARMHFTriples[] = { "arm-linux-gnueabihf",
                                               "armv7hl-redhat-linux-gnueabi" };
+  static const char *const ARMebLibDirs[] = { "/lib" };
+  static const char *const ARMebTriples[] = { "armeb-linux-gnueabi",
+                                              "armeb-linux-androideabi" };
+  static const char *const ARMebHFTriples[] = { "armeb-linux-gnueabihf",
+                                                "armebv7hl-redhat-linux-gnueabi" };
 
   static const char *const X86_64LibDirs[] = { "/lib64", "/lib" };
   static const char *const X86_64Triples[] = {
@@ -1441,6 +1439,17 @@ bool Generic_GCC::GCCInstallationDetector::getBiarchSibling(Multilib &M) const {
     } else {
       TripleAliases.append(ARMTriples,
                            ARMTriples + llvm::array_lengthof(ARMTriples));
+    }
+    break;
+  case llvm::Triple::armeb:
+  case llvm::Triple::thumbeb:
+    LibDirs.append(ARMebLibDirs, ARMebLibDirs + llvm::array_lengthof(ARMebLibDirs));
+    if (TargetTriple.getEnvironment() == llvm::Triple::GNUEABIHF) {
+      TripleAliases.append(ARMebHFTriples,
+                           ARMebHFTriples + llvm::array_lengthof(ARMebHFTriples));
+    } else {
+      TripleAliases.append(ARMebTriples,
+                           ARMebTriples + llvm::array_lengthof(ARMebTriples));
     }
     break;
   case llvm::Triple::x86_64:
@@ -2107,7 +2116,9 @@ bool Generic_GCC::IsIntegratedAssemblerDefault() const {
          getTriple().getArch() == llvm::Triple::aarch64_be ||
          getTriple().getArch() == llvm::Triple::arm64 ||
          getTriple().getArch() == llvm::Triple::arm ||
-         getTriple().getArch() == llvm::Triple::thumb;
+         getTriple().getArch() == llvm::Triple::armeb ||
+         getTriple().getArch() == llvm::Triple::thumb ||
+         getTriple().getArch() == llvm::Triple::thumbeb;
 }
 
 void Generic_ELF::addClangTargetOptions(const ArgList &DriverArgs,
@@ -2835,6 +2846,16 @@ static std::string getMultiarchTriple(const llvm::Triple &TargetTriple,
     } else {
       if (llvm::sys::fs::exists(SysRoot + "/lib/arm-linux-gnueabi"))
         return "arm-linux-gnueabi";
+    }
+    return TargetTriple.str();
+  case llvm::Triple::armeb:
+  case llvm::Triple::thumbeb:
+    if (TargetTriple.getEnvironment() == llvm::Triple::GNUEABIHF) {
+      if (llvm::sys::fs::exists(SysRoot + "/lib/armeb-linux-gnueabihf"))
+        return "armeb-linux-gnueabihf";
+    } else {
+      if (llvm::sys::fs::exists(SysRoot + "/lib/armeb-linux-gnueabi"))
+        return "armeb-linux-gnueabi";
     }
     return TargetTriple.str();
   case llvm::Triple::x86:
