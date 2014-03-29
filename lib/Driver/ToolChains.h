@@ -367,7 +367,7 @@ public:
   addStartObjectFileArgs(const llvm::opt::ArgList &Args,
                          llvm::opt::ArgStringList &CmdArgs) const override;
 
-  virtual bool isKernelStatic() const override {
+  bool isKernelStatic() const override {
     return !isTargetIPhoneOS() || isIPhoneOSVersionLT(6, 0) ||
            getTriple().getArch() == llvm::Triple::arm64;
   }
@@ -491,7 +491,7 @@ public:
 
   virtual void addClangWarningOptions(llvm::opt::ArgStringList &CC1Args) const;
 
-  virtual void
+  void
   AddLinkARCArgs(const llvm::opt::ArgList &Args,
                  llvm::opt::ArgStringList &CmdArgs) const override;
   /// }
