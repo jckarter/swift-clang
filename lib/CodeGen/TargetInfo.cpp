@@ -3146,6 +3146,7 @@ public:
     AAPCS = 0,
     DarwinPCS
   };
+
 private:
   ABIKind Kind;
 
@@ -3199,9 +3200,8 @@ private:
           uint32_t NumStackSlots = getContext().getTypeSize(it->type);
           NumStackSlots = llvm::RoundUpToAlignment(NumStackSlots, 64) / 64;
 
-          llvm::Type *CoerceTy
-              = llvm::ArrayType::get(llvm::Type::getDoubleTy(getVMContext()),
-                                     NumStackSlots);
+          llvm::Type *CoerceTy = llvm::ArrayType::get(
+              llvm::Type::getDoubleTy(getVMContext()), NumStackSlots);
           it->info = ABIArgInfo::getDirect(CoerceTy, 0, PaddingTy);
         }
       }
@@ -3210,8 +3210,8 @@ private:
       if (IsSmallAggr && AllocatedGPR > NumGPRs && PreGPR < NumGPRs) {
         llvm::Type *PaddingTy = llvm::ArrayType::get(
             llvm::Type::getInt32Ty(getVMContext()), NumGPRs - PreGPR);
-        it->info = ABIArgInfo::getDirect(it->info.getCoerceToType(), 0,
-                                         PaddingTy);
+        it->info =
+            ABIArgInfo::getDirect(it->info.getCoerceToType(), 0, PaddingTy);
       }
     }
   }
@@ -3224,29 +3224,24 @@ private:
 
   virtual llvm::Value *EmitVAArg(llvm::Value *VAListAddr, QualType Ty,
                                  CodeGenFunction &CGF) const {
-    return isDarwinPCS() ? EmitDarwinVAArg(VAListAddr, Ty, CGF) :
-      EmitAAPCSVAArg(VAListAddr, Ty, CGF);
+    return isDarwinPCS() ? EmitDarwinVAArg(VAListAddr, Ty, CGF)
+                         : EmitAAPCSVAArg(VAListAddr, Ty, CGF);
   }
 };
 
 class ARM64TargetCodeGenInfo : public TargetCodeGenInfo {
 public:
   ARM64TargetCodeGenInfo(CodeGenTypes &CGT, ARM64ABIInfo::ABIKind Kind)
-    : TargetCodeGenInfo(new ARM64ABIInfo(CGT, Kind)) {}
+      : TargetCodeGenInfo(new ARM64ABIInfo(CGT, Kind)) {}
 
   StringRef getARCRetainAutoreleasedReturnValueMarker() const {
     return "mov\tfp, fp\t\t; marker for objc_retainAutoreleaseReturnValue";
   }
 
-  int getDwarfEHStackPointer(CodeGen::CodeGenModule &M) const {
-    return 31;
-  }
+  int getDwarfEHStackPointer(CodeGen::CodeGenModule &M) const { return 31; }
 
-  virtual bool doesReturnSlotInterfereWithArgs() const {
-    return false;
-  }
+  virtual bool doesReturnSlotInterfereWithArgs() const { return false; }
 };
-
 }
 
 static bool isHomogeneousAggregate(QualType Ty, const Type *&Base,
@@ -3262,20 +3257,19 @@ ABIArgInfo ARM64ABIInfo::classifyArgumentType(QualType Ty,
   if (isIllegalVectorType(Ty)) {
     uint64_t Size = getContext().getTypeSize(Ty);
     if (Size <= 32) {
-      llvm::Type *ResType =
-          llvm::Type::getInt32Ty(getVMContext());
+      llvm::Type *ResType = llvm::Type::getInt32Ty(getVMContext());
       AllocatedGPR++;
       return ABIArgInfo::getDirect(ResType);
     }
     if (Size == 64) {
-      llvm::Type *ResType = llvm::VectorType::get(
-          llvm::Type::getInt32Ty(getVMContext()), 2);
+      llvm::Type *ResType =
+          llvm::VectorType::get(llvm::Type::getInt32Ty(getVMContext()), 2);
       AllocatedVFP++;
       return ABIArgInfo::getDirect(ResType);
     }
     if (Size == 128) {
-      llvm::Type *ResType = llvm::VectorType::get(
-          llvm::Type::getInt32Ty(getVMContext()), 4);
+      llvm::Type *ResType =
+          llvm::VectorType::get(llvm::Type::getInt32Ty(getVMContext()), 4);
       AllocatedVFP++;
       return ABIArgInfo::getDirect(ResType);
     }
@@ -3302,8 +3296,9 @@ ABIArgInfo ARM64ABIInfo::classifyArgumentType(QualType Ty,
       int RegsNeeded = getContext().getTypeSize(Ty) > 64 ? 2 : 1;
       AllocatedGPR += RegsNeeded;
     }
-    return (Ty->isPromotableIntegerType() && isDarwinPCS() ?
-            ABIArgInfo::getExtend() : ABIArgInfo::getDirect());
+    return (Ty->isPromotableIntegerType() && isDarwinPCS()
+                ? ABIArgInfo::getExtend()
+                : ABIArgInfo::getDirect());
   }
 
   // Structures with either a non-trivial destructor or a non-trivial
@@ -3364,8 +3359,8 @@ ABIArgInfo ARM64ABIInfo::classifyReturnType(QualType RetTy) const {
     if (const EnumType *EnumTy = RetTy->getAs<EnumType>())
       RetTy = EnumTy->getDecl()->getIntegerType();
 
-    return (RetTy->isPromotableIntegerType() ?
-            ABIArgInfo::getExtend() : ABIArgInfo::getDirect());
+    return (RetTy->isPromotableIntegerType() ? ABIArgInfo::getExtend()
+                                             : ABIArgInfo::getDirect());
   }
 
   // Structures with either a non-trivial destructor or a non-trivial
@@ -3453,8 +3448,8 @@ static llvm::Value *EmitAArch64VAArg(llvm::Value *VAListAddr, QualType Ty,
   // though anyone passing 2GB of arguments, each at most 16 bytes, deserves
   // whatever they get).
   llvm::Value *UsingStack = 0;
-  UsingStack = CGF.Builder.CreateICmpSGE(reg_offs,
-                                        llvm::ConstantInt::get(CGF.Int32Ty, 0));
+  UsingStack = CGF.Builder.CreateICmpSGE(
+      reg_offs, llvm::ConstantInt::get(CGF.Int32Ty, 0));
 
   CGF.Builder.CreateCondBr(UsingStack, OnStackBlock, MaybeRegBlock);
 
@@ -3468,27 +3463,25 @@ static llvm::Value *EmitAArch64VAArg(llvm::Value *VAListAddr, QualType Ty,
   if (AllocatedGPR && !IsIndirect && Ctx.getTypeAlign(Ty) > 64) {
     int Align = Ctx.getTypeAlign(Ty) / 8;
 
-    reg_offs = CGF.Builder.CreateAdd(reg_offs,
-                                 llvm::ConstantInt::get(CGF.Int32Ty, Align - 1),
-                                 "align_regoffs");
-    reg_offs = CGF.Builder.CreateAnd(reg_offs,
-                                    llvm::ConstantInt::get(CGF.Int32Ty, -Align),
-                                    "aligned_regoffs");
+    reg_offs = CGF.Builder.CreateAdd(
+        reg_offs, llvm::ConstantInt::get(CGF.Int32Ty, Align - 1),
+        "align_regoffs");
+    reg_offs = CGF.Builder.CreateAnd(
+        reg_offs, llvm::ConstantInt::get(CGF.Int32Ty, -Align),
+        "aligned_regoffs");
   }
 
   // Update the gr_offs/vr_offs pointer for next call to va_arg on this va_list.
   llvm::Value *NewOffset = 0;
-  NewOffset = CGF.Builder.CreateAdd(reg_offs,
-                                   llvm::ConstantInt::get(CGF.Int32Ty, RegSize),
-                                   "new_reg_offs");
+  NewOffset = CGF.Builder.CreateAdd(
+      reg_offs, llvm::ConstantInt::get(CGF.Int32Ty, RegSize), "new_reg_offs");
   CGF.Builder.CreateStore(NewOffset, reg_offs_p);
 
   // Now we're in a position to decide whether this argument really was in
   // registers or not.
   llvm::Value *InRegs = 0;
-  InRegs = CGF.Builder.CreateICmpSLE(NewOffset,
-                                     llvm::ConstantInt::get(CGF.Int32Ty, 0),
-                                     "inreg");
+  InRegs = CGF.Builder.CreateICmpSLE(
+      NewOffset, llvm::ConstantInt::get(CGF.Int32Ty, 0), "inreg");
 
   CGF.Builder.CreateCondBr(InRegs, InRegBlock, OnStackBlock);
 
@@ -3501,8 +3494,8 @@ static llvm::Value *EmitAArch64VAArg(llvm::Value *VAListAddr, QualType Ty,
   CGF.EmitBlock(InRegBlock);
 
   llvm::Value *reg_top_p = 0, *reg_top = 0;
-  reg_top_p = CGF.Builder.CreateStructGEP(VAListAddr, reg_top_index,
-                                          "reg_top_p");
+  reg_top_p =
+      CGF.Builder.CreateStructGEP(VAListAddr, reg_top_index, "reg_top_p");
   reg_top = CGF.Builder.CreateLoad(reg_top_p, "reg_top");
   llvm::Value *BaseAddr = CGF.Builder.CreateGEP(reg_top, reg_offs);
   llvm::Value *RegAddr = 0;
@@ -3528,13 +3521,13 @@ static llvm::Value *EmitAArch64VAArg(llvm::Value *VAListAddr, QualType Ty,
     int Offset = 0;
 
     if (CGF.CGM.getDataLayout().isBigEndian() && Ctx.getTypeSize(Base) < 128)
-      Offset = 16 - Ctx.getTypeSize(Base)/8;
+      Offset = 16 - Ctx.getTypeSize(Base) / 8;
     for (unsigned i = 0; i < NumMembers; ++i) {
-      llvm::Value *BaseOffset = llvm::ConstantInt::get(CGF.Int32Ty,
-                                                       16 * i + Offset);
+      llvm::Value *BaseOffset =
+          llvm::ConstantInt::get(CGF.Int32Ty, 16 * i + Offset);
       llvm::Value *LoadAddr = CGF.Builder.CreateGEP(BaseAddr, BaseOffset);
-      LoadAddr = CGF.Builder.CreateBitCast(LoadAddr,
-                                          llvm::PointerType::getUnqual(BaseTy));
+      LoadAddr = CGF.Builder.CreateBitCast(
+          LoadAddr, llvm::PointerType::getUnqual(BaseTy));
       llvm::Value *StoreAddr = CGF.Builder.CreateStructGEP(Tmp, i);
 
       llvm::Value *Elem = CGF.Builder.CreateLoad(LoadAddr);
@@ -3547,13 +3540,11 @@ static llvm::Value *EmitAArch64VAArg(llvm::Value *VAListAddr, QualType Ty,
     unsigned BeAlign = reg_top_index == 2 ? 16 : 8;
     if (CGF.CGM.getDataLayout().isBigEndian() && !isAggregateTypeForABI(Ty) &&
         Ctx.getTypeSize(Ty) < (BeAlign * 8)) {
-      int Offset = BeAlign - Ctx.getTypeSize(Ty)/8;
+      int Offset = BeAlign - Ctx.getTypeSize(Ty) / 8;
       BaseAddr = CGF.Builder.CreatePtrToInt(BaseAddr, CGF.Int64Ty);
 
-      BaseAddr = CGF.Builder.CreateAdd(BaseAddr,
-                                       llvm::ConstantInt::get(CGF.Int64Ty,
-                                                              Offset),
-                                       "align_be");
+      BaseAddr = CGF.Builder.CreateAdd(
+          BaseAddr, llvm::ConstantInt::get(CGF.Int64Ty, Offset), "align_be");
 
       BaseAddr = CGF.Builder.CreateIntToPtr(BaseAddr, CGF.Int8PtrTy);
     }
@@ -3579,12 +3570,12 @@ static llvm::Value *EmitAArch64VAArg(llvm::Value *VAListAddr, QualType Ty,
 
     OnStackAddr = CGF.Builder.CreatePtrToInt(OnStackAddr, CGF.Int64Ty);
 
-    OnStackAddr = CGF.Builder.CreateAdd(OnStackAddr,
-                                 llvm::ConstantInt::get(CGF.Int64Ty, Align - 1),
-                                 "align_stack");
-    OnStackAddr = CGF.Builder.CreateAnd(OnStackAddr,
-                                    llvm::ConstantInt::get(CGF.Int64Ty, -Align),
-                                    "align_stack");
+    OnStackAddr = CGF.Builder.CreateAdd(
+        OnStackAddr, llvm::ConstantInt::get(CGF.Int64Ty, Align - 1),
+        "align_stack");
+    OnStackAddr = CGF.Builder.CreateAnd(
+        OnStackAddr, llvm::ConstantInt::get(CGF.Int64Ty, -Align),
+        "align_stack");
 
     OnStackAddr = CGF.Builder.CreateIntToPtr(OnStackAddr, CGF.Int8PtrTy);
   }
@@ -3595,26 +3586,23 @@ static llvm::Value *EmitAArch64VAArg(llvm::Value *VAListAddr, QualType Ty,
   else
     StackSize = Ctx.getTypeSize(Ty) / 8;
 
-
   // All stack slots are 8 bytes
   StackSize = llvm::RoundUpToAlignment(StackSize, 8);
 
   llvm::Value *StackSizeC = llvm::ConstantInt::get(CGF.Int32Ty, StackSize);
-  llvm::Value *NewStack = CGF.Builder.CreateGEP(OnStackAddr, StackSizeC,
-                                                "new_stack");
+  llvm::Value *NewStack =
+      CGF.Builder.CreateGEP(OnStackAddr, StackSizeC, "new_stack");
 
   // Write the new value of __stack for the next call to va_arg
   CGF.Builder.CreateStore(NewStack, stack_p);
 
   if (CGF.CGM.getDataLayout().isBigEndian() && !isAggregateTypeForABI(Ty) &&
-      Ctx.getTypeSize(Ty) < 64 ) {
-    int Offset = 8 - Ctx.getTypeSize(Ty)/8;
+      Ctx.getTypeSize(Ty) < 64) {
+    int Offset = 8 - Ctx.getTypeSize(Ty) / 8;
     OnStackAddr = CGF.Builder.CreatePtrToInt(OnStackAddr, CGF.Int64Ty);
 
-    OnStackAddr = CGF.Builder.CreateAdd(OnStackAddr,
-                                        llvm::ConstantInt::get(CGF.Int64Ty,
-                                                               Offset),
-                                        "align_be");
+    OnStackAddr = CGF.Builder.CreateAdd(
+        OnStackAddr, llvm::ConstantInt::get(CGF.Int64Ty, Offset), "align_be");
 
     OnStackAddr = CGF.Builder.CreateIntToPtr(OnStackAddr, CGF.Int8PtrTy);
   }
@@ -3638,14 +3626,13 @@ static llvm::Value *EmitAArch64VAArg(llvm::Value *VAListAddr, QualType Ty,
   return ResAddr;
 }
 
-
 llvm::Value *ARM64ABIInfo::EmitAAPCSVAArg(llvm::Value *VAListAddr, QualType Ty,
                                           CodeGenFunction &CGF) const {
 
   unsigned AllocatedGPR = 0, AllocatedVFP = 0;
   bool IsHA = false, IsSmallAggr = false;
-  ABIArgInfo AI = classifyArgumentType(Ty, AllocatedVFP, IsHA, AllocatedGPR,
-                                       IsSmallAggr);
+  ABIArgInfo AI =
+      classifyArgumentType(Ty, AllocatedVFP, IsHA, AllocatedGPR, IsSmallAggr);
 
   return EmitAArch64VAArg(VAListAddr, Ty, AllocatedGPR, AllocatedVFP,
                           AI.isIndirect(), CGF);
@@ -3689,18 +3676,17 @@ llvm::Value *ARM64ABIInfo::EmitDarwinVAArg(llvm::Value *VAListAddr, QualType Ty,
 
   const uint64_t MinABIAlign = 8;
   if (Align > MinABIAlign) {
-    llvm::Value *Offset = llvm::ConstantInt::get(CGF.Int32Ty, Align-1);
+    llvm::Value *Offset = llvm::ConstantInt::get(CGF.Int32Ty, Align - 1);
     Addr = Builder.CreateGEP(Addr, Offset);
     llvm::Value *AsInt = Builder.CreatePtrToInt(Addr, CGF.Int64Ty);
-    llvm::Value *Mask = llvm::ConstantInt::get(CGF.Int64Ty, ~(Align-1));
+    llvm::Value *Mask = llvm::ConstantInt::get(CGF.Int64Ty, ~(Align - 1));
     llvm::Value *Aligned = Builder.CreateAnd(AsInt, Mask);
     Addr = Builder.CreateIntToPtr(Aligned, BP, "ap.align");
   }
 
   uint64_t Offset = llvm::RoundUpToAlignment(Size, MinABIAlign);
-  llvm::Value *NextAddr =
-    Builder.CreateGEP(Addr, llvm::ConstantInt::get(CGF.Int32Ty, Offset),
-                      "ap.next");
+  llvm::Value *NextAddr = Builder.CreateGEP(
+      Addr, llvm::ConstantInt::get(CGF.Int32Ty, Offset), "ap.next");
   Builder.CreateStore(NextAddr, VAListAddrAsBPP);
 
   if (isIndirect)
@@ -3949,8 +3935,7 @@ void ARMABIInfo::setRuntimeCC() {
 /// contained in the type is returned through it; this is used for the
 /// recursive calls that check aggregate component types.
 static bool isHomogeneousAggregate(QualType Ty, const Type *&Base,
-                                   ASTContext &Context,
-                                   uint64_t *HAMembers) {
+                                   ASTContext &Context, uint64_t *HAMembers) {
   uint64_t Members = 0;
   if (const ConstantArrayType *AT = Context.getAsConstantArrayType(Ty)) {
     if (!isHomogeneousAggregate(AT->getElementType(), Base, Context, &Members))

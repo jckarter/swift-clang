@@ -4720,8 +4720,7 @@ static void HandleExtVectorTypeAttr(QualType &CurType,
 }
 
 static bool isPermittedNeonBaseType(QualType &Ty,
-                                    VectorType::VectorKind VecKind,
-                                    Sema &S) {
+                                    VectorType::VectorKind VecKind, Sema &S) {
   const BuiltinType *BTy = Ty->getAs<BuiltinType>();
   if (!BTy)
     return false;

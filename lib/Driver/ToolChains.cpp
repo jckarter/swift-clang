@@ -502,8 +502,7 @@ void Darwin::AddDeploymentTarget(DerivedArgList &Args) const {
     // go ahead as assume we're targeting iOS.
     StringRef MachOArchName = getMachOArchName(Args);
     if (OSXTarget.empty() && iOSTarget.empty() &&
-        (MachOArchName == "armv7" ||
-         MachOArchName == "armv7s" ||
+        (MachOArchName == "armv7" || MachOArchName == "armv7s" ||
          MachOArchName == "arm64"))
         iOSTarget = iOSVersionMin;
 
@@ -2124,13 +2123,13 @@ bool Generic_GCC::IsIntegratedAssemblerDefault() const {
 void Generic_ELF::addClangTargetOptions(const ArgList &DriverArgs,
                                         ArgStringList &CC1Args) const {
   const Generic_GCC::GCCVersion &V = GCCInstallation.getVersion();
-  bool UseInitArrayDefault = 
+  bool UseInitArrayDefault =
       getTriple().getArch() == llvm::Triple::aarch64 ||
       getTriple().getArch() == llvm::Triple::aarch64_be ||
       getTriple().getArch() == llvm::Triple::arm64 ||
-      (getTriple().getOS() == llvm::Triple::Linux && (
-         !V.isOlderThan(4, 7, 0) ||
-         getTriple().getEnvironment() == llvm::Triple::Android));
+      (getTriple().getOS() == llvm::Triple::Linux &&
+       (!V.isOlderThan(4, 7, 0) ||
+        getTriple().getEnvironment() == llvm::Triple::Android));
 
   if (DriverArgs.hasFlag(options::OPT_fuse_init_array,
                          options::OPT_fno_use_init_array,

@@ -526,8 +526,9 @@ enum UniqueRTTIKind {
 
 /// What sort of uniqueness rules should we use for the RTTI for the
 /// given type?
-static UniqueRTTIKind classifyUniqueRTTI(CodeGenModule &CGM, QualType canTy,
-                                   llvm::GlobalValue::LinkageTypes linkage) {
+static UniqueRTTIKind
+classifyUniqueRTTI(CodeGenModule &CGM, QualType canTy,
+                   llvm::GlobalValue::LinkageTypes linkage) {
   // We only support non-unique RTTI on iOS64.
   // FIXME: abstract this into CGCXXABI after this code moves to trunk.
   if (CGM.getTarget().getCXXABI().getKind() != TargetCXXABI::iOS64)
@@ -599,9 +600,10 @@ llvm::Constant *RTTIBuilder::BuildTypeInfo(QualType Ty, bool Force) {
     // for global pointers.  This is very ARM64-specific.
     typeNameField = llvm::ConstantExpr::getPtrToInt(TypeName, CGM.Int64Ty);
     llvm::Constant *flag =
-      llvm::ConstantInt::get(CGM.Int64Ty, ((uint64_t)1) << 63);
+        llvm::ConstantInt::get(CGM.Int64Ty, ((uint64_t)1) << 63);
     typeNameField = llvm::ConstantExpr::getAdd(typeNameField, flag);
-    typeNameField = llvm::ConstantExpr::getIntToPtr(typeNameField, CGM.Int8PtrTy);
+    typeNameField =
+        llvm::ConstantExpr::getIntToPtr(typeNameField, CGM.Int8PtrTy);
   } else {
     typeNameField = llvm::ConstantExpr::getBitCast(TypeName, CGM.Int8PtrTy);
   }

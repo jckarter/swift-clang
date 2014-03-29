@@ -871,16 +871,13 @@ void Clang::AddARM64TargetArgs(const ArgList &Args,
   std::string TripleStr = getToolChain().ComputeEffectiveClangTriple(Args);
   llvm::Triple Triple(TripleStr);
 
-  if (!Args.hasFlag(options::OPT_mred_zone,
-                    options::OPT_mno_red_zone,
-                    true) ||
+  if (!Args.hasFlag(options::OPT_mred_zone, options::OPT_mno_red_zone, true) ||
       Args.hasArg(options::OPT_mkernel) ||
       Args.hasArg(options::OPT_fapple_kext))
     CmdArgs.push_back("-disable-red-zone");
 
   if (!Args.hasFlag(options::OPT_mimplicit_float,
-                    options::OPT_mno_implicit_float,
-                    true))
+                    options::OPT_mno_implicit_float, true))
     CmdArgs.push_back("-no-implicit-float");
 
   const char *ABIName = 0;
@@ -2382,9 +2379,8 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
   // Note that these flags are trump-cards. Regardless of the order w.r.t. the
   // PIC or PIE options above, if these show up, PIC is disabled.
   llvm::Triple Triple(TripleStr);
-  if (KernelOrKext &&
-      (!Triple.isiOS() || Triple.isOSVersionLT(6) ||
-       Triple.getArch() == llvm::Triple::arm64))
+  if (KernelOrKext && (!Triple.isiOS() || Triple.isOSVersionLT(6) ||
+                       Triple.getArch() == llvm::Triple::arm64))
     PIC = PIE = false;
   if (Args.hasArg(options::OPT_static))
     PIC = PIE = false;

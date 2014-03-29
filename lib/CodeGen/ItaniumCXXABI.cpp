@@ -1424,12 +1424,12 @@ void ItaniumCXXABI::EmitGuardedInit(CodeGenFunction &CGF,
   //       }
   //     }
 
-  // ARM64 C++ ABI 3.2.2:
-  // This ABI instead only specifies the value bit 0 of the static guard
-  // variable; all other bits are platform defined. Bit 0 shall be 0 when the
-  // variable is not initialized and 1 when it is.
-  // FIXME: Reading one bit is no more efficient than reading one byte so
-  // the codegen is same as generic Itanium ABI.
+    // ARM64 C++ ABI 3.2.2:
+    // This ABI instead only specifies the value bit 0 of the static guard
+    // variable; all other bits are platform defined. Bit 0 shall be 0 when the
+    // variable is not initialized and 1 when it is.
+    // FIXME: Reading one bit is no more efficient than reading one byte so
+    // the codegen is same as generic Itanium ABI.
   } else {
     // Load the first byte of the guard variable.
     llvm::LoadInst *LI = 
