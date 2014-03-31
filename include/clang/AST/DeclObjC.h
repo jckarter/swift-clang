@@ -984,6 +984,7 @@ public:
   void mergeClassExtensionProtocolList(ObjCProtocolDecl *const* List,
                                        unsigned Num,
                                        ASTContext &C);
+  std::string getObjCRuntimeNameAsString() const;
 
   /// Returns the designated initializers for the interface.
   ///
@@ -1690,6 +1691,8 @@ public:
   /// \brief Starts the definition of this Objective-C protocol.
   void startDefinition();
 
+  std::string getObjCRuntimeNameAsString() const;
+
   SourceRange getSourceRange() const override LLVM_READONLY {
     if (isThisDeclarationADefinition())
       return ObjCContainerDecl::getSourceRange();
@@ -2135,7 +2138,9 @@ public:
   std::string getNameAsString() const {
     return getName();
   }
-
+  
+  std::string getObjCRuntimeNameAsString() const;
+  
   const ObjCInterfaceDecl *getSuperClass() const { 
     if (SuperClass && SuperClass->isPartialInterface() && 
         SuperClass->getCompleteDefinition())

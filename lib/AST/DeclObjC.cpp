@@ -1178,8 +1178,32 @@ bool ObjCInterfaceDecl::hasDesignatedInitializers() const {
     return false;
   if (data().ExternallyCompleted)
     LoadExternalDefinition();
-
   return data().HasDesignatedInitializers;
+}
+
+std::string
+ObjCInterfaceDecl::getObjCRuntimeNameAsString() const {
+  if (hasAttr<ObjCAsmAttr>()) {
+    for (auto Attr : getAttrs())
+      if (auto ObjCAsm = dyn_cast<ObjCAsmAttr>(Attr)) {
+        return ObjCAsm->getMetadataName().str();
+      }
+  }
+  return getNameAsString();
+}
+
+std::string
+ObjCImplementationDecl::getObjCRuntimeNameAsString() const {
+  ObjCInterfaceDecl *ID =
+    const_cast<ObjCImplementationDecl*>(this)->getClassInterface();
+  
+  if (ID && ID->hasAttr<ObjCAsmAttr>()) {
+    for (auto Attr : ID->getAttrs())
+      if (auto ObjCAsm = dyn_cast<ObjCAsmAttr>(Attr)) {
+        return ObjCAsm->getMetadataName().str();
+      }
+  }
+  return getNameAsString();
 }
 
 ObjCImplementationDecl *ObjCInterfaceDecl::getImplementation() const {
@@ -1581,6 +1605,17 @@ void ObjCProtocolDecl::collectInheritedProtocolProperties(
       for (const auto *PI : PDecl->protocols())
         PI->collectInheritedProtocolProperties(Property, PM);
   }
+}
+
+std::string
+ObjCProtocolDecl::getObjCRuntimeNameAsString() const {
+  if (hasAttr<ObjCAsmAttr>()) {
+    for (auto Attr : getAttrs())
+      if (auto ObjCAsm = dyn_cast<ObjCAsmAttr>(Attr)) {
+        return ObjCAsm->getMetadataName().str();
+      }
+  }
+  return getNameAsString();
 }
 
 //===----------------------------------------------------------------------===//

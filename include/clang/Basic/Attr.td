@@ -983,6 +983,14 @@ def ObjCDesignatedInitializer : Attr {
   let Documentation = [Undocumented];
 }
 
+def ObjCAsm : Attr {
+  let Spellings = [GNU<"objc_asm">];
+  let Subjects = SubjectList<[ObjCInterface, ObjCProtocol], ErrorDiag,
+                              "ExpectedObjectiveCInterfaceOrProtocol">;
+  let Args = [StringArgument<"MetadataName", 1>];
+  let Documentation = [Undocumented];
+}
+
 def Overloadable : Attr {
   let Spellings = [GNU<"overloadable">];
   let Subjects = SubjectList<[Function], ErrorDiag>;
