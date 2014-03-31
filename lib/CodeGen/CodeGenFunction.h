@@ -2206,16 +2206,14 @@ public:
   // Helper functions for EmitARM64BuiltinExpr.
   llvm::Value *vectorWrapScalar8(llvm::Value *Op);
   llvm::Value *vectorWrapScalar16(llvm::Value *Op);
-  llvm::Value *emitVectorWrappedScalar8Intrinsic(unsigned Int,
-                                           SmallVectorImpl<llvm::Value*> &Ops,
-                                           const char *Name);
-  llvm::Value *emitVectorWrappedScalar16Intrinsic(unsigned Int,
-                                            SmallVectorImpl<llvm::Value*> &Ops,
-                                            const char *Name);
+  llvm::Value *emitVectorWrappedScalar8Intrinsic(
+      unsigned Int, SmallVectorImpl<llvm::Value *> &Ops, const char *Name);
+  llvm::Value *emitVectorWrappedScalar16Intrinsic(
+      unsigned Int, SmallVectorImpl<llvm::Value *> &Ops, const char *Name);
   llvm::Value *EmitARM64BuiltinExpr(unsigned BuiltinID, const CallExpr *E);
   llvm::Value *EmitNeon64Call(llvm::Function *F,
-                             llvm::SmallVectorImpl<llvm::Value*> &O,
-                             const char *name);
+                              llvm::SmallVectorImpl<llvm::Value *> &O,
+                              const char *name);
 
   llvm::Value *BuildVector(ArrayRef<llvm::Value*> Ops);
   llvm::Value *EmitX86BuiltinExpr(unsigned BuiltinID, const CallExpr *E);

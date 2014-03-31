@@ -880,7 +880,7 @@ bool CodeGenModule::ReturnTypeUsesSRet(const CGFunctionInfo &FI) {
 
 bool CodeGenModule::ReturnSlotInterferesWithArgs(const CGFunctionInfo &FI) {
   return ReturnTypeUsesSRet(FI) &&
-    getTargetCodeGenInfo().doesReturnSlotInterfereWithArgs();
+         getTargetCodeGenInfo().doesReturnSlotInterfereWithArgs();
 }
 
 bool CodeGenModule::ReturnTypeUsesFPRet(QualType ResultType) {
