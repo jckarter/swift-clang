@@ -2074,9 +2074,13 @@ def err_attribute_weak_static : Error<
   "weak declaration cannot have internal linkage">;
 def err_attribute_selectany_non_extern_data : Error<
   "'selectany' can only be applied to data items with external linkage">;
+def err_attribute_dll_not_extern : Error<
+  "%q0 must have external linkage when declared %q1">;
 def warn_attribute_invalid_on_definition : Warning<
   "'%0' attribute cannot be specified on a definition">,
   InGroup<IgnoredAttributes>;
+def err_attribute_dll_redeclaration : Error<
+  "redeclaration of %q0 cannot add %q1 attribute">;
 def err_attribute_dllimport_data_definition : Error<
   "definition of dllimport data">;
 def err_attribute_weakref_not_static : Error<
@@ -3714,6 +3718,8 @@ def warn_redefinition_of_typedef : ExtWarn<
 def err_redefinition_variably_modified_typedef : Error<
   "redefinition of %select{typedef|type alias}0 for variably-modified type %1">;
 
+def err_inline_decl_follows_def : Error<
+  "inline declaration of %0 follows non-inline definition">;
 def err_inline_declaration_block_scope : Error<
   "inline declaration of %0 not allowed in block scope">;
 def err_static_non_static : Error<
@@ -6913,6 +6919,8 @@ def note_omp_conversion_here : Note<
 def err_omp_ambiguous_conversion : Error<
   "ambiguous conversion from type %0 to an integral or unscoped "
   "enumeration type">;
+def err_omp_required_access : Error<
+  "%0 variable must be %1">;
 } // end of OpenMP category
 
 let CategoryName = "Related Result Type Issue" in {
