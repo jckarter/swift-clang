@@ -2385,9 +2385,23 @@ void MicrosoftMangleContextImpl::mangleStringLiteral(const StringLiteral *SL,
     }
   };
 
+  auto GetLittleEndianByte = [&Mangler, &SL](unsigned Index) {
+    unsigned CharByteWidth = SL->getCharByteWidth();
+    uint32_t CodeUnit = SL->getCodeUnit(Index / CharByteWidth);
+    unsigned OffsetInCodeUnit = Index % CharByteWidth;
+    return static_cast<char>((CodeUnit >> (8 * OffsetInCodeUnit)) & 0xff);
+  };
+
+  auto GetBigEndianByte = [&Mangler, &SL](unsigned Index) {
+    unsigned CharByteWidth = SL->getCharByteWidth();
+    uint32_t CodeUnit = SL->getCodeUnit(Index / CharByteWidth);
+    unsigned OffsetInCodeUnit = (CharByteWidth - 1) - (Index % CharByteWidth);
+    return static_cast<char>((CodeUnit >> (8 * OffsetInCodeUnit)) & 0xff);
+  };
+
   // CRC all the bytes of the StringLiteral.
-  for (char Byte : SL->getBytes())
-    UpdateCRC(Byte);
+  for (unsigned I = 0, E = SL->getByteLength(); I != E; ++I)
+    UpdateCRC(GetLittleEndianByte(I));
 
   // The NUL terminator byte(s) were not present earlier,
   // we need to manually process those bytes into the CRC.
@@ -2419,6 +2433,7 @@ void MicrosoftMangleContextImpl::mangleStringLiteral(const StringLiteral *SL,
       Mangler.getStream() << Byte;
     } else if ((Byte >= '\xe1' && Byte <= '\xfa') ||
                (Byte >= '\xc1' && Byte <= '\xda')) {
+      // The delta between '\xe1' and '\xc1' is the same as 'a' to 'A'.
       Mangler.getStream() << '?' << static_cast<char>('A' + (Byte - '\xc1'));
     } else {
       switch (Byte) {
@@ -2461,25 +2476,17 @@ void MicrosoftMangleContextImpl::mangleStringLiteral(const StringLiteral *SL,
     }
   };
 
-  auto MangleChar = [&Mangler, &MangleByte, &SL](uint32_t CodeUnit) {
-    if (SL->getCharByteWidth() == 1) {
-      MangleByte(static_cast<char>(CodeUnit));
-    } else if (SL->getCharByteWidth() == 2) {
-      MangleByte(static_cast<char>((CodeUnit >> 16) & 0xff));
-      MangleByte(static_cast<char>(CodeUnit & 0xff));
-    } else {
-      llvm_unreachable("unsupported CharByteWidth");
-    }
-  };
-
   // Enforce our 32 character max.
   unsigned NumCharsToMangle = std::min(32U, SL->getLength());
-  for (unsigned i = 0; i < NumCharsToMangle; ++i)
-    MangleChar(SL->getCodeUnit(i));
+  for (unsigned I = 0, E = NumCharsToMangle * SL->getCharByteWidth(); I != E;
+       ++I)
+    MangleByte(GetBigEndianByte(I));
 
   // Encode the NUL terminator if there is room.
   if (NumCharsToMangle < 32)
-    MangleChar(0);
+    for (unsigned NullTerminator = 0; NullTerminator < SL->getCharByteWidth();
+         ++NullTerminator)
+      MangleByte(0);
 
   Mangler.getStream() << '@';
 }

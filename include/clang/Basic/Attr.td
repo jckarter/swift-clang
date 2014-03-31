@@ -991,6 +991,12 @@ def ObjCAsm : Attr {
   let Documentation = [Undocumented];
 }
 
+def OptimizeNone : InheritableAttr {
+  let Spellings = [GNU<"optnone">, CXX11<"clang", "optnone">];
+  let Subjects = SubjectList<[Function, ObjCMethod]>;
+  let Documentation = [OptnoneDocs];
+}
+
 def Overloadable : Attr {
   let Spellings = [GNU<"overloadable">];
   let Subjects = SubjectList<[Function], ErrorDiag>;
