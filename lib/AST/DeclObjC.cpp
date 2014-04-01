@@ -1183,12 +1183,8 @@ bool ObjCInterfaceDecl::hasDesignatedInitializers() const {
 
 std::string
 ObjCInterfaceDecl::getObjCRuntimeNameAsString() const {
-  if (hasAttr<ObjCAsmAttr>()) {
-    for (auto Attr : getAttrs())
-      if (auto ObjCAsm = dyn_cast<ObjCAsmAttr>(Attr)) {
-        return ObjCAsm->getMetadataName().str();
-      }
-  }
+  if (ObjCRuntimeNameAttr *ObjCRTName = getAttr<ObjCRuntimeNameAttr>())
+    return ObjCRTName->getMetadataName().str();
   return getNameAsString();
 }
 
@@ -1604,12 +1600,8 @@ void ObjCProtocolDecl::collectInheritedProtocolProperties(
 
 std::string
 ObjCProtocolDecl::getObjCRuntimeNameAsString() const {
-  if (hasAttr<ObjCAsmAttr>()) {
-    for (auto Attr : getAttrs())
-      if (auto ObjCAsm = dyn_cast<ObjCAsmAttr>(Attr)) {
-        return ObjCAsm->getMetadataName().str();
-      }
-  }
+  if (ObjCRuntimeNameAttr *ObjCRTName = getAttr<ObjCRuntimeNameAttr>())
+    return ObjCRTName->getMetadataName().str();
   return getNameAsString();
 }
 

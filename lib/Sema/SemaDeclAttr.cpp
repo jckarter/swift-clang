@@ -3559,13 +3559,13 @@ static void handleObjCDesignatedInitializer(Sema &S, Decl *D,
                                          Attr.getAttributeSpellingListIndex()));
 }
 
-static void handleObjCAsm(Sema &S, Decl *D,
+static void handleObjCRuntimeName(Sema &S, Decl *D,
                           const AttributeList &Attr) {
   StringRef MetaDataName;
   if (!S.checkStringLiteralArgumentAttr(Attr, 0, MetaDataName))
     return;
   D->addAttr(::new (S.Context)
-                  ObjCAsmAttr(Attr.getRange(), S.Context,
+                  ObjCRuntimeNameAttr(Attr.getRange(), S.Context,
                               MetaDataName, 0));
 }
 
@@ -4220,8 +4220,8 @@ static void ProcessDeclAttribute(Sema &S, Scope *scope, Decl *D,
     handleObjCDesignatedInitializer(S, D, Attr);
     break;
       
-  case AttributeList::AT_ObjCAsm:
-    handleObjCAsm(S, D, Attr);
+  case AttributeList::AT_ObjCRuntimeName:
+    handleObjCRuntimeName(S, D, Attr);
     break;
 
   case AttributeList::AT_CFAuditedTransfer:
