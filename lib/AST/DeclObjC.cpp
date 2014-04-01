@@ -1194,15 +1194,10 @@ ObjCInterfaceDecl::getObjCRuntimeNameAsString() const {
 
 std::string
 ObjCImplementationDecl::getObjCRuntimeNameAsString() const {
-  ObjCInterfaceDecl *ID =
-    const_cast<ObjCImplementationDecl*>(this)->getClassInterface();
+  if (ObjCInterfaceDecl *ID =
+      const_cast<ObjCImplementationDecl*>(this)->getClassInterface())
+    return ID->getObjCRuntimeNameAsString();
   
-  if (ID && ID->hasAttr<ObjCAsmAttr>()) {
-    for (auto Attr : ID->getAttrs())
-      if (auto ObjCAsm = dyn_cast<ObjCAsmAttr>(Attr)) {
-        return ObjCAsm->getMetadataName().str();
-      }
-  }
   return getNameAsString();
 }
 
