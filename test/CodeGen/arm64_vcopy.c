@@ -1,7 +1,7 @@
-// RUN: %clang -O1 -target arm64-apple-ios7 -ffreestanding -S -o - -emit-llvm %s | FileCheck %s
-// RUN: %clang -O1 -target arm64-apple-ios7 -ffreestanding -S -o - %s | \
+// RUN: %clang_cc1 -O1 -triple arm64-apple-ios7 -ffreestanding -S -o - -emit-llvm %s | FileCheck %s
+// RUN: %clang_cc1 -O1 -triple arm64-apple-ios7 -ffreestanding -S -o - %s | \
 // RUN:   FileCheck -check-prefix=CHECK_CODEGEN %s
-// RUN: %clang -O0 -target arm64-apple-ios7 -ffreestanding -S -o - %s | \
+// RUN: %clang_cc1 -O0 -triple arm64-apple-ios7 -ffreestanding -S -o - %s | \
 // RUN:   FileCheck -check-prefix=CHECK_CODEGEN_O0 %s
 // REQUIRES: arm64-registered-target
 

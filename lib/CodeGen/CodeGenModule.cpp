@@ -660,6 +660,10 @@ void CodeGenModule::SetLLVMFunctionAttributesForDefinition(const Decl *D,
     // Naked implies noinline: we should not be inlining such functions.
     B.addAttribute(llvm::Attribute::Naked);
     B.addAttribute(llvm::Attribute::NoInline);
+  } else if (D->hasAttr<OptimizeNoneAttr>()) {
+    // OptimizeNone implies noinline; we should not be inlining such functions.
+    B.addAttribute(llvm::Attribute::OptimizeNone);
+    B.addAttribute(llvm::Attribute::NoInline);
   } else if (D->hasAttr<NoDuplicateAttr>()) {
     B.addAttribute(llvm::Attribute::NoDuplicate);
   } else if (D->hasAttr<NoInlineAttr>()) {
@@ -678,6 +682,12 @@ void CodeGenModule::SetLLVMFunctionAttributesForDefinition(const Decl *D,
 
   if (D->hasAttr<MinSizeAttr>())
     B.addAttribute(llvm::Attribute::MinSize);
+
+  if (D->hasAttr<OptimizeNoneAttr>()) {
+    // OptimizeNone wins over OptimizeForSize and MinSize.
+    B.removeAttribute(llvm::Attribute::OptimizeForSize);
+    B.removeAttribute(llvm::Attribute::MinSize);
+  }
 
   if (LangOpts.getStackProtector() == LangOptions::SSPOn)
     B.addAttribute(llvm::Attribute::StackProtect);
@@ -1178,12 +1188,14 @@ void CodeGenModule::EmitGlobal(GlobalDecl GD) {
       if (!FD->doesDeclarationForceExternallyVisibleDefinition())
         return;
 
-      const FunctionDecl *InlineDefinition = 0;
-      FD->getBody(InlineDefinition);
-
       StringRef MangledName = getMangledName(GD);
-      DeferredDecls.erase(MangledName);
-      EmitGlobalDefinition(InlineDefinition);
+
+      // Compute the function info and LLVM type.
+      const CGFunctionInfo &FI = getTypes().arrangeGlobalDeclaration(GD);
+      llvm::Type *Ty = getTypes().GetFunctionType(FI);
+
+      GetOrCreateLLVMFunction(MangledName, Ty, GD, /*ForVTable=*/false,
+                              /*DontDefer=*/false);
       return;
     }
   } else {

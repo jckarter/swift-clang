@@ -5346,10 +5346,9 @@ ObjCNonFragileABITypesHelper::ObjCNonFragileABITypesHelper(CodeGen::CodeGenModul
   //   uint32_t alignment;
   //   uint32_t size;
   // }
-  IvarnfABITy =
-    llvm::StructType::create("struct._ivar_t",
-                             llvm::PointerType::getUnqual(IvarOffsetVarTy),
-                             Int8PtrTy, Int8PtrTy, IntTy, IntTy, NULL);
+  IvarnfABITy = llvm::StructType::create(
+      "struct._ivar_t", llvm::PointerType::getUnqual(IvarOffsetVarTy),
+      Int8PtrTy, Int8PtrTy, IntTy, IntTy, NULL);
 
   // struct _ivar_list_t {
   //   uint32 entsize;  // sizeof(struct _ivar_t)
@@ -6103,12 +6102,9 @@ CGObjCNonFragileABIMac::ObjCIvarOffsetVariable(const ObjCInterfaceDecl *ID,
   llvm::GlobalVariable *IvarOffsetGV =
     CGM.getModule().getGlobalVariable(Name);
   if (!IvarOffsetGV)
-    IvarOffsetGV =
-      new llvm::GlobalVariable(CGM.getModule(), ObjCTypes.IvarOffsetVarTy,
-                               false,
-                               llvm::GlobalValue::ExternalLinkage,
-                               0,
-                               Name);
+    IvarOffsetGV = new llvm::GlobalVariable(
+        CGM.getModule(), ObjCTypes.IvarOffsetVarTy, false,
+        llvm::GlobalValue::ExternalLinkage, 0, Name);
   return IvarOffsetGV;
 }
 
@@ -6117,10 +6113,10 @@ CGObjCNonFragileABIMac::EmitIvarOffsetVar(const ObjCInterfaceDecl *ID,
                                           const ObjCIvarDecl *Ivar,
                                           unsigned long int Offset) {
   llvm::GlobalVariable *IvarOffsetGV = ObjCIvarOffsetVariable(ID, Ivar);
-  IvarOffsetGV->setInitializer(llvm::ConstantInt::get(ObjCTypes.IvarOffsetVarTy,
-                                                      Offset));
+  IvarOffsetGV->setInitializer(
+      llvm::ConstantInt::get(ObjCTypes.IvarOffsetVarTy, Offset));
   IvarOffsetGV->setAlignment(
-    CGM.getDataLayout().getABITypeAlignment(ObjCTypes.IvarOffsetVarTy));
+      CGM.getDataLayout().getABITypeAlignment(ObjCTypes.IvarOffsetVarTy));
 
   // FIXME: This matches gcc, but shouldn't the visibility be set on the use as
   // well (i.e., in ObjCIvarOffsetVariable).
@@ -6467,16 +6463,15 @@ llvm::Value *CGObjCNonFragileABIMac::EmitIvarOffset(
   IvarOffsetValue = CGF.Builder.CreateLoad(IvarOffsetValue, "ivar");
   if (IsIvarOffsetKnownIdempotent(CGF, Ivar))
     cast<llvm::LoadInst>(IvarOffsetValue)
-      ->setMetadata(CGM.getModule().getMDKindID("invariant.load"),
-                    llvm::MDNode::get(VMContext, ArrayRef<llvm::Value*>()));
+        ->setMetadata(CGM.getModule().getMDKindID("invariant.load"),
+                      llvm::MDNode::get(VMContext, ArrayRef<llvm::Value *>()));
 
   // This could be 32bit int or 64bit integer depending on the architecture.
   // Cast it to 64bit integer value, if it is a 32bit integer ivar offset value
   //  as this is what caller always expectes.
   if (ObjCTypes.IvarOffsetVarTy == ObjCTypes.IntTy)
-    IvarOffsetValue =
-      CGF.Builder.CreateIntCast(IvarOffsetValue, ObjCTypes.LongTy,
-                                true, "ivar.conv");
+    IvarOffsetValue = CGF.Builder.CreateIntCast(
+        IvarOffsetValue, ObjCTypes.LongTy, true, "ivar.conv");
   return IvarOffsetValue;
 }
 

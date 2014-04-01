@@ -4843,6 +4843,72 @@ static void checkAttributesAfterMerging(Sema &S, NamedDecl &ND) {
       ND.dropAttr<SelectAnyAttr>();
     }
   }
+
+  // dll attributes require external linkage.
+  if (const DLLImportAttr *Attr = ND.getAttr<DLLImportAttr>()) {
+    if (!ND.isExternallyVisible()) {
+      S.Diag(ND.getLocation(), diag::err_attribute_dll_not_extern)
+        << &ND << Attr;
+      ND.setInvalidDecl();
+    }
+  }
+  if (const DLLExportAttr *Attr = ND.getAttr<DLLExportAttr>()) {
+    if (!ND.isExternallyVisible()) {
+      S.Diag(ND.getLocation(), diag::err_attribute_dll_not_extern)
+        << &ND << Attr;
+      ND.setInvalidDecl();
+    }
+  }
+}
+
+static void checkDLLAttributeRedeclaration(Sema &S, NamedDecl *OldDecl,
+                                           NamedDecl *NewDecl,
+                                           bool IsSpecialization) {
+  if (TemplateDecl *OldTD = dyn_cast<TemplateDecl>(OldDecl))
+    OldDecl = OldTD->getTemplatedDecl();
+  if (TemplateDecl *NewTD = dyn_cast<TemplateDecl>(NewDecl))
+    NewDecl = NewTD->getTemplatedDecl();
+
+  if (!OldDecl || !NewDecl)
+      return;
+
+  const DLLImportAttr *OldImportAttr = OldDecl->getAttr<DLLImportAttr>();
+  const DLLExportAttr *OldExportAttr = OldDecl->getAttr<DLLExportAttr>();
+  const DLLImportAttr *NewImportAttr = NewDecl->getAttr<DLLImportAttr>();
+  const DLLExportAttr *NewExportAttr = NewDecl->getAttr<DLLExportAttr>();
+
+  // dllimport and dllexport are inheritable attributes so we have to exclude
+  // inherited attribute instances.
+  bool HasNewAttr = (NewImportAttr && !NewImportAttr->isInherited()) ||
+                    (NewExportAttr && !NewExportAttr->isInherited());
+
+  // A redeclaration is not allowed to add a dllimport or dllexport attribute,
+  // the only exception being explicit specializations.
+  // Implicitly generated declarations are also excluded for now because there
+  // is no other way to switch these to use dllimport or dllexport.
+  bool AddsAttr = !(OldImportAttr || OldExportAttr) && HasNewAttr;
+  if (AddsAttr && !IsSpecialization && !OldDecl->isImplicit()) {
+    S.Diag(NewDecl->getLocation(), diag::err_attribute_dll_redeclaration)
+      << NewDecl
+      << (NewImportAttr ? (const Attr *)NewImportAttr : NewExportAttr);
+    S.Diag(OldDecl->getLocation(), diag::note_previous_declaration);
+    NewDecl->setInvalidDecl();
+    return;
+  }
+
+  // A redeclaration is not allowed to drop a dllimport attribute, the only
+  // exception being inline function definitions.
+  // FIXME: Handle inline functions.
+  // NB: MSVC converts such a declaration to dllexport.
+  if (OldImportAttr && !HasNewAttr) {
+    S.Diag(NewDecl->getLocation(),
+           diag::warn_redeclaration_without_attribute_prev_attribute_ignored)
+      << NewDecl << OldImportAttr;
+    S.Diag(OldDecl->getLocation(), diag::note_previous_declaration);
+    S.Diag(OldImportAttr->getLocation(), diag::note_previous_attribute);
+    OldDecl->dropAttr<DLLImportAttr>();
+    NewDecl->dropAttr<DLLImportAttr>();
+  }
 }
 
 /// Given that we are within the definition of the given function,
@@ -5500,6 +5566,12 @@ Sema::ActOnVariableDeclarator(Scope *S, Declarator &D, DeclContext *DC,
           NewVD, MCtx->getManglingNumber(NewVD, S->getMSLocalManglingNumber()));
       Context.setStaticLocalNumber(NewVD, MCtx->getStaticLocalNumber(NewVD));
     }
+  }
+
+  if (D.isRedeclaration() && !Previous.empty()) {
+    checkDLLAttributeRedeclaration(
+        *this, dyn_cast<NamedDecl>(Previous.getRepresentativeDecl()), NewVD,
+        IsExplicitSpecialization);
   }
 
   if (NewTemplate) {
@@ -7322,6 +7394,12 @@ Sema::ActOnFunctionDeclarator(Scope *S, Declarator &D, DeclContext *DC,
 
   // Set this FunctionDecl's range up to the right paren.
   NewFD->setRangeEnd(D.getSourceRange().getEnd());
+
+  if (D.isRedeclaration() && !Previous.empty()) {
+    checkDLLAttributeRedeclaration(
+        *this, dyn_cast<NamedDecl>(Previous.getRepresentativeDecl()), NewFD,
+        isExplicitSpecialization || isFunctionTemplateSpecialization);
+  }
 
   if (getLangOpts().CPlusPlus) {
     if (FunctionTemplate) {
@@ -9683,17 +9761,6 @@ Decl *Sema::ActOnStartOfFunctionDef(Scope *FnBodyScope, Decl *D) {
         << DA;
       FD->setInvalidDecl();
       return D;
-    }
-
-    // Visual C++ appears to not think this is an issue, so only issue
-    // a warning when Microsoft extensions are disabled.
-    if (!LangOpts.MicrosoftExt) {
-      // If a symbol previously declared dllimport is later defined, the
-      // attribute is ignored in subsequent references, and a warning is
-      // emitted.
-      Diag(FD->getLocation(),
-           diag::warn_redeclaration_without_attribute_prev_attribute_ignored)
-        << FD << DA;
     }
   }
   // We want to attach documentation to original Decl (which might be
