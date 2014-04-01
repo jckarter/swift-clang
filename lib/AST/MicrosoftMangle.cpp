@@ -1545,9 +1545,18 @@ void MicrosoftCXXNameMangler::mangleFunctionType(const FunctionType *T,
     Out << '@';
   } else {
     QualType ResultType = Proto->getReturnType();
-    if (ResultType->isVoidType())
-      ResultType = ResultType.getUnqualifiedType();
-    mangleType(ResultType, Range, QMM_Result);
+    if (const auto *AT =
+            dyn_cast_or_null<AutoType>(ResultType->getContainedAutoType())) {
+      Out << '?';
+      mangleQualifiers(ResultType.getLocalQualifiers(), /*IsMember=*/false);
+      Out << '?';
+      mangleSourceName(AT->isDecltypeAuto() ? "<decltype-auto>" : "<auto>");
+      Out << '@';
+    } else {
+      if (ResultType->isVoidType())
+        ResultType = ResultType.getUnqualifiedType();
+      mangleType(ResultType, Range, QMM_Result);
+    }
   }
 
   // <argument-list> ::= X # void
@@ -2428,13 +2437,10 @@ void MicrosoftMangleContextImpl::mangleStringLiteral(const StringLiteral *SL,
     // - ?[A-Z]: The range from \xc1 to \xda.
     // - ?[0-9]: The set of [,/\:. \n\t'-].
     // - ?$XX: A fallback which maps nibbles.
-    if ((Byte >= 'a' && Byte <= 'z') || (Byte >= 'A' && Byte <= 'Z') ||
-        (Byte >= '0' && Byte <= '9') || Byte == '_' || Byte == '$') {
+    if (isIdentifierBody(Byte, /*AllowDollar=*/true)) {
       Mangler.getStream() << Byte;
-    } else if ((Byte >= '\xe1' && Byte <= '\xfa') ||
-               (Byte >= '\xc1' && Byte <= '\xda')) {
-      // The delta between '\xe1' and '\xc1' is the same as 'a' to 'A'.
-      Mangler.getStream() << '?' << static_cast<char>('A' + (Byte - '\xc1'));
+    } else if (isLetter(Byte & 0x7f)) {
+      Mangler.getStream() << '?' << static_cast<char>(Byte & 0x7f);
     } else {
       switch (Byte) {
         case ',':
