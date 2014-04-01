@@ -1,19 +1,19 @@
 // RUN: %clang_cc1 -emit-llvm -triple x86_64-apple-darwin %s -o - | FileCheck %s
 // rdar://16462586
 
-__attribute__((objc_asm("MySecretNamespace.Protocol")))
+__attribute__((objc_runtime_name("MySecretNamespace.Protocol")))
 @protocol Protocol
 - (void) MethodP;
 + (void) ClsMethodP;
 @end
 
-__attribute__((objc_asm("MySecretNamespace.Protocol2")))
+__attribute__((objc_runtime_name("MySecretNamespace.Protocol2")))
 @protocol Protocol2
 - (void) MethodP2;
 + (void) ClsMethodP2;
 @end
 
-__attribute__((objc_asm("MySecretNamespace.Message")))
+__attribute__((objc_runtime_name("MySecretNamespace.Message")))
 @interface Message <Protocol, Protocol2> {
   id MyIVAR;
 }

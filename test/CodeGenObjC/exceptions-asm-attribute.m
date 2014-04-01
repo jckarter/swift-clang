@@ -43,7 +43,7 @@
 // CHECK-ARMV6: define internal void @"\01-[A im0]"
 // CHECK-ARMV6: define internal void @"\01-[A(Cat) im1]"
 
-__attribute__((objc_asm("MySecretNamespace.A")))
+__attribute__((objc_runtime_name("MySecretNamespace.A")))
 @interface A
 @end
 
@@ -57,16 +57,16 @@ __attribute__((objc_asm("MySecretNamespace.A")))
 }
 @end
 
-__attribute__((objc_asm("MySecretNamespace.EH1")))
+__attribute__((objc_runtime_name("MySecretNamespace.EH1")))
 @interface EH1
 @end
 
-__attribute__((objc_asm("MySecretNamespace.EH2")))
+__attribute__((objc_runtime_name("MySecretNamespace.EH2")))
 __attribute__((__objc_exception__))
 @interface EH2
 @end
 
-__attribute__((objc_asm("MySecretNamespace.EH3")))
+__attribute__((objc_runtime_name("MySecretNamespace.EH3")))
 __attribute__((__objc_exception__))
 @interface EH3
 @end
