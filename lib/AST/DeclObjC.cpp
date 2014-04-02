@@ -1181,20 +1181,20 @@ bool ObjCInterfaceDecl::hasDesignatedInitializers() const {
   return data().HasDesignatedInitializers;
 }
 
-std::string
+StringRef
 ObjCInterfaceDecl::getObjCRuntimeNameAsString() const {
   if (ObjCRuntimeNameAttr *ObjCRTName = getAttr<ObjCRuntimeNameAttr>())
-    return ObjCRTName->getMetadataName().str();
-  return getNameAsString();
+    return ObjCRTName->getMetadataName();
+  return getName();
 }
 
-std::string
+StringRef
 ObjCImplementationDecl::getObjCRuntimeNameAsString() const {
   if (ObjCInterfaceDecl *ID =
       const_cast<ObjCImplementationDecl*>(this)->getClassInterface())
     return ID->getObjCRuntimeNameAsString();
   
-  return getNameAsString();
+  return getName();
 }
 
 ObjCImplementationDecl *ObjCInterfaceDecl::getImplementation() const {
@@ -1598,11 +1598,11 @@ void ObjCProtocolDecl::collectInheritedProtocolProperties(
   }
 }
 
-std::string
+StringRef
 ObjCProtocolDecl::getObjCRuntimeNameAsString() const {
   if (ObjCRuntimeNameAttr *ObjCRTName = getAttr<ObjCRuntimeNameAttr>())
-    return ObjCRTName->getMetadataName().str();
-  return getNameAsString();
+    return ObjCRTName->getMetadataName();
+  return getName();
 }
 
 //===----------------------------------------------------------------------===//
