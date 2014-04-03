@@ -350,7 +350,7 @@ unsigned ContinuationIndenter::addTokenOnNewLine(LineState &State,
 
   // Breaking before the first "<<" is generally not desirable if the LHS is
   // short. Also always add the penalty if the LHS is split over mutliple lines
-  // to avoid unncessary line breaks that just work around this penalty.
+  // to avoid unnecessary line breaks that just work around this penalty.
   if (NextNonComment->is(tok::lessless) &&
       State.Stack.back().FirstLessLess == 0 &&
       (State.Column <= Style.ColumnLimit / 3 ||
@@ -608,6 +608,18 @@ unsigned ContinuationIndenter::moveStateToNextToken(LineState &State,
       NewParenState.Indent =
           std::max(std::max(State.Column, NewParenState.Indent),
                    State.Stack.back().LastSpace);
+
+    // Don't allow the RHS of an operator to be split over multiple lines unless
+    // there is a line-break right after the operator.
+    // Exclude relational operators, as there, it is always more desirable to
+    // have the LHS 'left' of the RHS.
+    // FIXME: Implement this for '<<' and BreakBeforeBinaryOperators.
+    if (!Newline && Previous && Previous->Type == TT_BinaryOperator &&
+        !Previous->isOneOf(tok::lessless, tok::question, tok::colon) &&
+        Previous->getPrecedence() > prec::Assignment &&
+        Previous->getPrecedence() != prec::Relational &&
+        !Style.BreakBeforeBinaryOperators)
+      NewParenState.NoLineBreak = true;
 
     // Do not indent relative to the fake parentheses inserted for "." or "->".
     // This is a special case to make the following to statements consistent:
