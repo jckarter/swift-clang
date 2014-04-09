@@ -4516,8 +4516,9 @@ TEST_F(FormatTest, UnderstandsUsesOfStarAndAmp) {
 
   verifyIndependentOfContext("f(b * /* confusing comment */ ++c);");
   verifyFormat(
-      "int *MyValues = {*A, // Operator detection might be confused by the '{'\n"
-      "                 *BB // Operator detection might be confused by previous comment\n"
+      "int *MyValues = {\n"
+      "    *A, // Operator detection might be confused by the '{'\n"
+      "    *BB // Operator detection might be confused by previous comment\n"
       "};");
 
   verifyIndependentOfContext("if (int *a = &b)");
@@ -5072,7 +5073,10 @@ TEST_F(FormatTest, LayoutCxx11ConstructorBraceInitializers) {
       "                                 bbbbbbbbbbbbbbbbbbbb, bbbbb };",
       ExtraSpaces);
   verifyFormat("DoSomethingWithVector({} /* No data */);", ExtraSpaces);
-  verifyFormat("DoSomethingWithVector({ {} /* No data */ }, { { 1, 2 } });",
+  verifyFormat("DoSomethingWithVector({\n"
+               "                        {} /* No data */\n"
+               "                      },\n"
+               "                      { { 1, 2 } });",
                ExtraSpaces);
   verifyFormat(
       "someFunction(OtherParam,\n"
@@ -8161,6 +8165,9 @@ TEST_F(FormatTest, FormatsLambdas) {
                "        x.end(),   //\n"
                "        [&](int, int) { return 1; });\n"
                "}\n");
+  verifyFormat("SomeFunction([]() { // A cool function...\n"
+               "  return 43;\n"
+               "});");
 
   // Lambdas with return types.
   verifyFormat("int c = []() -> int { return 2; }();\n");
@@ -8170,6 +8177,16 @@ TEST_F(FormatTest, FormatsLambdas) {
                "                   int j) -> int {\n"
                "  return fffffffffffffffffffffffffffffffffffffff(i * j);\n"
                "};");
+
+  // Multiple lambdas in the same parentheses change indentation rules.
+  verifyFormat("SomeFunction([]() {\n"
+               "               int i = 42;\n"
+               "               return i;\n"
+               "             },\n"
+               "             []() {\n"
+               "               int j = 43;\n"
+               "               return j;\n"
+               "             });");
 
   // Not lambdas.
   verifyFormat("constexpr char hello[]{\"hello\"};");
