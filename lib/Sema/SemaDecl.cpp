@@ -7064,6 +7064,17 @@ Sema::ActOnFunctionDeclarator(Scope *S, Declarator &D, DeclContext *DC,
     NewFD->setInvalidDecl();
   }
 
+  if (D.isFunctionDefinition() && CodeSegStack.CurrentValue &&
+      !NewFD->hasAttr<SectionAttr>()) {
+    NewFD->addAttr(
+        SectionAttr::CreateImplicit(Context, SectionAttr::Declspec_allocate,
+                                    CodeSegStack.CurrentValue->getString(),
+                                    CodeSegStack.CurrentPragmaLocation));
+    if (UnifySection(CodeSegStack.CurrentValue->getString(),
+                     PSF_Implicit | PSF_Execute | PSF_Read, NewFD))
+      NewFD->dropAttr<SectionAttr>();
+  }
+
   // Handle attributes.
   ProcessDeclAttributes(S, NewFD, D);
 
@@ -8932,6 +8943,29 @@ void Sema::CheckCompleteVariableDeclaration(VarDecl *var) {
     Diag(var->getLocation(), diag::err_thread_nontrivial_dtor);
     if (getLangOpts().CPlusPlus11)
       Diag(var->getLocation(), diag::note_use_thread_local);
+  }
+
+  if (var->isThisDeclarationADefinition() &&
+      ActiveTemplateInstantiations.empty()) {
+    PragmaStack<StringLiteral *> *Stack = nullptr;
+    int SectionFlags = PSF_Implicit | PSF_Read;
+    if (var->getType().isConstQualified())
+      Stack = &ConstSegStack;
+    else if (!var->getInit()) {
+      Stack = &BSSSegStack;
+      SectionFlags |= PSF_Write;
+    } else {
+      Stack = &DataSegStack;
+      SectionFlags |= PSF_Write;
+    }
+    if (!var->hasAttr<SectionAttr>() && Stack->CurrentValue)
+      var->addAttr(
+          SectionAttr::CreateImplicit(Context, SectionAttr::Declspec_allocate,
+                                      Stack->CurrentValue->getString(),
+                                      Stack->CurrentPragmaLocation));
+    if (const SectionAttr *SA = var->getAttr<SectionAttr>())
+      if (UnifySection(SA->getName(), SectionFlags, var))
+        var->dropAttr<SectionAttr>();
   }
 
   // All the following checks are C++ only.
