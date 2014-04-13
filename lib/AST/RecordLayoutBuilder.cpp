@@ -2291,9 +2291,6 @@ MicrosoftRecordLayoutBuilder::getAdjustedElementInfo(
   if (FD->hasAttr<PackedAttr>())
     Info.Alignment = CharUnits::One();
   Info.Alignment = std::max(Info.Alignment, FieldRequiredAlignment);
-  // TODO: Add a Sema warning that MS ignores bitfield alignment in unions.
-  if (!(FD->isBitField() && IsUnion))
-    Alignment = std::max(Alignment, Info.Alignment);
   return Info;
 }
 
@@ -2472,6 +2469,7 @@ void MicrosoftRecordLayoutBuilder::layoutField(const FieldDecl *FD) {
   }
   LastFieldIsNonZeroWidthBitfield = false;
   ElementInfo Info = getAdjustedElementInfo(FD);
+  Alignment = std::max(Alignment, Info.Alignment);
   if (IsUnion) {
     placeFieldAtOffset(CharUnits::Zero());
     Size = std::max(Size, Info.Size);
@@ -2507,11 +2505,13 @@ void MicrosoftRecordLayoutBuilder::layoutBitField(const FieldDecl *FD) {
   if (IsUnion) {
     placeFieldAtOffset(CharUnits::Zero());
     Size = std::max(Size, Info.Size);
+    // TODO: Add a Sema warning that MS ignores bitfield alignment in unions.
   } else {
     // Allocate a new block of memory and place the bitfield in it.
     CharUnits FieldOffset = Size.RoundUpToAlignment(Info.Alignment);
     placeFieldAtOffset(FieldOffset);
     Size = FieldOffset + Info.Size;
+    Alignment = std::max(Alignment, Info.Alignment);
     RemainingBitsInField = Context.toBits(Info.Size) - Width;
   }
 }
@@ -2531,11 +2531,13 @@ MicrosoftRecordLayoutBuilder::layoutZeroWidthBitField(const FieldDecl *FD) {
   if (IsUnion) {
     placeFieldAtOffset(CharUnits::Zero());
     Size = std::max(Size, Info.Size);
+    // TODO: Add a Sema warning that MS ignores bitfield alignment in unions.
   } else {
     // Round up the current record size to the field's alignment boundary.
     CharUnits FieldOffset = Size.RoundUpToAlignment(Info.Alignment);
     placeFieldAtOffset(FieldOffset);
     Size = FieldOffset;
+    Alignment = std::max(Alignment, Info.Alignment);
   }
 }
 
@@ -2674,10 +2676,6 @@ llvm::SmallPtrSet<const CXXRecordDecl *, 2>
 MicrosoftRecordLayoutBuilder::computeVtorDispSet(const CXXRecordDecl *RD) {
   llvm::SmallPtrSet<const CXXRecordDecl *, 2> HasVtordispSet;
 
-  // /vd0 or #pragma vtordisp(0): Never use vtordisps when used as a vbase.
-  if (RD->getMSVtorDispMode() == MSVtorDispAttr::Never)
-    return HasVtordispSet;
-
   // /vd2 or #pragma vtordisp(2): Always use vtordisps for virtual bases with
   // vftables.
   if (RD->getMSVtorDispMode() == MSVtorDispAttr::ForVFTable) {
@@ -2690,11 +2688,6 @@ MicrosoftRecordLayoutBuilder::computeVtorDispSet(const CXXRecordDecl *RD) {
     return HasVtordispSet;
   }
 
-  // /vd1 or #pragma vtordisp(1): Try to guess based on whether we think it's
-  // possible for a partially constructed object with virtual base overrides to
-  // escape a non-trivial constructor.
-  assert(RD->getMSVtorDispMode() == MSVtorDispAttr::ForVBaseOverride);
-
   // If any of our bases need a vtordisp for this type, so do we.  Check our
   // direct bases for vtordisp requirements.
   for (const auto &I : RD->bases()) {
@@ -2704,10 +2697,16 @@ MicrosoftRecordLayoutBuilder::computeVtorDispSet(const CXXRecordDecl *RD) {
       if (bi.second.hasVtorDisp())
         HasVtordispSet.insert(bi.first);
   }
-  // If we do not have a user declared constructor or destructor then we don't
-  // introduce any additional vtordisps.
-  if (!RD->hasUserDeclaredConstructor() && !RD->hasUserDeclaredDestructor())
+  // We don't introduce any additional vtordisps if either:
+  // * A user declared constructor or destructor aren't declared.
+  // * #pragma vtordisp(0) or the /vd0 flag are in use.
+  if ((!RD->hasUserDeclaredConstructor() && !RD->hasUserDeclaredDestructor()) ||
+      RD->getMSVtorDispMode() == MSVtorDispAttr::Never)
     return HasVtordispSet;
+  // /vd1 or #pragma vtordisp(1): Try to guess based on whether we think it's
+  // possible for a partially constructed object with virtual base overrides to
+  // escape a non-trivial constructor.
+  assert(RD->getMSVtorDispMode() == MSVtorDispAttr::ForVBaseOverride);
   // Compute a set of base classes which define methods we override.  A virtual
   // base in this set will require a vtordisp.  A virtual base that transitively
   // contains one of these bases as a non-virtual base will also require a
