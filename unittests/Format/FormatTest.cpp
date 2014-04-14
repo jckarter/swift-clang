@@ -2940,8 +2940,9 @@ TEST_F(FormatTest, ExpressionIndentationBreakingBeforeOperators) {
                "       + bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb) {\n}",
                Style);
   verifyFormat("if () {\n"
-               "} else if (aaaaa && bbbbb // break\n"
-               "                    > ccccc) {\n"
+               "} else if (aaaaa\n"
+               "           && bbbbb // break\n"
+               "              > ccccc) {\n"
                "}",
                Style);
 
@@ -3697,6 +3698,12 @@ TEST_F(FormatTest, BreaksConditionalExpressions) {
                "                  : (bbbbbbbbbbbbbbb //\n"
                "                         ? ccccccccccccccc\n"
                "                         : ddddddddddddddd);");
+  verifyFormat(
+      "int aaaaaaaaaaaaaaaaaaaaaaaaaaa = aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n"
+      "                                      ? aaaaaaaaaaaaaaaaaaaaaaaaa +\n"
+      "                                            aaaaaaaaaaaaaaaaaaaaa +\n"
+      "                                            aaaaaaaaaaaaaaaaaaaaa\n"
+      "                                      : aaaaaaaaaa;");
 
   FormatStyle NoBinPacking = getLLVMStyle();
   NoBinPacking.BinPackParameters = false;
@@ -4000,6 +4007,8 @@ TEST_F(FormatTest, AlignsPipes) {
       "  llvm::outs() << \"aaaaaaaaaaaaaaaaaaaa: \"\n"
       "               << aaaaaaaaaaaaa(aaaaaaaaaaaaaaaaaaaaaaaaaaaa);\n"
       "}");
+  verifyFormat("llvm::outs() << \"aaaaaaaaaaaaaaaa: \"\n"
+               "             << aaaaaaaa.aaaaaaaaaaaa(aaa)->aaaaaaaaaaaaaa();");
 
   // Breaking before the first "<<" is generally not desirable.
   verifyFormat(
@@ -4575,6 +4584,16 @@ TEST_F(FormatTest, UnderstandsUsesOfStarAndAmp) {
   // FIXME: Is there a way to make this work?
   // verifyIndependentOfContext("MACRO(A *a);");
 
+  EXPECT_EQ("#define OP(x)                                    \\\n"
+            "  ostream &operator<<(ostream &s, const A &a) {  \\\n"
+            "    return s << a.DebugString();                 \\\n"
+            "  }",
+            format("#define OP(x) \\\n"
+                   "  ostream &operator<<(ostream &s, const A &a) { \\\n"
+                   "    return s << a.DebugString(); \\\n"
+                   "  }",
+                   getLLVMStyleWithColumns(50)));
+
   // FIXME: We cannot handle this case yet; we might be able to figure out that
   // foo<x> d > v; doesn't make sense.
   verifyFormat("foo<a < b && c> d > v;");
@@ -4638,6 +4657,7 @@ TEST_F(FormatTest, UnderstandsRvalueReferences) {
                "};");
   verifyGoogleFormat("#define IF(a, b, c) if (a && (b == c))");
   verifyGoogleFormat("#define WHILE(a, b, c) while (a && (b == c))");
+  verifyFormat("#define A(a, b) (a && b)");
 }
 
 TEST_F(FormatTest, FormatsBinaryOperatorsPrecedingEquals) {
@@ -8139,6 +8159,29 @@ TEST_F(FormatTest, FormatsWithWebKitStyle) {
             format("#define aNumber \\\n"
                    " 10",
                    Style));
+
+  // Keep empty and one-element array literals on a single line.
+  verifyFormat("NSArray* a = [[NSArray alloc] initWithArray:@[]\n"
+               "                                  copyItems:YES];",
+               Style);
+  verifyFormat("NSArray* a = [[NSArray alloc] initWithArray:@[ @\"a\" ]\n"
+               "                                  copyItems:YES];",
+               Style);
+  EXPECT_EQ("NSArray* a = [[NSArray alloc] initWithArray:@[\n"
+            "                                               @\"a\",\n"
+            "                                               @\"a\"\n"
+            "                                            ]\n"
+            "                                  copyItems:YES];",
+            format("NSArray* a = [[NSArray alloc] initWithArray:@[\n"
+                   "     @\"a\",\n"
+                   "     @\"a\"\n"
+                   "     ]\n"
+                   "       copyItems:YES];",
+                   Style));
+  verifyFormat(
+      "NSArray* a = [[NSArray alloc] initWithArray:@[ @\"a\", @\"a\" ]\n"
+      "                                  copyItems:YES];",
+      Style);
 }
 
 TEST_F(FormatTest, FormatsLambdas) {
