@@ -4,6 +4,7 @@
 // RUN: %clang_cc1 -O0 -triple arm64-apple-ios7 -ffreestanding -S -o - %s | \
 // RUN:   FileCheck -check-prefix=CHECK_CODEGEN_O0 %s
 // REQUIRES: arm64-registered-target
+// RUN: %clang_cc1 -O1 -triple arm64-apple-ios7 -target-feature +neon -ffreestanding -S -o - -emit-llvm %s | FileCheck %s
 
 // Test ARM64 SIMD copy vector element to vector element: vcopyq_lane*
 
