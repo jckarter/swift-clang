@@ -281,8 +281,17 @@ private:
         : ExitMap(std::move(RHS.ExitMap)), HasBackEdges(RHS.HasBackEdges),
           SuccessorsToProcess(RHS.SuccessorsToProcess) {}
 
+    BlockInfo &operator=(BlockInfo &&RHS) {
+      if (this != &RHS) {
+        ExitMap = std::move(RHS.ExitMap);
+        HasBackEdges = RHS.HasBackEdges;
+        SuccessorsToProcess = RHS.SuccessorsToProcess;
+      }
+      return *this;
+    }
   private:
     BlockInfo(const BlockInfo &) LLVM_DELETED_FUNCTION;
+    void operator=(const BlockInfo &) LLVM_DELETED_FUNCTION;
   };
 
   // We implement the CFGVisitor API
