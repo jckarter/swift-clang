@@ -6033,8 +6033,10 @@ static int getCursorPlatformAvailabilityForDecl(const Decl *D,
       HadAvailAttr = true;
       if (always_deprecated)
         *always_deprecated = 1;
-      if (deprecated_message)
+      if (deprecated_message) {
+        clang_disposeString(*deprecated_message);
         *deprecated_message = cxstring::createDup(Deprecated->getMessage());
+      }
       continue;
     }
     
@@ -6043,6 +6045,7 @@ static int getCursorPlatformAvailabilityForDecl(const Decl *D,
       if (always_unavailable)
         *always_unavailable = 1;
       if (unavailable_message) {
+        clang_disposeString(*unavailable_message);
         *unavailable_message = cxstring::createDup(Unavailable->getMessage());
       }
       continue;
