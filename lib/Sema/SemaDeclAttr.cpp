@@ -4301,6 +4301,9 @@ static void ProcessDeclAttribute(Sema &S, Scope *scope, Decl *D,
   case AttributeList::AT_ObjCRootClass:
     handleSimpleAttribute<ObjCRootClassAttr>(S, D, Attr);
     break;
+  case AttributeList::AT_ObjCSubclassingRestricted:
+    handleSimpleAttribute<ObjCSubclassingRestrictedAttr>(S, D, Attr);
+    break;
   case AttributeList::AT_ObjCCompleteDefinition:
     handleSimpleAttribute<ObjCCompleteDefinitionAttr>(S, D, Attr);
     break;

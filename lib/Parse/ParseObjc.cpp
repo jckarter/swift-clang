@@ -176,6 +176,7 @@ void Parser::CheckNestedObjCContexts(SourceLocation AtLoc)
 ///     __attribute__((unavailable))
 ///     __attribute__((objc_exception)) - used by NSException on 64-bit
 ///     __attribute__((objc_root_class))
+///     __attribute__((objc_subclassing_restricted))
 ///     __attribute__((objc_complete_definition))
 ///
 ///   objc_partial_interface:
