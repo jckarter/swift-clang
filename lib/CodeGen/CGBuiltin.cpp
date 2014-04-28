@@ -4839,7 +4839,6 @@ static Value *EmitARM64TblBuiltinExpr(CodeGenFunction &CGF, unsigned BuiltinID,
   unsigned int Int = 0;
   const char *s = NULL;
 
-  unsigned TblPos;
   switch (BuiltinID) {
   default:
     return 0;
@@ -4855,7 +4854,6 @@ static Value *EmitARM64TblBuiltinExpr(CodeGenFunction &CGF, unsigned BuiltinID,
   case NEON::BI__builtin_neon_vtbl4_v:
   case NEON::BI__builtin_neon_vqtbl4_v:
   case NEON::BI__builtin_neon_vqtbl4q_v:
-    TblPos = 0;
     break;
   case NEON::BI__builtin_neon_vtbx1_v:
   case NEON::BI__builtin_neon_vqtbx1_v:
@@ -4869,7 +4867,6 @@ static Value *EmitARM64TblBuiltinExpr(CodeGenFunction &CGF, unsigned BuiltinID,
   case NEON::BI__builtin_neon_vtbx4_v:
   case NEON::BI__builtin_neon_vqtbx4_v:
   case NEON::BI__builtin_neon_vqtbx4q_v:
-    TblPos = 1;
     break;
   }
 
@@ -4888,7 +4885,6 @@ static Value *EmitARM64TblBuiltinExpr(CodeGenFunction &CGF, unsigned BuiltinID,
   if (!Ty)
     return 0;
 
-  Arg = E->getArg(TblPos);
   unsigned nElts = VTy->getNumElements();
 
   CodeGen::CGBuilderTy &Builder = CGF.Builder;
@@ -5624,10 +5620,8 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
   case NEON::BI__builtin_neon_vqshlud_n_s64: {
     Ops.push_back(EmitScalarExpr(E->getArg(1)));
     Ops[1] = Builder.CreateZExt(Ops[1], Int64Ty);
-    llvm::Type *VTy = llvm::VectorType::get(Int64Ty, 1);
-    Ops[0] = EmitNeonCall(CGM.getIntrinsic(Intrinsic::arm64_neon_sqshlu, VTy),
-                          Ops, "vqshlu_n");
-    return Builder.CreateBitCast(Ops[0], Int64Ty);
+    return EmitNeonCall(CGM.getIntrinsic(Intrinsic::arm64_neon_sqshlu, Int64Ty),
+                        Ops, "vqshlu_n");
   }
   case NEON::BI__builtin_neon_vqshld_n_u64:
   case NEON::BI__builtin_neon_vqshld_n_s64: {
@@ -5636,9 +5630,7 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
                                    : Intrinsic::arm64_neon_sqshl;
     Ops.push_back(EmitScalarExpr(E->getArg(1)));
     Ops[1] = Builder.CreateZExt(Ops[1], Int64Ty);
-    llvm::Type *VTy = llvm::VectorType::get(Int64Ty, 1);
-    Ops[0] = EmitNeonCall(CGM.getIntrinsic(Int, VTy), Ops, "vqshl_n");
-    return Builder.CreateBitCast(Ops[0], Int64Ty);
+    return EmitNeonCall(CGM.getIntrinsic(Int, Int64Ty), Ops, "vqshl_n");
   }
   case NEON::BI__builtin_neon_vrshrd_n_u64:
   case NEON::BI__builtin_neon_vrshrd_n_s64: {
@@ -5646,9 +5638,9 @@ Value *CodeGenFunction::EmitARM64BuiltinExpr(unsigned BuiltinID,
                                    ? Intrinsic::arm64_neon_urshl
                                    : Intrinsic::arm64_neon_srshl;
     Ops.push_back(EmitScalarExpr(E->getArg(1)));
-    llvm::Type *VTy = llvm::VectorType::get(Int64Ty, 1);
-    Ops[0] = EmitNeonCall(CGM.getIntrinsic(Int, VTy), Ops, "vrshr_n", 1, true);
-    return Builder.CreateBitCast(Ops[0], Int64Ty);
+    int SV = cast<ConstantInt>(Ops[1])->getSExtValue();
+    Ops[1] = ConstantInt::get(Int64Ty, -SV);
+    return EmitNeonCall(CGM.getIntrinsic(Int, Int64Ty), Ops, "vrshr_n");
   }
   case NEON::BI__builtin_neon_vrsrad_n_u64:
   case NEON::BI__builtin_neon_vrsrad_n_s64: {
