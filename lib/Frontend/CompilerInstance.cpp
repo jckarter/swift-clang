@@ -1208,7 +1208,8 @@ CompilerInstance::loadModule(SourceLocation ImportLoc,
       return ModuleLoadResult();
     }
 
-    std::string ModuleFileName = PP->getHeaderSearchInfo().getModuleFileName(Module);
+    std::string ModuleFileName =
+        PP->getHeaderSearchInfo().getModuleFileName(Module);
 
     // If we don't already have an ASTReader, create one now.
     if (!ModuleManager)
