@@ -352,8 +352,11 @@ bool InclusionRewriter::Process(FileID FileId,
 
   StringRef EOL = DetectEOL(FromFile);
 
-  // Per the GNU docs: "1" indicates the start of a new file.
-  WriteLineInfo(FileName, 1, FileType, EOL, " 1");
+  // Per the GNU docs: "1" indicates entering a new file.
+  if (FileId == SM.getMainFileID())
+    WriteLineInfo(FileName, 1, FileType, EOL, "");
+  else
+    WriteLineInfo(FileName, 1, FileType, EOL, " 1");
 
   if (SM.getFileIDSize(FileId) == 0)
     return false;
@@ -514,13 +517,7 @@ void clang::RewriteIncludesInInput(Preprocessor &PP, raw_ostream *OS,
   InclusionRewriter *Rewrite = new InclusionRewriter(PP, *OS,
                                                      Opts.ShowLineMarkers);
   PP.addPPCallbacks(Rewrite);
-  // Ignore all pragmas, otherwise there will be warnings about unknown pragmas
-  // (because there's nothing to handle them).
-  PP.AddPragmaHandler(new EmptyPragmaHandler());
-  // Ignore also all pragma in all namespaces created
-  // in Preprocessor::RegisterBuiltinPragmas().
-  PP.AddPragmaHandler("GCC", new EmptyPragmaHandler());
-  PP.AddPragmaHandler("clang", new EmptyPragmaHandler());
+  PP.IgnorePragmas();
 
   // First let the preprocessor process the entire file and call callbacks.
   // Callbacks will record which #include's were actually performed.
