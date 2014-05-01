@@ -250,6 +250,10 @@ void InclusionRewriter::CommentOutDirective(Lexer &DirectiveLex,
   do {
     DirectiveLex.LexFromRawLexer(DirectiveToken);
   } while (!DirectiveToken.is(tok::eod) && DirectiveToken.isNot(tok::eof));
+  if (&FromFile == PredefinesBuffer) {
+    // OutputContentUpTo() would not output anything anyway.
+    return;
+  }
   OS << "#if 0 /* expanded by -frewrite-includes */" << EOL;
   OutputContentUpTo(FromFile, NextToWrite,
     SM.getFileOffset(DirectiveToken.getLocation()) + DirectiveToken.getLength(),
@@ -353,7 +357,7 @@ bool InclusionRewriter::Process(FileID FileId,
   StringRef EOL = DetectEOL(FromFile);
 
   // Per the GNU docs: "1" indicates entering a new file.
-  if (FileId == SM.getMainFileID())
+  if (FileId == SM.getMainFileID() || FileId == PP.getPredefinesFileID())
     WriteLineInfo(FileName, 1, FileType, EOL, "");
   else
     WriteLineInfo(FileName, 1, FileType, EOL, " 1");
@@ -386,6 +390,8 @@ bool InclusionRewriter::Process(FileID FileId,
           case tok::pp_import: {
             CommentOutDirective(RawLex, HashToken, FromFile, EOL, NextToWrite,
               Line);
+            if (FileId != PP.getPredefinesFileID())
+              WriteLineInfo(FileName, Line - 1, FileType, EOL, "");
             StringRef LineInfoExtra;
             if (const FileChange *Change = FindFileChangeLocation(
                 HashToken.getLocation())) {
