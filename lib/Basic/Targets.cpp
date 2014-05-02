@@ -489,7 +489,6 @@ protected:
 public:
   BitrigTargetInfo(const llvm::Triple &Triple) : OSTargetInfo<Target>(Triple) {
     this->UserLabelPrefix = "";
-    this->TLSSupported = false;
     this->MCountName = "__mcount";
   }
 };

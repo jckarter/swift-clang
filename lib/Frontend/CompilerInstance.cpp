@@ -239,13 +239,10 @@ void CompilerInstance::createPreprocessor(TranslationUnitKind TUKind) {
                                               getDiagnostics(),
                                               getLangOpts(),
                                               &getTarget());
-  PP = new Preprocessor(&getPreprocessorOpts(),
-                        getDiagnostics(), getLangOpts(), &getTarget(),
+  PP = new Preprocessor(&getPreprocessorOpts(), getDiagnostics(), getLangOpts(),
                         getSourceManager(), *HeaderInfo, *this, PTHMgr,
-                        /*OwnsHeaderSearch=*/true,
-                        /*DelayInitialization=*/false,
-                        /*IncrProcessing=*/false,
-                        TUKind);
+                        /*OwnsHeaderSearch=*/true, TUKind);
+  PP->Initialize(getTarget());
 
   // Note that this is different then passing PTHMgr to Preprocessor's ctor.
   // That argument is used as the IdentifierInfoLookup argument to
