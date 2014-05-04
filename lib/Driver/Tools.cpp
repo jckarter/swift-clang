@@ -1540,6 +1540,15 @@ static void getAArch64TargetFeatures(const Driver &D, const ArgList &Args,
     Features.push_back("-crypto");
     Features.push_back("-neon");
   }
+
+  // En/disable crc
+  if (Arg *A = Args.getLastArg(options::OPT_mcrc,
+                               options::OPT_mnocrc)) {
+    if (A->getOption().matches(options::OPT_mcrc))
+      Features.push_back("+crc");
+    else
+      Features.push_back("-crc");
+  }
 }
 
 static void getTargetFeatures(const Driver &D, const llvm::Triple &Triple,
@@ -2137,7 +2146,8 @@ static void SplitDebugInfo(const ToolChain &TC, Compilation &C,
 }
 
 /// \brief Vectorize at all optimization levels greater than 1 except for -Oz.
-static bool shouldEnableVectorizerAtOLevel(const ArgList &Args) {
+/// For -Oz the loop vectorizer is disable, while the slp vectorizer is enabled.
+static bool shouldEnableVectorizerAtOLevel(const ArgList &Args, bool isSlpVec) {
   if (Arg *A = Args.getLastArg(options::OPT_O_Group)) {
     if (A->getOption().matches(options::OPT_O4) ||
         A->getOption().matches(options::OPT_Ofast))
@@ -2153,9 +2163,9 @@ static bool shouldEnableVectorizerAtOLevel(const ArgList &Args) {
     if (S == "s")
       return true;
 
-    // Don't vectorize -Oz.
+    // Don't vectorize -Oz, unless it's the slp vectorizer.
     if (S == "z")
-      return false;
+      return isSlpVec;
 
     unsigned OptLevel = 0;
     if (S.getAsInteger(10, OptLevel))
@@ -3898,7 +3908,7 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
   // Enable vectorization per default according to the optimization level
   // selected. For optimization levels that want vectorization we use the alias
   // option to simplify the hasFlag logic.
-  bool EnableVec = shouldEnableVectorizerAtOLevel(Args);
+  bool EnableVec = shouldEnableVectorizerAtOLevel(Args, false);
   OptSpecifier VectorizeAliasOption = EnableVec ? options::OPT_O_Group :
     options::OPT_fvectorize;
   if (Args.hasFlag(options::OPT_fvectorize, VectorizeAliasOption,
@@ -3906,10 +3916,11 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
     CmdArgs.push_back("-vectorize-loops");
 
   // -fslp-vectorize is enabled based on the optimization level selected.
-  OptSpecifier SLPVectAliasOption = EnableVec ? options::OPT_O_Group :
+  bool EnableSLPVec = shouldEnableVectorizerAtOLevel(Args, true);
+  OptSpecifier SLPVectAliasOption = EnableSLPVec ? options::OPT_O_Group :
     options::OPT_fslp_vectorize;
   if (Args.hasFlag(options::OPT_fslp_vectorize, SLPVectAliasOption,
-                   options::OPT_fno_slp_vectorize, EnableVec))
+                   options::OPT_fno_slp_vectorize, EnableSLPVec))
     CmdArgs.push_back("-vectorize-slp");
 
   // -fno-slp-vectorize-aggressive is default.

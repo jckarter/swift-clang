@@ -3130,7 +3130,7 @@ ExprResult Sema::ActOnNumericConstant(const Token &Tok, Scope *UDLScope) {
     // FIXME: Actually, they don't. We seem to have accidentally invented the
     //        i128 suffix.
     if (Literal.isMicrosoftInteger && MaxWidth < 128 &&
-        PP.getTargetInfo().hasInt128Type())
+        Context.getTargetInfo().hasInt128Type())
       MaxWidth = 128;
     llvm::APInt ResultVal(MaxWidth, 0);
 
@@ -3201,7 +3201,7 @@ ExprResult Sema::ActOnNumericConstant(const Token &Tok, Scope *UDLScope) {
       // If it doesn't fit in unsigned long long, and we're using Microsoft
       // extensions, then its a 128-bit integer literal.
       if (Ty.isNull() && Literal.isMicrosoftInteger &&
-          PP.getTargetInfo().hasInt128Type()) {
+          Context.getTargetInfo().hasInt128Type()) {
         if (Literal.isUnsigned)
           Ty = Context.UnsignedInt128Ty;
         else
@@ -11688,9 +11688,8 @@ static bool captureInCapturedRegion(CapturedRegionScopeInfo *RSI,
   Expr *CopyExpr = 0;
   if (BuildAndDiagnose) {
     // The current implementation assumes that all variables are captured
-    // by references. Since there is no capture by copy, no expression evaluation
-    // will be needed.
-    //
+    // by references. Since there is no capture by copy, no expression
+    // evaluation will be needed.
     RecordDecl *RD = RSI->TheRecordDecl;
 
     FieldDecl *Field
@@ -12368,9 +12367,9 @@ void Sema::MarkMemberReferenced(MemberExpr *E) {
 }
 
 /// \brief Perform marking for a reference to an arbitrary declaration.  It
-/// marks the declaration referenced, and performs odr-use checking for functions
-/// and variables. This method should not be used when building an normal
-/// expression which refers to a variable.
+/// marks the declaration referenced, and performs odr-use checking for
+/// functions and variables. This method should not be used when building a
+/// normal expression which refers to a variable.
 void Sema::MarkAnyDeclReferenced(SourceLocation Loc, Decl *D, bool OdrUse) {
   if (OdrUse) {
     if (VarDecl *VD = dyn_cast<VarDecl>(D)) {
@@ -12404,7 +12403,7 @@ namespace {
 }
 
 bool MarkReferencedDecls::TraverseTemplateArgument(
-  const TemplateArgument &Arg) {
+    const TemplateArgument &Arg) {
   if (Arg.getKind() == TemplateArgument::Declaration) {
     if (Decl *D = Arg.getAsDecl())
       S.MarkAnyDeclReferenced(Loc, D, true);
@@ -12451,7 +12450,7 @@ namespace {
       
       S.MarkDeclRefReferenced(E);
     }
-    
+
     void VisitMemberExpr(MemberExpr *E) {
       S.MarkMemberReferenced(E);
       Inherited::VisitMemberExpr(E);
