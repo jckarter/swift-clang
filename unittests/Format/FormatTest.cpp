@@ -4741,12 +4741,18 @@ TEST_F(FormatTest, FormatsCasts) {
   verifyFormat("#define x ((int)-1)");
   verifyFormat("#define p(q) ((int *)&q)");
 
-  // FIXME: Without type knowledge, this can still fall apart miserably.
-  verifyFormat("void f() { my_int a = (my_int) * b; }");
-  verifyFormat("void f() { return P ? (my_int) * P : (my_int)0; }");
-  verifyFormat("my_int a = (my_int) ~0;");
-  verifyFormat("my_int a = (my_int)++ a;");
-  verifyFormat("my_int a = (my_int) + 2;");
+  verifyFormat("void f() { my_int a = (my_int)*b; }");
+  verifyFormat("void f() { return P ? (my_int)*P : (my_int)0; }");
+  verifyFormat("my_int a = (my_int)~0;");
+  verifyFormat("my_int a = (my_int)++a;");
+  verifyFormat("my_int a = (my_int)+2;");
+  verifyFormat("my_int a = (my_int)1;");
+  verifyFormat("my_int a = (my_int *)1;");
+  verifyFormat("my_int a = (const my_int)-1;");
+  verifyFormat("my_int a = (const my_int *)-1;");
+
+  // FIXME: single value wrapped with paren will be treated as cast.
+  verifyFormat("void f(int i = (kValue)*kMask) {}");
 
   // Don't break after a cast's
   verifyFormat("int aaaaaaaaaaaaaaaaaaaaaaaaaaa =\n"
@@ -4767,7 +4773,6 @@ TEST_F(FormatTest, FormatsCasts) {
   verifyFormat("void f(SmallVector<int>) {}");
   verifyFormat("void f(SmallVector<int>);");
   verifyFormat("void f(SmallVector<int>) = 0;");
-  verifyFormat("void f(int i = (kValue) * kMask) {}");
   verifyFormat("void f(int i = (kA * kB) & kMask) {}");
   verifyFormat("int a = sizeof(int) * b;");
   verifyFormat("int a = alignof(int) * b;", getGoogleStyle());
@@ -4834,6 +4839,8 @@ TEST_F(FormatTest, BreaksLongDeclarations) {
   verifyFormat("LoooooooooooooooooooooooooooooooooooooooongReturnType\n"
                "LooooooooooooooooooooooooooooooooooongFunctionDefinition() {}");
   verifyFormat("LoooooooooooooooooooooooooooooooooooooooongReturnType const\n"
+               "LooooooooooooooooooooooooooooooooooongFunctionDefinition() {}");
+  verifyFormat("decltype(LoooooooooooooooooooooooooooooooooooooooongName)\n"
                "LooooooooooooooooooooooooooooooooooongFunctionDefinition() {}");
 
   // FIXME: Without the comment, this breaks after "(".
@@ -4928,6 +4935,11 @@ TEST_F(FormatTest, HandlesIncludeDirectives) {
   // Protocol buffer definition or missing "#".
   verifyFormat("import \"aaaaaaaaaaaaaaaaa/aaaaaaaaaaaaaaa\";",
                getLLVMStyleWithColumns(30));
+
+  FormatStyle Style = getLLVMStyle();
+  Style.AlwaysBreakBeforeMultilineStrings = true;
+  Style.ColumnLimit = 0;
+  verifyFormat("#import \"abc.h\"", Style);
 }
 
 //===----------------------------------------------------------------------===//
@@ -7362,6 +7374,36 @@ TEST_F(FormatTest, StroustrupBraceBreaking) {
                "}\n"
                "}",
                BreakBeforeBrace);
+
+  verifyFormat("#ifdef _DEBUG\n"
+               "int foo(int i = 0)\n"
+               "#else\n"
+               "int foo(int i = 5)\n"
+               "#endif\n"
+               "{\n"
+               "  return i;\n"
+               "}",
+               BreakBeforeBrace);
+
+  verifyFormat("void foo() {}\n"
+               "void bar()\n"
+               "#ifdef _DEBUG\n"
+               "{\n"
+               "  foo();\n"
+               "}\n"
+               "#else\n"
+               "{\n"
+               "}\n"
+               "#endif",
+               BreakBeforeBrace);
+
+  verifyFormat("void foobar() { int i = 5; }\n"
+               "#ifdef _DEBUG\n"
+               "void bar() {}\n"
+               "#else\n"
+               "void bar() { foobar(); }\n"
+               "#endif",
+               BreakBeforeBrace);
 }
 
 TEST_F(FormatTest, AllmanBraceBreaking) {
@@ -7450,6 +7492,36 @@ TEST_F(FormatTest, AllmanBraceBreaking) {
                "  id _extraIvar;\n"
                "}\n"
                "@end\n",
+               BreakBeforeBrace);
+
+  verifyFormat("#ifdef _DEBUG\n"
+               "int foo(int i = 0)\n"
+               "#else\n"
+               "int foo(int i = 5)\n"
+               "#endif\n"
+               "{\n"
+               "  return i;\n"
+               "}",
+               BreakBeforeBrace);
+
+  verifyFormat("void foo() {}\n"
+               "void bar()\n"
+               "#ifdef _DEBUG\n"
+               "{\n"
+               "  foo();\n"
+               "}\n"
+               "#else\n"
+               "{\n"
+               "}\n"
+               "#endif",
+               BreakBeforeBrace);
+
+  verifyFormat("void foobar() { int i = 5; }\n"
+               "#ifdef _DEBUG\n"
+               "void bar() {}\n"
+               "#else\n"
+               "void bar() { foobar(); }\n"
+               "#endif",
                BreakBeforeBrace);
 
   BreakBeforeBrace.ColumnLimit = 19;
@@ -7579,6 +7651,36 @@ TEST_F(FormatTest, GNUBraceBreaking) {
                "  id _extraIvar;\n"
                "}\n"
                "@end\n",
+               GNUBraceStyle);
+
+  verifyFormat("#ifdef _DEBUG\n"
+               "int foo(int i = 0)\n"
+               "#else\n"
+               "int foo(int i = 5)\n"
+               "#endif\n"
+               "{\n"
+               "  return i;\n"
+               "}",
+               GNUBraceStyle);
+
+  verifyFormat("void foo() {}\n"
+               "void bar()\n"
+               "#ifdef _DEBUG\n"
+               "{\n"
+               "  foo();\n"
+               "}\n"
+               "#else\n"
+               "{\n"
+               "}\n"
+               "#endif",
+               GNUBraceStyle);
+
+  verifyFormat("void foobar() { int i = 5; }\n"
+               "#ifdef _DEBUG\n"
+               "void bar() {}\n"
+               "#else\n"
+               "void bar() { foobar(); }\n"
+               "#endif",
                GNUBraceStyle);
 }
 TEST_F(FormatTest, CatchExceptionReferenceBinding) {
@@ -8337,6 +8439,9 @@ TEST_F(FormatTest, FormatsLambdas) {
   verifyFormat("SomeFunction([]() { // A cool function...\n"
                "  return 43;\n"
                "});");
+  verifyFormat("void f() {\n"
+               "  SomeFunction([](decltype(x), A *a) {});\n"
+               "}");
 
   // Lambdas with return types.
   verifyFormat("int c = []() -> int { return 2; }();\n");
