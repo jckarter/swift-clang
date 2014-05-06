@@ -18,6 +18,7 @@
 #include "CGDebugInfo.h"
 #include "CGObjCRuntime.h"
 #include "CGOpenCLRuntime.h"
+#include "CGOpenMPRuntime.h"
 #include "CodeGenFunction.h"
 #include "CodeGenPGO.h"
 #include "CodeGenTBAA.h"
@@ -78,8 +79,8 @@ CodeGenModule::CodeGenModule(ASTContext &C, const CodeGenOptions &CGO,
       Diags(diags), TheDataLayout(TD), Target(C.getTargetInfo()),
       ABI(createCXXABI(*this)), VMContext(M.getContext()), TBAA(0),
       TheTargetCodeGenInfo(0), Types(*this), VTables(*this), ObjCRuntime(0),
-      OpenCLRuntime(0), CUDARuntime(0), DebugInfo(0), ARCData(0),
-      NoObjCARCExceptionsMetadata(0), RRData(0), PGOReader(nullptr),
+      OpenCLRuntime(0), OpenMPRuntime(nullptr), CUDARuntime(0), DebugInfo(0),
+      ARCData(0), NoObjCARCExceptionsMetadata(0), RRData(0), PGOReader(nullptr),
       CFConstantStringClassRef(0),
       ConstantStringClassRef(0), NSConstantStringType(0),
       NSConcreteGlobalBlock(0), NSConcreteStackBlock(0), BlockObjectAssign(0),
@@ -113,6 +114,8 @@ CodeGenModule::CodeGenModule(ASTContext &C, const CodeGenOptions &CGO,
     createObjCRuntime();
   if (LangOpts.OpenCL)
     createOpenCLRuntime();
+  if (LangOpts.OpenMP)
+    createOpenMPRuntime();
   if (LangOpts.CUDA)
     createCUDARuntime();
 
@@ -148,6 +151,7 @@ CodeGenModule::CodeGenModule(ASTContext &C, const CodeGenOptions &CGO,
 CodeGenModule::~CodeGenModule() {
   delete ObjCRuntime;
   delete OpenCLRuntime;
+  delete OpenMPRuntime;
   delete CUDARuntime;
   delete TheTargetCodeGenInfo;
   delete TBAA;
@@ -177,6 +181,10 @@ void CodeGenModule::createObjCRuntime() {
 
 void CodeGenModule::createOpenCLRuntime() {
   OpenCLRuntime = new CGOpenCLRuntime(*this);
+}
+
+void CodeGenModule::createOpenMPRuntime() {
+  OpenMPRuntime = new CGOpenMPRuntime(*this);
 }
 
 void CodeGenModule::createCUDARuntime() {
@@ -220,6 +228,7 @@ void CodeGenModule::checkAliases() {
   // that we have to do this in CodeGen, but we only construct mangled names
   // and aliases during codegen.
   bool Error = false;
+  DiagnosticsEngine &Diags = getDiags();
   for (std::vector<GlobalDecl>::iterator I = Aliases.begin(),
          E = Aliases.end(); I != E; ++I) {
     const GlobalDecl &GD = *I;
@@ -231,17 +240,12 @@ void CodeGenModule::checkAliases() {
     llvm::GlobalValue *GV = Alias->getAliasedGlobal();
     if (!GV) {
       Error = true;
-      getDiags().Report(AA->getLocation(), diag::err_cyclic_alias);
+      Diags.Report(AA->getLocation(), diag::err_cyclic_alias);
     } else if (GV->isDeclaration()) {
       Error = true;
-      getDiags().Report(AA->getLocation(), diag::err_alias_to_undefined);
+      Diags.Report(AA->getLocation(), diag::err_alias_to_undefined);
     }
 
-    // We have to handle alias to weak aliases in here. LLVM itself disallows
-    // this since the object semantics would not match the IL one. For
-    // compatibility with gcc we implement it by just pointing the alias
-    // to its aliasee's aliasee. We also warn, since the user is probably
-    // expecting the link to be weak.
     llvm::Constant *Aliasee = Alias->getAliasee();
     llvm::GlobalValue *AliaseeGV;
     if (auto CE = dyn_cast<llvm::ConstantExpr>(Aliasee)) {
@@ -252,9 +256,22 @@ void CodeGenModule::checkAliases() {
     } else {
       AliaseeGV = cast<llvm::GlobalValue>(Aliasee);
     }
+
+    if (const SectionAttr *SA = D->getAttr<SectionAttr>()) {
+      StringRef AliasSection = SA->getName();
+      if (AliasSection != AliaseeGV->getSection())
+        Diags.Report(SA->getLocation(), diag::warn_alias_with_section)
+            << AliasSection;
+    }
+
+    // We have to handle alias to weak aliases in here. LLVM itself disallows
+    // this since the object semantics would not match the IL one. For
+    // compatibility with gcc we implement it by just pointing the alias
+    // to its aliasee's aliasee. We also warn, since the user is probably
+    // expecting the link to be weak.
     if (auto GA = dyn_cast<llvm::GlobalAlias>(AliaseeGV)) {
       if (GA->mayBeOverridden()) {
-        getDiags().Report(AA->getLocation(), diag::warn_alias_to_weak_alias)
+        Diags.Report(AA->getLocation(), diag::warn_alias_to_weak_alias)
           << GA->getAliasedGlobal()->getName() << GA->getName();
         Aliasee = llvm::ConstantExpr::getPointerBitCastOrAddrSpaceCast(
             GA->getAliasee(), Alias->getType());
@@ -584,7 +601,7 @@ CodeGenModule::getFunctionLinkage(GlobalDecl GD) {
 /// variables (these details are set in EmitGlobalVarDefinition for variables).
 void CodeGenModule::SetFunctionDefinitionAttributes(const FunctionDecl *D,
                                                     llvm::GlobalValue *GV) {
-  SetCommonAttributes(D, GV);
+  setNonAliasAttributes(D, GV);
 }
 
 void CodeGenModule::SetLLVMFunctionAttributes(const Decl *D,
@@ -710,13 +727,17 @@ void CodeGenModule::SetCommonAttributes(const Decl *D,
 
   if (D->hasAttr<UsedAttr>())
     addUsedGlobal(GV);
+}
+
+void CodeGenModule::setNonAliasAttributes(const Decl *D,
+                                          llvm::GlobalValue *GV) {
+  assert(!isa<llvm::GlobalAlias>(GV));
+  SetCommonAttributes(D, GV);
 
   if (const SectionAttr *SA = D->getAttr<SectionAttr>())
     GV->setSection(SA->getName());
 
-  // Alias cannot have attributes. Filter them here.
-  if (!isa<llvm::GlobalAlias>(GV))
-    getTargetCodeGenInfo().SetTargetAttributes(D, GV, *this);
+  getTargetCodeGenInfo().SetTargetAttributes(D, GV, *this);
 }
 
 void CodeGenModule::SetInternalFunctionAttributes(const Decl *D,
@@ -727,7 +748,7 @@ void CodeGenModule::SetInternalFunctionAttributes(const Decl *D,
 
   F->setLinkage(llvm::Function::InternalLinkage);
 
-  SetCommonAttributes(D, F);
+  setNonAliasAttributes(D, F);
 }
 
 static void setLinkageAndVisibilityForGV(llvm::GlobalValue *GV,
@@ -1878,7 +1899,7 @@ void CodeGenModule::EmitGlobalVarDefinition(const VarDecl *D) {
     // common vars aren't constant even if declared const.
     GV->setConstant(false);
 
-  SetCommonAttributes(D, GV);
+  setNonAliasAttributes(D, GV);
 
   // Emit the initializer function if necessary.
   if (NeedsGlobalCtor || NeedsGlobalDtor)

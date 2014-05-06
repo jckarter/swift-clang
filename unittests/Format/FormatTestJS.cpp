@@ -91,5 +91,20 @@ TEST_F(FormatTestJS, SingleQuoteStrings) {
   verifyFormat("this.function('', true);");
 }
 
+TEST_F(FormatTestJS, GoogScopes) {
+  verifyFormat("goog.scope(function() {\n"
+               "var x = a.b;\n"
+               "var y = c.d;\n"
+               "});  // goog.scope");
+}
+
+TEST_F(FormatTestJS, ReturnStatements) {
+  verifyFormat("function() { return [hello, world]; }");
+}
+
+TEST_F(FormatTestJS, ClosureStyleComments) {
+  verifyFormat("var x = /** @type {foo} */ (bar);");
+}
+
 } // end namespace tooling
 } // end namespace clang
