@@ -83,6 +83,7 @@ namespace CodeGen {
   class CGDebugInfo;
   class CGObjCRuntime;
   class CGOpenCLRuntime;
+  class CGOpenMPRuntime;
   class CGCUDARuntime;
   class BlockFieldFlags;
   class FunctionArgList;
@@ -261,6 +262,7 @@ class CodeGenModule : public CodeGenTypeCache {
 
   CGObjCRuntime* ObjCRuntime;
   CGOpenCLRuntime* OpenCLRuntime;
+  CGOpenMPRuntime* OpenMPRuntime;
   CGCUDARuntime* CUDARuntime;
   CGDebugInfo* DebugInfo;
   ARCEntrypoints *ARCData;
@@ -414,6 +416,7 @@ class CodeGenModule : public CodeGenTypeCache {
   void createObjCRuntime();
 
   void createOpenCLRuntime();
+  void createOpenMPRuntime();
   void createCUDARuntime();
 
   bool isTriviallyRecursive(const FunctionDecl *F);
@@ -475,6 +478,12 @@ public:
   CGOpenCLRuntime &getOpenCLRuntime() {
     assert(OpenCLRuntime != 0);
     return *OpenCLRuntime;
+  }
+
+  /// getOpenMPRuntime() - Return a reference to the configured OpenMP runtime.
+  CGOpenMPRuntime &getOpenMPRuntime() {
+    assert(OpenMPRuntime != nullptr);
+    return *OpenMPRuntime;
   }
 
   /// getCUDARuntime() - Return a reference to the configured CUDA runtime.
@@ -1049,6 +1058,8 @@ private:
   ///
   /// NOTE: This should only be called for definitions.
   void SetCommonAttributes(const Decl *D, llvm::GlobalValue *GV);
+
+  void setNonAliasAttributes(const Decl *D, llvm::GlobalValue *GV);
 
   /// SetFunctionDefinitionAttributes - Set attributes for a global definition.
   void SetFunctionDefinitionAttributes(const FunctionDecl *D,

@@ -1852,6 +1852,7 @@ std::string CompilerInvocation::getModuleHash() const {
                       hsOpts.UseStandardSystemIncludes,
                       hsOpts.UseStandardCXXIncludes,
                       hsOpts.UseLibcxx);
+  code = hash_combine(code, hsOpts.ResourceDir);
 
   // Extend the signature with the user build path.
   code = hash_combine(code, hsOpts.ModuleUserBuildPath);

@@ -19,7 +19,6 @@
 #include "clang/AST/Expr.h"
 #include "clang/AST/ExprCXX.h"
 #include "clang/AST/TypeLoc.h"
-#include "clang/Lex/Preprocessor.h"
 #include "clang/Sema/Lookup.h"
 #include "clang/Sema/PrettyDeclStackTrace.h"
 #include "clang/Sema/Template.h"
@@ -417,6 +416,13 @@ Decl *TemplateDeclInstantiator::VisitVarDecl(VarDecl *D,
 
   SemaRef.BuildVariableInstantiation(Var, D, TemplateArgs, LateAttrs, Owner,
                                      StartingScope, InstantiatingVarTemplate);
+
+  if (D->isNRVOVariable()) {
+    QualType ReturnType = cast<FunctionDecl>(DC)->getReturnType();
+    if (SemaRef.isCopyElisionCandidate(ReturnType, Var, false))
+      Var->setNRVOVariable(true);
+  }
+
   return Var;
 }
 

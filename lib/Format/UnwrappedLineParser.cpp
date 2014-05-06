@@ -415,16 +415,34 @@ void UnwrappedLineParser::parseBlock(bool MustBeDeclaration, bool AddLevel,
   Line->Level = InitialLevel;
 }
 
+static bool IsGoogScope(const UnwrappedLine &Line) {
+  if (Line.Tokens.size() < 4)
+    return false;
+  auto I = Line.Tokens.begin();
+  if (I->Tok->TokenText != "goog")
+    return false;
+  ++I;
+  if (I->Tok->isNot(tok::period))
+    return false;
+  ++I;
+  if (I->Tok->TokenText != "scope")
+    return false;
+  ++I;
+  return I->Tok->is(tok::l_paren);
+}
+
 void UnwrappedLineParser::parseChildBlock() {
   FormatTok->BlockKind = BK_Block;
   nextToken();
   {
+    bool GoogScope =
+        Style.Language == FormatStyle::LK_JavaScript && IsGoogScope(*Line);
     ScopedLineState LineState(*this);
     ScopedDeclarationState DeclarationState(*Line, DeclarationScopeStack,
                                             /*MustBeDeclaration=*/false);
-    Line->Level += 1;
+    Line->Level += GoogScope ? 0 : 1;
     parseLevel(/*HasOpeningBrace=*/true);
-    Line->Level -= 1;
+    Line->Level -= GoogScope ? 0 : 1;
   }
   nextToken();
 }
@@ -1291,9 +1309,12 @@ void UnwrappedLineParser::parseObjCInterfaceOrImplementation() {
   if (FormatTok->Tok.is(tok::less))
     parseObjCProtocolList();
 
-  // If instance variables are present, keep the '{' on the first line too.
-  if (FormatTok->Tok.is(tok::l_brace))
+  if (FormatTok->Tok.is(tok::l_brace)) {
+    if (Style.BreakBeforeBraces == FormatStyle::BS_Allman ||
+        Style.BreakBeforeBraces == FormatStyle::BS_GNU)
+      addUnwrappedLine();
     parseBlock(/*MustBeDeclaration=*/true);
+  }
 
   // With instance variables, this puts '}' on its own line.  Without instance
   // variables, this ends the @interface line.

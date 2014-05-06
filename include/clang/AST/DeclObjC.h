@@ -41,7 +41,7 @@ protected:
   unsigned NumElts;
 
 public:
-  ObjCListBase() : List(0), NumElts(0) {}
+  ObjCListBase() : List(nullptr), NumElts(0) {}
   unsigned size() const { return NumElts; }
   bool empty() const { return NumElts == 0; }
 
@@ -79,7 +79,7 @@ class ObjCProtocolList : public ObjCList<ObjCProtocolDecl> {
   using ObjCList<ObjCProtocolDecl>::set;
 
 public:
-  ObjCProtocolList() : ObjCList<ObjCProtocolDecl>(), Locations(0) { }
+  ObjCProtocolList() : ObjCList<ObjCProtocolDecl>(), Locations(nullptr) { }
 
   typedef const SourceLocation *loc_iterator;
   loc_iterator loc_begin() const { return Locations; }
@@ -238,8 +238,9 @@ private:
         objcDeclQualifier(OBJC_TQ_None),
         RelatedResultType(HasRelatedResultType),
         SelLocsKind(SelLoc_StandardNoSpace), IsOverriding(0), HasSkippedBody(0),
-        MethodDeclType(T), ReturnTInfo(ReturnTInfo), ParamsAndSelLocs(0),
-        NumParams(0), DeclEndLoc(endLoc), Body(), SelfDecl(0), CmdDecl(0) {
+        MethodDeclType(T), ReturnTInfo(ReturnTInfo), ParamsAndSelLocs(nullptr),
+        NumParams(0), DeclEndLoc(endLoc), Body(), SelfDecl(nullptr),
+        CmdDecl(nullptr) {
     setImplicit(isImplicitlyDeclared);
   }
 
@@ -470,7 +471,7 @@ public:
   /// the method declaration that was marked with the designated initializer
   /// attribute.
   bool isDesignatedInitializerForTheInterface(
-      const ObjCMethodDecl **InitMethod = 0) const;
+      const ObjCMethodDecl **InitMethod = nullptr) const;
 
   /// \brief Determine whether this method has a body.
   bool hasBody() const override { return Body.isValid(); }
@@ -1003,8 +1004,9 @@ public:
   ///
   /// \param InitMethod if non-null and the function returns true, it receives
   /// the method that was marked as a designated initializer.
-  bool isDesignatedInitializer(Selector Sel,
-                               const ObjCMethodDecl **InitMethod = 0) const;
+  bool
+  isDesignatedInitializer(Selector Sel,
+                          const ObjCMethodDecl **InitMethod = nullptr) const;
 
   /// \brief Determine whether this particular declaration of this class is
   /// actually also a definition.
@@ -1033,7 +1035,7 @@ public:
   /// has been forward-declared (with \@class) but not yet defined (with 
   /// \@interface).
   ObjCInterfaceDecl *getDefinition() {
-    ObjCInterfaceDecl *Def = hasDefinition()? Data.getPointer()->Definition : 0;
+    ObjCInterfaceDecl *Def = hasDefinition()? Data.getPointer()->Definition : nullptr;
     if (Def && Def->isPartialInterface() && Def->getCompleteDefinition())
       return Def->getCompleteDefinition();
     return Def;
@@ -1043,7 +1045,7 @@ public:
   /// has been forward-declared (with \@class) but not yet defined (with 
   /// \@interface).
   const ObjCInterfaceDecl *getDefinition() const {
-    ObjCInterfaceDecl *Def = hasDefinition()? Data.getPointer()->Definition : 0;
+    ObjCInterfaceDecl *Def = hasDefinition()? Data.getPointer()->Definition : nullptr;
     if (Def && Def->isPartialInterface() && Def->getCompleteDefinition())
       return Def->getCompleteDefinition();
     return Def;
@@ -1056,7 +1058,7 @@ public:
   ObjCInterfaceDecl *getSuperClass() const {
     // FIXME: Should make sure no callers ever do this.
     if (!hasDefinition())
-      return 0;
+      return nullptr;
     
     if (data().ExternallyCompleted)
       LoadExternalDefinition();
@@ -1091,7 +1093,7 @@ public:
     typedef std::ptrdiff_t          difference_type;
     typedef std::input_iterator_tag iterator_category;
 
-    filtered_category_iterator() : Current(0) { }
+    filtered_category_iterator() : Current(nullptr) { }
     explicit filtered_category_iterator(ObjCCategoryDecl *Current)
       : Current(Current)
     {
@@ -1265,7 +1267,7 @@ public:
   ObjCCategoryDecl* getCategoryListRaw() const {
     // FIXME: Should make sure no callers ever do this.
     if (!hasDefinition())
-      return 0;
+      return nullptr;
     
     if (data().ExternallyCompleted)
       LoadExternalDefinition();
@@ -1289,7 +1291,7 @@ public:
   /// super class of the specified interface class.
   bool isSuperClassOf(const ObjCInterfaceDecl *I) const {
     // If RHS is derived from LHS it is OK; else it is not OK.
-    while (I != NULL) {
+    while (I != nullptr) {
       if (declaresSameEntity(this, I))
         return true;
       
@@ -1321,7 +1323,7 @@ public:
   ObjCMethodDecl *lookupMethod(Selector Sel, bool isInstance,
                                bool shallowCategoryLookup = false,
                                bool followSuper = true,
-                               const ObjCCategoryDecl *C = 0) const;
+                               const ObjCCategoryDecl *C = nullptr) const;
 
   /// Lookup an instance method for a given selector.
   ObjCMethodDecl *lookupInstanceMethod(Selector Sel) const {
@@ -1438,14 +1440,14 @@ private:
                bool synthesized)
     : FieldDecl(ObjCIvar, DC, StartLoc, IdLoc, Id, T, TInfo, BW,
                 /*Mutable=*/false, /*HasInit=*/ICIS_NoInit),
-      NextIvar(0), DeclAccess(ac), Synthesized(synthesized) {}
+      NextIvar(nullptr), DeclAccess(ac), Synthesized(synthesized) {}
 
 public:
   static ObjCIvarDecl *Create(ASTContext &C, ObjCContainerDecl *DC,
                               SourceLocation StartLoc, SourceLocation IdLoc,
                               IdentifierInfo *Id, QualType T,
                               TypeSourceInfo *TInfo,
-                              AccessControl ac, Expr *BW = NULL,
+                              AccessControl ac, Expr *BW = nullptr,
                               bool synthesized=false);
 
   static ObjCIvarDecl *CreateDeserialized(ASTContext &C, unsigned ID);
@@ -1492,7 +1494,7 @@ class ObjCAtDefsFieldDecl : public FieldDecl {
                       SourceLocation IdLoc, IdentifierInfo *Id,
                       QualType T, Expr *BW)
     : FieldDecl(ObjCAtDefsField, DC, StartLoc, IdLoc, Id, T,
-                /*TInfo=*/0, // FIXME: Do ObjCAtDefs have declarators ?
+                /*TInfo=*/nullptr, // FIXME: Do ObjCAtDefs have declarators ?
                 BW, /*Mutable=*/false, /*HasInit=*/ICIS_NoInit) {}
 
 public:
@@ -1674,12 +1676,12 @@ public:
 
   /// \brief Retrieve the definition of this protocol, if any.
   ObjCProtocolDecl *getDefinition() {
-    return hasDefinition()? Data.getPointer()->Definition : 0;
+    return hasDefinition()? Data.getPointer()->Definition : nullptr;
   }
 
   /// \brief Retrieve the definition of this protocol, if any.
   const ObjCProtocolDecl *getDefinition() const {
-    return hasDefinition()? Data.getPointer()->Definition : 0;
+    return hasDefinition()? Data.getPointer()->Definition : nullptr;
   }
 
   /// \brief Determine whether this particular declaration is also the 
@@ -1770,7 +1772,7 @@ class ObjCCategoryDecl : public ObjCContainerDecl {
                    SourceLocation IvarLBraceLoc=SourceLocation(),
                    SourceLocation IvarRBraceLoc=SourceLocation())
     : ObjCContainerDecl(ObjCCategory, DC, Id, ClassNameLoc, AtLoc),
-      ClassInterface(IDecl), NextClassCategory(0),
+      ClassInterface(IDecl), NextClassCategory(nullptr),
       CategoryNameLoc(CategoryNameLoc),
       IvarLBraceLoc(IvarLBraceLoc), IvarRBraceLoc(IvarRBraceLoc) {
   }
@@ -1836,7 +1838,7 @@ public:
     return NextClassCategory;
   }
 
-  bool IsClassExtension() const { return getIdentifier() == 0; }
+  bool IsClassExtension() const { return getIdentifier() == nullptr; }
 
   typedef specific_decl_iterator<ObjCIvarDecl> ivar_iterator;
   typedef llvm::iterator_range<specific_decl_iterator<ObjCIvarDecl>> ivar_range;
@@ -1881,7 +1883,8 @@ protected:
                ObjCInterfaceDecl *classInterface,
                SourceLocation nameLoc, SourceLocation atStartLoc)
     : ObjCContainerDecl(DK, DC,
-                        classInterface? classInterface->getIdentifier() : 0,
+                        classInterface? classInterface->getIdentifier()
+                                      : nullptr,
                         nameLoc, atStartLoc),
       ClassInterface(classInterface) {}
 
@@ -2015,11 +2018,14 @@ raw_ostream &operator<<(raw_ostream &OS, const ObjCCategoryImplDecl &CID);
 /// \@end
 /// @endcode
 ///
-/// Typically, instance variables are specified in the class interface,
-/// *not* in the implementation. Nevertheless (for legacy reasons), we
-/// allow instance variables to be specified in the implementation.  When
-/// specified, they need to be *identical* to the interface.
+/// In a non-fragile runtime, instance variables can appear in the class
+/// interface, class extensions (nameless categories), and in the implementation
+/// itself, as well as being synthesized as backing storage for properties.
 ///
+/// In a fragile runtime, instance variables are specified in the class
+/// interface, \em not in the implementation. Nevertheless (for legacy reasons),
+/// we allow instance variables to be specified in the implementation. When
+/// specified, they need to be \em identical to the interface.
 class ObjCImplementationDecl : public ObjCImplDecl {
   void anchor() override;
   /// Implementation Class's super class.
@@ -2052,7 +2058,7 @@ class ObjCImplementationDecl : public ObjCImplDecl {
     : ObjCImplDecl(ObjCImplementation, DC, classInterface, nameLoc, atStartLoc),
        SuperClass(superDecl), SuperLoc(superLoc), IvarLBraceLoc(IvarLBraceLoc),
        IvarRBraceLoc(IvarRBraceLoc),
-       IvarInitializers(0), NumIvarInitializers(0),
+       IvarInitializers(nullptr), NumIvarInitializers(0),
        HasNonZeroConstructors(false), HasDestructors(false) {}
 public:
   static ObjCImplementationDecl *Create(ASTContext &C, DeclContext *DC,
@@ -2274,7 +2280,9 @@ private:
       PropertyImplementation(None),
       GetterName(Selector()),
       SetterName(Selector()),
-      GetterMethodDecl(0), SetterMethodDecl(0) , PropertyIvarDecl(0) {}
+      GetterMethodDecl(nullptr), SetterMethodDecl(nullptr),
+      PropertyIvarDecl(nullptr) {}
+
 public:
   static ObjCPropertyDecl *Create(ASTContext &C, DeclContext *DC,
                                   SourceLocation L,
@@ -2438,7 +2446,7 @@ private:
                        SourceLocation ivarLoc)
     : Decl(ObjCPropertyImpl, DC, L), AtLoc(atLoc),
       IvarLoc(ivarLoc), PropertyDecl(property), PropertyIvarDecl(ivarDecl),
-      GetterCXXConstructor(0), SetterCXXAssignment(0) {
+      GetterCXXConstructor(nullptr), SetterCXXAssignment(nullptr) {
     assert (PK == Dynamic || PropertyIvarDecl);
   }
 

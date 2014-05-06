@@ -414,7 +414,9 @@ private:
       if (!parseParens())
         return false;
       if (Line.MustBeDeclaration && Contexts.size() == 1 &&
-          !Contexts.back().IsExpression && Line.First->Type != TT_ObjCProperty)
+          !Contexts.back().IsExpression &&
+          Line.First->Type != TT_ObjCProperty &&
+          (!Tok->Previous || Tok->Previous->isNot(tok::kw_decltype)))
         Line.MightBeFunctionDecl = true;
       break;
     case tok::l_square:
@@ -692,7 +694,9 @@ private:
     } else if (Current.isOneOf(tok::kw_return, tok::kw_throw)) {
       Contexts.back().IsExpression = true;
     } else if (Current.is(tok::l_paren) && !Line.MustBeDeclaration &&
-               !Line.InPPDirective) {
+               !Line.InPPDirective &&
+               (!Current.Previous ||
+                Current.Previous->isNot(tok::kw_decltype))) {
       bool ParametersOfFunctionType =
           Current.Previous && Current.Previous->is(tok::r_paren) &&
           Current.Previous->MatchingParen &&
@@ -755,40 +759,7 @@ private:
         else
           Current.Type = TT_BlockComment;
       } else if (Current.is(tok::r_paren)) {
-        FormatToken *LeftOfParens = NULL;
-        if (Current.MatchingParen)
-          LeftOfParens = Current.MatchingParen->getPreviousNonComment();
-        bool IsCast = false;
-        bool ParensAreEmpty = Current.Previous == Current.MatchingParen;
-        bool ParensAreType = !Current.Previous ||
-                             Current.Previous->Type == TT_PointerOrReference ||
-                             Current.Previous->Type == TT_TemplateCloser ||
-                             Current.Previous->isSimpleTypeSpecifier();
-        bool ParensCouldEndDecl =
-            Current.Next &&
-            Current.Next->isOneOf(tok::equal, tok::semi, tok::l_brace);
-        bool IsSizeOfOrAlignOf =
-            LeftOfParens &&
-            LeftOfParens->isOneOf(tok::kw_sizeof, tok::kw_alignof);
-        if (ParensAreType && !ParensCouldEndDecl && !IsSizeOfOrAlignOf &&
-            ((Contexts.size() > 1 &&
-              Contexts[Contexts.size() - 2].IsExpression) ||
-             (Current.Next && Current.Next->isBinaryOperator())))
-          IsCast = true;
-        if (Current.Next && Current.Next->isNot(tok::string_literal) &&
-            (Current.Next->Tok.isLiteral() ||
-             Current.Next->isOneOf(tok::kw_sizeof, tok::kw_alignof)))
-          IsCast = true;
-        // If there is an identifier after the (), it is likely a cast, unless
-        // there is also an identifier before the ().
-        if (LeftOfParens && (LeftOfParens->Tok.getIdentifierInfo() == NULL ||
-                             LeftOfParens->is(tok::kw_return)) &&
-            LeftOfParens->Type != TT_OverloadedOperator &&
-            LeftOfParens->isNot(tok::at) &&
-            LeftOfParens->Type != TT_TemplateCloser && Current.Next &&
-            Current.Next->is(tok::identifier))
-          IsCast = true;
-        if (IsCast && !ParensAreEmpty)
+        if (rParenEndsCast(Current))
           Current.Type = TT_CastRParen;
       } else if (Current.is(tok::at) && Current.Next) {
         switch (Current.Next->Tok.getObjCKeywordID()) {
@@ -844,9 +815,71 @@ private:
              PreviousNotConst->MatchingParen->Previous &&
              PreviousNotConst->MatchingParen->Previous->isNot(tok::kw_template);
 
+    if (PreviousNotConst->is(tok::r_paren) && PreviousNotConst->MatchingParen &&
+        PreviousNotConst->MatchingParen->Previous &&
+        PreviousNotConst->MatchingParen->Previous->is(tok::kw_decltype))
+      return true;
+
     return (!IsPPKeyword && PreviousNotConst->is(tok::identifier)) ||
            PreviousNotConst->Type == TT_PointerOrReference ||
            PreviousNotConst->isSimpleTypeSpecifier();
+  }
+
+  /// \brief Determine whether ')' is ending a cast.
+  bool rParenEndsCast(const FormatToken &Tok) {
+    FormatToken *LeftOfParens = NULL;
+    if (Tok.MatchingParen)
+      LeftOfParens = Tok.MatchingParen->getPreviousNonComment();
+    bool IsCast = false;
+    bool ParensAreEmpty = Tok.Previous == Tok.MatchingParen;
+    bool ParensAreType = !Tok.Previous ||
+                         Tok.Previous->Type == TT_PointerOrReference ||
+                         Tok.Previous->Type == TT_TemplateCloser ||
+                         Tok.Previous->isSimpleTypeSpecifier();
+    bool ParensCouldEndDecl =
+        Tok.Next && Tok.Next->isOneOf(tok::equal, tok::semi, tok::l_brace);
+    bool IsSizeOfOrAlignOf =
+        LeftOfParens && LeftOfParens->isOneOf(tok::kw_sizeof, tok::kw_alignof);
+    if (ParensAreType && !ParensCouldEndDecl && !IsSizeOfOrAlignOf &&
+        ((Contexts.size() > 1 && Contexts[Contexts.size() - 2].IsExpression) ||
+         (Tok.Next && Tok.Next->isBinaryOperator())))
+      IsCast = true;
+    else if (Tok.Next && Tok.Next->isNot(tok::string_literal) &&
+             (Tok.Next->Tok.isLiteral() ||
+              Tok.Next->isOneOf(tok::kw_sizeof, tok::kw_alignof)))
+      IsCast = true;
+    // If there is an identifier after the (), it is likely a cast, unless
+    // there is also an identifier before the ().
+    else if (LeftOfParens && (LeftOfParens->Tok.getIdentifierInfo() == NULL ||
+                              LeftOfParens->is(tok::kw_return)) &&
+             LeftOfParens->Type != TT_OverloadedOperator &&
+             LeftOfParens->isNot(tok::at) &&
+             LeftOfParens->Type != TT_TemplateCloser && Tok.Next) {
+      if (Tok.Next->isOneOf(tok::identifier, tok::numeric_constant)) {
+        IsCast = true;
+      } else {
+        // Use heuristics to recognize c style casting.
+        FormatToken *Prev = Tok.Previous;
+        if (Prev && Prev->isOneOf(tok::amp, tok::star))
+          Prev = Prev->Previous;
+
+        if (Prev && Tok.Next && Tok.Next->Next) {
+          bool NextIsUnary = Tok.Next->isUnaryOperator() ||
+                             Tok.Next->isOneOf(tok::amp, tok::star);
+          IsCast =
+              NextIsUnary &&
+              Tok.Next->Next->isOneOf(tok::identifier, tok::numeric_constant);
+        }
+
+        for (; Prev != Tok.MatchingParen; Prev = Prev->Previous) {
+          if (!Prev || !Prev->isOneOf(tok::kw_const, tok::identifier)) {
+            IsCast = false;
+            break;
+          }
+        }
+      }
+    }
+    return IsCast && !ParensAreEmpty;
   }
 
   /// \brief Return the type of the given token assuming it is * or &.
@@ -1182,7 +1215,7 @@ void TokenAnnotator::calculateFormattingInformation(AnnotatedLine &Line) {
         }
       }
     } else if (Current->SpacesRequiredBefore == 0 &&
-             spaceRequiredBefore(Line, *Current)) {
+               spaceRequiredBefore(Line, *Current)) {
       Current->SpacesRequiredBefore = 1;
     }
 
@@ -1352,6 +1385,8 @@ bool TokenAnnotator::spaceRequiredBetween(const AnnotatedLine &Line,
         (Left.TokenText == "returns" || Left.TokenText == "option"))
       return true;
   }
+  if (Left.is(tok::kw_return) && Right.isNot(tok::semi))
+    return true;
   if (Style.ObjCSpaceAfterProperty && Line.Type == LT_ObjCProperty &&
       Left.Tok.getObjCKeywordID() == tok::objc_property)
     return true;
@@ -1422,12 +1457,13 @@ bool TokenAnnotator::spaceRequiredBetween(const AnnotatedLine &Line,
     return false;
   if (Left.is(tok::colon))
     return Left.Type != TT_ObjCMethodExpr;
+  if (Left.Type == TT_BlockComment)
+    return !Left.TokenText.endswith("=*/");
   if (Right.is(tok::l_paren)) {
     if (Left.is(tok::r_paren) && Left.Type == TT_AttributeParen)
       return true;
     return Line.Type == LT_ObjCDecl ||
-           Left.isOneOf(tok::kw_return, tok::kw_new, tok::kw_delete,
-                        tok::semi) ||
+           Left.isOneOf(tok::kw_new, tok::kw_delete, tok::semi) ||
            (Style.SpaceBeforeParens != FormatStyle::SBPO_Never &&
             (Left.isOneOf(tok::kw_if, tok::kw_for, tok::kw_while,
                           tok::kw_switch, tok::kw_catch, tok::kw_case) ||
@@ -1444,8 +1480,6 @@ bool TokenAnnotator::spaceRequiredBetween(const AnnotatedLine &Line,
       (Right.is(tok::r_brace) && Right.MatchingParen &&
        Right.MatchingParen->BlockKind != BK_Block))
     return !Style.Cpp11BracedListStyle;
-  if (Left.Type == TT_BlockComment && Left.TokenText.endswith("=*/"))
-    return false;
   if (Right.Type == TT_UnaryOperator)
     return !Left.isOneOf(tok::l_paren, tok::l_square, tok::at) &&
            (Left.isNot(tok::colon) || Left.Type != TT_ObjCMethodExpr);

@@ -300,9 +300,9 @@ void CompilerInstance::createPreprocessor(TranslationUnitKind TUKind) {
 void CompilerInstance::createASTContext() {
   Preprocessor &PP = getPreprocessor();
   Context = new ASTContext(getLangOpts(), PP.getSourceManager(),
-                           &getTarget(), PP.getIdentifierTable(),
-                           PP.getSelectorTable(), PP.getBuiltinInfo(),
-                           /*size_reserve=*/ 0);
+                           PP.getIdentifierTable(), PP.getSelectorTable(),
+                           PP.getBuiltinInfo());
+  Context->InitBuiltinTypes(getTarget());
 }
 
 // ExternalASTSource
@@ -1192,7 +1192,7 @@ CompilerInstance::loadModule(SourceLocation ImportLoc,
     Module = Known->second;    
   } else if (ModuleName == getLangOpts().CurrentModule) {
     // This is the module we're building. 
-    Module = PP->getHeaderSearchInfo().getModuleMap().findModule(ModuleName);
+    Module = PP->getHeaderSearchInfo().lookupModule(ModuleName);
     Known = KnownModules.insert(std::make_pair(Path[0].first, Module)).first;
   } else {
     // Search for a module with the given name.
@@ -1246,6 +1246,9 @@ CompilerInstance::loadModule(SourceLocation ImportLoc,
           << ModuleName << CyclePath;
         return ModuleLoadResult();
       }
+
+      getDiagnostics().Report(ImportLoc, diag::warn_module_build)
+          << ModuleName << ModuleFileName;
 
       // Check whether we have already attempted to build this module (but
       // failed).

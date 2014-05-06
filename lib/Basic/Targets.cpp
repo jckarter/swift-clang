@@ -1812,6 +1812,7 @@ class X86TargetInfo : public TargetInfo {
     CK_BDVER1,
     CK_BDVER2,
     CK_BDVER3,
+    CK_BDVER4,
     //@}
 
     /// This specification is deprecated and will be removed in the future.
@@ -1955,6 +1956,7 @@ public:
       .Case("bdver1", CK_BDVER1)
       .Case("bdver2", CK_BDVER2)
       .Case("bdver3", CK_BDVER3)
+      .Case("bdver4", CK_BDVER4)
       .Case("x86-64", CK_x86_64)
       .Case("geode", CK_Geode)
       .Default(CK_Generic);
@@ -2024,6 +2026,7 @@ public:
     case CK_BDVER1:
     case CK_BDVER2:
     case CK_BDVER3:
+    case CK_BDVER4:
     case CK_x86_64:
       return true;
     }
@@ -2226,6 +2229,10 @@ void X86TargetInfo::getDefaultFeatures(llvm::StringMap<bool> &Features) const {
     setFeatureEnabledImpl(Features, "prfchw", true);
     setFeatureEnabledImpl(Features, "cx16", true);
     break;
+  case CK_BDVER4:
+    setFeatureEnabledImpl(Features, "avx2", true);
+    setFeatureEnabledImpl(Features, "bmi2", true);
+    // FALLTHROUGH
   case CK_BDVER2:
   case CK_BDVER3:
     setFeatureEnabledImpl(Features, "xop", true);
@@ -2732,6 +2739,9 @@ void X86TargetInfo::getTargetDefines(const LangOptions &Opts,
     break;
   case CK_BDVER3:
     defineCPUMacros(Builder, "bdver3");
+    break;
+  case CK_BDVER4:
+    defineCPUMacros(Builder, "bdver4");
     break;
   case CK_Geode:
     defineCPUMacros(Builder, "geode");
@@ -3447,6 +3457,7 @@ class AArch64TargetInfo : public TargetInfo {
   };
 
   unsigned FPU;
+  unsigned CRC;
   unsigned Crypto;
   static const Builtin::Info BuiltinInfo[];
 
@@ -3520,8 +3531,11 @@ public:
     if (FPU == NeonMode) {
       Builder.defineMacro("__ARM_NEON");
       // 64-bit NEON supports half, single and double precision operations.
-      Builder.defineMacro("__ARM_NEON_FP", "7");
+      Builder.defineMacro("__ARM_NEON_FP", "0xe");
     }
+
+    if (CRC)
+      Builder.defineMacro("__ARM_FEATURE_CRC32");
 
     if (Crypto) {
       Builder.defineMacro("__ARM_FEATURE_CRYPTO");
@@ -3546,10 +3560,13 @@ public:
   bool handleTargetFeatures(std::vector<std::string> &Features,
                             DiagnosticsEngine &Diags) override {
     FPU = FPUMode;
+    CRC = 0;
     Crypto = 0;
     for (unsigned i = 0, e = Features.size(); i != e; ++i) {
       if (Features[i] == "+neon")
         FPU = NeonMode;
+      if (Features[i] == "+crc")
+        CRC = 1;
       if (Features[i] == "+crypto")
         Crypto = 1;
     }
@@ -3815,11 +3832,18 @@ class ARMTargetInfo : public TargetInfo {
     else
       SizeType = UnsignedInt;
 
-    if (T.getOS() == llvm::Triple::NetBSD) {
+    switch (T.getOS()) {
+    case llvm::Triple::NetBSD:
       WCharType = SignedInt;
-    } else {
+      break;
+    case llvm::Triple::Win32:
+      WCharType = UnsignedShort;
+      break;
+    case llvm::Triple::Linux:
+    default:
       // AAPCS 7.1.1, ARM-Linux ABI 2.4: type of wchar_t is unsigned int.
       WCharType = UnsignedInt;
+      break;
     }
 
     UseBitFieldTypeAlignment = true;
@@ -4547,6 +4571,7 @@ class ARM64TargetInfo : public TargetInfo {
   };
 
   unsigned FPU;
+  unsigned CRC;
   unsigned Crypto;
 
   static const Builtin::Info BuiltinInfo[];
@@ -4641,8 +4666,11 @@ public:
     if (FPU == NeonMode) {
       Builder.defineMacro("__ARM_NEON");
       // 64-bit NEON supports half, single and double precision operations.
-      Builder.defineMacro("__ARM_NEON_FP", "7");
+      Builder.defineMacro("__ARM_NEON_FP", "0xe");
     }
+
+    if (CRC)
+      Builder.defineMacro("__ARM_FEATURE_CRC32");
 
     if (Crypto)
       Builder.defineMacro("__ARM_FEATURE_CRYPTO");
@@ -4663,10 +4691,13 @@ public:
   bool handleTargetFeatures(std::vector<std::string> &Features,
                             DiagnosticsEngine &Diags) override {
     FPU = FPUMode;
+    CRC = 0;
     Crypto = 0;
     for (unsigned i = 0, e = Features.size(); i != e; ++i) {
       if (Features[i] == "+neon")
         FPU = NeonMode;
+      if (Features[i] == "+crc")
+        CRC = 1;
       if (Features[i] == "+crypto")
         Crypto = 1;
     }
