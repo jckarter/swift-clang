@@ -390,6 +390,11 @@ TEST_F(FormatTest, ElseIf) {
                "else {\n"
                "  g()\n"
                "}");
+
+  verifyFormat("if (a) {\n"
+               "} else if (aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa(\n"
+               "               aaaaaaaaaaaaaaaaaaaaaaaaaaaa)) {\n"
+               "}");
 }
 
 TEST_F(FormatTest, FormatsForLoop) {
@@ -847,6 +852,18 @@ TEST_F(FormatTest, UnderstandsSingleLineComments) {
       "  int i;                        /* iiiiiiiiiiiiiiiiiiiii */ \\\n"
       "  int jjjjjjjjjjjjjjjjjjjjjjjj; /* */",
       getLLVMStyleWithColumns(61));
+
+  verifyFormat("if ( // This is some comment\n"
+               "    x + 3) {\n"
+               "}");
+  EXPECT_EQ("if ( // This is some comment\n"
+            "     // spanning two lines\n"
+            "    x + 3) {\n"
+            "}",
+            format("if( // This is some comment\n"
+                   "     // spanning two lines\n"
+                   " x + 3) {\n"
+                   "}"));
 }
 
 TEST_F(FormatTest, KeepsParameterWithTrailingCommentsOnTheirOwnLine) {
@@ -5093,6 +5110,7 @@ TEST_F(FormatTest, LayoutCxx11BraceInitializers) {
   verifyFormat("Class::Class : member{1, 2, 3} {}");
   verifyFormat("new vector<int>{1, 2, 3};");
   verifyFormat("new int[3]{1, 2, 3};");
+  verifyFormat("new int{1};");
   verifyFormat("return {arg1, arg2};");
   verifyFormat("return {arg1, SomeType{parameter}};");
   verifyFormat("int count = set<int>{f(), g(), h()}.size();");
