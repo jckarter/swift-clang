@@ -1483,7 +1483,8 @@ bool TokenAnnotator::spaceRequiredBetween(const AnnotatedLine &Line,
   if (Right.Type == TT_UnaryOperator)
     return !Left.isOneOf(tok::l_paren, tok::l_square, tok::at) &&
            (Left.isNot(tok::colon) || Left.Type != TT_ObjCMethodExpr);
-  if (Left.isOneOf(tok::identifier, tok::greater, tok::r_square) &&
+  if ((Left.isOneOf(tok::identifier, tok::greater, tok::r_square) ||
+       Left.isSimpleTypeSpecifier()) &&
       Right.is(tok::l_brace) && Right.getNextNonComment() &&
       Right.BlockKind != BK_Block)
     return false;
@@ -1666,7 +1667,7 @@ bool TokenAnnotator::canBreakBefore(const AnnotatedLine &Line,
     return false;
   if (Left.is(tok::l_paren) && Left.Previous &&
       (Left.Previous->Type == TT_BinaryOperator ||
-       Left.Previous->Type == TT_CastRParen))
+       Left.Previous->Type == TT_CastRParen || Left.Previous->is(tok::kw_if)))
     return false;
   if (Right.Type == TT_ImplicitStringLiteral)
     return false;
