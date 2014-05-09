@@ -6347,7 +6347,7 @@ llvm::Constant *CGObjCNonFragileABIMac::GetOrEmitProtocol(
 
   if (Entry) {
     // Already created, update the initializer.
-    assert(Entry->hasWeakAnyLinkage());
+    assert(Entry->hasWeakLinkage());
     Entry->setInitializer(Init);
   } else {
     Entry =
