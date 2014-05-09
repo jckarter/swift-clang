@@ -85,6 +85,7 @@ TEST_F(FormatTestJS, SpacesInContainerLiterals) {
 
   verifyFormat("var obj = {a: 1, b: 2, c: 3};",
                getChromiumStyle(FormatStyle::LK_JavaScript));
+  verifyFormat("someVariable = {'a': [{}]};");
 }
 
 TEST_F(FormatTestJS, SingleQuoteStrings) {
@@ -116,6 +117,16 @@ TEST_F(FormatTestJS, ReturnStatements) {
 
 TEST_F(FormatTestJS, ClosureStyleComments) {
   verifyFormat("var x = /** @type {foo} */ (bar);");
+}
+
+TEST_F(FormatTestJS, TryCatch) {
+  verifyFormat("try {\n"
+               "  f();\n"
+               "} catch (e) {\n"
+               "  g();\n"
+               "} finally {\n"
+               "  h();\n"
+               "}");
 }
 
 TEST_F(FormatTestJS, RegexLiteralClassification) {

@@ -2559,7 +2559,7 @@ static void assertPrivateName(const llvm::GlobalValue *GV) {
   (void)NameRef;
   assert(NameRef[0] == '\01' && (NameRef[1] == 'L' || NameRef[1] == 'l'));
   assert(GV->getVisibility() == llvm::GlobalValue::DefaultVisibility);
-  assert(GV->getLinkage() == llvm::GlobalValue::PrivateLinkage);
+  assert(GV->hasPrivateLinkage());
 }
 
 /*
@@ -2643,7 +2643,7 @@ llvm::Constant *CGObjCMac::GetOrEmitProtocol(const ObjCProtocolDecl *PD) {
 
   if (Entry) {
     // Already created, update the initializer.
-    assert(Entry->getLinkage() == llvm::GlobalValue::PrivateLinkage);
+    assert(Entry->hasPrivateLinkage());
     Entry->setInitializer(Init);
   } else {
     Entry =
@@ -6347,7 +6347,7 @@ llvm::Constant *CGObjCNonFragileABIMac::GetOrEmitProtocol(
 
   if (Entry) {
     // Already created, update the initializer.
-    assert(Entry->getLinkage() == llvm::GlobalValue::WeakAnyLinkage);
+    assert(Entry->hasWeakAnyLinkage());
     Entry->setInitializer(Init);
   } else {
     Entry =
@@ -6753,7 +6753,7 @@ llvm::Value *CGObjCNonFragileABIMac::GetClass(CodeGenFunction &CGF,
     ClassName += ID->getObjCRuntimeNameAsString();
     llvm::GlobalVariable *ClassGV = GetClassGlobal(ClassName.str(), true);
     (void)ClassGV;
-    assert(ClassGV->getLinkage() == llvm::GlobalValue::ExternalWeakLinkage);
+    assert(ClassGV->hasExternalWeakLinkage());
   }
   
   return EmitClassRef(CGF, ID);

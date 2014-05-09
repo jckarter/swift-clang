@@ -85,6 +85,7 @@ private:
   void parseParens();
   void parseSquare();
   void parseIfThenElse();
+  void parseTryCatch();
   void parseForOrWhileLoop();
   void parseDoWhile();
   void parseLabel();
@@ -200,7 +201,7 @@ private:
 };
 
 struct UnwrappedLineNode {
-  UnwrappedLineNode() : Tok(NULL) {}
+  UnwrappedLineNode() : Tok(nullptr) {}
   UnwrappedLineNode(FormatToken *Tok) : Tok(Tok) {}
 
   FormatToken *Tok;
