@@ -21,6 +21,7 @@
 #include "clang/AST/Redeclarable.h"
 #include "clang/AST/Type.h"
 #include "clang/Basic/Linkage.h"
+#include "clang/Basic/OperatorKinds.h"
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/Optional.h"
 #include "llvm/Support/Compiler.h"
