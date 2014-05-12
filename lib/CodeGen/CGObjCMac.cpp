@@ -1380,7 +1380,8 @@ private:
                             const ObjCInterfaceDecl *ID);
   
   llvm::Value *EmitClassRefFromId(CodeGenFunction &CGF,
-                                  IdentifierInfo *II, bool Weak);
+                                  IdentifierInfo *II, bool Weak,
+                                  const ObjCInterfaceDecl *ID);
 
   llvm::Value *EmitNSAutoreleasePoolClassRef(CodeGenFunction &CGF) override;
 
@@ -6662,11 +6663,14 @@ CGObjCNonFragileABIMac::GetClassGlobal(const std::string &Name, bool Weak) {
 
 llvm::Value *CGObjCNonFragileABIMac::EmitClassRefFromId(CodeGenFunction &CGF,
                                                         IdentifierInfo *II,
-                                                        bool Weak) {
+                                                        bool Weak,
+                                                        const ObjCInterfaceDecl *ID) {
   llvm::GlobalVariable *&Entry = ClassReferences[II];
   
   if (!Entry) {
-    std::string ClassName(getClassSymbolPrefix() + II->getName().str());
+      std::string ClassName(
+        getClassSymbolPrefix() +
+        (ID ? ID->getObjCRuntimeNameAsString() : II->getName()).str());
     llvm::GlobalVariable *ClassGV = GetClassGlobal(ClassName, Weak);
     Entry =
     new llvm::GlobalVariable(CGM.getModule(), ObjCTypes.ClassnfABIPtrTy,
@@ -6685,13 +6689,13 @@ llvm::Value *CGObjCNonFragileABIMac::EmitClassRefFromId(CodeGenFunction &CGF,
 
 llvm::Value *CGObjCNonFragileABIMac::EmitClassRef(CodeGenFunction &CGF,
                                                   const ObjCInterfaceDecl *ID) {
-  return EmitClassRefFromId(CGF, ID->getIdentifier(), ID->isWeakImported());
+  return EmitClassRefFromId(CGF, ID->getIdentifier(), ID->isWeakImported(), ID);
 }
 
 llvm::Value *CGObjCNonFragileABIMac::EmitNSAutoreleasePoolClassRef(
                                                     CodeGenFunction &CGF) {
   IdentifierInfo *II = &CGM.getContext().Idents.get("NSAutoreleasePool");
-  return EmitClassRefFromId(CGF, II, false);
+  return EmitClassRefFromId(CGF, II, false, 0);
 }
 
 llvm::Value *

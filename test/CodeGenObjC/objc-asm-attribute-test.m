@@ -35,9 +35,20 @@ __attribute__((objc_runtime_name("MySecretNamespace.Message")))
 + (void) ClsMethodP2 {}
 @end
 
+// rdar://16877359
+__attribute__((objc_runtime_name("foo")))
+@interface SLREarth
+- (instancetype)init;
++ (instancetype)alloc;
+@end
+
+id Test16877359() {
+    return [SLREarth alloc];
+}
+
 // CHECK: @"OBJC_IVAR_$_MySecretNamespace.Message.MyIVAR" = global i64
 // CHECK: @"OBJC_CLASS_$_MySecretNamespace.Message" = global %struct._class_t
 // CHECK: @"OBJC_METACLASS_$_MySecretNamespace.Message" = global %struct._class_t
+// CHECK: @"OBJC_CLASS_$_foo" = external global %struct._class_t
 // CHECK: define internal i8* @"\01-[Message MyMethod]"
 // CHECK: [[IVAR:%.*]] = load i64* @"OBJC_IVAR_$_MySecretNamespace.Message.MyIVAR"
-
