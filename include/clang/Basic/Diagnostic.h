@@ -16,6 +16,7 @@
 #define LLVM_CLANG_DIAGNOSTIC_H
 
 #include "clang/Basic/DiagnosticIDs.h"
+#include "clang/Basic/DiagnosticOptions.h"
 #include "clang/Basic/SourceLocation.h"
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/DenseMap.h"
@@ -32,7 +33,6 @@ namespace clang {
   class DiagnosticOptions;
   class IdentifierInfo;
   class LangOptions;
-  enum OverloadsShown : unsigned;
   class Preprocessor;
   class StoredDiagnostic;
   namespace tok {
@@ -132,6 +132,9 @@ public:
 /// the user. DiagnosticsEngine is tied to one translation unit and one
 /// SourceManager.
 class DiagnosticsEngine : public RefCountedBase<DiagnosticsEngine> {
+  DiagnosticsEngine(const DiagnosticsEngine &) LLVM_DELETED_FUNCTION;
+  void operator=(const DiagnosticsEngine &) LLVM_DELETED_FUNCTION;
+
 public:
   /// \brief The level of the diagnostic, after it has been through mapping.
   enum Level {
