@@ -339,7 +339,8 @@ static bool ParseCodeGenArgs(CodeGenOptions &Opts, ArgList &Args, InputKind IK,
     bool Default = false;
     // Until dtrace (via CTF) and LLDB can deal with distributed debug info,
     // Darwin and FreeBSD default to standalone/full debug info.
-    if (llvm::Triple(TargetOpts.Triple).isOSDarwin())
+    if (llvm::Triple(TargetOpts.Triple).isOSDarwin() ||
+        llvm::Triple(TargetOpts.Triple).isOSFreeBSD())
       Default = true;
 
     if (Args.hasFlag(OPT_fstandalone_debug, OPT_fno_standalone_debug, Default))
