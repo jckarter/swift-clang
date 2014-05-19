@@ -77,6 +77,13 @@ TEST_F(FormatTestJS, UnderstandsJavaScriptOperators) {
                "            bbbbbb :\n"
                "            ccc;",
                getGoogleJSStyleWithColumns(20));
+
+  verifyFormat("var b = a.map((x) => x + 1);");
+}
+
+TEST_F(FormatTestJS, ES6DestructuringAssignment) {
+  verifyFormat("var [a, b, c] = [1, 2, 3];");
+  verifyFormat("var {a, b} = {a: 1, b: 2};");
 }
 
 TEST_F(FormatTestJS, SpacesInContainerLiterals) {
