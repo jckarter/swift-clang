@@ -1406,7 +1406,7 @@ void ASTDeclReader::ReadCXXRecordDefinition(CXXRecordDecl *D) {
   // that all other deserialized declarations will see it.
   CXXRecordDecl *Canon = D->getCanonicalDecl();
   if (Canon == D) {
-    D->DefinitionData.setNotUpdated(DD);
+    D->DefinitionData = DD;
     D->IsCompleteDefinition = true;
   } else if (auto *CanonDD = Canon->DefinitionData.getNotUpdated()) {
     // We have already deserialized a definition of this record. This
@@ -1418,7 +1418,7 @@ void ASTDeclReader::ReadCXXRecordDefinition(CXXRecordDecl *D) {
     D->IsCompleteDefinition = false;
     MergeDefinitionData(D, *DD);
   } else {
-    Canon->DefinitionData.setNotUpdated(DD);
+    Canon->DefinitionData = DD;
     D->DefinitionData = Canon->DefinitionData;
     D->IsCompleteDefinition = true;
 
@@ -3202,6 +3202,16 @@ void ASTDeclReader::UpdateDecl(Decl *D, ModuleFile &ModuleFile,
             cast<ClassTemplateSpecializationDecl>(RD);
         Spec->setTemplateSpecializationKind(TSK);
         Spec->setPointOfInstantiation(POI);
+
+        if (Record[Idx++]) {
+          auto PartialSpec =
+              ReadDeclAs<ClassTemplatePartialSpecializationDecl>(Record, Idx);
+          SmallVector<TemplateArgument, 8> TemplArgs;
+          Reader.ReadTemplateArgumentList(TemplArgs, F, Record, Idx);
+          auto *TemplArgList = TemplateArgumentList::CreateCopy(
+              Reader.getContext(), TemplArgs.data(), TemplArgs.size());
+          Spec->setInstantiationOf(PartialSpec, TemplArgList);
+        }
       }
 
       RD->setTagKind((TagTypeKind)Record[Idx++]);
