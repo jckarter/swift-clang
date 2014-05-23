@@ -17,7 +17,7 @@
 // RUN:   -emit-llvm -w -o - %s | FileCheck -check-prefix=CHECK64 %s
 
 #ifdef __arm64__
-#include <aarch64_simd.h>
+#include <arm_neon.h>
 #else
 #include <arm_neon.h>
 #endif

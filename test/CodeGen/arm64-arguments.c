@@ -163,7 +163,7 @@ double t2(int i, ...) {
     return ll;
 }
 
-#include <aarch64_simd.h>
+#include <arm_neon.h>
 
 // Homogeneous Vector Aggregate as return type and argument type.
 // CHECK: define %struct.int8x16x2_t @f0_0(<16 x i8> %{{.*}}, <16 x i8> %{{.*}})

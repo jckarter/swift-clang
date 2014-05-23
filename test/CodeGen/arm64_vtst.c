@@ -1,7 +1,7 @@
 // RUN: %clang_cc1 -O1 -triple arm64-apple-ios7 -target-feature +neon -ffreestanding -S -o - -emit-llvm %s | FileCheck %s
 // Test ARM64 SIMD comparison test intrinsics
 
-#include <aarch64_simd.h>
+#include <arm_neon.h>
 
 uint64x2_t test_vtstq_s64(int64x2_t a1, int64x2_t a2) {
   // CHECK: test_vtstq_s64

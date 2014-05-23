@@ -1,7 +1,7 @@
 // RUN: %clang_cc1 -triple arm64-apple-ios7 -target-feature +neon -ffreestanding -S -o - -emit-llvm %s | FileCheck %s
 // Test ARM64 SIMD duplicate lane and n intrinsics
 
-#include <aarch64_simd.h>
+#include <arm_neon.h>
 
 void test_vdup_lane_s64(int64x1_t a1) {
   // CHECK-LABEL: test_vdup_lane_s64

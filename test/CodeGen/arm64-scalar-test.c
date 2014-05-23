@@ -2,9 +2,9 @@
 // RUN: %clang_cc1 -triple arm64-apple-ios7.0 -target-feature +neon  \
 // RUN:   -S -O1 -o - -ffreestanding %s | FileCheck %s
 
-// We're explicitly using aarch64_simd.h here: some types probably don't match
+// We're explicitly using arm_neon.h here: some types probably don't match
 // the ACLE definitions, but we want to check current codegen.
-#include <aarch64_simd.h>
+#include <arm_neon.h>
 
 float test_vrsqrtss_f32(float a, float b) {
 // CHECK: test_vrsqrtss_f32
@@ -18,13 +18,13 @@ double test_vrsqrtsd_f64(double a, double b) {
 // CHECK: frsqrts {{d[0-9]+}}, {{d[0-9]+}}, {{d[0-9]+}}
 }
 
-int64_t test_vrshl_s64(int64_t a, int64_t b) {
+int64x1_t test_vrshl_s64(int64x1_t a, int64x1_t b) {
 // CHECK: test_vrshl_s64
   return vrshl_s64(a, b);
 // CHECK: srshl {{d[0-9]+}}, {{d[0-9]+}}, {{d[0-9]+}}
 }
 
-uint64_t test_vrshl_u64(uint64_t a, int64_t b) {
+uint64x1_t test_vrshl_u64(uint64x1_t a, int64x1_t b) {
 // CHECK: test_vrshl_u64
   return vrshl_u64(a, b);
 // CHECK: urshl {{d[0-9]+}}, {{d[0-9]+}}, {{d[0-9]+}}

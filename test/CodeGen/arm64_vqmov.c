@@ -2,7 +2,7 @@
 // REQUIRES: arm64-registered-target
 /// Test vqmov[u]n_high_<su>{16,32,64) ARM64 intrinsics
 
-#include <aarch64_simd.h>
+#include <arm_neon.h>
 
 // vqmovn_high_s16 -> UQXTN2 Vd.16b,Vn.8h
 int8x16_t test_vqmovn_high_s16(int8x8_t Vdlow, int16x8_t Vn)

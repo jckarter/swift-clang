@@ -3,7 +3,7 @@
 /// Test vrecpss_f32, vrecpsd_f64 ARM64 intrinsics
 
 
-#include <aarch64_simd.h>
+#include <arm_neon.h>
 
 // vrecpss_f32 -> FRECPS Sd,Sa,Sb
 //

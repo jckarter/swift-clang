@@ -1,6 +1,6 @@
 // RUN: %clang_cc1 -O1 -triple arm64-apple-ios7 -target-feature +neon -ffreestanding -S -o - -emit-llvm %s | FileCheck %s
 
-#include <aarch64_simd.h>
+#include <arm_neon.h>
 
 float64x2_t test_vcvt_f64_f32(float32x2_t x) {
   // CHECK-LABEL: test_vcvt_f64_f32

@@ -3,7 +3,7 @@
 // REQUIRES: arm64-registered-target
 // Test ARM64 SIMD max/min intrinsics
 
-#include <aarch64_simd.h>
+#include <arm_neon.h>
 
 // Test a represntative sample of 8 and 16, signed and unsigned, 64 and 128 bit reduction
 int8_t test_vmaxv_s8(int8x8_t a1) {

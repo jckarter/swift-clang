@@ -1,7 +1,7 @@
 // RUN: %clang_cc1 -O1 -triple arm64-apple-ios7 -target-feature +neon -ffreestanding -S -o - -emit-llvm %s | FileCheck %s
 // Test ARM64 SIMD vcreate intrinsics
 
-/*#include <aarch64_simd.h>*/
+/*#include <arm_neon.h>*/
 #include <arm_neon.h>
 
 float32x2_t test_vcreate_f32(uint64_t a1) {
