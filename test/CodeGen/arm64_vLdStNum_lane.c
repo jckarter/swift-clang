@@ -1,7 +1,7 @@
 // RUN: %clang_cc1 -O1 -triple arm64-apple-ios7 -target-feature +neon -ffreestanding -S -o - -emit-llvm %s | FileCheck %s
 // Test ARM64 SIMD load and stores of an N-element structure  intrinsics
 
-#include <aarch64_simd.h>
+#include <arm_neon.h>
 
 int64x2x2_t test_vld2q_lane_s64(const void * a1, int64x2x2_t a2) {
   // CHECK: test_vld2q_lane_s64

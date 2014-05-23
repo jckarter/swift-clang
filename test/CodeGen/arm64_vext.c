@@ -4,7 +4,7 @@
 // can use as back end test by adding a run line with
 // -check-prefix=CHECK-CODEGEN on the FileCheck
 
-#include <aarch64_simd.h>
+#include <arm_neon.h>
 
 void test_vext_s8()
 {

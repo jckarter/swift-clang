@@ -4,7 +4,7 @@
 // REQUIRES: arm64-registered-target
 // Test
 
-#include <aarch64_simd.h>
+#include <arm_neon.h>
 
 int8x8_t test_vsli_n_s8(int8x8_t a1, int8x8_t a2) {
   // CHECK: test_vsli_n_s8

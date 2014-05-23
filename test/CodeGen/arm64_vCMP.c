@@ -2,7 +2,7 @@
 
 // Test ARM64 SIMD fused multiply add intrinsics
 
-#include <aarch64_simd.h>
+#include <arm_neon.h>
 
 int64x2_t test_vabsq_s64(int64x2_t a1) {
   // CHECK: test_vabsq_s64

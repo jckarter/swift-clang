@@ -8,7 +8,7 @@
 // missing
 
 
-#include <aarch64_simd.h>
+#include <arm_neon.h>
 
 // vdupq_n_f64 -> dup.2d v0, v0[0]
 //

@@ -1,7 +1,7 @@
 // RUN: %clang_cc1 -O1 -triple arm64-apple-ios7 -target-feature +neon -ffreestanding -S -o - -emit-llvm %s | FileCheck %s
 // Test ARM64 SIMD vget intrinsics
 
-#include <aarch64_simd.h>
+#include <arm_neon.h>
 
 float64_t test_vget_lane_f64(float64x1_t a1) {
   // CHECK: test_vget_lane_f64

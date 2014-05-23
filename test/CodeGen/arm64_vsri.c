@@ -5,7 +5,7 @@
 
 // Test ARM64 SIMD vector shift right and insert: vsri[q]_n_*
 
-#include <aarch64_simd.h>
+#include <arm_neon.h>
 
 int8x8_t test_vsri_n_s8(int8x8_t a1, int8x8_t a2) {
   // CHECK: test_vsri_n_s8
