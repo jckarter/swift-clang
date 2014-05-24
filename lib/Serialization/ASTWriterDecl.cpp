@@ -1157,8 +1157,6 @@ void ASTDeclWriter::VisitClassTemplateDecl(ClassTemplateDecl *D) {
       assert(I->isCanonicalDecl() && "Expected only canonical decls in set");
       Writer.AddDeclRef(&*I, Record); 
     }
-
-    Writer.AddTypeRef(D->getCommonPtr()->InjectedClassNameType, Record);
   }
   Code = serialization::DECL_CLASS_TEMPLATE;
 }
