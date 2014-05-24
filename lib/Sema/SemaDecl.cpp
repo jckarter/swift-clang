@@ -9520,6 +9520,10 @@ Decl *Sema::ActOnStartOfFunctionDef(Scope *FnBodyScope, Declarator &D) {
   return ActOnStartOfFunctionDef(FnBodyScope, DP);
 }
 
+void Sema::ActOnFinishInlineMethodDef(CXXMethodDecl *D) {
+  Consumer.HandleInlineMethodDefinition(D);
+}
+
 static bool ShouldWarnAboutMissingPrototype(const FunctionDecl *FD, 
                              const FunctionDecl*& PossibleZeroParamPrototype) {
   // Don't warn about invalid declarations.

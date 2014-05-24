@@ -1,4 +1,4 @@
-// RUN: %clang_cc1 %s -triple x86_64-apple-macosx10.9.0 -emit-llvm -o - | FileCheck %s
+// RUN: %clang_cc1 %s -ffreestanding -triple x86_64-apple-macosx10.9.0 -emit-llvm -o - | FileCheck %s
 
 #include <xmmintrin.h>
 
