@@ -183,6 +183,10 @@ endif()
 set(CLANG_REPOSITORY_STRING "" CACHE STRING
   "Vendor-specific text for showing the repository the source is taken from.")
 
+string(REPLACE "clang_KLONDIKE"
+       "clang" CLANG_REPOSITORY_STRING
+       "${CLANG_REPOSITORY_STRING}")
+
 if(CLANG_REPOSITORY_STRING)
   add_definitions(-DCLANG_REPOSITORY_STRING="${CLANG_REPOSITORY_STRING}")
 endif()
