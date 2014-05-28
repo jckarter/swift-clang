@@ -9802,6 +9802,11 @@ Decl *Sema::ActOnStartOfFunctionDef(Scope *FnBodyScope, Decl *D) {
   // We want to attach documentation to original Decl (which might be
   // a function template).
   ActOnDocumentableDecl(D);
+  if (getCurLexicalContext()->isObjCContainer() &&
+      getCurLexicalContext()->getDeclKind() != Decl::ObjCCategoryImpl &&
+      getCurLexicalContext()->getDeclKind() != Decl::ObjCImplementation)
+    Diag(FD->getLocation(), diag::warn_function_def_in_objc_container);
+    
   return D;
 }
 
