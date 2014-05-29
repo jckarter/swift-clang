@@ -8202,7 +8202,7 @@ void Sema::AddInitializerToDecl(Decl *RealDecl, Expr *Init,
         VDecl->setInvalidDecl();
         return;
       }
-      Init = Result.take();
+      Init = Result.get();
       DefaultedToAuto = true;
     }
 
@@ -8341,7 +8341,7 @@ void Sema::AddInitializerToDecl(Decl *RealDecl, Expr *Init,
       VDecl->setInvalidDecl();
       return;
     }
-    Init = Result.take();
+    Init = Result.get();
   }
 
   // Perform the initialization.
@@ -8369,7 +8369,7 @@ void Sema::AddInitializerToDecl(Decl *RealDecl, Expr *Init,
       return;
     }
 
-    Init = Result.takeAs<Expr>();
+    Init = Result.getAs<Expr>();
   }
 
   // Check for self-references within variable initializers.
@@ -8427,7 +8427,7 @@ void Sema::AddInitializerToDecl(Decl *RealDecl, Expr *Init,
     VDecl->setInvalidDecl();
     return;
   }
-  Init = Result.take();
+  Init = Result.get();
 
   // Attach the initializer to the decl.
   VDecl->setInit(Init);
@@ -8989,7 +8989,7 @@ void Sema::CheckCompleteVariableDeclaration(VarDecl *var) {
             var, var->getType(), varRef, /*AllowNRVO=*/true);
       if (!result.isInvalid()) {
         result = MaybeCreateExprWithCleanups(result);
-        Expr *init = result.takeAs<Expr>();
+        Expr *init = result.getAs<Expr>();
         Context.setBlockVarCopyInits(var, init);
       }
     }
@@ -11464,7 +11464,7 @@ ExprResult Sema::VerifyBitField(SourceLocation FieldLoc,
   ExprResult ICE = VerifyIntegerConstantExpression(BitWidth, &Value);
   if (ICE.isInvalid())
     return ICE;
-  BitWidth = ICE.take();
+  BitWidth = ICE.get();
 
   if (Value != 0 && ZeroWidth)
     *ZeroWidth = false;
@@ -11704,7 +11704,7 @@ FieldDecl *Sema::CheckFieldDecl(DeclarationName Name, QualType T,
   // If this is declared as a bit-field, check the bit-field.
   if (!InvalidDecl && BitWidth) {
     BitWidth = VerifyBitField(Loc, II, T, Record->isMsStruct(Context), BitWidth,
-                              &ZeroWidth).take();
+                              &ZeroWidth).get();
     if (!BitWidth) {
       InvalidDecl = true;
       BitWidth = nullptr;
@@ -11892,7 +11892,7 @@ Decl *Sema::ActOnIvar(Scope *S,
 
   if (BitWidth) {
     // 6.7.2.1p3, 6.7.2.1p4
-    BitWidth = VerifyBitField(Loc, II, T, /*IsMsStruct*/false, BitWidth).take();
+    BitWidth = VerifyBitField(Loc, II, T, /*IsMsStruct*/false, BitWidth).get();
     if (!BitWidth)
       D.setInvalidType();
   } else {
@@ -12493,7 +12493,7 @@ EnumConstantDecl *Sema::CheckEnumConstant(EnumDecl *Enum,
     Val = nullptr;
 
   if (Val)
-    Val = DefaultLvalueConversion(Val).take();
+    Val = DefaultLvalueConversion(Val).get();
 
   if (Val) {
     if (Enum->isDependentType() || Val->isTypeDependent())
@@ -12512,10 +12512,10 @@ EnumConstantDecl *Sema::CheckEnumConstant(EnumDecl *Enum,
         if (Converted.isInvalid())
           Val = nullptr;
         else
-          Val = Converted.take();
+          Val = Converted.get();
       } else if (!Val->isValueDependent() &&
                  !(Val = VerifyIntegerConstantExpression(Val,
-                                                         &EnumVal).take())) {
+                                                         &EnumVal).get())) {
         // C99 6.7.2.2p2: Make sure we have an integer constant expression.
       } else {
         if (Enum->isFixed()) {
@@ -12528,11 +12528,11 @@ EnumConstantDecl *Sema::CheckEnumConstant(EnumDecl *Enum,
           if (!isRepresentableIntegerValue(Context, EnumVal, EltTy)) {
             if (getLangOpts().MSVCCompat) {
               Diag(IdLoc, diag::ext_enumerator_too_large) << EltTy;
-              Val = ImpCastExprToType(Val, EltTy, CK_IntegralCast).take();
+              Val = ImpCastExprToType(Val, EltTy, CK_IntegralCast).get();
             } else
               Diag(IdLoc, diag::err_enumerator_too_large) << EltTy;
           } else
-            Val = ImpCastExprToType(Val, EltTy, CK_IntegralCast).take();
+            Val = ImpCastExprToType(Val, EltTy, CK_IntegralCast).get();
         } else if (getLangOpts().CPlusPlus) {
           // C++11 [dcl.enum]p5:
           //   If the underlying type is not fixed, the type of each enumerator
@@ -12553,7 +12553,7 @@ EnumConstantDecl *Sema::CheckEnumConstant(EnumDecl *Enum,
               << (EnumVal.isUnsigned() || EnumVal.isNonNegative());
           else if (!Context.hasSameType(Val->getType(), Context.IntTy)) {
             // Force the type of the expression to 'int'.
-            Val = ImpCastExprToType(Val, Context.IntTy, CK_IntegralCast).take();
+            Val = ImpCastExprToType(Val, Context.IntTy, CK_IntegralCast).get();
           }
           EltTy = Val->getType();
         }
