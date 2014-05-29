@@ -5,7 +5,6 @@ __attribute__((global)) void f_global();
 __attribute__((constant)) int* g_constant;
 __attribute__((host)) void f_host();
 
-
 // CHECK:       attributes-cuda.cu:3:30: FunctionDecl=f_device:3:30
 // CHECK-NEXT:  attributes-cuda.cu:3:16: attribute(device)
 // CHECK:       attributes-cuda.cu:4:30: FunctionDecl=f_global:4:30
