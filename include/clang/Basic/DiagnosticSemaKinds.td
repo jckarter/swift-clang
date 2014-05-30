@@ -1500,6 +1500,9 @@ def warn_uninit_byref_blockvar_captured_by_block : Warning<
   InGroup<Uninitialized>, DefaultIgnore;
 def note_block_var_fixit_add_initialization : Note<
   "maybe you meant to use __block %0">;
+def note_omitted_element_default_constructed : Note<
+  "initializer list shorter than initialized object, omitted element was "
+  "implicitly default constructed">;
 def note_var_fixit_add_initialization : Note<
   "initialize the variable %0 to silence this warning">;
 def note_uninit_fixit_remove_cond : Note<
@@ -4477,7 +4480,7 @@ def warn_addition_in_bitshift : Warning<
   "'%1' will be evaluated first">, InGroup<ShiftOpParentheses>;
 
 def warn_self_assignment : Warning<
-  "explicitly assigning a variable of type %0 to itself">,
+  "explicitly assigning value of variable of type %0 to itself">,
   InGroup<SelfAssignment>, DefaultIgnore;
 
 def warn_string_plus_int : Warning<
