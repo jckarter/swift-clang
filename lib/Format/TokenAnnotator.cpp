@@ -927,6 +927,12 @@ private:
         (InTemplateArgument && NextToken->Tok.isAnyIdentifier()))
       return TT_BinaryOperator;
 
+    // This catches some cases where evaluation order is used as control flow:
+    //   aaa && aaa->f();
+    const FormatToken *NextNextToken = NextToken->getNextNonComment();
+    if (NextNextToken && NextNextToken->is(tok::arrow))
+      return TT_BinaryOperator;
+
     // It is very unlikely that we are going to find a pointer or reference type
     // definition on the RHS of an assignment.
     if (IsExpression)
@@ -1493,7 +1499,8 @@ bool TokenAnnotator::spaceRequiredBetween(const AnnotatedLine &Line,
   if (Right.Type == TT_UnaryOperator)
     return !Left.isOneOf(tok::l_paren, tok::l_square, tok::at) &&
            (Left.isNot(tok::colon) || Left.Type != TT_ObjCMethodExpr);
-  if ((Left.isOneOf(tok::identifier, tok::greater, tok::r_square) ||
+  if ((Left.isOneOf(tok::identifier, tok::greater, tok::r_square,
+                    tok::r_paren) ||
        Left.isSimpleTypeSpecifier()) &&
       Right.is(tok::l_brace) && Right.getNextNonComment() &&
       Right.BlockKind != BK_Block)
