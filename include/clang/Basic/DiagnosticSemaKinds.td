@@ -2121,6 +2121,9 @@ def err_attribute_dllimport_data_definition : Error<
   "definition of dllimport data">;
 def err_attribute_dllimport_static_field_definition : Error<
   "definition of dllimport static field not allowed">;
+def warn_attribute_dllimport_static_field_definition : Warning<
+  "definition of dllimport static field">,
+  InGroup<DiagGroup<"dllimport-static-field-def">>;
 def err_attribute_dll_member_of_dll_class : Error<
   "attribute %q0 cannot be applied to member of %q1 class">;
 def err_attribute_weakref_not_static : Error<
@@ -6695,6 +6698,7 @@ def err_argument_invalid_range : Error<
 
 def err_builtin_longjmp_invalid_val : Error<
   "argument to __builtin_longjmp must be a constant 1">;
+def err_builtin_requires_language : Error<"'%0' is only available in %1">;
 
 def err_constant_integer_arg_type : Error<
   "argument to %0 must be a constant integer">;
