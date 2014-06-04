@@ -7340,7 +7340,8 @@ public:
                                       SourceLocation LParenLoc,
                                       SourceLocation EndLoc);
   /// \brief Called on well-formed 'collapse' clause.
-  OMPClause *ActOnOpenMPCollapseClause(Expr *Num, SourceLocation StartLoc,
+  OMPClause *ActOnOpenMPCollapseClause(Expr *NumForLoops,
+                                       SourceLocation StartLoc,
                                        SourceLocation LParenLoc,
                                        SourceLocation EndLoc);
 
