@@ -2517,6 +2517,13 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
 
   // LLVM Code Generator Options.
 
+  if (Arg *A = Args.getLastArg(options::OPT_Wframe_larger_than_EQ)) {
+    StringRef v = A->getValue();
+    CmdArgs.push_back("-mllvm");
+    CmdArgs.push_back(Args.MakeArgString("-warn-stack-size=" + v));
+    A->claim();
+  }
+
   if (Arg *A = Args.getLastArg(options::OPT_mregparm_EQ)) {
     CmdArgs.push_back("-mregparm");
     CmdArgs.push_back(A->getValue());
@@ -7214,9 +7221,9 @@ void gnutools::Link::ConstructJob(Compilation &C, const JobAction &JA,
       }
       AddRunTimeLibs(ToolChain, D, CmdArgs, Args);
 
-      if (!isAndroid &&
-          (Args.hasArg(options::OPT_pthread) ||
-           Args.hasArg(options::OPT_pthreads) || UsedOpenMPLib != LibUnknown))
+      if ((Args.hasArg(options::OPT_pthread) ||
+           Args.hasArg(options::OPT_pthreads) || UsedOpenMPLib != LibUnknown) &&
+          !isAndroid)
         CmdArgs.push_back("-lpthread");
 
       CmdArgs.push_back("-lc");
