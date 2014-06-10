@@ -463,7 +463,7 @@ ActOnSuperClassOfClassInterface(SourceLocation AtInterfaceLoc,
   // Check if a different kind of symbol declared in this scope.
   NamedDecl *PrevDecl = LookupSingleName(TUScope, SuperName, SuperLoc,
                                          LookupOrdinaryName);
-    
+
   if (!PrevDecl) {
     // Try to correct for a typo in the superclass name without correcting
     // to the class we're defining.
@@ -478,7 +478,7 @@ ActOnSuperClassOfClassInterface(SourceLocation AtInterfaceLoc,
       PrevDecl = Corrected.getCorrectionDeclAs<ObjCInterfaceDecl>();
     }
   }
-    
+
   if (declaresSameEntity(PrevDecl, IDecl)) {
     Diag(SuperLoc, diag::err_recursive_superclass)
       << SuperName << ClassName << SourceRange(AtInterfaceLoc, ClassLoc);
@@ -486,11 +486,11 @@ ActOnSuperClassOfClassInterface(SourceLocation AtInterfaceLoc,
   } else {
     ObjCInterfaceDecl *SuperClassDecl =
     dyn_cast_or_null<ObjCInterfaceDecl>(PrevDecl);
-      
+
     // Diagnose classes that inherit from deprecated classes.
     if (SuperClassDecl)
       (void)DiagnoseUseOfDecl(SuperClassDecl, SuperLoc);
-      
+
     if (PrevDecl && SuperClassDecl == 0) {
       // The previous declaration was not a class decl. Check if we have a
       // typedef. If we do, get the underlying class type.
@@ -508,7 +508,7 @@ ActOnSuperClassOfClassInterface(SourceLocation AtInterfaceLoc,
           }
         }
       }
-        
+
       // This handles the following case:
       //
       // typedef int SuperClass;
@@ -519,7 +519,7 @@ ActOnSuperClassOfClassInterface(SourceLocation AtInterfaceLoc,
         Diag(PrevDecl->getLocation(), diag::note_previous_definition);
       }
     }
-      
+
     if (!dyn_cast_or_null<TypedefNameDecl>(PrevDecl)) {
       if (!SuperClassDecl)
         Diag(SuperLoc, diag::err_undef_superclass)
@@ -542,7 +542,7 @@ ActOnSuperClassOfClassInterface(SourceLocation AtInterfaceLoc,
               IDecl->setInvalidDecl();
       }
     }
-      
+
     IDecl->setSuperClass(SuperClassDecl);
     IDecl->setSuperClassLoc(SuperLoc);
     IDecl->setEndOfDefinitionLoc(SuperLoc);
@@ -630,7 +630,7 @@ ActOnStartClassInterface(SourceLocation AtInterfaceLoc,
     if (IDecl->getTypeForDecl()) {
       cast<ObjCInterfaceType>(IDecl->getTypeForDecl())->setDecl(IDecl);
     }
-  
+
   if (SuperName)
     ActOnSuperClassOfClassInterface(AtInterfaceLoc, IDecl, PrevPartialClassDecl,
                                     ClassName, ClassLoc, SuperName, SuperLoc);
@@ -661,18 +661,18 @@ Decl *Sema::ActOnPartialInterface(SourceLocation AtPartialInterfaceLoc,
                                  IdentifierInfo *SuperName,
                                  SourceLocation SuperLoc) {
   assert(ClassName && "Missing class identifier");
-  
+
   // Check for another declaration kind with the same name.
   NamedDecl *PrevDecl = LookupSingleName(TUScope, ClassName, ClassLoc,
                                          LookupOrdinaryName, ForRedeclaration);
-  
+
   if (PrevDecl && !isa<ObjCInterfaceDecl>(PrevDecl)) {
     Diag(ClassLoc, diag::err_redefinition_different_kind) << ClassName;
     Diag(PrevDecl->getLocation(), diag::note_previous_definition);
   }
   // Create a declaration to describe this @interface.
   ObjCInterfaceDecl* PrevIDecl = dyn_cast_or_null<ObjCInterfaceDecl>(PrevDecl);
-  
+
   ObjCInterfaceDecl *IDecl
     = ObjCInterfaceDecl::Create(Context, CurContext, AtPartialInterfaceLoc, ClassName,
                                 PrevIDecl, ClassLoc);
@@ -695,13 +695,13 @@ Decl *Sema::ActOnPartialInterface(SourceLocation AtPartialInterfaceLoc,
       }
     }
   }
-  
+
   PushOnScopeChains(IDecl, TUScope);
   if(!IDecl->hasDefinition()) {
     IDecl->startDefinition();
     IDecl->setIsPartialInterface();
   }
-  
+
   if (SuperName)
     ActOnSuperClassOfClassInterface(AtPartialInterfaceLoc, IDecl, PrevCompleteDef,
                                     ClassName, ClassLoc, SuperName, SuperLoc);
@@ -1106,6 +1106,7 @@ Decl *Sema::ActOnStartCategoryImplementation(
       CatIDecl->setImplicit();
     }
   }
+
   ObjCCategoryImplDecl *CDecl =
     ObjCCategoryImplDecl::Create(Context, CurContext, CatName, IDecl,
                                  ClassLoc, AtCatImplLoc, CatLoc);
@@ -1118,7 +1119,7 @@ Decl *Sema::ActOnStartCategoryImplementation(
     CDecl->setInvalidDecl();
   }
   DiagnosePartialClass(*this, CDecl, IDecl);
-  
+
   // FIXME: PushOnScopeChains?
   CurContext->addDecl(CDecl);
 
