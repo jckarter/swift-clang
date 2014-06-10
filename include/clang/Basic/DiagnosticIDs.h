@@ -60,45 +60,40 @@ namespace clang {
     /// (emit a warning), MAP_ERROR (emit as an error).  It allows clients to
     /// map errors to MAP_ERROR/MAP_DEFAULT or MAP_FATAL (stop emitting
     /// diagnostics after this one).
-    enum Mapping {
+    enum Severity {
       // NOTE: 0 means "uncomputed".
-      MAP_IGNORE  = 1,     ///< Map this diagnostic to nothing, ignore it.
-      MAP_REMARK  = 2,     ///< Map this diagnostic to a remark.
-      MAP_WARNING = 3,     ///< Map this diagnostic to a warning.
-      MAP_ERROR   = 4,     ///< Map this diagnostic to an error.
-      MAP_FATAL   = 5      ///< Map this diagnostic to a fatal error.
+      MAP_IGNORE = 1,  ///< Map this diagnostic to nothing, ignore it.
+      MAP_REMARK = 2,  ///< Map this diagnostic to a remark.
+      MAP_WARNING = 3, ///< Map this diagnostic to a warning.
+      MAP_ERROR = 4,   ///< Map this diagnostic to an error.
+      MAP_FATAL = 5    ///< Map this diagnostic to a fatal error.
     };
   }
 
-class DiagnosticMappingInfo {
-  unsigned Mapping : 3;
+class DiagnosticMapping {
+  unsigned Severity : 3;
   unsigned IsUser : 1;
   unsigned IsPragma : 1;
-  unsigned HasShowInSystemHeader : 1;
   unsigned HasNoWarningAsError : 1;
   unsigned HasNoErrorAsFatal : 1;
 
 public:
-  static DiagnosticMappingInfo Make(diag::Mapping Mapping, bool IsUser,
-                                    bool IsPragma) {
-    DiagnosticMappingInfo Result;
-    Result.Mapping = Mapping;
+  static DiagnosticMapping Make(diag::Severity Severity, bool IsUser,
+                                bool IsPragma) {
+    DiagnosticMapping Result;
+    Result.Severity = Severity;
     Result.IsUser = IsUser;
     Result.IsPragma = IsPragma;
-    Result.HasShowInSystemHeader = 0;
     Result.HasNoWarningAsError = 0;
     Result.HasNoErrorAsFatal = 0;
     return Result;
   }
 
-  diag::Mapping getMapping() const { return diag::Mapping(Mapping); }
-  void setMapping(diag::Mapping Value) { Mapping = Value; }
+  diag::Severity getSeverity() const { return diag::Severity(Severity); }
+  void setSeverity(diag::Severity Value) { Severity = Value; }
 
   bool isUser() const { return IsUser; }
   bool isPragma() const { return IsPragma; }
-
-  bool hasShowInSystemHeader() const { return HasShowInSystemHeader; }
-  void setShowInSystemHeader(bool Value) { HasShowInSystemHeader = Value; }
 
   bool hasNoWarningAsError() const { return HasNoWarningAsError; }
   void setNoWarningAsError(bool Value) { HasNoWarningAsError = Value; }
