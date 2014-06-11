@@ -1782,6 +1782,8 @@ def LoopHint : Attr {
   /// vectorize_width: vectorize loop operations with width 'value'.
   /// interleave: interleave multiple loop iterations if 'value != 0'.
   /// interleave_count: interleaves 'value' loop interations.
+  /// unroll: unroll loop if 'value != 0'.
+  /// unroll_count: unrolls loop 'value' times.
 
   /// FIXME: Add Pragma spelling to tablegen and
   /// use it here.
@@ -1789,8 +1791,10 @@ def LoopHint : Attr {
 
   /// State of the loop optimization specified by the spelling.
   let Args = [EnumArgument<"Option", "OptionType",
-                          ["vectorize", "vectorize_width", "interleave", "interleave_count"],
-                          ["Vectorize", "VectorizeWidth", "Interleave", "InterleaveCount"]>,
+                          ["vectorize", "vectorize_width", "interleave", "interleave_count",
+                           "unroll", "unroll_count"],
+                          ["Vectorize", "VectorizeWidth", "Interleave", "InterleaveCount",
+                           "Unroll", "UnrollCount"]>,
               DefaultIntArgument<"Value", 1>];
 
   let AdditionalMembers = [{
@@ -1800,6 +1804,8 @@ def LoopHint : Attr {
     case VectorizeWidth: return "vectorize_width";
     case Interleave: return "interleave";
     case InterleaveCount: return "interleave_count";
+    case Unroll: return "unroll";
+    case UnrollCount: return "unroll_count";
     }
     llvm_unreachable("Unhandled LoopHint option.");
   }
@@ -1813,7 +1819,8 @@ def LoopHint : Attr {
   // FIXME: Modify pretty printer to print this pragma.
   void print(raw_ostream &OS, const PrintingPolicy &Policy) const {
     OS << "#pragma clang loop " << getOptionName(option) << "(";
-    if (option == VectorizeWidth || option == InterleaveCount)
+    if (option == VectorizeWidth || option == InterleaveCount ||
+        option == UnrollCount)
       OS << value;
     else
       OS << getValueName(value);
