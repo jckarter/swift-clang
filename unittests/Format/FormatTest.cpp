@@ -1900,6 +1900,10 @@ TEST_F(FormatTest, FormatsEnum) {
                    "\n"
                    "  THREE\n"
                    "}"));
+  verifyFormat("enum E { // comment\n"
+               "  ONE,\n"
+               "  TWO\n"
+               "};");
 }
 
 TEST_F(FormatTest, FormatsEnumsWithErrors) {
@@ -4167,6 +4171,12 @@ TEST_F(FormatTest, AlwaysBreakBeforeMultilineStrings) {
                "     L\"cccc\");",
                Break);
 
+  // As we break before unary operators, breaking right after them is bad.
+  verifyFormat("string foo = abc ? \"x\"\n"
+               "                   \"blah blah blah blah blah blah\"\n"
+               "                 : \"y\";",
+               Break);
+
   // Don't break if there is no column gain.
   verifyFormat("f(\"aaaa\"\n"
                "  \"bbbb\");",
@@ -4730,6 +4740,7 @@ TEST_F(FormatTest, UnderstandsUsesOfStarAndAmp) {
   verifyFormat("auto a = [](int **&, int ***) {};");
   verifyFormat("auto PointerBinding = [](const char *S) {};");
   verifyFormat("typedef typeof(int(int, int)) *MyFunc;");
+  verifyFormat("[](const decltype(*a) &value) {}");
   verifyIndependentOfContext("typedef void (*f)(int *a);");
   verifyIndependentOfContext("int i{a * b};");
   verifyIndependentOfContext("aaa && aaa->f();");
@@ -5100,6 +5111,10 @@ TEST_F(FormatTest, FormatsArrays) {
 
   verifyGoogleFormat("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa<int>\n"
                      "    aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa[aaaaaaaaaaaa];");
+  verifyFormat(
+      "aaaaaaaaaaa aaaaaaaaaaaaaaa = aaaaaaaaaaaaaaaaaaaaaaaaaa->aaaaaaaaa[0]\n"
+      "                                  .aaaaaaa[0]\n"
+      "                                  .aaaaaaaaaaaaaaaaaaaaaa();");
 }
 
 TEST_F(FormatTest, LineStartsWithSpecialCharacter) {
@@ -5404,7 +5419,8 @@ TEST_F(FormatTest, LayoutCxx11BraceInitializers) {
       "             BracedList{ // comment 1 (Forcing interesting break)\n"
       "                         param1, param2,\n"
       "                         // comment 2\n"
-      "                         param3, param4 });",
+      "                         param3, param4\n"
+      "             });",
       ExtraSpaces);
   verifyFormat(
       "std::this_thread::sleep_for(\n"
@@ -8165,10 +8181,9 @@ TEST_F(FormatTest, ParsesConfigurationWithLanguages) {
   CHECK_PARSE("Language: Cpp\n"
               "IndentWidth: 12",
               IndentWidth, 12u);
-  EXPECT_EQ(llvm::errc::not_supported,
-            parseConfiguration("Language: JavaScript\n"
-                               "IndentWidth: 34",
-                               &Style));
+  EXPECT_EQ(ParseError::Unsuitable, parseConfiguration("Language: JavaScript\n"
+                                                       "IndentWidth: 34",
+                                                       &Style));
   EXPECT_EQ(12u, Style.IndentWidth);
   CHECK_PARSE("IndentWidth: 56", IndentWidth, 56u);
   EXPECT_EQ(FormatStyle::LK_Cpp, Style.Language);
@@ -8178,9 +8193,9 @@ TEST_F(FormatTest, ParsesConfigurationWithLanguages) {
               "IndentWidth: 12",
               IndentWidth, 12u);
   CHECK_PARSE("IndentWidth: 23", IndentWidth, 23u);
-  EXPECT_EQ(llvm::errc::not_supported, parseConfiguration("Language: Cpp\n"
-                                                          "IndentWidth: 34",
-                                                          &Style));
+  EXPECT_EQ(ParseError::Unsuitable, parseConfiguration("Language: Cpp\n"
+                                                       "IndentWidth: 34",
+                                                       &Style));
   EXPECT_EQ(23u, Style.IndentWidth);
   CHECK_PARSE("IndentWidth: 56", IndentWidth, 56u);
   EXPECT_EQ(FormatStyle::LK_JavaScript, Style.Language);
@@ -8237,24 +8252,21 @@ TEST_F(FormatTest, ParsesConfigurationWithLanguages) {
   EXPECT_EQ(FormatStyle::BS_Stroustrup, Style.BreakBeforeBraces);
   EXPECT_EQ(789u, Style.TabWidth);
 
-
-  EXPECT_EQ(llvm::errc::invalid_argument,
-            parseConfiguration("---\n"
-                               "Language: JavaScript\n"
-                               "IndentWidth: 56\n"
-                               "---\n"
-                               "IndentWidth: 78\n"
-                               "...\n",
-                               &Style));
-  EXPECT_EQ(llvm::errc::invalid_argument,
-            parseConfiguration("---\n"
-                               "Language: JavaScript\n"
-                               "IndentWidth: 56\n"
-                               "---\n"
-                               "Language: JavaScript\n"
-                               "IndentWidth: 78\n"
-                               "...\n",
-                               &Style));
+  EXPECT_EQ(ParseError::Error, parseConfiguration("---\n"
+                                                  "Language: JavaScript\n"
+                                                  "IndentWidth: 56\n"
+                                                  "---\n"
+                                                  "IndentWidth: 78\n"
+                                                  "...\n",
+                                                  &Style));
+  EXPECT_EQ(ParseError::Error, parseConfiguration("---\n"
+                                                  "Language: JavaScript\n"
+                                                  "IndentWidth: 56\n"
+                                                  "---\n"
+                                                  "Language: JavaScript\n"
+                                                  "IndentWidth: 78\n"
+                                                  "...\n",
+                                                  &Style));
 
   EXPECT_EQ(FormatStyle::LK_Cpp, Style.Language);
 }
@@ -8702,6 +8714,9 @@ TEST_F(FormatTest, FormatsLambdas) {
                "               int j = 43;\n"
                "               return j;\n"
                "             });");
+
+  // More complex introducers.
+  verifyFormat("return [i, args...] {};");
 
   // Not lambdas.
   verifyFormat("constexpr char hello[]{\"hello\"};");

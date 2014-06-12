@@ -1195,6 +1195,7 @@ bool ObjCInterfaceDecl::hasDesignatedInitializers() const {
     return false;
   if (data().ExternallyCompleted)
     LoadExternalDefinition();
+
   return data().HasDesignatedInitializers;
 }
 
@@ -1210,7 +1211,7 @@ ObjCImplementationDecl::getObjCRuntimeNameAsString() const {
   if (ObjCInterfaceDecl *ID =
       const_cast<ObjCImplementationDecl*>(this)->getClassInterface())
     return ID->getObjCRuntimeNameAsString();
-  
+
   return getName();
 }
 

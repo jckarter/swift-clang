@@ -4377,8 +4377,23 @@ static void checkDLLAttribute(Sema &S, CXXRecordDecl *Class) {
   // specialization bases.
 
   for (Decl *Member : Class->decls()) {
-    if (!isa<CXXMethodDecl>(Member) && !isa<VarDecl>(Member))
+    VarDecl *VD = dyn_cast<VarDecl>(Member);
+    CXXMethodDecl *MD = dyn_cast<CXXMethodDecl>(Member);
+
+    // Only methods and static fields inherit the attributes.
+    if (!VD && !MD)
       continue;
+
+    // Don't process deleted methods.
+    if (MD && MD->isDeleted())
+      continue;
+
+    if (MD && MD->isMoveAssignmentOperator() && !ClassExported &&
+        MD->isInlined()) {
+      // Current MSVC versions don't export the move assignment operators, so
+      // don't attempt to import them if we have a definition.
+      continue;
+    }
 
     if (InheritableAttr *MemberAttr = getDLLAttr(Member)) {
       if (S.Context.getTargetInfo().getCXXABI().isMicrosoft() &&
@@ -4399,9 +4414,6 @@ static void checkDLLAttribute(Sema &S, CXXRecordDecl *Class) {
 
     if (CXXMethodDecl *MD = dyn_cast<CXXMethodDecl>(Member)) {
       if (ClassExported) {
-        if (MD->isDeleted())
-          continue;
-
         if (MD->isUserProvided()) {
           // Instantiate non-default methods.
           S.MarkFunctionReferenced(Class->getLocation(), MD);

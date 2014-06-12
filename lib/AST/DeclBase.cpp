@@ -913,7 +913,7 @@ DeclContext *DeclContext::getPrimaryContext() {
   case Decl::ObjCInterface:
     if (ObjCInterfaceDecl *Def = cast<ObjCInterfaceDecl>(this)->getDefinition())
       return Def;
-
+      
     return this;
       
   case Decl::ObjCProtocol:
