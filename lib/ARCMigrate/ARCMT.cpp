@@ -69,7 +69,7 @@ bool CapturedDiagList::hasDiagnostic(ArrayRef<unsigned> IDs,
            diagLoc.isBeforeInTranslationUnitThan(range.getEnd()))) {
       return true;
     }
- 
+
     ++I;
   }
 
