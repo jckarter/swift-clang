@@ -143,10 +143,60 @@ inline S &getS() {
 //   init.end:
 // CHECK: ret %struct.S* @"\01?TheS@?1??getS@@YAAAUS@@XZ@4U2@A"
 
+inline int enum_in_function() {
+  // CHECK-LABEL: define linkonce_odr i32 @"\01?enum_in_function@@YAHXZ"()
+  static enum e { foo, bar, baz } x;
+  // CHECK: @"\01?x@?1??enum_in_function@@YAHXZ@4W4e@?1??1@YAHXZ@A"
+  static int y;
+  // CHECK: @"\01?y@?1??enum_in_function@@YAHXZ@4HA"
+  return x + y;
+};
+
+struct T {
+  enum e { foo, bar, baz };
+  int enum_in_struct() {
+    // CHECK-LABEL: define linkonce_odr x86_thiscallcc i32 @"\01?enum_in_struct@T@@QAEHXZ"
+    static int x;
+    // CHECK: @"\01?x@?1??enum_in_struct@T@@QAEHXZ@4HA"
+    return x++;
+  }
+};
+
+inline int switch_test(int x) {
+  // CHECK-LABEL: define linkonce_odr i32 @"\01?switch_test@@YAHH@Z"(i32 %x)
+  switch (x) {
+    static int a;
+    // CHECK: @"\01?a@?3??switch_test@@YAHH@Z@4HA"
+    case 0:
+      a++;
+      return 1;
+    case 1:
+      static int b;
+      // CHECK: @"\01?b@?3??switch_test@@YAHH@Z@4HA"
+      return b++;
+    case 2: {
+      static int c;
+      // CHECK: @"\01?c@?4??switch_test@@YAHH@Z@4HA"
+      return b + c++;
+    }
+  };
+}
+
+int f();
+inline void switch_test2() {
+  // CHECK-LABEL: define linkonce_odr void @"\01?switch_test2@@YAXXZ"()
+  // CHECK: @"\01?x@?2??switch_test2@@YAXXZ@4HA"
+  switch (1) default: static int x = f();
+}
+
 void force_usage() {
   UnreachableStatic();
   getS();
   (void)B<int>::foo;  // (void) - force usage
+  enum_in_function();
+  (void)&T::enum_in_struct;
+  switch_test(1);
+  switch_test2();
 }
 
 // CHECK: define linkonce_odr void @"\01??__Efoo@?$B@H@@2VA@@A@YAXXZ"()
