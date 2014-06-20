@@ -277,6 +277,13 @@ def ext_for_range : ExtWarn<
 def warn_cxx98_compat_for_range : Warning<
   "range-based for loop is incompatible with C++98">,
   InGroup<CXX98Compat>, DefaultIgnore;
+def ext_for_range_identifier : ExtWarn<
+  "range-based for loop with implicit deduced type is a C++1z extension">,
+  InGroup<CXX1z>;
+def warn_cxx1y_compat_for_range_identifier : Warning<
+  "range-based for loop with implicit deduced type is incompatible with "
+  "C++ standards before C++1z">,
+  InGroup<CXXPre1zCompat>, DefaultIgnore;
 def err_for_range_expected_decl : Error<
   "for range declaration must declare a variable">;
 def err_argument_required_after_attribute : Error<
@@ -902,6 +909,8 @@ def err_omp_more_one_clause : Error<
 def err_pragma_loop_invalid_option : Error<
   "%select{invalid|missing}0 option%select{ %1|}0; expected vectorize, "
   "vectorize_width, interleave, interleave_count, unroll, or unroll_count">;
+def err_pragma_loop_missing_argument : Error<
+  "missing argument to loop pragma %0">;
 } // end of Parse Issue category.
 
 let CategoryName = "Modules Issue" in {
