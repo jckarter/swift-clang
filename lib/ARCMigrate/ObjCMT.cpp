@@ -29,7 +29,6 @@
 #include "clang/Lex/Preprocessor.h"
 #include "clang/Rewrite/Core/Rewriter.h"
 #include "clang/StaticAnalyzer/Checkers/ObjCRetainCount.h"
-#include "llvm/ADT/OwningPtr.h"
 #include "llvm/ADT/SmallString.h"
 #include "llvm/Support/Path.h"
 #include "llvm/Support/SourceMgr.h"
@@ -1879,12 +1878,12 @@ class XCTMigrateASTConsumer : public ASTConsumer {
 
 public:
   std::string MigrateDir;
-  llvm::OwningPtr<edit::EditedSource> Editor;
+  std::unique_ptr<edit::EditedSource> Editor;
   FileRemapper &Remapper;
   FileManager &FileMgr;
   const PPConditionalDirectiveRecord *PPRec;
   XCMTPPCallbacks &XCTMTPP;
-  llvm::OwningPtr<XCTMigrator> XCTM;
+  std::unique_ptr<XCTMigrator> XCTM;
 
   XCTMigrateASTConsumer(StringRef migrateDir,
                         FileRemapper &remapper,
