@@ -288,6 +288,13 @@ void OMPClauseProfiler::VisitOMPDefaultClause(const OMPDefaultClause *C) { }
 
 void OMPClauseProfiler::VisitOMPProcBindClause(const OMPProcBindClause *C) { }
 
+void OMPClauseProfiler::VisitOMPScheduleClause(const OMPScheduleClause *C) {
+  if (C->getChunkSize())
+    Profiler->VisitStmt(C->getChunkSize());
+}
+
+void OMPClauseProfiler::VisitOMPOrderedClause(const OMPOrderedClause *) {}
+
 template<typename T>
 void OMPClauseProfiler::VisitOMPClauseList(T *Node) {
   for (auto *I : Node->varlists())

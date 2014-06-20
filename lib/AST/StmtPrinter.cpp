@@ -628,6 +628,20 @@ void OMPClausePrinter::VisitOMPProcBindClause(OMPProcBindClause *Node) {
      << ")";
 }
 
+void OMPClausePrinter::VisitOMPScheduleClause(OMPScheduleClause *Node) {
+  OS << "schedule("
+     << getOpenMPSimpleClauseTypeName(OMPC_schedule, Node->getScheduleKind());
+  if (Node->getChunkSize()) {
+    OS << ", ";
+    Node->getChunkSize()->printPretty(OS, nullptr, Policy);
+  }
+  OS << ")";
+}
+
+void OMPClausePrinter::VisitOMPOrderedClause(OMPOrderedClause *) {
+  OS << "ordered";
+}
+
 template<typename T>
 void OMPClausePrinter::VisitOMPClauseList(T *Node, char StartSym) {
   for (typename T::varlist_iterator I = Node->varlist_begin(),
