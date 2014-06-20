@@ -926,11 +926,11 @@ protected:
   /// GetPropertyName - Return a unique constant for the given
   /// name. The return value has type char *.
   llvm::Constant *GetPropertyName(IdentifierInfo *Ident);
-  
+
   // FIXME: This can be dropped once string functions are unified.
   llvm::Constant *GetPropertyTypeString(const ObjCPropertyDecl *PD,
                                         const Decl *Container);
-  
+
   /// GetClassName - Return a unique constant for the given selector's
   /// runtime name (which may change via use of objc_runtime_name attribute on
   /// class or protocol definition. The return value has type char *.
@@ -5970,7 +5970,7 @@ void CGObjCNonFragileABIMac::GenerateCategory(const ObjCCategoryImplDecl *OCD) {
   ExtCatName += Interface->getObjCRuntimeNameAsString();
   ExtCatName += "_$_";
   ExtCatName += OCD->getNameAsString();
-  
+
   llvm::SmallString<64> ExtClassName(getClassSymbolPrefix());
   ExtClassName += Interface->getObjCRuntimeNameAsString();
 
@@ -5983,12 +5983,12 @@ void CGObjCNonFragileABIMac::GenerateCategory(const ObjCCategoryImplDecl *OCD) {
   Values[1] = ClassGV;
   std::vector<llvm::Constant*> Methods;
   llvm::SmallString<64> MethodListName(Prefix);
-  
+
   MethodListName += "INSTANCE_METHODS_";
   MethodListName += Interface->getObjCRuntimeNameAsString();
   MethodListName += "_$_";
   MethodListName += OCD->getName();
-  
+
   for (const auto *I : OCD->instance_methods())
     // Instance methods should always be defined.
     Methods.push_back(GetMethodConstant(I));
@@ -6002,7 +6002,7 @@ void CGObjCNonFragileABIMac::GenerateCategory(const ObjCCategoryImplDecl *OCD) {
   MethodListName += Interface->getObjCRuntimeNameAsString();
   MethodListName += "_$_";
   MethodListName += OCD->getNameAsString();
-  
+
   Methods.clear();
   for (const auto *I : OCD->class_methods())
     // Class methods should always be defined.

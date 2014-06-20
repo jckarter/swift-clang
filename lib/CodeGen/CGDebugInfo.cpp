@@ -364,10 +364,6 @@ void CGDebugInfo::CreateCompileUnit() {
   }
 
   std::string Producer = getClangFullVersion();
-  // Don't let 'KLONDIKE' show up in debug info.
-  size_t Pos = Producer.find("_KLONDIKE");
-  if (Pos != std::string::npos)
-    Producer.replace(Pos, strlen("_KLONDIKE"), "");
 
   // Figure out which version of the ObjC runtime we have.
   unsigned RuntimeVers = 0;
