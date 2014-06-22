@@ -944,9 +944,6 @@ void StmtPrinter::VisitIntegerLiteral(IntegerLiteral *Node) {
   // Emit suffixes.  Integer literals are always a builtin integer type.
   switch (Node->getType()->getAs<BuiltinType>()->getKind()) {
   default: llvm_unreachable("Unexpected type for integer literal!");
-  // FIXME: The Short and UShort cases are to handle cases where a short
-  // integeral literal is formed during template instantiation.  They should
-  // be removed when template instantiation no longer needs integer literals.
   case BuiltinType::SChar:     OS << "i8"; break;
   case BuiltinType::UChar:     OS << "Ui8"; break;
   case BuiltinType::Short:     OS << "i16"; break;
