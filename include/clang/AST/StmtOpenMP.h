@@ -67,8 +67,9 @@ protected:
   OMPExecutableDirective(const T *, StmtClass SC, OpenMPDirectiveKind K,
                          SourceLocation StartLoc, SourceLocation EndLoc,
                          unsigned NumClauses, unsigned NumChildren)
-      : Stmt(SC), Kind(K), StartLoc(StartLoc), EndLoc(EndLoc),
-        NumClauses(NumClauses), NumChildren(NumChildren),
+      : Stmt(SC), Kind(K), StartLoc(std::move(StartLoc)),
+        EndLoc(std::move(EndLoc)), NumClauses(NumClauses),
+        NumChildren(NumChildren),
         ClausesOffset(llvm::RoundUpToAlignment(sizeof(T),
                                                llvm::alignOf<OMPClause *>())) {}
 
@@ -85,6 +86,45 @@ protected:
   void setAssociatedStmt(Stmt *S) { *child_begin() = S; }
 
 public:
+  /// \brief Iterates over a filtered subrange of clauses applied to a
+  /// directive.
+  ///
+  /// This iterator visits only those declarations that meet some run-time
+  /// criteria.
+  template <class FilterPredicate> class filtered_clause_iterator {
+    ArrayRef<OMPClause *>::const_iterator Current;
+    ArrayRef<OMPClause *>::const_iterator End;
+    FilterPredicate Pred;
+    void SkipToNextClause() {
+      while (Current != End && !Pred(*Current))
+        ++Current;
+    }
+
+  public:
+    typedef const OMPClause *value_type;
+    filtered_clause_iterator() : Current(), End() {}
+    filtered_clause_iterator(ArrayRef<OMPClause *> Arr, FilterPredicate Pred)
+        : Current(Arr.begin()), End(Arr.end()), Pred(Pred) {
+      SkipToNextClause();
+    }
+    value_type operator*() const { return *Current; }
+    value_type operator->() const { return *Current; }
+    filtered_clause_iterator &operator++() {
+      ++Current;
+      SkipToNextClause();
+      return *this;
+    }
+
+    filtered_clause_iterator operator++(int) {
+      filtered_clause_iterator tmp(*this);
+      ++(*this);
+      return tmp;
+    }
+
+    bool operator!() { return Current == End; }
+    operator bool() { return Current != End; }
+  };
+
   /// \brief Returns starting location of directive kind.
   SourceLocation getLocStart() const { return StartLoc; }
   /// \brief Returns ending location of directive.
@@ -230,11 +270,12 @@ public:
   /// \param C AST context.
   /// \param StartLoc Starting location of the directive kind.
   /// \param EndLoc Ending Location of the directive.
+  /// \param CollapsedNum Number of collapsed loops.
   /// \param Clauses List of clauses.
   /// \param AssociatedStmt Statement, associated with the directive.
   ///
   static OMPSimdDirective *Create(const ASTContext &C, SourceLocation StartLoc,
-                                  SourceLocation EndLoc,
+                                  SourceLocation EndLoc, unsigned CollapsedNum,
                                   ArrayRef<OMPClause *> Clauses,
                                   Stmt *AssociatedStmt);
 
@@ -298,11 +339,12 @@ public:
   /// \param C AST context.
   /// \param StartLoc Starting location of the directive kind.
   /// \param EndLoc Ending Location of the directive.
+  /// \param CollapsedNum Number of collapsed loops.
   /// \param Clauses List of clauses.
   /// \param AssociatedStmt Statement, associated with the directive.
   ///
   static OMPForDirective *Create(const ASTContext &C, SourceLocation StartLoc,
-                                 SourceLocation EndLoc,
+                                 SourceLocation EndLoc, unsigned CollapsedNum,
                                  ArrayRef<OMPClause *> Clauses,
                                  Stmt *AssociatedStmt);
 

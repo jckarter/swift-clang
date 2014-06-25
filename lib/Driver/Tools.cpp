@@ -2432,6 +2432,27 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
     }
   }
 
+  // OpenBSD-specific defaults for PIE
+  if (getToolChain().getTriple().getOS() == llvm::Triple::OpenBSD) {
+    switch (getToolChain().getTriple().getArch()) {
+    case llvm::Triple::mips64:
+    case llvm::Triple::mips64el:
+    case llvm::Triple::sparc:
+    case llvm::Triple::x86:
+    case llvm::Triple::x86_64:
+      IsPICLevelTwo = false; // "-fpie"
+      break;
+
+    case llvm::Triple::ppc:
+    case llvm::Triple::sparcv9:
+      IsPICLevelTwo = true; // "-fPIE"
+      break;
+
+    default:
+      break;
+    }
+  }
+
   // For the PIC and PIE flag options, this logic is different from the
   // legacy logic in very old versions of GCC, as that logic was just
   // a bug no one had ever fixed. This logic is both more rational and
@@ -5115,6 +5136,22 @@ bool mips::hasMipsAbiArg(const ArgList &Args, const char *Value) {
   return A && (A->getValue() == StringRef(Value));
 }
 
+bool mips::isNaN2008(const ArgList &Args) {
+  if (Arg *NaNArg = Args.getLastArg(options::OPT_mnan_EQ))
+    return llvm::StringSwitch<bool>(NaNArg->getValue())
+               .Case("2008", true)
+               .Case("legacy", false)
+               .Default(false);
+
+  // NaN2008 is the default for MIPS32r6/MIPS64r6.
+  if (Arg *CPUArg = Args.getLastArg(options::OPT_mcpu_EQ))
+    return llvm::StringSwitch<bool>(CPUArg->getValue())
+               .Cases("mips32r6", "mips64r6", true)
+               .Default(false);
+
+  return false;
+}
+
 llvm::Triple::ArchType darwin::getArchTypeForMachOArchName(StringRef Str) {
   // See arch(3) and llvm-gcc's driver-driver.c. We don't implement support for
   // archs which Darwin doesn't use.
@@ -6946,14 +6983,17 @@ static StringRef getLinuxDynamicLinker(const ArgList &Args,
     else
       return "/lib/ld-linux.so.3";              /* TODO: check which dynamic linker name.  */
   } else if (ToolChain.getArch() == llvm::Triple::mips ||
-             ToolChain.getArch() == llvm::Triple::mipsel)
+             ToolChain.getArch() == llvm::Triple::mipsel) {
+    if (mips::isNaN2008(Args))
+      return "/lib/ld-linux-mipsn8.so.1";
     return "/lib/ld.so.1";
-  else if (ToolChain.getArch() == llvm::Triple::mips64 ||
-           ToolChain.getArch() == llvm::Triple::mips64el) {
+  } else if (ToolChain.getArch() == llvm::Triple::mips64 ||
+             ToolChain.getArch() == llvm::Triple::mips64el) {
     if (mips::hasMipsAbiArg(Args, "n32"))
-      return "/lib32/ld.so.1";
-    else
-      return "/lib64/ld.so.1";
+      return mips::isNaN2008(Args) ? "/lib32/ld-linux-mipsn8.so.1"
+                                   : "/lib32/ld.so.1";
+    return mips::isNaN2008(Args) ? "/lib64/ld-linux-mipsn8.so.1"
+                                 : "/lib64/ld.so.1";
   } else if (ToolChain.getArch() == llvm::Triple::ppc)
     return "/lib/ld.so.1";
   else if (ToolChain.getArch() == llvm::Triple::ppc64 ||

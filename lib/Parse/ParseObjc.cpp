@@ -2868,7 +2868,7 @@ Parser::ParseObjCProtocolExpression(SourceLocation AtLoc) {
 }
 
 ///     objc-selector-expression
-///       @selector '(' objc-keyword-selector ')'
+///       @selector '(' '('[opt] objc-keyword-selector ')'[opt] ')'
 ExprResult Parser::ParseObjCSelectorExpression(SourceLocation AtLoc) {
   SourceLocation SelectorLoc = ConsumeToken();
 
@@ -2880,7 +2880,10 @@ ExprResult Parser::ParseObjCSelectorExpression(SourceLocation AtLoc) {
   
   BalancedDelimiterTracker T(*this, tok::l_paren);
   T.consumeOpen();
-
+  bool HasOptionalParen = Tok.is(tok::l_paren);
+  if (HasOptionalParen)
+    ConsumeParen();
+  
   if (Tok.is(tok::code_completion)) {
     Actions.CodeCompleteObjCSelector(getCurScope(), KeyIdents);
     cutOffParsing();
@@ -2893,6 +2896,7 @@ ExprResult Parser::ParseObjCSelectorExpression(SourceLocation AtLoc) {
     return ExprError(Diag(Tok, diag::err_expected) << tok::identifier);
 
   KeyIdents.push_back(SelIdent);
+  
   unsigned nColons = 0;
   if (Tok.isNot(tok::r_paren)) {
     while (1) {
@@ -2920,11 +2924,14 @@ ExprResult Parser::ParseObjCSelectorExpression(SourceLocation AtLoc) {
         break;
     }
   }
+  if (HasOptionalParen && Tok.is(tok::r_paren))
+    ConsumeParen(); // ')'
   T.consumeClose();
   Selector Sel = PP.getSelectorTable().getSelector(nColons, &KeyIdents[0]);
   return Actions.ParseObjCSelectorExpression(Sel, AtLoc, SelectorLoc,
                                              T.getOpenLocation(),
-                                             T.getCloseLocation());
+                                             T.getCloseLocation(),
+                                             !HasOptionalParen);
  }
 
 void Parser::ParseLexedObjCMethodDefs(LexedMethod &LM, bool parseMethod) {
