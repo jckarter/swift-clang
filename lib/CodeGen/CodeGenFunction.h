@@ -1903,6 +1903,8 @@ public:
   void EmitOMPParallelDirective(const OMPParallelDirective &S);
   void EmitOMPSimdDirective(const OMPSimdDirective &S);
   void EmitOMPForDirective(const OMPForDirective &S);
+  void EmitOMPSectionsDirective(const OMPSectionsDirective &S);
+  void EmitOMPSectionDirective(const OMPSectionDirective &S);
 
   //===--------------------------------------------------------------------===//
   //                         LValue Expression Emission

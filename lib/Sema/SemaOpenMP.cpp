@@ -910,6 +910,20 @@ void Sema::ActOnOpenMPRegionStart(OpenMPDirectiveKind DKind, SourceLocation Loc,
     ActOnCapturedRegionStart(Loc, CurScope, CR_OpenMP, Params);
     break;
   }
+  case OMPD_sections: {
+    Sema::CapturedParamNameType Params[] = {
+        std::make_pair(StringRef(), QualType()) // __context with shared vars
+    };
+    ActOnCapturedRegionStart(Loc, CurScope, CR_OpenMP, Params);
+    break;
+  }
+  case OMPD_section: {
+    Sema::CapturedParamNameType Params[] = {
+        std::make_pair(StringRef(), QualType()) // __context with shared vars
+    };
+    ActOnCapturedRegionStart(Loc, CurScope, CR_OpenMP, Params);
+    break;
+  }
   case OMPD_threadprivate:
   case OMPD_task:
     llvm_unreachable("OpenMP Directive is not allowed");
@@ -931,6 +945,19 @@ bool CheckNestingOfRegions(Sema &SemaRef, DSAStackTy *Stack,
       // OpenMP constructs may not be nested inside a simd region.
       SemaRef.Diag(StartLoc, diag::err_omp_prohibited_region_simd);
       return true;
+    }
+    if (CurrentRegion == OMPD_section) {
+      // OpenMP [2.7.2, sections Construct, Restrictions]
+      // Orphaned section directives are prohibited. That is, the section
+      // directives must appear within the sections construct and must not be
+      // encountered elsewhere in the sections region.
+      if (ParentRegion != OMPD_sections) {
+        SemaRef.Diag(StartLoc, diag::err_omp_orphaned_section_directive)
+            << (ParentRegion != OMPD_unknown)
+            << getOpenMPDirectiveName(ParentRegion);
+        return true;
+      }
+      return false;
     }
     if (isOpenMPWorksharingDirective(CurrentRegion) &&
         !isOpenMPParallelDirective(CurrentRegion) &&
@@ -996,6 +1023,15 @@ StmtResult Sema::ActOnOpenMPExecutableDirective(OpenMPDirectiveKind Kind,
     break;
   case OMPD_for:
     Res = ActOnOpenMPForDirective(ClausesWithImplicit, AStmt, StartLoc, EndLoc);
+    break;
+  case OMPD_sections:
+    Res = ActOnOpenMPSectionsDirective(ClausesWithImplicit, AStmt, StartLoc,
+                                       EndLoc);
+    break;
+  case OMPD_section:
+    assert(ClausesWithImplicit.empty() &&
+           "No clauses is allowed for 'omp section' directive");
+    Res = ActOnOpenMPSectionDirective(AStmt, StartLoc, EndLoc);
     break;
   case OMPD_threadprivate:
   case OMPD_task:
@@ -1565,6 +1601,50 @@ StmtResult Sema::ActOnOpenMPForDirective(ArrayRef<OMPClause *> Clauses,
   getCurFunction()->setHasBranchProtectedScope();
   return OMPForDirective::Create(Context, StartLoc, EndLoc, NestedLoopCount,
                                  Clauses, AStmt);
+}
+
+StmtResult Sema::ActOnOpenMPSectionsDirective(ArrayRef<OMPClause *> Clauses,
+                                              Stmt *AStmt,
+                                              SourceLocation StartLoc,
+                                              SourceLocation EndLoc) {
+  assert(AStmt && isa<CapturedStmt>(AStmt) && "Captured statement expected");
+  auto BaseStmt = AStmt;
+  while (CapturedStmt *CS = dyn_cast_or_null<CapturedStmt>(BaseStmt))
+    BaseStmt = CS->getCapturedStmt();
+  if (auto C = dyn_cast_or_null<CompoundStmt>(BaseStmt)) {
+    auto S = C->children();
+    if (!S)
+      return StmtError();
+    // All associated statements must be '#pragma omp section' except for
+    // the first one.
+    for (++S; S; ++S) {
+      auto SectionStmt = *S;
+      if (!SectionStmt || !isa<OMPSectionDirective>(SectionStmt)) {
+        if (SectionStmt)
+          Diag(SectionStmt->getLocStart(),
+               diag::err_omp_sections_substmt_not_section);
+        return StmtError();
+      }
+    }
+  } else {
+    Diag(AStmt->getLocStart(), diag::err_omp_sections_not_compound_stmt);
+    return StmtError();
+  }
+
+  getCurFunction()->setHasBranchProtectedScope();
+
+  return OMPSectionsDirective::Create(Context, StartLoc, EndLoc, Clauses,
+                                      AStmt);
+}
+
+StmtResult Sema::ActOnOpenMPSectionDirective(Stmt *AStmt,
+                                             SourceLocation StartLoc,
+                                             SourceLocation EndLoc) {
+  assert(AStmt && isa<CapturedStmt>(AStmt) && "Captured statement expected");
+
+  getCurFunction()->setHasBranchProtectedScope();
+
+  return OMPSectionDirective::Create(Context, StartLoc, EndLoc, AStmt);
 }
 
 OMPClause *Sema::ActOnOpenMPSingleExprClause(OpenMPClauseKind Kind, Expr *Expr,

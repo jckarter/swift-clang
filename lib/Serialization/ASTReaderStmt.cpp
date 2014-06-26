@@ -1906,6 +1906,18 @@ void ASTStmtReader::VisitOMPForDirective(OMPForDirective *D) {
   VisitOMPExecutableDirective(D);
 }
 
+void ASTStmtReader::VisitOMPSectionsDirective(OMPSectionsDirective *D) {
+  VisitStmt(D);
+  // The NumClauses field was read in ReadStmtFromStream.
+  ++Idx;
+  VisitOMPExecutableDirective(D);
+}
+
+void ASTStmtReader::VisitOMPSectionDirective(OMPSectionDirective *D) {
+  VisitStmt(D);
+  VisitOMPExecutableDirective(D);
+}
+
 //===----------------------------------------------------------------------===//
 // ASTReader Implementation
 //===----------------------------------------------------------------------===//
@@ -2400,6 +2412,15 @@ Stmt *ASTReader::ReadStmtFromStream(ModuleFile &F) {
                                        Empty);
       break;
     }
+
+    case STMT_OMP_SECTIONS_DIRECTIVE:
+      S = OMPSectionsDirective::CreateEmpty(
+          Context, Record[ASTStmtReader::NumStmtFields], Empty);
+      break;
+
+    case STMT_OMP_SECTION_DIRECTIVE:
+      S = OMPSectionDirective::CreateEmpty(Context, Empty);
+      break;
 
     case EXPR_CXX_OPERATOR_CALL:
       S = new (Context) CXXOperatorCallExpr(Context, Empty);

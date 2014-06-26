@@ -1386,3 +1386,47 @@ OMPForDirective *OMPForDirective::CreateEmpty(const ASTContext &C,
   return new (Mem) OMPForDirective(CollapsedNum, NumClauses);
 }
 
+OMPSectionsDirective *OMPSectionsDirective::Create(
+    const ASTContext &C, SourceLocation StartLoc, SourceLocation EndLoc,
+    ArrayRef<OMPClause *> Clauses, Stmt *AssociatedStmt) {
+  unsigned Size = llvm::RoundUpToAlignment(sizeof(OMPSectionsDirective),
+                                           llvm::alignOf<OMPClause *>());
+  void *Mem =
+      C.Allocate(Size + sizeof(OMPClause *) * Clauses.size() + sizeof(Stmt *));
+  OMPSectionsDirective *Dir =
+      new (Mem) OMPSectionsDirective(StartLoc, EndLoc, Clauses.size());
+  Dir->setClauses(Clauses);
+  Dir->setAssociatedStmt(AssociatedStmt);
+  return Dir;
+}
+
+OMPSectionsDirective *OMPSectionsDirective::CreateEmpty(const ASTContext &C,
+                                                        unsigned NumClauses,
+                                                        EmptyShell) {
+  unsigned Size = llvm::RoundUpToAlignment(sizeof(OMPSectionsDirective),
+                                           llvm::alignOf<OMPClause *>());
+  void *Mem =
+      C.Allocate(Size + sizeof(OMPClause *) * NumClauses + sizeof(Stmt *));
+  return new (Mem) OMPSectionsDirective(NumClauses);
+}
+
+OMPSectionDirective *OMPSectionDirective::Create(const ASTContext &C,
+                                                 SourceLocation StartLoc,
+                                                 SourceLocation EndLoc,
+                                                 Stmt *AssociatedStmt) {
+  unsigned Size = llvm::RoundUpToAlignment(sizeof(OMPSectionsDirective),
+                                           llvm::alignOf<Stmt *>());
+  void *Mem = C.Allocate(Size + sizeof(Stmt *));
+  OMPSectionDirective *Dir = new (Mem) OMPSectionDirective(StartLoc, EndLoc);
+  Dir->setAssociatedStmt(AssociatedStmt);
+  return Dir;
+}
+
+OMPSectionDirective *OMPSectionDirective::CreateEmpty(const ASTContext &C,
+                                                      EmptyShell) {
+  unsigned Size = llvm::RoundUpToAlignment(sizeof(OMPSectionDirective),
+                                           llvm::alignOf<Stmt *>());
+  void *Mem = C.Allocate(Size + sizeof(Stmt *));
+  return new (Mem) OMPSectionDirective();
+}
+

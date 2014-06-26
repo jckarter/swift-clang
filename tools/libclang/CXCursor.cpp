@@ -522,6 +522,12 @@ CXCursor cxcursor::MakeCXCursor(const Stmt *S, const Decl *Parent,
   case Stmt::OMPForDirectiveClass:
     K = CXCursor_OMPForDirective;
     break;
+  case Stmt::OMPSectionsDirectiveClass:
+    K = CXCursor_OMPSectionsDirective;
+    break;
+  case Stmt::OMPSectionDirectiveClass:
+    K = CXCursor_OMPSectionDirective;
+    break;
   }
 
   CXCursor C = { K, 0, { Parent, S, TU } };
