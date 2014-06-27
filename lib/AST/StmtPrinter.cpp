@@ -748,6 +748,14 @@ void OMPClausePrinter::VisitOMPCopyinClause(OMPCopyinClause *Node) {
   }
 }
 
+void OMPClausePrinter::VisitOMPCopyprivateClause(OMPCopyprivateClause *Node) {
+  if (!Node->varlist_empty()) {
+    OS << "copyprivate";
+    VisitOMPClauseList(Node, '(');
+    OS << ")";
+  }
+}
+
 }
 
 //===----------------------------------------------------------------------===//
@@ -794,6 +802,11 @@ void StmtPrinter::VisitOMPSectionsDirective(OMPSectionsDirective *Node) {
 
 void StmtPrinter::VisitOMPSectionDirective(OMPSectionDirective *Node) {
   Indent() << "#pragma omp section";
+  PrintOMPExecutableDirective(Node);
+}
+
+void StmtPrinter::VisitOMPSingleDirective(OMPSingleDirective *Node) {
+  Indent() << "#pragma omp single ";
   PrintOMPExecutableDirective(Node);
 }
 

@@ -2305,6 +2305,11 @@ DEF_TRAVERSE_STMT(OMPSectionDirective, {
     return false;
 })
 
+DEF_TRAVERSE_STMT(OMPSingleDirective, {
+  if (!TraverseOMPExecutableDirective(S))
+    return false;
+})
+
 // OpenMP clauses.
 template <typename Derived>
 bool RecursiveASTVisitor<Derived>::TraverseOMPClause(OMPClause *C) {
@@ -2424,6 +2429,13 @@ bool RecursiveASTVisitor<Derived>::VisitOMPAlignedClause(OMPAlignedClause *C) {
 
 template <typename Derived>
 bool RecursiveASTVisitor<Derived>::VisitOMPCopyinClause(OMPCopyinClause *C) {
+  VisitOMPClauseList(C);
+  return true;
+}
+
+template <typename Derived>
+bool RecursiveASTVisitor<Derived>::VisitOMPCopyprivateClause(
+    OMPCopyprivateClause *C) {
   VisitOMPClauseList(C);
   return true;
 }

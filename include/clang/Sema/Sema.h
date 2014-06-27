@@ -7039,6 +7039,8 @@ public:
   
   void CheckTollFreeBridgeCast(QualType castType, Expr *castExpr);
   
+  void CheckObjCBridgeRelatedCast(QualType castType, Expr *castExpr);
+  
   bool CheckTollFreeBridgeStaticCast(QualType castType, Expr *castExpr,
                                      CastKind &Kind);
   
@@ -7291,8 +7293,8 @@ public:
                                                     Expr *Op);
   /// \brief Called on start of new data sharing attribute block.
   void StartOpenMPDSABlock(OpenMPDirectiveKind K,
-                           const DeclarationNameInfo &DirName,
-                           Scope *CurScope);
+                           const DeclarationNameInfo &DirName, Scope *CurScope,
+                           SourceLocation Loc);
   /// \brief Called on end of data sharing attribute block.
   void EndOpenMPDSABlock(Stmt *CurDirective);
 
@@ -7312,8 +7314,7 @@ public:
                                      ArrayRef<Expr *> VarList);
 
   // brief Initialization of captured region for OpenMP region.
-  void ActOnOpenMPRegionStart(OpenMPDirectiveKind DKind, SourceLocation Loc,
-                              Scope *CurScope);
+  void ActOnOpenMPRegionStart(OpenMPDirectiveKind DKind, Scope *CurScope);
   StmtResult ActOnOpenMPExecutableDirective(OpenMPDirectiveKind Kind,
                                             ArrayRef<OMPClause *> Clauses,
                                             Stmt *AStmt,
@@ -7345,6 +7346,11 @@ public:
   /// associated statement.
   StmtResult ActOnOpenMPSectionDirective(Stmt *AStmt, SourceLocation StartLoc,
                                          SourceLocation EndLoc);
+  /// \brief Called on well-formed '\#pragma omp single' after parsing of the
+  /// associated statement.
+  StmtResult ActOnOpenMPSingleDirective(ArrayRef<OMPClause *> Clauses,
+                                        Stmt *AStmt, SourceLocation StartLoc,
+                                        SourceLocation EndLoc);
 
   OMPClause *ActOnOpenMPSingleExprClause(OpenMPClauseKind Kind,
                                          Expr *Expr,
@@ -7467,6 +7473,11 @@ public:
                                      SourceLocation StartLoc,
                                      SourceLocation LParenLoc,
                                      SourceLocation EndLoc);
+  /// \brief Called on well-formed 'copyprivate' clause.
+  OMPClause *ActOnOpenMPCopyprivateClause(ArrayRef<Expr *> VarList,
+                                          SourceLocation StartLoc,
+                                          SourceLocation LParenLoc,
+                                          SourceLocation EndLoc);
 
   /// \brief The kind of conversion being performed.
   enum CheckedConversionKind {

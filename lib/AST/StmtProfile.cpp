@@ -335,6 +335,10 @@ void OMPClauseProfiler::VisitOMPAlignedClause(const OMPAlignedClause *C) {
 void OMPClauseProfiler::VisitOMPCopyinClause(const OMPCopyinClause *C) {
   VisitOMPClauseList(C);
 }
+void
+OMPClauseProfiler::VisitOMPCopyprivateClause(const OMPCopyprivateClause *C) {
+  VisitOMPClauseList(C);
+}
 }
 
 void
@@ -365,6 +369,10 @@ void StmtProfiler::VisitOMPSectionsDirective(const OMPSectionsDirective *S) {
 }
 
 void StmtProfiler::VisitOMPSectionDirective(const OMPSectionDirective *S) {
+  VisitOMPExecutableDirective(S);
+}
+
+void StmtProfiler::VisitOMPSingleDirective(const OMPSingleDirective *S) {
   VisitOMPExecutableDirective(S);
 }
 

@@ -2112,7 +2112,7 @@ Tool *Generic_GCC::buildAssembler() const {
 }
 
 Tool *Generic_GCC::buildLinker() const {
-  return new tools::gcc::Link(*this);
+  return new tools::gnutools::Link(*this);
 }
 
 void Generic_GCC::printVerboseInfo(raw_ostream &OS) const {
@@ -3011,7 +3011,7 @@ Linux::Linux(const Driver &D, const llvm::Triple &Triple, const ArgList &Args)
   PPaths.push_back(Twine(GCCInstallation.getParentLibPath() + "/../" +
                          GCCInstallation.getTriple().str() + "/bin").str());
 
-  Linker = GetProgramPath("ld");
+  Linker = GetLinkerPath();
 
   Distro Distro = DetectDistro(Arch);
 

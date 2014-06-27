@@ -750,8 +750,9 @@ public:
     ArchDefinePwr6  = 1 << 9,
     ArchDefinePwr6x = 1 << 10,
     ArchDefinePwr7  = 1 << 11,
-    ArchDefineA2    = 1 << 12,
-    ArchDefineA2q   = 1 << 13
+    ArchDefinePwr8  = 1 << 12,
+    ArchDefineA2    = 1 << 13,
+    ArchDefineA2q   = 1 << 14
   } ArchDefineTypes;
 
   // Note: GCC recognizes the following additional cpus:
@@ -798,6 +799,8 @@ public:
       .Case("pwr6x", true)
       .Case("power7", true)
       .Case("pwr7", true)
+      .Case("power8", true)
+      .Case("pwr8", true)
       .Case("powerpc", true)
       .Case("ppc", true)
       .Case("powerpc64", true)
@@ -1060,7 +1063,10 @@ void PPCTargetInfo::getTargetDefines(const LangOptions &Opts,
                      | ArchDefinePpcsq)
     .Case("pwr7",  ArchDefineName | ArchDefinePwr6x | ArchDefinePwr6
                      | ArchDefinePwr5x | ArchDefinePwr5 | ArchDefinePwr4
-                     | ArchDefinePwr6 | ArchDefinePpcgr | ArchDefinePpcsq)
+                     | ArchDefinePpcgr | ArchDefinePpcsq)
+    .Case("pwr8",  ArchDefineName | ArchDefinePwr7 | ArchDefinePwr6x
+                     | ArchDefinePwr6 | ArchDefinePwr5x | ArchDefinePwr5
+                     | ArchDefinePwr4 | ArchDefinePpcgr | ArchDefinePpcsq)
     .Case("power3",  ArchDefinePpcgr)
     .Case("power4",  ArchDefinePwr4 | ArchDefinePpcgr | ArchDefinePpcsq)
     .Case("power5",  ArchDefinePwr5 | ArchDefinePwr4 | ArchDefinePpcgr
@@ -1074,7 +1080,10 @@ void PPCTargetInfo::getTargetDefines(const LangOptions &Opts,
                        | ArchDefinePpcsq)
     .Case("power7",  ArchDefinePwr7 | ArchDefinePwr6x | ArchDefinePwr6
                        | ArchDefinePwr5x | ArchDefinePwr5 | ArchDefinePwr4
-                       | ArchDefinePwr6 | ArchDefinePpcgr | ArchDefinePpcsq)
+                       | ArchDefinePpcgr | ArchDefinePpcsq)
+    .Case("power8",  ArchDefinePwr8 | ArchDefinePwr7 | ArchDefinePwr6x
+                       | ArchDefinePwr6 | ArchDefinePwr5x | ArchDefinePwr5
+                       | ArchDefinePwr4 | ArchDefinePpcgr | ArchDefinePpcsq)
     .Default(ArchDefineNone);
 
   if (defs & ArchDefineName)
@@ -1101,6 +1110,8 @@ void PPCTargetInfo::getTargetDefines(const LangOptions &Opts,
     Builder.defineMacro("_ARCH_PWR6X");
   if (defs & ArchDefinePwr7)
     Builder.defineMacro("_ARCH_PWR7");
+  if (defs & ArchDefinePwr8)
+    Builder.defineMacro("_ARCH_PWR8");
   if (defs & ArchDefineA2)
     Builder.defineMacro("_ARCH_A2");
   if (defs & ArchDefineA2q) {
@@ -1149,6 +1160,7 @@ void PPCTargetInfo::getDefaultFeatures(llvm::StringMap<bool> &Features) const {
     .Case("g5", true)
     .Case("pwr6", true)
     .Case("pwr7", true)
+    .Case("pwr8", true)
     .Case("ppc64", true)
     .Case("ppc64le", true)
     .Default(false);
@@ -3883,7 +3895,8 @@ public:
 #endif // !__OPEN_SOURCE__
       .Case("swift", "7S")
       .Case("cyclone", "8A")
-      .Cases("cortex-m3", "cortex-m4", "7M")
+      .Case("cortex-m3", "7M")
+      .Case("cortex-m4", "7EM")
       .Case("cortex-m0", "6M")
       .Cases("cortex-a53", "cortex-a57", "8A")
       .Default(nullptr);

@@ -1724,6 +1724,9 @@ OMPClause *OMPClauseReader::readClause() {
   case OMPC_copyin:
     C = OMPCopyinClause::CreateEmpty(Context, Record[Idx++]);
     break;
+  case OMPC_copyprivate:
+    C = OMPCopyprivateClause::CreateEmpty(Context, Record[Idx++]);
+    break;
   }
   Visit(C);
   C->setLocStart(Reader->ReadSourceLocation(Record, Idx));
@@ -1871,6 +1874,16 @@ void OMPClauseReader::VisitOMPCopyinClause(OMPCopyinClause *C) {
   C->setVarRefs(Vars);
 }
 
+void OMPClauseReader::VisitOMPCopyprivateClause(OMPCopyprivateClause *C) {
+  C->setLParenLoc(Reader->ReadSourceLocation(Record, Idx));
+  unsigned NumVars = C->varlist_size();
+  SmallVector<Expr *, 16> Vars;
+  Vars.reserve(NumVars);
+  for (unsigned i = 0; i != NumVars; ++i)
+    Vars.push_back(Reader->Reader.ReadSubExpr());
+  C->setVarRefs(Vars);
+}
+
 //===----------------------------------------------------------------------===//
 // OpenMP Directives.
 //===----------------------------------------------------------------------===//
@@ -1915,6 +1928,13 @@ void ASTStmtReader::VisitOMPSectionsDirective(OMPSectionsDirective *D) {
 
 void ASTStmtReader::VisitOMPSectionDirective(OMPSectionDirective *D) {
   VisitStmt(D);
+  VisitOMPExecutableDirective(D);
+}
+
+void ASTStmtReader::VisitOMPSingleDirective(OMPSingleDirective *D) {
+  VisitStmt(D);
+  // The NumClauses field was read in ReadStmtFromStream.
+  ++Idx;
   VisitOMPExecutableDirective(D);
 }
 
@@ -2420,6 +2440,11 @@ Stmt *ASTReader::ReadStmtFromStream(ModuleFile &F) {
 
     case STMT_OMP_SECTION_DIRECTIVE:
       S = OMPSectionDirective::CreateEmpty(Context, Empty);
+      break;
+
+    case STMT_OMP_SINGLE_DIRECTIVE:
+      S = OMPSingleDirective::CreateEmpty(
+          Context, Record[ASTStmtReader::NumStmtFields], Empty);
       break;
 
     case EXPR_CXX_OPERATOR_CALL:

@@ -30,6 +30,9 @@
 #ifndef OPENMP_SECTIONS_CLAUSE
 #  define OPENMP_SECTIONS_CLAUSE(Name)
 #endif
+#ifndef OPENMP_SINGLE_CLAUSE
+#  define OPENMP_SINGLE_CLAUSE(Name)
+#endif
 #ifndef OPENMP_DEFAULT_KIND
 #  define OPENMP_DEFAULT_KIND(Name)
 #endif
@@ -48,6 +51,7 @@ OPENMP_DIRECTIVE(simd)
 OPENMP_DIRECTIVE(for)
 OPENMP_DIRECTIVE(sections)
 OPENMP_DIRECTIVE(section)
+OPENMP_DIRECTIVE(single)
 
 // OpenMP clauses.
 OPENMP_CLAUSE(if, OMPIfClause)
@@ -63,6 +67,7 @@ OPENMP_CLAUSE(reduction,  OMPReductionClause)
 OPENMP_CLAUSE(linear,  OMPLinearClause)
 OPENMP_CLAUSE(aligned, OMPAlignedClause)
 OPENMP_CLAUSE(copyin,  OMPCopyinClause)
+OPENMP_CLAUSE(copyprivate,  OMPCopyprivateClause)
 OPENMP_CLAUSE(proc_bind, OMPProcBindClause)
 OPENMP_CLAUSE(schedule, OMPScheduleClause)
 OPENMP_CLAUSE(ordered, OMPOrderedClause)
@@ -104,6 +109,12 @@ OPENMP_SECTIONS_CLAUSE(firstprivate)
 OPENMP_SECTIONS_CLAUSE(reduction)
 OPENMP_SECTIONS_CLAUSE(nowait)
 
+// TODO more clauses allowed for directive 'omp single'.
+OPENMP_SINGLE_CLAUSE(private)
+OPENMP_SINGLE_CLAUSE(firstprivate)
+OPENMP_SINGLE_CLAUSE(copyprivate)
+OPENMP_SINGLE_CLAUSE(nowait)
+
 // Static attributes for 'default' clause.
 OPENMP_DEFAULT_KIND(none)
 OPENMP_DEFAULT_KIND(shared)
@@ -125,6 +136,7 @@ OPENMP_SCHEDULE_KIND(runtime)
 #undef OPENMP_DEFAULT_KIND
 #undef OPENMP_DIRECTIVE
 #undef OPENMP_CLAUSE
+#undef OPENMP_SINGLE_CLAUSE
 #undef OPENMP_SECTIONS_CLAUSE
 #undef OPENMP_PARALLEL_CLAUSE
 #undef OPENMP_SIMD_CLAUSE

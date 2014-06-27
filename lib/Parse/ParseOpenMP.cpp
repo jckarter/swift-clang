@@ -65,6 +65,7 @@ Parser::DeclGroupPtrTy Parser::ParseOpenMPDeclarativeDirective() {
   case OMPD_for:
   case OMPD_sections:
   case OMPD_section:
+  case OMPD_single:
     Diag(Tok, diag::err_omp_unexpected_directive)
         << getOpenMPDirectiveName(DKind);
     break;
@@ -80,8 +81,8 @@ Parser::DeclGroupPtrTy Parser::ParseOpenMPDeclarativeDirective() {
 ///         annot_pragma_openmp_end
 ///
 ///       executable-directive:
-///         annot_pragma_openmp 'parallel'|'simd'|'for'|'sections'|'section'
-///         {clause} annot_pragma_openmp_end
+///         annot_pragma_openmp 'parallel' | 'simd' | 'for' | 'sections' |
+///         'section' | 'single' {clause} annot_pragma_openmp_end
 ///
 StmtResult Parser::ParseOpenMPDeclarativeOrExecutableDirective() {
   assert(Tok.is(tok::annot_pragma_openmp) && "Not an OpenMP directive!");
@@ -121,6 +122,7 @@ StmtResult Parser::ParseOpenMPDeclarativeOrExecutableDirective() {
   case OMPD_simd:
   case OMPD_for:
   case OMPD_sections:
+  case OMPD_single:
   case OMPD_section: {
     ConsumeToken();
 
@@ -129,7 +131,7 @@ StmtResult Parser::ParseOpenMPDeclarativeOrExecutableDirective() {
     if (isOpenMPSimdDirective(DKind))
       ScopeFlags |= Scope::OpenMPSimdDirectiveScope;
     ParseScope OMPDirectiveScope(this, ScopeFlags);
-    Actions.StartOpenMPDSABlock(DKind, DirName, Actions.getCurScope());
+    Actions.StartOpenMPDSABlock(DKind, DirName, Actions.getCurScope(), Loc);
 
     while (Tok.isNot(tok::annot_pragma_openmp_end)) {
       OpenMPClauseKind CKind = Tok.isAnnotation()
@@ -157,7 +159,7 @@ StmtResult Parser::ParseOpenMPDeclarativeOrExecutableDirective() {
     {
       // The body is a block scope like in Lambdas and Blocks.
       Sema::CompoundScopeRAII CompoundScope(Actions);
-      Actions.ActOnOpenMPRegionStart(DKind, Loc, getCurScope());
+      Actions.ActOnOpenMPRegionStart(DKind, getCurScope());
       Actions.ActOnStartOfCompoundStmt();
       // Parse statement
       AssociatedStmt = ParseStatement();
@@ -267,7 +269,8 @@ bool Parser::ParseOpenMPSimpleVarList(OpenMPDirectiveKind Kind,
 ///       if-clause | num_threads-clause | safelen-clause | default-clause |
 ///       private-clause | firstprivate-clause | shared-clause | linear-clause |
 ///       aligned-clause | collapse-clause | lastprivate-clause |
-///       reduction-clause | proc_bind-clause | schedule-clause
+///       reduction-clause | proc_bind-clause | schedule-clause |
+///       copyin-clause | copyprivate-clause
 ///
 OMPClause *Parser::ParseOpenMPClause(OpenMPDirectiveKind DKind,
                                      OpenMPClauseKind CKind, bool FirstClause) {
@@ -343,6 +346,7 @@ OMPClause *Parser::ParseOpenMPClause(OpenMPDirectiveKind DKind,
   case OMPC_linear:
   case OMPC_aligned:
   case OMPC_copyin:
+  case OMPC_copyprivate:
     Clause = ParseOpenMPVarListClause(CKind);
     break;
   case OMPC_unknown:
