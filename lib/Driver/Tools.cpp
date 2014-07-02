@@ -950,8 +950,8 @@ static void getMipsCPUAndABI(const ArgList &Args,
   if (!ABIName.empty()) {
     // Deduce CPU name from ABI name.
     CPUName = llvm::StringSwitch<const char *>(ABIName)
-      .Cases("32", "o32", "eabi", DefMips32CPU)
-      .Cases("n32", "n64", "64", DefMips64CPU)
+      .Cases("o32", "eabi", DefMips32CPU)
+      .Cases("n32", "n64", DefMips64CPU)
       .Default("");
   }
   else if (!CPUName.empty()) {
@@ -3918,6 +3918,14 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
     D.Diag(diag::err_drv_clang_unsupported)
       << Args.getLastArg(options::OPT_fno_for_scope)->getAsString(Args);
 
+  // -finput_charset=UTF-8 is default. Reject others
+  if (Arg *inputCharset = Args.getLastArg(
+          options::OPT_finput_charset_EQ)) {
+      StringRef value = inputCharset->getValue();
+      if (value != "UTF-8")
+          D.Diag(diag::err_drv_invalid_value) << inputCharset->getAsString(Args) << value;
+  }
+
   // -fcaret-diagnostics is default.
   if (!Args.hasFlag(options::OPT_fcaret_diagnostics,
                     options::OPT_fno_caret_diagnostics, true))
@@ -4192,15 +4200,7 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
       (InputType == types::TY_C || InputType == types::TY_CXX)) {
     Command *CLCommand = getCLFallback()->GetCommand(C, JA, Output, Inputs,
                                                      Args, LinkingOutput);
-    // RTTI support in clang-cl is a work in progress.  Fall back to MSVC early
-    // if we are using 'clang-cl /fallback /GR'.
-    // FIXME: Remove this when RTTI is finished.
-    if (Args.hasFlag(options::OPT_frtti, options::OPT_fno_rtti, false)) {
-      D.Diag(diag::warn_drv_rtti_fallback) << CLCommand->getExecutable();
-      C.addCommand(CLCommand);
-    } else {
-      C.addCommand(new FallbackCommand(JA, *this, Exec, CmdArgs, CLCommand));
-    }
+    C.addCommand(new FallbackCommand(JA, *this, Exec, CmdArgs, CLCommand));
   } else {
     C.addCommand(new Command(JA, *this, Exec, CmdArgs));
   }
@@ -4445,9 +4445,10 @@ void Clang::AddClangCLArgs(const ArgList &Args, ArgStringList &CmdArgs) const {
   if (Arg *A = Args.getLastArg(options::OPT_show_includes))
     A->render(Args, CmdArgs);
 
-  // RTTI is currently not supported, so disable it by default.
-  if (!Args.hasArg(options::OPT_frtti, options::OPT_fno_rtti))
-    CmdArgs.push_back("-fno-rtti");
+  // This controls whether or not we emit RTTI data for polymorphic types.
+  if (Args.hasFlag(options::OPT__SLASH_GR_, options::OPT__SLASH_GR,
+                   /*default=*/false))
+    CmdArgs.push_back("-fno-rtti-data");
 
   const Driver &D = getToolChain().getDriver();
   EHFlags EH = parseClangCLEHFlags(D, Args);
@@ -7726,9 +7727,9 @@ Command *visualstudio::Compile::GetCommand(Compilation &C, const JobAction &JA,
   // Flags for which clang-cl have an alias.
   // FIXME: How can we ensure this stays in sync with relevant clang-cl options?
 
-  if (Arg *A = Args.getLastArg(options::OPT_frtti, options::OPT_fno_rtti))
-    CmdArgs.push_back(A->getOption().getID() == options::OPT_frtti ? "/GR"
-                                                                   : "/GR-");
+  if (Args.hasFlag(options::OPT__SLASH_GR_, options::OPT__SLASH_GR,
+                   /*default=*/false))
+    CmdArgs.push_back("/GR-");
   if (Arg *A = Args.getLastArg(options::OPT_ffunction_sections,
                                options::OPT_fno_function_sections))
     CmdArgs.push_back(A->getOption().getID() == options::OPT_ffunction_sections

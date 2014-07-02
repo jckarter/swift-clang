@@ -505,8 +505,10 @@ llvm::Constant *CodeGenModule::getMSTypeDescriptor(QualType Type) {
       Int8PtrTy);
 }
 
-llvm::GlobalVariable *
+llvm::Constant *
 CodeGenModule::getMSCompleteObjectLocator(const CXXRecordDecl *RD,
                                           const VPtrInfo *Info) {
+  if (!getLangOpts().RTTIData)
+    return llvm::Constant::getNullValue(Int8PtrTy);
   return MSRTTIBuilder(*this, RD).getCompleteObjectLocator(Info);
 }

@@ -616,7 +616,7 @@ protected:
   void getVisualStudioDefines(const LangOptions &Opts,
                               MacroBuilder &Builder) const {
     if (Opts.CPlusPlus) {
-      if (Opts.RTTI)
+      if (Opts.RTTIData)
         Builder.defineMacro("_CPPRTTI");
 
       if (Opts.Exceptions)
@@ -5579,10 +5579,6 @@ public:
       ABI = Name;
       return true;
     }
-    if (Name == "32") {
-      ABI = "o32";
-      return true;
-    }
     return false;
   }
   void getTargetDefines(const LangOptions &Opts,
@@ -5718,9 +5714,9 @@ public:
       ABI = Name;
       return true;
     }
-    if (Name == "n64" || Name == "64") {
+    if (Name == "n64") {
       setN64ABITypes();
-      ABI = "n64";
+      ABI = Name;
       return true;
     }
     return false;
