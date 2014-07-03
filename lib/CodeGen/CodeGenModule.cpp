@@ -393,6 +393,8 @@ void CodeGenModule::Release() {
     DebugInfo->finalize();
 
   EmitVersionIdentMetadata();
+
+  EmitTargetMetadata();
 }
 
 void CodeGenModule::UpdateCompletedType(const TagDecl *TD) {
@@ -1534,8 +1536,6 @@ CodeGenModule::GetOrCreateLLVMFunction(StringRef MangledName,
     }
   }
 
-  getTargetCodeGenInfo().emitTargetMD(D, F, *this);
-
   // Make sure the result is of the requested type.
   if (!IsIncompleteFunction) {
     assert(F->getType()->getElementType() == Ty);
@@ -1684,8 +1684,6 @@ CodeGenModule::GetOrCreateLLVMGlobal(StringRef MangledName,
 
   if (AddrSpace != Ty->getAddressSpace())
     return llvm::ConstantExpr::getAddrSpaceCast(GV, Ty);
-
-  getTargetCodeGenInfo().emitTargetMD(D, GV, *this);
 
   return GV;
 }
@@ -3297,11 +3295,9 @@ void CodeGenModule::EmitDeclMetadata() {
   llvm::NamedMDNode *GlobalMetadata = nullptr;
 
   // StaticLocalDeclMap
-  for (llvm::DenseMap<GlobalDecl,StringRef>::iterator
-         I = MangledDeclNames.begin(), E = MangledDeclNames.end();
-       I != E; ++I) {
-    llvm::GlobalValue *Addr = getModule().getNamedValue(I->second);
-    EmitGlobalDeclMetadata(*this, GlobalMetadata, I->first, Addr);
+  for (auto &I : MangledDeclNames) {
+    llvm::GlobalValue *Addr = getModule().getNamedValue(I.second);
+    EmitGlobalDeclMetadata(*this, GlobalMetadata, I.first, Addr);
   }
 }
 
@@ -3317,11 +3313,9 @@ void CodeGenFunction::EmitDeclMetadata() {
 
   llvm::NamedMDNode *GlobalMetadata = nullptr;
 
-  for (llvm::DenseMap<const Decl*, llvm::Value*>::iterator
-         I = LocalDeclMap.begin(), E = LocalDeclMap.end(); I != E; ++I) {
-    const Decl *D = I->first;
-    llvm::Value *Addr = I->second;
-
+  for (auto &I : LocalDeclMap) {
+    const Decl *D = I.first;
+    llvm::Value *Addr = I.second;
     if (auto *Alloca = dyn_cast<llvm::AllocaInst>(Addr)) {
       llvm::Value *DAddr = GetPointerConstant(getLLVMContext(), D);
       Alloca->setMetadata(DeclPtrKind, llvm::MDNode::get(Context, DAddr));
@@ -3342,6 +3336,14 @@ void CodeGenModule::EmitVersionIdentMetadata() {
     llvm::MDString::get(Ctx, Version)
   };
   IdentMetadata->addOperand(llvm::MDNode::get(Ctx, IdentNode));
+}
+
+void CodeGenModule::EmitTargetMetadata() {
+  for (auto &I : MangledDeclNames) {
+    const Decl *D = I.first.getDecl()->getMostRecentDecl();
+    llvm::GlobalValue *GV = GetGlobalValue(I.second);
+    getTargetCodeGenInfo().emitTargetMD(D, GV, *this);
+  }
 }
 
 void CodeGenModule::EmitCoverageFile() {
