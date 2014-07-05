@@ -867,11 +867,9 @@ def Wlarge_by_value_copy_def : Flag<["-"], "Wlarge-by-value-copy">,
 def Wlarge_by_value_copy_EQ : Joined<["-"], "Wlarge-by-value-copy=">, Flags<[CC1Option]>;
 
 // Just silence warnings about -Wlarger-than for now.
-def Wlarger_than : Separate<["-"], "Wlarger-than">, Group<clang_ignored_f_Group>;
-def Wlarger_than_EQ : Joined<["-"], "Wlarger-than=">, Alias<Wlarger_than>;
-def Wlarger_than_ : Joined<["-"], "Wlarger-than-">, Alias<Wlarger_than>;
+def Wlarger_than_EQ : Joined<["-"], "Wlarger-than=">, Group<clang_ignored_f_Group>;
+def Wlarger_than_ : Joined<["-"], "Wlarger-than-">, Alias<Wlarger_than_EQ>;
 def Wframe_larger_than_EQ : Joined<["-"], "Wframe-larger-than=">, Flags<[DriverOption]>;
-def Wstack_usage_EQ : Joined<["-"], "Wstack-usage=">, Group<clang_ignored_f_Group>;
 
 def : Flag<["-"], "fterminated-vtables">, Alias<fapple_kext>;
 def fthreadsafe_statics : Flag<["-"], "fthreadsafe-statics">, Group<f_Group>;
@@ -1220,6 +1218,21 @@ def mfp64 : Flag<["-"], "mfp64">, Group<m_Group>,
 def mfp32 : Flag<["-"], "mfp32">, Group<m_Group>,
   HelpText<"Use 32-bit floating point registers (MIPS only)">;
 def mnan_EQ : Joined<["-"], "mnan=">, Group<m_Group>;
+def mips1 : Flag<["-"], "mips1">,
+  Alias<march_EQ>, AliasArgs<["mips1"]>,
+  HelpText<"Equivalent to -march=mips1">, Flags<[HelpHidden]>;
+def mips2 : Flag<["-"], "mips2">,
+  Alias<march_EQ>, AliasArgs<["mips2"]>,
+  HelpText<"Equivalent to -march=mips2">, Flags<[HelpHidden]>;
+def mips3 : Flag<["-"], "mips3">,
+  Alias<march_EQ>, AliasArgs<["mips3"]>,
+  HelpText<"Equivalent to -march=mips3">, Flags<[HelpHidden]>;
+def mips4 : Flag<["-"], "mips4">,
+  Alias<march_EQ>, AliasArgs<["mips4"]>,
+  HelpText<"Equivalent to -march=mips4">, Flags<[HelpHidden]>;
+def mips5 : Flag<["-"], "mips5">,
+  Alias<march_EQ>, AliasArgs<["mips5"]>,
+  HelpText<"Equivalent to -march=mips5">, Flags<[HelpHidden]>;
 def mips32 : Flag<["-"], "mips32">,
   Alias<march_EQ>, AliasArgs<["mips32"]>,
   HelpText<"Equivalent to -march=mips32">, Flags<[HelpHidden]>;
