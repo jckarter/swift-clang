@@ -215,6 +215,10 @@ CXCursor cxcursor::MakeCXCursor(const Stmt *S, const Decl *Parent,
   case Stmt::SEHFinallyStmtClass:
     K = CXCursor_SEHFinallyStmt;
     break;
+
+  case Stmt::SEHLeaveStmtClass:
+    K = CXCursor_SEHLeaveStmt;
+    break;
   
   case Stmt::ArrayTypeTraitExprClass:
   case Stmt::AsTypeExprClass:
@@ -1001,11 +1005,11 @@ CXCursor clang_Cursor_getArgument(CXCursor C, unsigned i) {
     const Decl *D = cxcursor::getCursorDecl(C);
     if (const ObjCMethodDecl *MD = dyn_cast_or_null<ObjCMethodDecl>(D)) {
       if (i < MD->param_size())
-        return cxcursor::MakeCXCursor(MD->param_begin()[i],
+        return cxcursor::MakeCXCursor(MD->parameters()[i],
                                       cxcursor::getCursorTU(C));
     } else if (const FunctionDecl *FD = dyn_cast_or_null<FunctionDecl>(D)) {
       if (i < FD->param_size())
-        return cxcursor::MakeCXCursor(FD->param_begin()[i],
+        return cxcursor::MakeCXCursor(FD->parameters()[i],
                                       cxcursor::getCursorTU(C));
     }
   }
