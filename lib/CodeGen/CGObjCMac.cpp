@@ -4454,7 +4454,7 @@ llvm::Constant *CGObjCCommonMac::GetClassName(StringRef RuntimeName) {
   if (!Entry)
     Entry = CreateMetadataVar("\01L_OBJC_CLASS_NAME_",
                               llvm::ConstantDataArray::getString(VMContext,
-                              RuntimeName.data()),
+                              RuntimeName),
                               ((ObjCABI == 2) ?
                                "__TEXT,__objc_classname,cstring_literals" :
                                "__TEXT,__cstring,cstring_literals"),
