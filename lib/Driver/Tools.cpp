@@ -1247,7 +1247,7 @@ void Clang::AddSparcTargetArgs(const ArgList &Args,
                              ArgStringList &CmdArgs) const {
   const Driver &D = getToolChain().getDriver();
 
-  // Select the float ABI as determined by -msoft-float, -mhard-float, and
+  // Select the float ABI as determined by -msoft-float and -mhard-float.
   StringRef FloatABI;
   if (Arg *A = Args.getLastArg(options::OPT_msoft_float,
                                options::OPT_mhard_float)) {
@@ -2857,6 +2857,7 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
     break;
 
   case llvm::Triple::sparc:
+  case llvm::Triple::sparcv9:
     AddSparcTargetArgs(Args, CmdArgs);
     break;
 
@@ -3139,6 +3140,13 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
     } else {
       A->render(Args, CmdArgs);
     }
+  }
+
+  // Warn about ignored options to clang.
+  for (arg_iterator it = Args.filtered_begin(
+       options::OPT_clang_ignored_gcc_optimization_f_Group),
+       ie = Args.filtered_end(); it != ie; ++it) {
+    D.Diag(diag::warn_ignored_gcc_optimization) << (*it)->getAsString(Args);
   }
 
   // Don't warn about unused -flto.  This can happen when we're preprocessing or
