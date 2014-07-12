@@ -5051,6 +5051,7 @@ void hexagon::Link::ConstructJob(Compilation &C, const JobAction &JA,
 }
 // Hexagon tools end.
 
+/// Get the (LLVM) name of the minimum ARM CPU for the arch we are targeting.
 const char *arm::getARMCPUForMArch(const ArgList &Args,
                                    const llvm::Triple &Triple) {
   StringRef MArch;
