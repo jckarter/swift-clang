@@ -170,7 +170,7 @@ public:
   };
 
 protected:
-  IntType SizeType, IntMaxType, UIntMaxType, PtrDiffType, IntPtrType, WCharType,
+  IntType SizeType, IntMaxType, PtrDiffType, IntPtrType, WCharType,
           WIntType, Char16Type, Char32Type, Int64Type, SigAtomicType,
           ProcessIDType;
 
@@ -206,13 +206,15 @@ protected:
 public:
   IntType getSizeType() const { return SizeType; }
   IntType getIntMaxType() const { return IntMaxType; }
-  IntType getUIntMaxType() const { return UIntMaxType; }
+  IntType getUIntMaxType() const {
+    return getCorrespondingUnsignedType(IntMaxType);
+  }
   IntType getPtrDiffType(unsigned AddrSpace) const {
     return AddrSpace == 0 ? PtrDiffType : getPtrDiffTypeV(AddrSpace);
   }
   IntType getIntPtrType() const { return IntPtrType; }
   IntType getUIntPtrType() const {
-    return getIntTypeByWidth(getTypeWidth(IntPtrType), false);
+    return getCorrespondingUnsignedType(IntPtrType);
   }
   IntType getWCharType() const { return WCharType; }
   IntType getWIntType() const { return WIntType; }
@@ -221,6 +223,23 @@ public:
   IntType getInt64Type() const { return Int64Type; }
   IntType getSigAtomicType() const { return SigAtomicType; }
   IntType getProcessIDType() const { return ProcessIDType; }
+
+  static IntType getCorrespondingUnsignedType(IntType T) {
+    switch (T) {
+    case SignedChar:
+      return UnsignedChar;
+    case SignedShort:
+      return UnsignedShort;
+    case SignedInt:
+      return UnsignedInt;
+    case SignedLong:
+      return UnsignedLong;
+    case SignedLongLong:
+      return UnsignedLongLong;
+    default:
+      llvm_unreachable("Unexpected signed integer type");
+    }
+  }
 
   /// \brief Return the width (in bits) of the specified integer type enum.
   ///
