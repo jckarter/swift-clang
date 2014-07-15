@@ -6,4 +6,4 @@ struct A {
   ~A();
 };
 
-thread_local A a; // expected-error{{thread-local storage is unsupported for the current target}}
+thread_local A a; // expected-error{{thread-local storage is not supported for the current target}}
