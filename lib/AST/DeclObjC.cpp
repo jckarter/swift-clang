@@ -1203,6 +1203,7 @@ StringRef
 ObjCInterfaceDecl::getObjCRuntimeNameAsString() const {
   if (ObjCRuntimeNameAttr *ObjCRTName = getAttr<ObjCRuntimeNameAttr>())
     return ObjCRTName->getMetadataName();
+
   return getName();
 }
 
@@ -1211,7 +1212,7 @@ ObjCImplementationDecl::getObjCRuntimeNameAsString() const {
   if (ObjCInterfaceDecl *ID =
       const_cast<ObjCImplementationDecl*>(this)->getClassInterface())
     return ID->getObjCRuntimeNameAsString();
-
+    
   return getName();
 }
 
@@ -1623,6 +1624,7 @@ StringRef
 ObjCProtocolDecl::getObjCRuntimeNameAsString() const {
   if (ObjCRuntimeNameAttr *ObjCRTName = getAttr<ObjCRuntimeNameAttr>())
     return ObjCRTName->getMetadataName();
+
   return getName();
 }
 
