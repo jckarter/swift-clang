@@ -909,10 +909,10 @@ void Clang::AddAArch64TargetArgs(const ArgList &Args,
 
 // Get CPU and ABI names. They are not independent
 // so we have to calculate them together.
-static void getMipsCPUAndABI(const ArgList &Args,
-                             const llvm::Triple &Triple,
-                             StringRef &CPUName,
-                             StringRef &ABIName) {
+void mips::getMipsCPUAndABI(const ArgList &Args,
+                            const llvm::Triple &Triple,
+                            StringRef &CPUName,
+                            StringRef &ABIName) {
   const char *DefMips32CPU = "mips32r2";
   const char *DefMips64CPU = "mips64r2";
 
@@ -1023,8 +1023,14 @@ static void AddTargetFeature(const ArgList &Args,
   }
 }
 
-static void getMIPSTargetFeatures(const Driver &D, const ArgList &Args,
+static void getMIPSTargetFeatures(const Driver &D, const llvm::Triple &Triple,
+                                  const ArgList &Args,
                                   std::vector<const char *> &Features) {
+  StringRef CPUName;
+  StringRef ABIName;
+  mips::getMipsCPUAndABI(Args, Triple, CPUName, ABIName);
+  ABIName = getGnuCompatibleMipsABIName(ABIName);
+
   StringRef FloatABI = getMipsFloatABI(D, Args);
   if (FloatABI == "soft") {
     // FIXME: Note, this is a hack. We need to pass the selected float
@@ -1056,12 +1062,23 @@ static void getMIPSTargetFeatures(const Driver &D, const ArgList &Args,
                    "dspr2");
   AddTargetFeature(Args, Features, options::OPT_mmsa, options::OPT_mno_msa,
                    "msa");
-  AddTargetFeature(Args, Features, options::OPT_mfp64, options::OPT_mfp32,
-                   "fp64");
-  if (Args.getLastArg(options::OPT_mfpxx)) {
+
+  // Add the last -mfp32/-mfpxx/-mfp64 or if none are given and the ABI is O32
+  // pass -mfpxx
+  if (Arg *A = Args.getLastArg(options::OPT_mfp32, options::OPT_mfpxx,
+                               options::OPT_mfp64)) {
+    if (A->getOption().matches(options::OPT_mfp32))
+      Features.push_back(Args.MakeArgString("-fp64"));
+    else if (A->getOption().matches(options::OPT_mfpxx)) {
+      Features.push_back(Args.MakeArgString("+fpxx"));
+      Features.push_back(Args.MakeArgString("+nooddspreg"));
+    } else
+      Features.push_back(Args.MakeArgString("+fp64"));
+  } else if (mips::isFPXXDefault(Triple, CPUName, ABIName)) {
     Features.push_back(Args.MakeArgString("+fpxx"));
     Features.push_back(Args.MakeArgString("+nooddspreg"));
   }
+
   AddTargetFeature(Args, Features, options::OPT_mno_odd_spreg,
                    options::OPT_modd_spreg, "nooddspreg");
 }
@@ -1072,7 +1089,7 @@ void Clang::AddMIPSTargetArgs(const ArgList &Args,
   StringRef CPUName;
   StringRef ABIName;
   const llvm::Triple &Triple = getToolChain().getTriple();
-  getMipsCPUAndABI(Args, Triple, CPUName, ABIName);
+  mips::getMipsCPUAndABI(Args, Triple, CPUName, ABIName);
 
   CmdArgs.push_back("-target-abi");
   CmdArgs.push_back(ABIName.data());
@@ -1366,7 +1383,7 @@ static std::string getCPUName(const ArgList &Args, const llvm::Triple &T) {
   case llvm::Triple::mips64el: {
     StringRef CPUName;
     StringRef ABIName;
-    getMipsCPUAndABI(Args, T, CPUName, ABIName);
+    mips::getMipsCPUAndABI(Args, T, CPUName, ABIName);
     return CPUName;
   }
 
@@ -1612,7 +1629,7 @@ static void getTargetFeatures(const Driver &D, const llvm::Triple &Triple,
   case llvm::Triple::mipsel:
   case llvm::Triple::mips64:
   case llvm::Triple::mips64el:
-    getMIPSTargetFeatures(D, Args, Features);
+    getMIPSTargetFeatures(D, Triple, Args, Features);
     break;
 
   case llvm::Triple::arm:
@@ -5211,6 +5228,22 @@ bool mips::isNaN2008(const ArgList &Args, const llvm::Triple &Triple) {
   return false;
 }
 
+bool mips::isFPXXDefault(const llvm::Triple &Triple, StringRef CPUName,
+                         StringRef ABIName) {
+  if (Triple.getVendor() != llvm::Triple::ImaginationTechnologies &&
+      Triple.getVendorName() != "mti")
+    return false;
+
+  if (ABIName != "32")
+    return false;
+
+  return llvm::StringSwitch<bool>(CPUName)
+             .Cases("mips2", "mips3", "mips4", "mips5", true)
+             .Cases("mips32", "mips32r2", true)
+             .Cases("mips64", "mips64r2", true)
+             .Default(false);
+}
+
 llvm::Triple::ArchType darwin::getArchTypeForMachOArchName(StringRef Str) {
   // See arch(3) and llvm-gcc's driver-driver.c. We don't implement support for
   // archs which Darwin doesn't use.
@@ -6029,7 +6062,7 @@ void openbsd::Assemble::ConstructJob(Compilation &C, const JobAction &JA,
   case llvm::Triple::mips64el: {
     StringRef CPUName;
     StringRef ABIName;
-    getMipsCPUAndABI(Args, getToolChain().getTriple(), CPUName, ABIName);
+    mips::getMipsCPUAndABI(Args, getToolChain().getTriple(), CPUName, ABIName);
 
     CmdArgs.push_back("-mabi");
     CmdArgs.push_back(getGnuCompatibleMipsABIName(ABIName).data());
@@ -6351,7 +6384,7 @@ void freebsd::Assemble::ConstructJob(Compilation &C, const JobAction &JA,
            getToolChain().getArch() == llvm::Triple::mips64el) {
     StringRef CPUName;
     StringRef ABIName;
-    getMipsCPUAndABI(Args, getToolChain().getTriple(), CPUName, ABIName);
+    mips::getMipsCPUAndABI(Args, getToolChain().getTriple(), CPUName, ABIName);
 
     CmdArgs.push_back("-march");
     CmdArgs.push_back(CPUName.data());
@@ -6624,7 +6657,7 @@ void netbsd::Assemble::ConstructJob(Compilation &C, const JobAction &JA,
   case llvm::Triple::mips64el: {
     StringRef CPUName;
     StringRef ABIName;
-    getMipsCPUAndABI(Args, getToolChain().getTriple(), CPUName, ABIName);
+    mips::getMipsCPUAndABI(Args, getToolChain().getTriple(), CPUName, ABIName);
 
     CmdArgs.push_back("-march");
     CmdArgs.push_back(CPUName.data());
@@ -6918,13 +6951,20 @@ void gnutools::Assemble::ConstructJob(Compilation &C, const JobAction &JA,
              getToolChain().getArch() == llvm::Triple::mips64el) {
     StringRef CPUName;
     StringRef ABIName;
-    getMipsCPUAndABI(Args, getToolChain().getTriple(), CPUName, ABIName);
+    mips::getMipsCPUAndABI(Args, getToolChain().getTriple(), CPUName, ABIName);
+    ABIName = getGnuCompatibleMipsABIName(ABIName);
 
     CmdArgs.push_back("-march");
     CmdArgs.push_back(CPUName.data());
 
     CmdArgs.push_back("-mabi");
-    CmdArgs.push_back(getGnuCompatibleMipsABIName(ABIName).data());
+    CmdArgs.push_back(ABIName.data());
+
+    // LLVM doesn't support -mabicalls yet and acts as if it is always given.
+    CmdArgs.push_back("-mno-shared");
+    // LLVM doesn't support -mplt yet and acts as if it is always given.
+    // However, -mplt has no effect with the N64 ABI.
+    CmdArgs.push_back(ABIName == "64" ? "-KPIC" : "-call_nonpic");
 
     if (getToolChain().getArch() == llvm::Triple::mips ||
         getToolChain().getArch() == llvm::Triple::mips64)
@@ -6937,8 +6977,28 @@ void gnutools::Assemble::ConstructJob(Compilation &C, const JobAction &JA,
         CmdArgs.push_back(Args.MakeArgString("-mnan=2008"));
     }
 
-    Args.AddLastArg(CmdArgs, options::OPT_mfp32, options::OPT_mfp64);
-    Args.AddLastArg(CmdArgs, options::OPT_mips16, options::OPT_mno_mips16);
+    // Add the last -mfp32/-mfpxx/-mfp64 or -mfpxx if it is enabled by default.
+    if (Arg *A = Args.getLastArg(options::OPT_mfp32, options::OPT_mfpxx,
+                                 options::OPT_mfp64)) {
+      A->claim();
+      A->render(Args, CmdArgs);
+    } else if (mips::isFPXXDefault(getToolChain().getTriple(), CPUName,
+                                   ABIName))
+      CmdArgs.push_back("-mfpxx");
+
+    // Pass on -mmips16 or -mno-mips16. However, the assembler equivalent of
+    // -mno-mips16 is actually -no-mips16.
+    if (Arg *A = Args.getLastArg(options::OPT_mips16,
+                                 options::OPT_mno_mips16)) {
+      if (A->getOption().matches(options::OPT_mips16)) {
+        A->claim();
+        A->render(Args, CmdArgs);
+      } else {
+        A->claim();
+        CmdArgs.push_back("-no-mips16");
+      }
+    }
+
     Args.AddLastArg(CmdArgs, options::OPT_mmicromips,
                     options::OPT_mno_micromips);
     Args.AddLastArg(CmdArgs, options::OPT_mdsp, options::OPT_mno_dsp);
@@ -6950,6 +7010,12 @@ void gnutools::Assemble::ConstructJob(Compilation &C, const JobAction &JA,
       if (A->getOption().matches(options::OPT_mmsa))
         CmdArgs.push_back(Args.MakeArgString("-mmsa"));
     }
+
+    Args.AddLastArg(CmdArgs, options::OPT_mhard_float,
+                    options::OPT_msoft_float);
+
+    Args.AddLastArg(CmdArgs, options::OPT_modd_spreg,
+                    options::OPT_mno_odd_spreg);
 
     NeedsKPIC = true;
   } else if (getToolChain().getArch() == llvm::Triple::systemz) {
