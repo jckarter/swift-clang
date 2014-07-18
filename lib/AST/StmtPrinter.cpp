@@ -791,7 +791,7 @@ void StmtPrinter::PrintOMPExecutableDirective(OMPExecutableDirective *S) {
       OS << ' ';
     }
   OS << "\n";
-  if (S->getAssociatedStmt()) {
+  if (S->hasAssociatedStmt() && S->getAssociatedStmt()) {
     assert(isa<CapturedStmt>(S->getAssociatedStmt()) &&
            "Expected captured statement!");
     Stmt *CS = cast<CapturedStmt>(S->getAssociatedStmt())->getCapturedStmt();
@@ -847,6 +847,21 @@ void StmtPrinter::VisitOMPParallelSectionsDirective(
 
 void StmtPrinter::VisitOMPTaskDirective(OMPTaskDirective *Node) {
   Indent() << "#pragma omp task ";
+  PrintOMPExecutableDirective(Node);
+}
+
+void StmtPrinter::VisitOMPTaskyieldDirective(OMPTaskyieldDirective *Node) {
+  Indent() << "#pragma omp taskyield";
+  PrintOMPExecutableDirective(Node);
+}
+
+void StmtPrinter::VisitOMPBarrierDirective(OMPBarrierDirective *Node) {
+  Indent() << "#pragma omp barrier";
+  PrintOMPExecutableDirective(Node);
+}
+
+void StmtPrinter::VisitOMPTaskwaitDirective(OMPTaskwaitDirective *Node) {
+  Indent() << "#pragma omp taskwait";
   PrintOMPExecutableDirective(Node);
 }
 

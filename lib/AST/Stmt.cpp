@@ -1574,3 +1574,46 @@ OMPTaskDirective *OMPTaskDirective::CreateEmpty(const ASTContext &C,
   return new (Mem) OMPTaskDirective(NumClauses);
 }
 
+OMPTaskyieldDirective *OMPTaskyieldDirective::Create(const ASTContext &C,
+                                                     SourceLocation StartLoc,
+                                                     SourceLocation EndLoc) {
+  void *Mem = C.Allocate(sizeof(OMPTaskyieldDirective));
+  OMPTaskyieldDirective *Dir =
+      new (Mem) OMPTaskyieldDirective(StartLoc, EndLoc);
+  return Dir;
+}
+
+OMPTaskyieldDirective *OMPTaskyieldDirective::CreateEmpty(const ASTContext &C,
+                                                          EmptyShell) {
+  void *Mem = C.Allocate(sizeof(OMPTaskyieldDirective));
+  return new (Mem) OMPTaskyieldDirective();
+}
+
+OMPBarrierDirective *OMPBarrierDirective::Create(const ASTContext &C,
+                                                 SourceLocation StartLoc,
+                                                 SourceLocation EndLoc) {
+  void *Mem = C.Allocate(sizeof(OMPBarrierDirective));
+  OMPBarrierDirective *Dir = new (Mem) OMPBarrierDirective(StartLoc, EndLoc);
+  return Dir;
+}
+
+OMPBarrierDirective *OMPBarrierDirective::CreateEmpty(const ASTContext &C,
+                                                      EmptyShell) {
+  void *Mem = C.Allocate(sizeof(OMPBarrierDirective));
+  return new (Mem) OMPBarrierDirective();
+}
+
+OMPTaskwaitDirective *OMPTaskwaitDirective::Create(const ASTContext &C,
+                                                   SourceLocation StartLoc,
+                                                   SourceLocation EndLoc) {
+  void *Mem = C.Allocate(sizeof(OMPTaskwaitDirective));
+  OMPTaskwaitDirective *Dir = new (Mem) OMPTaskwaitDirective(StartLoc, EndLoc);
+  return Dir;
+}
+
+OMPTaskwaitDirective *OMPTaskwaitDirective::CreateEmpty(const ASTContext &C,
+                                                        EmptyShell) {
+  void *Mem = C.Allocate(sizeof(OMPTaskwaitDirective));
+  return new (Mem) OMPTaskwaitDirective();
+}
+

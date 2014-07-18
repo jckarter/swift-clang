@@ -83,6 +83,9 @@ Parser::DeclGroupPtrTy Parser::ParseOpenMPDeclarativeDirective() {
   case OMPD_parallel:
   case OMPD_simd:
   case OMPD_task:
+  case OMPD_taskyield:
+  case OMPD_barrier:
+  case OMPD_taskwait:
   case OMPD_for:
   case OMPD_sections:
   case OMPD_section:
@@ -107,9 +110,11 @@ Parser::DeclGroupPtrTy Parser::ParseOpenMPDeclarativeDirective() {
 ///       executable-directive:
 ///         annot_pragma_openmp 'parallel' | 'simd' | 'for' | 'sections' |
 ///         'section' | 'single' | 'master' | 'parallel for' |
-///         'parallel sections' | 'task' {clause} annot_pragma_openmp_end
+///         'parallel sections' | 'task' | 'taskyield' | 'barrier' | 'taskwait'
+///         {clause} annot_pragma_openmp_end
 ///
-StmtResult Parser::ParseOpenMPDeclarativeOrExecutableDirective() {
+StmtResult
+Parser::ParseOpenMPDeclarativeOrExecutableDirective(bool StandAloneAllowed) {
   assert(Tok.is(tok::annot_pragma_openmp) && "Not an OpenMP directive!");
   ParenBraceBracketBalancer BalancerRAIIObj(*this);
   SmallVector<Expr *, 5> Identifiers;
@@ -123,6 +128,7 @@ StmtResult Parser::ParseOpenMPDeclarativeOrExecutableDirective() {
   // Name of critical directive.
   DeclarationNameInfo DirName;
   StmtResult Directive = StmtError();
+  bool HasAssociatedStatement = true;
 
   switch (DKind) {
   case OMPD_threadprivate:
@@ -141,6 +147,14 @@ StmtResult Parser::ParseOpenMPDeclarativeOrExecutableDirective() {
     }
     SkipUntil(tok::annot_pragma_openmp_end);
     break;
+  case OMPD_taskyield:
+  case OMPD_barrier:
+  case OMPD_taskwait:
+    if (!StandAloneAllowed) {
+      Diag(Tok, diag::err_omp_immediate_directive)
+          << getOpenMPDirectiveName(DKind);
+    }
+    HasAssociatedStatement = false;
   case OMPD_parallel:
   case OMPD_simd:
   case OMPD_for:
@@ -183,7 +197,7 @@ StmtResult Parser::ParseOpenMPDeclarativeOrExecutableDirective() {
 
     StmtResult AssociatedStmt;
     bool CreateDirective = true;
-    {
+    if (HasAssociatedStatement) {
       // The body is a block scope like in Lambdas and Blocks.
       Sema::CompoundScopeRAII CompoundScope(Actions);
       Actions.ActOnOpenMPRegionStart(DKind, getCurScope());

@@ -345,7 +345,7 @@ Retry:
 
   case tok::annot_pragma_openmp:
     ProhibitAttributes(Attrs);
-    return ParseOpenMPDeclarativeOrExecutableDirective();
+    return ParseOpenMPDeclarativeOrExecutableDirective(!OnlyStatement);
 
   case tok::annot_pragma_ms_pointers_to_members:
     ProhibitAttributes(Attrs);
@@ -804,7 +804,6 @@ StmtResult Parser::ParseCompoundStatement(bool isStmtExpr) {
 ///         declaration
 /// [GNU]   '__extension__' declaration
 ///         statement
-/// [OMP]   openmp-directive            [TODO]
 ///
 /// [GNU] label-declarations:
 /// [GNU]   label-declaration
@@ -812,10 +811,6 @@ StmtResult Parser::ParseCompoundStatement(bool isStmtExpr) {
 ///
 /// [GNU] label-declaration:
 /// [GNU]   '__label__' identifier-list ';'
-///
-/// [OMP] openmp-directive:             [TODO]
-/// [OMP]   barrier-directive
-/// [OMP]   flush-directive
 ///
 StmtResult Parser::ParseCompoundStatement(bool isStmtExpr,
                                           unsigned ScopeFlags) {

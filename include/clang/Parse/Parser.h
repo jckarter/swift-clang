@@ -486,12 +486,12 @@ private:
   void HandlePragmaMSVtorDisp();
 
   void HandlePragmaMSPragma();
-  unsigned HandlePragmaMSSection(llvm::StringRef PragmaName,
-                                 SourceLocation PragmaLocation);
-  unsigned HandlePragmaMSSegment(llvm::StringRef PragmaName,
-                                 SourceLocation PragmaLocation);
-  unsigned HandlePragmaMSInitSeg(llvm::StringRef PragmaName,
-                                 SourceLocation PragmaLocation);
+  bool HandlePragmaMSSection(StringRef PragmaName,
+                             SourceLocation PragmaLocation);
+  bool HandlePragmaMSSegment(StringRef PragmaName,
+                             SourceLocation PragmaLocation);
+  bool HandlePragmaMSInitSeg(StringRef PragmaName,
+                             SourceLocation PragmaLocation);
 
   /// \brief Handle the annotation token produced for
   /// #pragma align...
@@ -2339,7 +2339,12 @@ private:
                                 SmallVectorImpl<Expr *> &VarList,
                                 bool AllowScopeSpecifier);
   /// \brief Parses declarative or executable directive.
-  StmtResult ParseOpenMPDeclarativeOrExecutableDirective();
+  ///
+  /// \param StandAloneAllowed true if allowed stand-alone directives,
+  /// false - otherwise
+  ///
+  StmtResult
+  ParseOpenMPDeclarativeOrExecutableDirective(bool StandAloneAllowed);
   /// \brief Parses clause of kind \a CKind for directive of a kind \a Kind.
   ///
   /// \param DKind Kind of current directive.

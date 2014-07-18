@@ -1864,6 +1864,9 @@ public:
   void VisitOMPParallelForDirective(const OMPParallelForDirective *D);
   void VisitOMPParallelSectionsDirective(const OMPParallelSectionsDirective *D);
   void VisitOMPTaskDirective(const OMPTaskDirective *D);
+  void VisitOMPTaskyieldDirective(const OMPTaskyieldDirective *D);
+  void VisitOMPBarrierDirective(const OMPBarrierDirective *D);
+  void VisitOMPTaskwaitDirective(const OMPTaskwaitDirective *D);
 
 private:
   void AddDeclarationNameInfo(const Stmt *S);
@@ -2338,6 +2341,19 @@ void EnqueueVisitor::VisitOMPParallelSectionsDirective(
 }
 
 void EnqueueVisitor::VisitOMPTaskDirective(const OMPTaskDirective *D) {
+  VisitOMPExecutableDirective(D);
+}
+
+void
+EnqueueVisitor::VisitOMPTaskyieldDirective(const OMPTaskyieldDirective *D) {
+  VisitOMPExecutableDirective(D);
+}
+
+void EnqueueVisitor::VisitOMPBarrierDirective(const OMPBarrierDirective *D) {
+  VisitOMPExecutableDirective(D);
+}
+
+void EnqueueVisitor::VisitOMPTaskwaitDirective(const OMPTaskwaitDirective *D) {
   VisitOMPExecutableDirective(D);
 }
 
@@ -4033,6 +4049,12 @@ CXString clang_getCursorKindSpelling(enum CXCursorKind Kind) {
     return cxstring::createRef("OMPParallelSectionsDirective");
   case CXCursor_OMPTaskDirective:
     return cxstring::createRef("OMPTaskDirective");
+  case CXCursor_OMPTaskyieldDirective:
+    return cxstring::createRef("OMPTaskyieldDirective");
+  case CXCursor_OMPBarrierDirective:
+    return cxstring::createRef("OMPBarrierDirective");
+  case CXCursor_OMPTaskwaitDirective:
+    return cxstring::createRef("OMPTaskwaitDirective");
   }
 
   llvm_unreachable("Unhandled CXCursorKind");
