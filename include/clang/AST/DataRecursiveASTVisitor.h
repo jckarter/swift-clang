@@ -2297,6 +2297,9 @@ DEF_TRAVERSE_STMT(OMPSectionDirective,
 DEF_TRAVERSE_STMT(OMPSingleDirective,
                   { TRY_TO(TraverseOMPExecutableDirective(S)); })
 
+DEF_TRAVERSE_STMT(OMPMasterDirective,
+                  { TRY_TO(TraverseOMPExecutableDirective(S)); })
+
 DEF_TRAVERSE_STMT(OMPParallelForDirective,
                   { TRY_TO(TraverseOMPExecutableDirective(S)); })
 
@@ -2326,6 +2329,12 @@ bool RecursiveASTVisitor<Derived>::TraverseOMPClause(OMPClause *C) {
 
 template <typename Derived>
 bool RecursiveASTVisitor<Derived>::VisitOMPIfClause(OMPIfClause *C) {
+  TRY_TO(TraverseStmt(C->getCondition()));
+  return true;
+}
+
+template <typename Derived>
+bool RecursiveASTVisitor<Derived>::VisitOMPFinalClause(OMPFinalClause *C) {
   TRY_TO(TraverseStmt(C->getCondition()));
   return true;
 }
@@ -2374,6 +2383,17 @@ bool RecursiveASTVisitor<Derived>::VisitOMPOrderedClause(OMPOrderedClause *) {
 
 template <typename Derived>
 bool RecursiveASTVisitor<Derived>::VisitOMPNowaitClause(OMPNowaitClause *) {
+  return true;
+}
+
+template <typename Derived>
+bool RecursiveASTVisitor<Derived>::VisitOMPUntiedClause(OMPUntiedClause *) {
+  return true;
+}
+
+template <typename Derived>
+bool
+RecursiveASTVisitor<Derived>::VisitOMPMergeableClause(OMPMergeableClause *) {
   return true;
 }
 

@@ -201,8 +201,13 @@ static void AddLinkerInputs(const ToolChain &TC,
       TC.AddCXXStdlibLibArgs(Args, CmdArgs);
     else if (A.getOption().matches(options::OPT_Z_reserved_lib_cckext))
       TC.AddCCKextLibArgs(Args, CmdArgs);
-    else
-      A.renderAsInput(Args, CmdArgs);
+    else if (A.getOption().matches(options::OPT_z)) {
+      // Pass -z prefix for gcc linker compatibility.
+      A.claim();
+      A.render(Args, CmdArgs);
+    } else {
+       A.renderAsInput(Args, CmdArgs);
+    }
   }
 
   // LIBRARY_PATH - included following the user specified library paths.
@@ -1030,6 +1035,17 @@ static void getMIPSTargetFeatures(const Driver &D, const llvm::Triple &Triple,
   StringRef ABIName;
   mips::getMipsCPUAndABI(Args, Triple, CPUName, ABIName);
   ABIName = getGnuCompatibleMipsABIName(ABIName);
+
+  // Always override the backend's default ABI.
+  std::string ABIFeature = llvm::StringSwitch<StringRef>(ABIName)
+                               .Case("32", "+o32")
+                               .Case("n32", "+n32")
+                               .Case("64", "+n64")
+                               .Case("eabi", "+eabi")
+                               .Default(("+" + ABIName).str());
+  Features.push_back("-o32");
+  Features.push_back("-n64");
+  Features.push_back(Args.MakeArgString(ABIFeature));
 
   StringRef FloatABI = getMipsFloatABI(D, Args);
   if (FloatABI == "soft") {

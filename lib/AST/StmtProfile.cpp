@@ -273,6 +273,11 @@ void OMPClauseProfiler::VisitOMPIfClause(const OMPIfClause *C) {
     Profiler->VisitStmt(C->getCondition());
 }
 
+void OMPClauseProfiler::VisitOMPFinalClause(const OMPFinalClause *C) {
+  if (C->getCondition())
+    Profiler->VisitStmt(C->getCondition());
+}
+
 void OMPClauseProfiler::VisitOMPNumThreadsClause(const OMPNumThreadsClause *C) {
   if (C->getNumThreads())
     Profiler->VisitStmt(C->getNumThreads());
@@ -300,6 +305,10 @@ void OMPClauseProfiler::VisitOMPScheduleClause(const OMPScheduleClause *C) {
 void OMPClauseProfiler::VisitOMPOrderedClause(const OMPOrderedClause *) {}
 
 void OMPClauseProfiler::VisitOMPNowaitClause(const OMPNowaitClause *) {}
+
+void OMPClauseProfiler::VisitOMPUntiedClause(const OMPUntiedClause *) {}
+
+void OMPClauseProfiler::VisitOMPMergeableClause(const OMPMergeableClause *) {}
 
 template<typename T>
 void OMPClauseProfiler::VisitOMPClauseList(T *Node) {
@@ -377,6 +386,10 @@ void StmtProfiler::VisitOMPSectionDirective(const OMPSectionDirective *S) {
 }
 
 void StmtProfiler::VisitOMPSingleDirective(const OMPSingleDirective *S) {
+  VisitOMPExecutableDirective(S);
+}
+
+void StmtProfiler::VisitOMPMasterDirective(const OMPMasterDirective *S) {
   VisitOMPExecutableDirective(S);
 }
 
