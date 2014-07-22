@@ -197,6 +197,9 @@ void CodeGenFunction::EmitStmt(const Stmt *S) {
   case Stmt::OMPMasterDirectiveClass:
     EmitOMPMasterDirective(cast<OMPMasterDirective>(*S));
     break;
+  case Stmt::OMPCriticalDirectiveClass:
+    EmitOMPCriticalDirective(cast<OMPCriticalDirective>(*S));
+    break;
   case Stmt::OMPParallelForDirectiveClass:
     EmitOMPParallelForDirective(cast<OMPParallelForDirective>(*S));
     break;
@@ -214,6 +217,15 @@ void CodeGenFunction::EmitStmt(const Stmt *S) {
     break;
   case Stmt::OMPTaskwaitDirectiveClass:
     EmitOMPTaskwaitDirective(cast<OMPTaskwaitDirective>(*S));
+    break;
+  case Stmt::OMPFlushDirectiveClass:
+    EmitOMPFlushDirective(cast<OMPFlushDirective>(*S));
+    break;
+  case Stmt::OMPOrderedDirectiveClass:
+    EmitOMPOrderedDirective(cast<OMPOrderedDirective>(*S));
+    break;
+  case Stmt::OMPAtomicDirectiveClass:
+    EmitOMPAtomicDirective(cast<OMPAtomicDirective>(*S));
     break;
   }
 }
@@ -586,7 +598,7 @@ void CodeGenFunction::EmitCondBrHints(llvm::LLVMContext &Context,
       break;
     case LoopHintAttr::Interleave:
     case LoopHintAttr::InterleaveCount:
-      MetadataName = "llvm.loop.vectorize.unroll";
+      MetadataName = "llvm.loop.interleave.count";
       break;
     case LoopHintAttr::Unroll:
       MetadataName = "llvm.loop.unroll.enable";

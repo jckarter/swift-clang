@@ -1928,12 +1928,16 @@ public:
   void EmitOMPSectionDirective(const OMPSectionDirective &S);
   void EmitOMPSingleDirective(const OMPSingleDirective &S);
   void EmitOMPMasterDirective(const OMPMasterDirective &S);
+  void EmitOMPCriticalDirective(const OMPCriticalDirective &S);
   void EmitOMPParallelForDirective(const OMPParallelForDirective &S);
   void EmitOMPParallelSectionsDirective(const OMPParallelSectionsDirective &S);
   void EmitOMPTaskDirective(const OMPTaskDirective &S);
   void EmitOMPTaskyieldDirective(const OMPTaskyieldDirective &S);
   void EmitOMPBarrierDirective(const OMPBarrierDirective &S);
   void EmitOMPTaskwaitDirective(const OMPTaskwaitDirective &S);
+  void EmitOMPFlushDirective(const OMPFlushDirective &S);
+  void EmitOMPOrderedDirective(const OMPOrderedDirective &S);
+  void EmitOMPAtomicDirective(const OMPAtomicDirective &S);
 
   //===--------------------------------------------------------------------===//
   //                         LValue Expression Emission

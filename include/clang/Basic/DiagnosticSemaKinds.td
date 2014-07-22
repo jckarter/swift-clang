@@ -541,10 +541,9 @@ def err_pragma_loop_invalid_value : Error<
 def err_pragma_loop_invalid_keyword : Error<
   "invalid argument; expected 'enable' or 'disable'">;
 def err_pragma_loop_compatibility : Error<
-  "%select{incompatible|duplicate}0 directives '%1(%2)' and '%3(%4)'">;
+  "%select{incompatible|duplicate}0 directives '%1' and '%2'">;
 def err_pragma_loop_precedes_nonloop : Error<
-  "expected a for, while, or do-while loop to follow the '#pragma clang loop' "
-  "directive">;
+  "expected a for, while, or do-while loop to follow '%0'">;
 
 /// Objective-C parser diagnostics
 def err_duplicate_class_def : Error<
@@ -7136,9 +7135,16 @@ def err_omp_reduction_id_not_compatible : Error<
   "variable of type %0 is not valid for specified reduction operation">;
 def err_omp_prohibited_region : Error<
   "region cannot be%select{| closely}0 nested inside '%1' region"
-  "%select{|; perhaps you forget to enclose 'omp %3' directive into a parallel region?}2">;
+  "%select{|; perhaps you forget to enclose 'omp %3' directive into a parallel region?|"
+  "; perhaps you forget to enclose 'omp %3' directive into a for or a parallel for region with 'ordered' clause?}2">;
 def err_omp_prohibited_region_simd : Error<
   "OpenMP constructs may not be nested inside a simd region">;
+def err_omp_prohibited_region_atomic : Error<
+  "OpenMP constructs may not be nested inside an atomic region">;
+def err_omp_prohibited_region_critical_same_name : Error<
+  "cannot nest 'critical' regions having the same name %0">;
+def note_omp_previous_critical_region : Note<
+  "previous 'critical' region starts here">;
 def err_omp_sections_not_compound_stmt : Error<
   "the statement for '#pragma omp sections' must be a compound statement">;
 def err_omp_parallel_sections_not_compound_stmt : Error<

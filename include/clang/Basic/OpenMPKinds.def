@@ -45,6 +45,9 @@
 #ifndef OPENMP_TASK_CLAUSE
 #  define OPENMP_TASK_CLAUSE(Name)
 #endif
+#ifndef OPENMP_ATOMIC_CLAUSE
+#  define OPENMP_ATOMIC_CLAUSE(Name)
+#endif
 #ifndef OPENMP_DEFAULT_KIND
 #  define OPENMP_DEFAULT_KIND(Name)
 #endif
@@ -65,9 +68,13 @@ OPENMP_DIRECTIVE(sections)
 OPENMP_DIRECTIVE(section)
 OPENMP_DIRECTIVE(single)
 OPENMP_DIRECTIVE(master)
+OPENMP_DIRECTIVE(critical)
 OPENMP_DIRECTIVE(taskyield)
 OPENMP_DIRECTIVE(barrier)
 OPENMP_DIRECTIVE(taskwait)
+OPENMP_DIRECTIVE(flush)
+OPENMP_DIRECTIVE(ordered)
+OPENMP_DIRECTIVE(atomic)
 OPENMP_DIRECTIVE_EXT(parallel_for, "parallel for")
 OPENMP_DIRECTIVE_EXT(parallel_sections, "parallel sections")
 
@@ -93,6 +100,7 @@ OPENMP_CLAUSE(ordered, OMPOrderedClause)
 OPENMP_CLAUSE(nowait, OMPNowaitClause)
 OPENMP_CLAUSE(untied, OMPUntiedClause)
 OPENMP_CLAUSE(mergeable, OMPMergeableClause)
+OPENMP_CLAUSE(flush, OMPFlushClause)
 
 // Clauses allowed for OpenMP directive 'parallel'.
 OPENMP_PARALLEL_CLAUSE(if)
@@ -202,6 +210,7 @@ OPENMP_TASK_CLAUSE(mergeable)
 #undef OPENMP_PARALLEL_FOR_CLAUSE
 #undef OPENMP_PARALLEL_SECTIONS_CLAUSE
 #undef OPENMP_TASK_CLAUSE
+#undef OPENMP_ATOMIC_CLAUSE
 #undef OPENMP_SIMD_CLAUSE
 #undef OPENMP_FOR_CLAUSE
 

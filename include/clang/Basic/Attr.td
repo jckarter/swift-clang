@@ -1781,6 +1781,18 @@ def MSVtorDisp : InheritableAttr {
   let Documentation = [Undocumented];
 }
 
+def InitSeg : Attr {
+  let Spellings = [Pragma<"", "init_seg">];
+  let Args = [StringArgument<"Section">];
+  let SemaHandler = 0;
+  let Documentation = [InitSegDocs];
+  let AdditionalMembers = [{
+  void printPrettyPragma(raw_ostream &OS, const PrintingPolicy &Policy) const {
+    OS << '(' << getSection() << ')';
+  }
+  }];
+}
+
 def Unaligned : IgnoredAttr {
   let Spellings = [Keyword<"__unaligned">];
 }
@@ -1793,7 +1805,7 @@ def LoopHint : Attr {
   /// unroll: unroll loop if 'value != 0'.
   /// unroll_count: unrolls loop 'value' times.
 
-  let Spellings = [Pragma<"clang", "loop">];
+  let Spellings = [Pragma<"clang", "loop">, Pragma<"", "unroll">];
 
   /// State of the loop optimization specified by the spelling.
   let Args = [EnumArgument<"Option", "OptionType",
@@ -1823,15 +1835,52 @@ def LoopHint : Attr {
   }
 
   void printPrettyPragma(raw_ostream &OS, const PrintingPolicy &Policy) const {
-    OS << getOptionName(option) << "(";
+    unsigned SpellingIndex = getSpellingListIndex();
+    if (SpellingIndex == Pragma_unroll) {
+      // String "unroll" of "#pragma unroll" is already emitted as the
+      // pragma name.
+      if (option == UnrollCount)
+        printArgument(OS);
+      OS << "\n";
+      return;
+    }
+    assert(SpellingIndex == Pragma_clang_loop && "Unexpected spelling");
+    OS << getOptionName(option);
+    printArgument(OS);
+    OS << "\n";
+  }
+
+  // Prints the loop hint argument including the enclosing parentheses to OS.
+  void printArgument(raw_ostream &OS) const {
+    OS << "(";
     if (option == VectorizeWidth || option == InterleaveCount ||
         option == UnrollCount)
       OS << value;
+    else if (value)
+      OS << "enable";
     else
-      OS << getValueName(value);
-    OS << ")\n";
+      OS << "disable";
+    OS << ")";
+  }
+
+  // Return a string suitable for identifying this attribute in diagnostics.
+  std::string getDiagnosticName() const {
+    std::string DiagnosticName;
+    llvm::raw_string_ostream OS(DiagnosticName);
+    unsigned SpellingIndex = getSpellingListIndex();
+    if (SpellingIndex == Pragma_unroll && option == Unroll)
+      OS << "#pragma unroll";
+    else if (SpellingIndex == Pragma_unroll && option == UnrollCount) {
+      OS << "#pragma unroll";
+      printArgument(OS);
+    } else {
+      assert(SpellingIndex == Pragma_clang_loop && "Unexpected spelling");
+      OS << getOptionName(option);
+      printArgument(OS);
+    }
+    return OS.str();
   }
   }];
 
-  let Documentation = [LoopHintDocs];
+  let Documentation = [LoopHintDocs, UnrollHintDocs];
 }
