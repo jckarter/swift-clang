@@ -5215,7 +5215,9 @@ def err_address_space_qualified_delete : Error<
 
 def err_default_init_const : Error<
   "default initialization of an object of const type %0"
-  "%select{| requires a user-provided default constructor}1">;
+  "%select{| without a user-provided default constructor}1">;
+def note_add_initializer : Note<
+  "add an explicit initializer to initialize %0">;
 def err_delete_operand : Error<"cannot delete expression of type %0">;
 def ext_delete_void_ptr_operand : ExtWarn<
   "cannot delete expression with pointer-to-'void' type %0">;
@@ -7158,6 +7160,19 @@ def err_omp_parallel_sections_substmt_not_section : Error<
   "statement in 'omp parallel sections' directive must be enclosed into a section region">;
 def err_omp_parallel_reduction_in_task_firstprivate : Error<
   "argument of a reduction clause of a %0 construct must not appear in a firstprivate clause on a task construct">;
+def err_omp_atomic_read_not_expression_statement : Error<
+  "the statement for 'atomic read' must be an expression statement of form 'v = x;',"
+  " where v and x are both l-value expressions with scalar type">;
+def err_omp_atomic_write_not_expression_statement : Error<
+  "the statement for 'atomic write' must be an expression statement of form 'x = expr;',"
+  " where x is an l-value expression with scalar type">;
+def err_omp_atomic_update_not_expression_statement : Error<
+  "the statement for 'atomic%select{| update}0' must be an expression statement of form '++x;', '--x;', 'x++;', 'x--;', 'x binop= expr;', 'x = x binop expr' or 'x = expr binop x',"
+  " where x is an l-value expression with scalar type">;
+def err_omp_atomic_several_clauses : Error<
+  "directive '#pragma omp atomic' cannot contain more than one 'read', 'write', 'update' or 'capture' clause">;
+def note_omp_atomic_previous_clause : Note<
+  "'%0' clause used here">;
 } // end of OpenMP category
 
 let CategoryName = "Related Result Type Issue" in {
