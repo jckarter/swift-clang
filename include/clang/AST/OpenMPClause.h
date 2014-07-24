@@ -857,6 +857,66 @@ public:
   StmtRange children() { return StmtRange(); }
 };
 
+/// \brief This represents 'capture' clause in the '#pragma omp atomic'
+/// directive.
+///
+/// \code
+/// #pragma omp atomic capture
+/// \endcode
+/// In this example directive '#pragma omp atomic' has 'capture' clause.
+///
+class OMPCaptureClause : public OMPClause {
+public:
+  /// \brief Build 'capture' clause.
+  ///
+  /// \param StartLoc Starting location of the clause.
+  /// \param EndLoc Ending location of the clause.
+  ///
+  OMPCaptureClause(SourceLocation StartLoc, SourceLocation EndLoc)
+      : OMPClause(OMPC_capture, StartLoc, EndLoc) {}
+
+  /// \brief Build an empty clause.
+  ///
+  OMPCaptureClause()
+      : OMPClause(OMPC_capture, SourceLocation(), SourceLocation()) {}
+
+  static bool classof(const OMPClause *T) {
+    return T->getClauseKind() == OMPC_capture;
+  }
+
+  StmtRange children() { return StmtRange(); }
+};
+
+/// \brief This represents 'seq_cst' clause in the '#pragma omp atomic'
+/// directive.
+///
+/// \code
+/// #pragma omp atomic seq_cst
+/// \endcode
+/// In this example directive '#pragma omp atomic' has 'seq_cst' clause.
+///
+class OMPSeqCstClause : public OMPClause {
+public:
+  /// \brief Build 'seq_cst' clause.
+  ///
+  /// \param StartLoc Starting location of the clause.
+  /// \param EndLoc Ending location of the clause.
+  ///
+  OMPSeqCstClause(SourceLocation StartLoc, SourceLocation EndLoc)
+      : OMPClause(OMPC_seq_cst, StartLoc, EndLoc) {}
+
+  /// \brief Build an empty clause.
+  ///
+  OMPSeqCstClause()
+      : OMPClause(OMPC_seq_cst, SourceLocation(), SourceLocation()) {}
+
+  static bool classof(const OMPClause *T) {
+    return T->getClauseKind() == OMPC_seq_cst;
+  }
+
+  StmtRange children() { return StmtRange(); }
+};
+
 /// \brief This represents clause 'private' in the '#pragma omp ...' directives.
 ///
 /// \code

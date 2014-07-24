@@ -316,6 +316,10 @@ void OMPClauseProfiler::VisitOMPWriteClause(const OMPWriteClause *) {}
 
 void OMPClauseProfiler::VisitOMPUpdateClause(const OMPUpdateClause *) {}
 
+void OMPClauseProfiler::VisitOMPCaptureClause(const OMPCaptureClause *) {}
+
+void OMPClauseProfiler::VisitOMPSeqCstClause(const OMPSeqCstClause *) {}
+
 template<typename T>
 void OMPClauseProfiler::VisitOMPClauseList(T *Node) {
   for (auto *I : Node->varlists())

@@ -226,7 +226,7 @@ DSAStackTy::DSAVarData DSAStackTy::getDSA(StackTy::reverse_iterator Iter,
     //  File-scope or namespace-scope variables referenced in called routines
     //  in the region are shared unless they appear in a threadprivate
     //  directive.
-    if (!D->isFunctionOrMethodVarDecl())
+    if (!D->isFunctionOrMethodVarDecl() && !isa<ParmVarDecl>(D))
       DVar.CKind = OMPC_shared;
 
     // OpenMP [2.9.1.2, Data-sharing Attribute Rules for Variables Referenced
@@ -393,8 +393,10 @@ DSAStackTy::DSAVarData DSAStackTy::getTopDSA(VarDecl *D, bool FromParent) {
     StartI = std::next(StartI);
   }
   if (!isParallelOrTaskRegion(Kind)) {
-    if (isOpenMPLocal(D, StartI) && D->isLocalVarDecl() &&
-        (D->getStorageClass() == SC_Auto || D->getStorageClass() == SC_None)) {
+    if (isOpenMPLocal(D, StartI) &&
+        ((D->isLocalVarDecl() && (D->getStorageClass() == SC_Auto ||
+                                  D->getStorageClass() == SC_None)) ||
+         isa<ParmVarDecl>(D))) {
       DVar.CKind = OMPC_private;
       return DVar;
     }
@@ -2390,7 +2392,8 @@ StmtResult Sema::ActOnOpenMPAtomicDirective(ArrayRef<OMPClause *> Clauses,
   SourceLocation AtomicKindLoc;
   for (auto *C : Clauses) {
     if (C->getClauseKind() == OMPC_read || C->getClauseKind() == OMPC_write ||
-        C->getClauseKind() == OMPC_update) {
+        C->getClauseKind() == OMPC_update ||
+        C->getClauseKind() == OMPC_capture) {
       if (AtomicKind != OMPC_unknown) {
         Diag(C->getLocStart(), diag::err_omp_atomic_several_clauses)
             << SourceRange(C->getLocStart(), C->getLocEnd());
@@ -2402,23 +2405,34 @@ StmtResult Sema::ActOnOpenMPAtomicDirective(ArrayRef<OMPClause *> Clauses,
       }
     }
   }
+  auto Body = CS->getCapturedStmt();
   if (AtomicKind == OMPC_read) {
-    if (!isa<Expr>(CS->getCapturedStmt())) {
-      Diag(CS->getCapturedStmt()->getLocStart(),
+    if (!isa<Expr>(Body)) {
+      Diag(Body->getLocStart(),
            diag::err_omp_atomic_read_not_expression_statement);
       return StmtError();
     }
   } else if (AtomicKind == OMPC_write) {
-    if (!isa<Expr>(CS->getCapturedStmt())) {
-      Diag(CS->getCapturedStmt()->getLocStart(),
+    if (!isa<Expr>(Body)) {
+      Diag(Body->getLocStart(),
            diag::err_omp_atomic_write_not_expression_statement);
       return StmtError();
     }
   } else if (AtomicKind == OMPC_update || AtomicKind == OMPC_unknown) {
-    if (!isa<Expr>(CS->getCapturedStmt())) {
-      Diag(CS->getCapturedStmt()->getLocStart(),
+    if (!isa<Expr>(Body)) {
+      Diag(Body->getLocStart(),
            diag::err_omp_atomic_update_not_expression_statement)
           << (AtomicKind == OMPC_update);
+      return StmtError();
+    }
+  } else if (AtomicKind == OMPC_capture) {
+    if (isa<Expr>(Body) && !isa<BinaryOperator>(Body)) {
+      Diag(Body->getLocStart(),
+           diag::err_omp_atomic_capture_not_expression_statement);
+      return StmtError();
+    } else if (!isa<Expr>(Body) && !isa<CompoundStmt>(Body)) {
+      Diag(Body->getLocStart(),
+           diag::err_omp_atomic_capture_not_compound_statement);
       return StmtError();
     }
   }
@@ -2470,6 +2484,8 @@ OMPClause *Sema::ActOnOpenMPSingleExprClause(OpenMPClauseKind Kind, Expr *Expr,
   case OMPC_read:
   case OMPC_write:
   case OMPC_update:
+  case OMPC_capture:
+  case OMPC_seq_cst:
   case OMPC_unknown:
     llvm_unreachable("Clause is not allowed.");
   }
@@ -2675,6 +2691,8 @@ OMPClause *Sema::ActOnOpenMPSimpleClause(
   case OMPC_read:
   case OMPC_write:
   case OMPC_update:
+  case OMPC_capture:
+  case OMPC_seq_cst:
   case OMPC_unknown:
     llvm_unreachable("Clause is not allowed.");
   }
@@ -2793,6 +2811,8 @@ OMPClause *Sema::ActOnOpenMPSingleExprWithArgClause(
   case OMPC_read:
   case OMPC_write:
   case OMPC_update:
+  case OMPC_capture:
+  case OMPC_seq_cst:
   case OMPC_unknown:
     llvm_unreachable("Clause is not allowed.");
   }
@@ -2881,6 +2901,12 @@ OMPClause *Sema::ActOnOpenMPClause(OpenMPClauseKind Kind,
   case OMPC_update:
     Res = ActOnOpenMPUpdateClause(StartLoc, EndLoc);
     break;
+  case OMPC_capture:
+    Res = ActOnOpenMPCaptureClause(StartLoc, EndLoc);
+    break;
+  case OMPC_seq_cst:
+    Res = ActOnOpenMPSeqCstClause(StartLoc, EndLoc);
+    break;
   case OMPC_if:
   case OMPC_final:
   case OMPC_num_threads:
@@ -2942,6 +2968,16 @@ OMPClause *Sema::ActOnOpenMPUpdateClause(SourceLocation StartLoc,
   return new (Context) OMPUpdateClause(StartLoc, EndLoc);
 }
 
+OMPClause *Sema::ActOnOpenMPCaptureClause(SourceLocation StartLoc,
+                                          SourceLocation EndLoc) {
+  return new (Context) OMPCaptureClause(StartLoc, EndLoc);
+}
+
+OMPClause *Sema::ActOnOpenMPSeqCstClause(SourceLocation StartLoc,
+                                         SourceLocation EndLoc) {
+  return new (Context) OMPSeqCstClause(StartLoc, EndLoc);
+}
+
 OMPClause *Sema::ActOnOpenMPVarListClause(
     OpenMPClauseKind Kind, ArrayRef<Expr *> VarList, Expr *TailExpr,
     SourceLocation StartLoc, SourceLocation LParenLoc, SourceLocation ColonLoc,
@@ -2998,6 +3034,8 @@ OMPClause *Sema::ActOnOpenMPVarListClause(
   case OMPC_read:
   case OMPC_write:
   case OMPC_update:
+  case OMPC_capture:
+  case OMPC_seq_cst:
   case OMPC_unknown:
     llvm_unreachable("Clause is not allowed.");
   }

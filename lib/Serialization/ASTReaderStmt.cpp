@@ -1724,6 +1724,12 @@ OMPClause *OMPClauseReader::readClause() {
   case OMPC_update:
     C = new (Context) OMPUpdateClause();
     break;
+  case OMPC_capture:
+    C = new (Context) OMPCaptureClause();
+    break;
+  case OMPC_seq_cst:
+    C = new (Context) OMPSeqCstClause();
+    break;
   case OMPC_private:
     C = OMPPrivateClause::CreateEmpty(Context, Record[Idx++]);
     break;
@@ -1823,6 +1829,10 @@ void OMPClauseReader::VisitOMPReadClause(OMPReadClause *) {}
 void OMPClauseReader::VisitOMPWriteClause(OMPWriteClause *) {}
 
 void OMPClauseReader::VisitOMPUpdateClause(OMPUpdateClause *) {}
+
+void OMPClauseReader::VisitOMPCaptureClause(OMPCaptureClause *) {}
+
+void OMPClauseReader::VisitOMPSeqCstClause(OMPSeqCstClause *) {}
 
 void OMPClauseReader::VisitOMPPrivateClause(OMPPrivateClause *C) {
   C->setLParenLoc(Reader->ReadSourceLocation(Record, Idx));
