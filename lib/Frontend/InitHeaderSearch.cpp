@@ -47,6 +47,7 @@ class InitHeaderSearch {
   bool HasSysroot;
 
 public:
+
   InitHeaderSearch(HeaderSearch &HS, bool verbose, StringRef sysroot)
     : Headers(HS), Verbose(verbose), IncludeSysroot(sysroot),
       HasSysroot(!(sysroot.empty() || sysroot == "/")) {
