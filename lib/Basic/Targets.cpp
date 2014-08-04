@@ -3449,6 +3449,8 @@ public:
     return CC_C;
   }
 
+  // for x32 we need it here explicitly
+  bool hasInt128Type() const override { return true; }
 };
 } // end anonymous namespace
 
