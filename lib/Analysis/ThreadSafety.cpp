@@ -97,11 +97,11 @@ public:
 /// shared.
 class FactEntry : public CapabilityExpr {
 private:
-  LockKind          LKind;            //<  exclusive or shared
-  SourceLocation    AcquireLoc;       //<  where it was acquired.
-  bool              Managed;          //<  for ScopedLockable objects
-  bool              Asserted;         //<  true if the lock was asserted
-  const til::SExpr* UnderlyingMutex;  //<  for ScopedLockable objects
+  LockKind          LKind;            ///<  exclusive or shared
+  SourceLocation    AcquireLoc;       ///<  where it was acquired.
+  bool              Managed;          ///<  for ScopedLockable objects
+  bool              Asserted;         ///<  true if the lock was asserted
+  const til::SExpr* UnderlyingMutex;  ///<  for ScopedLockable objects
 
 public:
   FactEntry(const CapabilityExpr &CE, LockKind LK, SourceLocation Loc,
@@ -907,8 +907,6 @@ inline bool ThreadSafetyAnalyzer::inCurrentScope(const CapabilityExpr &CapE) {
 
 
 /// \brief Add a new lock to the lockset, warning if the lock is already there.
-/// \param Mutex   -- the Mutex expression for the lock
-/// \param LDat    -- the LockData for the lock
 /// \param ReqAttr -- true if this is part of an initial Requires attribute.
 void ThreadSafetyAnalyzer::addLock(FactSet &FSet, const FactEntry &Entry,
                                    StringRef DiagKind, bool ReqAttr) {
@@ -941,7 +939,6 @@ void ThreadSafetyAnalyzer::addLock(FactSet &FSet, const FactEntry &Entry,
 
 
 /// \brief Remove a lock from the lockset, warning if the lock is not there.
-/// \param Mutex The lock expression corresponding to the lock to be removed
 /// \param UnlockLoc The source location of the unlock (only used in error msg)
 void ThreadSafetyAnalyzer::removeLock(FactSet &FSet, const CapabilityExpr &Cp,
                                       SourceLocation UnlockLoc,
