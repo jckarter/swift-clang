@@ -1736,7 +1736,14 @@ static bool findMIPSMultilibs(const llvm::Triple &TargetTriple, StringRef Path,
       .Maybe(SoftFloat)
       .Maybe(Nan2008)
       .FilterOut(".*sof/nan2008")
-      .FilterOut(NonExistent);
+      .FilterOut(NonExistent)
+      .setIncludeDirsCallback([](
+          StringRef InstallDir, StringRef TripleStr, const Multilib &M) {
+        std::vector<std::string> Dirs;
+        Dirs.push_back((InstallDir + "/include").str());
+        Dirs.push_back((InstallDir + "/../../../../sysroot/usr/include").str());
+        return Dirs;
+      });
   }
 
   // Check for Code Sourcery toolchain multilibs
@@ -1781,7 +1788,15 @@ static bool findMIPSMultilibs(const llvm::Triple &TargetTriple, StringRef Path,
       .Maybe(MAbi64)
       .FilterOut("/mips16.*/64")
       .FilterOut("/micromips.*/64")
-      .FilterOut(NonExistent);
+      .FilterOut(NonExistent)
+      .setIncludeDirsCallback([](
+          StringRef InstallDir, StringRef TripleStr, const Multilib &M) {
+        std::vector<std::string> Dirs;
+        Dirs.push_back((InstallDir + "/include").str());
+        Dirs.push_back((InstallDir + "/../../../../" + TripleStr +
+                        "/libc/usr/include").str());
+        return Dirs;
+      });
   }
 
   MultilibSet AndroidMipsMultilibs = MultilibSet()
@@ -1823,7 +1838,14 @@ static bool findMIPSMultilibs(const llvm::Triple &TargetTriple, StringRef Path,
       .Maybe(Mips64r6)
       .Maybe(MAbi64)
       .Maybe(LittleEndian)
-      .FilterOut(NonExistent);
+      .FilterOut(NonExistent)
+      .setIncludeDirsCallback([](
+          StringRef InstallDir, StringRef TripleStr, const Multilib &M) {
+        std::vector<std::string> Dirs;
+        Dirs.push_back((InstallDir + "/include").str());
+        Dirs.push_back((InstallDir + "/../../../../sysroot/usr/include").str());
+        return Dirs;
+      });
   }
 
   StringRef CPUName;
@@ -3225,20 +3247,16 @@ void Linux::AddClangSystemIncludeArgs(const ArgList &DriverArgs,
   // Lacking those, try to detect the correct set of system includes for the
   // target triple.
 
-  // Sourcery CodeBench and modern FSF Mips toolchains put extern C
-  // system includes under three additional directories.
-  if (GCCInstallation.isValid() && isMipsArch(getTriple().getArch())) {
-    addExternCSystemIncludeIfExists(
-        DriverArgs, CC1Args, GCCInstallation.getInstallPath() + "/include");
-
-    addExternCSystemIncludeIfExists(
-        DriverArgs, CC1Args,
-        GCCInstallation.getInstallPath() + "/../../../../" +
-            GCCInstallation.getTriple().str() + "/libc/usr/include");
-
-    addExternCSystemIncludeIfExists(
-        DriverArgs, CC1Args,
-        GCCInstallation.getInstallPath() + "/../../../../sysroot/usr/include");
+  // Add include directories specific to the selected multilib set and multilib.
+  if (GCCInstallation.isValid()) {
+    auto Callback = Multilibs.includeDirsCallback();
+    if (Callback) {
+      const auto IncludePaths = Callback(GCCInstallation.getInstallPath(),
+                                         GCCInstallation.getTriple().str(),
+                                         GCCInstallation.getMultilib());
+      for (const auto &Path : IncludePaths)
+        addExternCSystemIncludeIfExists(DriverArgs, CC1Args, Path);
+    }
   }
 
   // Implement generic Debian multiarch support.
