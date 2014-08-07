@@ -55,7 +55,6 @@ set(output_dir ${LLVM_LIBRARY_OUTPUT_INTDIR}/clang/${CLANG_VERSION}/include)
 
 # Generate arm_neon.h
 clang_tablegen(arm_neon.h -gen-arm-neon
-  -I ${CMAKE_CURRENT_SOURCE_DIR}/../../include
   SOURCE ${CLANG_SOURCE_DIR}/include/clang/Basic/arm_neon.td)
 
 set(out_files)
