@@ -1449,6 +1449,8 @@ void Preprocessor::ExpandBuiltinMacro(Token &Tok) {
         break;
       }
 
+      // FIXME: Should we accept "-R..." flags here, or should that be handled
+      // by a separate __has_remark?
       if (WarningName.size() < 3 || WarningName[0] != '-' ||
           WarningName[1] != 'W') {
         Diag(StrStartLoc, diag::warn_has_warning_invalid_option);
@@ -1461,7 +1463,8 @@ void Preprocessor::ExpandBuiltinMacro(Token &Tok) {
       // worth special casing.
       SmallVector<diag::kind, 10> Diags;
       Value = !getDiagnostics().getDiagnosticIDs()->
-        getDiagnosticsInGroup(WarningName.substr(2), Diags);
+        getDiagnosticsInGroup(diag::Flavor::WarningOrError,
+                              WarningName.substr(2), Diags);
     } while (false);
 
     OS << (int)Value;
