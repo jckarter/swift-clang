@@ -159,6 +159,22 @@ int testTernaryUnconditionalNoreturn() {
   true ? NoReturn() : NoReturn();
 }
 
+int testTernaryStaticallyConditionalNoretrunOnTrue() {
+  true ? NoReturn() : Return();
+}
+
+int testTernaryStaticallyConditionalRetrunOnTrue() {
+  true ? Return() : NoReturn();
+} // expected-warning {{control reaches end of non-void function}}
+
+int testTernaryStaticallyConditionalNoretrunOnFalse() {
+  false ? Return() : NoReturn();
+}
+
+int testTernaryStaticallyConditionalRetrunOnFalse() {
+  false ? NoReturn() : Return();
+} // expected-warning {{control reaches end of non-void function}}
+
 int testTernaryConditionalNoreturnTrueBranch(bool value) {
   value ? (NoReturn() || NoReturn()) : Return();
 } // expected-warning {{control may reach end of non-void function}}
@@ -167,6 +183,33 @@ int testTernaryConditionalNoreturnFalseBranch(bool value) {
   value ? Return() : (NoReturn() || NoReturn());
 } // expected-warning {{control may reach end of non-void function}}
 
+int testConditionallyExecutedComplexTernaryTrueBranch(bool value) {
+  value || (true ? NoReturn() : true);
+} // expected-warning {{control may reach end of non-void function}}
+
+int testConditionallyExecutedComplexTernaryFalseBranch(bool value) {
+  value || (false ? true : NoReturn());
+} // expected-warning {{control may reach end of non-void function}}
+
+int testStaticallyExecutedLogicalOrBranch() {
+  false || NoReturn();
+}
+
+int testStaticallyExecutedLogicalAndBranch() {
+  true && NoReturn();
+}
+
+int testStaticallySkippedLogicalOrBranch() {
+  true || NoReturn();
+} // expected-warning {{control reaches end of non-void function}}
+
+int testStaticallySkppedLogicalAndBranch() {
+  false && NoReturn();
+} // expected-warning {{control reaches end of non-void function}}
+
+int testConditionallyExecutedComplexLogicalBranch(bool value) {
+  value || (true && NoReturn());
+} // expected-warning {{control may reach end of non-void function}}
 
 #if __cplusplus >= 201103L
 namespace LambdaVsTemporaryDtor {
