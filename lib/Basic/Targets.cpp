@@ -184,7 +184,6 @@ static void getDarwinDefines(MacroBuilder &Builder, const LangOptions &Opts,
     // version.
     assert(Maj < 100 && Min < 100 && Rev < 100 && "Invalid version!");
     char Str[7];
-    // Apple Internal (until OS X 10.10 is released): Handle versions > 10.9.
     if (Maj < 10 || (Maj == 10 && Min < 10)) {
       Str[0] = '0' + (Maj / 10);
       Str[1] = '0' + (Maj % 10);
@@ -192,6 +191,7 @@ static void getDarwinDefines(MacroBuilder &Builder, const LangOptions &Opts,
       Str[3] = '0' + std::min(Rev, 9U);
       Str[4] = '\0';
     } else {
+      // Handle versions > 10.9.
       Str[0] = '0' + (Maj / 10);
       Str[1] = '0' + (Maj % 10);
       Str[2] = '0' + (Min / 10);
