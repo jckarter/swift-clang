@@ -234,6 +234,12 @@ public:
   }
 };
 
+TryResult bothKnownTrue(TryResult R1, TryResult R2) {
+  if (!R1.isKnown() || !R2.isKnown())
+    return TryResult();
+  return TryResult(R1.isTrue() && R2.isTrue());
+}
+
 class reverse_children {
   llvm::SmallVector<Stmt *, 12> childrenBuf;
   ArrayRef<Stmt*> children;
@@ -439,9 +445,12 @@ private:
   ///     if the CXXBindTemporaryExpr was marked executed, and otherwise
   ///     branches to the stored successor.
   struct TempDtorContext {
-    TempDtorContext(bool IsConditional)
-        : IsConditional(IsConditional),
-          Succ(nullptr),
+    TempDtorContext()
+        : IsConditional(false), KnownExecuted(true), Succ(nullptr),
+          TerminatorExpr(nullptr) {}
+
+    TempDtorContext(TryResult KnownExecuted)
+        : IsConditional(true), KnownExecuted(KnownExecuted), Succ(nullptr),
           TerminatorExpr(nullptr) {}
 
     /// Returns whether we need to start a new branch for a temporary destructor
@@ -462,6 +471,7 @@ private:
     }
 
     const bool IsConditional;
+    const TryResult KnownExecuted;
     CFGBlock *Succ;
     CXXBindTemporaryExpr *TerminatorExpr;
   };
@@ -479,7 +489,6 @@ private:
       AbstractConditionalOperator *E, bool BindToTemporary,
       TempDtorContext &Context);
   void InsertTempDtorDecisionBlock(const TempDtorContext &Context,
-                                   TryResult ConditionVal,
                                    CFGBlock *FalseSucc = nullptr);
 
   // NYS == Not Yet Supported
@@ -1071,7 +1080,7 @@ CFGBlock *CFGBuilder::addInitializer(CXXCtorInitializer *I) {
 
     if (BuildOpts.AddTemporaryDtors && HasTemporaries) {
       // Generate destructors for temporaries in initialization expression.
-      TempDtorContext Context(/*IsConditional=*/false);
+      TempDtorContext Context;
       VisitForTemporaryDtors(cast<ExprWithCleanups>(Init)->getSubExpr(),
                              /*BindToTemporary=*/false, Context);
     }
@@ -2030,7 +2039,7 @@ CFGBlock *CFGBuilder::VisitDeclSubExpr(DeclStmt *DS) {
 
     if (BuildOpts.AddTemporaryDtors && HasTemporaries) {
       // Generate destructors for temporaries in initialization expression.
-      TempDtorContext Context(/*IsConditional=*/false);
+      TempDtorContext Context;
       VisitForTemporaryDtors(cast<ExprWithCleanups>(Init)->getSubExpr(),
                              /*BindToTemporary=*/false, Context);
     }
@@ -3412,7 +3421,7 @@ CFGBlock *CFGBuilder::VisitExprWithCleanups(ExprWithCleanups *E,
   if (BuildOpts.AddTemporaryDtors) {
     // If adding implicit destructors visit the full expression for adding
     // destructors of temporaries.
-    TempDtorContext Context(/*IsConditional=*/false);
+    TempDtorContext Context;
     VisitForTemporaryDtors(E->getSubExpr(), false, Context);
 
     // Full expression has to be added as CFGStmt so it will be sequenced
@@ -3639,9 +3648,10 @@ CFGBlock *CFGBuilder::VisitBinaryOperatorForTemporaryDtors(
     // We do not know at CFG-construction time whether the right-hand-side was
     // executed, thus we add a branch node that depends on the temporary
     // constructor call.
-    TempDtorContext RHSContext(/*IsConditional=*/true);
+    TempDtorContext RHSContext(
+        bothKnownTrue(Context.KnownExecuted, RHSExecuted));
     VisitForTemporaryDtors(E->getRHS(), false, RHSContext);
-    InsertTempDtorDecisionBlock(RHSContext, RHSExecuted);
+    InsertTempDtorDecisionBlock(RHSContext);
 
     return Block;
   }
@@ -3698,7 +3708,6 @@ CFGBlock *CFGBuilder::VisitCXXBindTemporaryExprForTemporaryDtors(
 }
 
 void CFGBuilder::InsertTempDtorDecisionBlock(const TempDtorContext &Context,
-                                             TryResult ConditionVal,
                                              CFGBlock *FalseSucc) {
   if (!Context.TerminatorExpr) {
     // If no temporary was found, we do not need to insert a decision point.
@@ -3707,9 +3716,9 @@ void CFGBuilder::InsertTempDtorDecisionBlock(const TempDtorContext &Context,
   assert(Context.TerminatorExpr);
   CFGBlock *Decision = createBlock(false);
   Decision->setTerminator(CFGTerminator(Context.TerminatorExpr, true));
-  addSuccessor(Decision, Block, !ConditionVal.isFalse());
+  addSuccessor(Decision, Block, !Context.KnownExecuted.isFalse());
   addSuccessor(Decision, FalseSucc ? FalseSucc : Context.Succ,
-               !ConditionVal.isTrue());
+               !Context.KnownExecuted.isTrue());
   Block = Decision;
 }
 
@@ -3723,22 +3732,24 @@ CFGBlock *CFGBuilder::VisitConditionalOperatorForTemporaryDtors(
   TryResult NegatedVal = ConditionVal;
   if (NegatedVal.isKnown()) NegatedVal.negate();
 
-  TempDtorContext TrueContext(/*IsConditional=*/true);
+  TempDtorContext TrueContext(
+      bothKnownTrue(Context.KnownExecuted, ConditionVal));
   VisitForTemporaryDtors(E->getTrueExpr(), BindToTemporary, TrueContext);
   CFGBlock *TrueBlock = Block;
 
   Block = ConditionBlock;
   Succ = ConditionSucc;
-  TempDtorContext FalseContext(/*IsConditional=*/true);
+  TempDtorContext FalseContext(
+      bothKnownTrue(Context.KnownExecuted, NegatedVal));
   VisitForTemporaryDtors(E->getFalseExpr(), BindToTemporary, FalseContext);
 
   if (TrueContext.TerminatorExpr && FalseContext.TerminatorExpr) {
-    InsertTempDtorDecisionBlock(FalseContext, NegatedVal, TrueBlock);
+    InsertTempDtorDecisionBlock(FalseContext, TrueBlock);
   } else if (TrueContext.TerminatorExpr) {
     Block = TrueBlock;
-    InsertTempDtorDecisionBlock(TrueContext, ConditionVal);
+    InsertTempDtorDecisionBlock(TrueContext);
   } else {
-    InsertTempDtorDecisionBlock(FalseContext, NegatedVal);
+    InsertTempDtorDecisionBlock(FalseContext);
   }
   return Block;
 }
