@@ -1984,10 +1984,9 @@ MigrateSourceAction::CreateASTConsumer(CompilerInstance &CI, StringRef InFile) {
   if (CI.getFrontendOpts().XCTMigrate) {
     XCMTPPCallbacks *XCTMTPP = new XCMTPPCallbacks();
     CI.getPreprocessor().addPPCallbacks(XCTMTPP);
-    return new XCTMigrateASTConsumer(CI.getFrontendOpts().OutputFile,
-                                     Remapper,
-                                     CI.getFileManager(),
-                                     PPRec, *XCTMTPP);
+    return llvm::make_unique<XCTMigrateASTConsumer>(
+        CI.getFrontendOpts().OutputFile, Remapper, CI.getFileManager(), PPRec,
+        *XCTMTPP);
   }
   std::vector<std::string> WhiteList =
     getWhiteListFilenames(CI.getFrontendOpts().ObjCMTWhiteListPath);
