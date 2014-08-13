@@ -8281,6 +8281,15 @@ namespace {
 
     void VisitObjCMessageExpr(ObjCMessageExpr *E) { return; }
 
+    void VisitCXXConstructExpr(CXXConstructExpr *E) {
+      if (E->getConstructor()->isCopyConstructor()) {
+        if (DeclRefExpr *DRE = dyn_cast<DeclRefExpr>(E->getArg(0))) {
+          HandleDeclRefExpr(DRE);
+        }
+      }
+      Inherited::VisitCXXConstructExpr(E);
+    }
+
     void HandleDeclRefExpr(DeclRefExpr *DRE) {
       Decl* ReferenceDecl = DRE->getDecl();
       if (OrigDecl != ReferenceDecl) return;

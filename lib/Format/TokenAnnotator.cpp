@@ -497,7 +497,6 @@ private:
   }
 
   void parseIncludeDirective() {
-    next();
     if (CurrentToken && CurrentToken->is(tok::less)) {
       next();
       while (CurrentToken) {
@@ -554,6 +553,7 @@ private:
     switch (CurrentToken->Tok.getIdentifierInfo()->getPPKeywordID()) {
     case tok::pp_include:
     case tok::pp_import:
+      next();
       parseIncludeDirective();
       break;
     case tok::pp_error:
@@ -587,8 +587,18 @@ public:
     // should not break the line).
     IdentifierInfo *Info = CurrentToken->Tok.getIdentifierInfo();
     if (Info && Info->getPPKeywordID() == tok::pp_import &&
-        CurrentToken->Next && CurrentToken->Next->is(tok::string_literal))
+        CurrentToken->Next && CurrentToken->Next->is(tok::string_literal)) {
+      next();
       parseIncludeDirective();
+      return LT_Other;
+    }
+
+    // If this line starts and ends in '<' and '>', respectively, it is likely
+    // part of "#define <a/b.h>".
+    if (CurrentToken->is(tok::less) && Line.Last->is(tok::greater)) {
+      parseIncludeDirective();
+      return LT_Other;
+    }
 
     while (CurrentToken) {
       if (CurrentToken->is(tok::kw_virtual))
@@ -1813,14 +1823,15 @@ bool TokenAnnotator::canBreakBefore(const AnnotatedLine &Line,
     return true;
   if (Left.Type == TT_ArrayInitializerLSquare)
     return true;
+  if (Right.is(tok::kw_typename) && Left.isNot(tok::kw_const))
+    return true;
   return (Left.isBinaryOperator() &&
           !Left.isOneOf(tok::arrowstar, tok::lessless) &&
           !Style.BreakBeforeBinaryOperators) ||
          Left.isOneOf(tok::comma, tok::coloncolon, tok::semi, tok::l_brace,
                       tok::kw_class, tok::kw_struct) ||
          Right.isMemberAccess() ||
-         Right.isOneOf(tok::lessless, tok::colon, tok::l_square, tok::at,
-                       tok::kw_typename) ||
+         Right.isOneOf(tok::lessless, tok::colon, tok::l_square, tok::at) ||
          (Left.is(tok::r_paren) &&
           Right.isOneOf(tok::identifier, tok::kw_const)) ||
          (Left.is(tok::l_paren) && !Right.is(tok::r_paren));
