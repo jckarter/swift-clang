@@ -4559,8 +4559,21 @@ Value *CodeGenFunction::EmitAArch64BuiltinExpr(unsigned BuiltinID,
     Ops[0] = Builder.CreateOr(Ops[1], Ops[2], "vbsl");
     return Builder.CreateBitCast(Ops[0], Ty);
   }
-  case NEON::BI__builtin_neon_vfma_lane_v:
-  case NEON::BI__builtin_neon_vfmaq_lane_v: { // Only used for FP types
+  case NEON::BI__builtin_neon_vfma_lane_silent_v:
+  case NEON::BI__builtin_neon_vfmaq_lane_silent_v:
+  case NEON::BI__builtin_neon_vfma_lane_warn_v:
+  case NEON::BI__builtin_neon_vfmaq_lane_warn_v: { // Only used for FP types
+    // Before the merge, Clang generated incorrect code for vfma_lane (&
+    // vfms_lane) intrinsics: we took the lane from the middle argument. As a
+    // temporary compatibility measure we're adding this tristate macro to
+    // (hopefully only) clang-602.
+    //    + If USE_CORRECT_VFMA_INTRINSICS is undefined, we will emit the
+    //      incorrect code, but warn about it.
+    //    + If USE_CORRECT_VFMA_INTRINSICS is defined to 0, we will emit incorrect
+    //      code and silence the warning.
+    //    + Otherwise we will emit correct code.
+    // See rdar://problem/17964959 for details.
+
     // The ARM builtins (and instructions) have the addend as the first
     // operand, but the 'fma' intrinsics have it last. Swap it around here.
     Value *Addend = Ops[0];
@@ -4571,9 +4584,14 @@ Value *CodeGenFunction::EmitAArch64BuiltinExpr(unsigned BuiltinID,
     Ops[2] = Addend;
 
     // Now adjust things to handle the lane access.
-    llvm::Type *SourceTy = BuiltinID == NEON::BI__builtin_neon_vfmaq_lane_v ?
-      llvm::VectorType::get(VTy->getElementType(), VTy->getNumElements() / 2) :
-      VTy;
+    llvm::Type *SourceTy;
+    if (BuiltinID == NEON::BI__builtin_neon_vfmaq_lane_silent_v ||
+        BuiltinID == NEON::BI__builtin_neon_vfmaq_lane_warn_v)
+      SourceTy = llvm::VectorType::get(VTy->getElementType(),
+                                       VTy->getNumElements() / 2);
+    else
+      SourceTy = VTy;
+
     llvm::Constant *cst = cast<Constant>(Ops[3]);
     Value *SV = llvm::ConstantVector::getSplat(VTy->getNumElements(), cst);
     Ops[1] = Builder.CreateBitCast(Ops[1], SourceTy);

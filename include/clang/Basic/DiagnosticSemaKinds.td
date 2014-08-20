@@ -6804,6 +6804,15 @@ def note_neon_vector_initializer_non_portable_q : Note<
   "vcombine_%0%1(vcreate_%0%1(), vcreate_%0%1()) to initialize from integer "
   "constants">;
 
+def warn_broken_neon_vfma : Warning<
+  "previous versions of Clang incorrectly interpreted vfmX_lane(a,b,c,i) as "
+  "a + b[i]*c. Future releases of Clang will fix this unconditionally. "
+  "Current behaviour is controlled by the USE_CORRECT_VFMA_INTRINSICS macro, "
+  "which should be defined before including arm_neon.h. Leaving this undefined "
+  "will retain the old behaviour with this warning; setting it to 0 will "
+  "silence this warning but retain the old behaviour; setting it to 1 will "
+  "emit compliant code.">;
+
 def err_builtin_longjmp_invalid_val : Error<
   "argument to __builtin_longjmp must be a constant 1">;
 def err_builtin_requires_language : Error<"'%0' is only available in %1">;
