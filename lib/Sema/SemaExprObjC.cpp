@@ -995,7 +995,11 @@ ExprResult Sema::BuildObjCEncodeExpression(SourceLocation AtLoc,
         return ExprError();
 
     std::string Str;
-    Context.getObjCEncodingForType(EncodedType, Str);
+    QualType NotEncodedT;
+    Context.getObjCEncodingForType(EncodedType, Str, nullptr, &NotEncodedT);
+    if (!NotEncodedT.isNull())
+      Diag(AtLoc, diag::warn_incomplete_encoded_type)
+        << EncodedType << NotEncodedT;
 
     // The type of @encode is the same as the type of the corresponding string,
     // which is an array type.
@@ -2232,8 +2236,9 @@ ExprResult Sema::BuildClassMessage(TypeSourceInfo *ReceiverTypeInfo,
                           diag::err_illegal_message_expr_incomplete_type))
     return ExprError();
   
-  // Warn about explicit call of +initialize on its own class.
-  if (Method && Method->getMethodFamily() == OMF_initialize) {
+  // Warn about explicit call of +initialize on its own class. But not on 'super'.
+  if (Method && Method->getMethodFamily() == OMF_initialize &&
+      !SuperLoc.isValid()) {
     const ObjCInterfaceDecl *ID =
       dyn_cast<ObjCInterfaceDecl>(Method->getDeclContext());
     if (ID == Class) {
