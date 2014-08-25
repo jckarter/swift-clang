@@ -1921,11 +1921,11 @@ void XCTMigrateASTConsumer::migrateDecl(Decl *D) {
 }
 
 void XCTMigrateASTConsumer::HandleTranslationUnit(ASTContext &Ctx) {
-  std::string Error;
-  llvm::raw_fd_ostream OS(MigrateDir.c_str(), Error, llvm::sys::fs::F_None);
-  if (!Error.empty()) {
+  std::error_code EC;
+  llvm::raw_fd_ostream OS(MigrateDir.c_str(), EC, llvm::sys::fs::F_None);
+  if (EC) {
     unsigned ID = Ctx.getDiagnostics().getDiagnosticIDs()->
-        getCustomDiagID(DiagnosticIDs::Error, Error);
+        getCustomDiagID(DiagnosticIDs::Error, EC.message());
     Ctx.getDiagnostics().Report(ID);
     return;
   }
