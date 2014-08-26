@@ -234,7 +234,7 @@ namespace clang {
     void VisitUsingDirectiveDecl(UsingDirectiveDecl *D);
     void VisitNamespaceAliasDecl(NamespaceAliasDecl *D);
     void VisitTypeDecl(TypeDecl *TD);
-    void VisitTypedefNameDecl(TypedefNameDecl *TD);
+    RedeclarableResult VisitTypedefNameDecl(TypedefNameDecl *TD);
     void VisitTypedefDecl(TypedefDecl *TD);
     void VisitTypeAliasDecl(TypeAliasDecl *TD);
     void VisitUnresolvedUsingTypenameDecl(UnresolvedUsingTypenameDecl *D);
@@ -456,7 +456,8 @@ void ASTDeclReader::VisitTypeDecl(TypeDecl *TD) {
   TypeIDForTypeDecl = Reader.getGlobalTypeID(F, Record[Idx++]);
 }
 
-void ASTDeclReader::VisitTypedefNameDecl(TypedefNameDecl *TD) {
+ASTDeclReader::RedeclarableResult
+ASTDeclReader::VisitTypedefNameDecl(TypedefNameDecl *TD) {
   RedeclarableResult Redecl = VisitRedeclarable(TD);
   VisitTypeDecl(TD);
   TypeSourceInfo *TInfo = GetTypeSourceInfo(Record, Idx);
@@ -465,15 +466,21 @@ void ASTDeclReader::VisitTypedefNameDecl(TypedefNameDecl *TD) {
     TD->setModedTypeSourceInfo(TInfo, modedT);
   } else
     TD->setTypeSourceInfo(TInfo);
-  mergeRedeclarable(TD, Redecl);
+  return Redecl;
 }
 
 void ASTDeclReader::VisitTypedefDecl(TypedefDecl *TD) {
-  VisitTypedefNameDecl(TD);
+  RedeclarableResult Redecl = VisitTypedefNameDecl(TD);
+  mergeRedeclarable(TD, Redecl);
 }
 
 void ASTDeclReader::VisitTypeAliasDecl(TypeAliasDecl *TD) {
-  VisitTypedefNameDecl(TD);
+  RedeclarableResult Redecl = VisitTypedefNameDecl(TD);
+  if (auto *Template = ReadDeclAs<TypeAliasTemplateDecl>(Record, Idx))
+    // Merged when we merge the template.
+    TD->setDescribedAliasTemplate(Template);
+  else
+    mergeRedeclarable(TD, Redecl);
 }
 
 ASTDeclReader::RedeclarableResult ASTDeclReader::VisitTagDecl(TagDecl *TD) {
@@ -2529,7 +2536,7 @@ ASTDeclReader::FindExistingResult ASTDeclReader::findExisting(NamedDecl *D) {
                                    IEnd = IdResolver.end();
          I != IEnd; ++I) {
       if (NamedDecl *Existing = getDeclForMerging(*I, IsTypedefNameForLinkage))
-        if (isSameEntity(*I, D))
+        if (isSameEntity(Existing, D))
           return FindExistingResult(Reader, D, Existing);
     }
   } else if (DeclContext *MergeDC = getPrimaryContextForMerging(DC)) {
