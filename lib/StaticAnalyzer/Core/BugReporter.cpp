@@ -3153,18 +3153,19 @@ bool GRBugReporter::generatePathDiagnostic(PathDiagnostic& PD,
       std::unique_ptr<PathDiagnosticPiece> LastPiece;
       for (BugReport::visitor_iterator I = visitors.begin(), E = visitors.end();
           I != E; ++I) {
-        if (PathDiagnosticPiece *Piece = (*I)->getEndPath(PDB, N, *R)) {
+        if (std::unique_ptr<PathDiagnosticPiece> Piece =
+                (*I)->getEndPath(PDB, N, *R)) {
           assert (!LastPiece &&
               "There can only be one final piece in a diagnostic.");
-          LastPiece.reset(Piece);
+          LastPiece = std::move(Piece);
         }
       }
 
       if (ActiveScheme != PathDiagnosticConsumer::None) {
         if (!LastPiece)
-          LastPiece.reset(BugReporterVisitor::getDefaultEndPath(PDB, N, *R));
+          LastPiece = BugReporterVisitor::getDefaultEndPath(PDB, N, *R);
         assert(LastPiece);
-        PD.setEndOfPath(LastPiece.release());
+        PD.setEndOfPath(std::move(LastPiece));
       }
 
       // Make sure we get a clean location context map so we don't
@@ -3449,13 +3450,13 @@ void BugReporter::FlushReport(BugReport *exampleReport,
   // of the issue.
   if (D->path.empty()) {
     PathDiagnosticLocation L = exampleReport->getLocation(getSourceManager());
-    PathDiagnosticPiece *piece =
-      new PathDiagnosticEventPiece(L, exampleReport->getDescription());
+    auto piece = llvm::make_unique<PathDiagnosticEventPiece>(
+        L, exampleReport->getDescription());
     BugReport::ranges_iterator Beg, End;
     std::tie(Beg, End) = exampleReport->getRanges();
     for ( ; Beg != End; ++Beg)
       piece->addRange(*Beg);
-    D->setEndOfPath(piece);
+    D->setEndOfPath(std::move(piece));
   }
 
   // Get the meta data.
