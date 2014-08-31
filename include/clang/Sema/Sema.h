@@ -7227,10 +7227,10 @@ public:
   };
 
   llvm::StringMap<SectionInfo> SectionInfos;
-  bool UnifySection(const StringRef &SectionName, 
+  bool UnifySection(StringRef SectionName,
                     int SectionFlags,
                     DeclaratorDecl *TheDecl);
-  bool UnifySection(const StringRef &SectionName,
+  bool UnifySection(StringRef SectionName,
                     int SectionFlags,
                     SourceLocation PragmaSectionLocation);
 
