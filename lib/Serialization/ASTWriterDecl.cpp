@@ -952,6 +952,7 @@ void ASTDeclWriter::VisitNamespaceDecl(NamespaceDecl *D) {
 }
 
 void ASTDeclWriter::VisitNamespaceAliasDecl(NamespaceAliasDecl *D) {
+  VisitRedeclarable(D);
   VisitNamedDecl(D);
   Writer.AddSourceLocation(D->getNamespaceLoc(), Record);
   Writer.AddSourceLocation(D->getTargetNameLoc(), Record);
