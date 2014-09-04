@@ -39,7 +39,7 @@ CodeGenFunction::CodeGenFunction(CodeGenModule &cgm, bool suppressNewContext)
               CGBuilderInserterTy(this)),
       CapturedStmtInfo(nullptr), SanOpts(&CGM.getLangOpts().Sanitize),
       IsSanitizerScope(false), CurFuncIsThunk(false), AutoreleaseResult(false),
-      BlockInfo(nullptr), BlockPointer(nullptr),
+      SawAsmBlock(false), BlockInfo(nullptr), BlockPointer(nullptr),
       LambdaThisCaptureField(nullptr), NormalCleanupDest(nullptr),
       NextCleanupDestIndex(1), FirstBlockInfo(nullptr), EHResumeBlock(nullptr),
       ExceptionSlot(nullptr), EHSelectorSlot(nullptr),
@@ -871,6 +871,25 @@ void CodeGenFunction::GenerateCode(GlobalDecl GD, llvm::Function *Fn,
     EmitSizedDeallocationFunction(*this, UnsizedDealloc);
   } else
     llvm_unreachable("no definition for emitted function");
+
+  // C++11 [stmt.return]p2:
+  //   Flowing off the end of a function [...] results in undefined behavior in
+  //   a value-returning function.
+  // C11 6.9.1p12:
+  //   If the '}' that terminates a function is reached, and the value of the
+  //   function call is used by the caller, the behavior is undefined.
+  if (getLangOpts().CPlusPlus && !FD->hasImplicitReturnZero() && !SawAsmBlock &&
+      !FD->getReturnType()->isVoidType() && Builder.GetInsertBlock()) {
+    if (SanOpts->Return) {
+      SanitizerScope SanScope(this);
+      EmitCheck(Builder.getFalse(), "missing_return",
+                EmitCheckSourceLocation(FD->getLocation()),
+                None, CRK_Unrecoverable);
+    } else if (CGM.getCodeGenOpts().OptimizationLevel == 0)
+      Builder.CreateCall(CGM.getIntrinsic(llvm::Intrinsic::trap));
+    Builder.CreateUnreachable();
+    Builder.ClearInsertionPoint();
+  }
 
   // Emit the standard function epilogue.
   FinishFunction(BodyRange.getEnd());
