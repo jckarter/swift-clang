@@ -46,7 +46,7 @@
 
 // RUN: %clang -target x86_64-linux-gnu -fsanitize=undefined-trap -fsanitize-undefined-trap-on-error %s -### 2>&1 | FileCheck %s --check-prefix=CHECK-UNDEFINED-TRAP
 // RUN: %clang -target x86_64-linux-gnu -fsanitize-undefined-trap-on-error -fsanitize=undefined-trap %s -### 2>&1 | FileCheck %s --check-prefix=CHECK-UNDEFINED-TRAP
-// CHECK-UNDEFINED-TRAP: "-fsanitize={{((alignment|array-bounds|bool|enum|float-cast-overflow|float-divide-by-zero|integer-divide-by-zero|null|object-size|return|returns-nonnull-attribute|shift|signed-integer-overflow|unreachable|vla-bound),?){15}"}}
+// CHECK-UNDEFINED-TRAP: "-fsanitize={{((alignment|array-bounds|bool|enum|float-cast-overflow|float-divide-by-zero|integer-divide-by-zero|null|object-size|return|returns-nonnull-attribute|shift|nonnull-attribute|signed-integer-overflow|unreachable|vla-bound),?){16}"}}
 // CHECK-UNDEFINED-TRAP: "-fsanitize-undefined-trap-on-error"
 
 // RUN: %clang -target x86_64-linux-gnu -fsanitize=undefined-trap %s -### 2>&1 | FileCheck %s --check-prefix=CHECK-UNDEFINED-TRAP-REQUIRES-UNDEF-TRAP-ON-ERROR
