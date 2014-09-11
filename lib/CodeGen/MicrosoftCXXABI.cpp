@@ -1145,7 +1145,7 @@ void MicrosoftCXXABI::EmitDestructorCall(CodeGenFunction &CGF,
                                          const CXXDestructorDecl *DD,
                                          CXXDtorType Type, bool ForVirtualBase,
                                          bool Delegating, llvm::Value *This) {
-  llvm::Value *Callee = CGM.GetAddrOfCXXDestructor(DD, Type);
+  llvm::Value *Callee = CGM.getAddrOfCXXStructor(DD, getFromDtorType(Type));
 
   if (DD->isVirtual()) {
     assert(Type != CXXDtorType::Dtor_Deleting &&
@@ -1162,7 +1162,7 @@ void MicrosoftCXXABI::EmitDestructorCall(CodeGenFunction &CGF,
 void MicrosoftCXXABI::emitVTableDefinitions(CodeGenVTables &CGVT,
                                             const CXXRecordDecl *RD) {
   MicrosoftVTableContext &VFTContext = CGM.getMicrosoftVTableContext();
-  VPtrInfoVector VFPtrs = VFTContext.getVFPtrOffsets(RD);
+  const VPtrInfoVector &VFPtrs = VFTContext.getVFPtrOffsets(RD);
 
   for (VPtrInfo *Info : VFPtrs) {
     llvm::GlobalVariable *VTable = getAddrOfVTable(RD, Info->FullOffsetInMDC);

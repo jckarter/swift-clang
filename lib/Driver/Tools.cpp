@@ -6621,7 +6621,7 @@ void freebsd::Link::ConstructJob(Compilation &C, const JobAction &JA,
   }
 
   Args.AddAllArgs(CmdArgs, options::OPT_L);
-  const ToolChain::path_list Paths = ToolChain.getFilePaths();
+  const ToolChain::path_list &Paths = ToolChain.getFilePaths();
   for (const auto &Path : Paths)
     CmdArgs.push_back(Args.MakeArgString(StringRef("-L") + Path));
   Args.AddAllArgs(CmdArgs, options::OPT_T_Group);
@@ -7447,7 +7447,7 @@ void gnutools::Link::ConstructJob(Compilation &C, const JobAction &JA,
   Args.AddAllArgs(CmdArgs, options::OPT_L);
   Args.AddAllArgs(CmdArgs, options::OPT_u);
 
-  const ToolChain::path_list Paths = ToolChain.getFilePaths();
+  const ToolChain::path_list &Paths = ToolChain.getFilePaths();
 
   for (const auto &Path : Paths)
     CmdArgs.push_back(Args.MakeArgString(StringRef("-L") + Path));
@@ -7648,12 +7648,9 @@ void dragonfly::Link::ConstructJob(Compilation &C, const JobAction &JA,
                                    const InputInfoList &Inputs,
                                    const ArgList &Args,
                                    const char *LinkingOutput) const {
-  bool UseGCC47 = false;
   const Driver &D = getToolChain().getDriver();
   ArgStringList CmdArgs;
-
-  if (llvm::sys::fs::exists("/usr/lib/gcc47", UseGCC47))
-    UseGCC47 = false;
+  bool UseGCC47 = llvm::sys::fs::exists("/usr/lib/gcc47");
 
   if (!D.SysRoot.empty())
     CmdArgs.push_back(Args.MakeArgString("--sysroot=" + D.SysRoot));

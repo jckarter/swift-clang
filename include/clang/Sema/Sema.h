@@ -8419,6 +8419,8 @@ public:
                          llvm::SmallBitVector &CheckedVarArgs);
   
   bool FormatStringHasSArg(const StringLiteral *FExpr);
+  
+  bool GetFormatNSStringIdx(const FormatAttr *Format, unsigned &Idx);
 
 private:
   bool CheckFormatArguments(const FormatAttr *Format,
