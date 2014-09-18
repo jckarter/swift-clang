@@ -1933,7 +1933,11 @@ public:
   bool validateAsmConstraint(const char *&Name,
                                      TargetInfo::ConstraintInfo &info) const override;
 
+  bool validateOutputSize(StringRef Constraint, unsigned Size) const override;
+
   bool validateInputSize(StringRef Constraint, unsigned Size) const override;
+
+  virtual bool validateOperandSize(StringRef Constraint, unsigned Size) const;
 
   std::string convertConstraint(const char *&Constraint) const override;
   const char *getClobbers() const override {
@@ -3085,8 +3089,24 @@ X86TargetInfo::validateAsmConstraint(const char *&Name,
   }
 }
 
+bool X86TargetInfo::validateOutputSize(StringRef Constraint,
+                                       unsigned Size) const {
+  // Strip off constraint modifiers.
+  while (Constraint[0] == '=' ||
+         Constraint[0] == '+' ||
+         Constraint[0] == '&')
+    Constraint = Constraint.substr(1);
+
+  return validateOperandSize(Constraint, Size);
+}
+
 bool X86TargetInfo::validateInputSize(StringRef Constraint,
                                       unsigned Size) const {
+  return validateOperandSize(Constraint, Size);
+}
+
+bool X86TargetInfo::validateOperandSize(StringRef Constraint,
+                                        unsigned Size) const {
   switch (Constraint[0]) {
   default: break;
   case 'y':
@@ -3156,8 +3176,8 @@ public:
     if (RegNo == 1) return 2;
     return -1;
   }
-  bool validateInputSize(StringRef Constraint,
-                         unsigned Size) const override {
+  bool validateOperandSize(StringRef Constraint,
+                           unsigned Size) const override {
     switch (Constraint[0]) {
     default: break;
     case 'R':
@@ -3174,7 +3194,7 @@ public:
       return Size <= 64;
     }
 
-    return X86TargetInfo::validateInputSize(Constraint, Size);
+    return X86TargetInfo::validateOperandSize(Constraint, Size);
   }
 };
 } // end anonymous namespace
