@@ -3831,12 +3831,9 @@ TEST_F(FormatTest, FormatsBuilderPattern) {
                "    .aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa<\n"
                "        aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa>();");
 
-  // Prefer not to break after empty parentheses ...
+  // Prefer not to break after empty parentheses.
   verifyFormat("FirstToken->WhitespaceRange.getBegin().getLocWithOffset(\n"
                "    First->LastNewlineOffset);");
-  // ... unless nested.
-  verifyFormat("f(FirstToken->WhitespaceRange.getBegin()\n"
-               "      .getLocWithOffset(First->LastNewlineOffset));");
 }
 
 TEST_F(FormatTest, BreaksAccordingToOperatorPrecedence) {
@@ -5634,15 +5631,11 @@ TEST_F(FormatTest, LayoutCxx11BraceInitializers) {
       "std::this_thread::sleep_for(\n"
       "    std::chrono::nanoseconds{ std::chrono::seconds{ 1 } } / 5);",
       ExtraSpaces);
-  verifyFormat("std::vector<MyValues> aaaaaaaaaaaaaaaaaaa{\n"
-               "  aaaaaaa,      aaaaaaaaaa,\n"
-               "  aaaaa,        aaaaaaaaaaaaaaa,\n"
-               "  aaa,          aaaaaaaaaa,\n"
-               "  a,            aaaaaaaaaaaaaaaaaaaaa,\n"
-               "  aaaaaaaaaaaa, aaaaaaaaaaaaaaaaaaa + aaaaaaaaaaaaaaaaaaa,\n"
-               "  aaaaaaa,      a\n"
-               "};",
-               ExtraSpaces);
+  verifyFormat(
+      "std::vector<MyValues> aaaaaaaaaaaaaaaaaaa{\n"
+      "    aaaaaaa, aaaaaaaaaa, aaaaa, aaaaaaaaaaaaaaa, aaa, aaaaaaaaaa, a,\n"
+      "    aaaaaaaaaaaaaaaaaaaaa, aaaaaaaaaaaa,\n"
+      "    aaaaaaaaaaaaaaaaaaa + aaaaaaaaaaaaaaaaaaa, aaaaaaa, a};");
   verifyFormat("vector<int> foo = { ::SomeGlobalFunction() };", ExtraSpaces);
 }
 

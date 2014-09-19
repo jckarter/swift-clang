@@ -1728,6 +1728,7 @@ class X86TargetInfo : public TargetInfo {
   bool HasRTM;
   bool HasPRFCHW;
   bool HasRDSEED;
+  bool HasADX;
   bool HasTBM;
   bool HasFMA;
   bool HasF16C;
@@ -1817,6 +1818,7 @@ class X86TargetInfo : public TargetInfo {
     CK_Corei7AVX,
     CK_CoreAVXi,
     CK_CoreAVX2,
+    CK_Broadwell,
     //@}
 
     /// \name Knights Landing
@@ -1898,11 +1900,11 @@ public:
       : TargetInfo(Triple), SSELevel(NoSSE), MMX3DNowLevel(NoMMX3DNow),
         XOPLevel(NoXOP), HasAES(false), HasPCLMUL(false), HasLZCNT(false),
         HasRDRND(false), HasBMI(false), HasBMI2(false), HasPOPCNT(false),
-        HasRTM(false), HasPRFCHW(false), HasRDSEED(false), HasTBM(false),
-        HasFMA(false), HasF16C(false), HasAVX512CD(false), HasAVX512ER(false),
-        HasAVX512PF(false), HasAVX512DQ(false), HasAVX512BW(false), HasAVX512VL(false),
-        HasSHA(false), HasCX16(false), CPU(CK_Generic),
-        FPMath(FP_Default) {
+        HasRTM(false), HasPRFCHW(false), HasRDSEED(false), HasADX(false),
+        HasTBM(false), HasFMA(false), HasF16C(false), HasAVX512CD(false),
+        HasAVX512ER(false), HasAVX512PF(false), HasAVX512DQ(false),
+        HasAVX512BW(false), HasAVX512VL(false), HasSHA(false), HasCX16(false),
+        CPU(CK_Generic), FPMath(FP_Default) {
     BigEndian = false;
     LongDoubleFormat = &llvm::APFloat::x87DoubleExtended;
   }
@@ -2001,6 +2003,7 @@ public:
       .Case("corei7-avx", CK_Corei7AVX)
       .Case("core-avx-i", CK_CoreAVXi)
       .Case("core-avx2", CK_CoreAVX2)
+      .Case("broadwell", CK_Broadwell)
       .Case("knl", CK_KNL)
       .Case("skx", CK_SKX)
       .Case("k6", CK_K6)
@@ -2080,6 +2083,7 @@ public:
     case CK_Corei7AVX:
     case CK_CoreAVXi:
     case CK_CoreAVX2:
+    case CK_Broadwell:
     case CK_KNL:
     case CK_SKX:
     case CK_Athlon64:
@@ -2215,6 +2219,21 @@ void X86TargetInfo::getDefaultFeatures(llvm::StringMap<bool> &Features) const {
     setFeatureEnabledImpl(Features, "fma", true);
     setFeatureEnabledImpl(Features, "cx16", true);
     break;
+  case CK_Broadwell:
+    setFeatureEnabledImpl(Features, "avx2", true);
+    setFeatureEnabledImpl(Features, "aes", true);
+    setFeatureEnabledImpl(Features, "pclmul", true);
+    setFeatureEnabledImpl(Features, "lzcnt", true);
+    setFeatureEnabledImpl(Features, "rdrnd", true);
+    setFeatureEnabledImpl(Features, "f16c", true);
+    setFeatureEnabledImpl(Features, "bmi", true);
+    setFeatureEnabledImpl(Features, "bmi2", true);
+    setFeatureEnabledImpl(Features, "rtm", true);
+    setFeatureEnabledImpl(Features, "fma", true);
+    setFeatureEnabledImpl(Features, "cx16", true);
+    setFeatureEnabledImpl(Features, "rdseed", true);
+    setFeatureEnabledImpl(Features, "adx", true);
+    break;
   case CK_KNL:
     setFeatureEnabledImpl(Features, "avx512f", true);
     setFeatureEnabledImpl(Features, "avx512cd", true);
@@ -2229,6 +2248,8 @@ void X86TargetInfo::getDefaultFeatures(llvm::StringMap<bool> &Features) const {
     setFeatureEnabledImpl(Features, "bmi2", true);
     setFeatureEnabledImpl(Features, "rtm", true);
     setFeatureEnabledImpl(Features, "fma", true);
+    setFeatureEnabledImpl(Features, "rdseed", true);
+    setFeatureEnabledImpl(Features, "adx", true);
     break;
   case CK_SKX:
     setFeatureEnabledImpl(Features, "avx512f", true);
@@ -2245,6 +2266,8 @@ void X86TargetInfo::getDefaultFeatures(llvm::StringMap<bool> &Features) const {
     setFeatureEnabledImpl(Features, "bmi2", true);
     setFeatureEnabledImpl(Features, "rtm", true);
     setFeatureEnabledImpl(Features, "fma", true);
+    setFeatureEnabledImpl(Features, "rdseed", true);
+    setFeatureEnabledImpl(Features, "adx", true);
     break;
   case CK_K6:
   case CK_WinChipC6:
@@ -2571,6 +2594,11 @@ bool X86TargetInfo::handleTargetFeatures(std::vector<std::string> &Features,
       continue;
     }
 
+    if (Feature == "adx") {
+      HasADX = true;
+      continue;
+    }
+
     if (Feature == "tbm") {
       HasTBM = true;
       continue;
@@ -2781,6 +2809,7 @@ void X86TargetInfo::getTargetDefines(const LangOptions &Opts,
   case CK_Corei7AVX:
   case CK_CoreAVXi:
   case CK_CoreAVX2:
+  case CK_Broadwell:
     defineCPUMacros(Builder, "corei7");
     break;
   case CK_KNL:
@@ -2889,6 +2918,9 @@ void X86TargetInfo::getTargetDefines(const LangOptions &Opts,
 
   if (HasRDSEED)
     Builder.defineMacro("__RDSEED__");
+
+  if (HasADX)
+    Builder.defineMacro("__ADX__");
 
   if (HasTBM)
     Builder.defineMacro("__TBM__");
@@ -3111,11 +3143,13 @@ bool X86TargetInfo::validateOperandSize(StringRef Constraint,
   default: break;
   case 'y':
     return Size <= 64;
-  case 'x':
   case 'f':
   case 't':
   case 'u':
     return Size <= 128;
+  case 'x':
+    // 256-bit ymm registers can be used if target supports AVX.
+    return Size <= (SSELevel >= AVX ? 256 : 128);
   }
 
   return true;
