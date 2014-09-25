@@ -17,3 +17,8 @@ Classes:
   - Name: B
     Availability: none
     AvailabilityMsg: "just don't"
+  - Name: C
+    Methods:
+      - Selector: "initWithA:"
+        MethodKind: Instance
+        DesignatedInit: true

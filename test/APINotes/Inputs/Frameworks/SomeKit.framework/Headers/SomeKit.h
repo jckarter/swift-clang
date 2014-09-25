@@ -15,4 +15,9 @@ __attribute__((objc_root_class))
 @interface B : A
 @end
 
+@interface C : A
+- (instancetype)init;
+- (instancetype)initWithA:(A*)a;
+@end
+
 #endif

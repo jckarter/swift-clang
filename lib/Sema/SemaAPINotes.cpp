@@ -75,6 +75,13 @@ static void ProcessAPINotes(Sema &S, FunctionDecl *D,
 /// Process API notes for an Objective-C method.
 static void ProcessAPINotes(Sema &S, ObjCMethodDecl *D,
                             const api_notes::ObjCMethodInfo &Info) {
+  // Designated initializers.
+  if (Info.DesignatedInit && !D->getAttr<ObjCDesignatedInitializerAttr>()) {
+    if (ObjCInterfaceDecl *IFace = D->getClassInterface()) {
+      D->addAttr(ObjCDesignatedInitializerAttr::CreateImplicit(S.Context));
+      IFace->setHasDesignatedInitializers();
+    }
+  }
 
   // Handle common function information.
   ProcessAPINotes(S, FunctionOrMethod(D),
