@@ -27,6 +27,13 @@ static void ProcessAPINotes(Sema &S, Decl *D,
 /// Process API notes for a variable or property.
 static void ProcessAPINotes(Sema &S, Decl *D,
                             const api_notes::VariableInfo &Info) {
+  // Nullability.
+  if (auto Nullability = Info.getNullability()) {
+    if (*Nullability == api_notes::NullableKind::NonNullable &&
+        !D->hasAttr<NonNullAttr>()) {
+      D->addAttr(NonNullAttr::CreateImplicit(S.Context, 0, 0));
+    }
+  }
 
   // Handle common entity information.
   ProcessAPINotes(S, D, static_cast<const api_notes::CommonEntityInfo &>(Info));
@@ -55,9 +62,43 @@ namespace {
 /// Process API notes for a function or method.
 static void ProcessAPINotes(Sema &S, FunctionOrMethod AnyFunc,
                             const api_notes::FunctionInfo &Info) {
-  Decl *D = AnyFunc.dyn_cast<FunctionDecl *>();
-  if (!D)
-    D = AnyFunc.get<ObjCMethodDecl *>();
+  // Find the declaration itself.
+  FunctionDecl *FD = AnyFunc.dyn_cast<FunctionDecl *>();
+  Decl *D = FD;
+  ObjCMethodDecl *MD = 0;
+  if (!D) {
+    MD = AnyFunc.get<ObjCMethodDecl *>();
+    D = MD;
+  }
+
+  // Nullability.
+  if (Info.NullabilityAudited) {
+    // Return type.
+    if (Info.getReturnTypeInfo() == api_notes::NullableKind::NonNullable &&
+        !D->hasAttr<ReturnsNonNullAttr>()) {
+      D->addAttr(ReturnsNonNullAttr::CreateImplicit(S.Context));
+    }
+
+    // Parameters.
+    unsigned NumParams;
+    if (FD)
+      NumParams = FD->getNumParams();
+    else
+      NumParams = MD->param_size();
+
+    for (unsigned I = 0; I != NumParams; ++I) {
+      ParmVarDecl *Param;
+      if (FD)
+        Param = FD->getParamDecl(I);
+      else
+        Param = MD->param_begin()[I];
+
+      if (Info.getParamTypeInfo(I) == api_notes::NullableKind::NonNullable &&
+          !D->hasAttr<NonNullAttr>()) {
+        D->addAttr(NonNullAttr::CreateImplicit(S.Context, 0, 0));
+      }
+    }
+  }
 
   // Handle common entity information.
   ProcessAPINotes(S, D, static_cast<const api_notes::CommonEntityInfo &>(Info));
@@ -203,7 +244,7 @@ void Sema::ProcessAPINotes(Decl *D) {
       return None;
     };
 
-    // FIXME: Objective-C methods.
+    // Objective-C methods.
     if (auto Method = dyn_cast<ObjCMethodDecl>(D)) {
       if (api_notes::APINotesReader *Reader
             = APINotes.findAPINotes(D->getLocation())) {
