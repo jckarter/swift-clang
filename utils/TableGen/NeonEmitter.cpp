@@ -2265,24 +2265,54 @@ void NeonEmitter::run(raw_ostream &OS) {
   //    + Otherwise we will emit correct code.
   // See rdar://problem/17964959 for details.
   OS << "#if USE_CORRECT_VFMA_INTRINSICS\n";
+  OS << "// Silently correct\n";
   OS << "#define vfma_lane_f32(a,b,c,l) vfma_lane_silent_f32(a,b,c,l)\n";
+  OS << "#define vfmaq_lane_f32(a,b,c,l) vfmaq_lane_silent_f32(a,b,c,l)\n";
   OS << "#define vfms_lane_f32(a,b,c,l) vfma_lane_silent_f32(a,b,-c,l)\n";
+  OS << "#define vfmsq_lane_f32(a,b,c,l) vfmaq_lane_silent_f32(a,b,-c,l)\n";
+  OS << "#define vfma_laneq_f32(a,b,c,l) vfma_laneq_silent_f32(a,b,c,l)\n";
+  OS << "#define vfmaq_laneq_f32(a,b,c,l) vfmaq_laneq_silent_f32(a,b,c,l)\n";
+  OS << "#define vfms_laneq_f32(a,b,c,l) vfma_laneq_silent_f32(a,b,-c,l)\n";
+  OS << "#define vfmsq_laneq_f32(a,b,c,l) vfmaq_laneq_silent_f32(a,b,-c,l)\n";
+  OS << "#define vfma_laneq_f64(a,b,c,l) vfma_laneq_silent_f64(a,b,c,l)\n";
+  OS << "#define vfmaq_laneq_f64(a,b,c,l) vfmaq_laneq_silent_f64(a,b,c,l)\n";
+  OS << "#define vfms_laneq_f64(a,b,c,l) vfma_laneq_silent_f64(a,b,-c,l)\n";
+  OS << "#define vfmsq_laneq_f64(a,b,c,l) vfmaq_laneq_silent_f64(a,b,-c,l)\n";
   OS << "#elif defined(USE_CORRECT_VFMA_INTRINSICS)\n";
+  OS << "// Silently wrong\n";
   OS << "#define vfma_lane_f32(a,b,c,l) vfma_lane_silent_f32(a, c, b, l)\n";
+  OS << "#define vfmaq_lane_f32(a,b,c,l) vfmaq_lane_silent_f32(a,c,b,l)\n";
   OS << "#define vfms_lane_f32(a,b,c,l) vfma_lane_silent_f32(a,-c,b,l)\n";
+  OS << "#define vfmsq_lane_f32(a,b,c,l) vfmaq_lane_silent_f32(a,-c,b,l)\n";
+  OS << "#define vfma_laneq_f32(a,b,c,l) vfma_laneq_silent_f32(a, c, b, l)\n";
+  OS << "#define vfmaq_laneq_f32(a,b,c,l) vfmaq_laneq_silent_f32(a,c,b,l)\n";
+  OS << "#define vfms_laneq_f32(a,b,c,l) vfma_laneq_silent_f32(a,-c,b,l)\n";
+  OS << "#define vfmsq_laneq_f32(a,b,c,l) vfmaq_laneq_silent_f32(a,-c,b,l)\n";
+  OS << "#define vfma_laneq_f64(a,b,c,l) vfma_laneq_silent_f64(a,c,b,l)\n";
+  OS << "#define vfmaq_laneq_f64(a,b,c,l) vfmaq_laneq_silent_f64(a,c,b,l)\n";
+  OS << "#define vfms_laneq_f64(a,b,c,l) vfma_laneq_silent_f64(a,-c,b,l)\n";
+  OS << "#define vfmsq_laneq_f64(a,b,c,l) vfmaq_laneq_silent_f64(a,-c,b,l)\n";
   OS << "#elif !defined(USE_CORRECT_VFMA_INTRINSICS)\n";
+  OS << "// Noisiliy wrong\n";
   OS << "#define vfma_lane_f32(a,b,c,l) vfma_lane_warn_f32(a, c, b, l)\n";
+  OS << "#define vfmaq_lane_f32(a,b,c,l) vfmaq_lane_warn_f32(a,c,b,l)\n";
   OS << "#define vfms_lane_f32(a,b,c,l) vfma_lane_warn_f32(a,-c,b,l)\n";
+  OS << "#define vfmsq_lane_f32(a,b,c,l) vfmaq_lane_warn_f32(a,-c,b,l)\n";
+  OS << "#define vfma_laneq_f32(a,b,c,l) vfma_laneq_warn_f32(a, c, b, l)\n";
+  OS << "#define vfmaq_laneq_f32(a,b,c,l) vfmaq_laneq_warn_f32(a,c,b,l)\n";
+  OS << "#define vfms_laneq_f32(a,b,c,l) vfma_laneq_warn_f32(a,-c,b,l)\n";
+  OS << "#define vfmsq_laneq_f32(a,b,c,l) vfmaq_laneq_warn_f32(a,-c,b,l)\n";
+  OS << "#define vfma_laneq_f64(a,b,c,l) vfma_laneq_warn_f64(a,c,b,l)\n";
+  OS << "#define vfmaq_laneq_f64(a,b,c,l) vfmaq_laneq_warn_f64(a,c,b,l)\n";
+  OS << "#define vfms_laneq_f64(a,b,c,l) vfma_laneq_warn_f64(a,-c,b,l)\n";
+  OS << "#define vfmsq_laneq_f64(a,b,c,l) vfmaq_laneq_warn_f64(a,-c,b,l)\n";
   OS << "#endif\n\n";
 
-  // The rest do not need adjusting for various reasons: the 64-bit f64
-  // intrinsic only *has* one lane. The other two are incompatible on clang-602
-  // anyway because of the lane/laneq changes.
+  // The rest do not need adjusting because the 64-bit f64 intrinsic
+  // only *has* one lane.
   OS << "#define vfma_lane_f64(a,b,c,l) vfma_lane_silent_f64(a,b,c,l)\n";
-  OS << "#define vfmaq_lane_f32(a,b,c,l) vfmaq_lane_silent_f32(a,b,c,l)\n";
   OS << "#define vfmaq_lane_f64(a,b,c,l) vfmaq_lane_silent_f64(a,b,c,l)\n";
   OS << "#define vfms_lane_f64(a,b,c,l) vfma_lane_silent_f64(a,b,-c,l)\n";
-  OS << "#define vfmsq_lane_f32(a,b,c,l) vfmaq_lane_silent_f32(a,b,-c,l)\n";
   OS << "#define vfmsq_lane_f64(a,b,c,l) vfmaq_lane_silent_f64(a,b,-c,l)\n\n";
 
 

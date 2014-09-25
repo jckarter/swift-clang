@@ -4640,7 +4640,8 @@ Value *CodeGenFunction::EmitAArch64BuiltinExpr(unsigned BuiltinID,
     Int = Intrinsic::fma;
     return EmitNeonCall(CGM.getIntrinsic(Int, Ty), Ops, "fmla");
   }
-  case NEON::BI__builtin_neon_vfma_laneq_v: {
+  case NEON::BI__builtin_neon_vfma_laneq_silent_v:
+  case NEON::BI__builtin_neon_vfma_laneq_warn_v: {
     llvm::VectorType *VTy = cast<llvm::VectorType>(Ty);
     // v1f64 fma should be mapped to Neon scalar f64 fma
     if (VTy && VTy->getElementType() == DoubleTy) {
@@ -4667,7 +4668,8 @@ Value *CodeGenFunction::EmitAArch64BuiltinExpr(unsigned BuiltinID,
 
     return Builder.CreateCall3(F, Ops[2], Ops[1], Ops[0]);
   }
-  case NEON::BI__builtin_neon_vfmaq_laneq_v: {
+  case NEON::BI__builtin_neon_vfmaq_laneq_silent_v:
+  case NEON::BI__builtin_neon_vfmaq_laneq_warn_v: {
     Value *F = CGM.getIntrinsic(Intrinsic::fma, Ty);
     Ops[0] = Builder.CreateBitCast(Ops[0], Ty);
     Ops[1] = Builder.CreateBitCast(Ops[1], Ty);

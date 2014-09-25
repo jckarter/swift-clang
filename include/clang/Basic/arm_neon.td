@@ -1112,11 +1112,13 @@ def VMLS_LANEQ   : IOpInst<"vmls_laneq", "dddji",
 def VFMA_LANE    : IInst<"vfma_lane_silent", "dddgi", "fdQfQd">;
 def VFMA_LANE_WARN : IInst<"vfma_lane_warn", "dddgi", "fdQfQd">;
 
-def VFMA_LANEQ   : IInst<"vfma_laneq", "dddji", "fdQfQd"> {
+def VFMA_LANEQ   : IInst<"vfma_laneq_silent", "dddji", "fdQfQd"> {
   let isLaneQ = 1;
 }
 
-def VFMS_LANEQ   : IOpInst<"vfms_laneq", "dddji", "fdQfQd", OP_FMS_LNQ>;
+def VFMA_LANEQ_WARN   : IInst<"vfma_laneq_warn", "dddji", "fdQfQd"> {
+  let isLaneQ = 1;
+}
 
 def VMLAL_LANEQ  : SOpInst<"vmlal_laneq", "wwdki", "siUsUi", OP_MLAL_LN>;
 def VMLAL_HIGH_LANE   : SOpInst<"vmlal_high_lane", "wwkdi", "siUsUi",

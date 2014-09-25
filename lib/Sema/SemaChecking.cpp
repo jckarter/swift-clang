@@ -734,7 +734,9 @@ bool Sema::CheckAArch64BuiltinFunctionCall(unsigned BuiltinID,
   //    + Otherwise we will emit correct code.
   // See rdar://problem/17964959 for details.
   if (BuiltinID == NEON::BI__builtin_neon_vfma_lane_warn_v ||
-      BuiltinID == NEON::BI__builtin_neon_vfmaq_lane_warn_v)
+      BuiltinID == NEON::BI__builtin_neon_vfmaq_lane_warn_v ||
+      BuiltinID == NEON::BI__builtin_neon_vfma_laneq_warn_v ||
+      BuiltinID == NEON::BI__builtin_neon_vfmaq_laneq_warn_v)
     Diag(TheCall->getLocStart(), diag::warn_broken_neon_vfma);
 
   if (CheckNeonBuiltinFunctionCall(BuiltinID, TheCall))
