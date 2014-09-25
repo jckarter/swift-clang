@@ -26,6 +26,9 @@ namespace llvm {
 namespace clang {
 namespace api_notes {
 
+/// The file extension used for the source representation of API notes.
+static const char SOURCE_APINOTES_EXTENSION[] = "apinotes";
+
 /// The file extension used for the binary representation of API notes.
 static const char BINARY_APINOTES_EXTENSION[] = "apinotesc";
 
@@ -163,7 +166,7 @@ public:
   }
 
   friend ObjCContextInfo &operator|=(ObjCContextInfo &lhs,
-                                   const ObjCContextInfo &rhs) {
+                                     const ObjCContextInfo &rhs) {
     // Merge inherited info.
     static_cast<CommonEntityInfo &>(lhs) |= rhs;
 

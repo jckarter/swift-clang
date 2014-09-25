@@ -3736,6 +3736,11 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
                     options::OPT_fno_assume_sane_operator_new))
     CmdArgs.push_back("-fno-assume-sane-operator-new");
 
+  if (Args.hasFlag(options::OPT_fapinotes, options::OPT_fno_apinotes,
+                   false)) {
+    CmdArgs.push_back("-fapinotes");
+  }
+
   // -fblocks=0 is default.
   if (Args.hasFlag(options::OPT_fblocks, options::OPT_fno_blocks,
                    getToolChain().IsBlocksDefault()) ||

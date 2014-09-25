@@ -1,0 +1,14 @@
+Name: HeaderLib
+Functions:
+  - Name: custom_realloc
+    NullabilityOfRet: N
+    Nullability: [ N, S ]
+  - Name: unavailable_function
+    Availability: none
+    AvailabilityMsg: "I beg you not to use this"
+
+Globals:
+  - Name: global_int
+    Nullability: N
+  - Name: unavailable_global_int
+    Availability: none

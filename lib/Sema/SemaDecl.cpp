@@ -10589,7 +10589,8 @@ void Sema::ActOnFinishDelayedAttribute(Scope *S, Decl *D,
   if (TemplateDecl *TD = dyn_cast<TemplateDecl>(D))
     D = TD->getTemplatedDecl();
   ProcessDeclAttributeList(S, D, Attrs.getList());  
-  
+  ProcessAPINotes(D);
+
   if (CXXMethodDecl *Method = dyn_cast_or_null<CXXMethodDecl>(D))
     if (Method->isStatic())
       checkThisInStaticMemberFunctionAttributes(Method);
@@ -11820,6 +11821,7 @@ CreateNewDecl:
 
   if (Attr)
     ProcessDeclAttributeList(S, New, Attr);
+  ProcessAPINotes(New);
 
   // Set the lexical context. If the tag has a C++ scope specifier, the
   // lexical context will be different from the semantic context.
@@ -13007,6 +13009,7 @@ void Sema::ActOnFields(Scope *S, SourceLocation RecLoc, Decl *EnclosingDecl,
 
   if (Attr)
     ProcessDeclAttributeList(S, Record, Attr);
+  ProcessAPINotes(Record);
 }
 
 /// \brief Determine whether the given integral value is representable within
@@ -13278,6 +13281,7 @@ Decl *Sema::ActOnEnumConstant(Scope *S, Decl *theEnumDecl, Decl *lastEnumConst,
   if (New) {
     // Process attributes.
     if (Attr) ProcessDeclAttributeList(S, New, Attr);
+    ProcessAPINotes(New);
 
     // Register this decl in the current scope stack.
     New->setAccess(TheEnumDecl->getAccess());
@@ -13472,6 +13476,7 @@ void Sema::ActOnEnumBody(SourceLocation EnumLoc, SourceLocation LBraceLoc,
 
   if (Attr)
     ProcessDeclAttributeList(S, Enum, Attr);
+  ProcessAPINotes(Enum);
 
   if (Enum->isDependentType()) {
     for (unsigned i = 0, e = Elements.size(); i != e; ++i) {

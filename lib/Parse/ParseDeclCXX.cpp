@@ -2410,8 +2410,10 @@ void Parser::ParseCXXClassMemberDeclaration(AccessSpecifier AS,
         // initialize it.
         ThisDecl = VT->getTemplatedDecl();
 
-      if (ThisDecl && AccessAttrs)
+      if (ThisDecl) {
         Actions.ProcessDeclAttributeList(getCurScope(), ThisDecl, AccessAttrs);
+        Actions.ProcessAPINotes(ThisDecl);
+      }
     }
 
     // Handle the initializer.

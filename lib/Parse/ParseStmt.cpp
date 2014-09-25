@@ -582,7 +582,7 @@ StmtResult Parser::ParseLabeledStatement(ParsedAttributesWithRange &attrs) {
   LabelDecl *LD = Actions.LookupOrCreateLabel(IdentTok.getIdentifierInfo(),
                                               IdentTok.getLocation());
   if (AttributeList *Attrs = attrs.getList()) {
-    Actions.ProcessDeclAttributeList(Actions.CurScope, LD, Attrs);
+    Actions.ProcessDeclAttributeList(Actions.CurScope, LD, attrs.getList());
     attrs.clear();
   }
 
