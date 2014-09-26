@@ -20,6 +20,7 @@
 #include "llvm/ADT/APInt.h"
 #include "llvm/ADT/Hashing.h"
 #include "llvm/ADT/Statistic.h"
+#include "llvm/ADT/SetVector.h"
 #include "llvm/Support/Path.h"
 #include <sys/stat.h>
 
@@ -337,7 +338,9 @@ APINotesReader *APINotesManager::findAPINotes(SourceLocation Loc) {
   // its its parent directories.
   const DirectoryEntry *Dir = File->getDir();
   FileManager &FileMgr = SourceMgr.getFileManager();
-  llvm::SmallVector<const DirectoryEntry *, 4> DirsVisited;
+  llvm::SetVector<const DirectoryEntry *,
+                  SmallVector<const DirectoryEntry *, 4>,
+                  llvm::SmallPtrSet<const DirectoryEntry *, 4>> DirsVisited;
   APINotesReader *Result = nullptr;
   do {
     // Look for an API notes reader for this header search directory.
@@ -349,7 +352,7 @@ APINotesReader *APINotesManager::findAPINotes(SourceLocation Loc) {
 
       // We've been redirected to another directory for answers. Follow it.
       if (auto OtherDir = Known->second.dyn_cast<const DirectoryEntry *>()) {
-        DirsVisited.push_back(Dir);
+        DirsVisited.insert(Dir);
         Dir = OtherDir;
         continue;
       }
@@ -414,8 +417,15 @@ APINotesReader *APINotesManager::findAPINotes(SourceLocation Loc) {
     }
 
     // We didn't find anything. Look at the parent directory.
-    DirsVisited.push_back(Dir);
+    if (!DirsVisited.insert(Dir)) {
+      Dir = 0;
+      break;
+    }
+
     StringRef ParentPath = llvm::sys::path::parent_path(Path);
+    while (llvm::sys::path::stem(ParentPath) == "..") {
+      ParentPath = llvm::sys::path::parent_path(ParentPath);
+    }
     if (ParentPath.empty()) {
       Dir = nullptr;
     } else {
