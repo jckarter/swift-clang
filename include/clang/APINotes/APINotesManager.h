@@ -47,6 +47,9 @@ class APINotesManager {
 
   SourceManager &SourceMgr;
 
+  /// Whether we have already pruned the API notes cache.
+  bool PrunedCache;
+
   /// A mapping from header file directories to the API notes reader for
   /// that directory, or a redirection to another directory entry that may
   /// have more information, or NULL to indicate that there is no API notes

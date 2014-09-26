@@ -21,6 +21,7 @@
 #include "llvm/ADT/Hashing.h"
 #include "llvm/ADT/Statistic.h"
 #include "llvm/Support/Path.h"
+#include <sys/stat.h>
 
 using namespace clang;
 using namespace api_notes;
@@ -46,7 +47,7 @@ STATISTIC(NumBinaryCacheRebuilds,
           "binary form cache rebuilds");
 
 APINotesManager::APINotesManager(SourceManager &SourceMgr)
-  : SourceMgr(SourceMgr) { }
+  : SourceMgr(SourceMgr), PrunedCache(false) { }
 
 
 APINotesManager::~APINotesManager() {
@@ -58,6 +59,74 @@ APINotesManager::~APINotesManager() {
   }
 }
 
+/// \brief Write a new timestamp file with the given path.
+static void writeTimestampFile(StringRef TimestampFile) {
+  std::error_code EC;
+  llvm::raw_fd_ostream Out(TimestampFile.str(), EC, llvm::sys::fs::F_None);
+}
+
+/// \brief Prune the API notes cache of API notes that haven't been accessed in
+/// a long time.
+static void pruneAPINotesCache(StringRef APINotesCachePath) {
+  struct stat StatBuf;
+  llvm::SmallString<128> TimestampFile;
+  TimestampFile = APINotesCachePath;
+  llvm::sys::path::append(TimestampFile, "APINotes.timestamp");
+
+  // Try to stat() the timestamp file.
+  if (::stat(TimestampFile.c_str(), &StatBuf)) {
+    // If the timestamp file wasn't there, create one now.
+    if (errno == ENOENT) {
+      llvm::sys::fs::create_directories(APINotesCachePath);
+      writeTimestampFile(TimestampFile);
+    }
+    return;
+  }
+
+  const unsigned APINotesCachePruneInterval = 7 * 24 * 60 * 60;
+  const unsigned APINotesCachePruneAfter = 31 * 24 * 60 * 60;
+
+  // Check whether the time stamp is older than our pruning interval.
+  // If not, do nothing.
+  time_t TimeStampModTime = StatBuf.st_mtime;
+  time_t CurrentTime = time(nullptr);
+  if (CurrentTime - TimeStampModTime <= time_t(APINotesCachePruneInterval))
+    return;
+
+  // Write a new timestamp file so that nobody else attempts to prune.
+  // There is a benign race condition here, if two Clang instances happen to
+  // notice at the same time that the timestamp is out-of-date.
+  writeTimestampFile(TimestampFile);
+
+  // Walk the entire API notes cache, looking for unused compiled API notes.
+  std::error_code EC;
+  SmallString<128> APINotesCachePathNative;
+  llvm::sys::path::native(APINotesCachePath, APINotesCachePathNative);
+  for (llvm::sys::fs::directory_iterator
+         File(APINotesCachePathNative.str(), EC), DirEnd;
+       File != DirEnd && !EC; File.increment(EC)) {
+    StringRef Extension = llvm::sys::path::extension(File->path());
+    if (Extension.empty())
+      continue;
+
+    if (Extension.substr(1) != BINARY_APINOTES_EXTENSION)
+      continue;
+
+    // Look at this file. If we can't stat it, there's nothing interesting
+    // there.
+    if (::stat(File->path().c_str(), &StatBuf))
+      continue;
+
+    // If the file has been used recently enough, leave it there.
+    time_t FileAccessTime = StatBuf.st_atime;
+    if (CurrentTime - FileAccessTime <= time_t(APINotesCachePruneAfter)) {
+      continue;
+    }
+
+    // Remove the file.
+    llvm::sys::fs::remove(File->path());
+  }
+}
 
 bool APINotesManager::loadAPINotes(const DirectoryEntry *HeaderDir,
                                    const FileEntry *APINotesFile) {
@@ -87,6 +156,13 @@ bool APINotesManager::loadAPINotes(const DirectoryEntry *HeaderDir,
     // Record the reader.
     Readers[HeaderDir] = Reader.release();
     return false;
+  }
+
+  // If we haven't pruned the API notes cache yet during this execution, do
+  // so now.
+  if (!PrunedCache) {
+    pruneAPINotesCache(FileMgr.getFileSystemOptions().APINotesCachePath);
+    PrunedCache = true;
   }
 
   // Compute a hash of the API notes file's directory and the Clang version,
