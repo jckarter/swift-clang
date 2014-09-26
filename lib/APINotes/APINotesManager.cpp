@@ -16,6 +16,9 @@
 #include "clang/APINotes/APINotesYAMLCompiler.h"
 #include "clang/Basic/FileManager.h"
 #include "clang/Basic/SourceManager.h"
+#include "clang/Basic/Version.h"
+#include "llvm/ADT/APInt.h"
+#include "llvm/ADT/Hashing.h"
 #include "llvm/ADT/Statistic.h"
 #include "llvm/Support/Path.h"
 
@@ -35,6 +38,12 @@ STATISTIC(NumDirectoriesSearched,
           "header directories searched");
 STATISTIC(NumDirectoryCacheHits,
           "directory cache hits");
+STATISTIC(NumBinaryCacheHits,
+          "binary form cache hits");
+STATISTIC(NumBinaryCacheMisses,
+          "binary form cache misses");
+STATISTIC(NumBinaryCacheRebuilds,
+          "binary form cache rebuilds");
 
 APINotesManager::APINotesManager(SourceManager &SourceMgr)
   : SourceMgr(SourceMgr) { }
@@ -54,8 +63,74 @@ bool APINotesManager::loadAPINotes(const DirectoryEntry *HeaderDir,
                                    const FileEntry *APINotesFile) {
   assert(Readers.find(HeaderDir) == Readers.end());
 
-  // Open the file.
   FileManager &FileMgr = SourceMgr.getFileManager();
+
+  // If the API notes file is already in the binary form, load it directly.
+  StringRef APINotesFileName = APINotesFile->getName();
+  StringRef APINotesFileExt = llvm::sys::path::extension(APINotesFileName);
+  if (!APINotesFileExt.empty() &&
+      APINotesFileExt.substr(1) == BINARY_APINOTES_EXTENSION) {
+    // Load the file.
+    auto Buffer = FileMgr.getBufferForFile(APINotesFile);
+    if (!Buffer) {
+      Readers[HeaderDir] = nullptr;
+      return true;
+    }
+
+    // Load the binary form.
+    auto Reader = APINotesReader::get(std::move(Buffer));
+    if (!Reader) {
+      Readers[HeaderDir] = nullptr;
+      return true;
+    }
+
+    // Record the reader.
+    Readers[HeaderDir] = Reader.release();
+    return false;
+  }
+
+  // Compute a hash of the API notes file's directory and the Clang version,
+  // to be used as part of the filename for the cached binary copy.
+  auto code = llvm::hash_value(StringRef(APINotesFile->getDir()->getName()));
+  code = hash_combine(code, getClangFullRepositoryVersion());
+
+  // Determine the file name for the cached binary form.
+  SmallString<128> CompiledFileName;
+  CompiledFileName += FileMgr.getFileSystemOptions().APINotesCachePath;
+  assert(!CompiledFileName.empty() && "No API notes cache path provided?");
+  llvm::sys::path::append(CompiledFileName,
+    (llvm::Twine(llvm::sys::path::stem(APINotesFileName)) + "-"
+     + llvm::APInt(64, code).toString(36, /*Signed=*/false) + "."
+     + BINARY_APINOTES_EXTENSION));
+
+  // Try to open the cached binary form.
+  if (const FileEntry *CompiledFile = FileMgr.getFile(CompiledFileName,
+                                                      /*openFile=*/true,
+                                                      /*cacheFailure=*/false)) {
+    // Load the file contents.
+    if (auto Buffer = FileMgr.getBufferForFile(CompiledFile)) {
+      // Make sure the file is up-to-date.
+      if (CompiledFile->getModificationTime()
+            >= APINotesFile->getModificationTime()) {
+        // Load the file.
+        if (auto Reader = APINotesReader::get(std::move(Buffer))) {
+          // Success.
+          ++NumBinaryCacheHits;
+          Readers[HeaderDir] = Reader.release();
+          return false;
+        }
+      }
+    }
+
+    // The cache entry was somehow broken; delete this one so we can build a
+    // new one below.
+    llvm::sys::fs::remove(CompiledFileName.str());
+    ++NumBinaryCacheRebuilds;
+  } else {
+    ++NumBinaryCacheMisses;
+  }
+
+  // Open the source file.
   auto Buffer = FileMgr.getBufferForFile(APINotesFile);
   if (!Buffer) {
     Readers[HeaderDir] = nullptr;
@@ -63,7 +138,6 @@ bool APINotesManager::loadAPINotes(const DirectoryEntry *HeaderDir,
   }
 
   // Compile the API notes source into a buffer.
-  // FIXME: Add a layer of caching here!
   // FIXME: Either propagate OSType through or, better yet, improve the binary
   // APINotes format to maintain complete availability information.
   llvm::SmallVector<char, 1024> APINotesBuffer;
@@ -76,17 +150,46 @@ bool APINotesManager::loadAPINotes(const DirectoryEntry *HeaderDir,
     }
     OS.flush();
 
-    // Make a copy of the APINotes files into the buffer.
+    // Make a copy of the compiled form into the buffer.
     Buffer = llvm::MemoryBuffer::getMemBufferCopy(
                StringRef(APINotesBuffer.data(), APINotesBuffer.size()));
   }
 
-  // Load the binary form.
-  auto Reader = APINotesReader::get(std::move(Buffer));
-  if (!Reader) {
-    Readers[HeaderDir] = nullptr;
-    return true;
+  // Save the binary form into the cache. Perform this operation
+  // atomically.
+  SmallString<64> TemporaryBinaryFileName = CompiledFileName.str();
+  TemporaryBinaryFileName.erase(
+    TemporaryBinaryFileName.end()
+      - llvm::sys::path::extension(TemporaryBinaryFileName).size(),
+    TemporaryBinaryFileName.end());
+  TemporaryBinaryFileName += "-%%%%%%.";
+  TemporaryBinaryFileName += BINARY_APINOTES_EXTENSION;
+
+  int TemporaryFD;
+  llvm::sys::fs::create_directories(
+    FileMgr.getFileSystemOptions().APINotesCachePath);
+  if (!llvm::sys::fs::createUniqueFile(TemporaryBinaryFileName.str(),
+                                       TemporaryFD, TemporaryBinaryFileName)) {
+    // Write the contents of the buffer.
+    bool hadError;
+    {
+      llvm::raw_fd_ostream Out(TemporaryFD, /*shouldClose=*/true);
+      Out.write(Buffer->getBufferStart(), Buffer->getBufferSize());
+      Out.flush();
+
+      hadError = Out.has_error();
+    }
+
+    if (!hadError) {
+      // Rename the temporary file to the actual compiled file.
+      llvm::sys::fs::rename(TemporaryBinaryFileName.str(),
+                            CompiledFileName.str());
+    }
   }
+
+  // Load the binary form we just compiled.
+  auto Reader = APINotesReader::get(std::move(Buffer));
+  assert(Reader && "Could not load the API notes we just generated?");
 
   // Record the reader.
   Readers[HeaderDir] = Reader.release();
