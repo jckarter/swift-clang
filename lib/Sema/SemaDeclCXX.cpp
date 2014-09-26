@@ -8586,6 +8586,11 @@ void Sema::DefineImplicitDefaultConstructor(SourceLocation CurrentLocation,
     return;
   }
 
+  // The exception specification is needed because we are defining the
+  // function.
+  ResolveExceptionSpec(CurrentLocation,
+                       Constructor->getType()->castAs<FunctionProtoType>());
+
   SourceLocation Loc = Constructor->getLocEnd().isValid()
                            ? Constructor->getLocEnd()
                            : Constructor->getLocation();
@@ -9049,6 +9054,11 @@ void Sema::DefineImplicitDestructor(SourceLocation CurrentLocation,
     Destructor->setInvalidDecl();
     return;
   }
+
+  // The exception specification is needed because we are defining the
+  // function.
+  ResolveExceptionSpec(CurrentLocation,
+                       Destructor->getType()->castAs<FunctionProtoType>());
 
   SourceLocation Loc = Destructor->getLocEnd().isValid()
                            ? Destructor->getLocEnd()
@@ -9893,6 +9903,11 @@ void Sema::DefineImplicitCopyAssignment(SourceLocation CurrentLocation,
     }
   }
 
+  // The exception specification is needed because we are defining the
+  // function.
+  ResolveExceptionSpec(CurrentLocation,
+                       CopyAssignOperator->getType()->castAs<FunctionProtoType>());
+
   if (Invalid) {
     CopyAssignOperator->setInvalidDecl();
     return;
@@ -10315,6 +10330,11 @@ void Sema::DefineImplicitMoveAssignment(SourceLocation CurrentLocation,
     }
   }
 
+  // The exception specification is needed because we are defining the
+  // function.
+  ResolveExceptionSpec(CurrentLocation,
+                       MoveAssignOperator->getType()->castAs<FunctionProtoType>());
+
   if (Invalid) {
     MoveAssignOperator->setInvalidDecl();
     return;
@@ -10484,6 +10504,11 @@ void Sema::DefineImplicitCopyConstructor(SourceLocation CurrentLocation,
         ActOnCompoundStmt(Loc, Loc, None, /*isStmtExpr=*/false).getAs<Stmt>());
   }
 
+  // The exception specification is needed because we are defining the
+  // function.
+  ResolveExceptionSpec(CurrentLocation,
+                       CopyConstructor->getType()->castAs<FunctionProtoType>());
+
   CopyConstructor->markUsed(Context);
   MarkVTableUsed(CurrentLocation, ClassDecl);
 
@@ -10643,6 +10668,11 @@ void Sema::DefineImplicitMoveConstructor(SourceLocation CurrentLocation,
     MoveConstructor->setBody(ActOnCompoundStmt(
         Loc, Loc, None, /*isStmtExpr=*/ false).getAs<Stmt>());
   }
+
+  // The exception specification is needed because we are defining the
+  // function.
+  ResolveExceptionSpec(CurrentLocation,
+                       MoveConstructor->getType()->castAs<FunctionProtoType>());
 
   MoveConstructor->markUsed(Context);
   MarkVTableUsed(CurrentLocation, ClassDecl);
@@ -12316,11 +12346,6 @@ void Sema::SetDeclDefaulted(Decl *Dcl, SourceLocation DefaultLoc) {
       return;
 
     CheckExplicitlyDefaultedSpecialMember(MD);
-
-    // The exception specification is needed because we are defining the
-    // function.
-    ResolveExceptionSpec(DefaultLoc,
-                         MD->getType()->castAs<FunctionProtoType>());
 
     if (MD->isInvalidDecl())
       return;
