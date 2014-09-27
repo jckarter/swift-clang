@@ -214,14 +214,14 @@ namespace {
     GlobalVariablesSeq Globals;
   };
 
-};
+}
 
-LLVM_YAML_IS_FLOW_SEQUENCE_VECTOR(clang::api_notes::NullableKind);
-LLVM_YAML_IS_SEQUENCE_VECTOR(Method);
-LLVM_YAML_IS_SEQUENCE_VECTOR(Property);
-LLVM_YAML_IS_SEQUENCE_VECTOR(Class);
-LLVM_YAML_IS_SEQUENCE_VECTOR(Function);
-LLVM_YAML_IS_SEQUENCE_VECTOR(GlobalVariable);
+LLVM_YAML_IS_FLOW_SEQUENCE_VECTOR(clang::api_notes::NullableKind)
+LLVM_YAML_IS_SEQUENCE_VECTOR(Method)
+LLVM_YAML_IS_SEQUENCE_VECTOR(Property)
+LLVM_YAML_IS_SEQUENCE_VECTOR(Class)
+LLVM_YAML_IS_SEQUENCE_VECTOR(Function)
+LLVM_YAML_IS_SEQUENCE_VECTOR(GlobalVariable)
 
 namespace llvm {
   namespace yaml {
