@@ -17,7 +17,7 @@ Classes:
         Availability:    iOS
         AvailabilityMsg: iOSOnly
         DesignatedInit:  true
-# CHECK: Duplicate definition of method '-[UIFont fontWithName:size:]'
+# CHECK: duplicate definition of method '-[UIFont fontWithName:size:]'
       - Selector:        'fontWithName:size:'
         MethodKind:      Instance
         Nullability:     [ N ]
@@ -34,17 +34,17 @@ Classes:
         Nullability:     N
         Availability:    iOS
         AvailabilityMsg: iOSOnly
-# CHECK: Duplicate definition of property 'UIFont.familyName'
+# CHECK: duplicate definition of property 'UIFont.familyName'
       - Name:            familyName
         Nullability:     N
         Availability:    iOS
         AvailabilityMsg: iOSOnly
-# CHECK: Multiple definitions of class 'UIFont'
+# CHECK: multiple definitions of class 'UIFont'
   - Name:            UIFont
 Protocols:
   - Name:            MyProto
     AuditedForNullability: true
-# CHECK: Multiple definitions of protocol 'MyProto'
+# CHECK: multiple definitions of protocol 'MyProto'
   - Name:            MyProto
     AuditedForNullability: true
 Functions:

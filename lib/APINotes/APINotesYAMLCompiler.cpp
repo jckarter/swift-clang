@@ -355,8 +355,11 @@ static bool parseAPINotes(StringRef yamlInput, Module &module,
   return static_cast<bool>(yin.error());
 }
 
-static bool compile(const Module &module, llvm::raw_ostream &os,
-                    api_notes::OSType targetOS){
+static bool compile(const Module &module,
+                    llvm::raw_ostream &os,
+                    api_notes::OSType targetOS,
+                    llvm::SourceMgr::DiagHandlerTy diagHandler,
+                    void *diagHandlerCtxt){
   using namespace api_notes;
 
   class YAMLConverter {
@@ -364,14 +367,27 @@ static bool compile(const Module &module, llvm::raw_ostream &os,
     APINotesWriter *Writer;
     OSType TargetOS;
     llvm::raw_ostream &OS;
-
+    llvm::SourceMgr::DiagHandlerTy DiagHandler;
+    void *DiagHandlerCtxt;
     bool ErrorOccured;
+
+    /// Emit a diagnostic
+    bool emitError(llvm::Twine message) {
+      DiagHandler(llvm::SMDiagnostic("", llvm::SourceMgr::DK_Error,
+                                     message.str()),
+                  DiagHandlerCtxt);
+      ErrorOccured = true;
+      return true;
+    }
 
   public:
     YAMLConverter(const Module &module,
                  OSType targetOS,
-                 llvm::raw_ostream &os) :
+                 llvm::raw_ostream &os,
+                 llvm::SourceMgr::DiagHandlerTy diagHandler,
+                 void *diagHandlerCtxt) :
       TheModule(module), Writer(0), TargetOS(targetOS), OS(os),
+      DiagHandler(diagHandler), DiagHandlerCtxt(diagHandlerCtxt),
       ErrorOccured(false) {}
 
     bool isAvailable(const AvailabilityItem &in) {
@@ -392,21 +408,19 @@ static bool compile(const Module &module, llvm::raw_ostream &os,
         outInfo.UnavailableMsg = in.Msg;
       } else {
         if (!in.Msg.empty()) {
-          llvm::errs() << "Availability message for available class '"
-                       << apiName << "' will not be used.";
-          ErrorOccured = true;
+          emitError("availability message for available class '" +
+                    apiName + "' will not be used");
         }
       }
       return false;
     }
 
     void convertNullability(const NullabilitySeq &nullability,
-                                   NullableKind nullabilityOfRet,
-                                   FunctionInfo &outInfo,
-                                   llvm::StringRef apiName) {
+                            NullableKind nullabilityOfRet,
+                            FunctionInfo &outInfo,
+                            llvm::StringRef apiName) {
       if (nullability.size() > FunctionInfo::getMaxNullabilityIndex()) {
-        llvm::errs() << "Nullability info for " << apiName << " does not fit.";
-        ErrorOccured = true;
+        emitError("nullability info for " + apiName + " does not fit");
         return;
       }
 
@@ -446,9 +460,7 @@ static bool compile(const Module &module, llvm::raw_ostream &os,
       llvm::SmallVector<StringRef, 4> a;
       meth.Selector.split(a, ":", /*MaxSplit*/ -1, /*KeepEmpty*/ false);
       if (!takesArguments && a.size() > 1 ) {
-        llvm::errs() << "Selector " << meth.Selector
-                     << "is missing a ':' at the end\n";
-        ErrorOccured = true;
+        emitError("selector " + meth.Selector + "is missing a ':' at the end");
         return;
       }
 
@@ -497,10 +509,9 @@ static bool compile(const Module &module, llvm::raw_ostream &os,
         bool &known = isInstanceMethod ? knownMethods[method.Selector].first
                                        : knownMethods[method.Selector].second;
         if (known) {
-          llvm::errs() << "Duplicate definition of method '"
-                       << (isInstanceMethod? '-' : '+')
-                       << "[" << cl.Name << " " << method.Selector << "]'\n";
-          ErrorOccured = true;
+          emitError(llvm::Twine("duplicate definition of method '") +
+                    (isInstanceMethod? "-" : "+") + "[" + cl.Name + " " +
+                    method.Selector + "]'");
           continue;
         }
         known = true;
@@ -513,9 +524,8 @@ static bool compile(const Module &module, llvm::raw_ostream &os,
       for (const auto &prop : cl.Properties) {
         // Check for duplicate property definitions.
         if (!knownProperties.insert(prop.Name)) {
-          llvm::errs() << "Duplicate definition of property '" << cl.Name << "."
-                       << prop.Name << "'\n";
-          ErrorOccured = true;
+          emitError("duplicate definition of property '" + cl.Name + "." +
+                    prop.Name + "'");
           continue;
         }
 
@@ -543,8 +553,7 @@ static bool compile(const Module &module, llvm::raw_ostream &os,
       for (const auto &cl : TheModule.Classes) {
         // Check for duplicate class definitions.
         if (!knownClasses.insert(cl.Name)) {
-          llvm::errs() << "Multiple definitions of class '" << cl.Name << "'\n";
-          ErrorOccured = true;
+          emitError("multiple definitions of class '" + cl.Name + "'");
           continue;
         }
 
@@ -556,9 +565,7 @@ static bool compile(const Module &module, llvm::raw_ostream &os,
       for (const auto &pr : TheModule.Protocols) {
         // Check for duplicate protocol definitions.
         if (!knownProtocols.insert(pr.Name)) {
-          llvm::errs() << "Multiple definitions of protocol '"
-                       << pr.Name << "'\n";
-          ErrorOccured = true;
+          emitError("multiple definitions of protocol '" + pr.Name + "'");
           continue;
         }
 
@@ -570,9 +577,8 @@ static bool compile(const Module &module, llvm::raw_ostream &os,
       for (const auto &global : TheModule.Globals) {
         // Check for duplicate global variables.
         if (!knownGlobals.insert(global.Name)) {
-          llvm::errs() << "Multiple definitions of global variable '"
-                       << global.Name << "'\n";
-          ErrorOccured = true;
+          emitError("multiple definitions of global variable '" +
+                    global.Name + "'");
           continue;
         }
 
@@ -589,9 +595,8 @@ static bool compile(const Module &module, llvm::raw_ostream &os,
       for (const auto &function : TheModule.Functions) {
         // Check for duplicate global functions.
         if (!knownFunctions.insert(function.Name)) {
-          llvm::errs() << "Multiple definitions of global function '"
-                       << function.Name << "'\n";
-          ErrorOccured = true;
+          emitError("multiple definitions of global function '" +
+                    function.Name + "'");
           continue;
         }
 
@@ -613,7 +618,7 @@ static bool compile(const Module &module, llvm::raw_ostream &os,
     }
   };
 
-  YAMLConverter c(module, targetOS, os);
+  YAMLConverter c(module, targetOS, os, diagHandler, diagHandlerCtxt);
   return c.convertModule();
 }
 
@@ -629,6 +634,11 @@ bool api_notes::parseAndDumpAPINotes(StringRef yamlInput)  {
   return false;
 }
 
+/// Simple diagnostic handler that prints diagnostics to standard error.
+static void printDiagnostic(const llvm::SMDiagnostic &diag, void *context) {
+  diag.print(nullptr, llvm::errs());
+}
+
 bool api_notes::compileAPINotes(StringRef yamlInput,
                                 llvm::raw_ostream &os,
                                 OSType targetOS,
@@ -636,10 +646,14 @@ bool api_notes::compileAPINotes(StringRef yamlInput,
                                 void *diagHandlerCtxt) {
   Module module;
 
+  if (!diagHandler) {
+    diagHandler = &printDiagnostic;
+  }
+
   if (parseAPINotes(yamlInput, module, diagHandler, diagHandlerCtxt))
     return true;
 
-  return compile(module, os, targetOS);
+  return compile(module, os, targetOS, diagHandler, diagHandlerCtxt);
 }
 
 bool api_notes::decompileAPINotes(std::unique_ptr<llvm::MemoryBuffer> input,

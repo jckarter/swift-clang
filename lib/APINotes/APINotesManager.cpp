@@ -227,7 +227,8 @@ bool APINotesManager::loadAPINotes(const DirectoryEntry *HeaderDir,
                                    diag::note_apinotes_message,
                                    APINotesFile);
     llvm::raw_svector_ostream OS(APINotesBuffer);
-    if (api_notes::compileAPINotes(Buffer->getBuffer(), OS,
+    if (api_notes::compileAPINotes(Buffer->getBuffer(),
+                                   OS,
                                    api_notes::OSType::Absent,
                                    srcMgrAdapter.getDiagHandler(),
                                    srcMgrAdapter.getDiagContext())) {

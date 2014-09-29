@@ -39,7 +39,8 @@ namespace api_notes {
   };
 
   /// Converts API notes from YAML format to binary format.
-  bool compileAPINotes(llvm::StringRef yamlInput, llvm::raw_ostream &os,
+  bool compileAPINotes(llvm::StringRef yamlInput,
+                       llvm::raw_ostream &os,
                        OSType targetOS,
                        llvm::SourceMgr::DiagHandlerTy diagHandler = nullptr,
                        void *diagHandlerCtxt = nullptr);
