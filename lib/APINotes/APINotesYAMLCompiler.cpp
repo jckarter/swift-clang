@@ -346,16 +346,13 @@ namespace llvm {
 using llvm::yaml::Input;
 using llvm::yaml::Output;
 
-static bool parseAPINotes(StringRef yamlInput, Module &module) {
-  Input yin(yamlInput);
+static bool parseAPINotes(StringRef yamlInput, Module &module,
+                          llvm::SourceMgr::DiagHandlerTy diagHandler,
+                          void *diagHandlerCtxt) {
+  Input yin(yamlInput, nullptr, diagHandler, diagHandlerCtxt);
   yin >> module;
 
-  if (std::error_code ec = yin.error()) {
-    llvm::errs() << "\n Could not parse the input file: "
-                 << ec.message() << '\n';
-    return true;
-  }
-  return false;
+  return static_cast<bool>(yin.error());
 }
 
 static bool compile(const Module &module, llvm::raw_ostream &os,
@@ -623,7 +620,7 @@ static bool compile(const Module &module, llvm::raw_ostream &os,
 bool api_notes::parseAndDumpAPINotes(StringRef yamlInput)  {
   Module module;
 
-  if (parseAPINotes(yamlInput, module))
+  if (parseAPINotes(yamlInput, module, nullptr, nullptr))
     return true;
 
   Output yout(llvm::outs());
@@ -634,10 +631,12 @@ bool api_notes::parseAndDumpAPINotes(StringRef yamlInput)  {
 
 bool api_notes::compileAPINotes(StringRef yamlInput,
                                 llvm::raw_ostream &os,
-                                OSType targetOS) {
+                                OSType targetOS,
+                                llvm::SourceMgr::DiagHandlerTy diagHandler,
+                                void *diagHandlerCtxt) {
   Module module;
 
-  if (parseAPINotes(yamlInput, module))
+  if (parseAPINotes(yamlInput, module, diagHandler, diagHandlerCtxt))
     return true;
 
   return compile(module, os, targetOS);

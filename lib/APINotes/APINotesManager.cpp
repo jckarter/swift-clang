@@ -14,8 +14,10 @@
 #include "clang/APINotes/APINotesManager.h"
 #include "clang/APINotes/APINotesReader.h"
 #include "clang/APINotes/APINotesYAMLCompiler.h"
+#include "clang/Basic/DiagnosticIDs.h"
 #include "clang/Basic/FileManager.h"
 #include "clang/Basic/SourceManager.h"
+#include "clang/Basic/SourceMgrAdapter.h"
 #include "clang/Basic/Version.h"
 #include "llvm/ADT/APInt.h"
 #include "llvm/ADT/Hashing.h"
@@ -219,9 +221,16 @@ bool APINotesManager::loadAPINotes(const DirectoryEntry *HeaderDir,
   // APINotes format to maintain complete availability information.
   llvm::SmallVector<char, 1024> APINotesBuffer;
   {
+    SourceMgrAdapter srcMgrAdapter(SourceMgr, SourceMgr.getDiagnostics(),
+                                   diag::err_apinotes_message,
+                                   diag::warn_apinotes_message,
+                                   diag::note_apinotes_message,
+                                   APINotesFile);
     llvm::raw_svector_ostream OS(APINotesBuffer);
     if (api_notes::compileAPINotes(Buffer->getBuffer(), OS,
-                                   api_notes::OSType::Absent)) {
+                                   api_notes::OSType::Absent,
+                                   srcMgrAdapter.getDiagHandler(),
+                                   srcMgrAdapter.getDiagContext())) {
       Readers[HeaderDir] = nullptr;
       return true;
     }

@@ -1,0 +1,6 @@
+Name: SomeBrokenLib
+Functions:
+  - Name: do_something_with_pointers
+    Nu llabilityOfRet: O
+    Nullability: N,
+    

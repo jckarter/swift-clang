@@ -14,6 +14,7 @@
 #ifndef LLVM_CLANG_API_NOTES_YAML_COMPILER_H
 #define LLVM_CLANG_API_NOTES_YAML_COMPILER_H
 #include "llvm/ADT/StringRef.h"
+#include "llvm/Support/SourceMgr.h"
 #include <memory>
 
 namespace llvm {
@@ -39,7 +40,9 @@ namespace api_notes {
 
   /// Converts API notes from YAML format to binary format.
   bool compileAPINotes(llvm::StringRef yamlInput, llvm::raw_ostream &os,
-                       OSType targetOS);
+                       OSType targetOS,
+                       llvm::SourceMgr::DiagHandlerTy diagHandler = nullptr,
+                       void *diagHandlerCtxt = nullptr);
 
   bool parseAndDumpAPINotes(llvm::StringRef yamlInput);
 

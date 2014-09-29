@@ -19,6 +19,7 @@ add_clang_library(clangBasic
   OperatorPrecedence.cpp
   SourceLocation.cpp
   SourceManager.cpp
+  SourceMgrAdapter.cpp
   TargetInfo.cpp
   Targets.cpp
   TokenKinds.cpp
