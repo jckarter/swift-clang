@@ -8,4 +8,6 @@ int *global_int;
 int unavailable_function(void);
 int unavailable_global_int;
 
+void do_something_with_pointers(int *ptr1, int *ptr2);
+
 #endif

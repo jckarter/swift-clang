@@ -94,8 +94,8 @@ static void ProcessAPINotes(Sema &S, FunctionOrMethod AnyFunc,
         Param = MD->param_begin()[I];
 
       if (Info.getParamTypeInfo(I) == api_notes::NullableKind::NonNullable &&
-          !D->hasAttr<NonNullAttr>()) {
-        D->addAttr(NonNullAttr::CreateImplicit(S.Context, 0, 0));
+          !Param->hasAttr<NonNullAttr>()) {
+        Param->addAttr(NonNullAttr::CreateImplicit(S.Context, 0, 0));
       }
     }
   }

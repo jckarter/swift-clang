@@ -4,6 +4,9 @@
 
 int main() {
   custom_realloc(0, 0); // expected-warning{{null passed to a callee that requires a non-null argument}}
+  int i = 0;
+  do_something_with_pointers(&i, 0);
+  do_something_with_pointers(0, &i); // expected-warning{{null passed to a callee that requires a non-null argument}}
   return 0;
 }
 
