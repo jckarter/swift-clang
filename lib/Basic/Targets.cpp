@@ -4582,7 +4582,7 @@ public:
   }
 
   StringRef getABI() const override { return ABI; }
-  virtual bool setABI(const std::string &Name) {
+  virtual bool setABI(const std::string &Name) override {
     if (Name != "aapcs" && Name != "darwinpcs")
       return false;
 
@@ -4590,7 +4590,7 @@ public:
     return true;
   }
 
-  virtual bool setCPU(const std::string &Name) {
+  virtual bool setCPU(const std::string &Name) override {
     bool CPUKnown = llvm::StringSwitch<bool>(Name)
                         .Case("generic", true)
                         .Cases("cortex-a53", "cortex-a57", true)
@@ -4600,7 +4600,7 @@ public:
   }
 
   virtual void getTargetDefines(const LangOptions &Opts,
-                                MacroBuilder &Builder) const {
+                                MacroBuilder &Builder) const  override {
     // Target identification.
     Builder.defineMacro("__aarch64__");
 
@@ -4660,12 +4660,12 @@ public:
   }
 
   virtual void getTargetBuiltins(const Builtin::Info *&Records,
-                                 unsigned &NumRecords) const {
+                                 unsigned &NumRecords) const override {
     Records = BuiltinInfo;
     NumRecords = clang::AArch64::LastTSBuiltin - Builtin::FirstTSBuiltin;
   }
 
-  virtual bool hasFeature(StringRef Feature) const {
+  virtual bool hasFeature(StringRef Feature) const override {
     return Feature == "aarch64" ||
       Feature == "arm64" ||
       (Feature == "neon" && FPU == NeonMode);
@@ -4690,19 +4690,19 @@ public:
     return true;
   }
 
-  virtual bool isCLZForZeroUndef() const { return false; }
+  virtual bool isCLZForZeroUndef() const override { return false; }
 
-  virtual BuiltinVaListKind getBuiltinVaListKind() const {
+  virtual BuiltinVaListKind getBuiltinVaListKind() const override {
     return TargetInfo::AArch64ABIBuiltinVaList;
   }
 
   virtual void getGCCRegNames(const char *const *&Names,
-                              unsigned &NumNames) const;
+                              unsigned &NumNames) const override;
   virtual void getGCCRegAliases(const GCCRegAlias *&Aliases,
-                                unsigned &NumAliases) const;
+                                unsigned &NumAliases) const override;
 
   virtual bool validateAsmConstraint(const char *&Name,
-                                     TargetInfo::ConstraintInfo &Info) const {
+                                     TargetInfo::ConstraintInfo &Info) const override {
     switch (*Name) {
     default:
       return false;
@@ -4771,9 +4771,9 @@ public:
     }
   }
 
-  virtual const char *getClobbers() const { return ""; }
+  virtual const char *getClobbers() const override { return ""; }
 
-  int getEHDataRegisterNumber(unsigned RegNo) const {
+  int getEHDataRegisterNumber(unsigned RegNo) const override {
     if (RegNo == 0)
       return 0;
     if (RegNo == 1)
@@ -4908,7 +4908,7 @@ public:
     TheCXXABI.set(TargetCXXABI::iOS64);
   }
 
-  virtual BuiltinVaListKind getBuiltinVaListKind() const {
+  virtual BuiltinVaListKind getBuiltinVaListKind() const override {
     return TargetInfo::CharPtrBuiltinVaList;
   }
 };
