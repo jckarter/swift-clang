@@ -75,7 +75,7 @@ __attribute((objc_complete_definition))
 // make sure we are still in the same function
 // CHECK: define {{.*}}__copy_helper_block_
 // Metadata
-// CHECK:        ![[MAIN:.*]] = {{.*}}!"Main"{{.*}}DW_TAG_structure_type{{.*}}line 35
+// CHECK:        ![[MAIN:.*]] = {{.*}}[ DW_TAG_structure_type ] [Main] [line 35,
 // CHECK:        ![[PMAIN:.*]] = {{.*}}![[MAIN]]} ; [ DW_TAG_pointer_type ]{{.*}}from Main
 // CHECK:        ![[BDMD]] = metadata {{.*}}.block_descriptor
 // CHECK:        ![[SELF]] = {{.*}}![[PMAIN]]{{.*}}[ DW_TAG_auto_variable ] [self] [line 52]
