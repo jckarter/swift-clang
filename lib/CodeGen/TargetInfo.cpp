@@ -4622,6 +4622,14 @@ ABIArgInfo ARMABIInfo::classifyArgumentType(QualType Ty, bool isVariadic,
     }
   }
 
+  if (getABIKind() == ARMABIInfo::APCS_VFP &&
+      getContext().getTypeSizeInChars(Ty) > CharUnits::fromQuantity(16)) {
+    // ARMv7k is adopting the 64-bit AAPCS rule on composite types: if they're
+    // bigger than 128-bits, they get placed in space allocated by the caller,
+    // and a pointer is passed.
+    return ABIArgInfo::getIndirect(getContext().getTypeAlign(Ty) / 8, false);
+  }
+
   // Support byval for ARM.
   // The ABI alignment for APCS is 4-byte and for AAPCS at least 4-byte and at
   // most 8-byte. We realign the indirect argument if type alignment is bigger
@@ -4631,6 +4639,7 @@ ABIArgInfo ARMABIInfo::classifyArgumentType(QualType Ty, bool isVariadic,
   if (getABIKind() == ARMABIInfo::AAPCS_VFP ||
       getABIKind() == ARMABIInfo::AAPCS)
     ABIAlign = std::min(std::max(TyAlign, (uint64_t)4), (uint64_t)8);
+
   if (getContext().getTypeSizeInChars(Ty) > CharUnits::fromQuantity(64)) {
     // Update Allocated GPRs. Since this is only used when the size of the
     // argument is greater than 64 bytes, this will always use up any available
@@ -4902,7 +4911,16 @@ llvm::Value *ARMABIInfo::EmitVAArg(llvm::Value *VAListAddr, QualType Ty,
   else
     TyAlign = 4;
   // Use indirect if size of the illegal vector is bigger than 16 bytes.
+  const Type *Base;
   if (isIllegalVectorType(Ty) && Size > 16) {
+    IsIndirect = true;
+    Size = 4;
+    TyAlign = 4;
+  } else if (getABIKind() == ARMABIInfo::APCS_VFP &&
+             !isARMHomogeneousAggregate(Ty, Base, getContext(), true) &&
+             Size > 16) {
+    // ARMv7k passes structs bigger than 16 bytes indirectly, in space allocated
+    // by the caller.
     IsIndirect = true;
     Size = 4;
     TyAlign = 4;
