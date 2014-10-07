@@ -3796,12 +3796,15 @@ class ARMTargetInfo : public TargetInfo {
     // FIXME: Enumerated types are variable width in straight AAPCS.
   }
 
-  void setABIAPCS() {
+  void setABIAPCS(bool IsAPCS_VFP) {
     const llvm::Triple &T = getTriple();
 
     IsAAPCS = false;
 
-    DoubleAlign = LongLongAlign = LongDoubleAlign = SuitableAlign = 32;
+    if (IsAPCS_VFP)
+      DoubleAlign = LongLongAlign = LongDoubleAlign = SuitableAlign = 64;
+    else
+      DoubleAlign = LongLongAlign = LongDoubleAlign = SuitableAlign = 32;
 
     // size_t is unsigned int on FreeBSD.
     if (T.getOS() == llvm::Triple::FreeBSD)
@@ -3821,17 +3824,19 @@ class ARMTargetInfo : public TargetInfo {
     /// gcc.
     ZeroLengthBitfieldBoundary = 32;
 
-    if (T.isOSBinFormatMachO())
+    if (T.isOSBinFormatMachO() && IsAPCS_VFP) {
+      assert(!BigEndian && "APCS_VFP does not support big-endian");
+      DescriptionString = "e-m:o-p:32:32-i64:64-a:0:32-n32-S128";
+    } else if (T.isOSBinFormatMachO()) {
       DescriptionString =
           BigEndian
               ? "E-m:o-p:32:32-f64:32:64-v64:32:64-v128:32:128-a:0:32-n32-S32"
               : "e-m:o-p:32:32-f64:32:64-v64:32:64-v128:32:128-a:0:32-n32-S32";
-    else
+    } else
       DescriptionString =
           BigEndian
               ? "E-m:e-p:32:32-f64:32:64-v64:32:64-v128:32:128-a:0:32-n32-S32"
               : "e-m:e-p:32:32-f64:32:64-v64:32:64-v128:32:128-a:0:32-n32-S32";
-
     // FIXME: Override "preferred align" for double and long long.
   }
 
@@ -3882,7 +3887,7 @@ public:
     // FIXME: We need support for -meabi... we could just mangle it into the
     // name.
     if (Name == "apcs-gnu" || Name == "apcs-vfp") {
-      setABIAPCS();
+      setABIAPCS(Name == "apcs-vfp");
       return true;
     }
     if (Name == "aapcs" || Name == "aapcs-vfp" || Name == "aapcs-linux") {

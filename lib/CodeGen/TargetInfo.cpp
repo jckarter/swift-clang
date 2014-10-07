@@ -4908,7 +4908,10 @@ llvm::Value *ARMABIInfo::EmitVAArg(llvm::Value *VAListAddr, QualType Ty,
   if (getABIKind() == ARMABIInfo::AAPCS_VFP ||
       getABIKind() == ARMABIInfo::AAPCS)
     TyAlign = std::min(std::max(TyAlign, (uint64_t)4), (uint64_t)8);
-  else
+  else if (getABIKind() == ARMABIInfo::APCS_VFP) {
+    // ARMv7k allows type alignment up to 16 bytes.
+    TyAlign = std::min(std::max(TyAlign, (uint64_t)4), (uint64_t)16);
+  } else
     TyAlign = 4;
   // Use indirect if size of the illegal vector is bigger than 16 bytes.
   const Type *Base;
