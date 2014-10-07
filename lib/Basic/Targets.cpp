@@ -4516,7 +4516,10 @@ public:
     MaxAtomicInlineWidth = 64;
 
     // Darwin on iOS uses a variant of the ARM C++ ABI.
-    TheCXXABI.set(TargetCXXABI::iOS);
+    if (Triple.getArchName().endswith("v7k"))
+      TheCXXABI.set(TargetCXXABI::iOS64);
+    else
+      TheCXXABI.set(TargetCXXABI::iOS);
   }
 };
 } // end anonymous namespace.
