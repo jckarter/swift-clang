@@ -4230,7 +4230,10 @@ public:
   }
   bool isCLZForZeroUndef() const override { return false; }
   BuiltinVaListKind getBuiltinVaListKind() const override {
-    return IsAAPCS ? AAPCSABIBuiltinVaList : TargetInfo::VoidPtrBuiltinVaList;
+    return IsAAPCS ? AAPCSABIBuiltinVaList
+                   : (getTriple().getArchName().endswith("v7k")
+                          ? TargetInfo::CharPtrBuiltinVaList
+                          : TargetInfo::VoidPtrBuiltinVaList);
   }
   void getGCCRegNames(const char * const *&Names,
                       unsigned &NumNames) const override;
