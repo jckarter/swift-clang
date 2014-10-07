@@ -4608,6 +4608,18 @@ ABIArgInfo ARMABIInfo::classifyArgumentType(QualType Ty, bool isVariadic,
       IsCPRC = true;
       return ABIArgInfo::getDirect(nullptr, 0, nullptr, !isAAPCS_VFP);
     }
+  } else if (getABIKind() == ARMABIInfo::APCS_VFP) {
+    // armv7k does have homogeneous aggregates, and uses the AArch64 rules to
+    // classify them.
+    const Type *Base = nullptr;
+    uint64_t Members = 0;
+    if (isARMHomogeneousAggregate(Ty, Base, getContext(), /*isAArch64=*/true,
+                                  &Members)) {
+      assert(Base && Members <= 4 && "unexpected homogeneous aggregate");
+      llvm::Type *Ty =
+        llvm::ArrayType::get(CGT.ConvertType(QualType(Base, 0)), Members);
+      return ABIArgInfo::getDirect(Ty);
+    }
   }
 
   // Support byval for ARM.
