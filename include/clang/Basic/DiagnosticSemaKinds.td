@@ -7162,8 +7162,8 @@ def err_omp_expected_var_name : Error<
   "expected variable name">;
 def err_omp_required_method : Error<
   "%0 variable must have an accessible, unambiguous %select{default constructor|copy constructor|copy assignment operator|'%2'|destructor}1">;
-def err_omp_task_predetermined_firstprivate_required_method : Error<
-  "predetermined as a firstprivate in a task construct variable must have an accessible, unambiguous %select{copy constructor|destructor}0">;
+def note_omp_task_predetermined_firstprivate_here : Note<
+  "predetermined as a firstprivate in a task construct here">;
 def err_omp_clause_ref_type_arg : Error<
   "arguments of OpenMP clause '%0' cannot be of reference type %1">;
 def err_omp_task_predetermined_firstprivate_ref_type_arg : Error<
@@ -7283,8 +7283,7 @@ def err_omp_reduction_id_not_compatible : Error<
 def err_omp_prohibited_region : Error<
   "region cannot be%select{| closely}0 nested inside '%1' region"
   "%select{|; perhaps you forget to enclose 'omp %3' directive into a parallel region?|"
-  "; perhaps you forget to enclose 'omp %3' directive into a for or a parallel for region with 'ordered' clause?|"
-  "; perhaps you forget to enclose 'omp %3' directive into a target region?}2">;
+  "; perhaps you forget to enclose 'omp %3' directive into a for or a parallel for region with 'ordered' clause?}2">;
 def err_omp_prohibited_region_simd : Error<
   "OpenMP constructs may not be nested inside a simd region">;
 def err_omp_prohibited_region_atomic : Error<
@@ -7327,12 +7326,6 @@ def err_omp_atomic_several_clauses : Error<
   "directive '#pragma omp atomic' cannot contain more than one 'read', 'write', 'update' or 'capture' clause">;
 def note_omp_atomic_previous_clause : Note<
   "'%0' clause used here">;
-def err_omp_target_contains_not_only_teams : Error<
-  "target construct with nested teams region contains statements outside of the teams construct">;
-def note_omp_nested_teams_construct_here : Note<
-  "nested teams construct here">;
-def note_omp_nested_statement_here : Note<
-  "%select{statement|directive}0 outside teams construct here">;
 } // end of OpenMP category
 
 let CategoryName = "Related Result Type Issue" in {
