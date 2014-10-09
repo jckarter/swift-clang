@@ -3921,10 +3921,6 @@ public:
 
     if (CPU == "arm1136jf-s" || CPU == "arm1176jzf-s" || CPU == "mpcore")
       Features["vfp2"] = true;
-#ifndef __OPEN_SOURCE__
-    else if (CPU == "pj4b")
-      Features["vfp3"] = true;
-#endif // !__OPEN_SOURCE__
     else if (CPU == "cortex-a8" || CPU == "cortex-a9" ||
              CPU == "cortex-a9-mp") {
       Features["vfp3"] = true;
