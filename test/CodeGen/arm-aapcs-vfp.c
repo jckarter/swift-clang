@@ -6,6 +6,13 @@
 // RUN:   -ffreestanding \
 // RUN:   -emit-llvm -w -o - %s | FileCheck %s
 
+// RUN: %clang_cc1 -triple thumbv7k-apple-ios-eabi \
+// RUN:   -target-abi aapcs-vfp \
+// RUN:   -target-cpu cortex-a7 \
+// RUN:   -mfloat-abi hard \
+// RUN:   -ffreestanding \
+// RUN:   -emit-llvm -w -o - %s | FileCheck %s
+
 // RUN: %clang_cc1 -triple armv7-unknown-nacl-gnueabi \
 // RUN:  -target-cpu cortex-a8 \
 // RUN:  -mfloat-abi hard \

@@ -246,7 +246,9 @@ public:
   virtual bool UseDwarfDebugFlags() const { return false; }
 
   /// UseSjLjExceptions - Does this tool chain use SjLj exceptions.
-  virtual bool UseSjLjExceptions() const { return false; }
+  virtual bool UseSjLjExceptions(const llvm::opt::ArgList &Args) const {
+    return false;
+  }
 
   /// UseSEHExceptions - Does this tool chain use SEH exceptions.
   virtual bool UseSEHExceptions() const { return false; }

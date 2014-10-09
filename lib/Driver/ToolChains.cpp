@@ -137,7 +137,7 @@ static const char *GetArmArchForMCpu(StringRef Value) {
     .Cases("cortex-a9", "cortex-a12", "cortex-a15", "krait", "armv7")
     .Cases("cortex-r4", "cortex-r5", "armv7r")
 #ifndef __OPEN_SOURCE__
-    .Case("pj4b", "armv7k")
+    .Case("cortex-a7", "armv7k")
 #endif // !__OPEN_SOURCE__
     .Case("cortex-m3", "armv7m")
     .Cases("cortex-m4", "cortex-m7", "armv7em")
@@ -503,6 +503,7 @@ void Darwin::AddDeploymentTarget(DerivedArgList &Args) const {
     StringRef MachOArchName = getMachOArchName(Args);
     if (OSXTarget.empty() && iOSTarget.empty() &&
         (MachOArchName == "armv7" || MachOArchName == "armv7s" ||
+         MachOArchName == "armv7k" ||
          MachOArchName == "arm64"))
         iOSTarget = iOSVersionMin;
 
@@ -982,10 +983,15 @@ bool MachO::UseDwarfDebugFlags() const {
   return false;
 }
 
-bool Darwin::UseSjLjExceptions() const {
+bool Darwin::UseSjLjExceptions(const ArgList &Args) const {
   // Darwin uses SjLj exceptions on ARM.
-  return (getTriple().getArch() == llvm::Triple::arm ||
-          getTriple().getArch() == llvm::Triple::thumb);
+  if (getTriple().getArch() != llvm::Triple::arm &&
+      getTriple().getArch() != llvm::Triple::thumb)
+    return false;
+
+  llvm::Triple Triple(ComputeLLVMTriple(Args));
+  return !(Triple.getArchName() == "armv7k" ||
+           Triple.getArchName() == "thumbv7k");
 }
 
 bool MachO::isPICDefault() const {
@@ -2577,7 +2583,7 @@ Tool *FreeBSD::buildLinker() const {
   return new tools::freebsd::Link(*this);
 }
 
-bool FreeBSD::UseSjLjExceptions() const {
+bool FreeBSD::UseSjLjExceptions(const ArgList &Args) const {
   // FreeBSD uses SjLj exceptions on ARM oabi.
   switch (getTriple().getEnvironment()) {
   case llvm::Triple::GNUEABIHF:

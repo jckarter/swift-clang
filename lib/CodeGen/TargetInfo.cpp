@@ -4144,7 +4144,8 @@ class ARMABIInfo : public ABIInfo {
 public:
   enum ABIKind {
     APCS = 0,
-    AAPCS = 1,
+    APCS_VFP = 1,
+    AAPCS = 2,
     AAPCS_VFP
   };
 
@@ -4263,7 +4264,8 @@ public:
 
     Fn->addFnAttr("interrupt", Kind);
 
-    if (cast<ARMABIInfo>(getABIInfo()).getABIKind() == ARMABIInfo::APCS)
+    ARMABIInfo::ABIKind ABI = cast<ARMABIInfo>(getABIInfo()).getABIKind();
+    if (ABI == ARMABIInfo::APCS || ABI == ARMABIInfo::APCS_VFP)
       return;
 
     // AAPCS guarantees that sp will be 8-byte aligned on any public interface,
@@ -4348,6 +4350,9 @@ llvm::CallingConv::ID ARMABIInfo::getLLVMDefaultCC() const {
     return llvm::CallingConv::ARM_AAPCS_VFP;
   else if (isEABI())
     return llvm::CallingConv::ARM_AAPCS;
+  else if (getTarget().getTriple().getArchName().endswith("v7k"))
+    // Special casing v7k. It uses the hybrid APCS-VFP ABI.
+    return llvm::CallingConv::ARM_APCS_VFP;
   else
     return llvm::CallingConv::ARM_APCS;
 }
@@ -4357,6 +4362,7 @@ llvm::CallingConv::ID ARMABIInfo::getLLVMDefaultCC() const {
 llvm::CallingConv::ID ARMABIInfo::getABIDefaultCC() const {
   switch (getABIKind()) {
   case APCS: return llvm::CallingConv::ARM_APCS;
+  case APCS_VFP: return llvm::CallingConv::ARM_APCS_VFP;
   case AAPCS: return llvm::CallingConv::ARM_AAPCS;
   case AAPCS_VFP: return llvm::CallingConv::ARM_AAPCS_VFP;
   }
@@ -4793,7 +4799,7 @@ ABIArgInfo ARMABIInfo::classifyReturnType(QualType RetTy,
   }
 
   // Are we following APCS?
-  if (getABIKind() == APCS) {
+  if (getABIKind() == APCS || getABIKind() == APCS_VFP) {
     if (isEmptyRecord(getContext(), RetTy, false))
       return ABIArgInfo::getIgnore();
 
@@ -6944,8 +6950,11 @@ const TargetCodeGenInfo &CodeGenModule::getTargetCodeGenInfo() {
   case llvm::Triple::thumbeb:
     {
       ARMABIInfo::ABIKind Kind = ARMABIInfo::AAPCS;
-      if (getTarget().getABI() == "apcs-gnu")
+      StringRef ABIStr = getTarget().getABI();
+      if (ABIStr == "apcs-gnu")
         Kind = ARMABIInfo::APCS;
+      else if (ABIStr == "apcs-vfp")
+        Kind = ARMABIInfo::APCS_VFP;
       else if (CodeGenOpts.FloatABI == "hard" ||
                (CodeGenOpts.FloatABI != "soft" &&
                 Triple.getEnvironment() == llvm::Triple::GNUEABIHF))

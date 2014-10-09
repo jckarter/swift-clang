@@ -609,9 +609,19 @@ StringRef tools::arm::getARMFloatABI(const Driver &D, const ArgList &Args,
     case llvm::Triple::Darwin:
     case llvm::Triple::MacOSX:
     case llvm::Triple::IOS: {
-      // Darwin defaults to "softfp" for v6 and v7.
+      // Darwin defaults to "softfp" for v6 and v7 except for v7k, which
+      // uses "hard".
       //
       // FIXME: Factor out an ARM class so we can cache the arch somewhere.
+      if (Triple.getArchName().endswith("v7k")) {
+        // If clang is invoked with "-arch armv7k", then it's compiling for the
+        // v7k slice which uses "hard". If it's invoked with
+        // "-arch armv7 -mcpu=cortex-a7", then it's using softfp like the
+        // rest of v7 cases. *DO NOT* use target cpu to detech float ABI here.
+        FloatABI = "hard";
+        break;
+      }
+
       std::string ArchName =
         arm::getLLVMArchSuffixForARM(arm::getARMTargetCPU(Args, Triple));
       if (StringRef(ArchName).startswith("v6") ||
@@ -751,6 +761,8 @@ void Clang::AddARMTargetArgs(const ArgList &Args,
          Triple.getObjectFormat() == llvm::Triple::MachO) ||
         StringRef(CPUName).startswith("cortex-m")) {
       ABIName = "aapcs";
+    } else if (Triple.getArchName().endswith("v7k")) {
+      ABIName = "apcs-vfp";
     } else {
       ABIName = "apcs-gnu";
     }
@@ -4124,7 +4136,7 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
     addExceptionArgs(Args, InputType, getToolChain().getTriple(), KernelOrKext,
                      objcRuntime, CmdArgs);
 
-  if (getToolChain().UseSjLjExceptions())
+  if (getToolChain().UseSjLjExceptions(Args))
     CmdArgs.push_back("-fsjlj-exceptions");
   else if (getToolChain().UseSEHExceptions())
     CmdArgs.push_back("-fseh-exceptions");
@@ -5386,7 +5398,12 @@ const char *arm::getLLVMArchSuffixForARM(StringRef CPU) {
     .Cases("arm1136j-s",  "arm1136jf-s",  "arm1176jz-s", "v6")
     .Cases("arm1176jzf-s",  "mpcorenovfp",  "mpcore", "v6")
     .Cases("arm1156t2-s",  "arm1156t2f-s", "v6t2")
+#ifndef __OPEN_SOURCE__
+    .Cases("cortex-a5", "cortex-a8", "cortex-a9-mp", "v7")
+    .Case("cortex-a7", "v7k")
+#else
     .Cases("cortex-a5", "cortex-a7", "cortex-a8", "cortex-a9-mp", "v7")
+#endif // !__OPEN_SOURCE__
     .Cases("cortex-a9", "cortex-a12", "cortex-a15", "krait", "v7")
     .Cases("cortex-r4", "cortex-r5", "v7r")
     .Case("cortex-m0", "v6m")

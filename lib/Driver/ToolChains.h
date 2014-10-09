@@ -298,7 +298,7 @@ public:
 
   bool UseDwarfDebugFlags() const override;
 
-  bool UseSjLjExceptions() const override {
+  bool UseSjLjExceptions(const llvm::opt::ArgList &Args) const override {
     return false;
   }
 
@@ -463,7 +463,7 @@ public:
 
   void CheckObjCARC() const override;
 
-  bool UseSjLjExceptions() const override;
+  bool UseSjLjExceptions(const llvm::opt::ArgList &Args) const override;
 };
 
 /// DarwinClang - The Darwin toolchain used by Clang.
@@ -594,7 +594,7 @@ public:
     }
   }
 
-  bool UseSjLjExceptions() const override;
+  bool UseSjLjExceptions(const llvm::opt::ArgList &Args) const override;
   bool isPIEDefault() const override;
 protected:
   Tool *buildAssembler() const override;

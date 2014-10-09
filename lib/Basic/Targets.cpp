@@ -3734,18 +3734,24 @@ class ARMTargetInfo : public TargetInfo {
     else
       SizeType = UnsignedInt;
 
-    switch (T.getOS()) {
-    case llvm::Triple::NetBSD:
+    if (T.isOSDarwin()) {
+      // wchar_t is signed int on Darwin and netbsd even when using AAPCS
+      // ABI.
       WCharType = SignedInt;
-      break;
-    case llvm::Triple::Win32:
-      WCharType = UnsignedShort;
-      break;
-    case llvm::Triple::Linux:
-    default:
-      // AAPCS 7.1.1, ARM-Linux ABI 2.4: type of wchar_t is unsigned int.
-      WCharType = UnsignedInt;
-      break;
+    } else {
+      switch (T.getOS()) {
+      case llvm::Triple::NetBSD:
+        WCharType = SignedInt;
+        break;
+      case llvm::Triple::Win32:
+        WCharType = UnsignedShort;
+        break;
+      case llvm::Triple::Linux:
+      default:
+        // AAPCS 7.1.1, ARM-Linux ABI 2.4: type of wchar_t is unsigned int.
+        WCharType = UnsignedInt;
+        break;
+      }
     }
 
     UseBitFieldTypeAlignment = true;
@@ -3893,7 +3899,7 @@ public:
     //
     // FIXME: We need support for -meabi... we could just mangle it into the
     // name.
-    if (Name == "apcs-gnu") {
+    if (Name == "apcs-gnu" || Name == "apcs-vfp") {
       setABIAPCS();
       return true;
     }
@@ -3905,12 +3911,14 @@ public:
   }
 
   void getDefaultFeatures(llvm::StringMap<bool> &Features) const override {
+    StringRef ArchName = getTriple().getArchName();
     if (IsAAPCS)
       Features["aapcs"] = true;
+    else if (ArchName.endswith("v7k"))
+      Features["apcs-vfp"] = true;
     else
       Features["apcs"] = true;
 
-    StringRef ArchName = getTriple().getArchName();
     if (CPU == "arm1136jf-s" || CPU == "arm1176jzf-s" || CPU == "mpcore")
       Features["vfp2"] = true;
 #ifndef __OPEN_SOURCE__
@@ -4047,12 +4055,14 @@ public:
       .Cases("arm1176jz-s", "arm1176jzf-s", "6ZK")
       .Cases("arm1136jf-s", "mpcorenovfp", "mpcore", "6K")
       .Cases("arm1156t2-s", "arm1156t2f-s", "6T2")
+#ifndef __OPEN_SOURCE__
+      .Cases("cortex-a5", "cortex-a8", "cortex-a9-mp", "7A")
+      .Case("cortex-a7", "7K")
+#else
       .Cases("cortex-a5", "cortex-a7", "cortex-a8", "cortex-a9-mp", "7A")
+#endif // !__OPEN_SOURCE__
       .Cases("cortex-a9", "cortex-a12", "cortex-a15", "krait", "7A")
       .Cases("cortex-r4", "cortex-r5", "7R")
-#ifndef __OPEN_SOURCE__
-      .Case("pj4b", "7K")
-#endif // !__OPEN_SOURCE__
       .Case("swift", "7S")
       .Case("cyclone", "8A")
       .Case("cortex-m3", "7M")
@@ -4111,6 +4121,12 @@ public:
     if (CPUArch.substr(0, 1).getAsInteger<unsigned int>(10, CPUArchVer))
       llvm_unreachable("Invalid char for architecture version number");
     Builder.defineMacro("__ARM_ARCH_" + CPUArch + "__");
+#ifndef __OPEN_SOURCE__
+    // Cortex-A7 has its own cpu subtargets (armv7k). However, it is also part
+    // of the 7A family. Clang should define __ARM_ARCH_7A__ as well.
+    if (CPUArch == "7K")
+      Builder.defineMacro("__ARM_ARCH_7A__");
+#endif // !__OPEN_SOURCE__
 
     // ACLE 6.4.1 ARM/Thumb instruction set architecture
     StringRef CPUProfile = getCPUProfile(CPU);
