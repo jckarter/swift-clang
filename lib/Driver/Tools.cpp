@@ -617,7 +617,7 @@ StringRef tools::arm::getARMFloatABI(const Driver &D, const ArgList &Args,
         // If clang is invoked with "-arch armv7k", then it's compiling for the
         // v7k slice which uses "hard". If it's invoked with
         // "-arch armv7 -mcpu=cortex-a7", then it's using softfp like the
-        // rest of v7 cases. *DO NOT* use target cpu to detech float ABI here.
+        // rest of v7 cases. *DO NOT* use target cpu to detect float ABI here.
         FloatABI = "hard";
         break;
       }
