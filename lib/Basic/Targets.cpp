@@ -3734,24 +3734,18 @@ class ARMTargetInfo : public TargetInfo {
     else
       SizeType = UnsignedInt;
 
-    if (T.isOSDarwin()) {
-      // wchar_t is signed int on Darwin and netbsd even when using AAPCS
-      // ABI.
+    switch (T.getOS()) {
+    case llvm::Triple::NetBSD:
       WCharType = SignedInt;
-    } else {
-      switch (T.getOS()) {
-      case llvm::Triple::NetBSD:
-        WCharType = SignedInt;
-        break;
-      case llvm::Triple::Win32:
-        WCharType = UnsignedShort;
-        break;
-      case llvm::Triple::Linux:
-      default:
-        // AAPCS 7.1.1, ARM-Linux ABI 2.4: type of wchar_t is unsigned int.
-        WCharType = UnsignedInt;
-        break;
-      }
+      break;
+    case llvm::Triple::Win32:
+      WCharType = UnsignedShort;
+      break;
+    case llvm::Triple::Linux:
+    default:
+      // AAPCS 7.1.1, ARM-Linux ABI 2.4: type of wchar_t is unsigned int.
+      WCharType = UnsignedInt;
+      break;
     }
 
     UseBitFieldTypeAlignment = true;
