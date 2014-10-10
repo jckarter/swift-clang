@@ -996,14 +996,7 @@ void Darwin::addMinVersionArgs(const llvm::opt::ArgList &Args,
                                llvm::opt::ArgStringList &CmdArgs) const {
   VersionTuple TargetVersion = getTargetVersion();
 
-  // If we had an explicit -mios-simulator-version-min argument, honor that,
-  // otherwise use the traditional deployment targets. We can't just check the
-  // is-sim attribute because existing code follows this path, and the linker
-  // may not handle the argument.
-  //
-  // FIXME: We may be able to remove this, once we can verify no one depends on
-  // it.
-  if (Args.hasArg(options::OPT_mios_simulator_version_min_EQ))
+  if (isTargetIOSSimulator())
     CmdArgs.push_back("-ios_simulator_version_min");
   else if (isTargetIOSBased())
     CmdArgs.push_back("-iphoneos_version_min");
