@@ -273,8 +273,16 @@ private:
       }
       if (CurrentToken->isOneOf(tok::r_paren, tok::r_brace))
         return false;
-      if (CurrentToken->is(tok::colon))
+      if (CurrentToken->is(tok::colon)) {
+        if (Left->Type == TT_ArraySubscriptLSquare) {
+          Left->Type = TT_ObjCMethodExpr;
+          StartsObjCMethodExpr = true;
+          Contexts.back().ColonIsObjCMethodExpr = true;
+          if (Parent && Parent->is(tok::r_paren))
+            Parent->Type = TT_CastRParen;
+        }
         ColonFound = true;
+      }
       if (CurrentToken->is(tok::comma) &&
           Style.Language != FormatStyle::LK_Proto &&
           (Left->Type == TT_ArraySubscriptLSquare ||
@@ -1166,6 +1174,9 @@ private:
   }
 
   void parseConditionalExpr() {
+    while (Current && Current->isTrailingComment()) {
+      next();
+    }
     FormatToken *Start = Current;
     parse(prec::LogicalOr);
     if (!Current || !Current->is(tok::question))
