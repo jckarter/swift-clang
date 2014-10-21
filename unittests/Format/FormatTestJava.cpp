@@ -74,6 +74,9 @@ TEST_F(FormatTestJava, Annotations) {
 
   verifyFormat("@SuppressWarnings(value = \"unchecked\")\n"
                "public void doSomething() {\n}");
+  verifyFormat("@SuppressWarnings(value = \"unchecked\")\n"
+               "@Author(name = \"abc\")\n"
+               "public void doSomething() {\n}");
 
   verifyFormat("DoSomething(new A() {\n"
                "  @Override\n"
@@ -82,12 +85,21 @@ TEST_F(FormatTestJava, Annotations) {
                "});");
 
   verifyFormat("@Partial @Mock DataLoader loader;");
+  verifyFormat("@SuppressWarnings(value = \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\")\n"
+               "public static int iiiiiiiiiiiiiiiiiiiiiiii;");
 }
 
 TEST_F(FormatTestJava, Generics) {
   verifyFormat("Iterable<?> a;");
   verifyFormat("Iterable<?> a;");
   verifyFormat("Iterable<? extends SomeObject> a;");
+
+  verifyFormat("A.<B>doSomething();");
+}
+
+TEST_F(FormatTestJava, StringConcatenation) {
+  verifyFormat("String someString = \"abc\"\n"
+               "                    + \"cde\";");
 }
 
 } // end namespace tooling

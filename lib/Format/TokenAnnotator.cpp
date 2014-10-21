@@ -827,7 +827,8 @@ private:
             PreviousNoComment->isOneOf(tok::comma, tok::l_brace))
           Current.Type = TT_DesignatedInitializerPeriod;
       } else if (Current.isOneOf(tok::identifier, tok::kw_const) &&
-                 Current.Previous && Current.Previous->isNot(tok::equal) &&
+                 Current.Previous &&
+                 !Current.Previous->isOneOf(tok::equal, tok::at) &&
                  Line.MightBeFunctionDecl && Contexts.size() == 1) {
         // Line.MightBeFunctionDecl can only be true after the parentheses of a
         // function declaration have been found.
@@ -1628,6 +1629,11 @@ bool TokenAnnotator::spaceRequiredBetween(const AnnotatedLine &Line,
     return false;
   if (Right.is(tok::hash) && Left.is(tok::identifier) && Left.TokenText == "L")
     return false;
+  if (Left.Type == TT_TemplateCloser && Left.MatchingParen &&
+      Left.MatchingParen->Previous &&
+      Left.MatchingParen->Previous->is(tok::period))
+    // A.<B>DoSomething();
+    return false;
   return true;
 }
 
@@ -1799,6 +1805,9 @@ bool TokenAnnotator::mustBreakBefore(const AnnotatedLine &Line,
     if (Left.Type == TT_JavaAnnotation && Right.isNot(tok::l_paren) &&
         Line.Last->is(tok::l_brace))
       return true;
+    if (Right.is(tok::plus) && Left.is(tok::string_literal) && Right.Next &&
+        Right.Next->is(tok::string_literal))
+      return true;
   }
 
   return false;
@@ -1817,6 +1826,8 @@ bool TokenAnnotator::canBreakBefore(const AnnotatedLine &Line,
     return false;
   if (Left.Tok.getObjCKeywordID() == tok::objc_interface)
     return false;
+  if (Left.Type == TT_JavaAnnotation)
+    return true;
   if (Right.Type == TT_StartOfName ||
       Right.Type == TT_FunctionDeclarationName || Right.is(tok::kw_operator))
     return true;
