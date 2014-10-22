@@ -2042,7 +2042,7 @@ const ToolChain &Driver::getToolChain(const ArgList &Args,
         break;
       case llvm::Triple::MSVC:
       case llvm::Triple::UnknownEnvironment:
-        TC = new toolchains::Windows(*this, Target, Args);
+        TC = new toolchains::MSVCToolChain(*this, Target, Args);
         break;
       }
       break;

@@ -779,7 +779,7 @@ private:
       } else if (Current.is(tok::kw_auto)) {
         AutoFound = true;
       } else if (Current.is(tok::arrow) && AutoFound &&
-                 Line.MustBeDeclaration) {
+                 Line.MustBeDeclaration && Current.NestingLevel == 0) {
         Current.Type = TT_TrailingReturnArrow;
       } else if (Current.isOneOf(tok::star, tok::amp, tok::ampamp)) {
         Current.Type =
@@ -1781,6 +1781,9 @@ bool TokenAnnotator::mustBreakBefore(const AnnotatedLine &Line,
            Style.BreakBeforeBraces == FormatStyle::BS_GNU;
   } else if (Style.Language == FormatStyle::LK_Proto &&
              Left.isNot(tok::l_brace) && Right.Type == TT_SelectorName) {
+    return true;
+  } else if (Left.Type == TT_ObjCBlockLBrace &&
+             !Style.AllowShortBlocksOnASingleLine) {
     return true;
   }
 
