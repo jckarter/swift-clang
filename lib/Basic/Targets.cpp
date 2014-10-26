@@ -224,7 +224,7 @@ public:
   DarwinTargetInfo(const llvm::Triple &Triple) : OSTargetInfo<Target>(Triple) {
     this->TLSSupported =
         (Triple.isMacOSX() && !Triple.isMacOSXVersionLT(10, 7)) ||
-        (Triple.getOS() == llvm::Triple::IOS &&
+        (Triple.isiOS() &&
          (Triple.getArch() == llvm::Triple::x86_64 ||
           Triple.getArch() == llvm::Triple::aarch64) &&
          !Triple.isOSVersionLT(8));
