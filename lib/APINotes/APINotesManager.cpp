@@ -150,7 +150,7 @@ bool APINotesManager::loadAPINotes(const DirectoryEntry *HeaderDir,
     }
 
     // Load the binary form.
-    auto Reader = APINotesReader::get(std::move(Buffer));
+    auto Reader = APINotesReader::get(std::move(Buffer.get()));
     if (!Reader) {
       Readers[HeaderDir] = nullptr;
       return true;
@@ -192,7 +192,7 @@ bool APINotesManager::loadAPINotes(const DirectoryEntry *HeaderDir,
       if (CompiledFile->getModificationTime()
             >= APINotesFile->getModificationTime()) {
         // Load the file.
-        if (auto Reader = APINotesReader::get(std::move(Buffer))) {
+        if (auto Reader = APINotesReader::get(std::move(Buffer.get()))) {
           // Success.
           ++NumBinaryCacheHits;
           Readers[HeaderDir] = Reader.release();
@@ -227,7 +227,7 @@ bool APINotesManager::loadAPINotes(const DirectoryEntry *HeaderDir,
                                    diag::note_apinotes_message,
                                    APINotesFile);
     llvm::raw_svector_ostream OS(APINotesBuffer);
-    if (api_notes::compileAPINotes(Buffer->getBuffer(),
+    if (api_notes::compileAPINotes(Buffer.get()->getBuffer(),
                                    OS,
                                    api_notes::OSType::Absent,
                                    srcMgrAdapter.getDiagHandler(),
@@ -261,7 +261,7 @@ bool APINotesManager::loadAPINotes(const DirectoryEntry *HeaderDir,
     bool hadError;
     {
       llvm::raw_fd_ostream Out(TemporaryFD, /*shouldClose=*/true);
-      Out.write(Buffer->getBufferStart(), Buffer->getBufferSize());
+      Out.write(Buffer.get()->getBufferStart(), Buffer.get()->getBufferSize());
       Out.flush();
 
       hadError = Out.has_error();
@@ -275,7 +275,7 @@ bool APINotesManager::loadAPINotes(const DirectoryEntry *HeaderDir,
   }
 
   // Load the binary form we just compiled.
-  auto Reader = APINotesReader::get(std::move(Buffer));
+  auto Reader = APINotesReader::get(std::move(*Buffer));
   assert(Reader && "Could not load the API notes we just generated?");
 
   // Record the reader.
