@@ -465,10 +465,10 @@ ActOnSuperClassOfClassInterface(SourceLocation AtInterfaceLoc,
     // to the class we're defining.
     ObjCInterfaceValidatorCCC Validator(IDecl);
     if (TypoCorrection Corrected = CorrectTypo(
-                                               DeclarationNameInfo(SuperName, SuperLoc),
-                                               LookupOrdinaryName, TUScope,
-                                               NULL, Validator,
-                                               CTK_ErrorRecovery)) {
+            DeclarationNameInfo(SuperName, SuperLoc),
+            LookupOrdinaryName, TUScope,
+            NULL, llvm::make_unique<ObjCInterfaceValidatorCCC>(IDecl),
+            CTK_ErrorRecovery)) {
       diagnoseTypo(Corrected, PDiag(diag::err_undef_superclass_suggest)
                    << SuperName << ClassName);
       PrevDecl = Corrected.getCorrectionDeclAs<ObjCInterfaceDecl>();
@@ -621,22 +621,83 @@ ActOnStartClassInterface(SourceLocation AtInterfaceLoc,
   // may already be a definition, so we'll end up adding to it.
   if (!IDecl->hasDefinition())
     IDecl->startDefinition();
-  else
-  // IDecl's definition in this case belongs to its partial_interface decl.
-  // Set it to its full definition here.
-    if (IDecl->getTypeForDecl()) {
-      cast<ObjCInterfaceType>(IDecl->getTypeForDecl())->setDecl(IDecl);
+  
+  if (SuperName) {
+    // Check if a different kind of symbol declared in this scope.
+    PrevDecl = LookupSingleName(TUScope, SuperName, SuperLoc,
+                                LookupOrdinaryName);
+
+    if (!PrevDecl) {
+      // Try to correct for a typo in the superclass name without correcting
+      // to the class we're defining.
+      if (TypoCorrection Corrected =
+              CorrectTypo(DeclarationNameInfo(SuperName, SuperLoc),
+                          LookupOrdinaryName, TUScope, nullptr,
+                          llvm::make_unique<ObjCInterfaceValidatorCCC>(IDecl),
+                          CTK_ErrorRecovery)) {
+        diagnoseTypo(Corrected, PDiag(diag::err_undef_superclass_suggest)
+                                    << SuperName << ClassName);
+        PrevDecl = Corrected.getCorrectionDeclAs<ObjCInterfaceDecl>();
+      }
     }
 
-  if (SuperName)
-    ActOnSuperClassOfClassInterface(AtInterfaceLoc, IDecl, PrevPartialClassDecl,
-                                    ClassName, ClassLoc, SuperName, SuperLoc);
-  else { // we have a root class.
-    if (PrevPartialClassDecl && PrevPartialClassDecl->getSuperClass()) {
-      Diag(IDecl->getLocation(),
-           diag::err_partial_complete_class_super_mismatch);
-      Diag(PrevPartialClassDecl->getLocation(), diag::note_previous_definition);
-      IDecl->setInvalidDecl();
+    if (declaresSameEntity(PrevDecl, IDecl)) {
+      Diag(SuperLoc, diag::err_recursive_superclass)
+        << SuperName << ClassName << SourceRange(AtInterfaceLoc, ClassLoc);
+      IDecl->setEndOfDefinitionLoc(ClassLoc);
+    } else {
+      ObjCInterfaceDecl *SuperClassDecl =
+                                dyn_cast_or_null<ObjCInterfaceDecl>(PrevDecl);
+
+      // Diagnose classes that inherit from deprecated classes.
+      if (SuperClassDecl)
+        (void)DiagnoseUseOfDecl(SuperClassDecl, SuperLoc);
+
+      if (PrevDecl && !SuperClassDecl) {
+        // The previous declaration was not a class decl. Check if we have a
+        // typedef. If we do, get the underlying class type.
+        if (const TypedefNameDecl *TDecl =
+              dyn_cast_or_null<TypedefNameDecl>(PrevDecl)) {
+          QualType T = TDecl->getUnderlyingType();
+          if (T->isObjCObjectType()) {
+            if (NamedDecl *IDecl = T->getAs<ObjCObjectType>()->getInterface()) {
+              SuperClassDecl = dyn_cast<ObjCInterfaceDecl>(IDecl);
+              // This handles the following case:
+              // @interface NewI @end
+              // typedef NewI DeprI __attribute__((deprecated("blah")))
+              // @interface SI : DeprI /* warn here */ @end
+              (void)DiagnoseUseOfDecl(const_cast<TypedefNameDecl*>(TDecl), SuperLoc);
+            }
+          }
+        }
+
+        // This handles the following case:
+        //
+        // typedef int SuperClass;
+        // @interface MyClass : SuperClass {} @end
+        //
+        if (!SuperClassDecl) {
+          Diag(SuperLoc, diag::err_redefinition_different_kind) << SuperName;
+          Diag(PrevDecl->getLocation(), diag::note_previous_definition);
+        }
+      }
+
+      if (!dyn_cast_or_null<TypedefNameDecl>(PrevDecl)) {
+        if (!SuperClassDecl)
+          Diag(SuperLoc, diag::err_undef_superclass)
+            << SuperName << ClassName << SourceRange(AtInterfaceLoc, ClassLoc);
+        else if (RequireCompleteType(SuperLoc, 
+                                  Context.getObjCInterfaceType(SuperClassDecl),
+                                     diag::err_forward_superclass,
+                                     SuperClassDecl->getDeclName(),
+                                     ClassName,
+                                     SourceRange(AtInterfaceLoc, ClassLoc))) {
+          SuperClassDecl = nullptr;
+        }
+      }
+      IDecl->setSuperClass(SuperClassDecl);
+      IDecl->setSuperClassLoc(SuperLoc);
+      IDecl->setEndOfDefinitionLoc(SuperLoc);
     }
     IDecl->setEndOfDefinitionLoc(ClassLoc);
   }
@@ -902,10 +963,10 @@ Sema::FindProtocolDeclaration(bool WarnOnDeclarations,
     ObjCProtocolDecl *PDecl = LookupProtocol(ProtocolId[i].first,
                                              ProtocolId[i].second);
     if (!PDecl) {
-      DeclFilterCCC<ObjCProtocolDecl> Validator;
       TypoCorrection Corrected = CorrectTypo(
           DeclarationNameInfo(ProtocolId[i].first, ProtocolId[i].second),
-          LookupObjCProtocolName, TUScope, nullptr, Validator,
+          LookupObjCProtocolName, TUScope, nullptr,
+          llvm::make_unique<DeclFilterCCC<ObjCProtocolDecl>>(),
           CTK_ErrorRecovery);
       if ((PDecl = Corrected.getCorrectionDeclAs<ObjCProtocolDecl>()))
         diagnoseTypo(Corrected, PDiag(diag::err_undeclared_protocol_suggest)
@@ -1167,11 +1228,9 @@ Decl *Sema::ActOnStartClassImplementation(
   } else {
     // We did not find anything with the name ClassName; try to correct for
     // typos in the class name.
-    ObjCInterfaceValidatorCCC Validator;
-    TypoCorrection Corrected =
-            CorrectTypo(DeclarationNameInfo(ClassName, ClassLoc),
-                        LookupOrdinaryName, TUScope, nullptr, Validator,
-                        CTK_NonError);
+    TypoCorrection Corrected = CorrectTypo(
+        DeclarationNameInfo(ClassName, ClassLoc), LookupOrdinaryName, TUScope,
+        nullptr, llvm::make_unique<ObjCInterfaceValidatorCCC>(), CTK_NonError);
     if (Corrected.getCorrectionDeclAs<ObjCInterfaceDecl>()) {
       // Suggest the (potentially) correct interface name. Don't provide a
       // code-modification hint or use the typo name for recovery, because

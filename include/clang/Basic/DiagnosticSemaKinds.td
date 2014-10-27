@@ -1703,6 +1703,9 @@ def override_keyword_hides_virtual_member_function : Error<
   "%select{function|functions}1">;
 def err_function_marked_override_not_overriding : Error<
   "%0 marked 'override' but does not override any member functions">;
+def warn_function_marked_not_override_overriding : Warning <
+  "%0 overrides a member function but is not marked 'override'">,
+  InGroup<CXX11WarnOverrideMethod>;
 def err_class_marked_final_used_as_base : Error<
   "base %0 is marked '%select{final|sealed}1'">;
 def warn_abstract_final_class : Warning<
@@ -4468,6 +4471,11 @@ def note_arc_retain_cycle_owner : Note<
 def warn_arc_object_memaccess : Warning<
   "%select{destination for|source of}0 this %1 call is a pointer to "
   "ownership-qualified type %2">, InGroup<ARCNonPodMemAccess>;
+  
+def warn_arc_consumed_object_released : Warning<
+  "__bridge cast of collection literal of type %1 to \"bridgeable\" C "
+  "type %0 causes early release of the collection">,
+  InGroup<ARCBridgeCastRelease>;
 
 let CategoryName = "ARC and @properties" in {
 
