@@ -620,7 +620,12 @@ ActOnStartClassInterface(SourceLocation AtInterfaceLoc,
   // may already be a definition, so we'll end up adding to it.
   if (!IDecl->hasDefinition())
     IDecl->startDefinition();
-
+  else
+  // IDecl's definition in this case belongs to its partial_interface decl.
+  // Set it to its full definition here.
+    if (IDecl->getTypeForDecl()) {
+      cast<ObjCInterfaceType>(IDecl->getTypeForDecl())->setDecl(IDecl);
+    }
 
   if (SuperName)
     ActOnSuperClassOfClassInterface(AtInterfaceLoc, IDecl, PrevPartialClassDecl,
