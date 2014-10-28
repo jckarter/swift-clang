@@ -4473,9 +4473,9 @@ def warn_arc_object_memaccess : Warning<
   "ownership-qualified type %2">, InGroup<ARCNonPodMemAccess>;
   
 def warn_arc_consumed_object_released : Warning<
-  "__bridge cast of collection literal of type %1 to \"bridgeable\" C "
+  "__bridge cast of collection literal of type %1 to bridgeable "
   "type %0 causes early release of the collection">,
-  InGroup<ARCBridgeCastRelease>;
+  InGroup<ARCBridgeCastRelease>, DefaultError;
 
 let CategoryName = "ARC and @properties" in {
 
@@ -4659,7 +4659,7 @@ def warn_logical_and_in_logical_or : Warning<
   "'&&' within '||'">, InGroup<LogicalOpParentheses>;
 
 def warn_overloaded_shift_in_comparison :Warning<
-  "overloaded operator %select{>>|<<}0 has lower precedence than "
+  "overloaded operator %select{>>|<<}0 has higher precedence than "
   "comparison operator">,
   InGroup<OverloadedShiftOpParentheses>;
 def note_evaluate_comparison_first :Note<
