@@ -7,8 +7,8 @@ add_clang_executable(clang-format
 target_link_libraries(clang-format
   clangBasic
   clangFormat
-  clangLex
   clangRewrite
+  clangToolingCore
   )
 
 install(TARGETS clang-format RUNTIME DESTINATION bin)
