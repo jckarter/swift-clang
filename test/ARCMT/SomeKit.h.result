@@ -1,0 +1,24 @@
+#ifndef SOMEKIT_H
+#define SOMEKIT_H
+
+__attribute__((objc_root_class))
+@interface A
+-(A*)transform:(A*)input __attribute__((unavailable("anything but this")));
+-(A*)transform:(A*) __attribute__((nonnull()))input integer:(int)integer __attribute__((returns_nonnull));
+
+@property (nonatomic, readonly, retain) A* someA;
+@property (nonatomic, retain) A* someOtherA;
+
+@property (nonatomic) int intValue __attribute__((unavailable("wouldn't work anyway")));
+@end
+
+__attribute__((unavailable("just don't")))
+@interface B : A
+@end
+
+@interface C : A
+- (instancetype)init;
+- (instancetype)initWithA:(A*)a __attribute__((objc_designated_initializer));
+@end
+
+#endif

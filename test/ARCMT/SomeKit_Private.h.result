@@ -1,0 +1,17 @@
+#ifndef SOMEKIT_PRIVATE_H
+#define SOMEKIT_PRIVATE_H
+
+#import <SomeKit/SomeKit.h>
+
+@interface A(Private)
+-(A*)privateTransform:(A*)input;
+
+@property (nonatomic) A* internalProperty;
+@end
+
+__attribute__((unavailable("not for you")))
+@protocol InternalProtocol
+@end
+
+#endif
+
