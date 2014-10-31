@@ -1,5 +1,9 @@
 // RUN: %clang_cc1 -triple thumbv7k-apple-ios7.0 -target-abi apcs-vfp %s -o - -emit-llvm | FileCheck %s
 
+// Make sure 64 and 128 bit types are naturally aligned by the v7k ABI:
+
+// CHECK: target datalayout = "e-m:o-p:32:32-i64:64-a:0:32-n32-S128"
+
 typedef struct {
   float arr[4];
 } HFA;
