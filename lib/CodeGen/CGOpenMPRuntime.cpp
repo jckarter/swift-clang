@@ -71,6 +71,7 @@ LValue CGOpenMPRegionInfo::getThreadIDVariableLValue(CodeGenFunction &CGF) {
 
 void CGOpenMPRegionInfo::EmitBody(CodeGenFunction &CGF, Stmt *S) {
   CodeGenFunction::OMPPrivateScope PrivateScope(CGF);
+  CGF.EmitOMPPrivateClause(Directive, PrivateScope);
   CGF.EmitOMPFirstprivateClause(Directive, PrivateScope);
   if (PrivateScope.Privatize()) {
     // Emit implicit barrier to synchronize threads and avoid data races.
@@ -200,7 +201,10 @@ llvm::Value *CGOpenMPRuntime::GetOpenMPThreadID(CodeGenFunction &CGF,
   OpenMPLocThreadIDMapTy::iterator I = OpenMPLocThreadIDMap.find(CGF.CurFn);
   if (I != OpenMPLocThreadIDMap.end()) {
     ThreadID = I->second.ThreadID;
-  } else if (auto OMPRegionInfo =
+    if (ThreadID != nullptr)
+      return ThreadID;
+  }
+  if (auto OMPRegionInfo =
                  dyn_cast_or_null<CGOpenMPRegionInfo>(CGF.CapturedStmtInfo)) {
     // Check if this an outlined function with thread id passed as argument.
     auto ThreadIDVar = OMPRegionInfo->getThreadIDVariable();
@@ -233,7 +237,8 @@ llvm::Value *CGOpenMPRuntime::GetOpenMPThreadID(CodeGenFunction &CGF,
 
 void CGOpenMPRuntime::FunctionFinished(CodeGenFunction &CGF) {
   assert(CGF.CurFn && "No function in current CodeGenFunction.");
-  OpenMPLocThreadIDMap.erase(CGF.CurFn);
+  if (OpenMPLocThreadIDMap.count(CGF.CurFn))
+    OpenMPLocThreadIDMap.erase(CGF.CurFn);
 }
 
 llvm::Type *CGOpenMPRuntime::getIdentTyPointerTy() {
@@ -371,7 +376,7 @@ void CGOpenMPRuntime::EmitOMPSerialCall(CodeGenFunction &CGF,
   CGF.EmitRuntimeCall(RTLFn, EndSerArgs);
 }
 
-// If we’re inside an (outlined) parallel region, use the region info’s
+// If we're inside an (outlined) parallel region, use the region info's
 // thread-ID variable (it is passed in a first argument of the outlined function
 // as "kmp_int32 *gtid"). Otherwise, if we're not inside parallel region, but in
 // regular serial code region, get thread ID by calling kmp_int32

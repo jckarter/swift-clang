@@ -146,7 +146,7 @@ public:
 
   // FIXME: CompoundLiteralExpr
 
-  ComplexPairTy EmitCast(CastExpr::CastKind CK, Expr *Op, QualType DestTy);
+  ComplexPairTy EmitCast(CastKind CK, Expr *Op, QualType DestTy);
   ComplexPairTy VisitImplicitCastExpr(ImplicitCastExpr *E) {
     // Unlike for scalars, we don't have to worry about function->ptr demotion
     // here.
@@ -417,7 +417,7 @@ ComplexPairTy ComplexExprEmitter::EmitScalarToComplexCast(llvm::Value *Val,
   return ComplexPairTy(Val, llvm::Constant::getNullValue(Val->getType()));
 }
 
-ComplexPairTy ComplexExprEmitter::EmitCast(CastExpr::CastKind CK, Expr *Op,
+ComplexPairTy ComplexExprEmitter::EmitCast(CastKind CK, Expr *Op,
                                            QualType DestTy) {
   switch (CK) {
   case CK_Dependent: llvm_unreachable("dependent cast kind in IR gen!");
@@ -607,6 +607,8 @@ static StringRef getComplexMultiplyLibCallName(llvm::Type *Ty) {
     return "__multc3";
   case llvm::Type::X86_FP80TyID:
     return "__mulxc3";
+  case llvm::Type::FP128TyID:
+    return "__multc3";
   }
 }
 
@@ -746,6 +748,8 @@ ComplexPairTy ComplexExprEmitter::EmitBinDiv(const BinOpInfo &Op) {
         return EmitComplexBinOpLibCall("__divtc3", LibCallOp);
       case llvm::Type::X86_FP80TyID:
         return EmitComplexBinOpLibCall("__divxc3", LibCallOp);
+      case llvm::Type::FP128TyID:
+        return EmitComplexBinOpLibCall("__divtc3", LibCallOp);
       }
     }
     assert(LHSi && "Can have at most one non-complex operand!");
