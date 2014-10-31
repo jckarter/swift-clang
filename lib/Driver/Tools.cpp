@@ -3422,6 +3422,12 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
   Args.AddLastArg(CmdArgs, options::OPT_pedantic_errors);
   Args.AddLastArg(CmdArgs, options::OPT_w);
 
+  // APPLE LOCAL: Forcibly disable -Werror when GCC_TREAT_WARNINGS_AS_ERRORS
+  // is set to "NO" in the environment.
+  if (char *EnableWError = ::getenv("GCC_TREAT_WARNINGS_AS_ERRORS"))
+    if (StringRef(EnableWError) == "NO")
+      CmdArgs.push_back("-Wno-error");
+
   // Handle -{std, ansi, trigraphs} -- take the last of -{std, ansi}
   // (-ansi is equivalent to -std=c89 or -std=c++98).
   //

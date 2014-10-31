@@ -463,6 +463,12 @@ int main(int argc_, const char **argv_) {
 
   ProcessWarningOptions(Diags, *DiagOpts, /*ReportDiags=*/false);
 
+  // APPLE LOCAL: Forcibly disable -Werror when GCC_TREAT_WARNINGS_AS_ERRORS
+  // is set to "NO" in the environment.
+  if (char *EnableWError = ::getenv("GCC_TREAT_WARNINGS_AS_ERRORS"))
+    if (StringRef(EnableWError) == "NO")
+      Diags.setWarningsAsErrors(false);
+
   Driver TheDriver(Path, llvm::sys::getDefaultTargetTriple(), Diags);
   SetInstallDir(argv, TheDriver);
 
