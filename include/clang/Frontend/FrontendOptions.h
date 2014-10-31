@@ -184,11 +184,14 @@ public:
     ObjCMT_NsAtomicIOSOnlyProperty = 0x400,
     /// \brief Enable inferring NS_DESIGNATED_INITIALIZER for ObjC methods.
     ObjCMT_DesignatedInitializer = 0x800,
+    /// \brief Enable APINote annotations on declarations.
+    ObjCMT_ApiNotes = 0x1000,
     ObjCMT_MigrateDecls = (ObjCMT_ReadonlyProperty | ObjCMT_ReadwriteProperty |
                            ObjCMT_Annotation | ObjCMT_Instancetype |
                            ObjCMT_NsMacros | ObjCMT_ProtocolConformance |
                            ObjCMT_NsAtomicIOSOnlyProperty |
-                           ObjCMT_DesignatedInitializer),
+                           ObjCMT_DesignatedInitializer |
+                           ObjCMT_ApiNotes),
     ObjCMT_MigrateAll = (ObjCMT_Literals | ObjCMT_Subscripting | ObjCMT_MigrateDecls)
   };
   unsigned ObjCMTAction;

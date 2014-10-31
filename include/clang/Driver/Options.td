@@ -176,6 +176,8 @@ def objcmt_migrate_subscripting : Flag<["-"], "objcmt-migrate-subscripting">, Fl
 def _migrate_xct : Flag<["--"], "migrate-xct">, Flags<[DriverOption]>,
   HelpText<"Apply modifications and produces temporary files to migrate to "
    "XCTest framework">;
+def objcmt_migrate_apinotes : Flag<["-"], "objcmt-migrate-apinotes">, Flags<[CC1Option]>,
+  HelpText<"Enable migration of apinotes to annotate declarations with attributes">;
 def objcmt_migrate_property : Flag<["-"], "objcmt-migrate-property">, Flags<[CC1Option]>,
   HelpText<"Enable migration to modern ObjC property">;
 def objcmt_migrate_all : Flag<["-"], "objcmt-migrate-all">, Flags<[CC1Option]>,
