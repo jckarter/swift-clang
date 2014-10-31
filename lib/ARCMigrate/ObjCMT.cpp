@@ -84,7 +84,12 @@ class ObjCMigrateASTConsumer : public ASTConsumer {
                                    const ObjCImplementationDecl *ImplD);
   
   bool InsertFoundation(ASTContext &Ctx, SourceLocation Loc);
-
+  void migrateApiNoteUnavailableAttr(Decl *D);
+  void migrateApiNoteNonnullAttr(Decl *D);
+  void AddNonnullAttribute(const Decl *D, bool MethodParam=false);
+  void migrateApiNoteReturnsNonnullAttr(const Decl *D);
+  void migrateApiNoteDesignatedInitializerAttr(const ObjCMethodDecl *MethodDecl);
+  
 public:
   std::string MigrateDir;
   unsigned ASTMigrateActions;
@@ -574,8 +579,13 @@ void ObjCMigrateASTConsumer::migrateObjCInterfaceDecl(ASTContext &Ctx,
                                                       ObjCContainerDecl *D) {
   if (D->isDeprecated() || IsCategoryNameWithDeprecatedSuffix(D))
     return;
-    
+  migrateApiNoteUnavailableAttr(D);
+  
   for (auto *Method : D->methods()) {
+    migrateApiNoteUnavailableAttr(Method);
+    migrateApiNoteNonnullAttr(Method);
+    migrateApiNoteReturnsNonnullAttr(Method);
+    migrateApiNoteDesignatedInitializerAttr(Method);
     if (Method->isDeprecated())
       continue;
     bool PropertyInferred = migrateProperty(Ctx, D, Method);
@@ -587,14 +597,142 @@ void ObjCMigrateASTConsumer::migrateObjCInterfaceDecl(ASTContext &Ctx,
       if (ASTMigrateActions & FrontendOptions::ObjCMT_Annotation)
         migrateNsReturnsInnerPointer(Ctx, Method);
   }
-  if (!(ASTMigrateActions & FrontendOptions::ObjCMT_ReturnsInnerPointerProperty))
-    return;
   
   for (auto *Prop : D->properties()) {
+    migrateApiNoteUnavailableAttr(Prop);
+    if (!(ASTMigrateActions & FrontendOptions::ObjCMT_ReturnsInnerPointerProperty))
+      continue;
     if ((ASTMigrateActions & FrontendOptions::ObjCMT_Annotation) &&
         !Prop->isDeprecated())
       migratePropertyNsReturnsInnerPointer(Ctx, Prop);
   }
+}
+
+void ObjCMigrateASTConsumer::migrateApiNoteUnavailableAttr(Decl *D) {
+  if (!(ASTMigrateActions & FrontendOptions::ObjCMT_ApiNotes))
+    return;
+  
+  if (D->isInvalidDecl() || !canModify(D) || D->isImplicit()
+      || !D->hasAttr<UnavailableAttr>())
+    return;
+  for (auto A : D->attrs()) {
+    if (UnavailableAttr *Unavailable = dyn_cast<UnavailableAttr>(A)) {
+      if (!Unavailable->isImplicit())
+        return;
+      bool isContainer = isa<ObjCContainerDecl>(D);
+      std::string Message(Unavailable->getMessage());
+      std::string UVAttrStr;
+      if (!isContainer)
+        UVAttrStr = " ";
+      UVAttrStr += "__attribute__((unavailable";
+      if (!Message.empty()) {
+        UVAttrStr += "(\"";
+        UVAttrStr += Message;
+        UVAttrStr += "\")";
+      }
+      UVAttrStr += "))";
+      if (isContainer)
+        UVAttrStr += "\n";
+      
+      edit::Commit commit(*Editor);
+      if (isa<ObjCPropertyDecl>(D) || isa<FunctionDecl>(D) || isa<VarDecl>(D))
+        commit.insertAfterToken(D->getLocEnd(), UVAttrStr);
+      else if (!isContainer) // i.e. Methods
+        commit.insertBefore(D->getLocEnd(), UVAttrStr);
+      else // i.e. class, propertocols, categories.
+        commit.insertBefore(D->getLocStart(), UVAttrStr);
+      Editor->commit(commit);
+    }
+  }
+}
+
+void ObjCMigrateASTConsumer::AddNonnullAttribute(const Decl *D, bool MethodParam) {
+  for (auto A : D->attrs())
+    if (auto NonNull = dyn_cast<NonNullAttr>(A)) {
+      if (!NonNull->isImplicit())
+        return;
+      std::string Str(" __attribute__((nonnull(");
+      bool isFirst = true;
+      for (const auto &Val : NonNull->args()) {
+        if (isFirst) isFirst = false;
+        else Str += ", ";
+        Str += Val;
+      }
+      Str += ")))";
+      edit::Commit commit(*Editor);
+      if (MethodParam)
+        commit.insertBefore(D->getLocEnd(), Str);
+      else
+        commit.insertAfterToken(D->getLocEnd(), Str);
+      Editor->commit(commit);
+      return;
+    }
+}
+
+void ObjCMigrateASTConsumer::migrateApiNoteNonnullAttr(Decl *D) {
+  if (!(ASTMigrateActions & FrontendOptions::ObjCMT_ApiNotes))
+    return;
+  
+  if (D->isInvalidDecl() || D->isImplicit() || !canModify(D))
+    return;
+  
+  if (!isa<FunctionDecl>(D) && !isa<ObjCMethodDecl>(D))
+    return;
+  if (const FunctionDecl *FD = dyn_cast<FunctionDecl>(D)) {
+    for (unsigned i = 0, e = FD->getNumParams(); i != e; ++i)
+      AddNonnullAttribute(FD->getParamDecl(i));
+  }
+  else if (const ObjCMethodDecl *OMD = dyn_cast<ObjCMethodDecl>(D)) {
+    for (const auto *PI : OMD->params())
+      AddNonnullAttribute(PI, true);
+  }
+  AddNonnullAttribute(D);
+}
+
+void ObjCMigrateASTConsumer::migrateApiNoteReturnsNonnullAttr(const Decl *D) {
+  if (!(ASTMigrateActions & FrontendOptions::ObjCMT_ApiNotes))
+    return;
+  
+  if (D->isInvalidDecl() || D->isImplicit() || !canModify(D))
+    return;
+  
+  if (!isa<FunctionDecl>(D) && !isa<ObjCMethodDecl>(D))
+    return;
+  
+  for (auto A : D->attrs())
+    if (auto RetNNAttr = dyn_cast<ReturnsNonNullAttr>(A)) {
+      if (!RetNNAttr->isImplicit())
+        return;
+      std::string Str(" __attribute__((returns_nonnull))");
+      edit::Commit commit(*Editor);
+      if (isa<ObjCMethodDecl>(D))
+        commit.insertBefore(D->getLocEnd(), Str);
+      else
+        commit.insertAfterToken(D->getLocEnd(), Str);
+      Editor->commit(commit);
+      return;
+    }
+}
+
+void ObjCMigrateASTConsumer::migrateApiNoteDesignatedInitializerAttr(
+                                          const ObjCMethodDecl *D) {
+  if (!(ASTMigrateActions & FrontendOptions::ObjCMT_ApiNotes))
+    return;
+  
+  if (D->isInvalidDecl() || !isa<ObjCMethodDecl>(D) ||
+      D->isImplicit() || !canModify(D))
+    return;
+  for (auto A : D->attrs())
+    if (auto DesigInitAttr = dyn_cast<ObjCDesignatedInitializerAttr>(A)) {
+      if (!DesigInitAttr->isImplicit())
+        return;
+      std::string Str(" __attribute__((objc_designated_initializer))");
+      edit::Commit commit(*Editor);
+      commit.insertBefore(D->getLocEnd(), Str);
+      Editor->commit(commit);
+      return;
+    }
+  
 }
 
 static bool
@@ -1919,6 +2057,13 @@ void ObjCMigrateASTConsumer::HandleTranslationUnit(ASTContext &Ctx) {
         if ((ASTMigrateActions & FrontendOptions::ObjCMT_DesignatedInitializer) &&
             canModify(ImplD))
           inferDesignatedInitializers(Ctx, ImplD);
+      }
+      
+      if (isa<ObjCProtocolDecl>(*D) || isa<VarDecl>(*D) || isa<FunctionDecl>(*D))
+        migrateApiNoteUnavailableAttr((*D));
+      if (isa<FunctionDecl>(*D)) {
+        migrateApiNoteNonnullAttr((*D));
+        migrateApiNoteReturnsNonnullAttr((*D));
       }
     }
     if (ASTMigrateActions & FrontendOptions::ObjCMT_Annotation)
