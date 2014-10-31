@@ -86,3 +86,8 @@ namespace test2 {
   // CHECK-GLOBALS: @_ZTIN5test21AE = constant { {{.*}}, i8* getelementptr inbounds ([11 x i8]* @_ZTSN5test21AE, i32 0, i32 0) }
 
 }
+
+// va_list should be based on "char *" rather than "void *".
+
+// CHECK: define void @_Z11whatsVaListPc
+void whatsVaList(__builtin_va_list l) {}
