@@ -4613,8 +4613,7 @@ ABIArgInfo ARMABIInfo::classifyArgumentType(QualType Ty, bool isVariadic,
     // classify them.
     const Type *Base = nullptr;
     uint64_t Members = 0;
-    if (isARMHomogeneousAggregate(Ty, Base, getContext(), /*isAArch64=*/true,
-                                  &Members)) {
+    if (isHomogeneousAggregate(Ty, Base, Members)) {
       assert(Base && Members <= 4 && "unexpected homogeneous aggregate");
       llvm::Type *Ty =
         llvm::ArrayType::get(CGT.ConvertType(QualType(Base, 0)), Members);
@@ -4905,6 +4904,7 @@ llvm::Value *ARMABIInfo::EmitVAArg(llvm::Value *VAListAddr, QualType Ty,
 
   // The ABI alignment for 64-bit or 128-bit vectors is 8 for AAPCS and 4 for
   // APCS. For AAPCS, the ABI alignment is at least 4-byte and at most 8-byte.
+  uint64_t Members;
   if (getABIKind() == ARMABIInfo::AAPCS_VFP ||
       getABIKind() == ARMABIInfo::AAPCS)
     TyAlign = std::min(std::max(TyAlign, (uint64_t)4), (uint64_t)8);
@@ -4920,7 +4920,7 @@ llvm::Value *ARMABIInfo::EmitVAArg(llvm::Value *VAListAddr, QualType Ty,
     Size = 4;
     TyAlign = 4;
   } else if (getABIKind() == ARMABIInfo::APCS_VFP &&
-             !isARMHomogeneousAggregate(Ty, Base, getContext(), true) &&
+             !isHomogeneousAggregate(Ty, Base, Members) &&
              Size > 16) {
     // ARMv7k passes structs bigger than 16 bytes indirectly, in space allocated
     // by the caller.
