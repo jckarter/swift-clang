@@ -464,6 +464,7 @@ unsigned ContinuationIndenter::addTokenOnNewLine(LineState &State,
       PreviousNonComment->Type != TT_TemplateCloser &&
       PreviousNonComment->Type != TT_BinaryOperator &&
       PreviousNonComment->Type != TT_JavaAnnotation &&
+      PreviousNonComment->Type != TT_LeadingJavaAnnotation &&
       Current.Type != TT_BinaryOperator && !PreviousNonComment->opensScope())
     State.Stack.back().BreakBeforeParameter = true;
 
@@ -538,9 +539,11 @@ unsigned ContinuationIndenter::getNewLineColumn(const LineState &State) {
     return State.Stack.back().QuestionColumn;
   if (Previous.is(tok::comma) && State.Stack.back().VariablePos != 0)
     return State.Stack.back().VariablePos;
-  if ((PreviousNonComment && (PreviousNonComment->ClosesTemplateDeclaration ||
-                              PreviousNonComment->Type == TT_AttributeParen ||
-                              PreviousNonComment->Type == TT_JavaAnnotation)) ||
+  if ((PreviousNonComment &&
+       (PreviousNonComment->ClosesTemplateDeclaration ||
+        PreviousNonComment->Type == TT_AttributeParen ||
+        PreviousNonComment->Type == TT_JavaAnnotation ||
+        PreviousNonComment->Type == TT_LeadingJavaAnnotation)) ||
       (!Style.IndentWrappedFunctionNames &&
        (NextNonComment->is(tok::kw_operator) ||
         NextNonComment->Type == TT_FunctionDeclarationName)))
@@ -664,6 +667,7 @@ unsigned ContinuationIndenter::moveStateToNextToken(LineState &State,
     if (Current.TokenText == "function")
       State.Stack.back().JSFunctionInlined =
           !Newline && Previous && Previous->Type != TT_DictLiteral &&
+          Previous->Type != TT_ConditionalExpr &&
           // If the unnamed function is the only parameter to another function,
           // we can likely inline it and come up with a good format.
           (Previous->isNot(tok::l_paren) || Previous->ParameterCount > 1);
