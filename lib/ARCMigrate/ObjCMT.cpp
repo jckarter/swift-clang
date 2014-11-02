@@ -339,7 +339,7 @@ public:
       Consumer.Editor->commit(commit);
     }
 
-    if (Consumer.ASTMigrateActions & FrontendOptions::ObjCMT_Property) {
+    if (Consumer.ASTMigrateActions & FrontendOptions::ObjCMT_PropertyDotSyntax) {
       edit::Commit commit(*Consumer.Editor);
       rewriteToPropertyDotSyntax(E, Consumer.PP, *Consumer.NSAPIObj,
                                  commit, &PMap);
