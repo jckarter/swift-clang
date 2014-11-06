@@ -4490,7 +4490,7 @@ public:
 
     // Darwin on iOS uses a variant of the ARM C++ ABI.
     if (Triple.getArchName().endswith("v7k"))
-      TheCXXABI.set(TargetCXXABI::iOS64);
+      TheCXXABI.set(TargetCXXABI::iOSv7k);
     else
       TheCXXABI.set(TargetCXXABI::iOS);
   }
