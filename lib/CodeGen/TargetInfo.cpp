@@ -4810,14 +4810,15 @@ ABIArgInfo ARMABIInfo::classifyArgumentType(QualType Ty, bool isVariadic,
     }
   } else if (getABIKind() == ARMABIInfo::APCS_VFP) {
     // armv7k does have homogeneous aggregates, and uses the AArch64 rules to
-    // classify them.
+    // classify them. Note that we intentionally use this convention even for a
+    // variadic function: the backend will use GPRs if needed.
     const Type *Base = nullptr;
     uint64_t Members = 0;
     if (isHomogeneousAggregate(Ty, Base, Members)) {
       assert(Base && Members <= 4 && "unexpected homogeneous aggregate");
       llvm::Type *Ty =
         llvm::ArrayType::get(CGT.ConvertType(QualType(Base, 0)), Members);
-      return ABIArgInfo::getDirect(Ty);
+      return ABIArgInfo::getDirect(Ty, 0, nullptr, false);
     }
   }
 
