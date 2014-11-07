@@ -4979,7 +4979,7 @@ ABIArgInfo ARMABIInfo::classifyReturnType(QualType RetTy,
   }
 
   // Are we following APCS?
-  if (getABIKind() == APCS || getABIKind() == APCS_VFP) {
+  if (getABIKind() == APCS) {
     if (isEmptyRecord(getContext(), RetTy, false))
       return ABIArgInfo::getIgnore();
 
@@ -5013,7 +5013,7 @@ ABIArgInfo ARMABIInfo::classifyReturnType(QualType RetTy,
     return ABIArgInfo::getIgnore();
 
   // Check for homogeneous aggregates with AAPCS-VFP.
-  if (getABIKind() == AAPCS_VFP && !isVariadic) {
+  if ((getABIKind() == AAPCS_VFP || getABIKind() == APCS_VFP) && !isVariadic) {
     const Type *Base = nullptr;
     uint64_t Members;
     if (isHomogeneousAggregate(RetTy, Base, Members)) {
@@ -5041,6 +5041,11 @@ ABIArgInfo ARMABIInfo::classifyReturnType(QualType RetTy,
                                    nullptr, !isAAPCS_VFP);
     return ABIArgInfo::getDirect(llvm::Type::getInt32Ty(getVMContext()), 0,
                                  nullptr, !isAAPCS_VFP);
+  } else if (Size <= 128 && getABIKind() == APCS_VFP) {
+    llvm::Type *Int32Ty = llvm::Type::getInt32Ty(getVMContext());
+    llvm::Type *CoerceTy =
+        llvm::ArrayType::get(Int32Ty, llvm::RoundUpToAlignment(Size, 32) / 32);
+    return ABIArgInfo::getDirect(CoerceTy);
   }
 
   markAllocatedGPRs(1, 1);

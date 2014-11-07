@@ -11,6 +11,9 @@ typedef struct {
 // CHECK: define void @simple_hfa([4 x float] %h.coerce)
 void simple_hfa(HFA h) {}
 
+// CHECK: define %struct.HFA @return_simple_hfa
+HFA return_simple_hfa() {}
+
 typedef struct {
   double arr[4];
 } BigHFA;
@@ -35,6 +38,9 @@ typedef struct {
 // CHECK: define void @big_struct_indirect(%struct.BigStruct* align 8 %b)
 void big_struct_indirect(BigStruct b) {}
 
+// CHECK: define void @return_big_struct_indirect(%struct.BigStruct* noalias sret
+BigStruct return_big_struct_indirect() {}
+
 // Structs smaller than 16 bytes should be passed directly, and coerced to
 // either [N x i32] or [N x i64] depending on alignment requirements.
 
@@ -47,6 +53,9 @@ typedef struct {
 // CHECK: define void @small_struct_direct([2 x i64] %s.coerce)
 void small_struct_direct(SmallStruct s) {}
 
+// CHECK: define [4 x i32] @return_small_struct_direct()
+SmallStruct return_small_struct_direct() {}
+
 typedef struct {
   float x;
   int y;
@@ -55,3 +64,18 @@ typedef struct {
 
 // CHECK: define void @small_struct_align_direct([3 x i32] %s.coerce)
 void small_struct_align_direct(SmallStructSmallAlign s) {}
+
+typedef struct {
+  char x;
+  short y;
+} PaddedSmallStruct;
+
+// CHECK: define i32 @return_padded_small_struct()
+PaddedSmallStruct return_padded_small_struct() {}
+
+typedef struct {
+  char arr[7];
+} OddlySizedStruct;
+
+// CHECK: define [2 x i32] @return_oddly_sized_struct()
+OddlySizedStruct return_oddly_sized_struct() {}
