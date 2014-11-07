@@ -902,10 +902,7 @@ void CodeGenFunction::GenerateCode(GlobalDecl GD, llvm::Function *Fn,
       EmitCheck(Builder.getFalse(), "missing_return",
                 EmitCheckSourceLocation(FD->getLocation()),
                 None, CRK_Unrecoverable);
-    } else if (CGM.getCodeGenOpts().OptimizationLevel == 0)
-      Builder.CreateCall(CGM.getIntrinsic(llvm::Intrinsic::trap));
-    Builder.CreateUnreachable();
-    Builder.ClearInsertionPoint();
+    }
   }
 
   // Emit the standard function epilogue.
