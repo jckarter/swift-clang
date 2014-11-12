@@ -3,22 +3,6 @@
 // rdar://12799898
 //
 
-// AddressSanitizer
-// RUN: %clang -target x86_64-linux-gnu -fsanitize=address %s -### 2>&1 | FileCheck %s --check-prefix=CHECK-UNSUPPORTED-ARG-ADDR
-// CHECK-UNSUPPORTED-ARG-ADDR: unsupported argument 'address' to option 'fsanitize='
-
-// RUN: %clang -target x86_64-linux-gnu -fsanitize=init-order %s -### 2>&1 | FileCheck %s --check-prefix=CHECK-UNSUPPORTED-ARG-INIT-ORDER
-// CHECK-UNSUPPORTED-ARG-INIT-ORDER: unsupported argument 'init-order' to option 'fsanitize='
-
-// RUN: %clang -target x86_64-linux-gnu -fsanitize=use-after-return %s -### 2>&1 | FileCheck %s --check-prefix=CHECK-UNSUPPORTED-ARG-USE-AFTER-RETURN
-// CHECK-UNSUPPORTED-ARG-USE-AFTER-RETURN: unsupported argument 'use-after-return' to option 'fsanitize='
-
-// RUN: %clang -target x86_64-linux-gnu -fsanitize=use-after-scope %s -### 2>&1 | FileCheck %s --check-prefix=CHECK-UNSUPPORTED-ARG-USE-AFTER-SCOPE
-// CHECK-UNSUPPORTED-ARG-USE-AFTER-SCOPE: unsupported argument 'use-after-scope' to option 'fsanitize='
-
-// RUN: %clang -target x86_64-linux-gnu -fsanitize=address-full %s -### 2>&1 | FileCheck %s --check-prefix=CHECK-UNSUPPORTED-ARG-ADDRESS-FULL
-// CHECK-UNSUPPORTED-ARG-ADDRESS-FULL: unsupported argument 'address-full' to option 'fsanitize='
-
 // MemorySanitizer
 // RUN: %clang -target x86_64-linux-gnu -fsanitize=memory %s -### 2>&1 | FileCheck %s --check-prefix=CHECK-UNSUPPORTED-ARG-MEMORY
 // CHECK-UNSUPPORTED-ARG-MEMORY: unsupported argument 'memory' to option 'fsanitize='

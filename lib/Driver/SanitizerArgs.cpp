@@ -249,13 +249,14 @@ unsigned SanitizerArgs::parse(const char *Value) {
 }
 
 static bool allowedOpt(const char *Value) {
-  // We support the UndefinedBehaviorSanitizers.
+  // We support the UndefinedBehaviorSanitizers and AddressSanitizer.
   return llvm::StringSwitch<bool>(Value)
     .Cases("alignment", "bounds", "float-cast-overflow", true)
     .Cases("float-divide-by-zero", "integer-divide-by-zero", true)
     .Cases("null", "object-size", "return", "shift", true)
     .Cases("signed-integer-overflow", "unreachable", "vla-bound", true)
     .Cases("bool", "enum", "undefined-trap", true)
+    .Case("address", true)
     .Default(false);
 }
 
@@ -323,6 +324,9 @@ unsigned SanitizerArgs::parse(const Driver &D, const llvm::opt::Arg *A,
         if (!allowedOpt(A->getValue(I)))
           D.Diag(diag::err_drv_unsupported_option_argument)
             << A->getOption().getName() << A->getValue(I);
+        // We don't require -fsanitize-undefined-trap-on-error for ASan
+        else if (std::string(A->getValue(I)) == "address")
+          continue;
         else if (!HasSanitizeUndefinedTrapOnError)
           D.Diag(diag::err_drv_required_option)
             << "-fsanitize-undefined-trap-on-error"
