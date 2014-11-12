@@ -155,17 +155,17 @@ namespace {
     AvailabilityItem() : Mode(APIAvailability::Available), Msg("") {}
   };
 
-  static Nullability AbsentNullability =
-    Nullability::Absent;
-  static Nullability DefaultNullability =
-    Nullability::NonNull;
-  typedef std::vector<clang::Nullability> NullabilitySeq;
+  static api_notes::NullableKind AbsentNullability =
+    api_notes::NullableKind::Absent;
+  static api_notes::NullableKind DefaultNullability =
+    api_notes::NullableKind::NonNullable;
+  typedef std::vector<clang::api_notes::NullableKind> NullabilitySeq;
 
   struct Method {
     StringRef Selector;
     MethodKind Kind;
-    NullabilitySeq NullabilityOfParams;
-    Nullability NullabilityOfRet = Nullability::ExplicitUnspecified;
+    NullabilitySeq Nullability;
+    api_notes::NullableKind NullabilityOfRet = api_notes::NullableKind::Unknown;
     AvailabilityItem Availability;
     api_notes::FactoryAsInitKind FactoryAsInit
       = api_notes::FactoryAsInitKind::Infer;
@@ -176,7 +176,7 @@ namespace {
 
   struct Property {
     StringRef Name;
-    Nullability NullabilityOfValue = Nullability::ExplicitUnspecified;
+    api_notes::NullableKind Nullability = api_notes::NullableKind::Unknown;
     AvailabilityItem Availability;
   };
   typedef std::vector<Property> PropertiesSeq;
@@ -192,15 +192,15 @@ namespace {
 
   struct Function {
     StringRef Name;
-    NullabilitySeq NullabilityOfParams;
-    Nullability NullabilityOfRet = Nullability::ExplicitUnspecified;
+    NullabilitySeq Nullability;
+    api_notes::NullableKind NullabilityOfRet = api_notes::NullableKind::Unknown;
     AvailabilityItem Availability;
   };
   typedef std::vector<Function> FunctionsSeq;
 
   struct GlobalVariable {
     StringRef Name;
-    Nullability NullabilityOfValue = Nullability::ExplicitUnspecified;
+    api_notes::NullableKind Nullability = api_notes::NullableKind::Unknown;
     AvailabilityItem Availability;
   };
   typedef std::vector<GlobalVariable> GlobalVariablesSeq;
@@ -216,7 +216,7 @@ namespace {
 
 }
 
-LLVM_YAML_IS_FLOW_SEQUENCE_VECTOR(Nullability)
+LLVM_YAML_IS_FLOW_SEQUENCE_VECTOR(clang::api_notes::NullableKind)
 LLVM_YAML_IS_SEQUENCE_VECTOR(Method)
 LLVM_YAML_IS_SEQUENCE_VECTOR(Property)
 LLVM_YAML_IS_SEQUENCE_VECTOR(Class)
@@ -227,14 +227,14 @@ namespace llvm {
   namespace yaml {
 
     template <>
-    struct ScalarEnumerationTraits<Nullability > {
-      static void enumeration(IO &io, Nullability  &value) {
-        io.enumCase(value, "N", Nullability::NonNull);
-        io.enumCase(value, "O", Nullability::Nullable);
-        io.enumCase(value, "U", Nullability::ExplicitUnspecified);
+    struct ScalarEnumerationTraits<api_notes::NullableKind > {
+      static void enumeration(IO &io, api_notes::NullableKind  &value) {
+        io.enumCase(value, "N", api_notes::NullableKind::NonNullable);
+        io.enumCase(value, "O", api_notes::NullableKind::Nullable);
+        io.enumCase(value, "U", api_notes::NullableKind::Unknown);
         // TODO: Mapping this to it's own value would allow for better cross
         // checking. Also the default should be Unknown.
-        io.enumCase(value, "S", Nullability::ExplicitUnspecified);
+        io.enumCase(value, "S", api_notes::NullableKind::Unknown);
       }
     };
 
@@ -269,7 +269,7 @@ namespace llvm {
     struct MappingTraits<Property> {
       static void mapping(IO &io, Property& p) {
         io.mapRequired("Name",            p.Name);
-        io.mapOptional("Nullability",     p.NullabilityOfValue,
+        io.mapOptional("Nullability",     p.Nullability,
                                           AbsentNullability);
         io.mapOptional("Availability",    p.Availability.Mode);
         io.mapOptional("AvailabilityMsg", p.Availability.Msg);
@@ -281,7 +281,7 @@ namespace llvm {
       static void mapping(IO &io, Method& m) {
         io.mapRequired("Selector",        m.Selector);
         io.mapRequired("MethodKind",      m.Kind);
-        io.mapOptional("Nullability",     m.NullabilityOfParams);
+        io.mapOptional("Nullability",     m.Nullability);
         io.mapOptional("NullabilityOfRet",  m.NullabilityOfRet,
                                             AbsentNullability);
         io.mapOptional("Availability",    m.Availability.Mode);
@@ -309,7 +309,7 @@ namespace llvm {
     struct MappingTraits<Function> {
       static void mapping(IO &io, Function& f) {
         io.mapRequired("Name",             f.Name);
-        io.mapOptional("Nullability",      f.NullabilityOfParams);
+        io.mapOptional("Nullability",      f.Nullability);
         io.mapOptional("NullabilityOfRet", f.NullabilityOfRet,
                                            AbsentNullability);
         io.mapOptional("Availability",     f.Availability.Mode);
@@ -321,7 +321,7 @@ namespace llvm {
     struct MappingTraits<GlobalVariable> {
       static void mapping(IO &io, GlobalVariable& v) {
         io.mapRequired("Name",            v.Name);
-        io.mapOptional("Nullability",     v.NullabilityOfValue,
+        io.mapOptional("Nullability",     v.Nullability,
                                           AbsentNullability);
         io.mapOptional("Availability",    v.Availability.Mode);
         io.mapOptional("AvailabilityMsg", v.Availability.Msg);
@@ -416,7 +416,7 @@ static bool compile(const Module &module,
     }
 
     void convertNullability(const NullabilitySeq &nullability,
-                            Nullability nullabilityOfRet,
+                            NullableKind nullabilityOfRet,
                             FunctionInfo &outInfo,
                             llvm::StringRef apiName) {
       if (nullability.size() > FunctionInfo::getMaxNullabilityIndex()) {
@@ -476,7 +476,7 @@ static bool compile(const Module &module,
         mInfo.setFactoryAsInitKind(meth.FactoryAsInit);
 
       // Translate nullability info.
-      convertNullability(meth.NullabilityOfParams, meth.NullabilityOfRet,
+      convertNullability(meth.Nullability, meth.NullabilityOfRet,
                          mInfo, meth.Selector);
 
       // Write it.
@@ -534,7 +534,7 @@ static bool compile(const Module &module,
         if (!isAvailable(prop.Availability))
           continue;
         convertAvailability(prop.Availability, pInfo, prop.Name);
-        pInfo.setNullabilityAudited(prop.NullabilityOfValue);
+        pInfo.setNullabilityAudited(prop.Nullability);
         Writer->addObjCProperty(clID, prop.Name, pInfo);
       }
     }
@@ -586,7 +586,7 @@ static bool compile(const Module &module,
         if (!isAvailable(global.Availability))
           continue;
         convertAvailability(global.Availability, info, global.Name);
-        info.setNullabilityAudited(global.NullabilityOfValue);
+        info.setNullabilityAudited(global.Nullability);
         Writer->addGlobalVariable(global.Name, info);
       }
 
@@ -604,7 +604,7 @@ static bool compile(const Module &module,
         if (!isAvailable(function.Availability))
           continue;
         convertAvailability(function.Availability, info, function.Name);
-        convertNullability(function.NullabilityOfParams,
+        convertNullability(function.Nullability,
                            function.NullabilityOfRet,
                            info, function.Name);
 
@@ -710,7 +710,7 @@ bool api_notes::decompileAPINotes(std::unique_ptr<llvm::MemoryBuffer> input,
 
     /// Map nullability information for a function.
     void handleNullability(NullabilitySeq &nullability,
-                           Nullability &nullabilityOfRet,
+                           NullableKind &nullabilityOfRet,
                            const FunctionInfo &info,
                            unsigned numParams) {
       if (info.NullabilityAudited) {
@@ -750,8 +750,8 @@ bool api_notes::decompileAPINotes(std::unique_ptr<llvm::MemoryBuffer> input,
       method.Selector = copyString(selector);
       method.Kind = isInstanceMethod ? MethodKind::Instance : MethodKind::Class;
 
-      handleNullability(method.NullabilityOfParams, method.NullabilityOfRet, 
-                        info, selector.count(':'));
+      handleNullability(method.Nullability, method.NullabilityOfRet, info,
+                        selector.count(':'));
       handleAvailability(method.Availability, info);
       method.FactoryAsInit = info.getFactoryAsInitKind();
       method.DesignatedInit = info.DesignatedInit;
@@ -772,7 +772,7 @@ bool api_notes::decompileAPINotes(std::unique_ptr<llvm::MemoryBuffer> input,
 
       // FIXME: No way to represent "not audited for nullability".
       if (auto nullability = info.getNullability()) {
-        property.NullabilityOfValue = *nullability;
+        property.Nullability = *nullability;
       }
 
       auto known = knownContexts[contextID.Value];
@@ -788,8 +788,7 @@ bool api_notes::decompileAPINotes(std::unique_ptr<llvm::MemoryBuffer> input,
       function.Name = name;
       handleAvailability(function.Availability, info);
       if (info.NumAdjustedNullable > 0)
-        handleNullability(function.NullabilityOfParams, 
-                          function.NullabilityOfRet,
+        handleNullability(function.Nullability, function.NullabilityOfRet,
                           info, info.NumAdjustedNullable-1);
 
       TheModule.Functions.push_back(function);
@@ -803,7 +802,7 @@ bool api_notes::decompileAPINotes(std::unique_ptr<llvm::MemoryBuffer> input,
 
       // FIXME: No way to represent "not audited for nullability".
       if (auto nullability = info.getNullability()) {
-        global.NullabilityOfValue = *nullability;
+        global.Nullability = *nullability;
       }
 
       TheModule.Globals.push_back(global);

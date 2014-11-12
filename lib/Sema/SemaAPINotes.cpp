@@ -29,7 +29,7 @@ static void ProcessAPINotes(Sema &S, Decl *D,
                             const api_notes::VariableInfo &Info) {
   // Nullability.
   if (auto Nullability = Info.getNullability()) {
-    if (*Nullability == Nullability::NonNull &&
+    if (*Nullability == api_notes::NullableKind::NonNullable &&
         !D->hasAttr<NonNullAttr>()) {
       D->addAttr(NonNullAttr::CreateImplicit(S.Context, 0, 0));
     }
@@ -74,7 +74,7 @@ static void ProcessAPINotes(Sema &S, FunctionOrMethod AnyFunc,
   // Nullability.
   if (Info.NullabilityAudited) {
     // Return type.
-    if (Info.getReturnTypeInfo() == Nullability::NonNull &&
+    if (Info.getReturnTypeInfo() == api_notes::NullableKind::NonNullable &&
         !D->hasAttr<ReturnsNonNullAttr>()) {
       D->addAttr(ReturnsNonNullAttr::CreateImplicit(S.Context));
     }
@@ -93,7 +93,7 @@ static void ProcessAPINotes(Sema &S, FunctionOrMethod AnyFunc,
       else
         Param = MD->param_begin()[I];
 
-      if (Info.getParamTypeInfo(I) == Nullability::NonNull &&
+      if (Info.getParamTypeInfo(I) == api_notes::NullableKind::NonNullable &&
           !Param->hasAttr<NonNullAttr>()) {
         Param->addAttr(NonNullAttr::CreateImplicit(S.Context, 0, 0));
       }
