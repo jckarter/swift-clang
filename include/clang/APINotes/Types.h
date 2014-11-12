@@ -13,6 +13,7 @@
 
 #ifndef LLVM_CLANG_API_NOTES_TYPES_H
 #define LLVM_CLANG_API_NOTES_TYPES_H
+#include "clang/Basic/Specifiers.h"
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/Optional.h"
 #include "llvm/ADT/StringRef.h"
@@ -36,19 +37,6 @@ using llvm::ArrayRef;
 using llvm::StringRef;
 using llvm::Optional;
 using llvm::None;
-
-/// Describes the nullability of a particular value, whether it is a property,
-/// parameter type, or result type.
-enum class NullableKind : unsigned {
-  /// The parameter is non-nullable.
-  NonNullable = 0,
-  /// The parameter is nullable.
-  Nullable,
-  /// The nullability of the parameter is unknown.
-  Unknown,
-  /// The nullability of the parameter has not been entered.
-  Absent
-};
 
 /// Describes whether to classify a factory method as an initializer.
 enum class FactoryAsInitKind {
@@ -131,15 +119,15 @@ public:
   /// class.
   ///
   /// \returns the default nullability, if implied, or None if there is no
-  Optional<NullableKind> getDefaultNullability() const {
+  Optional<Nullability> getDefaultNullability() const {
     if (HasDefaultNullability)
-      return static_cast<NullableKind>(DefaultNullability);
+      return static_cast<Nullability>(DefaultNullability);
 
     return None;
   }
 
   /// Set the default nullability for properties and methods of this class.
-  void setDefaultNullability(NullableKind kind) {
+  void setDefaultNullability(Nullability kind) {
     HasDefaultNullability = true;
     DefaultNullability = static_cast<unsigned>(kind);
   }
@@ -199,14 +187,14 @@ public:
       NullabilityAudited(false),
       Nullable(0) { }
 
-  Optional<NullableKind> getNullability() const {
+  Optional<Nullability> getNullability() const {
     if (NullabilityAudited)
-      return static_cast<NullableKind>(Nullable);
+      return static_cast<Nullability>(Nullable);
 
     return None;
   }
 
-  void setNullabilityAudited(NullableKind kind) {
+  void setNullabilityAudited(Nullability kind) {
     NullabilityAudited = true;
     Nullable = static_cast<unsigned>(kind);
   }
@@ -257,8 +245,8 @@ struct ObjCSelectorRef {
 /// API notes for a function or method.
 class FunctionInfo : public CommonEntityInfo {
 private:
-  static unsigned const NullableKindMask = 0x3;
-  static unsigned const NullableKindSize = 2;
+  static unsigned const NullabilityMask = 0x3;
+  static unsigned const NullabilitySize = 2;
 
 public:
   /// Whether the signature has been audited with respect to nullability.
@@ -271,7 +259,7 @@ public:
   unsigned NumAdjustedNullable : 8;
 
   /// Stores the nullability of the return type and the parameters.
-  //  NullableKindSize bits are used to encode the nullability. The info
+  //  NullabilitySize bits are used to encode the nullability. The info
   //  about the return type is stored at position 0, followed by the nullability
   //  of the parameters.
   uint64_t NullabilityPayload = 0;
@@ -282,53 +270,54 @@ public:
       NumAdjustedNullable(0) { }
 
   static unsigned getMaxNullabilityIndex() {
-    return ((sizeof(NullabilityPayload) * CHAR_BIT)/NullableKindSize);
+    return ((sizeof(NullabilityPayload) * CHAR_BIT)/NullabilitySize);
   }
 
-  void addTypeInfo(unsigned index, NullableKind kind) {
+  void addTypeInfo(unsigned index, Nullability kind) {
     assert(index <= getMaxNullabilityIndex());
-    assert(static_cast<unsigned>(kind) < NullableKindMask);
+    assert(static_cast<unsigned>(kind) <= NullabilityMask && 
+           kind != Nullability::Absent);
     NullabilityAudited = true;
     if (NumAdjustedNullable < index + 1)
       NumAdjustedNullable = index + 1;
 
     // Mask the bits.
-    NullabilityPayload &= ~(NullableKindMask << (index * NullableKindSize));
+    NullabilityPayload &= ~(NullabilityMask << (index * NullabilitySize));
 
     // Set the value.
     unsigned kindValue =
-      (static_cast<unsigned>(kind)) << (index * NullableKindSize);
+      (static_cast<unsigned>(kind)) << (index * NullabilitySize);
     NullabilityPayload |= kindValue;
   }
 
   /// Adds the return type info.
-  void addReturnTypeInfo(NullableKind kind) {
+  void addReturnTypeInfo(Nullability kind) {
     addTypeInfo(0, kind);
   }
 
   /// Adds the parameter type info.
-  void addParamTypeInfo(unsigned index, NullableKind kind) {
+  void addParamTypeInfo(unsigned index, Nullability kind) {
     addTypeInfo(index + 1, kind);
   }
 
 private:
-  NullableKind getTypeInfo(unsigned index) const {
+  Nullability getTypeInfo(unsigned index) const {
     assert(NullabilityAudited &&
            "Checking the type adjustment on non-audited method.");
     // If we don't have info about this parameter, return the default.
     if (index > NumAdjustedNullable)
-      return NullableKind::NonNullable;
-    return static_cast<NullableKind>(( NullabilityPayload
-                                          >> (index * NullableKindSize) )
-                                         & NullableKindMask);
+      return Nullability::NonNull;
+    return static_cast<Nullability>(( NullabilityPayload
+                                          >> (index * NullabilitySize) )
+                                         & NullabilityMask);
   }
 
 public:
-  NullableKind getParamTypeInfo(unsigned index) const {
+  Nullability getParamTypeInfo(unsigned index) const {
     return getTypeInfo(index + 1);
   }
   
-  NullableKind getReturnTypeInfo() const {
+  Nullability getReturnTypeInfo() const {
     return getTypeInfo(0);
   }
 

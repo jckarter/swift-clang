@@ -16,6 +16,8 @@
 #ifndef LLVM_CLANG_BASIC_SPECIFIERS_H
 #define LLVM_CLANG_BASIC_SPECIFIERS_H
 
+#include "llvm/Support/DataTypes.h"
+
 namespace clang {
   /// \brief Specifies the width of a type, e.g., short, long, or long long.
   enum TypeSpecifierWidth {
@@ -235,6 +237,18 @@ namespace clang {
     SD_Thread,         ///< Thread storage duration.
     SD_Static,         ///< Static storage duration.
     SD_Dynamic         ///< Dynamic storage duration.
+  };
+
+  /// Describes the nullability of a type.
+  enum class Nullability : uint8_t {
+    /// The nullability of the type is not known or is not relevant.
+    Absent = 0,
+    /// A value of the type is never null.
+    NonNull,
+    /// A value of the type can be null.
+    Nullable,
+    /// Whether a value of the type can be nil or not is explicitly unspecified.
+    ExplicitUnspecified
   };
 } // end namespace clang
 
