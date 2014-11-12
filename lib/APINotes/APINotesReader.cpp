@@ -127,7 +127,7 @@ namespace {
       result.first = endian::readNext<StoredContextID, little, unaligned>(data);
       readCommonEntityInfo(data, result.second);
       if (*data++) {
-        result.second.setDefaultNullability(static_cast<Nullability>(*data));
+        result.second.setDefaultNullability(static_cast<NullableKind>(*data));
       }
       ++data;
       result.second.setHasDesignatedInits(*data++);
@@ -139,7 +139,7 @@ namespace {
   void readVariableInfo(const uint8_t *&data, VariableInfo &info) {
     readCommonEntityInfo(data, info);
     if (*data++) {
-      info.setNullabilityAudited(static_cast<Nullability>(*data));
+      info.setNullabilityAudited(static_cast<NullableKind>(*data));
     }
     ++data;
   }
