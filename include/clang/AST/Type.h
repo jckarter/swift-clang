@@ -1790,6 +1790,19 @@ public:
   /// checking. Should always return true.
   bool isLinkageValid() const;
 
+  /// Determine the nullability of the given type.
+  ///
+  /// Note that nullability is only captured as sugar within the type
+  /// system, not as part of the canonical type, so nullability will
+  /// be lost by canonicalization and desugaring.
+  Optional<NullabilityKind> getNullability(const ASTContext &context) const;
+
+  /// Determine whether the given type can have a nullability
+  /// specifier applied to it, i.e., if it is any kind of pointer type
+  /// or a dependent type that could instantiate to any kind of
+  /// pointer type.
+  bool canHaveNullability() const;
+
   const char *getTypeClassName() const;
 
   QualType getCanonicalTypeInternal() const {
@@ -3442,7 +3455,10 @@ public:
     attr_ptr32,
     attr_ptr64,
     attr_sptr,
-    attr_uptr
+    attr_uptr,
+    attr_nonnull,
+    attr_nullable,
+    attr_null_unspecified,
   };
 
 private:
@@ -3475,6 +3491,8 @@ public:
   bool isMSTypeSpec() const;
 
   bool isCallingConv() const;
+
+  llvm::Optional<NullabilityKind> getImmediateNullability() const;
 
   void Profile(llvm::FoldingSetNodeID &ID) {
     Profile(ID, getAttrKind(), ModifiedType, EquivalentType);

@@ -1124,6 +1124,22 @@ void TypePrinter::printAttributedBefore(const AttributedType *T,
       T->getAttrKind() == AttributedType::attr_objc_ownership)
     return printBefore(T->getEquivalentType(), OS);
 
+  // Nullability is expressed as a type specifier.
+  if (T->getAttrKind() == AttributedType::attr_nonnull ||
+      T->getAttrKind() == AttributedType::attr_nullable ||
+      T->getAttrKind() == AttributedType::attr_null_unspecified) {
+    if (T->getAttrKind() == AttributedType::attr_nonnull)
+      OS << "__nonnull ";
+    else if (T->getAttrKind() == AttributedType::attr_nullable)
+      OS << "__nullable ";
+    else if (T->getAttrKind() == AttributedType::attr_null_unspecified)
+      OS << "__null_unspecified ";
+    else
+      llvm_unreachable("unhandled nullability");
+
+    return printBefore(T->getModifiedType(), OS);
+  }
+
   printBefore(T->getModifiedType(), OS);
 
   if (T->isMSTypeSpec()) {
@@ -1144,6 +1160,11 @@ void TypePrinter::printAttributedAfter(const AttributedType *T,
   if (T->getAttrKind() == AttributedType::attr_objc_gc ||
       T->getAttrKind() == AttributedType::attr_objc_ownership)
     return printAfter(T->getEquivalentType(), OS);
+
+  if (T->getAttrKind() == AttributedType::attr_nonnull ||
+      T->getAttrKind() == AttributedType::attr_nullable ||
+      T->getAttrKind() == AttributedType::attr_null_unspecified)
+    return;
 
   // TODO: not all attributes are GCC-style attributes.
   if (T->isMSTypeSpec())

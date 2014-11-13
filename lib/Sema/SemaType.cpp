@@ -122,6 +122,12 @@ static void diagnoseBadTypeAttribute(Sema &S, const AttributeList &attr,
     case AttributeList::AT_SPtr: \
     case AttributeList::AT_UPtr
 
+// Nullability qualifiers.
+#define NULLABILITY_TYPE_ATTRS_CASELIST         \
+    case AttributeList::AT_TypeNonNull:         \
+    case AttributeList::AT_TypeNullable:        \
+    case AttributeList::AT_TypeNullUnspecified
+
 namespace {
   /// An object which stores processing state for the entire
   /// GetTypeForDeclarator process.
@@ -308,8 +314,12 @@ static bool handleObjCPointerTypeAttr(TypeProcessingState &state,
 ///
 /// \param i - a notional index which the search will start
 ///   immediately inside
+///
+/// \param onlyBlockPointers Whether we should only look into block
+/// pointer types (vs. all pointer types).
 static DeclaratorChunk *maybeMovePastReturnType(Declarator &declarator,
-                                                unsigned i) {
+                                                unsigned i,
+                                                bool onlyBlockPointers) {
   assert(i <= declarator.getNumTypeObjects());
 
   DeclaratorChunk *result = nullptr;
@@ -330,20 +340,26 @@ static DeclaratorChunk *maybeMovePastReturnType(Declarator &declarator,
       return result;
 
     // If we do find a function declarator, scan inwards from that,
-    // looking for a block-pointer declarator.
+    // looking for a (block-)pointer declarator.
     case DeclaratorChunk::Function:
       for (--i; i != 0; --i) {
-        DeclaratorChunk &blockChunk = declarator.getTypeObject(i-1);
-        switch (blockChunk.Kind) {
+        DeclaratorChunk &ptrChunk = declarator.getTypeObject(i-1);
+        switch (ptrChunk.Kind) {
         case DeclaratorChunk::Paren:
-        case DeclaratorChunk::Pointer:
         case DeclaratorChunk::Array:
         case DeclaratorChunk::Function:
         case DeclaratorChunk::Reference:
-        case DeclaratorChunk::MemberPointer:
           continue;
+
+        case DeclaratorChunk::MemberPointer:
+        case DeclaratorChunk::Pointer:
+          if (onlyBlockPointers)
+            continue;
+
+          // fallthrough
+
         case DeclaratorChunk::BlockPointer:
-          result = &blockChunk;
+          result = &ptrChunk;
           goto continue_outer;
         }
         llvm_unreachable("bad declarator chunk kind");
@@ -383,7 +399,8 @@ static void distributeObjCPointerTypeAttr(TypeProcessingState &state,
       DeclaratorChunk *destChunk = nullptr;
       if (state.isProcessingDeclSpec() &&
           attr.getKind() == AttributeList::AT_ObjCOwnership)
-        destChunk = maybeMovePastReturnType(declarator, i - 1);
+        destChunk = maybeMovePastReturnType(declarator, i - 1,
+                                            /*onlyBlockPointers=*/true);
       if (!destChunk) destChunk = &chunk;
 
       moveAttrFromListToList(attr, state.getCurrentAttrListRef(),
@@ -399,7 +416,9 @@ static void distributeObjCPointerTypeAttr(TypeProcessingState &state,
     case DeclaratorChunk::Function:
       if (state.isProcessingDeclSpec() &&
           attr.getKind() == AttributeList::AT_ObjCOwnership) {
-        if (DeclaratorChunk *dest = maybeMovePastReturnType(declarator, i)) {
+        if (DeclaratorChunk *dest = maybeMovePastReturnType(
+                                      declarator, i,
+                                      /*onlyBlockPointers=*/true)) {
           moveAttrFromListToList(attr, state.getCurrentAttrListRef(),
                                  dest->getAttrListRef());
           return;
@@ -619,6 +638,10 @@ static void distributeTypeAttrsFromDeclarator(TypeProcessingState &state,
 
     MS_TYPE_ATTRS_CASELIST:
       // Microsoft type attributes cannot go after the declarator-id.
+      continue;
+
+    NULLABILITY_TYPE_ATTRS_CASELIST:
+      // Nullability specifiers cannot go after the declarator-id.
       continue;
 
     default:
@@ -3441,6 +3464,12 @@ static AttributeList::Kind getAttrListKind(AttributedType::Kind kind) {
     return AttributeList::AT_SPtr;
   case AttributedType::attr_uptr:
     return AttributeList::AT_UPtr;
+  case AttributedType::attr_nonnull:
+    return AttributeList::AT_TypeNonNull;
+  case AttributedType::attr_nullable:
+    return AttributeList::AT_TypeNullable;
+  case AttributedType::attr_null_unspecified:
+    return AttributeList::AT_TypeNullUnspecified;
   }
   llvm_unreachable("unexpected attribute kind!");
 }
@@ -4046,7 +4075,8 @@ static bool handleObjCOwnershipTypeAttr(TypeProcessingState &state,
     // just be the return type of a block pointer.
     if (state.isProcessingDeclSpec()) {
       Declarator &D = state.getDeclarator();
-      if (maybeMovePastReturnType(D, D.getNumTypeObjects()))
+      if (maybeMovePastReturnType(D, D.getNumTypeObjects(),
+                                  /*onlyBlockPointers=*/true))
         return false;
     }
   }
@@ -4420,6 +4450,146 @@ static bool handleMSPointerTypeQualifierAttr(TypeProcessingState &State,
   }
 
   Type = S.Context.getAttributedType(TAK, Type, Type);
+  return false;
+}
+
+/// Map a nullability attribute kind to a nullability kind.
+static NullabilityKind mapNullabilityAttrKind(AttributeList::Kind kind) {
+  switch (kind) {
+  case AttributeList::AT_TypeNonNull:
+    return NullabilityKind::NonNull;
+
+  case AttributeList::AT_TypeNullable:
+    return NullabilityKind::Nullable;
+
+  case AttributeList::AT_TypeNullUnspecified:
+    return NullabilityKind::Unspecified;
+
+  default:
+    llvm_unreachable("not a nullability attribute kind");
+  }
+}
+
+/// Handle a nullability type attribute.
+static bool handleNullabilityTypeAttr(TypeProcessingState &state,
+                                      AttributeList &attr,
+                                      QualType &type) {
+  Sema &S = state.getSema();
+
+  // Determine the nullability.
+  AttributeList::Kind kind = attr.getKind();
+  NullabilityKind nullability = mapNullabilityAttrKind(kind);
+
+  // Check for existing nullability attributes on the type.
+  QualType desugared = type;
+  while (auto attributed = dyn_cast<AttributedType>(desugared.getTypePtr())) {
+    // Check whether there is already a null
+    if (auto existingNullability = attributed->getImmediateNullability()) {
+      // Duplicated nullability.
+      if (nullability == *existingNullability) {
+        S.Diag(attr.getLoc(), diag::warn_duplicate_nullability)
+          << static_cast<unsigned>(nullability);
+        return true;
+      }
+
+      // Conflicting nullability.
+      S.Diag(attr.getLoc(), diag::err_conflicting_nullability)
+        <<  static_cast<unsigned>(nullability) 
+        << static_cast<unsigned>(*existingNullability);
+      return true;
+    }
+
+    desugared = attributed->getEquivalentType();
+  }
+  
+  // If this definitely isn't a pointer type, reject the specifier.
+  if (!type->canHaveNullability()) {
+    S.Diag(attr.getLoc(), diag::err_nullability_nonpointer)
+      << static_cast<unsigned>(nullability) << type;
+    return true;
+  }
+
+  // It's silly to add a nullability specifier to nullptr_t.
+  if (type->isNullPtrType()) {
+    S.Diag(attr.getLoc(), diag::warn_nullability_nullptr_t)
+      << static_cast<unsigned>(nullability) << type;
+  }
+
+  // Form the attributed type.
+  AttributedType::Kind typeAttrKind;
+  switch (kind) {
+  case AttributeList::AT_TypeNonNull: 
+    typeAttrKind = AttributedType::attr_nonnull; 
+    break;
+
+  case AttributeList::AT_TypeNullable: 
+    typeAttrKind = AttributedType::attr_nullable; 
+    break;
+
+  case AttributeList::AT_TypeNullUnspecified: 
+    typeAttrKind = AttributedType::attr_null_unspecified; 
+    break;
+
+  default:
+    llvm_unreachable("Not a nullability specifier");
+  }
+  type = S.Context.getAttributedType(typeAttrKind, type, type);
+  return false;
+}
+
+/// Check whether we need to distribute the given nullability type
+/// attribute to another declarator chunk that is a pointer, member
+/// pointer, or block pointer declarator.
+///
+/// \returns true if the nullability annotation was distributed, false
+/// otherwise.
+static bool distributeNullabilityTypeAttr(TypeProcessingState &state,
+                                          AttributeList &attr) {
+  Declarator &declarator = state.getDeclarator();
+
+  // Move it to the outermost pointer, member pointer, or block
+  // pointer declarator.
+  for (unsigned i = state.getCurrentChunkIndex(); i != 0; --i) {
+    DeclaratorChunk &chunk = declarator.getTypeObject(i-1);
+    switch (chunk.Kind) {
+    case DeclaratorChunk::Pointer:
+    case DeclaratorChunk::BlockPointer:
+    case DeclaratorChunk::MemberPointer: {
+      // But don't move an attribute to the return type of a block.
+      DeclaratorChunk *destChunk = nullptr;
+      if (state.isProcessingDeclSpec())
+        destChunk = maybeMovePastReturnType(declarator, i - 1,
+                                            /*onlyBlockPointers=*/false);
+      if (!destChunk) destChunk = &chunk;
+
+      moveAttrFromListToList(attr, state.getCurrentAttrListRef(),
+                             destChunk->getAttrListRef());
+      return true;
+    }
+
+    case DeclaratorChunk::Paren:
+    case DeclaratorChunk::Array:
+      continue;
+
+    // We may be starting at the return type of a block.
+    case DeclaratorChunk::Function:
+      if (state.isProcessingDeclSpec()) {
+        if (DeclaratorChunk *dest = maybeMovePastReturnType(
+                                      declarator, i,
+                                      /*onlyBlockPointers=*/false)) {
+          moveAttrFromListToList(attr, state.getCurrentAttrListRef(),
+                                 dest->getAttrListRef());
+          return true;
+        }
+      }
+      return false;
+
+    // Don't walk through these.
+    case DeclaratorChunk::Reference:
+      return false;
+    }
+  }
+
   return false;
 }
 
@@ -4928,6 +5098,17 @@ static void processTypeAttrs(TypeProcessingState &state, QualType &type,
     MS_TYPE_ATTRS_CASELIST:
       if (!handleMSPointerTypeQualifierAttr(state, attr, type))
         attr.setUsedAsTypeAttr();
+      break;
+
+    NULLABILITY_TYPE_ATTRS_CASELIST:
+      // Either add nullability here or try to distribute it.  We
+      // don't want to distribute the nullability specifier past any
+      // dependent type, because that complicates the user model.
+      if (type->canHaveNullability() || type->isDependentType() ||
+          !distributeNullabilityTypeAttr(state, attr)) {
+        handleNullabilityTypeAttr(state, attr, type);
+        attr.setUsedAsTypeAttr();
+      }
       break;
 
     case AttributeList::AT_NSReturnsRetained:

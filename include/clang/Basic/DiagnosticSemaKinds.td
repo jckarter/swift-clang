@@ -7427,4 +7427,28 @@ def warn_profile_data_unprofiled : Warning<
 
 } // end of instrumentation issue category
 
+let CategoryName = "Nullability Issue" in {
+
+def warn_duplicate_nullability : Warning<
+  "duplicate nullability specifier "
+  "'%select{__nonnull|__nullable|__null_unspecified}0'">,
+  InGroup<Nullability>;
+
+def err_conflicting_nullability : Error<
+  "nullability specifier "
+  "'%select{__nonnull|__nullable|__null_unspecified}0' conflicts with existing "
+  "specifier '%select{__nonnull|__nullable|__null_unspecified}1'">;
+
+def err_nullability_nonpointer : Error<
+  "nullability specifier "
+  "'%select{__nonnull|__nullable|__null_unspecified}0' cannot be applied to "
+  "non-pointer type %1">;
+
+def warn_nullability_nullptr_t : Warning<
+  "nullability specifier '%select{__nonnull|__nullable|__null_unspecified}0' "
+  "applied to always-null pointer type %1">,
+  InGroup<Nullability>;
+
+}
+
 } // end of sema component.
