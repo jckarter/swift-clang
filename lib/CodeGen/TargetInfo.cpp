@@ -5007,7 +5007,7 @@ ABIArgInfo ARMABIInfo::classifyReturnType(QualType RetTy,
   // Check for homogeneous aggregates with AAPCS-VFP.
   if (IsEffectivelyAAPCS_VFP) {
     const Type *Base = nullptr;
-    uint64_t Members;
+    uint64_t Members = 0;
     if (isHomogeneousAggregate(RetTy, Base, Members)) {
       assert(Base && "Base class should be set for homogeneous aggregate");
       // Homogeneous Aggregates are returned directly.
@@ -5097,7 +5097,6 @@ llvm::Value *ARMABIInfo::EmitVAArg(llvm::Value *VAListAddr, QualType Ty,
 
   // The ABI alignment for 64-bit or 128-bit vectors is 8 for AAPCS and 4 for
   // APCS. For AAPCS, the ABI alignment is at least 4-byte and at most 8-byte.
-  uint64_t Members;
   if (getABIKind() == ARMABIInfo::AAPCS_VFP ||
       getABIKind() == ARMABIInfo::AAPCS)
     TyAlign = std::min(std::max(TyAlign, (uint64_t)4), (uint64_t)8);
@@ -5107,7 +5106,8 @@ llvm::Value *ARMABIInfo::EmitVAArg(llvm::Value *VAListAddr, QualType Ty,
   } else
     TyAlign = 4;
   // Use indirect if size of the illegal vector is bigger than 16 bytes.
-  const Type *Base;
+  const Type *Base = nullptr;
+  uint64_t Members = 0;
   if (isIllegalVectorType(Ty) && Size > 16) {
     IsIndirect = true;
     Size = 4;

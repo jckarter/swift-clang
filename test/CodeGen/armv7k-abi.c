@@ -79,3 +79,10 @@ typedef struct {
 
 // CHECK: define [2 x i32] @return_oddly_sized_struct()
 OddlySizedStruct return_oddly_sized_struct() {}
+
+// CHECK: define double @test_va_arg(i8* %l) {
+// CHECK:   load double*
+double test_va_arg(__builtin_va_list l) {
+  return __builtin_va_arg(l, double);
+}
+
