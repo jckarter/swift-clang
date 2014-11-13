@@ -37,12 +37,14 @@ int cc1apinotes_main(ArrayRef<const char *> Argv, const char *Argv0,
   Action(cl::desc("Mode:"), cl::init(api_notes::ActionType::None),
          cl::values(
                     clEnumValN(api_notes::ActionType::YAMLToBinary,
-                            "yaml-to-binary", "Convert YAML to binary format"),
+                               "yaml-to-binary", 
+                               "Convert YAML to binary format"),
                     clEnumValN(api_notes::ActionType::BinaryToYAML,
                                "binary-to-yaml",
                                "Convert binary format to YAML"),
                     clEnumValN(api_notes::ActionType::Dump,
-                            "dump", "Parse and dump the output"),
+                               "dump", 
+                               "Parse and dump the output"),
                     clEnumValEnd),
          cl::cat(APINotesCategory));
 

@@ -155,9 +155,8 @@ namespace {
     AvailabilityItem() : Mode(APIAvailability::Available), Msg("") {}
   };
 
-  static api_notes::NullableKind AbsentNullability =
-    api_notes::NullableKind::Absent;
-  static api_notes::NullableKind DefaultNullability =
+  static llvm::Optional<api_notes::NullableKind> AbsentNullability = llvm::None;
+  static llvm::Optional<api_notes::NullableKind> DefaultNullability =
     api_notes::NullableKind::NonNullable;
   typedef std::vector<clang::api_notes::NullableKind> NullabilitySeq;
 
@@ -165,7 +164,7 @@ namespace {
     StringRef Selector;
     MethodKind Kind;
     NullabilitySeq Nullability;
-    api_notes::NullableKind NullabilityOfRet = api_notes::NullableKind::Unknown;
+    llvm::Optional<api_notes::NullableKind> NullabilityOfRet = api_notes::NullableKind::Unknown;
     AvailabilityItem Availability;
     api_notes::FactoryAsInitKind FactoryAsInit
       = api_notes::FactoryAsInitKind::Infer;
@@ -176,7 +175,7 @@ namespace {
 
   struct Property {
     StringRef Name;
-    api_notes::NullableKind Nullability = api_notes::NullableKind::Unknown;
+    llvm::Optional<api_notes::NullableKind> Nullability = api_notes::NullableKind::Unknown;
     AvailabilityItem Availability;
   };
   typedef std::vector<Property> PropertiesSeq;
@@ -193,14 +192,14 @@ namespace {
   struct Function {
     StringRef Name;
     NullabilitySeq Nullability;
-    api_notes::NullableKind NullabilityOfRet = api_notes::NullableKind::Unknown;
+    llvm::Optional<api_notes::NullableKind> NullabilityOfRet = api_notes::NullableKind::Unknown;
     AvailabilityItem Availability;
   };
   typedef std::vector<Function> FunctionsSeq;
 
   struct GlobalVariable {
     StringRef Name;
-    api_notes::NullableKind Nullability = api_notes::NullableKind::Unknown;
+    llvm::Optional<api_notes::NullableKind> Nullability = api_notes::NullableKind::Unknown;
     AvailabilityItem Availability;
   };
   typedef std::vector<GlobalVariable> GlobalVariablesSeq;
@@ -212,8 +211,11 @@ namespace {
     ClassesSeq Protocols;
     FunctionsSeq Functions;
     GlobalVariablesSeq Globals;
-  };
 
+    LLVM_ATTRIBUTE_DEPRECATED(
+      void dump() LLVM_ATTRIBUTE_USED,
+      "only for use within the debugger");
+  };
 }
 
 LLVM_YAML_IS_FLOW_SEQUENCE_VECTOR(clang::api_notes::NullableKind)
@@ -269,7 +271,7 @@ namespace llvm {
     struct MappingTraits<Property> {
       static void mapping(IO &io, Property& p) {
         io.mapRequired("Name",            p.Name);
-        io.mapOptional("Nullability",     p.Nullability,
+        io.mapOptional("Nullability",     p.Nullability, 
                                           AbsentNullability);
         io.mapOptional("Availability",    p.Availability.Mode);
         io.mapOptional("AvailabilityMsg", p.Availability.Msg);
@@ -346,6 +348,11 @@ namespace llvm {
 using llvm::yaml::Input;
 using llvm::yaml::Output;
 
+void Module::dump() {
+  Output yout(llvm::errs());
+  yout << *this;
+}
+
 static bool parseAPINotes(StringRef yamlInput, Module &module,
                           llvm::SourceMgr::DiagHandlerTy diagHandler,
                           void *diagHandlerCtxt) {
@@ -416,7 +423,7 @@ static bool compile(const Module &module,
     }
 
     void convertNullability(const NullabilitySeq &nullability,
-                            NullableKind nullabilityOfRet,
+                            Optional<NullableKind> nullabilityOfRet,
                             FunctionInfo &outInfo,
                             llvm::StringRef apiName) {
       if (nullability.size() > FunctionInfo::getMaxNullabilityIndex()) {
@@ -431,11 +438,11 @@ static bool compile(const Module &module,
         outInfo.addTypeInfo(idx, *i);
         audited = true;
       }
-      if (nullabilityOfRet != AbsentNullability) {
-        outInfo.addTypeInfo(0, nullabilityOfRet);
+      if (nullabilityOfRet) {
+        outInfo.addTypeInfo(0, *nullabilityOfRet);
         audited = true;
       } else if (audited) {
-        outInfo.addTypeInfo(0, DefaultNullability);
+        outInfo.addTypeInfo(0, *DefaultNullability);
       }
       if (audited) {
         outInfo.NullabilityAudited = audited;
@@ -496,7 +503,7 @@ static bool compile(const Module &module,
       convertAvailability(cl.Availability, cInfo, cl.Name);
 
       if (cl.AuditedForNullability)
-        cInfo.setDefaultNullability(DefaultNullability);
+        cInfo.setDefaultNullability(*DefaultNullability);
 
       ContextID clID = isClass ? Writer->addObjCClass(cl.Name, cInfo) :
                                  Writer->addObjCProtocol(cl.Name, cInfo);
@@ -534,7 +541,8 @@ static bool compile(const Module &module,
         if (!isAvailable(prop.Availability))
           continue;
         convertAvailability(prop.Availability, pInfo, prop.Name);
-        pInfo.setNullabilityAudited(prop.Nullability);
+        if (prop.Nullability)
+          pInfo.setNullabilityAudited(*prop.Nullability);
         Writer->addObjCProperty(clID, prop.Name, pInfo);
       }
     }
@@ -586,7 +594,8 @@ static bool compile(const Module &module,
         if (!isAvailable(global.Availability))
           continue;
         convertAvailability(global.Availability, info, global.Name);
-        info.setNullabilityAudited(global.Nullability);
+        if (global.Nullability)
+          info.setNullabilityAudited(*global.Nullability);
         Writer->addGlobalVariable(global.Name, info);
       }
 
@@ -710,7 +719,7 @@ bool api_notes::decompileAPINotes(std::unique_ptr<llvm::MemoryBuffer> input,
 
     /// Map nullability information for a function.
     void handleNullability(NullabilitySeq &nullability,
-                           NullableKind &nullabilityOfRet,
+                           llvm::Optional<NullableKind> &nullabilityOfRet,
                            const FunctionInfo &info,
                            unsigned numParams) {
       if (info.NullabilityAudited) {
