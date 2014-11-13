@@ -155,16 +155,16 @@ namespace {
     AvailabilityItem() : Mode(APIAvailability::Available), Msg("") {}
   };
 
-  static llvm::Optional<api_notes::NullableKind> AbsentNullability = llvm::None;
-  static llvm::Optional<api_notes::NullableKind> DefaultNullability =
-    api_notes::NullableKind::NonNullable;
-  typedef std::vector<clang::api_notes::NullableKind> NullabilitySeq;
+  static llvm::Optional<NullabilityKind> AbsentNullability = llvm::None;
+  static llvm::Optional<NullabilityKind> DefaultNullability =
+    NullabilityKind::NonNull;
+  typedef std::vector<clang::NullabilityKind> NullabilitySeq;
 
   struct Method {
     StringRef Selector;
     MethodKind Kind;
     NullabilitySeq Nullability;
-    llvm::Optional<api_notes::NullableKind> NullabilityOfRet = api_notes::NullableKind::Unknown;
+    llvm::Optional<NullabilityKind> NullabilityOfRet;
     AvailabilityItem Availability;
     api_notes::FactoryAsInitKind FactoryAsInit
       = api_notes::FactoryAsInitKind::Infer;
@@ -175,7 +175,7 @@ namespace {
 
   struct Property {
     StringRef Name;
-    llvm::Optional<api_notes::NullableKind> Nullability = api_notes::NullableKind::Unknown;
+    llvm::Optional<NullabilityKind> Nullability;
     AvailabilityItem Availability;
   };
   typedef std::vector<Property> PropertiesSeq;
@@ -192,14 +192,14 @@ namespace {
   struct Function {
     StringRef Name;
     NullabilitySeq Nullability;
-    llvm::Optional<api_notes::NullableKind> NullabilityOfRet = api_notes::NullableKind::Unknown;
+    llvm::Optional<NullabilityKind> NullabilityOfRet;
     AvailabilityItem Availability;
   };
   typedef std::vector<Function> FunctionsSeq;
 
   struct GlobalVariable {
     StringRef Name;
-    llvm::Optional<api_notes::NullableKind> Nullability = api_notes::NullableKind::Unknown;
+    llvm::Optional<NullabilityKind> Nullability;
     AvailabilityItem Availability;
   };
   typedef std::vector<GlobalVariable> GlobalVariablesSeq;
@@ -218,7 +218,7 @@ namespace {
   };
 }
 
-LLVM_YAML_IS_FLOW_SEQUENCE_VECTOR(clang::api_notes::NullableKind)
+LLVM_YAML_IS_FLOW_SEQUENCE_VECTOR(clang::NullabilityKind)
 LLVM_YAML_IS_SEQUENCE_VECTOR(Method)
 LLVM_YAML_IS_SEQUENCE_VECTOR(Property)
 LLVM_YAML_IS_SEQUENCE_VECTOR(Class)
@@ -229,14 +229,14 @@ namespace llvm {
   namespace yaml {
 
     template <>
-    struct ScalarEnumerationTraits<api_notes::NullableKind > {
-      static void enumeration(IO &io, api_notes::NullableKind  &value) {
-        io.enumCase(value, "N", api_notes::NullableKind::NonNullable);
-        io.enumCase(value, "O", api_notes::NullableKind::Nullable);
-        io.enumCase(value, "U", api_notes::NullableKind::Unknown);
+    struct ScalarEnumerationTraits<NullabilityKind > {
+      static void enumeration(IO &io, NullabilityKind  &value) {
+        io.enumCase(value, "N", NullabilityKind::NonNull);
+        io.enumCase(value, "O", NullabilityKind::Nullable);
+        io.enumCase(value, "U", NullabilityKind::Unspecified);
         // TODO: Mapping this to it's own value would allow for better cross
         // checking. Also the default should be Unknown.
-        io.enumCase(value, "S", api_notes::NullableKind::Unknown);
+        io.enumCase(value, "S", NullabilityKind::Unspecified);
       }
     };
 
@@ -423,7 +423,7 @@ static bool compile(const Module &module,
     }
 
     void convertNullability(const NullabilitySeq &nullability,
-                            Optional<NullableKind> nullabilityOfRet,
+                            Optional<NullabilityKind> nullabilityOfRet,
                             FunctionInfo &outInfo,
                             llvm::StringRef apiName) {
       if (nullability.size() > FunctionInfo::getMaxNullabilityIndex()) {
@@ -719,7 +719,7 @@ bool api_notes::decompileAPINotes(std::unique_ptr<llvm::MemoryBuffer> input,
 
     /// Map nullability information for a function.
     void handleNullability(NullabilitySeq &nullability,
-                           llvm::Optional<NullableKind> &nullabilityOfRet,
+                           llvm::Optional<NullabilityKind> &nullabilityOfRet,
                            const FunctionInfo &info,
                            unsigned numParams) {
       if (info.NullabilityAudited) {
