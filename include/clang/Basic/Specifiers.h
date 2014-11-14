@@ -16,6 +16,7 @@
 #ifndef LLVM_CLANG_BASIC_SPECIFIERS_H
 #define LLVM_CLANG_BASIC_SPECIFIERS_H
 
+#include "llvm/ADT/StringRef.h"
 #include "llvm/Support/DataTypes.h"
 
 namespace clang {
@@ -251,6 +252,9 @@ namespace clang {
     /// though it has been considered.
     Unspecified
   };
+
+  /// Retrieve the spelling of the given nullability kind.
+  llvm::StringRef getNullabilitySpelling(NullabilityKind kind);
 } // end namespace clang
 
 #endif // LLVM_CLANG_BASIC_SPECIFIERS_H

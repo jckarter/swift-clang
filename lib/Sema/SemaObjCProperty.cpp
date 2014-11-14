@@ -161,6 +161,17 @@ Decl *Sema::ActOnProperty(Scope *S, SourceLocation AtLoc,
                     !(Attributes & ObjCDeclSpec::DQ_PR_copy) &&
                     !(Attributes & ObjCDeclSpec::DQ_PR_unsafe_unretained) &&
                     !(Attributes & ObjCDeclSpec::DQ_PR_weak)));
+  
+  // If nullability was specified for this property via an attribute,
+  // apply it now.
+  if (!T.isNull() && (Attributes & ObjCDeclSpec::DQ_PR_nullability) &&
+      checkNullabilityTypeSpecifier(T,
+                                    ODS.getNullability(),
+                                    ODS.getNullabilityLoc(),
+                                    /*isContextSensitive=*/true)) {
+    // Clear out the invalid qualifier.
+    Attributes = Attributes & ~ObjCDeclSpec::DQ_PR_nullability;
+  }
 
   // Proceed with constructing the ObjCPropertyDecls.
   ObjCContainerDecl *ClassDecl = cast<ObjCContainerDecl>(CurContext);
@@ -172,7 +183,7 @@ Decl *Sema::ActOnProperty(Scope *S, SourceLocation AtLoc,
                                            isAssign, isReadWrite,
                                            Attributes,
                                            ODS.getPropertyAttributes(),
-                                           isOverridingProperty, TSI,
+                                           isOverridingProperty, T, TSI,
                                            MethodImplKind);
       if (!Res)
         return nullptr;
@@ -183,7 +194,7 @@ Decl *Sema::ActOnProperty(Scope *S, SourceLocation AtLoc,
     Res = CreatePropertyDecl(S, ClassDecl, AtLoc, LParenLoc, FD,
                              GetterSel, SetterSel, isAssign, isReadWrite,
                              Attributes, ODS.getPropertyAttributes(),
-                             TSI, MethodImplKind);
+                             T, TSI, MethodImplKind);
     if (lexicalDC)
       Res->setLexicalDeclContext(lexicalDC);
   }
@@ -321,7 +332,8 @@ Sema::HandlePropertyInClassExtension(Scope *S,
                                      const unsigned Attributes,
                                      const unsigned AttributesAsWritten,
                                      bool *isOverridingProperty,
-                                     TypeSourceInfo *T,
+                                     QualType T,
+                                     TypeSourceInfo *TSI,
                                      tok::ObjCKeywordKind MethodImplKind) {
   ObjCCategoryDecl *CDecl = cast<ObjCCategoryDecl>(CurContext);
   // Diagnose if this property is already in continuation class.
@@ -347,7 +359,7 @@ Sema::HandlePropertyInClassExtension(Scope *S,
   // FIXME. We should really be using CreatePropertyDecl for this.
   ObjCPropertyDecl *PDecl =
     ObjCPropertyDecl::Create(Context, DC, FD.D.getIdentifierLoc(),
-                             PropertyId, AtLoc, LParenLoc, T);
+                             PropertyId, AtLoc, LParenLoc, T, TSI);
   PDecl->setPropertyAttributesAsWritten(
                           makePropertyAttributesAsWritten(AttributesAsWritten));
   if (Attributes & ObjCDeclSpec::DQ_PR_readonly)
@@ -358,6 +370,8 @@ Sema::HandlePropertyInClassExtension(Scope *S,
     PDecl->setPropertyAttributes(ObjCPropertyDecl::OBJC_PR_nonatomic);
   if (Attributes & ObjCDeclSpec::DQ_PR_atomic)
     PDecl->setPropertyAttributes(ObjCPropertyDecl::OBJC_PR_atomic);
+  if (Attributes & ObjCDeclSpec::DQ_PR_nullability)
+    PDecl->setPropertyAttributes(ObjCPropertyDecl::OBJC_PR_nullability);
   // Set setter/getter selector name. Needed later.
   PDecl->setGetterName(GetterSel);
   PDecl->setSetterName(SetterSel);
@@ -382,7 +396,8 @@ Sema::HandlePropertyInClassExtension(Scope *S,
     ObjCPropertyDecl *PrimaryPDecl =
       CreatePropertyDecl(S, CCPrimary, AtLoc, LParenLoc,
                          FD, GetterSel, SetterSel, isAssign, isReadWrite,
-                         Attributes,AttributesAsWritten, T, MethodImplKind, DC);
+                         Attributes,AttributesAsWritten, T, TSI, MethodImplKind, 
+                         DC);
 
     // A case of continuation class adding a new property in the class. This
     // is not what it was meant for. However, gcc supports it and so should we.
@@ -528,11 +543,11 @@ ObjCPropertyDecl *Sema::CreatePropertyDecl(Scope *S,
                                            const bool isReadWrite,
                                            const unsigned Attributes,
                                            const unsigned AttributesAsWritten,
+                                           QualType T,
                                            TypeSourceInfo *TInfo,
                                            tok::ObjCKeywordKind MethodImplKind,
                                            DeclContext *lexicalDC){
   IdentifierInfo *PropertyId = FD.D.getIdentifier();
-  QualType T = TInfo->getType();
 
   // Issue a warning if property is 'assign' as default and its object, which is
   // gc'able conforms to NSCopying protocol
@@ -561,7 +576,8 @@ ObjCPropertyDecl *Sema::CreatePropertyDecl(Scope *S,
   DeclContext *DC = cast<DeclContext>(CDecl);
   ObjCPropertyDecl *PDecl = ObjCPropertyDecl::Create(Context, DC,
                                                      FD.D.getIdentifierLoc(),
-                                                     PropertyId, AtLoc, LParenLoc, TInfo);
+                                                     PropertyId, AtLoc, 
+                                                     LParenLoc, T, TInfo);
 
   if (ObjCPropertyDecl *prevDecl =
         ObjCPropertyDecl::findPropertyDecl(DC, PropertyId)) {
@@ -635,6 +651,9 @@ ObjCPropertyDecl *Sema::CreatePropertyDecl(Scope *S,
     PDecl->setPropertyImplementation(ObjCPropertyDecl::Required);
   else if (MethodImplKind == tok::objc_optional)
     PDecl->setPropertyImplementation(ObjCPropertyDecl::Optional);
+
+  if (Attributes & ObjCDeclSpec::DQ_PR_nullability)
+    PDecl->setPropertyAttributes(ObjCPropertyDecl::OBJC_PR_nullability);
 
   return PDecl;
 }

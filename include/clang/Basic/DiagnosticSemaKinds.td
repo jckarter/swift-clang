@@ -7431,15 +7431,15 @@ def warn_profile_data_unprofiled : Warning<
 
 let CategoryName = "Nullability Issue" in {
 
-def warn_duplicate_nullability : Warning<
+def warn_nullability_duplicate : Warning<
   "duplicate nullability specifier "
-  "'%select{__nonnull|__nullable|__null_unspecified}0'">,
+  "'%select{__|}1%select{nonnull|nullable|null_unspecified}0'">,
   InGroup<Nullability>;
 
-def err_conflicting_nullability : Error<
+def err_nullability_conflicting : Error<
   "nullability specifier "
-  "'%select{__nonnull|__nullable|__null_unspecified}0' conflicts with existing "
-  "specifier '%select{__nonnull|__nullable|__null_unspecified}1'">;
+  "'%select{__|}1%select{nonnull|nullable|null_unspecified}0' conflicts with "
+  "existing specifier '%select{__nonnull|__nullable|__null_unspecified}2'">;
 
 def err_nullability_nonpointer : Error<
   "nullability specifier "
@@ -7450,6 +7450,15 @@ def warn_nullability_nullptr_t : Warning<
   "nullability specifier '%select{__nonnull|__nullable|__null_unspecified}0' "
   "applied to always-null pointer type %1">,
   InGroup<Nullability>;
+
+def err_nullability_cs_multilevel : Error<
+  "nullability keyword "
+  "'%select{nonnull|nullable|null_unspecified}0' cannot be applied to "
+  "multi-level pointer type %1">;
+def note_nullability_type_specifier : Note<
+  "use nullability type specifier "
+  "'%select{__nonnull|__nullable|__null_unspecified}0' to affect the innermost "
+  "pointer type of %1">;
 
 }
 

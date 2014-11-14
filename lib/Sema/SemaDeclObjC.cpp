@@ -3262,6 +3262,18 @@ Decl *Sema::ActOnMethodDeclaration(
       << FixItHint::CreateInsertion(SelectorLocs.front(), "(id)");
   }
 
+  // If nullability was specified for the result type via a context-sensitive
+  // keyword, apply it now.
+  if (!resultDeclType.isNull() && 
+      (ReturnQT.getObjCDeclQualifier() & ObjCDeclSpec::DQ_CSNullability) &&
+      checkNullabilityTypeSpecifier(resultDeclType,
+                                    ReturnQT.getNullability(),
+                                    ReturnQT.getNullabilityLoc(),
+                                    /*isContextSensitive=*/true)) {
+    // Clear out the invalid qualifier.
+    ReturnQT.clearObjCDeclQualifier(ObjCDeclSpec::DQ_CSNullability);
+  }
+
   ObjCMethodDecl *ObjCMethod = ObjCMethodDecl::Create(
       Context, MethodLoc, EndLoc, Sel, resultDeclType, ReturnTInfo, CurContext,
       MethodType == tok::minus, isVariadic,
@@ -3297,6 +3309,19 @@ Decl *Sema::ActOnMethodDeclaration(
         Diag(PrevDecl->getLocation(), 
              diag::note_previous_declaration);
       }
+    }
+
+    // If nullability was specified for this parameter type via a
+    // context-sensitive keyword, apply it now.
+    ObjCDeclSpec &ArgDeclSpec = ArgInfo[i].DeclSpec;
+    if (!ArgType.isNull() && 
+        (ArgDeclSpec.getObjCDeclQualifier() & ObjCDeclSpec::DQ_CSNullability) &&
+        checkNullabilityTypeSpecifier(ArgType,
+                                      ArgDeclSpec.getNullability(),
+                                      ArgDeclSpec.getNullabilityLoc(),
+                                      /*isContextSensitive=*/true)) {
+      // Clear out the invalid qualifier.
+      ArgDeclSpec.clearObjCDeclQualifier(ObjCDeclSpec::DQ_CSNullability);
     }
 
     SourceLocation StartLoc = DI

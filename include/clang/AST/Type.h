@@ -3494,6 +3494,21 @@ public:
 
   llvm::Optional<NullabilityKind> getImmediateNullability() const;
 
+  /// Retrieve the attribute kind corresponding to the given
+  /// nullability kind.
+  static Kind getNullabilityAttrKind(NullabilityKind kind) {
+    switch (kind) {
+    case NullabilityKind::NonNull:
+      return attr_nonnull;
+     
+    case NullabilityKind::Nullable:
+      return attr_nullable;
+
+    case NullabilityKind::Unspecified:
+      return attr_null_unspecified;
+    }
+  }
+
   void Profile(llvm::FoldingSetNodeID &ID) {
     Profile(ID, getAttrKind(), ModifiedType, EquivalentType);
   }

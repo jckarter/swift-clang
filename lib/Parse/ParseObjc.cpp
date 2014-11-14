@@ -558,6 +558,9 @@ void Parser::ParseObjCInterfaceDeclList(tok::ObjCKeywordKind contextKey,
 ///     strong
 ///     weak
 ///     unsafe_unretained
+///     nonnull
+///     nullable
+///     null_unspecified
 ///
 void Parser::ParseObjCPropertyAttribute(ObjCDeclSpec &DS) {
   assert(Tok.getKind() == tok::l_paren);
@@ -643,6 +646,15 @@ void Parser::ParseObjCPropertyAttribute(ObjCDeclSpec &DS) {
         DS.setPropertyAttributes(ObjCDeclSpec::DQ_PR_getter);
         DS.setGetterName(SelIdent);
       }
+    } else if (II->isStr("nonnull")) {
+      DS.setPropertyAttributes(ObjCDeclSpec::DQ_PR_nullability);
+      DS.setNullability(Tok.getLocation(), NullabilityKind::NonNull);
+    } else if (II->isStr("nullable")) {
+      DS.setPropertyAttributes(ObjCDeclSpec::DQ_PR_nullability);
+      DS.setNullability(Tok.getLocation(), NullabilityKind::Nullable);
+    } else if (II->isStr("null_unspecified")) {
+      DS.setPropertyAttributes(ObjCDeclSpec::DQ_PR_nullability);
+      DS.setNullability(Tok.getLocation(), NullabilityKind::Unspecified);
     } else {
       Diag(AttrName, diag::err_objc_expected_property_attr) << II;
       SkipUntil(tok::r_paren, StopAtSemi);
@@ -808,6 +820,17 @@ bool Parser::isTokIdentifier_in() const {
 ///     objc-type-qualifier
 ///     objc-type-qualifiers objc-type-qualifier
 ///
+///   objc-type-qualifier:
+///     'in'
+///     'out'
+///     'inout'
+///     'oneway'
+///     'bycopy'
+///     'byref'
+///     'nonnull'
+///     'nullable'
+///     'null_unspecified'
+///
 void Parser::ParseObjCTypeQualifierList(ObjCDeclSpec &DS,
                                         Declarator::TheContext Context) {
   assert(Context == Declarator::ObjCParameterContext ||
@@ -825,10 +848,13 @@ void Parser::ParseObjCTypeQualifierList(ObjCDeclSpec &DS,
 
     const IdentifierInfo *II = Tok.getIdentifierInfo();
     for (unsigned i = 0; i != objc_NumQuals; ++i) {
-      if (II != ObjCTypeQuals[i])
+      if (II != ObjCTypeQuals[i] ||
+          NextToken().is(tok::less) ||
+          NextToken().is(tok::coloncolon))
         continue;
 
       ObjCDeclSpec::ObjCDeclQualifier Qual;
+      NullabilityKind Nullability;
       switch (i) {
       default: llvm_unreachable("Unknown decl qualifier");
       case objc_in:     Qual = ObjCDeclSpec::DQ_In; break;
@@ -837,8 +863,28 @@ void Parser::ParseObjCTypeQualifierList(ObjCDeclSpec &DS,
       case objc_oneway: Qual = ObjCDeclSpec::DQ_Oneway; break;
       case objc_bycopy: Qual = ObjCDeclSpec::DQ_Bycopy; break;
       case objc_byref:  Qual = ObjCDeclSpec::DQ_Byref; break;
+
+      case objc_nonnull: 
+        Qual = ObjCDeclSpec::DQ_CSNullability;
+        Nullability = NullabilityKind::NonNull;
+        break;
+
+      case objc_nullable: 
+        Qual = ObjCDeclSpec::DQ_CSNullability;
+        Nullability = NullabilityKind::Nullable;
+        break;
+
+      case objc_null_unspecified: 
+        Qual = ObjCDeclSpec::DQ_CSNullability;
+        Nullability = NullabilityKind::Unspecified;
+        break;
       }
+
+      // FIXME: Diagnose redundant specifiers.
       DS.setObjCDeclQualifier(Qual);
+      if (Qual == ObjCDeclSpec::DQ_CSNullability)
+        DS.setNullability(Tok.getLocation(), Nullability);
+
       ConsumeToken();
       II = nullptr;
       break;
