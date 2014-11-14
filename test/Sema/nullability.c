@@ -45,3 +45,15 @@ typedef int * __nullable ambiguous_int_ptr;
 // Printing of nullability.
 float f;
 int * __nonnull ip_1 = &f; // expected-warning{{incompatible pointer types initializing '__nonnull int *' with an expression of type 'float *'}}
+
+// Check passing null to a __nonnull argument.
+void accepts_nonnull_1(__nonnull int *ptr);
+void (*accepts_nonnull_2)(__nonnull int *ptr);
+void (^accepts_nonnull_3)(__nonnull int *ptr);
+
+void test_accepts_nonnull_null_pointer_literal() {
+  accepts_nonnull_1(0); // expected-warning{{null passed to a callee that requires a non-null argument}}
+  accepts_nonnull_2(0); // expected-warning{{null passed to a callee that requires a non-null argument}}
+  accepts_nonnull_3(0); // expected-warning{{null passed to a callee that requires a non-null argument}}
+}
+

@@ -11145,7 +11145,7 @@ Sema::CreateOverloadedBinOp(SourceLocation OpLoc,
         // Cut off the implicit 'this'.
         if (isa<CXXMethodDecl>(FnDecl))
           ArgsArray = ArgsArray.slice(1);
-        checkCall(FnDecl, ArgsArray, 0, isa<CXXMethodDecl>(FnDecl), OpLoc, 
+        checkCall(FnDecl, nullptr, ArgsArray, isa<CXXMethodDecl>(FnDecl), OpLoc, 
                   TheCall->getSourceRange(), VariadicDoesNotApply);
 
         return MaybeBindToTemporary(TheCall);
