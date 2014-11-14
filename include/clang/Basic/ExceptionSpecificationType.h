@@ -26,8 +26,7 @@ enum ExceptionSpecificationType {
   EST_BasicNoexcept,    ///< noexcept
   EST_ComputedNoexcept, ///< noexcept(expression)
   EST_Unevaluated,      ///< not evaluated yet, for special member function
-  EST_Uninstantiated,   ///< not instantiated yet
-  EST_Unparsed          ///< not parsed yet
+  EST_Uninstantiated    ///< not instantiated yet
 };
 
 inline bool isDynamicExceptionSpec(ExceptionSpecificationType ESpecType) {

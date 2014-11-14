@@ -46,12 +46,13 @@ namespace InClassInitializers {
 }
 
 namespace ExceptionSpecification {
-  // FIXME: This diagnostic is quite useless; we should indicate whose
-  // exception specification we were looking for and why.
-  struct Nested {
+  // A type is permitted to be used in a dynamic exception specification when it
+  // is still being defined, but isn't complete within such an exception
+  // specification.
+  struct Nested { // expected-note {{not complete}}
     struct T {
-      T() noexcept(!noexcept(Nested()));
-    } t; // expected-error{{exception specification is not available until end of class definition}}
+      T() noexcept(!noexcept(Nested())); // expected-error{{incomplete type}}
+    } t;
   };
 }
 
