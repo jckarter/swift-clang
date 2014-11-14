@@ -5323,8 +5323,7 @@ void Parser::ParseFunctionDeclarator(Declarator &D,
 
       // Parse exception-specification[opt].
       bool Delayed = D.isFirstDeclarationOfMember() &&
-                     D.isFunctionDeclaratorAFunctionDeclaration() &&
-                     !Actions.isLibstdcxxEagerExceptionSpecHack(D);
+                     D.isFunctionDeclaratorAFunctionDeclaration();
       ESpecType = tryParseExceptionSpecification(Delayed,
                                                  ESpecRange,
                                                  DynamicExceptions,
