@@ -250,9 +250,6 @@ public:
     return false;
   }
 
-  /// UseSEHExceptions - Does this tool chain use SEH exceptions.
-  virtual bool UseSEHExceptions() const { return false; }
-
   /// getThreadModel() - Which thread model does this target use?
   virtual std::string getThreadModel() const { return "posix"; }
 

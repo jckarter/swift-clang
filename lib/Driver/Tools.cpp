@@ -4192,8 +4192,6 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
 
   if (getToolChain().UseSjLjExceptions(Args))
     CmdArgs.push_back("-fsjlj-exceptions");
-  else if (getToolChain().UseSEHExceptions())
-    CmdArgs.push_back("-fseh-exceptions");
 
   // C++ "sane" operator new.
   if (!Args.hasFlag(options::OPT_fassume_sane_operator_new,
