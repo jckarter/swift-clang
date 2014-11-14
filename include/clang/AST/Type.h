@@ -1245,6 +1245,7 @@ protected:
 
   class FunctionTypeBitfields {
     friend class FunctionType;
+    friend class FunctionProtoType;
 
     unsigned : NumTypeBits;
 
@@ -1259,6 +1260,11 @@ protected:
     /// C++ 8.3.5p4: The return type, the parameter type list and the
     /// cv-qualifier-seq, [...], are part of the function type.
     unsigned TypeQuals : 3;
+
+    /// \brief The ref-qualifier associated with a \c FunctionProtoType.
+    ///
+    /// This is a value of type \c RefQualifierKind.
+    unsigned RefQualifier : 2;
   };
 
   class ObjCObjectTypeBitfields {
@@ -2778,7 +2784,7 @@ class FunctionType : public Type {
 
 protected:
   FunctionType(TypeClass tc, QualType res,
-               unsigned typeQuals, QualType Canonical, bool Dependent,
+               QualType Canonical, bool Dependent,
                bool InstantiationDependent,
                bool VariablyModified, bool ContainsUnexpandedParameterPack,
                ExtInfo Info)
@@ -2786,7 +2792,6 @@ protected:
            ContainsUnexpandedParameterPack),
       ResultType(res) {
     FunctionTypeBits.ExtInfo = Info.Bits;
-    FunctionTypeBits.TypeQuals = typeQuals;
   }
   unsigned getTypeQuals() const { return FunctionTypeBits.TypeQuals; }
 
@@ -2823,7 +2828,7 @@ public:
 /// no information available about its arguments.
 class FunctionNoProtoType : public FunctionType, public llvm::FoldingSetNode {
   FunctionNoProtoType(QualType Result, QualType Canonical, ExtInfo Info)
-    : FunctionType(FunctionNoProto, Result, 0, Canonical,
+    : FunctionType(FunctionNoProto, Result, Canonical,
                    /*Dependent=*/false, /*InstantiationDependent=*/false,
                    Result->isVariablyModifiedType(),
                    /*ContainsUnexpandedParameterPack=*/false, Info) {}
@@ -2927,7 +2932,7 @@ private:
   unsigned NumExceptions : 9;
 
   /// ExceptionSpecType - The type of exception specification this function has.
-  unsigned ExceptionSpecType : 3;
+  unsigned ExceptionSpecType : 4;
 
   /// HasAnyConsumedParams - Whether this function has any consumed parameters.
   unsigned HasAnyConsumedParams : 1;
@@ -2937,11 +2942,6 @@ private:
 
   /// HasTrailingReturn - Whether this function has a trailing return type.
   unsigned HasTrailingReturn : 1;
-
-  /// \brief The ref-qualifier associated with a \c FunctionProtoType.
-  ///
-  /// This is a value of type \c RefQualifierKind.
-  unsigned RefQualifier : 2;
 
   // ParamInfo - There is an variable size array after the class in memory that
   // holds the parameter types.
@@ -3089,7 +3089,7 @@ public:
 
   /// \brief Retrieve the ref-qualifier associated with this function type.
   RefQualifierKind getRefQualifier() const {
-    return static_cast<RefQualifierKind>(RefQualifier);
+    return static_cast<RefQualifierKind>(FunctionTypeBits.RefQualifier);
   }
 
   typedef const QualType *param_type_iterator;

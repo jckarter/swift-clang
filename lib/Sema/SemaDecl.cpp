@@ -10688,6 +10688,7 @@ NamedDecl *Sema::ImplicitlyDefineFunction(SourceLocation Loc,
                                              /*ExceptionRanges=*/nullptr,
                                              /*NumExceptions=*/0,
                                              /*NoexceptExpr=*/nullptr,
+                                             /*ExceptionSpecTokens=*/nullptr,
                                              Loc, Loc, D),
                 DS.getAttributes(),
                 SourceLocation());
