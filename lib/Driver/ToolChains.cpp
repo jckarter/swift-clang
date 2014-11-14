@@ -245,16 +245,17 @@ DarwinClang::DarwinClang(const Driver &D, const llvm::Triple& Triple,
 }
 
 void DarwinClang::addClangWarningOptions(ArgStringList &CC1Args) const {
-  // For iOS, 64-bit, promote certain warnings to errors.
-  if (!isTargetMacOS() && getTriple().isArch64Bit()) {
+  // For 64-bit, promote certain warnings to errors.
+  if (getTriple().isArch64Bit()) {
     // Always enable -Wdeprecated-objc-isa-usage and promote it
     // to an error.
     CC1Args.push_back("-Wdeprecated-objc-isa-usage");
     CC1Args.push_back("-Werror=deprecated-objc-isa-usage");
 
-    // Also error about implicit function declarations, as that
+    // For iOS, also error about implicit function declarations, as that
     // can impact calling conventions.
-    CC1Args.push_back("-Werror=implicit-function-declaration");
+    if (!isTargetMacOS())
+      CC1Args.push_back("-Werror=implicit-function-declaration");
   }
 }
 
