@@ -1,7 +1,9 @@
 // RUN: %clang_cc1 -fsyntax-only %s -verify
 
+__attribute__((objc_root_class))
 @interface NSFoo
 - (void)methodTakingIntPtr:(__nonnull int *)ptr;
+- (__nonnull int *)methodReturningIntPtr;
 @end
 
 // Nullability applies to all pointer types.
@@ -19,3 +21,10 @@ void test_accepts_nonnull_null_pointer_literal(NSFoo *foo) {
   [foo methodTakingIntPtr: 0]; // expected-warning{{null passed to a callee that requires a non-null argument}}
 }
 
+// Check returning nil from a __nonnull-returning method.
+@implementation NSFoo
+- (void)methodTakingIntPtr:(__nonnull int *)ptr { }
+- (__nonnull int *)methodReturningIntPtr {
+  return 0; // expected-warning{{null returned from method that requires a non-null return value}}
+}
+@end

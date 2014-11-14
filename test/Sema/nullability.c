@@ -57,3 +57,7 @@ void test_accepts_nonnull_null_pointer_literal() {
   accepts_nonnull_3(0); // expected-warning{{null passed to a callee that requires a non-null argument}}
 }
 
+// Check returning nil from a __nonnull-returning function.
+__nonnull int *returns_int_ptr() {
+  return 0; // expected-warning{{null returned from function that requires a non-null return value}}
+}
