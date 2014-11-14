@@ -2773,6 +2773,8 @@ public:
                                       const AttributeList *AttrList);
 
   void checkUnusedDeclAttributes(Declarator &D);
+    
+  void CheckBoolLikeConversion(Expr *E, SourceLocation CC);
 
   /// Map any API notes provided for this declaration to attributes on the
   /// declaration.

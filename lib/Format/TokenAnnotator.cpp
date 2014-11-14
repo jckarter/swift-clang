@@ -763,7 +763,7 @@ private:
            Previous && Previous->isOneOf(tok::star, tok::amp);
            Previous = Previous->Previous)
         Previous->Type = TT_PointerOrReference;
-      Contexts.back().IsExpression = false;
+      Contexts.back().IsExpression = Contexts.back().InCtorInitializer;
     } else if (Current.Previous &&
                Current.Previous->Type == TT_CtorInitializerColon) {
       Contexts.back().IsExpression = true;
@@ -1120,7 +1120,9 @@ public:
       // At the end of the line or when an operator with higher precedence is
       // found, insert fake parenthesis and return.
       if (!Current || (Current->closesScope() && Current->MatchingParen) ||
-          (CurrentPrecedence != -1 && CurrentPrecedence < Precedence)) {
+          (CurrentPrecedence != -1 && CurrentPrecedence < Precedence) ||
+          (CurrentPrecedence == prec::Conditional &&
+           Precedence == prec::Assignment && Current->is(tok::colon))) {
         if (LatestOperator) {
           LatestOperator->LastOperator = true;
           if (Precedence == PrecedenceArrowAndPeriod) {
@@ -1186,9 +1188,12 @@ private:
     if (Precedence > prec::Unknown)
       Start->StartsBinaryExpression = true;
     if (Current) {
-      ++Current->Previous->FakeRParens;
+      FormatToken *Previous = Current->Previous;
+      if (Previous->is(tok::comment) && Previous->Previous)
+        Previous = Previous->Previous;
+      ++Previous->FakeRParens;
       if (Precedence > prec::Unknown)
-        Current->Previous->EndsBinaryExpression = true;
+        Previous->EndsBinaryExpression = true;
     }
   }
 
@@ -1217,11 +1222,11 @@ private:
     if (!Current || !Current->is(tok::question))
       return;
     next();
-    parseConditionalExpr();
+    parse(prec::Assignment);
     if (!Current || Current->Type != TT_ConditionalExpr)
       return;
     next();
-    parseConditionalExpr();
+    parse(prec::Assignment);
     addFakeParenthesis(Start, prec::Conditional);
   }
 
@@ -1691,7 +1696,8 @@ bool TokenAnnotator::spaceRequiredBefore(const AnnotatedLine &Line,
   } else if (Style.Language == FormatStyle::LK_Java) {
     if (Left.is(Keywords.kw_synchronized) && Right.is(tok::l_paren))
       return Style.SpaceBeforeParens != FormatStyle::SBPO_Never;
-    if (Left.isOneOf(tok::kw_static, tok::kw_public) &&
+    if (Left.isOneOf(tok::kw_static, tok::kw_public, tok::kw_private,
+                     tok::kw_protected) &&
         Right.Type == TT_TemplateOpener)
       return true;
   }
