@@ -2773,8 +2773,6 @@ public:
                                       const AttributeList *AttrList);
 
   void checkUnusedDeclAttributes(Declarator &D);
-    
-  void CheckBoolLikeConversion(Expr *E, SourceLocation CC);
 
   /// Map any API notes provided for this declaration to attributes on the
   /// declaration.
@@ -8623,6 +8621,7 @@ private:
 
   void CheckFloatComparison(SourceLocation Loc, Expr* LHS, Expr* RHS);
   void CheckImplicitConversions(Expr *E, SourceLocation CC = SourceLocation());
+  void CheckBoolLikeConversion(Expr *E, SourceLocation CC);
   void CheckForIntOverflow(Expr *E);
   void CheckUnsequencedOperations(Expr *E);
 
