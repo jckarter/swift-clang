@@ -4141,6 +4141,20 @@ public:
                                    SmallVectorImpl<QualType> &Exceptions,
                                    FunctionProtoType::ExceptionSpecInfo &ESI);
 
+  /// \brief Determine if we're in a case where we need to (incorrectly) eagerly
+  /// parse an exception specification to work around a libstdc++ bug.
+  bool isLibstdcxxEagerExceptionSpecHack(const Declarator &D);
+
+  /// \brief Add an exception-specification to the given member function
+  /// (or member function template). The exception-specification was parsed
+  /// after the method itself was declared.
+  void actOnDelayedExceptionSpecification(Decl *Method,
+         ExceptionSpecificationType EST,
+         SourceRange SpecificationRange,
+         ArrayRef<ParsedType> DynamicExceptions,
+         ArrayRef<SourceRange> DynamicExceptionRanges,
+         Expr *NoexceptExpr);
+
   /// \brief Determine if a special member function should have a deleted
   /// definition when it is defaulted.
   bool ShouldDeleteSpecialMember(CXXMethodDecl *MD, CXXSpecialMember CSM,
