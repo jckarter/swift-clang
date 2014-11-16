@@ -469,6 +469,8 @@ bool parseArgument(const Driver &D, const llvm::opt::ArgList &Args,
     return true;
   }
   if (A->getOption().matches(options::OPT_fno_sanitize_EQ)) {
+    // If we're removing an option, then we don't require the
+    // -fsanitize-undefined-trap-on-error flag.
     Remove = parseArgValues(D, A, DiagnoseErrors,
                             /*HasSanitizeUndefinedTrapOnError=*/true);
     return true;
