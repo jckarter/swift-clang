@@ -3509,6 +3509,17 @@ public:
     }
   }
 
+  /// Strip off the top-level nullability annotation on the given
+  /// type, if it's there.
+  ///
+  /// \param T The type to strip. If the type is exactly an
+  /// AttributedType specifying nullability (without looking through
+  /// type sugar), the nullability is returned and this type changed
+  /// to the underlying modified type.
+  ///
+  /// \returns the top-level nullability, if present.
+  static Optional<NullabilityKind> stripOuterNullability(QualType &T);
+
   void Profile(llvm::FoldingSetNodeID &ID) {
     Profile(ID, getAttrKind(), ModifiedType, EquivalentType);
   }

@@ -2101,7 +2101,8 @@ static void MaybeAddSentinel(ASTContext &Context,
     }
 }
 
-static std::string formatObjCParamQualifiers(unsigned ObjCQuals) {
+static std::string formatObjCParamQualifiers(unsigned ObjCQuals, 
+                                             QualType &Type) {
   std::string Result;
   if (ObjCQuals & Decl::OBJC_TQ_In)
     Result += "in ";
@@ -2115,6 +2116,23 @@ static std::string formatObjCParamQualifiers(unsigned ObjCQuals) {
     Result += "byref ";
   if (ObjCQuals & Decl::OBJC_TQ_Oneway)
     Result += "oneway ";
+  if (ObjCQuals & Decl::OBJC_TQ_CSNullability) {
+    if (auto nullability = AttributedType::stripOuterNullability(Type)) {
+      switch (*nullability) {
+      case NullabilityKind::NonNull:
+        Result += "nonnull ";
+        break;
+
+      case NullabilityKind::Nullable:
+        Result += "nullable ";
+        break;
+
+      case NullabilityKind::Unspecified:
+        Result += "null_unspecified ";
+        break;
+      }
+    }
+  }
   return Result;
 }
 
@@ -2133,13 +2151,15 @@ static std::string FormatFunctionParameter(ASTContext &Context,
     if (Param->getIdentifier() && !ObjCMethodParam && !SuppressName)
       Result = Param->getIdentifier()->getName();
     
-    Param->getType().getAsStringInternal(Result, Policy);
-    
+    QualType Type = Param->getType();
     if (ObjCMethodParam) {
-      Result = "(" + formatObjCParamQualifiers(Param->getObjCDeclQualifier())
-             + Result + ")";
+      Result = "(" + formatObjCParamQualifiers(Param->getObjCDeclQualifier(),
+                                               Type);
+      Result += Type.getAsString(Policy) + ")";
       if (Param->getIdentifier() && !SuppressName)
         Result += Param->getIdentifier()->getName();
+    } else {
+      Type.getAsStringInternal(Result, Policy);
     }
     return Result;
   }
@@ -2187,13 +2207,16 @@ static std::string FormatFunctionParameter(ASTContext &Context,
     if (!ObjCMethodParam && Param->getIdentifier())
       Result = Param->getIdentifier()->getName();
 
-    Param->getType().getUnqualifiedType().getAsStringInternal(Result, Policy);
+    QualType Type = Param->getType().getUnqualifiedType();
     
     if (ObjCMethodParam) {
-      Result = "(" + formatObjCParamQualifiers(Param->getObjCDeclQualifier())
-             + Result + ")";
+      Result = "(" + formatObjCParamQualifiers(Param->getObjCDeclQualifier(),
+                                               Type);
+      Result += Type.getAsString(Policy) + Result + ")";
       if (Param->getIdentifier())
         Result += Param->getIdentifier()->getName();
+    } else {
+      Type.getAsStringInternal(Result, Policy);
     }
       
     return Result;
@@ -2768,9 +2791,10 @@ CodeCompletionResult::CreateCodeCompletionString(ASTContext &Ctx,
       if ((*P)->getType()->isBlockPointerType() && !DeclaringEntity)
         Arg = FormatFunctionParameter(Ctx, Policy, *P, true);
       else {
-        (*P)->getType().getAsStringInternal(Arg, Policy);
-        Arg = "(" + formatObjCParamQualifiers((*P)->getObjCDeclQualifier()) 
-            + Arg + ")";
+        QualType Type = (*P)->getType();
+        Arg = "(" + formatObjCParamQualifiers((*P)->getObjCDeclQualifier(),
+                                              Type);
+        Arg += Type.getAsString(Policy) + ")";
         if (IdentifierInfo *II = (*P)->getIdentifier())
           if (DeclaringEntity || AllParametersAreInformative)
             Arg += II->getName();
@@ -4723,6 +4747,11 @@ void Sema::CodeCompleteObjCPropertyFlags(Scope *S, ObjCDeclSpec &ODS) {
     Getter.AddPlaceholderChunk("method");
     Results.AddResult(CodeCompletionResult(Getter.TakeString()));
   }
+  if (!ObjCPropertyFlagConflicts(Attributes, ObjCDeclSpec::DQ_PR_nullability)) {
+    Results.AddResult(CodeCompletionResult("nonnull"));
+    Results.AddResult(CodeCompletionResult("nullable"));
+    Results.AddResult(CodeCompletionResult("null_unspecified"));
+  }
   Results.ExitScope();
   HandleCodeCompleteResults(this, CodeCompleter, 
                             CodeCompletionContext::CCC_Other,
@@ -4971,6 +5000,11 @@ void Sema::CodeCompleteObjCPassingType(Scope *S, ObjCDeclSpec &DS,
      Results.AddResult("bycopy");
      Results.AddResult("byref");
      Results.AddResult("oneway");
+  }
+  if ((DS.getObjCDeclQualifier() & ObjCDeclSpec::DQ_CSNullability) == 0) {
+    Results.AddResult("nonnull");
+    Results.AddResult("nullable");
+    Results.AddResult("null_unspecified");
   }
   
   // If we're completing the return type of an Objective-C method and the 
@@ -6144,7 +6178,7 @@ static void AddObjCPassingTypeChunk(QualType Type,
                                     const PrintingPolicy &Policy,
                                     CodeCompletionBuilder &Builder) {
   Builder.AddChunk(CodeCompletionString::CK_LeftParen);
-  std::string Quals = formatObjCParamQualifiers(ObjCDeclQuals);
+  std::string Quals = formatObjCParamQualifiers(ObjCDeclQuals, Type);
   if (!Quals.empty())
     Builder.AddTextChunk(Builder.getAllocator().CopyString(Quals));
   Builder.AddTextChunk(GetCompletionTypeString(Type, Context, Policy,
@@ -6878,7 +6912,12 @@ void Sema::CodeCompleteObjCMethodDecl(Scope *S,
         break;
 
       // Add the parameter type.
-      AddObjCPassingTypeChunk((*P)->getOriginalType(),
+      QualType ParamType;
+      if ((*P)->getObjCDeclQualifier() & Decl::OBJC_TQ_CSNullability)
+        ParamType = (*P)->getType();
+      else
+        ParamType = (*P)->getOriginalType();
+      AddObjCPassingTypeChunk(ParamType,
                               (*P)->getObjCDeclQualifier(),
                               Context, Policy,
                               Builder);
