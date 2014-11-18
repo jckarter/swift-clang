@@ -3225,6 +3225,89 @@ void Sema::CheckObjCMethodOverrides(ObjCMethodDecl *ObjCMethod,
   ObjCMethod->setOverriding(hasOverriddenMethodsInBaseOrProtocol);
 }
 
+/// Merge type nullability from for a redeclaration of the same entity,
+/// producing the updated type of the redeclared entity.
+static QualType mergeTypeNullabilityForRedecl(Sema &S, SourceLocation loc,
+                                              QualType type,
+                                              bool usesCSKeyword,
+                                              SourceLocation prevLoc,
+                                              QualType prevType,
+                                              bool prevUsesCSKeyword) {
+  // Determine the nullability of both types.
+  auto nullability = type->getNullability(S.Context);
+  auto prevNullability = prevType->getNullability(S.Context);
+
+  // Easy case: both have nullability.
+  if (nullability.hasValue() == prevNullability.hasValue()) {
+    // Neither has nullability; continue.
+    if (!nullability)
+      return type;
+
+    // The nullabilities are equivalent; do nothing.
+    if (*nullability == *prevNullability)
+      return type;
+
+    // Complain about mismatched nullability.
+    S.Diag(loc, diag::err_nullability_conflicting)
+      << static_cast<unsigned>(*nullability) << usesCSKeyword
+      << static_cast<unsigned>(*prevNullability) << prevUsesCSKeyword;
+    return type;
+  }
+
+  // If it's the redeclaration that has nullability, don't change anything.
+  if (nullability)
+    return type;
+
+  // Otherwise, provide the result with the same nullability.
+  return S.Context.getAttributedType(
+           AttributedType::getNullabilityAttrKind(*prevNullability),
+           type, type);
+}
+
+/// Merge information from the declaration of a method in the @interface
+/// (or a category/extension) into the corresponding method in the
+/// @implementation (for a class or category).
+static void mergeInterfaceMethodToImpl(Sema &S,
+                                       ObjCMethodDecl *method,
+                                       ObjCMethodDecl *prevMethod) {
+  // Merge the objc_requires_super attribute.
+  if (prevMethod->hasAttr<ObjCRequiresSuperAttr>() &&
+      !method->hasAttr<ObjCRequiresSuperAttr>()) {
+    // merge the attribute into implementation.
+    method->addAttr(
+      ObjCRequiresSuperAttr::CreateImplicit(S.Context,
+                                            method->getLocation()));
+  }
+
+  // Merge nullability of the result type.
+  QualType newReturnType
+    = mergeTypeNullabilityForRedecl(
+        S, method->getReturnTypeSourceRange().getBegin(),
+        method->getReturnType(),
+        method->getObjCDeclQualifier() & Decl::OBJC_TQ_CSNullability,
+        prevMethod->getReturnTypeSourceRange().getBegin(),
+        prevMethod->getReturnType(),
+        prevMethod->getObjCDeclQualifier() & Decl::OBJC_TQ_CSNullability);
+  method->setReturnType(newReturnType);
+
+  // Handle each of the parameters.
+  unsigned numParams = method->param_size();
+  unsigned numPrevParams = prevMethod->param_size();
+  for (unsigned i = 0, n = std::min(numParams, numPrevParams); i != n; ++i) {
+    ParmVarDecl *param = method->param_begin()[i];
+    ParmVarDecl *prevParam = prevMethod->param_begin()[i];
+
+    // Merge nullability.
+    QualType newParamType
+      = mergeTypeNullabilityForRedecl(
+          S, param->getLocation(), param->getType(),
+          param->getObjCDeclQualifier() & Decl::OBJC_TQ_CSNullability,
+          prevParam->getLocation(), prevParam->getType(),
+          prevParam->getObjCDeclQualifier() & Decl::OBJC_TQ_CSNullability);
+    param->setType(newParamType);
+  }
+}
+
 Decl *Sema::ActOnMethodDeclaration(
     Scope *S,
     SourceLocation MethodLoc, SourceLocation EndLoc,
@@ -3383,22 +3466,20 @@ Decl *Sema::ActOnMethodDeclaration(
       ImpDecl->addClassMethod(ObjCMethod);
     }
 
-    ObjCMethodDecl *IMD = nullptr;
-    if (ObjCInterfaceDecl *IDecl = ImpDecl->getClassInterface())
-      IMD = IDecl->lookupMethod(ObjCMethod->getSelector(), 
-                                ObjCMethod->isInstanceMethod());
-    if (IMD && IMD->hasAttr<ObjCRequiresSuperAttr>() &&
-        !ObjCMethod->hasAttr<ObjCRequiresSuperAttr>()) {
-      // merge the attribute into implementation.
-      ObjCMethod->addAttr(ObjCRequiresSuperAttr::CreateImplicit(Context,
-                                                   ObjCMethod->getLocation()));
-    }
-    if (isa<ObjCCategoryImplDecl>(ImpDecl)) {
-      ObjCMethodFamily family = 
-        ObjCMethod->getSelector().getMethodFamily();
-      if (family == OMF_dealloc && IMD && IMD->isOverriding()) 
-        Diag(ObjCMethod->getLocation(), diag::warn_dealloc_in_category)
-          << ObjCMethod->getDeclName();
+    // Merge information from the @interface declaration into the
+    // @implementation.
+    if (ObjCInterfaceDecl *IDecl = ImpDecl->getClassInterface()) {
+      if (auto *IMD = IDecl->lookupMethod(ObjCMethod->getSelector(),
+                                          ObjCMethod->isInstanceMethod())) {
+        mergeInterfaceMethodToImpl(*this, ObjCMethod, IMD);
+
+        // Warn about defining -dealloc in a category.
+        if (isa<ObjCCategoryImplDecl>(ImpDecl) && IMD->isOverriding() &&
+            ObjCMethod->getSelector().getMethodFamily() == OMF_dealloc) {
+          Diag(ObjCMethod->getLocation(), diag::warn_dealloc_in_category)
+            << ObjCMethod->getDeclName();
+        }
+      }
     }
   } else {
     cast<DeclContext>(ClassDecl)->addDecl(ObjCMethod);

@@ -4476,7 +4476,8 @@ bool Sema::checkNullabilityTypeSpecifier(QualType &type,
       Diag(nullabilityLoc, diag::err_nullability_conflicting)
         << static_cast<unsigned>(nullability) 
         << isContextSensitive
-        << static_cast<unsigned>(*existingNullability);
+        << static_cast<unsigned>(*existingNullability)
+        << false;
       return true;
     }
 

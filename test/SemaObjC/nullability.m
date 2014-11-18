@@ -68,5 +68,30 @@ void test_accepts_nonnull_null_pointer_literal(NSFoo *foo, NSBar *bar) {
 
 - (NSFoo **)invalidMethod1 { return 0; }
 - (NSFoo *)conflictingMethod1 { return 0; }
-- (NSFoo *)redundantMethod1 { return 0; }
+- (NSFoo *)redundantMethod1 {
+  return 0; // expected-warning{{null returned from method that requires a non-null return value}}
+}
+@end
+
+__attribute__((objc_root_class))
+@interface NSMerge
+- (nonnull NSFoo *)methodA:(nonnull NSFoo*)foo;
+- (nonnull NSFoo *)methodB:(nonnull NSFoo*)foo;
+- (NSFoo *)methodC:(NSFoo*)foo;
+@end
+
+@implementation NSMerge
+- (NSFoo *)methodA:(NSFoo*)foo {
+  int *ptr = foo; // expected-warning{{incompatible pointer types initializing 'int *' with an expression of type '__nonnull NSFoo *'}}
+  return 0; // expected-warning{{null returned from method that requires a non-null return value}}
+}
+
+- (nullable NSFoo *)methodB:(null_unspecified NSFoo*)foo { // expected-error{{nullability specifier 'nullable' conflicts with existing specifier 'nonnull'}} \
+  // expected-error{{nullability specifier 'null_unspecified' conflicts with existing specifier 'nonnull'}}
+  return 0;
+}
+
+- (nonnull NSFoo *)methodC:(nullable NSFoo*)foo {
+  return 0; // expected-warning{{null returned from method that requires a non-null return value}}
+}
 @end

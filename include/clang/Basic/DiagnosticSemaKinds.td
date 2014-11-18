@@ -7449,7 +7449,8 @@ def warn_nullability_duplicate : Warning<
 def err_nullability_conflicting : Error<
   "nullability specifier "
   "'%select{__|}1%select{nonnull|nullable|null_unspecified}0' conflicts with "
-  "existing specifier '%select{__nonnull|__nullable|__null_unspecified}2'">;
+  "existing specifier '%select{__|}3%select{nonnull|nullable|"
+  "null_unspecified}2'">;
 
 def err_nullability_nonpointer : Error<
   "nullability specifier "
