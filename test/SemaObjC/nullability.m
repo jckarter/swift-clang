@@ -50,7 +50,7 @@ __attribute__((objc_root_class))
 @property(retain,nonnull) NSFoo * __nonnull redundantProperty2; // expected-warning{{duplicate nullability specifier 'nonnull'}}
 @end
 
-void test_accepts_nonnull_null_pointer_literal(NSFoo *foo, NSBar *bar) {
+void test_accepts_nonnull_null_pointer_literal(NSFoo *foo, __nonnull NSBar *bar) {
   [foo methodTakingIntPtr: 0]; // expected-warning{{null passed to a callee that requires a non-null argument}}
   [bar methodWithFoo: 0]; // expected-warning{{null passed to a callee that requires a non-null argument}}
   bar.property1 = 0; // expected-warning{{null passed to a callee that requires a non-null argument}}
@@ -95,3 +95,39 @@ __attribute__((objc_root_class))
   return 0; // expected-warning{{null returned from method that requires a non-null return value}}
 }
 @end
+
+// Checking merging of nullability when sending a message.
+@interface NSMergeReceiver
+- (id)returnsNone;
+- (nonnull id)returnsNonNull;
+- (nullable id)returnsNullable;
+- (null_unspecified id)returnsNullUnspecified;
+@end
+
+void test_receiver_merge(NSMergeReceiver *none,
+                         __nonnull NSMergeReceiver *nonnull,
+                         __nullable NSMergeReceiver *nullable,
+                         __null_unspecified NSMergeReceiver *null_unspecified) {
+  int *ptr;
+
+  ptr = [nullable returnsNullable]; // expected-warning{{'__nullable id'}}
+  ptr = [nullable returnsNullUnspecified]; // expected-warning{{'__nullable id'}}
+  ptr = [nullable returnsNonNull]; // expected-warning{{'__nullable id'}}
+  ptr = [nullable returnsNone]; // expected-warning{{'__nullable id'}}
+
+  ptr = [null_unspecified returnsNullable]; // expected-warning{{'__nullable id'}}
+  ptr = [null_unspecified returnsNullUnspecified]; // expected-warning{{'__null_unspecified id'}}
+  ptr = [null_unspecified returnsNonNull]; // expected-warning{{'__null_unspecified id'}}
+  ptr = [null_unspecified returnsNone]; // expected-warning{{'id'}}
+
+  ptr = [nonnull returnsNullable]; // expected-warning{{'__nullable id'}}
+  ptr = [nonnull returnsNullUnspecified]; // expected-warning{{'__null_unspecified id'}}
+  ptr = [nonnull returnsNonNull]; // expected-warning{{'__nonnull id'}}
+  ptr = [nonnull returnsNone]; // expected-warning{{'id'}}
+
+  ptr = [none returnsNullable]; // expected-warning{{'__nullable id'}}
+  ptr = [none returnsNullUnspecified]; // expected-warning{{'id'}}
+  ptr = [none returnsNonNull]; // expected-warning{{'id'}}
+  ptr = [none returnsNone]; // expected-warning{{'id'}}
+  
+}
