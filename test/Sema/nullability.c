@@ -1,5 +1,10 @@
 // RUN: %clang_cc1 -fsyntax-only -fblocks %s -verify
 
+#if __has_feature(nullability)
+#else
+#  error nullability feature should be defined
+#endif
+
 typedef int * int_ptr;
 
 // Parse nullability type specifiers.
