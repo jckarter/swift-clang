@@ -2503,6 +2503,119 @@ getCCForDeclaratorChunk(Sema &S, Declarator &D,
                                                IsCXXInstanceMethod);
 }
 
+namespace {
+  /// A simple notion of pointer kinds, which matches up with the various
+  /// pointer declarators.
+  enum class SimplePointerKind {
+    Pointer,
+    BlockPointer,
+    MemberPointer,
+  };
+}
+
+static FileID getNullabilityCompletenessCheckFileID(Sema &S,
+                                                    SourceLocation loc) {
+  // If we're anywhere in a function, method, or closure context, don't perform
+  // completeness checks.
+  for (DeclContext *ctx = S.CurContext; ctx; ctx = ctx->getParent()) {
+    if (ctx->isFunctionOrMethod())
+      return FileID();
+
+    if (ctx->isFileContext())
+      break;
+  }
+
+  // We only care about the expansion location.
+  loc = S.SourceMgr.getExpansionLoc(loc);
+  FileID file = S.SourceMgr.getFileID(loc);
+  if (file.isInvalid())
+    return FileID();
+
+  // Retrieve file information.
+  bool invalid = false;
+  const SrcMgr::SLocEntry &sloc = S.SourceMgr.getSLocEntry(file, &invalid);
+  if (invalid || !sloc.isFile())
+    return FileID();
+
+  // We don't want to perform completeness checks on the main file or in
+  // system headers.
+  const SrcMgr::FileInfo &fileInfo = sloc.getFile();
+  if (fileInfo.getIncludeLoc().isInvalid() ||
+      fileInfo.getFileCharacteristic() != SrcMgr::C_User)
+    return FileID();
+
+  return file;
+}
+
+/// Check for consistent use of nullability.
+static void checkNullabilityConsistency(TypeProcessingState &state,
+                                        DeclaratorChunk &chunk) {
+  Sema &S = state.getSema();
+
+  // Determine which file we're performing consistency checking for.
+  SourceLocation pointerLoc = chunk.Loc;
+  FileID file = getNullabilityCompletenessCheckFileID(S, pointerLoc);
+  if (file.isInvalid())
+    return;
+
+  SimplePointerKind kind;
+  switch (chunk.Kind) {
+  case DeclaratorChunk::Array:
+  case DeclaratorChunk::Function:
+  case DeclaratorChunk::Paren:
+  case DeclaratorChunk::Reference:
+    llvm_unreachable("Not a pointer chunk kind");
+
+  case DeclaratorChunk::Pointer:
+    kind = SimplePointerKind::Pointer;
+    break;
+
+  case DeclaratorChunk::BlockPointer:
+    kind = SimplePointerKind::BlockPointer;
+    break;
+
+  case DeclaratorChunk::MemberPointer:
+    kind = SimplePointerKind::MemberPointer;
+    break;
+  }
+
+  // Local function to determine whether this declarator chunk has a
+  // nullability attribute.
+  auto hasNullability = [&]() -> bool {
+    // Check whether we have a type nullability attribute on this point. If so,
+    // there's nothing to do.
+    for (const AttributeList *attr = chunk.getAttrs(); attr;
+         attr = attr->getNext()) {
+      if (attr->getKind() == AttributeList::AT_TypeNonNull ||
+          attr->getKind() == AttributeList::AT_TypeNullable ||
+          attr->getKind() == AttributeList::AT_TypeNullUnspecified)
+        return true;
+    }
+
+    return false;
+  };
+
+  // If we haven't seen any type nullability in this file, we won't warn now
+  // about anything.
+  FileNullability &fileNullability = S.NullabilityMap[file];
+  if (!fileNullability.SawTypeNullability) {
+    // If this is the first pointer declarator in the file, record it.
+    if (fileNullability.PointerLoc.isInvalid() &&
+        !hasNullability()) {
+      fileNullability.PointerLoc = pointerLoc;
+      fileNullability.PointerKind = static_cast<unsigned>(kind);
+    }
+
+    return;
+  }
+
+  if (!hasNullability()) {
+    // Complain about missing nullability.
+    S.Diag(pointerLoc, diag::warn_nullability_missing)
+      << static_cast<unsigned>(kind);
+  }
+}
+
 static TypeSourceInfo *GetFullTypeForDeclarator(TypeProcessingState &state,
                                                 QualType declSpecType,
                                                 TypeSourceInfo *TInfo) {
@@ -2586,6 +2699,8 @@ static TypeSourceInfo *GetFullTypeForDeclarator(TypeProcessingState &state,
       if (!LangOpts.Blocks)
         S.Diag(DeclType.Loc, diag::err_blocks_disable);
 
+      checkNullabilityConsistency(state, DeclType);
+
       T = S.BuildBlockPointerType(T, D.getIdentifierLoc(), Name);
       if (DeclType.Cls.TypeQuals)
         T = S.BuildQualifiedType(T, DeclType.Loc, DeclType.Cls.TypeQuals);
@@ -2598,6 +2713,8 @@ static TypeSourceInfo *GetFullTypeForDeclarator(TypeProcessingState &state,
         D.setInvalidType(true);
         // Build the type anyway.
       }
+      checkNullabilityConsistency(state, DeclType);
+
       if (LangOpts.ObjC1 && T->getAs<ObjCObjectType>()) {
         T = Context.getObjCObjectPointerType(T);
         if (DeclType.Ptr.TypeQuals)
@@ -3031,6 +3148,7 @@ static TypeSourceInfo *GetFullTypeForDeclarator(TypeProcessingState &state,
       // The scope spec must refer to a class, or be dependent.
       CXXScopeSpec &SS = DeclType.Mem.Scope();
       QualType ClsType;
+      checkNullabilityConsistency(state, DeclType);
       if (SS.isInvalid()) {
         // Avoid emitting extra errors if we already errored on the scope.
         D.setInvalidType(true);
@@ -4453,10 +4571,27 @@ static bool handleMSPointerTypeQualifierAttr(TypeProcessingState &State,
   return false;
 }
 
-bool Sema::checkNullabilityTypeSpecifier(QualType &type, 
+bool Sema::checkNullabilityTypeSpecifier(QualType &type,
                                          NullabilityKind nullability,
                                          SourceLocation nullabilityLoc,
                                          bool isContextSensitive) {
+  // We saw a nullability type specifier. If this is the first one for
+  // this file, note that.
+  FileID file = getNullabilityCompletenessCheckFileID(*this, nullabilityLoc);
+  if (!file.isInvalid()) {
+    FileNullability &fileNullability = NullabilityMap[file];
+    if (!fileNullability.SawTypeNullability) {
+      // If we have already seen a pointer declarator without a nullability
+      // annotation, complain about it.
+      if (fileNullability.PointerLoc.isValid()) {
+        Diag(fileNullability.PointerLoc, diag::warn_nullability_missing)
+          << fileNullability.PointerKind;
+      }
+
+      fileNullability.SawTypeNullability = true;
+    }
+  }
+
   // Check for existing nullability attributes on the type.
   QualType desugared = type;
   while (auto attributed = dyn_cast<AttributedType>(desugared.getTypePtr())) {

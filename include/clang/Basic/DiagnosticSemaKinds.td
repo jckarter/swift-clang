@@ -7473,6 +7473,11 @@ def note_nullability_type_specifier : Note<
   "'%select{__nonnull|__nullable|__null_unspecified}0' to affect the innermost "
   "pointer type of %1">;
 
+def warn_nullability_missing : Warning<
+  "%select{pointer|block pointer|member pointer}0 is missing a nullability "
+  "type specifier (__nonnull, __nullable, or __null_unspecified)">,
+  InGroup<NullabilityCompleteness>;
+
 }
 
 } // end of sema component.
