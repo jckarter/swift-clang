@@ -168,7 +168,8 @@ Decl *Sema::ActOnProperty(Scope *S, SourceLocation AtLoc,
       checkNullabilityTypeSpecifier(T,
                                     ODS.getNullability(),
                                     ODS.getNullabilityLoc(),
-                                    /*isContextSensitive=*/true)) {
+                                    /*isContextSensitive=*/true,
+                                    /*isImplicit=*/false)) {
     // Clear out the invalid qualifier.
     Attributes = Attributes & ~ObjCDeclSpec::DQ_PR_nullability;
   }

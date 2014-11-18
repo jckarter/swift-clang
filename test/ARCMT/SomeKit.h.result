@@ -4,7 +4,7 @@
 __attribute__((objc_root_class))
 @interface A
 -(A*)transform:(A*)input __attribute__((unavailable("anything but this")));
--(A*)transform:(A*) __attribute__((nonnull()))input integer:(int)integer __attribute__((returns_nonnull));
+-(A*)transform:(A*)input integer:(int)integer;
 
 @property (nonatomic, readonly, retain) A* someA;
 @property (nonatomic, retain) A* someOtherA;

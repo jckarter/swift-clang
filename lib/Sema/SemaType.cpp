@@ -4574,21 +4574,24 @@ static bool handleMSPointerTypeQualifierAttr(TypeProcessingState &State,
 bool Sema::checkNullabilityTypeSpecifier(QualType &type,
                                          NullabilityKind nullability,
                                          SourceLocation nullabilityLoc,
-                                         bool isContextSensitive) {
-  // We saw a nullability type specifier. If this is the first one for
-  // this file, note that.
-  FileID file = getNullabilityCompletenessCheckFileID(*this, nullabilityLoc);
-  if (!file.isInvalid()) {
-    FileNullability &fileNullability = NullabilityMap[file];
-    if (!fileNullability.SawTypeNullability) {
-      // If we have already seen a pointer declarator without a nullability
-      // annotation, complain about it.
-      if (fileNullability.PointerLoc.isValid()) {
-        Diag(fileNullability.PointerLoc, diag::warn_nullability_missing)
-          << fileNullability.PointerKind;
-      }
+                                         bool isContextSensitive,
+                                         bool implicit) {
+  if (!implicit) {
+    // We saw a nullability type specifier. If this is the first one for
+    // this file, note that.
+    FileID file = getNullabilityCompletenessCheckFileID(*this, nullabilityLoc);
+    if (!file.isInvalid()) {
+      FileNullability &fileNullability = NullabilityMap[file];
+      if (!fileNullability.SawTypeNullability) {
+        // If we have already seen a pointer declarator without a nullability
+        // annotation, complain about it.
+        if (fileNullability.PointerLoc.isValid()) {
+          Diag(fileNullability.PointerLoc, diag::warn_nullability_missing)
+            << fileNullability.PointerKind;
+        }
 
-      fileNullability.SawTypeNullability = true;
+        fileNullability.SawTypeNullability = true;
+      }
     }
   }
 
@@ -4599,6 +4602,9 @@ bool Sema::checkNullabilityTypeSpecifier(QualType &type,
     if (auto existingNullability = attributed->getImmediateNullability()) {
       // Duplicated nullability.
       if (nullability == *existingNullability) {
+        if (implicit)
+          break;
+
         Diag(nullabilityLoc, diag::warn_nullability_duplicate)
           << static_cast<unsigned>(nullability)
           << isContextSensitive
@@ -4621,15 +4627,19 @@ bool Sema::checkNullabilityTypeSpecifier(QualType &type,
 
   // If this definitely isn't a pointer type, reject the specifier.
   if (!desugared->canHaveNullability()) {
-    Diag(nullabilityLoc, diag::err_nullability_nonpointer)
-      << static_cast<unsigned>(nullability) << type;
+    if (!implicit) {
+      Diag(nullabilityLoc, diag::err_nullability_nonpointer)
+        << static_cast<unsigned>(nullability) << type;
+    }
     return true;
   }
 
   // It's silly to add a nullability specifier to nullptr_t.
   if (desugared->isNullPtrType()) {
-    Diag(nullabilityLoc, diag::warn_nullability_nullptr_t)
-      << static_cast<unsigned>(nullability) << type;
+    if (!implicit) {
+      Diag(nullabilityLoc, diag::warn_nullability_nullptr_t)
+        << static_cast<unsigned>(nullability) << type;
+    }
   }
   
   // For the context-sensitive keywords/Objective-C property
@@ -5249,7 +5259,8 @@ static void processTypeAttrs(TypeProcessingState &state, QualType &type,
           type,
           mapNullabilityAttrKind(attr.getKind()),
           attr.getLoc(),
-          /*isContextSensitive=*/false);
+          /*isContextSensitive=*/false,
+          /*implicit=*/false);
 
         attr.setUsedAsTypeAttr();
       }

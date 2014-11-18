@@ -16,6 +16,82 @@
 #include "clang/APINotes/APINotesReader.h"
 using namespace clang;
 
+/// Determine whether this is a multi-level pointer type.
+static bool isMultiLevelPointerType(QualType type) {
+  QualType pointee = type->getPointeeType();
+  if (pointee.isNull())
+    return false;
+
+  return pointee->isAnyPointerType() || pointee->isObjCObjectPointerType() ||
+         pointee->isMemberPointerType();
+}
+
+// Apply nullability to the given declaration.
+static void applyNullability(Sema &S, Decl *decl, NullabilityKind nullability) {
+  QualType type;
+
+  // Nullability for a function/method appertains to the retain type.
+  if (auto function = dyn_cast<FunctionDecl>(decl)) {
+    type = function->getReturnType();
+  } else if (auto method = dyn_cast<ObjCMethodDecl>(decl)) {
+    type = method->getReturnType();
+  } else if (auto value = dyn_cast<ValueDecl>(decl)) {
+    type = value->getType();
+  } else if (auto property = dyn_cast<ObjCPropertyDecl>(decl)) {
+    type = property->getType();
+  } else {
+    return;
+  }
+
+  // Check the nullability specifier on this type.
+  QualType origType = type;
+  S.checkNullabilityTypeSpecifier(type, nullability, decl->getLocation(),
+                                  /*isContextSensitive=*/false,
+                                  /*implicit=*/true);
+  if (type.getTypePtr() == origType.getTypePtr())
+    return;
+
+  if (auto function = dyn_cast<FunctionDecl>(decl)) {
+    const FunctionType *fnType = function->getType()->castAs<FunctionType>();
+    if (const FunctionProtoType *proto = dyn_cast<FunctionProtoType>(fnType)) {
+      function->setType(S.Context.getFunctionType(type, proto->getParamTypes(),
+                                                  proto->getExtProtoInfo()));
+    } else {
+      function->setType(S.Context.getFunctionNoProtoType(type,
+                                                         fnType->getExtInfo()));
+    }
+  } else if (auto method = dyn_cast<ObjCMethodDecl>(decl)) {
+    method->setReturnType(type);
+
+    // Make it a context-sensitive keyword if we can.
+    if (!isMultiLevelPointerType(type)) {
+      method->setObjCDeclQualifier(
+        Decl::ObjCDeclQualifier(method->getObjCDeclQualifier() |
+                                Decl::OBJC_TQ_CSNullability));
+    }
+  } else if (auto value = dyn_cast<ValueDecl>(decl)) {
+    value->setType(type);
+
+    // Make it a context-sensitive keyword if we can.
+    if (auto parm = dyn_cast<ParmVarDecl>(decl)) {
+      if (parm->isObjCMethodParameter() && !isMultiLevelPointerType(type)) {
+        parm->setObjCDeclQualifier(
+          Decl::ObjCDeclQualifier(parm->getObjCDeclQualifier() |
+                                  Decl::OBJC_TQ_CSNullability));
+      }
+    }
+  } else if (auto property = dyn_cast<ObjCPropertyDecl>(decl)) {
+    property->setType(type, property->getTypeSourceInfo());
+
+    // Make it a property attribute if we can.
+    if (!isMultiLevelPointerType(type)) {
+      property->setPropertyAttributes(ObjCPropertyDecl::OBJC_PR_nullability);
+    }
+  } else {
+    llvm_unreachable("cannot handle nullability here");
+  }
+}
+
 static void ProcessAPINotes(Sema &S, Decl *D,
                             const api_notes::CommonEntityInfo &Info) {
   // Availability
@@ -29,10 +105,7 @@ static void ProcessAPINotes(Sema &S, Decl *D,
                             const api_notes::VariableInfo &Info) {
   // Nullability.
   if (auto Nullability = Info.getNullability()) {
-    if (*Nullability == NullabilityKind::NonNull &&
-        !D->hasAttr<NonNullAttr>()) {
-      D->addAttr(NonNullAttr::CreateImplicit(S.Context, 0, 0));
-    }
+    applyNullability(S, D, *Nullability);
   }
 
   // Handle common entity information.
@@ -74,10 +147,7 @@ static void ProcessAPINotes(Sema &S, FunctionOrMethod AnyFunc,
   // Nullability.
   if (Info.NullabilityAudited) {
     // Return type.
-    if (Info.getReturnTypeInfo() == NullabilityKind::NonNull &&
-        !D->hasAttr<ReturnsNonNullAttr>()) {
-      D->addAttr(ReturnsNonNullAttr::CreateImplicit(S.Context));
-    }
+    applyNullability(S, D, Info.getReturnTypeInfo());
 
     // Parameters.
     unsigned NumParams;
@@ -93,10 +163,7 @@ static void ProcessAPINotes(Sema &S, FunctionOrMethod AnyFunc,
       else
         Param = MD->param_begin()[I];
 
-      if (Info.getParamTypeInfo(I) == NullabilityKind::NonNull &&
-          !Param->hasAttr<NonNullAttr>()) {
-        Param->addAttr(NonNullAttr::CreateImplicit(S.Context, 0, 0));
-      }
+      applyNullability(S, Param, Info.getParamTypeInfo(I));
     }
   }
 

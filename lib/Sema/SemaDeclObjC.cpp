@@ -3352,7 +3352,8 @@ Decl *Sema::ActOnMethodDeclaration(
       checkNullabilityTypeSpecifier(resultDeclType,
                                     ReturnQT.getNullability(),
                                     ReturnQT.getNullabilityLoc(),
-                                    /*isContextSensitive=*/true)) {
+                                    /*isContextSensitive=*/true,
+                                    /*implicit=*/false)) {
     // Clear out the invalid qualifier.
     ReturnQT.clearObjCDeclQualifier(ObjCDeclSpec::DQ_CSNullability);
   }
@@ -3402,7 +3403,8 @@ Decl *Sema::ActOnMethodDeclaration(
         checkNullabilityTypeSpecifier(ArgType,
                                       ArgDeclSpec.getNullability(),
                                       ArgDeclSpec.getNullabilityLoc(),
-                                      /*isContextSensitive=*/true)) {
+                                      /*isContextSensitive=*/true,
+                                      /*implicit=*/false)) {
       // Clear out the invalid qualifier.
       ArgDeclSpec.clearObjCDeclQualifier(ObjCDeclSpec::DQ_CSNullability);
     }
