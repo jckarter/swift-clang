@@ -820,6 +820,13 @@ bool Sema::getFormatStringInfo(const FormatAttr *Format, bool IsCXXMember,
 /// \brief Returns true if the value evaluates to null.
 static bool CheckNonNullExpr(Sema &S,
                              const Expr *Expr) {
+  // If the expression has non-null type, it doesn't evaluate to null.
+  if (auto nullability
+        = Expr->IgnoreImplicit()->getType()->getNullability(S.Context)) {
+    if (*nullability == NullabilityKind::NonNull)
+      return false;
+  }
+
   // As a special case, transparent unions initialized with zero are
   // considered null for the purposes of the nonnull attribute.
   if (const RecordType *UT = Expr->getType()->getAsUnionType()) {

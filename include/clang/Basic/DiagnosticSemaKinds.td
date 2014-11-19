@@ -7471,6 +7471,10 @@ def warn_nullability_missing : Warning<
   "type specifier (__nonnull, __nullable, or __null_unspecified)">,
   InGroup<NullabilityCompleteness>;
 
+def warn_nullability_lost : Warning<
+  "implicit conversion from nullable pointer %0 to non-null pointer type %1">,
+  InGroup<Nullability>;
+
 }
 
 } // end of sema component.

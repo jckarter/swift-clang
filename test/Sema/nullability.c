@@ -63,8 +63,12 @@ void test_accepts_nonnull_null_pointer_literal() {
 }
 
 // Check returning nil from a __nonnull-returning function.
-__nonnull int *returns_int_ptr() {
-  return 0; // expected-warning{{null returned from function that requires a non-null return value}}
+__nonnull int *returns_int_ptr(int x) {
+  if (x) {
+    return 0; // expected-warning{{null returned from function that requires a non-null return value}}
+  }
+
+  return (__nonnull int *)0;
 }
 
 // Check printing of nullability specifiers.
@@ -77,4 +81,10 @@ void printing_nullability(void) {
 
   int * __nullable * __nonnull iptrptr2;
   float * *fptrptr2 = iptrptr2; // expected-warning{{incompatible pointer types initializing 'float **' with an expression of type '__nullable int ** __nonnull'}}
+}
+
+// Check nullable-to-nonnull conversions.
+void nullable_to_nonnull(__nullable int *ptr) {
+  int *a = ptr; // okay
+  __nonnull int *b = ptr; // expected-warning{{implicit conversion from nullable pointer '__nullable int *' to non-null pointer type '__nonnull int *'}}
 }
