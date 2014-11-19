@@ -1953,7 +1953,7 @@ void Sema::MatchAllMethodDeclarations(const SelectorSet &InsMap,
   // Check and see if instance methods in class interface have been
   // implemented in the implementation class. If so, their types match.
   for (auto *I : CDecl->instance_methods()) {
-    if (!InsMapSeen.insert(I->getSelector()))
+    if (!InsMapSeen.insert(I->getSelector()).second)
       continue;
     if (!I->isPropertyAccessor() &&
         !InsMap.count(I->getSelector())) {
@@ -1980,7 +1980,7 @@ void Sema::MatchAllMethodDeclarations(const SelectorSet &InsMap,
   // Check and see if class methods in class interface have been
   // implemented in the implementation class. If so, their types match.
   for (auto *I : CDecl->class_methods()) {
-    if (!ClsMapSeen.insert(I->getSelector()))
+    if (!ClsMapSeen.insert(I->getSelector()).second)
       continue;
     if (!ClsMap.count(I->getSelector())) {
       if (ImmediateClass)
