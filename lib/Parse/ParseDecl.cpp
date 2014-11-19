@@ -649,6 +649,9 @@ void Parser::ParseNullabilityTypeSpecifiers(ParsedAttributes &attrs) {
     case tok::kw___null_unspecified: {
       IdentifierInfo *AttrName = Tok.getIdentifierInfo();
       SourceLocation AttrNameLoc = ConsumeToken();
+      if (!getLangOpts().ObjC1)
+        Diag(AttrNameLoc, diag::ext_nullability)
+          << AttrName;
       attrs.addNew(AttrName, AttrNameLoc, nullptr, AttrNameLoc, nullptr, 0, 
                    AttributeList::AS_Keyword);
       break;

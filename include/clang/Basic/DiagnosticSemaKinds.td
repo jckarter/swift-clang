@@ -7471,6 +7471,7 @@ def err_nullability_cs_multilevel : Error<
   "nullability keyword "
   "'%select{nonnull|nullable|null_unspecified}0' cannot be applied to "
   "multi-level pointer type %1">;
+
 def note_nullability_type_specifier : Note<
   "use nullability type specifier "
   "'%select{__nonnull|__nullable|__null_unspecified}0' to affect the innermost "
