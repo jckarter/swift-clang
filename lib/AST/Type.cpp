@@ -2434,11 +2434,6 @@ bool Type::canHaveNullability() const {
 #include "clang/AST/BuiltinTypes.def"
       return false;
 
-    // nullptr_t is a pointer type (albeit a silly one to attach a
-    // nullability attribute).
-    case BuiltinType::NullPtr:
-      return true;
-
     // Dependent types that could instantiate to a pointer type.
     case BuiltinType::Dependent:
     case BuiltinType::Overload:
@@ -2461,6 +2456,7 @@ bool Type::canHaveNullability() const {
     case BuiltinType::OCLSampler:
     case BuiltinType::OCLEvent:
     case BuiltinType::BuiltinFn:
+    case BuiltinType::NullPtr:
       return false;
     }
 

@@ -7467,11 +7467,6 @@ def err_nullability_nonpointer : Error<
   "'%select{__nonnull|__nullable|__null_unspecified}0' cannot be applied to "
   "non-pointer type %1">;
 
-def warn_nullability_nullptr_t : Warning<
-  "nullability specifier '%select{__nonnull|__nullable|__null_unspecified}0' "
-  "applied to always-null pointer type %1">,
-  InGroup<Nullability>;
-
 def err_nullability_cs_multilevel : Error<
   "nullability keyword "
   "'%select{nonnull|nullable|null_unspecified}0' cannot be applied to "

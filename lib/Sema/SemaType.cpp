@@ -4634,14 +4634,6 @@ bool Sema::checkNullabilityTypeSpecifier(QualType &type,
     return true;
   }
 
-  // It's silly to add a nullability specifier to nullptr_t.
-  if (desugared->isNullPtrType()) {
-    if (!implicit) {
-      Diag(nullabilityLoc, diag::warn_nullability_nullptr_t)
-        << static_cast<unsigned>(nullability) << type;
-    }
-  }
-  
   // For the context-sensitive keywords/Objective-C property
   // attributes, require that the type be a single-level pointer.
   if (isContextSensitive) {
