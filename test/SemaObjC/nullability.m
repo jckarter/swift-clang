@@ -40,6 +40,9 @@ __attribute__((objc_root_class))
 // expected-note@-1{{use nullability type specifier '__nullable' to affect the innermost pointer type of 'NSFoo **'}}
 @property(null_unspecified,retain) NSFoo __nullable *conflictingProperty1; // expected-error{{nullability specifier 'null_unspecified' conflicts with existing specifier '__nullable'}}
 @property(retain,nonnull) NSFoo * __nonnull redundantProperty1; // expected-warning{{duplicate nullability specifier 'nonnull'}}
+
+@property(null_unspecified,retain,nullable) NSFoo *conflictingProperty3; // expected-error{{nullability specifier 'nullable' conflicts with existing specifier 'null_unspecified'}}
+@property(nullable,retain,nullable) NSFoo *redundantProperty3; // expected-warning{{duplicate nullability specifier 'nullable'}}
 @end
 
 @interface NSBar ()

@@ -94,6 +94,21 @@ def err_enum_template : Error<"enumeration cannot be a template">;
 
 }
 
+let CategoryName = "Nullability Issue" in {
+
+def warn_nullability_duplicate : Warning<
+  "duplicate nullability specifier "
+  "'%select{__|}1%select{nonnull|nullable|null_unspecified}0'">,
+  InGroup<Nullability>;
+
+def err_nullability_conflicting : Error<
+  "nullability specifier "
+  "'%select{__|}1%select{nonnull|nullable|null_unspecified}0' conflicts with "
+  "existing specifier '%select{__|}3%select{nonnull|nullable|"
+  "null_unspecified}2'">;
+
+}
+
 // Sema && Lex
 def ext_c99_longlong : Extension<
   "'long long' is an extension when C99 mode is not enabled">,

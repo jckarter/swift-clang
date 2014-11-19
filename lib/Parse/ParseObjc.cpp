@@ -539,6 +539,24 @@ void Parser::ParseObjCInterfaceDeclList(tok::ObjCKeywordKind contextKey,
   Actions.ActOnAtEnd(getCurScope(), AtEnd, allMethods, allTUVariables);
 }
 
+/// Diagnose redundant or conflicting nullability information.
+static void diagnoseRedundantPropertyNullability(Parser &P,
+                                                 ObjCDeclSpec &DS,
+                                                 NullabilityKind nullability,
+                                                 SourceLocation nullabilityLoc){
+  if (DS.getNullability() == nullability) {
+    P.Diag(nullabilityLoc, diag::warn_nullability_duplicate)
+      << static_cast<unsigned>(nullability) << true
+      << SourceRange(DS.getNullabilityLoc());
+    return;
+  }
+
+  P.Diag(nullabilityLoc, diag::err_nullability_conflicting)
+    << static_cast<unsigned>(nullability) << true
+    << static_cast<unsigned>(DS.getNullability()) << true
+    << SourceRange(DS.getNullabilityLoc());
+}
+
 ///   Parse property attribute declarations.
 ///
 ///   property-attr-decl: '(' property-attrlist ')'
@@ -647,12 +665,24 @@ void Parser::ParseObjCPropertyAttribute(ObjCDeclSpec &DS) {
         DS.setGetterName(SelIdent);
       }
     } else if (II->isStr("nonnull")) {
+      if (DS.getPropertyAttributes() & ObjCDeclSpec::DQ_PR_nullability)
+        diagnoseRedundantPropertyNullability(*this, DS,
+                                             NullabilityKind::NonNull,
+                                             Tok.getLocation());
       DS.setPropertyAttributes(ObjCDeclSpec::DQ_PR_nullability);
       DS.setNullability(Tok.getLocation(), NullabilityKind::NonNull);
     } else if (II->isStr("nullable")) {
+      if (DS.getPropertyAttributes() & ObjCDeclSpec::DQ_PR_nullability)
+        diagnoseRedundantPropertyNullability(*this, DS,
+                                             NullabilityKind::Nullable,
+                                             Tok.getLocation());
       DS.setPropertyAttributes(ObjCDeclSpec::DQ_PR_nullability);
       DS.setNullability(Tok.getLocation(), NullabilityKind::Nullable);
     } else if (II->isStr("null_unspecified")) {
+      if (DS.getPropertyAttributes() & ObjCDeclSpec::DQ_PR_nullability)
+        diagnoseRedundantPropertyNullability(*this, DS,
+                                             NullabilityKind::Unspecified,
+                                             Tok.getLocation());
       DS.setPropertyAttributes(ObjCDeclSpec::DQ_PR_nullability);
       DS.setNullability(Tok.getLocation(), NullabilityKind::Unspecified);
     } else {
