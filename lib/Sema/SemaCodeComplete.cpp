@@ -1344,6 +1344,11 @@ static void AddTypeSpecifierResults(const LangOptions &LangOpts,
     Builder.AddChunk(CodeCompletionString::CK_RightParen);
     Results.AddResult(Result(Builder.TakeString()));
   }
+
+  // Nullability
+  Results.AddResult(Result("__nonnull", CCP_Type));
+  Results.AddResult(Result("__null_unspecified", CCP_Type));
+  Results.AddResult(Result("__nullable", CCP_Type));
 }
 
 static void AddStorageSpecifiers(Sema::ParserCompletionContext CCC,
