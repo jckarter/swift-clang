@@ -217,6 +217,9 @@ TEST_F(FormatTestJava, Generics) {
   verifyFormat("public static <R> ArrayList<R> get() {\n}");
   verifyFormat("<T extends B> T getInstance(Class<T> type);");
   verifyFormat("Function<F, ? extends T> function;");
+
+  verifyFormat("private Foo<X, Y>[] foos;");
+  verifyFormat("Foo<X, Y>[] foos = this.foos;");
 }
 
 TEST_F(FormatTestJava, StringConcatenation) {
@@ -259,6 +262,17 @@ TEST_F(FormatTestJava, SynchronizedKeyword) {
 TEST_F(FormatTestJava, ImportDeclarations) {
   verifyFormat("import some.really.loooooooooooooooooooooong.imported.Class;",
                getStyleWithColumns(50));
+}
+
+TEST_F(FormatTestJava, MethodDeclarations) {
+  verifyFormat("void methodName(Object arg1,\n"
+               "    Object arg2, Object arg3) {\n"
+               "}",
+               getStyleWithColumns(40));
+  verifyFormat("void methodName(\n"
+               "    Object arg1, Object arg2) {\n"
+               "}",
+               getStyleWithColumns(40));
 }
 
 } // end namespace tooling
