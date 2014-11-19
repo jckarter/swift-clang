@@ -1117,6 +1117,16 @@ void TypePrinter::printPackExpansionAfter(const PackExpansionType *T,
   OS << "...";
 }
 
+/// Determine whether this is a multi-level pointer type.
+static bool isMultiLevelPointerType(QualType type) {
+  QualType pointee = type->getPointeeType();
+  if (pointee.isNull())
+    return false;
+
+  return pointee->isAnyPointerType() || pointee->isObjCObjectPointerType() ||
+  pointee->isMemberPointerType();
+}
+
 void TypePrinter::printAttributedBefore(const AttributedType *T,
                                         raw_ostream &OS) {
   // Prefer the macro forms of the GC and ownership qualifiers.
@@ -1125,9 +1135,10 @@ void TypePrinter::printAttributedBefore(const AttributedType *T,
     return printBefore(T->getEquivalentType(), OS);
 
   // Nullability is expressed as a type specifier.
-  if (T->getAttrKind() == AttributedType::attr_nonnull ||
-      T->getAttrKind() == AttributedType::attr_nullable ||
-      T->getAttrKind() == AttributedType::attr_null_unspecified) {
+  if ((T->getAttrKind() == AttributedType::attr_nonnull ||
+       T->getAttrKind() == AttributedType::attr_nullable ||
+       T->getAttrKind() == AttributedType::attr_null_unspecified) &&
+      !isMultiLevelPointerType(T->getModifiedType())) {
     if (T->getAttrKind() == AttributedType::attr_nonnull)
       OS << "__nonnull ";
     else if (T->getAttrKind() == AttributedType::attr_nullable)
@@ -1161,9 +1172,10 @@ void TypePrinter::printAttributedAfter(const AttributedType *T,
       T->getAttrKind() == AttributedType::attr_objc_ownership)
     return printAfter(T->getEquivalentType(), OS);
 
-  if (T->getAttrKind() == AttributedType::attr_nonnull ||
-      T->getAttrKind() == AttributedType::attr_nullable ||
-      T->getAttrKind() == AttributedType::attr_null_unspecified)
+  if ((T->getAttrKind() == AttributedType::attr_nonnull ||
+       T->getAttrKind() == AttributedType::attr_nullable ||
+       T->getAttrKind() == AttributedType::attr_null_unspecified) &&
+      !isMultiLevelPointerType(T->getModifiedType()))
     return;
 
   // TODO: not all attributes are GCC-style attributes.
@@ -1175,6 +1187,22 @@ void TypePrinter::printAttributedAfter(const AttributedType *T,
   SaveAndRestore<bool> MaybeSuppressCC(InsideCCAttribute, T->isCallingConv());
 
   printAfter(T->getModifiedType(), OS);
+
+  // Print nullability type specifiers that occur after
+  if (T->getAttrKind() == AttributedType::attr_nonnull ||
+      T->getAttrKind() == AttributedType::attr_nullable ||
+      T->getAttrKind() == AttributedType::attr_null_unspecified) {
+    if (T->getAttrKind() == AttributedType::attr_nonnull)
+      OS << " __nonnull";
+    else if (T->getAttrKind() == AttributedType::attr_nullable)
+      OS << " __nullable";
+    else if (T->getAttrKind() == AttributedType::attr_null_unspecified)
+      OS << " __null_unspecified";
+    else
+      llvm_unreachable("unhandled nullability");
+
+    return;
+  }
 
   OS << " __attribute__((";
   switch (T->getAttrKind()) {
