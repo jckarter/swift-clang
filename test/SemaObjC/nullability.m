@@ -1,4 +1,4 @@
-// RUN: %clang_cc1 -fsyntax-only %s -verify
+// RUN: %clang_cc1 -fsyntax-only -Woverriding-method-mismatch %s -verify
 
 __attribute__((objc_root_class))
 @interface NSFoo
@@ -134,3 +134,12 @@ void test_receiver_merge(NSMergeReceiver *none,
   ptr = [none returnsNone]; // expected-warning{{'id'}}
   
 }
+
+@protocol Initializable
+- (instancetype)initWithBlah:(id)blah;
+@end
+
+__attribute__((objc_root_class))
+@interface InitializableClass <Initializable>
+- (nonnull instancetype)initWithBlah:(nonnull)blah;
+@end

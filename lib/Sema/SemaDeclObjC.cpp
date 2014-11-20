@@ -1480,6 +1480,13 @@ static SourceRange getTypeRange(TypeSourceInfo *TSI) {
   return (TSI ? TSI->getTypeLoc().getSourceRange() : SourceRange());
 }
 
+/// Determine whether two set of Objective-C declaration qualifiers conflict.
+static bool objcModifiersConflict(Decl::ObjCDeclQualifier x,
+                                  Decl::ObjCDeclQualifier y) {
+  return (x & ~Decl::OBJC_TQ_CSNullability) !=
+         (y & ~Decl::OBJC_TQ_CSNullability);
+}
+
 static bool CheckMethodOverrideReturn(Sema &S,
                                       ObjCMethodDecl *MethodImpl,
                                       ObjCMethodDecl *MethodDecl,
@@ -1487,8 +1494,8 @@ static bool CheckMethodOverrideReturn(Sema &S,
                                       bool IsOverridingMode,
                                       bool Warn) {
   if (IsProtocolMethodDecl &&
-      (MethodDecl->getObjCDeclQualifier() !=
-       MethodImpl->getObjCDeclQualifier())) {
+      objcModifiersConflict(MethodDecl->getObjCDeclQualifier(),
+                            MethodImpl->getObjCDeclQualifier())) {
     if (Warn) {
       S.Diag(MethodImpl->getLocation(),
              (IsOverridingMode
@@ -1552,8 +1559,8 @@ static bool CheckMethodOverrideParam(Sema &S,
                                      bool IsOverridingMode,
                                      bool Warn) {
   if (IsProtocolMethodDecl &&
-      (ImplVar->getObjCDeclQualifier() !=
-       IfaceVar->getObjCDeclQualifier())) {
+      objcModifiersConflict(ImplVar->getObjCDeclQualifier(),
+                            IfaceVar->getObjCDeclQualifier())) {
     if (Warn) {
       if (IsOverridingMode)
         S.Diag(ImplVar->getLocation(), 
