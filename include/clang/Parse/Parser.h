@@ -308,8 +308,8 @@ public:
     return true;
   }
 
-  /// Retrieve the underscored keyword (__nonnull, __nullable,
-  /// __null_unspecified) that corresponds to the given nullability kind.
+  /// Retrieve the underscored keyword (__nonnull, __nullable) that corresponds
+  /// to the given nullability kind.
   IdentifierInfo *getNullabilityKeyword(NullabilityKind nullability);
 
 private:
@@ -1291,7 +1291,7 @@ private:
   // Definitions for Objective-c context sensitive keywords recognition.
   enum ObjCTypeQual {
     objc_in=0, objc_out, objc_inout, objc_oneway, objc_bycopy, objc_byref,
-    objc_nonnull, objc_nullable, objc_null_unspecified,
+    objc_nonnull, objc_nullable,
     objc_NumQuals
   };
   IdentifierInfo *ObjCTypeQuals[objc_NumQuals];

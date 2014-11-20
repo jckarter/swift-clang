@@ -1959,9 +1959,21 @@ void Sema::ProcessPropertyDecl(ObjCPropertyDecl *property,
       redeclaredProperty->getLocation() :
       property->getLocation();
 
+    // If the property is null_resettable, the getter returns nonnull.
+    QualType resultTy = property->getType();
+    if (property->getPropertyAttributes() &
+        ObjCPropertyDecl::OBJC_PR_nullability) {
+      QualType modifiedTy = resultTy;
+      if (auto nullability = AttributedType::stripOuterNullability(modifiedTy)){
+        if (*nullability == NullabilityKind::Unspecified)
+          resultTy = Context.getAttributedType(AttributedType::attr_nonnull,
+                                               modifiedTy, modifiedTy);
+      }
+    }
+
     GetterMethod = ObjCMethodDecl::Create(Context, Loc, Loc,
                              property->getGetterName(),
-                             property->getType(), nullptr, CD,
+                             resultTy, nullptr, CD,
                              /*isInstance=*/true, /*isVariadic=*/false,
                              /*isPropertyAccessor=*/true,
                              /*isImplicitlyDeclared=*/true, /*isDefined=*/false,
@@ -2022,12 +2034,24 @@ void Sema::ProcessPropertyDecl(ObjCPropertyDecl *property,
                                 ObjCMethodDecl::Optional :
                                 ObjCMethodDecl::Required);
 
+      // If the property is null_resettable, the getter returns nonnull.
+      QualType paramTy = property->getType().getUnqualifiedType();
+      if (property->getPropertyAttributes() &
+          ObjCPropertyDecl::OBJC_PR_nullability) {
+        QualType modifiedTy = paramTy;
+        if (auto nullability = AttributedType::stripOuterNullability(modifiedTy)){
+          if (*nullability == NullabilityKind::Unspecified)
+            paramTy = Context.getAttributedType(AttributedType::attr_nullable,
+                                                modifiedTy, modifiedTy);
+        }
+      }
+
       // Invent the arguments for the setter. We don't bother making a
       // nice name for the argument.
       ParmVarDecl *Argument = ParmVarDecl::Create(Context, SetterMethod,
                                                   Loc, Loc,
                                                   property->getIdentifier(),
-                                    property->getType().getUnqualifiedType(),
+                                                  paramTy,
                                                   /*TInfo=*/nullptr,
                                                   SC_None,
                                                   nullptr);

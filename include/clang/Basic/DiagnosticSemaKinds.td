@@ -7453,22 +7453,22 @@ let CategoryName = "Nullability Issue" in {
 
 def err_nullability_nonpointer : Error<
   "nullability specifier "
-  "'%select{__nonnull|__nullable|__null_unspecified}0' cannot be applied to "
-  "non-pointer type %1">;
+  "'%select{%select{__|}1nonnull|%select{__|}1nullable|null_resettable}0' cannot be applied "
+  "to non-pointer type %2">;
 
 def err_nullability_cs_multilevel : Error<
   "nullability keyword "
-  "'%select{nonnull|nullable|null_unspecified}0' cannot be applied to "
+  "'%select{nonnull|nullable|null_resettable}0' cannot be applied to "
   "multi-level pointer type %1">;
 
 def note_nullability_type_specifier : Note<
   "use nullability type specifier "
-  "'%select{__nonnull|__nullable|__null_unspecified}0' to affect the innermost "
+  "'%select{__nonnull|__nullable|<<error>>}0' to affect the innermost "
   "pointer type of %1">;
 
 def warn_nullability_missing : Warning<
   "%select{pointer|block pointer|member pointer}0 is missing a nullability "
-  "type specifier (__nonnull, __nullable, or __null_unspecified)">,
+  "type specifier (__nonnull or __nullable)">,
   InGroup<NullabilityCompleteness>;
 
 def warn_nullability_lost : Warning<

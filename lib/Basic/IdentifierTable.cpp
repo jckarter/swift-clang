@@ -615,6 +615,6 @@ StringRef clang::getNullabilitySpelling(NullabilityKind kind) {
     return "__nullable";
 
   case NullabilityKind::Unspecified:
-    return "__null_unspecified";
+    return "__null_resettable";
   }
 }

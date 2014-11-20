@@ -905,6 +905,9 @@ def TypeNullable : TypeAttr {
 }
 
 def TypeNullUnspecified : TypeAttr {
+  // Implicitly generated from Objective-C's @property (null_resettable).
+  // There is no way to spell this in source code, but the name is needed
+  // for the identifier -> attribute kind mapping.
   let Spellings = [Keyword<"__null_unspecified">];
   let Documentation = [Undocumented];
 }

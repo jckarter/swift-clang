@@ -1283,7 +1283,6 @@ Parser::isCXXDeclarationSpecifier(Parser::TPResult BracedCastResult,
   case tok::kw___unaligned:
   case tok::kw___nonnull:
   case tok::kw___nullable:
-  case tok::kw___null_unspecified:
     return TPResult::True;
 
     // Borland

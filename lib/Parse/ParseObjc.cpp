@@ -629,7 +629,7 @@ static void diagnoseRedundantPropertyNullability(Parser &P,
 ///     unsafe_unretained
 ///     nonnull
 ///     nullable
-///     null_unspecified
+///     null_resettable
 ///
 void Parser::ParseObjCPropertyAttribute(ObjCDeclSpec &DS) {
   assert(Tok.getKind() == tok::l_paren);
@@ -729,7 +729,7 @@ void Parser::ParseObjCPropertyAttribute(ObjCDeclSpec &DS) {
                                              Tok.getLocation());
       DS.setPropertyAttributes(ObjCDeclSpec::DQ_PR_nullability);
       DS.setNullability(Tok.getLocation(), NullabilityKind::Nullable);
-    } else if (II->isStr("null_unspecified")) {
+    } else if (II->isStr("null_resettable")) {
       if (DS.getPropertyAttributes() & ObjCDeclSpec::DQ_PR_nullability)
         diagnoseRedundantPropertyNullability(*this, DS,
                                              NullabilityKind::Unspecified,
@@ -910,7 +910,6 @@ bool Parser::isTokIdentifier_in() const {
 ///     'byref'
 ///     'nonnull'
 ///     'nullable'
-///     'null_unspecified'
 ///
 void Parser::ParseObjCTypeQualifierList(ObjCDeclSpec &DS,
                                         Declarator::TheContext Context) {
@@ -953,11 +952,6 @@ void Parser::ParseObjCTypeQualifierList(ObjCDeclSpec &DS,
       case objc_nullable: 
         Qual = ObjCDeclSpec::DQ_CSNullability;
         Nullability = NullabilityKind::Nullable;
-        break;
-
-      case objc_null_unspecified: 
-        Qual = ObjCDeclSpec::DQ_CSNullability;
-        Nullability = NullabilityKind::Unspecified;
         break;
       }
 

@@ -162,7 +162,6 @@ typedef A *MyObjectRef;
 // CHECK-CCF: NotImplemented:{TypedText in} (40)
 // CHECK-CCF: NotImplemented:{TypedText inout} (40)
 // CHECK-CCF: NotImplemented:{TypedText nonnull} (40)
-// CHECK-CCF: NotImplemented:{TypedText null_unspecified} (40)
 // CHECK-CCF: NotImplemented:{TypedText nullable} (40)
 // CHECK-CCF: NotImplemented:{TypedText oneway} (40)
 // CHECK-CCF: NotImplemented:{TypedText out} (40)

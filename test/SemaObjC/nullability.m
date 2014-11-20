@@ -38,10 +38,10 @@ __attribute__((objc_root_class))
 @property(nonnull,retain) NSFoo *property1;
 @property(nullable,assign) NSFoo ** invalidProperty1; // expected-error{{nullability keyword 'nullable' cannot be applied to multi-level pointer type 'NSFoo **'}}
 // expected-note@-1{{use nullability type specifier '__nullable' to affect the innermost pointer type of 'NSFoo **'}}
-@property(null_unspecified,retain) NSFoo __nullable *conflictingProperty1; // expected-error{{nullability specifier 'null_unspecified' conflicts with existing specifier '__nullable'}}
+@property(null_resettable,retain) NSFoo __nullable *conflictingProperty1; // expected-error{{nullability specifier 'null_resettable' conflicts with existing specifier '__nullable'}}
 @property(retain,nonnull) NSFoo * __nonnull redundantProperty1; // expected-warning{{duplicate nullability specifier '__nonnull'}}
 
-@property(null_unspecified,retain,nullable) NSFoo *conflictingProperty3; // expected-error{{nullability specifier 'nullable' conflicts with existing specifier 'null_unspecified'}}
+@property(null_resettable,retain,nullable) NSFoo *conflictingProperty3; // expected-error{{nullability specifier 'nullable' conflicts with existing specifier 'null_resettable'}}
 @property(nullable,retain,nullable) NSFoo *redundantProperty3; // expected-warning{{duplicate nullability specifier 'nullable'}}
 @end
 
@@ -49,7 +49,9 @@ __attribute__((objc_root_class))
 @property(nonnull,retain) NSFoo *property2;
 @property(nullable,assign) NSFoo ** invalidProperty2; // expected-error{{nullability keyword 'nullable' cannot be applied to multi-level pointer type 'NSFoo **'}}
 // expected-note@-1{{use nullability type specifier '__nullable' to affect the innermost pointer type of 'NSFoo **'}}
-@property(null_unspecified,retain) NSFoo __nullable *conflictingProperty2; // expected-error{{nullability specifier 'null_unspecified' conflicts with existing specifier '__nullable'}}
+@property(null_resettable,assign) NSFoo ** invalidProperty3; // expected-error{{nullability keyword 'null_resettable' cannot be applied to multi-level pointer type 'NSFoo **'}}
+@property(null_resettable,assign) int invalidProperty4; // expected-error{{nullability specifier 'null_resettable' cannot be applied to non-pointer type 'int'}}
+@property(null_resettable,retain) NSFoo __nullable *conflictingProperty2; // expected-error{{nullability specifier 'null_resettable' conflicts with existing specifier '__nullable'}}
 @property(retain,nonnull) NSFoo * __nonnull redundantProperty2; // expected-warning{{duplicate nullability specifier '__nonnull'}}
 @end
 
@@ -94,8 +96,8 @@ __attribute__((objc_root_class))
   return 0; // expected-warning{{null returned from method that requires a non-null return value}}
 }
 
-- (nullable NSFoo *)methodB:(null_unspecified NSFoo*)foo { // expected-error{{nullability specifier 'nullable' conflicts with existing specifier 'nonnull'}} \
-  // expected-error{{nullability specifier 'null_unspecified' conflicts with existing specifier 'nonnull'}}
+- (nullable NSFoo *)methodB:(nullable NSFoo*)foo { // expected-error{{nullability specifier 'nullable' conflicts with existing specifier 'nonnull'}} \
+  // expected-error{{nullability specifier 'nullable' conflicts with existing specifier 'nonnull'}}
   return 0;
 }
 
@@ -109,32 +111,22 @@ __attribute__((objc_root_class))
 - (id)returnsNone;
 - (nonnull id)returnsNonNull;
 - (nullable id)returnsNullable;
-- (null_unspecified id)returnsNullUnspecified;
 @end
 
 void test_receiver_merge(NSMergeReceiver *none,
                          __nonnull NSMergeReceiver *nonnull,
-                         __nullable NSMergeReceiver *nullable,
-                         __null_unspecified NSMergeReceiver *null_unspecified) {
+                         __nullable NSMergeReceiver *nullable) {
   int *ptr;
 
   ptr = [nullable returnsNullable]; // expected-warning{{'__nullable id'}}
-  ptr = [nullable returnsNullUnspecified]; // expected-warning{{'__nullable id'}}
   ptr = [nullable returnsNonNull]; // expected-warning{{'__nullable id'}}
   ptr = [nullable returnsNone]; // expected-warning{{'__nullable id'}}
 
-  ptr = [null_unspecified returnsNullable]; // expected-warning{{'__nullable id'}}
-  ptr = [null_unspecified returnsNullUnspecified]; // expected-warning{{'__null_unspecified id'}}
-  ptr = [null_unspecified returnsNonNull]; // expected-warning{{'__null_unspecified id'}}
-  ptr = [null_unspecified returnsNone]; // expected-warning{{'id'}}
-
   ptr = [nonnull returnsNullable]; // expected-warning{{'__nullable id'}}
-  ptr = [nonnull returnsNullUnspecified]; // expected-warning{{'__null_unspecified id'}}
   ptr = [nonnull returnsNonNull]; // expected-warning{{'__nonnull id'}}
   ptr = [nonnull returnsNone]; // expected-warning{{'id'}}
 
   ptr = [none returnsNullable]; // expected-warning{{'__nullable id'}}
-  ptr = [none returnsNullUnspecified]; // expected-warning{{'id'}}
   ptr = [none returnsNonNull]; // expected-warning{{'id'}}
   ptr = [none returnsNone]; // expected-warning{{'id'}}
   
@@ -147,4 +139,24 @@ void test_receiver_merge(NSMergeReceiver *none,
 __attribute__((objc_root_class))
 @interface InitializableClass <Initializable>
 - (nonnull instancetype)initWithBlah:(nonnull)blah;
+@end
+
+// Check null_resettable getters/setters.
+__attribute__((objc_root_class))
+@interface NSResettable
+@property(null_resettable,retain) NSResettable *resettable1; // expected-note{{passing argument to parameter 'resettable1' here}}
+@end
+
+void test_null_resettable(NSResettable *r, int *ip) {
+  [r setResettable1:ip]; // expected-warning{{incompatible pointer types sending 'int *' to parameter of type '__nullable NSResettable *'}}
+  r.resettable1 = ip; // expected-warning{{incompatible pointer types assigning to '__nullable NSResettable *' from 'int *'}}
+}
+
+@implementation NSResettable
+- (NSResettable *)resettable1 {
+  return 0; // expected-warning{{null returned from method that requires a non-null return value}}
+}
+
+- (void)setResettable1:(NSResettable *)param {
+}
 @end

@@ -17,7 +17,6 @@ void f(int x) {
 
 // RUN: c-index-test -code-completion-at=%s:6:1 %s | FileCheck -check-prefix=CHECK-STMT %s
 // CHECK-STMT: NotImplemented:{TypedText __nonnull} (50)
-// CHECK-STMT: NotImplemented:{TypedText __null_unspecified} (50)
 // CHECK-STMT: NotImplemented:{TypedText __nullable} (50)
 // CHECK-STMT: NotImplemented:{TypedText char} (50)
 // CHECK-STMT: NotImplemented:{TypedText const} (50)

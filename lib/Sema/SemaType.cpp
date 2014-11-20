@@ -4629,7 +4629,8 @@ bool Sema::checkNullabilityTypeSpecifier(QualType &type,
   if (!desugared->canHaveNullability()) {
     if (!implicit) {
       Diag(nullabilityLoc, diag::err_nullability_nonpointer)
-        << static_cast<unsigned>(nullability) << type;
+        << static_cast<unsigned>(nullability)
+        << isContextSensitive << type;
     }
     return true;
   }
@@ -4645,11 +4646,13 @@ bool Sema::checkNullabilityTypeSpecifier(QualType &type,
       Diag(nullabilityLoc, diag::err_nullability_cs_multilevel)
         << static_cast<unsigned>(nullability)
         << type;
-      Diag(nullabilityLoc, diag::note_nullability_type_specifier)
-        << static_cast<unsigned>(nullability)
-        << type
-        << FixItHint::CreateReplacement(nullabilityLoc,
-                                        getNullabilitySpelling(nullability));
+      if (nullability != NullabilityKind::Unspecified) {
+        Diag(nullabilityLoc, diag::note_nullability_type_specifier)
+          << static_cast<unsigned>(nullability)
+          << type
+          << FixItHint::CreateReplacement(nullabilityLoc,
+                                          getNullabilitySpelling(nullability));
+      }
       return true;
     }
   }
