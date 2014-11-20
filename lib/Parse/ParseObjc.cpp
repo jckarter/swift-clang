@@ -368,8 +368,7 @@ static void addContextSensitiveTypeNullability(Parser &P,
                                      SourceRange(nullabilityLoc),
                                      nullptr, SourceLocation(),
                                      nullptr, 0,
-                                     AttributeList::AS_Keyword);
-  nullabilityAttr->setContextSensitiveKeywordAttribute();
+                                     AttributeList::AS_ContextSensitiveKeyword);
 
   if (D.getNumTypeObjects() > 0) {
     // Add the attribute to the declarator chunk nearest the declarator.
