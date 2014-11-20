@@ -164,6 +164,20 @@ TEST_F(FormatTestJava, EnumDeclarations) {
                "  public void f() {\n"
                "  }\n"
                "}");
+  verifyFormat("private enum SomeEnum implements Foo<?, B> {\n"
+               "  ABC {\n"
+               "    @Override\n"
+               "    public String toString() {\n"
+               "      return \"ABC\";\n"
+               "    }\n"
+               "  },\n"
+               "  CDE {\n"
+               "    @Override\n"
+               "    public String toString() {\n"
+               "      return \"CDE\";\n"
+               "    }\n"
+               "  };\n"
+               "}");
 }
 
 TEST_F(FormatTestJava, ThrowsDeclarations) {
@@ -220,6 +234,13 @@ TEST_F(FormatTestJava, Generics) {
 
   verifyFormat("private Foo<X, Y>[] foos;");
   verifyFormat("Foo<X, Y>[] foos = this.foos;");
+
+  verifyFormat(
+      "SomeLoooooooooooooooooooooongType name =\n"
+      "    SomeType.foo(someArgument)\n"
+      "        .<X>method()\n"
+      "        .aaaaaaaaaaaaaaaaaaa()\n"
+      "        .aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa();");
 }
 
 TEST_F(FormatTestJava, StringConcatenation) {
@@ -279,6 +300,21 @@ TEST_F(FormatTestJava, CppKeywords) {
   verifyFormat("public void union(Type a, Type b);");
   verifyFormat("public void struct(Object o);");
   verifyFormat("public void delete(Object o);");
+}
+
+TEST_F(FormatTestJava, NeverAlignAfterReturn) {
+  verifyFormat("return aaaaaaaaaaaaaaaaaaa\n"
+               "    && bbbbbbbbbbbbbbbbbbb\n"
+               "    && ccccccccccccccccccc;",
+               getStyleWithColumns(40));
+  verifyFormat("return (result == null)\n"
+               "    ? aaaaaaaaaaaaaaaaa\n"
+               "    : bbbbbbbbbbbbbbbbb;",
+               getStyleWithColumns(40));
+  verifyFormat("return aaaaaaaaaaaaaaaaaaa()\n"
+               "    .bbbbbbbbbbbbbbbbbbb()\n"
+               "    .ccccccccccccccccccc();",
+               getStyleWithColumns(40));
 }
 
 } // end namespace tooling
