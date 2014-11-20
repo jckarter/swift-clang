@@ -3,6 +3,7 @@
 #include "nullability-consistency-1.h"
 #include "nullability-consistency-3.h"
 #include "nullability-consistency-4.h"
+#include "nullability-consistency-5.h"
 
 void h1(int *ptr) { } // don't warn
 

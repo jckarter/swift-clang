@@ -2601,7 +2601,9 @@ static void checkNullabilityConsistency(TypeProcessingState &state,
   if (!fileNullability.SawTypeNullability) {
     // If this is the first pointer declarator in the file, record it.
     if (fileNullability.PointerLoc.isInvalid() &&
-        !hasNullability()) {
+        !hasNullability() &&
+        !S.Context.getDiagnostics().isIgnored(diag::warn_nullability_missing,
+                                              pointerLoc)) {
       fileNullability.PointerLoc = pointerLoc;
       fileNullability.PointerKind = static_cast<unsigned>(kind);
     }
