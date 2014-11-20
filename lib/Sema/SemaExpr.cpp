@@ -1673,6 +1673,40 @@ Sema::DecomposeUnqualifiedId(const UnqualifiedId &Id,
   }
 }
 
+static void emitEmptyLookupTypoDiagnostic(
+    const TypoCorrection &TC, Sema &SemaRef, const CXXScopeSpec &SS,
+    DeclarationName Typo, SourceLocation TypoLoc, ArrayRef<Expr *> Args,
+    unsigned DiagnosticID, unsigned DiagnosticSuggestID) {
+  DeclContext *Ctx =
+      SS.isEmpty() ? nullptr : SemaRef.computeDeclContext(SS, false);
+  if (!TC) {
+    // Emit a special diagnostic for failed member lookups.
+    // FIXME: computing the declaration context might fail here (?)
+    if (Ctx)
+      SemaRef.Diag(TypoLoc, diag::err_no_member) << Typo << Ctx
+                                                 << SS.getRange();
+    else
+      SemaRef.Diag(TypoLoc, DiagnosticID) << Typo;
+    return;
+  }
+
+  std::string CorrectedStr = TC.getAsString(SemaRef.getLangOpts());
+  bool DroppedSpecifier =
+      TC.WillReplaceSpecifier() && Typo.getAsString() == CorrectedStr;
+  unsigned NoteID =
+      (TC.getCorrectionDecl() && isa<ImplicitParamDecl>(TC.getCorrectionDecl()))
+          ? diag::note_implicit_param_decl
+          : diag::note_previous_decl;
+  if (!Ctx)
+    SemaRef.diagnoseTypo(TC, SemaRef.PDiag(DiagnosticSuggestID) << Typo,
+                         SemaRef.PDiag(NoteID));
+  else
+    SemaRef.diagnoseTypo(TC, SemaRef.PDiag(diag::err_no_member_suggest)
+                                 << Typo << Ctx << DroppedSpecifier
+                                 << SS.getRange(),
+                         SemaRef.PDiag(NoteID));
+}
+
 /// Diagnose an empty lookup.
 ///
 /// \return false if new lookup candidates were found
@@ -1680,7 +1714,7 @@ bool
 Sema::DiagnoseEmptyLookup(Scope *S, CXXScopeSpec &SS, LookupResult &R,
                           std::unique_ptr<CorrectionCandidateCallback> CCC,
                           TemplateArgumentListInfo *ExplicitTemplateArgs,
-                          ArrayRef<Expr *> Args) {
+                          ArrayRef<Expr *> Args, TypoExpr **Out) {
   DeclarationName Name = R.getLookupName();
 
   unsigned diagnostic = diag::err_undeclared_var_use;
@@ -1797,8 +1831,22 @@ Sema::DiagnoseEmptyLookup(Scope *S, CXXScopeSpec &SS, LookupResult &R,
 
   // We didn't find anything, so try to correct for a typo.
   TypoCorrection Corrected;
-  if (S && (Corrected = CorrectTypo(R.getLookupNameInfo(), R.getLookupKind(),
-                                    S, &SS, std::move(CCC), CTK_ErrorRecovery))) {
+  if (S && Out) {
+    SourceLocation TypoLoc = R.getNameLoc();
+    assert(!ExplicitTemplateArgs &&
+           "Diagnosing an empty lookup with explicit template args!");
+    *Out = CorrectTypoDelayed(
+        R.getLookupNameInfo(), R.getLookupKind(), S, &SS, std::move(CCC),
+        [=](const TypoCorrection &TC) {
+          emitEmptyLookupTypoDiagnostic(TC, *this, SS, Name, TypoLoc, Args,
+                                        diagnostic, diagnostic_suggest);
+        },
+        nullptr, CTK_ErrorRecovery);
+    if (*Out)
+      return true;
+  } else if (S && (Corrected =
+                       CorrectTypo(R.getLookupNameInfo(), R.getLookupKind(), S,
+                                   &SS, std::move(CCC), CTK_ErrorRecovery))) {
     std::string CorrectedStr(Corrected.getAsString(getLangOpts()));
     bool DroppedSpecifier =
         Corrected.WillReplaceSpecifier() && Name.getAsString() == CorrectedStr;
@@ -1950,7 +1998,7 @@ Sema::ActOnIdExpression(Scope *S, CXXScopeSpec &SS,
                         SourceLocation TemplateKWLoc, UnqualifiedId &Id,
                         bool HasTrailingLParen, bool IsAddressOfOperand,
                         std::unique_ptr<CorrectionCandidateCallback> CCC,
-                        bool IsInlineAsmIdentifier) {
+                        bool IsInlineAsmIdentifier, Token *KeywordReplacement) {
   assert(!(IsAddressOfOperand && HasTrailingLParen) &&
          "cannot be direct & operand and have a trailing lparen");
   if (SS.isInvalid())
@@ -2062,13 +2110,43 @@ Sema::ActOnIdExpression(Scope *S, CXXScopeSpec &SS,
 
     // If this name wasn't predeclared and if this is not a function
     // call, diagnose the problem.
-    auto DefaultValidator = llvm::make_unique<CorrectionCandidateCallback>();
+    TypoExpr *TE = nullptr;
+    auto DefaultValidator = llvm::make_unique<CorrectionCandidateCallback>(
+        II, SS.isValid() ? SS.getScopeRep() : nullptr);
     DefaultValidator->IsAddressOfOperand = IsAddressOfOperand;
     assert((!CCC || CCC->IsAddressOfOperand == IsAddressOfOperand) &&
            "Typo correction callback misconfigured");
-    if (DiagnoseEmptyLookup(S, SS, R,
-                            CCC ? std::move(CCC) : std::move(DefaultValidator)))
-      return ExprError();
+    if (CCC) {
+      // Make sure the callback knows what the typo being diagnosed is.
+      CCC->setTypoName(II);
+      if (SS.isValid())
+        CCC->setTypoNNS(SS.getScopeRep());
+    }
+    if (DiagnoseEmptyLookup(
+            S, SS, R, CCC ? std::move(CCC) : std::move(DefaultValidator),
+            nullptr, None, getLangOpts().CPlusPlus ? &TE : nullptr)) {
+      if (TE && KeywordReplacement) {
+        auto &State = getTypoExprState(TE);
+        auto BestTC = State.Consumer->getNextCorrection();
+        if (BestTC.isKeyword()) {
+          auto *II = BestTC.getCorrectionAsIdentifierInfo();
+          if (State.DiagHandler)
+            State.DiagHandler(BestTC);
+          KeywordReplacement->startToken();
+          KeywordReplacement->setKind(II->getTokenID());
+          KeywordReplacement->setIdentifierInfo(II);
+          KeywordReplacement->setLocation(BestTC.getCorrectionRange().getBegin());
+          // Clean up the state associated with the TypoExpr, since it has
+          // now been diagnosed (without a call to CorrectDelayedTyposInExpr).
+          clearDelayedTypo(TE);
+          // Signal that a correction to a keyword was performed by returning a
+          // valid-but-null ExprResult.
+          return (Expr*)nullptr;
+        }
+        State.Consumer->resetCorrectionStream();
+      }
+      return TE ? TE : ExprError();
+    }
 
     assert(!R.empty() &&
            "DiagnoseEmptyLookup returned false but added no results");
@@ -2613,15 +2691,15 @@ static bool CheckDeclInExpr(Sema &S, SourceLocation Loc, NamedDecl *D) {
   return false;
 }
 
-ExprResult
-Sema::BuildDeclarationNameExpr(const CXXScopeSpec &SS,
-                               LookupResult &R,
-                               bool NeedsADL) {
+ExprResult Sema::BuildDeclarationNameExpr(const CXXScopeSpec &SS,
+                                          LookupResult &R, bool NeedsADL,
+                                          bool AcceptInvalidDecl) {
   // If this is a single, fully-resolved result and we don't need ADL,
   // just build an ordinary singleton decl ref.
   if (!NeedsADL && R.isSingleResult() && !R.getAsSingle<FunctionTemplateDecl>())
     return BuildDeclarationNameExpr(SS, R.getLookupNameInfo(), R.getFoundDecl(),
-                                    R.getRepresentativeDecl());
+                                    R.getRepresentativeDecl(), nullptr,
+                                    AcceptInvalidDecl);
 
   // We only need to check the declaration if there's exactly one
   // result, because in the overloaded case the results can only be
@@ -2648,7 +2726,8 @@ Sema::BuildDeclarationNameExpr(const CXXScopeSpec &SS,
 /// \brief Complete semantic analysis for a reference to the given declaration.
 ExprResult Sema::BuildDeclarationNameExpr(
     const CXXScopeSpec &SS, const DeclarationNameInfo &NameInfo, NamedDecl *D,
-    NamedDecl *FoundD, const TemplateArgumentListInfo *TemplateArgs) {
+    NamedDecl *FoundD, const TemplateArgumentListInfo *TemplateArgs,
+    bool AcceptInvalidDecl) {
   assert(D && "Cannot refer to a NULL declaration");
   assert(!isa<FunctionTemplateDecl>(D) &&
          "Cannot refer unambiguously to a function template");
@@ -2683,7 +2762,7 @@ ExprResult Sema::BuildDeclarationNameExpr(
     return ExprError();
 
   // Only create DeclRefExpr's for valid Decl's.
-  if (VD->isInvalidDecl())
+  if (VD->isInvalidDecl() && !AcceptInvalidDecl)
     return ExprError();
 
   // Handle members of anonymous structs and unions.  If we got here,
@@ -12449,6 +12528,8 @@ void Sema::UpdateMarkingForLValueToRValue(Expr *E) {
 }
 
 ExprResult Sema::ActOnConstantExpression(ExprResult Res) {
+  Res = CorrectDelayedTyposInExpr(Res);
+
   if (!Res.isUsable())
     return Res;
 
