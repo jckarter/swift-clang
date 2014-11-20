@@ -139,6 +139,11 @@ class Parser : public CodeCompletionHandler {
   // used as type traits.
   llvm::SmallDenseMap<IdentifierInfo *, tok::TokenKind> RevertibleTypeTraits;
 
+  /// Nullability type specifiers.
+  IdentifierInfo *Ident___nonnull = nullptr;
+  IdentifierInfo *Ident___nullable = nullptr;
+  IdentifierInfo *Ident___null_unspecified = nullptr;
+
   std::unique_ptr<PragmaHandler> AlignHandler;
   std::unique_ptr<PragmaHandler> GCCVisibilityHandler;
   std::unique_ptr<PragmaHandler> OptionsHandler;
@@ -302,6 +307,10 @@ public:
     Loc = PrevTokLocation;
     return true;
   }
+
+  /// Retrieve the underscored keyword (__nonnull, __nullable,
+  /// __null_unspecified) that corresponds to the given nullability kind.
+  IdentifierInfo *getNullabilityKeyword(NullabilityKind nullability);
 
 private:
   //===--------------------------------------------------------------------===//

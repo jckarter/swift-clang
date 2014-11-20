@@ -5249,12 +5249,14 @@ static void processTypeAttrs(TypeProcessingState &state, QualType &type,
       // dependent type, because that complicates the user model.
       if (type->canHaveNullability() || type->isDependentType() ||
           !distributeNullabilityTypeAttr(state, attr)) {
-        state.getSema().checkNullabilityTypeSpecifier(
-          type,
-          mapNullabilityAttrKind(attr.getKind()),
-          attr.getLoc(),
-          /*isContextSensitive=*/false,
-          /*implicit=*/false);
+        if (state.getSema().checkNullabilityTypeSpecifier(
+              type,
+              mapNullabilityAttrKind(attr.getKind()),
+              attr.getLoc(),
+              attr.isContextSensitiveKeywordAttribute(),
+              /*implicit=*/false)) {
+          attr.setInvalid();
+        }
 
         attr.setUsedAsTypeAttr();
       }

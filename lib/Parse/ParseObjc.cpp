@@ -13,6 +13,7 @@
 
 #include "clang/Parse/Parser.h"
 #include "RAIIObjectsForParser.h"
+#include "clang/AST/ASTContext.h"
 #include "clang/Basic/CharInfo.h"
 #include "clang/Parse/ParseDiagnostic.h"
 #include "clang/Sema/DeclSpec.h"
@@ -336,6 +337,51 @@ Decl *Parser::ParseObjCAtInterfaceDeclaration(SourceLocation AtLoc,
   return ClsType;
 }
 
+IdentifierInfo *Parser::getNullabilityKeyword(NullabilityKind nullability) {
+  switch (nullability) {
+  case NullabilityKind::NonNull:
+    if (!Ident___nonnull)
+      Ident___nonnull = PP.getIdentifierInfo("__nonnull");
+    return Ident___nonnull;
+
+  case NullabilityKind::Nullable:
+    if (!Ident___nullable)
+      Ident___nullable = PP.getIdentifierInfo("__nullable");
+    return Ident___nullable;
+
+  case NullabilityKind::Unspecified:
+    if (!Ident___null_unspecified)
+      Ident___null_unspecified = PP.getIdentifierInfo("__null_unspecified");
+    return Ident___null_unspecified;
+  }
+}
+
+/// Add an attribute for a context-sensitive type nullability to the given
+/// declarator.
+static void addContextSensitiveTypeNullability(Parser &P,
+                                               Declarator &D,
+                                               NullabilityKind nullability,
+                                               SourceLocation nullabilityLoc) {
+  // Create the attribute.
+  AttributeList *nullabilityAttr = D.getAttributePool().create(
+                                     P.getNullabilityKeyword(nullability),
+                                     SourceRange(nullabilityLoc),
+                                     nullptr, SourceLocation(),
+                                     nullptr, 0,
+                                     AttributeList::AS_Keyword);
+  nullabilityAttr->setContextSensitiveKeywordAttribute();
+
+  if (D.getNumTypeObjects() > 0) {
+    // Add the attribute to the declarator chunk nearest the declarator.
+    DeclaratorChunk &chunk = D.getTypeObject(0);
+    nullabilityAttr->setNext(chunk.getAttrListRef());
+    chunk.getAttrListRef() = nullabilityAttr;
+  } else {
+    // Otherwise, just put it on the declarator.
+    D.getMutableDeclSpec().addAttributes(nullabilityAttr);
+  }
+}
+
 ///   objc-interface-decl-list:
 ///     empty
 ///     objc-interface-decl-list objc-property-decl [OBJC2]
@@ -485,6 +531,12 @@ void Parser::ParseObjCInterfaceDeclList(tok::ObjCKeywordKind contextKey,
               << FD.D.getSourceRange();
           return;
         }
+
+        // Map a nullability property attribute to a context-sensitive keyword
+        // attribute.
+        if (OCDS.getPropertyAttributes() & ObjCDeclSpec::DQ_PR_nullability)
+          addContextSensitiveTypeNullability(*this, FD.D, OCDS.getNullability(),
+                                             OCDS.getNullabilityLoc());
 
         // Install the property declarator into interfaceDecl.
         IdentifierInfo *SelName =
@@ -994,6 +1046,12 @@ ParsedType Parser::ParseObjCTypeName(ObjCDeclSpec &DS,
 
     // If that's not invalid, extract a type.
     if (!declarator.isInvalidType()) {
+      // Map a nullability specifier to a context-sensitive keyword attribute.
+      if (DS.getObjCDeclQualifier() & ObjCDeclSpec::DQ_CSNullability)
+        addContextSensitiveTypeNullability(*this, declarator,
+                                           DS.getNullability(),
+                                           DS.getNullabilityLoc());
+
       TypeResult type = Actions.ActOnTypeName(getCurScope(), declarator);
       if (!type.isInvalid())
         Ty = type.get();
@@ -1009,8 +1067,31 @@ ParsedType Parser::ParseObjCTypeName(ObjCDeclSpec &DS,
       Ident_instancetype = PP.getIdentifierInfo("instancetype");
     
     if (Tok.getIdentifierInfo() == Ident_instancetype) {
-      Ty = Actions.ActOnObjCInstanceType(Tok.getLocation());
-      ConsumeToken();
+      SourceLocation loc = ConsumeToken();
+      Ty = Actions.ActOnObjCInstanceType(loc);
+
+      // Map a nullability specifier to a context-sensitive keyword attribute.
+      if (DS.getObjCDeclQualifier() & ObjCDeclSpec::DQ_CSNullability) {
+        // Synthesize an abstract declarator so we can use Sema::ActOnTypeName.
+        const char *prevSpec;
+        unsigned diagID;
+        DeclSpec declSpec(AttrFactory);
+        declSpec.setObjCQualifiers(&DS);
+        declSpec.SetTypeSpecType(DeclSpec::TST_typename, loc, prevSpec, diagID,
+                                 Ty,
+                                 Actions.getASTContext().getPrintingPolicy());
+        declSpec.SetRangeEnd(loc);
+        Declarator declarator(declSpec, context);
+
+        // Add the context-sensitive keyword attribute.
+        addContextSensitiveTypeNullability(*this, declarator,
+                                           DS.getNullability(),
+                                           DS.getNullabilityLoc());
+
+        TypeResult type = Actions.ActOnTypeName(getCurScope(), declarator);
+        if (!type.isInvalid())
+          Ty = type.get();
+      }
     }
   }
 

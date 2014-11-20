@@ -148,7 +148,6 @@ Decl *Sema::ActOnProperty(Scope *S, SourceLocation AtLoc,
   TypeSourceInfo *TSI = GetTypeForDeclarator(FD.D, S);
   QualType T = TSI->getType();
   Attributes |= deduceWeakPropertyFromType(*this, T);
-  
   bool isReadWrite = ((Attributes & ObjCDeclSpec::DQ_PR_readwrite) ||
                       // default is readwrite!
                       !(Attributes & ObjCDeclSpec::DQ_PR_readonly));
@@ -161,18 +160,6 @@ Decl *Sema::ActOnProperty(Scope *S, SourceLocation AtLoc,
                     !(Attributes & ObjCDeclSpec::DQ_PR_copy) &&
                     !(Attributes & ObjCDeclSpec::DQ_PR_unsafe_unretained) &&
                     !(Attributes & ObjCDeclSpec::DQ_PR_weak)));
-  
-  // If nullability was specified for this property via an attribute,
-  // apply it now.
-  if (!T.isNull() && (Attributes & ObjCDeclSpec::DQ_PR_nullability) &&
-      checkNullabilityTypeSpecifier(T,
-                                    ODS.getNullability(),
-                                    ODS.getNullabilityLoc(),
-                                    /*isContextSensitive=*/true,
-                                    /*isImplicit=*/false)) {
-    // Clear out the invalid qualifier.
-    Attributes = Attributes & ~ObjCDeclSpec::DQ_PR_nullability;
-  }
 
   // Proceed with constructing the ObjCPropertyDecls.
   ObjCContainerDecl *ClassDecl = cast<ObjCContainerDecl>(CurContext);
