@@ -2524,7 +2524,7 @@ bool FreeBSD::HasNativeLLVMSupport() const {
 }
 
 bool FreeBSD::isPIEDefault() const {
-  return getSanitizerArgs().hasZeroBaseShadow();
+  return getSanitizerArgs().requiresPIE();
 }
 
 /// NetBSD - NetBSD tool chain which can call as(1) and ld(1) directly.
@@ -3400,7 +3400,7 @@ void Linux::AddClangCXXStdlibIncludeArgs(const ArgList &DriverArgs,
 }
 
 bool Linux::isPIEDefault() const {
-  return getSanitizerArgs().hasZeroBaseShadow();
+  return getSanitizerArgs().requiresPIE();
 }
 
 /// DragonFly - DragonFly tool chain which can call as(1) and ld(1) directly.

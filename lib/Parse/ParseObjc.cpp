@@ -2529,7 +2529,7 @@ ExprResult Parser::ParseObjCMessageExpression() {
   }
   
   // Otherwise, an arbitrary expression can be the receiver of a send.
-  ExprResult Res(ParseExpression());
+  ExprResult Res = Actions.CorrectDelayedTyposInExpr(ParseExpression());
   if (Res.isInvalid()) {
     SkipUntil(tok::r_square, StopAtSemi);
     return Res;
@@ -2688,6 +2688,8 @@ Parser::ParseObjCMessageExpressionBody(SourceLocation LBracLoc,
       SourceLocation commaLoc = ConsumeToken(); // Eat the ','.
       ///  Parse the expression after ','
       ExprResult Res(ParseAssignmentExpression());
+      if (Tok.is(tok::colon))
+        Res = Actions.CorrectDelayedTyposInExpr(Res);
       if (Res.isInvalid()) {
         if (Tok.is(tok::colon)) {
           Diag(commaLoc, diag::note_extra_comma_message_arg) <<

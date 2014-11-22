@@ -5764,7 +5764,8 @@ void Parser::ParseBracketDeclarator(Declarator &D) {
     } else {
       EnterExpressionEvaluationContext Unevaluated(Actions,
                                                    Sema::ConstantEvaluated);
-      NumElements = ParseAssignmentExpression();
+      NumElements =
+          Actions.CorrectDelayedTyposInExpr(ParseAssignmentExpression());
     }
   } else {
     if (StaticLoc.isValid()) {
