@@ -1400,6 +1400,8 @@ namespace {
     1,    // opencl_global
     3,    // opencl_local
     4,    // opencl_constant
+    // FIXME: generic has to be added to the target
+    0,    // opencl_generic
     1,    // cuda_device
     4,    // cuda_constant
     3,    // cuda_shared
@@ -1519,6 +1521,8 @@ static const unsigned R600AddrSpaceMap[] = {
   1,    // opencl_global
   3,    // opencl_local
   2,    // opencl_constant
+  // FIXME: generic has to be added to the target
+  0,    // opencl_generic
   1,    // cuda_device
   2,    // cuda_constant
   3     // cuda_shared
@@ -5437,6 +5441,8 @@ namespace {
       3, // opencl_global
       4, // opencl_local
       5, // opencl_constant
+      // FIXME: generic has to be added to the target
+      0, // opencl_generic
       0, // cuda_device
       0, // cuda_constant
       0  // cuda_shared
@@ -6160,6 +6166,7 @@ namespace {
     1,    // opencl_global
     3,    // opencl_local
     2,    // opencl_constant
+    4,    // opencl_generic
     0,    // cuda_device
     0,    // cuda_constant
     0     // cuda_shared

@@ -54,6 +54,10 @@ TEST_F(FormatTestJava, NoAlternativeOperatorNames) {
   verifyFormat("someObject.and();");
 }
 
+TEST_F(FormatTestJava, UnderstandsCasts) {
+  verifyFormat("a[b >> 1] = (byte) (c() << 4);");
+}
+
 TEST_F(FormatTestJava, FormatsInstanceOfLikeOperators) {
   FormatStyle Style = getStyleWithColumns(50);
   verifyFormat("return aaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n"
@@ -63,6 +67,21 @@ TEST_F(FormatTestJava, FormatsInstanceOfLikeOperators) {
   verifyFormat("return aaaaaaaaaaaaaaaaaaaaaaaaaaaaa instanceof\n"
                "    bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb;",
                Style);
+}
+
+TEST_F(FormatTestJava, Chromium) {
+  verifyFormat("class SomeClass {\n"
+               "    void f() {}\n"
+               "    int g() {\n"
+               "        return 0;\n"
+               "    }\n"
+               "    void h() {\n"
+               "        while (true) f();\n"
+               "        for (;;) f();\n"
+               "        if (true) f();\n"
+               "    }\n"
+               "}",
+               getChromiumStyle(FormatStyle::LK_Java));
 }
 
 TEST_F(FormatTestJava, ClassKeyword) {
@@ -198,6 +217,8 @@ TEST_F(FormatTestJava, ArrayInitializers) {
 TEST_F(FormatTestJava, ThrowsDeclarations) {
   verifyFormat("public void doSooooooooooooooooooooooooooomething()\n"
                "    throws LooooooooooooooooooooooooooooongException {}");
+  verifyFormat("public void doSooooooooooooooooooooooooooomething()\n"
+               "    throws LoooooooooongException, LooooooooooongException {}");
 }
 
 TEST_F(FormatTestJava, Annotations) {
@@ -296,6 +317,11 @@ TEST_F(FormatTestJava, SynchronizedKeyword) {
   verifyFormat("synchronized (mData) {\n"
                "  // ...\n"
                "}");
+}
+
+TEST_F(FormatTestJava, PackageDeclarations) {
+  verifyFormat("package some.really.loooooooooooooooooooooong.package;",
+               getStyleWithColumns(50));
 }
 
 TEST_F(FormatTestJava, ImportDeclarations) {
