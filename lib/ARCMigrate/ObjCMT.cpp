@@ -87,8 +87,8 @@ class ObjCMigrateASTConsumer : public ASTConsumer {
   bool InsertFoundation(ASTContext &Ctx, SourceLocation Loc);
   void migrateApiNoteUnavailableAttr(Decl *D);
   void migrateApiNoteNonnullAttr(Decl *D);
-  void AddNonnullAttribute(const Decl *D, bool MethodParam=false);
-  void migrateApiNoteReturnsNonnullAttr(const Decl *D);
+  void AddNonnullAttribute(const Decl *D, bool Suger=true);
+  void migrateApiNoteReturnsNonnullAttr(const Decl *D, bool Suger=true);
   void migrateApiNoteDesignatedInitializerAttr(const ObjCMethodDecl *MethodDecl);
   
 public:
@@ -647,10 +647,11 @@ void ObjCMigrateASTConsumer::migrateApiNoteUnavailableAttr(Decl *D) {
   }
 }
 
-void ObjCMigrateASTConsumer::AddNonnullAttribute(const Decl *D, bool MethodParam) {
+void ObjCMigrateASTConsumer::AddNonnullAttribute(const Decl *D, bool Suger) {
   clang::NullabilityKind nullabilityKind;
   std::string nullabilityString;
   TypeSourceInfo *TSInfo;
+  const ObjCPropertyDecl *Prop = nullptr;
   if (const ParmVarDecl * Param = dyn_cast<ParmVarDecl>(D)) {
     QualType T = Param->getType();
     if (auto attributed = dyn_cast<AttributedType>(T.getTypePtr()))
@@ -660,7 +661,7 @@ void ObjCMigrateASTConsumer::AddNonnullAttribute(const Decl *D, bool MethodParam
         TSInfo = Param->getTypeSourceInfo();
       }
   }
-  else if (const ObjCPropertyDecl *Prop = dyn_cast<ObjCPropertyDecl>(D)) {
+  else if ((Prop = dyn_cast<ObjCPropertyDecl>(D))) {
     QualType T = Prop->getType();
     if (auto attributed = dyn_cast<AttributedType>(T.getTypePtr()))
       if (auto nullability = attributed->getImmediateNullability()) {
@@ -673,9 +674,25 @@ void ObjCMigrateASTConsumer::AddNonnullAttribute(const Decl *D, bool MethodParam
     return;
   
   TypeLoc TL = TSInfo->getTypeLoc();
-  nullabilityString += " ";
   edit::Commit commit(*Editor);
-  commit.insertBefore(TL.getBeginLoc(), nullabilityString);
+  if (Prop) {
+    SourceLocation LParenLoc = Prop->getLParenLoc();
+    if (LParenLoc.isInvalid()) {
+      std::string attr_list = "(";
+      attr_list += nullabilityString.substr(2);
+      attr_list += ") ";
+      commit.insertBefore(TL.getBeginLoc(), attr_list);
+    }
+    else {
+      nullabilityString += ", ";
+      commit.insertAfterToken(LParenLoc, nullabilityString.substr(2));
+    }
+  }
+  else {
+    nullabilityString += " ";
+    commit.insertBefore(TL.getBeginLoc(),
+                        Suger ? nullabilityString.substr(2) : nullabilityString);
+  }
   Editor->commit(commit);
 }
 
@@ -690,16 +707,16 @@ void ObjCMigrateASTConsumer::migrateApiNoteNonnullAttr(Decl *D) {
     return;
   if (const FunctionDecl *FD = dyn_cast<FunctionDecl>(D)) {
     for (unsigned i = 0, e = FD->getNumParams(); i != e; ++i)
-      AddNonnullAttribute(FD->getParamDecl(i));
+      AddNonnullAttribute(FD->getParamDecl(i), false);
   }
   else if (const ObjCMethodDecl *OMD = dyn_cast<ObjCMethodDecl>(D)) {
     for (const auto *PI : OMD->params())
-      AddNonnullAttribute(PI, true);
+      AddNonnullAttribute(PI);
   }
-  AddNonnullAttribute(D);
+  AddNonnullAttribute(D, false);
 }
 
-void ObjCMigrateASTConsumer::migrateApiNoteReturnsNonnullAttr(const Decl *D) {
+void ObjCMigrateASTConsumer::migrateApiNoteReturnsNonnullAttr(const Decl *D, bool Suger) {
   if (!(ASTMigrateActions & FrontendOptions::ObjCMT_ApiNotes))
     return;
   
@@ -735,7 +752,8 @@ void ObjCMigrateASTConsumer::migrateApiNoteReturnsNonnullAttr(const Decl *D) {
   nullabilityString += " ";
   
   edit::Commit commit(*Editor);
-  commit.insertBefore(TL.getBeginLoc(), nullabilityString);
+  commit.insertBefore(TL.getBeginLoc(),
+                      Suger ? nullabilityString.substr(2) : nullabilityString);
   Editor->commit(commit);
 }
 
@@ -2088,7 +2106,7 @@ void ObjCMigrateASTConsumer::HandleTranslationUnit(ASTContext &Ctx) {
         migrateApiNoteUnavailableAttr((*D));
       if (isa<FunctionDecl>(*D)) {
         migrateApiNoteNonnullAttr((*D));
-        migrateApiNoteReturnsNonnullAttr((*D));
+        migrateApiNoteReturnsNonnullAttr((*D), false);
       }
     }
     if (ASTMigrateActions & FrontendOptions::ObjCMT_Annotation)
