@@ -87,8 +87,8 @@ class ObjCMigrateASTConsumer : public ASTConsumer {
   bool InsertFoundation(ASTContext &Ctx, SourceLocation Loc);
   void migrateApiNoteUnavailableAttr(Decl *D);
   void migrateApiNoteNonnullAttr(Decl *D);
-  void AddNonnullAttribute(const Decl *D, bool Suger=true);
-  void migrateApiNoteReturnsNonnullAttr(const Decl *D, bool Suger=true);
+  void AddNonnullAttribute(const Decl *D, bool Sugar=true);
+  void migrateApiNoteReturnsNonnullAttr(const Decl *D, bool Sugar=true);
   void migrateApiNoteDesignatedInitializerAttr(const ObjCMethodDecl *MethodDecl);
   
 public:
@@ -647,7 +647,7 @@ void ObjCMigrateASTConsumer::migrateApiNoteUnavailableAttr(Decl *D) {
   }
 }
 
-void ObjCMigrateASTConsumer::AddNonnullAttribute(const Decl *D, bool Suger) {
+void ObjCMigrateASTConsumer::AddNonnullAttribute(const Decl *D, bool Sugar) {
   clang::NullabilityKind nullabilityKind;
   std::string nullabilityString;
   TypeSourceInfo *TSInfo;
@@ -691,7 +691,7 @@ void ObjCMigrateASTConsumer::AddNonnullAttribute(const Decl *D, bool Suger) {
   else {
     nullabilityString += " ";
     commit.insertBefore(TL.getBeginLoc(),
-                        Suger ? nullabilityString.substr(2) : nullabilityString);
+                        Sugar ? nullabilityString.substr(2) : nullabilityString);
   }
   Editor->commit(commit);
 }
@@ -716,7 +716,7 @@ void ObjCMigrateASTConsumer::migrateApiNoteNonnullAttr(Decl *D) {
   AddNonnullAttribute(D, false);
 }
 
-void ObjCMigrateASTConsumer::migrateApiNoteReturnsNonnullAttr(const Decl *D, bool Suger) {
+void ObjCMigrateASTConsumer::migrateApiNoteReturnsNonnullAttr(const Decl *D, bool Sugar) {
   if (!(ASTMigrateActions & FrontendOptions::ObjCMT_ApiNotes))
     return;
   
@@ -753,7 +753,7 @@ void ObjCMigrateASTConsumer::migrateApiNoteReturnsNonnullAttr(const Decl *D, boo
   
   edit::Commit commit(*Editor);
   commit.insertBefore(TL.getBeginLoc(),
-                      Suger ? nullabilityString.substr(2) : nullabilityString);
+                      Sugar ? nullabilityString.substr(2) : nullabilityString);
   Editor->commit(commit);
 }
 
