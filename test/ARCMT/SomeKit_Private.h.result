@@ -6,7 +6,7 @@
 @interface A(Private)
 -(A*)privateTransform:(A*)input;
 
-@property (nonatomic) A* internalProperty;
+@property (nonatomic) __nonnull A* internalProperty;
 @end
 
 __attribute__((unavailable("not for you")))

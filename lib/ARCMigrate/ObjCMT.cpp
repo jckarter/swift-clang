@@ -600,6 +600,7 @@ void ObjCMigrateASTConsumer::migrateObjCInterfaceDecl(ASTContext &Ctx,
   
   for (auto *Prop : D->properties()) {
     migrateApiNoteUnavailableAttr(Prop);
+    AddNonnullAttribute(Prop);
     if (!(ASTMigrateActions & FrontendOptions::ObjCMT_ReturnsInnerPointerProperty))
       continue;
     if ((ASTMigrateActions & FrontendOptions::ObjCMT_Annotation) &&
@@ -647,26 +648,35 @@ void ObjCMigrateASTConsumer::migrateApiNoteUnavailableAttr(Decl *D) {
 }
 
 void ObjCMigrateASTConsumer::AddNonnullAttribute(const Decl *D, bool MethodParam) {
-  for (auto A : D->attrs())
-    if (auto NonNull = dyn_cast<NonNullAttr>(A)) {
-      if (!NonNull->isImplicit())
-        return;
-      std::string Str(" __attribute__((nonnull(");
-      bool isFirst = true;
-      for (const auto &Val : NonNull->args()) {
-        if (isFirst) isFirst = false;
-        else Str += ", ";
-        Str += Val;
+  clang::NullabilityKind nullabilityKind;
+  std::string nullabilityString;
+  TypeSourceInfo *TSInfo;
+  if (const ParmVarDecl * Param = dyn_cast<ParmVarDecl>(D)) {
+    QualType T = Param->getType();
+    if (auto attributed = dyn_cast<AttributedType>(T.getTypePtr()))
+      if (auto nullability = attributed->getImmediateNullability()) {
+        nullabilityKind = *nullability;
+        nullabilityString = getNullabilitySpelling(nullabilityKind);
+        TSInfo = Param->getTypeSourceInfo();
       }
-      Str += ")))";
-      edit::Commit commit(*Editor);
-      if (MethodParam)
-        commit.insertBefore(D->getLocEnd(), Str);
-      else
-        commit.insertAfterToken(D->getLocEnd(), Str);
-      Editor->commit(commit);
-      return;
-    }
+  }
+  else if (const ObjCPropertyDecl *Prop = dyn_cast<ObjCPropertyDecl>(D)) {
+    QualType T = Prop->getType();
+    if (auto attributed = dyn_cast<AttributedType>(T.getTypePtr()))
+      if (auto nullability = attributed->getImmediateNullability()) {
+        nullabilityKind = *nullability;
+        nullabilityString = getNullabilitySpelling(nullabilityKind);
+        TSInfo = Prop->getTypeSourceInfo();
+      }
+  }
+  if (nullabilityString.empty())
+    return;
+  
+  TypeLoc TL = TSInfo->getTypeLoc();
+  nullabilityString += " ";
+  edit::Commit commit(*Editor);
+  commit.insertBefore(TL.getBeginLoc(), nullabilityString);
+  Editor->commit(commit);
 }
 
 void ObjCMigrateASTConsumer::migrateApiNoteNonnullAttr(Decl *D) {
@@ -698,20 +708,35 @@ void ObjCMigrateASTConsumer::migrateApiNoteReturnsNonnullAttr(const Decl *D) {
   
   if (!isa<FunctionDecl>(D) && !isa<ObjCMethodDecl>(D))
     return;
+  QualType T;
+  TypeSourceInfo *TSInfo;
+  if (const FunctionDecl *FD = dyn_cast<FunctionDecl>(D)) {
+    T = FD->getReturnType();
+    TSInfo = FD->getTypeSourceInfo();
+  }
+  else if (const ObjCMethodDecl *MD = dyn_cast<ObjCMethodDecl>(D)) {
+    T = MD->getReturnType();
+    TSInfo = MD->getReturnTypeSourceInfo();
+  }
+  if (T.isNull())
+    return;
   
-  for (auto A : D->attrs())
-    if (auto RetNNAttr = dyn_cast<ReturnsNonNullAttr>(A)) {
-      if (!RetNNAttr->isImplicit())
-        return;
-      std::string Str(" __attribute__((returns_nonnull))");
-      edit::Commit commit(*Editor);
-      if (isa<ObjCMethodDecl>(D))
-        commit.insertBefore(D->getLocEnd(), Str);
-      else
-        commit.insertAfterToken(D->getLocEnd(), Str);
-      Editor->commit(commit);
-      return;
+  clang::NullabilityKind nullabilityKind;
+  std::string nullabilityString;
+  if (auto attributed = dyn_cast<AttributedType>(T.getTypePtr()))
+    if (auto nullability = attributed->getImmediateNullability()) {
+      nullabilityKind = *nullability;
+      nullabilityString = getNullabilitySpelling(nullabilityKind);
     }
+  if (nullabilityString.empty())
+    return;
+  
+  TypeLoc TL = TSInfo->getTypeLoc();
+  nullabilityString += " ";
+  
+  edit::Commit commit(*Editor);
+  commit.insertBefore(TL.getBeginLoc(), nullabilityString);
+  Editor->commit(commit);
 }
 
 void ObjCMigrateASTConsumer::migrateApiNoteDesignatedInitializerAttr(

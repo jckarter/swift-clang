@@ -1,13 +1,13 @@
 #ifndef HEADER_LIB_H
 #define HEADER_LIB_H
 
-void *custom_realloc(void *member, unsigned size);
+__nonnull void *custom_realloc(__nonnull void *member, unsigned size);
 
 int *global_int;
 
 int unavailable_function(void) __attribute__((unavailable("I beg you not to use this")));
 int unavailable_global_int __attribute__((unavailable));
 
-void do_something_with_pointers(int *ptr1, int *ptr2);
+void do_something_with_pointers(__nonnull int *ptr1, __nullable int *ptr2);
 
 #endif
