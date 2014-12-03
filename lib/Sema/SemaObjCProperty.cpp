@@ -1757,6 +1757,38 @@ void Sema::DiagnoseUnimplementedProperties(Scope *S, ObjCImplDecl* IMPDecl,
   }
 }
 
+void Sema::diagnoseNullResettableSynthesizedSetters(ObjCImplDecl *impDecl) {
+  for (const auto *propertyImpl : impDecl->property_impls()) {
+    const auto *property = propertyImpl->getPropertyDecl();
+
+    // Warn about null_resettable properties with synthesized setters,
+    // because the setter won't properly handle nil.
+    if (propertyImpl->getPropertyImplementation()
+          == ObjCPropertyImplDecl::Synthesize &&
+        (property->getPropertyAttributes() &
+         ObjCPropertyDecl::OBJC_PR_nullability) &&
+        property->getGetterMethodDecl() &&
+        property->getSetterMethodDecl()) {
+      QualType type = property->getType();
+      if (auto nullability = AttributedType::stripOuterNullability(type)) {
+        if (*nullability == NullabilityKind::Unspecified) {
+          auto *getterMethod = property->getGetterMethodDecl();
+          auto *setterMethod = property->getSetterMethodDecl();
+          if (!impDecl->getInstanceMethod(setterMethod->getSelector()) &&
+              !impDecl->getInstanceMethod(getterMethod->getSelector())) {
+            SourceLocation loc = propertyImpl->getLocation();
+            if (loc.isInvalid())
+              loc = impDecl->getLocStart();
+
+            Diag(loc, diag::warn_null_resettable_setter)
+              << setterMethod->getSelector() << property->getDeclName();
+          }
+        }
+      }
+    }
+  }
+}
+
 void
 Sema::AtomicPropertySetterGetterRules (ObjCImplDecl* IMPDecl,
                                        ObjCContainerDecl* IDecl) {

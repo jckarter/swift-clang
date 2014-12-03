@@ -145,6 +145,11 @@ __attribute__((objc_root_class))
 __attribute__((objc_root_class))
 @interface NSResettable
 @property(null_resettable,retain) NSResettable *resettable1; // expected-note{{passing argument to parameter 'resettable1' here}}
+@property(null_resettable,retain,nonatomic) NSResettable *resettable2;
+@property(null_resettable,retain,nonatomic) NSResettable *resettable3;
+@property(null_resettable,retain,nonatomic) NSResettable *resettable4;
+@property(null_resettable,retain,nonatomic) NSResettable *resettable5;
+@property(null_resettable,retain,nonatomic) NSResettable *resettable6;
 @end
 
 void test_null_resettable(NSResettable *r, int *ip) {
@@ -152,11 +157,23 @@ void test_null_resettable(NSResettable *r, int *ip) {
   r.resettable1 = ip; // expected-warning{{incompatible pointer types assigning to '__nullable NSResettable *' from 'int *'}}
 }
 
-@implementation NSResettable
+@implementation NSResettable // expected-warning{{synthesized setter 'setResettable4:' for null_resettable property 'resettable4' does not handle nil}}
 - (NSResettable *)resettable1 {
   return 0; // no warning
 }
 
 - (void)setResettable1:(NSResettable *)param {
+}
+
+@synthesize resettable2; // no warning; not synthesized
+@synthesize resettable3; // expected-warning{{synthesized setter 'setResettable3:' for null_resettable property 'resettable3' does not handle nil}}
+
+- (void)setResettable2:(NSResettable *)param {
+}
+
+@dynamic resettable5;
+
+- (NSResettable *)resettable6 {
+  return 0; // no warning
 }
 @end

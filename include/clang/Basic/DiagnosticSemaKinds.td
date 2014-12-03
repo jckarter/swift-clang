@@ -7501,6 +7501,10 @@ def warn_nullability_lost : Warning<
   "implicit conversion from nullable pointer %0 to non-null pointer type %1">,
   InGroup<Nullability>;
 
+def warn_null_resettable_setter : Warning<
+  "synthesized setter %0 for null_resettable property %1 does not handle nil">,
+  InGroup<Nullability>;
+
 }
 
 } // end of sema component.
