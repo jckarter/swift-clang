@@ -21,7 +21,7 @@ typedef __nonnull NSFoo * __nullable conflict_NSFoo_ptr_2; // expected-error{{nu
 @implementation NSFoo
 - (void)methodTakingIntPtr:(__nonnull int *)ptr { }
 - (__nonnull int *)methodReturningIntPtr {
-  return 0; // expected-warning{{null returned from method that requires a non-null return value}}
+  return 0; // no warning
 }
 @end
 
@@ -68,7 +68,7 @@ void test_accepts_nonnull_null_pointer_literal(NSFoo *foo, __nonnull NSBar *bar)
 // Check returning nil from a nonnull-returning method.
 @implementation NSBar
 - (nonnull NSFoo *)methodWithFoo:(nonnull NSFoo *)foo {
-  return 0; // expected-warning{{null returned from method that requires a non-null return value}}
+  return 0; // no warning
 }
 
 - (NSFoo **)invalidMethod1 { 
@@ -76,10 +76,10 @@ void test_accepts_nonnull_null_pointer_literal(NSFoo *foo, __nonnull NSBar *bar)
 }
 
 - (NSFoo *)conflictingMethod1 { 
-  return 0; // expected-warning{{null returned from method that requires a non-null return value}}
+  return 0; // no warning
 }
 - (NSFoo *)redundantMethod1 {
-  return 0; // expected-warning{{null returned from method that requires a non-null return value}}
+  return 0; // no warning
 }
 @end
 
@@ -93,7 +93,7 @@ __attribute__((objc_root_class))
 @implementation NSMerge
 - (NSFoo *)methodA:(NSFoo*)foo {
   int *ptr = foo; // expected-warning{{incompatible pointer types initializing 'int *' with an expression of type '__nonnull NSFoo *'}}
-  return 0; // expected-warning{{null returned from method that requires a non-null return value}}
+  return 0; // no warning
 }
 
 - (nullable NSFoo *)methodB:(nullable NSFoo*)foo { // expected-error{{nullability specifier 'nullable' conflicts with existing specifier 'nonnull'}} \
@@ -102,7 +102,7 @@ __attribute__((objc_root_class))
 }
 
 - (nonnull NSFoo *)methodC:(nullable NSFoo*)foo {
-  return 0; // expected-warning{{null returned from method that requires a non-null return value}}
+  return 0; // no warning
 }
 @end
 
@@ -154,7 +154,7 @@ void test_null_resettable(NSResettable *r, int *ip) {
 
 @implementation NSResettable
 - (NSResettable *)resettable1 {
-  return 0; // expected-warning{{null returned from method that requires a non-null return value}}
+  return 0; // no warning
 }
 
 - (void)setResettable1:(NSResettable *)param {

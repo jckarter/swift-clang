@@ -5265,7 +5265,7 @@ Sema::CheckReturnValExpr(Expr *RetValExp, QualType lhsType,
 
   // Check if the return value is null but should not be.
   if (((Attrs && hasSpecificAttr<ReturnsNonNullAttr>(*Attrs)) ||
-       isNonNullType(Context, lhsType)) &&
+       (!isObjCMethod && isNonNullType(Context, lhsType))) &&
       CheckNonNullExpr(*this, RetValExp))
     Diag(ReturnLoc, diag::warn_null_ret)
       << (isObjCMethod ? 1 : 0) << RetValExp->getSourceRange();
