@@ -647,11 +647,19 @@ void ObjCMigrateASTConsumer::migrateApiNoteUnavailableAttr(Decl *D) {
   }
 }
 
+static bool IsPointeePointerType(QualType PointerType) {
+  QualType pointeeType = PointerType->getPointeeType();
+  return (pointeeType->isAnyPointerType() ||
+          pointeeType->isObjCObjectPointerType() ||
+          pointeeType->isMemberPointerType());
+}
+
 void ObjCMigrateASTConsumer::AddNonnullAttribute(const Decl *D, bool Sugar) {
   clang::NullabilityKind nullabilityKind;
   std::string nullabilityString;
   TypeSourceInfo *TSInfo;
   const ObjCPropertyDecl *Prop = nullptr;
+  bool PointeePointerType = false;
   if (const ParmVarDecl * Param = dyn_cast<ParmVarDecl>(D)) {
     QualType T = Param->getType();
     if (auto attributed = dyn_cast<AttributedType>(T.getTypePtr()))
@@ -659,6 +667,7 @@ void ObjCMigrateASTConsumer::AddNonnullAttribute(const Decl *D, bool Sugar) {
         nullabilityKind = *nullability;
         nullabilityString = getNullabilitySpelling(nullabilityKind);
         TSInfo = Param->getTypeSourceInfo();
+        PointeePointerType = IsPointeePointerType(T);
       }
   }
   else if ((Prop = dyn_cast<ObjCPropertyDecl>(D))) {
@@ -668,6 +677,7 @@ void ObjCMigrateASTConsumer::AddNonnullAttribute(const Decl *D, bool Sugar) {
         nullabilityKind = *nullability;
         nullabilityString = getNullabilitySpelling(nullabilityKind);
         TSInfo = Prop->getTypeSourceInfo();
+        PointeePointerType = IsPointeePointerType(T);
       }
   }
   if (nullabilityString.empty())
@@ -675,7 +685,12 @@ void ObjCMigrateASTConsumer::AddNonnullAttribute(const Decl *D, bool Sugar) {
   
   TypeLoc TL = TSInfo->getTypeLoc();
   edit::Commit commit(*Editor);
-  if (Prop) {
+  if (PointeePointerType) {
+    // __nullability must be applied to outer-most pointer type.
+    std::string SpacedNullableString = " ";
+    SpacedNullableString += nullabilityString;
+    commit.insertAfterToken(TL.getEndLoc(), SpacedNullableString);
+  } else if (Prop) {
     SourceLocation LParenLoc = Prop->getLParenLoc();
     if (LParenLoc.isInvalid()) {
       std::string attr_list = "(";
@@ -750,10 +765,17 @@ void ObjCMigrateASTConsumer::migrateApiNoteReturnsNonnullAttr(const Decl *D, boo
   
   TypeLoc TL = TSInfo->getTypeLoc();
   nullabilityString += " ";
-  
+  bool PointeePointerType = IsPointeePointerType(T);
   edit::Commit commit(*Editor);
-  commit.insertBefore(TL.getBeginLoc(),
-                      Sugar ? nullabilityString.substr(2) : nullabilityString);
+  if (PointeePointerType) {
+    // __nullability must be applied to outer-most pointer type.
+    std::string SpacedNullableString = " ";
+    SpacedNullableString += nullabilityString;
+    commit.insertAfterToken(TL.getEndLoc(), SpacedNullableString);
+  }
+  else
+    commit.insertBefore(TL.getBeginLoc(),
+                        Sugar ? nullabilityString.substr(2) : nullabilityString);
   Editor->commit(commit);
 }
 
