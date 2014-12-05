@@ -665,6 +665,9 @@ void ObjCMigrateASTConsumer::AddNonnullAttribute(const Decl *D, bool Sugar) {
     if (auto attributed = dyn_cast<AttributedType>(T.getTypePtr()))
       if (auto nullability = attributed->getImmediateNullability()) {
         nullabilityKind = *nullability;
+        // __null_resettable is for properties only.
+        if (nullabilityKind == NullabilityKind::Unspecified)
+          return;
         nullabilityString = getNullabilitySpelling(nullabilityKind);
         TSInfo = Param->getTypeSourceInfo();
         PointeePointerType = IsPointeePointerType(T);
@@ -758,6 +761,9 @@ void ObjCMigrateASTConsumer::migrateApiNoteReturnsNonnullAttr(const Decl *D, boo
   if (auto attributed = dyn_cast<AttributedType>(T.getTypePtr()))
     if (auto nullability = attributed->getImmediateNullability()) {
       nullabilityKind = *nullability;
+      // __null_resettable is for properties only.
+      if (nullabilityKind == NullabilityKind::Unspecified)
+        return;
       nullabilityString = getNullabilitySpelling(nullabilityKind);
     }
   if (nullabilityString.empty())
