@@ -2370,10 +2370,10 @@ Optional<NullabilityKind> Type::getNullability(const ASTContext &context) const 
     }
 
     // Desugar the type. If desugaring does nothing, we're done.
-    QualType desugared = type.getDesugaredType(context);
+    QualType desugared = type.getSingleStepDesugaredType(context);
     if (desugared.getTypePtr() == type.getTypePtr())
       return None;
-    
+
     type = desugared;
   } while (true);
 }
