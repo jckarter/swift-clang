@@ -7499,7 +7499,8 @@ def warn_nullability_missing : Warning<
   InGroup<NullabilityCompleteness>;
 
 def warn_nullability_lost : Warning<
-  "implicit conversion from nullable pointer %0 to non-null pointer type %1">,
+  "implicit conversion from nullable pointer %0 to non-nullable pointer "
+  "type %1">,
   InGroup<Nullability>;
 
 def warn_null_resettable_setter : Warning<

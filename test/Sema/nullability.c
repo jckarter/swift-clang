@@ -82,5 +82,5 @@ void printing_nullability(void) {
 // Check nullable-to-nonnull conversions.
 void nullable_to_nonnull(__nullable int *ptr) {
   int *a = ptr; // okay
-  __nonnull int *b = ptr; // expected-warning{{implicit conversion from nullable pointer '__nullable int *' to non-null pointer type '__nonnull int *'}}
+  __nonnull int *b = ptr; // expected-warning{{implicit conversion from nullable pointer '__nullable int *' to non-nullable pointer type '__nonnull int *'}}
 }
