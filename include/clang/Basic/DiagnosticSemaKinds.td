@@ -7480,12 +7480,12 @@ let CategoryName = "Nullability Issue" in {
 
 def err_nullability_nonpointer : Error<
   "nullability specifier "
-  "'%select{%select{__|}1nonnull|%select{__|}1nullable|null_resettable}0' cannot be applied "
-  "to non-pointer type %2">;
+  "'%select{%select{__|}1nonnull|%select{__|}1nullable|%select{__|}1"
+  "null_unspecified}0' cannot be applied to non-pointer type %2">;
 
 def err_nullability_cs_multilevel : Error<
   "nullability keyword "
-  "'%select{nonnull|nullable|null_resettable}0' cannot be applied to "
+  "'%select{nonnull|nullable|null_unspecified}0' cannot be applied to "
   "multi-level pointer type %1">;
 
 def note_nullability_type_specifier : Note<

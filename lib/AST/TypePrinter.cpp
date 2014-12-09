@@ -1143,9 +1143,9 @@ void TypePrinter::printAttributedBefore(const AttributedType *T,
       OS << "__nonnull ";
     else if (T->getAttrKind() == AttributedType::attr_nullable)
       OS << "__nullable ";
-    else if (T->getAttrKind() == AttributedType::attr_null_unspecified) {
-      // Not printed.
-    } else
+    else if (T->getAttrKind() == AttributedType::attr_null_unspecified)
+      OS << "__null_unspecified ";
+    else
       llvm_unreachable("unhandled nullability");
 
     return printBefore(T->getModifiedType(), OS);
@@ -1196,9 +1196,9 @@ void TypePrinter::printAttributedAfter(const AttributedType *T,
       OS << " __nonnull";
     else if (T->getAttrKind() == AttributedType::attr_nullable)
       OS << " __nullable";
-    else if (T->getAttrKind() == AttributedType::attr_null_unspecified) {
-      // Not printed
-    } else
+    else if (T->getAttrKind() == AttributedType::attr_null_unspecified)
+      OS << "__null_unspecified";
+    else
       llvm_unreachable("unhandled nullability");
 
     return;

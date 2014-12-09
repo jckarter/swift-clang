@@ -1348,6 +1348,7 @@ static void AddTypeSpecifierResults(const LangOptions &LangOpts,
   // Nullability
   Results.AddResult(Result("__nonnull", CCP_Type));
   Results.AddResult(Result("__nullable", CCP_Type));
+  Results.AddResult(Result("__null_unspecified", CCP_Type));
 }
 
 static void AddStorageSpecifiers(Sema::ParserCompletionContext CCC,
@@ -2132,6 +2133,7 @@ static std::string formatObjCParamQualifiers(unsigned ObjCQuals,
         break;
 
       case NullabilityKind::Unspecified:
+          Result += "null_unspecified ";
         break;
       }
     }
@@ -4753,7 +4755,7 @@ void Sema::CodeCompleteObjCPropertyFlags(Scope *S, ObjCDeclSpec &ODS) {
     Getter.AddPlaceholderChunk("method");
     Results.AddResult(CodeCompletionResult(Getter.TakeString()));
   }
-  if (!ObjCPropertyFlagConflicts(Attributes, ObjCDeclSpec::DQ_PR_nullability)) {
+  if (!ObjCPropertyFlagConflicts(Attributes, ObjCDeclSpec::DQ_PR_nullability)){
     Results.AddResult(CodeCompletionResult("nonnull"));
     Results.AddResult(CodeCompletionResult("nullable"));
     Results.AddResult(CodeCompletionResult("null_resettable"));

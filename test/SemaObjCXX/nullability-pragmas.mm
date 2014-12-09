@@ -22,10 +22,14 @@ void test_pragmas_1(__nonnull A *a) {
   f12(0); // okay
   [a method1:0]; // expected-warning{{null passed to a callee that requires a non-null argument}}
 
+  
   float *ptr;
   ptr = f13(); // expected-error{{assigning to 'float *' from incompatible type '__nonnull int_ptr' (aka 'int *')}}
   ptr = f14(); // expected-error{{assigning to 'float *' from incompatible type '__nonnull A *'}}
   ptr = [a method1:a]; // expected-error{{assigning to 'float *' from incompatible type '__nonnull A *'}}
   ptr = a.aProp; // expected-error{{assigning to 'float *' from incompatible type '__nonnull A *'}}
   ptr = global_int_ptr; // expected-error{{assigning to 'float *' from incompatible type '__nonnull int *'}}
+  ptr = f15(); // expected-error{{assigning to 'float *' from incompatible type '__null_unspecified int *'}}
+  ptr = f16(); // expected-error{{assigning to 'float *' from incompatible type '__null_unspecified A *'}}
+  ptr = [a method2]; // expected-error{{assigning to 'float *' from incompatible type '__null_unspecified A *'}}
 }

@@ -682,7 +682,8 @@ void Parser::ParseNullabilityTypeSpecifiers(ParsedAttributes &attrs) {
   while (true) {
     switch (Tok.getKind()) {
     case tok::kw___nonnull:
-    case tok::kw___nullable: {
+    case tok::kw___nullable:
+    case tok::kw___null_unspecified: {
       IdentifierInfo *AttrName = Tok.getIdentifierInfo();
       SourceLocation AttrNameLoc = ConsumeToken();
       if (!getLangOpts().ObjC1)
@@ -3004,6 +3005,7 @@ void Parser::ParseDeclarationSpecifiers(DeclSpec &DS,
     // Nullability type specifiers.
     case tok::kw___nonnull:
     case tok::kw___nullable:
+    case tok::kw___null_unspecified:
       ParseNullabilityTypeSpecifiers(DS.getAttributes());
       continue;
 
@@ -4218,6 +4220,7 @@ bool Parser::isTypeSpecifierQualifier() {
 
   case tok::kw___nonnull:
   case tok::kw___nullable:
+  case tok::kw___null_unspecified:
 
   case tok::kw___private:
   case tok::kw___local:
@@ -4394,6 +4397,7 @@ bool Parser::isDeclarationSpecifier(bool DisambiguatingWithExpression) {
 
   case tok::kw___nonnull:
   case tok::kw___nullable:
+  case tok::kw___null_unspecified:
 
   case tok::kw___private:
   case tok::kw___local:
@@ -4628,6 +4632,7 @@ void Parser::ParseTypeQualifierListOpt(DeclSpec &DS, unsigned AttrReqs,
     // Nullability type specifiers.
     case tok::kw___nonnull:
     case tok::kw___nullable:
+    case tok::kw___null_unspecified:
       ParseNullabilityTypeSpecifiers(DS.getAttributes());
       continue;
 

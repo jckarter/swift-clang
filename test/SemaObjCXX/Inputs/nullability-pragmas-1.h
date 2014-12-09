@@ -26,8 +26,12 @@ void f12(__nullable int (X::*mem_func)(int, int));
 int_ptr f13(void);
 A *f14(void);
 
+__null_unspecified int *f15(void);
+__null_unspecified A *f16(void);
+
 @interface A(Pragmas1)
 - (A *)method1:(A_ptr)ptr;
+- (null_unspecified A *)method2;
 
 @property A *aProp;
 @end
@@ -36,7 +40,7 @@ int *global_int_ptr;
 
 typedef int *int_ptr_2;
 
-static inline void f15(void) {
+static inline void f19(void) {
   float *fp = global_int_ptr; // expected-error{{cannot initialize a variable of type 'float *' with an lvalue of type '__nonnull int *'}}
 }
 

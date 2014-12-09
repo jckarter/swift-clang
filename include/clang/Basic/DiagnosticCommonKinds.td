@@ -98,14 +98,16 @@ let CategoryName = "Nullability Issue" in {
 
 def warn_nullability_duplicate : Warning<
   "duplicate nullability specifier "
-  "'%select{%select{__|}1nonnull|%select{__|}1nullable|null_resettable}0'">,
+  "'%select{%select{__|}1nonnull|%select{__|}1nullable|"
+  "%select{__|}1null_unspecified}0'">,
   InGroup<Nullability>;
 
 def err_nullability_conflicting : Error<
   "nullability specifier "
-  "'%select{%select{__|}1nonnull|%select{__|}1nullable|null_resettable}0' "
+  "'%select{%select{__|}1nonnull|%select{__|}1nullable|"
+  "%select{__|}1null_unspecified}0' "
   "conflicts with existing specifier '%select{%select{__|}3nonnull|"
-  "%select{__|}3nullable|null_resettable}2'">;
+  "%select{__|}3nullable|%select{__|}3null_unspecified}2'">;
 
 }
 

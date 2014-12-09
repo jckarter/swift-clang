@@ -360,6 +360,9 @@ Sema::HandlePropertyInClassExtension(Scope *S,
     PDecl->setPropertyAttributes(ObjCPropertyDecl::OBJC_PR_atomic);
   if (Attributes & ObjCDeclSpec::DQ_PR_nullability)
     PDecl->setPropertyAttributes(ObjCPropertyDecl::OBJC_PR_nullability);
+  if (Attributes & ObjCDeclSpec::DQ_PR_null_resettable)
+    PDecl->setPropertyAttributes(ObjCPropertyDecl::OBJC_PR_null_resettable);
+
   // Set setter/getter selector name. Needed later.
   PDecl->setGetterName(GetterSel);
   PDecl->setSetterName(SetterSel);
@@ -642,6 +645,9 @@ ObjCPropertyDecl *Sema::CreatePropertyDecl(Scope *S,
 
   if (Attributes & ObjCDeclSpec::DQ_PR_nullability)
     PDecl->setPropertyAttributes(ObjCPropertyDecl::OBJC_PR_nullability);
+
+  if (Attributes & ObjCDeclSpec::DQ_PR_null_resettable)
+    PDecl->setPropertyAttributes(ObjCPropertyDecl::OBJC_PR_null_resettable);
 
   return PDecl;
 }
@@ -1766,24 +1772,19 @@ void Sema::diagnoseNullResettableSynthesizedSetters(ObjCImplDecl *impDecl) {
     if (propertyImpl->getPropertyImplementation()
           == ObjCPropertyImplDecl::Synthesize &&
         (property->getPropertyAttributes() &
-         ObjCPropertyDecl::OBJC_PR_nullability) &&
+         ObjCPropertyDecl::OBJC_PR_null_resettable) &&
         property->getGetterMethodDecl() &&
         property->getSetterMethodDecl()) {
-      QualType type = property->getType();
-      if (auto nullability = AttributedType::stripOuterNullability(type)) {
-        if (*nullability == NullabilityKind::Unspecified) {
-          auto *getterMethod = property->getGetterMethodDecl();
-          auto *setterMethod = property->getSetterMethodDecl();
-          if (!impDecl->getInstanceMethod(setterMethod->getSelector()) &&
-              !impDecl->getInstanceMethod(getterMethod->getSelector())) {
-            SourceLocation loc = propertyImpl->getLocation();
-            if (loc.isInvalid())
-              loc = impDecl->getLocStart();
+      auto *getterMethod = property->getGetterMethodDecl();
+      auto *setterMethod = property->getSetterMethodDecl();
+      if (!impDecl->getInstanceMethod(setterMethod->getSelector()) &&
+          !impDecl->getInstanceMethod(getterMethod->getSelector())) {
+        SourceLocation loc = propertyImpl->getLocation();
+        if (loc.isInvalid())
+          loc = impDecl->getLocStart();
 
-            Diag(loc, diag::warn_null_resettable_setter)
-              << setterMethod->getSelector() << property->getDeclName();
-          }
-        }
+        Diag(loc, diag::warn_null_resettable_setter)
+          << setterMethod->getSelector() << property->getDeclName();
       }
     }
   }
@@ -1994,7 +1995,7 @@ void Sema::ProcessPropertyDecl(ObjCPropertyDecl *property,
     // If the property is null_resettable, the getter returns nonnull.
     QualType resultTy = property->getType();
     if (property->getPropertyAttributes() &
-        ObjCPropertyDecl::OBJC_PR_nullability) {
+        ObjCPropertyDecl::OBJC_PR_null_resettable) {
       QualType modifiedTy = resultTy;
       if (auto nullability = AttributedType::stripOuterNullability(modifiedTy)){
         if (*nullability == NullabilityKind::Unspecified)
@@ -2069,7 +2070,7 @@ void Sema::ProcessPropertyDecl(ObjCPropertyDecl *property,
       // If the property is null_resettable, the getter returns nonnull.
       QualType paramTy = property->getType().getUnqualifiedType();
       if (property->getPropertyAttributes() &
-          ObjCPropertyDecl::OBJC_PR_nullability) {
+          ObjCPropertyDecl::OBJC_PR_null_resettable) {
         QualType modifiedTy = paramTy;
         if (auto nullability = AttributedType::stripOuterNullability(modifiedTy)){
           if (*nullability == NullabilityKind::Unspecified)
