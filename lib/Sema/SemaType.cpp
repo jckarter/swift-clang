@@ -24,6 +24,7 @@
 #include "clang/AST/TypeLocVisitor.h"
 #include "clang/Basic/PartialDiagnostic.h"
 #include "clang/Basic/TargetInfo.h"
+#include "clang/Lex/Preprocessor.h"
 #include "clang/Parse/ParseDiagnostic.h"
 #include "clang/Sema/DeclSpec.h"
 #include "clang/Sema/DelayedDiagnostic.h"
@@ -2547,11 +2548,24 @@ static FileID getNullabilityCompletenessCheckFileID(Sema &S,
   return file;
 }
 
+/// Check whether there is a nullability attribute of any kind in the given
+/// attribute list.
+static bool hasNullabilityAttr(const AttributeList *attrs) {
+  for (const AttributeList *attr = attrs; attr;
+       attr = attr->getNext()) {
+    if (attr->getKind() == AttributeList::AT_TypeNonNull ||
+        attr->getKind() == AttributeList::AT_TypeNullable ||
+        attr->getKind() == AttributeList::AT_TypeNullUnspecified)
+      return true;
+  }
+
+  return false;
+}
+
 /// Check for consistent use of nullability.
 static void checkNullabilityConsistency(TypeProcessingState &state,
                                         SimplePointerKind pointerKind,
-                                        SourceLocation pointerLoc,
-                                        const AttributeList *attrs) {
+                                        SourceLocation pointerLoc) {
   Sema &S = state.getSema();
 
   // Determine which file we're performing consistency checking for.
@@ -2559,28 +2573,12 @@ static void checkNullabilityConsistency(TypeProcessingState &state,
   if (file.isInvalid())
     return;
 
-  // Local function to determine whether we have a nullability attribute.
-  auto hasNullability = [&]() -> bool {
-    // Check whether we have a type nullability attribute on this point. If so,
-    // there's nothing to do.
-    for (const AttributeList *attr = attrs; attr;
-         attr = attr->getNext()) {
-      if (attr->getKind() == AttributeList::AT_TypeNonNull ||
-          attr->getKind() == AttributeList::AT_TypeNullable ||
-          attr->getKind() == AttributeList::AT_TypeNullUnspecified)
-        return true;
-    }
-
-    return false;
-  };
-
   // If we haven't seen any type nullability in this file, we won't warn now
   // about anything.
   FileNullability &fileNullability = S.NullabilityMap[file];
   if (!fileNullability.SawTypeNullability) {
     // If this is the first pointer declarator in the file, record it.
     if (fileNullability.PointerLoc.isInvalid() &&
-        !hasNullability() &&
         !S.Context.getDiagnostics().isIgnored(diag::warn_nullability_missing,
                                               pointerLoc)) {
       fileNullability.PointerLoc = pointerLoc;
@@ -2590,11 +2588,9 @@ static void checkNullabilityConsistency(TypeProcessingState &state,
     return;
   }
 
-  if (!hasNullability()) {
-    // Complain about missing nullability.
-    S.Diag(pointerLoc, diag::warn_nullability_missing)
-      << static_cast<unsigned>(pointerKind);
-  }
+  // Complain about missing nullability.
+  S.Diag(pointerLoc, diag::warn_nullability_missing)
+    << static_cast<unsigned>(pointerKind);
 }
 
 static TypeSourceInfo *GetFullTypeForDeclarator(TypeProcessingState &state,
@@ -2663,8 +2659,73 @@ static TypeSourceInfo *GetFullTypeForDeclarator(TypeProcessingState &state,
     }
   }
 
-  // If the type itself could have nullability but does not, perform a
-  // consistency check.
+  // Determine whether we should infer __nonnull on pointer types.
+  bool inferNonNull = false;
+  if (S.PP.getPragmaAssumeNonNullLoc().isValid()) {
+    switch (state.getDeclarator().getContext()) {
+    case Declarator::AliasDeclContext:
+    case Declarator::AliasTemplateContext:
+    case Declarator::FileContext:
+    case Declarator::KNRTypeListContext:
+    case Declarator::MemberContext:
+    case Declarator::ObjCParameterContext:
+    case Declarator::ObjCResultContext:
+    case Declarator::PrototypeContext:
+    case Declarator::TemplateParamContext:
+    case Declarator::TrailingReturnContext:
+      // We can infer non-null for pointers in these contexts.
+      inferNonNull = true;
+      break;
+
+    case Declarator::BlockContext:
+    case Declarator::BlockLiteralContext:
+    case Declarator::ConditionContext:
+    case Declarator::ConversionIdContext:
+    case Declarator::CXXCatchContext:
+    case Declarator::CXXNewContext:
+    case Declarator::ForContext:
+    case Declarator::LambdaExprContext:
+    case Declarator::LambdaExprParameterContext:
+    case Declarator::ObjCCatchContext:
+    case Declarator::TemplateTypeArgContext:
+    case Declarator::TypeNameContext:
+      // Don't infer in these contexts.
+      break;
+    }
+  }
+
+  // Local function that checks the nullability for a given pointer declarator.
+  // Returns true if __nonnull was inferred.
+  auto inferPointerNullability = [&](SimplePointerKind pointerKind,
+                                     SourceLocation pointerLoc,
+                                     AttributeList *&attrs) -> bool {
+    // If a nullability attribute is present, there's nothing to do.
+    if (hasNullabilityAttr(attrs))
+      return false;
+
+    // If we're supposed to infer non-null, do so now.
+    if (inferNonNull) {
+      if (!S.Ident___nonnull)
+        S.Ident___nonnull = S.PP.getIdentifierInfo("__nonnull");
+
+      AttributeList *nullabilityAttr = state.getDeclarator().getAttributePool()
+                                         .create(
+                                           S.Ident___nonnull,
+                                           SourceRange(pointerLoc),
+                                           nullptr, SourceLocation(),
+                                           nullptr, 0,
+                                           AttributeList::AS_Keyword);
+
+      spliceAttrIntoList(*nullabilityAttr, attrs);
+      return true;
+    }
+
+    checkNullabilityConsistency(state, pointerKind, pointerLoc);
+    return false;
+  };
+
+  // If the type itself could have nullability but does not, infer pointer
+  // nullability.
   if (T->canHaveNullability() && !T->getNullability(Context) &&
       S.ActiveTemplateInstantiations.empty()) {
     SimplePointerKind pointerKind = SimplePointerKind::Pointer;
@@ -2673,9 +2734,11 @@ static TypeSourceInfo *GetFullTypeForDeclarator(TypeProcessingState &state,
     else if (T->isMemberPointerType())
       pointerKind = SimplePointerKind::MemberPointer;
 
-    checkNullabilityConsistency(state, pointerKind,
-                                D.getDeclSpec().getTypeSpecTypeLoc(),
-                                nullptr);
+    if (inferPointerNullability(
+          pointerKind, D.getDeclSpec().getTypeSpecTypeLoc(),
+          D.getMutableDeclSpec().getAttributes().getListRef())) {
+      T = Context.getAttributedType(AttributedType::attr_nonnull, T, T);
+    }
   }
 
   // Walk the DeclTypeInfo, building the recursive type as we go.
@@ -2695,8 +2758,9 @@ static TypeSourceInfo *GetFullTypeForDeclarator(TypeProcessingState &state,
       if (!LangOpts.Blocks)
         S.Diag(DeclType.Loc, diag::err_blocks_disable);
 
-      checkNullabilityConsistency(state, SimplePointerKind::BlockPointer,
-                                  DeclType.Loc, DeclType.getAttrs());
+      // Handle pointer nullability.
+      inferPointerNullability(SimplePointerKind::BlockPointer,
+                              DeclType.Loc, DeclType.getAttrListRef());
 
       T = S.BuildBlockPointerType(T, D.getIdentifierLoc(), Name);
       if (DeclType.Cls.TypeQuals)
@@ -2711,8 +2775,9 @@ static TypeSourceInfo *GetFullTypeForDeclarator(TypeProcessingState &state,
         // Build the type anyway.
       }
 
-      checkNullabilityConsistency(state, SimplePointerKind::Pointer,
-                                  DeclType.Loc, DeclType.getAttrs());
+      // Handle pointer nullability
+      inferPointerNullability(SimplePointerKind::Pointer, DeclType.Loc,
+                              DeclType.getAttrListRef());
 
       if (LangOpts.ObjC1 && T->getAs<ObjCObjectType>()) {
         T = Context.getObjCObjectPointerType(T);
@@ -3147,8 +3212,11 @@ static TypeSourceInfo *GetFullTypeForDeclarator(TypeProcessingState &state,
       // The scope spec must refer to a class, or be dependent.
       CXXScopeSpec &SS = DeclType.Mem.Scope();
       QualType ClsType;
-      checkNullabilityConsistency(state, SimplePointerKind::MemberPointer,
-                                  DeclType.Loc, DeclType.getAttrs());
+
+      // Handle pointer nullability.
+      inferPointerNullability(SimplePointerKind::MemberPointer,
+                              DeclType.Loc, DeclType.getAttrListRef());
+
       if (SS.isInvalid()) {
         // Avoid emitting extra errors if we already errored on the scope.
         D.setInvalidType(true);

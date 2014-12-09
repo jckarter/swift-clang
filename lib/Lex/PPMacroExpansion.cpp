@@ -865,6 +865,7 @@ static bool HasFeature(const Preprocessor &PP, const IdentifierInfo *II) {
 
   return llvm::StringSwitch<bool>(Feature)
       .Case("address_sanitizer", LangOpts.Sanitize.has(SanitizerKind::Address))
+      .Case("assume_nonnull", LangOpts.ObjC1 || LangOpts.GNUMode)
       .Case("attribute_analyzer_noreturn", true)
       .Case("attribute_availability", true)
       .Case("attribute_availability_with_message", true)

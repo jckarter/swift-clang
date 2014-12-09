@@ -8773,6 +8773,9 @@ protected:
   friend class ASTWriter;
 
 public:
+  // __nonnull identifier, lazily populated by SemaType.cpp.
+  IdentifierInfo *Ident___nonnull = nullptr;
+
   /// \brief Retrieve the parser's current scope.
   ///
   /// This routine must only be used when it is certain that semantic analysis
