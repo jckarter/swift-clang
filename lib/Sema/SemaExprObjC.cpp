@@ -1137,10 +1137,22 @@ ObjCMethodDecl *Sema::tryCaptureObjCSelf(SourceLocation Loc) {
 }
 
 static QualType stripObjCInstanceType(ASTContext &Context, QualType T) {
+  QualType origType = T;
+  if (auto nullability = AttributedType::stripOuterNullability(T)) {
+    if (T == Context.getObjCInstanceType()) {
+      return Context.getAttributedType(
+               AttributedType::getNullabilityAttrKind(*nullability),
+               Context.getObjCIdType(),
+               Context.getObjCIdType());
+    }
+
+    return origType;
+  }
+
   if (T == Context.getObjCInstanceType())
     return Context.getObjCIdType();
   
-  return T;
+  return origType;
 }
 
 /// Determine the result type of a message send based on the receiver type,
@@ -1159,6 +1171,24 @@ static QualType getBaseMessageSendResultType(Sema &S,
 
   ASTContext &Context = S.Context;
 
+  // Local function that transfers the nullability of the method's
+  // result type to the returned result.
+  auto transferNullability = [&](QualType type) -> QualType {
+    // If the method's result type has nullability, extract it.
+    if (auto nullability = Method->getSendResultType()->getNullability(Context)){
+      // Strip off any outer nullability sugar from the provided type.
+      (void)AttributedType::stripOuterNullability(type);
+
+      // Form a new attributed type using the method result type's nullability.
+      return Context.getAttributedType(
+               AttributedType::getNullabilityAttrKind(*nullability),
+               type,
+               type);
+    }
+
+    return type;
+  };
+
   // If a method has a related return type:
   //   - if the method found is an instance method, but the message send
   //     was a class message send, T is the declared return type of the method
@@ -1170,15 +1200,17 @@ static QualType getBaseMessageSendResultType(Sema &S,
   //     enclosing method definition
   if (isSuperMessage) {
     if (ObjCMethodDecl *CurMethod = S.getCurMethodDecl())
-      if (ObjCInterfaceDecl *Class = CurMethod->getClassInterface())
-        return Context.getObjCObjectPointerType(
-                 Context.getObjCInterfaceType(Class));
+      if (ObjCInterfaceDecl *Class = CurMethod->getClassInterface()) {
+        return transferNullability(
+                 Context.getObjCObjectPointerType(
+                   Context.getObjCInterfaceType(Class)));
+      }
   }
 
   //   - if the receiver is the name of a class U, T is a pointer to U
   if (ReceiverType->getAs<ObjCInterfaceType>() ||
       ReceiverType->isObjCQualifiedInterfaceType())
-    return Context.getObjCObjectPointerType(ReceiverType);
+    return transferNullability(Context.getObjCObjectPointerType(ReceiverType));
   //   - if the receiver is of type Class or qualified Class type,
   //     T is the declared return type of the method.
   if (ReceiverType->isObjCClassType() ||
@@ -1188,7 +1220,7 @@ static QualType getBaseMessageSendResultType(Sema &S,
   //   - if the receiver is id, qualified id, Class, or qualified Class, T
   //     is the receiver type, otherwise
   //   - T is the type of the receiver expression.
-  return ReceiverType;
+  return transferNullability(ReceiverType);
 }
 
 QualType Sema::getMessageSendResultType(QualType ReceiverType,

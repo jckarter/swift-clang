@@ -3348,7 +3348,9 @@ Decl *Sema::ActOnMethodDeclaration(
     if (CheckFunctionReturnType(resultDeclType, MethodLoc))
       return nullptr;
 
-    HasRelatedResultType = (resultDeclType == Context.getObjCInstanceType());
+    QualType bareResultType = resultDeclType;
+    (void)AttributedType::stripOuterNullability(bareResultType);
+    HasRelatedResultType = (bareResultType == Context.getObjCInstanceType());
   } else { // get the type for "id".
     resultDeclType = Context.getObjCIdType();
     Diag(MethodLoc, diag::warn_missing_method_return_type)

@@ -132,6 +132,7 @@ void test_receiver_merge(NSMergeReceiver *none,
   
 }
 
+// instancetype
 @protocol Initializable
 - (instancetype)initWithBlah:(id)blah;
 @end
@@ -139,7 +140,16 @@ void test_receiver_merge(NSMergeReceiver *none,
 __attribute__((objc_root_class))
 @interface InitializableClass <Initializable>
 - (nonnull instancetype)initWithBlah:(nonnull)blah;
+- (nullable instancetype)returnMe;
++ (nullable instancetype)returnInstanceOfMe;
 @end
+
+void test_instancetype(__nonnull InitializableClass *ic, __nonnull id object) {
+  int *ip = [ic returnMe]; // expected-warning{{incompatible pointer types initializing 'int *' with an expression of type '__nullable InitializableClass *'}}
+  ip = [InitializableClass returnMe]; // expected-warning{{incompatible pointer types assigning to 'int *' from '__nullable id'}}
+  ip = [InitializableClass returnInstanceOfMe]; // expected-warning{{incompatible pointer types assigning to 'int *' from '__nullable InitializableClass *'}}
+  ip = [object returnMe]; // expected-warning{{incompatible pointer types assigning to 'int *' from '__nullable id'}}
+}
 
 // Check null_resettable getters/setters.
 __attribute__((objc_root_class))
