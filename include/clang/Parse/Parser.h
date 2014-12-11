@@ -46,6 +46,8 @@ namespace clang {
   class PoisonSEHIdentifiersRAIIObject;
   class VersionTuple;
   class OMPClause;
+  class ObjCTypeParameterList;
+  class ObjCTypeParameter;
 
 /// Parser - This implements a parser for the C family of languages.  After
 /// parsing units of the grammar, productions are invoked to handle whatever has
@@ -1237,6 +1239,11 @@ private:
   DeclGroupPtrTy ParseObjCAtClassDeclaration(SourceLocation atLoc);
   Decl *ParseObjCAtInterfaceDeclaration(SourceLocation AtLoc,
                                         ParsedAttributes &prefixAttrs);
+  ObjCTypeParameterList *parseObjCTypeParameterList(
+                           SourceLocation &lAngleLoc,
+                           SmallVectorImpl<IdentifierLocPair> &protocolIdents,
+                           SourceLocation &rAngleLoc);
+
   void HelperActionsForIvarDeclarations(Decl *interfaceDecl, SourceLocation atLoc,
                                         BalancedDelimiterTracker &T,
                                         SmallVectorImpl<Decl *> &AllIvarDecls,
@@ -2440,7 +2447,8 @@ private:
   typedef SmallVector<ParsedTemplateArgument, 16> TemplateArgList;
 
   bool ParseGreaterThanInTemplateList(SourceLocation &RAngleLoc,
-                                      bool ConsumeLastToken);
+                                      bool ConsumeLastToken,
+                                      bool ObjCGenericList);
   bool ParseTemplateIdAfterTemplateName(TemplateTy Template,
                                         SourceLocation TemplateNameLoc,
                                         const CXXScopeSpec &SS,
