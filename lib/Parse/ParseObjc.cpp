@@ -337,25 +337,6 @@ Decl *Parser::ParseObjCAtInterfaceDeclaration(SourceLocation AtLoc,
   return ClsType;
 }
 
-IdentifierInfo *Parser::getNullabilityKeyword(NullabilityKind nullability) {
-  switch (nullability) {
-  case NullabilityKind::NonNull:
-    if (!Ident___nonnull)
-      Ident___nonnull = PP.getIdentifierInfo("__nonnull");
-    return Ident___nonnull;
-
-  case NullabilityKind::Nullable:
-    if (!Ident___nullable)
-      Ident___nullable = PP.getIdentifierInfo("__nullable");
-    return Ident___nullable;
-
-  case NullabilityKind::Unspecified:
-    if (!Ident___null_unspecified)
-      Ident___null_unspecified = PP.getIdentifierInfo("__null_unspecified");
-    return Ident___null_unspecified;
-  }
-}
-
 /// Add an attribute for a context-sensitive type nullability to the given
 /// declarator.
 static void addContextSensitiveTypeNullability(Parser &P,

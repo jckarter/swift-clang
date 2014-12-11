@@ -21,7 +21,9 @@ void test_pragmas_1(__nonnull A *a) {
   f11(0); // okay
   f12(0); // okay
   [a method1:0]; // expected-warning{{null passed to a callee that requires a non-null argument}}
-
+  f17(a); // expected-error{{no matching function for call to 'f17'}}
+  [a method3: a]; // expected-error{{cannot initialize a parameter of type '__nullable NSError ** __nullable' with an lvalue of type '__nonnull A *'}}
+  [a method4: a]; // expected-error{{cannot initialize a parameter of type '__nullable NSErrorPtr * __nullable' (aka 'NSError **') with an lvalue of type '__nonnull A *'}}
   
   float *ptr;
   ptr = f13(); // expected-error{{assigning to 'float *' from incompatible type '__nonnull int_ptr' (aka 'int *')}}

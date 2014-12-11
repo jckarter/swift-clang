@@ -8766,6 +8766,13 @@ private:
   mutable IdentifierInfo *Ident_super;
   mutable IdentifierInfo *Ident___float128;
 
+  /// Nullability type specifiers.
+  IdentifierInfo *Ident___nonnull = nullptr;
+  IdentifierInfo *Ident___nullable = nullptr;
+  IdentifierInfo *Ident___null_unspecified = nullptr;
+
+  IdentifierInfo *Ident_NSError = nullptr;
+
 protected:
   friend class Parser;
   friend class InitializationSequence;
@@ -8773,8 +8780,14 @@ protected:
   friend class ASTWriter;
 
 public:
-  // __nonnull identifier, lazily populated by SemaType.cpp.
-  IdentifierInfo *Ident___nonnull = nullptr;
+  /// Retrieve the keyword associated
+  IdentifierInfo *getNullabilityKeyword(NullabilityKind nullability);
+
+  /// The struct behind the CFErrorRef pointer.
+  RecordDecl *CFError = nullptr;
+
+  /// Retrieve the identifier "NSError".
+  IdentifierInfo *getNSErrorIdent();
 
   /// \brief Retrieve the parser's current scope.
   ///
