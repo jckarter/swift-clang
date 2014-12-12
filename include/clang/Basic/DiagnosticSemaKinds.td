@@ -7536,6 +7536,13 @@ def err_objc_parameterized_category_nonclass : Error<
   "%select{extension|category}0 of non-parameterized class %1 cannot have type "
   "parameters">;
 
+def err_objc_parameterized_forward_class : Error<
+  "forward declaration of non-parameterized class %0 cannot have type "
+  "parameters">;
+
+def err_objc_parameterized_forward_class_first : Error<
+  "class %0 previously declared with type parameters">;
+
 }
 
 } // end of sema component.

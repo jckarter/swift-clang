@@ -1471,6 +1471,7 @@ void ASTDumper::VisitObjCTypeParamDecl(const ObjCTypeParamDecl *D) {
 void ASTDumper::VisitObjCCategoryDecl(const ObjCCategoryDecl *D) {
   dumpName(D);
   dumpDeclRef(D->getClassInterface());
+  dumpObjCTypeParamList(D->getTypeParamList());
   dumpDeclRef(D->getImplementation());
   for (ObjCCategoryDecl::protocol_iterator I = D->protocol_begin(),
                                            E = D->protocol_end();
@@ -1493,7 +1494,7 @@ void ASTDumper::VisitObjCProtocolDecl(const ObjCProtocolDecl *D) {
 
 void ASTDumper::VisitObjCInterfaceDecl(const ObjCInterfaceDecl *D) {
   dumpName(D);
-  dumpObjCTypeParamList(D->getTypeParamList());
+  dumpObjCTypeParamList(D->getTypeParamListAsWritten());
   dumpDeclRef(D->getSuperClass(), "super");
 
   dumpDeclRef(D->getImplementation());

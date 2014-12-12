@@ -4,7 +4,7 @@
 @end
 
 __attribute__((objc_root_class))
-@interface NSObject <NSObject>
+@interface NSObject <NSObject> // expected-note{{'NSObject' defined here}}
 @end
 
 @interface NSString : NSObject
@@ -52,6 +52,58 @@ __attribute__((objc_root_class))
 // Type parameters with improper bounds.
 @interface PC9<T : int, // expected-error{{type bound 'int' for type parameter 'T' is not an Objective-C pointer type}}
                U : NSString> : NSObject // expected-error{{missing '*' in type bound 'NSString' for type parameter 'U'}}
+@end
+
+// --------------------------------------------------------------------------
+// Parsing parameterized forward declarations classes.
+// --------------------------------------------------------------------------
+
+// Okay: forward declaration without type parameters.
+@class PC10;
+
+// Okay: forward declarations with type parameters.
+@class PC10<T, U : NSObject *>, PC11<T : NSObject *, U : id>; // expected-note{{type parameter 'T' declared here}}
+
+// Okay: forward declaration without type parameters following ones
+// with type parameters.
+@class PC10, PC11;
+
+// Okay: definition of class with type parameters that was formerly
+// declared with the same type parameters.
+@interface PC10<T, U : NSObject *> : NSObject
+@end
+
+// Mismatched parameters in declaration of @interface following @class.
+@interface PC11<T, U> : NSObject // expected-error{{missing type bound 'NSObject *' for type parameter 'T' in @interface}}
+@end
+
+@interface PC12<T : NSObject *> : NSObject  // expected-note{{type parameter 'T' declared here}}
+@end
+
+@class PC12;
+
+// Mismatched parameters in subsequent forward declarations.
+@class PC13<T : NSObject *>; // expected-note{{type parameter 'T' declared here}}
+@class PC13;
+@class PC13<U>; // expected-error{{missing type bound 'NSObject *' for type parameter 'U' in @class}}
+
+// Mismatch parameters in declaration of @class following @interface.
+@class PC12<T>; // expected-error{{missing type bound 'NSObject *' for type parameter 'T' in @class}}
+
+// Parameterized forward declaration a class that is not parameterized.
+@class NSObject<T>; // expected-error{{forward declaration of non-parameterized class 'NSObject' cannot have type parameters}}
+
+// Parameterized forward declaration preceding the definition (that is
+// not parameterized).
+@class NSNumber<T : NSObject *>; // expected-note{{'NSNumber' declared here}}
+@interface NSNumber : NSObject // expected-error{{class 'NSNumber' previously declared with type parameters}}
+@end
+
+@class PC14;
+
+// Okay: definition of class with type parameters that was formerly
+// declared without type parameters.
+@interface PC14<T, U : NSObject *> : NSObject
 @end
 
 // --------------------------------------------------------------------------

@@ -238,6 +238,26 @@ ObjCPropertyDecl *ObjCContainerDecl::FindPropertyDeclaration(
 
 void ObjCInterfaceDecl::anchor() { }
 
+ObjCTypeParamList *ObjCInterfaceDecl::getTypeParamList() const {
+  // If this particular declaration has a type parameter list, return it.
+  if (ObjCTypeParamList *written = getTypeParamListAsWritten())
+    return written;
+
+  // If there is a definition, return its type parameter list.
+  if (const ObjCInterfaceDecl *def = getDefinition())
+    return def->getTypeParamListAsWritten();
+
+  // Otherwise, look at previous declarations to determine whether any
+  // of them has a type parameter list, skipping over those
+  // declarations that do not.
+  for (auto decl = getPreviousDecl(); decl; decl = decl->getPreviousDecl()) {
+    if (ObjCTypeParamList *written = decl->getTypeParamListAsWritten())
+      return written;
+  }
+
+  return nullptr;
+}
+
 /// FindPropertyVisibleInPrimaryClass - Finds declaration of the property
 /// with name 'PropertyId' in the primary class; including those in protocols
 /// (direct or indirect) used by the primary class.

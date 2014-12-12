@@ -775,6 +775,44 @@ ActOnStartClassInterface(SourceLocation AtInterfaceLoc,
     ClassName = PrevIDecl->getIdentifier();
   }
 
+  // If there was a forward declaration with type parameters, check
+  // for consistency.
+  if (PrevIDecl) {
+    if (ObjCTypeParamList *prevTypeParamList = PrevIDecl->getTypeParamList()) {
+      if (typeParamList) {
+        // Both have type parameter lists; check for consistency.
+        if (checkTypeParamListConsistency(*this, prevTypeParamList, 
+                                          typeParamList,
+                                          TypeParamListContext::Definition)) {
+          typeParamList = nullptr;
+        }
+      } else {
+        Diag(ClassLoc, diag::err_objc_parameterized_forward_class_first)
+          << ClassName;
+        Diag(prevTypeParamList->getLAngleLoc(), diag::note_previous_decl)
+          << ClassName;
+
+        // Clone the type parameter list.
+        SmallVector<ObjCTypeParamDecl *, 4> clonedTypeParams;
+        for (auto typeParam : *prevTypeParamList) {
+          clonedTypeParams.push_back(
+            ObjCTypeParamDecl::Create(
+              Context,
+              CurContext,
+              SourceLocation(),
+              typeParam->getIdentifier(),
+              SourceLocation(),
+              Context.getTrivialTypeSourceInfo(typeParam->getUnderlyingType())));
+        }
+
+        typeParamList = ObjCTypeParamList::create(Context, 
+                                                  SourceLocation(),
+                                                  clonedTypeParams,
+                                                  SourceLocation());
+      }
+    }
+  }
+
   ObjCInterfaceDecl *IDecl
     = ObjCInterfaceDecl::Create(Context, CurContext, AtInterfaceLoc, ClassName,
                                 typeParamList, PrevIDecl, ClassLoc);
@@ -2381,6 +2419,7 @@ Sema::DeclGroupPtrTy
 Sema::ActOnForwardClassDeclaration(SourceLocation AtClassLoc,
                                    IdentifierInfo **IdentList,
                                    SourceLocation *IdentLocs,
+                                   ArrayRef<ObjCTypeParamList *> TypeParamLists,
                                    unsigned NumElts) {
   SmallVector<Decl *, 8> DeclsInGroup;
   for (unsigned i = 0; i != NumElts; ++i) {
@@ -2434,9 +2473,32 @@ Sema::ActOnForwardClassDeclaration(SourceLocation AtClassLoc,
       ClassName = PrevIDecl->getIdentifier();
     }
 
+    // If this forward declaration has type parameters, compare them with the
+    // type parameters of the previous declaration.
+    ObjCTypeParamList *TypeParams = TypeParamLists[i];
+    if (PrevIDecl && TypeParams) {
+      if (ObjCTypeParamList *PrevTypeParams = PrevIDecl->getTypeParamList()) {
+        // Check for consistency with the previous declaration.
+        if (checkTypeParamListConsistency(
+              *this, PrevTypeParams, TypeParams,
+              TypeParamListContext::ForwardDeclaration)) {
+          TypeParams = nullptr;
+        }
+      } else if (ObjCInterfaceDecl *Def = PrevIDecl->getDefinition()) {
+        // The @interface does not have type parameters. Complain.
+        Diag(IdentLocs[i], diag::err_objc_parameterized_forward_class)
+          << ClassName
+          << TypeParams->getSourceRange();
+        Diag(Def->getLocation(), diag::note_defined_here)
+          << ClassName;
+
+        TypeParams = nullptr;
+      }
+    }
+
     ObjCInterfaceDecl *IDecl
       = ObjCInterfaceDecl::Create(Context, CurContext, AtClassLoc,
-                                  ClassName, /*FIXME:*/nullptr, PrevIDecl,
+                                  ClassName, TypeParams, PrevIDecl,
                                   IdentLocs[i]);
     IDecl->setAtEndRange(IdentLocs[i]);
     

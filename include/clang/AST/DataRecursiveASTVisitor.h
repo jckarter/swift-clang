@@ -1322,7 +1322,7 @@ DEF_TRAVERSE_DECL(ObjCImplementationDecl, {// FIXME: implement
                                           })
 
 DEF_TRAVERSE_DECL(ObjCInterfaceDecl, {// FIXME: implement
-  if (ObjCTypeParamList *typeParamList = D->getTypeParamList()) {
+  if (ObjCTypeParamList *typeParamList = D->getTypeParamListAsWritten()) {
     for (auto typeParam : *typeParamList)
       TRY_TO(TraverseObjCTypeParamDecl(typeParam));
   }

@@ -908,7 +908,16 @@ public:
   static ObjCInterfaceDecl *CreateDeserialized(const ASTContext &C, unsigned ID);
 
   /// Retrieve the type parameters of this class.
-  ObjCTypeParamList *getTypeParamList() const {
+  ///
+  /// This function looks for a type parameter list for the given
+  /// class; if the class has been declared (with @class) but not
+  /// defined (with @interface), it will search for a declaration that
+  /// has type parameters, skipping any declarations that do not.
+  ObjCTypeParamList *getTypeParamList() const;
+
+  /// Retrieve the type parameters written on this particular declaration of
+  /// the class.
+  ObjCTypeParamList *getTypeParamListAsWritten() const {
     return TypeParamList;
   }
 

@@ -1239,10 +1239,12 @@ private:
   DeclGroupPtrTy ParseObjCAtClassDeclaration(SourceLocation atLoc);
   Decl *ParseObjCAtInterfaceDeclaration(SourceLocation AtLoc,
                                         ParsedAttributes &prefixAttrs);
-  ObjCTypeParamList *parseObjCTypeParamList(
+  ObjCTypeParamList *parseObjCTypeParamList();
+  ObjCTypeParamList *parseObjCTypeParamListOrProtocolRefs(
                            SourceLocation &lAngleLoc,
                            SmallVectorImpl<IdentifierLocPair> &protocolIdents,
-                           SourceLocation &rAngleLoc);
+                           SourceLocation &rAngleLoc,
+                           bool mayBeProtocolList = true);
 
   void HelperActionsForIvarDeclarations(Decl *interfaceDecl, SourceLocation atLoc,
                                         BalancedDelimiterTracker &T,

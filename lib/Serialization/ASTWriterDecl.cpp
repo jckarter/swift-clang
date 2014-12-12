@@ -542,7 +542,7 @@ void ASTDeclWriter::VisitObjCInterfaceDecl(ObjCInterfaceDecl *D) {
   VisitRedeclarable(D);
   VisitObjCContainerDecl(D);
   Writer.AddTypeRef(QualType(D->getTypeForDecl(), 0), Record);
-  AddObjCTypeParamList(D->getTypeParamList());
+  AddObjCTypeParamList(D->TypeParamList);
 
   Record.push_back(D->isThisDeclarationADefinition());
   if (D->isThisDeclarationADefinition()) {
@@ -631,7 +631,7 @@ void ASTDeclWriter::VisitObjCCategoryDecl(ObjCCategoryDecl *D) {
   Writer.AddSourceLocation(D->getIvarLBraceLoc(), Record);
   Writer.AddSourceLocation(D->getIvarRBraceLoc(), Record);
   Writer.AddDeclRef(D->getClassInterface(), Record);
-  AddObjCTypeParamList(D->getTypeParamList());
+  AddObjCTypeParamList(D->TypeParamList);
   Record.push_back(D->protocol_size());
   for (const auto *I : D->protocols())
     Writer.AddDeclRef(I, Record);

@@ -7115,9 +7115,10 @@ public:
                                                ArrayRef<Decl *> Decls);
 
   DeclGroupPtrTy ActOnForwardClassDeclaration(SourceLocation Loc,
-                                     IdentifierInfo **IdentList,
-                                     SourceLocation *IdentLocs,
-                                     unsigned NumElts);
+                   IdentifierInfo **IdentList,
+                   SourceLocation *IdentLocs,
+                   ArrayRef<ObjCTypeParamList *> TypeParamLists,
+                   unsigned NumElts);
 
   DeclGroupPtrTy ActOnForwardProtocolDeclaration(SourceLocation AtProtoclLoc,
                                         const IdentifierLocPair *IdentList,

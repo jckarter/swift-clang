@@ -3685,7 +3685,7 @@ Decl *ASTNodeImporter::VisitObjCInterfaceDecl(ObjCInterfaceDecl *D) {
                                         Importer.Import(D->getAtStartLoc()),
                                         Name.getAsIdentifierInfo(),
                                         ImportObjCTypeParamList(
-                                          D->getTypeParamList()),
+                                          D->getTypeParamListAsWritten()),
                                         /*PrevDecl=*/nullptr, Loc,
                                         D->isImplicitInterfaceDecl());
     ToIface->setLexicalDeclContext(LexicalDC);

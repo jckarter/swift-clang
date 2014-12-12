@@ -97,14 +97,17 @@ Parser::DeclGroupPtrTy Parser::ParseObjCAtDirectives() {
 
 ///
 /// objc-class-declaration:
-///    '@' 'class' identifier-list ';'
+///    '@' 'class' objc-class-forward-decl (',' objc-class-forward-decl)* ';'
+///
+/// objc-class-forward-decl:
+///   identifier objc-type-parameter-list[opt]
 ///
 Parser::DeclGroupPtrTy
 Parser::ParseObjCAtClassDeclaration(SourceLocation atLoc) {
   ConsumeToken(); // the identifier "class"
   SmallVector<IdentifierInfo *, 8> ClassNames;
   SmallVector<SourceLocation, 8> ClassLocs;
-
+  SmallVector<ObjCTypeParamList *, 8> ClassTypeParams;
 
   while (1) {
     MaybeSkipAttributes(tok::objc_class);
@@ -117,6 +120,11 @@ Parser::ParseObjCAtClassDeclaration(SourceLocation atLoc) {
     ClassLocs.push_back(Tok.getLocation());
     ConsumeToken();
 
+    // Parse the optional objc-type-parameter-list.
+    ObjCTypeParamList *TypeParams = nullptr;
+    if (Tok.is(tok::less))
+      TypeParams = parseObjCTypeParamList();
+    ClassTypeParams.push_back(TypeParams);
     if (!TryConsumeToken(tok::comma))
       break;
   }
@@ -127,6 +135,7 @@ Parser::ParseObjCAtClassDeclaration(SourceLocation atLoc) {
 
   return Actions.ActOnForwardClassDeclaration(atLoc, ClassNames.data(),
                                               ClassLocs.data(),
+                                              ClassTypeParams,
                                               ClassNames.size());
 }
 
@@ -225,8 +234,9 @@ Decl *Parser::ParseObjCAtInterfaceDeclaration(SourceLocation AtLoc,
   SmallVector<IdentifierLocPair, 8> ProtocolIdents;
   ObjCTypeParamList *typeParameterList = nullptr;
   if (Tok.is(tok::less)) {
-    typeParameterList = parseObjCTypeParamList(LAngleLoc, ProtocolIdents,
-                                                   EndProtoLoc);
+    typeParameterList = parseObjCTypeParamListOrProtocolRefs(LAngleLoc, 
+                                                             ProtocolIdents,
+                                                             EndProtoLoc);
   }
 
   if (!IsPartialInterfaceDecl &&
@@ -392,10 +402,11 @@ Decl *Parser::ParseObjCAtInterfaceDeclaration(SourceLocation AtLoc,
 /// type parameter list.
 ///
 /// \param rAngleLoc The location of the ending '>'.
-ObjCTypeParamList *Parser::parseObjCTypeParamList(
+ObjCTypeParamList *Parser::parseObjCTypeParamListOrProtocolRefs(
                          SourceLocation &lAngleLoc,
                          SmallVectorImpl<IdentifierLocPair> &protocolIdents,
-                         SourceLocation &rAngleLoc) {
+                         SourceLocation &rAngleLoc,
+                         bool mayBeProtocolList) {
   assert(Tok.is(tok::less) && "Not at the beginning of a type parameter list");
 
   // Within the type parameter list, don't treat '>' as an operator.
@@ -403,7 +414,6 @@ ObjCTypeParamList *Parser::parseObjCTypeParamList(
 
   // Local function to "flush" the protocol identifiers, turning them into
   // type parameters.
-  bool mayBeProtocolList = true;
   SmallVector<Decl *, 4> typeParams;
   auto makeProtocolIdentsIntoTypeParameters = [&]() {
     for (const auto &pair : protocolIdents) {
@@ -523,6 +533,16 @@ ObjCTypeParamList *Parser::parseObjCTypeParamList(
   lAngleLoc = SourceLocation();
   rAngleLoc = SourceLocation();
   return list;
+}
+
+/// Parse an objc-type-parameter-list.
+ObjCTypeParamList *Parser::parseObjCTypeParamList() {
+  SourceLocation lAngleLoc;
+  SmallVector<IdentifierLocPair, 1> protocolIdents;
+  SourceLocation rAngleLoc;
+  return parseObjCTypeParamListOrProtocolRefs(lAngleLoc, protocolIdents, 
+                                              rAngleLoc, 
+                                              /*mayBeProtocolList=*/false);
 }
 
 /// Add an attribute for a context-sensitive type nullability to the given
@@ -1839,7 +1859,8 @@ Parser::ParseObjCAtImplementationDeclaration(SourceLocation AtLoc) {
     SourceLocation lAngleLoc, rAngleLoc;
     SmallVector<IdentifierLocPair, 8> protocolIdents;
     SourceLocation diagLoc = Tok.getLocation();
-    if (parseObjCTypeParamList(lAngleLoc, protocolIdents, rAngleLoc)) {
+    if (parseObjCTypeParamListOrProtocolRefs(lAngleLoc, protocolIdents, 
+                                             rAngleLoc)) {
       Diag(diagLoc, diag::err_objc_parameterized_implementation)
         << SourceRange(diagLoc, PrevTokLocation);
     } else if (lAngleLoc.isValid()) {
