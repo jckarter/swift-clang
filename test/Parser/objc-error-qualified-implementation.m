@@ -17,7 +17,8 @@
 
 @interface K @end
 
-@implementation K <P // expected-error {{@implementation declaration cannot be protocol qualified}}
+@implementation K <P // expected-note{{to match this '<'}}
+// expected-error@-1 {{@implementation declaration cannot be protocol qualified}}
 @end // expected-error {{expected '>'}}
 
 // rdar://13920026

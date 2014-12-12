@@ -1087,7 +1087,9 @@ namespace clang {
       /// \brief An OMPThreadPrivateDecl record.
       DECL_OMP_THREADPRIVATE,
       /// \brief An EmptyDecl record.
-      DECL_EMPTY
+      DECL_EMPTY,
+      /// \brief An ObjCTypeParamDecl record.
+      DECL_OBJC_TYPE_PARAM,
     };
 
     /// \brief Record codes for each kind of statement or expression.

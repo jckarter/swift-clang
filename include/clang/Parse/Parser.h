@@ -46,7 +46,7 @@ namespace clang {
   class PoisonSEHIdentifiersRAIIObject;
   class VersionTuple;
   class OMPClause;
-  class ObjCTypeParameterList;
+  class ObjCTypeParamList;
   class ObjCTypeParameter;
 
 /// Parser - This implements a parser for the C family of languages.  After
@@ -1239,7 +1239,7 @@ private:
   DeclGroupPtrTy ParseObjCAtClassDeclaration(SourceLocation atLoc);
   Decl *ParseObjCAtInterfaceDeclaration(SourceLocation AtLoc,
                                         ParsedAttributes &prefixAttrs);
-  ObjCTypeParameterList *parseObjCTypeParameterList(
+  ObjCTypeParamList *parseObjCTypeParamList(
                            SourceLocation &lAngleLoc,
                            SmallVectorImpl<IdentifierLocPair> &protocolIdents,
                            SourceLocation &rAngleLoc);
