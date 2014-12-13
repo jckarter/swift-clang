@@ -1260,6 +1260,12 @@ ObjCInterfaceDecl::ObjCInterfaceDecl(const ASTContext &C, DeclContext *DC,
     Data = PrevDecl->Data;
   
   setImplicit(IsInternal);
+
+  // Update the declaration context of the type parameters.
+  if (typeParamList) {
+    for (auto typeParam : *typeParamList)
+      typeParam->setDeclContext(this);
+  }
 }
 
 void ObjCInterfaceDecl::LoadExternalDefinition() const {
@@ -1728,6 +1734,26 @@ ObjCProtocolDecl::getObjCRuntimeNameAsString() const {
 //===----------------------------------------------------------------------===//
 
 void ObjCCategoryDecl::anchor() { }
+
+ObjCCategoryDecl::ObjCCategoryDecl(DeclContext *DC, SourceLocation AtLoc,
+                                   SourceLocation ClassNameLoc, 
+                                   SourceLocation CategoryNameLoc,
+                                   IdentifierInfo *Id, ObjCInterfaceDecl *IDecl,
+                                   ObjCTypeParamList *typeParamList,
+                                   SourceLocation IvarLBraceLoc,
+                                   SourceLocation IvarRBraceLoc)
+  : ObjCContainerDecl(ObjCCategory, DC, Id, ClassNameLoc, AtLoc),
+    ClassInterface(IDecl), TypeParamList(typeParamList),
+    NextClassCategory(nullptr), CategoryNameLoc(CategoryNameLoc),
+    IvarLBraceLoc(IvarLBraceLoc), IvarRBraceLoc(IvarRBraceLoc) 
+{
+  // Set the declaration context of each of the type parameters.
+  if (typeParamList) {
+    for (auto typeParam : *typeParamList) {
+      typeParam->setDeclContext(this);
+    }
+  }
+}
 
 ObjCCategoryDecl *ObjCCategoryDecl::Create(ASTContext &C, DeclContext *DC,
                                            SourceLocation AtLoc,

@@ -1915,12 +1915,7 @@ class ObjCCategoryDecl : public ObjCContainerDecl {
                    IdentifierInfo *Id, ObjCInterfaceDecl *IDecl,
                    ObjCTypeParamList *typeParamList,
                    SourceLocation IvarLBraceLoc=SourceLocation(),
-                   SourceLocation IvarRBraceLoc=SourceLocation())
-    : ObjCContainerDecl(ObjCCategory, DC, Id, ClassNameLoc, AtLoc),
-      ClassInterface(IDecl), TypeParamList(typeParamList),
-      NextClassCategory(nullptr), CategoryNameLoc(CategoryNameLoc),
-      IvarLBraceLoc(IvarLBraceLoc), IvarRBraceLoc(IvarRBraceLoc) {
-  }
+                   SourceLocation IvarRBraceLoc=SourceLocation());
 
 public:
 

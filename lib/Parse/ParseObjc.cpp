@@ -122,8 +122,11 @@ Parser::ParseObjCAtClassDeclaration(SourceLocation atLoc) {
 
     // Parse the optional objc-type-parameter-list.
     ObjCTypeParamList *TypeParams = nullptr;
-    if (Tok.is(tok::less))
+    if (Tok.is(tok::less)) {
       TypeParams = parseObjCTypeParamList();
+      if (TypeParams)
+        Actions.popObjCTypeParamList(getCurScope(), TypeParams);
+    }
     ClassTypeParams.push_back(TypeParams);
     if (!TryConsumeToken(tok::comma))
       break;
@@ -297,6 +300,10 @@ Decl *Parser::ParseObjCAtInterfaceDeclaration(SourceLocation AtLoc,
       ParseObjCClassInstanceVariables(CategoryType, tok::objc_private, AtLoc);
       
     ParseObjCInterfaceDeclList(tok::objc_not_keyword, CategoryType);
+
+    if (typeParameterList)
+      Actions.popObjCTypeParamList(getCurScope(), typeParameterList);
+
     return CategoryType;
   }
   // Parse a class interface.
@@ -379,6 +386,10 @@ Decl *Parser::ParseObjCAtInterfaceDeclaration(SourceLocation AtLoc,
     ParseObjCClassInstanceVariables(ClsType, tok::objc_protected, AtLoc);
 
   ParseObjCInterfaceDeclList(tok::objc_interface, ClsType);
+
+  if (typeParameterList)
+    Actions.popObjCTypeParamList(getCurScope(), typeParameterList);
+
   return ClsType;
 }
 
@@ -523,10 +534,11 @@ ObjCTypeParamList *Parser::parseObjCTypeParamListOrProtocolRefs(
   }
 
   // Form the type parameter list.
-  ObjCTypeParamList *list = Actions.actOnObjCTypeParamList(getCurScope(),
-                                                           lAngleLoc,
-                                                           typeParams,
-                                                           rAngleLoc);
+  ObjCTypeParamList *list = Actions.actOnObjCTypeParamList(
+                              getCurScope(),
+                              lAngleLoc,
+                              typeParams,
+                              rAngleLoc);
 
   // Clear out the angle locations; they're used by the caller to indicate
   // whether there are any protocol references.

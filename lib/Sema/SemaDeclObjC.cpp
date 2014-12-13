@@ -625,13 +625,27 @@ ObjCTypeParamList *Sema::actOnObjCTypeParamList(Scope *S,
       Diag(typeParam->getLocation(), diag::err_objc_type_param_redecl)
         << typeParam->getIdentifier()
         << SourceRange(known->second->getLocation());
+
+      typeParam->setInvalidDecl();
     } else {
       knownParams.insert(std::make_pair(typeParam->getIdentifier(), typeParam));
+
+      // Push the type parameter into scope.
+      PushOnScopeChains(typeParam, S, /*AddToContext=*/false);
     }
   }
 
   // Create the parameter list.
   return ObjCTypeParamList::create(Context, lAngleLoc, typeParams, rAngleLoc);
+}
+
+void Sema::popObjCTypeParamList(Scope *S, ObjCTypeParamList *typeParamList) {
+  for (auto typeParam : *typeParamList) {
+    if (!typeParam->isInvalidDecl()) {
+      S->RemoveDecl(typeParam);
+      IdResolver.RemoveDecl(typeParam);
+    }
+  }
 }
 
 namespace {

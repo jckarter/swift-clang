@@ -7039,6 +7039,7 @@ public:
   ObjCTypeParamList *actOnObjCTypeParamList(Scope *S, SourceLocation lAngleLoc,
                                             ArrayRef<Decl *> typeParams,
                                             SourceLocation rAngleLoc);
+  void popObjCTypeParamList(Scope *S, ObjCTypeParamList *typeParamList);
 
   Decl *ActOnStartClassInterface(SourceLocation AtInterfaceLoc,
                                  IdentifierInfo *ClassName,
