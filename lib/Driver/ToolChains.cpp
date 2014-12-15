@@ -390,29 +390,26 @@ void DarwinClang::AddLinkRuntimeLibArgs(const ArgList &Args,
   // Add ASAN runtime library, if required. Dynamic libraries and bundles
   // should not be linked with the runtime library.
   if (Sanitize.needsAsanRt()) {
-    // FIXME: Move this check to SanitizerArgs::filterUnsupportedKinds.
-    if (isTargetIPhoneOS()) {
-      getDriver().Diag(diag::err_drv_clang_unsupported_per_platform)
-        << "-fsanitize=address";
-    } else {
-      if (!Args.hasArg(options::OPT_dynamiclib) &&
-          !Args.hasArg(options::OPT_bundle)) {
-        // The ASAN runtime library requires C++.
-        AddCXXStdlibLibArgs(Args, CmdArgs);
-      }
-      if (isTargetMacOS()) {
-        AddLinkRuntimeLib(Args, CmdArgs,
-                          "libclang_rt.asan_osx_dynamic.dylib",
-                          /*AlwaysLink*/ true, /*IsEmbedded*/ false,
-                          /*AddRPath*/ true);
-      } else {
-        if (isTargetIOSSimulator()) {
-          AddLinkRuntimeLib(Args, CmdArgs,
-                            "libclang_rt.asan_iossim_dynamic.dylib",
-                            /*AlwaysLink*/ true, /*IsEmbedded*/ false,
-                            /*AddRPath*/ true);
-        }
-      }
+    if (!Args.hasArg(options::OPT_dynamiclib) &&
+        !Args.hasArg(options::OPT_bundle)) {
+      // The ASAN runtime library requires C++.
+      AddCXXStdlibLibArgs(Args, CmdArgs);
+    }
+    if (isTargetMacOS()) {
+      AddLinkRuntimeLib(Args, CmdArgs,
+                        "libclang_rt.asan_osx_dynamic.dylib",
+                        /*AlwaysLink*/ true, /*IsEmbedded*/ false,
+                        /*AddRPath*/ true);
+    } else if (isTargetIOSSimulator()) {
+      AddLinkRuntimeLib(Args, CmdArgs,
+                        "libclang_rt.asan_iossim_dynamic.dylib",
+                        /*AlwaysLink*/ true, /*IsEmbedded*/ false,
+                        /*AddRPath*/ true);
+    } else if (isTargetIPhoneOS()) {
+      AddLinkRuntimeLib(Args, CmdArgs,
+                        "libclang_rt.asan_ios_dynamic.dylib",
+                        /*AlwaysLink*/ true, /*IsEmbedded*/ false,
+                        /*AddRPath*/ true);
     }
   }
 

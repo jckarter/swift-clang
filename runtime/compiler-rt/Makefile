@@ -97,6 +97,10 @@ ifneq ($(IOSSIM_SDK),)
 RuntimeLibrary.darwin.Configs += asan_iossim_dynamic.dylib
 endif
 
+ifneq ($(IOS_SDK),)
+RuntimeLibrary.darwin.Configs += asan_ios_dynamic.dylib
+endif
+
 RuntimeLibrary.macho_embedded.Configs := \
 	hard_static.a hard_pic.a
 ifneq (,$(findstring ARM,$(TARGETS_TO_BUILD)))
