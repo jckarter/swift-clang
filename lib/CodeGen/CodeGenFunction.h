@@ -2043,12 +2043,17 @@ public:
   void EmitOMPTargetDirective(const OMPTargetDirective &S);
   void EmitOMPTeamsDirective(const OMPTeamsDirective &S);
 
-  /// Helpers for 'omp simd' directive.
+private:
+
+  /// Helpers for the OpenMP loop directives.
   void EmitOMPLoopBody(const OMPLoopDirective &Directive,
                        bool SeparateIter = false);
   void EmitOMPInnerLoop(const OMPLoopDirective &S, OMPPrivateScope &LoopScope,
                         bool SeparateIter = false);
   void EmitOMPSimdFinal(const OMPLoopDirective &S);
+  void EmitOMPWorksharingLoop(const OMPLoopDirective &S);
+
+public:
 
   //===--------------------------------------------------------------------===//
   //                         LValue Expression Emission
@@ -2100,6 +2105,12 @@ public:
                         AggValueSlot slot = AggValueSlot::ignored());
 
   void EmitAtomicStore(RValue rvalue, LValue lvalue, bool isInit);
+
+  std::pair<RValue, RValue> EmitAtomicCompareExchange(
+      LValue Obj, RValue Expected, RValue Desired, SourceLocation Loc,
+      llvm::AtomicOrdering Success = llvm::SequentiallyConsistent,
+      llvm::AtomicOrdering Failure = llvm::SequentiallyConsistent,
+      bool IsWeak = false, AggValueSlot Slot = AggValueSlot::ignored());
 
   /// EmitToMemory - Change a scalar value from its value
   /// representation to its in-memory representation.
