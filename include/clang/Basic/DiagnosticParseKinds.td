@@ -1016,6 +1016,8 @@ def err_objc_parameterized_class_without_base : Error<
 def err_objc_parameterized_implementation : Error<
   "@implementation cannot have type parameters">;
 
+def err_objc_type_args_after_protocols : Error<
+  "protocol qualifiers must precede type arguments">;
 }
 
 } // end of Parser diagnostics

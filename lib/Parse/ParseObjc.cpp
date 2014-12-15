@@ -1607,6 +1607,108 @@ bool Parser::ParseObjCProtocolQualifiers(DeclSpec &DS) {
   return Result;
 }
 
+/// Parse Objective-C type arguments or protocol qualifiers.
+///
+///   objc-type-arguments:
+///     '<' type-name (',' type-name)* '>'
+///
+void Parser::ParseObjCTypeArgsOrProtocolQualifiers(DeclSpec &DS) {
+  assert(Tok.is(tok::less) && "Not at the start of type args or protocols");
+  SourceLocation lAngleLoc = ConsumeToken();
+
+  // Whether all of the elements we've parsed thus far are single
+  // identifiers, which might be types or might be protocols.
+  bool allSingleIdentifiers = true;
+  SmallVector<IdentifierInfo *, 4> identifiers;
+  SmallVector<SourceLocation, 4> identifierLocs;
+
+  // Parse a list of comma-separated identifiers, bailing out if we
+  // see something different.
+  do {
+    // Parse a single identifier.
+    if (Tok.is(tok::identifier) &&
+        (NextToken().is(tok::comma) ||
+         NextToken().is(tok::greater) ||
+         NextToken().is(tok::greatergreater))) {
+      identifiers.push_back(Tok.getIdentifierInfo());
+      identifierLocs.push_back(ConsumeToken());
+      continue;
+    }
+
+    if (Tok.is(tok::code_completion)) {
+      // FIXME: Also include types here.
+      SmallVector<IdentifierLocPair, 4> identifierLocPairs;
+      for (unsigned i = 0, n = identifiers.size(); i != n; ++i) {
+        identifierLocPairs.push_back(IdentifierLocPair(identifiers[i], 
+                                                       identifierLocs[i]));
+      }
+
+      Actions.CodeCompleteObjCProtocolReferences(identifierLocPairs.data(),
+                                                 identifierLocPairs.size());
+      cutOffParsing();
+      return;
+    }
+
+    allSingleIdentifiers = false;
+    break;
+  } while (TryConsumeToken(tok::comma));
+
+  // If we parsed an identifier list, semantic analysis sorts out
+  // whether it refers to protocols or to type arguments.
+  if (allSingleIdentifiers) {
+    // Parse the closing '>'.
+    SourceLocation rAngleLoc;
+    (void)ParseGreaterThanInTemplateList(rAngleLoc, /*ConsumeLastToken=*/true,
+                                         /*ObjCGenericList=*/true);
+
+    // Let Sema figure out what we parsed.
+    Actions.actOnObjCTypeArgsOrProtocolQualifiers(getCurScope(),
+                                                  DS,
+                                                  lAngleLoc,
+                                                  identifiers,
+                                                  identifierLocs,
+                                                  rAngleLoc);
+    return;
+  }
+
+  // We syntactically matched a type argument, so commit to parsing
+  // type arguments.
+  SmallVector<ParsedType, 4> typeArgs;
+
+  // Convert the identifiers into type arguments.
+  bool invalid = false;
+  for (unsigned i = 0, n = identifiers.size(); i != n; ++i) {
+    ParsedType typeArg
+      = Actions.getTypeName(*identifiers[i], identifierLocs[i], getCurScope());
+    if (typeArg) {
+      typeArgs.push_back(typeArg);
+    } else {
+      invalid = true;
+    }
+  }
+
+  // Continue parsing type-names.
+  do {
+    TypeResult typeArg = ParseTypeName();
+    if (typeArg.isUsable()) {
+      typeArgs.push_back(typeArg.get());
+    } else {
+      invalid = true;
+    }
+  } while (TryConsumeToken(tok::comma));
+
+  // Parse the closing '>'.
+  SourceLocation rAngleLoc;
+  (void)ParseGreaterThanInTemplateList(rAngleLoc, /*ConsumeLastToken=*/true,
+                                       /*ObjCGenericList=*/true);
+
+  if (invalid)
+    return;
+
+  // Update the DeclSpec appropriately.
+  DS.setObjCTypeArgs(lAngleLoc, typeArgs, rAngleLoc);
+}
+
 void Parser::HelperActionsForIvarDeclarations(Decl *interfaceDecl, SourceLocation atLoc,
                                  BalancedDelimiterTracker &T,
                                  SmallVectorImpl<Decl *> &AllIvarDecls,

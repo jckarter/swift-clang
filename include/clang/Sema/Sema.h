@@ -7137,6 +7137,18 @@ public:
                                unsigned NumProtocols,
                                SmallVectorImpl<Decl *> &Protocols);
 
+  /// Given a list of identifiers (and their locations), resolve the
+  /// names to either Objective-C protocol qualifiers or type
+  /// arguments, as appropriate. The result will be attached to the
+  /// given declaration specifiers.
+  void actOnObjCTypeArgsOrProtocolQualifiers(
+         Scope *S,
+         DeclSpec &DS,
+         SourceLocation lAngleLoc,
+         ArrayRef<IdentifierInfo *> identifiers,
+         ArrayRef<SourceLocation> identifierLocs,
+         SourceLocation rAngleLoc);
+
   /// Ensure attributes are consistent with type.
   /// \param [in, out] Attributes The attributes to check; they will
   /// be modified to be consistent with \p PropertyTy.

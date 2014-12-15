@@ -1,6 +1,9 @@
 // RUN: %clang_cc1 %s -verify
 
-@protocol NSObject
+@protocol NSObject // expected-note{{'NSObject' declared here}}
+@end
+
+@protocol NSCopying // expected-note{{'NSCopying' declared here}}
 @end
 
 __attribute__((objc_root_class))
@@ -21,7 +24,7 @@ __attribute__((objc_root_class))
 @end
 
 // Parse a type parameter with a bound that terminates in '>>'.
-@interface PC2<T : id<NSObject>> : NSObject // expected-error{{a space is required between consecutive right angle brackets (use '> >')}}
+@interface PC2<T : id<NSObject>> : NSObject
 @end
 
 // Parse multiple type parameters.
@@ -92,6 +95,7 @@ __attribute__((objc_root_class))
 
 // Parameterized forward declaration a class that is not parameterized.
 @class NSObject<T>; // expected-error{{forward declaration of non-parameterized class 'NSObject' cannot have type parameters}}
+// expected-note@-1{{'NSObject' declared here}}
 
 // Parameterized forward declaration preceding the definition (that is
 // not parameterized).
@@ -190,3 +194,52 @@ void test_PC20_unspecialized(PC20 *pc20) {
   ip = [pc20 extMethod: 0]; // expected-warning{{incompatible pointer types assigning to 'int *' from 'X' (aka 'id')}}
   [pc20 extMethod: ip]; // expected-warning{{incompatible pointer types sending 'int *' to parameter of type 'Y' (aka 'NSObject *')}}
 }
+
+// --------------------------------------------------------------------------
+// Parsing type arguments.
+// --------------------------------------------------------------------------
+
+typedef NSString * ObjCStringRef; // expected-note{{'ObjCStringRef' declared here}}
+
+// Type arguments with a mix of identifiers and type-names.
+typedef PC4<id, NSObject *, NSString *> typeArgs1;
+
+// Type arguments with only identifiers.
+typedef PC4<id, id, id> typeArgs2;
+
+// Type arguments with only identifiers; one is ambiguous (resolved as
+// types).
+typedef PC4<NSObject, id, id> typeArgs3; // expected-error{{type argument 'NSObject' must be a pointer (requires a '*')}}
+
+// Type arguments with only identifiers; one is ambiguous (resolved as
+// protocol qualifiers).
+typedef PC4<NSObject, NSCopying> protocolQuals1;
+
+// Type arguments and protocol qualifiers.
+typedef PC4<id, NSObject *, id><NSObject, NSCopying> typeArgsAndProtocolQuals1;
+
+// Type arguments and protocol qualifiers in the wrong order.
+typedef PC4<NSObject, NSCopying><id, NSObject *, id> typeArgsAndProtocolQuals2; // expected-error{{protocol qualifiers must precede type arguments}}
+
+// Type arguments and protocol qualifiers (identifiers).
+typedef PC4<id, NSObject, id><NSObject, NSCopying> typeArgsAndProtocolQuals2; // expected-error{{type argument 'NSObject' must be a pointer (requires a '*')}}
+
+// Typo correction: protocol bias.
+typedef PC4<NSCopying, NSObjec> protocolQuals2; // expected-error{{cannot find protocol declaration for 'NSObjec'; did you mean 'NSObject'?}}
+
+// Typo correction: type bias.
+typedef PC4<id, NSObjec> typeArgs4; // expected-error{{unknown class name 'NSObjec'; did you mean 'NSObject'?}}
+// expected-error@-1{{type argument 'NSObject' must be a pointer (requires a '*')}}
+
+// Typo correction: bias set by correction itself to a protocol.
+typedef PC4<NSObject, NSCopyin> protocolQuals3; // expected-error{{cannot find protocol declaration for 'NSCopyin'; did you mean 'NSCopying'?}}
+
+// Typo correction: bias set by correction itself to a type.
+typedef PC4<NSObject, ObjCStringref> typeArgs5; // expected-error{{unknown type name 'ObjCStringref'; did you mean 'ObjCStringRef'?}}
+// expected-error@-1{{type argument 'NSObject' must be a pointer (requires a '*')}}
+
+// Type/protocol conflict.
+typedef PC4<NSCopying, ObjCStringRef> typeArgsProtocolQualsConflict1; // expected-error{{angle brackets contain both a type ('ObjCStringRef') and a protocol ('NSCopying')}}
+
+// Handling the '>>' in type argument lists.
+typedef PC4<id<NSCopying>, NSObject *, id<NSObject>> typeArgs6;
