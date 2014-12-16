@@ -1,4 +1,5 @@
 // RUN: %clang_cc1 -fsyntax-only -verify %s
+// expected-no-diagnostics
 
 @protocol MyProtocol @end
 
@@ -37,10 +38,10 @@ NSObject* test1 (int argc) {
     id <MyProtocol> instance2 = (argc) ? set : n1;
     id <MyProtocol> instance3 = (argc) ? n1 : array;
 
-    NSArray<MyProtocol> *qual_array = ((void*)0); // expected-warning{{class 'NSArray' always conforms to the protocol 'MyProtocol'}}
+    NSArray<MyProtocol> *qual_array = ((void*)0);
     id <MyProtocol> instance4 = (argc) ? array : qual_array;
     id <MyProtocol> instance5 = (argc) ? qual_array : array;
-    NSSet<MyProtocol> *qual_set = ((void*)0); // expected-warning{{class 'NSSet' always conforms to the protocol 'MyProtocol'}}
+    NSSet<MyProtocol> *qual_set = ((void*)0);
     id <MyProtocol> instance6 = (argc) ? qual_set : qual_array;
     id <MyProtocol> instance7 = (argc) ? qual_set : array;
     id <MyProtocol> instance8 = (argc) ? qual_array : set;

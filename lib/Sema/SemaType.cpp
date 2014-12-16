@@ -831,29 +831,6 @@ static QualType applyObjCProtocolQualifiers(
     if (objT->getNumProtocols())
       type = objT->getBaseType();
 
-    // If the type is a class type, check whether it is already known
-    // to conform to the listed protocols.
-    if (const ObjCInterfaceDecl *objcClass = objT->getInterface()) {
-      if (objcClass->hasDefinition()) {
-        // Collect the set of all protocols that this class
-        // specifically conforms to.
-        llvm::SmallPtrSet<ObjCProtocolDecl *, 4> allProtocols;
-        for (auto iface = objcClass; iface; iface = iface->getSuperClass()) {
-          for (auto proto : iface->all_referenced_protocols()) {
-            allProtocols.insert(proto->getCanonicalDecl());
-          }
-        }
-
-        // Check whether any of the listed protocols is known.
-        for (unsigned i = 0, n = protocols.size(); i != n; ++i) {
-          if (allProtocols.count(protocols[i]->getCanonicalDecl()) > 0) {
-            S.Diag(protocolLocs[i], diag::warn_extra_protocol_qualified_class)
-              << objcClass->getDeclName() << protocols[i]->getDeclName();
-          }
-        }
-      }
-    }
-
     // FIXME: Check for protocols to which the class type is already
     // known to conform.
 

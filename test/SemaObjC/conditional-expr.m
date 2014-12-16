@@ -96,14 +96,13 @@ id f7(int a, id<P0> x, A* p) {
   return a ? x : p;
 }
 
-int f8(int a, A<P0> *x, A *y) { // expected-warning{{class 'A' always conforms to the protocol 'P0'}}
+int f8(int a, A<P0> *x, A *y) {
   return [ (a ? x : y ) intProp ];
 }
 
-void f9(int a, A<P0> *x, A<P1> *y) { // expected-warning{{class 'A' always conforms to the protocol 'P0'}}
+void f9(int a, A<P0> *x, A<P1> *y) {
   id l0 = (a ? x : y );     // Ok. y is of A<P1> object type and A is qualified by P0.
   A<P0> *l1 = (a ? x : y ); // Ok. y is of A<P1> object type and A is qualified by P0.
-  // expected-warning@-1{{class 'A' always conforms to the protocol 'P0'}}
   A<P1> *l2 = (a ? x : y ); // expected-warning {{incompatible pointer types initializing 'A<P1> *' with an expression of type 'A<P0> *'}}
   (void)[ (a ? x : y ) intProp ]; // Ok. Common type is A<P0> * and P0's property intProp is accessed.
 }
@@ -116,6 +115,6 @@ void f11(int a, id<P0> x, id<P1> y) {
   [ (a ? x : y ) intProp ]; // expected-warning {{incompatible operand types ('id<P0>' and 'id<P1>')}}
 }
 
-void f12(int a, A<P0> *x, A<P1> *y) { // expected-warning{{class 'A' always conforms to the protocol 'P0'}}
+void f12(int a, A<P0> *x, A<P1> *y) {
   A<P1>* l0 = (a ? x : y ); // expected-warning {{incompatible pointer types initializing 'A<P1> *' with an expression of type 'A<P0> *'}}
 }

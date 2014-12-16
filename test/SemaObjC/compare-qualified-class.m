@@ -45,7 +45,7 @@ int main () {
 @end
 
 @interface OtherClass : NSObject
-@property (nonatomic, copy) ClassB<ProtocolX> *aProperty; // expected-warning{{class 'ClassB' always conforms to the protocol 'ProtocolX'}}
+@property (nonatomic, copy) ClassB<ProtocolX> *aProperty;
 - (ClassA<ProtocolY> *)aMethod;
 - (ClassA<ProtocolY> *)anotherMethod;
 @end
