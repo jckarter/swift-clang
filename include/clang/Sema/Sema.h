@@ -3191,6 +3191,18 @@ public:
     Sema &S;
   };
 
+  /// An RAII helper that pops function a function scope on exit.
+  struct FunctionScopeRAII {
+    Sema &S;
+    bool Active;
+    FunctionScopeRAII(Sema &S) : S(S), Active(true) {}
+    ~FunctionScopeRAII() {
+      if (Active)
+        S.PopFunctionScopeInfo();
+    }
+    void disable() { Active = false; }
+  };
+
   StmtResult ActOnDeclStmt(DeclGroupPtrTy Decl,
                                    SourceLocation StartLoc,
                                    SourceLocation EndLoc);
