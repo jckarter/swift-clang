@@ -45,5 +45,6 @@ id <XProto> idX = 0; // expected-error {{'XProto' is unavailable}}
 int main ()
 {
 	MyClass1 <MyProto1> *p1;  // expected-warning {{'MyProto1' is deprecated}}
+        // expected-warning@-1{{class 'MyClass1' always conforms to the protocol 'MyProto1'}}
 }
 

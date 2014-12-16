@@ -48,7 +48,7 @@ struct ToBar {
 };
 
 void f5(foo&);
-void f5b(foo<P1>&);
+void f5b(foo<P1>&); // expected-warning{{class 'foo' always conforms to the protocol 'P1'}}
 void f5c(foo<P2>&);
 void f5d(foo<P3>&);
 void f6(baz* x) { 

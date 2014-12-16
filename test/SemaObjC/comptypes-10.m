@@ -13,13 +13,17 @@
 @end
 
 void gorf(NSObject <NSCopying> *); // expected-note {{passing argument to parameter here}}
+// expected-warning@-1{{class 'NSObject' always conforms to the protocol 'NSCopying'}}
 
+// expected-warning@+1{{class 'NSObject' always conforms to the protocol 'NSCopying'}}
 NSObject <NSCopying> *foo(id <NSCopying> bar, id id_obj)
 {
  	NSObject <NSCopying> *Init = bar; // expected-warning {{initializing 'NSObject<NSCopying> *' with an expression of incompatible type 'id<NSCopying>'}}
+        // expected-warning@-1{{class 'NSObject' always conforms to the protocol 'NSCopying'}}
         NSObject *Init1 = bar; // expected-warning {{initializing 'NSObject *' with an expression of incompatible type 'id<NSCopying>'}}
 
- 	NSObject <NSCopying> *I = id_obj; 
+ 	NSObject <NSCopying> *I = id_obj; // expected-warning{{class 'NSObject' always conforms to the protocol 'NSCopying'}}
+
         NSObject *I1 = id_obj; 
         gorf(bar);	// expected-warning {{passing 'id<NSCopying>' to parameter of incompatible type 'NSObject<NSCopying> *'}}
 
@@ -31,6 +35,7 @@ NSObject <NSCopying> *foo(id <NSCopying> bar, id id_obj)
 void test(id <NSCopying, NSPROTO, NSPROTO2> bar)
 {
   NSObject <NSCopying> *Init = bar; // expected-warning {{initializing 'NSObject<NSCopying> *' with an expression of incompatible type 'id<NSCopying,NSPROTO,NSPROTO2>'}}
+  // expected-warning@-1{{class 'NSObject' always conforms to the protocol 'NSCopying'}}
 }
 
 // rdar://8843851

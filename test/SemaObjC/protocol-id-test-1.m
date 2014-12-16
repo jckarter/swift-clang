@@ -13,4 +13,5 @@
 
 @implementation INTF
 - (void)IMeth {INTF<P> *pi;  [pi Meth]; } // expected-warning {{instance method '-Meth' not found (return type defaults to 'id'); did you mean '-IMeth'?}}
+// expected-warning@-1{{class 'INTF' always conforms to the protocol 'P'}}
 @end

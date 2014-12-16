@@ -213,19 +213,21 @@ typedef PC4<NSObject, id, id> typeArgs3; // expected-error{{type argument 'NSObj
 
 // Type arguments with only identifiers; one is ambiguous (resolved as
 // protocol qualifiers).
-typedef PC4<NSObject, NSCopying> protocolQuals1;
+typedef PC4<NSObject, NSCopying> protocolQuals1; // expected-warning{{class 'PC4' always conforms to the protocol 'NSObject'}}
 
 // Type arguments and protocol qualifiers.
-typedef PC4<id, NSObject *, id><NSObject, NSCopying> typeArgsAndProtocolQuals1;
+typedef PC4<id, NSObject *, id><NSObject, NSCopying> typeArgsAndProtocolQuals1; // expected-warning{{class 'PC4' always conforms to the protocol 'NSObject'}}
 
 // Type arguments and protocol qualifiers in the wrong order.
 typedef PC4<NSObject, NSCopying><id, NSObject *, id> typeArgsAndProtocolQuals2; // expected-error{{protocol qualifiers must precede type arguments}}
-
+// expected-warning@-1 {{class 'PC4' always conforms to the protocol 'NSObject'}}
 // Type arguments and protocol qualifiers (identifiers).
 typedef PC4<id, NSObject, id><NSObject, NSCopying> typeArgsAndProtocolQuals2; // expected-error{{type argument 'NSObject' must be a pointer (requires a '*')}}
+// expected-warning@-1{{class 'PC4' always conforms to the protocol 'NSObject'}}
 
 // Typo correction: protocol bias.
 typedef PC4<NSCopying, NSObjec> protocolQuals2; // expected-error{{cannot find protocol declaration for 'NSObjec'; did you mean 'NSObject'?}}
+// expected-warning@-1{{class 'PC4' always conforms to the protocol 'NSObject'}}
 
 // Typo correction: type bias.
 typedef PC4<id, id, NSObjec> typeArgs4; // expected-error{{unknown class name 'NSObjec'; did you mean 'NSObject'?}}
@@ -233,6 +235,8 @@ typedef PC4<id, id, NSObjec> typeArgs4; // expected-error{{unknown class name 'N
 
 // Typo correction: bias set by correction itself to a protocol.
 typedef PC4<NSObject, NSObject, NSCopyin> protocolQuals3; // expected-error{{cannot find protocol declaration for 'NSCopyin'; did you mean 'NSCopying'?}}
+// expected-warning@-1{{class 'PC4' always conforms to the protocol 'NSObject'}}
+// expected-warning@-2{{class 'PC4' always conforms to the protocol 'NSObject'}}
 
 // Typo correction: bias set by correction itself to a type.
 typedef PC4<NSObject, NSObject, ObjCStringref> typeArgs5; // expected-error{{unknown type name 'ObjCStringref'; did you mean 'ObjCStringRef'?}}
