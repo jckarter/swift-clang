@@ -1,4 +1,4 @@
-// RUN: %clang_cc1 %s -verify
+// RUN: %clang_cc1 -fblocks %s -verify
 
 @protocol NSObject // expected-note{{'NSObject' declared here}}
 @end
@@ -10,7 +10,7 @@ __attribute__((objc_root_class))
 @interface NSObject <NSObject> // expected-note{{'NSObject' defined here}}
 @end
 
-@interface NSString : NSObject
+@interface NSString : NSObject <NSCopying>
 @end
 
 // --------------------------------------------------------------------------
@@ -32,7 +32,7 @@ __attribute__((objc_root_class))
 @end
 
 // Parse multiple type parameters--grammatically ambiguous with protocol refs.
-@interface PC4<T, U, V> : NSObject
+@interface PC4<T, U, V> : NSObject // expected-note 2{{'PC4' declared here}}
 @end
 
 // Parse a type parameter list without a superclass.
@@ -228,18 +228,59 @@ typedef PC4<id, NSObject, id><NSObject, NSCopying> typeArgsAndProtocolQuals2; //
 typedef PC4<NSCopying, NSObjec> protocolQuals2; // expected-error{{cannot find protocol declaration for 'NSObjec'; did you mean 'NSObject'?}}
 
 // Typo correction: type bias.
-typedef PC4<id, NSObjec> typeArgs4; // expected-error{{unknown class name 'NSObjec'; did you mean 'NSObject'?}}
+typedef PC4<id, id, NSObjec> typeArgs4; // expected-error{{unknown class name 'NSObjec'; did you mean 'NSObject'?}}
 // expected-error@-1{{type argument 'NSObject' must be a pointer (requires a '*')}}
 
 // Typo correction: bias set by correction itself to a protocol.
-typedef PC4<NSObject, NSCopyin> protocolQuals3; // expected-error{{cannot find protocol declaration for 'NSCopyin'; did you mean 'NSCopying'?}}
+typedef PC4<NSObject, NSObject, NSCopyin> protocolQuals3; // expected-error{{cannot find protocol declaration for 'NSCopyin'; did you mean 'NSCopying'?}}
 
 // Typo correction: bias set by correction itself to a type.
-typedef PC4<NSObject, ObjCStringref> typeArgs5; // expected-error{{unknown type name 'ObjCStringref'; did you mean 'ObjCStringRef'?}}
+typedef PC4<NSObject, NSObject, ObjCStringref> typeArgs5; // expected-error{{unknown type name 'ObjCStringref'; did you mean 'ObjCStringRef'?}}
 // expected-error@-1{{type argument 'NSObject' must be a pointer (requires a '*')}}
+// expected-error@-2{{type argument 'NSObject' must be a pointer (requires a '*')}}
 
 // Type/protocol conflict.
 typedef PC4<NSCopying, ObjCStringRef> typeArgsProtocolQualsConflict1; // expected-error{{angle brackets contain both a type ('ObjCStringRef') and a protocol ('NSCopying')}}
 
 // Handling the '>>' in type argument lists.
 typedef PC4<id<NSCopying>, NSObject *, id<NSObject>> typeArgs6;
+
+// --------------------------------------------------------------------------
+// Checking type arguments.
+// --------------------------------------------------------------------------
+
+@interface PC15<T : id, U : NSObject *, V : id<NSCopying>> : NSObject
+// expected-note@-1{{type parameter 'V' declared here}}
+// expected-note@-2{{type parameter 'V' declared here}}
+// expected-note@-3{{type parameter 'U' declared here}}
+@end
+
+typedef PC4<NSString *> tooFewTypeArgs1; // expected-error{{too few type arguments for class 'PC4' (have 1, expected 3)}}
+
+typedef PC4<NSString *, NSString *, NSString *, NSString *> tooManyTypeArgs1; // expected-error{{too many type arguments for class 'PC4' (have 4, expected 3)}}
+
+typedef PC15<int (^)(int, int), // block pointers as 'id'
+             NSString *, // subclass
+             NSString *> typeArgs7; // class that conforms to the protocol
+
+typedef PC15<NSObject *, NSObject *, id<NSCopying>> typeArgs8;
+
+typedef PC15<NSObject *, NSObject *,
+             NSObject *> typeArgs8; // expected-error{{type argument 'NSObject *' does not satisy the bound ('id<NSCopying>') of type parameter 'V'}}
+
+typedef PC15<id,
+             id,  // expected-error{{type argument 'id' does not satisy the bound ('NSObject *') of type parameter 'U'}}
+             id> typeArgs9;
+
+typedef PC15<id, NSObject *,
+             id> typeArgs10; // expected-error{{type argument 'id' does not satisy the bound ('id<NSCopying>') of type parameter 'V'}}
+
+typedef PC15<id,
+             int (^)(int, int), // okay
+             id<NSCopying, NSObject>> typeArgs11;
+
+typedef PC15<id, NSString *, int (^)(int, int)> typeArgs12; // okay
+
+typedef NSObject<id, id> typeArgs13; // expected-error{{type arguments cannot be applied to non-parameterized class 'NSObject'}}
+
+typedef id<id, id> typeArgs14; // expected-error{{type arguments cannot be applied to non-class type 'id'}}

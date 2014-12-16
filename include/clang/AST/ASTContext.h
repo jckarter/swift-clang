@@ -236,6 +236,12 @@ class ASTContext : public RefCountedBase<ASTContext> {
   QualType ObjCClassRedefinitionType;
   QualType ObjCSelRedefinitionType;
 
+  /// The identifier 'NSObject'.
+  IdentifierInfo *NSObjectName = nullptr;
+
+  /// The identifier 'NSCopying'.
+  IdentifierInfo *NSCopyingName = nullptr;
+
   QualType ObjCConstantStringType;
   mutable RecordDecl *CFConstantStringTypeDecl;
   
@@ -1327,6 +1333,24 @@ public:
   /// \brief Set the user-written type that redefines 'SEL'.
   void setObjCSelRedefinitionType(QualType RedefType) {
     ObjCSelRedefinitionType = RedefType;
+  }
+
+  /// Retrieve the identifier 'NSObject'.
+  IdentifierInfo *getNSObjectName() {
+    if (!NSObjectName) {
+      NSObjectName = &Idents.get("NSObject");
+    }
+
+    return NSObjectName;
+  }
+
+  /// Retrieve the identifier 'NSCopying'.
+  IdentifierInfo *getNSCopyingName() {
+    if (!NSCopyingName) {
+      NSCopyingName = &Idents.get("NSCopying");
+    }
+
+    return NSCopyingName;
   }
 
   /// \brief Retrieve the Objective-C "instancetype" type, if already known;

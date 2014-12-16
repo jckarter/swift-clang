@@ -1584,6 +1584,7 @@ public:
   bool isObjCObjectOrInterfaceType() const;
   bool isObjCIdType() const;                    // id
   bool isObjCClassType() const;                 // Class
+  bool isBlockCompatibleObjCPointerType(ASTContext &ctx) const;
   bool isObjCSelType() const;                 // Class
   bool isObjCBuiltinType() const;               // 'id' or 'Class'
   bool isObjCARCBridgableType() const;

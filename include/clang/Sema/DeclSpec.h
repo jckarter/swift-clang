@@ -757,6 +757,10 @@ public:
   SourceLocation getObjCTypeArgsRAngleLoc() const {
     return ObjCTypeArgsRAngleLoc;
   }
+  SourceRange getObjCTypeArgsRange() const {
+    return SourceRange(ObjCTypeArgsLAngleLoc, ObjCTypeArgsRAngleLoc);
+  }
+
   void setObjCTypeArgs(SourceLocation lAngleLoc,
                        ArrayRef<ParsedType> args,
                        SourceLocation rAngleLoc);

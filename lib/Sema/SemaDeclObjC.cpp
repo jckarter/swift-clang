@@ -582,7 +582,7 @@ DeclResult Sema::actOnObjCTypeParam(Scope *S, IdentifierInfo *paramName,
       // Form the new type source information.
       typeBoundInfo = builder.getTypeSourceInfo(Context, typeBound);
     } else {
-      // Not a
+      // Not a valid type bound.
       Diag(typeBoundInfo->getTypeLoc().getBeginLoc(),
            diag::err_objc_type_param_bound_nonobject)
         << typeBound << paramName;

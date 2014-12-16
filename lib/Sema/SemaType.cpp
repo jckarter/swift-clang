@@ -713,6 +713,149 @@ static void maybeSynthesizeBlockSignature(TypeProcessingState &state,
   state.setCurrentChunkIndex(declarator.getNumTypeObjects());
 }
 
+/// Apply Objective-C type arguments to the given type.
+static QualType applyObjCTypeArgs(Sema &S, SourceLocation loc, QualType type,
+                                  ArrayRef<ParsedType> typeArgs,
+                                  SourceRange typeArgsRange) {
+  // We can only apply type arguments to an Objective-C class type.
+  const auto *objCClassType = type->getAs<ObjCInterfaceType>();
+  if (!objCClassType) {
+    S.Diag(loc, diag::err_objc_type_args_non_class)
+      << type
+      << typeArgsRange;
+    return type;
+  }
+
+  // The class type must be parameterized.
+  ObjCInterfaceDecl *objCClass = objCClassType->getDecl();
+  ObjCTypeParamList *typeParams = objCClass->getTypeParamList();
+  if (!typeParams) {
+    S.Diag(loc, diag::err_objc_type_args_non_parameterized_class)
+      << objCClass->getDeclName()
+      << FixItHint::CreateRemoval(typeArgsRange);
+    return type;
+  }
+
+  // Make sure that we have the right number of type arguments.
+  if (typeArgs.size() != typeParams->size()) {
+    S.Diag(loc, diag::err_objc_type_args_wrong_arity)
+      << (typeArgs.size() < typeParams->size())
+      << objCClass->getDeclName()
+      << (unsigned)typeArgs.size()
+      << (unsigned)typeParams->size();
+    S.Diag(objCClass->getLocation(), diag::note_previous_decl)
+      << objCClass;
+    return type;
+  }
+
+  // Check the type arguments.
+  for (unsigned i = 0, n = typeArgs.size(); i != n; ++i) {
+    TypeSourceInfo *typeArgInfo = nullptr;
+    QualType typeArg = S.GetTypeFromParser(typeArgs[i], &typeArgInfo);
+
+    // Objective-C object pointer types must be substitutable for the bounds.
+    if (const auto *typeArgObjC = typeArg->getAs<ObjCObjectPointerType>()) {
+      // Retrieve the bound.
+      ObjCTypeParamDecl *typeParam = typeParams->begin()[i];
+      QualType bound = typeParam->getUnderlyingType();
+      const auto *boundObjC = bound->getAs<ObjCObjectPointerType>();
+
+      // Determine whether the type argument is substitutable for the bound.
+      if (typeArgObjC->isObjCIdType()) {
+        // When the type argument is 'id', the only acceptable type
+        // parameter bound is 'id'.
+        if (boundObjC->isObjCIdType())
+          continue;
+      } else if (S.Context.canAssignObjCInterfaces(boundObjC, typeArgObjC)) {
+        // Otherwise, we follow the assignability rules.
+        continue;
+      }
+
+      // Diagnose the mismatch.
+      S.Diag(typeArgInfo->getTypeLoc().getLocStart(),
+             diag::err_objc_type_arg_does_not_match_bound)
+        << typeArg << bound << typeParam->getDeclName();
+      S.Diag(typeParam->getLocation(), diag::note_objc_type_param_here)
+        << typeParam->getDeclName();
+
+      return type;
+    }
+
+    // Block pointer types are permitted for unqualified 'id' bounds.
+    if (typeArg->isBlockPointerType()) {
+      // Retrieve the bound.
+      ObjCTypeParamDecl *typeParam = typeParams->begin()[i];
+      QualType bound = typeParam->getUnderlyingType();
+      if (bound->isBlockCompatibleObjCPointerType(S.Context))
+        continue;
+
+      // Diagnose the mismatch.
+      S.Diag(typeArgInfo->getTypeLoc().getLocStart(),
+             diag::err_objc_type_arg_does_not_match_bound)
+        << typeArg << bound << typeParam->getDeclName();
+      S.Diag(typeParam->getLocation(), diag::note_objc_type_param_here)
+        << typeParam->getDeclName();
+
+      return type;
+    }
+
+    // Dependent types will be checked at instantiation time.
+    if (typeArg->isDependentType()) {
+      continue;
+    }
+
+    // Diagnose non-id-compatible type arguments.
+    S.Diag(typeArgInfo->getTypeLoc().getLocStart(),
+           diag::err_objc_type_arg_not_id_compatible)
+      << typeArg
+      << typeArgInfo->getTypeLoc().getSourceRange();
+    return type;
+  }
+
+  // Success.
+  // FIXME: Form the resulting type.
+
+  return type;
+}
+
+/// Apply Objective-C protocol qualifiers to the given type.
+static QualType applyObjCProtocolQualifiers(
+                  Sema &S, SourceLocation loc, SourceRange range, QualType type,
+                  ArrayRef<ObjCProtocolDecl *> protocols,
+                  const SourceLocation *protocolLocs) {
+  ASTContext &ctx = S.Context;
+
+  if (const ObjCObjectType *objT = type->getAs<ObjCObjectType>()) {
+    // Silently drop any existing protocol qualifiers.
+    // TODO: determine whether that's the right thing to do.
+    if (objT->getNumProtocols())
+      type = objT->getBaseType();
+
+    // FIXME: Check for protocols to which the class type is already
+    // known to conform.
+
+    return ctx.getObjCObjectType(type, protocols.data(), protocols.size());
+  }
+
+  // id<protocol-list>
+  if (type->isObjCIdType()) {
+    type = ctx.getObjCObjectType(ctx.ObjCBuiltinIdTy,
+                                 protocols.data(), protocols.size());
+    return ctx.getObjCObjectPointerType(type);
+  }
+
+  // Class<protocol-list>
+  if (type->isObjCClassType()) {
+    type = ctx.getObjCObjectType(ctx.ObjCBuiltinClassTy, protocols.data(),
+                                 protocols.size());
+    return ctx.getObjCObjectPointerType(type);
+  }
+
+  S.Diag(loc, diag::err_invalid_protocol_qualifiers)
+    << range;
+  return type;
+}
+
 /// \brief Convert the specified declspec to the appropriate type
 /// object.
 /// \param state Specifies the declarator containing the declaration specifier
@@ -939,36 +1082,22 @@ static QualType ConvertDeclSpecToType(TypeProcessingState &state) {
            DS.getTypeSpecSign() == 0 &&
            "Can't handle qualifiers on typedef names yet!");
     Result = S.GetTypeFromParser(DS.getRepAsType());
-    if (Result.isNull())
+    if (Result.isNull()) {
       declarator.setInvalidType(true);
-    else if (DeclSpec::ProtocolQualifierListTy PQ
-               = DS.getProtocolQualifiers()) {
-      if (const ObjCObjectType *ObjT = Result->getAs<ObjCObjectType>()) {
-        // Silently drop any existing protocol qualifiers.
-        // TODO: determine whether that's the right thing to do.
-        if (ObjT->getNumProtocols())
-          Result = ObjT->getBaseType();
+    } else {
+      // Apply Objective-C type arguments.
+      if (DS.hasObjCTypeArgs()) {
+        Result = applyObjCTypeArgs(S, DeclLoc, Result, DS.getObjCTypeArgs(),
+                                   DS.getObjCTypeArgsRange());
+      }
 
-        if (DS.getNumProtocolQualifiers())
-          Result = Context.getObjCObjectType(Result,
-                                             (ObjCProtocolDecl*const*) PQ,
-                                             DS.getNumProtocolQualifiers());
-      } else if (Result->isObjCIdType()) {
-        // id<protocol-list>
-        Result = Context.getObjCObjectType(Context.ObjCBuiltinIdTy,
-                                           (ObjCProtocolDecl*const*) PQ,
-                                           DS.getNumProtocolQualifiers());
-        Result = Context.getObjCObjectPointerType(Result);
-      } else if (Result->isObjCClassType()) {
-        // Class<protocol-list>
-        Result = Context.getObjCObjectType(Context.ObjCBuiltinClassTy,
-                                           (ObjCProtocolDecl*const*) PQ,
-                                           DS.getNumProtocolQualifiers());
-        Result = Context.getObjCObjectPointerType(Result);
-      } else {
-        S.Diag(DeclLoc, diag::err_invalid_protocol_qualifiers)
-          << DS.getSourceRange();
-        declarator.setInvalidType(true);
+      // Apply Objective-C protocol qualifiers.
+      if (DeclSpec::ProtocolQualifierListTy PQ = DS.getProtocolQualifiers()) {
+        Result = applyObjCProtocolQualifiers(
+                   S, DeclLoc, DS.getSourceRange(), Result,
+                   llvm::makeArrayRef((ObjCProtocolDecl * const *)PQ,
+                                      DS.getNumProtocolQualifiers()),
+                   DS.getProtocolLocs());
       }
     }
 

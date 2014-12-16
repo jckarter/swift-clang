@@ -2494,6 +2494,39 @@ llvm::Optional<NullabilityKind> AttributedType::getImmediateNullability() const 
   return None;
 }
 
+bool Type::isBlockCompatibleObjCPointerType(ASTContext &ctx) const {
+  const ObjCObjectPointerType *objcPtr = getAs<ObjCObjectPointerType>();
+  if (!objcPtr)
+    return false;
+
+  if (objcPtr->isObjCIdType()) {
+    // id is always okay.
+    return true;
+  }
+
+  // Blocks are NSObjects.
+  if (ObjCInterfaceDecl *iface = objcPtr->getInterfaceDecl()) {
+    if (iface->getIdentifier() != ctx.getNSObjectName())
+      return false;
+
+    // Continue to check qualifiers, below.
+  } else if (objcPtr->isObjCQualifiedIdType()) {
+    // Continue to check qualifiers, below.
+  } else {
+    return false;
+  }
+
+  // Check protocol qualifiers.
+  for (ObjCProtocolDecl *proto : objcPtr->quals()) {
+    // Blocks conform to NSObject and NSCopying.
+    if (proto->getIdentifier() != ctx.getNSObjectName() &&
+        proto->getIdentifier() != ctx.getNSCopyingName())
+      return false;
+  }
+
+  return true;
+}
+
 Qualifiers::ObjCLifetime Type::getObjCARCImplicitLifetime() const {
   if (isObjCARCImplicitlyUnretainedType())
     return Qualifiers::OCL_ExplicitNone;
