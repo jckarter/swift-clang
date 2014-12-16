@@ -10186,7 +10186,7 @@ static void RebuildLambdaScopeInfo(CXXMethodDecl *CallOperator,
       QualType CaptureType = VD->getType();
       const bool ByRef = C.getCaptureKind() == LCK_ByRef;
       LSI->addCapture(VD, /*IsBlock*/false, ByRef, 
-          /*RefersToEnclosingLocal*/true, C.getLocation(),
+          /*RefersToCapturedVariable*/true, C.getLocation(),
           /*EllipsisLoc*/C.isPackExpansion() 
                          ? C.getEllipsisLoc() : SourceLocation(),
           CaptureType, /*Expr*/ nullptr);
