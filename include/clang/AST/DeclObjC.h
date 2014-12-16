@@ -910,8 +910,8 @@ public:
   /// Retrieve the type parameters of this class.
   ///
   /// This function looks for a type parameter list for the given
-  /// class; if the class has been declared (with \c @class) but not
-  /// defined (with \c @interface), it will search for a declaration that
+  /// class; if the class has been declared (with \c \@class) but not
+  /// defined (with \c \@interface), it will search for a declaration that
   /// has type parameters, skipping any declarations that do not.
   ObjCTypeParamList *getTypeParamList() const;
 
