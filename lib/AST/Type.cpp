@@ -476,7 +476,7 @@ ObjCObjectType::ObjCObjectType(QualType Canonical, QualType Base,
     BaseType(Base) 
 {
   ObjCObjectTypeBits.NumTypeArgs = typeArgs.size();
-  assert(getTypeArgs().size() == typeArgs.size() &&
+  assert(getTypeArgsAsWritten().size() == typeArgs.size() &&
          "bitfield overflow in type argument count");
   ObjCObjectTypeBits.NumProtocols = protocols.size();
   assert(getNumProtocols() == protocols.size() &&
