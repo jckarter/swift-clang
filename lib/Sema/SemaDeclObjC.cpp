@@ -452,13 +452,16 @@ class ObjCInterfaceValidatorCCC : public CorrectionCandidateCallback {
 }
 
 void Sema::
-ActOnSuperClassOfClassInterface(SourceLocation AtInterfaceLoc,
+ActOnSuperClassOfClassInterface(Scope *S,
+                                SourceLocation AtInterfaceLoc,
                                 ObjCInterfaceDecl *IDecl,
                                 ObjCInterfaceDecl *PrevClassDef,
                                 IdentifierInfo *ClassName,
                                 SourceLocation ClassLoc,
                                 IdentifierInfo *SuperName,
-                                SourceLocation SuperLoc) {
+                                SourceLocation SuperLoc,
+                                ArrayRef<ParsedType> SuperTypeArgs,
+                                SourceRange SuperTypeArgsRange) {
   // Check if a different kind of symbol declared in this scope.
   NamedDecl *PrevDecl = LookupSingleName(TUScope, SuperName, SuperLoc,
                                          LookupOrdinaryName);
@@ -484,10 +487,13 @@ ActOnSuperClassOfClassInterface(SourceLocation AtInterfaceLoc,
   } else {
     ObjCInterfaceDecl *SuperClassDecl =
     dyn_cast_or_null<ObjCInterfaceDecl>(PrevDecl);
+    QualType SuperClassType;
 
     // Diagnose classes that inherit from deprecated classes.
-    if (SuperClassDecl)
+    if (SuperClassDecl) {
       (void)DiagnoseUseOfDecl(SuperClassDecl, SuperLoc);
+      SuperClassType = Context.getObjCInterfaceType(SuperClassDecl);
+    }
 
     if (PrevDecl && SuperClassDecl == 0) {
       // The previous declaration was not a class decl. Check if we have a
@@ -498,6 +504,8 @@ ActOnSuperClassOfClassInterface(SourceLocation AtInterfaceLoc,
         if (T->isObjCObjectType()) {
           if (NamedDecl *IDecl = T->getAs<ObjCObjectType>()->getInterface()) {
             SuperClassDecl = dyn_cast<ObjCInterfaceDecl>(IDecl);
+            SuperClassType = Context.getTypeDeclType(TDecl);
+
             // This handles the following case:
             // @interface NewI @end
             // typedef NewI DeprI __attribute__((deprecated("blah")))
@@ -523,12 +531,13 @@ ActOnSuperClassOfClassInterface(SourceLocation AtInterfaceLoc,
         Diag(SuperLoc, diag::err_undef_superclass)
           << SuperName << ClassName << SourceRange(AtInterfaceLoc, ClassLoc);
       else if (RequireCompleteType(SuperLoc,
-                                   Context.getObjCInterfaceType(SuperClassDecl),
+                                   SuperClassType,
                                    diag::err_forward_superclass,
                                    SuperClassDecl->getDeclName(),
                                    ClassName,
                                    SourceRange(AtInterfaceLoc, ClassLoc))) {
         SuperClassDecl = 0;
+        SuperClassType = QualType();
       }
     }
     if (PrevClassDef) {
@@ -541,9 +550,50 @@ ActOnSuperClassOfClassInterface(SourceLocation AtInterfaceLoc,
       }
     }
 
-    IDecl->setSuperClass(SuperClassDecl);
-    IDecl->setSuperClassLoc(SuperLoc);
-    IDecl->setEndOfDefinitionLoc(SuperLoc);
+    if (SuperClassType.isNull()) {
+      assert(!SuperClassDecl && "Failed to set SuperClassType?");
+      return;
+    }
+
+    // Handle type arguments on the superclass.
+    TypeSourceInfo *SuperClassTInfo = nullptr;
+    if (!SuperTypeArgs.empty()) {
+      // Form declaration specifiers naming this superclass type with
+      // type arguments.
+      AttributeFactory attrFactory;
+      DeclSpec DS(attrFactory);
+      const char* prevSpec; // unused
+      unsigned diagID; // unused
+      TypeSourceInfo *parsedTSInfo
+        = Context.getTrivialTypeSourceInfo(SuperClassType, SuperLoc);
+      ParsedType parsedType = CreateParsedType(SuperClassType, parsedTSInfo);
+
+      DS.SetTypeSpecType(DeclSpec::TST_typename, SuperLoc, prevSpec, diagID,
+                         parsedType, Context.getPrintingPolicy());
+      DS.SetRangeStart(SuperLoc);
+      DS.SetRangeEnd(SuperLoc);
+      DS.setObjCTypeArgs(SuperTypeArgsRange.getBegin(),
+                         SuperTypeArgs,
+                         SuperTypeArgsRange.getEnd());
+
+      // Form the declarator.
+      Declarator D(DS, Declarator::TypeNameContext);
+     
+      TypeResult fullSuperClassType = ActOnTypeName(S, D);
+      if (!fullSuperClassType.isUsable())
+        return;
+
+      SuperClassType = GetTypeFromParser(fullSuperClassType.get(), 
+                                         &SuperClassTInfo);
+    }
+
+    if (!SuperClassTInfo) {
+      SuperClassTInfo = Context.getTrivialTypeSourceInfo(SuperClassType, 
+                                                         SuperLoc);
+    }
+
+    IDecl->setSuperClass(SuperClassTInfo);
+    IDecl->setEndOfDefinitionLoc(SuperClassTInfo->getTypeLoc().getLocEnd());
   }
 }
 
@@ -752,10 +802,12 @@ static bool checkTypeParamListConsistency(Sema &S,
 }
 
 Decl *Sema::
-ActOnStartClassInterface(SourceLocation AtInterfaceLoc,
+ActOnStartClassInterface(Scope *S, SourceLocation AtInterfaceLoc,
                          IdentifierInfo *ClassName, SourceLocation ClassLoc,
                          ObjCTypeParamList *typeParamList,
                          IdentifierInfo *SuperName, SourceLocation SuperLoc,
+                         ArrayRef<ParsedType> SuperTypeArgs,
+                         SourceRange SuperTypeArgsRange,
                          Decl * const *ProtoRefs, unsigned NumProtoRefs,
                          const SourceLocation *ProtoLocs, 
                          SourceLocation EndProtoLoc, AttributeList *AttrList) {
@@ -874,8 +926,10 @@ ActOnStartClassInterface(SourceLocation AtInterfaceLoc,
     }
 
   if (SuperName)
-    ActOnSuperClassOfClassInterface(AtInterfaceLoc, IDecl, PrevPartialClassDecl,
-                                    ClassName, ClassLoc, SuperName, SuperLoc);
+    ActOnSuperClassOfClassInterface(S, AtInterfaceLoc, IDecl, 
+                                    PrevPartialClassDecl, ClassName, ClassLoc, 
+                                    SuperName, SuperLoc, SuperTypeArgs, 
+                                    SuperTypeArgsRange);
   else { // we have a root class.
     if (PrevPartialClassDecl && PrevPartialClassDecl->getSuperClass()) {
       Diag(IDecl->getLocation(),
@@ -897,11 +951,12 @@ ActOnStartClassInterface(SourceLocation AtInterfaceLoc,
   return ActOnObjCContainerStartDefinition(IDecl);
 }
 
-Decl *Sema::ActOnPartialInterface(SourceLocation AtPartialInterfaceLoc,
-                                 IdentifierInfo *ClassName,
-                                 SourceLocation ClassLoc,
-                                 IdentifierInfo *SuperName,
-                                 SourceLocation SuperLoc) {
+Decl *Sema::ActOnPartialInterface(Scope *S,
+                                  SourceLocation AtPartialInterfaceLoc,
+                                  IdentifierInfo *ClassName,
+                                  SourceLocation ClassLoc,
+                                  IdentifierInfo *SuperName,
+                                  SourceLocation SuperLoc) {
   assert(ClassName && "Missing class identifier");
 
   // Check for another declaration kind with the same name.
@@ -945,8 +1000,9 @@ Decl *Sema::ActOnPartialInterface(SourceLocation AtPartialInterfaceLoc,
   }
 
   if (SuperName)
-    ActOnSuperClassOfClassInterface(AtPartialInterfaceLoc, IDecl, PrevCompleteDef,
-                                    ClassName, ClassLoc, SuperName, SuperLoc);
+    ActOnSuperClassOfClassInterface(S, AtPartialInterfaceLoc, IDecl, 
+                                    PrevCompleteDef, ClassName, ClassLoc, 
+                                    SuperName, SuperLoc, { }, SourceRange());
   else { // we have a root class.
     if (PrevCompleteDef && PrevCompleteDef->getSuperClass()) {
       Diag(IDecl->getLocation(),
@@ -1241,7 +1297,8 @@ void Sema::actOnObjCTypeArgsOrProtocolQualifiers(
        SourceLocation lAngleLoc,
        ArrayRef<IdentifierInfo *> identifiers,
        ArrayRef<SourceLocation> identifierLocs,
-       SourceLocation rAngleLoc) {
+       SourceLocation rAngleLoc,
+       bool warnOnIncompleteProtocols) {
   // Local function that updates the declaration specifiers with
   // protocol information.
   SmallVector<ObjCProtocolDecl *, 4> protocols;
@@ -1250,7 +1307,24 @@ void Sema::actOnObjCTypeArgsOrProtocolQualifiers(
     assert(numProtocolsResolved == identifiers.size() && "Unresolved protocols");
     
     for (unsigned i = 0, n = protocols.size(); i != n; ++i) {
-      (void)DiagnoseUseOfDecl(protocols[i], identifierLocs[i]);
+      ObjCProtocolDecl *&proto = protocols[i];
+      (void)DiagnoseUseOfDecl(proto, identifierLocs[i]);
+
+      // If this is a forward protocol declaration, get its definition.
+      if (!proto->isThisDeclarationADefinition() && proto->getDefinition())
+        proto = proto->getDefinition();
+
+      // If this is a forward declaration and we are supposed to warn in this
+      // case, do it.
+      // FIXME: Recover nicely in the hidden case.
+      ObjCProtocolDecl *forwardDecl = nullptr;
+      if (warnOnIncompleteProtocols &&
+          NestedProtocolHasNoDefinition(proto, forwardDecl)) {
+        Diag(identifierLocs[i], diag::warn_undef_protocolref)
+          << proto->getDeclName();
+        Diag(forwardDecl->getLocation(), diag::note_protocol_decl_undefined)
+          << forwardDecl;
+      }
     }
 
     DS.setProtocolQualifiers((Decl * const *)(protocols.data()),
@@ -1785,8 +1859,9 @@ Decl *Sema::ActOnStartClassImplementation(
                                       true);
     IDecl->startDefinition();
     if (SDecl) {
-      IDecl->setSuperClass(SDecl);
-      IDecl->setSuperClassLoc(SuperClassLoc);
+      IDecl->setSuperClass(Context.getTrivialTypeSourceInfo(
+                             Context.getObjCInterfaceType(SDecl),
+                             SuperClassLoc));
       IDecl->setEndOfDefinitionLoc(SuperClassLoc);
     } else {
       IDecl->setEndOfDefinitionLoc(ClassLoc);

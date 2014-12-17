@@ -1259,7 +1259,8 @@ private:
                                    SourceLocation &LAngleLoc,
                                    SourceLocation &EndProtoLoc);
   bool ParseObjCProtocolQualifiers(DeclSpec &DS);
-  void ParseObjCTypeArgsOrProtocolQualifiers(DeclSpec &DS);
+  void ParseObjCTypeArgsOrProtocolQualifiers(DeclSpec &DS,
+                                             bool warnOnIncompleteProtocols);
   void ParseObjCInterfaceDeclList(tok::ObjCKeywordKind contextKey,
                                   Decl *CDecl);
   DeclGroupPtrTy ParseObjCAtProtocolDeclaration(SourceLocation atLoc,

@@ -382,8 +382,6 @@ public:
   bool shouldWalkTypesOfTypeLocs() const { return false; }
 
   bool VisitObjCInterfaceDecl(ObjCInterfaceDecl *D) {
-    if (ObjCInterfaceDecl *ID = D->getSuperClass())
-      XCTM.migrateRef(ID, D->getSuperClassLoc());
     return true;
   }
 

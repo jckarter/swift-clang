@@ -793,7 +793,9 @@ class ObjCInterfaceDecl : public ObjCContainerDecl
     ObjCInterfaceDecl *Definition;
     
     /// Class's super class.
-    ObjCInterfaceDecl *SuperClass;
+    ///
+    /// When non-null, this is always an ObjCObjectType.
+    TypeSourceInfo *SuperClassTInfo;
     
     /// Complete definition of the class - only when IsPartialInterface
     /// is true.
@@ -842,16 +844,13 @@ class ObjCInterfaceDecl : public ObjCContainerDecl
     };
     /// One of the \c InheritedDesignatedInitializersState enumeratos.
     mutable unsigned InheritedDesignatedInitializers : 2;
-
-    /// \brief The location of the superclass, if any.
-    SourceLocation SuperClassLoc;
     
     /// \brief The location of the last location in this declaration, before
     /// the properties/methods. For example, this will be the '>', '}', or 
     /// identifier, 
     SourceLocation EndLoc; 
 
-    DefinitionData() : Definition(), SuperClass(), CompleteDefinition(),
+    DefinitionData() : Definition(), SuperClassTInfo(), CompleteDefinition(),
                        CategoryList(), IvarList(),
                        ExternallyCompleted(),
                        IvarListMissingImplementation(true),
@@ -1194,7 +1193,16 @@ public:
   /// a forward declaration (\@class) to a definition (\@interface).
   void startDefinition();
   
-  ObjCInterfaceDecl *getSuperClass() const {
+  /// Retrieve the superclass type.
+  const ObjCObjectType *getSuperClassType() const {
+    if (TypeSourceInfo *TInfo = getSuperClassTInfo())
+      return TInfo->getType()->castAs<ObjCObjectType>();
+
+    return nullptr;
+  }
+
+  // Retrieve the type source information for the superclass.
+  TypeSourceInfo *getSuperClassTInfo() const {
     // FIXME: Should make sure no callers ever do this.
     if (!hasDefinition())
       return nullptr;
@@ -1202,16 +1210,15 @@ public:
     if (data().ExternallyCompleted)
       LoadExternalDefinition();
 
-    if (ObjCInterfaceDecl *Super = data().SuperClass)
-      if (Super->isPartialInterface() && Super->getCompleteDefinition())
-        return Super->getCompleteDefinition();
-    return data().SuperClass;
+    return data().SuperClassTInfo;
   }
 
-  void setSuperClass(ObjCInterfaceDecl * superCls) { 
-    data().SuperClass = 
-      (superCls && superCls->hasDefinition()) ? superCls->getDefinition() 
-                                              : superCls; 
+  // Retrieve the declaration for the superclass of this class, which
+  // does not include any type arguments that apply to the superclass.
+  ObjCInterfaceDecl *getSuperClass() const;
+
+  void setSuperClass(TypeSourceInfo *superClass) { 
+    data().SuperClassTInfo = superClass;
   }
 
   /// \brief Iterator that walks over the list of categories, filtering out
@@ -1503,8 +1510,8 @@ public:
                           
   void setEndOfDefinitionLoc(SourceLocation LE) { data().EndLoc = LE; }
 
-  void setSuperClassLoc(SourceLocation Loc) { data().SuperClassLoc = Loc; }
-  SourceLocation getSuperClassLoc() const { return data().SuperClassLoc; }
+  /// Retrieve the starting location of the superclass.
+  SourceLocation getSuperClassLoc() const;
 
   /// isImplicitInterfaceDecl - check that this is an implicitly declared
   /// ObjCInterfaceDecl node. This is for legacy objective-c \@implementation

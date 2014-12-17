@@ -18,9 +18,10 @@ __attribute__((objc_root_class))
 // --------------------------------------------------------------------------
 
 // Parse type parameters with a bound
-@interface PC1<T, U : NSObject*> : NSObject
+@interface PC1<T, U : NSObject*> : NSObject // expected-note{{'PC1' declared here}}
 // expected-note@-1{{type parameter 'T' declared here}}
 // expected-note@-2{{type parameter 'U' declared here}}
+// expected-note@-3{{type parameter 'U' declared here}}
 @end
 
 // Parse a type parameter with a bound that terminates in '>>'.
@@ -36,7 +37,7 @@ __attribute__((objc_root_class))
 @end
 
 // Parse a type parameter list without a superclass.
-@interface PC5<T : id> // expected-error{{parameterized Objective-C class 'PC5' must have a superclass}}
+@interface PC5<T : id>
 @end
 
 // Parse a type parameter with name conflicts.
@@ -304,3 +305,21 @@ void testSpecializedTypePrinting() {
   ip = (typeArgsAndProtocolQuals6)0; // expected-error{{used type 'typeArgsAndProtocolQuals6' (aka 'typeArgs15<NSObject>')}}
   ip = (typeArgsAndProtocolQuals6*)0;// expected-warning{{'typeArgsAndProtocolQuals6 *' (aka 'typeArgs15<NSObject> *')}}
 }
+
+// --------------------------------------------------------------------------
+// Specialized superclasses
+// --------------------------------------------------------------------------
+@interface PC21<T : NSObject *> : PC1<T, T>
+@end
+
+@interface PC22<T : NSObject *> : PC1<T> // expected-error{{too few type arguments for class 'PC1' (have 1, expected 2)}}
+@end
+
+@interface PC23<T : NSObject *> : PC1<T, U> // expected-error{{unknown type name 'U'}}
+@end
+
+@interface PC24<T> : PC1<T, T> // expected-error{{type argument 'T' (aka 'id') does not satisy the bound ('NSObject *') of type parameter 'U'}}
+@end
+
+@interface NSFoo : PC1<NSObject *, NSObject *> // okay
+@end

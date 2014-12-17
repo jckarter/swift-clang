@@ -1330,7 +1330,10 @@ DEF_TRAVERSE_DECL(ObjCInterfaceDecl, {// FIXME: implement
     for (auto typeParam : *typeParamList)
       TRY_TO(TraverseObjCTypeParamDecl(typeParam));
   }
-  return true;
+
+  if (TypeSourceInfo *superTInfo = D->getSuperClassTInfo()) {
+    TRY_TO(TraverseTypeLoc(superTInfo->getTypeLoc()));
+  }
 })
 
 DEF_TRAVERSE_DECL(ObjCProtocolDecl, {// FIXME: implement

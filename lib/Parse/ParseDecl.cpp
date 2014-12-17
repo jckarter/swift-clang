@@ -2832,7 +2832,8 @@ void Parser::ParseDeclarationSpecifiers(DeclSpec &DS,
       // following an Objective-C object pointer type. Handle either
       // one of them.
       if (Tok.is(tok::less) && getLangOpts().ObjC1) {
-        ParseObjCTypeArgsOrProtocolQualifiers(DS);
+        ParseObjCTypeArgsOrProtocolQualifiers(
+          DS, /*warnOnIncompleteProtocols=*/false);
 
         // An Objective-C object pointer followed by type arguments
         // can then be followed again by a set of protocol references, e.g.,
@@ -2944,7 +2945,8 @@ void Parser::ParseDeclarationSpecifiers(DeclSpec &DS,
       // following an Objective-C object pointer type. Handle either
       // one of them.
       if (Tok.is(tok::less) && getLangOpts().ObjC1) {
-        ParseObjCTypeArgsOrProtocolQualifiers(DS);
+        ParseObjCTypeArgsOrProtocolQualifiers(
+          DS, /*warnOnIncompleteProtocols=*/false);
 
         // An Objective-C object pointer followed by type arguments
         // can then be followed again by a set of protocol references, e.g.,

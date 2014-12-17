@@ -180,7 +180,7 @@ void Parser::CheckNestedObjCContexts(SourceLocation AtLoc)
 ///     @end
 ///
 ///   objc-superclass:
-///     ':' identifier
+///     ':' identifier objc-type-arguments[opt]
 ///
 ///   objc-class-interface-attributes:
 ///     __attribute__((visibility("default")))
@@ -309,6 +309,7 @@ Decl *Parser::ParseObjCAtInterfaceDeclaration(SourceLocation AtLoc,
   // Parse a class interface.
   IdentifierInfo *superClassId = nullptr;
   SourceLocation superClassLoc;
+  DeclSpec superClassDS(AttrFactory);
 
   if (Tok.is(tok::colon)) { // a super class is specified.
     ConsumeToken();
@@ -327,18 +328,12 @@ Decl *Parser::ParseObjCAtInterfaceDeclaration(SourceLocation AtLoc,
     }
     superClassId = Tok.getIdentifierInfo();
     superClassLoc = ConsumeToken();
-  } else if (typeParameterList) {
-    // An objc-type-parameter-list is ambiguous with an objc-protocol-refs
-    // in an @interface without a specified superclass, so such classes
-    // are ill-formed. We have determined that we have an
-    // objc-type-parameter-list but no superclass, so complain and record
-    // as if we inherited from NSObject.
-    SourceLocation insertLoc = PP.getLocForEndOfToken(PrevTokLocation);
-    Diag(insertLoc, diag::err_objc_parameterized_class_without_base)
-      << nameId
-      << FixItHint::CreateInsertion(insertLoc, " : NSObject");
-    superClassId = PP.getIdentifierInfo("NSObject");
-    superClassLoc = Tok.getLocation();
+
+    // Type arguments for the superclass or protocol conformances.
+    if (Tok.is(tok::less)) {
+      ParseObjCTypeArgsOrProtocolQualifiers(superClassDS,
+                                            /*warnOnIncompleteProtocols=*/true);
+    }
   }
 
   if (IsPartialInterfaceDecl) {
@@ -349,8 +344,9 @@ Decl *Parser::ParseObjCAtInterfaceDeclaration(SourceLocation AtLoc,
       return 0;
     }
     ConsumeToken();
-    Decl *ClsType = Actions.ActOnPartialInterface(AtLoc, nameId, nameLoc,
-                                                  superClassId, superClassLoc);
+    Decl *ClsType = Actions.ActOnPartialInterface(getCurScope(), AtLoc, nameId, 
+                                                  nameLoc, superClassId, 
+                                                  superClassLoc);
     return ClsType;
   }
   
@@ -366,6 +362,16 @@ Decl *Parser::ParseObjCAtInterfaceDeclaration(SourceLocation AtLoc,
     Actions.FindProtocolDeclaration(/*WarnOnDeclarations=*/true,
                                     &ProtocolIdents[0], ProtocolIdents.size(),
                                     ProtocolRefs);
+  } else if (auto protocols = superClassDS.getProtocolQualifiers()) {
+    // We already parsed the protocols named when we thought we had a
+    // type argument list (for a specialized superclass). Treat them
+    // as actual protocol references.
+    unsigned numProtocols = superClassDS.getNumProtocolQualifiers();
+    ProtocolRefs.append(protocols, protocols + numProtocols);
+    ProtocolLocs.append(superClassDS.getProtocolLocs(),
+                        superClassDS.getProtocolLocs() + numProtocols);
+    LAngleLoc = superClassDS.getProtocolLAngleLoc();
+    EndProtoLoc = superClassDS.getLocEnd();
   } else if (Tok.is(tok::less) &&
              ParseObjCProtocolReferences(ProtocolRefs, ProtocolLocs, true,
                                          LAngleLoc, EndProtoLoc)) {
@@ -376,8 +382,11 @@ Decl *Parser::ParseObjCAtInterfaceDeclaration(SourceLocation AtLoc,
     Actions.ActOnTypedefedProtocols(ProtocolRefs, superClassId, superClassLoc);
   
   Decl *ClsType =
-    Actions.ActOnStartClassInterface(AtLoc, nameId, nameLoc, typeParameterList,
-                                     superClassId, superClassLoc,
+    Actions.ActOnStartClassInterface(getCurScope(), AtLoc, nameId, nameLoc, 
+                                     typeParameterList, superClassId, 
+                                     superClassLoc, 
+                                     superClassDS.getObjCTypeArgs(),
+                                     superClassDS.getObjCTypeArgsRange(),
                                      ProtocolRefs.data(), ProtocolRefs.size(),
                                      ProtocolLocs.data(),
                                      EndProtoLoc, attrs.getList());
@@ -1612,7 +1621,9 @@ bool Parser::ParseObjCProtocolQualifiers(DeclSpec &DS) {
 ///   objc-type-arguments:
 ///     '<' type-name (',' type-name)* '>'
 ///
-void Parser::ParseObjCTypeArgsOrProtocolQualifiers(DeclSpec &DS) {
+void Parser::ParseObjCTypeArgsOrProtocolQualifiers(
+       DeclSpec &DS,
+       bool warnOnIncompleteProtocols) {
   assert(Tok.is(tok::less) && "Not at the start of type args or protocols");
   SourceLocation lAngleLoc = ConsumeToken();
 
@@ -1667,7 +1678,8 @@ void Parser::ParseObjCTypeArgsOrProtocolQualifiers(DeclSpec &DS) {
                                                   lAngleLoc,
                                                   identifiers,
                                                   identifierLocs,
-                                                  rAngleLoc);
+                                                  rAngleLoc,
+                                                  warnOnIncompleteProtocols);
     return;
   }
 

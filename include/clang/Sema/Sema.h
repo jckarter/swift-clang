@@ -7048,31 +7048,38 @@ public:
                                             SourceLocation rAngleLoc);
   void popObjCTypeParamList(Scope *S, ObjCTypeParamList *typeParamList);
 
-  Decl *ActOnStartClassInterface(SourceLocation AtInterfaceLoc,
+  Decl *ActOnStartClassInterface(Scope *S,
+                                 SourceLocation AtInterfaceLoc,
                                  IdentifierInfo *ClassName,
                                  SourceLocation ClassLoc,
                                  ObjCTypeParamList *typeParamList,
                                  IdentifierInfo *SuperName,
                                  SourceLocation SuperLoc,
+                                 ArrayRef<ParsedType> SuperTypeArgs,
+                                 SourceRange SuperTypeArgsRange,
                                  Decl * const *ProtoRefs,
                                  unsigned NumProtoRefs,
                                  const SourceLocation *ProtoLocs,
                                  SourceLocation EndProtoLoc,
                                  AttributeList *AttrList);
   
-  Decl *ActOnPartialInterface(SourceLocation AtPartialInterfaceLoc,
+  Decl *ActOnPartialInterface(Scope *S,
+                              SourceLocation AtPartialInterfaceLoc,
                               IdentifierInfo *ClassName,
                               SourceLocation ClassLoc,
                               IdentifierInfo *SuperName,
                               SourceLocation SuperLoc);
   
-  void ActOnSuperClassOfClassInterface(SourceLocation AtInterfaceLoc,
+  void ActOnSuperClassOfClassInterface(Scope *S,
+                                       SourceLocation AtInterfaceLoc,
                                        ObjCInterfaceDecl *IDecl,
                                        ObjCInterfaceDecl *PrevClassDef,
                                        IdentifierInfo *ClassName,
                                        SourceLocation ClassLoc,
                                        IdentifierInfo *SuperName,
-                                       SourceLocation SuperLoc);
+                                       SourceLocation SuperLoc,
+                                       ArrayRef<ParsedType> SuperTypeArgs,
+                                       SourceRange SuperTypeArgsRange);
   
   void ActOnTypedefedProtocols(SmallVectorImpl<Decl *> &ProtocolRefs,
                                IdentifierInfo *SuperName,
@@ -7148,7 +7155,8 @@ public:
          SourceLocation lAngleLoc,
          ArrayRef<IdentifierInfo *> identifiers,
          ArrayRef<SourceLocation> identifierLocs,
-         SourceLocation rAngleLoc);
+         SourceLocation rAngleLoc,
+         bool warnOnIncompleteProtocols);
 
   /// Ensure attributes are consistent with type.
   /// \param [in, out] Attributes The attributes to check; they will

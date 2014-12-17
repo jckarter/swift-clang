@@ -12,6 +12,9 @@
 
 typedef A<id<NSObject>, NSObject *> ASpecialization1;
 
+@interface B<T : id, U : NSObject *> : A<T, U>
+@end
+
 // RUN: c-index-test -test-annotate-tokens=%s:7:1:9:1 %s -target x86_64-apple-macosx10.7.0 | FileCheck -check-prefix=CHECK-INTERFACE-DECL %s
 // CHECK-INTERFACE-DECL: Identifier: "T" [7:14 - 7:15] TemplateTypeParameter=T:7:14
 // FIXME: Should be a type reference
@@ -32,3 +35,8 @@ typedef A<id<NSObject>, NSObject *> ASpecialization1;
 // CHECK-SPECIALIZATION: Identifier: "id" [13:11 - 13:13] TypeRef=id:0:0
 // CHECK-SPECIALIZATION: Identifier: "NSObject" [13:14 - 13:22] ObjCProtocolRef=NSObject:1:11
 // CHECK-SPECIALIZATION: Identifier: "NSObject" [13:25 - 13:33] ObjCClassRef=NSObject:4:12
+
+// RUN: c-index-test -test-annotate-tokens=%s:15:1:16:1 %s -target x86_64-apple-macosx10.7.0 | FileCheck -check-prefix=CHECK-SUPER %s
+// CHECK-SUPER: Identifier: "A" [15:40 - 15:41] ObjCSuperClassRef=A:7:12
+// CHECK-SUPER: Identifier: "T" [15:42 - 15:43] TypeRef=T:15:14
+// CHECK-SUPER: Identifier: "U" [15:45 - 15:46] TypeRef=U:15:22

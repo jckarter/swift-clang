@@ -322,6 +322,7 @@ void ObjCObjectTypeLoc::initializeLocal(ASTContext &Context,
                    Context.getTrivialTypeSourceInfo(
                      getTypePtr()->getTypeArgsAsWritten()[i], Loc));
   }
+  setProtocolLAngleLoc(Loc);
   setProtocolRAngleLoc(Loc);
   for (unsigned i = 0, e = getNumProtocols(); i != e; ++i)
     setProtocolLoc(i, Loc);
