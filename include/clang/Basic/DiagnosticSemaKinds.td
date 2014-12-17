@@ -7579,6 +7579,9 @@ def err_objc_type_args_non_class : Error<
 def err_objc_type_args_non_parameterized_class : Error<
   "type arguments cannot be applied to non-parameterized class %0">;
 
+def err_objc_type_args_specialized_class : Error<
+  "type arguments cannot be applied to already-specialized class type %0">;
+
 def err_objc_type_args_wrong_arity : Error<
   "too %select{many|few}0 type arguments for class %1 (have %2, expected %3)">;
 }

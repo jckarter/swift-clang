@@ -1022,6 +1022,9 @@ bool CursorVisitor::VisitObjCCategoryDecl(ObjCCategoryDecl *ND) {
                                    TU)))
     return true;
 
+  if (VisitObjCTypeParamList(ND->getTypeParamList()))
+    return true;
+
   ObjCCategoryDecl::protocol_loc_iterator PL = ND->protocol_loc_begin();
   for (ObjCCategoryDecl::protocol_iterator I = ND->protocol_begin(),
          E = ND->protocol_end(); I != E; ++I, ++PL)
@@ -1081,11 +1084,36 @@ bool CursorVisitor::VisitObjCPropertyDecl(ObjCPropertyDecl *PD) {
   return false;
 }
 
+bool CursorVisitor::VisitObjCTypeParamList(ObjCTypeParamList *typeParamList) {
+  if (!typeParamList)
+    return false;
+
+  for (auto *typeParam : *typeParamList) {
+    // Visit the type parameter.
+    if (Visit(MakeCXCursor(typeParam, TU, RegionOfInterest)))
+      return true;
+
+    // Visit the bound, if it's explicit.
+    if (typeParam->hasExplicitBound()) {
+      if (auto TInfo = typeParam->getTypeSourceInfo()) {
+        if (Visit(TInfo->getTypeLoc()))
+          return true;
+      }
+    }
+  }
+
+  return false;
+}
+
 bool CursorVisitor::VisitObjCInterfaceDecl(ObjCInterfaceDecl *D) {
   if (!D->isThisDeclarationADefinition()) {
     // Forward declaration is treated like a reference.
     return Visit(MakeCursorObjCClassRef(D, D->getLocation(), TU));
   }
+
+  // Objective-C type parameters.
+  if (VisitObjCTypeParamList(D->getTypeParamListAsWritten()))
+    return true;
 
   // Issue callbacks for super class.
   if (D->getSuperClass() &&
@@ -1486,6 +1514,11 @@ bool CursorVisitor::VisitObjCInterfaceTypeLoc(ObjCInterfaceTypeLoc TL) {
 bool CursorVisitor::VisitObjCObjectTypeLoc(ObjCObjectTypeLoc TL) {
   if (TL.hasBaseTypeAsWritten() && Visit(TL.getBaseLoc()))
     return true;
+
+  for (unsigned I = 0, N = TL.getNumTypeArgs(); I != N; ++I) {
+    if (Visit(TL.getTypeArgTInfo(I)->getTypeLoc()))
+      return true;
+  }
 
   for (unsigned I = 0, N = TL.getNumProtocols(); I != N; ++I) {
     if (Visit(MakeCursorObjCProtocolRef(TL.getProtocol(I), TL.getProtocolLoc(I),

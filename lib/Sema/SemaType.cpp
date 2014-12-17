@@ -718,8 +718,8 @@ static QualType applyObjCTypeArgs(Sema &S, SourceLocation loc, QualType type,
                                   ArrayRef<ParsedType> typeArgs,
                                   SourceRange typeArgsRange) {
   // We can only apply type arguments to an Objective-C class type.
-  const auto *objCClassType = type->getAs<ObjCInterfaceType>();
-  if (!objCClassType) {
+  const auto *objcObjectType = type->getAs<ObjCObjectType>();
+  if (!objcObjectType || !objcObjectType->getInterface()) {
     S.Diag(loc, diag::err_objc_type_args_non_class)
       << type
       << typeArgsRange;
@@ -727,11 +727,19 @@ static QualType applyObjCTypeArgs(Sema &S, SourceLocation loc, QualType type,
   }
 
   // The class type must be parameterized.
-  ObjCInterfaceDecl *objCClass = objCClassType->getDecl();
-  ObjCTypeParamList *typeParams = objCClass->getTypeParamList();
+  ObjCInterfaceDecl *objcClass = objcObjectType->getInterface();
+  ObjCTypeParamList *typeParams = objcClass->getTypeParamList();
   if (!typeParams) {
     S.Diag(loc, diag::err_objc_type_args_non_parameterized_class)
-      << objCClass->getDeclName()
+      << objcClass->getDeclName()
+      << FixItHint::CreateRemoval(typeArgsRange);
+    return type;
+  }
+
+  // The type must not already be specialized.
+  if (objcObjectType->isSpecialized()) {
+    S.Diag(loc, diag::err_objc_type_args_specialized_class)
+      << type
       << FixItHint::CreateRemoval(typeArgsRange);
     return type;
   }
@@ -740,18 +748,20 @@ static QualType applyObjCTypeArgs(Sema &S, SourceLocation loc, QualType type,
   if (typeArgs.size() != typeParams->size()) {
     S.Diag(loc, diag::err_objc_type_args_wrong_arity)
       << (typeArgs.size() < typeParams->size())
-      << objCClass->getDeclName()
+      << objcClass->getDeclName()
       << (unsigned)typeArgs.size()
       << (unsigned)typeParams->size();
-    S.Diag(objCClass->getLocation(), diag::note_previous_decl)
-      << objCClass;
+    S.Diag(objcClass->getLocation(), diag::note_previous_decl)
+      << objcClass;
     return type;
   }
 
   // Check the type arguments.
+  SmallVector<QualType, 4> finalTypeArgs;
   for (unsigned i = 0, n = typeArgs.size(); i != n; ++i) {
     TypeSourceInfo *typeArgInfo = nullptr;
     QualType typeArg = S.GetTypeFromParser(typeArgs[i], &typeArgInfo);
+    finalTypeArgs.push_back(typeArg);
 
     // Objective-C object pointer types must be substitutable for the bounds.
     if (const auto *typeArgObjC = typeArg->getAs<ObjCObjectPointerType>()) {
@@ -812,10 +822,8 @@ static QualType applyObjCTypeArgs(Sema &S, SourceLocation loc, QualType type,
     return type;
   }
 
-  // Success.
-  // FIXME: Form the resulting type.
-
-  return type;
+  // Success. Form the specialized type.
+  return S.Context.getObjCObjectType(type, finalTypeArgs, { });
 }
 
 /// Apply Objective-C protocol qualifiers to the given type.
@@ -824,30 +832,33 @@ static QualType applyObjCProtocolQualifiers(
                   ArrayRef<ObjCProtocolDecl *> protocols,
                   const SourceLocation *protocolLocs) {
   ASTContext &ctx = S.Context;
-
-  if (const ObjCObjectType *objT = type->getAs<ObjCObjectType>()) {
-    // Silently drop any existing protocol qualifiers.
-    // TODO: determine whether that's the right thing to do.
-    if (objT->getNumProtocols())
-      type = objT->getBaseType();
-
+  if (const ObjCObjectType *objT = dyn_cast<ObjCObjectType>(type.getTypePtr())){
     // FIXME: Check for protocols to which the class type is already
     // known to conform.
 
-    return ctx.getObjCObjectType(type, protocols.data(), protocols.size());
+    return ctx.getObjCObjectType(objT->getBaseType(),
+                                 objT->getTypeArgsAsWritten(),
+                                 protocols);
+  }
+
+  if (type->isObjCObjectType()) {
+    // Silently overwrite any existing protocol qualifiers.
+    // TODO: determine whether that's the right thing to do.
+
+    // FIXME: Check for protocols to which the class type is already
+    // known to conform.
+    return ctx.getObjCObjectType(type, { }, protocols);
   }
 
   // id<protocol-list>
   if (type->isObjCIdType()) {
-    type = ctx.getObjCObjectType(ctx.ObjCBuiltinIdTy,
-                                 protocols.data(), protocols.size());
+    type = ctx.getObjCObjectType(ctx.ObjCBuiltinIdTy, { }, protocols);
     return ctx.getObjCObjectPointerType(type);
   }
 
   // Class<protocol-list>
   if (type->isObjCClassType()) {
-    type = ctx.getObjCObjectType(ctx.ObjCBuiltinClassTy, protocols.data(),
-                                 protocols.size());
+    type = ctx.getObjCObjectType(ctx.ObjCBuiltinClassTy, { }, protocols);
     return ctx.getObjCObjectPointerType(type);
   }
 
@@ -921,9 +932,10 @@ static QualType ConvertDeclSpecToType(TypeProcessingState &state) {
   case DeclSpec::TST_unspecified:
     // "<proto1,proto2>" is an objc qualified ID with a missing id.
     if (DeclSpec::ProtocolQualifierListTy PQ = DS.getProtocolQualifiers()) {
-      Result = Context.getObjCObjectType(Context.ObjCBuiltinIdTy,
-                                         (ObjCProtocolDecl*const*)PQ,
-                                         DS.getNumProtocolQualifiers());
+      Result = Context.getObjCObjectType(Context.ObjCBuiltinIdTy, { },
+                                         llvm::makeArrayRef(
+                                           (ObjCProtocolDecl*const*)PQ,
+                                           DS.getNumProtocolQualifiers()));
       Result = Context.getObjCObjectPointerType(Result);
       break;
     }
@@ -4064,18 +4076,33 @@ namespace {
         Visit(TL.getBaseLoc());
       }
 
+      // Type arguments.
+      if (TL.getNumTypeArgs() > 0) {
+        assert(TL.getNumTypeArgs() == DS.getObjCTypeArgs().size());
+        TL.setTypeArgsLAngleLoc(DS.getObjCTypeArgsLAngleLoc());
+        TL.setTypeArgsRAngleLoc(DS.getObjCTypeArgsRAngleLoc());
+        for (unsigned i = 0, n = TL.getNumTypeArgs(); i != n; ++i) {
+          TypeSourceInfo *typeArgInfo = nullptr;
+          (void)Sema::GetTypeFromParser(DS.getObjCTypeArgs()[i], &typeArgInfo);
+          TL.setTypeArgTInfo(i, typeArgInfo);
+        }
+      } else {
+        TL.setTypeArgsLAngleLoc(SourceLocation());
+        TL.setTypeArgsRAngleLoc(SourceLocation());
+      }
+
       // Protocol qualifiers.
       if (DS.getProtocolQualifiers()) {
         assert(TL.getNumProtocols() > 0);
         assert(TL.getNumProtocols() == DS.getNumProtocolQualifiers());
-        TL.setLAngleLoc(DS.getProtocolLAngleLoc());
-        TL.setRAngleLoc(DS.getSourceRange().getEnd());
+        TL.setProtocolLAngleLoc(DS.getProtocolLAngleLoc());
+        TL.setProtocolRAngleLoc(DS.getSourceRange().getEnd());
         for (unsigned i = 0, e = DS.getNumProtocolQualifiers(); i != e; ++i)
           TL.setProtocolLoc(i, DS.getProtocolLocs()[i]);
       } else {
         assert(TL.getNumProtocols() == 0);
-        TL.setLAngleLoc(SourceLocation());
-        TL.setRAngleLoc(SourceLocation());
+        TL.setProtocolLAngleLoc(SourceLocation());
+        TL.setProtocolRAngleLoc(SourceLocation());
       }
     }
     void VisitObjCObjectPointerTypeLoc(ObjCObjectPointerTypeLoc TL) {

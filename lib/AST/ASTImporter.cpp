@@ -1782,6 +1782,16 @@ QualType ASTNodeImporter::VisitObjCObjectType(const ObjCObjectType *T) {
   if (ToBaseType.isNull())
     return QualType();
 
+  SmallVector<QualType, 4> TypeArgs;
+  for (auto TypeArg : T->getTypeArgs()) {
+    QualType ImportedTypeArg = Importer.Import(TypeArg);
+    if (ImportedTypeArg.isNull())
+      return QualType();
+
+    TypeArgs.push_back(ImportedTypeArg);
+  }
+
+
   SmallVector<ObjCProtocolDecl *, 4> Protocols;
   for (auto *P : T->quals()) {
     ObjCProtocolDecl *Protocol
@@ -1791,9 +1801,8 @@ QualType ASTNodeImporter::VisitObjCObjectType(const ObjCObjectType *T) {
     Protocols.push_back(Protocol);
   }
 
-  return Importer.getToContext().getObjCObjectType(ToBaseType,
-                                                   Protocols.data(),
-                                                   Protocols.size());
+  return Importer.getToContext().getObjCObjectType(ToBaseType, TypeArgs,
+                                                   Protocols);
 }
 
 QualType

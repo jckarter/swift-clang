@@ -222,7 +222,7 @@ typedef PC4<id, NSObject *, id><NSObject, NSCopying> typeArgsAndProtocolQuals1;
 typedef PC4<NSObject, NSCopying><id, NSObject *, id> typeArgsAndProtocolQuals2; // expected-error{{protocol qualifiers must precede type arguments}}
 
 // Type arguments and protocol qualifiers (identifiers).
-typedef PC4<id, NSObject, id><NSObject, NSCopying> typeArgsAndProtocolQuals2; // expected-error{{type argument 'NSObject' must be a pointer (requires a '*')}}
+typedef PC4<id, NSObject, id><NSObject, NSCopying> typeArgsAndProtocolQuals3; // expected-error{{type argument 'NSObject' must be a pointer (requires a '*')}}
 
 // Typo correction: protocol bias.
 typedef PC4<NSCopying, NSObjec> protocolQuals2; // expected-error{{cannot find protocol declaration for 'NSObjec'; did you mean 'NSObject'?}}
@@ -266,7 +266,7 @@ typedef PC15<int (^)(int, int), // block pointers as 'id'
 typedef PC15<NSObject *, NSObject *, id<NSCopying>> typeArgs8;
 
 typedef PC15<NSObject *, NSObject *,
-             NSObject *> typeArgs8; // expected-error{{type argument 'NSObject *' does not satisy the bound ('id<NSCopying>') of type parameter 'V'}}
+             NSObject *> typeArgs8b; // expected-error{{type argument 'NSObject *' does not satisy the bound ('id<NSCopying>') of type parameter 'V'}}
 
 typedef PC15<id,
              id,  // expected-error{{type argument 'id' does not satisy the bound ('NSObject *') of type parameter 'U'}}
@@ -284,3 +284,23 @@ typedef PC15<id, NSString *, int (^)(int, int)> typeArgs12; // okay
 typedef NSObject<id, id> typeArgs13; // expected-error{{type arguments cannot be applied to non-parameterized class 'NSObject'}}
 
 typedef id<id, id> typeArgs14; // expected-error{{type arguments cannot be applied to non-class type 'id'}}
+
+typedef PC1<NSObject *, NSString *> typeArgs15;
+
+typedef PC1<NSObject *, NSString *><NSCopying> typeArgsAndProtocolQuals4;
+
+typedef typeArgs15<NSCopying> typeArgsAndProtocolQuals5;
+
+typedef typeArgs15<NSObject *, NSString *> typeArgs16; // expected-error{{type arguments cannot be applied to already-specialized class type 'typeArgs15' (aka 'PC1<NSObject *,NSString *>')}}
+
+typedef typeArgs15<NSObject> typeArgsAndProtocolQuals6;
+
+void testSpecializedTypePrinting() {
+  int *ip;
+
+  ip = (typeArgs15*)0; // expected-warning{{'typeArgs15 *' (aka 'PC1<NSObject *,NSString *> *')}}
+  ip = (typeArgsAndProtocolQuals4*)0; // expected-warning{{'typeArgsAndProtocolQuals4 *' (aka 'PC1<NSObject *,NSString *><NSCopying> *')}}
+  ip = (typeArgsAndProtocolQuals5*)0; // expected-warning{{'typeArgsAndProtocolQuals5 *' (aka 'typeArgs15<NSCopying> *')}}
+  ip = (typeArgsAndProtocolQuals6)0; // expected-error{{used type 'typeArgsAndProtocolQuals6' (aka 'typeArgs15<NSObject>')}}
+  ip = (typeArgsAndProtocolQuals6*)0;// expected-warning{{'typeArgsAndProtocolQuals6 *' (aka 'typeArgs15<NSObject> *')}}
+}
