@@ -1481,6 +1481,12 @@ bool Sema::CheckMessageArgumentTypes(QualType ReceiverType,
     return false;
   }
 
+  // Compute the set of type arguments to be substituted into each parameter
+  // type.
+  SmallVector<QualType, 4> typeArgsBuffer;
+  ArrayRef<QualType> typeArgs
+    = ReceiverType->getObjCSubstitutions(Method->getDeclContext(),
+                                         typeArgsBuffer);
   bool IsError = false;
   for (unsigned i = 0; i < NumNamedArgs; i++) {
     // We can't do any type-checking on a type-dependent argument.
@@ -1514,13 +1520,14 @@ bool Sema::CheckMessageArgumentTypes(QualType ReceiverType,
       continue;
     }
 
+    QualType paramType = param->getType().substObjCTypeArgs(Context, typeArgs);
     if (RequireCompleteType(argExpr->getSourceRange().getBegin(),
-                            param->getType(),
+                            paramType,
                             diag::err_call_incomplete_argument, argExpr))
       return true;
 
-    InitializedEntity Entity = InitializedEntity::InitializeParameter(Context,
-                                                                      param);
+    InitializedEntity Entity
+      = InitializedEntity::InitializeParameter(Context, param, paramType);
     ExprResult ArgE = PerformCopyInitialization(Entity, SourceLocation(), argExpr);
     if (ArgE.isInvalid())
       IsError = true;
