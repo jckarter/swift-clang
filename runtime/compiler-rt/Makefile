@@ -85,6 +85,16 @@ RuntimeLibrary.darwin.Configs := \
 IOS_SDK := $(shell xcrun --show-sdk-path -sdk iphoneos 2> /dev/null)
 IOSSIM_SDK := $(shell xcrun --show-sdk-path -sdk iphonesimulator 2> /dev/null)
 
+LinkerSupportedArches = \
+  $(shell \
+    result=""; \
+    for arch in $1; do \
+      if $(LD) -v 2>&1 | grep "configured to support" | tr ' ' '\n' | grep "^$$arch$$" >/dev/null 2>/dev/null; then \
+        result="$$result$$arch "; \
+      fi; \
+    done; \
+    echo $$result)
+
 ifneq ($(IOS_SDK)$(IOSSIM_SDK),)
 RuntimeLibrary.darwin.Configs += ios.a profile_ios.a
 endif
@@ -98,7 +108,9 @@ RuntimeLibrary.darwin.Configs += asan_iossim_dynamic.dylib
 endif
 
 ifneq ($(IOS_SDK),)
+ifneq ($(call LinkerSupportedArches,armv7 armv7s arm64),)
 RuntimeLibrary.darwin.Configs += asan_ios_dynamic.dylib
+endif
 endif
 
 RuntimeLibrary.macho_embedded.Configs := \
