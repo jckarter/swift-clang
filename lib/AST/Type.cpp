@@ -518,6 +518,574 @@ ArrayRef<QualType> ObjCObjectType::getTypeArgs() const {
   return { };
 }
 
+namespace {
+
+/// Perform a simple type transformation that does not change the
+/// semantics of the type.
+template<typename F>
+QualType simpleTransform(ASTContext &ctx, QualType type, F &&f) {
+  struct Visitor : public TypeVisitor<Visitor, QualType> {
+    ASTContext &Ctx;
+    F &&TheFunc;
+
+    QualType recurse(QualType type) {
+      return simpleTransform(Ctx, type, std::move(TheFunc));
+    }
+
+  public:
+    Visitor(ASTContext &ctx, F &&f) : Ctx(ctx), TheFunc(std::move(f)) { }
+
+    // None of the clients of this transformation can occur where
+    // there are dependent types, so skip dependent types.
+#define TYPE(Class, Base)
+#define DEPENDENT_TYPE(Class, Base) \
+    QualType Visit##Class##Type(const Class##Type *T) { return QualType(T, 0); }
+#include "clang/AST/TypeNodes.def"
+
+#define TRIVIAL_TYPE_CLASS(Class) \
+    QualType Visit##Class##Type(const Class##Type *T) { return QualType(T, 0); }
+
+    TRIVIAL_TYPE_CLASS(Builtin)
+
+    QualType VisitComplexType(const ComplexType *T) { 
+      QualType elementType = recurse(T->getElementType());
+      if (elementType.isNull())
+        return QualType();
+
+      if (elementType.getAsOpaquePtr() == T->getElementType().getAsOpaquePtr())
+        return QualType(T, 0);
+
+      return Ctx.getComplexType(elementType);
+    }
+
+    QualType VisitPointerType(const PointerType *T) {
+      QualType pointeeType = recurse(T->getPointeeType());
+      if (pointeeType.isNull())
+        return QualType();
+
+      if (pointeeType.getAsOpaquePtr() == T->getPointeeType().getAsOpaquePtr())
+        return QualType(T, 0);
+
+      return Ctx.getPointerType(pointeeType);
+    }
+
+    QualType VisitBlockPointerType(const BlockPointerType *T) {
+      QualType pointeeType = recurse(T->getPointeeType());
+      if (pointeeType.isNull())
+        return QualType();
+
+      if (pointeeType.getAsOpaquePtr() == T->getPointeeType().getAsOpaquePtr())
+        return QualType(T, 0);
+
+      return Ctx.getBlockPointerType(pointeeType);
+    }
+
+    QualType VisitLValueReferenceType(const LValueReferenceType *T) {
+      QualType pointeeType = recurse(T->getPointeeTypeAsWritten());
+      if (pointeeType.isNull())
+        return QualType();
+
+      if (pointeeType.getAsOpaquePtr() 
+            == T->getPointeeTypeAsWritten().getAsOpaquePtr())
+        return QualType(T, 0);
+
+      return Ctx.getLValueReferenceType(pointeeType, T->isSpelledAsLValue());
+    }
+
+    QualType VisitRValueReferenceType(const RValueReferenceType *T) {
+      QualType pointeeType = recurse(T->getPointeeTypeAsWritten());
+      if (pointeeType.isNull())
+        return QualType();
+
+      if (pointeeType.getAsOpaquePtr() 
+            == T->getPointeeTypeAsWritten().getAsOpaquePtr())
+        return QualType(T, 0);
+
+      return Ctx.getRValueReferenceType(pointeeType);
+    }
+
+    QualType VisitMemberPointerType(const MemberPointerType *T) {
+      QualType pointeeType = recurse(T->getPointeeType());
+      if (pointeeType.isNull())
+        return QualType();
+
+      if (pointeeType.getAsOpaquePtr() == T->getPointeeType().getAsOpaquePtr())
+        return QualType(T, 0);
+
+      return Ctx.getMemberPointerType(pointeeType, T->getClass());      
+    }
+
+    QualType VisitConstantArrayType(const ConstantArrayType *T) {
+      QualType elementType = recurse(T->getElementType());
+      if (elementType.isNull())
+        return QualType();
+
+      if (elementType.getAsOpaquePtr() == T->getElementType().getAsOpaquePtr())
+        return QualType(T, 0);
+
+      return Ctx.getConstantArrayType(elementType, T->getSize(),
+                                      T->getSizeModifier(),
+                                      T->getIndexTypeCVRQualifiers());
+    }
+
+    QualType VisitVariableArrayType(const VariableArrayType *T) {
+      QualType elementType = recurse(T->getElementType());
+      if (elementType.isNull())
+        return QualType();
+
+      if (elementType.getAsOpaquePtr() == T->getElementType().getAsOpaquePtr())
+        return QualType(T, 0);
+
+      return Ctx.getVariableArrayType(elementType, T->getSizeExpr(),
+                                      T->getSizeModifier(),
+                                      T->getIndexTypeCVRQualifiers(),
+                                      T->getBracketsRange());
+    }
+
+    QualType VisitIncompleteArrayType(const IncompleteArrayType *T) {
+      QualType elementType = recurse(T->getElementType());
+      if (elementType.isNull())
+        return QualType();
+
+      if (elementType.getAsOpaquePtr() == T->getElementType().getAsOpaquePtr())
+        return QualType(T, 0);
+
+      return Ctx.getIncompleteArrayType(elementType, T->getSizeModifier(),
+                                        T->getIndexTypeCVRQualifiers());
+    }
+
+    QualType VisitVectorType(const VectorType *T) { 
+      QualType elementType = recurse(T->getElementType());
+      if (elementType.isNull())
+        return QualType();
+
+      if (elementType.getAsOpaquePtr() == T->getElementType().getAsOpaquePtr())
+        return QualType(T, 0);
+
+      return Ctx.getVectorType(elementType, T->getNumElements(), 
+                               T->getVectorKind());
+    }
+
+    QualType VisitExtVectorType(const ExtVectorType *T) { 
+      QualType elementType = recurse(T->getElementType());
+      if (elementType.isNull())
+        return QualType();
+
+      if (elementType.getAsOpaquePtr() == T->getElementType().getAsOpaquePtr())
+        return QualType(T, 0);
+
+      return Ctx.getExtVectorType(elementType, T->getNumElements());
+    }
+
+    QualType VisitFunctionNoProtoType(const FunctionNoProtoType *T) { 
+      QualType returnType = recurse(T->getReturnType());
+      if (returnType.isNull())
+        return QualType();
+
+      if (returnType.getAsOpaquePtr() == T->getReturnType().getAsOpaquePtr())
+        return QualType(T, 0);
+
+      return Ctx.getFunctionNoProtoType(returnType, T->getExtInfo());
+    }
+
+    QualType VisitFunctionProtoType(const FunctionProtoType *T) { 
+      QualType returnType = recurse(T->getReturnType());
+      if (returnType.isNull())
+        return QualType();
+
+      // Transform parameter types.
+      SmallVector<QualType, 4> paramTypes;
+      bool paramChanged = false;
+      for (auto paramType : T->getParamTypes()) {
+        QualType newParamType = recurse(paramType);
+        if (newParamType.isNull())
+          return QualType();
+
+        if (newParamType.getAsOpaquePtr() != paramType.getAsOpaquePtr())
+          paramChanged = true;
+
+        paramTypes.push_back(newParamType);
+      }
+
+      // Transform extended info.
+      FunctionProtoType::ExtProtoInfo info = T->getExtProtoInfo();
+      bool exceptionChanged = false;
+      if (info.ExceptionSpec.Type == EST_Dynamic) {
+        SmallVector<QualType, 4> exceptionTypes;
+        for (auto exceptionType : info.ExceptionSpec.Exceptions) {
+          QualType newExceptionType = recurse(exceptionType);
+          if (newExceptionType.isNull())
+            return QualType();
+          
+          if (newExceptionType.getAsOpaquePtr() 
+                != exceptionType.getAsOpaquePtr())
+            exceptionChanged = true;
+
+          exceptionTypes.push_back(newExceptionType);
+        }
+
+        if (exceptionChanged) {
+          unsigned size = sizeof(QualType) * exceptionTypes.size();
+          void *mem = Ctx.Allocate(size, llvm::alignOf<QualType>());
+          memcpy(mem, exceptionTypes.data(), size);
+          info.ExceptionSpec.Exceptions
+            = llvm::makeArrayRef((QualType *)mem, exceptionTypes.size());
+        }
+      }
+
+      if (returnType.getAsOpaquePtr() == T->getReturnType().getAsOpaquePtr() &&
+          !paramChanged && !exceptionChanged)
+        return QualType(T, 0);
+
+      return Ctx.getFunctionType(returnType, paramTypes, info);
+    }
+
+    QualType VisitParenType(const ParenType *T) { 
+      QualType innerType = recurse(T->getInnerType());
+      if (innerType.isNull())
+        return QualType();
+
+      if (innerType.getAsOpaquePtr() == T->getInnerType().getAsOpaquePtr())
+        return QualType(T, 0);
+
+      return Ctx.getParenType(innerType);
+    }
+
+    TRIVIAL_TYPE_CLASS(Typedef)
+
+    QualType VisitAdjustedType(const AdjustedType *T) { 
+      QualType originalType = recurse(T->getOriginalType());
+      if (originalType.isNull())
+        return QualType();
+
+      QualType adjustedType = recurse(T->getAdjustedType());
+      if (adjustedType.isNull())
+        return QualType();
+
+      if (originalType.getAsOpaquePtr() 
+            == T->getOriginalType().getAsOpaquePtr() &&
+          adjustedType.getAsOpaquePtr() == T->getAdjustedType().getAsOpaquePtr())
+        return QualType(T, 0);
+
+      return Ctx.getAdjustedType(originalType, adjustedType);
+    }
+    
+    QualType VisitDecayedType(const DecayedType *T) { 
+      QualType originalType = recurse(T->getOriginalType());
+      if (originalType.isNull())
+        return QualType();
+
+      if (originalType.getAsOpaquePtr() 
+            == T->getOriginalType().getAsOpaquePtr())
+        return QualType(T, 0);
+
+      return Ctx.getDecayedType(originalType);
+    }
+
+    TRIVIAL_TYPE_CLASS(TypeOfExpr)
+    TRIVIAL_TYPE_CLASS(TypeOf)
+    TRIVIAL_TYPE_CLASS(Decltype)
+    TRIVIAL_TYPE_CLASS(UnaryTransform)
+    TRIVIAL_TYPE_CLASS(Record)
+    TRIVIAL_TYPE_CLASS(Enum)
+
+    // FIXME: Non-trivial to implement, but important for C++
+    TRIVIAL_TYPE_CLASS(Elaborated)
+
+    QualType VisitAttributedType(const AttributedType *T) { 
+      QualType modifiedType = recurse(T->getModifiedType());
+      if (modifiedType.isNull())
+        return QualType();
+
+      QualType equivalentType = recurse(T->getEquivalentType());
+      if (equivalentType.isNull())
+        return QualType();
+
+      if (modifiedType.getAsOpaquePtr() 
+            == T->getModifiedType().getAsOpaquePtr() &&
+          equivalentType.getAsOpaquePtr() 
+            == T->getEquivalentType().getAsOpaquePtr())
+        return QualType(T, 0);
+
+      return Ctx.getAttributedType(T->getAttrKind(), modifiedType, 
+                                   equivalentType);
+    }
+
+    QualType VisitSubstTemplateTypeParmType(const SubstTemplateTypeParmType *T) {
+      QualType replacementType = recurse(T->getReplacementType());
+      if (replacementType.isNull())
+        return QualType();
+
+      if (replacementType.getAsOpaquePtr() 
+            == T->getReplacementType().getAsOpaquePtr())
+        return QualType(T, 0);
+
+      return Ctx.getSubstTemplateTypeParmType(T->getReplacedParameter(),
+                                              replacementType);
+    }
+
+    // FIXME: Non-trivial to implement, but important for C++
+    TRIVIAL_TYPE_CLASS(TemplateSpecialization)
+
+    QualType VisitAutoType(const AutoType *T) {
+      if (!T->isDeduced())
+        return QualType(T, 0);
+
+      QualType deducedType = recurse(T->getDeducedType());
+      if (deducedType.isNull())
+        return QualType();
+
+      if (deducedType.getAsOpaquePtr() 
+            == T->getDeducedType().getAsOpaquePtr())
+        return QualType(T, 0);
+
+      return Ctx.getAutoType(deducedType, T->isDecltypeAuto(),
+                             T->isDependentType());
+    }
+
+    // FIXME: Non-trivial to implement, but important for C++
+    TRIVIAL_TYPE_CLASS(PackExpansion)
+
+    QualType VisitObjCObjectType(const ObjCObjectType *T) {
+      QualType baseType = recurse(T->getBaseType());
+      if (baseType.isNull())
+        return QualType();
+
+      // Transform type arguments.
+      bool typeArgChanged = false;
+      SmallVector<QualType, 4> typeArgs;
+      for (auto typeArg : T->getTypeArgsAsWritten()) {
+        QualType newTypeArg = recurse(typeArg);
+        if (newTypeArg.isNull())
+          return QualType();
+
+        if (newTypeArg.getAsOpaquePtr() != typeArg.getAsOpaquePtr())
+          typeArgChanged = true;
+
+        typeArgs.push_back(newTypeArg);
+      }
+
+      if (baseType.getAsOpaquePtr() == T->getBaseType().getAsOpaquePtr() &&
+          !typeArgChanged)
+        return QualType(T, 0);
+
+      return Ctx.getObjCObjectType(baseType, typeArgs, 
+                                   llvm::makeArrayRef(T->qual_begin(),
+                                                      T->getNumProtocols()));
+    }
+
+    TRIVIAL_TYPE_CLASS(ObjCInterface)
+
+    QualType VisitObjCObjectPointerType(const ObjCObjectPointerType *T) {
+      QualType pointeeType = recurse(T->getPointeeType());
+      if (pointeeType.isNull())
+        return QualType();
+
+      if (pointeeType.getAsOpaquePtr() 
+            == T->getPointeeType().getAsOpaquePtr())
+        return QualType(T, 0);
+
+      return Ctx.getObjCObjectPointerType(pointeeType);
+    }
+
+    QualType VisitAtomicType(const AtomicType *T) {
+      QualType valueType = recurse(T->getValueType());
+      if (valueType.isNull())
+        return QualType();
+
+      if (valueType.getAsOpaquePtr() 
+            == T->getValueType().getAsOpaquePtr())
+        return QualType(T, 0);
+
+      return Ctx.getAtomicType(valueType);
+    }
+
+#undef TRIVIAL_TYPE_CLASS
+  };
+
+  // Transform the type. If it changed, return the transformed result.
+  QualType transformed = f(type);
+  if (transformed.getAsOpaquePtr() != type.getAsOpaquePtr())
+    return transformed;
+
+  // Split out the qualifiers from the type.
+  SplitQualType splitType = type.split();
+
+  // Visit the type itself.
+  Visitor visitor(ctx, std::move(f));
+  QualType result = visitor.Visit(splitType.Ty);
+  if (result.isNull())
+    return result;
+
+  // Reconstruct the transformed type by applying the local qualifiers
+  // from the split type.
+  return ctx.getQualifiedType(result, splitType.Quals);
+}
+
+} // end anonymous namespace
+
+/// Substitute the given type arguments for Objective-C type
+/// parameters within the given type, recursively.
+static QualType substObjCTypeArgs(ASTContext &ctx, QualType type,
+                                  ArrayRef<QualType> typeArgs) {
+  return simpleTransform(ctx, type,
+                         [&](QualType type) -> QualType {
+    SplitQualType splitType = type.split();
+
+    if (const auto *typedefTy = dyn_cast<TypedefType>(splitType.Ty)) {
+      if (auto *typeParam = dyn_cast<ObjCTypeParamDecl>(typedefTy->getDecl())) {
+        // FIXME: Introduce SubstObjCTypeParamType ?
+        QualType argType = typeArgs[typeParam->getIndex()];
+        return ctx.getQualifiedType(argType, splitType.Quals);
+      }
+    }
+    return type;
+  });
+}
+
+QualType ObjCObjectType::substTypeInContext(QualType type, 
+                                            const DeclContext *dc) const {
+  // Look through method scopes.
+  if (auto method = dyn_cast<ObjCMethodDecl>(dc))
+    dc = method->getDeclContext();
+
+  // Find the class or category in which the type we're substituting
+  // was declared.
+  const ObjCInterfaceDecl *dcClassDecl = dyn_cast<ObjCInterfaceDecl>(dc);
+  const ObjCCategoryDecl *dcCategoryDecl = nullptr;
+  ObjCTypeParamList *dcTypeParams = nullptr;
+  if (dcClassDecl) {
+    // If the class does not have any type parameters, there's no
+    // substitution to do.
+    dcTypeParams = dcClassDecl->getTypeParamList();
+    if (!dcTypeParams)
+      return type;
+  } else {
+    // If we are in neither a class mor a category, there's no
+    // substitution to perform.
+    dcCategoryDecl = dyn_cast<ObjCCategoryDecl>(dc);
+    if (!dcCategoryDecl)
+      return type;
+
+    // If the category does not have any type parameters, there's no
+    // substitution to do.
+    dcTypeParams = dcCategoryDecl->getTypeParamList();
+    if (!dcTypeParams)
+      return type;
+
+    dcClassDecl = dcCategoryDecl->getClassInterface();
+    if (!dcClassDecl)
+      return type;
+  }
+  assert(dcTypeParams && "No substitutions to perform");
+  assert(dcClassDecl && "No class context");
+
+  /// Extract the class on which the context type is based.
+  ObjCInterfaceDecl *curClassDecl = getInterface();
+  if (!curClassDecl) {
+    // If we don't have a context type (e.g., this is "id" or some
+    // variant thereof), substitute the default type arguments.
+    SmallVector<QualType, 4> typeArgs;
+    dcTypeParams->gatherDefaultTypeArgs(typeArgs);
+    return substObjCTypeArgs(dcClassDecl->getASTContext(), type, typeArgs);
+  }
+
+  // Follow the superclass chain until we've mapped the context type
+  // to the same class as the context.
+  const ObjCObjectType *contextType = this;
+  while (curClassDecl != dcClassDecl) {
+    // Map to the superclass type.
+    QualType superType = contextType->getSuperClassType();
+    if (superType.isNull()) {
+      contextType = nullptr;
+      break;
+    }
+
+    contextType = superType->castAs<ObjCObjectType>();
+    curClassDecl = contextType->getInterface();
+  }
+
+  // If we don't have a context type, or the context type does not
+  // have type arguments, substitute in the defaults.
+  if (!contextType || contextType->isUnspecialized()) {
+    SmallVector<QualType, 4> typeArgs;
+    dcTypeParams->gatherDefaultTypeArgs(typeArgs);
+    return substObjCTypeArgs(dcClassDecl->getASTContext(), type, typeArgs);
+  }
+
+  // Substitute the type arguments.
+  ArrayRef<QualType> typeArgs = contextType->getTypeArgs();
+  assert(typeArgs.size() == dcTypeParams->size() &&
+         "Parameter/argument mismatch");
+  return substObjCTypeArgs(dcClassDecl->getASTContext(), type, typeArgs);
+}
+
+QualType ObjCObjectType::getSuperClassType() const {
+  // Retrieve the class declaration for this type. If there isn't one
+  // (e.g., this is some variant of "id" or "Class"), then there is no
+  // superclass type.
+  ObjCInterfaceDecl *classDecl = getInterface();
+  if (!classDecl)
+    return QualType();
+  
+  // Extract the superclass type.
+  const ObjCObjectType *superClassObjTy = classDecl->getSuperClassType();
+  if (!superClassObjTy)
+    return QualType();
+
+  ObjCInterfaceDecl *superClassDecl = superClassObjTy->getInterface();
+  if (!superClassDecl)
+    return QualType();
+
+  // If the superclass doesn't have type parameters, then there is no
+  // substitution to perform.
+  QualType superClassType(superClassObjTy, 0);
+  ObjCTypeParamList *superClassTypeParams = superClassDecl->getTypeParamList();
+  if (!superClassTypeParams)
+    return superClassType;
+
+  // If the superclass reference is unspecialized, substitute the
+  // defaults.
+  if (superClassObjTy->isUnspecialized()) {
+    SmallVector<QualType, 4> typeArgs;
+    superClassTypeParams->gatherDefaultTypeArgs(typeArgs);
+    return substObjCTypeArgs(classDecl->getASTContext(), superClassType, 
+                             typeArgs);
+  }
+
+  // If the subclass is not parameterized, there aren't any type
+  // parameters in the superclass reference to substitute.
+  ObjCTypeParamList *typeParams = classDecl->getTypeParamList();
+  if (!typeParams)
+    return superClassType;
+  
+  // If the subclass type isn't specialized, substitute the defaults.
+  if (isUnspecialized()) {
+    SmallVector<QualType, 4> typeArgs;
+    typeParams->gatherDefaultTypeArgs(typeArgs);
+    return substObjCTypeArgs(classDecl->getASTContext(), superClassType, 
+                             typeArgs);
+  }
+
+  // Substitute the provided type arguments into the superclass type.
+  ArrayRef<QualType> typeArgs = getTypeArgs();
+  assert(typeArgs.size() == typeParams->size());
+  return substObjCTypeArgs(classDecl->getASTContext(), superClassType, typeArgs);
+}
+
+QualType ObjCObjectPointerType::substTypeInContext(QualType type, 
+                                                   const DeclContext *dc) const {
+  return getObjectType()->substTypeInContext(type, dc);
+}
+
+QualType ObjCObjectPointerType::getSuperClassType() const {
+  QualType superObjectType = getObjectType()->getSuperClassType();
+  if (superObjectType.isNull())
+    return superObjectType;
+
+  ASTContext &ctx = getInterfaceDecl()->getASTContext();
+  return ctx.getObjCObjectPointerType(superObjectType);
+}
 
 const ObjCObjectType *Type::getAsObjCQualifiedInterfaceType() const {
   // There is no sugar for ObjCObjectType's, just return the canonical

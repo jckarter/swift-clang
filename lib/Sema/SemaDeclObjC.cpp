@@ -597,7 +597,8 @@ ActOnSuperClassOfClassInterface(Scope *S,
   }
 }
 
-DeclResult Sema::actOnObjCTypeParam(Scope *S, IdentifierInfo *paramName,
+DeclResult Sema::actOnObjCTypeParam(Scope *S, unsigned index,
+                                    IdentifierInfo *paramName,
                                     SourceLocation paramLoc,
                                     SourceLocation colonLoc,
                                     ParsedType parsedTypeBound) {
@@ -650,8 +651,8 @@ DeclResult Sema::actOnObjCTypeParam(Scope *S, IdentifierInfo *paramName,
   }
 
   // Create the type parameter.
-  return ObjCTypeParamDecl::Create(Context, CurContext, paramLoc, paramName,
-                                   colonLoc, typeBoundInfo);
+  return ObjCTypeParamDecl::Create(Context, CurContext, index, paramLoc, 
+                                   paramName, colonLoc, typeBoundInfo);
 }
 
 ObjCTypeParamList *Sema::actOnObjCTypeParamList(Scope *S,
@@ -865,6 +866,7 @@ ActOnStartClassInterface(Scope *S, SourceLocation AtInterfaceLoc,
             ObjCTypeParamDecl::Create(
               Context,
               CurContext,
+              typeParam->getIndex(),
               SourceLocation(),
               typeParam->getIdentifier(),
               SourceLocation(),

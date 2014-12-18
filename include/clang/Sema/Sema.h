@@ -7041,7 +7041,8 @@ public:
   };
   ObjCContainerKind getObjCContainerKind() const;
 
-  DeclResult actOnObjCTypeParam(Scope *S, IdentifierInfo *paramName,
+  DeclResult actOnObjCTypeParam(Scope *S, unsigned index,
+                                IdentifierInfo *paramName,
                                 SourceLocation paramLoc,
                                 SourceLocation colonLoc,
                                 ParsedType typeBound);

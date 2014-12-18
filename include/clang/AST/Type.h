@@ -4511,6 +4511,35 @@ public:
     return qual_begin()[I];
   }
 
+  /// Substitute the type arguments into the given type, which was
+  /// declared within the provided declaration context.
+  ///
+  /// Given this code:
+  ///
+  /// \code
+  /// \@interface NSFoo<T>
+  /// +(T)method;
+  /// \@end
+  /// 
+  /// NSArray *x = [NSFoo<NSString *> method]; 
+  ///   // warning that NSString* can't be converted to NSArray*
+  /// \endcode
+  ///
+  /// When computing the result type of the message send, semantic
+  /// analysis will substitute the type arguments of this object type
+  /// (\c T=NSString*) into the result type of the method (\c T) which
+  /// comes from the \c \@interface declaration context to produce the
+  /// effective result type (\c NSString*).
+  QualType substTypeInContext(QualType type, const DeclContext *dc) const;
+
+  /// Retrieve the type of the superclass of this object type.
+  ///
+  /// This operation substitutes any type arguments into the
+  /// superclass of the current class type, potentially producing a
+  /// specialization of the superclass type. Produces a null type if
+  /// there is no superclass.
+  QualType getSuperClassType() const;
+
   bool isSugared() const { return false; }
   QualType desugar() const { return QualType(this, 0); }
 
@@ -4757,6 +4786,36 @@ public:
 
   bool isSugared() const { return false; }
   QualType desugar() const { return QualType(this, 0); }
+
+  /// Substitute the type arguments into the given type, which was
+  /// declared within the provided declaration context.
+  ///
+  /// Given this code:
+  ///
+  /// \code
+  /// \@interface NSFoo<T>
+  /// -(T)method;
+  /// \@end
+  /// 
+  /// NSFoo<NSString *> foo;
+  /// NSArray *x = [foo method]; 
+  ///   // warning that NSString* can't be converted to NSArray*
+  /// \endcode
+  ///
+  /// When computing the result type of the message send, semantic
+  /// analysis will substitute the type arguments of this object
+  /// pointer type (\c T=NSString*) into the result type of the method
+  /// (\c T) which comes from the \c \@interface declaration context
+  /// to produce the effective result type (\c NSString*).
+  QualType substTypeInContext(QualType type, const DeclContext *dc) const;
+
+  /// Retrieve the type of the superclass of this object pointer type.
+  ///
+  /// This operation substitutes any type arguments into the
+  /// superclass of the current class type, potentially producing a
+  /// pointer to a specialization of the superclass type. Produces a
+  /// null type if there is no superclass.
+  QualType getSuperClassType() const;
 
   void Profile(llvm::FoldingSetNodeID &ID) {
     Profile(ID, getPointeeType());

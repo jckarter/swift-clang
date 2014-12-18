@@ -1018,6 +1018,28 @@ SourceRange ObjCMethodDecl::getReturnTypeSourceRange() const {
   return SourceRange();
 }
 
+QualType ObjCMethodDecl::getSendResultType(QualType receiverType) const {
+  // FIXME: Handle related result types here.
+
+  QualType declaredResultType 
+    = getReturnType().getNonLValueExprType(getASTContext());
+  if (const auto *objcObjectTy = receiverType->getAs<ObjCObjectType>()) {
+    return objcObjectTy->substTypeInContext(declaredResultType, 
+                                            getDeclContext());
+  }
+
+  if (const auto *objcObjectPointerTy
+        = receiverType->getAs<ObjCObjectPointerType>()) {
+    return objcObjectPointerTy->substTypeInContext(declaredResultType, 
+                                                   getDeclContext());
+  }
+
+  ASTContext &ctx = getASTContext();
+  return ctx.getObjCIdType()->castAs<ObjCObjectPointerType>()
+           ->substTypeInContext(declaredResultType, 
+                                getDeclContext());
+}
+
 static void CollectOverriddenMethodsRecurse(const ObjCContainerDecl *Container,
                                             const ObjCMethodDecl *Method,
                                SmallVectorImpl<const ObjCMethodDecl *> &Methods,
@@ -1195,17 +1217,18 @@ ObjCMethodDecl::findPropertyDecl(bool CheckOverrides) const {
 void ObjCTypeParamDecl::anchor() { }
 
 ObjCTypeParamDecl *ObjCTypeParamDecl::Create(ASTContext &ctx, DeclContext *dc,
+                                             unsigned index,
                                              SourceLocation nameLoc,
                                              IdentifierInfo *name,
                                              SourceLocation colonLoc,
                                              TypeSourceInfo *boundInfo) {
-  return new (ctx, dc) ObjCTypeParamDecl(ctx, dc, nameLoc, name, colonLoc,
+  return new (ctx, dc) ObjCTypeParamDecl(ctx, dc, index, nameLoc, name, colonLoc,
                                          boundInfo);
 }
 
 ObjCTypeParamDecl *ObjCTypeParamDecl::CreateDeserialized(ASTContext &ctx,
                                                          unsigned ID) {
-  return new (ctx, ID) ObjCTypeParamDecl(ctx, nullptr, SourceLocation(),
+  return new (ctx, ID) ObjCTypeParamDecl(ctx, nullptr, 0, SourceLocation(),
                                          nullptr, SourceLocation(), nullptr);
 }
 
@@ -1241,6 +1264,13 @@ ObjCTypeParamList *ObjCTypeParamList::create(
                             llvm::alignOf<ObjCTypeParamDecl*>());
   void *mem = ctx.Allocate(size, align);
   return new (mem) ObjCTypeParamList(lAngleLoc, typeParams, rAngleLoc);
+}
+
+void ObjCTypeParamList::gatherDefaultTypeArgs(
+       SmallVectorImpl<QualType> &typeArgs) const {
+  typeArgs.reserve(size());
+  for (auto typeParam : *this)
+    typeArgs.push_back(typeParam->getUnderlyingType());
 }
 
 //===----------------------------------------------------------------------===//

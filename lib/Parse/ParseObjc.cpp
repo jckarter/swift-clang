@@ -436,8 +436,10 @@ ObjCTypeParamList *Parser::parseObjCTypeParamListOrProtocolRefs(
   // type parameters.
   SmallVector<Decl *, 4> typeParams;
   auto makeProtocolIdentsIntoTypeParameters = [&]() {
+    unsigned index = 0;
     for (const auto &pair : protocolIdents) {
       DeclResult typeParam = Actions.actOnObjCTypeParam(getCurScope(),
+                                                        index++,
                                                         pair.first,
                                                         pair.second,
                                                         SourceLocation(),
@@ -500,6 +502,7 @@ ObjCTypeParamList *Parser::parseObjCTypeParamListOrProtocolRefs(
 
     // Create the type parameter.
     DeclResult typeParam = Actions.actOnObjCTypeParam(getCurScope(),
+                                                      typeParams.size(),
                                                       paramName,
                                                       paramLoc,
                                                       colonLoc,

@@ -1171,7 +1171,7 @@ static QualType getBaseMessageSendResultType(Sema &S,
                                              bool isSuperMessage) {
   assert(Method && "Must have a method");
   if (!Method->hasRelatedResultType())
-    return Method->getSendResultType();
+    return Method->getSendResultType(ReceiverType);
 
   ASTContext &Context = S.Context;
 
@@ -1179,7 +1179,8 @@ static QualType getBaseMessageSendResultType(Sema &S,
   // result type to the returned result.
   auto transferNullability = [&](QualType type) -> QualType {
     // If the method's result type has nullability, extract it.
-    if (auto nullability = Method->getSendResultType()->getNullability(Context)){
+    if (auto nullability = Method->getSendResultType(ReceiverType)
+                             ->getNullability(Context)){
       // Strip off any outer nullability sugar from the provided type.
       (void)AttributedType::stripOuterNullability(type);
 
@@ -1198,7 +1199,8 @@ static QualType getBaseMessageSendResultType(Sema &S,
   //     was a class message send, T is the declared return type of the method
   //     found
   if (Method->isInstanceMethod() && isClassMessage)
-    return stripObjCInstanceType(Context, Method->getSendResultType());
+    return stripObjCInstanceType(Context, 
+                                 Method->getSendResultType(ReceiverType));
 
   //   - if the receiver is super, T is a pointer to the class of the
   //     enclosing method definition
@@ -1219,7 +1221,8 @@ static QualType getBaseMessageSendResultType(Sema &S,
   //     T is the declared return type of the method.
   if (ReceiverType->isObjCClassType() ||
       ReceiverType->isObjCQualifiedClassType())
-    return stripObjCInstanceType(Context, Method->getSendResultType());
+    return stripObjCInstanceType(Context, 
+                                 Method->getSendResultType(ReceiverType));
 
   //   - if the receiver is id, qualified id, Class, or qualified Class, T
   //     is the receiver type, otherwise

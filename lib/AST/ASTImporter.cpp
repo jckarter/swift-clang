@@ -3336,6 +3336,7 @@ Decl *ASTNodeImporter::VisitObjCTypeParamDecl(ObjCTypeParamDecl *D) {
 
   ObjCTypeParamDecl *Result = ObjCTypeParamDecl::Create(
                                 Importer.getToContext(), DC,
+                                D->getIndex(),
                                 Importer.Import(D->getLocation()),
                                 Name.getAsIdentifierInfo(),
                                 Importer.Import(D->getColonLoc()),
