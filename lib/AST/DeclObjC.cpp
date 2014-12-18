@@ -1021,23 +1021,8 @@ SourceRange ObjCMethodDecl::getReturnTypeSourceRange() const {
 QualType ObjCMethodDecl::getSendResultType(QualType receiverType) const {
   // FIXME: Handle related result types here.
 
-  QualType declaredResultType 
-    = getReturnType().getNonLValueExprType(getASTContext());
-  if (const auto *objcObjectTy = receiverType->getAs<ObjCObjectType>()) {
-    return objcObjectTy->substTypeInContext(declaredResultType, 
-                                            getDeclContext());
-  }
-
-  if (const auto *objcObjectPointerTy
-        = receiverType->getAs<ObjCObjectPointerType>()) {
-    return objcObjectPointerTy->substTypeInContext(declaredResultType, 
-                                                   getDeclContext());
-  }
-
-  ASTContext &ctx = getASTContext();
-  return ctx.getObjCIdType()->castAs<ObjCObjectPointerType>()
-           ->substTypeInContext(declaredResultType, 
-                                getDeclContext());
+  return getReturnType().getNonLValueExprType(getASTContext())
+           .substObjCMemberType(receiverType, getDeclContext());
 }
 
 static void CollectOverriddenMethodsRecurse(const ObjCContainerDecl *Container,
