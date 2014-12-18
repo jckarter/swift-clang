@@ -114,3 +114,20 @@ void test_property_read(
   ip = mutSet.allObjects; // expected-warning{{from 'NSArray<id<NSCopying>> *'}}
   ip = mutArraySet.allObjects; // expected-warning{{from 'NSArray<NSArray<id> *> *'}}
 }
+
+void test_property_write(
+       NSMutableSet<NSString *> *mutStringSet,
+       WidgetSet *widgetSet,
+       UntypedMutableSet *untypedMutSet,
+       MutableSetOfArrays<NSString *> *mutStringArraySet,
+       NSMutableSet *mutSet,
+       MutableSetOfArrays *mutArraySet) {
+  int *ip;
+
+  mutStringSet.allObjects = ip; // expected-warning{{to 'NSArray<NSString *> *'}}
+  widgetSet.allObjects = ip; // expected-warning{{to 'NSArray<Widget *> *'}}
+  untypedMutSet.allObjects = ip; // expected-warning{{to 'NSArray<id<NSCopying>> *'}}
+  mutStringArraySet.allObjects = ip; // expected-warning{{to 'NSArray<NSArray<NSString *> *> *'}}
+  mutSet.allObjects = ip; // expected-warning{{to 'NSArray<id<NSCopying>> *'}}
+  mutArraySet.allObjects = ip; // expected-warning{{to 'NSArray<NSArray<id> *> *'}}
+}

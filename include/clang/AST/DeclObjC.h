@@ -2467,7 +2467,11 @@ public:
 
   QualType getType() const { return DeclType; }
 
-  void setType(QualType T, TypeSourceInfo *TSI) { 
+  /// Retrieve the type when this property is used with a specific base object
+  // type
+  QualType getUsageType(QualType objectType) const;
+
+  void setType(QualType T, TypeSourceInfo *TSI) {
     DeclType = T;
     DeclTypeSourceInfo = TSI; 
   }

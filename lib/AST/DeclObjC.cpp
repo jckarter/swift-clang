@@ -2026,6 +2026,10 @@ ObjCPropertyDecl *ObjCPropertyDecl::CreateDeserialized(ASTContext &C,
                                       QualType(), nullptr, None);
 }
 
+QualType ObjCPropertyDecl::getUsageType(QualType objectType) const {
+  return DeclType.substObjCMemberType(objectType, getDeclContext());
+}
+
 //===----------------------------------------------------------------------===//
 // ObjCPropertyImplDecl
 //===----------------------------------------------------------------------===//
