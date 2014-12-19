@@ -15,16 +15,23 @@ __attribute__((objc_root_class))
 @interface NSString : NSObject <NSCopying>
 @end
 
+@interface NSNumber : NSObject <NSCopying>
+@end
+
 @interface NSArray<T> : NSObject <NSCopying> {
 @public
   T *data; // don't try this at home
 }
 - (T)objectAtIndexedSubscript:(int)index;
 + (NSArray<T> *)array;
+@property (copy,nonatomic) T lastObject;
 @end
 
 @interface NSMutableArray<T> : NSArray<T>
 - (void)setObject:(T)object atIndexedSubscript:(int)index; // expected-note 2{{passing argument to parameter 'object' here}}
+@end
+
+@interface NSStringArray : NSArray<NSString *>
 @end
 
 @interface NSSet<T : id<NSCopying>> : NSObject <NSCopying>
@@ -224,5 +231,77 @@ void test_instance_variable(NSArray<NSString *> *stringArray,
   int *ip;
 
   ip = data; // expected-warning{{from 'Window **'}}
+}
+@end
+
+// --------------------------------------------------------------------------
+// Implicit conversions.
+// --------------------------------------------------------------------------
+void test_implicit_conversions(NSArray<NSString *> *stringArray,
+                               NSArray<NSNumber *> *numberArray,
+                               NSMutableArray<NSString *> *mutStringArray,
+                               NSArray *array,
+                               NSMutableArray *mutArray) {
+  // Specialized -> unspecialized (same level)
+  array = stringArray;
+
+  // Unspecialized -> specialized (same level)
+  stringArray = array;
+
+  // Specialized -> specialized failure (same level).
+  stringArray = numberArray; // expected-warning{{incompatible pointer types assigning to 'NSArray<NSString *> *' from 'NSArray<NSNumber *> *'}}
+
+  // Specialized -> specialized (different levels).
+  stringArray = mutStringArray;
+
+  // Specialized -> specialized failure (different levels).
+  numberArray = mutStringArray; // expected-warning{{incompatible pointer types assigning to 'NSArray<NSNumber *> *' from 'NSMutableArray<NSString *> *'}}
+
+  // Unspecialized -> specialized (different levels).
+  stringArray = mutArray; // FIXME: expected-warning{{'NSArray<NSString *> *' from 'NSMutableArray *'}}
+
+  // Specialized -> unspecialized (different levels).
+  array = mutStringArray;
+}
+
+// --------------------------------------------------------------------------
+// Ternary operator
+// --------------------------------------------------------------------------
+void test_ternary_operator(NSArray<NSString *> *stringArray,
+                           NSArray<NSNumber *> *numberArray,
+                           NSMutableArray<NSString *> *mutStringArray,
+                           NSStringArray *stringArray2,
+                           NSArray *array,
+                           NSMutableArray *mutArray,
+                           int cond) {
+  int *ip;
+  id object;
+
+  ip = cond ? stringArray : mutStringArray; // expected-warning{{from 'NSArray<NSString *> *'}}
+  ip = cond ? mutStringArray : stringArray; // expected-warning{{from 'NSArray<NSString *> *'}}
+
+  ip = cond ? stringArray2 : mutStringArray; // expected-warning{{from 'NSArray<NSString *><NSCopying> *'}}
+  ip = cond ? mutStringArray : stringArray2; // expected-warning{{from 'NSArray<NSString *><NSCopying> *'}}
+
+  ip = cond ? stringArray : mutArray; // FIXME: expected-warning{{from 'NSObject<NSCopying> *'}}
+
+  object = cond ? stringArray : numberArray; // expected-warning{{incompatible operand types ('NSArray<NSString *> *' and 'NSArray<NSNumber *> *')}}
+}
+
+// --------------------------------------------------------------------------
+// super
+// --------------------------------------------------------------------------
+@implementation NSStringArray
+- (void)useSuperMethod {
+  int *ip;
+  ip = super.lastObject; // expected-warning{{from 'NSString *'}}
+  ip = [super objectAtIndexedSubscript:0]; // expected-warning{{from 'NSString *'}}
+}
+
++ (void)useSuperMethod {
+  int *ip;
+  ip = super.array; // FIXME: should have stronger type info. 
+  // expected-warning@-1{{from 'NSArray<id> *'}}
+  ip = [super array]; // expected-warning{{from 'NSArray<NSString *> *'}}
 }
 @end
