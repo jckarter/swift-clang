@@ -219,6 +219,7 @@ void Parser::ParseCXXNonStaticMemberInitializer(Decl *VarD) {
   Eof.startToken();
   Eof.setKind(tok::eof);
   Eof.setLocation(Tok.getLocation());
+  Eof.setEofData(VarD);
   Toks.push_back(Eof);
 }
 
@@ -623,7 +624,9 @@ void Parser::ParseLexedMemberInitializer(LateParsedMemberInitializer &MI) {
     while (Tok.isNot(tok::eof))
       ConsumeAnyToken();
   }
-  ConsumeAnyToken();
+  // Make sure this is *our* artificial EOF token.
+  if (Tok.getEofData() == MI.Field)
+    ConsumeAnyToken();
 }
 
 /// ConsumeAndStoreUntil - Consume and store the token at the passed token
