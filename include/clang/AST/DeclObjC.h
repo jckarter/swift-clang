@@ -1634,6 +1634,10 @@ public:
   void setSynthesize(bool synth) { Synthesized = synth; }
   bool getSynthesize() const { return Synthesized; }
 
+  /// Retrieve the type of this instance variable when viewed as a member of a
+  /// specific object type.
+  QualType getUsageType(QualType objectType) const;
+
   // Implement isa/cast/dyncast/etc.
   static bool classof(const Decl *D) { return classofKind(D->getKind()); }
   static bool classofKind(Kind K) { return K == ObjCIvar; }
@@ -2468,7 +2472,7 @@ public:
   QualType getType() const { return DeclType; }
 
   /// Retrieve the type when this property is used with a specific base object
-  // type
+  /// type.
   QualType getUsageType(QualType objectType) const;
 
   void setType(QualType T, TypeSourceInfo *TSI) {

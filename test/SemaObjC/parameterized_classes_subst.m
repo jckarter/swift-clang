@@ -15,7 +15,10 @@ __attribute__((objc_root_class))
 @interface NSString : NSObject <NSCopying>
 @end
 
-@interface NSArray<T> : NSObject <NSCopying>
+@interface NSArray<T> : NSObject <NSCopying> {
+@public
+  T *data; // don't try this at home
+}
 - (T)objectAtIndexedSubscript:(int)index;
 @end
 
@@ -63,6 +66,9 @@ __attribute__((objc_root_class))
 // expected-note@-2 {{parameter 'object' here}}
 // expected-note@-3 {{parameter 'key' here}}
 // expected-note@-4 {{parameter 'key' here}}
+@end
+
+@interface WindowArray : NSArray<Window *>
 @end
 
 // --------------------------------------------------------------------------
@@ -192,3 +198,22 @@ void test_subscripting(
   widget = mutDict[window]; // FIXME: expected-warning{{parameter of incompatible type 'id<NSCopying>'}}
   mutDict[window] = widget; // expected-warning{{parameter of incompatible type 'id<NSCopying>'}}
 }
+
+// --------------------------------------------------------------------------
+// Instance variable access.
+// --------------------------------------------------------------------------
+void test_instance_variable(NSArray<NSString *> *stringArray,
+                            NSArray *array) {
+  int *ip;
+
+  ip = stringArray->data; // expected-warning{{from 'NSString **'}}
+  ip = array->data; // expected-warning{{from 'id *'}}
+}
+
+@implementation WindowArray
+- (void)testInstanceVariable {
+  int *ip;
+
+  ip = data; // expected-warning{{from 'Window **'}}
+}
+@end

@@ -1625,6 +1625,10 @@ const ObjCInterfaceDecl *ObjCIvarDecl::getContainingInterface() const {
   }
 }
 
+QualType ObjCIvarDecl::getUsageType(QualType objectType) const {
+  return getType().substObjCMemberType(objectType, getDeclContext());
+}
+
 //===----------------------------------------------------------------------===//
 // ObjCAtDefsFieldDecl
 //===----------------------------------------------------------------------===//

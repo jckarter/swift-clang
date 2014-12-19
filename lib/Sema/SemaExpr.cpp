@@ -2401,8 +2401,8 @@ Sema::LookupInObjCMethod(LookupResult &Lookup, Scope *S,
         Diag(Loc, diag::warn_direct_ivar_access) << IV->getDeclName();
 
       ObjCIvarRefExpr *Result = new (Context)
-          ObjCIvarRefExpr(IV, IV->getType(), Loc, IV->getLocation(),
-                          SelfExpr.get(), true, true);
+          ObjCIvarRefExpr(IV, IV->getUsageType(SelfExpr.get()->getType()), Loc,
+                          IV->getLocation(), SelfExpr.get(), true, true);
 
       if (getLangOpts().ObjCAutoRefCount) {
         if (IV->getType().getObjCLifetime() == Qualifiers::OCL_Weak) {
