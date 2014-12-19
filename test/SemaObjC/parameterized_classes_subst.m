@@ -16,6 +16,11 @@ __attribute__((objc_root_class))
 @end
 
 @interface NSArray<T> : NSObject <NSCopying>
+- (T)objectAtIndexedSubscript:(int)index;
+@end
+
+@interface NSMutableArray<T> : NSArray<T>
+- (void)setObject:(T)object atIndexedSubscript:(int)index; // expected-note 2{{passing argument to parameter 'object' here}}
 @end
 
 @interface NSSet<T : id<NSCopying>> : NSObject <NSCopying>
@@ -46,6 +51,18 @@ __attribute__((objc_root_class))
 @end
 
 @interface Window : NSObject
+@end
+
+@interface NSDictionary<K, V> : NSObject <NSCopying>
+- (V)objectForKeyedSubscript:(K)key; // expected-note 3{{parameter 'key'}}
+@end
+
+@interface NSMutableDictionary<K : id<NSCopying>, V> : NSDictionary<K, V>
+- (void)setObject:(V)object forKeyedSubscript:(K)key;
+// expected-note@-1 {{parameter 'object' here}}
+// expected-note@-2 {{parameter 'object' here}}
+// expected-note@-3 {{parameter 'key' here}}
+// expected-note@-4 {{parameter 'key' here}}
 @end
 
 // --------------------------------------------------------------------------
@@ -130,4 +147,48 @@ void test_property_write(
   mutStringArraySet.allObjects = ip; // expected-warning{{to 'NSArray<NSArray<NSString *> *> *'}}
   mutSet.allObjects = ip; // expected-warning{{to 'NSArray<id<NSCopying>> *'}}
   mutArraySet.allObjects = ip; // expected-warning{{to 'NSArray<NSArray<id> *> *'}}
+}
+
+// --------------------------------------------------------------------------
+// Subscripting
+// --------------------------------------------------------------------------
+void test_subscripting(
+       NSArray<NSString *> *stringArray,
+       NSMutableArray<NSString *> *mutStringArray,
+       NSArray *array,
+       NSMutableArray *mutArray,
+       NSDictionary<NSString *, Widget *> *stringWidgetDict,
+       NSMutableDictionary<NSString *, Widget *> *mutStringWidgetDict,
+       NSDictionary *dict,
+       NSMutableDictionary *mutDict) {
+  int *ip;
+  NSString *string;
+  Widget *widget;
+  Window *window;
+
+  ip = stringArray[0]; // expected-warning{{from 'NSString *'}}
+
+  ip = mutStringArray[0]; // expected-warning{{from 'NSString *'}}
+  mutStringArray[0] = ip; // expected-warning{{parameter of type 'NSString *'}}
+
+  ip = array[0]; // expected-warning{{from 'id'}}
+
+  ip = mutArray[0]; // expected-warning{{from 'id'}}
+  mutArray[0] = ip; // expected-warning{{parameter of type 'id'}}
+
+  ip = stringWidgetDict[string]; // expected-warning{{from 'Widget *'}}
+  widget = stringWidgetDict[widget]; // expected-warning{{to parameter of type 'NSString *'}}
+
+  ip = mutStringWidgetDict[string]; // expected-warning{{from 'Widget *'}}
+  widget = mutStringWidgetDict[widget]; // expected-warning{{to parameter of type 'NSString *'}}
+  mutStringWidgetDict[string] = ip; // expected-warning{{to parameter of type 'Widget *'}}
+  mutStringWidgetDict[widget] = widget; // expected-warning{{to parameter of type 'NSString *'}}
+
+  ip = dict[string]; // expected-warning{{from 'id'}}
+
+  ip = mutDict[string]; // expected-warning{{from 'id'}}
+  mutDict[string] = ip; // expected-warning{{to parameter of type 'id'}}
+
+  widget = mutDict[window]; // FIXME: expected-warning{{parameter of incompatible type 'id<NSCopying>'}}
+  mutDict[window] = widget; // expected-warning{{parameter of incompatible type 'id<NSCopying>'}}
 }
