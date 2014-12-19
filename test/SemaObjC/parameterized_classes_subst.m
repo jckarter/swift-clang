@@ -20,6 +20,7 @@ __attribute__((objc_root_class))
   T *data; // don't try this at home
 }
 - (T)objectAtIndexedSubscript:(int)index;
++ (NSArray<T> *)array;
 @end
 
 @interface NSMutableArray<T> : NSArray<T>
@@ -94,6 +95,14 @@ void test_message_send_result(
   ip = [mutSet firstObject]; // expected-warning{{from 'id<NSCopying>'}}
   ip = [mutArraySet firstObject]; // expected-warning{{from 'NSArray<id> *'}}
   ip = [block firstObject]; // expected-warning{{from 'id<NSCopying>'}}
+
+  // Class messages.
+  ip = [NSSet<NSString *> alloc]; // expected-error{{from incompatible type 'NSSet<NSString *>'}}
+  ip = [NSSet alloc]; // expected-warning{{from 'NSSet *'}}
+  ip = [MutableSetOfArrays<NSString *> alloc]; // expected-error{{from incompatible type 'MutableSetOfArrays<NSString *>'}}
+  ip = [MutableSetOfArrays alloc];  // expected-warning{{from 'MutableSetOfArrays *'}}
+  ip = [NSArray<NSString *> array]; // expected-warning{{from 'NSArray<NSString *> *'}}
+  ip = [NSArray<NSString *><NSCopying> array]; // expected-warning{{from 'NSArray<NSString *> *'}}
 }
 
 void test_message_send_param(
