@@ -3983,13 +3983,6 @@ public:
 
   void getDefaultFeatures(llvm::StringMap<bool> &Features) const override {
     StringRef ArchName = getTriple().getArchName();
-    if (IsAAPCS)
-      Features["aapcs"] = true;
-    else if (ArchName.endswith("v7k"))
-      Features["apcs-vfp"] = true;
-    else
-      Features["apcs"] = true;
-
     if (CPU == "arm1136jf-s" || CPU == "arm1176jzf-s" || CPU == "mpcore")
       Features["vfp2"] = true;
     else if (CPU == "cortex-a8" || CPU == "cortex-a9") {
