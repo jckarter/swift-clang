@@ -1042,57 +1042,78 @@ ArrayRef<QualType> Type::getObjCSubstitutions(
   return objectType->getTypeArgs();
 }
 
-QualType ObjCObjectType::getSuperClassType() const {
+void ObjCObjectType::computeSuperClassTypeSlow() const {
   // Retrieve the class declaration for this type. If there isn't one
   // (e.g., this is some variant of "id" or "Class"), then there is no
   // superclass type.
   ObjCInterfaceDecl *classDecl = getInterface();
-  if (!classDecl)
-    return QualType();
-  
+  if (!classDecl) {
+    CachedSuperClassType.setInt(true);
+    return;
+  }
+
   // Extract the superclass type.
   const ObjCObjectType *superClassObjTy = classDecl->getSuperClassType();
-  if (!superClassObjTy)
-    return QualType();
+  if (!superClassObjTy) {
+    CachedSuperClassType.setInt(true);
+    return;
+  }
 
   ObjCInterfaceDecl *superClassDecl = superClassObjTy->getInterface();
-  if (!superClassDecl)
-    return QualType();
+  if (!superClassDecl) {
+    CachedSuperClassType.setInt(true);
+    return;
+  }
 
   // If the superclass doesn't have type parameters, then there is no
   // substitution to perform.
   QualType superClassType(superClassObjTy, 0);
   ObjCTypeParamList *superClassTypeParams = superClassDecl->getTypeParamList();
-  if (!superClassTypeParams)
-    return superClassType;
+  if (!superClassTypeParams) {
+    CachedSuperClassType.setPointerAndInt(
+      superClassType->castAs<ObjCObjectType>(), true);
+    return;
+  }
 
   // If the superclass reference is unspecialized, substitute the
   // defaults.
   if (superClassObjTy->isUnspecialized()) {
     SmallVector<QualType, 4> typeArgs;
     superClassTypeParams->gatherDefaultTypeArgs(typeArgs);
-    return superClassType.substObjCTypeArgs(classDecl->getASTContext(),
-                                            typeArgs);
+    CachedSuperClassType.setPointerAndInt(
+      superClassType.substObjCTypeArgs(classDecl->getASTContext(),
+                                       typeArgs)->castAs<ObjCObjectType>(),
+      true);
+    return;
   }
 
   // If the subclass is not parameterized, there aren't any type
   // parameters in the superclass reference to substitute.
   ObjCTypeParamList *typeParams = classDecl->getTypeParamList();
-  if (!typeParams)
-    return superClassType;
-  
+  if (!typeParams) {
+    CachedSuperClassType.setPointerAndInt(
+      superClassType->castAs<ObjCObjectType>(), true);
+    return;
+  }
+
   // If the subclass type isn't specialized, substitute the defaults.
   if (isUnspecialized()) {
     SmallVector<QualType, 4> typeArgs;
     typeParams->gatherDefaultTypeArgs(typeArgs);
-    return superClassType.substObjCTypeArgs(classDecl->getASTContext(),
-                                            typeArgs);
+    CachedSuperClassType.setPointerAndInt(
+      superClassType.substObjCTypeArgs(classDecl->getASTContext(),
+                                       typeArgs)->castAs<ObjCObjectType>(),
+      true);
+    return;
   }
 
   // Substitute the provided type arguments into the superclass type.
   ArrayRef<QualType> typeArgs = getTypeArgs();
   assert(typeArgs.size() == typeParams->size());
-  return superClassType.substObjCTypeArgs(classDecl->getASTContext(), typeArgs);
+  CachedSuperClassType.setPointerAndInt(
+    superClassType.substObjCTypeArgs(classDecl->getASTContext(), typeArgs)
+      ->castAs<ObjCObjectType>(),
+    true);
 }
 
 QualType ObjCObjectPointerType::getSuperClassType() const {

@@ -4465,6 +4465,10 @@ class ObjCObjectType : public Type {
   /// Either a BuiltinType or an InterfaceType or sugar for either.
   QualType BaseType;
 
+  /// Cached superclass type.
+  mutable llvm::PointerIntPair<const ObjCObjectType *, 1, bool>
+    CachedSuperClassType;
+
   ObjCProtocolDecl * const *getProtocolStorage() const {
     return const_cast<ObjCObjectType*>(this)->getProtocolStorage();
   }
@@ -4488,6 +4492,8 @@ protected:
     ObjCObjectTypeBits.NumProtocols = 0;
     ObjCObjectTypeBits.NumTypeArgs = 0;
   }
+
+  void computeSuperClassTypeSlow() const;
 
 public:
   /// getBaseType - Gets the base type of this object type.  This is
@@ -4572,7 +4578,13 @@ public:
   /// superclass of the current class type, potentially producing a
   /// specialization of the superclass type. Produces a null type if
   /// there is no superclass.
-  QualType getSuperClassType() const;
+  QualType getSuperClassType() const {
+    if (!CachedSuperClassType.getInt())
+      computeSuperClassTypeSlow();
+
+    assert(CachedSuperClassType.getInt() && "Superclass not set?");
+    return QualType(CachedSuperClassType.getPointer(), 0);
+  }
 
   bool isSugared() const { return false; }
   QualType desugar() const { return QualType(this, 0); }
