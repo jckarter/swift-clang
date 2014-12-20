@@ -1232,7 +1232,7 @@ SourceRange ObjCTypeParamDecl::getSourceRange() const {
 ObjCTypeParamList::ObjCTypeParamList(SourceLocation lAngleLoc,
                                      ArrayRef<ObjCTypeParamDecl *> typeParams,
                                      SourceLocation rAngleLoc)
-  : LAngleLoc(lAngleLoc), RAngleLoc(rAngleLoc), NumParams(typeParams.size())
+  : Brackets(lAngleLoc, rAngleLoc), NumParams(typeParams.size())
 {
   std::copy(typeParams.begin(), typeParams.end(), begin());
 }
@@ -1245,8 +1245,9 @@ ObjCTypeParamList *ObjCTypeParamList::create(
                      SourceLocation rAngleLoc) {
   unsigned size = sizeof(ObjCTypeParamList)
                 + sizeof(ObjCTypeParamDecl *) * typeParams.size();
-  unsigned align = std::max(llvm::alignOf<ObjCTypeParamList>(),
-                            llvm::alignOf<ObjCTypeParamDecl*>());
+  static_assert(alignof(ObjCTypeParamList) >= alignof(ObjCTypeParamDecl*),
+                "type parameter list needs greater alignment");
+  unsigned align = llvm::alignOf<ObjCTypeParamList>();
   void *mem = ctx.Allocate(size, align);
   return new (mem) ObjCTypeParamList(lAngleLoc, typeParams, rAngleLoc);
 }

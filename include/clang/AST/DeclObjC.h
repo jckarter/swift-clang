@@ -572,8 +572,13 @@ public:
 /// @end
 /// \endcode
 class ObjCTypeParamList {
-  /// Locations of the left and right angle brackets.
-  SourceLocation LAngleLoc, RAngleLoc;
+  union { 
+    /// Location of the left and right angle brackets.
+    SourceRange Brackets;
+
+    // Used only for alignment.
+    ObjCTypeParamDecl *AlignmentHack;
+  };
 
   /// The number of parameters in the list, which are tail-allocated.
   unsigned NumParams;
@@ -620,12 +625,9 @@ public:
     return *(end() - 1);
   }
 
-  SourceLocation getLAngleLoc() const { return LAngleLoc; }
-  SourceLocation getRAngleLoc() const { return RAngleLoc; }
-
-  SourceRange getSourceRange() const {
-    return SourceRange(LAngleLoc, RAngleLoc);
-  }
+  SourceLocation getLAngleLoc() const { return Brackets.getBegin(); }
+  SourceLocation getRAngleLoc() const { return Brackets.getEnd(); }
+  SourceRange getSourceRange() const { return Brackets; }
 
   /// Gather the default set of type arguments to be substituted for
   /// these type parameters when dealing with an unspecialized type.
