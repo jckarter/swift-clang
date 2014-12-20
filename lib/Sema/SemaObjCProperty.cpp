@@ -2071,7 +2071,8 @@ void Sema::ProcessPropertyDecl(ObjCPropertyDecl *property,
                                 ObjCMethodDecl::Optional :
                                 ObjCMethodDecl::Required);
 
-      // If the property is null_resettable, the getter returns nonnull.
+      // If the property is null_resettable, the setter accepts a
+      // nullable value.
       QualType paramTy = property->getType().getUnqualifiedType();
       if (property->getPropertyAttributes() &
           ObjCPropertyDecl::OBJC_PR_null_resettable) {
