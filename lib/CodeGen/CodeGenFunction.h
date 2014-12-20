@@ -2748,6 +2748,7 @@ public:
         assert(Arg != ArgEnd && "Running over edge of argument list!");
         assert(
             ((*I)->isVariablyModifiedType() ||
+             (*I).getNonReferenceType()->isObjCRetainableType() ||
              getContext()
                      .getCanonicalType((*I).getNonReferenceType())
                      .getTypePtr() ==
