@@ -4144,6 +4144,30 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
         << GCArg->getAsString(Args);
     } else if (getToolChain().SupportsObjCGC()) {
       GCArg->render(Args, CmdArgs);
+      // Disable support for building .o files with Objective-C
+      // garbage collection support.  We still allow -fsyntax-only,
+      // --analyze, etc., to work.
+      if ((isa<AssembleJobAction>(JA) ||
+           ((isa<CompileJobAction>(JA) || isa<BackendJobAction>(JA)) &&
+            (JA.getType() == types::TY_LTO_IR ||
+             JA.getType() == types::TY_LTO_BC ||
+             JA.getType() == types::TY_PP_Asm))) && !ARCMTEnabled) {
+
+        SmallString<1024> P(D.ResourceDir);
+        // 1. Strip away version.
+        // 2. Strip away 'clang'.
+        // 3. Strip away 'lib'.
+        for (unsigned i = 0 ; i < 3 ; ++i) llvm::sys::path::remove_filename(P);
+        // 4. Add 'local'.
+        llvm::sys::path::append(P, "local");
+        llvm::sys::path::append(P, "lib");
+        llvm::sys::path::append(P, "clang");
+        // 5. Add magic gc file.
+        llvm::sys::path::append(P, "enable_objc_gc");
+
+        if (!llvm::sys::fs::exists(P.str()))
+          D.Diag(diag::err_drv_objc_gc_not_supported);
+      }
     } else {
       // FIXME: We should move this to a hard error.
       D.Diag(diag::warn_drv_objc_gc_unsupported)

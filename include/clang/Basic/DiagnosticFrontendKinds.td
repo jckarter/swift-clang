@@ -95,9 +95,6 @@ def err_fe_no_pch_in_dir : Error<
 def err_fe_action_not_available : Error<
     "action %0 not compiled in">;
 
-def err_fe_objc_gc_not_supported : Error<
-  "garbage collection is no longer supported">;
-
 def warn_fe_serialized_diag_merge_failure : Warning<
     "unable to merge a subprocess's serialized diagnostics">,
     InGroup<SerializedDiagnostics>;
