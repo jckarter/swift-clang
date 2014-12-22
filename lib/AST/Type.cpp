@@ -1075,15 +1075,9 @@ void ObjCObjectType::computeSuperClassTypeSlow() const {
     return;
   }
 
-  // If the superclass reference is unspecialized, substitute the
-  // defaults.
+  // If the superclass reference is unspecialized, return it.
   if (superClassObjTy->isUnspecialized()) {
-    SmallVector<QualType, 4> typeArgs;
-    superClassTypeParams->gatherDefaultTypeArgs(typeArgs);
-    CachedSuperClassType.setPointerAndInt(
-      superClassType.substObjCTypeArgs(classDecl->getASTContext(),
-                                       typeArgs)->castAs<ObjCObjectType>(),
-      true);
+    CachedSuperClassType.setPointerAndInt(superClassObjTy, true);
     return;
   }
 
@@ -1096,13 +1090,14 @@ void ObjCObjectType::computeSuperClassTypeSlow() const {
     return;
   }
 
-  // If the subclass type isn't specialized, substitute the defaults.
+  // If the subclass type isn't specialized, return the unspecialized
+  // superclass.
   if (isUnspecialized()) {
-    SmallVector<QualType, 4> typeArgs;
-    typeParams->gatherDefaultTypeArgs(typeArgs);
+    QualType unspecializedSuper
+      = classDecl->getASTContext().getObjCInterfaceType(
+          superClassObjTy->getInterface());
     CachedSuperClassType.setPointerAndInt(
-      superClassType.substObjCTypeArgs(classDecl->getASTContext(),
-                                       typeArgs)->castAs<ObjCObjectType>(),
+      unspecializedSuper->castAs<ObjCObjectType>(),
       true);
     return;
   }

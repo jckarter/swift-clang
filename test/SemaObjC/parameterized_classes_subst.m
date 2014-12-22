@@ -34,7 +34,7 @@ __attribute__((objc_root_class))
 @interface NSStringArray : NSArray<NSString *>
 @end
 
-@interface NSSet<T : id<NSCopying>> : NSObject <NSCopying>
+@interface NSSet<T> : NSObject <NSCopying>
 - (T)firstObject;
 @property (nonatomic, copy) NSArray<T> *allObjects;
 @end
@@ -65,7 +65,7 @@ __attribute__((objc_root_class))
 @end
 
 @interface NSDictionary<K, V> : NSObject <NSCopying>
-- (V)objectForKeyedSubscript:(K)key; // expected-note 3{{parameter 'key'}}
+- (V)objectForKeyedSubscript:(K)key; // expected-note 2{{parameter 'key'}}
 @end
 
 @interface NSMutableDictionary<K : id<NSCopying>, V> : NSDictionary<K, V>
@@ -96,12 +96,12 @@ void test_message_send_result(
   ip = [stringSet firstObject]; // expected-warning{{from 'NSString *'}}
   ip = [mutStringSet firstObject]; // expected-warning{{from 'NSString *'}}
   ip = [widgetSet firstObject]; // expected-warning{{from 'Widget *'}}
-  ip = [untypedMutSet firstObject]; // expected-warning{{from 'id<NSCopying>'}}
+  ip = [untypedMutSet firstObject]; // expected-warning{{from 'id'}}
   ip = [mutStringArraySet firstObject]; // expected-warning{{from 'NSArray<NSString *> *'}}
-  ip = [set firstObject]; // expected-warning{{from 'id<NSCopying>'}}
-  ip = [mutSet firstObject]; // expected-warning{{from 'id<NSCopying>'}}
-  ip = [mutArraySet firstObject]; // expected-warning{{from 'NSArray<id> *'}}
-  ip = [block firstObject]; // expected-warning{{from 'id<NSCopying>'}}
+  ip = [set firstObject]; // expected-warning{{from 'id'}}
+  ip = [mutSet firstObject]; // expected-warning{{from 'id'}}
+  ip = [mutArraySet firstObject]; // expected-warning{{from 'id'}}
+  ip = [block firstObject]; // expected-warning{{from 'id'}}
 
   // Class messages.
   ip = [NSSet<NSString *> alloc]; // expected-error{{from incompatible type 'NSSet<NSString *>'}}
@@ -127,7 +127,7 @@ void test_message_send_param(
   [untypedMutSet addObject: window]; // expected-warning{{parameter of incompatible type 'id<NSCopying>'}}
   [mutStringArraySet addObject: window]; // expected-warning{{parameter of type 'NSArray<NSString *> *'}}
   [mutSet addObject: window]; // expected-warning{{parameter of incompatible type 'id<NSCopying>'}}
-  [mutArraySet addObject: window]; // expected-warning{{parameter of type 'NSArray<id> *'}}
+  [mutArraySet addObject: window]; // expected-warning{{parameter of incompatible type 'id<NSCopying>'}}
   [block addObject: window]; // expected-warning{{parameter of incompatible type 'id<NSCopying>'}}
 }
 
@@ -147,11 +147,11 @@ void test_property_read(
   ip = stringSet.allObjects; // expected-warning{{from 'NSArray<NSString *> *'}}
   ip = mutStringSet.allObjects; // expected-warning{{from 'NSArray<NSString *> *'}}
   ip = widgetSet.allObjects; // expected-warning{{from 'NSArray<Widget *> *'}}
-  ip = untypedMutSet.allObjects; // expected-warning{{from 'NSArray<id<NSCopying>> *'}}
+  ip = untypedMutSet.allObjects; // expected-warning{{from 'NSArray<id> *'}}
   ip = mutStringArraySet.allObjects; // expected-warning{{from 'NSArray<NSArray<NSString *> *> *'}}
-  ip = set.allObjects; // expected-warning{{from 'NSArray<id<NSCopying>> *'}}
-  ip = mutSet.allObjects; // expected-warning{{from 'NSArray<id<NSCopying>> *'}}
-  ip = mutArraySet.allObjects; // expected-warning{{from 'NSArray<NSArray<id> *> *'}}
+  ip = set.allObjects; // expected-warning{{from 'NSArray<id> *'}}
+  ip = mutSet.allObjects; // expected-warning{{from 'NSArray<id> *'}}
+  ip = mutArraySet.allObjects; // expected-warning{{from 'NSArray<id> *'}}
 }
 
 void test_property_write(
@@ -165,10 +165,10 @@ void test_property_write(
 
   mutStringSet.allObjects = ip; // expected-warning{{to 'NSArray<NSString *> *'}}
   widgetSet.allObjects = ip; // expected-warning{{to 'NSArray<Widget *> *'}}
-  untypedMutSet.allObjects = ip; // expected-warning{{to 'NSArray<id<NSCopying>> *'}}
+  untypedMutSet.allObjects = ip; // expected-warning{{to 'NSArray<id> *'}}
   mutStringArraySet.allObjects = ip; // expected-warning{{to 'NSArray<NSArray<NSString *> *> *'}}
-  mutSet.allObjects = ip; // expected-warning{{to 'NSArray<id<NSCopying>> *'}}
-  mutArraySet.allObjects = ip; // expected-warning{{to 'NSArray<NSArray<id> *> *'}}
+  mutSet.allObjects = ip; // expected-warning{{to 'NSArray<id> *'}}
+  mutArraySet.allObjects = ip; // expected-warning{{to 'NSArray<id> *'}}
 }
 
 // --------------------------------------------------------------------------
@@ -211,7 +211,7 @@ void test_subscripting(
   ip = mutDict[string]; // expected-warning{{from 'id'}}
   mutDict[string] = ip; // expected-warning{{to parameter of type 'id'}}
 
-  widget = mutDict[window]; // FIXME: expected-warning{{parameter of incompatible type 'id<NSCopying>'}}
+  widget = mutDict[window];
   mutDict[window] = widget; // expected-warning{{parameter of incompatible type 'id<NSCopying>'}}
 }
 
@@ -258,7 +258,7 @@ void test_implicit_conversions(NSArray<NSString *> *stringArray,
   numberArray = mutStringArray; // expected-warning{{incompatible pointer types assigning to 'NSArray<NSNumber *> *' from 'NSMutableArray<NSString *> *'}}
 
   // Unspecialized -> specialized (different levels).
-  stringArray = mutArray; // FIXME: expected-warning{{'NSArray<NSString *> *' from 'NSMutableArray *'}}
+  stringArray = mutArray;
 
   // Specialized -> unspecialized (different levels).
   array = mutStringArray;
@@ -283,7 +283,7 @@ void test_ternary_operator(NSArray<NSString *> *stringArray,
   ip = cond ? stringArray2 : mutStringArray; // expected-warning{{from 'NSArray<NSString *><NSCopying> *'}}
   ip = cond ? mutStringArray : stringArray2; // expected-warning{{from 'NSArray<NSString *><NSCopying> *'}}
 
-  ip = cond ? stringArray : mutArray; // FIXME: expected-warning{{from 'NSObject<NSCopying> *'}}
+  ip = cond ? stringArray : mutArray; // FIXME: expected-warning{{from 'NSArray<NSString *> *'}}
 
   object = cond ? stringArray : numberArray; // expected-warning{{incompatible operand types ('NSArray<NSString *> *' and 'NSArray<NSNumber *> *')}}
 }
