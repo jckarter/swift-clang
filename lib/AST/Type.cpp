@@ -1154,6 +1154,13 @@ const ObjCObjectPointerType *Type::getAsObjCQualifiedClassType() const {
   return nullptr;
 }
 
+const ObjCObjectType *Type::getAsObjCInterfaceType() const {
+  if (const ObjCObjectType *OT = getAs<ObjCObjectType>()) {
+    if (OT->getInterface())
+      return OT;
+  }
+  return nullptr;
+}
 const ObjCObjectPointerType *Type::getAsObjCInterfacePointerType() const {
   if (const ObjCObjectPointerType *OPT = getAs<ObjCObjectPointerType>()) {
     if (OPT->getInterfaceType())

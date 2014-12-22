@@ -79,6 +79,11 @@ __attribute__((objc_root_class))
 @interface WindowArray : NSArray<Window *>
 @end
 
+@interface NSSet<T> (Searching)
+- (T)findObject:(T)object;
+@end
+
+
 // --------------------------------------------------------------------------
 // Message sends.
 // --------------------------------------------------------------------------
@@ -103,13 +108,17 @@ void test_message_send_result(
   ip = [mutArraySet firstObject]; // expected-warning{{from 'id'}}
   ip = [block firstObject]; // expected-warning{{from 'id'}}
 
+  ip = [stringSet findObject:@"blah"]; // expected-warning{{from 'NSString *'}}
+
   // Class messages.
-  ip = [NSSet<NSString *> alloc]; // expected-error{{from incompatible type 'NSSet<NSString *>'}}
+  ip = [NSSet<NSString *> alloc]; // expected-warning{{from 'NSSet<NSString *> *'}}
   ip = [NSSet alloc]; // expected-warning{{from 'NSSet *'}}
-  ip = [MutableSetOfArrays<NSString *> alloc]; // expected-error{{from incompatible type 'MutableSetOfArrays<NSString *>'}}
+  ip = [MutableSetOfArrays<NSString *> alloc]; // expected-warning{{from 'MutableSetOfArrays<NSString *> *'}}
   ip = [MutableSetOfArrays alloc];  // expected-warning{{from 'MutableSetOfArrays *'}}
   ip = [NSArray<NSString *> array]; // expected-warning{{from 'NSArray<NSString *> *'}}
   ip = [NSArray<NSString *><NSCopying> array]; // expected-warning{{from 'NSArray<NSString *> *'}}
+
+  ip = [[NSMutableArray<NSString *> alloc] init];  // expected-warning{{from 'NSMutableArray<NSString *> *'}}
 }
 
 void test_message_send_param(

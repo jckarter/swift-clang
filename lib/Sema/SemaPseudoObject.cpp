@@ -1111,9 +1111,6 @@ bool ObjCSubscriptOpBuilder::findAtIndexGetter() {
   if (const ObjCObjectPointerType *PTy =
       BaseT->getAs<ObjCObjectPointerType>()) {
     ResultType = PTy->getPointeeType();
-    if (const ObjCObjectType *iQFaceTy = 
-        ResultType->getAsObjCQualifiedInterfaceType())
-      ResultType = iQFaceTy->getBaseType();
   }
   Sema::ObjCSubscriptKind Res = 
     S.CheckSubscriptingKind(RefExpr->getKeyExpr());
@@ -1220,9 +1217,6 @@ bool ObjCSubscriptOpBuilder::findAtIndexSetter() {
   if (const ObjCObjectPointerType *PTy =
       BaseT->getAs<ObjCObjectPointerType>()) {
     ResultType = PTy->getPointeeType();
-    if (const ObjCObjectType *iQFaceTy = 
-        ResultType->getAsObjCQualifiedInterfaceType())
-      ResultType = iQFaceTy->getBaseType();
   }
   
   Sema::ObjCSubscriptKind Res = 

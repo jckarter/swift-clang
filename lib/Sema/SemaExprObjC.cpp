@@ -1214,8 +1214,7 @@ static QualType getBaseMessageSendResultType(Sema &S,
   }
 
   //   - if the receiver is the name of a class U, T is a pointer to U
-  if (ReceiverType->getAs<ObjCInterfaceType>() ||
-      ReceiverType->isObjCQualifiedInterfaceType())
+  if (ReceiverType->getAsObjCInterfaceType())
     return transferNullability(Context.getObjCObjectPointerType(ReceiverType));
   //   - if the receiver is of type Class or qualified Class type,
   //     T is the declared return type of the method.
