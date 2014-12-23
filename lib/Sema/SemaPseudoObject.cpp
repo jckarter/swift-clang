@@ -729,8 +729,10 @@ ExprResult ObjCPropertyOpBuilder::buildSet(Expr *op, SourceLocation opcLoc,
   // C++ class type.
   if (!S.getLangOpts().CPlusPlus || !op->getType()->isRecordType()) {
     QualType paramType = (*Setter->param_begin())->getType()
-                           .substObjCMemberType(receiverType,
-                                                Setter->getDeclContext());
+                           .substObjCMemberType(
+                             receiverType,
+                             Setter->getDeclContext(),
+                             ObjCSubstitutionContext::Parameter);
     if (!S.getLangOpts().CPlusPlus || !paramType->isRecordType()) {
       ExprResult opResult = op;
       Sema::AssignConvertType assignResult

@@ -918,6 +918,8 @@ public:
   }
 
   unsigned getExtraLocalDataAlignment() const {
+    static_assert(alignof(ObjCObjectTypeLoc) >= alignof(TypeSourceInfo *),
+                  "not enough alignment for tail-allocated data");
     return llvm::alignOf<TypeSourceInfo *>();
   }
 

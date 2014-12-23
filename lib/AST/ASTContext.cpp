@@ -3542,16 +3542,6 @@ QualType ASTContext::getObjCObjectType(QualType BaseType,
                            llvm::makeArrayRef(Protocols, NumProtocols));
 }
 
-/// Determine whether all of the given types are canonical.
-static bool allTypesAreCanonical(ArrayRef<QualType> types) {
-  for (auto type : types) {
-    if (!type.isCanonical())
-      return false;
-  }
-
-  return true;
-}
-
 QualType ASTContext::getObjCObjectType(
            QualType baseType,
            ArrayRef<QualType> typeArgs,
@@ -3581,8 +3571,12 @@ QualType ASTContext::getObjCObjectType(
   // sorted-and-uniqued list of protocols and the type arguments
   // canonicalized.
   QualType canonical;
-  bool typeArgsAreCanonical = allTypesAreCanonical(effectiveTypeArgs);
-  bool protocolsSorted = areSortedAndUniqued(protocols.data(), 
+  bool typeArgsAreCanonical = std::all_of(effectiveTypeArgs.begin(),
+                                          effectiveTypeArgs.end(),
+                                          [&](QualType type) {
+                                            return type.isCanonical();
+                                          });
+  bool protocolsSorted = areSortedAndUniqued(protocols.data(),
                                              protocols.size());
   if (!typeArgsAreCanonical || !protocolsSorted || !baseType.isCanonical()) {
     // Determine the canonical type arguments.
@@ -3618,7 +3612,7 @@ QualType ASTContext::getObjCObjectType(
   }
 
   unsigned size = sizeof(ObjCObjectTypeImpl);
-  size += typeArgs.size() * sizeof(Type);
+  size += typeArgs.size() * sizeof(QualType);
   size += protocols.size() * sizeof(ObjCProtocolDecl *);
   void *mem = Allocate(size, TypeAlignment);
   ObjCObjectTypeImpl *T =
