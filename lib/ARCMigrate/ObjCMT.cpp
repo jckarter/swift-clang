@@ -85,13 +85,20 @@ class ObjCMigrateASTConsumer : public ASTConsumer {
                                    const ObjCImplementationDecl *ImplD);
   
   bool InsertFoundation(ASTContext &Ctx, SourceLocation Loc);
+  void AuditNullabilityAttribute(ASTContext &Ctx, Decl *D);
+  bool AuditDeclForNullabilityAttribute(ASTContext &Ctx, const Decl *D);
+  bool AuditDeclReturnForNullabilityAttribute(ASTContext &Ctx, const Decl *D);
+  void InsertNonnullMacro(ASTContext &Ctx);
+  void FixupNonnullMacro(ASTContext &Ctx, const Decl *D);
   void migrateApiNoteUnavailableAttr(Decl *D);
-  void migrateApiNoteNonnullAttr(Decl *D);
-  void AddNonnullAttribute(const Decl *D, bool Sugar=true);
+  void migrateApiNoteNonnullAttr(ASTContext &Ctx, Decl *D);
+  void AddNonnullAttribute(ASTContext &Ctx, const Decl *D, bool Sugar=true);
   void migrateApiNoteReturnsNonnullAttr(const Decl *D, bool Sugar=true);
   void migrateApiNoteDesignatedInitializerAttr(const ObjCMethodDecl *MethodDecl);
   
 public:
+  const Decl* FirstDeclWithNullabilityAttr;
+  const Decl* LastDeclWithNullabilityAttr;
   std::string MigrateDir;
   unsigned ASTMigrateActions;
   FileID FileId;
@@ -117,7 +124,9 @@ public:
                          Preprocessor &PP,
                          bool isOutputFile,
                          ArrayRef<std::string> WhiteList)
-  : MigrateDir(migrateDir),
+  : FirstDeclWithNullabilityAttr(nullptr),
+    LastDeclWithNullabilityAttr(nullptr),
+    MigrateDir(migrateDir),
     ASTMigrateActions(astMigrateActions),
     NSIntegerTypedefed(nullptr), NSUIntegerTypedefed(nullptr),
     Remapper(remapper), FileMgr(fileMgr), PPRec(PPRec), PP(PP),
@@ -581,6 +590,70 @@ static bool IsCategoryNameWithDeprecatedSuffix(ObjCContainerDecl *D) {
   return false;
 }
 
+bool ObjCMigrateASTConsumer::AuditDeclForNullabilityAttribute(
+                                                ASTContext &Ctx, const Decl *D) {
+  if (const ParmVarDecl * Param = dyn_cast<ParmVarDecl>(D)) {
+    QualType T = Param->getType();
+    auto attributed = dyn_cast<AttributedType>(T.getTypePtr());
+    return attributed;
+  }
+  else if (const ObjCPropertyDecl *Prop = dyn_cast<ObjCPropertyDecl>(D)) {
+    QualType T = Prop->getType();
+    auto attributed = dyn_cast<AttributedType>(T.getTypePtr());
+    return attributed;
+  }
+  return false;
+}
+
+bool ObjCMigrateASTConsumer::AuditDeclReturnForNullabilityAttribute(
+                                    ASTContext &Ctx, const Decl *D) {
+  QualType T;
+  if (const ObjCMethodDecl *Method = dyn_cast<ObjCMethodDecl>(D))
+    T = Method->getReturnType();
+  else if (const FunctionDecl *FD = dyn_cast<FunctionDecl>(D))
+    T = FD->getReturnType();
+  if (T.isNull())
+    return false;
+  auto attributed = dyn_cast<AttributedType>(T.getTypePtr());
+  return attributed;
+}
+
+void ObjCMigrateASTConsumer::AuditNullabilityAttribute(
+                                                ASTContext &Ctx, Decl *D) {
+    if (ObjCContainerDecl *CDecl = dyn_cast<ObjCContainerDecl>(D)) {
+      for (auto *Method : CDecl->methods()) {
+        if (Method->isInvalidDecl() || Method->isImplicit() || !canModify(Method))
+          continue;
+        if (AuditDeclReturnForNullabilityAttribute(Ctx, Method)) {
+          FixupNonnullMacro(Ctx, D);
+          return;
+        }
+        for (const auto *PI : Method->params())
+          if (AuditDeclForNullabilityAttribute(Ctx, PI)) {
+            FixupNonnullMacro(Ctx, D);
+            return;
+          }
+      }
+      for (auto *Prop : CDecl->properties()) {
+        if (AuditDeclForNullabilityAttribute(Ctx, Prop)) {
+          FixupNonnullMacro(Ctx, D);
+          return;
+        }
+      }
+    }
+    else if (const FunctionDecl *FD = dyn_cast<FunctionDecl>(D)) {
+      if (AuditDeclReturnForNullabilityAttribute(Ctx, FD)) {
+        FixupNonnullMacro(Ctx, D);
+        return;
+      }
+      for (unsigned i = 0, e = FD->getNumParams(); i != e; ++i)
+        if (AuditDeclForNullabilityAttribute(Ctx, FD->getParamDecl(i))) {
+          FixupNonnullMacro(Ctx, D);
+          return;
+        }
+    }
+}
+
 void ObjCMigrateASTConsumer::migrateObjCInterfaceDecl(ASTContext &Ctx,
                                                       ObjCContainerDecl *D) {
   if (D->isDeprecated() || IsCategoryNameWithDeprecatedSuffix(D))
@@ -589,7 +662,7 @@ void ObjCMigrateASTConsumer::migrateObjCInterfaceDecl(ASTContext &Ctx,
   
   for (auto *Method : D->methods()) {
     migrateApiNoteUnavailableAttr(Method);
-    migrateApiNoteNonnullAttr(Method);
+    migrateApiNoteNonnullAttr(Ctx, Method);
     migrateApiNoteReturnsNonnullAttr(Method);
     migrateApiNoteDesignatedInitializerAttr(Method);
     if (Method->isDeprecated())
@@ -606,7 +679,7 @@ void ObjCMigrateASTConsumer::migrateObjCInterfaceDecl(ASTContext &Ctx,
   
   for (auto *Prop : D->properties()) {
     migrateApiNoteUnavailableAttr(Prop);
-    AddNonnullAttribute(Prop);
+    AddNonnullAttribute(Ctx, Prop);
     if (!(ASTMigrateActions & FrontendOptions::ObjCMT_ReturnsInnerPointerProperty))
       continue;
     if ((ASTMigrateActions & FrontendOptions::ObjCMT_Annotation) &&
@@ -660,7 +733,11 @@ static bool IsPointeePointerType(QualType PointerType) {
           pointeeType->isMemberPointerType());
 }
 
-void ObjCMigrateASTConsumer::AddNonnullAttribute(const Decl *D, bool Sugar) {
+void ObjCMigrateASTConsumer::AddNonnullAttribute(ASTContext &Ctx,
+                                                 const Decl *D, bool Sugar) {
+  if (!(ASTMigrateActions & FrontendOptions::ObjCMT_ApiNotes) ||
+      !FirstDeclWithNullabilityAttr)
+    return;
   clang::NullabilityKind nullabilityKind;
   std::string nullabilityString;
   TypeSourceInfo *TSInfo;
@@ -668,11 +745,23 @@ void ObjCMigrateASTConsumer::AddNonnullAttribute(const Decl *D, bool Sugar) {
   bool PointeePointerType = false;
   if (const ParmVarDecl * Param = dyn_cast<ParmVarDecl>(D)) {
     QualType T = Param->getType();
-    if (auto attributed = dyn_cast<AttributedType>(T.getTypePtr()))
-      if (auto nullability = attributed->getImmediateNullability()) {
+    auto attributed = dyn_cast<AttributedType>(T.getTypePtr());
+    if (!attributed) {
+      // Declarations inside the region that have no annotation should
+      // get 'null_unspecified' annotation
+      if (T->isAnyPointerType()) {
+        nullabilityString = getNullabilitySpelling(NullabilityKind::Unspecified);
+        TSInfo = Param->getTypeSourceInfo();
+        PointeePointerType = IsPointeePointerType(T);
+      }
+    }
+    else if (auto nullability = attributed->getImmediateNullability()) {
         nullabilityKind = *nullability;
         // __null_resettable is for properties only.
-        if (nullabilityKind == NullabilityKind::Unspecified)
+        // Declarations that are annotated as 'nonnullable' should not
+        // get any annotation (this is assumed by default if it is inside the region)
+        if (nullabilityKind == NullabilityKind::Unspecified ||
+            nullabilityKind == NullabilityKind::NonNull)
           return;
         nullabilityString = getNullabilitySpelling(nullabilityKind);
         TSInfo = Param->getTypeSourceInfo();
@@ -681,9 +770,22 @@ void ObjCMigrateASTConsumer::AddNonnullAttribute(const Decl *D, bool Sugar) {
   }
   else if ((Prop = dyn_cast<ObjCPropertyDecl>(D))) {
     QualType T = Prop->getType();
-    if (auto attributed = dyn_cast<AttributedType>(T.getTypePtr()))
-      if (auto nullability = attributed->getImmediateNullability()) {
+    auto attributed = dyn_cast<AttributedType>(T.getTypePtr());
+    if (!attributed) {
+      // Declarations inside the region that have no annotation should
+      // get 'null_unspecified' annotation
+      if (T->isAnyPointerType()) {
+        nullabilityString = getNullabilitySpelling(NullabilityKind::Unspecified);
+        TSInfo = Prop->getTypeSourceInfo();
+        PointeePointerType = IsPointeePointerType(T);
+      }
+    }
+    else if (auto nullability = attributed->getImmediateNullability()) {
         nullabilityKind = *nullability;
+        // Declarations that are annotated as 'nonnullable' should not
+        // get any annotation (this is assumed by default if it is inside the region)
+        if (nullabilityKind == NullabilityKind::NonNull)
+            return;
         nullabilityString = getNullabilitySpelling(nullabilityKind);
         TSInfo = Prop->getTypeSourceInfo();
         PointeePointerType = IsPointeePointerType(T);
@@ -720,8 +822,9 @@ void ObjCMigrateASTConsumer::AddNonnullAttribute(const Decl *D, bool Sugar) {
   Editor->commit(commit);
 }
 
-void ObjCMigrateASTConsumer::migrateApiNoteNonnullAttr(Decl *D) {
-  if (!(ASTMigrateActions & FrontendOptions::ObjCMT_ApiNotes))
+void ObjCMigrateASTConsumer::migrateApiNoteNonnullAttr(ASTContext &Ctx, Decl *D) {
+  if (!(ASTMigrateActions & FrontendOptions::ObjCMT_ApiNotes) ||
+      !FirstDeclWithNullabilityAttr)
     return;
   
   if (D->isInvalidDecl() || D->isImplicit() || !canModify(D))
@@ -731,17 +834,18 @@ void ObjCMigrateASTConsumer::migrateApiNoteNonnullAttr(Decl *D) {
     return;
   if (const FunctionDecl *FD = dyn_cast<FunctionDecl>(D)) {
     for (unsigned i = 0, e = FD->getNumParams(); i != e; ++i)
-      AddNonnullAttribute(FD->getParamDecl(i), false);
+      AddNonnullAttribute(Ctx, FD->getParamDecl(i), false);
   }
   else if (const ObjCMethodDecl *OMD = dyn_cast<ObjCMethodDecl>(D)) {
     for (const auto *PI : OMD->params())
-      AddNonnullAttribute(PI);
+      AddNonnullAttribute(Ctx, PI);
   }
-  AddNonnullAttribute(D, false);
+  AddNonnullAttribute(Ctx, D, false);
 }
 
 void ObjCMigrateASTConsumer::migrateApiNoteReturnsNonnullAttr(const Decl *D, bool Sugar) {
-  if (!(ASTMigrateActions & FrontendOptions::ObjCMT_ApiNotes))
+  if (!(ASTMigrateActions & FrontendOptions::ObjCMT_ApiNotes) ||
+      !FirstDeclWithNullabilityAttr)
     return;
   
   if (D->isInvalidDecl() || D->isImplicit() || !canModify(D))
@@ -764,11 +868,20 @@ void ObjCMigrateASTConsumer::migrateApiNoteReturnsNonnullAttr(const Decl *D, boo
   
   clang::NullabilityKind nullabilityKind;
   std::string nullabilityString;
-  if (auto attributed = dyn_cast<AttributedType>(T.getTypePtr()))
-    if (auto nullability = attributed->getImmediateNullability()) {
+  auto attributed = dyn_cast<AttributedType>(T.getTypePtr());
+  if (!attributed) {
+    // Declarations inside the region that have no annotation should
+    // get 'null_unspecified' annotation
+    if (T->isAnyPointerType())
+      nullabilityString = getNullabilitySpelling(NullabilityKind::Unspecified);
+  }
+  else if (auto nullability = attributed->getImmediateNullability()) {
       nullabilityKind = *nullability;
       // __null_resettable is for properties only.
-      if (nullabilityKind == NullabilityKind::Unspecified)
+      // Declarations that are annotated as 'nonnullable' should not
+      // get any annotation (this is assumed by default if it is inside the region)
+      if (nullabilityKind == NullabilityKind::Unspecified ||
+          nullabilityKind == NullabilityKind::NonNull)
         return;
       nullabilityString = getNullabilitySpelling(nullabilityKind);
     }
@@ -1957,6 +2070,73 @@ bool ObjCMigrateASTConsumer::InsertFoundation(ASTContext &Ctx,
   return true;
 }
 
+void ObjCMigrateASTConsumer::FixupNonnullMacro(ASTContext &Ctx, const Decl *D) {
+  if (!FirstDeclWithNullabilityAttr) {
+    FirstDeclWithNullabilityAttr = LastDeclWithNullabilityAttr = D;
+    return;
+  }
+  SourceManager &SM = Ctx.getSourceManager();
+  FileID BegFID = SM.getFileID(FirstDeclWithNullabilityAttr->getLocation());
+  FileID EndFID = SM.getFileID(D->getLocation());
+  if (BegFID != EndFID) {
+    InsertNonnullMacro(Ctx);
+    FirstDeclWithNullabilityAttr = LastDeclWithNullabilityAttr = D;
+    return;
+  }
+  LastDeclWithNullabilityAttr = D;
+}
+
+void ObjCMigrateASTConsumer::InsertNonnullMacro(ASTContext &Ctx) {
+  if (!FirstDeclWithNullabilityAttr)
+    return;
+  SourceManager &SM = Ctx.getSourceManager();
+  FileID FirstFID = SM.getFileID(FirstDeclWithNullabilityAttr->getLocation());
+  if (!canModifyFile(FirstFID))
+    return;
+    
+  SourceLocation BegLoc = FirstDeclWithNullabilityAttr->getLocStart();
+  if (BegLoc.isInvalid())
+    return;
+
+  FileID LastFID = SM.getFileID(LastDeclWithNullabilityAttr->getLocation());
+  if (!canModifyFile(LastFID))
+    return;
+    
+  SourceLocation EndLoc = LastDeclWithNullabilityAttr->getLocEnd();
+  if (EndLoc.isInvalid())
+    return;
+  assert((FirstFID == LastFID) && "In InsertNonnullMacro, FileIDs do not match");
+    
+  // get location just past end of function location.
+  EndLoc = PP.getLocForEndOfToken(EndLoc);
+  if (isa<FunctionDecl>(LastDeclWithNullabilityAttr)) {
+    // For Methods, EndLoc points to the ending semcolon. So,
+    // none of these extra work is needed.
+    Token Tok;
+    // get locaiton of token that comes after end of function.
+    bool Failed = PP.getRawToken(EndLoc, Tok, /*IgnoreWhiteSpace=*/true);
+    if (!Failed)
+      EndLoc = Tok.getLocation();
+  }
+
+  edit::Commit commit(*Editor);
+  
+  commit.insert(BegLoc, "#ifndef NS_ASSUME_NONNULL_BEGIN\n"
+                        "#if __has_feature(assume_nonnull)\n"
+                        "#define NS_ASSUME_NONNULL_BEGIN _Pragma(\"clang assume_nonnull begin\")\n"
+                        "#define NS_ASSUME_NONNULL_END _Pragma(\"clang assume_nonnull end\")\n"
+                        "#else\n"
+                        "#define NS_ASSUME_NONNULL_BEGIN\n"
+                        "#define NS_ASSUME_NONNULL_END\n"
+                        "#endif\n"
+                        "#endif\n\n"
+                        "NS_ASSUME_NONNULL_BEGIN\n\n");
+  
+  commit.insertAfterToken(EndLoc, "\n\nNS_ASSUME_NONNULL_END\n");
+  Editor->commit(commit);
+  FirstDeclWithNullabilityAttr = LastDeclWithNullabilityAttr = nullptr;
+}
+
 namespace {
 
 class RewritesReceiver : public edit::EditsReceiver {
@@ -2056,6 +2236,22 @@ private:
 void ObjCMigrateASTConsumer::HandleTranslationUnit(ASTContext &Ctx) {
   
   TranslationUnitDecl *TU = Ctx.getTranslationUnitDecl();
+  // Go though interface and function declarations and look for nullability
+  // attributes.
+  if (ASTMigrateActions & FrontendOptions::ObjCMT_ApiNotes) {
+    for (DeclContext::decl_iterator D = TU->decls_begin(), DEnd = TU->decls_end();
+         D != DEnd; ++D) {
+      if (ObjCContainerDecl *CDecl = dyn_cast<ObjCContainerDecl>(*D)) {
+        if (canModify(CDecl))
+          AuditNullabilityAttribute(Ctx, CDecl);
+      }
+      else if (FunctionDecl *FDecl = dyn_cast<FunctionDecl>(*D))
+        if (canModify(FDecl))
+          AuditNullabilityAttribute(Ctx, FDecl);
+    }
+    InsertNonnullMacro(Ctx);
+  }
+
   if (ASTMigrateActions & FrontendOptions::ObjCMT_MigrateDecls) {
     for (DeclContext::decl_iterator D = TU->decls_begin(), DEnd = TU->decls_end();
          D != DEnd; ++D) {
@@ -2148,7 +2344,7 @@ void ObjCMigrateASTConsumer::HandleTranslationUnit(ASTContext &Ctx) {
       if (isa<ObjCProtocolDecl>(*D) || isa<VarDecl>(*D) || isa<FunctionDecl>(*D))
         migrateApiNoteUnavailableAttr((*D));
       if (isa<FunctionDecl>(*D)) {
-        migrateApiNoteNonnullAttr((*D));
+        migrateApiNoteNonnullAttr(Ctx, (*D));
         migrateApiNoteReturnsNonnullAttr((*D), false);
       }
     }
@@ -2170,7 +2366,6 @@ void ObjCMigrateASTConsumer::HandleTranslationUnit(ASTContext &Ctx) {
    Editor->applyRewrites(Writer);
    return;
  }
-
   Rewriter rewriter(Ctx.getSourceManager(), Ctx.getLangOpts());
   RewritesReceiver Rec(rewriter);
   Editor->applyRewrites(Rec);

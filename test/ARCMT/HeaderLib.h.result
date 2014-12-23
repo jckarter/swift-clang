@@ -1,13 +1,28 @@
 #ifndef HEADER_LIB_H
 #define HEADER_LIB_H
 
-__nonnull void *custom_realloc(__nonnull void *member, unsigned size);
+#ifndef NS_ASSUME_NONNULL_BEGIN
+#if __has_feature(assume_nonnull)
+#define NS_ASSUME_NONNULL_BEGIN _Pragma("clang assume_nonnull begin")
+#define NS_ASSUME_NONNULL_END _Pragma("clang assume_nonnull end")
+#else
+#define NS_ASSUME_NONNULL_BEGIN
+#define NS_ASSUME_NONNULL_END
+#endif
+#endif
+
+NS_ASSUME_NONNULL_BEGIN
+
+void *custom_realloc(void *member, unsigned size);
 
 int *global_int;
 
 int unavailable_function(void) __attribute__((unavailable("I beg you not to use this")));
 int unavailable_global_int __attribute__((unavailable));
 
-void do_something_with_pointers(__nonnull int *ptr1, __nullable int *ptr2);
+void do_something_with_pointers(int *ptr1, int *ptr2);
+
+NS_ASSUME_NONNULL_END
+
 
 #endif

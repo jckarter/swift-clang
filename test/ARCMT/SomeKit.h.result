@@ -2,15 +2,30 @@
 #define SOMEKIT_H
 
 __attribute__((objc_root_class))
+#ifndef NS_ASSUME_NONNULL_BEGIN
+#if __has_feature(assume_nonnull)
+#define NS_ASSUME_NONNULL_BEGIN _Pragma("clang assume_nonnull begin")
+#define NS_ASSUME_NONNULL_END _Pragma("clang assume_nonnull end")
+#else
+#define NS_ASSUME_NONNULL_BEGIN
+#define NS_ASSUME_NONNULL_END
+#endif
+#endif
+
+NS_ASSUME_NONNULL_BEGIN
+
 @interface A
 -(A*)transform:(A*)input __attribute__((unavailable("anything but this")));
--(nonnull A*)transform:(nonnull A*)input integer:(int)integer;
+-(A*)transform:(A*)input integer:(int)integer;
 
 @property (nonatomic, readonly, retain) A* someA;
 @property (nonatomic, retain) A* someOtherA;
 
 @property (nonatomic) int intValue __attribute__((unavailable("wouldn't work anyway")));
 @end
+
+NS_ASSUME_NONNULL_END
+
 
 __attribute__((unavailable("just don't")))
 @interface B : A
