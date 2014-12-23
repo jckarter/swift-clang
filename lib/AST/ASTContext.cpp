@@ -6750,6 +6750,14 @@ bool ASTContext::canAssignObjCInterfacesInBlockPointer(
   return false;
 }
 
+/// Comparison routine for Objective-C protocols to be used with
+/// llvm::array_pod_sort.
+static int compareObjCProtocolsByName(ObjCProtocolDecl * const *lhs,
+                                      ObjCProtocolDecl * const *rhs) {
+  return (*lhs)->getName().compare((*rhs)->getName());
+
+}
+
 /// getIntersectionOfProtocols - This routine finds the intersection of set
 /// of protocols inherited from two distinct objective-c pointer objects with
 /// the given common base.
@@ -6817,10 +6825,8 @@ void getIntersectionOfProtocols(ASTContext &Context,
   }
 
   // Sort the remaining protocols by name.
-  std::stable_sort(IntersectionSet.begin(), IntersectionSet.end(),
-                   [&](ObjCProtocolDecl *lhs, ObjCProtocolDecl *rhs) -> bool {
-                     return lhs->getName() < rhs->getName();
-                   });
+  llvm::array_pod_sort(IntersectionSet.begin(), IntersectionSet.end(),
+                       compareObjCProtocolsByName);
 }
 
 // Check that the given Objective-C type argument lists are equivalent.
