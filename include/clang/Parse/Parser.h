@@ -1257,19 +1257,23 @@ private:
                                    SmallVectorImpl<SourceLocation> &PLocs,
                                    bool WarnOnDeclarations,
                                    SourceLocation &LAngleLoc,
-                                   SourceLocation &EndProtoLoc);
-  bool ParseObjCProtocolQualifiers(DeclSpec &DS);
+                                   SourceLocation &EndProtoLoc,
+                                   bool consumeLastToken);
+  bool ParseObjCProtocolQualifiers(DeclSpec &DS, bool consumeLastToken);
   void ParseObjCTypeArgsOrProtocolQualifiers(DeclSpec &DS,
+                                             bool consumeLastToken,
                                              bool warnOnIncompleteProtocols);
 
   /// Parse either Objective-C type arguments or protocol qualifiers; if the
   /// former, also parse protocol qualifiers afterward.
-  void ParseObjCTypeArgsAndProtocolQualifiers(DeclSpec &DS);
+  void ParseObjCTypeArgsAndProtocolQualifiers(DeclSpec &DS,
+                                              bool consumeLastToken);
 
   /// Parse Objective-C type arguments and protocol qualifiers, extending the
   /// current type with the parsed result.
   TypeResult ParseObjCTypeArgsAndProtocolQualifiers(SourceLocation loc,
-                                                    ParsedType type);
+                                                    ParsedType type,
+                                                    bool consumeLastToken);
 
   void ParseObjCInterfaceDeclList(tok::ObjCKeywordKind contextKey,
                                   Decl *CDecl);

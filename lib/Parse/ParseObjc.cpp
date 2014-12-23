@@ -283,7 +283,8 @@ Decl *Parser::ParseObjCAtInterfaceDeclaration(SourceLocation AtLoc,
     SmallVector<SourceLocation, 8> ProtocolLocs;
     if (Tok.is(tok::less) &&
         ParseObjCProtocolReferences(ProtocolRefs, ProtocolLocs, true,
-                                    LAngleLoc, EndProtoLoc))
+                                    LAngleLoc, EndProtoLoc,
+    /*consumeLastToken=*/true))
       return nullptr;
 
     Decl *CategoryType =
@@ -332,6 +333,7 @@ Decl *Parser::ParseObjCAtInterfaceDeclaration(SourceLocation AtLoc,
     // Type arguments for the superclass or protocol conformances.
     if (Tok.is(tok::less)) {
       ParseObjCTypeArgsOrProtocolQualifiers(superClassDS,
+                                            /*consumeLastToken=*/true,
                                             /*warnOnIncompleteProtocols=*/true);
     }
   }
@@ -374,7 +376,8 @@ Decl *Parser::ParseObjCAtInterfaceDeclaration(SourceLocation AtLoc,
     EndProtoLoc = superClassDS.getLocEnd();
   } else if (Tok.is(tok::less) &&
              ParseObjCProtocolReferences(ProtocolRefs, ProtocolLocs, true,
-                                         LAngleLoc, EndProtoLoc)) {
+                                         LAngleLoc, EndProtoLoc,
+                                         /*consumeLastToken=*/true)) {
     return nullptr;
   }
 
@@ -1561,7 +1564,8 @@ bool Parser::
 ParseObjCProtocolReferences(SmallVectorImpl<Decl *> &Protocols,
                             SmallVectorImpl<SourceLocation> &ProtocolLocs,
                             bool WarnOnDeclarations,
-                            SourceLocation &LAngleLoc, SourceLocation &EndLoc) {
+                            SourceLocation &LAngleLoc, SourceLocation &EndLoc,
+                            bool consumeLastToken) {
   assert(Tok.is(tok::less) && "expected <");
 
   LAngleLoc = ConsumeToken(); // the "<"
@@ -1591,7 +1595,7 @@ ParseObjCProtocolReferences(SmallVectorImpl<Decl *> &Protocols,
   }
 
   // Consume the '>'.
-  if (ParseGreaterThanInTemplateList(EndLoc, /*ConsumeLastToken=*/true,
+  if (ParseGreaterThanInTemplateList(EndLoc, consumeLastToken,
                                      /*ObjCGenericList=*/false))
     return true;
 
@@ -1604,14 +1608,15 @@ ParseObjCProtocolReferences(SmallVectorImpl<Decl *> &Protocols,
 
 /// \brief Parse the Objective-C protocol qualifiers that follow a typename
 /// in a decl-specifier-seq, starting at the '<'.
-bool Parser::ParseObjCProtocolQualifiers(DeclSpec &DS) {
+bool Parser::ParseObjCProtocolQualifiers(DeclSpec &DS, bool consumeLastToken) {
   assert(Tok.is(tok::less) && "Protocol qualifiers start with '<'");
   assert(getLangOpts().ObjC1 && "Protocol qualifiers only exist in Objective-C");
   SourceLocation LAngleLoc, EndProtoLoc;
   SmallVector<Decl *, 8> ProtocolDecl;
   SmallVector<SourceLocation, 8> ProtocolLocs;
   bool Result = ParseObjCProtocolReferences(ProtocolDecl, ProtocolLocs, false,
-                                            LAngleLoc, EndProtoLoc);
+                                            LAngleLoc, EndProtoLoc,
+                                            consumeLastToken);
   DS.setProtocolQualifiers(ProtocolDecl.data(), ProtocolDecl.size(),
                            ProtocolLocs.data(), LAngleLoc);
   if (EndProtoLoc.isValid())
@@ -1626,6 +1631,7 @@ bool Parser::ParseObjCProtocolQualifiers(DeclSpec &DS) {
 ///
 void Parser::ParseObjCTypeArgsOrProtocolQualifiers(
        DeclSpec &DS,
+       bool consumeLastToken,
        bool warnOnIncompleteProtocols) {
   assert(Tok.is(tok::less) && "Not at the start of type args or protocols");
   SourceLocation lAngleLoc = ConsumeToken();
@@ -1672,7 +1678,7 @@ void Parser::ParseObjCTypeArgsOrProtocolQualifiers(
   if (allSingleIdentifiers) {
     // Parse the closing '>'.
     SourceLocation rAngleLoc;
-    (void)ParseGreaterThanInTemplateList(rAngleLoc, /*ConsumeLastToken=*/true,
+    (void)ParseGreaterThanInTemplateList(rAngleLoc, consumeLastToken,
                                          /*ObjCGenericList=*/true);
 
     // Let Sema figure out what we parsed.
@@ -1714,7 +1720,7 @@ void Parser::ParseObjCTypeArgsOrProtocolQualifiers(
 
   // Parse the closing '>'.
   SourceLocation rAngleLoc;
-  (void)ParseGreaterThanInTemplateList(rAngleLoc, /*ConsumeLastToken=*/true,
+  (void)ParseGreaterThanInTemplateList(rAngleLoc, consumeLastToken,
                                        /*ObjCGenericList=*/true);
 
   if (invalid)
@@ -1724,28 +1730,41 @@ void Parser::ParseObjCTypeArgsOrProtocolQualifiers(
   DS.setObjCTypeArgs(lAngleLoc, typeArgs, rAngleLoc);
 }
 
-void Parser::ParseObjCTypeArgsAndProtocolQualifiers(DeclSpec &DS) {
+void Parser::ParseObjCTypeArgsAndProtocolQualifiers(DeclSpec &DS,
+                                                    bool consumeLastToken) {
   assert(Tok.is(tok::less));
 
   ParseObjCTypeArgsOrProtocolQualifiers(DS,
+                                        consumeLastToken,
                                         /*warnOnIncompleteProtocols=*/false);
 
   // An Objective-C object pointer followed by type arguments
   // can then be followed again by a set of protocol references, e.g.,
   // \c NSArray<NSView><NSTextDelegate>
-  if (Tok.is(tok::less)) {
+  if ((consumeLastToken && Tok.is(tok::less)) ||
+      (!consumeLastToken && NextToken().is(tok::less))) {
+    // If we aren't consuming the last token, the prior '>' is still hanging
+    // there. Consume it before we parse the protocol qualifiers.
+    if (!consumeLastToken)
+      ConsumeToken();
+
     if (DS.getProtocolQualifiers()) {
+      SkipUntilFlags skipFlags = SkipUntilFlags();
+      if (!consumeLastToken)
+        skipFlags = skipFlags | StopBeforeMatch;
       Diag(Tok, diag::err_objc_type_args_after_protocols)
         << SourceRange(DS.getProtocolLAngleLoc(), DS.getLocEnd());
-      SkipUntil(tok::greater, tok::greatergreater);
+      SkipUntil(tok::greater, tok::greatergreater, skipFlags);
     } else {
-      ParseObjCProtocolQualifiers(DS);
+      ParseObjCProtocolQualifiers(DS, consumeLastToken);
     }
   }
 }
 
-TypeResult Parser::ParseObjCTypeArgsAndProtocolQualifiers(SourceLocation loc,
-                                                          ParsedType type) {
+TypeResult Parser::ParseObjCTypeArgsAndProtocolQualifiers(
+             SourceLocation loc,
+             ParsedType type,
+             bool consumeLastToken) {
   assert(Tok.is(tok::less));
 
   // Create declaration specifiers and set the type as the type specifier.
@@ -1756,7 +1775,7 @@ TypeResult Parser::ParseObjCTypeArgsAndProtocolQualifiers(SourceLocation loc,
                      Actions.getASTContext().getPrintingPolicy());
 
   // Parse type arguments and protocol qualifiers.
-  ParseObjCTypeArgsAndProtocolQualifiers(DS);
+  ParseObjCTypeArgsAndProtocolQualifiers(DS, consumeLastToken);
 
   // Form a declarator to turn this into a type.
   Declarator D(DS, Declarator::TypeNameContext);
@@ -1971,7 +1990,8 @@ Parser::ParseObjCAtProtocolDeclaration(SourceLocation AtLoc,
   SmallVector<SourceLocation, 8> ProtocolLocs;
   if (Tok.is(tok::less) &&
       ParseObjCProtocolReferences(ProtocolRefs, ProtocolLocs, false,
-                                  LAngleLoc, EndProtoLoc))
+                                  LAngleLoc, EndProtoLoc,
+                                  /*consumeLastToken=*/true))
     return DeclGroupPtrTy();
 
   Decl *ProtoType =
@@ -2067,7 +2087,7 @@ Parser::ParseObjCAtImplementationDeclaration(SourceLocation AtLoc) {
       Diag(Tok, diag::err_unexpected_protocol_qualifier);
       AttributeFactory attr;
       DeclSpec DS(attr);
-      (void)ParseObjCProtocolQualifiers(DS);
+      (void)ParseObjCProtocolQualifiers(DS, /*consumeLastToken=*/true);
     }
     ObjCImpDecl = Actions.ActOnStartCategoryImplementation(
                                     AtLoc, nameId, nameLoc, categoryId,
@@ -2098,7 +2118,7 @@ Parser::ParseObjCAtImplementationDeclaration(SourceLocation AtLoc) {
       // try to recover.
       AttributeFactory attr;
       DeclSpec DS(attr);
-      (void)ParseObjCProtocolQualifiers(DS);
+      (void)ParseObjCProtocolQualifiers(DS, /*consumeLastToken=*/true);
     }
   }
   assert(ObjCImpDecl);
@@ -2919,7 +2939,8 @@ ExprResult Parser::ParseObjCMessageExpression() {
       // Parse type arguments and protocol qualifiers.
       if (Tok.is(tok::less)) {
         TypeResult NewReceiverType
-          = ParseObjCTypeArgsAndProtocolQualifiers(NameLoc, ReceiverType);
+          = ParseObjCTypeArgsAndProtocolQualifiers(NameLoc, ReceiverType,
+                                                   /*consumeLastToken=*/true);
         if (!NewReceiverType.isUsable()) {
           SkipUntil(tok::r_square, StopAtSemi);
           return ExprError();

@@ -4076,15 +4076,53 @@ namespace {
         Visit(TL.getBaseLoc());
       }
 
+      // Extract type source information from the parser for this object type.
+      ObjCObjectTypeLoc OldObjCObjectTL;
+      if (DS.isTypeRep()) {
+        TypeSourceInfo *OldTInfo = nullptr;
+        Sema::GetTypeFromParser(DS.getRepAsType(), &OldTInfo);
+        if (OldTInfo) {
+          TypeLoc OldTL = OldTInfo->getTypeLoc();
+          OldObjCObjectTL = OldTL.getAs<ObjCObjectTypeLoc>();
+          if (OldObjCObjectTL.isNull()) {
+            auto OldObjCObjectPointerTL = OldTL.getAs<ObjCObjectPointerTypeLoc>();
+            if (!OldObjCObjectPointerTL.isNull()) {
+              OldObjCObjectTL = OldObjCObjectPointerTL.getPointeeLoc()
+                                  .getAs<ObjCObjectTypeLoc>();
+            }
+          }
+        }
+      }
+
       // Type arguments.
       if (TL.getNumTypeArgs() > 0) {
-        assert(TL.getNumTypeArgs() == DS.getObjCTypeArgs().size());
-        TL.setTypeArgsLAngleLoc(DS.getObjCTypeArgsLAngleLoc());
-        TL.setTypeArgsRAngleLoc(DS.getObjCTypeArgsRAngleLoc());
-        for (unsigned i = 0, n = TL.getNumTypeArgs(); i != n; ++i) {
-          TypeSourceInfo *typeArgInfo = nullptr;
-          (void)Sema::GetTypeFromParser(DS.getObjCTypeArgs()[i], &typeArgInfo);
-          TL.setTypeArgTInfo(i, typeArgInfo);
+        bool FilledTypeArgs = false;
+
+        // If the old type information has the type argument information,
+        // copy it.
+        if (!OldObjCObjectTL.isNull()) {
+          if (OldObjCObjectTL.getNumTypeArgs() == TL.getNumTypeArgs()) {
+            TL.setTypeArgsLAngleLoc(OldObjCObjectTL.getTypeArgsLAngleLoc());
+            TL.setTypeArgsRAngleLoc(OldObjCObjectTL.getTypeArgsRAngleLoc());
+            for (unsigned i = 0, n = TL.getNumTypeArgs(); i != n; ++i) {
+              TL.setTypeArgTInfo(i, OldObjCObjectTL.getTypeArgTInfo(i));
+            }
+
+            FilledTypeArgs = true;
+          }
+        }
+
+        // If we didn't fill in type argument information from the type
+        // specifier, that information is in the type arguments.
+        if (!FilledTypeArgs) {
+          assert(TL.getNumTypeArgs() == DS.getObjCTypeArgs().size());
+          TL.setTypeArgsLAngleLoc(DS.getObjCTypeArgsLAngleLoc());
+          TL.setTypeArgsRAngleLoc(DS.getObjCTypeArgsRAngleLoc());
+          for (unsigned i = 0, n = TL.getNumTypeArgs(); i != n; ++i) {
+            TypeSourceInfo *typeArgInfo = nullptr;
+            (void)Sema::GetTypeFromParser(DS.getObjCTypeArgs()[i], &typeArgInfo);
+            TL.setTypeArgTInfo(i, typeArgInfo);
+          }
         }
       } else {
         TL.setTypeArgsLAngleLoc(SourceLocation());
@@ -4092,15 +4130,27 @@ namespace {
       }
 
       // Protocol qualifiers.
-      if (DS.getProtocolQualifiers()) {
-        assert(TL.getNumProtocols() > 0);
-        assert(TL.getNumProtocols() == DS.getNumProtocolQualifiers());
-        TL.setProtocolLAngleLoc(DS.getProtocolLAngleLoc());
-        TL.setProtocolRAngleLoc(DS.getSourceRange().getEnd());
-        for (unsigned i = 0, e = DS.getNumProtocolQualifiers(); i != e; ++i)
-          TL.setProtocolLoc(i, DS.getProtocolLocs()[i]);
+      if (TL.getNumProtocols() > 0) {
+        // If we have the protocol information in the declaration specifiers,
+        // use it.
+        if (DS.getNumProtocolQualifiers() > 0) {
+          assert(TL.getNumProtocols() == DS.getNumProtocolQualifiers());
+          TL.setProtocolLAngleLoc(DS.getProtocolLAngleLoc());
+          TL.setProtocolRAngleLoc(DS.getSourceRange().getEnd());
+          for (unsigned i = 0, e = DS.getNumProtocolQualifiers(); i != e; ++i)
+            TL.setProtocolLoc(i, DS.getProtocolLocs()[i]);
+        } else {
+          // Otherwise, it's in the type specifier.
+          assert(!OldObjCObjectTL.isNull() && "Missing old type information?");
+          assert(OldObjCObjectTL.getNumProtocols()
+                   == TL.getNumProtocols());
+          TL.setProtocolLAngleLoc(OldObjCObjectTL.getProtocolLAngleLoc());
+          TL.setProtocolRAngleLoc(OldObjCObjectTL.getProtocolRAngleLoc());
+          for (unsigned i = 0, e = TL.getNumProtocols(); i != e; ++i) {
+            TL.setProtocolLoc(i, OldObjCObjectTL.getProtocolLoc(i));
+          }
+        }
       } else {
-        assert(TL.getNumProtocols() == 0);
         TL.setProtocolLAngleLoc(SourceLocation());
         TL.setProtocolRAngleLoc(SourceLocation());
       }

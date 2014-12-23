@@ -2828,13 +2828,6 @@ void Parser::ParseDeclarationSpecifiers(DeclSpec &DS,
       DS.SetRangeEnd(Tok.getAnnotationEndLoc());
       ConsumeToken(); // The typename
 
-      // Objective-C supports type arguments and protocol references
-      // following an Objective-C object pointer type. Handle either
-      // one of them.
-      if (Tok.is(tok::less) && getLangOpts().ObjC1) {
-        ParseObjCTypeArgsAndProtocolQualifiers(DS);
-      }
-
       continue;
     }
 
@@ -2931,7 +2924,7 @@ void Parser::ParseDeclarationSpecifiers(DeclSpec &DS,
       // following an Objective-C object pointer type. Handle either
       // one of them.
       if (Tok.is(tok::less) && getLangOpts().ObjC1) {
-        ParseObjCTypeArgsAndProtocolQualifiers(DS);
+        ParseObjCTypeArgsAndProtocolQualifiers(DS, /*consumeLastToken=*/true);
       }
 
       // Need to support trailing type qualifiers (e.g. "id<p> const").
@@ -3341,7 +3334,7 @@ void Parser::ParseDeclarationSpecifiers(DeclSpec &DS,
       if (DS.hasTypeSpecifier() || !getLangOpts().ObjC1)
         goto DoneWithDeclSpec;
 
-      if (!ParseObjCProtocolQualifiers(DS))
+      if (!ParseObjCProtocolQualifiers(DS, /*consumeLastToken=*/true))
         Diag(Loc, diag::warn_objc_protocol_qualifier_missing_id)
           << FixItHint::CreateInsertion(Loc, "id")
           << SourceRange(Loc, DS.getSourceRange().getEnd());

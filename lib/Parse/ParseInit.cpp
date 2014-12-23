@@ -275,7 +275,7 @@ ExprResult Parser::ParseInitializerWithPotentialDesignator() {
         // Parse type arguments and protocol qualifiers.
         if (Tok.is(tok::less)) {
           TypeResult NewReceiverType
-            = ParseObjCTypeArgsAndProtocolQualifiers(IILoc, ReceiverType);
+            = ParseObjCTypeArgsAndProtocolQualifiers(IILoc, ReceiverType,                                                     /*consumeLastToken=*/true);
           if (!NewReceiverType.isUsable()) {
             SkipUntil(tok::r_square, StopAtSemi);
             return ExprError();
