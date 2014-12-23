@@ -738,6 +738,9 @@ void ObjCMigrateASTConsumer::AddNonnullAttribute(ASTContext &Ctx,
   if (!(ASTMigrateActions & FrontendOptions::ObjCMT_ApiNotes) ||
       !FirstDeclWithNullabilityAttr)
     return;
+  if (D->isInvalidDecl() || D->isImplicit() || !canModify(D))
+    return;
+
   clang::NullabilityKind nullabilityKind;
   std::string nullabilityString;
   TypeSourceInfo *TSInfo;
