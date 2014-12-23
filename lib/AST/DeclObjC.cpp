@@ -93,13 +93,13 @@ ObjCContainerDecl::getMethod(Selector Sel, bool isInstance,
   return nullptr;
 }
 
-/// HasUserDeclaredSetterMethod - This routine returns 'true' if a user declared setter
-/// method was found in the class, its protocols, its super classes or categories.
-/// It also returns 'true' if one of its categories has declared a 'readwrite' property.
-/// This is because, user must provide a setter method for the category's 'readwrite'
-/// property.
-bool
-ObjCContainerDecl::HasUserDeclaredSetterMethod(const ObjCPropertyDecl *Property) const {
+/// \brief This routine returns 'true' if a user declared setter method was
+/// found in the class, its protocols, its super classes or categories.
+/// It also returns 'true' if one of its categories has declared a 'readwrite'
+/// property.  This is because, user must provide a setter method for the
+/// category's 'readwrite' property.
+bool ObjCContainerDecl::HasUserDeclaredSetterMethod(
+    const ObjCPropertyDecl *Property) const {
   Selector Sel = Property->getSetterName();
   lookup_const_result R = lookup(Sel);
   for (lookup_const_iterator Meth = R.begin(), MethEnd = R.end();
@@ -118,9 +118,10 @@ ObjCContainerDecl::HasUserDeclaredSetterMethod(const ObjCPropertyDecl *Property)
           return true;
       if (Cat->IsClassExtension())
         continue;
-      // Also search through the categories looking for a 'readwrite' declaration
-      // of this property. If one found, presumably a setter will be provided
-      // (properties declared in categories will not get auto-synthesized).
+      // Also search through the categories looking for a 'readwrite'
+      // declaration of this property. If one found, presumably a setter will
+      // be provided (properties declared in categories will not get
+      // auto-synthesized).
       for (const auto *P : Cat->properties())
         if (P->getIdentifier() == Property->getIdentifier()) {
           if (P->getPropertyAttributes() & ObjCPropertyDecl::OBJC_PR_readwrite)
@@ -250,7 +251,7 @@ ObjCTypeParamList *ObjCInterfaceDecl::getTypeParamList() const {
   // Otherwise, look at previous declarations to determine whether any
   // of them has a type parameter list, skipping over those
   // declarations that do not.
-  for (auto decl = getPreviousDecl(); decl; decl = decl->getPreviousDecl()) {
+  for (auto decl = getMostRecentDecl(); decl; decl = decl->getPreviousDecl()) {
     if (ObjCTypeParamList *written = decl->getTypeParamListAsWritten())
       return written;
   }
@@ -1021,23 +1022,8 @@ SourceRange ObjCMethodDecl::getReturnTypeSourceRange() const {
 QualType ObjCMethodDecl::getSendResultType(QualType receiverType) const {
   // FIXME: Handle related result types here.
 
-  QualType declaredResultType 
-    = getReturnType().getNonLValueExprType(getASTContext());
-  if (const auto *objcObjectTy = receiverType->getAs<ObjCObjectType>()) {
-    return objcObjectTy->substTypeInContext(declaredResultType, 
-                                            getDeclContext());
-  }
-
-  if (const auto *objcObjectPointerTy
-        = receiverType->getAs<ObjCObjectPointerType>()) {
-    return objcObjectPointerTy->substTypeInContext(declaredResultType, 
-                                                   getDeclContext());
-  }
-
-  ASTContext &ctx = getASTContext();
-  return ctx.getObjCIdType()->castAs<ObjCObjectPointerType>()
-           ->substTypeInContext(declaredResultType, 
-                                getDeclContext());
+  return getReturnType().getNonLValueExprType(getASTContext())
+           .substObjCMemberType(receiverType, getDeclContext());
 }
 
 static void CollectOverriddenMethodsRecurse(const ObjCContainerDecl *Container,
@@ -1247,7 +1233,7 @@ SourceRange ObjCTypeParamDecl::getSourceRange() const {
 ObjCTypeParamList::ObjCTypeParamList(SourceLocation lAngleLoc,
                                      ArrayRef<ObjCTypeParamDecl *> typeParams,
                                      SourceLocation rAngleLoc)
-  : LAngleLoc(lAngleLoc), RAngleLoc(rAngleLoc), NumParams(typeParams.size())
+  : Brackets(lAngleLoc, rAngleLoc), NumParams(typeParams.size())
 {
   std::copy(typeParams.begin(), typeParams.end(), begin());
 }
@@ -1260,8 +1246,9 @@ ObjCTypeParamList *ObjCTypeParamList::create(
                      SourceLocation rAngleLoc) {
   unsigned size = sizeof(ObjCTypeParamList)
                 + sizeof(ObjCTypeParamDecl *) * typeParams.size();
-  unsigned align = std::max(llvm::alignOf<ObjCTypeParamList>(),
-                            llvm::alignOf<ObjCTypeParamDecl*>());
+  static_assert(alignof(ObjCTypeParamList) >= alignof(ObjCTypeParamDecl*),
+                "type parameter list needs greater alignment");
+  unsigned align = llvm::alignOf<ObjCTypeParamList>();
   void *mem = ctx.Allocate(size, align);
   return new (mem) ObjCTypeParamList(lAngleLoc, typeParams, rAngleLoc);
 }
@@ -1638,6 +1625,10 @@ const ObjCInterfaceDecl *ObjCIvarDecl::getContainingInterface() const {
   case ObjCInterface:
     return cast<ObjCInterfaceDecl>(DC);
   }
+}
+
+QualType ObjCIvarDecl::getUsageType(QualType objectType) const {
+  return getType().substObjCMemberType(objectType, getDeclContext());
 }
 
 //===----------------------------------------------------------------------===//
@@ -2039,6 +2030,10 @@ ObjCPropertyDecl *ObjCPropertyDecl::CreateDeserialized(ASTContext &C,
   return new (C, ID) ObjCPropertyDecl(nullptr, SourceLocation(), nullptr,
                                       SourceLocation(), SourceLocation(),
                                       QualType(), nullptr, None);
+}
+
+QualType ObjCPropertyDecl::getUsageType(QualType objectType) const {
+  return DeclType.substObjCMemberType(objectType, getDeclContext());
 }
 
 //===----------------------------------------------------------------------===//

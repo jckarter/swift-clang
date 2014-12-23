@@ -139,7 +139,7 @@ void test_receiver_merge(NSMergeReceiver *none,
 
 __attribute__((objc_root_class))
 @interface InitializableClass <Initializable>
-- (nonnull instancetype)initWithBlah:(nonnull)blah;
+- (nonnull instancetype)initWithBlah:(nonnull id)blah;
 - (nullable instancetype)returnMe;
 + (nullable instancetype)returnInstanceOfMe;
 @end

@@ -1214,8 +1214,7 @@ static QualType getBaseMessageSendResultType(Sema &S,
   }
 
   //   - if the receiver is the name of a class U, T is a pointer to U
-  if (ReceiverType->getAs<ObjCInterfaceType>() ||
-      ReceiverType->isObjCQualifiedInterfaceType())
+  if (ReceiverType->getAsObjCInterfaceType())
     return transferNullability(Context.getObjCObjectPointerType(ReceiverType));
   //   - if the receiver is of type Class or qualified Class type,
   //     T is the declared return type of the method.
@@ -1481,6 +1480,12 @@ bool Sema::CheckMessageArgumentTypes(QualType ReceiverType,
     return false;
   }
 
+  // Compute the set of type arguments to be substituted into each parameter
+  // type.
+  SmallVector<QualType, 4> typeArgsBuffer;
+  ArrayRef<QualType> typeArgs
+    = ReceiverType->getObjCSubstitutions(Method->getDeclContext(),
+                                         typeArgsBuffer);
   bool IsError = false;
   for (unsigned i = 0; i < NumNamedArgs; i++) {
     // We can't do any type-checking on a type-dependent argument.
@@ -1514,13 +1519,14 @@ bool Sema::CheckMessageArgumentTypes(QualType ReceiverType,
       continue;
     }
 
+    QualType paramType = param->getType().substObjCTypeArgs(Context, typeArgs);
     if (RequireCompleteType(argExpr->getSourceRange().getBegin(),
-                            param->getType(),
+                            paramType,
                             diag::err_call_incomplete_argument, argExpr))
       return true;
 
-    InitializedEntity Entity = InitializedEntity::InitializeParameter(Context,
-                                                                      param);
+    InitializedEntity Entity
+      = InitializedEntity::InitializeParameter(Context, param, paramType);
     ExprResult ArgE = PerformCopyInitialization(Entity, SourceLocation(), argExpr);
     if (ArgE.isInvalid())
       IsError = true;
@@ -1860,18 +1866,17 @@ ActOnClassPropertyRefExpr(IdentifierInfo &receiverName,
 
       if (ObjCMethodDecl *CurMethod = tryCaptureObjCSelf(receiverNameLoc)) {
         if (CurMethod->isInstanceMethod()) {
-          ObjCInterfaceDecl *Super =
-            CurMethod->getClassInterface()->getSuperClass();
-          if (!Super) {
+          QualType SuperType(
+                     CurMethod->getClassInterface()->getSuperClassType(), 0);
+          if (SuperType.isNull()) {
             // The current class does not have a superclass.
             Diag(receiverNameLoc, diag::error_root_class_cannot_use_super)
-            << CurMethod->getClassInterface()->getIdentifier();
+              << CurMethod->getClassInterface()->getIdentifier();
             return ExprError();
           }
-          QualType T = Context.getObjCInterfaceType(Super);
-          T = Context.getObjCObjectPointerType(T);
+          QualType T = Context.getObjCObjectPointerType(SuperType);
 
-          return HandleExprPropertyRefExpr(T->getAsObjCInterfacePointerType(),
+          return HandleExprPropertyRefExpr(T->castAs<ObjCObjectPointerType>(),
                                            /*BaseExpr*/nullptr,
                                            SourceLocation()/*OpLoc*/, 
                                            &propertyName,
@@ -2078,8 +2083,8 @@ ExprResult Sema::ActOnSuperMessage(Scope *S,
     return ExprError();
   }
 
-  ObjCInterfaceDecl *Super = Class->getSuperClass();
-  if (!Super) {
+  QualType SuperTy(Class->getSuperClassType(), 0);
+  if (SuperTy.isNull()) {
     // The current class does not have a superclass.
     Diag(SuperLoc, diag::error_root_class_cannot_use_super)
       << Class->getIdentifier();
@@ -2094,7 +2099,6 @@ ExprResult Sema::ActOnSuperMessage(Scope *S,
   if (Method->isInstanceMethod()) {
     // Since we are in an instance method, this is an instance
     // message to the superclass instance.
-    QualType SuperTy = Context.getObjCInterfaceType(Super);
     SuperTy = Context.getObjCObjectPointerType(SuperTy);
     return BuildInstanceMessage(nullptr, SuperTy, SuperLoc,
                                 Sel, /*Method=*/nullptr,
@@ -2104,7 +2108,7 @@ ExprResult Sema::ActOnSuperMessage(Scope *S,
   // Since we are in a class method, this is a class message to
   // the superclass.
   return BuildClassMessage(/*ReceiverTypeInfo=*/nullptr,
-                           Context.getObjCInterfaceType(Super),
+                           SuperTy,
                            SuperLoc, Sel, /*Method=*/nullptr,
                            LBracLoc, SelectorLocs, RBracLoc, Args);
 }

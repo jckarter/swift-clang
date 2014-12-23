@@ -994,6 +994,40 @@ public:
   ///   type other than void.
   bool isCForbiddenLValueType() const;
 
+  /// Substitute type arguments for the Objective-C type parameters used in the
+  /// subject type.
+  ///
+  /// \param ctx ASTContext in which the type exists.
+  ///
+  /// \param typeArgs The type arguments that will be substituted for the
+  /// Objective-C type parameters in the subject type, which are generally
+  /// computed via \c Type::getObjCSubstitutions.
+  ///
+  /// \returns the resulting type.
+  QualType substObjCTypeArgs(ASTContext &ctx,
+                             ArrayRef<QualType> typeArgs) const;
+
+  /// Substitute type arguments from an object type for the Objective-C type
+  /// parameters used in the subject type.
+  ///
+  /// This operation combines the computation of type arguments for
+  /// substitution (\c Type::getObjCSubstitutions) with the actual process of
+  /// substitution (\c QualType::substObjCTypeArgs) for the convenience of
+  /// callers that need to perform a single substitution in isolation.
+  ///
+  /// \param objectType The type of the object whose member type we're
+  /// substituting into. For example, this might be the receiver of a message
+  /// or the base of a property access.
+  ///
+  /// \param dc The declaration context from which the subject type was
+  /// retrieved, which indicates (for example) which type parameters should
+  /// be substituted.
+  ///
+  /// \returns the subject type after replacing all of the Objective-C type
+  /// parameters with their corresponding arguments.
+  QualType substObjCMemberType(QualType objectType,
+                               const DeclContext *dc) const;
+
 private:
   // These methods are implemented in a separate translation unit;
   // "static"-ize them to avoid creating temporary QualTypes in the
@@ -1700,6 +1734,7 @@ public:
   /// NOTE: getAs*ArrayType are methods on ASTContext.
   const RecordType *getAsUnionType() const;
   const ComplexType *getAsComplexIntegerType() const; // GCC complex int type.
+  const ObjCObjectType *getAsObjCInterfaceType() const;
   // The following is a convenience method that returns an ObjCObjectPointerType
   // for object declared using an interface.
   const ObjCObjectPointerType *getAsObjCInterfacePointerType() const;
@@ -1829,6 +1864,27 @@ public:
   /// or a dependent type that could instantiate to any kind of
   /// pointer type.
   bool canHaveNullability() const;
+
+  /// Retrieve the set of substitutions required when accessing a member
+  /// of the Objective-C receiver type that is declared in the given context.
+  ///
+  /// \c *this is the type of the object we're operating on, e.g., the
+  /// receiver for a message send or the base of a property access, and is
+  /// expected to be of some object or object pointer type.
+  ///
+  /// \param dc The declaration context for which we are building up a
+  /// substitution mapping, which should be an Objective-C class, extension,
+  /// category, or method within.
+  ///
+  /// \param scratch Scratch space to store the returned type arguments if
+  /// they need to be computed.
+  ///
+  /// \returns an array of type arguments that can be substituted for
+  /// the type parameters of the given declaration context in any type described
+  /// within that context.
+  ArrayRef<QualType> getObjCSubstitutions(
+                       const DeclContext *dc,
+                       SmallVectorImpl<QualType> &scratch) const;
 
   const char *getTypeClassName() const;
 
@@ -4410,6 +4466,10 @@ class ObjCObjectType : public Type {
   /// Either a BuiltinType or an InterfaceType or sugar for either.
   QualType BaseType;
 
+  /// Cached superclass type.
+  mutable llvm::PointerIntPair<const ObjCObjectType *, 1, bool>
+    CachedSuperClassType;
+
   ObjCProtocolDecl * const *getProtocolStorage() const {
     return const_cast<ObjCObjectType*>(this)->getProtocolStorage();
   }
@@ -4433,6 +4493,8 @@ protected:
     ObjCObjectTypeBits.NumProtocols = 0;
     ObjCObjectTypeBits.NumTypeArgs = 0;
   }
+
+  void computeSuperClassTypeSlow() const;
 
 public:
   /// getBaseType - Gets the base type of this object type.  This is
@@ -4511,34 +4573,19 @@ public:
     return qual_begin()[I];
   }
 
-  /// Substitute the type arguments into the given type, which was
-  /// declared within the provided declaration context.
-  ///
-  /// Given this code:
-  ///
-  /// \code
-  /// \@interface NSFoo<T>
-  /// +(T)method;
-  /// \@end
-  /// 
-  /// NSArray *x = [NSFoo<NSString *> method]; 
-  ///   // warning that NSString* can't be converted to NSArray*
-  /// \endcode
-  ///
-  /// When computing the result type of the message send, semantic
-  /// analysis will substitute the type arguments of this object type
-  /// (\c T=NSString*) into the result type of the method (\c T) which
-  /// comes from the \c \@interface declaration context to produce the
-  /// effective result type (\c NSString*).
-  QualType substTypeInContext(QualType type, const DeclContext *dc) const;
-
   /// Retrieve the type of the superclass of this object type.
   ///
   /// This operation substitutes any type arguments into the
   /// superclass of the current class type, potentially producing a
   /// specialization of the superclass type. Produces a null type if
   /// there is no superclass.
-  QualType getSuperClassType() const;
+  QualType getSuperClassType() const {
+    if (!CachedSuperClassType.getInt())
+      computeSuperClassTypeSlow();
+
+    assert(CachedSuperClassType.getInt() && "Superclass not set?");
+    return QualType(CachedSuperClassType.getPointer(), 0);
+  }
 
   bool isSugared() const { return false; }
   QualType desugar() const { return QualType(this, 0); }
@@ -4786,28 +4833,6 @@ public:
 
   bool isSugared() const { return false; }
   QualType desugar() const { return QualType(this, 0); }
-
-  /// Substitute the type arguments into the given type, which was
-  /// declared within the provided declaration context.
-  ///
-  /// Given this code:
-  ///
-  /// \code
-  /// \@interface NSFoo<T>
-  /// -(T)method;
-  /// \@end
-  /// 
-  /// NSFoo<NSString *> foo;
-  /// NSArray *x = [foo method]; 
-  ///   // warning that NSString* can't be converted to NSArray*
-  /// \endcode
-  ///
-  /// When computing the result type of the message send, semantic
-  /// analysis will substitute the type arguments of this object
-  /// pointer type (\c T=NSString*) into the result type of the method
-  /// (\c T) which comes from the \c \@interface declaration context
-  /// to produce the effective result type (\c NSString*).
-  QualType substTypeInContext(QualType type, const DeclContext *dc) const;
 
   /// Retrieve the type of the superclass of this object pointer type.
   ///

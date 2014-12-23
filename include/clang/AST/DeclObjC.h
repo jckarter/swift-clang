@@ -572,8 +572,13 @@ public:
 /// @end
 /// \endcode
 class ObjCTypeParamList {
-  /// Locations of the left and right angle brackets.
-  SourceLocation LAngleLoc, RAngleLoc;
+  union { 
+    /// Location of the left and right angle brackets.
+    SourceRange Brackets;
+
+    // Used only for alignment.
+    ObjCTypeParamDecl *AlignmentHack;
+  };
 
   /// The number of parameters in the list, which are tail-allocated.
   unsigned NumParams;
@@ -620,12 +625,9 @@ public:
     return *(end() - 1);
   }
 
-  SourceLocation getLAngleLoc() const { return LAngleLoc; }
-  SourceLocation getRAngleLoc() const { return RAngleLoc; }
-
-  SourceRange getSourceRange() const {
-    return SourceRange(LAngleLoc, RAngleLoc);
-  }
+  SourceLocation getLAngleLoc() const { return Brackets.getBegin(); }
+  SourceLocation getRAngleLoc() const { return Brackets.getEnd(); }
+  SourceRange getSourceRange() const { return Brackets; }
 
   /// Gather the default set of type arguments to be substituted for
   /// these type parameters when dealing with an unspecialized type.
@@ -1634,6 +1636,10 @@ public:
   void setSynthesize(bool synth) { Synthesized = synth; }
   bool getSynthesize() const { return Synthesized; }
 
+  /// Retrieve the type of this instance variable when viewed as a member of a
+  /// specific object type.
+  QualType getUsageType(QualType objectType) const;
+
   // Implement isa/cast/dyncast/etc.
   static bool classof(const Decl *D) { return classofKind(D->getKind()); }
   static bool classofKind(Kind K) { return K == ObjCIvar; }
@@ -2467,7 +2473,11 @@ public:
 
   QualType getType() const { return DeclType; }
 
-  void setType(QualType T, TypeSourceInfo *TSI) { 
+  /// Retrieve the type when this property is used with a specific base object
+  /// type.
+  QualType getUsageType(QualType objectType) const;
+
+  void setType(QualType T, TypeSourceInfo *TSI) {
     DeclType = T;
     DeclTypeSourceInfo = TSI; 
   }

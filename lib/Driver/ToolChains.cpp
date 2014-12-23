@@ -1094,7 +1094,7 @@ void Darwin::addStartObjectFileArgs(const llvm::opt::ArgList &Args,
 }
 
 bool Darwin::SupportsObjCGC() const {
-  return isTargetMacOS();
+  return isTargetMacOS() && getArchName() != "x86_64h";
 }
 
 void Darwin::CheckObjCARC() const {

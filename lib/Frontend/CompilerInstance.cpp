@@ -779,34 +779,6 @@ bool CompilerInstance::ExecuteAction(FrontendAction &Act) {
   if (!hasTarget())
     return false;
 
-  // This check should not be done here, but it is important to check
-  // for GC usage here after serialized diagnostics have been created.
-  //
-  // Disable support for building .o files with Objective-C garbage collection
-  // support.  We still allow -fsyntax-only, --analyze, etc., to work.
-  if (getFrontendOpts().ProgramAction == frontend::EmitObj &&
-      getFrontendOpts().ARCMTAction == FrontendOptions::ARCMT_None &&
-      getLangOpts().getGC() != LangOptions::NonGC) {
-
-    SmallString<1024> P(getHeaderSearchOpts().ResourceDir);
-    // 1. Strip away version.
-    // 2. Strip away 'clang'.
-    // 3. Strip away 'lib'.
-    for (unsigned i = 0 ; i < 3 ; ++i) llvm::sys::path::remove_filename(P);
-    // 4. Add 'local'.
-    llvm::sys::path::append(P, "local");
-    llvm::sys::path::append(P, "lib");
-    llvm::sys::path::append(P, "clang");
-    // 5. Add magic gc file.
-    llvm::sys::path::append(P, "enable_objc_gc");
-
-    if (!llvm::sys::fs::exists(P.str())) {
-      getDiagnostics().Report(diag::err_fe_objc_gc_not_supported);
-      getDiagnostics().getClient()->finish();
-      return false;
-    }
-  }
-
   // Inform the target of the language options.
   //
   // FIXME: We shouldn't need to do this, the target should be immutable once

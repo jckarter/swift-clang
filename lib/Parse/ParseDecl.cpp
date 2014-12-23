@@ -2832,21 +2832,7 @@ void Parser::ParseDeclarationSpecifiers(DeclSpec &DS,
       // following an Objective-C object pointer type. Handle either
       // one of them.
       if (Tok.is(tok::less) && getLangOpts().ObjC1) {
-        ParseObjCTypeArgsOrProtocolQualifiers(
-          DS, /*warnOnIncompleteProtocols=*/false);
-
-        // An Objective-C object pointer followed by type arguments
-        // can then be followed again by a set of protocol references, e.g.,
-        // \c NSArray<NSView><NSTextDelegate>
-        if (Tok.is(tok::less)) {
-          if (DS.getProtocolQualifiers()) {
-            Diag(Tok, diag::err_objc_type_args_after_protocols)
-              << SourceRange(DS.getProtocolLAngleLoc(), DS.getLocEnd());
-            SkipUntil(tok::greater, tok::greatergreater);
-          } else {
-            ParseObjCProtocolQualifiers(DS);
-          }
-        }
+        ParseObjCTypeArgsAndProtocolQualifiers(DS);
       }
 
       continue;
@@ -2945,21 +2931,7 @@ void Parser::ParseDeclarationSpecifiers(DeclSpec &DS,
       // following an Objective-C object pointer type. Handle either
       // one of them.
       if (Tok.is(tok::less) && getLangOpts().ObjC1) {
-        ParseObjCTypeArgsOrProtocolQualifiers(
-          DS, /*warnOnIncompleteProtocols=*/false);
-
-        // An Objective-C object pointer followed by type arguments
-        // can then be followed again by a set of protocol references, e.g.,
-        // \c NSArray<NSView><NSTextDelegate>
-        if (Tok.is(tok::less)) {
-          if (DS.getProtocolQualifiers()) {
-            Diag(Tok, diag::err_objc_type_args_after_protocols)
-              << SourceRange(DS.getProtocolLAngleLoc(), DS.getLocEnd());
-            SkipUntil(tok::greater, tok::greatergreater);
-          } else {
-            ParseObjCProtocolQualifiers(DS);
-          }
-        }
+        ParseObjCTypeArgsAndProtocolQualifiers(DS);
       }
 
       // Need to support trailing type qualifiers (e.g. "id<p> const").
@@ -4800,7 +4772,7 @@ void Parser::ParseDeclaratorInternal(Declarator &D,
       // Sema will have to catch (syntactically invalid) pointers into global
       // scope. It has to catch pointers into namespace scope anyway.
       D.AddTypeInfo(DeclaratorChunk::getMemberPointer(SS,DS.getTypeQualifiers(),
-                                                      Loc),
+                                                      DS.getLocEnd()),
                     DS.getAttributes(),
                     /* Don't replace range end. */SourceLocation());
       return;
@@ -6007,8 +5979,8 @@ void Parser::ParseTypeofSpecifier(DeclSpec &DS) {
   bool isCastExpr;
   ParsedType CastTy;
   SourceRange CastRange;
-  ExprResult Operand = ParseExprAfterUnaryExprOrTypeTrait(OpTok, isCastExpr,
-                                                          CastTy, CastRange);
+  ExprResult Operand = Actions.CorrectDelayedTyposInExpr(
+      ParseExprAfterUnaryExprOrTypeTrait(OpTok, isCastExpr, CastTy, CastRange));
   if (hasParens)
     DS.setTypeofParensRange(CastRange);
 

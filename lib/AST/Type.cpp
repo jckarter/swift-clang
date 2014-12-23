@@ -926,12 +926,17 @@ QualType simpleTransform(ASTContext &ctx, QualType type, F &&f) {
 
 /// Substitute the given type arguments for Objective-C type
 /// parameters within the given type, recursively.
-static QualType substObjCTypeArgs(ASTContext &ctx, QualType type,
-                                  ArrayRef<QualType> typeArgs) {
-  return simpleTransform(ctx, type,
+QualType QualType::substObjCTypeArgs(ASTContext &ctx,
+                                     ArrayRef<QualType> typeArgs) const {
+  if (typeArgs.empty())
+    return *this;
+
+  return simpleTransform(ctx, *this,
                          [&](QualType type) -> QualType {
     SplitQualType splitType = type.split();
 
+    // Replace an Objective-C type parameter reference with the corresponding
+    // type argument.
     if (const auto *typedefTy = dyn_cast<TypedefType>(splitType.Ty)) {
       if (auto *typeParam = dyn_cast<ObjCTypeParamDecl>(typedefTy->getDecl())) {
         // FIXME: Introduce SubstObjCTypeParamType ?
@@ -943,8 +948,16 @@ static QualType substObjCTypeArgs(ASTContext &ctx, QualType type,
   });
 }
 
-QualType ObjCObjectType::substTypeInContext(QualType type, 
-                                            const DeclContext *dc) const {
+QualType QualType::substObjCMemberType(
+           QualType objectType, const DeclContext *dc) const {
+  SmallVector<QualType, 4> scratch;
+  return substObjCTypeArgs(dc->getParentASTContext(),
+                           objectType->getObjCSubstitutions(dc, scratch));
+}
+
+ArrayRef<QualType> Type::getObjCSubstitutions(
+                     const DeclContext *dc,
+                     SmallVectorImpl<QualType> &scratch) const {
   // Look through method scopes.
   if (auto method = dyn_cast<ObjCMethodDecl>(dc))
     dc = method->getDeclContext();
@@ -959,123 +972,143 @@ QualType ObjCObjectType::substTypeInContext(QualType type,
     // substitution to do.
     dcTypeParams = dcClassDecl->getTypeParamList();
     if (!dcTypeParams)
-      return type;
+      return { };
   } else {
     // If we are in neither a class mor a category, there's no
     // substitution to perform.
     dcCategoryDecl = dyn_cast<ObjCCategoryDecl>(dc);
     if (!dcCategoryDecl)
-      return type;
+      return { };
 
     // If the category does not have any type parameters, there's no
     // substitution to do.
     dcTypeParams = dcCategoryDecl->getTypeParamList();
     if (!dcTypeParams)
-      return type;
+      return { };
 
     dcClassDecl = dcCategoryDecl->getClassInterface();
     if (!dcClassDecl)
-      return type;
+      return { };
   }
   assert(dcTypeParams && "No substitutions to perform");
   assert(dcClassDecl && "No class context");
 
-  /// Extract the class on which the context type is based.
-  ObjCInterfaceDecl *curClassDecl = getInterface();
+  // Find the underlying object type.
+  const ObjCObjectType *objectType;
+  if (const auto *objectPointerType = getAs<ObjCObjectPointerType>()) {
+    objectType = objectPointerType->getObjectType();
+  } else if (getAs<BlockPointerType>()) {
+    ASTContext &ctx = dc->getParentASTContext();
+    objectType = ctx.getObjCObjectType(ctx.ObjCBuiltinIdTy, { }, { })
+                   ->castAs<ObjCObjectType>();;
+  } else {
+    objectType = getAs<ObjCObjectType>();
+  }
+
+  /// Extract the class from the receiver object type.
+  ObjCInterfaceDecl *curClassDecl = objectType ? objectType->getInterface()
+                                               : nullptr;
   if (!curClassDecl) {
     // If we don't have a context type (e.g., this is "id" or some
     // variant thereof), substitute the default type arguments.
-    SmallVector<QualType, 4> typeArgs;
-    dcTypeParams->gatherDefaultTypeArgs(typeArgs);
-    return substObjCTypeArgs(dcClassDecl->getASTContext(), type, typeArgs);
+    scratch.clear();
+    dcTypeParams->gatherDefaultTypeArgs(scratch);
+    return scratch;
   }
 
-  // Follow the superclass chain until we've mapped the context type
+  // Follow the superclass chain until we've mapped the receiver type
   // to the same class as the context.
-  const ObjCObjectType *contextType = this;
   while (curClassDecl != dcClassDecl) {
     // Map to the superclass type.
-    QualType superType = contextType->getSuperClassType();
+    QualType superType = objectType->getSuperClassType();
     if (superType.isNull()) {
-      contextType = nullptr;
+      objectType = nullptr;
       break;
     }
 
-    contextType = superType->castAs<ObjCObjectType>();
-    curClassDecl = contextType->getInterface();
+    objectType = superType->castAs<ObjCObjectType>();
+    curClassDecl = objectType->getInterface();
   }
 
-  // If we don't have a context type, or the context type does not
+  // If we don't have a receiver type, or the receiver type does not
   // have type arguments, substitute in the defaults.
-  if (!contextType || contextType->isUnspecialized()) {
-    SmallVector<QualType, 4> typeArgs;
-    dcTypeParams->gatherDefaultTypeArgs(typeArgs);
-    return substObjCTypeArgs(dcClassDecl->getASTContext(), type, typeArgs);
+  if (!objectType || objectType->isUnspecialized()) {
+    scratch.clear();
+    dcTypeParams->gatherDefaultTypeArgs(scratch);
+    return scratch;
   }
 
-  // Substitute the type arguments.
-  ArrayRef<QualType> typeArgs = contextType->getTypeArgs();
-  assert(typeArgs.size() == dcTypeParams->size() &&
-         "Parameter/argument mismatch");
-  return substObjCTypeArgs(dcClassDecl->getASTContext(), type, typeArgs);
+  // The receiver type has the type arguments we want.
+  return objectType->getTypeArgs();
 }
 
-QualType ObjCObjectType::getSuperClassType() const {
+void ObjCObjectType::computeSuperClassTypeSlow() const {
   // Retrieve the class declaration for this type. If there isn't one
   // (e.g., this is some variant of "id" or "Class"), then there is no
   // superclass type.
   ObjCInterfaceDecl *classDecl = getInterface();
-  if (!classDecl)
-    return QualType();
-  
+  if (!classDecl) {
+    CachedSuperClassType.setInt(true);
+    return;
+  }
+
   // Extract the superclass type.
   const ObjCObjectType *superClassObjTy = classDecl->getSuperClassType();
-  if (!superClassObjTy)
-    return QualType();
+  if (!superClassObjTy) {
+    CachedSuperClassType.setInt(true);
+    return;
+  }
 
   ObjCInterfaceDecl *superClassDecl = superClassObjTy->getInterface();
-  if (!superClassDecl)
-    return QualType();
+  if (!superClassDecl) {
+    CachedSuperClassType.setInt(true);
+    return;
+  }
 
   // If the superclass doesn't have type parameters, then there is no
   // substitution to perform.
   QualType superClassType(superClassObjTy, 0);
   ObjCTypeParamList *superClassTypeParams = superClassDecl->getTypeParamList();
-  if (!superClassTypeParams)
-    return superClassType;
+  if (!superClassTypeParams) {
+    CachedSuperClassType.setPointerAndInt(
+      superClassType->castAs<ObjCObjectType>(), true);
+    return;
+  }
 
-  // If the superclass reference is unspecialized, substitute the
-  // defaults.
+  // If the superclass reference is unspecialized, return it.
   if (superClassObjTy->isUnspecialized()) {
-    SmallVector<QualType, 4> typeArgs;
-    superClassTypeParams->gatherDefaultTypeArgs(typeArgs);
-    return substObjCTypeArgs(classDecl->getASTContext(), superClassType, 
-                             typeArgs);
+    CachedSuperClassType.setPointerAndInt(superClassObjTy, true);
+    return;
   }
 
   // If the subclass is not parameterized, there aren't any type
   // parameters in the superclass reference to substitute.
   ObjCTypeParamList *typeParams = classDecl->getTypeParamList();
-  if (!typeParams)
-    return superClassType;
-  
-  // If the subclass type isn't specialized, substitute the defaults.
+  if (!typeParams) {
+    CachedSuperClassType.setPointerAndInt(
+      superClassType->castAs<ObjCObjectType>(), true);
+    return;
+  }
+
+  // If the subclass type isn't specialized, return the unspecialized
+  // superclass.
   if (isUnspecialized()) {
-    SmallVector<QualType, 4> typeArgs;
-    typeParams->gatherDefaultTypeArgs(typeArgs);
-    return substObjCTypeArgs(classDecl->getASTContext(), superClassType, 
-                             typeArgs);
+    QualType unspecializedSuper
+      = classDecl->getASTContext().getObjCInterfaceType(
+          superClassObjTy->getInterface());
+    CachedSuperClassType.setPointerAndInt(
+      unspecializedSuper->castAs<ObjCObjectType>(),
+      true);
+    return;
   }
 
   // Substitute the provided type arguments into the superclass type.
   ArrayRef<QualType> typeArgs = getTypeArgs();
   assert(typeArgs.size() == typeParams->size());
-  return substObjCTypeArgs(classDecl->getASTContext(), superClassType, typeArgs);
-}
-
-QualType ObjCObjectPointerType::substTypeInContext(QualType type, 
-                                                   const DeclContext *dc) const {
-  return getObjectType()->substTypeInContext(type, dc);
+  CachedSuperClassType.setPointerAndInt(
+    superClassType.substObjCTypeArgs(classDecl->getASTContext(), typeArgs)
+      ->castAs<ObjCObjectType>(),
+    true);
 }
 
 QualType ObjCObjectPointerType::getSuperClassType() const {
@@ -1121,6 +1154,13 @@ const ObjCObjectPointerType *Type::getAsObjCQualifiedClassType() const {
   return nullptr;
 }
 
+const ObjCObjectType *Type::getAsObjCInterfaceType() const {
+  if (const ObjCObjectType *OT = getAs<ObjCObjectType>()) {
+    if (OT->getInterface())
+      return OT;
+  }
+  return nullptr;
+}
 const ObjCObjectPointerType *Type::getAsObjCInterfacePointerType() const {
   if (const ObjCObjectPointerType *OPT = getAs<ObjCObjectPointerType>()) {
     if (OPT->getInterfaceType())
