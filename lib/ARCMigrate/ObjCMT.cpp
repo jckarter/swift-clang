@@ -854,7 +854,7 @@ void ObjCMigrateASTConsumer::migrateApiNoteReturnsNonnullAttr(const Decl *D, boo
   if (!isa<FunctionDecl>(D) && !isa<ObjCMethodDecl>(D))
     return;
   QualType T;
-  TypeSourceInfo *TSInfo;
+  TypeSourceInfo *TSInfo = nullptr;
   if (const FunctionDecl *FD = dyn_cast<FunctionDecl>(D)) {
     T = FD->getReturnType();
     TSInfo = FD->getTypeSourceInfo();
@@ -863,7 +863,7 @@ void ObjCMigrateASTConsumer::migrateApiNoteReturnsNonnullAttr(const Decl *D, boo
     T = MD->getReturnType();
     TSInfo = MD->getReturnTypeSourceInfo();
   }
-  if (T.isNull())
+  if (T.isNull() || TSInfo == nullptr) // case of return type being implicit
     return;
   
   clang::NullabilityKind nullabilityKind;
