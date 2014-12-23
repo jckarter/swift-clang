@@ -28,6 +28,7 @@ __attribute__((objc_root_class))
 @end
 
 @interface NSMutableArray<T> : NSArray<T>
+-(instancetype)initWithArray:(NSArray<T> *)array; // expected-note{{passing argument}}
 - (void)setObject:(T)object atIndexedSubscript:(int)index; // expected-note 2{{passing argument to parameter 'object' here}}
 @end
 
@@ -74,6 +75,8 @@ __attribute__((objc_root_class))
 // expected-note@-2 {{parameter 'object' here}}
 // expected-note@-3 {{parameter 'key' here}}
 // expected-note@-4 {{parameter 'key' here}}
+
+@property (strong) K someRandomKey;
 @end
 
 @interface WindowArray : NSArray<Window *>
@@ -96,6 +99,7 @@ void test_message_send_result(
        NSSet *set,
        NSMutableSet *mutSet,
        MutableSetOfArrays *mutArraySet,
+       NSArray<NSString *> *stringArray,
        void (^block)(void)) {
   int *ip;
   ip = [stringSet firstObject]; // expected-warning{{from 'NSString *'}}
@@ -119,6 +123,10 @@ void test_message_send_result(
   ip = [NSArray<NSString *><NSCopying> array]; // expected-warning{{from 'NSArray<NSString *> *'}}
 
   ip = [[NSMutableArray<NSString *> alloc] init];  // expected-warning{{from 'NSMutableArray<NSString *> *'}}
+
+  [[NSMutableArray alloc] initWithArray: stringArray]; // okay
+  [[NSMutableArray<NSString *> alloc] initWithArray: stringArray]; // okay
+  [[NSMutableArray<NSNumber *> alloc] initWithArray: stringArray]; // expected-warning{{sending 'NSArray<NSString *> *' to parameter of type 'NSArray<NSNumber *> *'}}
 }
 
 void test_message_send_param(
@@ -151,16 +159,19 @@ void test_property_read(
        MutableSetOfArrays<NSString *> *mutStringArraySet,
        NSSet *set,
        NSMutableSet *mutSet,
-       MutableSetOfArrays *mutArraySet) {
+       MutableSetOfArrays *mutArraySet,
+       NSMutableDictionary *mutDict) {
   int *ip;
   ip = stringSet.allObjects; // expected-warning{{from 'NSArray<NSString *> *'}}
   ip = mutStringSet.allObjects; // expected-warning{{from 'NSArray<NSString *> *'}}
   ip = widgetSet.allObjects; // expected-warning{{from 'NSArray<Widget *> *'}}
-  ip = untypedMutSet.allObjects; // expected-warning{{from 'NSArray<id> *'}}
+  ip = untypedMutSet.allObjects; // expected-warning{{from 'NSArray *'}}
   ip = mutStringArraySet.allObjects; // expected-warning{{from 'NSArray<NSArray<NSString *> *> *'}}
-  ip = set.allObjects; // expected-warning{{from 'NSArray<id> *'}}
-  ip = mutSet.allObjects; // expected-warning{{from 'NSArray<id> *'}}
-  ip = mutArraySet.allObjects; // expected-warning{{from 'NSArray<id> *'}}
+  ip = set.allObjects; // expected-warning{{from 'NSArray *'}}
+  ip = mutSet.allObjects; // expected-warning{{from 'NSArray *'}}
+  ip = mutArraySet.allObjects; // expected-warning{{from 'NSArray *'}}
+
+  ip = mutDict.someRandomKey; // expected-warning{{from 'id'}}
 }
 
 void test_property_write(
@@ -169,15 +180,18 @@ void test_property_write(
        UntypedMutableSet *untypedMutSet,
        MutableSetOfArrays<NSString *> *mutStringArraySet,
        NSMutableSet *mutSet,
-       MutableSetOfArrays *mutArraySet) {
+       MutableSetOfArrays *mutArraySet,
+       NSMutableDictionary *mutDict) {
   int *ip;
 
   mutStringSet.allObjects = ip; // expected-warning{{to 'NSArray<NSString *> *'}}
   widgetSet.allObjects = ip; // expected-warning{{to 'NSArray<Widget *> *'}}
-  untypedMutSet.allObjects = ip; // expected-warning{{to 'NSArray<id> *'}}
+  untypedMutSet.allObjects = ip; // expected-warning{{to 'NSArray *'}}
   mutStringArraySet.allObjects = ip; // expected-warning{{to 'NSArray<NSArray<NSString *> *> *'}}
-  mutSet.allObjects = ip; // expected-warning{{to 'NSArray<id> *'}}
-  mutArraySet.allObjects = ip; // expected-warning{{to 'NSArray<id> *'}}
+  mutSet.allObjects = ip; // expected-warning{{to 'NSArray *'}}
+  mutArraySet.allObjects = ip; // expected-warning{{to 'NSArray *'}}
+
+  mutDict.someRandomKey = ip; // expected-warning{{to 'id<NSCopying>'}}
 }
 
 // --------------------------------------------------------------------------
@@ -316,7 +330,7 @@ void test_ternary_operator(NSArray<NSString *> *stringArray,
 + (void)useSuperMethod {
   int *ip;
   ip = super.array; // FIXME: should have stronger type info. 
-  // expected-warning@-1{{from 'NSArray<id> *'}}
+  // expected-warning@-1{{from 'NSArray *'}}
   ip = [super array]; // expected-warning{{from 'NSArray<NSString *> *'}}
 }
 @end

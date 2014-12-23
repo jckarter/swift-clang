@@ -1023,7 +1023,8 @@ QualType ObjCMethodDecl::getSendResultType(QualType receiverType) const {
   // FIXME: Handle related result types here.
 
   return getReturnType().getNonLValueExprType(getASTContext())
-           .substObjCMemberType(receiverType, getDeclContext());
+           .substObjCMemberType(receiverType, getDeclContext(),
+                                ObjCSubstitutionContext::Result);
 }
 
 static void CollectOverriddenMethodsRecurse(const ObjCContainerDecl *Container,
@@ -1628,7 +1629,8 @@ const ObjCInterfaceDecl *ObjCIvarDecl::getContainingInterface() const {
 }
 
 QualType ObjCIvarDecl::getUsageType(QualType objectType) const {
-  return getType().substObjCMemberType(objectType, getDeclContext());
+  return getType().substObjCMemberType(objectType, getDeclContext(),
+                                       ObjCSubstitutionContext::Property);
 }
 
 //===----------------------------------------------------------------------===//
@@ -2033,7 +2035,8 @@ ObjCPropertyDecl *ObjCPropertyDecl::CreateDeserialized(ASTContext &C,
 }
 
 QualType ObjCPropertyDecl::getUsageType(QualType objectType) const {
-  return DeclType.substObjCMemberType(objectType, getDeclContext());
+  return DeclType.substObjCMemberType(objectType, getDeclContext(),
+                                      ObjCSubstitutionContext::Property);
 }
 
 //===----------------------------------------------------------------------===//

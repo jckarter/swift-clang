@@ -1482,10 +1482,8 @@ bool Sema::CheckMessageArgumentTypes(QualType ReceiverType,
 
   // Compute the set of type arguments to be substituted into each parameter
   // type.
-  SmallVector<QualType, 4> typeArgsBuffer;
-  ArrayRef<QualType> typeArgs
-    = ReceiverType->getObjCSubstitutions(Method->getDeclContext(),
-                                         typeArgsBuffer);
+  Optional<ArrayRef<QualType>> typeArgs
+    = ReceiverType->getObjCSubstitutions(Method->getDeclContext());
   bool IsError = false;
   for (unsigned i = 0; i < NumNamedArgs; i++) {
     // We can't do any type-checking on a type-dependent argument.
@@ -1519,7 +1517,13 @@ bool Sema::CheckMessageArgumentTypes(QualType ReceiverType,
       continue;
     }
 
-    QualType paramType = param->getType().substObjCTypeArgs(Context, typeArgs);
+    QualType paramType = param->getType();
+    if (typeArgs)
+      paramType = paramType.substObjCTypeArgs(
+                    Context,
+                    *typeArgs,
+                    ObjCSubstitutionContext::Parameter);
+
     if (RequireCompleteType(argExpr->getSourceRange().getBegin(),
                             paramType,
                             diag::err_call_incomplete_argument, argExpr))

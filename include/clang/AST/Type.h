@@ -533,6 +533,24 @@ struct SplitQualType {
   }
 };
 
+/// The kind of type we are substituting Objective-C type arguments into.
+///
+/// The kind of substitution affects the replacement of type parameters when
+/// no concrete type information is provided, e.g., when dealing with an
+/// unspecialized type.
+enum class ObjCSubstitutionContext {
+  /// An ordinary type.
+  Ordinary,
+  /// The result type of a method or function.
+  Result,
+  /// The parameter type of a method or function.
+  Parameter,
+  /// The type of a property.
+  Property,
+  /// The superclass of a type.
+  Superclass,
+};
+
 /// QualType - For efficiency, we don't store CV-qualified types as nodes on
 /// their own: instead each reference to a type stores the qualifiers.  This
 /// greatly reduces the number of nodes we need to allocate for types (for
@@ -1001,11 +1019,16 @@ public:
   ///
   /// \param typeArgs The type arguments that will be substituted for the
   /// Objective-C type parameters in the subject type, which are generally
-  /// computed via \c Type::getObjCSubstitutions.
+  /// computed via \c Type::getObjCSubstitutions. If empty, the type
+  /// parameters will be replaced with their bounds or id/Class, as appropriate
+  /// for the context.
+  ///
+  /// \param context The context in which the subject type was written.
   ///
   /// \returns the resulting type.
   QualType substObjCTypeArgs(ASTContext &ctx,
-                             ArrayRef<QualType> typeArgs) const;
+                             ArrayRef<QualType> typeArgs,
+                             ObjCSubstitutionContext context) const;
 
   /// Substitute type arguments from an object type for the Objective-C type
   /// parameters used in the subject type.
@@ -1023,10 +1046,13 @@ public:
   /// retrieved, which indicates (for example) which type parameters should
   /// be substituted.
   ///
+  /// \param context The context in which the subject type was written.
+  ///
   /// \returns the subject type after replacing all of the Objective-C type
   /// parameters with their corresponding arguments.
   QualType substObjCMemberType(QualType objectType,
-                               const DeclContext *dc) const;
+                               const DeclContext *dc,
+                               ObjCSubstitutionContext context) const;
 
 private:
   // These methods are implemented in a separate translation unit;
@@ -1876,15 +1902,12 @@ public:
   /// substitution mapping, which should be an Objective-C class, extension,
   /// category, or method within.
   ///
-  /// \param scratch Scratch space to store the returned type arguments if
-  /// they need to be computed.
-  ///
   /// \returns an array of type arguments that can be substituted for
   /// the type parameters of the given declaration context in any type described
-  /// within that context.
-  ArrayRef<QualType> getObjCSubstitutions(
-                       const DeclContext *dc,
-                       SmallVectorImpl<QualType> &scratch) const;
+  /// within that context, or an empty optional to indicate that no
+  /// substitution is required.
+  Optional<ArrayRef<QualType>>
+  getObjCSubstitutions(const DeclContext *dc) const;
 
   const char *getTypeClassName() const;
 
