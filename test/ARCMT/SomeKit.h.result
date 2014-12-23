@@ -15,11 +15,11 @@ __attribute__((objc_root_class))
 NS_ASSUME_NONNULL_BEGIN
 
 @interface A
--(A*)transform:(A*)input __attribute__((unavailable("anything but this")));
+-(null_unspecified A*)transform:(null_unspecified A*)input __attribute__((unavailable("anything but this")));
 -(A*)transform:(A*)input integer:(int)integer;
 
-@property (nonatomic, readonly, retain) A* someA;
-@property (nonatomic, retain) A* someOtherA;
+@property (null_unspecified, nonatomic, readonly, retain) A* someA;
+@property (null_unspecified, nonatomic, retain) A* someOtherA;
 
 @property (nonatomic) int intValue __attribute__((unavailable("wouldn't work anyway")));
 @end
@@ -32,8 +32,8 @@ __attribute__((unavailable("just don't")))
 @end
 
 @interface C : A
-- (instancetype)init;
-- (instancetype)initWithA:(A*)a __attribute__((objc_designated_initializer));
+- (null_unspecified instancetype)init;
+- (null_unspecified instancetype)initWithA:(null_unspecified A*)a __attribute__((objc_designated_initializer));
 @end
 
 #endif

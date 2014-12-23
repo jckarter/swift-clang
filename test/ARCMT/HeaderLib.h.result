@@ -20,7 +20,7 @@ int *global_int;
 int unavailable_function(void) __attribute__((unavailable("I beg you not to use this")));
 int unavailable_global_int __attribute__((unavailable));
 
-void do_something_with_pointers(int *ptr1, int *ptr2);
+void do_something_with_pointers(int *ptr1, __nullable int *ptr2);
 
 NS_ASSUME_NONNULL_END
 

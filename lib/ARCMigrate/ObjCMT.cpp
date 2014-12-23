@@ -2134,7 +2134,6 @@ void ObjCMigrateASTConsumer::InsertNonnullMacro(ASTContext &Ctx) {
   
   commit.insertAfterToken(EndLoc, "\n\nNS_ASSUME_NONNULL_END\n");
   Editor->commit(commit);
-  FirstDeclWithNullabilityAttr = LastDeclWithNullabilityAttr = nullptr;
 }
 
 namespace {
