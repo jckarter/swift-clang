@@ -482,7 +482,8 @@ ObjCObjectType::ObjCObjectType(QualType Canonical, QualType Base,
   assert(getNumProtocols() == protocols.size() &&
          "bitfield overflow in protocol count");
   if (!typeArgs.empty())
-    memcpy(getTypeArgStorage(), typeArgs.data(), typeArgs.size() * sizeof(Type));
+    memcpy(getTypeArgStorage(), typeArgs.data(),
+           typeArgs.size() * sizeof(QualType));
   if (!protocols.empty())
     memcpy(getProtocolStorage(), protocols.data(),
            protocols.size() * sizeof(ObjCProtocolDecl*));
