@@ -1008,6 +1008,10 @@ class TemplateDiff {
             (!HasFromValueDecl && !HasToValueDecl)) &&
            "Template argument cannot be both integer and declaration");
 
+    unsigned ParamWidth = 128; // Safe default
+    if (FromDefaultNonTypeDecl->getType()->isIntegralOrEnumerationType())
+      ParamWidth = Context.getIntWidth(FromDefaultNonTypeDecl->getType());
+
     if (!HasFromInt && !HasToInt && !HasFromValueDecl && !HasToValueDecl) {
       Tree.SetNode(FromExpr, ToExpr);
       Tree.SetDefault(FromIter.isEnd() && FromExpr, ToIter.isEnd() && ToExpr);
@@ -1019,14 +1023,14 @@ class TemplateDiff {
       }
       if (HasFromInt && HasToInt) {
         Tree.SetNode(FromInt, ToInt, HasFromInt, HasToInt);
-        Tree.SetSame(FromInt == ToInt);
+        Tree.SetSame(IsSameConvertedInt(ParamWidth, FromInt, ToInt));
         Tree.SetKind(DiffTree::Integer);
       } else if (HasFromInt || HasToInt) {
         Tree.SetNode(FromInt, ToInt, HasFromInt, HasToInt);
         Tree.SetSame(false);
         Tree.SetKind(DiffTree::Integer);
       } else {
-        Tree.SetSame(IsEqualExpr(Context, FromExpr, ToExpr) ||
+        Tree.SetSame(IsEqualExpr(Context, ParamWidth, FromExpr, ToExpr) ||
                      (FromNullPtr && ToNullPtr));
         Tree.SetNullPtr(FromNullPtr, ToNullPtr);
         Tree.SetKind(DiffTree::Expression);
@@ -1040,11 +1044,7 @@ class TemplateDiff {
       if (!HasToInt && ToExpr)
         HasToInt = GetInt(Context, ToIter, ToExpr, ToInt);
       Tree.SetNode(FromInt, ToInt, HasFromInt, HasToInt);
-      if (HasFromInt && HasToInt) {
-        Tree.SetSame(FromInt == ToInt);
-      } else {
-        Tree.SetSame(false);
-      }
+      Tree.SetSame(IsSameConvertedInt(ParamWidth, FromInt, ToInt));
       Tree.SetDefault(FromIter.isEnd() && HasFromInt,
                       ToIter.isEnd() && HasToInt);
       Tree.SetKind(DiffTree::Integer);
@@ -1222,7 +1222,7 @@ class TemplateDiff {
   /// GetInt - Retrieves the template integer argument, including evaluating
   /// default arguments.
   static bool GetInt(ASTContext &Context, const TSTiterator &Iter,
-                     Expr *ArgExpr, llvm::APSInt &Int) {
+                     Expr *ArgExpr, llvm::APInt &Int) {
     // Default, value-depenedent expressions require fetching
     // from the desugared TemplateArgument, otherwise expression needs to
     // be evaluatable.
@@ -1312,8 +1312,18 @@ class TemplateDiff {
     return nullptr;
   }
 
+  /// IsSameConvertedInt - Returns true if both integers are equal when
+  /// converted to an integer type with the given width.
+  static bool IsSameConvertedInt(unsigned Width, const llvm::APSInt &X,
+                                 const llvm::APSInt &Y) {
+    llvm::APInt ConvertedX = X.extOrTrunc(Width);
+    llvm::APInt ConvertedY = Y.extOrTrunc(Width);
+    return ConvertedX == ConvertedY;
+  }
+
   /// IsEqualExpr - Returns true if the expressions evaluate to the same value.
-  static bool IsEqualExpr(ASTContext &Context, Expr *FromExpr, Expr *ToExpr) {
+  static bool IsEqualExpr(ASTContext &Context, unsigned ParamWidth,
+                          Expr *FromExpr, Expr *ToExpr) {
     if (FromExpr == ToExpr)
       return true;
 
@@ -1345,7 +1355,7 @@ class TemplateDiff {
 
     switch (FromVal.getKind()) {
       case APValue::Int:
-        return FromVal.getInt() == ToVal.getInt();
+        return IsSameConvertedInt(ParamWidth, FromVal.getInt(), ToVal.getInt());
       case APValue::LValue: {
         APValue::LValueBase FromBase = FromVal.getLValueBase();
         APValue::LValueBase ToBase = ToVal.getLValueBase();
@@ -1655,14 +1665,11 @@ class TemplateDiff {
     }
     Unbold();
   }
-
+  
   /// HasExtraInfo - Returns true if E is not an integer literal or the
   /// negation of an integer literal
   bool HasExtraInfo(Expr *E) {
     if (!E) return false;
-
-    E = E->IgnoreImpCasts();
-
     if (isa<IntegerLiteral>(E)) return false;
 
     if (UnaryOperator *UO = dyn_cast<UnaryOperator>(E))
