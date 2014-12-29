@@ -888,6 +888,11 @@ public:
     return *(this->getTypePtr()->qual_begin() + i);
   }
 
+
+  ArrayRef<SourceLocation> getProtocolLocs() const {
+    return llvm::makeArrayRef(getProtocolLocArray(), getNumProtocols());
+  }
+
   bool hasBaseTypeAsWritten() const {
     return getLocalData()->HasBaseTypeAsWritten;
   }

@@ -1,4 +1,4 @@
-// RUN: %clang_cc1 -fblocks -fsyntax-only %s -verify
+// RUN: %clang_cc1 -fblocks -fsyntax-only -std=c++11 %s -verify
 //
 // Test the substitution of type arguments for type parameters when
 // using parameterized classes in Objective-C.
@@ -69,7 +69,8 @@ __attribute__((objc_root_class))
 - (V)objectForKeyedSubscript:(K)key; // expected-note 2{{parameter 'key'}}
 @end
 
-@interface NSMutableDictionary<K : id<NSCopying>, V> : NSDictionary<K, V>
+@interface NSMutableDictionary<K : id<NSCopying>, V> : NSDictionary<K, V> // expected-note 2{{type parameter 'K' declared here}} \
+// expected-note 2{{'NSMutableDictionary' declared here}}
 - (void)setObject:(V)object forKeyedSubscript:(K)key;
 // expected-note@-1 {{parameter 'object' here}}
 // expected-note@-2 {{parameter 'object' here}}
@@ -334,3 +335,74 @@ void test_ternary_operator(NSArray<NSString *> *stringArray,
   ip = [super array]; // expected-error{{from incompatible type 'NSArray<NSString *> *'}}
 }
 @end
+
+// --------------------------------------------------------------------------
+// Template instantiation
+// --------------------------------------------------------------------------
+template<typename K, typename V>
+struct NSMutableDictionaryOf {
+  typedef NSMutableDictionary<K, V> *type; // expected-error{{type argument 'NSObject *' does not satisy the bound ('id<NSCopying>') of type parameter 'K'}}
+};
+
+template<typename ...Args>
+struct VariadicNSMutableDictionaryOf {
+  typedef NSMutableDictionary<Args...> *type; // expected-error{{type argument 'NSObject *' does not satisy the bound ('id<NSCopying>') of type parameter 'K'}}
+  // expected-error@-1{{too many type arguments for class 'NSMutableDictionary' (have 3, expected 2)}}
+  // expected-error@-2{{too few type arguments for class 'NSMutableDictionary' (have 1, expected 2)}}
+};
+
+void testInstantiation() {
+  int *ip;
+
+  typedef NSMutableDictionaryOf<NSString *, NSObject *>::type Dict1;
+  Dict1 d1 = ip; // expected-error{{cannot initialize a variable of type 'Dict1' (aka 'NSMutableDictionary<NSString *,NSObject *> *')}}
+
+  typedef NSMutableDictionaryOf<NSObject *, NSString *>::type Dict2; // expected-note{{in instantiation of template}}
+}
+
+void testVariadicInstantiation() {
+  int *ip;
+
+  typedef VariadicNSMutableDictionaryOf<NSString *, NSObject *>::type Dict1;
+  Dict1 d1 = ip; // expected-error{{cannot initialize a variable of type 'Dict1' (aka 'NSMutableDictionary<NSString *,NSObject *> *')}}
+
+  typedef VariadicNSMutableDictionaryOf<NSObject *, NSString *>::type Dict2; // expected-note{{in instantiation of template}}
+
+  typedef VariadicNSMutableDictionaryOf<NSString *, NSObject *, NSObject *>::type Dict3; // expected-note{{in instantiation of template}}
+
+  typedef VariadicNSMutableDictionaryOf<NSString *>::type Dict3; // expected-note{{in instantiation of template}}
+}
+
+// --------------------------------------------------------------------------
+// Parameterized classes are not templates
+// --------------------------------------------------------------------------
+template<template<typename T, typename U> class TT>
+struct AcceptsTemplateTemplate { };
+
+typedef AcceptsTemplateTemplate<NSMutableDictionary> TemplateTemplateFail1; // expected-error{{template argument for template template parameter must be a class template or type alias template}}
+
+template<typename T>
+struct DependentTemplate {
+  typedef typename T::template apply<NSString *, NSObject *> type; // expected-error{{'apply' following the 'template' keyword does not refer to a template}}
+};
+
+struct NSMutableDictionaryBuilder {
+  typedef NSMutableDictionary apply;
+};
+
+typedef DependentTemplate<NSMutableDictionaryBuilder>::type DependentTemplateFail1; // expected-note{{in instantiation of template class}}
+
+template<typename K, typename V>
+struct NonDependentTemplate {
+  typedef NSMutableDictionaryBuilder::template apply<NSString *, NSObject *> type; // expected-error{{'apply' following the 'template' keyword does not refer to a template}}
+  // expected-error@-1{{expected member name or }}
+};
+
+// However, one can use an alias template to turn a parameterized
+// class into a template.
+template<typename K, typename V>
+using NSMutableDictionaryAlias = NSMutableDictionary<K, V>;
+
+typedef AcceptsTemplateTemplate<NSMutableDictionaryAlias> TemplateTemplateAlias1; // okay
+
+

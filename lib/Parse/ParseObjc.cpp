@@ -1627,7 +1627,7 @@ bool Parser::ParseObjCProtocolQualifiers(DeclSpec &DS, bool consumeLastToken) {
 /// Parse Objective-C type arguments or protocol qualifiers.
 ///
 ///   objc-type-arguments:
-///     '<' type-name (',' type-name)* '>'
+///     '<' type-name '...'[opt] (',' type-name '...'[opt])* '>'
 ///
 void Parser::ParseObjCTypeArgsOrProtocolQualifiers(
        DeclSpec &DS,
@@ -1702,7 +1702,19 @@ void Parser::ParseObjCTypeArgsOrProtocolQualifiers(
     ParsedType typeArg
       = Actions.getTypeName(*identifiers[i], identifierLocs[i], getCurScope());
     if (typeArg) {
-      typeArgs.push_back(typeArg);
+      DeclSpec DS(AttrFactory);
+      const char *prevSpec = nullptr;
+      unsigned diagID;
+      DS.SetTypeSpecType(TST_typename, identifierLocs[i], prevSpec, diagID,
+                         typeArg, Actions.getASTContext().getPrintingPolicy());
+
+      // Form a declarator to turn this into a type.
+      Declarator D(DS, Declarator::TypeNameContext);
+      TypeResult fullTypeArg = Actions.ActOnTypeName(getCurScope(), D);
+      if (fullTypeArg.isUsable())
+        typeArgs.push_back(fullTypeArg.get());
+      else
+        invalid = true;
     } else {
       invalid = true;
     }
@@ -1711,6 +1723,14 @@ void Parser::ParseObjCTypeArgsOrProtocolQualifiers(
   // Continue parsing type-names.
   do {
     TypeResult typeArg = ParseTypeName();
+
+    // Consume the '...' for a pack expansion.
+    SourceLocation ellipsisLoc;
+    TryConsumeToken(tok::ellipsis, ellipsisLoc);
+    if (typeArg.isUsable() && ellipsisLoc.isValid()) {
+      typeArg = Actions.ActOnPackExpansion(typeArg.get(), ellipsisLoc);
+    }
+
     if (typeArg.isUsable()) {
       typeArgs.push_back(typeArg.get());
     } else {
