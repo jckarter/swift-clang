@@ -65,10 +65,13 @@ Driver::Driver(StringRef ClangExecutable,
   // Compute the path to the resource directory.
   StringRef ClangResourceDir(CLANG_RESOURCE_DIR);
   SmallString<128> P(Dir);
-  if (ClangResourceDir != "")
+  if (ClangResourceDir != "") {
     llvm::sys::path::append(P, ClangResourceDir);
-  else
-    llvm::sys::path::append(P, "..", "lib", "clang", CLANG_VERSION_STRING);
+  } else {
+    StringRef ClangLibdirSuffix(CLANG_LIBDIR_SUFFIX);
+    llvm::sys::path::append(P, "..", Twine("lib") + ClangLibdirSuffix, "clang",
+                            CLANG_VERSION_STRING);
+  }
   ResourceDir = P.str();
 }
 
@@ -125,9 +128,7 @@ InputArgList *Driver::ParseArgStrings(ArrayRef<const char *> ArgStrings) {
       << Args->getArgString(MissingArgIndex) << MissingArgCount;
 
   // Check for unsupported options.
-  for (ArgList::const_iterator it = Args->begin(), ie = Args->end();
-       it != ie; ++it) {
-    Arg *A = *it;
+  for (const Arg *A : *Args) {
     if (A->getOption().hasFlag(options::Unsupported)) {
       Diag(clang::diag::err_drv_unsupported_opt) << A->getAsString(*Args);
       continue;
@@ -209,10 +210,7 @@ DerivedArgList *Driver::TranslateInputArgs(const InputArgList &Args) const {
   DerivedArgList *DAL = new DerivedArgList(Args);
 
   bool HasNostdlib = Args.hasArg(options::OPT_nostdlib);
-  for (ArgList::const_iterator it = Args.begin(),
-         ie = Args.end(); it != ie; ++it) {
-    const Arg *A = *it;
-
+  for (Arg *A : Args) {
     // Unfortunately, we have to parse some forwarding options (-Xassembler,
     // -Xlinker, -Xpreprocessor) because we either integrate their functionality
     // (assembler and preprocessor), or bypass a previous driver ('collect2').
@@ -278,7 +276,7 @@ DerivedArgList *Driver::TranslateInputArgs(const InputArgList &Args) const {
       continue;
     }
 
-    DAL->append(*it);
+    DAL->append(A);
   }
 
   // Add a default value of -mlinker-version=, if one was given and the user
@@ -472,9 +470,7 @@ void Driver::generateCompilationDiagnostics(Compilation &C,
   // Don't attempt to generate preprocessed files if multiple -arch options are
   // used, unless they're all duplicates.
   llvm::StringSet<> ArchNames;
-  for (ArgList::const_iterator it = C.getArgs().begin(), ie = C.getArgs().end();
-       it != ie; ++it) {
-    Arg *A = *it;
+  for (const Arg *A : C.getArgs()) {
     if (A->getOption().matches(options::OPT_arch)) {
       StringRef ArchName = A->getValue();
       ArchNames.insert(ArchName);
@@ -874,10 +870,7 @@ void Driver::BuildUniversalActions(const ToolChain &TC,
   // be handled once (in the order seen).
   llvm::StringSet<> ArchNames;
   SmallVector<const char *, 4> Archs;
-  for (ArgList::const_iterator it = Args.begin(), ie = Args.end();
-       it != ie; ++it) {
-    Arg *A = *it;
-
+  for (Arg *A : Args) {
     if (A->getOption().matches(options::OPT_arch)) {
       // Validate the option here; we don't save the type here because its
       // particular spelling may participate in other driver choices.
@@ -1025,10 +1018,7 @@ void Driver::BuildInputs(const ToolChain &TC, DerivedArgList &Args,
     assert(!Args.hasArg(options::OPT_x) && "-x and /TC or /TP is not allowed");
   }
 
-  for (ArgList::const_iterator it = Args.begin(), ie = Args.end();
-       it != ie; ++it) {
-    Arg *A = *it;
-
+  for (Arg *A : Args) {
     if (A->getOption().getKind() == Option::InputClass) {
       const char *Value = A->getValue();
       types::ID Ty = types::TY_INVALID;
@@ -1393,9 +1383,8 @@ void Driver::BuildJobs(Compilation &C) const {
   // files.
   if (FinalOutput) {
     unsigned NumOutputs = 0;
-    for (ActionList::const_iterator it = C.getActions().begin(),
-           ie = C.getActions().end(); it != ie; ++it)
-      if ((*it)->getType() != types::TY_Nothing)
+    for (const Action *A : C.getActions())
+      if (A->getType() != types::TY_Nothing)
         ++NumOutputs;
 
     if (NumOutputs > 1) {
@@ -1406,19 +1395,12 @@ void Driver::BuildJobs(Compilation &C) const {
 
   // Collect the list of architectures.
   llvm::StringSet<> ArchNames;
-  if (C.getDefaultToolChain().getTriple().isOSBinFormatMachO()) {
-    for (ArgList::const_iterator it = C.getArgs().begin(), ie = C.getArgs().end();
-         it != ie; ++it) {
-      Arg *A = *it;
+  if (C.getDefaultToolChain().getTriple().isOSBinFormatMachO())
+    for (const Arg *A : C.getArgs())
       if (A->getOption().matches(options::OPT_arch))
         ArchNames.insert(A->getValue());
-    }
-  }
 
-  for (ActionList::const_iterator it = C.getActions().begin(),
-         ie = C.getActions().end(); it != ie; ++it) {
-    Action *A = *it;
-
+  for (Action *A : C.getActions()) {
     // If we are linking an image for multiple archs then the linker wants
     // -arch_multiple and -final_output <final image name>. Unfortunately, this
     // doesn't fit in cleanly because we have to pass this information down.
@@ -1454,10 +1436,7 @@ void Driver::BuildJobs(Compilation &C) const {
   // Claim --driver-mode, it was handled earlier.
   (void) C.getArgs().hasArg(options::OPT_driver_mode);
 
-  for (ArgList::const_iterator it = C.getArgs().begin(), ie = C.getArgs().end();
-       it != ie; ++it) {
-    Arg *A = *it;
-
+  for (Arg *A : C.getArgs()) {
     // FIXME: It would be nice to be able to send the argument to the
     // DiagnosticsEngine, so that extra values, position, and so on could be
     // printed.
@@ -1601,8 +1580,7 @@ void Driver::BuildJobsForAction(Compilation &C,
 
   // Only use pipes when there is exactly one input.
   InputInfoList InputInfos;
-  for (ActionList::const_iterator it = Inputs->begin(), ie = Inputs->end();
-       it != ie; ++it) {
+  for (const Action *Input : *Inputs) {
     // Treat dsymutil and verify sub-jobs as being at the top-level too, they
     // shouldn't get temporary output names.
     // FIXME: Clean this up.
@@ -1611,7 +1589,7 @@ void Driver::BuildJobsForAction(Compilation &C,
       SubJobAtTopLevel = true;
 
     InputInfo II;
-    BuildJobsForAction(C, *it, TC, BoundArch, SubJobAtTopLevel, MultipleArchs,
+    BuildJobsForAction(C, Input, TC, BoundArch, SubJobAtTopLevel, MultipleArchs,
                        LinkingOutput, II);
     InputInfos.push_back(II);
   }

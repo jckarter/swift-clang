@@ -2646,6 +2646,7 @@ void CGDebugInfo::EmitLocation(CGBuilderTy &Builder, SourceLocation Loc,
 
   // Don't bother if things are the same as last time.
   SourceManager &SM = CGM.getContext().getSourceManager();
+  assert(!LexicalBlockStack.empty());
   if (CurLoc == PrevLoc ||
       SM.getExpansionLoc(CurLoc) == SM.getExpansionLoc(PrevLoc))
     // New Builder may not be in sync with CGDebugInfo.
