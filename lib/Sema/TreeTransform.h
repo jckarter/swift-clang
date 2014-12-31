@@ -5595,12 +5595,6 @@ template<typename Derived>
 QualType
 TreeTransform<Derived>::TransformObjCObjectType(TypeLocBuilder &TLB,
                                                 ObjCObjectTypeLoc TL) {
-  if (TL.getNumTypeArgs() == 0) {
-    // Not dependent.
-    TLB.pushFullCopy(TL);
-    return TL.getType();
-  }
-
   // Transform base type.
   QualType BaseType = getDerived().TransformType(TLB, TL.getBaseLoc());
   if (BaseType.isNull())
@@ -5695,21 +5689,24 @@ TreeTransform<Derived>::TransformObjCObjectType(TypeLocBuilder &TLB,
     AnyChanged = true;
   }
 
-  // Rebuild the type.
-  QualType Result = getDerived().RebuildObjCObjectType(
-                      BaseType,
-                      TL.getLocStart(),
-                      TL.getTypeArgsLAngleLoc(),
-                      NewTypeArgInfos,
-                      TL.getTypeArgsRAngleLoc(),
-                      TL.getProtocolLAngleLoc(),
-                      llvm::makeArrayRef(TL.getTypePtr()->qual_begin(),
-                                         TL.getNumProtocols()),
-                      TL.getProtocolLocs(),
-                      TL.getProtocolRAngleLoc());
+  QualType Result = TL.getType();
+  if (getDerived().AlwaysRebuild() || AnyChanged) {
+    // Rebuild the type.
+    Result = getDerived().RebuildObjCObjectType(
+               BaseType,
+               TL.getLocStart(),
+               TL.getTypeArgsLAngleLoc(),
+               NewTypeArgInfos,
+               TL.getTypeArgsRAngleLoc(),
+               TL.getProtocolLAngleLoc(),
+               llvm::makeArrayRef(TL.getTypePtr()->qual_begin(),
+                                  TL.getNumProtocols()),
+               TL.getProtocolLocs(),
+               TL.getProtocolRAngleLoc());
 
-  if (Result.isNull())
-    return QualType();
+    if (Result.isNull())
+      return QualType();
+  }
 
   ObjCObjectTypeLoc NewT = TLB.push<ObjCObjectTypeLoc>(Result);
   assert(TL.hasBaseTypeAsWritten() && "Can't be dependent");
