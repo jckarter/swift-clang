@@ -330,8 +330,7 @@ void test_ternary_operator(NSArray<NSString *> *stringArray,
 
 + (void)useSuperMethod {
   int *ip;
-  ip = super.array; // FIXME: should have stronger type info. 
-  // expected-error@-1{{from incompatible type 'NSArray *'}}
+  ip = super.array; // expected-error{{from incompatible type 'NSArray<NSString *> *'}}
   ip = [super array]; // expected-error{{from incompatible type 'NSArray<NSString *> *'}}
 }
 @end

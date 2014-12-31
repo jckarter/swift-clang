@@ -24,6 +24,7 @@ __attribute__((objc_root_class))
 }
 - (T)objectAtIndexedSubscript:(int)index;
 + (NSArray<T> *)array;
++ (void)setArray:(NSArray <T> *)array;
 @property (copy,nonatomic) T lastObject;
 @end
 
@@ -324,13 +325,14 @@ void test_ternary_operator(NSArray<NSString *> *stringArray,
 - (void)useSuperMethod {
   int *ip;
   ip = super.lastObject; // expected-warning{{from 'NSString *'}}
+  super.lastObject = ip; // expected-warning{{to 'NSString *'}}
   ip = [super objectAtIndexedSubscript:0]; // expected-warning{{from 'NSString *'}}
 }
 
 + (void)useSuperMethod {
   int *ip;
-  ip = super.array; // FIXME: should have stronger type info. 
-  // expected-warning@-1{{from 'NSArray *'}}
+  ip = super.array; // expected-warning{{from 'NSArray<NSString *> *'}}
+  super.array = ip; // expected-warning{{to 'NSArray<NSString *> *'}}
   ip = [super array]; // expected-warning{{from 'NSArray<NSString *> *'}}
 }
 @end

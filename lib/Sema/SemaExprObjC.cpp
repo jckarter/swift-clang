@@ -1861,17 +1861,15 @@ ActOnClassPropertyRefExpr(IdentifierInfo &receiverName,
   ObjCInterfaceDecl *IFace = getObjCInterfaceDecl(receiverNamePtr,
                                                   receiverNameLoc);
 
-  bool IsSuper = false;
+  QualType SuperType;
   if (!IFace) {
     // If the "receiver" is 'super' in a method, handle it as an expression-like
     // property reference.
     if (receiverNamePtr->isStr("super")) {
-      IsSuper = true;
-
       if (ObjCMethodDecl *CurMethod = tryCaptureObjCSelf(receiverNameLoc)) {
         if (CurMethod->isInstanceMethod()) {
-          QualType SuperType(
-                     CurMethod->getClassInterface()->getSuperClassType(), 0);
+          SuperType = QualType(CurMethod->getClassInterface()
+                                 ->getSuperClassType(), 0);
           if (SuperType.isNull()) {
             // The current class does not have a superclass.
             Diag(receiverNameLoc, diag::error_root_class_cannot_use_super)
@@ -1890,6 +1888,9 @@ ActOnClassPropertyRefExpr(IdentifierInfo &receiverName,
 
         // Otherwise, if this is a class method, try dispatching to our
         // superclass.
+        SuperType = QualType(
+                      CurMethod->getClassInterface()->getSuperClassType(),
+                      0);
         IFace = CurMethod->getClassInterface()->getSuperClass();
       }
     }
@@ -1919,7 +1920,7 @@ ActOnClassPropertyRefExpr(IdentifierInfo &receiverName,
   // Look for the matching setter, in case it is needed.
   Selector SetterSel =
     SelectorTable::constructSetterSelector(PP.getIdentifierTable(),
-                                           PP.getSelectorTable(),
+                                            PP.getSelectorTable(),
                                            &propertyName);
 
   ObjCMethodDecl *Setter = IFace->lookupClassMethod(SetterSel);
@@ -1936,11 +1937,11 @@ ActOnClassPropertyRefExpr(IdentifierInfo &receiverName,
     return ExprError();
 
   if (Getter || Setter) {
-    if (IsSuper)
+    if (!SuperType.isNull())
       return new (Context)
           ObjCPropertyRefExpr(Getter, Setter, Context.PseudoObjectTy, VK_LValue,
                               OK_ObjCProperty, propertyNameLoc, receiverNameLoc,
-                              Context.getObjCInterfaceType(IFace));
+                              SuperType);
 
     return new (Context) ObjCPropertyRefExpr(
         Getter, Setter, Context.PseudoObjectTy, VK_LValue, OK_ObjCProperty,
