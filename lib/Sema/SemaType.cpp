@@ -973,6 +973,138 @@ QualType Sema::BuildObjCObjectType(QualType BaseType,
   return Result;
 }
 
+TypeResult Sema::actOnObjCProtocolQualifierType(
+             SourceLocation lAngleLoc,
+             ArrayRef<Decl *> protocols,
+             ArrayRef<SourceLocation> protocolLocs,
+             SourceLocation rAngleLoc) {
+  // Form id<protocol-list>.
+  QualType Result = Context.getObjCObjectType(
+                      Context.ObjCBuiltinIdTy, { },
+                      llvm::makeArrayRef(
+                        (ObjCProtocolDecl * const *)protocols.data(),
+                        protocols.size()));
+  Result = Context.getObjCObjectPointerType(Result);
+
+  TypeSourceInfo *ResultTInfo = Context.CreateTypeSourceInfo(Result);
+  TypeLoc ResultTL = ResultTInfo->getTypeLoc();
+
+  auto ObjCObjectPointerTL = ResultTL.castAs<ObjCObjectPointerTypeLoc>();
+  ObjCObjectPointerTL.setStarLoc(SourceLocation()); // implicit
+
+  auto ObjCObjectTL = ObjCObjectPointerTL.getPointeeLoc()
+                        .castAs<ObjCObjectTypeLoc>();
+  ObjCObjectTL.setHasBaseTypeAsWritten(false);
+  ObjCObjectTL.getBaseLoc().initialize(Context, SourceLocation());
+
+  // No type arguments.
+  ObjCObjectTL.setTypeArgsLAngleLoc(SourceLocation());
+  ObjCObjectTL.setTypeArgsRAngleLoc(SourceLocation());
+
+  // Fill in protocol qualifiers.
+  ObjCObjectTL.setProtocolLAngleLoc(lAngleLoc);
+  ObjCObjectTL.setProtocolRAngleLoc(rAngleLoc);
+  for (unsigned i = 0, n = protocols.size(); i != n; ++i)
+    ObjCObjectTL.setProtocolLoc(i, protocolLocs[i]);
+
+  // We're done. Return the completed type to the parser.
+  return CreateParsedType(Result, ResultTInfo);
+}
+
+TypeResult Sema::actOnObjCTypeArgsAndProtocolQualifiers(
+             Scope *S,
+             SourceLocation Loc,
+             ParsedType BaseType,
+             SourceLocation TypeArgsLAngleLoc,
+             ArrayRef<ParsedType> TypeArgs,
+             SourceLocation TypeArgsRAngleLoc,
+             SourceLocation ProtocolLAngleLoc,
+             ArrayRef<Decl *> Protocols,
+             ArrayRef<SourceLocation> ProtocolLocs,
+             SourceLocation ProtocolRAngleLoc) {
+  TypeSourceInfo *BaseTypeInfo = nullptr;
+  QualType T = GetTypeFromParser(BaseType, &BaseTypeInfo);
+  if (T.isNull())
+    return true;
+
+  // Handle missing type-source info.
+  if (!BaseTypeInfo)
+    BaseTypeInfo = Context.getTrivialTypeSourceInfo(T, Loc);
+
+  // Extract type arguments.
+  SmallVector<TypeSourceInfo *, 4> ActualTypeArgInfos;
+  for (unsigned i = 0, n = TypeArgs.size(); i != n; ++i) {
+    TypeSourceInfo *TypeArgInfo = nullptr;
+    QualType TypeArg = GetTypeFromParser(TypeArgs[i], &TypeArgInfo);
+    if (TypeArg.isNull()) {
+      ActualTypeArgInfos.clear();
+      break;
+    }
+    
+    assert(TypeArgInfo && "No type source info?");
+    ActualTypeArgInfos.push_back(TypeArgInfo);
+  }
+
+  // Build the object type.
+  QualType Result = BuildObjCObjectType(
+                      T, 
+                      BaseTypeInfo->getTypeLoc().getSourceRange().getBegin(),
+                      TypeArgsLAngleLoc, 
+                      ActualTypeArgInfos, 
+                      TypeArgsRAngleLoc,
+                      ProtocolLAngleLoc,
+                      llvm::makeArrayRef((ObjCProtocolDecl **)Protocols.data(),
+                                         Protocols.size()),
+                      ProtocolLocs,
+                      ProtocolRAngleLoc,
+                      /*FailOnError=*/false);
+
+  if (Result == T)
+    return BaseType;
+    
+  // Create source information for this type.
+  TypeSourceInfo *ResultTInfo = Context.CreateTypeSourceInfo(Result);
+  TypeLoc ResultTL = ResultTInfo->getTypeLoc();
+
+  // For id<Proto1, Proto2> or Class<Proto1, Proto2>, we'll have an
+  // object pointer type. Fill in source information for it.
+  if (auto ObjCObjectPointerTL = ResultTL.getAs<ObjCObjectPointerTypeLoc>()) {
+    // The '*' is implicit.
+    ObjCObjectPointerTL.setStarLoc(SourceLocation());
+    ResultTL = ObjCObjectPointerTL.getPointeeLoc();
+  }
+
+  auto ObjCObjectTL = ResultTL.castAs<ObjCObjectTypeLoc>();
+
+  // Type argument information.
+  if (ObjCObjectTL.getNumTypeArgs() > 0) {
+    assert(ObjCObjectTL.getNumTypeArgs() == ActualTypeArgInfos.size());
+    ObjCObjectTL.setTypeArgsLAngleLoc(TypeArgsLAngleLoc);
+    ObjCObjectTL.setTypeArgsRAngleLoc(TypeArgsRAngleLoc);
+    for (unsigned i = 0, n = ActualTypeArgInfos.size(); i != n; ++i)
+      ObjCObjectTL.setTypeArgTInfo(i, ActualTypeArgInfos[i]);
+  }
+
+  // Protocol qualifier information.
+  if (ObjCObjectTL.getNumProtocols() > 0) {
+    assert(ObjCObjectTL.getNumProtocols() == Protocols.size());
+    ObjCObjectTL.setProtocolLAngleLoc(ProtocolLAngleLoc);
+    ObjCObjectTL.setProtocolRAngleLoc(ProtocolRAngleLoc);
+    for (unsigned i = 0, n = Protocols.size(); i != n; ++i)
+      ObjCObjectTL.setProtocolLoc(i, ProtocolLocs[i]);
+  }
+
+  // Base type.
+  ObjCObjectTL.setHasBaseTypeAsWritten(true);
+  if (ObjCObjectTL.getType() == T)
+    ObjCObjectTL.getBaseLoc().initializeFullCopy(BaseTypeInfo->getTypeLoc());
+  else
+    ObjCObjectTL.getBaseLoc().initialize(Context, Loc);
+
+  // We're done. Return the completed type to the parser.
+  return CreateParsedType(Result, ResultTInfo);
+}
+
 /// \brief Convert the specified declspec to the appropriate type
 /// object.
 /// \param state Specifies the declarator containing the declaration specifier
@@ -1036,16 +1168,6 @@ static QualType ConvertDeclSpecToType(TypeProcessingState &state) {
       Result = Context.Char32Ty;
     break;
   case DeclSpec::TST_unspecified:
-    // "<proto1,proto2>" is an objc qualified ID with a missing id.
-    if (DeclSpec::ProtocolQualifierListTy PQ = DS.getProtocolQualifiers()) {
-      Result = Context.getObjCObjectType(Context.ObjCBuiltinIdTy, { },
-                                         llvm::makeArrayRef(
-                                           (ObjCProtocolDecl*const*)PQ,
-                                           DS.getNumProtocolQualifiers()));
-      Result = Context.getObjCObjectPointerType(Result);
-      break;
-    }
-
     // If this is a missing declspec in a block literal return context, then it
     // is inferred from the return statements inside the block.
     // The declspec is always missing in a lambda expr context; it is either
@@ -1202,38 +1324,6 @@ static QualType ConvertDeclSpecToType(TypeProcessingState &state) {
     Result = S.GetTypeFromParser(DS.getRepAsType());
     if (Result.isNull()) {
       declarator.setInvalidType(true);
-    } else {
-      // Apply Objective-C type arguments.
-      if (DS.hasObjCTypeArgs()) {
-        ArrayRef<ParsedType> parsedTypeArgs = DS.getObjCTypeArgs();
-        SmallVector<TypeSourceInfo *, 4> typeArgInfos;
-        bool isInvalid = false;
-        for (unsigned i = 0, n = parsedTypeArgs.size(); i != n; ++i) {
-          TypeSourceInfo *typeArgInfo = nullptr;
-          QualType typeArg = S.GetTypeFromParser(parsedTypeArgs[i],
-                                                 &typeArgInfo);
-          if (typeArg.isNull()) {
-            isInvalid = true;
-            break;
-          }
-
-          assert(typeArgInfo && "No type source info?");
-          typeArgInfos.push_back(typeArgInfo);
-        }
-
-        if (!isInvalid)
-          Result = applyObjCTypeArgs(S, DeclLoc, Result, typeArgInfos,
-                                     DS.getObjCTypeArgsRange());
-      }
-
-      // Apply Objective-C protocol qualifiers.
-      if (DeclSpec::ProtocolQualifierListTy PQ = DS.getProtocolQualifiers()) {
-        Result = applyObjCProtocolQualifiers(
-                   S, DeclLoc, DS.getSourceRange(), Result,
-                   llvm::makeArrayRef((ObjCProtocolDecl * const *)PQ,
-                                      DS.getNumProtocolQualifiers()),
-                   DS.getProtocolLocs());
-      }
     }
 
     // TypeQuals handled by caller.
@@ -4190,97 +4280,14 @@ namespace {
       TL.setNameEndLoc(DS.getLocEnd());
     }
     void VisitObjCObjectTypeLoc(ObjCObjectTypeLoc TL) {
-      // Handle the base type, which might not have been written explicitly.
-      if (DS.getTypeSpecType() == DeclSpec::TST_unspecified) {
-        TL.setHasBaseTypeAsWritten(false);
-        TL.getBaseLoc().initialize(Context, SourceLocation());
-      } else {
-        TL.setHasBaseTypeAsWritten(true);
-        Visit(TL.getBaseLoc());
-      }
-
-      // Extract type source information from the parser for this object type.
-      ObjCObjectTypeLoc OldObjCObjectTL;
-      if (DS.isTypeRep()) {
-        TypeSourceInfo *OldTInfo = nullptr;
-        Sema::GetTypeFromParser(DS.getRepAsType(), &OldTInfo);
-        if (OldTInfo) {
-          TypeLoc OldTL = OldTInfo->getTypeLoc();
-          OldObjCObjectTL = OldTL.getAs<ObjCObjectTypeLoc>();
-          if (OldObjCObjectTL.isNull()) {
-            auto OldObjCObjectPointerTL = OldTL.getAs<ObjCObjectPointerTypeLoc>();
-            if (!OldObjCObjectPointerTL.isNull()) {
-              OldObjCObjectTL = OldObjCObjectPointerTL.getPointeeLoc()
-                                  .getAs<ObjCObjectTypeLoc>();
-            }
-          }
-        }
-      }
-
-      // Type arguments.
-      if (TL.getNumTypeArgs() > 0) {
-        bool FilledTypeArgs = false;
-
-        // If the old type information has the type argument information,
-        // copy it.
-        if (!OldObjCObjectTL.isNull()) {
-          if (OldObjCObjectTL.getNumTypeArgs() == TL.getNumTypeArgs()) {
-            TL.setTypeArgsLAngleLoc(OldObjCObjectTL.getTypeArgsLAngleLoc());
-            TL.setTypeArgsRAngleLoc(OldObjCObjectTL.getTypeArgsRAngleLoc());
-            for (unsigned i = 0, n = TL.getNumTypeArgs(); i != n; ++i) {
-              TL.setTypeArgTInfo(i, OldObjCObjectTL.getTypeArgTInfo(i));
-            }
-
-            FilledTypeArgs = true;
-          }
-        }
-
-        // If we didn't fill in type argument information from the type
-        // specifier, that information is in the type arguments.
-        if (!FilledTypeArgs) {
-          assert(TL.getNumTypeArgs() == DS.getObjCTypeArgs().size());
-          TL.setTypeArgsLAngleLoc(DS.getObjCTypeArgsLAngleLoc());
-          TL.setTypeArgsRAngleLoc(DS.getObjCTypeArgsRAngleLoc());
-          for (unsigned i = 0, n = TL.getNumTypeArgs(); i != n; ++i) {
-            TypeSourceInfo *typeArgInfo = nullptr;
-            (void)Sema::GetTypeFromParser(DS.getObjCTypeArgs()[i], &typeArgInfo);
-            TL.setTypeArgTInfo(i, typeArgInfo);
-          }
-        }
-      } else {
-        TL.setTypeArgsLAngleLoc(SourceLocation());
-        TL.setTypeArgsRAngleLoc(SourceLocation());
-      }
-
-      // Protocol qualifiers.
-      if (TL.getNumProtocols() > 0) {
-        // If we have the protocol information in the declaration specifiers,
-        // use it.
-        if (DS.getNumProtocolQualifiers() > 0) {
-          assert(TL.getNumProtocols() == DS.getNumProtocolQualifiers());
-          TL.setProtocolLAngleLoc(DS.getProtocolLAngleLoc());
-          TL.setProtocolRAngleLoc(DS.getSourceRange().getEnd());
-          for (unsigned i = 0, e = DS.getNumProtocolQualifiers(); i != e; ++i)
-            TL.setProtocolLoc(i, DS.getProtocolLocs()[i]);
-        } else {
-          // Otherwise, it's in the type specifier.
-          assert(!OldObjCObjectTL.isNull() && "Missing old type information?");
-          assert(OldObjCObjectTL.getNumProtocols()
-                   == TL.getNumProtocols());
-          TL.setProtocolLAngleLoc(OldObjCObjectTL.getProtocolLAngleLoc());
-          TL.setProtocolRAngleLoc(OldObjCObjectTL.getProtocolRAngleLoc());
-          for (unsigned i = 0, e = TL.getNumProtocols(); i != e; ++i) {
-            TL.setProtocolLoc(i, OldObjCObjectTL.getProtocolLoc(i));
-          }
-        }
-      } else {
-        TL.setProtocolLAngleLoc(SourceLocation());
-        TL.setProtocolRAngleLoc(SourceLocation());
-      }
+      TypeSourceInfo *RepTInfo = nullptr;
+      Sema::GetTypeFromParser(DS.getRepAsType(), &RepTInfo);
+      TL.initializeFullCopy(RepTInfo->getTypeLoc());
     }
     void VisitObjCObjectPointerTypeLoc(ObjCObjectPointerTypeLoc TL) {
-      TL.setStarLoc(SourceLocation());
-      Visit(TL.getPointeeLoc());
+      TypeSourceInfo *RepTInfo = nullptr;
+      Sema::GetTypeFromParser(DS.getRepAsType(), &RepTInfo);
+      TL.initializeFullCopy(RepTInfo->getTypeLoc());
     }
     void VisitTemplateSpecializationTypeLoc(TemplateSpecializationTypeLoc TL) {
       TypeSourceInfo *TInfo = nullptr;

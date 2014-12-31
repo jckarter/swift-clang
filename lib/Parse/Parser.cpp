@@ -1400,10 +1400,11 @@ Parser::TryAnnotateName(bool IsAddressOfOperand,
          Ty.get()->isObjCObjectPointerType())) {
       // Consume the name.
       SourceLocation IdentifierLoc = ConsumeToken();
-
+      SourceLocation NewEndLoc;
       TypeResult NewType
-          = ParseObjCTypeArgsAndProtocolQualifiers(IdentifierLoc, Ty,
-                                                   /*consumeLastToken=*/false);
+          = parseObjCTypeArgsAndProtocolQualifiers(IdentifierLoc, Ty,
+                                                   /*consumeLastToken=*/false,
+                                                   NewEndLoc);
       if (NewType.isUsable())
         Ty = NewType.get();
     }
@@ -1633,10 +1634,11 @@ bool Parser::TryAnnotateTypeOrScopeTokenAfterScopeSpec(bool EnteringContext,
            Ty.get()->isObjCObjectPointerType())) {
         // Consume the name.
         SourceLocation IdentifierLoc = ConsumeToken();
-
+        SourceLocation NewEndLoc;
         TypeResult NewType
-          = ParseObjCTypeArgsAndProtocolQualifiers(IdentifierLoc, Ty,
-                                                   /*consumeLastToken=*/false);
+          = parseObjCTypeArgsAndProtocolQualifiers(IdentifierLoc, Ty,
+                                                   /*consumeLastToken=*/false,
+                                                   NewEndLoc);
         if (NewType.isUsable())
           Ty = NewType.get();
       }

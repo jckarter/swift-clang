@@ -341,12 +341,12 @@ void test_ternary_operator(NSArray<NSString *> *stringArray,
 // --------------------------------------------------------------------------
 template<typename K, typename V>
 struct NSMutableDictionaryOf {
-  typedef NSMutableDictionary<K, V> *type; // expected-error{{type argument 'NSObject *' does not satisy the bound ('id<NSCopying>') of type parameter 'K'}}
+  typedef NSMutableDictionary<K, V> *type; // expected-error{{type argument 'NSObject *' does not satisfy the bound ('id<NSCopying>') of type parameter 'K'}}
 };
 
 template<typename ...Args>
 struct VariadicNSMutableDictionaryOf {
-  typedef NSMutableDictionary<Args...> *type; // expected-error{{type argument 'NSObject *' does not satisy the bound ('id<NSCopying>') of type parameter 'K'}}
+  typedef NSMutableDictionary<Args...> *type; // expected-error{{type argument 'NSObject *' does not satisfy the bound ('id<NSCopying>') of type parameter 'K'}}
   // expected-error@-1{{too many type arguments for class 'NSMutableDictionary' (have 3, expected 2)}}
   // expected-error@-2{{too few type arguments for class 'NSMutableDictionary' (have 1, expected 2)}}
 };
