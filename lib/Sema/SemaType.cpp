@@ -1083,6 +1083,9 @@ TypeResult Sema::actOnObjCTypeArgsAndProtocolQualifiers(
     ObjCObjectTL.setTypeArgsRAngleLoc(TypeArgsRAngleLoc);
     for (unsigned i = 0, n = ActualTypeArgInfos.size(); i != n; ++i)
       ObjCObjectTL.setTypeArgTInfo(i, ActualTypeArgInfos[i]);
+  } else {
+    ObjCObjectTL.setTypeArgsLAngleLoc(SourceLocation());
+    ObjCObjectTL.setTypeArgsRAngleLoc(SourceLocation());
   }
 
   // Protocol qualifier information.
@@ -1092,6 +1095,9 @@ TypeResult Sema::actOnObjCTypeArgsAndProtocolQualifiers(
     ObjCObjectTL.setProtocolRAngleLoc(ProtocolRAngleLoc);
     for (unsigned i = 0, n = Protocols.size(); i != n; ++i)
       ObjCObjectTL.setProtocolLoc(i, ProtocolLocs[i]);
+  } else {
+    ObjCObjectTL.setProtocolLAngleLoc(SourceLocation());
+    ObjCObjectTL.setProtocolRAngleLoc(SourceLocation());
   }
 
   // Base type.
