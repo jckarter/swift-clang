@@ -75,6 +75,15 @@ ApplyDebugLocation::ApplyDebugLocation(CodeGenFunction &CGF,
   }
 }
 
+ApplyDebugLocation::ApplyDebugLocation(CodeGenFunction &CGF, llvm::DebugLoc Loc)
+    : CGF(CGF) {
+  if (CGF.getDebugInfo()) {
+    OriginalLocation = CGF.Builder.getCurrentDebugLocation();
+    if (!Loc.isUnknown())
+      CGF.Builder.SetCurrentDebugLocation(Loc);
+  }
+}
+
 ApplyDebugLocation::~ApplyDebugLocation() {
   // Query CGF so the location isn't overwritten when location updates are
   // temporarily disabled (for C++ default function arguments)
@@ -2627,20 +2636,6 @@ void CGDebugInfo::EmitLocation(CGBuilderTy &Builder, SourceLocation Loc,
 
   if (CurLoc.isInvalid() || CurLoc.isMacroID())
     return;
-
-  // Don't bother if things are the same as last time.
-  SourceManager &SM = CGM.getContext().getSourceManager();
-  assert(!LexicalBlockStack.empty());
-  if (CurLoc == PrevLoc ||
-      SM.getExpansionLoc(CurLoc) == SM.getExpansionLoc(PrevLoc))
-    // New Builder may not be in sync with CGDebugInfo.
-    if (!Builder.getCurrentDebugLocation().isUnknown() &&
-        Builder.getCurrentDebugLocation().getScope(CGM.getLLVMContext()) ==
-            LexicalBlockStack.back())
-      return;
-
-  // Update last state.
-  PrevLoc = CurLoc;
 
   llvm::MDNode *Scope = LexicalBlockStack.back();
   Builder.SetCurrentDebugLocation(llvm::DebugLoc::get(
