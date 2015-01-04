@@ -1264,6 +1264,7 @@ private:
   /// Objective-C object or object pointer type, which may be either
   /// type arguments or protocol qualifiers.
   void parseObjCTypeArgsOrProtocolQualifiers(
+         ParsedType baseType,
          SourceLocation &typeArgsLAngleLoc,
          SmallVectorImpl<ParsedType> &typeArgs,
          SourceLocation &typeArgsRAngleLoc,
@@ -1277,6 +1278,7 @@ private:
   /// Parse either Objective-C type arguments or protocol qualifiers; if the
   /// former, also parse protocol qualifiers afterward.
   void parseObjCTypeArgsAndProtocolQualifiers(
+         ParsedType baseType,
          SourceLocation &typeArgsLAngleLoc,
          SmallVectorImpl<ParsedType> &typeArgs,
          SourceLocation &typeArgsRAngleLoc,
