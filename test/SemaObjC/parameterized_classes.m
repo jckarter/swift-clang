@@ -1,5 +1,9 @@
 // RUN: %clang_cc1 -fblocks %s -verify
 
+#if !__has_feature(objc_generics)
+#  error Compiler does not support Objective-C generics?
+#endif
+
 @protocol NSObject // expected-note{{'NSObject' declared here}}
 @end
 

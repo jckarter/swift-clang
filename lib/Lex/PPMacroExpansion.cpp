@@ -916,6 +916,7 @@ static bool HasFeature(const Preprocessor &PP, const IdentifierInfo *II) {
       .Case("objc_boxed_expressions", LangOpts.ObjC2)
       .Case("arc_cf_code_audited", true)
       .Case("objc_bridge_id", LangOpts.ObjC2)
+      .Case("objc_generics", LangOpts.ObjC2)
       // C11 features
       .Case("c_alignas", LangOpts.C11)
       .Case("c_alignof", LangOpts.C11)
