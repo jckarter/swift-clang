@@ -1488,8 +1488,10 @@ static const Tool *SelectToolForJob(Compilation &C, const ToolChain *TC,
     // -save-temps they will always get combined together, so instead of
     // checking the backend tool, check if the tool for the CompileJob
     // has an integrated assembler.
-    const ActionList *BackendInputs = &(*Inputs)[0]->getInputs();
-    JobAction *CompileJA = cast<CompileJobAction>(*BackendInputs->begin());
+    const ActionList *BackendInputs =
+      (C.getArgs().hasArg(options::OPT_fembed_bitcode) ?
+       Inputs : &(*Inputs)[0]->getInputs());
+    JobAction *CompileJA = cast<JobAction>(*BackendInputs->begin());
     const Tool *Compiler = TC->SelectTool(*CompileJA);
     if (!Compiler)
       return nullptr;
@@ -1510,7 +1512,8 @@ static const Tool *SelectToolForJob(Compilation &C, const ToolChain *TC,
     if (!Compiler)
       return nullptr;
     if (!Compiler->canEmitIR() ||
-        !C.getArgs().hasArg(options::OPT_save_temps)) {
+        (!C.getArgs().hasArg(options::OPT_save_temps) &&
+         !C.getArgs().hasArg(options::OPT_fembed_bitcode))) {
       Inputs = &(*Inputs)[0]->getInputs();
       ToolForJob = Compiler;
     }

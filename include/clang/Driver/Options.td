@@ -409,6 +409,10 @@ def fno_autolink : Flag <["-"], "fno-autolink">, Group<f_Group>,
   Flags<[DriverOption, CC1Option]>,
   HelpText<"Disable generation of linker directives for automatic library linking">;
 
+def fembed_bitcode : Flag<["-"], "fembed-bitcode">, Group<f_Group>,
+  Flags<[CC1Option]>,
+  HelpText<"Embed LLVM IR bitcode as data">;
+
 def fprofile_sample_use_EQ : Joined<["-"], "fprofile-sample-use=">,
     Group<f_Group>, Flags<[DriverOption, CC1Option]>,
     HelpText<"Enable sample-based profile guided optimizations">;

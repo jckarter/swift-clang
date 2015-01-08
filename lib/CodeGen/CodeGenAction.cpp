@@ -718,6 +718,7 @@ void CodeGenAction::ExecuteAction() {
       TheModule->setTargetTriple(TargetOpts.Triple);
     }
 
+    EmbedBitcode(TheModule.get(), CI.getCodeGenOpts());
     EmitBackendOutput(CI.getDiagnostics(), CI.getCodeGenOpts(), TargetOpts,
                       CI.getLangOpts(), CI.getTarget().getTargetDescription(),
                       TheModule.get(), BA, OS);

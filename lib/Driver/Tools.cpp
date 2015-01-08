@@ -3402,6 +3402,10 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
     }
   }
 
+  if (Args.hasArg(options::OPT_fembed_bitcode) &&
+      (isa<BackendJobAction>(JA) || isa<AssembleJobAction>(JA)))
+    CmdArgs.push_back("-fembed-bitcode");
+
   // Warn about ignored options to clang.
   for (arg_iterator it = Args.filtered_begin(
        options::OPT_clang_ignored_gcc_optimization_f_Group),
@@ -4507,7 +4511,9 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
   // With -save-temps, we want to save the unoptimized bitcode output from the
   // CompileJobAction, so disable optimizations if they are not already
   // disabled.
-  if (Args.hasArg(options::OPT_save_temps) && !OptDisabled &&
+  if (Args.hasArg(options::OPT_save_temps) &&
+      !Args.hasArg(options::OPT_fembed_bitcode) &&
+      !OptDisabled &&
       isa<CompileJobAction>(JA))
     CmdArgs.push_back("-disable-llvm-optzns");
 
