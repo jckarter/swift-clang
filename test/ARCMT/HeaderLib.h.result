@@ -1,16 +1,6 @@
 #ifndef HEADER_LIB_H
 #define HEADER_LIB_H
 
-#ifndef NS_ASSUME_NONNULL_BEGIN
-#if __has_feature(assume_nonnull)
-#define NS_ASSUME_NONNULL_BEGIN _Pragma("clang assume_nonnull begin")
-#define NS_ASSUME_NONNULL_END _Pragma("clang assume_nonnull end")
-#else
-#define NS_ASSUME_NONNULL_BEGIN
-#define NS_ASSUME_NONNULL_END
-#endif
-#endif
-
 NS_ASSUME_NONNULL_BEGIN
 
 void *custom_realloc(void *member, unsigned size);

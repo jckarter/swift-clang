@@ -1,0 +1,53 @@
+#ifndef SOMEKIT_H
+#define SOMEKIT_H
+
+#define ROOT_CLASS __attribute__((objc_root_class))
+
+NS_ASSUME_NONNULL_BEGIN
+
+ROOT_CLASS
+@interface A
+-(null_unspecified A*)transform:(null_unspecified A*)input __attribute__((unavailable("anything but this")));
+-(A*)transform:(A*)input integer:(int)integer;
+
+@property (null_unspecified, nonatomic, readonly, retain) A* someA;
+@property (null_unspecified, nonatomic, retain) A* someOtherA;
+
+@property (nonatomic) int intValue __attribute__((unavailable("wouldn't work anyway")));
+@end
+
+__attribute__((unavailable("just don't")))
+@interface B : A
+@end
+
+@interface C : A
+- (null_unspecified instancetype)init;
+- (null_unspecified instancetype)initWithA:(null_unspecified A*)a __attribute__((objc_designated_initializer));
+@end
+
+
+@interface MyClass : A
+- (null_unspecified id) Inst;
++ (null_unspecified id) Clas;
+@end
+
+struct CGRect {
+  float origin;
+  float size;
+};
+typedef struct CGRect NSRect;
+
+@interface I
+- (void) Meth : (NSRect[4])exposedRects;
+- (void) Meth1 : (null_unspecified const  I*)exposedRects;
+- (void) Meth2 : (null_unspecified const I*)exposedRects;
+- (void) Meth3 : (null_unspecified I*)exposedRects;
+- (null_unspecified const I*) Meth4;
+- (null_unspecified const I*) Meth5 : (int) Arg1 : (null_unspecified const I*)Arg2 : (double)Arg3 :   (null_unspecified const I*) Arg4 :(null_unspecified const  volatile id) Arg5;
+- (null_unspecified volatile const I*) Meth6 : (null_unspecified const char *)Arg1 : (null_unspecified const char *)Arg2 : (double)Arg3 :   (null_unspecified const I*) Arg4 :(null_unspecified const  volatile id) Arg5;
+@end
+
+NS_ASSUME_NONNULL_END
+
+
+#endif

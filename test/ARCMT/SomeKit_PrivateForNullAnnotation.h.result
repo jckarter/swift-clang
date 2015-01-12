@@ -1,0 +1,23 @@
+#ifndef SOMEKIT_PRIVATE_H
+#define SOMEKIT_PRIVATE_H
+
+#import <SomeKit/SomeKitForNullAnnotation.h>
+
+NS_ASSUME_NONNULL_BEGIN
+
+@interface A(Private)
+-(null_unspecified A*)privateTransform:(null_unspecified A*)input;
+
+@property (nonatomic) A* internalProperty;
+@end
+
+__attribute__((unavailable("not for you")))
+@protocol InternalProtocol
+- (null_unspecified id) MomeMethod;
+@end
+
+NS_ASSUME_NONNULL_END
+
+
+#endif
+
