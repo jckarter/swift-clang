@@ -3165,8 +3165,9 @@ Parser::tryParseExceptionSpecification(bool Delayed,
     // Add the 'stop' token.
     Token End;
     End.startToken();
-    End.setKind(tok::cxx_exceptspec_end);
+    End.setKind(tok::eof);
     End.setLocation(Tok.getLocation());
+    End.setEofData(Actions.CurScope);
     ExceptionSpecTokens->push_back(End);
     return EST_Unparsed;
   }
@@ -3388,9 +3389,11 @@ IdentifierInfo *Parser::TryParseCXX11AttributeIdentifier(SourceLocation &Loc) {
   switch (Tok.getKind()) {
   default:
     // Identifiers and keywords have identifier info attached.
-    if (IdentifierInfo *II = Tok.getIdentifierInfo()) {
-      Loc = ConsumeToken();
-      return II;
+    if (!Tok.isAnnotation()) {
+      if (IdentifierInfo *II = Tok.getIdentifierInfo()) {
+        Loc = ConsumeToken();
+        return II;
+      }
     }
     return nullptr;
 

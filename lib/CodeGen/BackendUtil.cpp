@@ -21,9 +21,12 @@
 #include "llvm/IR/DataLayout.h"
 #include "llvm/IR/IRPrintingPasses.h"
 #include "llvm/IR/Module.h"
+#include "llvm/IR/Constants.h"
+#include "llvm/IR/GlobalVariable.h"
 #include "llvm/IR/Verifier.h"
 #include "llvm/MC/SubtargetFeature.h"
 #include "llvm/PassManager.h"
+#include "llvm/Bitcode/ReaderWriter.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/FormattedStream.h"
 #include "llvm/Support/PrettyStackTrace.h"
@@ -39,6 +42,7 @@
 #include "llvm/Transforms/Instrumentation.h"
 #include "llvm/Transforms/ObjCARC.h"
 #include "llvm/Transforms/Scalar.h"
+#include "llvm/Transforms/Utils/SymbolRewriter.h"
 #include <memory>
 using namespace clang;
 using namespace llvm;
@@ -234,6 +238,17 @@ static TargetLibraryInfo *createTLI(llvm::Triple &TargetTriple,
   return TLI;
 }
 
+static void addSymbolRewriterPass(const CodeGenOptions &Opts,
+                                  PassManager *MPM) {
+  llvm::SymbolRewriter::RewriteDescriptorList DL;
+
+  llvm::SymbolRewriter::RewriteMapParser MapParser;
+  for (const auto &MapFile : Opts.RewriteMapFiles)
+    MapParser.parse(MapFile, &DL);
+
+  MPM->add(createRewriteSymbolsPass(DL));
+}
+
 void EmitAssemblyHelper::CreatePasses() {
   unsigned OptLevel = CodeGenOpts.OptimizationLevel;
   CodeGenOptions::InliningMethod Inlining = CodeGenOpts.getInlining();
@@ -346,6 +361,8 @@ void EmitAssemblyHelper::CreatePasses() {
 
   // Set up the per-module pass manager.
   PassManager *MPM = getPerModulePasses();
+  if (!CodeGenOpts.RewriteMapFiles.empty())
+    addSymbolRewriterPass(CodeGenOpts, MPM);
   if (CodeGenOpts.VerifyModule)
     MPM->add(createDebugInfoVerifierPass());
 
@@ -642,5 +659,53 @@ void clang::EmitBackendOutput(DiagnosticsEngine &Diags,
                                     "expected target description '%1'");
       Diags.Report(DiagID) << DLDesc << TDesc;
     }
+  }
+}
+
+// With -fembed-bitcode, save a copy of the llvm IR as data in the
+// __LLVM,__bitcode section.
+void clang::EmbedBitcode(llvm::Module *M, CodeGenOptions &CGOpts)
+{
+  if (!CGOpts.EmbedBitcode)
+    return;
+
+  // Embed the bitcode for the llvm module.
+  std::string Data;
+  llvm::raw_string_ostream OS(Data);
+  llvm::WriteBitcodeToFile(M, OS);
+  ArrayRef<uint8_t> ModuleData((uint8_t*)OS.str().data(), OS.str().size());
+  llvm::Constant *ModuleConstant =
+    llvm::ConstantDataArray::get(M->getContext(), ModuleData);
+  // Use Appending linkage so it doesn't get optimized out.
+  llvm::GlobalVariable *GV = new llvm::GlobalVariable(*M,
+                                       ModuleConstant->getType(), true,
+                                       llvm::GlobalValue::AppendingLinkage,
+                                       ModuleConstant);
+  GV->setSection("__LLVM,__bitcode");
+  if (llvm::GlobalVariable *Old =
+      M->getGlobalVariable("llvm.embedded.module")) {
+    GV->takeName(Old);
+    Old->replaceAllUsesWith(GV);
+    delete Old;
+  } else {
+    GV->setName("llvm.embedded.module");
+  }
+
+  // Embed command-line options.
+  // FIXME: This can be removed once all the options are recorded in the IR.
+  ArrayRef<uint8_t> CmdData((uint8_t*)CGOpts.CmdArgs.data(),
+                            CGOpts.CmdArgs.size());
+  llvm::Constant *CmdConstant =
+    llvm::ConstantDataArray::get(M->getContext(), CmdData);
+  GV = new llvm::GlobalVariable(*M, CmdConstant->getType(), true,
+                                llvm::GlobalValue::AppendingLinkage,
+                                CmdConstant);
+  GV->setSection("__LLVM,__cmdline");
+  if (llvm::GlobalVariable *Old = M->getGlobalVariable("llvm.cmdline")) {
+    GV->takeName(Old);
+    Old->replaceAllUsesWith(GV);
+    delete Old;
+  } else {
+    GV->setName("llvm.cmdline");
   }
 }

@@ -50,7 +50,6 @@ Driver::Driver(StringRef ClangExecutable,
   : Opts(createDriverOptTable()), Diags(Diags), Mode(GCCMode),
     ClangExecutable(ClangExecutable), SysRoot(DEFAULT_SYSROOT),
     UseStdLib(true), DefaultTargetTriple(DefaultTargetTriple),
-    DefaultImageName("a.out"),
     DriverTitle("clang LLVM compiler"),
     CCPrintOptionsFilename(nullptr), CCPrintHeadersFilename(nullptr),
     CCLogDiagnosticsFilename(nullptr),
@@ -550,6 +549,11 @@ void Driver::generateCompilationDiagnostics(Compilation &C,
     Cmd.Print(ScriptOS, "\n", /*Quote=*/true, &CrashInfo);
     Diag(clang::diag::note_drv_command_failed_diag_msg) << Script;
   }
+
+  for (const auto &A : C.getArgs().filtered(options::OPT_frewrite_map_file,
+                                            options::OPT_frewrite_map_file_EQ))
+    Diag(clang::diag::note_drv_command_failed_diag_msg) << A->getValue();
+
   Diag(clang::diag::note_drv_command_failed_diag_msg)
       << "\n\n********************";
 }
@@ -1412,7 +1416,7 @@ void Driver::BuildJobs(Compilation &C) const {
       if (FinalOutput)
         LinkingOutput = FinalOutput->getValue();
       else
-        LinkingOutput = DefaultImageName.c_str();
+        LinkingOutput = getDefaultImageName();
     }
 
     InputInfo II;
@@ -1488,8 +1492,10 @@ static const Tool *SelectToolForJob(Compilation &C, const ToolChain *TC,
     // -save-temps they will always get combined together, so instead of
     // checking the backend tool, check if the tool for the CompileJob
     // has an integrated assembler.
-    const ActionList *BackendInputs = &(*Inputs)[0]->getInputs();
-    JobAction *CompileJA = cast<CompileJobAction>(*BackendInputs->begin());
+    const ActionList *BackendInputs =
+      (C.getArgs().hasArg(options::OPT_fembed_bitcode) ?
+       Inputs : &(*Inputs)[0]->getInputs());
+    JobAction *CompileJA = cast<JobAction>(*BackendInputs->begin());
     const Tool *Compiler = TC->SelectTool(*CompileJA);
     if (!Compiler)
       return nullptr;
@@ -1510,7 +1516,8 @@ static const Tool *SelectToolForJob(Compilation &C, const ToolChain *TC,
     if (!Compiler)
       return nullptr;
     if (!Compiler->canEmitIR() ||
-        !C.getArgs().hasArg(options::OPT_save_temps)) {
+        (!C.getArgs().hasArg(options::OPT_save_temps) &&
+         !C.getArgs().hasArg(options::OPT_fembed_bitcode))) {
       Inputs = &(*Inputs)[0]->getInputs();
       ToolForJob = Compiler;
     }
@@ -1623,6 +1630,11 @@ void Driver::BuildJobsForAction(Compilation &C,
     T->ConstructJob(C, *JA, Result, InputInfos,
                     C.getArgsForToolChain(TC, BoundArch), LinkingOutput);
   }
+}
+
+const char *Driver::getDefaultImageName() const {
+  llvm::Triple Target(llvm::Triple::normalize(DefaultTargetTriple));
+  return Target.isOSWindows() ? "a.exe" : "a.out";
 }
 
 /// \brief Create output filename based on ArgValue, which could either be a
@@ -1743,12 +1755,12 @@ const char *Driver::GetNamedOutputPath(Compilation &C,
       NamedOutput = MakeCLOutputFilename(C.getArgs(), "", BaseName,
                                          types::TY_Image);
     } else if (MultipleArchs && BoundArch) {
-      SmallString<128> Output(DefaultImageName.c_str());
+      SmallString<128> Output(getDefaultImageName());
       Output += "-";
       Output.append(BoundArch);
       NamedOutput = C.getArgs().MakeArgString(Output.c_str());
     } else
-      NamedOutput = DefaultImageName.c_str();
+      NamedOutput = getDefaultImageName();
   } else {
     const char *Suffix = types::getTypeTempSuffix(JA.getType(), IsCLMode());
     assert(Suffix && "All types used for output should have a suffix.");
@@ -1997,8 +2009,6 @@ const ToolChain &Driver::getToolChain(const ArgList &Args,
                                       StringRef DarwinArchName) const {
   llvm::Triple Target = computeTargetTriple(DefaultTargetTriple, Args,
                                             DarwinArchName);
-  if (Target.isOSWindows())
-    DefaultImageName = "a.exe";
 
   ToolChain *&TC = ToolChains[Target.str()];
   if (!TC) {

@@ -989,6 +989,10 @@ void mips::getMipsCPUAndABI(const ArgList &Args,
     DefMips64CPU = "mips64r6";
   }
 
+  // MIPS3 is the default for mips64*-unknown-openbsd.
+  if (Triple.getOS() == llvm::Triple::OpenBSD)
+    DefMips64CPU = "mips3";
+
   if (Arg *A = Args.getLastArg(options::OPT_march_EQ,
                                options::OPT_mcpu_EQ))
     CPUName = A->getValue();
@@ -1530,6 +1534,7 @@ static std::string getCPUName(const ArgList &Args, const llvm::Triple &T) {
     return getSystemZTargetCPU(Args);
 
   case llvm::Triple::r600:
+  case llvm::Triple::amdgcn:
     return getR600TargetGPU(Args);
   }
 }
@@ -2453,14 +2458,11 @@ static std::string getMSCompatibilityVersion(const char *VersionStr) {
 }
 
 // Claim options we don't want to warn if they are unused. We do this for
-// options that
-// build systems might add but are unused when assembling or only running the
-// preprocessor
-// for example.
+// options that build systems might add but are unused when assembling or only
+// running the preprocessor for example.
 static void claimNoWarnArgs(const ArgList &Args) {
   // Don't warn about unused -f(no-)?lto.  This can happen when we're
-  // preprocessing,
-  // precompiling or assembling.
+  // preprocessing, precompiling or assembling.
   Args.ClaimAllArgs(options::OPT_flto);
   Args.ClaimAllArgs(options::OPT_fno_lto);
 }
@@ -2790,6 +2792,19 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
     CmdArgs.push_back("-fno-merge-all-constants");
 
   // LLVM Code Generator Options.
+
+  if (Args.hasArg(options::OPT_frewrite_map_file) ||
+      Args.hasArg(options::OPT_frewrite_map_file_EQ)) {
+    for (arg_iterator
+             MFI = Args.filtered_begin(options::OPT_frewrite_map_file,
+                                       options::OPT_frewrite_map_file_EQ),
+             MFE = Args.filtered_end();
+         MFI != MFE; ++MFI) {
+      CmdArgs.push_back("-frewrite-map-file");
+      CmdArgs.push_back((*MFI)->getValue());
+      (*MFI)->claim();
+    }
+  }
 
   if (Arg *A = Args.getLastArg(options::OPT_Wframe_larger_than_EQ)) {
     StringRef v = A->getValue();
@@ -3399,6 +3414,10 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
       A->render(Args, CmdArgs);
     }
   }
+
+  if (Args.hasArg(options::OPT_fembed_bitcode) &&
+      (isa<BackendJobAction>(JA) || isa<AssembleJobAction>(JA)))
+    CmdArgs.push_back("-fembed-bitcode");
 
   // Warn about ignored options to clang.
   for (arg_iterator it = Args.filtered_begin(
@@ -4505,7 +4524,9 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
   // With -save-temps, we want to save the unoptimized bitcode output from the
   // CompileJobAction, so disable optimizations if they are not already
   // disabled.
-  if (Args.hasArg(options::OPT_save_temps) && !OptDisabled &&
+  if (Args.hasArg(options::OPT_save_temps) &&
+      !Args.hasArg(options::OPT_fembed_bitcode) &&
+      !OptDisabled &&
       isa<CompileJobAction>(JA))
     CmdArgs.push_back("-disable-llvm-optzns");
 
@@ -5552,6 +5573,7 @@ llvm::Triple::ArchType darwin::getArchTypeForMachOArchName(StringRef Str) {
     .Cases("armv7s", "xscale", llvm::Triple::arm)
     .Case("arm64", llvm::Triple::aarch64)
     .Case("r600", llvm::Triple::r600)
+    .Case("amdgcn", llvm::Triple::amdgcn)
     .Case("nvptx", llvm::Triple::nvptx)
     .Case("nvptx64", llvm::Triple::nvptx64)
 #ifndef __OPEN_SOURCE__
