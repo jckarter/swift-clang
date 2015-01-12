@@ -17,6 +17,7 @@
 #include <memory>
 #include <string>
 #include <vector>
+#include "clang/Basic/Sanitizers.h"
 #include "llvm/Support/Regex.h"
 
 namespace clang {
@@ -179,8 +180,13 @@ public:
   /// Set of files definining the rules for the symbol rewriting.
   std::vector<std::string> RewriteMapFiles;
 
+  /// Set of sanitizer checks that are non-fatal (i.e. execution should be
+  /// continued when possible).
+  SanitizerSet SanitizeRecover;
+
   /// List of backend command-line options for -fembed-bitcode.
   std::vector<uint8_t> CmdArgs;
+
 public:
   // Define accessors/mutators for code generation options of enumeration type.
 #define CODEGENOPT(Name, Bits, Default)
