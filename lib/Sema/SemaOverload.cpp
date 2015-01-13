@@ -11199,6 +11199,11 @@ Sema::CreateOverloadedBinOp(SourceLocation OpLoc,
         // Cut off the implicit 'this'.
         if (isa<CXXMethodDecl>(FnDecl))
           ArgsArray = ArgsArray.slice(1);
+
+        // Check for a self move.
+        if (Op == OO_Equal)
+          DiagnoseSelfMove(Args[0], Args[1], OpLoc);
+
         checkCall(FnDecl, nullptr, ArgsArray, isa<CXXMethodDecl>(FnDecl), OpLoc, 
                   TheCall->getSourceRange(), VariadicDoesNotApply);
 
