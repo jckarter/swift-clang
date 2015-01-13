@@ -225,7 +225,7 @@ SanitizerArgs::SanitizerArgs(const ToolChain &TC,
       RecoverableKinds &= ~expandGroups(LegacyFsanitizeRecoverMask);
       Arg->claim();
     } else if (Arg->getOption().matches(options::OPT_fsanitize_recover_EQ)) {
-      unsigned Add = parseArgValues(D, Arg, true);
+      unsigned Add = parseArgValues(D, Arg, true, HasSanitizeUndefinedTrapOnError);
       // Report error if user explicitly tries to recover from unrecoverable
       // sanitizer.
       if (unsigned KindsToDiagnose =
@@ -239,7 +239,7 @@ SanitizerArgs::SanitizerArgs(const ToolChain &TC,
       RecoverableKinds |= expandGroups(Add);
       Arg->claim();
     } else if (Arg->getOption().matches(options::OPT_fno_sanitize_recover_EQ)) {
-      RecoverableKinds &= ~expandGroups(parseArgValues(D, Arg, true));
+      RecoverableKinds &= ~expandGroups(parseArgValues(D, Arg, true, HasSanitizeUndefinedTrapOnError));
       Arg->claim();
     }
   }
