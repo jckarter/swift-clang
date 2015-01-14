@@ -22,7 +22,7 @@ __attribute__((unavailable("just don't")))
 
 @interface C : A
 - (null_unspecified instancetype)init;
-- (null_unspecified instancetype)initWithA:(null_unspecified A*)a __attribute__((objc_designated_initializer));
+- (null_unspecified instancetype)initWithA:(null_unspecified A*)a NS_DESIGNATED_INITIALIZER;
 @end
 
 

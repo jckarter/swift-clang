@@ -816,6 +816,8 @@ void ObjCMigrateASTConsumer::AddNonnullAttribute(ASTContext &Ctx,
     // __nullability must be applied to outer-most pointer type.
     std::string SpacedNullableString = " ";
     SpacedNullableString += nullabilityString;
+    if (isa<ParmVarDecl>(D))
+      SpacedNullableString += " ";
     commit.insertAfterToken(TL.getEndLoc(), SpacedNullableString);
   } else if (Prop) {
     SourceLocation LParenLoc = Prop->getLParenLoc();
@@ -967,7 +969,7 @@ void ObjCMigrateASTConsumer::migrateApiNoteDesignatedInitializerAttr(
     if (auto DesigInitAttr = dyn_cast<ObjCDesignatedInitializerAttr>(A)) {
       if (!DesigInitAttr->isImplicit())
         return;
-      std::string Str(" __attribute__((objc_designated_initializer))");
+      std::string Str(" NS_DESIGNATED_INITIALIZER");
       edit::Commit commit(*Editor);
       commit.insertBefore(D->getLocEnd(), Str);
       Editor->commit(commit);
