@@ -4645,10 +4645,14 @@ public:
     // ARMleTargetInfo.
     MaxAtomicInlineWidth = 64;
 
-    // Darwin on iOS uses a variant of the ARM C++ ABI.
-    if (Triple.getArchName().endswith("v7k"))
+    if (Triple.getArchName().endswith("v7k")) {
+      // Darwin on iOS uses a variant of the ARM C++ ABI.
       TheCXXABI.set(TargetCXXABI::iOSv7k);
-    else
+
+      // The 32-bit ABI is silent on what ptrdiff_t should be, but given that
+      // size_t is long, it's a bit weird for it to be int.
+      PtrDiffType = SignedLong;
+    } else
       TheCXXABI.set(TargetCXXABI::iOS);
   }
 };
