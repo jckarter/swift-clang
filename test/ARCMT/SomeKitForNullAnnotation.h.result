@@ -47,6 +47,14 @@ typedef struct CGRect NSRect;
 - (null_unspecified volatile const I*) Meth6 : (null_unspecified const char *)Arg1 : (null_unspecified const char *)Arg2 : (double)Arg3 :   (null_unspecified const I*) Arg4 :(null_unspecified const  volatile id) Arg5;
 @end
 
+@class NSURL,  NSArray, NSError;
+@interface INTF_BLOCKS
+  + (void)getNonLocalVersionsOfItemAtURL:(null_unspecified NSURL *)url completionHandler:(void (^)(__null_unspecified NSArray *nonLocalFileVersions, __null_unspecified NSError *error))completionHandler;
+  + (null_unspecified void *)getNonLocalVersionsOfItemAtURL2:(null_unspecified NSURL *)url completionHandler:(void (^)(__null_unspecified NSArray *nonLocalFileVersions, __null_unspecified NSError *error))completionHandler;
+  + (NSError ** __null_unspecified )getNonLocalVersionsOfItemAtURL3:(int)url completionHandler:(void (^)(__null_unspecified NSArray *nonLocalFileVersions, __null_unspecified NSError *error))completionHandler;
+  + (null_unspecified id)getNonLocalVersionsOfItemAtURL4:(null_unspecified NSURL *)url completionHandler:(void (^)(int nonLocalFileVersions, __null_unspecified NSError *error, __null_unspecified NSURL*))completionHandler;
+@end
+
 NS_ASSUME_NONNULL_END
 
 

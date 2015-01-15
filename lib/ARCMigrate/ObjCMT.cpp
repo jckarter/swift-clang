@@ -770,6 +770,22 @@ void ObjCMigrateASTConsumer::AddNonnullAttribute(ASTContext &Ctx,
         TSInfo = Param->getTypeSourceInfo();
         PointeePointerType = IsPointeePointerType(T);
       }
+      else if (T->isBlockPointerType()) {
+        migrateApiNoteReturnsNonnullAttr(D, Sugar);
+        TSInfo = Param->getTypeSourceInfo();
+        TypeLoc TL = TSInfo->getTypeLoc().getUnqualifiedLoc();
+        // Try to get the function prototype behind the block pointer type,
+        // then we're done.
+        if (BlockPointerTypeLoc BlockPtr = TL.getAs<BlockPointerTypeLoc>()) {
+          TL = BlockPtr.getPointeeLoc().IgnoreParens();
+          FunctionTypeLoc Block = TL.getAs<FunctionTypeLoc>();
+          for (unsigned i = 0, e = Block.getNumParams(); i < e; i++) {
+            ParmVarDecl *BlockParam = Block.getParam(i);
+            AddNonnullAttribute(Ctx, BlockParam, SelLoc, false);
+          }
+        }
+        return;
+      }
     }
     else if (auto nullability = attributed->getImmediateNullability()) {
         nullabilityKind = *nullability;
@@ -884,7 +900,7 @@ void ObjCMigrateASTConsumer::migrateApiNoteReturnsNonnullAttr(const Decl *D, boo
   if (D->isInvalidDecl() || D->isImplicit() || !canModify(D))
     return;
   
-  if (!isa<FunctionDecl>(D) && !isa<ObjCMethodDecl>(D))
+  if (!isa<FunctionDecl>(D) && !isa<ObjCMethodDecl>(D) && !isa<ParmVarDecl>(D))
     return;
   QualType T;
   TypeSourceInfo *TSInfo = nullptr;
@@ -895,6 +911,15 @@ void ObjCMigrateASTConsumer::migrateApiNoteReturnsNonnullAttr(const Decl *D, boo
   else if (const ObjCMethodDecl *MD = dyn_cast<ObjCMethodDecl>(D)) {
     T = MD->getReturnType();
     TSInfo = MD->getReturnTypeSourceInfo();
+  }
+  else if (const ParmVarDecl *Param = dyn_cast<ParmVarDecl>(D)) {
+    QualType PT = Param->getType();
+    if (PT->isBlockPointerType()) {
+      const BlockPointerType *BType = PT->getAs<BlockPointerType>();
+      if (const FunctionType *FT =
+          BType->getPointeeType()->getAs<FunctionType>())
+        T = FT->getReturnType();
+    }
   }
   if (T.isNull())
     return;

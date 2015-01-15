@@ -44,4 +44,12 @@ typedef struct CGRect NSRect;
 - (volatile const I*) Meth6 : (const char *)Arg1 : (const char *)Arg2 : (double)Arg3 :   (const I*) Arg4 :(const  volatile id) Arg5;
 @end
 
+@class NSURL,  NSArray, NSError;
+@interface INTF_BLOCKS
+  + (void)getNonLocalVersionsOfItemAtURL:(NSURL *)url completionHandler:(void (^)(NSArray *nonLocalFileVersions, NSError *error))completionHandler;
+  + (void *)getNonLocalVersionsOfItemAtURL2:(NSURL *)url completionHandler:(void (^)(NSArray *nonLocalFileVersions, NSError *error))completionHandler;
+  + (NSError **)getNonLocalVersionsOfItemAtURL3:(int)url completionHandler:(void (^)(NSArray *nonLocalFileVersions, NSError *error))completionHandler;
+  + (id)getNonLocalVersionsOfItemAtURL4:(NSURL *)url completionHandler:(void (^)(int nonLocalFileVersions, NSError *error, NSURL*))completionHandler;
+@end
+
 #endif
