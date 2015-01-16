@@ -216,7 +216,7 @@ struct FileNullability {
   uint8_t PointerKind;
 
   /// Whether we saw any type nullability annotations in the given file.
-  bool SawTypeNullability;
+  bool SawTypeNullability = false;
 };
 
 /// A mapping from file IDs to a record of whether we've seen nullability
