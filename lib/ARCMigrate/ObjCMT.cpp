@@ -93,7 +93,7 @@ class ObjCMigrateASTConsumer : public ASTConsumer {
   void migrateApiNoteNonnullAttr(ASTContext &Ctx, const Decl *D);
   void AddNonnullAttribute(ASTContext &Ctx, const Decl *D, SourceLocation SelLoc,
                            bool Sugar=true);
-  void migrateApiNoteReturnsNonnullAttr(const Decl *D, bool Sugar=true);
+  void migrateApiNoteReturnsNonnullAttr(ASTContext &Ctx, const Decl *D, bool Sugar=true);
   void InsertNonnullCode(ASTContext &Ctx);
   
   void migrateApiNoteDesignatedInitializerAttr(const ObjCMethodDecl *MethodDecl);
@@ -746,6 +746,20 @@ static bool IsPointeePointerType(QualType PointerType) {
           pointeeType->isMemberPointerType());
 }
 
+static bool IsNSErrorPointerToPointer(ASTContext &Ctx, QualType PType)  {
+  if (!PType->isAnyPointerType())
+    return false;
+  QualType pointeeType = PType->getPointeeType();
+  if (!pointeeType->isAnyPointerType())
+    return false;
+  const ObjCObjectPointerType* PT =
+    pointeeType->getAs<ObjCObjectPointerType>();
+  if (!PT)
+    return false;
+  const ObjCInterfaceDecl *ID = PT->getInterfaceDecl();
+  return ID && (ID->getIdentifier() == &Ctx.Idents.get("NSError"));
+}
+
 void ObjCMigrateASTConsumer::AddNonnullAttribute(ASTContext &Ctx,
                                                  const Decl *D, SourceLocation SelLoc,
                                                  bool Sugar) {
@@ -769,9 +783,11 @@ void ObjCMigrateASTConsumer::AddNonnullAttribute(ASTContext &Ctx,
         nullabilityString = getNullabilitySpelling(NullabilityKind::Unspecified);
         TSInfo = Param->getTypeSourceInfo();
         PointeePointerType = IsPointeePointerType(T);
+        if (PointeePointerType && IsNSErrorPointerToPointer(Ctx, T))
+          return;
       }
       else if (T->isBlockPointerType()) {
-        migrateApiNoteReturnsNonnullAttr(D, Sugar);
+        migrateApiNoteReturnsNonnullAttr(Ctx, D, Sugar);
         TSInfo = Param->getTypeSourceInfo();
         TypeLoc TL = TSInfo->getTypeLoc().getUnqualifiedLoc();
         // Try to get the function prototype behind the block pointer type,
@@ -893,7 +909,8 @@ void ObjCMigrateASTConsumer::migrateApiNoteNonnullAttr(ASTContext &Ctx, const De
   AddNonnullAttribute(Ctx, D, SourceLocation(), false);
 }
 
-void ObjCMigrateASTConsumer::migrateApiNoteReturnsNonnullAttr(const Decl *D, bool Sugar) {
+void ObjCMigrateASTConsumer::migrateApiNoteReturnsNonnullAttr(ASTContext &Ctx,
+                                                              const Decl *D, bool Sugar) {
   if (!(ASTMigrateActions & FrontendOptions::ObjCMT_ApiNotes))
     return;
   
@@ -928,6 +945,10 @@ void ObjCMigrateASTConsumer::migrateApiNoteReturnsNonnullAttr(const Decl *D, boo
   std::string nullabilityString;
   auto attributed = dyn_cast<AttributedType>(T.getTypePtr());
   if (!attributed) {
+    // NSError ** needs no annotation.
+    if (IsNSErrorPointerToPointer(Ctx, T))
+      return;
+
     // Declarations inside the region that have no annotation should
     // get 'null_unspecified' annotation
     if (T->isAnyPointerType() && !isa<DecayedType>(T))
@@ -2205,14 +2226,14 @@ void ObjCMigrateASTConsumer::InsertNonnullCode(ASTContext &Ctx) {
     if (const ObjCContainerDecl *CDecl = dyn_cast<ObjCContainerDecl>(D)) {
       for (auto *Method : CDecl->methods()) {
         migrateApiNoteNonnullAttr(Ctx, Method);
-        migrateApiNoteReturnsNonnullAttr(Method);
+        migrateApiNoteReturnsNonnullAttr(Ctx, Method);
       }
       for (auto *Prop : CDecl->properties())
         AddNonnullAttribute(Ctx, Prop, SourceLocation());
     }
     else if (isa<FunctionDecl>(D)) {
       migrateApiNoteNonnullAttr(Ctx, D);
-      migrateApiNoteReturnsNonnullAttr(D, false);
+      migrateApiNoteReturnsNonnullAttr(Ctx, D, false);
     }
   }
   DeclWithNullabilityAttrCandidates.clear();

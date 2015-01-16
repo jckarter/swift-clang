@@ -51,7 +51,7 @@ typedef struct CGRect NSRect;
 @interface INTF_BLOCKS
   + (void)getNonLocalVersionsOfItemAtURL:(null_unspecified NSURL *)url completionHandler:(void (^)(__null_unspecified NSArray *nonLocalFileVersions, __null_unspecified NSError *error))completionHandler;
   + (null_unspecified void *)getNonLocalVersionsOfItemAtURL2:(null_unspecified NSURL *)url completionHandler:(void (^)(__null_unspecified NSArray *nonLocalFileVersions, __null_unspecified NSError *error))completionHandler;
-  + (NSError ** __null_unspecified )getNonLocalVersionsOfItemAtURL3:(int)url completionHandler:(void (^)(__null_unspecified NSArray *nonLocalFileVersions, __null_unspecified NSError *error))completionHandler;
+  + (NSError **)getNonLocalVersionsOfItemAtURL3:(int)url completionHandler:(void (^)(__null_unspecified NSArray *nonLocalFileVersions, __null_unspecified NSError *error))completionHandler;
   + (null_unspecified id)getNonLocalVersionsOfItemAtURL4:(null_unspecified NSURL *)url completionHandler:(void (^)(int nonLocalFileVersions, __null_unspecified NSError *error, __null_unspecified NSURL*))completionHandler;
 @end
 
