@@ -1597,6 +1597,7 @@ static void ParseLangArgs(LangOptions &Opts, ArgList &Args, InputKind IK,
   Opts.NativeHalfType = Opts.NativeHalfType;
   Opts.HalfArgsAndReturns = Args.hasArg(OPT_fallow_half_arguments_and_returns);
   Opts.APINotes = Args.hasArg(OPT_fapinotes);
+  Opts.GNUAsm = !Args.hasArg(OPT_fno_gnu_inline_asm);
 
   if (!Opts.CurrentModule.empty() && !Opts.ImplementationOfModule.empty() &&
       Opts.CurrentModule != Opts.ImplementationOfModule) {

@@ -412,6 +412,10 @@ def fno_autolink : Flag <["-"], "fno-autolink">, Group<f_Group>,
 def fembed_bitcode : Flag<["-"], "fembed-bitcode">, Group<f_Group>,
   Flags<[CC1Option]>,
   HelpText<"Embed LLVM IR bitcode as data">;
+def fgnu_inline_asm : Flag<["-"], "fgnu-inline-asm">, Group<f_Group>, Flags<[DriverOption]>;
+def fno_gnu_inline_asm : Flag<["-"], "fno-gnu-inline-asm">, Group<f_Group>,
+  Flags<[DriverOption, CC1Option]>,
+  HelpText<"Disable GNU style inline asm">;
 
 def fprofile_sample_use_EQ : Joined<["-"], "fprofile-sample-use=">,
     Group<f_Group>, Flags<[DriverOption, CC1Option]>,
