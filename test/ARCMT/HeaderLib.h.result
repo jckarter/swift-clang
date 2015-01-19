@@ -7,8 +7,8 @@ void *custom_realloc(void *member, unsigned size);
 
 int *global_int;
 
-int unavailable_function(void) __attribute__((unavailable("I beg you not to use this")));
-int unavailable_global_int __attribute__((unavailable));
+int unavailable_function(void);
+int unavailable_global_int;
 
 void do_something_with_pointers(int *ptr1, __nullable int *ptr2);
 

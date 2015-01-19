@@ -89,7 +89,6 @@ class ObjCMigrateASTConsumer : public ASTConsumer {
   void HelperAuditNullabilityAttribute(Decl *D);
   bool AuditDeclForNullabilityAttribute(ASTContext &Ctx, const Decl *D);
   bool AuditDeclReturnForNullabilityAttribute(ASTContext &Ctx, const Decl *D);
-  void migrateApiNoteUnavailableAttr(Decl *D);
   void migrateApiNoteNonnullAttr(ASTContext &Ctx, const Decl *D);
   void AddNonnullAttribute(ASTContext &Ctx, const Decl *D, SourceLocation SelLoc,
                            bool Sugar=true);
@@ -673,10 +672,8 @@ void ObjCMigrateASTConsumer::migrateObjCInterfaceDecl(ASTContext &Ctx,
                                                       ObjCContainerDecl *D) {
   if (D->isDeprecated() || IsCategoryNameWithDeprecatedSuffix(D))
     return;
-  migrateApiNoteUnavailableAttr(D);
   
   for (auto *Method : D->methods()) {
-    migrateApiNoteUnavailableAttr(Method);
     if (isa<ObjCInterfaceDecl>(D))
       migrateApiNoteDesignatedInitializerAttr(Method);
     if (Method->isDeprecated())
@@ -692,50 +689,11 @@ void ObjCMigrateASTConsumer::migrateObjCInterfaceDecl(ASTContext &Ctx,
   }
   
   for (auto *Prop : D->properties()) {
-    migrateApiNoteUnavailableAttr(Prop);
     if (!(ASTMigrateActions & FrontendOptions::ObjCMT_ReturnsInnerPointerProperty))
       continue;
     if ((ASTMigrateActions & FrontendOptions::ObjCMT_Annotation) &&
         !Prop->isDeprecated())
       migratePropertyNsReturnsInnerPointer(Ctx, Prop);
-  }
-}
-
-void ObjCMigrateASTConsumer::migrateApiNoteUnavailableAttr(Decl *D) {
-  if (!(ASTMigrateActions & FrontendOptions::ObjCMT_ApiNotes))
-    return;
-  
-  if (D->isInvalidDecl() || !canModify(D) || D->isImplicit()
-      || !D->hasAttr<UnavailableAttr>())
-    return;
-  for (auto A : D->attrs()) {
-    if (UnavailableAttr *Unavailable = dyn_cast<UnavailableAttr>(A)) {
-      if (!Unavailable->isImplicit())
-        return;
-      bool isContainer = isa<ObjCContainerDecl>(D);
-      std::string Message(Unavailable->getMessage());
-      std::string UVAttrStr;
-      if (!isContainer)
-        UVAttrStr = " ";
-      UVAttrStr += "__attribute__((unavailable";
-      if (!Message.empty()) {
-        UVAttrStr += "(\"";
-        UVAttrStr += Message;
-        UVAttrStr += "\")";
-      }
-      UVAttrStr += "))";
-      if (isContainer)
-        UVAttrStr += "\n";
-      
-      edit::Commit commit(*Editor);
-      if (isa<ObjCPropertyDecl>(D) || isa<FunctionDecl>(D) || isa<VarDecl>(D))
-        commit.insertAfterToken(D->getLocEnd(), UVAttrStr);
-      else if (!isContainer) // i.e. Methods
-        commit.insertBefore(D->getLocEnd(), UVAttrStr);
-      else // i.e. class, propertocols, categories.
-        commit.insertBefore(D->getLocStart(), UVAttrStr);
-      Editor->commit(commit);
-    }
   }
 }
 
@@ -1006,6 +964,9 @@ void ObjCMigrateASTConsumer::migrateApiNoteReturnsNonnullAttr(ASTContext &Ctx,
 void ObjCMigrateASTConsumer::migrateApiNoteDesignatedInitializerAttr(
                                           const ObjCMethodDecl *D) {
   if (!(ASTMigrateActions & FrontendOptions::ObjCMT_ApiNotes))
+    return;
+    
+  if (!(ASTMigrateActions & FrontendOptions::ObjCMT_DesignatedInitializer))
     return;
   
   if (D->isInvalidDecl() || !isa<ObjCMethodDecl>(D) ||
@@ -2447,9 +2408,6 @@ void ObjCMigrateASTConsumer::HandleTranslationUnit(ASTContext &Ctx) {
             canModify(ImplD))
           inferDesignatedInitializers(Ctx, ImplD);
       }
-      
-      if (isa<ObjCProtocolDecl>(*D) || isa<VarDecl>(*D) || isa<FunctionDecl>(*D))
-        migrateApiNoteUnavailableAttr((*D));
     }
     if (ASTMigrateActions & FrontendOptions::ObjCMT_Annotation)
       AnnotateImplicitBridging(Ctx);
