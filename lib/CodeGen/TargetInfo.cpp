@@ -4558,8 +4558,20 @@ void ARMABIInfo::setCCs() {
   if (abiCC != getLLVMDefaultCC())
     RuntimeCC = abiCC;
 
-  BuiltinCC = (getABIKind() == APCS ?
-               llvm::CallingConv::ARM_APCS : llvm::CallingConv::ARM_AAPCS);
+  // AAPCS apparently requires runtime support functions to be soft-float, but
+  // that's almost certainly for historic reasons (Thumb1 not supporting VFP
+  // most likely). It's more convenient for APCS_VFP to be hard-float.
+  switch (getABIKind()) {
+  case APCS:
+  case APCS_VFP:
+    if (abiCC != getLLVMDefaultCC())
+      BuiltinCC = abiCC;
+    break;
+  case AAPCS:
+  case AAPCS_VFP:
+    BuiltinCC = llvm::CallingConv::ARM_AAPCS;
+    break;
+  }
 }
 
 /// markAllocatedVFPs - update VFPRegs according to the alignment and
