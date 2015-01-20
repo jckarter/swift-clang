@@ -1867,31 +1867,32 @@ ActOnClassPropertyRefExpr(IdentifierInfo &receiverName,
     // property reference.
     if (receiverNamePtr->isStr("super")) {
       if (ObjCMethodDecl *CurMethod = tryCaptureObjCSelf(receiverNameLoc)) {
-        if (CurMethod->isInstanceMethod()) {
-          SuperType = QualType(CurMethod->getClassInterface()
-                                 ->getSuperClassType(), 0);
-          if (SuperType.isNull()) {
-            // The current class does not have a superclass.
-            Diag(receiverNameLoc, diag::error_root_class_cannot_use_super)
-              << CurMethod->getClassInterface()->getIdentifier();
-            return ExprError();
+        if (ObjCInterfaceDecl *Class = CurMethod->getClassInterface()) {
+          if (CurMethod->isInstanceMethod()) {
+            SuperType = QualType(Class->getSuperClassType(), 0);
+            if (SuperType.isNull()) {
+              // The current class does not have a superclass.
+              Diag(receiverNameLoc, diag::error_root_class_cannot_use_super)
+              << Class->getIdentifier();
+              return ExprError();
+            }
+            QualType T = Context.getObjCObjectPointerType(SuperType);
+
+            return HandleExprPropertyRefExpr(T->castAs<ObjCObjectPointerType>(),
+                                             /*BaseExpr*/nullptr,
+                                             SourceLocation()/*OpLoc*/,
+                                             &propertyName,
+                                             propertyNameLoc,
+                                             receiverNameLoc, T, true);
           }
-          QualType T = Context.getObjCObjectPointerType(SuperType);
 
-          return HandleExprPropertyRefExpr(T->castAs<ObjCObjectPointerType>(),
-                                           /*BaseExpr*/nullptr,
-                                           SourceLocation()/*OpLoc*/, 
-                                           &propertyName,
-                                           propertyNameLoc,
-                                           receiverNameLoc, T, true);
+          // Otherwise, if this is a class method, try dispatching to our
+          // superclass.
+          SuperType = QualType(
+                        CurMethod->getClassInterface()->getSuperClassType(),
+                        0);
+          IFace = Class->getSuperClass();
         }
-
-        // Otherwise, if this is a class method, try dispatching to our
-        // superclass.
-        SuperType = QualType(
-                      CurMethod->getClassInterface()->getSuperClassType(),
-                      0);
-        IFace = CurMethod->getClassInterface()->getSuperClass();
       }
     }
 
