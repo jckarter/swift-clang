@@ -2576,6 +2576,51 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
     }
   }
 
+  // Embed-bitcode option.
+  // Only white-listed flags below are allowed to be embedded.
+  if (Args.hasArg(options::OPT_fembed_bitcode) &&
+      (isa<BackendJobAction>(JA) || isa<AssembleJobAction>(JA))) {
+    // Add flags implied by -fembed-bitcode.
+    CmdArgs.push_back("-fembed-bitcode");
+    // Disable all llvm IR level optimizations.
+    CmdArgs.push_back("-disable-llvm-optzns");
+
+    // Optimization level for CodeGen.
+    if (Arg *A = Args.getLastArg(options::OPT_O_Group)) {
+      if (A->getOption().matches(options::OPT_O4)) {
+        CmdArgs.push_back("-O3");
+        D.Diag(diag::warn_O4_is_O3);
+      } else {
+        A->render(Args, CmdArgs);
+      }
+    }
+
+    // Input/Output file.
+    if (Output.getType() == types::TY_Dependencies) {
+      // Handled with other dependency code.
+    } else if (Output.isFilename()) {
+      CmdArgs.push_back("-o");
+      CmdArgs.push_back(Output.getFilename());
+    } else {
+      assert(Output.isNothing() && "Invalid output.");
+    }
+
+    for (const auto &II : Inputs) {
+      addDashXForInput(Args, II, CmdArgs);
+
+      if (II.isFilename())
+        CmdArgs.push_back(II.getFilename());
+      else
+        II.getInputArg().renderAsInput(Args, CmdArgs);
+    }
+
+    const char *Exec = getToolChain().getDriver().getClangProgramPath();
+
+    C.addCommand(llvm::make_unique<Command>(JA, *this, Exec, CmdArgs));
+
+    return;
+  }
+
   // We normally speed up the clang process a bit by skipping destructors at
   // exit, but when we're generating diagnostics we can rely on some of the
   // cleanup.
@@ -3414,10 +3459,6 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
       A->render(Args, CmdArgs);
     }
   }
-
-  if (Args.hasArg(options::OPT_fembed_bitcode) &&
-      (isa<BackendJobAction>(JA) || isa<AssembleJobAction>(JA)))
-    CmdArgs.push_back("-fembed-bitcode");
 
   // Warn about ignored options to clang.
   for (arg_iterator it = Args.filtered_begin(

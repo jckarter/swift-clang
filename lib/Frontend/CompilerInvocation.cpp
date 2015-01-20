@@ -506,14 +506,13 @@ static bool ParseCodeGenArgs(CodeGenOptions &Opts, ArgList &Args, InputKind IK,
   // attributes in the IR, keep track of them so we can embed them in a
   // separate data section and use them when building the bitcode. This can
   // be removed when all the backend options are recorded in the IR.
-  // FIXME: We need to keep a whitelist of options to be recorded here. For
-  // now, just record everything.
   if (Opts.EmbedBitcode) {
     for (ArgList::const_iterator A = Args.begin(), AE = Args.end();
          A != AE; ++ A) {
       // Do not encode output and input.
-      if ((*A)->getOption().getID() == (unsigned)options::OPT_o ||
-          (*A)->getOption().getID() == (unsigned)options::OPT_INPUT)
+      if ((*A)->getOption().getID() == options::OPT_o ||
+          (*A)->getOption().getID() == options::OPT_INPUT ||
+          (*A)->getOption().getID() == options::OPT_fembed_bitcode)
         continue;
       ArgStringList ASL;
       (*A)->render(Args, ASL);
@@ -521,7 +520,7 @@ static bool ParseCodeGenArgs(CodeGenOptions &Opts, ArgList &Args, InputKind IK,
           it != ie; ++ it) {
         StringRef ArgStr(*it);
         Opts.CmdArgs.insert(Opts.CmdArgs.end(), ArgStr.begin(), ArgStr.end());
-        // using \00 to terminate to avoid problem decoding
+        // using \00 to terminate to avoid problem decoding.
         Opts.CmdArgs.push_back('\0');
       }
     }
