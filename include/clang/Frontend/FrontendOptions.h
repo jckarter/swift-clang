@@ -188,15 +188,16 @@ public:
     ObjCMT_PropertyDotSyntax = 0x1000,
     /// \brief Enable APINote annotations on declarations.
     ObjCMT_ApiNotes = 0x2000,
+    ObjCMT_Swift_Unavailable = 0x4000,
     ObjCMT_MigrateDecls = (ObjCMT_ReadonlyProperty | ObjCMT_ReadwriteProperty |
                            ObjCMT_Annotation | ObjCMT_Instancetype |
                            ObjCMT_NsMacros | ObjCMT_ProtocolConformance |
                            ObjCMT_NsAtomicIOSOnlyProperty |
                            ObjCMT_DesignatedInitializer |
-                           ObjCMT_ApiNotes),
+                           ObjCMT_ApiNotes | ObjCMT_Swift_Unavailable),
     ObjCMT_MigrateAll = (ObjCMT_Literals | ObjCMT_Subscripting |
                          ObjCMT_MigrateDecls | ObjCMT_PropertyDotSyntax |
-                         ObjCMT_ApiNotes)
+                         ObjCMT_ApiNotes | ObjCMT_Swift_Unavailable)
   };
   unsigned ObjCMTAction;
   std::string ObjCMTWhiteListPath;

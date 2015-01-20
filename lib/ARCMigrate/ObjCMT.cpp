@@ -86,9 +86,9 @@ class ObjCMigrateASTConsumer : public ASTConsumer {
   
   bool InsertFoundation(ASTContext &Ctx, SourceLocation Loc);
   void AuditNullabilityAttribute(ASTContext &Ctx, Decl *D);
-  void HelperAuditNullabilityAttribute(Decl *D);
   bool AuditDeclForNullabilityAttribute(ASTContext &Ctx, const Decl *D);
   bool AuditDeclReturnForNullabilityAttribute(ASTContext &Ctx, const Decl *D);
+  void migrateApiNoteSwiftUnavailableAttr(Decl *D);
   void migrateApiNoteNonnullAttr(ASTContext &Ctx, const Decl *D);
   void AddNonnullAttribute(ASTContext &Ctx, const Decl *D, SourceLocation SelLoc,
                            bool Sugar=true);
@@ -111,10 +111,11 @@ public:
   Preprocessor &PP;
   bool IsOutputFile;
   bool FoundationIncluded;
+  bool HeaderHasNullabilityAttr;
   llvm::SmallPtrSet<ObjCProtocolDecl *, 32> ObjCProtocolDecls;
   llvm::SmallVector<const Decl *, 8> CFFunctionIBCandidates;
   llvm::StringSet<> WhiteListFilenames;
-  llvm::SmallVector<const Decl *, 8> DeclWithNullabilityAttrCandidates;
+  llvm::SmallVector<const Decl *, 32> DeclWithNullabilityAttrCandidates;
 
   ObjCMigrateASTConsumer(StringRef migrateDir,
                          unsigned astMigrateActions,
@@ -129,7 +130,8 @@ public:
     NSIntegerTypedefed(nullptr), NSUIntegerTypedefed(nullptr),
     Remapper(remapper), FileMgr(fileMgr), PPRec(PPRec), PP(PP),
     IsOutputFile(isOutputFile),
-    FoundationIncluded(false){
+    FoundationIncluded(false),
+    HeaderHasNullabilityAttr(false) {
 
     // FIXME: StringSet should have insert(iter, iter) to use here.
     for (const std::string &Val : WhiteList)
@@ -593,7 +595,7 @@ bool ObjCMigrateASTConsumer::AuditDeclForNullabilityAttribute(
   // Once the first declaration is enterred because it has at least one
   // nullability attribute, all following declarations need be assuemed
   // for auditing regardless of if they have their own nullability attribute.
-  if (!DeclWithNullabilityAttrCandidates.empty())
+  if (HeaderHasNullabilityAttr)
     return true;
   if (const ParmVarDecl * Param = dyn_cast<ParmVarDecl>(D)) {
     QualType T = Param->getType();
@@ -610,7 +612,7 @@ bool ObjCMigrateASTConsumer::AuditDeclForNullabilityAttribute(
 
 bool ObjCMigrateASTConsumer::AuditDeclReturnForNullabilityAttribute(
                                     ASTContext &Ctx, const Decl *D) {
-  if (!DeclWithNullabilityAttrCandidates.empty())
+  if (HeaderHasNullabilityAttr)
     return true;
   QualType T;
   if (const ObjCMethodDecl *Method = dyn_cast<ObjCMethodDecl>(D))
@@ -625,55 +627,57 @@ bool ObjCMigrateASTConsumer::AuditDeclReturnForNullabilityAttribute(
 
 void ObjCMigrateASTConsumer::AuditNullabilityAttribute(
                                                 ASTContext &Ctx, Decl *D) {
+    // Put all decls in the cache so NS_ASSUME_NONNULL_BEGIN/END always
+    // starts and ends all declarations.
+    if (FileId.isInvalid()) {
+        FileID FID = PP.getSourceManager().getFileID(D->getLocation());
+        if (!FID.isInvalid())
+          FileId = FID;
+    }
+    DeclWithNullabilityAttrCandidates.push_back(D);
+    
     if (ObjCContainerDecl *CDecl = dyn_cast<ObjCContainerDecl>(D)) {
       for (auto *Method : CDecl->methods()) {
         if (Method->isInvalidDecl() || Method->isImplicit() || !canModify(Method))
           continue;
         if (AuditDeclReturnForNullabilityAttribute(Ctx, Method)) {
-          HelperAuditNullabilityAttribute(D);
+          HeaderHasNullabilityAttr = true;
           return;
         }
         for (const auto *PI : Method->params())
           if (AuditDeclForNullabilityAttribute(Ctx, PI)) {
-            HelperAuditNullabilityAttribute(D);
+            HeaderHasNullabilityAttr = true;
             return;
           }
       }
       for (auto *Prop : CDecl->properties()) {
         if (AuditDeclForNullabilityAttribute(Ctx, Prop)) {
-          HelperAuditNullabilityAttribute(D);
+          HeaderHasNullabilityAttr = true;
           return;
         }
       }
     }
     else if (const FunctionDecl *FD = dyn_cast<FunctionDecl>(D)) {
       if (AuditDeclReturnForNullabilityAttribute(Ctx, FD)) {
-        HelperAuditNullabilityAttribute(D);
+        HeaderHasNullabilityAttr = true;
         return;
       }
       for (unsigned i = 0, e = FD->getNumParams(); i != e; ++i)
         if (AuditDeclForNullabilityAttribute(Ctx, FD->getParamDecl(i))) {
-          HelperAuditNullabilityAttribute(D);
+          HeaderHasNullabilityAttr = true;
           return;
         }
     }
-}
-
-void ObjCMigrateASTConsumer::HelperAuditNullabilityAttribute(Decl *D) {
-  if (FileId.isInvalid()) {
-    FileID FID = PP.getSourceManager().getFileID(D->getLocation());
-    if (!FID.isInvalid())
-      FileId = FID;
-  }
-  DeclWithNullabilityAttrCandidates.push_back(D);
 }
 
 void ObjCMigrateASTConsumer::migrateObjCInterfaceDecl(ASTContext &Ctx,
                                                       ObjCContainerDecl *D) {
   if (D->isDeprecated() || IsCategoryNameWithDeprecatedSuffix(D))
     return;
-  
+  migrateApiNoteSwiftUnavailableAttr(D);
+    
   for (auto *Method : D->methods()) {
+    migrateApiNoteSwiftUnavailableAttr(Method);
     if (isa<ObjCInterfaceDecl>(D))
       migrateApiNoteDesignatedInitializerAttr(Method);
     if (Method->isDeprecated())
@@ -689,12 +693,52 @@ void ObjCMigrateASTConsumer::migrateObjCInterfaceDecl(ASTContext &Ctx,
   }
   
   for (auto *Prop : D->properties()) {
+    migrateApiNoteSwiftUnavailableAttr(Prop);
     if (!(ASTMigrateActions & FrontendOptions::ObjCMT_ReturnsInnerPointerProperty))
       continue;
     if ((ASTMigrateActions & FrontendOptions::ObjCMT_Annotation) &&
         !Prop->isDeprecated())
       migratePropertyNsReturnsInnerPointer(Ctx, Prop);
   }
+}
+
+void ObjCMigrateASTConsumer::migrateApiNoteSwiftUnavailableAttr(Decl *D) {
+    if (!(ASTMigrateActions & FrontendOptions::ObjCMT_ApiNotes))
+        return;
+    if (!(ASTMigrateActions & FrontendOptions::ObjCMT_Swift_Unavailable))
+        return;
+    
+    if (D->isInvalidDecl() || !canModify(D) || D->isImplicit()
+        || !D->hasAttr<UnavailableAttr>())
+        return;
+    for (auto A : D->attrs()) {
+        if (UnavailableAttr *Unavailable = dyn_cast<UnavailableAttr>(A)) {
+            if (!Unavailable->isImplicit())
+                return;
+            bool isContainer = isa<ObjCContainerDecl>(D);
+            std::string Message(Unavailable->getMessage());
+            std::string UVAttrStr;
+            if (!isContainer)
+                UVAttrStr = " ";
+            UVAttrStr += "SWIFT_UNAVAILABLE";
+            if (!Message.empty()) {
+                UVAttrStr += "(\"";
+                UVAttrStr += Message;
+                UVAttrStr += "\")";
+            }
+            if (isContainer)
+                UVAttrStr += "\n";
+            
+            edit::Commit commit(*Editor);
+            if (isa<ObjCPropertyDecl>(D) || isa<FunctionDecl>(D) || isa<VarDecl>(D))
+                commit.insertAfterToken(D->getLocEnd(), UVAttrStr);
+            else if (!isContainer) // i.e. Methods
+                commit.insertBefore(D->getLocEnd(), UVAttrStr);
+            else // i.e. class, propertocols, categories.
+                commit.insertBefore(D->getLocStart(), UVAttrStr);
+            Editor->commit(commit);
+        }
+    }
 }
 
 static bool IsPointeePointerType(QualType PointerType) {
@@ -792,10 +836,36 @@ void ObjCMigrateASTConsumer::AddNonnullAttribute(ASTContext &Ctx,
         // get any annotation (this is assumed by default if it is inside the region)
         if (nullabilityKind == NullabilityKind::NonNull)
             return;
-        nullabilityString = getNullabilitySpelling(nullabilityKind);
+        // FIXME. NullabilityKind does not have a NullResettable entry.
+        if (nullabilityKind == NullabilityKind::Unspecified)
+          nullabilityString = "null_resettable";
+        else
+          nullabilityString = getNullabilitySpelling(nullabilityKind);
         TSInfo = Prop->getTypeSourceInfo();
         PointeePointerType = IsPointeePointerType(T);
       }
+  }
+  else if (const VarDecl *VDecl = dyn_cast<VarDecl>(D)) {
+    QualType T = VDecl->getType();
+    auto attributed = dyn_cast<AttributedType>(T.getTypePtr());
+    if (!attributed) {
+      // Declarations inside the region that have no annotation should
+      // get 'null_unspecified' annotation
+      if (T->isAnyPointerType()) {
+        nullabilityString = getNullabilitySpelling(NullabilityKind::Unspecified);
+        TSInfo = VDecl->getTypeSourceInfo();
+        PointeePointerType = IsPointeePointerType(T);
+      }
+    } else if (auto nullability = attributed->getImmediateNullability()) {
+        nullabilityKind = *nullability;
+        // Declarations that are annotated as 'nonnullable' should not
+        // get any annotation (this is assumed by default if it is inside the region)
+        if (nullabilityKind == NullabilityKind::NonNull)
+          return;
+        nullabilityString = getNullabilitySpelling(nullabilityKind);
+        TSInfo = Prop->getTypeSourceInfo();
+        PointeePointerType = IsPointeePointerType(T);
+    }
   }
   if (nullabilityString.empty())
     return;
@@ -806,7 +876,7 @@ void ObjCMigrateASTConsumer::AddNonnullAttribute(ASTContext &Ctx,
     // __nullability must be applied to outer-most pointer type.
     std::string SpacedNullableString = " ";
     SpacedNullableString += nullabilityString;
-    if (isa<ParmVarDecl>(D))
+    if (isa<ParmVarDecl>(D) || isa<VarDecl>(D))
       SpacedNullableString += " ";
     commit.insertAfterToken(TL.getEndLoc(), SpacedNullableString);
   } else if (Prop) {
@@ -853,7 +923,7 @@ void ObjCMigrateASTConsumer::migrateApiNoteNonnullAttr(ASTContext &Ctx, const De
   if (D->isInvalidDecl() || D->isImplicit() || !canModify(D))
     return;
   
-  if (!isa<FunctionDecl>(D) && !isa<ObjCMethodDecl>(D))
+  if (!isa<FunctionDecl>(D) && !isa<ObjCMethodDecl>(D) && !isa<VarDecl>(D))
     return;
   if (const FunctionDecl *FD = dyn_cast<FunctionDecl>(D)) {
     for (unsigned i = 0, e = FD->getNumParams(); i != e; ++i)
@@ -2131,8 +2201,11 @@ bool ObjCMigrateASTConsumer::InsertFoundation(ASTContext &Ctx,
 }
 
 void ObjCMigrateASTConsumer::InsertNonnullCode(ASTContext &Ctx) {
-  if (DeclWithNullabilityAttrCandidates.empty())
+  if (!HeaderHasNullabilityAttr) {
+    DeclWithNullabilityAttrCandidates.clear();
+    FileId = FileID();
     return;
+  }
   const Decl *FirstDeclWithNullabilityAttr = DeclWithNullabilityAttrCandidates[0];
   SourceManager &SM = Ctx.getSourceManager();
   FileID FirstFID = SM.getFileID(FirstDeclWithNullabilityAttr->getLocation());
@@ -2166,14 +2239,16 @@ void ObjCMigrateASTConsumer::InsertNonnullCode(ASTContext &Ctx) {
     
   // get location just past end of function location.
   EndLoc = PP.getLocForEndOfToken(EndLoc);
-  if (isa<FunctionDecl>(LastDeclWithNullabilityAttr)) {
-    // For Methods, EndLoc points to the ending semcolon. So,
-    // none of these extra work is needed.
-    Token Tok;
-    // get locaiton of token that comes after end of function.
-    bool Failed = PP.getRawToken(EndLoc, Tok, /*IgnoreWhiteSpace=*/true);
-    if (!Failed)
-      EndLoc = Tok.getLocation();
+  if (const FunctionDecl *FDecl = dyn_cast<FunctionDecl>(LastDeclWithNullabilityAttr)) {
+    if (!FDecl->hasBody()) {
+      // For Methods, EndLoc points to the ending semcolon. So,
+      // none of these extra work is needed.
+      Token Tok;
+      // get locaiton of token that comes after end of function.
+      bool Failed = PP.getRawToken(EndLoc, Tok, /*IgnoreWhiteSpace=*/true);
+      if (!Failed)
+        EndLoc = Tok.getLocation();
+      }
   }
 
   edit::Commit commit(*Editor);
@@ -2196,8 +2271,11 @@ void ObjCMigrateASTConsumer::InsertNonnullCode(ASTContext &Ctx) {
       migrateApiNoteNonnullAttr(Ctx, D);
       migrateApiNoteReturnsNonnullAttr(Ctx, D, false);
     }
+    else
+      migrateApiNoteNonnullAttr(Ctx, D);
   }
   DeclWithNullabilityAttrCandidates.clear();
+  HeaderHasNullabilityAttr = false;
   FileId = FileID();
 }
 
@@ -2305,17 +2383,27 @@ void ObjCMigrateASTConsumer::HandleTranslationUnit(ASTContext &Ctx) {
   if (ASTMigrateActions & FrontendOptions::ObjCMT_ApiNotes) {
     for (DeclContext::decl_iterator D = TU->decls_begin(), DEnd = TU->decls_end();
          D != DEnd; ++D) {
-      FileID FID = PP.getSourceManager().getFileID((*D)->getLocation());
-      if (!FID.isInvalid() && !FileId.isInvalid() && FileId != FID)
+      SourceLocation Loc = (*D)->getLocation();
+      if (Loc.isMacroID())
+        Loc = PP.getSourceManager().getExpansionLoc(Loc);
+      FileID FID = PP.getSourceManager().getFileID(Loc);
+      if (!FID.isInvalid() && !FileId.isInvalid() && FileId != FID) {
         InsertNonnullCode(Ctx);
+        FileId = FID;
+      }
 
       if (ObjCContainerDecl *CDecl = dyn_cast<ObjCContainerDecl>(*D)) {
         if (canModify(CDecl))
           AuditNullabilityAttribute(Ctx, CDecl);
       }
-      else if (FunctionDecl *FDecl = dyn_cast<FunctionDecl>(*D))
+      else if (FunctionDecl *FDecl = dyn_cast<FunctionDecl>(*D)) {
         if (canModify(FDecl))
           AuditNullabilityAttribute(Ctx, FDecl);
+      }
+      else if (VarDecl *VDecl = dyn_cast<VarDecl>(*D)) {
+        if (canModify(VDecl))
+          AuditNullabilityAttribute(Ctx, VDecl);
+      }
     }
     InsertNonnullCode(Ctx);
   }
@@ -2408,6 +2496,8 @@ void ObjCMigrateASTConsumer::HandleTranslationUnit(ASTContext &Ctx) {
             canModify(ImplD))
           inferDesignatedInitializers(Ctx, ImplD);
       }
+      if (isa<ObjCProtocolDecl>(*D) || isa<VarDecl>(*D) || isa<FunctionDecl>(*D))
+        migrateApiNoteSwiftUnavailableAttr((*D));
     }
     if (ASTMigrateActions & FrontendOptions::ObjCMT_Annotation)
       AnnotateImplicitBridging(Ctx);

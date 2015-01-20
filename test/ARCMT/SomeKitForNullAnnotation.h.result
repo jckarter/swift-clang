@@ -7,15 +7,16 @@ NS_ASSUME_NONNULL_BEGIN
 
 ROOT_CLASS
 @interface A
--(null_unspecified A*)transform:(null_unspecified A*)input;
+-(null_unspecified A*)transform:(null_unspecified A*)input SWIFT_UNAVAILABLE("anything but this");
 -(A*)transform:(A*)input integer:(int)integer;
 
 @property (null_unspecified, nonatomic, readonly, retain) A* someA;
 @property (null_unspecified, nonatomic, retain) A* someOtherA;
 
-@property (nonatomic) int intValue;
+@property (nonatomic) int intValue SWIFT_UNAVAILABLE("wouldn't work anyway");
 @end
 
+SWIFT_UNAVAILABLE("just don't")
 @interface B : A
 @end
 

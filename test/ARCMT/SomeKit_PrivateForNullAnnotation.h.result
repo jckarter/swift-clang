@@ -11,6 +11,7 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic) A* internalProperty;
 @end
 
+SWIFT_UNAVAILABLE("not for you")
 @protocol InternalProtocol
 - (null_unspecified id) MomeMethod;
 @end
