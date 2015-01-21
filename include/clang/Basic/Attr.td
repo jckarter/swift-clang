@@ -973,6 +973,12 @@ def TypeNullUnspecified : TypeAttr {
   let Documentation = [Undocumented];
 }
 
+def NoEscape : InheritableAttr {
+  let Spellings = [GCC<"noescape">];
+  let Subjects = SubjectList<[ParmVar], WarnDiag, "ExpectedParameter">;
+  let Documentation = [Undocumented];
+}
+
 def AssumeAligned : InheritableAttr {
   let Spellings = [GCC<"assume_aligned">];
   let Subjects = SubjectList<[ObjCMethod, Function]>;
