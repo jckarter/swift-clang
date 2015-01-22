@@ -3927,6 +3927,7 @@ void Sema::CodeCompleteCall(Scope *S, Expr *Fn, ArrayRef<Expr *> Args) {
 
   // FIXME: Provide support for highlighting optional parameters.
   // FIXME: Provide support for variadic template functions.
+  // FIXME: Provide support for pointers and references to functions.
 
   // Ignore type-dependent call expressions entirely.
   if (!Fn || Fn->isTypeDependent() || anyNullArguments(Args) ||
