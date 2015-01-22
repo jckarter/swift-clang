@@ -2015,7 +2015,11 @@ Decl *Parser::ParseDeclarationAfterDeclaratorAndAttributes(
       Actions.ActOnCXXEnterDeclInitializer(getCurScope(), ThisDecl);
     }
 
-    if (ParseExpressionList(Exprs, CommaLocs)) {
+    if (ParseExpressionList(Exprs, CommaLocs, [&] {
+          Actions.CodeCompleteConstructor(getCurScope(),
+                 cast<VarDecl>(ThisDecl)->getType()->getCanonicalTypeInternal(),
+                                          ThisDecl->getLocation(), Exprs);
+       })) {
       Actions.ActOnInitializerError(ThisDecl);
       SkipUntil(tok::r_paren, StopAtSemi);
 
