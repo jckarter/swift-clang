@@ -6689,6 +6689,38 @@ bool ASTContext::ObjCQualifiedIdTypesAreCompatible(QualType lhs, QualType rhs,
   return false;
 }
 
+/// Strip off the Objective-C "kindof" type.
+static QualType stripObjCKindOfType(ASTContext &ctx, const ObjCObjectType *obj) {
+  if (!obj->isKindOfType() && obj->qual_empty())
+    return QualType(obj, 0);
+
+  // Recursively strip __kindof.
+  SplitQualType splitBaseType = obj->getBaseType().split();
+  QualType baseType(splitBaseType.Ty, 0);
+  if (const ObjCObjectType *baseObj
+        = splitBaseType.Ty->getAs<ObjCObjectType>()) {
+    baseType = stripObjCKindOfType(ctx, baseObj);
+  }
+
+  return ctx.getObjCObjectType(ctx.getQualifiedType(baseType,
+                                                    splitBaseType.Quals),
+                               obj->getTypeArgsAsWritten(),
+                               /*protocols=*/{ },
+                               /*isKindOf=*/false);
+}
+
+/// Strip off the Objective-C "kindof" type and remove protocol
+/// qualifiers.
+static const ObjCObjectPointerType *stripObjCKindOfType(
+                                      ASTContext &ctx,
+                                      const ObjCObjectPointerType *objPtr) {
+  if (!objPtr->isKindOfType() && objPtr->qual_empty())
+    return objPtr;
+
+  QualType obj = stripObjCKindOfType(ctx, objPtr->getObjectType());
+  return ctx.getObjCObjectPointerType(obj)->castAs<ObjCObjectPointerType>();
+}
+
 /// canAssignObjCInterfaces - Return true if the two interface types are
 /// compatible for assignment from RHS to LHS.  This handles validation of any
 /// protocol qualifiers on the LHS or RHS.
@@ -6703,18 +6735,36 @@ bool ASTContext::canAssignObjCInterfaces(const ObjCObjectPointerType *LHSOPT,
       RHS->isObjCUnqualifiedIdOrClass())
     return true;
 
-  if (LHS->isObjCQualifiedId() || RHS->isObjCQualifiedId())
-    return ObjCQualifiedIdTypesAreCompatible(QualType(LHSOPT,0),
-                                             QualType(RHSOPT,0),
-                                             false);
+  // Function object that propagates a successful result or handles
+  // __kindof types.
+  auto finish = [&](bool succeeded) -> bool {
+    if (succeeded)
+      return true;
+
+    if (!RHS->isKindOfType())
+      return false;
+
+    // Strip off __kindof and protocol qualifiers, then check whether
+    // we can assign the other way.
+    return canAssignObjCInterfaces(stripObjCKindOfType(*this, RHSOPT),
+                                   stripObjCKindOfType(*this, LHSOPT));
+  };
+
+  if (LHS->isObjCQualifiedId() || RHS->isObjCQualifiedId()) {
+    return finish(ObjCQualifiedIdTypesAreCompatible(QualType(LHSOPT,0),
+                                                    QualType(RHSOPT,0),
+                                                    false));
+  }
   
-  if (LHS->isObjCQualifiedClass() && RHS->isObjCQualifiedClass())
-    return ObjCQualifiedClassTypesAreCompatible(QualType(LHSOPT,0),
-                                                QualType(RHSOPT,0));
+  if (LHS->isObjCQualifiedClass() && RHS->isObjCQualifiedClass()) {
+    return finish(ObjCQualifiedClassTypesAreCompatible(QualType(LHSOPT,0),
+                                                       QualType(RHSOPT,0)));
+  }
   
   // If we have 2 user-defined types, fall into that path.
-  if (LHS->getInterface() && RHS->getInterface())
-    return canAssignObjCInterfaces(LHS, RHS);
+  if (LHS->getInterface() && RHS->getInterface()) {
+    return finish(canAssignObjCInterfaces(LHS, RHS));
+  }
 
   return false;
 }
@@ -6728,26 +6778,45 @@ bool ASTContext::canAssignObjCInterfacesInBlockPointer(
                                          const ObjCObjectPointerType *LHSOPT,
                                          const ObjCObjectPointerType *RHSOPT,
                                          bool BlockReturnType) {
+
+  // Function object that propagates a successful result or handles
+  // __kindof types.
+  auto finish = [&](bool succeeded) -> bool {
+    if (succeeded)
+      return true;
+
+    if (!RHSOPT->isKindOfType())
+      return false;
+
+    // Strip off __kindof and protocol qualifiers, then check whether
+    // we can assign the other way.
+    return canAssignObjCInterfacesInBlockPointer(
+             stripObjCKindOfType(*this, RHSOPT),
+             stripObjCKindOfType(*this, LHSOPT),
+             BlockReturnType);
+  };
+
   if (RHSOPT->isObjCBuiltinType() || LHSOPT->isObjCIdType())
     return true;
   
   if (LHSOPT->isObjCBuiltinType()) {
-    return RHSOPT->isObjCBuiltinType() || RHSOPT->isObjCQualifiedIdType();
+    return finish(RHSOPT->isObjCBuiltinType() ||
+                  RHSOPT->isObjCQualifiedIdType());
   }
   
   if (LHSOPT->isObjCQualifiedIdType() || RHSOPT->isObjCQualifiedIdType())
-    return ObjCQualifiedIdTypesAreCompatible(QualType(LHSOPT,0),
-                                             QualType(RHSOPT,0),
-                                             false);
+    return finish(ObjCQualifiedIdTypesAreCompatible(QualType(LHSOPT,0),
+                                                    QualType(RHSOPT,0),
+                                                    false));
   
   const ObjCInterfaceType* LHS = LHSOPT->getInterfaceType();
   const ObjCInterfaceType* RHS = RHSOPT->getInterfaceType();
   if (LHS && RHS)  { // We have 2 user-defined types.
     if (LHS != RHS) {
       if (LHS->getDecl()->isSuperClassOf(RHS->getDecl()))
-        return BlockReturnType;
+        return finish(BlockReturnType);
       if (RHS->getDecl()->isSuperClassOf(LHS->getDecl()))
-        return !BlockReturnType;
+        return finish(!BlockReturnType);
     }
     else
       return true;

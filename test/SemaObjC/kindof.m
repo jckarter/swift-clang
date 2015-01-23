@@ -1,4 +1,4 @@
-// RUN: %clang_cc1 -fsyntax-only %s -verify
+// RUN: %clang_cc1 -fblocks -fsyntax-only %s -verify
 
 // Tests Objective-C 'kindof' types.
 
@@ -76,8 +76,6 @@ void test_pretty_print(int *ip) {
 void test_add_remove_kindof_conversions(void) {
   __kindof NSObject *kindof_NSObject_obj;
   NSObject *NSObject_obj;
-  __kindof NSString *kindof_NSString_obj;
-  NSString *NSString_obj;
 
   // Conversion back and forth
   kindof_NSObject_obj = NSObject_obj;
@@ -133,4 +131,94 @@ void test_ptr_object_conversions(void) {
   ptr_kindof_NSObject_obj = ptr_NSString_obj;
   ptr_NSObject_obj = ptr_kindof_NSString_obj;
   ptr_NSObject_obj = ptr_NSString_obj;
+}
+
+// ---------------------------------------------------------------------------
+// Implicit downcasting
+// ---------------------------------------------------------------------------
+void test_downcast_conversions(void) {
+  __kindof NSObject *kindof_NSObject_obj;
+  NSObject *NSObject_obj;
+  __kindof NSString *kindof_NSString_obj;
+  NSString *NSString_obj;
+
+  // Implicit downcasting.
+  kindof_NSString_obj = kindof_NSObject_obj;
+  kindof_NSString_obj = NSObject_obj; // expected-warning{{assigning to '__kindof NSString *' from 'NSObject *'}}
+  NSString_obj = kindof_NSObject_obj;
+  NSString_obj = NSObject_obj; // expected-warning{{assigning to 'NSString *' from 'NSObject *'}}
+
+  // Implicit downcasting with qualified id.
+  __kindof id <NSCopying> kindof_NSCopying_obj;
+  id <NSCopying> NSCopying_obj;
+  kindof_NSString_obj = kindof_NSCopying_obj;
+  kindof_NSString_obj = NSCopying_obj; // expected-warning{{from incompatible type 'id<NSCopying>'}}
+  NSString_obj = kindof_NSCopying_obj;
+  NSString_obj = NSCopying_obj; // expected-warning{{from incompatible type 'id<NSCopying>'}}
+  kindof_NSObject_obj = kindof_NSCopying_obj;
+  kindof_NSObject_obj = NSCopying_obj; // expected-warning{{from incompatible type 'id<NSCopying>'}}
+  NSObject_obj = kindof_NSCopying_obj;
+  NSObject_obj = NSCopying_obj; // expected-warning{{from incompatible type 'id<NSCopying>'}}
+}
+
+void test_crosscast_conversions(void) {
+  __kindof NSString *kindof_NSString_obj;
+  NSString *NSString_obj;
+  __kindof NSNumber *kindof_NSNumber_obj;
+  NSNumber *NSNumber_obj;
+
+  NSString_obj = kindof_NSNumber_obj; // expected-warning{{from '__kindof NSNumber *'}}
+}
+
+// ---------------------------------------------------------------------------
+// Blocks
+// ---------------------------------------------------------------------------
+void test_block_conversions(void) {
+  // Adding/removing __kindof from return type.
+  __kindof NSString *(^kindof_NSString_void_block)(void);
+  NSString *(^NSString_void_block)(void);
+  kindof_NSString_void_block = NSString_void_block;
+  NSString_void_block = kindof_NSString_void_block;
+
+  // Covariant return type.
+  __kindof NSMutableString *(^kindof_NSMutableString_void_block)(void);
+  NSMutableString *(^NSMutableString_void_block)(void);
+  kindof_NSString_void_block = NSMutableString_void_block;
+  NSString_void_block = kindof_NSMutableString_void_block;
+  kindof_NSString_void_block = NSMutableString_void_block;
+  NSString_void_block = kindof_NSMutableString_void_block;
+
+  // "Covariant" return type via downcasting rule.
+  kindof_NSMutableString_void_block = NSString_void_block; // expected-error{{from 'NSString *(^)(void)'}}
+  NSMutableString_void_block = kindof_NSString_void_block;
+  kindof_NSMutableString_void_block = NSString_void_block; // expected-error{{from 'NSString *(^)(void)'}}
+  NSMutableString_void_block = kindof_NSString_void_block;
+
+  // Cross-casted return type.
+  __kindof NSNumber *(^kindof_NSNumber_void_block)(void);
+  NSNumber *(^NSNumber_void_block)(void);
+  kindof_NSString_void_block = NSNumber_void_block; // expected-error{{from 'NSNumber *(^)(void)'}}
+  NSString_void_block = kindof_NSNumber_void_block; // expected-error{{'__kindof NSNumber *(^)(void)'}}
+  kindof_NSString_void_block = NSNumber_void_block; // expected-error{{from 'NSNumber *(^)(void)'}}
+  NSString_void_block = kindof_NSNumber_void_block; // expected-error{{'__kindof NSNumber *(^)(void)'}}
+
+  // Adding/removing __kindof from argument type.
+  void (^void_kindof_NSString_block)(__kindof NSString *);
+  void (^void_NSString_block)(NSString *);
+  void_kindof_NSString_block = void_NSString_block;
+  void_NSString_block = void_kindof_NSString_block;
+
+  // Contravariant argument type.
+  void (^void_kindof_NSMutableString_block)(__kindof NSMutableString *);
+  void (^void_NSMutableString_block)(NSMutableString *);
+  void_kindof_NSMutableString_block = void_kindof_NSString_block;
+  void_kindof_NSMutableString_block = void_NSString_block;
+  void_NSMutableString_block = void_kindof_NSString_block;
+  void_NSMutableString_block = void_NSString_block;
+
+  // "Contravariant" argument type via downcasting rule.
+  void_kindof_NSString_block = void_kindof_NSMutableString_block;
+  void_kindof_NSString_block = void_NSMutableString_block; // expected-error{{from 'void (^)(NSMutableString *)'}}
+  void_NSString_block = void_kindof_NSMutableString_block;
+  void_NSString_block = void_NSMutableString_block; // expected-error{{from 'void (^)(NSMutableString *)'}}
 }
