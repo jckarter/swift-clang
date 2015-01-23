@@ -4712,7 +4712,7 @@ public:
     // contributes to the alignment of the containing aggregate in the same way
     // a plain (non bit-field) member of that type would, without exception for
     // zero-sized or anonymous bit-fields."
-    UseBitFieldTypeAlignment = true;
+    assert(UseBitFieldTypeAlignment && "bitfields affect type alignment");
     UseZeroLengthBitfieldAlignment = true;
 
     // AArch64 targets default to using the ARM C++ ABI.
@@ -5046,7 +5046,6 @@ public:
 
     // FIXME: the AAPCS says these should be true, but we need to do more
     // testing before we can change it for iOS.
-    UseBitFieldTypeAlignment = false;
     UseZeroLengthBitfieldAlignment = false;
 
     TheCXXABI.set(TargetCXXABI::iOS64);

@@ -14,7 +14,7 @@ struct t1
 
 };
 static_assert(offsetof(struct t1, bar) == 1);
-static_assert(sizeof(struct t1) == 2);
+static_assert(sizeof(struct t1) == 4);
 
 struct t2
 {
@@ -22,8 +22,8 @@ struct t2
   short : 0;
   char bar;
 };
-static_assert(offsetof(struct t2, bar) == 1);
-static_assert(sizeof(struct t2) == 2);
+static_assert(offsetof(struct t2, bar) == 2);
+static_assert(sizeof(struct t2) == 4);
 
 struct t3
 {
@@ -31,8 +31,8 @@ struct t3
   int : 0;
   char bar;
 };
-static_assert(offsetof(struct t3, bar) == 1);
-static_assert(sizeof(struct t3) == 2);
+static_assert(offsetof(struct t3, bar) == 4);
+static_assert(sizeof(struct t3) == 8);
 
 struct t4
 {
@@ -40,8 +40,8 @@ struct t4
   long : 0;
   char bar;
 };
-static_assert(offsetof(struct t4, bar) == 1);
-static_assert(sizeof(struct t4) == 2);
+static_assert(offsetof(struct t4, bar) == 8);
+static_assert(sizeof(struct t4) == 12);
 
 struct t5
 {
@@ -49,8 +49,8 @@ struct t5
   long long : 0;
   char bar;
 };
-static_assert(offsetof(struct t5, bar) == 1);
-static_assert(sizeof(struct t5) == 2);
+static_assert(offsetof(struct t5, bar) == 8);
+static_assert(sizeof(struct t5) == 12);
 
 struct t6
 {
@@ -59,8 +59,8 @@ struct t6
   char bar : 1;
   char bar2;
 };
-static_assert(offsetof(struct t6, bar2) == 1);
-static_assert(sizeof(struct t6) == 2);
+static_assert(offsetof(struct t6, bar2) == 2);
+static_assert(sizeof(struct t6) == 4);
 
 struct t7
 {
@@ -69,8 +69,8 @@ struct t7
   char bar1 : 1;
   char bar2;
 };
-static_assert(offsetof(struct t7, bar2) == 1);
-static_assert(sizeof(struct t7) == 2);
+static_assert(offsetof(struct t7, bar2) == 3);
+static_assert(sizeof(struct t7) == 4);
 
 struct t8
 {
@@ -79,8 +79,8 @@ struct t8
   char bar1 : 1;
   char bar2;
 };
-static_assert(offsetof(struct t8, bar2) == 1);
-static_assert(sizeof(struct t8) == 2);
+static_assert(offsetof(struct t8, bar2) == 5);
+static_assert(sizeof(struct t8) == 8);
 
 struct t9
 {
@@ -89,8 +89,8 @@ struct t9
   char bar1 : 1;
   char bar2;
 };
-static_assert(offsetof(struct t9, bar2) == 1);
-static_assert(sizeof(struct t9) == 2);
+static_assert(offsetof(struct t9, bar2) == 9);
+static_assert(sizeof(struct t9) == 12);
 
 struct t10
 {
@@ -99,8 +99,8 @@ struct t10
   char bar1 : 1;
   char bar2;
 };
-static_assert(offsetof(struct t10, bar2) == 1);
-static_assert(sizeof(struct t10) == 2);
+static_assert(offsetof(struct t10, bar2) == 9);
+static_assert(sizeof(struct t10) == 12);
 
 struct t11
 {
@@ -110,8 +110,8 @@ struct t11
   char bar1 : 1;
   char bar2;
 };
-static_assert(offsetof(struct t11, bar2) == 1);
-static_assert(sizeof(struct t11) == 2);
+static_assert(offsetof(struct t11, bar2) == 9);
+static_assert(sizeof(struct t11) == 12);
 
 struct t12
 {
@@ -121,8 +121,8 @@ struct t12
   char : 0;
   char bar;
 };
-static_assert(offsetof(struct t12, bar) == 1);
-static_assert(sizeof(struct t12) == 2);
+static_assert(offsetof(struct t12, bar) == 8);
+static_assert(sizeof(struct t12) == 12);
 
 struct t13
 {
@@ -130,8 +130,8 @@ struct t13
   long : 0;
   char bar;
 };
-static_assert(offsetof(struct t13, bar) == 1);
-static_assert(sizeof(struct t13) == 2);
+static_assert(offsetof(struct t13, bar) == 8);
+static_assert(sizeof(struct t13) == 9);
 
 struct t14
 {
@@ -145,9 +145,9 @@ struct t14
   int : 0;
   char bar2;
 };
-static_assert(offsetof(struct t14, bar1) == 6);
-static_assert(offsetof(struct t14, bar2) == 7);
-static_assert(sizeof(struct t14) == 8);
+static_assert(offsetof(struct t14, bar1) == 10);
+static_assert(offsetof(struct t14, bar2) == 12);
+static_assert(sizeof(struct t14) == 14);
 
 struct t15
 {
@@ -158,8 +158,8 @@ struct t15
   long : 0;
   char : 0;
 };
-static_assert(offsetof(struct t15, bar) == 1);
-static_assert(sizeof(struct t15) == 2);
+static_assert(offsetof(struct t15, bar) == 4);
+static_assert(sizeof(struct t15) == 8);
 
 struct t16
 {
@@ -177,8 +177,8 @@ struct t17
   char : 0;
   char bar;
 };
-static_assert(offsetof(struct t17, bar) == 1);
-static_assert(sizeof(struct t17) == 2);
+static_assert(offsetof(struct t17, bar) == 8);
+static_assert(sizeof(struct t17) == 9);
 
 struct t18
 {
@@ -197,7 +197,7 @@ struct t19
   char bar;
 };
 static_assert(offsetof(struct t19, bar) == 6);
-static_assert(sizeof(struct t19) == 7);
+static_assert(sizeof(struct t19) == 8);
 
 struct t20
 {
@@ -206,8 +206,8 @@ struct t20
   long : 0;
   char bar;
 };
-static_assert(offsetof(struct t20, bar) == 1);
-static_assert(sizeof(struct t20) == 2);
+static_assert(offsetof(struct t20, bar) == 8);
+static_assert(sizeof(struct t20) == 12);
 
 struct t21
 {
@@ -229,11 +229,11 @@ struct t21
   short foo7: 16;
   short foo8: 16;
 };
-static_assert(offsetof(struct t21, bar1) == 3);
-static_assert(offsetof(struct t21, bar2) == 4);
-static_assert(offsetof(struct t21, bar3) == 8);
-static_assert(offsetof(struct t21, bar4) == 24);
-static_assert(sizeof(struct t21) == 40);
+static_assert(offsetof(struct t21, bar1) == 8);
+static_assert(offsetof(struct t21, bar2) == 12);
+static_assert(offsetof(struct t21, bar3) == 16);
+static_assert(offsetof(struct t21, bar4) == 40);
+static_assert(sizeof(struct t21) == 56);
 
 // The rules also apply to anonymous bitfields with non-zero length.
 struct t22
