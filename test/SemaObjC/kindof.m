@@ -6,19 +6,31 @@
 @end
 
 @protocol NSCopying
+- (id)copy;
++ (Class)classCopy;
+@end
+
+@protocol NSRandomProto
+- (void)randomMethod;
++ (void)randomClassMethod;
 @end
 
 __attribute__((objc_root_class))
 @interface NSObject <NSObject>
+- (NSObject *)retain;
 @end
 
 @interface NSString : NSObject <NSCopying>
+- (NSString *)stringByAppendingString:(NSString *)string;
++ (instancetype)string;
 @end
 
 @interface NSMutableString : NSString
+- (void)appendString:(NSString *)string;
 @end
 
 @interface NSNumber : NSObject <NSCopying>
+- (NSNumber *)numberByAddingNumber:(NSNumber *)number;
 @end
 
 // ---------------------------------------------------------------------------
@@ -221,4 +233,28 @@ void test_block_conversions(void) {
   void_kindof_NSString_block = void_NSMutableString_block; // expected-error{{from 'void (^)(NSMutableString *)'}}
   void_NSString_block = void_kindof_NSMutableString_block;
   void_NSString_block = void_NSMutableString_block; // expected-error{{from 'void (^)(NSMutableString *)'}}
+}
+
+// ---------------------------------------------------------------------------
+// Messaging __kindof types.
+// ---------------------------------------------------------------------------
+void message_kindof_object(__kindof NSString *kindof_NSString) {
+  [kindof_NSString retain]; // in superclass
+  [kindof_NSString stringByAppendingString:0]; // in class
+  [kindof_NSString appendString:0]; // in subclass
+  [kindof_NSString numberByAddingNumber: 0]; // FIXME: in unrelated class
+  [kindof_NSString randomMethod]; // in protocol
+}
+
+void message_kindof_qualified_id(__kindof id <NSCopying> kindof_NSCopying) {
+  [kindof_NSCopying copy]; // in protocol
+  [kindof_NSCopying stringByAppendingString:0]; // in some class
+  [kindof_NSCopying randomMethod]; // in unrelated protocol
+}
+
+void message_kindof_qualified_class(
+       __kindof Class <NSCopying> kindof_NSCopying) {
+  [kindof_NSCopying classCopy]; // in protocol
+  [kindof_NSCopying string]; // in some class
+  [kindof_NSCopying randomClassMethod]; // in unrelated protocol
 }

@@ -1650,7 +1650,27 @@ public:
   bool isObjCQualifiedClassType() const;        // Class<foo>
   bool isObjCObjectOrInterfaceType() const;
   bool isObjCIdType() const;                    // id
+
+  /// Whether the type is Objective-C 'id' or a __kindof type of an
+  /// object type, e.g., __kindof NSView * or __kindof id
+  /// <NSCopying>.
+  ///
+  /// \param bound Will be set to the bound on non-id subtype types,
+  /// which will be (possibly specialized) Objective-C class type, or
+  /// null for 'id.
+  bool isObjCIdOrObjectKindOfType(const ASTContext &ctx,
+                                  const ObjCObjectType *&bound) const;
+
   bool isObjCClassType() const;                 // Class
+
+  /// Whether the type is Objective-C 'Class' or a __kindof type of an
+  /// Class type, e.g., __kindof Class <NSCopying>.
+  ///
+  /// Unlike \c isObjCIdOrObjectKindOfType, there is no relevant bound
+  /// here because Objective-C's type system cannot express "a class
+  /// object for a subclass of NSFoo".
+  bool isObjCClassOrClassKindOfType() const;
+
   bool isBlockCompatibleObjCPointerType(ASTContext &ctx) const;
   bool isObjCSelType() const;                 // Class
   bool isObjCBuiltinType() const;               // 'id' or 'Class'
@@ -4632,6 +4652,10 @@ public:
     return QualType(CachedSuperClassType.getPointer(), 0);
   }
 
+  /// Strip off the Objective-C "kindof" type and (with it) any
+  /// protocol qualifiers.
+  QualType stripObjCKindOfTypeAndQuals(const ASTContext &ctx) const;
+
   bool isSugared() const { return false; }
   QualType desugar() const { return QualType(this, 0); }
 
@@ -4899,6 +4923,11 @@ public:
   /// pointer to a specialization of the superclass type. Produces a
   /// null type if there is no superclass.
   QualType getSuperClassType() const;
+
+  /// Strip off the Objective-C "kindof" type and (with it) any
+  /// protocol qualifiers.
+  const ObjCObjectPointerType *stripObjCKindOfTypeAndQuals(
+                                 const ASTContext &ctx) const;
 
   void Profile(llvm::FoldingSetNodeID &ID) {
     Profile(ID, getPointeeType());

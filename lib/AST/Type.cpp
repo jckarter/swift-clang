@@ -469,6 +469,49 @@ const RecordType *Type::getAsUnionType() const {
   return nullptr;
 }
 
+bool Type::isObjCIdOrObjectKindOfType(const ASTContext &ctx,
+                                      const ObjCObjectType *&bound) const {
+  bound = nullptr;
+
+  const ObjCObjectPointerType *OPT = getAs<ObjCObjectPointerType>();
+  if (!OPT)
+    return false;
+
+  // Easy case: id.
+  if (OPT->isObjCIdType())
+    return true;
+
+  // If it's not a __kindof type, reject it now.
+  if (!OPT->isKindOfType())
+    return false;
+
+  // If it's Class or qualified Class, it's not an object type.
+  if (OPT->isObjCClassType() || OPT->isObjCQualifiedClassType())
+    return false;
+
+  // Figure out the type bound for the __kindof type.
+  bound = OPT->getObjectType()->stripObjCKindOfTypeAndQuals(ctx)
+            ->getAs<ObjCObjectType>();
+  return true;
+}
+
+bool Type::isObjCClassOrClassKindOfType() const {
+  const ObjCObjectPointerType *OPT = getAs<ObjCObjectPointerType>();
+  if (!OPT)
+    return false;
+
+  // Easy case: Class.
+  if (OPT->isObjCClassType())
+    return true;
+
+  // If it's not a __kindof type, reject it now.
+  if (!OPT->isKindOfType())
+    return false;
+
+  // If it's Class or qualified Class, it's a class __kindof type.
+  return OPT->isObjCClassType() || OPT->isObjCQualifiedClassType();
+}
+
 ObjCObjectType::ObjCObjectType(QualType Canonical, QualType Base,
                                ArrayRef<QualType> typeArgs,
                                ArrayRef<ObjCProtocolDecl *> protocols,
@@ -556,6 +599,35 @@ bool ObjCObjectType::isKindOfType() const {
 
   // Not a "__kindof" type.
   return false;
+}
+
+QualType ObjCObjectType::stripObjCKindOfTypeAndQuals(
+           const ASTContext &ctx) const {
+  if (!isKindOfType() && qual_empty())
+    return QualType(this, 0);
+
+  // Recursively strip __kindof.
+  SplitQualType splitBaseType = getBaseType().split();
+  QualType baseType(splitBaseType.Ty, 0);
+  if (const ObjCObjectType *baseObj
+        = splitBaseType.Ty->getAs<ObjCObjectType>()) {
+    baseType = baseObj->stripObjCKindOfTypeAndQuals(ctx);
+  }
+
+  return ctx.getObjCObjectType(ctx.getQualifiedType(baseType,
+                                                    splitBaseType.Quals),
+                               getTypeArgsAsWritten(),
+                               /*protocols=*/{ },
+                               /*isKindOf=*/false);
+}
+
+const ObjCObjectPointerType *ObjCObjectPointerType::stripObjCKindOfTypeAndQuals(
+                               const ASTContext &ctx) const {
+  if (!isKindOfType() && qual_empty())
+    return this;
+
+  QualType obj = getObjectType()->stripObjCKindOfTypeAndQuals(ctx);
+  return ctx.getObjCObjectPointerType(obj)->castAs<ObjCObjectPointerType>();
 }
 
 namespace {
