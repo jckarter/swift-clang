@@ -507,10 +507,13 @@ bool ObjCObjectType::isSpecialized() const {
   if (ObjCObjectTypeBits.NumTypeArgs > 0)
     return true;
 
-  if (!qual_empty()) {
-    // Otherwise, check whether the base type is specialized.
-    if (auto objcObject = getBaseType()->getAs<ObjCObjectType>())
-      return objcObject->isSpecialized();
+  // Otherwise, check whether the base type is specialized.
+  if (auto objcObject = getBaseType()->getAs<ObjCObjectType>()) {
+    // Terminate when we reach an interface type.
+    if (isa<ObjCInterfaceType>(objcObject))
+      return false;
+
+    return objcObject->isSpecialized();
   }
 
   // Not specialized.
@@ -522,10 +525,13 @@ ArrayRef<QualType> ObjCObjectType::getTypeArgs() const {
   if (isSpecializedAsWritten())
     return getTypeArgsAsWritten();
 
-  if (!qual_empty()) {
-    // Look at the base type, which might have type arguments.
-    if (auto objcObject = getBaseType()->getAs<ObjCObjectType>())
-      return objcObject->getTypeArgs();
+  // Look at the base type, which might have type arguments.
+  if (auto objcObject = getBaseType()->getAs<ObjCObjectType>()) {
+    // Terminate when we reach an interface type.
+    if (isa<ObjCInterfaceType>(objcObject))
+      return { };
+
+    return objcObject->getTypeArgs();
   }
 
   // No type arguments.
@@ -1071,10 +1077,10 @@ QualType QualType::substObjCTypeArgs(
     // Substitute into the type arguments of a specialized Objective-C object
     // type.
     if (const auto *objcObjectType = dyn_cast<ObjCObjectType>(splitType.Ty)) {
-      if (objcObjectType->isSpecialized()) {
+      if (objcObjectType->isSpecializedAsWritten()) {
         SmallVector<QualType, 4> newTypeArgs;
         bool anyChanged = false;
-        for (auto typeArg : objcObjectType->getTypeArgs()) {
+        for (auto typeArg : objcObjectType->getTypeArgsAsWritten()) {
           QualType newTypeArg = typeArg.substObjCTypeArgs(
                                   ctx, typeArgs,
                                   ObjCSubstitutionContext::Ordinary);
@@ -2922,7 +2928,7 @@ void ObjCObjectTypeImpl::Profile(llvm::FoldingSetNodeID &ID,
 }
 
 void ObjCObjectTypeImpl::Profile(llvm::FoldingSetNodeID &ID) {
-  Profile(ID, getBaseType(), getTypeArgs(), 
+  Profile(ID, getBaseType(), getTypeArgsAsWritten(),
           llvm::makeArrayRef(qual_begin(), getNumProtocols()));
 }
 

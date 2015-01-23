@@ -1783,7 +1783,7 @@ QualType ASTNodeImporter::VisitObjCObjectType(const ObjCObjectType *T) {
     return QualType();
 
   SmallVector<QualType, 4> TypeArgs;
-  for (auto TypeArg : T->getTypeArgs()) {
+  for (auto TypeArg : T->getTypeArgsAsWritten()) {
     QualType ImportedTypeArg = Importer.Import(TypeArg);
     if (ImportedTypeArg.isNull())
       return QualType();
