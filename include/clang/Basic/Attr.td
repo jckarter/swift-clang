@@ -973,6 +973,11 @@ def TypeNullUnspecified : TypeAttr {
   let Documentation = [Undocumented];
 }
 
+def ObjCKindOf : TypeAttr {
+  let Spellings = [Keyword<"__kindof">];
+  let Documentation = [Undocumented];
+}
+
 def NoEscape : InheritableAttr {
   let Spellings = [GCC<"noescape">];
   let Subjects = SubjectList<[ParmVar], WarnDiag, "ExpectedParameter">;

@@ -645,6 +645,10 @@ static void distributeTypeAttrsFromDeclarator(TypeProcessingState &state,
       // Nullability specifiers cannot go after the declarator-id.
       continue;
 
+    // Objective-C __kindof does not get distributed.
+    case AttributeList::AT_ObjCKindOf:
+      continue;
+
     default:
       break;
     }
@@ -890,7 +894,7 @@ static QualType applyObjCTypeArgs(Sema &S, SourceLocation loc, QualType type,
   }
 
   // Success. Form the specialized type.
-  return S.Context.getObjCObjectType(type, finalTypeArgs, { });
+  return S.Context.getObjCObjectType(type, finalTypeArgs, { }, false);
 }
 
 /// Apply Objective-C protocol qualifiers to the given type.
@@ -906,7 +910,8 @@ static QualType applyObjCProtocolQualifiers(
 
     return ctx.getObjCObjectType(objT->getBaseType(),
                                  objT->getTypeArgsAsWritten(),
-                                 protocols);
+                                 protocols,
+                                 objT->isKindOfTypeAsWritten());
   }
 
   if (type->isObjCObjectType()) {
@@ -915,18 +920,22 @@ static QualType applyObjCProtocolQualifiers(
 
     // FIXME: Check for protocols to which the class type is already
     // known to conform.
-    return ctx.getObjCObjectType(type, { }, protocols);
+    return ctx.getObjCObjectType(type, { }, protocols, false);
   }
 
   // id<protocol-list>
   if (type->isObjCIdType()) {
-    type = ctx.getObjCObjectType(ctx.ObjCBuiltinIdTy, { }, protocols);
+    const ObjCObjectPointerType *objPtr = type->castAs<ObjCObjectPointerType>();
+    type = ctx.getObjCObjectType(ctx.ObjCBuiltinIdTy, { }, protocols,
+                                 objPtr->isKindOfType());
     return ctx.getObjCObjectPointerType(type);
   }
 
   // Class<protocol-list>
   if (type->isObjCClassType()) {
-    type = ctx.getObjCObjectType(ctx.ObjCBuiltinClassTy, { }, protocols);
+    const ObjCObjectPointerType *objPtr = type->castAs<ObjCObjectPointerType>();
+    type = ctx.getObjCObjectType(ctx.ObjCBuiltinClassTy, { }, protocols,
+                                 objPtr->isKindOfType());
     return ctx.getObjCObjectPointerType(type);
   }
 
@@ -983,7 +992,8 @@ TypeResult Sema::actOnObjCProtocolQualifierType(
                       Context.ObjCBuiltinIdTy, { },
                       llvm::makeArrayRef(
                         (ObjCProtocolDecl * const *)protocols.data(),
-                        protocols.size()));
+                        protocols.size()),
+                      false);
   Result = Context.getObjCObjectPointerType(Result);
 
   TypeSourceInfo *ResultTInfo = Context.CreateTypeSourceInfo(Result);
@@ -4249,6 +4259,8 @@ static AttributeList::Kind getAttrListKind(AttributedType::Kind kind) {
     return AttributeList::AT_TypeNullable;
   case AttributedType::attr_null_unspecified:
     return AttributeList::AT_TypeNullUnspecified;
+  case AttributedType::attr_objc_kindof:
+    return AttributeList::AT_ObjCKindOf;
   }
   llvm_unreachable("unexpected attribute kind!");
 }
@@ -5308,6 +5320,39 @@ bool Sema::checkNullabilityTypeSpecifier(QualType &type,
   return false;
 }
 
+bool Sema::checkObjCKindOfType(QualType &type, SourceLocation loc) {
+  // Find out if it's an Objective-C object or object pointer type;
+  const ObjCObjectPointerType *ptrType = type->getAs<ObjCObjectPointerType>();
+  const ObjCObjectType *objType = ptrType ? ptrType->getObjectType() 
+                                          : type->getAs<ObjCObjectType>();
+
+  // If not, we can't apply __kindof.
+  if (!objType) {
+    // FIXME: Handle dependent types that aren't yet object types.
+    Diag(loc, diag::err_objc_kindof_nonobject)
+      << type;
+    return true;
+  }
+
+  // Rebuild the "equivalent" type, which pushes __kindof down into
+  // the object type.
+  QualType equivType = Context.getObjCObjectType(objType->getBaseType(),
+                                                 objType->getTypeArgsAsWritten(),
+                                                 objType->getProtocols(),
+                                                 /*isKindOf=*/true);
+
+  // If we started with an object pointer type, rebuild it.
+  if (ptrType)
+    equivType = Context.getObjCObjectPointerType(equivType);
+
+  // Build the attributed type to record where __kindof occurred.
+  type = Context.getAttributedType(AttributedType::attr_objc_kindof, 
+                                   type,
+                                   equivType);
+
+  return false;
+}
+
 /// Handle a nullability type attribute.
 /// Check whether we need to distribute the given nullability type
 /// attribute to another declarator chunk that is a pointer, member
@@ -5907,6 +5952,28 @@ static void processTypeAttrs(TypeProcessingState &state, QualType &type,
 
         attr.setUsedAsTypeAttr();
       }
+      break;
+
+    case AttributeList::AT_ObjCKindOf:
+      // '__kindof' must be part of the decl-specifiers.
+      switch (TAL) {
+      case TAL_DeclSpec:
+        break;
+
+      case TAL_DeclChunk:
+      case TAL_DeclName:
+        state.getSema().Diag(attr.getLoc(),
+                             diag::err_objc_kindof_wrong_position)
+          << FixItHint::CreateRemoval(attr.getLoc())
+          << FixItHint::CreateInsertion(
+               state.getDeclarator().getDeclSpec().getLocStart(), "__kindof ");
+        break;
+      }
+
+      // Apply it regardless.
+      if (state.getSema().checkObjCKindOfType(type, attr.getLoc()))
+        attr.setInvalid();
+      attr.setUsedAsTypeAttr();
       break;
 
     case AttributeList::AT_NSReturnsRetained:

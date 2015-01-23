@@ -2553,6 +2553,7 @@ Parser::DiagnoseMissingSemiAfterTagDefinition(DeclSpec &DS, AccessSpecifier AS,
 /// [C11]   alignment-specifier declaration-specifiers[opt]
 /// [GNU]   attributes declaration-specifiers[opt]
 /// [Clang] '__module_private__' declaration-specifiers[opt]
+/// [ObjC1] '__kindof' declaration-specifiers[opt]
 ///
 ///       storage-class-specifier: [C99 6.7.1]
 ///         'typedef'
@@ -3019,6 +3020,13 @@ void Parser::ParseDeclarationSpecifiers(DeclSpec &DS,
     case tok::kw___nullable:
     case tok::kw___null_unspecified:
       ParseNullabilityTypeSpecifiers(DS.getAttributes());
+      continue;
+
+    // Objective-C 'kindof' types.
+    case tok::kw___kindof:
+      DS.getAttributes().addNew(Tok.getIdentifierInfo(), Loc, nullptr, Loc,
+                                nullptr, 0, AttributeList::AS_Keyword);
+      (void)ConsumeToken();
       continue;
 
     // storage-class-specifier
@@ -4246,6 +4254,8 @@ bool Parser::isTypeSpecifierQualifier() {
   case tok::kw___nullable:
   case tok::kw___null_unspecified:
 
+  case tok::kw___kindof:
+
   case tok::kw___private:
   case tok::kw___local:
   case tok::kw___global:
@@ -4422,6 +4432,8 @@ bool Parser::isDeclarationSpecifier(bool DisambiguatingWithExpression) {
   case tok::kw___nonnull:
   case tok::kw___nullable:
   case tok::kw___null_unspecified:
+
+  case tok::kw___kindof:
 
   case tok::kw___private:
   case tok::kw___local:
@@ -4658,6 +4670,13 @@ void Parser::ParseTypeQualifierListOpt(DeclSpec &DS, unsigned AttrReqs,
     case tok::kw___nullable:
     case tok::kw___null_unspecified:
       ParseNullabilityTypeSpecifiers(DS.getAttributes());
+      continue;
+
+    // Objective-C 'kindof' types.
+    case tok::kw___kindof:
+      DS.getAttributes().addNew(Tok.getIdentifierInfo(), Loc, nullptr, Loc,
+                                nullptr, 0, AttributeList::AS_Keyword);
+      (void)ConsumeToken();
       continue;
 
     case tok::kw___attribute:

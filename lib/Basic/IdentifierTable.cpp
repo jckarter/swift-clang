@@ -109,6 +109,7 @@ namespace {
     KEYNOMS = 0x01000,
     WCHARSUPPORT = 0x02000,
     HALFSUPPORT = 0x04000,
+    KEYOBJC1 = 0x08000,
     KEYALL = (0xffff & ~KEYNOMS) // Because KEYNOMS is used to exclude.
   };
 
@@ -142,6 +143,7 @@ static KeywordStatus getKeywordStatus(const LangOptions &LangOpts,
   // We treat bridge casts as objective-C keywords so we can warn on them
   // in non-arc mode.
   if (LangOpts.ObjC2 && (Flags & KEYARC)) return KS_Enabled;
+  if (LangOpts.ObjC1 && (Flags & KEYOBJC1)) return KS_Enabled;
   if (LangOpts.CPlusPlus && (Flags & KEYCXX11)) return KS_Future;
   return KS_Disabled;
 }

@@ -3551,21 +3551,24 @@ QualType ASTContext::getObjCObjectType(QualType BaseType,
                                        ObjCProtocolDecl * const *Protocols,
                                        unsigned NumProtocols) const {
   return getObjCObjectType(BaseType, { },
-                           llvm::makeArrayRef(Protocols, NumProtocols));
+                           llvm::makeArrayRef(Protocols, NumProtocols),
+                           /*isKindOf=*/false);
 }
 
 QualType ASTContext::getObjCObjectType(
            QualType baseType,
            ArrayRef<QualType> typeArgs,
-           ArrayRef<ObjCProtocolDecl *> protocols) const {
+           ArrayRef<ObjCProtocolDecl *> protocols,
+           bool isKindOf) const {
   // If the base type is an interface and there aren't any protocols or
   // type arguments to add, then the interface type will do just fine.
-  if (typeArgs.empty() && protocols.empty() && isa<ObjCInterfaceType>(baseType))
+  if (typeArgs.empty() && protocols.empty() && !isKindOf &&
+      isa<ObjCInterfaceType>(baseType))
     return baseType;
 
   // Look in the folding set for an existing type.
   llvm::FoldingSetNodeID ID;
-  ObjCObjectTypeImpl::Profile(ID, baseType, typeArgs, protocols);
+  ObjCObjectTypeImpl::Profile(ID, baseType, typeArgs, protocols, isKindOf);
   void *InsertPos = nullptr;
   if (ObjCObjectType *QT = ObjCObjectTypes.FindNodeOrInsertPos(ID, InsertPos))
     return QualType(QT, 0);
@@ -3617,7 +3620,7 @@ QualType ASTContext::getObjCObjectType(
     }
 
     canonical = getObjCObjectType(getCanonicalType(baseType), canonTypeArgs,
-                                  canonProtocols);
+                                  canonProtocols, isKindOf);
 
     // Regenerate InsertPos.
     ObjCObjectTypes.FindNodeOrInsertPos(ID, InsertPos);
@@ -3628,7 +3631,8 @@ QualType ASTContext::getObjCObjectType(
   size += protocols.size() * sizeof(ObjCProtocolDecl *);
   void *mem = Allocate(size, TypeAlignment);
   ObjCObjectTypeImpl *T =
-    new (mem) ObjCObjectTypeImpl(canonical, baseType, typeArgs, protocols);
+    new (mem) ObjCObjectTypeImpl(canonical, baseType, typeArgs, protocols,
+                                 isKindOf);
 
   Types.push_back(T);
   ObjCObjectTypes.InsertNode(T, InsertPos);
@@ -6889,7 +6893,8 @@ QualType ASTContext::areCommonBaseCompatible(
       // If anything in the LHS will have changed, build a new result type.
       if (anyChanges) {
         QualType Result = getObjCInterfaceType(LHS->getInterface());
-        Result = getObjCObjectType(Result, LHSTypeArgs, Protocols);
+        Result = getObjCObjectType(Result, LHSTypeArgs, Protocols,
+                                   LHS->isKindOfType());
         return getObjCObjectPointerType(Result);
       }
 
@@ -6934,7 +6939,8 @@ QualType ASTContext::areCommonBaseCompatible(
 
       if (anyChanges) {
         QualType Result = getObjCInterfaceType(RHS->getInterface());
-        Result = getObjCObjectType(Result, RHSTypeArgs, Protocols);
+        Result = getObjCObjectType(Result, RHSTypeArgs, Protocols,
+                                   RHS->isKindOfType());
         return getObjCObjectPointerType(Result);
       }
 

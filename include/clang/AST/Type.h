@@ -1353,9 +1353,12 @@ protected:
 
     /// NumProtocols - The number of protocols stored directly on this
     /// object type.
-    unsigned NumProtocols : 7;
+    unsigned NumProtocols : 6;
+
+    /// Whether this is a "kindof" type.
+    unsigned IsKindOf : 1;
   };
-  static_assert(NumTypeBits + 7 + 7 <= 32, "Does not fit in an unsigned");
+  static_assert(NumTypeBits + 7 + 6 + 1 <= 32, "Does not fit in an unsigned");
 
   class ReferenceTypeBitfields {
     friend class ReferenceType;
@@ -3580,6 +3583,7 @@ public:
     attr_nonnull,
     attr_nullable,
     attr_null_unspecified,
+    attr_objc_kindof,
   };
 
 private:
@@ -4512,7 +4516,8 @@ class ObjCObjectType : public Type {
 protected:
   ObjCObjectType(QualType Canonical, QualType Base,
                  ArrayRef<QualType> typeArgs,
-                 ArrayRef<ObjCProtocolDecl *> protocols);
+                 ArrayRef<ObjCProtocolDecl *> protocols,
+                 bool isKindOf);
 
   enum Nonce_ObjCInterface { Nonce_ObjCInterface };
   ObjCObjectType(enum Nonce_ObjCInterface)
@@ -4520,6 +4525,7 @@ protected:
       BaseType(QualType(this_(), 0)) {
     ObjCObjectTypeBits.NumProtocols = 0;
     ObjCObjectTypeBits.NumTypeArgs = 0;
+    ObjCObjectTypeBits.IsKindOf = 0;
   }
 
   void computeSuperClassTypeSlow() const;
@@ -4601,6 +4607,17 @@ public:
     return qual_begin()[I];
   }
 
+  /// Retrieve all of the protocol qualifiers.
+  ArrayRef<ObjCProtocolDecl *> getProtocols() const {
+    return ArrayRef<ObjCProtocolDecl *>(qual_begin(), getNumProtocols());
+  }
+
+  /// Whether this is a "__kindof" type as written.
+  bool isKindOfTypeAsWritten() const { return ObjCObjectTypeBits.IsKindOf; }
+
+  /// Whether this ia a "__kindof" type (semantically).
+  bool isKindOfType() const;
+
   /// Retrieve the type of the superclass of this object type.
   ///
   /// This operation substitutes any type arguments into the
@@ -4636,15 +4653,17 @@ class ObjCObjectTypeImpl : public ObjCObjectType, public llvm::FoldingSetNode {
 
   ObjCObjectTypeImpl(QualType Canonical, QualType Base,
                      ArrayRef<QualType> typeArgs,
-                     ArrayRef<ObjCProtocolDecl *> protocols)
-    : ObjCObjectType(Canonical, Base, typeArgs, protocols) {}
+                     ArrayRef<ObjCProtocolDecl *> protocols,
+                     bool isKindOf)
+    : ObjCObjectType(Canonical, Base, typeArgs, protocols, isKindOf) {}
 
 public:
   void Profile(llvm::FoldingSetNodeID &ID);
   static void Profile(llvm::FoldingSetNodeID &ID,
                       QualType Base,
                       ArrayRef<QualType> typeArgs,
-                      ArrayRef<ObjCProtocolDecl *> protocols);
+                      ArrayRef<ObjCProtocolDecl *> protocols,
+                      bool isKindOf);
 };
 
 inline QualType *ObjCObjectType::getTypeArgStorage() {
@@ -4797,6 +4816,12 @@ public:
     return getObjectType()->isObjCUnqualifiedClass();
   }
 
+  /// isObjCIdOrClassType - True if this is equivalent to the 'id' or
+  /// 'Class' type,
+  bool isObjCIdOrClassType() const {
+    return getObjectType()->isObjCUnqualifiedIdOrClass();
+  }
+
   /// isObjCQualifiedIdType - True if this is equivalent to 'id<P>' for some
   /// non-empty set of protocols.
   bool isObjCQualifiedIdType() const {
@@ -4808,6 +4833,9 @@ public:
   bool isObjCQualifiedClassType() const {
     return getObjectType()->isObjCQualifiedClass();
   }
+
+  /// Whether this is a "__kindof" type.
+  bool isKindOfType() const { return getObjectType()->isKindOfType(); }
 
   /// Whether this type is specialized, meaning that it has type arguments.
   bool isSpecialized() const { return getObjectType()->isSpecialized(); }

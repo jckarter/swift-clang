@@ -471,13 +471,16 @@ const RecordType *Type::getAsUnionType() const {
 
 ObjCObjectType::ObjCObjectType(QualType Canonical, QualType Base,
                                ArrayRef<QualType> typeArgs,
-                               ArrayRef<ObjCProtocolDecl *> protocols)
+                               ArrayRef<ObjCProtocolDecl *> protocols,
+                               bool isKindOf)
   : Type(ObjCObject, Canonical, Base->isDependentType(), 
          Base->isInstantiationDependentType(), 
          Base->isVariablyModifiedType(), 
          Base->containsUnexpandedParameterPack()),
     BaseType(Base) 
 {
+  ObjCObjectTypeBits.IsKindOf = isKindOf;
+
   ObjCObjectTypeBits.NumTypeArgs = typeArgs.size();
   assert(getTypeArgsAsWritten().size() == typeArgs.size() &&
          "bitfield overflow in type argument count");
@@ -536,6 +539,23 @@ ArrayRef<QualType> ObjCObjectType::getTypeArgs() const {
 
   // No type arguments.
   return { };
+}
+
+bool ObjCObjectType::isKindOfType() const {
+  if (isKindOfTypeAsWritten())
+    return true;
+
+  // Look at the base type, which might have type arguments.
+  if (auto objcObject = getBaseType()->getAs<ObjCObjectType>()) {
+    // Terminate when we reach an interface type.
+    if (isa<ObjCInterfaceType>(objcObject))
+      return false;
+
+    return objcObject->isKindOfType();
+  }
+
+  // Not a "__kindof" type.
+  return false;
 }
 
 namespace {
@@ -893,7 +913,8 @@ public:
 
     return Ctx.getObjCObjectType(baseType, typeArgs, 
                                  llvm::makeArrayRef(T->qual_begin(),
-                                                    T->getNumProtocols()));
+                                                    T->getNumProtocols()),
+                                 T->isKindOfTypeAsWritten());
   }
 
   TRIVIAL_TYPE_CLASS(ObjCInterface)
@@ -1095,8 +1116,10 @@ QualType QualType::substObjCTypeArgs(
                                            objcObjectType->getNumProtocols());
             if (typeArgs.empty() &&
                 context != ObjCSubstitutionContext::Superclass) {
-              return ctx.getObjCObjectType(objcObjectType->getBaseType(), { },
-                                           protocols);
+              return ctx.getObjCObjectType(
+                       objcObjectType->getBaseType(), { },
+                       protocols,
+                       objcObjectType->isKindOfTypeAsWritten());
             }
 
             anyChanged = true;
@@ -1110,7 +1133,8 @@ QualType QualType::substObjCTypeArgs(
                                          objcObjectType->qual_begin(),
                                          objcObjectType->getNumProtocols());
           return ctx.getObjCObjectType(objcObjectType->getBaseType(),
-                                       newTypeArgs, protocols);
+                                       newTypeArgs, protocols,
+                                       objcObjectType->isKindOfTypeAsWritten());
         }
       }
 
@@ -2754,6 +2778,7 @@ bool AttributedType::isCallingConv() const {
   case attr_nonnull:
   case attr_nullable:
   case attr_null_unspecified:
+  case attr_objc_kindof:
     return false;
   case attr_pcs:
   case attr_pcs_vfp:
@@ -2917,7 +2942,8 @@ QualifierCollector::apply(const ASTContext &Context, const Type *T) const {
 void ObjCObjectTypeImpl::Profile(llvm::FoldingSetNodeID &ID,
                                  QualType BaseType,
                                  ArrayRef<QualType> typeArgs,
-                                 ArrayRef<ObjCProtocolDecl *> protocols) {
+                                 ArrayRef<ObjCProtocolDecl *> protocols,
+                                 bool isKindOf) {
   ID.AddPointer(BaseType.getAsOpaquePtr());
   ID.AddInteger(typeArgs.size());
   for (auto typeArg : typeArgs)
@@ -2925,11 +2951,13 @@ void ObjCObjectTypeImpl::Profile(llvm::FoldingSetNodeID &ID,
   ID.AddInteger(protocols.size());
   for (auto proto : protocols)
     ID.AddPointer(proto);
+  ID.AddBoolean(isKindOf);
 }
 
 void ObjCObjectTypeImpl::Profile(llvm::FoldingSetNodeID &ID) {
   Profile(ID, getBaseType(), getTypeArgsAsWritten(),
-          llvm::makeArrayRef(qual_begin(), getNumProtocols()));
+          llvm::makeArrayRef(qual_begin(), getNumProtocols()),
+          isKindOfTypeAsWritten());
 }
 
 namespace {

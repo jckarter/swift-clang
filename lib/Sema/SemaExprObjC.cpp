@@ -848,7 +848,8 @@ ExprResult Sema::BuildObjCDictionaryLiteral(SourceRange SR,
               Context.getObjCObjectType(Context.ObjCBuiltinIdTy, { },
                                         llvm::makeArrayRef(
                                           (ObjCProtocolDecl**) PQ,
-                                          1));
+                                          1),
+                                        false);
             QIDNSCopying = Context.getObjCObjectPointerType(QIDNSCopying);
           }
         }
