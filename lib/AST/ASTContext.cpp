@@ -1850,11 +1850,7 @@ void ASTContext::CollectInheritedProtocols(const Decl *CDecl,
     // We can use protocol_iterator here instead of
     // all_referenced_protocol_iterator since we are walking all categories.    
     for (auto *Proto : OI->all_referenced_protocols()) {
-      Protocols.insert(Proto->getCanonicalDecl());
-      for (auto *P : Proto->protocols()) {
-        Protocols.insert(P->getCanonicalDecl());
-        CollectInheritedProtocols(P, Protocols);
-      }
+      CollectInheritedProtocols(Proto, Protocols);
     }
     
     // Categories of this Interface.
@@ -1868,16 +1864,16 @@ void ASTContext::CollectInheritedProtocols(const Decl *CDecl,
       }
   } else if (const ObjCCategoryDecl *OC = dyn_cast<ObjCCategoryDecl>(CDecl)) {
     for (auto *Proto : OC->protocols()) {
-      Protocols.insert(Proto->getCanonicalDecl());
-      for (const auto *P : Proto->protocols())
-        CollectInheritedProtocols(P, Protocols);
+      CollectInheritedProtocols(Proto, Protocols);
     }
   } else if (const ObjCProtocolDecl *OP = dyn_cast<ObjCProtocolDecl>(CDecl)) {
-    for (auto *Proto : OP->protocols()) {
-      Protocols.insert(Proto->getCanonicalDecl());
-      for (const auto *P : Proto->protocols())
-        CollectInheritedProtocols(P, Protocols);
-    }
+    // Insert the protocol.
+    if (!Protocols.insert(
+          const_cast<ObjCProtocolDecl *>(OP->getCanonicalDecl())).second)
+      return;
+
+    for (auto *Proto : OP->protocols())
+      CollectInheritedProtocols(Proto, Protocols);
   }
 }
 
@@ -6822,8 +6818,7 @@ void getIntersectionOfProtocols(ASTContext &Context,
 
   // Start with the protocol qualifiers.
   for (auto proto : LHS->quals()) {
-    if (LHSProtocolSet.insert(proto->getCanonicalDecl()).second)
-      Context.CollectInheritedProtocols(proto, LHSProtocolSet);
+    Context.CollectInheritedProtocols(proto, LHSProtocolSet);
   }
 
   // Also add the protocols associated with the LHS interface.
@@ -6834,8 +6829,7 @@ void getIntersectionOfProtocols(ASTContext &Context,
 
   // Start with the protocol qualifiers.
   for (auto proto : RHS->quals()) {
-    if (RHSProtocolSet.insert(proto->getCanonicalDecl()).second)
-      Context.CollectInheritedProtocols(proto, RHSProtocolSet);
+    Context.CollectInheritedProtocols(proto, RHSProtocolSet);
   }
 
   // Also add the protocols associated with the RHS interface.
@@ -6851,9 +6845,6 @@ void getIntersectionOfProtocols(ASTContext &Context,
   // the protocols within the intersection.
   llvm::SmallPtrSet<ObjCProtocolDecl *, 8> ImpliedProtocols;
   Context.CollectInheritedProtocols(CommonBase, ImpliedProtocols);
-  for (auto proto : IntersectionSet) {
-    Context.CollectInheritedProtocols(proto, ImpliedProtocols);
-  }
 
   // Remove any implied protocols from the list of inherited protocols.
   if (!ImpliedProtocols.empty()) {
@@ -7020,7 +7011,7 @@ bool ASTContext::canAssignObjCInterfaces(const ObjCObjectType *LHS,
     // Also, if RHS has explicit quelifiers, include them for comparing with LHS's
     // qualifiers.
     for (auto *RHSPI : RHS->quals())
-      SuperClassInheritedProtocols.insert(RHSPI->getCanonicalDecl());
+      CollectInheritedProtocols(RHSPI, SuperClassInheritedProtocols);
     // If there is no protocols associated with RHS, it is not a match.
     if (SuperClassInheritedProtocols.empty())
       return false;
