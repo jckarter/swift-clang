@@ -3356,7 +3356,7 @@ Sema::SubstDefaultTemplateArgumentIfAvailable(TemplateDecl *Template,
 /// \param Param The template parameter against which the argument will be
 /// checked.
 ///
-/// \param Arg The template argument.
+/// \param Arg The template argument, which may be updated due to conversions.
 ///
 /// \param Template The template in which the template argument resides.
 ///
@@ -3433,6 +3433,13 @@ bool Sema::CheckTemplateArgument(NamedDecl *Param,
                               Result, CTAK);
       if (Res.isInvalid())
         return true;
+
+      // If the resulting expression is new, then use it in place of the
+      // old expression in the template argument.
+      if (Res.get() != Arg.getArgument().getAsExpr()) {
+        TemplateArgument TA(Res.get());
+        Arg = TemplateArgumentLoc(TA, Res.get());
+      }
 
       Converted.push_back(Result);
       break;
@@ -3641,9 +3648,14 @@ bool Sema::CheckTemplateArgumentList(TemplateDecl *Template,
                                      TemplateArgumentListInfo &TemplateArgs,
                                      bool PartialTemplateArgs,
                           SmallVectorImpl<TemplateArgument> &Converted) {
+  // Make a copy of the template arguments for processing.  Only make the
+  // changes at the end when successful in matching the arguments to the
+  // template.
+  TemplateArgumentListInfo NewArgs = TemplateArgs;
+
   TemplateParameterList *Params = Template->getTemplateParameters();
 
-  SourceLocation RAngleLoc = TemplateArgs.getRAngleLoc();
+  SourceLocation RAngleLoc = NewArgs.getRAngleLoc();
 
   // C++ [temp.arg]p1:
   //   [...] The type and form of each template-argument specified in
@@ -3652,7 +3664,7 @@ bool Sema::CheckTemplateArgumentList(TemplateDecl *Template,
   //   template-parameter-list.
   bool isTemplateTemplateParameter = isa<TemplateTemplateParmDecl>(Template);
   SmallVector<TemplateArgument, 2> ArgumentPack;
-  unsigned ArgIdx = 0, NumArgs = TemplateArgs.size();
+  unsigned ArgIdx = 0, NumArgs = NewArgs.size();
   LocalInstantiationScope InstScope(*this, true);
   for (TemplateParameterList::iterator Param = Params->begin(),
                                        ParamEnd = Params->end();
@@ -3688,21 +3700,21 @@ bool Sema::CheckTemplateArgumentList(TemplateDecl *Template,
 
     if (ArgIdx < NumArgs) {
       // Check the template argument we were given.
-      if (CheckTemplateArgument(*Param, TemplateArgs[ArgIdx], Template,
+      if (CheckTemplateArgument(*Param, NewArgs[ArgIdx], Template,
                                 TemplateLoc, RAngleLoc,
                                 ArgumentPack.size(), Converted))
         return true;
 
       bool PackExpansionIntoNonPack =
-          TemplateArgs[ArgIdx].getArgument().isPackExpansion() &&
+          NewArgs[ArgIdx].getArgument().isPackExpansion() &&
           (!(*Param)->isTemplateParameterPack() || getExpandedPackSize(*Param));
       if (PackExpansionIntoNonPack && isa<TypeAliasTemplateDecl>(Template)) {
         // Core issue 1430: we have a pack expansion as an argument to an
         // alias template, and it's not part of a parameter pack. This
         // can't be canonicalized, so reject it now.
-        Diag(TemplateArgs[ArgIdx].getLocation(),
+        Diag(NewArgs[ArgIdx].getLocation(),
              diag::err_alias_template_expansion_into_fixed_list)
-          << TemplateArgs[ArgIdx].getSourceRange();
+          << NewArgs[ArgIdx].getSourceRange();
         Diag((*Param)->getLocation(), diag::note_template_param_here);
         return true;
       }
@@ -3734,7 +3746,7 @@ bool Sema::CheckTemplateArgumentList(TemplateDecl *Template,
         }
 
         while (ArgIdx < NumArgs) {
-          Converted.push_back(TemplateArgs[ArgIdx].getArgument());
+          Converted.push_back(NewArgs[ArgIdx].getArgument());
           ++ArgIdx;
         }
 
@@ -3785,8 +3797,7 @@ bool Sema::CheckTemplateArgumentList(TemplateDecl *Template,
     // the default argument.
     if (TemplateTypeParmDecl *TTP = dyn_cast<TemplateTypeParmDecl>(*Param)) {
       if (!TTP->hasDefaultArgument())
-        return diagnoseArityMismatch(*this, Template, TemplateLoc, 
-                                     TemplateArgs);
+        return diagnoseArityMismatch(*this, Template, TemplateLoc, NewArgs);
 
       TypeSourceInfo *ArgType = SubstDefaultTemplateArgument(*this,
                                                              Template,
@@ -3802,8 +3813,7 @@ bool Sema::CheckTemplateArgumentList(TemplateDecl *Template,
     } else if (NonTypeTemplateParmDecl *NTTP
                  = dyn_cast<NonTypeTemplateParmDecl>(*Param)) {
       if (!NTTP->hasDefaultArgument())
-        return diagnoseArityMismatch(*this, Template, TemplateLoc, 
-                                     TemplateArgs);
+        return diagnoseArityMismatch(*this, Template, TemplateLoc, NewArgs);
 
       ExprResult E = SubstDefaultTemplateArgument(*this, Template,
                                                               TemplateLoc,
@@ -3820,8 +3830,7 @@ bool Sema::CheckTemplateArgumentList(TemplateDecl *Template,
         = cast<TemplateTemplateParmDecl>(*Param);
 
       if (!TempParm->hasDefaultArgument())
-        return diagnoseArityMismatch(*this, Template, TemplateLoc, 
-                                     TemplateArgs);
+        return diagnoseArityMismatch(*this, Template, TemplateLoc, NewArgs);
 
       NestedNameSpecifierLoc QualifierLoc;
       TemplateName Name = SubstDefaultTemplateArgument(*this, Template,
@@ -3849,12 +3858,12 @@ bool Sema::CheckTemplateArgumentList(TemplateDecl *Template,
                               RAngleLoc, 0, Converted))
       return true;
 
-    // Core issue 150 (assumed resolution): if this is a template template 
-    // parameter, keep track of the default template arguments from the 
+    // Core issue 150 (assumed resolution): if this is a template template
+    // parameter, keep track of the default template arguments from the
     // template definition.
     if (isTemplateTemplateParameter)
-      TemplateArgs.addArgument(Arg);
-    
+      NewArgs.addArgument(Arg);
+
     // Move to the next template parameter and argument.
     ++Param;
     ++ArgIdx;
@@ -3866,15 +3875,18 @@ bool Sema::CheckTemplateArgumentList(TemplateDecl *Template,
   // still dependent).
   if (ArgIdx < NumArgs && CurrentInstantiationScope &&
       CurrentInstantiationScope->getPartiallySubstitutedPack()) {
-    while (ArgIdx < NumArgs &&
-           TemplateArgs[ArgIdx].getArgument().isPackExpansion())
-      Converted.push_back(TemplateArgs[ArgIdx++].getArgument());
+    while (ArgIdx < NumArgs && NewArgs[ArgIdx].getArgument().isPackExpansion())
+      Converted.push_back(NewArgs[ArgIdx++].getArgument());
   }
 
   // If we have any leftover arguments, then there were too many arguments.
   // Complain and fail.
   if (ArgIdx < NumArgs)
-    return diagnoseArityMismatch(*this, Template, TemplateLoc, TemplateArgs);
+    return diagnoseArityMismatch(*this, Template, TemplateLoc, NewArgs);
+
+  // No problems found with the new argument list, propagate changes back
+  // to caller.
+  TemplateArgs = NewArgs;
 
   return false;
 }
