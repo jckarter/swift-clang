@@ -1073,18 +1073,28 @@ QualType QualType::substObjCTypeArgs(
                                       splitType.Quals);
 
         case ObjCSubstitutionContext::Result:
-        case ObjCSubstitutionContext::Property:
-          // Substitute 'id' or 'Class', as appropriate.
+        case ObjCSubstitutionContext::Property: {
+          // Substitute the __kindof form of the underlying type.
+          const auto *objPtr = typeParam->getUnderlyingType()
+            ->castAs<ObjCObjectPointerType>();
 
-          // If the underlying type is based on 'Class', substitute 'Class'.
-          if (typeParam->getUnderlyingType()->isObjCClassType() ||
-              typeParam->getUnderlyingType()->isObjCQualifiedClassType()) {
-            return ctx.getQualifiedType(ctx.getObjCClassType(),
+          // __kindof types, id, and Class don't need an additional
+          // __kindof.
+          if (objPtr->isKindOfType() || objPtr->isObjCIdOrClassType())
+            return ctx.getQualifiedType(typeParam->getUnderlyingType(),
                                         splitType.Quals);
-          }
 
-          // Otherwise, substitute 'id'.
-          return ctx.getQualifiedType(ctx.getObjCIdType(), splitType.Quals);
+          // Add __kindof.
+          const auto *obj = objPtr->getObjectType();
+          QualType resultTy = ctx.getObjCObjectType(obj->getBaseType(),
+                                                    obj->getTypeArgsAsWritten(),
+                                                    obj->getProtocols(),
+                                                    /*isKindOf=*/true);
+
+          // Rebuild object pointer type.
+          resultTy = ctx.getObjCObjectPointerType(resultTy);
+          return ctx.getQualifiedType(resultTy, splitType.Quals);
+        }
         }
       }
     }

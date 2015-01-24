@@ -18,6 +18,9 @@ __attribute__((objc_root_class))
 @interface NSString : NSObject <NSCopying>
 @end
 
+@interface NSMutableString : NSString
+@end
+
 @interface NSNumber : NSObject <NSCopying>
 @end
 
@@ -90,6 +93,16 @@ __attribute__((objc_root_class))
 - (T)findObject:(T)object;
 @end
 
+@interface NSView : NSObject
+@end
+
+@interface NSControl : NSView
+- (void)toggle;
+@end
+
+@interface NSViewController<ViewType : NSView *> : NSObject
+@property (nonatomic,retain) ViewType view;
+@end
 
 // --------------------------------------------------------------------------
 // Message sends.
@@ -104,6 +117,7 @@ void test_message_send_result(
        NSMutableSet *mutSet,
        MutableSetOfArrays *mutArraySet,
        NSArray<NSString *> *stringArray,
+       NSArray<__kindof NSString *> *kindofStringArray,
        void (^block)(void)) {
   int *ip;
   ip = [stringSet firstObject]; // expected-warning{{from 'NSString *'}}
@@ -131,6 +145,12 @@ void test_message_send_result(
   [[NSMutableArray alloc] initWithArray: stringArray]; // okay
   [[NSMutableArray<NSString *> alloc] initWithArray: stringArray]; // okay
   [[NSMutableArray<NSNumber *> alloc] initWithArray: stringArray]; // expected-warning{{sending 'NSArray<NSString *> *' to parameter of type 'NSArray<NSNumber *> *'}}
+
+  ip = [[[NSViewController alloc] init] view]; // expected-warning{{from '__kindof NSView *'}}
+  [[[[NSViewController alloc] init] view] toggle];
+
+  NSMutableString *mutStr = kindofStringArray[0];
+  NSNumber *number = kindofStringArray[0]; // expected-warning{{of type '__kindof NSString *'}}
 }
 
 void test_message_send_param(
@@ -175,7 +195,9 @@ void test_property_read(
   ip = mutSet.allObjects; // expected-warning{{from 'NSArray *'}}
   ip = mutArraySet.allObjects; // expected-warning{{from 'NSArray *'}}
 
-  ip = mutDict.someRandomKey; // expected-warning{{from 'id'}}
+  ip = mutDict.someRandomKey; // expected-warning{{from '__kindof id<NSCopying>'}}
+
+  ip = [[NSViewController alloc] init].view; // expected-warning{{from '__kindof NSView *'}}
 }
 
 void test_property_write(
