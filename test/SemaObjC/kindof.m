@@ -2,6 +2,10 @@
 
 // Tests Objective-C 'kindof' types.
 
+#if !__has_feature(objc_kindof)
+#error does not support __kindof
+#endif
+
 @protocol NSObject
 @end
 
