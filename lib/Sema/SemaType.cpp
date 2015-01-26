@@ -3231,7 +3231,28 @@ static TypeSourceInfo *GetFullTypeForDeclarator(TypeProcessingState &state,
   // Determine whether we should infer __nonnull on pointer types.
   Optional<NullabilityKind> inferNullability;
   bool inferNullabilityCS = false;
-  bool inAssumeNonNullRegion = S.PP.getPragmaAssumeNonNullLoc().isValid();
+
+  // Are we in an assume-nonnull region?
+  bool inAssumeNonNullRegion = false;
+  if (S.PP.getPragmaAssumeNonNullLoc().isValid()) {
+    inAssumeNonNullRegion = true;
+    // Determine which file we saw the assume-nonnull region in.
+    FileID file = getNullabilityCompletenessCheckFileID(
+                    S, S.PP.getPragmaAssumeNonNullLoc());
+    if (!file.isInvalid()) {
+      FileNullability &fileNullability = S.NullabilityMap[file];
+
+      // If we haven't seen any type nullability before, now we have.
+      if (!fileNullability.SawTypeNullability) {
+        if (fileNullability.PointerLoc.isValid()) {
+          S.Diag(fileNullability.PointerLoc, diag::warn_nullability_missing)
+              << fileNullability.PointerKind;
+        }
+
+        fileNullability.SawTypeNullability = true;
+      }
+    }
+  }
 
   // Whether to complain about missing nullability specifiers or not.
   enum {

@@ -4,8 +4,10 @@
 #include "nullability-consistency-3.h"
 #include "nullability-consistency-4.h"
 #include "nullability-consistency-5.h"
+#include "nullability-consistency-5.h"
+#include "nullability-consistency-6.h"
+#include "nullability-consistency-7.h"
 
 void h1(int *ptr) { } // don't warn
 
 void h2(__nonnull int *) { }
-
