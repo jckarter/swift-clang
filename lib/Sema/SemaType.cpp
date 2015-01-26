@@ -5385,6 +5385,21 @@ bool Sema::checkNullabilityTypeSpecifier(QualType &type,
     desugared = attributed->getModifiedType();
   }
 
+  // If there is already a different nullability specifier, complain.
+  // This (unlike the code above) looks through typedefs that might
+  // have nullability specifiers on them, which means we cannot
+  // provide a useful Fix-It.
+  if (auto existingNullability = desugared->getNullability(Context)) {
+    if (nullability != *existingNullability && !implicit) {
+      Diag(nullabilityLoc, diag::err_nullability_conflicting)
+        << static_cast<unsigned>(nullability)
+        << isContextSensitive
+        << static_cast<unsigned>(*existingNullability)
+        << false;
+      return true;
+    }
+  }
+
   // If this definitely isn't a pointer type, reject the specifier.
   if (!desugared->canHaveNullability()) {
     if (!implicit) {

@@ -7556,7 +7556,7 @@ def err_nullability_cs_multilevel : Error<
 
 def note_nullability_type_specifier : Note<
   "use nullability type specifier "
-  "'%select{__nonnull|__nullable|<<error>>}0' to affect the innermost "
+  "'%select{__nonnull|__nullable|null_unspecified}0' to affect the innermost "
   "pointer type of %1">;
 
 def warn_nullability_missing : Warning<

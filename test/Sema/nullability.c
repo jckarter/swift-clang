@@ -17,9 +17,11 @@ typedef int * __nonnull __nonnull redundant_1; // expected-warning{{duplicate nu
 // Conflicting nullability type specifiers.
 typedef int * __nonnull __nullable conflicting_1; // expected-error{{nullability specifier '__nonnull' conflicts with existing specifier '__nullable'}}
 
-// Redundant/conflicting nullability specifiers via a typedef are okay.
-// FIXME: Test that these have proper override semantics.
+// Redundant nullability specifiers via a typedef are okay.
 typedef nonnull_int_ptr __nonnull redundant_okay_1;
+
+// Conflicting nullability specifiers via a typedef are not.
+typedef nonnull_int_ptr __nullable conflicting_2; // expected-error{{nullability specifier '__nullable' conflicts with existing specifier '__nonnull'}}
 
 // Nullability applies to all pointer types.
 typedef int (* __nonnull function_pointer_type_1)(int, int);
