@@ -62,9 +62,20 @@ void g5(int (**fp)(int, int)); // expected-warning 2{{pointer is missing a nulla
 
 int *global_int_ptr;
 
+// typedefs not inferred __nonnull
 typedef int *int_ptr_2;
+
+typedef int * // expected-warning{{pointer is missing a nullability type}}
+            *int_ptr_ptr;
+
 static inline void f30(void) {
   float *fp = global_int_ptr; // expected-error{{cannot initialize a variable of type 'float *' with an lvalue of type '__nonnull int *'}}
+
+  int_ptr_2 ip2;
+  float *fp2 = ip2; // expected-error{{cannot initialize a variable of type 'float *' with an lvalue of type 'int_ptr_2' (aka 'int *')}}
+
+  int_ptr_ptr ipp;
+  float *fp3 = ipp; // expected-error{{lvalue of type 'int_ptr_ptr' (aka 'int **')}}
 }
 
 #pragma clang assume_nonnull end
@@ -74,4 +85,4 @@ void f21(int_ptr x); // expected-warning{{pointer is missing a nullability type 
 void f22(A_ptr y); // expected-warning{{pointer is missing a nullability type specifier (__nonnull or __nullable)}}
 void f23(__nullable int_ptr x);
 void f24(__nullable A_ptr y);
-void f25(int_ptr_2 x);
+void f25(int_ptr_2 x); // expected-warning{{pointer is missing a nullability type specifier}}

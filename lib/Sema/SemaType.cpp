@@ -3048,7 +3048,6 @@ static PointerDeclaratorKind classifyPointerDeclarator(Sema &S,
     case DeclaratorChunk::MemberPointer:
       return numNormalPointers > 0 ? PointerDeclaratorKind::MultiLevelPointer
                                    : PointerDeclaratorKind::SingleLevelPointer;
-      break;
 
     case DeclaratorChunk::Paren:
     case DeclaratorChunk::Reference:
@@ -3232,22 +3231,67 @@ static TypeSourceInfo *GetFullTypeForDeclarator(TypeProcessingState &state,
   // Determine whether we should infer __nonnull on pointer types.
   Optional<NullabilityKind> inferNullability;
   bool inferNullabilityCS = false;
-  if (S.PP.getPragmaAssumeNonNullLoc().isValid()) {
+  bool inAssumeNonNullRegion = S.PP.getPragmaAssumeNonNullLoc().isValid();
+
+  // Whether to complain about missing nullability specifiers or not.
+  enum {
+    /// Never complain.
+    CAMN_No,
+    /// Complain on the inner pointers (but not the outermost
+    /// pointer).
+    CAMN_InnerPointers,
+    /// Complain about any pointers that don't have nullability
+    /// specified or inferred.
+    CAMN_Yes
+  } complainAboutMissingNullability = CAMN_No;
+  unsigned NumPointersRemaining = 0;
+
+  if (IsTypedefName) {
+    // For typedefs, we do not infer any nullability (the default),
+    // and we only complain about missing nullability specifiers on
+    // inner pointers.
+    complainAboutMissingNullability = CAMN_InnerPointers;
+
+    if (T->canHaveNullability()) {
+      ++NumPointersRemaining;
+    }
+
+    for (unsigned i = 0, n = D.getNumTypeObjects(); i != n; ++i) {
+      DeclaratorChunk &chunk = D.getTypeObject(i);
+      switch (chunk.Kind) {
+      case DeclaratorChunk::Array:
+      case DeclaratorChunk::Function:
+        break;
+
+      case DeclaratorChunk::BlockPointer:
+      case DeclaratorChunk::MemberPointer:
+        ++NumPointersRemaining;
+        break;
+
+      case DeclaratorChunk::Paren:
+      case DeclaratorChunk::Reference:
+        continue;
+
+      case DeclaratorChunk::Pointer:
+        ++NumPointersRemaining;
+        continue;
+      }
+    }
+  } else {
     bool isFunctionOrMethod = false;
     switch (auto context = state.getDeclarator().getContext()) {
     case Declarator::ObjCParameterContext:
     case Declarator::ObjCResultContext:
     case Declarator::PrototypeContext:
+    case Declarator::TrailingReturnContext:
       isFunctionOrMethod = true;
       // fallthrough
 
-    case Declarator::AliasDeclContext:
-    case Declarator::AliasTemplateContext:
     case Declarator::FileContext:
     case Declarator::KNRTypeListContext:
     case Declarator::MemberContext:
-    case Declarator::TemplateParamContext:
-    case Declarator::TrailingReturnContext:
+      complainAboutMissingNullability = CAMN_Yes;
+
       // Nullability inference depends on the type and declarator.
       switch (classifyPointerDeclarator(S, T, D)) {
       case PointerDeclaratorKind::NonPointer:
@@ -3256,32 +3300,40 @@ static TypeSourceInfo *GetFullTypeForDeclarator(TypeProcessingState &state,
         break;
 
       case PointerDeclaratorKind::SingleLevelPointer:
-        // Infer __nonnull.
-        inferNullability = NullabilityKind::NonNull;
-        inferNullabilityCS = (context == Declarator::ObjCParameterContext ||
-                              context == Declarator::ObjCResultContext);
+        // Infer __nonnull if we are in an assumes-nonnull region.
+        if (inAssumeNonNullRegion) {
+          inferNullability = NullabilityKind::NonNull;
+          inferNullabilityCS = (context == Declarator::ObjCParameterContext ||
+                                context == Declarator::ObjCResultContext);
+        }
         break;
 
       case PointerDeclaratorKind::CFErrorRefPointer:
       case PointerDeclaratorKind::NSErrorPointerPointer:
         // Within a function or method signature, infer __nullable at both
         // levels.
-        if (isFunctionOrMethod)
+        if (isFunctionOrMethod && inAssumeNonNullRegion)
           inferNullability = NullabilityKind::Nullable;
         break;
       }
       break;
 
+    case Declarator::ConversionIdContext:
+      complainAboutMissingNullability = CAMN_Yes;
+      break;
+
+    case Declarator::AliasDeclContext:
+    case Declarator::AliasTemplateContext:
     case Declarator::BlockContext:
     case Declarator::BlockLiteralContext:
     case Declarator::ConditionContext:
-    case Declarator::ConversionIdContext:
     case Declarator::CXXCatchContext:
     case Declarator::CXXNewContext:
     case Declarator::ForContext:
     case Declarator::LambdaExprContext:
     case Declarator::LambdaExprParameterContext:
     case Declarator::ObjCCatchContext:
+    case Declarator::TemplateParamContext:
     case Declarator::TemplateTypeArgContext:
     case Declarator::TypeNameContext:
       // Don't infer in these contexts.
@@ -3294,6 +3346,10 @@ static TypeSourceInfo *GetFullTypeForDeclarator(TypeProcessingState &state,
   auto inferPointerNullability = [&](SimplePointerKind pointerKind,
                                      SourceLocation pointerLoc,
                                      AttributeList *&attrs) -> bool {
+    // We've seen a pointer.
+    if (NumPointersRemaining > 0)
+      --NumPointersRemaining;
+
     // If a nullability attribute is present, there's nothing to do.
     if (hasNullabilityAttr(attrs))
       return false;
@@ -3316,14 +3372,24 @@ static TypeSourceInfo *GetFullTypeForDeclarator(TypeProcessingState &state,
       return true;
     }
 
-    checkNullabilityConsistency(state, pointerKind, pointerLoc);
+    switch (complainAboutMissingNullability) {
+    case CAMN_No:
+      break;
+
+    case CAMN_InnerPointers:
+      if (NumPointersRemaining == 0)
+        break;
+      // Fallthrough.
+
+    case CAMN_Yes:
+      checkNullabilityConsistency(state, pointerKind, pointerLoc);
+    }
     return false;
   };
 
   // If the type itself could have nullability but does not, infer pointer
   // nullability.
-  if (T->canHaveNullability() && !T->getNullability(Context) &&
-      S.ActiveTemplateInstantiations.empty()) {
+  if (T->canHaveNullability() && S.ActiveTemplateInstantiations.empty()) {
     SimplePointerKind pointerKind = SimplePointerKind::Pointer;
     if (T->isBlockPointerType())
       pointerKind = SimplePointerKind::BlockPointer;
