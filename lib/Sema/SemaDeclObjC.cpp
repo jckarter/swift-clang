@@ -631,6 +631,23 @@ DeclResult Sema::actOnObjCTypeParam(Scope *S, unsigned index,
       // Forget the bound; we'll default to id later.
       typeBoundInfo = nullptr;
     }
+
+    // Type bounds cannot have explicit nullability.
+    if (typeBoundInfo) {
+      // Type arguments cannot explicitly specify nullability.
+      if (auto nullability = AttributedType::stripOuterNullability(typeBound)) {
+        // Look at the type location information to find the nullability
+        // specifier so we can zap it.
+        SourceLocation nullabilityLoc
+          = typeBoundInfo->getTypeLoc().findNullabilityLoc();
+        SourceLocation diagLoc
+          = nullabilityLoc.isValid()? nullabilityLoc
+                                    : typeBoundInfo->getTypeLoc().getLocStart();
+        Diag(diagLoc, diag::err_type_param_bound_explicit_nullability)
+          << paramName << typeBoundInfo->getType()
+          << FixItHint::CreateRemoval(nullabilityLoc);
+      }
+    }
   }
 
   // If there was no explicit type bound (or we removed it due to an error),

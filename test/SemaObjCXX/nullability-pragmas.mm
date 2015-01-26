@@ -2,6 +2,7 @@
 
 #include "nullability-pragmas-1.h"
 #include "nullability-pragmas-2.h"
+#include "nullability-pragmas-generics-1.h"
 
 #if !__has_feature(assume_nonnull)
 #  error assume_nonnull feature is not set
@@ -34,4 +35,15 @@ void test_pragmas_1(__nonnull A *a) {
   ptr = f15(); // expected-error{{assigning to 'float *' from incompatible type '__null_unspecified int *'}}
   ptr = f16(); // expected-error{{assigning to 'float *' from incompatible type '__null_unspecified A *'}}
   ptr = [a method2]; // expected-error{{assigning to 'float *' from incompatible type '__null_unspecified A *'}}
+}
+
+void test_pragmas_generics(void) {
+  float *fp;
+
+  NSGeneric<C *> *genC;
+  fp = [genC tee]; // expected-error{{from incompatible type 'C *'}}
+  fp = [genC maybeTee]; // expected-error{{from incompatible type '__nullable C *'}}
+
+  Generic_with_C genC2;
+  fp = genC2; // expected-error{{from incompatible type 'Generic_with_C' (aka 'NSGeneric<C *> *')}}
 }

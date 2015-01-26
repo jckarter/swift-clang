@@ -767,6 +767,19 @@ static QualType applyObjCTypeArgs(Sema &S, SourceLocation loc, QualType type,
   for (unsigned i = 0, n = typeArgs.size(); i != n; ++i) {
     TypeSourceInfo *typeArgInfo = typeArgs[i];
     QualType typeArg = typeArgInfo->getType();
+
+    // Type arguments cannot explicitly specify nullability.
+    if (auto nullability = AttributedType::stripOuterNullability(typeArg)) {
+      SourceLocation nullabilityLoc
+        = typeArgInfo->getTypeLoc().findNullabilityLoc();
+      SourceLocation diagLoc = nullabilityLoc.isValid()? nullabilityLoc
+        : typeArgInfo->getTypeLoc().getLocStart();
+      S.Diag(diagLoc,
+             diag::err_type_arg_explicit_nullability)
+        << typeArg
+        << FixItHint::CreateRemoval(nullabilityLoc);
+    }
+
     finalTypeArgs.push_back(typeArg);
 
     if (typeArg->getAs<PackExpansionType>())
@@ -3366,16 +3379,16 @@ static TypeSourceInfo *GetFullTypeForDeclarator(TypeProcessingState &state,
   // Returns true if __nonnull was inferred.
   auto inferPointerNullability = [&](SimplePointerKind pointerKind,
                                      SourceLocation pointerLoc,
-                                     AttributeList *&attrs) -> bool {
+                                     AttributeList *&attrs) -> AttributeList * {
     // We've seen a pointer.
     if (NumPointersRemaining > 0)
       --NumPointersRemaining;
 
     // If a nullability attribute is present, there's nothing to do.
     if (hasNullabilityAttr(attrs))
-      return false;
+      return nullptr;
 
-    // If we're supposed to infer non-null, do so now.
+    // If we're supposed to infer nullability, do so now.
     if (inferNullability) {
       AttributeList::Syntax syntax
         = inferNullabilityCS ? AttributeList::AS_ContextSensitiveKeyword
@@ -3390,9 +3403,11 @@ static TypeSourceInfo *GetFullTypeForDeclarator(TypeProcessingState &state,
                                            syntax);
 
       spliceAttrIntoList(*nullabilityAttr, attrs);
-      return true;
+      return nullabilityAttr;
     }
 
+    // If we're supposed to complain about missing nullability, do so
+    // now if it's truly missing.
     switch (complainAboutMissingNullability) {
     case CAMN_No:
       break;
@@ -3405,7 +3420,7 @@ static TypeSourceInfo *GetFullTypeForDeclarator(TypeProcessingState &state,
     case CAMN_Yes:
       checkNullabilityConsistency(state, pointerKind, pointerLoc);
     }
-    return false;
+    return nullptr;
   };
 
   // If the type itself could have nullability but does not, infer pointer
@@ -3417,11 +3432,12 @@ static TypeSourceInfo *GetFullTypeForDeclarator(TypeProcessingState &state,
     else if (T->isMemberPointerType())
       pointerKind = SimplePointerKind::MemberPointer;
 
-    if (inferPointerNullability(
-          pointerKind, D.getDeclSpec().getTypeSpecTypeLoc(),
-          D.getMutableDeclSpec().getAttributes().getListRef())) {
+    if (auto *attr = inferPointerNullability(
+                       pointerKind, D.getDeclSpec().getTypeSpecTypeLoc(),
+                       D.getMutableDeclSpec().getAttributes().getListRef())) {
       T = Context.getAttributedType(
             AttributedType::getNullabilityAttrKind(*inferNullability), T, T);
+      attr->setUsedAsTypeAttr();
     }
   }
 

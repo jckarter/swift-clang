@@ -7573,6 +7573,12 @@ def warn_null_resettable_setter : Warning<
   "synthesized setter %0 for null_resettable property %1 does not handle nil">,
   InGroup<Nullability>;
 
+def err_type_arg_explicit_nullability : Error<
+  "type argument %0 cannot explicitly specify nullability">;
+
+def err_type_param_bound_explicit_nullability : Error<
+  "type parameter %0 bound %1 cannot explicitly specify nullability">;
+
 }
 
 let CategoryName = "Generics Issue" in {
