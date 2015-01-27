@@ -22,6 +22,10 @@ typedef nonnull_int_ptr __nonnull redundant_okay_1;
 
 // Conflicting nullability specifiers via a typedef are not.
 typedef nonnull_int_ptr __nullable conflicting_2; // expected-error{{nullability specifier '__nullable' conflicts with existing specifier '__nonnull'}}
+typedef nonnull_int_ptr non_nullint_ptr_typedef;
+typedef nonnull_int_ptr_typedef __nullable conflicting_2; // expected-error{{nullability specifier '__nullable' conflicts with existing specifier '__nonnull'}}
+typedef nonnull_int_ptr_typedef nonnull_int_ptr_typedef_typedef;
+typedef nonnull_int_ptr_typedef_typedef __null_unspecified conflicting_3; // expected-error{{nullability specifier '__null_unspecified' conflicts with existing specifier '__nonnull'}}
 
 // Nullability applies to all pointer types.
 typedef int (* __nonnull function_pointer_type_1)(int, int);
