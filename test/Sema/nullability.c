@@ -8,7 +8,7 @@
 typedef int * int_ptr;
 
 // Parse nullability type specifiers.
-typedef int * __nonnull nonnull_int_ptr;
+typedef int * __nonnull nonnull_int_ptr; // expected-note{{'__nonnull' specified here}}
 typedef int * __nullable nullable_int_ptr;
 
 // Redundant nullability type specifiers.

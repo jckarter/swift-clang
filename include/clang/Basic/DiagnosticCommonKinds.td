@@ -109,6 +109,9 @@ def err_nullability_conflicting : Error<
   "conflicts with existing specifier '%select{%select{__|}3nonnull|"
   "%select{__|}3nullable|%select{__|}3null_unspecified}2'">;
 
+def note_nullability_here : Note<
+  "'%select{__nonnull|__nullable|__null_unspecified}0' specified here">;
+
 }
 
 // Sema && Lex
