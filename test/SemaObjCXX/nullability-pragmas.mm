@@ -29,6 +29,7 @@ void test_pragmas_1(__nonnull A *a) {
   float *ptr;
   ptr = f13(); // expected-error{{assigning to 'float *' from incompatible type '__nonnull int_ptr' (aka 'int *')}}
   ptr = f14(); // expected-error{{assigning to 'float *' from incompatible type '__nonnull A *'}}
+  ptr = [A aWithA:a]; // expected-error{{assigning to 'float *' from incompatible type '__nonnull A *'}}
   ptr = [a method1:a]; // expected-error{{assigning to 'float *' from incompatible type '__nonnull A *'}}
   ptr = a.aProp; // expected-error{{assigning to 'float *' from incompatible type '__nonnull A *'}}
   ptr = global_int_ptr; // expected-error{{assigning to 'float *' from incompatible type '__nonnull int *'}}

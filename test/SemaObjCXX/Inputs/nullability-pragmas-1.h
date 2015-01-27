@@ -50,6 +50,7 @@ void g4(int (*fp)(int, int));
 void g5(int (**fp)(int, int)); // expected-warning 2{{pointer is missing a nullability type specifier (__nonnull or __nullable)}}
 
 @interface A(Pragmas1)
++ (instancetype)aWithA:(A *)a;
 - (A *)method1:(A_ptr)ptr;
 - (null_unspecified A *)method2;
 - (void)method3:(NSError **)error; // expected-note{{passing argument to parameter 'error' here}}
@@ -86,3 +87,7 @@ void f22(A_ptr y); // expected-warning{{pointer is missing a nullability type sp
 void f23(__nullable int_ptr x);
 void f24(__nullable A_ptr y);
 void f25(int_ptr_2 x); // expected-warning{{pointer is missing a nullability type specifier}}
+
+@interface A(OutsidePragmas1)
++ (instancetype)aWithInt:(int)value; // expected-warning{{pointer is missing a nullability type specifier}}
+@end

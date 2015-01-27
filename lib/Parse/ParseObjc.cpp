@@ -1297,28 +1297,26 @@ ParsedType Parser::ParseObjCTypeName(ObjCDeclSpec &DS,
       SourceLocation loc = ConsumeToken();
       Ty = Actions.ActOnObjCInstanceType(loc);
 
-      // Map a nullability specifier to a context-sensitive keyword attribute.
-      if (DS.getObjCDeclQualifier() & ObjCDeclSpec::DQ_CSNullability) {
-        // Synthesize an abstract declarator so we can use Sema::ActOnTypeName.
-        const char *prevSpec;
-        unsigned diagID;
-        DeclSpec declSpec(AttrFactory);
-        declSpec.setObjCQualifiers(&DS);
-        declSpec.SetTypeSpecType(DeclSpec::TST_typename, loc, prevSpec, diagID,
-                                 Ty,
-                                 Actions.getASTContext().getPrintingPolicy());
-        declSpec.SetRangeEnd(loc);
-        Declarator declarator(declSpec, context);
+      // Synthesize an abstract declarator so we can use Sema::ActOnTypeName.
+      const char *prevSpec;
+      unsigned diagID;
+      DeclSpec declSpec(AttrFactory);
+      declSpec.setObjCQualifiers(&DS);
+      declSpec.SetTypeSpecType(DeclSpec::TST_typename, loc, prevSpec, diagID,
+                               Ty,
+                               Actions.getASTContext().getPrintingPolicy());
+      declSpec.SetRangeEnd(loc);
+      Declarator declarator(declSpec, context);
 
-        // Add the context-sensitive keyword attribute.
+      // Map a nullability specifier to a context-sensitive keyword attribute.
+      if (DS.getObjCDeclQualifier() & ObjCDeclSpec::DQ_CSNullability)
         addContextSensitiveTypeNullability(*this, declarator,
                                            DS.getNullability(),
                                            DS.getNullabilityLoc());
 
-        TypeResult type = Actions.ActOnTypeName(getCurScope(), declarator);
-        if (!type.isInvalid())
-          Ty = type.get();
-      }
+      TypeResult type = Actions.ActOnTypeName(getCurScope(), declarator);
+      if (!type.isInvalid())
+        Ty = type.get();
     }
   }
 
