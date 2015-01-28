@@ -1182,12 +1182,6 @@ def Packed : InheritableAttr {
   let Documentation = [Undocumented];
 }
 
-def PnaclCall : InheritableAttr {
-  let Spellings = [GNU<"pnaclcall">];
-//  let Subjects = [Function, ObjCMethod];
-  let Documentation = [Undocumented];
-}
-
 def IntelOclBicc : InheritableAttr {
   let Spellings = [GNU<"intel_ocl_bicc">];
 //  let Subjects = [Function, ObjCMethod];
