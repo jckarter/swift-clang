@@ -25,6 +25,12 @@ endmacro()
 find_first_existing_vc_file(llvm_vc "${LLVM_MAIN_SRC_DIR}")
 find_first_existing_vc_file(clang_vc "${CLANG_SOURCE_DIR}")
 
+# Apple-internal: Handle megaclang/ repos containing exports of LLVM/Clang.
+if(NOT DEFINED llvm_vc AND NOT DEFINED clang_vc AND
+   NOT CLANG_REPOSITORY_STRING)
+  find_first_existing_vc_file(megaclang_vc "${LLVM_MAIN_SRC_DIR}/..")
+endif()
+
 # The VC revision include that we want to generate.
 set(version_inc "${CMAKE_CURRENT_BINARY_DIR}/SVNVersion.inc")
 
@@ -41,7 +47,23 @@ if(DEFINED llvm_vc AND DEFINED clang_vc)
                      "-DSECOND_NAME=SVN"
                      "-DHEADER_FILE=${version_inc}"
                      -P "${get_svn_script}")
+elseif(DEFINED megaclang_vc)
+  # Create custom target to generate the VC revision include.
+  add_custom_command(OUTPUT "${version_inc}"
+    DEPENDS "${megaclang_vc}" "${get_svn_script}"
+    COMMAND
+    ${CMAKE_COMMAND} "-DFIRST_SOURCE_DIR=${LLVM_MAIN_SRC_DIR}"
+                     "-DFIRST_NAME=LLVM"
+                     "-DSECOND_SOURCE_DIR=${LLVM_MAIN_SRC_DIR}/.."
+                     "-DSECOND_NAME=SVN"
+                     "-DHEADER_FILE=${version_inc}"
+                     -P "${get_svn_script}")
+else()
+  # Not producing a VC revision include.
+  set(version_inc)
+endif()
 
+if(version_inc)
   # Mark the generated header as being generated.
   set_source_files_properties("${version_inc}"
     PROPERTIES GENERATED TRUE
@@ -50,9 +72,6 @@ if(DEFINED llvm_vc AND DEFINED clang_vc)
   # Tell Version.cpp that it needs to build with -DHAVE_SVN_VERSION_INC.
   set_source_files_properties(Version.cpp
     PROPERTIES COMPILE_DEFINITIONS "HAVE_SVN_VERSION_INC")
-else()
-  # Not producing a VC revision include.
-  set(version_inc)
 endif()
 
 add_clang_library(clangBasic
@@ -83,4 +102,3 @@ add_clang_library(clangBasic
   Warnings.cpp
   ${version_inc}
   )
-
