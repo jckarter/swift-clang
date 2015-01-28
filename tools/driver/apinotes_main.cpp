@@ -59,15 +59,7 @@ int cc1apinotes_main(ArrayRef<const char *> Argv, const char *Argv0,
   static cl::opt<std::string>
   OutputFilename("o", cl::desc("Output file name"), cl::cat(APINotesCategory));
 
-  // Hide unrelated options.
-  const StringMap<cl::Option*> &Options = cl::getRegisteredOptions();
-  for (StringMap<cl::Option *>::const_iterator I = Options.begin(),
-                                               E = Options.end();
-                                               I != E; ++I) {
-    if (I->second->Category != &APINotesCategory &&
-        I->first() != "help" && I->first() != "version")
-      I->second->setHiddenFlag(cl::ReallyHidden);
-  }
+  cl::HideUnrelatedOptions(APINotesCategory);
 
   SmallVector<const char *, 4> Args;
   Args.push_back(Argv0);
