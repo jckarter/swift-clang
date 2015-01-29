@@ -28,7 +28,8 @@ find_first_existing_vc_file(clang_vc "${CLANG_SOURCE_DIR}")
 # Apple-internal: Handle megaclang/ repos containing exports of LLVM/Clang.
 if(NOT DEFINED llvm_vc AND NOT DEFINED clang_vc AND
    NOT CLANG_REPOSITORY_STRING)
-  find_first_existing_vc_file(megaclang_vc "${LLVM_MAIN_SRC_DIR}/..")
+  get_filename_component(llvm_parent_dir "${LLVM_MAIN_SRC_DIR}/.." REALPATH)
+  find_first_existing_vc_file(megaclang_vc "${llvm_parent_dir}")
 endif()
 
 # The VC revision include that we want to generate.
