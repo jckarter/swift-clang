@@ -307,9 +307,9 @@ void Parser::ParseLexedMethodDeclaration(LateParsedMethodDeclaration &LM) {
   ParseScope PrototypeScope(this, Scope::FunctionPrototypeScope |
                             Scope::FunctionDeclarationScope | Scope::DeclScope);
   for (unsigned I = 0, N = LM.DefaultArgs.size(); I != N; ++I) {
+    auto Param = LM.DefaultArgs[I].Param;
     // Introduce the parameter into scope.
-    Actions.ActOnDelayedCXXMethodParameter(getCurScope(),
-                                           LM.DefaultArgs[I].Param);
+    Actions.ActOnDelayedCXXMethodParameter(getCurScope(), Param);
     if (CachedTokens *Toks = LM.DefaultArgs[I].Toks) {
       // Mark the end of the default argument so that we know when to stop when
       // we parse it later on.
@@ -319,7 +319,7 @@ void Parser::ParseLexedMethodDeclaration(LateParsedMethodDeclaration &LM) {
       DefArgEnd.setKind(tok::eof);
       DefArgEnd.setLocation(LastDefaultArgToken.getLocation().getLocWithOffset(
           LastDefaultArgToken.getLength()));
-      DefArgEnd.setEofData(LM.DefaultArgs[I].Param);
+      DefArgEnd.setEofData(Param);
       Toks->push_back(DefArgEnd);
 
       // Parse the default argument from its saved token stream.
@@ -337,7 +337,7 @@ void Parser::ParseLexedMethodDeclaration(LateParsedMethodDeclaration &LM) {
       // used.
       EnterExpressionEvaluationContext Eval(Actions,
                                             Sema::PotentiallyEvaluatedIfUsed,
-                                            LM.DefaultArgs[I].Param);
+                                            Param);
 
       ExprResult DefArgResult;
       if (getLangOpts().CPlusPlus11 && Tok.is(tok::l_brace)) {
@@ -347,11 +347,9 @@ void Parser::ParseLexedMethodDeclaration(LateParsedMethodDeclaration &LM) {
         DefArgResult = ParseAssignmentExpression();
       DefArgResult = Actions.CorrectDelayedTyposInExpr(DefArgResult);
       if (DefArgResult.isInvalid()) {
-        Actions.ActOnParamDefaultArgumentError(LM.DefaultArgs[I].Param,
-                                               EqualLoc);
+        Actions.ActOnParamDefaultArgumentError(Param, EqualLoc);
       } else {
-        if (Tok.isNot(tok::eof) ||
-            Tok.getEofData() != LM.DefaultArgs[I].Param) {
+        if (Tok.isNot(tok::eof) || Tok.getEofData() != Param) {
           // The last two tokens are the terminator and the saved value of
           // Tok; the last token in the default argument is the one before
           // those.
@@ -360,7 +358,7 @@ void Parser::ParseLexedMethodDeclaration(LateParsedMethodDeclaration &LM) {
             << SourceRange(Tok.getLocation(),
                            (*Toks)[Toks->size() - 3].getLocation());
         }
-        Actions.ActOnParamDefaultArgument(LM.DefaultArgs[I].Param, EqualLoc,
+        Actions.ActOnParamDefaultArgument(Param, EqualLoc,
                                           DefArgResult.get());
       }
 
@@ -369,7 +367,7 @@ void Parser::ParseLexedMethodDeclaration(LateParsedMethodDeclaration &LM) {
       while (Tok.isNot(tok::eof))
         ConsumeAnyToken();
 
-      if (Tok.is(tok::eof) && Tok.getEofData() == LM.DefaultArgs[I].Param)
+      if (Tok.is(tok::eof) && Tok.getEofData() == Param)
         ConsumeAnyToken();
 
       delete Toks;
