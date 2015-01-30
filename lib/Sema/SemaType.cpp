@@ -3287,7 +3287,7 @@ static TypeSourceInfo *GetFullTypeForDeclarator(TypeProcessingState &state,
     // inner pointers.
     complainAboutMissingNullability = CAMN_InnerPointers;
 
-    if (T->canHaveNullability()) {
+    if (T->canHaveNullability() && !T->getNullability(S.Context)) {
       ++NumPointersRemaining;
     }
 
@@ -3426,7 +3426,8 @@ static TypeSourceInfo *GetFullTypeForDeclarator(TypeProcessingState &state,
 
   // If the type itself could have nullability but does not, infer pointer
   // nullability.
-  if (T->canHaveNullability() && S.ActiveTemplateInstantiations.empty()) {
+  if (T->canHaveNullability() && S.ActiveTemplateInstantiations.empty() &&
+      !T->getNullability(S.Context)) {
     SimplePointerKind pointerKind = SimplePointerKind::Pointer;
     if (T->isBlockPointerType())
       pointerKind = SimplePointerKind::BlockPointer;
