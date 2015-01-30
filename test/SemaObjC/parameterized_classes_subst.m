@@ -1,4 +1,4 @@
-// RUN: %clang_cc1 -fblocks -fsyntax-only %s -verify
+// RUN: %clang_cc1 -fblocks -fsyntax-only -Wnullable-to-nonnull-conversion %s -verify
 //
 // Test the substitution of type arguments for type parameters when
 // using parameterized classes in Objective-C.
