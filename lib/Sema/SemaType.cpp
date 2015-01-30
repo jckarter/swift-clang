@@ -5501,15 +5501,8 @@ static bool distributeNullabilityTypeAttr(TypeProcessingState &state,
     case DeclaratorChunk::Pointer:
     case DeclaratorChunk::BlockPointer:
     case DeclaratorChunk::MemberPointer: {
-      // But don't move an attribute to the return type of a block.
-      DeclaratorChunk *destChunk = nullptr;
-      if (state.isProcessingDeclSpec())
-        destChunk = maybeMovePastReturnType(declarator, i - 1,
-                                            /*onlyBlockPointers=*/false);
-      if (!destChunk) destChunk = &chunk;
-
       moveAttrFromListToList(attr, state.getCurrentAttrListRef(),
-                             destChunk->getAttrListRef());
+                             chunk.getAttrListRef());
       return true;
     }
 
@@ -5517,21 +5510,9 @@ static bool distributeNullabilityTypeAttr(TypeProcessingState &state,
     case DeclaratorChunk::Array:
       continue;
 
-    // We may be starting at the return type of a block.
-    case DeclaratorChunk::Function:
-      if (state.isProcessingDeclSpec()) {
-        if (DeclaratorChunk *dest = maybeMovePastReturnType(
-                                      declarator, i,
-                                      /*onlyBlockPointers=*/false)) {
-          moveAttrFromListToList(attr, state.getCurrentAttrListRef(),
-                                 dest->getAttrListRef());
-          return true;
-        }
-      }
-      return false;
-
     // Don't walk through these.
     case DeclaratorChunk::Reference:
+    case DeclaratorChunk::Function:
       return false;
     }
   }

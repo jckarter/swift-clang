@@ -635,7 +635,10 @@ Parser::TPResult Parser::TryParsePtrOperatorSeq() {
       ConsumeToken();
       while (Tok.is(tok::kw_const)    ||
              Tok.is(tok::kw_volatile) ||
-             Tok.is(tok::kw_restrict))
+             Tok.is(tok::kw_restrict) ||
+             Tok.is(tok::kw___nonnull) ||
+             Tok.is(tok::kw___nullable) ||
+             Tok.is(tok::kw___null_unspecified))
         ConsumeToken();
     } else {
       return TPResult::True;

@@ -37,9 +37,27 @@ typedef int __nonnull int_type_1; // expected-error{{nullability specifier '__no
 // Nullability can move out to a pointer/block pointer declarator.
 typedef __nonnull int * nonnull_int_ptr_2;
 typedef int __nullable * nullable_int_ptr_2;
-typedef __nonnull int (* function_pointer_type_2)(int, int);
-typedef __nonnull int (^ block_type_2)(int, int);
+typedef __nonnull int (* function_pointer_type_2)(int, int); // expected-error{{nullability specifier '__nonnull' cannot be applied to non-pointer type 'int'}}
+typedef __nonnull int (^ block_type_2)(int, int); // expected-error{{nullability specifier '__nonnull' cannot be applied to non-pointer type 'int'}}
 typedef __nonnull int * * __nullable nonnull_int_ptr_ptr_1;
+typedef __nonnull int *(^ block_type_3)(int, int);
+typedef __nonnull int *(* function_pointer_type_3)(int, int);
+typedef __nonnull int_ptr (^ block_type_4)(int, int);
+typedef __nonnull int_ptr (* function_pointer_type_4)(int, int);
+
+void acceptFunctionPtr(__nonnull int *(*)(void));
+void acceptBlockPtr(__nonnull int *(^)(void));
+
+void testBlockFunctionPtrNullability() {
+  float *fp;
+  fp = (function_pointer_type_3)0; // expected-warning{{from 'function_pointer_type_3' (aka '__nonnull int *(*)(int, int)')}}
+  fp = (block_type_3)0; // expected-error{{from incompatible type 'block_type_3' (aka '__nonnull int *(^)(int, int)')}}
+  fp = (function_pointer_type_4)0; // expected-warning{{from 'function_pointer_type_4' (aka '__nonnull int_ptr (*)(int, int)')}}
+  fp = (block_type_4)0; // expected-error{{from incompatible type 'block_type_4' (aka '__nonnull int_ptr (^)(int, int)')}}
+
+  acceptFunctionPtr(0); // no-warning
+  acceptBlockPtr(0); // no-warning
+}
 
 // Moving nullability where it creates a conflict.
 typedef __nonnull int * __nullable *  conflict_int_ptr_ptr_2; // expected-error{{nullability specifier '__nullable' conflicts with existing specifier '__nonnull'}}

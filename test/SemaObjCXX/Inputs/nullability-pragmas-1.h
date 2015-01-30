@@ -30,7 +30,7 @@ void f8(__nullable A *obj);
 void f9(int X::* mem_ptr);
 void f10(int (X::*mem_func)(int, int));
 void f11(__nullable int X::* mem_ptr);
-void f12(__nullable int (X::*mem_func)(int, int));
+void f12(int (X::* __nullable mem_func)(int, int));
 
 int_ptr f13(void);
 A *f14(void);
