@@ -7574,7 +7574,7 @@ def warn_nullability_missing : Warning<
 def warn_nullability_lost : Warning<
   "implicit conversion from nullable pointer %0 to non-nullable pointer "
   "type %1">,
-  InGroup<Nullability>;
+  InGroup<NullableToNonNullConversion>, DefaultIgnore;
 
 def warn_null_resettable_setter : Warning<
   "synthesized setter %0 for null_resettable property %1 does not handle nil">,

@@ -1,4 +1,4 @@
-// RUN: %clang_cc1 -fsyntax-only -fblocks %s -verify
+// RUN: %clang_cc1 -fsyntax-only -fblocks -Wnullable-to-nonnull-conversion %s -verify
 
 #if __has_feature(nullability)
 #else

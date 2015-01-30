@@ -243,6 +243,7 @@ def NewlineEOF : DiagGroup<"newline-eof">;
 def NullabilityCompleteness : DiagGroup<"nullability-completeness">;
 def Nullability : DiagGroup<"nullability",
                             [NullabilityCompleteness]>;
+def NullableToNonNullConversion : DiagGroup<"nullable-to-nonnull-conversion">;
 def NullArithmetic : DiagGroup<"null-arithmetic">;
 def NullCharacter : DiagGroup<"null-character">;
 def NullDereference : DiagGroup<"null-dereference">;
