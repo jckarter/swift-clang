@@ -64,18 +64,19 @@ class EmitAssemblyHelper {
   mutable FunctionPassManager *PerFunctionPasses;
 
 private:
-  TargetTransformInfo getTTI() const {
+  TargetIRAnalysis getTargetIRAnalysis() const {
     if (TM)
-      return TM->getTTI();
+      return TM->getTargetIRAnalysis();
 
-    return TargetTransformInfo(TheModule->getDataLayout());
+    return TargetIRAnalysis();
   }
 
   PassManager *getCodeGenPasses() const {
     if (!CodeGenPasses) {
       CodeGenPasses = new PassManager();
       CodeGenPasses->add(new DataLayoutPass());
-      CodeGenPasses->add(createTargetTransformInfoWrapperPass(getTTI()));
+      CodeGenPasses->add(
+          createTargetTransformInfoWrapperPass(getTargetIRAnalysis()));
     }
     return CodeGenPasses;
   }
@@ -84,7 +85,8 @@ private:
     if (!PerModulePasses) {
       PerModulePasses = new PassManager();
       PerModulePasses->add(new DataLayoutPass());
-      PerModulePasses->add(createTargetTransformInfoWrapperPass(getTTI()));
+      PerModulePasses->add(
+          createTargetTransformInfoWrapperPass(getTargetIRAnalysis()));
     }
     return PerModulePasses;
   }
@@ -93,7 +95,8 @@ private:
     if (!PerFunctionPasses) {
       PerFunctionPasses = new FunctionPassManager(TheModule);
       PerFunctionPasses->add(new DataLayoutPass());
-      PerFunctionPasses->add(createTargetTransformInfoWrapperPass(getTTI()));
+      PerFunctionPasses->add(
+          createTargetTransformInfoWrapperPass(getTargetIRAnalysis()));
     }
     return PerFunctionPasses;
   }
