@@ -5,7 +5,7 @@
 // REQUIRES: shell
 
 // Stack traces also require back traces.
-REQUIRES: backtrace
+// REQUIRES: backtrace
 
 #prag\
 ma clang __debug crash
