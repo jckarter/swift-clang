@@ -4616,9 +4616,8 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
   // With -save-temps, we want to save the unoptimized bitcode output from the
   // CompileJobAction, so disable optimizations if they are not already
   // disabled.
-  if (Args.hasArg(options::OPT_save_temps) &&
+  if (C.getDriver().isSaveTempsEnabled() && !OptDisabled &&
       !Args.hasArg(options::OPT_fembed_bitcode) &&
-      !OptDisabled &&
       isa<CompileJobAction>(JA))
     CmdArgs.push_back("-disable-llvm-optzns");
 
