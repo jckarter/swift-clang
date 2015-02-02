@@ -1010,7 +1010,8 @@ def NoThrow : InheritableAttr {
 
 def ObjCBridge : InheritableAttr {
   let Spellings = [GNU<"objc_bridge">];
-  let Subjects = SubjectList<[Record], ErrorDiag>;
+  let Subjects = SubjectList<[Record, TypedefName], ErrorDiag,
+                             "ExpectedStructOrUnionOrTypedef">;
   let Args = [IdentifierArgument<"BridgedType">];
   let Documentation = [Undocumented];
 }
