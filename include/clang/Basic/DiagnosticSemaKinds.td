@@ -2417,6 +2417,13 @@ def warn_fun_excludes_mutex : Warning<
 def warn_cannot_resolve_lock : Warning<
   "cannot resolve lock expression">,
   InGroup<ThreadSafetyAnalysis>, DefaultIgnore;
+def warn_acquired_before : Warning<
+  "%0 '%1' must be acquired before '%2'">,
+  InGroup<ThreadSafetyAnalysis>, DefaultIgnore;
+def warn_acquired_before_after_cycle : Warning<
+  "Cycle in acquired_before/after dependencies, starting with '%0'">,
+  InGroup<ThreadSafetyAnalysis>, DefaultIgnore;
+
 
 // Thread safety warnings negative capabilities
 def warn_acquire_requires_negative_cap : Warning<
@@ -4317,6 +4324,12 @@ def note_protected_by_cxx_try : Note<
   "jump bypasses initialization of try block">;
 def note_protected_by_cxx_catch : Note<
   "jump bypasses initialization of catch block">;
+def note_protected_by_seh_try : Note<
+  "jump bypasses initialization of __try block">;
+def note_protected_by_seh_except : Note<
+  "jump bypasses initialization of __except block">;
+def note_protected_by_seh_finally : Note<
+  "jump bypasses initialization of __finally block">;
 def note_protected_by___block : Note<
   "jump bypasses setup of __block variable">;
 def note_protected_by_objc_ownership : Note<
@@ -4349,6 +4362,12 @@ def note_exits_cxx_try : Note<
   "jump exits try block">;
 def note_exits_cxx_catch : Note<
   "jump exits catch block">;
+def note_exits_seh_try : Note<
+  "jump exits __try block">;
+def note_exits_seh_except : Note<
+  "jump exits __except block">;
+def note_exits_seh_finally : Note<
+  "jump exits __finally block">;
 def note_exits_objc_autoreleasepool : Note<
   "jump exits autoreleasepool block">;
 def note_exits_objc_ownership : Note<
@@ -5473,6 +5492,8 @@ def err_exceptions_disabled : Error<
   "cannot use '%0' with exceptions disabled">;
 def err_objc_exceptions_disabled : Error<
   "cannot use '%0' with Objective-C exceptions disabled">;
+def err_seh_try_outside_functions : Error<
+  "cannot use SEH '__try' in blocks, captured regions, or Obj-C method decls">;
 def err_mixing_cxx_try_seh_try : Error<
   "cannot use C++ 'try' in the same function as SEH '__try'">;
 def note_conflicting_try_here : Note<
@@ -7227,6 +7248,8 @@ def err_filter_expression_integral : Error<
 
 def err_non_asm_stmt_in_naked_function : Error<
   "non-ASM statement in naked function is not supported">;
+def err_asm_naked_this_ref : Error<
+  "'this' pointer references not allowed in naked functions">;
 def err_asm_naked_parm_ref : Error<
   "parameter references not allowed in naked functions">;
 
