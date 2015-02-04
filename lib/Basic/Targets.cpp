@@ -176,8 +176,11 @@ static void getDarwinDefines(MacroBuilder &Builder, const LangOptions &Opts,
     Str[3] = '0' + (Rev / 10);
     Str[4] = '0' + (Rev % 10);
     Str[5] = '\0';
-    Builder.defineMacro("__ENVIRONMENT_IPHONE_OS_VERSION_MIN_REQUIRED__",
-                        Str);
+    if (Triple.isTvOS())
+      Builder.defineMacro("__ENVIRONMENT_TV_OS_VERSION_MIN_REQUIRED__", Str);
+    else
+      Builder.defineMacro("__ENVIRONMENT_IPHONE_OS_VERSION_MIN_REQUIRED__",
+                          Str);
   } else if (Triple.isMacOSX()) {
     // Note that the Driver allows versions which aren't representable in the
     // define (because we only get a single digit for the minor and micro

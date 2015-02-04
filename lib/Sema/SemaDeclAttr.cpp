@@ -1863,6 +1863,22 @@ AvailabilityAttr *Sema::mergeAvailabilityAttr(NamedDecl *D, SourceRange Range,
         continue;
       }
 
+      // If there is an existing availability attribute for this platform that
+      // is explicit and the new one is implicit use the explicit one and
+      // discard the new implicit attribute.
+      if (OldAA->getRange().isValid() && Range.isInvalid()) {
+        return nullptr;
+      }
+
+      // If there is an existing attribute for this platform that is implicit
+      // and the new attribute is explicit then erase the old one and
+      // continue processing the attributes.
+      if (Range.isValid() && OldAA->getRange().isInvalid()) {
+        Attrs.erase(Attrs.begin() + i);
+        --e;
+        continue;
+      }
+
       FoundAny = true;
       VersionTuple OldIntroduced = OldAA->getIntroduced();
       VersionTuple OldDeprecated = OldAA->getDeprecated();
@@ -1995,6 +2011,30 @@ static void handleAvailabilityAttr(Sema &S, Decl *D,
                                                       Index);
   if (NewAttr)
     D->addAttr(NewAttr);
+
+  // Transcribe "ios" to "tvos" (and add a new attribute) if the versioning
+  // matches before the start of the AppleTVOS platform.
+  if (S.Context.getTargetInfo().getTriple().isTvOS()) {
+    IdentifierInfo *NewII = nullptr;
+    if (II->getName() == "ios")
+      NewII = &S.Context.Idents.get("tvos");
+    else if (II->getName() == "ios_app_extension")
+      NewII = &S.Context.Idents.get("tvos_app_extension");
+
+    if (NewII) {
+        AvailabilityAttr *NewAttr = S.mergeAvailabilityAttr(ND,
+                                                            SourceRange(),
+                                                            NewII,
+                                                            Introduced.Version,
+                                                            Deprecated.Version,
+                                                            Obsoleted.Version,
+                                                            IsUnavailable, Str,
+                                                            /*Override=*/false,
+                                                            Index);
+        if (NewAttr)
+          D->addAttr(NewAttr);
+      }
+  }
 }
 
 template <class T>

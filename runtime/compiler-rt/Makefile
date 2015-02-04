@@ -84,6 +84,8 @@ RuntimeLibrary.darwin.Configs := \
 
 IOS_SDK := $(shell xcrun --show-sdk-path -sdk iphoneos 2> /dev/null)
 IOSSIM_SDK := $(shell xcrun --show-sdk-path -sdk iphonesimulator 2> /dev/null)
+TVOS_SDK := $(shell xcrun --show-sdk-path -sdk appletvos 2> /dev/null)
+TVOSSIM_SDK := $(shell xcrun --show-sdk-path -sdk appletvsimulator 2> /dev/null)
 
 LinkerSupportedArches = \
   $(shell \
@@ -111,6 +113,14 @@ ifneq ($(IOS_SDK),)
 ifneq ($(call LinkerSupportedArches,armv7 armv7s arm64),)
 RuntimeLibrary.darwin.Configs += asan_ios_dynamic.dylib
 endif
+endif
+
+ifneq ($(TVOS_SDK)$(TVOSSIM_SDK),)
+RuntimeLibrary.darwin.Configs += tvos.a profile_tvos.a
+endif
+
+ifneq ($(TVOS_SDK),)
+RuntimeLibrary.darwin.Configs += cc_kext_tvos.a
 endif
 
 RuntimeLibrary.macho_embedded.Configs := \

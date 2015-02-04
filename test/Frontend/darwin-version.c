@@ -9,6 +9,17 @@
 // RUN: not grep '__ENVIRONMENT_MAC_OS_X_VERSION_MIN_REQUIRED__' %t
 // RUN: %clang -target armv6-apple-darwin9 -miphoneos-version-min=2.2 -dM -E -o %t %s
 // RUN: grep '__ENVIRONMENT_IPHONE_OS_VERSION_MIN_REQUIRED__' %t | grep '20200' | count 1
+
+// RUN: %clang -target arm64-apple-tvos -mtvos-version-min=8.3 -dM -E -o %t %s
+// RUN: grep '__ENVIRONMENT_TV_OS_VERSION_MIN_REQUIRED__' %t | grep '80300' | count 1
+// RUN: not grep '__ENVIRONMENT_MAC_OS_X_VERSION_MIN_REQUIRED__' %t
+// RUN: not grep '__ENVIRONMENT_IPHONE_OS_VERSION_MIN_REQUIRED__' %t
+
+// RUN: %clang -target x86_64-apple-tvos -mtvos-simulator-version-min=8.3 -dM -E -o %t %s
+// RUN: grep '__ENVIRONMENT_TV_OS_VERSION_MIN_REQUIRED__' %t | grep '80300' | count 1
+// RUN: not grep '__ENVIRONMENT_MAC_OS_X_VERSION_MIN_REQUIRED__' %t
+// RUN: not grep '__ENVIRONMENT_IPHONE_OS_VERSION_MIN_REQUIRED__' %t
+
 // RUN: %clang -target i686-apple-darwin8 -dM -E -o %t %s
 // RUN: not grep '__ENVIRONMENT_IPHONE_OS_VERSION_MIN_REQUIRED__' %t
 // RUN: grep '__ENVIRONMENT_MAC_OS_X_VERSION_MIN_REQUIRED__' %t | grep '1040' | count 1
@@ -18,6 +29,7 @@
 // RUN: grep '__ENVIRONMENT_MAC_OS_X_VERSION_MIN_REQUIRED__' %t | grep '1060' | count 1
 // RUN: %clang -target i686-apple-darwin9 -mmacosx-version-min=10.4 -dM -E -o %t %s
 // RUN: not grep '__ENVIRONMENT_IPHONE_OS_VERSION_MIN_REQUIRED__' %t
+// RUN: not grep '__ENVIRONMENT_TV_OS_VERSION_MIN_REQUIRED__' %t
 // RUN: grep '__ENVIRONMENT_MAC_OS_X_VERSION_MIN_REQUIRED__' %t | grep '1040' | count 1
 // RUN: %clang -target i686-apple-darwin9 -mmacosx-version-min=10.5 -dM -E -o %t %s
 // RUN: grep '__ENVIRONMENT_MAC_OS_X_VERSION_MIN_REQUIRED__' %t | grep '1050' | count 1

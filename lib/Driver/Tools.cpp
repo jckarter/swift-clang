@@ -638,7 +638,8 @@ StringRef tools::arm::getARMFloatABI(const Driver &D, const ArgList &Args,
     switch (Triple.getOS()) {
     case llvm::Triple::Darwin:
     case llvm::Triple::MacOSX:
-    case llvm::Triple::IOS: {
+    case llvm::Triple::IOS:
+    case llvm::Triple::TvOS: {
       // Darwin defaults to "softfp" for v6 and v7 except for v7k, which
       // uses "hard".
       //

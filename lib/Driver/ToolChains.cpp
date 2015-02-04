@@ -203,7 +203,9 @@ std::string Darwin::ComputeEffectiveClangTriple(const ArgList &Args,
     return Triple.getTriple();
 
   SmallString<16> Str;
-  Str += isTargetIOSBased() ? "ios" : "macosx";
+  Str += (isTargetIOSBased() ?
+          (isTargetTvOSBased() ? "tvos" : "ios") :
+          "macosx");
   Str += getTargetVersion().getAsString();
   Triple.setOSName(Str);
 
@@ -364,7 +366,9 @@ void DarwinClang::AddLinkRuntimeLibArgs(const ArgList &Args,
       Args.hasArg(options::OPT_fcreate_profile) ||
       Args.hasArg(options::OPT_coverage)) {
     // Select the appropriate runtime library for the target.
-    if (isTargetIOSBased())
+    if (isTargetTvOSBased())
+      AddLinkRuntimeLib(Args, CmdArgs, "libclang_rt.profile_tvos.a");
+    else if (isTargetIOSBased())
       AddLinkRuntimeLib(Args, CmdArgs, "libclang_rt.profile_ios.a");
     else
       AddLinkRuntimeLib(Args, CmdArgs, "libclang_rt.profile_osx.a");
@@ -418,7 +422,11 @@ void DarwinClang::AddLinkRuntimeLibArgs(const ArgList &Args,
   CmdArgs.push_back("-lSystem");
 
   // Select the dynamic runtime library and the target specific static library.
-  if (isTargetIOSBased()) {
+  if (isTargetTvOSBased()) {
+    // We currently always need a static runtime library for AppleTVOS.
+    AddLinkRuntimeLib(Args, CmdArgs, "libclang_rt.tvos.a");
+
+  } else if (isTargetIOSBased()) {
     // If we are compiling as iOS / simulator, don't attempt to link libgcc_s.1,
     // it never went into the SDK.
     // Linking against libgcc_s.1 isn't needed for iOS 5.0+
@@ -479,21 +487,30 @@ void Darwin::AddDeploymentTarget(DerivedArgList &Args) const {
 
   Arg *OSXVersion = Args.getLastArg(options::OPT_mmacosx_version_min_EQ);
   Arg *iOSVersion = Args.getLastArg(options::OPT_miphoneos_version_min_EQ);
+  Arg *TvOSVersion = Args.getLastArg(options::OPT_mtvos_version_min_EQ);
 
-  if (OSXVersion && iOSVersion) {
+  if (OSXVersion && (iOSVersion || TvOSVersion)) {
     getDriver().Diag(diag::err_drv_argument_not_allowed_with)
           << OSXVersion->getAsString(Args)
-          << iOSVersion->getAsString(Args);
-    iOSVersion = nullptr;
-  } else if (!OSXVersion && !iOSVersion) {
+          << (iOSVersion ? iOSVersion : TvOSVersion)->getAsString(Args);
+    iOSVersion = TvOSVersion = nullptr;
+  } else if (iOSVersion && TvOSVersion) {
+    getDriver().Diag(diag::err_drv_argument_not_allowed_with)
+          << iOSVersion->getAsString(Args)
+          << TvOSVersion->getAsString(Args);
+    TvOSVersion = nullptr;
+  } else if (!OSXVersion && !iOSVersion && !TvOSVersion) {
     // If no deployment target was specified on the command line, check for
     // environment defines.
     StringRef OSXTarget;
     StringRef iOSTarget;
+    StringRef TvOSTarget;
     if (char *env = ::getenv("MACOSX_DEPLOYMENT_TARGET"))
       OSXTarget = env;
     if (char *env = ::getenv("IPHONEOS_DEPLOYMENT_TARGET"))
       iOSTarget = env;
+    if (char *env = ::getenv("TVOS_DEPLOYMENT_TARGET"))
+      TvOSTarget = env;
 
     // If no '-miphoneos-version-min' specified on the command line and
     // IPHONEOS_DEPLOYMENT_TARGET is not defined, see if we can set the default
@@ -511,11 +528,19 @@ void Darwin::AddDeploymentTarget(DerivedArgList &Args) const {
     // If no OSX or iOS target has been specified and we're compiling for armv7,
     // go ahead as assume we're targeting iOS.
     StringRef MachOArchName = getMachOArchName(Args);
-    if (OSXTarget.empty() && iOSTarget.empty() &&
+    if (OSXTarget.empty() && iOSTarget.empty() && TvOSTarget.empty() &&
         (MachOArchName == "armv7" || MachOArchName == "armv7s" ||
          MachOArchName == "armv7k" ||
          MachOArchName == "arm64"))
         iOSTarget = iOSVersionMin;
+
+    // Do not allow conflicts with the tvOS target.
+    if (!TvOSTarget.empty() && (!OSXTarget.empty() || !iOSTarget.empty())) {
+      getDriver().Diag(diag::err_drv_conflicting_deployment_targets)
+        << "TVOS_DEPLOYMENT_TARGET"
+        << (!OSXTarget.empty() ? "MACOSX_DEPLOYMENT_TARGET" :
+            "IPHONEOS_DEPLOYMENT_TARGET");
+    }
 
     // Allow conflicts among OSX and iOS for historical reasons, but choose the
     // default platform.
@@ -536,6 +561,10 @@ void Darwin::AddDeploymentTarget(DerivedArgList &Args) const {
       const Option O = Opts.getOption(options::OPT_miphoneos_version_min_EQ);
       iOSVersion = Args.MakeJoinedArg(nullptr, O, iOSTarget);
       Args.append(iOSVersion);
+    } else if (!TvOSTarget.empty()) {
+      const Option O = Opts.getOption(options::OPT_mtvos_version_min_EQ);
+      TvOSVersion = Args.MakeJoinedArg(nullptr, O, TvOSTarget);
+      Args.append(TvOSVersion);
     } else if (MachOArchName != "armv6m" && MachOArchName != "armv7m" &&
                MachOArchName != "armv7em") {
       // Otherwise, assume we are targeting OS X.
@@ -550,6 +579,8 @@ void Darwin::AddDeploymentTarget(DerivedArgList &Args) const {
     Platform = MacOS;
   else if (iOSVersion)
     Platform = IPhoneOS;
+  else if (TvOSVersion)
+    Platform = TvOS;
   else
     llvm_unreachable("Unable to infer Darwin variant");
 
@@ -557,7 +588,7 @@ void Darwin::AddDeploymentTarget(DerivedArgList &Args) const {
   unsigned Major, Minor, Micro;
   bool HadExtra;
   if (Platform == MacOS) {
-    assert(!iOSVersion && "Unknown target platform!");
+    assert((!iOSVersion && !TvOSVersion) && "Unknown target platform!");
     if (!Driver::GetReleaseVersion(OSXVersion->getValue(), Major, Minor,
                                    Micro, HadExtra) || HadExtra ||
         Major != 10 || Minor >= 100 || Micro >= 100)
@@ -570,6 +601,12 @@ void Darwin::AddDeploymentTarget(DerivedArgList &Args) const {
         Major >= 10 || Minor >= 100 || Micro >= 100)
       getDriver().Diag(diag::err_drv_invalid_version_number)
         << iOSVersion->getAsString(Args);
+  } else if (Platform == TvOS) {
+    if (!Driver::GetReleaseVersion(TvOSVersion->getValue(), Major, Minor,
+                                   Micro, HadExtra) || HadExtra ||
+        Major >= 10 || Minor >= 100 || Micro >= 100)
+      getDriver().Diag(diag::err_drv_invalid_version_number)
+        << TvOSVersion->getAsString(Args);
   } else
     llvm_unreachable("unknown kind of Darwin platform");
 
@@ -577,6 +614,9 @@ void Darwin::AddDeploymentTarget(DerivedArgList &Args) const {
   if (iOSVersion && (getTriple().getArch() == llvm::Triple::x86 ||
                      getTriple().getArch() == llvm::Triple::x86_64))
     Platform = IPhoneOSSimulator;
+  if (TvOSVersion && (getTriple().getArch() == llvm::Triple::x86 ||
+                      getTriple().getArch() == llvm::Triple::x86_64))
+    Platform = TvOSSimulator;
 
   setTarget(Platform, Major, Minor, Micro);
 }
@@ -637,10 +677,12 @@ void DarwinClang::AddCCKextLibArgs(const ArgList &Args,
   SmallString<128> P(getDriver().ResourceDir);
   llvm::sys::path::append(P, "lib", "darwin");
 
-  // Use the newer cc_kext for iOS ARM after 6.0.
-  if (!isTargetIPhoneOS() || isTargetIOSSimulator() ||
-      getTriple().getArch() == llvm::Triple::aarch64 ||
-      !isIPhoneOSVersionLT(6, 0)) {
+  if (isTargetTvOS()) {
+    llvm::sys::path::append(P, "libclang_rt.cc_kext_tvos.a");
+  } else if (!isTargetIPhoneOS() || isTargetIOSSimulator() ||
+             getTriple().getArch() == llvm::Triple::aarch64 ||
+             !isIPhoneOSVersionLT(6, 0)) {
+    // Use the newer cc_kext for iOS ARM after 6.0.
     llvm::sys::path::append(P, "libclang_rt.cc_kext.a");
   } else {
     llvm::sys::path::append(P, "libclang_rt.cc_kext_ios5.a");
@@ -995,7 +1037,11 @@ void Darwin::addMinVersionArgs(const llvm::opt::ArgList &Args,
                                llvm::opt::ArgStringList &CmdArgs) const {
   VersionTuple TargetVersion = getTargetVersion();
 
-  if (isTargetIOSSimulator())
+  if (isTargetTvOS())
+    CmdArgs.push_back("-tvos_version_min");
+  else if (isTargetTvOSSimulator())
+    CmdArgs.push_back("-tvos_simulator_version_min");
+  else if (isTargetIOSSimulator())
     CmdArgs.push_back("-ios_simulator_version_min");
   else if (isTargetIOSBased())
     CmdArgs.push_back("-iphoneos_version_min");

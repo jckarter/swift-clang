@@ -322,7 +322,9 @@ public:
   enum DarwinPlatformKind {
     MacOS,
     IPhoneOS,
-    IPhoneOSSimulator
+    IPhoneOSSimulator,
+    TvOS,
+    TvOSSimulator
   };
 
   mutable DarwinPlatformKind TargetPlatform;
@@ -389,12 +391,28 @@ protected:
 
   bool isTargetIPhoneOS() const {
     assert(TargetInitialized && "Target not initialized!");
-    return TargetPlatform == IPhoneOS;
+    return TargetPlatform == IPhoneOS || TargetPlatform == TvOS;
   }
 
   bool isTargetIOSSimulator() const {
     assert(TargetInitialized && "Target not initialized!");
-    return TargetPlatform == IPhoneOSSimulator;
+    return (TargetPlatform == IPhoneOSSimulator ||
+            TargetPlatform == TvOSSimulator);
+  }
+
+  bool isTargetTvOS() const {
+    assert(TargetInitialized && "Target not initialized!");
+    return TargetPlatform == TvOS;
+  }
+
+  bool isTargetTvOSSimulator() const {
+    assert(TargetInitialized && "Target not initialized!");
+    return TargetPlatform == TvOSSimulator;
+  }
+
+  bool isTargetTvOSBased() const {
+    assert(TargetInitialized && "Target not initialized!");
+    return TargetPlatform == TvOS || TargetPlatform == TvOSSimulator;
   }
 
   bool isTargetIOSBased() const {

@@ -29,3 +29,11 @@
 #error Invalid version
 #endif
 #endif
+
+// RUN: env TVOS_DEPLOYMENT_TARGET=8.3.1 \
+// RUN:   %clang -target i386-apple-darwin9 -DTEST4 -E %s
+#ifdef TEST4
+#if __ENVIRONMENT_TV_OS_VERSION_MIN_REQUIRED__ != 80301
+#error Invalid version
+#endif
+#endif
