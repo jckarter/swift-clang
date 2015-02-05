@@ -1482,6 +1482,13 @@ static const Tool *SelectToolForJob(Compilation &C, bool SaveTemps,
                                     const ActionList *&Inputs) {
   const Tool *ToolForJob = nullptr;
 
+  // We will ignore OPT_fembed_bitcode for LTO build. Since the merged bitcode
+  // file will be generated at link time, there is no need to embed the single
+  // bitcode file.
+  bool ShouldEmbedBitcode =
+    C.getArgs().hasArg(options::OPT_fembed_bitcode) &&
+    !C.getArgs().hasFlag(options::OPT_flto, options::OPT_fno_lto, false);
+
   // See if we should look for a compiler with an integrated assembler. We match
   // bottom up, so what we are actually looking for is an assembler job with a
   // compiler input.
@@ -1498,8 +1505,7 @@ static const Tool *SelectToolForJob(Compilation &C, bool SaveTemps,
     // checking the backend tool, check if the tool for the CompileJob
     // has an integrated assembler.
     const ActionList *BackendInputs =
-      (C.getArgs().hasArg(options::OPT_fembed_bitcode) ?
-       Inputs : &(*Inputs)[0]->getInputs());
+      (ShouldEmbedBitcode ? Inputs : &(*Inputs)[0]->getInputs());
     JobAction *CompileJA = cast<JobAction>(*BackendInputs->begin());
     const Tool *Compiler = TC->SelectTool(*CompileJA);
     if (!Compiler)
@@ -1521,7 +1527,7 @@ static const Tool *SelectToolForJob(Compilation &C, bool SaveTemps,
     if (!Compiler)
       return nullptr;
     if (!Compiler->canEmitIR() ||
-        (!SaveTemps && !C.getArgs().hasArg(options::OPT_fembed_bitcode))) {
+        (!SaveTemps && !ShouldEmbedBitcode)) {
       Inputs = &(*Inputs)[0]->getInputs();
       ToolForJob = Compiler;
     }
