@@ -33,3 +33,6 @@ tools/extra
 # Sphinx build products
 docs/_build
 docs/analyzer/_build
+
+# Apple Internal Text-based API tool
+tools/tapi
