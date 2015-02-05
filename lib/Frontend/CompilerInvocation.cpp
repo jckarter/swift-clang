@@ -515,7 +515,10 @@ static bool ParseCodeGenArgs(CodeGenOptions &Opts, ArgList &Args, InputKind IK,
       // Do not encode output and input.
       if ((*A)->getOption().getID() == options::OPT_o ||
           (*A)->getOption().getID() == options::OPT_INPUT ||
-          (*A)->getOption().getID() == options::OPT_fembed_bitcode)
+          (*A)->getOption().getID() == options::OPT_x ||
+          (*A)->getOption().getID() == options::OPT_fembed_bitcode ||
+          ((*A)->getOption().getGroup().isValid() &&
+           (*A)->getOption().getGroup().getID() == options::OPT_W_Group))
         continue;
       ArgStringList ASL;
       (*A)->render(Args, ASL);
