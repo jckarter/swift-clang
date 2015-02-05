@@ -128,12 +128,7 @@ namespace {
     // This function must have prototype void(void*).
     const char *CatchallRethrowFn;
 
-    static const EHPersonality &get(CodeGenModule &CGM,
-                                    const FunctionDecl *FD);
-    static const EHPersonality &get(CodeGenFunction &CGF) {
-      return get(CGF.CGM, dyn_cast_or_null<FunctionDecl>(CGF.CurCodeDecl));
-    }
-
+    static const EHPersonality &get(CodeGenModule &CGM);
     static const EHPersonality GNU_C;
     static const EHPersonality GNU_C_SJLJ;
     static const EHPersonality GNU_C_SEH;
@@ -146,7 +141,6 @@ namespace {
     static const EHPersonality GNU_CPlusPlus_SEH;
     static const EHPersonality MSVC_except_handler;
     static const EHPersonality MSVC_C_specific_handler;
-    static const EHPersonality MSVC_CxxFrameHandler3;
   };
 }
 
@@ -173,8 +167,6 @@ const EHPersonality
 EHPersonality::MSVC_except_handler = { "_except_handler3", nullptr };
 const EHPersonality
 EHPersonality::MSVC_C_specific_handler = { "__C_specific_handler", nullptr };
-const EHPersonality
-EHPersonality::MSVC_CxxFrameHandler3 = { "__CxxFrameHandler3", nullptr };
 
 /// On Win64, use libgcc's SEH personality function. We fall back to dwarf on
 /// other platforms, unless the user asked for SjLj exceptions.
@@ -247,27 +239,35 @@ static const EHPersonality &getObjCXXPersonality(const llvm::Triple &T,
   llvm_unreachable("bad runtime kind");
 }
 
-static const EHPersonality &getSEHPersonalityMSVC(const llvm::Triple &T) {
+static const EHPersonality &getCPersonalityMSVC(const llvm::Triple &T,
+                                                const LangOptions &L) {
+  if (L.SjLjExceptions)
+    return EHPersonality::GNU_C_SJLJ;
+
   if (T.getArch() == llvm::Triple::x86)
     return EHPersonality::MSVC_except_handler;
   return EHPersonality::MSVC_C_specific_handler;
 }
 
-const EHPersonality &EHPersonality::get(CodeGenModule &CGM,
-                                        const FunctionDecl *FD) {
+static const EHPersonality &getCXXPersonalityMSVC(const llvm::Triple &T,
+                                                  const LangOptions &L) {
+  if (L.SjLjExceptions)
+    return EHPersonality::GNU_CPlusPlus_SJLJ;
+  // FIXME: Implement C++ exceptions.
+  return getCPersonalityMSVC(T, L);
+}
+
+const EHPersonality &EHPersonality::get(CodeGenModule &CGM) {
   const llvm::Triple &T = CGM.getTarget().getTriple();
   const LangOptions &L = CGM.getLangOpts();
-
   // Try to pick a personality function that is compatible with MSVC if we're
   // not compiling Obj-C. Obj-C users better have an Obj-C runtime that supports
   // the GCC-style personality function.
   if (T.isWindowsMSVCEnvironment() && !L.ObjC1) {
-    if (L.SjLjExceptions)
-      return EHPersonality::GNU_CPlusPlus_SJLJ;
-    else if (FD && FD->usesSEHTry())
-      return getSEHPersonalityMSVC(T);
+    if (L.CPlusPlus)
+      return getCXXPersonalityMSVC(T, L);
     else
-      return EHPersonality::MSVC_CxxFrameHandler3;
+      return getCPersonalityMSVC(T, L);
   }
 
   if (L.CPlusPlus && L.ObjC1)
@@ -354,7 +354,7 @@ void CodeGenModule::SimplifyPersonality() {
   if (!LangOpts.ObjCRuntime.isNeXTFamily())
     return;
 
-  const EHPersonality &ObjCXX = EHPersonality::get(*this, /*FD=*/nullptr);
+  const EHPersonality &ObjCXX = EHPersonality::get(*this);
   const EHPersonality &CXX =
       getCXXPersonality(getTarget().getTriple(), LangOpts);
   if (&ObjCXX == &CXX)
@@ -449,6 +449,12 @@ llvm::Value *CodeGenFunction::getExceptionFromSlot() {
 
 llvm::Value *CodeGenFunction::getSelectorFromSlot() {
   return Builder.CreateLoad(getEHSelectorSlot(), "sel");
+}
+
+llvm::Value *CodeGenFunction::getAbnormalTerminationSlot() {
+  if (!AbnormalTerminationSlot)
+    AbnormalTerminationSlot = CreateTempAlloca(Int8Ty, "abnormal.termination.slot");
+  return AbnormalTerminationSlot;
 }
 
 void CodeGenFunction::EmitCXXThrowExpr(const CXXThrowExpr *E,
@@ -772,7 +778,7 @@ llvm::BasicBlock *CodeGenFunction::EmitLandingPad() {
   CGBuilderTy::InsertPoint savedIP = Builder.saveAndClearIP();
   auto DL = ApplyDebugLocation::CreateDefaultArtificial(*this, CurEHLocation);
 
-  const EHPersonality &personality = EHPersonality::get(*this);
+  const EHPersonality &personality = EHPersonality::get(CGM);
 
   // Create and configure the landing pad.
   llvm::BasicBlock *lpad = createBasicBlock("lpad");
@@ -1589,7 +1595,7 @@ llvm::BasicBlock *CodeGenFunction::getTerminateLandingPad() {
   Builder.SetInsertPoint(TerminateLandingPad);
 
   // Tell the backend that this is a landing pad.
-  const EHPersonality &Personality = EHPersonality::get(*this);
+  const EHPersonality &Personality = EHPersonality::get(CGM);
   llvm::LandingPadInst *LPadInst =
     Builder.CreateLandingPad(llvm::StructType::get(Int8PtrTy, Int32Ty, nullptr),
                              getOpaquePersonalityFn(CGM, Personality), 0);
@@ -1648,7 +1654,7 @@ llvm::BasicBlock *CodeGenFunction::getEHResumeBlock(bool isCleanup) {
   EHResumeBlock = createBasicBlock("eh.resume");
   Builder.SetInsertPoint(EHResumeBlock);
 
-  const EHPersonality &Personality = EHPersonality::get(*this);
+  const EHPersonality &Personality = EHPersonality::get(CGM);
 
   // This can always be a call because we necessarily didn't find
   // anything on the EH stack which needs our help.
@@ -1686,18 +1692,45 @@ void CodeGenFunction::EmitSEHTryStmt(const SEHTryStmt &S) {
     return;
   }
 
-  EnterSEHTryStmt(S);
+  SEHFinallyInfo FI;
+  EnterSEHTryStmt(S, FI);
   EmitStmt(S.getTryBlock());
-  ExitSEHTryStmt(S);
+  ExitSEHTryStmt(S, FI);
 }
 
 namespace {
 struct PerformSEHFinally : EHScopeStack::Cleanup  {
-  Stmt *Block;
-  PerformSEHFinally(Stmt *Block) : Block(Block) {}
+  CodeGenFunction::SEHFinallyInfo *FI;
+  PerformSEHFinally(CodeGenFunction::SEHFinallyInfo *FI) : FI(FI) {}
+
   void Emit(CodeGenFunction &CGF, Flags F) override {
-    // FIXME: Don't double-emit LabelDecls.
-    CGF.EmitStmt(Block);
+    // Cleanups are emitted at most twice: once for normal control flow and once
+    // for exception control flow. Branch into the finally block, and remember
+    // the continuation block so we can branch out later.
+    if (!FI->FinallyBB) {
+      FI->FinallyBB = CGF.createBasicBlock("__finally");
+      FI->FinallyBB->insertInto(CGF.CurFn);
+      FI->FinallyBB->moveAfter(CGF.Builder.GetInsertBlock());
+    }
+
+    // Set the termination status and branch in.
+    CGF.Builder.CreateStore(
+        llvm::ConstantInt::get(CGF.Int8Ty, F.isForEHCleanup()),
+        CGF.getAbnormalTerminationSlot());
+    CGF.Builder.CreateBr(FI->FinallyBB);
+
+    // Create a continuation block for normal or exceptional control.
+    if (F.isForEHCleanup()) {
+      assert(!FI->ResumeBB && "double emission for EH");
+      FI->ResumeBB = CGF.createBasicBlock("__finally.resume");
+      CGF.EmitBlock(FI->ResumeBB);
+    } else {
+      assert(F.isForNormalCleanup() && !FI->ContBB && "double normal emission");
+      FI->ContBB = CGF.createBasicBlock("__finally.cont");
+      CGF.EmitBlock(FI->ContBB);
+      // Try to keep source order.
+      FI->ContBB->moveAfter(FI->FinallyBB);
+    }
   }
 };
 }
@@ -1827,11 +1860,17 @@ llvm::Value *CodeGenFunction::EmitSEHExceptionCode() {
   return Builder.CreateTrunc(Code, CGM.Int32Ty);
 }
 
-void CodeGenFunction::EnterSEHTryStmt(const SEHTryStmt &S) {
-  if (SEHFinallyStmt *Finally = S.getFinallyHandler()) {
+llvm::Value *CodeGenFunction::EmitSEHAbnormalTermination() {
+  // Load from the abnormal termination slot. It will be uninitialized outside
+  // of __finally blocks, which we should warn or error on.
+  llvm::Value *IsEH = Builder.CreateLoad(getAbnormalTerminationSlot());
+  return Builder.CreateZExt(IsEH, Int32Ty);
+}
+
+void CodeGenFunction::EnterSEHTryStmt(const SEHTryStmt &S, SEHFinallyInfo &FI) {
+  if (S.getFinallyHandler()) {
     // Push a cleanup for __finally blocks.
-    EHStack.pushCleanup<PerformSEHFinally>(NormalAndEHCleanup,
-                                           Finally->getBlock());
+    EHStack.pushCleanup<PerformSEHFinally>(NormalAndEHCleanup, &FI);
     return;
   }
 
@@ -1859,15 +1898,42 @@ void CodeGenFunction::EnterSEHTryStmt(const SEHTryStmt &S) {
   CatchScope->setHandler(0, OpaqueFunc, createBasicBlock("__except"));
 }
 
-void CodeGenFunction::ExitSEHTryStmt(const SEHTryStmt &S) {
+void CodeGenFunction::ExitSEHTryStmt(const SEHTryStmt &S, SEHFinallyInfo &FI) {
   // Just pop the cleanup if it's a __finally block.
-  if (S.getFinallyHandler()) {
+  if (const SEHFinallyStmt *Finally = S.getFinallyHandler()) {
     PopCleanupBlock();
+    assert(FI.ContBB && "did not emit normal cleanup");
+
+    // Emit the code into FinallyBB.
+    Builder.SetInsertPoint(FI.FinallyBB);
+    EmitStmt(Finally->getBlock());
+
+    // If the finally block doesn't fall through, we don't need these blocks.
+    if (!HaveInsertPoint()) {
+      FI.ContBB->eraseFromParent();
+      if (FI.ResumeBB)
+        FI.ResumeBB->eraseFromParent();
+      return;
+    }
+
+    if (FI.ResumeBB) {
+      llvm::Value *IsEH = Builder.CreateLoad(getAbnormalTerminationSlot(),
+                                             "abnormal.termination");
+      IsEH = Builder.CreateICmpEQ(IsEH, llvm::ConstantInt::get(Int8Ty, 0));
+      Builder.CreateCondBr(IsEH, FI.ContBB, FI.ResumeBB);
+    } else {
+      // There was nothing exceptional in the try body, so we only have normal
+      // control flow.
+      Builder.CreateBr(FI.ContBB);
+    }
+
+    Builder.SetInsertPoint(FI.ContBB);
+
     return;
   }
 
   // Otherwise, we must have an __except block.
-  SEHExceptStmt *Except = S.getExceptHandler();
+  const SEHExceptStmt *Except = S.getExceptHandler();
   assert(Except && "__try must have __finally xor __except");
   EHCatchScope &CatchScope = cast<EHCatchScope>(*EHStack.begin());
 
