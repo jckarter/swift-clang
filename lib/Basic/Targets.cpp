@@ -3902,15 +3902,12 @@ class ARMTargetInfo : public TargetInfo {
     // FIXME: Enumerated types are variable width in straight AAPCS.
   }
 
-  void setABIAPCS(bool IsAPCS_VFP) {
+  void setABIAPCS() {
     const llvm::Triple &T = getTriple();
 
     IsAAPCS = false;
 
-    if (IsAPCS_VFP)
-      DoubleAlign = LongLongAlign = LongDoubleAlign = SuitableAlign = 64;
-    else
-      DoubleAlign = LongLongAlign = LongDoubleAlign = SuitableAlign = 32;
+    DoubleAlign = LongLongAlign = LongDoubleAlign = SuitableAlign = 32;
 
     // size_t is unsigned int on FreeBSD.
     if (T.getOS() == llvm::Triple::FreeBSD)
@@ -3930,19 +3927,17 @@ class ARMTargetInfo : public TargetInfo {
     /// gcc.
     ZeroLengthBitfieldBoundary = 32;
 
-    if (T.isOSBinFormatMachO() && IsAPCS_VFP) {
-      assert(!BigEndian && "APCS_VFP does not support big-endian");
-      DescriptionString = "e-m:o-p:32:32-i64:64-a:0:32-n32-S128";
-    } else if (T.isOSBinFormatMachO()) {
+    if (T.isOSBinFormatMachO())
       DescriptionString =
           BigEndian
               ? "E-m:o-p:32:32-f64:32:64-v64:32:64-v128:32:128-a:0:32-n32-S32"
               : "e-m:o-p:32:32-f64:32:64-v64:32:64-v128:32:128-a:0:32-n32-S32";
-    } else
+    else
       DescriptionString =
           BigEndian
               ? "E-m:e-p:32:32-f64:32:64-v64:32:64-v128:32:128-a:0:32-n32-S32"
               : "e-m:e-p:32:32-f64:32:64-v64:32:64-v128:32:128-a:0:32-n32-S32";
+
     // FIXME: Override "preferred align" for double and long long.
   }
 
@@ -4031,7 +4026,7 @@ public:
     // FIXME: We need support for -meabi... we could just mangle it into the
     // name.
     if (Name == "apcs-gnu" || Name == "apcs-vfp") {
-      setABIAPCS(Name == "apcs-vfp");
+      setABIAPCS();
       return true;
     }
     if (Name == "aapcs" || Name == "aapcs-vfp" || Name == "aapcs-linux") {
@@ -4381,10 +4376,7 @@ public:
   }
   bool isCLZForZeroUndef() const override { return false; }
   BuiltinVaListKind getBuiltinVaListKind() const override {
-    return IsAAPCS ? AAPCSABIBuiltinVaList
-                   : (getTriple().getArchName().endswith("v7k")
-                          ? TargetInfo::CharPtrBuiltinVaList
-                          : TargetInfo::VoidPtrBuiltinVaList);
+    return IsAAPCS ? AAPCSABIBuiltinVaList : TargetInfo::VoidPtrBuiltinVaList;
   }
   void getGCCRegNames(const char * const *&Names,
                       unsigned &NumNames) const override;
@@ -4677,15 +4669,8 @@ public:
     // ARMleTargetInfo.
     MaxAtomicInlineWidth = 64;
 
-    if (Triple.getArchName().endswith("v7k")) {
-      // Darwin on iOS uses a variant of the ARM C++ ABI.
-      TheCXXABI.set(TargetCXXABI::iOSv7k);
-
-      // The 32-bit ABI is silent on what ptrdiff_t should be, but given that
-      // size_t is long, it's a bit weird for it to be int.
-      PtrDiffType = SignedLong;
-    } else
-      TheCXXABI.set(TargetCXXABI::iOS);
+    // Darwin on iOS uses a variant of the ARM C++ ABI.
+    TheCXXABI.set(TargetCXXABI::iOS);
   }
 };
 } // end anonymous namespace.

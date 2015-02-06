@@ -4563,7 +4563,7 @@ llvm::CallingConv::ID ARMABIInfo::getLLVMDefaultCC() const {
     return llvm::CallingConv::ARM_AAPCS;
   else if (getTarget().getTriple().getArchName().endswith("v7k"))
     // Special casing v7k. It uses the hybrid APCS-VFP ABI.
-    return llvm::CallingConv::ARM_AAPCS_VFP;
+    return llvm::CallingConv::ARM_APCS_VFP;
   else
     return llvm::CallingConv::ARM_APCS;
 }
@@ -4573,7 +4573,7 @@ llvm::CallingConv::ID ARMABIInfo::getLLVMDefaultCC() const {
 llvm::CallingConv::ID ARMABIInfo::getABIDefaultCC() const {
   switch (getABIKind()) {
   case APCS: return llvm::CallingConv::ARM_APCS;
-  case APCS_VFP: return llvm::CallingConv::ARM_AAPCS_VFP;
+  case APCS_VFP: return llvm::CallingConv::ARM_APCS_VFP;
   case AAPCS: return llvm::CallingConv::ARM_AAPCS;
   case AAPCS_VFP: return llvm::CallingConv::ARM_AAPCS_VFP;
   }
@@ -4589,20 +4589,8 @@ void ARMABIInfo::setCCs() {
   if (abiCC != getLLVMDefaultCC())
     RuntimeCC = abiCC;
 
-  // AAPCS apparently requires runtime support functions to be soft-float, but
-  // that's almost certainly for historic reasons (Thumb1 not supporting VFP
-  // most likely). It's more convenient for APCS_VFP to be hard-float.
-  switch (getABIKind()) {
-  case APCS:
-  case APCS_VFP:
-    if (abiCC != getLLVMDefaultCC())
-      BuiltinCC = abiCC;
-    break;
-  case AAPCS:
-  case AAPCS_VFP:
-    BuiltinCC = llvm::CallingConv::ARM_AAPCS;
-    break;
-  }
+  BuiltinCC = (getABIKind() == APCS ?
+               llvm::CallingConv::ARM_APCS : llvm::CallingConv::ARM_AAPCS);
 }
 
 /// markAllocatedVFPs - update VFPRegs according to the alignment and
@@ -4778,26 +4766,6 @@ ABIArgInfo ARMABIInfo::classifyArgumentType(QualType Ty, bool isVariadic,
       IsCPRC = true;
       return ABIArgInfo::getDirect(nullptr, 0, nullptr, false);
     }
-  } else if (getABIKind() == ARMABIInfo::APCS_VFP) {
-    // armv7k does have homogeneous aggregates, and uses the AArch64 rules to
-    // classify them. Note that we intentionally use this convention even for a
-    // variadic function: the backend will use GPRs if needed.
-    const Type *Base = nullptr;
-    uint64_t Members = 0;
-    if (isHomogeneousAggregate(Ty, Base, Members)) {
-      assert(Base && Members <= 4 && "unexpected homogeneous aggregate");
-      llvm::Type *Ty =
-        llvm::ArrayType::get(CGT.ConvertType(QualType(Base, 0)), Members);
-      return ABIArgInfo::getDirect(Ty, 0, nullptr, false);
-    }
-  }
-
-  if (getABIKind() == ARMABIInfo::APCS_VFP &&
-      getContext().getTypeSizeInChars(Ty) > CharUnits::fromQuantity(16)) {
-    // ARMv7k is adopting the 64-bit AAPCS rule on composite types: if they're
-    // bigger than 128-bits, they get placed in space allocated by the caller,
-    // and a pointer is passed.
-    return ABIArgInfo::getIndirect(getContext().getTypeAlign(Ty) / 8, false);
   }
 
   // Support byval for ARM.
@@ -4809,7 +4777,6 @@ ABIArgInfo ARMABIInfo::classifyArgumentType(QualType Ty, bool isVariadic,
   if (getABIKind() == ARMABIInfo::AAPCS_VFP ||
       getABIKind() == ARMABIInfo::AAPCS)
     ABIAlign = std::min(std::max(TyAlign, (uint64_t)4), (uint64_t)8);
-
   if (getContext().getTypeSizeInChars(Ty) > CharUnits::fromQuantity(64)) {
     // Update Allocated GPRs. Since this is only used when the size of the
     // argument is greater than 64 bytes, this will always use up any available
@@ -4925,8 +4892,7 @@ static bool isIntegerLikeType(QualType Ty, ASTContext &Context,
 
 ABIArgInfo ARMABIInfo::classifyReturnType(QualType RetTy,
                                           bool isVariadic) const {
-  bool IsEffectivelyAAPCS_VFP =
-      (getABIKind() == AAPCS_VFP || getABIKind() == APCS_VFP) && !isVariadic;
+  bool IsEffectivelyAAPCS_VFP = getABIKind() == AAPCS_VFP && !isVariadic;
 
   if (RetTy->isVoidType())
     return ABIArgInfo::getIgnore();
@@ -4947,7 +4913,7 @@ ABIArgInfo ARMABIInfo::classifyReturnType(QualType RetTy,
   }
 
   // Are we following APCS?
-  if (getABIKind() == APCS) {
+  if (getABIKind() == APCS || getABIKind() == APCS_VFP) {
     if (isEmptyRecord(getContext(), RetTy, false))
       return ABIArgInfo::getIgnore();
 
@@ -4983,7 +4949,7 @@ ABIArgInfo ARMABIInfo::classifyReturnType(QualType RetTy,
   // Check for homogeneous aggregates with AAPCS-VFP.
   if (IsEffectivelyAAPCS_VFP) {
     const Type *Base = nullptr;
-    uint64_t Members = 0;
+    uint64_t Members;
     if (isHomogeneousAggregate(RetTy, Base, Members)) {
       assert(Base && "Base class should be set for homogeneous aggregate");
       // Homogeneous Aggregates are returned directly.
@@ -5003,13 +4969,10 @@ ABIArgInfo ARMABIInfo::classifyReturnType(QualType RetTy,
     if (Size <= 8)
       return ABIArgInfo::getDirect(llvm::Type::getInt8Ty(getVMContext()));
     if (Size <= 16)
-      return ABIArgInfo::getDirect(llvm::Type::getInt16Ty(getVMContext()));
-    return ABIArgInfo::getDirect(llvm::Type::getInt32Ty(getVMContext()));
-  } else if (Size <= 128 && getABIKind() == APCS_VFP) {
-    llvm::Type *Int32Ty = llvm::Type::getInt32Ty(getVMContext());
-    llvm::Type *CoerceTy =
-        llvm::ArrayType::get(Int32Ty, llvm::RoundUpToAlignment(Size, 32) / 32);
-    return ABIArgInfo::getDirect(CoerceTy);
+      return ABIArgInfo::getDirect(llvm::Type::getInt16Ty(getVMContext()), 0,
+                                   nullptr, false);
+    return ABIArgInfo::getDirect(llvm::Type::getInt32Ty(getVMContext()), 0,
+                                 nullptr, false);
   }
 
   markAllocatedGPRs(1, 1);
@@ -5076,23 +5039,10 @@ llvm::Value *ARMABIInfo::EmitVAArg(llvm::Value *VAListAddr, QualType Ty,
   if (getABIKind() == ARMABIInfo::AAPCS_VFP ||
       getABIKind() == ARMABIInfo::AAPCS)
     TyAlign = std::min(std::max(TyAlign, (uint64_t)4), (uint64_t)8);
-  else if (getABIKind() == ARMABIInfo::APCS_VFP) {
-    // ARMv7k allows type alignment up to 16 bytes.
-    TyAlign = std::min(std::max(TyAlign, (uint64_t)4), (uint64_t)16);
-  } else
+  else
     TyAlign = 4;
   // Use indirect if size of the illegal vector is bigger than 16 bytes.
-  const Type *Base = nullptr;
-  uint64_t Members = 0;
   if (isIllegalVectorType(Ty) && Size > 16) {
-    IsIndirect = true;
-    Size = 4;
-    TyAlign = 4;
-  } else if (getABIKind() == ARMABIInfo::APCS_VFP &&
-             !isHomogeneousAggregate(Ty, Base, Members) &&
-             Size > 16) {
-    // ARMv7k passes structs bigger than 16 bytes indirectly, in space allocated
-    // by the caller.
     IsIndirect = true;
     Size = 4;
     TyAlign = 4;
