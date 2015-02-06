@@ -47,7 +47,8 @@ using namespace llvm::opt;
 Driver::Driver(StringRef ClangExecutable, StringRef DefaultTargetTriple,
                DiagnosticsEngine &Diags)
     : Opts(createDriverOptTable()), Diags(Diags), Mode(GCCMode),
-      SaveTemps(SaveTempsNone), ClangExecutable(ClangExecutable),
+      SaveTemps(SaveTempsNone), BitcodeEmbed(EmbedNone),
+      ClangExecutable(ClangExecutable),
       SysRoot(DEFAULT_SYSROOT), UseStdLib(true),
       DefaultTargetTriple(DefaultTargetTriple),
       DriverTitle("clang LLVM compiler"), CCPrintOptionsFilename(nullptr),
@@ -368,6 +369,15 @@ Compilation *Driver::BuildCompilation(ArrayRef<const char *> ArgList) {
                     .Case("cwd", SaveTempsCwd)
                     .Case("obj", SaveTempsObj)
                     .Default(SaveTempsCwd);
+  }
+
+  // Ignore -fembed-bitcode options with LTO
+  // since the output will be bitcode anyway.
+  if (!Args->hasFlag(options::OPT_flto, options::OPT_fno_lto, false)) {
+    if (Args->hasArg(options::OPT_fembed_bitcode))
+      BitcodeEmbed = EmbedBitcode;
+    else if (Args->hasArg(options::OPT_fembed_bitcode_marker))
+      BitcodeEmbed = EmbedMarker;
   }
 
   // Perform the default argument translations.
@@ -1478,16 +1488,10 @@ void Driver::BuildJobs(Compilation &C) const {
 }
 
 static const Tool *SelectToolForJob(Compilation &C, bool SaveTemps,
+                                    bool EmbedBitcode,
                                     const ToolChain *TC, const JobAction *JA,
                                     const ActionList *&Inputs) {
   const Tool *ToolForJob = nullptr;
-
-  // We will ignore OPT_fembed_bitcode for LTO build. Since the merged bitcode
-  // file will be generated at link time, there is no need to embed the single
-  // bitcode file.
-  bool ShouldEmbedBitcode =
-    C.getArgs().hasArg(options::OPT_fembed_bitcode) &&
-    !C.getArgs().hasFlag(options::OPT_flto, options::OPT_fno_lto, false);
 
   // See if we should look for a compiler with an integrated assembler. We match
   // bottom up, so what we are actually looking for is an assembler job with a
@@ -1505,7 +1509,7 @@ static const Tool *SelectToolForJob(Compilation &C, bool SaveTemps,
     // checking the backend tool, check if the tool for the CompileJob
     // has an integrated assembler.
     const ActionList *BackendInputs =
-      (ShouldEmbedBitcode ? Inputs : &(*Inputs)[0]->getInputs());
+      (EmbedBitcode ? Inputs : &(*Inputs)[0]->getInputs());
     JobAction *CompileJA = cast<JobAction>(*BackendInputs->begin());
     const Tool *Compiler = TC->SelectTool(*CompileJA);
     if (!Compiler)
@@ -1527,7 +1531,7 @@ static const Tool *SelectToolForJob(Compilation &C, bool SaveTemps,
     if (!Compiler)
       return nullptr;
     if (!Compiler->canEmitIR() ||
-        (!SaveTemps && !ShouldEmbedBitcode)) {
+        (!SaveTemps && !EmbedBitcode)) {
       Inputs = &(*Inputs)[0]->getInputs();
       ToolForJob = Compiler;
     }
@@ -1591,7 +1595,9 @@ void Driver::BuildJobsForAction(Compilation &C,
   const ActionList *Inputs = &A->getInputs();
 
   const JobAction *JA = cast<JobAction>(A);
-  const Tool *T = SelectToolForJob(C, isSaveTempsEnabled(), TC, JA, Inputs);
+  const Tool *T = SelectToolForJob(C, isSaveTempsEnabled(),
+                                   embedBitcodeEnabled(),
+                                   TC, JA, Inputs);
   if (!T)
     return;
 

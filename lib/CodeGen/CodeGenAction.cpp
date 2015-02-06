@@ -171,6 +171,7 @@ namespace clang {
       void *OldDiagnosticContext = Ctx.getDiagnosticContext();
       Ctx.setDiagnosticHandler(DiagnosticHandler, this);
 
+      EmbedBitcode(TheModule.get(), CodeGenOpts);
       EmitBackendOutput(Diags, CodeGenOpts, TargetOpts, LangOpts,
                         C.getTargetInfo().getTargetDescription(),
                         TheModule.get(), Action, AsmOutStream);

@@ -2639,8 +2639,7 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
 
   // Embed-bitcode option.
   // Only white-listed flags below are allowed to be embedded.
-  if (Args.hasArg(options::OPT_fembed_bitcode) &&
-      !Args.hasFlag(options::OPT_flto, options::OPT_fno_lto, false) &&
+  if (C.getDriver().embedBitcodeEnabled() &&
       (isa<BackendJobAction>(JA) || isa<AssembleJobAction>(JA))) {
     // Add flags implied by -fembed-bitcode.
     CmdArgs.push_back("-fembed-bitcode");
@@ -4680,10 +4679,12 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
   // CompileJobAction, so disable optimizations if they are not already
   // disabled.
   if (C.getDriver().isSaveTempsEnabled() && !OptDisabled &&
-      !(Args.hasArg(options::OPT_fembed_bitcode) &&
-        !Args.hasFlag(options::OPT_flto, options::OPT_fno_lto, false)) &&
+      !C.getDriver().embedBitcodeEnabled() &&
       isa<CompileJobAction>(JA))
     CmdArgs.push_back("-disable-llvm-optzns");
+
+  if (C.getDriver().embedBitcodeMarkerOnly())
+    CmdArgs.push_back("-fembed-bitcode-marker");
 
   if (Output.getType() == types::TY_Dependencies) {
     // Handled with other dependency code.
