@@ -67,6 +67,12 @@ class Driver {
     SaveTempsObj
   } SaveTemps;
 
+  enum BitcodeEmbedMode {
+    EmbedNone,
+    EmbedMarker,
+    EmbedBitcode
+  } BitcodeEmbed;
+
 public:
   // Diag - Forwarding function for diagnostics.
   DiagnosticBuilder Diag(unsigned DiagID) const {
@@ -240,6 +246,9 @@ public:
 
   bool isSaveTempsEnabled() const { return SaveTemps != SaveTempsNone; }
   bool isSaveTempsObj() const { return SaveTemps == SaveTempsObj; }
+
+  bool embedBitcodeEnabled() const { return BitcodeEmbed == EmbedBitcode; }
+  bool embedBitcodeMarkerOnly() const { return BitcodeEmbed == EmbedMarker; }
 
   /// @}
   /// @name Primary Functionality

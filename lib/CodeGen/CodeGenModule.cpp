@@ -39,6 +39,7 @@
 #include "clang/Basic/SourceManager.h"
 #include "clang/Basic/TargetInfo.h"
 #include "clang/Basic/Version.h"
+#include "clang/CodeGen/BackendUtil.h"
 #include "clang/Frontend/CodeGenOptions.h"
 #include "clang/Sema/SemaDiagnostic.h"
 #include "llvm/ADT/APSInt.h"
@@ -412,6 +413,9 @@ void CodeGenModule::Release() {
 
   if (DebugInfo)
     DebugInfo->finalize();
+
+  if (getCodeGenOpts().EmbedMarkerOnly)
+    EmbedBitcode(&getModule(), getCodeGenOpts());
 
   EmitVersionIdentMetadata();
 
