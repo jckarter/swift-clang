@@ -670,16 +670,15 @@ void clang::EmitBackendOutput(DiagnosticsEngine &Diags,
 
 // With -fembed-bitcode, save a copy of the llvm IR as data in the
 // __LLVM,__bitcode section.
-void clang::EmbedBitcode(llvm::Module *M, const CodeGenOptions &CGOpts)
+void clang::EmbedBitcode(llvm::Module *M, CodeGenOptions &CGOpts)
 {
-  if (!CGOpts.EmbedBitcode && !CGOpts.EmbedMarkerOnly)
+  if (!CGOpts.EmbedBitcode)
     return;
 
   // Embed the bitcode for the llvm module.
   std::string Data;
   llvm::raw_string_ostream OS(Data);
-  if (!CGOpts.EmbedMarkerOnly)
-    llvm::WriteBitcodeToFile(M, OS);
+  llvm::WriteBitcodeToFile(M, OS);
   ArrayRef<uint8_t> ModuleData((uint8_t*)OS.str().data(), OS.str().size());
   llvm::Constant *ModuleConstant =
     llvm::ConstantDataArray::get(M->getContext(), ModuleData);

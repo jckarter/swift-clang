@@ -14,9 +14,3 @@
 // CHECK-LTO: -emit-llvm-bc
 // CHECK-LTO-NOT: -cc1
 // CHECK-LTO-NOT: -fembed-bitcode
-
-// RUN: %clang -c %s -fembed-bitcode-marker 2>&1 -### | FileCheck %s -check-prefix=CHECK-MARKER
-// CHECK-MARKER: -cc1
-// CHECK-MARKER: -emit-obj
-// CHECK-MARKER: -fembed-bitcode-marker
-// CHECK-MARKER-NOT: -cc1

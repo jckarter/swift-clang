@@ -36,7 +36,7 @@ namespace clang {
                          StringRef TDesc, llvm::Module *M, BackendAction Action,
                          raw_ostream *OS);
 
-  void EmbedBitcode(llvm::Module *M, const CodeGenOptions &CGOpts);
+  void EmbedBitcode(llvm::Module *M, CodeGenOptions &CGOpts);
 }
 
 #endif
