@@ -861,6 +861,10 @@ bool DeclContext::isDependentContext() const {
       return getLexicalParent()->isDependentContext();
   }
 
+  // FIXME: A variable template is a dependent context, but is not a
+  // DeclContext. A context within it (such as a lambda-expression)
+  // should be considered dependent.
+
   return getParent() && getParent()->isDependentContext();
 }
 
@@ -1266,7 +1270,7 @@ StoredDeclsMap *DeclContext::buildLookup() {
   collectAllContexts(Contexts);
   for (unsigned I = 0, N = Contexts.size(); I != N; ++I)
     buildLookupImpl<&DeclContext::decls_begin,
-                    &DeclContext::decls_end>(Contexts[I]);
+                    &DeclContext::decls_end>(Contexts[I], false);
 
   // We no longer have any lazy decls.
   LookupPtr.setInt(false);
@@ -1279,7 +1283,7 @@ StoredDeclsMap *DeclContext::buildLookup() {
 /// nested within it.
 template<DeclContext::decl_iterator (DeclContext::*Begin)() const,
          DeclContext::decl_iterator (DeclContext::*End)() const>
-void DeclContext::buildLookupImpl(DeclContext *DCtx) {
+void DeclContext::buildLookupImpl(DeclContext *DCtx, bool Internal) {
   for (decl_iterator I = (DCtx->*Begin)(), E = (DCtx->*End)();
        I != E; ++I) {
     Decl *D = *I;
@@ -1297,14 +1301,14 @@ void DeclContext::buildLookupImpl(DeclContext *DCtx) {
           (!ND->isFromASTFile() ||
            (isTranslationUnit() &&
             !getParentASTContext().getLangOpts().CPlusPlus)))
-        makeDeclVisibleInContextImpl(ND, false);
+        makeDeclVisibleInContextImpl(ND, Internal);
 
     // If this declaration is itself a transparent declaration context
     // or inline namespace, add the members of this declaration of that
     // context (recursively).
     if (DeclContext *InnerCtx = dyn_cast<DeclContext>(D))
       if (InnerCtx->isTransparentContext() || InnerCtx->isInlineNamespace())
-        buildLookupImpl<Begin, End>(InnerCtx);
+        buildLookupImpl<Begin, End>(InnerCtx, Internal);
   }
 }
 
@@ -1384,7 +1388,7 @@ DeclContext::noload_lookup(DeclarationName Name) {
     collectAllContexts(Contexts);
     for (unsigned I = 0, N = Contexts.size(); I != N; ++I)
       buildLookupImpl<&DeclContext::noload_decls_begin,
-                      &DeclContext::noload_decls_end>(Contexts[I]);
+                      &DeclContext::noload_decls_end>(Contexts[I], true);
 
     // We no longer have any lazy decls.
     LookupPtr.setInt(false);
@@ -1570,7 +1574,7 @@ void DeclContext::makeDeclVisibleInContextImpl(NamedDecl *D, bool Internal) {
     return;
   }
 
-  else if (DeclNameEntries.isNull()) {
+  if (DeclNameEntries.isNull()) {
     DeclNameEntries.setOnlyValue(D);
     return;
   }
