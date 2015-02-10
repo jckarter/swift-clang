@@ -300,7 +300,7 @@ public:
       IncludesSet.insert(TKIncludes[i].SenTestStr);
   }
 
-  virtual bool needsInputFileVisitation() { return true; }
+  bool needsInputFileVisitation() override { return true; }
   bool visitInputFile(StringRef Filename, bool isSystem, bool isOverride) override {
     if (isSystem)
       return false;
