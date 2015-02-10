@@ -5,9 +5,6 @@
 // Stack traces also require back traces.
 // REQUIRES: shell backtrace
 
-// Stack traces also require back traces.
-// REQUIRES: backtrace
-
 void clang_analyzer_crash(void);
 
 void inlined() {
