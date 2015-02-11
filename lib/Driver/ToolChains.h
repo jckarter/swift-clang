@@ -324,7 +324,9 @@ public:
     IPhoneOS,
     IPhoneOSSimulator,
     TvOS,
-    TvOSSimulator
+    TvOSSimulator,
+    WatchOS,
+    WatchOSSimulator
   };
 
   mutable DarwinPlatformKind TargetPlatform;
@@ -364,7 +366,8 @@ public:
                          llvm::opt::ArgStringList &CmdArgs) const override;
 
   bool isKernelStatic() const override {
-    return !isTargetIPhoneOS() || isIPhoneOSVersionLT(6, 0);
+    return (!(isTargetIPhoneOS() && !isIPhoneOSVersionLT(6, 0)) &&
+            !isTargetWatchOS());
   }
 
 protected:
@@ -399,6 +402,11 @@ protected:
             TargetPlatform == TvOSSimulator);
   }
 
+  bool isTargetIOSBased() const {
+    assert(TargetInitialized && "Target not initialized!");
+    return isTargetIPhoneOS() || isTargetIOSSimulator();
+  }
+
   bool isTargetTvOS() const {
     assert(TargetInitialized && "Target not initialized!");
     return TargetPlatform == TvOS;
@@ -414,9 +422,19 @@ protected:
     return TargetPlatform == TvOS || TargetPlatform == TvOSSimulator;
   }
 
-  bool isTargetIOSBased() const {
+  bool isTargetWatchOS() const {
     assert(TargetInitialized && "Target not initialized!");
-    return isTargetIPhoneOS() || isTargetIOSSimulator();
+    return TargetPlatform == WatchOS;
+  }
+
+  bool isTargetWatchOSSimulator() const {
+    assert(TargetInitialized && "Target not initialized!");
+    return TargetPlatform == WatchOSSimulator;
+  }
+
+  bool isTargetWatchOSBased() const {
+    assert(TargetInitialized && "Target not initialized!");
+    return TargetPlatform == WatchOS || TargetPlatform == WatchOSSimulator;
   }
 
   bool isTargetMacOS() const {
@@ -467,7 +485,7 @@ public:
   unsigned GetDefaultStackProtectorLevel(bool KernelOrKext) const override {
     // Stack protectors default to on for user code on 10.5,
     // and for everything in 10.6 and beyond
-    if (isTargetIOSBased())
+    if (isTargetIOSBased() || isTargetWatchOSBased())
       return 1;
     else if (isTargetMacOS() && !isMacosxVersionLT(10, 6))
       return 1;

@@ -91,6 +91,8 @@ bool MachO::HasNativeLLVMSupport() const {
 
 /// Darwin provides an ARC runtime starting in MacOS X 10.7 and iOS 5.0.
 ObjCRuntime Darwin::getDefaultObjCRuntime(bool isNonFragile) const {
+  if (isTargetWatchOSBased())
+    return ObjCRuntime(ObjCRuntime::WatchOS, TargetVersion);
   if (isTargetIOSBased())
     return ObjCRuntime(ObjCRuntime::iOS, TargetVersion);
   if (isNonFragile)
@@ -100,7 +102,9 @@ ObjCRuntime Darwin::getDefaultObjCRuntime(bool isNonFragile) const {
 
 /// Darwin provides a blocks runtime starting in MacOS X 10.6 and iOS 3.2.
 bool Darwin::hasBlocksRuntime() const {
-  if (isTargetIOSBased())
+  if (isTargetWatchOSBased())
+    return true;
+  else if (isTargetIOSBased())
     return !isIPhoneOSVersionLT(3, 2);
   else {
     assert(isTargetMacOS() && "unexpected darwin target");
@@ -203,9 +207,14 @@ std::string Darwin::ComputeEffectiveClangTriple(const ArgList &Args,
     return Triple.getTriple();
 
   SmallString<16> Str;
-  Str += (isTargetIOSBased() ?
-          (isTargetTvOSBased() ? "tvos" : "ios") :
-          "macosx");
+  if (isTargetWatchOSBased())
+    Str += "watchos";
+  else if (isTargetTvOSBased())
+    Str += "tvos";
+  else if (isTargetIOSBased())
+    Str += "ios";
+  else
+    Str += "macosx";
   Str += getTargetVersion().getAsString();
   Triple.setOSName(Str);
 
@@ -285,7 +294,11 @@ void DarwinClang::AddLinkARCArgs(const ArgList &Args,
   llvm::sys::path::remove_filename(P); // 'bin'
   llvm::sys::path::append(P, "lib", "arc", "libarclite_");
   // Mash in the platform.
-  if (isTargetIOSSimulator())
+  if (isTargetWatchOSSimulator())
+    P += "watchsimulator";
+  else if (isTargetWatchOS())
+    P += "watchos";
+  else if (isTargetIOSSimulator())
     P += "iphonesimulator";
   else if (isTargetIPhoneOS())
     P += "iphoneos";
@@ -366,7 +379,9 @@ void DarwinClang::AddLinkRuntimeLibArgs(const ArgList &Args,
       Args.hasArg(options::OPT_fcreate_profile) ||
       Args.hasArg(options::OPT_coverage)) {
     // Select the appropriate runtime library for the target.
-    if (isTargetTvOSBased())
+    if (isTargetWatchOSBased())
+      AddLinkRuntimeLib(Args, CmdArgs, "libclang_rt.profile_watchos.a");
+    else if (isTargetTvOSBased())
       AddLinkRuntimeLib(Args, CmdArgs, "libclang_rt.profile_tvos.a");
     else if (isTargetIOSBased())
       AddLinkRuntimeLib(Args, CmdArgs, "libclang_rt.profile_ios.a");
@@ -379,7 +394,7 @@ void DarwinClang::AddLinkRuntimeLibArgs(const ArgList &Args,
   // Add Ubsan runtime library, if required.
   if (Sanitize.needsUbsanRt()) {
     // FIXME: Move this check to SanitizerArgs::filterUnsupportedKinds.
-    if (isTargetIOSBased()) {
+    if (isTargetIOSBased() || isTargetWatchOSBased()) {
       getDriver().Diag(diag::err_drv_clang_unsupported_per_platform)
         << "-fsanitize=undefined";
     } else {
@@ -404,6 +419,16 @@ void DarwinClang::AddLinkRuntimeLibArgs(const ArgList &Args,
                         "libclang_rt.asan_osx_dynamic.dylib",
                         /*AlwaysLink*/ true, /*IsEmbedded*/ false,
                         /*AddRPath*/ true);
+    } else if (isTargetWatchOSSimulator()) {
+      AddLinkRuntimeLib(Args, CmdArgs,
+                        "libclang_rt.asan_watchsim_dynamic.dylib",
+                        /*AlwaysLink*/ true, /*IsEmbedded*/ false,
+                        /*AddRPath*/ true);
+    } else if (isTargetWatchOS()) {
+      AddLinkRuntimeLib(Args, CmdArgs,
+                        "libclang_rt.asan_watchos_dynamic.dylib",
+                        /*AlwaysLink*/ true, /*IsEmbedded*/ false,
+                        /*AddRPath*/ true);
     } else if (isTargetIOSSimulator()) {
       AddLinkRuntimeLib(Args, CmdArgs,
                         "libclang_rt.asan_iossim_dynamic.dylib",
@@ -422,7 +447,11 @@ void DarwinClang::AddLinkRuntimeLibArgs(const ArgList &Args,
   CmdArgs.push_back("-lSystem");
 
   // Select the dynamic runtime library and the target specific static library.
-  if (isTargetTvOSBased()) {
+  if (isTargetWatchOSBased()) {
+    // We currently always need a static runtime library for WatchOS.
+    AddLinkRuntimeLib(Args, CmdArgs, "libclang_rt.watchos.a");
+
+  } else if (isTargetTvOSBased()) {
     // We currently always need a static runtime library for AppleTVOS.
     AddLinkRuntimeLib(Args, CmdArgs, "libclang_rt.tvos.a");
 
@@ -488,29 +517,39 @@ void Darwin::AddDeploymentTarget(DerivedArgList &Args) const {
   Arg *OSXVersion = Args.getLastArg(options::OPT_mmacosx_version_min_EQ);
   Arg *iOSVersion = Args.getLastArg(options::OPT_miphoneos_version_min_EQ);
   Arg *TvOSVersion = Args.getLastArg(options::OPT_mtvos_version_min_EQ);
+  Arg *WatchOSVersion = Args.getLastArg(options::OPT_mwatchos_version_min_EQ);
 
-  if (OSXVersion && (iOSVersion || TvOSVersion)) {
+  if (OSXVersion && (iOSVersion || TvOSVersion || WatchOSVersion)) {
     getDriver().Diag(diag::err_drv_argument_not_allowed_with)
           << OSXVersion->getAsString(Args)
-          << (iOSVersion ? iOSVersion : TvOSVersion)->getAsString(Args);
-    iOSVersion = TvOSVersion = nullptr;
-  } else if (iOSVersion && TvOSVersion) {
+          << (iOSVersion ? iOSVersion :
+              TvOSVersion ? TvOSVersion : WatchOSVersion)->getAsString(Args);
+    iOSVersion = TvOSVersion = WatchOSVersion = nullptr;
+  } else if (iOSVersion && (TvOSVersion || WatchOSVersion)) {
     getDriver().Diag(diag::err_drv_argument_not_allowed_with)
           << iOSVersion->getAsString(Args)
-          << TvOSVersion->getAsString(Args);
-    TvOSVersion = nullptr;
-  } else if (!OSXVersion && !iOSVersion && !TvOSVersion) {
+          << (TvOSVersion ? TvOSVersion : WatchOSVersion)->getAsString(Args);
+    TvOSVersion = WatchOSVersion = nullptr;
+  } else if (TvOSVersion && WatchOSVersion) {
+    getDriver().Diag(diag::err_drv_argument_not_allowed_with)
+          << TvOSVersion->getAsString(Args)
+          << WatchOSVersion->getAsString(Args);
+    WatchOSVersion = nullptr;
+  } else if (!OSXVersion && !iOSVersion && !TvOSVersion && !WatchOSVersion) {
     // If no deployment target was specified on the command line, check for
     // environment defines.
     StringRef OSXTarget;
     StringRef iOSTarget;
     StringRef TvOSTarget;
+    StringRef WatchOSTarget;
     if (char *env = ::getenv("MACOSX_DEPLOYMENT_TARGET"))
       OSXTarget = env;
     if (char *env = ::getenv("IPHONEOS_DEPLOYMENT_TARGET"))
       iOSTarget = env;
     if (char *env = ::getenv("TVOS_DEPLOYMENT_TARGET"))
       TvOSTarget = env;
+    if (char *env = ::getenv("WATCHOS_DEPLOYMENT_TARGET"))
+      WatchOSTarget = env;
 
     // If no '-miphoneos-version-min' specified on the command line and
     // IPHONEOS_DEPLOYMENT_TARGET is not defined, see if we can set the default
@@ -529,10 +568,21 @@ void Darwin::AddDeploymentTarget(DerivedArgList &Args) const {
     // go ahead as assume we're targeting iOS.
     StringRef MachOArchName = getMachOArchName(Args);
     if (OSXTarget.empty() && iOSTarget.empty() && TvOSTarget.empty() &&
+        WatchOSTarget.empty() &&
         (MachOArchName == "armv7" || MachOArchName == "armv7s" ||
          MachOArchName == "armv7k" ||
          MachOArchName == "arm64"))
         iOSTarget = iOSVersionMin;
+
+    // Do not allow conflicts with the WatchOS target.
+    if (!WatchOSTarget.empty() && (!OSXTarget.empty() || !iOSTarget.empty() ||
+                                   !TvOSTarget.empty())) {
+      getDriver().Diag(diag::err_drv_conflicting_deployment_targets)
+        << "WATCHOS_DEPLOYMENT_TARGET"
+        << (!OSXTarget.empty() ? "MACOSX_DEPLOYMENT_TARGET" :
+            !iOSTarget.empty() ? "IPHONEOS_DEPLOYMENT_TARGET" :
+            "TVOS_DEPLOYMENT_TARGET");
+    }
 
     // Do not allow conflicts with the tvOS target.
     if (!TvOSTarget.empty() && (!OSXTarget.empty() || !iOSTarget.empty())) {
@@ -565,6 +615,10 @@ void Darwin::AddDeploymentTarget(DerivedArgList &Args) const {
       const Option O = Opts.getOption(options::OPT_mtvos_version_min_EQ);
       TvOSVersion = Args.MakeJoinedArg(nullptr, O, TvOSTarget);
       Args.append(TvOSVersion);
+    } else if (!WatchOSTarget.empty()) {
+      const Option O = Opts.getOption(options::OPT_mwatchos_version_min_EQ);
+      WatchOSVersion = Args.MakeJoinedArg(nullptr, O, WatchOSTarget);
+      Args.append(WatchOSVersion);
     } else if (MachOArchName != "armv6m" && MachOArchName != "armv7m" &&
                MachOArchName != "armv7em") {
       // Otherwise, assume we are targeting OS X.
@@ -581,6 +635,8 @@ void Darwin::AddDeploymentTarget(DerivedArgList &Args) const {
     Platform = IPhoneOS;
   else if (TvOSVersion)
     Platform = TvOS;
+  else if (WatchOSVersion)
+    Platform = WatchOS;
   else
     llvm_unreachable("Unable to infer Darwin variant");
 
@@ -588,7 +644,8 @@ void Darwin::AddDeploymentTarget(DerivedArgList &Args) const {
   unsigned Major, Minor, Micro;
   bool HadExtra;
   if (Platform == MacOS) {
-    assert((!iOSVersion && !TvOSVersion) && "Unknown target platform!");
+    assert((!iOSVersion && !TvOSVersion && !WatchOSVersion) &&
+           "Unknown target platform!");
     if (!Driver::GetReleaseVersion(OSXVersion->getValue(), Major, Minor,
                                    Micro, HadExtra) || HadExtra ||
         Major != 10 || Minor >= 100 || Micro >= 100)
@@ -607,6 +664,12 @@ void Darwin::AddDeploymentTarget(DerivedArgList &Args) const {
         Major >= 10 || Minor >= 100 || Micro >= 100)
       getDriver().Diag(diag::err_drv_invalid_version_number)
         << TvOSVersion->getAsString(Args);
+  } else if (Platform == WatchOS) {
+    if (!Driver::GetReleaseVersion(WatchOSVersion->getValue(), Major, Minor,
+                                   Micro, HadExtra) || HadExtra ||
+        Major >= 10 || Minor >= 100 || Micro >= 100)
+      getDriver().Diag(diag::err_drv_invalid_version_number)
+        << WatchOSVersion->getAsString(Args);
   } else
     llvm_unreachable("unknown kind of Darwin platform");
 
@@ -617,6 +680,9 @@ void Darwin::AddDeploymentTarget(DerivedArgList &Args) const {
   if (TvOSVersion && (getTriple().getArch() == llvm::Triple::x86 ||
                       getTriple().getArch() == llvm::Triple::x86_64))
     Platform = TvOSSimulator;
+  if (WatchOSVersion && (getTriple().getArch() == llvm::Triple::x86 ||
+                         getTriple().getArch() == llvm::Triple::x86_64))
+    Platform = WatchOSSimulator;
 
   setTarget(Platform, Major, Minor, Micro);
 }
@@ -677,7 +743,9 @@ void DarwinClang::AddCCKextLibArgs(const ArgList &Args,
   SmallString<128> P(getDriver().ResourceDir);
   llvm::sys::path::append(P, "lib", "darwin");
 
-  if (isTargetTvOS()) {
+  if (isTargetWatchOS()) {
+    llvm::sys::path::append(P, "libclang_rt.cc_kext_watchos.a");
+  } else if (isTargetTvOS()) {
     llvm::sys::path::append(P, "libclang_rt.cc_kext_tvos.a");
   } else if (!isTargetIPhoneOS() || isTargetIOSSimulator() ||
              getTriple().getArch() == llvm::Triple::aarch64 ||
@@ -946,7 +1014,8 @@ DerivedArgList *Darwin::TranslateArgs(const DerivedArgList &Args,
   // FIXME: It would be far better to avoid inserting those -static arguments,
   // but we can't check the deployment target in the translation code until
   // it is set here.
-  if (isTargetIOSBased() && !isIPhoneOSVersionLT(6, 0)) {
+  if (isTargetWatchOSBased() ||
+      (isTargetIOSBased() && !isIPhoneOSVersionLT(6, 0))) {
     for (ArgList::iterator it = DAL->begin(), ie = DAL->end(); it != ie; ) {
       Arg *A = *it;
       ++it;
@@ -963,7 +1032,8 @@ DerivedArgList *Darwin::TranslateArgs(const DerivedArgList &Args,
 
   // Default to use libc++ on OS X 10.9+ and iOS 7+.
   if (((isTargetMacOS() && !isMacosxVersionLT(10, 9)) ||
-       (isTargetIOSBased() && !isIPhoneOSVersionLT(7, 0))) &&
+       (isTargetIOSBased() && !isIPhoneOSVersionLT(7, 0)) ||
+       isTargetWatchOSBased()) &&
       !Args.getLastArg(options::OPT_stdlib_EQ))
     DAL->AddJoinedArg(nullptr, Opts.getOption(options::OPT_stdlib_EQ),
                       "libc++");
@@ -975,10 +1045,9 @@ DerivedArgList *Darwin::TranslateArgs(const DerivedArgList &Args,
     StringRef where;
 
     // Complain about targeting iOS < 5.0 in any way.
-    if (isTargetIOSBased()) {
-      if (isIPhoneOSVersionLT(5, 0))
+    if (isTargetIOSBased() && isIPhoneOSVersionLT(5, 0)) {
         where = "iOS 5.0";
-    } else if (isMacosxVersionLT(10, 7)) {
+    } else if (isTargetMacOS() && isMacosxVersionLT(10, 7)) {
       // Complain about targetting anything short of Lion.
       // This check is Apple-internal only; open source users
       // may have installed private copies of libc++.
@@ -1037,7 +1106,11 @@ void Darwin::addMinVersionArgs(const llvm::opt::ArgList &Args,
                                llvm::opt::ArgStringList &CmdArgs) const {
   VersionTuple TargetVersion = getTargetVersion();
 
-  if (isTargetTvOS())
+  if (isTargetWatchOS())
+    CmdArgs.push_back("-watchos_version_min");
+  else if (isTargetWatchOSSimulator())
+    CmdArgs.push_back("-watchos_simulator_version_min");
+  else if (isTargetTvOS())
     CmdArgs.push_back("-tvos_version_min");
   else if (isTargetTvOSSimulator())
     CmdArgs.push_back("-tvos_simulator_version_min");
@@ -1058,7 +1131,9 @@ void Darwin::addStartObjectFileArgs(const llvm::opt::ArgList &Args,
   // Derived from startfile spec.
   if (Args.hasArg(options::OPT_dynamiclib)) {
     // Derived from darwin_dylib1 spec.
-    if (isTargetIOSSimulator()) {
+    if (isTargetWatchOSBased()) {
+      ; // WatchOS does not need dylib1.o.
+    } else if (isTargetIOSSimulator()) {
       ; // iOS simulator does not need dylib1.o.
     } else if (isTargetIPhoneOS()) {
       if (isIPhoneOSVersionLT(3, 1))
@@ -1073,7 +1148,9 @@ void Darwin::addStartObjectFileArgs(const llvm::opt::ArgList &Args,
     if (Args.hasArg(options::OPT_bundle)) {
       if (!Args.hasArg(options::OPT_static)) {
         // Derived from darwin_bundle1 spec.
-        if (isTargetIOSSimulator()) {
+        if (isTargetWatchOSBased()) {
+          ; // WatchOS does not need bundle1.o.
+        } else if (isTargetIOSSimulator()) {
           ; // iOS simulator does not need bundle1.o.
         } else if (isTargetIPhoneOS()) {
           if (isIPhoneOSVersionLT(3, 1))
@@ -1108,7 +1185,9 @@ void Darwin::addStartObjectFileArgs(const llvm::opt::ArgList &Args,
           CmdArgs.push_back("-lcrt0.o");
         } else {
           // Derived from darwin_crt1 spec.
-          if (isTargetIOSSimulator()) {
+          if (isTargetWatchOSBased()) {
+            ; // WatchOS does not need crt1.o.
+          } else if (isTargetIOSSimulator()) {
             ; // iOS simulator does not need crt1.o.
           } else if (isTargetIPhoneOS()) {
             if (getArch() == llvm::Triple::aarch64)
@@ -1133,6 +1212,7 @@ void Darwin::addStartObjectFileArgs(const llvm::opt::ArgList &Args,
   }
 
   if (!isTargetIPhoneOS() && Args.hasArg(options::OPT_shared_libgcc) &&
+      !isTargetWatchOS() &&
       isMacosxVersionLT(10, 5)) {
     const char *Str = Args.MakeArgString(GetFilePath("crt3.o"));
     CmdArgs.push_back(Str);
@@ -1144,7 +1224,8 @@ bool Darwin::SupportsObjCGC() const {
 }
 
 void Darwin::CheckObjCARC() const {
-  if (isTargetIOSBased()|| (isTargetMacOS() && !isMacosxVersionLT(10, 6)))
+  if (isTargetIOSBased() || isTargetWatchOSBased() ||
+      (isTargetMacOS() && !isMacosxVersionLT(10, 6)))
     return;
   getDriver().Diag(diag::err_arc_unsupported_on_toolchain);
 }

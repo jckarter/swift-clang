@@ -52,3 +52,8 @@
 // RUN:   %clang -target i386-apple-darwin9 -c %s -### 2>&1 | \
 // RUN:   FileCheck --check-prefix=CHECK-VERSION-TVOS %s
 // CHECK-VERSION-TVOS: "i386-apple-tvos8.3.1"
+
+// RUN: env WATCHOS_DEPLOYMENT_TARGET=2.0 \
+// RUN:   %clang -target i386-apple-darwin9 -c %s -### 2>&1 | \
+// RUN:   FileCheck --check-prefix=CHECK-VERSION-WATCHOS %s
+// CHECK-VERSION-WATCHOS: "i386-apple-watchos2.0.0"
