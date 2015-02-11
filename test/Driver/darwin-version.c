@@ -30,6 +30,18 @@
 // RUN: %clang -target x86_64-apple-macosx -mmacosx-version-min=10.10 -c %s -### 2>&1 | \
 // RUN:   FileCheck --check-prefix=CHECK-VERSION-OSX10 %s
 // CHECK-VERSION-OSX10: "x86_64-apple-macosx10.10.0"
+// RUN: %clang -target armv7-apple-darwin -mtvos-version-min=8.3 -c %s -### 2>&1 | \
+// RUN:   FileCheck --check-prefix=CHECK-VERSION-TVOS83 %s
+// CHECK-VERSION-TVOS83: "thumbv7-apple-tvos8.3.0"
+// RUN: %clang -target i386-apple-darwin -mtvos-simulator-version-min=8.3 -c %s -### 2>&1 | \
+// RUN:   FileCheck --check-prefix=CHECK-VERSION-TVSIM83 %s
+// CHECK-VERSION-TVSIM83: "i386-apple-tvos8.3.0"
+// RUN: %clang -target armv7k-apple-darwin -mwatchos-version-min=2.0 -c %s -### 2>&1 | \
+// RUN:   FileCheck --check-prefix=CHECK-VERSION-WATCHOS20 %s
+// CHECK-VERSION-WATCHOS20: "thumbv7k-apple-watchos2.0.0"
+// RUN: %clang -target i386-apple-darwin -mwatchos-simulator-version-min=2.0 -c %s -### 2>&1 | \
+// RUN:   FileCheck --check-prefix=CHECK-VERSION-WATCHSIM20 %s
+// CHECK-VERSION-WATCHSIM20: "i386-apple-watchos2.0.0"
 
 // Check environment variable gets interpreted correctly
 // RUN: env MACOSX_DEPLOYMENT_TARGET=10.5 \
