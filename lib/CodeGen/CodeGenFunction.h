@@ -263,6 +263,9 @@ public:
   /// potentially set the return value.
   bool SawAsmBlock;
 
+  /// Codegen is currently inside an SEH try block.
+  bool IsSEHTryScope;
+
   const CodeGen::CGBlockInfo *BlockInfo;
   llvm::Value *BlockPointer;
 
@@ -1298,7 +1301,8 @@ public:
   /// legal to call this function even if there is no current insertion point.
   void FinishFunction(SourceLocation EndLoc=SourceLocation());
 
-  void StartThunk(llvm::Function *Fn, GlobalDecl GD, const CGFunctionInfo &FnInfo);
+  void StartThunk(llvm::Function *Fn, GlobalDecl GD,
+                  const CGFunctionInfo &FnInfo);
 
   void EmitCallAndReturnForThunk(llvm::Value *Callee, const ThunkInfo *Thunk);
 
