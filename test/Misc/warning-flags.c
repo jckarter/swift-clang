@@ -50,7 +50,6 @@ CHECK-NEXT:   warn_apinotes_message
 CHECK-NEXT:   warn_arcmt_nsalloc_realloc
 CHECK-NEXT:   warn_asm_label_on_auto_decl
 CHECK-NEXT:   warn_bitfield_width_exceeds_type_size
-CHECK-NEXT:   warn_braces_around_scalar_init
 CHECK-NEXT:   warn_broken_neon_vfma
 CHECK-NEXT:   warn_c_kext
 CHECK-NEXT:   warn_call_to_pure_virtual_member_function_from_ctor_dtor
