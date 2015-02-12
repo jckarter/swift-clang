@@ -1,4 +1,4 @@
-// RUN: %clang_cc1 -fsyntax-only -Woverriding-method-mismatch %s -verify
+// RUN: %clang_cc1 -fsyntax-only -fblocks -Woverriding-method-mismatch %s -verify
 
 __attribute__((objc_root_class))
 @interface NSFoo
@@ -187,3 +187,16 @@ void test_null_resettable(NSResettable *r, int *ip) {
   return 0; // no warning
 }
 @end
+
+// rdar://problem/19814852
+@interface MultiProp
+@property (nullable, copy) id a, b, c;
+@property (nullable, copy) MultiProp *d, *(^e)(int);
+@end
+
+void testMultiProp(MultiProp *foo) {
+  int *ip;
+  ip = foo.a; // expected-warning{{from '__nullable id'}}
+  ip = foo.d; // expected-warning{{from '__nullable MultiProp *'}}
+  ip = foo.e; // expected-error{{incompatible type '__nullable MultiProp *(^}}
+}

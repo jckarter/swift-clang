@@ -578,23 +578,29 @@ ObjCTypeParamList *Parser::parseObjCTypeParamList() {
 static void addContextSensitiveTypeNullability(Parser &P,
                                                Declarator &D,
                                                NullabilityKind nullability,
-                                               SourceLocation nullabilityLoc) {
+                                               SourceLocation nullabilityLoc,
+                                               bool &addedToDeclSpec) {
   // Create the attribute.
-  AttributeList *nullabilityAttr = D.getAttributePool().create(
-                                     P.getNullabilityKeyword(nullability),
-                                     SourceRange(nullabilityLoc),
-                                     nullptr, SourceLocation(),
-                                     nullptr, 0,
-                                     AttributeList::AS_ContextSensitiveKeyword);
+  auto getNullabilityAttr = [&]() -> AttributeList * {
+    return D.getAttributePool().create(
+             P.getNullabilityKeyword(nullability),
+             SourceRange(nullabilityLoc),
+             nullptr, SourceLocation(),
+             nullptr, 0,
+             AttributeList::AS_ContextSensitiveKeyword);
+  };
 
   if (D.getNumTypeObjects() > 0) {
     // Add the attribute to the declarator chunk nearest the declarator.
+    auto nullabilityAttr = getNullabilityAttr();
     DeclaratorChunk &chunk = D.getTypeObject(0);
     nullabilityAttr->setNext(chunk.getAttrListRef());
     chunk.getAttrListRef() = nullabilityAttr;
-  } else {
-    // Otherwise, just put it on the declarator.
-    D.getMutableDeclSpec().addAttributes(nullabilityAttr);
+  } else if (!addedToDeclSpec) {
+    // Otherwise, just put it on the declaration specifiers (if one
+    // isn't there already).
+    D.getMutableDeclSpec().addAttributes(getNullabilityAttr());
+    addedToDeclSpec = true;
   }
 }
 
@@ -736,6 +742,7 @@ void Parser::ParseObjCInterfaceDeclList(tok::ObjCKeywordKind contextKey,
         ParseObjCPropertyAttribute(OCDS);
       }
 
+      bool addedToDeclSpec = false;
       auto ObjCPropertyCallback = [&](ParsingFieldDeclarator &FD) {
         if (FD.D.getIdentifier() == nullptr) {
           Diag(AtLoc, diag::err_objc_property_requires_field_name)
@@ -752,7 +759,8 @@ void Parser::ParseObjCInterfaceDeclList(tok::ObjCKeywordKind contextKey,
         // attribute.
         if (OCDS.getPropertyAttributes() & ObjCDeclSpec::DQ_PR_nullability)
           addContextSensitiveTypeNullability(*this, FD.D, OCDS.getNullability(),
-                                             OCDS.getNullabilityLoc());
+                                             OCDS.getNullabilityLoc(),
+                                             addedToDeclSpec);
 
         // Install the property declarator into interfaceDecl.
         IdentifierInfo *SelName =
@@ -1274,10 +1282,12 @@ ParsedType Parser::ParseObjCTypeName(ObjCDeclSpec &DS,
     // If that's not invalid, extract a type.
     if (!declarator.isInvalidType()) {
       // Map a nullability specifier to a context-sensitive keyword attribute.
+      bool addedToDeclSpec = false;
       if (DS.getObjCDeclQualifier() & ObjCDeclSpec::DQ_CSNullability)
         addContextSensitiveTypeNullability(*this, declarator,
                                            DS.getNullability(),
-                                           DS.getNullabilityLoc());
+                                           DS.getNullabilityLoc(),
+                                           addedToDeclSpec);
 
       TypeResult type = Actions.ActOnTypeName(getCurScope(), declarator);
       if (!type.isInvalid())
@@ -1309,10 +1319,13 @@ ParsedType Parser::ParseObjCTypeName(ObjCDeclSpec &DS,
       Declarator declarator(declSpec, context);
 
       // Map a nullability specifier to a context-sensitive keyword attribute.
-      if (DS.getObjCDeclQualifier() & ObjCDeclSpec::DQ_CSNullability)
+      if (DS.getObjCDeclQualifier() & ObjCDeclSpec::DQ_CSNullability) {
+        bool addedToDeclSpec = false;
         addContextSensitiveTypeNullability(*this, declarator,
                                            DS.getNullability(),
-                                           DS.getNullabilityLoc());
+                                           DS.getNullabilityLoc(),
+                                           addedToDeclSpec);
+      }
 
       TypeResult type = Actions.ActOnTypeName(getCurScope(), declarator);
       if (!type.isInvalid())
