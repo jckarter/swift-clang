@@ -198,5 +198,5 @@ void testMultiProp(MultiProp *foo) {
   int *ip;
   ip = foo.a; // expected-warning{{from '__nullable id'}}
   ip = foo.d; // expected-warning{{from '__nullable MultiProp *'}}
-  ip = foo.e; // expected-error{{incompatible type '__nullable MultiProp *(^}}
+  ip = foo.e; // expected-error{{incompatible type '__nullable MultiProp *(^)(int)'}}
 }

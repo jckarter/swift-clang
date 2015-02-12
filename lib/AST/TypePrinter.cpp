@@ -1180,7 +1180,7 @@ void TypePrinter::printAttributedAfter(const AttributedType *T,
        T->getAttrKind() == AttributedType::attr_nullable ||
        T->getAttrKind() == AttributedType::attr_null_unspecified) &&
       !isMultiLevelPointerType(T->getModifiedType()))
-    return;
+    return printAfter(T->getEquivalentType(), OS);
 
   if (T->getAttrKind() == AttributedType::attr_objc_kindof)
     return;
