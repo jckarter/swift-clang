@@ -18,17 +18,17 @@
 #include "llvm/Analysis/TargetLibraryInfo.h"
 #include "llvm/Analysis/TargetTransformInfo.h"
 #include "llvm/Bitcode/BitcodeWriterPass.h"
+#include "llvm/Bitcode/ReaderWriter.h"
 #include "llvm/CodeGen/RegAllocRegistry.h"
 #include "llvm/CodeGen/SchedulerRegistry.h"
 #include "llvm/IR/DataLayout.h"
 #include "llvm/IR/IRPrintingPasses.h"
+#include "llvm/IR/LegacyPassManager.h"
 #include "llvm/IR/Module.h"
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/GlobalVariable.h"
 #include "llvm/IR/Verifier.h"
 #include "llvm/MC/SubtargetFeature.h"
-#include "llvm/PassManager.h"
-#include "llvm/Bitcode/ReaderWriter.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/FormattedStream.h"
 #include "llvm/Support/PrettyStackTrace.h"
@@ -59,9 +59,9 @@ class EmitAssemblyHelper {
 
   Timer CodeGenerationTime;
 
-  mutable PassManager *CodeGenPasses;
-  mutable PassManager *PerModulePasses;
-  mutable FunctionPassManager *PerFunctionPasses;
+  mutable legacy::PassManager *CodeGenPasses;
+  mutable legacy::PassManager *PerModulePasses;
+  mutable legacy::FunctionPassManager *PerFunctionPasses;
 
 private:
   TargetIRAnalysis getTargetIRAnalysis() const {
@@ -71,9 +71,9 @@ private:
     return TargetIRAnalysis();
   }
 
-  PassManager *getCodeGenPasses() const {
+  legacy::PassManager *getCodeGenPasses() const {
     if (!CodeGenPasses) {
-      CodeGenPasses = new PassManager();
+      CodeGenPasses = new legacy::PassManager();
       CodeGenPasses->add(new DataLayoutPass());
       CodeGenPasses->add(
           createTargetTransformInfoWrapperPass(getTargetIRAnalysis()));
@@ -81,9 +81,9 @@ private:
     return CodeGenPasses;
   }
 
-  PassManager *getPerModulePasses() const {
+  legacy::PassManager *getPerModulePasses() const {
     if (!PerModulePasses) {
-      PerModulePasses = new PassManager();
+      PerModulePasses = new legacy::PassManager();
       PerModulePasses->add(new DataLayoutPass());
       PerModulePasses->add(
           createTargetTransformInfoWrapperPass(getTargetIRAnalysis()));
@@ -91,9 +91,9 @@ private:
     return PerModulePasses;
   }
 
-  FunctionPassManager *getPerFunctionPasses() const {
+  legacy::FunctionPassManager *getPerFunctionPasses() const {
     if (!PerFunctionPasses) {
-      PerFunctionPasses = new FunctionPassManager(TheModule);
+      PerFunctionPasses = new legacy::FunctionPassManager(TheModule);
       PerFunctionPasses->add(new DataLayoutPass());
       PerFunctionPasses->add(
           createTargetTransformInfoWrapperPass(getTargetIRAnalysis()));
@@ -174,7 +174,7 @@ static void addObjCARCOptPass(const PassManagerBuilder &Builder, PassManagerBase
 }
 
 static void addSampleProfileLoaderPass(const PassManagerBuilder &Builder,
-                                       PassManagerBase &PM) {
+                                       legacy::PassManagerBase &PM) {
   const PassManagerBuilderWrapper &BuilderWrapper =
       static_cast<const PassManagerBuilderWrapper &>(Builder);
   const CodeGenOptions &CGOpts = BuilderWrapper.getCGOpts();
@@ -182,17 +182,17 @@ static void addSampleProfileLoaderPass(const PassManagerBuilder &Builder,
 }
 
 static void addAddDiscriminatorsPass(const PassManagerBuilder &Builder,
-                                     PassManagerBase &PM) {
+                                     legacy::PassManagerBase &PM) {
   PM.add(createAddDiscriminatorsPass());
 }
 
 static void addBoundsCheckingPass(const PassManagerBuilder &Builder,
-                                    PassManagerBase &PM) {
+                                    legacy::PassManagerBase &PM) {
   PM.add(createBoundsCheckingPass());
 }
 
 static void addSanitizerCoveragePass(const PassManagerBuilder &Builder,
-                                     PassManagerBase &PM) {
+                                     legacy::PassManagerBase &PM) {
   const PassManagerBuilderWrapper &BuilderWrapper =
       static_cast<const PassManagerBuilderWrapper&>(Builder);
   const CodeGenOptions &CGOpts = BuilderWrapper.getCGOpts();
@@ -200,13 +200,13 @@ static void addSanitizerCoveragePass(const PassManagerBuilder &Builder,
 }
 
 static void addAddressSanitizerPasses(const PassManagerBuilder &Builder,
-                                      PassManagerBase &PM) {
+                                      legacy::PassManagerBase &PM) {
   PM.add(createAddressSanitizerFunctionPass());
   PM.add(createAddressSanitizerModulePass());
 }
 
 static void addMemorySanitizerPass(const PassManagerBuilder &Builder,
-                                   PassManagerBase &PM) {
+                                   legacy::PassManagerBase &PM) {
   const PassManagerBuilderWrapper &BuilderWrapper =
       static_cast<const PassManagerBuilderWrapper&>(Builder);
   const CodeGenOptions &CGOpts = BuilderWrapper.getCGOpts();
@@ -226,12 +226,12 @@ static void addMemorySanitizerPass(const PassManagerBuilder &Builder,
 }
 
 static void addThreadSanitizerPass(const PassManagerBuilder &Builder,
-                                   PassManagerBase &PM) {
+                                   legacy::PassManagerBase &PM) {
   PM.add(createThreadSanitizerPass());
 }
 
 static void addDataFlowSanitizerPass(const PassManagerBuilder &Builder,
-                                     PassManagerBase &PM) {
+                                     legacy::PassManagerBase &PM) {
   const PassManagerBuilderWrapper &BuilderWrapper =
       static_cast<const PassManagerBuilderWrapper&>(Builder);
   const LangOptions &LangOpts = BuilderWrapper.getLangOpts();
@@ -247,7 +247,7 @@ static TargetLibraryInfoImpl *createTLII(llvm::Triple &TargetTriple,
 }
 
 static void addSymbolRewriterPass(const CodeGenOptions &Opts,
-                                  PassManager *MPM) {
+                                  legacy::PassManager *MPM) {
   llvm::SymbolRewriter::RewriteDescriptorList DL;
 
   llvm::SymbolRewriter::RewriteMapParser MapParser;
@@ -362,13 +362,13 @@ void EmitAssemblyHelper::CreatePasses() {
   }
 
   // Set up the per-function pass manager.
-  FunctionPassManager *FPM = getPerFunctionPasses();
+  legacy::FunctionPassManager *FPM = getPerFunctionPasses();
   if (CodeGenOpts.VerifyModule)
     FPM->add(createVerifierPass());
   PMBuilder.populateFunctionPassManager(*FPM);
 
   // Set up the per-module pass manager.
-  PassManager *MPM = getPerModulePasses();
+  legacy::PassManager *MPM = getPerModulePasses();
   if (!CodeGenOpts.RewriteMapFiles.empty())
     addSymbolRewriterPass(CodeGenOpts, MPM);
   if (CodeGenOpts.VerifyModule)
@@ -550,7 +550,7 @@ bool EmitAssemblyHelper::AddEmitPasses(BackendAction Action,
                                        formatted_raw_ostream &OS) {
 
   // Create the code generator passes.
-  PassManager *PM = getCodeGenPasses();
+  legacy::PassManager *PM = getCodeGenPasses();
 
   // Add LibraryInfo.
   llvm::Triple TargetTriple(TheModule->getTargetTriple());
