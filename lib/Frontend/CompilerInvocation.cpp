@@ -477,6 +477,8 @@ static bool ParseCodeGenArgs(CodeGenOptions &Opts, ArgList &Args, InputKind IK,
                                    OPT_fno_data_sections, false);
   Opts.MergeFunctions = Args.hasArg(OPT_fmerge_functions);
 
+  Opts.MSVolatile = Args.hasArg(OPT_fms_volatile);
+
   Opts.VectorizeBB = Args.hasArg(OPT_vectorize_slp_aggressive);
   Opts.VectorizeLoop = Args.hasArg(OPT_vectorize_loops);
   Opts.VectorizeSLP = Args.hasArg(OPT_vectorize_slp);
@@ -1557,6 +1559,8 @@ static void ParseLangArgs(LangOptions &Opts, ArgList &Args, InputKind IK,
   Opts.NoMathBuiltin = Args.hasArg(OPT_fno_math_builtin);
   Opts.AssumeSaneOperatorNew = !Args.hasArg(OPT_fno_assume_sane_operator_new);
   Opts.SizedDeallocation |= Args.hasArg(OPT_fsized_deallocation);
+  Opts.DefaultSizedDelete = Opts.SizedDeallocation &&
+      Args.hasArg(OPT_fdef_sized_delete);
   Opts.HeinousExtensions = Args.hasArg(OPT_fheinous_gnu_extensions);
   Opts.AccessControl = !Args.hasArg(OPT_fno_access_control);
   Opts.ElideConstructors = !Args.hasArg(OPT_fno_elide_constructors);
