@@ -8484,6 +8484,10 @@ void ASTReader::diagnoseOdrViolations() {
       // completed. We only really need to mark FieldDecls as invalid here.
       if (!isa<TagDecl>(D))
         D->setInvalidDecl();
+      
+      // Ensure we don't accidentally recursively enter deserialization while
+      // we're producing our diagnostic.
+      Deserializing RecursionGuard(this);
 
       std::string CanonDefModule =
           getOwningModuleNameForDiagnostic(cast<Decl>(CanonDef));
@@ -8504,6 +8508,13 @@ void ASTReader::diagnoseOdrViolations() {
       DiagnosedOdrMergeFailures.insert(CanonDef);
     }
   }
+
+  if (OdrMergeFailures.empty())
+    return;
+
+  // Ensure we don't accidentally recursively enter deserialization while
+  // we're producing our diagnostics.
+  Deserializing RecursionGuard(this);
 
   // Issue any pending ODR-failure diagnostics.
   for (auto &Merge : OdrMergeFailures) {
