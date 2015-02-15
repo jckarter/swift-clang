@@ -3695,11 +3695,12 @@ void Parser::ParseEnumSpecifier(SourceLocation StartLoc, DeclSpec &DS,
     // if a fixed underlying type is allowed.
     ColonProtectionRAIIObject X(*this, AllowFixedUnderlyingType);
 
-    if (ParseOptionalCXXScopeSpecifier(SS, ParsedType(),
+    CXXScopeSpec Spec;
+    if (ParseOptionalCXXScopeSpecifier(Spec, ParsedType(),
                                        /*EnteringContext=*/true))
       return;
 
-    if (SS.isSet() && Tok.isNot(tok::identifier)) {
+    if (Spec.isSet() && Tok.isNot(tok::identifier)) {
       Diag(Tok, diag::err_expected) << tok::identifier;
       if (Tok.isNot(tok::l_brace)) {
         // Has no name and is not a definition.
@@ -3708,6 +3709,8 @@ void Parser::ParseEnumSpecifier(SourceLocation StartLoc, DeclSpec &DS,
         return;
       }
     }
+
+    SS = Spec;
   }
 
   // Must have either 'enum name' or 'enum {...}'.
