@@ -551,6 +551,10 @@ are:
   AppleTVOS operating system.  The minimum deployment target is specified by
   the ``-mtvos-version-min=*version*`` command-line argument.
 
+``watchos``
+  AppleWatchOS operating system.  The minimum deployment target is specified by
+  the ``-mwatchos-version-min=*version*`` command-line argument.
+
 A declaration can be used even when deploying back to a platform version prior
 to when the declaration was introduced.  When this happens, the declaration is
 `weakly linked
