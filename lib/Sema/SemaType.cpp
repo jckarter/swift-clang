@@ -3322,9 +3322,15 @@ static TypeSourceInfo *GetFullTypeForDeclarator(TypeProcessingState &state,
       isFunctionOrMethod = true;
       // fallthrough
 
+    case Declarator::MemberContext:
+      if (state.getDeclarator().isObjCIvar() && !isFunctionOrMethod) {
+        complainAboutMissingNullability = CAMN_No;
+        break;
+      }
+      // fallthrough
+
     case Declarator::FileContext:
     case Declarator::KNRTypeListContext:
-    case Declarator::MemberContext:
       complainAboutMissingNullability = CAMN_Yes;
 
       // Nullability inference depends on the type and declarator.

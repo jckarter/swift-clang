@@ -8,7 +8,11 @@ void g3(const
         * // expected-warning{{missing a nullability type specifier}}
         ); 
 
-@interface SomeClass
+@interface SomeClass {
+  __nullable id ivar1;
+  id ivar2;
+}
+
 @property (retain,nonnull) id property1;
 @property (retain,nullable) SomeClass *property2;
 - (nullable SomeClass *)method1;

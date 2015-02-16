@@ -79,6 +79,13 @@ static inline void f30(void) {
   float *fp3 = ipp; // expected-error{{lvalue of type 'int_ptr_ptr' (aka 'int **')}}
 }
 
+@interface AA : A {
+@public
+  id ivar1;
+  __nonnull id ivar2;
+}
+@end
+
 #pragma clang assume_nonnull end
 
 void f20(A *a); // expected-warning{{pointer is missing a nullability type specifier (__nonnull or __nullable)}}

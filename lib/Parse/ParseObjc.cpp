@@ -1970,6 +1970,7 @@ void Parser::ParseObjCClassInstanceVariables(Decl *interfaceDecl,
     auto ObjCIvarCallback = [&](ParsingFieldDeclarator &FD) {
       Actions.ActOnObjCContainerStartDefinition(interfaceDecl);
       // Install the declarator into the interface decl.
+      FD.D.setObjCIvar(true);
       Decl *Field = Actions.ActOnIvar(
           getCurScope(), FD.D.getDeclSpec().getSourceRange().getBegin(), FD.D,
           FD.BitfieldSize, visibility);

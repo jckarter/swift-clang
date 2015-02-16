@@ -8,7 +8,7 @@
 #  error assume_nonnull feature is not set
 #endif
 
-void test_pragmas_1(__nonnull A *a) {
+void test_pragmas_1(__nonnull A *a, __nonnull AA *aa) {
   f1(0); // okay: no nullability annotations
   f2(0); // expected-warning{{null passed to a callee that requires a non-null argument}}
   f3(0); // expected-warning{{null passed to a callee that requires a non-null argument}}
@@ -36,6 +36,9 @@ void test_pragmas_1(__nonnull A *a) {
   ptr = f15(); // expected-error{{assigning to 'float *' from incompatible type '__null_unspecified int *'}}
   ptr = f16(); // expected-error{{assigning to 'float *' from incompatible type '__null_unspecified A *'}}
   ptr = [a method2]; // expected-error{{assigning to 'float *' from incompatible type '__null_unspecified A *'}}
+
+  ptr = aa->ivar1; // expected-error{{from incompatible type 'id'}}
+  ptr = aa->ivar2; // expected-error{{from incompatible type '__nonnull id'}}
 }
 
 void test_pragmas_generics(void) {
