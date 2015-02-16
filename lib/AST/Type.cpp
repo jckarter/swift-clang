@@ -1236,6 +1236,30 @@ QualType QualType::substObjCMemberType(QualType objectType,
   return *this;
 }
 
+QualType QualType::stripObjCKindOfType(const ASTContext &constCtx) const {
+  // FIXME: Because ASTContext::getAttributedType() is non-const.
+  auto &ctx = const_cast<ASTContext &>(constCtx);
+  return simpleTransform(ctx, *this,
+           [&](QualType type) -> QualType {
+             SplitQualType splitType = type.split();
+             if (auto *objType = splitType.Ty->getAs<ObjCObjectType>()) {
+               if (!objType->isKindOfType())
+                 return type;
+
+               QualType baseType
+                 = objType->getBaseType().stripObjCKindOfType(ctx);
+               return ctx.getQualifiedType(
+                        ctx.getObjCObjectType(baseType,
+                                              objType->getTypeArgsAsWritten(),
+                                              objType->getProtocols(),
+                                              /*isKindOf=*/false),
+                        splitType.Quals);
+             }
+
+             return type;
+           });
+}
+
 Optional<ArrayRef<QualType>> Type::getObjCSubstitutions(
                                const DeclContext *dc) const {
   // Look through method scopes.

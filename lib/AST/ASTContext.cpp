@@ -6864,13 +6864,19 @@ void getIntersectionOfProtocols(ASTContext &Context,
 
 // Check that the given Objective-C type argument lists are equivalent.
 static bool sameObjCTypeArgs(const ASTContext &ctx, ArrayRef<QualType> lhsArgs,
-                             ArrayRef<QualType> rhsArgs) {
+                             ArrayRef<QualType> rhsArgs,
+                             bool stripKindOf) {
   if (lhsArgs.size() != rhsArgs.size())
     return false;
 
   for (unsigned i = 0, n = lhsArgs.size(); i != n; ++i) {
-    if (!ctx.hasSameType(lhsArgs[i], rhsArgs[i]))
-      return false;
+    if (!ctx.hasSameType(lhsArgs[i], rhsArgs[i])) {
+      if (!stripKindOf ||
+          !ctx.hasSameType(lhsArgs[i].stripObjCKindOfType(ctx),
+                           rhsArgs[i].stripObjCKindOfType(ctx))) {
+        return false;
+      }
+    }
   }
 
   return true;
@@ -6902,7 +6908,8 @@ QualType ASTContext::areCommonBaseCompatible(
       bool anyChanges = false;
       if (LHS->isSpecialized() && RHS->isSpecialized()) {
         // Both have type arguments, compare them.
-        if (!sameObjCTypeArgs(*this, LHS->getTypeArgs(), RHS->getTypeArgs()))
+        if (!sameObjCTypeArgs(*this, LHS->getTypeArgs(), RHS->getTypeArgs(),
+                              /*stripKindOf=*/true))
           return QualType();
       } else if (LHS->isSpecialized() != RHS->isSpecialized()) {
         // If only one has type arguments, the result will not have type
@@ -6949,7 +6956,8 @@ QualType ASTContext::areCommonBaseCompatible(
       bool anyChanges = false;
       if (LHS->isSpecialized() && RHS->isSpecialized()) {
         // Both have type arguments, compare them.
-        if (!sameObjCTypeArgs(*this, LHS->getTypeArgs(), RHS->getTypeArgs()))
+        if (!sameObjCTypeArgs(*this, LHS->getTypeArgs(), RHS->getTypeArgs(),
+                              /*stripKindOf=*/true))
           return QualType();
       } else if (LHS->isSpecialized() != RHS->isSpecialized()) {
         // If only one has type arguments, the result will not have type
@@ -7038,7 +7046,8 @@ bool ASTContext::canAssignObjCInterfaces(const ObjCObjectType *LHS,
 
     // If the RHS is specializd, compare type arguments.
     if (RHSSuper->isSpecialized() &&
-        !sameObjCTypeArgs(*this, LHS->getTypeArgs(), RHSSuper->getTypeArgs())) {
+        !sameObjCTypeArgs(*this, LHS->getTypeArgs(), RHSSuper->getTypeArgs(),
+                          /*stripKindOf=*/true)) {
       return false;
     }
   }

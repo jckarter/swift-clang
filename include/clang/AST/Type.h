@@ -1054,6 +1054,9 @@ public:
                                const DeclContext *dc,
                                ObjCSubstitutionContext context) const;
 
+  /// Strip Objective-C "__kindof" types from the given type.
+  QualType stripObjCKindOfType(const ASTContext &ctx) const;
+
 private:
   // These methods are implemented in a separate translation unit;
   // "static"-ize them to avoid creating temporary QualTypes in the

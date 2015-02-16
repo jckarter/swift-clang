@@ -262,3 +262,30 @@ void message_kindof_qualified_class(
   [kindof_NSCopying string]; // in some class
   [kindof_NSCopying randomClassMethod]; // in unrelated protocol
 }
+
+// ---------------------------------------------------------------------------
+// __kindof within specialized types
+// ---------------------------------------------------------------------------
+@interface NSArray<T> : NSObject
+@end
+
+void implicit_convert_array(NSArray<__kindof NSString *> *kindofStringsArray,
+                            NSArray<NSString *> *stringsArray,
+                            NSArray<__kindof NSMutableString *>
+                              *kindofMutStringsArray,
+                            NSArray<NSMutableString *> *mutStringsArray) {
+  // Adding/removing __kindof is okay.
+  kindofStringsArray = stringsArray;
+  stringsArray = kindofStringsArray;
+
+  // Other covariant and contravariant conversions still not permitted.
+  kindofStringsArray = mutStringsArray; // expected-warning{{incompatible pointer types}}
+  stringsArray = kindofMutStringsArray; // expected-warning{{incompatible pointer types}}
+  mutStringsArray = kindofStringsArray; // expected-warning{{incompatible pointer types}}
+
+  // Adding/removing nested __kindof is okay.
+  NSArray<NSArray<__kindof NSString *> *> *kindofStringsArrayArray;
+  NSArray<NSArray<NSString *> *> *stringsArrayArray;
+  kindofStringsArrayArray = stringsArrayArray;
+  stringsArrayArray = kindofStringsArrayArray;
+}
