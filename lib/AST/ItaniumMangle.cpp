@@ -69,6 +69,14 @@ static const DeclContext *getEffectiveDeclContext(const Decl *D) {
   if (const CapturedDecl *CD = dyn_cast<CapturedDecl>(DC))
     return getEffectiveDeclContext(CD);
 
+  if (const auto *VD = dyn_cast<VarDecl>(D))
+    if (VD->isExternC())
+      return VD->getASTContext().getTranslationUnitDecl();
+
+  if (const auto *FD = dyn_cast<FunctionDecl>(D))
+    if (FD->isExternC())
+      return FD->getASTContext().getTranslationUnitDecl();
+
   return DC;
 }
 
@@ -3549,7 +3557,7 @@ void CXXNameMangler::mangleTemplateArg(TemplateArgument A) {
     if (const DeclRefExpr *DRE = dyn_cast<DeclRefExpr>(E)) {
       const ValueDecl *D = DRE->getDecl();
       if (isa<VarDecl>(D) || isa<FunctionDecl>(D)) {
-        Out << "L";
+        Out << 'L';
         mangle(D);
         Out << 'E';
         break;
