@@ -3375,6 +3375,10 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
     CmdArgs.push_back("-fdata-sections");
   }
 
+  if (!Args.hasFlag(options::OPT_funique_section_names,
+                    options::OPT_fno_unique_section_names, true))
+    CmdArgs.push_back("-fno-unique-section-names");
+
   Args.AddAllArgs(CmdArgs, options::OPT_finstrument_functions);
 
   if (Args.hasArg(options::OPT_fprofile_instr_generate) &&
@@ -5957,7 +5961,8 @@ void darwin::Link::AddLinkArgs(Compilation &C,
   // If we are using LTO, then automatically create a temporary file path for
   // the linker to use, so that it's lifetime will extend past a possible
   // dsymutil step.
-  if (Version[0] >= 116 && D.IsUsingLTO(Args) && NeedsTempPath(Inputs)) {
+  if (Version[0] >= 116 && D.IsUsingLTO(getToolChain(), Args) &&
+      NeedsTempPath(Inputs)) {
     const char *TmpPath = C.getArgs().MakeArgString(
       D.GetTemporaryPath("cc", types::getTypeTempSuffix(types::TY_Object)));
     C.addTempFile(TmpPath);
@@ -6980,7 +6985,7 @@ void freebsd::Link::ConstructJob(Compilation &C, const JobAction &JA,
   Args.AddAllArgs(CmdArgs, options::OPT_Z_Flag);
   Args.AddAllArgs(CmdArgs, options::OPT_r);
 
-  if (D.IsUsingLTO(Args))
+  if (D.IsUsingLTO(getToolChain(), Args))
     AddGoldPlugin(ToolChain, Args, CmdArgs);
 
   bool NeedsSanitizerDeps = addSanitizerRuntimes(ToolChain, Args, CmdArgs);
@@ -7816,7 +7821,7 @@ void gnutools::Link::ConstructJob(Compilation &C, const JobAction &JA,
   for (const auto &Path : Paths)
     CmdArgs.push_back(Args.MakeArgString(StringRef("-L") + Path));
 
-  if (D.IsUsingLTO(Args))
+  if (D.IsUsingLTO(getToolChain(), Args))
     AddGoldPlugin(ToolChain, Args, CmdArgs);
 
   if (Args.hasArg(options::OPT_Z_Xlinker__no_demangle))
