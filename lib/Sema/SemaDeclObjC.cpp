@@ -3337,12 +3337,16 @@ ObjCMethodDecl *Sema::LookupImplementedMethodInGlobalPool(Selector Sel) {
   GlobalMethods &Methods = Pos->second;
   for (const ObjCMethodList *Method = &Methods.first; Method;
        Method = Method->getNext())
-    if (Method->getMethod() && Method->getMethod()->isDefined())
+    if (Method->getMethod() &&
+        (Method->getMethod()->isDefined() ||
+         Method->getMethod()->isPropertyAccessor()))
       return Method->getMethod();
   
   for (const ObjCMethodList *Method = &Methods.second; Method;
        Method = Method->getNext())
-    if (Method->getMethod() && Method->getMethod()->isDefined())
+    if (Method->getMethod() &&
+        (Method->getMethod()->isDefined() ||
+         Method->getMethod()->isPropertyAccessor()))
       return Method->getMethod();
   return nullptr;
 }
