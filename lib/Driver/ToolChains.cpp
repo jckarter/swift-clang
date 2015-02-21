@@ -298,6 +298,10 @@ void DarwinClang::AddLinkARCArgs(const ArgList &Args,
     P += "watchsimulator";
   else if (isTargetWatchOS())
     P += "watchos";
+  else if (isTargetTvOSSimulator())
+    P += "appletvsimulator";
+  else if (isTargetTvOS())
+    P += "appletvos";
   else if (isTargetIOSSimulator())
     P += "iphonesimulator";
   else if (isTargetIPhoneOS())
