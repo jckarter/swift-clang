@@ -4345,15 +4345,6 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
   if (!Args.hasFlag(options::OPT_fassume_sane_operator_new,
                     options::OPT_fno_assume_sane_operator_new))
     CmdArgs.push_back("-fno-assume-sane-operator-new");
-  
-  // -fno-sized-deallocation: disable sized delete.
-  if (Args.hasArg(options::OPT_fno_sized_deallocation))
-    CmdArgs.push_back("-fno-sized-deallocation");
-  
-  // -fdefine-sized-deallocation: default implementation of sized delete as a
-  // weak definition.
-  if (Args.hasArg(options::OPT_fdefine_sized_deallocation))
-    CmdArgs.push_back("-fdefine-sized-deallocation");
 
   // -fconstant-cfstrings is default, and may be subject to argument translation
   // on Darwin.
@@ -5743,8 +5734,8 @@ bool mips::isFPXXDefault(const llvm::Triple &Triple, StringRef CPUName,
 
   return llvm::StringSwitch<bool>(CPUName)
              .Cases("mips2", "mips3", "mips4", "mips5", true)
-             .Cases("mips32", "mips32r2", true)
-             .Cases("mips64", "mips64r2", true)
+             .Cases("mips32", "mips32r2", "mips32r3", "mips32r5", true)
+             .Cases("mips64", "mips64r2", "mips64r3", "mips64r5", true)
              .Default(false);
 }
 
