@@ -412,7 +412,7 @@ def fno_autolink : Flag <["-"], "fno-autolink">, Group<f_Group>,
   HelpText<"Disable generation of linker directives for automatic library linking">;
 
 def fembed_bitcode : Flag<["-"], "fembed-bitcode">, Group<f_Group>,
-  Flags<[CC1Option]>,
+  Flags<[CC1Option, CC1AsOption]>,
   HelpText<"Embed LLVM IR bitcode as data">;
 def fembed_bitcode_marker : Flag<["-"], "fembed-bitcode-marker">,
   Group<f_Group>, Flags<[CC1Option]>,

@@ -30,6 +30,7 @@
 #include "llvm/MC/MCObjectFileInfo.h"
 #include "llvm/MC/MCParser/MCAsmParser.h"
 #include "llvm/MC/MCRegisterInfo.h"
+#include "llvm/MC/MCSectionMachO.h"
 #include "llvm/MC/MCStreamer.h"
 #include "llvm/MC/MCSubtargetInfo.h"
 #include "llvm/MC/MCTargetAsmParser.h"
@@ -124,6 +125,7 @@ struct AssemblerInvocation {
   unsigned RelaxAll : 1;
   unsigned NoExecStack : 1;
   unsigned FatalWarnings : 1;
+  unsigned EmbedBitcode : 1;
 
   /// @}
 
@@ -141,6 +143,7 @@ public:
     NoExecStack = 0;
     FatalWarnings = 0;
     DwarfVersion = 3;
+    EmbedBitcode = 0;
   }
 
   static bool CreateFromArgs(AssemblerInvocation &Res,
@@ -250,6 +253,8 @@ bool AssemblerInvocation::CreateFromArgs(AssemblerInvocation &Opts,
   Opts.RelaxAll = Args->hasArg(OPT_mrelax_all);
   Opts.NoExecStack = Args->hasArg(OPT_mno_exec_stack);
   Opts.FatalWarnings =  Args->hasArg(OPT_massembler_fatal_warnings);
+
+  Opts.EmbedBitcode = Args->hasArg(OPT_fembed_bitcode);
 
   return Success;
 }
@@ -382,6 +387,19 @@ static bool ExecuteAssembler(AssemblerInvocation &Opts,
     Str.reset(TheTarget->createMCObjectStreamer(Opts.Triple, Ctx, *MAB, *Out,
                                                 CE, *STI, Opts.RelaxAll));
     Str.get()->InitSections(Opts.NoExecStack);
+
+    if (Opts.EmbedBitcode &&
+        Ctx.getObjectFileInfo()->getObjectFileType() ==
+                                 MCObjectFileInfo::IsMachO) {
+      // When -fembed-bitcode is passed to clang_as, a 1-byte marker
+      // is emitted in __LLVM,__asm section to tell the linker to add
+      // the macho object into the bundle
+      const MCSection *AsmLabel = Ctx.getMachOSection("__LLVM", "__asm",
+                                      MachO::S_REGULAR, 4,
+                                      SectionKind::getDataNoRel());
+      Str.get()->SwitchSection(AsmLabel);
+      Str.get()->EmitZeros(1);
+    }
   }
 
   bool Failed = false;

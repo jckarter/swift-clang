@@ -20,3 +20,8 @@
 // CHECK-MARKER: -emit-obj
 // CHECK-MARKER: -fembed-bitcode-marker
 // CHECK-MARKER-NOT: -cc1
+
+// RUN: %clang -c -x assembler %s -fembed-bitcode -### 2>&1 | FileCheck %s -check-prefix=CHECK-AS
+// RUN: %clang -c -x assembler %s -fembed-bitcode-marker -### 2>&1 | FileCheck %s -check-prefix=CHECK-AS
+// CHECK-AS: -cc1as
+// CHECK-AS: -fembed-bitcode
