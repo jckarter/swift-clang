@@ -26,7 +26,6 @@
 #include "llvm/ADT/StringRef.h"
 #include "llvm/ADT/StringSwitch.h"
 #include "llvm/ADT/Triple.h"
-#include "llvm/IR/Type.h"
 #include "llvm/MC/MCSectionMachO.h"
 #include "llvm/Support/ErrorHandling.h"
 #include <algorithm>

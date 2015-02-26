@@ -1582,6 +1582,8 @@ unsigned TokenAnnotator::splitPenalty(const AnnotatedLine &Line,
 
   if (Left.is(tok::l_paren) && InFunctionDecl && Style.AlignAfterOpenBracket)
     return 100;
+  if (Left.is(tok::l_paren) && Left.Previous && Left.Previous->is(tok::kw_if))
+    return 1000;
   if (Left.is(tok::equal) && InFunctionDecl)
     return 110;
   if (Right.is(tok::r_brace))
@@ -1836,7 +1838,8 @@ bool TokenAnnotator::spaceRequiredBefore(const AnnotatedLine &Line,
   if ((Right.is(TT_BinaryOperator) && !Left.is(tok::l_paren)) ||
       Left.isOneOf(TT_BinaryOperator, TT_ConditionalExpr))
     return true;
-  if (Left.is(TT_TemplateCloser) && Right.is(tok::l_paren))
+  if (Left.is(TT_TemplateCloser) && Right.is(tok::l_paren) &&
+      Right.isNot(TT_FunctionTypeLParen))
     return Style.SpaceBeforeParens == FormatStyle::SBPO_Always;
   if (Right.is(TT_TemplateOpener) && Left.is(tok::r_paren) &&
       Left.MatchingParen && Left.MatchingParen->is(TT_OverloadedOperatorLParen))
@@ -2009,8 +2012,7 @@ bool TokenAnnotator::canBreakBefore(const AnnotatedLine &Line,
   if (Left.is(tok::l_paren) && Left.is(TT_AttributeParen))
     return false;
   if (Left.is(tok::l_paren) && Left.Previous &&
-      (Left.Previous->isOneOf(TT_BinaryOperator, TT_CastRParen) ||
-       Left.Previous->is(tok::kw_if)))
+      (Left.Previous->isOneOf(TT_BinaryOperator, TT_CastRParen)))
     return false;
   if (Right.is(TT_ImplicitStringLiteral))
     return false;

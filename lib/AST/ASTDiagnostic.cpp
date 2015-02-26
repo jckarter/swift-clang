@@ -1014,9 +1014,11 @@ class TemplateDiff {
       Tree.SetDefault(FromIter.isEnd() && FromExpr, ToIter.isEnd() && ToExpr);
       if (FromDefaultNonTypeDecl->getType()->isIntegralOrEnumerationType()) {
         if (FromExpr)
-          HasFromInt = GetInt(Context, FromIter, FromExpr, FromInt);
+          HasFromInt = GetInt(Context, FromIter, FromExpr, FromInt,
+                              FromDefaultNonTypeDecl->getType());
         if (ToExpr)
-          HasToInt = GetInt(Context, ToIter, ToExpr, ToInt);
+          HasToInt = GetInt(Context, ToIter, ToExpr, ToInt,
+                            ToDefaultNonTypeDecl->getType());
       }
       if (HasFromInt && HasToInt) {
         Tree.SetNode(FromInt, ToInt, HasFromInt, HasToInt);
@@ -1037,9 +1039,11 @@ class TemplateDiff {
 
     if (HasFromInt || HasToInt) {
       if (!HasFromInt && FromExpr)
-        HasFromInt = GetInt(Context, FromIter, FromExpr, FromInt);
+        HasFromInt = GetInt(Context, FromIter, FromExpr, FromInt,
+                            FromDefaultNonTypeDecl->getType());
       if (!HasToInt && ToExpr)
-        HasToInt = GetInt(Context, ToIter, ToExpr, ToInt);
+        HasToInt = GetInt(Context, ToIter, ToExpr, ToInt,
+                          ToDefaultNonTypeDecl->getType());
       Tree.SetNode(FromInt, ToInt, HasFromInt, HasToInt);
       if (HasFromInt && HasToInt) {
         Tree.SetSame(FromInt == ToInt);
@@ -1221,9 +1225,11 @@ class TemplateDiff {
   }
 
   /// GetInt - Retrieves the template integer argument, including evaluating
-  /// default arguments.
+  /// default arguments.  If the value comes from an expression, extend the
+  /// APSInt to size of IntegerType to match the behavior in
+  /// Sema::CheckTemplateArgument
   static bool GetInt(ASTContext &Context, const TSTiterator &Iter,
-                     Expr *ArgExpr, llvm::APSInt &Int) {
+                     Expr *ArgExpr, llvm::APSInt &Int, QualType IntegerType) {
     // Default, value-depenedent expressions require fetching
     // from the desugared TemplateArgument, otherwise expression needs to
     // be evaluatable.
@@ -1235,12 +1241,14 @@ class TemplateDiff {
         case TemplateArgument::Expression:
           ArgExpr = Iter.getDesugar().getAsExpr();
           Int = ArgExpr->EvaluateKnownConstInt(Context);
+          Int = Int.extOrTrunc(Context.getTypeSize(IntegerType));
           return true;
         default:
           llvm_unreachable("Unexpected template argument kind");
       }
     } else if (ArgExpr->isEvaluatable(Context)) {
       Int = ArgExpr->EvaluateKnownConstInt(Context);
+      Int = Int.extOrTrunc(Context.getTypeSize(IntegerType));
       return true;
     }
 

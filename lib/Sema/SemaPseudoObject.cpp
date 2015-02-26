@@ -1426,7 +1426,7 @@ ExprResult MSPropertyOpBuilder::buildGet() {
   ExprResult GetterExpr = S.ActOnMemberAccessExpr(
     S.getCurScope(), RefExpr->getBaseExpr(), SourceLocation(),
     RefExpr->isArrow() ? tok::arrow : tok::period, SS, SourceLocation(),
-    GetterName, nullptr, true);
+    GetterName, nullptr);
   if (GetterExpr.isInvalid()) {
     S.Diag(RefExpr->getMemberLoc(),
            diag::error_cannot_find_suitable_accessor) << 0 /* getter */
@@ -1456,7 +1456,7 @@ ExprResult MSPropertyOpBuilder::buildSet(Expr *op, SourceLocation sl,
   ExprResult SetterExpr = S.ActOnMemberAccessExpr(
     S.getCurScope(), RefExpr->getBaseExpr(), SourceLocation(),
     RefExpr->isArrow() ? tok::arrow : tok::period, SS, SourceLocation(),
-    SetterName, nullptr, true);
+    SetterName, nullptr);
   if (SetterExpr.isInvalid()) {
     S.Diag(RefExpr->getMemberLoc(),
            diag::error_cannot_find_suitable_accessor) << 1 /* setter */
