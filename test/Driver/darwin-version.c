@@ -44,10 +44,10 @@
 // CHECK-VERSION-WATCHSIM20: "i386-apple-watchos2.0.0"
 
 // Check environment variable gets interpreted correctly
-// RUN: env MACOSX_DEPLOYMENT_TARGET=10.5 \
+// RUN: env MACOSX_DEPLOYMENT_TARGET=10.5 IPHONEOS_DEPLOYMENT_TARGET=2.0 \
 // RUN:   %clang -target i386-apple-darwin9 -c %s -### 2>&1 | \
 // RUN:   FileCheck --check-prefix=CHECK-VERSION-OSX5 %s
-// RUN: env IPHONEOS_DEPLOYMENT_TARGET=2.0 \
+// RUN: env MACOSX_DEPLOYMENT_TARGET=10.5 IPHONEOS_DEPLOYMENT_TARGET=2.0 \
 // RUN:   %clang -target armv6-apple-darwin9 -c %s -### 2>&1 | \
 // RUN:   FileCheck --check-prefix=CHECK-VERSION-IOS2 %s
 
@@ -60,12 +60,20 @@
 // RUN:   FileCheck --check-prefix=CHECK-VERSION-IOS231 %s
 // CHECK-VERSION-IOS231: "armv6-apple-ios2.3.1"
 
+// RUN: env MACOSX_DEPLOYMENT_TARGET=10.5 TVOS_DEPLOYMENT_TARGET=8.3.1 \
+// RUN:   %clang -target armv7-apple-darwin9 -c %s -### 2>&1 | \
+// RUN:   FileCheck --check-prefix=CHECK-VERSION-TVOS %s
+// CHECK-VERSION-TVOS: "thumbv7-apple-tvos8.3.1"
 // RUN: env TVOS_DEPLOYMENT_TARGET=8.3.1 \
 // RUN:   %clang -target i386-apple-darwin9 -c %s -### 2>&1 | \
-// RUN:   FileCheck --check-prefix=CHECK-VERSION-TVOS %s
-// CHECK-VERSION-TVOS: "i386-apple-tvos8.3.1"
+// RUN:   FileCheck --check-prefix=CHECK-VERSION-TVOSSIM %s
+// CHECK-VERSION-TVOSSIM: "i386-apple-tvos8.3.1"
 
+// RUN: env MACOSX_DEPLOYMENT_TARGET=10.5 WATCHOS_DEPLOYMENT_TARGET=2.0 \
+// RUN:   %clang -target armv7-apple-darwin9 -c %s -### 2>&1 | \
+// RUN:   FileCheck --check-prefix=CHECK-VERSION-WATCHOS %s
+// CHECK-VERSION-WATCHOS: "thumbv7-apple-watchos2.0.0"
 // RUN: env WATCHOS_DEPLOYMENT_TARGET=2.0 \
 // RUN:   %clang -target i386-apple-darwin9 -c %s -### 2>&1 | \
-// RUN:   FileCheck --check-prefix=CHECK-VERSION-WATCHOS %s
-// CHECK-VERSION-WATCHOS: "i386-apple-watchos2.0.0"
+// RUN:   FileCheck --check-prefix=CHECK-VERSION-WATCHOSSIM %s
+// CHECK-VERSION-WATCHOSSIM: "i386-apple-watchos2.0.0"

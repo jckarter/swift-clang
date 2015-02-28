@@ -579,32 +579,31 @@ void Darwin::AddDeploymentTarget(DerivedArgList &Args) const {
         iOSTarget = iOSVersionMin;
 
     // Do not allow conflicts with the WatchOS target.
-    if (!WatchOSTarget.empty() && (!OSXTarget.empty() || !iOSTarget.empty() ||
-                                   !TvOSTarget.empty())) {
+    if (!WatchOSTarget.empty() && (!iOSTarget.empty() || !TvOSTarget.empty())){
       getDriver().Diag(diag::err_drv_conflicting_deployment_targets)
         << "WATCHOS_DEPLOYMENT_TARGET"
-        << (!OSXTarget.empty() ? "MACOSX_DEPLOYMENT_TARGET" :
-            !iOSTarget.empty() ? "IPHONEOS_DEPLOYMENT_TARGET" :
+        << (!iOSTarget.empty() ? "IPHONEOS_DEPLOYMENT_TARGET" :
             "TVOS_DEPLOYMENT_TARGET");
     }
 
     // Do not allow conflicts with the tvOS target.
-    if (!TvOSTarget.empty() && (!OSXTarget.empty() || !iOSTarget.empty())) {
+    if (!TvOSTarget.empty() && !iOSTarget.empty()) {
       getDriver().Diag(diag::err_drv_conflicting_deployment_targets)
         << "TVOS_DEPLOYMENT_TARGET"
-        << (!OSXTarget.empty() ? "MACOSX_DEPLOYMENT_TARGET" :
-            "IPHONEOS_DEPLOYMENT_TARGET");
+        << "IPHONEOS_DEPLOYMENT_TARGET";
     }
 
     // Allow conflicts among OSX and iOS for historical reasons, but choose the
     // default platform.
-    if (!OSXTarget.empty() && !iOSTarget.empty()) {
+    if (!OSXTarget.empty() && (!iOSTarget.empty() ||
+                               !WatchOSTarget.empty() ||
+                               !TvOSTarget.empty())) {
       if (getTriple().getArch() == llvm::Triple::arm ||
           getTriple().getArch() == llvm::Triple::aarch64 ||
           getTriple().getArch() == llvm::Triple::thumb)
         OSXTarget = "";
       else
-        iOSTarget = "";
+        iOSTarget = WatchOSTarget = TvOSTarget = "";
     }
 
     if (!OSXTarget.empty()) {
