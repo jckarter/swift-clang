@@ -8326,10 +8326,9 @@ void ASTReader::finishPendingActions() {
     PendingIncompleteDeclChains.clear();
 
     // Load pending declaration chains.
-    for (unsigned I = 0; I != PendingDeclChains.size(); ++I) {
+    for (unsigned I = 0; I != PendingDeclChains.size(); ++I)
       loadPendingDeclChain(PendingDeclChains[I]);
-      PendingDeclChainsKnown.erase(PendingDeclChains[I]);
-    }
+    PendingDeclChainsKnown.clear();
     PendingDeclChains.clear();
 
     // Make the most recent of the top-level declarations visible.
