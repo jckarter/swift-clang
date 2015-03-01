@@ -75,7 +75,9 @@ __attribute((objc_complete_definition))
 // make sure we are still in the same function
 // CHECK: define {{.*}}__copy_helper_block_
 // Metadata
-// CHECK:        ![[MAIN:.*]] = {{.*}}[ DW_TAG_structure_type ] [Main] [line 35,
-// CHECK:        ![[PMAIN:.*]] = {{.*}}![[MAIN]]} ; [ DW_TAG_pointer_type ]{{.*}}from Main
+// CHECK:        ![[MAIN:.*]] = !MDCompositeType(tag: DW_TAG_structure_type, name: "Main"
+// CHECK-SAME:                                   line: 35
+// CHECK:        ![[PMAIN:.*]] = !MDDerivedType(tag: DW_TAG_pointer_type, baseType: ![[MAIN]]
 // CHECK:        ![[BDMD]] = {{.*}}.block_descriptor
-// CHECK:        ![[SELF]] = {{.*}}![[PMAIN]]{{.*}}[ DW_TAG_auto_variable ] [self] [line 52]
+// CHECK:        ![[SELF]] = !MDLocalVariable(tag: DW_TAG_auto_variable, name: "self", {{.*}}line: 52
+// CHECK-SAME:                                type: ![[PMAIN]]
