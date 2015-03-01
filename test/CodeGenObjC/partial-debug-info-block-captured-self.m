@@ -66,7 +66,7 @@ __attribute((objc_complete_definition))
 // CHECK:        %[[MEM1:.*]] = alloca i8*, align 8
 // CHECK-NEXT:   %[[MEM2:.*]] = alloca i8*, align 8
 // CHECK:        store i8* [[BLOCK_DESC:%.*]], i8** %[[MEM1]], align 8
-// CHECK:        %[[TMP0:.*]] = load i8** %[[MEM1]]
+// CHECK:        %[[TMP0:.*]] = load i8*, i8** %[[MEM1]]
 // CHECK:        call void @llvm.dbg.value(metadata i8* %[[TMP0]], i64 0, metadata ![[BDMD:[0-9]+]], metadata !{{[0-9]+}})
 // CHECK:        call void @llvm.dbg.declare(metadata i8* [[BLOCK_DESC]], metadata ![[BDMD:[0-9]+]], metadata !{{[0-9]+}})
 // CHECK:        %[[TMP1:.*]] = bitcast
