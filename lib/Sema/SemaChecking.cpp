@@ -2212,7 +2212,7 @@ bool Sema::SemaBuiltinVAStartARM(CallExpr *Call) {
   if (checkBuiltinArgument(*this, Call, 0))
     return true;
 
-  static const struct {
+  const struct {
     unsigned ArgNo;
     QualType Type;
   } ArgumentTypes[] = {
