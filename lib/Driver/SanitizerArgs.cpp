@@ -547,16 +547,16 @@ uint64_t parseArgValues(const Driver &D, const llvm::opt::Arg *A,
     if (Kind) {
       Kinds |= Kind;
       if (DiagnoseErrors) {
-        if (!allowedOpt(A->getValue(I)))
+        if (!allowedOpt(A->getValue(i)))
           D.Diag(clang::diag::err_drv_unsupported_option_argument)
-            << A->getOption().getName() << A->getValue(I);
+            << A->getOption().getName() << A->getValue(i);
         // We don't require -fsanitize-undefined-trap-on-error for ASan
-        else if (std::string(A->getValue(I)) == "address")
+        else if (std::string(A->getValue(i)) == "address")
           continue;
         else if (!HasSanitizeUndefinedTrapOnError)
           D.Diag(clang::diag::err_drv_required_option)
             << "-fsanitize-undefined-trap-on-error"
-            << std::string("-fsanitize=") + A->getValue(I);
+            << std::string("-fsanitize=") + A->getValue(i);
       }
     } else if (DiagnoseErrors)
       D.Diag(clang::diag::err_drv_unsupported_option_argument)
@@ -580,7 +580,7 @@ std::string lastArgumentForMask(const Driver &D, const llvm::opt::ArgList &Args,
       if (AddKinds & Mask)
         return describeSanitizeArg(Arg, Mask);
     } else if (Arg->getOption().matches(options::OPT_fno_sanitize_EQ)) {
-      unit64_t RemoveKinds = expandGroups(parseArgValues(D, Arg, false, true));
+      uint64_t RemoveKinds = expandGroups(parseArgValues(D, Arg, false, true));
       Mask &= ~RemoveKinds;
     }
   }
