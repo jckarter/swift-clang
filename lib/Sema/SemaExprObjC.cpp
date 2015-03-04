@@ -2927,7 +2927,9 @@ ExprResult Sema::BuildInstanceMessage(Expr *Receiver,
       }
     }
   }
-  
+
+  CheckObjCCircularContainer(Result);
+
   return MaybeBindToTemporary(Result);
 }
 
