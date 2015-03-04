@@ -558,7 +558,7 @@ void Darwin::AddDeploymentTarget(DerivedArgList &Args) const {
     // If no '-miphoneos-version-min' specified on the command line and
     // IPHONEOS_DEPLOYMENT_TARGET is not defined, see if we can set the default
     // based on -isysroot.
-    if (iOSTarget.empty()) {
+    if (iOSTarget.empty() && TvOSTarget.empty() && WatchOSTarget.empty()) {
       if (const Arg *A = Args.getLastArg(options::OPT_isysroot)) {
         StringRef first, second;
         StringRef isysroot = A->getValue();
