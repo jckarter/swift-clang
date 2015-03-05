@@ -7318,7 +7318,7 @@ cxindex::Logger::~Logger() {
   OS << Msg.str() << '\n';
 
   if (Trace) {
-    llvm::sys::PrintStackTrace(stderr);
+    llvm::sys::PrintStackTrace(OS);
     OS << "--------------------------------------------------\n";
   }
 }
