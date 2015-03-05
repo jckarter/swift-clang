@@ -67,7 +67,7 @@ def ext_keyword_as_ident : ExtWarn<
 
 def ext_nullability : Extension<
   "type nullability specifier %0 is a Clang extension">,
-  InGroup<Nullability>;
+  InGroup<DiagGroup<"nullability-extension">>;
 
 def error_empty_enum : Error<"use of empty enum">;
 def err_invalid_sign_spec : Error<"'%0' cannot be signed or unsigned">;
