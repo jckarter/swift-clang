@@ -30,7 +30,7 @@
 
 // RUN: %clang -target x86_64-linux-gnu -fsanitize=undefined-trap -fsanitize-undefined-trap-on-error %s -### 2>&1 | FileCheck %s --check-prefix=CHECK-UNDEFINED-TRAP
 // RUN: %clang -target x86_64-linux-gnu -fsanitize-undefined-trap-on-error -fsanitize=undefined-trap %s -### 2>&1 | FileCheck %s --check-prefix=CHECK-UNDEFINED-TRAP
-// CHECK-UNDEFINED-TRAP: "-fsanitize={{((alignment|array-bounds|bool|enum|float-cast-overflow|float-divide-by-zero|integer-divide-by-zero|null|object-size|return|returns-nonnull-attribute|shift-base|shift-exponent|nonnull-attribute|signed-integer-overflow|unreachable|vla-bound),?){17}"}}
+// CHECK-UNDEFINED-TRAP: "-fsanitize={{((alignment|array-bounds|bool|enum|float-cast-overflow|float-divide-by-zero|integer-divide-by-zero|null|object-size|return|returns-nonnull-attribute|shift|nonnull-attribute|signed-integer-overflow|unreachable|vla-bound),?){16}"}}
 // CHECK-UNDEFINED-TRAP: "-fsanitize-undefined-trap-on-error"
 
 // RUN: %clang -target x86_64-linux-gnu -fsanitize=undefined-trap %s -### 2>&1 | FileCheck %s --check-prefix=CHECK-UNDEFINED-TRAP-REQUIRES-UNDEF-TRAP-ON-ERROR
@@ -76,7 +76,7 @@
 // RUN: %clang -target x86_64-linux-gnu -fsanitize=shift -fsanitize-undefined-trap-on-error %s -### 2>&1 | FileCheck %s --check-prefix=CHECK-SHIFT
 // CHECK-SHIFT-NOT: unsupported argument 'shift' to option 'fsanitize='
 // CHECK-SHIFT-NOT: '-fsanitize-undefined-trap-on-error' required with '-fsanitize=shift' option
-// CHECK-SHIFT: "-fsanitize={{((shift-base|shift-exponent),?){2}"}}
+// CHECK-SHIFT: "-fsanitize={{((shift),?){1}"}}
 
 // RUN: %clang -target x86_64-linux-gnu -fsanitize=signed-integer-overflow %s -### 2>&1 | FileCheck %s --check-prefix=CHECK-SIGNED-INTEGER-OVERFLOW-REQUIRES-UNDEF-TRAP-ON-ERROR
 // CHECK-SIGNED-INTEGER-OVERFLOW-REQUIRES-UNDEF-TRAP-ON-ERROR: '-fsanitize-undefined-trap-on-error' required with '-fsanitize=signed-integer-overflow' option
