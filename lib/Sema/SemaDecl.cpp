@@ -7408,7 +7408,8 @@ Sema::ActOnFunctionDeclarator(Scope *S, Declarator &D, DeclContext *DC,
     NewFD->setInvalidDecl();
   }
 
-  if (D.isFunctionDefinition() && CodeSegStack.CurrentValue &&
+  // Apply an implicit SectionAttr if #pragma code_seg is active.
+  if (CodeSegStack.CurrentValue && D.isFunctionDefinition() &&
       !NewFD->hasAttr<SectionAttr>()) {
     NewFD->addAttr(
         SectionAttr::CreateImplicit(Context, SectionAttr::Declspec_allocate,
@@ -9502,7 +9503,9 @@ void Sema::CheckCompleteVariableDeclaration(VarDecl *var) {
 
   }
 
-  if (var->isThisDeclarationADefinition() &&
+  // Apply section attributes and pragmas to global variables.
+  bool GlobalStorage = var->hasGlobalStorage();
+  if (GlobalStorage && var->isThisDeclarationADefinition() &&
       ActiveTemplateInstantiations.empty()) {
     PragmaStack<StringLiteral *> *Stack = nullptr;
     int SectionFlags = ASTContext::PSF_Implicit | ASTContext::PSF_Read;
@@ -9515,11 +9518,11 @@ void Sema::CheckCompleteVariableDeclaration(VarDecl *var) {
       Stack = &DataSegStack;
       SectionFlags |= ASTContext::PSF_Write;
     }
-    if (!var->hasAttr<SectionAttr>() && Stack->CurrentValue)
-      var->addAttr(
-          SectionAttr::CreateImplicit(Context, SectionAttr::Declspec_allocate,
-                                      Stack->CurrentValue->getString(),
-                                      Stack->CurrentPragmaLocation));
+    if (Stack->CurrentValue && !var->hasAttr<SectionAttr>()) {
+      var->addAttr(SectionAttr::CreateImplicit(
+          Context, SectionAttr::Declspec_allocate,
+          Stack->CurrentValue->getString(), Stack->CurrentPragmaLocation));
+    }
     if (const SectionAttr *SA = var->getAttr<SectionAttr>())
       if (UnifySection(SA->getName(), SectionFlags, var))
         var->dropAttr<SectionAttr>();
@@ -9562,7 +9565,7 @@ void Sema::CheckCompleteVariableDeclaration(VarDecl *var) {
   }
 
   Expr *Init = var->getInit();
-  bool IsGlobal = var->hasGlobalStorage() && !var->isStaticLocal();
+  bool IsGlobal = GlobalStorage && !var->isStaticLocal();
   QualType baseType = Context.getBaseElementType(type);
 
   if (!var->getDeclContext()->isDependentContext() &&
