@@ -459,33 +459,6 @@ public:
   /// we are currently parsing the initializer.
   llvm::SmallPtrSet<const Decl*, 4> ParsingInitForAutoVars;
 
-  /// \brief A mapping from external names to the most recent
-  /// locally-scoped extern "C" declaration with that name.
-  ///
-  /// This map contains external declarations introduced in local
-  /// scopes, e.g.,
-  ///
-  /// \code
-  /// extern "C" void f() {
-  ///   void foo(int, int);
-  /// }
-  /// \endcode
-  ///
-  /// Here, the name "foo" will be associated with the declaration of
-  /// "foo" within f. This name is not visible outside of
-  /// "f". However, we still find it in two cases:
-  ///
-  ///   - If we are declaring another global or extern "C" entity with
-  ///     the name "foo", we can find "foo" as a previous declaration,
-  ///     so that the types of this external declaration can be checked
-  ///     for compatibility.
-  ///
-  ///   - If we would implicitly declare "foo" (e.g., due to a call to
-  ///     "foo" in C when no prototype or definition is visible), then
-  ///     we find this declaration of "foo" and complain that it is
-  ///     not visible.
-  llvm::DenseMap<DeclarationName, NamedDecl *> LocallyScopedExternCDecls;
-
   /// \brief Look for a locally scoped extern "C" declaration by the given name.
   NamedDecl *findLocallyScopedExternCDecl(DeclarationName Name);
 
@@ -6688,10 +6661,8 @@ public:
     bool CheckInstantiationDepth(SourceLocation PointOfInstantiation,
                                  SourceRange InstantiationRange);
 
-    // FIXME: Replace this with a constructor once we can use delegating
-    // constructors in llvm.
-    void Initialize(
-        ActiveTemplateInstantiation::InstantiationKind Kind,
+    InstantiatingTemplate(
+        Sema &SemaRef, ActiveTemplateInstantiation::InstantiationKind Kind,
         SourceLocation PointOfInstantiation, SourceRange InstantiationRange,
         Decl *Entity, NamedDecl *Template = nullptr,
         ArrayRef<TemplateArgument> TemplateArgs = ArrayRef<TemplateArgument>(),
