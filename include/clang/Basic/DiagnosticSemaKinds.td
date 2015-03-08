@@ -7626,6 +7626,15 @@ def err_nullability_nonpointer : Error<
   "'%select{%select{__|}1nonnull|%select{__|}1nullable|%select{__|}1"
   "null_unspecified}0' cannot be applied to non-pointer type %2">;
 
+def warn_nullability_declspec : Warning<
+  "nullability specifier "
+  "'%select{__nonnull|__nullable|__null_unspecified}0' cannot be applied "
+  "to non-pointer type %1; did you mean to apply the specifier to the "
+  "%select{pointer|block pointer|member pointer|function pointer|"
+  "member function pointer}2?">,
+  InGroup<NullabilityDeclSpec>,
+  DefaultError;
+  
 def err_nullability_cs_multilevel : Error<
   "nullability keyword "
   "'%select{nonnull|nullable|null_unspecified}0' cannot be applied to "

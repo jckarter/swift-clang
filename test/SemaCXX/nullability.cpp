@@ -1,4 +1,4 @@
-// RUN: %clang_cc1 -std=c++11 -fsyntax-only %s -verify
+// RUN: %clang_cc1 -std=c++11 -fsyntax-only -Wno-nullability-declspec %s -verify
 
 typedef decltype(nullptr) nullptr_t;
 
@@ -10,8 +10,8 @@ typedef int (X::* __nonnull member_function_type_1)(int);
 typedef int X::* __nonnull member_data_type_1;
 typedef nullptr_t __nonnull nonnull_nullptr_t; // expected-error{{nullability specifier '__nonnull' cannot be applied to non-pointer type 'nullptr_t'}}
 
-// Nullability can move into member pointers (but not through functions).
-typedef __nonnull int (X::* member_function_type_2)(int); // expected-error{{nullability specifier '__nonnull' cannot be applied to non-pointer type 'int'}}
+// Nullability can move into member pointers (this is suppressing a warning).
+typedef __nonnull int (X::* member_function_type_2)(int);
 typedef int (X::* __nonnull member_function_type_3)(int);
 typedef __nonnull int X::* member_data_type_2;
 

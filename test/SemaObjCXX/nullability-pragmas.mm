@@ -1,4 +1,4 @@
-// RUN: %clang_cc1 -fsyntax-only -fblocks -I %S/Inputs %s -verify
+// RUN: %clang_cc1 -fsyntax-only -fblocks -I %S/Inputs -Wno-nullability-declspec %s -verify
 
 #include "nullability-pragmas-1.h"
 #include "nullability-pragmas-2.h"

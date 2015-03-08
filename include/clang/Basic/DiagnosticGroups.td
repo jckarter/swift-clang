@@ -241,6 +241,7 @@ def ModuleBuild : DiagGroup<"module-build">;
 def ModuleConflict : DiagGroup<"module-conflict">;
 def NewlineEOF : DiagGroup<"newline-eof">;
 def NullabilityCompleteness : DiagGroup<"nullability-completeness">;
+def NullabilityDeclSpec : DiagGroup<"nullability-declspec">;
 def Nullability : DiagGroup<"nullability",
                             [NullabilityCompleteness]>;
 def NullableToNonNullConversion : DiagGroup<"nullable-to-nonnull-conversion">;

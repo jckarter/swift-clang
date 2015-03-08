@@ -5485,16 +5485,69 @@ bool Sema::checkObjCKindOfType(QualType &type, SourceLocation loc) {
   return false;
 }
 
-/// Handle a nullability type attribute.
-/// Check whether we need to distribute the given nullability type
-/// attribute to another declarator chunk that is a pointer, member
-/// pointer, or block pointer declarator.
+/// Map a nullability attribute kind to a nullability kind.
+static NullabilityKind mapNullabilityAttrKind(AttributeList::Kind kind) {
+  switch (kind) {
+  case AttributeList::AT_TypeNonNull:
+    return NullabilityKind::NonNull;
+
+  case AttributeList::AT_TypeNullable:
+    return NullabilityKind::Nullable;
+
+  case AttributeList::AT_TypeNullUnspecified:
+    return NullabilityKind::Unspecified;
+
+  default:
+    llvm_unreachable("not a nullability attribute kind");
+  }
+}
+
+/// Distribute a nullability type attribute that cannot be applied to
+/// the type specifier to a pointer, block pointer, or member pointer
+/// declarator, complaining if necessary.
 ///
 /// \returns true if the nullability annotation was distributed, false
 /// otherwise.
 static bool distributeNullabilityTypeAttr(TypeProcessingState &state,
+                                          QualType type,
                                           AttributeList &attr) {
   Declarator &declarator = state.getDeclarator();
+
+  /// Attempt to move the attribute to the specified chunk.
+  auto moveToChunk = [&](DeclaratorChunk &chunk, bool inFunction) -> bool {
+    // If there is already a nullability attribute there, don't add
+    // one.
+    if (hasNullabilityAttr(chunk.getAttrListRef()))
+      return false;
+
+    // Complain about the nullability qualifier being in the wrong
+    // place.
+    if (!attr.isContextSensitiveKeywordAttribute()) {
+      unsigned pointerKind
+        = chunk.Kind == DeclaratorChunk::Pointer ? (inFunction ? 3 : 0)
+        : chunk.Kind == DeclaratorChunk::BlockPointer ? 1
+        : inFunction? 4 : 2;
+
+      auto diag = state.getSema().Diag(attr.getLoc(),
+                                       diag::warn_nullability_declspec)
+        << static_cast<unsigned>(mapNullabilityAttrKind(attr.getKind()))
+        << type
+        << pointerKind;
+
+      // FIXME: MemberPointer chunks don't carry the location of the *.
+      if (chunk.Kind != DeclaratorChunk::MemberPointer) {
+        diag << FixItHint::CreateRemoval(attr.getLoc())
+             << FixItHint::CreateInsertion(
+                  state.getSema().getPreprocessor()
+                    .getLocForEndOfToken(chunk.Loc),
+                  " " + attr.getName()->getName().str() + " ");
+      }
+    }
+
+    moveAttrFromListToList(attr, state.getCurrentAttrListRef(),
+                           chunk.getAttrListRef());
+    return true;
+  };
 
   // Move it to the outermost pointer, member pointer, or block
   // pointer declarator.
@@ -5503,19 +5556,26 @@ static bool distributeNullabilityTypeAttr(TypeProcessingState &state,
     switch (chunk.Kind) {
     case DeclaratorChunk::Pointer:
     case DeclaratorChunk::BlockPointer:
-    case DeclaratorChunk::MemberPointer: {
-      moveAttrFromListToList(attr, state.getCurrentAttrListRef(),
-                             chunk.getAttrListRef());
-      return true;
-    }
+    case DeclaratorChunk::MemberPointer:
+      return moveToChunk(chunk, false);
 
     case DeclaratorChunk::Paren:
     case DeclaratorChunk::Array:
       continue;
 
+    case DeclaratorChunk::Function:
+      // Try to move past the return type to a function/block/member
+      // function pointer.
+      if (DeclaratorChunk *dest = maybeMovePastReturnType(
+                                    declarator, i,
+                                    /*onlyBlockPointers=*/false)) {
+        return moveToChunk(*dest, true);
+      }
+
+      return false;
+      
     // Don't walk through these.
     case DeclaratorChunk::Reference:
-    case DeclaratorChunk::Function:
       return false;
     }
   }
@@ -5925,23 +5985,6 @@ static void HandleNeonVectorTypeAttr(QualType& CurType,
   CurType = S.Context.getVectorType(CurType, numElts, VecKind);
 }
 
-/// Map a nullability attribute kind to a nullability kind.
-static NullabilityKind mapNullabilityAttrKind(AttributeList::Kind kind) {
-  switch (kind) {
-  case AttributeList::AT_TypeNonNull:
-    return NullabilityKind::NonNull;
-
-  case AttributeList::AT_TypeNullable:
-    return NullabilityKind::Nullable;
-
-  case AttributeList::AT_TypeNullUnspecified:
-    return NullabilityKind::Unspecified;
-
-  default:
-    llvm_unreachable("not a nullability attribute kind");
-  }
-}
-
 static void processTypeAttrs(TypeProcessingState &state, QualType &type,
                              TypeAttrLocation TAL, AttributeList *attrs) {
   // Scan through and apply attributes to this type where it makes sense.  Some
@@ -6051,7 +6094,7 @@ static void processTypeAttrs(TypeProcessingState &state, QualType &type,
       // don't want to distribute the nullability specifier past any
       // dependent type, because that complicates the user model.
       if (type->canHaveNullability() || type->isDependentType() ||
-          !distributeNullabilityTypeAttr(state, attr)) {
+          !distributeNullabilityTypeAttr(state, type, attr)) {
         if (state.getSema().checkNullabilityTypeSpecifier(
               type,
               mapNullabilityAttrKind(attr.getKind()),

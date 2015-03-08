@@ -1,4 +1,4 @@
-// RUN: %clang_cc1 -fsyntax-only -fblocks -Wnullable-to-nonnull-conversion %s -verify
+// RUN: %clang_cc1 -fsyntax-only -fblocks -Wno-nullability-declspec -Wnullable-to-nonnull-conversion %s -verify
 
 #if __has_feature(nullability)
 #else
@@ -34,11 +34,12 @@ typedef int (^ __nonnull block_type_1)(int, int);
 // Nullability must be on a pointer type.
 typedef int __nonnull int_type_1; // expected-error{{nullability specifier '__nonnull' cannot be applied to non-pointer type 'int'}}
 
-// Nullability can move out to a pointer/block pointer declarator.
+// Nullability can move out to a pointer/block pointer declarator
+// (with a suppressed warning).
 typedef __nonnull int * nonnull_int_ptr_2;
 typedef int __nullable * nullable_int_ptr_2;
-typedef __nonnull int (* function_pointer_type_2)(int, int); // expected-error{{nullability specifier '__nonnull' cannot be applied to non-pointer type 'int'}}
-typedef __nonnull int (^ block_type_2)(int, int); // expected-error{{nullability specifier '__nonnull' cannot be applied to non-pointer type 'int'}}
+typedef __nonnull int (* function_pointer_type_2)(int, int);
+typedef __nonnull int (^ block_type_2)(int, int);
 typedef __nonnull int * * __nullable nonnull_int_ptr_ptr_1;
 typedef __nonnull int *(^ block_type_3)(int, int);
 typedef __nonnull int *(* function_pointer_type_3)(int, int);
@@ -60,7 +61,7 @@ void testBlockFunctionPtrNullability() {
 }
 
 // Moving nullability where it creates a conflict.
-typedef __nonnull int * __nullable *  conflict_int_ptr_ptr_2; // expected-error{{nullability specifier '__nullable' conflicts with existing specifier '__nonnull'}}
+typedef __nonnull int * __nullable *  conflict_int_ptr_ptr_2; // expected-error{{nullability specifier '__nonnull' cannot be applied to non-pointer type 'int'}}
 
 // Nullability is not part of the canonical type.
 typedef int * __nonnull ambiguous_int_ptr;

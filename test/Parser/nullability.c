@@ -1,4 +1,4 @@
-// RUN: %clang_cc1 -fsyntax-only -std=c99 -pedantic %s -verify
+// RUN: %clang_cc1 -fsyntax-only -std=c99 -Wno-nullability-declspec -pedantic %s -verify
 
 __nonnull int *ptr; // expected-warning{{type nullability specifier '__nonnull' is a Clang extension}}
 
