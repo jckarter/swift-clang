@@ -37,7 +37,7 @@ A *f14(void);
 
 __null_unspecified int *f15(void);
 __null_unspecified A *f16(void);
-void f17(CFErrorRef *error); // expected-note{{no known conversion from '__nonnull A *' to '__nullable CFErrorRef * __nullable' (aka '__CFError **') for 1st argument}}
+void f17(CFErrorRef *error); // expected-note{{no known conversion from 'A * __nonnull' to 'CFErrorRef  __nullable * __nullable' (aka '__CFError **') for 1st argument}}
 void f18(A **); // expected-warning 2{{pointer is missing a nullability type specifier (__nonnull or __nullable)}}
 void f19(CFErrorRefPtr error); // expected-warning{{pointer is missing a nullability type specifier (__nonnull or __nullable)}}
 
@@ -70,7 +70,7 @@ typedef int * // expected-warning{{pointer is missing a nullability type}}
             *int_ptr_ptr;
 
 static inline void f30(void) {
-  float *fp = global_int_ptr; // expected-error{{cannot initialize a variable of type 'float *' with an lvalue of type '__nonnull int *'}}
+  float *fp = global_int_ptr; // expected-error{{cannot initialize a variable of type 'float *' with an lvalue of type 'int * __nonnull'}}
 
   int_ptr_2 ip2;
   float *fp2 = ip2; // expected-error{{cannot initialize a variable of type 'float *' with an lvalue of type 'int_ptr_2' (aka 'int *')}}

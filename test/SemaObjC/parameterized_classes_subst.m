@@ -114,7 +114,7 @@ typedef __nonnull NSControl *Nonnull_NSControl;
 - (nullable ViewType)maybeView;
 @end
 
-@interface NSNullableTest2<ViewType : __nullable NSView *> : NSObject // expected-error{{type parameter 'ViewType' bound '__nullable NSView *' cannot explicitly specify nullability}}
+@interface NSNullableTest2<ViewType : __nullable NSView *> : NSObject // expected-error{{type parameter 'ViewType' bound 'NSView * __nullable' cannot explicitly specify nullability}}
 @end
 
 void test_nullability(void) {
@@ -123,12 +123,12 @@ void test_nullability(void) {
   // Nullability introduced by substitution.
   NSNullableTest<NSControl *> *unspecifiedControl;
   nonnull_NSControl = [unspecifiedControl view];
-  nonnull_NSControl = [unspecifiedControl maybeView];  // expected-warning{{from nullable pointer '__nullable NSControl *' to non-nullable pointer type '__nonnull NSControl *'}}
+  nonnull_NSControl = [unspecifiedControl maybeView];  // expected-warning{{from nullable pointer 'NSControl * __nullable' to non-nullable pointer type 'NSControl * __nonnull'}}
 
   // Nullability overridden by substitution.
   NSNullableTest<Nonnull_NSControl> *nonnullControl;
   nonnull_NSControl = [nonnullControl view];
-  nonnull_NSControl = [nonnullControl maybeView];  // expected-warning{{from nullable pointer '__nullable Nonnull_NSControl' (aka 'NSControl *') to non-nullable pointer type '__nonnull NSControl *'}}
+  nonnull_NSControl = [nonnullControl maybeView];  // expected-warning{{from nullable pointer 'Nonnull_NSControl __nullable' (aka 'NSControl *') to non-nullable pointer type 'NSControl * __nonnull'}}
 
   // Nullability cannot be specified directly on a type argument.
   NSNullableTest<__nonnull NSControl *> *nonnullControl2; // expected-error{{type argument 'NSControl *' cannot explicitly specify nullability}}

@@ -62,7 +62,7 @@ void test_accepts_nonnull_null_pointer_literal(NSFoo *foo, __nonnull NSBar *bar)
   bar.property2 = 0; // expected-warning{{null passed to a callee that requires a non-null argument}}
   [bar setProperty1: 0]; // expected-warning{{null passed to a callee that requires a non-null argument}}
   [bar setProperty2: 0]; // expected-warning{{null passed to a callee that requires a non-null argument}}
-  int *ptr = bar.property1; // expected-warning{{incompatible pointer types initializing 'int *' with an expression of type '__nonnull NSFoo *'}}
+  int *ptr = bar.property1; // expected-warning{{incompatible pointer types initializing 'int *' with an expression of type 'NSFoo * __nonnull'}}
 }
 
 @implementation NSBar
@@ -92,7 +92,7 @@ __attribute__((objc_root_class))
 
 @implementation NSMerge
 - (NSFoo *)methodA:(NSFoo*)foo {
-  int *ptr = foo; // expected-warning{{incompatible pointer types initializing 'int *' with an expression of type '__nonnull NSFoo *'}}
+  int *ptr = foo; // expected-warning{{incompatible pointer types initializing 'int *' with an expression of type 'NSFoo * __nonnull'}}
   return 0; // no warning
 }
 
@@ -118,15 +118,15 @@ void test_receiver_merge(NSMergeReceiver *none,
                          __nullable NSMergeReceiver *nullable) {
   int *ptr;
 
-  ptr = [nullable returnsNullable]; // expected-warning{{'__nullable id'}}
-  ptr = [nullable returnsNonNull]; // expected-warning{{'__nullable id'}}
-  ptr = [nullable returnsNone]; // expected-warning{{'__nullable id'}}
+  ptr = [nullable returnsNullable]; // expected-warning{{'id __nullable'}}
+  ptr = [nullable returnsNonNull]; // expected-warning{{'id __nullable'}}
+  ptr = [nullable returnsNone]; // expected-warning{{'id __nullable'}}
 
-  ptr = [nonnull returnsNullable]; // expected-warning{{'__nullable id'}}
-  ptr = [nonnull returnsNonNull]; // expected-warning{{'__nonnull id'}}
+  ptr = [nonnull returnsNullable]; // expected-warning{{'id __nullable'}}
+  ptr = [nonnull returnsNonNull]; // expected-warning{{'id __nonnull'}}
   ptr = [nonnull returnsNone]; // expected-warning{{'id'}}
 
-  ptr = [none returnsNullable]; // expected-warning{{'__nullable id'}}
+  ptr = [none returnsNullable]; // expected-warning{{'id __nullable'}}
   ptr = [none returnsNonNull]; // expected-warning{{'id'}}
   ptr = [none returnsNone]; // expected-warning{{'id'}}
   
@@ -145,10 +145,10 @@ __attribute__((objc_root_class))
 @end
 
 void test_instancetype(__nonnull InitializableClass *ic, __nonnull id object) {
-  int *ip = [ic returnMe]; // expected-warning{{incompatible pointer types initializing 'int *' with an expression of type '__nullable InitializableClass *'}}
-  ip = [InitializableClass returnMe]; // expected-warning{{incompatible pointer types assigning to 'int *' from '__nullable id'}}
-  ip = [InitializableClass returnInstanceOfMe]; // expected-warning{{incompatible pointer types assigning to 'int *' from '__nullable InitializableClass *'}}
-  ip = [object returnMe]; // expected-warning{{incompatible pointer types assigning to 'int *' from '__nullable id'}}
+  int *ip = [ic returnMe]; // expected-warning{{incompatible pointer types initializing 'int *' with an expression of type 'InitializableClass * __nullable'}}
+  ip = [InitializableClass returnMe]; // expected-warning{{incompatible pointer types assigning to 'int *' from 'id __nullable'}}
+  ip = [InitializableClass returnInstanceOfMe]; // expected-warning{{incompatible pointer types assigning to 'int *' from 'InitializableClass * __nullable'}}
+  ip = [object returnMe]; // expected-warning{{incompatible pointer types assigning to 'int *' from 'id __nullable'}}
 }
 
 // Check null_resettable getters/setters.
@@ -163,8 +163,8 @@ __attribute__((objc_root_class))
 @end
 
 void test_null_resettable(NSResettable *r, int *ip) {
-  [r setResettable1:ip]; // expected-warning{{incompatible pointer types sending 'int *' to parameter of type '__nullable NSResettable *'}}
-  r.resettable1 = ip; // expected-warning{{incompatible pointer types assigning to '__nullable NSResettable *' from 'int *'}}
+  [r setResettable1:ip]; // expected-warning{{incompatible pointer types sending 'int *' to parameter of type 'NSResettable * __nullable'}}
+  r.resettable1 = ip; // expected-warning{{incompatible pointer types assigning to 'NSResettable * __nullable' from 'int *'}}
 }
 
 @implementation NSResettable // expected-warning{{synthesized setter 'setResettable4:' for null_resettable property 'resettable4' does not handle nil}}
@@ -196,7 +196,7 @@ void test_null_resettable(NSResettable *r, int *ip) {
 
 void testMultiProp(MultiProp *foo) {
   int *ip;
-  ip = foo.a; // expected-warning{{from '__nullable id'}}
-  ip = foo.d; // expected-warning{{from '__nullable MultiProp *'}}
-  ip = foo.e; // expected-error{{incompatible type '__nullable MultiProp *(^)(int)'}}
+  ip = foo.a; // expected-warning{{from 'id __nullable'}}
+  ip = foo.d; // expected-warning{{from 'MultiProp * __nullable'}}
+  ip = foo.e; // expected-error{{incompatible type 'MultiProp *(^ __nullable)(int)'}}
 }

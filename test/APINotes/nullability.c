@@ -8,7 +8,7 @@ int main() {
   do_something_with_pointers(&i, 0);
   do_something_with_pointers(0, &i); // expected-warning{{null passed to a callee that requires a non-null argument}}
 
-  float *fp = global_int; // expected-warning{{incompatible pointer types initializing 'float *' with an expression of type '__nonnull int *'}}
+  float *fp = global_int; // expected-warning{{incompatible pointer types initializing 'float *' with an expression of type 'int * __nonnull'}}
   return 0;
 }
 
