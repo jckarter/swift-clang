@@ -8374,8 +8374,8 @@ static bool isSetterLikeSelector(Selector sel) {
   return !isLowercase(str.front());
 }
 
-Optional<int> GetNSMutableArrayArgumentIndex(Sema &S, ObjCMessageExpr *Message) {
-
+static Optional<int> GetNSMutableArrayArgumentIndex(Sema &S,
+                                                    ObjCMessageExpr *Message) {
   if (S.NSMutableArrayPointer.isNull()) {
     IdentifierInfo *NSMutableArrayId =
       S.NSAPIObj->getNSClassId(NSAPI::ClassId_NSMutableArray);
