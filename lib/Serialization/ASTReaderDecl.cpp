@@ -871,7 +871,6 @@ void ASTDeclReader::VisitObjCInterfaceDecl(ObjCInterfaceDecl *ID) {
 
     Data.EndLoc = ReadSourceLocation(Record, Idx);
     Data.HasDesignatedInitializers = Record[Idx++];
-    Data.IsPartialInterface = Record[Idx++];
     
     // Read the directly referenced protocols and their SourceLocations.
     unsigned NumProtocols = Record[Idx++];

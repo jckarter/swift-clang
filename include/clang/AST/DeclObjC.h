@@ -813,10 +813,6 @@ class ObjCInterfaceDecl : public ObjCContainerDecl
     ///
     /// When non-null, this is always an ObjCObjectType.
     TypeSourceInfo *SuperClassTInfo;
-    
-    /// Complete definition of the class - only when IsPartialInterface
-    /// is true.
-    ObjCInterfaceDecl *CompleteDefinition;
 
     /// Protocols referenced in the \@interface  declaration
     ObjCProtocolList ReferencedProtocols;
@@ -846,9 +842,6 @@ class ObjCInterfaceDecl : public ObjCContainerDecl
     /// Indicates that this interface decl contains at least one initializer
     /// marked with the 'objc_designated_initializer' attribute.
     bool HasDesignatedInitializers : 1;
-    
-    /// \brief Indicates that this class is a partial interface.
-    bool  IsPartialInterface : 1;
 
     enum InheritedDesignatedInitializersState {
       /// We didn't calculate whether the designated initializers should be
@@ -867,12 +860,11 @@ class ObjCInterfaceDecl : public ObjCContainerDecl
     /// identifier, 
     SourceLocation EndLoc; 
 
-    DefinitionData() : Definition(), SuperClassTInfo(), CompleteDefinition(),
+    DefinitionData() : Definition(), SuperClassTInfo(),
                        CategoryList(), IvarList(),
                        ExternallyCompleted(),
                        IvarListMissingImplementation(true),
                        HasDesignatedInitializers(),
-                       IsPartialInterface(),
                        InheritedDesignatedInitializers(IDI_Unknown) { }
   };
 
@@ -969,27 +961,6 @@ public:
       LoadExternalDefinition();
 
     return data().ReferencedProtocols;
-  }
-
-  ObjCInterfaceDecl *getCompleteDefinition() const {
-    assert(hasDefinition() &&
-           "Must have definition before looking at CompleteDefinition");
-    return data().CompleteDefinition;
-  }
-
-  void setCompleteDefinition(ObjCInterfaceDecl *IDecl) {
-    assert(hasDefinition() &&
-           "Must have definition before looking at CompleteDefinition");
-    data().CompleteDefinition = IDecl;
-  }
-
-  bool isPartialInterface() const {
-    return hasDefinition() && data().IsPartialInterface;
-  }
-  void setIsPartialInterface() {
-    assert(hasDefinition() &&
-           "Must have definition before looking at IsPartialInterface");
-    data().IsPartialInterface = true;
   }
 
   ObjCImplementationDecl *getImplementation() const;
@@ -1190,20 +1161,14 @@ public:
   /// has been forward-declared (with \@class) but not yet defined (with 
   /// \@interface).
   ObjCInterfaceDecl *getDefinition() {
-    ObjCInterfaceDecl *Def = hasDefinition()? Data.getPointer()->Definition : nullptr;
-    if (Def && Def->isPartialInterface() && Def->getCompleteDefinition())
-      return Def->getCompleteDefinition();
-    return Def;
+    return hasDefinition()? Data.getPointer()->Definition : nullptr;
   }
 
   /// \brief Retrieve the definition of this class, or NULL if this class 
   /// has been forward-declared (with \@class) but not yet defined (with 
   /// \@interface).
   const ObjCInterfaceDecl *getDefinition() const {
-    ObjCInterfaceDecl *Def = hasDefinition()? Data.getPointer()->Definition : nullptr;
-    if (Def && Def->isPartialInterface() && Def->getCompleteDefinition())
-      return Def->getCompleteDefinition();
-    return Def;
+    return hasDefinition()? Data.getPointer()->Definition : nullptr;
   }
 
   /// \brief Starts the definition of this Objective-C class, taking it from

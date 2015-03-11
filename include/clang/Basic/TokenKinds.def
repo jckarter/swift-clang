@@ -626,8 +626,6 @@ OBJC2_AT_KEYWORD(synthesize)
 OBJC2_AT_KEYWORD(dynamic)
 OBJC2_AT_KEYWORD(import)
 
-OBJC2_AT_KEYWORD(partial_interface)
-
 // TODO: What to do about context-sensitive keywords like:
 //       bycopy/byref/in/inout/oneway/out?
 

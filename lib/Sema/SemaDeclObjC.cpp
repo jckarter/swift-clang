@@ -455,7 +455,6 @@ void Sema::
 ActOnSuperClassOfClassInterface(Scope *S,
                                 SourceLocation AtInterfaceLoc,
                                 ObjCInterfaceDecl *IDecl,
-                                ObjCInterfaceDecl *PrevClassDef,
                                 IdentifierInfo *ClassName,
                                 SourceLocation ClassLoc,
                                 IdentifierInfo *SuperName,
@@ -486,7 +485,7 @@ ActOnSuperClassOfClassInterface(Scope *S,
     IDecl->setEndOfDefinitionLoc(ClassLoc);
   } else {
     ObjCInterfaceDecl *SuperClassDecl =
-    dyn_cast_or_null<ObjCInterfaceDecl>(PrevDecl);
+      dyn_cast_or_null<ObjCInterfaceDecl>(PrevDecl);
     QualType SuperClassType;
 
     // Diagnose classes that inherit from deprecated classes.
@@ -540,16 +539,7 @@ ActOnSuperClassOfClassInterface(Scope *S,
         SuperClassType = QualType();
       }
     }
-    if (PrevClassDef) {
-      ObjCInterfaceDecl *completeSuper = PrevClassDef->getSuperClass();
-      if (!declaresSameEntity(completeSuper, SuperClassDecl)) {
-        Diag(IDecl->getLocation(),
-             diag::err_partial_complete_class_super_mismatch);
-        Diag(PrevClassDef->getLocation(), diag::note_previous_definition);
-              IDecl->setInvalidDecl();
-      }
-    }
-
+    
     if (SuperClassType.isNull()) {
       assert(!SuperClassDecl && "Failed to set SuperClassType?");
       return;
@@ -895,29 +885,13 @@ ActOnStartClassInterface(Scope *S, SourceLocation AtInterfaceLoc,
     ProcessDeclAttributeList(TUScope, IDecl, AttrList);
   ProcessAPINotes(IDecl);
 
-  ObjCInterfaceDecl *PrevPartialClassDecl = 0;
   if (PrevIDecl) {
     // Class already seen. Was it a definition?
     if (ObjCInterfaceDecl *Def = PrevIDecl->getDefinition()) {
-      if (Def->isPartialInterface()) {
-        if (IDecl->hasAttr<ObjCCompleteDefinitionAttr>()) {
-          Def->setCompleteDefinition(IDecl);
-          PrevPartialClassDecl = Def;
-        }
-        else {
-          Diag(AtInterfaceLoc, diag::err_partial_class_def)
+      Diag(AtInterfaceLoc, diag::err_duplicate_class_def)
             << PrevIDecl->getDeclName();
-          Diag(Def->getLocation(), diag::note_previous_definition);
-          IDecl->setInvalidDecl();
-          // FIXME provide a fixit by adding the attribute to class.
-        }
-      }
-      else {
-        Diag(AtInterfaceLoc, diag::err_duplicate_class_def)
-          << PrevIDecl->getDeclName();
-        Diag(Def->getLocation(), diag::note_previous_definition);
-        IDecl->setInvalidDecl();
-      }
+      Diag(Def->getLocation(), diag::note_previous_definition);
+      IDecl->setInvalidDecl();
     }
   }
   
@@ -927,27 +901,14 @@ ActOnStartClassInterface(Scope *S, SourceLocation AtInterfaceLoc,
   // may already be a definition, so we'll end up adding to it.
   if (!IDecl->hasDefinition())
     IDecl->startDefinition();
-  else
-  // IDecl's definition in this case belongs to its partial_interface decl.
-  // Set it to its full definition here.
-    if (IDecl->getTypeForDecl()) {
-      cast<ObjCInterfaceType>(IDecl->getTypeForDecl())->setDecl(IDecl);
-    }
-
+    
   if (SuperName)
     ActOnSuperClassOfClassInterface(S, AtInterfaceLoc, IDecl, 
-                                    PrevPartialClassDecl, ClassName, ClassLoc, 
+                                    ClassName, ClassLoc,
                                     SuperName, SuperLoc, SuperTypeArgs, 
                                     SuperTypeArgsRange);
-  else { // we have a root class.
-    if (PrevPartialClassDecl && PrevPartialClassDecl->getSuperClass()) {
-      Diag(IDecl->getLocation(),
-           diag::err_partial_complete_class_super_mismatch);
-      Diag(PrevPartialClassDecl->getLocation(), diag::note_previous_definition);
-      IDecl->setInvalidDecl();
-    }
+  else // we have a root class.
     IDecl->setEndOfDefinitionLoc(ClassLoc);
-  }
 
   // Check then save referenced protocols.
   if (NumProtoRefs) {
@@ -958,70 +919,6 @@ ActOnStartClassInterface(Scope *S, SourceLocation AtInterfaceLoc,
 
   CheckObjCDeclScope(IDecl);
   return ActOnObjCContainerStartDefinition(IDecl);
-}
-
-Decl *Sema::ActOnPartialInterface(Scope *S,
-                                  SourceLocation AtPartialInterfaceLoc,
-                                  IdentifierInfo *ClassName,
-                                  SourceLocation ClassLoc,
-                                  IdentifierInfo *SuperName,
-                                  SourceLocation SuperLoc) {
-  assert(ClassName && "Missing class identifier");
-
-  // Check for another declaration kind with the same name.
-  NamedDecl *PrevDecl = LookupSingleName(TUScope, ClassName, ClassLoc,
-                                         LookupOrdinaryName, ForRedeclaration);
-
-  if (PrevDecl && !isa<ObjCInterfaceDecl>(PrevDecl)) {
-    Diag(ClassLoc, diag::err_redefinition_different_kind) << ClassName;
-    Diag(PrevDecl->getLocation(), diag::note_previous_definition);
-  }
-  // Create a declaration to describe this @interface.
-  ObjCInterfaceDecl* PrevIDecl = dyn_cast_or_null<ObjCInterfaceDecl>(PrevDecl);
-
-  ObjCInterfaceDecl *IDecl
-    = ObjCInterfaceDecl::Create(Context, CurContext, AtPartialInterfaceLoc, ClassName,
-                                /*typeParamList=*/nullptr, PrevIDecl, ClassLoc);
-  ObjCInterfaceDecl *PrevCompleteDef = 0;
-  if (PrevIDecl) {
-    // Class already seen. Was it a definition?
-    if (ObjCInterfaceDecl *Def = PrevIDecl->getDefinition()) {
-      if (Def->hasAttr<ObjCCompleteDefinitionAttr>()) {
-        IDecl->setCompleteDefinition(Def);
-        PrevCompleteDef = Def;
-      }
-      else {
-        Diag(AtPartialInterfaceLoc, diag::err_duplicate_partial_class_decl)
-          << PrevIDecl->getDeclName();
-        if (Def->isPartialInterface())
-          Diag(Def->getLocation(), diag::note_previous_declaration);
-        else
-          Diag(Def->getLocation(), diag::note_previous_definition);
-        IDecl->setInvalidDecl();
-      }
-    }
-  }
-
-  PushOnScopeChains(IDecl, TUScope);
-  if(!IDecl->hasDefinition()) {
-    IDecl->startDefinition();
-    IDecl->setIsPartialInterface();
-  }
-
-  if (SuperName)
-    ActOnSuperClassOfClassInterface(S, AtPartialInterfaceLoc, IDecl, 
-                                    PrevCompleteDef, ClassName, ClassLoc, 
-                                    SuperName, SuperLoc, { }, SourceRange());
-  else { // we have a root class.
-    if (PrevCompleteDef && PrevCompleteDef->getSuperClass()) {
-      Diag(IDecl->getLocation(),
-           diag::err_partial_complete_class_super_mismatch);
-      Diag(PrevCompleteDef->getLocation(), diag::note_previous_definition);
-      IDecl->setInvalidDecl();
-    }
-    IDecl->setEndOfDefinitionLoc(ClassLoc);
-  }
-  return IDecl;
 }
 
 /// ActOnTypedefedProtocols - this action finds protocol list as part of the
@@ -1781,28 +1678,6 @@ ActOnStartCategoryInterface(SourceLocation AtInterfaceLoc,
   return ActOnObjCContainerStartDefinition(CDecl);
 }
 
-static void
-DiagnosePartialClass(Sema &S, ObjCImplDecl *IC,
-                     ObjCInterfaceDecl *IDecl) {
-  if (!IDecl)
-    return;
-  if (IDecl->isPartialInterface() && !IDecl->getCompleteDefinition()) {
-    S.Diag(IC->getLocation(), diag::err_partial_implementation)
-      << (isa<ObjCCategoryImplDecl>(IC)) << IDecl->getName();
-    S.Diag(IDecl->getLocation(), diag::note_class_declared);
-  }
-  ObjCInterfaceDecl *Super = IDecl->getSuperClass();
-  while (Super) {
-    if (Super->isPartialInterface() && !Super->getCompleteDefinition()) {
-      S.Diag(Super->getLocation(), diag::err_partial_interface_in_super)
-      << Super->getDeclName();
-      S.Diag(IC->getLocation(), diag::note_implementation_declared)
-        << (isa<ObjCCategoryImplDecl>(IC));
-    }
-    Super = Super->getSuperClass();
-  }
-}
-
 /// ActOnStartCategoryImplementation - Perform semantic checks on the
 /// category implementation declaration and build an ObjCCategoryImplDecl
 /// object.
@@ -1836,7 +1711,6 @@ Decl *Sema::ActOnStartCategoryImplementation(
                                  diag::err_undef_interface)) {
     CDecl->setInvalidDecl();
   }
-  DiagnosePartialClass(*this, CDecl, IDecl);
 
   // FIXME: PushOnScopeChains?
   CurContext->addDecl(CDecl);
@@ -3615,7 +3489,7 @@ Decl *Sema::ActOnAtEnd(Scope *S, SourceRange AtEnd, ArrayRef<Decl *> allMethods,
         DiagnoseMissingDesignatedInitOverrides(IC, IDecl);
 
       bool HasRootClassAttr = IDecl->hasAttr<ObjCRootClassAttr>();
-      if (IDecl->getSuperClass() == nullptr && !IDecl->isPartialInterface()) {
+      if (IDecl->getSuperClass() == nullptr) {
         // This class has no superclass, so check that it has been marked with
         // __attribute((objc_root_class)).
         if (!HasRootClassAttr && !IDecl->hasAttr<ObjCCompleteDefinitionAttr>()) {

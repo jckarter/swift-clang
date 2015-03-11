@@ -7070,17 +7070,9 @@ public:
                                  SourceLocation EndProtoLoc,
                                  AttributeList *AttrList);
   
-  Decl *ActOnPartialInterface(Scope *S,
-                              SourceLocation AtPartialInterfaceLoc,
-                              IdentifierInfo *ClassName,
-                              SourceLocation ClassLoc,
-                              IdentifierInfo *SuperName,
-                              SourceLocation SuperLoc);
-  
   void ActOnSuperClassOfClassInterface(Scope *S,
                                        SourceLocation AtInterfaceLoc,
                                        ObjCInterfaceDecl *IDecl,
-                                       ObjCInterfaceDecl *PrevClassDef,
                                        IdentifierInfo *ClassName,
                                        SourceLocation ClassLoc,
                                        IdentifierInfo *SuperName,

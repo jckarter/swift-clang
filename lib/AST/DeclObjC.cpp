@@ -269,10 +269,6 @@ ObjCInterfaceDecl *ObjCInterfaceDecl::getSuperClass() const {
 
   if (const ObjCObjectType *superType = getSuperClassType()) {
     if (ObjCInterfaceDecl *superDecl = superType->getInterface()) {
-      if (superDecl->isPartialInterface() && 
-          superDecl->getCompleteDefinition())
-        return superDecl->getCompleteDefinition();
-
       if (ObjCInterfaceDecl *superDef = superDecl->getDefinition())
         return superDef;
 
