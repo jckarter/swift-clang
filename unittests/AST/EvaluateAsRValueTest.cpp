@@ -16,6 +16,7 @@
 #include "clang/AST/ASTConsumer.h"
 #include "clang/AST/ASTContext.h"
 #include "clang/AST/RecursiveASTVisitor.h"
+#include "clang/CodeGen/LLVMModuleProvider.h"
 #include "clang/Tooling/Tooling.h"
 #include "gtest/gtest.h"
 #include <map>
@@ -90,6 +91,7 @@ TEST(EvaluateAsRValue, FailsGracefullyForUnknownTypes) {
     std::vector<std::string> Args(1, Mode);
     Args.push_back("-fno-delayed-template-parsing");
     ASSERT_TRUE(runToolOnCodeWithArgs(
+      clang::SharedModuleProvider::Create<clang::LLVMModuleProvider>(),
       new EvaluateConstantInitializersAction(),
       "template <typename T>"
       "struct vector {"

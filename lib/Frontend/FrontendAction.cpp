@@ -190,8 +190,8 @@ bool FrontendAction::BeginSourceFile(CompilerInstance &CI,
 
     IntrusiveRefCntPtr<DiagnosticsEngine> Diags(&CI.getDiagnostics());
 
-    std::unique_ptr<ASTUnit> AST =
-        ASTUnit::LoadFromASTFile(InputFile, Diags, CI.getFileSystemOpts());
+    std::unique_ptr<ASTUnit> AST = ASTUnit::LoadFromASTFile(
+        InputFile, CI.getSharedModuleProvider(), Diags, CI.getFileSystemOpts());
 
     if (!AST)
       goto failure;
@@ -272,6 +272,7 @@ bool FrontendAction::BeginSourceFile(CompilerInstance &CI,
            Dir != DirEnd && !EC; Dir.increment(EC)) {
         // Check whether this is an acceptable AST file.
         if (ASTReader::isAcceptableASTFile(Dir->path(), FileMgr,
+                                           CI.getModuleProvider(),
                                            CI.getLangOpts(),
                                            CI.getTargetOpts(),
                                            CI.getPreprocessorOpts(),
@@ -443,7 +444,7 @@ bool FrontendAction::Execute() {
   if (CI.shouldBuildGlobalModuleIndex() && CI.hasFileManager() &&
       CI.hasPreprocessor()) {
     GlobalModuleIndex::writeIndex(
-      CI.getFileManager(),
+      CI.getFileManager(), CI.getModuleProvider(),
       CI.getPreprocessor().getHeaderSearchInfo().getModuleCachePath());
   }
 

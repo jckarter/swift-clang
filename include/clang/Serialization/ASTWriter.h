@@ -827,30 +827,32 @@ class PCHGenerator : public SemaConsumer {
   std::string OutputFile;
   clang::Module *Module;
   std::string isysroot;
-  raw_ostream *Out;
   Sema *SemaPtr;
-  SmallVector<char, 128> Buffer;
+  // This buffer is always large, but BitstreamWriter really wants a
+  // SmallVectorImpl<char>.
+  std::shared_ptr<std::pair<bool, SmallVector<char, 0>>> Buffer;
   llvm::BitstreamWriter Stream;
   ASTWriter Writer;
   bool AllowASTWithErrors;
-  bool HasEmittedPCH;
 
 protected:
   ASTWriter &getWriter() { return Writer; }
   const ASTWriter &getWriter() const { return Writer; }
+  SmallVectorImpl<char>& getPCH() const { return Buffer->second; }
 
 public:
-  PCHGenerator(const Preprocessor &PP, StringRef OutputFile,
+  PCHGenerator(const Preprocessor &PP,
+               StringRef OutputFile,
                clang::Module *Module,
-               StringRef isysroot, raw_ostream *Out,
+               StringRef isysroot,
+               std::shared_ptr<std::pair<bool, SmallVector<char, 0>>> Buffer,
                bool AllowASTWithErrors = false);
   ~PCHGenerator();
   void InitializeSema(Sema &S) override { SemaPtr = &S; }
   void HandleTranslationUnit(ASTContext &Ctx) override;
   ASTMutationListener *GetASTMutationListener() override;
   ASTDeserializationListener *GetASTDeserializationListener() override;
-
-  bool hasEmittedPCH() const { return HasEmittedPCH; }
+  bool hasEmittedPCH() const { return Buffer->first; }
 };
 
 } // end namespace clang

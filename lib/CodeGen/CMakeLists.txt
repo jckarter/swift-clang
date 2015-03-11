@@ -1,4 +1,5 @@
 set(LLVM_LINK_COMPONENTS
+  ${LLVM_TARGETS_TO_BUILD}
   Analysis
   BitReader
   BitWriter
@@ -68,6 +69,7 @@ add_clang_library(clangCodeGen
   CodeGenTypes.cpp
   CoverageMappingGen.cpp
   ItaniumCXXABI.cpp
+  LLVMModuleProvider.cpp
   MicrosoftCXXABI.cpp
   ModuleBuilder.cpp
   SanitizerMetadata.cpp

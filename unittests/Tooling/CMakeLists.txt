@@ -21,6 +21,7 @@ target_link_libraries(ToolingTests
   clangAST
   clangASTMatchers
   clangBasic
+  clangCodeGen
   clangFrontend
   clangLex
   clangRewrite

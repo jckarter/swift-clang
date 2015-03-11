@@ -51,8 +51,8 @@
 
 using namespace clang;
 
-CompilerInstance::CompilerInstance(bool BuildingModule)
-  : ModuleLoader(BuildingModule),
+CompilerInstance::CompilerInstance(SharedModuleProvider MP, bool BuildingModule)
+  : ModuleLoader(MP, BuildingModule),
     Invocation(new CompilerInvocation()), ModuleManager(nullptr),
     BuildGlobalModuleIndex(false), HaveFullGlobalModuleIndex(false),
     ModuleBuildFailed(false) {
@@ -321,7 +321,7 @@ void CompilerInstance::createPreprocessor(TranslationUnitKind TUKind) {
                           PP->getFileManager(), PPOpts);
 
   // Predefine macros and configure the preprocessor.
-  InitializePreprocessor(*PP, PPOpts, getFrontendOpts());
+  InitializePreprocessor(*PP, PPOpts, getModuleProvider(), getFrontendOpts());
 
   // Initialize the header search object.
   ApplyHeaderSearchOptions(PP->getHeaderSearchInfo(), getHeaderSearchOpts(),
@@ -396,19 +396,19 @@ void CompilerInstance::createPCHExternalASTSource(
   ModuleManager = createPCHExternalASTSource(
       Path, getHeaderSearchOpts().Sysroot, DisablePCHValidation,
       AllowPCHWithCompilerErrors, getPreprocessor(), getASTContext(),
-      DeserializationListener, OwnDeserializationListener, Preamble,
-      getFrontendOpts().UseGlobalModuleIndex);
+      getModuleProvider(), DeserializationListener, OwnDeserializationListener,
+      Preamble, getFrontendOpts().UseGlobalModuleIndex);
 }
 
 IntrusiveRefCntPtr<ASTReader> CompilerInstance::createPCHExternalASTSource(
     StringRef Path, const std::string &Sysroot, bool DisablePCHValidation,
     bool AllowPCHWithCompilerErrors, Preprocessor &PP, ASTContext &Context,
-    void *DeserializationListener, bool OwnDeserializationListener,
-    bool Preamble, bool UseGlobalModuleIndex) {
+    const ModuleProvider &MP, void *DeserializationListener,
+    bool OwnDeserializationListener, bool Preamble, bool UseGlobalModuleIndex) {
   HeaderSearchOptions &HSOpts = PP.getHeaderSearchInfo().getHeaderSearchOpts();
 
   IntrusiveRefCntPtr<ASTReader> Reader(
-      new ASTReader(PP, Context, Sysroot.empty() ? "" : Sysroot.c_str(),
+      new ASTReader(PP, Context, MP, Sysroot.empty() ? "" : Sysroot.c_str(),
                     DisablePCHValidation, AllowPCHWithCompilerErrors,
                     /*AllowConfigurationMismatch*/ false,
                     HSOpts.ModulesValidateSystemHeaders, UseGlobalModuleIndex));
@@ -910,7 +910,8 @@ static bool compileModuleImpl(CompilerInstance &ImportingInstance,
   
   // Construct a compiler instance that will be used to actually create the
   // module.
-  CompilerInstance Instance(/*BuildingModule=*/true);
+  CompilerInstance Instance(ImportingInstance.getSharedModuleProvider(),
+                            /*BuildingModule=*/true);
   Instance.setInvocation(&*Invocation);
 
   Instance.createDiagnostics(new ForwardingDiagnosticConsumer(
@@ -1252,6 +1253,7 @@ void CompilerInstance::createModuleManager() {
     std::string Sysroot = HSOpts.Sysroot;
     const PreprocessorOptions &PPOpts = getPreprocessorOpts();
     ModuleManager = new ASTReader(getPreprocessor(), *Context,
+                                  getModuleProvider(),
                                   Sysroot.empty() ? "" : Sysroot.c_str(),
                                   PPOpts.DisablePCHValidation,
                                   /*AllowASTWithCompilerErrors=*/false,
@@ -1298,7 +1300,7 @@ bool CompilerInstance::loadModuleFile(StringRef FileName) {
       ModuleFileStack.push_back(FileName);
       ModuleNameStack.push_back(StringRef());
       if (ASTReader::readASTFileControlBlock(FileName, CI.getFileManager(),
-                                             *this)) {
+                                             CI.getModuleProvider(), *this)) {
         CI.getDiagnostics().Report(
             SourceLocation(), CI.getFileManager().getBufferForFile(FileName)
                                   ? diag::err_module_file_invalid
@@ -1666,7 +1668,7 @@ GlobalModuleIndex *CompilerInstance::loadGlobalModuleIndex(
     llvm::sys::fs::create_directories(
       getPreprocessor().getHeaderSearchInfo().getModuleCachePath());
     GlobalModuleIndex::writeIndex(
-      getFileManager(),
+      getFileManager(), getModuleProvider(),
       getPreprocessor().getHeaderSearchInfo().getModuleCachePath());
     ModuleManager->resetForReload();
     ModuleManager->loadGlobalIndex();
@@ -1694,7 +1696,7 @@ GlobalModuleIndex *CompilerInstance::loadGlobalModuleIndex(
     }
     if (RecreateIndex) {
       GlobalModuleIndex::writeIndex(
-        getFileManager(),
+        getFileManager(), getModuleProvider(),
         getPreprocessor().getHeaderSearchInfo().getModuleCachePath());
       ModuleManager->resetForReload();
       ModuleManager->loadGlobalIndex();

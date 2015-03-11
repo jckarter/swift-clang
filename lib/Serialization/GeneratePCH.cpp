@@ -19,7 +19,6 @@
 #include "clang/Lex/Preprocessor.h"
 #include "clang/Sema/SemaConsumer.h"
 #include "llvm/Bitcode/BitstreamWriter.h"
-#include "llvm/Support/raw_ostream.h"
 #include <string>
 
 using namespace clang;
@@ -28,12 +27,17 @@ PCHGenerator::PCHGenerator(const Preprocessor &PP,
                            StringRef OutputFile,
                            clang::Module *Module,
                            StringRef isysroot,
-                           raw_ostream *OS, bool AllowASTWithErrors)
+                           std::shared_ptr<std::pair<bool,
+                               SmallVector<char, 0>>> Buffer,
+                           bool AllowASTWithErrors)
   : PP(PP), OutputFile(OutputFile), Module(Module), 
-    isysroot(isysroot.str()), Out(OS), 
-    SemaPtr(nullptr), Stream(Buffer), Writer(Stream),
-    AllowASTWithErrors(AllowASTWithErrors),
-    HasEmittedPCH(false) {
+    isysroot(isysroot.str()),
+    SemaPtr(nullptr),
+    Buffer(Buffer),
+    Stream(Buffer->second),
+    Writer(Stream),
+    AllowASTWithErrors(AllowASTWithErrors) {
+  Buffer->first = false;
 }
 
 PCHGenerator::~PCHGenerator() {
@@ -48,20 +52,11 @@ void PCHGenerator::HandleTranslationUnit(ASTContext &Ctx) {
   if (hasErrors && !AllowASTWithErrors)
     return;
   
-  // Emit the PCH file
+  // Emit the PCH file to the Buffer.
   assert(SemaPtr && "No Sema?");
   Writer.WriteAST(*SemaPtr, OutputFile, Module, isysroot, hasErrors);
 
-  // Write the generated bitstream to "Out".
-  Out->write((char *)&Buffer.front(), Buffer.size());
-
-  // Make sure it hits disk now.
-  Out->flush();
-
-  // Free up some memory, in case the process is kept alive.
-  Buffer.clear();
-
-  HasEmittedPCH = true;
+  Buffer->first = true;
 }
 
 ASTMutationListener *PCHGenerator::GetASTMutationListener() {

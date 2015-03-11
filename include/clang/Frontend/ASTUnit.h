@@ -44,22 +44,23 @@ namespace llvm {
 }
 
 namespace clang {
-class Sema;
 class ASTContext;
+class ASTDeserializationListener;
+class ASTFrontendAction;
 class ASTReader;
 class CodeCompleteConsumer;
-class CompilerInvocation;
 class CompilerInstance;
+class CompilerInvocation;
 class Decl;
 class DiagnosticsEngine;
 class FileEntry;
 class FileManager;
 class HeaderSearch;
+class ModuleProvider;
 class Preprocessor;
+class Sema;
 class SourceManager;
 class TargetInfo;
-class ASTFrontendAction;
-class ASTDeserializationListener;
 
 /// \brief Utility class for loading a ASTContext from an AST file.
 ///
@@ -419,10 +420,11 @@ private:
   ASTUnit(const ASTUnit &) = delete;
   void operator=(const ASTUnit &) = delete;
   
-  explicit ASTUnit(bool MainFileIsAST);
+  explicit ASTUnit(SharedModuleProvider MP, bool MainFileIsAST);
 
   void CleanTemporaryFiles();
-  bool Parse(std::unique_ptr<llvm::MemoryBuffer> OverrideMainBuffer);
+  bool Parse(SharedModuleProvider MP,
+             std::unique_ptr<llvm::MemoryBuffer> OverrideMainBuffer);
 
   struct ComputedPreamble {
     llvm::MemoryBuffer *Buffer;
@@ -707,6 +709,7 @@ public:
 
   /// \brief Create a ASTUnit. Gets ownership of the passed CompilerInvocation. 
   static ASTUnit *create(CompilerInvocation *CI,
+                         SharedModuleProvider MP,
                          IntrusiveRefCntPtr<DiagnosticsEngine> Diags,
                          bool CaptureDiagnostics,
                          bool UserFilesAreVolatile);
@@ -720,9 +723,10 @@ public:
   ///
   /// \returns - The initialized ASTUnit or null if the AST failed to load.
   static std::unique_ptr<ASTUnit> LoadFromASTFile(
-      const std::string &Filename, IntrusiveRefCntPtr<DiagnosticsEngine> Diags,
-      const FileSystemOptions &FileSystemOpts, bool OnlyLocalDecls = false,
-      ArrayRef<RemappedFile> RemappedFiles = None,
+      const std::string &Filename, SharedModuleProvider MP,
+      IntrusiveRefCntPtr<DiagnosticsEngine> Diags,
+      const FileSystemOptions &FileSystemOpts,
+      bool OnlyLocalDecls = false, ArrayRef<RemappedFile> RemappedFiles = None,
       bool CaptureDiagnostics = false, bool AllowPCHWithCompilerErrors = false,
       bool UserFilesAreVolatile = false);
 
@@ -765,7 +769,8 @@ public:
   /// created ASTUnit was passed in \p Unit then the caller can check that.
   ///
   static ASTUnit *LoadFromCompilerInvocationAction(
-      CompilerInvocation *CI, IntrusiveRefCntPtr<DiagnosticsEngine> Diags,
+      CompilerInvocation *CI, SharedModuleProvider MP,
+      IntrusiveRefCntPtr<DiagnosticsEngine> Diags,
       ASTFrontendAction *Action = nullptr, ASTUnit *Unit = nullptr,
       bool Persistent = true, StringRef ResourceFilesPath = StringRef(),
       bool OnlyLocalDecls = false, bool CaptureDiagnostics = false,
@@ -786,7 +791,8 @@ public:
   // FIXME: Move OnlyLocalDecls, UseBumpAllocator to setters on the ASTUnit, we
   // shouldn't need to specify them at construction time.
   static std::unique_ptr<ASTUnit> LoadFromCompilerInvocation(
-      CompilerInvocation *CI, IntrusiveRefCntPtr<DiagnosticsEngine> Diags,
+      CompilerInvocation *CI, SharedModuleProvider MP,
+      IntrusiveRefCntPtr<DiagnosticsEngine> Diags,
       bool OnlyLocalDecls = false, bool CaptureDiagnostics = false,
       bool PrecompilePreamble = false, TranslationUnitKind TUKind = TU_Complete,
       bool CacheCodeCompletionResults = false,
@@ -813,6 +819,7 @@ public:
   // shouldn't need to specify them at construction time.
   static ASTUnit *LoadFromCommandLine(
       const char **ArgBegin, const char **ArgEnd,
+      SharedModuleProvider MP,
       IntrusiveRefCntPtr<DiagnosticsEngine> Diags, StringRef ResourceFilesPath,
       bool OnlyLocalDecls = false, bool CaptureDiagnostics = false,
       ArrayRef<RemappedFile> RemappedFiles = None,

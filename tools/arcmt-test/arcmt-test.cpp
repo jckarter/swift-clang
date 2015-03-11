@@ -8,6 +8,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "clang/ARCMigrate/ARCMT.h"
+#include "clang/CodeGen/LLVMModuleProvider.h"
 #include "clang/Frontend/ASTUnit.h"
 #include "clang/Frontend/TextDiagnosticPrinter.h"
 #include "clang/Frontend/Utils.h"
@@ -130,7 +131,8 @@ static bool checkForMigration(StringRef resourcesPath,
   if (!CI.getLangOpts()->ObjC1)
     return false;
 
-  arcmt::checkForManualIssues(CI, CI.getFrontendOpts().Inputs[0], 
+  arcmt::checkForManualIssues(CI, CI.getFrontendOpts().Inputs[0],
+                              SharedModuleProvider::Create<LLVMModuleProvider>(),
                               Diags->getClient());
   return Diags->getClient()->getNumErrors() > 0;
 }
@@ -169,7 +171,8 @@ static bool performTransformations(StringRef resourcesPath,
   if (!origCI.getLangOpts()->ObjC1)
     return false;
 
-  MigrationProcess migration(origCI, DiagClient);
+  MigrationProcess migration(
+      origCI, SharedModuleProvider::Create<LLVMModuleProvider>(), DiagClient);
 
   std::vector<TransformFn>
     transforms = arcmt::getAllTransformations(origCI.getLangOpts()->getGC(),

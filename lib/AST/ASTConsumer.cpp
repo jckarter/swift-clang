@@ -14,6 +14,9 @@
 #include "clang/AST/ASTConsumer.h"
 #include "clang/AST/Decl.h"
 #include "clang/AST/DeclGroup.h"
+#include "clang/AST/ModuleProvider.h"
+#include "clang/Lex/ModuleLoader.h"
+
 using namespace clang;
 
 bool ASTConsumer::HandleTopLevelDecl(DeclGroupRef D) {
@@ -29,3 +32,8 @@ void ASTConsumer::HandleTopLevelDeclInObjCContainer(DeclGroupRef D) {}
 void ASTConsumer::HandleImplicitImportDecl(ImportDecl *D) {
   HandleTopLevelDecl(DeclGroupRef(D));
 }
+
+SharedModuleProvider::SharedModuleProvider(ModuleProvider *MP)
+  : std::shared_ptr<ModuleProvider>(MP) {}
+
+ModuleProvider::~ModuleProvider() {}

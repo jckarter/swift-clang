@@ -12,6 +12,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "clang/ASTMatchers/ASTMatchFinder.h"
+#include "clang/CodeGen/LLVMModuleProvider.h"
 #include "clang/Tooling/Tooling.h"
 #include "gtest/gtest.h"
 
@@ -22,6 +23,7 @@ TEST(Decl, CleansUpAPValues) {
   MatchFinder Finder;
   std::unique_ptr<FrontendActionFactory> Factory(
       newFrontendActionFactory(&Finder));
+  auto MP = clang::SharedModuleProvider::Create<clang::LLVMModuleProvider>();
 
   // This is a regression test for a memory leak in APValues for structs that
   // allocate memory. This test only fails if run under valgrind with full leak
@@ -29,6 +31,7 @@ TEST(Decl, CleansUpAPValues) {
   std::vector<std::string> Args(1, "-std=c++11");
   Args.push_back("-fno-ms-extensions");
   ASSERT_TRUE(runToolOnCodeWithArgs(
+      MP,
       Factory->create(),
       "struct X { int a; }; constexpr X x = { 42 };"
       "union Y { constexpr Y(int a) : a(a) {} int a; }; constexpr Y y = { 42 };"
@@ -53,6 +56,7 @@ TEST(Decl, CleansUpAPValues) {
   // FIXME: Once this test starts breaking we can test APValue::needsCleanup
   // for ComplexInt.
   ASSERT_FALSE(runToolOnCodeWithArgs(
+      MP,
       Factory->create(),
       "constexpr _Complex __uint128_t c = 0xffffffffffffffff;",
       Args));

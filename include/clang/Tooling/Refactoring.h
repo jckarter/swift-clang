@@ -37,7 +37,8 @@ namespace tooling {
 class RefactoringTool : public ClangTool {
 public:
   /// \see ClangTool::ClangTool.
-  RefactoringTool(const CompilationDatabase &Compilations,
+  RefactoringTool(SharedModuleProvider MP,
+                  const CompilationDatabase &Compilations,
                   ArrayRef<std::string> SourcePaths);
 
   /// \brief Returns the set of replacements to which replacements should

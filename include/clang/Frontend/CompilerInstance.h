@@ -43,6 +43,7 @@ class FileEntry;
 class FileManager;
 class FrontendAction;
 class Module;
+class ModuleProvider;
 class Preprocessor;
 class Sema;
 class SourceManager;
@@ -164,7 +165,8 @@ class CompilerInstance : public ModuleLoader {
   CompilerInstance(const CompilerInstance &) = delete;
   void operator=(const CompilerInstance &) = delete;
 public:
-  explicit CompilerInstance(bool BuildingModule = false);
+  explicit CompilerInstance(SharedModuleProvider MP,
+                            bool BuildingModule = false);
   ~CompilerInstance();
 
   /// @name High-Level Operations
@@ -597,8 +599,8 @@ public:
   static IntrusiveRefCntPtr<ASTReader> createPCHExternalASTSource(
       StringRef Path, const std::string &Sysroot, bool DisablePCHValidation,
       bool AllowPCHWithCompilerErrors, Preprocessor &PP, ASTContext &Context,
-      void *DeserializationListener, bool OwnDeserializationListener,
-      bool Preamble, bool UseGlobalModuleIndex);
+      const ModuleProvider &MP, void *DeserializationListener,
+      bool OwnDeserializationListener, bool Preamble, bool UseGlobalModuleIndex);
 
   /// Create a code completion consumer using the invocation; note that this
   /// will cause the source manager to truncate the input source file at the

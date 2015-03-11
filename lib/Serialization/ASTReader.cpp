@@ -19,6 +19,7 @@
 #include "clang/AST/DeclTemplate.h"
 #include "clang/AST/Expr.h"
 #include "clang/AST/ExprCXX.h"
+#include "clang/AST/ModuleProvider.h"
 #include "clang/AST/NestedNameSpecifier.h"
 #include "clang/AST/Type.h"
 #include "clang/AST/TypeLocVisitor.h"
@@ -3863,9 +3864,10 @@ ASTReader::ReadASTCore(StringRef FileName,
 
   ModuleFile &F = *M;
   BitstreamCursor &Stream = F.Stream;
+  MP.UnwrapModuleContainer(F.Buffer->getMemBufferRef(), F.StreamFile);
   Stream.init(&F.StreamFile);
-  F.SizeInBits = F.Buffer->getBufferSize() * 8;
-  
+  F.SizeInBits = F.StreamFile.getBitcodeBytes().getExtent() * 8;
+
   // Sniff for the signature.
   if (Stream.Read(8) != 'C' ||
       Stream.Read(8) != 'P' ||
@@ -4143,6 +4145,7 @@ static ASTFileSignature readASTFileSignature(llvm::BitstreamReader &StreamFile){
 /// file.
 std::string ASTReader::getOriginalSourceFile(const std::string &ASTFileName,
                                              FileManager &FileMgr,
+                                             const ModuleProvider &MP,
                                              DiagnosticsEngine &Diags) {
   // Open the AST file.
   auto Buffer = FileMgr.getBufferForFile(ASTFileName);
@@ -4154,8 +4157,7 @@ std::string ASTReader::getOriginalSourceFile(const std::string &ASTFileName,
 
   // Initialize the stream
   llvm::BitstreamReader StreamFile;
-  StreamFile.init((const unsigned char *)(*Buffer)->getBufferStart(),
-                  (const unsigned char *)(*Buffer)->getBufferEnd());
+  MP.UnwrapModuleContainer((*Buffer)->getMemBufferRef(), StreamFile);
   BitstreamCursor Stream(StreamFile);
 
   // Sniff for the signature.
@@ -4241,6 +4243,7 @@ namespace {
 
 bool ASTReader::readASTFileControlBlock(StringRef Filename,
                                         FileManager &FileMgr,
+                                        const ModuleProvider &MP,
                                         ASTReaderListener &Listener) {
   // Open the AST file.
   auto Buffer = FileMgr.getBufferForFile(Filename);
@@ -4250,8 +4253,7 @@ bool ASTReader::readASTFileControlBlock(StringRef Filename,
 
   // Initialize the stream
   llvm::BitstreamReader StreamFile;
-  StreamFile.init((const unsigned char *)(*Buffer)->getBufferStart(),
-                  (const unsigned char *)(*Buffer)->getBufferEnd());
+  MP.UnwrapModuleContainer((*Buffer)->getMemBufferRef(), StreamFile);
   BitstreamCursor Stream(StreamFile);
 
   // Sniff for the signature.
@@ -4422,13 +4424,14 @@ bool ASTReader::readASTFileControlBlock(StringRef Filename,
 
 bool ASTReader::isAcceptableASTFile(StringRef Filename,
                                     FileManager &FileMgr,
+                                    const ModuleProvider &MP,
                                     const LangOptions &LangOpts,
                                     const TargetOptions &TargetOpts,
                                     const PreprocessorOptions &PPOpts,
                                     std::string ExistingModuleCachePath) {
   SimplePCHValidator validator(LangOpts, TargetOpts, PPOpts,
                                ExistingModuleCachePath, FileMgr);
-  return !readASTFileControlBlock(Filename, FileMgr, validator);
+  return !readASTFileControlBlock(Filename, FileMgr, MP, validator);
 }
 
 ASTReader::ASTReadResult
@@ -8622,15 +8625,17 @@ void ASTReader::pushExternalDeclIntoScope(NamedDecl *D, DeclarationName Name) {
   }
 }
 
-ASTReader::ASTReader(Preprocessor &PP, ASTContext &Context, StringRef isysroot,
-                     bool DisableValidation, bool AllowASTWithCompilerErrors,
+ASTReader::ASTReader(Preprocessor &PP, ASTContext &Context,
+                     const ModuleProvider &MP,
+                     StringRef isysroot, bool DisableValidation,
+                     bool AllowASTWithCompilerErrors,
                      bool AllowConfigurationMismatch, bool ValidateSystemInputs,
                      bool UseGlobalIndex)
     : Listener(new PCHValidator(PP, *this)), DeserializationListener(nullptr),
       OwnsDeserializationListener(false), SourceMgr(PP.getSourceManager()),
-      FileMgr(PP.getFileManager()), Diags(PP.getDiagnostics()),
+      FileMgr(PP.getFileManager()), MP(MP), Diags(PP.getDiagnostics()),
       SemaObj(nullptr), PP(PP), Context(Context), Consumer(nullptr),
-      ModuleMgr(PP.getFileManager()), isysroot(isysroot),
+      ModuleMgr(PP.getFileManager(), MP), isysroot(isysroot),
       DisableValidation(DisableValidation),
       AllowASTWithCompilerErrors(AllowASTWithCompilerErrors),
       AllowConfigurationMismatch(AllowConfigurationMismatch),

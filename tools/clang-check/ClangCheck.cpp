@@ -18,6 +18,7 @@
 
 #include "clang/AST/ASTConsumer.h"
 #include "clang/Driver/Options.h"
+#include "clang/CodeGen/LLVMModuleProvider.h"
 #include "clang/Frontend/ASTConsumers.h"
 #include "clang/Frontend/CompilerInstance.h"
 #include "clang/Rewrite/Frontend/FixItRewriter.h"
@@ -150,8 +151,10 @@ public:
 int main(int argc, const char **argv) {
   llvm::sys::PrintStackTraceOnErrorSignal();
   CommonOptionsParser OptionsParser(argc, argv, ClangCheckCategory);
-  ClangTool Tool(OptionsParser.getCompilations(),
-                 OptionsParser.getSourcePathList());
+  ClangTool Tool(
+      clang::SharedModuleProvider::Create<clang::LLVMModuleProvider>(),
+      OptionsParser.getCompilations(),
+      OptionsParser.getSourcePathList());
 
   // Clear adjusters because -fsyntax-only is inserted by the default chain.
   Tool.clearArgumentsAdjusters();
