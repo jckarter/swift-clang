@@ -2877,7 +2877,8 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
   // Note that these flags are trump-cards. Regardless of the order w.r.t. the
   // PIC or PIE options above, if these show up, PIC is disabled.
   llvm::Triple Triple(TripleStr);
-  if (KernelOrKext && (!Triple.isiOS() || Triple.isOSVersionLT(6)))
+  if (KernelOrKext && ((!Triple.isiOS() || Triple.isOSVersionLT(6)) &&
+                       !Triple.isWatchOS()))
     PIC = PIE = false;
   if (Args.hasArg(options::OPT_static))
     PIC = PIE = false;
