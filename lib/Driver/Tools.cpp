@@ -847,7 +847,8 @@ void Clang::AddARMTargetArgs(const ArgList &Args,
 
   // Kernel code has more strict alignment requirements.
   if (KernelOrKext) {
-    if (!Triple.isiOS() || Triple.isOSVersionLT(6)) {
+    if ((!Triple.isiOS() || Triple.isOSVersionLT(6)) &&
+        !Triple.isWatchOS()) {
       CmdArgs.push_back("-backend-option");
       CmdArgs.push_back("-arm-long-calls");
     }
