@@ -827,7 +827,7 @@ IdentifierInfo *ASTIdentifierLookupTrait::ReadData(const internal_key_type& k,
         uint32_t LocalMacroID =
             endian::readNext<uint32_t, little, unaligned>(d);
         DataLen -= 4;
-        if (LocalMacroID == 0xdeadbeef) break;
+        if (LocalMacroID == (uint32_t)-1) break;
         LocalMacroIDs.push_back(LocalMacroID);
       }
     }
@@ -1808,7 +1808,7 @@ struct ASTReader::ModuleMacroInfo {
 };
 
 ASTReader::ModuleMacroInfo *
-ASTReader::getModuleMacro(const PendingMacroInfo &PMInfo) {
+ASTReader::getModuleMacro(IdentifierInfo *II, const PendingMacroInfo &PMInfo) {
   ModuleMacroInfo Info;
 
   uint32_t ID = PMInfo.ModuleMacroData.MacID;
@@ -1816,6 +1816,11 @@ ASTReader::getModuleMacro(const PendingMacroInfo &PMInfo) {
     // Macro undefinition.
     Info.SubModID = getGlobalSubmoduleID(*PMInfo.M, ID >> 1);
     Info.MI = nullptr;
+
+    // If we've already loaded the #undef of this macro from this module,
+    // don't do so again.
+    if (!LoadedUndefs.insert(std::make_pair(II, Info.SubModID)).second)
+      return nullptr;
   } else {
     // Macro definition.
     GlobalMacroID GMacID = getGlobalMacroID(*PMInfo.M, ID >> 1);
@@ -1849,7 +1854,7 @@ void ASTReader::resolvePendingMacro(IdentifierInfo *II,
 
   // Module Macro.
 
-  ModuleMacroInfo *MMI = getModuleMacro(PMInfo);
+  ModuleMacroInfo *MMI = getModuleMacro(II, PMInfo);
   if (!MMI)
     return;
 

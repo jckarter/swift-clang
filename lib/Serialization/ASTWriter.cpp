@@ -3355,6 +3355,7 @@ public:
     using namespace llvm::support;
     endian::Writer<little> LE(Out);
 
+    assert((uint16_t)DataLen == DataLen && (uint16_t)KeyLen == KeyLen);
     LE.write<uint16_t>(DataLen);
     // We emit the key length after the data length so that every
     // string is preceded by a 16-bit length. This matches the PTH
@@ -3433,7 +3434,7 @@ public:
           }
           emitMacroOverrides(Out, getOverriddenSubmodules(MD, Scratch));
         }
-        LE.write<uint32_t>(0xdeadbeef);
+        LE.write<uint32_t>((uint32_t)-1);
       }
     }
 
