@@ -3657,7 +3657,7 @@ llvm::Constant *CodeGenModule::GetAddrOfRTTIDescriptor(QualType Ty,
       LangOpts.ObjCRuntime.isGNUFamily())
     return ObjCRuntime->GetEHType(Ty);
 
-  return getCXXABI().getAddrOfRTTIDescriptor(Ty);
+  return getCXXABI().getAddrOfRTTIDescriptor(Ty, ForEH);
 }
 
 void CodeGenModule::EmitOMPThreadPrivateDecl(const OMPThreadPrivateDecl *D) {
