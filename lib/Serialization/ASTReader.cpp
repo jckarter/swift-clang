@@ -8316,8 +8316,8 @@ void ASTReader::finishPendingActions() {
 
     // Load pending declaration chains.
     for (unsigned I = 0; I != PendingDeclChains.size(); ++I) {
-      loadPendingDeclChain(PendingDeclChains[I]);
       PendingDeclChainsKnown.erase(PendingDeclChains[I]);
+      loadPendingDeclChain(PendingDeclChains[I]);
     }
     assert(PendingDeclChainsKnown.empty());
     PendingDeclChains.clear();
