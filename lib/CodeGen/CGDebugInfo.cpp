@@ -1454,8 +1454,15 @@ llvm::DIType CGDebugInfo::getOrCreateRecordType(QualType RTy,
 /// debug info.
 llvm::DIType CGDebugInfo::getOrCreateInterfaceType(QualType D,
                                                    SourceLocation Loc) {
+  return getOrCreateStandaloneType(D, Loc);
+}
+
+llvm::DIType CGDebugInfo::getOrCreateStandaloneType(QualType D,
+                                                    SourceLocation Loc) {
   assert(DebugKind >= CodeGenOptions::LimitedDebugInfo);
+  assert(!D.isNull() && "null type");
   llvm::DIType T = getOrCreateType(D, getOrCreateFile(Loc));
+  assert(T.get() && "could not create debug info for type");
   RetainedTypes.push_back(D.getAsOpaquePtr());
   return T;
 }
@@ -2656,6 +2663,51 @@ void CGDebugInfo::EmitFunctionStart(GlobalDecl GD, SourceLocation Loc,
     RegionMap[D].reset(SP);
 }
 
+void CGDebugInfo::EmitFunctionDecl(GlobalDecl GD, SourceLocation Loc,
+                                   QualType FnType) {
+  StringRef Name;
+  StringRef LinkageName;
+
+  FnBeginRegionCount.push_back(LexicalBlockStack.size());
+
+  const Decl *D = GD.getDecl();
+  if (!D)
+    return;
+
+  unsigned Flags = 0;
+  llvm::DIFile Unit = getOrCreateFile(Loc);
+  llvm::DIDescriptor FDContext(Unit);
+  llvm::DIArray TParamsArray;
+  if (isa<FunctionDecl>(D)) {
+    // If there is a DISubprogram for this function available then use it.
+    collectFunctionDeclProps(GD, Unit, Name, LinkageName, FDContext,
+                             TParamsArray, Flags);
+  } else if (const ObjCMethodDecl *OMD = dyn_cast<ObjCMethodDecl>(D)) {
+    Name = getObjCMethodName(OMD);
+    Flags |= llvm::DIDescriptor::FlagPrototyped;
+  } else {
+    llvm_unreachable("not a function or ObjC method");
+  }
+  if (!Name.empty() && Name[0] == '\01')
+    Name = Name.substr(1);
+
+  if (D->isImplicit()) {
+    Flags |= llvm::DIDescriptor::FlagArtificial;
+    // Artificial functions without a location should not silently reuse CurLoc.
+    if (Loc.isInvalid())
+      CurLoc = SourceLocation();
+  }
+  unsigned LineNo = getLineNumber(Loc);
+  unsigned ScopeLine = 0;
+
+  DBuilder.createFunction(
+      FDContext, Name, LinkageName, Unit, LineNo,
+      getOrCreateFunctionType(D, FnType, Unit), false /*internalLinkage*/,
+      true /*definition*/, ScopeLine, Flags, CGM.getLangOpts().Optimize,
+      nullptr, TParamsArray, getFunctionDeclaration(D));//, true /*forceOutput*/);
+}
+
+
 /// EmitLocation - Emit metadata to indicate a change in line/column
 /// information in the source file. If the location is invalid, the
 /// previous location will be reused.
@@ -3422,10 +3474,14 @@ void CGDebugInfo::finalize() {
 
   // We keep our own list of retained types, because we need to look
   // up the final type in the type cache.
-  for (std::vector<void *>::const_iterator RI = RetainedTypes.begin(),
-         RE = RetainedTypes.end(); RI != RE; ++RI)
-    DBuilder.retainType(llvm::DIType(cast<llvm::MDNode>(TypeCache[*RI])));
-
+  llvm::DenseSet<void *> UniqueTypes;
+  UniqueTypes.resize(RetainedTypes.size() * 2);
+  for (auto &RT : RetainedTypes) {
+    if (!UniqueTypes.insert(RT).second)
+      continue;
+    if (auto MD = TypeCache[RT])
+      DBuilder.retainType(llvm::DIType(cast<llvm::MDNode>(MD)));
+  }
   DBuilder.finalize();
 }
 

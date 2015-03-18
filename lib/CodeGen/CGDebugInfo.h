@@ -235,6 +235,9 @@ public:
                          QualType FnType, llvm::Function *Fn,
                          CGBuilderTy &Builder);
 
+  /// \brief Emit debug info for a function declaration.
+  void EmitFunctionDecl(GlobalDecl GD, SourceLocation Loc, QualType FnType);
+
   /// \brief Constructs the debug code for exiting a function.
   void EmitFunctionEnd(CGBuilderTy &Builder);
 
@@ -297,6 +300,10 @@ public:
   /// debug info.
   llvm::DIType getOrCreateInterfaceType(QualType Ty,
                                         SourceLocation Loc);
+
+  /// \brief - Emit standalone type debug info.
+  llvm::DIType getOrCreateStandaloneType(QualType Ty, SourceLocation Loc);
+
 
   void completeType(const EnumDecl *ED);
   void completeType(const RecordDecl *RD);
