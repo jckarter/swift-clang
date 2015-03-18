@@ -1775,7 +1775,7 @@ void ASTWriter::WriteHeaderSearch(const HeaderSearch &HS) {
   Record.push_back(NumHeaderSearchEntries);
   Record.push_back(TableData.size());
   TableData.append(GeneratorTrait.strings_begin(),GeneratorTrait.strings_end());
-  Stream.EmitRecordWithBlob(TableAbbrev, Record, TableData.str());
+  Stream.EmitRecordWithBlob(TableAbbrev, Record, TableData);
   
   // Free all of the strings we had to duplicate.
   for (unsigned I = 0, N = SavedStrings.size(); I != N; ++I)
@@ -2235,7 +2235,7 @@ void ASTWriter::WritePreprocessor(const Preprocessor &PP, bool IsModule) {
 
   Record.push_back(MACRO_TABLE);
   Record.push_back(BucketOffset);
-  Stream.EmitRecordWithBlob(MacroTableAbbrev, Record, MacroTable.str());
+  Stream.EmitRecordWithBlob(MacroTableAbbrev, Record, MacroTable);
   Record.clear();
 
   // Write the offsets table for macro IDs.
@@ -3069,7 +3069,7 @@ void ASTWriter::WriteSelectors(Sema &SemaRef) {
     Record.push_back(METHOD_POOL);
     Record.push_back(BucketOffset);
     Record.push_back(NumTableEntries);
-    Stream.EmitRecordWithBlob(MethodPoolAbbrev, Record, MethodPool.str());
+    Stream.EmitRecordWithBlob(MethodPoolAbbrev, Record, MethodPool);
 
     // Create a blob abbreviation for the selector table offsets.
     Abbrev = new BitCodeAbbrev();
@@ -3525,7 +3525,7 @@ void ASTWriter::WriteIdentifierTable(Preprocessor &PP,
     RecordData Record;
     Record.push_back(IDENTIFIER_TABLE);
     Record.push_back(BucketOffset);
-    Stream.EmitRecordWithBlob(IDTableAbbrev, Record, IdentifierTable.str());
+    Stream.EmitRecordWithBlob(IDTableAbbrev, Record, IdentifierTable);
   }
 
   // Write the offsets table for identifier IDs.
@@ -3843,7 +3843,7 @@ uint64_t ASTWriter::WriteDeclContextVisibleBlock(ASTContext &Context,
   Record.push_back(DECL_CONTEXT_VISIBLE);
   Record.push_back(BucketOffset);
   Stream.EmitRecordWithBlob(DeclContextVisibleLookupAbbrev, Record,
-                            LookupTable.str());
+                            LookupTable);
   ++NumVisibleDeclContexts;
   return Offset;
 }
@@ -3868,7 +3868,7 @@ void ASTWriter::WriteDeclContextVisibleUpdate(const DeclContext *DC) {
   Record.push_back(UPDATE_VISIBLE);
   Record.push_back(getDeclID(cast<Decl>(DC)));
   Record.push_back(BucketOffset);
-  Stream.EmitRecordWithBlob(UpdateVisibleAbbrev, Record, LookupTable.str());
+  Stream.EmitRecordWithBlob(UpdateVisibleAbbrev, Record, LookupTable);
 }
 
 /// \brief Write an FP_PRAGMA_OPTIONS block for the given FPOptions.

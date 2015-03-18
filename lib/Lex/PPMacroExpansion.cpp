@@ -1140,7 +1140,7 @@ static bool EvaluateHasIncludeCommon(Token &Tok,
       Tok.setKind(tok::eod);
       return false;   // Found <eod> but no ">"?  Diagnostic already emitted.
     }
-    Filename = FilenameBuffer.str();
+    Filename = FilenameBuffer;
     break;
   default:
     PP.Diag(Tok.getLocation(), diag::err_pp_expects_filename);
