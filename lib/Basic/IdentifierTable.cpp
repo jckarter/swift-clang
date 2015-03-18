@@ -106,11 +106,11 @@ namespace {
     KEYOPENCL = 0x200,
     KEYC11 = 0x400,
     KEYARC = 0x800,
-    KEYNOMS = 0x01000,
+    KEYNOMS18 = 0x01000,
     WCHARSUPPORT = 0x02000,
     HALFSUPPORT = 0x04000,
     KEYOBJC2 = 0x08000,
-    KEYALL = (0xffff & ~KEYNOMS) // Because KEYNOMS is used to exclude.
+    KEYALL = (0xffff & ~KEYNOMS18) // Because KEYNOMS is used to exclude.
   };
 
   /// \brief How a keyword is treated in the selected standard.
@@ -157,7 +157,8 @@ static void AddKeyword(StringRef Keyword,
   KeywordStatus AddResult = getKeywordStatus(LangOpts, Flags);
 
   // Don't add this keyword under MSVCCompat.
-  if (LangOpts.MSVCCompat && (Flags & KEYNOMS))
+  if (LangOpts.MSVCCompat && (Flags & KEYNOMS18) &&
+      !LangOpts.isCompatibleWithMSVC(19))
      return;
   // Don't add this keyword if disabled in this language.
   if (AddResult == KS_Disabled) return;
