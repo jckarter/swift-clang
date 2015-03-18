@@ -6078,6 +6078,11 @@ void darwin::Link::AddLinkArgs(Compilation &C,
       CmdArgs.push_back("-no_pie");
   }
 
+  // for embed-bitcode, use -bitcode_bundle in linker command
+  if (C.getDriver().embedBitcodeEnabled() ||
+      C.getDriver().embedBitcodeMarkerOnly())
+    CmdArgs.push_back("-bitcode_bundle");
+
   Args.AddLastArg(CmdArgs, options::OPT_prebind);
   Args.AddLastArg(CmdArgs, options::OPT_noprebind);
   Args.AddLastArg(CmdArgs, options::OPT_nofixprebinding);
