@@ -8,7 +8,6 @@
 //===----------------------------------------------------------------------===//
 
 #include "clang/CodeGen/LLVMModuleProvider.h"
-#include "CGDebugInfo.h"
 #include "CodeGenModule.h"
 #include "clang/AST/ASTContext.h"
 #include "clang/AST/DeclObjC.h"
@@ -45,74 +44,6 @@ class ModuleContainerGenerator : public ASTConsumer {
   raw_ostream *OS;
   std::shared_ptr<std::pair<bool, llvm::SmallVector<char, 0>>> Buffer;
 
-
-  /// Visit every type and emit debug info for it.
-  struct DebugTypeVisitor : public RecursiveASTVisitor<DebugTypeVisitor> {
-    clang::CodeGen::CGDebugInfo &DI;
-    ASTContext &Ctx;
-    DebugTypeVisitor(clang::CodeGen::CGDebugInfo &DI, ASTContext &Ctx)
-        : DI(DI), Ctx(Ctx) {}
-
-    /// Determine whether this type can be represented in DWARF.
-    static bool CanRepresent(const Type *Ty) {
-      return !Ty->isDependentType() && !Ty->isUndeducedType();
-    }
-
-    bool VisitTypeDecl(TypeDecl *D) {
-      const Type *Ty = D->getTypeForDecl();
-      if (Ty && CanRepresent(Ty))
-        DI.getOrCreateStandaloneType(QualType(Ty, 0), D->getLocation());
-      return true;
-    }
-
-    bool VisitValueDecl(ValueDecl *D) {
-      QualType QualTy = D->getType();
-      if (!QualTy.isNull() && CanRepresent(QualTy.getTypePtr()))
-        DI.getOrCreateStandaloneType(QualTy, D->getLocation());
-      return true;
-    }
-
-    bool VisitObjCInterfaceDecl(ObjCInterfaceDecl *D) {
-      QualType QualTy(D->getTypeForDecl(), 0);
-      if (!QualTy.isNull() && CanRepresent(QualTy.getTypePtr()))
-        DI.getOrCreateStandaloneType(QualTy, D->getLocation());
-      return true;
-    }
-
-    bool VisitFunctionDecl(FunctionDecl *D) {
-      if (isa<CXXMethodDecl>(D))
-        // Constructing the this argument mandates a CodeGenFunction.
-        return true;
- 
-      SmallVector<QualType, 16> ArgTypes;
-      for (auto i : D->params())
-        ArgTypes.push_back(i->getType());
-      QualType RetTy = D->getReturnType();
-      QualType FnTy = Ctx.getFunctionType(RetTy, ArgTypes,
-                                          FunctionProtoType::ExtProtoInfo());
-      if (CanRepresent(FnTy.getTypePtr()))
-        DI.EmitFunctionDecl(D, D->getLocation(), FnTy);
-      return true;
-    }
-
-    bool VisitObjCMethodDecl(ObjCMethodDecl *D) {
-      if (!D->getClassInterface())
-        return true;
-      D->createImplicitParams(Ctx, D->getClassInterface());
-      SmallVector<QualType, 16> ArgTypes;
-      ArgTypes.push_back(D->getSelfDecl()->getType());
-      ArgTypes.push_back(D->getCmdDecl()->getType());
-      for (auto i : D->params())
-        ArgTypes.push_back(i->getType());
-      QualType RetTy = D->getReturnType();
-      QualType FnTy = Ctx.getFunctionType(RetTy, ArgTypes,
-                                            FunctionProtoType::ExtProtoInfo());
-      if (CanRepresent(FnTy.getTypePtr()))
-        DI.EmitFunctionDecl(D, D->getLocation(), FnTy);
-      return true;
-    }
-  };
-
 public:
   ModuleContainerGenerator(
       DiagnosticsEngine &diags, const std::string &ModuleName,
@@ -140,17 +71,6 @@ public:
         Builder->clear();
       M.reset();
       return;
-    }
-
-    if (CodeGenOpts.getDebugInfo() > CodeGenOptions::NoDebugInfo) {
-      // Collect all the debug info.
-      const TranslationUnitDecl *TU = Ctx.getTranslationUnitDecl();
-      for (auto *I : TU->noload_decls()) {
-        if (!I->isFromASTFile()) {
-          DebugTypeVisitor DTV(*Builder->getModuleDebugInfo(), Ctx);
-          DTV.TraverseDecl(I);
-        }
-      }
     }
 
     // Finalize the Builder.
