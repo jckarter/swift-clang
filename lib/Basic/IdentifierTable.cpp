@@ -107,10 +107,12 @@ namespace {
     KEYC11 = 0x400,
     KEYARC = 0x800,
     KEYNOMS18 = 0x01000,
-    WCHARSUPPORT = 0x02000,
-    HALFSUPPORT = 0x04000,
-    KEYOBJC2 = 0x08000,
-    KEYALL = (0xffff & ~KEYNOMS18) // Because KEYNOMS is used to exclude.
+    KEYNOOPENCL = 0x02000,
+    WCHARSUPPORT = 0x04000,
+    HALFSUPPORT = 0x08000,
+    KEYOBJC2 = 0x10000,
+    KEYALL = (0x1ffff & ~KEYNOMS18 &
+              ~KEYNOOPENCL) // KEYNOMS18 and KEYNOOPENCL are used to exclude.
   };
 
   /// \brief How a keyword is treated in the selected standard.
@@ -159,7 +161,12 @@ static void AddKeyword(StringRef Keyword,
   // Don't add this keyword under MSVCCompat.
   if (LangOpts.MSVCCompat && (Flags & KEYNOMS18) &&
       !LangOpts.isCompatibleWithMSVC(19))
-     return;
+    return;
+
+  // Don't add this keyword under OpenCL.
+  if (LangOpts.OpenCL && (Flags & KEYNOOPENCL))
+    return;
+
   // Don't add this keyword if disabled in this language.
   if (AddResult == KS_Disabled) return;
 
