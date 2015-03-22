@@ -4,6 +4,7 @@ set(LLVM_LINK_COMPONENTS
   BitReader
   BitWriter
   Core
+  DebugInfoDWARF
   IPO
   IRReader
   InstCombine
@@ -11,6 +12,7 @@ set(LLVM_LINK_COMPONENTS
   Linker
   MC
   ObjCARCOpts
+  Object
   ProfileData
   ScalarOpts
   Support
@@ -83,4 +85,5 @@ add_clang_library(clangCodeGen
   clangBasic
   clangFrontend
   clangLex
+  clangIndex
   )

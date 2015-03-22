@@ -63,6 +63,9 @@ public:
 
   /// \brief The umbrella header or directory.
   llvm::PointerUnion<const DirectoryEntry *, const FileEntry *> Umbrella;
+
+  /// \brief The DWO signature of the module's debug info.
+  uint64_t SplitDwarfID;
   
 private:
   /// \brief The submodules of this module, indexed by name.

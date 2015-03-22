@@ -96,12 +96,14 @@ GeneratePCHAction::CreateASTConsumer(CompilerInstance &CI, StringRef InFile) {
                                                       Sysroot, Buffer));
 
   auto CGOpts = CI.getCodeGenOpts();
+  CGOpts.SplitDwarfFile = OutputFile+".dwo";
   // The debug info emitted by ModuleContainerGenerator is not affected by the
   // optimization level.
   CGOpts.OptimizationLevel = 0;
   CGOpts.setDebugInfo(CodeGenOptions::LimitedDebugInfo);
   Consumers.push_back(CI.getModuleProvider().CreateModuleContainerGenerator(
-      CI.getDiagnostics(), "PCH", CGOpts, CI.getTargetOpts(), CI.getLangOpts(),
+      CI.getDiagnostics(), "PCH", CI.getHeaderSearchOpts(),
+      CI.getPreprocessorOpts(), CGOpts, CI.getTargetOpts(), CI.getLangOpts(),
       OS, Buffer));
 
   return llvm::make_unique<MultiplexConsumer>(std::move(Consumers));
@@ -150,9 +152,11 @@ GenerateModuleAction::CreateASTConsumer(CompilerInstance &CI,
   // The debug info emitted by ModuleContainerGenerator is not affected by the
   // optimization level.
   CGOpts.OptimizationLevel = 0;
+  CGOpts.SplitDwarfFile = OutputFile+".dwo";
   CGOpts.setDebugInfo(CodeGenOptions::LimitedDebugInfo);
   Consumers.push_back(CI.getModuleProvider().CreateModuleContainerGenerator(
-      CI.getDiagnostics(), Module->getFullModuleName(), CGOpts,
+      CI.getDiagnostics(), Module->getFullModuleName(),
+      CI.getHeaderSearchOpts(), CI.getPreprocessorOpts(), CGOpts,
       CI.getTargetOpts(), CI.getLangOpts(), OS, Buffer));
   return llvm::make_unique<MultiplexConsumer>(std::move(Consumers));
 }

@@ -159,9 +159,10 @@ IntrusiveRefCntPtr<ExternalSemaSource> clang::createChainedIncludesSource(
                                                  &Clang->getPreprocessor());
     Clang->createASTContext();
 
+    uint64_t Signature;
     auto Buffer = std::make_shared<std::pair<bool, SmallVector<char, 0>>>();
     auto consumer = llvm::make_unique<PCHGenerator>(Clang->getPreprocessor(),
-                                         "-", nullptr, /*isysroot=*/"", Buffer);
+                           "-", nullptr, /*isysroot=*/"", Buffer, Signature);
     Clang->getASTContext().setASTMutationListener(
                                             consumer->GetASTMutationListener());
     Clang->setASTConsumer(std::move(consumer));
