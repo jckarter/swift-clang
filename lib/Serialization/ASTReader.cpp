@@ -1,4 +1,4 @@
-//===--- ASTReader.cpp - AST File Reader ----------------------------------===//
+//===-- ASTReader.cpp - AST File Reader ----------------------------------===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -2836,6 +2836,8 @@ ASTReader::ReadASTBlock(ModuleFile &F, unsigned ClientLoadCapabilities) {
     }
 
     case EAGERLY_DESERIALIZED_DECLS:
+      // FIXME: Skip reading this record if our ASTConsumer doesn't care
+      // about "interesting" decls (for instance, if we're building a module).
       for (unsigned I = 0, N = Record.size(); I != N; ++I)
         EagerlyDeserializedDecls.push_back(getGlobalDeclID(F, Record[I]));
       break;
@@ -6846,6 +6848,12 @@ void ASTReader::PassInterestingDeclsToConsumer() {
   SaveAndRestore<bool> GuardPassingDeclsToConsumer(PassingDeclsToConsumer,
                                                    true);
 
+  // Ensure that we've loaded all potentially-interesting declarations
+  // that need to be eagerly loaded.
+  for (auto ID : EagerlyDeserializedDecls)
+    GetDecl(ID);
+  EagerlyDeserializedDecls.clear();
+
   while (!InterestingDecls.empty()) {
     Decl *D = InterestingDecls.front();
     InterestingDecls.pop_front();
@@ -6864,17 +6872,8 @@ void ASTReader::PassInterestingDeclToConsumer(Decl *D) {
 void ASTReader::StartTranslationUnit(ASTConsumer *Consumer) {
   this->Consumer = Consumer;
 
-  if (!Consumer)
-    return;
-
-  for (unsigned I = 0, N = EagerlyDeserializedDecls.size(); I != N; ++I) {
-    // Force deserialization of this decl, which will cause it to be queued for
-    // passing to the consumer.
-    GetDecl(EagerlyDeserializedDecls[I]);
-  }
-  EagerlyDeserializedDecls.clear();
-
-  PassInterestingDeclsToConsumer();
+  if (Consumer)
+    PassInterestingDeclsToConsumer();
 
   if (DeserializationListener)
     DeserializationListener->ReaderInitialized(this);
@@ -8657,6 +8656,13 @@ void ASTReader::FinishedDeserializing() {
   --NumCurrentElementsDeserializing;
 
   if (NumCurrentElementsDeserializing == 0) {
+    // Propagate exception specification updates along redeclaration chains.
+    for (auto Update : PendingExceptionSpecUpdates) {
+      auto *FPT = Update.second->getType()->castAs<FunctionProtoType>();
+      SemaObj->UpdateExceptionSpec(Update.second,
+                                   FPT->getExtProtoInfo().ExceptionSpec);
+    }
+
     diagnoseOdrViolations();
 
     // We are not in recursive loading, so it's safe to pass the "interesting"
@@ -8667,7 +8673,15 @@ void ASTReader::FinishedDeserializing() {
 }
 
 void ASTReader::pushExternalDeclIntoScope(NamedDecl *D, DeclarationName Name) {
-  D = D->getMostRecentDecl();
+  if (IdentifierInfo *II = Name.getAsIdentifierInfo()) {
+    // Remove any fake results before adding any real ones.
+    auto It = PendingFakeLookupResults.find(II);
+    if (It != PendingFakeLookupResults.end()) {
+      for (auto *ND : PendingFakeLookupResults[II])
+        SemaObj->IdResolver.RemoveDecl(ND);
+      PendingFakeLookupResults.erase(It);
+    }
+  }
 
   if (SemaObj->IdResolver.tryAddTopLevelDecl(D, Name) && SemaObj->TUScope) {
     SemaObj->TUScope->AddDecl(D);
