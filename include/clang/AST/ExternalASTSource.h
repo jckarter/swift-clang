@@ -149,6 +149,17 @@ public:
   /// \brief Retrieve the module that corresponds to the given module ID.
   virtual Module *getModule(unsigned ID) { return nullptr; }
 
+  struct ASTSourceDescriptor {
+    std::string ModuleName;
+    std::string Dir;
+    std::string ASTFile;
+    uint64_t ModuleHash;
+  };
+  /// \brief Return a descriptor for the corresponding module.
+  virtual llvm::Optional<ASTSourceDescriptor> getSourceDescriptor(unsigned ID) {
+    return None;
+  }
+  
   /// \brief Finds all declarations lexically contained within the given
   /// DeclContext, after applying an optional filter predicate.
   ///
