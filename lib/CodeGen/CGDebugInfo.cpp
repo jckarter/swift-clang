@@ -30,7 +30,7 @@
 #include "clang/Lex/HeaderSearchOptions.h"
 #include "clang/Lex/PreprocessorOptions.h"
 #include "clang/Index/USRGeneration.h"
-#include "clang/serialization/Module.h"
+#include "clang/Serialization/Module.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/IR/Constants.h"
