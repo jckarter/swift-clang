@@ -3873,7 +3873,8 @@ ASTReader::ReadASTCore(StringRef FileName,
 
   ModuleFile &F = *M;
   BitstreamCursor &Stream = F.Stream;
-  MP.UnwrapModuleContainer(F.Buffer->getMemBufferRef(), F.StreamFile);
+  F.SplitDwarfID =
+       MP.UnwrapModuleContainer(F.Buffer->getMemBufferRef(), F.StreamFile);
   Stream.init(&F.StreamFile);
   F.SizeInBits = F.StreamFile.getBitcodeBytes().getExtent() * 8;
 
@@ -4563,6 +4564,7 @@ ASTReader::ReadSubmoduleBlock(ModuleFile &F, unsigned ClientLoadCapabilities) {
         CurrentModule->setASTFile(F.File);
       }
 
+      CurrentModule->SplitDwarfID = F.SplitDwarfID;
       CurrentModule->IsFromModuleFile = true;
       CurrentModule->IsSystem = IsSystem || CurrentModule->IsSystem;
       CurrentModule->IsExternC = IsExternC;
@@ -7627,6 +7629,31 @@ Module *ASTReader::getSubmodule(SubmoduleID GlobalID) {
 
 Module *ASTReader::getModule(unsigned ID) {
   return getSubmodule(ID);
+}
+
+llvm::Optional<ASTReader::ASTSourceDescriptor>
+ASTReader::getSourceDescriptor(unsigned ID) {
+  if (Module *M = getSubmodule(ID)) {
+    StringRef Dir;
+    if (auto UmbrellaHeader = M->getUmbrellaHeader())
+      Dir = UmbrellaHeader->getDir()->getName();
+    return ASTReader::ASTSourceDescriptor{
+        M->getTopLevelModuleName(), Dir,
+        M->getASTFile()->getName(),
+        M->SplitDwarfID
+      };
+  }
+  // If there is only a single PCH, return it instead.
+  // TODO: Handle chained PCH here.
+  if (ModuleMgr.size() == 1) {
+    ModuleFile &MF = ModuleMgr.getPrimaryModule();
+    return ASTReader::ASTSourceDescriptor{
+      MF.OriginalSourceFileName, MF.OriginalDir,
+      MF.FileName,
+      MF.SplitDwarfID
+    };
+  }
+  return None;
 }
 
 Selector ASTReader::getLocalSelector(ModuleFile &M, unsigned LocalID) {

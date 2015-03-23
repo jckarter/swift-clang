@@ -14,8 +14,6 @@
 
 namespace clang {
 
-class TargetOptions;
-
 /// \brief A ModuleProvider that uses LLVM to wraps Clang modules inside a COFF,
 /// ELF, or Mach-O container.
 class LLVMModuleProvider
@@ -25,6 +23,8 @@ class LLVMModuleProvider
   std::unique_ptr<ASTConsumer>
     CreateModuleContainerGenerator(DiagnosticsEngine &Diags,
                                    const std::string &ModuleName,
+                                   const HeaderSearchOptions &HSO,
+                                   const PreprocessorOptions &PPO,
                                    const CodeGenOptions &CGO,
                                    const TargetOptions &TO,
                                    const LangOptions &LO,
@@ -35,8 +35,8 @@ class LLVMModuleProvider
 
   /// \brief Initialize an llvm::BitstreamReader with the module
   /// inside the module container Buffer.
-  void UnwrapModuleContainer(llvm::MemoryBufferRef Buffer,
-                             llvm::BitstreamReader &StreamFile) const override;
+  uint64_t UnwrapModuleContainer(llvm::MemoryBufferRef Buffer,
+                                 llvm::BitstreamReader &StreamFile) const override;
 
 
 };

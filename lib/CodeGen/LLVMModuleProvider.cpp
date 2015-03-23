@@ -21,6 +21,7 @@
 #include "clang/Serialization/ASTWriter.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/Bitcode/BitstreamReader.h"
+#include "llvm/DebugInfo/DWARF/DWARFContext.h"
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/DataLayout.h"
 #include "llvm/IR/LLVMContext.h"
@@ -36,6 +37,8 @@ class ModuleContainerGenerator : public ASTConsumer {
   DiagnosticsEngine &Diags;
   std::unique_ptr<const llvm::DataLayout> TD;
   ASTContext *Ctx;
+  const HeaderSearchOptions &HeaderSearchOpts;
+  const PreprocessorOptions &PreprocessorOpts;
   const CodeGenOptions CodeGenOpts;
   const TargetOptions TargetOpts;
   const LangOptions LangOpts;
@@ -44,7 +47,6 @@ class ModuleContainerGenerator : public ASTConsumer {
   std::unique_ptr<CodeGen::CodeGenModule> Builder;
   raw_ostream *OS;
   std::shared_ptr<std::pair<bool, llvm::SmallVector<char, 0>>> Buffer;
-
 
   /// Visit every type and emit debug info for it.
   struct DebugTypeVisitor : public RecursiveASTVisitor<DebugTypeVisitor> {
@@ -98,10 +100,12 @@ class ModuleContainerGenerator : public ASTConsumer {
     bool VisitObjCMethodDecl(ObjCMethodDecl *D) {
       if (!D->getClassInterface())
         return true;
-      D->createImplicitParams(Ctx, D->getClassInterface());
+
+      bool selfIsPseudoStrong, selfIsConsumed;
       SmallVector<QualType, 16> ArgTypes;
-      ArgTypes.push_back(D->getSelfDecl()->getType());
-      ArgTypes.push_back(D->getCmdDecl()->getType());
+      ArgTypes.push_back(D->getSelfType(Ctx, D->getClassInterface(),
+                                        selfIsPseudoStrong, selfIsConsumed));
+      ArgTypes.push_back(Ctx.getObjCSelType());
       for (auto i : D->params())
         ArgTypes.push_back(i->getType());
       QualType RetTy = D->getReturnType();
@@ -116,41 +120,48 @@ class ModuleContainerGenerator : public ASTConsumer {
 public:
   ModuleContainerGenerator(
       DiagnosticsEngine &diags, const std::string &ModuleName,
+      const HeaderSearchOptions &HSO, const PreprocessorOptions &PPO,
       const CodeGenOptions &CGO, const TargetOptions &TO, const LangOptions &LO,
       raw_ostream *OS,
       std::shared_ptr<std::pair<bool, llvm::SmallVector<char, 0>>> Buffer)
-      : Diags(diags), CodeGenOpts(CGO), TargetOpts(TO), LangOpts(LO),
+      : Diags(diags), HeaderSearchOpts(HSO), PreprocessorOpts(PPO),
+        CodeGenOpts(CGO), TargetOpts(TO), LangOpts(LO),
         M(new llvm::Module(ModuleName, VMContext)), OS(OS), Buffer(Buffer) {}
 
   virtual ~ModuleContainerGenerator() {}
 
   void Initialize(ASTContext &Context) override {
     Ctx = &Context;
-    M->setTargetTriple(Ctx->getTargetInfo().getTriple().getTriple());
-    M->setDataLayout(Ctx->getTargetInfo().getTargetDescription());
+  }
+
+  bool HandleTopLevelDecl(DeclGroupRef D) override {
     TD.reset(new llvm::DataLayout(Ctx->getTargetInfo().getTargetDescription()));
-    Builder.reset(
-        new CodeGen::CodeGenModule(Context, CodeGenOpts, *M, *TD, Diags));
+    if (!Builder)
+      Builder.reset(
+        new CodeGen::CodeGenModule(*Ctx, HeaderSearchOpts, PreprocessorOpts,
+            CodeGenOpts, *M, *TD, Diags));
+
+    if (CodeGenOpts.getDebugInfo() > CodeGenOptions::NoDebugInfo) {
+      // Collect all the debug info.
+      for (auto *I : D) {
+        if (!I->isFromASTFile()) {
+          DebugTypeVisitor DTV(*Builder->getModuleDebugInfo(), *Ctx);
+          DTV.TraverseDecl(I);
+        }
+      }
+    }
+    return true;
   }
 
   /// Emit a container holding the serialized AST.
   void HandleTranslationUnit(ASTContext &Ctx) override {
+    M->setTargetTriple(Ctx.getTargetInfo().getTriple().getTriple());
+    M->setDataLayout(Ctx.getTargetInfo().getTargetDescription());
     if (Diags.hasErrorOccurred()) {
       if (Builder)
         Builder->clear();
       M.reset();
       return;
-    }
-
-    if (CodeGenOpts.getDebugInfo() > CodeGenOptions::NoDebugInfo) {
-      // Collect all the debug info.
-      const TranslationUnitDecl *TU = Ctx.getTranslationUnitDecl();
-      for (auto *I : TU->noload_decls()) {
-        if (!I->isFromASTFile()) {
-          DebugTypeVisitor DTV(*Builder->getModuleDebugInfo(), Ctx);
-          DTV.TraverseDecl(I);
-        }
-      }
     }
 
     // Finalize the Builder.
@@ -190,11 +201,21 @@ public:
     else
       ASTSym->setSection("__clangast");
 
+    // Use split dwarf on platforms that don't have LLDB as their system
+    // debugger.
+    if (!Triple.isOSDarwin())
+      M->addModuleFlag(llvm::Module::Warning, "Dwarf Split", 1);
+
     // Use the LLVM backend to emit the pcm.
     clang::EmitBackendOutput(Diags, CodeGenOpts, TargetOpts, LangOpts,
                              Ctx.getTargetInfo().getTargetDescription(),
                              M.get(), BackendAction::Backend_EmitObj, OS);
 
+//    clang::EmitBackendOutput(Diags, CodeGenOpts, TargetOpts, LangOpts,
+//                             Ctx.getTargetInfo().getTargetDescription(),
+//                             M.get(), BackendAction::Backend_EmitAssembly, &llvm::outs());
+
+    
     // Make sure the module container hits disk now.
     OS->flush();
 
@@ -206,17 +227,26 @@ public:
 
 std::unique_ptr<ASTConsumer> LLVMModuleProvider::CreateModuleContainerGenerator(
     DiagnosticsEngine &Diags, const std::string &ModuleName,
+    const HeaderSearchOptions &HSO, const PreprocessorOptions &PPO,
     const CodeGenOptions &CGO, const TargetOptions &TO, const LangOptions &LO,
     llvm::raw_ostream *OS,
     std::shared_ptr<std::pair<bool, SmallVector<char, 0>>> Buffer) const {
-  return llvm::make_unique<ModuleContainerGenerator>(Diags, ModuleName, CGO, TO,
-                                                     LO, OS, Buffer);
+ return llvm::make_unique<ModuleContainerGenerator>
+   (Diags, ModuleName, HSO, PPO, CGO, TO, LO, OS, Buffer);
 }
 
-void LLVMModuleProvider::UnwrapModuleContainer(
+uint64_t LLVMModuleProvider::UnwrapModuleContainer(
     llvm::MemoryBufferRef Buffer, llvm::BitstreamReader &StreamFile) const {
   if (auto OF = llvm::object::ObjectFile::createObjectFile(Buffer)) {
-    bool IsCOFF = isa<llvm::object::COFFObjectFile>(OF.get().get());
+    auto *Obj = OF.get().get();
+    uint64_t DWOId = 0;
+    std::unique_ptr<llvm::DIContext>
+        DICtx(llvm::DIContext::getDWARFContext(*Obj));
+    if (auto DWARFCtx = dyn_cast<llvm::DWARFContext>(DICtx.get()))
+      if (DWARFCtx->getNumCompileUnits())
+        DWOId = DWARFCtx->getCompileUnitAtIndex(0)->getDWOId();
+
+    bool IsCOFF = isa<llvm::object::COFFObjectFile>(Obj);
     // Find the clang AST section in the container.
     for (auto &Section : OF->get()->sections()) {
       StringRef Name;
@@ -224,11 +254,13 @@ void LLVMModuleProvider::UnwrapModuleContainer(
       if ((!IsCOFF && Name == "__clangast") || (IsCOFF && Name == "clangast")) {
         StringRef Buf;
         Section.getContents(Buf);
-        return StreamFile.init((const unsigned char *)Buf.begin(),
-                               (const unsigned char *)Buf.end());
+        StreamFile.init((const unsigned char *)Buf.begin(),
+                        (const unsigned char *)Buf.end());
+        return DWOId;
       }
     }
   }
   StreamFile.init((const unsigned char *)Buffer.getBufferStart(),
                   (const unsigned char *)Buffer.getBufferEnd());
+  return 0;
 }

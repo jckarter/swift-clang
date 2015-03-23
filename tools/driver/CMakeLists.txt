@@ -3,6 +3,7 @@ set( LLVM_LINK_COMPONENTS
   Analysis
   CodeGen
   Core
+  DebugInfoDWARF
   IPA
   IPO
   InstCombine
@@ -11,6 +12,7 @@ set( LLVM_LINK_COMPONENTS
   MCParser
   ObjCARCOpts
   Option
+  Object
   ScalarOpts
   Support
   TransformUtils
