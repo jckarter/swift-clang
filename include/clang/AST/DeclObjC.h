@@ -402,8 +402,6 @@ public:
   /// or getCmdDecl(). The call is ignored if the implicit paramters
   /// have already been created.
   void createImplicitParams(ASTContext &Context, const ObjCInterfaceDecl *ID);
-  QualType getSelfType(ASTContext &Context, const ObjCInterfaceDecl *OID,
-                       bool &selfIsPseudoStrong, bool &selfIsConsumed);
 
   ImplicitParamDecl * getSelfDecl() const { return SelfDecl; }
   void setSelfDecl(ImplicitParamDecl *SD) { SelfDecl = SD; }

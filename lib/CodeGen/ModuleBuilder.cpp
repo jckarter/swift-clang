@@ -32,8 +32,6 @@ namespace {
     DiagnosticsEngine &Diags;
     std::unique_ptr<const llvm::DataLayout> TD;
     ASTContext *Ctx;
-    const HeaderSearchOptions &HeaderSearchOpts; // Only used for debug info.
-    const PreprocessorOptions &PreprocessorOpts; // Only used for debug info.
     const CodeGenOptions CodeGenOpts;  // Intentionally copied in.
 
     unsigned HandlingTopLevelDecls;
@@ -59,13 +57,9 @@ namespace {
 
   public:
     CodeGeneratorImpl(DiagnosticsEngine &diags, const std::string& ModuleName,
-                      const HeaderSearchOptions &HSO,
-                      const PreprocessorOptions &PPO,
                       const CodeGenOptions &CGO, llvm::LLVMContext& C,
                       CoverageSourceInfo *CoverageInfo = nullptr)
-      : Diags(diags), Ctx(nullptr),
-        HeaderSearchOpts(HSO), PreprocessorOpts(PPO),
-        CodeGenOpts(CGO), HandlingTopLevelDecls(0),
+      : Diags(diags), Ctx(nullptr), CodeGenOpts(CGO), HandlingTopLevelDecls(0),
         CoverageInfo(CoverageInfo),
         M(new llvm::Module(ModuleName, C)) {}
 
@@ -103,11 +97,7 @@ namespace {
       M->setDataLayout(Ctx->getTargetInfo().getTargetDescription());
       TD.reset(
           new llvm::DataLayout(Ctx->getTargetInfo().getTargetDescription()));
-      Builder.reset(new CodeGen::CodeGenModule(Context,
-                                               HeaderSearchOpts,
-                                               PreprocessorOpts,
-                                               CodeGenOpts,
-                                               *M, *TD,
+      Builder.reset(new CodeGen::CodeGenModule(Context, CodeGenOpts, *M, *TD,
                                                Diags, CoverageInfo));
 
       for (size_t i = 0, e = CodeGenOpts.DependentLibraries.size(); i < e; ++i)
@@ -248,12 +238,8 @@ void CodeGenerator::anchor() { }
 
 CodeGenerator *clang::CreateLLVMCodeGen(DiagnosticsEngine &Diags,
                                         const std::string& ModuleName,
-                                        const HeaderSearchOptions &HeaderSearchOpts,
-                                        const PreprocessorOptions &PreprocessorOpts,
                                         const CodeGenOptions &CGO,
                                         llvm::LLVMContext& C,
                                         CoverageSourceInfo *CoverageInfo) {
-  return new CodeGeneratorImpl(Diags, ModuleName,
-                               HeaderSearchOpts, PreprocessorOpts,
-                               CGO, C, CoverageInfo);
+  return new CodeGeneratorImpl(Diags, ModuleName, CGO, C, CoverageInfo);
 }

@@ -936,13 +936,9 @@ ObjCMethodFamily ObjCMethodDecl::getMethodFamily() const {
   return family;
 }
 
-QualType ObjCMethodDecl::getSelfType(ASTContext &Context,
-                                     const ObjCInterfaceDecl *OID,
-                                     bool &selfIsPseudoStrong,
-                                     bool &selfIsConsumed) {
+void ObjCMethodDecl::createImplicitParams(ASTContext &Context,
+                                          const ObjCInterfaceDecl *OID) {
   QualType selfTy;
-  selfIsPseudoStrong = false;
-  selfIsConsumed = false;
   if (isInstanceMethod()) {
     // There may be no interface context due to error in declaration
     // of the interface (which has been reported). Recover gracefully.
@@ -955,6 +951,9 @@ QualType ObjCMethodDecl::getSelfType(ASTContext &Context,
   } else // we have a factory method.
     selfTy = Context.getObjCClassType();
 
+  bool selfIsPseudoStrong = false;
+  bool selfIsConsumed = false;
+  
   if (Context.getLangOpts().ObjCAutoRefCount) {
     if (isInstanceMethod()) {
       selfIsConsumed = hasAttr<NSConsumesSelfAttr>();
@@ -978,14 +977,7 @@ QualType ObjCMethodDecl::getSelfType(ASTContext &Context,
       selfIsPseudoStrong = true;
     }
   }
-  return selfTy;
-}
 
-void ObjCMethodDecl::createImplicitParams(ASTContext &Context,
-                                          const ObjCInterfaceDecl *OID) {
-  bool selfIsPseudoStrong, selfIsConsumed;
-  QualType selfTy =
-    getSelfType(Context, OID, selfIsPseudoStrong, selfIsConsumed);
   ImplicitParamDecl *self
     = ImplicitParamDecl::Create(Context, this, SourceLocation(),
                                 &Context.Idents.get("self"), selfTy);

@@ -1935,8 +1935,6 @@ public:
   /// Note: overrides method in ExternalASTSource
   Module *getModule(unsigned ID) override;
 
-  llvm::Optional<ASTSourceDescriptor> getSourceDescriptor(unsigned ID) override;
-
   /// \brief Retrieve a selector from the given module with its local ID
   /// number.
   Selector getLocalSelector(ModuleFile &M, unsigned LocalID);
