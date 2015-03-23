@@ -79,3 +79,16 @@
 @property (readwrite) id frr;
 @end
 
+// rdar://20152386
+@interface NSObject @end
+
+#pragma clang assume_nonnull begin
+@interface rdar20152386: NSObject
+@property(nonatomic, weak) id delegate; // expected-error {{property attributes 'nonnull' and 'weak' are mutually exclusive}}
+@end
+#pragma clang assume_nonnull end
+
+@interface rdar20152386_2: NSObject
+@property(nonatomic, weak, nonnull) id delegate; // expected-error {{property attributes 'nonnull' and 'weak' are mutually exclusive}}
+@end
+
