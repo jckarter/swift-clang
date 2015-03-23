@@ -57,8 +57,6 @@ namespace clang {
 
   public:
     BackendConsumer(BackendAction action, DiagnosticsEngine &_Diags,
-                    const HeaderSearchOptions &headersearchopts,
-                    const PreprocessorOptions &ppopts,
                     const CodeGenOptions &compopts,
                     const TargetOptions &targetopts,
                     const LangOptions &langopts, bool TimePasses,
@@ -68,8 +66,7 @@ namespace clang {
         : Diags(_Diags), Action(action), CodeGenOpts(compopts),
           TargetOpts(targetopts), LangOpts(langopts), AsmOutStream(OS),
           Context(nullptr), LLVMIRGeneration("LLVM IR Generation Time"),
-          Gen(CreateLLVMCodeGen(Diags, infile, headersearchopts, ppopts,
-                                compopts, C, CoverageInfo)),
+          Gen(CreateLLVMCodeGen(Diags, infile, compopts, C, CoverageInfo)),
           LinkModule(LinkModule) {
       llvm::TimePassesIsEnabled = TimePasses;
     }
@@ -664,9 +661,7 @@ CodeGenAction::CreateASTConsumer(CompilerInstance &CI, StringRef InFile) {
                                     std::unique_ptr<PPCallbacks>(CoverageInfo));
   }
   std::unique_ptr<BackendConsumer> Result(new BackendConsumer(
-      BA, CI.getDiagnostics(),
-      CI.getHeaderSearchOpts(), CI.getPreprocessorOpts(),
-      CI.getCodeGenOpts(), CI.getTargetOpts(),
+      BA, CI.getDiagnostics(), CI.getCodeGenOpts(), CI.getTargetOpts(),
       CI.getLangOpts(), CI.getFrontendOpts().ShowTimers, InFile,
       LinkModuleToUse, OS.release(), *VMContext, CoverageInfo));
   BEConsumer = Result.get();

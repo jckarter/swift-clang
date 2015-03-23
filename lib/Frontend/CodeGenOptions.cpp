@@ -19,7 +19,6 @@ CodeGenOptions::CodeGenOptions() {
 
   RelocationModel = "pic";
   memcpy(CoverageVersion, "402*", 4);
-  SplitDwarfID = 0;
 }
 
 }  // end namespace clang

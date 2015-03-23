@@ -18,9 +18,9 @@ NO_INSTALL = 1
 
 include $(CLANG_LEVEL)/../../Makefile.config
 LINK_COMPONENTS := $(TARGETS_TO_BUILD) asmparser bitreader bitwriter \
-    instrumentation ipo mc objcarcopts option support DebugInfoDWARF
+                   instrumentation ipo mc objcarcopts option support
 USEDLIBS = clangARCMigrate.a clangRewrite.a \
-		 clangFrontend.a clangCodeGen.a clangIndex.a \
+		 clangFrontend.a clangCodeGen.a \
                  clangDriver.a clangSerialization.a clangParse.a \
 		 clangSema.a clangEdit.a clangAnalysis.a clangAST.a clangLex.a \
 		 clangAPINotes.a clangBasic.a

@@ -27,7 +27,7 @@ using namespace clang;
 Module::Module(StringRef Name, SourceLocation DefinitionLoc, Module *Parent,
                bool IsFramework, bool IsExplicit)
     : Name(Name), DefinitionLoc(DefinitionLoc), Parent(Parent), Directory(),
-      Umbrella(), SplitDwarfID(0), ASTFile(nullptr), IsMissingRequirement(false),
+      Umbrella(), ASTFile(nullptr), IsMissingRequirement(false),
       IsAvailable(true), IsFromModuleFile(false), IsFramework(IsFramework),
       IsExplicit(IsExplicit), IsSystem(false), IsExternC(false),
       IsInferred(false), InferSubmodules(false), InferExplicitSubmodules(false),

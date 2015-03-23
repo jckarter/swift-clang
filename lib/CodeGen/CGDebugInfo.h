@@ -51,7 +51,6 @@ class CGDebugInfo {
   friend class SaveAndRestoreLocation;
   CodeGenModule &CGM;
   const CodeGenOptions::DebugInfoKind DebugKind;
-  bool DebugTypeExtRefs;
   llvm::DIBuilder DBuilder;
   llvm::DICompileUnit TheCU;
   SourceLocation CurLoc;
@@ -80,9 +79,6 @@ class CGDebugInfo {
   /// \brief Cache of previously constructed interfaces
   /// which may change.
   llvm::SmallVector<ObjCInterfaceCacheEntry, 32> ObjCInterfaceCache;
-
-  /// \brief Cache of references to AST files such as PCHs or modules.
-  llvm::DenseMap<unsigned, llvm::DICompileUnit> ModuleRefCache;
 
   /// \brief list of interfaces we want to keep even if orphaned.
   std::vector<void *> RetainedTypes;
@@ -356,17 +352,6 @@ private:
   /// \brief Get the type from the cache or create a new type if
   /// necessary.
   llvm::DIType getOrCreateType(QualType Ty, llvm::DIFile Fg);
-
-  /// \brief Get a reference to a clang module.
-  llvm::DICompileUnit getOrCreateModuleRef(unsigned Idx);
-
-  /// \brief Attempt to get a pointer to the serialized
-  /// AST of the declaration of the type.
-  llvm::DIType getTypeASTRefOrNull(QualType Ty, llvm::DIFile F);
-  
-  /// \brief Attempt to get a pointer to the serialized
-  /// AST of the declaration of the type.
-  llvm::DIType getTypeASTRefOrNull(Decl *Decl, llvm::DIFile F);
 
   /// \brief Get the type from the cache or create a new
   /// partial type if necessary.

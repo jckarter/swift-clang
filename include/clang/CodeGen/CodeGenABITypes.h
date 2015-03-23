@@ -37,8 +37,6 @@ namespace clang {
 class ASTContext;
 class CXXRecordDecl;
 class CodeGenOptions;
-class HeaderSearchOptions;
-class PreprocessorOptions;
 class DiagnosticsEngine;
 class ObjCMethodDecl;
 class CoverageSourceInfo;
@@ -76,9 +74,6 @@ private:
   /// CodeGenModule and otherwise not used. More specifically, it is
   /// not used in ABI type generation, so none of the options matter.
   CodeGenOptions *CGO;
-  HeaderSearchOptions *HSO;
-  PreprocessorOptions *PPO;
-
 
   /// The CodeGenModule we use get to the CodeGenTypes object.
   CodeGen::CodeGenModule *CGM;
