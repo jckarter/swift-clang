@@ -97,10 +97,11 @@ static void AddImplicitIncludePTH(MacroBuilder &Builder, Preprocessor &PP,
 /// \brief Add an implicit \#include using the original file used to generate
 /// a PCH file.
 static void AddImplicitIncludePCH(MacroBuilder &Builder, Preprocessor &PP,
+                                  const ModuleProvider &MP,
                                   StringRef ImplicitIncludePCH) {
   std::string OriginalFile =
     ASTReader::getOriginalSourceFile(ImplicitIncludePCH, PP.getFileManager(),
-                                     PP.getDiagnostics());
+                                     MP, PP.getDiagnostics());
   if (OriginalFile.empty())
     return;
 
@@ -891,6 +892,7 @@ static void InitializePredefinedMacros(const TargetInfo &TI,
 ///
 void clang::InitializePreprocessor(Preprocessor &PP,
                                    const PreprocessorOptions &InitOpts,
+                                   const ModuleProvider &MP,
                                    const FrontendOptions &FEOpts) {
   const LangOptions &LangOpts = PP.getLangOpts();
   std::string PredefineBuffer;
@@ -950,7 +952,7 @@ void clang::InitializePreprocessor(Preprocessor &PP,
 
   // Process -include-pch/-include-pth directives.
   if (!InitOpts.ImplicitPCHInclude.empty())
-    AddImplicitIncludePCH(Builder, PP, InitOpts.ImplicitPCHInclude);
+    AddImplicitIncludePCH(Builder, PP, MP, InitOpts.ImplicitPCHInclude);
   if (!InitOpts.ImplicitPTHInclude.empty())
     AddImplicitIncludePTH(Builder, PP, InitOpts.ImplicitPTHInclude);
 

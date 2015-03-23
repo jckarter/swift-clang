@@ -11,6 +11,7 @@
 #include "clang/AST/ASTConsumer.h"
 #include "clang/AST/ASTContext.h"
 #include "clang/AST/RecursiveASTVisitor.h"
+#include "clang/CodeGen/LLVMModuleProvider.h"
 #include "clang/Frontend/CompilerInstance.h"
 #include "clang/Frontend/CompilerInvocation.h"
 #include "clang/Lex/Preprocessor.h"
@@ -75,6 +76,10 @@ private:
   };
 };
 
+static SharedModuleProvider getMP() {
+  return SharedModuleProvider::Create<LLVMModuleProvider>();
+}
+
 TEST(ASTFrontendAction, Sanity) {
   CompilerInvocation *invocation = new CompilerInvocation;
   invocation->getPreprocessorOpts().addRemappedFile(
@@ -84,7 +89,7 @@ TEST(ASTFrontendAction, Sanity) {
                                                                    IK_CXX));
   invocation->getFrontendOpts().ProgramAction = frontend::ParseSyntaxOnly;
   invocation->getTargetOpts().Triple = "i386-unknown-linux-gnu";
-  CompilerInstance compiler;
+  CompilerInstance compiler(getMP());
   compiler.setInvocation(invocation);
   compiler.createDiagnostics();
 
@@ -104,7 +109,7 @@ TEST(ASTFrontendAction, IncrementalParsing) {
                                                                    IK_CXX));
   invocation->getFrontendOpts().ProgramAction = frontend::ParseSyntaxOnly;
   invocation->getTargetOpts().Triple = "i386-unknown-linux-gnu";
-  CompilerInstance compiler;
+  CompilerInstance compiler(getMP());
   compiler.setInvocation(invocation);
   compiler.createDiagnostics();
 
@@ -131,7 +136,7 @@ TEST(ASTFrontendAction, LateTemplateIncrementalParsing) {
                                                                    IK_CXX));
   invocation->getFrontendOpts().ProgramAction = frontend::ParseSyntaxOnly;
   invocation->getTargetOpts().Triple = "i386-unknown-linux-gnu";
-  CompilerInstance compiler;
+  CompilerInstance compiler(getMP());
   compiler.setInvocation(invocation);
   compiler.createDiagnostics();
 
@@ -177,7 +182,7 @@ TEST(PreprocessorFrontendAction, EndSourceFile) {
       FrontendInputFile("test.cc", IK_CXX));
   Invocation->getFrontendOpts().ProgramAction = frontend::ParseSyntaxOnly;
   Invocation->getTargetOpts().Triple = "i386-unknown-linux-gnu";
-  CompilerInstance Compiler;
+  CompilerInstance Compiler(getMP());
   Compiler.setInvocation(Invocation);
   Compiler.createDiagnostics();
 

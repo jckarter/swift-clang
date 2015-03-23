@@ -240,6 +240,14 @@ static TargetLibraryInfoImpl *createTLII(llvm::Triple &TargetTriple,
   TargetLibraryInfoImpl *TLII = new TargetLibraryInfoImpl(TargetTriple);
   if (!CodeGenOpts.SimplifyLibCalls)
     TLII->disableAllFunctions();
+
+  switch (CodeGenOpts.getVecLib()) {
+  case CodeGenOptions::Accelerate:
+    TLII->addVectorizableFunctionsFromVecLib(TargetLibraryInfoImpl::Accelerate);
+    break;
+  default:
+    break;
+  }
   return TLII;
 }
 
@@ -368,8 +376,6 @@ void EmitAssemblyHelper::CreatePasses() {
   legacy::PassManager *MPM = getPerModulePasses();
   if (!CodeGenOpts.RewriteMapFiles.empty())
     addSymbolRewriterPass(CodeGenOpts, MPM);
-  if (CodeGenOpts.VerifyModule)
-    MPM->add(createDebugInfoVerifierPass());
 
   if (!CodeGenOpts.DisableGCov &&
       (CodeGenOpts.EmitGcovArcs || CodeGenOpts.EmitGcovNotes)) {
@@ -383,6 +389,7 @@ void EmitAssemblyHelper::CreatePasses() {
     Options.NoRedZone = CodeGenOpts.DisableRedZone;
     Options.FunctionNamesInData =
         !CodeGenOpts.CoverageNoFunctionNamesInData;
+    Options.ExitBlockBeforeBody = CodeGenOpts.CoverageExitBlockBeforeBody;
     MPM->add(createGCOVProfilerPass(Options));
     if (CodeGenOpts.getDebugInfo() == CodeGenOptions::NoDebugInfo)
       MPM->add(createStripSymbolsPass(true));

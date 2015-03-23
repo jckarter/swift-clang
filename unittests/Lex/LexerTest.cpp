@@ -15,6 +15,7 @@
 #include "clang/Basic/SourceManager.h"
 #include "clang/Basic/TargetInfo.h"
 #include "clang/Basic/TargetOptions.h"
+#include "clang/CodeGen/LLVMModuleProvider.h"
 #include "clang/Lex/HeaderSearch.h"
 #include "clang/Lex/HeaderSearchOptions.h"
 #include "clang/Lex/ModuleLoader.h"
@@ -28,6 +29,12 @@ using namespace clang;
 namespace {
 
 class VoidModuleLoader : public ModuleLoader {
+public:
+  VoidModuleLoader()
+    : ModuleLoader(SharedModuleProvider::Create<LLVMModuleProvider>())
+  { }
+
+private:
   ModuleLoadResult loadModule(SourceLocation ImportLoc, 
                               ModuleIdPath Path,
                               Module::NameVisibilityKind Visibility,

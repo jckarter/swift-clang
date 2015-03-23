@@ -228,9 +228,11 @@ namespace clang {
 
     template <typename DeclT>
     static void attachPreviousDeclImpl(ASTReader &Reader,
-                                       Redeclarable<DeclT> *D, Decl *Previous);
+                                       Redeclarable<DeclT> *D, Decl *Previous,
+                                       Decl *Canon);
     static void attachPreviousDeclImpl(ASTReader &Reader, ...);
-    static void attachPreviousDecl(ASTReader &Reader, Decl *D, Decl *Previous);
+    static void attachPreviousDecl(ASTReader &Reader, Decl *D, Decl *Previous,
+                                   Decl *Canon);
 
     template <typename DeclT>
     static void attachLatestDeclImpl(Redeclarable<DeclT> *D, Decl *Latest);
@@ -1232,13 +1234,13 @@ void ASTDeclReader::VisitNamespaceDecl(NamespaceDecl *D) {
   D->LocStart = ReadSourceLocation(Record, Idx);
   D->RBraceLoc = ReadSourceLocation(Record, Idx);
 
+  // Defer loading the anonymous namespace until we've finished merging
+  // this namespace; loading it might load a later declaration of the
+  // same namespace, and we have an invariant that older declarations
+  // get merged before newer ones try to merge.
+  GlobalDeclID AnonNamespace = 0;
   if (Redecl.getFirstID() == ThisDeclID) {
-    // Each module has its own anonymous namespace, which is disjoint from
-    // any other module's anonymous namespaces, so don't attach the anonymous
-    // namespace at all.
-    NamespaceDecl *Anon = ReadDeclAs<NamespaceDecl>(Record, Idx);
-    if (F.Kind != MK_ImplicitModule && F.Kind != MK_ExplicitModule)
-      D->setAnonymousNamespace(Anon);
+    AnonNamespace = ReadDeclID(Record, Idx);
   } else {
     // Link this namespace back to the first declaration, which has already
     // been deserialized.
@@ -1246,6 +1248,15 @@ void ASTDeclReader::VisitNamespaceDecl(NamespaceDecl *D) {
   }
 
   mergeRedeclarable(D, Redecl);
+
+  if (AnonNamespace) {
+    // Each module has its own anonymous namespace, which is disjoint from
+    // any other module's anonymous namespaces, so don't attach the anonymous
+    // namespace at all.
+    NamespaceDecl *Anon = cast<NamespaceDecl>(Reader.GetDecl(AnonNamespace));
+    if (F.Kind != MK_ImplicitModule && F.Kind != MK_ExplicitModule)
+      D->setAnonymousNamespace(Anon);
+  }
 }
 
 void ASTDeclReader::VisitNamespaceAliasDecl(NamespaceAliasDecl *D) {
@@ -2230,6 +2241,8 @@ void ASTDeclReader::mergeRedeclarable(Redeclarable<T> *DBase, T *Existing,
     D->RedeclLink = Redeclarable<T>::PreviousDeclLink(ExistingCanon);
 
     // When we merge a namespace, update its pointer to the first namespace.
+    // We cannot have loaded any redeclarations of this declaration yet, so
+    // there's nothing else that needs to be updated.
     if (auto *Namespace = dyn_cast<NamespaceDecl>(D))
       Namespace->AnonOrFirstNamespaceAndInline.setPointer(
           assert_cast<NamespaceDecl*>(ExistingCanon));
@@ -2240,9 +2253,7 @@ void ASTDeclReader::mergeRedeclarable(Redeclarable<T> *DBase, T *Existing,
           DTemplate, assert_cast<RedeclarableTemplateDecl*>(ExistingCanon),
           TemplatePatternID);
 
-    // If this declaration was the canonical declaration, make a note of
-    // that. We accept the linear algorithm here because the number of
-    // unique canonical declarations of an entity should always be tiny.
+    // If this declaration was the canonical declaration, make a note of that.
     if (DCanon == D) {
       Reader.MergedDecls[ExistingCanon].push_back(Redecl.getFirstID());
       if (Reader.PendingDeclChainsKnown.insert(ExistingCanon).second)
@@ -2646,8 +2657,11 @@ ASTDeclReader::FindExistingResult::~FindExistingResult() {
   if (needsAnonymousDeclarationNumber(New)) {
     setAnonymousDeclForMerging(Reader, New->getLexicalDeclContext(),
                                AnonymousDeclNumber, New);
-  } else if (DC->isTranslationUnit() && Reader.SemaObj) {
-    Reader.SemaObj->IdResolver.tryAddTopLevelDecl(New, Name);
+  } else if (DC->isTranslationUnit() && Reader.SemaObj &&
+             !Reader.getContext().getLangOpts().CPlusPlus) {
+    if (Reader.SemaObj->IdResolver.tryAddTopLevelDecl(New, Name))
+      Reader.PendingFakeLookupResults[Name.getAsIdentifierInfo()]
+            .push_back(New);
   } else if (DeclContext *MergeDC = getPrimaryContextForMerging(Reader, DC)) {
     // Add the declaration to its redeclaration context so later merging
     // lookups will find it.
@@ -2752,7 +2766,8 @@ ASTDeclReader::FindExistingResult ASTDeclReader::findExisting(NamedDecl *D) {
       if (isSameEntity(Existing, D))
         return FindExistingResult(Reader, D, Existing, AnonymousDeclNumber,
                                   TypedefNameForLinkage);
-  } else if (DC->isTranslationUnit() && Reader.SemaObj) {
+  } else if (DC->isTranslationUnit() && Reader.SemaObj &&
+             !Reader.getContext().getLangOpts().CPlusPlus) {
     IdentifierResolver &IdResolver = Reader.SemaObj->IdResolver;
 
     // Temporarily consider the identifier to be up-to-date. We don't want to
@@ -2841,14 +2856,14 @@ Decl *ASTReader::getMostRecentExistingDecl(Decl *D) {
 template<typename DeclT>
 void ASTDeclReader::attachPreviousDeclImpl(ASTReader &Reader,
                                            Redeclarable<DeclT> *D,
-                                           Decl *Previous) {
+                                           Decl *Previous, Decl *Canon) {
   D->RedeclLink.setPrevious(cast<DeclT>(Previous));
 }
 namespace clang {
 template<>
 void ASTDeclReader::attachPreviousDeclImpl(ASTReader &Reader,
                                            Redeclarable<FunctionDecl> *D,
-                                           Decl *Previous) {
+                                           Decl *Previous, Decl *Canon) {
   FunctionDecl *FD = static_cast<FunctionDecl*>(D);
   FunctionDecl *PrevFD = cast<FunctionDecl>(Previous);
 
@@ -2875,25 +2890,17 @@ void ASTDeclReader::attachPreviousDeclImpl(ASTReader &Reader,
     FD->IsInline = true;
   }
 
-  // If this declaration has an unresolved exception specification but the
-  // previous declaration had a resolved one, resolve the exception
-  // specification now. If this declaration has a resolved exception
-  // specification but the previous declarations did not, apply our exception
-  // specification to all prior ones now.
+  // If we need to propagate an exception specification along the redecl
+  // chain, make a note of that so that we can do so later.
   auto *FPT = FD->getType()->getAs<FunctionProtoType>();
   auto *PrevFPT = PrevFD->getType()->getAs<FunctionProtoType>();
   if (FPT && PrevFPT) {
-    bool WasUnresolved = isUnresolvedExceptionSpec(FPT->getExceptionSpecType());
-    bool IsUnresolved = isUnresolvedExceptionSpec(PrevFPT->getExceptionSpecType());
-    if (WasUnresolved && !IsUnresolved) {
-      Reader.Context.adjustExceptionSpec(
-          FD, PrevFPT->getExtProtoInfo().ExceptionSpec);
-    } else if (!WasUnresolved && IsUnresolved) {
-      FunctionProtoType::ExtProtoInfo EPI = FPT->getExtProtoInfo();
-      for (FunctionDecl *PrevFDToUpdate = PrevFD; PrevFDToUpdate;
-           PrevFDToUpdate = PrevFDToUpdate->getPreviousDecl())
-         Reader.Context.adjustExceptionSpec(PrevFDToUpdate, EPI.ExceptionSpec);
-    }
+    bool IsUnresolved = isUnresolvedExceptionSpec(FPT->getExceptionSpecType());
+    bool WasUnresolved =
+        isUnresolvedExceptionSpec(PrevFPT->getExceptionSpecType());
+    if (IsUnresolved != WasUnresolved)
+      Reader.PendingExceptionSpecUpdates.insert(
+          std::make_pair(Canon, IsUnresolved ? PrevFD : FD));
   }
 }
 }
@@ -2902,14 +2909,14 @@ void ASTDeclReader::attachPreviousDeclImpl(ASTReader &Reader, ...) {
 }
 
 void ASTDeclReader::attachPreviousDecl(ASTReader &Reader, Decl *D,
-                                       Decl *Previous) {
+                                       Decl *Previous, Decl *Canon) {
   assert(D && Previous);
 
   switch (D->getKind()) {
 #define ABSTRACT_DECL(TYPE)
-#define DECL(TYPE, BASE)                                           \
-  case Decl::TYPE:                                                 \
-    attachPreviousDeclImpl(Reader, cast<TYPE##Decl>(D), Previous); \
+#define DECL(TYPE, BASE)                                                  \
+  case Decl::TYPE:                                                        \
+    attachPreviousDeclImpl(Reader, cast<TYPE##Decl>(D), Previous, Canon); \
     break;
 #include "clang/AST/DeclNodes.inc"
   }
@@ -3416,7 +3423,7 @@ void ASTReader::loadPendingDeclChain(Decl *CanonDecl) {
     if (Chain[I] == CanonDecl)
       continue;
 
-    ASTDeclReader::attachPreviousDecl(*this, Chain[I], MostRecent);
+    ASTDeclReader::attachPreviousDecl(*this, Chain[I], MostRecent, CanonDecl);
     MostRecent = Chain[I];
   }
   ASTDeclReader::attachLatestDecl(CanonDecl, MostRecent);
@@ -3760,23 +3767,24 @@ void ASTDeclReader::UpdateDecl(Decl *D, ModuleFile &ModuleFile,
     }
 
     case UPD_CXX_RESOLVED_EXCEPTION_SPEC: {
-      // FIXME: This doesn't send the right notifications if there are
-      // ASTMutationListeners other than an ASTWriter.
       FunctionProtoType::ExceptionSpecInfo ESI;
       SmallVector<QualType, 8> ExceptionStorage;
       Reader.readExceptionSpec(ModuleFile, ExceptionStorage, ESI, Record, Idx);
-      for (auto *Redecl : merged_redecls(D)) {
-        auto *FD = cast<FunctionDecl>(Redecl);
-        auto *FPT = FD->getType()->castAs<FunctionProtoType>();
-        if (!isUnresolvedExceptionSpec(FPT->getExceptionSpecType())) {
-          // AST invariant: if any exception spec in the redecl chain is
-          // resolved, all are resolved. We don't need to go any further.
-          // FIXME: If the exception spec is resolved, check that it matches.
-          break;
-        }
+
+      // Update this declaration's exception specification, if needed.
+      auto *FD = cast<FunctionDecl>(D);
+      auto *FPT = FD->getType()->castAs<FunctionProtoType>();
+      // FIXME: If the exception specification is already present, check that it
+      // matches.
+      if (isUnresolvedExceptionSpec(FPT->getExceptionSpecType())) {
         FD->setType(Reader.Context.getFunctionType(
             FPT->getReturnType(), FPT->getParamTypes(),
             FPT->getExtProtoInfo().withExceptionSpec(ESI)));
+
+        // When we get to the end of deserializing, see if there are other decls
+        // that we need to propagate this exception specification onto.
+        Reader.PendingExceptionSpecUpdates.insert(
+            std::make_pair(FD->getCanonicalDecl(), FD));
       }
       break;
     }

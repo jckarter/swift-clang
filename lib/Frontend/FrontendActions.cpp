@@ -9,11 +9,14 @@
 
 #include "clang/Frontend/FrontendActions.h"
 #include "clang/AST/ASTConsumer.h"
+#include "clang/AST/ModuleProvider.h"
 #include "clang/Basic/FileManager.h"
+#include "clang/Basic/TargetInfo.h"
 #include "clang/Frontend/ASTConsumers.h"
 #include "clang/Frontend/ASTUnit.h"
 #include "clang/Frontend/CompilerInstance.h"
 #include "clang/Frontend/FrontendDiagnostic.h"
+#include "clang/Frontend/MultiplexConsumer.h"
 #include "clang/Frontend/Utils.h"
 #include "clang/Lex/HeaderSearch.h"
 #include "clang/Lex/Pragma.h"
@@ -85,8 +88,23 @@ GeneratePCHAction::CreateASTConsumer(CompilerInstance &CI, StringRef InFile) {
 
   if (!CI.getFrontendOpts().RelocatablePCH)
     Sysroot.clear();
-  return llvm::make_unique<PCHGenerator>(CI.getPreprocessor(), OutputFile,
-                                         nullptr, Sysroot, OS);
+
+  auto Buffer = std::make_shared<std::pair<bool, SmallVector<char, 0>>>();
+  std::vector<std::unique_ptr<ASTConsumer>> Consumers;
+  Consumers.push_back(llvm::make_unique<PCHGenerator>(CI.getPreprocessor(),
+                                                      OutputFile, nullptr,
+                                                      Sysroot, Buffer));
+
+  auto CGOpts = CI.getCodeGenOpts();
+  // The debug info emitted by ModuleContainerGenerator is not affected by the
+  // optimization level.
+  CGOpts.OptimizationLevel = 0;
+  CGOpts.setDebugInfo(CodeGenOptions::LimitedDebugInfo);
+  Consumers.push_back(CI.getModuleProvider().CreateModuleContainerGenerator(
+      CI.getDiagnostics(), "PCH", CGOpts, CI.getTargetOpts(), CI.getLangOpts(),
+      OS, Buffer));
+
+  return llvm::make_unique<MultiplexConsumer>(std::move(Consumers));
 }
 
 bool GeneratePCHAction::ComputeASTConsumerArguments(CompilerInstance &CI,
@@ -122,8 +140,21 @@ GenerateModuleAction::CreateASTConsumer(CompilerInstance &CI,
   if (ComputeASTConsumerArguments(CI, InFile, Sysroot, OutputFile, OS))
     return nullptr;
 
-  return llvm::make_unique<PCHGenerator>(CI.getPreprocessor(), OutputFile,
-                                         Module, Sysroot, OS);
+  auto Buffer = std::make_shared<std::pair<bool, SmallVector<char, 0>>>();
+  std::vector<std::unique_ptr<ASTConsumer>> Consumers;
+  Consumers.push_back(llvm::make_unique<PCHGenerator>(CI.getPreprocessor(),
+                                                      OutputFile, Module,
+                                                      Sysroot, Buffer));
+
+  auto CGOpts = CI.getCodeGenOpts();
+  // The debug info emitted by ModuleContainerGenerator is not affected by the
+  // optimization level.
+  CGOpts.OptimizationLevel = 0;
+  CGOpts.setDebugInfo(CodeGenOptions::LimitedDebugInfo);
+  Consumers.push_back(CI.getModuleProvider().CreateModuleContainerGenerator(
+      CI.getDiagnostics(), Module->getFullModuleName(), CGOpts,
+      CI.getTargetOpts(), CI.getLangOpts(), OS, Buffer));
+  return llvm::make_unique<MultiplexConsumer>(std::move(Consumers));
 }
 
 static SmallVectorImpl<char> &
@@ -209,7 +240,7 @@ collectModuleHeaderIncludes(const LangOptions &LangOpts, FileManager &FileMgr,
     std::error_code EC;
     SmallString<128> DirNative;
     llvm::sys::path::native(UmbrellaDir->getName(), DirNative);
-    for (llvm::sys::fs::recursive_directory_iterator Dir(DirNative.str(), EC), 
+    for (llvm::sys::fs::recursive_directory_iterator Dir(DirNative, EC), 
                                                      DirEnd;
          Dir != DirEnd && !EC; Dir.increment(EC)) {
       // Check whether this entry has an extension typically associated with 
@@ -405,6 +436,7 @@ void VerifyPCHAction::ExecuteAction() {
   const std::string &Sysroot = CI.getHeaderSearchOpts().Sysroot;
   std::unique_ptr<ASTReader> Reader(
       new ASTReader(CI.getPreprocessor(), CI.getASTContext(),
+                    CI.getModuleProvider(),
                     Sysroot.empty() ? "" : Sysroot.c_str(),
                     /*DisableValidation*/ false,
                     /*AllowPCHWithCompilerErrors*/ false,
@@ -462,8 +494,8 @@ namespace {
       return false;
     }
 
-    bool ReadTargetOptions(const TargetOptions &TargetOpts,
-                           bool Complain) override {
+    bool ReadTargetOptions(const TargetOptions &TargetOpts, bool Complain,
+                           bool AllowCompatibleDifferences) override {
       Out.indent(2) << "Target options:\n";
       Out.indent(4) << "  Triple: " << TargetOpts.Triple << "\n";
       Out.indent(4) << "  CPU: " << TargetOpts.CPU << "\n";
@@ -561,6 +593,7 @@ void DumpModuleInfoAction::ExecuteAction() {
   DumpModuleInfoListener Listener(Out);
   ASTReader::readASTFileControlBlock(getCurrentFile(),
                                      getCompilerInstance().getFileManager(),
+                                     getCompilerInstance().getModuleProvider(),
                                      Listener);
 }
 
@@ -690,6 +723,7 @@ void PrintPreambleAction::ExecuteAction() {
   case IK_None:
   case IK_Asm:
   case IK_PreprocessedC:
+  case IK_PreprocessedCuda:
   case IK_PreprocessedCXX:
   case IK_PreprocessedObjC:
   case IK_PreprocessedObjCXX:

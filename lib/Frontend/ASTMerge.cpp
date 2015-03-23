@@ -46,7 +46,9 @@ void ASTMergeAction::ExecuteAction() {
                                           *CI.getDiagnostics().getClient()),
                                     /*ShouldOwnClient=*/true));
     std::unique_ptr<ASTUnit> Unit = ASTUnit::LoadFromASTFile(
-        ASTFiles[I], Diags, CI.getFileSystemOpts(), false);
+        ASTFiles[I], CI.getSharedModuleProvider(), Diags, CI.getFileSystemOpts(),
+        false);
+
     if (!Unit)
       continue;
 

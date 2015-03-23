@@ -18,6 +18,7 @@
 #include "clang/AST/ASTConsumer.h"
 #include "clang/AST/ASTContext.h"
 #include "clang/AST/RecursiveASTVisitor.h"
+#include "clang/CodeGen/LLVMModuleProvider.h"
 #include "clang/Frontend/CompilerInstance.h"
 #include "clang/Frontend/FrontendAction.h"
 #include "clang/Tooling/Tooling.h"
@@ -62,7 +63,10 @@ public:
         Args.push_back("-fblocks");
         break;
     }
-    return tooling::runToolOnCodeWithArgs(CreateTestAction(), Code, Args);
+
+    return tooling::runToolOnCodeWithArgs(
+        SharedModuleProvider::Create<LLVMModuleProvider>(),
+        CreateTestAction(), Code, Args);
   }
 
   bool shouldVisitTemplateInstantiations() const {

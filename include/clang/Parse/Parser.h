@@ -247,8 +247,8 @@ public:
 
   const Token &getCurToken() const { return Tok; }
   Scope *getCurScope() const { return Actions.getCurScope(); }
-  void incrementMSLocalManglingNumber() const {
-    return Actions.incrementMSLocalManglingNumber();
+  void incrementMSManglingNumber() const {
+    return Actions.incrementMSManglingNumber();
   }
 
   Decl  *getObjCDeclContext() const { return Actions.getObjCDeclContext(); }
@@ -767,7 +767,7 @@ public:
         Self->EnterScope(ScopeFlags);
       else {
         if (BeforeCompoundStmt)
-          Self->incrementMSLocalManglingNumber();
+          Self->incrementMSManglingNumber();
 
         this->Self = nullptr;
       }

@@ -163,6 +163,8 @@ def gnu_pubnames : Flag<["-"], "gnu-pubnames">,
   HelpText<"Emit newer GNU style pubnames">;
 def arange_sections : Flag<["-"], "arange_sections">,
   HelpText<"Emit DWARF .debug_arange sections">;
+def dwarf_ext_refs : Flag<["-"], "dwarf-ext-refs">,
+  HelpText<"Generate debug info that directly references modules or pch.">;
 def fforbid_guard_variables : Flag<["-"], "fforbid-guard-variables">,
   HelpText<"Emit an error if a C++ static local initializer would need a guard variable">;
 def no_implicit_float : Flag<["-"], "no-implicit-float">,
@@ -182,6 +184,8 @@ def coverage_cfg_checksum : Flag<["-"], "coverage-cfg-checksum">,
   HelpText<"Emit CFG checksum for functions in .gcno files.">;
 def coverage_no_function_names_in_data : Flag<["-"], "coverage-no-function-names-in-data">,
   HelpText<"Emit function names in .gcda files.">;
+def coverage_exit_block_before_body : Flag<["-"], "coverage-exit-block-before-body">,
+  HelpText<"Emit the exit block before the body blocks in .gcno files.">;
 def coverage_version_EQ : Joined<["-"], "coverage-version=">,
   HelpText<"Four-byte version string for gcov files.">;
 def test_coverage : Flag<["-"], "test-coverage">,
@@ -519,12 +523,6 @@ def fdeprecated_macro : Flag<["-"], "fdeprecated-macro">,
   HelpText<"Defines the __DEPRECATED macro">;
 def fno_deprecated_macro : Flag<["-"], "fno-deprecated-macro">,
   HelpText<"Undefines the __DEPRECATED macro">;
-def fsized_deallocation : Flag<["-"], "fsized-deallocation">,
-  HelpText<"Enable C++14 sized global deallocation functions">;
-def fno_sized_deallocation: Flag<["-"], "fno-sized-deallocation">,
-  HelpText<"Disable sized deallocation functions">;
-def fdefine_sized_deallocation: Flag<["-"], "fdefine-sized-deallocation">,
-  HelpText<"Allow compiler-generated definition of sized deallocation functions">;
 def fobjc_subscripting_legacy_runtime : Flag<["-"], "fobjc-subscripting-legacy-runtime">,
   HelpText<"Allow Objective-C array and dictionary subscripting in legacy runtime">;
 def vtordisp_mode_EQ : Joined<["-"], "vtordisp-mode=">,

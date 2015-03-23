@@ -6,6 +6,8 @@
 // THROW-DAG: @_CTA1H = linkonce_odr unnamed_addr constant %eh.CatchableTypeArray.1 { i32 1, [1 x %eh.CatchableType*] [%eh.CatchableType* @"_CT??_R0H@84"] }, section ".xdata", comdat
 // THROW-DAG: @_TI1H = linkonce_odr unnamed_addr constant %eh.ThrowInfo { i32 0, i8* null, i8* null, i8* bitcast (%eh.CatchableTypeArray.1* @_CTA1H to i8*) }, section ".xdata", comdat
 
+// TRY-DAG: @llvm.eh.handlermapentry.const.PAH = private unnamed_addr constant %eh.HandlerMapEntry { i32 1, i8* bitcast (%rtti.TypeDescriptor4* @"\01??_R0PAH@8" to i8*) }, section "llvm.metadata"
+
 void external();
 
 inline void not_emitted() {
@@ -31,3 +33,15 @@ int main() {
 #endif
   return rv;
 }
+
+#ifdef TRY
+// TRY-LABEL: define void @"\01?qual_catch@@YAXXZ"
+void qual_catch() {
+  try {
+    external();
+  } catch (const int *) {
+  }
+  // TRY: catch %eh.HandlerMapEntry* @llvm.eh.handlermapentry.const.PAH
+  // TRY: call i32 @llvm.eh.typeid.for(i8* bitcast (%eh.HandlerMapEntry* @llvm.eh.handlermapentry.const.PAH to i8*))
+}
+#endif

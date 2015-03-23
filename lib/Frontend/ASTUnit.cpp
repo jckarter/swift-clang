@@ -211,8 +211,9 @@ const unsigned DefaultPreambleRebuildInterval = 5;
 /// Used for debugging purposes only.
 static std::atomic<unsigned> ActiveASTUnitObjects;
 
-ASTUnit::ASTUnit(bool _MainFileIsAST)
-  : Reader(nullptr), HadModuleLoaderFatalFailure(false),
+ASTUnit::ASTUnit(SharedModuleProvider MP, bool _MainFileIsAST)
+  : ModuleLoader(MP),
+    Reader(nullptr), HadModuleLoaderFatalFailure(false),
     OnlyLocalDecls(false), CaptureDiagnostics(false),
     MainFileIsAST(_MainFileIsAST), 
     TUKind(TU_Complete), WantTiming(getenv("LIBCLANG_TIMING")),
@@ -353,6 +354,7 @@ void ASTUnit::CacheCodeCompletionResults() {
   
   // Translate global code completions into cached completions.
   llvm::DenseMap<CanQualType, unsigned> CompletionTypes;
+  CodeCompletionContext CCContext(CodeCompletionContext::CCC_TopLevel);
 
   for (Result &R : Results) {
     switch (R.Kind) {
@@ -360,7 +362,7 @@ void ASTUnit::CacheCodeCompletionResults() {
       bool IsNestedNameSpecifier = false;
       CachedCodeCompletionResult CachedResult;
       CachedResult.Completion = R.CreateCodeCompletionString(
-          *TheSema, *CachedCompletionAllocator, CCTUInfo,
+          *TheSema, CCContext, *CachedCompletionAllocator, CCTUInfo,
           IncludeBriefCommentsInCodeCompletion);
       CachedResult.ShowInContexts = getDeclShowContexts(
           R.Declaration, Ctx->getLangOpts(), IsNestedNameSpecifier);
@@ -423,7 +425,7 @@ void ASTUnit::CacheCodeCompletionResults() {
           // nested-name-specifier completion.
           R.StartsNestedNameSpecifier = true;
           CachedResult.Completion = R.CreateCodeCompletionString(
-              *TheSema, *CachedCompletionAllocator, CCTUInfo,
+              *TheSema, CCContext, *CachedCompletionAllocator, CCTUInfo,
               IncludeBriefCommentsInCodeCompletion);
           CachedResult.ShowInContexts = RemainingContexts;
           CachedResult.Priority = CCP_NestedNameSpecifier;
@@ -444,7 +446,7 @@ void ASTUnit::CacheCodeCompletionResults() {
     case Result::RK_Macro: {
       CachedCodeCompletionResult CachedResult;
       CachedResult.Completion = R.CreateCodeCompletionString(
-          *TheSema, *CachedCompletionAllocator, CCTUInfo,
+          *TheSema, CCContext, *CachedCompletionAllocator, CCTUInfo,
           IncludeBriefCommentsInCodeCompletion);
       CachedResult.ShowInContexts
         = (1LL << CodeCompletionContext::CCC_TopLevel)
@@ -513,8 +515,8 @@ public:
     return false;
   }
 
-  bool ReadTargetOptions(const TargetOptions &TargetOpts,
-                         bool Complain) override {
+  bool ReadTargetOptions(const TargetOptions &TargetOpts, bool Complain,
+                         bool AllowCompatibleDifferences) override {
     // If we've already initialized the target, don't do it again.
     if (Target)
       return false;
@@ -648,11 +650,13 @@ void ASTUnit::ConfigureDiags(IntrusiveRefCntPtr<DiagnosticsEngine> Diags,
 }
 
 std::unique_ptr<ASTUnit> ASTUnit::LoadFromASTFile(
-    const std::string &Filename, IntrusiveRefCntPtr<DiagnosticsEngine> Diags,
-    const FileSystemOptions &FileSystemOpts, bool OnlyLocalDecls,
-    ArrayRef<RemappedFile> RemappedFiles, bool CaptureDiagnostics,
-    bool AllowPCHWithCompilerErrors, bool UserFilesAreVolatile) {
-  std::unique_ptr<ASTUnit> AST(new ASTUnit(true));
+const std::string &Filename, SharedModuleProvider MP,
+    IntrusiveRefCntPtr<DiagnosticsEngine> Diags,
+    const FileSystemOptions &FileSystemOpts,
+    bool OnlyLocalDecls, ArrayRef<RemappedFile> RemappedFiles,
+    bool CaptureDiagnostics, bool AllowPCHWithCompilerErrors,
+    bool UserFilesAreVolatile) {
+   std::unique_ptr<ASTUnit> AST(new ASTUnit(MP, true));
 
   // Recover resources if we crash before exiting this method.
   llvm::CrashRecoveryContextCleanupRegistrar<ASTUnit>
@@ -705,7 +709,7 @@ std::unique_ptr<ASTUnit> ASTUnit::LoadFromASTFile(
   bool disableValid = false;
   if (::getenv("LIBCLANG_DISABLE_PCH_VALIDATION"))
     disableValid = true;
-  AST->Reader = new ASTReader(PP, Context,
+  AST->Reader = new ASTReader(PP, Context, *MP,
                              /*isysroot=*/"",
                              /*DisableValidation=*/disableValid,
                              AllowPCHWithCompilerErrors);
@@ -916,13 +920,17 @@ class PrecompilePreambleConsumer : public PCHGenerator {
   unsigned &Hash;
   std::vector<Decl *> TopLevelDecls;
   PrecompilePreambleAction *Action;
+  raw_ostream *Out;
 
 public:
   PrecompilePreambleConsumer(ASTUnit &Unit, PrecompilePreambleAction *Action,
                              const Preprocessor &PP, StringRef isysroot,
                              raw_ostream *Out)
-    : PCHGenerator(PP, "", nullptr, isysroot, Out, /*AllowASTWithErrors=*/true),
-      Unit(Unit), Hash(Unit.getCurrentTopLevelHashValue()), Action(Action) {
+    : PCHGenerator(PP, "", nullptr, isysroot,
+                   std::make_shared<std::pair<bool, SmallVector<char, 0>>>(),
+                   /*AllowASTWithErrors=*/true),
+      Unit(Unit), Hash(Unit.getCurrentTopLevelHashValue()), Action(Action),
+      Out(Out) {
     Hash = 0;
   }
 
@@ -942,7 +950,15 @@ public:
 
   void HandleTranslationUnit(ASTContext &Ctx) override {
     PCHGenerator::HandleTranslationUnit(Ctx);
+    auto &SerializedAST = getPCH();
     if (hasEmittedPCH()) {
+      // Write the generated bitstream to "Out".
+      Out->write((char *)&SerializedAST.front(),
+                 SerializedAST.size());
+      // Make sure it hits disk now.
+      Out->flush();
+      SerializedAST.clear();
+
       // Translate the top-level declarations we captured during
       // parsing into declaration IDs in the precompiled
       // preamble. This will allow us to deserialize those top-level
@@ -1015,14 +1031,15 @@ static void checkAndSanitizeDiags(SmallVectorImpl<StoredDiagnostic> &
 ///
 /// \returns True if a failure occurred that causes the ASTUnit not to
 /// contain any translation-unit information, false otherwise.
-bool ASTUnit::Parse(std::unique_ptr<llvm::MemoryBuffer> OverrideMainBuffer) {
+bool ASTUnit::Parse(SharedModuleProvider MP,
+                    std::unique_ptr<llvm::MemoryBuffer> OverrideMainBuffer) {
   SavedMainFileBuffer.reset();
 
   if (!Invocation)
     return true;
 
   // Create the compiler instance to use for building the AST.
-  std::unique_ptr<CompilerInstance> Clang(new CompilerInstance());
+  std::unique_ptr<CompilerInstance> Clang(new CompilerInstance(MP));
 
   // Recover resources if we crash before exiting this method.
   llvm::CrashRecoveryContextCleanupRegistrar<CompilerInstance>
@@ -1487,7 +1504,8 @@ ASTUnit::getMainBufferWithPrecompiledPreamble(
   PreprocessorOpts.PrecompiledPreambleBytes.second = false;
   
   // Create the compiler instance to use for building the precompiled preamble.
-  std::unique_ptr<CompilerInstance> Clang(new CompilerInstance());
+  std::unique_ptr<CompilerInstance> Clang(
+      new CompilerInstance(getSharedModuleProvider()));
 
   // Recover resources if we crash before exiting this method.
   llvm::CrashRecoveryContextCleanupRegistrar<CompilerInstance>
@@ -1680,11 +1698,12 @@ StringRef ASTUnit::getASTFileName() const {
 }
 
 ASTUnit *ASTUnit::create(CompilerInvocation *CI,
+                         SharedModuleProvider MP,
                          IntrusiveRefCntPtr<DiagnosticsEngine> Diags,
                          bool CaptureDiagnostics,
                          bool UserFilesAreVolatile) {
   std::unique_ptr<ASTUnit> AST;
-  AST.reset(new ASTUnit(false));
+  AST.reset(new ASTUnit(MP, false));
   ConfigureDiags(Diags, *AST, CaptureDiagnostics);
   AST->Diagnostics = Diags;
   AST->Invocation = CI;
@@ -1702,7 +1721,8 @@ ASTUnit *ASTUnit::create(CompilerInvocation *CI,
 }
 
 ASTUnit *ASTUnit::LoadFromCompilerInvocationAction(
-    CompilerInvocation *CI, IntrusiveRefCntPtr<DiagnosticsEngine> Diags,
+    CompilerInvocation *CI, SharedModuleProvider MP,
+    IntrusiveRefCntPtr<DiagnosticsEngine> Diags,
     ASTFrontendAction *Action, ASTUnit *Unit, bool Persistent,
     StringRef ResourceFilesPath, bool OnlyLocalDecls, bool CaptureDiagnostics,
     bool PrecompilePreamble, bool CacheCodeCompletionResults,
@@ -1714,7 +1734,8 @@ ASTUnit *ASTUnit::LoadFromCompilerInvocationAction(
   ASTUnit *AST = Unit;
   if (!AST) {
     // Create the AST unit.
-    OwnAST.reset(create(CI, Diags, CaptureDiagnostics, UserFilesAreVolatile));
+    OwnAST.reset(
+        create(CI, MP, Diags, CaptureDiagnostics, UserFilesAreVolatile));
     AST = OwnAST.get();
     if (!AST)
       return nullptr;
@@ -1746,7 +1767,7 @@ ASTUnit *ASTUnit::LoadFromCompilerInvocationAction(
   ProcessWarningOptions(AST->getDiagnostics(), CI->getDiagnosticOpts());
 
   // Create the compiler instance to use for building the AST.
-  std::unique_ptr<CompilerInstance> Clang(new CompilerInstance());
+  std::unique_ptr<CompilerInstance> Clang(new CompilerInstance(MP));
 
   // Recover resources if we crash before exiting this method.
   llvm::CrashRecoveryContextCleanupRegistrar<CompilerInstance>
@@ -1863,16 +1884,17 @@ bool ASTUnit::LoadFromCompilerInvocation(bool PrecompilePreamble) {
   llvm::CrashRecoveryContextCleanupRegistrar<llvm::MemoryBuffer>
     MemBufferCleanup(OverrideMainBuffer.get());
 
-  return Parse(std::move(OverrideMainBuffer));
+  return Parse(getSharedModuleProvider(), std::move(OverrideMainBuffer));
 }
 
 std::unique_ptr<ASTUnit> ASTUnit::LoadFromCompilerInvocation(
-    CompilerInvocation *CI, IntrusiveRefCntPtr<DiagnosticsEngine> Diags,
+    CompilerInvocation *CI, SharedModuleProvider MP,
+    IntrusiveRefCntPtr<DiagnosticsEngine> Diags,
     bool OnlyLocalDecls, bool CaptureDiagnostics, bool PrecompilePreamble,
     TranslationUnitKind TUKind, bool CacheCodeCompletionResults,
     bool IncludeBriefCommentsInCodeCompletion, bool UserFilesAreVolatile) {
   // Create the AST unit.
-  std::unique_ptr<ASTUnit> AST(new ASTUnit(false));
+  std::unique_ptr<ASTUnit> AST(new ASTUnit(MP, false));
   ConfigureDiags(Diags, *AST, CaptureDiagnostics);
   AST->Diagnostics = Diags;
   AST->OnlyLocalDecls = OnlyLocalDecls;
@@ -1904,6 +1926,7 @@ std::unique_ptr<ASTUnit> ASTUnit::LoadFromCompilerInvocation(
 
 ASTUnit *ASTUnit::LoadFromCommandLine(
     const char **ArgBegin, const char **ArgEnd,
+    SharedModuleProvider MP,
     IntrusiveRefCntPtr<DiagnosticsEngine> Diags, StringRef ResourceFilesPath,
     bool OnlyLocalDecls, bool CaptureDiagnostics,
     ArrayRef<RemappedFile> RemappedFiles, bool RemappedFilesKeepOriginalName,
@@ -1946,7 +1969,7 @@ ASTUnit *ASTUnit::LoadFromCommandLine(
 
   // Create the AST unit.
   std::unique_ptr<ASTUnit> AST;
-  AST.reset(new ASTUnit(false));
+  AST.reset(new ASTUnit(MP, false));
   ConfigureDiags(Diags, *AST, CaptureDiagnostics);
   AST->Diagnostics = Diags;
   AST->FileSystemOpts = CI->getFileSystemOpts();
@@ -2021,7 +2044,7 @@ bool ASTUnit::Reparse(ArrayRef<RemappedFile> RemappedFiles) {
     getDiagnostics().setNumWarnings(NumWarningsInPreamble);
 
   // Parse the sources
-  bool Result = Parse(std::move(OverrideMainBuffer));
+  bool Result = Parse(getSharedModuleProvider(), std::move(OverrideMainBuffer));
 
   // If we're caching global code-completion results, and the top-level 
   // declarations have changed, clear out the code-completion cache.
@@ -2318,7 +2341,8 @@ void ASTUnit::CodeComplete(StringRef File, unsigned Line, unsigned Column,
   LangOpts.SpellChecking = false;
   CCInvocation->getDiagnosticOpts().IgnoreWarnings = true;
 
-  std::unique_ptr<CompilerInstance> Clang(new CompilerInstance());
+  std::unique_ptr<CompilerInstance> Clang(
+      new CompilerInstance(getSharedModuleProvider()));
 
   // Recover resources if we crash before exiting this method.
   llvm::CrashRecoveryContextCleanupRegistrar<CompilerInstance>
@@ -2433,7 +2457,7 @@ bool ASTUnit::Save(StringRef File) {
   TempPath = File;
   TempPath += "-%%%%%%%%";
   int fd;
-  if (llvm::sys::fs::createUniqueFile(TempPath.str(), fd, TempPath))
+  if (llvm::sys::fs::createUniqueFile(TempPath, fd, TempPath))
     return true;
 
   // FIXME: Can we somehow regenerate the stat cache here, or do we need to 
@@ -2447,8 +2471,8 @@ bool ASTUnit::Save(StringRef File) {
     return true;
   }
 
-  if (llvm::sys::fs::rename(TempPath.str(), File)) {
-    llvm::sys::fs::remove(TempPath.str());
+  if (llvm::sys::fs::rename(TempPath, File)) {
+    llvm::sys::fs::remove(TempPath);
     return true;
   }
 

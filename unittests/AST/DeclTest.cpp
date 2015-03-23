@@ -11,7 +11,9 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "MatchVerifier.h"
 #include "clang/ASTMatchers/ASTMatchFinder.h"
+#include "clang/CodeGen/LLVMModuleProvider.h"
 #include "clang/Tooling/Tooling.h"
 #include "gtest/gtest.h"
 
@@ -22,6 +24,7 @@ TEST(Decl, CleansUpAPValues) {
   MatchFinder Finder;
   std::unique_ptr<FrontendActionFactory> Factory(
       newFrontendActionFactory(&Finder));
+  auto MP = clang::SharedModuleProvider::Create<clang::LLVMModuleProvider>();
 
   // This is a regression test for a memory leak in APValues for structs that
   // allocate memory. This test only fails if run under valgrind with full leak
@@ -29,6 +32,7 @@ TEST(Decl, CleansUpAPValues) {
   std::vector<std::string> Args(1, "-std=c++11");
   Args.push_back("-fno-ms-extensions");
   ASSERT_TRUE(runToolOnCodeWithArgs(
+      MP,
       Factory->create(),
       "struct X { int a; }; constexpr X x = { 42 };"
       "union Y { constexpr Y(int a) : a(a) {} int a; }; constexpr Y y = { 42 };"
@@ -53,7 +57,58 @@ TEST(Decl, CleansUpAPValues) {
   // FIXME: Once this test starts breaking we can test APValue::needsCleanup
   // for ComplexInt.
   ASSERT_FALSE(runToolOnCodeWithArgs(
+      MP,
       Factory->create(),
       "constexpr _Complex __uint128_t c = 0xffffffffffffffff;",
       Args));
+}
+
+TEST(Decl, Availability) {
+  const char *CodeStr = "int x __attribute__((availability(macosx, "
+        "introduced=10.2, deprecated=10.8, obsoleted=10.10)));";
+  auto Matcher = varDecl(hasName("x"));
+  std::vector<std::string> Args = {"-target", "x86_64-apple-macosx10.9"};
+
+  class AvailabilityVerifier : public MatchVerifier<clang::VarDecl> {
+  public:
+    void verify(const MatchFinder::MatchResult &Result,
+                const clang::VarDecl &Node) override {
+      if (Node.getAvailability(nullptr, clang::VersionTuple(10, 1)) !=
+          clang::AR_NotYetIntroduced) {
+        setFailure("failed introduced");
+      }
+      if (Node.getAvailability(nullptr, clang::VersionTuple(10, 2)) !=
+          clang::AR_Available) {
+        setFailure("failed available (exact)");
+      }
+      if (Node.getAvailability(nullptr, clang::VersionTuple(10, 3)) !=
+          clang::AR_Available) {
+        setFailure("failed available");
+      }
+      if (Node.getAvailability(nullptr, clang::VersionTuple(10, 8)) !=
+          clang::AR_Deprecated) {
+        setFailure("failed deprecated (exact)");
+      }
+      if (Node.getAvailability(nullptr, clang::VersionTuple(10, 9)) !=
+          clang::AR_Deprecated) {
+        setFailure("failed deprecated");
+      }
+      if (Node.getAvailability(nullptr, clang::VersionTuple(10, 10)) !=
+          clang::AR_Unavailable) {
+        setFailure("failed obsoleted (exact)");
+      }
+      if (Node.getAvailability(nullptr, clang::VersionTuple(10, 11)) !=
+          clang::AR_Unavailable) {
+        setFailure("failed obsoleted");
+      }
+
+      if (Node.getAvailability() != clang::AR_Deprecated)
+        setFailure("did not default to target OS version");
+
+      setSuccess();
+    }
+  };
+
+  AvailabilityVerifier Verifier;
+  EXPECT_TRUE(Verifier.match(CodeStr, Matcher, Args, Lang_C));
 }

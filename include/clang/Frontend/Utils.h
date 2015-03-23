@@ -44,6 +44,7 @@ class FileManager;
 class HeaderSearch;
 class HeaderSearchOptions;
 class IdentifierTable;
+class ModuleProvider;
 class LangOptions;
 class Preprocessor;
 class PreprocessorOptions;
@@ -63,6 +64,7 @@ void ApplyHeaderSearchOptions(HeaderSearch &HS,
 /// environment ready to process a single file.
 void InitializePreprocessor(Preprocessor &PP,
                             const PreprocessorOptions &PPOpts,
+                            const ModuleProvider &MP,
                             const FrontendOptions &FEOpts);
 
 /// DoPrintPreprocessedInput - Implement -E mode.

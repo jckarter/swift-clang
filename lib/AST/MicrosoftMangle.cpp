@@ -122,6 +122,8 @@ public:
                               CXXCtorType CT, uint32_t Size, uint32_t NVOffset,
                               int32_t VBPtrOffset, uint32_t VBIndex,
                               raw_ostream &Out) override;
+  void mangleCXXHandlerMapEntry(QualType T, bool IsConst, bool IsVolatile,
+                                bool IsReference, raw_ostream &Out) override;
   void mangleCXXRTTI(QualType T, raw_ostream &Out) override;
   void mangleCXXRTTIName(QualType T, raw_ostream &Out) override;
   void mangleCXXRTTIBaseClassDescriptor(const CXXRecordDecl *Derived,
@@ -583,7 +585,7 @@ void MicrosoftCXXNameMangler::mangleVirtualMemPtrThunk(
   Out << "$B";
   mangleNumber(OffsetInVFTable);
   Out << 'A';
-  Out << (PointersAre64Bit ? 'A' : 'E');
+  mangleCallingConvention(MD->getType()->getAs<FunctionProtoType>());
 }
 
 void MicrosoftCXXNameMangler::mangleName(const NamedDecl *ND) {
@@ -1201,7 +1203,11 @@ void MicrosoftCXXNameMangler::mangleTemplateArg(const TemplateDecl *TD,
     if (TemplateArgs.empty()) {
       if (isa<TemplateTypeParmDecl>(Parm) ||
           isa<TemplateTemplateParmDecl>(Parm))
-        Out << "$$V";
+        // MSVC 2015 changed the mangling for empty expanded template packs,
+        // use the old mangling for link compatibility for old versions.
+        Out << (Context.getASTContext().getLangOpts().isCompatibleWithMSVC(19)
+                    ? "$$V"
+                    : "$$$V");
       else if (isa<NonTypeTemplateParmDecl>(Parm))
         Out << "$S";
       else
@@ -1640,10 +1646,11 @@ void MicrosoftCXXNameMangler::mangleFunctionType(const FunctionType *T,
                                    ->getPointeeType(),
                                /*SpelledAsLValue=*/true),
                            Range);
+        Out << '@';
       } else {
         llvm_unreachable("unexpected constructor closure!");
       }
-      Out << "@Z";
+      Out << 'Z';
       return;
     }
     Out << '@';
@@ -2335,6 +2342,22 @@ void MicrosoftMangleContextImpl::mangleCXXRTTIName(QualType T,
                                                    raw_ostream &Out) {
   MicrosoftCXXNameMangler Mangler(*this, Out);
   Mangler.getStream() << '.';
+  Mangler.mangleType(T, SourceRange(), MicrosoftCXXNameMangler::QMM_Result);
+}
+
+void MicrosoftMangleContextImpl::mangleCXXHandlerMapEntry(QualType T,
+                                                          bool IsConst,
+                                                          bool IsVolatile,
+                                                          bool IsReference,
+                                                          raw_ostream &Out) {
+  MicrosoftCXXNameMangler Mangler(*this, Out);
+  Mangler.getStream() << "llvm.eh.handlermapentry.";
+  if (IsConst)
+    Mangler.getStream() << "const.";
+  if (IsVolatile)
+    Mangler.getStream() << "volatile.";
+  if (IsReference)
+    Mangler.getStream() << "reference.";
   Mangler.mangleType(T, SourceRange(), MicrosoftCXXNameMangler::QMM_Result);
 }
 

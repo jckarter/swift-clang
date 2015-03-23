@@ -875,6 +875,7 @@ void ASTWriter::WriteBlockInfoBlock() {
   RECORD(MODULE_NAME);
   RECORD(MODULE_MAP_FILE);
   RECORD(IMPORTS);
+  RECORD(KNOWN_MODULE_FILES);
   RECORD(LANGUAGE_OPTIONS);
   RECORD(TARGET_OPTIONS);
   RECORD(ORIGINAL_FILE);
@@ -1230,20 +1231,28 @@ void ASTWriter::WriteControlBlock(Preprocessor &PP, ASTContext &Context,
     serialization::ModuleManager &Mgr = Chain->getModuleManager();
     Record.clear();
 
-    for (ModuleManager::ModuleIterator M = Mgr.begin(), MEnd = Mgr.end();
-         M != MEnd; ++M) {
+    for (auto *M : Mgr) {
       // Skip modules that weren't directly imported.
-      if (!(*M)->isDirectlyImported())
+      if (!M->isDirectlyImported())
         continue;
 
-      Record.push_back((unsigned)(*M)->Kind); // FIXME: Stable encoding
-      AddSourceLocation((*M)->ImportLoc, Record);
-      Record.push_back((*M)->File->getSize());
-      Record.push_back((*M)->File->getModificationTime());
-      Record.push_back((*M)->Signature);
-      AddPath((*M)->FileName, Record);
+      Record.push_back((unsigned)M->Kind); // FIXME: Stable encoding
+      AddSourceLocation(M->ImportLoc, Record);
+      Record.push_back(M->File->getSize());
+      Record.push_back(M->File->getModificationTime());
+      Record.push_back(M->Signature);
+      AddPath(M->FileName, Record);
     }
     Stream.EmitRecord(IMPORTS, Record);
+
+    // Also emit a list of known module files that were not imported,
+    // but are made available by this module.
+    // FIXME: Should we also include a signature here?
+    Record.clear();
+    for (auto *E : Mgr.getAdditionalKnownModuleFiles())
+      AddPath(E->getName(), Record);
+    if (!Record.empty())
+      Stream.EmitRecord(KNOWN_MODULE_FILES, Record);
   }
 
   // Language options.
@@ -1766,7 +1775,7 @@ void ASTWriter::WriteHeaderSearch(const HeaderSearch &HS) {
   Record.push_back(NumHeaderSearchEntries);
   Record.push_back(TableData.size());
   TableData.append(GeneratorTrait.strings_begin(),GeneratorTrait.strings_end());
-  Stream.EmitRecordWithBlob(TableAbbrev, Record, TableData.str());
+  Stream.EmitRecordWithBlob(TableAbbrev, Record, TableData);
   
   // Free all of the strings we had to duplicate.
   for (unsigned I = 0, N = SavedStrings.size(); I != N; ++I)
@@ -2226,7 +2235,7 @@ void ASTWriter::WritePreprocessor(const Preprocessor &PP, bool IsModule) {
 
   Record.push_back(MACRO_TABLE);
   Record.push_back(BucketOffset);
-  Stream.EmitRecordWithBlob(MacroTableAbbrev, Record, MacroTable.str());
+  Stream.EmitRecordWithBlob(MacroTableAbbrev, Record, MacroTable);
   Record.clear();
 
   // Write the offsets table for macro IDs.
@@ -3060,7 +3069,7 @@ void ASTWriter::WriteSelectors(Sema &SemaRef) {
     Record.push_back(METHOD_POOL);
     Record.push_back(BucketOffset);
     Record.push_back(NumTableEntries);
-    Stream.EmitRecordWithBlob(MethodPoolAbbrev, Record, MethodPool.str());
+    Stream.EmitRecordWithBlob(MethodPoolAbbrev, Record, MethodPool);
 
     // Create a blob abbreviation for the selector table offsets.
     Abbrev = new BitCodeAbbrev();
@@ -3355,6 +3364,7 @@ public:
     using namespace llvm::support;
     endian::Writer<little> LE(Out);
 
+    assert((uint16_t)DataLen == DataLen && (uint16_t)KeyLen == KeyLen);
     LE.write<uint16_t>(DataLen);
     // We emit the key length after the data length so that every
     // string is preceded by a 16-bit length. This matches the PTH
@@ -3433,7 +3443,7 @@ public:
           }
           emitMacroOverrides(Out, getOverriddenSubmodules(MD, Scratch));
         }
-        LE.write<uint32_t>(0xdeadbeef);
+        LE.write<uint32_t>((uint32_t)-1);
       }
     }
 
@@ -3515,7 +3525,7 @@ void ASTWriter::WriteIdentifierTable(Preprocessor &PP,
     RecordData Record;
     Record.push_back(IDENTIFIER_TABLE);
     Record.push_back(BucketOffset);
-    Stream.EmitRecordWithBlob(IDTableAbbrev, Record, IdentifierTable.str());
+    Stream.EmitRecordWithBlob(IDTableAbbrev, Record, IdentifierTable);
   }
 
   // Write the offsets table for identifier IDs.
@@ -3729,7 +3739,9 @@ void ASTWriter::AddUpdatedDeclContext(const DeclContext *DC) {
 uint32_t
 ASTWriter::GenerateNameLookupTable(const DeclContext *DC,
                                    llvm::SmallVectorImpl<char> &LookupTable) {
-  assert(!DC->LookupPtr.getInt() && "must call buildLookups first");
+  assert(!DC->HasLazyLocalLexicalLookups &&
+         !DC->HasLazyExternalLexicalLookups &&
+         "must call buildLookups first");
 
   llvm::OnDiskChainedHashTableGenerator<ASTDeclContextNameLookupTrait>
       Generator;
@@ -3833,7 +3845,7 @@ uint64_t ASTWriter::WriteDeclContextVisibleBlock(ASTContext &Context,
   Record.push_back(DECL_CONTEXT_VISIBLE);
   Record.push_back(BucketOffset);
   Stream.EmitRecordWithBlob(DeclContextVisibleLookupAbbrev, Record,
-                            LookupTable.str());
+                            LookupTable);
   ++NumVisibleDeclContexts;
   return Offset;
 }
@@ -3858,7 +3870,7 @@ void ASTWriter::WriteDeclContextVisibleUpdate(const DeclContext *DC) {
   Record.push_back(UPDATE_VISIBLE);
   Record.push_back(getDeclID(cast<Decl>(DC)));
   Record.push_back(BucketOffset);
-  Stream.EmitRecordWithBlob(UpdateVisibleAbbrev, Record, LookupTable.str());
+  Stream.EmitRecordWithBlob(UpdateVisibleAbbrev, Record, LookupTable);
 }
 
 /// \brief Write an FP_PRAGMA_OPTIONS block for the given FPOptions.
@@ -5006,46 +5018,40 @@ void ASTWriter::AddTypeRef(QualType T, RecordDataImpl &Record) {
   Record.push_back(GetOrCreateTypeID(T));
 }
 
-TypeID ASTWriter::GetOrCreateTypeID( QualType T) {
+TypeID ASTWriter::GetOrCreateTypeID(QualType T) {
   assert(Context);
-  return MakeTypeID(*Context, T,
-              std::bind1st(std::mem_fun(&ASTWriter::GetOrCreateTypeIdx), this));
+  return MakeTypeID(*Context, T, [&](QualType T) -> TypeIdx {
+    if (T.isNull())
+      return TypeIdx();
+    assert(!T.getLocalFastQualifiers());
+
+    TypeIdx &Idx = TypeIdxs[T];
+    if (Idx.getIndex() == 0) {
+      if (DoneWritingDeclsAndTypes) {
+        assert(0 && "New type seen after serializing all the types to emit!");
+        return TypeIdx();
+      }
+
+      // We haven't seen this type before. Assign it a new ID and put it
+      // into the queue of types to emit.
+      Idx = TypeIdx(NextTypeID++);
+      DeclTypesToEmit.push(T);
+    }
+    return Idx;
+  });
 }
 
 TypeID ASTWriter::getTypeID(QualType T) const {
   assert(Context);
-  return MakeTypeID(*Context, T,
-              std::bind1st(std::mem_fun(&ASTWriter::getTypeIdx), this));
-}
-
-TypeIdx ASTWriter::GetOrCreateTypeIdx(QualType T) {
-  if (T.isNull())
-    return TypeIdx();
-  assert(!T.getLocalFastQualifiers());
-
-  TypeIdx &Idx = TypeIdxs[T];
-  if (Idx.getIndex() == 0) {
-    if (DoneWritingDeclsAndTypes) {
-      assert(0 && "New type seen after serializing all the types to emit!");
+  return MakeTypeID(*Context, T, [&](QualType T) -> TypeIdx {
+    if (T.isNull())
       return TypeIdx();
-    }
+    assert(!T.getLocalFastQualifiers());
 
-    // We haven't seen this type before. Assign it a new ID and put it
-    // into the queue of types to emit.
-    Idx = TypeIdx(NextTypeID++);
-    DeclTypesToEmit.push(T);
-  }
-  return Idx;
-}
-
-TypeIdx ASTWriter::getTypeIdx(QualType T) const {
-  if (T.isNull())
-    return TypeIdx();
-  assert(!T.getLocalFastQualifiers());
-
-  TypeIdxMap::const_iterator I = TypeIdxs.find(T);
-  assert(I != TypeIdxs.end() && "Type not emitted!");
-  return I->second;
+    TypeIdxMap::const_iterator I = TypeIdxs.find(T);
+    assert(I != TypeIdxs.end() && "Type not emitted!");
+    return I->second;
+  });
 }
 
 void ASTWriter::AddDeclRef(const Decl *D, RecordDataImpl &Record) {
@@ -5668,6 +5674,8 @@ void ASTWriter::ReaderInitialized(ASTReader *Reader) {
 
   Chain = Reader;
 
+  // Note, this will get called multiple times, once one the reader starts up
+  // and again each time it's done reading a PCH or module.
   FirstDeclID = NUM_PREDEF_DECL_IDS + Chain->getTotalNumDecls();
   FirstTypeID = NUM_PREDEF_TYPE_IDS + Chain->getTotalNumTypes();
   FirstIdentID = NUM_PREDEF_IDENT_IDS + Chain->getTotalNumIdentifiers();
@@ -5806,37 +5814,36 @@ void ASTWriter::AddedCXXTemplateSpecialization(const FunctionTemplateDecl *TD,
 }
 
 void ASTWriter::ResolvedExceptionSpec(const FunctionDecl *FD) {
-  assert(!WritingAST && "Already writing the AST!");
-  FD = FD->getCanonicalDecl();
-  if (!FD->isFromASTFile())
-    return; // Not a function declared in PCH and defined outside.
-
-  DeclUpdates[FD].push_back(UPD_CXX_RESOLVED_EXCEPTION_SPEC);
+  assert(!DoneWritingDeclsAndTypes && "Already done writing updates!");
+  if (!Chain) return;
+  Chain->forEachFormerlyCanonicalImportedDecl(FD, [&](const Decl *D) {
+    // If we don't already know the exception specification for this redecl
+    // chain, add an update record for it.
+    if (isUnresolvedExceptionSpec(cast<FunctionDecl>(D)
+                                      ->getType()
+                                      ->castAs<FunctionProtoType>()
+                                      ->getExceptionSpecType()))
+      DeclUpdates[D].push_back(UPD_CXX_RESOLVED_EXCEPTION_SPEC);
+  });
 }
 
 void ASTWriter::DeducedReturnType(const FunctionDecl *FD, QualType ReturnType) {
   assert(!WritingAST && "Already writing the AST!");
-  FD = FD->getCanonicalDecl();
-  if (!FD->isFromASTFile())
-    return; // Not a function declared in PCH and defined outside.
-
-  DeclUpdates[FD].push_back(DeclUpdate(UPD_CXX_DEDUCED_RETURN_TYPE, ReturnType));
+  if (!Chain) return;
+  Chain->forEachFormerlyCanonicalImportedDecl(FD, [&](const Decl *D) {
+    DeclUpdates[D].push_back(
+        DeclUpdate(UPD_CXX_DEDUCED_RETURN_TYPE, ReturnType));
+  });
 }
 
 void ASTWriter::ResolvedOperatorDelete(const CXXDestructorDecl *DD,
                                        const FunctionDecl *Delete) {
   assert(!WritingAST && "Already writing the AST!");
   assert(Delete && "Not given an operator delete");
-  for (auto *D : DD->redecls()) {
-    if (D->isFromASTFile()) {
-      // We added an operator delete that some imported destructor didn't
-      // know about. Add an update record to let importers of us and that
-      // declaration know about it.
-      DeclUpdates[DD].push_back(
-          DeclUpdate(UPD_CXX_RESOLVED_DTOR_DELETE, Delete));
-      return;
-    }
-  }
+  if (!Chain) return;
+  Chain->forEachFormerlyCanonicalImportedDecl(DD, [&](const Decl *D) {
+    DeclUpdates[D].push_back(DeclUpdate(UPD_CXX_RESOLVED_DTOR_DELETE, Delete));
+  });
 }
 
 void ASTWriter::CompletedImplicitDefinition(const FunctionDecl *D) {
@@ -5853,8 +5860,7 @@ void ASTWriter::FunctionDefinitionInstantiated(const FunctionDecl *D) {
   if (!D->isFromASTFile())
     return;
 
-  DeclUpdates[D].push_back(
-      DeclUpdate(UPD_CXX_ADDED_FUNCTION_DEFINITION));
+  DeclUpdates[D].push_back(DeclUpdate(UPD_CXX_ADDED_FUNCTION_DEFINITION));
 }
 
 void ASTWriter::StaticDataMemberInstantiated(const VarDecl *D) {

@@ -1,4 +1,4 @@
-// RUN: %clang_cc1 -emit-llvm -o - -triple=i386-pc-win32 -std=c++11 %s -fcxx-exceptions | FileCheck %s
+// RUN: %clang_cc1 -emit-llvm -o - -triple=i386-pc-win32 -std=c++11 %s -fcxx-exceptions -fms-extensions | FileCheck %s
 
 // CHECK-DAG: @"\01??_R0?AUY@@@8" = linkonce_odr global %rtti.TypeDescriptor7 { i8** @"\01??_7type_info@@6B@", i8* null, [8 x i8] c".?AUY@@\00" }, comdat
 // CHECK-DAG: @"_CT??_R0?AUY@@@8??0Y@@QAE@ABU0@@Z8" = linkonce_odr unnamed_addr constant %eh.CatchableType { i32 4, i8* bitcast (%rtti.TypeDescriptor7* @"\01??_R0?AUY@@@8" to i8*), i32 0, i32 -1, i32 0, i32 8, i8* bitcast (%struct.Y* (%struct.Y*, %struct.Y*, i32)* @"\01??0Y@@QAE@ABU0@@Z" to i8*) }, section ".xdata", comdat
@@ -15,6 +15,7 @@
 // CHECK-DAG: @"_CT??_R0?AUDefault@@@8??_ODefault@@QAEXAAU0@@Z1" = linkonce_odr unnamed_addr constant %eh.CatchableType { i32 0, i8* bitcast (%rtti.TypeDescriptor13* @"\01??_R0?AUDefault@@@8" to i8*), i32 0, i32 -1, i32 0, i32 1, i8* bitcast (void (%struct.Default*, %struct.Default*)* @"\01??_ODefault@@QAEXAAU0@@Z" to i8*) }, section ".xdata", comdat
 // CHECK-DAG: @"_CT??_R0?AUVariadic@@@8??_OVariadic@@QAEXAAU0@@Z1" = linkonce_odr unnamed_addr constant %eh.CatchableType { i32 0, i8* bitcast (%rtti.TypeDescriptor14* @"\01??_R0?AUVariadic@@@8" to i8*), i32 0, i32 -1, i32 0, i32 1, i8* bitcast (void (%struct.Variadic*, %struct.Variadic*)* @"\01??_OVariadic@@QAEXAAU0@@Z" to i8*) }, section ".xdata", comdat
 // CHECK-DAG: @"_CT??_R0?AUTemplateWithDefault@@@8??$?_OH@TemplateWithDefault@@QAEXAAU0@@Z1" = linkonce_odr unnamed_addr constant %eh.CatchableType { i32 0, i8* bitcast (%rtti.TypeDescriptor25* @"\01??_R0?AUTemplateWithDefault@@@8" to i8*), i32 0, i32 -1, i32 0, i32 1, i8* bitcast (void (%struct.TemplateWithDefault*, %struct.TemplateWithDefault*)* @"\01??$?_OH@TemplateWithDefault@@QAEXAAU0@@Z" to i8*) }, section ".xdata", comdat
+// CHECK-DAG: @"_CTA2$$T" = linkonce_odr unnamed_addr constant %eh.CatchableTypeArray.2 { i32 2, [2 x %eh.CatchableType*] [%eh.CatchableType* @"_CT??_R0$$T@84", %eh.CatchableType* @"_CT??_R0PAX@84"] }, section ".xdata", comdat
 
 
 struct N { ~N(); };
@@ -72,7 +73,7 @@ void i(Variadic &v) {
 // CHECK:  store {{.*}} %this, {{.*}} %[[this_addr:.*]], align
 // CHECK:  %[[this:.*]] = load {{.*}} %[[this_addr]]
 // CHECK:  %[[src:.*]] = load {{.*}} %[[src_addr]]
-// CHECK:  %call = call {{.*}} @"\01??0Variadic@@QAA@AAU0@ZZ"({{.*}} %[[this]], {{.*}} %[[src]])
+// CHECK:  call {{.*}} @"\01??0Variadic@@QAA@AAU0@ZZ"({{.*}} %[[this]], {{.*}} %[[src]])
 // CHECK:  ret void
 
 struct TemplateWithDefault {
@@ -86,4 +87,20 @@ struct TemplateWithDefault {
 
 void j(TemplateWithDefault &twd) {
   throw twd;
+}
+
+
+void h() {
+  throw nullptr;
+}
+
+namespace std {
+template <typename T>
+void *__GetExceptionInfo(T);
+}
+
+void *GetExceptionInfo_test0() {
+// CHECK-LABEL: @"\01?GetExceptionInfo_test0@@YAPAXXZ"
+// CHECK:  ret i8* bitcast (%eh.ThrowInfo* @_TI1H to i8*)
+  return std::__GetExceptionInfo(0);
 }

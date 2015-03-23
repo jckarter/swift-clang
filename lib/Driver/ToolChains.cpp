@@ -325,8 +325,8 @@ void MachO::AddLinkRuntimeLib(const ArgList &Args, ArgStringList &CmdArgs,
   // For now, allow missing resource libraries to support developers who may
   // not have compiler-rt checked out or integrated into their build (unless
   // we explicitly force linking with this library).
-  if (AlwaysLink || llvm::sys::fs::exists(P.str()))
-    CmdArgs.push_back(Args.MakeArgString(P.str()));
+  if (AlwaysLink || llvm::sys::fs::exists(P))
+    CmdArgs.push_back(Args.MakeArgString(P));
 
   // Adding the rpaths might negatively interact when other rpaths are involved,
   // so we should make sure we add the rpaths last, after all user-specified
@@ -343,7 +343,7 @@ void MachO::AddLinkRuntimeLib(const ArgList &Args, ArgStringList &CmdArgs,
     // Add the path to the resource dir to rpath to support using the dylib
     // from the default location without copying.
     CmdArgs.push_back("-rpath");
-    CmdArgs.push_back(Args.MakeArgString(Dir.str()));
+    CmdArgs.push_back(Args.MakeArgString(Dir));
   }
 }
 
@@ -710,11 +710,11 @@ void DarwinClang::AddCXXStdlibLibArgs(const ArgList &Args,
       SmallString<128> P(A->getValue());
       llvm::sys::path::append(P, "usr", "lib", "libstdc++.dylib");
 
-      if (!llvm::sys::fs::exists(P.str())) {
+      if (!llvm::sys::fs::exists(P)) {
         llvm::sys::path::remove_filename(P);
         llvm::sys::path::append(P, "libstdc++.6.dylib");
-        if (llvm::sys::fs::exists(P.str())) {
-          CmdArgs.push_back(Args.MakeArgString(P.str()));
+        if (llvm::sys::fs::exists(P)) {
+          CmdArgs.push_back(Args.MakeArgString(P));
           return;
         }
       }
@@ -761,8 +761,8 @@ void DarwinClang::AddCCKextLibArgs(const ArgList &Args,
 
   // For now, allow missing resource libraries to support developers who may
   // not have compiler-rt checked out or integrated into their build.
-  if (llvm::sys::fs::exists(P.str()))
-    CmdArgs.push_back(Args.MakeArgString(P.str()));
+  if (llvm::sys::fs::exists(P))
+    CmdArgs.push_back(Args.MakeArgString(P));
 }
 
 DerivedArgList *MachO::TranslateArgs(const DerivedArgList &Args,
@@ -1642,11 +1642,12 @@ bool Generic_GCC::GCCInstallationDetector::getBiarchSibling(Multilib &M) const {
 
 namespace {
 // Filter to remove Multilibs that don't exist as a suffix to Path
-class FilterNonExistent : public MultilibSet::FilterCallback {
-  std::string Base;
+class FilterNonExistent {
+  StringRef Base;
+
 public:
-  FilterNonExistent(std::string Base) : Base(Base) {}
-  bool operator()(const Multilib &M) const override {
+  FilterNonExistent(StringRef Base) : Base(Base) {}
+  bool operator()(const Multilib &M) {
     return !llvm::sys::fs::exists(Base + M.gccSuffix() + "/crtbegin.o");
   }
 };
@@ -2393,7 +2394,7 @@ void Hexagon_TC::AddClangCXXStdlibIncludeArgs(const ArgList &DriverArgs,
 
   llvm::sys::path::append(IncludeDir, "hexagon/include/c++/");
   llvm::sys::path::append(IncludeDir, Ver);
-  addSystemInclude(DriverArgs, CC1Args, IncludeDir.str());
+  addSystemInclude(DriverArgs, CC1Args, IncludeDir);
 }
 
 ToolChain::CXXStdlibType
@@ -3291,7 +3292,7 @@ void Linux::AddClangSystemIncludeArgs(const ArgList &DriverArgs,
   if (!DriverArgs.hasArg(options::OPT_nobuiltininc)) {
     SmallString<128> P(D.ResourceDir);
     llvm::sys::path::append(P, "include");
-    addSystemInclude(DriverArgs, CC1Args, P.str());
+    addSystemInclude(DriverArgs, CC1Args, P);
   }
 
   if (DriverArgs.hasArg(options::OPT_nostdlibinc))
@@ -3315,7 +3316,7 @@ void Linux::AddClangSystemIncludeArgs(const ArgList &DriverArgs,
 
   // Add include directories specific to the selected multilib set and multilib.
   if (GCCInstallation.isValid()) {
-    auto Callback = Multilibs.includeDirsCallback();
+    const auto &Callback = Multilibs.includeDirsCallback();
     if (Callback) {
       const auto IncludePaths = Callback(GCCInstallation.getInstallPath(),
                                          GCCInstallation.getTriple().str(),

@@ -2686,6 +2686,13 @@ TEST_F(FormatTest, MacroDefinitionsWithIncompleteCode) {
                "#define b }\\\n"
                "  a\n"
                "a");
+  verifyFormat("#define A     \\\n"
+               "  {           \\\n"
+               "    {\n"
+               "#define B     \\\n"
+               "  }           \\\n"
+               "  }",
+               getLLVMStyleWithColumns(15));
 
   verifyNoCrash("#if a\na(\n#else\n#endif\n{a");
   verifyNoCrash("a={0,1\n#if a\n#else\n;\n#endif\n}");
@@ -3767,6 +3774,16 @@ TEST_F(FormatTest, BreaksFunctionDeclarations) {
       "typename aaaaaaaaaa<aaaaaa>::aaaaaaaaaaa\n"
       "aaaaaaaaaa<aaaaaa>::aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa(\n"
       "    bool *aaaaaaaaaaaaaaaaaa, bool *aa) {}");
+
+  FormatStyle Style = getLLVMStyle();
+  Style.PointerAlignment = FormatStyle::PAS_Left;
+  verifyFormat("void aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa(\n"
+               "    aaaaaaaaaaaaaaaaaaaaaaaaa* const aaaaaaaaaaaa) {}",
+               Style);
+  verifyFormat(
+      "void aaaaaaa(aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa*\n"
+      "                 aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa) {}",
+      Style);
 }
 
 TEST_F(FormatTest, TrailingReturnType) {
@@ -5648,6 +5665,8 @@ TEST_F(FormatTest, BreaksLongVariableDeclarations) {
                "    LoooooooooooooooooooooooooooooooooooooooongVariable;");
   verifyFormat("LoooooooooooooooooooooooooooooooooooooooongType const\n"
                "    LoooooooooooooooooooooooooooooooooooooooongVariable;");
+  verifyFormat("LoooooooooooooooooooooooooooooooooooooooongType\n"
+               "    *LoooooooooooooooooooooooooooooooooooooooongVariable;");
 
   // Different ways of ()-initializiation.
   verifyFormat("LoooooooooooooooooooooooooooooooooooooooongType\n"
@@ -5664,6 +5683,8 @@ TEST_F(FormatTest, BreaksLongDeclarations) {
   verifyFormat("typedef LongTemplateType<aaaaaaaaaaaaaaaaaaa()>\n"
                "    aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa;");
   verifyFormat("LoooooooooooooooooooooooooooooooooooooooongReturnType\n"
+               "LoooooooooooooooooooooooooooooooongFunctionDeclaration();");
+  verifyFormat("LoooooooooooooooooooooooooooooooooooooooongReturnType *\n"
                "LoooooooooooooooooooooooooooooooongFunctionDeclaration();");
   verifyFormat("LoooooooooooooooooooooooooooooooooooooooongReturnType\n"
                "LooooooooooooooooooooooooooooooooooongFunctionDefinition() {}");
@@ -5703,12 +5724,12 @@ TEST_F(FormatTest, BreaksLongDeclarations) {
       "                                   SourceLocation L, IdentifierIn *II,\n"
       "                                   Type *T) {}");
   verifyFormat("ReallyLongReturnType<TemplateParam1, TemplateParam2>\n"
-               "ReallyReallyLongFunctionName(\n"
+               "ReallyReaaallyLongFunctionName(\n"
                "    const std::string &SomeParameter,\n"
-               "    const SomeType<string, SomeOtherTemplateParameter> &\n"
-               "        ReallyReallyLongParameterName,\n"
-               "    const SomeType<string, SomeOtherTemplateParameter> &\n"
-               "        AnotherLongParameterName) {}");
+               "    const SomeType<string, SomeOtherTemplateParameter>\n"
+               "        &ReallyReallyLongParameterName,\n"
+               "    const SomeType<string, SomeOtherTemplateParameter>\n"
+               "        &AnotherLongParameterName) {}");
   verifyFormat("template <typename A>\n"
                "SomeLoooooooooooooooooooooongType<\n"
                "    typename some_namespace::SomeOtherType<A>::Type>\n"
@@ -5732,8 +5753,8 @@ TEST_F(FormatTest, BreaksLongDeclarations) {
                      "                   int aaaaaaaaaaaaaaaaaaaaaaa);");
 
   verifyFormat("typedef size_t (*aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa)(\n"
-               "    const aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa *\n"
-               "        aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa);");
+               "    const aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n"
+               "        *aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa);");
 }
 
 TEST_F(FormatTest, FormatsArrays) {
@@ -6623,6 +6644,8 @@ TEST_F(FormatTest, FormatForObjectiveCMethodDecls) {
           "- (void)sendAction:(SEL)aSelector to:(id)anObject forAllCells:(BOOL)flag;"));
 
   // Very long objectiveC method declaration.
+  verifyFormat("- (void)aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:\n"
+               "    (SoooooooooooooooooooooomeType *)bbbbbbbbbb;");
   verifyFormat("- (NSUInteger)indexOfObject:(id)anObject\n"
                "                    inRange:(NSRange)range\n"
                "                   outRange:(NSRange)out_range\n"
@@ -8184,6 +8207,8 @@ TEST_F(FormatTest, ConfigurableSpacesInParentheses) {
 
   Spaces.SpacesInParentheses = true;
   verifyFormat("call( x, y, z );", Spaces);
+  verifyFormat("call();", Spaces);
+  verifyFormat("std::function<void( int, int )> callback;", Spaces);
   verifyFormat("while ( (bool)1 )\n"
                "  continue;", Spaces);
   verifyFormat("for ( ;; )\n"
@@ -8210,19 +8235,13 @@ TEST_F(FormatTest, ConfigurableSpacesInParentheses) {
   verifyFormat("my_int a = ( my_int )sizeof(int);", Spaces);
   verifyFormat("#define x (( int )-1)", Spaces);
 
-  Spaces.SpacesInParentheses = false;
-  Spaces.SpaceInEmptyParentheses = true;
-  verifyFormat("call(x, y, z);", Spaces);
-  verifyFormat("call( )", Spaces);
-
-  // Run the first set of tests again with
-  // Spaces.SpacesInParentheses = false,
-  // Spaces.SpaceInEmptyParentheses = true and
-  // Spaces.SpacesInCStyleCastParentheses = true
+  // Run the first set of tests again with:
   Spaces.SpacesInParentheses = false,
   Spaces.SpaceInEmptyParentheses = true;
   Spaces.SpacesInCStyleCastParentheses = true;
   verifyFormat("call(x, y, z);", Spaces);
+  verifyFormat("call( );", Spaces);
+  verifyFormat("std::function<void(int, int)> callback;", Spaces);
   verifyFormat("while (( bool )1)\n"
                "  continue;", Spaces);
   verifyFormat("for (;;)\n"
@@ -8239,8 +8258,11 @@ TEST_F(FormatTest, ConfigurableSpacesInParentheses) {
                "  break;\n"
                "}", Spaces);
 
+  // Run the first set of tests again with:
   Spaces.SpaceAfterCStyleCast = true;
   verifyFormat("call(x, y, z);", Spaces);
+  verifyFormat("call( );", Spaces);
+  verifyFormat("std::function<void(int, int)> callback;", Spaces);
   verifyFormat("while (( bool ) 1)\n"
                "  continue;",
                Spaces);
@@ -8261,6 +8283,8 @@ TEST_F(FormatTest, ConfigurableSpacesInParentheses) {
                "  break;\n"
                "}",
                Spaces);
+
+  // Run subset of tests again with:
   Spaces.SpacesInCStyleCastParentheses = false;
   Spaces.SpaceAfterCStyleCast = true;
   verifyFormat("while ((bool) 1)\n"

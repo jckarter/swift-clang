@@ -1286,6 +1286,7 @@ CXCompletionString clang_getCursorCompletionString(CXCursor cursor) {
       CodeCompletionString *String
         = Result.CreateCodeCompletionString(unit->getASTContext(),
                                             unit->getPreprocessor(),
+                                            CodeCompletionContext::CCC_Other,
                                  unit->getCodeCompletionTUInfo().getAllocator(),
                                  unit->getCodeCompletionTUInfo(),
                                  true);
@@ -1300,6 +1301,7 @@ CXCompletionString clang_getCursorCompletionString(CXCursor cursor) {
     CodeCompletionString *String
       = Result.CreateCodeCompletionString(unit->getASTContext(),
                                           unit->getPreprocessor(),
+                                          CodeCompletionContext::CCC_Other,
                                  unit->getCodeCompletionTUInfo().getAllocator(),
                                  unit->getCodeCompletionTUInfo(),
                                  false);

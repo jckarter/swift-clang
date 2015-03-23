@@ -700,6 +700,9 @@ protected:
       Builder.defineMacro("_MSC_FULL_VER", Twine(Opts.MSCompatibilityVersion));
       // FIXME We cannot encode the revision information into 32-bits
       Builder.defineMacro("_MSC_BUILD", Twine(1));
+
+      if (Opts.CPlusPlus11 && Opts.isCompatibleWithMSVC(19))
+        Builder.defineMacro("_HAS_CHAR16_T_LANGUAGE_SUPPORT", Twine(1));
     }
 
     if (Opts.MicrosoftExt) {
@@ -787,6 +790,7 @@ class PPCTargetInfo : public TargetInfo {
   bool HasVSX;
   bool HasP8Vector;
   bool HasP8Crypto;
+  bool HasQPX;
 
 protected:
   std::string ABI;
@@ -794,7 +798,7 @@ protected:
 public:
   PPCTargetInfo(const llvm::Triple &Triple)
     : TargetInfo(Triple), HasVSX(false), HasP8Vector(false),
-      HasP8Crypto(false) {
+      HasP8Crypto(false), HasQPX(false) {
     BigEndian = (Triple.getArch() != llvm::Triple::ppc64le);
     LongDoubleWidth = LongDoubleAlign = 128;
     LongDoubleFormat = &llvm::APFloat::PPCDoubleDouble;
@@ -1025,6 +1029,10 @@ public:
     if (RegNo == 1) return 4;
     return -1;
   }
+
+  bool hasSjLjLowering() const override {
+    return true;
+  }
 };
 
 const Builtin::Info PPCTargetInfo::BuiltinInfo[] = {
@@ -1057,6 +1065,11 @@ bool PPCTargetInfo::handleTargetFeatures(std::vector<std::string> &Features,
 
     if (Feature == "crypto") {
       HasP8Crypto = true;
+      continue;
+    }
+
+    if (Feature == "qpx") {
+      HasQPX = true;
       continue;
     }
 
@@ -1094,7 +1107,7 @@ void PPCTargetInfo::getTargetDefines(const LangOptions &Opts,
   }
 
   // ABI options.
-  if (ABI == "elfv1")
+  if (ABI == "elfv1" || ABI == "elfv1-qpx")
     Builder.defineMacro("_CALL_ELF", "1");
   if (ABI == "elfv2")
     Builder.defineMacro("_CALL_ELF", "2");
@@ -1268,6 +1281,7 @@ bool PPCTargetInfo::hasFeature(StringRef Feature) const {
     .Case("vsx", HasVSX)
     .Case("power8-vector", HasP8Vector)
     .Case("crypto", HasP8Crypto)
+    .Case("qpx", HasQPX)
     .Default(false);
 }
 
@@ -1448,7 +1462,7 @@ public:
   }
   // PPC64 Linux-specifc ABI options.
   bool setABI(const std::string &Name) override {
-    if (Name == "elfv1" || Name == "elfv2") {
+    if (Name == "elfv1" || Name == "elfv1-qpx" || Name == "elfv2") {
       ABI = Name;
       return true;
     }
@@ -2308,6 +2322,10 @@ public:
 
   CallingConv getDefaultCallingConv(CallingConvMethodType MT) const override {
     return MT == CCMT_Member ? CC_X86ThisCall : CC_C;
+  }
+
+  bool hasSjLjLowering() const override {
+    return true;
   }
 };
 
@@ -3482,7 +3500,7 @@ public:
       : WindowsTargetInfo<X86_32TargetInfo>(Triple) {
     WCharType = UnsignedShort;
     DoubleAlign = LongLongAlign = 64;
-    DescriptionString = "e-m:w-p:32:32-i64:64-f80:32-n8:16:32-S32";
+    DescriptionString = "e-m:x-p:32:32-i64:64-f80:32-n8:16:32-S32";
   }
   void getTargetDefines(const LangOptions &Opts,
                         MacroBuilder &Builder) const override {
@@ -3563,7 +3581,7 @@ public:
     TLSSupported = false;
     WCharType = UnsignedShort;
     DoubleAlign = LongLongAlign = 64;
-    DescriptionString = "e-m:w-p:32:32-i64:64-f80:32-n8:16:32-S32";
+    DescriptionString = "e-m:x-p:32:32-i64:64-f80:32-n8:16:32-S32";
   }
   void getTargetDefines(const LangOptions &Opts,
                         MacroBuilder &Builder) const override {
@@ -3659,6 +3677,8 @@ class X86_64TargetInfo : public X86TargetInfo {
 public:
   X86_64TargetInfo(const llvm::Triple &Triple) : X86TargetInfo(Triple) {
     const bool IsX32 = getTriple().getEnvironment() == llvm::Triple::GNUX32;
+    bool IsWinCOFF =
+        getTriple().isOSWindows() && getTriple().isOSBinFormatCOFF();
     LongWidth = LongAlign = PointerWidth = PointerAlign = IsX32 ? 32 : 64;
     LongDoubleWidth = 128;
     LongDoubleAlign = 128;
@@ -3673,9 +3693,10 @@ public:
     RegParmMax = 6;
 
     // Pointers are 32-bit in x32.
-    DescriptionString = (IsX32)
-                            ? "e-m:e-p:32:32-i64:64-f80:128-n8:16:32:64-S128"
-                            : "e-m:e-i64:64-f80:128-n8:16:32:64-S128";
+    DescriptionString = IsX32 ? "e-m:e-p:32:32-i64:64-f80:128-n8:16:32:64-S128"
+                              : IsWinCOFF
+                                    ? "e-m:w-i64:64-f80:128-n8:16:32:64-S128"
+                                    : "e-m:e-i64:64-f80:128-n8:16:32:64-S128";
 
     // Use fpret only for long double.
     RealTypeUsesObjCFPRet = (1 << TargetInfo::LongDouble);
@@ -3960,10 +3981,9 @@ class ARMTargetInfo : public TargetInfo {
           BigEndian ? "E-m:o-p:32:32-i64:64-v128:64:128-a:0:32-n32-S64"
                     : "e-m:o-p:32:32-i64:64-v128:64:128-a:0:32-n32-S64";
     } else if (T.isOSWindows()) {
-      // FIXME: this is invalid for WindowsCE
       assert(!BigEndian && "Windows on ARM does not support big endian");
       DescriptionString = "e"
-                          "-m:e"
+                          "-m:w"
                           "-p:32:32"
                           "-i64:64"
                           "-v128:64:128"
@@ -4245,8 +4265,9 @@ public:
         .Cases("arm10e", "arm1020e", "arm1022e", "5TE")
         .Cases("xscale", "iwmmxt", "5TE")
         .Case("arm1136j-s", "6J")
-        .Cases("arm1176jz-s", "arm1176jzf-s", "6ZK")
-        .Cases("arm1136jf-s", "mpcorenovfp", "mpcore", "6K")
+        .Case("arm1136jf-s", "6")
+        .Cases("mpcorenovfp", "mpcore", "6K")
+        .Cases("arm1176jz-s", "arm1176jzf-s", "6K")
         .Cases("arm1156t2-s", "arm1156t2f-s", "6T2")
 #ifndef __OPEN_SOURCE__
         .Cases("cortex-a5", "cortex-a8", "7A")

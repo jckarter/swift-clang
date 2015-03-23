@@ -169,7 +169,8 @@ static bool HasARCRuntime(CompilerInvocation &origCI) {
 }
 
 static CompilerInvocation *
-createInvocationForMigration(CompilerInvocation &origCI) {
+createInvocationForMigration(CompilerInvocation &origCI,
+                             const ModuleProvider &MP) {
   std::unique_ptr<CompilerInvocation> CInvok;
   CInvok.reset(new CompilerInvocation(origCI));
   PreprocessorOptions &PPOpts = CInvok->getPreprocessorOpts();
@@ -181,9 +182,8 @@ createInvocationForMigration(CompilerInvocation &origCI) {
     IntrusiveRefCntPtr<DiagnosticsEngine> Diags(
         new DiagnosticsEngine(DiagID, &origCI.getDiagnosticOpts(),
                               new IgnoringDiagConsumer()));
-    std::string OriginalFile =
-        ASTReader::getOriginalSourceFile(PPOpts.ImplicitPCHInclude,
-                                         FileMgr, *Diags);
+    std::string OriginalFile = ASTReader::getOriginalSourceFile(
+        PPOpts.ImplicitPCHInclude, FileMgr, MP, *Diags);
     if (!OriginalFile.empty())
       PPOpts.Includes.insert(PPOpts.Includes.begin(), OriginalFile);
     PPOpts.ImplicitPCHInclude.clear();
@@ -235,6 +235,7 @@ static void emitPremigrationErrors(const CapturedDiagList &arcDiags,
 
 bool arcmt::checkForManualIssues(CompilerInvocation &origCI,
                                  const FrontendInputFile &Input,
+                                 SharedModuleProvider MP,
                                  DiagnosticConsumer *DiagClient,
                                  bool emitPremigrationARCErrors,
                                  StringRef plistOut) {
@@ -250,7 +251,7 @@ bool arcmt::checkForManualIssues(CompilerInvocation &origCI,
   assert(!transforms.empty());
 
   std::unique_ptr<CompilerInvocation> CInvok;
-  CInvok.reset(createInvocationForMigration(origCI));
+  CInvok.reset(createInvocationForMigration(origCI, *MP));
   CInvok->getFrontendOpts().Inputs.clear();
   CInvok->getFrontendOpts().Inputs.push_back(Input);
 
@@ -267,7 +268,7 @@ bool arcmt::checkForManualIssues(CompilerInvocation &origCI,
   Diags->setClient(&errRec, /*ShouldOwnClient=*/false);
 
   std::unique_ptr<ASTUnit> Unit(
-      ASTUnit::LoadFromCompilerInvocationAction(CInvok.release(), Diags));
+    ASTUnit::LoadFromCompilerInvocationAction(CInvok.release(), MP, Diags));
   if (!Unit) {
     errRec.FinishCapture();
     return true;
@@ -335,6 +336,7 @@ bool arcmt::checkForManualIssues(CompilerInvocation &origCI,
 
 static bool applyTransforms(CompilerInvocation &origCI,
                             const FrontendInputFile &Input,
+                            SharedModuleProvider MP,
                             DiagnosticConsumer *DiagClient,
                             StringRef outputDir,
                             bool emitPremigrationARCErrors,
@@ -346,7 +348,7 @@ static bool applyTransforms(CompilerInvocation &origCI,
 
   // Make sure checking is successful first.
   CompilerInvocation CInvokForCheck(origCI);
-  if (arcmt::checkForManualIssues(CInvokForCheck, Input, DiagClient,
+  if (arcmt::checkForManualIssues(CInvokForCheck, Input, MP, DiagClient,
                                   emitPremigrationARCErrors, plistOut))
     return true;
 
@@ -354,7 +356,7 @@ static bool applyTransforms(CompilerInvocation &origCI,
   CInvok.getFrontendOpts().Inputs.clear();
   CInvok.getFrontendOpts().Inputs.push_back(Input);
   
-  MigrationProcess migration(CInvok, DiagClient, outputDir);
+  MigrationProcess migration(CInvok, MP, DiagClient, outputDir);
   bool NoFinalizeRemoval = origCI.getMigratorOpts().NoFinalizeRemoval;
 
   std::vector<TransformFn> transforms = arcmt::getAllTransformations(OrigGCMode,
@@ -381,19 +383,21 @@ static bool applyTransforms(CompilerInvocation &origCI,
 
 bool arcmt::applyTransformations(CompilerInvocation &origCI,
                                  const FrontendInputFile &Input,
+                                 SharedModuleProvider MP,
                                  DiagnosticConsumer *DiagClient) {
-  return applyTransforms(origCI, Input, DiagClient,
+  return applyTransforms(origCI, Input, MP, DiagClient,
                          StringRef(), false, StringRef());
 }
 
 bool arcmt::migrateWithTemporaryFiles(CompilerInvocation &origCI,
                                       const FrontendInputFile &Input,
+                                      SharedModuleProvider MP,
                                       DiagnosticConsumer *DiagClient,
                                       StringRef outputDir,
                                       bool emitPremigrationARCErrors,
                                       StringRef plistOut) {
   assert(!outputDir.empty() && "Expected output directory path");
-  return applyTransforms(origCI, Input, DiagClient,
+  return applyTransforms(origCI, Input, MP, DiagClient,
                          outputDir, emitPremigrationARCErrors, plistOut);
 }
 
@@ -503,9 +507,10 @@ public:
 MigrationProcess::RewriteListener::~RewriteListener() { }
 
 MigrationProcess::MigrationProcess(const CompilerInvocation &CI,
+                                   SharedModuleProvider MP,
                                    DiagnosticConsumer *diagClient,
                                    StringRef outputDir)
-  : OrigCI(CI), DiagClient(diagClient), HadARCErrors(false) {
+  : OrigCI(CI), MP(MP), DiagClient(diagClient), HadARCErrors(false) {
   if (!outputDir.empty()) {
     IntrusiveRefCntPtr<DiagnosticIDs> DiagID(new DiagnosticIDs());
     IntrusiveRefCntPtr<DiagnosticsEngine> Diags(
@@ -518,7 +523,7 @@ MigrationProcess::MigrationProcess(const CompilerInvocation &CI,
 bool MigrationProcess::applyTransform(TransformFn trans,
                                       RewriteListener *listener) {
   std::unique_ptr<CompilerInvocation> CInvok;
-  CInvok.reset(createInvocationForMigration(OrigCI));
+  CInvok.reset(createInvocationForMigration(OrigCI, *MP));
   CInvok->getDiagnosticOpts().IgnoreWarnings = true;
 
   Remapper.applyMappings(CInvok->getPreprocessorOpts());
@@ -540,7 +545,7 @@ bool MigrationProcess::applyTransform(TransformFn trans,
   ASTAction.reset(new ARCMTMacroTrackerAction(ARCMTMacroLocs));
 
   std::unique_ptr<ASTUnit> Unit(ASTUnit::LoadFromCompilerInvocationAction(
-      CInvok.release(), Diags, ASTAction.get()));
+    CInvok.release(), MP, Diags, ASTAction.get()));
   if (!Unit) {
     errRec.FinishCapture();
     return true;

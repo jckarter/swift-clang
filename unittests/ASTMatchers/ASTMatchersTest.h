@@ -11,6 +11,7 @@
 #define LLVM_CLANG_UNITTESTS_ASTMATCHERS_ASTMATCHERSTEST_H
 
 #include "clang/ASTMatchers/ASTMatchFinder.h"
+#include "clang/CodeGen/LLVMModuleProvider.h"
 #include "clang/Frontend/ASTUnit.h"
 #include "clang/Tooling/Tooling.h"
 #include "gtest/gtest.h"
@@ -58,11 +59,16 @@ private:
   BoundNodesCallback *const FindResultReviewer;
 };
 
+static SharedModuleProvider getMP() {
+  return SharedModuleProvider::Create<LLVMModuleProvider>();
+}
+ 
 template <typename T>
 testing::AssertionResult matchesConditionally(
     const std::string &Code, const T &AMatcher, bool ExpectMatch,
     llvm::StringRef CompileArg,
-    const FileContentMappings &VirtualMappedFiles = FileContentMappings()) {
+    const FileContentMappings &VirtualMappedFiles = FileContentMappings(),
+    const std::string &Filename = "input.cc") {
   bool Found = false, DynamicFound = false;
   MatchFinder Finder;
   VerifyMatch VerifyFound(nullptr, &Found);
@@ -78,7 +84,7 @@ testing::AssertionResult matchesConditionally(
   // Some tests need rtti/exceptions on
   Args.push_back("-frtti");
   Args.push_back("-fexceptions");
-  if (!runToolOnCodeWithArgs(Factory->create(), Code, Args, "input.cc",
+  if (!runToolOnCodeWithArgs(getMP(), Factory->create(), Code, Args, Filename,
                              VirtualMappedFiles)) {
     return testing::AssertionFailure() << "Parsing error in \"" << Code << "\"";
   }
@@ -108,6 +114,23 @@ testing::AssertionResult notMatches(const std::string &Code,
                                     const T &AMatcher) {
   return matchesConditionally(Code, AMatcher, false, "-std=c++11");
 }
+
+template <typename T>
+testing::AssertionResult matchesObjC(const std::string &Code,
+                                     const T &AMatcher) {
+  return matchesConditionally(
+    Code, AMatcher, true,
+    "", FileContentMappings(), "input.m");
+}
+
+template <typename T>
+testing::AssertionResult notMatchesObjC(const std::string &Code,
+                                     const T &AMatcher) {
+  return matchesConditionally(
+    Code, AMatcher, false,
+    "", FileContentMappings(), "input.m");
+}
+
 
 // Function based on matchesConditionally with "-x cuda" argument added and
 // small CUDA header prepended to the code string.
@@ -146,7 +169,7 @@ testing::AssertionResult matchesConditionallyWithCuda(
   Args.push_back("-xcuda");
   Args.push_back("-fno-ms-extensions");
   Args.push_back(CompileArg);
-  if (!runToolOnCodeWithArgs(Factory->create(),
+  if (!runToolOnCodeWithArgs(getMP(), Factory->create(),
                              CudaHeader + Code, Args)) {
     return testing::AssertionFailure() << "Parsing error in \"" << Code << "\"";
   }
@@ -192,7 +215,7 @@ matchAndVerifyResultConditionally(const std::string &Code, const T &AMatcher,
       newFrontendActionFactory(&Finder));
   // Some tests use typeof, which is a gnu extension.
   std::vector<std::string> Args(1, "-std=gnu++98");
-  if (!runToolOnCodeWithArgs(Factory->create(), Code, Args)) {
+  if (!runToolOnCodeWithArgs(getMP(), Factory->create(), Code, Args)) {
     return testing::AssertionFailure() << "Parsing error in \"" << Code << "\"";
   }
   if (!VerifiedResult && ExpectResult) {
@@ -204,7 +227,7 @@ matchAndVerifyResultConditionally(const std::string &Code, const T &AMatcher,
   }
 
   VerifiedResult = false;
-  std::unique_ptr<ASTUnit> AST(buildASTFromCodeWithArgs(Code, Args));
+  std::unique_ptr<ASTUnit> AST(buildASTFromCodeWithArgs(getMP(), Code, Args));
   if (!AST.get())
     return testing::AssertionFailure() << "Parsing error in \"" << Code
                                        << "\" while building AST";

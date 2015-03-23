@@ -55,7 +55,7 @@ void B::func_fwd() {}
 // This should work even if 'i' and 'func' were declarations & not definitions,
 // but it doesn't yet.
 
-// CHECK: [[CU:![0-9]+]] = !MDCompileUnit(
+// CHECK: [[CU:![0-9]+]] = distinct !MDCompileUnit(
 // CHECK-SAME:                            imports: [[MODULES:![0-9]*]]
 // CHECK: [[FOO:![0-9]+]] = !MDCompositeType(tag: DW_TAG_structure_type, name: "foo",
 // CHECK-SAME:                               line: 5
@@ -94,7 +94,7 @@ void B::func_fwd() {}
 // CHECK: [[M11]] = !MDImportedEntity(tag: DW_TAG_imported_declaration, name: "X", scope: [[FUNC]], entity: [[CTXT]]
 // CHECK: [[M12]] = !MDImportedEntity(tag: DW_TAG_imported_declaration, name: "Y", scope: [[FUNC]], entity: [[M11]]
 // CHECK: [[M13]] = !MDImportedEntity(tag: DW_TAG_imported_declaration, scope: [[FUNC]], entity: [[VAR_DECL:![0-9]+]]
-// CHECK [[VAR_DECL]] = !MDGlobalVariable(name: "var_decl", scope: [[NS]],{{.*}} line: 8,
+// CHECK: [[VAR_DECL]] = !MDGlobalVariable(name: "var_decl", linkageName: "_ZN1A1B8var_declE", scope: [[NS]],{{.*}} line: 8,
 // CHECK: [[M14]] = !MDImportedEntity(tag: DW_TAG_imported_declaration, scope: [[FUNC]], entity: [[FUNC_DECL:![0-9]+]]
 // CHECK: [[FUNC_DECL]] = !MDSubprogram(name: "func_decl",
 // CHECK-SAME:                          scope: [[NS]], file: [[FOOCPP]], line: 9
@@ -102,7 +102,7 @@ void B::func_fwd() {}
 // CHECK: [[M16]] = !MDImportedEntity(tag: DW_TAG_imported_declaration, scope: [[FUNC]], entity: [[FUNC_FWD:![0-9]+]]
 // CHECK: [[M17]] = !MDImportedEntity(tag: DW_TAG_imported_declaration, scope: [[CTXT]], entity: [[I]]
 
-// CHECK-GMLT: [[CU:![0-9]+]] = !MDCompileUnit(
+// CHECK-GMLT: [[CU:![0-9]+]] = distinct !MDCompileUnit(
 // CHECK-GMLT-SAME:                            emissionKind: 2,
 // CHECK-GMLT-SAME:                            imports: [[MODULES:![0-9]+]]
 // CHECK-GMLT: [[MODULES]] = !{}

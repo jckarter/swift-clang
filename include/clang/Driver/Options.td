@@ -777,6 +777,8 @@ def fno_exceptions : Flag<["-"], "fno-exceptions">, Group<f_Group>;
 def fno_gnu_keywords : Flag<["-"], "fno-gnu-keywords">, Group<f_Group>, Flags<[CC1Option]>;
 def fno_inline_functions : Flag<["-"], "fno-inline-functions">, Group<f_clang_Group>, Flags<[CC1Option]>;
 def fno_inline : Flag<["-"], "fno-inline">, Group<f_clang_Group>, Flags<[CC1Option]>;
+def fveclib : Joined<["-"], "fveclib=">, Group<f_Group>, Flags<[CC1Option]>,
+    HelpText<"Use the given vector functions library">;
 def fno_lax_vector_conversions : Flag<["-"], "fno-lax-vector-conversions">, Group<f_Group>,
   HelpText<"Disallow implicit conversions between vectors with a different number of elements or different element types">, Flags<[CC1Option]>;
 def fno_merge_all_constants : Flag<["-"], "fno-merge-all-constants">, Group<f_Group>,
@@ -790,6 +792,10 @@ def fno_modules_decluse : Flag <["-"], "fno-modules-decluse">, Group<f_Group>,
 def fno_modules_strict_decluse : Flag <["-"], "fno-strict-modules-decluse">, Group<f_Group>,
   Flags<[DriverOption]>;
 def fimplicit_modules : Flag <["-"], "fimplicit-modules">, Group<f_Group>,
+  Flags<[DriverOption]>;
+def fmodule_file_deps : Flag <["-"], "fmodule-file-deps">, Group<f_Group>,
+  Flags<[DriverOption]>;
+def fno_module_file_deps : Flag <["-"], "fno-module-file-deps">, Group<f_Group>,
   Flags<[DriverOption]>;
 def fno_ms_extensions : Flag<["-"], "fno-ms-extensions">, Group<f_Group>;
 def fno_ms_compatibility : Flag<["-"], "fno-ms-compatibility">, Group<f_Group>;
@@ -845,6 +851,9 @@ def fapplication_extension : Flag<["-"], "fapplication-extension">,
   HelpText<"Restrict code to those available for App Extensions">;
 def fno_application_extension : Flag<["-"], "fno-application-extension">,
   Group<f_Group>;
+def fsized_deallocation : Flag<["-"], "fsized-deallocation">, Flags<[CC1Option]>,
+  HelpText<"Enable C++14 sized global deallocation functions">, Group<f_Group>;
+def fno_sized_deallocation: Flag<["-"], "fno-sized-deallocation">, Group<f_Group>;
 
 def fobjc_gc_only : Flag<["-"], "fobjc-gc-only">, Group<f_Group>, Flags<[CC1Option]>,
   HelpText<"Use GC exclusively for Objective-C related memory management">;
@@ -1079,6 +1088,8 @@ def gno_column_info : Flag<["-"], "gno-column-info">, Group<g_flags_Group>;
 def gsplit_dwarf : Flag<["-"], "gsplit-dwarf">, Group<g_flags_Group>;
 def ggnu_pubnames : Flag<["-"], "ggnu-pubnames">, Group<g_flags_Group>;
 def gdwarf_aranges : Flag<["-"], "gdwarf-aranges">, Group<g_flags_Group>;
+def gmodules : Flag <["-"], "gmodules">, Group<f_Group>,
+  HelpText<"Generate debug info that directly references modules or pch">;
 def headerpad__max__install__names : Joined<["-"], "headerpad_max_install_names">;
 def help : Flag<["-", "--"], "help">, Flags<[CC1Option,CC1AsOption]>,
   HelpText<"Display available options">;

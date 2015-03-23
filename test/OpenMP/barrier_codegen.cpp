@@ -2,13 +2,13 @@
 // RUN: %clang_cc1 -fopenmp=libiomp5 -x c++ -std=c++11 -triple x86_64-unknown-unknown -emit-pch -o %t %s
 // RUN: %clang_cc1 -fopenmp=libiomp5 -x c++ -triple x86_64-unknown-unknown -std=c++11 -include-pch %t -verify %s -emit-llvm -o - | FileCheck %s
 // expected-no-diagnostics
-
+// REQUIRES: x86-registered-target
 #ifndef HEADER
 #define HEADER
 
 // CHECK: [[IDENT_T:%.+]] = type { i32, i32, i32, i32, i8* }
-// CHECK-DAG: [[EXPLICIT_BARRIER_LOC:@.+]] = {{.+}} [[IDENT_T]] { i32 0, i32 34, i32 0, i32 0, i8* getelementptr inbounds ([{{[0-9]+}} x i8]* @{{.+}}, i32 0, i32 0) }
-// CHECK-DAG: [[LOC:@.+]] = {{.+}} [[IDENT_T]] { i32 0, i32 2, i32 0, i32 0, i8* getelementptr inbounds ([{{[0-9]+}} x i8]* @{{.+}}, i32 0, i32 0) }
+// CHECK-DAG: [[EXPLICIT_BARRIER_LOC:@.+]] = {{.+}} [[IDENT_T]] { i32 0, i32 34, i32 0, i32 0, i8* getelementptr inbounds ([{{[0-9]+}} x i8], [{{[0-9]+}} x i8]* @{{.+}}, i32 0, i32 0) }
+// CHECK-DAG: [[LOC:@.+]] = {{.+}} [[IDENT_T]] { i32 0, i32 2, i32 0, i32 0, i8* getelementptr inbounds ([{{[0-9]+}} x i8], [{{[0-9]+}} x i8]* @{{.+}}, i32 0, i32 0) }
 
 void foo() {}
 

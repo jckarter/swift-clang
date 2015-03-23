@@ -124,8 +124,8 @@ public:
   ///
   /// \returns true to indicate the target options are invalid, or false
   /// otherwise.
-  virtual bool ReadTargetOptions(const TargetOptions &TargetOpts,
-                                 bool Complain) {
+  virtual bool ReadTargetOptions(const TargetOptions &TargetOpts, bool Complain,
+                                 bool AllowCompatibleDifferences) {
     return false;
   }
 
@@ -223,8 +223,8 @@ public:
   void ReadModuleMapFile(StringRef ModuleMapPath) override;
   bool ReadLanguageOptions(const LangOptions &LangOpts, bool Complain,
                            bool AllowCompatibleDifferences) override;
-  bool ReadTargetOptions(const TargetOptions &TargetOpts,
-                         bool Complain) override;
+  bool ReadTargetOptions(const TargetOptions &TargetOpts, bool Complain,
+                         bool AllowCompatibleDifferences) override;
   bool ReadDiagnosticOptions(IntrusiveRefCntPtr<DiagnosticOptions> DiagOpts,
                              bool Complain) override;
   bool ReadFileSystemOptions(const FileSystemOptions &FSOpts,
@@ -257,8 +257,8 @@ public:
 
   bool ReadLanguageOptions(const LangOptions &LangOpts, bool Complain,
                            bool AllowCompatibleDifferences) override;
-  bool ReadTargetOptions(const TargetOptions &TargetOpts,
-                         bool Complain) override;
+  bool ReadTargetOptions(const TargetOptions &TargetOpts, bool Complain,
+                         bool AllowCompatibleDifferences) override;
   bool ReadDiagnosticOptions(IntrusiveRefCntPtr<DiagnosticOptions> DiagOpts,
                              bool Complain) override;
   bool ReadPreprocessorOptions(const PreprocessorOptions &PPOpts, bool Complain,
@@ -361,6 +361,7 @@ private:
 
   SourceManager &SourceMgr;
   FileManager &FileMgr;
+  const ModuleProvider &MP;
   DiagnosticsEngine &Diags;
 
   /// \brief The semantic analysis object that will be processing the
@@ -445,6 +446,12 @@ private:
   /// \brief The DefinitionData pointers that we faked up for class definitions
   /// that we needed but hadn't loaded yet.
   llvm::DenseMap<void *, PendingFakeDefinitionKind> PendingFakeDefinitionData;
+
+  /// \brief Exception specification updates that have been loaded but not yet
+  /// propagated across the relevant redeclaration chain. The map key is the
+  /// canonical declaration (used only for deduplication) and the value is a
+  /// declaration that has an exception specification.
+  llvm::SmallMapVector<Decl *, FunctionDecl *, 4> PendingExceptionSpecUpdates;
 
   struct ReplacedDeclInfo {
     ModuleFile *Mod;
@@ -538,6 +545,14 @@ private:
   /// MacroInfo for the identifier with ID=I+1 that has already
   /// been loaded.
   std::vector<MacroInfo *> MacrosLoaded;
+
+  typedef std::pair<IdentifierInfo *, serialization::SubmoduleID>
+      LoadedMacroInfo;
+
+  /// \brief A set of #undef directives that we have loaded; used to
+  /// deduplicate the same #undef information coming from multiple module
+  /// files.
+  llvm::DenseSet<LoadedMacroInfo> LoadedUndefs;
 
   typedef ContinuousRangeMap<serialization::MacroID, ModuleFile *, 4>
     GlobalMacroMapType;
@@ -940,6 +955,11 @@ private:
   llvm::MapVector<IdentifierInfo *, SmallVector<uint32_t, 4> >
     PendingIdentifierInfos;
 
+  /// \brief The set of lookup results that we have faked in order to support
+  /// merging of partially deserialized decls but that we have not yet removed.
+  llvm::SmallMapVector<IdentifierInfo *, SmallVector<NamedDecl*, 2>, 16>
+    PendingFakeLookupResults;
+
   /// \brief The generation number of each identifier, which keeps track of
   /// the last time we loaded information about this identifier.
   llvm::DenseMap<IdentifierInfo *, unsigned> IdentifierGeneration;
@@ -1132,7 +1152,8 @@ private:
                                    ASTReaderListener &Listener,
                                    bool AllowCompatibleDifferences);
   static bool ParseTargetOptions(const RecordData &Record, bool Complain,
-                                 ASTReaderListener &Listener);
+                                 ASTReaderListener &Listener,
+                                 bool AllowCompatibleDifferences);
   static bool ParseDiagnosticOptions(const RecordData &Record, bool Complain,
                                      ASTReaderListener &Listener);
   static bool ParseFileSystemOptions(const RecordData &Record, bool Complain,
@@ -1164,6 +1185,18 @@ private:
   /// of a redeclarable kind) that is either local or has already been loaded
   /// merged into its redecl chain.
   Decl *getMostRecentExistingDecl(Decl *D);
+
+  template <typename Fn>
+  void forEachFormerlyCanonicalImportedDecl(const Decl *D, Fn Visit) {
+    D = D->getCanonicalDecl();
+    if (D->isFromASTFile())
+      Visit(D);
+
+    auto It = MergedDecls.find(const_cast<Decl*>(D));
+    if (It != MergedDecls.end())
+      for (auto ID : It->second)
+        Visit(GetExistingDecl(ID));
+  }
 
   RecordLocation DeclCursorForID(serialization::DeclID ID,
                                  unsigned &RawLocation);
@@ -1266,6 +1299,9 @@ public:
   /// \param Context the AST context that this precompiled header will be
   /// loaded into.
   ///
+  /// \param MP module provider that takes care of the physical
+  /// representation of Clang modules.
+  ///
   /// \param isysroot If non-NULL, the system include path specified by the
   /// user. This is only used with relocatable PCH files. If non-NULL,
   /// a relocatable PCH file will use the default path "/".
@@ -1287,7 +1323,8 @@ public:
   ///
   /// \param UseGlobalIndex If true, the AST reader will try to load and use
   /// the global module index.
-  ASTReader(Preprocessor &PP, ASTContext &Context, StringRef isysroot = "",
+  ASTReader(Preprocessor &PP, ASTContext &Context, const ModuleProvider &MP,
+            StringRef isysroot = "",
             bool DisableValidation = false,
             bool AllowASTWithCompilerErrors = false,
             bool AllowConfigurationMismatch = false,
@@ -1460,6 +1497,7 @@ public:
   /// the AST file, without actually loading the AST file.
   static std::string getOriginalSourceFile(const std::string &ASTFileName,
                                            FileManager &FileMgr,
+                                           const ModuleProvider &MP,
                                            DiagnosticsEngine &Diags);
 
   /// \brief Read the control block for the named AST file.
@@ -1467,12 +1505,14 @@ public:
   /// \returns true if an error occurred, false otherwise.
   static bool readASTFileControlBlock(StringRef Filename,
                                       FileManager &FileMgr,
+                                      const ModuleProvider &MP,
                                       ASTReaderListener &Listener);
 
   /// \brief Determine whether the given AST file is acceptable to load into a
   /// translation unit with the given language and target options.
   static bool isAcceptableASTFile(StringRef Filename,
                                   FileManager &FileMgr,
+                                  const ModuleProvider &MP,
                                   const LangOptions &LangOpts,
                                   const TargetOptions &TargetOpts,
                                   const PreprocessorOptions &PPOpts,
@@ -1844,7 +1884,8 @@ public:
   serialization::IdentifierID getGlobalIdentifierID(ModuleFile &M,
                                                     unsigned LocalID);
 
-  ModuleMacroInfo *getModuleMacro(const PendingMacroInfo &PMInfo);
+  ModuleMacroInfo *getModuleMacro(IdentifierInfo *II,
+                                  const PendingMacroInfo &PMInfo);
 
   void resolvePendingMacro(IdentifierInfo *II, const PendingMacroInfo &PMInfo);
 

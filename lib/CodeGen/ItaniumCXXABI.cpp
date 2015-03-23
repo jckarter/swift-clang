@@ -126,6 +126,10 @@ public:
   void EmitFundamentalRTTIDescriptor(QualType Type);
   void EmitFundamentalRTTIDescriptors();
   llvm::Constant *getAddrOfRTTIDescriptor(QualType Ty) override;
+  llvm::Constant *
+  getAddrOfCXXHandlerMapEntry(QualType Ty, QualType CatchHandlerType) override {
+    return getAddrOfRTTIDescriptor(Ty);
+  }
 
   bool shouldTypeidBeNullChecked(bool IsDeref, QualType SrcRecordTy) override;
   void EmitBadTypeidCall(CodeGenFunction &CGF) override;

@@ -11,6 +11,7 @@
 #include "clang/AST/PrettyPrinter.h"
 #include "clang/ASTMatchers/ASTMatchFinder.h"
 #include "clang/ASTMatchers/ASTMatchers.h"
+#include "clang/CodeGen/LLVMModuleProvider.h"
 #include "clang/Tooling/Tooling.h"
 #include "llvm/ADT/Triple.h"
 #include "llvm/Support/Host.h"
@@ -4479,7 +4480,7 @@ TEST(MatchFinder, CheckProfiling) {
   Finder.addMatcher(decl(), &Callback);
   std::unique_ptr<FrontendActionFactory> Factory(
       newFrontendActionFactory(&Finder));
-  ASSERT_TRUE(tooling::runToolOnCode(Factory->create(), "int x;"));
+  ASSERT_TRUE(tooling::runToolOnCode(getMP(), Factory->create(), "int x;"));
 
   EXPECT_EQ(1u, Records.size());
   EXPECT_EQ("MyID", Records.begin()->getKey());
@@ -4503,11 +4504,11 @@ TEST(MatchFinder, InterceptsStartOfTranslationUnit) {
   Finder.addMatcher(decl(), &VerifyCallback);
   std::unique_ptr<FrontendActionFactory> Factory(
       newFrontendActionFactory(&Finder));
-  ASSERT_TRUE(tooling::runToolOnCode(Factory->create(), "int x;"));
+  ASSERT_TRUE(tooling::runToolOnCode(getMP(), Factory->create(), "int x;"));
   EXPECT_TRUE(VerifyCallback.Called);
 
   VerifyCallback.Called = false;
-  std::unique_ptr<ASTUnit> AST(tooling::buildASTFromCode("int x;"));
+  std::unique_ptr<ASTUnit> AST(tooling::buildASTFromCode(getMP(), "int x;"));
   ASSERT_TRUE(AST.get());
   Finder.matchAST(AST->getASTContext());
   EXPECT_TRUE(VerifyCallback.Called);
@@ -4531,11 +4532,11 @@ TEST(MatchFinder, InterceptsEndOfTranslationUnit) {
   Finder.addMatcher(decl(), &VerifyCallback);
   std::unique_ptr<FrontendActionFactory> Factory(
       newFrontendActionFactory(&Finder));
-  ASSERT_TRUE(tooling::runToolOnCode(Factory->create(), "int x;"));
+  ASSERT_TRUE(tooling::runToolOnCode(getMP(), Factory->create(), "int x;"));
   EXPECT_TRUE(VerifyCallback.Called);
 
   VerifyCallback.Called = false;
-  std::unique_ptr<ASTUnit> AST(tooling::buildASTFromCode("int x;"));
+  std::unique_ptr<ASTUnit> AST(tooling::buildASTFromCode(getMP(), "int x;"));
   ASSERT_TRUE(AST.get());
   Finder.matchAST(AST->getASTContext());
   EXPECT_TRUE(VerifyCallback.Called);
@@ -4713,6 +4714,51 @@ TEST(Matcher, IsExpansionInFileMatching) {
 }
 
 #endif // LLVM_ON_WIN32
+
+  
+TEST(ObjCMessageExprMatcher, SimpleExprs) {
+  // don't find ObjCMessageExpr where none are present
+  EXPECT_TRUE(notMatchesObjC("", objcMessageExpr(anything())));
+ 
+  std::string Objc1String =
+  "@interface Str "
+  " - (Str *)uppercaseString:(Str *)str;"
+  "@end "
+  "@interface foo "
+  "- (void)meth:(Str *)text;"
+  "@end "
+  " "
+  "@implementation foo "
+  "- (void) meth:(Str *)text { "
+  "  [self contents];"
+  "  Str *up = [text uppercaseString];"
+  "} "
+  "@end ";
+  EXPECT_TRUE(matchesObjC(
+      Objc1String,
+      objcMessageExpr(anything())));
+  EXPECT_TRUE(matchesObjC(
+      Objc1String,
+      objcMessageExpr(hasSelector("contents"))));
+  EXPECT_TRUE(matchesObjC(
+      Objc1String,
+      objcMessageExpr(matchesSelector("cont*"))));
+  EXPECT_FALSE(matchesObjC(
+      Objc1String,
+      objcMessageExpr(matchesSelector("?cont*"))));
+  EXPECT_TRUE(notMatchesObjC(
+      Objc1String,
+      objcMessageExpr(hasSelector("contents"), hasNullSelector())));
+  EXPECT_TRUE(matchesObjC(
+      Objc1String,
+      objcMessageExpr(hasSelector("contents"), hasUnarySelector())));
+  EXPECT_TRUE(matchesObjC(
+      Objc1String,
+      objcMessageExpr(matchesSelector("uppercase*"),
+                      argumentCountIs(0)
+                      )));
+  
+}
 
 } // end namespace ast_matchers
 } // end namespace clang
