@@ -23,10 +23,18 @@ namespace clang {
 
 class ASTConsumer;
 class CodeGenOptions;
-class TargetOptions;
-class LangOptions;
 class DiagnosticsEngine;
+class HeaderSearchOptions;
+class LangOptions;
+class PreprocessorOptions;
+class TargetOptions;
 
+struct ModuleBuffer {
+  bool IsComplete;
+  uint64_t Signature;
+  llvm::SmallVector<char, 0> Data;
+};
+  
 class ModuleProvider {
 public:
   virtual ~ModuleProvider();
@@ -35,15 +43,17 @@ public:
   /// representation of a module.
   virtual std::unique_ptr<ASTConsumer> CreateModuleContainerGenerator(
       DiagnosticsEngine &Diags, const std::string &ModuleName,
+      const HeaderSearchOptions &HSO, const PreprocessorOptions &PPO,
       const CodeGenOptions &CGO, const TargetOptions &TO, const LangOptions &LO,
       llvm::raw_ostream *OS,
-      std::shared_ptr<std::pair<bool, llvm::SmallVector<char, 0>>> Buffer)
-      const = 0;
+      std::shared_ptr<ModuleBuffer> Buffer) const = 0;
 
   /// \brief Initialize an llvm::BitstreamReader with the module
   /// inside the module container Buffer.
-  virtual void UnwrapModuleContainer(llvm::MemoryBufferRef Buffer,
-                                     llvm::BitstreamReader &StreamFile) const = 0;
+  /// Returns the module's hash value or zero if unsuccessful.
+  virtual uint64_t UnwrapModuleContainer(llvm::MemoryBufferRef Buffer,
+                                         llvm::BitstreamReader &StreamFile)
+    const = 0;
 };
 }
 

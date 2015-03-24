@@ -17,6 +17,7 @@
 #include "clang/AST/ASTMutationListener.h"
 #include "clang/AST/Decl.h"
 #include "clang/AST/DeclarationName.h"
+#include "clang/AST/ModuleProvider.h"
 #include "clang/AST/TemplateBase.h"
 #include "clang/Sema/SemaConsumer.h"
 #include "clang/Serialization/ASTBitCodes.h"
@@ -67,6 +68,8 @@ class Token;
 class VersionTuple;
 class ASTUnresolvedSet;
 
+typedef unsigned ASTFileSignature;
+
 namespace SrcMgr { class SLocEntry; }
 
 /// \brief Writes an AST file containing the contents of a translation unit.
@@ -84,6 +87,8 @@ public:
   friend class ASTDeclWriter;
   friend class ASTStmtWriter;
 private:
+  ASTFileSignature Signature;
+  
   /// \brief Map that provides the ID numbers of each type within the
   /// output stream, plus those deserialized from a chained PCH.
   ///
@@ -533,6 +538,8 @@ public:
   ASTWriter(llvm::BitstreamWriter &Stream);
   ~ASTWriter();
 
+  ASTFileSignature getSignature() const { return Signature; }
+
   const LangOptions &getLangOpts() const;
 
   /// \brief Write a precompiled header for the given semantic analysis.
@@ -824,7 +831,7 @@ class PCHGenerator : public SemaConsumer {
   Sema *SemaPtr;
   // This buffer is always large, but BitstreamWriter really wants a
   // SmallVectorImpl<char>.
-  std::shared_ptr<std::pair<bool, SmallVector<char, 0>>> Buffer;
+  std::shared_ptr<ModuleBuffer> Buffer;
   llvm::BitstreamWriter Stream;
   ASTWriter Writer;
   bool AllowASTWithErrors;
@@ -832,21 +839,21 @@ class PCHGenerator : public SemaConsumer {
 protected:
   ASTWriter &getWriter() { return Writer; }
   const ASTWriter &getWriter() const { return Writer; }
-  SmallVectorImpl<char>& getPCH() const { return Buffer->second; }
+  SmallVectorImpl<char>& getPCH() const { return Buffer->Data; }
 
 public:
   PCHGenerator(const Preprocessor &PP,
                StringRef OutputFile,
                clang::Module *Module,
                StringRef isysroot,
-               std::shared_ptr<std::pair<bool, SmallVector<char, 0>>> Buffer,
+               std::shared_ptr<ModuleBuffer> Buffer,
                bool AllowASTWithErrors = false);
   ~PCHGenerator();
   void InitializeSema(Sema &S) override { SemaPtr = &S; }
   void HandleTranslationUnit(ASTContext &Ctx) override;
   ASTMutationListener *GetASTMutationListener() override;
   ASTDeserializationListener *GetASTDeserializationListener() override;
-  bool hasEmittedPCH() const { return Buffer->first; }
+  bool hasEmittedPCH() const { return Buffer->IsComplete; }
 };
 
 } // end namespace clang

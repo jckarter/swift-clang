@@ -1129,14 +1129,6 @@ adjustFilenameForRelocatableAST(const char *Filename, StringRef BaseDir) {
   return Filename + Pos;
 }
 
-static ASTFileSignature getSignature() {
-  while (1) {
-    if (ASTFileSignature S = llvm::sys::Process::GetRandomNumber())
-      return S;
-    // Rely on GetRandomNumber to eventually return non-zero...
-  }
-}
-
 /// \brief Write the control block.
 void ASTWriter::WriteControlBlock(Preprocessor &PP, ASTContext &Context,
                                   StringRef isysroot,
@@ -4149,8 +4141,17 @@ void ASTWriter::SetSelectorOffset(Selector Sel, uint32_t Offset) {
   SelectorOffsets[ID - FirstSelectorID] = Offset;
 }
 
+static ASTFileSignature makeSignature() {
+  while (1) {
+    if (ASTFileSignature S = llvm::sys::Process::GetRandomNumber())
+      return S;
+    // Rely on GetRandomNumber to eventually return non-zero...
+  }
+}
+
 ASTWriter::ASTWriter(llvm::BitstreamWriter &Stream)
-    : Stream(Stream), Context(nullptr), PP(nullptr), Chain(nullptr),
+    : Signature(makeSignature()),
+      Stream(Stream), Context(nullptr), PP(nullptr), Chain(nullptr),
       WritingModule(nullptr), WritingAST(false),
       DoneWritingDeclsAndTypes(false), ASTHasCompilerErrors(false),
       FirstDeclID(NUM_PREDEF_DECL_IDS), NextDeclID(FirstDeclID),

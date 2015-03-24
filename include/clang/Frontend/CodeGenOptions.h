@@ -138,6 +138,9 @@ public:
   /// in the backend for setting the name in the skeleton cu.
   std::string SplitDwarfFile;
 
+  /// The DWO id for module debugging.
+  uint64_t SplitDwarfID;
+
   /// The name of the relocation model to use.
   std::string RelocationModel;
 

@@ -27,6 +27,9 @@
 #include "clang/Basic/SourceManager.h"
 #include "clang/Basic/Version.h"
 #include "clang/Frontend/CodeGenOptions.h"
+#include "clang/Lex/HeaderSearchOptions.h"
+#include "clang/Lex/PreprocessorOptions.h"
+#include "clang/Index/USRGeneration.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/IR/Constants.h"
@@ -43,7 +46,8 @@ using namespace clang::CodeGen;
 
 CGDebugInfo::CGDebugInfo(CodeGenModule &CGM)
     : CGM(CGM), DebugKind(CGM.getCodeGenOpts().getDebugInfo()),
-      DBuilder(CGM.getModule()) {
+        DebugTypeExtRefs(CGM.getCodeGenOpts().DebugTypeExtRefs),
+        DBuilder(CGM.getModule()) {
   CreateCompileUnit();
 }
 
@@ -382,6 +386,7 @@ void CGDebugInfo::CreateCompileUnit() {
       DebugKind <= CodeGenOptions::DebugLineTablesOnly
           ? llvm::DIBuilder::LineTablesOnly
           : llvm::DIBuilder::FullDebug,
+      CGM.getCodeGenOpts().SplitDwarfID,
       DebugKind != CodeGenOptions::LocTrackingOnly);
 }
 
@@ -603,6 +608,13 @@ static SmallString<256> getUniqueTagTypeName(const TagType *Ty,
                                              CodeGenModule &CGM,
                                              llvm::DICompileUnit TheCU) {
   SmallString<256> FullName;
+
+  if (TheCU.getDWOId() &&
+      TheCU.getLanguage() != llvm::dwarf::DW_LANG_C_plus_plus) {
+    index::generateUSRForDecl(Ty->getDecl(), FullName);
+    return FullName;
+  }
+
   // FIXME: ODR should apply to ObjC++ exactly the same wasy it does to C++.
   // For now, only apply ODR with C++.
   const TagDecl *TD = Ty->getDecl();
@@ -1705,9 +1717,15 @@ llvm::DIType CGDebugInfo::CreateTypeDefinition(const ObjCInterfaceType *Ty,
   if (ID->getImplementation())
     Flags |= llvm::DIDescriptor::FlagObjcClassComplete;
 
+  // For module debugging, get the UID of the type.
+  SmallString<256> FullName;
+  if (TheCU.getDWOId() &&
+      TheCU.getLanguage() != llvm::dwarf::DW_LANG_C_plus_plus)
+    index::generateUSRForDecl(Ty->getDecl(), FullName);
+
   llvm::DICompositeType RealDecl = DBuilder.createStructType(
       Unit, ID->getName(), DefUnit, Line, Size, Align, Flags, llvm::DIType(),
-      llvm::DIArray(), RuntimeLang);
+      llvm::DIArray(), RuntimeLang, nullptr, FullName);
 
   QualType QTy(Ty, 0);
   TypeCache[QTy.getAsOpaquePtr()].reset(RealDecl);
@@ -2102,9 +2120,16 @@ llvm::DIType CGDebugInfo::getOrCreateType(QualType Ty, llvm::DIFile Unit) {
   if (llvm::DIType T = getTypeOrNull(Ty))
     return T;
 
+  llvm::DIType Res;
+  // Can we make it point to a serialized AST?
+  if (DebugTypeExtRefs)
+    Res = getTypeASTRefOrNull(Ty, Unit);
+
+  void* TyPtr = Ty.getAsOpaquePtr();
   // Otherwise create the type.
-  llvm::DIType Res = CreateTypeNode(Ty, Unit);
-  void *TyPtr = Ty.getAsOpaquePtr();
+  if (!Res.Verify())
+    Res = CreateTypeNode(Ty, Unit);
+
 
   // And update the type cache.
   TypeCache[TyPtr].reset(Res);
@@ -2135,6 +2160,99 @@ ObjCInterfaceDecl *CGDebugInfo::getObjCInterfaceDecl(QualType Ty) {
     return cast<ObjCInterfaceType>(Ty)->getDecl();
   default:
     return nullptr;
+  }
+}
+
+llvm::DICompileUnit CGDebugInfo::getOrCreateModuleRef(unsigned Idx) {
+  llvm::DICompileUnit ModuleRef;
+  // ClangModule = ClangModule->getTopLevelModule();
+  auto it = ModuleRefCache.find(Idx);
+  if (it != ModuleRefCache.end())
+    ModuleRef = it->second;
+    else {
+      // Macro definitions that were defined with "-D" on the command line.
+      SmallString<128> Flags;
+      {
+        llvm::raw_svector_ostream OS(Flags);
+        PreprocessorOptions PPOpts = CGM.getPreprocessorOpts();
+        for (unsigned I = 0, N = PPOpts.Macros.size(); I != N; ++I) {
+          // FIXME: This needs to be replaced by an array of metadata.
+          OS << " -D" << PPOpts.Macros[I].first
+             << "=" << PPOpts.Macros[I].second;
+        }
+        OS << " -isysroot " << CGM.getHeaderSearchOpts().Sysroot;
+      }
+      auto *Reader = CGM.getContext().getExternalSource();
+      if (auto Info = Reader->getSourceDescriptor(Idx)) {
+        llvm::DIBuilder DIB(CGM.getModule());
+        ModuleRef = DIB.createCompileUnit(TheCU.getLanguage(),
+          internString(Info->ModuleName), internString(Info->Dir),
+          TheCU.getProducer(), true, internString(Flags.str()), 0,
+          internString(Info->ASTFile),
+          llvm::DIBuilder::FullDebug,
+          Info->ModuleHash);
+        DIB.finalize();
+        ModuleRefCache.insert(std::make_pair(Idx, ModuleRef));
+      }
+    }
+  return ModuleRef;
+}
+
+/// GetTypeDeclASTRefOrNull - If the type T is declared in a Module or PCH
+/// return a DIType that references the module.
+llvm::DIType
+CGDebugInfo::getTypeASTRefOrNull(Decl *TyDecl, llvm::DIFile F) {
+  if (!TyDecl || !TyDecl->isFromASTFile())
+    return llvm::DIType();
+ 
+  llvm::DICompileUnit ModuleRef =
+    getOrCreateModuleRef(TyDecl->getOwningModuleID());
+
+  if (ModuleRef.Verify()) {
+    SmallString<256> buf;
+    index::generateUSRForDecl(TyDecl, buf);
+    unsigned Tag = 0;
+    if (auto *RD = dyn_cast<RecordDecl>(TyDecl))
+      Tag = getTagForRecord(RD);
+    else if (isa<ObjCInterfaceDecl>(TyDecl))
+      Tag = llvm::dwarf::DW_TAG_structure_type;
+    else if (isa<EnumDecl>(TyDecl))
+      Tag = llvm::dwarf::DW_TAG_enumeration_type;
+    else if (isa<TypedefDecl>(TyDecl))
+      // Typedef types don't yet have a UID.
+      return llvm::DIType();
+    if (!Tag) {
+      TyDecl->dump();
+      llvm::errs()<<buf.str()<<"\n";
+      assert(Tag);
+    }
+    return DBuilder.createExternalTypeRef(Tag,
+        DBuilder.createFile(ModuleRef.getSplitDebugFilename(), ""), buf.str());
+  }
+
+  return llvm::DIType();
+}
+
+/// CreateTypeASTNode - Attempt to get a pointer to the serialized
+/// AST of the declaration of the type.
+llvm::DIType CGDebugInfo::getTypeASTRefOrNull(QualType Ty, llvm::DIFile F) {
+  switch (Ty->getTypeClass()) {
+  // Handle all types that have a declaration.
+  case Type::Typedef:
+      return getTypeASTRefOrNull(cast<TypedefType>(Ty)->getDecl(), F);
+  case Type::Record:
+    return getTypeASTRefOrNull(cast<RecordType>(Ty)->getDecl(), F);
+  case Type::Enum:
+    return getTypeASTRefOrNull(cast<EnumType>(Ty)->getDecl(), F);
+  case Type::TemplateTypeParm:
+    return getTypeASTRefOrNull(cast<TemplateTypeParmType>(Ty)->getDecl(), F);
+  case Type::UnresolvedUsing:
+    return getTypeASTRefOrNull(cast<UnresolvedUsingType>(Ty)->getDecl(), F);
+  case Type::ObjCInterface:
+    return getTypeASTRefOrNull(cast<ObjCInterfaceType>(Ty)->getDecl(), F);
+    
+  default:
+    return llvm::DIType();
   }
 }
 
@@ -2537,7 +2655,8 @@ llvm::DICompositeType CGDebugInfo::getOrCreateFunctionType(const Decl *D,
 
   if (const CXXMethodDecl *Method = dyn_cast<CXXMethodDecl>(D))
     return getOrCreateMethodType(Method, F);
-  if (const ObjCMethodDecl *OMethod = dyn_cast<ObjCMethodDecl>(D)) {
+  const ObjCMethodDecl *OMethod = dyn_cast<ObjCMethodDecl>(D);
+  if (OMethod && OMethod->getSelfDecl()) {
     // Add "self" and "_cmd"
     SmallVector<llvm::Metadata *, 16> Elts;
 
@@ -3332,6 +3451,7 @@ void CGDebugInfo::EmitGlobalVariable(const ValueDecl *VD,
   // Do not use DIGlobalVariable for enums.
   if (Ty.getTag() == llvm::dwarf::DW_TAG_enumeration_type)
     return;
+
   // Do not emit separate definitions for function local const/statics.
   if (isa<FunctionDecl>(VD->getDeclContext()))
     return;

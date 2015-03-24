@@ -26,6 +26,8 @@
 #include "clang/Basic/LangOptions.h"
 #include "clang/Basic/Module.h"
 #include "clang/Basic/SanitizerBlacklist.h"
+#include "clang/Lex/HeaderSearchOptions.h"
+#include "clang/Lex/PreprocessorOptions.h"
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/SetVector.h"
 #include "llvm/ADT/SmallPtrSet.h"
@@ -278,6 +280,8 @@ public:
 private:
   ASTContext &Context;
   const LangOptions &LangOpts;
+  const HeaderSearchOptions &HeaderSearchOpts; // Only used for debug info.
+  const PreprocessorOptions &PreprocessorOpts; // Only used for debug info.
   const CodeGenOptions &CodeGenOpts;
   llvm::Module &TheModule;
   DiagnosticsEngine &Diags;
@@ -487,7 +491,10 @@ private:
 
   std::unique_ptr<CoverageMappingModuleGen> CoverageMapping;
 public:
-  CodeGenModule(ASTContext &C, const CodeGenOptions &CodeGenOpts,
+  CodeGenModule(ASTContext &C,
+                const HeaderSearchOptions &headersearchopts,
+                const PreprocessorOptions &ppopts,
+                const CodeGenOptions &CodeGenOpts,
                 llvm::Module &M, const llvm::DataLayout &TD,
                 DiagnosticsEngine &Diags,
                 CoverageSourceInfo *CoverageInfo = nullptr);
@@ -599,6 +606,10 @@ public:
 
   ASTContext &getContext() const { return Context; }
   const LangOptions &getLangOpts() const { return LangOpts; }
+  const HeaderSearchOptions &getHeaderSearchOpts()
+    const { return HeaderSearchOpts; }
+  const PreprocessorOptions &getPreprocessorOpts()
+    const { return PreprocessorOpts; }
   const CodeGenOptions &getCodeGenOpts() const { return CodeGenOpts; }
   llvm::Module &getModule() const { return TheModule; }
   DiagnosticsEngine &getDiags() const { return Diags; }

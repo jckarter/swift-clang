@@ -159,9 +159,10 @@ IntrusiveRefCntPtr<ExternalSemaSource> clang::createChainedIncludesSource(
                                                  &Clang->getPreprocessor());
     Clang->createASTContext();
 
-    auto Buffer = std::make_shared<std::pair<bool, SmallVector<char, 0>>>();
+    uint64_t Signature;
+    auto Buffer = std::make_shared<ModuleBuffer>();
     auto consumer = llvm::make_unique<PCHGenerator>(Clang->getPreprocessor(),
-                                         "-", nullptr, /*isysroot=*/"", Buffer);
+                           "-", nullptr, /*isysroot=*/"", Buffer, Signature);
     Clang->getASTContext().setASTMutationListener(
                                             consumer->GetASTMutationListener());
     Clang->setASTConsumer(std::move(consumer));
@@ -198,8 +199,8 @@ IntrusiveRefCntPtr<ExternalSemaSource> clang::createChainedIncludesSource(
 
     ParseAST(Clang->getSema());
     Clang->getDiagnosticClient().EndSourceFile();
-    assert(Buffer->first && "serialization did not complete");
-    auto &serialAST = Buffer->second;
+    assert(Buffer->IsComplete && "serialization did not complete");
+    auto &serialAST = Buffer->Data;
     SerialBufs.push_back(llvm::MemoryBuffer::
         getMemBufferCopy(StringRef(serialAST.data(), serialAST.size())));
     serialAST.clear();

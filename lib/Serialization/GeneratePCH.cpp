@@ -16,6 +16,7 @@
 #include "clang/AST/ASTConsumer.h"
 #include "clang/AST/ASTContext.h"
 #include "clang/Basic/FileManager.h"
+#include "clang/AST/ModuleProvider.h"
 #include "clang/Lex/Preprocessor.h"
 #include "clang/Sema/SemaConsumer.h"
 #include "llvm/Bitcode/BitstreamWriter.h"
@@ -27,17 +28,17 @@ PCHGenerator::PCHGenerator(const Preprocessor &PP,
                            StringRef OutputFile,
                            clang::Module *Module,
                            StringRef isysroot,
-                           std::shared_ptr<std::pair<bool,
-                               SmallVector<char, 0>>> Buffer,
+                           std::shared_ptr<ModuleBuffer> Buffer,
                            bool AllowASTWithErrors)
   : PP(PP), OutputFile(OutputFile), Module(Module), 
     isysroot(isysroot.str()),
     SemaPtr(nullptr),
     Buffer(Buffer),
-    Stream(Buffer->second),
+    Stream(Buffer->Data),
     Writer(Stream),
     AllowASTWithErrors(AllowASTWithErrors) {
-  Buffer->first = false;
+  Buffer->IsComplete = false;
+  Buffer->Signature = Writer.getSignature();
 }
 
 PCHGenerator::~PCHGenerator() {
@@ -56,7 +57,7 @@ void PCHGenerator::HandleTranslationUnit(ASTContext &Ctx) {
   assert(SemaPtr && "No Sema?");
   Writer.WriteAST(*SemaPtr, OutputFile, Module, isysroot, hasErrors);
 
-  Buffer->first = true;
+  Buffer->IsComplete = true;
 }
 
 ASTMutationListener *PCHGenerator::GetASTMutationListener() {

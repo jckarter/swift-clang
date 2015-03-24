@@ -89,19 +89,24 @@ GeneratePCHAction::CreateASTConsumer(CompilerInstance &CI, StringRef InFile) {
   if (!CI.getFrontendOpts().RelocatablePCH)
     Sysroot.clear();
 
-  auto Buffer = std::make_shared<std::pair<bool, SmallVector<char, 0>>>();
+  auto Buffer = std::make_shared<ModuleBuffer>();
   std::vector<std::unique_ptr<ASTConsumer>> Consumers;
   Consumers.push_back(llvm::make_unique<PCHGenerator>(CI.getPreprocessor(),
                                                       OutputFile, nullptr,
                                                       Sysroot, Buffer));
 
   auto CGOpts = CI.getCodeGenOpts();
+  CGOpts.SplitDwarfFile = OutputFile+".dwo";
   // The debug info emitted by ModuleContainerGenerator is not affected by the
   // optimization level.
+  CGOpts.EmitDeclMetadata = false;
+  CGOpts.EmitGcovArcs = false;
+  CGOpts.EmitGcovNotes = false;
   CGOpts.OptimizationLevel = 0;
   CGOpts.setDebugInfo(CodeGenOptions::LimitedDebugInfo);
   Consumers.push_back(CI.getModuleProvider().CreateModuleContainerGenerator(
-      CI.getDiagnostics(), "PCH", CGOpts, CI.getTargetOpts(), CI.getLangOpts(),
+      CI.getDiagnostics(), "PCH", CI.getHeaderSearchOpts(),
+      CI.getPreprocessorOpts(), CGOpts, CI.getTargetOpts(), CI.getLangOpts(),
       OS, Buffer));
 
   return llvm::make_unique<MultiplexConsumer>(std::move(Consumers));
@@ -140,7 +145,7 @@ GenerateModuleAction::CreateASTConsumer(CompilerInstance &CI,
   if (ComputeASTConsumerArguments(CI, InFile, Sysroot, OutputFile, OS))
     return nullptr;
 
-  auto Buffer = std::make_shared<std::pair<bool, SmallVector<char, 0>>>();
+  auto Buffer = std::make_shared<ModuleBuffer>();
   std::vector<std::unique_ptr<ASTConsumer>> Consumers;
   Consumers.push_back(llvm::make_unique<PCHGenerator>(CI.getPreprocessor(),
                                                       OutputFile, Module,
@@ -149,10 +154,15 @@ GenerateModuleAction::CreateASTConsumer(CompilerInstance &CI,
   auto CGOpts = CI.getCodeGenOpts();
   // The debug info emitted by ModuleContainerGenerator is not affected by the
   // optimization level.
+  CGOpts.EmitDeclMetadata = false;
+  CGOpts.EmitGcovArcs = false;
+  CGOpts.EmitGcovNotes = false;
   CGOpts.OptimizationLevel = 0;
+  CGOpts.SplitDwarfFile = OutputFile;
   CGOpts.setDebugInfo(CodeGenOptions::LimitedDebugInfo);
   Consumers.push_back(CI.getModuleProvider().CreateModuleContainerGenerator(
-      CI.getDiagnostics(), Module->getFullModuleName(), CGOpts,
+      CI.getDiagnostics(), Module->getFullModuleName(),
+      CI.getHeaderSearchOpts(), CI.getPreprocessorOpts(), CGOpts,
       CI.getTargetOpts(), CI.getLangOpts(), OS, Buffer));
   return llvm::make_unique<MultiplexConsumer>(std::move(Consumers));
 }
