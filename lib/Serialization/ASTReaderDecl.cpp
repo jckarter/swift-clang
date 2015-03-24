@@ -408,6 +408,12 @@ void ASTDeclReader::Visit(Decl *D) {
     // module).
     // FIXME: Can we diagnose ODR violations somehow?
     if (Record[Idx++]) {
+      if (auto *CD = dyn_cast<CXXConstructorDecl>(FD)) {
+        CD->NumCtorInitializers = Record[Idx++];
+        if (CD->NumCtorInitializers)
+          CD->CtorInitializers =
+              Reader.ReadCXXCtorInitializersRef(F, Record, Idx);
+      }
       Reader.PendingBodies[FD] = GetCurrentCursorOffset();
       HasPendingBody = true;
     }
@@ -1026,8 +1032,9 @@ void ASTDeclReader::VisitObjCImplementationDecl(ObjCImplementationDecl *D) {
   D->setIvarRBraceLoc(ReadSourceLocation(Record, Idx));
   D->setHasNonZeroConstructors(Record[Idx++]);
   D->setHasDestructors(Record[Idx++]);
-  std::tie(D->IvarInitializers, D->NumIvarInitializers) =
-      Reader.ReadCXXCtorInitializers(F, Record, Idx);
+  D->NumIvarInitializers = Record[Idx++];
+  if (D->NumIvarInitializers)
+    D->IvarInitializers = Reader.ReadCXXCtorInitializersRef(F, Record, Idx);
 }
 
 
@@ -1657,9 +1664,6 @@ void ASTDeclReader::VisitCXXConstructorDecl(CXXConstructorDecl *D) {
     if (D->isCanonicalDecl())
       D->setInheritedConstructor(CD);
   D->IsExplicitSpecified = Record[Idx++];
-  // FIXME: We should defer loading this until we need the constructor's body.
-  std::tie(D->CtorInitializers, D->NumCtorInitializers) =
-      Reader.ReadCXXCtorInitializers(F, Record, Idx);
 }
 
 void ASTDeclReader::VisitCXXDestructorDecl(CXXDestructorDecl *D) {
@@ -3180,6 +3184,9 @@ Decl *ASTReader::ReadDeclRecord(DeclID ID) {
   case DECL_CXX_BASE_SPECIFIERS:
     Error("attempt to read a C++ base-specifier record as a declaration");
     return nullptr;
+  case DECL_CXX_CTOR_INITIALIZERS:
+    Error("attempt to read a C++ ctor initializer record as a declaration");
+    return nullptr;
   case DECL_IMPORT:
     // Note: last entry of the ImportDecl record is the number of stored source 
     // locations.
@@ -3686,9 +3693,12 @@ void ASTDeclReader::UpdateDecl(Decl *D, ModuleFile &ModuleFile,
         });
       }
       FD->setInnerLocStart(Reader.ReadSourceLocation(ModuleFile, Record, Idx));
-      if (auto *CD = dyn_cast<CXXConstructorDecl>(FD))
-        std::tie(CD->CtorInitializers, CD->NumCtorInitializers) =
-            Reader.ReadCXXCtorInitializers(ModuleFile, Record, Idx);
+      if (auto *CD = dyn_cast<CXXConstructorDecl>(FD)) {
+        CD->NumCtorInitializers = Record[Idx++];
+        if (CD->NumCtorInitializers)
+          CD->CtorInitializers =
+              Reader.ReadCXXCtorInitializersRef(F, Record, Idx);
+      }
       // Store the offset of the body so we can lazily load it later.
       Reader.PendingBodies[FD] = GetCurrentCursorOffset();
       HasPendingBody = true;

@@ -134,9 +134,12 @@ namespace clang {
 
     void AddFunctionDefinition(const FunctionDecl *FD) {
       assert(FD->doesThisDeclarationHaveABody());
-      if (auto *CD = dyn_cast<CXXConstructorDecl>(FD))
-        Writer.AddCXXCtorInitializers(CD->CtorInitializers,
-                                      CD->NumCtorInitializers, Record);
+      if (auto *CD = dyn_cast<CXXConstructorDecl>(FD)) {
+        Record.push_back(CD->NumCtorInitializers);
+        if (CD->NumCtorInitializers)
+          Writer.AddCXXCtorInitializersRef(
+              llvm::makeArrayRef(CD->init_begin(), CD->init_end()), Record);
+      }
       Writer.AddStmt(FD->getBody());
     }
 
@@ -226,7 +229,7 @@ void ASTDeclWriter::Visit(Decl *D) {
   if (FunctionDecl *FD = dyn_cast<FunctionDecl>(D)) {
     Record.push_back(FD->doesThisDeclarationHaveABody());
     if (FD->doesThisDeclarationHaveABody())
-      Writer.AddStmt(FD->getBody());
+      AddFunctionDefinition(FD);
   }
 }
 
@@ -738,8 +741,10 @@ void ASTDeclWriter::VisitObjCImplementationDecl(ObjCImplementationDecl *D) {
   Writer.AddSourceLocation(D->getIvarRBraceLoc(), Record);
   Record.push_back(D->hasNonZeroConstructors());
   Record.push_back(D->hasDestructors());
-  Writer.AddCXXCtorInitializers(D->IvarInitializers, D->NumIvarInitializers,
-                                Record);
+  Record.push_back(D->NumIvarInitializers);
+  if (D->NumIvarInitializers)
+    Writer.AddCXXCtorInitializersRef(
+        llvm::makeArrayRef(D->init_begin(), D->init_end()), Record);
   Code = serialization::DECL_OBJC_IMPLEMENTATION;
 }
 
@@ -1147,8 +1152,6 @@ void ASTDeclWriter::VisitCXXConstructorDecl(CXXConstructorDecl *D) {
 
   Writer.AddDeclRef(D->getInheritedConstructor(), Record);
   Record.push_back(D->IsExplicitSpecified);
-  Writer.AddCXXCtorInitializers(D->CtorInitializers, D->NumCtorInitializers,
-                                Record);
 
   Code = serialization::DECL_CXX_CONSTRUCTOR;
 }
@@ -2093,12 +2096,10 @@ void ASTWriter::WriteDecl(ASTContext &Context, Decl *D) {
                             D->getDeclKindName() + "'");
   Stream.EmitRecord(W.Code, Record, W.AbbrevToUse);
 
-  // Flush any expressions that were written as part of this declaration.
-  FlushStmts();
-  
-  // Flush C++ base specifiers, if there are any.
-  FlushCXXBaseSpecifiers();
-  
+  // Flush any expressions, base specifiers, and ctor initializers that
+  // were written as part of this declaration.
+  FlushPendingAfterDecl();
+
   // Note declarations that should be deserialized eagerly so that we can add
   // them to a record in the AST file later.
   if (isRequiredDecl(D, Context))
