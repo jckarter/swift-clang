@@ -29,8 +29,7 @@ class LLVMModuleProvider
                                    const TargetOptions &TO,
                                    const LangOptions &LO,
                                    llvm::raw_ostream *OS,
-                                   std::shared_ptr<std::pair<bool,
-                                   llvm::SmallVector<char, 0>>> Buffer)
+                                   std::shared_ptr<ModuleBuffer> Buffer)
    const override;
 
   /// \brief Initialize an llvm::BitstreamReader with the module

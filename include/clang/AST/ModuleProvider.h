@@ -29,6 +29,12 @@ class LangOptions;
 class PreprocessorOptions;
 class TargetOptions;
 
+struct ModuleBuffer {
+  bool IsComplete;
+  uint64_t Signature;
+  llvm::SmallVector<char, 0> Data;
+};
+  
 class ModuleProvider {
 public:
   virtual ~ModuleProvider();
@@ -40,8 +46,7 @@ public:
       const HeaderSearchOptions &HSO, const PreprocessorOptions &PPO,
       const CodeGenOptions &CGO, const TargetOptions &TO, const LangOptions &LO,
       llvm::raw_ostream *OS,
-      std::shared_ptr<std::pair<bool, llvm::SmallVector<char, 0>>> Buffer)
-      const = 0;
+      std::shared_ptr<ModuleBuffer> Buffer) const = 0;
 
   /// \brief Initialize an llvm::BitstreamReader with the module
   /// inside the module container Buffer.

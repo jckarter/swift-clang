@@ -2219,7 +2219,8 @@ CGDebugInfo::getTypeASTRefOrNull(Decl *TyDecl, llvm::DIFile F) {
     else if (isa<EnumDecl>(TyDecl))
       Tag = llvm::dwarf::DW_TAG_enumeration_type;
     else if (isa<TypedefDecl>(TyDecl))
-      Tag = llvm::dwarf::DW_TAG_typedef;
+      // Typedef types don't yet have a UID.
+      return llvm::DIType();
     if (!Tag) {
       TyDecl->dump();
       llvm::errs()<<buf.str()<<"\n";

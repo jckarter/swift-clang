@@ -39,14 +39,14 @@ class ModuleContainerGenerator : public ASTConsumer {
   ASTContext *Ctx;
   const HeaderSearchOptions &HeaderSearchOpts;
   const PreprocessorOptions &PreprocessorOpts;
-  const CodeGenOptions CodeGenOpts;
+  CodeGenOptions CodeGenOpts;
   const TargetOptions TargetOpts;
   const LangOptions LangOpts;
   llvm::LLVMContext VMContext;
   std::unique_ptr<llvm::Module> M;
   std::unique_ptr<CodeGen::CodeGenModule> Builder;
   raw_ostream *OS;
-  std::shared_ptr<std::pair<bool, llvm::SmallVector<char, 0>>> Buffer;
+  std::shared_ptr<ModuleBuffer> Buffer;
 
   /// Visit every type and emit debug info for it.
   struct DebugTypeVisitor : public RecursiveASTVisitor<DebugTypeVisitor> {
@@ -123,7 +123,7 @@ public:
       const HeaderSearchOptions &HSO, const PreprocessorOptions &PPO,
       const CodeGenOptions &CGO, const TargetOptions &TO, const LangOptions &LO,
       raw_ostream *OS,
-      std::shared_ptr<std::pair<bool, llvm::SmallVector<char, 0>>> Buffer)
+      std::shared_ptr<ModuleBuffer> Buffer)
       : Diags(diags), HeaderSearchOpts(HSO), PreprocessorOpts(PPO),
         CodeGenOpts(CGO), TargetOpts(TO), LangOpts(LO),
         M(new llvm::Module(ModuleName, VMContext)), OS(OS), Buffer(Buffer) {}
@@ -136,10 +136,13 @@ public:
 
   bool HandleTopLevelDecl(DeclGroupRef D) override {
     TD.reset(new llvm::DataLayout(Ctx->getTargetInfo().getTargetDescription()));
-    if (!Builder)
+    if (!Builder) { 
+      assert(Buffer->Signature && "serialized module has no signature");
+      CodeGenOpts.SplitDwarfFile = Buffer->Signature;
       Builder.reset(
         new CodeGen::CodeGenModule(*Ctx, HeaderSearchOpts, PreprocessorOpts,
             CodeGenOpts, *M, *TD, Diags));
+    }
 
     if (CodeGenOpts.getDebugInfo() > CodeGenOptions::NoDebugInfo) {
       // Collect all the debug info.
@@ -181,8 +184,8 @@ public:
       llvm::report_fatal_error(Error);
 
     // Emit the serialized Clang AST into its own section.
-    assert(Buffer->first && "serialization did not complete");
-    auto &SerializedAST = Buffer->second;
+    assert(Buffer->IsComplete && "serialization did not complete");
+    auto &SerializedAST = Buffer->Data;
     auto Size = SerializedAST.size();
     auto Int8Ty = llvm::Type::getInt8Ty(VMContext);
     auto *Ty = llvm::ArrayType::get(Int8Ty, Size);
@@ -201,21 +204,11 @@ public:
     else
       ASTSym->setSection("__clangast");
 
-    // Use split dwarf on platforms that don't have LLDB as their system
-    // debugger.
-    if (!Triple.isOSDarwin())
-      M->addModuleFlag(llvm::Module::Warning, "Dwarf Split", 1);
-
     // Use the LLVM backend to emit the pcm.
     clang::EmitBackendOutput(Diags, CodeGenOpts, TargetOpts, LangOpts,
                              Ctx.getTargetInfo().getTargetDescription(),
                              M.get(), BackendAction::Backend_EmitObj, OS);
 
-//    clang::EmitBackendOutput(Diags, CodeGenOpts, TargetOpts, LangOpts,
-//                             Ctx.getTargetInfo().getTargetDescription(),
-//                             M.get(), BackendAction::Backend_EmitAssembly, &llvm::outs());
-
-    
     // Make sure the module container hits disk now.
     OS->flush();
 
@@ -230,7 +223,7 @@ std::unique_ptr<ASTConsumer> LLVMModuleProvider::CreateModuleContainerGenerator(
     const HeaderSearchOptions &HSO, const PreprocessorOptions &PPO,
     const CodeGenOptions &CGO, const TargetOptions &TO, const LangOptions &LO,
     llvm::raw_ostream *OS,
-    std::shared_ptr<std::pair<bool, SmallVector<char, 0>>> Buffer) const {
+    std::shared_ptr<ModuleBuffer> Buffer) const {
  return llvm::make_unique<ModuleContainerGenerator>
    (Diags, ModuleName, HSO, PPO, CGO, TO, LO, OS, Buffer);
 }

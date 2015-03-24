@@ -926,8 +926,7 @@ public:
   PrecompilePreambleConsumer(ASTUnit &Unit, PrecompilePreambleAction *Action,
                              const Preprocessor &PP, StringRef isysroot,
                              raw_ostream *Out)
-    : PCHGenerator(PP, "", nullptr, isysroot,
-                   std::make_shared<std::pair<bool, SmallVector<char, 0>>>(),
+    : PCHGenerator(PP, "", nullptr, isysroot, std::make_shared<ModuleBuffer>(),
                    /*AllowASTWithErrors=*/true),
       Unit(Unit), Hash(Unit.getCurrentTopLevelHashValue()), Action(Action),
       Out(Out) {
