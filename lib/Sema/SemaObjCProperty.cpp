@@ -2295,13 +2295,21 @@ void Sema::CheckObjCPropertyAttributes(Decl *PDecl,
       Attributes &= ~ObjCDeclSpec::DQ_PR_weak;
   }
 
-  if (Attributes & ObjCDeclSpec::DQ_PR_weak)
+  if (Attributes & ObjCDeclSpec::DQ_PR_weak) {
     // 'weak' and 'nonnull' are mutually exclusive.
     if (auto nullability = PropertyTy->getNullability(Context)) {
       if (*nullability == NullabilityKind::NonNull)
         Diag(Loc, diag::err_objc_property_attr_mutually_exclusive)
           << "nonnull" << "weak";
+    } else {
+        PropertyTy =
+          Context.getAttributedType(
+            AttributedType::getNullabilityAttrKind(NullabilityKind::Nullable),
+            PropertyTy, PropertyTy);
+        TypeSourceInfo *TSInfo = PropertyDecl->getTypeSourceInfo();
+        PropertyDecl->setType(PropertyTy, TSInfo);
     }
+  }
 
   if ((Attributes & ObjCDeclSpec::DQ_PR_atomic) &&
       (Attributes & ObjCDeclSpec::DQ_PR_nonatomic)) {
