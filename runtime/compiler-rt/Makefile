@@ -80,7 +80,7 @@ RuntimeLibrary.darwin.Configs := \
 	asan_osx_dynamic.dylib \
 	profile_osx.a
 #	Apple Internal: ASan is now enabled, but disable UBSan. <rdar://12423266>
-#	ubsan_osx.a
+#	ubsan_osx_dynamic.dylib
 
 IOS_SDK := $(shell xcrun --show-sdk-path -sdk iphoneos 2> /dev/null)
 IOSSIM_SDK := $(shell xcrun --show-sdk-path -sdk iphonesimulator 2> /dev/null)
@@ -108,7 +108,8 @@ RuntimeLibrary.darwin.Configs += cc_kext_ios5.a
 endif
 
 ifneq ($(IOSSIM_SDK),)
-RuntimeLibrary.darwin.Configs += asan_iossim_dynamic.dylib
+RuntimeLibrary.darwin.Configs += asan_iossim_dynamic.dylib \
+                                 ubsan_iossim_dynamic.dylib
 endif
 
 ifneq ($(IOS_SDK),)

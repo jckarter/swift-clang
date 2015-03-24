@@ -270,11 +270,6 @@ namespace {
     if (!Method->isPropertyAccessor())
       return false;
     
-    const ObjCInterfaceDecl *IFace =
-      NS.getASTContext().getObjContainingInterface(Method);
-    if (!IFace)
-      return false;
-    
     const ObjCPropertyDecl *Prop = Method->findPropertyDecl();
     if (!Prop)
       return false;

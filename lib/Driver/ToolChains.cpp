@@ -347,6 +347,34 @@ void MachO::AddLinkRuntimeLib(const ArgList &Args, ArgStringList &CmdArgs,
   }
 }
 
+void DarwinClang::AddLinkSanitizerLibArgs(const ArgList &Args,
+                                          ArgStringList &CmdArgs,
+                                          StringRef Sanitizer) const {
+  if (!Args.hasArg(options::OPT_dynamiclib) &&
+      !Args.hasArg(options::OPT_bundle)) {
+    // Sanitizer runtime libraries requires C++.
+    AddCXXStdlibLibArgs(Args, CmdArgs);
+  }
+  assert(isTargetMacOS() || isTargetIOSSimulator() || isTargetIPhoneOS());
+  StringRef OS = "";
+  if (isTargetMacOS())
+    OS = "osx";
+  if (isTargetWatchOSSimulator())
+    OS = "watchsim";
+  if (isTargetWatchOS())
+    OS = "watchos";
+  if (isTargetIOSSimulator())
+    OS = "iossim";
+  if (isTargetIPhoneOS())
+    OS = "ios";
+  assert(!OS.empty());
+
+  AddLinkRuntimeLib(Args, CmdArgs, (Twine("libclang_rt.") + Sanitizer + "_" +
+                                    OS + "_dynamic.dylib").str(),
+                    /*AlwaysLink*/ true, /*IsEmbedded*/ false,
+                    /*AddRPath*/ true);
+}
+
 void DarwinClang::AddLinkRuntimeLibArgs(const ArgList &Args,
                                         ArgStringList &CmdArgs) const {
   // Darwin only supports the compiler-rt based runtime libraries.
@@ -395,54 +423,26 @@ void DarwinClang::AddLinkRuntimeLibArgs(const ArgList &Args,
 
   const SanitizerArgs &Sanitize = getSanitizerArgs();
 
-  // Add Ubsan runtime library, if required.
-  if (Sanitize.needsUbsanRt()) {
-    // FIXME: Move this check to SanitizerArgs::filterUnsupportedKinds.
-    if (isTargetIOSBased() || isTargetWatchOSBased()) {
+  if (Sanitize.needsAsanRt()) {
+    if (!isTargetMacOS() && !isTargetIOSSimulator() && !isTargetIPhoneOS()) {
+      // FIXME: Move this check to SanitizerArgs::filterUnsupportedKinds.
       getDriver().Diag(diag::err_drv_clang_unsupported_per_platform)
-        << "-fsanitize=undefined";
+          << "-fsanitize=address";
     } else {
-      assert(isTargetMacOS() && "unexpected non OS X target");
-      AddLinkRuntimeLib(Args, CmdArgs, "libclang_rt.ubsan_osx.a", true);
-
-      // The Ubsan runtime library requires C++.
-      AddCXXStdlibLibArgs(Args, CmdArgs);
+      AddLinkSanitizerLibArgs(Args, CmdArgs, "asan");
     }
   }
 
-  // Add ASAN runtime library, if required. Dynamic libraries and bundles
-  // should not be linked with the runtime library.
-  if (Sanitize.needsAsanRt()) {
-    if (!Args.hasArg(options::OPT_dynamiclib) &&
-        !Args.hasArg(options::OPT_bundle)) {
-      // The ASAN runtime library requires C++.
-      AddCXXStdlibLibArgs(Args, CmdArgs);
-    }
-    if (isTargetMacOS()) {
-      AddLinkRuntimeLib(Args, CmdArgs,
-                        "libclang_rt.asan_osx_dynamic.dylib",
-                        /*AlwaysLink*/ true, /*IsEmbedded*/ false,
-                        /*AddRPath*/ true);
-    } else if (isTargetWatchOSSimulator()) {
-      AddLinkRuntimeLib(Args, CmdArgs,
-                        "libclang_rt.asan_watchsim_dynamic.dylib",
-                        /*AlwaysLink*/ true, /*IsEmbedded*/ false,
-                        /*AddRPath*/ true);
-    } else if (isTargetWatchOS()) {
-      AddLinkRuntimeLib(Args, CmdArgs,
-                        "libclang_rt.asan_watchos_dynamic.dylib",
-                        /*AlwaysLink*/ true, /*IsEmbedded*/ false,
-                        /*AddRPath*/ true);
-    } else if (isTargetIOSSimulator()) {
-      AddLinkRuntimeLib(Args, CmdArgs,
-                        "libclang_rt.asan_iossim_dynamic.dylib",
-                        /*AlwaysLink*/ true, /*IsEmbedded*/ false,
-                        /*AddRPath*/ true);
-    } else if (isTargetIPhoneOS()) {
-      AddLinkRuntimeLib(Args, CmdArgs,
-                        "libclang_rt.asan_ios_dynamic.dylib",
-                        /*AlwaysLink*/ true, /*IsEmbedded*/ false,
-                        /*AddRPath*/ true);
+  if (Sanitize.needsUbsanRt()) {
+    if (!isTargetMacOS() && !isTargetIOSSimulator() && !isTargetIPhoneOS()) {
+      // FIXME: Move this check to SanitizerArgs::filterUnsupportedKinds.
+      getDriver().Diag(diag::err_drv_clang_unsupported_per_platform)
+          << "-fsanitize=undefined";
+    } else {
+      AddLinkSanitizerLibArgs(Args, CmdArgs, "ubsan");
+      // Add explicit dependcy on -lc++abi, as -lc++ doesn't re-export
+      // all RTTI-related symbols that UBSan uses.
+      CmdArgs.push_back("-lc++abi");
     }
   }
 
