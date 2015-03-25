@@ -138,7 +138,7 @@ public:
     TD.reset(new llvm::DataLayout(Ctx->getTargetInfo().getTargetDescription()));
     if (!Builder) { 
       assert(Buffer->Signature && "serialized module has no signature");
-      CodeGenOpts.SplitDwarfFile = Buffer->Signature;
+      CodeGenOpts.SplitDwarfID = Buffer->Signature;
       Builder.reset(
         new CodeGen::CodeGenModule(*Ctx, HeaderSearchOpts, PreprocessorOpts,
             CodeGenOpts, *M, *TD, Diags));
