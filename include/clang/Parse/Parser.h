@@ -2271,6 +2271,8 @@ private:
                                BalancedDelimiterTracker &Tracker,
                                bool IsAmbiguous,
                                bool RequiresArg = false);
+  bool ParseRefQualifier(bool &RefQualifierIsLValueRef,
+                         SourceLocation &RefQualifierLoc);
   bool isFunctionDeclaratorIdentifierList();
   void ParseFunctionDeclaratorIdentifierList(
          Declarator &D,
@@ -2350,6 +2352,8 @@ private:
                                                  VirtSpecifiers &VS,
                                                  ExprResult &BitfieldSize,
                                                  LateParsedAttrList &LateAttrs);
+  void MaybeParseAndDiagnoseDeclSpecAfterCXX11VirtSpecifierSeq(Declarator &D,
+                                                               VirtSpecifiers &VS);
   void ParseCXXClassMemberDeclaration(AccessSpecifier AS, AttributeList *Attr,
                   const ParsedTemplateInfo &TemplateInfo = ParsedTemplateInfo(),
                   ParsingDeclRAIIObject *DiagsFromTParams = nullptr);
