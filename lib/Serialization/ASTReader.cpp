@@ -3891,8 +3891,7 @@ ASTReader::ReadASTCore(StringRef FileName,
 
   ModuleFile &F = *M;
   BitstreamCursor &Stream = F.Stream;
-  F.SplitDwarfID =
-       MP.UnwrapModuleContainer(F.Buffer->getMemBufferRef(), F.StreamFile);
+  MP.UnwrapModuleContainer(F.Buffer->getMemBufferRef(), F.StreamFile);
   Stream.init(&F.StreamFile);
   F.SizeInBits = F.StreamFile.getBitcodeBytes().getExtent() * 8;
 
@@ -4570,7 +4569,7 @@ ASTReader::ReadSubmoduleBlock(ModuleFile &F, unsigned ClientLoadCapabilities) {
         CurrentModule->setASTFile(F.File);
       }
 
-      CurrentModule->SplitDwarfID = F.SplitDwarfID;
+      CurrentModule->SplitDwarfID = F.Signature;
       CurrentModule->IsFromModuleFile = true;
       CurrentModule->IsSystem = IsSystem || CurrentModule->IsSystem;
       CurrentModule->IsExternC = IsExternC;
@@ -7688,7 +7687,7 @@ ASTReader::getSourceDescriptor(unsigned ID) {
     return ASTReader::ASTSourceDescriptor{
       MF.OriginalSourceFileName, MF.OriginalDir,
       MF.FileName,
-      MF.SplitDwarfID
+      MF.Signature
     };
   }
   return None;

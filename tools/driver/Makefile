@@ -34,7 +34,7 @@ endif
 LINK_COMPONENTS := $(TARGETS_TO_BUILD) asmparser bitreader bitwriter codegen \
                    instrumentation ipo irreader linker objcarcopts option \
                    profiledata selectiondag \
-                   DebugInfoDWARF object
+                   object
 USEDLIBS = clangFrontendTool.a clangFrontend.a clangDriver.a \
            clangSerialization.a clangCodeGen.a clangParse.a clangSema.a \
            clangRewriteFrontend.a clangRewrite.a clangIndex.a

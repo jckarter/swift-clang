@@ -161,9 +161,6 @@ public:
   /// and modification time to identify this particular file.
   ASTFileSignature Signature;
 
-  /// \brief The DWO signature of the module's debug info.
-  uint64_t SplitDwarfID;
-
   /// \brief Whether this module has been directly imported by the
   /// user.
   bool DirectlyImported;

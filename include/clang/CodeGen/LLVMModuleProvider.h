@@ -34,8 +34,8 @@ class LLVMModuleProvider
 
   /// \brief Initialize an llvm::BitstreamReader with the module
   /// inside the module container Buffer.
-  uint64_t UnwrapModuleContainer(llvm::MemoryBufferRef Buffer,
-                                 llvm::BitstreamReader &StreamFile) const override;
+  void UnwrapModuleContainer(llvm::MemoryBufferRef Buffer,
+                             llvm::BitstreamReader &StreamFile) const override;
 
 
 };

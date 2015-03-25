@@ -50,9 +50,8 @@ public:
 
   /// \brief Initialize an llvm::BitstreamReader with the module
   /// inside the module container Buffer.
-  /// Returns the module's hash value or zero if unsuccessful.
-  virtual uint64_t UnwrapModuleContainer(llvm::MemoryBufferRef Buffer,
-                                         llvm::BitstreamReader &StreamFile)
+  virtual void UnwrapModuleContainer(llvm::MemoryBufferRef Buffer,
+                                     llvm::BitstreamReader &StreamFile)
     const = 0;
 };
 }
