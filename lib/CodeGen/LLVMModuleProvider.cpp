@@ -32,6 +32,8 @@
 #include <memory>
 using namespace clang;
 
+#define DEBUG_TYPE "modulecontainer"
+
 namespace {
 class ModuleContainerGenerator : public ASTConsumer {
   DiagnosticsEngine &Diags;
@@ -203,6 +205,11 @@ public:
       ASTSym->setSection("clangast");
     else
       ASTSym->setSection("__clangast");
+
+    DEBUG(clang::EmitBackendOutput(Diags, CodeGenOpts, TargetOpts, LangOpts,
+                                   Ctx.getTargetInfo().getTargetDescription(),
+                                   M.get(), BackendAction::Backend_EmitLL,
+                                   &llvm::dbgs()));
 
     // Use the LLVM backend to emit the pcm.
     clang::EmitBackendOutput(Diags, CodeGenOpts, TargetOpts, LangOpts,
