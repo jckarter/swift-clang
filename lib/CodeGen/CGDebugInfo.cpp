@@ -2207,20 +2207,26 @@ CGDebugInfo::getTypeASTRefOrNull(Decl *TyDecl, llvm::DIFile F) {
     getOrCreateModuleRef(TyDecl->getOwningModuleID());
 
   if (ModuleRef.Verify()) {
-    SmallString<256> buf;
-    index::generateUSRForDecl(TyDecl, buf);
     unsigned Tag = 0;
-    if (auto *RD = dyn_cast<RecordDecl>(TyDecl))
+    if (auto *RD = dyn_cast<RecordDecl>(TyDecl)) {
+      if (!RD->getDefinition())
+        return llvm::DIType();
       Tag = getTagForRecord(RD);
-    else if (isa<ObjCInterfaceDecl>(TyDecl))
+    } else if (auto *ID = dyn_cast<ObjCInterfaceDecl>(TyDecl)) {
+      if (!ID->getDefinition())
+        return llvm::DIType();
       Tag = llvm::dwarf::DW_TAG_structure_type;
-    else if (isa<EnumDecl>(TyDecl))
+    } else if (auto *ED = dyn_cast<EnumDecl>(TyDecl)) {
+      if (!ED->getDefinition())
+        return llvm::DIType();
       Tag = llvm::dwarf::DW_TAG_enumeration_type;
-    else if (isa<TypedefDecl>(TyDecl))
+    } else if (isa<TypedefDecl>(TyDecl))
       // Typedef types don't yet have a UID.
       return llvm::DIType();
     if (!Tag)
       llvm_unreachable("unhandled tag");
+    SmallString<256> buf;
+    index::generateUSRForDecl(TyDecl, buf);
     return DBuilder.createExternalTypeRef(Tag,
         DBuilder.createFile(ModuleRef.getSplitDebugFilename(), ""), buf.str());
   }
