@@ -9,7 +9,7 @@
 @end
 
 @interface Sub : Base
-- (nullable id)bad:(nonnull id)obj; // expected-warning {{conflicting nullability specifier on return types, 'nullable' conflicts with existing specifier 'nullable'}} \
+- (nullable id)bad:(nonnull id)obj; // expected-warning {{conflicting nullability specifier on return types, 'nullable' conflicts with existing specifier 'nonnull'}} \
                                     // expected-warning {{conflicting nullability specifier on parameter types, 'nonnull' conflicts with existing specifier 'nullable'}}
 - (nonnull id)notAsBad:(nullable id)obj;
 @end
