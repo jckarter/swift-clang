@@ -114,6 +114,22 @@ def warn_mismatched_nullability_attr : Warning<
   "conflicts with existing specifier '%select{%select{__|}3nonnull|"
   "%select{__|}3nullable|%select{__|}3null_unspecified}2'">,
   InGroup<Nullability>;
+  
+def warn_conflicting_nullability_attr_overriding_ret_types : Warning<
+  "conflicting nullability specifier on return types, "
+  "'%select{%select{__|}1nonnull|"
+  "%select{__|}1nullable|%select{__|}1null_unspecified}0' "
+  "conflicts with existing specifier '%select{%select{__|}3nonnull|"
+  "%select{__|}3nullable|%select{__|}3null_unspecified}2'">,
+  InGroup<Nullability>;
+
+def warn_conflicting_nullability_attr_overriding_param_types : Warning<
+  "conflicting nullability specifier on parameter types, "
+  "'%select{%select{__|}1nonnull|"
+  "%select{__|}1nullable|%select{__|}1null_unspecified}0' "
+  "conflicts with existing specifier '%select{%select{__|}3nonnull|"
+  "%select{__|}3nullable|%select{__|}3null_unspecified}2'">,
+  InGroup<Nullability>;
 
 def err_nullability_conflicting : Error<
   "nullability specifier "

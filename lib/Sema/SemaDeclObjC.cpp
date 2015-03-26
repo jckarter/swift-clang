@@ -2105,7 +2105,24 @@ static bool CheckMethodOverrideReturn(Sema &S,
     else
       return false;
   }
-
+  if (Warn && IsOverridingMode &&
+      !isa<ObjCImplementationDecl>(MethodImpl->getDeclContext()) &&
+      !S.Context.hasSameNullabilityTypeQualifier(MethodImpl->getReturnType(),
+                                                 MethodDecl->getReturnType(),
+                                                 false)) {
+    unsigned unsNullabilityMethodImpl =
+      static_cast<unsigned>(*MethodImpl->getReturnType()->getNullability(S.Context));
+    unsigned unsNullabilityMethodDecl =
+      static_cast<unsigned>(*MethodDecl->getReturnType()->getNullability(S.Context));
+      S.Diag(MethodImpl->getLocation(),
+             diag::warn_conflicting_nullability_attr_overriding_ret_types)
+        << unsNullabilityMethodImpl
+        << ((MethodImpl->getObjCDeclQualifier() & Decl::OBJC_TQ_CSNullability) != 0)
+        << unsNullabilityMethodDecl
+        << ((MethodDecl->getObjCDeclQualifier() & Decl::OBJC_TQ_CSNullability) != 0);
+      S.Diag(MethodDecl->getLocation(), diag::note_previous_declaration);
+  }
+    
   if (S.Context.hasSameUnqualifiedType(MethodImpl->getReturnType(),
                                        MethodDecl->getReturnType()))
     return true;
@@ -2176,7 +2193,19 @@ static bool CheckMethodOverrideParam(Sema &S,
       
   QualType ImplTy = ImplVar->getType();
   QualType IfaceTy = IfaceVar->getType();
-  
+  if (Warn && IsOverridingMode &&
+      !isa<ObjCImplementationDecl>(MethodImpl->getDeclContext()) &&
+      !S.Context.hasSameNullabilityTypeQualifier(ImplTy, IfaceTy, true)) {
+    unsigned unsImplTy = static_cast<unsigned>(*ImplTy->getNullability(S.Context));
+    unsigned unsIfaceTy = static_cast<unsigned>(*IfaceTy->getNullability(S.Context));
+    S.Diag(ImplVar->getLocation(),
+           diag::warn_conflicting_nullability_attr_overriding_param_types)
+        << unsImplTy
+        << ((ImplVar->getObjCDeclQualifier() & Decl::OBJC_TQ_CSNullability) != 0)
+        << unsIfaceTy
+        << ((IfaceVar->getObjCDeclQualifier() & Decl::OBJC_TQ_CSNullability) != 0);
+        S.Diag(IfaceVar->getLocation(), diag::note_previous_declaration);
+  }
   if (S.Context.hasSameUnqualifiedType(ImplTy, IfaceTy))
     return true;
   
