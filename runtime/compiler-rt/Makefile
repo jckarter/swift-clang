@@ -108,8 +108,7 @@ RuntimeLibrary.darwin.Configs += cc_kext_ios5.a
 endif
 
 ifneq ($(IOSSIM_SDK),)
-RuntimeLibrary.darwin.Configs += asan_iossim_dynamic.dylib \
-                                 ubsan_iossim_dynamic.dylib
+RuntimeLibrary.darwin.Configs += asan_iossim_dynamic.dylib
 endif
 
 ifneq ($(IOS_SDK),)

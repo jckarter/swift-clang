@@ -3,7 +3,6 @@ set( LLVM_LINK_COMPONENTS
   Analysis
   CodeGen
   Core
-  DebugInfoDWARF
   IPA
   IPO
   InstCombine

@@ -22,7 +22,7 @@ NO_INSTALL = 1
 include $(CLANG_LEVEL)/../../Makefile.config
 
 LINK_COMPONENTS := $(TARGETS_TO_BUILD) asmparser bitreader bitwriter \
-    instrumentation ipo mc objcarcopts option support DebugInfoDWARF
+    instrumentation ipo mc objcarcopts option support
 
 # Note that 'USEDLIBS' must include all of the core clang libraries
 # when -static is given to linker on cygming.

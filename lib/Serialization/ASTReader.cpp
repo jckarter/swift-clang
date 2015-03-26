@@ -3891,8 +3891,7 @@ ASTReader::ReadASTCore(StringRef FileName,
 
   ModuleFile &F = *M;
   BitstreamCursor &Stream = F.Stream;
-  F.SplitDwarfID =
-       MP.UnwrapModuleContainer(F.Buffer->getMemBufferRef(), F.StreamFile);
+  MP.UnwrapModuleContainer(F.Buffer->getMemBufferRef(), F.StreamFile);
   Stream.init(&F.StreamFile);
   F.SizeInBits = F.StreamFile.getBitcodeBytes().getExtent() * 8;
 
@@ -4570,7 +4569,7 @@ ASTReader::ReadSubmoduleBlock(ModuleFile &F, unsigned ClientLoadCapabilities) {
         CurrentModule->setASTFile(F.File);
       }
 
-      CurrentModule->SplitDwarfID = F.SplitDwarfID;
+      CurrentModule->SplitDwarfID = F.Signature;
       CurrentModule->IsFromModuleFile = true;
       CurrentModule->IsSystem = IsSystem || CurrentModule->IsSystem;
       CurrentModule->IsExternC = IsExternC;
@@ -7467,7 +7466,7 @@ void ASTReader::ReadPendingInstantiations(
 }
 
 void ASTReader::ReadLateParsedTemplates(
-    llvm::DenseMap<const FunctionDecl *, LateParsedTemplate *> &LPTMap) {
+    llvm::MapVector<const FunctionDecl *, LateParsedTemplate *> &LPTMap) {
   for (unsigned Idx = 0, N = LateParsedTemplates.size(); Idx < N;
        /* In loop */) {
     FunctionDecl *FD = cast<FunctionDecl>(GetDecl(LateParsedTemplates[Idx++]));
@@ -7483,7 +7482,7 @@ void ASTReader::ReadLateParsedTemplates(
     for (unsigned T = 0; T < TokN; ++T)
       LT->Toks.push_back(ReadToken(*F, LateParsedTemplates, Idx));
 
-    LPTMap[FD] = LT;
+    LPTMap.insert(std::make_pair(FD, LT));
   }
 
   LateParsedTemplates.clear();
@@ -7688,7 +7687,7 @@ ASTReader::getSourceDescriptor(unsigned ID) {
     return ASTReader::ASTSourceDescriptor{
       MF.OriginalSourceFileName, MF.OriginalDir,
       MF.FileName,
-      MF.SplitDwarfID
+      MF.Signature
     };
   }
   return None;

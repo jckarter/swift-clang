@@ -32,6 +32,8 @@
 #include <memory>
 using namespace clang;
 
+#define DEBUG_TYPE "modulecontainer"
+
 namespace {
 class ModuleContainerGenerator : public ASTConsumer {
   DiagnosticsEngine &Diags;
@@ -138,7 +140,7 @@ public:
     TD.reset(new llvm::DataLayout(Ctx->getTargetInfo().getTargetDescription()));
     if (!Builder) { 
       assert(Buffer->Signature && "serialized module has no signature");
-      CodeGenOpts.SplitDwarfFile = Buffer->Signature;
+      CodeGenOpts.SplitDwarfID = Buffer->Signature;
       Builder.reset(
         new CodeGen::CodeGenModule(*Ctx, HeaderSearchOpts, PreprocessorOpts,
             CodeGenOpts, *M, *TD, Diags));
@@ -204,6 +206,11 @@ public:
     else
       ASTSym->setSection("__clangast");
 
+    DEBUG(clang::EmitBackendOutput(Diags, CodeGenOpts, TargetOpts, LangOpts,
+                                   Ctx.getTargetInfo().getTargetDescription(),
+                                   M.get(), BackendAction::Backend_EmitLL,
+                                   &llvm::dbgs()));
+
     // Use the LLVM backend to emit the pcm.
     clang::EmitBackendOutput(Diags, CodeGenOpts, TargetOpts, LangOpts,
                              Ctx.getTargetInfo().getTargetDescription(),
@@ -228,17 +235,10 @@ std::unique_ptr<ASTConsumer> LLVMModuleProvider::CreateModuleContainerGenerator(
    (Diags, ModuleName, HSO, PPO, CGO, TO, LO, OS, Buffer);
 }
 
-uint64_t LLVMModuleProvider::UnwrapModuleContainer(
+void LLVMModuleProvider::UnwrapModuleContainer(
     llvm::MemoryBufferRef Buffer, llvm::BitstreamReader &StreamFile) const {
   if (auto OF = llvm::object::ObjectFile::createObjectFile(Buffer)) {
     auto *Obj = OF.get().get();
-    uint64_t DWOId = 0;
-    std::unique_ptr<llvm::DIContext>
-        DICtx(llvm::DIContext::getDWARFContext(*Obj));
-    if (auto DWARFCtx = dyn_cast<llvm::DWARFContext>(DICtx.get()))
-      if (DWARFCtx->getNumCompileUnits())
-        DWOId = DWARFCtx->getCompileUnitAtIndex(0)->getDWOId();
-
     bool IsCOFF = isa<llvm::object::COFFObjectFile>(Obj);
     // Find the clang AST section in the container.
     for (auto &Section : OF->get()->sections()) {
@@ -249,11 +249,11 @@ uint64_t LLVMModuleProvider::UnwrapModuleContainer(
         Section.getContents(Buf);
         StreamFile.init((const unsigned char *)Buf.begin(),
                         (const unsigned char *)Buf.end());
-        return DWOId;
+        return;
       }
     }
   }
   StreamFile.init((const unsigned char *)Buffer.getBufferStart(),
                   (const unsigned char *)Buffer.getBufferEnd());
-  return 0;
+  return;
 }

@@ -38,7 +38,6 @@
 #include "llvm/IR/Instructions.h"
 #include "llvm/IR/Intrinsics.h"
 #include "llvm/IR/Module.h"
-#include "llvm/Support/Dwarf.h"
 #include "llvm/Support/FileSystem.h"
 #include "llvm/Support/Path.h"
 using namespace clang;
@@ -2165,10 +2164,11 @@ ObjCInterfaceDecl *CGDebugInfo::getObjCInterfaceDecl(QualType Ty) {
 
 llvm::DICompileUnit CGDebugInfo::getOrCreateModuleRef(unsigned Idx) {
   llvm::DICompileUnit ModuleRef;
-  // ClangModule = ClangModule->getTopLevelModule();
-  auto it = ModuleRefCache.find(Idx);
-  if (it != ModuleRefCache.end())
-    ModuleRef = it->second;
+  auto *Reader = CGM.getContext().getExternalSource();
+  if (auto Info = Reader->getSourceDescriptor(Idx)) {
+    auto it = ModuleRefCache.find(Info->ModuleHash);
+    if (it != ModuleRefCache.end())
+      ModuleRef = it->second;
     else {
       // Macro definitions that were defined with "-D" on the command line.
       SmallString<128> Flags;
@@ -2182,19 +2182,17 @@ llvm::DICompileUnit CGDebugInfo::getOrCreateModuleRef(unsigned Idx) {
         }
         OS << " -isysroot " << CGM.getHeaderSearchOpts().Sysroot;
       }
-      auto *Reader = CGM.getContext().getExternalSource();
-      if (auto Info = Reader->getSourceDescriptor(Idx)) {
-        llvm::DIBuilder DIB(CGM.getModule());
-        ModuleRef = DIB.createCompileUnit(TheCU.getLanguage(),
+      llvm::DIBuilder DIB(CGM.getModule());
+      ModuleRef = DIB.createCompileUnit(TheCU.getLanguage(),
           internString(Info->ModuleName), internString(Info->Dir),
           TheCU.getProducer(), true, internString(Flags.str()), 0,
           internString(Info->ASTFile),
           llvm::DIBuilder::FullDebug,
           Info->ModuleHash);
-        DIB.finalize();
-        ModuleRefCache.insert(std::make_pair(Idx, ModuleRef));
-      }
+      DIB.finalize();
+      ModuleRefCache.insert(std::make_pair(Info->ModuleHash, ModuleRef));
     }
+  }
   return ModuleRef;
 }
 
@@ -2204,28 +2202,31 @@ llvm::DIType
 CGDebugInfo::getTypeASTRefOrNull(Decl *TyDecl, llvm::DIFile F) {
   if (!TyDecl || !TyDecl->isFromASTFile())
     return llvm::DIType();
- 
+
   llvm::DICompileUnit ModuleRef =
     getOrCreateModuleRef(TyDecl->getOwningModuleID());
 
   if (ModuleRef.Verify()) {
-    SmallString<256> buf;
-    index::generateUSRForDecl(TyDecl, buf);
     unsigned Tag = 0;
-    if (auto *RD = dyn_cast<RecordDecl>(TyDecl))
+    if (auto *RD = dyn_cast<RecordDecl>(TyDecl)) {
+      if (!RD->getDefinition())
+        return llvm::DIType();
       Tag = getTagForRecord(RD);
-    else if (isa<ObjCInterfaceDecl>(TyDecl))
+    } else if (auto *ID = dyn_cast<ObjCInterfaceDecl>(TyDecl)) {
+      if (!ID->getDefinition())
+        return llvm::DIType();
       Tag = llvm::dwarf::DW_TAG_structure_type;
-    else if (isa<EnumDecl>(TyDecl))
+    } else if (auto *ED = dyn_cast<EnumDecl>(TyDecl)) {
+      if (!ED->getDefinition())
+        return llvm::DIType();
       Tag = llvm::dwarf::DW_TAG_enumeration_type;
-    else if (isa<TypedefDecl>(TyDecl))
+    } else if (isa<TypedefDecl>(TyDecl))
       // Typedef types don't yet have a UID.
       return llvm::DIType();
-    if (!Tag) {
-      TyDecl->dump();
-      llvm::errs()<<buf.str()<<"\n";
-      assert(Tag);
-    }
+    if (!Tag)
+      llvm_unreachable("unhandled tag");
+    SmallString<256> buf;
+    index::generateUSRForDecl(TyDecl, buf);
     return DBuilder.createExternalTypeRef(Tag,
         DBuilder.createFile(ModuleRef.getSplitDebugFilename(), ""), buf.str());
   }
