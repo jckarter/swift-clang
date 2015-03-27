@@ -2238,6 +2238,8 @@ static bool mergeDeclAttribute(Sema &S, NamedDecl *D,
     NewAttr = nullptr;
   else if (isa<DeprecatedAttr>(Attr) && Override)
     NewAttr = nullptr;
+  else if (isa<SwiftPrivateAttr>(Attr) && Override)
+    NewAttr = nullptr;
   else if (Attr->duplicatesAllowed() || !DeclHasAttr(D, Attr))
     NewAttr = cast<InheritableAttr>(Attr->clone(S.Context));
 

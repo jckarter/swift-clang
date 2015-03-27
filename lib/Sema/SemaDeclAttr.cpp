@@ -4950,6 +4950,11 @@ static void ProcessDeclAttribute(Sema &S, Scope *scope, Decl *D,
   case AttributeList::AT_TypeTagForDatatype:
     handleTypeTagForDatatypeAttr(S, D, Attr);
     break;
+
+  // Swift attributes.
+  case AttributeList::AT_SwiftPrivate:
+    handleSimpleAttribute<SwiftPrivateAttr>(S, D, Attr);
+    break;
   }
 }
 

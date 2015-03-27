@@ -1214,6 +1214,11 @@ def Regparm : TypeAttr {
   let Documentation = [RegparmDocs];
 }
 
+def SwiftPrivate : InheritableAttr {
+  let Spellings = [GCC<"swift_private">];
+  let Documentation = [Undocumented];
+}
+
 def ReqdWorkGroupSize : InheritableAttr {
   let Spellings = [GNU<"reqd_work_group_size">];
   let Args = [UnsignedArgument<"XDim">, UnsignedArgument<"YDim">,
