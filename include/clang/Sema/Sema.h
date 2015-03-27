@@ -948,7 +948,7 @@ public:
 
   /// Method selectors used in a \@selector expression. Used for implementation
   /// of -Wselector.
-  llvm::DenseMap<Selector, SourceLocation> ReferencedSelectors;
+  llvm::MapVector<Selector, SourceLocation> ReferencedSelectors;
 
   /// Kinds of C++ special members.
   enum CXXSpecialMember {
@@ -5428,7 +5428,8 @@ public:
                                 SourceLocation ModulePrivateLoc,
                                 SourceLocation FriendLoc,
                                 unsigned NumOuterTemplateParamLists,
-                            TemplateParameterList **OuterTemplateParamLists);
+                            TemplateParameterList **OuterTemplateParamLists,
+                                bool *SkipBody = nullptr);
 
   void translateTemplateArguments(const ASTTemplateArgsPtr &In,
                                   TemplateArgumentListInfo &Out);
