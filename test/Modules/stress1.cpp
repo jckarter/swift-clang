@@ -15,7 +15,7 @@
 // RUN:   -emit-module -fmodule-name=m00 -o %t/m00_check.pcm \
 // RUN:   Inputs/stress1/module.modulemap
 //
-// FIXME: diff %t/m00.pcm %t/m00_check.pcm
+// RUN: diff %t/m00.pcm %t/m00_check.pcm
 //
 // RUN: %clang_cc1 -fmodules -x c++ -std=c++11 -fdelayed-template-parsing \
 // RUN:   -I Inputs/stress1 \
@@ -31,7 +31,7 @@
 // RUN:   -emit-module -fmodule-name=m01 -o %t/m01_check.pcm \
 // RUN:   Inputs/stress1/module.modulemap
 //
-// FIXME: diff %t/m01.pcm %t/m01_check.pcm
+// RUN: diff %t/m01.pcm %t/m01_check.pcm
 //
 // RUN: %clang_cc1 -fmodules -x c++ -std=c++11 \
 // RUN:   -I Inputs/stress1 \
@@ -69,7 +69,7 @@
 // RUN:   -emit-module -fmodule-name=merge00 -o %t/merge00_check.pcm \
 // RUN:   Inputs/stress1/module.modulemap
 //
-// FIXME: diff %t/merge00.pcm %t/merge00_check.pcm
+// RUN: diff %t/merge00.pcm %t/merge00_check.pcm
 //
 // RUN: %clang_cc1 -fmodules -x c++ -std=c++11 \
 // RUN:   -I Inputs/stress1 \
