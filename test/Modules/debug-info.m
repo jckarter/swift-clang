@@ -20,7 +20,6 @@
 @end
 
 // CHECK-AST: DW_TAG_compile_unit
-// CHECK-AST: DW_AT_GNU_dwo_id
 // CHECK-AST: DW_TAG_structure_type
 // CHECK-AST: DW_AT_name {{.*}}"A"
 // CHECK-AST: DW_TAG_subprogram

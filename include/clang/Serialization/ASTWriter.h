@@ -69,8 +69,6 @@ class Token;
 class VersionTuple;
 class ASTUnresolvedSet;
 
-typedef unsigned ASTFileSignature;
-
 namespace SrcMgr { class SLocEntry; }
 
 /// \brief Writes an AST file containing the contents of a translation unit.
@@ -88,8 +86,6 @@ public:
   friend class ASTDeclWriter;
   friend class ASTStmtWriter;
 private:
-  ASTFileSignature Signature;
-  
   /// \brief Map that provides the ID numbers of each type within the
   /// output stream, plus those deserialized from a chained PCH.
   ///
@@ -565,8 +561,6 @@ public:
   /// the given bitstream.
   ASTWriter(llvm::BitstreamWriter &Stream);
   ~ASTWriter();
-
-  ASTFileSignature getSignature() const { return Signature; }
 
   const LangOptions &getLangOpts() const;
 

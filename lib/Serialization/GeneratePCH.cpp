@@ -38,7 +38,6 @@ PCHGenerator::PCHGenerator(const Preprocessor &PP,
     Writer(Stream),
     AllowASTWithErrors(AllowASTWithErrors) {
   Buffer->IsComplete = false;
-  Buffer->Signature = Writer.getSignature();
 }
 
 PCHGenerator::~PCHGenerator() {
