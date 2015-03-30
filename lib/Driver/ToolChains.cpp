@@ -355,6 +355,7 @@ void DarwinClang::AddLinkSanitizerLibArgs(const ArgList &Args,
     // Sanitizer runtime libraries requires C++.
     AddCXXStdlibLibArgs(Args, CmdArgs);
   }
+  // ASan is not supported on the WatchOS.
   assert(isTargetMacOS() || isTargetIOSSimulator() || isTargetIPhoneOS());
   StringRef OS = "";
   if (isTargetMacOS())
@@ -367,6 +368,10 @@ void DarwinClang::AddLinkSanitizerLibArgs(const ArgList &Args,
     OS = "iossim";
   if (isTargetIPhoneOS())
     OS = "ios";
+  if (isTargetTvOSSimulator())
+    OS = "tvossim";
+  if (isTargetTvOS())
+    OS = "tvos";
   assert(!OS.empty());
 
   AddLinkRuntimeLib(Args, CmdArgs, (Twine("libclang_rt.") + Sanitizer + "_" +
