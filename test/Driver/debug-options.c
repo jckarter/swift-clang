@@ -95,7 +95,7 @@
 // GLTO_ONLY: "-cc1"
 // GLTO_ONLY-NOT: "-g"
 // GLTO_ONLY: "-gline-tables-only"
-// GLsTO_ONLY-NOT: "-g"
+// GLTO_ONLY-NOT: "-g"
 //
 // GLTO_ONLY_DWARF2: "-cc1"
 // GLTO_ONLY_DWARF2-NOT: "-g"
@@ -130,4 +130,4 @@
 //
 // NOCI-NOT: "-dwarf-column-info"
 //
-// GEXTREFS: "-dwarf-ext-refs"
+// GEXTREFS: "-g" "-dwarf-ext-refs"
