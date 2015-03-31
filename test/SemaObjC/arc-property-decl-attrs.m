@@ -85,10 +85,12 @@
 #pragma clang assume_nonnull begin
 @interface rdar20152386: NSObject
 @property(nonatomic, weak) id delegate; // expected-error {{property attributes 'nonnull' and 'weak' are mutually exclusive}}
+@property(nonatomic, weak, readonly) id ReadDelegate; // no warning
 @end
 #pragma clang assume_nonnull end
 
 @interface rdar20152386_2: NSObject
 @property(nonatomic, weak, nonnull) id delegate; // expected-error {{property attributes 'nonnull' and 'weak' are mutually exclusive}}
+@property(nonatomic, weak, nonnull, readonly) id ReadDelegate; // no warning
 @end
 

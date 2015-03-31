@@ -2295,7 +2295,8 @@ void Sema::CheckObjCPropertyAttributes(Decl *PDecl,
       Attributes &= ~ObjCDeclSpec::DQ_PR_weak;
   }
 
-  if (Attributes & ObjCDeclSpec::DQ_PR_weak) {
+  if ((Attributes & ObjCDeclSpec::DQ_PR_weak) &&
+      !(Attributes & ObjCDeclSpec::DQ_PR_readonly)) {
     // 'weak' and 'nonnull' are mutually exclusive.
     if (auto nullability = PropertyTy->getNullability(Context)) {
       if (*nullability == NullabilityKind::NonNull)
