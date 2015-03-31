@@ -3360,11 +3360,10 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
                    /*Default*/ true))
     CmdArgs.push_back("-dwarf-column-info");
 
-  // FIXME: Move backend command line options to the module.
   if (Args.hasArg(options::OPT_gmodules)) {
-    CmdArgs.push_back("-g");
     CmdArgs.push_back("-dwarf-ext-refs");
   }
+  // FIXME: Move backend command line options to the module.
 
   // -gsplit-dwarf should turn on -g and enable the backend dwarf
   // splitting and extraction.
