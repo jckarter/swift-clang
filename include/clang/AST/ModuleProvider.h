@@ -31,7 +31,6 @@ class TargetOptions;
 
 struct ModuleBuffer {
   bool IsComplete;
-  uint64_t Signature;
   llvm::SmallVector<char, 0> Data;
 };
   

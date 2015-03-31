@@ -123,6 +123,11 @@ endif
 
 ifneq ($(TVOS_SDK),)
 RuntimeLibrary.darwin.Configs += cc_kext_tvos.a
+RuntimeLibrary.darwin.Configs += asan_tvos_dynamic.dylib
+endif
+
+ifneq ($(TVOSSIM_SDK),)
+RuntimeLibrary.darwin.Configs += asan_tvossim_dynamic.dylib
 endif
 
 ifneq ($(WATCHOS_SDK)$(WATCHOSSIM_SDK),)

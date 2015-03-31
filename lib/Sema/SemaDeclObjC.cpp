@@ -1381,6 +1381,7 @@ void Sema::actOnObjCTypeArgsOrProtocolQualifiers(
       D.AddTypeInfo(DeclaratorChunk::getPointer(/*typeQuals=*/0, starLoc,
                                                 SourceLocation(),
                                                 SourceLocation(),
+                                                SourceLocation(),
                                                 SourceLocation()),
                     parsedAttrs,
                     starLoc);
