@@ -384,8 +384,9 @@ void CGDebugInfo::CreateCompileUnit() {
       CGM.getCodeGenOpts().DwarfDebugFlags, RuntimeVers, SplitDwarfFilename,
       DebugKind <= CodeGenOptions::DebugLineTablesOnly
           ? llvm::DIBuilder::LineTablesOnly
-          : llvm::DIBuilder::FullDebug,
-      CGM.getCodeGenOpts().SplitDwarfID,
+          : (CGM.getCodeGenOpts().ClangModule ?
+             llvm::DIBuilder::ClangModule : llvm::DIBuilder::FullDebug),
+      0,
       DebugKind != CodeGenOptions::LocTrackingOnly);
 }
 
@@ -608,7 +609,7 @@ static SmallString<256> getUniqueTagTypeName(const TagType *Ty,
                                              llvm::DICompileUnit TheCU) {
   SmallString<256> FullName;
 
-  if (TheCU.getDWOId() &&
+  if (CGM.getCodeGenOpts().ClangModule &&
       TheCU.getLanguage() != llvm::dwarf::DW_LANG_C_plus_plus) {
     index::generateUSRForDecl(Ty->getDecl(), FullName);
     return FullName;
@@ -1718,7 +1719,7 @@ llvm::DIType CGDebugInfo::CreateTypeDefinition(const ObjCInterfaceType *Ty,
 
   // For module debugging, get the UID of the type.
   SmallString<256> FullName;
-  if (TheCU.getDWOId() &&
+  if (CGM.getCodeGenOpts().ClangModule &&
       TheCU.getLanguage() != llvm::dwarf::DW_LANG_C_plus_plus)
     index::generateUSRForDecl(Ty->getDecl(), FullName);
 
