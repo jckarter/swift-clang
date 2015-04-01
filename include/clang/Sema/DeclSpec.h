@@ -1629,6 +1629,9 @@ private:
 
   /// Indicates whether this is an Objective-C instance variable.
   unsigned ObjCIvar : 1;
+    
+  /// Indicates whether this is an Objective-C 'weak' property.
+  unsigned ObjCWeakProperty : 1;
 
   /// \brief If this is the second or subsequent declarator in this declaration,
   /// the location of the comma before this declarator.
@@ -1647,7 +1650,8 @@ public:
       GroupingParens(false), FunctionDefinition(FDK_Declaration), 
       Redeclaration(false),
       Attrs(ds.getAttributePool().getFactory()), AsmLabel(nullptr),
-      InlineParamsUsed(false), Extension(false), ObjCIvar(false) {
+      InlineParamsUsed(false), Extension(false), ObjCIvar(false),
+      ObjCWeakProperty(false) {
   }
 
   ~Declarator() {
@@ -1726,6 +1730,7 @@ public:
     AsmLabel = nullptr;
     InlineParamsUsed = false;
     ObjCIvar = false;
+    ObjCWeakProperty = false;
     CommaLoc = SourceLocation();
     EllipsisLoc = SourceLocation();
   }
@@ -2136,6 +2141,9 @@ public:
 
   void setObjCIvar(bool Val = true) { ObjCIvar = Val; }
   bool isObjCIvar() const { return ObjCIvar; }
+    
+  void setObjCWeakProperty(bool Val = true) { ObjCWeakProperty = Val; }
+  bool isObjCWeakProperty() const { return ObjCWeakProperty; }
 
   void setInvalidType(bool Val = true) { InvalidType = Val; }
   bool isInvalidType() const {
