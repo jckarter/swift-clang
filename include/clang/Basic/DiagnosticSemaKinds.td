@@ -7070,6 +7070,8 @@ def note_neon_vector_initializer_non_portable_q : Note<
   "consider using vld1q_%0%1() to initialize a vector from memory, or "
   "vcombine_%0%1(vcreate_%0%1(), vcreate_%0%1()) to initialize from integer "
   "constants">;
+def err_systemz_invalid_tabort_code : Error<
+  "invalid transaction abort code">;
 
 def warn_broken_neon_vfma : Warning<
   "previous versions of Clang incorrectly interpreted vfmX_lane(a,b,c,i) as "
