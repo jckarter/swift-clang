@@ -3323,6 +3323,23 @@ OptimizeNoneAttr *Sema::mergeOptimizeNoneAttr(Decl *D, SourceRange Range,
                                           AttrSpellingListIndex);
 }
 
+SwiftNameAttr *Sema::mergeSwiftNameAttr(Decl *D, SourceRange Range,
+                                        StringRef Name, bool Override,
+                                        unsigned AttrSpellingListIndex) {
+  if (SwiftNameAttr *Inline = D->getAttr<SwiftNameAttr>()) {
+    if (Override) {
+      // FIXME: Warn about an incompatible override.
+      return nullptr;
+    }
+    Diag(Inline->getLocation(), diag::warn_attribute_ignored) << Inline;
+    Diag(Range.getBegin(), diag::note_conflicting_attribute);
+    D->dropAttr<SwiftNameAttr>();
+  }
+
+  return ::new (Context) SwiftNameAttr(Range, Context, Name,
+                                       AttrSpellingListIndex);
+}
+
 static void handleAlwaysInlineAttr(Sema &S, Decl *D,
                                    const AttributeList &Attr) {
   if (AlwaysInlineAttr *Inline = S.mergeAlwaysInlineAttr(
@@ -3983,6 +4000,102 @@ static void handleObjCPreciseLifetimeAttr(Sema &S, Decl *D,
   D->addAttr(::new (S.Context)
              ObjCPreciseLifetimeAttr(Attr.getRange(), S.Context,
                                      Attr.getAttributeSpellingListIndex()));
+}
+
+/// Returns true if \p MD returns \c instancetype or the type of the containing
+/// class.
+static bool hasInstanceResultType(ASTContext &Ctx, const ObjCMethodDecl *MD) {
+  if (MD->hasRelatedResultType())
+    return true;
+
+  const ObjCInterfaceDecl *Interface = MD->getClassInterface();
+  if (!Interface)
+    return false;
+
+  const auto *ResultTy = MD->getReturnType()->getAsObjCInterfacePointerType();
+  if (!ResultTy)
+    return false;
+
+  return ResultTy->getInterfaceDecl() == Interface;
+}
+
+/// Do a very rough check to make sure \p Name looks like a Swift method name,
+/// e.g. <code>init(foo:bar:baz:)</code> or <code>controllerForName(_:)</code>,
+/// and return the number of parameter names.
+static Optional<unsigned> countParamsInSwiftMethodName(StringRef Name) {
+  if (Name.back() != ')')
+    return None;
+
+  StringRef BaseName, Parameters;
+  std::tie(BaseName, Parameters) = Name.split('(');
+  if (!isValidIdentifier(BaseName) || BaseName == "_")
+    return None;
+
+  if (Parameters.empty())
+    return None;
+  Parameters = Parameters.drop_back(); // ')'
+  if (Parameters.empty())
+    return 0;
+
+  if (Parameters.back() != ':')
+    return None;
+
+  unsigned NumParamsSeen = 0;
+  do {
+    StringRef NextParam;
+    std::tie(NextParam, Parameters) = Parameters.split(':');
+
+    if (!isValidIdentifier(NextParam))
+      return None;
+    ++NumParamsSeen;
+  } while (!Parameters.empty());
+
+  return NumParamsSeen;
+}
+
+static void handleSwiftName(Sema &S, Decl *D, const AttributeList &Attr) {
+  StringRef Name;
+  SourceLocation ArgLoc;
+  if (!S.checkStringLiteralArgumentAttr(Attr, 0, Name, &ArgLoc))
+    return;
+
+  if (auto *Method = dyn_cast<ObjCMethodDecl>(D)) {
+    // swift_name only applies to factory methods for now.
+    if (!Method->isClassMethod() || !hasInstanceResultType(S.Context, Method)) {
+      S.Diag(Attr.getLoc(), diag::err_attr_swift_name_decl_kind)
+          << Attr.getName();
+      return;
+    }
+
+    Optional<unsigned> SwiftParamCount = countParamsInSwiftMethodName(Name);
+    if (!SwiftParamCount.hasValue()) {
+      S.Diag(ArgLoc, diag::err_attr_swift_name_method) << Attr.getName();
+      return;
+    }
+
+    unsigned ObjCParamCount = Method->getSelector().getNumArgs();
+    if (*SwiftParamCount != ObjCParamCount) {
+      S.Diag(ArgLoc, diag::err_attr_swift_name_num_params)
+          << (*SwiftParamCount < ObjCParamCount) << Attr.getName()
+          << ObjCParamCount << *SwiftParamCount;
+      return;
+    }
+
+  } else if (isa<EnumConstantDecl>(D) || isa<ObjCProtocolDecl>(D)) {
+    if (!isValidIdentifier(Name)) {
+      S.Diag(ArgLoc, diag::err_attr_swift_name_identifier) << Attr.getName();
+      return;
+    }
+
+  } else {
+    S.Diag(Attr.getLoc(), diag::err_attr_swift_name_decl_kind)
+        << Attr.getName();
+    return;
+  }
+
+  D->addAttr(::new (S.Context)
+             SwiftNameAttr(Attr.getRange(), S.Context, Name,
+                           Attr.getAttributeSpellingListIndex()));
 }
 
 //===----------------------------------------------------------------------===//
@@ -4954,6 +5067,9 @@ static void ProcessDeclAttribute(Sema &S, Scope *scope, Decl *D,
   // Swift attributes.
   case AttributeList::AT_SwiftPrivate:
     handleSimpleAttribute<SwiftPrivateAttr>(S, D, Attr);
+    break;
+  case AttributeList::AT_SwiftName:
+    handleSwiftName(S, D, Attr);
     break;
   }
 }

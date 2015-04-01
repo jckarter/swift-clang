@@ -2791,6 +2791,17 @@ def err_objc_bridged_related_known_method : Error<
 def err_objc_attr_protocol_requires_definition : Error<
   "attribute %0 can only be applied to @protocol definitions, not forward declarations">;
 
+// Swift attributes
+def err_attr_swift_name_decl_kind : Error<
+  "%0 attribute only applies to enum constants, protocols, and factory "
+  "methods">;
+  def err_attr_swift_name_identifier : Error<
+  "parameter of %0 attribute must be an ASCII identifier string">;
+def err_attr_swift_name_method : Error<
+  "parameter of %0 attribute must be a Swift method name string">;
+def err_attr_swift_name_num_params : Error<
+  "too %select{few|many}0 parameters in %1 attribute (expected %2; got %3)">;
+
 // Function Parameter Semantic Analysis.
 def err_param_with_void_type : Error<"argument may not have 'void' type">;
 def err_void_only_param : Error<

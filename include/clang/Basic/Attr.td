@@ -85,6 +85,9 @@ def NormalVar : SubsetSubject<Var,
 def NonBitField : SubsetSubject<Field,
                                 [{!S->isBitField()}]>;
 
+def ObjCClassMethod : SubsetSubject<ObjCMethod,
+                                    [{!S->isInstanceMethod()}]>;
+
 def ObjCInstanceMethod : SubsetSubject<ObjCMethod,
                                        [{S->isInstanceMethod()}]>;
 
@@ -1212,6 +1215,16 @@ def Regparm : TypeAttr {
   let Spellings = [GCC<"regparm">];
   let Args = [UnsignedArgument<"NumParams">];
   let Documentation = [RegparmDocs];
+}
+
+def SwiftName : InheritableAttr {
+  let Spellings = [GCC<"swift_name">];
+  let Args = [StringArgument<"Name">];
+  // Proper subject list disabled because of the custom error needed.
+  // Let's avoid merge conflicts for now.
+//  let Subjects = SubjectList<[EnumConstant, ObjCProtocol, ObjCClassMethod],
+//                             ErrorDiag, "ExpectedSwiftNameSubjects">;
+  let Documentation = [Undocumented];
 }
 
 def SwiftPrivate : InheritableAttr {
