@@ -3701,12 +3701,10 @@ CvtQTToAstBitMask(ObjCDeclSpec::ObjCDeclQualifier PQTVal) {
   return (Decl::ObjCDeclQualifier) (unsigned) PQTVal;
 }
 
-/// \brief Check whether the declared result type of the given Objective-C
-/// method declaration is compatible with the method's class.
-///
-static Sema::ResultTypeCompatibilityKind 
-CheckRelatedResultTypeCompatibility(Sema &S, ObjCMethodDecl *Method,
-                                    ObjCInterfaceDecl *CurrentClass) {
+Sema::ResultTypeCompatibilityKind
+Sema::checkRelatedResultTypeCompatibility(
+    const ObjCMethodDecl *Method,
+    const ObjCInterfaceDecl *CurrentClass) {
   QualType ResultType = Method->getReturnType();
 
   // If an Objective-C method inherits its related result type, then its 
@@ -4250,7 +4248,7 @@ Decl *Sema::ActOnMethodDeclaration(
   }
 
   ResultTypeCompatibilityKind RTC
-    = CheckRelatedResultTypeCompatibility(*this, ObjCMethod, CurrentClass);
+    = checkRelatedResultTypeCompatibility(ObjCMethod, CurrentClass);
 
   CheckObjCMethodOverrides(ObjCMethod, CurrentClass, RTC);
 
