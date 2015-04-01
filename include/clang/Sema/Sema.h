@@ -2000,6 +2000,9 @@ public:
                                 unsigned AttrSpellingListIndex);
   OptimizeNoneAttr *mergeOptimizeNoneAttr(Decl *D, SourceRange Range,
                                           unsigned AttrSpellingListIndex);
+  SwiftNameAttr *mergeSwiftNameAttr(Decl *D, SourceRange Range,
+                                    StringRef Name, bool Override,
+                                    unsigned AttrSpellingListIndex);
 
   /// \brief Describes the kind of merge to perform for availability
   /// attributes (including "deprecated", "unavailable", and "availability").
