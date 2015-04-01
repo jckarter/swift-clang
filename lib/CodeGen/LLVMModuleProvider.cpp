@@ -134,16 +134,15 @@ public:
 
   void Initialize(ASTContext &Context) override {
     Ctx = &Context;
-  }
-
-  bool HandleTopLevelDecl(DeclGroupRef D) override {
     TD.reset(new llvm::DataLayout(Ctx->getTargetInfo().getTargetDescription()));
     if (!Builder) { 
       Builder.reset(
         new CodeGen::CodeGenModule(*Ctx, HeaderSearchOpts, PreprocessorOpts,
             CodeGenOpts, *M, *TD, Diags));
     }
+  }
 
+  bool HandleTopLevelDecl(DeclGroupRef D) override {
     if (CodeGenOpts.getDebugInfo() > CodeGenOptions::NoDebugInfo) {
       // Collect all the debug info.
       for (auto *I : D) {
