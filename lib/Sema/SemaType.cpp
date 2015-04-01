@@ -3291,7 +3291,9 @@ static TypeSourceInfo *GetFullTypeForDeclarator(TypeProcessingState &state,
 
   // Are we in an assume-nonnull region?
   bool inAssumeNonNullRegion = false;
-  if (S.PP.getPragmaAssumeNonNullLoc().isValid()) {
+  if (S.PP.getPragmaAssumeNonNullLoc().isValid() &&
+      !state.getDeclarator().isObjCWeakProperty() &&
+      !S.deduceWeakPropertyFromType(T)) {
     inAssumeNonNullRegion = true;
     // Determine which file we saw the assume-nonnull region in.
     FileID file = getNullabilityCompletenessCheckFileID(
