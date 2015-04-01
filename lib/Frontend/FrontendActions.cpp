@@ -96,14 +96,15 @@ GeneratePCHAction::CreateASTConsumer(CompilerInstance &CI, StringRef InFile) {
                                                       Sysroot, Buffer));
 
   auto CGOpts = CI.getCodeGenOpts();
-  CGOpts.SplitDwarfFile = OutputFile+".dwo";
   // The debug info emitted by ModuleContainerGenerator is not affected by the
   // optimization level.
   CGOpts.EmitDeclMetadata = false;
   CGOpts.EmitGcovArcs = false;
   CGOpts.EmitGcovNotes = false;
   CGOpts.OptimizationLevel = 0;
+  CGOpts.ClangModule = true;
   CGOpts.setDebugInfo(CodeGenOptions::LimitedDebugInfo);
+  CGOpts.SplitDwarfFile = OutputFile;
   Consumers.push_back(CI.getModuleProvider().CreateModuleContainerGenerator(
       CI.getDiagnostics(), "PCH", CI.getHeaderSearchOpts(),
       CI.getPreprocessorOpts(), CGOpts, CI.getTargetOpts(), CI.getLangOpts(),
@@ -158,8 +159,9 @@ GenerateModuleAction::CreateASTConsumer(CompilerInstance &CI,
   CGOpts.EmitGcovArcs = false;
   CGOpts.EmitGcovNotes = false;
   CGOpts.OptimizationLevel = 0;
-  CGOpts.SplitDwarfFile = OutputFile;
+  CGOpts.ClangModule = true;
   CGOpts.setDebugInfo(CodeGenOptions::LimitedDebugInfo);
+  CGOpts.SplitDwarfFile = OutputFile;
   Consumers.push_back(CI.getModuleProvider().CreateModuleContainerGenerator(
       CI.getDiagnostics(), Module->getFullModuleName(),
       CI.getHeaderSearchOpts(), CI.getPreprocessorOpts(), CGOpts,
