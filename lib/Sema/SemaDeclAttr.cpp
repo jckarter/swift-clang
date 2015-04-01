@@ -3323,6 +3323,23 @@ OptimizeNoneAttr *Sema::mergeOptimizeNoneAttr(Decl *D, SourceRange Range,
                                           AttrSpellingListIndex);
 }
 
+SwiftNameAttr *Sema::mergeSwiftNameAttr(Decl *D, SourceRange Range,
+                                        StringRef Name, bool Override,
+                                        unsigned AttrSpellingListIndex) {
+  if (SwiftNameAttr *Inline = D->getAttr<SwiftNameAttr>()) {
+    if (Override) {
+      // FIXME: Warn about an incompatible override.
+      return nullptr;
+    }
+    Diag(Inline->getLocation(), diag::warn_attribute_ignored) << Inline;
+    Diag(Range.getBegin(), diag::note_conflicting_attribute);
+    D->dropAttr<SwiftNameAttr>();
+  }
+
+  return ::new (Context) SwiftNameAttr(Range, Context, Name,
+                                       AttrSpellingListIndex);
+}
+
 static void handleAlwaysInlineAttr(Sema &S, Decl *D,
                                    const AttributeList &Attr) {
   if (AlwaysInlineAttr *Inline = S.mergeAlwaysInlineAttr(
@@ -3983,6 +4000,105 @@ static void handleObjCPreciseLifetimeAttr(Sema &S, Decl *D,
   D->addAttr(::new (S.Context)
              ObjCPreciseLifetimeAttr(Attr.getRange(), S.Context,
                                      Attr.getAttributeSpellingListIndex()));
+}
+
+/// Do a very rough check to make sure \p Name looks like a Swift method name,
+/// e.g. <code>init(foo:bar:baz:)</code> or <code>controllerForName(_:)</code>,
+/// and return the number of parameter names.
+static bool validateSwiftMethodName(StringRef Name,
+                                    unsigned &ParamCount,
+                                    bool &IsSingleParamInit) {
+  ParamCount = 0;
+  if (Name.back() != ')')
+    return false;
+
+  StringRef BaseName, Parameters;
+  std::tie(BaseName, Parameters) = Name.split('(');
+  if (!isValidIdentifier(BaseName) || BaseName == "_")
+    return false;
+
+  if (Parameters.empty())
+    return false;
+  Parameters = Parameters.drop_back(); // ')'
+  if (Parameters.empty())
+    return true;
+
+  if (Parameters.back() != ':')
+    return false;
+
+  StringRef NextParam;
+  do {
+    std::tie(NextParam, Parameters) = Parameters.split(':');
+
+    if (!isValidIdentifier(NextParam))
+      return false;
+    ++ParamCount;
+  } while (!Parameters.empty());
+
+  IsSingleParamInit =
+      (ParamCount == 1 && BaseName == "init" && NextParam != "_");
+
+  return true;
+}
+
+static void handleSwiftName(Sema &S, Decl *D, const AttributeList &Attr) {
+  StringRef Name;
+  SourceLocation ArgLoc;
+  if (!S.checkStringLiteralArgumentAttr(Attr, 0, Name, &ArgLoc))
+    return;
+
+  if (auto *Method = dyn_cast<ObjCMethodDecl>(D)) {
+    // swift_name only applies to factory methods for now.
+    if (!Method->isClassMethod()) {
+      S.Diag(Attr.getLoc(), diag::err_attr_swift_name_decl_kind)
+          << Attr.getName();
+      return;
+    }
+
+    bool HasRelatedResultType = Method->hasRelatedResultType();
+    if (!HasRelatedResultType) {
+      const ObjCInterfaceDecl *Interface = Method->getClassInterface();
+      Sema::ResultTypeCompatibilityKind RTC =
+          S.checkRelatedResultTypeCompatibility(Method, Interface);
+      HasRelatedResultType = (RTC == Sema::RTC_Compatible);
+    }
+    if (!HasRelatedResultType) {
+      S.Diag(Attr.getLoc(), diag::err_attr_swift_name_decl_kind)
+          << Attr.getName();
+      return;
+    }
+
+    bool IsSingleParamInit;
+    unsigned SwiftParamCount;
+    if (!validateSwiftMethodName(Name, SwiftParamCount, IsSingleParamInit)) {
+      S.Diag(ArgLoc, diag::err_attr_swift_name_method) << Attr.getName();
+      return;
+    }
+
+    unsigned ObjCParamCount = Method->getSelector().getNumArgs();
+    if (SwiftParamCount != ObjCParamCount &&
+        !(IsSingleParamInit && ObjCParamCount == 0)) {
+      S.Diag(ArgLoc, diag::err_attr_swift_name_num_params)
+          << (SwiftParamCount > ObjCParamCount) << Attr.getName()
+          << ObjCParamCount << SwiftParamCount;
+      return;
+    }
+
+  } else if (isa<EnumConstantDecl>(D) || isa<ObjCProtocolDecl>(D)) {
+    if (!isValidIdentifier(Name)) {
+      S.Diag(ArgLoc, diag::err_attr_swift_name_identifier) << Attr.getName();
+      return;
+    }
+
+  } else {
+    S.Diag(Attr.getLoc(), diag::err_attr_swift_name_decl_kind)
+        << Attr.getName();
+    return;
+  }
+
+  D->addAttr(::new (S.Context)
+             SwiftNameAttr(Attr.getRange(), S.Context, Name,
+                           Attr.getAttributeSpellingListIndex()));
 }
 
 //===----------------------------------------------------------------------===//
@@ -4949,6 +5065,14 @@ static void ProcessDeclAttribute(Sema &S, Scope *scope, Decl *D,
     break;
   case AttributeList::AT_TypeTagForDatatype:
     handleTypeTagForDatatypeAttr(S, D, Attr);
+    break;
+
+  // Swift attributes.
+  case AttributeList::AT_SwiftPrivate:
+    handleSimpleAttribute<SwiftPrivateAttr>(S, D, Attr);
+    break;
+  case AttributeList::AT_SwiftName:
+    handleSwiftName(S, D, Attr);
     break;
   }
 }

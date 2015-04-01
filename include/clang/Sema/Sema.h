@@ -2010,6 +2010,9 @@ public:
                                 unsigned AttrSpellingListIndex);
   OptimizeNoneAttr *mergeOptimizeNoneAttr(Decl *D, SourceRange Range,
                                           unsigned AttrSpellingListIndex);
+  SwiftNameAttr *mergeSwiftNameAttr(Decl *D, SourceRange Range,
+                                    StringRef Name, bool Override,
+                                    unsigned AttrSpellingListIndex);
 
   /// \brief Describes the kind of merge to perform for availability
   /// attributes (including "deprecated", "unavailable", and "availability").
@@ -7367,6 +7370,12 @@ public:
     RTC_Unknown
   };
 
+  /// Check whether the declared result type of the given Objective-C
+  /// method declaration is compatible with the method's class.
+  ResultTypeCompatibilityKind
+  checkRelatedResultTypeCompatibility(const ObjCMethodDecl *Method,
+                                      const ObjCInterfaceDecl *CurrentClass);
+
   void CheckObjCMethodOverrides(ObjCMethodDecl *ObjCMethod,
                                 ObjCInterfaceDecl *CurrentClass,
                                 ResultTypeCompatibilityKind RTC);
@@ -8635,6 +8644,7 @@ private:
 
   bool CheckAArch64BuiltinFunctionCall(unsigned BuiltinID, CallExpr *TheCall);
   bool CheckMipsBuiltinFunctionCall(unsigned BuiltinID, CallExpr *TheCall);
+  bool CheckSystemZBuiltinFunctionCall(unsigned BuiltinID, CallExpr *TheCall);
   bool CheckX86BuiltinFunctionCall(unsigned BuiltinID, CallExpr *TheCall);
   bool CheckPPCBuiltinFunctionCall(unsigned BuiltinID, CallExpr *TheCall);
   

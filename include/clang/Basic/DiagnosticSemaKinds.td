@@ -2791,6 +2791,17 @@ def err_objc_bridged_related_known_method : Error<
 def err_objc_attr_protocol_requires_definition : Error<
   "attribute %0 can only be applied to @protocol definitions, not forward declarations">;
 
+// Swift attributes
+def err_attr_swift_name_decl_kind : Error<
+  "%0 attribute only applies to enum constants, protocols, and factory "
+  "methods">;
+def err_attr_swift_name_identifier : Error<
+  "parameter of %0 attribute must be an ASCII identifier string">;
+def err_attr_swift_name_method : Error<
+  "parameter of %0 attribute must be a Swift method name string">;
+def err_attr_swift_name_num_params : Error<
+  "too %select{few|many}0 parameters in %1 attribute (expected %2; got %3)">;
+
 // Function Parameter Semantic Analysis.
 def err_param_with_void_type : Error<"argument may not have 'void' type">;
 def err_void_only_param : Error<
@@ -7059,6 +7070,8 @@ def note_neon_vector_initializer_non_portable_q : Note<
   "consider using vld1q_%0%1() to initialize a vector from memory, or "
   "vcombine_%0%1(vcreate_%0%1(), vcreate_%0%1()) to initialize from integer "
   "constants">;
+def err_systemz_invalid_tabort_code : Error<
+  "invalid transaction abort code">;
 
 def warn_broken_neon_vfma : Warning<
   "previous versions of Clang incorrectly interpreted vfmX_lane(a,b,c,i) as "
@@ -7522,6 +7535,8 @@ def err_omp_atomic_capture_not_compound_statement : Error<
   " '{v = x; x = x binop expr;}', '{v = x; x = expr binop x;}', '{x = x binop expr; v = x;}', '{x = expr binop x; v = x;}' or '{v = x; x = expr;}',"
   " '{v = x; x++;}', '{v = x; ++x;}', '{++x; v = x;}', '{x++; v = x;}', '{v = x; x--;}', '{v = x; --x;}', '{--x; v = x;}', '{x--; v = x;}'"
   " where x is an l-value expression with scalar type">;
+def note_omp_atomic_capture: Note<
+  "%select{expected assignment expression|expected compound statement|expected exactly two expression statements|expected in right hand side of the first expression}0">;
 def err_omp_atomic_several_clauses : Error<
   "directive '#pragma omp atomic' cannot contain more than one 'read', 'write', 'update' or 'capture' clause">;
 def note_omp_atomic_previous_clause : Note<
