@@ -4002,55 +4002,43 @@ static void handleObjCPreciseLifetimeAttr(Sema &S, Decl *D,
                                      Attr.getAttributeSpellingListIndex()));
 }
 
-/// Returns true if \p MD returns \c instancetype or the type of the containing
-/// class.
-static bool hasInstanceResultType(ASTContext &Ctx, const ObjCMethodDecl *MD) {
-  if (MD->hasRelatedResultType())
-    return true;
-
-  const ObjCInterfaceDecl *Interface = MD->getClassInterface();
-  if (!Interface)
-    return false;
-
-  const auto *ResultTy = MD->getReturnType()->getAsObjCInterfacePointerType();
-  if (!ResultTy)
-    return false;
-
-  return ResultTy->getInterfaceDecl() == Interface;
-}
-
 /// Do a very rough check to make sure \p Name looks like a Swift method name,
 /// e.g. <code>init(foo:bar:baz:)</code> or <code>controllerForName(_:)</code>,
 /// and return the number of parameter names.
-static Optional<unsigned> countParamsInSwiftMethodName(StringRef Name) {
+static bool validateSwiftMethodName(StringRef Name,
+                                    unsigned &ParamCount,
+                                    bool &IsSingleParamInit) {
+  ParamCount = 0;
   if (Name.back() != ')')
-    return None;
+    return false;
 
   StringRef BaseName, Parameters;
   std::tie(BaseName, Parameters) = Name.split('(');
   if (!isValidIdentifier(BaseName) || BaseName == "_")
-    return None;
+    return false;
 
   if (Parameters.empty())
-    return None;
+    return false;
   Parameters = Parameters.drop_back(); // ')'
   if (Parameters.empty())
-    return 0;
+    return true;
 
   if (Parameters.back() != ':')
-    return None;
+    return false;
 
-  unsigned NumParamsSeen = 0;
+  StringRef NextParam;
   do {
-    StringRef NextParam;
     std::tie(NextParam, Parameters) = Parameters.split(':');
 
     if (!isValidIdentifier(NextParam))
-      return None;
-    ++NumParamsSeen;
+      return false;
+    ++ParamCount;
   } while (!Parameters.empty());
 
-  return NumParamsSeen;
+  IsSingleParamInit =
+      (ParamCount == 1 && BaseName == "init" && NextParam != "_");
+
+  return true;
 }
 
 static void handleSwiftName(Sema &S, Decl *D, const AttributeList &Attr) {
@@ -4061,23 +4049,38 @@ static void handleSwiftName(Sema &S, Decl *D, const AttributeList &Attr) {
 
   if (auto *Method = dyn_cast<ObjCMethodDecl>(D)) {
     // swift_name only applies to factory methods for now.
-    if (!Method->isClassMethod() || !hasInstanceResultType(S.Context, Method)) {
+    if (!Method->isClassMethod()) {
       S.Diag(Attr.getLoc(), diag::err_attr_swift_name_decl_kind)
           << Attr.getName();
       return;
     }
 
-    Optional<unsigned> SwiftParamCount = countParamsInSwiftMethodName(Name);
-    if (!SwiftParamCount.hasValue()) {
+    bool HasRelatedResultType = Method->hasRelatedResultType();
+    if (!HasRelatedResultType) {
+      const ObjCInterfaceDecl *Interface = Method->getClassInterface();
+      Sema::ResultTypeCompatibilityKind RTC =
+          S.checkRelatedResultTypeCompatibility(Method, Interface);
+      HasRelatedResultType = (RTC == Sema::RTC_Compatible);
+    }
+    if (!HasRelatedResultType) {
+      S.Diag(Attr.getLoc(), diag::err_attr_swift_name_decl_kind)
+          << Attr.getName();
+      return;
+    }
+
+    bool IsSingleParamInit;
+    unsigned SwiftParamCount;
+    if (!validateSwiftMethodName(Name, SwiftParamCount, IsSingleParamInit)) {
       S.Diag(ArgLoc, diag::err_attr_swift_name_method) << Attr.getName();
       return;
     }
 
     unsigned ObjCParamCount = Method->getSelector().getNumArgs();
-    if (*SwiftParamCount != ObjCParamCount) {
+    if (SwiftParamCount != ObjCParamCount &&
+        !(IsSingleParamInit && ObjCParamCount == 0)) {
       S.Diag(ArgLoc, diag::err_attr_swift_name_num_params)
-          << (*SwiftParamCount < ObjCParamCount) << Attr.getName()
-          << ObjCParamCount << *SwiftParamCount;
+          << (SwiftParamCount > ObjCParamCount) << Attr.getName()
+          << ObjCParamCount << SwiftParamCount;
       return;
     }
 

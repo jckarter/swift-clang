@@ -7360,6 +7360,12 @@ public:
     RTC_Unknown
   };
 
+  /// Check whether the declared result type of the given Objective-C
+  /// method declaration is compatible with the method's class.
+  ResultTypeCompatibilityKind
+  checkRelatedResultTypeCompatibility(const ObjCMethodDecl *Method,
+                                      const ObjCInterfaceDecl *CurrentClass);
+
   void CheckObjCMethodOverrides(ObjCMethodDecl *ObjCMethod,
                                 ObjCInterfaceDecl *CurrentClass,
                                 ResultTypeCompatibilityKind RTC);
