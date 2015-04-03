@@ -3072,6 +3072,8 @@ namespace {
     SingleLevelPointer,
     // Multi-level pointer (of any pointer kind).
     MultiLevelPointer,
+    // CFFooRef*
+    MaybePointerToCFRef,
     // CFErrorRef*
     CFErrorRefPointer,
     // NSError**
@@ -3213,6 +3215,9 @@ static PointerDeclaratorKind classifyPointerDeclarator(Sema &S,
   case 1:
     return PointerDeclaratorKind::SingleLevelPointer;
 
+  case 2:
+    return PointerDeclaratorKind::MaybePointerToCFRef;
+
   default:
     return PointerDeclaratorKind::MultiLevelPointer;
   }
@@ -3288,6 +3293,8 @@ static TypeSourceInfo *GetFullTypeForDeclarator(TypeProcessingState &state,
   // Determine whether we should infer __nonnull on pointer types.
   Optional<NullabilityKind> inferNullability;
   bool inferNullabilityCS = false;
+  bool inferNullabilityInnerOnly = false;
+  bool inferNullabilityInnerOnlyComplete = false;
 
   // Are we in an assume-nonnull region?
   bool inAssumeNonNullRegion = false;
@@ -3399,6 +3406,31 @@ static TypeSourceInfo *GetFullTypeForDeclarator(TypeProcessingState &state,
         if (isFunctionOrMethod && inAssumeNonNullRegion)
           inferNullability = NullabilityKind::Nullable;
         break;
+
+      case PointerDeclaratorKind::MaybePointerToCFRef:
+        if (isFunctionOrMethod) {
+          // On pointer-to-pointer parameters marked cf_returns_retained or
+          // cf_returns_not_retained, if the outer pointer is explicit then
+          // infer the inner pointer as __nullable.
+          auto hasCFReturnsAttr = [](const AttributeList *NextAttr) -> bool {
+            while (NextAttr) {
+              if (NextAttr->getKind() == AttributeList::AT_CFReturnsRetained ||
+                  NextAttr->getKind() == AttributeList::AT_CFReturnsNotRetained)
+                return true;
+              NextAttr = NextAttr->getNext();
+            }
+            return false;
+          };
+          if (const auto *InnermostChunk = D.getInnermostNonParenChunk()) {
+            if (hasCFReturnsAttr(D.getAttributes()) ||
+                hasCFReturnsAttr(InnermostChunk->getAttrs()) ||
+                hasCFReturnsAttr(D.getDeclSpec().getAttributes().getList())) {
+              inferNullability = NullabilityKind::Nullable;
+              inferNullabilityInnerOnly = true;
+            }
+          }
+        }
+        break;
       }
       break;
 
@@ -3439,7 +3471,7 @@ static TypeSourceInfo *GetFullTypeForDeclarator(TypeProcessingState &state,
       return nullptr;
 
     // If we're supposed to infer nullability, do so now.
-    if (inferNullability) {
+    if (inferNullability && !inferNullabilityInnerOnlyComplete) {
       AttributeList::Syntax syntax
         = inferNullabilityCS ? AttributeList::AS_ContextSensitiveKeyword
                              : AttributeList::AS_Keyword;
@@ -3453,6 +3485,9 @@ static TypeSourceInfo *GetFullTypeForDeclarator(TypeProcessingState &state,
                                            syntax);
 
       spliceAttrIntoList(*nullabilityAttr, attrs);
+
+      if (inferNullabilityInnerOnly)
+        inferNullabilityInnerOnlyComplete = true;
       return nullabilityAttr;
     }
 
