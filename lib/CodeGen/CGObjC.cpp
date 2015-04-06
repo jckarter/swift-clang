@@ -101,8 +101,8 @@ llvm::Value *CodeGenFunction::EmitObjCCollectionLiteral(const Expr *E,
                                    ArrayType::Normal, /*IndexTypeQuals=*/0);
 
   // Allocate the temporary array(s).
-  llvm::Value *Objects = CreateMemTemp(ElementArrayType, "objects");
-  llvm::Value *Keys = nullptr;
+  llvm::AllocaInst *Objects = CreateMemTemp(ElementArrayType, "objects");
+  llvm::AllocaInst *Keys = nullptr;
   if (DLE)
     Keys = CreateMemTemp(ElementArrayType, "keys");
   
@@ -118,10 +118,9 @@ llvm::Value *CodeGenFunction::EmitObjCCollectionLiteral(const Expr *E,
     if (ALE) {
       // Emit the element and store it to the appropriate array slot.
       const Expr *Rhs = ALE->getElement(i);
-      LValue LV = LValue::MakeAddr(Builder.CreateStructGEP(Objects, i),
-                                   ElementType,
-                                   Context.getTypeAlignInChars(Rhs->getType()),
-                                   Context);
+      LValue LV = LValue::MakeAddr(
+          Builder.CreateStructGEP(Objects->getAllocatedType(), Objects, i),
+          ElementType, Context.getTypeAlignInChars(Rhs->getType()), Context);
 
       llvm::Value *value = EmitScalarExpr(Rhs);
       EmitStoreThroughLValue(RValue::get(value), LV, true);
@@ -131,19 +130,17 @@ llvm::Value *CodeGenFunction::EmitObjCCollectionLiteral(const Expr *E,
     } else {      
       // Emit the key and store it to the appropriate array slot.
       const Expr *Key = DLE->getKeyValueElement(i).Key;
-      LValue KeyLV = LValue::MakeAddr(Builder.CreateStructGEP(Keys, i),
-                                      ElementType,
-                                    Context.getTypeAlignInChars(Key->getType()),
-                                      Context);
+      LValue KeyLV = LValue::MakeAddr(
+          Builder.CreateStructGEP(Keys->getAllocatedType(), Keys, i),
+          ElementType, Context.getTypeAlignInChars(Key->getType()), Context);
       llvm::Value *keyValue = EmitScalarExpr(Key);
       EmitStoreThroughLValue(RValue::get(keyValue), KeyLV, /*isInit=*/true);
 
       // Emit the value and store it to the appropriate array slot.
-      const Expr *Value = DLE->getKeyValueElement(i).Value;  
-      LValue ValueLV = LValue::MakeAddr(Builder.CreateStructGEP(Objects, i), 
-                                        ElementType,
-                                  Context.getTypeAlignInChars(Value->getType()),
-                                        Context);
+      const Expr *Value = DLE->getKeyValueElement(i).Value;
+      LValue ValueLV = LValue::MakeAddr(
+          Builder.CreateStructGEP(Objects->getAllocatedType(), Objects, i),
+          ElementType, Context.getTypeAlignInChars(Value->getType()), Context);
       llvm::Value *valueValue = EmitScalarExpr(Value);
       EmitStoreThroughLValue(RValue::get(valueValue), ValueLV, /*isInit=*/true);
       if (TrackNeededObjects) {
@@ -1432,7 +1429,7 @@ void CodeGenFunction::EmitObjCForCollectionStmt(const ObjCForCollectionStmt &S){
 
   // Fast enumeration state.
   QualType StateTy = CGM.getObjCFastEnumerationStateType();
-  llvm::Value *StatePtr = CreateMemTemp(StateTy, "state.ptr");
+  llvm::AllocaInst *StatePtr = CreateMemTemp(StateTy, "state.ptr");
   EmitNullInitialization(StatePtr, StateTy);
 
   // Number of elements in the items array.
@@ -1516,8 +1513,8 @@ void CodeGenFunction::EmitObjCForCollectionStmt(const ObjCForCollectionStmt &S){
   // Save the initial mutations value.  This is the value at an
   // address that was written into the state object by
   // countByEnumeratingWithState:objects:count:.
-  llvm::Value *StateMutationsPtrPtr =
-    Builder.CreateStructGEP(StatePtr, 2, "mutationsptr.ptr");
+  llvm::Value *StateMutationsPtrPtr = Builder.CreateStructGEP(
+      StatePtr->getAllocatedType(), StatePtr, 2, "mutationsptr.ptr");
   llvm::Value *StateMutationsPtr = Builder.CreateLoad(StateMutationsPtrPtr,
                                                       "mutationsptr");
 
@@ -1597,8 +1594,8 @@ void CodeGenFunction::EmitObjCForCollectionStmt(const ObjCForCollectionStmt &S){
   // Fetch the buffer out of the enumeration state.
   // TODO: this pointer should actually be invariant between
   // refreshes, which would help us do certain loop optimizations.
-  llvm::Value *StateItemsPtr =
-    Builder.CreateStructGEP(StatePtr, 1, "stateitems.ptr");
+  llvm::Value *StateItemsPtr = Builder.CreateStructGEP(
+      StatePtr->getAllocatedType(), StatePtr, 1, "stateitems.ptr");
   llvm::Value *EnumStateItems =
     Builder.CreateLoad(StateItemsPtr, "stateitems");
 
