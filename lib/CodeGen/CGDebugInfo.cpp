@@ -2126,7 +2126,7 @@ llvm::DIType CGDebugInfo::getOrCreateType(QualType Ty, llvm::DIFile Unit) {
 
   void* TyPtr = Ty.getAsOpaquePtr();
   // Otherwise create the type.
-  if (!Res.Verify())
+  if (!Res)
     Res = CreateTypeNode(Ty, Unit);
 
 
@@ -2206,7 +2206,7 @@ CGDebugInfo::getTypeASTRefOrNull(Decl *TyDecl, llvm::DIFile F) {
   llvm::DICompileUnit ModuleRef =
     getOrCreateModuleRef(TyDecl->getOwningModuleID());
 
-  if (ModuleRef.Verify()) {
+  if (ModuleRef) {
     unsigned Tag = 0;
     if (auto *RD = dyn_cast<RecordDecl>(TyDecl)) {
       if (!RD->getDefinition())
