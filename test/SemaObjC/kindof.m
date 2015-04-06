@@ -289,3 +289,16 @@ void implicit_convert_array(NSArray<__kindof NSString *> *kindofStringsArray,
   kindofStringsArrayArray = stringsArrayArray;
   stringsArrayArray = kindofStringsArrayArray;
 }
+
+// ---------------------------------------------------------------------------
+// __kindof + nullability
+// ---------------------------------------------------------------------------
+
+void testNullability() {
+  // The base type being a pointer type tickles the bug.
+  extern __kindof id <NSCopying> __nonnull getSomeCopyable();
+  NSString *string = getSomeCopyable(); // no-warning
+
+  void processCopyable(__typeof(getSomeCopyable()) string);
+  processCopyable(0); // expected-warning{{null passed to a callee that requires a non-null argument}}
+}

@@ -5564,8 +5564,13 @@ bool Sema::checkObjCKindOfType(QualType &type, SourceLocation loc) {
                                                  /*isKindOf=*/true);
 
   // If we started with an object pointer type, rebuild it.
-  if (ptrType)
+  if (ptrType) {
     equivType = Context.getObjCObjectPointerType(equivType);
+    if (auto nullability = type->getNullability(Context)) {
+      auto attrKind = AttributedType::getNullabilityAttrKind(*nullability);
+      equivType = Context.getAttributedType(attrKind, equivType, equivType);
+    }
+  }
 
   // Build the attributed type to record where __kindof occurred.
   type = Context.getAttributedType(AttributedType::attr_objc_kindof, 
