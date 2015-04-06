@@ -44,7 +44,7 @@ class ModuleContainerGenerator : public ASTConsumer {
   CodeGenOptions CodeGenOpts;
   const TargetOptions TargetOpts;
   const LangOptions LangOpts;
-  llvm::LLVMContext VMContext;
+  std::unique_ptr<llvm::LLVMContext> VMContext;
   std::unique_ptr<llvm::Module> M;
   std::unique_ptr<CodeGen::CodeGenModule> Builder;
   raw_ostream *OS;
@@ -138,7 +138,9 @@ public:
       std::shared_ptr<ModuleBuffer> Buffer)
       : Diags(diags), HeaderSearchOpts(HSO), PreprocessorOpts(PPO),
         CodeGenOpts(CGO), TargetOpts(TO), LangOpts(LO),
-        M(new llvm::Module(ModuleName, VMContext)), OS(OS), Buffer(Buffer) {}
+        VMContext(new llvm::LLVMContext()),
+        M(new llvm::Module(ModuleName, *VMContext)), OS(OS),
+        Buffer(Buffer) {}
 
   virtual ~ModuleContainerGenerator() {}
 
@@ -196,10 +198,11 @@ public:
     assert(Buffer->IsComplete && "serialization did not complete");
     auto &SerializedAST = Buffer->Data;
     auto Size = SerializedAST.size();
-    auto Int8Ty = llvm::Type::getInt8Ty(VMContext);
+    auto Int8Ty = llvm::Type::getInt8Ty(*VMContext);
     auto *Ty = llvm::ArrayType::get(Int8Ty, Size);
-    auto *Data = llvm::ConstantDataArray::getString(
-        VMContext, StringRef(SerializedAST.data(), Size), /*AddNull=*/false);
+    auto *Data = llvm::ConstantDataArray::
+      getString(*VMContext, StringRef(SerializedAST.data(), Size),
+                /*AddNull=*/false);
     auto *ASTSym = new llvm::GlobalVariable(
         *M, Ty, /*constant*/ true, llvm::GlobalVariable::InternalLinkage, Data,
         "__clang_ast");
@@ -228,6 +231,8 @@ public:
 
     // Free up some memory, in case the process is kept alive.
     SerializedAST.clear();
+    M.release();
+    VMContext.release();
   }
 };
 }
