@@ -873,22 +873,6 @@ bool Sema::CheckAArch64BuiltinFunctionCall(unsigned BuiltinID,
       SemaBuiltinConstantArgRange(TheCall, 4, 0, 1);
   }
 
-  // Before the merge, Clang generated incorrect code for vfma_lane (&
-  // vfms_lane) intrinsics: we took the lane from the middle argument. As a
-  // temporary compatibility measure we're adding this tristate macro to
-  // (hopefully only) clang-602.
-  //    + If USE_CORRECT_VFMA_INTRINSICS is undefined, we will emit the
-  //      incorrect code, but warn about it.
-  //    + If USE_CORRECT_VFMA_INTRINSICS is defined to 0, we will emit incorrect
-  //      code and silence the warning.
-  //    + Otherwise we will emit correct code.
-  // See rdar://problem/17964959 for details.
-  if (BuiltinID == NEON::BI__builtin_neon_vfma_lane_warn_v ||
-      BuiltinID == NEON::BI__builtin_neon_vfmaq_lane_warn_v ||
-      BuiltinID == NEON::BI__builtin_neon_vfma_laneq_warn_v ||
-      BuiltinID == NEON::BI__builtin_neon_vfmaq_laneq_warn_v)
-    Diag(TheCall->getLocStart(), diag::warn_broken_neon_vfma);
-
   if (CheckNeonBuiltinFunctionCall(BuiltinID, TheCall))
     return true;
 

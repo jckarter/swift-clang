@@ -4,7 +4,6 @@
 
 // Test new aarch64 intrinsics and types
 
-#define USE_CORRECT_VFMA_INTRINSICS 1
 #include <arm_neon.h>
 
 

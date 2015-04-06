@@ -2252,69 +2252,7 @@ void NeonEmitter::run(raw_ostream &OS) {
   OS << "#else\n";
   OS << "typedef int8_t poly8_t;\n";
   OS << "typedef int16_t poly16_t;\n";
-  OS << "#endif\n\n";
-
-  // Before the merge, Clang generated incorrect code for vfma_lane (&
-  // vfms_lane) intrinsics: we took the lane from the middle argument. As a
-  // temporary compatibility measure we're adding this tristate macro to
-  // (hopefully only) clang-602.
-  //    + If USE_CORRECT_VFMA_INTRINSICS is undefined, we will emit the
-  //      incorrect code, but warn about it.
-  //    + If USE_CORRECT_VFMA_INTRINSICS is defined to 0, we will emit incorrect
-  //      code and silence the warning.
-  //    + Otherwise we will emit correct code.
-  // See rdar://problem/17964959 for details.
-  OS << "#if USE_CORRECT_VFMA_INTRINSICS\n";
-  OS << "// Silently correct\n";
-  OS << "#define vfma_lane_f32(a,b,c,l) vfma_lane_silent_f32(a,b,c,l)\n";
-  OS << "#define vfmaq_lane_f32(a,b,c,l) vfmaq_lane_silent_f32(a,b,c,l)\n";
-  OS << "#define vfms_lane_f32(a,b,c,l) vfma_lane_silent_f32(a,b,-c,l)\n";
-  OS << "#define vfmsq_lane_f32(a,b,c,l) vfmaq_lane_silent_f32(a,b,-c,l)\n";
-  OS << "#define vfma_laneq_f32(a,b,c,l) vfma_laneq_silent_f32(a,b,c,l)\n";
-  OS << "#define vfmaq_laneq_f32(a,b,c,l) vfmaq_laneq_silent_f32(a,b,c,l)\n";
-  OS << "#define vfms_laneq_f32(a,b,c,l) vfma_laneq_silent_f32(a,b,-c,l)\n";
-  OS << "#define vfmsq_laneq_f32(a,b,c,l) vfmaq_laneq_silent_f32(a,b,-c,l)\n";
-  OS << "#define vfma_laneq_f64(a,b,c,l) vfma_laneq_silent_f64(a,b,c,l)\n";
-  OS << "#define vfmaq_laneq_f64(a,b,c,l) vfmaq_laneq_silent_f64(a,b,c,l)\n";
-  OS << "#define vfms_laneq_f64(a,b,c,l) vfma_laneq_silent_f64(a,b,-c,l)\n";
-  OS << "#define vfmsq_laneq_f64(a,b,c,l) vfmaq_laneq_silent_f64(a,b,-c,l)\n";
-  OS << "#elif defined(USE_CORRECT_VFMA_INTRINSICS)\n";
-  OS << "// Silently wrong\n";
-  OS << "#define vfma_lane_f32(a,b,c,l) vfma_lane_silent_f32(a, c, b, l)\n";
-  OS << "#define vfmaq_lane_f32(a,b,c,l) vfmaq_lane_silent_f32(a,c,b,l)\n";
-  OS << "#define vfms_lane_f32(a,b,c,l) vfma_lane_silent_f32(a,-c,b,l)\n";
-  OS << "#define vfmsq_lane_f32(a,b,c,l) vfmaq_lane_silent_f32(a,-c,b,l)\n";
-  OS << "#define vfma_laneq_f32(a,b,c,l) vfma_laneq_silent_f32(a, c, b, l)\n";
-  OS << "#define vfmaq_laneq_f32(a,b,c,l) vfmaq_laneq_silent_f32(a,c,b,l)\n";
-  OS << "#define vfms_laneq_f32(a,b,c,l) vfma_laneq_silent_f32(a,-c,b,l)\n";
-  OS << "#define vfmsq_laneq_f32(a,b,c,l) vfmaq_laneq_silent_f32(a,-c,b,l)\n";
-  OS << "#define vfma_laneq_f64(a,b,c,l) vfma_laneq_silent_f64(a,c,b,l)\n";
-  OS << "#define vfmaq_laneq_f64(a,b,c,l) vfmaq_laneq_silent_f64(a,c,b,l)\n";
-  OS << "#define vfms_laneq_f64(a,b,c,l) vfma_laneq_silent_f64(a,-c,b,l)\n";
-  OS << "#define vfmsq_laneq_f64(a,b,c,l) vfmaq_laneq_silent_f64(a,-c,b,l)\n";
-  OS << "#elif !defined(USE_CORRECT_VFMA_INTRINSICS)\n";
-  OS << "// Noisiliy wrong\n";
-  OS << "#define vfma_lane_f32(a,b,c,l) vfma_lane_warn_f32(a, c, b, l)\n";
-  OS << "#define vfmaq_lane_f32(a,b,c,l) vfmaq_lane_warn_f32(a,c,b,l)\n";
-  OS << "#define vfms_lane_f32(a,b,c,l) vfma_lane_warn_f32(a,-c,b,l)\n";
-  OS << "#define vfmsq_lane_f32(a,b,c,l) vfmaq_lane_warn_f32(a,-c,b,l)\n";
-  OS << "#define vfma_laneq_f32(a,b,c,l) vfma_laneq_warn_f32(a, c, b, l)\n";
-  OS << "#define vfmaq_laneq_f32(a,b,c,l) vfmaq_laneq_warn_f32(a,c,b,l)\n";
-  OS << "#define vfms_laneq_f32(a,b,c,l) vfma_laneq_warn_f32(a,-c,b,l)\n";
-  OS << "#define vfmsq_laneq_f32(a,b,c,l) vfmaq_laneq_warn_f32(a,-c,b,l)\n";
-  OS << "#define vfma_laneq_f64(a,b,c,l) vfma_laneq_warn_f64(a,c,b,l)\n";
-  OS << "#define vfmaq_laneq_f64(a,b,c,l) vfmaq_laneq_warn_f64(a,c,b,l)\n";
-  OS << "#define vfms_laneq_f64(a,b,c,l) vfma_laneq_warn_f64(a,-c,b,l)\n";
-  OS << "#define vfmsq_laneq_f64(a,b,c,l) vfmaq_laneq_warn_f64(a,-c,b,l)\n";
-  OS << "#endif\n\n";
-
-  // The rest do not need adjusting because the 64-bit f64 intrinsic
-  // only *has* one lane.
-  OS << "#define vfma_lane_f64(a,b,c,l) vfma_lane_silent_f64(a,b,c,l)\n";
-  OS << "#define vfmaq_lane_f64(a,b,c,l) vfmaq_lane_silent_f64(a,b,c,l)\n";
-  OS << "#define vfms_lane_f64(a,b,c,l) vfma_lane_silent_f64(a,b,-c,l)\n";
-  OS << "#define vfmsq_lane_f64(a,b,c,l) vfmaq_lane_silent_f64(a,b,-c,l)\n\n";
-
+  OS << "#endif\n";
 
   // Emit Neon vector typedefs.
   std::string TypedefTypes(

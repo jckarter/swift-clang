@@ -1,7 +1,6 @@
 // RUN: %clang_cc1 -triple aarch64-linux-gnu -target-feature +neon -ffreestanding -fsyntax-only -verify %s
 // RUN: %clang_cc1 -triple arm64-linux-gnu -target-feature +neon -ffreestanding -fsyntax-only -verify %s
 
-#define USE_CORRECT_VFMA_INTRINSICS 1
 #include <arm_neon.h>
 
 void test_vext_8bit(int8x8_t small, int8x16_t big) {

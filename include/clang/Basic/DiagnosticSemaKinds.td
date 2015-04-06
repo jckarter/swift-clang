@@ -7073,14 +7073,6 @@ def note_neon_vector_initializer_non_portable_q : Note<
 def err_systemz_invalid_tabort_code : Error<
   "invalid transaction abort code">;
 
-def warn_broken_neon_vfma : Warning<
-  "previous versions of Clang incorrectly interpreted vfmX_lane(a,b,c,i) as "
-  "a + b[i]*c. Future releases of Clang will fix this unconditionally. "
-  "Current behaviour is controlled by the USE_CORRECT_VFMA_INTRINSICS macro, "
-  "which should be defined before including arm_neon.h. Leaving this undefined "
-  "will retain the old behaviour with this warning; setting it to 0 will "
-  "silence this warning but retain the old behaviour; setting it to 1 will "
-  "emit compliant code.">;
 def err_builtin_longjmp_unsupported : Error<
   "__builtin_longjmp is not supported for the current target">;
 def err_builtin_setjmp_unsupported : Error<

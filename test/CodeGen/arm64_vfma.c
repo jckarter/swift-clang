@@ -1,7 +1,6 @@
 // RUN: %clang_cc1 -O1 -triple arm64-apple-ios7 -target-feature +neon -ffreestanding -S -o - -emit-llvm %s | FileCheck %s
 // Test ARM64 SIMD fused multiply add intrinsics
 
-#define USE_CORRECT_VFMA_INTRINSICS 1
 #include <arm_neon.h>
 
 float32x2_t test_vfma_f32(float32x2_t a1, float32x2_t a2, float32x2_t a3) {

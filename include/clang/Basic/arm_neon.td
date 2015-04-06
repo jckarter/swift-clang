@@ -1095,30 +1095,12 @@ def VMLA_LANEQ   : IOpInst<"vmla_laneq", "dddji",
 def VMLS_LANEQ   : IOpInst<"vmls_laneq", "dddji",
                            "siUsUifQsQiQUsQUiQf", OP_MLS_LN>;
 
-// Before the merge, Clang generated incorrect code for vfma_lane (&
-// vfms_lane) intrinsics: we took the lane from the middle argument. As a
-// temporary compatibility measure we're adding this tristate macro to
-// (hopefully only) clang-602.
-//    + If USE_CORRECT_VFMA_INTRINSICS is undefined, we will emit the
-//      incorrect code, but warn about it.
-//    + If USE_CORRECT_VFMA_INTRINSICS is defined to 0, we will emit incorrect
-//      code and silence the warning.
-//    + Otherwise we will emit correct code.
-// See rdar://problem/17964959 for details. The changes here are:
-//    + Rename auto-generated vfma_lane & add warning version.
-//    + Remove auto-generated vfms_lane intrinsic.
-// The usual intrinsics will be defined to the correct variant manually at the
-// top of arm_neon.h.
-def VFMA_LANE    : IInst<"vfma_lane_silent", "dddgi", "fdQfQd">;
-def VFMA_LANE_WARN : IInst<"vfma_lane_warn", "dddgi", "fdQfQd">;
-
-def VFMA_LANEQ   : IInst<"vfma_laneq_silent", "dddji", "fdQfQd"> {
+def VFMA_LANE    : IInst<"vfma_lane", "dddgi", "fdQfQd">;
+def VFMA_LANEQ   : IInst<"vfma_laneq", "dddji", "fdQfQd"> {
   let isLaneQ = 1;
 }
-
-def VFMA_LANEQ_WARN   : IInst<"vfma_laneq_warn", "dddji", "fdQfQd"> {
-  let isLaneQ = 1;
-}
+def VFMS_LANE    : IOpInst<"vfms_lane", "dddgi", "fdQfQd", OP_FMS_LN>;
+def VFMS_LANEQ   : IOpInst<"vfms_laneq", "dddji", "fdQfQd", OP_FMS_LNQ>;
 
 def VMLAL_LANEQ  : SOpInst<"vmlal_laneq", "wwdki", "siUsUi", OP_MLAL_LN>;
 def VMLAL_HIGH_LANE   : SOpInst<"vmlal_high_lane", "wwkdi", "siUsUi",

@@ -3,7 +3,6 @@
 
 // Test new aarch64 intrinsics and types
 
-#define USE_CORRECT_VFMA_INTRINSICS 1
 #include <arm_neon.h>
 
 int16x4_t test_vmla_lane_s16(int16x4_t a, int16x4_t b, int16x4_t v) {
