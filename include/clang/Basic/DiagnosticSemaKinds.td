@@ -2349,6 +2349,9 @@ def warn_mismatched_availability_override_unavail : Warning<
   InGroup<Availability>;
 def note_overridden_method : Note<
   "overridden method is here">;
+def warn_availability_swift_unavailable_only : Warning<
+  "only 'unavailable' is supported for Swift availability">,
+  InGroup<Availability>;
 
 // Thread Safety Attributes
 def warn_invalid_capability_name : Warning<
