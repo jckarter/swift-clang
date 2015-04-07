@@ -30,6 +30,9 @@
 // RUN: %clang -target x86_64-apple-macosx -mmacosx-version-min=10.10 -c %s -### 2>&1 | \
 // RUN:   FileCheck --check-prefix=CHECK-VERSION-OSX10 %s
 // CHECK-VERSION-OSX10: "x86_64-apple-macosx10.10.0"
+// RUN: %clang -target x86_64-apple-macosx -mmacosx-version-min= -c %s -### 2>&1 | \
+// RUN:   FileCheck --check-prefix=CHECK-VERSION-MISSING %s
+// CHECK-VERSION-MISSING: invalid version number
 // RUN: %clang -target armv7-apple-darwin -mtvos-version-min=8.3 -c %s -### 2>&1 | \
 // RUN:   FileCheck --check-prefix=CHECK-VERSION-TVOS83 %s
 // CHECK-VERSION-TVOS83: "thumbv7-apple-tvos8.3.0"
