@@ -2000,6 +2000,14 @@ static void handleAvailabilityAttr(Sema &S, Decl *D,
           dyn_cast_or_null<StringLiteral>(Attr.getMessageExpr()))
     Str = SE->getString();
 
+  if (II->getName() == "swift") {
+    if (Introduced.isValid() || Deprecated.isValid() || Obsoleted.isValid() ||
+        !IsUnavailable) {
+      S.Diag(Attr.getLoc(), diag::warn_availability_swift_unavailable_only);
+      return;
+    }
+  }
+
   AvailabilityAttr *NewAttr = S.mergeAvailabilityAttr(ND, Attr.getRange(), II,
                                                       Introduced.Version,
                                                       Deprecated.Version,

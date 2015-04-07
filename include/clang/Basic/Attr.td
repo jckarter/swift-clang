@@ -449,6 +449,7 @@ def Availability : InheritableAttr {
              .Case("macosx_app_extension", "OS X (App Extension)")
              .Case("tvos_app_extension", "AppleTVOS (App Extension)")
              .Case("watchos_app_extension", "AppleWatchOS (App Extension)")
+             .Case("swift", "Swift")
              .Default(llvm::StringRef());
 } }];
   let HasCustomParsing = 1;

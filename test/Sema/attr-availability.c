@@ -79,3 +79,10 @@ void f8() {
 
 extern int x2 __attribute__((availability(macosx,introduced=10.2))); // expected-note {{previous attribute is here}}
 extern int x2 __attribute__((availability(macosx,introduced=10.5))); // expected-warning {{availability does not match previous declaration}}
+
+
+extern int noSwiftGlobal1 __attribute__((availability(swift, unavailable)));
+extern int noSwiftGlobal1 __attribute__((availability(macosx, introduced=10.1))); // okay
+extern int noSwiftGlobal1 __attribute__((availability(swift, unavailable, message="and this one has a message"))); // okay
+
+extern int noSwiftGlobal2 __attribute__((availability(swift, introduced=5))); // expected-warning{{only 'unavailable' is supported for Swift availability}}
