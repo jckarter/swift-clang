@@ -1056,7 +1056,7 @@ llvm::DICompositeType CGDebugInfo::getOrCreateInstanceMethodType(
   SmallVector<llvm::Metadata *, 16> Elts;
 
   // First element is always return type. For 'void' functions it is NULL.
-  Elts.push_back(Args[0]);
+  Elts.push_back(Args[0u]);
 
   // "this" pointer is always first argument.
   const CXXRecordDecl *RD = ThisPtr->getPointeeCXXRecordDecl();
@@ -1179,7 +1179,7 @@ CGDebugInfo::CreateCXXMemberFunction(const CXXMethodDecl *Method,
       RecordTy, MethodName, MethodLinkageName, MethodDefUnit, MethodLine,
       MethodTy, /*isLocalToUnit=*/false,
       /* isDefinition=*/false, Virtuality, VIndex, ContainingType, Flags,
-      CGM.getLangOpts().Optimize, nullptr, TParamsArray);
+      CGM.getLangOpts().Optimize, nullptr, TParamsArray.get());
 
   SPCache[Method->getCanonicalDecl()].reset(SP);
 
@@ -2546,13 +2546,11 @@ CGDebugInfo::getFunctionForwardDeclaration(const FunctionDecl *FD) {
   QualType FnType =
     CGM.getContext().getFunctionType(FD->getReturnType(), ArgTypes,
                                      FunctionProtoType::ExtProtoInfo());
-  llvm::DISubprogram SP =
-    DBuilder.createTempFunctionFwdDecl(DContext, Name, LinkageName, Unit, Line,
-                                       getOrCreateFunctionType(FD, FnType, Unit),
-                                       !FD->isExternallyVisible(),
-                                       false /*declaration*/, 0, Flags,
-                                       CGM.getLangOpts().Optimize, nullptr,
-                                       TParamsArray, getFunctionDeclaration(FD));
+  llvm::DISubprogram SP = DBuilder.createTempFunctionFwdDecl(
+      DContext, Name, LinkageName, Unit, Line,
+      getOrCreateFunctionType(FD, FnType, Unit), !FD->isExternallyVisible(),
+      false /*declaration*/, 0, Flags, CGM.getLangOpts().Optimize, nullptr,
+      TParamsArray.get(), getFunctionDeclaration(FD));
   const FunctionDecl *CanonDecl = cast<FunctionDecl>(FD->getCanonicalDecl());
   FwdDeclReplaceMap.emplace_back(
       std::piecewise_construct, std::make_tuple(CanonDecl),
@@ -2772,7 +2770,7 @@ void CGDebugInfo::EmitFunctionStart(GlobalDecl GD, SourceLocation Loc,
       FDContext, Name, LinkageName, Unit, LineNo,
       getOrCreateFunctionType(D, FnType, Unit), Fn->hasInternalLinkage(),
       true /*definition*/, ScopeLine, Flags, CGM.getLangOpts().Optimize, Fn,
-      TParamsArray, getFunctionDeclaration(D));
+      TParamsArray.get(), getFunctionDeclaration(D));
   // We might get here with a VarDecl in the case we're generating
   // code for the initialization of globals. Do not record these decls
   // as they will overwrite the actual VarDecl Decl in the cache.
