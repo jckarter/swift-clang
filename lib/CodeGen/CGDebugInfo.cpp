@@ -2822,11 +2822,12 @@ void CGDebugInfo::EmitFunctionDecl(GlobalDecl GD, SourceLocation Loc,
   unsigned LineNo = getLineNumber(Loc);
   unsigned ScopeLine = 0;
 
-  DBuilder.createFunction(
-      FDContext, Name, LinkageName, Unit, LineNo,
-      getOrCreateFunctionType(D, FnType, Unit), false /*internalLinkage*/,
-      true /*definition*/, ScopeLine, Flags, CGM.getLangOpts().Optimize,
-      nullptr, TParamsArray, getFunctionDeclaration(D));//, true /*forceOutput*/);
+  DBuilder.createFunction(FDContext, Name, LinkageName, Unit, LineNo,
+                          getOrCreateFunctionType(D, FnType, Unit),
+                          false /*internalLinkage*/, true /*definition*/,
+                          ScopeLine, Flags, CGM.getLangOpts().Optimize, nullptr,
+                          TParamsArray.get(),
+                          getFunctionDeclaration(D)); //, true /*forceOutput*/);
 }
 
 
