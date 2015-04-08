@@ -106,7 +106,7 @@ GeneratePCHAction::CreateASTConsumer(CompilerInstance &CI, StringRef InFile) {
   CGOpts.setDebugInfo(CodeGenOptions::LimitedDebugInfo);
   CGOpts.SplitDwarfFile = OutputFile;
   Consumers.push_back(CI.getModuleProvider().CreateModuleContainerGenerator(
-      CI.getDiagnostics(), "PCH", CI.getHeaderSearchOpts(),
+      CI.getDiagnostics(), CGOpts.MainFileName, CI.getHeaderSearchOpts(),
       CI.getPreprocessorOpts(), CGOpts, CI.getTargetOpts(), CI.getLangOpts(),
       OS, Buffer));
 
@@ -161,9 +161,10 @@ GenerateModuleAction::CreateASTConsumer(CompilerInstance &CI,
   CGOpts.OptimizationLevel = 0;
   CGOpts.ClangModule = true;
   CGOpts.setDebugInfo(CodeGenOptions::LimitedDebugInfo);
+  CGOpts.MainFileName = Module->getFullModuleName();
   CGOpts.SplitDwarfFile = OutputFile;
   Consumers.push_back(CI.getModuleProvider().CreateModuleContainerGenerator(
-      CI.getDiagnostics(), Module->getFullModuleName(),
+      CI.getDiagnostics(), CGOpts.MainFileName,
       CI.getHeaderSearchOpts(), CI.getPreprocessorOpts(), CGOpts,
       CI.getTargetOpts(), CI.getLangOpts(), OS, Buffer));
   return llvm::make_unique<MultiplexConsumer>(std::move(Consumers));
