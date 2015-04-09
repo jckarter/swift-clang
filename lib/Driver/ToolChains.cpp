@@ -139,7 +139,7 @@ static const char *GetArmArchForMCpu(StringRef Value) {
     .Cases("sc000", "cortex-m0", "cortex-m0plus", "cortex-m1", "armv6m")
     .Cases("cortex-a5", "cortex-a7", "cortex-a8", "armv7")
     .Cases("cortex-a9", "cortex-a12", "cortex-a15", "cortex-a17", "krait", "armv7")
-    .Cases("cortex-r4", "cortex-r5", "cortex-r7", "armv7r")
+    .Cases("cortex-r4", "cortex-r4f", "cortex-r5", "cortex-r7", "armv7r")
 #ifndef __OPEN_SOURCE__
     .Case("cortex-a7", "armv7k")
 #endif // !__OPEN_SOURCE__

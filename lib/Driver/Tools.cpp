@@ -3123,6 +3123,9 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
   if (!SignedZeros)
     CmdArgs.push_back("-fno-signed-zeros");
 
+  if (ReciprocalMath)
+    CmdArgs.push_back("-freciprocal-math");
+
   // Validate and pass through -fp-contract option. 
   if (Arg *A = Args.getLastArg(options::OPT_ffast_math, FastMathAliasOption,
                                options::OPT_fno_fast_math,
@@ -5745,7 +5748,7 @@ const char *arm::getLLVMArchSuffixForARM(StringRef CPU) {
     .Cases("cortex-a5", "cortex-a7", "cortex-a8", "v7")
 #endif // !__OPEN_SOURCE__
     .Cases("cortex-a9", "cortex-a12", "cortex-a15", "cortex-a17", "krait", "v7")
-    .Cases("cortex-r4", "cortex-r5", "cortex-r7", "v7r")
+    .Cases("cortex-r4", "cortex-r4f", "cortex-r5", "cortex-r7", "v7r")
     .Cases("sc000", "cortex-m0", "cortex-m0plus", "cortex-m1", "v6m")
     .Cases("sc300", "cortex-m3", "v7m")
     .Cases("cortex-m4", "cortex-m7", "v7em")

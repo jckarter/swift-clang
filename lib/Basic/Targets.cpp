@@ -4137,7 +4137,7 @@ public:
       Features["hwdiv"] = true;
       Features["hwdiv-arm"] = true;
     } else if (CPU == "cortex-m3" || CPU == "cortex-m4" || CPU == "cortex-m7" ||
-               CPU == "sc300") {
+               CPU == "sc300" || CPU == "cortex-r4" || CPU == "cortex-r4f") {
       Features["hwdiv"] = true;
     }
   }
@@ -4241,7 +4241,7 @@ public:
 #endif // !__OPEN_SOURCE__
         .Cases("cortex-a9", "cortex-a12", "cortex-a15", "cortex-a17", "krait",
                "7A")
-        .Cases("cortex-r4", "cortex-r5", "cortex-r7", "7R")
+        .Cases("cortex-r4", "cortex-r4f", "cortex-r5", "cortex-r7", "7R")
         .Case("swift", "7S")
         .Case("cyclone", "8A")
         .Cases("sc300", "cortex-m3", "7M")
@@ -4258,7 +4258,7 @@ public:
         .Cases("cortex-a53", "cortex-a57", "cortex-a72", "A")
         .Cases("cortex-m3", "cortex-m4", "cortex-m0", "cortex-m0plus", "M")
         .Cases("cortex-m1", "cortex-m7", "sc000", "sc300", "M")
-        .Cases("cortex-r4", "cortex-r5", "cortex-r7", "R")
+        .Cases("cortex-r4",  "cortex-r4f", "cortex-r5", "cortex-r7", "R")
         .Default("");
   }
   bool setCPU(const std::string &Name) override {
