@@ -192,7 +192,7 @@ public:
 
     CapturedRegionKind getKind() const { return Kind; }
 
-    void setContextValue(llvm::Value *V) { ThisValue = V; }
+    virtual void setContextValue(llvm::Value *V) { ThisValue = V; }
     // \brief Retrieve the value of the context parameter.
     virtual llvm::Value *getContextValue() const { return ThisValue; }
 
@@ -1741,6 +1741,9 @@ public:
   void EmitCXXTemporary(const CXXTemporary *Temporary, QualType TempType,
                         llvm::Value *Ptr);
 
+  llvm::Value *EmitLifetimeStart(uint64_t Size, llvm::Value *Addr);
+  void EmitLifetimeEnd(llvm::Value *Size, llvm::Value *Addr);
+
   llvm::Value *EmitCXXNewExpr(const CXXNewExpr *E);
   void EmitCXXDeleteExpr(const CXXDeleteExpr *E);
 
@@ -2029,10 +2032,39 @@ public:
   void EmitOMPAggregateAssign(LValue OriginalAddr, llvm::Value *PrivateAddr,
                               const Expr *AssignExpr, QualType Type,
                               const VarDecl *VDInit);
+  /// \brief Emit atomic update code for constructs: \a X = \a X \a BO \a E or
+  /// \a X = \a E \a BO \a E.
+  ///
+  /// \param X Value to be updated.
+  /// \param E Update value.
+  /// \param BO Binary operation for update operation.
+  /// \param IsXLHSInRHSPart true if \a X is LHS in RHS part of the update
+  /// expression, false otherwise.
+  /// \param AO Atomic ordering of the generated atomic instructions.
+  /// \param CommonGen Code generator for complex expressions that cannot be
+  /// expressed through atomicrmw instruction.
+  void EmitOMPAtomicSimpleUpdateExpr(
+      LValue X, RValue E, BinaryOperatorKind BO, bool IsXLHSInRHSPart,
+      llvm::AtomicOrdering AO, SourceLocation Loc,
+      const llvm::function_ref<RValue(RValue)> &CommonGen);
   void EmitOMPFirstprivateClause(const OMPExecutableDirective &D,
                                  OMPPrivateScope &PrivateScope);
   void EmitOMPPrivateClause(const OMPExecutableDirective &D,
                             OMPPrivateScope &PrivateScope);
+  /// \brief Emit initial code for reduction variables. Creates reduction copies
+  /// and initializes them with the values according to OpenMP standard.
+  ///
+  /// \param D Directive (possibly) with the 'reduction' clause.
+  /// \param PrivateScope Private scope for capturing reduction variables for
+  /// proper codegen in internal captured statement.
+  ///
+  void EmitOMPReductionClauseInit(const OMPExecutableDirective &D,
+                                  OMPPrivateScope &PrivateScope);
+  /// \brief Emit final update of reduction values to original variables at
+  /// the end of the directive.
+  ///
+  /// \param D Directive that has at least one 'reduction' directives.
+  void EmitOMPReductionClauseFinal(const OMPExecutableDirective &D);
 
   void EmitOMPParallelDirective(const OMPParallelDirective &S);
   void EmitOMPSimdDirective(const OMPSimdDirective &S);
@@ -2061,9 +2093,10 @@ private:
   /// Helpers for the OpenMP loop directives.
   void EmitOMPLoopBody(const OMPLoopDirective &Directive,
                        bool SeparateIter = false);
-  void EmitOMPInnerLoop(const Stmt &S, bool RequiresCleanup,
-                        const Expr *LoopCond, const Expr *IncExpr,
-                        const std::function<void()> &BodyGen);
+  void
+  EmitOMPInnerLoop(const Stmt &S, bool RequiresCleanup, const Expr *LoopCond,
+                   const Expr *IncExpr,
+                   const llvm::function_ref<void(CodeGenFunction &)> &BodyGen);
   void EmitOMPSimdFinal(const OMPLoopDirective &S);
   void EmitOMPWorksharingLoop(const OMPLoopDirective &S);
   void EmitOMPForOuterLoop(OpenMPScheduleClauseKind ScheduleKind,

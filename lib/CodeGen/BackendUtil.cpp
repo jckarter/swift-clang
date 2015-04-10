@@ -30,7 +30,6 @@
 #include "llvm/IR/Verifier.h"
 #include "llvm/MC/SubtargetFeature.h"
 #include "llvm/Support/CommandLine.h"
-#include "llvm/Support/FormattedStream.h"
 #include "llvm/Support/PrettyStackTrace.h"
 #include "llvm/Support/TargetRegistry.h"
 #include "llvm/Support/Timer.h"
@@ -113,7 +112,7 @@ private:
   /// AddEmitPasses - Add passes necessary to emit assembly or LLVM IR.
   ///
   /// \return True on success.
-  bool AddEmitPasses(BackendAction Action, formatted_raw_ostream &OS);
+  bool AddEmitPasses(BackendAction Action, raw_ostream &OS);
 
 public:
   EmitAssemblyHelper(DiagnosticsEngine &_Diags,
@@ -551,8 +550,7 @@ TargetMachine *EmitAssemblyHelper::CreateTargetMachine(bool MustCreateTM) {
   return TM;
 }
 
-bool EmitAssemblyHelper::AddEmitPasses(BackendAction Action,
-                                       formatted_raw_ostream &OS) {
+bool EmitAssemblyHelper::AddEmitPasses(BackendAction Action, raw_ostream &OS) {
 
   // Create the code generator passes.
   legacy::PassManager *PM = getCodeGenPasses();
@@ -591,7 +589,6 @@ bool EmitAssemblyHelper::AddEmitPasses(BackendAction Action,
 
 void EmitAssemblyHelper::EmitAssembly(BackendAction Action, raw_ostream *OS) {
   TimeRegion Region(llvm::TimePassesIsEnabled ? &CodeGenerationTime : nullptr);
-  llvm::formatted_raw_ostream FormattedOS;
 
   bool UsesCodeGen = (Action != Backend_EmitNothing &&
                       Action != Backend_EmitBC &&
@@ -611,13 +608,11 @@ void EmitAssemblyHelper::EmitAssembly(BackendAction Action, raw_ostream *OS) {
     break;
 
   case Backend_EmitLL:
-    FormattedOS.setStream(*OS, formatted_raw_ostream::PRESERVE_STREAM);
-    getPerModulePasses()->add(createPrintModulePass(FormattedOS));
+    getPerModulePasses()->add(createPrintModulePass(*OS));
     break;
 
   default:
-    FormattedOS.setStream(*OS, formatted_raw_ostream::PRESERVE_STREAM);
-    if (!AddEmitPasses(Action, FormattedOS))
+    if (!AddEmitPasses(Action, *OS))
       return;
   }
 
