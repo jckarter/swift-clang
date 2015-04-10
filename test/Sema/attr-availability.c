@@ -81,6 +81,14 @@ extern int x2 __attribute__((availability(macosx,introduced=10.2))); // expected
 extern int x2 __attribute__((availability(macosx,introduced=10.5))); // expected-warning {{availability does not match previous declaration}}
 
 
+#if __has_feature(attribute_availability_swift)
+# warning "okay"
+// expected-warning@-1{{okay}}
+#else
+# error "Missing __has_feature"
+#endif
+
+
 extern int noSwiftGlobal1 __attribute__((availability(swift, unavailable)));
 extern int noSwiftGlobal1 __attribute__((availability(macosx, introduced=10.1))); // okay
 extern int noSwiftGlobal1 __attribute__((availability(swift, unavailable, message="and this one has a message"))); // okay
