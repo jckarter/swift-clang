@@ -4652,8 +4652,8 @@ class ARMleTargetInfo : public ARMTargetInfo {
 public:
   ARMleTargetInfo(const llvm::Triple &Triple)
     : ARMTargetInfo(Triple, false) { }
-  virtual void getTargetDefines(const LangOptions &Opts,
-                                MacroBuilder &Builder) const {
+  void getTargetDefines(const LangOptions &Opts,
+                        MacroBuilder &Builder) const override {
     Builder.defineMacro("__ARMEL__");
     ARMTargetInfo::getTargetDefines(Opts, Builder);
   }
@@ -4663,8 +4663,8 @@ class ARMbeTargetInfo : public ARMTargetInfo {
 public:
   ARMbeTargetInfo(const llvm::Triple &Triple)
     : ARMTargetInfo(Triple, true) { }
-  virtual void getTargetDefines(const LangOptions &Opts,
-                                MacroBuilder &Builder) const {
+  void getTargetDefines(const LangOptions &Opts,
+                        MacroBuilder &Builder) const override {
     Builder.defineMacro("__ARMEB__");
     Builder.defineMacro("__ARM_BIG_ENDIAN");
     ARMTargetInfo::getTargetDefines(Opts, Builder);
@@ -4836,8 +4836,8 @@ public:
     return CPUKnown;
   }
 
-  virtual void getTargetDefines(const LangOptions &Opts,
-                                MacroBuilder &Builder) const  override {
+  void getTargetDefines(const LangOptions &Opts,
+                        MacroBuilder &Builder) const override {
     // Target identification.
     Builder.defineMacro("__aarch64__");
 
@@ -4896,8 +4896,8 @@ public:
       Builder.defineMacro("__ARM_FEATURE_CRYPTO");
   }
 
-  virtual void getTargetBuiltins(const Builtin::Info *&Records,
-                                 unsigned &NumRecords) const override {
+  void getTargetBuiltins(const Builtin::Info *&Records,
+                         unsigned &NumRecords) const override {
     Records = BuiltinInfo;
     NumRecords = clang::AArch64::LastTSBuiltin - Builtin::FirstTSBuiltin;
   }
@@ -4933,14 +4933,13 @@ public:
     return TargetInfo::AArch64ABIBuiltinVaList;
   }
 
-  virtual void getGCCRegNames(const char *const *&Names,
-                              unsigned &NumNames) const override;
-  virtual void getGCCRegAliases(const GCCRegAlias *&Aliases,
-                                unsigned &NumAliases) const override;
+  void getGCCRegNames(const char *const *&Names,
+                      unsigned &NumNames) const override;
+  void getGCCRegAliases(const GCCRegAlias *&Aliases,
+                        unsigned &NumAliases) const override;
 
-  virtual bool
-  validateAsmConstraint(const char *&Name,
-                        TargetInfo::ConstraintInfo &Info) const override {
+  bool validateAsmConstraint(const char *&Name,
+                             TargetInfo::ConstraintInfo &Info) const override {
     switch (*Name) {
     default:
       return false;

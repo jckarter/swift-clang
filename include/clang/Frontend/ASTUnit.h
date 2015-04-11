@@ -486,8 +486,8 @@ public:
     }
   };
   friend class ConcurrencyCheck;
-  
-  ~ASTUnit();
+
+  ~ASTUnit() override;
 
   bool isMainFileAST() const { return MainFileIsAST; }
 

@@ -170,7 +170,7 @@ class CompilerInstance : public ModuleLoader {
 public:
   explicit CompilerInstance(SharedModuleProvider MP,
                             bool BuildingModule = false);
-  ~CompilerInstance();
+  ~CompilerInstance() override;
 
   /// @name High-Level Operations
   /// {

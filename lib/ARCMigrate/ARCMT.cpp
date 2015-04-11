@@ -124,7 +124,7 @@ public:
     }
   }
 
-  virtual ~CaptureDiagnosticConsumer() {
+  ~CaptureDiagnosticConsumer() override {
     assert(!HasBegunSourceFile && "FinishCapture not called!");
   }
 
@@ -472,7 +472,7 @@ public:
     if (Listener)
       Listener->start(ctx);
   }
-  ~RewritesApplicator() {
+  ~RewritesApplicator() override {
     if (Listener)
       Listener->finish();
   }

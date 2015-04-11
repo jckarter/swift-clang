@@ -40,8 +40,9 @@ public:
       : TestConsumer(std::move(TestConsumer)) {}
 
 protected:
-  virtual std::unique_ptr<clang::ASTConsumer>
-  CreateASTConsumer(clang::CompilerInstance &compiler, StringRef dummy) {
+  std::unique_ptr<clang::ASTConsumer>
+  CreateASTConsumer(clang::CompilerInstance &compiler,
+                    StringRef dummy) override {
     /// TestConsumer will be deleted by the framework calling us.
     return std::move(TestConsumer);
   }
@@ -54,7 +55,7 @@ class FindTopLevelDeclConsumer : public clang::ASTConsumer {
  public:
   explicit FindTopLevelDeclConsumer(bool *FoundTopLevelDecl)
       : FoundTopLevelDecl(FoundTopLevelDecl) {}
-  virtual bool HandleTopLevelDecl(clang::DeclGroupRef DeclGroup) {
+  bool HandleTopLevelDecl(clang::DeclGroupRef DeclGroup) override {
     *FoundTopLevelDecl = true;
     return true;
   }
@@ -78,7 +79,7 @@ class FindClassDeclXConsumer : public clang::ASTConsumer {
  public:
   FindClassDeclXConsumer(bool *FoundClassDeclX)
       : FoundClassDeclX(FoundClassDeclX) {}
-  virtual bool HandleTopLevelDecl(clang::DeclGroupRef GroupRef) {
+  bool HandleTopLevelDecl(clang::DeclGroupRef GroupRef) override {
     if (CXXRecordDecl* Record = dyn_cast<clang::CXXRecordDecl>(
             *GroupRef.begin())) {
       if (Record->getName() == "X") {
@@ -192,14 +193,11 @@ TEST(ToolInvocation, TestVirtualModulesCompilation) {
 
 struct VerifyEndCallback : public SourceFileCallbacks {
   VerifyEndCallback() : BeginCalled(0), EndCalled(0), Matched(false) {}
-  virtual bool handleBeginSource(CompilerInstance &CI,
-                                 StringRef Filename) override {
+  bool handleBeginSource(CompilerInstance &CI, StringRef Filename) override {
     ++BeginCalled;
     return true;
   }
-  virtual void handleEndSource() override {
-    ++EndCalled;
-  }
+  void handleEndSource() override { ++EndCalled; }
   std::unique_ptr<ASTConsumer> newASTConsumer() {
     return llvm::make_unique<FindTopLevelDeclConsumer>(&Matched);
   }
@@ -233,15 +231,15 @@ TEST(newFrontendActionFactory, InjectsSourceFileCallbacks) {
 
 struct SkipBodyConsumer : public clang::ASTConsumer {
   /// Skip the 'skipMe' function.
-  virtual bool shouldSkipFunctionBody(Decl *D) {
+  bool shouldSkipFunctionBody(Decl *D) override {
     FunctionDecl *F = dyn_cast<FunctionDecl>(D);
     return F && F->getNameAsString() == "skipMe";
   }
 };
 
 struct SkipBodyAction : public clang::ASTFrontendAction {
-  virtual std::unique_ptr<ASTConsumer>
-  CreateASTConsumer(CompilerInstance &Compiler, StringRef) {
+  std::unique_ptr<ASTConsumer> CreateASTConsumer(CompilerInstance &Compiler,
+                                                 StringRef) override {
     Compiler.getFrontendOpts().SkipFunctionBodies = true;
     return llvm::make_unique<SkipBodyConsumer>();
   }
@@ -320,8 +318,8 @@ TEST(ClangToolTest, BuildASTs) {
 
 struct TestDiagnosticConsumer : public DiagnosticConsumer {
   TestDiagnosticConsumer() : NumDiagnosticsSeen(0) {}
-  virtual void HandleDiagnostic(DiagnosticsEngine::Level DiagLevel,
-                                const Diagnostic &Info) {
+  void HandleDiagnostic(DiagnosticsEngine::Level DiagLevel,
+                        const Diagnostic &Info) override {
     ++NumDiagnosticsSeen;
   }
   unsigned NumDiagnosticsSeen;

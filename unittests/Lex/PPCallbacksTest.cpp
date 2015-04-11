@@ -61,15 +61,11 @@ private:
 // Stub to collect data from InclusionDirective callbacks.
 class InclusionDirectiveCallbacks : public PPCallbacks {
 public:
-  void InclusionDirective(SourceLocation HashLoc, 
-    const Token &IncludeTok, 
-    StringRef FileName, 
-    bool IsAngled, 
-    CharSourceRange FilenameRange, 
-    const FileEntry *File, 
-    StringRef SearchPath, 
-    StringRef RelativePath, 
-    const Module *Imported) {
+  void InclusionDirective(SourceLocation HashLoc, const Token &IncludeTok,
+                          StringRef FileName, bool IsAngled,
+                          CharSourceRange FilenameRange, const FileEntry *File,
+                          StringRef SearchPath, StringRef RelativePath,
+                          const Module *Imported) override {
       this->HashLoc = HashLoc;
       this->IncludeTok = IncludeTok;
       this->FileName = FileName.str();
@@ -102,9 +98,10 @@ public:
 
   PragmaOpenCLExtensionCallbacks() : Name("Not called."), State(99) {};
 
-  void PragmaOpenCLExtension(
-    clang::SourceLocation NameLoc, const clang::IdentifierInfo *Name,
-    clang::SourceLocation StateLoc, unsigned State) {
+  void PragmaOpenCLExtension(clang::SourceLocation NameLoc,
+                             const clang::IdentifierInfo *Name,
+                             clang::SourceLocation StateLoc,
+                             unsigned State) override {
       this->NameLoc = NameLoc;
       this->Name = Name->getName();
       this->StateLoc = StateLoc;
