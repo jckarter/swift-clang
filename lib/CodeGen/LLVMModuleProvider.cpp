@@ -47,7 +47,7 @@ class ModuleContainerGenerator : public ASTConsumer {
   std::unique_ptr<llvm::LLVMContext> VMContext;
   std::unique_ptr<llvm::Module> M;
   std::unique_ptr<CodeGen::CodeGenModule> Builder;
-  raw_ostream *OS;
+  raw_pwrite_stream *OS;
   std::shared_ptr<ModuleBuffer> Buffer;
 
   /// Visit every type and emit debug info for it.
@@ -134,7 +134,7 @@ public:
       DiagnosticsEngine &diags, const std::string &ModuleName,
       const HeaderSearchOptions &HSO, const PreprocessorOptions &PPO,
       const CodeGenOptions &CGO, const TargetOptions &TO, const LangOptions &LO,
-      raw_ostream *OS,
+      raw_pwrite_stream *OS,
       std::shared_ptr<ModuleBuffer> Buffer)
       : Diags(diags), HeaderSearchOpts(HSO), PreprocessorOpts(PPO),
         CodeGenOpts(CGO), TargetOpts(TO), LangOpts(LO),
@@ -216,10 +216,15 @@ public:
     else
       ASTSym->setSection("__clangast");
 
-    DEBUG(clang::EmitBackendOutput(Diags, CodeGenOpts, TargetOpts, LangOpts,
-                                   Ctx.getTargetInfo().getTargetDescription(),
-                                   M.get(), BackendAction::Backend_EmitLL,
-                                   &llvm::dbgs()));
+    DEBUG({
+        llvm::SmallString<0> Buffer;
+        llvm::raw_svector_ostream OS(Buffer);
+        clang::EmitBackendOutput(Diags, CodeGenOpts, TargetOpts, LangOpts,
+                                 Ctx.getTargetInfo().getTargetDescription(),
+                                 M.get(), BackendAction::Backend_EmitLL, &OS);
+        OS.flush();
+        llvm::dbgs()<<Buffer;
+      });
 
     // Use the LLVM backend to emit the pcm.
     clang::EmitBackendOutput(Diags, CodeGenOpts, TargetOpts, LangOpts,
@@ -241,7 +246,7 @@ std::unique_ptr<ASTConsumer> LLVMModuleProvider::CreateModuleContainerGenerator(
     DiagnosticsEngine &Diags, const std::string &ModuleName,
     const HeaderSearchOptions &HSO, const PreprocessorOptions &PPO,
     const CodeGenOptions &CGO, const TargetOptions &TO, const LangOptions &LO,
-    llvm::raw_ostream *OS,
+    llvm::raw_pwrite_stream *OS,
     std::shared_ptr<ModuleBuffer> Buffer) const {
  return llvm::make_unique<ModuleContainerGenerator>
    (Diags, ModuleName, HSO, PPO, CGO, TO, LO, OS, Buffer);

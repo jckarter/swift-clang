@@ -28,7 +28,7 @@ class LLVMModuleProvider
                                    const CodeGenOptions &CGO,
                                    const TargetOptions &TO,
                                    const LangOptions &LO,
-                                   llvm::raw_ostream *OS,
+                                   llvm::raw_pwrite_stream *OS,
                                    std::shared_ptr<ModuleBuffer> Buffer)
    const override;
 

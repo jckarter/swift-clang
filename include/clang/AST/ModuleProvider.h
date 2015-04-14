@@ -12,6 +12,7 @@
 
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/Support/MemoryBuffer.h"
+#include "llvm/Support/raw_ostream.h"
 #include <memory>
 
 namespace llvm {
@@ -44,7 +45,7 @@ public:
       DiagnosticsEngine &Diags, const std::string &ModuleName,
       const HeaderSearchOptions &HSO, const PreprocessorOptions &PPO,
       const CodeGenOptions &CGO, const TargetOptions &TO, const LangOptions &LO,
-      llvm::raw_ostream *OS,
+      llvm::raw_pwrite_stream *OS,
       std::shared_ptr<ModuleBuffer> Buffer) const = 0;
 
   /// \brief Initialize an llvm::BitstreamReader with the module

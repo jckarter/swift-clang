@@ -82,7 +82,7 @@ std::unique_ptr<ASTConsumer>
 GeneratePCHAction::CreateASTConsumer(CompilerInstance &CI, StringRef InFile) {
   std::string Sysroot;
   std::string OutputFile;
-  raw_ostream *OS =
+  raw_pwrite_stream *OS =
       ComputeASTConsumerArguments(CI, InFile, Sysroot, OutputFile);
   if (!OS)
     return nullptr;
@@ -114,7 +114,7 @@ GeneratePCHAction::CreateASTConsumer(CompilerInstance &CI, StringRef InFile) {
   return llvm::make_unique<MultiplexConsumer>(std::move(Consumers));
 }
 
-raw_ostream *GeneratePCHAction::ComputeASTConsumerArguments(
+llvm::raw_pwrite_stream *GeneratePCHAction::ComputeASTConsumerArguments(
     CompilerInstance &CI, StringRef InFile, std::string &Sysroot,
     std::string &OutputFile) {
   Sysroot = CI.getHeaderSearchOpts().Sysroot;
@@ -126,7 +126,7 @@ raw_ostream *GeneratePCHAction::ComputeASTConsumerArguments(
   // We use createOutputFile here because this is exposed via libclang, and we
   // must disable the RemoveFileOnSignal behavior.
   // We use a temporary to avoid race conditions.
-  raw_ostream *OS =
+  llvm::raw_pwrite_stream *OS =
       CI.createOutputFile(CI.getFrontendOpts().OutputFile, /*Binary=*/true,
                           /*RemoveFileOnSignal=*/false, InFile,
                           /*Extension=*/"", /*useTemporary=*/true);
@@ -142,7 +142,7 @@ GenerateModuleAction::CreateASTConsumer(CompilerInstance &CI,
                                         StringRef InFile) {
   std::string Sysroot;
   std::string OutputFile;
-  raw_ostream *OS =
+  raw_pwrite_stream *OS =
       ComputeASTConsumerArguments(CI, InFile, Sysroot, OutputFile);
   if (!OS)
     return nullptr;
@@ -400,7 +400,7 @@ bool GenerateModuleAction::BeginSourceFileAction(CompilerInstance &CI,
   return true;
 }
 
-raw_ostream *GenerateModuleAction::ComputeASTConsumerArguments(
+raw_pwrite_stream *GenerateModuleAction::ComputeASTConsumerArguments(
     CompilerInstance &CI, StringRef InFile, std::string &Sysroot,
     std::string &OutputFile) {
   // If no output file was provided, figure out where this module would go
@@ -415,7 +415,7 @@ raw_ostream *GenerateModuleAction::ComputeASTConsumerArguments(
   // We use createOutputFile here because this is exposed via libclang, and we
   // must disable the RemoveFileOnSignal behavior.
   // We use a temporary to avoid race conditions.
-  raw_ostream *OS =
+  raw_pwrite_stream *OS =
       CI.createOutputFile(CI.getFrontendOpts().OutputFile, /*Binary=*/true,
                           /*RemoveFileOnSignal=*/false, InFile,
                           /*Extension=*/"", /*useTemporary=*/true,
@@ -645,14 +645,9 @@ void DumpTokensAction::ExecuteAction() {
 
 void GeneratePTHAction::ExecuteAction() {
   CompilerInstance &CI = getCompilerInstance();
-  llvm::raw_fd_ostream *OS = CI.createDefaultOutputFile(true, getCurrentFile());
+  raw_pwrite_stream *OS = CI.createDefaultOutputFile(true, getCurrentFile());
   if (!OS)
     return;
-
-  if (!OS->supportsSeeking()) {
-    // FIXME: Don't fail this way.
-    llvm::report_fatal_error("PTH requires a seekable file for output!");
-  }
 
   CacheTokens(CI.getPreprocessor(), OS);
 }

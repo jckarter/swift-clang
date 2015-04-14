@@ -320,8 +320,8 @@ static bool ExecuteAssembler(AssemblerInvocation &Opts,
     MAI->setCompressDebugSections(true);
 
   bool IsBinary = Opts.OutputType == AssemblerInvocation::FT_Obj;
-  std::unique_ptr<raw_fd_ostream> Out = getOutputStream(Opts, Diags, IsBinary);
-  if (!Out)
+  std::unique_ptr<raw_fd_ostream> FDOS = getOutputStream(Opts, Diags, IsBinary);
+  if (!FDOS)
     return true;
 
   // FIXME: This is not pretty. MCContext has a ptr to MCObjectFileInfo and
@@ -360,6 +360,9 @@ static bool ExecuteAssembler(AssemblerInvocation &Opts,
   std::unique_ptr<MCSubtargetInfo> STI(
       TheTarget->createMCSubtargetInfo(Opts.Triple, Opts.CPU, FS));
 
+  raw_pwrite_stream *Out = FDOS.get();
+  std::unique_ptr<buffer_ostream> BOS;
+
   // FIXME: There is a bit of code duplication with addPassesToEmitFile.
   if (Opts.OutputType == AssemblerInvocation::FT_Asm) {
     MCInstPrinter *IP = TheTarget->createMCInstPrinter(
@@ -379,6 +382,11 @@ static bool ExecuteAssembler(AssemblerInvocation &Opts,
   } else {
     assert(Opts.OutputType == AssemblerInvocation::FT_Obj &&
            "Invalid file type!");
+    if (!FDOS->supportsSeeking()) {
+      BOS = make_unique<buffer_ostream>(*FDOS);
+      Out = BOS.get();
+    }
+
     MCCodeEmitter *CE = TheTarget->createMCCodeEmitter(*MCII, *MRI, Ctx);
     MCAsmBackend *MAB = TheTarget->createMCAsmBackend(*MRI, Opts.Triple,
                                                       Opts.CPU);
@@ -420,7 +428,8 @@ static bool ExecuteAssembler(AssemblerInvocation &Opts,
   }
 
   // Close the output stream early.
-  Out.reset();
+  BOS.reset();
+  FDOS.reset();
 
   // Delete output file if there were errors.
   if (Failed && Opts.OutputPath != "-")
