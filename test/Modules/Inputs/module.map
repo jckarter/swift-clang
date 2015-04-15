@@ -328,3 +328,7 @@ module recursive2 {
 module DebugModule {
   header "DebugModule.h"
 }
+
+module DebugCXX {
+  header "DebugCXX.h"
+}
