@@ -152,6 +152,8 @@ CODEGENOPT(DebugTypeExtRefs, 1, 0) ///< Whether or not we should emit debug info
                                    ///< for types as external references into a
                                    ///< PCH or a Module.
 
+CODEGENOPT(EmitLLVMUseLists, 1, 0) ///< Control whether to serialize use-lists.
+
 /// The user specified number of registers to be used for integral arguments,
 /// or 0 if unspecified.
 VALUE_CODEGENOPT(NumRegisterParameters, 32, 0)
