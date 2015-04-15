@@ -1412,7 +1412,7 @@ llvm::DIArray CGDebugInfo::CollectCXXTemplateParams(
 
 /// getOrCreateVTablePtrType - Return debug info descriptor for vtable.
 llvm::DIType CGDebugInfo::getOrCreateVTablePtrType(llvm::DIFile Unit) {
-  if (VTablePtrType.isValid())
+  if (VTablePtrType)
     return VTablePtrType;
 
   ASTContext &Context = CGM.getContext();
@@ -1742,7 +1742,7 @@ llvm::DIType CGDebugInfo::CreateTypeDefinition(const ObjCInterfaceType *Ty,
   if (SClass) {
     llvm::DIType SClassTy =
         getOrCreateType(CGM.getContext().getObjCInterfaceType(SClass), Unit);
-    if (!SClassTy.isValid())
+    if (!SClassTy)
       return llvm::DIType();
 
     llvm::DIType InhTag = DBuilder.createInheritance(RealDecl, SClassTy, 0, 0);
@@ -1771,7 +1771,7 @@ llvm::DIType CGDebugInfo::CreateTypeDefinition(const ObjCInterfaceType *Ty,
   for (ObjCIvarDecl *Field = ID->all_declared_ivar_begin(); Field;
        Field = Field->getNextIvar(), ++FieldNo) {
     llvm::DIType FieldTy = getOrCreateType(Field->getType(), Unit);
-    if (!FieldTy.isValid())
+    if (!FieldTy)
       return llvm::DIType();
 
     StringRef FieldName = Field->getName();
