@@ -1048,7 +1048,7 @@ ExprResult Sema::ParseObjCSelectorExpression(Selector Sel,
                                              SourceLocation RParenLoc,
                                              bool WarnMultipleSelectors) {
   ObjCMethodDecl *Method = LookupInstanceMethodInGlobalPool(Sel,
-                             SourceRange(LParenLoc, RParenLoc), false, false);
+                             SourceRange(LParenLoc, RParenLoc));
   if (!Method)
     Method = LookupFactoryMethodInGlobalPool(Sel,
                                           SourceRange(LParenLoc, RParenLoc));
@@ -2520,8 +2520,11 @@ ExprResult Sema::BuildInstanceMessage(Expr *Receiver,
         if (ObjCMethodDecl *BestMethod =
               SelectBestMethod(Sel, ArgsIn, Method->isInstanceMethod()))
           Method = BestMethod;
-        if (!AreMultipleMethodsInGlobalPool(Sel, Method->isInstanceMethod()))
+        if (!AreMultipleMethodsInGlobalPool(Sel, Method,
+                                            SourceRange(LBracLoc, RBracLoc),
+                                            receiverIsId)) {
           DiagnoseUseOfDecl(Method, SelLoc);
+        }
       }
     } else if (ReceiverType->isObjCClassOrClassKindOfType() ||
                ReceiverType->isObjCQualifiedClassType()) {
@@ -2560,14 +2563,12 @@ ExprResult Sema::BuildInstanceMessage(Expr *Receiver,
           // If not messaging 'self', look for any factory method named 'Sel'.
           if (!Receiver || !isSelfExpr(Receiver)) {
             Method = LookupFactoryMethodInGlobalPool(Sel, 
-                                                SourceRange(LBracLoc, RBracLoc),
-                                                     true);
+                                                SourceRange(LBracLoc, RBracLoc));
             if (!Method) {
               // If no class (factory) method was found, check if an _instance_
               // method of the same name exists in the root class only.
               Method = LookupInstanceMethodInGlobalPool(Sel,
-                                               SourceRange(LBracLoc, RBracLoc),
-                                                        true);
+                                               SourceRange(LBracLoc, RBracLoc));
               if (Method)
                   if (const ObjCInterfaceDecl *ID =
                       dyn_cast<ObjCInterfaceDecl>(Method->getDeclContext())) {
@@ -2644,6 +2645,14 @@ ExprResult Sema::BuildInstanceMessage(Expr *Receiver,
             if (OCIType->qual_empty()) {
               Method = LookupInstanceMethodInGlobalPool(Sel,
                                               SourceRange(LBracLoc, RBracLoc));
+              if (Method) {
+                if (auto BestMethod =
+                      SelectBestMethod(Sel, ArgsIn, Method->isInstanceMethod()))
+                  Method = BestMethod;
+                AreMultipleMethodsInGlobalPool(Sel, Method,
+                                               SourceRange(LBracLoc, RBracLoc),
+                                               true);
+              }
               if (Method && !forwardClass)
                 Diag(SelLoc, diag::warn_maynot_respond)
                   << OCIType->getInterfaceDecl()->getIdentifier()

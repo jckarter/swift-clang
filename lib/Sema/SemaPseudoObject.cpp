@@ -1179,7 +1179,7 @@ bool ObjCSubscriptOpBuilder::findAtIndexGetter() {
     AtIndexGetter = 
       S.LookupInstanceMethodInGlobalPool(AtIndexGetterSelector, 
                                          RefExpr->getSourceRange(), 
-                                         true, false);
+                                         true);
   }
   
   if (AtIndexGetter) {
@@ -1298,7 +1298,7 @@ bool ObjCSubscriptOpBuilder::findAtIndexSetter() {
     AtIndexSetter = 
       S.LookupInstanceMethodInGlobalPool(AtIndexSetterSelector, 
                                          RefExpr->getSourceRange(), 
-                                         true, false);
+                                         true);
   }
   
   bool err = false;
