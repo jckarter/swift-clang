@@ -3068,10 +3068,9 @@ void CGDebugInfo::EmitDeclare(const VarDecl *VD, llvm::dwarf::Tag Tag,
           Tag, llvm::DIDescriptor(Scope), VD->getName(), Unit, Line, Ty, ArgNo);
 
       // Insert an llvm.dbg.declare into the current block.
-      llvm::Instruction *Call =
-          DBuilder.insertDeclare(Storage, D, DBuilder.createExpression(Expr),
-                                 Builder.GetInsertBlock());
-      Call->setDebugLoc(llvm::DebugLoc::get(Line, Column, Scope));
+      DBuilder.insertDeclare(Storage, D, DBuilder.createExpression(Expr),
+                             llvm::DebugLoc::get(Line, Column, Scope),
+                             Builder.GetInsertBlock());
       return;
     } else if (isa<VariableArrayType>(VD->getType()))
       Expr.push_back(llvm::dwarf::DW_OP_deref);
@@ -3094,10 +3093,9 @@ void CGDebugInfo::EmitDeclare(const VarDecl *VD, llvm::dwarf::Tag Tag,
             CGM.getLangOpts().Optimize, Flags, ArgNo);
 
         // Insert an llvm.dbg.declare into the current block.
-        llvm::Instruction *Call = DBuilder.insertDeclare(
-            Storage, D, DBuilder.createExpression(Expr),
-            Builder.GetInsertBlock());
-        Call->setDebugLoc(llvm::DebugLoc::get(Line, Column, Scope));
+        DBuilder.insertDeclare(Storage, D, DBuilder.createExpression(Expr),
+                               llvm::DebugLoc::get(Line, Column, Scope),
+                               Builder.GetInsertBlock());
       }
       return;
     }
@@ -3109,9 +3107,9 @@ void CGDebugInfo::EmitDeclare(const VarDecl *VD, llvm::dwarf::Tag Tag,
       CGM.getLangOpts().Optimize, Flags, ArgNo);
 
   // Insert an llvm.dbg.declare into the current block.
-  llvm::Instruction *Call = DBuilder.insertDeclare(
-      Storage, D, DBuilder.createExpression(Expr), Builder.GetInsertBlock());
-  Call->setDebugLoc(llvm::DebugLoc::get(Line, Column, Scope));
+  DBuilder.insertDeclare(Storage, D, DBuilder.createExpression(Expr),
+                         llvm::DebugLoc::get(Line, Column, Scope),
+                         Builder.GetInsertBlock());
 }
 
 void CGDebugInfo::EmitDeclareOfAutoVariable(const VarDecl *VD,
@@ -3195,13 +3193,13 @@ void CGDebugInfo::EmitDeclareOfBlockDeclRefVariable(
                                    VD->getName(), Unit, Line, Ty);
 
   // Insert an llvm.dbg.declare into the current block.
-  llvm::Instruction *Call = InsertPoint ?
-      DBuilder.insertDeclare(Storage, D, DBuilder.createExpression(addr),
-                             InsertPoint)
-    : DBuilder.insertDeclare(Storage, D, DBuilder.createExpression(addr),
-                             Builder.GetInsertBlock());
-  Call->setDebugLoc(
-      llvm::DebugLoc::get(Line, Column, LexicalBlockStack.back()));
+  auto DL = llvm::DebugLoc::get(Line, Column, LexicalBlockStack.back());
+  if (InsertPoint)
+    DBuilder.insertDeclare(Storage, D, DBuilder.createExpression(addr), DL,
+                           InsertPoint);
+  else
+    DBuilder.insertDeclare(Storage, D, DBuilder.createExpression(addr), DL,
+                           Builder.GetInsertBlock());
 }
 
 /// EmitDeclareOfArgVariable - Emit call to llvm.dbg.declare for an argument
@@ -3360,16 +3358,15 @@ void CGDebugInfo::EmitDeclareOfBlockLiteralArgVariable(const CGBlockInfo &block,
 
   if (LocalAddr) {
     // Insert an llvm.dbg.value into the current block.
-    llvm::Instruction *DbgVal = DBuilder.insertDbgValueIntrinsic(
+    DBuilder.insertDbgValueIntrinsic(
         LocalAddr, 0, debugVar, DBuilder.createExpression(),
-        Builder.GetInsertBlock());
-    DbgVal->setDebugLoc(llvm::DebugLoc::get(line, column, scope));
+        llvm::DebugLoc::get(line, column, scope), Builder.GetInsertBlock());
   }
 
   // Insert an llvm.dbg.declare into the current block.
-  llvm::Instruction *DbgDecl = DBuilder.insertDeclare(
-      Arg, debugVar, DBuilder.createExpression(), Builder.GetInsertBlock());
-  DbgDecl->setDebugLoc(llvm::DebugLoc::get(line, column, scope));
+  DBuilder.insertDeclare(Arg, debugVar, DBuilder.createExpression(),
+                         llvm::DebugLoc::get(line, column, scope),
+                         Builder.GetInsertBlock());
 }
 
 /// If D is an out-of-class definition of a static data member of a class, find
