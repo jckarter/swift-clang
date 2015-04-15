@@ -2522,7 +2522,7 @@ ExprResult Sema::BuildInstanceMessage(Expr *Receiver,
           Method = BestMethod;
         if (!AreMultipleMethodsInGlobalPool(Sel, Method,
                                             SourceRange(LBracLoc, RBracLoc),
-                                            receiverIsId)) {
+                                            receiverIsIdLike)) {
           DiagnoseUseOfDecl(Method, SelLoc);
         }
       }
