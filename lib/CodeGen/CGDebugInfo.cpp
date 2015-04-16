@@ -610,7 +610,7 @@ static SmallString<256> getUniqueTagTypeName(const TagType *Ty,
   SmallString<256> FullName;
 
   if (CGM.getCodeGenOpts().ClangModule &&
-      TheCU.getLanguage() != llvm::dwarf::DW_LANG_C_plus_plus) {
+      TheCU->getSourceLanguage() != llvm::dwarf::DW_LANG_C_plus_plus) {
     index::generateUSRForDecl(Ty->getDecl(), FullName);
     return FullName;
   }
@@ -1721,7 +1721,7 @@ llvm::DIType CGDebugInfo::CreateTypeDefinition(const ObjCInterfaceType *Ty,
   // For module debugging, get the UID of the type.
   SmallString<256> FullName;
   if (CGM.getCodeGenOpts().ClangModule &&
-      TheCU.getLanguage() != llvm::dwarf::DW_LANG_C_plus_plus)
+      TheCU->getSourceLanguage() != llvm::dwarf::DW_LANG_C_plus_plus)
     index::generateUSRForDecl(Ty->getDecl(), FullName);
 
   llvm::DICompositeType RealDecl = DBuilder.createStructType(
@@ -2185,12 +2185,11 @@ llvm::DICompileUnit CGDebugInfo::getOrCreateModuleRef(unsigned Idx) {
         OS << " -isysroot " << CGM.getHeaderSearchOpts().Sysroot;
       }
       llvm::DIBuilder DIB(CGM.getModule());
-      ModuleRef = DIB.createCompileUnit(TheCU.getLanguage(),
-          internString(Info->ModuleName), internString(Info->Dir),
-          TheCU.getProducer(), true, internString(Flags.str()), 0,
-          internString(Info->ASTFile),
-          llvm::DIBuilder::FullDebug,
-          Info->ModuleHash);
+      ModuleRef = DIB.createCompileUnit(
+          TheCU->getSourceLanguage(), internString(Info->ModuleName),
+          internString(Info->Dir), TheCU->getProducer(), true,
+          internString(Flags.str()), 0, internString(Info->ASTFile),
+          llvm::DIBuilder::FullDebug, Info->ModuleHash);
       DIB.finalize();
       ModuleRefCache.insert(std::make_pair(Info->ModuleHash, ModuleRef));
     }
@@ -2229,8 +2228,9 @@ CGDebugInfo::getTypeASTRefOrNull(Decl *TyDecl, llvm::DIFile F) {
       llvm_unreachable("unhandled tag");
     SmallString<256> buf;
     index::generateUSRForDecl(TyDecl, buf);
-    return DBuilder.createExternalTypeRef(Tag,
-        DBuilder.createFile(ModuleRef.getSplitDebugFilename(), ""), buf.str());
+    return DBuilder.createExternalTypeRef(
+        Tag, DBuilder.createFile(ModuleRef->getSplitDebugFilename(), ""),
+        buf.str());
   }
 
   return llvm::DIType();
@@ -2798,7 +2798,7 @@ void CGDebugInfo::EmitFunctionDecl(GlobalDecl GD, SourceLocation Loc,
 
   unsigned Flags = 0;
   llvm::DIFile Unit = getOrCreateFile(Loc);
-  llvm::DIDescriptor FDContext(Unit);
+  llvm::DIDescriptor FDContext = Unit;
   llvm::DIArray TParamsArray;
   if (isa<FunctionDecl>(D)) {
     // If there is a DISubprogram for this function available then use it.
