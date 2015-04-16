@@ -2822,7 +2822,7 @@ void CGDebugInfo::EmitFunctionDecl(GlobalDecl GD, SourceLocation Loc,
                              TParamsArray, Flags);
   } else if (const ObjCMethodDecl *OMD = dyn_cast<ObjCMethodDecl>(D)) {
     Name = getObjCMethodName(OMD);
-    Flags |= llvm::DIDescriptor::FlagPrototyped;
+    Flags |= llvm::DebugNode::FlagPrototyped;
   } else {
     llvm_unreachable("not a function or ObjC method");
   }
@@ -2830,7 +2830,7 @@ void CGDebugInfo::EmitFunctionDecl(GlobalDecl GD, SourceLocation Loc,
     Name = Name.substr(1);
 
   if (D->isImplicit()) {
-    Flags |= llvm::DIDescriptor::FlagArtificial;
+    Flags |= llvm::DebugNode::FlagArtificial;
     // Artificial functions without a location should not silently reuse CurLoc.
     if (Loc.isInvalid())
       CurLoc = SourceLocation();
