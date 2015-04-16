@@ -343,6 +343,7 @@ CodeGen::CGCXXABI *CodeGen::CreateItaniumCXXABI(CodeGenModule &CGM) {
   // between the ARM and iOS ABIs.
   case TargetCXXABI::GenericARM:
   case TargetCXXABI::iOS:
+  case TargetCXXABI::iOSv7k:
     return new ARMCXXABI(CGM);
 
   case TargetCXXABI::iOS64:
