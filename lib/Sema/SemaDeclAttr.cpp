@@ -2234,6 +2234,22 @@ static void handleObjCNSObject(Sema &S, Decl *D, const AttributeList &Attr) {
                               Attr.getAttributeSpellingListIndex()));
 }
 
+static void handleObjCIndependentClass(Sema &S, Decl *D, const AttributeList &Attr) {
+  if (TypedefNameDecl *TD = dyn_cast<TypedefNameDecl>(D)) {
+    QualType T = TD->getUnderlyingType();
+    if (!T->isObjCObjectPointerType()) {
+      S.Diag(TD->getLocation(), diag::warn_ptr_independentclass_attribute);
+      return;
+    }
+  } else {
+    S.Diag(D->getLocation(), diag::warn_independentclass_attribute);
+    return;
+  }
+  D->addAttr(::new (S.Context)
+             ObjCIndependentClassAttr(Attr.getRange(), S.Context,
+                              Attr.getAttributeSpellingListIndex()));
+}
+
 static void handleBlocksAttr(Sema &S, Decl *D, const AttributeList &Attr) {
   if (!Attr.isArgIdent(0)) {
     S.Diag(Attr.getLoc(), diag::err_attribute_argument_n_type)
@@ -4952,6 +4968,9 @@ static void ProcessDeclAttribute(Sema &S, Scope *scope, Decl *D,
     break;
   case AttributeList::AT_ObjCNSObject:
     handleObjCNSObject(S, D, Attr);
+    break;
+  case AttributeList::AT_ObjCIndependentClass:
+    handleObjCIndependentClass(S, D, Attr);
     break;
   case AttributeList::AT_Blocks:
     handleBlocksAttr(S, D, Attr);

@@ -3517,6 +3517,11 @@ bool Type::isObjCNSObjectType() const {
     return typedefType->getDecl()->hasAttr<ObjCNSObjectAttr>();
   return false;
 }
+bool Type::isObjCIndependentClassType() const {
+  if (const TypedefType *typedefType = dyn_cast<TypedefType>(this))
+    return typedefType->getDecl()->hasAttr<ObjCIndependentClassAttr>();
+  return false;
+}
 bool Type::isObjCRetainableType() const {
   return isObjCObjectPointerType() ||
          isBlockPointerType() ||
