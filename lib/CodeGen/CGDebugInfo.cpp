@@ -609,15 +609,18 @@ static SmallString<256> getUniqueTagTypeName(const TagType *Ty,
                                              llvm::DICompileUnit TheCU) {
   SmallString<256> FullName;
 
+  const TagDecl *TD = Ty->getDecl();
+
+  // In a clang module even non-C++ types are assigned a UID.
   if (CGM.getCodeGenOpts().ClangModule &&
-      TheCU->getSourceLanguage() != llvm::dwarf::DW_LANG_C_plus_plus) {
+      !((TheCU->getSourceLanguage() == llvm::dwarf::DW_LANG_C_plus_plus) &&
+        (isa<CXXRecordDecl>(TD) || isa<EnumDecl>(TD)))) {
     index::generateUSRForDecl(Ty->getDecl(), FullName);
     return FullName;
   }
-
-  // FIXME: ODR should apply to ObjC++ exactly the same wasy it does to C++.
+  
+  // FIXME: ODR should apply to ObjC++ exactly the same way it does to C++.
   // For now, only apply ODR with C++.
-  const TagDecl *TD = Ty->getDecl();
   if (TheCU->getSourceLanguage() != llvm::dwarf::DW_LANG_C_plus_plus ||
       !TD->isExternallyVisible())
     return FullName;
@@ -2196,31 +2199,40 @@ CGDebugInfo::getTypeASTRefOrNull(Decl *TyDecl, llvm::DIFile F) {
     getOrCreateModuleRef(TyDecl->getOwningModuleID());
 
   if (ModuleRef) {
+    SmallString<256> Buf;
+    StringRef UID;
     unsigned Tag = 0;
-    if (auto *RD = dyn_cast<RecordDecl>(TyDecl)) {
+    if (auto *RD = dyn_cast<CXXRecordDecl>(TyDecl)) {
       if (!RD->getDefinition())
         return llvm::DIType();
       Tag = getTagForRecord(RD);
-    } else if (auto *ID = dyn_cast<ObjCInterfaceDecl>(TyDecl)) {
-      if (!ID->getDefinition())
+      UID = getUniqueTagTypeName(cast<TagType>(RD->getTypeForDecl()),
+                                 CGM, TheCU);
+    } else if (auto *RD = dyn_cast<RecordDecl>(TyDecl)) {
+      if (!RD->getDefinition())
         return llvm::DIType();
-      Tag = llvm::dwarf::DW_TAG_structure_type;
+      Tag = getTagForRecord(RD);
     } else if (auto *ED = dyn_cast<EnumDecl>(TyDecl)) {
       if (!ED->getDefinition())
         return llvm::DIType();
       Tag = llvm::dwarf::DW_TAG_enumeration_type;
-    } else if (isa<TypedefDecl>(TyDecl))
-      // Typedef types don't yet have a UID.
-      return llvm::DIType();
+    } else if (auto *ID = dyn_cast<ObjCInterfaceDecl>(TyDecl)) {
+      if (!ID->getDefinition())
+        return llvm::DIType();
+      Tag = llvm::dwarf::DW_TAG_structure_type;
+    }
     if (!Tag)
       llvm_unreachable("unhandled tag");
-    SmallString<256> buf;
-    index::generateUSRForDecl(TyDecl, buf);
-    return DBuilder.createExternalTypeRef(
-        Tag, DBuilder.createFile(ModuleRef->getSplitDebugFilename(), ""),
-        buf.str());
-  }
 
+    // Handle non-C++ types.
+    if (UID.empty()) {
+      index::generateUSRForDecl(TyDecl, Buf);
+      UID = Buf.str();
+    }
+    assert(!UID.empty() && "could not determine unique type identifier");
+    auto File = DBuilder.createFile(ModuleRef->getSplitDebugFilename(), "");
+    return DBuilder.createExternalTypeRef(Tag, File, UID);
+  }
   return llvm::DIType();
 }
 
@@ -2230,15 +2242,12 @@ llvm::DIType CGDebugInfo::getTypeASTRefOrNull(QualType Ty, llvm::DIFile F) {
   switch (Ty->getTypeClass()) {
   // Handle all types that have a declaration.
   case Type::Typedef:
-      return getTypeASTRefOrNull(cast<TypedefType>(Ty)->getDecl(), F);
+    // FIXME: These don't have a UID IR field yet.
+    return llvm::DIType();
   case Type::Record:
     return getTypeASTRefOrNull(cast<RecordType>(Ty)->getDecl(), F);
   case Type::Enum:
     return getTypeASTRefOrNull(cast<EnumType>(Ty)->getDecl(), F);
-  case Type::TemplateTypeParm:
-    return getTypeASTRefOrNull(cast<TemplateTypeParmType>(Ty)->getDecl(), F);
-  case Type::UnresolvedUsing:
-    return getTypeASTRefOrNull(cast<UnresolvedUsingType>(Ty)->getDecl(), F);
   case Type::ObjCInterface:
     return getTypeASTRefOrNull(cast<ObjCInterfaceType>(Ty)->getDecl(), F);
     
