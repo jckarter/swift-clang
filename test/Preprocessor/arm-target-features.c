@@ -179,7 +179,7 @@
 // RUN: %clang -target armv7 -mcpu=cortex-a7 -x c -E -dM %s -o - | FileCheck --check-prefix=A7 %s
 // RUN: %clang -target armv7 -mthumb -mcpu=cortex-a7 -x c -E -dM %s -o - | FileCheck --check-prefix=A7 %s
 // A7:#define __ARM_ARCH 7
-// A7:#define __ARM_ARCH_7K__ 1
+// A7:#define __ARM_ARCH_7K__ 2
 // A7:#define __ARM_ARCH_EXT_IDIV__ 1
 #endif
 // A7:#define __ARM_ARCH_PROFILE 'A'
