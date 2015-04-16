@@ -103,7 +103,8 @@ GeneratePCHAction::CreateASTConsumer(CompilerInstance &CI, StringRef InFile) {
   CGOpts.EmitGcovNotes = false;
   CGOpts.OptimizationLevel = 0;
   CGOpts.ClangModule = true;
-  CGOpts.setDebugInfo(CodeGenOptions::LimitedDebugInfo);
+  CGOpts.DebugTypeExtRefs = true;
+  CGOpts.setDebugInfo(CodeGenOptions::FullDebugInfo);
   CGOpts.SplitDwarfFile = OutputFile;
   Consumers.push_back(CI.getModuleProvider().CreateModuleContainerGenerator(
       CI.getDiagnostics(), CGOpts.MainFileName, CI.getHeaderSearchOpts(),
@@ -160,7 +161,8 @@ GenerateModuleAction::CreateASTConsumer(CompilerInstance &CI,
   CGOpts.EmitGcovNotes = false;
   CGOpts.OptimizationLevel = 0;
   CGOpts.ClangModule = true;
-  CGOpts.setDebugInfo(CodeGenOptions::LimitedDebugInfo);
+  CGOpts.DebugTypeExtRefs = true;
+  CGOpts.setDebugInfo(CodeGenOptions::FullDebugInfo);
   CGOpts.MainFileName = Module->getFullModuleName();
   CGOpts.SplitDwarfFile = OutputFile;
   Consumers.push_back(CI.getModuleProvider().CreateModuleContainerGenerator(

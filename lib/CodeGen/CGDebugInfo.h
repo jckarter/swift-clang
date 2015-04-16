@@ -366,7 +366,7 @@ private:
   
   /// \brief Attempt to get a pointer to the serialized
   /// AST of the declaration of the type.
-  llvm::DIType getTypeASTRefOrNull(Decl *Decl, llvm::DIFile F);
+  llvm::DIType getTypeASTRefOrNull(Decl *TyDecl, llvm::DIFile F);
 
   /// \brief Get the type from the cache or create a new
   /// partial type if necessary.
