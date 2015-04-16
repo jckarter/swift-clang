@@ -1475,7 +1475,7 @@ llvm::DIType CGDebugInfo::getOrCreateStandaloneType(QualType D,
   assert(DebugKind >= CodeGenOptions::LimitedDebugInfo);
   assert(!D.isNull() && "null type");
   llvm::DIType T = getOrCreateType(D, getOrCreateFile(Loc));
-  assert(T.get() && "could not create debug info for type");
+  assert(T && "could not create debug info for type");
   RetainedTypes.push_back(D.getAsOpaquePtr());
   return T;
 }
