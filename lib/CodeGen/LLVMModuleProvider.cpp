@@ -63,8 +63,6 @@ class ModuleContainerGenerator : public ASTConsumer {
     }
 
     bool VisitTypeDecl(TypeDecl *D) {
-      if (D->isInvalidDecl())
-        return true;
       const Type *Ty = D->getTypeForDecl();
       if (Ty && CanRepresent(Ty))
         DI.getOrCreateStandaloneType(QualType(Ty, 0), D->getLocation());
@@ -72,8 +70,6 @@ class ModuleContainerGenerator : public ASTConsumer {
     }
 
     bool VisitValueDecl(ValueDecl *D) {
-      if (D->isInvalidDecl())
-        return true;
       QualType QualTy = D->getType();
       if (!QualTy.isNull() && CanRepresent(QualTy.getTypePtr()))
         DI.getOrCreateStandaloneType(QualTy, D->getLocation());
@@ -81,8 +77,6 @@ class ModuleContainerGenerator : public ASTConsumer {
     }
 
     bool VisitObjCInterfaceDecl(ObjCInterfaceDecl *D) {
-      if (D->isInvalidDecl())
-        return true;
       QualType QualTy(D->getTypeForDecl(), 0);
       if (!QualTy.isNull() && CanRepresent(QualTy.getTypePtr()))
         DI.getOrCreateStandaloneType(QualTy, D->getLocation());
@@ -90,8 +84,6 @@ class ModuleContainerGenerator : public ASTConsumer {
     }
 
     bool VisitFunctionDecl(FunctionDecl *D) {
-      if (D->isInvalidDecl())
-        return true;
       if (isa<CXXMethodDecl>(D))
         // Constructing the this argument mandates a CodeGenFunction.
         return true;
@@ -108,8 +100,6 @@ class ModuleContainerGenerator : public ASTConsumer {
     }
 
     bool VisitObjCMethodDecl(ObjCMethodDecl *D) {
-      if (D->isInvalidDecl())
-        return true;
       if (!D->getClassInterface())
         return true;
 
@@ -155,10 +145,11 @@ public:
   }
 
   bool HandleTopLevelDecl(DeclGroupRef D) override {
-    if (CodeGenOpts.getDebugInfo() > CodeGenOptions::NoDebugInfo) {
+    if (!Diags.hasErrorOccurred() &&
+        (CodeGenOpts.getDebugInfo() > CodeGenOptions::NoDebugInfo)) {
       // Collect all the debug info.
       for (auto *I : D) {
-        if (!I->isFromASTFile()) {
+        if (!I->isInvalidDecl() && !I->isFromASTFile()) {
           DebugTypeVisitor DTV(*Builder->getModuleDebugInfo(), *Ctx);
           DTV.TraverseDecl(I);
         }
@@ -174,7 +165,8 @@ public:
     if (Diags.hasErrorOccurred()) {
       if (Builder)
         Builder->clear();
-      M.reset();
+      M.release();
+      VMContext.release();
       return;
     }
 
