@@ -2220,8 +2220,11 @@ CGDebugInfo::getTypeASTRefOrNull(Decl *TyDecl, llvm::DIFile F) {
       if (!RD->getDefinition())
         return llvm::DIType();
       Tag = getTagForRecord(RD);
-      UID = getUniqueTagTypeName(cast<TagType>(RD->getTypeForDecl()),
-                                 CGM, TheCU);
+      if (TheCU->getSourceLanguage() == llvm::dwarf::DW_LANG_C_plus_plus) {
+        UID = getUniqueTagTypeName(cast<TagType>(RD->getTypeForDecl()),
+                                   CGM, TheCU);
+        assert(!UID.empty() && "no C++ mangling");
+      }
     } else if (auto *RD = dyn_cast<RecordDecl>(TyDecl)) {
       if (!RD->getDefinition())
         return llvm::DIType();
