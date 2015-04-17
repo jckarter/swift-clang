@@ -21,7 +21,8 @@
 using DebugCXX::Foo;
 
 Foo foo;
-
+DebugCXX::Enum e;
+DebugCXX::Bar<long> bar;
 // CHECK-AST: DW_TAG_compile_unit
 // CHECK-AST: DW_AT_name {{.*(DebugCXX|<stdin>)}}
 // CHECK-AST: DW_TAG_structure_type
@@ -29,11 +30,15 @@ Foo foo;
 // CHECK-AST: DW_TAG_member
 // CHECK-AST: DW_AT_name {{.*}}"i"
 // CHECK-MODULE: .apple_types contents:
+// CHECK-MODULE: Name: {{.*}}"c:@N@DebugCXX@E@Enum"
 // CHECK-MODULE: Name: {{.*}}"c:@N@DebugCXX@S@Foo"
 // CHECK-PCH: .apple_types contents:
 // CHECK-PCH: Name: {{.*}}"_ZTSN8DebugCXX3FooE"
+// CHECK-PCH: Name: {{.*}}"_ZTSN8DebugCXX4EnumE"
 
 // CHECK-EXTREF-MODULE: ![[FOO:.*]] = !MDExternalTypeRef(tag: DW_TAG_structure_type, file: ![[PCM:[0-9]+]], identifier: "c:@N@DebugCXX@S@Foo")
+// CHECK-EXTREF-MODULE: !MDExternalTypeRef(tag: DW_TAG_enumeration_type, file: ![[PCM]], identifier: "c:@N@DebugCXX@E@Enum")
 // CHECK-EXTREF-MODULE: !MDImportedEntity(tag: DW_TAG_imported_declaration, {{.*}}, entity: ![[FOO]], line: 21)
 // CHECK-EXTREF-PCH: ![[FOO:.*]] = !MDExternalTypeRef(tag: DW_TAG_structure_type, file: ![[PCM:[0-9]+]], identifier: "_ZTSN8DebugCXX3FooE")
+// CHECK-EXTREF-PCH: !MDExternalTypeRef(tag: DW_TAG_enumeration_type, file: ![[PCM]], identifier: "_ZTSN8DebugCXX4EnumE")
 // CHECK-EXTREF-PCH: !MDImportedEntity(tag: DW_TAG_imported_declaration, {{.*}}, entity: ![[FOO]], line: 21)

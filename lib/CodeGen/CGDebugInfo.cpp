@@ -2198,8 +2198,8 @@ llvm::DICompileUnit CGDebugInfo::getOrCreateModuleRef(unsigned Idx) {
   return ModuleRef;
 }
 
-/// GetTypeDeclASTRefOrNull - If the type T is declared in a Module or PCH
-/// return a DIType that references the module.
+/// GetTypeDeclASTRefOrNull - If the type is declared in a Module or
+/// PCH return a DIType that references the module.
 llvm::DIType
 CGDebugInfo::getTypeASTRefOrNull(Decl *TyDecl, llvm::DIFile F) {
   if (!TyDecl || !TyDecl->isFromASTFile())
@@ -2212,7 +2212,11 @@ CGDebugInfo::getTypeASTRefOrNull(Decl *TyDecl, llvm::DIFile F) {
     SmallString<256> Buf;
     StringRef UID;
     unsigned Tag = 0;
-    if (auto *RD = dyn_cast<CXXRecordDecl>(TyDecl)) {
+    if (isa<ClassTemplateSpecializationDecl>(TyDecl))
+      // ClassTemplateSpecializationDecl tends to lie about its
+      // isFromASTFile property.
+      return llvm::DIType();
+    else if (auto *RD = dyn_cast<CXXRecordDecl>(TyDecl)) {
       if (!RD->getDefinition())
         return llvm::DIType();
       Tag = getTagForRecord(RD);
@@ -2226,6 +2230,9 @@ CGDebugInfo::getTypeASTRefOrNull(Decl *TyDecl, llvm::DIFile F) {
       if (!ED->getDefinition())
         return llvm::DIType();
       Tag = llvm::dwarf::DW_TAG_enumeration_type;
+      if (TheCU->getSourceLanguage() == llvm::dwarf::DW_LANG_C_plus_plus)
+        UID = getUniqueTagTypeName(cast<TagType>(ED->getTypeForDecl()),
+                                   CGM, TheCU);
     } else if (auto *ID = dyn_cast<ObjCInterfaceDecl>(TyDecl)) {
       if (!ID->getDefinition())
         return llvm::DIType();
