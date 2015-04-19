@@ -488,6 +488,8 @@ ActOnSuperClassOfClassInterface(Scope *S,
       dyn_cast_or_null<ObjCInterfaceDecl>(PrevDecl);
     QualType SuperClassType;
 
+    // Diagnose availability in the context of the @interface.
+    ContextRAII SavedContext(*this, IDecl);
     // Diagnose classes that inherit from deprecated classes.
     if (SuperClassDecl) {
       (void)DiagnoseUseOfDecl(SuperClassDecl, SuperLoc);
@@ -862,6 +864,19 @@ static bool checkTypeParamListConsistency(Sema &S,
   return false;
 }
 
+static void diagnoseUseOfProtocols(Sema &TheSema,
+                                   ObjCContainerDecl *CD,
+                                   ObjCProtocolDecl *const *ProtoRefs,
+                                   unsigned NumProtoRefs,
+                                   const SourceLocation *ProtoLocs) {
+  assert(ProtoRefs);
+  // Diagnose availability in the context of the ObjC container.
+  Sema::ContextRAII SavedContext(TheSema, CD);
+  for (unsigned i = 0; i < NumProtoRefs; ++i) {
+    (void)TheSema.DiagnoseUseOfDecl(ProtoRefs[i], ProtoLocs[i]);
+  }
+}
+
 Decl *Sema::
 ActOnStartClassInterface(Scope *S, SourceLocation AtInterfaceLoc,
                          IdentifierInfo *ClassName, SourceLocation ClassLoc,
@@ -977,6 +992,8 @@ ActOnStartClassInterface(Scope *S, SourceLocation AtInterfaceLoc,
 
   // Check then save referenced protocols.
   if (NumProtoRefs) {
+    diagnoseUseOfProtocols(*this, IDecl, (ObjCProtocolDecl*const*)ProtoRefs,
+                           NumProtoRefs, ProtoLocs);
     IDecl->setProtocolList((ObjCProtocolDecl*const*)ProtoRefs, NumProtoRefs,
                            ProtoLocs, Context);
     IDecl->setEndOfDefinitionLoc(EndProtoLoc);
@@ -1138,6 +1155,8 @@ Sema::ActOnStartProtocolInterface(SourceLocation AtProtoInterfaceLoc,
 
   if (!err && NumProtoRefs ) {
     /// Check then save referenced protocols.
+    diagnoseUseOfProtocols(*this, PDecl, (ObjCProtocolDecl*const*)ProtoRefs,
+                           NumProtoRefs, ProtoLocs);
     PDecl->setProtocolList((ObjCProtocolDecl*const*)ProtoRefs, NumProtoRefs,
                            ProtoLocs, Context);
   }
@@ -1165,7 +1184,7 @@ static bool NestedProtocolHasNoDefinition(ObjCProtocolDecl *PDecl,
 /// issues an error if they are not declared. It returns list of
 /// protocol declarations in its 'Protocols' argument.
 void
-Sema::FindProtocolDeclaration(bool WarnOnDeclarations,
+Sema::FindProtocolDeclaration(bool WarnOnDeclarations, bool ForObjCContainer,
                               const IdentifierLocPair *ProtocolId,
                               unsigned NumProtocols,
                               SmallVectorImpl<Decl *> &Protocols) {
@@ -1191,8 +1210,12 @@ Sema::FindProtocolDeclaration(bool WarnOnDeclarations,
     // If this is a forward protocol declaration, get its definition.
     if (!PDecl->isThisDeclarationADefinition() && PDecl->getDefinition())
       PDecl = PDecl->getDefinition();
-    
-    (void)DiagnoseUseOfDecl(PDecl, ProtocolId[i].second);
+
+    // For an objc container, delay protocol reference checking until after we
+    // can set the objc decl as the availability context, otherwise check now.
+    if (!ForObjCContainer) {
+      (void)DiagnoseUseOfDecl(PDecl, ProtocolId[i].second);
+    }
 
     // If this is a forward declaration and we are supposed to warn in this
     // case, do it.
@@ -1305,7 +1328,11 @@ void Sema::actOnObjCTypeArgsOrProtocolQualifiers(
     for (unsigned i = 0, n = protocols.size(); i != n; ++i) {
       ObjCProtocolDecl *&proto 
         = reinterpret_cast<ObjCProtocolDecl *&>(protocols[i]);
-      (void)DiagnoseUseOfDecl(proto, identifierLocs[i]);
+      // For an objc container, delay protocol reference checking until after we
+      // can set the objc decl as the availability context, otherwise check now.
+      if (!warnOnIncompleteProtocols) {
+        (void)DiagnoseUseOfDecl(proto, identifierLocs[i]);
+      }
 
       // If this is a forward protocol declaration, get its definition.
       if (!proto->isThisDeclarationADefinition() && proto->getDefinition())
@@ -1732,7 +1759,9 @@ ActOnStartCategoryInterface(SourceLocation AtInterfaceLoc,
   CurContext->addDecl(CDecl);
 
   if (NumProtoRefs) {
-    CDecl->setProtocolList((ObjCProtocolDecl*const*)ProtoRefs, NumProtoRefs, 
+    diagnoseUseOfProtocols(*this, CDecl, (ObjCProtocolDecl*const*)ProtoRefs,
+                           NumProtoRefs, ProtoLocs);
+    CDecl->setProtocolList((ObjCProtocolDecl*const*)ProtoRefs, NumProtoRefs,
                            ProtoLocs, Context);
     // Protocols in the class extension belong to the class.
     if (CDecl->IsClassExtension())
