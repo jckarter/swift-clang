@@ -268,7 +268,7 @@ Decl *Parser::ParseObjCAtInterfaceDeclaration(SourceLocation AtLoc,
     SmallVector<Decl *, 8> ProtocolRefs;
     SmallVector<SourceLocation, 8> ProtocolLocs;
     if (Tok.is(tok::less) &&
-        ParseObjCProtocolReferences(ProtocolRefs, ProtocolLocs, true,
+        ParseObjCProtocolReferences(ProtocolRefs, ProtocolLocs, true, true,
                                     LAngleLoc, EndProtoLoc,
                                     /*consumeLastToken=*/true))
       return nullptr;
@@ -343,11 +343,12 @@ Decl *Parser::ParseObjCAtInterfaceDeclaration(SourceLocation AtLoc,
         protocolLocs.push_back(pair.second);
       }
       Actions.FindProtocolDeclaration(/*WarnOnDeclarations=*/true,
+                                      /*ForObjCContainer=*/true,
                                       &ProtocolIdents[0], ProtocolIdents.size(),
                                       protocols);
     }
   } else if (protocols.empty() && Tok.is(tok::less) &&
-             ParseObjCProtocolReferences(protocols, protocolLocs, true,
+             ParseObjCProtocolReferences(protocols, protocolLocs, true, true,
                                          LAngleLoc, EndProtoLoc,
                                          /*consumeLastToken=*/true)) {
     return nullptr;
@@ -1547,7 +1548,7 @@ Decl *Parser::ParseObjCMethodDecl(SourceLocation mLoc,
 bool Parser::
 ParseObjCProtocolReferences(SmallVectorImpl<Decl *> &Protocols,
                             SmallVectorImpl<SourceLocation> &ProtocolLocs,
-                            bool WarnOnDeclarations,
+                            bool WarnOnDeclarations, bool ForObjCContainer,
                             SourceLocation &LAngleLoc, SourceLocation &EndLoc,
                             bool consumeLastToken) {
   assert(Tok.is(tok::less) && "expected <");
@@ -1584,7 +1585,7 @@ ParseObjCProtocolReferences(SmallVectorImpl<Decl *> &Protocols,
     return true;
 
   // Convert the list of protocols identifiers into a list of protocol decls.
-  Actions.FindProtocolDeclaration(WarnOnDeclarations,
+  Actions.FindProtocolDeclaration(WarnOnDeclarations, ForObjCContainer,
                                   &ProtocolIdents[0], ProtocolIdents.size(),
                                   Protocols);
   return false;
@@ -1597,7 +1598,7 @@ TypeResult Parser::parseObjCProtocolQualifierType(SourceLocation &rAngleLoc) {
   SourceLocation lAngleLoc;
   SmallVector<Decl *, 8> protocols;
   SmallVector<SourceLocation, 8> protocolLocs;
-  (void)ParseObjCProtocolReferences(protocols, protocolLocs, false,
+  (void)ParseObjCProtocolReferences(protocols, protocolLocs, false, false,
                                     lAngleLoc, rAngleLoc,
                                     /*consumeLastToken=*/true);
   TypeResult result = Actions.actOnObjCProtocolQualifierType(lAngleLoc,
@@ -1798,6 +1799,7 @@ void Parser::parseObjCTypeArgsAndProtocolQualifiers(
     } else {
       ParseObjCProtocolReferences(protocols, protocolLocs, 
                                   /*WarnOnDeclarations=*/false,
+                                  /*ForObjCContainer=*/false,
                                   protocolLAngleLoc, protocolRAngleLoc, 
                                   consumeLastToken);
     }
@@ -2051,7 +2053,7 @@ Parser::ParseObjCAtProtocolDeclaration(SourceLocation AtLoc,
   SmallVector<Decl *, 8> ProtocolRefs;
   SmallVector<SourceLocation, 8> ProtocolLocs;
   if (Tok.is(tok::less) &&
-      ParseObjCProtocolReferences(ProtocolRefs, ProtocolLocs, false,
+      ParseObjCProtocolReferences(ProtocolRefs, ProtocolLocs, false, true,
                                   LAngleLoc, EndProtoLoc,
                                   /*consumeLastToken=*/true))
     return DeclGroupPtrTy();
@@ -2152,6 +2154,7 @@ Parser::ParseObjCAtImplementationDeclaration(SourceLocation AtLoc) {
       SmallVector<SourceLocation, 4> protocolLocs;
       (void)ParseObjCProtocolReferences(protocols, protocolLocs, 
                                         /*warnOnIncompleteProtocols=*/false,
+                                        /*ForObjCContainer=*/false,
                                         protocolLAngleLoc, protocolRAngleLoc,
                                         /*consumeLastToken=*/true);
     }
@@ -2187,6 +2190,7 @@ Parser::ParseObjCAtImplementationDeclaration(SourceLocation AtLoc) {
       SmallVector<SourceLocation, 4> protocolLocs;
       (void)ParseObjCProtocolReferences(protocols, protocolLocs, 
                                         /*warnOnIncompleteProtocols=*/false,
+                                        /*ForObjCContainer=*/false,
                                         protocolLAngleLoc, protocolRAngleLoc,
                                         /*consumeLastToken=*/true);
     }
