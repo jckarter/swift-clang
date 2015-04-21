@@ -1457,7 +1457,8 @@ llvm::MDType *CGDebugInfo::getOrCreateStandaloneType(QualType D,
   assert(!D.isNull() && "null type");
   llvm::MDType *T = getOrCreateType(D, getOrCreateFile(Loc));
   assert(T && "could not create debug info for type");
-  RetainedTypes.push_back(D.getAsOpaquePtr());
+  if (!isa<llvm::MDExternalTypeRef>(T))
+    RetainedTypes.push_back(D.getAsOpaquePtr());
   return T;
 }
 
@@ -2141,8 +2142,8 @@ ObjCInterfaceDecl *CGDebugInfo::getObjCInterfaceDecl(QualType Ty) {
   }
 }
 
-llvm::DICompileUnit CGDebugInfo::getOrCreateModuleRef(unsigned Idx) {
-  llvm::DICompileUnit ModuleRef;
+llvm::MDCompileUnit *CGDebugInfo::getOrCreateModuleRef(unsigned Idx) {
+  llvm::MDCompileUnit *ModuleRef = nullptr;
   auto *Reader = CGM.getContext().getExternalSource();
   if (auto Info = Reader->getSourceDescriptor(Idx)) {
     auto it = ModuleRefCache.find(Info->ModuleHash);
@@ -2175,13 +2176,13 @@ llvm::DICompileUnit CGDebugInfo::getOrCreateModuleRef(unsigned Idx) {
 }
 
 /// GetTypeDeclASTRefOrNull - If the type is declared in a Module or
-/// PCH return a DIType that references the module.
-llvm::DIType
-CGDebugInfo::getTypeASTRefOrNull(Decl *TyDecl, llvm::DIFile F) {
+/// PCH return a MDType that references the module.
+llvm::MDType *
+CGDebugInfo::getTypeASTRefOrNull(Decl *TyDecl, llvm::MDFile *F) {
   if (!TyDecl || !TyDecl->isFromASTFile())
-    return llvm::DIType();
+    return nullptr;
 
-  llvm::DICompileUnit ModuleRef =
+  llvm::MDCompileUnit *ModuleRef =
     getOrCreateModuleRef(TyDecl->getOwningModuleID());
 
   if (ModuleRef) {
@@ -2191,10 +2192,10 @@ CGDebugInfo::getTypeASTRefOrNull(Decl *TyDecl, llvm::DIFile F) {
     if (isa<ClassTemplateSpecializationDecl>(TyDecl))
       // ClassTemplateSpecializationDecl tends to lie about its
       // isFromASTFile property.
-      return llvm::DIType();
+      return nullptr;
     else if (auto *RD = dyn_cast<CXXRecordDecl>(TyDecl)) {
       if (!RD->getDefinition())
-        return llvm::DIType();
+        return nullptr;
       Tag = getTagForRecord(RD);
       if (TheCU->getSourceLanguage() == llvm::dwarf::DW_LANG_C_plus_plus) {
         UID = getUniqueTagTypeName(cast<TagType>(RD->getTypeForDecl()),
@@ -2203,18 +2204,18 @@ CGDebugInfo::getTypeASTRefOrNull(Decl *TyDecl, llvm::DIFile F) {
       }
     } else if (auto *RD = dyn_cast<RecordDecl>(TyDecl)) {
       if (!RD->getDefinition())
-        return llvm::DIType();
+        return nullptr;
       Tag = getTagForRecord(RD);
     } else if (auto *ED = dyn_cast<EnumDecl>(TyDecl)) {
       if (!ED->getDefinition())
-        return llvm::DIType();
+        return nullptr;
       Tag = llvm::dwarf::DW_TAG_enumeration_type;
       if (TheCU->getSourceLanguage() == llvm::dwarf::DW_LANG_C_plus_plus)
         UID = getUniqueTagTypeName(cast<TagType>(ED->getTypeForDecl()),
                                    CGM, TheCU);
     } else if (auto *ID = dyn_cast<ObjCInterfaceDecl>(TyDecl)) {
       if (!ID->getDefinition())
-        return llvm::DIType();
+        return nullptr;
       Tag = llvm::dwarf::DW_TAG_structure_type;
     }
     if (!Tag)
@@ -2229,17 +2230,17 @@ CGDebugInfo::getTypeASTRefOrNull(Decl *TyDecl, llvm::DIFile F) {
     auto File = DBuilder.createFile(ModuleRef->getSplitDebugFilename(), "");
     return DBuilder.createExternalTypeRef(Tag, File, UID);
   }
-  return llvm::DIType();
+  return nullptr;
 }
 
 /// CreateTypeASTNode - Attempt to get a pointer to the serialized
 /// AST of the declaration of the type.
-llvm::DIType CGDebugInfo::getTypeASTRefOrNull(QualType Ty, llvm::DIFile F) {
+llvm::MDType *CGDebugInfo::getTypeASTRefOrNull(QualType Ty, llvm::MDFile *F) {
   switch (Ty->getTypeClass()) {
   // Handle all types that have a declaration.
   case Type::Typedef:
     // FIXME: These don't have a UID IR field yet.
-    return llvm::DIType();
+    return nullptr;
   case Type::Record:
     return getTypeASTRefOrNull(cast<RecordType>(Ty)->getDecl(), F);
   case Type::Enum:
@@ -2248,7 +2249,7 @@ llvm::DIType CGDebugInfo::getTypeASTRefOrNull(QualType Ty, llvm::DIFile F) {
     return getTypeASTRefOrNull(cast<ObjCInterfaceType>(Ty)->getDecl(), F);
     
   default:
-    return llvm::DIType();
+    return nullptr;
   }
 }
 
