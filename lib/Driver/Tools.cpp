@@ -2737,6 +2737,227 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
     // Disable all llvm IR level optimizations.
     CmdArgs.push_back("-disable-llvm-optzns");
 
+    // reject options that shouldn't be supported in bitcode
+    // also reject kernel/kext.
+    for (const auto &A : Args) {
+      if (A->getOption().getID() == options::OPT_mkernel ||
+          A->getOption().getID() == options::OPT_fapple_kext ||
+          A->getOption().getID() == options::OPT_ffunction_sections ||
+          A->getOption().getID() == options::OPT_fno_function_sections ||
+          A->getOption().getID() == options::OPT_fdata_sections ||
+          A->getOption().getID() == options::OPT_fno_data_sections ||
+          A->getOption().getID() == options::OPT_funique_section_names ||
+          A->getOption().getID() == options::OPT_fno_unique_section_names ||
+          A->getOption().getID() == options::OPT_mrestrict_it ||
+          A->getOption().getID() == options::OPT_mno_restrict_it ||
+          A->getOption().getID() == options::OPT_mstackrealign ||
+          A->getOption().getID() == options::OPT_mno_stackrealign ||
+          A->getOption().getID() == options::OPT_mstack_alignment ||
+          A->getOption().getID() == options::OPT_mcmodel_EQ ||
+          A->getOption().getID() == options::OPT_mlong_calls ||
+          A->getOption().getID() == options::OPT_mno_long_calls ||
+          A->getOption().getID() == options::OPT_ggnu_pubnames ||
+          A->getOption().getID() == options::OPT_gdwarf_aranges ||
+          A->getOption().getID() == options::OPT_fdebug_types_section ||
+          A->getOption().getID() == options::OPT_fno_debug_types_section ||
+          A->getOption().getID() == options::OPT_fdwarf_directory_asm ||
+          A->getOption().getID() == options::OPT_fno_dwarf_directory_asm ||
+          A->getOption().getID() == options::OPT_ftrap_function_EQ ||
+          A->getOption().getID() == options::OPT_ffixed_r9 ||
+          A->getOption().getID() == options::OPT_mfix_cortex_a53_835769 ||
+          A->getOption().getID() == options::OPT_mno_fix_cortex_a53_835769 ||
+          A->getOption().getID() == options::OPT_ffixed_x18 ||
+          A->getOption().getID() == options::OPT_mglobal_merge ||
+          A->getOption().getID() == options::OPT_mno_global_merge ||
+          A->getOption().getID() == options::OPT_mred_zone ||
+          A->getOption().getID() == options::OPT_mno_red_zone ||
+          A->getOption().getID() == options::OPT_Wa_COMMA ||
+          A->getOption().getID() == options::OPT_Xassembler ||
+          A->getOption().getID() == options::OPT_mllvm)
+      D.Diag(diag::err_drv_unsupported_embed_bitcode) << A->getSpelling();
+    }
+
+    // render the codegen options that need to be passed.
+    if (!Args.hasFlag(options::OPT_foptimize_sibling_calls,
+                      options::OPT_fno_optimize_sibling_calls))
+      CmdArgs.push_back("-mdisable-tail-calls");
+
+    // render float point related args
+    if (Arg *A = Args.getLastArg(options::OPT_flimited_precision_EQ)) {
+      CmdArgs.push_back("-mlimit-float-precision");
+      CmdArgs.push_back(A->getValue());
+    }
+    bool OFastEnabled = isOptimizationLevelFast(Args);
+    OptSpecifier FastMathAliasOption = OFastEnabled ? options::OPT_Ofast :
+                                       options::OPT_ffast_math;
+    if (Arg *A = Args.getLastArg(options::OPT_ffast_math, FastMathAliasOption,
+                                 options::OPT_fno_fast_math,
+                                 options::OPT_ffinite_math_only,
+                                 options::OPT_fno_finite_math_only,
+                                 options::OPT_fhonor_infinities,
+                                 options::OPT_fno_honor_infinities))
+      if (A->getOption().getID() != options::OPT_fno_fast_math &&
+          A->getOption().getID() != options::OPT_fno_finite_math_only &&
+          A->getOption().getID() != options::OPT_fhonor_infinities)
+        CmdArgs.push_back("-menable-no-infs");
+    if (Arg *A = Args.getLastArg(options::OPT_ffast_math, FastMathAliasOption,
+                                 options::OPT_fno_fast_math,
+                                 options::OPT_ffinite_math_only,
+                                 options::OPT_fno_finite_math_only,
+                                 options::OPT_fhonor_nans,
+                                 options::OPT_fno_honor_nans))
+      if (A->getOption().getID() != options::OPT_fno_fast_math &&
+          A->getOption().getID() != options::OPT_fno_finite_math_only &&
+          A->getOption().getID() != options::OPT_fhonor_nans)
+        CmdArgs.push_back("-menable-no-nans");
+    bool MathErrno = getToolChain().IsMathErrnoDefault();
+    if (Arg *A = Args.getLastArg(options::OPT_ffast_math, FastMathAliasOption,
+                                 options::OPT_fno_fast_math,
+                                 options::OPT_fmath_errno,
+                                 options::OPT_fno_math_errno)) {
+      // Turning on -ffast_math (with either flag) removes the need for MathErrno.
+      // However, turning *off* -ffast_math merely restores the toolchain default
+      // (which may be false).
+      if (A->getOption().getID() == options::OPT_fno_math_errno ||
+          A->getOption().getID() == options::OPT_ffast_math ||
+          A->getOption().getID() == options::OPT_Ofast)
+        MathErrno = false;
+      else if (A->getOption().getID() == options::OPT_fmath_errno)
+        MathErrno = true;
+    }
+    if (MathErrno)
+      CmdArgs.push_back("-fmath-errno");
+    bool AssociativeMath = false;
+    if (Arg *A = Args.getLastArg(options::OPT_ffast_math, FastMathAliasOption,
+                                 options::OPT_fno_fast_math,
+                                 options::OPT_funsafe_math_optimizations,
+                                 options::OPT_fno_unsafe_math_optimizations,
+                                 options::OPT_fassociative_math,
+                                 options::OPT_fno_associative_math))
+      if (A->getOption().getID() != options::OPT_fno_fast_math &&
+          A->getOption().getID() != options::OPT_fno_unsafe_math_optimizations &&
+          A->getOption().getID() != options::OPT_fno_associative_math)
+        AssociativeMath = true;
+    bool ReciprocalMath = false;
+    if (Arg *A = Args.getLastArg(options::OPT_ffast_math, FastMathAliasOption,
+                                 options::OPT_fno_fast_math,
+                                 options::OPT_funsafe_math_optimizations,
+                                 options::OPT_fno_unsafe_math_optimizations,
+                                 options::OPT_freciprocal_math,
+                                 options::OPT_fno_reciprocal_math))
+      if (A->getOption().getID() != options::OPT_fno_fast_math &&
+          A->getOption().getID() != options::OPT_fno_unsafe_math_optimizations &&
+          A->getOption().getID() != options::OPT_fno_reciprocal_math)
+        ReciprocalMath = true;
+    bool SignedZeros = true;
+    if (Arg *A = Args.getLastArg(options::OPT_ffast_math, FastMathAliasOption,
+                                 options::OPT_fno_fast_math,
+                                 options::OPT_funsafe_math_optimizations,
+                                 options::OPT_fno_unsafe_math_optimizations,
+                                 options::OPT_fsigned_zeros,
+                                 options::OPT_fno_signed_zeros))
+      if (A->getOption().getID() != options::OPT_fno_fast_math &&
+          A->getOption().getID() != options::OPT_fno_unsafe_math_optimizations &&
+          A->getOption().getID() != options::OPT_fsigned_zeros)
+        SignedZeros = false;
+    bool TrappingMath = true;
+    if (Arg *A = Args.getLastArg(options::OPT_ffast_math, FastMathAliasOption,
+                                 options::OPT_fno_fast_math,
+                                 options::OPT_funsafe_math_optimizations,
+                                 options::OPT_fno_unsafe_math_optimizations,
+                                 options::OPT_ftrapping_math,
+                                 options::OPT_fno_trapping_math))
+      if (A->getOption().getID() != options::OPT_fno_fast_math &&
+          A->getOption().getID() != options::OPT_fno_unsafe_math_optimizations &&
+          A->getOption().getID() != options::OPT_ftrapping_math)
+        TrappingMath = false;
+    if (!MathErrno && AssociativeMath && ReciprocalMath && !SignedZeros &&
+        !TrappingMath)
+      CmdArgs.push_back("-menable-unsafe-fp-math");
+
+    if (!SignedZeros)
+      CmdArgs.push_back("-fno-signed-zeros");
+
+    if (ReciprocalMath)
+      CmdArgs.push_back("-freciprocal-math");
+
+    if (Arg *A = Args.getLastArg(options::OPT_ffast_math, FastMathAliasOption,
+                                 options::OPT_fno_fast_math,
+                                 options::OPT_ffp_contract)) {
+      if (A->getOption().getID() == options::OPT_ffp_contract) {
+        StringRef Val = A->getValue();
+        if (Val == "fast" || Val == "on" || Val == "off") {
+          CmdArgs.push_back(Args.MakeArgString("-ffp-contract=" + Val));
+        } else {
+          D.Diag(diag::err_drv_unsupported_option_argument)
+            << A->getOption().getName() << Val;
+        }
+      } else if (A->getOption().matches(options::OPT_ffast_math) ||
+                 (OFastEnabled && A->getOption().matches(options::OPT_Ofast))) {
+        CmdArgs.push_back(Args.MakeArgString("-ffp-contract=fast"));
+      }
+    }
+
+    const char *ABIName = nullptr;
+    // Add target specific flags.
+    switch(getToolChain().getArch()) {
+    default:
+      // ignore all unsupported arch
+      break;
+
+    case llvm::Triple::arm:
+    case llvm::Triple::armeb:
+    case llvm::Triple::thumb:
+    case llvm::Triple::thumbeb:
+      {
+        std::string CPUName = arm::getARMTargetCPU(Args, TT);
+        if (Arg *A = Args.getLastArg(options::OPT_mabi_EQ)) {
+          ABIName = A->getValue();
+        } else {
+          if (TT.getEnvironment() == llvm::Triple::EABI ||
+              StringRef(CPUName).startswith("cortex-m")) {
+            ABIName = "aapcs";
+          } else if (TT.getArchName().endswith("v7k")) {
+            ABIName = "apcs-vfp";
+          } else {
+            ABIName = "apcs-gnu";
+          }
+        }
+        CmdArgs.push_back("-target-abi");
+        CmdArgs.push_back(ABIName);
+
+        // Determine floating point ABI from the options & target defaults.
+        StringRef FloatABI = tools::arm::getARMFloatABI(D, Args, TT);
+        if (FloatABI == "soft") {
+          CmdArgs.push_back("-msoft-float");
+          CmdArgs.push_back("-mfloat-abi");
+          CmdArgs.push_back("soft");
+        } else if (FloatABI == "softfp") {
+          CmdArgs.push_back("-mfloat-abi");
+          CmdArgs.push_back("soft");
+        } else {
+          assert(FloatABI == "hard" && "Invalid float abi!");
+          CmdArgs.push_back("-mfloat-abi");
+          CmdArgs.push_back("hard");
+        }
+
+      }
+      break;
+    case llvm::Triple::aarch64:
+    case llvm::Triple::aarch64_be:
+      {
+        if (Arg *A = Args.getLastArg(options::OPT_mabi_EQ))
+          ABIName = A->getValue();
+        else
+          ABIName = "darwinpcs";
+
+        CmdArgs.push_back("-target-abi");
+        CmdArgs.push_back(ABIName);
+      }
+      break;
+
+    }
+
     // Optimization level for CodeGen.
     if (Arg *A = Args.getLastArg(options::OPT_O_Group)) {
       if (A->getOption().matches(options::OPT_O4)) {
