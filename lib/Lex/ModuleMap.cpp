@@ -589,9 +589,17 @@ static void inferFrameworkLink(Module *Mod, const DirectoryEntry *FrameworkDir,
   SmallString<128> LibName;
   LibName += FrameworkDir->getName();
   llvm::sys::path::append(LibName, Mod->Name);
-  if (FileMgr.getFile(LibName)) {
-    Mod->LinkLibraries.push_back(Module::LinkLibrary(Mod->Name,
-                                                     /*IsFramework=*/true));
+
+  // The library name of a framework has several possible extensions with the
+  // introduction of the text-based dynamic library format.
+  static const char *frameworkExtensions[] = { "", ".tbd", ".api", ".spi" };
+  for (const auto *extension : frameworkExtensions) {
+    llvm::sys::path::replace_extension(LibName, extension);
+    if (FileMgr.getFile(LibName)) {
+      Mod->LinkLibraries.push_back(Module::LinkLibrary(Mod->Name,
+                                                       /*IsFramework=*/true));
+      return;
+    }
   }
 }
 
