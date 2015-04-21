@@ -2772,7 +2772,7 @@ void CGDebugInfo::EmitFunctionDecl(GlobalDecl GD, SourceLocation Loc,
   unsigned Flags = 0;
   llvm::MDFile *Unit = getOrCreateFile(Loc);
   llvm::MDScope *FDContext = Unit;
-  llvm::DIArray TParamsArray;
+  llvm::DebugNodeArray TParamsArray;
   if (isa<FunctionDecl>(D)) {
     // If there is a DISubprogram for this function available then use it.
     collectFunctionDeclProps(GD, Unit, Name, LinkageName, FDContext,
