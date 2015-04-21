@@ -1782,6 +1782,8 @@ CodeGenModule::GetOrCreateLLVMGlobal(StringRef MangledName,
     // handling.
     GV->setConstant(isTypeConstant(D->getType(), false));
 
+    GV->setAlignment(getContext().getDeclAlign(D).getQuantity());
+
     setLinkageAndVisibilityForGV(GV, D);
 
     if (D->getTLSKind()) {
