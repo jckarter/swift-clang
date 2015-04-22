@@ -7578,6 +7578,11 @@ public:
   void AddAlignValueAttr(SourceRange AttrRange, Decl *D, Expr *E,
                          unsigned SpellingListIndex);
 
+  /// AddLaunchBoundsAttr - Adds a launch_bounds attribute to a particular
+  /// declaration.
+  void AddLaunchBoundsAttr(SourceRange AttrRange, Decl *D, Expr *MaxThreads,
+                           Expr *MinBlocks, unsigned SpellingListIndex);
+
   // OpenMP directives and clauses.
 private:
   void *VarDataSharingAttributesStack;
