@@ -720,15 +720,14 @@ public:
   void appendMacroDirective(IdentifierInfo *II, MacroDirective *MD);
   DefMacroDirective *appendDefMacroDirective(IdentifierInfo *II, MacroInfo *MI,
                                              SourceLocation Loc,
-                                             unsigned ImportedFromModuleID,
-                                             ArrayRef<unsigned> Overrides) {
-    DefMacroDirective *MD =
-        AllocateDefMacroDirective(MI, Loc, ImportedFromModuleID, Overrides);
+                                             ModuleMacro *MM = nullptr) {
+    DefMacroDirective *MD = AllocateDefMacroDirective(MI, Loc, MM);
     appendMacroDirective(II, MD);
     return MD;
   }
-  DefMacroDirective *appendDefMacroDirective(IdentifierInfo *II, MacroInfo *MI){
-    return appendDefMacroDirective(II, MI, MI->getDefinitionLoc(), 0, None);
+  DefMacroDirective *appendDefMacroDirective(IdentifierInfo *II,
+                                             MacroInfo *MI) {
+    return appendDefMacroDirective(II, MI, MI->getDefinitionLoc());
   }
   /// \brief Set a MacroDirective that was loaded from a PCH file.
   void setLoadedMacroDirective(IdentifierInfo *II, MacroDirective *MD);
@@ -1527,14 +1526,11 @@ private:
   /// \brief Allocate a new MacroInfo object.
   MacroInfo *AllocateMacroInfo();
 
-  DefMacroDirective *
-  AllocateDefMacroDirective(MacroInfo *MI, SourceLocation Loc,
-                            unsigned ImportedFromModuleID = 0,
-                            ArrayRef<unsigned> Overrides = None);
-  UndefMacroDirective *
-  AllocateUndefMacroDirective(SourceLocation UndefLoc,
-                              unsigned ImportedFromModuleID = 0,
-                              ArrayRef<unsigned> Overrides = None);
+  DefMacroDirective *AllocateDefMacroDirective(MacroInfo *MI,
+                                               SourceLocation Loc,
+                                               ModuleMacro *MM = nullptr);
+  UndefMacroDirective *AllocateUndefMacroDirective(SourceLocation UndefLoc,
+                                                   ModuleMacro *MM = nullptr);
   VisibilityMacroDirective *AllocateVisibilityMacroDirective(SourceLocation Loc,
                                                              bool isPublic);
 
@@ -1691,9 +1687,14 @@ private:
   void HandleMicrosoftImportDirective(Token &Tok);
 
   // Module inclusion testing.
-  /// \brief Find the module for the source or header file that \p FilenameLoc
-  /// points to.
-  Module *getModuleForLocation(SourceLocation FilenameLoc);
+  /// \brief Find the module that owns the source or header file that
+  /// \p Loc points to. If the location is in a file that was included
+  /// into a module, or is outside any module, returns nullptr.
+  Module *getModuleForLocation(SourceLocation Loc);
+
+  /// \brief Find the module that contains the specified location, either
+  /// directly or indirectly.
+  Module *getModuleContainingLocation(SourceLocation Loc);
 
   // Macro handling.
   void HandleDefineDirective(Token &Tok, bool ImmediatelyAfterTopLevelIfndef);

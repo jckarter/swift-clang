@@ -64,24 +64,16 @@ MacroInfo *Preprocessor::AllocateDeserializedMacroInfo(SourceLocation L,
 
 DefMacroDirective *
 Preprocessor::AllocateDefMacroDirective(MacroInfo *MI, SourceLocation Loc,
-                                        unsigned ImportedFromModuleID,
-                                        ArrayRef<unsigned> Overrides) {
-  unsigned NumExtra = (ImportedFromModuleID ? 1 : 0) + Overrides.size();
-  return new (BP.Allocate(sizeof(DefMacroDirective) +
-                              sizeof(unsigned) * NumExtra,
-                          llvm::alignOf<DefMacroDirective>()))
-      DefMacroDirective(MI, Loc, ImportedFromModuleID, Overrides);
+    ModuleMacro *MM) {
+  if (MM) return DefMacroDirective::createImported(*this, MI, Loc, MM);
+  return new (BP) DefMacroDirective(MI, Loc);
 }
 
 UndefMacroDirective *
 Preprocessor::AllocateUndefMacroDirective(SourceLocation UndefLoc,
-                                          unsigned ImportedFromModuleID,
-                                          ArrayRef<unsigned> Overrides) {
-  unsigned NumExtra = (ImportedFromModuleID ? 1 : 0) + Overrides.size();
-  return new (BP.Allocate(sizeof(UndefMacroDirective) +
-                              sizeof(unsigned) * NumExtra,
-                          llvm::alignOf<UndefMacroDirective>()))
-      UndefMacroDirective(UndefLoc, ImportedFromModuleID, Overrides);
+                                          ModuleMacro *MM) {
+  if (MM) return UndefMacroDirective::createImported(*this, UndefLoc, MM);
+  return new (BP) UndefMacroDirective(UndefLoc);
 }
 
 VisibilityMacroDirective *
@@ -585,16 +577,16 @@ void Preprocessor::PTHSkipExcludedConditionalBlock() {
   }
 }
 
-Module *Preprocessor::getModuleForLocation(SourceLocation FilenameLoc) {
+Module *Preprocessor::getModuleForLocation(SourceLocation Loc) {
   ModuleMap &ModMap = HeaderInfo.getModuleMap();
-  if (SourceMgr.isInMainFile(FilenameLoc)) {
+  if (SourceMgr.isInMainFile(Loc)) {
     if (Module *CurMod = getCurrentModule())
       return CurMod;                               // Compiling a module.
     return HeaderInfo.getModuleMap().SourceModule; // Compiling a source.
   }
   // Try to determine the module of the include directive.
   // FIXME: Look into directly passing the FileEntry from LookupFile instead.
-  FileID IDOfIncl = SourceMgr.getFileID(SourceMgr.getExpansionLoc(FilenameLoc));
+  FileID IDOfIncl = SourceMgr.getFileID(SourceMgr.getExpansionLoc(Loc));
   if (const FileEntry *EntryOfIncl = SourceMgr.getFileEntryForID(IDOfIncl)) {
     // The include comes from a file.
     return ModMap.findModuleForHeader(EntryOfIncl).getModule();
@@ -603,6 +595,11 @@ Module *Preprocessor::getModuleForLocation(SourceLocation FilenameLoc) {
     // so it is probably a module compilation.
     return getCurrentModule();
   }
+}
+
+Module *Preprocessor::getModuleContainingLocation(SourceLocation Loc) {
+  return HeaderInfo.getModuleMap().inferModuleFromLocation(
+      FullSourceLoc(Loc, SourceMgr));
 }
 
 const FileEntry *Preprocessor::LookupFile(
