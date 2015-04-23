@@ -2,6 +2,7 @@
 namespace DebugCXX {
   struct Foo {
     int i;
+    static int static_member;
   };
   enum Enum {
     Enumerator
