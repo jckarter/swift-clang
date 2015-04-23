@@ -1769,8 +1769,7 @@ void ASTReader::resolvePendingMacro(IdentifierInfo *II,
     }
 
     Record.clear();
-    switch (PreprocessorRecordTypes RecType =
-                (PreprocessorRecordTypes)Cursor.readRecord(Entry.ID, Record)) {
+    switch ((PreprocessorRecordTypes)Cursor.readRecord(Entry.ID, Record)) {
     case PP_MACRO_DIRECTIVE_HISTORY:
       break;
 
