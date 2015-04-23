@@ -620,9 +620,9 @@ void Preprocessor::HandleMicrosoftCommentPaste(Token &Tok) {
   assert(!FoundLexer && "Lexer should return EOD before EOF in PP mode");
 }
 
-void Preprocessor::EnterSubmodule(Module *M) {
+void Preprocessor::EnterSubmodule(Module *M, SourceLocation ImportLoc) {
   // Save the current state for future imports.
-  BuildingSubmoduleStack.push_back(BuildingSubmoduleInfo(M));
+  BuildingSubmoduleStack.push_back(BuildingSubmoduleInfo(M, ImportLoc));
 
   auto &Info = BuildingSubmoduleStack.back();
   // Copy across our macros and start the submodule with the current state.
@@ -641,6 +641,7 @@ void Preprocessor::LeaveSubmodule() {
     // This module may have exported a new macro. If so, create a ModuleMacro
     // representing that fact.
     bool ExplicitlyPublic = false;
+    ModuleMacro *MM = nullptr;
     for (auto *MD = Macro.second.getLatest(); MD != State.getLatest();
          MD = MD->getPrevious()) {
       // Skip macros defined in other submodules we #included along the way.
@@ -664,8 +665,8 @@ void Preprocessor::LeaveSubmodule() {
         // FIXME: Issue a warning if multiple headers for the same submodule
         // define a macro, rather than silently ignoring all but the first.
         bool IsNew;
-        addModuleMacro(Info.M, II, Def, Macro.second.getOverriddenMacros(),
-                       IsNew);
+        MM = addModuleMacro(Info.M, II, Def, Macro.second.getOverriddenMacros(),
+                            IsNew);
         break;
       }
     }
@@ -675,6 +676,12 @@ void Preprocessor::LeaveSubmodule() {
 
     // Restore the old macro state.
     Macro.second = State;
+
+    // If our submodule defined a macro, import it.
+    // FIXME: Do this lazily.
+    if (MM)
+      appendMacroDirective(II,
+                           AllocateImportedMacroDirective(MM, Info.ImportLoc));
   }
 
   BuildingSubmoduleStack.pop_back();
