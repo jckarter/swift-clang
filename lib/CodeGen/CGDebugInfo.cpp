@@ -3337,8 +3337,7 @@ CGDebugInfo::getOrCreateStaticDataMemberDeclarationOrNull(const VarDecl *D) {
   // If the member wasn't found in the cache, lazily construct and add it to the
   // type (used when a limited form of the type is emitted).
   auto DC = D->getDeclContext();
-  auto *Ctxt =
-      cast<llvm::MDCompositeType>(getContextDescriptor(cast<Decl>(DC)));
+  auto *Ctxt = cast<llvm::MDType>(getContextDescriptor(cast<Decl>(DC)));
   return CreateRecordStaticField(D, Ctxt, cast<RecordDecl>(DC));
 }
 
