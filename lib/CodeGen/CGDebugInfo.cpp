@@ -2601,7 +2601,7 @@ llvm::MDSubprogram *CGDebugInfo::getFunctionDeclaration(const Decl *D) {
     if (const CXXMethodDecl *MD =
             dyn_cast<CXXMethodDecl>(FD->getCanonicalDecl())) {
       return CreateCXXMemberFunction(MD, getOrCreateFile(MD->getLocation()),
-                                     cast<llvm::MDCompositeType>(S));
+                                     cast<llvm::MDType>(S));
     }
   }
   if (MI != SPCache.end()) {
