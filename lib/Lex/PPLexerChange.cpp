@@ -641,7 +641,6 @@ void Preprocessor::LeaveSubmodule() {
     // This module may have exported a new macro. If so, create a ModuleMacro
     // representing that fact.
     bool ExplicitlyPublic = false;
-    ModuleMacro *MM = nullptr;
     for (auto *MD = Macro.second.getLatest(); MD != State.getLatest();
          MD = MD->getPrevious()) {
       // Skip macros defined in other submodules we #included along the way.
@@ -665,8 +664,8 @@ void Preprocessor::LeaveSubmodule() {
         // FIXME: Issue a warning if multiple headers for the same submodule
         // define a macro, rather than silently ignoring all but the first.
         bool IsNew;
-        MM = addModuleMacro(Info.M, II, Def, Macro.second.getOverriddenMacros(),
-                            IsNew);
+        addModuleMacro(Info.M, II, Def, Macro.second.getOverriddenMacros(),
+                       IsNew);
         break;
       }
     }
@@ -676,12 +675,6 @@ void Preprocessor::LeaveSubmodule() {
 
     // Restore the old macro state.
     Macro.second = State;
-
-    // If our submodule defined a macro, import it.
-    // FIXME: Do this lazily.
-    if (MM)
-      appendMacroDirective(II,
-                           AllocateImportedMacroDirective(MM, Info.ImportLoc));
   }
 
   BuildingSubmoduleStack.pop_back();
