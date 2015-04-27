@@ -825,7 +825,9 @@ void ASTDeclReader::VisitObjCMethodDecl(ObjCMethodDecl *MD) {
 
 void ASTDeclReader::VisitObjCTypeParamDecl(ObjCTypeParamDecl *D) {
   VisitTypedefNameDecl(D);
+  D->Variance = Record[Idx++];
   D->Index = Record[Idx++];
+  D->VarianceLoc = ReadSourceLocation(Record, Idx);
   D->ColonLoc = ReadSourceLocation(Record, Idx);
 }
 
