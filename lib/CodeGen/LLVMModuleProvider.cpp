@@ -158,6 +158,13 @@ public:
     return true;
   }
 
+  void HandleTagDeclDefinition(TagDecl *D) override {
+    if (Diags.hasErrorOccurred())
+      return;
+ 
+    Builder->UpdateCompletedType(D);
+  }
+
   /// Emit a container holding the serialized AST.
   void HandleTranslationUnit(ASTContext &Ctx) override {
     M->setTargetTriple(Ctx.getTargetInfo().getTriple().getTriple());

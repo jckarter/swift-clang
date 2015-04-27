@@ -7,7 +7,14 @@ namespace DebugCXX {
   enum Enum {
     Enumerator
   };
-  template<typename T> class Bar {
+  template<typename T> struct traits;
+  template<typename T,
+           typename Traits = traits<T>
+          > class Bar {
     T value;
   };
+  void bar(Bar<int> &);
+}
+namespace DebugCXX {
+  template class Bar<int>;
 }

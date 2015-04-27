@@ -29,10 +29,10 @@ int Foo::static_member = -1;
 // CHECK-AST: DW_TAG_structure_type
 // CHECK-AST: DW_AT_name {{.*}}"Foo"
 // CHECK-AST: DW_TAG_member
-// CHECK-AST: DW_AT_name {{.*}}"i"
+// CHECK-AST: DW_AT_name {{.*}}"value"
 // CHECK-MODULE: .apple_types contents:
-// CHECK-MODULE: Name: {{.*}}"c:@N@DebugCXX@E@Enum"
 // CHECK-MODULE: Name: {{.*}}"c:@N@DebugCXX@S@Foo"
+// CHECK-MODULE: Name: {{.*}}"c:@N@DebugCXX@E@Enum"
 // CHECK-PCH: .apple_types contents:
 // CHECK-PCH: Name: {{.*}}"_ZTSN8DebugCXX3FooE"
 // CHECK-PCH: Name: {{.*}}"_ZTSN8DebugCXX4EnumE"
