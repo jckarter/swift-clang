@@ -3361,6 +3361,9 @@ void CodeGenModule::EmitTopLevelDecl(Decl *D) {
     break;
 
   case Decl::FileScopeAsm: {
+    // File-scope asm is ignored during device-side CUDA compilation.
+    if (LangOpts.CUDA && LangOpts.CUDAIsDevice)
+      break;
     auto *AD = cast<FileScopeAsmDecl>(D);
     getModule().appendModuleInlineAsm(AD->getAsmString()->getString());
     break;
