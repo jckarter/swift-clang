@@ -1702,6 +1702,7 @@ void Preprocessor::HandleIncludeDirective(SourceLocation HashLoc,
     ModuleLoadResult Imported
       = TheModuleLoader.loadModule(IncludeTok.getLocation(), Path, Visibility,
                                    /*IsIncludeDirective=*/true);
+    ++MacroVisibilityGeneration;
     assert((Imported == nullptr || Imported == SuggestedModule.getModule()) &&
            "the imported module is different than the suggested one");
 
