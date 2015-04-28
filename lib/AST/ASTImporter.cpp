@@ -3440,8 +3440,11 @@ Decl *ASTNodeImporter::VisitObjCTypeParamDecl(ObjCTypeParamDecl *D) {
   DeclContext *DC, *LexicalDC;
   DeclarationName Name;
   SourceLocation Loc;
-  if (ImportDeclParts(D, DC, LexicalDC, Name, Loc))
+  NamedDecl *ToD;
+  if (ImportDeclParts(D, DC, LexicalDC, Name, ToD, Loc))
     return nullptr;
+  if (ToD)
+    return ToD;
 
   TypeSourceInfo *BoundInfo = Importer.Import(D->getTypeSourceInfo());
   if (!BoundInfo)
