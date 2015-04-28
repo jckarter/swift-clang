@@ -412,6 +412,11 @@ class Preprocessor : public RefCountedBase<Preprocessor> {
   public:
     MacroState() : MacroState(nullptr) {}
     MacroState(MacroDirective *MD) : State(MD) {}
+    void destroy() {
+      if (auto *Info = State.dyn_cast<ModuleMacroInfo*>())
+        Info->~ModuleMacroInfo();
+      State = (MacroDirective*)nullptr;
+    }
     MacroDirective *getLatest() const {
       if (auto *Info = State.dyn_cast<ModuleMacroInfo*>())
         return Info->MD;
@@ -499,13 +504,6 @@ class Preprocessor : public RefCountedBase<Preprocessor> {
     // FIXME: PragmaPushMacroInfo?
   };
   SmallVector<BuildingSubmoduleInfo, 8> BuildingSubmoduleStack;
-
-  void EnterSubmodule(Module *M, SourceLocation ImportLoc);
-  void LeaveSubmodule();
-
-  /// Update the set of active module macros and ambiguity flag for a module
-  /// macro name.
-  void updateModuleMacroInfo(IdentifierInfo *II, ModuleMacroInfo &Info);
 
   /// The set of known macros exported from modules.
   llvm::FoldingSet<ModuleMacro> ModuleMacros;
@@ -1584,6 +1582,13 @@ private:
   }
 
   void PropagateLineStartLeadingSpaceInfo(Token &Result);
+
+  void EnterSubmodule(Module *M, SourceLocation ImportLoc);
+  void LeaveSubmodule();
+
+  /// Update the set of active module macros and ambiguity flag for a module
+  /// macro name.
+  void updateModuleMacroInfo(IdentifierInfo *II, ModuleMacroInfo &Info);
 
   /// \brief Allocate a new MacroInfo object.
   MacroInfo *AllocateMacroInfo();
