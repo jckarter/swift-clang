@@ -6784,7 +6784,8 @@ bool ASTContext::canAssignObjCInterfacesInBlockPointer(
     if (succeeded)
       return true;
 
-    if (!RHSOPT->isKindOfType())
+    const ObjCObjectPointerType *Expected = BlockReturnType ? RHSOPT : LHSOPT;
+    if (!Expected->isKindOfType())
       return false;
 
     // Strip off __kindof and protocol qualifiers, then check whether

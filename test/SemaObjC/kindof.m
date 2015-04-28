@@ -234,8 +234,8 @@ void test_block_conversions(void) {
 
   // "Contravariant" argument type via downcasting rule.
   void_kindof_NSString_block = void_kindof_NSMutableString_block;
-  void_kindof_NSString_block = void_NSMutableString_block; // expected-error{{from 'void (^)(NSMutableString *)'}}
-  void_NSString_block = void_kindof_NSMutableString_block;
+  void_kindof_NSString_block = void_NSMutableString_block;
+  void_NSString_block = void_kindof_NSMutableString_block; // expected-error{{from 'void (^)(__kindof NSMutableString *)'}}
   void_NSString_block = void_NSMutableString_block; // expected-error{{from 'void (^)(NSMutableString *)'}}
 }
 
