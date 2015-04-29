@@ -39,10 +39,10 @@ int Foo::static_member = -1;
 
 // CHECK-EXTREF-MODULE: ![[FOO:.*]] = !MDExternalTypeRef(tag: DW_TAG_structure_type, file: ![[PCM:[0-9]+]], identifier: "c:@N@DebugCXX@S@Foo")
 // CHECK-EXTREF-MODULE: !MDExternalTypeRef(tag: DW_TAG_enumeration_type, file: ![[PCM]], identifier: "c:@N@DebugCXX@E@Enum")
-// CHECK-EXTREF-MODULE: !MDDerivedType(tag: DW_TAG_member, name: "static_member", scope: ![[FOO]]
-// CHECK-EXTREF-MODULE: !MDImportedEntity(tag: DW_TAG_imported_declaration, {{.*}}, entity: ![[FOO]], line: 21)
+// CHECK-EXTREF-MODULE: !DIDerivedType(tag: DW_TAG_member, name: "static_member", scope: ![[FOO]]
+// CHECK-EXTREF-MODULE: !DIImportedEntity(tag: DW_TAG_imported_declaration, {{.*}}, entity: ![[FOO]], line: 21)
 
 // CHECK-EXTREF-PCH: ![[FOO:.*]] = !MDExternalTypeRef(tag: DW_TAG_structure_type, file: ![[PCM:[0-9]+]], identifier: "_ZTSN8DebugCXX3FooE")
 // CHECK-EXTREF-PCH: !MDExternalTypeRef(tag: DW_TAG_enumeration_type, file: ![[PCM]], identifier: "_ZTSN8DebugCXX4EnumE")
-// CHECK-EXTREF-PCH: !MDDerivedType(tag: DW_TAG_member, name: "static_member", scope: ![[FOO]]
-// CHECK-EXTREF-PCH: !MDImportedEntity(tag: DW_TAG_imported_declaration, {{.*}}, entity: ![[FOO]], line: 21)
+// CHECK-EXTREF-PCH: !DIDerivedType(tag: DW_TAG_member, name: "static_member", scope: ![[FOO]]
+// CHECK-EXTREF-PCH: !DIImportedEntity(tag: DW_TAG_imported_declaration, {{.*}}, entity: ![[FOO]], line: 21)
