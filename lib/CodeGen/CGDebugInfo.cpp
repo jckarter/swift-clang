@@ -2176,11 +2176,12 @@ llvm::DIType *CGDebugInfo::getTypeASTRefOrNull(Decl *TyDecl, llvm::DIFile *F) {
     SmallString<256> Buf;
     StringRef UID;
     unsigned Tag = 0;
-    if (isa<ClassTemplateSpecializationDecl>(TyDecl))
-      // ClassTemplateSpecializationDecl tends to lie about its
-      // isFromASTFile property.
-      return nullptr;
-    else if (auto *RD = dyn_cast<CXXRecordDecl>(TyDecl)) {
+    if (auto *CTSD = dyn_cast<ClassTemplateSpecializationDecl>(TyDecl))
+      if (!CTSD->isExplicitInstantiationOrSpecialization())
+        // The module debug type visitor does not visit any types
+        // instantiated inside functions.
+        return nullptr;
+    if (auto *RD = dyn_cast<CXXRecordDecl>(TyDecl)) {
       if (!RD->getDefinition())
         return nullptr;
       Tag = getTagForRecord(RD);

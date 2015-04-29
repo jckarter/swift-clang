@@ -7,14 +7,20 @@ namespace DebugCXX {
   enum Enum {
     Enumerator
   };
-  template<typename T> struct traits;
+  template<typename T> struct traits {};
   template<typename T,
            typename Traits = traits<T>
           > class Bar {
     T value;
   };
-  void bar(Bar<int> &);
 }
 namespace DebugCXX {
-  template class Bar<int>;
+  extern template class Bar<int>;
+
+  extern template struct traits<float>;
+  typedef class Bar<float> FloatBar;
+
+  inline void fn() {
+    Bar<long> invisible;
+  }
 }

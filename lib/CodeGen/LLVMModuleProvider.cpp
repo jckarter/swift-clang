@@ -63,9 +63,9 @@ class ModuleContainerGenerator : public ASTConsumer {
     }
 
     bool VisitTypeDecl(TypeDecl *D) {
-      const Type *Ty = D->getTypeForDecl();
-      if (Ty && CanRepresent(Ty))
-        DI.getOrCreateStandaloneType(QualType(Ty, 0), D->getLocation());
+      QualType QualTy = Ctx.getTypeDeclType(D);
+      if (!QualTy.isNull() && CanRepresent(QualTy.getTypePtr()))
+        DI.getOrCreateStandaloneType(QualTy, D->getLocation());
       return true;
     }
 
@@ -163,6 +163,15 @@ public:
       return;
  
     Builder->UpdateCompletedType(D);
+  }
+
+  void HandleTagDeclRequiredDefinition(const TagDecl *D) override {
+    if (Diags.hasErrorOccurred())
+      return;
+
+    if (CodeGen::CGDebugInfo *DI = Builder->getModuleDebugInfo())
+      if (const RecordDecl *RD = dyn_cast<RecordDecl>(D))
+        DI->completeRequiredType(RD);
   }
 
   /// Emit a container holding the serialized AST.
