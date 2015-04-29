@@ -2169,7 +2169,7 @@ static std::string FormatFunctionParameter(const PrintingPolicy &Policy,
     
     QualType Type = Param->getType();
     if (ObjCSubsts)
-      Type = Type.substObjCTypeArgs(Context, *ObjCSubsts,
+      Type = Type.substObjCTypeArgs(Param->getASTContext(), *ObjCSubsts,
                                     ObjCSubstitutionContext::Parameter);
     if (ObjCMethodParam) {
       Result = "(" + formatObjCParamQualifiers(Param->getObjCDeclQualifier(),
@@ -2246,8 +2246,8 @@ static std::string FormatFunctionParameter(const PrintingPolicy &Policy,
   std::string Result;
   QualType ResultType = Block.getTypePtr()->getReturnType();
   if (ObjCSubsts)
-    ResultType = ResultType.substObjCTypeArgs(Context, *ObjCSubsts,
-                                              ObjCSubstitutionContext::Result);
+    ResultType = ResultType.substObjCTypeArgs(
+        Param->getASTContext(), *ObjCSubsts, ObjCSubstitutionContext::Result);
   if (!ResultType->isVoidType() || SuppressBlock)
     ResultType.getAsStringInternal(Result, Policy);
 
