@@ -2022,7 +2022,7 @@ static void AddOrdinaryNameResults(Sema::ParserCompletionContext CCC,
     if (SemaRef.getLangOpts().C11) {
       // _Alignof
       Builder.AddResultTypeChunk("size_t");
-      if (SemaRef.PP.isMacroDefined("alignof"))
+      if (SemaRef.getASTContext().Idents.get("alignof").hasMacroDefinition())
         Builder.AddTypedTextChunk("alignof");
       else
         Builder.AddTypedTextChunk("_Alignof");
@@ -2103,14 +2103,15 @@ static void AddResultTypeChunk(ASTContext &Context,
                                                     Result.getAllocator()));
 }
 
-static void MaybeAddSentinel(Preprocessor &PP,
+static void MaybeAddSentinel(ASTContext &Context,
                              const NamedDecl *FunctionOrMethod,
                              CodeCompletionBuilder &Result) {
   if (SentinelAttr *Sentinel = FunctionOrMethod->getAttr<SentinelAttr>())
     if (Sentinel->getSentinel() == 0) {
-      if (PP.getLangOpts().ObjC1 && PP.isMacroDefined("nil"))
+      if (Context.getLangOpts().ObjC1 &&
+          Context.Idents.get("nil").hasMacroDefinition())
         Result.AddTextChunk(", nil");
-      else if (PP.isMacroDefined("NULL"))
+      else if (Context.Idents.get("NULL").hasMacroDefinition())
         Result.AddTextChunk(", NULL");
       else
         Result.AddTextChunk(", (void*)0");
@@ -2152,7 +2153,8 @@ static std::string formatObjCParamQualifiers(unsigned ObjCQuals,
   return Result;
 }
 
-static std::string FormatFunctionParameter(const PrintingPolicy &Policy,
+static std::string FormatFunctionParameter(ASTContext &Context,
+                                           const PrintingPolicy &Policy,
                                            const ParmVarDecl *Param,
                                            bool SuppressName = false,
                                            bool SuppressBlock = false,
@@ -2169,7 +2171,7 @@ static std::string FormatFunctionParameter(const PrintingPolicy &Policy,
     
     QualType Type = Param->getType();
     if (ObjCSubsts)
-      Type = Type.substObjCTypeArgs(Param->getASTContext(), *ObjCSubsts,
+      Type = Type.substObjCTypeArgs(Context, *ObjCSubsts,
                                     ObjCSubstitutionContext::Parameter);
     if (ObjCMethodParam) {
       Result = "(" + formatObjCParamQualifiers(Param->getObjCDeclQualifier(),
@@ -2246,8 +2248,8 @@ static std::string FormatFunctionParameter(const PrintingPolicy &Policy,
   std::string Result;
   QualType ResultType = Block.getTypePtr()->getReturnType();
   if (ObjCSubsts)
-    ResultType = ResultType.substObjCTypeArgs(
-        Param->getASTContext(), *ObjCSubsts, ObjCSubstitutionContext::Result);
+    ResultType = ResultType.substObjCTypeArgs(Context, *ObjCSubsts,
+                                              ObjCSubstitutionContext::Result);
   if (!ResultType->isVoidType() || SuppressBlock)
     ResultType.getAsStringInternal(Result, Policy);
 
@@ -2263,7 +2265,7 @@ static std::string FormatFunctionParameter(const PrintingPolicy &Policy,
     for (unsigned I = 0, N = Block.getNumParams(); I != N; ++I) {
       if (I)
         Params += ", ";
-      Params += FormatFunctionParameter(Policy, Block.getParam(I),
+      Params += FormatFunctionParameter(Context, Policy, Block.getParam(I),
                                         /*SuppressName=*/false,
                                         /*SuppressBlock=*/true,
                                         ObjCSubsts);
@@ -2294,7 +2296,7 @@ static std::string FormatFunctionParameter(const PrintingPolicy &Policy,
 }
 
 /// \brief Add function parameter chunks to the given code completion string.
-static void AddFunctionParameterChunks(Preprocessor &PP,
+static void AddFunctionParameterChunks(ASTContext &Context,
                                        const PrintingPolicy &Policy,
                                        const FunctionDecl *Function,
                                        CodeCompletionBuilder &Result,
@@ -2312,7 +2314,7 @@ static void AddFunctionParameterChunks(Preprocessor &PP,
                                 Result.getCodeCompletionTUInfo());
       if (!FirstParameter)
         Opt.AddChunk(CodeCompletionString::CK_Comma);
-      AddFunctionParameterChunks(PP, Policy, Function, Opt, P, true);
+      AddFunctionParameterChunks(Context, Policy, Function, Opt, P, true);
       Result.AddOptionalChunk(Opt.TakeString());
       break;
     }
@@ -2325,8 +2327,9 @@ static void AddFunctionParameterChunks(Preprocessor &PP,
     InOptional = false;
     
     // Format the placeholder string.
-    std::string PlaceholderStr = FormatFunctionParameter(Policy, Param);
-
+    std::string PlaceholderStr = FormatFunctionParameter(Context, Policy, 
+                                                         Param);
+        
     if (Function->isVariadic() && P == N - 1)
       PlaceholderStr += ", ...";
 
@@ -2341,7 +2344,7 @@ static void AddFunctionParameterChunks(Preprocessor &PP,
       if (Proto->getNumParams() == 0)
         Result.AddPlaceholderChunk("...");
 
-      MaybeAddSentinel(PP, Function, Result);
+      MaybeAddSentinel(Context, Function, Result);
     }
 }
 
@@ -2623,7 +2626,11 @@ CodeCompletionResult::CreateCodeCompletionString(ASTContext &Ctx,
   }
   
   if (Kind == RK_Macro) {
-    const MacroInfo *MI = PP.getMacroInfo(Macro);
+    const MacroDirective *MD = PP.getMacroDirectiveHistory(Macro);
+    assert(MD && "Not a macro?");
+    const MacroInfo *MI = MD->getMacroInfo();
+    assert((!MD->isDefined() || MI) && "missing MacroInfo for define");
+
     Result.AddTypedTextChunk(
                             Result.getAllocator().CopyString(Macro->getName()));
 
@@ -2698,7 +2705,7 @@ CodeCompletionResult::CreateCodeCompletionString(ASTContext &Ctx,
                                    Ctx, Policy);
     AddTypedNameChunk(Ctx, Policy, ND, Result);
     Result.AddChunk(CodeCompletionString::CK_LeftParen);
-    AddFunctionParameterChunks(PP, Policy, Function, Result);
+    AddFunctionParameterChunks(Ctx, Policy, Function, Result);
     Result.AddChunk(CodeCompletionString::CK_RightParen);
     AddFunctionTypeQualsToCompletionString(Result, Function);
     return Result.TakeString();
@@ -2752,7 +2759,7 @@ CodeCompletionResult::CreateCodeCompletionString(ASTContext &Ctx,
     
     // Add the function parameters
     Result.AddChunk(CodeCompletionString::CK_LeftParen);
-    AddFunctionParameterChunks(PP, Policy, Function, Result);
+    AddFunctionParameterChunks(Ctx, Policy, Function, Result);
     Result.AddChunk(CodeCompletionString::CK_RightParen);
     AddFunctionTypeQualsToCompletionString(Result, Function);
     return Result.TakeString();
@@ -2817,8 +2824,8 @@ CodeCompletionResult::CreateCodeCompletionString(ASTContext &Ctx,
         ObjCSubsts = CCContext.getBaseType()->getObjCSubstitutions(Method);
 
       if (ParamType->isBlockPointerType() && !DeclaringEntity)
-        Arg = FormatFunctionParameter(Policy, *P, true, /*SuppressBlock=*/false,
-                                      ObjCSubsts);
+        Arg = FormatFunctionParameter(Ctx, Policy, *P, true,
+                                      /*SuppressBlock=*/false, ObjCSubsts);
       else {
         if (ObjCSubsts)
           ParamType = ParamType.substObjCTypeArgs(Ctx, *ObjCSubsts,
@@ -2852,7 +2859,7 @@ CodeCompletionResult::CreateCodeCompletionString(ASTContext &Ctx,
           Result.AddPlaceholderChunk(", ...");
       }
       
-      MaybeAddSentinel(PP, Method, Result);
+      MaybeAddSentinel(Ctx, Method, Result);
     }
     
     return Result.TakeString();
@@ -2906,7 +2913,8 @@ static void AddOverloadParameterChunks(ASTContext &Context,
     // Format the placeholder string.
     std::string Placeholder;
     if (Function)
-      Placeholder = FormatFunctionParameter(Policy, Function->getParamDecl(P));
+      Placeholder = FormatFunctionParameter(Context, Policy,
+                                            Function->getParamDecl(P));
     else
       Placeholder = Prototype->getParamType(P).getAsString(Policy);
 
@@ -3089,9 +3097,8 @@ static void AddMacroResults(Preprocessor &PP, ResultBuilder &Results,
   for (Preprocessor::macro_iterator M = PP.macro_begin(), 
                                  MEnd = PP.macro_end();
        M != MEnd; ++M) {
-    auto MD = PP.getMacroDefinition(M->first);
-    if (IncludeUndefined || MD) {
-      if (MacroInfo *MI = MD.getMacroInfo())
+    if (IncludeUndefined || M->first->hasMacroDefinition()) {
+      if (MacroInfo *MI = M->second.getLatest()->getMacroInfo())
         if (MI->isUsedForHeaderGuard())
           continue;
 
@@ -5187,7 +5194,7 @@ void Sema::CodeCompleteObjCPassingType(Scope *S, ObjCDeclSpec &DS,
   // an action, e.g.,
   //   IBAction)<#selector#>:(id)sender
   if (DS.getObjCDeclQualifier() == 0 && !IsParameter &&
-      PP.isMacroDefined("IBAction")) {
+      Context.Idents.get("IBAction").hasMacroDefinition()) {
     CodeCompletionBuilder Builder(Results.getAllocator(),
                                   Results.getCodeCompletionTUInfo(),
                                   CCP_CodePattern, CXAvailability_Available);

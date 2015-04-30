@@ -400,7 +400,7 @@ void Preprocessor::HandlePragmaPoison(Token &PoisonTok) {
     if (II->isPoisoned()) continue;
 
     // If this is a macro identifier, emit a warning.
-    if (isMacroDefined(II))
+    if (II->hasMacroDefinition())
       Diag(Tok, diag::pp_poisoning_existing_macro);
 
     // Finally, poison it!
@@ -590,7 +590,8 @@ void Preprocessor::HandlePragmaPopMacro(Token &PopMacroTok) {
     PragmaPushMacroInfo.find(IdentInfo);
   if (iter != PragmaPushMacroInfo.end()) {
     // Forget the MacroInfo currently associated with IdentInfo.
-    if (MacroInfo *MI = getMacroInfo(IdentInfo)) {
+    if (MacroDirective *CurrentMD = getMacroDirective(IdentInfo)) {
+      MacroInfo *MI = CurrentMD->getMacroInfo();
       if (MI->isWarnIfUnused())
         WarnUnusedMacroLocs.erase(MI->getDefinitionLoc());
       appendMacroDirective(IdentInfo, AllocateUndefMacroDirective(MessageLoc));

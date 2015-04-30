@@ -18,7 +18,6 @@
 #include "clang/Lex/HeaderSearchOptions.h"
 #include "clang/Lex/LexDiagnostic.h"
 #include "clang/Lex/Lexer.h"
-#include "clang/Lex/Preprocessor.h"
 #include "llvm/ADT/APInt.h"
 #include "llvm/ADT/Hashing.h"
 #include "llvm/ADT/SmallString.h"
@@ -1017,9 +1016,7 @@ void HeaderSearch::MarkFileModuleHeader(const FileEntry *FE,
   HFI.setHeaderRole(Role);
 }
 
-bool HeaderSearch::ShouldEnterIncludeFile(Preprocessor &PP,
-                                          const FileEntry *File,
-                                          bool isImport) {
+bool HeaderSearch::ShouldEnterIncludeFile(const FileEntry *File, bool isImport){
   ++NumIncluded; // Count # of attempted #includes.
 
   // Get information about this file.
@@ -1044,7 +1041,7 @@ bool HeaderSearch::ShouldEnterIncludeFile(Preprocessor &PP,
   // if the macro that guards it is defined, we know the #include has no effect.
   if (const IdentifierInfo *ControllingMacro
       = FileInfo.getControllingMacro(ExternalLookup))
-    if (PP.isMacroDefined(ControllingMacro)) {
+    if (ControllingMacro->hasMacroDefinition()) {
       ++NumMultiIncludeFileOptzn;
       return false;
     }

@@ -483,7 +483,7 @@ static void rewriteToObjCProperty(const ObjCMethodDecl *Getter,
   ASTContext &Context = NS.getASTContext();
   bool LParenAdded = false;
   std::string PropertyString = "@property ";
-  if (UseNsIosOnlyMacro && NS.isMacroDefined("NS_NONATOMIC_IOSONLY")) {
+  if (UseNsIosOnlyMacro && Context.Idents.get("NS_NONATOMIC_IOSONLY").hasMacroDefinition()) {
     PropertyString += "(NS_NONATOMIC_IOSONLY";
     LParenAdded = true;
   } else if (!Atomic) {
@@ -1730,7 +1730,7 @@ void ObjCMigrateASTConsumer::migrateNsReturnsInnerPointer(ASTContext &Ctx,
 
   QualType RT = OM->getReturnType();
   if (!TypeIsInnerPointer(RT) ||
-      !NSAPIObj->isMacroDefined("NS_RETURNS_INNER_POINTER"))
+      !Ctx.Idents.get("NS_RETURNS_INNER_POINTER").hasMacroDefinition())
     return;
   
   edit::Commit commit(*Editor);
@@ -1741,9 +1741,9 @@ void ObjCMigrateASTConsumer::migrateNsReturnsInnerPointer(ASTContext &Ctx,
 void ObjCMigrateASTConsumer::migratePropertyNsReturnsInnerPointer(ASTContext &Ctx,
                                                                   ObjCPropertyDecl *P) {
   QualType T = P->getType();
-
+  
   if (!TypeIsInnerPointer(T) ||
-      !NSAPIObj->isMacroDefined("NS_RETURNS_INNER_POINTER"))
+      !Ctx.Idents.get("NS_RETURNS_INNER_POINTER").hasMacroDefinition())
     return;
   edit::Commit commit(*Editor);
   commit.insertBefore(P->getLocEnd(), " NS_RETURNS_INNER_POINTER ");
@@ -1861,7 +1861,7 @@ static bool AuditedType (QualType AT) {
 void ObjCMigrateASTConsumer::AnnotateImplicitBridging(ASTContext &Ctx) {
   if (CFFunctionIBCandidates.empty())
     return;
-  if (!NSAPIObj->isMacroDefined("CF_IMPLICIT_BRIDGING_ENABLED")) {
+  if (!Ctx.Idents.get("CF_IMPLICIT_BRIDGING_ENABLED").hasMacroDefinition()) {
     CFFunctionIBCandidates.clear();
     FileId = FileID();
     return;
@@ -1936,14 +1936,16 @@ void ObjCMigrateASTConsumer::AddCFAnnotations(ASTContext &Ctx,
     RetEffect Ret = CE.getReturnValue();
     const char *AnnotationString = nullptr;
     if (Ret.getObjKind() == RetEffect::CF) {
-      if (Ret.isOwned() && NSAPIObj->isMacroDefined("CF_RETURNS_RETAINED"))
+      if (Ret.isOwned() &&
+          Ctx.Idents.get("CF_RETURNS_RETAINED").hasMacroDefinition())
         AnnotationString = " CF_RETURNS_RETAINED";
       else if (Ret.notOwned() &&
-               NSAPIObj->isMacroDefined("CF_RETURNS_NOT_RETAINED"))
+               Ctx.Idents.get("CF_RETURNS_NOT_RETAINED").hasMacroDefinition())
         AnnotationString = " CF_RETURNS_NOT_RETAINED";
     }
     else if (Ret.getObjKind() == RetEffect::ObjC) {
-      if (Ret.isOwned() && NSAPIObj->isMacroDefined("NS_RETURNS_RETAINED"))
+      if (Ret.isOwned() &&
+          Ctx.Idents.get("NS_RETURNS_RETAINED").hasMacroDefinition())
         AnnotationString = " NS_RETURNS_RETAINED";
     }
     
@@ -1960,13 +1962,13 @@ void ObjCMigrateASTConsumer::AddCFAnnotations(ASTContext &Ctx,
     const ParmVarDecl *pd = *pi;
     ArgEffect AE = AEArgs[i];
     if (AE == DecRef && !pd->hasAttr<CFConsumedAttr>() &&
-        NSAPIObj->isMacroDefined("CF_CONSUMED")) {
+        Ctx.Idents.get("CF_CONSUMED").hasMacroDefinition()) {
       edit::Commit commit(*Editor);
       commit.insertBefore(pd->getLocation(), "CF_CONSUMED ");
       Editor->commit(commit);
     }
     else if (AE == DecRefMsg && !pd->hasAttr<NSConsumedAttr>() &&
-             NSAPIObj->isMacroDefined("NS_CONSUMED")) {
+             Ctx.Idents.get("NS_CONSUMED").hasMacroDefinition()) {
       edit::Commit commit(*Editor);
       commit.insertBefore(pd->getLocation(), "NS_CONSUMED ");
       Editor->commit(commit);
@@ -2051,10 +2053,11 @@ void ObjCMigrateASTConsumer::AddCFAnnotations(ASTContext &Ctx,
     RetEffect Ret = CE.getReturnValue();
     const char *AnnotationString = nullptr;
     if (Ret.getObjKind() == RetEffect::CF) {
-      if (Ret.isOwned() && NSAPIObj->isMacroDefined("CF_RETURNS_RETAINED"))
+      if (Ret.isOwned() &&
+          Ctx.Idents.get("CF_RETURNS_RETAINED").hasMacroDefinition())
         AnnotationString = " CF_RETURNS_RETAINED";
       else if (Ret.notOwned() &&
-               NSAPIObj->isMacroDefined("CF_RETURNS_NOT_RETAINED"))
+               Ctx.Idents.get("CF_RETURNS_NOT_RETAINED").hasMacroDefinition())
         AnnotationString = " CF_RETURNS_NOT_RETAINED";
     }
     else if (Ret.getObjKind() == RetEffect::ObjC) {
@@ -2068,7 +2071,8 @@ void ObjCMigrateASTConsumer::AddCFAnnotations(ASTContext &Ctx,
           break;
           
         default:
-          if (Ret.isOwned() && NSAPIObj->isMacroDefined("NS_RETURNS_RETAINED"))
+          if (Ret.isOwned() &&
+              Ctx.Idents.get("NS_RETURNS_RETAINED").hasMacroDefinition())
             AnnotationString = " NS_RETURNS_RETAINED";
           break;
       }
@@ -2087,7 +2091,7 @@ void ObjCMigrateASTConsumer::AddCFAnnotations(ASTContext &Ctx,
     const ParmVarDecl *pd = *pi;
     ArgEffect AE = AEArgs[i];
     if (AE == DecRef && !pd->hasAttr<CFConsumedAttr>() &&
-        NSAPIObj->isMacroDefined("CF_CONSUMED")) {
+        Ctx.Idents.get("CF_CONSUMED").hasMacroDefinition()) {
       edit::Commit commit(*Editor);
       commit.insertBefore(pd->getLocation(), "CF_CONSUMED ");
       Editor->commit(commit);
@@ -2107,12 +2111,12 @@ void ObjCMigrateASTConsumer::migrateAddMethodAnnotation(
                                   MethodDecl->hasAttr<NSReturnsRetainedAttr>() ||
                                   MethodDecl->hasAttr<NSReturnsNotRetainedAttr>() ||
                                   MethodDecl->hasAttr<NSReturnsAutoreleasedAttr>());
-
-  if (CE.getReceiver() == DecRefMsg &&
+  
+  if (CE.getReceiver() ==  DecRefMsg &&
       !MethodDecl->hasAttr<NSConsumesSelfAttr>() &&
       MethodDecl->getMethodFamily() != OMF_init &&
       MethodDecl->getMethodFamily() != OMF_release &&
-      NSAPIObj->isMacroDefined("NS_CONSUMES_SELF")) {
+      Ctx.Idents.get("NS_CONSUMES_SELF").hasMacroDefinition()) {
     edit::Commit commit(*Editor);
     commit.insertBefore(MethodDecl->getLocEnd(), " NS_CONSUMES_SELF");
     Editor->commit(commit);
@@ -2178,7 +2182,7 @@ void ObjCMigrateASTConsumer::inferDesignatedInitializers(
   const ObjCInterfaceDecl *IFace = ImplD->getClassInterface();
   if (!IFace || IFace->hasDesignatedInitializers())
     return;
-  if (!NSAPIObj->isMacroDefined("NS_DESIGNATED_INITIALIZER"))
+  if (!Ctx.Idents.get("NS_DESIGNATED_INITIALIZER").hasMacroDefinition())
     return;
 
   for (const auto *MD : ImplD->instance_methods()) {

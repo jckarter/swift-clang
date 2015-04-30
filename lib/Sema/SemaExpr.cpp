@@ -450,11 +450,12 @@ void Sema::DiagnoseSentinelCalls(NamedDecl *D, SourceLocation Loc,
   SourceLocation MissingNilLoc
     = PP.getLocForEndOfToken(sentinelExpr->getLocEnd());
   std::string NullValue;
-  if (calleeType == CT_Method && PP.isMacroDefined("nil"))
+  if (calleeType == CT_Method &&
+      PP.getIdentifierInfo("nil")->hasMacroDefinition())
     NullValue = "nil";
   else if (getLangOpts().CPlusPlus11)
     NullValue = "nullptr";
-  else if (PP.isMacroDefined("NULL"))
+  else if (PP.getIdentifierInfo("NULL")->hasMacroDefinition())
     NullValue = "NULL";
   else
     NullValue = "(void*) 0";

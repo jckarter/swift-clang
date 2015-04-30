@@ -7196,7 +7196,7 @@ MacroInfo *cxindex::getMacroInfo(const IdentifierInfo &II,
 
   ASTUnit *Unit = cxtu::getASTUnit(TU);
   Preprocessor &PP = Unit->getPreprocessor();
-  MacroDirective *MD = PP.getLocalMacroDirectiveHistory(&II);
+  MacroDirective *MD = PP.getMacroDirectiveHistory(&II);
   if (MD) {
     for (MacroDirective::DefInfo
            Def = MD->getDefinition(); Def; Def = Def.getPreviousDefinition()) {
@@ -7253,7 +7253,7 @@ MacroDefinition *cxindex::checkForMacroInMacroDefinition(const MacroInfo *MI,
   if (std::find(MI->arg_begin(), MI->arg_end(), &II) != MI->arg_end())
     return nullptr;
 
-  MacroDirective *InnerMD = PP.getLocalMacroDirectiveHistory(&II);
+  MacroDirective *InnerMD = PP.getMacroDirectiveHistory(&II);
   if (!InnerMD)
     return nullptr;
 

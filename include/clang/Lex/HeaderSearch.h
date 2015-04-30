@@ -32,7 +32,6 @@ class FileEntry;
 class FileManager;
 class HeaderSearchOptions;
 class IdentifierInfo;
-class Preprocessor;
 
 /// \brief The preprocessor keeps track of this information for each
 /// file that is \#included.
@@ -420,8 +419,8 @@ public:
   ///
   /// \return false if \#including the file will have no effect or true
   /// if we should include it.
-  bool ShouldEnterIncludeFile(Preprocessor &PP, const FileEntry *File,
-                              bool isImport);
+  bool ShouldEnterIncludeFile(const FileEntry *File, bool isImport);
+
 
   /// \brief Return whether the specified file is a normal header,
   /// a system header, or a C++ friendly system header.
