@@ -96,12 +96,11 @@ GeneratePCHAction::CreateASTConsumer(CompilerInstance &CI, StringRef InFile) {
                                                       OutputFile, nullptr,
                                                       Sysroot, Buffer));
 
-  auto CGOpts = CI.getCodeGenOpts();
+  CodeGenOptions CGOpts;
   // The debug info emitted by ModuleContainerGenerator is not affected by the
   // optimization level.
-  CGOpts.EmitDeclMetadata = false;
-  CGOpts.EmitGcovArcs = false;
-  CGOpts.EmitGcovNotes = false;
+  CGOpts.CodeModel = CI.getCodeGenOpts().CodeModel;
+  CGOpts.ThreadModel = CI.getCodeGenOpts().ThreadModel;
   CGOpts.OptimizationLevel = 0;
   CGOpts.ClangModule = true;
   CGOpts.DebugTypeExtRefs = true;
@@ -154,12 +153,11 @@ GenerateModuleAction::CreateASTConsumer(CompilerInstance &CI,
                                                       OutputFile, Module,
                                                       Sysroot, Buffer));
 
-  auto CGOpts = CI.getCodeGenOpts();
+  CodeGenOptions CGOpts;
   // The debug info emitted by ModuleContainerGenerator is not affected by the
   // optimization level.
-  CGOpts.EmitDeclMetadata = false;
-  CGOpts.EmitGcovArcs = false;
-  CGOpts.EmitGcovNotes = false;
+  CGOpts.CodeModel = CI.getCodeGenOpts().CodeModel;
+  CGOpts.ThreadModel = CI.getCodeGenOpts().ThreadModel;
   CGOpts.OptimizationLevel = 0;
   CGOpts.ClangModule = true;
   CGOpts.DebugTypeExtRefs = true;
