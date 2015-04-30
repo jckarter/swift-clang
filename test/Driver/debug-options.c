@@ -130,4 +130,4 @@
 //
 // NOCI-NOT: "-dwarf-column-info"
 //
-// GEXTREFS: "-dwarf-ext-refs"
+// GEXTREFS: "-g" "-dwarf-ext-refs"
