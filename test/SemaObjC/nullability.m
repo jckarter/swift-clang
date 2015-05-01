@@ -230,3 +230,13 @@ void testBlockLiterals() {
 
   int *x = (^ _Nullable id(void) { return 0; })(); // expected-warning{{incompatible pointer types initializing 'int *' with an expression of type 'id _Nullable'}}
 }
+
+// rdar://problem/20754602
+// FIXME: highlight ranges
+__attribute__((objc_root_class))
+@interface MethodType
+-(void)fooWithThing:(nonnull float *)thing; // expected-note{{previous definition}} expected-note{{declaration is here}}
+@end
+@implementation MethodType
+-(void)fooWithThing:(nonnull int *)thing { } // expected-warning2{{conflicting parameter types}}
+@end
