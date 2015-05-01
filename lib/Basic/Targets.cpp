@@ -1740,6 +1740,8 @@ class R600TargetInfo : public TargetInfo {
     GK_SEA_ISLANDS
   } GPU;
 
+  bool hasFP64;
+
 public:
   R600TargetInfo(const llvm::Triple &Triple)
       : TargetInfo(Triple) {
@@ -1747,9 +1749,11 @@ public:
     if (Triple.getArch() == llvm::Triple::amdgcn) {
       DescriptionString = DescriptionStringSI;
       GPU = GK_SOUTHERN_ISLANDS;
+      hasFP64 = true;
     } else {
       DescriptionString = DescriptionStringR600;
       GPU = GK_R600;
+      hasFP64 = false;
     }
     AddrSpaceMap = &R600AddrSpaceMap;
     UseAddrSpaceMapMangling = true;
@@ -1796,8 +1800,9 @@ public:
   void getTargetDefines(const LangOptions &Opts,
                         MacroBuilder &Builder) const override {
     Builder.defineMacro("__R600__");
-    if (GPU >= GK_SOUTHERN_ISLANDS && Opts.OpenCL)
+    if (hasFP64 && Opts.OpenCL) {
       Builder.defineMacro("cl_khr_fp64");
+    }
   }
 
   BuiltinVaListKind getBuiltinVaListKind() const override {
@@ -1855,16 +1860,19 @@ public:
     case GK_EVERGREEN:
     case GK_NORTHERN_ISLANDS:
       DescriptionString = DescriptionStringR600;
+      hasFP64 = false;
       break;
     case GK_R600_DOUBLE_OPS:
     case GK_R700_DOUBLE_OPS:
     case GK_EVERGREEN_DOUBLE_OPS:
     case GK_CAYMAN:
       DescriptionString = DescriptionStringR600DoubleOps;
+      hasFP64 = true;
       break;
     case GK_SOUTHERN_ISLANDS:
     case GK_SEA_ISLANDS:
       DescriptionString = DescriptionStringSI;
+      hasFP64 = true;
       break;
     }
 
@@ -4209,12 +4217,8 @@ public:
       Features["neon"] = true;
       Features["hwdiv"] = true;
       Features["hwdiv-arm"] = true;
-    } else if (CPU == "cyclone") {
-      Features["v8fp"] = true;
-      Features["neon"] = true;
-      Features["hwdiv"] = true;
-      Features["hwdiv-arm"] = true;
-    } else if (CPU == "cortex-a53" || CPU == "cortex-a57" || CPU == "cortex-a72") {
+    } else if (CPU == "cyclone" || CPU == "cortex-a53" || CPU == "cortex-a57" ||
+               CPU == "cortex-a72") {
       Features["fp-armv8"] = true;
       Features["neon"] = true;
       Features["hwdiv"] = true;
