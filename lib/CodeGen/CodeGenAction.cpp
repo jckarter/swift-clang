@@ -732,6 +732,12 @@ void CodeGenAction::ExecuteAction() {
     }
 
     EmbedBitcode(TheModule.get(), CI.getCodeGenOpts());
+    if (CI.getCodeGenOpts().DisableBitcodeAsm &&
+        ContainInlineAsm(TheModule.get())) {
+      CI.getDiagnostics().Report(SourceLocation(),
+          diag::err_inline_asm_not_allowed);
+      return;
+    }
 
     LLVMContext &Ctx = TheModule->getContext();
     Ctx.setInlineAsmDiagnosticHandler(BitcodeInlineAsmDiagHandler);

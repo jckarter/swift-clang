@@ -37,6 +37,7 @@ namespace clang {
                          raw_pwrite_stream *OS);
 
   void EmbedBitcode(llvm::Module *M, const CodeGenOptions &CGOpts);
+  bool ContainInlineAsm(llvm::Module *M);
 }
 
 #endif

@@ -214,4 +214,7 @@ def err_no_apinotes_cache_path : Error<
   "-fapinotes was provided without -fapinotes-cache-path=<directory>">,
   DefaultFatal;
 
+def err_inline_asm_not_allowed : Error<
+  "inline asm is used in the module with -fno-gnu-inline-asm">;
+
 }

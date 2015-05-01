@@ -717,3 +717,23 @@ void clang::EmbedBitcode(llvm::Module *M, const CodeGenOptions &CGOpts)
     GV->setName("llvm.cmdline");
   }
 }
+
+// Check if module contains inline assembly.
+// Return true if module has file scope asm or function scope asm.
+bool clang::ContainInlineAsm(llvm::Module *M)
+{
+  if (!M->getModuleInlineAsm().empty())
+    return true;
+
+  for (const auto &F : *M) {
+    for (const auto &BB : F) {
+      for (const auto &I : BB) {
+        if (const CallInst* CI = dyn_cast<CallInst>(&I)) {
+          if (CI->isInlineAsm())
+            return true;
+        }
+      }
+    }
+  }
+  return false;
+}

@@ -526,6 +526,7 @@ static bool ParseCodeGenArgs(CodeGenOptions &Opts, ArgList &Args, InputKind IK,
 
   Opts.EmbedBitcode = Args.hasArg(OPT_fembed_bitcode);
   Opts.EmbedMarkerOnly = Args.hasArg(OPT_fembed_bitcode_marker);
+  Opts.DisableBitcodeAsm = Args.hasArg(OPT_fno_gnu_inline_asm);
   // FIXME: For backend options that are not yet recorded as function
   // attributes in the IR, keep track of them so we can embed them in a
   // separate data section and use them when building the bitcode. This can
