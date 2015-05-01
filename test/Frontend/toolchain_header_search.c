@@ -14,7 +14,7 @@
 // RUN: mkdir -p %t.dir/XcodeDefault.xctoolchain/usr/include
 //
 // RUN: echo "#define A OK" > %t.dir/XcodeDefault.xctoolchain/usr/include/FlexLexer.h
-// RUN: %clang -fsyntax-only -v -Xclang -verify -resource-dir %t.dir/foo.xctoolchain/usr/lib/clang/someversion %s 2> %t.err
+// RUN: %clang -fsyntax-only -v -Xclang -verify -isysroot / -resource-dir %t.dir/foo.xctoolchain/usr/lib/clang/someversion %s 2> %t.err
 // RUN: FileCheck --check-prefix=CHECK-XCODE-TOOLCHAIN < %t.err %s
 //
 // CHECK-XCODE-TOOLCHAIN: #include <...> search starts here:
@@ -30,7 +30,7 @@
 // RUN: mkdir -p %t.dir/CommandLineTools/usr/lib/clang/someversion/
 //
 // RUN: echo "#define A OK" > %t.dir/CommandLineTools/usr/include/FlexLexer.h
-// RUN: %clang -fsyntax-only -v -Xclang -verify -resource-dir %t.dir/CommandLineTools/usr/lib/clang/someversion %s
+// RUN: %clang -fsyntax-only -v -Xclang -verify -isysroot / -resource-dir %t.dir/CommandLineTools/usr/lib/clang/someversion %s
 
 // Verify that we *don't* use this directory if it would resolve to
 // some other '/usr/include' (which might be outside the sysroot).
