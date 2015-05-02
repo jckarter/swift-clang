@@ -244,8 +244,9 @@ public:
 
     // Free up some memory, in case the process is kept alive.
     SerializedAST.clear();
-    M.release();
-    VMContext.release();
+    Builder.reset();
+    M.reset();
+    VMContext.reset();
   }
 };
 }
