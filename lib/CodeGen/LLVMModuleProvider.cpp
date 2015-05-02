@@ -37,7 +37,6 @@ using namespace clang;
 namespace {
 class ModuleContainerGenerator : public ASTConsumer {
   DiagnosticsEngine &Diags;
-  std::unique_ptr<const llvm::DataLayout> TD;
   ASTContext *Ctx;
   const HeaderSearchOptions &HeaderSearchOpts;
   const PreprocessorOptions &PreprocessorOpts;
@@ -136,11 +135,11 @@ public:
 
   void Initialize(ASTContext &Context) override {
     Ctx = &Context;
-    TD.reset(new llvm::DataLayout(Ctx->getTargetInfo().getTargetDescription()));
-    if (!Builder) { 
-      Builder.reset(
-        new CodeGen::CodeGenModule(*Ctx, HeaderSearchOpts, PreprocessorOpts,
-            CodeGenOpts, *M, *TD, Diags));
+    M->setDataLayout(Ctx->getTargetInfo().getTargetDescription());
+    if (!Builder) {
+      Builder.reset(new CodeGen::CodeGenModule(*Ctx, HeaderSearchOpts,
+                                               PreprocessorOpts, CodeGenOpts,
+                                               *M, M->getDataLayout(), Diags));
     }
   }
 
