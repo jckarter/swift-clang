@@ -1030,6 +1030,12 @@ SourceRange ObjCMethodDecl::getReturnTypeSourceRange() const {
   return SourceRange();
 }
 
+QualType ObjCMethodDecl::getSendResultType() const {
+  ASTContext &Ctx = getASTContext();
+  return getReturnType().getNonLValueExprType(Ctx)
+           .substObjCTypeArgs(Ctx, {}, ObjCSubstitutionContext::Result);
+}
+
 QualType ObjCMethodDecl::getSendResultType(QualType receiverType) const {
   // FIXME: Handle related result types here.
 
