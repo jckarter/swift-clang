@@ -1688,8 +1688,13 @@ void Parser::parseObjCTypeArgsOrProtocolQualifiers(
                                                        identifierLocs[i]));
       }
 
-      Actions.CodeCompleteObjCProtocolReferences(identifierLocPairs.data(),
-                                                 identifierLocPairs.size());
+      QualType BaseT = Actions.GetTypeFromParser(baseType);
+      if (!BaseT.isNull() && BaseT->acceptsObjCTypeParams()) {
+        Actions.CodeCompleteOrdinaryName(getCurScope(), Sema::PCC_Type);
+      } else {
+        Actions.CodeCompleteObjCProtocolReferences(identifierLocPairs.data(),
+                                                   identifierLocPairs.size());
+      }
       cutOffParsing();
       return;
     }
