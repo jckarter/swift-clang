@@ -2570,10 +2570,10 @@ public:
   XCMTPPCallbacks() : XCTM(0) {}
   void setMigrator(XCTMigrator *Mig) { XCTM = Mig; }
 
-  virtual void MacroExpands(const Token &MacroNameTok, const MacroDirective *MD,
+  virtual void MacroExpands(const Token &MacroNameTok, const MacroDefinition &MD,
                             SourceRange Range, const MacroArgs *Args) {
     XCTM->migrateMacro(MacroNameTok.getIdentifierInfo(), Range,
-                       MD->getMacroInfo()->getDefinitionLoc(), Args, MD);
+                       MD.getMacroInfo()->getDefinitionLoc(), Args, MD);
   }
   virtual void InclusionDirective(SourceLocation HashLoc,
                                   const Token &IncludeTok,

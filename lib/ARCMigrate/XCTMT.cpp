@@ -170,9 +170,9 @@ void XCTMigrator::migrateRef(NamedDecl *D, SourceLocation Loc) {
 }
 
 void XCTMigrator::keepMacroArgInfo(const MacroArgs *Args,
-                                   const MacroDirective *MD) {
+                                   const MacroDefinition &MD) {
   assert(Args && MD);
-  const MacroInfo *MI = MD->getMacroInfo();
+  const MacroInfo *MI = MD.getMacroInfo();
   if (!MI->isVariadic())
     return;
   unsigned NumArgs = MI->getNumArgs();
@@ -212,7 +212,7 @@ void XCTMigrator::keepMacroArgInfo(const MacroArgs *Args,
 
 void XCTMigrator::migrateMacro(IdentifierInfo *Name, SourceRange Range,
                                SourceLocation DefLoc, const MacroArgs *Args,
-                               const MacroDirective *MD) {
+                               const MacroDefinition &MD) {
   SourceLocation Loc = Range.getBegin();
   if (!Name || Loc.isInvalid())
     return;
