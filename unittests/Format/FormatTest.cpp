@@ -692,6 +692,11 @@ TEST_F(FormatTest, FormatsSwitchStatement) {
                "  case OP_name:                        \\\n"
                "    return operations::Operation##name\n",
                getLLVMStyleWithColumns(40));
+  verifyFormat("switch (x) {\n"
+               "case 1:;\n"
+               "default:;\n"
+               "  int i;\n"
+               "}");
 
   verifyGoogleFormat("switch (x) {\n"
                      "  case 1:\n"
@@ -826,6 +831,11 @@ TEST_F(FormatTest, FormatsLabels) {
                "  some_code();\n"
                "test_label:\n"
                "  some_other_code();\n"
+               "}");
+  verifyFormat("{\n"
+               "  some_code();\n"
+               "test_label:;\n"
+               "  int i = 0;\n"
                "}");
 }
 
@@ -2951,15 +2961,13 @@ TEST_F(FormatTest, FormatUnbalancedStructuralElements) {
             format("#define A } }\nint i;", getLLVMStyleWithColumns(11)));
 }
 
-TEST_F(FormatTest, EscapedNewlineAtStartOfToken) {
+TEST_F(FormatTest, EscapedNewlines) {
   EXPECT_EQ(
       "#define A \\\n  int i;  \\\n  int j;",
       format("#define A \\\nint i;\\\n  int j;", getLLVMStyleWithColumns(11)));
   EXPECT_EQ("template <class T> f();", format("\\\ntemplate <class T> f();"));
-}
-
-TEST_F(FormatTest, NoEscapedNewlineHandlingInBlockComments) {
   EXPECT_EQ("/* \\  \\  \\\n*/", format("\\\n/* \\  \\  \\\n*/"));
+  EXPECT_EQ("<a\n\\\\\n>", format("<a\n\\\\\n>"));
 }
 
 TEST_F(FormatTest, DontCrashOnBlockComments) {
@@ -3501,6 +3509,10 @@ TEST_F(FormatTest, ExpressionIndentationBreakingBeforeOperators) {
       "                 * bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\n"
       "             + cc;",
       Style);
+
+  verifyFormat("aaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n"
+               "    = aaaaaaaaaaaaaaaaaaaa + aaaaaaaaaaaaaaaaaaaaaaaaaaaa;",
+               Style);
 
   // Forced by comments.
   verifyFormat(
@@ -5142,6 +5154,8 @@ TEST_F(FormatTest, UnderstandsTemplateParameters) {
   verifyFormat("f<int>();");
   verifyFormat("template <typename T> void f() {}");
   verifyFormat("struct A<std::enable_if<sizeof(T2) < sizeof(int32)>::type>;");
+  verifyFormat("struct A<std::enable_if<sizeof(T2) ? sizeof(int32) : "
+               "sizeof(char)>::type>;");
 
   // Not template parameters.
   verifyFormat("return a < b && c > d;");
@@ -6398,6 +6412,8 @@ TEST_F(FormatTest, UnderstandContextOfRecordTypeKeywords) {
   verifyFormat("class __declspec(X) Z {\n} n;");
   verifyFormat("class A##B##C {\n} n;");
   verifyFormat("class alignas(16) Z {\n} n;");
+  verifyFormat("class MACRO(X) alignas(16) Z {\n} n;");
+  verifyFormat("class MACROA MACRO(X) Z {\n} n;");
 
   // Redefinition from nested context:
   verifyFormat("class A::B::C {\n} n;");
@@ -7146,6 +7162,8 @@ TEST_F(FormatTest, FormatObjCMethodExpr) {
                "             fraction:1.0\n"
                "       respectFlipped:NO\n"
                "                hints:nil];");
+  verifyFormat("[aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n"
+               "    aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa];");
 
   verifyFormat(
       "scoped_nsobject<NSTextField> message(\n"
@@ -7161,6 +7179,13 @@ TEST_F(FormatTest, FormatObjCMethodExpr) {
       "[self aaaaaaaaaa:aaaaaaaaaaaaaaa | aaaaaaaaaaaaaaa | aaaaaaaaaaaaaaa |\n"
       "                 aaaaaaaaaaaaaaa | aaaaaaaaaaaaaaa | aaaaaaaaaaaaaaa |\n"
       "                 aaaaaaaaaaaaaaa | aaaaaaaaaaaaaaa];");
+
+  // FIXME: This violates the column limit.
+  verifyFormat(
+      "[aaaaaaaaaaaaaaaaaaaaaaaaa\n"
+      "    aaaaaaaaaaaaaaaaa:aaaaaaaa\n"
+      "                  aaa:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa];",
+      getLLVMStyleWithColumns(60));
 
   // Variadic parameters.
   verifyFormat(
