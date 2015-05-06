@@ -4157,6 +4157,8 @@ public:
           Triple.getOS() == llvm::Triple::UnknownOS ||
           StringRef(CPU).startswith("cortex-m")) {
         setABI("aapcs");
+      } else if (Triple.getArchName().endswith("v7k")) {
+        setABI("apcs-vfp");
       } else {
         setABI("apcs-gnu");
       }
