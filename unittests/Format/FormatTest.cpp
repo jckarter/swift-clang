@@ -1056,6 +1056,8 @@ TEST_F(FormatTest, UnderstandsSingleLineComments) {
 
   verifyNoCrash("/\\\n/");
   verifyNoCrash("/\\\n* */");
+  // The 0-character somehow makes the lexer return a proper comment.
+  verifyNoCrash(StringRef("/*\\\0\n/", 6));
 }
 
 TEST_F(FormatTest, KeepsParameterWithTrailingCommentsOnTheirOwnLine) {
@@ -1619,6 +1621,17 @@ TEST_F(FormatTest, SplitsLongLinesInComments) {
                    "   * another comment we have to break\n"
                    "* a left comment\n"
                    "   */",
+                   getLLVMStyleWithColumns(20)));
+
+  EXPECT_EQ("/**\n"
+            " * multiline block\n"
+            " * comment\n"
+            " *\n"
+            " */",
+            format("/**\n"
+                   " * multiline block comment\n"
+                   " *\n"
+                   " */",
                    getLLVMStyleWithColumns(20)));
 
   EXPECT_EQ("/*\n"
@@ -5144,6 +5157,7 @@ TEST_F(FormatTest, UnderstandsTemplateParameters) {
                getLLVMStyleWithColumns(60));
   verifyFormat("static_assert(is_convertible<A &&, B>::value, \"AAA\");");
   verifyFormat("Constructor(A... a) : a_(X<A>{std::forward<A>(a)}...) {}");
+  verifyFormat("< < < < < < < < < < < < < < < < < < < < < < < < < < < < < <");
 }
 
 TEST_F(FormatTest, UnderstandsBinaryOperators) {
@@ -6525,7 +6539,7 @@ TEST_F(FormatTest, BlockComments) {
   EXPECT_EQ("/*\n"
             "*\n"
             " * aaaaaa\n"
-            "*aaaaaa\n"
+            " * aaaaaa\n"
             "*/",
             format("/*\n"
                    "*\n"

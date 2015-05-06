@@ -15,6 +15,7 @@
 
 #include "TokenAnnotator.h"
 #include "clang/Basic/SourceManager.h"
+#include "llvm/ADT/SmallPtrSet.h"
 #include "llvm/Support/Debug.h"
 
 #define DEBUG_TYPE "format-token-annotator"
@@ -495,13 +496,15 @@ private:
         return false;
       break;
     case tok::less:
-      if ((!Tok->Previous ||
+      if (!NonTemplateLess.count(Tok) &&
+          (!Tok->Previous ||
            (!Tok->Previous->Tok.isLiteral() &&
             !(Tok->Previous->is(tok::r_paren) && Contexts.size() > 1))) &&
           parseAngle()) {
         Tok->Type = TT_TemplateOpener;
       } else {
         Tok->Type = TT_BinaryOperator;
+        NonTemplateLess.insert(Tok);
         CurrentToken = Tok;
         next();
       }
@@ -648,6 +651,7 @@ private:
 
 public:
   LineType parseLine() {
+    NonTemplateLess.clear();
     if (CurrentToken->is(tok::hash))
       return parsePreprocessorDirective();
 
@@ -891,8 +895,16 @@ private:
                (!Current.Previous || Current.Previous->isNot(tok::l_square))) {
       Current.Type = TT_BinaryOperator;
     } else if (Current.is(tok::comment)) {
-      Current.Type =
-          Current.TokenText.startswith("/*") ? TT_BlockComment : TT_LineComment;
+      if (Current.TokenText.startswith("/*")) {
+        if (Current.TokenText.endswith("*/"))
+          Current.Type = TT_BlockComment;
+        else
+          // The lexer has for some reason determined a comment here. But we
+          // cannot really handle it, if it isn't properly terminated.
+          Current.Tok.setKind(tok::unknown);
+      } else {
+        Current.Type = TT_LineComment;
+      }
     } else if (Current.is(tok::r_paren)) {
       if (rParenEndsCast(Current))
         Current.Type = TT_CastRParen;
@@ -1160,6 +1172,12 @@ private:
   FormatToken *CurrentToken;
   bool AutoFound;
   const AdditionalKeywords &Keywords;
+
+  // Set of "<" tokens that do not open a template parameter list. If parseAngle
+  // determines that a specific token can't be a template opener, it will make
+  // same decision irrespective of the decisions for tokens leading up to it.
+  // Store this information to prevent this from causing exponential runtime.
+  llvm::SmallPtrSet<FormatToken *, 16> NonTemplateLess;
 };
 
 static const int PrecedenceUnaryOperator = prec::PointerToMember + 1;

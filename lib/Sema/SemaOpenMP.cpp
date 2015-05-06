@@ -426,9 +426,15 @@ DSAStackTy::DSAVarData DSAStackTy::getTopDSA(VarDecl *D, bool FromParent) {
   // in a Construct, C/C++, predetermined, p.1]
   //  Variables appearing in threadprivate directives are threadprivate.
   if (D->getTLSKind() != VarDecl::TLS_None ||
-      D->getStorageClass() == SC_Register) {
-    DVar.CKind = OMPC_threadprivate;
-    return DVar;
+      (D->getStorageClass() == SC_Register && D->hasAttr<AsmLabelAttr>() &&
+       !D->isLocalVarDecl())) {
+    addDSA(D,
+           DeclRefExpr::Create(SemaRef.getASTContext(),
+                               NestedNameSpecifierLoc(), SourceLocation(), D,
+                               /*RefersToEnclosingVariableOrCapture=*/false,
+                               D->getLocation(),
+                               D->getType().getNonReferenceType(), VK_LValue),
+           OMPC_threadprivate);
   }
   if (Stack[0].SharingMap.count(D)) {
     DVar.RefExpr = Stack[0].SharingMap[D].RefExpr;
@@ -885,7 +891,8 @@ Sema::CheckOMPThreadPrivateDecl(SourceLocation Loc, ArrayRef<Expr *> VarList) {
 
     // Check if this is a TLS variable.
     if (VD->getTLSKind() != VarDecl::TLS_None ||
-        VD->getStorageClass() == SC_Register) {
+        (VD->getStorageClass() == SC_Register && VD->hasAttr<AsmLabelAttr>() &&
+         !VD->isLocalVarDecl())) {
       Diag(ILoc, diag::err_omp_var_thread_local)
           << VD << ((VD->getTLSKind() != VarDecl::TLS_None) ? 0 : 1);
       bool IsDecl =
@@ -2571,7 +2578,9 @@ static bool CheckOpenMPIterationSpace(
     SemaRef.Diag(Init->getLocStart(), diag::err_omp_loop_var_dsa)
         << getOpenMPClauseName(DVar.CKind) << getOpenMPDirectiveName(DKind)
         << getOpenMPClauseName(PredeterminedCKind);
-    ReportOriginalDSA(SemaRef, &DSA, Var, DVar, true);
+    if (DVar.RefExpr == nullptr)
+      DVar.CKind = PredeterminedCKind;
+    ReportOriginalDSA(SemaRef, &DSA, Var, DVar, /*IsLoopIterVar=*/true);
     HasErrors = true;
   } else if (LoopVarRefExpr != nullptr) {
     // Make the loop iteration variable private (for worksharing constructs),
