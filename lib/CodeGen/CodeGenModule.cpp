@@ -2696,7 +2696,8 @@ CodeGenModule::GetAddrOfConstantCFString(const StringLiteral *Literal) {
   }
 
   // String.
-  Fields[2] = llvm::ConstantExpr::getGetElementPtr(GV->getType(), GV, Zeros);
+  Fields[2] =
+      llvm::ConstantExpr::getGetElementPtr(GV->getValueType(), GV, Zeros);
 
   if (isUTF16)
     // Cast the UTF16 string to the correct type.
