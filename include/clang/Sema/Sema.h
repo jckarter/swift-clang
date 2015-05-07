@@ -1338,6 +1338,10 @@ private:
   bool RequireCompleteTypeImpl(SourceLocation Loc, QualType T,
                            TypeDiagnoser &Diagnoser);
 public:
+  /// \brief Make a merged definition of an existing hidden definition \p ND
+  /// visible at the specified location.
+  void makeMergedDefinitionVisible(NamedDecl *ND, SourceLocation Loc);
+
   /// Determine if \p D has a visible definition. If not, suggest a declaration
   /// that should be made visible to expose the definition.
   bool hasVisibleDefinition(NamedDecl *D, NamedDecl **Suggested);
@@ -1783,6 +1787,12 @@ public:
     TUK_Friend       // Friend declaration:  'friend struct foo;'
   };
 
+  struct SkipBodyInfo {
+    SkipBodyInfo() : ShouldSkip(false), Previous(nullptr) {}
+    bool ShouldSkip;
+    NamedDecl *Previous;
+  };
+
   Decl *ActOnTag(Scope *S, unsigned TagSpec, TagUseKind TUK,
                  SourceLocation KWLoc, CXXScopeSpec &SS,
                  IdentifierInfo *Name, SourceLocation NameLoc,
@@ -1792,7 +1802,7 @@ public:
                  bool &OwnedDecl, bool &IsDependent,
                  SourceLocation ScopedEnumKWLoc,
                  bool ScopedEnumUsesClassTag, TypeResult UnderlyingType,
-                 bool IsTypeSpecifier, bool *SkipBody = nullptr);
+                 bool IsTypeSpecifier, SkipBodyInfo *SkipBody = nullptr);
 
   Decl *ActOnTemplatedFriendTag(Scope *S, SourceLocation FriendLoc,
                                 unsigned TagSpec, SourceLocation TagLoc,
@@ -1902,6 +1912,11 @@ public:
   bool CheckEnumUnderlyingType(TypeSourceInfo *TI);
   bool CheckEnumRedeclaration(SourceLocation EnumLoc, bool IsScoped,
                               QualType EnumUnderlyingTy, const EnumDecl *Prev);
+
+  /// Determine whether the body of an anonymous enumeration should be skipped.
+  /// \param II The name of the first enumerator.
+  SkipBodyInfo shouldSkipAnonEnumBody(Scope *S, IdentifierInfo *II,
+                                      SourceLocation IILoc);
 
   Decl *ActOnEnumConstant(Scope *S, Decl *EnumDecl, Decl *LastEnumConstant,
                           SourceLocation IdLoc, IdentifierInfo *Id,
@@ -5479,7 +5494,7 @@ public:
                                 SourceLocation FriendLoc,
                                 unsigned NumOuterTemplateParamLists,
                             TemplateParameterList **OuterTemplateParamLists,
-                                bool *SkipBody = nullptr);
+                                SkipBodyInfo *SkipBody = nullptr);
 
   void translateTemplateArguments(const ASTTemplateArgsPtr &In,
                                   TemplateArgumentListInfo &Out);
