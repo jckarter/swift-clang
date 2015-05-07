@@ -24,3 +24,6 @@
 // CLANG-CL-COVERAGE-NOT: unknown argument
 // CLANG-CL-COVERAGE: -fsanitize=address
 // CLANG-CL-COVERAGE: -fsanitize-coverage-type=1
+
+// rdar://problem/20859716
+// XFAIL: *
