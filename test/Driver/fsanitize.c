@@ -106,12 +106,12 @@
 // RUN: %clang -target x86_64-linux-gnu -fsanitize=bool -fsanitize-coverage=1 %s -### 2>&1 | FileCheck %s --check-prefix=CHECK-SANITIZE-COVERAGE-1
 // RUN: %clang -target x86_64-linux-gnu -fsanitize=dataflow -fsanitize-coverage=1 %s -### 2>&1 | FileCheck %s --check-prefix=CHECK-SANITIZE-COVERAGE-1
 
-// Remove the -NOT for the next two lines: rdar://problem/20859716
+// Remove the -NOT for the next three lines: rdar://problem/20859716
 // CHECK-SANITIZE-COVERAGE-1-NOT: fsanitize-coverage=1
 // RUN: %clang -target x86_64-linux-gnu -fsanitize=address -fsanitize-coverage=4 %s -### 2>&1 | FileCheck %s --check-prefix=CHECK-SANITIZE-COVERAGE-4
 // CHECK-SANITIZE-COVERAGE-4-NOT: fsanitize-coverage=4
 // RUN: %clang -target x86_64-linux-gnu -fsanitize=address -fsanitize-coverage=5 %s -### 2>&1 | FileCheck %s --check-prefix=CHECK-SANITIZE-COVERAGE-5
-// CHECK-SANITIZE-COVERAGE-5: error: invalid value '5' in '-fsanitize-coverage=5'
+// CHECK-SANITIZE-COVERAGE-5-NOT: error: invalid value '5' in '-fsanitize-coverage=5'
 // RUN: %clang -target x86_64-linux-gnu -fsanitize=thread   -fsanitize-coverage=1 %s -### 2>&1 | FileCheck %s --check-prefix=CHECK-SANITIZE-COVERAGE-UNUSED-0
 // RUN: %clang -target x86_64-linux-gnu                     -fsanitize-coverage=1 %s -### 2>&1 | FileCheck %s --check-prefix=CHECK-SANITIZE-COVERAGE-UNUSED-2
 // CHECK-SANITIZE-COVERAGE-UNUSED-0: error: unsupported argument 'thread' to option 'fsanitize='
