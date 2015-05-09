@@ -1304,8 +1304,7 @@ llvm::Constant *CodeGenModule::GetAddrOfUuidDescriptor(
   auto *GV = new llvm::GlobalVariable(
       getModule(), Init->getType(),
       /*isConstant=*/true, llvm::GlobalValue::LinkOnceODRLinkage, Init, Name);
-  if (supportsCOMDAT())
-    GV->setComdat(TheModule.getOrInsertComdat(GV->getName()));
+  maybeSetTrivialComdat(*GV);
   return GV;
 }
 
@@ -1856,9 +1855,7 @@ CodeGenModule::CreateOrReplaceCXXRuntimeVariable(StringRef Name,
     OldGV->eraseFromParent();
   }
 
-  if (supportsCOMDAT() && GV->isWeakForLinker() &&
-      !GV->hasAvailableExternallyLinkage())
-    GV->setComdat(TheModule.getOrInsertComdat(GV->getName()));
+  maybeSetTrivialComdat(*GV);
 
   return GV;
 }
@@ -1989,6 +1986,14 @@ void CodeGenModule::maybeSetTrivialComdat(const Decl &D,
   if (!shouldBeInCOMDAT(*this, D))
     return;
   GO.setComdat(TheModule.getOrInsertComdat(GO.getName()));
+}
+
+void CodeGenModule::maybeSetTrivialComdat(llvm::GlobalObject &GO) {
+  if (!supportsCOMDAT())
+    return;
+  if (GO.isWeakForLinker() && !GO.hasAvailableExternallyLinkage()) {
+    GO.setComdat(getModule().getOrInsertComdat(GO.getName()));
+  }
 }
 
 void CodeGenModule::EmitGlobalVarDefinition(const VarDecl *D) {
@@ -2930,10 +2935,7 @@ GenerateStringLiteral(llvm::Constant *C, llvm::GlobalValue::LinkageTypes LT,
       nullptr, llvm::GlobalVariable::NotThreadLocal, AddrSpace);
   GV->setAlignment(Alignment);
   GV->setUnnamedAddr(true);
-  if (GV->isWeakForLinker()) {
-    assert(CGM.supportsCOMDAT() && "Only COFF uses weak string literals");
-    GV->setComdat(M.getOrInsertComdat(GV->getName()));
-  }
+  CGM.maybeSetTrivialComdat(*GV);
 
   return GV;
 }
@@ -3115,8 +3117,7 @@ llvm::Constant *CodeGenModule::GetAddrOfGlobalTemporary(
   setGlobalVisibility(GV, VD);
   GV->setAlignment(
       getContext().getTypeAlignInChars(MaterializedType).getQuantity());
-  if (supportsCOMDAT() && GV->isWeakForLinker())
-    GV->setComdat(TheModule.getOrInsertComdat(GV->getName()));
+  maybeSetTrivialComdat(*GV);
   if (VD->getTLSKind())
     setTLSMode(GV, *VD);
   Slot = GV;
