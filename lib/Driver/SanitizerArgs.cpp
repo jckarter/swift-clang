@@ -7,6 +7,7 @@
 //
 //===----------------------------------------------------------------------===//
 #include "clang/Driver/SanitizerArgs.h"
+#include "clang/Basic/Sanitizers.h"
 #include "clang/Driver/Driver.h"
 #include "clang/Driver/DriverDiagnostic.h"
 #include "clang/Driver/Options.h"
@@ -45,10 +46,6 @@ enum CoverageFeature {
   Coverage8bitCounters = 1 << 6,
 };
 
-/// Parse a single value from a -fsanitize= or -fno-sanitize= value list.
-/// Returns a non-zero SanitizerMask, or \c 0 if \p Value is not known.
-static SanitizerMask parseValue(const char *Value);
-
 /// Parse a -fsanitize= or -fno-sanitize= argument's values, diagnosing any
 /// invalid components. Returns a SanitizerMask.
 static SanitizerMask parseArgValues(const Driver &D, const llvm::opt::Arg *A,
@@ -77,10 +74,6 @@ static std::string describeSanitizeArg(const llvm::opt::Arg *A,
 /// Produce a string containing comma-separated names of sanitizers in \p
 /// Sanitizers set.
 static std::string toString(const clang::SanitizerSet &Sanitizers);
-
-/// For each sanitizer group bit set in \p Kinds, set the bits for sanitizers
-/// this group enables.
-static SanitizerMask expandGroups(SanitizerMask Kinds);
 
 static SanitizerMask getToolchainUnsupportedKinds(const ToolChain &TC) {
   bool IsFreeBSD = TC.getTriple().getOS() == llvm::Triple::FreeBSD;
@@ -216,7 +209,7 @@ SanitizerArgs::SanitizerArgs(const ToolChain &TC,
         AllRemove |= Vptr;
       }
 
-      Add = expandGroups(Add);
+      Add = expandSanitizerGroups(Add);
       // Group expansion may have enabled a sanitizer which is disabled later.
       Add &= ~AllRemove;
       // Silently discard any unsupported sanitizers implicitly enabled through
@@ -227,7 +220,7 @@ SanitizerArgs::SanitizerArgs(const ToolChain &TC,
     } else if (Arg->getOption().matches(options::OPT_fno_sanitize_EQ)) {
       Arg->claim();
       SanitizerMask Remove = parseArgValues(D, Arg, true, true);
-      AllRemove |= expandGroups(Remove);
+      AllRemove |= expandSanitizerGroups(Remove);
     }
   }
 
@@ -278,11 +271,11 @@ SanitizerArgs::SanitizerArgs(const ToolChain &TC,
     const char *DeprecatedReplacement = nullptr;
     if (Arg->getOption().matches(options::OPT_fsanitize_recover)) {
       DeprecatedReplacement = "-fsanitize-recover=undefined,integer";
-      RecoverableKinds |= expandGroups(LegacyFsanitizeRecoverMask);
+      RecoverableKinds |= expandSanitizerGroups(LegacyFsanitizeRecoverMask);
       Arg->claim();
     } else if (Arg->getOption().matches(options::OPT_fno_sanitize_recover)) {
       DeprecatedReplacement = "-fno-sanitize-recover=undefined,integer";
-      RecoverableKinds &= ~expandGroups(LegacyFsanitizeRecoverMask);
+      RecoverableKinds &= ~expandSanitizerGroups(LegacyFsanitizeRecoverMask);
       Arg->claim();
     } else if (Arg->getOption().matches(options::OPT_fsanitize_recover_EQ)) {
       SanitizerMask Add = parseArgValues(D, Arg, true, HasSanitizeUndefinedTrapOnError);
@@ -296,10 +289,11 @@ SanitizerArgs::SanitizerArgs(const ToolChain &TC,
             << Arg->getOption().getName() << toString(SetToDiagnose);
         DiagnosedUnrecoverableKinds |= KindsToDiagnose;
       }
-      RecoverableKinds |= expandGroups(Add);
+      RecoverableKinds |= expandSanitizerGroups(Add);
       Arg->claim();
     } else if (Arg->getOption().matches(options::OPT_fno_sanitize_recover_EQ)) {
-      RecoverableKinds &= ~expandGroups(parseArgValues(D, Arg, true, HasSanitizeUndefinedTrapOnError));
+      RecoverableKinds &= ~expandSanitizerGroups(
+        parseArgValues(D, Arg, true, HasSanitizeUndefinedTrapOnError));
       Arg->claim();
     }
     if (DeprecatedReplacement) {
@@ -573,7 +567,7 @@ SanitizerMask parseArgValues(const Driver &D, const llvm::opt::Arg *A,
         0 == strcmp("all", Value))
       Kind = 0;
     else
-      Kind = parseValue(Value);
+      Kind = parseSanitizerValue(Value, /*AllowGroups=*/true);
 
     if (Kind) {
       Kinds |= Kind;
@@ -629,12 +623,14 @@ std::string lastArgumentForMask(const Driver &D, const llvm::opt::ArgList &Args,
        I != E; ++I) {
     const auto *Arg = *I;
     if (Arg->getOption().matches(options::OPT_fsanitize_EQ)) {
-      SanitizerMask AddKinds = expandGroups(
-        parseArgValues(D, Arg, false, HasSanitizeUndefinedTrapOnError));
+      SanitizerMask AddKinds =
+          expandSanitizerGroups(
+            parseArgValues(D, Arg, false, HasSanitizeUndefinedTrapOnError)));
       if (AddKinds & Mask)
         return describeSanitizeArg(Arg, Mask);
     } else if (Arg->getOption().matches(options::OPT_fno_sanitize_EQ)) {
-      SanitizerMask RemoveKinds = expandGroups(parseArgValues(D, Arg, false, true));
+      SanitizerMask RemoveKinds =
+          expandSanitizerGroups(parseArgValues(D, Arg, false, true));
       Mask &= ~RemoveKinds;
     }
   }
@@ -647,7 +643,9 @@ std::string describeSanitizeArg(const llvm::opt::Arg *A, SanitizerMask Mask) {
 
   std::string Sanitizers;
   for (int i = 0, n = A->getNumValues(); i != n; ++i) {
-    if (expandGroups(parseValue(A->getValue(i))) & Mask) {
+    if (expandSanitizerGroups(
+            parseSanitizerValue(A->getValue(i), /*AllowGroups=*/true)) &
+        Mask) {
       if (!Sanitizers.empty())
         Sanitizers += ",";
       Sanitizers += A->getValue(i);
