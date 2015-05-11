@@ -1520,7 +1520,8 @@ bool Sema::CheckMessageArgumentTypes(QualType ReceiverType,
       continue;
     }
 
-    QualType paramType = param->getType();
+    QualType origParamType = param->getType();
+    QualType paramType = origParamType;
     if (typeArgs)
       paramType = paramType.substObjCTypeArgs(
                     Context,
@@ -1537,8 +1538,19 @@ bool Sema::CheckMessageArgumentTypes(QualType ReceiverType,
     ExprResult ArgE = PerformCopyInitialization(Entity, SourceLocation(), argExpr);
     if (ArgE.isInvalid())
       IsError = true;
-    else
+    else {
       Args[i] = ArgE.getAs<Expr>();
+
+      // If we are type-erasing a block to a block-compatible
+      // Objective-C pointer type, we may need to extend the lifetime
+      // of the block object.
+      if (typeArgs && Args[i]->isRValue() && paramType->isBlockPointerType() &&
+          origParamType->isBlockCompatibleObjCPointerType(Context)) {
+        ExprResult arg = Args[i];
+        maybeExtendBlockObject(arg);
+        Args[i] = arg.get();
+      }
+    }
   }
 
   // Promote additional arguments to variadic methods.
