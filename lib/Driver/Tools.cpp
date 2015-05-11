@@ -1583,6 +1583,7 @@ static std::string getCPUName(const ArgList &Args, const llvm::Triple &T) {
   }
 
   case llvm::Triple::sparc:
+  case llvm::Triple::sparcel:
   case llvm::Triple::sparcv9:
     if (const Arg *A = Args.getLastArg(options::OPT_mcpu_EQ))
       return A->getValue();
@@ -1961,6 +1962,7 @@ static void getTargetFeatures(const Driver &D, const llvm::Triple &Triple,
     getPPCTargetFeatures(Args, Features);
     break;
   case llvm::Triple::sparc:
+  case llvm::Triple::sparcel:
   case llvm::Triple::sparcv9:
     getSparcTargetFeatures(Args, Features);
     break;
@@ -3114,6 +3116,7 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
     case llvm::Triple::mips64:
     case llvm::Triple::mips64el:
     case llvm::Triple::sparc:
+    case llvm::Triple::sparcel:
     case llvm::Triple::x86:
     case llvm::Triple::x86_64:
       IsPICLevelTwo = false; // "-fpie"
@@ -3551,6 +3554,7 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
     break;
 
   case llvm::Triple::sparc:
+  case llvm::Triple::sparcel:
   case llvm::Triple::sparcv9:
     AddSparcTargetArgs(Args, CmdArgs);
     break;
@@ -6952,6 +6956,7 @@ void openbsd::Assemble::ConstructJob(Compilation &C, const JobAction &JA,
     break;
 
   case llvm::Triple::sparc:
+  case llvm::Triple::sparcel:
     CmdArgs.push_back("-32");
     NeedsKPIC = true;
     break;
@@ -7330,6 +7335,7 @@ void freebsd::Assemble::ConstructJob(Compilation &C, const JobAction &JA,
       CmdArgs.push_back("-matpcs");
     }
   } else if (getToolChain().getArch() == llvm::Triple::sparc ||
+             getToolChain().getArch() == llvm::Triple::sparcel ||
              getToolChain().getArch() == llvm::Triple::sparcv9) {
     if (getToolChain().getArch() == llvm::Triple::sparc)
       CmdArgs.push_back("-Av8plusa");
@@ -7584,6 +7590,7 @@ void netbsd::Assemble::ConstructJob(Compilation &C, const JobAction &JA,
   }
 
   case llvm::Triple::sparc:
+  case llvm::Triple::sparcel:
     CmdArgs.push_back("-32");
     addAssemblerKPIC(Args, CmdArgs);
     break;
@@ -7861,6 +7868,7 @@ void gnutools::Assemble::ConstructJob(Compilation &C, const JobAction &JA,
     CmdArgs.push_back("-mlittle-endian");
     break;
   case llvm::Triple::sparc:
+  case llvm::Triple::sparcel:
     CmdArgs.push_back("-32");
     CmdArgs.push_back("-Av8plusa");
     NeedsKPIC = true;
@@ -8068,7 +8076,8 @@ static std::string getLinuxDynamicLinker(const ArgList &Args,
     else
       return "/system/bin/linker";
   } else if (ToolChain.getArch() == llvm::Triple::x86 ||
-             ToolChain.getArch() == llvm::Triple::sparc)
+             ToolChain.getArch() == llvm::Triple::sparc ||
+             ToolChain.getArch() == llvm::Triple::sparcel)
     return "/lib/ld-linux.so.2";
   else if (ToolChain.getArch() == llvm::Triple::aarch64)
     return "/lib/ld-linux-aarch64.so.1";
@@ -8170,6 +8179,7 @@ static const char *getLDMOption(const llvm::Triple &T, const ArgList &Args) {
   case llvm::Triple::ppc64le:
     return "elf64lppc";
   case llvm::Triple::sparc:
+  case llvm::Triple::sparcel:
     return "elf32_sparc";
   case llvm::Triple::sparcv9:
     return "elf64_sparc";
