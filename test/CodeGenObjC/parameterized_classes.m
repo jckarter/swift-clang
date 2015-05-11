@@ -1,4 +1,4 @@
-// RUN: %clang_cc1 -triple x86_64-unknown-unknown -fblocks -fobjc-runtime=macosx-fragile-10.5 -emit-llvm -o - %s
+// RUN: %clang_cc1 -triple x86_64-apple-darwin10 -fblocks -fobjc-arc -emit-llvm -o - %s | FileCheck %s
 
 // Parameterized classes have no effect on code generation; this test
 // mainly verifies that CodeGen doesn't assert when substituted types
@@ -23,7 +23,7 @@ __attribute__((objc_root_class))
 @property (copy,nonatomic) T firstObject;
 - (void)addObject:(T)object;
 - (void)sortWithFunction:(int (*)(T, T))function;
-- (void)getObjects:(T*)objects length:(unsigned*)length;
+- (void)getObjects:(T __strong *)objects length:(unsigned*)length;
 @end
 
 NSString *getFirstObjectProp(NSMutableArray<NSString *> *array) {
@@ -49,7 +49,15 @@ void sortTest(NSMutableArray<NSString *> *array,
 }
 
 void getObjectsTest(NSMutableArray<NSString *> *array) {
-  NSString **objects;
+  NSString * __strong *objects;
   unsigned length;
   [array getObjects: objects length: &length];
+}
+
+void printMe(NSString *name) { }
+
+// CHECK-LABEL: define void @blockTest
+void blockTest(NSMutableArray<void (^)(void)> *array, NSString *name) {
+  // CHECK: call i8* @objc_retainBlock
+  [array addObject: ^ { printMe(name); }];
 }
