@@ -13,6 +13,8 @@
 
 #include "clang-c/BuildSystem.h"
 #include "CXString.h"
+#include "CXModuleProvider.h"
+#include "clang/AST/ModuleProvider.h"
 #include "clang/Basic/VirtualFileSystem.h"
 #include "llvm/ADT/SmallString.h"
 #include "llvm/Support/CBindingWrapping.h"
@@ -145,3 +147,4 @@ clang_ModuleMapDescriptor_writeToBuffer(CXModuleMapDescriptor MMD, unsigned,
 void clang_ModuleMapDescriptor_dispose(CXModuleMapDescriptor MMD) {
   delete MMD;
 }
+

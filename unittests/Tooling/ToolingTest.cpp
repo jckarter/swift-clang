@@ -10,7 +10,6 @@
 #include "clang/AST/ASTConsumer.h"
 #include "clang/AST/DeclCXX.h"
 #include "clang/AST/DeclGroup.h"
-#include "clang/CodeGen/LLVMModuleProvider.h"
 #include "clang/Frontend/ASTUnit.h"
 #include "clang/Frontend/CompilerInstance.h"
 #include "clang/Frontend/FrontendAction.h"
@@ -25,10 +24,6 @@
 
 namespace clang {
 namespace tooling {
-
-static SharedModuleProvider getMP() {
-  return SharedModuleProvider::Create<LLVMModuleProvider>();
-}
 
 namespace {
 /// Takes an ast consumer and returns it from CreateASTConsumer. This only
@@ -67,7 +62,7 @@ class FindTopLevelDeclConsumer : public clang::ASTConsumer {
 TEST(runToolOnCode, FindsNoTopLevelDeclOnEmptyCode) {
   bool FoundTopLevelDecl = false;
   EXPECT_TRUE(
-      runToolOnCode(getMP(),
+      runToolOnCode(
           new TestAction(llvm::make_unique<FindTopLevelDeclConsumer>(
                         &FoundTopLevelDecl)),
                     ""));
@@ -108,27 +103,25 @@ bool FindClassDeclX(ASTUnit *AST) {
 TEST(runToolOnCode, FindsClassDecl) {
   bool FoundClassDeclX = false;
   EXPECT_TRUE(
-      runToolOnCode(getMP(),
-                    new TestAction(llvm::make_unique<FindClassDeclXConsumer>(
+      runToolOnCode(new TestAction(llvm::make_unique<FindClassDeclXConsumer>(
                         &FoundClassDeclX)),
                     "class X;"));
   EXPECT_TRUE(FoundClassDeclX);
 
   FoundClassDeclX = false;
   EXPECT_TRUE(
-      runToolOnCode(getMP(),
-                    new TestAction(llvm::make_unique<FindClassDeclXConsumer>(
+      runToolOnCode(new TestAction(llvm::make_unique<FindClassDeclXConsumer>(
                         &FoundClassDeclX)),
                     "class Y;"));
   EXPECT_FALSE(FoundClassDeclX);
 }
 
 TEST(buildASTFromCode, FindsClassDecl) {
-  std::unique_ptr<ASTUnit> AST = buildASTFromCode(getMP(), "class X;");
+  std::unique_ptr<ASTUnit> AST = buildASTFromCode("class X;");
   ASSERT_TRUE(AST.get());
   EXPECT_TRUE(FindClassDeclX(AST.get()));
 
-  AST = buildASTFromCode(getMP(), "class Y;");
+  AST = buildASTFromCode("class Y;");
   ASSERT_TRUE(AST.get());
   EXPECT_FALSE(FindClassDeclX(AST.get()));
 }
@@ -162,7 +155,7 @@ TEST(ToolInvocation, TestMapVirtualFile) {
   Args.push_back("-Idef");
   Args.push_back("-fsyntax-only");
   Args.push_back("test.cpp");
-  clang::tooling::ToolInvocation Invocation(getMP(), Args, new SyntaxOnlyAction,
+  clang::tooling::ToolInvocation Invocation(Args, new SyntaxOnlyAction,
                                             Files.get());
   Invocation.mapVirtualFile("test.cpp", "#include <abc>\n");
   Invocation.mapVirtualFile("def/abc", "\n");
@@ -181,7 +174,7 @@ TEST(ToolInvocation, TestVirtualModulesCompilation) {
   Args.push_back("-Idef");
   Args.push_back("-fsyntax-only");
   Args.push_back("test.cpp");
-  clang::tooling::ToolInvocation Invocation(getMP(), Args, new SyntaxOnlyAction,
+  clang::tooling::ToolInvocation Invocation(Args, new SyntaxOnlyAction,
                                             Files.get());
   Invocation.mapVirtualFile("test.cpp", "#include <abc>\n");
   Invocation.mapVirtualFile("def/abc", "\n");
@@ -214,7 +207,7 @@ TEST(newFrontendActionFactory, InjectsSourceFileCallbacks) {
   std::vector<std::string> Sources;
   Sources.push_back("/a.cc");
   Sources.push_back("/b.cc");
-  ClangTool Tool(getMP(), Compilations, Sources);
+  ClangTool Tool(Compilations, Sources);
 
   Tool.mapVirtualFile("/a.cc", "void a() {}");
   Tool.mapVirtualFile("/b.cc", "void b() {}");
@@ -246,9 +239,9 @@ struct SkipBodyAction : public clang::ASTFrontendAction {
 };
 
 TEST(runToolOnCode, TestSkipFunctionBody) {
-  EXPECT_TRUE(runToolOnCode(getMP(), new SkipBodyAction,
+  EXPECT_TRUE(runToolOnCode(new SkipBodyAction,
                             "int skipMe() { an_error_here }"));
-  EXPECT_FALSE(runToolOnCode(getMP(), new SkipBodyAction,
+  EXPECT_FALSE(runToolOnCode(new SkipBodyAction,
                              "int skipMeNot() { an_error_here }"));
 }
 
@@ -262,7 +255,7 @@ TEST(runToolOnCodeWithArgs, TestNoDepFile) {
   Args.push_back(DepFilePath.str());
   Args.push_back("-MF");
   Args.push_back(DepFilePath.str());
-  EXPECT_TRUE(runToolOnCodeWithArgs(getMP(), new SkipBodyAction, "", Args));
+  EXPECT_TRUE(runToolOnCodeWithArgs(new SkipBodyAction, "", Args));
   EXPECT_FALSE(llvm::sys::fs::exists(DepFilePath.str()));
   EXPECT_FALSE(llvm::sys::fs::remove(DepFilePath.str()));
 }
@@ -270,7 +263,7 @@ TEST(runToolOnCodeWithArgs, TestNoDepFile) {
 TEST(ClangToolTest, ArgumentAdjusters) {
   FixedCompilationDatabase Compilations("/", std::vector<std::string>());
 
-  ClangTool Tool(getMP(), Compilations, std::vector<std::string>(1, "/a.cc"));
+  ClangTool Tool(Compilations, std::vector<std::string>(1, "/a.cc"));
   Tool.mapVirtualFile("/a.cc", "void a() {}");
 
   std::unique_ptr<FrontendActionFactory> Action(
@@ -306,7 +299,7 @@ TEST(ClangToolTest, BuildASTs) {
   std::vector<std::string> Sources;
   Sources.push_back("/a.cc");
   Sources.push_back("/b.cc");
-  ClangTool Tool(getMP(), Compilations, Sources);
+  ClangTool Tool(Compilations, Sources);
 
   Tool.mapVirtualFile("/a.cc", "void a() {}");
   Tool.mapVirtualFile("/b.cc", "void b() {}");
@@ -327,7 +320,7 @@ struct TestDiagnosticConsumer : public DiagnosticConsumer {
 
 TEST(ClangToolTest, InjectDiagnosticConsumer) {
   FixedCompilationDatabase Compilations("/", std::vector<std::string>());
-  ClangTool Tool(getMP(), Compilations, std::vector<std::string>(1, "/a.cc"));
+  ClangTool Tool(Compilations, std::vector<std::string>(1, "/a.cc"));
   Tool.mapVirtualFile("/a.cc", "int x = undeclared;");
   TestDiagnosticConsumer Consumer;
   Tool.setDiagnosticConsumer(&Consumer);
@@ -339,7 +332,7 @@ TEST(ClangToolTest, InjectDiagnosticConsumer) {
 
 TEST(ClangToolTest, InjectDiagnosticConsumerInBuildASTs) {
   FixedCompilationDatabase Compilations("/", std::vector<std::string>());
-  ClangTool Tool(getMP(), Compilations, std::vector<std::string>(1, "/a.cc"));
+  ClangTool Tool(Compilations, std::vector<std::string>(1, "/a.cc"));
   Tool.mapVirtualFile("/a.cc", "int x = undeclared;");
   TestDiagnosticConsumer Consumer;
   Tool.setDiagnosticConsumer(&Consumer);
