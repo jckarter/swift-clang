@@ -16,7 +16,6 @@
 #include "CIndexDiagnostic.h"
 #include "CLog.h"
 #include "CXCursor.h"
-#include "CXModuleProvider.h"
 #include "CXSourceLocation.h"
 #include "CXString.h"
 #include "CXTranslationUnit.h"
@@ -24,7 +23,6 @@
 #include "CursorVisitor.h"
 #include "clang/AST/Attr.h"
 #include "clang/AST/Mangle.h"
-#include "clang/AST/ModuleProvider.h"
 #include "clang/AST/StmtVisitor.h"
 #include "clang/Basic/Diagnostic.h"
 #include "clang/Basic/DiagnosticCategories.h"
@@ -2846,7 +2844,6 @@ struct RegisterFatalErrorHandler {
 static llvm::ManagedStatic<RegisterFatalErrorHandler> RegisterFatalErrorHandlerOnce;
 
 extern "C" {
-
 CXIndex clang_createIndex(int excludeDeclarationsFromPCH,
                           int displayDiagnostics) {
   // We use crash recovery to make some of our APIs more reliable, implicitly
@@ -2859,8 +2856,7 @@ CXIndex clang_createIndex(int excludeDeclarationsFromPCH,
   // registered once.
   (void)*RegisterFatalErrorHandlerOnce;
 
-  auto MP = SharedModuleProvider::Create<LLVMModuleProvider>();
-  CIndexer *CIdxr = new CIndexer(MP);
+  CIndexer *CIdxr = new CIndexer();
   if (excludeDeclarationsFromPCH)
     CIdxr->setOnlyLocalDecls();
   if (displayDiagnostics)
@@ -2903,7 +2899,7 @@ CXTranslationUnit clang_createTranslationUnit(CXIndex CIdx,
                                               const char *ast_filename) {
   CXTranslationUnit TU;
   enum CXErrorCode Result =
-    clang_createTranslationUnit2(CIdx, ast_filename, &TU);
+      clang_createTranslationUnit2(CIdx, ast_filename, &TU);
   (void)Result;
   assert((TU && Result == CXError_Success) ||
          (!TU && Result != CXError_Success));
@@ -2929,7 +2925,7 @@ enum CXErrorCode clang_createTranslationUnit2(CXIndex CIdx,
   IntrusiveRefCntPtr<DiagnosticsEngine> Diags =
       CompilerInstance::createDiagnostics(new DiagnosticOptions());
   std::unique_ptr<ASTUnit> AU = ASTUnit::LoadFromASTFile(
-      ast_filename, CXXIdx->getModuleProvider(),
+      ast_filename, SharedModuleProvider::Create<LLVMModuleProvider>(),
       Diags, FileSystemOpts,
       CXXIdx->getOnlyLocalDecls(), None,
       /*CaptureDiagnostics=*/true,
@@ -3070,7 +3066,7 @@ static void clang_parseTranslationUnit_Impl(void *UserData) {
   std::unique_ptr<ASTUnit> ErrUnit;
   std::unique_ptr<ASTUnit> Unit(ASTUnit::LoadFromCommandLine(
   Args->data(), Args->data() + Args->size(),
-      CXXIdx->getModuleProvider(), Diags,
+      SharedModuleProvider::Create<LLVMModuleProvider>(), Diags,
       CXXIdx->getClangResourcesPath(), CXXIdx->getOnlyLocalDecls(),
       /*CaptureDiagnostics=*/true, *RemappedFiles.get(),
       /*RemappedFilesKeepOriginalName=*/true, PrecompilePreamble, TUKind,

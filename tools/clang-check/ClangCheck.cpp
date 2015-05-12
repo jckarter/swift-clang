@@ -152,9 +152,9 @@ int main(int argc, const char **argv) {
   llvm::sys::PrintStackTraceOnErrorSignal();
   CommonOptionsParser OptionsParser(argc, argv, ClangCheckCategory);
   ClangTool Tool(
+      clang::SharedModuleProvider::Create<clang::LLVMModuleProvider>(),
       OptionsParser.getCompilations(),
-      OptionsParser.getSourcePathList(),
-      clang::SharedModuleProvider::Create<clang::LLVMModuleProvider>());
+      OptionsParser.getSourcePathList());
 
   // Clear adjusters because -fsyntax-only is inserted by the default chain.
   Tool.clearArgumentsAdjusters();

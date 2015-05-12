@@ -16,7 +16,6 @@
 #define LLVM_CLANG_TOOLS_LIBCLANG_CINDEXER_H
 
 #include "clang-c/Index.h"
-#include "clang/Lex/ModuleLoader.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/Support/Path.h"
 #include <vector>
@@ -39,12 +38,10 @@ class CIndexer {
   unsigned Options; // CXGlobalOptFlags.
 
   std::string ResourcesPath;
-  SharedModuleProvider MP;
 
 public:
-  CIndexer(SharedModuleProvider MP)
-   : OnlyLocalDecls(false), DisplayDiagnostics(false),
-     Options(CXGlobalOpt_None), MP(MP) { }
+ CIndexer() : OnlyLocalDecls(false), DisplayDiagnostics(false),
+              Options(CXGlobalOpt_None) { }
   
   /// \brief Whether we only want to see "local" declarations (that did not
   /// come from a previous precompiled header). If false, we want to see all
@@ -56,8 +53,6 @@ public:
   void setDisplayDiagnostics(bool Display = true) {
     DisplayDiagnostics = Display;
   }
-
-  SharedModuleProvider getModuleProvider() const { return MP; }
 
   unsigned getCXGlobalOptFlags() const { return Options; }
   void setCXGlobalOptFlags(unsigned options) { Options = options; }

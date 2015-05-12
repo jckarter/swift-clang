@@ -31,7 +31,6 @@
 #define LLVM_CLANG_TOOLING_TOOLING_H
 
 #include "clang/AST/ASTConsumer.h"
-#include "clang/AST/ModuleProvider.h"
 #include "clang/Basic/Diagnostic.h"
 #include "clang/Basic/FileManager.h"
 #include "clang/Basic/LLVM.h"
@@ -145,10 +144,9 @@ inline std::unique_ptr<FrontendActionFactory> newFrontendActionFactory(
 /// \param FileName The file name which 'Code' will be mapped as.
 ///
 /// \return - True if 'ToolAction' was successfully executed.
-bool runToolOnCode(clang::FrontendAction *ToolAction, const Twine &Code,
-                   const Twine &FileName = "input.cc",
-                   SharedModuleProvider MP =
-                   SharedModuleProvider::Create<SimpleModuleProvider>());
+bool runToolOnCode(SharedModuleProvider MP,
+                   clang::FrontendAction *ToolAction, const Twine &Code,
+                   const Twine &FileName = "input.cc");
 
 /// The first part of the pair is the filename, the second part the
 /// file-content.
@@ -163,11 +161,9 @@ typedef std::vector<std::pair<std::string, std::string>> FileContentMappings;
 /// \param FileName The file name which 'Code' will be mapped as.
 ///
 /// \return - True if 'ToolAction' was successfully executed.
-bool runToolOnCodeWithArgs(
+bool runToolOnCodeWithArgs(SharedModuleProvider MP,
     clang::FrontendAction *ToolAction, const Twine &Code,
     const std::vector<std::string> &Args, const Twine &FileName = "input.cc",
-    SharedModuleProvider MP =
-    SharedModuleProvider::Create<SimpleModuleProvider>(),
     const FileContentMappings &VirtualMappedFiles = FileContentMappings());
 
 /// \brief Builds an AST for 'Code'.
@@ -176,11 +172,9 @@ bool runToolOnCodeWithArgs(
 /// \param FileName The file name which 'Code' will be mapped as.
 ///
 /// \return The resulting AST or null if an error occurred.
-std::unique_ptr<ASTUnit> buildASTFromCode(
-    const Twine &Code,
-    const Twine &FileName = "input.cc",
-    SharedModuleProvider MP =
-    SharedModuleProvider::Create<SimpleModuleProvider>());
+std::unique_ptr<ASTUnit> buildASTFromCode(SharedModuleProvider MP,
+                                          const Twine &Code,
+                                          const Twine &FileName = "input.cc");
 
 /// \brief Builds an AST for 'Code' with additional flags.
 ///
@@ -190,11 +184,9 @@ std::unique_ptr<ASTUnit> buildASTFromCode(
 ///
 /// \return The resulting AST or null if an error occurred.
 std::unique_ptr<ASTUnit>
-buildASTFromCodeWithArgs(const Twine &Code,
+buildASTFromCodeWithArgs(SharedModuleProvider MP, const Twine &Code,
                          const std::vector<std::string> &Args,
-                         const Twine &FileName = "input.cc",
-                         SharedModuleProvider MP =
-                         SharedModuleProvider::Create<SimpleModuleProvider>());
+                         const Twine &FileName = "input.cc");
 
 /// \brief Utility to run a FrontendAction in a single clang invocation.
 class ToolInvocation {
@@ -208,20 +200,18 @@ class ToolInvocation {
   /// \param FAction The action to be executed. Class takes ownership.
   /// \param Files The FileManager used for the execution. Class does not take
   /// ownership.
-  ToolInvocation(std::vector<std::string> CommandLine, FrontendAction *FAction,
-                 FileManager *Files,
-                 SharedModuleProvider MP =
-                 SharedModuleProvider::Create<SimpleModuleProvider>());
-  
+  ToolInvocation(SharedModuleProvider MP,
+                 std::vector<std::string> CommandLine, FrontendAction *FAction,
+                 FileManager *Files);
+
   /// \brief Create a tool invocation.
   ///
   /// \param CommandLine The command line arguments to clang.
   /// \param Action The action to be executed.
   /// \param Files The FileManager used for the execution.
-  ToolInvocation(std::vector<std::string> CommandLine, ToolAction *Action,
-                 FileManager *Files,
-                 SharedModuleProvider MP =
-                 SharedModuleProvider::Create<SimpleModuleProvider>());
+  ToolInvocation(SharedModuleProvider MP,
+                 std::vector<std::string> CommandLine, ToolAction *Action,
+                 FileManager *Files);
 
   ~ToolInvocation();
 
@@ -274,10 +264,9 @@ class ClangTool {
   ///        command lines for the given source paths.
   /// \param SourcePaths The source files to run over. If a source files is
   ///        not found in Compilations, it is skipped.
-  ClangTool(const CompilationDatabase &Compilations,
-            ArrayRef<std::string> SourcePaths,
-            SharedModuleProvider MP =
-            SharedModuleProvider::Create<SimpleModuleProvider>());
+  ClangTool(SharedModuleProvider MP,
+            const CompilationDatabase &Compilations,
+            ArrayRef<std::string> SourcePaths);
 
   ~ClangTool();
 
@@ -316,9 +305,9 @@ class ClangTool {
   FileManager &getFiles() { return *Files; }
 
  private:
+  SharedModuleProvider MP;
   const CompilationDatabase &Compilations;
   std::vector<std::string> SourcePaths;
-  SharedModuleProvider MP;
 
   llvm::IntrusiveRefCntPtr<FileManager> Files;
   // Contains a list of pairs (<file name>, <file content>).
