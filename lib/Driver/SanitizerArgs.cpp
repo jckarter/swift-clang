@@ -625,7 +625,7 @@ std::string lastArgumentForMask(const Driver &D, const llvm::opt::ArgList &Args,
     if (Arg->getOption().matches(options::OPT_fsanitize_EQ)) {
       SanitizerMask AddKinds =
           expandSanitizerGroups(
-            parseArgValues(D, Arg, false, HasSanitizeUndefinedTrapOnError)));
+            parseArgValues(D, Arg, false, HasSanitizeUndefinedTrapOnError));
       if (AddKinds & Mask)
         return describeSanitizeArg(Arg, Mask);
     } else if (Arg->getOption().matches(options::OPT_fno_sanitize_EQ)) {
