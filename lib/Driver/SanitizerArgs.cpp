@@ -522,6 +522,7 @@ void SanitizerArgs::addArgs(const llvm::opt::ArgList &Args,
     CmdArgs.push_back(Args.MakeArgString("-fno-assume-sane-operator-new"));
 }
 
+<<<<<<< HEAD
 SanitizerMask parseValue(const char *Value) {
   SanitizerMask ParsedKind = llvm::StringSwitch<SanitizerMask>(Value)
 #define SANITIZER(NAME, ID) .Case(NAME, ID)
@@ -618,6 +619,7 @@ std::string lastArgumentForMask(const Driver &D, const llvm::opt::ArgList &Args,
   bool HasSanitizeUndefinedTrapOnError =
       Args.hasFlag(options::OPT_fsanitize_undefined_trap_on_error,
                    options::OPT_fno_sanitize_undefined_trap_on_error, false);
+
   for (llvm::opt::ArgList::const_reverse_iterator I = Args.rbegin(),
                                                   E = Args.rend();
        I != E; ++I) {
