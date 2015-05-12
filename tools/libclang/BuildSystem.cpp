@@ -13,6 +13,7 @@
 
 #include "clang-c/BuildSystem.h"
 #include "CXString.h"
+#include "CXModuleProvider.h"
 #include "clang/AST/ModuleProvider.h"
 #include "clang/Basic/VirtualFileSystem.h"
 #include "llvm/ADT/SmallString.h"

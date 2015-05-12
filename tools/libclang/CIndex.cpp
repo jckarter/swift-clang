@@ -16,6 +16,7 @@
 #include "CIndexDiagnostic.h"
 #include "CLog.h"
 #include "CXCursor.h"
+#include "CXModuleProvider.h"
 #include "CXSourceLocation.h"
 #include "CXString.h"
 #include "CXTranslationUnit.h"
