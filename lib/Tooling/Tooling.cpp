@@ -104,11 +104,10 @@ clang::CompilerInvocation *newInvocation(
   return Invocation;
 }
 
-bool runToolOnCode(SharedModuleProvider MP,
-                   clang::FrontendAction *ToolAction, const Twine &Code,
-                   const Twine &FileName) {
+bool runToolOnCode(clang::FrontendAction *ToolAction, const Twine &Code,
+                   const Twine &FileName, SharedModuleProvider MP) {
   return runToolOnCodeWithArgs(
-      MP, ToolAction, Code, std::vector<std::string>(), FileName);
+      ToolAction, Code, std::vector<std::string>(), FileName, MP);
 }
 
 static std::vector<std::string>
@@ -122,18 +121,18 @@ getSyntaxOnlyToolArgs(const std::vector<std::string> &ExtraArgs,
   return Args;
 }
 
-bool runToolOnCodeWithArgs(SharedModuleProvider MP,
-                           clang::FrontendAction *ToolAction, const Twine &Code,
+bool runToolOnCodeWithArgs(clang::FrontendAction *ToolAction, const Twine &Code,
                            const std::vector<std::string> &Args,
                            const Twine &FileName,
+                           SharedModuleProvider MP,
                            const FileContentMappings &VirtualMappedFiles) {
 
   SmallString<16> FileNameStorage;
   StringRef FileNameRef = FileName.toNullTerminatedStringRef(FileNameStorage);
   llvm::IntrusiveRefCntPtr<FileManager> Files(
       new FileManager(FileSystemOptions()));
-  ToolInvocation Invocation(MP, getSyntaxOnlyToolArgs(Args, FileNameRef),
-                            ToolAction, Files.get());
+  ToolInvocation Invocation(getSyntaxOnlyToolArgs(Args, FileNameRef),
+                            ToolAction, Files.get(), MP);
 
   SmallString<1024> CodeStorage;
   Invocation.mapVirtualFile(FileNameRef,
@@ -175,9 +174,9 @@ public:
 
 }
 
-ToolInvocation::ToolInvocation(SharedModuleProvider MP,
-                               std::vector<std::string> CommandLine,
-                               ToolAction *Action, FileManager *Files)
+ToolInvocation::ToolInvocation(std::vector<std::string> CommandLine,
+                               ToolAction *Action, FileManager *Files,
+                               SharedModuleProvider MP)
     : CommandLine(std::move(CommandLine)),
       Action(Action),
       OwnsAction(false),
@@ -185,9 +184,9 @@ ToolInvocation::ToolInvocation(SharedModuleProvider MP,
       MP(MP),
       DiagConsumer(nullptr) {}
 
-ToolInvocation::ToolInvocation(SharedModuleProvider MP,
-                               std::vector<std::string> CommandLine,
-                               FrontendAction *FAction, FileManager *Files)
+ToolInvocation::ToolInvocation(std::vector<std::string> CommandLine,
+                               FrontendAction *FAction, FileManager *Files,
+                               SharedModuleProvider MP)
     : CommandLine(std::move(CommandLine)),
       Action(new SingleFrontendActionFactory(FAction)),
       OwnsAction(true),
@@ -283,10 +282,10 @@ bool FrontendActionFactory::runInvocation(CompilerInvocation *Invocation,
   return Success;
 }
 
-ClangTool::ClangTool(SharedModuleProvider MP,
-                     const CompilationDatabase &Compilations,
-                     ArrayRef<std::string> SourcePaths)
-    : MP(MP), Compilations(Compilations), SourcePaths(SourcePaths),
+ClangTool::ClangTool(const CompilationDatabase &Compilations,
+                     ArrayRef<std::string> SourcePaths,
+                     SharedModuleProvider MP)
+  : Compilations(Compilations), SourcePaths(SourcePaths), MP(MP),
       Files(new FileManager(FileSystemOptions())), DiagConsumer(nullptr) {
   appendArgumentsAdjuster(getClangStripOutputAdjuster());
   appendArgumentsAdjuster(getClangSyntaxOnlyAdjuster());
@@ -366,7 +365,7 @@ int ClangTool::run(ToolAction *Action) {
       // FIXME: We need a callback mechanism for the tool writer to output a
       // customized message for each file.
       DEBUG({ llvm::dbgs() << "Processing: " << File << ".\n"; });
-      ToolInvocation Invocation(MP, std::move(CommandLine), Action, Files.get());
+      ToolInvocation Invocation(std::move(CommandLine), Action, Files.get(), MP);
       Invocation.setDiagnosticConsumer(DiagConsumer);
       for (const auto &MappedFile : MappedFileContents)
         Invocation.mapVirtualFile(MappedFile.first, MappedFile.second);
@@ -416,24 +415,24 @@ int ClangTool::buildASTs(std::vector<std::unique_ptr<ASTUnit>> &ASTs) {
   return run(&Action);
 }
 
-std::unique_ptr<ASTUnit> buildASTFromCode(SharedModuleProvider MP,
-                                          const Twine &Code,
-                                          const Twine &FileName) {
-  return buildASTFromCodeWithArgs(MP, Code, std::vector<std::string>(),
-                                  FileName);
+std::unique_ptr<ASTUnit> buildASTFromCode(const Twine &Code,
+                                          const Twine &FileName,
+                                          SharedModuleProvider MP) {
+  return buildASTFromCodeWithArgs(Code, std::vector<std::string>(),
+                                  FileName, MP);
 }
 
 std::unique_ptr<ASTUnit>
-buildASTFromCodeWithArgs(SharedModuleProvider MP, const Twine &Code,
+buildASTFromCodeWithArgs(const Twine &Code,
                          const std::vector<std::string> &Args,
-                         const Twine &FileName) {
+                         const Twine &FileName, SharedModuleProvider MP) {
   SmallString<16> FileNameStorage;
   StringRef FileNameRef = FileName.toNullTerminatedStringRef(FileNameStorage);
 
   std::vector<std::unique_ptr<ASTUnit>> ASTs;
   ASTBuilderAction Action(ASTs);
-  ToolInvocation Invocation(MP, getSyntaxOnlyToolArgs(Args, FileNameRef), &Action,
-                            nullptr);
+  ToolInvocation Invocation(getSyntaxOnlyToolArgs(Args, FileNameRef), &Action,
+                            nullptr, MP);
 
   SmallString<1024> CodeStorage;
   Invocation.mapVirtualFile(FileNameRef,

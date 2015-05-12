@@ -9,7 +9,6 @@
 
 #include "clang/AST/ASTConsumer.h"
 #include "clang/AST/ASTContext.h"
-#include "clang/CodeGen/LLVMModuleProvider.h"
 #include "clang/Frontend/CompilerInstance.h"
 #include "clang/Lex/Preprocessor.h"
 #include "clang/Parse/ParseAST.h"
@@ -176,10 +175,6 @@ public:
   }
 };
 
-static SharedModuleProvider getMP() {
-  return SharedModuleProvider::Create<LLVMModuleProvider>();
-}
-
 // Make sure that the NamespaceDiagnosticWatcher is not miscounting.
 TEST(ExternalSemaSource, SanityCheck) {
   std::unique_ptr<ExternalSemaSourceInstaller> Installer(
@@ -187,7 +182,7 @@ TEST(ExternalSemaSource, SanityCheck) {
   NamespaceDiagnosticWatcher Watcher("AAB", "BBB");
   Installer->PushWatcher(&Watcher);
   std::vector<std::string> Args(1, "-std=c++11");
-  ASSERT_TRUE(clang::tooling::runToolOnCodeWithArgs(getMP(),
+  ASSERT_TRUE(clang::tooling::runToolOnCodeWithArgs(
       Installer.release(), "namespace AAA { } using namespace AAB;", Args));
   ASSERT_EQ(0, Watcher.SeenCount);
 }
@@ -202,7 +197,7 @@ TEST(ExternalSemaSource, ExternalTypoCorrectionPrioritized) {
   Installer->PushSource(&Provider);
   Installer->PushWatcher(&Watcher);
   std::vector<std::string> Args(1, "-std=c++11");
-  ASSERT_TRUE(clang::tooling::runToolOnCodeWithArgs(getMP(),
+  ASSERT_TRUE(clang::tooling::runToolOnCodeWithArgs(
       Installer.release(), "namespace AAA { } using namespace AAB;", Args));
   ASSERT_LE(0, Provider.CallCount);
   ASSERT_EQ(1, Watcher.SeenCount);
@@ -222,7 +217,7 @@ TEST(ExternalSemaSource, ExternalTypoCorrectionOrdering) {
   Installer->PushSource(&Third);
   Installer->PushWatcher(&Watcher);
   std::vector<std::string> Args(1, "-std=c++11");
-  ASSERT_TRUE(clang::tooling::runToolOnCodeWithArgs(getMP(),
+  ASSERT_TRUE(clang::tooling::runToolOnCodeWithArgs(
       Installer.release(), "namespace AAA { } using namespace AAB;", Args));
   ASSERT_LE(1, First.CallCount);
   ASSERT_LE(1, Second.CallCount);
@@ -240,7 +235,7 @@ TEST(ExternalSemaSource, TryOtherTacticsBeforeDiagnosing) {
   std::vector<std::string> Args(1, "-std=c++11");
   // This code hits the class template specialization/class member of a class
   // template specialization checks in Sema::RequireCompleteTypeImpl.
-  ASSERT_TRUE(clang::tooling::runToolOnCodeWithArgs(getMP(),
+  ASSERT_TRUE(clang::tooling::runToolOnCodeWithArgs(
       Installer.release(),
       "template <typename T> struct S { class C { }; }; S<char>::C SCInst;",
       Args));
@@ -259,7 +254,7 @@ TEST(ExternalSemaSource, FirstDiagnoserTaken) {
   Installer->PushSource(&Second);
   Installer->PushSource(&Third);
   std::vector<std::string> Args(1, "-std=c++11");
-  ASSERT_FALSE(clang::tooling::runToolOnCodeWithArgs(getMP(),
+  ASSERT_FALSE(clang::tooling::runToolOnCodeWithArgs(
       Installer.release(), "class Incomplete; Incomplete IncompleteInstance;",
       Args));
   ASSERT_EQ(1, First.CallCount);

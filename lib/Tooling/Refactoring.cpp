@@ -28,7 +28,7 @@ namespace tooling {
 RefactoringTool::RefactoringTool(SharedModuleProvider MP,
                                  const CompilationDatabase &Compilations,
                                  ArrayRef<std::string> SourcePaths)
-  : ClangTool(MP, Compilations, SourcePaths) {}
+  : ClangTool(Compilations, SourcePaths, MP) {}
 
 Replacements &RefactoringTool::getReplacements() { return Replace; }
 

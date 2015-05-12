@@ -11,7 +11,6 @@
 #include "RewriterTestContext.h"
 #include "clang/ASTMatchers/ASTMatchFinder.h"
 #include "clang/ASTMatchers/ASTMatchers.h"
-#include "clang/CodeGen/LLVMModuleProvider.h"
 #include "gtest/gtest.h"
 
 namespace clang {
@@ -29,7 +28,6 @@ void expectRewritten(const std::string &Code,
   std::unique_ptr<tooling::FrontendActionFactory> Factory(
       tooling::newFrontendActionFactory(&Finder));
   ASSERT_TRUE(tooling::runToolOnCode(
-      SharedModuleProvider::Create<LLVMModuleProvider>(),
       Factory->create(), Code))
       << "Parsing error in \"" << Code << "\"";
   RewriterTestContext Context;
