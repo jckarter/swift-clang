@@ -522,7 +522,6 @@ void SanitizerArgs::addArgs(const llvm::opt::ArgList &Args,
     CmdArgs.push_back(Args.MakeArgString("-fno-assume-sane-operator-new"));
 }
 
-<<<<<<< HEAD
 SanitizerMask parseValue(const char *Value) {
   SanitizerMask ParsedKind = llvm::StringSwitch<SanitizerMask>(Value)
 #define SANITIZER(NAME, ID) .Case(NAME, ID)
