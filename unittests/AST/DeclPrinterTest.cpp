@@ -21,7 +21,6 @@
 
 #include "clang/AST/ASTContext.h"
 #include "clang/ASTMatchers/ASTMatchFinder.h"
-#include "clang/CodeGen/LLVMModuleProvider.h"
 #include "clang/Tooling/Tooling.h"
 #include "llvm/ADT/SmallString.h"
 #include "gtest/gtest.h"
@@ -78,8 +77,7 @@ public:
   std::unique_ptr<FrontendActionFactory> Factory(
       newFrontendActionFactory(&Finder));
 
-  if (!runToolOnCodeWithArgs(SharedModuleProvider::Create<LLVMModuleProvider>(),
-                             Factory->create(), Code, Args, FileName))
+  if (!runToolOnCodeWithArgs(Factory->create(), Code, Args, FileName))
     return testing::AssertionFailure()
       << "Parsing error in \"" << Code.str() << "\"";
 

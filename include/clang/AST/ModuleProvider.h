@@ -15,8 +15,8 @@
 #include <memory>
 
 namespace llvm {
-class raw_ostream;
-class BitstreamReader;
+  class raw_ostream;
+  class BitstreamReader;
 }
 
 namespace clang {
@@ -53,6 +53,23 @@ public:
                                      llvm::BitstreamReader &StreamFile)
     const = 0;
 };
+
+/// \brief A simple pass-through module provider.
+class SimpleModuleProvider : public ModuleProvider {
+  /// \brief Return an ASTconsumer that can be chained with a
+  /// PCHGenerator that writes the module to a flat file.
+  std::unique_ptr<ASTConsumer> CreateModuleContainerGenerator(
+      DiagnosticsEngine &Diags, const std::string &ModuleName,
+      const HeaderSearchOptions &HSO, const PreprocessorOptions &PPO,
+      const CodeGenOptions &CGO, const TargetOptions &TO, const LangOptions &LO,
+      llvm::raw_ostream *OS,
+      std::shared_ptr<ModuleBuffer> Buffer) const override;
+
+  /// \brief Initialize an llvm::BitstreamReader with Buffer.
+  void UnwrapModuleContainer(llvm::MemoryBufferRef Buffer,
+                             llvm::BitstreamReader &StreamFile) const override;
+};
+
 }
 
 #endif

@@ -72,8 +72,7 @@ PrintedNamedDeclMatches(StringRef Code, const std::vector<std::string> &Args,
   std::unique_ptr<FrontendActionFactory> Factory =
       newFrontendActionFactory(&Finder);
 
-  if (!runToolOnCodeWithArgs(SharedModuleProvider::Create<LLVMModuleProvider>(),
-                             Factory->create(), Code, Args, FileName))
+  if (!runToolOnCodeWithArgs(Factory->create(), Code, Args, FileName))
     return testing::AssertionFailure()
         << "Parsing error in \"" << Code.str() << "\"";
 
