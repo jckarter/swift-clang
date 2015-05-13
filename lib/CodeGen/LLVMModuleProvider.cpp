@@ -37,6 +37,7 @@ using namespace clang;
 namespace {
 class ModuleContainerGenerator : public ASTConsumer {
   DiagnosticsEngine &Diags;
+  const std::string &ModuleName;
   ASTContext *Ctx;
   const HeaderSearchOptions &HeaderSearchOpts;
   const PreprocessorOptions &PreprocessorOpts;
@@ -125,22 +126,21 @@ public:
       const CodeGenOptions &CGO, const TargetOptions &TO, const LangOptions &LO,
       raw_pwrite_stream *OS,
       std::shared_ptr<ModuleBuffer> Buffer)
-      : Diags(diags), HeaderSearchOpts(HSO), PreprocessorOpts(PPO),
-        CodeGenOpts(CGO), TargetOpts(TO), LangOpts(LO),
-        VMContext(new llvm::LLVMContext()),
-        M(new llvm::Module(ModuleName, *VMContext)), OS(OS),
-        Buffer(Buffer) {}
+    : Diags(diags), ModuleName(ModuleName),
+      HeaderSearchOpts(HSO), PreprocessorOpts(PPO),
+      CodeGenOpts(CGO), TargetOpts(TO), LangOpts(LO), OS(OS),
+      Buffer(Buffer) {}
 
   virtual ~ModuleContainerGenerator() {}
 
   void Initialize(ASTContext &Context) override {
     Ctx = &Context;
+    VMContext.reset(new llvm::LLVMContext());
+    M.reset(new llvm::Module(ModuleName, *VMContext));
     M->setDataLayout(Ctx->getTargetInfo().getTargetDescription());
-    if (!Builder) {
-      Builder.reset(new CodeGen::CodeGenModule(*Ctx, HeaderSearchOpts,
-                                               PreprocessorOpts, CodeGenOpts,
-                                               *M, M->getDataLayout(), Diags));
-    }
+    Builder.reset(new CodeGen::CodeGenModule(*Ctx, HeaderSearchOpts,
+                                             PreprocessorOpts, CodeGenOpts,
+                                             *M, M->getDataLayout(), Diags));
   }
 
   bool HandleTopLevelDecl(DeclGroupRef D) override {
@@ -175,15 +175,17 @@ public:
 
   /// Emit a container holding the serialized AST.
   void HandleTranslationUnit(ASTContext &Ctx) override {
+    assert(M && VMContext && Builder);
+    // Delete these on function exit.
+    std::unique_ptr<llvm::LLVMContext> VMContext = std::move(this->VMContext);
+    std::unique_ptr<llvm::Module> M = std::move(this->M);
+    std::unique_ptr<CodeGen::CodeGenModule> Builder = std::move(this->Builder);
+
+    if (Diags.hasErrorOccurred())
+      return;
+
     M->setTargetTriple(Ctx.getTargetInfo().getTriple().getTriple());
     M->setDataLayout(Ctx.getTargetInfo().getTargetDescription());
-    if (Diags.hasErrorOccurred()) {
-      if (Builder)
-        Builder->clear();
-      M.release();
-      VMContext.release();
-      return;
-    }
 
     // Finalize the Builder.
     if (Builder)
@@ -243,9 +245,6 @@ public:
 
     // Free up some memory, in case the process is kept alive.
     SerializedAST.clear();
-    Builder.reset();
-    M.reset();
-    VMContext.reset();
   }
 };
 }
