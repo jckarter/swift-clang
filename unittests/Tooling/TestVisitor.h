@@ -65,7 +65,6 @@ public:
     }
 
     return tooling::runToolOnCodeWithArgs(
-        SharedModuleProvider::Create<LLVMModuleProvider>(),
         CreateTestAction(), Code, Args);
   }
 

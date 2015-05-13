@@ -22,7 +22,6 @@
 #include "clang/AST/ASTContext.h"
 #include "clang/ASTMatchers/ASTMatchFinder.h"
 #include "clang/ASTMatchers/ASTMatchers.h"
-#include "clang/CodeGen/LLVMModuleProvider.h"
 #include "clang/Tooling/Tooling.h"
 #include "gtest/gtest.h"
 
@@ -82,10 +81,6 @@ private:
   std::string VerifyResult;
 };
 
-static SharedModuleProvider getMP() {
-  return SharedModuleProvider::Create<LLVMModuleProvider>();
-}
-
 /// \brief Runs a matcher over some code, and returns the result of the
 /// verifier for the matched node.
 template <typename NodeType> template <typename MatcherType>
@@ -125,7 +120,7 @@ testing::AssertionResult MatchVerifier<NodeType>::match(
 
   // Default to failure in case callback is never called
   setFailure("Could not find match");
-  if (!tooling::runToolOnCodeWithArgs(getMP(), Factory->create(),
+  if (!tooling::runToolOnCodeWithArgs(Factory->create(),
                                       Code, Args, FileName))
     return testing::AssertionFailure() << "Parsing error";
   if (!Verified)
