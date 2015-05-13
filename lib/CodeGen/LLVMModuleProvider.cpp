@@ -148,7 +148,7 @@ public:
         (CodeGenOpts.getDebugInfo() > CodeGenOptions::NoDebugInfo)) {
       // Collect all the debug info.
       for (auto *I : D) {
-        if (!I->isInvalidDecl() && !I->isFromASTFile()) {
+        if (!I->isFromASTFile()) {
           DebugTypeVisitor DTV(*Builder->getModuleDebugInfo(), *Ctx);
           DTV.TraverseDecl(I);
         }
