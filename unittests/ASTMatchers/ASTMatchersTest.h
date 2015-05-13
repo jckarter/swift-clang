@@ -59,6 +59,10 @@ private:
   BoundNodesCallback *const FindResultReviewer;
 };
 
+static SharedModuleProvider getMP() {
+  return SharedModuleProvider::Create<LLVMModuleProvider>();
+}
+ 
 template <typename T>
 testing::AssertionResult matchesConditionally(
     const std::string &Code, const T &AMatcher, bool ExpectMatch,
@@ -80,8 +84,7 @@ testing::AssertionResult matchesConditionally(
   // Some tests need rtti/exceptions on
   Args.push_back("-frtti");
   Args.push_back("-fexceptions");
-  if (!runToolOnCodeWithArgs(Factory->create(), Code, Args, Filename,
-                             SharedModuleProvider::Create<SimpleModuleProvider>(),
+  if (!runToolOnCodeWithArgs(getMP(), Factory->create(), Code, Args, Filename,
                              VirtualMappedFiles)) {
     return testing::AssertionFailure() << "Parsing error in \"" << Code << "\"";
   }
@@ -166,7 +169,7 @@ testing::AssertionResult matchesConditionallyWithCuda(
   Args.push_back("-xcuda");
   Args.push_back("-fno-ms-extensions");
   Args.push_back(CompileArg);
-  if (!runToolOnCodeWithArgs(Factory->create(),
+  if (!runToolOnCodeWithArgs(getMP(), Factory->create(),
                              CudaHeader + Code, Args)) {
     return testing::AssertionFailure() << "Parsing error in \"" << Code << "\"";
   }
@@ -212,7 +215,7 @@ matchAndVerifyResultConditionally(const std::string &Code, const T &AMatcher,
       newFrontendActionFactory(&Finder));
   // Some tests use typeof, which is a gnu extension.
   std::vector<std::string> Args(1, "-std=gnu++98");
-  if (!runToolOnCodeWithArgs(Factory->create(), Code, Args)) {
+  if (!runToolOnCodeWithArgs(getMP(), Factory->create(), Code, Args)) {
     return testing::AssertionFailure() << "Parsing error in \"" << Code << "\"";
   }
   if (!VerifiedResult && ExpectResult) {
@@ -224,7 +227,7 @@ matchAndVerifyResultConditionally(const std::string &Code, const T &AMatcher,
   }
 
   VerifiedResult = false;
-  std::unique_ptr<ASTUnit> AST(buildASTFromCodeWithArgs(Code, Args));
+  std::unique_ptr<ASTUnit> AST(buildASTFromCodeWithArgs(getMP(), Code, Args));
   if (!AST.get())
     return testing::AssertionFailure() << "Parsing error in \"" << Code
                                        << "\" while building AST";

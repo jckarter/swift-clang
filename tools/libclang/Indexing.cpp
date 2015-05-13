@@ -12,12 +12,12 @@
 #include "CIndexer.h"
 #include "CLog.h"
 #include "CXCursor.h"
-#include "CXModuleProvider.h"
 #include "CXSourceLocation.h"
 #include "CXString.h"
 #include "CXTranslationUnit.h"
 #include "clang/AST/ASTConsumer.h"
 #include "clang/AST/DeclVisitor.h"
+#include "clang/CodeGen/LLVMModuleProvider.h"
 #include "clang/Frontend/ASTUnit.h"
 #include "clang/Frontend/CompilerInstance.h"
 #include "clang/Frontend/CompilerInvocation.h"
@@ -591,9 +591,10 @@ static void clang_indexSourceFile_Impl(void *UserData) {
   if (index_options & CXIndexOpt_SuppressWarnings)
     CInvok->getDiagnosticOpts().IgnoreWarnings = true;
 
+  auto MP = SharedModuleProvider::Create<LLVMModuleProvider>();
+  
   ASTUnit *Unit = ASTUnit::create(
-      CInvok.get(), CXXIdx->getModuleProvider(),
-      Diags, CaptureDiagnostics,
+      CInvok.get(), MP, Diags, CaptureDiagnostics,
       /*UserFilesAreVolatile=*/true);
 
   if (!Unit) {
@@ -647,9 +648,7 @@ static void clang_indexSourceFile_Impl(void *UserData) {
     PPOpts.DetailedRecord = false;
 
   DiagnosticErrorTrap DiagTrap(*Diags);
-  bool Success = ASTUnit::LoadFromCompilerInvocationAction(CInvok.get(),
-                                                    CXXIdx->getModuleProvider(),
-                                                           Diags,
+  bool Success = ASTUnit::LoadFromCompilerInvocationAction(CInvok.get(), MP, Diags,
                                                        IndexAction.get(),
                                                        Unit,
                                                        Persistent,

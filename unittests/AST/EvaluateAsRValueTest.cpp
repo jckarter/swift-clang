@@ -91,6 +91,7 @@ TEST(EvaluateAsRValue, FailsGracefullyForUnknownTypes) {
     std::vector<std::string> Args(1, Mode);
     Args.push_back("-fno-delayed-template-parsing");
     ASSERT_TRUE(runToolOnCodeWithArgs(
+      clang::SharedModuleProvider::Create<clang::LLVMModuleProvider>(),
       new EvaluateConstantInitializersAction(),
       "template <typename T>"
       "struct vector {"
