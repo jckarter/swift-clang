@@ -85,7 +85,7 @@ class CGDebugInfo {
   llvm::SmallVector<ObjCInterfaceCacheEntry, 32> ObjCInterfaceCache;
 
   /// \brief Cache of references to AST files such as PCHs or modules.
-  llvm::DenseMap<uint64_t, llvm::DICompileUnit *> ModuleRefCache;
+  llvm::DenseMap<uint64_t, llvm::MDModule *> ModuleRefCache;
 
   /// \brief list of interfaces we want to keep even if orphaned.
   std::vector<void *> RetainedTypes;
@@ -296,6 +296,9 @@ public:
   /// \brief Emit C++ using declaration.
   void EmitUsingDecl(const UsingDecl &UD);
 
+  /// \brief - Emit an @import declaration.
+  void EmitImportDecl(const ImportDecl &ID);
+
   /// \brief Emit C++ namespace alias.
   llvm::DIImportedEntity *EmitNamespaceAlias(const NamespaceAliasDecl &NA);
 
@@ -355,7 +358,8 @@ private:
   llvm::DIType *getOrCreateType(QualType Ty, llvm::DIFile *Fg);
 
   /// \brief Get a reference to a clang module.
-  llvm::DICompileUnit *getOrCreateModuleRef(unsigned Idx);
+  llvm::MDModule *
+  getOrCreateModuleRef(ExternalASTSource::ASTSourceDescriptor Mod);
 
   /// \brief Attempt to get a pointer to the serialized
   /// AST of the declaration of the type.

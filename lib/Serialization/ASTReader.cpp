@@ -7345,18 +7345,24 @@ Module *ASTReader::getModule(unsigned ID) {
   return getSubmodule(ID);
 }
 
-llvm::Optional<ASTReader::ASTSourceDescriptor>
+ExternalASTSource::ASTSourceDescriptor
+ASTReader::getSourceDescriptor(const Module &M) {
+  StringRef Dir;
+  if (auto UmbrellaHeader = M.getUmbrellaHeader())
+    Dir = UmbrellaHeader->getDir()->getName();
+
+  return ASTReader::ASTSourceDescriptor{
+             M.getTopLevelModuleName(), Dir,
+             M.getASTFile()->getName(),
+             M.SplitDwarfID
+         };
+}
+
+llvm::Optional<ExternalASTSource::ASTSourceDescriptor>
 ASTReader::getSourceDescriptor(unsigned ID) {
-  if (Module *M = getSubmodule(ID)) {
-    StringRef Dir;
-    if (auto UmbrellaHeader = M->getUmbrellaHeader())
-      Dir = UmbrellaHeader->getDir()->getName();
-    return ASTReader::ASTSourceDescriptor{
-        M->getTopLevelModuleName(), Dir,
-        M->getASTFile()->getName(),
-        M->SplitDwarfID
-      };
-  }
+  if (const Module *M = getSubmodule(ID))
+    return getSourceDescriptor(*M);
+
   // If there is only a single PCH, return it instead.
   // TODO: Handle chained PCH here.
   if (ModuleMgr.size() == 1) {

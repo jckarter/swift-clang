@@ -162,10 +162,11 @@ public:
     std::string ASTFile;
     uint64_t ModuleHash;
   };
-  /// \brief Return a descriptor for the corresponding module.
-  virtual llvm::Optional<ASTSourceDescriptor> getSourceDescriptor(unsigned ID) {
-    return None;
-  }
+
+  /// \brief Return a descriptor for the corresponding module, if one exists.
+  virtual llvm::Optional<ASTSourceDescriptor> getSourceDescriptor(unsigned ID);
+  /// \brief Return a descriptor for the module.
+  virtual ASTSourceDescriptor getSourceDescriptor(const Module &M);
   
   /// \brief Finds all declarations lexically contained within the given
   /// DeclContext, after applying an optional filter predicate.

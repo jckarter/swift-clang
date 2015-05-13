@@ -2130,35 +2130,35 @@ ObjCInterfaceDecl *CGDebugInfo::getObjCInterfaceDecl(QualType Ty) {
   }
 }
 
-llvm::DICompileUnit *CGDebugInfo::getOrCreateModuleRef(unsigned Idx) {
-  llvm::DICompileUnit *ModuleRef = nullptr;
-  auto *Reader = CGM.getContext().getExternalSource();
-  if (auto Info = Reader->getSourceDescriptor(Idx)) {
-    auto it = ModuleRefCache.find(Info->ModuleHash);
-    if (it != ModuleRefCache.end())
-      ModuleRef = it->second;
-    else {
-      // Macro definitions that were defined with "-D" on the command line.
-      SmallString<128> Flags;
-      {
-        llvm::raw_svector_ostream OS(Flags);
-        PreprocessorOptions PPOpts = CGM.getPreprocessorOpts();
-        for (unsigned I = 0, N = PPOpts.Macros.size(); I != N; ++I) {
-          // FIXME: This needs to be replaced by an array of metadata.
-          OS << " -D" << PPOpts.Macros[I].first
-             << "=" << PPOpts.Macros[I].second;
-        }
-        OS << " -isysroot " << CGM.getHeaderSearchOpts().Sysroot;
+llvm::MDModule *
+CGDebugInfo::getOrCreateModuleRef(ExternalASTSource::ASTSourceDescriptor Mod) {
+  llvm::MDModule *ModuleRef = nullptr;
+  auto it = ModuleRefCache.find(Mod.ModuleHash);
+  if (it != ModuleRefCache.end())
+    ModuleRef = it->second;
+  else {
+    // Macro definitions that were defined with "-D" on the command line.
+    SmallString<128> Flags;
+    {
+      llvm::raw_svector_ostream OS(Flags);
+      PreprocessorOptions PPOpts = CGM.getPreprocessorOpts();
+      for (unsigned I = 0, N = PPOpts.Macros.size(); I != N; ++I) {
+        // FIXME: This needs to be replaced by an array of metadata.
+        OS << " -D" << PPOpts.Macros[I].first
+           << "=" << PPOpts.Macros[I].second;
       }
-      llvm::DIBuilder DIB(CGM.getModule());
-      ModuleRef = DIB.createCompileUnit(
-          TheCU->getSourceLanguage(), internString(Info->ModuleName),
-          internString(Info->Dir), TheCU->getProducer(), true,
-          internString(Flags.str()), 0, internString(Info->ASTFile),
-          llvm::DIBuilder::FullDebug, Info->ModuleHash);
-      DIB.finalize();
-      ModuleRefCache.insert(std::make_pair(Info->ModuleHash, ModuleRef));
+      OS << " -isysroot " << CGM.getHeaderSearchOpts().Sysroot;
     }
+    llvm::DIBuilder DIB(CGM.getModule());
+    auto *CU = DIB.createCompileUnit(
+        TheCU->getSourceLanguage(), internString(Mod.ModuleName),
+        internString(Mod.Dir), TheCU->getProducer(), true,
+        internString(Flags.str()), 0, internString(Mod.ASTFile),
+        llvm::DIBuilder::FullDebug, Mod.ModuleHash);
+    ModuleRef = DIB.createModule(CU, Mod.ModuleName,
+                                 DIB.createFile(Mod.ASTFile, ""), 1);
+    DIB.finalize();
+    ModuleRefCache.insert(std::make_pair(Mod.ModuleHash, ModuleRef));
   }
   return ModuleRef;
 }
@@ -2169,8 +2169,11 @@ llvm::DIType *CGDebugInfo::getTypeASTRefOrNull(Decl *TyDecl, llvm::DIFile *F) {
   if (!TyDecl || !TyDecl->isFromASTFile())
     return nullptr;
 
-  llvm::DICompileUnit *ModuleRef =
-      getOrCreateModuleRef(TyDecl->getOwningModuleID());
+  llvm::MDModule *ModuleRef = nullptr;
+  auto *Reader = CGM.getContext().getExternalSource();
+  auto Idx = TyDecl->getOwningModuleID();
+  if (auto Info = Reader->getSourceDescriptor(Idx))
+    ModuleRef = getOrCreateModuleRef(*Info);
 
   if (ModuleRef) {
     SmallString<256> Buf;
@@ -2215,7 +2218,7 @@ llvm::DIType *CGDebugInfo::getTypeASTRefOrNull(Decl *TyDecl, llvm::DIFile *F) {
       UID = Buf.str();
     }
     assert(!UID.empty() && "could not determine unique type identifier");
-    auto File = DBuilder.createFile(ModuleRef->getSplitDebugFilename(), "");
+    auto File = ModuleRef->getFile();
     return DBuilder.createExternalTypeRef(Tag, File, UID);
   }
   return nullptr;
@@ -3481,6 +3484,15 @@ void CGDebugInfo::EmitUsingDecl(const UsingDecl &UD) {
     DBuilder.createImportedDeclaration(
         getCurrentContextDescriptor(cast<Decl>(USD.getDeclContext())), Target,
         getLineNumber(USD.getLocation()));
+}
+
+void CGDebugInfo::EmitImportDecl(const ImportDecl &ID) {
+  auto *Reader = CGM.getContext().getExternalSource();
+  auto Info = Reader->getSourceDescriptor(*ID.getImportedModule());
+  DBuilder.createImportedDeclaration(
+    getCurrentContextDescriptor(cast<Decl>(ID.getDeclContext())),
+                                getOrCreateModuleRef(Info),
+                                getLineNumber(ID.getLocation()));
 }
 
 llvm::DIImportedEntity *
