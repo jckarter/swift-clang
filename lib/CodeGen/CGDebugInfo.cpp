@@ -2142,11 +2142,11 @@ CGDebugInfo::getOrCreateModuleRef(ExternalASTSource::ASTSourceDescriptor Mod) {
     {
       llvm::raw_svector_ostream OS(Flags);
       PreprocessorOptions PPOpts = CGM.getPreprocessorOpts();
-      for (unsigned I = 0, N = PPOpts.Macros.size(); I != N; ++I) {
-        // FIXME: This needs to be replaced by an array of metadata.
+      for (unsigned I = 0, N = PPOpts.Macros.size(); I != N; ++I)
         OS << " -D" << PPOpts.Macros[I].first
            << "=" << PPOpts.Macros[I].second;
-      }
+      for (auto I : CGM.getHeaderSearchOpts().UserEntries)
+        OS << " -I" << I.Path;
       OS << " -isysroot " << CGM.getHeaderSearchOpts().Sysroot;
     }
     llvm::DIBuilder DIB(CGM.getModule());
