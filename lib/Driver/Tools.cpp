@@ -661,7 +661,8 @@ StringRef tools::arm::getARMFloatABI(const Driver &D, const ArgList &Args,
       }
 
       std::string ArchName =
-        arm::getLLVMArchSuffixForARM(arm::getARMTargetCPU(Args, Triple));
+        arm::getLLVMArchSuffixForARM(arm::getARMTargetCPU(Args, Triple),
+                                     arm::getARMArch(Args, Triple));
       if (StringRef(ArchName).startswith("v6") ||
           StringRef(ArchName).startswith("v7"))
         FloatABI = "softfp";
@@ -704,7 +705,8 @@ StringRef tools::arm::getARMFloatABI(const Driver &D, const ArgList &Args,
         break;
       case llvm::Triple::Android: {
         std::string ArchName =
-          arm::getLLVMArchSuffixForARM(arm::getARMTargetCPU(Args, Triple));
+          arm::getLLVMArchSuffixForARM(arm::getARMTargetCPU(Args, Triple),
+                                       arm::getARMArch(Args, Triple));
         if (StringRef(ArchName).startswith("v7"))
           FloatABI = "softfp";
         else
@@ -779,6 +781,10 @@ static void getARMTargetFeatures(const Driver &D, const llvm::Triple &Triple,
       Features.push_back("+crc");
     else
       Features.push_back("-crc");
+  }
+
+  if (Triple.getSubArch() == llvm::Triple::SubArchType::ARMSubArch_v8_1a) {
+    Features.insert(Features.begin(), "+v8.1a");
   }
 }
 
@@ -5980,9 +5986,8 @@ void hexagon::Link::ConstructJob(Compilation &C, const JobAction &JA,
 }
 // Hexagon tools end.
 
-/// Get the (LLVM) name of the minimum ARM CPU for the arch we are targeting.
-const char *arm::getARMCPUForMArch(const ArgList &Args,
-                                   const llvm::Triple &Triple) {
+const StringRef arm::getARMArch(const ArgList &Args,
+                                const llvm::Triple &Triple) {
   StringRef MArch;
   if (Arg *A = Args.getLastArg(options::OPT_march_EQ)) {
     // Otherwise, if we have -march= choose the base CPU for that arch.
@@ -5991,6 +5996,12 @@ const char *arm::getARMCPUForMArch(const ArgList &Args,
     // Otherwise, use the Arch from the triple.
     MArch = Triple.getArchName();
   }
+  return MArch;
+}
+/// Get the (LLVM) name of the minimum ARM CPU for the arch we are targeting.
+const char *arm::getARMCPUForMArch(const ArgList &Args,
+                                   const llvm::Triple &Triple) {
+  StringRef MArch = getARMArch(Args, Triple);
 
   // Handle -march=native.
   if (MArch == "native") {
@@ -5998,7 +6009,8 @@ const char *arm::getARMCPUForMArch(const ArgList &Args,
     if (CPU != "generic") {
       // Translate the native cpu into the architecture. The switch below will
       // then chose the minimum cpu for that arch.
-      MArch = std::string("arm") + arm::getLLVMArchSuffixForARM(CPU);
+      MArch = std::string("arm") + 
+        arm::getLLVMArchSuffixForARM(CPU, arm::getARMArch(Args, Triple));
     }
   }
 
@@ -6029,12 +6041,20 @@ StringRef arm::getARMTargetCPU(const ArgList &Args,
 }
 
 /// getLLVMArchSuffixForARM - Get the LLVM arch name to use for a particular
-/// CPU.
+/// CPU  (or Arch, if CPU is generic).
 //
 // FIXME: This is redundant with -mcpu, why does LLVM use this.
 // FIXME: tblgen this, or kill it!
 // FIXME: Use ARMTargetParser.
-const char *arm::getLLVMArchSuffixForARM(StringRef CPU) {
+const char *arm::getLLVMArchSuffixForARM(StringRef CPU, StringRef Arch) {
+  // FIXME: Use ARMTargetParser
+  if (CPU == "generic") {
+    if (Arch == "armv8.1a" || Arch == "armv8.1-a" ||
+        Arch == "armebv8.1a" || Arch == "armebv8.1-a") {
+      return "v8.1a";
+    }
+  }
+
   return llvm::StringSwitch<const char *>(CPU)
     .Case("strongarm", "v4")
     .Cases("arm7tdmi", "arm7tdmi-s", "arm710t", "v4t")
@@ -6066,11 +6086,13 @@ const char *arm::getLLVMArchSuffixForARM(StringRef CPU) {
     .Default("");
 }
 
-void arm::appendEBLinkFlags(const ArgList &Args, ArgStringList &CmdArgs, const llvm::Triple &Triple) {
+void arm::appendEBLinkFlags(const ArgList &Args, ArgStringList &CmdArgs, 
+                            const llvm::Triple &Triple) {
   if (Args.hasArg(options::OPT_r))
     return;
 
-  StringRef Suffix = getLLVMArchSuffixForARM(getARMCPUForMArch(Args, Triple));
+  StringRef Suffix = getLLVMArchSuffixForARM(getARMCPUForMArch(Args, Triple), 
+                                             getARMArch(Args, Triple));
   const char *LinkFlag = llvm::StringSwitch<const char *>(Suffix)
     .Cases("v4", "v4t", "v5", "v5e", nullptr)
     .Cases("v6", "v6k", "v6t2", nullptr)
