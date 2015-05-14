@@ -30,6 +30,7 @@
 // CHECK-EXTREF: ![[A]] = !MDExternalTypeRef(tag: DW_TAG_structure_type, file: ![[PCM:[0-9]+]], identifier: "c:objc(cs)A")
 // CHECK-EXTREF: ![[PCM]] = !DIFile(filename: "{{.*}}.pcm", directory: "")
 // CHECK-EXTREF: !DICompositeType(tag: DW_TAG_structure_type, name: "F"
+// CHECK-EXTREF: !DIFile(filename: "{{.*}}DebugModule{{.*}}", directory: "{{.*}}test/Modules{{.*}}")
 // CHECK-EXTREF: !MDExternalTypeRef(tag: DW_TAG_enumeration_type, file: ![[PCM]], identifier: "c:@EA@enum3")
 int foo(A *a, F *f) {
   enum3 e3 = ENUM_VAL3;

@@ -7347,13 +7347,13 @@ Module *ASTReader::getModule(unsigned ID) {
 
 ExternalASTSource::ASTSourceDescriptor
 ASTReader::getSourceDescriptor(const Module &M) {
-  StringRef Dir;
-  if (auto UmbrellaHeader = M.getUmbrellaHeader())
-    Dir = UmbrellaHeader->getDir()->getName();
-
+  StringRef Dir, Filename;
+  if (M.Directory)
+    Dir = M.Directory->getName();
+  if (auto *File = M.getASTFile())
+    Filename = File->getName();
   return ASTReader::ASTSourceDescriptor{
-             M.getTopLevelModuleName(), Dir,
-             M.getASTFile()->getName(),
+             M.getTopLevelModuleName(), Dir, Filename,
              M.SplitDwarfID
          };
 }
