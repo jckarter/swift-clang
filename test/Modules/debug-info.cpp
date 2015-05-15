@@ -39,16 +39,16 @@ int Foo::static_member = -1;
 // CHECK-PCH: Name: {{.*}}"_ZTSN8DebugCXX3FooE"
 // CHECK-PCH: Name: {{.*}}"_ZTSN8DebugCXX4EnumE"
 
-// CHECK-EXTREF-MODULE: ![[FOO:.*]] = !MDExternalTypeRef(tag: DW_TAG_structure_type, file: ![[PCM:[0-9]+]], identifier: "c:@N@DebugCXX@S@Foo")
-// CHECK-EXTREF-MODULE: !MDExternalTypeRef(tag: DW_TAG_enumeration_type, file: ![[PCM]], identifier: "c:@N@DebugCXX@E@Enum")
+// CHECK-EXTREF-MODULE: distinct !DICompositeType(tag: DW_TAG_structure_type, file: ![[PCM:[0-9]+]], flags: DIFlagExternalTypeRef, identifier: "c:@N@DebugCXX@S@Foo")
+// CHECK-EXTREF-MODULE: distinct !DICompositeType(tag: DW_TAG_enumeration_type, file: ![[PCM]], flags: DIFlagExternalTypeRef, identifier: "c:@N@DebugCXX@E@Enum")
+// CHECK-EXTREF-MODULE:  distinct !DICompositeType(tag: DW_TAG_structure_type, file: ![[PCM]], flags: DIFlagExternalTypeRef, identifier: "c:@N@DebugCXX@S@traits>#f")
 // CHECK-EXTREF-MODULE: !DICompositeType({{.*}}name: "Bar<long, DebugCXX::traits<long> >"
-// CHECK-EXTREF-MODULE: !MDExternalTypeRef({{.*}}identifier: "c:@N@DebugCXX@S@Bar>#I#$@N@DebugCXX@S@traits>#I")
-// CHECK-EXTREF-MODULE: !DIDerivedType(tag: DW_TAG_member, name: "static_member", scope: ![[FOO]]
-// CHECK-EXTREF-MODULE: !DIImportedEntity(tag: DW_TAG_imported_declaration, {{.*}}, entity: ![[FOO]], line: 21)
+// CHECK-EXTREF-MODULE: !DIDerivedType(tag: DW_TAG_member, name: "static_member", scope: !"c:@N@DebugCXX@S@Foo"
+// CHECK-EXTREF-MODULE: !DIImportedEntity(tag: DW_TAG_imported_declaration, {{.*}}, entity: !"c:@N@DebugCXX@S@Foo", line: 21)
 
-// CHECK-EXTREF-PCH: ![[FOO:.*]] = !MDExternalTypeRef(tag: DW_TAG_structure_type, file: ![[PCM:[0-9]+]], identifier: "_ZTSN8DebugCXX3FooE")
-// CHECK-EXTREF-PCH: !MDExternalTypeRef(tag: DW_TAG_enumeration_type, file: ![[PCM]], identifier: "_ZTSN8DebugCXX4EnumE")
-// CHECK-EXTREF-PCH: !MDExternalTypeRef({{.*}}identifier: "_ZTSN8DebugCXX3BarIiNS_6traitsIiEEEE")
-// CHECK-EXTREF-PCH: !DIDerivedType(tag: DW_TAG_member, name: "static_member", scope: ![[FOO]]
-// CHECK-EXTREF-PCH: !DIImportedEntity(tag: DW_TAG_imported_declaration, {{.*}}, entity: ![[FOO]], line: 21)
+// CHECK-EXTREF-PCH: distinct !DICompositeType(tag: DW_TAG_structure_type, file: ![[PCM:[0-9]+]], flags: DIFlagExternalTypeRef, identifier: "_ZTSN8DebugCXX3FooE")
+// CHECK-EXTREF-PCH: distinct !DICompositeType(tag: DW_TAG_enumeration_type, file: ![[PCM]], flags: DIFlagExternalTypeRef, identifier:  "_ZTSN8DebugCXX4EnumE")
+// CHECK-EXTREF-PCH: distinct !DICompositeType({{.*}}identifier: "_ZTSN8DebugCXX3BarIiNS_6traitsIiEEEE")
+// CHECK-EXTREF-PCH: !DIDerivedType(tag: DW_TAG_member, name: "static_member", scope: !"_ZTSN8DebugCXX3FooE"
+// CHECK-EXTREF-PCH: !DIImportedEntity(tag: DW_TAG_imported_declaration, {{.*}}, entity: !"_ZTSN8DebugCXX3FooE", line: 21)
 

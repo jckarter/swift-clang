@@ -1445,8 +1445,7 @@ llvm::DIType *CGDebugInfo::getOrCreateStandaloneType(QualType D,
   assert(!D.isNull() && "null type");
   llvm::DIType *T = getOrCreateType(D, getOrCreateFile(Loc));
   assert(T && "could not create debug info for type");
-  if (!isa<llvm::MDExternalTypeRef>(T))
-    RetainedTypes.push_back(D.getAsOpaquePtr());
+  RetainedTypes.push_back(D.getAsOpaquePtr());
   return T;
 }
 
