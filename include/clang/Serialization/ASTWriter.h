@@ -301,6 +301,7 @@ private:
       void *Type;
       unsigned Loc;
       unsigned Val;
+      Module *Mod;
     };
 
   public:
@@ -312,6 +313,8 @@ private:
         : Kind(Kind), Loc(Loc.getRawEncoding()) {}
     DeclUpdate(unsigned Kind, unsigned Val)
         : Kind(Kind), Val(Val) {}
+    DeclUpdate(unsigned Kind, Module *M)
+          : Kind(Kind), Mod(M) {}
 
     unsigned getKind() const { return Kind; }
     const Decl *getDecl() const { return Dcl; }
@@ -320,6 +323,7 @@ private:
       return SourceLocation::getFromRawEncoding(Loc);
     }
     unsigned getNumber() const { return Val; }
+    Module *getModule() const { return Mod; }
   };
 
   typedef SmallVector<DeclUpdate, 1> UpdateRecord;
@@ -855,8 +859,7 @@ public:
                                     const ObjCCategoryDecl *ClassExt) override;
   void DeclarationMarkedUsed(const Decl *D) override;
   void DeclarationMarkedOpenMPThreadPrivate(const Decl *D) override;
-  void RedefinedHiddenDefinition(const NamedDecl *D,
-                                 SourceLocation Loc) override;
+  void RedefinedHiddenDefinition(const NamedDecl *D, Module *M) override;
 };
 
 /// \brief AST and semantic-analysis consumer that generates a

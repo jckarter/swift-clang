@@ -1808,6 +1808,7 @@ private:
   void HandleImportDirective(SourceLocation HashLoc, Token &Tok);
   void HandleMicrosoftImportDirective(Token &Tok);
 
+public:
   // Module inclusion testing.
   /// \brief Find the module that owns the source or header file that
   /// \p Loc points to. If the location is in a file that was included
@@ -1818,6 +1819,7 @@ private:
   /// directly or indirectly.
   Module *getModuleContainingLocation(SourceLocation Loc);
 
+private:
   // Macro handling.
   void HandleDefineDirective(Token &Tok, bool ImmediatelyAfterTopLevelIfndef);
   void HandleUndefDirective(Token &Tok);
