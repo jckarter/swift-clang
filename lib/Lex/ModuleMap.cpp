@@ -713,14 +713,16 @@ Module *ModuleMap::inferFrameworkModule(StringRef ModuleName,
   Result->IsSystem |= Attrs.IsSystem;
   Result->IsExternC |= Attrs.IsExternC;
   Result->ConfigMacrosExhaustive |= Attrs.IsExhaustive;
+  Result->Directory = FrameworkDir;
 
   if (!Parent)
     Modules[ModuleName] = Result;
   
   // umbrella header "umbrella-header-name"
-  Result->Umbrella = UmbrellaHeader;
-  Headers[UmbrellaHeader].push_back(KnownHeader(Result, NormalHeader));
-  UmbrellaDirs[UmbrellaHeader->getDir()] = Result;
+  //
+  // The "Headers/" component of the name is implied because this is
+  // a framework module.
+  setUmbrellaHeader(Result, UmbrellaHeader, ModuleName + ".h");
   
   // export *
   Result->Exports.push_back(Module::ExportDecl(nullptr, true));
@@ -781,14 +783,18 @@ Module *ModuleMap::inferFrameworkModule(StringRef ModuleName,
   return Result;
 }
 
-void ModuleMap::setUmbrellaHeader(Module *Mod, const FileEntry *UmbrellaHeader){
+void ModuleMap::setUmbrellaHeader(Module *Mod, const FileEntry *UmbrellaHeader,
+                                  Twine NameAsWritten) {
   Headers[UmbrellaHeader].push_back(KnownHeader(Mod, NormalHeader));
   Mod->Umbrella = UmbrellaHeader;
+  Mod->UmbrellaAsWritten = NameAsWritten.str();
   UmbrellaDirs[UmbrellaHeader->getDir()] = Mod;
 }
 
-void ModuleMap::setUmbrellaDir(Module *Mod, const DirectoryEntry *UmbrellaDir) {
+void ModuleMap::setUmbrellaDir(Module *Mod, const DirectoryEntry *UmbrellaDir,
+                               Twine NameAsWritten) {
   Mod->Umbrella = UmbrellaDir;
+  Mod->UmbrellaAsWritten = NameAsWritten.str();
   UmbrellaDirs[UmbrellaDir] = Mod;
 }
 
@@ -1787,7 +1793,7 @@ void ModuleMapParser::parseHeaderDecl(MMToken::TokenKind LeadingToken,
         HadError = true;
       } else {
         // Record this umbrella header.
-        Map.setUmbrellaHeader(ActiveModule, File);
+        Map.setUmbrellaHeader(ActiveModule, File, RelativePathName.str());
       }
     } else if (LeadingToken == MMToken::ExcludeKeyword) {
       Module::Header H = {RelativePathName.str(), File};
@@ -1869,7 +1875,7 @@ void ModuleMapParser::parseUmbrellaDirDecl(SourceLocation UmbrellaLoc) {
   } 
   
   // Record this umbrella directory.
-  Map.setUmbrellaDir(ActiveModule, Dir);
+  Map.setUmbrellaDir(ActiveModule, Dir, DirName);
 }
 
 /// \brief Parse a module export declaration.
