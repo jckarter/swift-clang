@@ -16,6 +16,7 @@
 #define LLVM_CLANG_BASIC_MODULE_H
 
 #include "clang/Basic/SourceLocation.h"
+#include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/DenseSet.h"
 #include "llvm/ADT/PointerIntPair.h"
 #include "llvm/ADT/PointerUnion.h"
@@ -520,7 +521,9 @@ public:
       ConflictCallback;
   /// \brief Make a specific module visible.
   void setVisible(Module *M, SourceLocation Loc,
-                  VisibleCallback Vis, ConflictCallback Cb);
+                  VisibleCallback Vis = [](Module *) {},
+                  ConflictCallback Cb = [](ArrayRef<Module *>, Module *,
+                                           StringRef) {});
 
 private:
   /// Import locations for each visible module. Indexed by the module's
