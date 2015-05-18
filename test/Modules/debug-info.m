@@ -26,9 +26,9 @@
 // CHECK-AST: DW_TAG_subprogram
 // CHECK-AST: DW_AT_name {{.*}}"-[A method2:]"
 
-// CHECK-EXTREF: distinct !DICompositeType(tag: DW_TAG_structure_type, file: ![[PCM:[0-9]+]], flags: DIFlagExternalTypeRef, identifier: "c:objc(cs)A")
+// CHECK-EXTREF: !DICompositeType(tag: DW_TAG_structure_type, file: ![[PCM:[0-9]+]], flags: DIFlagExternalTypeRef, identifier: "c:objc(cs)A")
 // CHECK-EXTREF: ![[PCM]] = !DIFile(filename: "{{.*}}.pcm", directory: "")
-// CHECK-EXTREF: distinct !DICompositeType(tag: DW_TAG_enumeration_type, file: ![[PCM]], flags: DIFlagExternalTypeRef, identifier: "c:@EA@enum3")
+// CHECK-EXTREF: !DICompositeType(tag: DW_TAG_enumeration_type, file: ![[PCM]], flags: DIFlagExternalTypeRef, identifier: "c:@EA@enum3")
 // CHECK-EXTREF: !DIDerivedType(tag: DW_TAG_pointer_type, baseType: !"c:objc(cs)A",
 // CHECK-EXTREF: !DICompositeType(tag: DW_TAG_structure_type, name: "F"
 // CHECK-EXTREF: !DIFile(filename: "{{.*}}DebugModule{{.*}}", directory: "{{.*}}test/Modules{{.*}}")
