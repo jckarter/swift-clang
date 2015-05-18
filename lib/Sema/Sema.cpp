@@ -874,6 +874,17 @@ void Sema::ActOnEndOfTranslationUnit() {
     }
   }
 
+  if (!Diags.isIgnored(diag::warn_mismatched_delete_new, SourceLocation())) {
+    if (ExternalSource)
+      ExternalSource->ReadMismatchingDeleteExpressions(DeleteExprs);
+    for (const auto &DeletedFieldInfo : DeleteExprs) {
+      for (const auto &DeleteExprLoc : DeletedFieldInfo.second) {
+        AnalyzeDeleteExprMismatch(DeletedFieldInfo.first, DeleteExprLoc.first,
+                                  DeleteExprLoc.second);
+      }
+    }
+  }
+
   // Check we've noticed that we're no longer parsing the initializer for every
   // variable. If we miss cases, then at best we have a performance issue and
   // at worst a rejects-valid bug.
@@ -1233,6 +1244,9 @@ void ExternalSemaSource::ReadUndefinedButUsed(
                        llvm::DenseMap<NamedDecl *, SourceLocation> &Undefined) {
 }
 
+void ExternalSemaSource::ReadMismatchingDeleteExpressions(llvm::MapVector<
+    FieldDecl *, llvm::SmallVector<std::pair<SourceLocation, bool>, 4>> &) {}
+
 void PrettyDeclStackTraceEntry::print(raw_ostream &OS) const {
   SourceLocation Loc = this->Loc;
   if (!Loc.isValid() && TheDecl) Loc = TheDecl->getLocation();
@@ -1480,4 +1494,9 @@ CapturedRegionScopeInfo *Sema::getCurCapturedRegion() {
     return nullptr;
 
   return dyn_cast<CapturedRegionScopeInfo>(FunctionScopes.back());
+}
+
+const llvm::MapVector<FieldDecl *, Sema::DeleteLocs> &
+Sema::getMismatchingDeleteExpressions() const {
+  return DeleteExprs;
 }
