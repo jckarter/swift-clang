@@ -2024,7 +2024,7 @@ static void handleAvailabilityAttr(Sema &S, Decl *D,
     D->addAttr(NewAttr);
 
   // Transcribe "ios" to "watchos" (and add a new attribute) if the versioning
-  // matches before the start of the WatchTVOS platform.
+  // matches before the start of the WatchOS platform.
   if (S.Context.getTargetInfo().getTriple().isWatchOS()) {
     IdentifierInfo *NewII = nullptr;
     if (II->getName() == "ios")
