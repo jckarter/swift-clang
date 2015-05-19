@@ -124,6 +124,8 @@ def err_drv_no_neon_modifier : Error<"[no]neon is not accepted as modifier, plea
 
 def err_drv_unsupported_embed_bitcode : Error<
   "%0 is not supported with -fembed-bitcode">;
+def err_drv_bitcode_unsupported_on_toolchain : Error<
+  "-fembed-bitcode is not supported on versions of iOS prior to 6.0">;
 
 def warn_O4_is_O3 : Warning<"-O4 is equivalent to -O3">, InGroup<Deprecated>;
 def warn_drv_optimization_value : Warning<"optimization level '%0' is not supported; using '%1%2' instead">,

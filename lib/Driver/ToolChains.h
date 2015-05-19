@@ -510,6 +510,8 @@ public:
   void CheckObjCARC() const override;
 
   bool UseSjLjExceptions(const llvm::opt::ArgList &Args) const override;
+
+  void CheckBitcodeSupport() const override;
 };
 
 /// DarwinClang - The Darwin toolchain used by Clang.

@@ -28,6 +28,13 @@
 // CHECK-AS: -cc1as
 // CHECK-AS: -fembed-bitcode
 
+// RUN: %clang -target armv7-apple-darwin -miphoneos-version-min=6.0 -c %s -fembed-bitcode -### 2>&1 | \
+// RUN:   FileCheck %s -check-prefix=CHECK-PLATFORM-SUPPORTED
+// RUN: %clang -target armv7-apple-darwin -miphoneos-version-min=5.0 -c %s -fembed-bitcode -### 2>&1 | \
+// RUN:   FileCheck %s -check-prefix=CHECK-PLATFORM-UNSUPPORTED
+// CHECK-PLATFORM-SUPPORTED-NOT: -fembed-bitcode is not supported on versions of iOS prior to 6.0
+// CHECK-PLATFORM-UNSUPPORTED: -fembed-bitcode is not supported on versions of iOS prior to 6.0
+
 // RUN: %clang -c %s -fembed-bitcode -mkernel -fapple-kext -ffunction-sections \
 // RUN:   -fno-function-sections -fdata-sections -fno-data-sections \
 // RUN:   -funique-section-names -fno-unique-section-names -mrestrict-it \
@@ -72,9 +79,9 @@
 // CHECK-UNSUPPORTED-OPT: -mllvm is not supported with -fembed-bitcode
 
 
-// RUN: %clang -target armv7-apple-ios5.0.0 -S -fembed-bitcode %s -o - \
+// RUN: %clang -target armv7-apple-ios8.0.0 -S -fembed-bitcode %s -o - \
 // RUN:   -O0 -fno-optimize-sibling-calls -flimited-precision=16 \
 // RUN:   -fmath-errno -ffp-contract=fast -mabi=aapcs -ffast-math \
 // RUN:   | FileCheck %s -check-prefix=CHECK-ARM-OPTIONS
 // CHECK-ARM-OPTIONS: .section __LLVM,__cmdline
-// CHECK-ARM-OPTIONS: -triple\000thumbv7-apple-ios5.0.0\000-S\000-disable-llvm-optzns\000-mdisable-tail-calls\000-mlimit-float-precision\00016\000-menable-no-infs\000-menable-no-nans\000-menable-unsafe-fp-math\000-fno-signed-zeros\000-freciprocal-math\000-ffp-contract=fast\000-target-abi\000aapcs\000-mfloat-abi\000soft\000-O0
+// CHECK-ARM-OPTIONS: -triple\000thumbv7-apple-ios8.0.0\000-S\000-disable-llvm-optzns\000-mdisable-tail-calls\000-mlimit-float-precision\00016\000-menable-no-infs\000-menable-no-nans\000-menable-unsafe-fp-math\000-fno-signed-zeros\000-freciprocal-math\000-ffp-contract=fast\000-target-abi\000aapcs\000-mfloat-abi\000soft\000-O0

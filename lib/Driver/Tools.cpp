@@ -2728,6 +2728,8 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
   // Only white-listed flags below are allowed to be embedded.
   if (C.getDriver().embedBitcodeEnabled() &&
       (isa<BackendJobAction>(JA) || isa<AssembleJobAction>(JA))) {
+    // Check Bitcode support on the platform.
+    getToolChain().CheckBitcodeSupport();
     // Add flags implied by -fembed-bitcode.
     CmdArgs.push_back("-fembed-bitcode");
     // Disable all llvm IR level optimizations.
@@ -5012,8 +5014,12 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
       isa<CompileJobAction>(JA))
     CmdArgs.push_back("-disable-llvm-optzns");
 
-  if (C.getDriver().embedBitcodeMarkerOnly())
+  if (C.getDriver().embedBitcodeMarkerOnly()) {
+    // Check if bitcode build flow is supported.
+    // Only check the bitcode marker here, -fembed-bitcode is handled already.
+    getToolChain().CheckBitcodeSupport();
     CmdArgs.push_back("-fembed-bitcode-marker");
+  }
 
   if (Output.getType() == types::TY_Dependencies) {
     // Handled with other dependency code.
@@ -6527,8 +6533,10 @@ void darwin::Link::AddLinkArgs(Compilation &C,
 
   // for embed-bitcode, use -bitcode_bundle in linker command
   if (C.getDriver().embedBitcodeEnabled() ||
-      C.getDriver().embedBitcodeMarkerOnly())
+      C.getDriver().embedBitcodeMarkerOnly()) {
+    MachOTC.CheckBitcodeSupport();
     CmdArgs.push_back("-bitcode_bundle");
+  }
 
   Args.AddLastArg(CmdArgs, options::OPT_prebind);
   Args.AddLastArg(CmdArgs, options::OPT_noprebind);

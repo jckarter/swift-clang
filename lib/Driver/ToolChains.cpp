@@ -1264,6 +1264,13 @@ void Darwin::CheckObjCARC() const {
   getDriver().Diag(diag::err_arc_unsupported_on_toolchain);
 }
 
+void Darwin::CheckBitcodeSupport() const {
+  assert(TargetInitialized && "Target not initialized!");
+  // based on whether the target requires crt.
+  if (isTargetIPhoneOS() && isIPhoneOSVersionLT(6, 0))
+    getDriver().Diag(diag::err_drv_bitcode_unsupported_on_toolchain);
+}
+
 /// Generic_GCC - A tool chain using the 'gcc' command to perform
 /// all subcommands; this relies on gcc translating the majority of
 /// command line options.

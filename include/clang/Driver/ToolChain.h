@@ -257,6 +257,9 @@ public:
   /// Complain if this tool chain doesn't support Objective-C ARC.
   virtual void CheckObjCARC() const {}
 
+  /// Complain if this tool chain doesn't support Bitcode build flow.
+  virtual void CheckBitcodeSupport() const {}
+
   /// UseDwarfDebugFlags - Embed the compile options to clang into the Dwarf
   /// compile unit information.
   virtual bool UseDwarfDebugFlags() const { return false; }
