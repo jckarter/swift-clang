@@ -2,7 +2,7 @@
 
 class MyFriend;
 
-class SomeClass {
+class SomeClass : private Foo {
   friend class MyFriend;
   typedef int SomeType;
 };

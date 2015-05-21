@@ -383,7 +383,7 @@ void CGDebugInfo::CreateCompileUnit() {
           ? llvm::DIBuilder::LineTablesOnly
           : (CGM.getCodeGenOpts().ClangModule ?
              llvm::DIBuilder::ClangModule : llvm::DIBuilder::FullDebug),
-      0,
+      0 /* DWOid */,
       DebugKind != CodeGenOptions::LocTrackingOnly);
 }
 
