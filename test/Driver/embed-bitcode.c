@@ -30,10 +30,13 @@
 // CHECK-AS: -cc1as
 // CHECK-AS: -fembed-bitcode
 
-// RUN: %clang -target armv7-apple-darwin -miphoneos-version-min=6.0 -c %s -fembed-bitcode -### 2>&1 | \
+// Check clang complains about ios version min if it is used to generate link command.
+// RUN: %clang -target armv7-apple-darwin -miphoneos-version-min=6.0 %s -fembed-bitcode -### 2>&1 | \
 // RUN:   FileCheck %s -check-prefix=CHECK-PLATFORM-SUPPORTED
-// RUN: %clang -target armv7-apple-darwin -miphoneos-version-min=5.0 -c %s -fembed-bitcode -### 2>&1 | \
+// RUN: %clang -target armv7-apple-darwin -miphoneos-version-min=5.0 %s -fembed-bitcode -### 2>&1 | \
 // RUN:   FileCheck %s -check-prefix=CHECK-PLATFORM-UNSUPPORTED
+// RUN: %clang -target armv7-apple-darwin -miphoneos-version-min=5.0 -c %s -fembed-bitcode -### 2>&1 | \
+// RUN:   FileCheck %s -check-prefix=CHECK-PLATFORM-SUPPORTED
 // CHECK-PLATFORM-SUPPORTED-NOT: -fembed-bitcode is not supported on versions of iOS prior to 6.0
 // CHECK-PLATFORM-UNSUPPORTED: -fembed-bitcode is not supported on versions of iOS prior to 6.0
 
