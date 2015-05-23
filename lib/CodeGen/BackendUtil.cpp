@@ -481,9 +481,6 @@ TargetMachine *EmitAssemblyHelper::CreateTargetMachine(bool MustCreateTM) {
 
   llvm::TargetOptions Options;
 
-  if (!TargetOpts.Reciprocals.empty())
-    Options.Reciprocals = TargetRecip(TargetOpts.Reciprocals);
-
   Options.ThreadModel =
     llvm::StringSwitch<llvm::ThreadModel::Model>(CodeGenOpts.ThreadModel)
       .Case("posix", llvm::ThreadModel::POSIX)
