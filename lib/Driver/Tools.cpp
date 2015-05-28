@@ -2135,6 +2135,11 @@ static bool ContainsCompileAction(const Action *A) {
 /// \brief Check if -relax-all should be passed to the internal assembler.
 /// This is done by default when compiling non-assembler source with -O0.
 static bool UseRelaxAll(Compilation &C, const ArgList &Args) {
+  // If embed bitcode, RelaxAll is not allowed, function returns false.
+  if (C.getDriver().embedBitcodeEnabled() ||
+      C.getDriver().embedBitcodeMarkerOnly())
+    return false;
+
   bool RelaxDefault = true;
 
   if (Arg *A = Args.getLastArg(options::OPT_O_Group))
@@ -2822,6 +2827,8 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
           A->getOption().getID() == options::OPT_fno_debug_types_section ||
           A->getOption().getID() == options::OPT_fdwarf_directory_asm ||
           A->getOption().getID() == options::OPT_fno_dwarf_directory_asm ||
+          A->getOption().getID() == options::OPT_mrelax_all ||
+          A->getOption().getID() == options::OPT_mno_relax_all ||
           A->getOption().getID() == options::OPT_ftrap_function_EQ ||
           A->getOption().getID() == options::OPT_ffixed_r9 ||
           A->getOption().getID() == options::OPT_mfix_cortex_a53_835769 ||

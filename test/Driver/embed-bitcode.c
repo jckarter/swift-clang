@@ -41,7 +41,8 @@
 // RUN:   -mno-restrict-it -mstackrealgin -mno-stackrealign -mstack-alignment=8 \
 // RUN:   -mcmodel=small -mlong-calls -mno-long-calls -ggnu-pubnames \
 // RUN:   -gdwarf-arange -fdebug-types-section -fno-debug-types-section \
-// RUN:   -fdwarf-directory-asm -fno-dwarf-directory-asm -ftrap-function=trap \
+// RUN:   -fdwarf-directory-asm -fno-dwarf-directory-asm \
+// RUN:   -mrelax-all -mno-relax-all -ftrap-function=trap \
 // RUN:   -ffixed-r9 -mfix-cortex-a53-835769 -mno-fix-cortex-a53-835769 \
 // RUN:   -ffixed-x18 -mglobal-merge -mno-global-merge -mred-zone -mno-red-zone \
 // RUN:   -Wa,-L -Xlinker,-L -mllvm -test -### 2>&1 | \
@@ -66,6 +67,8 @@
 // CHECK-UNSUPPORTED-OPT: -fno-debug-types-section is not supported with -fembed-bitcode
 // CHECK-UNSUPPORTED-OPT: -fdwarf-directory-asm is not supported with -fembed-bitcode
 // CHECK-UNSUPPORTED-OPT: -fno-dwarf-directory-asm is not supported with -fembed-bitcode
+// CHECK-UNSUPPORTED-OPT: -mrelax-all is not supported with -fembed-bitcode
+// CHECK-UNSUPPORTED-OPT: -mno-relax-all is not supported with -fembed-bitcode
 // CHECK-UNSUPPORTED-OPT: -ftrap-function= is not supported with -fembed-bitcode
 // CHECK-UNSUPPORTED-OPT: -ffixed-r9 is not supported with -fembed-bitcode
 // CHECK-UNSUPPORTED-OPT: -mfix-cortex-a53-835769 is not supported with -fembed-bitcode
@@ -78,6 +81,9 @@
 // CHECK-UNSUPPORTED-OPT: -Wa, is not supported with -fembed-bitcode
 // CHECK-UNSUPPORTED-OPT: -mllvm is not supported with -fembed-bitcode
 
+// Check -mrelax-all is not passed as CC1 flag even with -O0.
+// RUN: %clang %s -fembed-bitcode -O0 2>&1 -### | FileCheck %s -check-prefix=CHECK-RELAX-ALL
+// CHECK-RELAX-ALL-NOT: -mrelax-all
 
 // RUN: %clang -target armv7-apple-ios8.0.0 -S -fembed-bitcode %s -o - \
 // RUN:   -O0 -fno-optimize-sibling-calls -flimited-precision=16 \
