@@ -448,11 +448,11 @@ def Availability : InheritableAttr {
              .Case("ios", "iOS")
              .Case("macosx", "OS X")
              .Case("tvos", "AppleTVOS")
-             .Case("watchos", "AppleWatchOS")
+             .Case("watchos", "watchOS")
              .Case("ios_app_extension", "iOS (App Extension)")
              .Case("macosx_app_extension", "OS X (App Extension)")
              .Case("tvos_app_extension", "AppleTVOS (App Extension)")
-             .Case("watchos_app_extension", "AppleWatchOS (App Extension)")
+             .Case("watchos_app_extension", "watchOS (App Extension)")
              .Case("swift", "Swift")
              .Default(llvm::StringRef());
 } }];

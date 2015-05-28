@@ -265,7 +265,7 @@ void DarwinClang::addClangWarningOptions(ArgStringList &CC1Args) const {
     CC1Args.push_back("-Wdeprecated-objc-isa-usage");
     CC1Args.push_back("-Werror=deprecated-objc-isa-usage");
 
-    // For iOS and WatchOS, also error about implicit function declarations,
+    // For iOS and watchOS, also error about implicit function declarations,
     // as that can impact calling conventions.
     if (!isTargetMacOS())
       CC1Args.push_back("-Werror=implicit-function-declaration");
@@ -377,7 +377,7 @@ void DarwinClang::AddLinkSanitizerLibArgs(const ArgList &Args,
     // Sanitizer runtime libraries requires C++.
     AddCXXStdlibLibArgs(Args, CmdArgs);
   }
-  // ASan is not supported on the WatchOS.
+  // ASan is not supported on watchOS.
   assert(isTargetMacOS() || isTargetIOSSimulator() || isTargetIPhoneOS());
   StringRef OS = "";
   if (isTargetMacOS())
@@ -483,7 +483,7 @@ void DarwinClang::AddLinkRuntimeLibArgs(const ArgList &Args,
 
   // Select the dynamic runtime library and the target specific static library.
   if (isTargetWatchOSBased()) {
-    // We currently always need a static runtime library for WatchOS.
+    // We currently always need a static runtime library for watchOS.
     AddLinkRuntimeLib(Args, CmdArgs, "libclang_rt.watchos.a");
 
   } else if (isTargetTvOSBased()) {
@@ -609,7 +609,7 @@ void Darwin::AddDeploymentTarget(DerivedArgList &Args) const {
          MachOArchName == "arm64"))
         iOSTarget = iOSVersionMin;
 
-    // Do not allow conflicts with the WatchOS target.
+    // Do not allow conflicts with the watchOS target.
     if (!WatchOSTarget.empty() && (!iOSTarget.empty() || !TvOSTarget.empty())){
       getDriver().Diag(diag::err_drv_conflicting_deployment_targets)
         << "WATCHOS_DEPLOYMENT_TARGET"
@@ -1166,7 +1166,7 @@ void Darwin::addStartObjectFileArgs(const llvm::opt::ArgList &Args,
   if (Args.hasArg(options::OPT_dynamiclib)) {
     // Derived from darwin_dylib1 spec.
     if (isTargetWatchOSBased()) {
-      ; // WatchOS does not need dylib1.o.
+      ; // watchOS does not need dylib1.o.
     } else if (isTargetIOSSimulator()) {
       ; // iOS simulator does not need dylib1.o.
     } else if (isTargetIPhoneOS()) {
@@ -1183,7 +1183,7 @@ void Darwin::addStartObjectFileArgs(const llvm::opt::ArgList &Args,
       if (!Args.hasArg(options::OPT_static)) {
         // Derived from darwin_bundle1 spec.
         if (isTargetWatchOSBased()) {
-          ; // WatchOS does not need bundle1.o.
+          ; // watchOS does not need bundle1.o.
         } else if (isTargetIOSSimulator()) {
           ; // iOS simulator does not need bundle1.o.
         } else if (isTargetIPhoneOS()) {
@@ -1220,7 +1220,7 @@ void Darwin::addStartObjectFileArgs(const llvm::opt::ArgList &Args,
         } else {
           // Derived from darwin_crt1 spec.
           if (isTargetWatchOSBased()) {
-            ; // WatchOS does not need crt1.o.
+            ; // watchOS does not need crt1.o.
           } else if (isTargetIOSSimulator()) {
             ; // iOS simulator does not need crt1.o.
           } else if (isTargetIPhoneOS()) {

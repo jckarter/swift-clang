@@ -41,8 +41,8 @@ public:
     /// version of iOS.
     iOS,
 
-    /// 'watchos' is a variant of iOS for Apple's WatchOS. The version
-    /// is a release version of WatchOS.
+    /// 'watchos' is a variant of iOS for Apple's watchOS. The version
+    /// is a release version of watchOS.
     WatchOS,
 
     /// 'gcc' is the Objective-C runtime shipped with GCC, implementing a

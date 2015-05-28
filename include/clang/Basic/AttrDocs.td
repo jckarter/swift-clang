@@ -552,7 +552,7 @@ are:
   the ``-mtvos-version-min=*version*`` command-line argument.
 
 ``watchos``
-  AppleWatchOS operating system.  The minimum deployment target is specified by
+  Apple's watchOS operating system.  The minimum deployment target is specified by
   the ``-mwatchos-version-min=*version*`` command-line argument.
 
 A declaration can be used even when deploying back to a platform version prior
