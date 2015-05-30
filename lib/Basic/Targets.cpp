@@ -3464,6 +3464,10 @@ public:
     LongDoubleAlign = 128;
     SuitableAlign = 128;
     MaxVectorAlign = 256;
+    // The watchOS simulator uses the builtin bool type for Objective-C.
+    llvm::Triple T = llvm::Triple(Triple);
+    if (T.isWatchOS())
+      UseSignedCharForObjCBool = false;
     SizeType = UnsignedLong;
     IntPtrType = SignedLong;
     DescriptionString = "e-m:o-p:32:32-f64:32:64-f80:128-n8:16:32-S128";
