@@ -14,6 +14,7 @@
 // RUN: %clang -c %s -flto -fembed-bitcode 2>&1 -### | FileCheck %s -check-prefix=CHECK-LTO
 // CHECK-LTO: -cc1
 // CHECK-LTO: -emit-llvm-bc
+// CHECK-LTO-NOT: warning: argument unused during compilation: '-fembed-bitcode'
 // CHECK-LTO-NOT: -cc1
 // CHECK-LTO-NOT: -fembed-bitcode
 

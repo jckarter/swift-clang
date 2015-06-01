@@ -379,6 +379,10 @@ Compilation *Driver::BuildCompilation(ArrayRef<const char *> ArgList) {
       BitcodeEmbed = EmbedBitcode;
     else if (Args->hasArg(options::OPT_fembed_bitcode_marker))
       BitcodeEmbed = EmbedMarker;
+  } else {
+    // claim the bitcode option under LTO so no warning is issued.
+    Args->ClaimAllArgs(options::OPT_fembed_bitcode);
+    Args->ClaimAllArgs(options::OPT_fembed_bitcode_marker);
   }
 
   // Perform the default argument translations.
