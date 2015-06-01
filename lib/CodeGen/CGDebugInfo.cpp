@@ -2177,8 +2177,7 @@ llvm::DIType *CGDebugInfo::getTypeASTRefOrNull(Decl *TyDecl, llvm::DIFile *F) {
     ModuleRef = getOrCreateModuleRef(*Info);
 
   if (ModuleRef) {
-    SmallString<256> Buf;
-    StringRef UID;
+    SmallString<256> UID;
     unsigned Tag = 0;
     if (auto *CTSD = dyn_cast<ClassTemplateSpecializationDecl>(TyDecl))
       if (!CTSD->isExplicitInstantiationOrSpecialization())
@@ -2214,10 +2213,9 @@ llvm::DIType *CGDebugInfo::getTypeASTRefOrNull(Decl *TyDecl, llvm::DIFile *F) {
       llvm_unreachable("unhandled tag");
 
     // Handle non-C++ types.
-    if (UID.empty()) {
-      index::generateUSRForDecl(TyDecl, Buf);
-      UID = Buf.str();
-    }
+    if (UID.empty())
+      index::generateUSRForDecl(TyDecl, UID);
+
     assert(!UID.empty() && "could not determine unique type identifier");
     auto File = ModuleRef->getFile();
     return DBuilder.createExternalTypeRef(Tag, File, UID);
