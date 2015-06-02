@@ -252,6 +252,22 @@ TEST_F(FormatTestJS, ArrayLiterals) {
                "  new SomeThingAAAAAAAAAAAA(),\n"
                "  new SomeThingBBBBBBBBB()\n"
                "];");
+  verifyFormat("var someVariable = SomeFuntion([\n"
+               "  aaaaaaaaaaaaaaaaaaaaaaaaaaa,\n"
+               "  bbbbbbbbbbbbbbbbbbbbbbbbbbb,\n"
+               "  ccccccccccccccccccccccccccc\n"
+               "]);");
+  verifyFormat("var someVariable = SomeFuntion([\n"
+               "  [aaaaaaaaaaaaaaaaaaaaaa, bbbbbbbbbbbbbbbbbbbbbb],\n"
+               "]);",
+               getGoogleJSStyleWithColumns(51));
+  verifyFormat("var someVariable = SomeFuntion(aaaa, [\n"
+               "  aaaaaaaaaaaaaaaaaaaaaaaaaaa,\n"
+               "  bbbbbbbbbbbbbbbbbbbbbbbbbbb,\n"
+               "  ccccccccccccccccccccccccccc\n"
+               "]);");
+
+  verifyFormat("someFunction([], {a: a});");
 }
 
 TEST_F(FormatTestJS, FunctionLiterals) {
