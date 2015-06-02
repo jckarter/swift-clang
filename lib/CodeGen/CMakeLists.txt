@@ -16,6 +16,7 @@ set(LLVM_LINK_COMPONENTS
   ProfileData
   ScalarOpts
   Support
+  Target
   TransformUtils
   )
 
