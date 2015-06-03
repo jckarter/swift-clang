@@ -448,7 +448,8 @@ private:
              !Line.First->isOneOf(tok::kw_enum, tok::kw_case)) ||
             Contexts.back().ContextKind == tok::l_paren ||  // function params
             Contexts.back().ContextKind == tok::l_square || // array type
-            Line.MustBeDeclaration) { // method/property declaration
+            (Contexts.size() == 1 &&
+             Line.MustBeDeclaration)) { // method/property declaration
           Tok->Type = TT_JsTypeColon;
           break;
         }
@@ -1626,7 +1627,8 @@ unsigned TokenAnnotator::splitPenalty(const AnnotatedLine &Line,
     // Slightly prefer formatting local lambda definitions like functions.
     if (Right.is(TT_LambdaLSquare) && Left.is(tok::equal))
       return 50;
-    if (!Right.isOneOf(TT_ObjCMethodExpr, TT_LambdaLSquare))
+    if (!Right.isOneOf(TT_ObjCMethodExpr, TT_LambdaLSquare,
+                       TT_ArrayInitializerLSquare))
       return 500;
   }
 
