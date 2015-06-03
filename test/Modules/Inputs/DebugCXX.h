@@ -23,4 +23,11 @@ namespace DebugCXX {
   inline void fn() {
     Bar<long> invisible;
   }
+
+  // The follow snippet would not work with USRs because the forward
+  // declaration gets a different USR than the partial specialization.
+  template <typename...> class A;
+  template <typename T> class A<T> {};
+  typedef A<void> B;
+  void foo(B) {}
 }
