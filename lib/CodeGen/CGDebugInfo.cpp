@@ -594,18 +594,6 @@ llvm::DIType *CGDebugInfo::CreateType(const PointerType *Ty,
                                Ty->getPointeeType(), Unit);
 }
 
-/// \return whether a C++ mangling exists for the type defined by TD.
-static bool hasCXXMangling(const TagDecl *TD, llvm::DICompileUnit *TheCU) {
-  switch (TheCU->getSourceLanguage()) {
-  case llvm::dwarf::DW_LANG_C_plus_plus:
-    return true;
-  case llvm::dwarf::DW_LANG_ObjC_plus_plus:
-    return isa<CXXRecordDecl>(TD) || isa<EnumDecl>(TD);
-  default:
-    return false;
-  }
-}
-
 /// In C++ mode, types have linkage, so we can rely on the ODR and
 /// on their mangled names, if they're external.
 static SmallString<256> getUniqueTagTypeName(const TagType *Ty,
@@ -616,18 +604,18 @@ static SmallString<256> getUniqueTagTypeName(const TagType *Ty,
   const TagDecl *TD = Ty->getDecl();
 
   // In a clang module even non-C++ types are assigned a UID.
-  if (CGM.getCodeGenOpts().ClangModule) {
-    if (!hasCXXMangling(TD, TheCU)) {
-      index::generateUSRForDecl(Ty->getDecl(), FullName);
-      return FullName;
-    }
-  } else {
-    // FIXME: ODR should apply to ObjC++ exactly the same way it does to C++.
-    // For now, only apply ODR with C++.
-    if (!hasCXXMangling(TD, TheCU) || !TD->isExternallyVisible())
-      return FullName;
+  if (CGM.getCodeGenOpts().ClangModule &&
+      !((TheCU->getSourceLanguage() == llvm::dwarf::DW_LANG_C_plus_plus) &&
+        (isa<CXXRecordDecl>(TD) || isa<EnumDecl>(TD)))) {
+    index::generateUSRForDecl(Ty->getDecl(), FullName);
+    return FullName;
   }
   
+  // FIXME: ODR should apply to ObjC++ exactly the same way it does to C++.
+  // For now, only apply ODR with C++.
+  if (TheCU->getSourceLanguage() != llvm::dwarf::DW_LANG_C_plus_plus ||
+      !TD->isExternallyVisible())
+    return FullName;
   // Microsoft Mangler does not have support for mangleCXXRTTIName yet.
   if (CGM.getTarget().getCXXABI().isMicrosoft())
     return FullName;
@@ -2200,10 +2188,11 @@ llvm::DIType *CGDebugInfo::getTypeASTRefOrNull(Decl *TyDecl, llvm::DIFile *F) {
       if (!RD->getDefinition())
         return nullptr;
       Tag = getTagForRecord(RD);
-      UID = getUniqueTagTypeName(cast<TagType>(RD->getTypeForDecl()),
-                                 CGM, TheCU);
-      if (UID.empty())
-        return nullptr;
+      if (TheCU->getSourceLanguage() == llvm::dwarf::DW_LANG_C_plus_plus) {
+        UID = getUniqueTagTypeName(cast<TagType>(RD->getTypeForDecl()),
+                                   CGM, TheCU);
+        assert(!UID.empty() && "no C++ mangling");
+      }
     } else if (auto *RD = dyn_cast<RecordDecl>(TyDecl)) {
       if (!RD->getDefinition())
         return nullptr;
@@ -2212,8 +2201,9 @@ llvm::DIType *CGDebugInfo::getTypeASTRefOrNull(Decl *TyDecl, llvm::DIFile *F) {
       if (!ED->getDefinition())
         return nullptr;
       Tag = llvm::dwarf::DW_TAG_enumeration_type;
-      UID = getUniqueTagTypeName(cast<TagType>(ED->getTypeForDecl()),
-                                 CGM, TheCU);
+      if (TheCU->getSourceLanguage() == llvm::dwarf::DW_LANG_C_plus_plus)
+        UID = getUniqueTagTypeName(cast<TagType>(ED->getTypeForDecl()),
+                                   CGM, TheCU);
     } else if (auto *ID = dyn_cast<ObjCInterfaceDecl>(TyDecl)) {
       if (!ID->getDefinition())
         return nullptr;
