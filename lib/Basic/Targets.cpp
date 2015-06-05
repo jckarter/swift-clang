@@ -4256,9 +4256,7 @@ public:
   // FIXME: This should be based on Arch attributes, not CPU names.
   void getDefaultFeatures(llvm::StringMap<bool> &Features) const override {
     StringRef ArchName = getTriple().getArchName();
-    unsigned ArchKind =
-                llvm::ARMTargetParser::parseArch(
-                llvm::ARMTargetParser::getCanonicalArchName(ArchName));
+    unsigned ArchKind = llvm::ARMTargetParser::parseArch(ArchName);
     bool IsV8 = (ArchKind == llvm::ARM::AK_ARMV8A ||
                  ArchKind == llvm::ARM::AK_ARMV8_1A);
 
