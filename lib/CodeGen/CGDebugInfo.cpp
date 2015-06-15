@@ -612,7 +612,6 @@ static SmallString<256> getUniqueTagTypeName(const TagType *Ty,
                                              CodeGenModule &CGM,
                                              llvm::DICompileUnit *TheCU) {
   SmallString<256> FullName;
-
   const TagDecl *TD = Ty->getDecl();
 
   // In a clang module even non-C++ types are assigned a UID.
