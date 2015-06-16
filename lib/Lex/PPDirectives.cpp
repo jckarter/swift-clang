@@ -1612,7 +1612,7 @@ void Preprocessor::HandleIncludeDirective(SourceLocation HashLoc,
       FilenameLoc, LangOpts.MSVCCompat ? NormalizedPath.c_str() : Filename,
       isAngled, LookupFrom, LookupFromFile, CurDir,
       Callbacks ? &SearchPath : nullptr, Callbacks ? &RelativePath : nullptr,
-      HeaderInfo.getHeaderSearchOpts().ModuleMaps ? &SuggestedModule : nullptr);
+      &SuggestedModule);
 
   if (!File) {
     if (Callbacks) {
@@ -1629,9 +1629,7 @@ void Preprocessor::HandleIncludeDirective(SourceLocation HashLoc,
               FilenameLoc,
               LangOpts.MSVCCompat ? NormalizedPath.c_str() : Filename, isAngled,
               LookupFrom, LookupFromFile, CurDir, nullptr, nullptr,
-              HeaderInfo.getHeaderSearchOpts().ModuleMaps ? &SuggestedModule
-                                                          : nullptr,
-              /*SkipCache*/ true);
+              &SuggestedModule, /*SkipCache*/ true);
         }
       }
     }
@@ -1647,8 +1645,7 @@ void Preprocessor::HandleIncludeDirective(SourceLocation HashLoc,
             LookupFrom, LookupFromFile, CurDir,
             Callbacks ? &SearchPath : nullptr,
             Callbacks ? &RelativePath : nullptr,
-            HeaderInfo.getHeaderSearchOpts().ModuleMaps ? &SuggestedModule
-                                                        : nullptr);
+            &SuggestedModule);
         if (File) {
           SourceRange Range(FilenameTok.getLocation(), CharEnd);
           Diag(FilenameTok, diag::err_pp_file_not_found_not_fatal) << 
