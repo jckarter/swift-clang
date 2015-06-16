@@ -1,7 +1,7 @@
 // RUN: rm -rf %t
 
 // Modules:
-// RUN: %clang_cc1 -g -dwarf-ext-refs -fmodules -DMODULES -fmodules-cache-path=%t %s -I %S/Inputs -I %t -emit-llvm -o %t-mod.ll
+// RUN: %clang_cc1 -g -dwarf-ext-refs -fmodules -fimplicit-module-maps -DMODULES -fmodules-cache-path=%t %s -I %S/Inputs -I %t -emit-llvm -o %t-mod.ll
 // RUN: llvm-dwarfdump %t/*/DebugModule-*.pcm | FileCheck %s --check-prefix=CHECK-AST
 // RUN: cat %t-mod.ll |  FileCheck %s --check-prefix=CHECK-EXTREF
 

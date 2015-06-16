@@ -1,5 +1,5 @@
 // RUN: rm -rf %t
-// RUN: %clang_cc1 -g -dwarf-ext-refs -fmodules -DMODULES -fmodules-cache-path=%t %s -I %S/Inputs -I %t -emit-llvm -o - | FileCheck %s
+// RUN: %clang_cc1 -g -dwarf-ext-refs -fmodules -DMODULES -fimplicit-module-maps -fmodules-cache-path=%t %s -I %S/Inputs -I %t -emit-llvm -o - | FileCheck %s
   
 // CHECK: ![[CU:.*]] = distinct !DICompileUnit
 @import DebugModule;

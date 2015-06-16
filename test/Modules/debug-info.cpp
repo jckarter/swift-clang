@@ -1,7 +1,7 @@
 // RUN: rm -rf %t
 
 // Modules:
-// RUN: %clang_cc1 -x objective-c++ -std=c++11 -g -dwarf-ext-refs -fmodules -DMODULES -fmodules-cache-path=%t %s -I %S/Inputs -I %t -emit-llvm -o %t-mod.ll
+// RUN: %clang_cc1 -x objective-c++ -std=c++11 -g -dwarf-ext-refs -fmodules -fimplicit-module-maps -DMODULES -fmodules-cache-path=%t %s -I %S/Inputs -I %t -emit-llvm -o %t-mod.ll
 // RUN: llvm-dwarfdump --debug-dump=info %t/*/DebugCXX-*.pcm | FileCheck %s --check-prefix=CHECK-AST
 // RUN: llvm-dwarfdump --debug-dump=apple_types %t/*/DebugCXX-*.pcm | FileCheck %s --check-prefix=CHECK-PCM
 // RUN: cat %t-mod.ll |  FileCheck %s --check-prefix=CHECK-EXTREF-PCM
