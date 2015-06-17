@@ -448,6 +448,7 @@ protected:
   }
 
   bool isTargetMacOS() const {
+    assert(TargetInitialized && "Target not initialized!");
     return TargetPlatform == MacOS;
   }
 
