@@ -553,6 +553,7 @@ static bool allowedOpt(const char *Value) {
     .Cases("signed-integer-overflow", "unreachable", "vla-bound", true)
     .Cases("bool", "enum", "undefined-trap", true)
     .Case("address", true)
+    .Case("safe-stack", true)
     .Default(false);
 }
 
@@ -583,6 +584,8 @@ SanitizerMask parseArgValues(const Driver &D, const llvm::opt::Arg *A,
             << A->getOption().getName() << A->getValue(i);
         // We don't require -fsanitize-undefined-trap-on-error for ASan
         else if (std::string(A->getValue(i)) == "address")
+          continue;
+        else if (std::string(A->getValue(i)) == "safe-stack")
           continue;
         else if (!HasSanitizeUndefinedTrapOnError)
           D.Diag(clang::diag::err_drv_required_option)
