@@ -591,15 +591,19 @@ void Darwin::AddDeploymentTarget(DerivedArgList &Args) const {
       }
     }
 
-    // If no OSX or iOS target has been specified and we're compiling for armv7,
-    // go ahead as assume we're targeting iOS.
-    StringRef MachOArchName = getMachOArchName(Args);
+    // If no OSX or iOS target has been specified, try to guess platform
+    // from arch name.
     if (OSXTarget.empty() && iOSTarget.empty() && TvOSTarget.empty() &&
-        WatchOSTarget.empty() &&
-        (MachOArchName == "armv7" || MachOArchName == "armv7s" ||
-         MachOArchName == "armv7k" ||
-         MachOArchName == "arm64"))
+        WatchOSTarget.empty()) {
+      StringRef MachOArchName = getMachOArchName(Args);
+      if (MachOArchName == "armv7" || MachOArchName == "armv7s" ||
+          MachOArchName == "armv7k" ||
+          MachOArchName == "arm64")
         iOSTarget = iOSVersionMin;
+      else if (MachOArchName != "armv6m" && MachOArchName != "armv7m" &&
+               MachOArchName != "armv7em")
+        OSXTarget = MacosxVersionMin;
+    }
 
     // Do not allow conflicts with the watchOS target.
     if (!WatchOSTarget.empty() && (!iOSTarget.empty() || !TvOSTarget.empty())){
@@ -645,12 +649,6 @@ void Darwin::AddDeploymentTarget(DerivedArgList &Args) const {
       const Option O = Opts.getOption(options::OPT_mwatchos_version_min_EQ);
       WatchOSVersion = Args.MakeJoinedArg(nullptr, O, WatchOSTarget);
       Args.append(WatchOSVersion);
-    } else if (MachOArchName != "armv6m" && MachOArchName != "armv7m" &&
-               MachOArchName != "armv7em") {
-      // Otherwise, assume we are targeting OS X.
-      const Option O = Opts.getOption(options::OPT_mmacosx_version_min_EQ);
-      OSXVersion = Args.MakeJoinedArg(nullptr, O, MacosxVersionMin);
-      Args.append(OSXVersion);
     }
   }
 
