@@ -142,6 +142,10 @@ __attribute__((objc_root_class))
 - (nonnull instancetype)initWithBlah:(nonnull id)blah;
 - (nullable instancetype)returnMe;
 + (nullable instancetype)returnInstanceOfMe;
+
+- (nonnull instancetype __nullable)initWithBlah2:(nonnull id)blah; // expected-error {{nullability specifier '__nullable' conflicts with existing specifier '__nonnull'}}
+- (instancetype __nullable)returnMe2;
++ (__nonnull instancetype)returnInstanceOfMe2;
 @end
 
 void test_instancetype(__nonnull InitializableClass *ic, __nonnull id object) {
@@ -149,6 +153,9 @@ void test_instancetype(__nonnull InitializableClass *ic, __nonnull id object) {
   ip = [InitializableClass returnMe]; // expected-warning{{incompatible pointer types assigning to 'int *' from 'id __nullable'}}
   ip = [InitializableClass returnInstanceOfMe]; // expected-warning{{incompatible pointer types assigning to 'int *' from 'InitializableClass * __nullable'}}
   ip = [object returnMe]; // expected-warning{{incompatible pointer types assigning to 'int *' from 'id __nullable'}}
+
+  ip = [ic returnMe2]; // expected-warning{{incompatible pointer types assigning to 'int *' from 'InitializableClass * __nullable'}}
+  ip = [InitializableClass returnInstanceOfMe2]; // expected-warning{{incompatible pointer types assigning to 'int *' from 'InitializableClass * __nonnull'}}
 }
 
 // Check null_resettable getters/setters.
