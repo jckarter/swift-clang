@@ -2147,6 +2147,11 @@ public:
   ///
   /// \param D Directive that has at least one 'reduction' directives.
   void EmitOMPReductionClauseFinal(const OMPExecutableDirective &D);
+  /// \brief Emit initial code for linear variables. Creates private copies
+  /// and initializes them with the values according to OpenMP standard.
+  ///
+  /// \param D Directive (possibly) with the 'linear' clause.
+  void EmitOMPLinearClauseInit(const OMPLoopDirective &D);
 
   void EmitOMPParallelDirective(const OMPParallelDirective &S);
   void EmitOMPSimdDirective(const OMPSimdDirective &S);
@@ -2189,7 +2194,9 @@ public:
 private:
 
   /// Helpers for the OpenMP loop directives.
-  void EmitOMPLoopBody(const OMPLoopDirective &Directive);
+  void EmitOMPLoopBody(const OMPLoopDirective &D);
+  void EmitOMPSimdInit(const OMPLoopDirective &D);
+  void EmitOMPSimdFinal(const OMPLoopDirective &D);
   /// \brief Emit code for the worksharing loop-based directive.
   /// \return true, if this construct has any lastprivate clause, false -
   /// otherwise.
