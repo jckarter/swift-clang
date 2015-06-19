@@ -4213,7 +4213,7 @@ static void handleSwiftName(Sema &S, Decl *D, const AttributeList &Attr) {
   if (!S.checkStringLiteralArgumentAttr(Attr, 0, Name, &ArgLoc))
     return;
 
-  if (auto *Method = dyn_cast<ObjCMethodDecl>(D)) {
+  if (const auto *Method = dyn_cast<ObjCMethodDecl>(D)) {
     // swift_name only applies to factory methods for now.
     if (!Method->isClassMethod()) {
       S.Diag(Attr.getLoc(), diag::err_attr_swift_name_factory_methods_only)
@@ -4242,9 +4242,29 @@ static void handleSwiftName(Sema &S, Decl *D, const AttributeList &Attr) {
     }
 
     unsigned ObjCParamCount = Method->getSelector().getNumArgs();
-    if (SwiftParamCount != ObjCParamCount &&
-        !(IsSingleParamInit && ObjCParamCount == 0)) {
-      S.Diag(ArgLoc, diag::err_attr_swift_name_num_params)
+
+    bool ParamsOK;
+    if (SwiftParamCount == ObjCParamCount) {
+      ParamsOK = true;
+    } else if (SwiftParamCount > ObjCParamCount) {
+      ParamsOK = IsSingleParamInit && ObjCParamCount == 0;
+    } else {
+      // We have fewer Swift parameters than Objective-C parameters, but that
+      // might be because we've transformed some of them. Check for potential
+      // "out" parameters and err on the side of not warning.
+      unsigned MaybeOutParamCount =
+          std::count_if(Method->param_begin(), Method->sel_param_end(),
+                        [](const ParmVarDecl *Param) -> bool {
+        QualType ParamTy = Param->getType();
+        if (ParamTy->isReferenceType() || ParamTy->isPointerType())
+          return !ParamTy->getPointeeType().isConstQualified();
+        return false;
+      });
+      ParamsOK = (SwiftParamCount + MaybeOutParamCount >= ObjCParamCount);
+    }
+
+    if (!ParamsOK) {
+      S.Diag(ArgLoc, diag::warn_attr_swift_name_num_params)
           << (SwiftParamCount > ObjCParamCount) << Attr.getName()
           << ObjCParamCount << SwiftParamCount;
       return;
