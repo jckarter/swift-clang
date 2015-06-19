@@ -38,12 +38,12 @@ __attribute__((swift_name("SNFooType")))
 @protocol SNFoo
 @end
 
-__attribute__((swift_name("SNFooClass")))  // expected-error {{'swift_name' attribute only applies to enum constants, protocols, and factory methods}}
+__attribute__((swift_name("SNFooClass")))
 @interface SNFoo <SNFoo>
-- (instancetype)init __attribute__((swift_name("init"))); // expected-error {{'swift_name' attribute only applies to enum constants, protocols, and factory methods}}
-- (instancetype)initWithValue:(int)value __attribute__((swift_name("fooWithValue(_:)"))); // expected-error {{'swift_name' attribute only applies to enum constants, protocols, and factory methods}}
+- (instancetype)init __attribute__((swift_name("init"))); // expected-error {{only factory methods can have the 'swift_name' attribute}}
+- (instancetype)initWithValue:(int)value __attribute__((swift_name("fooWithValue(_:)"))); // expected-error {{only factory methods can have the 'swift_name' attribute}}
 
-+ (void)refresh __attribute__((swift_name("refresh()"))); // expected-error {{'swift_name' attribute only applies to enum constants, protocols, and factory methods}}
++ (void)refresh __attribute__((swift_name("refresh()"))); // expected-error {{only factory methods can have the 'swift_name' attribute}}
 
 + (instancetype)foo __attribute__((swift_name("foo()")));
 + (SNFoo *)fooWithValue:(int)value __attribute__((swift_name("foo(value:)")));
@@ -63,9 +63,11 @@ __attribute__((swift_name("SNFooClass")))  // expected-error {{'swift_name' attr
 + (instancetype)trailingColon:(int)value __attribute__((swift_name("foo(value)"))); // expected-error {{parameter of 'swift_name' attribute must be a Swift method name string}}
 + (instancetype)initialIgnore:(int)value __attribute__((swift_name("_(value:)"))); // expected-error {{parameter of 'swift_name' attribute must be a Swift method name string}}
 + (instancetype)middleOmitted:(int)value __attribute__((swift_name("foo(:)"))); // expected-error {{parameter of 'swift_name' attribute must be a Swift method name string}}
+
+@property(strong) id someProp __attribute__((swift_name("prop"))); // expected-error {{'swift_name' attribute cannot be applied to this declaration}}
 @end
 
-enum __attribute__((swift_name("MoreColors"))) MoreColors { // expected-error {{'swift_name' attribute only applies to enum constants, protocols, and factory methods}}
+enum __attribute__((swift_name("MoreColors"))) MoreColors { // expected-error {{'swift_name' attribute cannot be applied to this declaration}}
   Cyan,
   Magenta,
   Yellow __attribute__((swift_name("RoseGold"))),
