@@ -2029,6 +2029,10 @@ TEST_F(FormatTest, FormatsEnum) {
                "  a();\n"
                "  return 42;\n"
                "}");
+  verifyFormat("enum X Type::f() {\n"
+               "  a();\n"
+               "  return 42;\n"
+               "}");
   verifyFormat("enum ::X f() {\n"
                "  a();\n"
                "  return 42;\n"
@@ -4657,6 +4661,10 @@ TEST_F(FormatTest, AlwaysBreakBeforeMultilineStrings) {
                Break);
   verifyFormat("aaaaa(aaaaaa, aaaaaaa(\"aaaa\"\n"
                "                      \"bbbb\"));",
+               Break);
+  verifyFormat("string s = someFunction(\n"
+               "    \"abc\"\n"
+               "    \"abc\");",
                Break);
 
   // As we break before unary operators, breaking right after them is bad.
