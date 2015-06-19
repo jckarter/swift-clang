@@ -4216,7 +4216,7 @@ static void handleSwiftName(Sema &S, Decl *D, const AttributeList &Attr) {
   if (auto *Method = dyn_cast<ObjCMethodDecl>(D)) {
     // swift_name only applies to factory methods for now.
     if (!Method->isClassMethod()) {
-      S.Diag(Attr.getLoc(), diag::err_attr_swift_name_decl_kind)
+      S.Diag(Attr.getLoc(), diag::err_attr_swift_name_factory_methods_only)
           << Attr.getName();
       return;
     }
@@ -4229,7 +4229,7 @@ static void handleSwiftName(Sema &S, Decl *D, const AttributeList &Attr) {
       HasRelatedResultType = (RTC == Sema::RTC_Compatible);
     }
     if (!HasRelatedResultType) {
-      S.Diag(Attr.getLoc(), diag::err_attr_swift_name_decl_kind)
+      S.Diag(Attr.getLoc(), diag::err_attr_swift_name_factory_methods_only)
           << Attr.getName();
       return;
     }
@@ -4250,7 +4250,8 @@ static void handleSwiftName(Sema &S, Decl *D, const AttributeList &Attr) {
       return;
     }
 
-  } else if (isa<EnumConstantDecl>(D) || isa<ObjCProtocolDecl>(D)) {
+  } else if (isa<EnumConstantDecl>(D) || isa<ObjCProtocolDecl>(D) ||
+             isa<ObjCInterfaceDecl>(D)) {
     if (!isValidIdentifier(Name)) {
       S.Diag(ArgLoc, diag::err_attr_swift_name_identifier) << Attr.getName();
       return;
