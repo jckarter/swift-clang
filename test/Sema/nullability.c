@@ -1,4 +1,4 @@
-// RUN: %clang_cc1 -fsyntax-only -fblocks -Wno-nullability-declspec -Wnullable-to-nonnull-conversion %s -verify
+// RUN: %clang_cc1 -fsyntax-only -fblocks -Wnullable-to-nonnull-conversion -Wno-nullability-declspec %s -verify
 
 #if __has_feature(nullability)
 #else
@@ -10,12 +10,14 @@ typedef int * int_ptr;
 // Parse nullability type specifiers.
 typedef int * __nonnull nonnull_int_ptr; // expected-note{{'__nonnull' specified here}}
 typedef int * __nullable nullable_int_ptr;
+typedef int * __null_unspecified null_unspecified_int_ptr;
 
 // Redundant nullability type specifiers.
 typedef int * __nonnull __nonnull redundant_1; // expected-warning{{duplicate nullability specifier '__nonnull'}}
 
 // Conflicting nullability type specifiers.
 typedef int * __nonnull __nullable conflicting_1; // expected-error{{nullability specifier '__nonnull' conflicts with existing specifier '__nullable'}}
+typedef int * __null_unspecified __nonnull conflicting_2; // expected-error{{nullability specifier '__null_unspecified' conflicts with existing specifier '__nonnull'}}
 
 // Redundant nullability specifiers via a typedef are okay.
 typedef nonnull_int_ptr __nonnull redundant_okay_1;
@@ -72,6 +74,18 @@ typedef int * __nullable ambiguous_int_ptr;
 float f;
 int * __nonnull ip_1 = &f; // expected-warning{{incompatible pointer types initializing 'int * __nonnull' with an expression of type 'float *'}}
 
+// Check printing of nullability specifiers.
+void printing_nullability(void) {
+  int * __nonnull iptr;
+  float *fptr = iptr; // expected-warning{{incompatible pointer types initializing 'float *' with an expression of type 'int * __nonnull'}}
+
+  int * * __nonnull iptrptr;
+  float **fptrptr = iptrptr; // expected-warning{{incompatible pointer types initializing 'float **' with an expression of type 'int ** __nonnull'}}
+
+  int * __nullable * __nonnull iptrptr2;
+  float * *fptrptr2 = iptrptr2; // expected-warning{{incompatible pointer types initializing 'float **' with an expression of type 'int * __nullable * __nonnull'}}
+}
+
 // Check passing null to a __nonnull argument.
 void accepts_nonnull_1(__nonnull int *ptr);
 void (*accepts_nonnull_2)(__nonnull int *ptr);
@@ -90,18 +104,6 @@ __nonnull int *returns_int_ptr(int x) {
   }
 
   return (__nonnull int *)0;
-}
-
-// Check printing of nullability specifiers.
-void printing_nullability(void) {
-  int * __nonnull iptr;
-  float *fptr = iptr; // expected-warning{{incompatible pointer types initializing 'float *' with an expression of type 'int * __nonnull'}}
-
-  int * * __nonnull iptrptr;
-  float **fptrptr = iptrptr; // expected-warning{{incompatible pointer types initializing 'float **' with an expression of type 'int ** __nonnull'}}
-
-  int * __nullable * __nonnull iptrptr2;
-  float * *fptrptr2 = iptrptr2; // expected-warning{{incompatible pointer types initializing 'float **' with an expression of type 'int * __nullable * __nonnull'}}
 }
 
 // Check nullable-to-nonnull conversions.

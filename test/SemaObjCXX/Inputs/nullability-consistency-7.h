@@ -33,7 +33,7 @@ __attribute__((unavailable("just don't")))
 
 @interface C : A
 - (instancetype)init; // expected-warning{{pointer is missing a nullability type specifier}}
-- (nullable instancetype)initWithA:( A*)a __attribute__((objc_designated_initializer)); // expected-warning{{pointer is missing a nullability type specifier}}
+- (instancetype)initWithA:( A*)a __attribute__((objc_designated_initializer)); // expected-warning 2{{pointer is missing a nullability type specifier}}
 @end
 
 #endif

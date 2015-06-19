@@ -103,16 +103,7 @@ let CategoryName = "Nullability Issue" in {
 
 def warn_nullability_duplicate : Warning<
   "duplicate nullability specifier "
-  "'%select{%select{__|}1nonnull|%select{__|}1nullable|"
-  "%select{__|}1null_unspecified}0'">,
-  InGroup<Nullability>;
-
-def warn_mismatched_nullability_attr : Warning<
-  "nullability specifier "
-  "'%select{%select{__|}1nonnull|"
-  "%select{__|}1nullable|%select{__|}1null_unspecified}0' "
-  "conflicts with existing specifier '%select{%select{__|}3nonnull|"
-  "%select{__|}3nullable|%select{__|}3null_unspecified}2'">,
+  "'%select{__|}1%select{nonnull|nullable|null_unspecified}0'">,
   InGroup<Nullability>;
   
 def warn_conflicting_nullability_attr_overriding_ret_types : Warning<
@@ -133,13 +124,9 @@ def warn_conflicting_nullability_attr_overriding_param_types : Warning<
 
 def err_nullability_conflicting : Error<
   "nullability specifier "
-  "'%select{%select{__|}1nonnull|%select{__|}1nullable|"
-  "%select{__|}1null_unspecified}0' "
-  "conflicts with existing specifier '%select{%select{__|}3nonnull|"
-  "%select{__|}3nullable|%select{__|}3null_unspecified}2'">;
-
-def note_nullability_here : Note<
-  "'%select{__nonnull|__nullable|__null_unspecified}0' specified here">;
+  "'%select{__|}1%select{nonnull|nullable|null_unspecified}0' conflicts with "
+  "existing specifier '%select{__|}3%select{nonnull|nullable|"
+  "null_unspecified}2'">;
 
 }
 

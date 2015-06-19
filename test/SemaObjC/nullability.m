@@ -17,6 +17,10 @@ typedef __nonnull NSFoo * nonnull_NSFoo_ptr_2;
 // Conflicts from nullability moving into Objective-C pointer type.
 typedef __nonnull NSFoo * __nullable conflict_NSFoo_ptr_2; // expected-error{{'__nonnull' cannot be applied to non-pointer type 'NSFoo'}}
 
+void testBlocksPrinting(NSFoo * __nullable (^bp)(int)) {
+  int *ip = bp; // expected-error{{'NSFoo * __nullable (^)(int)'}}
+}
+
 // Check returning nil from a __nonnull-returning method.
 @implementation NSFoo
 - (void)methodTakingIntPtr:(__nonnull int *)ptr { }
@@ -49,9 +53,7 @@ __attribute__((objc_root_class))
 @property(nonnull,retain) NSFoo *property2;
 @property(nullable,assign) NSFoo ** invalidProperty2; // expected-error{{nullability keyword 'nullable' cannot be applied to multi-level pointer type 'NSFoo **'}}
 // expected-note@-1{{use nullability type specifier '__nullable' to affect the innermost pointer type of 'NSFoo **'}}
-@property(null_unspecified,assign) NSFoo ** invalidProperty3; // expected-error{{nullability keyword 'null_unspecified' cannot be applied to multi-level pointer type 'NSFoo **'}}
-@property(null_unspecified,assign) int invalidProperty4; // expected-error{{nullability specifier 'null_unspecified' cannot be applied to non-pointer type 'int'}}
-@property(null_unspecified,retain) NSFoo __nullable *conflictingProperty2; // expected-error{{nullability specifier '__nullable' cannot be applied to non-pointer type 'NSFoo'}}
+@property(null_unspecified,retain) NSFoo * __nullable conflictingProperty2; // expected-error{{nullability specifier '__nullable' conflicts with existing specifier '__null_unspecified'}}
 @property(retain,nonnull) NSFoo * __nonnull redundantProperty2; // expected-warning{{duplicate nullability specifier '__nonnull'}}
 @end
 
@@ -65,8 +67,8 @@ void test_accepts_nonnull_null_pointer_literal(NSFoo *foo, __nonnull NSBar *bar)
   int *ptr = bar.property1; // expected-warning{{incompatible pointer types initializing 'int *' with an expression of type 'NSFoo * __nonnull'}}
 }
 
-@implementation NSBar
 // Check returning nil from a nonnull-returning method.
+@implementation NSBar
 - (nonnull NSFoo *)methodWithFoo:(nonnull NSFoo *)foo {
   return 0; // no warning
 }
@@ -79,7 +81,8 @@ void test_accepts_nonnull_null_pointer_literal(NSFoo *foo, __nonnull NSBar *bar)
   return 0; // no warning
 }
 - (NSFoo *)redundantMethod1 {
-  return 0; // no warning
+  int *ip = 0;
+  return ip; // expected-warning{{result type 'NSFoo * __nonnull'}}
 }
 @end
 
@@ -93,16 +96,17 @@ __attribute__((objc_root_class))
 @implementation NSMerge
 - (NSFoo *)methodA:(NSFoo*)foo {
   int *ptr = foo; // expected-warning{{incompatible pointer types initializing 'int *' with an expression of type 'NSFoo * __nonnull'}}
-  return 0; // no warning
+  return ptr; // expected-warning{{result type 'NSFoo * __nonnull'}}
 }
 
-- (nullable NSFoo *)methodB:(nullable NSFoo*)foo { // expected-error{{nullability specifier 'nullable' conflicts with existing specifier 'nonnull'}} \
-  // expected-error{{nullability specifier 'nullable' conflicts with existing specifier 'nonnull'}}
+- (nullable NSFoo *)methodB:(null_unspecified NSFoo*)foo { // expected-error{{nullability specifier 'nullable' conflicts with existing specifier 'nonnull'}} \
+  // expected-error{{nullability specifier 'null_unspecified' conflicts with existing specifier 'nonnull'}}
   return 0;
 }
 
 - (nonnull NSFoo *)methodC:(nullable NSFoo*)foo {
-  return 0; // no warning
+  int *ip = 0;
+  return ip; // expected-warning{{result type 'NSFoo * __nonnull'}}
 }
 @end
 
@@ -111,22 +115,32 @@ __attribute__((objc_root_class))
 - (id)returnsNone;
 - (nonnull id)returnsNonNull;
 - (nullable id)returnsNullable;
+- (null_unspecified id)returnsNullUnspecified;
 @end
 
 void test_receiver_merge(NSMergeReceiver *none,
                          __nonnull NSMergeReceiver *nonnull,
-                         __nullable NSMergeReceiver *nullable) {
+                         __nullable NSMergeReceiver *nullable,
+                         __null_unspecified NSMergeReceiver *null_unspecified) {
   int *ptr;
 
   ptr = [nullable returnsNullable]; // expected-warning{{'id __nullable'}}
+  ptr = [nullable returnsNullUnspecified]; // expected-warning{{'id __nullable'}}
   ptr = [nullable returnsNonNull]; // expected-warning{{'id __nullable'}}
   ptr = [nullable returnsNone]; // expected-warning{{'id __nullable'}}
 
+  ptr = [null_unspecified returnsNullable]; // expected-warning{{'id __nullable'}}
+  ptr = [null_unspecified returnsNullUnspecified]; // expected-warning{{'id __null_unspecified'}}
+  ptr = [null_unspecified returnsNonNull]; // expected-warning{{'id __null_unspecified'}}
+  ptr = [null_unspecified returnsNone]; // expected-warning{{'id'}}
+
   ptr = [nonnull returnsNullable]; // expected-warning{{'id __nullable'}}
+  ptr = [nonnull returnsNullUnspecified]; // expected-warning{{'id __null_unspecified'}}
   ptr = [nonnull returnsNonNull]; // expected-warning{{'id __nonnull'}}
   ptr = [nonnull returnsNone]; // expected-warning{{'id'}}
 
   ptr = [none returnsNullable]; // expected-warning{{'id __nullable'}}
+  ptr = [none returnsNullUnspecified]; // expected-warning{{'id'}}
   ptr = [none returnsNonNull]; // expected-warning{{'id'}}
   ptr = [none returnsNone]; // expected-warning{{'id'}}
   
@@ -148,7 +162,7 @@ __attribute__((objc_root_class))
 + (__nonnull instancetype)returnInstanceOfMe2;
 @end
 
-void test_instancetype(__nonnull InitializableClass *ic, __nonnull id object) {
+void test_instancetype(InitializableClass * __nonnull ic, id __nonnull object) {
   int *ip = [ic returnMe]; // expected-warning{{incompatible pointer types initializing 'int *' with an expression of type 'InitializableClass * __nullable'}}
   ip = [InitializableClass returnMe]; // expected-warning{{incompatible pointer types assigning to 'int *' from 'id __nullable'}}
   ip = [InitializableClass returnInstanceOfMe]; // expected-warning{{incompatible pointer types assigning to 'int *' from 'InitializableClass * __nullable'}}
@@ -176,7 +190,8 @@ void test_null_resettable(NSResettable *r, int *ip) {
 
 @implementation NSResettable // expected-warning{{synthesized setter 'setResettable4:' for null_resettable property 'resettable4' does not handle nil}}
 - (NSResettable *)resettable1 {
-  return 0; // no warning
+  int *ip = 0;
+  return ip; // expected-warning{{result type 'NSResettable * __nonnull'}}
 }
 
 - (void)setResettable1:(NSResettable *)param {

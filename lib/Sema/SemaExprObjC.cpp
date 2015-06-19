@@ -1179,7 +1179,7 @@ static QualType getBaseMessageSendResultType(Sema &S,
   auto transferNullability = [&](QualType type) -> QualType {
     // If the method's result type has nullability, extract it.
     if (auto nullability = Method->getSendResultType(ReceiverType)
-                             ->getNullability(Context)){
+                             ->getNullability(Context)) {
       // Strip off any outer nullability sugar from the provided type.
       (void)AttributedType::stripOuterNullability(type);
 

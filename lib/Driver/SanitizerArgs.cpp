@@ -192,10 +192,6 @@ bool SanitizerArgs::needsUnwindTables() const {
   return Sanitizers.Mask & NeedsUnwindTables;
 }
 
-bool SanitizerArgs::needsLTO() const {
-  return Sanitizers.Mask & NeedsLTO;
-}
-
 void SanitizerArgs::clear() {
   Sanitizers.clear();
   RecoverableSanitizers.clear();
@@ -306,6 +302,12 @@ SanitizerArgs::SanitizerArgs(const ToolChain &TC,
       (RTTIMode == ToolChain::RM_DisabledImplicitly ||
        RTTIMode == ToolChain::RM_DisabledExplicitly)) {
     Kinds &= ~Vptr;
+  }
+
+  // Check that LTO is enabled if we need it.
+  if ((Kinds & NeedsLTO) && !D.IsUsingLTO(Args)) {
+    D.Diag(diag::err_drv_argument_only_allowed_with)
+        << lastArgumentForMask(D, Args, Kinds & NeedsLTO) << "-flto";
   }
 
   // Warn about incompatible groups of sanitizers.

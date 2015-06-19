@@ -13,4 +13,4 @@
 
 void h1(int *ptr) { } // don't warn
 
-void h2(__nonnull int *) { }
+void h2(int * __nonnull) { }

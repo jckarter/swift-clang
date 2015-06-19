@@ -2905,18 +2905,6 @@ bool AttributedType::isCallingConv() const {
   llvm_unreachable("invalid attr kind");
 }
 
-/// Strip off the top-level nullability annotation, if it's there.
-Optional<NullabilityKind> AttributedType::stripOuterNullability(QualType &T) {
-  if (auto attributed = dyn_cast<AttributedType>(T.getTypePtr())) {
-    if (auto nullability = attributed->getImmediateNullability()) {
-      T = attributed->getModifiedType();
-      return nullability;
-    }
-  }
-
-  return None;
-}
-
 CXXRecordDecl *InjectedClassNameType::getDecl() const {
   return cast<CXXRecordDecl>(getInterestingTagDecl(Decl));
 }
@@ -3461,6 +3449,17 @@ llvm::Optional<NullabilityKind> AttributedType::getImmediateNullability() const 
     return NullabilityKind::Nullable;
   if (getAttrKind() == AttributedType::attr_null_unspecified)
     return NullabilityKind::Unspecified;
+  return None;
+}
+
+Optional<NullabilityKind> AttributedType::stripOuterNullability(QualType &T) {
+  if (auto attributed = dyn_cast<AttributedType>(T.getTypePtr())) {
+    if (auto nullability = attributed->getImmediateNullability()) {
+      T = attributed->getModifiedType();
+      return nullability;
+    }
+  }
+
   return None;
 }
 

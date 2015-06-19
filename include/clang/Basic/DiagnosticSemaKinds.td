@@ -7709,10 +7709,12 @@ def warn_profile_data_unprofiled : Warning<
 
 let CategoryName = "Nullability Issue" in {
 
-def err_nullability_nonpointer : Error<
+def warn_mismatched_nullability_attr : Warning<
   "nullability specifier "
-  "'%select{%select{__|}1nonnull|%select{__|}1nullable|%select{__|}1"
-  "null_unspecified}0' cannot be applied to non-pointer type %2">;
+  "'%select{__|}1%select{nonnull|nullable|null_unspecified}0' "
+  "conflicts with existing specifier "
+  "'%select{__|}3%select{nonnull|nullable|null_unspecified}2'">,
+  InGroup<Nullability>;
 
 def warn_nullability_declspec : Warning<
   "nullability specifier "
@@ -7722,7 +7724,20 @@ def warn_nullability_declspec : Warning<
   "member function pointer}2?">,
   InGroup<NullabilityDeclSpec>,
   DefaultError;
-  
+
+def note_nullability_here : Note<
+  "'%select{__nonnull|__nullable|__null_unspecified}0' specified here">;
+
+def err_nullability_nonpointer : Error<
+  "nullability specifier "
+  "'%select{__|}1%select{nonnull|nullable|null_unspecified}0' cannot be applied "
+  "to non-pointer type %2">;
+
+def warn_nullability_lost : Warning<
+  "implicit conversion from nullable pointer %0 to non-nullable pointer "
+  "type %1">,
+  InGroup<NullableToNonNullConversion>, DefaultIgnore;
+
 def err_nullability_cs_multilevel : Error<
   "nullability keyword "
   "'%select{nonnull|nullable|null_unspecified}0' cannot be applied to "
@@ -7733,19 +7748,14 @@ def note_nullability_type_specifier : Note<
   "'%select{__nonnull|__nullable|__null_unspecified}0' to affect the innermost "
   "pointer type of %1">;
 
-def warn_nullability_missing : Warning<
-  "%select{pointer|block pointer|member pointer}0 is missing a nullability "
-  "type specifier (__nonnull or __nullable)">,
-  InGroup<NullabilityCompleteness>;
-
-def warn_nullability_lost : Warning<
-  "implicit conversion from nullable pointer %0 to non-nullable pointer "
-  "type %1">,
-  InGroup<NullableToNonNullConversion>, DefaultIgnore;
-
 def warn_null_resettable_setter : Warning<
   "synthesized setter %0 for null_resettable property %1 does not handle nil">,
   InGroup<Nullability>;
+
+def warn_nullability_missing : Warning<
+  "%select{pointer|block pointer|member pointer}0 is missing a nullability "
+  "type specifier (__nonnull, __nullable, or __null_unspecified)">,
+  InGroup<NullabilityCompleteness>;
 
 def err_type_arg_explicit_nullability : Error<
   "type argument %0 cannot explicitly specify nullability">;
@@ -7818,7 +7828,6 @@ def err_objc_type_args_specialized_class : Error<
 
 def err_objc_type_args_wrong_arity : Error<
   "too %select{many|few}0 type arguments for class %1 (have %2, expected %3)">;
-}
 
 def err_objc_type_arg_not_id_compatible : Error<
   "type argument %0 is neither an Objective-C object nor a block type">;
@@ -7829,5 +7838,6 @@ def err_objc_type_arg_does_not_match_bound : Error<
 def warn_objc_redundant_qualified_class_type : Warning<
   "parameterized class %0 already conforms to the protocols listed; did you "
   "forget a '*'?">, InGroup<ObjCProtocolQualifiers>;
+}
 
 } // end of sema component.

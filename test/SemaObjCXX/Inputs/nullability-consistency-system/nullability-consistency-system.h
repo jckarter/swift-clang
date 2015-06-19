@@ -2,7 +2,7 @@
 
 void system1(int *ptr);
 #if WARN_IN_SYSTEM_HEADERS
-// expected-warning@-2{{pointer is missing a nullability type specifier (__nonnull or __nullable)}}
+// expected-warning@-2{{pointer is missing a nullability type specifier}}
 #endif
 
 void system2(int * __nonnull);

@@ -1187,6 +1187,22 @@ void TypePrinter::printAttributedAfter(const AttributedType *T,
 
   printAfter(T->getModifiedType(), OS);
 
+  // Print nullability type specifiers that occur after
+  if (T->getAttrKind() == AttributedType::attr_nonnull ||
+      T->getAttrKind() == AttributedType::attr_nullable ||
+      T->getAttrKind() == AttributedType::attr_null_unspecified) {
+    if (T->getAttrKind() == AttributedType::attr_nonnull)
+      OS << " __nonnull";
+    else if (T->getAttrKind() == AttributedType::attr_nullable)
+      OS << " __nullable";
+    else if (T->getAttrKind() == AttributedType::attr_null_unspecified)
+      OS << " __null_unspecified";
+    else
+      llvm_unreachable("unhandled nullability");
+
+    return;
+  }
+
   OS << " __attribute__((";
   switch (T->getAttrKind()) {
   default: llvm_unreachable("This attribute should have been handled already");

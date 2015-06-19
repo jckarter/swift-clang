@@ -22,6 +22,7 @@
 #include "clang/AST/Expr.h"
 #include "clang/AST/TypeLoc.h"
 #include "clang/AST/TypeLocVisitor.h"
+#include "clang/Lex/Preprocessor.h"
 #include "clang/Basic/PartialDiagnostic.h"
 #include "clang/Basic/TargetInfo.h"
 #include "clang/Lex/Preprocessor.h"
@@ -2970,43 +2971,6 @@ namespace {
   };
 }
 
-static FileID getNullabilityCompletenessCheckFileID(Sema &S,
-                                                    SourceLocation loc) {
-  // If we're anywhere in a function, method, or closure context, don't perform
-  // completeness checks.
-  for (DeclContext *ctx = S.CurContext; ctx; ctx = ctx->getParent()) {
-    if (ctx->isFunctionOrMethod())
-      return FileID();
-
-    if (ctx->isFileContext())
-      break;
-  }
-
-  // We only care about the expansion location.
-  loc = S.SourceMgr.getExpansionLoc(loc);
-  FileID file = S.SourceMgr.getFileID(loc);
-  if (file.isInvalid())
-    return FileID();
-
-  // Retrieve file information.
-  bool invalid = false;
-  const SrcMgr::SLocEntry &sloc = S.SourceMgr.getSLocEntry(file, &invalid);
-  if (invalid || !sloc.isFile())
-    return FileID();
-
-  // We don't want to perform completeness checks on the main file or in
-  // system headers.
-  const SrcMgr::FileInfo &fileInfo = sloc.getFile();
-  if (fileInfo.getIncludeLoc().isInvalid())
-    return FileID();
-  if (fileInfo.getFileCharacteristic() != SrcMgr::C_User &&
-      S.Diags.getSuppressSystemWarnings()) {
-    return FileID();
-  }
-
-  return file;
-}
-
 IdentifierInfo *Sema::getNullabilityKeyword(NullabilityKind nullability) {
   switch (nullability) {
   case NullabilityKind::NonNull:
@@ -3048,37 +3012,6 @@ static bool hasNullabilityAttr(const AttributeList *attrs) {
   return false;
 }
 
-/// Check for consistent use of nullability.
-static void checkNullabilityConsistency(TypeProcessingState &state,
-                                        SimplePointerKind pointerKind,
-                                        SourceLocation pointerLoc) {
-  Sema &S = state.getSema();
-
-  // Determine which file we're performing consistency checking for.
-  FileID file = getNullabilityCompletenessCheckFileID(S, pointerLoc);
-  if (file.isInvalid())
-    return;
-
-  // If we haven't seen any type nullability in this file, we won't warn now
-  // about anything.
-  FileNullability &fileNullability = S.NullabilityMap[file];
-  if (!fileNullability.SawTypeNullability) {
-    // If this is the first pointer declarator in the file, record it.
-    if (fileNullability.PointerLoc.isInvalid() &&
-        !S.Context.getDiagnostics().isIgnored(diag::warn_nullability_missing,
-                                              pointerLoc)) {
-      fileNullability.PointerLoc = pointerLoc;
-      fileNullability.PointerKind = static_cast<unsigned>(pointerKind);
-    }
-
-    return;
-  }
-
-  // Complain about missing nullability.
-  S.Diag(pointerLoc, diag::warn_nullability_missing)
-    << static_cast<unsigned>(pointerKind);
-}
-
 namespace {
   /// Describes the kind of a pointer a declarator describes.
   enum class PointerDeclaratorKind {
@@ -3095,7 +3028,6 @@ namespace {
     // NSError**
     NSErrorPointerPointer,
   };
-
 }
 
 /// Classify the given declarator, whose type-specified is \c type, based on
@@ -3237,6 +3169,74 @@ static PointerDeclaratorKind classifyPointerDeclarator(Sema &S,
   default:
     return PointerDeclaratorKind::MultiLevelPointer;
   }
+}
+
+static FileID getNullabilityCompletenessCheckFileID(Sema &S,
+                                                    SourceLocation loc) {
+  // If we're anywhere in a function, method, or closure context, don't perform
+  // completeness checks.
+  for (DeclContext *ctx = S.CurContext; ctx; ctx = ctx->getParent()) {
+    if (ctx->isFunctionOrMethod())
+      return FileID();
+
+    if (ctx->isFileContext())
+      break;
+  }
+
+  // We only care about the expansion location.
+  loc = S.SourceMgr.getExpansionLoc(loc);
+  FileID file = S.SourceMgr.getFileID(loc);
+  if (file.isInvalid())
+    return FileID();
+
+  // Retrieve file information.
+  bool invalid = false;
+  const SrcMgr::SLocEntry &sloc = S.SourceMgr.getSLocEntry(file, &invalid);
+  if (invalid || !sloc.isFile())
+    return FileID();
+
+  // We don't want to perform completeness checks on the main file or in
+  // system headers.
+  const SrcMgr::FileInfo &fileInfo = sloc.getFile();
+  if (fileInfo.getIncludeLoc().isInvalid())
+    return FileID();
+
+  if (fileInfo.getFileCharacteristic() != SrcMgr::C_User &&
+      S.Diags.getSuppressSystemWarnings())
+    return FileID();
+
+  return file;
+}
+
+/// Check for consistent use of nullability.
+static void checkNullabilityConsistency(TypeProcessingState &state,
+                                        SimplePointerKind pointerKind,
+                                        SourceLocation pointerLoc) {
+  Sema &S = state.getSema();
+
+  // Determine which file we're performing consistency checking for.
+  FileID file = getNullabilityCompletenessCheckFileID(S, pointerLoc);
+  if (file.isInvalid())
+    return;
+
+  // If we haven't seen any type nullability in this file, we won't warn now
+  // about anything.
+  FileNullability &fileNullability = S.NullabilityMap[file];
+  if (!fileNullability.SawTypeNullability) {
+    // If this is the first pointer declarator in the file, record it.
+    if (fileNullability.PointerLoc.isInvalid() &&
+        !S.Context.getDiagnostics().isIgnored(diag::warn_nullability_missing,
+                                              pointerLoc)) {
+      fileNullability.PointerLoc = pointerLoc;
+      fileNullability.PointerKind = static_cast<unsigned>(pointerKind);
+    }
+
+    return;
+  }
+
+  // Complain about missing nullability.
+  S.Diag(pointerLoc, diag::warn_nullability_missing)
+    << static_cast<unsigned>(pointerKind);
 }
 
 static TypeSourceInfo *GetFullTypeForDeclarator(TypeProcessingState &state,
@@ -3528,11 +3528,12 @@ static TypeSourceInfo *GetFullTypeForDeclarator(TypeProcessingState &state,
     case CAMN_Yes:
       checkNullabilityConsistency(state, pointerKind, pointerLoc);
     }
+
     return nullptr;
   };
 
   // If the type itself could have nullability but does not, infer pointer
-  // nullability.
+  // nullability and perform consistency checking.
   if (T->canHaveNullability() && S.ActiveTemplateInstantiations.empty() &&
       !T->getNullability(S.Context)) {
     SimplePointerKind pointerKind = SimplePointerKind::Pointer;

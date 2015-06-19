@@ -1344,8 +1344,8 @@ static void AddTypeSpecifierResults(const LangOptions &LangOpts,
 
   // Nullability
   Results.AddResult(Result("__nonnull", CCP_Type));
-  Results.AddResult(Result("__nullable", CCP_Type));
   Results.AddResult(Result("__null_unspecified", CCP_Type));
+  Results.AddResult(Result("__nullable", CCP_Type));
 }
 
 static void AddStorageSpecifiers(Sema::ParserCompletionContext CCC,
@@ -2142,7 +2142,7 @@ static std::string formatObjCParamQualifiers(unsigned ObjCQuals,
         break;
 
       case NullabilityKind::Unspecified:
-          Result += "null_unspecified ";
+        Result += "null_unspecified ";
         break;
       }
     }
@@ -4926,9 +4926,10 @@ void Sema::CodeCompleteObjCPropertyFlags(Scope *S, ObjCDeclSpec &ODS) {
     Getter.AddPlaceholderChunk("method");
     Results.AddResult(CodeCompletionResult(Getter.TakeString()));
   }
-  if (!ObjCPropertyFlagConflicts(Attributes, ObjCDeclSpec::DQ_PR_nullability)){
+  if (!ObjCPropertyFlagConflicts(Attributes, ObjCDeclSpec::DQ_PR_nullability)) {
     Results.AddResult(CodeCompletionResult("nonnull"));
     Results.AddResult(CodeCompletionResult("nullable"));
+    Results.AddResult(CodeCompletionResult("null_unspecified"));
     Results.AddResult(CodeCompletionResult("null_resettable"));
   }
   Results.ExitScope();
@@ -5183,6 +5184,7 @@ void Sema::CodeCompleteObjCPassingType(Scope *S, ObjCDeclSpec &DS,
   if ((DS.getObjCDeclQualifier() & ObjCDeclSpec::DQ_CSNullability) == 0) {
     Results.AddResult("nonnull");
     Results.AddResult("nullable");
+    Results.AddResult("null_unspecified");
   }
   
   // If we're completing the return type of an Objective-C method and the 
