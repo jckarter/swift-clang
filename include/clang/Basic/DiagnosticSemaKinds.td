@@ -2803,8 +2803,9 @@ def err_attr_swift_name_identifier : Error<
   "parameter of %0 attribute must be an ASCII identifier string">;
 def err_attr_swift_name_method : Error<
   "parameter of %0 attribute must be a Swift method name string">;
-def err_attr_swift_name_num_params : Error<
-  "too %select{few|many}0 parameters in %1 attribute (expected %2; got %3)">;
+def warn_attr_swift_name_num_params : Warning<
+  "too %select{few|many}0 parameters in %1 attribute (expected %2; got %3)">,
+  InGroup<DiagGroup<"swift-name-attribute">>;
 
 // Function Parameter Semantic Analysis.
 def err_param_with_void_type : Error<"argument may not have 'void' type">;
