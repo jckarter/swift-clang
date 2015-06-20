@@ -2988,6 +2988,7 @@ IdentifierInfo *Sema::getNullabilityKeyword(NullabilityKind nullability) {
       Ident___null_unspecified = PP.getIdentifierInfo("__null_unspecified");
     return Ident___null_unspecified;
   }
+  llvm_unreachable("Unknown nullability kind.");
 }
 
 /// Retrieve the identifier "NSError".
@@ -5467,7 +5468,7 @@ bool Sema::checkNullabilityTypeSpecifier(QualType &type,
         // annotation, complain about it.
         if (fileNullability.PointerLoc.isValid()) {
           Diag(fileNullability.PointerLoc, diag::warn_nullability_missing)
-            << fileNullability.PointerKind;
+            << static_cast<unsigned>(fileNullability.PointerKind);
         }
 
         fileNullability.SawTypeNullability = true;

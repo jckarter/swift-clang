@@ -660,4 +660,5 @@ StringRef clang::getNullabilitySpelling(NullabilityKind kind) {
   case NullabilityKind::Unspecified:
     return "__null_unspecified";
   }
+  llvm_unreachable("Unknown nullability kind.");
 }

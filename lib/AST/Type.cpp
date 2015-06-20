@@ -3440,6 +3440,7 @@ bool Type::canHaveNullability() const {
   case Type::Atomic:
     return false;
   }
+  llvm_unreachable("bad type kind!");
 }
 
 llvm::Optional<NullabilityKind> AttributedType::getImmediateNullability() const {
