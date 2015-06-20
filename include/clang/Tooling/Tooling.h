@@ -180,6 +180,7 @@ bool runToolOnCodeWithArgs(
 /// \param FileName The file name which 'Code' will be mapped as.
 /// \param PCHContainerOps The PCHContainerOperations for loading and creating
 /// clang modules.
+///
 /// \return The resulting AST or null if an error occurred.
 std::unique_ptr<ASTUnit>
 buildASTFromCode(const Twine &Code, const Twine &FileName = "input.cc",
@@ -193,6 +194,7 @@ buildASTFromCode(const Twine &Code, const Twine &FileName = "input.cc",
 /// \param FileName The file name which 'Code' will be mapped as.
 /// \param PCHContainerOps The PCHContainerOperations for loading and creating
 /// clang modules.
+///
 /// \return The resulting AST or null if an error occurred.
 std::unique_ptr<ASTUnit> buildASTFromCodeWithArgs(
     const Twine &Code, const std::vector<std::string> &Args,
@@ -202,7 +204,7 @@ std::unique_ptr<ASTUnit> buildASTFromCodeWithArgs(
 
 /// \brief Utility to run a FrontendAction in a single clang invocation.
 class ToolInvocation {
- public:
+public:
   /// \brief Create a tool invocation.
   ///
   /// \param CommandLine The command line arguments to clang. Note that clang
