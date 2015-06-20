@@ -7,6 +7,12 @@ namespace DebugCXX {
   enum Enum {
     Enumerator
   };
+  enum {
+    e1 = '1'
+  };
+  enum {
+    e2 = '2'
+  };
   template<typename T> struct traits {};
   template<typename T,
            typename Traits = traits<T>

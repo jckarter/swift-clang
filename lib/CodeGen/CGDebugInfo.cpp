@@ -2210,9 +2210,12 @@ llvm::DIType *CGDebugInfo::getTypeASTRefOrNull(Decl *TyDecl, llvm::DIFile *F) {
         return nullptr;
       Tag = llvm::dwarf::DW_TAG_enumeration_type;
       if ((TheCU->getSourceLanguage() == llvm::dwarf::DW_LANG_C_plus_plus) ||
-          (TheCU->getSourceLanguage() == llvm::dwarf::DW_LANG_ObjC_plus_plus))
+          (TheCU->getSourceLanguage() == llvm::dwarf::DW_LANG_ObjC_plus_plus)) {
         UID = getUniqueTagTypeName(cast<TagType>(ED->getTypeForDecl()),
                                    CGM, TheCU);
+        if (UID.empty())
+          return nullptr;
+      }
     } else if (auto *ID = dyn_cast<ObjCInterfaceDecl>(TyDecl)) {
       if (!ID->getDefinition())
         return nullptr;
