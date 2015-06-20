@@ -11,6 +11,7 @@
 #define LLVM_CLANG_FRONTEND_COMPILERINSTANCE_H_
 
 #include "clang/AST/ASTConsumer.h"
+#include "clang/Frontend/PCHContainerOperations.h"
 #include "clang/Basic/Diagnostic.h"
 #include "clang/Basic/SourceManager.h"
 #include "clang/Frontend/CompilerInvocation.h"
@@ -43,7 +44,6 @@ class FileEntry;
 class FileManager;
 class FrontendAction;
 class Module;
-class ModuleProvider;
 class Preprocessor;
 class Sema;
 class SourceManager;
@@ -110,6 +110,9 @@ class CompilerInstance : public ModuleLoader {
   /// \brief The module dependency collector for crashdumps
   std::shared_ptr<ModuleDependencyCollector> ModuleDepCollector;
 
+  /// \brief The module provider.
+  std::shared_ptr<PCHContainerOperations> ThePCHContainerOperations;
+
   /// \brief The dependency file generator.
   std::unique_ptr<DependencyFileGenerator> TheDependencyFileGenerator;
 
@@ -173,8 +176,10 @@ class CompilerInstance : public ModuleLoader {
   CompilerInstance(const CompilerInstance &) = delete;
   void operator=(const CompilerInstance &) = delete;
 public:
-  explicit CompilerInstance(SharedModuleProvider MP,
-                            bool BuildingModule = false);
+  explicit CompilerInstance(
+      std::shared_ptr<PCHContainerOperations> PCHContainerOps =
+          std::make_shared<RawPCHContainerOperations>(),
+      bool BuildingModule = false);
   ~CompilerInstance() override;
 
   /// @name High-Level Operations
@@ -494,6 +499,10 @@ public:
   void setModuleDepCollector(
       std::shared_ptr<ModuleDependencyCollector> Collector);
 
+  std::shared_ptr<PCHContainerOperations> getPCHContainerOperations() const {
+    return ThePCHContainerOperations;
+  }
+
   /// }
   /// @name Code Completion
   /// {
@@ -607,8 +616,9 @@ public:
   static IntrusiveRefCntPtr<ASTReader> createPCHExternalASTSource(
       StringRef Path, const std::string &Sysroot, bool DisablePCHValidation,
       bool AllowPCHWithCompilerErrors, Preprocessor &PP, ASTContext &Context,
-      const ModuleProvider &MP, void *DeserializationListener,
-      bool OwnDeserializationListener, bool Preamble, bool UseGlobalModuleIndex);
+      const PCHContainerOperations &PCHContainerOps,
+      void *DeserializationListener, bool OwnDeserializationListener,
+      bool Preamble, bool UseGlobalModuleIndex);
 
   /// Create a code completion consumer using the invocation; note that this
   /// will cause the source manager to truncate the input source file at the

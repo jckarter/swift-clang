@@ -12,7 +12,6 @@
 #include "clang/AST/RecursiveASTVisitor.h"
 #include "clang/Basic/TargetInfo.h"
 #include "clang/CodeGen/ModuleBuilder.h"
-#include "clang/CodeGen/LLVMModuleProvider.h"
 #include "clang/Frontend/CompilerInstance.h"
 #include "clang/Lex/Preprocessor.h"
 #include "clang/Parse/ParseAST.h"
@@ -40,8 +39,7 @@ const char TestProgram[] =
     "EmitCXXGlobalInitFunc test;    ";
 
 TEST(BufferSourceTest, EmitCXXGlobalInitFunc) {
-    CompilerInstance
-        compiler(SharedModuleProvider::Create<LLVMModuleProvider>());
+    CompilerInstance compiler;
 
     compiler.createDiagnostics();
     compiler.getLangOpts().CPlusPlus = 1;

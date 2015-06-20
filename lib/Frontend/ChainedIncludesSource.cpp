@@ -81,9 +81,8 @@ createASTReader(CompilerInstance &CI, StringRef pchFile,
   Preprocessor &PP = CI.getPreprocessor();
   std::unique_ptr<ASTReader> Reader;
   Reader.reset(new ASTReader(PP, CI.getASTContext(),
-                             CI.getModuleProvider(),
-                             /*isysroot=*/"",
-                             /*DisableValidation=*/true));
+                             *CI.getPCHContainerOperations(),
+                             /*isysroot=*/"", /*DisableValidation=*/true));
   for (unsigned ti = 0; ti < bufNames.size(); ++ti) {
     StringRef sr(bufNames[ti]);
     Reader->addInMemoryBuffer(sr, std::move(MemBufs[ti]));
@@ -148,7 +147,7 @@ IntrusiveRefCntPtr<ExternalSemaSource> clang::createChainedIncludesSource(
         new DiagnosticsEngine(DiagID, &CI.getDiagnosticOpts(), DiagClient));
 
     std::unique_ptr<CompilerInstance> Clang(
-        new CompilerInstance(CI.getSharedModuleProvider()));
+        new CompilerInstance(CI.getPCHContainerOperations()));
     Clang->setInvocation(CInvok.release());
     Clang->setDiagnostics(Diags.get());
     Clang->setTarget(TargetInfo::CreateTargetInfo(
@@ -160,10 +159,9 @@ IntrusiveRefCntPtr<ExternalSemaSource> clang::createChainedIncludesSource(
                                                  &Clang->getPreprocessor());
     Clang->createASTContext();
 
-    uint64_t Signature;
-    auto Buffer = std::make_shared<ModuleBuffer>();
-    auto consumer = llvm::make_unique<PCHGenerator>(Clang->getPreprocessor(),
-                           "-", nullptr, /*isysroot=*/"", Buffer, Signature);
+    auto Buffer = std::make_shared<PCHBuffer>();
+    auto consumer = llvm::make_unique<PCHGenerator>(
+        Clang->getPreprocessor(), "-", nullptr, /*isysroot=*/"", Buffer);
     Clang->getASTContext().setASTMutationListener(
                                             consumer->GetASTMutationListener());
     Clang->setASTConsumer(std::move(consumer));
@@ -202,8 +200,8 @@ IntrusiveRefCntPtr<ExternalSemaSource> clang::createChainedIncludesSource(
     Clang->getDiagnosticClient().EndSourceFile();
     assert(Buffer->IsComplete && "serialization did not complete");
     auto &serialAST = Buffer->Data;
-    SerialBufs.push_back(llvm::MemoryBuffer::
-        getMemBufferCopy(StringRef(serialAST.data(), serialAST.size())));
+    SerialBufs.push_back(llvm::MemoryBuffer::getMemBufferCopy(
+        StringRef(serialAST.data(), serialAST.size())));
     serialAST.clear();
     source->CIs.push_back(Clang.release());
   }

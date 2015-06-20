@@ -7,8 +7,8 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "clang/Frontend/PCHContainerOperations.h"
 #include "clang/ARCMigrate/ARCMT.h"
-#include "clang/CodeGen/LLVMModuleProvider.h"
 #include "clang/Frontend/ASTUnit.h"
 #include "clang/Frontend/TextDiagnosticPrinter.h"
 #include "clang/Frontend/Utils.h"
@@ -132,7 +132,7 @@ static bool checkForMigration(StringRef resourcesPath,
     return false;
 
   arcmt::checkForManualIssues(CI, CI.getFrontendOpts().Inputs[0],
-                              SharedModuleProvider::Create<LLVMModuleProvider>(),
+                              std::make_shared<RawPCHContainerOperations>(),
                               Diags->getClient());
   return Diags->getClient()->getNumErrors() > 0;
 }
@@ -172,7 +172,7 @@ static bool performTransformations(StringRef resourcesPath,
     return false;
 
   MigrationProcess migration(
-      origCI, SharedModuleProvider::Create<LLVMModuleProvider>(), DiagClient);
+      origCI, std::make_shared<RawPCHContainerOperations>(), DiagClient);
 
   std::vector<TransformFn>
     transforms = arcmt::getAllTransformations(origCI.getLangOpts()->getGC(),

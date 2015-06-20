@@ -9,7 +9,6 @@
 
 #include "clang/Frontend/FrontendActions.h"
 #include "clang/AST/ASTConsumer.h"
-#include "clang/AST/ModuleProvider.h"
 #include "clang/Basic/FileManager.h"
 #include "clang/Basic/TargetInfo.h"
 #include "clang/Frontend/ASTConsumers.h"
@@ -90,31 +89,20 @@ GeneratePCHAction::CreateASTConsumer(CompilerInstance &CI, StringRef InFile) {
   if (!CI.getFrontendOpts().RelocatablePCH)
     Sysroot.clear();
 
-  auto Buffer = std::make_shared<ModuleBuffer>();
+  auto Buffer = std::make_shared<PCHBuffer>();
   std::vector<std::unique_ptr<ASTConsumer>> Consumers;
-  Consumers.push_back(llvm::make_unique<PCHGenerator>(CI.getPreprocessor(),
-                                                      OutputFile, nullptr,
-                                                      Sysroot, Buffer));
-
-  CodeGenOptions CGOpts;
-  // The debug info emitted by ModuleContainerGenerator is not affected by the
-  // optimization level.
-  CGOpts.CodeModel = CI.getCodeGenOpts().CodeModel;
-  CGOpts.ThreadModel = CI.getCodeGenOpts().ThreadModel;
-  CGOpts.OptimizationLevel = 0;
-  CGOpts.ClangModule = true;
-  CGOpts.DebugTypeExtRefs = true;
-  CGOpts.setDebugInfo(CodeGenOptions::FullDebugInfo);
-  CGOpts.SplitDwarfFile = OutputFile;
-  Consumers.push_back(CI.getModuleProvider().CreateModuleContainerGenerator(
-      CI.getDiagnostics(), CGOpts.MainFileName, CI.getHeaderSearchOpts(),
-      CI.getPreprocessorOpts(), CGOpts, CI.getTargetOpts(), CI.getLangOpts(),
-      OS, Buffer));
+  Consumers.push_back(llvm::make_unique<PCHGenerator>(
+      CI.getPreprocessor(), OutputFile, nullptr, Sysroot, Buffer));
+  Consumers.push_back(
+      CI.getPCHContainerOperations()->CreatePCHContainerGenerator(
+          CI.getDiagnostics(), CI.getHeaderSearchOpts(),
+          CI.getPreprocessorOpts(), CI.getTargetOpts(), CI.getLangOpts(),
+          InFile, OutputFile, OS, Buffer));
 
   return llvm::make_unique<MultiplexConsumer>(std::move(Consumers));
 }
 
-llvm::raw_pwrite_stream *GeneratePCHAction::ComputeASTConsumerArguments(
+raw_pwrite_stream *GeneratePCHAction::ComputeASTConsumerArguments(
     CompilerInstance &CI, StringRef InFile, std::string &Sysroot,
     std::string &OutputFile) {
   Sysroot = CI.getHeaderSearchOpts().Sysroot;
@@ -126,7 +114,7 @@ llvm::raw_pwrite_stream *GeneratePCHAction::ComputeASTConsumerArguments(
   // We use createOutputFile here because this is exposed via libclang, and we
   // must disable the RemoveFileOnSignal behavior.
   // We use a temporary to avoid race conditions.
-  llvm::raw_pwrite_stream *OS =
+  raw_pwrite_stream *OS =
       CI.createOutputFile(CI.getFrontendOpts().OutputFile, /*Binary=*/true,
                           /*RemoveFileOnSignal=*/false, InFile,
                           /*Extension=*/"", /*useTemporary=*/true);
@@ -147,27 +135,15 @@ GenerateModuleAction::CreateASTConsumer(CompilerInstance &CI,
   if (!OS)
     return nullptr;
 
-  auto Buffer = std::make_shared<ModuleBuffer>();
+  auto Buffer = std::make_shared<PCHBuffer>();
   std::vector<std::unique_ptr<ASTConsumer>> Consumers;
-  Consumers.push_back(llvm::make_unique<PCHGenerator>(CI.getPreprocessor(),
-                                                      OutputFile, Module,
-                                                      Sysroot, Buffer));
-
-  CodeGenOptions CGOpts;
-  // The debug info emitted by ModuleContainerGenerator is not affected by the
-  // optimization level.
-  CGOpts.CodeModel = CI.getCodeGenOpts().CodeModel;
-  CGOpts.ThreadModel = CI.getCodeGenOpts().ThreadModel;
-  CGOpts.OptimizationLevel = 0;
-  CGOpts.ClangModule = true;
-  CGOpts.DebugTypeExtRefs = true;
-  CGOpts.setDebugInfo(CodeGenOptions::FullDebugInfo);
-  CGOpts.MainFileName = Module->getFullModuleName();
-  CGOpts.SplitDwarfFile = OutputFile;
-  Consumers.push_back(CI.getModuleProvider().CreateModuleContainerGenerator(
-      CI.getDiagnostics(), CGOpts.MainFileName,
-      CI.getHeaderSearchOpts(), CI.getPreprocessorOpts(), CGOpts,
-      CI.getTargetOpts(), CI.getLangOpts(), OS, Buffer));
+  Consumers.push_back(llvm::make_unique<PCHGenerator>(
+      CI.getPreprocessor(), OutputFile, Module, Sysroot, Buffer));
+  Consumers.push_back(
+      CI.getPCHContainerOperations()->CreatePCHContainerGenerator(
+          CI.getDiagnostics(), CI.getHeaderSearchOpts(),
+          CI.getPreprocessorOpts(), CI.getTargetOpts(), CI.getLangOpts(),
+          InFile, OutputFile, OS, Buffer));
   return llvm::make_unique<MultiplexConsumer>(std::move(Consumers));
 }
 
@@ -439,14 +415,13 @@ void VerifyPCHAction::ExecuteAction() {
   CompilerInstance &CI = getCompilerInstance();
   bool Preamble = CI.getPreprocessorOpts().PrecompiledPreambleBytes.first != 0;
   const std::string &Sysroot = CI.getHeaderSearchOpts().Sysroot;
-  std::unique_ptr<ASTReader> Reader(
-      new ASTReader(CI.getPreprocessor(), CI.getASTContext(),
-                    CI.getModuleProvider(),
-                    Sysroot.empty() ? "" : Sysroot.c_str(),
-                    /*DisableValidation*/ false,
-                    /*AllowPCHWithCompilerErrors*/ false,
-                    /*AllowConfigurationMismatch*/ true,
-                    /*ValidateSystemInputs*/ true));
+  std::unique_ptr<ASTReader> Reader(new ASTReader(
+      CI.getPreprocessor(), CI.getASTContext(), *CI.getPCHContainerOperations(),
+      Sysroot.empty() ? "" : Sysroot.c_str(),
+      /*DisableValidation*/ false,
+      /*AllowPCHWithCompilerErrors*/ false,
+      /*AllowConfigurationMismatch*/ true,
+      /*ValidateSystemInputs*/ true));
 
   Reader->ReadAST(getCurrentFile(),
                   Preamble ? serialization::MK_Preamble
@@ -595,10 +570,9 @@ void DumpModuleInfoAction::ExecuteAction() {
 
   Out << "Information for module file '" << getCurrentFile() << "':\n";
   DumpModuleInfoListener Listener(Out);
-  ASTReader::readASTFileControlBlock(getCurrentFile(),
-                                     getCompilerInstance().getFileManager(),
-                                     getCompilerInstance().getModuleProvider(),
-                                     Listener);
+  ASTReader::readASTFileControlBlock(
+      getCurrentFile(), getCompilerInstance().getFileManager(),
+      *getCompilerInstance().getPCHContainerOperations(), Listener);
 }
 
 //===----------------------------------------------------------------------===//

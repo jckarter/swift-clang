@@ -16,7 +16,6 @@
 #include "clang/AST/ASTConsumer.h"
 #include "clang/AST/ASTContext.h"
 #include "clang/Basic/FileManager.h"
-#include "clang/AST/ModuleProvider.h"
 #include "clang/Lex/Preprocessor.h"
 #include "clang/Sema/SemaConsumer.h"
 #include "llvm/Bitcode/BitstreamWriter.h"
@@ -24,19 +23,13 @@
 
 using namespace clang;
 
-PCHGenerator::PCHGenerator(const Preprocessor &PP,
-                           StringRef OutputFile,
-                           clang::Module *Module,
-                           StringRef isysroot,
-                           std::shared_ptr<ModuleBuffer> Buffer,
+PCHGenerator::PCHGenerator(const Preprocessor &PP, StringRef OutputFile,
+                           clang::Module *Module, StringRef isysroot,
+                           std::shared_ptr<PCHBuffer> Buffer,
                            bool AllowASTWithErrors)
-  : PP(PP), OutputFile(OutputFile), Module(Module), 
-    isysroot(isysroot.str()),
-    SemaPtr(nullptr),
-    Buffer(Buffer),
-    Stream(Buffer->Data),
-    Writer(Stream),
-    AllowASTWithErrors(AllowASTWithErrors) {
+    : PP(PP), OutputFile(OutputFile), Module(Module), isysroot(isysroot.str()),
+      SemaPtr(nullptr), Buffer(Buffer), Stream(Buffer->Data), Writer(Stream),
+      AllowASTWithErrors(AllowASTWithErrors) {
   Buffer->IsComplete = false;
 }
 
@@ -51,7 +44,7 @@ void PCHGenerator::HandleTranslationUnit(ASTContext &Ctx) {
   bool hasErrors = PP.getDiagnostics().hasErrorOccurred();
   if (hasErrors && !AllowASTWithErrors)
     return;
-  
+
   // Emit the PCH file to the Buffer.
   assert(SemaPtr && "No Sema?");
   Writer.WriteAST(*SemaPtr, OutputFile, Module, isysroot, hasErrors);

@@ -1,4 +1,4 @@
-//===--- CodeGenModuleContainer.cpp - Emit .pcm files ---------------------===//
+//===--- ObjectFilePCHContainerOperations.cpp -----------------------------===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -7,7 +7,7 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "clang/CodeGen/LLVMModuleProvider.h"
+#include "clang/CodeGen/ObjectFilePCHContainerOperations.h"
 #include "CGDebugInfo.h"
 #include "CodeGenModule.h"
 #include "clang/AST/ASTContext.h"
@@ -37,7 +37,7 @@ using namespace clang;
 namespace {
 class ModuleContainerGenerator : public ASTConsumer {
   DiagnosticsEngine &Diags;
-  const std::string ModuleName;
+  const std::string MainFileName;
   ASTContext *Ctx;
   const HeaderSearchOptions &HeaderSearchOpts;
   const PreprocessorOptions &PreprocessorOpts;
@@ -48,7 +48,7 @@ class ModuleContainerGenerator : public ASTConsumer {
   std::unique_ptr<llvm::Module> M;
   std::unique_ptr<CodeGen::CodeGenModule> Builder;
   raw_pwrite_stream *OS;
-  std::shared_ptr<ModuleBuffer> Buffer;
+  std::shared_ptr<PCHBuffer> Buffer;
 
   /// Visit every type and emit debug info for it.
   struct DebugTypeVisitor : public RecursiveASTVisitor<DebugTypeVisitor> {
@@ -121,22 +121,30 @@ class ModuleContainerGenerator : public ASTConsumer {
 
 public:
   ModuleContainerGenerator(
-      DiagnosticsEngine &diags, const std::string &ModuleName,
+      DiagnosticsEngine &diags,
       const HeaderSearchOptions &HSO, const PreprocessorOptions &PPO,
-      const CodeGenOptions &CGO, const TargetOptions &TO, const LangOptions &LO,
-      raw_pwrite_stream *OS,
-      std::shared_ptr<ModuleBuffer> Buffer)
-    : Diags(diags), ModuleName(ModuleName),
-      HeaderSearchOpts(HSO), PreprocessorOpts(PPO),
-      CodeGenOpts(CGO), TargetOpts(TO), LangOpts(LO), OS(OS),
-      Buffer(Buffer) {}
+      const TargetOptions &TO, const LangOptions &LO,
+      const std::string &MainFileName, const std::string &OutputFileName,
+      raw_pwrite_stream *OS, std::shared_ptr<PCHBuffer> Buffer)
+    : Diags(diags), HeaderSearchOpts(HSO), PreprocessorOpts(PPO),
+      TargetOpts(TO), LangOpts(LO), OS(OS),
+      Buffer(Buffer) {
+    // The debug info output isn't affected by CodeModel and
+    // ThreadModel, but the backend expects them to be nonempty.
+    CodeGenOpts.CodeModel = "default";
+    CodeGenOpts.ThreadModel = "single";
+    CodeGenOpts.ClangModule = true;
+    CodeGenOpts.DebugTypeExtRefs = true;
+    CodeGenOpts.setDebugInfo(CodeGenOptions::FullDebugInfo);
+    CodeGenOpts.SplitDwarfFile = OutputFileName;
+  }
 
   virtual ~ModuleContainerGenerator() {}
 
   void Initialize(ASTContext &Context) override {
     Ctx = &Context;
     VMContext.reset(new llvm::LLVMContext());
-    M.reset(new llvm::Module(ModuleName, *VMContext));
+    M.reset(new llvm::Module(MainFileName, *VMContext));
     M->setDataLayout(Ctx->getTargetInfo().getTargetDescription());
     Builder.reset(new CodeGen::CodeGenModule(*Ctx, HeaderSearchOpts,
                                              PreprocessorOpts, CodeGenOpts,
@@ -249,17 +257,18 @@ public:
 };
 }
 
-std::unique_ptr<ASTConsumer> LLVMModuleProvider::CreateModuleContainerGenerator(
-    DiagnosticsEngine &Diags, const std::string &ModuleName,
-    const HeaderSearchOptions &HSO, const PreprocessorOptions &PPO,
-    const CodeGenOptions &CGO, const TargetOptions &TO, const LangOptions &LO,
-    llvm::raw_pwrite_stream *OS,
-    std::shared_ptr<ModuleBuffer> Buffer) const {
+std::unique_ptr<ASTConsumer>
+ObjectFilePCHContainerOperations::CreatePCHContainerGenerator(
+    DiagnosticsEngine &Diags, const HeaderSearchOptions &HSO,
+    const PreprocessorOptions &PPO, const TargetOptions &TO,
+    const LangOptions &LO, const std::string &MainFileName,
+    const std::string &OutputFileName, llvm::raw_pwrite_stream *OS,
+    std::shared_ptr<PCHBuffer> Buffer) const {
  return llvm::make_unique<ModuleContainerGenerator>
-   (Diags, ModuleName, HSO, PPO, CGO, TO, LO, OS, Buffer);
+   (Diags, HSO, PPO, TO, LO, MainFileName, OutputFileName, OS, Buffer);
 }
 
-void LLVMModuleProvider::UnwrapModuleContainer(
+void ObjectFilePCHContainerOperations::ExtractPCH(
     llvm::MemoryBufferRef Buffer, llvm::BitstreamReader &StreamFile) const {
   if (auto OF = llvm::object::ObjectFile::createObjectFile(Buffer)) {
     auto *Obj = OF.get().get();

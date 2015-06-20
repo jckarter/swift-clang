@@ -14,7 +14,6 @@
 #include "clang/AST/ASTConsumer.h"
 #include "clang/AST/ASTContext.h"
 #include "clang/AST/ExternalASTSource.h"
-#include "clang/CodeGen/LLVMModuleProvider.h"
 #include "clang/Frontend/CompilerInstance.h"
 #include "clang/Frontend/CompilerInvocation.h"
 #include "clang/Frontend/FrontendActions.h"
@@ -46,7 +45,7 @@ private:
 
 bool testExternalASTSource(ExternalASTSource *Source,
                            StringRef FileContents) {
-  CompilerInstance Compiler(SharedModuleProvider::Create<LLVMModuleProvider>());
+  CompilerInstance Compiler;
   Compiler.createDiagnostics();
 
   CompilerInvocation *Invocation = new CompilerInvocation;

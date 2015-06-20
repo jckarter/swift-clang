@@ -590,11 +590,8 @@ static void clang_indexSourceFile_Impl(void *UserData) {
   if (index_options & CXIndexOpt_SuppressWarnings)
     CInvok->getDiagnosticOpts().IgnoreWarnings = true;
 
-  ASTUnit *Unit = ASTUnit::create(
-      CInvok.get(), CXXIdx->getModuleProvider(),
-      Diags, CaptureDiagnostics,
-      /*UserFilesAreVolatile=*/true);
-
+  ASTUnit *Unit = ASTUnit::create(CInvok.get(), Diags, CaptureDiagnostics,
+                                  /*UserFilesAreVolatile=*/true);
   if (!Unit) {
     ITUI->result = CXError_InvalidArguments;
     return;
@@ -646,19 +643,13 @@ static void clang_indexSourceFile_Impl(void *UserData) {
     PPOpts.DetailedRecord = false;
 
   DiagnosticErrorTrap DiagTrap(*Diags);
-  bool Success = ASTUnit::LoadFromCompilerInvocationAction(CInvok.get(),
-                                                    CXXIdx->getModuleProvider(),
-                                                           Diags,
-                                                       IndexAction.get(),
-                                                       Unit,
-                                                       Persistent,
-                                                CXXIdx->getClangResourcesPath(),
-                                                       OnlyLocalDecls,
-                                                       CaptureDiagnostics,
-                                                       PrecompilePreamble,
-                                                    CacheCodeCompletionResults,
-                                 /*IncludeBriefCommentsInCodeCompletion=*/false,
-                                                 /*UserFilesAreVolatile=*/true);
+  bool Success = ASTUnit::LoadFromCompilerInvocationAction(
+      CInvok.get(), CXXIdx->getPCHContainerOperations(), Diags,
+      IndexAction.get(), Unit, Persistent, CXXIdx->getClangResourcesPath(),
+      OnlyLocalDecls, CaptureDiagnostics, PrecompilePreamble,
+      CacheCodeCompletionResults,
+      /*IncludeBriefCommentsInCodeCompletion=*/false,
+      /*UserFilesAreVolatile=*/true);
   if (DiagTrap.hasErrorOccurred() && CXXIdx->getDisplayDiagnostics())
     printDiagsToStderr(Unit);
 

@@ -14,7 +14,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "llvm/Option/Arg.h"
-#include "clang/CodeGen/LLVMModuleProvider.h"
+#include "clang/CodeGen/ObjectFilePCHContainerOperations.h"
 #include "clang/Driver/DriverDiagnostic.h"
 #include "clang/Driver/Options.h"
 #include "clang/Frontend/CompilerInstance.h"
@@ -66,7 +66,7 @@ void initializePollyPasses(llvm::PassRegistry &Registry);
 
 int cc1_main(ArrayRef<const char *> Argv, const char *Argv0, void *MainAddr) {
   std::unique_ptr<CompilerInstance> Clang(new CompilerInstance(
-      SharedModuleProvider::Create<LLVMModuleProvider>()));
+      std::make_shared<ObjectFilePCHContainerOperations>()));
   IntrusiveRefCntPtr<DiagnosticIDs> DiagID(new DiagnosticIDs());
 
   // Initialize targets first, so that --version shows registered targets.

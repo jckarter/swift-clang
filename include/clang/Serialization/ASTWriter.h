@@ -17,7 +17,7 @@
 #include "clang/AST/ASTMutationListener.h"
 #include "clang/AST/Decl.h"
 #include "clang/AST/DeclarationName.h"
-#include "clang/AST/ModuleProvider.h"
+#include "clang/Frontend/PCHContainerOperations.h"
 #include "clang/AST/TemplateBase.h"
 #include "clang/Sema/SemaConsumer.h"
 #include "clang/Serialization/ASTBitCodes.h"
@@ -870,9 +870,7 @@ class PCHGenerator : public SemaConsumer {
   clang::Module *Module;
   std::string isysroot;
   Sema *SemaPtr;
-  // This buffer is always large, but BitstreamWriter really wants a
-  // SmallVectorImpl<char>.
-  std::shared_ptr<ModuleBuffer> Buffer;
+  std::shared_ptr<PCHBuffer> Buffer;
   llvm::BitstreamWriter Stream;
   ASTWriter Writer;
   bool AllowASTWithErrors;
@@ -880,14 +878,12 @@ class PCHGenerator : public SemaConsumer {
 protected:
   ASTWriter &getWriter() { return Writer; }
   const ASTWriter &getWriter() const { return Writer; }
-  SmallVectorImpl<char>& getPCH() const { return Buffer->Data; }
+  SmallVectorImpl<char> &getPCH() const { return Buffer->Data; }
 
 public:
-  PCHGenerator(const Preprocessor &PP,
-               StringRef OutputFile,
-               clang::Module *Module,
-               StringRef isysroot,
-               std::shared_ptr<ModuleBuffer> Buffer,
+  PCHGenerator(const Preprocessor &PP, StringRef OutputFile,
+               clang::Module *Module, StringRef isysroot,
+               std::shared_ptr<PCHBuffer> Buffer,
                bool AllowASTWithErrors = false);
   ~PCHGenerator() override;
   void InitializeSema(Sema &S) override { SemaPtr = &S; }

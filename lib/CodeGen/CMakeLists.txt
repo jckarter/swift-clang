@@ -72,9 +72,9 @@ add_clang_library(clangCodeGen
   CodeGenTypes.cpp
   CoverageMappingGen.cpp
   ItaniumCXXABI.cpp
-  LLVMModuleProvider.cpp
   MicrosoftCXXABI.cpp
   ModuleBuilder.cpp
+  ObjectFilePCHContainerOperations.cpp
   SanitizerMetadata.cpp
   TargetInfo.cpp
 

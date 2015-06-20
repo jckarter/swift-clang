@@ -11,7 +11,7 @@
 //  modules for the ASTReader.
 //
 //===----------------------------------------------------------------------===//
-#include "clang/AST/ModuleProvider.h"
+#include "clang/Frontend/PCHContainerOperations.h"
 #include "clang/Lex/HeaderSearch.h"
 #include "clang/Lex/ModuleMap.h"
 #include "clang/Serialization/ASTReader.h"
@@ -140,7 +140,7 @@ ModuleManager::addModule(StringRef FileName, ModuleKind Type,
     }
 
     // Initialize the stream.
-    MP.UnwrapModuleContainer(New->Buffer->getMemBufferRef(), New->StreamFile);
+    PCHContainerOps.ExtractPCH(New->Buffer->getMemBufferRef(), New->StreamFile);
   }
 
   if (ExpectedSignature) {
@@ -290,8 +290,10 @@ void ModuleManager::moduleFileAccepted(ModuleFile *MF) {
   ModulesInCommonWithGlobalIndex.push_back(MF);
 }
 
-ModuleManager::ModuleManager(FileManager &FileMgr, const ModuleProvider &MP)
-  : FileMgr(FileMgr), MP(MP), GlobalIndex(), FirstVisitState(nullptr) {}
+ModuleManager::ModuleManager(FileManager &FileMgr,
+                             const PCHContainerOperations &PCHContainerOps)
+    : FileMgr(FileMgr), PCHContainerOps(PCHContainerOps), GlobalIndex(),
+      FirstVisitState(nullptr) {}
 
 ModuleManager::~ModuleManager() {
   for (unsigned i = 0, e = Chain.size(); i != e; ++i)

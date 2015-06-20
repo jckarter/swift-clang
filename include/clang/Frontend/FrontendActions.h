@@ -93,11 +93,9 @@ public:
   /// create the PCHGenerator instance returned by CreateASTConsumer.
   ///
   /// \returns true if an error occurred, false otherwise.
-  static llvm::raw_pwrite_stream *
-  ComputeASTConsumerArguments(CompilerInstance &CI,
-                              StringRef InFile,
-                              std::string &Sysroot,
-                              std::string &OutputFile);
+  static raw_pwrite_stream *
+  ComputeASTConsumerArguments(CompilerInstance &CI, StringRef InFile,
+                              std::string &Sysroot, std::string &OutputFile);
 };
 
 class GenerateModuleAction : public ASTFrontendAction {

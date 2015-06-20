@@ -11,7 +11,6 @@
 #define LLVM_CLANG_UNITTESTS_ASTMATCHERS_ASTMATCHERSTEST_H
 
 #include "clang/ASTMatchers/ASTMatchFinder.h"
-#include "clang/CodeGen/LLVMModuleProvider.h"
 #include "clang/Frontend/ASTUnit.h"
 #include "clang/Tooling/Tooling.h"
 #include "gtest/gtest.h"
@@ -81,7 +80,7 @@ testing::AssertionResult matchesConditionally(
   Args.push_back("-frtti");
   Args.push_back("-fexceptions");
   if (!runToolOnCodeWithArgs(Factory->create(), Code, Args, Filename,
-                             SharedModuleProvider::Create<SimpleModuleProvider>(),
+                             std::make_shared<RawPCHContainerOperations>(),
                              VirtualMappedFiles)) {
     return testing::AssertionFailure() << "Parsing error in \"" << Code << "\"";
   }

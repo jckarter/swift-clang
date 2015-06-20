@@ -12,7 +12,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "ASTReaderInternals.h"
-#include "clang/AST/ModuleProvider.h"
+#include "clang/Frontend/PCHContainerOperations.h"
 #include "clang/Basic/FileManager.h"
 #include "clang/Lex/HeaderSearch.h"
 #include "clang/Serialization/ASTBitCodes.h"
@@ -386,7 +386,7 @@ namespace {
   /// \brief Builder that generates the global module index file.
   class GlobalModuleIndexBuilder {
     FileManager &FileMgr;
-    const ModuleProvider &MP;
+    const PCHContainerOperations &PCHContainerOps;
 
     /// \brief Mapping from files to module file information.
     typedef llvm::MapVector<const FileEntry *, ModuleFileInfo> ModuleFilesMap;
@@ -419,9 +419,9 @@ namespace {
     }
 
   public:
-    explicit GlobalModuleIndexBuilder(FileManager &FileMgr,
-                                      const ModuleProvider &MP)
-    : FileMgr(FileMgr), MP(MP) {}
+    explicit GlobalModuleIndexBuilder(
+        FileManager &FileMgr, const PCHContainerOperations &PCHContainerOps)
+        : FileMgr(FileMgr), PCHContainerOps(PCHContainerOps) {}
 
     /// \brief Load the contents of the given module file into the builder.
     ///
@@ -506,7 +506,7 @@ bool GlobalModuleIndexBuilder::loadModuleFile(const FileEntry *File) {
 
   // Initialize the input stream
   llvm::BitstreamReader InStreamFile;
-  MP.UnwrapModuleContainer((*Buffer)->getMemBufferRef(), InStreamFile);
+  PCHContainerOps.ExtractPCH((*Buffer)->getMemBufferRef(), InStreamFile);
   llvm::BitstreamCursor InStream(InStreamFile);
 
   // Sniff for the signature.
@@ -768,7 +768,8 @@ void GlobalModuleIndexBuilder::writeIndex(llvm::BitstreamWriter &Stream) {
 }
 
 GlobalModuleIndex::ErrorCode
-GlobalModuleIndex::writeIndex(FileManager &FileMgr, const ModuleProvider &MP,
+GlobalModuleIndex::writeIndex(FileManager &FileMgr,
+                              const PCHContainerOperations &PCHContainerOps,
                               StringRef Path) {
   llvm::SmallString<128> IndexPath;
   IndexPath += Path;
@@ -792,8 +793,8 @@ GlobalModuleIndex::writeIndex(FileManager &FileMgr, const ModuleProvider &MP,
   }
 
   // The module index builder.
-  GlobalModuleIndexBuilder Builder(FileMgr, MP);
-  
+  GlobalModuleIndexBuilder Builder(FileMgr, PCHContainerOps);
+
   // Load each of the module files.
   std::error_code EC;
   for (llvm::sys::fs::directory_iterator D(Path, EC), DEnd;

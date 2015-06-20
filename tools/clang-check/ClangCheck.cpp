@@ -18,7 +18,7 @@
 
 #include "clang/AST/ASTConsumer.h"
 #include "clang/Driver/Options.h"
-#include "clang/CodeGen/LLVMModuleProvider.h"
+#include "clang/CodeGen/ObjectFilePCHContainerOperations.h"
 #include "clang/Frontend/ASTConsumers.h"
 #include "clang/Frontend/CompilerInstance.h"
 #include "clang/Rewrite/Frontend/FixItRewriter.h"
@@ -154,7 +154,7 @@ int main(int argc, const char **argv) {
   ClangTool Tool(
       OptionsParser.getCompilations(),
       OptionsParser.getSourcePathList(),
-      clang::SharedModuleProvider::Create<clang::LLVMModuleProvider>());
+      std::make_shared<clang::ObjectFilePCHContainerOperations>());
 
   // Clear adjusters because -fsyntax-only is inserted by the default chain.
   Tool.clearArgumentsAdjusters();
