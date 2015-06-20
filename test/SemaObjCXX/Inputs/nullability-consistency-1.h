@@ -1,6 +1,6 @@
 void f1(int *ptr); // expected-warning{{pointer is missing a nullability type specifier}}
 
-void f2(__nonnull int *);
+void f2(int * __nonnull);
 
 #include "nullability-consistency-2.h"
 

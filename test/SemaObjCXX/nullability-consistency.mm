@@ -1,5 +1,5 @@
-// RUN: %clang_cc1 -fsyntax-only -fblocks -I %S/Inputs -isystem %S/Inputs/nullability-consistency-system -Wno-nullability-declspec %s -verify
-// RUN: %clang_cc1 -fsyntax-only -fblocks -I %S/Inputs -isystem %S/Inputs/nullability-consistency-system -Wno-nullability-declspec %s -Wsystem-headers -DWARN_IN_SYSTEM_HEADERS -verify
+// RUN: %clang_cc1 -fsyntax-only -fblocks -I %S/Inputs -isystem %S/Inputs/nullability-consistency-system %s -verify
+// RUN: %clang_cc1 -fsyntax-only -fblocks -I %S/Inputs -isystem %S/Inputs/nullability-consistency-system %s -Wsystem-headers -DWARN_IN_SYSTEM_HEADERS -verify
 
 #include "nullability-consistency-1.h"
 #include "nullability-consistency-3.h"

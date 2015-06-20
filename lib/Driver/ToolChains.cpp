@@ -1257,6 +1257,18 @@ void Darwin::CheckBitcodeSupport() const {
     getDriver().Diag(diag::err_drv_bitcode_unsupported_on_toolchain);
 }
 
+SanitizerMask Darwin::getSupportedSanitizers() const {
+  SanitizerMask Res = ToolChain::getSupportedSanitizers();
+  if (isTargetMacOS() || isTargetIOSSimulator()) {
+    // ASan and UBSan are available on Mac OS and on iOS simulator.
+    Res |= SanitizerKind::Address;
+    Res |= SanitizerKind::Vptr;
+  }
+  if (isTargetMacOS())
+    Res |= SanitizerKind::SafeStack;
+  return Res;
+}
+
 /// Generic_GCC - A tool chain using the 'gcc' command to perform
 /// all subcommands; this relies on gcc translating the majority of
 /// command line options.
@@ -2897,6 +2909,24 @@ bool FreeBSD::isPIEDefault() const {
   return getSanitizerArgs().requiresPIE();
 }
 
+SanitizerMask FreeBSD::getSupportedSanitizers() const {
+  const bool IsX86 = getTriple().getArch() == llvm::Triple::x86;
+  const bool IsX86_64 = getTriple().getArch() == llvm::Triple::x86_64;
+  const bool IsMIPS64 = getTriple().getArch() == llvm::Triple::mips64 ||
+                        getTriple().getArch() == llvm::Triple::mips64el;
+  SanitizerMask Res = ToolChain::getSupportedSanitizers();
+  Res |= SanitizerKind::Address;
+  Res |= SanitizerKind::Vptr;
+  if (IsX86_64 || IsMIPS64) {
+    Res |= SanitizerKind::Leak;
+    Res |= SanitizerKind::Thread;
+  }
+  if (IsX86 || IsX86_64) {
+    Res |= SanitizerKind::SafeStack;
+  }
+  return Res;
+}
+
 /// NetBSD - NetBSD tool chain which can call as(1) and ld(1) directly.
 
 NetBSD::NetBSD(const Driver &D, const llvm::Triple& Triple, const ArgList &Args)
@@ -3799,6 +3829,28 @@ void Linux::AddClangCXXStdlibIncludeArgs(const ArgList &DriverArgs,
 
 bool Linux::isPIEDefault() const {
   return getSanitizerArgs().requiresPIE();
+}
+
+SanitizerMask Linux::getSupportedSanitizers() const {
+  const bool IsX86 = getTriple().getArch() == llvm::Triple::x86;
+  const bool IsX86_64 = getTriple().getArch() == llvm::Triple::x86_64;
+  const bool IsMIPS64 = getTriple().getArch() == llvm::Triple::mips64 ||
+                        getTriple().getArch() == llvm::Triple::mips64el;
+  SanitizerMask Res = ToolChain::getSupportedSanitizers();
+  Res |= SanitizerKind::Address;
+  Res |= SanitizerKind::KernelAddress;
+  Res |= SanitizerKind::Vptr;
+  if (IsX86_64 || IsMIPS64) {
+    Res |= SanitizerKind::DataFlow;
+    Res |= SanitizerKind::Leak;
+    Res |= SanitizerKind::Memory;
+    Res |= SanitizerKind::Thread;
+  }
+  if (IsX86 || IsX86_64) {
+    Res |= SanitizerKind::Function;
+    Res |= SanitizerKind::SafeStack;
+  }
+  return Res;
 }
 
 /// DragonFly - DragonFly tool chain which can call as(1) and ld(1) directly.

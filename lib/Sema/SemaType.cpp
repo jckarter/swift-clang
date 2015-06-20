@@ -3200,10 +3200,10 @@ static FileID getNullabilityCompletenessCheckFileID(Sema &S,
   const SrcMgr::FileInfo &fileInfo = sloc.getFile();
   if (fileInfo.getIncludeLoc().isInvalid())
     return FileID();
-
   if (fileInfo.getFileCharacteristic() != SrcMgr::C_User &&
-      S.Diags.getSuppressSystemWarnings())
+      S.Diags.getSuppressSystemWarnings()) {
     return FileID();
+  }
 
   return file;
 }
@@ -3328,7 +3328,7 @@ static TypeSourceInfo *GetFullTypeForDeclarator(TypeProcessingState &state,
       if (!fileNullability.SawTypeNullability) {
         if (fileNullability.PointerLoc.isValid()) {
           S.Diag(fileNullability.PointerLoc, diag::warn_nullability_missing)
-              << fileNullability.PointerKind;
+            << static_cast<unsigned>(fileNullability.PointerKind);
         }
 
         fileNullability.SawTypeNullability = true;
