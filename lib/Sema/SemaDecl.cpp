@@ -2485,8 +2485,7 @@ static void mergeParamDeclTypes(ParmVarDecl *NewParam,
           << ((OldParam->getObjCDeclQualifier() & Decl::OBJC_TQ_CSNullability) != 0);
         S.Diag(OldParam->getLocation(), diag::note_previous_declaration);
       }
-    }
-    else {
+    } else {
       QualType NewT = NewParam->getType();
       NewT = S.Context.getAttributedType(
                          AttributedType::getNullabilityAttrKind(*Oldnullability),
