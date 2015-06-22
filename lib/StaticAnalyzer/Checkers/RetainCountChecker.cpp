@@ -61,7 +61,7 @@ template <> struct FoldingSetTrait<RetEffect> {
     ID.AddInteger((unsigned) X.getObjKind());
 }
 };
-} // end llvm namespace
+} // namespace llvm
 
 //===----------------------------------------------------------------------===//
 // Reference-counting logic (typestate + counts).
@@ -484,7 +484,7 @@ public:
   IdentifierInfo *getIdentifier() const { return II; }
   Selector getSelector() const { return S; }
 };
-}
+} // namespace
 
 namespace llvm {
 template <> struct DenseMapInfo<ObjCSummaryKey> {
@@ -510,7 +510,7 @@ template <> struct DenseMapInfo<ObjCSummaryKey> {
   }
 
 };
-} // end llvm namespace
+} // namespace llvm
 
 namespace {
 class ObjCSummaryCache {
@@ -3320,22 +3320,22 @@ void RetainCountChecker::processNonLeakError(ProgramStateRef St,
     case RefVal::ErrorUseAfterRelease:
       if (!useAfterRelease)
         useAfterRelease.reset(new UseAfterRelease(this));
-      BT = &*useAfterRelease;
+      BT = useAfterRelease.get();
       break;
     case RefVal::ErrorReleaseNotOwned:
       if (!releaseNotOwned)
         releaseNotOwned.reset(new BadRelease(this));
-      BT = &*releaseNotOwned;
+      BT = releaseNotOwned.get();
       break;
     case RefVal::ErrorDeallocGC:
       if (!deallocGC)
         deallocGC.reset(new DeallocGC(this));
-      BT = &*deallocGC;
+      BT = deallocGC.get();
       break;
     case RefVal::ErrorDeallocNotOwned:
       if (!deallocNotOwned)
         deallocNotOwned.reset(new DeallocNotOwned(this));
-      BT = &*deallocNotOwned;
+      BT = deallocNotOwned.get();
       break;
   }
 
@@ -4032,4 +4032,6 @@ CallEffects CallEffects::getEffect(const FunctionDecl *FD) {
 
 #undef createCallEffect
 
-}}}
+} // namespace objc_retain
+} // namespace ento
+} // namespace clang

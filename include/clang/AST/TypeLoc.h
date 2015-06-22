@@ -2000,6 +2000,6 @@ public:
 };
 
 
-}
+} // namespace clang
 
 #endif

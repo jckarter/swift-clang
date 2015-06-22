@@ -150,7 +150,7 @@ private:
   const LangOptions &LangOpts;
 };
 
-}
+} // namespace
 
 static void addObjCARCAPElimPass(const PassManagerBuilder &Builder, PassManagerBase &PM) {
   if (Builder.OptLevel > 0)

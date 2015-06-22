@@ -347,4 +347,4 @@ TEST_F(PPCallbacksTest, OpenCLExtensionPragmaDisabled) {
   ASSERT_EQ(ExpectedState, Parameters.State);
 }
 
-} // anonoymous namespace
+} // namespace

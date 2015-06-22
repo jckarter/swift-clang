@@ -125,6 +125,6 @@ public:
   bool HadFatalFailure;
 };
   
-}
+} // namespace clang
 
 #endif
