@@ -689,7 +689,9 @@ void clang::EmbedBitcode(llvm::Module *M, const CodeGenOptions &CGOpts)
   std::string Data;
   llvm::raw_string_ostream OS(Data);
   if (!CGOpts.EmbedMarkerOnly)
-    llvm::WriteBitcodeToFile(M, OS);
+    // FIXME: It's crazy to serialize here.  Instead we should just copy the
+    // raw data.
+    llvm::WriteBitcodeToFile(M, OS, /* ShouldPreserveUseListOrder */ true);
   ArrayRef<uint8_t> ModuleData((uint8_t*)OS.str().data(), OS.str().size());
   llvm::Constant *ModuleConstant =
     llvm::ConstantDataArray::get(M->getContext(), ModuleData);
