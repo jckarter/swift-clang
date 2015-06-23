@@ -3279,7 +3279,6 @@ void ASTReader::makeModuleVisible(Module *Mod,
 
     // Update the module's name visibility.
     Mod->NameVisibility = NameVisibility;
-    PP.makeModuleVisible(Mod, ImportLoc);
 
     // If we've already deserialized any names from this module,
     // mark them as visible.
