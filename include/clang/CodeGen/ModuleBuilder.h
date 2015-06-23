@@ -49,6 +49,6 @@ namespace clang {
                                    const CodeGenOptions &CGO,
                                    llvm::LLVMContext& C,
                                    CoverageSourceInfo *CoverageInfo = nullptr);
-} // namespace clang
+}
 
 #endif

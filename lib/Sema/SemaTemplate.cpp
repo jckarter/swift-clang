@@ -1550,7 +1550,7 @@ struct DependencyChecker : RecursiveASTVisitor<DependencyChecker> {
     return TraverseType(T->getInjectedSpecializationType());
   }
 };
-} // namespace
+}
 
 /// Determines whether a given type depends on the given parameter
 /// list.
@@ -3954,7 +3954,7 @@ namespace {
     bool VisitTagDecl(const TagDecl *Tag);
     bool VisitNestedNameSpecifier(NestedNameSpecifier *NNS);
   };
-} // namespace
+}
 
 bool UnnamedLocalNoLinkageFinder::VisitBuiltinType(const BuiltinType*) {
   return false;
@@ -8225,7 +8225,7 @@ namespace {
       return E;
     }
   };
-} // namespace
+}
 
 /// \brief Rebuilds a type within the context of the current instantiation.
 ///

@@ -38,6 +38,6 @@ namespace clang {
 
   void EmbedBitcode(llvm::Module *M, const CodeGenOptions &CGOpts);
   bool ContainInlineAsm(llvm::Module *M);
-} // namespace clang
+}
 
 #endif

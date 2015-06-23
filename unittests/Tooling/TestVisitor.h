@@ -231,6 +231,6 @@ protected:
   std::vector<MatchCandidate> DisallowedMatches;
   std::vector<ExpectedMatch> ExpectedMatches;
 };
-} // namespace clang
+}
 
 #endif

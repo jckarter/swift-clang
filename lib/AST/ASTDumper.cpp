@@ -554,7 +554,7 @@ namespace  {
     void visitVerbatimBlockLineComment(const VerbatimBlockLineComment *C);
     void visitVerbatimLineComment(const VerbatimLineComment *C);
   };
-} // namespace
+}
 
 //===----------------------------------------------------------------------===//
 //  Utilities

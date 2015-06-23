@@ -1077,7 +1077,7 @@ namespace clang {
     
     bool parseModuleMapFile();
   };
-} // namespace clang
+}
 
 SourceLocation ModuleMapParser::consumeToken() {
 retry:
@@ -1271,7 +1271,7 @@ namespace {
     /// \brief The 'exhaustive' attribute.
     AT_exhaustive
   };
-} // namespace
+}
 
 /// \brief Parse a module declaration.
 ///
