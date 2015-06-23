@@ -19,6 +19,8 @@
 #include "llvm/Support/raw_ostream.h"
 using namespace clang;
 
+const unsigned TypeLoc::MaxDataAlign = llvm::alignOf<void *>();
+
 //===----------------------------------------------------------------------===//
 // TypeLoc Implementation
 //===----------------------------------------------------------------------===//
@@ -123,6 +125,45 @@ void TypeLoc::initializeImpl(ASTContext &Context, TypeLoc TL,
 #include "clang/AST/TypeLocNodes.def"
     }
   }
+}
+
+namespace {
+  class TypeLocCopier : public TypeLocVisitor<TypeLocCopier> {
+    TypeLoc Source;
+  public:
+    TypeLocCopier(TypeLoc source) : Source(source) { }
+
+#define ABSTRACT_TYPELOC(CLASS, PARENT)
+#define TYPELOC(CLASS, PARENT)                          \
+    void Visit##CLASS##TypeLoc(CLASS##TypeLoc dest) {   \
+      dest.copyLocal(Source.castAs<CLASS##TypeLoc>());  \
+    }
+#include "clang/AST/TypeLocNodes.def"
+  };
+}
+
+
+void TypeLoc::copy(TypeLoc other) {
+  unsigned size = getFullDataSize();
+  assert(size == other.getFullDataSize());
+
+  // If both data pointers are aligned to the maximum alignment, we can memcpy.
+  if (reinterpret_cast<uintptr_t>(Data)
+        == llvm::RoundUpToAlignment(reinterpret_cast<uintptr_t>(Data),
+                                    MaxDataAlign) &&
+      reinterpret_cast<uintptr_t>(other.Data)
+        == llvm::RoundUpToAlignment(reinterpret_cast<uintptr_t>(other.Data),
+                                    MaxDataAlign)) {
+    memcpy(Data, other.Data, size);
+    return;
+  }
+
+  // Copy each of the pieces.
+  TypeLoc TL(getType(), Data);
+  do {
+    TypeLocCopier(other).Visit(TL);
+    other = other.getNextTypeLoc();
+  } while ((TL = TL.getNextTypeLoc()));
 }
 
 SourceLocation TypeLoc::getBeginLoc() const {

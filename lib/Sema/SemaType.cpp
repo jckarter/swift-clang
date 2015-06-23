@@ -4546,12 +4546,12 @@ namespace {
     void VisitObjCObjectTypeLoc(ObjCObjectTypeLoc TL) {
       TypeSourceInfo *RepTInfo = nullptr;
       Sema::GetTypeFromParser(DS.getRepAsType(), &RepTInfo);
-      TL.initializeFullCopy(RepTInfo->getTypeLoc());
+      TL.copy(RepTInfo->getTypeLoc());
     }
     void VisitObjCObjectPointerTypeLoc(ObjCObjectPointerTypeLoc TL) {
       TypeSourceInfo *RepTInfo = nullptr;
       Sema::GetTypeFromParser(DS.getRepAsType(), &RepTInfo);
-      TL.initializeFullCopy(RepTInfo->getTypeLoc());
+      TL.copy(RepTInfo->getTypeLoc());
     }
     void VisitTemplateSpecializationTypeLoc(TemplateSpecializationTypeLoc TL) {
       TypeSourceInfo *TInfo = nullptr;
