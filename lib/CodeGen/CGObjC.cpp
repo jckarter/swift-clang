@@ -100,10 +100,12 @@ llvm::Value *CodeGenFunction::EmitObjCCollectionLiteral(const Expr *E,
     llvm::Constant *Constant = CGM.CreateRuntimeVariable(
                                  ConvertType(IdTy),
                                  ConstantName);
-    LValue LV = LValue::MakeAddr(Constant, IdTy,
-                                 Context.getTypeAlignInChars(IdTy), Context);
-    return Builder.CreateBitCast(EmitLoadOfScalar(LV, E->getLocStart()),
-                                 ConvertType(E->getType()));
+    LValue LV = MakeNaturalAlignAddrLValue(Constant, IdTy);
+    llvm::Value *Ptr = EmitLoadOfScalar(LV, E->getLocStart());
+    cast<llvm::LoadInst>(Ptr)
+      ->setMetadata(CGM.getModule().getMDKindID("invariant.load"),
+                    llvm::MDNode::get(getLLVMContext(), None));
+    return Builder.CreateBitCast(Ptr, ConvertType(E->getType()));
   }
 
   // Compute the type of the array we're initializing.
