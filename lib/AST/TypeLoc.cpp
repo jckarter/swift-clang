@@ -19,7 +19,7 @@
 #include "llvm/Support/raw_ostream.h"
 using namespace clang;
 
-const unsigned TypeLoc::MaxDataAlign = llvm::alignOf<void *>();
+static const unsigned TypeLocMaxDataAlign = llvm::alignOf<void *>();
 
 //===----------------------------------------------------------------------===//
 // TypeLoc Implementation
@@ -144,17 +144,18 @@ namespace {
 
 
 void TypeLoc::copy(TypeLoc other) {
-  unsigned size = getFullDataSize();
-  assert(size == other.getFullDataSize());
+  assert(getFullDataSize() == other.getFullDataSize());
 
-  // If both data pointers are aligned to the maximum alignment, we can memcpy.
+  // If both data pointers are aligned to the maximum alignment, we
+  // can memcpy because getFullDataSize() accurately reflects the
+  // layout of the data.
   if (reinterpret_cast<uintptr_t>(Data)
         == llvm::RoundUpToAlignment(reinterpret_cast<uintptr_t>(Data),
-                                    MaxDataAlign) &&
+                                    TypeLocMaxDataAlign) &&
       reinterpret_cast<uintptr_t>(other.Data)
         == llvm::RoundUpToAlignment(reinterpret_cast<uintptr_t>(other.Data),
-                                    MaxDataAlign)) {
-    memcpy(Data, other.Data, size);
+                                    TypeLocMaxDataAlign)) {
+    memcpy(Data, other.Data, getFullDataSize());
     return;
   }
 

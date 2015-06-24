@@ -44,9 +44,6 @@ protected:
   const void *Ty;
   void *Data;
 
-  /// The maximum alignment of the data for any \c TypeLoc.
-  static const unsigned MaxDataAlign;
-
 public:
   /// \brief Convert to the specified TypeLoc type, asserting that this TypeLoc
   /// is of the desired type.
