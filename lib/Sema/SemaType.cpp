@@ -2974,19 +2974,19 @@ namespace {
 IdentifierInfo *Sema::getNullabilityKeyword(NullabilityKind nullability) {
   switch (nullability) {
   case NullabilityKind::NonNull:
-    if (!Ident___nonnull)
-      Ident___nonnull = PP.getIdentifierInfo("__nonnull");
-    return Ident___nonnull;
+    if (!Ident__Nonnull)
+      Ident__Nonnull = PP.getIdentifierInfo("_Nonnull");
+    return Ident__Nonnull;
 
   case NullabilityKind::Nullable:
-    if (!Ident___nullable)
-      Ident___nullable = PP.getIdentifierInfo("__nullable");
-    return Ident___nullable;
+    if (!Ident__Nullable)
+      Ident__Nullable = PP.getIdentifierInfo("_Nullable");
+    return Ident__Nullable;
 
   case NullabilityKind::Unspecified:
-    if (!Ident___null_unspecified)
-      Ident___null_unspecified = PP.getIdentifierInfo("__null_unspecified");
-    return Ident___null_unspecified;
+    if (!Ident__Null_unspecified)
+      Ident__Null_unspecified = PP.getIdentifierInfo("_Null_unspecified");
+    return Ident__Null_unspecified;
   }
   llvm_unreachable("Unknown nullability kind.");
 }
@@ -3307,7 +3307,7 @@ static TypeSourceInfo *GetFullTypeForDeclarator(TypeProcessingState &state,
     }
   }
 
-  // Determine whether we should infer __nonnull on pointer types.
+  // Determine whether we should infer _Nonnull on pointer types.
   Optional<NullabilityKind> inferNullability;
   bool inferNullabilityCS = false;
   bool inferNullabilityInnerOnly = false;
@@ -3410,7 +3410,7 @@ static TypeSourceInfo *GetFullTypeForDeclarator(TypeProcessingState &state,
         break;
 
       case PointerDeclaratorKind::SingleLevelPointer:
-        // Infer __nonnull if we are in an assumes-nonnull region.
+        // Infer _Nonnull if we are in an assumes-nonnull region.
         if (inAssumeNonNullRegion) {
           inferNullability = NullabilityKind::NonNull;
           inferNullabilityCS = (context == Declarator::ObjCParameterContext ||
@@ -3420,7 +3420,7 @@ static TypeSourceInfo *GetFullTypeForDeclarator(TypeProcessingState &state,
 
       case PointerDeclaratorKind::CFErrorRefPointer:
       case PointerDeclaratorKind::NSErrorPointerPointer:
-        // Within a function or method signature, infer __nullable at both
+        // Within a function or method signature, infer _Nullable at both
         // levels.
         if (isFunctionOrMethod && inAssumeNonNullRegion)
           inferNullability = NullabilityKind::Nullable;
@@ -3430,7 +3430,7 @@ static TypeSourceInfo *GetFullTypeForDeclarator(TypeProcessingState &state,
         if (isFunctionOrMethod) {
           // On pointer-to-pointer parameters marked cf_returns_retained or
           // cf_returns_not_retained, if the outer pointer is explicit then
-          // infer the inner pointer as __nullable.
+          // infer the inner pointer as _Nullable.
           auto hasCFReturnsAttr = [](const AttributeList *NextAttr) -> bool {
             while (NextAttr) {
               if (NextAttr->getKind() == AttributeList::AT_CFReturnsRetained ||
@@ -3477,7 +3477,7 @@ static TypeSourceInfo *GetFullTypeForDeclarator(TypeProcessingState &state,
   }
 
   // Local function that checks the nullability for a given pointer declarator.
-  // Returns true if __nonnull was inferred.
+  // Returns true if _Nonnull was inferred.
   auto inferPointerNullability = [&](SimplePointerKind pointerKind,
                                      SourceLocation pointerLoc,
                                      AttributeList *&attrs) -> AttributeList * {
@@ -5487,8 +5487,7 @@ bool Sema::checkNullabilityTypeSpecifier(QualType &type,
           break;
 
         Diag(nullabilityLoc, diag::warn_nullability_duplicate)
-          << static_cast<unsigned>(nullability)
-          << isContextSensitive
+          << DiagNullabilityKind(nullability, isContextSensitive)
           << FixItHint::CreateRemoval(nullabilityLoc);
 
         break;
@@ -5496,10 +5495,8 @@ bool Sema::checkNullabilityTypeSpecifier(QualType &type,
 
       // Conflicting nullability.
       Diag(nullabilityLoc, diag::err_nullability_conflicting)
-        << static_cast<unsigned>(nullability) 
-        << isContextSensitive
-        << static_cast<unsigned>(*existingNullability)
-        << false;
+        << DiagNullabilityKind(nullability, isContextSensitive)
+        << DiagNullabilityKind(*existingNullability, false);
       return true;
     }
 
@@ -5513,10 +5510,8 @@ bool Sema::checkNullabilityTypeSpecifier(QualType &type,
   if (auto existingNullability = desugared->getNullability(Context)) {
     if (nullability != *existingNullability && !implicit) {
       Diag(nullabilityLoc, diag::err_nullability_conflicting)
-        << static_cast<unsigned>(nullability)
-        << isContextSensitive
-        << static_cast<unsigned>(*existingNullability)
-        << false;
+        << DiagNullabilityKind(nullability, isContextSensitive)
+        << DiagNullabilityKind(*existingNullability, false);
 
       // Try to find the typedef with the existing nullability specifier.
       if (auto typedefType = desugared->getAs<TypedefType>()) {
@@ -5526,7 +5521,7 @@ bool Sema::checkNullabilityTypeSpecifier(QualType &type,
               = AttributedType::stripOuterNullability(underlyingType)) {
           if (*typedefNullability == *existingNullability) {
             Diag(typedefDecl->getLocation(), diag::note_nullability_here)
-              << static_cast<unsigned>(*existingNullability);
+              << DiagNullabilityKind(*existingNullability, false);
           }
         }
       }
@@ -5539,8 +5534,7 @@ bool Sema::checkNullabilityTypeSpecifier(QualType &type,
   if (!desugared->canHaveNullability()) {
     if (!implicit) {
       Diag(nullabilityLoc, diag::err_nullability_nonpointer)
-        << static_cast<unsigned>(nullability)
-        << isContextSensitive << type;
+        << DiagNullabilityKind(nullability, isContextSensitive) << type;
     }
     return true;
   }
@@ -5554,15 +5548,13 @@ bool Sema::checkNullabilityTypeSpecifier(QualType &type,
         pointeeType->isObjCObjectPointerType() ||
         pointeeType->isMemberPointerType()) {
       Diag(nullabilityLoc, diag::err_nullability_cs_multilevel)
-        << static_cast<unsigned>(nullability)
+        << DiagNullabilityKind(nullability, true)
         << type;
-      if (nullability != NullabilityKind::Unspecified) {
-        Diag(nullabilityLoc, diag::note_nullability_type_specifier)
-          << static_cast<unsigned>(nullability)
-          << type
-          << FixItHint::CreateReplacement(nullabilityLoc,
-                                          getNullabilitySpelling(nullability));
-      }
+      Diag(nullabilityLoc, diag::note_nullability_type_specifier)
+        << DiagNullabilityKind(nullability, false)
+        << type
+        << FixItHint::CreateReplacement(nullabilityLoc,
+                                        getNullabilitySpelling(nullability));
       return true;
     }
   }
@@ -5663,7 +5655,8 @@ static bool distributeNullabilityTypeAttr(TypeProcessingState &state,
 
       auto diag = state.getSema().Diag(attr.getLoc(),
                                        diag::warn_nullability_declspec)
-        << static_cast<unsigned>(mapNullabilityAttrKind(attr.getKind()))
+        << DiagNullabilityKind(mapNullabilityAttrKind(attr.getKind()),
+                               attr.isContextSensitiveKeywordAttribute())
         << type
         << static_cast<unsigned>(pointerKind);
 

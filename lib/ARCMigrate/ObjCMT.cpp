@@ -775,6 +775,7 @@ void ObjCMigrateASTConsumer::AddNonnullAttribute(ASTContext &Ctx,
 
   clang::NullabilityKind nullabilityKind;
   std::string nullabilityString;
+  std::string nullabilityStringCS;
   TypeSourceInfo *TSInfo;
   const ObjCPropertyDecl *Prop = nullptr;
   bool PointeePointerType = false;
@@ -786,6 +787,7 @@ void ObjCMigrateASTConsumer::AddNonnullAttribute(ASTContext &Ctx,
       // get 'null_unspecified' annotation
       if (T->isAnyPointerType() && !isa<DecayedType>(T)) {
         nullabilityString = getNullabilitySpelling(NullabilityKind::Unspecified);
+        nullabilityStringCS = getNullabilitySpelling(NullabilityKind::Unspecified, true);
         TSInfo = Param->getTypeSourceInfo();
         PointeePointerType = IsPointeePointerType(T);
         if (PointeePointerType && IsNSErrorPointerToPointer(Ctx, T))
@@ -817,6 +819,7 @@ void ObjCMigrateASTConsumer::AddNonnullAttribute(ASTContext &Ctx,
             nullabilityKind == NullabilityKind::NonNull)
           return;
         nullabilityString = getNullabilitySpelling(nullabilityKind);
+        nullabilityStringCS = getNullabilitySpelling(nullabilityKind, true);
         TSInfo = Param->getTypeSourceInfo();
         PointeePointerType = IsPointeePointerType(T);
       }
@@ -829,6 +832,7 @@ void ObjCMigrateASTConsumer::AddNonnullAttribute(ASTContext &Ctx,
       // get 'null_unspecified' annotation
       if (T->isAnyPointerType() && !isa<DecayedType>(T)) {
         nullabilityString = getNullabilitySpelling(NullabilityKind::Unspecified);
+        nullabilityStringCS = getNullabilitySpelling(NullabilityKind::Unspecified, true);
         TSInfo = Prop->getTypeSourceInfo();
         PointeePointerType = IsPointeePointerType(T);
       }
@@ -840,10 +844,13 @@ void ObjCMigrateASTConsumer::AddNonnullAttribute(ASTContext &Ctx,
         if (nullabilityKind == NullabilityKind::NonNull)
             return;
         // FIXME. NullabilityKind does not have a NullResettable entry.
-        if (nullabilityKind == NullabilityKind::Unspecified)
+        if (nullabilityKind == NullabilityKind::Unspecified) {
           nullabilityString = "null_resettable";
-        else
+          nullabilityStringCS = nullabilityString;
+        } else {
           nullabilityString = getNullabilitySpelling(nullabilityKind);
+          nullabilityStringCS = getNullabilitySpelling(nullabilityKind, true);
+        }
         TSInfo = Prop->getTypeSourceInfo();
         PointeePointerType = IsPointeePointerType(T);
       }
@@ -856,6 +863,7 @@ void ObjCMigrateASTConsumer::AddNonnullAttribute(ASTContext &Ctx,
       // get 'null_unspecified' annotation
       if (T->isAnyPointerType()) {
         nullabilityString = getNullabilitySpelling(NullabilityKind::Unspecified);
+        nullabilityStringCS = getNullabilitySpelling(NullabilityKind::Unspecified, true);
         TSInfo = VDecl->getTypeSourceInfo();
         PointeePointerType = IsPointeePointerType(T);
       }
@@ -866,6 +874,7 @@ void ObjCMigrateASTConsumer::AddNonnullAttribute(ASTContext &Ctx,
         if (nullabilityKind == NullabilityKind::NonNull)
           return;
         nullabilityString = getNullabilitySpelling(nullabilityKind);
+        nullabilityStringCS = getNullabilitySpelling(nullabilityKind, true);
         TSInfo = Prop->getTypeSourceInfo();
         PointeePointerType = IsPointeePointerType(T);
     }
@@ -878,7 +887,7 @@ void ObjCMigrateASTConsumer::AddNonnullAttribute(ASTContext &Ctx,
   if (PointeePointerType) {
     // __nullability must be applied to outer-most pointer type.
     std::string SpacedNullableString = " ";
-    SpacedNullableString += nullabilityString;
+    SpacedNullableString += nullabilityStringCS;
     if (isa<ParmVarDecl>(D) || isa<VarDecl>(D))
       SpacedNullableString += " ";
     commit.insertAfterToken(TL.getEndLoc(), SpacedNullableString);
@@ -886,13 +895,14 @@ void ObjCMigrateASTConsumer::AddNonnullAttribute(ASTContext &Ctx,
     SourceLocation LParenLoc = Prop->getLParenLoc();
     if (LParenLoc.isInvalid()) {
       std::string attr_list = "(";
-      attr_list += nullabilityString.substr(2);
+      attr_list += nullabilityStringCS;
       attr_list += ") ";
       commit.insertBefore(TL.getBeginLoc(), attr_list);
     }
     else {
       nullabilityString += ", ";
-      commit.insertAfterToken(LParenLoc, nullabilityString.substr(2));
+      nullabilityStringCS += ", ";
+      commit.insertAfterToken(LParenLoc, nullabilityStringCS);
     }
   }
   else {
@@ -902,6 +912,7 @@ void ObjCMigrateASTConsumer::AddNonnullAttribute(ASTContext &Ctx,
     }
 
     nullabilityString += " ";
+    nullabilityStringCS += " ";
     // Special handling of parameter types inside method declarations.
     if (Sugar) {
       const char *starSelBuf = PP.getSourceManager().getCharacterData(SelLoc);
@@ -914,7 +925,7 @@ void ObjCMigrateASTConsumer::AddNonnullAttribute(ASTContext &Ctx,
       InsertionLocation = SelLoc.getLocWithOffset(parenBuf - starSelBuf + 1);
     }
     commit.insertBefore(InsertionLocation,
-                        Sugar ? nullabilityString.substr(2) : nullabilityString);
+                        Sugar ? nullabilityStringCS : nullabilityString);
   }
   Editor->commit(commit);
 }
@@ -974,6 +985,7 @@ void ObjCMigrateASTConsumer::migrateApiNoteReturnsNonnullAttr(ASTContext &Ctx,
   
   clang::NullabilityKind nullabilityKind;
   std::string nullabilityString;
+  std::string nullabilityStringCS;
   auto attributed = dyn_cast<AttributedType>(T.getTypePtr());
   if (!attributed) {
     // NSError ** needs no annotation.
@@ -982,8 +994,10 @@ void ObjCMigrateASTConsumer::migrateApiNoteReturnsNonnullAttr(ASTContext &Ctx,
 
     // Declarations inside the region that have no annotation should
     // get 'null_unspecified' annotation
-    if (T->isAnyPointerType() && !isa<DecayedType>(T))
+    if (T->isAnyPointerType() && !isa<DecayedType>(T)) {
       nullabilityString = getNullabilitySpelling(NullabilityKind::Unspecified);
+      nullabilityStringCS = getNullabilitySpelling(NullabilityKind::Unspecified, true);
+    }
   }
   else if (auto nullability = attributed->getImmediateNullability()) {
       nullabilityKind = *nullability;
@@ -994,6 +1008,7 @@ void ObjCMigrateASTConsumer::migrateApiNoteReturnsNonnullAttr(ASTContext &Ctx,
           nullabilityKind == NullabilityKind::NonNull)
         return;
       nullabilityString = getNullabilitySpelling(nullabilityKind);
+      nullabilityStringCS = getNullabilitySpelling(nullabilityKind, true);
     }
   if (nullabilityString.empty())
     return;
@@ -1004,7 +1019,7 @@ void ObjCMigrateASTConsumer::migrateApiNoteReturnsNonnullAttr(ASTContext &Ctx,
   else {
     // return turn is implicitly 'id'.
     nullabilityString = " (";
-    nullabilityString += getNullabilitySpelling(NullabilityKind::Unspecified).substr(2);
+    nullabilityString += getNullabilitySpelling(NullabilityKind::Unspecified, true);
     nullabilityString += " id)";
     edit::Commit commit(*Editor);
     commit.insertAfterToken(D->getLocStart(), nullabilityString);
@@ -1012,6 +1027,7 @@ void ObjCMigrateASTConsumer::migrateApiNoteReturnsNonnullAttr(ASTContext &Ctx,
     return;
   }
   nullabilityString += " ";
+  nullabilityStringCS += " ";
   bool PointeePointerType = IsPointeePointerType(T);
   edit::Commit commit(*Editor);
   if (PointeePointerType) {
@@ -1029,7 +1045,7 @@ void ObjCMigrateASTConsumer::migrateApiNoteReturnsNonnullAttr(ASTContext &Ctx,
       InsertionLocation = D->getLocStart().getLocWithOffset(parenBuf - starSelBuf + 1);
     }
     commit.insertBefore(InsertionLocation,
-                        Sugar ? nullabilityString.substr(2) : nullabilityString);
+                        Sugar ? nullabilityStringCS : nullabilityString);
   }
   Editor->commit(commit);
 }

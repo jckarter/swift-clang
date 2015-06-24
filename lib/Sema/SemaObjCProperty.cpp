@@ -1762,7 +1762,7 @@ void Sema::DiagnoseUnimplementedProperties(Scope *S, ObjCImplDecl* IMPDecl,
   }
 }
 
-void Sema::diagnoseNullResettableSynthesizedSetters(ObjCImplDecl *impDecl) {
+void Sema::diagnoseNullResettableSynthesizedSetters(const ObjCImplDecl *impDecl) {
   for (const auto *propertyImpl : impDecl->property_impls()) {
     const auto *property = propertyImpl->getPropertyDecl();
 
@@ -2029,7 +2029,7 @@ void Sema::ProcessPropertyDecl(ObjCPropertyDecl *property,
     if (property->getPropertyAttributes() &
         ObjCPropertyDecl::OBJC_PR_null_resettable) {
       QualType modifiedTy = resultTy;
-      if (auto nullability = AttributedType::stripOuterNullability(modifiedTy)){
+      if (auto nullability = AttributedType::stripOuterNullability(modifiedTy)) {
         if (*nullability == NullabilityKind::Unspecified)
           resultTy = Context.getAttributedType(AttributedType::attr_nonnull,
                                                modifiedTy, modifiedTy);
