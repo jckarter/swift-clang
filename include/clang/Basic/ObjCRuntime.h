@@ -306,6 +306,23 @@ public:
     }
   }
 
+  /// Are the empty collection symbols available?
+  bool hasEmptyCollections() const {
+    switch (getKind()) {
+    case MacOSX:
+      return getVersion() >= VersionTuple(10, 11);
+    case iOS:
+      return getVersion() >= VersionTuple(9);
+    case WatchOS:
+      return getVersion() >= VersionTuple(2);
+    case GNUstep:
+      return false;
+      
+    default:
+      return false;
+    }
+  }
+
   /// \brief Try to parse an Objective-C runtime specification from the given
   /// string.
   ///
