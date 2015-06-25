@@ -588,7 +588,7 @@ void Darwin::AddDeploymentTarget(DerivedArgList &Args) const {
               OSXTarget = Version;
             else if (SDK.startswith("WatchOS") ||
                      SDK.startswith("WatchSimulator"))
-              WatchOSTarget = Verion;
+              WatchOSTarget = Version;
             else if (SDK.startswith("AppleTVOS") ||
                      SDK.startswith("AppleTVSimulator"))
               TvOSTarget = Version; 
