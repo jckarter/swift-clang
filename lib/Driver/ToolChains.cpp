@@ -565,7 +565,7 @@ void Darwin::AddDeploymentTarget(DerivedArgList &Args) const {
     // If there is no command-line argument to specify the Target version and
     // no environment variable defined, see if we can set the default based
     // on -isysroot.
-    if (OSXTarget.empty && iOSTarget.empty() &&
+    if (OSXTarget.empty() && iOSTarget.empty() &&
         TvOSTarget.empty() && WatchOSTarget.empty() &&
         Args.hasArg(options::OPT_isysroot)) {
       if (const Arg *A = Args.getLastArg(options::OPT_isysroot)) {
