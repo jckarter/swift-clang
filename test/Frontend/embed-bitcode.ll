@@ -16,6 +16,12 @@
 ; RUN:    -fembed-bitcode-marker -x ir %t.bc -o - \
 ; RUN:    | FileCheck %s -check-prefix=CHECK-MARKER
 
+; run through -fembed-bitcode twice and make sure it doesn't crash
+; RUN: %clang_cc1 -triple thumbv7-apple-ios8.0.0 -emit-llvm-bc \
+; RUN:    -fembed-bitcode -x ir %s -o - \
+; RUN: | %clang_cc1 -triple thumbv7-apple-ios8.0.0 -emit-llvm \
+; RUN:    -fembed-bitcode -x ir - -o /dev/null
+
 ; check the magic number of bitcode at the beginning of the string
 ; CHECK: @llvm.embedded.module
 ; CHECK: c"\DE\C0\17\0B

@@ -717,9 +717,9 @@ void clang::EmbedBitcode(llvm::Module *M, const CodeGenOptions &CGOpts,
   GV->setSection("__LLVM,__bitcode");
   if (llvm::GlobalVariable *Old =
       M->getGlobalVariable("llvm.embedded.module")) {
+    assert(Old->use_empty() && "llvm.embedded.module must have no uses");
     GV->takeName(Old);
-    Old->replaceAllUsesWith(GV);
-    delete Old;
+    Old->eraseFromParent();
   } else {
     GV->setName("llvm.embedded.module");
   }
@@ -735,9 +735,9 @@ void clang::EmbedBitcode(llvm::Module *M, const CodeGenOptions &CGOpts,
                                 CmdConstant);
   GV->setSection("__LLVM,__cmdline");
   if (llvm::GlobalVariable *Old = M->getGlobalVariable("llvm.cmdline")) {
+    assert(Old->use_empty() && "llvm.cmdline must have no uses");
     GV->takeName(Old);
-    Old->replaceAllUsesWith(GV);
-    delete Old;
+    Old->eraseFromParent();
   } else {
     GV->setName("llvm.cmdline");
   }
