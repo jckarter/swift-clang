@@ -179,7 +179,7 @@ namespace clang {
       void *OldDiagnosticContext = Ctx.getDiagnosticContext();
       Ctx.setDiagnosticHandler(DiagnosticHandler, this);
 
-      EmbedBitcode(TheModule.get(), CodeGenOpts);
+      EmbedBitcode(TheModule.get(), CodeGenOpts, llvm::MemoryBufferRef());
       EmitBackendOutput(Diags, CodeGenOpts, TargetOpts, LangOpts,
                         C.getTargetInfo().getTargetDescription(),
                         TheModule.get(), Action, AsmOutStream);
@@ -734,7 +734,8 @@ void CodeGenAction::ExecuteAction() {
       TheModule->setTargetTriple(TargetOpts.Triple);
     }
 
-    EmbedBitcode(TheModule.get(), CI.getCodeGenOpts());
+    EmbedBitcode(TheModule.get(), CI.getCodeGenOpts(),
+                 MainFile->getMemBufferRef());
     if (CI.getCodeGenOpts().DisableBitcodeAsm &&
         ContainInlineAsm(TheModule.get())) {
       CI.getDiagnostics().Report(SourceLocation(),

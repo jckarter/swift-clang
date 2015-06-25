@@ -14,6 +14,7 @@
 
 namespace llvm {
   class Module;
+  class MemoryBufferRef;
 }
 
 namespace clang {
@@ -36,7 +37,8 @@ namespace clang {
                          StringRef TDesc, llvm::Module *M, BackendAction Action,
                          raw_pwrite_stream *OS);
 
-  void EmbedBitcode(llvm::Module *M, const CodeGenOptions &CGOpts);
+  void EmbedBitcode(llvm::Module *M, const CodeGenOptions &CGOpts,
+                    llvm::MemoryBufferRef Buf);
   bool ContainInlineAsm(llvm::Module *M);
 }
 

@@ -683,21 +683,32 @@ void clang::EmitBackendOutput(DiagnosticsEngine &Diags,
 
 // With -fembed-bitcode, save a copy of the llvm IR as data in the
 // __LLVM,__bitcode section.
-void clang::EmbedBitcode(llvm::Module *M, const CodeGenOptions &CGOpts)
+void clang::EmbedBitcode(llvm::Module *M, const CodeGenOptions &CGOpts,
+                         llvm::MemoryBufferRef Buf)
 {
   if (!CGOpts.EmbedBitcode && !CGOpts.EmbedMarkerOnly)
     return;
 
   // Embed the bitcode for the llvm module.
   std::string Data;
-  llvm::raw_string_ostream OS(Data);
-  if (!CGOpts.EmbedMarkerOnly)
-    // FIXME: It's crazy to serialize here.  Instead we should just copy the
-    // raw data.
-    llvm::WriteBitcodeToFile(M, OS, /* ShouldPreserveUseListOrder */ true);
-  ArrayRef<uint8_t> ModuleData((uint8_t*)OS.str().data(), OS.str().size());
+  ArrayRef<uint8_t> ModuleData;
+  if (!CGOpts.EmbedMarkerOnly) {
+    if (!isBitcode((const unsigned char*)Buf.getBufferStart(),
+                   (const unsigned char*)Buf.getBufferEnd())) {
+      // If the input is LLVM Assembly, bitcode is produced by serializing
+      // the module. Use-lists order need to be perserved in this case.
+      llvm::raw_string_ostream OS(Data);
+      llvm::WriteBitcodeToFile(M, OS, /* ShouldPreserveUseListOrder */ true);
+      ModuleData = ArrayRef<uint8_t>((uint8_t*)OS.str().data(),
+                                     OS.str().size());
+    } else {
+      // If the input is LLVM bitcode, write the input byte stream directly.
+      ModuleData = ArrayRef<uint8_t>((uint8_t*)Buf.getBufferStart(),
+                                     Buf.getBufferSize());
+    }
+  }
   llvm::Constant *ModuleConstant =
-    llvm::ConstantDataArray::get(M->getContext(), ModuleData);
+      llvm::ConstantDataArray::get(M->getContext(), ModuleData);
   // Use Appending linkage so it doesn't get optimized out.
   llvm::GlobalVariable *GV = new llvm::GlobalVariable(*M,
                                        ModuleConstant->getType(), true,
