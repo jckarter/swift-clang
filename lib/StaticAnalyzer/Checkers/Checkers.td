@@ -452,6 +452,10 @@ def DirectIvarAssignmentForAnnotatedFunctions : Checker<"DirectIvarAssignmentFor
   HelpText<"Check for direct assignments to instance variables in the methods annotated with objc_no_direct_instance_variable_assignment">,
   DescFile<"DirectIvarAssignment.cpp">;
 
+def ObjCGenericsChecker : Checker<"ObjCGenerics">,
+  HelpText<"Checks for type errors.">,
+  DescFile<"ObjCGenericsChecker.cpp">;
+
 } // end "alpha.osx.cocoa"
 
 let ParentPackage = CoreFoundation in {
