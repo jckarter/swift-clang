@@ -3925,7 +3925,7 @@ void ASTDeclReader::UpdateDecl(Decl *D, ModuleFile &ModuleFile,
           Reader.Context, ReadSourceRange(Record, Idx)));
       break;
 
-    case UPD_DECL_EXPORTED:
+    case UPD_DECL_EXPORTED: {
       unsigned SubmoduleID = readSubmoduleID(Record, Idx);
       auto *Exported = cast<NamedDecl>(D);
       if (auto *TD = dyn_cast<TagDecl>(Exported))
@@ -3947,6 +3947,14 @@ void ASTDeclReader::UpdateDecl(Decl *D, ModuleFile &ModuleFile,
         // The declaration is now visible.
         Exported->Hidden = false;
       }
+      break;
+    }
+
+    case UPD_ADDED_ATTR_TO_RECORD:
+      AttrVec Attrs;
+      Reader.ReadAttributes(F, Attrs, Record, Idx);
+      assert(Attrs.size() == 1);
+      D->addAttr(Attrs[0]);
       break;
     }
   }

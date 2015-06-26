@@ -1431,7 +1431,7 @@ namespace {
         return false;
       }
       unsigned BuiltinID = FD->getBuiltinID();
-      if (!BuiltinID)
+      if (!BuiltinID || !BI.isLibFunction(BuiltinID))
         return true;
       StringRef BuiltinName = BI.GetName(BuiltinID);
       if (BuiltinName.startswith("__builtin_") &&
@@ -1460,7 +1460,12 @@ CodeGenModule::isTriviallyRecursive(const FunctionDecl *FD) {
     Name = FD->getName();
   }
 
-  FunctionIsDirectlyRecursive Walker(Name, Context.BuiltinInfo);
+  auto &BI = Context.BuiltinInfo;
+  unsigned BuiltinID = Context.Idents.get(Name).getBuiltinID();
+  if (!BuiltinID || !BI.isPredefinedLibFunction(BuiltinID))
+    return false;
+
+  FunctionIsDirectlyRecursive Walker(Name, BI);
   Walker.TraverseFunctionDecl(const_cast<FunctionDecl*>(FD));
   return Walker.Result;
 }
