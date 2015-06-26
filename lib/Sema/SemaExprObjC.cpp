@@ -593,7 +593,8 @@ ExprResult Sema::BuildObjCBoxedExpr(SourceRange SR, Expr *ValueExpr) {
           DeclContext *TU = Context.getTranslationUnitDecl();
           NSValueDecl = ObjCInterfaceDecl::Create(Context, TU,
                                                   SourceLocation(), NSValueId,
-                                                  nullptr, SourceLocation());
+                                                  nullptr, nullptr,
+                                                  SourceLocation());
         } else {
           // Otherwise, require a declaration of NSValue.
           Diag(SR.getBegin(), diag::err_undeclared_nsvalue);
