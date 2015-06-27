@@ -2198,8 +2198,7 @@ llvm::DIType *CGDebugInfo::getTypeASTRefOrNull(Decl *TyDecl, llvm::DIFile *F) {
       if (!RD->getDefinition())
         return nullptr;
       Tag = getTagForRecord(RD);
-      UID = getUniqueTagTypeName(cast<TagType>(RD->getTypeForDecl()),
-                                 CGM, TheCU);
+      UID = getUniqueTagTypeName(cast<TagType>(RD->getTypeForDecl()), CGM, TheCU);
       if (UID.empty())
         return nullptr;
     } else if (auto *RD = dyn_cast<RecordDecl>(TyDecl)) {
