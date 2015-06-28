@@ -62,8 +62,7 @@ class FindTopLevelDeclConsumer : public clang::ASTConsumer {
 TEST(runToolOnCode, FindsNoTopLevelDeclOnEmptyCode) {
   bool FoundTopLevelDecl = false;
   EXPECT_TRUE(
-      runToolOnCode(
-          new TestAction(llvm::make_unique<FindTopLevelDeclConsumer>(
+      runToolOnCode(new TestAction(llvm::make_unique<FindTopLevelDeclConsumer>(
                         &FoundTopLevelDecl)),
                     ""));
   EXPECT_FALSE(FoundTopLevelDecl);

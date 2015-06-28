@@ -145,4 +145,3 @@ clang_ModuleMapDescriptor_writeToBuffer(CXModuleMapDescriptor MMD, unsigned,
 void clang_ModuleMapDescriptor_dispose(CXModuleMapDescriptor MMD) {
   delete MMD;
 }
-

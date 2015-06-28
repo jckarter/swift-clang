@@ -56,7 +56,6 @@ public:
 class ModuleLoader {
   // Building a module if true.
   bool BuildingModule;
-
 public:
   explicit ModuleLoader(bool BuildingModule = false) :
     BuildingModule(BuildingModule),
@@ -72,7 +71,7 @@ public:
   void setBuildingModule(bool BuildingModuleFlag) {
     BuildingModule = BuildingModuleFlag;
   }
-
+ 
   /// \brief Attempt to load the given module.
   ///
   /// This routine attempts to load the module described by the given 

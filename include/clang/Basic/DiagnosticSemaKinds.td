@@ -2718,9 +2718,6 @@ def warn_attribute_nonnull_parm_no_args : Warning<
 def warn_attribute_noescape_non_pointer : Warning<
   "'noescape' attribute ignored on parameter of non-pointer type %0">,
   InGroup<IgnoredAttributes>;
-def warn_attribute_malloc_pointer_only : Warning<
-  "'malloc' attribute only applies to functions returning a pointer type">,
-  InGroup<IgnoredAttributes>;
 def warn_attribute_sentinel_named_arguments : Warning<
   "'sentinel' attribute requires named arguments">,
   InGroup<IgnoredAttributes>;
@@ -7741,7 +7738,6 @@ def warn_nullability_lost : Warning<
 
 def err_nullability_cs_multilevel : Error<
   "nullability keyword %0 cannot be applied to multi-level pointer type %1">;
-
 def note_nullability_type_specifier : Note<
   "use nullability type specifier %0 to affect the innermost "
   "pointer type of %1">;

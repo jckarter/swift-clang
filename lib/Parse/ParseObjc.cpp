@@ -1192,7 +1192,7 @@ void Parser::ParseObjCTypeQualifierList(ObjCDeclSpec &DS,
         Nullability = NullabilityKind::Nullable;
         break;
 
-      case objc_null_unspecified:
+      case objc_null_unspecified: 
         Qual = ObjCDeclSpec::DQ_CSNullability;
         Nullability = NullabilityKind::Unspecified;
         break;

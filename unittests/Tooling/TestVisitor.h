@@ -62,9 +62,7 @@ public:
         Args.push_back("-fblocks");
         break;
     }
-
-    return tooling::runToolOnCodeWithArgs(
-        CreateTestAction(), Code, Args);
+    return tooling::runToolOnCodeWithArgs(CreateTestAction(), Code, Args);
   }
 
   bool shouldVisitTemplateInstantiations() const {

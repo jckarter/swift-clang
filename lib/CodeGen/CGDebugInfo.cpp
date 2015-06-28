@@ -3441,7 +3441,6 @@ void CGDebugInfo::EmitGlobalVariable(const ValueDecl *VD,
   // FIXME: why not?
   if (Ty->getTag() == llvm::dwarf::DW_TAG_enumeration_type)
     return;
-
   // Do not emit separate definitions for function local const/statics.
   if (isa<FunctionDecl>(VD->getDeclContext()))
     return;

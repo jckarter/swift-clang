@@ -4969,7 +4969,6 @@ Value *CodeGenFunction::EmitAArch64BuiltinExpr(unsigned BuiltinID,
     llvm::Type *SourceTy = BuiltinID == NEON::BI__builtin_neon_vfmaq_lane_v ?
       llvm::VectorType::get(VTy->getElementType(), VTy->getNumElements() / 2) :
       VTy;
-
     llvm::Constant *cst = cast<Constant>(Ops[3]);
     Value *SV = llvm::ConstantVector::getSplat(VTy->getNumElements(), cst);
     Ops[1] = Builder.CreateBitCast(Ops[1], SourceTy);

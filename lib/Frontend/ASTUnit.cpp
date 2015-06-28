@@ -1733,8 +1733,7 @@ ASTUnit *ASTUnit::LoadFromCompilerInvocationAction(
   ASTUnit *AST = Unit;
   if (!AST) {
     // Create the AST unit.
-    OwnAST.reset(
-        create(CI, Diags, CaptureDiagnostics, UserFilesAreVolatile));
+    OwnAST.reset(create(CI, Diags, CaptureDiagnostics, UserFilesAreVolatile));
     AST = OwnAST.get();
     if (!AST)
       return nullptr;

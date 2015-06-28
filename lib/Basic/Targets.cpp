@@ -4167,16 +4167,17 @@ class ARMTargetInfo : public TargetInfo {
     if (T.isOSBinFormatMachO() && IsAPCS_VFP) {
       assert(!BigEndian && "APCS_VFP does not support big-endian");
       DescriptionString = "e-m:o-p:32:32-i64:64-a:0:32-n32-S128";
-    } else if (T.isOSBinFormatMachO()) {
+    } else if (T.isOSBinFormatMachO())
       DescriptionString =
           BigEndian
               ? "E-m:o-p:32:32-f64:32:64-v64:32:64-v128:32:128-a:0:32-n32-S32"
               : "e-m:o-p:32:32-f64:32:64-v64:32:64-v128:32:128-a:0:32-n32-S32";
-    } else
+    else
       DescriptionString =
           BigEndian
               ? "E-m:e-p:32:32-f64:32:64-v64:32:64-v128:32:128-a:0:32-n32-S32"
               : "e-m:e-p:32:32-f64:32:64-v64:32:64-v128:32:128-a:0:32-n32-S32";
+
     // FIXME: Override "preferred align" for double and long long.
   }
 

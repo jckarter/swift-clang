@@ -5527,7 +5527,6 @@ void Sema::ProcessPragmaWeak(Scope *S, Decl *D) {
   }
 }
 
-
 /// ProcessDeclAttributes - Given a declarator (PD) with attributes indicated in
 /// it, apply them to D.  This is a bit tricky because PD can have attributes
 /// specified in many different places, and we need to find and apply them all.
