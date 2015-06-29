@@ -85,7 +85,7 @@ class CGDebugInfo {
   llvm::SmallVector<ObjCInterfaceCacheEntry, 32> ObjCInterfaceCache;
 
   /// \brief Cache of references to AST files such as PCHs or modules.
-  llvm::DenseMap<uint64_t, llvm::MDModule *> ModuleRefCache;
+  llvm::DenseMap<uint64_t, llvm::DIModule *> ModuleRefCache;
 
   /// \brief list of interfaces we want to keep even if orphaned.
   std::vector<void *> RetainedTypes;
@@ -113,6 +113,7 @@ class CGDebugInfo {
   StringRef CWDName;
 
   llvm::DenseMap<const char *, llvm::TrackingMDRef> DIFileCache;
+  llvm::DenseMap<unsigned, llvm::TrackingMDRef> ModuleFileCache;
   llvm::DenseMap<const FunctionDecl *, llvm::TrackingMDRef> SPCache;
   /// \brief Cache declarations relevant to DW_TAG_imported_declarations (C++
   /// using declarations) that aren't covered by other more specific caches.
@@ -358,7 +359,7 @@ private:
   llvm::DIType *getOrCreateType(QualType Ty, llvm::DIFile *Fg);
 
   /// \brief Get a reference to a clang module.
-  llvm::MDModule *
+  llvm::DIModule *
   getOrCreateModuleRef(ExternalASTSource::ASTSourceDescriptor Mod);
 
   /// \brief Attempt to get a pointer to the serialized
