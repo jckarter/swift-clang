@@ -82,3 +82,34 @@ enum __attribute__((swift_name("MoreColors"))) MoreColors { // expected-error {{
   Yellow __attribute__((swift_name("RoseGold"))),
   Black __attribute__((swift_name("SpaceGrey()"))) // expected-error {{parameter of 'swift_name' attribute must be an ASCII identifier string}}
 };
+
+// --- swift_error ---
+
+@class NSError;
+
+@interface Erroneous
+- (_Bool) tom0: (NSError**) err __attribute__((swift_error(none)));
+- (_Bool) tom1: (NSError**) err __attribute__((swift_error(nonnull_error)));
+- (_Bool) tom2: (NSError**) err __attribute__((swift_error(null_result))); // expected-warning {{'swift_error' attribute with 'null_result' convention can only be applied to a method returning a pointer}}
+- (_Bool) tom3: (NSError**) err __attribute__((swift_error(nonzero_result)));
+- (_Bool) tom4: (NSError**) err __attribute__((swift_error(zero_result)));
+
+- (Undeclared) richard0: (NSError**) err __attribute__((swift_error(none))); // expected-error {{expected a type}}
+- (Undeclared) richard1: (NSError**) err __attribute__((swift_error(nonnull_error))); // expected-error {{expected a type}}
+- (Undeclared) richard2: (NSError**) err __attribute__((swift_error(null_result))); // expected-error {{expected a type}}
+// FIXME: the follow-on warnings should really be suppressed, but apparently having an ill-formed return type doesn't mark anything as invalid
+- (Undeclared) richard3: (NSError**) err __attribute__((swift_error(nonzero_result))); // expected-error {{expected a type}} expected-warning {{can only be applied}}
+- (Undeclared) richard4: (NSError**) err __attribute__((swift_error(zero_result))); // expected-error {{expected a type}} expected-warning {{can only be applied}}
+
+- (instancetype) harry0: (NSError**) err __attribute__((swift_error(none)));
+- (instancetype) harry1: (NSError**) err __attribute__((swift_error(nonnull_error)));
+- (instancetype) harry2: (NSError**) err __attribute__((swift_error(null_result)));
+- (instancetype) harry3: (NSError**) err __attribute__((swift_error(nonzero_result))); // expected-warning {{'swift_error' attribute with 'nonzero_result' convention can only be applied to a method returning an integral type}}
+- (instancetype) harry4: (NSError**) err __attribute__((swift_error(zero_result))); // expected-warning {{'swift_error' attribute with 'zero_result' convention can only be applied to a method returning an integral type}}
+
+- (instancetype) harry0 __attribute__((swift_error(none)));
+- (instancetype) harry1 __attribute__((swift_error(nonnull_error))); // expected-warning {{'swift_error' attribute can only be applied to a method with an error parameter}}
+- (instancetype) harry2 __attribute__((swift_error(null_result))); // expected-warning {{'swift_error' attribute can only be applied to a method with an error parameter}}
+- (instancetype) harry3 __attribute__((swift_error(nonzero_result))); // expected-warning {{'swift_error' attribute can only be applied to a method with an error parameter}}
+- (instancetype) harry4 __attribute__((swift_error(zero_result))); // expected-warning {{'swift_error' attribute can only be applied to a method with an error parameter}}
+@end

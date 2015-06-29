@@ -1231,6 +1231,15 @@ def Regparm : TypeAttr {
   let Documentation = [RegparmDocs];
 }
 
+def SwiftError : InheritableAttr {
+  let Spellings = [GCC<"swift_error">];
+  let Args = [EnumArgument<"Convention", "ConventionKind",
+               ["none", "nonnull_error", "null_result", "zero_result", "nonzero_result"],
+               ["None", "NonNullError", "NullResult", "ZeroResult", "NonZeroResult"]>];
+  let Subjects = SubjectList<[ObjCMethod, Function], ErrorDiag>;
+  let Documentation = [Undocumented];
+}
+
 def SwiftName : InheritableAttr {
   let Spellings = [GCC<"swift_name">];
   let Args = [StringArgument<"Name">];
