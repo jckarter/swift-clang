@@ -2846,10 +2846,10 @@ def err_attr_swift_name_method : Error<
 def warn_attr_swift_name_num_params : Warning<
   "too %select{few|many}0 parameters in %1 attribute (expected %2; got %3)">,
   InGroup<DiagGroup<"swift-name-attribute">>;
-def warn_attr_swift_error_no_error_parameter : Warning<
+def err_attr_swift_error_no_error_parameter : Error<
   "%0 attribute can only be applied to a %select{function|method}1 "
   "with an error parameter">;
-def warn_attr_swift_error_return_type : Warning<
+def err_attr_swift_error_return_type : Error<
   "%0 attribute with '%1' convention can only be applied to a "
   "%select{function|method}2 returning %select{an integral type|a pointer}3">;
 

@@ -1231,7 +1231,7 @@ def SwiftError : InheritableAttr {
                ["none", "nonnull_error", "null_result", "zero_result", "nonzero_result"],
                ["None", "NonNullError", "NullResult", "ZeroResult", "NonZeroResult"]>];
   let Subjects = SubjectList<[ObjCMethod, Function], ErrorDiag>;
-  let Documentation = [Undocumented];
+  let Documentation = [SwiftErrorDocs];
 }
 
 def SwiftName : InheritableAttr {
