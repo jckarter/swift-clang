@@ -3129,25 +3129,9 @@ static PointerDeclaratorKind classifyPointerDeclarator(Sema &S,
     if (auto recordType = type->getAs<RecordType>()) {
       RecordDecl *recordDecl = recordType->getDecl();
 
-      bool isCFError = false;
-      if (S.CFError) {
-        // If we already know about CFError, test it directly.
-        isCFError = (S.CFError == recordDecl);
-      } else {
-        // Check whether this is CFError, which we identify based on its bridge
-        // to NSError.
-        if (recordDecl->getTagKind() == TTK_Struct && numNormalPointers > 0) {
-          if (auto bridgeAttr = recordDecl->getAttr<ObjCBridgeAttr>()) {
-            if (bridgeAttr->getBridgedType() == S.getNSErrorIdent()) {
-              S.CFError = recordDecl;
-              isCFError = true;
-            }
-          }
-        }
-      }
-
       // If this is CFErrorRef*, report it as such.
-      if (isCFError && numNormalPointers == 2 && numTypeSpecifierPointers < 2) {
+      if (numNormalPointers == 2 && numTypeSpecifierPointers < 2 &&
+          S.isCFError(recordDecl)) {
         return PointerDeclaratorKind::CFErrorRefPointer;
       }
       break;
@@ -3170,6 +3154,26 @@ static PointerDeclaratorKind classifyPointerDeclarator(Sema &S,
   default:
     return PointerDeclaratorKind::MultiLevelPointer;
   }
+}
+
+bool Sema::isCFError(RecordDecl *recordDecl) {
+  // If we already know about CFError, test it directly.
+  if (CFError) {
+    return (CFError == recordDecl);
+  }
+
+  // Check whether this is CFError, which we identify based on being
+  // bridged to NSError.
+  if (recordDecl->getTagKind() == TTK_Struct) {
+    if (auto bridgeAttr = recordDecl->getAttr<ObjCBridgeAttr>()) {
+      if (bridgeAttr->getBridgedType() == getNSErrorIdent()) {
+        CFError = recordDecl;
+        return true;
+      }
+    }
+  }
+
+  return false;
 }
 
 static FileID getNullabilityCompletenessCheckFileID(Sema &S,

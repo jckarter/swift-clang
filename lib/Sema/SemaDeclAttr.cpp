@@ -4319,20 +4319,22 @@ static void handleSwiftName(Sema &S, Decl *D, const AttributeList &Attr) {
 
 static bool isErrorParameter(Sema &S, QualType paramType) {
   if (auto ptr = paramType->getAs<PointerType>()) {
-    auto pointee = ptr->getPointeeType();
+    auto outerPointee = ptr->getPointeeType();
 
     // NSError**.
-    if (auto objcPtr = pointee->getAs<ObjCObjectPointerType>()) {
+    if (auto objcPtr = outerPointee->getAs<ObjCObjectPointerType>()) {
       if (auto iface = objcPtr->getInterfaceDecl())
         if (iface->getIdentifier() == S.getNSErrorIdent())
           return true;
     }
 
     // CFErrorRef*.
-    if (auto tdef = pointee->getAs<TypedefType>()) {
-      if (tdef->getDecl()->getName() == "CFErrorRef" &&
-          pointee->isCARCBridgableType())
-        return true;
+    if (auto cPtr = outerPointee->getAs<PointerType>()) {
+      auto innerPointee = cPtr->getPointeeType();
+      if (auto recordType = innerPointee->getAs<RecordType>()) {
+        if (S.isCFError(recordType->getDecl()))
+          return true;
+      }
     }
   }
 
@@ -4357,7 +4359,7 @@ static void handleSwiftError(Sema &S, Decl *D, const AttributeList &attr) {
         return true;
     }
 
-    S.Diag(attr.getLoc(), diag::warn_attr_swift_error_no_error_parameter)
+    S.Diag(attr.getLoc(), diag::err_attr_swift_error_no_error_parameter)
       << attr.getName() << isa<ObjCMethodDecl>(D);
     return false;
   };
@@ -4372,7 +4374,7 @@ static void handleSwiftError(Sema &S, Decl *D, const AttributeList &attr) {
     if (returnType->hasPointerRepresentation() &&
         !returnType->isReferenceType()) return true;
 
-    S.Diag(attr.getLoc(), diag::warn_attr_swift_error_return_type)
+    S.Diag(attr.getLoc(), diag::err_attr_swift_error_return_type)
       << attr.getName() << conventionStr
       << isa<ObjCMethodDecl>(D) << /*pointer*/ 1;
     return false;
@@ -4384,7 +4386,7 @@ static void handleSwiftError(Sema &S, Decl *D, const AttributeList &attr) {
     QualType returnType = getFunctionOrMethodResultType(D);
     if (returnType->isIntegralType(S.Context)) return true;
 
-    S.Diag(attr.getLoc(), diag::warn_attr_swift_error_return_type)
+    S.Diag(attr.getLoc(), diag::err_attr_swift_error_return_type)
       << attr.getName() << conventionStr
       << isa<ObjCMethodDecl>(D) << /*integral*/ 0;
     return false;
