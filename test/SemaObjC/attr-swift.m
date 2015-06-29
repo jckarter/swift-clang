@@ -87,6 +87,8 @@ enum __attribute__((swift_name("MoreColors"))) MoreColors { // expected-error {{
 
 @class NSError;
 
+typedef struct __attribute__((objc_bridge(NSError))) __CFError *CFErrorRef;
+
 @interface Erroneous
 - (_Bool) tom0: (NSError**) err __attribute__((swift_error(none)));
 - (_Bool) tom1: (NSError**) err __attribute__((swift_error(nonnull_error)));
@@ -113,3 +115,30 @@ enum __attribute__((swift_name("MoreColors"))) MoreColors { // expected-error {{
 - (instancetype) harry3 __attribute__((swift_error(nonzero_result))); // expected-error {{'swift_error' attribute can only be applied to a method with an error parameter}}
 - (instancetype) harry4 __attribute__((swift_error(zero_result))); // expected-error {{'swift_error' attribute can only be applied to a method with an error parameter}}
 @end
+
+extern _Bool tom0(CFErrorRef *) __attribute__((swift_error(none)));
+extern _Bool tom1(CFErrorRef *) __attribute__((swift_error(nonnull_error)));
+extern _Bool tom2(CFErrorRef *) __attribute__((swift_error(null_result))); // expected-error {{'swift_error' attribute with 'null_result' convention can only be applied to a function returning a pointer}}
+extern _Bool tom3(CFErrorRef *) __attribute__((swift_error(nonzero_result)));
+extern _Bool tom4(CFErrorRef *) __attribute__((swift_error(zero_result)));
+
+extern Undeclared richard0(CFErrorRef *) __attribute__((swift_error(none))); // expected-error {{unknown type name 'Undeclared'}}
+extern Undeclared richard1(CFErrorRef *) __attribute__((swift_error(nonnull_error))); // expected-error {{unknown type name 'Undeclared'}}
+extern Undeclared richard2(CFErrorRef *) __attribute__((swift_error(null_result))); // expected-error {{unknown type name 'Undeclared'}}
+extern Undeclared richard3(CFErrorRef *) __attribute__((swift_error(nonzero_result))); // expected-error {{unknown type name 'Undeclared'}}
+extern Undeclared richard4(CFErrorRef *) __attribute__((swift_error(zero_result))); // expected-error {{unknown type name 'Undeclared'}}
+
+extern void *harry0(CFErrorRef *) __attribute__((swift_error(none)));
+extern void *harry1(CFErrorRef *) __attribute__((swift_error(nonnull_error)));
+extern void *harry2(CFErrorRef *) __attribute__((swift_error(null_result)));
+extern void *harry3(CFErrorRef *) __attribute__((swift_error(nonzero_result))); // expected-error {{'swift_error' attribute with 'nonzero_result' convention can only be applied to a function returning an integral type}}
+extern void *harry4(CFErrorRef *) __attribute__((swift_error(zero_result))); // expected-error {{'swift_error' attribute with 'zero_result' convention can only be applied to a function returning an integral type}}
+
+extern void *wilma0(void) __attribute__((swift_error(none)));
+extern void *wilma1(void) __attribute__((swift_error(nonnull_error))); // expected-error {{'swift_error' attribute can only be applied to a function with an error parameter}}
+extern void *wilma2(void) __attribute__((swift_error(null_result))); // expected-error {{'swift_error' attribute can only be applied to a function with an error parameter}}
+extern void *wilma3(void) __attribute__((swift_error(nonzero_result))); // expected-error {{'swift_error' attribute can only be applied to a function with an error parameter}}
+extern void *wilma4(void) __attribute__((swift_error(zero_result))); // expected-error {{'swift_error' attribute can only be applied to a function with an error parameter}}
+
+
+extern _Bool suzanne __attribute__((swift_error(none))); // expected-error {{'swift_error' attribute only applies to functions and methods}}
