@@ -28,7 +28,6 @@ using namespace clang;
 namespace {
 
 class VoidModuleLoader : public ModuleLoader {
-private:
   ModuleLoadResult loadModule(SourceLocation ImportLoc, 
                               ModuleIdPath Path,
                               Module::NameVisibilityKind Visibility,

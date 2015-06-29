@@ -56,7 +56,7 @@ private:
   ModuleLoadResult loadModule(SourceLocation ImportLoc, 
                               ModuleIdPath Path,
                               Module::NameVisibilityKind Visibility,
-                              bool IsInclusionDirective) override{
+                              bool IsInclusionDirective) override {
     return ModuleLoadResult();
   }
 
