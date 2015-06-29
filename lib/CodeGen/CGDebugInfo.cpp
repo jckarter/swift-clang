@@ -2141,35 +2141,33 @@ ObjCInterfaceDecl *CGDebugInfo::getObjCInterfaceDecl(QualType Ty) {
   }
 }
 
-llvm::DIModule *
+llvm::MDModule *
 CGDebugInfo::getOrCreateModuleRef(ExternalASTSource::ASTSourceDescriptor Mod) {
-  llvm::DIModule *ModuleRef = nullptr;
+  llvm::MDModule *ModuleRef = nullptr;
   auto it = ModuleRefCache.find(Mod.ModuleHash);
   if (it != ModuleRefCache.end())
     ModuleRef = it->second;
   else {
     // Macro definitions that were defined with "-D" on the command line.
-    SmallString<128> ConfigMacros;
+    SmallString<128> Flags;
     {
-      llvm::raw_svector_ostream ConfigMacroOS(ConfigMacros);
+      llvm::raw_svector_ostream OS(Flags);
       PreprocessorOptions PPOpts = CGM.getPreprocessorOpts();
-      // FIXME: 1. Shell-quote this string.
-      //        2. Use the Module's vector of ConfigMacros instead.
-      for (unsigned I = 0, N = PPOpts.Macros.size(); I != N; ++I) {
-        if (I > 1)
-          ConfigMacroOS << " ";
-        ConfigMacroOS << "-D" << PPOpts.Macros[I].first << "="
-                      << PPOpts.Macros[I].second;
-      }
+      for (unsigned I = 0, N = PPOpts.Macros.size(); I != N; ++I)
+        OS << " -D" << PPOpts.Macros[I].first
+           << "=" << PPOpts.Macros[I].second;
+      for (auto I : CGM.getHeaderSearchOpts().UserEntries)
+        OS << " -I" << I.Path;
+      OS << " -isysroot " << CGM.getHeaderSearchOpts().Sysroot;
     }
     llvm::DIBuilder DIB(CGM.getModule());
     auto *CU = DIB.createCompileUnit(
         TheCU->getSourceLanguage(), internString(Mod.ModuleName),
-        internString(Mod.Dir), TheCU->getProducer(), true, StringRef(), 0,
-        internString(Mod.ASTFile), llvm::DIBuilder::FullDebug, Mod.ModuleHash);
-    ModuleRef = DIB.createModule(
-        CU, Mod.ModuleName, ConfigMacros, internString(Mod.Dir),
-        internString(CGM.getHeaderSearchOpts().Sysroot));
+        internString(Mod.Dir), TheCU->getProducer(), true,
+        internString(Flags.str()), 0, internString(Mod.ASTFile),
+        llvm::DIBuilder::FullDebug, Mod.ModuleHash);
+    ModuleRef = DIB.createModule(CU, Mod.ModuleName,
+                                 DIB.createFile(Mod.ASTFile, ""), 1);
     DIB.finalize();
     ModuleRefCache.insert(std::make_pair(Mod.ModuleHash, ModuleRef));
   }
@@ -2182,11 +2180,10 @@ llvm::DIType *CGDebugInfo::getTypeASTRefOrNull(Decl *TyDecl, llvm::DIFile *F) {
   if (!TyDecl || !TyDecl->isFromASTFile())
     return nullptr;
 
-  llvm::DIModule *ModuleRef = nullptr;
+  llvm::MDModule *ModuleRef = nullptr;
   auto *Reader = CGM.getContext().getExternalSource();
   auto Idx = TyDecl->getOwningModuleID();
-  auto Info = Reader->getSourceDescriptor(Idx);
-  if (Info)
+  if (auto Info = Reader->getSourceDescriptor(Idx))
     ModuleRef = getOrCreateModuleRef(*Info);
 
   if (ModuleRef) {
@@ -2232,16 +2229,7 @@ llvm::DIType *CGDebugInfo::getTypeASTRefOrNull(Decl *TyDecl, llvm::DIFile *F) {
       index::generateUSRForDecl(TyDecl, UID);
 
     assert(!UID.empty() && "could not determine unique type identifier");
-    const char *fname = Info->ASTFile.c_str();
-    llvm::DIFile *File = nullptr;
-    auto it = DIFileCache.find(fname);
-    if (it != DIFileCache.end())
-      if (llvm::Metadata *V = it->second)
-        File = cast<llvm::DIFile>(V);
-    if (!File) {
-      File = DBuilder.createFile(fname, "");
-      DIFileCache[fname].reset(File);
-    }
+    auto File = ModuleRef->getFile();
     return DBuilder.createExternalTypeRef(Tag, File, UID);
   }
   return nullptr;
