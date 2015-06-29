@@ -332,3 +332,7 @@ module DebugModule {
 module DebugCXX {
   header "DebugCXX.h"
 }
+
+module crash {
+  header "crash.h"
+}
