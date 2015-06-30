@@ -4269,7 +4269,7 @@ ASTReader::ReadSubmoduleBlock(ModuleFile &F, unsigned ClientLoadCapabilities) {
         CurrentModule->setASTFile(F.File);
       }
 
-      CurrentModule->SplitDwarfID = F.Signature;
+      CurrentModule->Signature = F.Signature;
       CurrentModule->IsFromModuleFile = true;
       CurrentModule->IsSystem = IsSystem || CurrentModule->IsSystem;
       CurrentModule->IsExternC = IsExternC;
@@ -7385,8 +7385,8 @@ ASTReader::getSourceDescriptor(const Module &M) {
   if (auto *File = M.getASTFile())
     Filename = File->getName();
   return ASTReader::ASTSourceDescriptor{
-             M.getTopLevelModuleName(), Dir, Filename,
-             M.SplitDwarfID
+             M.getFullModuleName(), Dir, Filename,
+             M.Signature
          };
 }
 
@@ -7396,7 +7396,7 @@ ASTReader::getSourceDescriptor(unsigned ID) {
     return getSourceDescriptor(*M);
 
   // If there is only a single PCH, return it instead.
-  // TODO: Handle chained PCH here.
+  // Chained PCH are not suported.
   if (ModuleMgr.size() == 1) {
     ModuleFile &MF = ModuleMgr.getPrimaryModule();
     return ASTReader::ASTSourceDescriptor{
