@@ -8838,6 +8838,7 @@ private:
   bool SemaBuiltinARMSpecialReg(unsigned BuiltinID, CallExpr *TheCall,
                                 int ArgNum, unsigned ExpectedFieldNum,
                                 bool AllowName);
+  bool SemaBuiltinCpuSupports(CallExpr *TheCall);
 public:
   enum FormatStringType {
     FST_Scanf,
