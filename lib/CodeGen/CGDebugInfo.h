@@ -297,7 +297,7 @@ public:
   /// \brief Emit C++ using declaration.
   void EmitUsingDecl(const UsingDecl &UD);
 
-  /// \brief - Emit an @import declaration.
+  /// \brief Emit an @import declaration.
   void EmitImportDecl(const ImportDecl &ID);
 
   /// \brief Emit C++ namespace alias.

@@ -325,14 +325,14 @@ module recursive2 {
   header "recursive2.h"
 }
 
+module crash {
+  header "crash.h"
+}
+
 module DebugModule {
   header "DebugModule.h"
 }
 
 module DebugCXX {
   header "DebugCXX.h"
-}
-
-module crash {
-  header "crash.h"
 }

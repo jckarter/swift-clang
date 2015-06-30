@@ -1,3 +1,4 @@
+
 //===--- CGDebugInfo.cpp - Emit Debug Information for a Module ------------===//
 //
 //                     The LLVM Compiler Infrastructure
@@ -27,9 +28,9 @@
 #include "clang/Basic/SourceManager.h"
 #include "clang/Basic/Version.h"
 #include "clang/Frontend/CodeGenOptions.h"
+#include "clang/Index/USRGeneration.h"
 #include "clang/Lex/HeaderSearchOptions.h"
 #include "clang/Lex/PreprocessorOptions.h"
-#include "clang/Index/USRGeneration.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/IR/Constants.h"
@@ -1680,6 +1681,49 @@ llvm::DIType *CGDebugInfo::CreateType(const ObjCInterfaceType *Ty,
   return CreateTypeDefinition(Ty, Unit);
 }
 
+llvm::DIModule *
+CGDebugInfo::getOrCreateModuleRef(ExternalASTSource::ASTSourceDescriptor Mod) {
+  llvm::DIModule *ModuleRef = nullptr;
+  auto it = ModuleRefCache.find(Mod.Signature);
+  if (it != ModuleRefCache.end())
+    ModuleRef = it->second;
+  else {
+    // Macro definitions that were defined with "-D" on the command line.
+    SmallString<128> ConfigMacros;
+    {
+      llvm::raw_svector_ostream OS(ConfigMacros);
+      const auto &PPOpts = CGM.getPreprocessorOpts();
+      unsigned I = 0;
+      // Translate the macro definitions back into a commmand line.
+      for (auto &M : PPOpts.Macros) {
+        if (++I > 1)
+          OS << " ";
+        const std::string &Macro = M.first;
+        bool Undef = M.second;
+        OS << "\"-" << (Undef ? 'U' : 'D');
+        for (char c : Macro)
+          switch (c) {
+          case '\\' : OS << "\\\\"; break;
+          case '"'  : OS << "\\\""; break;
+          default: OS << c;
+          }
+        OS << '\"';
+      }
+    }
+    llvm::DIBuilder DIB(CGM.getModule());
+    auto *CU = DIB.createCompileUnit(
+        TheCU->getSourceLanguage(), internString(Mod.ModuleName),
+        internString(Mod.Path), TheCU->getProducer(), true, StringRef(), 0,
+        internString(Mod.ASTFile), llvm::DIBuilder::FullDebug, Mod.Signature);
+    ModuleRef = DIB.createModule(
+        CU, Mod.ModuleName, ConfigMacros, internString(Mod.Path),
+        internString(CGM.getHeaderSearchOpts().Sysroot));
+    DIB.finalize();
+    ModuleRefCache.insert(std::make_pair(Mod.Signature, ModuleRef));
+  }
+  return ModuleRef;
+}
+
 llvm::DIType *CGDebugInfo::CreateTypeDefinition(const ObjCInterfaceType *Ty,
                                                 llvm::DIFile *Unit) {
   ObjCInterfaceDecl *ID = Ty->getDecl();
@@ -2139,41 +2183,6 @@ ObjCInterfaceDecl *CGDebugInfo::getObjCInterfaceDecl(QualType Ty) {
   default:
     return nullptr;
   }
-}
-
-llvm::DIModule *
-CGDebugInfo::getOrCreateModuleRef(ExternalASTSource::ASTSourceDescriptor Mod) {
-  llvm::DIModule *ModuleRef = nullptr;
-  auto it = ModuleRefCache.find(Mod.ModuleHash);
-  if (it != ModuleRefCache.end())
-    ModuleRef = it->second;
-  else {
-    // Macro definitions that were defined with "-D" on the command line.
-    SmallString<128> ConfigMacros;
-    {
-      llvm::raw_svector_ostream ConfigMacroOS(ConfigMacros);
-      PreprocessorOptions PPOpts = CGM.getPreprocessorOpts();
-      // FIXME: 1. Shell-quote this string.
-      //        2. Use the Module's vector of ConfigMacros instead.
-      for (unsigned I = 0, N = PPOpts.Macros.size(); I != N; ++I) {
-        if (I > 1)
-          ConfigMacroOS << " ";
-        ConfigMacroOS << "-D" << PPOpts.Macros[I].first << "="
-                      << PPOpts.Macros[I].second;
-      }
-    }
-    llvm::DIBuilder DIB(CGM.getModule());
-    auto *CU = DIB.createCompileUnit(
-        TheCU->getSourceLanguage(), internString(Mod.ModuleName),
-        internString(Mod.Dir), TheCU->getProducer(), true, StringRef(), 0,
-        internString(Mod.ASTFile), llvm::DIBuilder::FullDebug, Mod.ModuleHash);
-    ModuleRef = DIB.createModule(
-        CU, Mod.ModuleName, ConfigMacros, internString(Mod.Dir),
-        internString(CGM.getHeaderSearchOpts().Sysroot));
-    DIB.finalize();
-    ModuleRefCache.insert(std::make_pair(Mod.ModuleHash, ModuleRef));
-  }
-  return ModuleRef;
 }
 
 /// GetTypeDeclASTRefOrNull - If the type is declared in a Module or
