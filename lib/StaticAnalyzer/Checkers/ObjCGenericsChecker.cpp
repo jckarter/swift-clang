@@ -77,7 +77,7 @@ private:
     std::string FromStr = QualType::getAsString(From, Qualifiers());
     std::string ToStr = QualType::getAsString(To, Qualifiers());
     std::string ErrorText =
-        (llvm::Twine("incompatible pointer types assigning to '") + ToStr +
+        (llvm::Twine("Incompatible pointer types assigning to '") + ToStr +
          "' from '" + FromStr + "'")
             .str();
     std::unique_ptr<BugReport> R(new BugReport(*BT, ErrorText, N));
@@ -108,10 +108,8 @@ PathDiagnosticPiece *ObjCGenericsChecker::GenericsBugVisitor::VisitNode(
   if (TrackedTypePrev && *TrackedTypePrev == *TrackedType)
     return nullptr;
 
-  const Stmt *S = nullptr;
-  StackHintGeneratorForSymbol *StackHint = nullptr;
-
   // Retrieve the associated statement.
+  const Stmt *S = nullptr;
   ProgramPoint ProgLoc = N->getLocation();
   if (Optional<StmtPoint> SP = ProgLoc.getAs<StmtPoint>()) {
     S = SP->getStmt();
@@ -120,11 +118,15 @@ PathDiagnosticPiece *ObjCGenericsChecker::GenericsBugVisitor::VisitNode(
   if (!S)
     return nullptr;
 
+  std::string TypeName = QualType::getAsString(*TrackedType, Qualifiers());
+  std::string InfoText =
+      (llvm::Twine("Type '") + TypeName + "' is infered from this context'")
+          .str();
+
   // Generate the extra diagnostic.
   PathDiagnosticLocation Pos(S, BRC.getSourceManager(),
                              N->getLocationContext());
-  return new PathDiagnosticEventPiece(
-      Pos, "Type information inferred from this location.", true, StackHint);
+  return new PathDiagnosticEventPiece(Pos, InfoText, true, nullptr);
 }
 
 void ObjCGenericsChecker::checkDeadSymbols(SymbolReaper &SR,
