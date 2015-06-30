@@ -332,3 +332,8 @@ module DebugModule {
 module DebugCXX {
   header "DebugCXX.h"
 }
+
+module DebugModule {
+  header "DebugModule.h"
+}
+
