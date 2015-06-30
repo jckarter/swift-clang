@@ -58,16 +58,15 @@ namespace {
     SmallVector<CXXMethodDecl *, 8> DeferredInlineMethodDefinitions;
 
   public:
-    CodeGeneratorImpl(DiagnosticsEngine &diags, const std::string& ModuleName,
+    CodeGeneratorImpl(DiagnosticsEngine &diags, const std::string &ModuleName,
                       const HeaderSearchOptions &HSO,
-                      const PreprocessorOptions &PPO,
-                      const CodeGenOptions &CGO, llvm::LLVMContext& C,
+                      const PreprocessorOptions &PPO, const CodeGenOptions &CGO,
+                      llvm::LLVMContext &C,
                       CoverageSourceInfo *CoverageInfo = nullptr)
-      : Diags(diags), Ctx(nullptr),
-        HeaderSearchOpts(HSO), PreprocessorOpts(PPO),
-        CodeGenOpts(CGO), HandlingTopLevelDecls(0),
-        CoverageInfo(CoverageInfo),
-        M(new llvm::Module(ModuleName, C)) {}
+        : Diags(diags), Ctx(nullptr), HeaderSearchOpts(HSO),
+          PreprocessorOpts(PPO), CodeGenOpts(CGO), HandlingTopLevelDecls(0),
+          CoverageInfo(CoverageInfo),
+          M(new llvm::Module(ModuleName, C)) {}
 
     ~CodeGeneratorImpl() override {
       // There should normally not be any leftover inline method definitions.
@@ -106,8 +105,7 @@ namespace {
       Builder.reset(new CodeGen::CodeGenModule(Context,
                                                HeaderSearchOpts,
                                                PreprocessorOpts,
-                                               CodeGenOpts,
-                                               *M, *TD,
+                                               CodeGenOpts, *M, *TD,
                                                Diags, CoverageInfo));
 
       for (size_t i = 0, e = CodeGenOpts.DependentLibraries.size(); i < e; ++i)
@@ -246,14 +244,11 @@ namespace {
 
 void CodeGenerator::anchor() { }
 
-CodeGenerator *clang::CreateLLVMCodeGen(DiagnosticsEngine &Diags,
-                                        const std::string& ModuleName,
-                                        const HeaderSearchOptions &HeaderSearchOpts,
-                                        const PreprocessorOptions &PreprocessorOpts,
-                                        const CodeGenOptions &CGO,
-                                        llvm::LLVMContext& C,
-                                        CoverageSourceInfo *CoverageInfo) {
-  return new CodeGeneratorImpl(Diags, ModuleName,
-                               HeaderSearchOpts, PreprocessorOpts,
-                               CGO, C, CoverageInfo);
+CodeGenerator *clang::CreateLLVMCodeGen(
+    DiagnosticsEngine &Diags, const std::string &ModuleName,
+    const HeaderSearchOptions &HeaderSearchOpts,
+    const PreprocessorOptions &PreprocessorOpts, const CodeGenOptions &CGO,
+    llvm::LLVMContext &C, CoverageSourceInfo *CoverageInfo) {
+  return new CodeGeneratorImpl(Diags, ModuleName, HeaderSearchOpts,
+                               PreprocessorOpts, CGO, C, CoverageInfo);
 }

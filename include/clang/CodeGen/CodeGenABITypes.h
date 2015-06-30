@@ -37,11 +37,11 @@ namespace clang {
 class ASTContext;
 class CXXRecordDecl;
 class CodeGenOptions;
-class HeaderSearchOptions;
-class PreprocessorOptions;
-class DiagnosticsEngine;
-class ObjCMethodDecl;
 class CoverageSourceInfo;
+class DiagnosticsEngine;
+class HeaderSearchOptions;
+class ObjCMethodDecl;
+class PreprocessorOptions;
 
 namespace CodeGen {
 class CGFunctionInfo;
@@ -78,7 +78,6 @@ private:
   CodeGenOptions *CGO;
   HeaderSearchOptions *HSO;
   PreprocessorOptions *PPO;
-
 
   /// The CodeGenModule we use get to the CodeGenTypes object.
   CodeGen::CodeGenModule *CGM;

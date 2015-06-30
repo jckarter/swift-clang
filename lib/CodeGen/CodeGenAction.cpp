@@ -671,9 +671,8 @@ CodeGenAction::CreateASTConsumer(CompilerInstance &CI, StringRef InFile) {
                                     std::unique_ptr<PPCallbacks>(CoverageInfo));
   }
   std::unique_ptr<BackendConsumer> Result(new BackendConsumer(
-      BA, CI.getDiagnostics(),
-      CI.getHeaderSearchOpts(), CI.getPreprocessorOpts(),
-      CI.getCodeGenOpts(), CI.getTargetOpts(),
+      BA, CI.getDiagnostics(), CI.getHeaderSearchOpts(),
+      CI.getPreprocessorOpts(), CI.getCodeGenOpts(), CI.getTargetOpts(),
       CI.getLangOpts(), CI.getFrontendOpts().ShowTimers, InFile,
       LinkModuleToUse, OS, *VMContext, CoverageInfo));
   BEConsumer = Result.get();

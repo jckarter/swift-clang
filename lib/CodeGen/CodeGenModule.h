@@ -71,6 +71,8 @@ class ValueDecl;
 class VarDecl;
 class LangOptions;
 class CodeGenOptions;
+class HeaderSearchOptions;
+class PreprocessorOptions;
 class DiagnosticsEngine;
 class AnnotateAttr;
 class CXXDestructorDecl;
