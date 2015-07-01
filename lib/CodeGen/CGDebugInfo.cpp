@@ -2181,49 +2181,17 @@ ObjCInterfaceDecl *CGDebugInfo::getObjCInterfaceDecl(QualType Ty) {
   }
 }
 
-llvm::MDModule *
-CGDebugInfo::getOrCreateModuleRef(ExternalASTSource::ASTSourceDescriptor Mod) {
-  llvm::MDModule *ModuleRef = nullptr;
-  auto it = ModuleRefCache.find(Mod.ModuleHash);
-  if (it != ModuleRefCache.end())
-    ModuleRef = it->second;
-  else {
-    // Macro definitions that were defined with "-D" on the command line.
-    SmallString<128> Flags;
-    {
-      llvm::raw_svector_ostream OS(Flags);
-      PreprocessorOptions PPOpts = CGM.getPreprocessorOpts();
-      for (unsigned I = 0, N = PPOpts.Macros.size(); I != N; ++I)
-        OS << " -D" << PPOpts.Macros[I].first
-           << "=" << PPOpts.Macros[I].second;
-      for (auto I : CGM.getHeaderSearchOpts().UserEntries)
-        OS << " -I" << I.Path;
-      OS << " -isysroot " << CGM.getHeaderSearchOpts().Sysroot;
-    }
-    llvm::DIBuilder DIB(CGM.getModule());
-    auto *CU = DIB.createCompileUnit(
-        TheCU->getSourceLanguage(), internString(Mod.ModuleName),
-        internString(Mod.Dir), TheCU->getProducer(), true,
-        internString(Flags.str()), 0, internString(Mod.ASTFile),
-        llvm::DIBuilder::FullDebug, Mod.ModuleHash);
-    ModuleRef = DIB.createModule(CU, Mod.ModuleName,
-                                 DIB.createFile(Mod.ASTFile, ""), 1);
-    DIB.finalize();
-    ModuleRefCache.insert(std::make_pair(Mod.ModuleHash, ModuleRef));
-  }
-  return ModuleRef;
-}
-
 /// GetTypeDeclASTRefOrNull - If the type is declared in a Module or
 /// PCH return a DIType that references the module.
 llvm::DIType *CGDebugInfo::getTypeASTRefOrNull(Decl *TyDecl, llvm::DIFile *F) {
   if (!TyDecl || !TyDecl->isFromASTFile())
     return nullptr;
 
-  llvm::MDModule *ModuleRef = nullptr;
+  llvm::DIModule *ModuleRef = nullptr;
   auto *Reader = CGM.getContext().getExternalSource();
   auto Idx = TyDecl->getOwningModuleID();
-  if (auto Info = Reader->getSourceDescriptor(Idx))
+  auto Info = Reader->getSourceDescriptor(Idx); 
+  if (Info)
     ModuleRef = getOrCreateModuleRef(*Info);
 
   if (ModuleRef) {
@@ -2238,8 +2206,7 @@ llvm::DIType *CGDebugInfo::getTypeASTRefOrNull(Decl *TyDecl, llvm::DIFile *F) {
       if (!RD->getDefinition())
         return nullptr;
       Tag = getTagForRecord(RD);
-      UID = getUniqueTagTypeName(cast<TagType>(RD->getTypeForDecl()),
-                                 CGM, TheCU);
+      UID = getUniqueTagTypeName(cast<TagType>(RD->getTypeForDecl()), CGM, TheCU);
       if (UID.empty())
         return nullptr;
     } else if (auto *RD = dyn_cast<RecordDecl>(TyDecl)) {
@@ -2270,7 +2237,15 @@ llvm::DIType *CGDebugInfo::getTypeASTRefOrNull(Decl *TyDecl, llvm::DIFile *F) {
       index::generateUSRForDecl(TyDecl, UID);
 
     assert(!UID.empty() && "could not determine unique type identifier");
-    auto File = ModuleRef->getFile();
+    llvm::DIFile *File = nullptr;
+    auto it = ModuleFileCache.find(Idx);
+    if (it != ModuleFileCache.end())
+      if (llvm::Metadata *V = it->second)
+        File = cast<llvm::DIFile>(V);
+    if (!File) {
+      File = DBuilder.createFile(Info->ASTFile, "");
+      ModuleFileCache[Idx].reset(File);
+    }
     return DBuilder.createExternalTypeRef(Tag, File, UID);
   }
   return nullptr;

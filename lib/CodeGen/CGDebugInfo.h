@@ -113,6 +113,7 @@ class CGDebugInfo {
   StringRef CWDName;
 
   llvm::DenseMap<const char *, llvm::TrackingMDRef> DIFileCache;
+  llvm::DenseMap<unsigned, llvm::TrackingMDRef> ModuleFileCache;
   llvm::DenseMap<const FunctionDecl *, llvm::TrackingMDRef> SPCache;
   /// \brief Cache declarations relevant to DW_TAG_imported_declarations (C++
   /// using declarations) that aren't covered by other more specific caches.

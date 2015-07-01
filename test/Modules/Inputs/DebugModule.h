@@ -1,5 +1,3 @@
-<<<<<<< HEAD
-
 @class F;
 
 @interface A
@@ -24,6 +22,3 @@ enum {
 typedef enum {
   ENUM_VAL3 = 3
 } enum3;
-=======
-@class F;
->>>>>>> e9ad7b2... Debug Info: Emit debug info for @import declarations.
