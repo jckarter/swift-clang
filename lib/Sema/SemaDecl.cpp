@@ -10395,7 +10395,7 @@ Sema::CheckForFunctionRedefinition(FunctionDecl *FD,
   // through a deduced return type, or instantiate templates with local types.
   if (!hasVisibleDefinition(Definition) &&
       (Definition->getFormalLinkage() == InternalLinkage ||
-       Definition->isInlineSpecified() ||
+       Definition->isInlined() ||
        Definition->getDescribedFunctionTemplate() ||
        Definition->getNumTemplateParameterLists()))
     return;
