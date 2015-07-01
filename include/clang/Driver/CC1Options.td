@@ -496,6 +496,9 @@ def fobjc_arc_cxxlib_EQ : Joined<["-"], "fobjc-arc-cxxlib=">,
   HelpText<"Objective-C++ Automatic Reference Counting standard library kind">;
 def fobjc_runtime_has_weak : Flag<["-"], "fobjc-runtime-has-weak">,
   HelpText<"The target Objective-C runtime supports ARC weak operations">;
+def fobjc_arc_unsafeclaim : Flag<["-"], "fobjc-arc-unsafeclaim">, Group<f_Group>,
+  HelpText<"Enable an optimization to dynamically avoid retain/releases of "
+           "call results in __unsafe_unretained contexts">;
 def fobjc_dispatch_method_EQ : Joined<["-"], "fobjc-dispatch-method=">,
   HelpText<"Objective-C dispatch method to use">;
 def disable_objc_default_synthesize_properties : Flag<["-"], "disable-objc-default-synthesize-properties">,

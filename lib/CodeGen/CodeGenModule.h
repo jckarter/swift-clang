@@ -218,6 +218,9 @@ struct ARCEntrypoints {
   /// id objc_storeWeak(id*, id);
   llvm::Constant *objc_storeWeak;
 
+  /// id objc_unsafeClaimAutoreleasedReturnValue(id);
+  llvm::Constant *objc_unsafeClaimAutoreleasedReturnValue;
+
   /// A void(void) inline asm to use to mark that the return value of
   /// a call will be immediately retain.
   llvm::InlineAsm *retainAutoreleasedReturnValueMarker;
