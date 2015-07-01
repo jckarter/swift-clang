@@ -33,6 +33,7 @@ __attribute__((objc_root_class))
 
 @interface Array<__covariant T> : NSObject
 - (int)contains:(T)obj;
+- (T)getObjAtIndex:(int)idx;
 @end
 
 @interface MutableArray<T> : Array<T>
@@ -210,4 +211,10 @@ void test19(Array<NSNumber *> *a) {
   // Valid uses of Array of NSNumbers.
   b = getStrings();
   // Valid uses of Array of NSStrings.
+}
+
+void test20(Array<NSNumber *> *a) {
+  Array *b = a;
+  NSString *str = [b getObjAtIndex: 0]; // expected-warning {{Incompatible}}
+  NSNumber *num = [b getObjAtIndex: 0];
 }

@@ -366,6 +366,37 @@ void ObjCGenericsChecker::checkPostObjCMessage(const ObjCMethodCall &M,
       return;
     }
   }
+  QualType ResultType = Method->getReturnType().substObjCTypeArgs(
+      ASTCtxt, *typeArgs, ObjCSubstitutionContext::Result);
+  QualType StaticResultType = Method->getSendResultType();
+  // If the tracked return type differs from the static return type, check the
+  // cast above the returned expression.
+  if (ResultType.getTypePtr() != StaticResultType.getTypePtr() &&
+      StaticResultType == ASTCtxt.getObjCIdType()) {
+    ArrayRef<ast_type_traits::DynTypedNode> ParentVec =
+        ASTCtxt.getParents(*MessageExpr);
+    // Assuming non-templated code. So the parent should be unique.
+    ast_type_traits::DynTypedNode Parent = ParentVec[0];
+    const auto *ImplicitCast = Parent.get<ImplicitCastExpr>();
+    if (!ImplicitCast || ImplicitCast->getCastKind() != CK_BitCast)
+      return;
+
+    const auto *ExprTypeAboveCast =
+        ImplicitCast->getType()->getAs<ObjCObjectPointerType>();
+    const auto *ResultPtrType = ResultType->getAs<ObjCObjectPointerType>();
+
+    if (!ExprTypeAboveCast || !ResultPtrType)
+      return;
+
+    // Only warn on unrelated types to avoid too many false positives on
+    // downcasts.
+    if (!ASTCtxt.canAssignObjCInterfaces(ExprTypeAboveCast, ResultPtrType) &&
+        !ASTCtxt.canAssignObjCInterfaces(ResultPtrType, ExprTypeAboveCast)) {
+      ExplodedNode *N = C.addTransition();
+      reportBug(ResultPtrType, ExprTypeAboveCast, N, Sym, C);
+      return;
+    }
+  }
 }
 
 /// Register checker.
