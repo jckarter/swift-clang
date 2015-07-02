@@ -333,6 +333,11 @@ module DebugModule {
   header "DebugModule.h"
 }
 
+module ImportNameInDir {
+  header "ImportNameInDir.h"
+  export *
+}
+
 module DebugCXX {
   header "DebugCXX.h"
 }
