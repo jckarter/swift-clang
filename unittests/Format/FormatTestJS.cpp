@@ -631,10 +631,17 @@ TEST_F(FormatTestJS, RegexLiteralSpecialCharacters) {
             "var x = 0;",
             format("var regex = /\\/*/;\n"
                    "var x=0;"));
+  EXPECT_EQ("var x = /a\\//;", format("var x = /a\\//  \n;"));
   verifyFormat("var regex = /\"/;", getGoogleJSStyleWithColumns(16));
   verifyFormat("var regex =\n"
                "    /\"/;",
                getGoogleJSStyleWithColumns(15));
+  verifyFormat("var regex =  //\n"
+               "    /a/;");
+  verifyFormat("var regexs = [\n"
+               "  /d/,   //\n"
+               "  /aa/,  //\n"
+               "];");
 }
 
 TEST_F(FormatTestJS, RegexLiteralModifiers) {
@@ -876,6 +883,8 @@ TEST_F(FormatTestJS, TypeArguments) {
   verifyFormat("class C extends D<E> implements F<G>, H<I> {}");
   verifyFormat("function f(a: List<any> = null) {}");
   verifyFormat("function f(): List<any> {}");
+  verifyFormat("function aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa():\n"
+               "    bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb {}");
 }
 
 TEST_F(FormatTestJS, OptionalTypes) {
