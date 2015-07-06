@@ -734,10 +734,10 @@ llvm::DIType *CGDebugInfo::CreateType(const BlockPointerType *Ty,
   EltTys.clear();
 
   unsigned Flags = llvm::DINode::FlagAppleBlock;
-  unsigned LineNo = getLineNumber(CurLoc);
+  unsigned LineNo = 0;
 
   auto *EltTy =
-      DBuilder.createStructType(Unit, "__block_descriptor", Unit, LineNo,
+      DBuilder.createStructType(Unit, "__block_descriptor", nullptr, LineNo,
                                 FieldOffset, 0, Flags, nullptr, Elements);
 
   // Bit size, align and offset of the type.
@@ -757,7 +757,7 @@ llvm::DIType *CGDebugInfo::CreateType(const BlockPointerType *Ty,
   FType = CGM.getContext().getPointerType(CGM.getContext().VoidTy);
   FieldSize = CGM.getContext().getTypeSize(Ty);
   FieldAlign = CGM.getContext().getTypeAlign(Ty);
-  EltTys.push_back(DBuilder.createMemberType(Unit, "__descriptor", Unit, LineNo,
+  EltTys.push_back(DBuilder.createMemberType(Unit, "__descriptor", nullptr, LineNo,
                                              FieldSize, FieldAlign, FieldOffset,
                                              0, DescTy));
 
@@ -765,7 +765,7 @@ llvm::DIType *CGDebugInfo::CreateType(const BlockPointerType *Ty,
   Elements = DBuilder.getOrCreateArray(EltTys);
 
   EltTy =
-      DBuilder.createStructType(Unit, "__block_literal_generic", Unit, LineNo,
+      DBuilder.createStructType(Unit, "__block_literal_generic", nullptr, LineNo,
                                 FieldOffset, 0, Flags, nullptr, Elements);
 
   BlockLiteralGeneric = DBuilder.createPointerType(EltTy, Size);
