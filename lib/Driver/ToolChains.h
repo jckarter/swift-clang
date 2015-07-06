@@ -596,6 +596,7 @@ protected:
 private:
   std::string Base;
   std::string GccLibDir;
+  std::string Ver;
   std::string Arch;
   mutable std::unique_ptr<tools::gcc::Preprocessor> Preprocessor;
   mutable std::unique_ptr<tools::gcc::Compiler> Compiler;
