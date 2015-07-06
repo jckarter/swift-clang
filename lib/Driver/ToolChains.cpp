@@ -1264,7 +1264,7 @@ void Darwin::CheckBitcodeSupport() const {
 
 SanitizerMask Darwin::getSupportedSanitizers() const {
   SanitizerMask Res = ToolChain::getSupportedSanitizers();
-  if (isTargetMacOS() || isTargetIOSSimulator())
+  if (isTargetMacOS() || isTargetIOSSimulator() || isTargetIPhoneOS())
     Res |= SanitizerKind::Address;
   if (isTargetMacOS()) {
     if (!isMacosxVersionLT(10, 9))
