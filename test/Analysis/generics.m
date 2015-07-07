@@ -31,24 +31,26 @@ __attribute__((objc_root_class))
 @interface NSNumber : NSObject <NSCopying>
 @end
 
-@interface Array<__covariant T> : NSObject
+@interface NSArray<__covariant T> : NSObject
++ (instancetype)arrayWithObjects:(const T [])objects count:(int)count;
 - (int)contains:(T)obj;
 - (T)getObjAtIndex:(int)idx;
 @end
 
-@interface MutableArray<T> : Array<T>
+@interface MutableArray<T> : NSArray<T>
+- (int)addObject:(T)obj;
 @end
 
-@interface LegacyArray : Array
+@interface LegacyMutableArray : MutableArray
 @end
 
-@interface LegacyMutableArray : LegacyArray
+@interface LegacySpecialMutableArray : LegacyMutableArray
 @end
 
-@interface BuggyArray<T> : Array
+@interface BuggyMutableArray<T> : MutableArray
 @end
 
-@interface BuggyMutableArray<T> : BuggyArray<T>
+@interface BuggySpecialMutableArray<T> : BuggyMutableArray<T>
 @end
 
 @interface MyMutableStringArray : MutableArray<NSString *>
@@ -59,18 +61,20 @@ __attribute__((objc_root_class))
 @end
 
 int getUnknown();
-Array *getStuff();
-Array *getTypedStuff() {
-  Array<NSNumber *> *c = getStuff();
+NSArray *getStuff();
+NSArray *getTypedStuff() {
+  NSArray<NSNumber *> *c = getStuff();
   return c;
 }
 
-void doStuff(Array<NSNumber *> *);
-void withString(Array<NSString *> *);
-void withMutableString(Array<NSMutableString *> *);
+void doStuff(NSArray<NSNumber *> *);
+void withArrString(NSArray<NSString *> *);
+void withArrMutableString(NSArray<NSMutableString *> *);
+void withMutArrString(MutableArray<NSString *> *);
+void withMutArrMutableString(MutableArray<NSMutableString *> *);
 
-void test(Array *a, Array<NSString *> *b,
-          Array<NSNumber *> *c) {
+void test(NSArray *a, NSArray<NSString *> *b,
+          NSArray<NSNumber *> *c) {
   a = b;
   c = a; // expected-warning  {{Incompatible}}
   [a contains: [[NSNumber alloc] init]]; // expected-warning {{Incompatible}}
@@ -79,25 +83,25 @@ void test(Array *a, Array<NSString *> *b,
 }
 
 void test2() {
-  Array<NSString *> *a = getTypedStuff(); // expected-warning {{Incompatible}}
+  NSArray<NSString *> *a = getTypedStuff(); // expected-warning {{Incompatible}}
 }
 
-void test3(Array *a, Array<NSString *> *b) {
+void test3(NSArray *a, NSArray<NSString *> *b) {
   b = a;
   [a contains: [[NSNumber alloc] init]]; // expected-warning {{Incompatible}}
   [a contains: [[NSString alloc] init]];
   doStuff(a); // expected-warning {{Incompatible}}
 }
 
-void test4(id a, Array<NSString *> *b) {
+void test4(id a, NSArray<NSString *> *b) {
   b = a;
   [a contains: [[NSNumber alloc] init]]; // expected-warning {{Incompatible}}
   [a contains: [[NSString alloc] init]];
   doStuff(a); // expected-warning {{Incompatible}}
 }
 
-void test5(id a, Array<NSString *> *b,
-           Array<NSNumber *> *c) {
+void test5(id a, NSArray<NSString *> *b,
+           NSArray<NSNumber *> *c) {
   a = b;
   c = a; // expected-warning {{Incompatible}}
   [a contains: [[NSNumber alloc] init]]; // expected-warning {{Incompatible}}
@@ -105,8 +109,8 @@ void test5(id a, Array<NSString *> *b,
   doStuff(a); // expected-warning {{Incompatible}}
 }
 
-void test6(Array *m, Array<NSString *> *a,
-           Array<NSMutableString *> *b) {
+void test6(MutableArray *m, MutableArray<NSString *> *a,
+           MutableArray<NSMutableString *> *b) {
   if (getUnknown() == 5) {
     m = a;  
     [m contains: [[NSString alloc] init]];
@@ -114,20 +118,8 @@ void test6(Array *m, Array<NSString *> *a,
     m = b;
     [m contains: [[NSMutableString alloc] init]];
   }
-  [m contains: [[NSString alloc] init]]; // expected-warning {{Incompatible}}
-  [m contains: [[NSMutableString alloc] init]];
-}
-
-void test7(Array *m, Array<NSString *> *a,
-           Array<NSMutableString *> *b) {
-  a = b;
-  if (getUnknown() == 5) {
-    m = a;  
-    [m contains: [[NSString alloc] init]]; // expected-warning {{Incompatible}}
-  } else {
-    m = b;
-    [m contains: [[NSMutableString alloc] init]];
-  }
+  [m addObject: [[NSString alloc] init]]; // expected-warning {{Incompatible}}
+  [m addObject: [[NSMutableString alloc] init]];
 }
 
 void test8(id a, MutableArray<NSString *> *b) {
@@ -135,10 +127,10 @@ void test8(id a, MutableArray<NSString *> *b) {
   doStuff(a); // expected-warning {{Incompatible}}
 }
 
-void test9(Array<NSString *> *a,
-           Array<NSMutableString *> *b) {
-  b = (Array<NSMutableString *> *)a;
-  [a contains: [[NSString alloc] init]]; // expected-warning {{Incompatible}}
+void test9(MutableArray *a,
+           MutableArray<NSMutableString *> *b) {
+  b = (MutableArray<NSMutableString *> *)a;
+  [a addObject: [[NSString alloc] init]]; // expected-warning {{Incompatible}}
 }
 
 void test10(id d, MyMutableStringArray *a,
@@ -170,51 +162,79 @@ void test12(id d, ExceptionalArray<NSString *> *a,
 }
 
 void test13(id a) {
-  withString(a);
-  withMutableString(a);
-  [a contains: [[NSString alloc] init]]; // expected-warning {{Incompatible}}
+  withMutArrString(a);
+  withMutArrMutableString(a); // expected-warning {{Incompatible}}
 }
 
 void test14(id a) {
-  withMutableString(a);
-  withString(a);
-  [a contains: [[NSString alloc] init]]; // expected-warning {{Incompatible}}
+  withMutArrMutableString(a);
+  withMutArrString(a); // expected-warning {{Incompatible}}
 }
 
-void test15(LegacyArray *a) {
-  withMutableString(a);
-  withString(a);
-  [a contains: [[NSString alloc] init]]; // expected-warning {{Incompatible}}
+void test15(LegacyMutableArray *a) {
+  withMutArrMutableString(a);
+  withMutArrString(a); // expected-warning {{Incompatible}}
 }
 
-void test16(LegacyMutableArray *a) {
-  withString(a);
-  withMutableString(a);
-  [a contains: [[NSString alloc] init]]; // expected-warning {{Incompatible}}
+void test16(LegacySpecialMutableArray *a) {
+  withMutArrString(a);
+  withMutArrMutableString(a); // expected-warning {{Incompatible}}
 }
 
-void test17(BuggyArray<NSMutableString *> *a) {
-  withString(a);
-  withMutableString(a);
-  [a contains: [[NSString alloc] init]]; // expected-warning {{Incompatible}}
+void test17(BuggyMutableArray<NSMutableString *> *a) {
+  withMutArrString(a);
+  withMutArrMutableString(a); // expected-warning {{Incompatible}}
 }
 
-void test18(BuggyMutableArray<NSMutableString *> *a) {
-  withMutableString(a);
-  withString(a);
-  [a contains: [[NSString alloc] init]]; // expected-warning {{Incompatible}}
+void test18(BuggySpecialMutableArray<NSMutableString *> *a) {
+  withMutArrMutableString(a);
+  withMutArrString(a); // expected-warning {{Incompatible}}
 }
 
-Array<NSString *> *getStrings();
-void test19(Array<NSNumber *> *a) {
-  Array *b = a;
-  // Valid uses of Array of NSNumbers.
+NSArray<NSString *> *getStrings();
+void test19(NSArray<NSNumber *> *a) {
+  NSArray *b = a;
+  // Valid uses of NSArray of NSNumbers.
   b = getStrings();
-  // Valid uses of Array of NSStrings.
+  // Valid uses of NSArray of NSStrings.
 }
 
-void test20(Array<NSNumber *> *a) {
-  Array *b = a;
+void test20(NSArray<NSNumber *> *a) {
+  NSArray *b = a;
   NSString *str = [b getObjAtIndex: 0]; // expected-warning {{Incompatible}}
   NSNumber *num = [b getObjAtIndex: 0];
+}
+
+void test21(id m, NSArray<NSMutableString *> *a,
+            MutableArray<NSMutableString *> *b) {
+  a = b;
+  if (getUnknown() == 5) {
+    m = a;  
+    [m addObject: [[NSString alloc] init]]; // expected-warning {{Incompatible}}
+  } else {
+    m = b;
+    [m addObject: [[NSMutableString alloc] init]];
+  }
+}
+
+void test22(__kindof NSArray<NSString *> *a,
+            MutableArray<NSMutableString *> *b) {
+  a = b;
+  if (getUnknown() == 5) {
+    [a addObject: [[NSString alloc] init]]; // expected-warning {{Incompatible}}
+  } else {
+    [a addObject: [[NSMutableString alloc] init]];
+  }
+}
+
+void test23() {
+  // ObjCArrayLiterals are not specialized in the AST. 
+  NSArray *arr = @[@"A", @"B"];
+  [arr contains: [[NSNumber alloc] init]];
+}
+
+void test24() {
+  NSArray<NSString *> *arr = @[@"A", @"B"];
+  NSArray *arr2 = arr;
+  [arr2 contains: [[NSNumber alloc] init]]; // expected-warning {{Incompatible}}
 }

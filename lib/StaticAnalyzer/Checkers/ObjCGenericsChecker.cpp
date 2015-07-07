@@ -156,11 +156,8 @@ static const ObjCObjectPointerType *getMostInformativeDerivedClassImpl(
     }
     return From;
   }
-  const ObjCInterfaceDecl *SuperOfToDecl =
-      To->getObjectType()->getInterface()->getSuperClass();
-  assert(SuperOfToDecl);
   const auto *SuperOfTo =
-      SuperOfToDecl->getTypeForDecl()->getAs<ObjCObjectType>();
+      To->getObjectType()->getSuperClassType()->getAs<ObjCObjectType>();
   assert(SuperOfTo);
   QualType SuperPtrOfToQual =
       C.getObjCObjectPointerType(QualType(SuperOfTo, 0));
@@ -201,8 +198,14 @@ void ObjCGenericsChecker::checkPostStmt(const CastExpr *CE,
   const auto *OrigObjectPtrType = OriginType->getAs<ObjCObjectPointerType>();
   const auto *DestObjectPtrType = DestType->getAs<ObjCObjectPointerType>();
 
+  ASTContext &ASTCtxt = C.getASTContext();
+
   if (!OrigObjectPtrType || !DestObjectPtrType)
     return;
+
+  // In order to detect subtype relation properly, strip the kindofness.
+  OrigObjectPtrType = OrigObjectPtrType->stripObjCKindOfTypeAndQuals(ASTCtxt);
+  DestObjectPtrType = DestObjectPtrType->stripObjCKindOfTypeAndQuals(ASTCtxt);
 
   const ObjCObjectType *OrigObjectType = OrigObjectPtrType->getObjectType();
   const ObjCObjectType *DestObjectType = DestObjectPtrType->getObjectType();
@@ -215,7 +218,6 @@ void ObjCGenericsChecker::checkPostStmt(const CastExpr *CE,
   if (!Sym)
     return;
 
-  ASTContext &ASTCtxt = C.getASTContext();
   // Check which assignments are legal.
   bool OrigToDest =
       ASTCtxt.canAssignObjCInterfaces(DestObjectPtrType, OrigObjectPtrType);
@@ -224,7 +226,9 @@ void ObjCGenericsChecker::checkPostStmt(const CastExpr *CE,
   const ObjCObjectPointerType *const *TrackedType =
       State->get<TypeParamMap>(Sym);
 
-  if (isa<ExplicitCastExpr>(CE)) {
+  // If OrigObjectType could convert to DestObjectType, this could be an
+  // implicit cast. Handle it as implicit cast.
+  if (isa<ExplicitCastExpr>(CE) && !OrigToDest) {
     // Trust explicit downcasts.
     // However a downcast may also lose information. E. g.:
     //   MutableMap<T, U> : Map
@@ -232,7 +236,7 @@ void ObjCGenericsChecker::checkPostStmt(const CastExpr *CE,
     // map, and in general there is no way to recover that information from the
     // declaration. So no checks possible against APIs that expect specialized
     // Maps.
-    if (DestToOrig && !OrigToDest) {
+    if (DestToOrig) {
       const ObjCObjectPointerType *WithMostInfo =
           getMostInformativeDerivedClass(OrigObjectPtrType, DestObjectPtrType,
                                          C.getASTContext());
@@ -253,11 +257,22 @@ void ObjCGenericsChecker::checkPostStmt(const CastExpr *CE,
       C.addTransition(State);
     }
   } else {
-    // When upcast happens, store the type with the most information.
+    // When upcast happens, store the type with the most information about the
+    // type parameters.
     if (OrigToDest && !DestToOrig) {
       const ObjCObjectPointerType *WithMostInfo =
           getMostInformativeDerivedClass(DestObjectPtrType, OrigObjectPtrType,
                                          C.getASTContext());
+      // When an (implicit) upcast or a downcast happens according to static
+      // types,the destination type of the cast may contradict the tracked type.
+      // In this case a warning should be emitted.
+      if (TrackedType &&
+          !ASTCtxt.canAssignObjCInterfaces(DestObjectPtrType, *TrackedType) &&
+          !ASTCtxt.canAssignObjCInterfaces(*TrackedType, DestObjectPtrType)) {
+        ExplodedNode *N = C.addTransition();
+        reportBug(*TrackedType, DestObjectPtrType, N, Sym, C);
+        return;
+      }
       if (storeWhenMoreInformative(State, Sym, TrackedType, WithMostInfo,
                                    ASTCtxt))
         C.addTransition(State);
@@ -320,11 +335,27 @@ void ObjCGenericsChecker::checkPostObjCMessage(const ObjCMethodCall &M,
   if (!TrackedType)
     return;
 
+  ASTContext &ASTCtxt = C.getASTContext();
+
   // Get the type arguments from tracked type and substitute type arguments
   // before do the semantic check.
 
-  const ObjCMethodDecl *Method = MessageExpr->getMethodDecl();
+  // When the receiver type is id, or some super class of the tracked type (and
+  // kindof type), look up the method in the tracked type, not in the receiver
+  // type. This way we preserve more information.
   Selector Sel = MessageExpr->getSelector();
+  const ObjCMethodDecl *Method = nullptr;
+  if (ASTCtxt.getObjCIdType() == ReceiverType ||
+      (ReceiverObjectPtrType->getObjectType()->isKindOfType() &&
+       ASTCtxt.canAssignObjCInterfaces(ReceiverObjectPtrType, *TrackedType))) {
+    const ObjCInterfaceDecl *InterfaceDecl = (*TrackedType)->getInterfaceDecl();
+    // The method might not be found.
+    Method = InterfaceDecl->lookupInstanceMethod(Sel);
+  }
+
+  if (!Method) {
+    Method = MessageExpr->getMethodDecl();
+  }
 
   unsigned NumNamedArgs = Sel.getNumArgs();
   // Method might have more arguments than selector indicates. This is due
@@ -339,7 +370,6 @@ void ObjCGenericsChecker::checkPostObjCMessage(const ObjCMethodCall &M,
   if (!typeArgs)
     return;
 
-  ASTContext &ASTCtxt = C.getASTContext();
   for (unsigned i = 0; i < NumNamedArgs; i++) {
     const Expr *Arg = MessageExpr->getArg(i);
     // We can't do any type-checking on a type-dependent argument.
@@ -349,6 +379,17 @@ void ObjCGenericsChecker::checkPostObjCMessage(const ObjCMethodCall &M,
     const ParmVarDecl *Param = Method->parameters()[i];
 
     QualType OrigParamType = Param->getType();
+    const auto *ParamTypedef = OrigParamType->getAs<TypedefType>();
+    if (!ParamTypedef)
+      continue;
+
+    const auto *TypeParamDecl =
+        dyn_cast<ObjCTypeParamDecl>(ParamTypedef->getDecl());
+    if (!TypeParamDecl)
+      continue;
+
+    ObjCTypeParamVariance ParamVariance = TypeParamDecl->getVariance();
+
     QualType ParamType = OrigParamType.substObjCTypeArgs(
         ASTCtxt, *typeArgs, ObjCSubstitutionContext::Parameter);
     // Check if it can be assigned
@@ -359,8 +400,13 @@ void ObjCGenericsChecker::checkPostObjCMessage(const ObjCMethodCall &M,
     if (!ParamObjectPtrType || !ArgObjectPtrType)
       continue;
 
+    // For covariant type parameters every subclasses and supertypes are both
+    // accepted.
     if (!ASTCtxt.canAssignObjCInterfaces(ParamObjectPtrType,
-                                         ArgObjectPtrType)) {
+                                         ArgObjectPtrType) &&
+        (ParamVariance != ObjCTypeParamVariance::Covariant ||
+         !ASTCtxt.canAssignObjCInterfaces(ArgObjectPtrType,
+                                          ParamObjectPtrType))) {
       ExplodedNode *N = C.addTransition();
       reportBug(ArgObjectPtrType, ParamObjectPtrType, N, Sym, C);
       return;
