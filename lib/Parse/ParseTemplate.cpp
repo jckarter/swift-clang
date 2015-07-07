@@ -793,7 +793,6 @@ bool Parser::ParseGreaterThanInTemplateList(SourceLocation &RAngleLoc,
   // lists.
   RAngleLoc = Tok.getLocation();
   Token Next = NextToken();
-
   if (!ObjCGenericList) {
     // The source range of the '>>' or '>=' at the start of the token.
     CharSourceRange ReplacementRange =
@@ -812,10 +811,10 @@ bool Parser::ParseGreaterThanInTemplateList(SourceLocation &RAngleLoc,
     FixItHint Hint2;
     if ((RemainingToken == tok::greater ||
          RemainingToken == tok::greatergreater) &&
-        (Next.is(tok::greater) || Next.is(tok::greatergreater) ||
-         Next.isOneOf(tok::greater, tok::greatergreater,
-                      tok::greatergreatergreater, tok::equal, tok::greaterequal,
-                      tok::greatergreaterequal, tok::equalequal)) &&
+        (Next.isOneOf(tok::greater, tok::greatergreater,
+                      tok::greatergreatergreater, tok::equal,
+                      tok::greaterequal, tok::greatergreaterequal,
+                      tok::equalequal)) &&
         areTokensAdjacent(Tok, Next))
       Hint2 = FixItHint::CreateInsertion(Next.getLocation(), " ");
 

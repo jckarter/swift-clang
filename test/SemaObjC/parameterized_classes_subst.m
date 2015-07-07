@@ -1,4 +1,4 @@
-// RUN: %clang_cc1 -fblocks -fsyntax-only -Wnullable-to-nonnull-conversion -Wno-nullability-declspec %s -verify
+// RUN: %clang_cc1 -fblocks -fsyntax-only -Wnullable-to-nonnull-conversion %s -verify
 //
 // Test the substitution of type arguments for type parameters when
 // using parameterized classes in Objective-C.
@@ -107,18 +107,18 @@ __attribute__((objc_root_class))
 // --------------------------------------------------------------------------
 // Nullability
 // --------------------------------------------------------------------------
-typedef _Nonnull NSControl *Nonnull_NSControl;
+typedef NSControl * _Nonnull Nonnull_NSControl;
 
 @interface NSNullableTest<ViewType : NSView *> : NSObject
 - (ViewType)view;
 - (nullable ViewType)maybeView;
 @end
 
-@interface NSNullableTest2<ViewType : _Nullable NSView *> : NSObject // expected-error{{type parameter 'ViewType' bound 'NSView * _Nullable' cannot explicitly specify nullability}}
+@interface NSNullableTest2<ViewType : NSView * _Nullable> : NSObject // expected-error{{type parameter 'ViewType' bound 'NSView * _Nullable' cannot explicitly specify nullability}}
 @end
 
 void test_nullability(void) {
-  _Nonnull NSControl *nonnull_NSControl;
+  NSControl * _Nonnull nonnull_NSControl;
 
   // Nullability introduced by substitution.
   NSNullableTest<NSControl *> *unspecifiedControl;
@@ -131,7 +131,7 @@ void test_nullability(void) {
   nonnull_NSControl = [nonnullControl maybeView];  // expected-warning{{from nullable pointer 'Nonnull_NSControl _Nullable' (aka 'NSControl *') to non-nullable pointer type 'NSControl * _Nonnull'}}
 
   // Nullability cannot be specified directly on a type argument.
-  NSNullableTest<_Nonnull NSControl *> *nonnullControl2; // expected-error{{type argument 'NSControl *' cannot explicitly specify nullability}}
+  NSNullableTest<NSControl * _Nonnull> *nonnullControl2; // expected-error{{type argument 'NSControl *' cannot explicitly specify nullability}}
 }
 
 // --------------------------------------------------------------------------

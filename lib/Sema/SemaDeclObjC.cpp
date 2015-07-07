@@ -498,7 +498,7 @@ ActOnSuperClassOfClassInterface(Scope *S,
     IDecl->setEndOfDefinitionLoc(ClassLoc);
   } else {
     ObjCInterfaceDecl *SuperClassDecl =
-      dyn_cast_or_null<ObjCInterfaceDecl>(PrevDecl);
+    dyn_cast_or_null<ObjCInterfaceDecl>(PrevDecl);
     QualType SuperClassType;
 
     // Diagnose classes that inherit from deprecated classes.
@@ -552,7 +552,7 @@ ActOnSuperClassOfClassInterface(Scope *S,
         SuperClassType = QualType();
       }
     }
-    
+
     if (SuperClassType.isNull()) {
       assert(!SuperClassDecl && "Failed to set SuperClassType?");
       return;
@@ -984,11 +984,12 @@ ActOnStartClassInterface(Scope *S, SourceLocation AtInterfaceLoc,
     // Diagnose availability in the context of the @interface.
     ContextRAII SavedContext(*this, IDecl);
     ActOnSuperClassOfClassInterface(S, AtInterfaceLoc, IDecl, 
-                                    ClassName, ClassLoc,
+                                    ClassName, ClassLoc, 
                                     SuperName, SuperLoc, SuperTypeArgs, 
                                     SuperTypeArgsRange);
-  } else // we have a root class.
+  } else { // we have a root class.
     IDecl->setEndOfDefinitionLoc(ClassLoc);
+  }
 
   // Check then save referenced protocols.
   if (NumProtoRefs) {

@@ -2894,6 +2894,7 @@ bool AttributedType::isCallingConv() const {
   case attr_null_unspecified:
   case attr_objc_kindof:
     return false;
+
   case attr_pcs:
   case attr_pcs_vfp:
   case attr_cdecl:

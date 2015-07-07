@@ -993,7 +993,7 @@ void DeclPrinter::PrintObjCTypeParams(ObjCTypeParamList *Params) {
       Out << " : " << Param->getUnderlyingType().getAsString(Policy);
     }
   }
-  Out << "> ";
+  Out << ">";
 }
 
 void DeclPrinter::VisitObjCMethodDecl(ObjCMethodDecl *OMD) {
@@ -1071,12 +1071,13 @@ void DeclPrinter::VisitObjCInterfaceDecl(ObjCInterfaceDecl *OID) {
   ObjCInterfaceDecl *SID = OID->getSuperClass();
 
   if (!OID->isThisDeclarationADefinition()) {
-    Out << "@class " << I << ";";
+    Out << "@class " << I;
 
     if (auto TypeParams = OID->getTypeParamListAsWritten()) {
       PrintObjCTypeParams(TypeParams);
     }
 
+    Out << ";";
     return;
   }
   bool eolnOut = false;

@@ -379,6 +379,37 @@ Decl *Parser::ParseObjCAtInterfaceDeclaration(SourceLocation AtLoc,
   return ClsType;
 }
 
+/// Add an attribute for a context-sensitive type nullability to the given
+/// declarator.
+static void addContextSensitiveTypeNullability(Parser &P,
+                                               Declarator &D,
+                                               NullabilityKind nullability,
+                                               SourceLocation nullabilityLoc,
+                                               bool &addedToDeclSpec) {
+  // Create the attribute.
+  auto getNullabilityAttr = [&]() -> AttributeList * {
+    return D.getAttributePool().create(
+             P.getNullabilityKeyword(nullability),
+             SourceRange(nullabilityLoc),
+             nullptr, SourceLocation(),
+             nullptr, 0,
+             AttributeList::AS_ContextSensitiveKeyword);
+  };
+
+  if (D.getNumTypeObjects() > 0) {
+    // Add the attribute to the declarator chunk nearest the declarator.
+    auto nullabilityAttr = getNullabilityAttr();
+    DeclaratorChunk &chunk = D.getTypeObject(0);
+    nullabilityAttr->setNext(chunk.getAttrListRef());
+    chunk.getAttrListRef() = nullabilityAttr;
+  } else if (!addedToDeclSpec) {
+    // Otherwise, just put it on the declaration specifiers (if one
+    // isn't there already).
+    D.getMutableDeclSpec().addAttributes(getNullabilityAttr());
+    addedToDeclSpec = true;
+  }
+}
+
 /// Parse an Objective-C type parameter list, if present, or capture
 /// the locations of the protocol identifiers for a list of protocol
 /// references.
@@ -520,7 +551,9 @@ ObjCTypeParamList *Parser::parseObjCTypeParamListOrProtocolRefs(
 
   // Parse the '>'.
   if (invalid) {
-    SkipUntil(tok::greater);
+    SkipUntil(tok::greater, tok::at, StopBeforeMatch);
+    if (Tok.is(tok::greater))
+      ConsumeToken();
   } else if (ParseGreaterThanInTemplateList(rAngleLoc,
                                             /*ConsumeLastToken=*/true,
                                             /*ObjCGenericList=*/true)) {
@@ -572,37 +605,6 @@ ObjCTypeParamList *Parser::parseObjCTypeParamList() {
   return parseObjCTypeParamListOrProtocolRefs(lAngleLoc, protocolIdents, 
                                               rAngleLoc, 
                                               /*mayBeProtocolList=*/false);
-}
-
-/// Add an attribute for a context-sensitive type nullability to the given
-/// declarator.
-static void addContextSensitiveTypeNullability(Parser &P,
-                                               Declarator &D,
-                                               NullabilityKind nullability,
-                                               SourceLocation nullabilityLoc,
-                                               bool &addedToDeclSpec) {
-  // Create the attribute.
-  auto getNullabilityAttr = [&]() -> AttributeList * {
-    return D.getAttributePool().create(
-             P.getNullabilityKeyword(nullability),
-             SourceRange(nullabilityLoc),
-             nullptr, SourceLocation(),
-             nullptr, 0,
-             AttributeList::AS_ContextSensitiveKeyword);
-  };
-
-  if (D.getNumTypeObjects() > 0) {
-    // Add the attribute to the declarator chunk nearest the declarator.
-    auto nullabilityAttr = getNullabilityAttr();
-    DeclaratorChunk &chunk = D.getTypeObject(0);
-    nullabilityAttr->setNext(chunk.getAttrListRef());
-    chunk.getAttrListRef() = nullabilityAttr;
-  } else if (!addedToDeclSpec) {
-    // Otherwise, just put it on the declaration specifiers (if one
-    // isn't there already).
-    D.getMutableDeclSpec().addAttributes(getNullabilityAttr());
-    addedToDeclSpec = true;
-  }
 }
 
 ///   objc-interface-decl-list:

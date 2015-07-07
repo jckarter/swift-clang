@@ -847,11 +847,9 @@ class ObjCInterfaceDecl : public ObjCContainerDecl
     /// declaration.
     ObjCInterfaceDecl *Definition;
     
-    /// Class's super class.
-    ///
     /// When non-null, this is always an ObjCObjectType.
     TypeSourceInfo *SuperClassTInfo;
-
+    
     /// Protocols referenced in the \@interface  declaration
     ObjCProtocolList ReferencedProtocols;
 
@@ -898,8 +896,7 @@ class ObjCInterfaceDecl : public ObjCContainerDecl
     /// identifier, 
     SourceLocation EndLoc; 
 
-    DefinitionData() : Definition(), SuperClassTInfo(),
-                       CategoryList(), IvarList(),
+    DefinitionData() : Definition(), SuperClassTInfo(), CategoryList(), IvarList(), 
                        ExternallyCompleted(),
                        IvarListMissingImplementation(true),
                        HasDesignatedInitializers(),
@@ -1979,7 +1976,6 @@ public:
   /// This function is used by the AST importer, which must import the type
   /// parameters after creating their DeclContext to avoid loops.
   void setTypeParamList(ObjCTypeParamList *TPL);
-
 
   ObjCCategoryImplDecl *getImplementation() const;
   void setImplementation(ObjCCategoryImplDecl *ImplD);

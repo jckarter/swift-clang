@@ -1291,7 +1291,7 @@ static QualType getBaseMessageSendResultType(Sema &S,
   auto transferNullability = [&](QualType type) -> QualType {
     // If the method's result type has nullability, extract it.
     if (auto nullability = Method->getSendResultType(ReceiverType)
-                             ->getNullability(Context)) {
+                             ->getNullability(Context)){
       // Strip off any outer nullability sugar from the provided type.
       (void)AttributedType::stripOuterNullability(type);
 
@@ -1633,7 +1633,7 @@ bool Sema::CheckMessageArgumentTypes(QualType ReceiverType,
     }
 
     QualType origParamType = param->getType();
-    QualType paramType = origParamType;
+    QualType paramType = param->getType();
     if (typeArgs)
       paramType = paramType.substObjCTypeArgs(
                     Context,
@@ -1937,13 +1937,13 @@ ActOnClassPropertyRefExpr(IdentifierInfo &receiverName,
     // property reference.
     if (receiverNamePtr->isStr("super")) {
       if (ObjCMethodDecl *CurMethod = tryCaptureObjCSelf(receiverNameLoc)) {
-        if (ObjCInterfaceDecl *Class = CurMethod->getClassInterface()) {
+        if (auto classDecl = CurMethod->getClassInterface()) {
+          SuperType = QualType(classDecl->getSuperClassType(), 0);
           if (CurMethod->isInstanceMethod()) {
-            SuperType = QualType(Class->getSuperClassType(), 0);
             if (SuperType.isNull()) {
               // The current class does not have a superclass.
               Diag(receiverNameLoc, diag::error_root_class_cannot_use_super)
-              << Class->getIdentifier();
+                << CurMethod->getClassInterface()->getIdentifier();
               return ExprError();
             }
             QualType T = Context.getObjCObjectPointerType(SuperType);
@@ -1961,7 +1961,7 @@ ActOnClassPropertyRefExpr(IdentifierInfo &receiverName,
           SuperType = QualType(
                         CurMethod->getClassInterface()->getSuperClassType(),
                         0);
-          IFace = Class->getSuperClass();
+          IFace = classDecl->getSuperClass();
         }
       }
     }
