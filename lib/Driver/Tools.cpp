@@ -724,7 +724,8 @@ static void getARMTargetFeatures(const Driver &D, const llvm::Triple &Triple,
                                options::OPT_mno_long_calls)) {
     if (A->getOption().matches(options::OPT_mlong_calls))
       Features.push_back("+long-calls");
-  } else if (KernelOrKext && (!Triple.isiOS() || Triple.isOSVersionLT(6))) {
+  } else if (KernelOrKext && (!Triple.isiOS() || Triple.isOSVersionLT(6)) &&
+             !Triple.isWatchOS()) {
       Features.push_back("+long-calls");
   }
 }
@@ -802,12 +803,6 @@ void Clang::AddARMTargetArgs(const ArgList &Args, ArgStringList &CmdArgs,
 
   // Kernel code has more strict alignment requirements.
   if (KernelOrKext) {
-    if ((!Triple.isiOS() || Triple.isOSVersionLT(6)) &&
-        !Triple.isWatchOS()) {
-      CmdArgs.push_back("-backend-option");
-      CmdArgs.push_back("-arm-long-calls");
-    }
-
     CmdArgs.push_back("-backend-option");
     CmdArgs.push_back("-arm-strict-align");
 
