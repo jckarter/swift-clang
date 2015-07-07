@@ -32,7 +32,7 @@
 #include <memory>
 using namespace clang;
 
-#define DEBUG_TYPE "modulecontainer"
+#define DEBUG_TYPE "pchcontainer"
 
 namespace {
 class ModuleContainerGenerator : public ASTConsumer {
@@ -223,17 +223,20 @@ public:
     auto *ASTSym = new llvm::GlobalVariable(
         *M, Ty, /*constant*/ true, llvm::GlobalVariable::InternalLinkage, Data,
         "__clang_ast");
+    // The on-disk hashtable needs to be aligned.
     ASTSym->setAlignment(8);
+
+    // Mach-O also needs a segment name.
     if (Triple.isOSBinFormatMachO())
-      // Include Mach-O segment name.
       ASTSym->setSection("__CLANG,__clangast");
+    // COFF has an eight character length limit.
     else if (Triple.isOSBinFormatCOFF())
-      // Adhere to COFF eight-character limit.
       ASTSym->setSection("clangast");
     else
       ASTSym->setSection("__clangast");
 
     DEBUG({
+        // Print the IR for the PCH container to the debug output.
         llvm::SmallString<0> Buffer;
         llvm::raw_svector_ostream OS(Buffer);
         clang::EmitBackendOutput(Diags, CodeGenOpts, TargetOpts, LangOpts,
@@ -243,16 +246,17 @@ public:
         llvm::dbgs()<<Buffer;
       });
 
-    // Use the LLVM backend to emit the pcm.
+    // Use the LLVM backend to emit the pch container.
     clang::EmitBackendOutput(Diags, CodeGenOpts, TargetOpts, LangOpts,
                              Ctx.getTargetInfo().getTargetDescription(),
                              M.get(), BackendAction::Backend_EmitObj, OS);
 
-    // Make sure the module container hits disk now.
+    // Make sure the pch container hits disk.
     OS->flush();
 
-    // Free up some memory, in case the process is kept alive.
-    SerializedAST.clear();
+    // Free the memory for the temporary buffer.
+    llvm::SmallVector<char, 0> Empty;
+    SerializedAST = std::move(Empty);
   }
 };
 }
@@ -277,7 +281,8 @@ void ObjectFilePCHContainerOperations::ExtractPCH(
     for (auto &Section : OF->get()->sections()) {
       StringRef Name;
       Section.getName(Name);
-      if ((!IsCOFF && Name == "__clangast") || (IsCOFF && Name == "clangast")) {
+      if ((!IsCOFF && Name == "__clangast") ||
+          ( IsCOFF && Name ==   "clangast")) {
         StringRef Buf;
         Section.getContents(Buf);
         StreamFile.init((const unsigned char *)Buf.begin(),
@@ -286,6 +291,8 @@ void ObjectFilePCHContainerOperations::ExtractPCH(
       }
     }
   }
+
+  // As a fallback, treat the buffer as a raw AST.
   StreamFile.init((const unsigned char *)Buffer.getBufferStart(),
                   (const unsigned char *)Buffer.getBufferEnd());
   return;

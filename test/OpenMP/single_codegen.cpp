@@ -5,7 +5,6 @@
 // RUN: %clang_cc1 -verify -fopenmp -x c++ -std=c++11 -DARRAY -triple x86_64-apple-darwin10 -emit-llvm %s -o - | FileCheck -check-prefix=ARRAY %s
 // expected-no-diagnostics
 // REQUIRES: x86-registered-target
-
 #ifndef ARRAY
 #ifndef HEADER
 #define HEADER

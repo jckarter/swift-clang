@@ -2878,8 +2878,8 @@ CXIndex clang_createIndex(int excludeDeclarationsFromPCH,
   // registered once.
   (void)*RegisterFatalErrorHandlerOnce;
 
-  CIndexer *CIdxr = new CIndexer(
-      std::make_shared<ObjectFilePCHContainerOperations>());
+  CIndexer *CIdxr =
+      new CIndexer(std::make_shared<ObjectFilePCHContainerOperations>());
   if (excludeDeclarationsFromPCH)
     CIdxr->setOnlyLocalDecls();
   if (displayDiagnostics)
