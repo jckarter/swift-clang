@@ -2249,8 +2249,9 @@ static std::string FormatFunctionParameter(const PrintingPolicy &Policy,
   std::string Result;
   QualType ResultType = Block.getTypePtr()->getReturnType();
   if (ObjCSubsts)
-    ResultType = ResultType.substObjCTypeArgs(
-        Param->getASTContext(), *ObjCSubsts, ObjCSubstitutionContext::Result);
+    ResultType = ResultType.substObjCTypeArgs(Param->getASTContext(),
+                                              *ObjCSubsts,
+                                              ObjCSubstitutionContext::Result);
   if (!ResultType->isVoidType() || SuppressBlock)
     ResultType.getAsStringInternal(Result, Policy);
 
@@ -2820,7 +2821,8 @@ CodeCompletionResult::CreateCodeCompletionString(ASTContext &Ctx,
         ObjCSubsts = CCContext.getBaseType()->getObjCSubstitutions(Method);
 
       if (ParamType->isBlockPointerType() && !DeclaringEntity)
-        Arg = FormatFunctionParameter(Policy, *P, true, /*SuppressBlock=*/false,
+        Arg = FormatFunctionParameter(Policy, *P, true,
+                                      /*SuppressBlock=*/false,
                                       ObjCSubsts);
       else {
         if (ObjCSubsts)

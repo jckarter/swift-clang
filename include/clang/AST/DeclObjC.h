@@ -612,7 +612,10 @@ public:
 class ObjCTypeParamList {
   union { 
     /// Location of the left and right angle brackets.
-    SourceRange Brackets;
+    struct {
+      unsigned Begin;
+      unsigned End;
+    } Brackets;
 
     // Used only for alignment.
     ObjCTypeParamDecl *AlignmentHack;
@@ -663,9 +666,15 @@ public:
     return *(end() - 1);
   }
 
-  SourceLocation getLAngleLoc() const { return Brackets.getBegin(); }
-  SourceLocation getRAngleLoc() const { return Brackets.getEnd(); }
-  SourceRange getSourceRange() const { return Brackets; }
+  SourceLocation getLAngleLoc() const {
+    return SourceLocation::getFromRawEncoding(Brackets.Begin);
+  }
+  SourceLocation getRAngleLoc() const {
+    return SourceLocation::getFromRawEncoding(Brackets.End);
+  }
+  SourceRange getSourceRange() const {
+    return SourceRange(getLAngleLoc(), getRAngleLoc());
+  }
 
   /// Gather the default set of type arguments to be substituted for
   /// these type parameters when dealing with an unspecialized type.
@@ -1976,6 +1985,7 @@ public:
   /// This function is used by the AST importer, which must import the type
   /// parameters after creating their DeclContext to avoid loops.
   void setTypeParamList(ObjCTypeParamList *TPL);
+
 
   ObjCCategoryImplDecl *getImplementation() const;
   void setImplementation(ObjCCategoryImplDecl *ImplD);

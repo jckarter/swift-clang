@@ -43,9 +43,9 @@ void test_D(D *d) {
 }
 
 @interface I1
-- method7:(int (^__nullable)(int x, int y))b;
+- method7:(int (^_Nullable)(int x, int y))b;
 @end
-void f2(int (^__nullable block)(int x, int y));
+void f2(int (^_Nullable block)(int x, int y));
 void test_f2(I1 *o) {
   [o method7:0];
 }

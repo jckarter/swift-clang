@@ -1309,11 +1309,13 @@ CXCompletionString clang_getCursorCompletionString(CXCursor cursor) {
     const IdentifierInfo *MacroInfo = definition->getName();
     ASTUnit *unit = getCursorASTUnit(cursor);
     CodeCompletionResult Result(MacroInfo);
-    CodeCompletionString *String = Result.CreateCodeCompletionString(
-        unit->getASTContext(), unit->getPreprocessor(),
-        CodeCompletionContext::CCC_Other,
-        unit->getCodeCompletionTUInfo().getAllocator(),
-        unit->getCodeCompletionTUInfo(), false);
+    CodeCompletionString *String
+      = Result.CreateCodeCompletionString(unit->getASTContext(),
+                                          unit->getPreprocessor(),
+                                          CodeCompletionContext::CCC_Other,
+                                 unit->getCodeCompletionTUInfo().getAllocator(),
+                                 unit->getCodeCompletionTUInfo(),
+                                 false);
     return String;
   }
   return nullptr;
