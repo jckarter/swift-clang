@@ -37,10 +37,6 @@ set(SOURCES
   ../../include/clang-c/Index.h
   )
 
-set( LLVM_LINK_COMPONENTS
-  ${LLVM_TARGETS_TO_BUILD}
-  )
-
 set(LIBS
   clangAST
   clangAPINotes
@@ -97,6 +93,7 @@ add_clang_library(libclang ${ENABLE_SHARED} ${ENABLE_STATIC}
   ${LIBS}
 
   LINK_COMPONENTS
+  ${LLVM_TARGETS_TO_BUILD}
   Core
   Support
   )

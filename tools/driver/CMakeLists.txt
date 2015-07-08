@@ -36,6 +36,7 @@ add_clang_executable(clang
 target_link_libraries(clang
   clangBasic
   clangAPINotes
+  clangCodeGen
   clangDriver
   clangFrontend
   clangFrontendTool

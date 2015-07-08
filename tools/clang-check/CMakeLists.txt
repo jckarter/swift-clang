@@ -17,6 +17,8 @@ set( LLVM_LINK_COMPONENTS
   Vectorize
   )
 
+set(LLVM_NO_DEAD_STRIP 1)
+
 add_clang_executable(clang-check
   ClangCheck.cpp
   )
@@ -25,8 +27,8 @@ target_link_libraries(clang-check
   clangAPINotes
   clangAST
   clangBasic
-  clangDriver
   clangCodeGen
+  clangDriver
   clangFrontend
   clangRewriteFrontend
   clangStaticAnalyzerFrontend
