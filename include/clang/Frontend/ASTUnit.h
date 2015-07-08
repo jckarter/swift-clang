@@ -44,13 +44,12 @@ namespace llvm {
 }
 
 namespace clang {
+class Sema;
 class ASTContext;
-class ASTDeserializationListener;
-class ASTFrontendAction;
 class ASTReader;
 class CodeCompleteConsumer;
-class CompilerInstance;
 class CompilerInvocation;
+class CompilerInstance;
 class Decl;
 class DiagnosticsEngine;
 class FileEntry;
@@ -60,6 +59,8 @@ class Preprocessor;
 class PCHContainerOperations;
 class SourceManager;
 class TargetInfo;
+class ASTFrontendAction;
+class ASTDeserializationListener;
 
 /// \brief Utility class for loading a ASTContext from an AST file.
 ///
