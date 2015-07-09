@@ -11,6 +11,7 @@ add_clang_executable(clang-check
 target_link_libraries(clang-check
   clangAPINotes
   clangAST
+  clangBasic
   clangCodeGen
   clangDriver
   clangFrontend
