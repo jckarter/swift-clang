@@ -799,7 +799,12 @@ bool CompilerInstance::ExecuteAction(FrontendAction &Act) {
   // Validate/process some options.
   if (getHeaderSearchOpts().Verbose)
     OS << "clang -cc1 version " CLANG_VERSION_STRING
+      // Apple Internal: Show the Apple project version. rdar://21692886
+#ifdef CLANG_REPOSITORY_STRING
+       << " " << getClangFullRepositoryVersion()
+#else
        << " based upon " << BACKEND_PACKAGE_STRING
+#endif
        << " default target " << llvm::sys::getDefaultTargetTriple() << "\n";
 
   if (getFrontendOpts().ShowTimers)
