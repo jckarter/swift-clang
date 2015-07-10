@@ -426,26 +426,10 @@ void DarwinClang::AddLinkRuntimeLibArgs(const ArgList &Args,
   }
 
   const SanitizerArgs &Sanitize = getSanitizerArgs();
-
-  if (Sanitize.needsAsanRt()) {
-    if (!isTargetMacOS() && !isTargetIOSSimulator() && !isTargetIPhoneOS()) {
-      // FIXME: Move this check to SanitizerArgs::filterUnsupportedKinds.
-      getDriver().Diag(diag::err_drv_clang_unsupported_per_platform)
-          << "-fsanitize=address";
-    } else {
-      AddLinkSanitizerLibArgs(Args, CmdArgs, "asan");
-    }
-  }
-
-  if (Sanitize.needsUbsanRt()) {
-    if (!isTargetMacOS() && !isTargetIOSSimulator() && !isTargetIPhoneOS()) {
-      // FIXME: Move this check to SanitizerArgs::filterUnsupportedKinds.
-      getDriver().Diag(diag::err_drv_clang_unsupported_per_platform)
-          << "-fsanitize=undefined";
-    } else {
-      AddLinkSanitizerLibArgs(Args, CmdArgs, "ubsan");
-    }
-  }
+  if (Sanitize.needsAsanRt())
+    AddLinkSanitizerLibArgs(Args, CmdArgs, "asan");
+  if (Sanitize.needsUbsanRt())
+    AddLinkSanitizerLibArgs(Args, CmdArgs, "ubsan");
 
   // Otherwise link libSystem, then the dynamic runtime library, and finally any
   // target specific static runtime library.
