@@ -21,12 +21,21 @@ NO_INSTALL = 1
 # LINK_COMPONENTS before including Makefile.rules
 include $(CLANG_LEVEL)/../../Makefile.config
 
-LINK_COMPONENTS := $(TARGETS_TO_BUILD) asmparser bitreader bitwriter \
-    instrumentation ipo mc objcarcopts option support
+LINK_COMPONENTS := $(TARGETS_TO_BUILD) \
+	AsmParser \
+	BitReader \
+	BitWriter \
+	Instrumentation \
+	IPO \
+	MC \
+	ObjCARCOpts \
+	Option \
+	Support
 
 # Note that 'USEDLIBS' must include all of the core clang libraries
 # when -static is given to linker on cygming.
 USEDLIBS = clang.a \
+	   clangCodeGen.a \
 	   clangARCMigrate.a \
 	   clangIndex.a \
 	   clangFormat.a \
