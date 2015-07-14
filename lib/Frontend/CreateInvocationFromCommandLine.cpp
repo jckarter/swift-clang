@@ -69,11 +69,15 @@ clang::createInvocationFromCommandLine(ArrayRef<const char *> ArgList,
   const driver::JobList &Jobs = C->getJobs();
   bool CudaCompilation = false;
   if (Jobs.size() > 1) {
-    for (auto &A : C->getActions())
+    for (auto &A : C->getActions()){
+      // On MacOSX real actions may end up being wrapped in BindArchAction
+      if (isa<driver::BindArchAction>(A))
+        A = *A->begin();
       if (isa<driver::CudaDeviceAction>(A)) {
         CudaCompilation = true;
         break;
       }
+    }
   }
   if (Jobs.size() == 0 || !isa<driver::Command>(*Jobs.begin()) ||
       (Jobs.size() > 1 && !CudaCompilation)) {
