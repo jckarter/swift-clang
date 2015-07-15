@@ -534,6 +534,12 @@ void Driver::generateCompilationDiagnostics(Compilation &C,
   CCGenDiagnostics = true;
   FinalPhaseForDiagnostics = phases::Preprocess;
 
+  for (const char *S : FailingCommand.getArguments())
+    if (StringRef("-fembed-bitcode").equals(S)) {
+      FinalPhaseForDiagnostics = phases::Compile;
+      break;
+    }
+
   // Save the original job command(s).
   Command Cmd = FailingCommand;
 
