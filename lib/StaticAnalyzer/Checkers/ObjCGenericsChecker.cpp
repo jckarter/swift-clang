@@ -348,13 +348,10 @@ void ObjCGenericsChecker::checkPreObjCMessage(const ObjCMethodCall &M,
 
   if (!Method) {
     Method = MessageExpr->getMethodDecl();
+    // When arc is disabled non-existent methods can be called.
+    if (!Method)
+      return;
   }
-
-  unsigned NumNamedArgs = Sel.getNumArgs();
-  // Method might have more arguments than selector indicates. This is due
-  // to addition of c-style arguments in method.
-  if (Method->param_size() > Sel.getNumArgs())
-    NumNamedArgs = Method->param_size();
 
   Optional<ArrayRef<QualType>> TypeArgs =
       (*TrackedType)->getObjCSubstitutions(Method->getDeclContext());
@@ -363,7 +360,7 @@ void ObjCGenericsChecker::checkPreObjCMessage(const ObjCMethodCall &M,
   if (!TypeArgs)
     return;
 
-  for (unsigned i = 0; i < NumNamedArgs; i++) {
+  for (unsigned i = 0; i < Method->param_size(); i++) {
     const Expr *Arg = MessageExpr->getArg(i);
     // We can't do any type-checking on a type-dependent argument.
     if (Arg->isTypeDependent())
@@ -395,6 +392,7 @@ void ObjCGenericsChecker::checkPreObjCMessage(const ObjCMethodCall &M,
 
     // For covariant type parameters every subclasses and supertypes are both
     // accepted.
+    // FIXME: in case the argument is actually tracked, use the tracked type.
     if (!ASTCtxt.canAssignObjCInterfaces(ParamObjectPtrType,
                                          ArgObjectPtrType) &&
         (ParamVariance != ObjCTypeParamVariance::Covariant ||
@@ -419,6 +417,7 @@ void ObjCGenericsChecker::checkPreObjCMessage(const ObjCMethodCall &M,
   const Stmt *Parent =
       C.getCurrentAnalysisDeclContext()->getParentMap().getParent(MessageExpr);
 
+  // FIXME: when accessing properties the cast might not be the direct parent.
   const auto *ImplicitCast = dyn_cast_or_null<ImplicitCastExpr>(Parent);
   if (!ImplicitCast || ImplicitCast->getCastKind() != CK_BitCast)
     return;

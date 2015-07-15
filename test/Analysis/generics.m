@@ -1,4 +1,4 @@
-// RUN: %clang_cc1 -analyze -analyzer-checker=core,alpha.osx.cocoa.ObjCGenerics -verify %s
+// RUN: %clang_cc1 -analyze -analyzer-checker=core,alpha.osx.cocoa.ObjCGenerics -verify -Wno-objc-method-access %s
 
 #if !__has_feature(objc_generics)
 #  error Compiler does not support Objective-C generics?
@@ -237,4 +237,9 @@ void test24() {
   NSArray<NSString *> *arr = @[@"A", @"B"];
   NSArray *arr2 = arr;
   [arr2 contains: [[NSNumber alloc] init]]; // expected-warning {{Incompatible}}
+}
+
+void test25(id a, MutableArray<NSMutableString *> *b) {
+  a = b;
+  [a nonExistentMethod];
 }
