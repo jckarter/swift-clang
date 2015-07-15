@@ -12,6 +12,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "ClangSACheckers.h"
+#include "clang/AST/ParentMap.h"
 #include "clang/StaticAnalyzer/Core/BugReporter/BugType.h"
 #include "clang/StaticAnalyzer/Core/Checker.h"
 #include "clang/StaticAnalyzer/Core/CheckerManager.h"
@@ -23,21 +24,15 @@ using namespace ento;
 
 namespace {
 class ObjCGenericsChecker
-    : public Checker<check::DeadSymbols, check::PostObjCMessage,
+    : public Checker<check::DeadSymbols, check::PreObjCMessage,
                      check::PostStmt<CastExpr>> {
 public:
-  /// A tag to id this checker.
-  static void *getTag() {
-    static int Tag;
-    return &Tag;
-  }
-
   ProgramStateRef checkPointerEscape(ProgramStateRef State,
                                      const InvalidatedSymbols &Escaped,
                                      const CallEvent *Call,
                                      PointerEscapeKind Kind) const;
 
-  void checkPostObjCMessage(const ObjCMethodCall &M, CheckerContext &C) const;
+  void checkPreObjCMessage(const ObjCMethodCall &M, CheckerContext &C) const;
   void checkPostStmt(const CastExpr *CE, CheckerContext &C) const;
   void checkDeadSymbols(SymbolReaper &SR, CheckerContext &C) const;
 
@@ -46,7 +41,7 @@ private:
   void initBugType() const {
     if (!BT)
       BT.reset(
-          new BugType(this, "Generics.", categories::CoreFoundationObjectiveC));
+          new BugType(this, "Generics", categories::CoreFoundationObjectiveC));
   }
 
   class GenericsBugVisitor : public BugReporterVisitorImpl<GenericsBugVisitor> {
@@ -74,13 +69,14 @@ private:
                  const ObjCObjectPointerType *To, ExplodedNode *N,
                  SymbolRef Sym, CheckerContext &C) const {
     initBugType();
-    std::string FromStr = QualType::getAsString(From, Qualifiers());
-    std::string ToStr = QualType::getAsString(To, Qualifiers());
-    std::string ErrorText =
-        (llvm::Twine("Incompatible pointer types assigning to '") + ToStr +
-         "' from '" + FromStr + "'")
-            .str();
-    std::unique_ptr<BugReport> R(new BugReport(*BT, ErrorText, N));
+    SmallString<64> Buf;
+    llvm::raw_svector_ostream OS(Buf);
+    OS << "Incompatible pointer types assigning to '";
+    QualType::print(From, Qualifiers(), OS, C.getLangOpts(), llvm::Twine());
+    OS << "' from '";
+    QualType::print(To, Qualifiers(), OS, C.getLangOpts(), llvm::Twine());
+    OS << "'";
+    std::unique_ptr<BugReport> R(new BugReport(*BT, OS.str(), N));
     R->markInteresting(Sym);
     R->addVisitor(llvm::make_unique<GenericsBugVisitor>(Sym));
     C.emitReport(std::move(R));
@@ -88,7 +84,7 @@ private:
 };
 } // end anonymous namespace
 
-// ProgramState trait - a map from symbol to its typewith specified params.
+// ProgramState trait - a map from symbol to its type with specified params.
 REGISTER_MAP_WITH_PROGRAMSTATE(TypeParamMap, SymbolRef,
                                const ObjCObjectPointerType *)
 
@@ -292,7 +288,7 @@ void ObjCGenericsChecker::checkPostStmt(const CastExpr *CE,
         reportBug(*TrackedType, DestObjectPtrType, N, Sym, C);
       }
     } else {
-      // Just found out, what the type of this symbol should be.
+      // Just found out what the type of this symbol should be.
       State = State->set<TypeParamMap>(Sym, DestObjectPtrType);
       C.addTransition(State);
     }
@@ -308,17 +304,14 @@ static const Expr *stripImplicitIdCast(const Expr *E, ASTContext &ASTCtxt) {
     return E;
 }
 
-void ObjCGenericsChecker::checkPostObjCMessage(const ObjCMethodCall &M,
+void ObjCGenericsChecker::checkPreObjCMessage(const ObjCMethodCall &M,
                                                CheckerContext &C) const {
   const ObjCMessageExpr *MessageExpr = M.getOriginExpr();
   if (MessageExpr->getReceiverKind() != ObjCMessageExpr::Instance)
     return;
 
-  const Expr *InstanceExpr = MessageExpr->getInstanceReceiver();
-
   ProgramStateRef State = C.getState();
-  SymbolRef Sym =
-      State->getSVal(InstanceExpr, C.getLocationContext()).getAsSymbol();
+  SymbolRef Sym = M.getReceiverSVal().getAsSymbol();
   if (!Sym)
     return;
 
@@ -363,11 +356,11 @@ void ObjCGenericsChecker::checkPostObjCMessage(const ObjCMethodCall &M,
   if (Method->param_size() > Sel.getNumArgs())
     NumNamedArgs = Method->param_size();
 
-  Optional<ArrayRef<QualType>> typeArgs =
+  Optional<ArrayRef<QualType>> TypeArgs =
       (*TrackedType)->getObjCSubstitutions(Method->getDeclContext());
-  // This case might happen, when there is an unspecialized override of a
+  // This case might happen when there is an unspecialized override of a
   // specialized method.
-  if (!typeArgs)
+  if (!TypeArgs)
     return;
 
   for (unsigned i = 0; i < NumNamedArgs; i++) {
@@ -391,7 +384,7 @@ void ObjCGenericsChecker::checkPostObjCMessage(const ObjCMethodCall &M,
     ObjCTypeParamVariance ParamVariance = TypeParamDecl->getVariance();
 
     QualType ParamType = OrigParamType.substObjCTypeArgs(
-        ASTCtxt, *typeArgs, ObjCSubstitutionContext::Parameter);
+        ASTCtxt, *TypeArgs, ObjCSubstitutionContext::Parameter);
     // Check if it can be assigned
     const auto *ParamObjectPtrType = ParamType->getAs<ObjCObjectPointerType>();
     const auto *ArgObjectPtrType = stripImplicitIdCast(Arg, ASTCtxt)
@@ -413,35 +406,37 @@ void ObjCGenericsChecker::checkPostObjCMessage(const ObjCMethodCall &M,
     }
   }
   QualType ResultType = Method->getReturnType().substObjCTypeArgs(
-      ASTCtxt, *typeArgs, ObjCSubstitutionContext::Result);
-  QualType StaticResultType = Method->getSendResultType();
-  // If the tracked return type differs from the static return type, check the
-  // cast above the returned expression.
-  if (ResultType.getTypePtr() != StaticResultType.getTypePtr() &&
-      StaticResultType == ASTCtxt.getObjCIdType()) {
-    ArrayRef<ast_type_traits::DynTypedNode> ParentVec =
-        ASTCtxt.getParents(*MessageExpr);
-    // Assuming non-templated code. So the parent should be unique.
-    ast_type_traits::DynTypedNode Parent = ParentVec[0];
-    const auto *ImplicitCast = Parent.get<ImplicitCastExpr>();
-    if (!ImplicitCast || ImplicitCast->getCastKind() != CK_BitCast)
-      return;
+      ASTCtxt, *TypeArgs, ObjCSubstitutionContext::Result);
+  QualType StaticResultType = Method->getReturnType();
+  // Check whether the result type was a type parameter.
+  const auto *ResultTypedef = StaticResultType->getAs<TypedefType>();
+  if (!ResultTypedef)
+    return;
 
-    const auto *ExprTypeAboveCast =
-        ImplicitCast->getType()->getAs<ObjCObjectPointerType>();
-    const auto *ResultPtrType = ResultType->getAs<ObjCObjectPointerType>();
+  if (!isa<ObjCTypeParamDecl>(ResultTypedef->getDecl()))
+    return;
 
-    if (!ExprTypeAboveCast || !ResultPtrType)
-      return;
+  const Stmt *Parent =
+      C.getCurrentAnalysisDeclContext()->getParentMap().getParent(MessageExpr);
 
-    // Only warn on unrelated types to avoid too many false positives on
-    // downcasts.
-    if (!ASTCtxt.canAssignObjCInterfaces(ExprTypeAboveCast, ResultPtrType) &&
-        !ASTCtxt.canAssignObjCInterfaces(ResultPtrType, ExprTypeAboveCast)) {
-      ExplodedNode *N = C.addTransition();
-      reportBug(ResultPtrType, ExprTypeAboveCast, N, Sym, C);
-      return;
-    }
+  const auto *ImplicitCast = dyn_cast_or_null<ImplicitCastExpr>(Parent);
+  if (!ImplicitCast || ImplicitCast->getCastKind() != CK_BitCast)
+    return;
+
+  const auto *ExprTypeAboveCast =
+      ImplicitCast->getType()->getAs<ObjCObjectPointerType>();
+  const auto *ResultPtrType = ResultType->getAs<ObjCObjectPointerType>();
+
+  if (!ExprTypeAboveCast || !ResultPtrType)
+    return;
+
+  // Only warn on unrelated types to avoid too many false positives on
+  // downcasts.
+  if (!ASTCtxt.canAssignObjCInterfaces(ExprTypeAboveCast, ResultPtrType) &&
+      !ASTCtxt.canAssignObjCInterfaces(ResultPtrType, ExprTypeAboveCast)) {
+    ExplodedNode *N = C.addTransition();
+    reportBug(ResultPtrType, ExprTypeAboveCast, N, Sym, C);
+    return;
   }
 }
 
