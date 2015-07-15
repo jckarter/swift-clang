@@ -190,6 +190,8 @@ private:
   mutable llvm::StringMap<ToolChain *> ToolChains;
 
 private:
+  phases::ID FinalPhaseForDiagnostics;
+
   /// TranslateInputArgs - Create a new derived argument list from the input
   /// arguments, after applying the standard argument translations.
   llvm::opt::DerivedArgList *

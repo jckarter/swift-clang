@@ -152,11 +152,15 @@ phases::ID Driver::getFinalPhase(const DerivedArgList &DAL,
   Arg *PhaseArg = nullptr;
   phases::ID FinalPhase;
 
+  // When generating diagnostics we want to run to a particular point.
+  if (CCGenDiagnostics) {
+    FinalPhase = FinalPhaseForDiagnostics;
+
   // -{E,EP,P,M,MM} only run the preprocessor.
-  if (CCCIsCPP() || (PhaseArg = DAL.getLastArg(options::OPT_E)) ||
-      (PhaseArg = DAL.getLastArg(options::OPT__SLASH_EP)) ||
-      (PhaseArg = DAL.getLastArg(options::OPT_M, options::OPT_MM)) ||
-      (PhaseArg = DAL.getLastArg(options::OPT__SLASH_P))) {
+  } else if (CCCIsCPP() || (PhaseArg = DAL.getLastArg(options::OPT_E)) ||
+             (PhaseArg = DAL.getLastArg(options::OPT__SLASH_EP)) ||
+             (PhaseArg = DAL.getLastArg(options::OPT_M, options::OPT_MM)) ||
+             (PhaseArg = DAL.getLastArg(options::OPT__SLASH_P))) {
     FinalPhase = phases::Preprocess;
 
     // -{fsyntax-only,-analyze,emit-ast} only run up to the compiler.
@@ -527,8 +531,8 @@ void Driver::generateCompilationDiagnostics(Compilation &C,
          "crash backtrace, preprocessed source, and associated run script.";
 
   // Suppress driver output and emit preprocessor output to temp file.
-  Mode = CPPMode;
   CCGenDiagnostics = true;
+  FinalPhaseForDiagnostics = phases::Preprocess;
 
   // Save the original job command(s).
   Command Cmd = FailingCommand;
