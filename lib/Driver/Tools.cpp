@@ -728,6 +728,10 @@ static void getARMTargetFeatures(const Driver &D, const llvm::Triple &Triple,
              !Triple.isWatchOS()) {
       Features.push_back("+long-calls");
   }
+
+  // The kext linker doesn't know how to deal with movw/movt.
+  if (KernelOrKext)
+    Features.push_back("+no-movt");
 }
 
 void Clang::AddARMTargetArgs(const ArgList &Args, ArgStringList &CmdArgs,
@@ -805,10 +809,6 @@ void Clang::AddARMTargetArgs(const ArgList &Args, ArgStringList &CmdArgs,
   if (KernelOrKext) {
     CmdArgs.push_back("-backend-option");
     CmdArgs.push_back("-arm-strict-align");
-
-    // The kext linker doesn't know how to deal with movw/movt.
-    CmdArgs.push_back("-backend-option");
-    CmdArgs.push_back("-arm-use-movt=0");
   }
 
   // -mkernel implies -mstrict-align; don't add the redundant option.
