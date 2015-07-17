@@ -12,7 +12,6 @@ target_link_libraries(clang-check
   clangAPINotes
   clangAST
   clangBasic
-  clangCodeGen
   clangDriver
   clangFrontend
   clangRewriteFrontend
