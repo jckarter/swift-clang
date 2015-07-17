@@ -3227,7 +3227,7 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
 
     const char *Exec = getToolChain().getDriver().getClangProgramPath();
 
-    C.addCommand(llvm::make_unique<Command>(JA, *this, Exec, CmdArgs));
+    C.addCommand(llvm::make_unique<Command>(JA, *this, Exec, CmdArgs, Inputs));
 
     return;
   }
