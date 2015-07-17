@@ -1,14 +1,14 @@
 // RUN: rm -rf %t
 
 // Modules:
-// RUN: %clang_cc1 -g -dwarf-ext-refs -fmodules -fimplicit-module-maps -DMODULES -fmodules-cache-path=%t %s -I %S/Inputs -I %t -emit-llvm -o %t-mod.ll
+// RUN: %clang_cc1 -g -dwarf-ext-refs -fmodules -fmodule-format=obj -fimplicit-module-maps -DMODULES -fmodules-cache-path=%t %s -I %S/Inputs -I %t -emit-llvm -o %t-mod.ll
 // RUN: llvm-dwarfdump %t/*/DebugModule-*.pcm | FileCheck %s --check-prefix=CHECK-AST
 // RUN: cat %t-mod.ll |  FileCheck %s --check-prefix=CHECK-EXTREF
 
 // PCH:
-// RUN: %clang_cc1 -x objective-c -emit-pch -I %S/Inputs -o %t.pcm %S/Inputs/DebugModule.h
+// RUN: %clang_cc1 -x objective-c -fmodule-format=obj -emit-pch -I %S/Inputs -o %t.pcm %S/Inputs/DebugModule.h
 // RUN: llvm-dwarfdump %t.pcm | FileCheck %s --check-prefix=CHECK-AST
-// RUN: %clang_cc1 -g -dwarf-ext-refs -include-pch %t.pcm %s -emit-llvm -o %t-pch.ll %s
+// RUN: %clang_cc1 -g -dwarf-ext-refs -fmodule-format=obj -include-pch %t.pcm %s -emit-llvm -o %t-pch.ll %s
 // RUN: cat %t-pch.ll |  FileCheck %s --check-prefix=CHECK-EXTREF
 
 
