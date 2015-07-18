@@ -8286,8 +8286,12 @@ static GVALinkage basicGVALinkageForVariable(const ASTContext &Context,
 
   switch (VD->getTemplateSpecializationKind()) {
   case TSK_Undeclared:
-  case TSK_ExplicitSpecialization:
     return GVA_StrongExternal;
+
+  case TSK_ExplicitSpecialization:
+    return Context.getLangOpts().MSVCCompat && VD->isStaticDataMember()
+               ? GVA_StrongODR
+               : GVA_StrongExternal;
 
   case TSK_ExplicitInstantiationDefinition:
     return GVA_StrongODR;
