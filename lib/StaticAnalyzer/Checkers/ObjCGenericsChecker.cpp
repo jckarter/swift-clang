@@ -7,12 +7,15 @@
 //
 //===----------------------------------------------------------------------===//
 //
-// TODO: Description.
+// This checker tries to find type errors that the compiler is not able to catch
+// due to the implicit conversions that was introduced for backward
+// compatibility.
 //
 //===----------------------------------------------------------------------===//
 
 #include "ClangSACheckers.h"
 #include "clang/AST/ParentMap.h"
+#include "clang/AST/RecursiveASTVisitor.h"
 #include "clang/StaticAnalyzer/Core/BugReporter/BugType.h"
 #include "clang/StaticAnalyzer/Core/Checker.h"
 #include "clang/StaticAnalyzer/Core/CheckerManager.h"
@@ -25,7 +28,7 @@ using namespace ento;
 namespace {
 class ObjCGenericsChecker
     : public Checker<check::DeadSymbols, check::PreObjCMessage,
-                     check::PostStmt<CastExpr>> {
+                     check::PostObjCMessage, check::PostStmt<CastExpr>> {
 public:
   ProgramStateRef checkPointerEscape(ProgramStateRef State,
                                      const InvalidatedSymbols &Escaped,
@@ -33,6 +36,7 @@ public:
                                      PointerEscapeKind Kind) const;
 
   void checkPreObjCMessage(const ObjCMethodCall &M, CheckerContext &C) const;
+  void checkPostObjCMessage(const ObjCMethodCall &M, CheckerContext &C) const;
   void checkPostStmt(const CastExpr *CE, CheckerContext &C) const;
   void checkDeadSymbols(SymbolReaper &SR, CheckerContext &C) const;
 
@@ -114,15 +118,38 @@ PathDiagnosticPiece *ObjCGenericsChecker::GenericsBugVisitor::VisitNode(
   if (!S)
     return nullptr;
 
-  std::string TypeName = QualType::getAsString(*TrackedType, Qualifiers());
-  std::string InfoText =
-      (llvm::Twine("Type '") + TypeName + "' is infered from this context'")
-          .str();
+  const LangOptions &LangOpts = BRC.getASTContext().getLangOpts();
+
+  SmallString<64> Buf;
+  llvm::raw_svector_ostream OS(Buf);
+  OS << "Type '";
+  QualType::print(*TrackedType, Qualifiers(), OS, LangOpts, llvm::Twine());
+  OS << "' is infered from ";
+
+  if (const auto *ExplicitCast = dyn_cast<ExplicitCastExpr>(S)) {
+    OS << "explicit cast (from '";
+    QualType::print(ExplicitCast->getSubExpr()->getType().getTypePtr(),
+                    Qualifiers(), OS, LangOpts, llvm::Twine());
+    OS << "' to '";
+    QualType::print(ExplicitCast->getType().getTypePtr(), Qualifiers(), OS,
+                    LangOpts, llvm::Twine());
+    OS << "')";
+  } else if (const auto *ImplicitCast = dyn_cast<ImplicitCastExpr>(S)) {
+    OS << "implicit cast (from '";
+    QualType::print(ImplicitCast->getSubExpr()->getType().getTypePtr(),
+                    Qualifiers(), OS, LangOpts, llvm::Twine());
+    OS << "' to '";
+    QualType::print(ImplicitCast->getType().getTypePtr(), Qualifiers(), OS,
+                    LangOpts, llvm::Twine());
+    OS << "')";
+  } else {
+    OS << "this context";
+  }
 
   // Generate the extra diagnostic.
   PathDiagnosticLocation Pos(S, BRC.getSourceManager(),
                              N->getLocationContext());
-  return new PathDiagnosticEventPiece(Pos, InfoText, true, nullptr);
+  return new PathDiagnosticEventPiece(Pos, OS.str(), true, nullptr);
 }
 
 void ObjCGenericsChecker::checkDeadSymbols(SymbolReaper &SR,
@@ -304,11 +331,62 @@ static const Expr *stripImplicitIdCast(const Expr *E, ASTContext &ASTCtxt) {
     return E;
 }
 
-void ObjCGenericsChecker::checkPreObjCMessage(const ObjCMethodCall &M,
+void ObjCGenericsChecker::checkPostObjCMessage(const ObjCMethodCall &M,
                                                CheckerContext &C) const {
   const ObjCMessageExpr *MessageExpr = M.getOriginExpr();
-  if (MessageExpr->getReceiverKind() != ObjCMessageExpr::Instance)
+
+  ProgramStateRef State = C.getState();
+  SymbolRef Sym = M.getReturnValue().getAsSymbol();
+  if (!Sym)
     return;
+
+  Selector Sel = MessageExpr->getSelector();
+  // When invoking the class selector, store the class to the state.
+  if (MessageExpr->getReceiverKind() != ObjCMessageExpr::Class ||
+      Sel.getAsString() != "class")
+    return;
+
+  QualType ReceiverType = MessageExpr->getClassReceiver();
+  const auto *ReceiverClassType = ReceiverType->getAs<ObjCObjectType>();
+  QualType ReceiverClassPointerType =
+      C.getASTContext().getObjCObjectPointerType(
+          QualType(ReceiverClassType, 0));
+
+  if (!ReceiverClassType->isSpecialized())
+    return;
+  const auto *InferredType =
+      ReceiverClassPointerType->getAs<ObjCObjectPointerType>();
+  assert(InferredType);
+  State = State->set<TypeParamMap>(Sym, InferredType);
+  C.addTransition(State);
+}
+
+class IsObjCTypeParamDependentTypeVisitor
+    : public RecursiveASTVisitor<IsObjCTypeParamDependentTypeVisitor> {
+public:
+  IsObjCTypeParamDependentTypeVisitor() : Result(false) {}
+  bool VisitTypedefType(const TypedefType *Type) {
+    if (isa<ObjCTypeParamDecl>(Type->getDecl())) {
+      Result = true;
+      return false;
+    }
+    return true;
+  }
+  bool getResult() { return Result; }
+
+private:
+  bool Result;
+};
+
+static bool isObjCTypeParamDependent(QualType Type) {
+  IsObjCTypeParamDependentTypeVisitor Visitor;
+  Visitor.TraverseType(Type);
+  return Visitor.getResult();
+}
+
+void ObjCGenericsChecker::checkPreObjCMessage(const ObjCMethodCall &M,
+                                              CheckerContext &C) const {
+  const ObjCMessageExpr *MessageExpr = M.getOriginExpr();
 
   ProgramStateRef State = C.getState();
   SymbolRef Sym = M.getReceiverSVal().getAsSymbol();
@@ -335,15 +413,24 @@ void ObjCGenericsChecker::checkPreObjCMessage(const ObjCMethodCall &M,
 
   // When the receiver type is id, or some super class of the tracked type (and
   // kindof type), look up the method in the tracked type, not in the receiver
-  // type. This way we preserve more information.
-  Selector Sel = MessageExpr->getSelector();
+  // type. This way we preserve more information. Do this "devirtualization" on
+  // instance and class methods only. Otherwise trust the static type.
   const ObjCMethodDecl *Method = nullptr;
-  if (ASTCtxt.getObjCIdType() == ReceiverType ||
-      (ReceiverObjectPtrType->getObjectType()->isKindOfType() &&
-       ASTCtxt.canAssignObjCInterfaces(ReceiverObjectPtrType, *TrackedType))) {
-    const ObjCInterfaceDecl *InterfaceDecl = (*TrackedType)->getInterfaceDecl();
-    // The method might not be found.
-    Method = InterfaceDecl->lookupInstanceMethod(Sel);
+  if (MessageExpr->getReceiverKind() == ObjCMessageExpr::Instance ||
+      MessageExpr->getReceiverKind() == ObjCMessageExpr::Class) {
+    if (ASTCtxt.getObjCIdType() == ReceiverType ||
+        ASTCtxt.getObjCClassType() == ReceiverType ||
+        (ReceiverObjectPtrType->getObjectType()->isKindOfType() &&
+         ASTCtxt.canAssignObjCInterfaces(ReceiverObjectPtrType,
+                                         *TrackedType))) {
+      const ObjCInterfaceDecl *InterfaceDecl =
+          (*TrackedType)->getInterfaceDecl();
+      // The method might not be found.
+      Selector Sel = MessageExpr->getSelector();
+      Method = InterfaceDecl->lookupInstanceMethod(Sel);
+      if (!Method)
+        Method = InterfaceDecl->lookupClassMethod(Sel);
+    }
   }
 
   if (!Method) {
@@ -403,16 +490,18 @@ void ObjCGenericsChecker::checkPreObjCMessage(const ObjCMethodCall &M,
       return;
     }
   }
-  QualType ResultType = Method->getReturnType().substObjCTypeArgs(
-      ASTCtxt, *TypeArgs, ObjCSubstitutionContext::Result);
   QualType StaticResultType = Method->getReturnType();
   // Check whether the result type was a type parameter.
-  const auto *ResultTypedef = StaticResultType->getAs<TypedefType>();
-  if (!ResultTypedef)
+  bool IsInstanceType = StaticResultType == ASTCtxt.getObjCInstanceType();
+  if (!isObjCTypeParamDependent(StaticResultType) &&
+      !IsInstanceType)
     return;
 
-  if (!isa<ObjCTypeParamDecl>(ResultTypedef->getDecl()))
-    return;
+  QualType ResultType = Method->getReturnType().substObjCTypeArgs(
+      ASTCtxt, *TypeArgs, ObjCSubstitutionContext::Result);
+  if (IsInstanceType)
+    ResultType = QualType(*TrackedType, 0);
+  ResultType.dump();
 
   const Stmt *Parent =
       C.getCurrentAnalysisDeclContext()->getParentMap().getParent(MessageExpr);

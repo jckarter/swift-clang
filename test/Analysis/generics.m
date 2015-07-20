@@ -33,6 +33,8 @@ __attribute__((objc_root_class))
 
 @interface NSArray<__covariant T> : NSObject
 + (instancetype)arrayWithObjects:(const T [])objects count:(int)count;
++ (instancetype)getEmpty;
++ (NSArray<T> *)getEmpty2;
 - (int)contains:(T)obj;
 - (T)getObjAtIndex:(int)idx;
 @end
@@ -242,4 +244,10 @@ void test24() {
 void test25(id a, MutableArray<NSMutableString *> *b) {
   a = b;
   [a nonExistentMethod];
+}
+
+void test26() {
+  Class c = [NSArray<NSString *> class];
+  NSArray<NSNumber *> *a = [c getEmpty]; // expected-warning {{Incompatible}}
+  a = [c getEmpty2]; // expected-warning {{Incompatible}}
 }
