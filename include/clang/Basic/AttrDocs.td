@@ -1592,6 +1592,16 @@ The ``returns_nonnull`` attribute implies that returning a null pointer is undef
 }];
 }
 
+def NoAliasDocs : Documentation {
+  let Category = DocCatFunction;
+  let Heading = "noalias";
+  let Content = [{
+The ``noalias`` attribute indicates that the only memory accesses inside
+function are loads and stores from objects pointed to by its pointer-typed
+arguments, with arbitrary offsets.
+  }];
+}
+
 def SwiftDocs : DocumentationCategory<"Controlling Swift Import"> {
   let Content = [{
 Clang supports additional attributes for controlling how APIs are imported into Swift.
