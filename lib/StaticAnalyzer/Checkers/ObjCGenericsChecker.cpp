@@ -501,7 +501,6 @@ void ObjCGenericsChecker::checkPreObjCMessage(const ObjCMethodCall &M,
       ASTCtxt, *TypeArgs, ObjCSubstitutionContext::Result);
   if (IsInstanceType)
     ResultType = QualType(*TrackedType, 0);
-  ResultType.dump();
 
   const Stmt *Parent =
       C.getCurrentAnalysisDeclContext()->getParentMap().getParent(MessageExpr);
