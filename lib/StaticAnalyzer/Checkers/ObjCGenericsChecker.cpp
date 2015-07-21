@@ -477,9 +477,21 @@ void ObjCGenericsChecker::checkPreObjCMessage(const ObjCMethodCall &M,
     if (!ParamObjectPtrType || !ArgObjectPtrType)
       continue;
 
+    // Check if we have more concrete tracked type that is not a super type of
+    // the static argument type.
+    SVal ArgSVal = M.getArgSVal(i);
+    SymbolRef ArgSym = ArgSVal.getAsSymbol();
+    if (ArgSym) {
+      const ObjCObjectPointerType *const *TrackedType =
+          State->get<TypeParamMap>(ArgSym);
+      if (TrackedType && ASTCtxt.canAssignObjCInterfaces(ArgObjectPtrType,
+                                         *TrackedType)){
+        ArgObjectPtrType = *TrackedType;
+      }
+    }
+
     // For covariant type parameters every subclasses and supertypes are both
     // accepted.
-    // FIXME: in case the argument is actually tracked, use the tracked type.
     if (!ASTCtxt.canAssignObjCInterfaces(ParamObjectPtrType,
                                          ArgObjectPtrType) &&
         (ParamVariance != ObjCTypeParamVariance::Covariant ||
@@ -493,8 +505,7 @@ void ObjCGenericsChecker::checkPreObjCMessage(const ObjCMethodCall &M,
   QualType StaticResultType = Method->getReturnType();
   // Check whether the result type was a type parameter.
   bool IsInstanceType = StaticResultType == ASTCtxt.getObjCInstanceType();
-  if (!isObjCTypeParamDependent(StaticResultType) &&
-      !IsInstanceType)
+  if (!isObjCTypeParamDependent(StaticResultType) && !IsInstanceType)
     return;
 
   QualType ResultType = Method->getReturnType().substObjCTypeArgs(
@@ -504,8 +515,12 @@ void ObjCGenericsChecker::checkPreObjCMessage(const ObjCMethodCall &M,
 
   const Stmt *Parent =
       C.getCurrentAnalysisDeclContext()->getParentMap().getParent(MessageExpr);
+  if (M.getMessageKind() != OCM_Message) {
+    // Properties and subscripts are not direct parents.
+    Parent =
+        C.getCurrentAnalysisDeclContext()->getParentMap().getParent(Parent);
+  }
 
-  // FIXME: when accessing properties the cast might not be the direct parent.
   const auto *ImplicitCast = dyn_cast_or_null<ImplicitCastExpr>(Parent);
   if (!ImplicitCast || ImplicitCast->getCastKind() != CK_BitCast)
     return;

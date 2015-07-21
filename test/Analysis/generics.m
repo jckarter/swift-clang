@@ -37,6 +37,8 @@ __attribute__((objc_root_class))
 + (NSArray<T> *)getEmpty2;
 - (int)contains:(T)obj;
 - (T)getObjAtIndex:(int)idx;
+- (T)objectAtIndexedSubscript:(int)idx;
+@property(readonly) T firstObject;
 @end
 
 @interface MutableArray<T> : NSArray<T>
@@ -205,6 +207,12 @@ void test20(NSArray<NSNumber *> *a) {
   NSArray *b = a;
   NSString *str = [b getObjAtIndex: 0]; // expected-warning {{Incompatible}}
   NSNumber *num = [b getObjAtIndex: 0];
+  str = [b firstObject]; // expected-warning {{Incompatible}}
+  num = [b firstObject];
+  str = b.firstObject; // expected-warning {{Incompatible}}
+  num = b.firstObject;
+  str = b[0]; // expected-warning {{Incompatible}}
+  num = b[0];
 }
 
 void test21(id m, NSArray<NSMutableString *> *a,
@@ -250,4 +258,9 @@ void test26() {
   Class c = [NSArray<NSString *> class];
   NSArray<NSNumber *> *a = [c getEmpty]; // expected-warning {{Incompatible}}
   a = [c getEmpty2]; // expected-warning {{Incompatible}}
+}
+
+void test27(NSArray<NSArray<NSNumber *> *> *mat, NSArray<NSString *> *row) {
+  id temp = row;
+  [mat contains: temp]; // expected-warning {{Incompatible}}
 }
