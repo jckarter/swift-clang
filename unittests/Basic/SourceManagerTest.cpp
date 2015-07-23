@@ -68,7 +68,7 @@ private:
   GlobalModuleIndex *loadGlobalModuleIndex(SourceLocation TriggerLoc) override
     { return nullptr; }
   bool lookupMissingImports(StringRef Name, SourceLocation TriggerLoc) override
-    { return 0; };
+    { return 0; }
 };
 
 TEST_F(SourceManagerTest, isBeforeInTranslationUnit) {
