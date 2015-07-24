@@ -441,7 +441,7 @@ void DarwinClang::AddLinkRuntimeLibArgs(const ArgList &Args,
     AddLinkRuntimeLib(Args, CmdArgs, "libclang_rt.watchos.a");
 
   } else if (isTargetTvOSBased()) {
-    // We currently always need a static runtime library for AppleTVOS.
+    // We currently always need a static runtime library for tvOS.
     AddLinkRuntimeLib(Args, CmdArgs, "libclang_rt.tvos.a");
 
   } else if (isTargetIOSBased()) {

@@ -581,7 +581,7 @@ are:
   specified by the ``-mmacosx-version-min=*version*`` command-line argument.
 
 ``tvos``
-  AppleTVOS operating system.  The minimum deployment target is specified by
+  Apple's tvOS operating system.  The minimum deployment target is specified by
   the ``-mtvos-version-min=*version*`` command-line argument.
 
 ``watchos``

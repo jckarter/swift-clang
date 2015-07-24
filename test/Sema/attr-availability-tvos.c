@@ -1,6 +1,6 @@
 // RUN: %clang_cc1 "-triple" "arm64-apple-tvos3.0" -fsyntax-only -verify %s
 
-// Anything 'ios' 8.x or earlier applies to AppleTVOS.
+// Anything 'ios' 8.x or earlier applies to tvOS.
 void f0(int) __attribute__((availability(ios,introduced=2.0,deprecated=2.1))); // expected-note {{'f0' has been explicitly marked deprecated here}}
 void f1(int) __attribute__((availability(ios,introduced=2.1)));
 void f2(int) __attribute__((availability(ios,introduced=2.0,deprecated=3.0))); // expected-note {{'f2' has been explicitly marked deprecated here}}
@@ -11,23 +11,23 @@ void f6(int) __attribute__((availability(ios,deprecated=3.0)));
 void f6(int) __attribute__((availability(ios,introduced=2.0))); // expected-note {{'f6' has been explicitly marked deprecated here}}
 
 void test() {
-  f0(0); // expected-warning{{'f0' is deprecated: first deprecated in AppleTVOS 2.1}}
+  f0(0); // expected-warning{{'f0' is deprecated: first deprecated in tvOS 2.1}}
   f1(0);
-  f2(0); // expected-warning{{'f2' is deprecated: first deprecated in AppleTVOS 3.0}}
+  f2(0); // expected-warning{{'f2' is deprecated: first deprecated in tvOS 3.0}}
   f3(0);
-  f4(0); // expected-error{{f4' is unavailable: obsoleted in AppleTVOS 3.0}}
-  f5(0); // expected-warning{{'f5' is deprecated: first deprecated in AppleTVOS 3.0}}
-  f6(0); // expected-warning{{'f6' is deprecated: first deprecated in AppleTVOS 3.0}}
+  f4(0); // expected-error{{f4' is unavailable: obsoleted in tvOS 3.0}}
+  f5(0); // expected-warning{{'f5' is deprecated: first deprecated in tvOS 3.0}}
+  f6(0); // expected-warning{{'f6' is deprecated: first deprecated in tvOS 3.0}}
 }
 
-// Anything iOS later than 8 does not apply to AppleTVOS.
+// Anything iOS later than 8 does not apply to tvOS.
 void f9(int) __attribute__((availability(ios,introduced=2.0,deprecated=9.0)));
 
 void test_transcribed_availability() {
   f9(0);
 }
 
-// Test AppleTVOS specific attributes.
+// Test tvOS specific attributes.
 void f0_tvos(int) __attribute__((availability(tvos,introduced=2.0,deprecated=2.1))); // expected-note {{'f0_tvos' has been explicitly marked deprecated here}}
 void f1_tvos(int) __attribute__((availability(tvos,introduced=2.1)));
 void f2_tvos(int) __attribute__((availability(tvos,introduced=2.0,deprecated=3.0))); // expected-note {{'f2_tvos' has been explicitly marked deprecated here}}
@@ -41,19 +41,19 @@ void f6_tvos(int) __attribute__((availability(tvos,deprecated=3.0)));
 void f6_tvos(int) __attribute__((availability(tvos,introduced=2.0))); // expected-note {{'f6_tvos' has been explicitly marked deprecated here}}
 
 void test_tvos() {
-  f0_tvos(0); // expected-warning{{'f0_tvos' is deprecated: first deprecated in AppleTVOS 2.1}}
+  f0_tvos(0); // expected-warning{{'f0_tvos' is deprecated: first deprecated in tvOS 2.1}}
   f1_tvos(0);
-  f2_tvos(0); // expected-warning{{'f2_tvos' is deprecated: first deprecated in AppleTVOS 3.0}}
+  f2_tvos(0); // expected-warning{{'f2_tvos' is deprecated: first deprecated in tvOS 3.0}}
   f3_tvos(0);
-  f4_tvos(0); // expected-error{{'f4_tvos' is unavailable: obsoleted in AppleTVOS 3.0}}
+  f4_tvos(0); // expected-error{{'f4_tvos' is unavailable: obsoleted in tvOS 3.0}}
   // We get no warning here because any explicit 'tvos' availability causes
   // the ios availablity to not implicitly become 'tvos' availability.  Otherwise we'd get
   // a deprecated warning.
   f5_tvos(0); // no-warning
   f5_attr_reversed_tvos(0); // no-warning
   // We get a deprecated warning here because both attributes are explicitly 'tvos'.
-  f5b_tvos(0); // expected-warning {{'f5b_tvos' is deprecated: first deprecated in AppleTVOS 3.0}}
+  f5b_tvos(0); // expected-warning {{'f5b_tvos' is deprecated: first deprecated in tvOS 3.0}}
   // We get a deprecated warning here because both attributes are 'ios' (both get mapped to 'tvos').
-  f5c_tvos(0); // expected-warning {{'f5c_tvos' is deprecated: first deprecated in AppleTVOS 3.0}}
-  f6_tvos(0); // expected-warning{{'f6_tvos' is deprecated: first deprecated in AppleTVOS 3.0}}
+  f5c_tvos(0); // expected-warning {{'f5c_tvos' is deprecated: first deprecated in tvOS 3.0}}
+  f6_tvos(0); // expected-warning{{'f6_tvos' is deprecated: first deprecated in tvOS 3.0}}
 }

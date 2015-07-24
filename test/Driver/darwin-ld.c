@@ -158,18 +158,18 @@
 // LINK_TVOS_ARM64: -tvos_version_min
 // LINK_TVOS_ARM64-NOT: crt
 // LINK_TVOS_ARM64-NOT: lgcc_s.1
-// FIXME: This library does not get built unless the AppleTVOS SDK is
+// FIXME: This library does not get built unless the tvOS SDK is
 // installed, and the driver will not try to link it if it does not exist.
-// This should be reenabled when the AppleTVOS SDK becomes a standard part
+// This should be reenabled when the tvOS SDK becomes a standard part
 // of Xcode.
 // FIXME_LINK_TVOS_ARM64: libclang_rt.tvos.a
 
 // RUN: %clang -target arm64-apple-tvos8.3 -mtvos-version-min=8.3 -fprofile-instr-generate -### %t.o 2> %t.log
 // RUN: FileCheck -check-prefix=LINK_TVOS_PROFILE %s < %t.log
 // LINK_TVOS_PROFILE: {{ld(.exe)?"}}
-// FIXME: These libraries do not get built unless the AppleTVOS SDK is
+// FIXME: These libraries do not get built unless the tvOS SDK is
 // installed, and the driver will not try to link them if they do not exist.
-// This should be reenabled when the AppleTVOS SDK becomes a standard part
+// This should be reenabled when the tvOS SDK becomes a standard part
 // of Xcode.
 // FIXME_LINK_TVOS_PROFILE: libclang_rt.profile_tvos.a
 // FIXME_LINK_TVOS_PROFILE: libclang_rt.tvos.a
@@ -177,9 +177,9 @@
 // RUN: %clang -target arm64-apple-tvos8.3 -mtvos-version-min=8.3 -### %t.o -lcc_kext 2> %t.log
 // RUN: FileCheck -check-prefix=LINK_TVOS_KEXT %s < %t.log
 // LINK_TVOS_KEXT: {{ld(.exe)?"}}
-// FIXME: These libraries do not get built unless the AppleTVOS SDK is
+// FIXME: These libraries do not get built unless the tvOS SDK is
 // installed, and the driver will not try to link them if they do not exist.
-// This should be reenabled when the AppleTVOS SDK becomes a standard part
+// This should be reenabled when the tvOS SDK becomes a standard part
 // of Xcode.
 // FIXME_LINK_TVOS_KEXT: libclang_rt.cc_kext_tvos.a
 // FIXME_LINK_TVOS_KEXT: libclang_rt.tvos.a
@@ -269,7 +269,7 @@
 // LINK_IPHONEOS_VERSION_MIN: -iphoneos_version_min
 // LINK_IOS_SIMULATOR_VERSION_MIN: -ios_simulator_version_min
 
-// Ditto for AppleTVOS....
+// Ditto for tvOS....
 // RUN: env TVOS_DEPLOYMENT_TARGET=7.0 \
 // RUN:   %clang -target armv7-apple-darwin -### %t.o 2> %t.log
 // RUN: FileCheck -check-prefix=LINK_TVOS_VERSION_MIN %s < %t.log

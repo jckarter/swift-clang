@@ -2070,7 +2070,7 @@ static void handleAvailabilityAttr(Sema &S, Decl *D,
       }
   } else if (S.Context.getTargetInfo().getTriple().isTvOS()) {
     // Transcribe "ios" to "tvos" (and add a new attribute) if the versioning
-    // matches before the start of the AppleTVOS platform.
+    // matches before the start of the tvOS platform.
     IdentifierInfo *NewII = nullptr;
     if (II->getName() == "ios")
       NewII = &S.Context.Idents.get("tvos");
