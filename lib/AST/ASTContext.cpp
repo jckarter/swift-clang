@@ -1084,7 +1084,7 @@ void ASTContext::InitBuiltinTypes(const TargetInfo &Target) {
   InitBuiltinType(HalfTy, BuiltinType::Half);
 
   // Builtin type used to help define __builtin_va_list.
-  VaListTagTy = QualType();
+  VaListTagDecl = nullptr;
 }
 
 DiagnosticsEngine &ASTContext::getDiagnostics() const {
@@ -6069,8 +6069,8 @@ CreateAArch64ABIBuiltinVaListDecl(const ASTContext *Context) {
     VaListTagDecl->addDecl(Field);
   }
   VaListTagDecl->completeDefinition();
+  Context->VaListTagDecl = VaListTagDecl;
   QualType VaListTagType = Context->getRecordType(VaListTagDecl);
-  Context->VaListTagTy = VaListTagType;
 
   // } __builtin_va_list;
   return Context->buildImplicitTypedef(VaListTagType, "__builtin_va_list");
@@ -6121,8 +6121,8 @@ static TypedefDecl *CreatePowerABIBuiltinVaListDecl(const ASTContext *Context) {
     VaListTagDecl->addDecl(Field);
   }
   VaListTagDecl->completeDefinition();
+  Context->VaListTagDecl = VaListTagDecl;
   QualType VaListTagType = Context->getRecordType(VaListTagDecl);
-  Context->VaListTagTy = VaListTagType;
 
   // } __va_list_tag;
   TypedefDecl *VaListTagTypedefDecl =
@@ -6141,7 +6141,7 @@ static TypedefDecl *CreatePowerABIBuiltinVaListDecl(const ASTContext *Context) {
 
 static TypedefDecl *
 CreateX86_64ABIBuiltinVaListDecl(const ASTContext *Context) {
-  // typedef struct __va_list_tag {
+  // struct __va_list_tag {
   RecordDecl *VaListTagDecl;
   VaListTagDecl = Context->buildImplicitRecord("__va_list_tag");
   VaListTagDecl->startDefinition();
@@ -6181,21 +6181,15 @@ CreateX86_64ABIBuiltinVaListDecl(const ASTContext *Context) {
     VaListTagDecl->addDecl(Field);
   }
   VaListTagDecl->completeDefinition();
+  Context->VaListTagDecl = VaListTagDecl;
   QualType VaListTagType = Context->getRecordType(VaListTagDecl);
-  Context->VaListTagTy = VaListTagType;
 
-  // } __va_list_tag;
-  TypedefDecl *VaListTagTypedefDecl =
-      Context->buildImplicitTypedef(VaListTagType, "__va_list_tag");
+  // };
 
-  QualType VaListTagTypedefType =
-    Context->getTypedefType(VaListTagTypedefDecl);
-
-  // typedef __va_list_tag __builtin_va_list[1];
+  // typedef struct __va_list_tag __builtin_va_list[1];
   llvm::APInt Size(Context->getTypeSize(Context->getSizeType()), 1);
-  QualType VaListTagArrayType
-    = Context->getConstantArrayType(VaListTagTypedefType,
-                                      Size, ArrayType::Normal,0);
+  QualType VaListTagArrayType =
+      Context->getConstantArrayType(VaListTagType, Size, ArrayType::Normal, 0);
   return Context->buildImplicitTypedef(VaListTagArrayType, "__builtin_va_list");
 }
 
@@ -6250,7 +6244,7 @@ CreateAAPCSABIBuiltinVaListDecl(const ASTContext *Context) {
 
 static TypedefDecl *
 CreateSystemZBuiltinVaListDecl(const ASTContext *Context) {
-  // typedef struct __va_list_tag {
+  // struct __va_list_tag {
   RecordDecl *VaListTagDecl;
   VaListTagDecl = Context->buildImplicitRecord("__va_list_tag");
   VaListTagDecl->startDefinition();
@@ -6290,20 +6284,15 @@ CreateSystemZBuiltinVaListDecl(const ASTContext *Context) {
     VaListTagDecl->addDecl(Field);
   }
   VaListTagDecl->completeDefinition();
+  Context->VaListTagDecl = VaListTagDecl;
   QualType VaListTagType = Context->getRecordType(VaListTagDecl);
-  Context->VaListTagTy = VaListTagType;
 
-  // } __va_list_tag;
-  TypedefDecl *VaListTagTypedefDecl =
-      Context->buildImplicitTypedef(VaListTagType, "__va_list_tag");
-  QualType VaListTagTypedefType =
-    Context->getTypedefType(VaListTagTypedefDecl);
+  // };
 
   // typedef __va_list_tag __builtin_va_list[1];
   llvm::APInt Size(Context->getTypeSize(Context->getSizeType()), 1);
-  QualType VaListTagArrayType
-    = Context->getConstantArrayType(VaListTagTypedefType,
-                                      Size, ArrayType::Normal,0);
+  QualType VaListTagArrayType =
+      Context->getConstantArrayType(VaListTagType, Size, ArrayType::Normal, 0);
 
   return Context->buildImplicitTypedef(VaListTagArrayType, "__builtin_va_list");
 }
@@ -6341,13 +6330,13 @@ TypedefDecl *ASTContext::getBuiltinVaListDecl() const {
   return BuiltinVaListDecl;
 }
 
-QualType ASTContext::getVaListTagType() const {
-  // Force the creation of VaListTagTy by building the __builtin_va_list
+Decl *ASTContext::getVaListTagDecl() const {
+  // Force the creation of VaListTagDecl by building the __builtin_va_list
   // declaration.
-  if (VaListTagTy.isNull())
-    (void) getBuiltinVaListDecl();
+  if (!VaListTagDecl)
+    (void)getBuiltinVaListDecl();
 
-  return VaListTagTy;
+  return VaListTagDecl;
 }
 
 void ASTContext::setObjCConstantStringInterface(ObjCInterfaceDecl *Decl) {
