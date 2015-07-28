@@ -3242,7 +3242,9 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
     case llvm::Triple::thumb:
     case llvm::Triple::thumbeb:
       {
-        std::string CPUName = arm::getARMTargetCPU(Args, TT);
+        StringRef MArch, MCPU;
+        getARMArchCPUFromArgs(Args, MArch, MCPU);
+        std::string CPUName = arm::getARMTargetCPU(MCPU, MArch, TT);
         if (Arg *A = Args.getLastArg(options::OPT_mabi_EQ)) {
           ABIName = A->getValue();
         } else {
