@@ -5945,6 +5945,8 @@ public:
     Builder.defineMacro("__LONG_DOUBLE_128__");
     if (HasTransactionalExecution)
       Builder.defineMacro("__HTM__");
+    if (Opts.ZVector)
+      Builder.defineMacro("__VEC__", "10301");
   }
   void getTargetBuiltins(const Builtin::Info *&Records,
                          unsigned &NumRecords) const override {
