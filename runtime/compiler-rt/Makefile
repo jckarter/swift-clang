@@ -98,6 +98,11 @@ LinkerSupportedArches = \
     done; \
     echo $$result)
 
+
+RuntimeLibrary.macho_embedded.Configs := \
+	hard_static.a hard_pic.a
+ifneq (,$(findstring ARM,$(TARGETS_TO_BUILD)))
+
 ifneq ($(IOS_SDK)$(IOSSIM_SDK),)
 RuntimeLibrary.darwin.Configs += ios.a profile_ios.a
 endif
@@ -139,9 +144,7 @@ ifneq ($(WATCHOS_SDK),)
 RuntimeLibrary.darwin.Configs += cc_kext_watchos.a
 endif
 
-RuntimeLibrary.macho_embedded.Configs := \
-	hard_static.a hard_pic.a
-ifneq (,$(findstring ARM,$(TARGETS_TO_BUILD)))
+
 RuntimeLibrary.macho_embedded.Configs += \
 	soft_static.a soft_pic.a
 endif
