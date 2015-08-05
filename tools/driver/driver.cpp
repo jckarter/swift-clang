@@ -346,7 +346,7 @@ CreateAndPopulateDiagOpts(ArrayRef<const char *> argv) {
 }
 
 static void SetInstallDir(SmallVectorImpl<const char *> &argv,
-                          Driver &TheDriver) {
+                          Driver &TheDriver, bool CanonicalPrefixes) {
   // Attempt to find the original path used to invoke the driver, to determine
   // the installed path. We do this manually, because we want to support that
   // path being a symlink.
@@ -357,7 +357,11 @@ static void SetInstallDir(SmallVectorImpl<const char *> &argv,
     if (llvm::ErrorOr<std::string> Tmp = llvm::sys::findProgramByName(
             llvm::sys::path::filename(InstalledPath.str())))
       InstalledPath = *Tmp;
-  llvm::sys::fs::make_absolute(InstalledPath);
+
+  // FIXME: We don't actually canonicalize this, we just make it absolute.
+  if (CanonicalPrefixes)
+    llvm::sys::fs::make_absolute(InstalledPath);
+
   InstalledPath = llvm::sys::path::parent_path(InstalledPath);
   if (llvm::sys::fs::exists(InstalledPath.c_str()))
     TheDriver.setInstalledDir(InstalledPath);
@@ -483,7 +487,7 @@ int main(int argc_, const char **argv_) {
       Diags.setWarningsAsErrors(false);
 
   Driver TheDriver(Path, llvm::sys::getDefaultTargetTriple(), Diags);
-  SetInstallDir(argv, TheDriver);
+  SetInstallDir(argv, TheDriver, CanonicalPrefixes);
 
   llvm::InitializeAllTargets();
   insertArgsFromProgramName(ProgName, DS, argv, SavedStrings);
