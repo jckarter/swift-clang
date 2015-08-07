@@ -324,8 +324,7 @@ void ObjCGenericsChecker::checkPostStmt(const CastExpr *CE,
 
 static const Expr *stripImplicitIdCast(const Expr *E, ASTContext &ASTCtxt) {
   const ImplicitCastExpr *CE = dyn_cast<ImplicitCastExpr>(E);
-  if (CE && CE->getCastKind() == CK_BitCast &&
-      CE->getType() == ASTCtxt.getObjCIdType())
+  if (CE && CE->getCastKind() == CK_BitCast && CE->getType()->isObjCIdType())
     return CE->getSubExpr();
   else
     return E;
