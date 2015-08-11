@@ -142,6 +142,11 @@ endif
 
 ifneq ($(WATCHOS_SDK),)
 RuntimeLibrary.darwin.Configs += cc_kext_watchos.a
+RuntimeLibrary.darwin.Configs += asan_watchos_dynamic.dylib
+endif
+
+ifneq ($(WATCHOSSIM_SDK),)
+RuntimeLibrary.darwin.Configs += asan_watchsim_dynamic.dylib
 endif
 
 

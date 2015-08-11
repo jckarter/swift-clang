@@ -347,13 +347,11 @@ void DarwinClang::AddLinkSanitizerLibArgs(const ArgList &Args,
     // Sanitizer runtime libraries requires C++.
     AddCXXStdlibLibArgs(Args, CmdArgs);
   }
-  // ASan is not supported on watchOS.
-  assert(isTargetMacOS() || isTargetIOSSimulator() || isTargetIPhoneOS());
   StringRef OS = "";
   if (isTargetMacOS())
     OS = "osx";
   if (isTargetWatchOSSimulator())
-    OS = "watchsim";
+    OS = "watchossim";
   if (isTargetWatchOS())
     OS = "watchos";
   if (isTargetIOSSimulator())
@@ -1249,8 +1247,7 @@ void Darwin::CheckBitcodeSupport() const {
 
 SanitizerMask Darwin::getSupportedSanitizers() const {
   SanitizerMask Res = ToolChain::getSupportedSanitizers();
-  if (isTargetMacOS() || isTargetIOSSimulator() || isTargetIPhoneOS())
-    Res |= SanitizerKind::Address;
+  Res |= SanitizerKind::Address;
   if (isTargetMacOS()) {
     if (!isMacosxVersionLT(10, 9))
       Res |= SanitizerKind::Vptr;
