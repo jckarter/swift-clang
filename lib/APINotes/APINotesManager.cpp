@@ -235,7 +235,6 @@ bool APINotesManager::loadAPINotes(const DirectoryEntry *HeaderDir,
       Readers[HeaderDir] = nullptr;
       return true;
     }
-    OS.flush();
 
     // Make a copy of the compiled form into the buffer.
     Buffer = llvm::MemoryBuffer::getMemBufferCopy(
