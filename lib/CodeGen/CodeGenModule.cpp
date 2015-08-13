@@ -2955,7 +2955,6 @@ CodeGenModule::GetAddrOfConstantStringFromLiteral(const StringLiteral *S,
       getCXXABI().getMangleContext().shouldMangleStringLiteral(S)) {
     llvm::raw_svector_ostream Out(MangledNameBuffer);
     getCXXABI().getMangleContext().mangleStringLiteral(S, Out);
-    Out.flush();
 
     LT = llvm::GlobalValue::LinkOnceODRLinkage;
     GlobalVariableName = MangledNameBuffer;
@@ -3043,7 +3042,6 @@ llvm::Constant *CodeGenModule::GetAddrOfGlobalTemporary(
   llvm::raw_svector_ostream Out(Name);
   getCXXABI().getMangleContext().mangleReferenceTemporary(
       VD, E->getManglingNumber(), Out);
-  Out.flush();
 
   APValue *Value = nullptr;
   if (E->getStorageDuration() == SD_Static) {

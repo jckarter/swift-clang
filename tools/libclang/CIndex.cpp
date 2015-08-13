@@ -7365,8 +7365,6 @@ Logger &cxindex::Logger::operator<<(const llvm::format_object_base &Fmt) {
 static llvm::ManagedStatic<llvm::sys::Mutex> LoggingMutex;
 
 cxindex::Logger::~Logger() {
-  LogOS.flush();
-
   llvm::sys::ScopedLock L(*LoggingMutex);
 
   static llvm::TimeRecord sBeginTR = llvm::TimeRecord::getCurrentTime();
